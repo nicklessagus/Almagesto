@@ -37,26 +37,35 @@ pre-cargado con un ejemplo (actividad estelar vs RV planetaria) que sirve de doc
 y de default funcional — reescribilo para tu tema. Lo demás (forma astro: estrellas, planetas,
 indicadores, ground-truth de exoplanetas) es genérico y no se toca.
 
-## Mantener tu bóveda actualizada (sync con el template)
+## Mantener tu bóveda actualizada (traer mejoras del framework)
 
 Tu bóveda es **una sola implementación**: el framework (scripts, skills, `CLAUDE.md`, `.obsidian/`)
-vive acá, en Almagesto; tu instancia lo consume y le agrega contenido. Para recibir mejoras del
-framework sin re-implementar nada, usá Almagesto como **remoto `upstream`**:
+vive acá; vos le agregás contenido. Al clonar, tu `origin` apunta a Almagesto, así que traés mejoras
+del framework con un simple `git pull`. Tu contenido no corre riesgo: `config/objective.yaml`,
+`config/stars.yaml`, `config/topics.yaml`, `STATUS.md`, `wiki/index.md` y `wiki/log.md` están marcados
+`merge=ours` en `.gitattributes` — un merge del framework **nunca** los pisa. Registrá el driver una
+sola vez por clon:
 
 ```bash
-# una sola vez, en tu instancia:
-git remote add upstream https://github.com/nicklessagus/Almagesto.git
-git config merge.ours.driver true          # respeta los archivos 'merge=ours' (.gitattributes)
-
-# cada vez que quieras traer mejoras del framework:
-git fetch upstream
-git merge upstream/main                     # sólo toca framework; tu contenido queda intacto
+git config merge.ours.driver true   # respeta los archivos 'merge=ours' (.gitattributes)
+git pull                            # trae mejoras del framework; tu contenido queda intacto
 ```
 
-**Regla de oro:** no edites archivos de framework en tu instancia. Si necesitás una funcionalidad
-nueva, hacela en Almagesto (este repo) y traela con un `merge`. Todo lo específico de tu instancia
-vive en `config/objective.yaml` + tu contenido (`wiki/`, `raw/`), que `.gitattributes` marca
-`merge=ours` para que un merge nunca los pise.
+¿Querés versionar tu bóveda en tu **propio** repo (recomendado) y seguir recibiendo updates? Creá un
+repo vacío tuyo, convertí Almagesto en `upstream` y poné el tuyo como `origin`:
+
+```bash
+git remote rename origin upstream            # Almagesto = de dónde vienen los updates
+git remote add origin <URL-de-tu-repo>       # tu repo (crealo vacío primero)
+git push -u origin main
+# desde ahora, para actualizar:  git fetch upstream && git merge upstream/main
+```
+
+**Regla de oro:** no edites archivos de framework (scripts, skills, `CLAUDE.md`, `.obsidian/`) en tu
+bóveda — así los merges quedan limpios y sin conflictos. Todo tu trabajo vive en
+`config/objective.yaml` + tu contenido (`wiki/`, `raw/`), protegido por `merge=ours`. ¿Te falta una
+funcionalidad del framework? Abrí un *issue* o *pull request* en Almagesto, o mantené un parche local
+— no la metas inline en tu instancia, o el próximo merge te dará conflictos.
 
 ## Arquitectura (patrón LLM Wiki)
 

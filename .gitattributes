@@ -2,9 +2,9 @@
 raw/pdfs/**/*.pdf filter=lfs diff=lfs merge=lfs -text
 
 # ── Sync template-as-upstream ────────────────────────────────────────────────
-# Archivos "propios de la instancia": al traer mejoras del framework con
-# `git merge upstream/main`, se conserva SIEMPRE la versión local (nunca la del
-# template). Registrar el driver una vez por clon:
+# Archivos "propios de la instancia": al traer mejoras del framework
+# (`git pull` o `git merge upstream/main`) se conserva SIEMPRE la versión local
+# (nunca la del template). Registrar el driver una vez por clon:
 #     git config merge.ours.driver true
 config/objective.yaml merge=ours
 config/stars.yaml     merge=ours
