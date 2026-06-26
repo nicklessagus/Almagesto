@@ -1,0 +1,6 @@
+# Dependencias Python de los scripts de ingesta (scripts/).
+# Instalar: pip install -r requirements.txt
+# Dependencias de sistema (NO pip): pdftotext (poppler-utils) y git-lfs. Ver README "Portabilidad".
+pyyaml>=6.0
+requests>=2.28
+astroquery>=0.4.6   # fetch_ground_truth.py: NASA Exoplanet Archive + SIMBAD (trae astropy, numpy)

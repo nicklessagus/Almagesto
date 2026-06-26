@@ -1,0 +1,18 @@
+# Registro de TEMAS para ingest-topic (análogo a stars.yaml, pero por tema en vez de por estrella).
+#
+# La clave de cada entrada ES el slug → dir de build/<slug>/ y raw/{pdfs,fulltext}/<slug>/.
+# Campos:
+#   title    : nombre humano del tema.
+#   area     : subcarpeta de wiki/concepts/ (indicators | methods | activity | hypotheses).
+#   concept  : nombre de la nota concept durable destino (puede diferir del slug; existente o a stubbear).
+#   query    : query Solr ADS CRUDA (control total; ver scripts/query_ads.py). NO es por nombre de estrella.
+#   aliases  : opcional, sólo para prosa.
+#
+# Agregá tus temas acá (o dejá que `ingest-topic` los agregue). Ejemplo comentado:
+#
+# activity-rv:
+#   title: "Actividad estelar ↔ velocidad radial (indicadores, signos, desfasajes)"
+#   area: activity
+#   concept: activity-rv-degeneracy
+#   query: '(abs:"radial velocity" OR abs:"radial-velocity") (abs:"planet" OR abs:"exoplanet") (abs:"bisector" OR abs:"FWHM" OR abs:"S-index" OR abs:"activity indicator" OR abs:"chromospheric")'
+#   aliases: ["BIS-RV", "indicadores de actividad"]

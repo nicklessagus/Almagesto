@@ -1,0 +1,53 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# OBJETIVO de la bóveda  ·  EDITÁ ESTE ARCHIVO para instanciar tu propia wiki.
+#
+# Es el único archivo que define "de qué trata" esta bóveda. Controla:
+#   1) el encuadre que lee el agente (name/short/description),
+#   2) qué paper es "core" = `relevance.topics` (el clasificador de relevancia),
+#   3) cómo el lint detecta fuga del repo aguas abajo (`downstream`).
+#
+# Viene pre-cargado con el ejemplo canónico (actividad estelar vs RV planetaria)
+# que sirve a la vez de documentación del formato y de default funcional. Para tu
+# tema: reescribí name/short/description y, sobre todo, `relevance.topics`.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: "Separar señales de actividad estelar vs planetarias en velocidades radiales"
+short: "actividad estelar vs RV planetaria"
+description: >
+  Reunir, por estrella y por concepto, todo lo publicado relevante (planetas,
+  actividad, indicadores, métodos) para decidir si una señal de velocidad radial
+  es actividad estelar o un planeta. El objetivo define qué papers entran como
+  "core". Reescribí esto para tu propio tema.
+
+# Repo/código aguas abajo que CONSUME la bóveda (opcional). La frontera dura
+# (regla #0 del CLAUDE.md) prohíbe que el vault describa/parametrice este repo;
+# el lint usa este nombre para saltear las líneas-puntero al detectar fuga.
+# Dejalo en null si tu bóveda no alimenta a ningún código aguas abajo.
+downstream: null            # p. ej. "ICA_Solar"
+
+# ─── Clasificador de relevancia ──────────────────────────────────────────────
+# Un paper de ADS es "relevante" (= core) si matchea ≥1 topic (regex sobre
+# título+abstract+keywords, case-insensitive) y su doctype no es ruido.
+# Cada topic: nombre canónico → patrón regex de Python. Esto ES lo que define
+# tus papers core: ajustá los patrones a tu objetivo.
+relevance:
+  # Comillas SIMPLES y una línea por patrón: YAML deja el string literal (sin
+  # interpretar \b ni plegar saltos en espacios), así la regex llega intacta.
+  topics:
+    discovery: 'discover|detection of|planetary system|super-?earth|planets? orbiting|new planet|hot (jupiter|neptune)'
+    rv:        'radial[ -]velocit|doppler|HARPS|ESPRESSO|HIRES|spectrograph|CCF'
+    activity:  '\bactivit|magnetic|rotation|starspot|chromospher|faculae|granulation|stellar cycle|flare|S-?index|log ?R'
+    planet:    '\bplanet|exoplanet|habitable|orbit|transit|mass-radius'
+    method:    'gaussian process|independent component|principal component|\bICA\b|\bPCA\b|SCALPELS|YARARA|line-?by-?line|periodogram|machine learning|deconvolution|disentangl'
+
+  # doctypes de ADS que casi siempre son ruido (menciones triviales / no-papers).
+  noise_doctypes:
+    - catalog
+    - proposal
+    - abstract
+    - erratum
+    - bookreview
+    - newsletter
+    - pressrelease
+    - circular
+    - software
