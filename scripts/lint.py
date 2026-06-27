@@ -31,10 +31,10 @@ LINK_RE = re.compile(r"\[\[([^\]\|#]+)")
 # Frontera dura (regla #0 de CLAUDE.md): la bóveda es SÓLO bibliografía. Detecta material de
 # implementación/código no bibliográfico que se filtró a una nota. WARN, no bloquea: son heurísticas de
 # alta señal/bajo ruido; se saltan los blockquotes meta (frontera/alcance). Revisar a mano cada hit.
-SIM_LEAK_RE = [
-    (re.compile(r"\bperilla\b", re.I), "perilla (dial de la sim)"),
-    (re.compile(r"\bdial\b", re.I), "dial de la sim"),
-    (re.compile(r"w_\{?j"), "pesos por orden w_j (generador)"),
+IMPL_LEAK_RE = [
+    (re.compile(r"\bperilla\b", re.I), "perilla (dial de implementación)"),
+    (re.compile(r"\bdial\b", re.I), "dial de implementación"),
+    (re.compile(r"w_\{?j"), "pesos por orden w_j (parámetro de código)"),
     (re.compile(r"=\s*peso\("), "vector de mezcla peso(azul)/peso(rojo)"),
 ]
 # targets que son texto de ejemplo/placeholder, no links reales
@@ -79,7 +79,7 @@ def main() -> int:
     incoming: dict[str, int] = {n: 0 for n in names}
     kinds: dict[str, list] = {}
     broken, incomplete, contradictions = [], [], []
-    sim_leaks: list = []               # (stem, "línea N: marcador → texto") — fuga de simulación
+    impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
     thesis_refs: dict[str, list] = {}  # valor de thesis_link -> notas que lo usan
     dispute_refs: list = []            # (estrella, planeta, ref) de planets[].disputes
 
@@ -113,15 +113,15 @@ def main() -> int:
         # (todo lo apuntable debe ser citable o marcado `inferencia`; ver Verify en CLAUDE.md). Backlog.
         if "/concepts/" in f and nbib == 0:
             coverage.append((stem, "sin citas [[bibcode]] → afirmaciones no chequeables (cobertura)"))
-        # frontera dura: fuga de implementación de la sim al vault (WARN, no bloquea).
+        # frontera dura: fuga de implementación (código no bibliográfico) al vault (WARN, no bloquea).
         body_full = text.split("---", 2)[-1] if text.startswith("---") else text
         scan_leaks = stem not in NON_ORPHAN    # log/index/README son historia/navegación, no fichas
         for i, line in enumerate(body_full.splitlines(), 1) if scan_leaks else []:
             if line.lstrip().startswith(">"):
                 continue                       # blockquote meta (frontera/alcance)
-            for rx, label in SIM_LEAK_RE:
+            for rx, label in IMPL_LEAK_RE:
                 if rx.search(line):
-                    sim_leaks.append((stem, f"L{i} [{label}]: {line.strip()[:80]}"))
+                    impl_leaks.append((stem, f"L{i} [{label}]: {line.strip()[:80]}"))
                     break
         # chequeos de completitud por tipo
         tags = fm.get("tags", []) or []
@@ -212,7 +212,7 @@ def main() -> int:
                          ("Ground-truth: masa inconsistente con m·sini (K,P,e,M*)", mass_issues),
                          ("thesis_links sin página destino", dangling_thesis),
                          ("disputes[].ref sin paper destino", dangling_disputes),
-                         ("⛔ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)", sim_leaks),
+                         ("⛔ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)", impl_leaks),
                          ("Citas no verificables en query/concepto/hipótesis (sin fulltext)", unverifiable),
                          ("Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog)", coverage),
                          ("Campos incompletos", incomplete)]:
