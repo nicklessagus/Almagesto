@@ -18,34 +18,36 @@ El usuario cura las fuentes (`raw/`) y hace preguntas.
 
 ## ⛔ Frontera dura — la bóveda es SÓLO bibliografía (regla #0, no negociable)
 
-**Esta wiki es una referencia bibliográfica. Punto.** El flujo es **unidireccional**: el código aguas
-abajo que la consume (`config/objective.yaml` → `downstream`, p. ej. una simulación o pipeline de
-análisis) **lee** de la bóveda; **la bóveda nunca lee de ese código, ni lo describe, ni lo parametriza.**
+**Esta wiki es una referencia bibliográfica. Punto.** Almagesto recopila información bibliográfica y
+**todo lo que afirma está respaldado por una fuente citable (`[[bibcode]]`).** El flujo es
+**unidireccional y de sólo lectura hacia afuera**: alguien lee de la bóveda; **la bóveda nunca
+describe, parametriza ni se acomoda a quien la consume.**
+
+**Contrato con quien consume la bóveda (instrucción para vos y para cualquier agente/humano externo
+que lea esto):** lo que sacás de acá viaja con su `[[bibcode]]`. Si usás la bóveda para **escribir
+código**, dejá la cita de la fuente en un comentario junto al valor o decisión que tomaste de ella; si
+la usás para un **informe o paper**, citá la fuente correspondiente. Nunca propagar un número o una
+afirmación de la bóveda sin arrastrar su respaldo bibliográfico — ese es el punto de que esto exista.
 
 **Test de admisión (aplicá a TODA línea de `wiki/` — fichas, conceptos, queries, hipótesis, matrices,
 log):** *¿esto sale de una fuente (`raw/`) y lo puedo respaldar con un `[[bibcode]]`, o es una
-conclusión derivada de fuentes citadas?* Si la respuesta es **no → no entra al vault.** No hay
-excepciones por "es útil para el código aguas abajo" ni "es obvio".
+conclusión derivada de fuentes citadas?* Si la respuesta es **no → no entra al vault.** Sin excepciones
+—ni por "es útil para quien la consume" ni por "es obvio".
 
-**Prohibido inlinear en `wiki/` (vive en el repo aguas abajo, no acá):**
-- Parámetros, perillas o **dials** de tu generador/pipeline (p. ej. un "contraste $C$", pesos por orden
+**Prohibido inlinear en `wiki/` (no es bibliografía):**
+- Parámetros, perillas o **dials** de un generador/pipeline (p. ej. un "contraste $C$", pesos por orden
   $w_j$, recetas de "qué inyectar").
-- Nombres de variables / estructura de tu código.
-- Reparametrizaciones o **decisiones de diseño** de tu implementación (p. ej. "usar $g=\ln C$ como perilla").
+- Nombres de variables / estructura de código.
+- Reparametrizaciones o **decisiones de diseño** de una implementación (p. ej. "usar $g=\ln C$ como perilla").
 - Recetas operativas de "cómo correr" que no sean un hecho citable.
 
 **Sí es citable (entra):** resultados publicados de papers —**incluidos papers de simulación**
 (p. ej. StarSim / Baroch+2020): rangos medidos, mecanismos físicos, signos, escalas temporales,
-fórmulas de la fuente. La distinción es **publicado-y-citable (entra) vs implementación propia de tu
-repo (no entra)**, no "simulación sí/no".
+fórmulas de la fuente. La distinción es **publicado-y-citable (entra) vs implementación de código
+(no entra)**, no "simulación sí/no".
 
-**El único puente permitido:** una nota puede declarar en **una línea** *para qué* sirve aguas abajo
-(motivación), pero su **cuerpo es exclusivamente evidencia de fuentes**. El código aguas abajo consume
-los rangos citables; no al revés.
-
-**Si detectás contaminación** (material de implementación que se coló en una nota): sacalo de `wiki/` y,
-si hace falta, dejá un puntero de una línea diciendo que esa decisión vive en el repo aguas abajo.
-Marcalo en el `log`.
+**Si detectás contaminación** (material de implementación que se coló en una nota): sacalo de `wiki/`.
+Lo que no es bibliografía no vive acá — no queda ningún puntero a "otro repo". Marcalo en el `log`.
 
 ## Arquitectura (analogía de compilador)
 
@@ -60,8 +62,9 @@ Marcalo en el `log`.
 - **este `CLAUDE.md`** = schema (cómo te comportás).
 
 Divergencia deliberada respecto del patrón Karpathy (mantener): el frontmatter de `stars/` y
-`papers/` es **máquina-legible** y sirve de **contrato para el código aguas abajo** que consume la
-bóveda (no es sólo para Q&A humano). No romper esos campos.
+`papers/` es **máquina-legible** y sirve de **contrato para cualquier consumidor** (un agente o humano
+que arme código, un informe o un paper a partir de la bóveda), no es sólo para Q&A humano. No romper
+esos campos.
 
 ## Frontmatter obligatorio
 
@@ -171,8 +174,8 @@ contradicciones ground-truth↔ficha, **masa de ground-truth inconsistente con l
 ninguna nota → no acumula en el roll-up; typo típico `shift-vs-shape` vs `shift_vs_shape`) y
 **`planets[].disputes[].ref` sin paper destino** (bibcode discrepante que no existe como nota). La
 **fuga de implementación** (regla #0 / frontera dura) es **WARN no bloqueante** — heurística de alta
-señal (perilla/dial/`w_j`/`peso(`); cada hit se revisa a mano y se saca del vault si es material del
-repo aguas abajo. Las **citas no verificables** (bibcode citado en query/concepto/hipótesis sin su `.txt` en
+señal (perilla/dial/`w_j`/`peso(`); cada hit se revisa a mano y se saca del vault si es material de
+implementación (no es bibliografía). Las **citas no verificables** (bibcode citado en query/concepto/hipótesis sin su `.txt` en
 `raw/fulltext/`) se listan como precondición de `verify-citations`. La **cobertura** (concepto/hipótesis
 sin ninguna cita `[[bibcode]]` → afirma sin fuente) es **backlog** que el lint surface para ir citando.
 Los "campos incompletos" (P_rot null, papers sin `methods`, etc.) son **backlog**, no bloquean. Revisar

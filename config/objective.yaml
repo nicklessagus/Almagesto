@@ -3,8 +3,7 @@
 #
 # Es el único archivo que define "de qué trata" esta bóveda. Controla:
 #   1) el encuadre que lee el agente (name/short/description),
-#   2) qué paper es "core" = `relevance.topics` (el clasificador de relevancia),
-#   3) cómo el lint detecta fuga del repo aguas abajo (`downstream`).
+#   2) qué paper es "core" = `relevance.topics` (el clasificador de relevancia).
 #
 # Viene pre-cargado con el ejemplo canónico (actividad estelar vs RV planetaria)
 # que sirve a la vez de documentación del formato y de default funcional. Para tu
@@ -18,12 +17,6 @@ description: >
   actividad, indicadores, métodos) para decidir si una señal de velocidad radial
   es actividad estelar o un planeta. El objetivo define qué papers entran como
   "core". Reescribí esto para tu propio tema.
-
-# Repo/código aguas abajo que CONSUME la bóveda (opcional). La frontera dura
-# (regla #0 del CLAUDE.md) prohíbe que el vault describa/parametrice este repo;
-# el lint usa este nombre para saltear las líneas-puntero al detectar fuga.
-# Dejalo en null si tu bóveda no alimenta a ningún código aguas abajo.
-downstream: null            # p. ej. "ICA_Solar"
 
 # ─── Clasificador de relevancia ──────────────────────────────────────────────
 # Un paper de ADS es "relevante" (= core) si matchea ≥1 topic (regex sobre

@@ -4,7 +4,8 @@ Base de conocimiento mantenida por un LLM (patrón [LLM Wiki](raw/refs/karpathy-
 Karpathy) sobre **literatura astronómica**, organizada por **estrella** y por **concepto**. Reúne todo
 lo publicado relevante (planetas, actividad, indicadores, métodos), en formato a la vez **legible**
 (notas + grafo Obsidian + síntesis de huecos) y **máquina-legible** (frontmatter YAML que puede
-consumir el código aguas abajo).
+consumir un agente o humano para armar código, un informe o un paper — siempre arrastrando las citas
+`[[bibcode]]` correspondientes).
 
 Es un **template**: el objetivo de cada bóveda (de qué trata, **qué papers son "core"**) se setea en
 un solo archivo, `config/objective.yaml`. El resto del repo es framework reusable.
@@ -142,7 +143,7 @@ extracción LLM) funcionan **sin dependencias externas ni LFS**. Qué **no** via
 - **PDFs (`raw/pdfs/**`, git-lfs):** sin `git lfs pull` quedan como punteros. No hace falta para
   re-consultar el corpus (el fulltext ya está commiteado); sólo para re-extraer texto o ingestar nuevo.
 - **Datos crudos (FITS/PKL):** gitignored (`*.fits`, `*.pkl`). Cada ficha apunta a ellos con
-  `data_local` (ruta **relativa** al código aguas abajo). Ese puntero es **machine-local**.
+  `data_local` (ruta local a los datos crudos de la estrella). Ese puntero es **machine-local**.
 - **`build/`, `outputs/`:** gitignored (intermedios regenerables). Los scripts los recrean solos.
 
 Sin rutas absolutas hardcodeadas: los scripts resuelven el root del repo desde `__file__`

@@ -7,7 +7,7 @@ Detecta: wikilinks rotos (página faltante), notas huérfanas (sin links entrant
 contradicciones ground-truth ↔ ficha, **masa de ground-truth inconsistente** con la
 m·sini implícita por K/P/e/M* (atrapa best-mass espurias de NEA), `thesis_links` sin
 página destino (tag que no matchea ninguna nota concepto/hipótesis → no acumula),
-**fuga de implementación** (material del código aguas abajo —`downstream` en objective.yaml— que se
+**fuga de implementación** (material de implementación/código no bibliográfico que se
 filtró al vault; frontera dura, regla #0 de CLAUDE.md; WARN no bloqueante), **citas no verificables** (bibcode
 citado en query/concepto/hipótesis sin su `.txt` en `raw/fulltext/` → no se puede chequear claim↔fuente
 con el skill `verify-citations`), **cobertura** (concepto/hipótesis sin ninguna cita `[[bibcode]]` →
@@ -28,13 +28,9 @@ import lib_config as cfg
 from fetch_ground_truth import msini_earth   # verificación de masa (m·sini implícita)
 
 LINK_RE = re.compile(r"\[\[([^\]\|#]+)")
-# Repo aguas abajo que consume la bóveda (config/objective.yaml → `downstream`). Las líneas que lo
-# mencionan son punteros permitidos y se saltan al chequear fuga. None si no hay código aguas abajo.
-DOWNSTREAM = (cfg.load_objective().get("downstream") or "").strip() or None
 # Frontera dura (regla #0 de CLAUDE.md): la bóveda es SÓLO bibliografía. Detecta material de
-# implementación del repo aguas abajo que se filtró a una nota. WARN, no bloquea: son heurísticas de
-# alta señal/bajo ruido; se saltan las líneas-puntero (que mencionan `downstream`) y los blockquotes
-# meta (frontera/alcance). Revisar a mano cada hit.
+# implementación/código no bibliográfico que se filtró a una nota. WARN, no bloquea: son heurísticas de
+# alta señal/bajo ruido; se saltan los blockquotes meta (frontera/alcance). Revisar a mano cada hit.
 SIM_LEAK_RE = [
     (re.compile(r"\bperilla\b", re.I), "perilla (dial de la sim)"),
     (re.compile(r"\bdial\b", re.I), "dial de la sim"),
@@ -121,8 +117,8 @@ def main() -> int:
         body_full = text.split("---", 2)[-1] if text.startswith("---") else text
         scan_leaks = stem not in NON_ORPHAN    # log/index/README son historia/navegación, no fichas
         for i, line in enumerate(body_full.splitlines(), 1) if scan_leaks else []:
-            if (DOWNSTREAM and DOWNSTREAM in line) or line.lstrip().startswith(">"):
-                continue                       # línea-puntero permitida / blockquote meta
+            if line.lstrip().startswith(">"):
+                continue                       # blockquote meta (frontera/alcance)
             for rx, label in SIM_LEAK_RE:
                 if rx.search(line):
                     sim_leaks.append((stem, f"L{i} [{label}]: {line.strip()[:80]}"))
@@ -216,7 +212,7 @@ def main() -> int:
                          ("Ground-truth: masa inconsistente con m·sini (K,P,e,M*)", mass_issues),
                          ("thesis_links sin página destino", dangling_thesis),
                          ("disputes[].ref sin paper destino", dangling_disputes),
-                         ("⛔ Fuga de implementación (repo aguas abajo) → frontera dura (WARN, revisar a mano)", sim_leaks),
+                         ("⛔ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)", sim_leaks),
                          ("Citas no verificables en query/concepto/hipótesis (sin fulltext)", unverifiable),
                          ("Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog)", coverage),
                          ("Campos incompletos", incomplete)]:

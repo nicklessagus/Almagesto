@@ -79,9 +79,9 @@ def topic_by_slug(slug: str) -> tuple[str, dict]:
 
 
 def load_objective() -> dict:
-    """El OBJETIVO de la bóveda (config/objective.yaml): name/short/description, el
-    clasificador de relevancia (`relevance.topics`, `relevance.noise_doctypes`) y el
-    repo aguas abajo (`downstream`). Es lo que define qué papers son 'core'."""
+    """El OBJETIVO de la bóveda (config/objective.yaml): name/short/description y el
+    clasificador de relevancia (`relevance.topics`, `relevance.noise_doctypes`). Es
+    lo que define qué papers son 'core'."""
     if not OBJECTIVE_YAML.exists():
         raise RuntimeError(
             "Falta config/objective.yaml. Es el archivo que define el objetivo de la "

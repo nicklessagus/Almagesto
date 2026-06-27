@@ -1,7 +1,7 @@
 # Estrellas de la bóveda. Nombre canónico (clave) + alias para resolver en SIMBAD/ADS.
 # `simbad`: nombre que mejor resuelve en SIMBAD. `ads_object`: cómo se consulta en ADS (object:).
-# `slug`: nombre de archivo/carpeta (sin espacios). `data_local`: puntero a datos crudos (opcional,
-#   ruta relativa al código aguas abajo; machine-local).
+# `slug`: nombre de archivo/carpeta (sin espacios). `data_local`: puntero a los datos crudos locales
+#   de la estrella (opcional, ruta machine-local; no se commitea).
 #
 # Agregá tus estrellas acá (o dejá que `ingest-star` las agregue). Ejemplo comentado:
 #
@@ -10,4 +10,4 @@
 #   simbad: "tau Cet"
 #   ads_object: "tau Ceti"
 #   aliases: ["HD 10700", "GJ 71", "HIP 8102"]
-#   data_local: "../tu_codigo/real_stars/TAU_CETI"   # opcional
+#   data_local: "../datos/real_stars/TAU_CETI"       # opcional (ruta local a los datos crudos)

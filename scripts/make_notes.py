@@ -62,7 +62,7 @@ def write_star_note(slug: str, force: bool) -> None:
 # {name}
 
 > Ficha índice. El frontmatter de arriba es la fuente de verdad máquina-legible
-> (lo leen Obsidian/Dataview y el código aguas abajo). La prosa y los `[[links]]` son la capa humana.
+> (lo leen Obsidian/Dataview y cualquier consumidor de la bóveda). La prosa y los `[[links]]` son la capa humana.
 
 ## Resumen
 _(síntesis por LLM: qué se sabe, qué indicadores deberían correlacionar con actividad para este
