@@ -1,6 +1,6 @@
 ---
 name: ingest-topic
-description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable.
+description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema no-astro / fuera de ADS (desde PDFs locales + web; ver Modo off-ADS).
 version: 1.0.0
 ---
 
@@ -10,12 +10,16 @@ Operación **ingest** del patrón LLM Wiki (ver `CLAUDE.md`), hermana de `ingest
 en vez de por estrella. División idéntica: los scripts bajan, el LLM procesa. Trabajar desde la raíz
 del repo.
 
-**Diferencias con `ingest-star`** (mismo dominio RV, distinto sujeto):
+**Diferencias con `ingest-star`** (mismo patrón, distinto sujeto: un tema en vez de una estrella):
 - La búsqueda ADS es **por keywords** (query Solr cruda), no por nombre vía SIMBAD.
 - El producto durable es un **concept** (`concepts/<area>/<concept>.md`), no una ficha de estrella.
 - **No hay ground-truth** (no existe NEA/SIMBAD para un tema) → se **saltea `fetch_ground_truth.py`**.
 - **No** se toca la matriz método×estrella.
 - Las notas de paper llevan `stars: []` y `thesis_links` pre-sembrado al concept.
+
+> **Default = astro vía ADS** (los **Pasos** de abajo). Si el usuario pide **explícitamente** un tema
+> **no-astro** o cuya bibliografía vive **fuera de ADS**, usar el **Modo off-ADS** (al final de los
+> Pasos). `ingest-star` no tiene este modo: es astro-only.
 
 ## Pasos
 
@@ -78,6 +82,36 @@ del repo.
 7. **Cierre (commit + push).** Tras la verificación (lint en 0), `git add` de los archivos
    **específicos** que tocó la operación (no `-A`; ver `CLAUDE.md` global) y commitear con mensaje
    descriptivo. Después **preguntar al usuario si hace `push`** — no pushear sin confirmación.
+
+## Modo off-ADS / tema no-astro (opt-in — **sólo a pedido explícito**)
+
+Almagesto es astro **por estructura** (la plomería de adquisición —ADS, arXiv, NEA/SIMBAD— es de
+astronomía); por eso un tema, por **default**, se baja por ADS (los **Pasos** de arriba). **Pero** si el
+usuario pide **explícitamente** ingerir un tema **no-astro** o cuya bibliografía canónica vive **fuera de
+ADS** (p. ej. un método matemático general: ICA/FastICA, signal processing, estadística), se permite en
+este modo. **`ingest-star` no cambia: sigue siendo astro-only.**
+
+Qué cambia respecto del flujo ADS de arriba:
+- **Sin ADS:** se saltean `query_ads.py`, `fetch_arxiv.py` y `fetch_ground_truth.py`. En
+  `config/topics.yaml` la entrada lleva `query: null` y un campo `source: local-pdfs+web` (marcador); el
+  resto del schema del tema igual (`title`, `area`, `concept`, `aliases`).
+- **Fuente = PDFs locales y/o web:**
+  - **PDFs** que provee el usuario → copiarlos a `raw/pdfs/<slug>/` (git-lfs) renombrados a la **clave de
+    cita** (abajo); `python extract_fulltext.py <slug>` los pasa a `raw/fulltext/<slug>/` (es
+    source-agnostic: sólo corre `pdftotext`).
+  - **Web** (rellenar fundacionales / huecos) → traer con `WebFetch`/`deep-research` y **guardar un
+    snapshot determinista** como `raw/fulltext/<slug>/<clave>.txt`, con **URL + fecha de acceso** al
+    inicio del archivo, para que la afirmación sea **citable y verificable** por `verify-citations`.
+- **Clave de cita sintética (papers sin bibcode ADS):** `AAAA+Autor` (p. ej. `2000HyvarinenOja`,
+  `2006Tichavsky`, `2025sklearn`). Debe **empezar con `AAAA`+letra** (lo exige `BIBCODE_RE` del lint) y
+  coincidir con el nombre del `.txt`. Donde **sí** exista un bibcode ADS real, usarlo.
+- **Notas de paper a mano:** `make_notes.py` asume ADS → en este modo se crean a mano
+  `wiki/papers/<clave>.md` con el mismo frontmatter (`bibcode` = clave sintética; `arxiv_id`/`doi` si
+  hay; `bibstem` = venue; `stars: []`; `thesis_links` al concept).
+- **Todo lo demás igual:** extracción enfocada en el eje del tema, síntesis al concept durable,
+  auto-revisión de autosuficiencia, **`verify-citations`** (la clave sintética y el snapshot `.txt` la
+  hacen chequeable), **`lint`** (0 bloqueante) y bookkeeping. **La frontera dura (regla #0) sigue
+  rigiendo:** sólo bibliografía citable; nada de implementación de quien consume la bóveda.
 
 ## Notas
 - Reglas de notación/reporte y schemas de frontmatter: ver `CLAUDE.md`. Notación matemática en `$...$`,

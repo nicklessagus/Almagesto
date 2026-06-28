@@ -16,6 +16,20 @@ El usuario cura las fuentes (`raw/`) y hace preguntas.
 > que no viaja entre máquinas. Tras cada operación, actualizá `index.md`, appendeá a `log.md` y, si
 > cambió el estado, `STATUS.md`.
 
+## Framework vs instancia — Regla de oro (no editar framework en la instancia)
+
+Esta bóveda puede estar corriendo como **instancia** del template **Almagesto** (tu repo como `origin`,
+`Almagesto` como `upstream`). **Regla de oro: en una instancia NO se edita ningún archivo de framework**
+— este `CLAUDE.md`, `scripts/`, `.claude/skills/`, `.obsidian/`, `README.md`, `requirements.txt`. El
+framework es **una sola implementación**: los cambios se hacen en el repo template `Almagesto` (issue/PR
+o parche), se pushean, y se traen por `git pull` / `git merge upstream/main`. Editarlos en la instancia
+**da conflictos** en el próximo merge. En la instancia sólo se edita **contenido** (`wiki/`, `raw/`) y los
+**archivos de instancia** protegidos por `merge=ours` (`config/objective.yaml`, `config/stars.yaml`,
+`config/topics.yaml`, `STATUS.md`, `wiki/index.md`, `wiki/log.md`). **Si una operación revela una mejora
+de framework** (skill nuevo, fix de script, regla), anotala como backlog en `STATUS.md`/`wiki/log.md` y
+aplicala en el template — no la inlines acá. *(Si estás trabajando en el repo template `Almagesto` mismo,
+editar framework **es** la tarea; esta regla rige para las instancias.)*
+
 ## ⛔ Frontera dura — la bóveda es SÓLO bibliografía (regla #0, no negociable)
 
 **Esta wiki es una referencia bibliográfica. Punto.** Almagesto recopila información bibliográfica y
@@ -132,6 +146,16 @@ terminal no renderiza LaTeX y `$...$` se ve crudo.
    (`methods`, `thesis_links`, `bearing`, P/K/indicadores), actualizás la ficha de la estrella
    (síntesis, huecos), tocás conceptos/hipótesis relacionados y la matriz método×estrella.
 3. Actualizás `index.md` y appendeás a `log.md`.
+
+> **Tema no-astro / fuera de ADS (opt-in — sólo a pedido explícito).** Por default un tema se baja por
+> **ADS** (plomería astro: ADS/arXiv/NEA). Almagesto es astro por estructura, pero si el usuario pide
+> **explícitamente** un tema **no-astro** o cuya bibliografía vive **fuera de ADS** (p. ej. un método
+> matemático general: ICA, signal processing), el skill `ingest-topic` lo soporta en su **modo off-ADS**
+> (fuente = PDFs locales + web; sin `query_ads`/`fetch_ground_truth`). **`ingest-star` no cambia: es
+> astro-only.** Papers sin bibcode ADS → **clave de cita sintética `AAAA+Autor`** (debe empezar con
+> `AAAA`+letra para el lint; el `.txt` en `raw/fulltext/` se llama igual). Páginas web → **snapshot
+> `.txt` determinista** (URL + fecha) para que sea citable/verificable. La **frontera dura sigue
+> rigiendo**: sólo bibliografía citable.
 
 ### Query / hipótesis (pregunta → respuesta; archivar SÓLO si el usuario lo pide)
 1. Para búsqueda general o test de hipótesis: `grep` sobre `raw/fulltext/`, leé los hits, sintetizá
