@@ -10,11 +10,6 @@ consumir un agente o humano para armar código, un informe o un paper — siempr
 Es un **template**: el objetivo de cada bóveda (de qué trata, **qué papers son "core"**) se setea en
 un solo archivo, `vault/config/objective.yaml`. El resto del repo es framework reusable.
 
-> El **schema de operación del agente** está en `CLAUDE.md` (raíz); el **estado** en `vault/STATUS.md`; el
-> **catálogo** en `vault/wiki/index.md`. Diseño basado en
-> [karpathy-llm-wiki](vault/raw/refs/karpathy-llm-wiki.md) +
-> [starmorph-implementation-guide](vault/raw/refs/starmorph-implementation-guide.md).
-
 ## Instanciar (crear tu bóveda)
 
 ```bash
@@ -23,10 +18,12 @@ pip install -r requirements.txt             # pyyaml, requests
 echo "TU_TOKEN" > vault/config/ads_dev_key  # token ADS (gratis, gitignored) — o export ADS_DEV_KEY
 ```
 
-> Para **ingestar PDFs nuevos** necesitás `pdftotext` (paquete *poppler*), según tu OS: Debian/Ubuntu
-> `sudo apt install poppler-utils` · macOS `brew install poppler` · Fedora `sudo dnf install poppler-utils`
-> · Windows `conda install -c conda-forge poppler`. No hace falta para consultar una bóveda ya poblada
-> (el fulltext se commitea). En Windows, los comandos de shell de acá corren en Git Bash o WSL.
+> **Token ADS** gratis en <https://ui.adsabs.harvard.edu/user/settings/token> (~5000 consultas/día); va
+> en `vault/config/ads_dev_key` (gitignored) o en la variable `ADS_DEV_KEY`. Para **ingestar PDFs nuevos**
+> necesitás `pdftotext` (paquete *poppler*), según tu OS: Debian/Ubuntu `sudo apt install poppler-utils` ·
+> macOS `brew install poppler` · Fedora `sudo dnf install poppler-utils` · Windows
+> `conda install -c conda-forge poppler`. No hace falta para consultar una bóveda ya poblada (el fulltext
+> se commitea). En Windows, los comandos de shell de acá corren en Git Bash o WSL.
 
 Después **definí el objetivo pidiéndoselo al agente** — no hace falta escribir YAML ni regex a mano. El
 skill `setup` traduce tu foco (en palabras) a `relevance.topics` (los buckets que deciden qué paper es
@@ -52,37 +49,26 @@ preferís: `name`/`description` + `relevance.topics`). Lo demás —forma astro:
 indicadores, ground-truth— es framework genérico y no se toca. Viene con un ejemplo (actividad estelar vs
 RV) que sirve de formato y default funcional.
 
-## Mantener tu bóveda actualizada (traer mejoras del framework)
+## Skills del agente (`.claude/skills/`)
 
-Tu bóveda es **una sola implementación**: el framework (scripts, skills, `CLAUDE.md`, `vault/.obsidian/`)
-vive acá; vos le agregás contenido. Al clonar, tu `origin` apunta a Almagesto, así que traés mejoras
-del framework con un simple `git pull`. Tu contenido no corre riesgo: `vault/config/objective.yaml`,
-`vault/config/stars.yaml`, `vault/config/topics.yaml`, `vault/STATUS.md`, `vault/wiki/index.md` y `vault/wiki/log.md` están marcados
-`merge=ours` en `.gitattributes` — un merge del framework **nunca** los pisa. Registrá el driver una
-sola vez por clon:
+Las operaciones del patrón están empaquetadas como skills invocables (Claude las dispara solo por la
+descripción, o el usuario con `/<nombre>`). Encapsulan la cadena mecánica + el criterio LLM:
 
-```bash
-git config merge.ours.driver true   # respeta los archivos 'merge=ours' (.gitattributes)
-git pull                            # trae mejoras del framework; tu contenido queda intacto
-```
-
-¿Querés versionar tu bóveda en tu **propio** repo (recomendado) y seguir recibiendo updates? Creá un
-repo vacío tuyo, convertí Almagesto en `upstream` y poné el tuyo como `origin`:
-
-```bash
-git remote rename origin upstream            # Almagesto = de dónde vienen los updates
-git remote add origin <URL-de-tu-repo>       # tu repo (crealo vacío primero)
-git push -u origin main
-# desde ahora, para actualizar:  git fetch upstream && git merge upstream/main
-```
-
-**Regla de oro:** no edites archivos de framework (scripts, skills, `CLAUDE.md`, `vault/.obsidian/`) en tu
-bóveda — así los merges quedan limpios y sin conflictos. Todo tu trabajo vive en
-`vault/config/objective.yaml` + tu contenido (`vault/wiki/`, `vault/raw/`), protegido por `merge=ours`. ¿Te falta una
-funcionalidad del framework? Abrí un *issue* o *pull request* en Almagesto, o mantené un parche local
-— no la metas inline en tu instancia, o el próximo merge te dará conflictos.
+| Skill | Cuándo | Qué hace |
+|---|---|---|
+| `setup` | "configurá la bóveda", "definí el objetivo" | Paso 0: traduce tu foco en palabras a `objective.yaml` (incluida la regex `relevance.topics`) y la **afina contra ADS con un preview** (`query_ads --probe`), para que NO escribas regex a mano. No ingesta. |
+| `ingest-star` | "bajá/ingestá/agregá la estrella X" | Corre la cadena (`query_ads → fetch_arxiv → fetch_ground_truth → make_notes → extract_fulltext`) y hace la extracción LLM de los papers clave + síntesis + bookkeeping. |
+| `ingest-topic` | "investigá a fondo el tema X" | Como ingest-star pero por TEMA: query ADS por keywords → concept durable en `concepts/`. |
+| `test-hypothesis` | "hipótesis: …", "evidencia a favor/contra de …" | Testea un supuesto **durable** contra el fulltext, lo archiva en `concepts/hypotheses/` y taggea papers (`thesis_links`/`bearing`). |
+| `query-corpus` | búsqueda/pregunta general (no hipótesis) | Responde contra índice + frontmatter + fulltext; archiva en `vault/wiki/queries/` si vale re-preguntarlo. |
+| `verify-citations` | cierre de toda operación con prosa `[[bibcode]]` | Chequea, afirmación por afirmación, que la fuente respalde el claim (1 subagente/par lee el fulltext). |
 
 ## Arquitectura (patrón LLM Wiki)
+
+> El **schema de operación del agente** está en `CLAUDE.md` (raíz); el **estado** en `vault/STATUS.md`; el
+> **catálogo** en `vault/wiki/index.md`. Diseño basado en
+> [karpathy-llm-wiki](vault/raw/refs/karpathy-llm-wiki.md) +
+> [starmorph-implementation-guide](vault/raw/refs/starmorph-implementation-guide.md).
 
 **`vault/raw/`** (fuentes inmutables, las cura el humano) → **LLM** (compilador) → **`vault/wiki/`** (.md que el
 LLM escribe y mantiene). Operaciones: **ingest / query / verify / lint**.
@@ -123,20 +109,6 @@ Para TEMAS (en vez de estrellas) agregar `--topic` y definir el tema en `vault/c
 Luego: extracción LLM (leer PDFs/fulltext → poblar `methods`, indicadores, P/K, síntesis), actualizar
 `index.md` y appendear a `log.md`. Ver `CLAUDE.md` para las operaciones en detalle.
 
-## Skills del agente (`.claude/skills/`)
-
-Las operaciones del patrón están empaquetadas como skills invocables (Claude las dispara solo por la
-descripción, o el usuario con `/<nombre>`). Encapsulan la cadena mecánica + el criterio LLM:
-
-| Skill | Cuándo | Qué hace |
-|---|---|---|
-| `setup` | "configurá la bóveda", "definí el objetivo" | Paso 0: traduce tu foco en palabras a `objective.yaml` (incluida la regex `relevance.topics`) y la **afina contra ADS con un preview** (`query_ads --probe`), para que NO escribas regex a mano. No ingesta. |
-| `ingest-star` | "bajá/ingestá/agregá la estrella X" | Corre la cadena (`query_ads → fetch_arxiv → fetch_ground_truth → make_notes → extract_fulltext`) y hace la extracción LLM de los papers clave + síntesis + bookkeeping. |
-| `ingest-topic` | "investigá a fondo el tema X" | Como ingest-star pero por TEMA: query ADS por keywords → concept durable en `concepts/`. |
-| `test-hypothesis` | "hipótesis: …", "evidencia a favor/contra de …" | Testea un supuesto **durable** contra el fulltext, lo archiva en `concepts/hypotheses/` y taggea papers (`thesis_links`/`bearing`). |
-| `query-corpus` | búsqueda/pregunta general (no hipótesis) | Responde contra índice + frontmatter + fulltext; archiva en `vault/wiki/queries/` si vale re-preguntarlo. |
-| `verify-citations` | cierre de toda operación con prosa `[[bibcode]]` | Chequea, afirmación por afirmación, que la fuente respalde el claim (1 subagente/par lee el fulltext). |
-
 ## Verify — chequeo claim↔fuente
 
 Extensión propia de este template (el lint de Karpathy sólo valida salud estructural, no que la fuente
@@ -144,10 +116,35 @@ respalde la afirmación). Toda afirmación fáctica va **citada `[[bibcode]]` o 
 skill `verify-citations` descompone cada nota en pares (afirmación, bibcode) y lanza un subagente por
 par que lee SÓLO ese `.txt` y devuelve `soportada|parcial|no-soportada` + cita textual. Ver `CLAUDE.md`.
 
-## Token NASA ADS
+## Mantener tu bóveda actualizada (traer mejoras del framework)
 
-Gratis en <https://ui.adsabs.harvard.edu/user/settings/token>. En `vault/config/ads_dev_key` (**gitignored**)
-o en la variable `ADS_DEV_KEY`. Límite ~5000 consultas/día.
+Tu bóveda es **una sola implementación**: el framework (scripts, skills, `CLAUDE.md`, `vault/.obsidian/`)
+vive acá; vos le agregás contenido. Al clonar, tu `origin` apunta a Almagesto, así que traés mejoras
+del framework con un simple `git pull`. Tu contenido no corre riesgo: `vault/config/objective.yaml`,
+`vault/config/stars.yaml`, `vault/config/topics.yaml`, `vault/STATUS.md`, `vault/wiki/index.md` y `vault/wiki/log.md` están marcados
+`merge=ours` en `.gitattributes` — un merge del framework **nunca** los pisa. Registrá el driver una
+sola vez por clon:
+
+```bash
+git config merge.ours.driver true   # respeta los archivos 'merge=ours' (.gitattributes)
+git pull                            # trae mejoras del framework; tu contenido queda intacto
+```
+
+¿Querés versionar tu bóveda en tu **propio** repo (recomendado) y seguir recibiendo updates? Creá un
+repo vacío tuyo, convertí Almagesto en `upstream` y poné el tuyo como `origin`:
+
+```bash
+git remote rename origin upstream            # Almagesto = de dónde vienen los updates
+git remote add origin <URL-de-tu-repo>       # tu repo (crealo vacío primero)
+git push -u origin main
+# desde ahora, para actualizar:  git fetch upstream && git merge upstream/main
+```
+
+**Regla de oro:** no edites archivos de framework (scripts, skills, `CLAUDE.md`, `vault/.obsidian/`) en tu
+bóveda — así los merges quedan limpios y sin conflictos. Todo tu trabajo vive en
+`vault/config/objective.yaml` + tu contenido (`vault/wiki/`, `vault/raw/`), protegido por `merge=ours`. ¿Te falta una
+funcionalidad del framework? Abrí un *issue* o *pull request* en Almagesto, o mantené un parche local
+— no la metas inline en tu instancia, o el próximo merge te dará conflictos.
 
 ## Portabilidad (usar el repo en varias máquinas vía git)
 
