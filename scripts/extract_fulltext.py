@@ -12,6 +12,7 @@ de re-preguntar al corpus cuando cambia el pipeline sin re-parsear el PDF). Requ
 from __future__ import annotations
 
 import argparse
+import shutil
 import subprocess
 import sys
 
@@ -25,6 +26,13 @@ def main() -> int:
     ap.add_argument("slug")
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
+
+    if shutil.which("pdftotext") is None:
+        sys.exit(
+            "Falta `pdftotext` (paquete poppler), necesario para extraer texto de los PDFs:\n"
+            "  Debian/Ubuntu: sudo apt install poppler-utils   ·  macOS: brew install poppler\n"
+            "  Fedora: sudo dnf install poppler-utils           ·  Windows: conda install -c conda-forge poppler"
+        )
 
     srcdir = cfg.PDFS / args.slug
     if not srcdir.exists():

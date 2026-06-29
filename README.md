@@ -20,9 +20,13 @@ un solo archivo, `vault/config/objective.yaml`. El resto del repo es framework r
 ```bash
 git clone <este-repo> mi-boveda && cd mi-boveda
 pip install -r requirements.txt             # pyyaml, requests
-sudo apt install poppler-utils              # pdftotext (extract_fulltext.py)
 echo "TU_TOKEN" > vault/config/ads_dev_key  # token ADS (gratis, gitignored) — o export ADS_DEV_KEY
 ```
+
+> Para **ingestar PDFs nuevos** necesitás `pdftotext` (paquete *poppler*), según tu OS: Debian/Ubuntu
+> `sudo apt install poppler-utils` · macOS `brew install poppler` · Fedora `sudo dnf install poppler-utils`
+> · Windows `conda install -c conda-forge poppler`. No hace falta para consultar una bóveda ya poblada
+> (el fulltext se commitea). En Windows, los comandos de shell de acá corren en Git Bash o WSL.
 
 Después **definí el objetivo pidiéndoselo al agente** — no hace falta escribir YAML ni regex a mano. El
 skill `setup` traduce tu foco (en palabras) a `relevance.topics` (los buckets que deciden qué paper es
