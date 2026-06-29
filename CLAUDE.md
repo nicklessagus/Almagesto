@@ -117,7 +117,9 @@ Toda nota de `vault/wiki/` lleva frontmatter YAML. Campos comunes: `tags`, y cua
   RV-only ≈ $m\sin i$) + `disputes[]` cuando un paper discrepa. El cuerpo trae además una sección
   **`## Huecos`** (qué falta para que la ficha alcance sola: parámetros sin valor, señales sin árbitro,
   métodos no aplicados) y un apéndice **`## Excluidos por el filtro`** (snapshot de los no-core, top por
-  citas con link a ADS — puntero por las dudas, no se bajan).
+  citas con link a ADS — puntero por las dudas, no se bajan). El blockquote de cabecera lleva un
+  **disclaimer ⚠ de capa-LLM** (la prosa es síntesis LLM a revisar; el ground-truth del frontmatter es
+  auditable) — va en blockquote, así el lint lo exime del scan de fuga.
   **Estándar de la ficha: autosuficiente.** La ficha de estrella debe alcanzar por sí sola —
   un agente (o humano) que la lee queda servido **sin abrir ningún paper**. Es una ficha
   bibliográfica: **corta y suficiente**, con todos los datos importantes destilados (parámetros

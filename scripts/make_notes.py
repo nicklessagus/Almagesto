@@ -97,7 +97,12 @@ def write_star_note(slug: str, force: bool) -> None:
 # {name}
 
 > Ficha índice. El frontmatter de arriba es la fuente de verdad máquina-legible
-> (lo leen Obsidian/Dataview y cualquier consumidor de la bóveda). La prosa y los `[[links]]` son la capa humana.
+> (lo leen Obsidian/Dataview y cualquier consumidor de la bóveda); la prosa y los `[[links]]` son la capa humana.
+>
+> ⚠ **Capa LLM — revisar antes de citar.** El ground-truth del frontmatter (NEA/SIMBAD) es auditable, pero
+> la prosa (Resumen, Huecos, extracción) la sintetizó un LLM desde las fuentes: trazable por `[[bibcode]]` y
+> chequeable con `verify-citations`, que es **juicio de LLM, no prueba**. Verificá contra la fuente antes de
+> llevar un dato a un paper/tesis.
 
 ## Resumen
 _(síntesis por LLM: qué se sabe, qué indicadores deberían correlacionar con actividad para este
@@ -169,6 +174,10 @@ def write_concept_note(slug: str, force: bool) -> None:
 
 > Concept durable (tema). Síntesis por LLM: destilar acá lo que aprenden los papers de abajo, de modo
 > que el tema se entienda **sin abrir ningún paper**. Trazabilidad por `[[bibcode]]`.
+>
+> ⚠ **Capa LLM — revisar antes de citar.** La síntesis la compiló un LLM desde los papers citados:
+> chequeable con `verify-citations`, que es **juicio de LLM, no prueba**. Verificá contra la fuente antes
+> de llevar un dato a un paper/tesis.
 
 ## Síntesis
 _(qué se sabe del tema: mecanismos, signos, desfasajes, regímenes)._
