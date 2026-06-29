@@ -19,26 +19,34 @@ un solo archivo, `vault/config/objective.yaml`. El resto del repo es framework r
 
 ```bash
 git clone <este-repo> mi-boveda && cd mi-boveda
-pip install -r requirements.txt                  # pyyaml, requests
-sudo apt install poppler-utils                   # pdftotext (extract_fulltext.py)
-
-# 1) Definí TU objetivo — es lo único específico de tu instancia:
-$EDITOR vault/config/objective.yaml                    # name/short/description + relevance.topics (papers core)
-#    …o NO lo edites a mano: pedíle al agente "configurá la bóveda" (skill `setup`): redacta la
-#    regex de relevancia desde tu foco en palabras y la prueba contra ADS antes de cerrar.
-
-# 2) Poné tu token ADS (gratis, NO se commitea — está gitignored):
-echo "TU_TOKEN" > vault/config/ads_dev_key             # o export ADS_DEV_KEY=...
-
-# 3) Agregá tu primera estrella a vault/config/stars.yaml y ingestala (o pedíselo al agente):
-cd scripts && python query_ads.py <tu_slug>      # <tu_slug> = la clave 'slug' que definiste
+pip install -r requirements.txt             # pyyaml, requests
+sudo apt install poppler-utils              # pdftotext (extract_fulltext.py)
+echo "TU_TOKEN" > vault/config/ads_dev_key  # token ADS (gratis, gitignored) — o export ADS_DEV_KEY
 ```
 
-**`vault/config/objective.yaml` es el corazón.** Controla el encuadre que lee el agente y, sobre todo, el
-clasificador de relevancia (`relevance.topics`: regex que deciden qué paper de ADS es core). Viene
-pre-cargado con un ejemplo (actividad estelar vs RV planetaria) que sirve de documentación del formato
-y de default funcional — reescribilo para tu tema. Lo demás (forma astro: estrellas, planetas,
-indicadores, ground-truth de exoplanetas) es genérico y no se toca.
+Después **definí el objetivo pidiéndoselo al agente** — no hace falta escribir YAML ni regex a mano. El
+skill `setup` traduce tu foco (en palabras) a `relevance.topics` (los buckets que deciden qué paper es
+*core*), lo **prueba contra ADS** y te muestra el corte para que lo apruebes:
+
+> **Vos:** *"configurá la bóveda: quiero separar actividad estelar de señales planetarias en RV."*
+>
+> **Agente (skill `setup`):** arma los buckets (`rv`, `activity`, `method`…) y corre el preview
+> (`query_ads.py --probe`, no baja nada):
+> ```
+> 41/50 CORE · top por citas  [CORE/—  · tópicos que matchearon]:
+> [CORE]  812  Stellar activity and radial-velocity jitter in...    «rv,activity»
+> [CORE]  333  Gaussian-process modelling to disentangle planets...  «rv,activity,method»
+> [—   ]  210  A catalogue of nearby M dwarfs                        «(ninguno)»
+> ```
+> Afina la regex e itera hasta que el corte cierre → te deja `vault/config/objective.yaml` listo.
+
+Con el objetivo definido, sumás estrellas/temas y los ingestás, también pidiéndoselo al agente:
+*"bajá HD 152391"* (`ingest-star`) o *"investigá BSS sobre RV"* (`ingest-topic`).
+
+**El objetivo es lo único específico de tu instancia** (`vault/config/objective.yaml`; editable a mano si
+preferís: `name`/`description` + `relevance.topics`). Lo demás —forma astro: estrellas, planetas,
+indicadores, ground-truth— es framework genérico y no se toca. Viene con un ejemplo (actividad estelar vs
+RV) que sirve de formato y default funcional.
 
 ## Mantener tu bóveda actualizada (traer mejoras del framework)
 
