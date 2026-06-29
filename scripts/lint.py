@@ -10,12 +10,13 @@ página destino (tag que no matchea ninguna nota concepto/hipótesis → no acum
 **fuga de implementación** (material de implementación/código no bibliográfico que se
 filtró al vault; frontera dura, regla #0 de CLAUDE.md; WARN no bloqueante), **áreas de concepts/ fuera
 de `concept_areas`** (subcarpeta de concepts/ no declarada en objective.yaml → posible typo/carpeta
-fantasma; WARN), **citas no verificables** (bibcode
+fantasma; WARN), **PDF ↔ disco** (drift: el campo `pdf` de un paper no refleja el PDF bajado — sin linkear
+o puntero a archivo inexistente; WARN), **citas no verificables** (bibcode
 citado en query/concepto/hipótesis sin su `.txt` en `vault/raw/fulltext/` → no se puede chequear claim↔fuente
 con el skill `verify-citations`), **cobertura** (concepto/hipótesis sin ninguna cita `[[bibcode]]` →
 afirmaciones no chequeables; backlog), y campos clave
-incompletos (P_rot null, papers relevantes sin `methods`, `thesis_links` sin `bearing`,
-PDF declarado pero ausente). No modifica nada: reporta para que el agente/usuario decida.
+incompletos (P_rot null, papers relevantes sin `methods`, `thesis_links` sin `bearing`).
+No modifica nada: reporta para que el agente/usuario decida.
 """
 from __future__ import annotations
 
@@ -75,6 +76,11 @@ def main() -> int:
     # verificabilidad: una cita en query/hipótesis sin su .txt no se puede chequear claim↔fuente.
     fulltext = {basename(p)[:-4] for p in glob.glob(str(cfg.RAW / "fulltext" / "**" / "*.txt"),
                                                      recursive=True)}
+    # PDFs en disco (un <bibcode>.pdf por slug en vault/raw/pdfs/) → chequear drift `pdf` ↔ archivo.
+    # stem = safe_name(bibcode), igual que el nombre de la nota del paper.
+    pdf_on_disk = {}
+    for _p in glob.glob(str(cfg.PDFS / "**" / "*.pdf"), recursive=True):
+        pdf_on_disk.setdefault(basename(_p)[:-4], _p)
     unverifiable: list = []            # (stem, "cita <bibcode> sin fulltext")
     coverage: list = []                # concept/hipótesis sin citas [[bibcode]] → no chequeable
     names = {p.rsplit("/", 1)[-1][:-3] for p in files}  # stems referenciables por [[..]]
@@ -82,6 +88,7 @@ def main() -> int:
     kinds: dict[str, list] = {}
     broken, incomplete, contradictions = [], [], []
     impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
+    pdf_issues: list = []              # (stem, ...) — drift frontmatter `pdf` ↔ PDF en disco
     thesis_refs: dict[str, list] = {}  # valor de thesis_link -> notas que lo usan
     dispute_refs: list = []            # (estrella, planeta, ref) de planets[].disputes
 
@@ -156,11 +163,14 @@ def main() -> int:
                 incomplete.append((stem, "thesis_links sin bearing"))
             for tl in (fm.get("thesis_links") or []):
                 thesis_refs.setdefault(str(tl), []).append(stem)
-            pdf = fm.get("pdf")
+            # PDF ↔ disco (higiene; WARN): el campo `pdf` debe reflejar el PDF real bajado.
+            pdf, on_disk = fm.get("pdf"), pdf_on_disk.get(stem)
             if pdf:
-                p = (cfg.WIKI / "papers" / pdf).resolve()
-                if not p.exists():
-                    incomplete.append((stem, f"pdf declarado ausente: {pdf}"))
+                if not (cfg.WIKI / "papers" / pdf).resolve().exists():
+                    pdf_issues.append((stem, f"`pdf` apunta a archivo inexistente: {pdf}"))
+            elif on_disk:                      # pdf null/vacío pero el PDF está bajado → drift
+                slug_dir = on_disk.rsplit("/", 2)[-2]
+                pdf_issues.append((stem, f"PDF en disco sin linkear → poné `pdf: ../../raw/pdfs/{slug_dir}/{stem}.pdf`"))
 
     # contradicción ground-truth ↔ ficha (nº de planetas) + masa sospechosa
     mass_issues = []
@@ -229,6 +239,7 @@ def main() -> int:
                          ("disputes[].ref sin paper destino", dangling_disputes),
                          ("⛔ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)", impl_leaks),
                          ("Áreas de concepts/ no declaradas en objective.yaml (WARN, posible typo)", undeclared_areas),
+                         ("PDF ↔ disco (WARN — higiene: frontmatter `pdf` vs PDF bajado)", pdf_issues),
                          ("Citas no verificables en query/concepto/hipótesis (sin fulltext)", unverifiable),
                          ("Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog)", coverage),
                          ("Campos incompletos", incomplete)]:
