@@ -24,6 +24,8 @@ sudo apt install poppler-utils                   # pdftotext (extract_fulltext.p
 
 # 1) Definí TU objetivo — es lo único específico de tu instancia:
 $EDITOR vault/config/objective.yaml                    # name/short/description + relevance.topics (papers core)
+#    …o NO lo edites a mano: pedíle al agente "configurá la bóveda" (skill `setup`): redacta la
+#    regex de relevancia desde tu foco en palabras y la prueba contra ADS antes de cerrar.
 
 # 2) Poné tu token ADS (gratis, NO se commitea — está gitignored):
 echo "TU_TOKEN" > vault/config/ads_dev_key             # o export ADS_DEV_KEY=...
@@ -116,6 +118,7 @@ descripción, o el usuario con `/<nombre>`). Encapsulan la cadena mecánica + el
 
 | Skill | Cuándo | Qué hace |
 |---|---|---|
+| `setup` | "configurá la bóveda", "definí el objetivo" | Paso 0: traduce tu foco en palabras a `objective.yaml` (incluida la regex `relevance.topics`) y la **afina contra ADS con un preview** (`query_ads --probe`), para que NO escribas regex a mano. No ingesta. |
 | `ingest-star` | "bajá/ingestá/agregá la estrella X" | Corre la cadena (`query_ads → fetch_arxiv → fetch_ground_truth → make_notes → extract_fulltext`) y hace la extracción LLM de los papers clave + síntesis + bookkeeping. |
 | `ingest-topic` | "investigá a fondo el tema X" | Como ingest-star pero por TEMA: query ADS por keywords → concept durable en `concepts/`. |
 | `test-hypothesis` | "hipótesis: …", "evidencia a favor/contra de …" | Testea un supuesto **durable** contra el fulltext, lo archiva en `concepts/hypotheses/` y taggea papers (`thesis_links`/`bearing`). |

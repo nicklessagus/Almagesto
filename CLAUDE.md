@@ -167,6 +167,14 @@ terminal no renderiza LaTeX y `$...$` se ve crudo.
 
 ## Operaciones
 
+### Setup (definir el objetivo — paso 0, skill `setup`)
+Genera/afina `vault/config/objective.yaml` (la **lente**: `name`/`description` + `relevance.topics`, el
+clasificador de papers core). El agente traduce el foco del usuario (en palabras) a la regex — el usuario
+**no** escribe regex — y la valida contra papers reales con `python scripts/query_ads.py --probe "<query>"`
+(muestra el corte core/no-core sin bajar nada) iterando hasta que cierre. `relevance.topics` son **facetas**
+(constantes; clasifican tanto papers de estrella como de tema), **no** sujetos (las estrellas/temas van en
+la query, `stars.yaml`/`topics.yaml`). No ingesta nada; después se usan `ingest-star`/`ingest-topic`.
+
 ### Ingest (una fuente → cascada de páginas)
 1. Scripts de `scripts/` bajan: `query_ads.py` → `fetch_arxiv.py` → `fetch_ground_truth.py` →
    `extract_fulltext.py` → `make_notes.py` (stubs mecánicos; idempotente, no pisa).

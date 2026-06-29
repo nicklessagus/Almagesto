@@ -104,15 +104,41 @@ def query_ads(q: str, rows: int = 400) -> list[dict]:
     return out
 
 
+def print_probe(q: str, recs: list) -> int:
+    """Modo preview del skill `setup`: muestra el corte core/no-core de una query sin bajar nada,
+    para afinar la regla de relevancia (relevance.topics) contra papers reales."""
+    rel = [r for r in recs if r["relevant"]]
+    print(f"Probe (no baja PDFs ni escribe build/). q: {q}")
+    print(f"  {len(recs)} papers · {len(rel)} CORE · {len(recs) - len(rel)} no-core\n")
+    print("  Top por citas  [CORE/—  ·  tópicos que matchearon]:")
+    for r in recs[:25]:
+        mark = "CORE" if r["relevant"] else "—   "
+        tp = ",".join(r["topics"]) or "(ninguno)"
+        print(f"  [{mark}] {r['citation_count']:>5}  {(r['title'] or '')[:68]}  «{tp}»")
+    print("\n  → ajustá relevance.topics en objective.yaml y re-corré --probe hasta que el corte cierre.")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("slug")
+    ap.add_argument("slug", nargs="?",
+                    help="slug de estrella (o tema con --topic). Se omite con --probe.")
     ap.add_argument("--rows", type=int, default=400)
     ap.add_argument("--all", action="store_true",
                     help="guardar todos (default: solo relevantes en el resumen)")
     ap.add_argument("--topic", action="store_true",
                     help="el slug es un TEMA de vault/config/topics.yaml (query Solr cruda), no una estrella")
+    ap.add_argument("--probe", metavar="QUERY",
+                    help="PREVIEW (skill setup): corre una query Solr CRUDA y muestra el corte "
+                         "core/no-core con títulos, clasificando con relevance.topics de objective.yaml. "
+                         "No baja PDFs ni escribe build/ — sólo para afinar la regla de relevancia.")
     args = ap.parse_args()
+
+    if args.probe:
+        return print_probe(args.probe, query_ads(args.probe, rows=args.rows))
+
+    if not args.slug:
+        ap.error('falta el slug (o usá --probe "<query>" para previsualizar la regla de relevancia)')
 
     if args.topic:
         _, meta = cfg.topic_by_slug(args.slug)

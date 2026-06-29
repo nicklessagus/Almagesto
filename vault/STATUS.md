@@ -38,10 +38,13 @@ nomenclatura no tiene a qué adaptarse; el check sin la nomenclatura no tiene co
    `vault/config/objective.yaml`; `methods`/`hypotheses` reservadas; loader `lib_config.load_concept_areas()`
    (modo tolerante si una instancia vieja no lo declara). Las 5 menciones de "folklore" ahora defieren al
    contrato (CLAUDE.md, README.md, topics.yaml, ingest-topic/SKILL.md).
-2. ⏳ **PENDIENTE** — **skill de setup interactivo** (mayor impacto UX). El agente pregunta el foco y genera
-   `vault/config/objective.yaml` + `stars`/`topics` + áreas en la nomenclatura oficial. Valor en las 2 partes
-   difíciles: redactar `relevance.topics` (regex) y nombrar los buckets. **Riesgo:** respetar la
-   frontera dura — adapta el foco, no toca el sustrato astro ni inventa nada no-citable.
+2. ✅ **HECHO (alcance: objetivo)** — **skill `setup` interactivo**. El agente traduce el foco del
+   usuario (en palabras) a `objective.yaml` —`name`/`description` + la regex `relevance.topics` + sugerencia
+   de `concept_areas`— y la **afina contra ADS** con `query_ads.py --probe "<query>"` (preview del corte
+   core/no-core sin bajar nada), iterando hasta que cierre. Distingue **facetas** (→ relevance.topics,
+   constantes) de **sujetos** (→ stars/topics) y respeta la frontera dura. **Descopeado** (a pedido): sembrar
+   `stars.yaml`/`topics.yaml` queda fuera — eso entra por `ingest-star`/`ingest-topic`. **Pendiente** (capa
+   2 extendida, opcional): un setup que además proponga las estrellas/temas iniciales.
 3. 🟡 **PARCIAL** — **check de config (lint, WARN blando)**. ✅ Áreas (abiertas, nunca se bloquea):
    `make_notes` **avisa** si el `area` no está en `concept_areas` pero crea igual; `lint.py` marca **WARN**
    las carpetas de `concepts/` fuera de la lista (atrapa typos sin restringir). ⏳ Falta el resto de los guards de config: `KeyError`
