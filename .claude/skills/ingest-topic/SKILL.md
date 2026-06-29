@@ -36,7 +36,7 @@ del repo.
      --rows 50` y mirar `n_relevant` + los títulos top (ordenados por citas). Si trae cientos con
      ruido o muy pocos, reajustar la query y reconfirmar. **No** bajar PDFs hasta que el usuario
      apruebe la query final.
-   - **d. Persistir.** Recién entonces escribir/actualizar la entrada en `config/topics.yaml`:
+   - **d. Persistir.** Recién entonces escribir/actualizar la entrada en `vault/config/topics.yaml`:
      `title`, `area` (`indicators|methods|activity|hypotheses`), `concept` (nota destino, existente o
      a stubbear), `query` (la Solr cruda aprobada) y `aliases` opcional. Si el tema ya existía en el
      YAML, ofrecer reusar la query guardada o re-pulirla.
@@ -54,7 +54,7 @@ del repo.
    `build/<slug>/missing_pdf.json` → bajar manual por DOI si son clave.
 
 3. **Extracción LLM (criterio).** Leer los papers **clave del tema** (fundacionales / árbitros /
-   metodológicos) desde `raw/fulltext/<slug>/` y poblar cada `wiki/papers/<bibcode>.md`: `methods`,
+   metodológicos) desde `vault/raw/fulltext/<slug>/` y poblar cada `vault/wiki/papers/<bibcode>.md`: `methods`,
    `bearing`, `thesis_links` (ya pre-sembrado al concept; agregar otros si toca) y la sección
    "Extracción" enfocada **en el eje del tema** (qué aporta al tópico: signo, lag, mecanismo, método),
    no en una estrella concreta.
@@ -69,8 +69,8 @@ del repo.
    que abrir un paper, falta en el concept → agregarlo. (No hay proxy estructural en `lint.py` para
    concepts — la suficiencia la juzgás vos, igual que en la ficha de estrella.)
 
-6. **Bookkeeping.** Actualizar `wiki/index.md` (agregar el concept si es nuevo), appendear a
-   `wiki/log.md`, y `STATUS.md` si cambió el estado. **No** tocar la matriz método×estrella. Correr
+6. **Bookkeeping.** Actualizar `vault/wiki/index.md` (agregar el concept si es nuevo), appendear a
+   `vault/wiki/log.md`, y `vault/STATUS.md` si cambió el estado. **No** tocar la matriz método×estrella. Correr
    `python scripts/lint.py` y revisar (0 wikilinks rotos / huérfanos / `thesis_links` colgados).
 
 6b. **Verificar citas.** Correr el skill `verify-citations` sobre el **concept** (y las notas de paper
@@ -93,20 +93,20 @@ este modo. **`ingest-star` no cambia: sigue siendo astro-only.**
 
 Qué cambia respecto del flujo ADS de arriba:
 - **Sin ADS:** se saltean `query_ads.py`, `fetch_arxiv.py` y `fetch_ground_truth.py`. En
-  `config/topics.yaml` la entrada lleva `query: null` y un campo `source: local-pdfs+web` (marcador); el
+  `vault/config/topics.yaml` la entrada lleva `query: null` y un campo `source: local-pdfs+web` (marcador); el
   resto del schema del tema igual (`title`, `area`, `concept`, `aliases`).
 - **Fuente = PDFs locales y/o web:**
-  - **PDFs** que provee el usuario → copiarlos a `raw/pdfs/<slug>/` (git-lfs) renombrados a la **clave de
-    cita** (abajo); `python extract_fulltext.py <slug>` los pasa a `raw/fulltext/<slug>/` (es
+  - **PDFs** que provee el usuario → copiarlos a `vault/raw/pdfs/<slug>/` (git-lfs) renombrados a la **clave de
+    cita** (abajo); `python extract_fulltext.py <slug>` los pasa a `vault/raw/fulltext/<slug>/` (es
     source-agnostic: sólo corre `pdftotext`).
   - **Web** (rellenar fundacionales / huecos) → traer con `WebFetch`/`deep-research` y **guardar un
-    snapshot determinista** como `raw/fulltext/<slug>/<clave>.txt`, con **URL + fecha de acceso** al
+    snapshot determinista** como `vault/raw/fulltext/<slug>/<clave>.txt`, con **URL + fecha de acceso** al
     inicio del archivo, para que la afirmación sea **citable y verificable** por `verify-citations`.
 - **Clave de cita sintética (papers sin bibcode ADS):** `AAAA+Autor` (p. ej. `2000HyvarinenOja`,
   `2006Tichavsky`, `2025sklearn`). Debe **empezar con `AAAA`+letra** (lo exige `BIBCODE_RE` del lint) y
   coincidir con el nombre del `.txt`. Donde **sí** exista un bibcode ADS real, usarlo.
 - **Notas de paper a mano:** `make_notes.py` asume ADS → en este modo se crean a mano
-  `wiki/papers/<clave>.md` con el mismo frontmatter (`bibcode` = clave sintética; `arxiv_id`/`doi` si
+  `vault/wiki/papers/<clave>.md` con el mismo frontmatter (`bibcode` = clave sintética; `arxiv_id`/`doi` si
   hay; `bibstem` = venue; `stars: []`; `thesis_links` al concept).
 - **Todo lo demás igual:** extracción enfocada en el eje del tema, síntesis al concept durable,
   auto-revisión de autosuficiencia, **`verify-citations`** (la clave sintética y el snapshot `.txt` la
@@ -119,6 +119,6 @@ Qué cambia respecto del flujo ADS de arriba:
 - Distinción concept vs query: el concept es el resultado **durable** del tema (acumula solo). Una
   *query* archivada (`queries/`) es un snapshot complementario — opcional, sólo si vale re-preguntarla.
 - **Lectura del fulltext (saltar afiliaciones):** los `.txt` arrancan con autores/afiliaciones que no
-  aportan. Saltar al contenido con, p. ej., `awk 'tolower($0)~/abstract/{f=1} f' raw/fulltext/<slug>/<bib>.txt | head -60`
+  aportan. Saltar al contenido con, p. ej., `awk 'tolower($0)~/abstract/{f=1} f' vault/raw/fulltext/<slug>/<bib>.txt | head -60`
   y `grep -inE "bisector|BIS|FWHM|S-?index|chromatic|correlat|lag" ...` para los números clave. No
   tocar el `.txt` en disco (se usa para grep); el salto es sólo en la lectura.

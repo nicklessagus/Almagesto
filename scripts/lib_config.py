@@ -1,8 +1,8 @@
 """Configuración compartida de los scripts de ingesta de la bóveda.
 
 - Resuelve rutas del repo (sin asumir cwd).
-- Lee el token ADS de config/ads_dev_key o de la variable de entorno ADS_DEV_KEY.
-- Carga config/stars.yaml, config/topics.yaml y config/objective.yaml.
+- Lee el token ADS de vault/config/ads_dev_key o de la variable de entorno ADS_DEV_KEY.
+- Carga vault/config/stars.yaml, vault/config/topics.yaml y vault/config/objective.yaml.
 """
 from __future__ import annotations
 
@@ -11,16 +11,19 @@ from pathlib import Path
 
 import yaml
 
-ROOT = Path(__file__).resolve().parent.parent  # raíz del repo
-CONFIG = ROOT / "config"
+ROOT = Path(__file__).resolve().parent.parent  # raíz del repo (andamiaje + bóveda)
+VAULT = ROOT / "vault"                          # la bóveda: contenido (config/wiki/raw); Obsidian abre acá
+CONFIG = VAULT / "config"
 STARS_YAML = CONFIG / "stars.yaml"
 TOPICS_YAML = CONFIG / "topics.yaml"
 OBJECTIVE_YAML = CONFIG / "objective.yaml"
 ADS_KEY_FILE = CONFIG / "ads_dev_key"
 
 # raw/ = fuentes inmutables (el LLM lee, no modifica) | wiki/ = el LLM escribe y mantiene
-RAW = ROOT / "raw"
-WIKI = ROOT / "wiki"
+RAW = VAULT / "raw"
+WIKI = VAULT / "wiki"
+# build/ y outputs/ son scratch del tooling (gitignored, regenerable): viven en la raíz del
+# repo, FUERA de vault/, para no contaminar la bóveda de Obsidian. Resolver vía cfg.ROOT.
 
 PDFS = RAW / "pdfs"
 FULLTEXT = RAW / "fulltext"
@@ -36,14 +39,14 @@ LOG = WIKI / "log.md"
 
 
 def get_ads_token() -> str:
-    """Token ADS desde env ADS_DEV_KEY o config/ads_dev_key (gitignored — nunca se commitea)."""
+    """Token ADS desde env ADS_DEV_KEY o vault/config/ads_dev_key (gitignored — nunca se commitea)."""
     tok = os.environ.get("ADS_DEV_KEY")
     if tok:
         return tok.strip()
     if ADS_KEY_FILE.exists():
         return ADS_KEY_FILE.read_text().strip()
     raise RuntimeError(
-        "No hay token ADS. Poné config/ads_dev_key o exportá ADS_DEV_KEY. "
+        "No hay token ADS. Poné vault/config/ads_dev_key o exportá ADS_DEV_KEY. "
         "Token gratis en https://ui.adsabs.harvard.edu/user/settings/token"
     )
 
@@ -59,7 +62,7 @@ def star_by_slug(slug: str) -> tuple[str, dict]:
     for name, meta in load_stars().items():
         if meta.get("slug") == slug:
             return name, meta
-    raise KeyError(f"slug desconocido: {slug!r}. Definilo en config/stars.yaml")
+    raise KeyError(f"slug desconocido: {slug!r}. Definilo en vault/config/stars.yaml")
 
 
 def load_topics() -> dict:
@@ -75,16 +78,16 @@ def topic_by_slug(slug: str) -> tuple[str, dict]:
     topics = load_topics()
     if slug in topics:
         return slug, topics[slug]
-    raise KeyError(f"tema desconocido: {slug!r}. Definilo en config/topics.yaml")
+    raise KeyError(f"tema desconocido: {slug!r}. Definilo en vault/config/topics.yaml")
 
 
 def load_objective() -> dict:
-    """El OBJETIVO de la bóveda (config/objective.yaml): name/short/description y el
+    """El OBJETIVO de la bóveda (vault/config/objective.yaml): name/short/description y el
     clasificador de relevancia (`relevance.topics`, `relevance.noise_doctypes`). Es
     lo que define qué papers son 'core'."""
     if not OBJECTIVE_YAML.exists():
         raise RuntimeError(
-            "Falta config/objective.yaml. Es el archivo que define el objetivo de la "
+            "Falta vault/config/objective.yaml. Es el archivo que define el objetivo de la "
             "bóveda y el clasificador de relevancia. Partí del ejemplo del template."
         )
     with open(OBJECTIVE_YAML, encoding="utf-8") as fh:

@@ -9,7 +9,7 @@ m·sini implícita por K/P/e/M* (atrapa best-mass espurias de NEA), `thesis_link
 página destino (tag que no matchea ninguna nota concepto/hipótesis → no acumula),
 **fuga de implementación** (material de implementación/código no bibliográfico que se
 filtró al vault; frontera dura, regla #0 de CLAUDE.md; WARN no bloqueante), **citas no verificables** (bibcode
-citado en query/concepto/hipótesis sin su `.txt` en `raw/fulltext/` → no se puede chequear claim↔fuente
+citado en query/concepto/hipótesis sin su `.txt` en `vault/raw/fulltext/` → no se puede chequear claim↔fuente
 con el skill `verify-citations`), **cobertura** (concepto/hipótesis sin ninguna cita `[[bibcode]]` →
 afirmaciones no chequeables; backlog), y campos clave
 incompletos (P_rot null, papers relevantes sin `methods`, `thesis_links` sin `bearing`,

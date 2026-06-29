@@ -12,7 +12,7 @@ Tapa el *grounding gap* / *epistemic drift*: el LLM puede escribir una cita corr
 afirmación que el paper **no dice** (estudios: 50–90% de citas en texto largo de LLM no están
 plenamente respaldadas). Acá cada afirmación se contrasta contra el texto real de su fuente.
 
-> **Ventaja del corpus cerrado:** corpus **cerrado** — hay un `.txt` por bibcode en `raw/fulltext/`. Se
+> **Ventaja del corpus cerrado:** corpus **cerrado** — hay un `.txt` por bibcode en `vault/raw/fulltext/`. Se
 > saltea el *retrieval* (la parte que mete errores en los verificadores generales): ya sabemos qué
 > archivo leer. El chequeo es directo passage-matching.
 >
@@ -22,7 +22,7 @@ plenamente respaldadas). Acá cada afirmación se contrasta contra el texto real
 > desordenar doble-columna, ecuaciones, tablas, ligaduras y guionado; y un PDF **escaneado sin capa de
 > texto** da `.txt` vacío/basura. Por eso: si una afirmación **no** aparece textual en el `.txt`, antes
 > de declararla `no-soportada` considerar que puede ser un **artefacto de extracción** (ecuación/tabla)
-> → en ese caso abrir el **PDF** (`raw/pdfs/<slug>/<bibcode>.pdf`) para esa afirmación puntual, o
+> → en ese caso abrir el **PDF** (`vault/raw/pdfs/<slug>/<bibcode>.pdf`) para esa afirmación puntual, o
 > marcarla **`no verificable por extracción`** (distinto de `no-soportada`).
 
 ## Cuándo correrlo
@@ -30,7 +30,7 @@ plenamente respaldadas). Acá cada afirmación se contrasta contra el texto real
 - A pedido: "rechequeá las citas", "¿esto lo dice el paper?", al editar una nota con citas.
 
 ## Entrada
-La **ruta de la nota** a verificar (p. ej. `wiki/queries/crx-slope-values.md`). Si no se da, usar la
+La **ruta de la nota** a verificar (p. ej. `vault/wiki/queries/crx-slope-values.md`). Si no se da, usar la
 última nota tocada en la operación en curso.
 
 ## Pasos
@@ -45,7 +45,7 @@ fila de tabla con un valor, cada bullet o frase que asevera un hecho. Para cada 
 **Excepciones (no se verifican, pero se chequea la marca):**
 - **Valores de ground-truth (NEA) en fichas de estrella** → los parámetros planetarios (P/K/e/m·sin i,
   status, nº de planetas) del **frontmatter** y de la **tabla de inventario** vienen de **NEA**
-  (`raw/ground_truth/<slug>.json`), **no** de un paper. **NO se verifican contra el fulltext** — de su
+  (`vault/raw/ground_truth/<slug>.json`), **no** de un paper. **NO se verifican contra el fulltext** — de su
   consistencia se ocupa el **lint** (contradicción GT↔ficha + masa implícita por K/P/e/M\*). Verificar
   un valor NEA contra un paper es un **error de categoría** (el paper de descubrimiento suele dar un
   valor algo distinto al best-value combinado de NEA, y eso NO es una cita rota). Regla: si el número
@@ -65,7 +65,7 @@ fila de tabla con un valor, cada bullet o frase que asevera un hecho. Para cada 
 ### 2. Fan-out: un subagente independiente por par
 Para cada par, lanzar un subagente (tipo `Explore`) **en paralelo** (varios en un mismo mensaje).
 Cada uno:
-- Localiza el fulltext: `raw/fulltext/**/<bibcode>.txt` (el bibcode puede vivir bajo cualquier
+- Localiza el fulltext: `vault/raw/fulltext/**/<bibcode>.txt` (el bibcode puede vivir bajo cualquier
   slug/tema — usar glob). **Ojo:** los nombres tienen `&` y puntos → citarlos entre comillas simples
   al leer/grep.
 - Lee **sólo ese archivo** (grounding-first; **prohibido** responder de memoria o de otro paper).
@@ -109,12 +109,12 @@ Chequeo afirmación↔fulltext (skill `verify-citations`). N pares; X soportadas
 
 Inferencias declaradas (sin cita, por diseño): <listar>.
 ```
-Convertir fechas relativas a absolutas. Notación `$...$` en archivos `wiki/` (texto plano en chat).
+Convertir fechas relativas a absolutas. Notación `$...$` en archivos `vault/wiki/` (texto plano en chat).
 
 ### 6. Lint + cierre
 Correr `python scripts/lint.py` (debe quedar 0 en lo bloqueante, incl. **0 fuga-sim** y **0 citas
 no verificables**). Si el usuario pidió archivar/commitear, `git add` de los archivos **específicos**
-y commit descriptivo; **preguntar antes de `push`**. Appendear a `wiki/log.md` (resumen del chequeo:
+y commit descriptivo; **preguntar antes de `push`**. Appendear a `vault/wiki/log.md` (resumen del chequeo:
 cuántas soportadas/corregidas).
 
 ## Reporte (al chat)

@@ -11,7 +11,7 @@ procesa. Trabajar desde la raíz del repo.
 
 ## Pasos
 
-1. **Resolver el slug.** Buscar la estrella en `config/stars.yaml`. Si no está, agregarla con
+1. **Resolver el slug.** Buscar la estrella en `vault/config/stars.yaml`. Si no está, agregarla con
    `slug`, `simbad`, `ads_object`, `aliases` y (si aplica) `data_local`. Verificar el nombre en
    SIMBAD si hay duda.
 
@@ -27,13 +27,13 @@ procesa. Trabajar desde la raíz del repo.
    son muchos PDFs. Papers sin arXiv quedan en `build/<slug>/missing_pdf.json`.
 
 3. **Extracción LLM (criterio).** Leer los papers **clave** (discovery / actividad / métodos) desde
-   `raw/fulltext/<slug>/` y poblar:
-   - en `wiki/papers/<bibcode>.md`: `methods`, `thesis_links`, `bearing`, y la sección "Extracción"
+   `vault/raw/fulltext/<slug>/` y poblar:
+   - en `vault/wiki/papers/<bibcode>.md`: `methods`, `thesis_links`, `bearing`, y la sección "Extracción"
      (P/K por planeta, indicadores, relevancia para la tesis).
-   - en `wiki/stars/<slug>.md`: completar frontmatter (`P_rot_days`,
+   - en `vault/wiki/stars/<slug>.md`: completar frontmatter (`P_rot_days`,
      `activity_indicators_expected`, caveats por planeta) y escribir la **síntesis** (qué se sabe,
      qué indicador debería trazar actividad para ese tipo espectral, huecos).
-   - **Contrastar contra `raw/ground_truth/<slug>.json`**: si un paper discrepa del archivo
+   - **Contrastar contra `vault/raw/ground_truth/<slug>.json`**: si un paper discrepa del archivo
      (p. ej. planeta dudoso), marcarlo con `lit_caveat`/`bearing: challenges`, no celebrar.
 
 4. **Auto-revisión de autosuficiencia (semántica).** Releer la ficha **como un agente externo que
@@ -43,8 +43,8 @@ procesa. Trabajar desde la raíz del repo.
    responder algo hay que abrir un paper, falta en la ficha → agregarlo. (`lint.py` chequea el proxy
    estructural — cada planeta del frontmatter discutido en prosa — pero la suficiencia la juzgás vos.)
 
-5. **Bookkeeping.** Actualizar `wiki/index.md` (agregar la estrella), appendear a `wiki/log.md`,
-   tocar `wiki/matrices/method_star.md` (qué métodos se aplicaron en la literatura) y `STATUS.md`
+5. **Bookkeeping.** Actualizar `vault/wiki/index.md` (agregar la estrella), appendear a `vault/wiki/log.md`,
+   tocar `vault/wiki/matrices/method_star.md` (qué métodos se aplicaron en la literatura) y `vault/STATUS.md`
    si cambió el estado. Correr `python scripts/lint.py` y revisar.
 
 5b. **Verificar citas.** Correr el skill `verify-citations` sobre la **ficha de la estrella** (y sobre
@@ -64,6 +64,6 @@ procesa. Trabajar desde la raíz del repo.
 - No copiar FITS a la bóveda: la ficha apunta a los datos vía `data_local`.
 - **Lectura del fulltext (saltar afiliaciones):** los `.txt` arrancan con autores/afiliaciones que no
   aportan a la extracción. NO leer las primeras páginas enteras: saltar al contenido con, p. ej.,
-  `awk 'tolower($0)~/abstract/{f=1} f' raw/fulltext/<slug>/<bib>.txt | head -60` para el abstract, y
+  `awk 'tolower($0)~/abstract/{f=1} f' vault/raw/fulltext/<slug>/<bib>.txt | head -60` para el abstract, y
   `grep -inE "P_?rot|K ?=|mass|chromatic|GP|activity indicator" ...` para los números clave. No tocar
   el `.txt` en disco (se usa para grep); el salto es sólo en la lectura.

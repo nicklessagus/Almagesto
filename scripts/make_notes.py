@@ -207,7 +207,7 @@ def main() -> int:
     ap.add_argument("--all", action="store_true", help="incluir papers no-relevantes")
     ap.add_argument("--force", action="store_true", help="pisar notas existentes")
     ap.add_argument("--topic", action="store_true",
-                    help="el slug es un TEMA de config/topics.yaml: genera concept en vez de ficha de estrella")
+                    help="el slug es un TEMA de vault/config/topics.yaml: genera concept en vez de ficha de estrella")
     args = ap.parse_args()
     print(f"Generando notas para {args.slug}")
     if args.topic:

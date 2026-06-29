@@ -1,30 +1,29 @@
-# Token ADS: NUNCA commitearlo. Ponelo en config/ads_dev_key (gitignored) o en la
+# Token ADS: NUNCA commitearlo. Ponelo en vault/config/ads_dev_key (gitignored) o en la
 # variable de entorno ADS_DEV_KEY. Token gratis: https://ui.adsabs.harvard.edu/user/settings/token
-config/ads_dev_key
+vault/config/ads_dev_key
 
 # Cachés Python
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
 
-# Intermedios de ingesta (se regeneran con los scripts)
+# Intermedios de ingesta y reportes de lint (regenerables): scratch del tooling, viven en
+# la raíz del repo FUERA de vault/ para no contaminar la bóveda de Obsidian.
 build/
-
-# Reportes de lint (regenerables)
 outputs/
 
 # Datos crudos (la bóveda referencia, no aloja)
 *.fits
 *.pkl
 
-# Obsidian: se commitea la config compartible (.obsidian/app.json, appearance.json,
-# core-plugins.json, community-plugins.json, plugins/, snippets/, themes/, hotkeys.json...);
-# se ignora lo volátil/por-máquina (layout de ventanas y caché).
-.obsidian/workspace.json
-.obsidian/workspace-mobile.json
-.obsidian/cache
+# Obsidian (la bóveda se abre en vault/): se commitea la config compartible
+# (vault/.obsidian/app.json, appearance.json, core-plugins.json, community-plugins.json,
+# plugins/, snippets/, themes/, hotkeys.json...); se ignora lo volátil/por-máquina.
+vault/.obsidian/workspace.json
+vault/.obsidian/workspace-mobile.json
+vault/.obsidian/cache
 # Plugins de comunidad (Dataview, etc.): se instalan desde Obsidian, no se versionan.
-.obsidian/plugins/
+vault/.obsidian/plugins/
 
 # Sistema
 .DS_Store

@@ -1,32 +1,59 @@
 # Almagesto — schema de la wiki de conocimiento astro (instrucciones para el agente)
 
 Esta es una **LLM wiki** (patrón Karpathy) sobre literatura astronómica, organizada por **estrella**
-y por **concepto**. **El OBJETIVO de la bóveda vive en `config/objective.yaml`** (editable): define de
+y por **concepto**. **El OBJETIVO de la bóveda vive en `vault/config/objective.yaml`** (editable): define de
 qué trata esta wiki y —vía `relevance.topics`— **qué papers son "core"**. Leé ese archivo al iniciar
-para saber sobre qué estás trabajando. Vos (Claude) **sos el dueño de `wiki/`**: la creás y mantenés.
-El usuario cura las fuentes (`raw/`) y hace preguntas.
+para saber sobre qué estás trabajando. Vos (Claude) **sos el dueño de `vault/wiki/`**: la creás y mantenés.
+El usuario cura las fuentes (`vault/raw/`) y hace preguntas.
 
 > Este archivo es el **schema genérico** (forma astro: estrellas, planetas, indicadores de actividad,
-> ground-truth de exoplanetas). Lo único específico de cada instancia es `config/objective.yaml` + el
-> contenido de `wiki/`/`raw/`. Para instanciar una bóveda nueva ver `README.md` (sección *Instanciar*).
+> ground-truth de exoplanetas). Lo único específico de cada instancia es `vault/config/objective.yaml` + el
+> contenido de `vault/wiki/`/`vault/raw/`. Para instanciar una bóveda nueva ver `README.md` (sección *Instanciar*).
 
-> **Al iniciar sesión, leé `STATUS.md` (estado + próximos pasos) y `wiki/log.md` (historial
-> reciente) para orientarte.** La "memoria" del proyecto es in-repo: este `CLAUDE.md` + `STATUS.md`
-> + `wiki/log.md` + `wiki/index.md`. No depender de la memoria local de Claude (`~/.claude/...`),
+> **Al iniciar sesión, leé `vault/STATUS.md` (estado + próximos pasos) y `vault/wiki/log.md` (historial
+> reciente) para orientarte.** La "memoria" del proyecto es in-repo: este `CLAUDE.md` + `vault/STATUS.md`
+> + `vault/wiki/log.md` + `vault/wiki/index.md`. No depender de la memoria local de Claude (`~/.claude/...`),
 > que no viaja entre máquinas. Tras cada operación, actualizá `index.md`, appendeá a `log.md` y, si
-> cambió el estado, `STATUS.md`.
+> cambió el estado, `vault/STATUS.md`.
+
+## Layout del repo — la bóveda vive en `vault/`
+
+El repo separa **andamiaje** (raíz) de **bóveda** (`vault/`):
+
+```
+Almagesto/
+├── CLAUDE.md  README.md  requirements.txt  scripts/  .claude/skills/   ← andamiaje (framework)
+├── build/  outputs/                                                    ← scratch del tooling (gitignored)
+└── vault/                                                              ← la bóveda — Obsidian abre ACÁ
+    ├── config/  (objective.yaml, stars.yaml, topics.yaml, ads_dev_key)
+    ├── wiki/    (stars, papers, concepts, queries, matrices, index.md, log.md)
+    ├── raw/     (pdfs, fulltext, ground_truth, refs)
+    ├── STATUS.md
+    └── .obsidian/
+```
+
+**Reglas de ruta (no romper):**
+- **Todo el contenido cuelga de `vault/`.** En este documento y en los skills las rutas de contenido
+  se escriben **repo-root-relative** con prefijo `vault/` (p. ej. `vault/raw/fulltext/…`), porque los
+  scripts y greps se corren **desde la raíz del repo**.
+- **Excepción Obsidian-space:** dentro de notas `.md` de `vault/`, los `[[wikilink]]`, las queries
+  Dataview (`FROM "papers"`/`FROM "wiki/papers"`) y los links relativos (`../../raw/pdfs/…`) son
+  **relativos a la raíz del vault** (`vault/`) — **no** llevan el prefijo `vault/`.
+- Los scripts resuelven solos vía `scripts/lib_config.py` (`VAULT = ROOT/"vault"`); no hardcodear rutas.
+- `build/` y `outputs/` son scratch regenerable: viven en la **raíz**, FUERA de `vault/`, para no
+  contaminar la bóveda de Obsidian.
 
 ## Framework vs instancia — Regla de oro (no editar framework en la instancia)
 
 Esta bóveda puede estar corriendo como **instancia** del template **Almagesto** (tu repo como `origin`,
 `Almagesto` como `upstream`). **Regla de oro: en una instancia NO se edita ningún archivo de framework**
-— este `CLAUDE.md`, `scripts/`, `.claude/skills/`, `.obsidian/`, `README.md`, `requirements.txt`. El
+— este `CLAUDE.md`, `scripts/`, `.claude/skills/`, `vault/.obsidian/`, `README.md`, `requirements.txt`. El
 framework es **una sola implementación**: los cambios se hacen en el repo template `Almagesto` (issue/PR
 o parche), se pushean, y se traen por `git pull` / `git merge upstream/main`. Editarlos en la instancia
-**da conflictos** en el próximo merge. En la instancia sólo se edita **contenido** (`wiki/`, `raw/`) y los
-**archivos de instancia** protegidos por `merge=ours` (`config/objective.yaml`, `config/stars.yaml`,
-`config/topics.yaml`, `STATUS.md`, `wiki/index.md`, `wiki/log.md`). **Si una operación revela una mejora
-de framework** (skill nuevo, fix de script, regla), anotala como backlog en `STATUS.md`/`wiki/log.md` y
+**da conflictos** en el próximo merge. En la instancia sólo se edita **contenido** (`vault/wiki/`, `vault/raw/`) y los
+**archivos de instancia** protegidos por `merge=ours` (`vault/config/objective.yaml`, `vault/config/stars.yaml`,
+`vault/config/topics.yaml`, `vault/STATUS.md`, `vault/wiki/index.md`, `vault/wiki/log.md`). **Si una operación revela una mejora
+de framework** (skill nuevo, fix de script, regla), anotala como backlog en `vault/STATUS.md`/`vault/wiki/log.md` y
 aplicala en el template — no la inlines acá. *(Si estás trabajando en el repo template `Almagesto` mismo,
 editar framework **es** la tarea; esta regla rige para las instancias.)*
 
@@ -43,12 +70,12 @@ código**, dejá la cita de la fuente en un comentario junto al valor o decisió
 la usás para un **informe o paper**, citá la fuente correspondiente. Nunca propagar un número o una
 afirmación de la bóveda sin arrastrar su respaldo bibliográfico — ese es el punto de que esto exista.
 
-**Test de admisión (aplicá a TODA línea de `wiki/` — fichas, conceptos, queries, hipótesis, matrices,
-log):** *¿esto sale de una fuente (`raw/`) y lo puedo respaldar con un `[[bibcode]]`, o es una
+**Test de admisión (aplicá a TODA línea de `vault/wiki/` — fichas, conceptos, queries, hipótesis, matrices,
+log):** *¿esto sale de una fuente (`vault/raw/`) y lo puedo respaldar con un `[[bibcode]]`, o es una
 conclusión derivada de fuentes citadas?* Si la respuesta es **no → no entra al vault.** Sin excepciones
 —ni por "es útil para quien la consume" ni por "es obvio".
 
-**Prohibido inlinear en `wiki/` (no es bibliografía):**
+**Prohibido inlinear en `vault/wiki/` (no es bibliografía):**
 - Parámetros, perillas o **dials** de un generador/pipeline (p. ej. un "contraste $C$", pesos por orden
   $w_j$, recetas de "qué inyectar").
 - Nombres de variables / estructura de código.
@@ -60,16 +87,16 @@ conclusión derivada de fuentes citadas?* Si la respuesta es **no → no entra a
 fórmulas de la fuente. La distinción es **publicado-y-citable (entra) vs implementación de código
 (no entra)**, no "simulación sí/no".
 
-**Si detectás contaminación** (material de implementación que se coló en una nota): sacalo de `wiki/`.
+**Si detectás contaminación** (material de implementación que se coló en una nota): sacalo de `vault/wiki/`.
 Lo que no es bibliografía no vive acá — no queda ningún puntero a "otro repo". Marcalo en el `log`.
 
 ## Arquitectura (analogía de compilador)
 
-- **`raw/`** = código fuente **inmutable**. Leer, nunca modificar. Contiene `raw/pdfs/<slug>/`
-  (git-lfs), `raw/fulltext/<slug>/*.txt` (texto para grep/lectura barata) y
-  `raw/ground_truth/<slug>.json` (hechos de NASA Exoplanet Archive + SIMBAD, fuente de verdad dura).
+- **`vault/raw/`** = código fuente **inmutable**. Leer, nunca modificar. Contiene `vault/raw/pdfs/<slug>/`
+  (git-lfs), `vault/raw/fulltext/<slug>/*.txt` (texto para grep/lectura barata) y
+  `vault/raw/ground_truth/<slug>.json` (hechos de NASA Exoplanet Archive + SIMBAD, fuente de verdad dura).
 - **el LLM** = compilador.
-- **`wiki/`** = ejecutable. `.md` que escribís vos: `stars/` (entidades), `papers/` (resúmenes de
+- **`vault/wiki/`** = ejecutable. `.md` que escribís vos: `stars/` (entidades), `papers/` (resúmenes de
   fuente), `concepts/{indicators,methods,activity,hypotheses}/`, `queries/`, `matrices/`,
   `index.md` (catálogo) y `log.md` (registro append-only).
 - **lint** = tests. **queries** = runtime.
@@ -82,7 +109,7 @@ esos campos.
 
 ## Frontmatter obligatorio
 
-Toda nota de `wiki/` lleva frontmatter YAML. Campos comunes: `tags`, y cuando aplique
+Toda nota de `vault/wiki/` lleva frontmatter YAML. Campos comunes: `tags`, y cuando aplique
 `confidence: high|medium|low`. Schemas específicos:
 - **stars/**: `name, slug, aliases, simbad_id, spectral_type, P_rot_days,
   activity_indicators_expected, planets[], data_local, methods_applied{literature,ours}`.
@@ -133,7 +160,7 @@ Si para implementar o citar algo hace falta abrir el paper, eso que falta **debe
 
 Convenciones: filenames kebab-case (papers usan el bibcode); links internos `[[wikilink]]` por
 nombre de nota (sobreviven a mover carpetas); reportar agregados declarando mean vs median.
-**Notación matemática según destino:** en archivos de `wiki/` SIEMPRE `$...$` (Obsidian lo renderiza);
+**Notación matemática según destino:** en archivos de `vault/wiki/` SIEMPRE `$...$` (Obsidian lo renderiza);
 en **respuestas de consola/chat** usar **texto plano** (`P_rot`, `m·sini`, `K=2.5 m/s`), porque la
 terminal no renderiza LaTeX y `$...$` se ve crudo.
 
@@ -153,12 +180,12 @@ terminal no renderiza LaTeX y `$...$` se ve crudo.
 > matemático general: ICA, signal processing), el skill `ingest-topic` lo soporta en su **modo off-ADS**
 > (fuente = PDFs locales + web; sin `query_ads`/`fetch_ground_truth`). **`ingest-star` no cambia: es
 > astro-only.** Papers sin bibcode ADS → **clave de cita sintética `AAAA+Autor`** (debe empezar con
-> `AAAA`+letra para el lint; el `.txt` en `raw/fulltext/` se llama igual). Páginas web → **snapshot
+> `AAAA`+letra para el lint; el `.txt` en `vault/raw/fulltext/` se llama igual). Páginas web → **snapshot
 > `.txt` determinista** (URL + fecha) para que sea citable/verificable. La **frontera dura sigue
 > rigiendo**: sólo bibliografía citable.
 
 ### Query / hipótesis (pregunta → respuesta; archivar SÓLO si el usuario lo pide)
-1. Para búsqueda general o test de hipótesis: `grep` sobre `raw/fulltext/`, leé los hits, sintetizá
+1. Para búsqueda general o test de hipótesis: `grep` sobre `vault/raw/fulltext/`, leé los hits, sintetizá
    con citas `[[bibcode]]` y **respondé en el chat**.
 2. **No archivar por default.** Persistir una query (`queries/<x>.md`) o una hipótesis
    (`concepts/hypotheses/`) es **decisión explícita del usuario** — sin pedido, la respuesta vive
@@ -176,7 +203,7 @@ afirmación — sólo salud estructural; tapa el *grounding gap* / *epistemic dr
 cierre de **toda operación que escriba prosa con `[[bibcode]]`** — ingest-star (ficha + papers),
 ingest-topic (concept + papers), query archivada, test de hipótesis — **antes de lint/commit**.
 **Qué hace:** descompone la nota en pares (afirmación, `[[bibcode]]`) y lanza **un subagente
-independiente por par** que lee SÓLO ese `raw/fulltext/**/<bibcode>.txt` (grounding-first, prohibido de
+independiente por par** que lee SÓLO ese `vault/raw/fulltext/**/<bibcode>.txt` (grounding-first, prohibido de
 memoria) y devuelve `soportada|parcial|no-soportada` + **cita textual + nº de línea del `.txt`**
 (obligatoria; sin cita ⇒ no-soportada). Cada falla se **resuelve** (bajar la afirmación a lo que dice
 la fuente, reasignar la cita al bibcode correcto, o marcar **`inferencia`**) y se deja un bloque
@@ -190,7 +217,7 @@ chequea el lint); sólo se verifican disputas y afirmaciones atribuidas a un pap
 backlog los conceptos/hipótesis **sin ninguna cita** (cobertura: afirman sin fuente → no chequeables).
 
 ### Lint (chequeo de salud)
-**Cuándo:** como **paso de cierre de toda operación que escriba en `wiki/`** (ingest / query archivada
+**Cuándo:** como **paso de cierre de toda operación que escriba en `vault/wiki/`** (ingest / query archivada
 / test de hipótesis), **antes de commitear**; más una pasada completa periódica. Es barato.
 Correr `python scripts/lint.py`: debe quedar en **0** para wikilinks rotos, páginas huérfanas,
 contradicciones ground-truth↔ficha, **masa de ground-truth inconsistente con la m·sini implícita**
@@ -200,13 +227,13 @@ ninguna nota → no acumula en el roll-up; typo típico `shift-vs-shape` vs `shi
 **fuga de implementación** (regla #0 / frontera dura) es **WARN no bloqueante** — heurística de alta
 señal (perilla/dial/`w_j`/`peso(`); cada hit se revisa a mano y se saca del vault si es material de
 implementación (no es bibliografía). Las **citas no verificables** (bibcode citado en query/concepto/hipótesis sin su `.txt` en
-`raw/fulltext/`) se listan como precondición de `verify-citations`. La **cobertura** (concepto/hipótesis
+`vault/raw/fulltext/`) se listan como precondición de `verify-citations`. La **cobertura** (concepto/hipótesis
 sin ninguna cita `[[bibcode]]` → afirma sin fuente) es **backlog** que el lint surface para ir citando.
 Los "campos incompletos" (P_rot null, papers sin `methods`, etc.) son **backlog**, no bloquean. Revisar
 además a mano: claims stale y conceptos referidos sin página. Si faltan datos, abrir queries para
 imputar (web/ADS).
 
 ## Token / secretos
-El token ADS va en `config/ads_dev_key` (**gitignored** — nunca se commitea) o en la variable de
+El token ADS va en `vault/config/ads_dev_key` (**gitignored** — nunca se commitea) o en la variable de
 entorno `ADS_DEV_KEY`. Token gratis en <https://ui.adsabs.harvard.edu/user/settings/token>.
-`build/` y `outputs/` gitignored. PDFs por git-lfs (`raw/pdfs/**/*.pdf`).
+`build/` y `outputs/` gitignored. PDFs por git-lfs (`vault/raw/pdfs/**/*.pdf`).

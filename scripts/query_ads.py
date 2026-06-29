@@ -25,7 +25,7 @@ API = "https://api.adsabs.harvard.edu/v1/search/query"
 FIELDS = ("bibcode,title,author,year,pubdate,abstract,identifier,doctype,"
           "citation_count,bibstem,doi,keyword")
 
-# Clasificación de relevancia: se LEE de config/objective.yaml (el archivo que define
+# Clasificación de relevancia: se LEE de vault/config/objective.yaml (el archivo que define
 # el objetivo de la bóveda → qué paper es "core"). No hardcodear acá: editar el YAML.
 _OBJ = cfg.load_objective()
 _REL = (_OBJ.get("relevance") or {})
@@ -36,7 +36,7 @@ TOPIC_PATTERNS = {
 NOISE_DOCTYPES = set(_REL.get("noise_doctypes") or [])
 if not TOPIC_PATTERNS:
     raise RuntimeError(
-        "config/objective.yaml no define relevance.topics (el clasificador de papers core). "
+        "vault/config/objective.yaml no define relevance.topics (el clasificador de papers core). "
         "Completalo antes de consultar ADS."
     )
 
@@ -111,7 +111,7 @@ def main() -> int:
     ap.add_argument("--all", action="store_true",
                     help="guardar todos (default: solo relevantes en el resumen)")
     ap.add_argument("--topic", action="store_true",
-                    help="el slug es un TEMA de config/topics.yaml (query Solr cruda), no una estrella")
+                    help="el slug es un TEMA de vault/config/topics.yaml (query Solr cruda), no una estrella")
     args = ap.parse_args()
 
     if args.topic:
