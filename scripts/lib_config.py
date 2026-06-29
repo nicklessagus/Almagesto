@@ -100,8 +100,9 @@ RESERVED_CONCEPT_AREAS = ("methods", "hypotheses")
 
 
 def load_concept_areas() -> list:
-    """Áreas declaradas de vault/wiki/concepts/ — un CONTRATO, no folklore. Salen de
-    `concept_areas` en objective.yaml; siempre incluyen las reservadas (methods, hypotheses).
+    """Lista de REFERENCIA de áreas de vault/wiki/concepts/ (para el typo-check; NO restringe — las
+    áreas son abiertas). Salen de `concept_areas` en objective.yaml; siempre incluyen las reservadas
+    (methods, hypotheses).
 
     Si objective.yaml NO declara `concept_areas` (instancia vieja, pre-feature), cae a un
     modo tolerante: reservadas + las carpetas ya existentes en concepts/ (no marca falsos

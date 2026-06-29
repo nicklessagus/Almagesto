@@ -46,13 +46,14 @@ relevance:
     - software
 
 # ─── Áreas de concepts/ ──────────────────────────────────────────────────────
-# Las subcarpetas de vault/wiki/concepts/ son un CONTRATO declarado acá (no folklore
-# repartido por el repo). `ingest-topic` (vía el `area` de topics.yaml) y el lint chequean
-# contra esta lista: un `area` fuera de acá se trata como posible typo (make_notes lo rechaza;
-# el lint lo marca WARN), para que un error no cree una carpeta fantasma en silencio.
-#   · `methods` y `hypotheses` están RESERVADAS (siempre válidas aunque no estén en la lista):
-#     methods es universal; hypotheses es estructural (schema name/status + roll-up Dataview).
-#   · El resto depende del foco de TU bóveda — editá esta lista para tu tema.
+# Las subcarpetas de vault/wiki/concepts/ son ABIERTAS: podés crear el área que quieras
+# (investigás cualquier tema). Esta lista NO restringe — es sólo una REFERENCIA para que el
+# typo-check distinga un error de tipeo (`indicatorz`) de un área nueva legítima (`granulation`):
+# un `area` fuera de la lista sólo dispara un AVISO (make_notes avisa pero crea igual; el lint
+# lo marca WARN), nunca bloquea. Si tu área nueva es legítima, agregala acá para silenciar el aviso.
+#   · `methods` y `hypotheses` están RESERVADAS (siempre válidas): methods es universal;
+#     hypotheses es estructural (schema name/status + roll-up Dataview).
+#   · El resto es libre — editá la lista según el foco de TU bóveda.
 concept_areas:
   - indicators
   - methods

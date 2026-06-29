@@ -42,9 +42,9 @@ nomenclatura no tiene a qué adaptarse; el check sin la nomenclatura no tiene co
    `vault/config/objective.yaml` + `stars`/`topics` + áreas en la nomenclatura oficial. Valor en las 2 partes
    difíciles: redactar `relevance.topics` (regex) y nombrar los buckets. **Riesgo:** respetar la
    frontera dura — adapta el foco, no toca el sustrato astro ni inventa nada no-citable.
-3. 🟡 **PARCIAL** — **check de config (lint, WARN blando)**. ✅ Áreas: `make_notes` **rechaza** un `area`
-   no declarado al crear (salvo `--force`); `lint.py` marca **WARN** las carpetas de `concepts/` fuera del
-   contrato (atrapa typos / carpetas fantasma). ⏳ Falta el resto de los guards de config: `KeyError`
+3. 🟡 **PARCIAL** — **check de config (lint, WARN blando)**. ✅ Áreas (abiertas, nunca se bloquea):
+   `make_notes` **avisa** si el `area` no está en `concept_areas` pero crea igual; `lint.py` marca **WARN**
+   las carpetas de `concepts/` fuera de la lista (atrapa typos sin restringir). ⏳ Falta el resto de los guards de config: `KeyError`
    amigable en los índices duros (`ads_object`/`simbad` en stars, `query`/`concept` en topics) y **WARN si
    `objective.name` sigue siendo el default** (olvido de instanciar).
 

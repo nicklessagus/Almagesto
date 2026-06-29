@@ -37,8 +37,9 @@ del repo.
      ruido o muy pocos, reajustar la query y reconfirmar. **No** bajar PDFs hasta que el usuario
      apruebe la query final.
    - **d. Persistir.** Recién entonces escribir/actualizar la entrada en `vault/config/topics.yaml`:
-     `title`, `area` (DEBE estar en `concept_areas` de `objective.yaml` — ej.
-     `indicators|methods|activity|hypotheses`; si falta, declarala ahí primero), `concept` (nota destino, existente o
+     `title`, `area` (abierta: cualquiera; idealmente una de `concept_areas` de `objective.yaml` —
+     ej. `indicators|methods|activity|hypotheses` — para que el typo-check la reconozca; si es un área
+     nueva real, agregala a esa lista), `concept` (nota destino, existente o
      a stubbear), `query` (la Solr cruda aprobada) y `aliases` opcional. Si el tema ya existía en el
      YAML, ofrecer reusar la query guardada o re-pulirla.
 
