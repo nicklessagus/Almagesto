@@ -109,8 +109,9 @@ esos campos.
 
 ## Frontmatter obligatorio
 
-Toda nota de `vault/wiki/` lleva frontmatter YAML. Campos comunes: `tags`, y cuando aplique
-`confidence: high|medium|low`. Schemas específicos:
+Toda nota de `vault/wiki/` lleva frontmatter YAML. Campos comunes: `tags`, `generator`
+(`Almagesto v<x>`, provenance — lo estampa `make_notes` desde `lib_config.ALMAGESTO_VERSION`), y
+cuando aplique `confidence: high|medium|low`. Schemas específicos:
 - **stars/**: `name, slug, aliases, simbad_id, spectral_type, teff_K, dist_pc, P_rot_days,
   activity_indicators_expected, planets[], data_local, methods_applied{literature,ours}`. Cada
   `planets[]` lleva `letter, P_days, K_ms, e, mass_earth, status` (de ground-truth NEA; `mass_earth`

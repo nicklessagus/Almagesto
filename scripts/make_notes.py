@@ -92,6 +92,7 @@ def write_star_note(slug: str, force: bool) -> None:
         "methods_applied": {"literature": [], "ours": []},
         "confidence": "medium",          # patrón LLM Wiki; subir a high tras síntesis revisada
         "tags": ["star"],
+        "generator": f"Almagesto v{cfg.ALMAGESTO_VERSION}",   # provenance (con qué versión se armó)
     }
     body = f"""{fm(front)}
 # {name}
@@ -103,6 +104,8 @@ def write_star_note(slug: str, force: bool) -> None:
 > la prosa (Resumen, Huecos, extracción) la sintetizó un LLM desde las fuentes: trazable por `[[bibcode]]` y
 > chequeable con `verify-citations`, que es **juicio de LLM, no prueba**. Verificá contra la fuente antes de
 > llevar un dato a un paper/tesis.
+>
+> _Generado con Almagesto v{cfg.ALMAGESTO_VERSION}._
 
 ## Resumen
 _(síntesis por LLM: qué se sabe, qué indicadores deberían correlacionar con actividad para este
@@ -168,6 +171,7 @@ def write_concept_note(slug: str, force: bool) -> None:
         "aliases": meta.get("aliases", []),   # sinónimos EN+ES para grep; sembrado del topic, el LLM enriquece
         "tags": [area, "thesis"],
         "confidence": "medium",
+        "generator": f"Almagesto v{cfg.ALMAGESTO_VERSION}",   # provenance (con qué versión se armó)
     })
     body = f"""{fm(front)}
 # {meta.get('title', concept)}
@@ -178,6 +182,8 @@ def write_concept_note(slug: str, force: bool) -> None:
 > ⚠ **Capa LLM — revisar antes de citar.** La síntesis la compiló un LLM desde los papers citados:
 > chequeable con `verify-citations`, que es **juicio de LLM, no prueba**. Verificá contra la fuente antes
 > de llevar un dato a un paper/tesis.
+>
+> _Generado con Almagesto v{cfg.ALMAGESTO_VERSION}._
 
 ## Síntesis
 _(qué se sabe del tema: mecanismos, signos, desfasajes, regímenes)._
@@ -242,6 +248,7 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
             "pdf": pdf_rel,
             "confidence": "medium",      # patrón LLM Wiki
             "tags": ["paper"],
+            "generator": f"Almagesto v{cfg.ALMAGESTO_VERSION}",   # provenance (con qué versión se armó)
         }
         abstract = (r.get("abstract") or "").strip()
         body = f"""{fm(front)}

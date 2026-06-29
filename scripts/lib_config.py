@@ -11,6 +11,10 @@ from pathlib import Path
 
 import yaml
 
+# Versión del framework Almagesto (bump MANUAL; no hay release formal todavía). Se estampa en el
+# frontmatter `generator` de cada nota que genera make_notes → traza con qué versión se armó la ficha.
+ALMAGESTO_VERSION = "0.1.0"
+
 ROOT = Path(__file__).resolve().parent.parent  # raíz del repo (andamiaje + bóveda)
 VAULT = ROOT / "vault"                          # la bóveda: contenido (config/wiki/raw); Obsidian abre acá
 CONFIG = VAULT / "config"
