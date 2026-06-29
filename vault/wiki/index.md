@@ -10,7 +10,7 @@ FROM "wiki/stars"
 SORT file.name ASC
 ```
 
-## Conceptos (indicadores · métodos · actividad · hipótesis)
+## Conceptos (por área)
 ```dataview
 TABLE status, confidence
 FROM "wiki/concepts"

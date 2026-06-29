@@ -112,8 +112,8 @@ Inferencias declaradas (sin cita, por diseño): <listar>.
 Convertir fechas relativas a absolutas. Notación `$...$` en archivos `vault/wiki/` (texto plano en chat).
 
 ### 6. Lint + cierre
-Correr `python scripts/lint.py` (debe quedar 0 en lo bloqueante, incl. **0 fuga-sim** y **0 citas
-no verificables**). Si el usuario pidió archivar/commitear, `git add` de los archivos **específicos**
+Correr `python scripts/lint.py` (0 en lo bloqueante; la **fuga de implementación** es WARN a revisar a
+mano, y resolvé las **citas no verificables** del corpus que chequeás). Si el usuario pidió archivar/commitear, `git add` de los archivos **específicos**
 y commit descriptivo; **preguntar antes de `push`**. Appendear a `vault/wiki/log.md` (resumen del chequeo:
 cuántas soportadas/corregidas).
 

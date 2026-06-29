@@ -44,8 +44,8 @@ Distinción: una hipótesis es un supuesto que se sostiene y acumula evidencia �
    (supports/challenges) de cada paper debe reflejar lo que el texto **realmente** dice.
 
 8. **Chequeo de salud**: correr `python scripts/lint.py` antes de commitear. Debe quedar en **0**
-   para wikilinks rotos, huérfanas, contradicciones, `thesis_links` sin página destino, fuga-sim y
-   citas no verificables (los "campos incompletos" son backlog). Ojo con el tag del nuevo
+   para wikilinks rotos, huérfanas, contradicciones y `thesis_links` sin página destino; la **fuga de
+   implementación** y las **citas no verificables** son WARN a revisar a mano (los "campos incompletos" son backlog). Ojo con el tag del nuevo
    `thesis_link`: tiene que matchear el nombre de la página de hipótesis (typo típico: guion vs guion_bajo).
 
 9. **Cierre (commit + push).** Si la operación escribió en `vault/wiki/`, `git add` de los archivos

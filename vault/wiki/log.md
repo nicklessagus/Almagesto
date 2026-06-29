@@ -6,4 +6,4 @@ final; no reescribir entradas pasadas.
 ---
 
 - **Instanciada** desde el template **Almagesto** (patrón LLM Wiki). Pendiente: editar
-  `config/objective.yaml`, poner token ADS, primer ingest.
+  `vault/config/objective.yaml`, poner token ADS, primer ingest.

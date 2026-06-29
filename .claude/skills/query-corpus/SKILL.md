@@ -35,9 +35,9 @@ usar `test-hypothesis`).
    `inferencia`) y dejar el bloque `## Verificación de citas` en la nota.
 
 6. **Chequeo de salud (si se escribió en `vault/wiki/`)**: correr `python scripts/lint.py` antes de
-   commitear. Debe quedar en **0** para wikilinks rotos, huérfanas, contradicciones,
-   `thesis_links` sin página destino, fuga-sim y citas no verificables (los "campos incompletos" son
-   backlog, no bloquean). Si creaste un `thesis_link`/concepto nuevo, verificá que el tag matchee el
+   commitear. Debe quedar en **0** para wikilinks rotos, huérfanas, contradicciones y
+   `thesis_links` sin página destino; la **fuga de implementación** y las **citas no verificables** son
+   WARN/precondición a revisar a mano (los "campos incompletos" son backlog, no bloquean). Si creaste un `thesis_link`/concepto nuevo, verificá que el tag matchee el
    nombre de la página (typo típico: `shift-vs-shape` vs `shift_vs_shape`).
 
 7. **Cierre (commit + push).** **Solo si se archivó algo en `vault/wiki/`** (si la respuesta quedó solo en

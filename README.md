@@ -14,7 +14,7 @@ un solo archivo, `vault/config/objective.yaml`. El resto del repo es framework r
 
 ```bash
 git clone <este-repo> mi-boveda && cd mi-boveda
-pip install -r requirements.txt             # pyyaml, requests
+pip install -r requirements.txt             # pyyaml, requests, astroquery
 echo "TU_TOKEN" > vault/config/ads_dev_key  # token ADS (gratis, gitignored) — o export ADS_DEV_KEY
 ```
 

@@ -183,7 +183,7 @@ la query, `stars.yaml`/`topics.yaml`). No ingesta nada; después se usan `ingest
 
 ### Ingest (una fuente → cascada de páginas)
 1. Scripts de `scripts/` bajan: `query_ads.py` → `fetch_arxiv.py` → `fetch_ground_truth.py` →
-   `extract_fulltext.py` → `make_notes.py` (stubs mecánicos; idempotente, no pisa).
+   `make_notes.py` → `extract_fulltext.py` (stubs mecánicos; idempotente, no pisa).
 2. **Vos (LLM)** leés el PDF/fulltext y hacés la cascada: poblás la extracción del paper
    (`methods`, `thesis_links`, `bearing`, P/K/indicadores), actualizás la ficha de la estrella
    (síntesis, huecos), tocás conceptos/hipótesis relacionados y la matriz método×estrella.
