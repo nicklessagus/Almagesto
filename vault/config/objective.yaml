@@ -44,3 +44,17 @@ relevance:
     - pressrelease
     - circular
     - software
+
+# ─── Áreas de concepts/ ──────────────────────────────────────────────────────
+# Las subcarpetas de vault/wiki/concepts/ son un CONTRATO declarado acá (no folklore
+# repartido por el repo). `ingest-topic` (vía el `area` de topics.yaml) y el lint chequean
+# contra esta lista: un `area` fuera de acá se trata como posible typo (make_notes lo rechaza;
+# el lint lo marca WARN), para que un error no cree una carpeta fantasma en silencio.
+#   · `methods` y `hypotheses` están RESERVADAS (siempre válidas aunque no estén en la lista):
+#     methods es universal; hypotheses es estructural (schema name/status + roll-up Dataview).
+#   · El resto depende del foco de TU bóveda — editá esta lista para tu tema.
+concept_areas:
+  - indicators
+  - methods
+  - activity
+  - hypotheses

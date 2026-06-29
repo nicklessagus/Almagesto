@@ -139,7 +139,8 @@ Toda nota de `vault/wiki/` lleva frontmatter YAML. Campos comunes: `tags`, y cua
   no diferencias cosméticas dentro de la barra). Reflejar la disputa también en la tabla/prosa.
 - **papers/**: `bibcode, title, first_author, year, arxiv_id, doi, stars[], topics[], methods[],
   thesis_links[], bearing(supports|challenges|method), relevance, citation_count, pdf`.
-- **concepts/ (indicators, methods, activity)**: `name`, **`aliases`** (lista de sinónimos EN+ES —
+- **concepts/ (áreas declaradas en `concept_areas` de `vault/config/objective.yaml` — `methods` y
+  `hypotheses` reservadas; el resto según el foco de la bóveda)**: `name`, **`aliases`** (lista de sinónimos EN+ES —
   p. ej. `[chromatic index, índice cromático, RV-color]` — para que la ficha se encuentre por `grep`
   desde **cualquier término**, no sólo el nombre canónico; espeja la idea de `aliases` de `stars/`),
   `tags`, `confidence`. Rige el *Estándar transversal* (autosuficiente + implementation-ready).
@@ -226,7 +227,10 @@ ninguna nota → no acumula en el roll-up; typo típico `shift-vs-shape` vs `shi
 **`planets[].disputes[].ref` sin paper destino** (bibcode discrepante que no existe como nota). La
 **fuga de implementación** (regla #0 / frontera dura) es **WARN no bloqueante** — heurística de alta
 señal (perilla/dial/`w_j`/`peso(`); cada hit se revisa a mano y se saca del vault si es material de
-implementación (no es bibliografía). Las **citas no verificables** (bibcode citado en query/concepto/hipótesis sin su `.txt` en
+implementación (no es bibliografía). Las **áreas de `concepts/` fuera de `concept_areas`** (subcarpeta no
+declarada en `vault/config/objective.yaml`) son **WARN** (áreas abiertas: un typo y un área nueva legítima
+se ven igual, así que no bloquea; `make_notes` igual **rechaza** al crear un `area` no declarado salvo
+`--force`, y el lint marca las carpetas que ya existan fuera del contrato). Las **citas no verificables** (bibcode citado en query/concepto/hipótesis sin su `.txt` en
 `vault/raw/fulltext/`) se listan como precondición de `verify-citations`. La **cobertura** (concepto/hipótesis
 sin ninguna cita `[[bibcode]]` → afirma sin fuente) es **backlog** que el lint surface para ir citando.
 Los "campos incompletos" (P_rot null, papers sin `methods`, etc.) son **backlog**, no bloquean. Revisar

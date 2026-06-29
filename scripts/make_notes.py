@@ -104,6 +104,16 @@ def write_concept_note(slug: str, force: bool) -> None:
     síntesis LLM de un concept ya existente (sólo se crea si falta)."""
     _, meta = cfg.topic_by_slug(slug)
     area, concept = meta["area"], meta["concept"]
+    # Validar el área contra el contrato (concept_areas en objective.yaml) ANTES de mkdir: un
+    # `area` mal tipeado en topics.yaml crearía una carpeta fantasma en silencio. --force la fuerza.
+    areas = cfg.load_concept_areas()
+    if area not in areas and not force:
+        sys.exit(
+            f"  ✗ área '{area}' (topic '{slug}') no está en concept_areas (vault/config/objective.yaml).\n"
+            f"    Áreas válidas: {', '.join(areas)}.\n"
+            f"    ¿Typo en topics.yaml? Corregilo. ¿Área nueva legítima? Declarala en concept_areas\n"
+            f"    (no inventes carpetas sueltas). O usá --force para crearla igual."
+        )
     dest = cfg.CONCEPTS / area / f"{concept}.md"
     if dest.exists():
         print(f"  concept: {area}/{concept}.md ya existe (no se pisa; los papers enganchan por thesis_links)")

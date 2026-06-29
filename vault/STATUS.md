@@ -34,22 +34,24 @@ cerrado de 4): sólo `hypotheses` (estructural: schema `name,status` + roll-up D
 **Tres mejoras — son CAPAS, no alternativas.** Orden recomendado: **1 → 2 → 3** (el skill sin la
 nomenclatura no tiene a qué adaptarse; el check sin la nomenclatura no tiene contra qué chequear).
 
-1. **Bajar la nomenclatura de áreas a config** (cimiento). Declararla en **un solo lugar** (candidato:
-   `vault/config/objective.yaml`, p. ej. `concept_areas: [...]`), reservando `hypotheses`/`methods`, resto abierto.
-2. **Skill de setup interactivo** (mayor impacto UX). El agente pregunta el foco y genera
+1. ✅ **HECHO** — **nomenclatura de áreas a config**. `concept_areas` declarado en
+   `vault/config/objective.yaml`; `methods`/`hypotheses` reservadas; loader `lib_config.load_concept_areas()`
+   (modo tolerante si una instancia vieja no lo declara). Las 5 menciones de "folklore" ahora defieren al
+   contrato (CLAUDE.md, README.md, topics.yaml, ingest-topic/SKILL.md).
+2. ⏳ **PENDIENTE** — **skill de setup interactivo** (mayor impacto UX). El agente pregunta el foco y genera
    `vault/config/objective.yaml` + `stars`/`topics` + áreas en la nomenclatura oficial. Valor en las 2 partes
    difíciles: redactar `relevance.topics` (regex) y nombrar los buckets. **Riesgo:** respetar la
    frontera dura — adapta el foco, no toca el sustrato astro ni inventa nada no-citable.
-3. **Check de config (lint, versión blanda WARN)** — red de seguridad para ediciones a mano / entre
-   máquinas. Guardrail **blando** (un typo y un área nueva se ven igual → whitelist cerrado descartado):
-   WARN contra las carpetas existentes en `vault/wiki/concepts/`, no bloqueo. Además: guards amigables para los
-   índices duros que hoy tiran `KeyError` crudo (`ads_object`/`simbad` en stars, `query`/`concept` en
-   topics) y WARN si `objective.name` sigue siendo el default (olvido de instanciar).
+3. 🟡 **PARCIAL** — **check de config (lint, WARN blando)**. ✅ Áreas: `make_notes` **rechaza** un `area`
+   no declarado al crear (salvo `--force`); `lint.py` marca **WARN** las carpetas de `concepts/` fuera del
+   contrato (atrapa typos / carpetas fantasma). ⏳ Falta el resto de los guards de config: `KeyError`
+   amigable en los índices duros (`ads_object`/`simbad` en stars, `query`/`concept` en topics) y **WARN si
+   `objective.name` sigue siendo el default** (olvido de instanciar).
 
-**Preguntas abiertas (resolver al retomar):**
-- ¿La nomenclatura vive en `vault/config/objective.yaml` (instance-owned) o en el framework (`CLAUDE.md`/lib)? Tira
-  para `vault/config/objective.yaml` (ya es "lo específico de cada instancia"), pero mantener consistencia con la
-  prosa del schema en `CLAUDE.md`.
-- ¿`methods` se reserva igual que `hypotheses`, o se trata como área normal (universal pero no especial)?
-- ¿El check vive en `lint.py` (encaja con su filosofía WARN/backlog) o en un `validate_config.py` aparte?
-- ¿El skill de setup reemplaza el flujo "editá `vault/config/objective.yaml`" del `README` o lo complementa?
+**Preguntas abiertas — resueltas al implementar capas 1+3-áreas:**
+- Nomenclatura → vive en `vault/config/objective.yaml` (instance-owned), con la prosa del schema en
+  `CLAUDE.md` deferiendo a ella. ✅
+- `methods` → **reservada** igual que `hypotheses` (universal). ✅
+- El check → vive en `lint.py` (encaja con su filosofía WARN/backlog), no en un script aparte. ✅
+- Pendiente de decidir (al hacer la capa 2): ¿el skill de setup **reemplaza** el flujo "editá
+  `objective.yaml`" del README o lo **complementa**? (lean: complementa).

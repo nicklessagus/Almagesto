@@ -82,7 +82,7 @@ LLM escribe y mantiene). Operaciones: **ingest / query / verify / lint**.
 | `vault/raw/refs/` | Fuentes de diseño del patrón (gist Karpathy, guía de implementación). |
 | `vault/wiki/stars/<slug>.md` | Ficha por estrella (entidad). **Frontmatter = fuente de verdad** (sp_type, P_rot, planetas, indicadores esperados, métodos). |
 | `vault/wiki/papers/<bibcode>.md` | Una nota por paper (metadata ADS + abstract + extracción LLM). |
-| `vault/wiki/concepts/{indicators,methods,activity,hypotheses}/` | Notas transversales. `hypotheses/` = supuestos durables. |
+| `vault/wiki/concepts/<área>/` | Notas transversales. Áreas declaradas en `concept_areas` (objective.yaml; ej. indicators/methods/activity/hypotheses); `methods`/`hypotheses` reservadas. |
 | `vault/wiki/queries/` | Preguntas contestadas contra el corpus. |
 | `vault/wiki/matrices/method_star.md` | Matriz método × estrella = huecos + backlog. |
 | `vault/wiki/index.md` | Catálogo de la wiki (se actualiza en cada operación). |

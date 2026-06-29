@@ -92,3 +92,22 @@ def load_objective() -> dict:
         )
     with open(OBJECTIVE_YAML, encoding="utf-8") as fh:
         return yaml.safe_load(fh) or {}
+
+
+# Áreas de vault/wiki/concepts/ RESERVADAS (siempre válidas): `methods` es universal;
+# `hypotheses` es estructural (schema name/status + roll-up Dataview). Ver CLAUDE.md.
+RESERVED_CONCEPT_AREAS = ("methods", "hypotheses")
+
+
+def load_concept_areas() -> list:
+    """Áreas declaradas de vault/wiki/concepts/ — un CONTRATO, no folklore. Salen de
+    `concept_areas` en objective.yaml; siempre incluyen las reservadas (methods, hypotheses).
+
+    Si objective.yaml NO declara `concept_areas` (instancia vieja, pre-feature), cae a un
+    modo tolerante: reservadas + las carpetas ya existentes en concepts/ (no marca falsos
+    positivos hasta que declares la lista). Devuelve los nombres en orden, deduplicados."""
+    declared = load_objective().get("concept_areas") or []
+    if declared:
+        return list(dict.fromkeys([*declared, *RESERVED_CONCEPT_AREAS]))
+    existing = sorted(p.name for p in CONCEPTS.iterdir() if p.is_dir()) if CONCEPTS.exists() else []
+    return list(dict.fromkeys([*existing, *RESERVED_CONCEPT_AREAS]))

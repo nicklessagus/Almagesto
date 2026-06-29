@@ -3,7 +3,9 @@
 # La clave de cada entrada ES el slug → dir de build/<slug>/ y raw/{pdfs,fulltext}/<slug>/.
 # Campos:
 #   title    : nombre humano del tema.
-#   area     : subcarpeta de wiki/concepts/ (indicators | methods | activity | hypotheses).
+#   area     : subcarpeta de vault/wiki/concepts/. DEBE estar en `concept_areas` (objective.yaml;
+#              ej. indicators|methods|activity|hypotheses). make_notes la rechaza si no figura; el
+#              lint marca como WARN cualquier carpeta de concepts/ fuera de la lista (atrapa typos).
 #   concept  : nombre de la nota concept durable destino (puede diferir del slug; existente o a stubbear).
 #   query    : query Solr ADS CRUDA (control total; ver scripts/query_ads.py). NO es por nombre de estrella.
 #   aliases  : opcional, sólo para prosa.

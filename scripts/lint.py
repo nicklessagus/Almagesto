@@ -8,7 +8,9 @@ contradicciones ground-truth ↔ ficha, **masa de ground-truth inconsistente** c
 m·sini implícita por K/P/e/M* (atrapa best-mass espurias de NEA), `thesis_links` sin
 página destino (tag que no matchea ninguna nota concepto/hipótesis → no acumula),
 **fuga de implementación** (material de implementación/código no bibliográfico que se
-filtró al vault; frontera dura, regla #0 de CLAUDE.md; WARN no bloqueante), **citas no verificables** (bibcode
+filtró al vault; frontera dura, regla #0 de CLAUDE.md; WARN no bloqueante), **áreas de concepts/ fuera
+de `concept_areas`** (subcarpeta de concepts/ no declarada en objective.yaml → posible typo/carpeta
+fantasma; WARN), **citas no verificables** (bibcode
 citado en query/concepto/hipótesis sin su `.txt` en `vault/raw/fulltext/` → no se puede chequear claim↔fuente
 con el skill `verify-citations`), **cobertura** (concepto/hipótesis sin ninguna cita `[[bibcode]]` →
 afirmaciones no chequeables; backlog), y campos clave
@@ -204,6 +206,19 @@ def main() -> int:
         (f"{star}", f"planeta {l}: ref `{ref}` sin nota de paper")
         for star, l, ref in dispute_refs if ref not in names)
 
+    # áreas de concepts/ no declaradas en concept_areas (objective.yaml) → posible typo / carpeta
+    # fantasma: un `area` mal tipeado en topics.yaml crea carpeta en silencio (ver make_notes). WARN
+    # blando (un typo y un área nueva legítima se ven igual → no se bloquea, se marca para revisar).
+    declared_areas = set(cfg.load_concept_areas())
+    undeclared_areas = []
+    if cfg.CONCEPTS.exists():
+        for d in sorted(cfg.CONCEPTS.iterdir()):
+            if d.is_dir() and d.name not in declared_areas:
+                n = len(list(d.glob("*.md")))
+                undeclared_areas.append(
+                    (f"concepts/{d.name}/",
+                     f"área fuera de concept_areas; {n} nota(s) — ¿typo o área nueva sin declarar?"))
+
     # reporte
     lines = [f"# Lint de la bóveda — {dt.date.today().isoformat()}", ""]
     for title, items in [("Wikilinks rotos (página faltante)", broken),
@@ -213,6 +228,7 @@ def main() -> int:
                          ("thesis_links sin página destino", dangling_thesis),
                          ("disputes[].ref sin paper destino", dangling_disputes),
                          ("⛔ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)", impl_leaks),
+                         ("Áreas de concepts/ no declaradas en objective.yaml (WARN, posible typo)", undeclared_areas),
                          ("Citas no verificables en query/concepto/hipótesis (sin fulltext)", unverifiable),
                          ("Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog)", coverage),
                          ("Campos incompletos", incomplete)]:
