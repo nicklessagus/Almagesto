@@ -166,7 +166,7 @@ def main() -> int:
     mass_issues = []
     for gtf in glob.glob(str(cfg.GROUND_TRUTH / "*.json")):
         gt = json.loads(open(gtf).read())
-        slug = gt["slug"]
+        slug = gt.get("slug") or basename(gtf)[:-5]   # robusto si un GT a mano no trae 'slug'
         mstar = (gt.get("host") or {}).get("mass_msun")
         for p in gt.get("planets", []) or []:
             if p.get("mass_flag"):                       # ya marcado por el fetch
@@ -204,7 +204,7 @@ def main() -> int:
     # la disputa no es trazable (typo en el bibcode o paper sin ingestar).
     dangling_disputes = sorted(
         (f"{star}", f"planeta {l}: ref `{ref}` sin nota de paper")
-        for star, l, ref in dispute_refs if ref not in names)
+        for star, l, ref in dispute_refs if ref not in names or "paper" not in kinds.get(ref, []))
 
     # áreas de concepts/ no declaradas en concept_areas (objective.yaml) → posible typo / carpeta
     # fantasma: un `area` mal tipeado en topics.yaml crea carpeta en silencio (ver make_notes). WARN

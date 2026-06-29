@@ -142,7 +142,7 @@ Toda nota de `vault/wiki/` lleva frontmatter YAML. Campos comunes: `tags`, y cua
   (qué dice ese paper) y, para disputas de valor, `alt` (el valor según ese paper). Convención
   **simétrica** existencia↔valor. Sólo taguear discrepancias **materiales** (mayores que el error;
   no diferencias cosméticas dentro de la barra). Reflejar la disputa también en la tabla/prosa.
-- **papers/**: `bibcode, title, first_author, year, arxiv_id, doi, stars[], topics[], methods[],
+- **papers/**: `bibcode, title, first_author, n_authors, year, arxiv_id, doi, bibstem, stars[], topics[], methods[],
   thesis_links[], bearing(supports|challenges|method), relevance, citation_count, pdf`.
 - **concepts/ (áreas **abiertas** — cualquiera según el foco de la bóveda; `concept_areas` en
   `vault/config/objective.yaml` es sólo referencia para el typo-check, con `methods`/`hypotheses` reservadas)**: `name`, **`aliases`** (lista de sinónimos EN+ES —

@@ -47,9 +47,11 @@ def excluded_table(slug: str) -> str:
     rows = []
     for r in out[:EXCLUDED_TOP_N]:
         url = f"https://ui.adsabs.harvard.edu/abs/{quote(r.get('bibcode', ''), safe='')}"
-        title = (r.get("title") or "(sin título)").replace("|", r"\|")[:70]
+        # colapsar espacios/saltos, truncar y RECIÉN escapar (|, []) para no romper el link/tabla
+        title = " ".join((r.get("title") or "(sin título)").split())[:70] \
+            .replace("|", r"\|").replace("[", r"\[").replace("]", r"\]")
         motivo = "sin tópico" if not r.get("topics") else f"doctype: {r.get('doctype')}"
-        rows.append(f"| [{title}]({url}) | {r.get('year') or ''} | {r.get('citation_count', 0)} | {motivo} |")
+        rows.append(f"| [{title}]({url}) | {r.get('year') or ''} | {r.get('citation_count') or 0} | {motivo} |")
     extra = len(out) - len(rows)
     tail = f"\n\n_(+ {extra} más excluidos por el filtro)_" if extra > 0 else ""
     return ("\n## Excluidos por el filtro (no-core · snapshot del ingest)\n"
@@ -139,7 +141,7 @@ SORT method ASC
 
 def write_concept_note(slug: str, force: bool) -> None:
     """Para temas (ingest-topic): stub del concept durable destino. Idempotente: NO pisa la
-    síntesis LLM de un concept ya existente (sólo se crea si falta)."""
+    síntesis LLM de un concept ya existente salvo --force (protege la síntesis)."""
     _, meta = cfg.topic_by_slug(slug)
     area, concept = meta["area"], meta["concept"]
     # Las áreas de concepts/ son ABIERTAS: no se prohíbe ninguna (podés investigar cualquier tema).
@@ -150,17 +152,18 @@ def write_concept_note(slug: str, force: bool) -> None:
         print(f"  ⚠ área '{area}' (topic '{slug}') no está en concept_areas (objective.yaml). "
               f"Si es un typo, corregí topics.yaml; si es un área nueva, agregala a la lista. Creo igual.")
     dest = cfg.CONCEPTS / area / f"{concept}.md"
-    if dest.exists():
-        print(f"  concept: {area}/{concept}.md ya existe (no se pisa; los papers enganchan por thesis_links)")
+    if dest.exists() and not force:
+        print(f"  concept: {area}/{concept}.md ya existe (no se pisa sin --force; los papers enganchan por thesis_links)")
         return
     dest.parent.mkdir(parents=True, exist_ok=True)
-    front = {
-        "name": meta.get("title", concept),
-        "status": "active",
+    front = {"name": meta.get("title", concept)}
+    if area == "hypotheses":          # `status` sólo en hipótesis (schema name,status; ver CLAUDE.md)
+        front["status"] = "active"
+    front.update({
         "aliases": meta.get("aliases", []),   # sinónimos EN+ES para grep; sembrado del topic, el LLM enriquece
         "tags": [area, "thesis"],
         "confidence": "medium",
-    }
+    })
     body = f"""{fm(front)}
 # {meta.get('title', concept)}
 

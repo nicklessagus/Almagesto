@@ -114,7 +114,9 @@ def print_probe(q: str, recs: list) -> int:
     for r in recs[:25]:
         mark = "CORE" if r["relevant"] else "—   "
         tp = ",".join(r["topics"]) or "(ninguno)"
-        print(f"  [{mark}] {r['citation_count']:>5}  {(r['title'] or '')[:68]}  «{tp}»")
+        cites = r.get("citation_count") or 0          # ADS puede devolver citation_count null
+        title = " ".join((r.get("title") or "").split())[:68]
+        print(f"  [{mark}] {cites:>5}  {title}  «{tp}»")
     print("\n  → ajustá relevance.topics en objective.yaml y re-corré --probe hasta que el corte cierre.")
     return 0
 
