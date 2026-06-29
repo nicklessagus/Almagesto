@@ -58,3 +58,27 @@ nomenclatura no tiene a qué adaptarse; el check sin la nomenclatura no tiene co
 - El check → vive en `lint.py` (encaja con su filosofía WARN/backlog), no en un script aparte. ✅
 - Pendiente de decidir (al hacer la capa 2): ¿el skill de setup **reemplaza** el flujo "editá
   `objective.yaml`" del README o lo **complementa**? (lean: complementa).
+
+## Backlog de framework — obtención de PDFs (papers viejos / no-arXiv)
+
+> Surgido al usar la bóveda (2026-06-29): papers **pre-arXiv / viejos** no están en arXiv, así que
+> `fetch_arxiv.py` no los baja; hubo que recurrir a workarounds manuales para conseguir el PDF.
+
+**Problema.** `fetch_arxiv.py` sólo baja de arXiv (usa el campo `arxiv_id`). Papers sin arXiv (revistas
+viejas, escaneados) quedan sin PDF → sin fulltext → sin extracción LLM ni `verify-citations`. Hoy se
+resuelve a mano, fuera del pipeline.
+
+**Principio que rige (pedido del usuario).** Meter en **scripts** todo lo determinista posible, que **no
+dependa de gastar tokens** del LLM. Alinea con la división del patrón (`scripts bajan determinista; LLM
+procesa criterio`): empujar la frontera hacia los scripts.
+
+**Dirección concreta a evaluar (inferencia mía — falta verificar la API):** la ADS API expone los
+`esources`/`links_data` de cada paper (`PUB_PDF`, `ADS_PDF`, `ADS_SCAN`, `EPRINT_PDF`…), y ADS **aloja
+escaneos** de artículos viejos (`ADS_SCAN`). Un fetcher más general (extender `fetch_arxiv` o un
+`fetch_pdf.py` nuevo) podría, para un paper sin `arxiv_id`, intentar en orden `EPRINT → ADS_PDF/ADS_SCAN
+→ PUB_PDF` vía la API de links/resolver de ADS, y/o resolver por DOI al publisher — todo determinista, sin
+tokens. Los que ni así se consigan, **reportarlos** (caso residual a mano).
+
+**A verificar antes de codificar:** qué devuelve realmente la ADS API (`/v1/resolver` o el campo
+`esources`), y si `ADS_SCAN`/`PUB_PDF` se bajan con el mismo token (algunos requieren acceso
+institucional).
