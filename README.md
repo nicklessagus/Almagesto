@@ -49,6 +49,20 @@ preferís: `name`/`description` + `relevance.topics`). Lo demás —forma astro:
 indicadores, ground-truth— es framework genérico y no se toca. Viene con un ejemplo (actividad estelar vs
 RV) que sirve de formato y default funcional.
 
+## De un objetivo a una ficha (qué hace un ingest)
+
+Cuando le pedís ingestar una estrella o un tema, el agente:
+
+1. **Busca en ADS** (por estrella: nombre + alias; por tema: keywords) y **clasifica** cada paper con tu
+   `relevance.topics`: **core** = matchea ≥1 faceta y no es ruido; el resto queda **no-core**.
+2. Los **core** se bajan (PDF + fulltext) y el LLM los **lee y destila** en la ficha: métodos, P/K/e,
+   indicadores y por qué es relevante — cada dato con su cita `[[bibcode]]` (trazable hasta el PDF).
+3. Los **no-core** no se bajan: quedan sólo listados (top por citas, con link a ADS) en un apéndice
+   *"excluidos, por las dudas"* — por si alguno debería haber entrado.
+
+El resultado es una **ficha autosuficiente** (resumen + tablas auto + huecos) que se entiende **sin abrir
+ningún paper**, con todo lo que afirma trazable a su fuente.
+
 ## Skills del agente (`.claude/skills/`)
 
 Las operaciones del patrón están empaquetadas como skills invocables (Claude las dispara solo por la
