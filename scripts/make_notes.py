@@ -13,10 +13,13 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from urllib.parse import quote
 
 import yaml
 
 import lib_config as cfg
+
+EXCLUDED_TOP_N = 10  # cuántos no-core mostrar en la tabla de excluidos (top por citas)
 
 
 def fm(d: dict) -> str:
@@ -29,6 +32,34 @@ def safe_name(bibcode: str) -> str:
     return bibcode.replace("/", "_")
 
 
+def excluded_table(slug: str) -> str:
+    """Tabla breve (snapshot del ingest) de los papers que el clasificador dejó AFUERA (no-core):
+    top por citas, con motivo y link a ADS. Es un puntero "por las dudas" para cazar falsos negativos
+    y afinar relevance.topics — los no-core NO se bajan ni se fichan. Vacío si no hay ads.json/excluidos.
+    Frontera dura OK: son papers reales (bibcode citable) con motivo reproducible, no afirmación suelta."""
+    adsfile = cfg.ROOT / "build" / slug / "ads.json"
+    if not adsfile.exists():
+        return ""
+    out = [r for r in json.loads(adsfile.read_text()).get("records", []) if not r.get("relevant")]
+    if not out:
+        return ""
+    out.sort(key=lambda r: r.get("citation_count", 0) or 0, reverse=True)
+    rows = []
+    for r in out[:EXCLUDED_TOP_N]:
+        url = f"https://ui.adsabs.harvard.edu/abs/{quote(r.get('bibcode', ''), safe='')}"
+        title = (r.get("title") or "(sin título)").replace("|", r"\|")[:70]
+        motivo = "sin tópico" if not r.get("topics") else f"doctype: {r.get('doctype')}"
+        rows.append(f"| [{title}]({url}) | {r.get('year') or ''} | {r.get('citation_count', 0)} | {motivo} |")
+    extra = len(out) - len(rows)
+    tail = f"\n\n_(+ {extra} más excluidos por el filtro)_" if extra > 0 else ""
+    return ("\n## Excluidos por el filtro (no-core · snapshot del ingest)\n"
+            "> Top por citas de lo que el clasificador dejó afuera (no matchea `relevance.topics` o "
+            "doctype ruido). **No se bajan ni se fichan** — esto es un puntero por las dudas. Si ves un "
+            "falso negativo, ajustá `relevance.topics` y re-ingestá con `--force`.\n\n"
+            "| Paper | Año | Citas | Motivo |\n|---|---|---|---|\n"
+            + "\n".join(rows) + tail + "\n")
+
+
 def write_star_note(slug: str, force: bool) -> None:
     name, meta = cfg.star_by_slug(slug)
     dest = cfg.STARS / f"{slug}.md"
@@ -39,7 +70,9 @@ def write_star_note(slug: str, force: bool) -> None:
     gt = json.loads(gt_file.read_text()) if gt_file.exists() else {"host": {}, "planets": []}
     host = gt.get("host", {})
     planets = [{"letter": p.get("letter"), "P_days": p.get("P_days"),
-                "K_ms": p.get("K_ms"), "e": p.get("e"), "status": p.get("status")}
+                "K_ms": p.get("K_ms"), "e": p.get("e"),
+                "mass_earth": p.get("mass_earth"),   # masa NEA (M⊕); RV-only ≈ m·sini. Lint valida consistencia.
+                "status": p.get("status")}
                for p in gt.get("planets", [])]
 
     front = {
@@ -66,13 +99,17 @@ def write_star_note(slug: str, force: bool) -> None:
 
 ## Resumen
 _(síntesis por LLM: qué se sabe, qué indicadores deberían correlacionar con actividad para este
-tipo espectral, planetas confirmados/dudosos, huecos en la bibliografía)._
+tipo espectral, planetas confirmados/dudosos)._
+
+## Huecos
+_(qué falta para que la ficha alcance sola: parámetros sin valor (¿`P_rot`?), señales RV sin árbitro,
+indicadores esperados no medidos, métodos no aplicados. Lista corta y accionable — abrir queries para imputar.)_
 
 ## Planetas (ground-truth NASA Exoplanet Archive)
 ```dataviewjs
 const p = dv.current().planets ?? [];
-dv.table(["letter","P (d)","K (m/s)","e","status"],
-  p.map(x => [x.letter, x.P_days, x.K_ms, x.e, x.status]));
+dv.table(["letter","P (d)","K (m/s)","e","M (M⊕)","status"],
+  p.map(x => [x.letter, x.P_days, x.K_ms, x.e, x.mass_earth, x.status]));
 ```
 
 ## Papers
@@ -95,6 +132,7 @@ SORT method ASC
 ## Datos crudos
 `{meta.get('data_local')}`
 """
+    body += excluded_table(slug)
     dest.write_text(body, encoding="utf-8")
     print(f"  star: {dest.name} escrito")
 
@@ -119,6 +157,7 @@ def write_concept_note(slug: str, force: bool) -> None:
     front = {
         "name": meta.get("title", concept),
         "status": "active",
+        "aliases": meta.get("aliases", []),   # sinónimos EN+ES para grep; sembrado del topic, el LLM enriquece
         "tags": [area, "thesis"],
         "confidence": "medium",
     }
@@ -129,7 +168,11 @@ def write_concept_note(slug: str, force: bool) -> None:
 > que el tema se entienda **sin abrir ningún paper**. Trazabilidad por `[[bibcode]]`.
 
 ## Síntesis
-_(qué se sabe del tema: mecanismos, signos, desfasajes, regímenes, huecos)._
+_(qué se sabe del tema: mecanismos, signos, desfasajes, regímenes)._
+
+## Huecos
+_(qué falta para entender/implementar el tema sin abrir papers: pasos o ecuaciones faltantes,
+regímenes no cubiertos, contradicciones sin resolver.)_
 
 ## Papers que tocan este tema (auto)
 ```dataview
@@ -139,6 +182,7 @@ WHERE contains(thesis_links, "{concept}")
 SORT year ASC
 ```
 """
+    body += excluded_table(slug)
     dest.write_text(body, encoding="utf-8")
     print(f"  concept: {area}/{concept}.md escrito (stub)")
 

@@ -111,8 +111,13 @@ esos campos.
 
 Toda nota de `vault/wiki/` lleva frontmatter YAML. Campos comunes: `tags`, y cuando aplique
 `confidence: high|medium|low`. Schemas específicos:
-- **stars/**: `name, slug, aliases, simbad_id, spectral_type, P_rot_days,
-  activity_indicators_expected, planets[], data_local, methods_applied{literature,ours}`.
+- **stars/**: `name, slug, aliases, simbad_id, spectral_type, teff_K, dist_pc, P_rot_days,
+  activity_indicators_expected, planets[], data_local, methods_applied{literature,ours}`. Cada
+  `planets[]` lleva `letter, P_days, K_ms, e, mass_earth, status` (de ground-truth NEA; `mass_earth`
+  RV-only ≈ $m\sin i$) + `disputes[]` cuando un paper discrepa. El cuerpo trae además una sección
+  **`## Huecos`** (qué falta para que la ficha alcance sola: parámetros sin valor, señales sin árbitro,
+  métodos no aplicados) y un apéndice **`## Excluidos por el filtro`** (snapshot de los no-core, top por
+  citas con link a ADS — puntero por las dudas, no se bajan).
   **Estándar de la ficha: autosuficiente.** La ficha de estrella debe alcanzar por sí sola —
   un agente (o humano) que la lee queda servido **sin abrir ningún paper**. Es una ficha
   bibliográfica: **corta y suficiente**, con todos los datos importantes destilados (parámetros
@@ -143,7 +148,8 @@ Toda nota de `vault/wiki/` lleva frontmatter YAML. Campos comunes: `tags`, y cua
   `vault/config/objective.yaml` es sólo referencia para el typo-check, con `methods`/`hypotheses` reservadas)**: `name`, **`aliases`** (lista de sinónimos EN+ES —
   p. ej. `[chromatic index, índice cromático, RV-color]` — para que la ficha se encuentre por `grep`
   desde **cualquier término**, no sólo el nombre canónico; espeja la idea de `aliases` de `stars/`),
-  `tags`, `confidence`. Rige el *Estándar transversal* (autosuficiente + implementation-ready).
+  `tags`, `confidence`. El cuerpo trae `## Síntesis`, `## Huecos` y el apéndice `## Excluidos por el
+  filtro` (igual que la ficha de estrella). Rige el *Estándar transversal* (autosuficiente + implementation-ready).
 - **concepts/hypotheses/**: `name, status`; el roll-up de evidencia es por Dataview sobre
   `thesis_links`.
 
