@@ -7,7 +7,8 @@ Escribe build/<slug>/ads.json con la lista de registros (bibcode, título, autor
 año, abstract, arxiv_id, doctype, citation_count, topics, relevant).
 
 Usa la API REST de ADS directamente (control total de campos y filas). Rate: ~5000/día.
-ADS resuelve `object:` vía SIMBAD, así que trae todo lo que menciona la estrella.
+La query por estrella se arma con `title:`/`abs:` sobre nombre+alias (ver `build_query`; `object:`
+no es campo válido en la API Solr de ADS). Para temas, query Solr cruda de `topics.yaml`.
 """
 from __future__ import annotations
 

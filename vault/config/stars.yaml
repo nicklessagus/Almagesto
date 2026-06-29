@@ -1,5 +1,6 @@
 # Estrellas de la bóveda. Nombre canónico (clave) + alias para resolver en SIMBAD/ADS.
-# `simbad`: nombre que mejor resuelve en SIMBAD. `ads_object`: cómo se consulta en ADS (object:).
+# `simbad`: nombre que mejor resuelve en SIMBAD. `ads_object`: nombre para la query ADS (va en
+#   `title:`/`abs:`, no en `object:` — no es campo válido en la API Solr de ADS).
 # `slug`: nombre de archivo/carpeta (sin espacios). `data_local`: puntero a los datos crudos locales
 #   de la estrella (opcional, ruta machine-local; no se commitea).
 #
