@@ -82,3 +82,34 @@ tokens. Los que ni así se consigan, **reportarlos** (caso residual a mano).
 **A verificar antes de codificar:** qué devuelve realmente la ADS API (`/v1/resolver` o el campo
 `esources`), y si `ADS_SCAN`/`PUB_PDF` se bajan con el mismo token (algunos requieren acceso
 institucional).
+
+## Backlog de framework — evaluar `defuddle` para el modo off-ADS de `ingest-topic`
+
+> Surgido de una discusión (2026-07-01) sobre si conviene adoptar los **skills oficiales de Obsidian**
+> (`kepano/obsidian-skills`, de Steph Ango). Conclusión: para el flujo de Almagesto la ventaja es
+> marginal-a-negativa y **una sola pieza del pack encaja** — la anoto acá; el resto se descarta abajo.
+
+**Contexto.** El pack oficial trae 5 skills: `obsidian-markdown`, `obsidian-bases`, `json-canvas`,
+`obsidian-cli`, `defuddle`. Hay además una ruta **MCP** (plugin Local REST API + `mcp-obsidian`) que
+expone read/search/write del vault por HTTP con Obsidian abierto.
+
+**Por qué se descartan casi todos (para no re-discutirlo).**
+- `obsidian-markdown` → redundante y potencialmente en conflicto: el contrato de frontmatter + convenciones
+  (`$...$`, kebab-case, disclaimers) ya están codificados y son **más estrictos** que la sintaxis OFM genérica.
+- `obsidian-bases` → el vault usa **Dataview** (`FROM "papers"`), no Bases; migrar sería un cambio de todo el
+  esquema, no un win gratis.
+- `json-canvas` → artefacto visual/humano; Almagesto es machine-first (frontmatter+lint+git) y el grafo ya
+  lo da Obsidian nativo. No es bibliografía citable.
+- `obsidian-cli` **y la ruta MCP** → **exigen Obsidian corriendo** (app + plugin/CLI, cert self-signed,
+  bearer token). Chocan con el principio de **headless/portabilidad** (memoria in-repo, scripts desde raíz,
+  que viaje entre máquinas) y no aportan nada que no cubra ya el acceso directo a FS + grep.
+
+**Lo único a evaluar — `defuddle`.** Extrae markdown limpio de páginas web quitando clutter (menos tokens)
+[documentado: `kepano/defuddle`]. Encaja con el **modo off-ADS** de `ingest-topic`, que guarda snapshots web
+como `.txt` **deterministas** (URL + fecha) para citabilidad. Hoy esa extracción va por `WebFetch`.
+
+**A verificar antes de adoptar (inferencia mía):** si `defuddle` aporta señal/tokens **por encima de
+`WebFetch`** (que ya convierte a markdown) — puede no justificar la dependencia extra. Si aporta, hay que
+**envolverlo** para producir el snapshot determinista y citable en el mismo formato URL+fecha del modo
+off-ADS (no basta el markdown crudo). Es una **utilidad general**, no Obsidian-específica: se puede adoptar
+sola, sin el resto del pack ni la ruta MCP. Prioridad baja.
