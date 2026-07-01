@@ -108,8 +108,17 @@ expone read/search/write del vault por HTTP con Obsidian abierto.
 [documentado: `kepano/defuddle`]. Encaja con el **modo off-ADS** de `ingest-topic`, que guarda snapshots web
 como `.txt` **deterministas** (URL + fecha) para citabilidad. Hoy esa extracción va por `WebFetch`.
 
-**A verificar antes de adoptar (inferencia mía):** si `defuddle` aporta señal/tokens **por encima de
-`WebFetch`** (que ya convierte a markdown) — puede no justificar la dependencia extra. Si aporta, hay que
-**envolverlo** para producir el snapshot determinista y citable en el mismo formato URL+fecha del modo
-off-ADS (no basta el markdown crudo). Es una **utilidad general**, no Obsidian-específica: se puede adoptar
-sola, sin el resto del pack ni la ruta MCP. Prioridad baja.
+**Evaluado 2026-07-01 (rama `exp/defuddle-offads`) → conviene.** Números (página ICA de Wikipedia,
+ejemplo off-ADS de `CLAUDE.md`): defuddle 60 KB vs pandoc 235 KB vs HTML crudo 480 KB (~4×/~8× menos);
+**determinista** (dos corridas byte-idénticas); 0 hits de clutter (vs 34 en pandoc); conserva cuerpo,
+referencias (DOI/arXiv/bibcode) y matemática. Supera a `WebFetch` para este uso porque WebFetch es
+model-based (no determinista, no es snapshot verbatim) y el snapshot citable **exige** determinismo.
+Caveats: dependencia **Node/npm** (off-ADS es opt-in y raro → aceptable) y algún artefacto HTML suelto
+(un bloque `<video>` quedó sin limpiar). Es una **utilidad general**, no Obsidian-específica: se adopta
+sola, sin el resto del pack ni la ruta MCP.
+
+**PoC hecho (en la rama):** `scripts/fetch_web.py` — envuelve `npx defuddle parse <url> --markdown`,
+escribe `vault/raw/fulltext/<slug>/<clave>.txt` con encabezado URL+fecha, valida la clave contra
+`BIBCODE_RE`, idempotente salvo `--force`; error amigable si falta Node. Wiring: bullet **Web** del modo
+off-ADS en `ingest-topic/SKILL.md` (v1.0.0→1.1.0) apunta al script, con WebFetch como fallback sin Node.
+**Falta:** decidir merge a `main` (revisar) y —opcional— un post-filtro que limpie el `<video>` residual.

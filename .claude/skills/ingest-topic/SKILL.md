@@ -1,7 +1,7 @@
 ---
 name: ingest-topic
 description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema no-astro / fuera de ADS (desde PDFs locales + web; ver Modo off-ADS).
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Ingest: agregar un TEMA a la wiki
@@ -101,9 +101,13 @@ Qué cambia respecto del flujo ADS de arriba:
   - **PDFs** que provee el usuario → copiarlos a `vault/raw/pdfs/<slug>/` (git-lfs) renombrados a la **clave de
     cita** (abajo); `python extract_fulltext.py <slug>` los pasa a `vault/raw/fulltext/<slug>/` (es
     source-agnostic: sólo corre `pdftotext`).
-  - **Web** (rellenar fundacionales / huecos) → traer con `WebFetch`/`deep-research` y **guardar un
-    snapshot determinista** como `vault/raw/fulltext/<slug>/<clave>.txt`, con **URL + fecha de acceso** al
-    inicio del archivo, para que la afirmación sea **citable y verificable** por `verify-citations`.
+  - **Web** (rellenar fundacionales / huecos) → **preferido:** `python fetch_web.py <slug> <clave> <url>`,
+    que baja la página con **defuddle** (extractor que quita nav/menús/clutter → markdown limpio, ~8× menos
+    bytes que el HTML crudo, ~4× menos que pandoc; determinista) y escribe el **snapshot**
+    `vault/raw/fulltext/<slug>/<clave>.txt` con el encabezado **URL + fecha de acceso** ya puesto, para que
+    sea **citable y verificable** por `verify-citations`. Requiere Node/npm (usa `npx defuddle`, JS-only;
+    valida que `<clave>` matchee `BIBCODE_RE`, idempotente salvo `--force`). **Sin Node:** traer con
+    `WebFetch`/`deep-research` y guardar el snapshot a mano, con el mismo encabezado URL + fecha al inicio.
 - **Clave de cita sintética (papers sin bibcode ADS):** `AAAA+Autor` (p. ej. `2000HyvarinenOja`,
   `2006Tichavsky`, `2025sklearn`). Debe **empezar con `AAAA`+letra** (lo exige `BIBCODE_RE` del lint) y
   coincidir con el nombre del `.txt`. Donde **sí** exista un bibcode ADS real, usarlo.
