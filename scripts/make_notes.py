@@ -13,7 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import yaml
 
@@ -271,14 +271,89 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
     print(f"  papers: {written} escritos, {skipped} ya existían")
 
 
+def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | None = None,
+                         concept: str | None = None, title: str | None = None,
+                         first_author: str | None = None, year=None,
+                         venue: str | None = None, force: bool = False) -> bool:
+    """Stub de nota de paper para una fuente **off-ADS** (web o PDF sin bibcode ADS) — modo off-ADS de
+    ingest-topic. Análogo a write_paper_notes pero **sin ads.json**: la metadata la provee quien llama
+    (fetch_web.py o el usuario). `bibcode` = clave sintética AAAA+Autor; `arxiv_id`/`doi` null;
+    `pdf: null` (el respaldo citable es el snapshot `.txt` de fulltext/, no un PDF de arXiv);
+    `thesis_links` pre-sembrado al concept. Idempotente: NO pisa una nota existente salvo force.
+    Devuelve True si escribió. El mismo template que las notas ADS → un solo lugar de verdad."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    dest = cfg.PAPERS / f"{safe_name(citekey)}.md"
+    if dest.exists() and not force:
+        print(f"  papers: {dest.name} ya existe (no se pisa sin --force)")
+        return False
+    bibstem = venue or (urlparse(url).netloc if url else None)   # venue: dominio web por default
+    front = {
+        "bibcode": citekey,
+        "title": title,
+        "first_author": first_author,
+        "n_authors": None,
+        "year": int(year) if year else None,
+        "arxiv_id": None,
+        "doi": None,
+        "bibstem": bibstem,
+        "stars": [],
+        "topics": [],
+        "methods": [],                       # poblar con extracción LLM
+        "thesis_links": [concept] if concept else [],   # pre-sembrado al concept
+        "bearing": None,                     # supports | challenges | method
+        "relevance": "high",
+        "citation_count": 0,
+        "pdf": None,                         # off-ADS: la fuente es el snapshot .txt, no un PDF de arXiv
+        "confidence": "medium",
+        "tags": ["paper", "web"],            # `web`: marca fuente off-ADS (findability)
+        "generator": f"Almagesto v{cfg.ALMAGESTO_VERSION}",   # provenance
+    }
+    txt_ptr = f"vault/raw/fulltext/{slug or '<slug>'}/{citekey}.txt"
+    src_line = f"· {url}\n" if url else ""
+    body = f"""{fm(front)}
+# {title or citekey}
+
+**{first_author or '(autor desconocido)'}** ({year or 's.f.'})
+· {'[[' + concept + ']] · ' if concept else ''}fuente off-ADS · `{citekey}`
+{src_line}
+> Fuente **off-ADS** (fuera de ADS). El respaldo citable es el snapshot determinista
+> `{txt_ptr}` (URL + fecha de acceso), verificable por `verify-citations`. El frontmatter es
+> máquina-legible como en cualquier nota de paper.
+
+## Extracción (LLM)
+- **Aporte al tema:** _(qué agrega al eje del concept: definición, ecuación, método, signo, régimen)_
+- **Métodos:** _(llenar `methods:` del frontmatter con `concepts/methods/`)_
+- **Para mi objetivo:** _(relevancia para el objetivo de la bóveda / huecos)_
+"""
+    dest.write_text(body, encoding="utf-8")
+    print(f"  papers: {dest.name} escrito (stub off-ADS)")
+    return True
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("slug")
+    ap.add_argument("slug", help="slug de estrella/tema; en --web es la CLAVE de cita (AAAA+Autor)")
     ap.add_argument("--all", action="store_true", help="incluir papers no-relevantes")
     ap.add_argument("--force", action="store_true", help="pisar notas existentes")
     ap.add_argument("--topic", action="store_true",
                     help="el slug es un TEMA de vault/config/topics.yaml: genera concept en vez de ficha de estrella")
+    ap.add_argument("--web", action="store_true",
+                    help="modo off-ADS: el positional es la CLAVE de cita de una fuente web/PDF sin ADS; crea sólo la nota de paper (stub)")
+    ap.add_argument("--url", help="(--web) URL fuente del snapshot")
+    ap.add_argument("--slug-hint", dest="slug_hint", help="(--web) tema al que pertenece, para el puntero al .txt")
+    ap.add_argument("--concept", help="(--web) concept destino → thesis_links")
+    ap.add_argument("--title", help="(--web) título de la fuente")
+    ap.add_argument("--author", help="(--web) primer autor")
+    ap.add_argument("--year", help="(--web) año")
+    ap.add_argument("--venue", help="(--web) venue/bibstem (default: dominio de --url)")
     args = ap.parse_args()
+
+    if args.web:
+        write_web_paper_note(args.slug, url=args.url, slug=args.slug_hint, concept=args.concept,
+                             title=args.title, first_author=args.author, year=args.year,
+                             venue=args.venue, force=args.force)
+        return 0
+
     print(f"Generando notas para {args.slug}")
     if args.topic:
         write_concept_note(args.slug, args.force)

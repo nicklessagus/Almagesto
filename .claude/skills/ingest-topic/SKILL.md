@@ -101,19 +101,24 @@ Qué cambia respecto del flujo ADS de arriba:
   - **PDFs** que provee el usuario → copiarlos a `vault/raw/pdfs/<slug>/` (git-lfs) renombrados a la **clave de
     cita** (abajo); `python extract_fulltext.py <slug>` los pasa a `vault/raw/fulltext/<slug>/` (es
     source-agnostic: sólo corre `pdftotext`).
-  - **Web** (rellenar fundacionales / huecos) → **preferido:** `python fetch_web.py <slug> <clave> <url>`,
-    que baja la página con **defuddle** (extractor que quita nav/menús/clutter → markdown limpio, ~8× menos
-    bytes que el HTML crudo, ~4× menos que pandoc; determinista) y escribe el **snapshot**
-    `vault/raw/fulltext/<slug>/<clave>.txt` con el encabezado **URL + fecha de acceso** ya puesto, para que
-    sea **citable y verificable** por `verify-citations`. Requiere Node/npm (usa `npx defuddle`, JS-only;
-    valida que `<clave>` matchee `BIBCODE_RE`, idempotente salvo `--force`). **Sin Node:** traer con
-    `WebFetch`/`deep-research` y guardar el snapshot a mano, con el mismo encabezado URL + fecha al inicio.
+  - **Web** (rellenar fundacionales / huecos) → **preferido:** `python fetch_web.py <slug> <clave> <url>
+    [--concept <concept> --title … --author … --year …]`. Baja la página con **defuddle** (quita
+    nav/menús/clutter → markdown limpio, ~8× menos bytes que el HTML crudo, ~4× menos que pandoc), le pasa
+    un **post-clean** determinista (saca bloques HTML de media/embed sueltos) y escribe el **snapshot**
+    `vault/raw/fulltext/<slug>/<clave>.txt` con el encabezado **URL + fecha de acceso** ya puesto (citable y
+    verificable por `verify-citations`). **Además crea el stub `vault/wiki/papers/<clave>.md`** (salvo
+    `--no-note`). Requiere Node/npm (`npx defuddle`, JS-only; valida `<clave>` contra `BIBCODE_RE`,
+    idempotente salvo `--force`). **Sin Node:** traer con `WebFetch`/`deep-research`, guardar el snapshot a
+    mano (mismo encabezado) y stubbear la nota con `python make_notes.py --web <clave> --url … --concept …`.
 - **Clave de cita sintética (papers sin bibcode ADS):** `AAAA+Autor` (p. ej. `2000HyvarinenOja`,
   `2006Tichavsky`, `2025sklearn`). Debe **empezar con `AAAA`+letra** (lo exige `BIBCODE_RE` del lint) y
   coincidir con el nombre del `.txt`. Donde **sí** exista un bibcode ADS real, usarlo.
-- **Notas de paper a mano:** `make_notes.py` asume ADS → en este modo se crean a mano
-  `vault/wiki/papers/<clave>.md` con el mismo frontmatter (`bibcode` = clave sintética; `arxiv_id`/`doi` si
-  hay; `bibstem` = venue; `stars: []`; `thesis_links` al concept).
+- **Notas de paper (automatizado):** `fetch_web.py` ya crea el stub `vault/wiki/papers/<clave>.md`; para
+  fuentes **PDF** off-ADS (sin URL) usá `python make_notes.py --web <clave> --concept <concept>
+  --slug-hint <slug> [--title … --author … --year … --venue …]`. El stub lleva el **mismo frontmatter** que
+  una nota ADS (`bibcode` = clave sintética; `arxiv_id`/`doi` null; `bibstem` = venue o dominio; `pdf: null`
+  — el respaldo es el snapshot `.txt`; `stars: []`; `thesis_links` al concept; `tags: [paper, web]`).
+  Completar la extracción LLM a mano.
 - **Todo lo demás igual:** extracción enfocada en el eje del tema, síntesis al concept durable,
   auto-revisión de autosuficiencia, **`verify-citations`** (la clave sintética y el snapshot `.txt` la
   hacen chequeable), **`lint`** (0 bloqueante) y bookkeeping. **La frontera dura (regla #0) sigue

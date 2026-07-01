@@ -117,8 +117,17 @@ Caveats: dependencia **Node/npm** (off-ADS es opt-in y raro → aceptable) y alg
 (un bloque `<video>` quedó sin limpiar). Es una **utilidad general**, no Obsidian-específica: se adopta
 sola, sin el resto del pack ni la ruta MCP.
 
-**PoC hecho (en la rama):** `scripts/fetch_web.py` — envuelve `npx defuddle parse <url> --markdown`,
-escribe `vault/raw/fulltext/<slug>/<clave>.txt` con encabezado URL+fecha, valida la clave contra
-`BIBCODE_RE`, idempotente salvo `--force`; error amigable si falta Node. Wiring: bullet **Web** del modo
-off-ADS en `ingest-topic/SKILL.md` (v1.0.0→1.1.0) apunta al script, con WebFetch como fallback sin Node.
-**Falta:** decidir merge a `main` (revisar) y —opcional— un post-filtro que limpie el `<video>` residual.
+**Implementado (en la rama, completo):**
+- `scripts/fetch_web.py` — `npx defuddle parse <url> --markdown` → `vault/raw/fulltext/<slug>/<clave>.txt`
+  con encabezado URL+fecha; valida la clave contra `BIBCODE_RE`, idempotente salvo `--force`, error
+  amigable si falta Node. **Post-clean determinista** (`clean_markdown`) que saca los bloques HTML de
+  media/embed sueltos (`<video>/<audio>/<iframe>/<svg>/<picture>` + `<source>/<track>`) → resuelve el
+  artefacto `<video>` (probado: 0 residuales).
+- **Creación automática de la nota de paper:** `make_notes.write_web_paper_note()` + modo CLI
+  `make_notes.py --web` (reusa el template de frontmatter de las notas ADS → un solo lugar de verdad);
+  `fetch_web.py` la llama tras el snapshot (salvo `--no-note`). Stub con `pdf: null`, `arxiv_id/doi: null`,
+  `bibstem` = venue o dominio de la URL, `thesis_links` al concept, `tags: [paper, web]`, `generator`
+  estampado. El modo standalone cubre también fuentes **PDF** off-ADS (sin URL).
+- Wiring en `ingest-topic/SKILL.md` (v1.0.0→1.1.0): el bullet **Web** y el ex-"notas a mano" reflejan el
+  flujo automatizado, con WebFetch + `make_notes --web` como fallback sin Node.
+**Falta:** sólo decidir merge a `main` (revisar el diff).
