@@ -58,6 +58,19 @@ def clean_markdown(md: str) -> tuple[str, int]:
     return md.strip() + "\n", removed
 
 
+def snapshot_date_of(path) -> str | None:
+    """Fecha `retrieved` del header de un snapshot ya existente, para que la nota coincida con el .txt
+    (si se re-corre sin --force y el .txt es viejo, la nota usa la fecha original, no la de hoy)."""
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines()[:8]:
+            m = re.match(r"retrieved\s*:\s*(\d{4}-\d{2}-\d{2})", line)
+            if m:
+                return m.group(1)
+    except OSError:
+        pass
+    return None
+
+
 def defuddle_version() -> str:
     """Versión del paquete defuddle (para provenance en el header); 'desconocida' si no se puede."""
     try:
@@ -107,7 +120,10 @@ def main() -> int:
     outdir = cfg.FULLTEXT / args.slug
     outdir.mkdir(parents=True, exist_ok=True)
     out = outdir / f"{args.citekey}.txt"
+    # fecha del snapshot (UTC): la comparte el .txt y la nota. Si el .txt ya existe, se reusa la suya.
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     if out.exists() and not args.force:
+        stamp = snapshot_date_of(out) or stamp
         print(f"{args.citekey}: ya existe {out} (usá --force para re-bajar)")
     else:
         print(f"  defuddle ← {args.url}")
@@ -118,7 +134,6 @@ def main() -> int:
         body, removed = clean_markdown(raw)
         # Encabezado citable: URL + fecha de acceso (UTC) + provenance del extractor. El cuerpo es
         # determinista; la fecha es el metadato del snapshot (cuándo se capturó), como pide off-ADS.
-        stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         header = (
             "# Almagesto — snapshot web (off-ADS), determinista para citar/verificar\n"
             f"source_url : {args.url}\n"
@@ -135,7 +150,7 @@ def main() -> int:
         make_notes.write_web_paper_note(
             args.citekey, url=args.url, slug=args.slug, concept=args.concept,
             title=args.title, first_author=args.author, year=args.year,
-            venue=args.venue, force=args.force,
+            venue=args.venue, accessed=stamp, force=args.force,
         )
         print("  siguiente: completar la extracción LLM en la nota y verificar con verify-citations")
     return 0

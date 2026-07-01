@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime, timezone
 from urllib.parse import quote, urlparse
 
 import yaml
@@ -274,19 +275,24 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
 def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | None = None,
                          concept: str | None = None, title: str | None = None,
                          first_author: str | None = None, year=None,
-                         venue: str | None = None, force: bool = False) -> bool:
+                         venue: str | None = None, accessed: str | None = None,
+                         force: bool = False) -> bool:
     """Stub de nota de paper para una fuente **off-ADS** (web o PDF sin bibcode ADS) — modo off-ADS de
     ingest-topic. Análogo a write_paper_notes pero **sin ads.json**: la metadata la provee quien llama
     (fetch_web.py o el usuario). `bibcode` = clave sintética AAAA+Autor; `arxiv_id`/`doi` null;
     `pdf: null` (el respaldo citable es el snapshot `.txt` de fulltext/, no un PDF de arXiv);
-    `thesis_links` pre-sembrado al concept. Idempotente: NO pisa una nota existente salvo force.
-    Devuelve True si escribió. El mismo template que las notas ADS → un solo lugar de verdad."""
+    `thesis_links` pre-sembrado al concept. Para fuentes web, `source_url` + `accessed` son la
+    provenance bibliográfica (el "Retrieved <fecha>" de una cita web); `accessed` = la fecha del
+    snapshot (la pasa fetch_web.py; si es web y no se pasó, default = hoy UTC). Idempotente: NO pisa
+    una nota existente salvo force. Devuelve True si escribió. Mismo template que las notas ADS."""
     cfg.PAPERS.mkdir(parents=True, exist_ok=True)
     dest = cfg.PAPERS / f"{safe_name(citekey)}.md"
     if dest.exists() and not force:
         print(f"  papers: {dest.name} ya existe (no se pisa sin --force)")
         return False
     bibstem = venue or (urlparse(url).netloc if url else None)   # venue: dominio web por default
+    if accessed is None and url:                                 # fuente web sin fecha explícita → hoy
+        accessed = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     front = {
         "bibcode": citekey,
         "title": title,
@@ -295,6 +301,8 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
         "year": int(year) if year else None,
         "arxiv_id": None,
         "doi": None,
+        "source_url": url,           # fuente web off-ADS (provenance); null para fuente PDF
+        "accessed": accessed,        # fecha del snapshot — bibliografía web ("Retrieved <fecha>")
         "bibstem": bibstem,
         "stars": [],
         "topics": [],
@@ -310,15 +318,16 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
     }
     txt_ptr = f"vault/raw/fulltext/{slug or '<slug>'}/{citekey}.txt"
     src_line = f"· {url}\n" if url else ""
+    acc_line = f"· snapshot {accessed}\n" if accessed else ""
     body = f"""{fm(front)}
 # {title or citekey}
 
 **{first_author or '(autor desconocido)'}** ({year or 's.f.'})
 · {'[[' + concept + ']] · ' if concept else ''}fuente off-ADS · `{citekey}`
-{src_line}
+{src_line}{acc_line}
 > Fuente **off-ADS** (fuera de ADS). El respaldo citable es el snapshot determinista
-> `{txt_ptr}` (URL + fecha de acceso), verificable por `verify-citations`. El frontmatter es
-> máquina-legible como en cualquier nota de paper.
+> `{txt_ptr}` (`source_url` + `accessed` en el frontmatter), verificable por `verify-citations`.
+> El frontmatter es máquina-legible como en cualquier nota de paper.
 
 ## Extracción (LLM)
 - **Aporte al tema:** _(qué agrega al eje del concept: definición, ecuación, método, signo, régimen)_

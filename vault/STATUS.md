@@ -126,8 +126,9 @@ sola, sin el resto del pack ni la ruta MCP.
 - **Creación automática de la nota de paper:** `make_notes.write_web_paper_note()` + modo CLI
   `make_notes.py --web` (reusa el template de frontmatter de las notas ADS → un solo lugar de verdad);
   `fetch_web.py` la llama tras el snapshot (salvo `--no-note`). Stub con `pdf: null`, `arxiv_id/doi: null`,
-  `bibstem` = venue o dominio de la URL, `thesis_links` al concept, `tags: [paper, web]`, `generator`
-  estampado. El modo standalone cubre también fuentes **PDF** off-ADS (sin URL).
+  `source_url` + `accessed` (la **fecha del snapshot**, tomada del `.txt` → coinciden), `bibstem` = venue o
+  dominio de la URL, `thesis_links` al concept, `tags: [paper, web]`, `generator` estampado. El modo
+  standalone cubre también fuentes **PDF** off-ADS (sin URL → `source_url`/`accessed` null).
 - Wiring en `ingest-topic/SKILL.md` (v1.0.0→1.1.0): el bullet **Web** y el ex-"notas a mano" reflejan el
   flujo automatizado, con WebFetch + `make_notes --web` como fallback sin Node.
 **Falta:** sólo decidir merge a `main` (revisar el diff).

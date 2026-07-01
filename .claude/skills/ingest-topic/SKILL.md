@@ -116,9 +116,10 @@ Qué cambia respecto del flujo ADS de arriba:
 - **Notas de paper (automatizado):** `fetch_web.py` ya crea el stub `vault/wiki/papers/<clave>.md`; para
   fuentes **PDF** off-ADS (sin URL) usá `python make_notes.py --web <clave> --concept <concept>
   --slug-hint <slug> [--title … --author … --year … --venue …]`. El stub lleva el **mismo frontmatter** que
-  una nota ADS (`bibcode` = clave sintética; `arxiv_id`/`doi` null; `bibstem` = venue o dominio; `pdf: null`
-  — el respaldo es el snapshot `.txt`; `stars: []`; `thesis_links` al concept; `tags: [paper, web]`).
-  Completar la extracción LLM a mano.
+  una nota ADS más la provenance web: `bibcode` = clave sintética; `arxiv_id`/`doi` null; `source_url` +
+  `accessed` (la **fecha del snapshot** — el "Retrieved <fecha>" de una cita web, la toma del `.txt`);
+  `bibstem` = venue o dominio; `pdf: null` (el respaldo es el snapshot `.txt`); `stars: []`; `thesis_links`
+  al concept; `tags: [paper, web]`. Completar la extracción LLM a mano.
 - **Todo lo demás igual:** extracción enfocada en el eje del tema, síntesis al concept durable,
   auto-revisión de autosuficiencia, **`verify-citations`** (la clave sintética y el snapshot `.txt` la
   hacen chequeable), **`lint`** (0 bloqueante) y bookkeeping. **La frontera dura (regla #0) sigue
