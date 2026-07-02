@@ -83,6 +83,24 @@ tokens. Los que ni así se consigan, **reportarlos** (caso residual a mano).
 `esources`), y si `ADS_SCAN`/`PUB_PDF` se bajan con el mismo token (algunos requieren acceso
 institucional).
 
+**Hallazgos testeados (2026-07-01, episodio Saar & Brandenburg 1999 en la instancia Actividad).** Reglas
+concretas para el futuro `fetch_pdf.py` y para la guía del skill (ya reflejadas en `ingest-star/SKILL.md`):
+- El **escaneo ADS** directo (`articles.adsabs.harvard.edu/pdf/<bibcode>`) devolvió **403** sin sesión; el
+  gateway `.../link_gateway/<bibcode>/{ADS_PDF,PUB_PDF}` y el `/pdf` del publisher devuelven **HTML/captcha**
+  a un fetch automático (necesitan sesión institucional del navegador). → la parte determinista tiene techo:
+  para paywall/captcha el fallback real es **pedir el PDF al usuario**.
+- **Gana el dato sin el PDF:** en artículos viejos las **tablas son imágenes** servidas por el CDN del
+  publisher (IOP: `content.cld.iop.org/journals/<...>/<vol>/<pag>/revision1/tbN.gif`) y **se bajan sin
+  paywall**. Para papers de survey donde sólo interesa la fila de una estrella, bajar el `tbN.gif` alcanza.
+  También existe el **HTML legacy** (`iopscience.iop.org/article/<doi>/fulltext/NNNNN.text.html`) con el
+  cuerpo (no las tablas).
+- **El índice full-text de ADS de escaneos viejos es incompleto:** su OCR **pierde ~½ de las filas** de
+  tabla (12/26 estrellas en Saar 1999) → un `full:"HD X" → 0` es **inconcluso, no ausencia**. Implicación
+  para código: no marcar "no está" desde un full-text negativo; y el barrido full-text por estrella (paso 2b
+  del skill) debe listar **todo** el core, no top-N por citas.
+- **No todo PDF necesita OCR:** el de Saar 1999 traía **capa de texto** (`pdftotext` lo sacó entero, tablas
+  incluidas), con quirks de PostScript viejo (`-` y `>` → `[`). Chequear capa de texto antes de OCR.
+
 ## Backlog de framework — evaluar `defuddle` para el modo off-ADS de `ingest-topic`
 
 > Surgido de una discusión (2026-07-01) sobre si conviene adoptar los **skills oficiales de Obsidian**
