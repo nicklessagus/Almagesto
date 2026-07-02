@@ -33,7 +33,11 @@ procesa. Trabajar desde la raíz del repo.
    ```bash
    # query Solr cruda: papers con la estrella en el CUERPO (no sólo título/abstract)
    python query_ads.py --probe 'full:"HD 152391"'      # repetir por alias
+   python query_ads.py --probe 'full:"HD152391"'       # …y por la grafía SIN espacio
    ```
+   **Probá ambas grafías** (`HD 152391` y `HD152391`): ADS tokeniza distinto cada forma y los papers usan
+   las dos → una sola se pierde la otra. (El ingest automático ya expande las variantes de espaciado en
+   `build_query`; este barrido `full:` es manual, así que acá lo hacés a mano.)
    Clasificá el resultado con `relevance.topics` (igual que el ingest) y **revisá TODO el core, no sólo el
    top-N por citas**: los papers recientes/poco citados caen al fondo del ranking aunque sean core (así se
    perdieron Garg+2019 y Willamo+2020, con 21c/9c). Los core que falten se agregan a mano (inyectar el

@@ -63,13 +63,39 @@ def extract_arxiv(identifiers: list[str]) -> str | None:
     return None
 
 
+# Designación de catálogo <acrónimo alfabético 1-4><número…> donde el espacio es COSMÉTICO: los
+# papers escriben "HD 40307" o "HD40307" indistintamente y ADS los tokeniza distinto en title:/abs:
+# (dos tokens vs uno) → una frase no matchea la otra. Guard de patrón para NO expandir nombres propios
+# ("tau Ceti"), designaciones numéricas ("51 Peg", el espacio separa tokens con sentido) ni variables
+# con sufijo ("V889 Her"): sólo entra <letras><dígito+resto> que termina en el número.
+_CATALOG_DESIG = re.compile(r"^([A-Za-z]{2,4})\s*(\d[\w.+-]*)$")
+
+
+def name_variants(n: str) -> list[str]:
+    """Variantes de espaciado de UNA designación de catálogo: 'HD 40307' → ['HD 40307', 'HD40307']
+    (y 'HD40307' → lo mismo). Cualquier nombre que no matchee el guard se devuelve tal cual, sin tocar."""
+    n = n.strip()
+    m = _CATALOG_DESIG.match(n)
+    if not m:
+        return [n]
+    prefix, rest = m.group(1), m.group(2)
+    return [f"{prefix} {rest}", f"{prefix}{rest}"]   # con espacio y sin espacio
+
+
 def build_query(names: list[str]) -> str:
-    """OR del nombre y alias sobre título y abstract (papers que discuten la estrella,
-    no que la citan de pasada). `object:` no es campo válido en la API Solr de ADS."""
-    clauses = []
+    """OR del nombre y alias sobre título y abstract (papers que discuten la estrella, no que la citan
+    de pasada). Para designaciones de catálogo expande las **variantes de espaciado** (HD 40307 ↔
+    HD40307) porque ADS las indexa distinto y los papers usan ambas formas. `object:` no es campo
+    válido en la API Solr de ADS."""
+    variants: list[str] = []
     for n in names:
-        clauses.append(f'title:"{n}"')
-        clauses.append(f'abs:"{n}"')
+        for v in name_variants(n):
+            if v not in variants:      # dedup: alias ya listado en ambas formas no duplica cláusulas
+                variants.append(v)
+    clauses = []
+    for v in variants:
+        clauses.append(f'title:"{v}"')
+        clauses.append(f'abs:"{v}"')
     return " OR ".join(clauses)
 
 
