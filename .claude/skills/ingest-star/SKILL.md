@@ -26,6 +26,20 @@ procesa. Trabajar desde la raíz del repo.
    `fetch_arxiv` respeta el rate limit de arXiv (1 req/3 s) → puede tardar; correr en background si
    son muchos PDFs. Papers sin arXiv quedan en `build/<slug>/missing_pdf.json`.
 
+2b. **Barrido full-text (NO perder surveys de muestra grande).** `query_ads.py` busca en
+   **título+abstract** → tiene un **punto ciego sistemático**: los **surveys de muestra grande**
+   (Mount Wilson HK, catálogos de actividad) **tabulan la estrella sin nombrarla en el abstract**, así que
+   nunca salen por esa query. Correr **siempre** además un barrido full-text por la estrella y sus alias:
+   ```bash
+   # query Solr cruda: papers con la estrella en el CUERPO (no sólo título/abstract)
+   python query_ads.py --probe 'full:"HD 152391"'      # repetir por alias
+   ```
+   Clasificá el resultado con `relevance.topics` (igual que el ingest) y **revisá TODO el core, no sólo el
+   top-N por citas**: los papers recientes/poco citados caen al fondo del ranking aunque sean core (así se
+   perdieron Garg+2019 y Willamo+2020, con 21c/9c). Los core que falten se agregan a mano (inyectar el
+   registro en `build/<slug>/ads.json` y correr `make_notes`, como con los curados). Si el barrido devuelve
+   muchos, **listá cuántos quedan sin bajar** en el `log` — no cures en silencio.
+
 3. **Extracción LLM (criterio).** Leer los papers **clave** (discovery / actividad / métodos) desde
    `vault/raw/fulltext/<slug>/` y poblar:
    - en `vault/wiki/papers/<bibcode>.md`: `methods`, `thesis_links`, `bearing`, y la sección "Extracción"
@@ -67,3 +81,21 @@ procesa. Trabajar desde la raíz del repo.
   `awk 'tolower($0)~/abstract/{f=1} f' vault/raw/fulltext/<slug>/<bib>.txt | head -60` para el abstract, y
   `grep -inE "P_?rot|K ?=|mass|chromatic|GP|activity indicator" ...` para los números clave. No tocar
   el `.txt` en disco (se usa para grep); el salto es sólo en la lectura.
+- **Mirá las TABLAS, no sólo el texto.** En papers viejos las tablas suelen ser **imágenes** (en el
+  escaneo de ADS y a veces hasta en el HTML del publisher). El dato de la estrella (P_cyc, P_rot, rama…)
+  vive ahí → **invisible a cualquier búsqueda de texto**. Para confirmar si una estrella está en un paper
+  y para extraer sus valores, **abrí la tabla** (imagen o PDF), no te fíes del grep.
+- **Un `full:"HD X" → 0` NO prueba ausencia** en papers pre-digitales: el **OCR del escaneo de ADS pierde
+  ~½ de las filas** (medido: 12/26 estrellas en Saar & Brandenburg 1999; faltaba hasta HD 81809). Nunca
+  afirmar "la estrella no está en ese paper" desde un hit full-text negativo — **corroborar** (papers que
+  lo citan y le atribuyen datos) o **abrir el PDF/tabla**. Reportar honesto: es inconcluso, no ausencia.
+- **Cascada de adquisición de PDFs no-arXiv** (antes de rendirse; ver también backlog en `vault/STATUS.md`):
+  (a) escaneo ADS `articles.adsabs.harvard.edu/pdf/<bibcode>`; (b) **imágenes de tabla del CDN del
+  publisher** (p. ej. IOP `content.cld.iop.org/journals/.../tbN.gif`) — **funcionan aunque el PDF esté tras
+  paywall**, y suelen tener el dato que se busca; (c) HTML legacy del publisher (frameset `…/fulltext/`);
+  (d) si nada funciona, **pedir el PDF al usuario** (tiene acceso institucional; anduvo con Frick 2004 y
+  Saar 1999). Guardá el artefacto citable (PDF o imagen de tabla) en `vault/raw/`.
+- **No asumir OCR.** Chequeá primero si el PDF trae **capa de texto** (`pdftotext` da texto real, no vacío);
+  sólo los **escaneos-imagen** puros (p. ej. Baliunas 1995) necesitan OCR. Ojo con quirks de PostScript
+  viejo en la extracción (p. ej. el signo `-` y `>` pueden salir ambos como `[`): los datos están, sólo hay
+  que desambiguar por contexto.
