@@ -1,6 +1,9 @@
 # Estrellas de la bóveda. Nombre canónico (clave) + alias para resolver en SIMBAD/ADS.
 # `simbad`: nombre que mejor resuelve en SIMBAD. `ads_object`: nombre para la query ADS (va en
 #   `title:`/`abs:`, no en `object:` — no es campo válido en la API Solr de ADS).
+#   Las variantes de espaciado de designaciones de catálogo (HD 10700 ↔ HD10700, GJ 71 ↔ GJ71) se
+#   expanden solas en la query — NO hace falta listar ambas en `aliases`. (Medido: ADS normaliza el
+#   espaciado en HD pero NO en GJ, donde cada grafía trae papers distintos → por eso se expande.)
 # `slug`: nombre de archivo/carpeta (sin espacios). `data_local`: puntero a los datos crudos locales
 #   de la estrella (opcional, ruta machine-local; no se commitea).
 #
