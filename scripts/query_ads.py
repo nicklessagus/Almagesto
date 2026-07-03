@@ -10,16 +10,19 @@ Usa la API REST de ADS directamente (control total de campos y filas). Rate: ~50
 La query por estrella se arma con `title:`/`abs:` sobre nombre+alias (ver `build_query`; `object:`
 no es campo válido en la API Solr de ADS). Para temas, query Solr cruda de `topics.yaml`.
 
-Para ESTRELLAS, tras la query directa hace **citation chaining** (snowballing): pide a ADS
-`references()` y `citations()` de los papers core encontrados, **ancladas al sujeto** con un filtro
-full-text server-side (`full:"nombre"` OR alias — sin ese ancla el grafo devuelve los mega-citados
-genéricos del área, no papers de la estrella), clasifica los candidatos con el mismo
+Tras la query directa hace **citation chaining** (snowballing): pide a ADS `references()` y
+`citations()` de los papers core encontrados, **ancladas al sujeto** server-side —para ESTRELLAS el
+`full:"nombre"` OR alias; para TEMAS la propia query del tema— (sin ese ancla el grafo devuelve los
+mega-citados genéricos del área, no papers del sujeto), clasifica los candidatos con el mismo
 `relevance.topics` y agrega los que resulten core (dedup por bibcode; provenance en el campo
-`via`: `query` | `chain:references` | `chain:citations`). Recupera papers que la query por
+`via`: `query` | `chain:references` | `chain:citations` | `manual`). Recupera papers que la query por
 título/abstract pierde (p. ej. surveys que tabulan la estrella sin nombrarla en el abstract).
 Sólo entran los core: los no-core encadenados no se agregan (inundarían el apéndice "Excluidos").
-Desactivar con --no-chain. TEMAS (--topic) no encadenan (un tema no tiene sujeto filtrable por
-`full:`; diseño abierto — ver backlog en vault/STATUS.md). `--probe` tampoco (es sólo preview).
+Desactivar con --no-chain. `--probe` no encadena (es sólo preview; lista TODO el core del corte).
+
+**Curación manual persistente:** `extra_core: [bibcode, …]` en la entrada de `stars.yaml`/`topics.yaml`
+lista papers que el clasificador perdió; se traen por bibcode, se marcan core (`via: manual`) y se
+mergean. Vive en config (se commitea) → sobrevive al re-run, a diferencia de editar `build/` (scratch).
 """
 from __future__ import annotations
 
@@ -201,19 +204,47 @@ def chain_candidates(core_bibcodes: list[str], rows: int, subject_filter: str) -
     return out
 
 
-def print_probe(q: str, recs: list) -> int:
+def _probe_row(r: dict) -> str:
+    mark = "CORE" if r["relevant"] else "—   "
+    tp = ",".join(r["topics"]) or "(ninguno)"
+    cites = r.get("citation_count") or 0              # ADS puede devolver citation_count null
+    title = " ".join((r.get("title") or "").split())[:68]
+    return f"  [{mark}] {cites:>5}  {title}  «{tp}»"
+
+
+def fetch_bibcodes(bibs: list[str]) -> list[dict]:
+    """Trae registros ADS de una lista explícita de bibcodes (curación manual `extra_core`). Se
+    marcan `relevant: True` a la fuerza (el usuario los declaró core: entraron porque el clasificador
+    los perdió, no para re-juzgarlos) y `via: manual`."""
+    out = []
+    for i in range(0, len(bibs), CHAIN_CHUNK):
+        chunk = bibs[i:i + CHAIN_CHUNK]
+        q = " OR ".join(f'bibcode:"{b}"' for b in chunk)
+        for r in query_ads(q, rows=len(chunk), quiet_truncate=True):
+            r["relevant"] = True
+            r["via"] = "manual"
+            out.append(r)
+        time.sleep(1.0)
+    return out
+
+
+def print_probe(q: str, recs: list, noncore_top: int = 25) -> int:
     """Modo preview del skill `setup`: muestra el corte core/no-core de una query sin bajar nada,
-    para afinar la regla de relevancia (relevance.topics) contra papers reales."""
-    rel = [r for r in recs if r["relevant"]]
+    para afinar la regla de relevancia (relevance.topics) contra papers reales. Lista **TODO el core**
+    (el barrido full-text 2b de ingest-star necesita ver el core completo, no un top-N — papers
+    recientes/poco citados caen al fondo del ranking pero pueden ser core); del no-core muestra sólo
+    el top `noncore_top` por citas (chequeo de sanidad del corte)."""
+    core = sorted((r for r in recs if r["relevant"]), key=lambda r: r.get("citation_count") or 0, reverse=True)
+    noncore = sorted((r for r in recs if not r["relevant"]), key=lambda r: r.get("citation_count") or 0, reverse=True)
     print(f"Probe (no baja PDFs ni escribe build/). q: {q}")
-    print(f"  {len(recs)} papers · {len(rel)} CORE · {len(recs) - len(rel)} no-core\n")
-    print("  Top por citas  [CORE/—  ·  tópicos que matchearon]:")
-    for r in recs[:25]:
-        mark = "CORE" if r["relevant"] else "—   "
-        tp = ",".join(r["topics"]) or "(ninguno)"
-        cites = r.get("citation_count") or 0          # ADS puede devolver citation_count null
-        title = " ".join((r.get("title") or "").split())[:68]
-        print(f"  [{mark}] {cites:>5}  {title}  «{tp}»")
+    print(f"  {len(recs)} papers · {len(core)} CORE · {len(noncore)} no-core\n")
+    print(f"  CORE (todos, por citas)  [tópicos que matchearon]:")
+    for r in core:
+        print(_probe_row(r))
+    shown = noncore[:noncore_top]
+    print(f"\n  no-core (top {len(shown)} de {len(noncore)}, chequeo de sanidad):")
+    for r in shown:
+        print(_probe_row(r))
     print("\n  → ajustá relevance.topics en objective.yaml y re-corré --probe hasta que el corte cierre.")
     return 0
 
@@ -242,7 +273,9 @@ def main() -> int:
     if args.topic:
         _, meta = cfg.topic_by_slug(args.slug)
         q = meta["query"]
-        chain_filter = None   # un tema no tiene sujeto filtrable por full: → sin chaining (ver docstring)
+        # el "sujeto" de un tema es su propia query: anclar el chaining con ella deja on-topic a los
+        # papers del grafo de citas (sin ancla traería los mega-citados genéricos, como en estrellas).
+        chain_filter = f"({q})"
         print(f"Consultando ADS (tema): {meta.get('title', args.slug)}\n  q: {q}")
         head = {"kind": "topic", "slug": args.slug, "title": meta.get("title"),
                 "concept": meta.get("concept"), "area": meta.get("area"), "query": q}
@@ -269,12 +302,22 @@ def main() -> int:
             if c["relevant"] and b and b not in seen:   # sólo core nuevos (dedup vs query y entre ops)
                 seen.add(b)
                 chained.append(c)
+        anchor = "full-text del sujeto" if not args.topic else "la query del tema"
         print(f"  chaining: +{len(chained)} core nuevos vía el grafo de citas de {len(core_bibs)} core "
-              f"(filtrado por full-text del sujeto)")
+              f"(anclado a {anchor})")
         recs += chained
         rel = [r for r in recs if r["relevant"]]
-    elif not args.no_chain and args.topic:
-        print("  chaining: n/a para temas (sin sujeto filtrable por full: — diseño abierto, ver STATUS)")
+
+    # curación manual persistente: bibcodes en `extra_core` de stars.yaml/topics.yaml que el
+    # clasificador perdió (build/ es scratch y se pisa; esto sobrevive porque vive en config).
+    extra = [b for b in (meta.get("extra_core") or []) if b]
+    if extra:
+        seen = {r["bibcode"] for r in recs if r.get("bibcode")}
+        manual = [m for m in fetch_bibcodes(extra) if m.get("bibcode") and m["bibcode"] not in seen]
+        print(f"  extra_core: +{len(manual)} curados a mano (de {len(extra)} en config)")
+        recs += manual
+        rel = [r for r in recs if r["relevant"]]
+
     recs.sort(key=lambda r: r.get("citation_count") or 0, reverse=True)
     print(f"  total: {len(recs)} registros, {len(rel)} relevantes")
 

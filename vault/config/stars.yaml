@@ -6,6 +6,9 @@
 #   espaciado en HD pero NO en GJ, donde cada grafía trae papers distintos → por eso se expande.)
 # `slug`: nombre de archivo/carpeta (sin espacios). `data_local`: puntero a los datos crudos locales
 #   de la estrella (opcional, ruta machine-local; no se commitea).
+# `extra_core`: (opcional) lista de bibcodes que el clasificador perdió y querés forzar como core
+#   (curación manual). `query_ads` los trae por bibcode, los marca core (`via: manual`) y los mergea.
+#   Vive acá (config, se commitea) → sobrevive al re-run; editar `build/` no, es scratch y se pisa.
 #
 # Agregá tus estrellas acá (o dejá que `ingest-star` las agregue). Ejemplo comentado:
 #

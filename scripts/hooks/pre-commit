@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Pre-commit hook de Almagesto: corre el lint offline y BLOQUEA el commit si hay hallazgos en
+# categorías bloqueantes (wikilinks rotos, papers retractados, huérfanas, contradicciones GT↔ficha,
+# masa inconsistente, thesis_links/disputes colgantes). El lint ya es gateable por exit code.
+#
+# Activar (una vez por clon):   git config core.hooksPath scripts/hooks
+# Saltar en un commit puntual:  git commit --no-verify   (p. ej. un WIP de framework)
+#
+# Es OFFLINE y barato (no toca la red). El chequeo de retracciones (red) es aparte:
+# correr `python scripts/check_retractions.py` al ingestar y periódicamente.
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+if [ ! -f "$ROOT/scripts/lint.py" ]; then
+    exit 0   # no es una bóveda Almagesto (o falta el script): no bloquear
+fi
+
+PY="$(command -v python3 || command -v python || true)"
+if [ -z "$PY" ]; then
+    echo "pre-commit: no encuentro python — salteo el lint (instalá python o usá --no-verify)."
+    exit 0
+fi
+
+if ! "$PY" "$ROOT/scripts/lint.py" >/dev/null 2>&1; then
+    echo "✗ pre-commit: el lint encontró problemas BLOQUEANTES. Corré 'python scripts/lint.py' para verlos."
+    echo "  (commit puntual sin chequear: git commit --no-verify)"
+    exit 1
+fi

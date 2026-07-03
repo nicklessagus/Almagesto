@@ -194,15 +194,23 @@ sola, sin el resto del pack ni la ruta MCP.
    (README dice "enfoque conservador" pero no MIT/CC) → NO se puede vendorear en un template MIT; el
    camino limpio sería `fetch_vocab.py` que **el usuario** baja el CSV a ruta gitignoreada + WARN del
    lint sugiriendo el concepto canónico más cercano por **string/fuzzy match** contra los nombres del
-   CSV (ignorar los embeddings → evita la dependencia de OpenAI). **Prioridad baja**: payoff sólo con
-   la bóveda ya grande; menor relación valor/esfuerzo de la tanda. Revisar cuando haya volumen real.
+   CSV (ignorar los embeddings → evita la dependencia de OpenAI). **Prioridad baja / EN OBSERVACIÓN**:
+   payoff sólo con la bóveda ya grande. **Re-evaluar cuando** (a) el repo declare una licencia
+   permisiva (hoy el bloqueante) — chequear `github.com/tingyuansen/astro-ph_knowledge_graph/LICENSE
+   periódicamente — o (b) la bóveda alcance volumen y el drift taxonómico se vuelva medible. Hasta
+   entonces no se implementa.
 6. ✅ **HECHO (2026-07-03)** — **Skill de mantenimiento** `maintain` (v1.0.0): opera sobre entidades
    **ya ingestadas** — refrescar (papers nuevos → re-sintetizar sólo lo nuevo), borrar (nota + PDF +
    reparar colgados), renombrar slug, re-clasificar tras cambiar `relevance.topics`, y resolver el
    backlog del lint. Invariante: cadena idempotente; extracción LLM y ground-truth no se pisan sin
    `--force`.
-7. Menores restantes: `--probe` imprime top-25 pero el barrido 2b de `ingest-star` pide "todo el
-   core" (dar salida completa); los papers curados a mano en `build/<slug>/ads.json` se pierden al
-   re-correr `query_ads` (persistir la curación); citation precision por nota (ALCE) en el lint;
-   chaining para TEMAS (falta ancla de sujeto); lint como hook pre-commit (ya es gateable por exit
-   code); fetch de PDFs viejos vía `esources` (backlog aparte, arriba).
+7. ✅ **HECHO (2026-07-03)** — **Menores**: (a) `--probe` ahora lista **todo el core** (no top-25);
+   (b) **curación persistente** `extra_core: [bibcode]` en stars/topics.yaml (`via: manual`, sobrevive
+   al re-run); (c) **chaining para TEMAS** anclado a la propia query del tema (verificado: +9 core en
+   un tema de prueba); (d) **cobertura de verificación** en el lint (query/concepto con citas pero sin
+   bloque `verify-citations` → backlog ALCE-adjacent); (e) **pre-commit hook** `scripts/hooks/pre-commit`
+   (corre el lint, bloquea si hay bloqueantes; activar con `git config core.hooksPath scripts/hooks`).
+   Todo verificado contra ADS/lint. **Queda sólo:** fetch de PDFs viejos vía `esources` (backlog
+   aparte, arriba — parcialmente bloqueado por paywall/captcha) y el vocabulario AstroMLab (ítem 5, en
+   observación por licencia). La citation precision "dura" (parsear X/N del bloque de verify) se
+   descartó por frágil; la **cobertura** de (d) cubre la parte accionable.

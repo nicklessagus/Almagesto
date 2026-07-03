@@ -10,6 +10,9 @@
 #   concept  : nombre de la nota concept durable destino (puede diferir del slug; existente o a stubbear).
 #   query    : query Solr ADS CRUDA (control total; ver scripts/query_ads.py). NO es por nombre de estrella.
 #   aliases  : opcional, sólo para prosa.
+#   extra_core : opcional, lista de bibcodes a forzar como core (curación manual que el clasificador
+#                perdió). query_ads los trae por bibcode (`via: manual`) y los mergea. Persistente
+#                (config se commitea), a diferencia de editar build/ (scratch, se pisa).
 #
 # Agregá tus temas acá (o dejá que `ingest-topic` los agregue). Ejemplo comentado:
 #

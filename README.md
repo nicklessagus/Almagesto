@@ -16,6 +16,7 @@ un solo archivo, `vault/config/objective.yaml`. El resto del repo es framework r
 git clone <este-repo> mi-boveda && cd mi-boveda
 git lfs install                             # PDFs por git-lfs — sin esto se commitean binarios crudos
 git config merge.ours.driver true           # protege tus archivos de instancia en futuros `git pull`
+git config core.hooksPath scripts/hooks     # (opcional) pre-commit que corre el lint y bloquea si falla
 pip install -r requirements.txt             # pyyaml, requests, astroquery
 echo "TU_TOKEN" > vault/config/ads_dev_key  # token ADS (gratis, gitignored) — o export ADS_DEV_KEY
 ```
@@ -123,7 +124,7 @@ python fetch_ground_truth.py <slug> # NEA + SIMBAD → vault/raw/ground_truth/<s
 python make_notes.py       <slug>   # genera vault/wiki/stars/ y vault/wiki/papers/ (idempotente; --force)
 python extract_fulltext.py <slug>   # PDFs → vault/raw/fulltext/<slug>/*.txt
 python check_retractions.py         # Crossref → marca `retracted` en papers retractados (red)
-python lint.py                      # chequeo de salud → outputs/lint-<fecha>.md
+python lint.py                      # chequeo de salud → outputs/lint-<fecha>.md (exit 1 si hay bloqueantes)
 ```
 
 Para TEMAS (en vez de estrellas): definir el tema en `vault/config/topics.yaml` y correr `query_ads.py

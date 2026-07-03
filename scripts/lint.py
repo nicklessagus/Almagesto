@@ -15,7 +15,8 @@ fantasma; WARN), **PDF ↔ disco** (drift: el campo `pdf` de un paper no refleja
 o puntero a archivo inexistente; WARN), **citas no verificables** (bibcode
 citado en query/concepto/hipótesis sin su `.txt` en `vault/raw/fulltext/` → no se puede chequear claim↔fuente
 con el skill `verify-citations`), **cobertura** (concepto/hipótesis sin ninguna cita `[[bibcode]]` →
-afirmaciones no chequeables; backlog), y campos clave
+afirmaciones no chequeables; backlog), **cobertura de verificación** (query/concepto CON citas pero
+SIN bloque `## Verificación de citas` → nunca pasó por verify-citations; backlog ALCE-adjacent), y campos clave
 incompletos (P_rot null, papers relevantes sin `methods`, `thesis_links` sin `bearing`).
 No modifica nada: reporta para que el agente/usuario decida.
 
@@ -88,6 +89,7 @@ def main() -> int:
         pdf_on_disk.setdefault(basename(_p)[:-4], _p)
     unverifiable: list = []            # (stem, "cita <bibcode> sin fulltext")
     coverage: list = []                # concept/hipótesis sin citas [[bibcode]] → no chequeable
+    unverified: list = []              # query/concept CON citas pero SIN bloque de verify-citations
     names = {p.rsplit("/", 1)[-1][:-3] for p in files}  # stems referenciables por [[..]]
     incoming: dict[str, int] = {n: 0 for n in names}
     kinds: dict[str, list] = {}
@@ -128,6 +130,12 @@ def main() -> int:
         # (todo lo apuntable debe ser citable o marcado `inferencia`; ver Verify en CLAUDE.md). Backlog.
         if "/concepts/" in f and nbib == 0:
             coverage.append((stem, "sin citas [[bibcode]] → afirmaciones no chequeables (cobertura)"))
+        # cobertura de VERIFICACIÓN (ALCE-adjacent): una nota apuntable con citas pero sin el bloque
+        # `## Verificación de citas` nunca pasó por verify-citations → sus claims no fueron chequeados
+        # claim↔fuente. Backlog (no bloquea): correr el skill. Sólo queries/concepts (las fichas de
+        # estrella mezclan valores NEA que no se verifican contra papers).
+        if in_verifiable_note and nbib > 0 and "## Verificación de citas" not in text:
+            unverified.append((stem, f"{nbib} cita(s) sin bloque de verify-citations → correr el skill"))
         # frontera dura: fuga de implementación (código no bibliográfico) al vault (WARN, no bloquea).
         body_full = text.split("---", 2)[-1] if text.startswith("---") else text
         scan_leaks = stem not in NON_ORPHAN    # log/index/README son historia/navegación, no fichas
@@ -254,6 +262,7 @@ def main() -> int:
                          ("Áreas de concepts/ no declaradas en objective.yaml (WARN, posible typo)", undeclared_areas),
                          ("PDF ↔ disco (WARN — higiene: frontmatter `pdf` vs PDF bajado)", pdf_issues),
                          ("Citas no verificables en query/concepto/hipótesis (sin fulltext)", unverifiable),
+                         ("Sin verificar: query/concepto con citas pero sin bloque verify-citations (backlog)", unverified),
                          ("Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog)", coverage),
                          ("Campos incompletos", incomplete)]:
         lines.append(f"## {title} ({len(items)})")

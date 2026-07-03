@@ -1,7 +1,7 @@
 ---
 name: ingest-topic
 description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema no-astro / fuera de ADS (desde PDFs locales + web; ver Modo off-ADS).
-version: 1.3.0
+version: 1.4.0
 ---
 
 # Ingest: agregar un TEMA a la wiki
@@ -54,11 +54,12 @@ del repo.
    python check_retractions.py            # Crossref: marca `retracted` si algún paper fue retractado
    ```
    `query_ads --topic` escribe el mismo `build/<slug>/ads.json` (con `kind: topic`), así que
-   `fetch_arxiv` y `extract_fulltext` corren sin cambios. A diferencia de las estrellas, un tema
-   **no hace citation chaining** (no tiene sujeto anclable por `full:`; sin ancla el grafo de citas
-   devuelve los mega-citados genéricos del área — diseño abierto, ver backlog en `vault/STATUS.md`). `fetch_arxiv` respeta el rate limit de arXiv
+   `fetch_arxiv` y `extract_fulltext` corren sin cambios. Hace **citation chaining anclado a la query
+   del tema** (references/citations de los core filtrados por la propia query → recall extra sin traer
+   los mega-citados genéricos del área). `fetch_arxiv` respeta el rate limit de arXiv
    (1 req/3 s) → correr en background si son muchos PDFs. Papers sin arXiv (A&A viejos) quedan en
-   `build/<slug>/missing_pdf.json` → bajar manual por DOI si son clave.
+   `build/<slug>/missing_pdf.json` → bajar manual por DOI si son clave. Curación persistente con
+   `extra_core: [<bibcode>, …]` en la entrada del tema en `topics.yaml` (igual que en estrellas).
 
 3. **Extracción LLM (criterio).** Leer los papers **clave del tema** (fundacionales / árbitros /
    metodológicos) desde `vault/raw/fulltext/<slug>/` y poblar cada `vault/wiki/papers/<bibcode>.md`: `methods`,
