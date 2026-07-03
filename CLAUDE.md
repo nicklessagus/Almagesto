@@ -147,7 +147,9 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   **simétrica** existencia↔valor. Sólo taguear discrepancias **materiales** (mayores que el error;
   no diferencias cosméticas dentro de la barra). Reflejar la disputa también en la tabla/prosa.
 - **papers/**: `bibcode, title, first_author, n_authors, year, arxiv_id, doi, bibstem, stars[], topics[], methods[],
-  thesis_links[], bearing(supports|challenges|method), relevance, citation_count, pdf`.
+  thesis_links[], bearing(supports|challenges|method), relevance, citation_count, pdf`. Opcional
+  `retracted: true` + `retraction{type,notice_doi,date,source}` — lo estampa `scripts/check_retractions.py`
+  (Crossref) cuando el paper fue **retractado**; el lint lo surface como bloqueante (fuente no válida).
 - **concepts/ (áreas **abiertas** — cualquiera según el foco de la bóveda; `concept_areas` en
   `vault/config/objective.yaml` es sólo referencia para el typo-check, con `methods`/`hypotheses` reservadas)**: `name`, **`aliases`** (lista de sinónimos EN+ES —
   p. ej. `[chromatic index, índice cromático, RV-color]` — para que la ficha se encuentre por `grep`
@@ -241,7 +243,10 @@ backlog los conceptos/hipótesis **sin ninguna cita** (cobertura: afirman sin fu
 ### Lint (chequeo de salud)
 **Cuándo:** como **paso de cierre de toda operación que escriba en `vault/wiki/`** (ingest / query archivada
 / test de hipótesis), **antes de commitear**; más una pasada completa periódica. Es barato.
-Correr `python scripts/lint.py`: debe quedar en **0** para wikilinks rotos, páginas huérfanas,
+Correr `python scripts/lint.py`: debe quedar en **0** para wikilinks rotos, **papers retractados**
+(flag `retracted`; lo detecta `scripts/check_retractions.py` vía Crossref —red, correr al ingestar y
+periódicamente— y el lint lo surface offline: una fuente retractada citada rompe la frontera dura),
+páginas huérfanas,
 contradicciones ground-truth↔ficha, **masa de ground-truth inconsistente con la m·sini implícita**
 (K/P/e/M\* — atrapa best-mass espurias de NEA), **`thesis_links` sin página destino** (tag que no matchea
 ninguna nota → no acumula en el roll-up; typo típico `shift-vs-shape` vs `shift_vs_shape`) y

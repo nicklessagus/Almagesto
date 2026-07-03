@@ -1,7 +1,7 @@
 ---
 name: ingest-star
 description: Usar cuando el usuario pide bajar/agregar/ingestar una estrella a la bóveda ("bajá GJ 581", "ingest tau ceti", "agregá la estrella X", "traé la bibliografía de AU Mic"). Corre la cadena de ingesta y hace la extracción LLM.
-version: 1.2.0
+version: 1.3.0
 ---
 
 # Ingest: agregar una estrella a la wiki
@@ -22,11 +22,14 @@ procesa. Trabajar desde la raíz del repo.
    python fetch_ground_truth.py <slug>
    python make_notes.py       <slug>
    python extract_fulltext.py <slug>
+   python check_retractions.py            # Crossref: marca `retracted` si algún paper fue retractado
    ```
    `fetch_arxiv` respeta el rate limit de arXiv (1 req/3 s) → puede tardar; correr en background si
    son muchos PDFs. Papers sin arXiv quedan en `build/<slug>/missing_pdf.json`.
    La cadena es idempotente (no pisa): en un re-ingest, `fetch_ground_truth` **no** refresca un
    ground-truth existente salvo `--force` (refrescar desde NEA es decisión explícita, no side-effect).
+   `check_retractions` consulta **Crossref** por DOI y, si un paper fue **retractado**, estampa
+   `retracted: true` en su nota (el lint lo vuelve bloqueante) → revisá cada afirmación que lo cita.
    `query_ads` hace además **citation chaining**: pide a ADS references/citations de los core,
    **ancladas al sujeto** con `full:` sobre nombre+alias — trae surveys/catálogos conectados por el
    grafo de citas aunque no nombren la estrella en el abstract (quedan marcados `via: chain:*` en

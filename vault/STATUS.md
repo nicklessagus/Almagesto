@@ -176,8 +176,12 @@ sola, sin el resto del pack ni la ruta MCP.
    falsas (CiteAudit).
 3. **Detección batch de contradicciones entre papers** sobre la misma estrella/parámetro → proponer
    entradas `disputes[]` (estilo ContraCrow de PaperQA2; hoy se detectan a mano en el ingest).
-4. **Chequeo de retracciones** (Crossref/ADS) en el lint — una fuente retractada silenciosa viola el
-   contrato de la bóveda.
+4. ✅ **HECHO (2026-07-03)** — **Chequeo de retracciones**: `scripts/check_retractions.py` consulta
+   **Crossref** por DOI (señal determinista: `updated-by` con `type: retraction|removal|withdrawal`;
+   ADS no expone `property:retracted` — sólo prefijo de título, que se usa de fallback para papers sin
+   DOI), estampa `retracted: true` + `retraction{...}` en la nota (idempotente, viaja en git) y el
+   `lint.py` la surface **offline como categoría bloqueante**. En la cadena de `ingest-star`/`-topic`
+   y a correr periódicamente. Errata/EoC → aviso blando (no retracta).
 5. **Vocabulario AstroMLab 5** (arXiv:2511.12353; ~10k conceptos astro con descripciones/embeddings)
    como diccionario de referencia para `topics`/`methods`/`aliases` (anti drift taxonómico).
 6. Menores: `--probe` imprime top-25 pero el barrido 2b de `ingest-star` pide "todo el core" (dar

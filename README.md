@@ -120,6 +120,7 @@ python fetch_arxiv.py      <slug>   # PDFs a vault/raw/pdfs/<slug>/  (rate limit
 python fetch_ground_truth.py <slug> # NEA + SIMBAD → vault/raw/ground_truth/<slug>.json
 python make_notes.py       <slug>   # genera vault/wiki/stars/ y vault/wiki/papers/ (idempotente; --force)
 python extract_fulltext.py <slug>   # PDFs → vault/raw/fulltext/<slug>/*.txt
+python check_retractions.py         # Crossref → marca `retracted` en papers retractados (red)
 python lint.py                      # chequeo de salud → outputs/lint-<fecha>.md
 ```
 

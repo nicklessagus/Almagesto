@@ -3,7 +3,8 @@
 Uso:
     python lint.py            # imprime resumen y escribe outputs/lint-<fecha>.md
 
-Detecta: wikilinks rotos (página faltante), notas huérfanas (sin links entrantes),
+Detecta: wikilinks rotos (página faltante), **papers retractados** (flag `retracted` que estampa
+`check_retractions.py` vía Crossref → acá se surface offline; bloqueante), notas huérfanas (sin links entrantes),
 contradicciones ground-truth ↔ ficha, **masa de ground-truth inconsistente** con la
 m·sini implícita por K/P/e/M* (atrapa best-mass espurias de NEA), `thesis_links` sin
 página destino (tag que no matchea ninguna nota concepto/hipótesis → no acumula),
@@ -91,6 +92,7 @@ def main() -> int:
     incoming: dict[str, int] = {n: 0 for n in names}
     kinds: dict[str, list] = {}
     broken, incomplete, contradictions = [], [], []
+    retracted: list = []               # (stem, "<tipo> <fecha>") — papers marcados retracted (check_retractions)
     impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
     pdf_issues: list = []              # (stem, ...) — drift frontmatter `pdf` ↔ PDF en disco
     thesis_refs: dict[str, list] = {}  # valor de thesis_link -> notas que lo usan
@@ -161,6 +163,12 @@ def main() -> int:
                     if ref:
                         dispute_refs.append((stem, l, ref))
         if "paper" in tags:
+            # retracción (bloqueante): el flag lo estampa check_retractions.py (red); acá se surface
+            # offline. Una fuente retractada citada viola el contrato de la bóveda (todo respaldado
+            # por fuente citable válida) → revisar cada afirmación que la cita.
+            if fm.get("retracted"):
+                rt = fm.get("retraction") or {}
+                retracted.append((stem, f"{rt.get('type', 'retraction')} ({rt.get('date') or 's/f'})"))
             if fm.get("relevance") == "high" and not fm.get("methods"):
                 incomplete.append((stem, "paper relevante sin methods (sin extraer)"))
             if fm.get("thesis_links") and not fm.get("bearing"):
@@ -236,6 +244,7 @@ def main() -> int:
     # reporte
     lines = [f"# Lint de la bóveda — {dt.date.today().isoformat()}", ""]
     for title, items in [("Wikilinks rotos (página faltante)", broken),
+                         ("⛔ Papers RETRACTADOS citados (frontera dura: fuente no válida)", retracted),
                          ("Notas huérfanas (sin links entrantes)", [(o, "") for o in orphans]),
                          ("Contradicciones ground-truth ↔ ficha", contradictions),
                          ("Ground-truth: masa inconsistente con m·sini (K,P,e,M*)", mass_issues),
@@ -261,7 +270,7 @@ def main() -> int:
     print(f"→ {out}")
     # Exit code gateable: las categorías que CLAUDE.md exige "en 0" bloquean; WARN (fuga de
     # implementación, áreas, PDF↔disco) y backlog (verificabilidad, cobertura, incompletos) no.
-    n_block = sum(len(x) for x in (broken, orphans, contradictions, mass_issues,
+    n_block = sum(len(x) for x in (broken, retracted, orphans, contradictions, mass_issues,
                                    dangling_thesis, dangling_disputes))
     if n_block:
         print(f"✗ {n_block} hallazgo(s) en categorías bloqueantes → exit 1")
