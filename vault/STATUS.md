@@ -12,7 +12,8 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 
 ## Próximos pasos
 
-1. Editar `vault/config/objective.yaml` con tu objetivo y tu clasificador de relevancia (`relevance.topics`).
+1. Definir el objetivo con el skill `setup` (se lo pedís al agente en palabras; genera/afina
+   `vault/config/objective.yaml` con su `relevance.topics` — editable a mano si preferís).
 2. Poner el token ADS en `vault/config/ads_dev_key` (o `ADS_DEV_KEY`).
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
@@ -101,7 +102,7 @@ concretas para el futuro `fetch_pdf.py` y para la guía del skill (ya reflejadas
 - **No todo PDF necesita OCR:** el de Saar 1999 traía **capa de texto** (`pdftotext` lo sacó entero, tablas
   incluidas), con quirks de PostScript viejo (`-` y `>` → `[`). Chequear capa de texto antes de OCR.
 
-## Backlog de framework — evaluar `defuddle` para el modo off-ADS de `ingest-topic`
+## ✅ Backlog de framework (RESUELTO 2026-07-01) — `defuddle` para el modo off-ADS de `ingest-topic`
 
 > Surgido de una discusión (2026-07-01) sobre si conviene adoptar los **skills oficiales de Obsidian**
 > (`kepano/obsidian-skills`, de Steph Ango). Conclusión: para el flujo de Almagesto la ventaja es
@@ -135,7 +136,7 @@ Caveats: dependencia **Node/npm** (off-ADS es opt-in y raro → aceptable) y alg
 (un bloque `<video>` quedó sin limpiar). Es una **utilidad general**, no Obsidian-específica: se adopta
 sola, sin el resto del pack ni la ruta MCP.
 
-**Implementado (en la rama, completo):**
+**Implementado (mergeado a `main`: commits `70fc899` / `d21f70c` / `c59fa52`):**
 - `scripts/fetch_web.py` — `npx defuddle parse <url> --markdown` → `vault/raw/fulltext/<slug>/<clave>.txt`
   con encabezado URL+fecha; valida la clave contra `BIBCODE_RE`, idempotente salvo `--force`, error
   amigable si falta Node. **Post-clean determinista** (`clean_markdown`) que saca los bloques HTML de
@@ -149,4 +150,32 @@ sola, sin el resto del pack ni la ruta MCP.
   standalone cubre también fuentes **PDF** off-ADS (sin URL → `source_url`/`accessed` null).
 - Wiring en `ingest-topic/SKILL.md` (v1.0.0→1.1.0): el bullet **Web** y el ex-"notas a mano" reflejan el
   flujo automatizado, con WebFetch + `make_notes --web` como fallback sin Node.
-**Falta:** sólo decidir merge a `main` (revisar el diff).
+**Resuelto:** mergeado a `main`; nada pendiente.
+
+## Backlog de framework — revisión profunda 2026-07-03 (tanda 3 pendiente)
+
+> De la revisión completa del proyecto (code review de `scripts/` + consistencia docs↔skills +
+> relevamiento de proyectos similares; informe local en `outputs/revision-2026-07-03.md`, gitignored).
+> **Aplicado:** tanda 1 (bugs de scripts: Range/200 en fetch_arxiv, idempotencia envenenada, gate
+> `--force` en ground-truth, exit code del lint, retry/truncado en query_ads, encoding utf-8) y
+> tanda 2 (matriz método×estrella seed, política de archivado alineada, paso 1c→`--probe`,
+> `git lfs install` en README, `lit_caveat`→`disputes[]`, formato de log). Queda la **tanda 3**,
+> por valor:
+
+1. **Citation chaining en el ingest** (`references()`/`citations()` de la API de ADS por paper core;
+   ataca la brecha de recall — una sola query por keywords pierde papers, cf. episodio Saar 1999 — y
+   resuelve parte del backlog "PDFs viejos" vía `esources`).
+2. **Veredicto `contradice` en `verify-citations`** (hoy `no-soportada` mezcla "la fuente calla" con
+   "la fuente contradice" — clave para `disputes[]`) + citation precision por nota como métrica del
+   lint (estándares CAQA / ALCE; auto-benchmark sembrando citas falsas, CiteAudit).
+3. **Detección batch de contradicciones entre papers** sobre la misma estrella/parámetro → proponer
+   entradas `disputes[]` (estilo ContraCrow de PaperQA2; hoy se detectan a mano en el ingest).
+4. **Chequeo de retracciones** (Crossref/ADS) en el lint — una fuente retractada silenciosa viola el
+   contrato de la bóveda.
+5. **Vocabulario AstroMLab 5** (arXiv:2511.12353; ~10k conceptos astro con descripciones/embeddings)
+   como diccionario de referencia para `topics`/`methods`/`aliases` (anti drift taxonómico).
+6. Menores: `--probe` imprime top-25 pero el barrido 2b de `ingest-star` pide "todo el core" (dar
+   salida completa); los papers curados a mano en `build/<slug>/ads.json` se pierden al re-correr
+   `query_ads` (persistir la curación); skill de mantenimiento (actualizar estrella ya ingestada,
+   borrar/renombrar, re-clasificar tras cambiar `relevance.topics`); lint como hook pre-commit
+   (ya es gateable por exit code).

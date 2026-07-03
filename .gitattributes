@@ -12,3 +12,4 @@ vault/config/topics.yaml    merge=ours
 vault/STATUS.md             merge=ours
 vault/wiki/index.md         merge=ours
 vault/wiki/log.md           merge=ours
+vault/wiki/matrices/method_star.md merge=ours

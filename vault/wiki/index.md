@@ -24,3 +24,6 @@ FROM "wiki/papers"
 SORT citation_count DESC
 LIMIT 50
 ```
+
+## Matrices
+- [[method_star]] — método × estrella (celda = `[[bibcode]]` que lo aplica; huecos = backlog)

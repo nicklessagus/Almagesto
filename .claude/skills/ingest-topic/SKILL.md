@@ -1,7 +1,7 @@
 ---
 name: ingest-topic
 description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema no-astro / fuera de ADS (desde PDFs locales + web; ver Modo off-ADS).
-version: 1.1.0
+version: 1.2.0
 ---
 
 # Ingest: agregar un TEMA a la wiki
@@ -32,10 +32,12 @@ del repo.
    - **b. Ofrecer variantes de alcance** (amplia ↔ acotada) y/o **sugerir términos que faltan** según
      lo que entendiste, en castellano (vos traducís a `abs:"..."`). Usar `AskUserQuestion` si la
      elección cambia qué se trae.
-   - **c. Validar con un conteo barato** antes de bajar nada: `python query_ads.py --topic <slug>
-     --rows 50` y mirar `n_relevant` + los títulos top (ordenados por citas). Si trae cientos con
-     ruido o muy pocos, reajustar la query y reconfirmar. **No** bajar PDFs hasta que el usuario
-     apruebe la query final.
+   - **c. Validar con un conteo barato** antes de bajar nada (y antes de persistir el slug):
+     `python query_ads.py --probe '<query candidata>' --rows 50` y mirar el corte CORE/no-core +
+     los títulos top (ordenados por citas). Si trae cientos con ruido o muy pocos, reajustar la
+     query y reconfirmar. **No** bajar PDFs hasta que el usuario apruebe la query final. (`--probe`
+     recibe la query cruda, así que corre sin que el tema exista todavía en `topics.yaml` —
+     `--topic <slug>` recién funciona después del paso d.)
    - **d. Persistir.** Recién entonces escribir/actualizar la entrada en `vault/config/topics.yaml`:
      `title`, `area` (abierta: cualquiera; idealmente una de `concept_areas` de `objective.yaml` —
      ej. `indicators|methods|activity|hypotheses` — para que el typo-check la reconozca; si es un área
@@ -82,7 +84,7 @@ del repo.
    que dice la fuente, reasignar la cita, o marcar `inferencia`) y dejar el bloque `## Verificación de citas`.
 
 7. **Cierre (commit + push).** Tras la verificación (lint en 0), `git add` de los archivos
-   **específicos** que tocó la operación (no `-A`; ver `CLAUDE.md` global) y commitear con mensaje
+   **específicos** que tocó la operación (no `-A`) y commitear con mensaje
    descriptivo. Después **preguntar al usuario si hace `push`** — no pushear sin confirmación.
 
 ## Modo off-ADS / tema no-astro (opt-in — **sólo a pedido explícito**)

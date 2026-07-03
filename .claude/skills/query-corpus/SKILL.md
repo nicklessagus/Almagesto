@@ -1,7 +1,7 @@
 ---
 name: query-corpus
 description: Usar cuando el usuario hace una búsqueda o pregunta general contra el corpus de la bóveda que NO es un test de hipótesis ("buscá en el corpus ...", "qué se sabe del P_rot de GJ 581", "qué papers usan ESPRESSO", "qué métodos se aplicaron a tau Ceti", "qué celdas de la matriz están vacías").
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Query: búsqueda/pregunta general contra el corpus
@@ -24,9 +24,12 @@ usar `test-hypothesis`).
 
 3. **Sintetizar** con citas `[[bibcode]]` y, cuando aplique, links a `[[slug]]` y conceptos.
 
-4. **Archivar si vale la pena re-preguntarlo** (sobre todo si el pipeline va a cambiar): guardar en
-   `vault/wiki/queries/<slug>.md`. Si es descartable, basta la respuesta en el chat. Actualizar
-   `vault/wiki/log.md` si se archivó.
+4. **Archivar SÓLO si el usuario lo pide** (regla de `CLAUDE.md`: por default la respuesta vive en
+   el chat; persistir una query es decisión explícita del usuario, para no llenar la wiki de notas
+   no deseadas). Si la pregunta parece valer re-preguntarla (p. ej. el pipeline va a cambiar),
+   **ofrecer** archivarla. Si el usuario acepta: guardar en `vault/wiki/queries/<slug>.md` cumpliendo
+   el estándar de ficha (autosuficiente, búsqueda reproducible —el grep usado—, citas `[[bibcode]]`)
+   y actualizar `vault/wiki/log.md`.
 
 5. **Verificar citas (si se archivó en `vault/wiki/`)**: correr el skill `verify-citations` sobre la nota
    archivada — chequea afirmación por afirmación contra el fulltext (cita textual + nº de línea del
@@ -41,11 +44,11 @@ usar `test-hypothesis`).
    nombre de la página (typo típico: `shift-vs-shape` vs `shift_vs_shape`).
 
 7. **Cierre (commit + push).** **Solo si se archivó algo en `vault/wiki/`** (si la respuesta quedó solo en
-   el chat, no hay cierre): `git add` de los archivos **específicos** tocados (no `-A`; ver `CLAUDE.md`
-   global) y commitear con mensaje descriptivo. Después **preguntar al usuario si hace `push`** — no
+   el chat, no hay cierre): `git add` de los archivos **específicos** tocados (no `-A`) y commitear
+   con mensaje descriptivo. Después **preguntar al usuario si hace `push`** — no
    pushear sin confirmación.
 
 ## Salida
-Por defecto responder en el chat. Si el usuario quiere, generar un `.md` (o tabla, o figura) y
+Por defecto responder en el chat. Si el usuario lo pide, generar un `.md` (o tabla, o figura) y
 "filearlo" de vuelta en `vault/wiki/` para que la exploración sume. Declarar agregados (mean/median)
 según `CLAUDE.md`. Cuidado con outliers antes de afirmar correlaciones.

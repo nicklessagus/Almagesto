@@ -13,8 +13,9 @@ El usuario cura las fuentes (`vault/raw/`) y hace preguntas.
 > **Al iniciar sesión, leé `vault/STATUS.md` (estado + próximos pasos) y `vault/wiki/log.md` (historial
 > reciente) para orientarte.** La "memoria" del proyecto es in-repo: este `CLAUDE.md` + `vault/STATUS.md`
 > + `vault/wiki/log.md` + `vault/wiki/index.md`. No depender de la memoria local de Claude (`~/.claude/...`),
-> que no viaja entre máquinas. Tras cada operación, actualizá `index.md`, appendeá a `log.md` y, si
-> cambió el estado, `vault/STATUS.md`.
+> que no viaja entre máquinas. Tras cada operación, actualizá `index.md`, appendeá a `log.md`
+> (entrada `## AAAA-MM-DD — <op>: <título>` + bullets — greppable por fecha) y, si cambió el estado,
+> `vault/STATUS.md`.
 
 ## Layout del repo — la bóveda vive en `vault/`
 
@@ -37,7 +38,7 @@ Almagesto/
   se escriben **repo-root-relative** con prefijo `vault/` (p. ej. `vault/raw/fulltext/…`), porque los
   scripts y greps se corren **desde la raíz del repo**.
 - **Excepción Obsidian-space:** dentro de notas `.md` de `vault/`, los `[[wikilink]]`, las queries
-  Dataview (`FROM "papers"`/`FROM "wiki/papers"`) y los links relativos (`../../raw/pdfs/…`) son
+  Dataview (`FROM "wiki/papers"`) y los links relativos (`../../raw/pdfs/…`) son
   **relativos a la raíz del vault** (`vault/`) — **no** llevan el prefijo `vault/`.
 - Los scripts resuelven solos vía `scripts/lib_config.py` (`VAULT = ROOT/"vault"`); no hardcodear rutas.
 - `build/` y `outputs/` son scratch regenerable: viven en la **raíz**, FUERA de `vault/`, para no
@@ -199,7 +200,8 @@ la query, `stars.yaml`/`topics.yaml`). No ingesta nada; después se usan `ingest
 > (fuente = PDFs locales + web; sin `query_ads`/`fetch_ground_truth`). **`ingest-star` no cambia: es
 > astro-only.** Papers sin bibcode ADS → **clave de cita sintética `AAAA+Autor`** (debe empezar con
 > `AAAA`+letra para el lint; el `.txt` en `vault/raw/fulltext/` se llama igual). Páginas web → **snapshot
-> `.txt` determinista** (URL + fecha) para que sea citable/verificable. La **frontera dura sigue
+> `.txt` determinista** (URL + fecha; lo genera `scripts/fetch_web.py` vía defuddle y crea además el
+> stub de la nota de paper) para que sea citable/verificable. La **frontera dura sigue
 > rigiendo**: sólo bibliografía citable.
 
 ### Query / hipótesis (pregunta → respuesta; archivar SÓLO si el usuario lo pide)

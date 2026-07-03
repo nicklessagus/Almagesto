@@ -1,7 +1,7 @@
 ---
 name: ingest-star
 description: Usar cuando el usuario pide bajar/agregar/ingestar una estrella a la bóveda ("bajá GJ 581", "ingest tau ceti", "agregá la estrella X", "traé la bibliografía de AU Mic"). Corre la cadena de ingesta y hace la extracción LLM.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Ingest: agregar una estrella a la wiki
@@ -25,6 +25,8 @@ procesa. Trabajar desde la raíz del repo.
    ```
    `fetch_arxiv` respeta el rate limit de arXiv (1 req/3 s) → puede tardar; correr en background si
    son muchos PDFs. Papers sin arXiv quedan en `build/<slug>/missing_pdf.json`.
+   La cadena es idempotente (no pisa): en un re-ingest, `fetch_ground_truth` **no** refresca un
+   ground-truth existente salvo `--force` (refrescar desde NEA es decisión explícita, no side-effect).
 
 2b. **Barrido full-text (NO perder surveys de muestra grande).** `query_ads.py` busca en
    **título+abstract** → tiene un **punto ciego sistemático**: los **surveys de muestra grande**
@@ -52,7 +54,8 @@ procesa. Trabajar desde la raíz del repo.
      `activity_indicators_expected`, caveats por planeta) y escribir la **síntesis** (qué se sabe,
      qué indicador debería trazar actividad para ese tipo espectral, huecos).
    - **Contrastar contra `vault/raw/ground_truth/<slug>.json`**: si un paper discrepa del archivo
-     (p. ej. planeta dudoso), marcarlo con `lit_caveat`/`bearing: challenges`, no celebrar.
+     (p. ej. planeta dudoso), taguearlo en `planets[].disputes[]` de la ficha (`field`/`ref`/`note`/`alt`;
+     ver *Disputas* en `CLAUDE.md`) y `bearing: challenges` en la nota del paper — no celebrar.
 
 4. **Auto-revisión de autosuficiencia (semántica).** Releer la ficha **como un agente externo que
    sólo tiene ese archivo**: ¿se entiende la estrella sin abrir ningún paper? Checklist: parámetros
@@ -74,7 +77,7 @@ procesa. Trabajar desde la raíz del repo.
    reasignar la cita, o marcar `inferencia`) y dejar el bloque `## Verificación de citas`.
 
 6. **Cierre (commit + push).** Tras la verificación (lint en 0), `git add` de los archivos
-   **específicos** que tocó la operación (no `-A`; ver `CLAUDE.md` global) y commitear con mensaje
+   **específicos** que tocó la operación (no `-A`) y commitear con mensaje
    descriptivo. Después **preguntar al usuario si hace `push`** — no pushear sin confirmación.
 
 ## Notas

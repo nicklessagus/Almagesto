@@ -14,6 +14,8 @@ un solo archivo, `vault/config/objective.yaml`. El resto del repo es framework r
 
 ```bash
 git clone <este-repo> mi-boveda && cd mi-boveda
+git lfs install                             # PDFs por git-lfs — sin esto se commitean binarios crudos
+git config merge.ours.driver true           # protege tus archivos de instancia en futuros `git pull`
 pip install -r requirements.txt             # pyyaml, requests, astroquery
 echo "TU_TOKEN" > vault/config/ads_dev_key  # token ADS (gratis, gitignored) — o export ADS_DEV_KEY
 ```
@@ -22,8 +24,10 @@ echo "TU_TOKEN" > vault/config/ads_dev_key  # token ADS (gratis, gitignored) —
 > en `vault/config/ads_dev_key` (gitignored) o en la variable `ADS_DEV_KEY`. Para **ingestar PDFs nuevos**
 > necesitás `pdftotext` (paquete *poppler*), según tu OS: Debian/Ubuntu `sudo apt install poppler-utils` ·
 > macOS `brew install poppler` · Fedora `sudo dnf install poppler-utils` · Windows
-> `conda install -c conda-forge poppler`. No hace falta para consultar una bóveda ya poblada (el fulltext
-> se commitea). En Windows, los comandos de shell de acá corren en Git Bash o WSL.
+> `conda install -c conda-forge poppler` — y **git-lfs** (`sudo apt install git-lfs` · `brew install
+> git-lfs`; luego el `git lfs install` de arriba, una vez por máquina). Ninguno de los dos hace falta
+> para consultar una bóveda ya poblada (el fulltext se commitea). En Windows, los comandos de shell de
+> acá corren en Git Bash o WSL.
 
 Después **definí el objetivo pidiéndoselo al agente** — no hace falta escribir YAML ni regex a mano. El
 skill `setup` traduce tu foco (en palabras) a `relevance.topics` (los buckets que deciden qué paper es
@@ -73,8 +77,8 @@ descripción, o el usuario con `/<nombre>`). Encapsulan la cadena mecánica + el
 | `setup` | "configurá la bóveda", "definí el objetivo" | Paso 0: traduce tu foco en palabras a `objective.yaml` (incluida la regex `relevance.topics`) y la **afina contra ADS con un preview** (`query_ads --probe`), para que NO escribas regex a mano. No ingesta. |
 | `ingest-star` | "bajá/ingestá/agregá la estrella X" | Corre la cadena (`query_ads → fetch_arxiv → fetch_ground_truth → make_notes → extract_fulltext`) y hace la extracción LLM de los papers clave + síntesis + bookkeeping. |
 | `ingest-topic` | "investigá a fondo el tema X" | Como ingest-star pero por TEMA: query ADS por keywords → concept durable en `concepts/`. |
-| `test-hypothesis` | "hipótesis: …", "evidencia a favor/contra de …" | Testea un supuesto **durable** contra el fulltext, lo archiva en `concepts/hypotheses/` y taggea papers (`thesis_links`/`bearing`). |
-| `query-corpus` | búsqueda/pregunta general (no hipótesis) | Responde contra índice + frontmatter + fulltext; archiva en `vault/wiki/queries/` si vale re-preguntarlo. |
+| `test-hypothesis` | "hipótesis: …", "evidencia a favor/contra de …" | Testea un supuesto **durable** contra el fulltext y responde con veredicto citado; **a pedido del usuario** lo archiva en `concepts/hypotheses/` y taggea papers (`thesis_links`/`bearing`). |
+| `query-corpus` | búsqueda/pregunta general (no hipótesis) | Responde contra índice + frontmatter + fulltext; archiva en `vault/wiki/queries/` **sólo si el usuario lo pide**. |
 | `verify-citations` | cierre de toda operación con prosa `[[bibcode]]` | Chequea, afirmación por afirmación, que la fuente respalde el claim (1 subagente/par lee el fulltext). |
 
 ## Arquitectura (patrón LLM Wiki)
@@ -119,9 +123,13 @@ python extract_fulltext.py <slug>   # PDFs → vault/raw/fulltext/<slug>/*.txt
 python lint.py                      # chequeo de salud → outputs/lint-<fecha>.md
 ```
 
-Para TEMAS (en vez de estrellas) agregar `--topic` y definir el tema en `vault/config/topics.yaml`.
-Luego: extracción LLM (leer PDFs/fulltext → poblar `methods`, indicadores, P/K, síntesis), actualizar
-`index.md` y appendear a `log.md`. Ver `CLAUDE.md` para las operaciones en detalle.
+Para TEMAS (en vez de estrellas): definir el tema en `vault/config/topics.yaml` y correr `query_ads.py
+--topic <slug>` y `make_notes.py --topic <slug>`; `fetch_arxiv.py` y `extract_fulltext.py` corren igual
+(sin flag) y `fetch_ground_truth.py` se **saltea** (no hay NEA/SIMBAD para un tema). Para fuentes web
+off-ADS (opt-in) existe `fetch_web.py <slug> <clave> <url>`: snapshot web citable vía defuddle + stub de
+la nota de paper (ver skill `ingest-topic`). Luego: extracción LLM (leer PDFs/fulltext → poblar
+`methods`, indicadores, P/K, síntesis), actualizar `index.md` y appendear a `log.md`. Ver `CLAUDE.md`
+para las operaciones en detalle.
 
 ## Verify — chequeo claim↔fuente
 
