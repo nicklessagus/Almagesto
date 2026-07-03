@@ -115,7 +115,7 @@ División de tareas: **scripts** bajan (determinista, rate-limited); **LLM** pro
 
 ```bash
 cd scripts
-python query_ads.py        <slug>   # ADS → build/<slug>/ads.json (metadata + relevancia desde objective.yaml)
+python query_ads.py        <slug>   # ADS → build/<slug>/ads.json (metadata + relevancia + citation chaining)
 python fetch_arxiv.py      <slug>   # PDFs a vault/raw/pdfs/<slug>/  (rate limit arXiv: 1 req/3 s)
 python fetch_ground_truth.py <slug> # NEA + SIMBAD → vault/raw/ground_truth/<slug>.json
 python make_notes.py       <slug>   # genera vault/wiki/stars/ y vault/wiki/papers/ (idempotente; --force)

@@ -162,9 +162,13 @@ sola, sin el resto del pack ni la ruta MCP.
 > `git lfs install` en README, `lit_caveat`→`disputes[]`, formato de log). Queda la **tanda 3**,
 > por valor:
 
-1. **Citation chaining en el ingest** (`references()`/`citations()` de la API de ADS por paper core;
-   ataca la brecha de recall — una sola query por keywords pierde papers, cf. episodio Saar 1999 — y
-   resuelve parte del backlog "PDFs viejos" vía `esources`).
+1. ✅ **HECHO (estrellas, 2026-07-03)** — **Citation chaining en el ingest**: `query_ads.py` pide
+   `references()`/`citations()` de los core, **ancladas server-side** con `full:` de nombre+alias
+   (sin ancla el grafo devuelve los mega-citados genéricos del área — medido: 31/31 falsos positivos
+   en tau Ceti; con ancla trae exactamente los surveys/catálogos que el barrido 2b cazaba a mano,
+   p. ej. Wilson 1978 / Mount Wilson). Provenance `via: chain:*` en `ads.json`; `--no-chain`
+   desactiva. **Abierto:** ancla de sujeto para TEMAS (`--topic` no encadena) y el fetch de PDFs
+   viejos vía `esources` (backlog aparte, arriba).
 2. **Veredicto `contradice` en `verify-citations`** (hoy `no-soportada` mezcla "la fuente calla" con
    "la fuente contradice" — clave para `disputes[]`) + citation precision por nota como métrica del
    lint (estándares CAQA / ALCE; auto-benchmark sembrando citas falsas, CiteAudit).

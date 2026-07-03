@@ -1,7 +1,7 @@
 ---
 name: ingest-star
 description: Usar cuando el usuario pide bajar/agregar/ingestar una estrella a la bóveda ("bajá GJ 581", "ingest tau ceti", "agregá la estrella X", "traé la bibliografía de AU Mic"). Corre la cadena de ingesta y hace la extracción LLM.
-version: 1.1.0
+version: 1.2.0
 ---
 
 # Ingest: agregar una estrella a la wiki
@@ -27,11 +27,16 @@ procesa. Trabajar desde la raíz del repo.
    son muchos PDFs. Papers sin arXiv quedan en `build/<slug>/missing_pdf.json`.
    La cadena es idempotente (no pisa): en un re-ingest, `fetch_ground_truth` **no** refresca un
    ground-truth existente salvo `--force` (refrescar desde NEA es decisión explícita, no side-effect).
+   `query_ads` hace además **citation chaining**: pide a ADS references/citations de los core,
+   **ancladas al sujeto** con `full:` sobre nombre+alias — trae surveys/catálogos conectados por el
+   grafo de citas aunque no nombren la estrella en el abstract (quedan marcados `via: chain:*` en
+   `ads.json`; se desactiva con `--no-chain`).
 
-2b. **Barrido full-text (NO perder surveys de muestra grande).** `query_ads.py` busca en
-   **título+abstract** → tiene un **punto ciego sistemático**: los **surveys de muestra grande**
-   (Mount Wilson HK, catálogos de actividad) **tabulan la estrella sin nombrarla en el abstract**, así que
-   nunca salen por esa query. Correr **siempre** además un barrido full-text por la estrella y sus alias:
+2b. **Barrido full-text (NO perder surveys de muestra grande).** La query directa de `query_ads.py`
+   busca en **título+abstract** → punto ciego sistemático: los **surveys de muestra grande**
+   (Mount Wilson HK, catálogos de actividad) **tabulan la estrella sin nombrarla en el abstract**. El
+   **chaining del paso 2 ya trae** los que están conectados por citas a los core encontrados; este
+   barrido caza los que quedan **fuera del grafo** (o cuyos core-vecinos no entraron). Correr:
    ```bash
    # query Solr cruda: papers con la estrella en el CUERPO (no sólo título/abstract)
    python query_ads.py --probe 'full:"HD 152391"'      # repetir por alias

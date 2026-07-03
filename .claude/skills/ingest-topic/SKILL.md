@@ -1,7 +1,7 @@
 ---
 name: ingest-topic
 description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema no-astro / fuera de ADS (desde PDFs locales + web; ver Modo off-ADS).
-version: 1.2.0
+version: 1.2.1
 ---
 
 # Ingest: agregar un TEMA a la wiki
@@ -53,7 +53,9 @@ del repo.
    python extract_fulltext.py    <slug>
    ```
    `query_ads --topic` escribe el mismo `build/<slug>/ads.json` (con `kind: topic`), así que
-   `fetch_arxiv` y `extract_fulltext` corren sin cambios. `fetch_arxiv` respeta el rate limit de arXiv
+   `fetch_arxiv` y `extract_fulltext` corren sin cambios. A diferencia de las estrellas, un tema
+   **no hace citation chaining** (no tiene sujeto anclable por `full:`; sin ancla el grafo de citas
+   devuelve los mega-citados genéricos del área — diseño abierto, ver backlog en `vault/STATUS.md`). `fetch_arxiv` respeta el rate limit de arXiv
    (1 req/3 s) → correr en background si son muchos PDFs. Papers sin arXiv (A&A viejos) quedan en
    `build/<slug>/missing_pdf.json` → bajar manual por DOI si son clave.
 
