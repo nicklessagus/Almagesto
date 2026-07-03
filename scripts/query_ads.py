@@ -1,7 +1,7 @@
 """Consulta NASA ADS por estrella → metadata de papers + clasificación de relevancia.
 
 Uso:
-    python query_ads.py <slug> [--all] [--rows N]
+    python query_ads.py <slug> [--rows N]
 
 Escribe build/<slug>/ads.json con la lista de registros (bibcode, título, autores,
 año, abstract, arxiv_id, doctype, citation_count, topics, relevant).
@@ -99,16 +99,35 @@ def build_query(names: list[str]) -> str:
     return " OR ".join(clauses)
 
 
+RETRY_STATUS = (429, 500, 502, 503, 504)   # rate-limit / errores transitorios de ADS
+RETRY_WAITS_S = (5, 15, 30)                # backoff entre reintentos
+
+
 def query_ads(q: str, rows: int = 400) -> list[dict]:
     """Corre una query Solr `q` ya armada contra ADS y devuelve registros clasificados.
-    Para estrellas, armar `q` con build_query(names); para temas, usar la query cruda del topic."""
+    Para estrellas, armar `q` con build_query(names); para temas, usar la query cruda del topic.
+    Reintenta con backoff ante 429/5xx y avisa si el resultado quedó truncado (numFound > rows)."""
     token = cfg.get_ads_token()
     headers = {"Authorization": f"Bearer {token}"}
     params = {"q": q, "fl": FIELDS, "rows": rows,
               "sort": "citation_count desc", "fq": "database:astronomy"}
-    resp = requests.get(API, headers=headers, params=params, timeout=60)
-    resp.raise_for_status()
-    docs = resp.json()["response"]["docs"]
+    for wait in (*RETRY_WAITS_S, None):
+        resp = requests.get(API, headers=headers, params=params, timeout=60)
+        if resp.status_code in RETRY_STATUS and wait is not None:
+            print(f"  ADS HTTP {resp.status_code} — reintento en {wait} s")
+            time.sleep(wait)
+            continue
+        resp.raise_for_status()
+        break
+    try:
+        response = resp.json()["response"]
+        docs = response["docs"]
+    except (ValueError, KeyError) as exc:   # cuerpo de error con 200 / formato inesperado
+        raise RuntimeError(f"Respuesta inesperada de ADS (sin response.docs): {resp.text[:200]}") from exc
+    num_found = response.get("numFound", len(docs))
+    if num_found > rows:
+        print(f"  ⚠ truncado: ADS reporta {num_found} resultados y sólo se trajeron {rows} "
+              f"(top por citas) — subí --rows para cubrir todo")
     out = []
     for d in docs:
         topics, relevant = classify(d)
@@ -153,8 +172,6 @@ def main() -> int:
     ap.add_argument("slug", nargs="?",
                     help="slug de estrella (o tema con --topic). Se omite con --probe.")
     ap.add_argument("--rows", type=int, default=400)
-    ap.add_argument("--all", action="store_true",
-                    help="guardar todos (default: solo relevantes en el resumen)")
     ap.add_argument("--topic", action="store_true",
                     help="el slug es un TEMA de vault/config/topics.yaml (query Solr cruda), no una estrella")
     ap.add_argument("--probe", metavar="QUERY",
@@ -189,7 +206,8 @@ def main() -> int:
     outdir = cfg.ROOT / "build" / args.slug
     outdir.mkdir(parents=True, exist_ok=True)
     payload = {**head, "n_total": len(recs), "n_relevant": len(rel), "records": recs}
-    (outdir / "ads.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False))
+    (outdir / "ads.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False),
+                                     encoding="utf-8")
     print(f"  → {outdir / 'ads.json'}")
     return 0
 

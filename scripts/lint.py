@@ -17,6 +17,10 @@ con el skill `verify-citations`), **cobertura** (concepto/hipótesis sin ninguna
 afirmaciones no chequeables; backlog), y campos clave
 incompletos (P_rot null, papers relevantes sin `methods`, `thesis_links` sin `bearing`).
 No modifica nada: reporta para que el agente/usuario decida.
+
+Exit code: 1 si alguna categoría BLOQUEANTE tiene hits (wikilinks rotos, huérfanas, contradicciones
+GT↔ficha, masa inconsistente, thesis_links/disputes colgantes — las que CLAUDE.md exige "en 0");
+0 si sólo hay WARN/backlog. Gateable en pre-commit/CI.
 """
 from __future__ import annotations
 
@@ -175,7 +179,7 @@ def main() -> int:
     # contradicción ground-truth ↔ ficha (nº de planetas) + masa sospechosa
     mass_issues = []
     for gtf in glob.glob(str(cfg.GROUND_TRUTH / "*.json")):
-        gt = json.loads(open(gtf).read())
+        gt = json.loads(open(gtf, encoding="utf-8").read())
         slug = gt.get("slug") or basename(gtf)[:-5]   # robusto si un GT a mano no trae 'slug'
         mstar = (gt.get("host") or {}).get("mass_msun")
         for p in gt.get("planets", []) or []:
@@ -189,7 +193,7 @@ def main() -> int:
                                           f"≠ m·sini implícita {chk:.3g} M⊕"))
         sf = cfg.STARS / f"{slug}.md"
         if sf.exists():
-            fm = split_fm(open(sf).read())
+            fm = split_fm(sf.read_text(encoding="utf-8"))
             n_note = len(fm.get("planets", []) or [])
             n_gt = len(gt.get("planets", []) or [])
             if n_note != n_gt:
@@ -255,6 +259,13 @@ def main() -> int:
     out.write_text(report, encoding="utf-8")
     print(report)
     print(f"→ {out}")
+    # Exit code gateable: las categorías que CLAUDE.md exige "en 0" bloquean; WARN (fuga de
+    # implementación, áreas, PDF↔disco) y backlog (verificabilidad, cobertura, incompletos) no.
+    n_block = sum(len(x) for x in (broken, orphans, contradictions, mass_issues,
+                                   dangling_thesis, dangling_disputes))
+    if n_block:
+        print(f"✗ {n_block} hallazgo(s) en categorías bloqueantes → exit 1")
+        return 1
     return 0
 
 

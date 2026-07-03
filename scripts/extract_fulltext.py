@@ -55,11 +55,12 @@ def main() -> int:
             done += 1
         else:
             failed += 1
+            out.unlink(missing_ok=True)  # no dejar un .txt vacío/a medias que la idempotencia congele
             print(f"  ! fallo {pdf.name}: {r.stderr.strip()[:120]}")
 
     print(f"{args.slug}: {done} extraídos, {skipped} ya estaban, {failed} fallaron "
           f"→ {outdir}")
-    return 0
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

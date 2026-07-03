@@ -51,6 +51,8 @@ def download_pdf(arxiv_id: str, dest) -> bool:
                     print(f"    ! {arxiv_id}: HTTP {r.status_code}")
                     time.sleep(8)
                     continue
+                if r.status_code == 200 and buf:
+                    buf.clear()  # 200 con Range pedido = el servidor ignoró el Range y manda el archivo ENTERO
                 for chunk in r.iter_content(chunk_size=65536):
                     buf += chunk
             break  # cuerpo recibido completo sin cortes
@@ -77,7 +79,7 @@ def main() -> int:
     if not adsfile.exists():
         print(f"No existe {adsfile}. Corré primero query_ads.py {args.slug}")
         return 1
-    data = json.loads(adsfile.read_text())
+    data = json.loads(adsfile.read_text(encoding="utf-8"))
     recs = data["records"]
     if not args.all:
         recs = [r for r in recs if r["relevant"]]
@@ -109,7 +111,7 @@ def main() -> int:
         miss = cfg.ROOT / "build" / args.slug / "missing_pdf.json"
         miss.write_text(json.dumps(
             [{"bibcode": r["bibcode"], "title": r["title"], "doi": r.get("doi")}
-             for r in no_arxiv], indent=2, ensure_ascii=False))
+             for r in no_arxiv], indent=2, ensure_ascii=False), encoding="utf-8")
         print(f"Papers sin arXiv listados en {miss} (bajar manual vía DOI si hacen falta).")
     return 0
 

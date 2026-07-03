@@ -1,12 +1,14 @@
 """Ground-truth estructurado por estrella desde NASA Exoplanet Archive + SIMBAD.
 
 Uso:
-    python fetch_ground_truth.py <slug>
+    python fetch_ground_truth.py <slug> [--force]
 
 Escribe ground_truth/<slug>.json con:
   - host: tipo espectral, Teff, distancia, coords, V, masa estelar (lo que haya).
   - planets: lista (letter, P_days, K_ms, e, mass_earth, ...).
 Estos son hechos auditables (no extracción LLM). Los scripts de ICA los consumen directo.
+Idempotente: NO pisa un ground_truth/<slug>.json existente salvo --force (vault/raw/ es fuente
+inmutable, y NEA cambia valores entre releases — refrescar es una decisión, no un side-effect).
 
 Sobre la masa: `mass_earth` = **m·sin i** (`pl_msinie`), que es la cantidad robusta para planetas
 RV. Se preserva `bmass_earth`/`bmass_prov` (la "best mass" de NEA, que a veces viene de una ref de
@@ -160,8 +162,14 @@ def fetch_host(host: str, tab_row=None) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("slug")
+    ap.add_argument("--force", action="store_true",
+                    help="refrescar un ground-truth existente desde NEA/SIMBAD (pisa el snapshot)")
     args = ap.parse_args()
     name, meta = cfg.star_by_slug(args.slug)
+    out = cfg.GROUND_TRUTH / f"{args.slug}.json"
+    if out.exists() and not args.force:
+        print(f"Ground-truth {name}: {out} ya existe — no se pisa (refrescar desde NEA: --force)")
+        return 0
     host = meta["simbad"]
     print(f"Ground-truth {name} (host={host!r})")
 
@@ -179,8 +187,7 @@ def main() -> int:
     payload = {"star": name, "slug": args.slug, "host": host_info, "planets": planets,
                "source": "NASA Exoplanet Archive (pscomppars) + SIMBAD"}
     cfg.GROUND_TRUTH.mkdir(parents=True, exist_ok=True)
-    out = cfg.GROUND_TRUTH / f"{args.slug}.json"
-    out.write_text(json.dumps(payload, indent=2, ensure_ascii=False))
+    out.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"  → {out}")
     return 0
 

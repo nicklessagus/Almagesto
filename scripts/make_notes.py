@@ -41,7 +41,8 @@ def excluded_table(slug: str) -> str:
     adsfile = cfg.ROOT / "build" / slug / "ads.json"
     if not adsfile.exists():
         return ""
-    out = [r for r in json.loads(adsfile.read_text()).get("records", []) if not r.get("relevant")]
+    out = [r for r in json.loads(adsfile.read_text(encoding="utf-8")).get("records", [])
+           if not r.get("relevant")]
     if not out:
         return ""
     out.sort(key=lambda r: r.get("citation_count", 0) or 0, reverse=True)
@@ -70,7 +71,7 @@ def write_star_note(slug: str, force: bool) -> None:
         print(f"  star: {dest.name} ya existe (usa --force para regenerar)")
         return
     gt_file = cfg.GROUND_TRUTH / f"{slug}.json"
-    gt = json.loads(gt_file.read_text()) if gt_file.exists() else {"host": {}, "planets": []}
+    gt = json.loads(gt_file.read_text(encoding="utf-8")) if gt_file.exists() else {"host": {}, "planets": []}
     host = gt.get("host", {})
     planets = [{"letter": p.get("letter"), "P_days": p.get("P_days"),
                 "K_ms": p.get("K_ms"), "e": p.get("e"),
@@ -217,7 +218,7 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
     if not adsfile.exists():
         print(f"  (sin {adsfile}; corré query_ads.py primero)")
         return
-    recs = json.loads(adsfile.read_text())["records"]
+    recs = json.loads(adsfile.read_text(encoding="utf-8"))["records"]
     if not include_all:
         recs = [r for r in recs if r["relevant"]]
     cfg.PAPERS.mkdir(parents=True, exist_ok=True)
