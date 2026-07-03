@@ -182,8 +182,16 @@ sola, sin el resto del pack ni la ruta MCP.
    DOI), estampa `retracted: true` + `retraction{...}` en la nota (idempotente, viaja en git) y el
    `lint.py` la surface **offline como categoría bloqueante**. En la cadena de `ingest-star`/`-topic`
    y a correr periódicamente. Errata/EoC → aviso blando (no retracta).
-5. **Vocabulario AstroMLab 5** (arXiv:2511.12353; ~10k conceptos astro con descripciones/embeddings)
-   como diccionario de referencia para `topics`/`methods`/`aliases` (anti drift taxonómico).
+5. **Vocabulario AstroMLab 5** (arXiv:2511.12353) como diccionario de referencia para
+   `topics`/`methods`/`aliases` (anti drift taxonómico). **Recurso verificado 2026-07-03** — existe y
+   sirve: repo `github.com/tingyuansen/astro-ph_knowledge_graph`, poblado, con
+   `concepts_vocabulary.csv.gz` (9.999 conceptos: label/class/nombre/descripción) + embeddings
+   `.npz` (9999×3072, `text-embedding-3-large`). **Bloqueante para adoptar: SIN licencia declarada**
+   (README dice "enfoque conservador" pero no MIT/CC) → NO se puede vendorear en un template MIT; el
+   camino limpio sería `fetch_vocab.py` que **el usuario** baja el CSV a ruta gitignoreada + WARN del
+   lint sugiriendo el concepto canónico más cercano por **string/fuzzy match** contra los nombres del
+   CSV (ignorar los embeddings → evita la dependencia de OpenAI). **Prioridad baja**: payoff sólo con
+   la bóveda ya grande; menor relación valor/esfuerzo de la tanda. Revisar cuando haya volumen real.
 6. Menores: `--probe` imprime top-25 pero el barrido 2b de `ingest-star` pide "todo el core" (dar
    salida completa); los papers curados a mano en `build/<slug>/ads.json` se pierden al re-correr
    `query_ads` (persistir la curación); skill de mantenimiento (actualizar estrella ya ingestada,
