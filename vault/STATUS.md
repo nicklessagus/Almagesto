@@ -174,8 +174,12 @@ sola, sin el resto del pack ni la ruta MCP.
    `planets[].disputes[]`, no como cita rota; skill v1.1.0 + CLAUDE.md/README). ⏳ Queda: citation
    precision por nota como métrica del lint (ALCE) y auto-benchmark del verificador sembrando citas
    falsas (CiteAudit).
-3. **Detección batch de contradicciones entre papers** sobre la misma estrella/parámetro → proponer
-   entradas `disputes[]` (estilo ContraCrow de PaperQA2; hoy se detectan a mano en el ingest).
+3. ✅ **HECHO (2026-07-03)** — **Detección batch de contradicciones**: skill `find-contradictions`
+   (v1.0.0). Barre un eje (estrella/parámetro o concepto), confirma cada desacuerdo claim↔claim con un
+   subagente por par que lee los **dos** fulltext (`real|aparente|no-concluyente` + cita de ambos
+   lados) y **propone** disputas (`planets[].disputes[]` con NEA como verdad; línea citando ambos
+   `[[bibcode]]` para conceptos) que el usuario aprueba antes de escribir. Ortogonal a
+   `verify-citations` (claim↔su fuente vs claim↔claim entre fuentes).
 4. ✅ **HECHO (2026-07-03)** — **Chequeo de retracciones**: `scripts/check_retractions.py` consulta
    **Crossref** por DOI (señal determinista: `updated-by` con `type: retraction|removal|withdrawal`;
    ADS no expone `property:retracted` — sólo prefijo de título, que se usa de fallback para papers sin
@@ -192,8 +196,13 @@ sola, sin el resto del pack ni la ruta MCP.
    lint sugiriendo el concepto canónico más cercano por **string/fuzzy match** contra los nombres del
    CSV (ignorar los embeddings → evita la dependencia de OpenAI). **Prioridad baja**: payoff sólo con
    la bóveda ya grande; menor relación valor/esfuerzo de la tanda. Revisar cuando haya volumen real.
-6. Menores: `--probe` imprime top-25 pero el barrido 2b de `ingest-star` pide "todo el core" (dar
-   salida completa); los papers curados a mano en `build/<slug>/ads.json` se pierden al re-correr
-   `query_ads` (persistir la curación); skill de mantenimiento (actualizar estrella ya ingestada,
-   borrar/renombrar, re-clasificar tras cambiar `relevance.topics`); lint como hook pre-commit
-   (ya es gateable por exit code).
+6. ✅ **HECHO (2026-07-03)** — **Skill de mantenimiento** `maintain` (v1.0.0): opera sobre entidades
+   **ya ingestadas** — refrescar (papers nuevos → re-sintetizar sólo lo nuevo), borrar (nota + PDF +
+   reparar colgados), renombrar slug, re-clasificar tras cambiar `relevance.topics`, y resolver el
+   backlog del lint. Invariante: cadena idempotente; extracción LLM y ground-truth no se pisan sin
+   `--force`.
+7. Menores restantes: `--probe` imprime top-25 pero el barrido 2b de `ingest-star` pide "todo el
+   core" (dar salida completa); los papers curados a mano en `build/<slug>/ads.json` se pierden al
+   re-correr `query_ads` (persistir la curación); citation precision por nota (ALCE) en el lint;
+   chaining para TEMAS (falta ancla de sujeto); lint como hook pre-commit (ya es gateable por exit
+   code); fetch de PDFs viejos vía `esources` (backlog aparte, arriba).

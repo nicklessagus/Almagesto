@@ -240,6 +240,24 @@ ground-truth (NEA)** en `stars/` (P/K/e/m·sini) no se verifican contra papers (
 chequea el lint); sólo se verifican disputas y afirmaciones atribuidas a un paper. El lint reporta como
 backlog los conceptos/hipótesis **sin ninguna cita** (cobertura: afirman sin fuente → no chequeables).
 
+### Contradicciones (desacuerdo claim↔claim — skill `find-contradictions`)
+**Complementa Verify en el eje ortogonal:** Verify chequea claim ↔ **su propia** fuente;
+`find-contradictions` chequea claim ↔ claim **entre** fuentes (¿dos papers discrepan sobre el mismo
+hecho?). **Cuándo:** auditoría **explícita** (a pedido, o tras un ingest grande) — **no** es paso de
+cierre automático. **Qué hace:** barre un eje (estrella/parámetro o concepto), confirma cada desacuerdo
+candidato con un subagente por par (lee los **dos** fulltext, `real|aparente|no-concluyente` + cita de
+ambos lados) y **propone** disputas —`planets[].disputes[]` para estrellas (NEA sigue siendo la verdad),
+línea citando ambos `[[bibcode]]` para conceptos— que **el usuario aprueba** antes de escribir. Detalle
+en el skill.
+
+### Mantenimiento (cuidar lo ya ingestado — skill `maintain`)
+**No crea entidades** (eso es Ingest); opera sobre estrellas/conceptos que **ya existen**. Sub-modos:
+**refrescar** (papers nuevos → re-sintetizar sólo lo nuevo), **borrar** (nota + PDF/fulltext + reparar
+colgados), **renombrar** slug, **re-clasificar** tras cambiar `relevance.topics`, y **resolver el
+backlog del lint** (huérfanos, P_rot nulo, drift PDF↔disco, cobertura). Invariante: la cadena es
+idempotente (refrescar es seguro); **nunca** se pisa la extracción LLM ni el ground-truth sin `--force`
+explícito. Detalle en el skill.
+
 ### Lint (chequeo de salud)
 **Cuándo:** como **paso de cierre de toda operación que escriba en `vault/wiki/`** (ingest / query archivada
 / test de hipótesis), **antes de commitear**; más una pasada completa periódica. Es barato.
