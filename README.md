@@ -136,7 +136,8 @@ para las operaciones en detalle.
 Extensión propia de este template (el lint de Karpathy sólo valida salud estructural, no que la fuente
 respalde la afirmación). Toda afirmación fáctica va **citada `[[bibcode]]` o marcada `inferencia`**. El
 skill `verify-citations` descompone cada nota en pares (afirmación, bibcode) y lanza un subagente por
-par que lee SÓLO ese `.txt` y devuelve `soportada|parcial|no-soportada` + cita textual. Ver `CLAUDE.md`.
+par que lee SÓLO ese `.txt` y devuelve `soportada|parcial|no-soportada|contradice` + cita textual
+(una contradicción es candidata a disputa, no sólo cita rota). Ver `CLAUDE.md`.
 
 ## Mantener tu bóveda actualizada (traer mejoras del framework)
 

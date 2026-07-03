@@ -224,10 +224,12 @@ cierre de **toda operación que escriba prosa con `[[bibcode]]`** — ingest-sta
 ingest-topic (concept + papers), query archivada, test de hipótesis — **antes de lint/commit**.
 **Qué hace:** descompone la nota en pares (afirmación, `[[bibcode]]`) y lanza **un subagente
 independiente por par** que lee SÓLO ese `vault/raw/fulltext/**/<bibcode>.txt` (grounding-first, prohibido de
-memoria) y devuelve `soportada|parcial|no-soportada` + **cita textual + nº de línea del `.txt`**
-(obligatoria; sin cita ⇒ no-soportada). Cada falla se **resuelve** (bajar la afirmación a lo que dice
-la fuente, reasignar la cita al bibcode correcto, o marcar **`inferencia`**) y se deja un bloque
-`## Verificación de citas` en la nota. El `.txt` es extracción **determinista** (`pdftotext`), así que
+memoria) y devuelve `soportada|parcial|no-soportada|contradice` + **cita textual + nº de línea del `.txt`**
+(obligatoria; sin cita ⇒ no-soportada). `no-soportada` = la fuente **calla**; `contradice` = la fuente
+**afirma lo contrario** → no es (sólo) cita rota: es corrección de la nota o **disputa** a taguear
+(`planets[].disputes[]` si es parámetro planetario). Cada falla se **resuelve** (bajar la afirmación
+a lo que dice la fuente, reasignar la cita al bibcode correcto, marcar **`inferencia`**, o taguear la
+disputa) y se deja un bloque `## Verificación de citas` en la nota. El `.txt` es extracción **determinista** (`pdftotext`), así que
 la cita son las palabras reales del paper; si una afirmación no aparece (artefacto de extracción:
 ecuación/tabla/escaneo) abrir el PDF o marcar `no verificable por extracción`. Es **juicio de LLM**,
 robusto pero no prueba. **Regla dura — todo lo apuntable es chequeable:** toda afirmación fáctica va

@@ -169,9 +169,11 @@ sola, sin el resto del pack ni la ruta MCP.
    p. ej. Wilson 1978 / Mount Wilson). Provenance `via: chain:*` en `ads.json`; `--no-chain`
    desactiva. **Abierto:** ancla de sujeto para TEMAS (`--topic` no encadena) y el fetch de PDFs
    viejos vía `esources` (backlog aparte, arriba).
-2. **Veredicto `contradice` en `verify-citations`** (hoy `no-soportada` mezcla "la fuente calla" con
-   "la fuente contradice" — clave para `disputes[]`) + citation precision por nota como métrica del
-   lint (estándares CAQA / ALCE; auto-benchmark sembrando citas falsas, CiteAudit).
+2. 🟡 **PARCIAL (2026-07-03)** — ✅ **Veredicto `contradice` en `verify-citations`** hecho (4
+   categorías estilo CAQA; `contradice` manda sobre el score y se resuelve como corrección o disputa
+   `planets[].disputes[]`, no como cita rota; skill v1.1.0 + CLAUDE.md/README). ⏳ Queda: citation
+   precision por nota como métrica del lint (ALCE) y auto-benchmark del verificador sembrando citas
+   falsas (CiteAudit).
 3. **Detección batch de contradicciones entre papers** sobre la misma estrella/parámetro → proponer
    entradas `disputes[]` (estilo ContraCrow de PaperQA2; hoy se detectan a mano en el ingest).
 4. **Chequeo de retracciones** (Crossref/ADS) en el lint — una fuente retractada silenciosa viola el

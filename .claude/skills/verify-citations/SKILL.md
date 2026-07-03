@@ -1,7 +1,7 @@
 ---
 name: verify-citations
-description: Usar para verificar, afirmación por afirmación, que las citas [[bibcode]] de una nota de la wiki (query, hipótesis, ficha, concepto) realmente están respaldadas por el texto completo de la fuente. Se corre como paso de cierre al armar/editar una query o hipótesis, o cuando el usuario pide "rechequeá las citas / ¿esto lo dice el paper?". Implementa el chequeo claim↔evidencia (pipeline tipo CiteAudit) sobre el corpus cerrado de la bóveda.
-version: 1.0.0
+description: Usar para verificar, afirmación por afirmación, que las citas [[bibcode]] de una nota de la wiki (query, hipótesis, ficha, concepto) realmente están respaldadas por el texto completo de la fuente. Se corre como paso de cierre al armar/editar una query o hipótesis, o cuando el usuario pide "rechequeá las citas / ¿esto lo dice el paper?". Implementa el chequeo claim↔evidencia (pipeline tipo CiteAudit) sobre el corpus cerrado de la bóveda. Veredictos: soportada / parcial / no-soportada (la fuente calla) / contradice (la fuente afirma lo contrario → candidata a disputa, no sólo cita rota).
+version: 1.1.0
 ---
 
 # Verify-citations — chequeo claim↔evidencia contra el fulltext
@@ -70,23 +70,36 @@ Cada uno:
   al leer/grep.
 - Lee **sólo ese archivo** (grounding-first; **prohibido** responder de memoria o de otro paper).
 - Devuelve, para la afirmación dada:
-  - `veredicto`: `soportada` | `parcial` | `no-soportada`
+  - `veredicto`: `soportada` | `parcial` | `no-soportada` | `contradice`. **Distinguir los dos modos
+    de falla** (alineado al estándar de 4 categorías tipo CAQA): `no-soportada` = la fuente **calla**
+    (no dice nada de eso → error de cita); `contradice` = la fuente **afirma lo contrario** (valor
+    incompatible más allá del error, existencia negada, signo opuesto) — también exige cita textual,
+    de lo que el paper **sí** dice.
   - `score`: 0–10 (qué tan literal/completo es el respaldo)
   - `evidencia`: **cita textual** del paper + **nº de línea**. **Sin cita textual ⇒ `no-soportada`**
     (regla dura: si no puede pegar la frase, no está respaldado).
   - `nota`: una línea de por qué (sobre todo en `parcial`/`no-soportada`: qué dice el paper en cambio).
 
 Prompt sugerido por agente: *"Leé SOLO `<ruta fulltext>`. ¿El paper respalda esta afirmación: «…»?
-Respondé veredicto (soportada/parcial/no-soportada) + score 0–10 + cita textual con nº de línea + nota.
-Si no encontrás respaldo textual, es no-soportada. No uses memoria ni otros papers."*
+Respondé veredicto (soportada/parcial/no-soportada/contradice) + score 0–10 + cita textual con nº de
+línea + nota. Si no encontrás respaldo textual, es no-soportada; si el paper afirma lo CONTRARIO,
+es contradice (pegá la frase que lo contradice). No uses memoria ni otros papers."*
 
 ### 3. Umbral y agregación
 - `score ≥ 7` → **soportada**
 - `4 ≤ score ≤ 6` → **parcial** (revisar: matiz, rango distinto, atribución cruzada)
 - `score < 4` → **no-soportada**
+- **`contradice`** manda sobre el score (no es un grado de soporte sino evidencia **en contra**, con
+  cita textual de lo contradicho): se resuelve como corrección o disputa (paso 4), no como cita rota.
 
 ### 4. Resolver lo que falla (no dejar pasar)
-Cada **parcial / no-soportada** se resuelve antes de cerrar:
+Cada **parcial / no-soportada / contradice** se resuelve antes de cerrar:
+- **Contradicción** (`contradice`) → decidir cuál de dos casos es. (a) **La nota está mal** →
+  corregirla a lo que dice la fuente. (b) **Desacuerdo real entre fuentes** → es una **disputa**:
+  si es un parámetro planetario de una ficha, taguearla en `planets[].disputes[]`
+  (`field`/`ref`/`note`/`alt`; NEA sigue siendo el valor de verdad) y reflejarla en la prosa; si es
+  un claim de concepto/query, citar **ambas** fuentes con el desacuerdo explícito (y ajustar el
+  `bearing` del paper si aplica). Una contradicción detectada es un **hallazgo**, no un fracaso.
 - **Atribución cruzada** (el hecho está, pero en otro de los papers citados) → reasignar la cita al
   bibcode correcto.
 - **Afirmación estirada** (el paper dice menos/distinto) → **bajar** la afirmación a lo que la fuente
@@ -100,12 +113,13 @@ Agregar/refrescar al final de la nota (idempotente — si ya existe, reemplazar)
 
 ```markdown
 ## Verificación de citas (YYYY-MM-DD)
-Chequeo afirmación↔fulltext (skill `verify-citations`). N pares; X soportadas / Y parciales / Z no-soportadas (resueltas).
+Chequeo afirmación↔fulltext (skill `verify-citations`). N pares; X soportadas / Y parciales / Z no-soportadas / W contradicen (resueltas).
 
 | Afirmación (resumen) | Ref | Veredicto | Score | Evidencia |
 |---|---|---|---|---|
 | YZ CMi κ ≈ −2.6 | [[2018A&A...609A..12Z]] | soportada | 9 | "gradient of −2.6 Np−1 (±21%)" (L966) |
 | activas −2.4/−2.6 | [[2025A&A...696A..27J]] | no-soportada→corregida | 2 | el paper da −2.65 a −3.70; el −2.6 es de Zechmeister |
+| señal g confirmada | [[2016A&A...585A.134D]] | contradice→disputa | 1 | "is an artifact of... rotation" (L2101) → tagueada en disputes[] |
 
 Inferencias declaradas (sin cita, por diseño): <listar>.
 ```
@@ -118,9 +132,10 @@ y commit descriptivo; **preguntar antes de `push`**. Appendear a `vault/wiki/log
 cuántas soportadas/corregidas).
 
 ## Reporte (al chat)
-Veredicto global honesto: total de pares, cuántas soportadas, y **cada corrección hecha** (qué se
-bajó/reasignó/marcó inferencia). No maquillar: una afirmación que se estiró y se corrigió es un
-hallazgo del chequeo, no un fracaso. Si algo quedó dudoso, decirlo.
+Veredicto global honesto: total de pares, cuántas soportadas, **cada corrección hecha** (qué se
+bajó/reasignó/marcó inferencia) y **cada contradicción con su resolución** (corrección o disputa
+tagueada). No maquillar: una afirmación que se estiró y se corrigió es un hallazgo del chequeo, no
+un fracaso. Si algo quedó dudoso, decirlo.
 
 ## Límite honesto
 El chequeo es **juicio de un LLM** leyendo la fuente — robusto (independiente por par, grounding-first,
