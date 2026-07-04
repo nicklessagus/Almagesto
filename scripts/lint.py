@@ -216,10 +216,12 @@ def main() -> int:
                 contradictions.append((slug, f"ficha {n_note} planetas vs ground-truth {n_gt}"))
 
     # huérfanos: notas-concepto sin links entrantes. Papers/estrellas se acceden por
-    # Dataview/index, no por wikilink → no son huérfanos genuinos. README tampoco.
+    # Dataview/index, no por wikilink → no son huérfanos genuinos. README tampoco. Las **matrices**
+    # son estructurales (se navegan desde index.md, que es merge=ours → puede no linkearlas en una
+    # instancia): tampoco son huérfanas genuinas.
     def is_orphan_candidate(n: str) -> bool:
         tags = kinds.get(n, [])
-        return (not ({"paper", "star"} & set(tags))
+        return (not ({"paper", "star", "matrix"} & set(tags))
                 and n not in NON_ORPHAN and n not in refs_stems)
     orphans = [n for n, c in incoming.items() if c == 0 and is_orphan_candidate(n)]
 
