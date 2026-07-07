@@ -16,14 +16,24 @@ un solo archivo, `vault/config/objective.yaml`. El resto del repo es framework r
 
 ## Instanciar (crear tu bóveda)
 
+**Recomendado — botón "Use this template":** en la [página del repo](https://github.com/nicklessagus/Almagesto)
+apretá **"Use this template" → Create a new repository**. GitHub te crea un repo **propio** con esta
+estructura y **historia limpia** (un commit inicial, sin el historial de desarrollo del framework) y sin
+quedar ligado como fork. Después cloná *tu* repo nuevo y configurálo:
+
 ```bash
-git clone <este-repo> mi-boveda && cd mi-boveda
+git clone git@github.com:TU_USUARIO/mi-boveda.git && cd mi-boveda
 git lfs install                             # PDFs por git-lfs — sin esto se commitean binarios crudos
-git config merge.ours.driver true           # protege tus archivos de instancia en futuros `git pull`
+git config merge.ours.driver true           # protege tus archivos de instancia en futuros merges
 git config core.hooksPath scripts/hooks     # (opcional) pre-commit que corre el lint y bloquea si falla
+git remote add upstream https://github.com/nicklessagus/Almagesto.git  # de acá traés mejoras del framework
 pip install -r requirements.txt             # pyyaml, requests, astroquery
 echo "TU_TOKEN" > vault/config/ads_dev_key  # token ADS (gratis, gitignored) — o export ADS_DEV_KEY
 ```
+
+> **Alternativa — `git clone` directo** (probar sin crear tu repo en GitHub): `git clone <este-repo>
+> mi-boveda`. Tu `origin` queda apuntando a Almagesto (traés updates con `git pull`), pero no tenés
+> remoto propio donde pushear tu contenido. Ver *Mantener tu bóveda actualizada* para pasarte a tu repo.
 
 > **Token ADS** gratis en <https://ui.adsabs.harvard.edu/user/settings/token> (~5000 consultas/día); va
 > en `vault/config/ads_dev_key` (gitignored) o en la variable `ADS_DEV_KEY`. Para **ingestar PDFs nuevos**
@@ -150,19 +160,20 @@ par que lee SÓLO ese `.txt` y devuelve `soportada|parcial|no-soportada|contradi
 ## Mantener tu bóveda actualizada (traer mejoras del framework)
 
 Tu bóveda es **una sola implementación**: el framework (scripts, skills, `CLAUDE.md`, `vault/.obsidian/`)
-vive acá; vos le agregás contenido. Al clonar, tu `origin` apunta a Almagesto, así que traés mejoras
-del framework con un simple `git pull`. Tu contenido no corre riesgo: `vault/config/objective.yaml`,
-`vault/config/stars.yaml`, `vault/config/topics.yaml`, `vault/STATUS.md`, `vault/wiki/index.md` y `vault/wiki/log.md` están marcados
-`merge=ours` en `.gitattributes` — un merge del framework **nunca** los pisa. Registrá el driver una
-sola vez por clon:
+vive en Almagesto; vos le agregás contenido. Tu contenido no corre riesgo al mergear:
+`vault/config/objective.yaml`, `vault/config/stars.yaml`, `vault/config/topics.yaml`, `vault/STATUS.md`,
+`vault/wiki/index.md` y `vault/wiki/log.md` están marcados `merge=ours` en `.gitattributes` — un merge del
+framework **nunca** los pisa (registrá el driver una vez por clon: `git config merge.ours.driver true`).
+
+**Si instanciaste con "Use this template" (recomendado):** tu `origin` es *tu* repo y Almagesto es
+`upstream` (lo agregaste en el paso *Instanciar*). Traés mejoras del framework mergeando upstream:
 
 ```bash
-git config merge.ours.driver true   # respeta los archivos 'merge=ours' (.gitattributes)
-git pull                            # trae mejoras del framework; tu contenido queda intacto
+git fetch upstream && git merge upstream/main   # trae mejoras del framework; tu contenido (merge=ours) queda intacto
 ```
 
-¿Querés versionar tu bóveda en tu **propio** repo (recomendado) y seguir recibiendo updates? Creá un
-repo vacío tuyo, convertí Almagesto en `upstream` y poné el tuyo como `origin`:
+**Si clonaste directo** (`origin` = Almagesto): traés updates con `git pull`. Para pasarte a tu **propio**
+repo, creá uno vacío, convertí Almagesto en `upstream` y poné el tuyo como `origin`:
 
 ```bash
 git remote rename origin upstream            # Almagesto = de dónde vienen los updates
