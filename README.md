@@ -1,5 +1,9 @@
 # Almagesto — template de wiki de conocimiento astro (patrón LLM Wiki)
 
+[![CI](https://github.com/nicklessagus/Almagesto/actions/workflows/ci.yml/badge.svg)](https://github.com/nicklessagus/Almagesto/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Use this template](https://img.shields.io/badge/Use%20this-template-2ea44f?logo=github)](https://github.com/nicklessagus/Almagesto/generate)
+
 Base de conocimiento mantenida por un LLM (patrón [LLM Wiki](vault/raw/refs/karpathy-llm-wiki.md) de
 Karpathy) sobre **literatura astronómica**, organizada por **estrella** y por **concepto**. Reúne todo
 lo publicado relevante (planetas, actividad, indicadores, métodos), en formato a la vez **legible**

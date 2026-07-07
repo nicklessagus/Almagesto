@@ -1,0 +1,29 @@
+# CI de Almagesto (framework) — corre el lint de la bóveda en cada push/PR a main.
+#
+# scripts/lint.py es un chequeo OFFLINE de salud estructural del vault (wikilinks
+# rotos, notas huérfanas, contradicciones ground-truth ↔ ficha, papers retractados
+# citados, disputes[].ref sin destino, …); sale con exit 1 si hay bloqueantes.
+#
+# Sólo necesita pyyaml + stdlib: astroquery se importa lazy dentro de funciones de
+# fetch_ground_truth (de donde lint toma msini_earth), no al cargar el módulo. Sin
+# git-lfs: el lint lee el fulltext .txt (commiteado) y el frontmatter, nunca los PDFs.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar deps del lint
+        run: pip install pyyaml
+      - name: Lint de la bóveda
+        run: python scripts/lint.py
