@@ -156,6 +156,13 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   desde **cualquier término**, no sólo el nombre canónico; espeja la idea de `aliases` de `stars/`),
   `tags`, `confidence`. El cuerpo trae `## Síntesis`, `## Huecos` y el apéndice `## Excluidos por el
   filtro` (igual que la ficha de estrella). Rige el *Estándar transversal* (autosuficiente + implementation-ready).
+  **Convención hub/radios (tema grande → varias notas):** cuando un tema no cabe en una sola nota sin
+  perder foco, se estructura como **hub** (la nota central: síntesis del tema completo) + **radios**
+  (notas satélite del mismo área que profundizan un sub-aspecto; p. ej. hub `fastica_icasso`, radio
+  `ica-noise` para el caso con ruido). El hub referencia cada radio explícitamente ("<sub-aspecto> vive
+  en el radio [[...]]") y el radio abre con su "Para qué" apuntando de vuelta al hub. Un radio es una
+  nota de concepto normal (mismo frontmatter y estándar de autosuficiencia); "hub/radio" es sólo la
+  metáfora organizativa (rueda: centro y rayos).
 - **concepts/hypotheses/**: `name, status`; el roll-up de evidencia es por Dataview sobre
   `thesis_links`.
 
