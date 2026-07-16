@@ -2,7 +2,7 @@
 
 Uso:
     python fetch_web.py <slug> <citekey> <url> [--concept C] [--title T] [--author A]
-                        [--year Y] [--venue V] [--no-note] [--force]
+                        [--year Y] [--n-authors N] [--doi D] [--venue V] [--no-note] [--force]
 
 Baja la URL con **defuddle** (extractor de contenido de Obsidian: quita nav/menús/clutter y
 devuelve markdown limpio), le pasa un **post-clean** determinista (saca bloques HTML de media/embed
@@ -100,6 +100,8 @@ def main() -> int:
     ap.add_argument("--title", help="título de la fuente (para la nota de paper)")
     ap.add_argument("--author", help="primer autor (para la nota de paper)")
     ap.add_argument("--year", help="año (para la nota de paper)")
+    ap.add_argument("--n-authors", dest="n_authors", help="cantidad de autores (para la nota de paper)")
+    ap.add_argument("--doi", help="DOI de la fuente, si existe (para la nota; habilita check_retractions)")
     ap.add_argument("--venue", help="venue/bibstem de la nota (default: dominio de la URL)")
     ap.add_argument("--no-note", action="store_true", help="sólo el snapshot; no crear wiki/papers/<citekey>.md")
     ap.add_argument("--force", action="store_true", help="re-baja/pisa aunque ya existan")
@@ -150,6 +152,7 @@ def main() -> int:
         make_notes.write_web_paper_note(
             args.citekey, url=args.url, slug=args.slug, concept=args.concept,
             title=args.title, first_author=args.author, year=args.year,
+            n_authors=args.n_authors, doi=args.doi,
             venue=args.venue, accessed=stamp, force=args.force,
         )
         print("  siguiente: completar la extracción LLM en la nota y verificar con verify-citations")

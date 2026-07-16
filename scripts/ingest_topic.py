@@ -11,9 +11,10 @@ campo `source` (formaliza el modo off-ADS del skill ingest-topic en el tooling):
 - `web` | `local-pdfs` | `local-pdfs+web`: modo off-ADS. La bibliografía se declara en la
   lista `sources:` de la entrada (cada item: `key` = clave de cita sintética AAAA+Autor +
   `url` (fuente web) o `pdf` (ruta a un PDF provisto por el usuario) + metadata opcional
-  `title/author/year/venue`). El orquestador stubbea el concept, procesa cada fuente
-  (`fetch_web.py` para URLs; copia a raw/pdfs/<slug>/<key>.pdf para PDFs) y corre
-  extract_fulltext. Sin query_ads / fetch_ground_truth / check_retractions (no hay DOI).
+  `title/author/year/venue/n_authors/doi`). El orquestador stubbea el concept, procesa cada
+  fuente (`fetch_web.py` para URLs; copia a raw/pdfs/<slug>/<key>.pdf para PDFs) y corre
+  extract_fulltext. Sin query_ads / fetch_ground_truth (no aplican fuera de ADS);
+  check_retractions SÍ corre cuando algún item declara `doi` (Crossref lo cubre igual).
 
 Idempotente como la cadena que envuelve: nada se re-baja ni se copia si ya existe. `--force`
 fuerza SÓLO la re-bajada/copia de FUENTES (snapshot web, PDF, fulltext) — **nunca pisa notas
@@ -89,9 +90,9 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
                      f"(admite {'/'.join(allowed)}). ¿Typo? Para mezclar usá source: local-pdfs+web.")
         if kind == "url":
             args = [slug, key, s["url"], "--concept", concept]
-            for flag in ("title", "author", "year", "venue"):
+            for flag in ("title", "author", "year", "venue", "n_authors", "doi"):
                 if s.get(flag):
-                    args += [f"--{flag}", str(s[flag])]
+                    args += [f"--{flag.replace('_', '-')}", str(s[flag])]
             if force:
                 args.append("--force")
             fails += 1 if run("fetch_web.py", *args) else 0
@@ -117,12 +118,19 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
             # stub de nota (idempotente; detecta solo el PDF copiado y linkea el campo `pdf`)
             make_notes.write_web_paper_note(key, slug=slug, concept=concept,
                                             title=s.get("title"), first_author=s.get("author"),
-                                            year=s.get("year"), venue=s.get("venue"))
+                                            year=s.get("year"), n_authors=s.get("n_authors"),
+                                            doi=s.get("doi"), venue=s.get("venue"))
     if n_pdf:
         rc = run("extract_fulltext.py", slug, *(["--force"] if force else []))
         fails += 1 if rc else 0
     if fails:
         sys.exit(f"{fails} fuente(s) fallaron — revisá arriba y re-corré (idempotente).")
+    # off-ADS no tiene bibcode ADS, pero un DOI declarado en sources alcanza para el chequeo de
+    # retracciones (Crossref) — una fuente retractada silenciosa rompe la frontera dura igual.
+    if any(s.get("doi") for s in sources):
+        if run("check_retractions.py"):
+            sys.exit("check_retractions detectó papers retractados — revisá las notas marcadas "
+                     "(el lint las surface como bloqueante).")
 
 
 def main() -> int:

@@ -118,7 +118,7 @@ Qué cambia respecto del flujo ADS de arriba:
 - **Sin ADS:** se saltean `query_ads.py`, `fetch_arxiv.py` y `fetch_ground_truth.py`. En
   `vault/config/topics.yaml` la entrada lleva `query: null`, el switch **`source: web | local-pdfs |
   local-pdfs+web`** y la bibliografía **declarada** en la lista `sources:` (cada item: `key`
-  AAAA+Autor + `url` o `pdf` + `title/author/year/venue` opcionales; ver header del YAML); el resto
+  AAAA+Autor + `url` o `pdf` + `title/author/year/venue/n_authors/doi` opcionales; ver header del YAML); el resto
   del schema igual (`title`, `area`, `concept`, `aliases`). Con eso, **el mismo comando del paso 2**
   (`python ingest_topic.py <slug>`) orquesta todo: stub del concept, `fetch_web.py` por cada `url`,
   copia de cada `pdf` a `vault/raw/pdfs/<slug>/<key>.pdf` (nota con el campo `pdf` ya linkeado) y
@@ -142,11 +142,15 @@ Qué cambia respecto del flujo ADS de arriba:
   coincidir con el nombre del `.txt`. Donde **sí** exista un bibcode ADS real, usarlo.
 - **Notas de paper (automatizado):** `fetch_web.py` ya crea el stub `vault/wiki/papers/<clave>.md`; para
   fuentes **PDF** off-ADS (sin URL) usá `python make_notes.py --web <clave> --concept <concept>
-  --slug-hint <slug> [--title … --author … --year … --venue …]`. El stub lleva el **mismo frontmatter** que
-  una nota ADS más la provenance web: `bibcode` = clave sintética; `arxiv_id`/`doi` null; `source_url` +
+  --slug-hint <slug> [--title … --author … --year … --n-authors … --doi … --venue …]`. El stub lleva el
+  **mismo frontmatter** que
+  una nota ADS más la provenance web: `bibcode` = clave sintética; `arxiv_id` null; `n_authors`/`doi` los
+  del item de `sources:` si se declararon (un PDF con DOI sigue siendo off-ADS; con `doi`,
+  `ingest_topic.py` corre además `check_retractions.py`); `source_url` +
   `accessed` (la **fecha del snapshot** — el "Retrieved <fecha>" de una cita web, la toma del `.txt`);
   `bibstem` = venue o dominio; `pdf: null` (el respaldo es el snapshot `.txt`); `stars: []`; `thesis_links`
-  al concept; `tags: [paper, web]`. Completar la extracción LLM a mano.
+  al concept; `tags: [paper, web]` (snapshot de URL) o `[paper, local-pdf]` (PDF provisto).
+  Completar la extracción LLM a mano.
 - **Todo lo demás igual:** extracción enfocada en el eje del tema, síntesis al concept durable,
   auto-revisión de autosuficiencia, **`verify-citations`** (la clave sintética y el snapshot `.txt` la
   hacen chequeable), **`lint`** (0 bloqueante) y bookkeeping. **La frontera dura (regla #0) sigue

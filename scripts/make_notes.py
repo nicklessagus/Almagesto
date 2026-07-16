@@ -339,19 +339,22 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
 
 def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | None = None,
                          concept: str | None = None, title: str | None = None,
-                         first_author: str | None = None, year=None,
-                         venue: str | None = None, accessed: str | None = None,
-                         force: bool = False) -> bool:
+                         first_author: str | None = None, year=None, n_authors=None,
+                         doi: str | None = None, venue: str | None = None,
+                         accessed: str | None = None, force: bool = False) -> bool:
     """Stub de nota de paper para una fuente **off-ADS** (web o PDF sin bibcode ADS) — modo off-ADS de
     ingest-topic. Análogo a write_paper_notes pero **sin ads.json**: la metadata la provee quien llama
-    (fetch_web.py o el usuario). `bibcode` = clave sintética AAAA+Autor; `arxiv_id`/`doi` null;
+    (fetch_web.py, ingest_topic.py o el usuario). `bibcode` = clave sintética AAAA+Autor; `arxiv_id`
+    null; `n_authors`/`doi` los del item de `sources:` si se declararon (un PDF con DOI sigue siendo
+    off-ADS — no tiene bibcode ADS — pero el DOI habilita check_retractions);
     `pdf` normalmente null (el respaldo citable es el snapshot `.txt` de fulltext/) — salvo que el
     PDF off-ADS ya esté copiado en raw/pdfs/<slug>/<citekey>.pdf (fuente local-pdfs, lo hace
     ingest_topic.py), en cuyo caso se linkea solo (así el chequeo PDF↔disco del lint no marca drift);
     `thesis_links` pre-sembrado al concept. Para fuentes web, `source_url` + `accessed` son la
     provenance bibliográfica (el "Retrieved <fecha>" de una cita web); `accessed` = la fecha del
-    snapshot (la pasa fetch_web.py; si es web y no se pasó, default = hoy UTC). Idempotente: NO pisa
-    una nota existente salvo force. Devuelve True si escribió. Mismo template que las notas ADS."""
+    snapshot (la pasa fetch_web.py; si es web y no se pasó, default = hoy UTC). El tag distingue el
+    tipo de fuente: `web` = snapshot de URL; `local-pdf` = PDF provisto (off-ADS). Idempotente: NO
+    pisa una nota existente salvo force. Devuelve True si escribió. Mismo template que las notas ADS."""
     cfg.PAPERS.mkdir(parents=True, exist_ok=True)
     dest = cfg.PAPERS / f"{safe_name(citekey)}.md"
     if dest.exists() and not force:
@@ -368,10 +371,10 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
         "bibcode": citekey,
         "title": title,
         "first_author": first_author,
-        "n_authors": None,
+        "n_authors": int(n_authors) if n_authors else None,
         "year": int(year) if year else None,
         "arxiv_id": None,
-        "doi": None,
+        "doi": doi,                  # un PDF con DOI sigue siendo off-ADS (sin bibcode ADS)
         "source_url": url,           # fuente web off-ADS (provenance); null para fuente PDF
         "accessed": accessed,        # fecha del snapshot — bibliografía web ("Retrieved <fecha>")
         "bibstem": bibstem,
@@ -384,7 +387,7 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
         "citation_count": 0,
         "pdf": pdf_rel,                      # off-ADS: null salvo PDF local ya copiado a raw/pdfs/<slug>/
         "confidence": "medium",
-        "tags": ["paper", "web"],            # `web`: marca fuente off-ADS (findability)
+        "tags": ["paper", "web" if url else "local-pdf"],   # tipo de fuente off-ADS (findability)
         "generator": f"Almagesto v{cfg.ALMAGESTO_VERSION}",   # provenance
     }
     txt_ptr = f"vault/raw/fulltext/{slug or '<slug>'}/{citekey}.txt"
@@ -425,12 +428,15 @@ def main() -> int:
     ap.add_argument("--title", help="(--web) título de la fuente")
     ap.add_argument("--author", help="(--web) primer autor")
     ap.add_argument("--year", help="(--web) año")
+    ap.add_argument("--n-authors", dest="n_authors", help="(--web) cantidad de autores")
+    ap.add_argument("--doi", help="(--web) DOI de la fuente, si existe (habilita check_retractions)")
     ap.add_argument("--venue", help="(--web) venue/bibstem (default: dominio de --url)")
     args = ap.parse_args()
 
     if args.web:
         write_web_paper_note(args.slug, url=args.url, slug=args.slug_hint, concept=args.concept,
                              title=args.title, first_author=args.author, year=args.year,
+                             n_authors=args.n_authors, doi=args.doi,
                              venue=args.venue, force=args.force)
         return 0
 
