@@ -1,7 +1,7 @@
 ---
 name: ingest-topic
 description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema no-astro / fuera de ADS (desde PDFs locales + web; ver Modo off-ADS).
-version: 1.4.0
+version: 1.5.0
 ---
 
 # Ingest: agregar un TEMA a la wiki
@@ -66,6 +66,15 @@ del repo.
    `bearing`, `thesis_links` (ya pre-sembrado al concept; agregar otros si toca) y la sección
    "Extracción" enfocada **en el eje del tema** (qué aporta al tópico: signo, lag, mecanismo, método),
    no en una estrella concreta.
+
+3b. **Retro-tag del corpus pre-existente (grep por aliases).** Los papers que la query ADS devolvió
+   pero **ya estaban** en el corpus quedan conectados solos (`make_notes` mergea add-only el seed
+   `thesis_links` en la nota existente, sin pisar su extracción). Lo que la query **no** devolvió se
+   caza por grep: buscar los `aliases` del tema sobre el fulltext de **todo** el corpus (los otros
+   slugs), p. ej. `grep -rilE --include="*.txt" "fastica|icasso" vault/raw/fulltext/`, y para cada
+   hit sin taguear leer el contexto y decidir si el paper **usa/aporta** al tema (no mención al
+   pasar) → agregar add-only `thesis_links` (y `methods` si aplica) a su nota. La tabla Dataview del
+   concept acumula sola; una ficha-método junta además por `methods:` sin re-taguear.
 
 4. **Síntesis del concept durable** (`concepts/<area>/<concept>.md`). Destilar lo aprendido a la
    página viva: mecanismos, signos, desfasajes, regímenes, huecos. El roll-up Dataview (papers con

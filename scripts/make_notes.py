@@ -6,7 +6,9 @@ Uso:
 - stars/<slug>.md  : ficha índice de la estrella (frontmatter máquina-legible + Dataview).
 - papers/<bibcode>.md : una nota por paper relevante (metadata + abstract + placeholders LLM).
 
-Idempotente: NO pisa notas existentes (protege la extracción LLM) salvo --force.
+Idempotente: NO pisa notas existentes (protege la extracción LLM) salvo --force. Única
+excepción (add-only, no destructiva): en una nota de paper que ya existía, mergea los seeds
+del ingest actual (`stars` / `thesis_links`) si faltan — retro-linkeo, ver merge_frontmatter_list.
 """
 from __future__ import annotations
 
@@ -31,6 +33,53 @@ def fm(d: dict) -> str:
 
 def safe_name(bibcode: str) -> str:
     return bibcode.replace("/", "_")
+
+
+def merge_frontmatter_list(dest, field: str, values: list) -> bool:
+    """Retro-linkeo add-only: agrega a la lista `field` del frontmatter de `dest` los `values`
+    que falten. Edita el TEXTO en el lugar (no re-serializa el YAML) para preservar byte a byte
+    el resto del frontmatter — orden, comentarios y todo lo que haya tocado la extracción LLM.
+    Nunca saca ni pisa nada. Devuelve True si modificó el archivo."""
+    text = dest.read_text(encoding="utf-8")
+    if not text.startswith("---\n"):
+        return False
+    end = text.find("\n---\n", 4)
+    if end < 0:
+        return False
+    head = text[4:end]
+    try:
+        data = yaml.safe_load(head) or {}
+    except yaml.YAMLError:
+        return False
+    current = data.get(field) or []
+    if not isinstance(current, list):
+        return False
+    missing = [v for v in values if v not in current]
+    if not missing:
+        return False
+    lines = head.split("\n")
+    idx = next((i for i, ln in enumerate(lines) if ln.startswith(f"{field}:")), None)
+    if idx is None:
+        return False   # campo ausente: no inventar posición (el stub siempre lo trae)
+    rest = lines[idx][len(field) + 1:].strip()
+    if rest.startswith("[") and rest.endswith("]"):
+        # lista inline: `field: []` o `field: [a, b]`
+        inner = rest[1:-1].strip()
+        items = ([x.strip() for x in inner.split(",")] if inner else []) + missing
+        lines[idx] = f"{field}: [{', '.join(items)}]"
+    elif rest == "" or rest.startswith("#") or data.get(field) is None:
+        # lista en bloque (o campo null): insertar tras el último "- item" existente
+        j = idx + 1
+        while j < len(lines) and lines[j].lstrip().startswith("- "):
+            j += 1
+        indent = lines[j - 1][:len(lines[j - 1]) - len(lines[j - 1].lstrip())] if j > idx + 1 else ""
+        if rest and not rest.startswith("#"):
+            lines[idx] = f"{field}:"                # normaliza un `field: null` explícito
+        lines[j:j] = [f"{indent}- {v}" for v in missing]
+    else:
+        return False   # forma no reconocida (escalar con valor): no tocar
+    dest.write_text("---\n" + "\n".join(lines) + text[end:], encoding="utf-8")
+    return True
 
 
 def excluded_table(slug: str) -> str:
@@ -175,6 +224,12 @@ def write_concept_note(slug: str, force: bool) -> None:
         "confidence": "medium",
         "generator": f"Almagesto v{cfg.ALMAGESTO_VERSION}",   # provenance (con qué versión se armó)
     })
+    # Retro-link de la tabla: una ficha-MÉTODO junta además todo paper ya tagueado con el método
+    # en `methods:` (aunque no tenga `thesis_links`) — los papers extraídos antes de crear la ficha
+    # aparecen solos, sin re-taguear (issue #4a).
+    link_pred = f'contains(thesis_links, "{concept}")'
+    if area == "methods":
+        link_pred += f' OR contains(methods, "{concept}")'
     body = f"""{fm(front)}
 # {meta.get('title', concept)}
 
@@ -198,7 +253,7 @@ regímenes no cubiertos, contradicciones sin resolver.)_
 ```dataview
 TABLE bearing, year, file.link
 FROM "wiki/papers"
-WHERE contains(thesis_links, "{concept}")
+WHERE {link_pred}
 SORT year ASC
 ```
 """
@@ -222,12 +277,20 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
     if not include_all:
         recs = [r for r in recs if r["relevant"]]
     cfg.PAPERS.mkdir(parents=True, exist_ok=True)
-    written = skipped = 0
+    written = skipped = merged = 0
     for r in recs:
         bib = r["bibcode"]
         dest = cfg.PAPERS / f"{safe_name(bib)}.md"
         if dest.exists() and not force:
-            skipped += 1
+            # Retro-linkeo add-only (issue #4b): el paper ya estaba en el corpus (ingest previo de
+            # otra estrella/tema) → no se pisa la extracción LLM, pero SÍ se mergean los seeds de
+            # este ingest (tema → thesis_links; estrella → stars) para que la nota aparezca en las
+            # tablas Dataview de la entidad nueva. Idempotente: si ya están, no toca nada.
+            seeds = seed_links if topic else ([name] if name else [])
+            if seeds and merge_frontmatter_list(dest, "thesis_links" if topic else "stars", seeds):
+                merged += 1
+            else:
+                skipped += 1
             continue
         authors = r.get("authors", [])
         pdf_rel = f"../../raw/pdfs/{slug}/{safe_name(bib)}.pdf" if r.get("arxiv_id") else None
@@ -270,7 +333,8 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
 """
         dest.write_text(body, encoding="utf-8")
         written += 1
-    print(f"  papers: {written} escritos, {skipped} ya existían")
+    print(f"  papers: {written} escritos, {skipped} ya existían"
+          + (f", {merged} retro-linkeados (seeds add-only)" if merged else ""))
 
 
 def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | None = None,

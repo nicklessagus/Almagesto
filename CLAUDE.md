@@ -207,11 +207,21 @@ la query, `stars.yaml`/`topics.yaml`). No ingesta nada; después se usan `ingest
 
 ### Ingest (una fuente → cascada de páginas)
 1. Scripts de `scripts/` bajan: `query_ads.py` → `fetch_arxiv.py` → `fetch_ground_truth.py` →
-   `make_notes.py` → `extract_fulltext.py` (stubs mecánicos; idempotente, no pisa).
+   `make_notes.py` → `extract_fulltext.py` (stubs mecánicos; idempotente, no pisa — con una única
+   excepción add-only: el retro-linkeo de abajo).
 2. **Vos (LLM)** leés el PDF/fulltext y hacés la cascada: poblás la extracción del paper
    (`methods`, `thesis_links`, `bearing`, P/K/indicadores), actualizás la ficha de la estrella
    (síntesis, huecos), tocás conceptos/hipótesis relacionados y la matriz método×estrella.
 3. Actualizás `index.md` y appendeás a `log.md`.
+
+> **Retro-linkeo (papers pre-existentes ↔ entidad nueva) — tres capas:** (a) una **ficha-método**
+> (`concepts/methods/`) junta en su tabla Dataview también por `contains(methods, "<concept>")` —
+> los papers ya extraídos con ese método aparecen solos, sin re-taguear; (b) `make_notes` mergea
+> **add-only** los seeds del ingest (`stars` / `thesis_links`) en notas de paper que **ya existían**
+> (nunca pisa la extracción LLM; si ya están, no toca nada); (c) `ingest-topic` incluye un paso de
+> **retro-tag por grep**: buscar los `aliases` del tema en el fulltext de **todo** el corpus y
+> taguear (add-only, con juicio de LLM: uso real, no mención al pasar) los papers que la query ADS
+> no devolvió. Así la entidad nueva ve también lo que ya estaba en el corpus.
 
 > **Tema no-astro / fuera de ADS (opt-in — sólo a pedido explícito).** Por default un tema se baja por
 > **ADS** (plomería astro: ADS/arXiv/NEA). Almagesto es astro por estructura, pero si el usuario pide
