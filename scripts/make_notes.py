@@ -337,11 +337,43 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
           + (f", {merged} retro-linkeados (seeds add-only)" if merged else ""))
 
 
+def unpend_note(dest, citekey: str, slug: str | None) -> bool:
+    """Des-pendea una nota cuya fuente YA llegó: si el frontmatter tiene `pending_source` y el
+    material existe en disco (PDF en raw/pdfs/<slug>/ o snapshot .txt en raw/fulltext/<slug>/),
+    saca el flag (y el blockquote ⏳ del cuerpo), y linkea `pdf` si estaba null. Edición QUIRÚRGICA
+    a nivel texto (como merge_frontmatter_list): sólo toca líneas estampadas por la máquina, nunca
+    la extracción LLM. Devuelve True si modificó."""
+    if not slug:
+        return False
+    text = dest.read_text(encoding="utf-8")
+    if not text.startswith("---\n"):
+        return False
+    end = text.find("\n---\n", 4)
+    if end < 0 or "\npending_source:" not in text[:end]:
+        return False
+    has_pdf = (cfg.PDFS / slug / f"{safe_name(citekey)}.pdf").exists()
+    has_txt = (cfg.FULLTEXT / slug / f"{citekey}.txt").exists()
+    if not (has_pdf or has_txt):
+        return False                     # la fuente sigue faltando: el flag se queda
+    head, body = text[4:end], text[end:]
+    lines = [ln for ln in head.split("\n") if not ln.startswith("pending_source:")]
+    if has_pdf:
+        pdf_rel = f"../../raw/pdfs/{slug}/{safe_name(citekey)}.pdf"
+        lines = [f"pdf: {pdf_rel}" if ln.strip() == "pdf: null" else ln for ln in lines]
+    body = "\n".join(ln for ln in body.split("\n")
+                     if not ln.startswith("> ⏳ **Fuente pendiente"))
+    dest.write_text("---\n" + "\n".join(lines) + body, encoding="utf-8")
+    print(f"  papers: {dest.name} — fuente obtenida → pending_source removido"
+          + (" y `pdf` linkeado" if has_pdf else ""))
+    return True
+
+
 def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | None = None,
                          concept: str | None = None, title: str | None = None,
                          first_author: str | None = None, year=None, n_authors=None,
                          doi: str | None = None, venue: str | None = None,
-                         accessed: str | None = None, force: bool = False) -> bool:
+                         accessed: str | None = None, pending: str | None = None,
+                         force: bool = False) -> bool:
     """Stub de nota de paper para una fuente **off-ADS** (web o PDF sin bibcode ADS) — modo off-ADS de
     ingest-topic. Análogo a write_paper_notes pero **sin ads.json**: la metadata la provee quien llama
     (fetch_web.py, ingest_topic.py o el usuario). `bibcode` = clave sintética AAAA+Autor; `arxiv_id`
@@ -353,16 +385,27 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
     `thesis_links` pre-sembrado al concept. Para fuentes web, `source_url` + `accessed` son la
     provenance bibliográfica (el "Retrieved <fecha>" de una cita web); `accessed` = la fecha del
     snapshot (la pasa fetch_web.py; si es web y no se pasó, default = hoy UTC). El tag distingue el
-    tipo de fuente: `web` = snapshot de URL; `local-pdf` = PDF provisto (off-ADS). Idempotente: NO
-    pisa una nota existente salvo force. Devuelve True si escribió. Mismo template que las notas ADS."""
+    tipo de fuente: `web` = snapshot de URL; `local-pdf` = PDF provisto (off-ADS).
+
+    `pending` (fallback fuentes no-conseguibles): la fuente todavía NO se pudo obtener —
+    `paywall` (sin copia libre), `scan` (escaneo sin capa de texto) o `unextractable` (mojibake) —
+    y queda DERIVADA al usuario: se estampa `pending_source` en el frontmatter (el lint lo lista
+    como precondición) y `url`/`doi` quedan como puntero conocido, sin snapshot (`accessed` null).
+
+    Idempotente: NO pisa una nota existente salvo force. Devuelve True si escribió. Mismo template
+    que las notas ADS."""
     cfg.PAPERS.mkdir(parents=True, exist_ok=True)
     dest = cfg.PAPERS / f"{safe_name(citekey)}.md"
     if dest.exists() and not force:
+        # la nota no se pisa, pero si estaba PENDIENTE y la fuente ya llegó, se des-pendea
+        # (edición quirúrgica del flag; la extracción LLM no se toca).
+        if not pending and unpend_note(dest, citekey, slug):
+            return False
         print(f"  papers: {dest.name} ya existe (no se pisa sin --force)")
         return False
     bibstem = venue or (urlparse(url).netloc if url else None)   # venue: dominio web por default
-    if accessed is None and url:                                 # fuente web sin fecha explícita → hoy
-        accessed = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    if accessed is None and url and not pending:                 # fuente web sin fecha explícita → hoy
+        accessed = datetime.now(timezone.utc).strftime("%Y-%m-%d")   # (pending: sin snapshot → null)
     # PDF↔disco: si el PDF off-ADS ya está copiado a raw/pdfs/<slug>/, linkearlo (verdad de disco)
     pdf_rel = None
     if slug and (cfg.PDFS / slug / f"{safe_name(citekey)}.pdf").exists():
@@ -386,6 +429,8 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
         "relevance": "high",
         "citation_count": 0,
         "pdf": pdf_rel,                      # off-ADS: null salvo PDF local ya copiado a raw/pdfs/<slug>/
+        # fuente aún no obtenida (paywall|scan|unextractable) → derivada al usuario; sólo si aplica
+        **({"pending_source": pending} if pending else {}),
         "confidence": "medium",
         "tags": ["paper", "web" if url else "local-pdf"],   # tipo de fuente off-ADS (findability)
         "generator": f"Almagesto v{cfg.ALMAGESTO_VERSION}",   # provenance
@@ -393,6 +438,10 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
     txt_ptr = f"vault/raw/fulltext/{slug or '<slug>'}/{citekey}.txt"
     src_line = f"· {url}\n" if url else ""
     acc_line = f"· snapshot {accessed}\n" if accessed else ""
+    pend_line = ("" if not pending else
+                 f"\n> ⏳ **Fuente pendiente (`{pending}`):** todavía sin fulltext — el usuario debe "
+                 "proveer el PDF/fuente (puntero `doi`/`source_url` en el frontmatter). Al conseguirla, "
+                 "re-correr la cadena y completar la extracción.\n")
     body = f"""{fm(front)}
 # {title or citekey}
 
@@ -402,7 +451,7 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
 > Fuente **off-ADS** (fuera de ADS). El respaldo citable es el snapshot determinista
 > `{txt_ptr}` (`source_url` + `accessed` en el frontmatter), verificable por `verify-citations`.
 > El frontmatter es máquina-legible como en cualquier nota de paper.
-
+{pend_line}
 ## Extracción (LLM)
 - **Aporte al tema:** _(qué agrega al eje del concept: definición, ecuación, método, signo, régimen)_
 - **Métodos:** _(llenar `methods:` del frontmatter con `concepts/methods/`)_
@@ -431,13 +480,15 @@ def main() -> int:
     ap.add_argument("--n-authors", dest="n_authors", help="(--web) cantidad de autores")
     ap.add_argument("--doi", help="(--web) DOI de la fuente, si existe (habilita check_retractions)")
     ap.add_argument("--venue", help="(--web) venue/bibstem (default: dominio de --url)")
+    ap.add_argument("--pending", choices=["paywall", "scan", "unextractable"],
+                    help="(--web) fuente aún no conseguible: estampa pending_source y deriva al usuario")
     args = ap.parse_args()
 
     if args.web:
         write_web_paper_note(args.slug, url=args.url, slug=args.slug_hint, concept=args.concept,
                              title=args.title, first_author=args.author, year=args.year,
                              n_authors=args.n_authors, doi=args.doi,
-                             venue=args.venue, force=args.force)
+                             venue=args.venue, pending=args.pending, force=args.force)
         return 0
 
     print(f"Generando notas para {args.slug}")

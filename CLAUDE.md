@@ -230,7 +230,10 @@ la query, `stars.yaml`/`topics.yaml`). No ingesta nada; después se usan `ingest
 > (fuente = PDFs locales + web; sin `query_ads`/`fetch_ground_truth`). Formalizado en el tooling: la
 > entrada del tema en `topics.yaml` lleva `source: ads | web | local-pdfs [+web]` y (si es off-ADS) la
 > lista `sources:`; `scripts/ingest_topic.py <slug>` orquesta la cadena según ese campo — también en
-> modo ads. **`ingest-star` no cambia: es astro-only.** Papers sin bibcode ADS → **clave de cita sintética `AAAA+Autor`** (debe empezar con
+> modo ads. Una fuente que **no se consigue** (paywall / escaneo / mojibake) se marca
+> `pending: paywall|scan|unextractable` en su item de `sources:` → stub con `pending_source` (url/doi
+> como puntero), **derivada al usuario** sin frenar la cadena; el lint la lista como precondición.
+> **`ingest-star` no cambia: es astro-only.** Papers sin bibcode ADS → **clave de cita sintética `AAAA+Autor`** (debe empezar con
 > `AAAA`+letra para el lint; el `.txt` en `vault/raw/fulltext/` se llama igual). Páginas web → **snapshot
 > `.txt` determinista** (URL + fecha; lo genera `scripts/fetch_web.py` vía defuddle y crea además el
 > stub de la nota de paper) para que sea citable/verificable. La **frontera dura sigue
@@ -316,7 +319,11 @@ referencia para distinguir un typo de un área nueva, **nunca se bloquea** (`mak
 igual; el lint marca las carpetas fuera de la lista). El **PDF ↔ disco** es **WARN/higiene**: marca un paper
 cuyo campo `pdf` no refleja el PDF real — está bajado en `vault/raw/pdfs/<slug>/<bibcode>.pdf` pero el
 frontmatter quedó `null` (drift, hay que linkearlo) o apunta a un archivo inexistente (puntero roto). Las **citas no verificables** (bibcode citado en query/concepto/hipótesis sin su `.txt` en
-`vault/raw/fulltext/`) se listan como precondición de `verify-citations`. La **cobertura** (concepto/hipótesis
+`vault/raw/fulltext/`) se listan como precondición de `verify-citations`; ídem las **fuentes
+pendientes** (`pending_source` en una nota de paper: fuente no conseguida —paywall/escaneo/mojibake—
+derivada al usuario con su puntero doi/url) y el **fulltext ilegible** (un `.txt` que no pasa el
+umbral determinista de legibilidad — mojibake o escaneo sin capa de texto: existe pero no sirve para
+grep ni verify; rescate: PDF sano, OCR, o marcar `pending`). La **cobertura** (concepto/hipótesis
 sin ninguna cita `[[bibcode]]` → afirma sin fuente) es **backlog** que el lint surface para ir citando.
 Los "campos incompletos" (P_rot null, papers sin `methods`, etc.) son **backlog**, no bloquean. Revisar
 además a mano: claims stale y conceptos referidos sin página. Si faltan datos, abrir queries para

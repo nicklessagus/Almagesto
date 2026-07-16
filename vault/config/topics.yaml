@@ -24,6 +24,12 @@
 #                  n_authors/doi               # opcionales: nº de autores; DOI si existe (un PDF con
 #                                              # DOI sigue siendo off-ADS — sin bibcode ADS — y el DOI
 #                                              # habilita el chequeo de retracciones vía Crossref)
+#                  pending: paywall            # la fuente NO se pudo conseguir todavía (paywall |
+#                                              # scan | unextractable): en vez de url/pdf obtenible,
+#                                              # el item queda DERIVADO al usuario — se stubbea la
+#                                              # nota con pending_source (url/doi como puntero), no
+#                                              # cuenta como fallo y el lint lo lista. Al conseguir
+#                                              # la fuente: reemplazar por pdf:/url: y re-correr.
 #
 # La cadena mecánica se corre con `python scripts/ingest_topic.py <slug>` (despacha según `source`).
 #

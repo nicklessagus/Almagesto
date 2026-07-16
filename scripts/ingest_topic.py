@@ -16,6 +16,13 @@ campo `source` (formaliza el modo off-ADS del skill ingest-topic en el tooling):
   extract_fulltext. Sin query_ads / fetch_ground_truth (no aplican fuera de ADS);
   check_retractions SÍ corre cuando algún item declara `doi` (Crossref lo cubre igual).
 
+Fallback fuentes no-conseguibles: un item puede llevar `pending: paywall|scan|unextractable`
+en vez de una fuente obtenible — declara que la fuente todavía NO se pudo conseguir (sin copia
+libre / escaneo / mojibake) y queda DERIVADA al usuario. El orquestador NO la fetchea ni la
+cuenta como fallo: crea el stub de nota con `pending_source` (con `url`/`doi` como puntero) y
+lista las pendientes en un aviso al final; el lint las surfacea como precondición. Cuando el
+usuario provee la fuente: reemplazar `pending` por `pdf:`/`url:` y re-correr (idempotente).
+
 Idempotente como la cadena que envuelve: nada se re-baja ni se copia si ya existe. `--force`
 fuerza SÓLO la re-bajada/copia de FUENTES (snapshot web, PDF, fulltext) — **nunca pisa notas
 de wiki** (la extracción LLM se protege siempre; para regenerar una nota: make_notes --force
@@ -74,11 +81,24 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
     make_notes.write_concept_note(slug, force=False)   # nunca --force acá: protege la síntesis LLM
 
     fails = n_pdf = 0
+    pending_items: list[tuple[str, str, str]] = []   # (key, motivo, puntero) → aviso final
+    failed_items: list[tuple[str, str]] = []         # (key, puntero) → aviso final
     for s in sources:
         key = s.get("key") or ""
         if not CITEKEY_RE.match(key):
             sys.exit(f"key inválida en sources de '{slug}': {key!r}. Debe empezar con AAAA+letra "
                      "(clave de cita sintética, p. ej. 2000HyvarinenOja).")
+        if s.get("pending"):
+            # Fuente no-conseguible declarada: NO se fetchea ni cuenta como fallo — stub con
+            # pending_source (url/doi quedan como puntero) y derivación al usuario en el aviso final.
+            make_notes.write_web_paper_note(key, url=s.get("url"), slug=slug, concept=concept,
+                                            title=s.get("title"), first_author=s.get("author"),
+                                            year=s.get("year"), n_authors=s.get("n_authors"),
+                                            doi=s.get("doi"), venue=s.get("venue"),
+                                            pending=str(s["pending"]))
+            pending_items.append((key, str(s["pending"]),
+                                  s.get("doi") or s.get("url") or "(sin puntero conocido)"))
+            continue
         if s.get("url") and s.get("pdf"):
             sys.exit(f"{key}: item de sources con `url` Y `pdf` a la vez — ambiguo. Partilo en dos "
                      "items (una clave por fuente/snapshot).")
@@ -95,7 +115,9 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
                     args += [f"--{flag.replace('_', '-')}", str(s[flag])]
             if force:
                 args.append("--force")
-            fails += 1 if run("fetch_web.py", *args) else 0
+            if run("fetch_web.py", *args):
+                fails += 1
+                failed_items.append((key, s["url"]))
         else:
             n_pdf += 1
             dest = cfg.PDFS / slug / f"{make_notes.safe_name(key)}.pdf"
@@ -110,6 +132,7 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
                 else:
                     print(f"  ! {key}: no existe el PDF fuente {src} — item salteado")
                     fails += 1
+                    failed_items.append((key, str(src)))
                     continue
             else:
                 dest.parent.mkdir(parents=True, exist_ok=True)
@@ -123,6 +146,19 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
     if n_pdf:
         rc = run("extract_fulltext.py", slug, *(["--force"] if force else []))
         fails += 1 if rc else 0
+    # Aviso claro al operador (issue #7): qué fuentes faltan y con qué puntero, para que el
+    # usuario las provea. Las pendientes NO son fallos (la cadena degrada limpio y sigue).
+    if pending_items:
+        print("\n⏳ Fuentes PENDIENTES (derivadas al usuario — no frenan la cadena):")
+        for key, why, ptr in pending_items:
+            print(f"  - {key} [{why}] → {ptr}")
+        print("  Cuando esté la fuente: reemplazá `pending` por `pdf:`/`url:` en sources: y re-corré.")
+    if failed_items:
+        print("\n! Fuentes que FALLARON (¿transitorio? → re-corré; si la fuente no se puede "
+              "conseguir, marcá el item con `pending: paywall|scan|unextractable` para derivarla "
+              "al usuario sin frenar la cadena):")
+        for key, ptr in failed_items:
+            print(f"  - {key} → {ptr}")
     if fails:
         sys.exit(f"{fails} fuente(s) fallaron — revisá arriba y re-corré (idempotente).")
     # off-ADS no tiene bibcode ADS, pero un DOI declarado en sources alcanza para el chequeo de

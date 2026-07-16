@@ -12,7 +12,11 @@ página destino (tag que no matchea ninguna nota concepto/hipótesis → no acum
 filtró al vault; frontera dura, regla #0 de CLAUDE.md; WARN no bloqueante), **áreas de concepts/ fuera
 de `concept_areas`** (subcarpeta de concepts/ no declarada en objective.yaml → posible typo/carpeta
 fantasma; WARN), **PDF ↔ disco** (drift: el campo `pdf` de un paper no refleja el PDF bajado — sin linkear
-o puntero a archivo inexistente; WARN), **citas no verificables** (bibcode
+o puntero a archivo inexistente; WARN), **fuentes pendientes** (`pending_source` en una nota de
+paper: la fuente no se pudo obtener —paywall/escaneo/mojibake— y está derivada al usuario;
+precondición como las citas no verificables), **fulltext ilegible** (un `.txt` de `vault/raw/fulltext/`
+que no pasa el umbral determinista de legibilidad de `extract_fulltext.is_legible` → mojibake o
+escaneo sin capa de texto: existe pero no sirve para grep ni verify), **citas no verificables** (bibcode
 citado en query/concepto/hipótesis sin su `.txt` en `vault/raw/fulltext/` → no se puede chequear claim↔fuente
 con el skill `verify-citations`), **cobertura** (concepto/hipótesis sin ninguna cita `[[bibcode]]` →
 afirmaciones no chequeables; backlog), **cobertura de verificación** (query/concepto CON citas pero
@@ -34,6 +38,7 @@ import re
 import yaml
 
 import lib_config as cfg
+from extract_fulltext import is_legible      # umbral determinista de legibilidad (mismo que extract)
 from fetch_ground_truth import msini_earth   # verificación de masa (m·sini implícita)
 
 LINK_RE = re.compile(r"\[\[([^\]\|#]+)")
@@ -80,8 +85,18 @@ def main() -> int:
     files = note_files()
     # fulltext disponible (un .txt por bibcode, bajo cualquier slug/tema) → precondición de
     # verificabilidad: una cita en query/hipótesis sin su .txt no se puede chequear claim↔fuente.
-    fulltext = {basename(p)[:-4] for p in glob.glob(str(cfg.RAW / "fulltext" / "**" / "*.txt"),
-                                                     recursive=True)}
+    fulltext_files = sorted(glob.glob(str(cfg.RAW / "fulltext" / "**" / "*.txt"), recursive=True))
+    fulltext = {basename(p)[:-4] for p in fulltext_files}
+    # Fulltext ILEGIBLE (precondición): el .txt existe pero es mojibake (fuentes sin ToUnicode) o
+    # casi vacío (escaneo sin capa de texto) → no sirve para grep ni para verify-citations. Mismo
+    # umbral determinista que extract_fulltext. Rescate: reemplazar el PDF por uno con capa de texto
+    # sana, extraer por OCR, o marcar la fuente `pending` en sources: para derivarla al usuario.
+    illegible_txt = []
+    for p in fulltext_files:
+        ok, why = is_legible(open(p, encoding="utf-8", errors="replace").read())
+        if not ok:
+            rel = p.split(f"{cfg.RAW}/")[-1]
+            illegible_txt.append((f"fulltext/{rel.split('/', 1)[-1]}", why))
     # PDFs en disco (un <bibcode>.pdf por slug en vault/raw/pdfs/) → chequear drift `pdf` ↔ archivo.
     # stem = safe_name(bibcode), igual que el nombre de la nota del paper.
     pdf_on_disk = {}
@@ -95,6 +110,7 @@ def main() -> int:
     kinds: dict[str, list] = {}
     broken, incomplete, contradictions = [], [], []
     retracted: list = []               # (stem, "<tipo> <fecha>") — papers marcados retracted (check_retractions)
+    pending_srcs: list = []            # (stem, "<motivo> — puntero") — fuentes derivadas al usuario
     impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
     pdf_issues: list = []              # (stem, ...) — drift frontmatter `pdf` ↔ PDF en disco
     thesis_refs: dict[str, list] = {}  # valor de thesis_link -> notas que lo usan
@@ -177,6 +193,12 @@ def main() -> int:
             if fm.get("retracted"):
                 rt = fm.get("retraction") or {}
                 retracted.append((stem, f"{rt.get('type', 'retraction')} ({rt.get('date') or 's/f'})"))
+            # fuente pendiente (issue #7): derivada al usuario — precondición, como las citas no
+            # verificables: sin la fuente no hay fulltext ni verify. Se estampa en el ingest
+            # (ingest_topic/make_notes --web con `pending`) o a mano en la nota.
+            if fm.get("pending_source"):
+                ptr = fm.get("doi") or fm.get("source_url") or "(sin puntero conocido)"
+                pending_srcs.append((stem, f"{fm['pending_source']} — proveer la fuente; puntero: {ptr}"))
             if fm.get("relevance") == "high" and not fm.get("methods"):
                 incomplete.append((stem, "paper relevante sin methods (sin extraer)"))
             if fm.get("thesis_links") and not fm.get("bearing"):
@@ -263,6 +285,8 @@ def main() -> int:
                          ("⛔ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)", impl_leaks),
                          ("Áreas de concepts/ no declaradas en objective.yaml (WARN, posible typo)", undeclared_areas),
                          ("PDF ↔ disco (WARN — higiene: frontmatter `pdf` vs PDF bajado)", pdf_issues),
+                         ("⏳ Fuentes pendientes (pending_source — el usuario debe proveer la fuente)", pending_srcs),
+                         ("Fulltext ilegible (mojibake/escaneo — existe pero no sirve para grep/verify)", illegible_txt),
                          ("Citas no verificables en query/concepto/hipótesis (sin fulltext)", unverifiable),
                          ("Sin verificar: query/concepto con citas pero sin bloque verify-citations (backlog)", unverified),
                          ("Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog)", coverage),

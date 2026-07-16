@@ -137,6 +137,14 @@ Qué cambia respecto del flujo ADS de arriba:
     `--no-note`). Requiere Node/npm (`npx defuddle`, JS-only; valida `<clave>` contra `BIBCODE_RE`,
     idempotente salvo `--force`). **Sin Node:** traer con `WebFetch`/`deep-research`, guardar el snapshot a
     mano (mismo encabezado) y stubbear la nota con `python make_notes.py --web <clave> --url … --concept …`.
+- **Fuente no-conseguible (fallback — paywall / escaneo / mojibake):** si una fuente no se puede
+  obtener (sin copia libre) o su PDF no rinde texto usable (escaneo sin capa de texto, fuentes sin
+  ToUnicode → `extract_fulltext` avisa "ILEGIBLE"), **no frenar el ingest ni dejarla muda**: marcá el
+  item de `sources:` con `pending: paywall|scan|unextractable` (dejando `url`/`doi` conocidos como
+  puntero). La cadena stubbea la nota con `pending_source`, la **deriva al usuario** en el aviso
+  final y el lint la lista como precondición. El resto del tema se arma igual con las fuentes
+  limpias; la pendiente queda como hueco citado. Cuando el usuario provea el PDF/fuente: reemplazar
+  `pending` por `pdf:`/`url:`, re-correr la cadena (idempotente) y completar la extracción.
 - **Clave de cita sintética (papers sin bibcode ADS):** `AAAA+Autor` (p. ej. `2000HyvarinenOja`,
   `2006Tichavsky`, `2025sklearn`). Debe **empezar con `AAAA`+letra** (lo exige `BIBCODE_RE` del lint) y
   coincidir con el nombre del `.txt`. Donde **sí** exista un bibcode ADS real, usarlo.
