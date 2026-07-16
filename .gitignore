@@ -25,5 +25,12 @@ vault/.obsidian/cache
 # Plugins de comunidad (Dataview, etc.): se instalan desde Obsidian, no se versionan.
 vault/.obsidian/plugins/
 
+# Hooks generados por git-lfs: con core.hooksPath = scripts/hooks, `git lfs install` los
+# escribe acá (adentro del working tree). Son shims estándar por-máquina — no se versionan.
+scripts/hooks/post-checkout
+scripts/hooks/post-commit
+scripts/hooks/post-merge
+scripts/hooks/pre-push
+
 # Sistema
 .DS_Store

@@ -23,9 +23,10 @@ quedar ligado como fork. Después cloná *tu* repo nuevo y configurálo:
 
 ```bash
 git clone git@github.com:TU_USUARIO/mi-boveda.git && cd mi-boveda
-git lfs install                             # PDFs por git-lfs — sin esto se commitean binarios crudos
-git config merge.ours.driver true           # protege tus archivos de instancia en futuros merges
 git config core.hooksPath scripts/hooks     # (opcional) pre-commit que corre el lint y bloquea si falla
+git lfs install                             # PDFs por git-lfs — sin esto se commitean binarios crudos
+                                            #   (sus hooks caen en scripts/hooks/, ya gitignorados)
+git config merge.ours.driver true           # protege tus archivos de instancia en futuros merges
 git remote add upstream https://github.com/nicklessagus/Almagesto.git  # de acá traés mejoras del framework
 pip install -r requirements.txt             # pyyaml, requests, astroquery
 echo "TU_TOKEN" > vault/config/ads_dev_key  # token ADS (gratis, gitignored) — o export ADS_DEV_KEY
