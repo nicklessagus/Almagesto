@@ -110,8 +110,12 @@ procesa. Trabajar desde la raíz del repo.
   publisher** (p. ej. IOP `content.cld.iop.org/journals/.../tbN.gif`) — **funcionan aunque el PDF esté tras
   paywall**, y suelen tener el dato que se busca; (c) HTML legacy del publisher (frameset `…/fulltext/`);
   (d) si nada funciona, **pedir el PDF al usuario** (tiene acceso institucional; anduvo con Frick 2004 y
-  Saar 1999). Guardá el artefacto citable (PDF o imagen de tabla) en `vault/raw/`.
-- **No asumir OCR.** Chequeá primero si el PDF trae **capa de texto** (`pdftotext` da texto real, no vacío);
-  sólo los **escaneos-imagen** puros (p. ej. Baliunas 1995) necesitan OCR. Ojo con quirks de PostScript
-  viejo en la extracción (p. ej. el signo `-` y `>` pueden salir ambos como `[`): los datos están, sólo hay
-  que desambiguar por contexto.
+  Saar 1999) — mientras tanto, estampá `pending_source: paywall` en el frontmatter de la nota del paper
+  (el lint la lista como precondición hasta que la fuente llegue). Guardá el artefacto citable (PDF o
+  imagen de tabla) en `vault/raw/`.
+- **OCR: lo maneja solo `extract_fulltext.py`.** Chequea si el PDF trae **capa de texto** legible
+  (umbral determinista) y, si no (escaneos-imagen puros, p. ej. Baliunas 1995, o fuentes sin
+  ToUnicode), **cae solo a OCR** cuando hay `tesseract` instalado — el `.txt` queda con header
+  `source: ocr`, **citable con salvedad** (ver README); sin tesseract AVISA y el lint lo lista. Ojo
+  con quirks de PostScript viejo en la extracción (p. ej. el signo `-` y `>` pueden salir ambos como
+  `[`): los datos están, sólo hay que desambiguar por contexto.

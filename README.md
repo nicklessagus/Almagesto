@@ -118,7 +118,7 @@ LLM escribe y mantiene). Operaciones: **ingest / query / verify / lint**.
 |---|---|
 | `vault/config/objective.yaml` | **El objetivo de la bóveda** + clasificador de relevancia (papers core). Editar para instanciar. |
 | `vault/raw/pdfs/<slug>/` | PDFs (git-lfs). |
-| `vault/raw/fulltext/<slug>/*.txt` | Texto completo (pdftotext) para búsqueda local y re-extracción. |
+| `vault/raw/fulltext/<slug>/*.txt` | Texto completo (pdftotext; si la capa de texto es ilegible, OCR marcado `source: ocr` — citable con salvedad) para búsqueda local y re-extracción. |
 | `vault/raw/ground_truth/<slug>.json` | Hechos auditables (NASA Exoplanet Archive + SIMBAD). |
 | `vault/raw/refs/` | Fuentes de diseño del patrón (gist Karpathy, guía de implementación). |
 | `vault/wiki/stars/<slug>.md` | Ficha por estrella (entidad). **Frontmatter = fuente de verdad** (sp_type, P_rot, planetas, indicadores esperados, métodos). |

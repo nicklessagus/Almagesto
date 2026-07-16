@@ -65,6 +65,14 @@ nomenclatura no tiene a qué adaptarse; el check sin la nomenclatura no tiene co
 > Surgido al usar la bóveda (2026-06-29): papers **pre-arXiv / viejos** no están en arXiv, así que
 > `fetch_arxiv.py` no los baja; hubo que recurrir a workarounds manuales para conseguir el PDF.
 
+> **Update 2026-07-16 (issues #7/#8, HECHO):** la parte "derivar al usuario" y el rescate de
+> escaneos ya están en el framework — fuentes no-conseguibles se marcan `pending`
+> (`pending_source` en la nota, aviso del orquestador, precondición en el lint, des-pendeo
+> automático al llegar la fuente) y `extract_fulltext.py` cae solo a **OCR** (tesseract) cuando la
+> capa de texto es ilegible (`.txt` con `source: ocr`, citable con salvedad). **Sigue pendiente**
+> de esta sección sólo el fetcher determinista vía `esources`/resolver de ADS (parcialmente
+> bloqueado por paywall/captcha, ver hallazgos abajo).
+
 **Problema.** `fetch_arxiv.py` sólo baja de arXiv (usa el campo `arxiv_id`). Papers sin arXiv (revistas
 viejas, escaneados) quedan sin PDF → sin fulltext → sin extracción LLM ni `verify-citations`. Hoy se
 resuelve a mano, fuera del pipeline.
