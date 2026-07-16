@@ -1,7 +1,7 @@
 ---
 name: maintain
 description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), y resolver el backlog del lint (huérfanos, P_rot faltante, drift PDF↔disco, claims stale).
-version: 1.1.0
+version: 1.1.1
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
@@ -29,7 +29,9 @@ cierra con **verify-citations** (si tocó prosa con `[[bibcode]]`) + **lint en 0
    python extract_fulltext.py <slug>
    python check_retractions.py           # re-chequea retracciones (papers viejos pueden retractarse)
    ```
-   (Para conceptos: `--topic <slug>`, sin `fetch_ground_truth`.) **No** correr `fetch_ground_truth`
+   (Para conceptos: `python ingest_topic.py <slug>` — despacha según el `source` del tema, así un
+   refresh de un tema **off-ADS** procesa su `sources:` en vez de pegarle a ADS; equivale a la cadena
+   con `--topic` y sin `fetch_ground_truth`.) **No** correr `fetch_ground_truth`
    salvo que quieras refrescar NEA a propósito (`--force`) — NEA cambia entre releases y refrescarlo es
    una decisión, no un side-effect.
 2. **Identificar lo nuevo:** `git status` sobre `vault/wiki/papers/` muestra los stubs recién creados. Leer

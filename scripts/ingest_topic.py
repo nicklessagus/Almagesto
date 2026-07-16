@@ -78,6 +78,9 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
         if not CITEKEY_RE.match(key):
             sys.exit(f"key inválida en sources de '{slug}': {key!r}. Debe empezar con AAAA+letra "
                      "(clave de cita sintética, p. ej. 2000HyvarinenOja).")
+        if s.get("url") and s.get("pdf"):
+            sys.exit(f"{key}: item de sources con `url` Y `pdf` a la vez — ambiguo. Partilo en dos "
+                     "items (una clave por fuente/snapshot).")
         kind = "url" if s.get("url") else "pdf" if s.get("pdf") else None
         if kind is None:
             sys.exit(f"{key}: item de sources sin `url` ni `pdf` — no hay de dónde traer la fuente.")

@@ -92,7 +92,8 @@ descripción, o el usuario con `/<nombre>`). Encapsulan la cadena mecánica + el
 |---|---|---|
 | `setup` | "configurá la bóveda", "definí el objetivo" | Paso 0: traduce tu foco en palabras a `objective.yaml` (incluida la regex `relevance.topics`) y la **afina contra ADS con un preview** (`query_ads --probe`), para que NO escribas regex a mano. No ingesta. |
 | `ingest-star` | "bajá/ingestá/agregá la estrella X" | Corre la cadena (`query_ads → fetch_arxiv → fetch_ground_truth → make_notes → extract_fulltext`) y hace la extracción LLM de los papers clave + síntesis + bookkeeping. |
-| `ingest-topic` | "investigá a fondo el tema X" | Como ingest-star pero por TEMA: query ADS por keywords → concept durable en `concepts/`. |
+| `ingest-topic` | "investigá a fondo el tema X" | Como ingest-star pero por TEMA: query ADS por keywords → concept durable en `concepts/`. Soporta temas off-ADS (opt-in) vía `source: web\|local-pdfs` + `sources:` en `topics.yaml`. |
+| `append-knowledge` | "agregale este paper a la ficha X", "sumá este PDF al concept Y" | Pliega **una fuente puntual** (bibcode / PDF / URL) a una ficha/concepto **existente**: plomería mínima + extracción enfocada + síntesis a la nota viva. No crea entidades ni barre por query. |
 | `test-hypothesis` | "hipótesis: …", "evidencia a favor/contra de …" | Testea un supuesto **durable** contra el fulltext y responde con veredicto citado; **a pedido del usuario** lo archiva en `concepts/hypotheses/` y taggea papers (`thesis_links`/`bearing`). |
 | `query-corpus` | búsqueda/pregunta general (no hipótesis) | Responde contra índice + frontmatter + fulltext; archiva en `vault/wiki/queries/` **sólo si el usuario lo pide**. |
 | `verify-citations` | cierre de toda operación con prosa `[[bibcode]]` | Chequea, afirmación por afirmación, que la fuente respalde el claim (1 subagente/par lee el fulltext). |
@@ -142,13 +143,14 @@ python check_retractions.py         # Crossref → marca `retracted` en papers r
 python lint.py                      # chequeo de salud → outputs/lint-<fecha>.md (exit 1 si hay bloqueantes)
 ```
 
-Para TEMAS (en vez de estrellas): definir el tema en `vault/config/topics.yaml` y correr `query_ads.py
---topic <slug>` y `make_notes.py --topic <slug>`; `fetch_arxiv.py` y `extract_fulltext.py` corren igual
-(sin flag) y `fetch_ground_truth.py` se **saltea** (no hay NEA/SIMBAD para un tema). Para fuentes web
-off-ADS (opt-in) existe `fetch_web.py <slug> <clave> <url>`: snapshot web citable vía defuddle + stub de
-la nota de paper (ver skill `ingest-topic`). Luego: extracción LLM (leer PDFs/fulltext → poblar
-`methods`, indicadores, P/K, síntesis), actualizar `index.md` y appendear a `log.md`. Ver `CLAUDE.md`
-para las operaciones en detalle.
+Para TEMAS (en vez de estrellas): definir el tema en `vault/config/topics.yaml` y correr
+`python ingest_topic.py <slug>` — el orquestador despacha según el campo `source` de la entrada:
+`ads` (default) corre la cadena de arriba con `--topic` y **sin** `fetch_ground_truth` (no hay
+NEA/SIMBAD para un tema); `web` / `local-pdfs` (modo **off-ADS**, opt-in) procesa la bibliografía
+declarada en la lista `sources:` de la entrada — snapshots web citables vía `fetch_web.py` (defuddle)
+y PDFs locales copiados a la bóveda con clave `AAAA+Autor` (ver skill `ingest-topic`). Luego:
+extracción LLM (leer PDFs/fulltext → poblar `methods`, indicadores, P/K, síntesis), actualizar
+`index.md` y appendear a `log.md`. Ver `CLAUDE.md` para las operaciones en detalle.
 
 ## Verify — chequeo claim↔fuente
 
