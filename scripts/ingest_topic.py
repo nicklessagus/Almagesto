@@ -99,9 +99,14 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
             if dest.exists() and not force:
                 print(f"{key}: ya existe {dest} (usá --force para re-copiar)")
             elif not src.exists():
-                print(f"  ! {key}: no existe el PDF fuente {src} — item salteado")
-                fails += 1
-                continue
+                if dest.exists():
+                    # --force en una máquina sin la fuente externa (post-clone): la copia versionada
+                    # en la bóveda es la que vale — conservarla no es un fallo.
+                    print(f"  ⚠ {key}: no existe el PDF fuente {src}; conservo la copia de la bóveda ({dest})")
+                else:
+                    print(f"  ! {key}: no existe el PDF fuente {src} — item salteado")
+                    fails += 1
+                    continue
             else:
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src, dest)
