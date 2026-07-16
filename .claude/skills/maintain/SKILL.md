@@ -1,7 +1,7 @@
 ---
 name: maintain
 description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), y resolver el backlog del lint (huérfanos, P_rot faltante, drift PDF↔disco, claims stale).
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
@@ -9,6 +9,8 @@ version: 1.0.0
 Operación de **mantenimiento** del patrón LLM Wiki (las "operaciones de lint" de Karpathy: la wiki es
 viva y hay que cuidarla, no sólo poblarla). **No crea entidades** (para eso `ingest-star`/`ingest-topic`);
 opera sobre lo que **ya existe**. Elegir el sub-modo según el pedido. Trabajar desde la raíz del repo.
+(Si el pedido es plegar **una fuente puntual ya identificada** —un bibcode, un PDF, una URL— a una
+ficha/concepto, eso es `append-knowledge`, no un refresh: A barre por query lo nuevo.)
 
 **Invariante que rige todo:** la cadena de scripts es **idempotente** (no pisa). Refrescar es seguro;
 lo que **nunca** se pisa sin decisión explícita es la **extracción LLM** (`make_notes --force` la

@@ -236,6 +236,15 @@ la query, `stars.yaml`/`topics.yaml`). No ingesta nada; después se usan `ingest
 > stub de la nota de paper) para que sea citable/verificable. La **frontera dura sigue
 > rigiendo**: sólo bibliografía citable.
 
+### Append (plegar UNA fuente puntual a una entidad existente — skill `append-knowledge`)
+El usuario trae **una fuente concreta** (bibcode ADS, PDF local o URL) para una ficha/concepto que
+**ya existe**: plomería mínima según el tipo (bibcode → `extra_core` + cadena idempotente; off-ADS →
+item en `sources:` + `ingest_topic.py`, o las piezas sueltas `fetch_web`/`make_notes --web`),
+extracción enfocada en el eje del destino, síntesis a la nota viva (rige la regla de poda y
+`disputes[]`) y cierre estándar (autosuficiencia + verify-citations + lint + log). **No crea
+entidades** (eso es Ingest) **ni barre por query lo nuevo** (eso es Mantenimiento/refrescar); un dato
+suelto sin fuente citable no entra (regla #0). Detalle en el skill.
+
 ### Query / hipótesis (pregunta → respuesta; archivar SÓLO si el usuario lo pide)
 1. Para búsqueda general o test de hipótesis: `grep` sobre `vault/raw/fulltext/`, leé los hits, sintetizá
    con citas `[[bibcode]]` y **respondé en el chat**.
