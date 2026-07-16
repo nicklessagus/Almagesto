@@ -89,7 +89,18 @@ fórmulas de la fuente. La distinción es **publicado-y-citable (entra) vs imple
 (no entra)**, no "simulación sí/no".
 
 **Si detectás contaminación** (material de implementación que se coló en una nota): sacalo de `vault/wiki/`.
-Lo que no es bibliografía no vive acá — no queda ningún puntero a "otro repo". Marcalo en el `log`.
+Lo que no es bibliografía no vive acá. Marcalo en el `log`.
+
+**Punteros a otros repos — regla afinada (prosa no, frontmatter estructural sí):** lo prohibido es
+el puntero downstream **en prosa / como motivación** ("para qué sirve en <repo consumidor>", "esto
+decide X en <pipeline>") — eso es describir al consumidor y rompe el flujo unidireccional. En cambio,
+los **campos estructurales del frontmatter** de `stars/` —`data_local`, `methods_applied.ours`—
+**sí** pueden apuntar a rutas/experimentos externos: registran *qué datos hay* y *qué se les aplicó*,
+son parte del contrato máquina-legible de la ficha, no motivación. **Migración de una instancia con
+prosa downstream heredada** (regla vieja → estricta): (a) borrar de notas de método/queries los
+comentarios "para qué sirve en <downstream>" y la parte decisión-downstream de las disputas;
+(b) `data_local`, `methods_applied.ours` y `log.md` (bitácora histórica) se quedan; (c) los links a
+experimentos en la matriz método×estrella quedan a decisión de cada instancia.
 
 ## Arquitectura (analogía de compilador)
 
