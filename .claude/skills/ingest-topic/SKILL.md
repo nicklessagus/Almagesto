@@ -1,7 +1,7 @@
 ---
 name: ingest-topic
 description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema no-astro / fuera de ADS (desde PDFs locales + web; ver Modo off-ADS).
-version: 1.5.0
+version: 1.6.0
 ---
 
 # Ingest: agregar un TEMA a la wiki
@@ -45,7 +45,13 @@ del repo.
      a stubbear), `query` (la Solr cruda aprobada) y `aliases` opcional. Si el tema ya existía en el
      YAML, ofrecer reusar la query guardada o re-pulirla.
 
-2. **Cadena mecánica** (correr desde `scripts/`, en orden; **sin `fetch_ground_truth`**):
+2. **Cadena mecánica** — un solo comando (correr desde `scripts/`):
+   ```bash
+   python ingest_topic.py <slug>
+   ```
+   El orquestador despacha según el campo `source` de la entrada del tema (`ads` si falta) y en
+   modo ADS equivale a correr, en orden y **sin `fetch_ground_truth`** (todo idempotente — si algo
+   falla se re-corre, o se corre por partes):
    ```bash
    python query_ads.py   --topic <slug>
    python fetch_arxiv.py         <slug>
@@ -110,8 +116,14 @@ este modo. **`ingest-star` no cambia: sigue siendo astro-only.**
 
 Qué cambia respecto del flujo ADS de arriba:
 - **Sin ADS:** se saltean `query_ads.py`, `fetch_arxiv.py` y `fetch_ground_truth.py`. En
-  `vault/config/topics.yaml` la entrada lleva `query: null` y un campo `source: local-pdfs+web` (marcador); el
-  resto del schema del tema igual (`title`, `area`, `concept`, `aliases`).
+  `vault/config/topics.yaml` la entrada lleva `query: null`, el switch **`source: web | local-pdfs |
+  local-pdfs+web`** y la bibliografía **declarada** en la lista `sources:` (cada item: `key`
+  AAAA+Autor + `url` o `pdf` + `title/author/year/venue` opcionales; ver header del YAML); el resto
+  del schema igual (`title`, `area`, `concept`, `aliases`). Con eso, **el mismo comando del paso 2**
+  (`python ingest_topic.py <slug>`) orquesta todo: stub del concept, `fetch_web.py` por cada `url`,
+  copia de cada `pdf` a `vault/raw/pdfs/<slug>/<key>.pdf` (nota con el campo `pdf` ya linkeado) y
+  `extract_fulltext.py`. `--force` re-baja/re-copia **fuentes**, nunca pisa notas. Los bullets de
+  abajo documentan las piezas por si hay que correr algo a mano.
 - **Fuente = PDFs locales y/o web:**
   - **PDFs** que provee el usuario → copiarlos a `vault/raw/pdfs/<slug>/` (git-lfs) renombrados a la **clave de
     cita** (abajo); `python extract_fulltext.py <slug>` los pasa a `vault/raw/fulltext/<slug>/` (es

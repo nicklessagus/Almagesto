@@ -13,6 +13,16 @@
 #   extra_core : opcional, lista de bibcodes a forzar como core (curación manual que el clasificador
 #                perdió). query_ads los trae por bibcode (`via: manual`) y los mergea. Persistente
 #                (config se commitea), a diferencia de editar build/ (scratch, se pisa).
+#   source   : de dónde sale la bibliografía (default si falta: ads). Valores:
+#              ads | web | local-pdfs | local-pdfs+web. Todo lo no-ads es el modo off-ADS de
+#              ingest-topic (opt-in, sólo a pedido explícito) y requiere `sources:` y `query: null`.
+#   sources  : (sólo off-ADS) la bibliografía declarada del tema. Cada item:
+#                - key: 2000HyvarinenOja       # clave de cita sintética AAAA+Autor (obligatoria)
+#                  url: https://...            # fuente web (snapshot vía fetch_web/defuddle) — o bien
+#                  pdf: ~/ruta/al/archivo.pdf  # PDF provisto (se copia a raw/pdfs/<slug>/<key>.pdf)
+#                  title/author/year/venue     # opcionales: metadata para la nota de paper
+#
+# La cadena mecánica se corre con `python scripts/ingest_topic.py <slug>` (despacha según `source`).
 #
 # Agregá tus temas acá (o dejá que `ingest-topic` los agregue). Ejemplo comentado:
 #
@@ -22,3 +32,24 @@
 #   concept: activity-rv-degeneracy
 #   query: '(abs:"radial velocity" OR abs:"radial-velocity") (abs:"planet" OR abs:"exoplanet") (abs:"bisector" OR abs:"FWHM" OR abs:"S-index" OR abs:"activity indicator" OR abs:"chromospheric")'
 #   aliases: ["BIS-RV", "indicadores de actividad"]
+#
+# Ejemplo off-ADS (tema no-astro; ver Modo off-ADS del skill ingest-topic):
+#
+# fastica:
+#   title: "FastICA & Icasso (ICA: algoritmo y estabilidad)"
+#   area: methods
+#   concept: fastica_icasso
+#   query: null
+#   source: local-pdfs+web
+#   aliases: ["ICA", "independent component analysis"]
+#   sources:
+#     - key: 2000HyvarinenOja
+#       pdf: ~/Descargas/hyvarinen_oja_2000.pdf
+#       title: "Independent Component Analysis: Algorithms and Applications"
+#       author: Hyvärinen
+#       year: 2000
+#     - key: 2025sklearn
+#       url: https://scikit-learn.org/stable/modules/decomposition.html
+#       title: "scikit-learn User Guide: Decomposing signals (ICA)"
+#       venue: scikit-learn.org
+#       year: 2025

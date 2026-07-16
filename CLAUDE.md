@@ -227,8 +227,10 @@ la query, `stars.yaml`/`topics.yaml`). No ingesta nada; después se usan `ingest
 > **ADS** (plomería astro: ADS/arXiv/NEA). Almagesto es astro por estructura, pero si el usuario pide
 > **explícitamente** un tema **no-astro** o cuya bibliografía vive **fuera de ADS** (p. ej. un método
 > matemático general: ICA, signal processing), el skill `ingest-topic` lo soporta en su **modo off-ADS**
-> (fuente = PDFs locales + web; sin `query_ads`/`fetch_ground_truth`). **`ingest-star` no cambia: es
-> astro-only.** Papers sin bibcode ADS → **clave de cita sintética `AAAA+Autor`** (debe empezar con
+> (fuente = PDFs locales + web; sin `query_ads`/`fetch_ground_truth`). Formalizado en el tooling: la
+> entrada del tema en `topics.yaml` lleva `source: ads | web | local-pdfs [+web]` y (si es off-ADS) la
+> lista `sources:`; `scripts/ingest_topic.py <slug>` orquesta la cadena según ese campo — también en
+> modo ads. **`ingest-star` no cambia: es astro-only.** Papers sin bibcode ADS → **clave de cita sintética `AAAA+Autor`** (debe empezar con
 > `AAAA`+letra para el lint; el `.txt` en `vault/raw/fulltext/` se llama igual). Páginas web → **snapshot
 > `.txt` determinista** (URL + fecha; lo genera `scripts/fetch_web.py` vía defuddle y crea además el
 > stub de la nota de paper) para que sea citable/verificable. La **frontera dura sigue

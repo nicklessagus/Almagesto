@@ -345,7 +345,9 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
     """Stub de nota de paper para una fuente **off-ADS** (web o PDF sin bibcode ADS) — modo off-ADS de
     ingest-topic. Análogo a write_paper_notes pero **sin ads.json**: la metadata la provee quien llama
     (fetch_web.py o el usuario). `bibcode` = clave sintética AAAA+Autor; `arxiv_id`/`doi` null;
-    `pdf: null` (el respaldo citable es el snapshot `.txt` de fulltext/, no un PDF de arXiv);
+    `pdf` normalmente null (el respaldo citable es el snapshot `.txt` de fulltext/) — salvo que el
+    PDF off-ADS ya esté copiado en raw/pdfs/<slug>/<citekey>.pdf (fuente local-pdfs, lo hace
+    ingest_topic.py), en cuyo caso se linkea solo (así el chequeo PDF↔disco del lint no marca drift);
     `thesis_links` pre-sembrado al concept. Para fuentes web, `source_url` + `accessed` son la
     provenance bibliográfica (el "Retrieved <fecha>" de una cita web); `accessed` = la fecha del
     snapshot (la pasa fetch_web.py; si es web y no se pasó, default = hoy UTC). Idempotente: NO pisa
@@ -358,6 +360,10 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
     bibstem = venue or (urlparse(url).netloc if url else None)   # venue: dominio web por default
     if accessed is None and url:                                 # fuente web sin fecha explícita → hoy
         accessed = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    # PDF↔disco: si el PDF off-ADS ya está copiado a raw/pdfs/<slug>/, linkearlo (verdad de disco)
+    pdf_rel = None
+    if slug and (cfg.PDFS / slug / f"{safe_name(citekey)}.pdf").exists():
+        pdf_rel = f"../../raw/pdfs/{slug}/{safe_name(citekey)}.pdf"
     front = {
         "bibcode": citekey,
         "title": title,
@@ -376,7 +382,7 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
         "bearing": None,                     # supports | challenges | method
         "relevance": "high",
         "citation_count": 0,
-        "pdf": None,                         # off-ADS: la fuente es el snapshot .txt, no un PDF de arXiv
+        "pdf": pdf_rel,                      # off-ADS: null salvo PDF local ya copiado a raw/pdfs/<slug>/
         "confidence": "medium",
         "tags": ["paper", "web"],            # `web`: marca fuente off-ADS (findability)
         "generator": f"Almagesto v{cfg.ALMAGESTO_VERSION}",   # provenance
