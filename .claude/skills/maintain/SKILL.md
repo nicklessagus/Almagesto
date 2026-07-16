@@ -87,8 +87,9 @@ Pasada de higiene sobre lo que `lint.py` marca como backlog/WARN (no bloqueante,
 - **Cobertura** (concepto/hipótesis sin ninguna cita) → agregar las citas que faltan.
 - **Fuentes pendientes** (`pending_source`) → conseguir el PDF/fuente (el lint lista el puntero
   doi/url), reemplazar `pending` por `pdf:`/`url:` en `sources:` y re-correr la cadena.
-- **Fulltext ilegible** (mojibake/escaneo) → reemplazar el PDF por uno con capa de texto sana o
-  re-extraer por OCR; si no se consigue, marcar la fuente `pending`.
+- **Fulltext ilegible** (mojibake/escaneo) → instalar `tesseract-ocr` y re-correr
+  `extract_fulltext.py <slug>` (upgradea solo el .txt ilegible vía OCR), o reemplazar el PDF por
+  uno con capa de texto sana; si no se consigue, marcar la fuente `pending`.
 - **Fuga de implementación** (WARN) → revisar el hit; si es material de código no bibliográfico,
   sacarlo del vault (frontera dura).
 - **Claims stale** → re-verificar contra la fuente los que quedaron dudosos.

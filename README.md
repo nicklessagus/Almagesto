@@ -41,7 +41,11 @@ echo "TU_TOKEN" > vault/config/ads_dev_key  # token ADS (gratis, gitignored) —
 > necesitás `pdftotext` (paquete *poppler*), según tu OS: Debian/Ubuntu `sudo apt install poppler-utils` ·
 > macOS `brew install poppler` · Fedora `sudo dnf install poppler-utils` · Windows
 > `conda install -c conda-forge poppler` — y **git-lfs** (`sudo apt install git-lfs` · `brew install
-> git-lfs`; luego el `git lfs install` de arriba, una vez por máquina). Ninguno de los dos hace falta
+> git-lfs`; luego el `git lfs install` de arriba, una vez por máquina). **Opcional:** `tesseract-ocr`
+> (`sudo apt install tesseract-ocr` · `brew install tesseract`) para rescatar por **OCR** PDFs
+> escaneados o con fuentes rotas (mojibake) — con tesseract instalado, `extract_fulltext.py` cae solo
+> a OCR cuando la capa de texto no es legible, y el `.txt` queda marcado `source: ocr` (citable con
+> salvedad: símbolos/notación pueden diferir). Ninguno de estos hace falta
 > para consultar una bóveda ya poblada (el fulltext se commitea). En Windows, los comandos de shell de
 > acá corren en Git Bash o WSL.
 

@@ -17,13 +17,20 @@ plenamente respaldadas). Acá cada afirmación se contrasta contra el texto real
 > archivo leer. El chequeo es directo passage-matching.
 >
 > **El fulltext es una extracción DETERMINISTA** de la capa de texto del PDF (`pdftotext -layout`,
-> sin LLM ni OCR). Por eso la **cita textual que encuentra el verificador son las palabras reales del
+> sin LLM). Por eso la **cita textual que encuentra el verificador son las palabras reales del
 > paper** y el nº de línea es un localizador greppable estable. **Caveats:** `pdftotext` puede
 > desordenar doble-columna, ecuaciones, tablas, ligaduras y guionado; y un PDF **escaneado sin capa de
 > texto** da `.txt` vacío/basura. Por eso: si una afirmación **no** aparece textual en el `.txt`, antes
 > de declararla `no-soportada` considerar que puede ser un **artefacto de extracción** (ecuación/tabla)
 > → en ese caso abrir el **PDF** (`vault/raw/pdfs/<slug>/<bibcode>.pdf`) para esa afirmación puntual, o
 > marcarla **`no verificable por extracción`** (distinto de `no-soportada`).
+>
+> **Excepción OCR — citable con salvedad:** si el `.txt` abre con el header `# Almagesto — fulltext
+> por OCR` (`source: ocr`), vino de tesseract (PDF escaneado o con fuentes sin ToUnicode que
+> `pdftotext` no pudo leer; lo estampa `extract_fulltext.py`). Sigue siendo determinista y citable,
+> pero el OCR puede errar **símbolos, ligaduras y notación matemática**: la verificación vale para
+> **prosa**; ante una discrepancia puntual de símbolos/números en una ecuación, abrir el **PDF** para
+> esa afirmación en vez de declararla `no-soportada`/`contradice`.
 
 ## Cuándo correrlo
 - **Paso de cierre obligatorio** de `query-corpus` y `test-hypothesis`, **antes de archivar/commitear**.

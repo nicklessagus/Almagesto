@@ -275,7 +275,10 @@ memoria) y devuelve `soportada|parcial|no-soportada|contradice` + **cita textual
 a lo que dice la fuente, reasignar la cita al bibcode correcto, marcar **`inferencia`**, o taguear la
 disputa) y se deja un bloque `## Verificación de citas` en la nota. El `.txt` es extracción **determinista** (`pdftotext`), así que
 la cita son las palabras reales del paper; si una afirmación no aparece (artefacto de extracción:
-ecuación/tabla/escaneo) abrir el PDF o marcar `no verificable por extracción`. Es **juicio de LLM**,
+ecuación/tabla/escaneo) abrir el PDF o marcar `no verificable por extracción`. Un `.txt` con header
+`source: ocr` (rescatado por tesseract cuando la capa de texto era ilegible) es **citable con
+salvedad**: el OCR puede errar símbolos/notación — la verificación vale para prosa; ante discrepancia
+de símbolos, abrir el PDF. Es **juicio de LLM**,
 robusto pero no prueba. **Regla dura — todo lo apuntable es chequeable:** toda afirmación fáctica va
 **citada `[[bibcode]]` o marcada `inferencia`** — nada sin respaldo. Excepción: los **valores de
 ground-truth (NEA)** en `stars/` (P/K/e/m·sini) no se verifican contra papers (su consistencia la
