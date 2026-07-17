@@ -15,7 +15,8 @@ usa acá como *fallback* para papers sin DOI). Un `erratum`/`corrigendum`/`expre
 retracta pero se anota como aviso blando.
 
 Efecto: estampa en el frontmatter de la nota `retracted: true` + `retraction: {...}` (idempotente:
-sólo reescribe notas cuyo estado cambió). El flag **viaja en git**, así que un clon ve la retracción
+sólo reescribe notas cuyo estado cambió; edición quirúrgica del texto — no re-serializa el YAML,
+preserva comentarios/orden de la extracción LLM). El flag **viaja en git**, así que un clon ve la retracción
 sin re-consultar, y `lint.py` la surface offline como categoría bloqueante. Parte de RED (como los
 `fetch_*`), separada del lint offline: correr periódicamente y al ingestar.
 
@@ -72,9 +73,33 @@ def split_note(text: str) -> tuple[dict | None, str]:
         return None, text
 
 
-def restamp(path, fm: dict, body: str) -> None:
-    dumped = yaml.safe_dump(fm, sort_keys=False, allow_unicode=True, default_flow_style=False)
-    path.write_text(f"---\n{dumped}---{body}", encoding="utf-8")
+def stamp_retraction(path, fm: dict, body: str, retraction: dict) -> None:
+    """Estampa `retracted: true` + `retraction{...}` editando el TEXTO del frontmatter
+    (como merge_frontmatter_list de make_notes): NO re-serializa el YAML completo →
+    preserva byte a byte comentarios/orden que haya dejado la extracción LLM. Si la nota
+    ya traía un bloque retraction (re-chequeo con --force), lo reemplaza. Fallback (nota
+    sin estructura `---\\n…\\n---\\n`): re-serializa el frontmatter parseado."""
+    text = path.read_text(encoding="utf-8")
+    end = text.find("\n---\n", 4)
+    if text.startswith("---\n") and end > 0:
+        out, in_retraction = [], False
+        for ln in text[4:end].split("\n"):
+            if in_retraction and ln[:1] in (" ", "\t"):
+                continue                       # items del bloque retraction viejo
+            in_retraction = False
+            if ln.startswith("retracted:"):
+                continue
+            if ln.startswith("retraction:"):
+                in_retraction = True
+                continue
+            out.append(ln)
+        block = yaml.safe_dump({"retracted": True, "retraction": retraction}, sort_keys=False,
+                               allow_unicode=True, default_flow_style=False).rstrip("\n")
+        path.write_text("---\n" + "\n".join(out + [block]) + text[end:], encoding="utf-8")
+    else:
+        dumped = yaml.safe_dump({**fm, "retracted": True, "retraction": retraction},
+                                sort_keys=False, allow_unicode=True, default_flow_style=False)
+        path.write_text(f"---\n{dumped}---{body}", encoding="utf-8")
 
 
 def crossref_retraction(doi: str, headers: dict) -> tuple[dict | None, list]:
@@ -150,7 +175,11 @@ def main() -> int:
             print(f"  ! no existe {note.name}")
             continue
         fm, body = split_note(note.read_text(encoding="utf-8"))
-        if fm is None or "paper" not in (fm.get("tags") or []):
+        if fm is None:
+            print(f"  ⚠ {note.name}: sin frontmatter parseable — no chequeable "
+                  "(arreglá el YAML; el lint lo marca)")
+            continue
+        if "paper" not in (fm.get("tags") or []):
             continue
         if fm.get("retracted") and not args.force:
             found.append((fm.get("bibcode") or note.stem, "ya marcado"))
@@ -167,9 +196,7 @@ def main() -> int:
         if soft:
             print(f"  · {fm.get('bibcode') or note.stem}: corrección no-retractante ({', '.join(soft)})")
         if retraction:
-            fm["retracted"] = True
-            fm["retraction"] = retraction
-            restamp(note, fm, body)
+            stamp_retraction(note, fm, body, retraction)
             marked += 1
             found.append((fm.get("bibcode") or note.stem,
                           f"{retraction['type']} ({retraction.get('date') or 's/f'})"))

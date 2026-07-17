@@ -306,7 +306,9 @@ explícito. Detalle en el skill.
 ### Lint (chequeo de salud)
 **Cuándo:** como **paso de cierre de toda operación que escriba en `vault/wiki/`** (ingest / query archivada
 / test de hipótesis), **antes de commitear**; más una pasada completa periódica. Es barato.
-Correr `python scripts/lint.py`: debe quedar en **0** para wikilinks rotos, **papers retractados**
+Correr `python scripts/lint.py`: debe quedar en **0** para wikilinks rotos, **frontmatter no
+parseable** (nota que empieza con `---` pero cuyo YAML no parsea —p. ej. un `title:` con `:` sin
+comillas editado a mano—: evade en silencio los chequeos de su tipo), **papers retractados**
 (flag `retracted`; lo detecta `scripts/check_retractions.py` vía Crossref —red, correr al ingestar y
 periódicamente— y el lint lo surface offline: una fuente retractada citada rompe la frontera dura),
 páginas huérfanas,

@@ -156,6 +156,10 @@ y PDFs locales copiados a la bóveda con clave `AAAA+Autor` (ver skill `ingest-t
 extracción LLM (leer PDFs/fulltext → poblar `methods`, indicadores, P/K, síntesis), actualizar
 `index.md` y appendear a `log.md`. Ver `CLAUDE.md` para las operaciones en detalle.
 
+Los scripts tienen su **suite de tests** en `tests/` (pytest; sin red ni binarios externos —
+todo mockeado; corre en CI junto al lint). Diseño y alcance en `tests/README.md`; correr con
+`python -m pytest tests/ -q` desde la raíz.
+
 ## Verify — chequeo claim↔fuente
 
 Extensión propia de este template (el lint de Karpathy sólo valida salud estructural, no que la fuente

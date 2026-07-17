@@ -3,7 +3,9 @@
 Uso:
     python lint.py            # imprime resumen y escribe outputs/lint-<fecha>.md
 
-Detecta: wikilinks rotos (página faltante), **papers retractados** (flag `retracted` que estampa
+Detecta: wikilinks rotos (página faltante), **frontmatter no parseable** (nota que empieza con
+`---` pero cuyo YAML no parsea → evade en silencio los chequeos de su tipo; bloqueante),
+**papers retractados** (flag `retracted` que estampa
 `check_retractions.py` vía Crossref → acá se surface offline; bloqueante), notas huérfanas (sin links entrantes),
 contradicciones ground-truth ↔ ficha, **masa de ground-truth inconsistente** con la
 m·sini implícita por K/P/e/M* (atrapa best-mass espurias de NEA), `thesis_links` sin
@@ -24,7 +26,8 @@ SIN bloque `## Verificación de citas` → nunca pasó por verify-citations; bac
 incompletos (P_rot null, papers relevantes sin `methods`, `thesis_links` sin `bearing`).
 No modifica nada: reporta para que el agente/usuario decida.
 
-Exit code: 1 si alguna categoría BLOQUEANTE tiene hits (wikilinks rotos, huérfanas, contradicciones
+Exit code: 1 si alguna categoría BLOQUEANTE tiene hits (wikilinks rotos, frontmatter no parseable,
+huérfanas, contradicciones
 GT↔ficha, masa inconsistente, thesis_links/disputes colgantes — las que CLAUDE.md exige "en 0");
 0 si sólo hay WARN/backlog. Gateable en pre-commit/CI.
 """
@@ -65,6 +68,25 @@ def split_fm(text: str) -> dict:
         return yaml.safe_load(parts[1]) or {}
     except Exception:
         return {}
+
+
+def fm_error(text: str) -> str | None:
+    """Nota que EMPIEZA con `---` pero cuyo frontmatter no parsea (YAML roto — p. ej. un
+    `title: RETRACTED: x` editado a mano sin comillas — o sin cierre `---`). split_fm devuelve
+    {} y la nota EVADE en silencio todos los chequeos de su tipo (paper/star/concept), y
+    check_retractions la saltea: peor que fallar. Devuelve el motivo, o None si está sana
+    o no tiene frontmatter (index/log son prosa plana, legítimo)."""
+    if not text.startswith("---"):
+        return None
+    parts = text.split("---")
+    if len(parts) < 3:
+        return "frontmatter sin cierre `---`"
+    try:
+        yaml.safe_load(parts[1])
+    except Exception as e:
+        first = (str(e).splitlines() or [e.__class__.__name__])[0]
+        return f"YAML inválido: {first[:80]}"
+    return None
 
 
 def basename(p: str) -> str:
@@ -109,6 +131,7 @@ def main() -> int:
     incoming: dict[str, int] = {n: 0 for n in names}
     kinds: dict[str, list] = {}
     broken, incomplete, contradictions = [], [], []
+    fm_broken: list = []               # (stem, motivo) — frontmatter no parseable (evade chequeos)
     retracted: list = []               # (stem, "<tipo> <fecha>") — papers marcados retracted (check_retractions)
     pending_srcs: list = []            # (stem, "<motivo> — puntero") — fuentes derivadas al usuario
     impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
@@ -123,6 +146,9 @@ def main() -> int:
         fm = split_fm(text)
         stem = basename(f)[:-3]
         kinds[stem] = fm.get("tags", []) or []
+        err = fm_error(text)
+        if err:
+            fm_broken.append((stem, err))
         # links salientes (las refs de diseño tienen links-ejemplo: no contar sus salientes)
         if f.startswith(refs_dir):
             continue
@@ -276,6 +302,7 @@ def main() -> int:
     # reporte
     lines = [f"# Lint de la bóveda — {dt.date.today().isoformat()}", ""]
     for title, items in [("Wikilinks rotos (página faltante)", broken),
+                         ("⛔ Frontmatter no parseable (la nota evade los chequeos de su tipo)", fm_broken),
                          ("⛔ Papers RETRACTADOS citados (frontera dura: fuente no válida)", retracted),
                          ("Notas huérfanas (sin links entrantes)", [(o, "") for o in orphans]),
                          ("Contradicciones ground-truth ↔ ficha", contradictions),
@@ -305,8 +332,8 @@ def main() -> int:
     print(f"→ {out}")
     # Exit code gateable: las categorías que CLAUDE.md exige "en 0" bloquean; WARN (fuga de
     # implementación, áreas, PDF↔disco) y backlog (verificabilidad, cobertura, incompletos) no.
-    n_block = sum(len(x) for x in (broken, retracted, orphans, contradictions, mass_issues,
-                                   dangling_thesis, dangling_disputes))
+    n_block = sum(len(x) for x in (broken, fm_broken, retracted, orphans, contradictions,
+                                   mass_issues, dangling_thesis, dangling_disputes))
     if n_block:
         print(f"✗ {n_block} hallazgo(s) en categorías bloqueantes → exit 1")
         return 1

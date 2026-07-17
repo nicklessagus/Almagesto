@@ -27,3 +27,17 @@ jobs:
         run: pip install pyyaml
       - name: Lint de la bóveda
         run: python scripts/lint.py
+
+  # Suite de tests de la capa determinista (scripts/): sin red ni binarios externos —
+  # todo mockeado (ver tests/README.md). astroquery no hace falta (se fakea vía sys.modules).
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar deps de la suite
+        run: pip install pyyaml requests numpy pytest
+      - name: Tests de scripts/
+        run: python -m pytest tests/ -q

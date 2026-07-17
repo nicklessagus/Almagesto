@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from urllib.parse import quote, urlparse
@@ -33,6 +34,30 @@ def fm(d: dict) -> str:
 
 def safe_name(bibcode: str) -> str:
     return bibcode.replace("/", "_")
+
+
+def parse_year(year) -> int | None:
+    """Año tolerante para metadata off-ADS (provista a mano): acepta int, '2020', '2020a'
+    (→ 2020); un valor sin año reconocible ('in press') queda null con aviso — la metadata
+    de una fuente nunca aborta la cadena."""
+    if year in (None, ""):
+        return None
+    m = re.search(r"(?<!\d)(\d{4})(?!\d)", str(year))   # 4 dígitos no rodeados de dígitos ('2020a' → 2020)
+    if m:
+        return int(m.group(1))
+    print(f"  ⚠ year no numérico: {year!r} → queda null (completalo a mano en la nota si aplica)")
+    return None
+
+
+def parse_int(value, field: str) -> int | None:
+    """Entero tolerante para metadata off-ADS: no numérico → null con aviso, no aborta."""
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        print(f"  ⚠ {field} no numérico: {value!r} → queda null")
+        return None
 
 
 def merge_frontmatter_list(dest, field: str, values: list) -> bool:
@@ -414,8 +439,8 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
         "bibcode": citekey,
         "title": title,
         "first_author": first_author,
-        "n_authors": int(n_authors) if n_authors else None,
-        "year": int(year) if year else None,
+        "n_authors": parse_int(n_authors, "n_authors"),
+        "year": parse_year(year),
         "arxiv_id": None,
         "doi": doi,                  # un PDF con DOI sigue siendo off-ADS (sin bibcode ADS)
         "source_url": url,           # fuente web off-ADS (provenance); null para fuente PDF

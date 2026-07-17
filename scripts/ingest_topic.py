@@ -119,7 +119,6 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
                 fails += 1
                 failed_items.append((key, s["url"]))
         else:
-            n_pdf += 1
             dest = cfg.PDFS / slug / f"{make_notes.safe_name(key)}.pdf"
             src = Path(s["pdf"]).expanduser()
             if dest.exists() and not force:
@@ -138,14 +137,17 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src, dest)
                 print(f"{key}: {src.name} → {dest}")
+            n_pdf += 1     # sólo cuenta PDFs presentes en disco (un item fallido no dispara extract)
             # stub de nota (idempotente; detecta solo el PDF copiado y linkea el campo `pdf`)
             make_notes.write_web_paper_note(key, slug=slug, concept=concept,
                                             title=s.get("title"), first_author=s.get("author"),
                                             year=s.get("year"), n_authors=s.get("n_authors"),
                                             doi=s.get("doi"), venue=s.get("venue"))
+    extract_rc = 0
     if n_pdf:
-        rc = run("extract_fulltext.py", slug, *(["--force"] if force else []))
-        fails += 1 if rc else 0
+        # el rc de extract se reporta aparte: un fallo de extracción NO es una "fuente fallida"
+        # (contarlo ahí inflaba el conteo del aviso final)
+        extract_rc = run("extract_fulltext.py", slug, *(["--force"] if force else []))
     # Aviso claro al operador (issue #7): qué fuentes faltan y con qué puntero, para que el
     # usuario las provea. Las pendientes NO son fallos (la cadena degrada limpio y sigue).
     if pending_items:
@@ -161,6 +163,9 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
             print(f"  - {key} → {ptr}")
     if fails:
         sys.exit(f"{fails} fuente(s) fallaron — revisá arriba y re-corré (idempotente).")
+    if extract_rc:
+        sys.exit(f"extract_fulltext.py falló (rc={extract_rc}) — corregí y re-corré "
+                 "(idempotente: los PDFs ya copiados no se re-copian).")
     # off-ADS no tiene bibcode ADS, pero un DOI declarado en sources alcanza para el chequeo de
     # retracciones (Crossref) — una fuente retractada silenciosa rompe la frontera dura igual.
     if any(s.get("doi") for s in sources):
