@@ -234,7 +234,10 @@ sola, sin el resto del pack ni la ruta MCP.
    payoff sólo con la bóveda ya grande. **Re-evaluar cuando** (a) el repo declare una licencia
    permisiva (hoy el bloqueante) — chequear `github.com/tingyuansen/astro-ph_knowledge_graph/LICENSE
    periódicamente — o (b) la bóveda alcance volumen y el drift taxonómico se vuelva medible. Hasta
-   entonces no se implementa.
+   entonces no se implementa. **Re-chequeado 2026-07-17: sigue sin licencia** — GitHub API
+   `license: null` (sin archivo LICENSE); el `## License` del README sólo lista las licencias de las
+   FUENTES agregadas (arXiv non-exclusive, ADS) y pide respetarlas, **sin grant propio del dataset**;
+   último push del repo 2025-11-15 (nada cambió desde la evaluación de 2026-07-03).
 6. ✅ **HECHO (2026-07-03)** — **Skill de mantenimiento** `maintain` (v1.0.0): opera sobre entidades
    **ya ingestadas** — refrescar (papers nuevos → re-sintetizar sólo lo nuevo), borrar (nota + PDF +
    reparar colgados), renombrar slug, re-clasificar tras cambiar `relevance.topics`, y resolver el
