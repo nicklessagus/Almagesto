@@ -318,7 +318,11 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
                 skipped += 1
             continue
         authors = r.get("authors", [])
-        pdf_rel = f"../../raw/pdfs/{slug}/{safe_name(bib)}.pdf" if r.get("arxiv_id") else None
+        # PDF ↔ disco (verdad de disco, como en off-ADS): linkear sólo el PDF realmente bajado
+        # (fetch_arxiv/fetch_pdf ya corrieron en la cadena) — no adivinar por arxiv_id, que
+        # dejaba punteros a archivos inexistentes cuando la bajada fallaba.
+        pdf_rel = (f"../../raw/pdfs/{slug}/{safe_name(bib)}.pdf"
+                   if (cfg.PDFS / slug / f"{safe_name(bib)}.pdf").exists() else None)
         front = {
             "bibcode": bib,
             "title": r.get("title"),

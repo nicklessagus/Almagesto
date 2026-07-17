@@ -61,10 +61,11 @@ def test_source_invalido(toy_vault, fake_run, monkeypatch):
 def test_cadena_ads_en_orden(toy_vault, fake_run, fake_notes, monkeypatch):
     topic()                                          # sin source → ads
     assert run_main(monkeypatch) == 0
-    assert [c[0] for c in fake_run.calls] == ["query_ads.py", "fetch_arxiv.py", "make_notes.py",
-                                              "extract_fulltext.py", "check_retractions.py"]
+    assert [c[0] for c in fake_run.calls] == ["query_ads.py", "fetch_arxiv.py", "fetch_pdf.py",
+                                              "make_notes.py", "extract_fulltext.py",
+                                              "check_retractions.py"]
     assert fake_run.calls[0] == ("query_ads.py", "--topic", "ica")
-    assert fake_run.calls[2] == ("make_notes.py", "--topic", "ica")
+    assert fake_run.calls[3] == ("make_notes.py", "--topic", "ica")
 
 
 def test_cadena_ads_aborta_al_primer_fallo(toy_vault, fake_run, monkeypatch):

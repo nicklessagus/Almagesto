@@ -235,6 +235,10 @@ def test_paper_notes_estrella(toy_vault):
     ads_json([rec("2020conA...1..1A", arxiv="2101.00001"),
               rec("1990preB....1..1B"),
               rec("2020nonC....1..1C", relevant=False)])
+    # verdad de disco: sólo el PDF realmente bajado se linkea (la cadena corre fetch_* antes)
+    pdf_dir = toy_vault.PDFS / "test_star"
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    (pdf_dir / "2020conA...1..1A.pdf").write_bytes(b"%PDF")
     mn.write_paper_notes("test_star", include_all=False, force=False)
     assert not (toy_vault.PAPERS / "2020nonC....1..1C.md").exists()
     fm_a = read_fm(toy_vault.PAPERS / "2020conA...1..1A.md")
@@ -243,6 +247,20 @@ def test_paper_notes_estrella(toy_vault):
     assert fm_a["pdf"] == "../../raw/pdfs/test_star/2020conA...1..1A.pdf"
     assert fm_a["first_author"] == "Ana Pérez" and fm_a["n_authors"] == 2
     assert read_fm(toy_vault.PAPERS / "1990preB....1..1B.md")["pdf"] is None
+
+
+def test_paper_notes_pdf_es_verdad_de_disco(toy_vault):
+    """Con arXiv pero SIN el PDF bajado → pdf null (antes quedaba un puntero roto que el
+    lint marcaba 'apunta a archivo inexistente'); sin arXiv pero CON PDF (fetch_pdf) → linkeado."""
+    ads_json([rec("2020conA...1..1A", arxiv="2101.00001"),
+              rec("1978oldW...1..1W")])
+    pdf_dir = toy_vault.PDFS / "test_star"
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    (pdf_dir / "1978oldW...1..1W.pdf").write_bytes(b"%PDF")     # bajado por fetch_pdf
+    mn.write_paper_notes("test_star", include_all=False, force=False)
+    assert read_fm(toy_vault.PAPERS / "2020conA...1..1A.md")["pdf"] is None
+    assert read_fm(toy_vault.PAPERS / "1978oldW...1..1W.md")["pdf"] \
+        == "../../raw/pdfs/test_star/1978oldW...1..1W.pdf"
 
 
 def test_paper_notes_all_incluye_no_core(toy_vault):

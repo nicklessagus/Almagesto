@@ -60,7 +60,7 @@ nomenclatura no tiene a qué adaptarse; el check sin la nomenclatura no tiene co
 - Pendiente de decidir (al hacer la capa 2): ¿el skill de setup **reemplaza** el flujo "editá
   `objective.yaml`" del README o lo **complementa**? (lean: complementa).
 
-## Backlog de framework — obtención de PDFs (papers viejos / no-arXiv)
+## ✅ Backlog de framework (RESUELTO 2026-07-17) — obtención de PDFs (papers viejos / no-arXiv)
 
 > Surgido al usar la bóveda (2026-06-29): papers **pre-arXiv / viejos** no están en arXiv, así que
 > `fetch_arxiv.py` no los baja; hubo que recurrir a workarounds manuales para conseguir el PDF.
@@ -69,9 +69,16 @@ nomenclatura no tiene a qué adaptarse; el check sin la nomenclatura no tiene co
 > escaneos ya están en el framework — fuentes no-conseguibles se marcan `pending`
 > (`pending_source` en la nota, aviso del orquestador, precondición en el lint, des-pendeo
 > automático al llegar la fuente) y `extract_fulltext.py` cae solo a **OCR** (tesseract) cuando la
-> capa de texto es ilegible (`.txt` con `source: ocr`, citable con salvedad). **Sigue pendiente**
-> de esta sección sólo el fetcher determinista vía `esources`/resolver de ADS (parcialmente
-> bloqueado por paywall/captcha, ver hallazgos abajo).
+> capa de texto es ilegible (`.txt` con `source: ocr`, citable con salvedad).
+
+> **Update 2026-07-17: fetcher HECHO — `scripts/fetch_pdf.py` cierra la sección.** Corre en la
+> cadena (`ingest-star` / `ingest_topic --ads`, tras `fetch_arxiv`) para los papers SIN arXiv:
+> resolver `esource` → `EPRINT_PDF`/`ADS_PDF` (con token) → `PUB_PDF` (sin token; fallback al
+> mismo pedido con `curl` del sistema — los WAF tipo Radware/IOP desafían el fingerprint de
+> python-requests pero aceptan curl). Valida magic `%PDF`, retry/backoff, deja el residuo en
+> `missing_pdf.json`. Smoke real 3/3: Wilson 78 y Noyes 84 por ADS_PDF, Saar 99 por PUB_PDF
+> vía curl. Bonus: `make_notes` ahora estampa `pdf:` por **verdad de disco** (antes adivinaba
+> por `arxiv_id` y dejaba punteros rotos si la bajada fallaba).
 
 **Problema.** `fetch_arxiv.py` sólo baja de arXiv (usa el campo `arxiv_id`). Papers sin arXiv (revistas
 viejas, escaneados) quedan sin PDF → sin fulltext → sin extracción LLM ni `verify-citations`. Hoy se
@@ -189,8 +196,8 @@ sola, sin el resto del pack ni la ruta MCP.
    (sin ancla el grafo devuelve los mega-citados genéricos del área — medido: 31/31 falsos positivos
    en tau Ceti; con ancla trae exactamente los surveys/catálogos que el barrido 2b cazaba a mano,
    p. ej. Wilson 1978 / Mount Wilson). Provenance `via: chain:*` en `ads.json`; `--no-chain`
-   desactiva. **Abierto:** ancla de sujeto para TEMAS (`--topic` no encadena) y el fetch de PDFs
-   viejos vía `esources` (backlog aparte, arriba).
+   desactiva. **Abierto:** nada — el chaining de temas se resolvió en el ítem 7(c) y el fetch de
+   PDFs viejos en `fetch_pdf.py` (2026-07-17, sección arriba).
 2. 🟡 **PARCIAL (2026-07-03)** — ✅ **Veredicto `contradice` en `verify-citations`** hecho (4
    categorías estilo CAQA; `contradice` manda sobre el score y se resuelve como corrección o disputa
    `planets[].disputes[]`, no como cita rota; skill v1.1.0 + CLAUDE.md/README). ⏳ Queda: citation
@@ -232,7 +239,7 @@ sola, sin el resto del pack ni la ruta MCP.
    un tema de prueba); (d) **cobertura de verificación** en el lint (query/concepto con citas pero sin
    bloque `verify-citations` → backlog ALCE-adjacent); (e) **pre-commit hook** `scripts/hooks/pre-commit`
    (corre el lint, bloquea si hay bloqueantes; activar con `git config core.hooksPath scripts/hooks`).
-   Todo verificado contra ADS/lint. **Queda sólo:** fetch de PDFs viejos vía `esources` (backlog
-   aparte, arriba — parcialmente bloqueado por paywall/captcha) y el vocabulario AstroMLab (ítem 5, en
-   observación por licencia). La citation precision "dura" (parsear X/N del bloque de verify) se
+   Todo verificado contra ADS/lint. **Queda sólo:** el vocabulario AstroMLab (ítem 5, en observación
+   por licencia) — el fetch de PDFs viejos vía `esources` se resolvió el 2026-07-17 (`fetch_pdf.py`,
+   sección arriba). La citation precision "dura" (parsear X/N del bloque de verify) se
    descartó por frágil; la **cobertura** de (d) cubre la parte accionable.

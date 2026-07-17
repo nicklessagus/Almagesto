@@ -7,7 +7,8 @@ Lee la entrada del tema en vault/config/topics.yaml y corre la cadena que corres
 campo `source` (formaliza el modo off-ADS del skill ingest-topic en el tooling):
 
 - `ads` (default si el campo falta): cadena astro estándar —
-  query_ads --topic → fetch_arxiv → make_notes --topic → extract_fulltext → check_retractions.
+  query_ads --topic → fetch_arxiv → fetch_pdf → make_notes --topic → extract_fulltext →
+  check_retractions.
 - `web` | `local-pdfs` | `local-pdfs+web`: modo off-ADS. La bibliografía se declara en la
   lista `sources:` de la entrada (cada item: `key` = clave de cita sintética AAAA+Autor +
   `url` (fuente web) o `pdf` (ruta a un PDF provisto por el usuario) + metadata opcional
@@ -57,6 +58,7 @@ def ingest_ads(slug: str) -> None:
     """Cadena astro estándar (paso 2 del skill ingest-topic), abortando al primer fallo."""
     for script, args in (("query_ads.py", ["--topic", slug]),
                          ("fetch_arxiv.py", [slug]),
+                         ("fetch_pdf.py", [slug]),      # los sin arXiv, vía resolver ADS (esources)
                          ("make_notes.py", ["--topic", slug]),
                          ("extract_fulltext.py", [slug]),
                          ("check_retractions.py", [])):

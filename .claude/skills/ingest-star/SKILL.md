@@ -19,13 +19,15 @@ procesa. Trabajar desde la raíz del repo.
    ```bash
    python query_ads.py        <slug>
    python fetch_arxiv.py      <slug>
+   python fetch_pdf.py        <slug>       # los SIN arXiv, vía resolver ADS (esources)
    python fetch_ground_truth.py <slug>
    python make_notes.py       <slug>
    python extract_fulltext.py <slug>
    python check_retractions.py            # Crossref: marca `retracted` si algún paper fue retractado
    ```
    `fetch_arxiv` respeta el rate limit de arXiv (1 req/3 s) → puede tardar; correr en background si
-   son muchos PDFs. Papers sin arXiv quedan en `build/<slug>/missing_pdf.json`.
+   son muchos PDFs. Los papers sin arXiv los intenta `fetch_pdf` (escaneo ADS con token → PDF del
+   publisher, con fallback `curl`); lo que ni así sale queda en `build/<slug>/missing_pdf.json`.
    La cadena es idempotente (no pisa): en un re-ingest, `fetch_ground_truth` **no** refresca un
    ground-truth existente salvo `--force` (refrescar desde NEA es decisión explícita, no side-effect).
    `check_retractions` consulta **Crossref** por DOI y, si un paper fue **retractado**, estampa
@@ -106,7 +108,8 @@ procesa. Trabajar desde la raíz del repo.
   afirmar "la estrella no está en ese paper" desde un hit full-text negativo — **corroborar** (papers que
   lo citan y le atribuyen datos) o **abrir el PDF/tabla**. Reportar honesto: es inconcluso, no ausencia.
 - **Cascada de adquisición de PDFs no-arXiv** (antes de rendirse; ver también backlog en `vault/STATUS.md`):
-  (a) escaneo ADS `articles.adsabs.harvard.edu/pdf/<bibcode>`; (b) **imágenes de tabla del CDN del
+  (a) **la cubre `fetch_pdf.py`** (resolver ADS: escaneo con token → publisher, fallback `curl`) —
+  si el paper quedó en `missing_pdf.json` ya falló, seguir con (b); (b) **imágenes de tabla del CDN del
   publisher** (p. ej. IOP `content.cld.iop.org/journals/.../tbN.gif`) — **funcionan aunque el PDF esté tras
   paywall**, y suelen tener el dato que se busca; (c) HTML legacy del publisher (frameset `…/fulltext/`);
   (d) si nada funciona, **pedir el PDF al usuario** (tiene acceso institucional; anduvo con Frick 2004 y
