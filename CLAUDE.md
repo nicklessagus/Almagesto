@@ -206,10 +206,11 @@ clasificador de papers core). El agente traduce el foco del usuario (en palabras
 la query, `stars.yaml`/`topics.yaml`). No ingesta nada; después se usan `ingest-star`/`ingest-topic`.
 
 ### Ingest (una fuente → cascada de páginas)
-1. Scripts de `scripts/` bajan: `query_ads.py` → `fetch_arxiv.py` → `fetch_pdf.py` (los sin
-   arXiv, vía resolver ADS) → `fetch_ground_truth.py` →
-   `make_notes.py` → `extract_fulltext.py` (stubs mecánicos; idempotente, no pisa — con una única
-   excepción add-only: el retro-linkeo de abajo).
+1. Los **orquestadores** corren la cadena mecánica completa (idempotente, no pisa — con una única
+   excepción add-only: el retro-linkeo de abajo): `scripts/ingest_star.py <slug>` para estrellas,
+   `scripts/ingest_topic.py <slug>` para temas. **El orden canónico de cada cadena vive en el
+   header de su orquestador** (fuente de verdad única — puntero, no copia: no replicar la lista de
+   scripts en docs/skills).
 2. **Vos (LLM)** leés el PDF/fulltext y hacés la cascada: poblás la extracción del paper
    (`methods`, `thesis_links`, `bearing`, P/K/indicadores), actualizás la ficha de la estrella
    (síntesis, huecos), tocás conceptos/hipótesis relacionados y la matriz método×estrella.

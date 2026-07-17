@@ -60,12 +60,15 @@ def ingest_ads(slug: str) -> None:
                          ("fetch_arxiv.py", [slug]),
                          ("fetch_pdf.py", [slug]),      # los sin arXiv, vía resolver ADS (esources)
                          ("make_notes.py", ["--topic", slug]),
-                         ("extract_fulltext.py", [slug]),
-                         ("check_retractions.py", [])):
+                         ("extract_fulltext.py", [slug])):
         rc = run(script, *args)
         if rc:
             sys.exit(f"{script} falló (rc={rc}) — cadena abortada. La cadena es idempotente: "
                      "corregí y re-corré ingest_topic.py (lo ya bajado no se re-baja).")
+    # cierre: exit 1 acá significa "detectó papers retractados", no un fallo de la cadena
+    if run("check_retractions.py"):
+        sys.exit("check_retractions detectó papers retractados — revisá las notas marcadas "
+                 "(el lint las surface como bloqueante).")
 
 
 def ingest_offads(slug: str, meta: dict, force: bool) -> None:

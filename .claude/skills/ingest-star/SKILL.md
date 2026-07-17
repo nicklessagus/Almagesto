@@ -1,7 +1,7 @@
 ---
 name: ingest-star
 description: Usar cuando el usuario pide bajar/agregar/ingestar una estrella a la bóveda ("bajá GJ 581", "ingest tau ceti", "agregá la estrella X", "traé la bibliografía de AU Mic"). Corre la cadena de ingesta y hace la extracción LLM.
-version: 1.4.1
+version: 1.5.0
 ---
 
 # Ingest: agregar una estrella a la wiki
@@ -15,16 +15,14 @@ procesa. Trabajar desde la raíz del repo.
    `slug`, `simbad`, `ads_object`, `aliases` y (si aplica) `data_local`. Verificar el nombre en
    SIMBAD si hay duda.
 
-2. **Cadena mecánica** (correr desde `scripts/`, en orden):
+2. **Cadena mecánica** (orquestador — correr desde `scripts/`):
    ```bash
-   python query_ads.py        <slug>
-   python fetch_arxiv.py      <slug>
-   python fetch_pdf.py        <slug>       # los SIN arXiv, vía resolver ADS (esources)
-   python fetch_ground_truth.py <slug>
-   python make_notes.py       <slug>
-   python extract_fulltext.py <slug>
-   python check_retractions.py            # Crossref: marca `retracted` si algún paper fue retractado
+   python ingest_star.py <slug>
    ```
+   Corre la cadena completa (ADS → PDFs arXiv y no-arXiv → ground-truth NEA/SIMBAD → stubs →
+   fulltext → retracciones), abortando al primer fallo. **El orden canónico vive en el header de
+   `scripts/ingest_star.py`** — puntero, no copia: no lo repliques acá ni en otros docs. Para un
+   flag fino (`--rows`, `--all`, `--force` de un paso) corré el script puntual.
    `fetch_arxiv` respeta el rate limit de arXiv (1 req/3 s) → puede tardar; correr en background si
    son muchos PDFs. Los papers sin arXiv los intenta `fetch_pdf` (escaneo ADS con token → PDF del
    publisher, con fallback `curl`); lo que ni así sale queda en `build/<slug>/missing_pdf.json`.

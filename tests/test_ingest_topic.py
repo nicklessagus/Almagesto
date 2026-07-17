@@ -76,6 +76,14 @@ def test_cadena_ads_aborta_al_primer_fallo(toy_vault, fake_run, monkeypatch):
     assert [c[0] for c in fake_run.calls] == ["query_ads.py", "fetch_arxiv.py"]
 
 
+def test_ads_retraccion_detectada_no_es_fallo(toy_vault, fake_run, fake_notes, monkeypatch):
+    topic()
+    fake_run.rcs["check_retractions.py"] = 1
+    with pytest.raises(SystemExit) as exc:
+        run_main(monkeypatch)
+    assert "retractados" in str(exc.value) and "falló" not in str(exc.value)
+
+
 def test_ads_con_sources_avisa(toy_vault, fake_run, monkeypatch, capsys):
     topic(sources=[{"key": "2000Hyvarinen", "url": "https://x"}])
     run_main(monkeypatch)

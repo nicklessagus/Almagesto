@@ -1,6 +1,6 @@
 # Tests de `scripts/` — diseño de la suite
 
-Tests unitarios/integración de la **capa determinista** del framework (los 12 scripts de
+Tests unitarios/integración de la **capa determinista** del framework (los 13 scripts de
 `scripts/`). No testean la capa LLM (skills, extracción, síntesis) ni el contenido de una
 bóveda real — para eso está `lint.py`, que es el "test suite" del *contenido*.
 
@@ -50,6 +50,7 @@ Requiere `pytest` (dev-only, no está en `requirements.txt`; los scripts no lo n
 | `test_lint.py` | cada categoría con su caso sembrado + exit codes | bóvedas mínimas por escenario |
 | `test_check_retractions.py` | parseo Crossref (`updated-by`, fechas), fallback por título, estampado idempotente, exit codes | `requests` falso |
 | `test_ingest_topic.py` | despacho por `source`, validaciones de `sources:`, flujo `pending`, copia de PDFs, orden de la cadena ads | `run()` y `make_notes.*` grabadores |
+| `test_ingest_star.py` | orden canónico de la cadena de estrellas, aborto al primer fallo, retracción ≠ fallo | `run()` grabador |
 | `test_bench_verify.py` | extracción de pares (excluye blockquotes/fences/bloque de verificación), siembra por rotación (sin falsos-falsos), determinismo byte a byte, puntaje | puro FS |
 
 ## Fuera de alcance (deliberado)

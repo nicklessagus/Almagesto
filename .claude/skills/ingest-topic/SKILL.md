@@ -1,7 +1,7 @@
 ---
 name: ingest-topic
 description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema no-astro / fuera de ADS (desde PDFs locales + web; ver Modo off-ADS).
-version: 1.6.1
+version: 1.6.2
 ---
 
 # Ingest: agregar un TEMA a la wiki
@@ -49,17 +49,11 @@ del repo.
    ```bash
    python ingest_topic.py <slug>
    ```
-   El orquestador despacha según el campo `source` de la entrada del tema (`ads` si falta) y en
-   modo ADS equivale a correr, en orden y **sin `fetch_ground_truth`** (todo idempotente — si algo
-   falla se re-corre, o se corre por partes):
-   ```bash
-   python query_ads.py   --topic <slug>
-   python fetch_arxiv.py         <slug>
-   python fetch_pdf.py           <slug>   # los SIN arXiv, vía resolver ADS (esources)
-   python make_notes.py  --topic <slug>
-   python extract_fulltext.py    <slug>
-   python check_retractions.py            # Crossref: marca `retracted` si algún paper fue retractado
-   ```
+   El orquestador despacha según el campo `source` de la entrada del tema (`ads` si falta). En modo
+   ADS corre la cadena de estrellas **sin `fetch_ground_truth`** (no hay NEA para un tema) y con
+   `--topic` donde aplica; **el orden canónico vive en el header de `scripts/ingest_topic.py`** —
+   puntero, no copia: no lo repliques acá ni en otros docs. Todo idempotente (si algo falla se
+   re-corre, o se corre el script puntual con sus flags finos).
    `query_ads --topic` escribe el mismo `build/<slug>/ads.json` (con `kind: topic`), así que
    `fetch_arxiv`, `fetch_pdf` y `extract_fulltext` corren sin cambios. Hace **citation chaining anclado a la query
    del tema** (references/citations de los core filtrados por la propia query → recall extra sin traer

@@ -1,7 +1,7 @@
 ---
 name: maintain
 description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), y resolver el backlog del lint (huérfanos, P_rot faltante, drift PDF↔disco, claims stale).
-version: 1.1.2
+version: 1.2.0
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
@@ -21,20 +21,15 @@ cierra con **verify-citations** (si tocó prosa con `[[bibcode]]`) + **lint en 0
 ---
 
 ## A. Refrescar una estrella / concepto (papers nuevos desde el último ingest)
-1. Re-correr la cadena (idempotente — sólo agrega lo nuevo, no re-baja ni pisa):
+1. Re-correr el **orquestador** (idempotente — sólo agrega lo nuevo, no re-baja ni pisa; el orden
+   canónico de la cadena vive en el header del orquestador, no lo copies acá):
    ```bash
-   python query_ads.py <slug>            # trae papers nuevos + citation chaining (estrella)
-   python fetch_arxiv.py <slug>          # baja sólo los PDF que faltan
-   python fetch_pdf.py <slug>            # los sin arXiv, vía resolver ADS (idempotente igual)
-   python make_notes.py <slug>           # crea SÓLO stubs nuevos (no pisa notas con extracción)
-   python extract_fulltext.py <slug>
-   python check_retractions.py           # re-chequea retracciones (papers viejos pueden retractarse)
+   python ingest_star.py <slug>          # estrella (temas: ingest_topic.py <slug>, despacha por `source`)
    ```
-   (Para conceptos: `python ingest_topic.py <slug>` — despacha según el `source` del tema, así un
-   refresh de un tema **off-ADS** procesa su `sources:` en vez de pegarle a ADS; equivale a la cadena
-   con `--topic` y sin `fetch_ground_truth`.) **No** correr `fetch_ground_truth`
-   salvo que quieras refrescar NEA a propósito (`--force`) — NEA cambia entre releases y refrescarlo es
-   una decisión, no un side-effect.
+   Un refresh de un tema **off-ADS** procesa su `sources:` en vez de pegarle a ADS. La cadena
+   re-chequea retracciones (papers viejos pueden retractarse) y **no pisa el ground-truth**:
+   `fetch_ground_truth` saltea un snapshot existente — para refrescar NEA a propósito, correrlo
+   suelto con `--force` (NEA cambia entre releases y refrescarlo es una decisión, no un side-effect).
 2. **Identificar lo nuevo:** `git status` sobre `vault/wiki/papers/` muestra los stubs recién creados. Leer
    **sólo esos** fulltext y hacer su extracción (methods/bearing/thesis_links/P·K/indicadores).
 3. **Re-sintetizar incorporando sólo lo nuevo:** releer la ficha/concepto y **actualizar** la síntesis y
