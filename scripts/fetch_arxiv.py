@@ -21,7 +21,8 @@ import lib_config as cfg
 ARXIV_PDF = "https://export.arxiv.org/pdf/{arxiv_id}"
 SLEEP_S = 3.0  # arXiv: no más de 1 req / 3 s
 MAX_ATTEMPTS = 12  # arXiv throttlea por bytes y corta la conexión en PDFs grandes
-HEADERS = {"User-Agent": "Almagesto/0.1 (academic literature vault; https://github.com/nicklessagus/Almagesto)"}
+HEADERS = {"User-Agent": f"Almagesto/{cfg.ALMAGESTO_VERSION} (academic literature vault; "
+                         "https://github.com/nicklessagus/Almagesto)"}
 
 
 def safe_name(bibcode: str) -> str:

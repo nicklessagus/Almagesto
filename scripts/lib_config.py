@@ -11,9 +11,12 @@ from pathlib import Path
 
 import yaml
 
-# Versión del framework Almagesto (bump MANUAL; no hay release formal todavía). Se estampa en el
-# frontmatter `generator` de cada nota que genera make_notes → traza con qué versión se armó la ficha.
-ALMAGESTO_VERSION = "0.1.0"
+# Versión del framework Almagesto — ÚNICA fuente de versión del repo (bump MANUAL + tag git
+# `vX.Y.Z` al bumpear). La consumen: el frontmatter `generator` de cada nota que genera make_notes
+# (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
+# "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
+# (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
+ALMAGESTO_VERSION = "1.0.0"
 
 # `name` del EJEMPLO canónico que trae el template en vault/config/objective.yaml (default
 # funcional + documentación del formato). El lint lo usa para AVISAR (WARN) si una instancia

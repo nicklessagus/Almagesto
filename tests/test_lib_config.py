@@ -89,6 +89,25 @@ def test_concept_areas_modo_tolerante(toy_vault):
     assert cfg.load_concept_areas() == ["activity", "zzz", "methods", "hypotheses"]
 
 
+def test_version_unica_fuente():
+    """ALMAGESTO_VERSION es la ÚNICA fuente de versión: los UA de los fetchers derivan de la
+    constante, y ningún script hardcodea 'Almagesto/x.y' (el drift que tenían los UA en 0.1)."""
+    import re
+
+    import check_retractions
+    import fetch_arxiv
+    import fetch_pdf
+    from conftest import SCRIPTS
+    v = cfg.ALMAGESTO_VERSION
+    assert f"Almagesto/{v}" in fetch_arxiv.HEADERS["User-Agent"]
+    assert f"Almagesto/{v}" in fetch_pdf.UA["User-Agent"]
+    assert f"Almagesto/{v}" in check_retractions._ua()["User-Agent"]
+    for p in sorted(SCRIPTS.glob("*.py")):
+        for m in re.finditer(r"Almagesto/\d[\w.]*", p.read_text(encoding="utf-8")):
+            raise AssertionError(
+                f"{p.name}: versión hardcodeada {m.group()!r} — interpolá cfg.ALMAGESTO_VERSION")
+
+
 def test_require_field(toy_vault):
     """Guard de config: campo obligatorio faltante → salida amigable, no KeyError crudo."""
     meta = {"slug": "x", "ads_object": "Test Star", "vacio": ""}

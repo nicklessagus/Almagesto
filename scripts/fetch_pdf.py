@@ -40,7 +40,8 @@ import requests
 import lib_config as cfg
 
 RESOLVER = "https://api.adsabs.harvard.edu/v1/resolver/{bibcode}/esource"
-UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) Almagesto/0.1 (academic literature vault)"}
+UA = {"User-Agent": f"Mozilla/5.0 (X11; Linux x86_64) Almagesto/{cfg.ALMAGESTO_VERSION} "
+                    "(academic literature vault)"}
 SLEEP_S = 2.0                        # cortesía entre papers (resolver + descarga)
 RETRY_WAITS_S = (3, 8)               # backoff: el host de escaneos corta ráfagas (probe 2026-07-17)
 RETRY_STATUS = (429, 500, 502, 503, 504)

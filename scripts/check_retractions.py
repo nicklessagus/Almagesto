@@ -54,7 +54,8 @@ def _mailto() -> str | None:
 
 def _ua() -> dict:
     m = _mailto()
-    ua = "Almagesto/0.1 (academic literature vault; https://github.com/nicklessagus/Almagesto"
+    ua = (f"Almagesto/{cfg.ALMAGESTO_VERSION} (academic literature vault; "
+          "https://github.com/nicklessagus/Almagesto")
     ua += f"; mailto:{m})" if m else ")"
     return {"User-Agent": ua}
 
