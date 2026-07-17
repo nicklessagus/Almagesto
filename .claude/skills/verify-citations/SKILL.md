@@ -1,7 +1,7 @@
 ---
 name: verify-citations
 description: Usar para verificar, afirmación por afirmación, que las citas [[bibcode]] de una nota de la wiki (query, hipótesis, ficha, concepto) realmente están respaldadas por el texto completo de la fuente. Se corre como paso de cierre al armar/editar una query o hipótesis, o cuando el usuario pide "rechequeá las citas / ¿esto lo dice el paper?". Implementa el chequeo claim↔evidencia (pipeline tipo CiteAudit) sobre el corpus cerrado de la bóveda. Veredictos: soportada / parcial / no-soportada (la fuente calla) / contradice (la fuente afirma lo contrario → candidata a disputa, no sólo cita rota).
-version: 1.1.0
+version: 1.2.0
 ---
 
 # Verify-citations — chequeo claim↔evidencia contra el fulltext
@@ -147,3 +147,30 @@ un fracaso. Si algo quedó dudoso, decirlo.
 ## Límite honesto
 El chequeo es **juicio de un LLM** leyendo la fuente — robusto (independiente por par, grounding-first,
 cita textual obligatoria) pero **no una prueba**. Reduce drásticamente la mala atribución; no la elimina.
+Su tasa de error se mide con el **modo benchmark** (abajo).
+
+## Modo benchmark (auto-test del verificador — a pedido)
+¿Cuánto confiar en ese "juicio de LLM"? Este modo le pone un número: **recall sobre errores
+plantados** (estilo CiteAudit). Correr **a pedido** (no es paso de cierre), con la bóveda ya
+poblada y citada.
+
+1. `python scripts/bench_verify.py seed [--max N]` → arma `build/verify_bench/bench.json`:
+   N pares (afirmación, `[[bibcode]]`) **reales** de queries/concepts + un par **falso por
+   construcción** por cada uno (misma afirmación, bibcode rotado a otro paper del corpus —
+   determinista, y nunca uno que esa afirmación cite de verdad).
+2. **Fan-out A CIEGAS** — mismo protocolo del paso 2 normal, con una regla extra **dura**: cada
+   subagente recibe SOLO (afirmación, ruta al fulltext). **NUNCA mostrarle `bench.json`, las
+   etiquetas real/sembrada, ni decirle que es un benchmark** — sabría qué buscar y el número no
+   mediría nada. El orquestador (vos) sí ve las etiquetas: sos el corrector del examen, no el
+   examinado.
+3. Volcar cada veredicto en el campo `verdict` de su par en el JSON
+   (`soportada|parcial|no-soportada|contradice|no verificable por extracción`).
+4. `python scripts/bench_verify.py score` → recall de sembradas + reales caídas →
+   `outputs/verify-bench-<fecha>.md`.
+5. **Reporte honesto al chat:** el recall; cada sembrada que PASÓ (revisar a mano — puede ser
+   **soporte casual**: el otro paper de verdad dice lo mismo — antes de culpar al verificador); y
+   cada real caída (flaky del verificador **o** error de grounding genuino de la nota: si es lo
+   segundo, corregir la nota por el flujo normal de arriba).
+
+**Regla #0:** nada del benchmark entra a `vault/` — pares sembrados y reportes viven en
+`build/`/`outputs/` (scratch gitignored). Las citas falsas no son bibliografía.

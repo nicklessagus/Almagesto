@@ -279,7 +279,11 @@ ecuación/tabla/escaneo) abrir el PDF o marcar `no verificable por extracción`.
 `source: ocr` (rescatado por tesseract cuando la capa de texto era ilegible) es **citable con
 salvedad**: el OCR puede errar símbolos/notación — la verificación vale para prosa; ante discrepancia
 de símbolos, abrir el PDF. Es **juicio de LLM**,
-robusto pero no prueba. **Regla dura — todo lo apuntable es chequeable:** toda afirmación fáctica va
+robusto pero no prueba — su tasa de error se mide con el **auto-benchmark** (modo benchmark del
+skill, a pedido): `scripts/bench_verify.py seed` siembra citas falsas deterministas entre pares
+reales (misma afirmación, bibcode rotado), el verificador las juzga **a ciegas** y `score`
+reporta el recall; nada del benchmark entra al vault (vive en `build/`/`outputs/`).
+**Regla dura — todo lo apuntable es chequeable:** toda afirmación fáctica va
 **citada `[[bibcode]]` o marcada `inferencia`** — nada sin respaldo. Excepción: los **valores de
 ground-truth (NEA)** en `stars/` (P/K/e/m·sini) no se verifican contra papers (su consistencia la
 chequea el lint); sólo se verifican disputas y afirmaciones atribuidas a un paper. El lint reporta como

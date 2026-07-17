@@ -201,11 +201,15 @@ sola, sin el resto del pack ni la ruta MCP.
    p. ej. Wilson 1978 / Mount Wilson). Provenance `via: chain:*` en `ads.json`; `--no-chain`
    desactiva. **Abierto:** nada — el chaining de temas se resolvió en el ítem 7(c) y el fetch de
    PDFs viejos en `fetch_pdf.py` (2026-07-17, sección arriba).
-2. 🟡 **PARCIAL (2026-07-03)** — ✅ **Veredicto `contradice` en `verify-citations`** hecho (4
+2. ✅ **HECHO (completado 2026-07-17)** — ✅ **Veredicto `contradice` en `verify-citations`** (4
    categorías estilo CAQA; `contradice` manda sobre el score y se resuelve como corrección o disputa
-   `planets[].disputes[]`, no como cita rota; skill v1.1.0 + CLAUDE.md/README). ⏳ Queda: citation
-   precision por nota como métrica del lint (ALCE) y auto-benchmark del verificador sembrando citas
-   falsas (CiteAudit).
+   `planets[].disputes[]`, no como cita rota; CLAUDE.md/README). ✅ (2026-07-17) **auto-benchmark
+   del verificador** (CiteAudit): `scripts/bench_verify.py seed` siembra citas falsas deterministas
+   entre pares reales de queries/concepts (misma afirmación, bibcode rotado — excluyendo los que la
+   afirmación cita de verdad, para no plantar falsos-falsos); el skill (modo benchmark, v1.2.0) las
+   verifica **a ciegas** (el subagente nunca ve etiquetas) y `score` reporta recall de sembradas +
+   reales caídas en `outputs/verify-bench-*.md`. Nada del benchmark toca `vault/`. La citation
+   precision por nota (ALCE) se descartó por frágil (ítem 7); la cobertura del lint cubre lo accionable.
 3. ✅ **HECHO (2026-07-03)** — **Detección batch de contradicciones**: skill `find-contradictions`
    (v1.0.0). Barre un eje (estrella/parámetro o concepto), confirma cada desacuerdo claim↔claim con un
    subagente por par que lee los **dos** fulltext (`real|aparente|no-concluyente` + cita de ambos
