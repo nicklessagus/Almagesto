@@ -220,6 +220,16 @@ def test_concept_note_area_no_declarada_avisa_pero_crea(toy_vault, capsys):
     assert (toy_vault.CONCEPTS / "zzz" / "fastica.md").exists()
 
 
+def test_concept_note_sin_area_o_concept_error_amigable(toy_vault):
+    """Guard de config: entrada de topics.yaml incompleta → mensaje amigable, no KeyError."""
+    write_yaml(cfg.TOPICS_YAML, {"ica": {"title": "ICA", "concept": "fastica"}})
+    with pytest.raises(SystemExit, match="'ica' no tiene `area`"):
+        mn.write_concept_note("ica", force=False)
+    write_yaml(cfg.TOPICS_YAML, {"ica": {"title": "ICA", "area": "methods"}})
+    with pytest.raises(SystemExit, match="'ica' no tiene `concept`"):
+        mn.write_concept_note("ica", force=False)
+
+
 def test_concept_note_idempotente(toy_vault):
     seed_topic()
     mn.write_concept_note("ica", force=False)

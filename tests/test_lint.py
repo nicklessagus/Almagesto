@@ -170,6 +170,24 @@ def test_fuga_de_implementacion_warn(toy_vault, capsys):
     assert "perilla" in out
 
 
+def test_objetivo_default_warn(toy_vault, capsys):
+    """Guard de config: objective.yaml sin instanciar (name = default del template) → WARN."""
+    import lib_config as cfg
+    from conftest import write_yaml
+    obj = dict(cfg.load_objective())
+    obj["name"] = cfg.DEFAULT_OBJECTIVE_NAME
+    write_yaml(cfg.OBJECTIVE_YAML, obj)
+    rc, out = run_lint(capsys)
+    assert rc == 0                                   # WARN, no bloquea
+    assert "objective.name sigue siendo el default del template" in out
+    assert "`setup`" in out
+
+
+def test_objetivo_propio_sin_warn(toy_vault, capsys):
+    rc, out = run_lint(capsys)                       # el toy objective ya tiene name propio
+    assert "Objetivo sin instanciar (WARN — objective.yaml sigue en el default del template) (0)" in out
+
+
 def test_area_no_declarada_warn(toy_vault, capsys):
     mk_note(toy_vault.CONCEPTS / "zzz", "nota", {"tags": ["zzz"]}, "área typo\n")
     link_from_index(toy_vault, "nota")

@@ -227,7 +227,8 @@ def write_concept_note(slug: str, force: bool) -> None:
     """Para temas (ingest-topic): stub del concept durable destino. Idempotente: NO pisa la
     síntesis LLM de un concept ya existente salvo --force (protege la síntesis)."""
     _, meta = cfg.topic_by_slug(slug)
-    area, concept = meta["area"], meta["concept"]
+    area = cfg.require_field(meta, "area", slug, "topics.yaml")
+    concept = cfg.require_field(meta, "concept", slug, "topics.yaml")
     # Las áreas de concepts/ son ABIERTAS: no se prohíbe ninguna (podés investigar cualquier tema).
     # `concept_areas` (objective.yaml) es sólo una REFERENCIA para distinguir un typo de un área nueva
     # legítima → si el área no está declarada, AVISAR (nunca bloquear) para que un typo no pase mudo.

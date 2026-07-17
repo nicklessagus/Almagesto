@@ -46,11 +46,14 @@ nomenclatura no tiene a qué adaptarse; el check sin la nomenclatura no tiene co
    constantes) de **sujetos** (→ stars/topics) y respeta la frontera dura. **Descopeado** (a pedido): sembrar
    `stars.yaml`/`topics.yaml` queda fuera — eso entra por `ingest-star`/`ingest-topic`. **Pendiente** (capa
    2 extendida, opcional): un setup que además proponga las estrellas/temas iniciales.
-3. 🟡 **PARCIAL** — **check de config (lint, WARN blando)**. ✅ Áreas (abiertas, nunca se bloquea):
-   `make_notes` **avisa** si el `area` no está en `concept_areas` pero crea igual; `lint.py` marca **WARN**
-   las carpetas de `concepts/` fuera de la lista (atrapa typos sin restringir). ⏳ Falta el resto de los guards de config: `KeyError`
-   amigable en los índices duros (`ads_object`/`simbad` en stars, `query`/`concept` en topics) y **WARN si
-   `objective.name` sigue siendo el default** (olvido de instanciar).
+3. ✅ **HECHO (completado 2026-07-17)** — **check de config (lint, WARN blando)**. ✅ Áreas (abiertas,
+   nunca se bloquea): `make_notes` **avisa** si el `area` no está en `concept_areas` pero crea igual;
+   `lint.py` marca **WARN** las carpetas de `concepts/` fuera de la lista (atrapa typos sin restringir).
+   ✅ (2026-07-17) el resto de los guards: `lib_config.require_field()` da error amigable (entrada +
+   campo + archivo) en los índices duros — `ads_object`/`simbad` en stars, `query` en topics (con
+   pista "es off-ADS → ingest_topic"), `area`/`concept` en `make_notes --topic` — en vez de un
+   KeyError crudo; y el lint marca **WARN si `objective.name` sigue siendo el default** del template
+   (olvido de instanciar; en el repo template ese WARN es esperable y no bloquea).
 
 **Preguntas abiertas — resueltas al implementar capas 1+3-áreas:**
 - Nomenclatura → vive en `vault/config/objective.yaml` (instance-owned), con la prosa del schema en

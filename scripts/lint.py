@@ -11,7 +11,9 @@ contradicciones ground-truth ↔ ficha, **masa de ground-truth inconsistente** c
 m·sini implícita por K/P/e/M* (atrapa best-mass espurias de NEA), `thesis_links` sin
 página destino (tag que no matchea ninguna nota concepto/hipótesis → no acumula),
 **fuga de implementación** (material de implementación/código no bibliográfico que se
-filtró al vault; frontera dura, regla #0 de CLAUDE.md; WARN no bloqueante), **áreas de concepts/ fuera
+filtró al vault; frontera dura, regla #0 de CLAUDE.md; WARN no bloqueante), **objetivo sin
+instanciar** (objective.name sigue siendo el default del template → la bóveda clasifica "core"
+con la regex del ejemplo; WARN), **áreas de concepts/ fuera
 de `concept_areas`** (subcarpeta de concepts/ no declarada en objective.yaml → posible typo/carpeta
 fantasma; WARN), **PDF ↔ disco** (drift: el campo `pdf` de un paper no refleja el PDF bajado — sin linkear
 o puntero a archivo inexistente; WARN), **fuentes pendientes** (`pending_source` en una nota de
@@ -286,6 +288,17 @@ def main() -> int:
         (f"{star}", f"planeta {l}: ref `{ref}` sin nota de paper")
         for star, l, ref in dispute_refs if ref not in names or "paper" not in kinds.get(ref, []))
 
+    # objetivo sin instanciar (WARN): el template trae objective.yaml pre-cargado con el ejemplo
+    # canónico; si `name` sigue siendo ese default, la bóveda clasifica "core" con la regex del
+    # ejemplo, no con TU tema — típico olvido post-instanciación. (En el repo template este WARN
+    # es esperable: la bóveda seed no está instanciada.)
+    objective_warn = []
+    if cfg.load_objective().get("name") == cfg.DEFAULT_OBJECTIVE_NAME:
+        objective_warn.append(
+            ("vault/config/objective.yaml",
+             "objective.name sigue siendo el default del template — corré el skill `setup` "
+             "(o editá el YAML) para definir el objetivo de TU bóveda"))
+
     # áreas de concepts/ no declaradas en concept_areas (objective.yaml) → posible typo / carpeta
     # fantasma: un `area` mal tipeado en topics.yaml crea carpeta en silencio (ver make_notes). WARN
     # blando (un typo y un área nueva legítima se ven igual → no se bloquea, se marca para revisar).
@@ -310,6 +323,7 @@ def main() -> int:
                          ("thesis_links sin página destino", dangling_thesis),
                          ("disputes[].ref sin paper destino", dangling_disputes),
                          ("⛔ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)", impl_leaks),
+                         ("Objetivo sin instanciar (WARN — objective.yaml sigue en el default del template)", objective_warn),
                          ("Áreas de concepts/ no declaradas en objective.yaml (WARN, posible typo)", undeclared_areas),
                          ("PDF ↔ disco (WARN — higiene: frontmatter `pdf` vs PDF bajado)", pdf_issues),
                          ("⏳ Fuentes pendientes (pending_source — el usuario debe proveer la fuente)", pending_srcs),

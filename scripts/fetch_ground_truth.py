@@ -170,7 +170,7 @@ def main() -> int:
     if out.exists() and not args.force:
         print(f"Ground-truth {name}: {out} ya existe — no se pisa (refrescar desde NEA: --force)")
         return 0
-    host = meta["simbad"]
+    host = cfg.require_field(meta, "simbad", name, "stars.yaml")
     print(f"Ground-truth {name} (host={host!r})")
 
     host_info = fetch_host(host)

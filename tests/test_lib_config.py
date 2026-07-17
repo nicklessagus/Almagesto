@@ -89,6 +89,18 @@ def test_concept_areas_modo_tolerante(toy_vault):
     assert cfg.load_concept_areas() == ["activity", "zzz", "methods", "hypotheses"]
 
 
+def test_require_field(toy_vault):
+    """Guard de config: campo obligatorio faltante → salida amigable, no KeyError crudo."""
+    meta = {"slug": "x", "ads_object": "Test Star", "vacio": ""}
+    assert cfg.require_field(meta, "ads_object", "Estrella Test", "stars.yaml") == "Test Star"
+    with pytest.raises(SystemExit, match=r"'Estrella Test' no tiene `simbad` en vault/config/stars.yaml"):
+        cfg.require_field(meta, "simbad", "Estrella Test", "stars.yaml")
+    with pytest.raises(SystemExit):
+        cfg.require_field(meta, "vacio", "Estrella Test", "stars.yaml")   # vacío = faltante
+    with pytest.raises(SystemExit, match="usá ingest_topic"):
+        cfg.require_field(meta, "query", "ica", "topics.yaml", hint="usá ingest_topic.")
+
+
 def test_concept_areas_sin_nada(toy_vault):
     obj = dict(cfg.load_objective())
     obj.pop("concept_areas")

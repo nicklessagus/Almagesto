@@ -272,7 +272,9 @@ def main() -> int:
 
     if args.topic:
         _, meta = cfg.topic_by_slug(args.slug)
-        q = meta["query"]
+        q = cfg.require_field(meta, "query", args.slug, "topics.yaml",
+                              hint="Si es un tema off-ADS (source: web|local-pdfs) no va por "
+                                   "query_ads: corré ingest_topic.py, que despacha por `source`.")
         # el "sujeto" de un tema es su propia query: anclar el chaining con ella deja on-topic a los
         # papers del grafo de citas (sin ancla traería los mega-citados genéricos, como en estrellas).
         chain_filter = f"({q})"
@@ -281,7 +283,7 @@ def main() -> int:
                 "concept": meta.get("concept"), "area": meta.get("area"), "query": q}
     else:
         name, meta = cfg.star_by_slug(args.slug)
-        names = [meta["ads_object"]] + meta.get("aliases", [])
+        names = [cfg.require_field(meta, "ads_object", name, "stars.yaml")] + meta.get("aliases", [])
         q = build_query(names)
         chain_filter = build_fulltext_filter(names)
         print(f"Consultando ADS: {name}  (nombres: {', '.join(names)})")

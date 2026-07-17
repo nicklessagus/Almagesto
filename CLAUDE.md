@@ -321,7 +321,9 @@ señal (perilla/dial/`w_j`/`peso(`); cada hit se revisa a mano y se saca del vau
 implementación (no es bibliografía). Las **áreas de `concepts/` fuera de `concept_areas`** (subcarpeta no
 declarada en `vault/config/objective.yaml`) son **WARN** — las áreas son **abiertas**: la lista es sólo
 referencia para distinguir un typo de un área nueva, **nunca se bloquea** (`make_notes` **avisa** pero crea
-igual; el lint marca las carpetas fuera de la lista). El **PDF ↔ disco** es **WARN/higiene**: marca un paper
+igual; el lint marca las carpetas fuera de la lista). El **objetivo sin instanciar** (`objective.name`
+sigue siendo el default del template) es **WARN**: la bóveda estaría clasificando "core" con la regex del
+ejemplo — correr el skill `setup`. El **PDF ↔ disco** es **WARN/higiene**: marca un paper
 cuyo campo `pdf` no refleja el PDF real — está bajado en `vault/raw/pdfs/<slug>/<bibcode>.pdf` pero el
 frontmatter quedó `null` (drift, hay que linkearlo) o apunta a un archivo inexistente (puntero roto). Las **citas no verificables** (bibcode citado en query/concepto/hipótesis sin su `.txt` en
 `vault/raw/fulltext/`) se listan como precondición de `verify-citations`; ídem las **fuentes

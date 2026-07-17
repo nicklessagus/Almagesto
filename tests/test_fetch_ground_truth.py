@@ -167,6 +167,15 @@ def test_main_no_pisa_sin_force(toy_vault, monkeypatch):
     assert json.loads(out.read_text())["star"] == "vieja"
 
 
+def test_main_sin_simbad_error_amigable(toy_vault, monkeypatch):
+    """Guard de config: entrada sin `simbad` → mensaje amigable, no KeyError."""
+    import conftest
+    conftest.write_yaml(gt.cfg.STARS_YAML, {"Estrella Test": {"slug": "test_star",
+                                                              "ads_object": "Test Star"}})
+    with pytest.raises(SystemExit, match="no tiene `simbad`"):
+        run_main(monkeypatch, ["test_star"])
+
+
 def test_main_force_refresca(toy_vault, monkeypatch):
     out = toy_vault.GROUND_TRUTH / "test_star.json"
     out.write_text(json.dumps({"star": "vieja"}), encoding="utf-8")

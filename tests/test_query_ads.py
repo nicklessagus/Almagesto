@@ -247,6 +247,21 @@ def test_main_extra_core_persistente(toy_vault, toy_classifier, no_sleep, monkey
     assert [r["bibcode"] for r in manual] == ["1988old.....1O"]
 
 
+def test_main_estrella_sin_ads_object_error_amigable(toy_vault, toy_classifier, monkeypatch):
+    """Guard de config: entrada de stars.yaml cargada a mano sin ads_object → mensaje, no traceback."""
+    write_yaml(cfg.STARS_YAML, {"Estrella Test": {"slug": "test_star", "simbad": "s"}})
+    with pytest.raises(SystemExit, match="no tiene `ads_object`"):
+        run_main(monkeypatch, ["test_star"])
+
+
+def test_main_tema_sin_query_sugiere_offads(toy_vault, toy_classifier, monkeypatch):
+    """Guard de config: tema sin `query` (típico: es off-ADS) → mensaje con la pista, no KeyError."""
+    write_yaml(cfg.TOPICS_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "fastica",
+                                         "source": "web"}})
+    with pytest.raises(SystemExit, match="no tiene `query`.*ingest_topic"):
+        run_main(monkeypatch, ["ica", "--topic"])
+
+
 def test_probe_lista_todo_el_core(toy_classifier, capsys):
     recs = [rec(f"2020core...{i}A", cites=i) for i in range(30)] + [rec("2020non....1N", relevant=False)]
     qa.print_probe("q", recs)

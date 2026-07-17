@@ -15,6 +15,12 @@ import yaml
 # frontmatter `generator` de cada nota que genera make_notes → traza con qué versión se armó la ficha.
 ALMAGESTO_VERSION = "0.1.0"
 
+# `name` del EJEMPLO canónico que trae el template en vault/config/objective.yaml (default
+# funcional + documentación del formato). El lint lo usa para AVISAR (WARN) si una instancia
+# olvidó definir su propio objetivo (skill `setup`) — con el default, la bóveda clasifica
+# "core" con la regex del ejemplo, no con tu tema. Mantener en sync con el YAML del template.
+DEFAULT_OBJECTIVE_NAME = "Separar señales de actividad estelar vs planetarias en velocidades radiales"
+
 ROOT = Path(__file__).resolve().parent.parent  # raíz del repo (andamiaje + bóveda)
 VAULT = ROOT / "vault"                          # la bóveda: contenido (config/wiki/raw); Obsidian abre acá
 CONFIG = VAULT / "config"
@@ -53,6 +59,19 @@ def get_ads_token() -> str:
         "No hay token ADS. Poné vault/config/ads_dev_key o exportá ADS_DEV_KEY. "
         "Token gratis en https://ui.adsabs.harvard.edu/user/settings/token"
     )
+
+
+def require_field(meta: dict, key: str, entry: str, yaml_name: str, hint: str = ""):
+    """Campo OBLIGATORIO de una entrada de config: si falta o está vacío, salida amigable
+    (qué entrada, qué campo, en qué archivo) en vez de un KeyError crudo con traceback.
+    Para los índices duros que los scripts acceden a pelo (`ads_object`/`simbad` en stars,
+    `query` en topics) — un campo olvidado al cargar la entrada a mano es el caso típico."""
+    val = meta.get(key)
+    if val in (None, ""):
+        raise SystemExit(
+            f"la entrada '{entry}' no tiene `{key}` en vault/config/{yaml_name} — "
+            "agregalo (ver el ejemplo comentado del YAML)." + (f" {hint}" if hint else ""))
+    return val
 
 
 def load_stars() -> dict:
