@@ -92,6 +92,20 @@ tokens. Los que ni así se consigan, **reportarlos** (caso residual a mano).
 `esources`), y si `ADS_SCAN`/`PUB_PDF` se bajan con el mismo token (algunos requieren acceso
 institucional).
 
+> **✅ Probe del resolver corrido (2026-07-17) — `fetch_pdf.py` es VIABLE.** Testeado con el token
+> ADS sobre 3 clásicos pre-arXiv (Wilson 1978, Noyes 1984, Saar & Brandenburg 1999):
+> - `GET /v1/resolver/<bibcode>/esource` (Bearer token) lista las fuentes por tipo
+>   (`ADS_PDF`, `ADS_SCAN`, `PUB_PDF`, `EPRINT_*`).
+> - **`ADS_PDF` (`articles.adsabs.harvard.edu/pdf/<bibcode>`) BAJA con el token** en el header
+>   (200, PDF real con capa OCR de ADS, greppable): el 403 del episodio Saar era por pedirlo
+>   **sin** el Bearer. Sin token sigue fallando.
+> - El host **throttlea ráfagas** (una bajada dio `000` y salió al retry) → mismo patrón
+>   retry/backoff + sleep que `fetch_arxiv.py`.
+> - `PUB_PDF` (IOP `stacks.iop.org`) entregó el PDF a un GET pelado con UA de navegador —
+>   variable por publisher/red (el episodio previo reportó captcha): intentar y degradar.
+> - Orden sugerido para `fetch_pdf.py`: `EPRINT_PDF → ADS_PDF/ADS_SCAN (con token) → PUB_PDF
+>   (sin token, UA normal)`; lo que no salga → `pending` (fallback ya existente).
+
 **Hallazgos testeados (2026-07-01, episodio Saar & Brandenburg 1999 en la instancia Actividad).** Reglas
 concretas para el futuro `fetch_pdf.py` y para la guía del skill (ya reflejadas en `ingest-star/SKILL.md`):
 - El **escaneo ADS** directo (`articles.adsabs.harvard.edu/pdf/<bibcode>`) devolvió **403** sin sesión; el
