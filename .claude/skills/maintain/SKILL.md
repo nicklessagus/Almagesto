@@ -1,7 +1,7 @@
 ---
 name: maintain
 description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), y resolver el backlog del lint (huérfanos, P_rot faltante, drift PDF↔disco, claims stale).
-version: 1.1.1
+version: 1.1.2
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
@@ -25,6 +25,7 @@ cierra con **verify-citations** (si tocó prosa con `[[bibcode]]`) + **lint en 0
    ```bash
    python query_ads.py <slug>            # trae papers nuevos + citation chaining (estrella)
    python fetch_arxiv.py <slug>          # baja sólo los PDF que faltan
+   python fetch_pdf.py <slug>            # los sin arXiv, vía resolver ADS (idempotente igual)
    python make_notes.py <slug>           # crea SÓLO stubs nuevos (no pisa notas con extracción)
    python extract_fulltext.py <slug>
    python check_retractions.py           # re-chequea retracciones (papers viejos pueden retractarse)

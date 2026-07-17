@@ -45,7 +45,8 @@ echo "TU_TOKEN" > vault/config/ads_dev_key  # token ADS (gratis, gitignored) —
 > (`sudo apt install tesseract-ocr` · `brew install tesseract`) para rescatar por **OCR** PDFs
 > escaneados o con fuentes rotas (mojibake) — con tesseract instalado, `extract_fulltext.py` cae solo
 > a OCR cuando la capa de texto no es legible, y el `.txt` queda marcado `source: ocr` (citable con
-> salvedad: símbolos/notación pueden diferir). Ninguno de estos hace falta
+> salvedad: símbolos/notación pueden diferir); y `curl` (estándar en Linux/macOS), que `fetch_pdf.py`
+> usa de fallback para publishers cuyo WAF rechaza a python-requests. Ninguno de estos hace falta
 > para consultar una bóveda ya poblada (el fulltext se commitea). En Windows, los comandos de shell de
 > acá corren en Git Bash o WSL.
 
@@ -95,7 +96,7 @@ descripción, o el usuario con `/<nombre>`). Encapsulan la cadena mecánica + el
 | Skill | Cuándo | Qué hace |
 |---|---|---|
 | `setup` | "configurá la bóveda", "definí el objetivo" | Paso 0: traduce tu foco en palabras a `objective.yaml` (incluida la regex `relevance.topics`) y la **afina contra ADS con un preview** (`query_ads --probe`), para que NO escribas regex a mano. No ingesta. |
-| `ingest-star` | "bajá/ingestá/agregá la estrella X" | Corre la cadena (`query_ads → fetch_arxiv → fetch_ground_truth → make_notes → extract_fulltext`) y hace la extracción LLM de los papers clave + síntesis + bookkeeping. |
+| `ingest-star` | "bajá/ingestá/agregá la estrella X" | Corre la cadena (`query_ads → fetch_arxiv → fetch_pdf → fetch_ground_truth → make_notes → extract_fulltext`) y hace la extracción LLM de los papers clave + síntesis + bookkeeping. |
 | `ingest-topic` | "investigá a fondo el tema X" | Como ingest-star pero por TEMA: query ADS por keywords → concept durable en `concepts/`. Soporta temas off-ADS (opt-in) vía `source: web\|local-pdfs` + `sources:` en `topics.yaml`. |
 | `append-knowledge` | "agregale este paper a la ficha X", "sumá este PDF al concept Y" | Pliega **una fuente puntual** (bibcode / PDF / URL) a una ficha/concepto **existente**: plomería mínima + extracción enfocada + síntesis a la nota viva. No crea entidades ni barre por query. |
 | `test-hypothesis` | "hipótesis: …", "evidencia a favor/contra de …" | Testea un supuesto **durable** contra el fulltext y responde con veredicto citado; **a pedido del usuario** lo archiva en `concepts/hypotheses/` y taggea papers (`thesis_links`/`bearing`). |
@@ -168,6 +169,9 @@ respalde la afirmación). Toda afirmación fáctica va **citada `[[bibcode]]` o 
 skill `verify-citations` descompone cada nota en pares (afirmación, bibcode) y lanza un subagente por
 par que lee SÓLO ese `.txt` y devuelve `soportada|parcial|no-soportada|contradice` + cita textual
 (una contradicción es candidata a disputa, no sólo cita rota). Ver `CLAUDE.md`.
+Su tasa de error se mide a pedido con el **auto-benchmark** (`scripts/bench_verify.py` + modo
+benchmark del skill): siembra citas falsas deterministas entre pares reales, el verificador las
+juzga a ciegas y `score` reporta el recall (todo en `build/`/`outputs/`, nada toca la bóveda).
 
 ## Mantener tu bóveda actualizada (traer mejoras del framework)
 

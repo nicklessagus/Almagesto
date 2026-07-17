@@ -206,7 +206,8 @@ clasificador de papers core). El agente traduce el foco del usuario (en palabras
 la query, `stars.yaml`/`topics.yaml`). No ingesta nada; después se usan `ingest-star`/`ingest-topic`.
 
 ### Ingest (una fuente → cascada de páginas)
-1. Scripts de `scripts/` bajan: `query_ads.py` → `fetch_arxiv.py` → `fetch_ground_truth.py` →
+1. Scripts de `scripts/` bajan: `query_ads.py` → `fetch_arxiv.py` → `fetch_pdf.py` (los sin
+   arXiv, vía resolver ADS) → `fetch_ground_truth.py` →
    `make_notes.py` → `extract_fulltext.py` (stubs mecánicos; idempotente, no pisa — con una única
    excepción add-only: el retro-linkeo de abajo).
 2. **Vos (LLM)** leés el PDF/fulltext y hacés la cascada: poblás la extracción del paper

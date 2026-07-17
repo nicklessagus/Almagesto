@@ -1,6 +1,6 @@
 # Tests de `scripts/` — diseño de la suite
 
-Tests unitarios/integración de la **capa determinista** del framework (los 10 scripts de
+Tests unitarios/integración de la **capa determinista** del framework (los 12 scripts de
 `scripts/`). No testean la capa LLM (skills, extracción, síntesis) ni el contenido de una
 bóveda real — para eso está `lint.py`, que es el "test suite" del *contenido*.
 
@@ -42,6 +42,7 @@ Requiere `pytest` (dev-only, no está en `requirements.txt`; los scripts no lo n
 | `test_lib_config.py` | token ADS, loaders YAML, `load_concept_areas` (declarado/tolerante) | puro FS |
 | `test_query_ads.py` | `classify`, variantes de designación, `build_query`, retry/truncado, chaining (dedup, `via`), `extra_core`, `main()` | `requests` falso + subfunciones mockeadas |
 | `test_fetch_arxiv.py` | `download_pdf` (resume por Range, 200-ignora-Range, 429, magic `%PDF`), `main()` (skip/limit/missing) | respuestas streaming falsas |
+| `test_fetch_pdf.py` | resolver `esource` (formas múltiple/link-único, placeholders, DOI pelado), higiene del token (sólo hosts ADS), fallback `curl` sólo a publishers, residuo `missing_pdf` | `requests` y `curl` falsos |
 | `test_fetch_ground_truth.py` | `msini_earth` (física), `_val`, selección de masa y flags en `fetch_planets`, idempotencia de `main()` | `astroquery` falso vía `sys.modules` |
 | `test_extract_fulltext.py` | `is_legible` (umbrales), flujo pdftotext→OCR (fallback, upgrade automático, ya-OCR no reintenta), degradación limpia | `subprocess`/`shutil` falsos |
 | `test_fetch_web.py` | `clean_markdown` (determinista), `snapshot_date_of`, header del snapshot, reuso de fecha, `CITEKEY_RE` | `defuddle` mockeado |
@@ -49,6 +50,7 @@ Requiere `pytest` (dev-only, no está en `requirements.txt`; los scripts no lo n
 | `test_lint.py` | cada categoría con su caso sembrado + exit codes | bóvedas mínimas por escenario |
 | `test_check_retractions.py` | parseo Crossref (`updated-by`, fechas), fallback por título, estampado idempotente, exit codes | `requests` falso |
 | `test_ingest_topic.py` | despacho por `source`, validaciones de `sources:`, flujo `pending`, copia de PDFs, orden de la cadena ads | `run()` y `make_notes.*` grabadores |
+| `test_bench_verify.py` | extracción de pares (excluye blockquotes/fences/bloque de verificación), siembra por rotación (sin falsos-falsos), determinismo byte a byte, puntaje | puro FS |
 
 ## Fuera de alcance (deliberado)
 

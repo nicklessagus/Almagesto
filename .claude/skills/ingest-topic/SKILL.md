@@ -1,7 +1,7 @@
 ---
 name: ingest-topic
 description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema no-astro / fuera de ADS (desde PDFs locales + web; ver Modo off-ADS).
-version: 1.6.0
+version: 1.6.1
 ---
 
 # Ingest: agregar un TEMA a la wiki
@@ -55,16 +55,18 @@ del repo.
    ```bash
    python query_ads.py   --topic <slug>
    python fetch_arxiv.py         <slug>
+   python fetch_pdf.py           <slug>   # los SIN arXiv, vía resolver ADS (esources)
    python make_notes.py  --topic <slug>
    python extract_fulltext.py    <slug>
    python check_retractions.py            # Crossref: marca `retracted` si algún paper fue retractado
    ```
    `query_ads --topic` escribe el mismo `build/<slug>/ads.json` (con `kind: topic`), así que
-   `fetch_arxiv` y `extract_fulltext` corren sin cambios. Hace **citation chaining anclado a la query
+   `fetch_arxiv`, `fetch_pdf` y `extract_fulltext` corren sin cambios. Hace **citation chaining anclado a la query
    del tema** (references/citations de los core filtrados por la propia query → recall extra sin traer
    los mega-citados genéricos del área). `fetch_arxiv` respeta el rate limit de arXiv
-   (1 req/3 s) → correr en background si son muchos PDFs. Papers sin arXiv (A&A viejos) quedan en
-   `build/<slug>/missing_pdf.json` → bajar manual por DOI si son clave. Curación persistente con
+   (1 req/3 s) → correr en background si son muchos PDFs. Los papers sin arXiv (A&A viejos) los
+   intenta `fetch_pdf` (escaneo ADS con token → publisher, fallback `curl`); lo que ni así sale
+   queda en `build/<slug>/missing_pdf.json` → bajar manual por DOI si son clave. Curación persistente con
    `extra_core: [<bibcode>, …]` en la entrada del tema en `topics.yaml` (igual que en estrellas).
 
 3. **Extracción LLM (criterio).** Leer los papers **clave del tema** (fundacionales / árbitros /
@@ -115,7 +117,7 @@ ADS** (p. ej. un método matemático general: ICA/FastICA, signal processing, es
 este modo. **`ingest-star` no cambia: sigue siendo astro-only.**
 
 Qué cambia respecto del flujo ADS de arriba:
-- **Sin ADS:** se saltean `query_ads.py`, `fetch_arxiv.py` y `fetch_ground_truth.py`. En
+- **Sin ADS:** se saltean `query_ads.py`, `fetch_arxiv.py`, `fetch_pdf.py` y `fetch_ground_truth.py`. En
   `vault/config/topics.yaml` la entrada lleva `query: null`, el switch **`source: web | local-pdfs |
   local-pdfs+web`** y la bibliografía **declarada** en la lista `sources:` (cada item: `key`
   AAAA+Autor + `url` o `pdf` + `title/author/year/venue/n_authors/doi` opcionales; ver header del YAML); el resto
