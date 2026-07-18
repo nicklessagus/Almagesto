@@ -65,9 +65,19 @@ retro-tag + clave de cita de ejemplo `2006RasmussenWilliams`), `append-knowledge
 strokes leen en los dos). Nota de tooling: `mmdc` necesita `--no-sandbox` (config puppeteer) en este
 entorno.
 
-**Pendientes menores de eye candy (menú ofrecido, sin decidir):** social preview PNG 1280×640
-(se sube a mano en Settings → Social preview), captura de Obsidian (demo con estrella famosa), GIF de
-terminal (vhs) del `--probe`.
+**✅ HECHO (2026-07-18) — social preview + favicon (make_logo.py).** `make_logo.py` ahora genera 4
+assets: `logo-animated.svg`, `logo.svg`, **`favicon.svg`** (marca reducida: anillo/órbita neutro +
+Venus ámbar + centro — la rosa completa se emborrona a 16-32 px, así que el favicon es su reducción
+legible; elección del usuario) y **`social-preview.svg`** (tarjeta 1280×640 estilo lámina papel-antiguo:
+rosa sepia a la izquierda, `ALMAGESTO` en GFS Didot + el etimón griego `ἡ Μεγίστη` + tagline en EB
+Garamond, dentro de un marco de lámina; fondo pergamino `#efe6d3`). El PNG del social preview
+(`docs/assets/social-preview.png`) se **rasteriza aparte** (necesita las fuentes GFS Didot + EB Garamond
+y un rasterizador; en esta sesión, el Chromium de puppeteer con `--no-sandbox`) y **se sube a mano** en
+Settings → General → Social preview. El social preview arrancó con fondo oscuro (se veía "muy IA") →
+iterado a papel-antiguo + tipografía griega a pedido del usuario.
+
+**Pendientes menores de eye candy (menú ofrecido, sin decidir):** captura de Obsidian (demo con estrella
+famosa), GIF de terminal (vhs) del `--probe`.
 
 ## Backlog de framework — validación de áreas de `vault/wiki/concepts/` + config a mano
 
