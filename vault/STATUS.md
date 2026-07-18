@@ -79,6 +79,40 @@ iterado a papel-antiguo + tipografía griega a pedido del usuario.
 **Pendientes menores de eye candy (menú ofrecido, sin decidir):** captura de Obsidian (demo con estrella
 famosa), GIF de terminal (vhs) del `--probe`.
 
+## Backlog de framework — relevar buscadores IA de literatura (Undermind & co.) — A INVESTIGAR
+
+> Anotado 2026-07-18 a pedido del usuario. **Nada verificado todavía**: lo de abajo es el encuadre de
+> la pregunta, no hallazgos. Es backlog de **framework** → se evalúa/aplica en el template.
+
+**Pregunta.** Existen herramientas que hacen búsqueda bibliográfica con IA (**Undermind**, y en la
+misma familia Elicit / Consensus / SciSpace / semantic-search sobre Semantic Scholar u OpenAlex).
+¿Conviene (a) **consumir alguna API** desde la cadena de ingest, o (b) **copiar la metodología** y
+reimplementarla sobre nuestra plomería (ADS + chaining + `objective.yaml`)?
+
+**Por qué importa acá.** El descubrimiento de papers hoy es: query ADS por keywords → filtro core con
+la regex de `relevance.topics` → citation chaining anclado. Es determinista y barato, pero es
+**matching léxico**: un paper relevante que no usa nuestras palabras no aparece. Ese es exactamente el
+hueco que estas herramientas dicen cubrir (búsqueda semántica + exploración iterativa del grafo de
+citas, en vez de una sola query).
+
+**A verificar antes de opinar (nada de esto está chequeado):**
+- ¿Undermind expone **API pública** y con qué licencia/costo? ¿Los resultados vienen con identificador
+  estable (DOI/bibcode) para que encajen con `vault/raw/` y las claves de cita?
+- ¿Cubre **astro-ph**/ADS o está sesgado a bio/CS? Si no trae bibcode, hay que resolver DOI→bibcode.
+- **Metodología publicada:** ¿hay paper/whitepaper describiendo el algoritmo (búsqueda iterativa,
+  criterio de relevancia, criterio de parada)? Eso es lo copiable y lo que no ata a un proveedor.
+- Alternativas **abiertas** que sirvan de sustituto barato: API de **Semantic Scholar** (recomendaciones
+  + embeddings SPECTER2) y **OpenAlex** (gratis, sin key) — probablemente el camino menos comprometido.
+
+**Criterios de decisión (los de siempre acá).** (1) Lo determinista va en `scripts/`, sin gastar tokens;
+(2) el template es MIT y portable → una dependencia de servicio pago/cerrado no puede ser obligatoria,
+a lo sumo opt-in como el modo off-ADS; (3) todo lo que entre al vault sigue necesitando fuente citable
+(regla #0) — un buscador IA aporta **candidatos**, nunca prosa.
+
+**Entregable esperado del relevamiento:** una nota corta comparando (API vs metodología vs no-hacer-nada)
+con números, al estilo de la evaluación de `defuddle` — no adoptar nada sin medir contra el baseline
+actual (query ADS + chaining) sobre una estrella/tema ya ingestado.
+
 ## Backlog de framework — validación de áreas de `vault/wiki/concepts/` + config a mano
 
 > Rescatado del scratch `DESIGN-NOTES.md` (discusión 2026-06-27) al borrarlo el 2026-06-28. El escape
