@@ -117,6 +117,6 @@ procesa. Trabajar desde la raíz del repo.
 - **OCR: lo maneja solo `extract_fulltext.py`.** Chequea si el PDF trae **capa de texto** legible
   (umbral determinista) y, si no (escaneos-imagen puros, p. ej. Baliunas 1995, o fuentes sin
   ToUnicode), **cae solo a OCR** cuando hay `tesseract` instalado — el `.txt` queda con header
-  `source: ocr`, **citable con salvedad** (ver README); sin tesseract AVISA y el lint lo lista. Ojo
+  `source: ocr`, **citable con salvedad** (ver docs/operacion.md); sin tesseract AVISA y el lint lo lista. Ojo
   con quirks de PostScript viejo en la extracción (p. ej. el signo `-` y `>` pueden salir ambos como
   `[`): los datos están, sólo hay que desambiguar por contexto.
