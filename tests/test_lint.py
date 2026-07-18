@@ -179,13 +179,13 @@ def test_objetivo_default_warn(toy_vault, capsys):
     write_yaml(cfg.OBJECTIVE_YAML, obj)
     rc, out = run_lint(capsys)
     assert rc == 0                                   # WARN, no bloquea
-    assert "objective.name sigue siendo el default del template" in out
+    assert "objective.name sigue siendo el placeholder del template" in out
     assert "`setup`" in out
 
 
 def test_objetivo_propio_sin_warn(toy_vault, capsys):
     rc, out = run_lint(capsys)                       # el toy objective ya tiene name propio
-    assert "Objetivo sin instanciar (WARN — objective.yaml sigue en el default del template) (0)" in out
+    assert "Objetivo sin instanciar (WARN — objective.yaml sigue en el placeholder del template) (0)" in out
 
 
 def test_area_no_declarada_warn(toy_vault, capsys):

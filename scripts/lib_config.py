@@ -18,11 +18,12 @@ import yaml
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
 ALMAGESTO_VERSION = "1.0.0"
 
-# `name` del EJEMPLO canónico que trae el template en vault/config/objective.yaml (default
-# funcional + documentación del formato). El lint lo usa para AVISAR (WARN) si una instancia
-# olvidó definir su propio objetivo (skill `setup`) — con el default, la bóveda clasifica
-# "core" con la regex del ejemplo, no con tu tema. Mantener en sync con el YAML del template.
-DEFAULT_OBJECTIVE_NAME = "Separar señales de actividad estelar vs planetarias en velocidades radiales"
+# PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
+# explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
+# daría WARN permanente sin forma de apagarlo). El lint AVISA (WARN) mientras `name` siga siendo
+# este string — la instancia no definió su objetivo (skill `setup`) y clasifica "core" con la
+# regex del ejemplo. Mantener en sync con el YAML del template.
+DEFAULT_OBJECTIVE_NAME = "<definir con el skill setup>"
 
 ROOT = Path(__file__).resolve().parent.parent  # raíz del repo (andamiaje + bóveda)
 VAULT = ROOT / "vault"                          # la bóveda: contenido (config/wiki/raw); Obsidian abre acá

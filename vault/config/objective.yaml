@@ -5,12 +5,14 @@
 #   1) el encuadre que lee el agente (name/short/description),
 #   2) qué paper es "core" = `relevance.topics` (el clasificador de relevancia).
 #
-# Viene pre-cargado con el ejemplo canónico (actividad estelar vs RV planetaria)
-# que sirve a la vez de documentación del formato y de default funcional. Para tu
-# tema: reescribí name/short/description y, sobre todo, `relevance.topics`.
+# `name` viene como PLACEHOLDER a propósito: el lint avisa (WARN) mientras siga
+# así, y es el target que pisa el skill `setup`. El resto (short/description/
+# relevance) trae el ejemplo canónico (actividad estelar vs RV planetaria) como
+# documentación del formato y default funcional. Para tu tema: reescribí
+# name/short/description y, sobre todo, `relevance.topics`.
 # ─────────────────────────────────────────────────────────────────────────────
 
-name: "Separar señales de actividad estelar vs planetarias en velocidades radiales"
+name: "<definir con el skill setup>"
 short: "actividad estelar vs RV planetaria"
 description: >
   Reunir, por estrella y por concepto, todo lo publicado relevante (planetas,
