@@ -18,6 +18,33 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.1.0 (2026-07-18) — tanda de issues #9–#14 resuelta
+
+> Los 6 issues abiertos desde la instancia Almagesto-RV, resueltos en el template (un commit por
+> issue, `closes #N`). 233 tests verdes, lint 0 bloqueantes. `ALMAGESTO_VERSION` 1.0.0 → **1.1.0**
+> (minor: cambios aditivos de schema/cadena). Al mergear en las instancias: re-correr la cadena
+> idempotente estampa el contrato nuevo en las notas viejas (ver #14).
+
+- **#9** — guard "objetivo sin instanciar" compara contra un **placeholder explícito**
+  (`<definir con el skill setup>`), no contra un nombre real: mata el falso positivo permanente
+  de Almagesto-RV.
+- **#10** — guard contra abrir la **raíz** del repo como vault de Obsidian: `/.obsidian/` (raíz) al
+  `.gitignore`, WARN del lint si existe, filtro vestigial de `graph.json` limpiado, síntoma+remedio
+  en `docs/operacion.md`.
+- **#11** — tema off-ADS **MIXTO**: `extra_core:` con bibcodes ADS reales dispara la sub-cadena ADS
+  (`query_ads --extra-only` nuevo → fetch → make_notes) — antes se ignoraba en silencio. Skill
+  `ingest-topic` 1.6.3→1.7.0.
+- **#12** — `strictLineBreaks: true` persistido en `vault/.obsidian/app.json` (las notas
+  hard-wrapped se reflowean en modo lectura).
+- **#13** — stub de paper con **link markdown clickeable al PDF** en el cuerpo (`· [📄 PDF](…)`;
+  markdown, no wikilink — el lint rompería).
+- **#14** — contrato de `papers/` extendido: **`fulltext:`** (ruta al `.txt` barato) +
+  **`fulltext_source:`** (`pdftotext|ocr|web` — la salvedad OCR visible desde el frontmatter).
+  Estampado por verdad de disco (stubs) + cirugía `stamp_fulltext` desde `extract_fulltext`
+  (migra notas viejas al re-correr). `CLAUDE.md` desambiguado: el default de lectura es el `.txt`.
+  Skill `verify-citations` 1.2.0→1.2.1. Los `.txt` OCR'd a mano sin header (caso Almagesto-RV) se
+  rescatan con `extract_fulltext.py <slug> --force`.
+
 ## Backlog de framework — eye candy del README (EN CURSO, sesión 2026-07-18)
 
 > Estado hasta `9221352` **commiteado y pusheado**; 218 tests verdes, lint 0. Lo de la
