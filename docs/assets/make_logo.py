@@ -1,23 +1,25 @@
 """Generador del logo de Almagesto — epiciclo ptolemaico, línea fina. Determinista.
 
-Uso:  python docs/assets/make_logo.py     (regenera los 4 SVG en docs/assets/)
+Uso:  python docs/assets/make_logo.py     (regenera los 2 SVG en docs/assets/)
 
-Produce, con fondo transparente y variante clara/oscura (el README las elige con
-<picture> + prefers-color-scheme):
-  - logo-animated[-dark].svg — header del README: el epiciclo recorre el deferente (24 s)
+Produce, con fondo transparente y UNA sola tinta neutra (gris intermedio legible sobre
+blanco y sobre el fondo oscuro de GitHub — el truco <picture>+prefers-color-scheme sigue el
+tema del OS, no el de GitHub, y sirve la variante equivocada cuando difieren). Sin wordmark:
+el título del README ya nombra al proyecto.
+  - logo-animated.svg — header del README: el epiciclo recorre el deferente (24 s)
     mientras la estrella gira sobre él (6 s); la relación 4:1 hace que la estrella pase
     EXACTO sobre la traza epitrocoide k=5 del fondo (el mecanismo dibuja su propia curva).
     Animación SMIL nativa: GitHub la reproduce en el README; donde no, congela en el frame
     inicial (≈ la versión estática — degrada bien).
-  - logo[-dark].svg — emblema estático (reserva: social preview, favicon, usos chicos).
+  - logo.svg — emblema estático (reserva: social preview, favicon, usos chicos).
 """
 import math
 from pathlib import Path
 
 OUT = Path(__file__).parent
 ACCENT = "#d4a017"                       # ámbar: funciona sobre claro y oscuro
-INKS = {"": "#2b2d42", "-dark": "#e8e6e3"}
-CX, CY = 160, 158
+INK = "#7d8590"                          # gris neutro: legible sobre blanco y sobre #0d1117
+CX, CY = 160, 160
 
 
 def pt(cx, cy, r, ang):
@@ -45,15 +47,9 @@ def epitrochoid(R, r, k, rot=0.0, n=560):
     return "M " + " L ".join(f"{x:.2f} {y:.2f}" for x, y in pts)
 
 
-def wordmark(ink):
-    return (f'<text x="157" y="336" text-anchor="middle" '
-            f'font-family="Georgia, \'Times New Roman\', serif" font-size="31" '
-            f'letter-spacing="6" fill="{ink}">ALMAGESTO</text>')
-
-
 def write(body, name):
-    doc = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 370" '
-           f'width="320" height="370">\n' + body + "\n</svg>\n")
+    doc = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" '
+           f'width="320" height="320">\n' + body + "\n</svg>\n")
     (OUT / name).write_text(doc, encoding="utf-8")
     print(f"  docs/assets/{name}")
 
@@ -63,7 +59,7 @@ def animated(ink):
     R_DEF, R_EPI = 78, 26                # traza máx. R+r=104: entra en el lienzo
     ex = CX + R_DEF
     return f'''<path d="{epitrochoid(R_DEF, R_EPI, 5)}" stroke="{ink}" fill="none"
-      stroke-width="1" opacity="0.22"/>
+      stroke-width="1" opacity="0.3"/>
 <circle cx="{CX}" cy="{CY}" r="{R_DEF}" stroke="{ink}" fill="none" stroke-width="1.6"
       stroke-dasharray="4 5" opacity="0.6"/>
 <circle cx="{CX}" cy="{CY}" r="3.6" fill="{ink}"/>
@@ -79,8 +75,7 @@ def animated(ink):
     <line x1="{ex}" y1="{CY}" x2="{ex + R_EPI}" y2="{CY}" stroke="{ink}" stroke-width="1.3"/>
     <path d="{star4(ex + R_EPI, CY, 11, 4.2)}" fill="{ACCENT}"/>
   </g>
-</g>
-{wordmark(ink)}'''
+</g>'''
 
 
 def static(ink):
@@ -95,11 +90,9 @@ def static(ink):
 </g>
 <circle cx="{CX}" cy="{CY}" r="3.6" fill="{ink}"/>
 <circle cx="{ex:.2f}" cy="{ey:.2f}" r="2.6" fill="{ink}"/>
-<path d="{star4(sx, sy, 12, 4.6)}" fill="{ACCENT}"/>
-{wordmark(ink)}'''
+<path d="{star4(sx, sy, 12, 4.6)}" fill="{ACCENT}"/>'''
 
 
 if __name__ == "__main__":
-    for suffix, ink in INKS.items():
-        write(animated(ink), f"logo-animated{suffix}.svg")
-        write(static(ink), f"logo{suffix}.svg")
+    write(animated(INK), "logo-animated.svg")
+    write(static(INK), "logo.svg")

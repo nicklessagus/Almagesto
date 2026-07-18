@@ -1,9 +1,6 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-animated-dark.svg">
-    <img src="docs/assets/logo-animated.svg" width="290"
-         alt="Almagesto — un epiciclo dibujando su trayectoria">
-  </picture>
+  <img src="docs/assets/logo-animated.svg" width="180"
+       alt="Almagesto — un epiciclo dibujando su trayectoria">
 </p>
 
 # Almagesto — template de wiki de conocimiento astro (patrón LLM Wiki)
