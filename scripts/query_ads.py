@@ -258,6 +258,11 @@ def main() -> int:
                     help="desactivar el citation chaining (references/citations de los papers core)")
     ap.add_argument("--topic", action="store_true",
                     help="el slug es un TEMA de vault/config/topics.yaml (query Solr cruda), no una estrella")
+    ap.add_argument("--extra-only", action="store_true",
+                    help="traer SÓLO los bibcodes de `extra_core` (sin query ni chaining) — la vía ADS "
+                         "de un tema off-ADS MIXTO: su bibliografía canónica vive fuera de ADS (sin "
+                         "`query`), pero los papers que SÍ tienen bibcode van en extra_core. "
+                         "La corre ingest_topic.py solo.")
     ap.add_argument("--probe", metavar="QUERY",
                     help="PREVIEW (skill setup): corre una query Solr CRUDA y muestra el corte "
                          "core/no-core con títulos, clasificando con relevance.topics de objective.yaml. "
@@ -269,18 +274,28 @@ def main() -> int:
 
     if not args.slug:
         ap.error('falta el slug (o usá --probe "<query>" para previsualizar la regla de relevancia)')
+    if args.extra_only and not args.topic:
+        ap.error("--extra-only es de temas (--topic): una estrella siempre tiene query (ads_object)")
 
     if args.topic:
         _, meta = cfg.topic_by_slug(args.slug)
-        q = cfg.require_field(meta, "query", args.slug, "topics.yaml",
-                              hint="Si es un tema off-ADS (source: web|local-pdfs) no va por "
-                                   "query_ads: corré ingest_topic.py, que despacha por `source`.")
-        # el "sujeto" de un tema es su propia query: anclar el chaining con ella deja on-topic a los
-        # papers del grafo de citas (sin ancla traería los mega-citados genéricos, como en estrellas).
-        chain_filter = f"({q})"
-        print(f"Consultando ADS (tema): {meta.get('title', args.slug)}\n  q: {q}")
-        head = {"kind": "topic", "slug": args.slug, "title": meta.get("title"),
-                "concept": meta.get("concept"), "area": meta.get("area"), "query": q}
+        if args.extra_only:
+            # Tema MIXTO (off-ADS + extra_core): sin `query` no hay búsqueda ni chaining — la
+            # única fuente ADS es la curación manual de `extra_core` (el bloque de abajo).
+            q, chain_filter = None, None
+            print(f"Consultando ADS (tema, sólo extra_core): {meta.get('title', args.slug)}")
+            head = {"kind": "topic", "slug": args.slug, "title": meta.get("title"),
+                    "concept": meta.get("concept"), "area": meta.get("area"), "query": None}
+        else:
+            q = cfg.require_field(meta, "query", args.slug, "topics.yaml",
+                                  hint="Si es un tema off-ADS (source: web|local-pdfs) no va por "
+                                       "query_ads: corré ingest_topic.py, que despacha por `source`.")
+            # el "sujeto" de un tema es su propia query: anclar el chaining con ella deja on-topic a los
+            # papers del grafo de citas (sin ancla traería los mega-citados genéricos, como en estrellas).
+            chain_filter = f"({q})"
+            print(f"Consultando ADS (tema): {meta.get('title', args.slug)}\n  q: {q}")
+            head = {"kind": "topic", "slug": args.slug, "title": meta.get("title"),
+                    "concept": meta.get("concept"), "area": meta.get("area"), "query": q}
     else:
         name, meta = cfg.star_by_slug(args.slug)
         names = [cfg.require_field(meta, "ads_object", name, "stars.yaml")] + meta.get("aliases", [])
@@ -289,11 +304,14 @@ def main() -> int:
         print(f"Consultando ADS: {name}  (nombres: {', '.join(names)})")
         head = {"kind": "star", "star": name, "slug": args.slug, "ads_object": meta["ads_object"]}
 
-    recs = query_ads(q, rows=args.rows)
-    for r in recs:
-        r["via"] = "query"
-    rel = [r for r in recs if r["relevant"]]
-    print(f"  query directa: {len(recs)} registros, {len(rel)} relevantes")
+    if q is None:
+        recs, rel = [], []          # --extra-only: todo entra por el bloque extra_core de abajo
+    else:
+        recs = query_ads(q, rows=args.rows)
+        for r in recs:
+            r["via"] = "query"
+        rel = [r for r in recs if r["relevant"]]
+        print(f"  query directa: {len(recs)} registros, {len(rel)} relevantes")
 
     if not args.no_chain and rel and chain_filter:
         seen = {r["bibcode"] for r in recs if r.get("bibcode")}
@@ -313,6 +331,9 @@ def main() -> int:
     # curación manual persistente: bibcodes en `extra_core` de stars.yaml/topics.yaml que el
     # clasificador perdió (build/ es scratch y se pisa; esto sobrevive porque vive en config).
     extra = [b for b in (meta.get("extra_core") or []) if b]
+    if args.extra_only and not extra:
+        sys.exit(f"--extra-only pero la entrada '{args.slug}' no declara `extra_core` en topics.yaml "
+                 "— listá ahí los bibcodes ADS del tema mixto.")
     if extra:
         seen = {r["bibcode"] for r in recs if r.get("bibcode")}
         manual = [m for m in fetch_bibcodes(extra) if m.get("bibcode") and m["bibcode"] not in seen]

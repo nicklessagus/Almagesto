@@ -16,6 +16,10 @@ campo `source` (formaliza el modo off-ADS del skill ingest-topic en el tooling):
   fuente (`fetch_web.py` para URLs; copia a raw/pdfs/<slug>/<key>.pdf para PDFs) y corre
   extract_fulltext. Sin query_ads / fetch_ground_truth (no aplican fuera de ADS);
   check_retractions SÍ corre cuando algún item declara `doi` (Crossref lo cubre igual).
+  **Tema MIXTO:** un tema off-ADS puede además declarar `extra_core: [bibcode, …]` con los
+  papers del tema que SÍ están en ADS (un método no-astro casi siempre tiene aplicaciones
+  publicadas en revista astro) — para ellos corre la sub-cadena ADS (query_ads --extra-only →
+  fetch_arxiv → fetch_pdf → make_notes --topic): metadata ADS real, sin blockquote off-ADS.
 
 Fallback fuentes no-conseguibles: un item puede llevar `pending: paywall|scan|unextractable`
 en vez de una fuente obtenible — declara que la fuente todavía NO se pudo conseguir (sin copia
@@ -148,8 +152,23 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
                                             title=s.get("title"), first_author=s.get("author"),
                                             year=s.get("year"), n_authors=s.get("n_authors"),
                                             doi=s.get("doi"), venue=s.get("venue"))
+    # Tema MIXTO: un método no-astro casi siempre tiene alguna aplicación/variante publicada en
+    # revista astro — papers con bibcode ADS real. Van en `extra_core:` (no en `sources:`, que
+    # degradaría el stub: clave sintética, citation_count 0, blockquote off-ADS falso) y para
+    # ellos corre la sub-cadena ADS. Antes extra_core se ignoraba acá en silencio.
+    extra = [b for b in (meta.get("extra_core") or []) if b]
+    if extra:
+        print(f"\nextra_core: {len(extra)} paper(s) con bibcode ADS (tema mixto) → sub-cadena ADS")
+        for script, sargs in (("query_ads.py", ["--topic", slug, "--extra-only"]),
+                              ("fetch_arxiv.py", [slug]),
+                              ("fetch_pdf.py", [slug]),
+                              ("make_notes.py", ["--topic", slug])):
+            rc = run(script, *sargs)
+            if rc:
+                sys.exit(f"{script} falló (rc={rc}) — cadena abortada. La cadena es idempotente: "
+                         "corregí y re-corré ingest_topic.py (lo ya bajado no se re-baja).")
     extract_rc = 0
-    if n_pdf:
+    if n_pdf or extra:
         # el rc de extract se reporta aparte: un fallo de extracción NO es una "fuente fallida"
         # (contarlo ahí inflaba el conteo del aviso final)
         extract_rc = run("extract_fulltext.py", slug, *(["--force"] if force else []))
@@ -173,7 +192,8 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
                  "(idempotente: los PDFs ya copiados no se re-copian).")
     # off-ADS no tiene bibcode ADS, pero un DOI declarado en sources alcanza para el chequeo de
     # retracciones (Crossref) — una fuente retractada silenciosa rompe la frontera dura igual.
-    if any(s.get("doi") for s in sources):
+    # Con extra_core también corre: los papers ADS del tema mixto traen DOI.
+    if any(s.get("doi") for s in sources) or extra:
         if run("check_retractions.py"):
             sys.exit("check_retractions detectó papers retractados — revisá las notas marcadas "
                      "(el lint las surface como bloqueante).")

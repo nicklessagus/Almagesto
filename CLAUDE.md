@@ -240,7 +240,9 @@ la query, `stars.yaml`/`topics.yaml`). No ingesta nada; después se usan `ingest
 > sin `query_ads`/`fetch_ground_truth`). Formalizado en el tooling: la
 > entrada del tema en `topics.yaml` lleva `source: ads | web | local-pdfs [+web]` y (si es off-ADS) la
 > lista `sources:`; `scripts/ingest_topic.py <slug>` orquesta la cadena según ese campo — también en
-> modo ads. Una fuente que **no se consigue** (paywall / escaneo / mojibake) se marca
+> modo ads. Un tema off-ADS puede ser **mixto**: los papers del tema que **sí** tienen bibcode ADS
+> van en `extra_core:` (no en `sources:`) y el orquestador les corre solo la sub-cadena ADS
+> (metadata real, sin blockquote off-ADS). Una fuente que **no se consigue** (paywall / escaneo / mojibake) se marca
 > `pending: paywall|scan|unextractable` en su item de `sources:` → stub con `pending_source` (url/doi
 > como puntero), **derivada al usuario** sin frenar la cadena; el lint la lista como precondición.
 > **`ingest-star` no cambia: es astro-only.** Papers sin bibcode ADS → **clave de cita sintética `AAAA+Autor`** (debe empezar con

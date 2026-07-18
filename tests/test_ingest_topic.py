@@ -145,6 +145,35 @@ def test_offads_web_llama_fetch_web(toy_vault, fake_run, fake_notes, monkeypatch
     assert fake_notes.concepts == [("gp", False)]   # el concept NUNCA se pisa
 
 
+def test_offads_mixto_extra_core_corre_subcadena_ads(toy_vault, fake_run, fake_notes, monkeypatch):
+    """Tema off-ADS con extra_core (papers que SÍ tienen bibcode ADS) → sub-cadena ADS + extract
+    + retracciones. Antes extra_core se ignoraba en silencio en modo off-ADS."""
+    topic(source="web", sources=[{"key": "2006Rasmussen", "url": "https://x"}],
+          extra_core=["2012PASP..124.1015B"])
+    assert run_main(monkeypatch) == 0
+    assert [c[0] for c in fake_run.calls] == \
+        ["fetch_web.py", "query_ads.py", "fetch_arxiv.py", "fetch_pdf.py",
+         "make_notes.py", "extract_fulltext.py", "check_retractions.py"]
+    assert ("query_ads.py", "--topic", "gp", "--extra-only") in fake_run.calls
+    assert ("make_notes.py", "--topic", "gp") in fake_run.calls
+
+
+def test_offads_sin_extra_core_no_corre_ads(toy_vault, fake_run, fake_notes, monkeypatch):
+    topic(source="web", sources=[{"key": "2006Rasmussen", "url": "https://x"}])
+    assert run_main(monkeypatch) == 0
+    assert "query_ads.py" not in [c[0] for c in fake_run.calls]
+
+
+def test_offads_mixto_aborta_si_falla_subcadena(toy_vault, fake_run, fake_notes, monkeypatch):
+    topic(source="web", sources=[{"key": "2006Rasmussen", "url": "https://x"}],
+          extra_core=["2012PASP..124.1015B"])
+    fake_run.rcs["fetch_pdf.py"] = 1
+    with pytest.raises(SystemExit, match="fetch_pdf.py falló"):
+        run_main(monkeypatch)
+    assert [c[0] for c in fake_run.calls] == ["fetch_web.py", "query_ads.py", "fetch_arxiv.py",
+                                              "fetch_pdf.py"]
+
+
 def test_offads_force_solo_re_baja_fuentes(toy_vault, fake_run, fake_notes, monkeypatch):
     topic(source="web", sources=[{"key": "2006Rasmussen", "url": "https://x"}])
     run_main(monkeypatch, ("gp", "--force"))

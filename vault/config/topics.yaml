@@ -13,6 +13,9 @@
 #   extra_core : opcional, lista de bibcodes a forzar como core (curación manual que el clasificador
 #                perdió). query_ads los trae por bibcode (`via: manual`) y los mergea. Persistente
 #                (config se commitea), a diferencia de editar build/ (scratch, se pisa).
+#                En un tema OFF-ADS también vale (tema MIXTO): los papers del tema que SÍ tienen
+#                bibcode ADS van acá — NO en sources: con el bibcode de key (degrada el stub:
+#                metadata a mano, blockquote off-ADS falso). ingest_topic les corre la sub-cadena ADS.
 #   source   : de dónde sale la bibliografía (default si falta: ads). Valores:
 #              ads | web | local-pdfs | local-pdfs+web. Todo lo no-ads es el modo off-ADS de
 #              ingest-topic (opt-in, sólo a pedido explícito) y requiere `sources:` y `query: null`.

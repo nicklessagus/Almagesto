@@ -1,7 +1,7 @@
 ---
 name: ingest-topic
 description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema no-astro / fuera de ADS (desde PDFs locales + web; ver Modo off-ADS).
-version: 1.6.3
+version: 1.7.0
 ---
 
 # Ingest: agregar un TEMA a la wiki
@@ -147,7 +147,14 @@ Qué cambia respecto del flujo ADS de arriba:
   `pending` por `pdf:`/`url:`, re-correr la cadena (idempotente) y completar la extracción.
 - **Clave de cita sintética (papers sin bibcode ADS):** `AAAA+Autor` (p. ej. `2006RasmussenWilliams`,
   `2006Tichavsky`, `2025sklearn`). Debe **empezar con `AAAA`+letra** (lo exige `BIBCODE_RE` del lint) y
-  coincidir con el nombre del `.txt`. Donde **sí** exista un bibcode ADS real, usarlo.
+  coincidir con el nombre del `.txt`.
+- **Tema MIXTO — papers del tema que SÍ tienen bibcode ADS** (un método no-astro casi siempre tiene
+  aplicaciones/variantes publicadas en revista astro): van en **`extra_core: [<bibcode>, …]`** de la
+  entrada del tema, **no** en `sources:` con el bibcode como `key` (eso degrada el stub: metadata a
+  mano, `citation_count: 0`, blockquote off-ADS factualmente falso). `ingest_topic.py` les corre solo
+  la **sub-cadena ADS** (`query_ads --extra-only` → `fetch_arxiv` → `fetch_pdf` → `make_notes
+  --topic`): stub con metadata ADS real, PDF por arXiv/resolver y chequeo de retracciones por la vía
+  ADS. El tema queda mixto: `sources:` para lo off-ADS + `extra_core:` para lo que está en ADS.
 - **Notas de paper (automatizado):** `fetch_web.py` ya crea el stub `vault/wiki/papers/<clave>.md`; para
   fuentes **PDF** off-ADS (sin URL) usá `python make_notes.py --web <clave> --concept <concept>
   --slug-hint <slug> [--title … --author … --year … --n-authors … --doi … --venue …]`. El stub lleva el

@@ -247,6 +247,35 @@ def test_main_extra_core_persistente(toy_vault, toy_classifier, no_sleep, monkey
     assert [r["bibcode"] for r in manual] == ["1988old.....1O"]
 
 
+def test_main_tema_extra_only(toy_vault, toy_classifier, no_sleep, monkeypatch):
+    """Tema off-ADS MIXTO: --extra-only trae SÓLO los extra_core (sin query ni chaining), y no
+    exige `query` — la vía ADS de un tema cuya bibliografía canónica vive fuera de ADS."""
+    write_yaml(cfg.TOPICS_YAML, {"gp": {"title": "Gaussian processes", "area": "methods",
+                                        "concept": "gaussian-processes", "source": "web",
+                                        "extra_core": ["2012PASP..124.1015B"]}})
+    monkeypatch.setattr(qa, "query_ads", lambda *a, **kw: pytest.fail("no debe correr la query"))
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a: pytest.fail("no debe encadenar"))
+    monkeypatch.setattr(qa, "fetch_bibcodes",
+                        lambda bibs: [dict(rec("2012PASP..124.1015B", relevant=True), via="manual")])
+    assert run_main(monkeypatch, ["gp", "--topic", "--extra-only"]) == 0
+    data = json.loads((toy_vault.ROOT / "build" / "gp" / "ads.json").read_text())
+    assert data["kind"] == "topic" and data["query"] is None
+    assert [r["bibcode"] for r in data["records"]] == ["2012PASP..124.1015B"]
+    assert data["records"][0]["via"] == "manual"
+
+
+def test_main_extra_only_sin_extra_core_error(toy_vault, toy_classifier, monkeypatch):
+    write_yaml(cfg.TOPICS_YAML, {"gp": {"title": "GP", "area": "methods",
+                                        "concept": "gaussian-processes", "source": "web"}})
+    with pytest.raises(SystemExit, match="no declara `extra_core`"):
+        run_main(monkeypatch, ["gp", "--topic", "--extra-only"])
+
+
+def test_main_extra_only_requiere_topic(toy_vault, toy_classifier, monkeypatch):
+    with pytest.raises(SystemExit):                  # ap.error → exit 2
+        run_main(monkeypatch, ["test_star", "--extra-only"])
+
+
 def test_main_estrella_sin_ads_object_error_amigable(toy_vault, toy_classifier, monkeypatch):
     """Guard de config: entrada de stars.yaml cargada a mano sin ads_object → mensaje, no traceback."""
     write_yaml(cfg.STARS_YAML, {"Estrella Test": {"slug": "test_star", "simbad": "s"}})
