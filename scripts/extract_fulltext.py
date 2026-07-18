@@ -66,7 +66,8 @@ def ocr_available() -> bool:
 def tesseract_version() -> str:
     """Primera línea de `tesseract --version` (provenance del header OCR)."""
     try:
-        r = subprocess.run(["tesseract", "--version"], capture_output=True, text=True, timeout=30)
+        r = subprocess.run(["tesseract", "--version"], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=30)
         return (r.stdout or r.stderr).splitlines()[0].strip()
     except Exception:
         return "tesseract (versión desconocida)"
@@ -90,7 +91,7 @@ def ocr_pdf(pdf: Path) -> str | None:
     form feed (como pdftotext). Determinista para una misma versión de tesseract. None si falla."""
     with tempfile.TemporaryDirectory() as td:
         r = subprocess.run(["pdftoppm", "-r", str(OCR_DPI), "-png", str(pdf), str(Path(td) / "p")],
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
         if r.returncode:
             print(f"    ! pdftoppm falló: {r.stderr.strip()[:120]}")
             return None
@@ -192,8 +193,8 @@ def main() -> int:
             print("     no sirve para grep/verify-citations; "
                   + ("reemplazá el PDF o marcá la fuente `pending` en sources:"
                      if via_ocr else
-                     "instalá `tesseract-ocr` para rescatarlo por OCR (ver README), reemplazá el "
-                     "PDF, o marcá la fuente `pending` en sources:")
+                     "instalá `tesseract-ocr` para rescatarlo por OCR (ver docs/operacion.md), "
+                     "reemplazá el PDF, o marcá la fuente `pending` en sources:")
                   + " (el lint lo lista como precondición)")
 
     print(f"{args.slug}: {done} extraídos" + (f" ({ocred} por OCR)" if ocred else "")

@@ -101,10 +101,13 @@ def _curl_pdf(url: str) -> bytes | None:
     publisher). None si no hay curl o no entregó un PDF real."""
     if shutil.which("curl") is None:
         return None
-    with tempfile.NamedTemporaryFile(suffix=".pdf") as tf:
+    # TemporaryDirectory y no NamedTemporaryFile: en Windows el archivo con nombre queda abierto
+    # por Python y curl no puede escribirlo (sharing violation).
+    with tempfile.TemporaryDirectory() as td:
+        dest = Path(td) / "dl.pdf"
         r = subprocess.run(["curl", "-sL", "--max-time", "120", "-A", UA["User-Agent"],
-                            "-o", tf.name, url], capture_output=True, text=True)
-        data = Path(tf.name).read_bytes() if r.returncode == 0 else b""
+                            "-o", str(dest), url], capture_output=True, text=True)
+        data = dest.read_bytes() if r.returncode == 0 and dest.exists() else b""
     return data if data[:4] == b"%PDF" else None
 
 

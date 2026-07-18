@@ -39,6 +39,7 @@ import datetime as dt
 import glob
 import json
 import re
+from pathlib import Path
 
 import yaml
 
@@ -92,7 +93,7 @@ def fm_error(text: str) -> str | None:
 
 
 def basename(p: str) -> str:
-    return p.rsplit("/", 1)[-1]
+    return Path(p).name          # no splitear "/" a mano: glob devuelve separador nativo del OS
 
 
 def note_files() -> list:
@@ -119,8 +120,7 @@ def main() -> int:
     for p in fulltext_files:
         ok, why = is_legible(open(p, encoding="utf-8", errors="replace").read())
         if not ok:
-            rel = p.split(f"{cfg.RAW}/")[-1]
-            illegible_txt.append((f"fulltext/{rel.split('/', 1)[-1]}", why))
+            illegible_txt.append((Path(p).relative_to(cfg.RAW).as_posix(), why))
     # PDFs en disco (un <bibcode>.pdf por slug en vault/raw/pdfs/) → chequear drift `pdf` ↔ archivo.
     # stem = safe_name(bibcode), igual que el nombre de la nota del paper.
     pdf_on_disk = {}
@@ -129,7 +129,7 @@ def main() -> int:
     unverifiable: list = []            # (stem, "cita <bibcode> sin fulltext")
     coverage: list = []                # concept/hipótesis sin citas [[bibcode]] → no chequeable
     unverified: list = []              # query/concept CON citas pero SIN bloque de verify-citations
-    names = {p.rsplit("/", 1)[-1][:-3] for p in files}  # stems referenciables por [[..]]
+    names = {basename(p)[:-3] for p in files}  # stems referenciables por [[..]]
     incoming: dict[str, int] = {n: 0 for n in names}
     kinds: dict[str, list] = {}
     broken, incomplete, contradictions = [], [], []
@@ -239,7 +239,7 @@ def main() -> int:
                 if not (cfg.WIKI / "papers" / pdf).resolve().exists():
                     pdf_issues.append((stem, f"`pdf` apunta a archivo inexistente: {pdf}"))
             elif on_disk:                      # pdf null/vacío pero el PDF está bajado → drift
-                slug_dir = on_disk.rsplit("/", 2)[-2]
+                slug_dir = Path(on_disk).parent.name
                 pdf_issues.append((stem, f"PDF en disco sin linkear → poné `pdf: ../../raw/pdfs/{slug_dir}/{stem}.pdf`"))
 
     # contradicción ground-truth ↔ ficha (nº de planetas) + masa sospechosa

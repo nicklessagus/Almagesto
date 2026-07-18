@@ -30,6 +30,7 @@ import hashlib
 import json
 import re
 import sys
+from pathlib import Path
 
 import lib_config as cfg
 
@@ -53,7 +54,7 @@ def fulltext_map() -> dict[str, str]:
     """bibcode → ruta del .txt, para todo el corpus (bajo cualquier slug/tema)."""
     out: dict[str, str] = {}
     for p in sorted(glob.glob(str(cfg.FULLTEXT / "**" / "*.txt"), recursive=True)):
-        out.setdefault(p.rsplit("/", 1)[-1][:-4], p)
+        out.setdefault(Path(p).stem, p)      # separador nativo del OS: no splitear "/" a mano
     return out
 
 
@@ -90,7 +91,7 @@ def extract_pairs(max_pairs: int) -> list[dict]:
         cut = text.find(VERIFY_HEADER)
         if cut >= 0:
             text = text[:cut]
-        stem = f.rsplit("/", 1)[-1][:-3]
+        stem = Path(f).stem
         for lineno, line in claim_lines(text):
             bibs = [t.strip() for t in LINK_RE.findall(line) if BIBCODE_RE.match(t.strip())]
             if not bibs:

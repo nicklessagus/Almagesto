@@ -75,7 +75,8 @@ def defuddle_version() -> str:
     """Versión del paquete defuddle (para provenance en el header); 'desconocida' si no se puede."""
     try:
         r = subprocess.run(["npx", "--yes", "defuddle", "--version"],
-                           capture_output=True, text=True, timeout=60)
+                           capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           timeout=60)
         return r.stdout.strip() or "desconocida"
     except Exception:
         return "desconocida"
@@ -83,8 +84,11 @@ def defuddle_version() -> str:
 
 def fetch(url: str) -> str:
     """Corre `npx defuddle parse <url> --markdown` y devuelve el markdown. '' si falla."""
+    # encoding explícito: sin él, Windows decodifica con la locale (cp1252) y el markdown
+    # UTF-8 de defuddle sale mojibake — el snapshot debe ser idéntico en cualquier OS.
     r = subprocess.run(["npx", "--yes", "defuddle", "parse", url, "--markdown"],
-                       capture_output=True, text=True, timeout=180)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace",
+                       timeout=180)
     if r.returncode != 0:
         print(f"    ! defuddle falló ({r.returncode}): {r.stderr.strip()[:200]}")
         return ""
