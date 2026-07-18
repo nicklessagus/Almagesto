@@ -20,28 +20,31 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 
 ## Backlog de framework — eye candy del README (EN CURSO, sesión 2026-07-18)
 
-> Estado guardado antes de limpiar contexto. Todo lo de abajo está **commiteado y pusheado**
-> (hasta `9221352`); el repo quedó limpio, 218 tests verdes, lint 0.
+> Estado hasta `9221352` **commiteado y pusheado**; 218 tests verdes, lint 0. Lo de la
+> sub-tanda **logo + About (2026-07-18)** de abajo está en el working tree, **sin commitear** aún.
 
-**Hecho esta tanda:** README adelgazado a pantallazo de presentación (lo operativo →
+**Hecho tandas previas:** README adelgazado a pantallazo de presentación (lo operativo →
 `docs/operacion.md`); portabilidad OS-agnóstica (pathlib, TemporaryDirectory, encoding utf-8 en
-subprocesos); logo de epiciclos: generador determinista `docs/assets/make_logo.py` → `logo-animated.svg`
+subprocesos); generador determinista `docs/assets/make_logo.py` → `logo-animated.svg`
 (header del README, 180 px) + `logo.svg` (emblema estático de reserva).
 
-**⚠ PENDIENTE PRINCIPAL — rediseñar el logo.** Al usuario **no le gustan** los logos que quedaron
-(ni el estático ni el animado) → hay que iterar el diseño desde cero, no retocar. Decisiones técnicas
-que SÍ quedaron validadas y conviene conservar en cualquier rediseño:
-- **Una sola tinta neutra** (`#7d8590`) sobre fondo transparente — el truco `<picture>` +
-  `prefers-color-scheme` sigue el tema del **OS**, no el de GitHub, y sirve la variante equivocada
-  cuando difieren. Acento ámbar `#d4a017` funciona en ambos temas.
-- **Sin wordmark** en el logo (el H1 del README ya nombra al proyecto).
-- **SMIL anima en READMEs de GitHub** (camo proxy sirve el SVG como img y el browser lo anima);
-  donde no, congela en el frame inicial. Ojo: camo/browser cachean ~5 min (un "no se ve" tras un
-  push suele ser caché, no el archivo).
-- Animado actual: deferente 24 s + epiciclo 6 s ⇒ la estrella pasa exacto sobre la traza
-  epitrocoide k=5 (relación 4:1 → fase combinada 5×). El usuario mostró interés en una lámina
-  histórica de trayectorias planetarias (estilo grabado, más ornamental) como inspiración —
-  se probaron variantes "trayectoria" y "anillo graduado" que tampoco convencieron.
+**✅ RESUELTO (2026-07-18) — logo rediseñado: la rosa de Venus.** El usuario descartó el
+epiciclo (estático y animado). Rediseño desde cero: `make_logo.py` ahora dibuja la **trayectoria
+geocéntrica real de Venus en 8 años** (pentagrama de 5 pétalos, `posición(Venus) − posición(Tierra)`
+con órbitas circulares). Se le ofrecieron 4 direcciones (rosa de Venus / lámina Mercurio+Venus /
+retrogradación / esfera armilar) y eligió **A (rosa de Venus)**. El animado **dibuja su propia traza**
+(`stroke-dashoffset`) mientras Venus —estrella ámbar— recorre la punta (`animateMotion` sobre la
+misma curva, 20 s en loop) → conserva el concepto "el mecanismo dibuja su curva" que sí gustaba.
+`alt` del README actualizado. **Decisiones técnicas conservadas** (siguen validadas): una sola tinta
+neutra `#7d8590` sobre transparente (evita el truco frágil `<picture>`+`prefers-color-scheme`, que
+sigue el tema del OS y no el de GitHub); acento ámbar `#d4a017`; sin wordmark; SMIL anima en READMEs
+de GitHub (camo proxy) y congela con la rosa completa donde no; camo/browser cachean ~5 min (un "no
+se ve" tras push suele ser caché).
+
+**✅ HECHO (2026-07-18) — About del repo.** Estaba vacío. Descripción seteada vía `gh repo edit`:
+"Wiki de conocimiento astronómico mantenida por un LLM (patrón LLM Wiki de Karpathy): literatura por
+estrella y concepto, verificable claim↔fuente." El usuario optó por **no** poner topics por ahora
+(los agrega a mano si quiere).
 
 **Pendientes menores de eye candy (menú ofrecido, sin decidir):** social preview PNG 1280×640
 (se sube a mano en Settings → Social preview), diagrama Mermaid del pipeline, captura de Obsidian

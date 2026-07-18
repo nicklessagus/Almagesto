@@ -1,25 +1,41 @@
-"""Generador del logo de Almagesto — epiciclo ptolemaico, línea fina. Determinista.
+"""Generador del logo de Almagesto — la rosa de Venus. Determinista.
 
 Uso:  python docs/assets/make_logo.py     (regenera los 2 SVG en docs/assets/)
 
-Produce, con fondo transparente y UNA sola tinta neutra (gris intermedio legible sobre
-blanco y sobre el fondo oscuro de GitHub — el truco <picture>+prefers-color-scheme sigue el
-tema del OS, no el de GitHub, y sirve la variante equivocada cuando difieren). Sin wordmark:
-el título del README ya nombra al proyecto.
-  - logo-animated.svg — header del README: el epiciclo recorre el deferente (24 s)
-    mientras la estrella gira sobre él (6 s); la relación 4:1 hace que la estrella pase
-    EXACTO sobre la traza epitrocoide k=5 del fondo (el mecanismo dibuja su propia curva).
-    Animación SMIL nativa: GitHub la reproduce en el README; donde no, congela en el frame
-    inicial (≈ la versión estática — degrada bien).
-  - logo.svg — emblema estático (reserva: social preview, favicon, usos chicos).
+El emblema es la **trayectoria geocéntrica real de Venus**: vista desde la Tierra, Venus
+dibuja en el cielo una rosa de 5 pétalos que se cierra cada 8 años (8 años terrestres ≈ 13
+años venusinos ≈ 5 períodos sinódicos — el "pentagrama de Venus"). Es astronomía observacional
+literal, no un adorno: la curva es `posición(Venus) − posición(Tierra)` con órbitas circulares.
+Encaja con Almagesto —una bóveda de literatura astronómica— y con el linaje ptolemaico del nombre
+(las trayectorias aparentes que los antiguos mapeaban).
+
+Convenciones (validadas, conservar): fondo transparente y UNA sola tinta neutra (`#7d8590`,
+gris intermedio legible sobre blanco y sobre el `#0d1117` de GitHub — evita el truco frágil
+`<picture>`+`prefers-color-scheme`, que sigue el tema del OS y no el de GitHub). Acento ámbar
+(`#d4a017`) para Venus, funciona en ambos temas. Sin wordmark: el título del README ya nombra
+al proyecto.
+  - logo-animated.svg — header del README: la rosa se DIBUJA sola (stroke-dashoffset) mientras
+    Venus (estrella ámbar) recorre la punta del trazo (animateMotion sobre la misma curva), 20 s
+    en loop. SMIL nativo: GitHub lo reproduce; donde no, congela con la rosa completa (≈ la
+    versión estática — degrada bien).
+  - logo.svg — emblema estático (reserva: social preview, favicon, usos chicos): la rosa completa
+    con Venus fijado en la conjunción de radio máximo.
 """
 import math
 from pathlib import Path
 
 OUT = Path(__file__).parent
-ACCENT = "#d4a017"                       # ámbar: funciona sobre claro y oscuro
+ACCENT = "#d4a017"                       # ámbar: Venus; funciona sobre claro y oscuro
 INK = "#7d8590"                          # gris neutro: legible sobre blanco y sobre #0d1117
 CX, CY = 160, 160
+SCALE = 80.0                             # UA → px (radio máx R+1 ≈ 1.72 UA ⇒ ~138 px, entra en 320)
+TAU = 2 * math.pi
+
+# Efemérides usadas (órbitas circulares, co-planares): períodos siderales en años terrestres
+# y semieje de Venus en UA. Fuente de la razón 8:13 ⇒ 5 pétalos.
+P_VENUS = 0.61519726
+A_VENUS = 0.7233
+ROT_DEG = 18.0                           # orientación estética de la rosa (no altera la forma)
 
 
 def pt(cx, cy, r, ang):
@@ -27,6 +43,7 @@ def pt(cx, cy, r, ang):
 
 
 def star4(cx, cy, r_out, r_in):
+    """Estrella de 4 puntas (destello) centrada en (cx, cy)."""
     pts = []
     for i in range(8):
         ang = math.pi / 4 * i - math.pi / 2
@@ -35,16 +52,27 @@ def star4(cx, cy, r_out, r_in):
     return "M " + " L ".join(f"{x:.2f} {y:.2f}" for x, y in pts) + " Z"
 
 
-def epitrochoid(R, r, k, rot=0.0, n=560):
+def venus_rose(n=2400):
+    """Trayectoria geocéntrica de Venus en 8 años: posición(Venus) − posición(Tierra)."""
+    rot = math.radians(ROT_DEG)
     pts = []
     for i in range(n + 1):
-        t = 2 * math.pi * i / n
-        x = R * math.cos(t) + r * math.cos(k * t)
-        y = R * math.sin(t) + r * math.sin(k * t)
+        t = 8.0 * i / n                                  # años terrestres
+        x = A_VENUS * math.cos(TAU * t / P_VENUS) - math.cos(TAU * t)
+        y = A_VENUS * math.sin(TAU * t / P_VENUS) - math.sin(TAU * t)
         xr = x * math.cos(rot) - y * math.sin(rot)
         yr = x * math.sin(rot) + y * math.cos(rot)
-        pts.append((CX + xr, CY + yr))
+        pts.append((CX + xr * SCALE, CY + yr * SCALE))
+    return pts
+
+
+def path_d(pts):
     return "M " + " L ".join(f"{x:.2f} {y:.2f}" for x, y in pts)
+
+
+def polyline_len(pts):
+    return sum(math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1])
+               for i in range(len(pts) - 1))
 
 
 def write(body, name):
@@ -54,45 +82,36 @@ def write(body, name):
     print(f"  docs/assets/{name}")
 
 
-def animated(ink):
-    """Deferente 24 s + epiciclo 6 s ⇒ traza k=5 (ver header del módulo)."""
-    R_DEF, R_EPI = 78, 26                # traza máx. R+r=104: entra en el lienzo
-    ex = CX + R_DEF
-    return f'''<path d="{epitrochoid(R_DEF, R_EPI, 5)}" stroke="{ink}" fill="none"
-      stroke-width="1" opacity="0.3"/>
-<circle cx="{CX}" cy="{CY}" r="{R_DEF}" stroke="{ink}" fill="none" stroke-width="1.6"
-      stroke-dasharray="4 5" opacity="0.6"/>
-<circle cx="{CX}" cy="{CY}" r="3.6" fill="{ink}"/>
-<g>
-  <animateTransform attributeName="transform" type="rotate"
-    from="0 {CX} {CY}" to="360 {CX} {CY}" dur="24s" repeatCount="indefinite"/>
-  <line x1="{CX}" y1="{CY}" x2="{ex}" y2="{CY}" stroke="{ink}" stroke-width="1.3"/>
-  <circle cx="{ex}" cy="{CY}" r="{R_EPI}" stroke="{ink}" fill="none" stroke-width="1.8"/>
-  <circle cx="{ex}" cy="{CY}" r="2.4" fill="{ink}"/>
-  <g>
-    <animateTransform attributeName="transform" type="rotate"
-      from="0 {ex} {CY}" to="360 {ex} {CY}" dur="6s" repeatCount="indefinite"/>
-    <line x1="{ex}" y1="{CY}" x2="{ex + R_EPI}" y2="{CY}" stroke="{ink}" stroke-width="1.3"/>
-    <path d="{star4(ex + R_EPI, CY, 11, 4.2)}" fill="{ACCENT}"/>
-  </g>
-</g>'''
+def animated():
+    """La rosa se dibuja sola mientras Venus recorre la punta del trazo (20 s, loop)."""
+    pts = venus_rose()
+    d = path_d(pts)
+    length = polyline_len(pts)
+    dur = "20s"
+    return f'''<path id="rose" d="{d}" stroke="{INK}" fill="none" stroke-width="1.2"
+      stroke-linejoin="round" stroke-linecap="round"
+      stroke-dasharray="{length:.1f}" stroke-dashoffset="{length:.1f}">
+  <animate attributeName="stroke-dashoffset" from="{length:.1f}" to="0"
+    dur="{dur}" repeatCount="indefinite"/>
+</path>
+<circle cx="{CX}" cy="{CY}" r="2.6" fill="{INK}"/>
+<path d="{star4(0, 0, 10, 3.8)}" fill="{ACCENT}">
+  <animateMotion dur="{dur}" repeatCount="indefinite" rotate="0">
+    <mpath href="#rose"/>
+  </animateMotion>
+</path>'''
 
 
-def static(ink):
-    """Emblema V1: deferente + epiciclo + estrella, geometría limpia."""
-    ex, ey = pt(CX, CY, 92, math.radians(-38))
-    sx, sy = pt(ex, ey, 30, math.radians(-95))
-    return f'''<g stroke="{ink}" fill="none" stroke-width="2">
-  <circle cx="{CX}" cy="{CY}" r="92"/>
-  <circle cx="{ex:.2f}" cy="{ey:.2f}" r="30"/>
-  <line x1="{CX}" y1="{CY}" x2="{ex:.2f}" y2="{ey:.2f}" stroke-width="1.4"/>
-  <line x1="{ex:.2f}" y1="{ey:.2f}" x2="{sx:.2f}" y2="{sy:.2f}" stroke-width="1.4"/>
-</g>
-<circle cx="{CX}" cy="{CY}" r="3.6" fill="{ink}"/>
-<circle cx="{ex:.2f}" cy="{ey:.2f}" r="2.6" fill="{ink}"/>
-<path d="{star4(sx, sy, 12, 4.6)}" fill="{ACCENT}"/>'''
+def static():
+    """Rosa completa; Venus fijado en la conjunción de radio máximo."""
+    pts = venus_rose()
+    far = max(pts, key=lambda p: (p[0] - CX) ** 2 + (p[1] - CY) ** 2)
+    return f'''<path d="{path_d(pts)}" stroke="{INK}" fill="none" stroke-width="1.2"
+      stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="{CX}" cy="{CY}" r="2.6" fill="{INK}"/>
+<path d="{star4(far[0], far[1], 10, 3.8)}" fill="{ACCENT}"/>'''
 
 
 if __name__ == "__main__":
-    write(animated(INK), "logo-animated.svg")
-    write(static(INK), "logo.svg")
+    write(animated(), "logo-animated.svg")
+    write(static(), "logo.svg")

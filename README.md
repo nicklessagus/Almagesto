@@ -1,6 +1,6 @@
 <p align="center">
   <img src="docs/assets/logo-animated.svg" width="180"
-       alt="Almagesto — un epiciclo dibujando su trayectoria">
+       alt="Almagesto — la rosa de Venus: la trayectoria geocéntrica de Venus en 8 años">
 </p>
 
 # Almagesto — template de wiki de conocimiento astro (patrón LLM Wiki)
