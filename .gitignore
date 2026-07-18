@@ -19,6 +19,9 @@ outputs/
 # Obsidian (la bóveda se abre en vault/): se commitea la config compartible
 # (vault/.obsidian/app.json, appearance.json, core-plugins.json, community-plugins.json,
 # plugins/, snippets/, themes/, hotkeys.json...); se ignora lo volátil/por-máquina.
+# Un .obsidian/ en la RAÍZ es siempre un error (repo abierto como vault → el grafo indexa
+# andamiaje); se ignora para que no se commitee por accidente — el lint además lo marca WARN.
+/.obsidian/
 vault/.obsidian/workspace.json
 vault/.obsidian/workspace-mobile.json
 vault/.obsidian/cache

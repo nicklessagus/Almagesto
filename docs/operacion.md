@@ -135,7 +135,9 @@ Sin rutas absolutas hardcodeadas: los scripts resuelven el root del repo desde `
 
 El vault de Obsidian es la carpeta **`vault/`** (no la raíz del repo): así el grafo y el explorador
 muestran sólo conocimiento, sin el andamiaje (`scripts/`, `CLAUDE.md`, …). Las consultas Dataview usan
-rutas relativas a esa raíz, tipo `FROM "wiki/papers"`.
+rutas relativas a esa raíz, tipo `FROM "wiki/papers"`. Si abrís la raíz por error, el síntoma es un
+grafo lleno de nodos ajenos a la bóveda (reportes de lint de `outputs/`, README, tests) y queda un
+`.obsidian/` en la raíz — está gitignored y el lint lo marca WARN: borralo y reabrí `vault/`.
 
 1. Obsidian → **"Open folder as vault"** → elegir la carpeta **`vault/`** del repo.
 2. Instalar/activar el plugin **Dataview** (Settings → Community plugins → Browse → "Dataview" →

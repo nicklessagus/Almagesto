@@ -313,6 +313,17 @@ def main() -> int:
                     (f"concepts/{d.name}/",
                      f"área fuera de concept_areas; {n} nota(s) — ¿typo o área nueva sin declarar?"))
 
+    # Obsidian abierto en la raíz del repo (WARN): la bóveda es vault/ por diseño — un .obsidian/
+    # en la raíz significa que el repo entero se abrió como vault y el grafo indexa el andamiaje
+    # (outputs/, build/, scripts/, README, tests/). Error de operación silencioso: sólo se nota
+    # mirando el grafo, y sin este check nadie lo mira.
+    root_obsidian = []
+    if (cfg.ROOT / ".obsidian").exists():
+        root_obsidian.append(
+            (".obsidian/ (raíz del repo)",
+             "Obsidian fue abierto en la raíz en vez de `vault/` — el grafo indexa andamiaje "
+             "(outputs/, build/, scripts/); abrí la carpeta `vault/` como vault y borrá este directorio"))
+
     # reporte
     lines = [f"# Lint de la bóveda — {dt.date.today().isoformat()}", ""]
     for title, items in [("Wikilinks rotos (página faltante)", broken),
@@ -326,6 +337,7 @@ def main() -> int:
                          ("⛔ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)", impl_leaks),
                          ("Objetivo sin instanciar (WARN — objective.yaml sigue en el placeholder del template)", objective_warn),
                          ("Áreas de concepts/ no declaradas en objective.yaml (WARN, posible typo)", undeclared_areas),
+                         ("Obsidian en la raíz del repo (WARN — la bóveda se abre en vault/)", root_obsidian),
                          ("PDF ↔ disco (WARN — higiene: frontmatter `pdf` vs PDF bajado)", pdf_issues),
                          ("⏳ Fuentes pendientes (pending_source — el usuario debe proveer la fuente)", pending_srcs),
                          ("Fulltext ilegible (mojibake/escaneo — existe pero no sirve para grep/verify)", illegible_txt),

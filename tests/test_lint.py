@@ -196,6 +196,19 @@ def test_area_no_declarada_warn(toy_vault, capsys):
     assert "concepts/zzz/" in out and "¿typo o área nueva sin declarar?" in out
 
 
+def test_obsidian_en_raiz_warn(toy_vault, capsys):
+    """Guard de operación: .obsidian/ en la raíz del repo (vault abierto ahí por error) → WARN."""
+    (toy_vault.ROOT / ".obsidian").mkdir()
+    rc, out = run_lint(capsys)
+    assert rc == 0                                   # WARN, no bloquea
+    assert "Obsidian fue abierto en la raíz en vez de `vault/`" in out
+
+
+def test_sin_obsidian_en_raiz_sin_warn(toy_vault, capsys):
+    rc, out = run_lint(capsys)
+    assert "Obsidian en la raíz del repo (WARN — la bóveda se abre en vault/) (0)" in out
+
+
 def test_pdf_drift_ambas_direcciones(toy_vault, capsys):
     # (a) PDF bajado pero frontmatter pdf: null
     pdf_dir = toy_vault.PDFS / "test_star"
