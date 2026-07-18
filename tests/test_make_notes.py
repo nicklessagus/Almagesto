@@ -273,6 +273,21 @@ def test_paper_notes_pdf_es_verdad_de_disco(toy_vault):
         == "../../raw/pdfs/test_star/1978oldW...1..1W.pdf"
 
 
+def test_paper_notes_link_pdf_clickeable(toy_vault):
+    """El stub deja en el CUERPO un link markdown al PDF (el `pdf:` del frontmatter se renderiza
+    como texto plano en Obsidian, no navegable). Markdown y NO wikilink: un [[x.pdf]] sería
+    wikilink roto para el lint (sólo indexa destinos .md)."""
+    ads_json([rec("2020conA...1..1A"), rec("1990preB....1..1B")])
+    pdf_dir = toy_vault.PDFS / "test_star"
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    (pdf_dir / "2020conA...1..1A.pdf").write_bytes(b"%PDF")     # bibcode con puntos consecutivos
+    mn.write_paper_notes("test_star", include_all=False, force=False)
+    body_a = (toy_vault.PAPERS / "2020conA...1..1A.md").read_text(encoding="utf-8")
+    assert "[📄 PDF](../../raw/pdfs/test_star/2020conA...1..1A.pdf)" in body_a
+    body_b = (toy_vault.PAPERS / "1990preB....1..1B.md").read_text(encoding="utf-8")
+    assert "📄 PDF" not in body_b                # sin PDF bajado → sin link
+
+
 def test_paper_notes_all_incluye_no_core(toy_vault):
     ads_json([rec("2020nonC....1..1C", relevant=False)])
     mn.write_paper_notes("test_star", include_all=True, force=False)
@@ -321,6 +336,8 @@ def test_web_note_local_pdf(toy_vault):
     assert fm["tags"] == ["paper", "local-pdf"]
     assert fm["accessed"] is None and fm["source_url"] is None
     assert fm["pdf"] == "../../raw/pdfs/gp/2006Rasmussen.pdf"   # verdad de disco
+    body = (toy_vault.PAPERS / "2006Rasmussen.md").read_text(encoding="utf-8")
+    assert "[📄 PDF](../../raw/pdfs/gp/2006Rasmussen.pdf)" in body   # link clickeable en el cuerpo
 
 
 def test_web_note_pending(toy_vault):

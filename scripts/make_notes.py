@@ -350,7 +350,7 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
 # {r.get('title')}
 
 **{', '.join(authors[:6])}{' et al.' if len(authors) > 6 else ''}** ({r.get('year')})
-· [[{link}]] · ADS: `{bib}`{' · arXiv: ' + r['arxiv_id'] if r.get('arxiv_id') else ''}
+· [[{link}]] · ADS: `{bib}`{' · arXiv: ' + r['arxiv_id'] if r.get('arxiv_id') else ''}{f' · [📄 PDF]({pdf_rel})' if pdf_rel else ''}
 
 ## Abstract
 {abstract or '_(no disponible)_'}
@@ -476,7 +476,7 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
 # {title or citekey}
 
 **{first_author or '(autor desconocido)'}** ({year or 's.f.'})
-· {'[[' + concept + ']] · ' if concept else ''}fuente off-ADS · `{citekey}`
+· {'[[' + concept + ']] · ' if concept else ''}fuente off-ADS · `{citekey}`{f' · [📄 PDF]({pdf_rel})' if pdf_rel else ''}
 {src_line}{acc_line}
 > Fuente **off-ADS** (fuera de ADS). El respaldo citable es el snapshot determinista
 > `{txt_ptr}` (`source_url` + `accessed` en el frontmatter), verificable por `verify-citations`.
