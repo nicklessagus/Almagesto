@@ -18,6 +18,35 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## Backlog de framework — eye candy del README (EN CURSO, sesión 2026-07-18)
+
+> Estado guardado antes de limpiar contexto. Todo lo de abajo está **commiteado y pusheado**
+> (hasta `9221352`); el repo quedó limpio, 218 tests verdes, lint 0.
+
+**Hecho esta tanda:** README adelgazado a pantallazo de presentación (lo operativo →
+`docs/operacion.md`); portabilidad OS-agnóstica (pathlib, TemporaryDirectory, encoding utf-8 en
+subprocesos); logo de epiciclos: generador determinista `docs/assets/make_logo.py` → `logo-animated.svg`
+(header del README, 180 px) + `logo.svg` (emblema estático de reserva).
+
+**⚠ PENDIENTE PRINCIPAL — rediseñar el logo.** Al usuario **no le gustan** los logos que quedaron
+(ni el estático ni el animado) → hay que iterar el diseño desde cero, no retocar. Decisiones técnicas
+que SÍ quedaron validadas y conviene conservar en cualquier rediseño:
+- **Una sola tinta neutra** (`#7d8590`) sobre fondo transparente — el truco `<picture>` +
+  `prefers-color-scheme` sigue el tema del **OS**, no el de GitHub, y sirve la variante equivocada
+  cuando difieren. Acento ámbar `#d4a017` funciona en ambos temas.
+- **Sin wordmark** en el logo (el H1 del README ya nombra al proyecto).
+- **SMIL anima en READMEs de GitHub** (camo proxy sirve el SVG como img y el browser lo anima);
+  donde no, congela en el frame inicial. Ojo: camo/browser cachean ~5 min (un "no se ve" tras un
+  push suele ser caché, no el archivo).
+- Animado actual: deferente 24 s + epiciclo 6 s ⇒ la estrella pasa exacto sobre la traza
+  epitrocoide k=5 (relación 4:1 → fase combinada 5×). El usuario mostró interés en una lámina
+  histórica de trayectorias planetarias (estilo grabado, más ornamental) como inspiración —
+  se probaron variantes "trayectoria" y "anillo graduado" que tampoco convencieron.
+
+**Pendientes menores de eye candy (menú ofrecido, sin decidir):** social preview PNG 1280×640
+(se sube a mano en Settings → Social preview), diagrama Mermaid del pipeline, captura de Obsidian
+(demo con estrella famosa), GIF de terminal (vhs) del `--probe`.
+
 ## Backlog de framework — validación de áreas de `vault/wiki/concepts/` + config a mano
 
 > Rescatado del scratch `DESIGN-NOTES.md` (discusión 2026-06-27) al borrarlo el 2026-06-28. El escape
