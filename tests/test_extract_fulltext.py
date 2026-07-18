@@ -92,6 +92,19 @@ def test_capa_de_texto_sana(toy_vault, fake_tools, monkeypatch):
     assert out.read_text(encoding="utf-8") == GOOD_TEXT
 
 
+def test_estampa_contrato_en_notas(toy_vault, fake_tools, monkeypatch):
+    """Al cerrar, main() estampa fulltext:/fulltext_source: en la nota del paper — en la cadena
+    el stub nace ANTES que el .txt; y un re-run idempotente migra notas pre-contrato."""
+    seed_pdf(toy_vault)
+    note = toy_vault.PAPERS / "2020toy.....1A.md"
+    note.write_text("---\npdf: null\ntags:\n- paper\n---\ncuerpo\n", encoding="utf-8")
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    text = note.read_text(encoding="utf-8")
+    assert "fulltext: ../../raw/fulltext/test_star/2020toy.....1A.txt" in text
+    assert "fulltext_source: pdftotext" in text
+    assert "cuerpo" in text                          # el cuerpo no se toca
+
+
 def test_idempotente_no_reextrae(toy_vault, fake_tools, monkeypatch):
     out = seed_pdf(toy_vault)
     out.parent.mkdir(parents=True, exist_ok=True)

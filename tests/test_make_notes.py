@@ -324,6 +324,85 @@ def test_paper_notes_topic_siembra_thesis_links(toy_vault):
     assert fm["thesis_links"] == ["gaussian-processes"] and fm["stars"] == []
 
 
+# ── contrato fulltext (fulltext: / fulltext_source:) ─────────────────────────
+
+def seed_txt(toy_vault, slug, stem, header=""):
+    d = toy_vault.FULLTEXT / slug
+    d.mkdir(parents=True, exist_ok=True)
+    p = d / f"{stem}.txt"
+    p.write_text(header + "Texto del paper con contenido de sobra.\n", encoding="utf-8")
+    return p
+
+
+def test_fulltext_info_provenance(toy_vault):
+    """La provenance sale de la marca en la primera línea del .txt (verdad de disco)."""
+    seed_txt(toy_vault, "test_star", "2020plain..1..1P")
+    seed_txt(toy_vault, "test_star", "2020ocrX...1..1O",
+             header=f"{cfg.FULLTEXT_OCR_MARK}: citable CON SALVEDAD\n")
+    seed_txt(toy_vault, "gp", "2020Web",
+             header=f"{cfg.FULLTEXT_WEB_MARK} (off-ADS), determinista para citar/verificar\n")
+    assert mn.fulltext_info("test_star", "2020plain..1..1P") \
+        == ("../../raw/fulltext/test_star/2020plain..1..1P.txt", "pdftotext")
+    assert mn.fulltext_info("test_star", "2020ocrX...1..1O")[1] == "ocr"
+    assert mn.fulltext_info("gp", "2020Web")[1] == "web"
+    assert mn.fulltext_info("test_star", "no-existe") == (None, None)
+    assert mn.fulltext_info(None, "x") == (None, None)
+
+
+def test_paper_notes_fulltext_verdad_de_disco(toy_vault):
+    """Re-run con .txt ya extraído → el stub nace con el contrato completo; sin .txt → null
+    (en el primer run de la cadena lo estampa extract_fulltext después, vía stamp_fulltext)."""
+    ads_json([rec("2020conA...1..1A"), rec("1990preB....1..1B")])
+    seed_txt(toy_vault, "test_star", "2020conA...1..1A")
+    mn.write_paper_notes("test_star", include_all=False, force=False)
+    fm_a = read_fm(toy_vault.PAPERS / "2020conA...1..1A.md")
+    assert fm_a["fulltext"] == "../../raw/fulltext/test_star/2020conA...1..1A.txt"
+    assert fm_a["fulltext_source"] == "pdftotext"
+    fm_b = read_fm(toy_vault.PAPERS / "1990preB....1..1B.md")
+    assert fm_b["fulltext"] is None and fm_b["fulltext_source"] is None
+
+
+def test_stamp_fulltext_quirurgico(toy_vault):
+    """stamp_fulltext actualiza `fulltext: null` → ruta sin tocar la extracción LLM; idempotente."""
+    ads_json([rec("2020conA...1..1A")])
+    mn.write_paper_notes("test_star", include_all=False, force=False)   # sin .txt → null
+    dest = toy_vault.PAPERS / "2020conA...1..1A.md"
+    dest.write_text(dest.read_text(encoding="utf-8")
+                    + "\n- **Métodos:** GP con kernel QP\n", encoding="utf-8")
+    seed_txt(toy_vault, "test_star", "2020conA...1..1A",
+             header=f"{cfg.FULLTEXT_OCR_MARK}: citable CON SALVEDAD\n")
+    assert mn.stamp_fulltext(dest, "2020conA...1..1A", "test_star") is True
+    fm_a = read_fm(dest)
+    assert fm_a["fulltext"] == "../../raw/fulltext/test_star/2020conA...1..1A.txt"
+    assert fm_a["fulltext_source"] == "ocr"                  # la salvedad OCR viaja en la nota
+    assert "GP con kernel QP" in dest.read_text(encoding="utf-8")
+    assert mn.stamp_fulltext(dest, "2020conA...1..1A", "test_star") is False
+
+
+def test_stamp_fulltext_migra_nota_pre_contrato(toy_vault):
+    """Nota vieja SIN los campos → se insertan tras `pdf:` (migración: re-correr la cadena)."""
+    mk_note(toy_vault.PAPERS, "2019oldC...1..1C",
+            {"bibcode": "2019oldC...1..1C", "pdf": None, "tags": ["paper"]}, "extracción vieja\n")
+    seed_txt(toy_vault, "test_star", "2019oldC...1..1C")
+    dest = toy_vault.PAPERS / "2019oldC...1..1C.md"
+    assert mn.stamp_fulltext(dest, "2019oldC...1..1C", "test_star") is True
+    fm_c = read_fm(dest)
+    assert fm_c["fulltext"].endswith("2019oldC...1..1C.txt")
+    assert fm_c["fulltext_source"] == "pdftotext"
+    assert "extracción vieja" in dest.read_text(encoding="utf-8")
+    assert mn.stamp_fulltext(dest, "2019oldC...1..1C", "test_star") is False
+
+
+def test_web_note_nace_con_fulltext(toy_vault):
+    """Flujo web: fetch_web escribe el snapshot ANTES de la nota → nace con provenance web."""
+    seed_txt(toy_vault, "gp", "2020Smith",
+             header=f"{cfg.FULLTEXT_WEB_MARK} (off-ADS), determinista para citar/verificar\n")
+    mn.write_web_paper_note("2020Smith", slug="gp", url="https://x", concept="gaussian-processes")
+    fm_s = read_fm(toy_vault.PAPERS / "2020Smith.md")
+    assert fm_s["fulltext"] == "../../raw/fulltext/gp/2020Smith.txt"
+    assert fm_s["fulltext_source"] == "web"
+
+
 # ── write_web_paper_note / unpend ────────────────────────────────────────────
 
 def test_web_note_local_pdf(toy_vault):

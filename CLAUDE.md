@@ -158,7 +158,12 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   **simétrica** existencia↔valor. Sólo taguear discrepancias **materiales** (mayores que el error;
   no diferencias cosméticas dentro de la barra). Reflejar la disputa también en la tabla/prosa.
 - **papers/**: `bibcode, title, first_author, n_authors, year, arxiv_id, doi, bibstem, stars[], topics[], methods[],
-  thesis_links[], bearing(supports|challenges|method), relevance, citation_count, pdf`. Opcional
+  thesis_links[], bearing(supports|challenges|method), relevance, citation_count, pdf, fulltext,
+  fulltext_source(pdftotext|ocr|web)`. El contrato apunta a **ambos artefactos**: `fulltext` es el
+  `.txt` **barato** (grep/lectura — el default de todo consumidor) y `pdf` el respaldo caro (abrir
+  sólo para figuras/tablas/ecuaciones o dudas de símbolos); `fulltext_source: ocr` hereda desde el
+  frontmatter la salvedad OCR (sin abrir el archivo). Los estampan `make_notes`/`extract_fulltext`
+  por verdad de disco (null si no hay extracción). Opcional
   `retracted: true` + `retraction{type,notice_doi,date,source}` — lo estampa `scripts/check_retractions.py`
   (Crossref) cuando el paper fue **retractado**; el lint lo surface como bloqueante (fuente no válida).
 - **concepts/ (áreas **abiertas** — cualquiera según el foco de la bóveda; `concept_areas` en
@@ -211,7 +216,9 @@ la query, `stars.yaml`/`topics.yaml`). No ingesta nada; después se usan `ingest
    `scripts/ingest_topic.py <slug>` para temas. **El orden canónico de cada cadena vive en el
    header de su orquestador** (fuente de verdad única — puntero, no copia: no replicar la lista de
    scripts en docs/skills).
-2. **Vos (LLM)** leés el PDF/fulltext y hacés la cascada: poblás la extracción del paper
+2. **Vos (LLM)** leés el **fulltext `.txt`** (el default: barato y greppable; el PDF se abre sólo
+   para figuras/tablas/ecuaciones o ante duda de símbolos si `fulltext_source: ocr`) y hacés la
+   cascada: poblás la extracción del paper
    (`methods`, `thesis_links`, `bearing`, P/K/indicadores), actualizás la ficha de la estrella
    (síntesis, huecos), tocás conceptos/hipótesis relacionados y la matriz método×estrella.
 3. Actualizás `index.md` y appendeás a `log.md`.
@@ -279,7 +286,8 @@ a lo que dice la fuente, reasignar la cita al bibcode correcto, marcar **`infere
 disputa) y se deja un bloque `## Verificación de citas` en la nota. El `.txt` es extracción **determinista** (`pdftotext`), así que
 la cita son las palabras reales del paper; si una afirmación no aparece (artefacto de extracción:
 ecuación/tabla/escaneo) abrir el PDF o marcar `no verificable por extracción`. Un `.txt` con header
-`source: ocr` (rescatado por tesseract cuando la capa de texto era ilegible) es **citable con
+`source: ocr` (rescatado por tesseract cuando la capa de texto era ilegible; la nota del paper lo
+espeja en `fulltext_source: ocr`) es **citable con
 salvedad**: el OCR puede errar símbolos/notación — la verificación vale para prosa; ante discrepancia
 de símbolos, abrir el PDF. Es **juicio de LLM**,
 robusto pero no prueba — su tasa de error se mide con el **auto-benchmark** (modo benchmark del

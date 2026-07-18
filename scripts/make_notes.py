@@ -36,6 +36,68 @@ def safe_name(bibcode: str) -> str:
     return bibcode.replace("/", "_")
 
 
+def fulltext_info(slug: str | None, stem: str) -> tuple[str | None, str | None]:
+    """(ruta relativa, provenance) del fulltext `.txt` de un paper, por VERDAD DE DISCO —
+    (None, None) si no hay extracción. `stem` es el nombre en disco (safe_name del bibcode /
+    citekey). La provenance sale de la marca en la primera línea del .txt: `ocr` (rescate
+    tesseract — citable con salvedad), `web` (snapshot defuddle) o `pdftotext` (extracción
+    determinista, sin marca). Es el lado barato del contrato máquina-legible: el consumidor
+    lee el .txt, no el PDF."""
+    if not slug:
+        return None, None
+    p = cfg.FULLTEXT / slug / f"{stem}.txt"
+    if not p.exists():
+        return None, None
+    with p.open(encoding="utf-8", errors="replace") as fh:
+        first = fh.readline()
+    src = ("ocr" if first.startswith(cfg.FULLTEXT_OCR_MARK)
+           else "web" if first.startswith(cfg.FULLTEXT_WEB_MARK)
+           else "pdftotext")
+    return f"../../raw/fulltext/{slug}/{stem}.txt", src
+
+
+def stamp_fulltext(dest, stem: str, slug: str | None) -> bool:
+    """Estampa/actualiza `fulltext:` + `fulltext_source:` (verdad de disco) en una nota que YA
+    existe. Hace falta porque en la cadena ADS el stub nace ANTES que el .txt (make_notes corre
+    antes que extract_fulltext, que llama esto al cerrar); de paso migra notas pre-contrato que
+    no traen los campos. Edición QUIRÚRGICA a nivel texto (como unpend_note/merge_frontmatter_list):
+    sólo esas dos líneas del frontmatter — actualiza las existentes o las inserta tras `pdf:` —,
+    nunca la extracción LLM. Sin .txt en disco no des-estampa (la ausencia ya la surface el lint).
+    Devuelve True si modificó."""
+    rel, src = fulltext_info(slug, stem)
+    if rel is None or not dest.exists():
+        return False
+    text = dest.read_text(encoding="utf-8")
+    if not text.startswith("---\n"):
+        return False
+    end = text.find("\n---\n", 4)
+    if end < 0:
+        return False
+    lines = text[4:end].split("\n")
+
+    def upsert(field: str, value: str, anchors: tuple[str, ...]) -> bool:
+        want = f"{field}: {value}"
+        for i, ln in enumerate(lines):
+            if ln.startswith(f"{field}:"):
+                if ln == want:
+                    return False
+                lines[i] = want
+                return True
+        for anchor in anchors:                       # insertar tras el primer ancla presente
+            for i, ln in enumerate(lines):
+                if ln.startswith(f"{anchor}:"):
+                    lines.insert(i + 1, want)
+                    return True
+        lines.append(want)
+        return True
+
+    changed = upsert("fulltext", rel, ("pdf",))
+    changed = upsert("fulltext_source", src, ("fulltext", "pdf")) or changed
+    if changed:
+        dest.write_text("---\n" + "\n".join(lines) + text[end:], encoding="utf-8")
+    return changed
+
+
 def parse_year(year) -> int | None:
     """Año tolerante para metadata off-ADS (provista a mano): acepta int, '2020', '2020a'
     (→ 2020); un valor sin año reconocible ('in press') queda null con aviso — la metadata
@@ -324,6 +386,9 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
         # dejaba punteros a archivos inexistentes cuando la bajada fallaba.
         pdf_rel = (f"../../raw/pdfs/{slug}/{safe_name(bib)}.pdf"
                    if (cfg.PDFS / slug / f"{safe_name(bib)}.pdf").exists() else None)
+        # En la cadena el .txt suele no existir todavía (extract_fulltext corre después y
+        # estampa vía stamp_fulltext); en un re-run sí está y el stub nace completo.
+        txt_rel, txt_src = fulltext_info(slug, safe_name(bib))
         front = {
             "bibcode": bib,
             "title": r.get("title"),
@@ -341,6 +406,8 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
             "relevance": "high" if r.get("relevant") else "low",
             "citation_count": r.get("citation_count", 0),
             "pdf": pdf_rel,
+            "fulltext": txt_rel,           # el artefacto BARATO del contrato: leer/grep esto, no el PDF
+            "fulltext_source": txt_src,    # pdftotext | ocr (citable con salvedad) | web
             "confidence": "medium",      # patrón LLM Wiki
             "tags": ["paper"],
             "generator": f"Almagesto v{cfg.ALMAGESTO_VERSION}",   # provenance (con qué versión se armó)
@@ -428,8 +495,13 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
     dest = cfg.PAPERS / f"{safe_name(citekey)}.md"
     if dest.exists() and not force:
         # la nota no se pisa, pero si estaba PENDIENTE y la fuente ya llegó, se des-pendea
-        # (edición quirúrgica del flag; la extracción LLM no se toca).
+        # (edición quirúrgica del flag; la extracción LLM no se toca). Ídem el contrato
+        # fulltext: si el snapshot/.txt ya está en disco, se estampa en la nota existente.
         if not pending and unpend_note(dest, citekey, slug):
+            stamp_fulltext(dest, safe_name(citekey), slug)
+            return False
+        if not pending and stamp_fulltext(dest, safe_name(citekey), slug):
+            print(f"  papers: {dest.name} — fulltext estampado (contrato máquina)")
             return False
         print(f"  papers: {dest.name} ya existe (no se pisa sin --force)")
         return False
@@ -440,6 +512,9 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
     pdf_rel = None
     if slug and (cfg.PDFS / slug / f"{safe_name(citekey)}.pdf").exists():
         pdf_rel = f"../../raw/pdfs/{slug}/{safe_name(citekey)}.pdf"
+    # fulltext↔disco: fetch_web escribe el snapshot ANTES de llamar acá → la nota web nace con el
+    # contrato completo; para local-pdfs lo estampa extract_fulltext al extraer (stamp_fulltext).
+    txt_rel, txt_src = fulltext_info(slug, safe_name(citekey))
     front = {
         "bibcode": citekey,
         "title": title,
@@ -459,6 +534,8 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
         "relevance": "high",
         "citation_count": 0,
         "pdf": pdf_rel,                      # off-ADS: null salvo PDF local ya copiado a raw/pdfs/<slug>/
+        "fulltext": txt_rel,                 # el artefacto BARATO del contrato: leer/grep esto, no el PDF
+        "fulltext_source": txt_src,          # pdftotext | ocr (citable con salvedad) | web
         # fuente aún no obtenida (paywall|scan|unextractable) → derivada al usuario; sólo si aplica
         **({"pending_source": pending} if pending else {}),
         "confidence": "medium",

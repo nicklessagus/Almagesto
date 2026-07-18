@@ -43,6 +43,13 @@ PDFS = RAW / "pdfs"
 FULLTEXT = RAW / "fulltext"
 GROUND_TRUTH = RAW / "ground_truth"
 
+# Marcas de provenance en la PRIMERA línea de un .txt de fulltext/ — las escriben
+# extract_fulltext (OCR) y fetch_web (snapshot); las lee make_notes para estampar
+# `fulltext_source` en la nota (ocr|web; sin marca = pdftotext). Un solo lugar de verdad:
+# si cambia el header, cambia acá.
+FULLTEXT_OCR_MARK = "# Almagesto — fulltext por OCR"
+FULLTEXT_WEB_MARK = "# Almagesto — snapshot web"
+
 STARS = WIKI / "stars"
 PAPERS = WIKI / "papers"
 CONCEPTS = WIKI / "concepts"

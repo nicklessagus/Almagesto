@@ -34,11 +34,12 @@ import tempfile
 from pathlib import Path
 
 import lib_config as cfg
+import make_notes
 
 FULLTEXT = cfg.FULLTEXT
 
 OCR_DPI = 300                                   # rasterizado pdftoppm (probado: rescate ~99% ASCII)
-OCR_MARK = "# Almagesto — fulltext por OCR"     # primera línea de un .txt OCR (lo detecta verify)
+OCR_MARK = cfg.FULLTEXT_OCR_MARK                # primera línea de un .txt OCR (verify/make_notes la leen)
 
 # Umbrales de legibilidad (issue #7): deterministas y laxos a propósito — un paper sano da
 # ~99% ASCII imprimible (los acentos/símbolos raros no llegan a 15%); el mojibake cae a ~0%.
@@ -201,6 +202,16 @@ def main() -> int:
           + f", {skipped} ya estaban, {failed} fallaron"
           + (f", {illegible} ilegibles (⚠ ver arriba)" if illegible else "")
           + f" → {outdir}")
+
+    # Contrato máquina: estampar `fulltext:`/`fulltext_source:` en las notas de paper para TODOS
+    # los .txt del slug (recién extraídos, viejos y snapshots web) — el stub nace antes que el
+    # .txt (make_notes corre primero en la cadena), así que este paso cierra el contrato; de paso
+    # un re-run idempotente migra notas pre-contrato sin los campos. Cirugía de make_notes: nunca
+    # toca la extracción LLM.
+    stamped = sum(make_notes.stamp_fulltext(cfg.PAPERS / f"{t.stem}.md", t.stem, args.slug)
+                  for t in sorted(outdir.glob("*.txt")))
+    if stamped:
+        print(f"  notas: {stamped} con fulltext:/fulltext_source: estampados (contrato máquina)")
     return 1 if failed else 0
 
 

@@ -1,7 +1,7 @@
 ---
 name: verify-citations
 description: Usar para verificar, afirmación por afirmación, que las citas [[bibcode]] de una nota de la wiki (query, hipótesis, ficha, concepto) realmente están respaldadas por el texto completo de la fuente. Se corre como paso de cierre al armar/editar una query o hipótesis, o cuando el usuario pide "rechequeá las citas / ¿esto lo dice el paper?". Implementa el chequeo claim↔evidencia (pipeline tipo CiteAudit) sobre el corpus cerrado de la bóveda. Veredictos: soportada / parcial / no-soportada (la fuente calla) / contradice (la fuente afirma lo contrario → candidata a disputa, no sólo cita rota).
-version: 1.2.0
+version: 1.2.1
 ---
 
 # Verify-citations — chequeo claim↔evidencia contra el fulltext
@@ -25,8 +25,10 @@ plenamente respaldadas). Acá cada afirmación se contrasta contra el texto real
 > → en ese caso abrir el **PDF** (`vault/raw/pdfs/<slug>/<bibcode>.pdf`) para esa afirmación puntual, o
 > marcarla **`no verificable por extracción`** (distinto de `no-soportada`).
 >
-> **Excepción OCR — citable con salvedad:** si el `.txt` abre con el header `# Almagesto — fulltext
-> por OCR` (`source: ocr`), vino de tesseract (PDF escaneado o con fuentes sin ToUnicode que
+> **Excepción OCR — citable con salvedad:** si la nota del paper trae `fulltext_source: ocr` (el
+> contrato del frontmatter lo espeja — no hace falta abrir el `.txt` para saberlo) o el `.txt` abre
+> con el header `# Almagesto — fulltext por OCR` (`source: ocr`), vino de tesseract (PDF escaneado
+> o con fuentes sin ToUnicode que
 > `pdftotext` no pudo leer; lo estampa `extract_fulltext.py`). Sigue siendo determinista y citable,
 > pero el OCR puede errar **símbolos, ligaduras y notación matemática**: la verificación vale para
 > **prosa**; ante una discrepancia puntual de símbolos/números en una ecuación, abrir el **PDF** para

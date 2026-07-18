@@ -141,7 +141,7 @@ def main() -> int:
         # Encabezado citable: URL + fecha de acceso (UTC) + provenance del extractor. El cuerpo es
         # determinista; la fecha es el metadato del snapshot (cuándo se capturó), como pide off-ADS.
         header = (
-            "# Almagesto — snapshot web (off-ADS), determinista para citar/verificar\n"
+            f"{cfg.FULLTEXT_WEB_MARK} (off-ADS), determinista para citar/verificar\n"
             f"source_url : {args.url}\n"
             f"retrieved  : {stamp} (UTC)\n"
             f"extractor  : defuddle {defuddle_version()} + post-clean off-ADS (npx defuddle parse --markdown)\n"
