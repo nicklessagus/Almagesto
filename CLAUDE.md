@@ -169,8 +169,8 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   filtro` (igual que la ficha de estrella). Rige el *Estándar transversal* (autosuficiente + implementation-ready).
   **Convención hub/radios (tema grande → varias notas):** cuando un tema no cabe en una sola nota sin
   perder foco, se estructura como **hub** (la nota central: síntesis del tema completo) + **radios**
-  (notas satélite del mismo área que profundizan un sub-aspecto; p. ej. hub `fastica_icasso`, radio
-  `ica-noise` para el caso con ruido). El hub referencia cada radio explícitamente ("<sub-aspecto> vive
+  (notas satélite del mismo área que profundizan un sub-aspecto; p. ej. hub `procesos-gaussianos`, radio
+  `gp-kernels` para la elección de kernel). El hub referencia cada radio explícitamente ("<sub-aspecto> vive
   en el radio [[...]]") y el radio abre con su "Para qué" apuntando de vuelta al hub. Un radio es una
   nota de concepto normal (mismo frontmatter y estándar de autosuficiencia); "hub/radio" es sólo la
   metáfora organizativa (rueda: centro y rayos).
@@ -226,10 +226,11 @@ la query, `stars.yaml`/`topics.yaml`). No ingesta nada; después se usan `ingest
 > no devolvió. Así la entidad nueva ve también lo que ya estaba en el corpus.
 
 > **Tema no-astro / fuera de ADS (opt-in — sólo a pedido explícito).** Por default un tema se baja por
-> **ADS** (plomería astro: ADS/arXiv/NEA). Almagesto es astro por estructura, pero si el usuario pide
-> **explícitamente** un tema **no-astro** o cuya bibliografía vive **fuera de ADS** (p. ej. un método
-> matemático general: ICA, signal processing), el skill `ingest-topic` lo soporta en su **modo off-ADS**
-> (fuente = PDFs locales + web; sin `query_ads`/`fetch_ground_truth`). Formalizado en el tooling: la
+> **ADS** (plomería astro: ADS/arXiv/NEA). Almagesto es astro por estructura, pero el **modo off-ADS**
+> existe para los **métodos que no son exclusivamente astronómicos** —análisis de datos, machine
+> learning, procesos gaussianos, signal processing— cuya bibliografía canónica vive **fuera de ADS**: si
+> el usuario lo pide **explícitamente**, el skill `ingest-topic` lo soporta (fuente = PDFs locales + web;
+> sin `query_ads`/`fetch_ground_truth`). Formalizado en el tooling: la
 > entrada del tema en `topics.yaml` lleva `source: ads | web | local-pdfs [+web]` y (si es off-ADS) la
 > lista `sources:`; `scripts/ingest_topic.py <slug>` orquesta la cadena según ese campo — también en
 > modo ads. Una fuente que **no se consigue** (paywall / escaneo / mojibake) se marca

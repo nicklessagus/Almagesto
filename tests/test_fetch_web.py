@@ -43,11 +43,11 @@ def test_snapshot_date_of(tmp_path):
 
 
 @pytest.mark.parametrize("key,ok", [
-    ("2000HyvarinenOja", True),
+    ("2006RasmussenWilliams", True),
     ("1999a", True),
-    ("HyvarinenOja2000", False),
+    ("RasmussenWilliams2006", False),
     ("20001", False),                # falta la letra tras el año
-    ("200Hyv", False),
+    ("200Ras", False),
 ])
 def test_citekey_re(key, ok):
     assert bool(fw.CITEKEY_RE.match(key)) is ok
@@ -73,23 +73,23 @@ def run_main(monkeypatch, argv):
     return fw.main()
 
 
-ARGS = ["ica", "2000HyvarinenOja", "https://example.org/ica",
-        "--concept", "fastica", "--title", "ICA review", "--author", "Hyvärinen",
-        "--year", "2000", "--n-authors", "2", "--doi", "10.1/ica"]
+ARGS = ["gp", "2006RasmussenWilliams", "https://example.org/gp",
+        "--concept", "gaussian-processes", "--title", "GP review", "--author", "Rasmussen",
+        "--year", "2000", "--n-authors", "2", "--doi", "10.1/gp"]
 
 
 def test_main_snapshot_y_nota(toy_vault, fake_defuddle, monkeypatch):
     assert run_main(monkeypatch, ARGS) == 0
-    txt = (toy_vault.FULLTEXT / "ica" / "2000HyvarinenOja.txt").read_text(encoding="utf-8")
-    assert "source_url : https://example.org/ica" in txt
-    assert "retrieved  :" in txt and "citekey    : 2000HyvarinenOja" in txt
+    txt = (toy_vault.FULLTEXT / "gp" / "2006RasmussenWilliams.txt").read_text(encoding="utf-8")
+    assert "source_url : https://example.org/gp" in txt
+    assert "retrieved  :" in txt and "citekey    : 2006RasmussenWilliams" in txt
     assert "Prosa citable" in txt and "<video" not in txt
-    note = toy_vault.PAPERS / "2000HyvarinenOja.md"
+    note = toy_vault.PAPERS / "2006RasmussenWilliams.md"
     fm = read_fm(note)
-    assert fm["bibcode"] == "2000HyvarinenOja"
-    assert fm["source_url"] == "https://example.org/ica"
-    assert fm["thesis_links"] == ["fastica"]
-    assert fm["doi"] == "10.1/ica" and fm["n_authors"] == 2 and fm["year"] == 2000
+    assert fm["bibcode"] == "2006RasmussenWilliams"
+    assert fm["source_url"] == "https://example.org/gp"
+    assert fm["thesis_links"] == ["gaussian-processes"]
+    assert fm["doi"] == "10.1/gp" and fm["n_authors"] == 2 and fm["year"] == 2000
     assert fm["tags"] == ["paper", "web"]
     # la fecha de la nota coincide con la del snapshot
     assert f"retrieved  : {fm['accessed']}" in txt
@@ -97,27 +97,27 @@ def test_main_snapshot_y_nota(toy_vault, fake_defuddle, monkeypatch):
 
 def test_main_citekey_invalida(toy_vault, fake_defuddle, monkeypatch):
     with pytest.raises(SystemExit, match="citekey inválida"):
-        run_main(monkeypatch, ["ica", "SinAnio", "https://example.org"])
+        run_main(monkeypatch, ["gp", "SinAnio", "https://example.org"])
 
 
 def test_main_snapshot_vacio(toy_vault, fake_defuddle, monkeypatch):
     fake_defuddle.md = "   "
     assert run_main(monkeypatch, ARGS) == 1
-    assert not (toy_vault.FULLTEXT / "ica" / "2000HyvarinenOja.txt").exists()
-    assert not (toy_vault.PAPERS / "2000HyvarinenOja.md").exists()
+    assert not (toy_vault.FULLTEXT / "gp" / "2006RasmussenWilliams.txt").exists()
+    assert not (toy_vault.PAPERS / "2006RasmussenWilliams.md").exists()
 
 
 def test_main_idempotente_reusa_fecha_del_snapshot(toy_vault, fake_defuddle, monkeypatch):
-    d = toy_vault.FULLTEXT / "ica"
+    d = toy_vault.FULLTEXT / "gp"
     d.mkdir(parents=True, exist_ok=True)
-    (d / "2000HyvarinenOja.txt").write_text(
+    (d / "2006RasmussenWilliams.txt").write_text(
         "# header\nsource_url : x\nretrieved  : 2020-05-05 (UTC)\ncontenido viejo\n", encoding="utf-8")
     assert run_main(monkeypatch, ARGS) == 0
     assert fake_defuddle.fetched == []               # no re-baja
-    fm = read_fm(toy_vault.PAPERS / "2000HyvarinenOja.md")
+    fm = read_fm(toy_vault.PAPERS / "2006RasmussenWilliams.md")
     assert fm["accessed"] == "2020-05-05"            # la nota usa la fecha original
 
 
 def test_main_no_note(toy_vault, fake_defuddle, monkeypatch):
     assert run_main(monkeypatch, [*ARGS, "--no-note"]) == 0
-    assert not (toy_vault.PAPERS / "2000HyvarinenOja.md").exists()
+    assert not (toy_vault.PAPERS / "2006RasmussenWilliams.md").exists()

@@ -34,8 +34,8 @@ def ads_json(records, slug="test_star"):
     (d / "ads.json").write_text(json.dumps({"records": records}), encoding="utf-8")
 
 
-def seed_topic(slug="ica", area="methods", concept="fastica"):
-    write_yaml(cfg.TOPICS_YAML, {slug: {"title": "ICA", "area": area, "concept": concept,
+def seed_topic(slug="gp", area="methods", concept="gaussian-processes"):
+    write_yaml(cfg.TOPICS_YAML, {slug: {"title": "Gaussian processes", "area": area, "concept": concept,
                                         "aliases": ["análisis de componentes"]}})
 
 
@@ -67,7 +67,7 @@ def test_parse_year_tolerante(capsys):
 
 def test_web_note_year_no_numerico_no_crashea(toy_vault):
     """Regresión (hallazgo 2): '--year \"in press\"' creaba un ValueError crudo."""
-    assert mn.write_web_paper_note("2020Smith", slug="ica", url="https://x",
+    assert mn.write_web_paper_note("2020Smith", slug="gp", url="https://x",
                                    year="in press", n_authors="dos") is True
     fm = read_fm(toy_vault.PAPERS / "2020Smith.md")
     assert fm["year"] is None and fm["n_authors"] is None
@@ -195,47 +195,47 @@ def test_star_note_idempotente(toy_vault):
 
 def test_concept_note_methods(toy_vault):
     seed_topic()
-    mn.write_concept_note("ica", force=False)
-    dest = toy_vault.CONCEPTS / "methods" / "fastica.md"
+    mn.write_concept_note("gp", force=False)
+    dest = toy_vault.CONCEPTS / "methods" / "gaussian-processes.md"
     fm = read_fm(dest)
-    assert fm["name"] == "ICA" and "status" not in fm
+    assert fm["name"] == "Gaussian processes" and "status" not in fm
     assert fm["aliases"] == ["análisis de componentes"]
     assert fm["tags"] == ["methods", "thesis"]
     # ficha-método: la tabla junta también por methods: (retro-link)
-    assert 'contains(methods, "fastica")' in dest.read_text(encoding="utf-8")
+    assert 'contains(methods, "gaussian-processes")' in dest.read_text(encoding="utf-8")
 
 
 def test_concept_note_hypotheses_lleva_status(toy_vault):
     seed_topic(area="hypotheses")
-    mn.write_concept_note("ica", force=False)
-    dest = toy_vault.CONCEPTS / "hypotheses" / "fastica.md"
+    mn.write_concept_note("gp", force=False)
+    dest = toy_vault.CONCEPTS / "hypotheses" / "gaussian-processes.md"
     assert read_fm(dest)["status"] == "active"
     assert 'contains(methods,' not in dest.read_text(encoding="utf-8")
 
 
 def test_concept_note_area_no_declarada_avisa_pero_crea(toy_vault, capsys):
     seed_topic(area="zzz")
-    mn.write_concept_note("ica", force=False)
+    mn.write_concept_note("gp", force=False)
     assert "no está en concept_areas" in capsys.readouterr().out
-    assert (toy_vault.CONCEPTS / "zzz" / "fastica.md").exists()
+    assert (toy_vault.CONCEPTS / "zzz" / "gaussian-processes.md").exists()
 
 
 def test_concept_note_sin_area_o_concept_error_amigable(toy_vault):
     """Guard de config: entrada de topics.yaml incompleta → mensaje amigable, no KeyError."""
-    write_yaml(cfg.TOPICS_YAML, {"ica": {"title": "ICA", "concept": "fastica"}})
-    with pytest.raises(SystemExit, match="'ica' no tiene `area`"):
-        mn.write_concept_note("ica", force=False)
-    write_yaml(cfg.TOPICS_YAML, {"ica": {"title": "ICA", "area": "methods"}})
-    with pytest.raises(SystemExit, match="'ica' no tiene `concept`"):
-        mn.write_concept_note("ica", force=False)
+    write_yaml(cfg.TOPICS_YAML, {"gp": {"title": "Gaussian processes", "concept": "gaussian-processes"}})
+    with pytest.raises(SystemExit, match="'gp' no tiene `area`"):
+        mn.write_concept_note("gp", force=False)
+    write_yaml(cfg.TOPICS_YAML, {"gp": {"title": "Gaussian processes", "area": "methods"}})
+    with pytest.raises(SystemExit, match="'gp' no tiene `concept`"):
+        mn.write_concept_note("gp", force=False)
 
 
 def test_concept_note_idempotente(toy_vault):
     seed_topic()
-    mn.write_concept_note("ica", force=False)
-    dest = toy_vault.CONCEPTS / "methods" / "fastica.md"
+    mn.write_concept_note("gp", force=False)
+    dest = toy_vault.CONCEPTS / "methods" / "gaussian-processes.md"
     dest.write_text("SÍNTESIS LLM", encoding="utf-8")
-    mn.write_concept_note("ica", force=False)
+    mn.write_concept_note("gp", force=False)
     assert dest.read_text(encoding="utf-8") == "SÍNTESIS LLM"
 
 
@@ -303,28 +303,28 @@ def test_paper_notes_retrolinkea_nota_preexistente(toy_vault):
 
 def test_paper_notes_topic_siembra_thesis_links(toy_vault):
     seed_topic()
-    ads_json([rec("2020icaA...1..1A")], slug="ica")
-    mn.write_paper_notes("ica", include_all=False, force=False, topic=True)
-    fm = read_fm(toy_vault.PAPERS / "2020icaA...1..1A.md")
-    assert fm["thesis_links"] == ["fastica"] and fm["stars"] == []
+    ads_json([rec("2020gpsA...1..1A")], slug="gp")
+    mn.write_paper_notes("gp", include_all=False, force=False, topic=True)
+    fm = read_fm(toy_vault.PAPERS / "2020gpsA...1..1A.md")
+    assert fm["thesis_links"] == ["gaussian-processes"] and fm["stars"] == []
 
 
 # ── write_web_paper_note / unpend ────────────────────────────────────────────
 
 def test_web_note_local_pdf(toy_vault):
-    pdf_dir = toy_vault.PDFS / "ica"
+    pdf_dir = toy_vault.PDFS / "gp"
     pdf_dir.mkdir(parents=True, exist_ok=True)
-    (pdf_dir / "2000Hyvarinen.pdf").write_bytes(b"%PDF")
-    mn.write_web_paper_note("2000Hyvarinen", slug="ica", concept="fastica",
-                            title="ICA book", first_author="Hyvärinen", year="2000")
-    fm = read_fm(toy_vault.PAPERS / "2000Hyvarinen.md")
+    (pdf_dir / "2006Rasmussen.pdf").write_bytes(b"%PDF")
+    mn.write_web_paper_note("2006Rasmussen", slug="gp", concept="gaussian-processes",
+                            title="GP book", first_author="Rasmussen", year="2000")
+    fm = read_fm(toy_vault.PAPERS / "2006Rasmussen.md")
     assert fm["tags"] == ["paper", "local-pdf"]
     assert fm["accessed"] is None and fm["source_url"] is None
-    assert fm["pdf"] == "../../raw/pdfs/ica/2000Hyvarinen.pdf"   # verdad de disco
+    assert fm["pdf"] == "../../raw/pdfs/gp/2006Rasmussen.pdf"   # verdad de disco
 
 
 def test_web_note_pending(toy_vault):
-    mn.write_web_paper_note("1999Paywall", slug="ica", concept="fastica",
+    mn.write_web_paper_note("1999Paywall", slug="gp", concept="gaussian-processes",
                             url="https://pay.wall/x", doi="10.1/pw", pending="paywall")
     dest = toy_vault.PAPERS / "1999Paywall.md"
     fm = read_fm(dest)
@@ -334,24 +334,24 @@ def test_web_note_pending(toy_vault):
 
 
 def test_web_note_idempotente(toy_vault):
-    assert mn.write_web_paper_note("2000Hyvarinen", slug="ica", url="https://x") is True
-    dest = toy_vault.PAPERS / "2000Hyvarinen.md"
+    assert mn.write_web_paper_note("2006Rasmussen", slug="gp", url="https://x") is True
+    dest = toy_vault.PAPERS / "2006Rasmussen.md"
     antes = dest.read_text(encoding="utf-8")
-    assert mn.write_web_paper_note("2000Hyvarinen", slug="ica", url="https://x") is False
+    assert mn.write_web_paper_note("2006Rasmussen", slug="gp", url="https://x") is False
     assert dest.read_text(encoding="utf-8") == antes
 
 
 def test_unpend_al_llegar_fulltext(toy_vault):
-    mn.write_web_paper_note("1999Paywall", slug="ica", concept="fastica",
+    mn.write_web_paper_note("1999Paywall", slug="gp", concept="gaussian-processes",
                             url="https://pay.wall/x", pending="paywall")
     dest = toy_vault.PAPERS / "1999Paywall.md"
     # el usuario ya extrajo algo en la nota: eso debe sobrevivir al des-pendeo
     dest.write_text(dest.read_text(encoding="utf-8").replace(
         "- **Aporte al tema:**", "- **Aporte al tema:** SENTINEL_LLM"), encoding="utf-8")
-    ft = toy_vault.FULLTEXT / "ica"
+    ft = toy_vault.FULLTEXT / "gp"
     ft.mkdir(parents=True, exist_ok=True)
     (ft / "1999Paywall.txt").write_text("fuente conseguida", encoding="utf-8")
-    mn.write_web_paper_note("1999Paywall", slug="ica", concept="fastica", url="https://pay.wall/x")
+    mn.write_web_paper_note("1999Paywall", slug="gp", concept="gaussian-processes", url="https://pay.wall/x")
     text = dest.read_text(encoding="utf-8")
     assert "pending_source" not in text
     assert "⏳ **Fuente pendiente" not in text
@@ -359,19 +359,19 @@ def test_unpend_al_llegar_fulltext(toy_vault):
 
 
 def test_unpend_al_llegar_pdf_linkea(toy_vault):
-    mn.write_web_paper_note("1999Paywall", slug="ica", pending="paywall", doi="10.1/x")
-    pdf_dir = toy_vault.PDFS / "ica"
+    mn.write_web_paper_note("1999Paywall", slug="gp", pending="paywall", doi="10.1/x")
+    pdf_dir = toy_vault.PDFS / "gp"
     pdf_dir.mkdir(parents=True, exist_ok=True)
     (pdf_dir / "1999Paywall.pdf").write_bytes(b"%PDF")
-    mn.write_web_paper_note("1999Paywall", slug="ica", doi="10.1/x")
+    mn.write_web_paper_note("1999Paywall", slug="gp", doi="10.1/x")
     fm = read_fm(toy_vault.PAPERS / "1999Paywall.md")
     assert "pending_source" not in fm
-    assert fm["pdf"] == "../../raw/pdfs/ica/1999Paywall.pdf"
+    assert fm["pdf"] == "../../raw/pdfs/gp/1999Paywall.pdf"
 
 
 def test_unpend_sin_fuente_no_toca(toy_vault):
-    mn.write_web_paper_note("1999Paywall", slug="ica", pending="paywall")
+    mn.write_web_paper_note("1999Paywall", slug="gp", pending="paywall")
     dest = toy_vault.PAPERS / "1999Paywall.md"
     antes = dest.read_text(encoding="utf-8")
-    mn.write_web_paper_note("1999Paywall", slug="ica")   # la fuente sigue faltando
+    mn.write_web_paper_note("1999Paywall", slug="gp")   # la fuente sigue faltando
     assert dest.read_text(encoding="utf-8") == antes     # el flag se queda

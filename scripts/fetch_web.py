@@ -15,7 +15,7 @@ Es la contraparte web de `extract_fulltext.py` (PDF→txt): mismo destino, misma
 inmutable. Sólo aplica al **modo off-ADS** de `ingest-topic` (tema no-astro / bibliografía fuera de
 ADS); el flujo astro normal baja PDFs por arXiv. Ver `.claude/skills/ingest-topic/SKILL.md`.
 
-`citekey` = clave de cita sintética `AAAA+Autor` (p. ej. `2000HyvarinenOja`); debe empezar con
+`citekey` = clave de cita sintética `AAAA+Autor` (p. ej. `2006RasmussenWilliams`); debe empezar con
 `AAAA`+letra (mismo `BIBCODE_RE` que el lint) y coincidir con el `[[citekey]]` que cites en la nota.
 
 Requiere Node/npm (usa `npx defuddle`, JS-only; se invoca por subproceso). Idempotente: no re-baja
@@ -98,7 +98,7 @@ def fetch(url: str) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("slug", help="tema (subcarpeta de raw/fulltext)")
-    ap.add_argument("citekey", help="clave de cita sintética AAAA+Autor (p. ej. 2000HyvarinenOja)")
+    ap.add_argument("citekey", help="clave de cita sintética AAAA+Autor (p. ej. 2006RasmussenWilliams)")
     ap.add_argument("url", help="URL a snapshotear")
     ap.add_argument("--concept", help="concept destino de la nota de paper (thesis_links)")
     ap.add_argument("--title", help="título de la fuente (para la nota de paper)")
@@ -120,7 +120,7 @@ def main() -> int:
     if not CITEKEY_RE.match(args.citekey):
         sys.exit(
             f"citekey inválida: {args.citekey!r}. Debe empezar con AAAA+letra (año+inicial del autor, "
-            "p. ej. 2000HyvarinenOja) para que el lint la reconozca y el .txt matchee el [[citekey]]."
+            "p. ej. 2006RasmussenWilliams) para que el lint la reconozca y el .txt matchee el [[citekey]]."
         )
 
     outdir = cfg.FULLTEXT / args.slug

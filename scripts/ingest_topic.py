@@ -92,7 +92,7 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
         key = s.get("key") or ""
         if not CITEKEY_RE.match(key):
             sys.exit(f"key inválida en sources de '{slug}': {key!r}. Debe empezar con AAAA+letra "
-                     "(clave de cita sintética, p. ej. 2000HyvarinenOja).")
+                     "(clave de cita sintética, p. ej. 2006RasmussenWilliams).")
         if s.get("pending"):
             # Fuente no-conseguible declarada: NO se fetchea ni cuenta como fallo — stub con
             # pending_source (url/doi quedan como puntero) y derivación al usuario en el aviso final.

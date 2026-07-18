@@ -256,10 +256,10 @@ def test_main_estrella_sin_ads_object_error_amigable(toy_vault, toy_classifier, 
 
 def test_main_tema_sin_query_sugiere_offads(toy_vault, toy_classifier, monkeypatch):
     """Guard de config: tema sin `query` (típico: es off-ADS) → mensaje con la pista, no KeyError."""
-    write_yaml(cfg.TOPICS_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "fastica",
+    write_yaml(cfg.TOPICS_YAML, {"gp": {"title": "Gaussian processes", "area": "methods", "concept": "gaussian-processes",
                                          "source": "web"}})
     with pytest.raises(SystemExit, match="no tiene `query`.*ingest_topic"):
-        run_main(monkeypatch, ["ica", "--topic"])
+        run_main(monkeypatch, ["gp", "--topic"])
 
 
 def test_probe_lista_todo_el_core(toy_classifier, capsys):

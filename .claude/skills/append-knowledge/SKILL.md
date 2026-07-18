@@ -1,14 +1,14 @@
 ---
 name: append-knowledge
-description: Usar cuando el usuario quiere plegar UNA fuente puntual (paper por bibcode, PDF local, URL) a una entidad YA existente de la wiki — ficha de estrella o concepto — sin re-correr el ingest completo ("agregale este paper a la ficha de tau Ceti", "sumá este PDF al concept de ICA", "este bibcode va a GJ 581", "encontré un paper nuevo para el tema X, agregalo"). Plomería mínima + extracción enfocada + síntesis a la nota viva + cierre estándar. NO crea entidades (eso es ingest-star/ingest-topic) ni barre por query lo nuevo (eso es maintain/refrescar).
-version: 1.0.0
+description: Usar cuando el usuario quiere plegar UNA fuente puntual (paper por bibcode, PDF local, URL) a una entidad YA existente de la wiki — ficha de estrella o concepto — sin re-correr el ingest completo ("agregale este paper a la ficha de tau Ceti", "sumá este PDF al concept de procesos gaussianos", "este bibcode va a GJ 581", "encontré un paper nuevo para el tema X, agregalo"). Plomería mínima + extracción enfocada + síntesis a la nota viva + cierre estándar. NO crea entidades (eso es ingest-star/ingest-topic) ni barre por query lo nuevo (eso es maintain/refrescar).
+version: 1.0.1
 ---
 
 # Append — plegar una fuente puntual a una ficha o concepto existente
 
 Operación **incremental** del patrón LLM Wiki (ver `CLAUDE.md`): el usuario trae **una fuente
 concreta** (bibcode ADS, PDF, URL) y una **entidad destino que ya existe**. Encapsula lo que antes
-se hacía a mano (caso real: ampliar el radio `ica-noise` con 2 papers — copiar PDF, extract, stub,
+se hacía a mano (p. ej. ampliar un radio de un concepto con 2 papers — copiar PDF, extract, stub,
 extracción, síntesis, verify, lint). Trabajar desde la raíz del repo.
 
 **Fronteras:** la entidad destino **debe existir** (ficha en `vault/wiki/stars/` o concept en

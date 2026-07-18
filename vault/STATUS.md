@@ -46,9 +46,28 @@ se ve" tras push suele ser caché).
 estrella y concepto, verificable claim↔fuente." El usuario optó por **no** poner topics por ahora
 (los agrega a mano si quiere).
 
+**✅ HECHO (2026-07-18) — diagrama Mermaid del pipeline.** Bloque ```mermaid en el README (sección
+intro, tras el párrafo del flujo raw→LLM→wiki): `ADS/arXiv + NEA/SIMBAD → vault/raw (inmutable) →
+LLM-compilador → vault/wiki`, con `objective.yaml` clasificando core/no-core y `lint`/`verify-citations`
+como checks (verify retro-alimenta disputas). Incluye la rama **off-ADS** (nodo punteado "PDFs locales ·
+web", opt-in) que entra a `vault/raw` sin ADS/NEA — a pedido del usuario, que notó que la v1 del
+diagrama la omitía; abajo del bloque va un blockquote explicando el modo off-ADS (`source: web|local-pdfs`
++ `sources:` en `topics.yaml`). **Framing del off-ADS afinado (mismo pedido):** README + CLAUDE.md +
+skill `ingest-topic` ahora **lideran con la intención** —es para *métodos que no son exclusivamente
+astronómicos* (análisis de datos, machine learning, procesos gaussianos, signal processing) cuya
+bibliografía vive fuera de ADS— en vez de con el mecanismo. **Ejemplo canónico de método off-ADS unificado
+a procesos gaussianos** en TODO el framework (era demasiado específico del usuario): README, CLAUDE.md
+(off-ADS + ejemplo hub/radio → `procesos-gaussianos`/`gp-kernels`), `ingest-topic` (framing + grep de
+retro-tag + clave de cita de ejemplo `2006RasmussenWilliams`), `append-knowledge`, el ejemplo comentado de
+`topics.yaml`, un comentario de `fetch_ground_truth.py` y los fixtures de tests (`gp`/`gaussian-processes`;
+218 tests siguen verdes). Skills bumpeados: `append-knowledge` 1.0.0→1.0.1, `ingest-topic` 1.6.2→1.6.3. Trazos: gris neutro `#7d8590` (fuentes/almacenes/checks), ámbar `#d4a017`
+(LLM). GitHub re-renderiza el bloque con su tema claro/oscuro (verificado en ambos con mermaid-cli; los
+strokes leen en los dos). Nota de tooling: `mmdc` necesita `--no-sandbox` (config puppeteer) en este
+entorno.
+
 **Pendientes menores de eye candy (menú ofrecido, sin decidir):** social preview PNG 1280×640
-(se sube a mano en Settings → Social preview), diagrama Mermaid del pipeline, captura de Obsidian
-(demo con estrella famosa), GIF de terminal (vhs) del `--probe`.
+(se sube a mano en Settings → Social preview), captura de Obsidian (demo con estrella famosa), GIF de
+terminal (vhs) del `--probe`.
 
 ## Backlog de framework — validación de áreas de `vault/wiki/concepts/` + config a mano
 
@@ -191,8 +210,8 @@ expone read/search/write del vault por HTTP con Obsidian abierto.
 [documentado: `kepano/defuddle`]. Encaja con el **modo off-ADS** de `ingest-topic`, que guarda snapshots web
 como `.txt` **deterministas** (URL + fecha) para citabilidad. Hoy esa extracción va por `WebFetch`.
 
-**Evaluado 2026-07-01 (rama `exp/defuddle-offads`) → conviene.** Números (página ICA de Wikipedia,
-ejemplo off-ADS de `CLAUDE.md`): defuddle 60 KB vs pandoc 235 KB vs HTML crudo 480 KB (~4×/~8× menos);
+**Evaluado 2026-07-01 (rama `exp/defuddle-offads`) → conviene.** Números (una página de Wikipedia,
+ejemplo off-ADS): defuddle 60 KB vs pandoc 235 KB vs HTML crudo 480 KB (~4×/~8× menos);
 **determinista** (dos corridas byte-idénticas); 0 hits de clutter (vs 34 en pandoc); conserva cuerpo,
 referencias (DOI/arXiv/bibcode) y matemática. Supera a `WebFetch` para este uso porque WebFetch es
 model-based (no determinista, no es snapshot verbatim) y el snapshot citable **exige** determinismo.

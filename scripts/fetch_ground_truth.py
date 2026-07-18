@@ -6,7 +6,7 @@ Uso:
 Escribe ground_truth/<slug>.json con:
   - host: tipo espectral, Teff, distancia, coords, V, masa estelar (lo que haya).
   - planets: lista (letter, P_days, K_ms, e, mass_earth, ...).
-Estos son hechos auditables (no extracción LLM). Los scripts de ICA los consumen directo.
+Estos son hechos auditables (no extracción LLM). Los scripts que los consumen los leen directo.
 Idempotente: NO pisa un ground_truth/<slug>.json existente salvo --force (vault/raw/ es fuente
 inmutable, y NEA cambia valores entre releases — refrescar es una decisión, no un side-effect).
 

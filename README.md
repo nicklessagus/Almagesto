@@ -24,6 +24,47 @@ un solo archivo, `vault/config/objective.yaml`. El resto del repo es framework r
 salud estructural y una capa de **verificación claim↔fuente**. El schema con el que opera el agente
 está en [`CLAUDE.md`](CLAUDE.md).
 
+```mermaid
+flowchart LR
+    ADS["ADS · arXiv"]
+    NEA["NASA Exoplanet Archive<br/>· SIMBAD"]
+    OFF["PDFs locales · web<br/>(off-ADS · opt-in)"]
+    OBJ[["objective.yaml<br/>— qué papers son core"]]
+    RAW[("vault/raw/<br/>PDFs · fulltext · ground-truth<br/><i>inmutable</i>")]
+    LLM{{"LLM — compilador"}}
+    WIKI[("vault/wiki/<br/>stars · papers · concepts · queries")]
+    LINT["lint<br/>salud estructural"]
+    VER["verify-citations<br/>claim ↔ fuente"]
+
+    ADS --> RAW
+    NEA --> RAW
+    OFF -. sin ADS/NEA .-> RAW
+    OBJ -. clasifica core/no-core .-> RAW
+    RAW --> LLM
+    LLM --> WIKI
+    WIKI --> LINT
+    WIKI --> VER
+    VER -. disputa / corrección .-> WIKI
+
+    classDef src stroke:#7d8590,stroke-width:1px;
+    classDef off stroke:#7d8590,stroke-width:1px,stroke-dasharray:4 3;
+    classDef store stroke:#7d8590,stroke-width:1.5px;
+    classDef llm stroke:#d4a017,stroke-width:2px;
+    classDef check stroke:#7d8590,stroke-width:1px,stroke-dasharray:3 3;
+    class ADS,NEA src;
+    class OFF off;
+    class RAW,WIKI store;
+    class LLM llm;
+    class LINT,VER check;
+```
+
+> Por defecto la bibliografía entra por **ADS** (plomería astro). El **modo off-ADS** (opt-in, sólo a
+> pedido) es para los **métodos que no son exclusivamente astronómicos** —análisis de datos, machine
+> learning, procesos gaussianos, signal processing— cuya bibliografía canónica vive **fuera de ADS**: se
+> declara en `topics.yaml` con `source: web \| local-pdfs` + su lista `sources:` y entra a `vault/raw/`
+> desde snapshots web + PDFs locales, sin ADS/NEA. Sigue rigiendo la **frontera dura**: sólo bibliografía
+> citable — el método **publicado**, no su implementación.
+
 ## Instanciar (crear tu bóveda)
 
 **Recomendado — botón "Use this template":** en la [página del repo](https://github.com/nicklessagus/Almagesto)

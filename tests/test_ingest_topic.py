@@ -31,16 +31,16 @@ def fake_notes(monkeypatch):
     return state
 
 
-def topic(source=None, sources=None, area="methods", concept="fastica", **extra):
-    entry = {"title": "ICA", "area": area, "concept": concept, **extra}
+def topic(source=None, sources=None, area="methods", concept="gaussian-processes", **extra):
+    entry = {"title": "Gaussian processes", "area": area, "concept": concept, **extra}
     if source:
         entry["source"] = source
     if sources is not None:
         entry["sources"] = sources
-    write_yaml(cfg.TOPICS_YAML, {"ica": entry})
+    write_yaml(cfg.TOPICS_YAML, {"gp": entry})
 
 
-def run_main(monkeypatch, argv=("ica",)):
+def run_main(monkeypatch, argv=("gp",)):
     monkeypatch.setattr(sys, "argv", ["ingest_topic.py", *argv])
     return it.main()
 
@@ -64,8 +64,8 @@ def test_cadena_ads_en_orden(toy_vault, fake_run, fake_notes, monkeypatch):
     assert [c[0] for c in fake_run.calls] == ["query_ads.py", "fetch_arxiv.py", "fetch_pdf.py",
                                               "make_notes.py", "extract_fulltext.py",
                                               "check_retractions.py"]
-    assert fake_run.calls[0] == ("query_ads.py", "--topic", "ica")
-    assert fake_run.calls[3] == ("make_notes.py", "--topic", "ica")
+    assert fake_run.calls[0] == ("query_ads.py", "--topic", "gp")
+    assert fake_run.calls[3] == ("make_notes.py", "--topic", "gp")
 
 
 def test_cadena_ads_aborta_al_primer_fallo(toy_vault, fake_run, monkeypatch):
@@ -85,7 +85,7 @@ def test_ads_retraccion_detectada_no_es_fallo(toy_vault, fake_run, fake_notes, m
 
 
 def test_ads_con_sources_avisa(toy_vault, fake_run, monkeypatch, capsys):
-    topic(sources=[{"key": "2000Hyvarinen", "url": "https://x"}])
+    topic(sources=[{"key": "2006Rasmussen", "url": "https://x"}])
     run_main(monkeypatch)
     assert "se ignora en modo ADS" in capsys.readouterr().out
 
@@ -93,8 +93,8 @@ def test_ads_con_sources_avisa(toy_vault, fake_run, monkeypatch, capsys):
 # ── validaciones off-ADS ─────────────────────────────────────────────────────
 
 def test_offads_sin_concept(toy_vault, fake_run, monkeypatch):
-    write_yaml(cfg.TOPICS_YAML, {"ica": {"title": "ICA", "area": "methods", "source": "web",
-                                         "sources": [{"key": "2000Hyv", "url": "https://x"}]}})
+    write_yaml(cfg.TOPICS_YAML, {"gp": {"title": "Gaussian processes", "area": "methods", "source": "web",
+                                         "sources": [{"key": "2006Ras", "url": "https://x"}]}})
     with pytest.raises(SystemExit, match="`concept`"):
         run_main(monkeypatch)
 
@@ -113,19 +113,19 @@ def test_offads_key_invalida(toy_vault, fake_run, fake_notes, monkeypatch):
 
 def test_offads_url_y_pdf_ambiguo(toy_vault, fake_run, fake_notes, monkeypatch):
     topic(source="local-pdfs+web",
-          sources=[{"key": "2000Hyvarinen", "url": "https://x", "pdf": "/tmp/x.pdf"}])
+          sources=[{"key": "2006Rasmussen", "url": "https://x", "pdf": "/tmp/x.pdf"}])
     with pytest.raises(SystemExit, match="ambiguo"):
         run_main(monkeypatch)
 
 
 def test_offads_sin_url_ni_pdf(toy_vault, fake_run, fake_notes, monkeypatch):
-    topic(source="web", sources=[{"key": "2000Hyvarinen"}])
+    topic(source="web", sources=[{"key": "2006Rasmussen"}])
     with pytest.raises(SystemExit, match="no hay de dónde"):
         run_main(monkeypatch)
 
 
 def test_offads_kind_no_admitido(toy_vault, fake_run, fake_notes, monkeypatch):
-    topic(source="web", sources=[{"key": "2000Hyvarinen", "pdf": "/tmp/x.pdf"}])
+    topic(source="web", sources=[{"key": "2006Rasmussen", "pdf": "/tmp/x.pdf"}])
     with pytest.raises(SystemExit, match="admite url"):
         run_main(monkeypatch)
 
@@ -133,28 +133,28 @@ def test_offads_kind_no_admitido(toy_vault, fake_run, fake_notes, monkeypatch):
 # ── flujos off-ADS ───────────────────────────────────────────────────────────
 
 def test_offads_web_llama_fetch_web(toy_vault, fake_run, fake_notes, monkeypatch):
-    topic(source="web", sources=[{"key": "2000Hyvarinen", "url": "https://x",
-                                  "title": "ICA", "year": 2000, "n_authors": 2}])
+    topic(source="web", sources=[{"key": "2006Rasmussen", "url": "https://x",
+                                  "title": "Gaussian processes", "year": 2000, "n_authors": 2}])
     assert run_main(monkeypatch) == 0
     (script, *args) = fake_run.calls[0]
     assert script == "fetch_web.py"
-    assert args[:3] == ["ica", "2000Hyvarinen", "https://x"]
-    assert "--concept" in args and "fastica" in args
+    assert args[:3] == ["gp", "2006Rasmussen", "https://x"]
+    assert "--concept" in args and "gaussian-processes" in args
     assert "--n-authors" in args and "2" in args
     assert "--force" not in args
-    assert fake_notes.concepts == [("ica", False)]   # el concept NUNCA se pisa
+    assert fake_notes.concepts == [("gp", False)]   # el concept NUNCA se pisa
 
 
 def test_offads_force_solo_re_baja_fuentes(toy_vault, fake_run, fake_notes, monkeypatch):
-    topic(source="web", sources=[{"key": "2000Hyvarinen", "url": "https://x"}])
-    run_main(monkeypatch, ("ica", "--force"))
+    topic(source="web", sources=[{"key": "2006Rasmussen", "url": "https://x"}])
+    run_main(monkeypatch, ("gp", "--force"))
     (_, *args) = fake_run.calls[0]
     assert "--force" in args
-    assert fake_notes.concepts == [("ica", False)]   # --force no llega al concept
+    assert fake_notes.concepts == [("gp", False)]   # --force no llega al concept
 
 
 def test_offads_web_fallo_aborta_con_aviso(toy_vault, fake_run, fake_notes, monkeypatch, capsys):
-    topic(source="web", sources=[{"key": "2000Hyvarinen", "url": "https://x"}])
+    topic(source="web", sources=[{"key": "2006Rasmussen", "url": "https://x"}])
     fake_run.rcs["fetch_web.py"] = 1
     with pytest.raises(SystemExit, match="1 fuente\\(s\\) fallaron"):
         run_main(monkeypatch)
@@ -174,31 +174,31 @@ def test_offads_pending_deriva_sin_fallar(toy_vault, fake_run, fake_notes, monke
 def test_offads_pdf_copia_y_extrae(toy_vault, fake_run, fake_notes, monkeypatch, tmp_path):
     src = tmp_path / "externo.pdf"
     src.write_bytes(b"%PDF-contenido")
-    topic(source="local-pdfs", sources=[{"key": "2000Hyvarinen", "pdf": str(src)}])
+    topic(source="local-pdfs", sources=[{"key": "2006Rasmussen", "pdf": str(src)}])
     assert run_main(monkeypatch) == 0
-    dest = cfg.PDFS / "ica" / "2000Hyvarinen.pdf"
+    dest = cfg.PDFS / "gp" / "2006Rasmussen.pdf"
     assert dest.read_bytes() == b"%PDF-contenido"
-    assert fake_notes.webs[0][0] == "2000Hyvarinen"
+    assert fake_notes.webs[0][0] == "2006Rasmussen"
     assert "pending" not in fake_notes.webs[0][1] or not fake_notes.webs[0][1].get("pending")
-    assert ("extract_fulltext.py", "ica") in fake_run.calls
+    assert ("extract_fulltext.py", "gp") in fake_run.calls
     assert "check_retractions.py" not in [c[0] for c in fake_run.calls]   # sin doi
 
 
 def test_offads_pdf_idempotente(toy_vault, fake_run, fake_notes, monkeypatch, tmp_path, capsys):
     src = tmp_path / "externo.pdf"
     src.write_bytes(b"%PDF-v1")
-    topic(source="local-pdfs", sources=[{"key": "2000Hyvarinen", "pdf": str(src)}])
+    topic(source="local-pdfs", sources=[{"key": "2006Rasmussen", "pdf": str(src)}])
     run_main(monkeypatch)
     src.write_bytes(b"%PDF-v2")
     run_main(monkeypatch)                            # sin --force: no re-copia
-    assert (cfg.PDFS / "ica" / "2000Hyvarinen.pdf").read_bytes() == b"%PDF-v1"
+    assert (cfg.PDFS / "gp" / "2006Rasmussen.pdf").read_bytes() == b"%PDF-v1"
     assert "ya existe" in capsys.readouterr().out
 
 
 def test_offads_pdf_fuente_faltante_falla(toy_vault, fake_run, fake_notes, monkeypatch, capsys):
     """Regresión (hallazgo 1): UNA fuente fallida → '1 fuente(s) fallaron' (no 2), y
     extract_fulltext NO corre si ningún PDF quedó en disco."""
-    topic(source="local-pdfs", sources=[{"key": "2000Hyvarinen", "pdf": "/no/existe.pdf"}])
+    topic(source="local-pdfs", sources=[{"key": "2006Rasmussen", "pdf": "/no/existe.pdf"}])
     with pytest.raises(SystemExit, match="1 fuente\\(s\\) fallaron"):
         run_main(monkeypatch)
     assert "item salteado" in capsys.readouterr().out
@@ -210,7 +210,7 @@ def test_offads_fallo_de_extract_se_reporta_aparte(toy_vault, fake_run, fake_not
     """Regresión (hallazgo 1): un fallo de extracción no se cuenta como 'fuente fallida'."""
     src = tmp_path / "externo.pdf"
     src.write_bytes(b"%PDF-x")
-    topic(source="local-pdfs", sources=[{"key": "2000Hyvarinen", "pdf": str(src)}])
+    topic(source="local-pdfs", sources=[{"key": "2006Rasmussen", "pdf": str(src)}])
     fake_run.rcs["extract_fulltext.py"] = 1
     with pytest.raises(SystemExit) as exc:
         run_main(monkeypatch)
@@ -220,17 +220,17 @@ def test_offads_fallo_de_extract_se_reporta_aparte(toy_vault, fake_run, fake_not
 
 def test_offads_pdf_faltante_pero_copia_versionada(toy_vault, fake_run, fake_notes, monkeypatch, capsys):
     """--force post-clone sin la fuente externa: la copia de la bóveda se conserva, no es fallo."""
-    dest = cfg.PDFS / "ica" / "2000Hyvarinen.pdf"
+    dest = cfg.PDFS / "gp" / "2006Rasmussen.pdf"
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(b"%PDF-versionado")
-    topic(source="local-pdfs", sources=[{"key": "2000Hyvarinen", "pdf": "/no/existe.pdf"}])
-    assert run_main(monkeypatch, ("ica", "--force")) == 0
+    topic(source="local-pdfs", sources=[{"key": "2006Rasmussen", "pdf": "/no/existe.pdf"}])
+    assert run_main(monkeypatch, ("gp", "--force")) == 0
     assert dest.read_bytes() == b"%PDF-versionado"
     assert "conservo la copia" in capsys.readouterr().out
 
 
 def test_offads_retraccion_detectada_aborta(toy_vault, fake_run, fake_notes, monkeypatch):
-    topic(source="web", sources=[{"key": "2000Hyvarinen", "url": "https://x", "doi": "10.1/x"}])
+    topic(source="web", sources=[{"key": "2006Rasmussen", "url": "https://x", "doi": "10.1/x"}])
     fake_run.rcs["check_retractions.py"] = 1
     with pytest.raises(SystemExit, match="retractados"):
         run_main(monkeypatch)

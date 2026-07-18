@@ -1,7 +1,7 @@
 ---
 name: ingest-topic
 description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema no-astro / fuera de ADS (desde PDFs locales + web; ver Modo off-ADS).
-version: 1.6.2
+version: 1.6.3
 ---
 
 # Ingest: agregar un TEMA a la wiki
@@ -73,7 +73,7 @@ del repo.
    pero **ya estaban** en el corpus quedan conectados solos (`make_notes` mergea add-only el seed
    `thesis_links` en la nota existente, sin pisar su extracción). Lo que la query **no** devolvió se
    caza por grep: buscar los `aliases` del tema sobre el fulltext de **todo** el corpus (los otros
-   slugs), p. ej. `grep -rilE --include="*.txt" "fastica|icasso" vault/raw/fulltext/`, y para cada
+   slugs), p. ej. `grep -rilE --include="*.txt" "gaussian.process|gpr" vault/raw/fulltext/`, y para cada
    hit sin taguear leer el contexto y decidir si el paper **usa/aporta** al tema (no mención al
    pasar) → agregar add-only `thesis_links` (y `methods` si aplica) a su nota. La tabla Dataview del
    concept acumula sola; una ficha-método junta además por `methods:` sin re-taguear.
@@ -105,10 +105,12 @@ del repo.
 ## Modo off-ADS / tema no-astro (opt-in — **sólo a pedido explícito**)
 
 Almagesto es astro **por estructura** (la plomería de adquisición —ADS, arXiv, NEA/SIMBAD— es de
-astronomía); por eso un tema, por **default**, se baja por ADS (los **Pasos** de arriba). **Pero** si el
-usuario pide **explícitamente** ingerir un tema **no-astro** o cuya bibliografía canónica vive **fuera de
-ADS** (p. ej. un método matemático general: ICA/FastICA, signal processing, estadística), se permite en
-este modo. **`ingest-star` no cambia: sigue siendo astro-only.**
+astronomía); por eso un tema, por **default**, se baja por ADS (los **Pasos** de arriba). Este modo
+existe para los **métodos que no son exclusivamente astronómicos** —análisis de datos, machine
+learning, procesos gaussianos, signal processing— que la investigación astro usa pero
+cuya bibliografía canónica vive **fuera de ADS**. Se permite **sólo si el usuario lo pide
+explícitamente** (sea por su naturaleza no-astro o porque las fuentes no están en ADS). **`ingest-star`
+no cambia: sigue siendo astro-only.**
 
 Qué cambia respecto del flujo ADS de arriba:
 - **Sin ADS:** se saltean `query_ads.py`, `fetch_arxiv.py`, `fetch_pdf.py` y `fetch_ground_truth.py`. En
@@ -143,7 +145,7 @@ Qué cambia respecto del flujo ADS de arriba:
   final y el lint la lista como precondición. El resto del tema se arma igual con las fuentes
   limpias; la pendiente queda como hueco citado. Cuando el usuario provea el PDF/fuente: reemplazar
   `pending` por `pdf:`/`url:`, re-correr la cadena (idempotente) y completar la extracción.
-- **Clave de cita sintética (papers sin bibcode ADS):** `AAAA+Autor` (p. ej. `2000HyvarinenOja`,
+- **Clave de cita sintética (papers sin bibcode ADS):** `AAAA+Autor` (p. ej. `2006RasmussenWilliams`,
   `2006Tichavsky`, `2025sklearn`). Debe **empezar con `AAAA`+letra** (lo exige `BIBCODE_RE` del lint) y
   coincidir con el nombre del `.txt`. Donde **sí** exista un bibcode ADS real, usarlo.
 - **Notas de paper (automatizado):** `fetch_web.py` ya crea el stub `vault/wiki/papers/<clave>.md`; para

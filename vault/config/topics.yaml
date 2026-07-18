@@ -17,7 +17,7 @@
 #              ads | web | local-pdfs | local-pdfs+web. Todo lo no-ads es el modo off-ADS de
 #              ingest-topic (opt-in, sólo a pedido explícito) y requiere `sources:` y `query: null`.
 #   sources  : (sólo off-ADS) la bibliografía declarada del tema. Cada item:
-#                - key: 2000HyvarinenOja       # clave de cita sintética AAAA+Autor (obligatoria)
+#                - key: 2006RasmussenWilliams       # clave de cita sintética AAAA+Autor (obligatoria)
 #                  url: https://...            # fuente web (snapshot vía fetch_web/defuddle) — o bien
 #                  pdf: ~/ruta/al/archivo.pdf  # PDF provisto (se copia a raw/pdfs/<slug>/<key>.pdf)
 #                  title/author/year/venue     # opcionales: metadata para la nota de paper
@@ -42,23 +42,23 @@
 #   query: '(abs:"radial velocity" OR abs:"radial-velocity") (abs:"planet" OR abs:"exoplanet") (abs:"bisector" OR abs:"FWHM" OR abs:"S-index" OR abs:"activity indicator" OR abs:"chromospheric")'
 #   aliases: ["BIS-RV", "indicadores de actividad"]
 #
-# Ejemplo off-ADS (tema no-astro; ver Modo off-ADS del skill ingest-topic):
+# Ejemplo off-ADS (método no-astro que se quiere usar en la bóveda; ver Modo off-ADS del skill ingest-topic):
 #
-# fastica:
-#   title: "FastICA & Icasso (ICA: algoritmo y estabilidad)"
+# gaussian-processes:
+#   title: "Procesos gaussianos (regresión: algoritmo y kernels)"
 #   area: methods
-#   concept: fastica_icasso
+#   concept: gaussian-processes
 #   query: null
 #   source: local-pdfs+web
-#   aliases: ["ICA", "independent component analysis"]
+#   aliases: ["GP", "gaussian process regression", "procesos gaussianos"]
 #   sources:
-#     - key: 2000HyvarinenOja
-#       pdf: ~/Descargas/hyvarinen_oja_2000.pdf
-#       title: "Independent Component Analysis: Algorithms and Applications"
-#       author: Hyvärinen
-#       year: 2000
+#     - key: 2006RasmussenWilliams
+#       pdf: ~/Descargas/rasmussen_williams_2006.pdf
+#       title: "Gaussian Processes for Machine Learning"
+#       author: Rasmussen
+#       year: 2006
 #     - key: 2025sklearn
-#       url: https://scikit-learn.org/stable/modules/decomposition.html
-#       title: "scikit-learn User Guide: Decomposing signals (ICA)"
+#       url: https://scikit-learn.org/stable/modules/gaussian_process.html
+#       title: "scikit-learn User Guide: Gaussian Processes"
 #       venue: scikit-learn.org
 #       year: 2025

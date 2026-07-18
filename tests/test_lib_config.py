@@ -51,9 +51,9 @@ def test_load_topics_vacio(toy_vault):
 
 
 def test_topic_by_slug(toy_vault):
-    write_yaml(toy_vault.TOPICS_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ica"}})
-    slug, meta = cfg.topic_by_slug("ica")
-    assert slug == "ica" and meta["concept"] == "ica"
+    write_yaml(toy_vault.TOPICS_YAML, {"gp": {"title": "Gaussian processes", "area": "methods", "concept": "gp"}})
+    slug, meta = cfg.topic_by_slug("gp")
+    assert slug == "gp" and meta["concept"] == "gp"
     with pytest.raises(KeyError, match="topics.yaml"):
         cfg.topic_by_slug("nope")
 
@@ -90,7 +90,7 @@ def test_concept_areas_modo_tolerante(toy_vault):
 
 
 def test_version_unica_fuente():
-    """ALMAGESTO_VERSION es la ÚNICA fuente de versión: los UA de los fetchers derivan de la
+    """ALMAGESTO_VERSION es la ÚNGaussian processes fuente de versión: los UA de los fetchers derivan de la
     constante, y ningún script hardcodea 'Almagesto/x.y' (el drift que tenían los UA en 0.1)."""
     import re
 
@@ -117,7 +117,7 @@ def test_require_field(toy_vault):
     with pytest.raises(SystemExit):
         cfg.require_field(meta, "vacio", "Estrella Test", "stars.yaml")   # vacío = faltante
     with pytest.raises(SystemExit, match="usá ingest_topic"):
-        cfg.require_field(meta, "query", "ica", "topics.yaml", hint="usá ingest_topic.")
+        cfg.require_field(meta, "query", "gp", "topics.yaml", hint="usá ingest_topic.")
 
 
 def test_concept_areas_sin_nada(toy_vault):
