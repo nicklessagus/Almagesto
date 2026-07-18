@@ -60,7 +60,7 @@ flowchart LR
 
 > Por defecto la bibliografía entra por **ADS** (plomería astro). El **modo off-ADS** (opt-in, sólo a
 > pedido) es para los **métodos que no son exclusivamente astronómicos** —análisis de datos, machine
-> learning, procesos gaussianos, signal processing— cuya bibliografía canónica vive **fuera de ADS**: se
+> learning, procesos gaussianos, signal processing, etc. — cuya bibliografía canónica vive **fuera de ADS**: se
 > declara en `topics.yaml` con `source: web \| local-pdfs` + su lista `sources:` y entra a `vault/raw/`
 > desde snapshots web + PDFs locales, sin ADS/NEA. Sigue rigiendo la **frontera dura**: sólo bibliografía
 > citable — el método **publicado**, no su implementación.
