@@ -18,6 +18,30 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.2.0 (2026-07-19) — tanda de issues #15–#17 resuelta
+
+> Los 3 issues abiertos desde la instancia Almagesto-RV, resueltos en el template (un commit por
+> issue, `closes #N`). 246 tests verdes, lint 0 bloqueantes. `ALMAGESTO_VERSION` 1.1.0 → **1.2.0**
+> (minor: cambios aditivos/retrocompatibles). Al mergear en las instancias: el nuevo default
+> `--rows 2000` y la regla de combinación aplican en el próximo ingest; cambiar la regla re-clasifica
+> (sub-modo `maintain`).
+
+- **#16** — `fulltext:` **determinista** para papers que viven bajo varios slugs (relevantes para más
+  de un sujeto). `stamp_fulltext` dejó de repuntar al slug que corrió último: precedencia declarada
+  (primer escritor gana en empate) + preferencia por calidad (`pdftotext`/`web` > `ocr`) → sin ruido
+  de diff y `fulltext_source` estable. Repara punteros colgados.
+- **#17** — el **truncamiento** de la query directa (`numFound > --rows`) se **persiste** en
+  `build/<slug>/ads.json` (`truncated: {num_found, rows}`) y el **lint lo surface** como backlog:
+  un fallo silencioso pasa a visible. Default `--rows` 400 → **2000** (≈ el máximo de una request ADS).
+  El truncado del chaining sigue sin registrarse (por diseño). Deferido: `--audit` (censo de bóvedas
+  pre-registro), paginación, ordenar el corte por relevancia.
+- **#15** — la **regla de combinación** de `relevance.topics` es **declarativa**, no hardcodeada:
+  `relevance.require: [faceta,…]` (AND) y/o `relevance.min_topics: N`. `core = (≥min_topics) Y (todas
+  las de require) Y (doctype no-ruido)`. Sin declarar nada = OR histórico (retrocompatible). Es la
+  palanca contra el ruido que el citation chaining mete al ampliar el pool (medido en Almagesto-RV:
+  exigir el eje recorta 928→254). Documentado en `objective.yaml`/`setup`/`maintain`/`CLAUDE.md`.
+  Deferido: aplicar la restricción también server-side en la sub-query del chaining.
+
 ## ✅ Framework 1.1.0 (2026-07-18) — tanda de issues #9–#14 resuelta
 
 > Los 6 issues abiertos desde la instancia Almagesto-RV, resueltos en el template (un commit por
