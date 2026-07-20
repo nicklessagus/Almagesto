@@ -157,12 +157,23 @@ def test_query_ads_200_cuerpo_raro(toy_classifier, ads_token, no_sleep, monkeypa
 def test_query_ads_avisa_truncado(toy_classifier, ads_token, no_sleep, monkeypatch, capsys):
     monkeypatch.setattr(qa, "requests", SimpleNamespace(
         get=fake_get_seq([FakeResp(200, payload([], num_found=500))])))
-    qa.query_ads("q", rows=10)
+    m = {}
+    qa.query_ads("q", rows=10, meta=m)
     assert "truncado" in capsys.readouterr().out
+    assert m == {"num_found": 500, "rows": 10, "truncated": True}   # marca persistible (#17)
     monkeypatch.setattr(qa, "requests", SimpleNamespace(
         get=fake_get_seq([FakeResp(200, payload([], num_found=500))])))
     qa.query_ads("q", rows=10, quiet_truncate=True)
     assert "truncado" not in capsys.readouterr().out
+
+
+def test_query_ads_meta_sin_truncar(toy_classifier, ads_token, no_sleep, monkeypatch):
+    """meta reporta truncated=False cuando numFound ≤ rows (así el caller escribe `truncated: null`)."""
+    monkeypatch.setattr(qa, "requests", SimpleNamespace(
+        get=fake_get_seq([FakeResp(200, payload([], num_found=1))])))
+    m = {}
+    qa.query_ads("q", rows=2000, meta=m)
+    assert m["truncated"] is False and m["num_found"] == 1
 
 
 # ── chaining / extra_core ────────────────────────────────────────────────────
@@ -212,10 +223,11 @@ def test_main_estrella_chaining_dedup_y_via(toy_vault, toy_classifier, no_sleep,
                rec("2020chD....1D", relevant=False)]             # no-core encadenado → afuera
     for c in chained:
         c["via"] = "chain:references"
-    monkeypatch.setattr(qa, "query_ads", lambda q, rows=400, quiet_truncate=False: [dict(r) for r in direct])
+    monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, quiet_truncate=False, meta=None: [dict(r) for r in direct])
     monkeypatch.setattr(qa, "chain_candidates", lambda bibs, rows, filt: [dict(r) for r in chained])
     assert run_main(monkeypatch, ["test_star"]) == 0
     data = json.loads((toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text())
+    assert data["truncated"] is None                    # meta vacío (mock) → no truncó (#17)
     bibs = {r["bibcode"]: r for r in data["records"]}
     assert set(bibs) == {"2020dirA....1A", "2020dirB....1B", "2020chC....1C"}
     assert bibs["2020dirA....1A"]["via"] == "query"
@@ -227,17 +239,31 @@ def test_main_estrella_chaining_dedup_y_via(toy_vault, toy_classifier, no_sleep,
 
 def test_main_no_chain(toy_vault, toy_classifier, no_sleep, monkeypatch):
     called = []
-    monkeypatch.setattr(qa, "query_ads", lambda q, rows=400, quiet_truncate=False: [rec("2020dirA....1A")])
+    monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, quiet_truncate=False, meta=None: [rec("2020dirA....1A")])
     monkeypatch.setattr(qa, "chain_candidates", lambda *a: called.append(a) or [])
     run_main(monkeypatch, ["test_star", "--no-chain"])
     assert called == []
+
+
+def test_main_persiste_truncado(toy_vault, toy_classifier, no_sleep, monkeypatch):
+    """Query directa truncada → main persiste `truncated: {num_found, rows}` en ads.json (#17),
+    convirtiendo el aviso de stdout en una marca que el lint surface."""
+    def fake_qa(q, rows=2000, quiet_truncate=False, meta=None):
+        if meta is not None:
+            meta.update(num_found=410, rows=rows, truncated=True)
+        return [rec("2020dirA....1A")]
+    monkeypatch.setattr(qa, "query_ads", fake_qa)
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    assert run_main(monkeypatch, ["test_star", "--rows", "400"]) == 0
+    data = json.loads((toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text())
+    assert data["truncated"] == {"num_found": 410, "rows": 400}
 
 
 def test_main_extra_core_persistente(toy_vault, toy_classifier, no_sleep, monkeypatch):
     stars = {"Estrella Test": {"slug": "test_star", "simbad": "s", "ads_object": "Test Star",
                                "aliases": [], "extra_core": ["1988old.....1O"]}}
     write_yaml(cfg.STARS_YAML, stars)
-    monkeypatch.setattr(qa, "query_ads", lambda q, rows=400, quiet_truncate=False: [rec("2020dirA....1A")])
+    monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, quiet_truncate=False, meta=None: [rec("2020dirA....1A")])
     monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
     monkeypatch.setattr(qa, "fetch_bibcodes",
                         lambda bibs: [dict(rec("1988old.....1O", relevant=True), via="manual")])

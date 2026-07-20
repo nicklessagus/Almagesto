@@ -4,7 +4,9 @@ Uso:
     python query_ads.py <slug> [--rows N] [--no-chain]
 
 Escribe build/<slug>/ads.json con la lista de registros (bibcode, título, autores,
-año, abstract, arxiv_id, doctype, citation_count, topics, relevant, via).
+año, abstract, arxiv_id, doctype, citation_count, topics, relevant, via) y, si la query directa
+quedó truncada (numFound > --rows), la marca `truncated: {num_found, rows}` que el lint surface
+como corpus incompleto (si no truncó, `truncated: null`).
 
 Usa la API REST de ADS directamente (control total de campos y filas). Rate: ~5000/día.
 La query por estrella se arma con `title:`/`abs:` sobre nombre+alias (ver `build_query`; `object:`
@@ -128,11 +130,17 @@ RETRY_STATUS = (429, 500, 502, 503, 504)   # rate-limit / errores transitorios d
 RETRY_WAITS_S = (5, 15, 30)                # backoff entre reintentos
 
 
-def query_ads(q: str, rows: int = 400, quiet_truncate: bool = False) -> list[dict]:
+def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
+              meta: dict | None = None) -> list[dict]:
     """Corre una query Solr `q` ya armada contra ADS y devuelve registros clasificados.
     Para estrellas, armar `q` con build_query(names); para temas, usar la query cruda del topic.
     Reintenta con backoff ante 429/5xx y avisa si el resultado quedó truncado (numFound > rows;
-    `quiet_truncate` lo silencia — en el chaining el truncado a top-por-citas es por diseño)."""
+    `quiet_truncate` lo silencia — en el chaining el truncado a top-por-citas es por diseño).
+
+    Si se pasa `meta` (dict mutable), se rellena con `num_found`/`rows`/`truncated` de ESTA corrida
+    — así el caller persiste la marca de truncamiento (`build/<slug>/ads.json`) para que el lint la
+    surface como backlog en vez de que el aviso muera en el stdout (#17). Se mantiene el tipo de
+    retorno (lista) para no tocar al resto de los callers."""
     token = cfg.get_ads_token()
     headers = {"Authorization": f"Bearer {token}"}
     params = {"q": q, "fl": FIELDS, "rows": rows,
@@ -151,9 +159,12 @@ def query_ads(q: str, rows: int = 400, quiet_truncate: bool = False) -> list[dic
     except (ValueError, KeyError) as exc:   # cuerpo de error con 200 / formato inesperado
         raise RuntimeError(f"Respuesta inesperada de ADS (sin response.docs): {resp.text[:200]}") from exc
     num_found = response.get("numFound", len(docs))
-    if num_found > rows and not quiet_truncate:
+    truncated = num_found > rows
+    if meta is not None:
+        meta.update(num_found=num_found, rows=rows, truncated=truncated)
+    if truncated and not quiet_truncate:
         print(f"  ⚠ truncado: ADS reporta {num_found} resultados y sólo se trajeron {rows} "
-              f"(top por citas) — subí --rows para cubrir todo")
+              f"(top por citas) — subí --rows para cubrir todo (queda marcado en ads.json → lint)")
     out = []
     for d in docs:
         topics, relevant = classify(d)
@@ -253,7 +264,10 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("slug", nargs="?",
                     help="slug de estrella (o tema con --topic). Se omite con --probe.")
-    ap.add_argument("--rows", type=int, default=400)
+    ap.add_argument("--rows", type=int, default=2000,
+                    help="tope de registros por query (default 2000 ≈ el máximo de una request ADS; "
+                         "cubre la enorme mayoría de sujetos sin truncar). Si igual trunca, queda "
+                         "marcado en build/<slug>/ads.json y el lint lo surface")
     ap.add_argument("--no-chain", action="store_true",
                     help="desactivar el citation chaining (references/citations de los papers core)")
     ap.add_argument("--topic", action="store_true",
@@ -304,10 +318,11 @@ def main() -> int:
         print(f"Consultando ADS: {name}  (nombres: {', '.join(names)})")
         head = {"kind": "star", "star": name, "slug": args.slug, "ads_object": meta["ads_object"]}
 
+    qmeta: dict = {}                # truncamiento de la query DIRECTA (el chaining trunca por diseño)
     if q is None:
         recs, rel = [], []          # --extra-only: todo entra por el bloque extra_core de abajo
     else:
-        recs = query_ads(q, rows=args.rows)
+        recs = query_ads(q, rows=args.rows, meta=qmeta)
         for r in recs:
             r["via"] = "query"
         rel = [r for r in recs if r["relevant"]]
@@ -344,9 +359,18 @@ def main() -> int:
     recs.sort(key=lambda r: r.get("citation_count") or 0, reverse=True)
     print(f"  total: {len(recs)} registros, {len(rel)} relevantes")
 
+    # marca de truncamiento de la query directa (sólo si realmente se cortó): persistida para que el
+    # lint la surface como corpus incompleto. El truncado del chaining NO se registra (es por diseño).
+    truncated = ({"num_found": qmeta["num_found"], "rows": qmeta["rows"]}
+                 if qmeta.get("truncated") else None)
+    if truncated:
+        print(f"  ⚠ corpus truncado: ADS reporta {truncated['num_found']} y se trajeron "
+              f"{truncated['rows']} — marcado en ads.json (el lint lo surface)")
+
     outdir = cfg.ROOT / "build" / args.slug
     outdir.mkdir(parents=True, exist_ok=True)
-    payload = {**head, "n_total": len(recs), "n_relevant": len(rel), "records": recs}
+    payload = {**head, "n_total": len(recs), "n_relevant": len(rel),
+               "truncated": truncated, "records": recs}
     (outdir / "ads.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False),
                                      encoding="utf-8")
     print(f"  → {outdir / 'ads.json'}")

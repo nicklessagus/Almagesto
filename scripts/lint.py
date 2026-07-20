@@ -24,7 +24,9 @@ escaneo sin capa de texto: existe pero no sirve para grep ni verify), **citas no
 citado en query/concepto/hipótesis sin su `.txt` en `vault/raw/fulltext/` → no se puede chequear claim↔fuente
 con el skill `verify-citations`), **cobertura** (concepto/hipótesis sin ninguna cita `[[bibcode]]` →
 afirmaciones no chequeables; backlog), **cobertura de verificación** (query/concepto CON citas pero
-SIN bloque `## Verificación de citas` → nunca pasó por verify-citations; backlog ALCE-adjacent), y campos clave
+SIN bloque `## Verificación de citas` → nunca pasó por verify-citations; backlog ALCE-adjacent),
+**corpus truncado** (un `build/<slug>/ads.json` con `truncated` seteado → la query directa trajo
+menos papers de los que ADS reporta: al sujeto le falta cola; backlog), y campos clave
 incompletos (P_rot null, papers relevantes sin `methods`, `thesis_links` sin `bearing`).
 No modifica nada: reporta para que el agente/usuario decida.
 
@@ -324,6 +326,24 @@ def main() -> int:
              "Obsidian fue abierto en la raíz en vez de `vault/` — el grafo indexa andamiaje "
              "(outputs/, build/, scripts/); abrí la carpeta `vault/` como vault y borrá este directorio"))
 
+    # corpus truncado (backlog): un build/<slug>/ads.json con `truncated` seteado significa que la
+    # query directa devolvió menos papers de los que ADS reporta (numFound > --rows) → al sujeto le
+    # falta cola. El aviso vivía sólo en el stdout de la corrida (que nadie guarda); persistirlo en
+    # ads.json y surfacearlo acá convierte un fallo silencioso en backlog visible (#17). build/ es
+    # scratch: si no está, no hay nada que reportar (el censo de bóvedas pre-registro es otro modo).
+    truncated_corpora = []
+    for aj in sorted(glob.glob(str(cfg.ROOT / "build" / "*" / "ads.json"))):
+        try:
+            data = json.loads(open(aj, encoding="utf-8").read())
+        except (ValueError, OSError):
+            continue
+        t = data.get("truncated")
+        if t:
+            slug = data.get("slug") or Path(aj).parent.name
+            truncated_corpora.append(
+                (slug, f"ADS reporta {t.get('num_found')} y se trajeron {t.get('rows')} → corpus "
+                       f"incompleto; re-ingestá con --rows mayor (o paginá) para cubrir la cola"))
+
     # reporte
     lines = [f"# Lint de la bóveda — {dt.date.today().isoformat()}", ""]
     for title, items in [("Wikilinks rotos (página faltante)", broken),
@@ -344,6 +364,7 @@ def main() -> int:
                          ("Citas no verificables en query/concepto/hipótesis (sin fulltext)", unverifiable),
                          ("Sin verificar: query/concepto con citas pero sin bloque verify-citations (backlog)", unverified),
                          ("Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog)", coverage),
+                         ("Corpus truncado: la query directa trajo menos de lo que ADS reporta (backlog)", truncated_corpora),
                          ("Campos incompletos", incomplete)]:
         lines.append(f"## {title} ({len(items)})")
         for a, b in items:

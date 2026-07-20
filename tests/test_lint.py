@@ -326,3 +326,27 @@ def test_prosa_reconoce_variantes_de_mencion(toy_vault, capsys):
             body)
     rc, out = run_lint(capsys)
     assert "no discutido en prosa" not in out
+
+
+def test_corpus_truncado_surface_backlog(toy_vault, capsys):
+    """build/<slug>/ads.json con `truncated` seteado → el lint lo surface como backlog (no bloquea, #17)."""
+    d = toy_vault.ROOT / "build" / "au_mic"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "ads.json").write_text(json.dumps(
+        {"kind": "star", "slug": "au_mic", "truncated": {"num_found": 410, "rows": 400},
+         "records": []}), encoding="utf-8")
+    rc, out = run_lint(capsys)
+    assert rc == 0                                     # backlog, no bloqueante
+    assert "Corpus truncado" in out and "au_mic" in out and "410" in out
+
+
+def test_corpus_no_truncado_no_reporta(toy_vault, capsys):
+    """ads.json con `truncated: null` (no truncó) o sin la clave (ads.json viejo) → nada que reportar."""
+    for slug, payload in (("hd40307", {"slug": "hd40307", "truncated": None, "records": []}),
+                          ("tau_ceti", {"slug": "tau_ceti", "records": []})):   # sin la clave (legacy)
+        d = toy_vault.ROOT / "build" / slug
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "ads.json").write_text(json.dumps(payload), encoding="utf-8")
+    rc, out = run_lint(capsys)
+    assert rc == 0
+    assert "Corpus truncado: la query directa trajo menos de lo que ADS reporta (backlog) (0)" in out

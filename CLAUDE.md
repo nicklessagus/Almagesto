@@ -352,7 +352,10 @@ derivada al usuario con su puntero doi/url) y el **fulltext ilegible** (un `.txt
 umbral determinista de legibilidad — mojibake o escaneo sin capa de texto: existe pero no sirve para
 grep ni verify; rescate: PDF sano, OCR, o marcar `pending`). La **cobertura** (concepto/hipótesis
 sin ninguna cita `[[bibcode]]` → afirma sin fuente) es **backlog** que el lint surface para ir citando.
-Los "campos incompletos" (P_rot null, papers sin `methods`, etc.) son **backlog**, no bloquean. Revisar
+El **corpus truncado** (un `build/<slug>/ads.json` con `truncated` seteado → la query directa trajo
+menos papers de los que ADS reporta: al sujeto le falta cola) es **backlog** — `query_ads` persiste la
+marca (default `--rows 2000`, ≈ el máximo de una request; re-ingestar con `--rows` mayor para cubrir la
+cola). Los "campos incompletos" (P_rot null, papers sin `methods`, etc.) son **backlog**, no bloquean. Revisar
 además a mano: claims stale y conceptos referidos sin página. Si faltan datos, abrir queries para
 imputar (web/ADS).
 
