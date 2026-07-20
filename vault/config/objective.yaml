@@ -35,6 +35,17 @@ relevance:
     planet:    '\bplanet|exoplanet|habitable|orbit|transit|mass-radius'
     method:    'gaussian process|independent component|principal component|\bICA\b|\bPCA\b|SCALPELS|YARARA|line-?by-?line|periodogram|machine learning|deconvolution|disentangl'
 
+  # ── Regla de COMBINACIÓN de facetas (opcional) ──────────────────────────────
+  # Por default la combinación es OR: alcanza con matchear UNA faceta cualquiera.
+  # Sirve para la query directa (pool chico), pero el citation chaining amplía el
+  # pool y esa laxitud deja pasar off-topic (discos de escombros, coronas X…).
+  # La palanca NO es podar regex sino declarar qué facetas son OBLIGATORIAS:
+  #   require:    [rv]     # AND: estas facetas DEBEN matchear (p. ej. el eje de la bóveda)
+  #   min_topics: 2        # o: al menos N facetas cualesquiera (default 1)
+  # Semántica: core = (≥ min_topics facetas) Y (todas las de require) Y (doctype no-ruido).
+  # Dejá ambas sin declarar para el comportamiento histórico (≥1 faceta). Cambiar la
+  # regla RE-CLASIFICA el corpus existente → correr el sub-modo re-clasificar de `maintain`.
+
   # doctypes de ADS que casi siempre son ruido (menciones triviales / no-papers).
   noise_doctypes:
     - catalog

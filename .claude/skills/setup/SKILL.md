@@ -48,8 +48,15 @@ papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** 
    - `description`: 2–3 líneas (qué reúne y para qué decidir).
    - `relevance.topics`: **varios buckets nombrados**, cada uno una faceta del tema; regex de Python en
      **comillas simples**, **una línea por patrón** (YAML literal: `\b` y demás llegan intactos). Cubrir
-     **sinónimos en inglés** (ADS es inglés), instrumentos y términos técnicos. Recordar que es un **OR**:
-     basta que matchee 1 bucket. Partir del ejemplo del template como molde de formato.
+     **sinónimos en inglés** (ADS es inglés), instrumentos y términos técnicos. Recordar que por default es
+     un **OR**: basta que matchee 1 bucket. Partir del ejemplo del template como molde de formato.
+   - `relevance.require` / `relevance.min_topics` (**opcionales**): la **regla de combinación**. Por default
+     OR (≥1 faceta) — bien para la query directa, pero el citation chaining amplía el pool y esa laxitud deja
+     pasar off-topic. Si hay una **faceta-eje** que todo paper core debería tocar (p. ej. `rv` en una bóveda
+     de velocidades radiales), declarala obligatoria: `require: [rv]` (AND) y/o `min_topics: 2` (al menos N
+     cualesquiera). Core = (≥ min_topics facetas) Y (todas las de require) Y (doctype no-ruido). La palanca
+     contra el ruido del chaining es la **obligatoriedad**, no podar regex. Dejar ambas sin declarar = OR
+     histórico. **Cada faceta de `require` debe existir en `topics`** (si no, el clasificador aborta).
    - `noise_doctypes`: el default (catalog, proposal, abstract, erratum, bookreview, newsletter,
      pressrelease, circular, software) salvo razón.
    - `concept_areas`: sugerir 3–5 áreas según el foco (`methods`/`hypotheses` reservadas + las que

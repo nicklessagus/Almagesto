@@ -63,8 +63,10 @@ cierra con **verify-citations** (si tocó prosa con `[[bibcode]]`) + **lint en 0
    nota** (sobreviven a mover carpeta pero **no** a renombrar el archivo) → actualizarlos todos.
 3. Cierre: lint en 0 → `log` → commit → preguntar push.
 
-## D. Re-clasificar tras cambiar `relevance.topics`
-Cuando editaste `objective.yaml` (vía `setup`) y el corte core/no-core cambió:
+## D. Re-clasificar tras cambiar la regla de relevancia
+Cuando editaste `objective.yaml` (vía `setup`) y el corte core/no-core cambió — sea porque tocaste
+`relevance.topics` (las regex) **o** la **regla de combinación** (`relevance.require` / `min_topics`;
+p. ej. volviste obligatoria la faceta del eje para frenar el ruido del chaining):
 1. Re-correr `python query_ads.py <slug>` para cada estrella/tema afectado → re-clasifica con la regla
    nueva (regenera `build/<slug>/ads.json`).
 2. **Papers que dejaron de ser core:** decidir con el usuario — dejar la nota marcada (`relevance: low`)

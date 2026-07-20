@@ -14,12 +14,16 @@ import lib_config as cfg
 
 @pytest.fixture
 def toy_classifier(monkeypatch):
-    """Clasificador determinista para los tests (query_ads compila el real al importar)."""
+    """Clasificador determinista para los tests (query_ads compila el real al importar). Resetea la
+    regla de combinación a su default (require=[], min_topics=1) para no heredar la del objective.yaml
+    real; los tests de la regla declarativa la sobre-escriben."""
     monkeypatch.setattr(qa, "TOPIC_PATTERNS", {
         "actividad": re.compile("activity|starspot", re.I),
         "rv": re.compile("radial velocity", re.I),
     })
     monkeypatch.setattr(qa, "NOISE_DOCTYPES", {"catalog", "proposal"})
+    monkeypatch.setattr(qa, "REQUIRE_TOPICS", [])
+    monkeypatch.setattr(qa, "MIN_TOPICS", 1)
 
 
 @pytest.fixture
@@ -44,6 +48,50 @@ def test_classify_doctype_ruido_no_es_core(toy_classifier):
 
 def test_classify_sin_match(toy_classifier):
     assert qa.classify({"title": ["asteroseismology"], "doctype": "article"}) == ([], False)
+
+
+# ── regla de combinación declarativa: require / min_topics (#15) ──────────────
+
+def test_classify_require_faceta_obligatoria(toy_classifier, monkeypatch):
+    """`require: [rv]` → un paper que matchea sólo `actividad` deja de ser core; el que matchea
+    `rv` (aunque no `actividad`) sí. La faceta del eje se vuelve AND, no OR."""
+    monkeypatch.setattr(qa, "REQUIRE_TOPICS", ["rv"])
+    assert qa.classify({"title": ["starspot activity"], "doctype": "article"}) == (["actividad"], False)
+    t, rel = qa.classify({"title": ["radial velocity survey"], "doctype": "article"})
+    assert t == ["rv"] and rel is True
+    # matchea ambas → core (require ⊆ matched)
+    _, rel2 = qa.classify({"title": ["radial velocity"], "abstract": "activity", "doctype": "article"})
+    assert rel2 is True
+
+
+def test_classify_min_topics_dos(toy_classifier, monkeypatch):
+    """`min_topics: 2` → una sola faceta no alcanza; hacen falta ≥2 cualesquiera."""
+    monkeypatch.setattr(qa, "MIN_TOPICS", 2)
+    assert qa.classify({"title": ["radial velocity"], "doctype": "article"}) == (["rv"], False)
+    t, rel = qa.classify({"title": ["radial velocity"], "abstract": "starspot activity",
+                          "doctype": "article"})
+    assert set(t) == {"actividad", "rv"} and rel is True
+
+
+def test_classify_require_y_ruido_componen(toy_classifier, monkeypatch):
+    """require se combina con el filtro de doctype ruido (AND de las tres condiciones)."""
+    monkeypatch.setattr(qa, "REQUIRE_TOPICS", ["rv"])
+    _, rel = qa.classify({"title": ["radial velocity"], "doctype": "catalog"})
+    assert rel is False                                   # matchea require pero es doctype ruido
+
+
+def test_combination_rule_defaults():
+    """Sin declarar nada → (require=[], min_topics=1): el comportamiento histórico (≥1 faceta OR)."""
+    assert qa.combination_rule({}, {"rv": None, "actividad": None}) == ([], 1)
+    assert qa.combination_rule({"min_topics": 2, "require": ["rv"]},
+                               {"rv": None, "actividad": None}) == (["rv"], 2)
+
+
+def test_require_faceta_inexistente_falla():
+    """Guard de config: una faceta en `require` ausente de `topics` filtraría TODO en silencio →
+    falla ruidoso (mismo camino que corre al importar el módulo)."""
+    with pytest.raises(RuntimeError, match="require nombra facetas ausentes"):
+        qa.combination_rule({"require": ["no-existe"]}, {"rv": None})
 
 
 # ── designaciones / queries ──────────────────────────────────────────────────

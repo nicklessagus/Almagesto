@@ -57,9 +57,37 @@ if not TOPIC_PATTERNS:
         "Completalo antes de consultar ADS."
     )
 
+# Regla de COMBINACIÓN de facetas — declarativa (objective.yaml), no hardcodeada (#15). El default
+# histórico es OR (≥1 faceta cualquiera), calibrado para el pool chico de la query directa; el
+# citation chaining amplía el pool a "todo lo que el grafo conecta y menciona al sujeto", mucho más
+# ruidoso, y ahí una faceta laxa deja de discriminar (medido: exigir la faceta del eje recorta 928→254).
+# La palanca es la OBLIGATORIEDAD, no podar regex. Cada instancia declara cuáles de SUS facetas son
+# load-bearing sin tocar el framework:
+#   relevance.require:    [faceta, ...]  → AND: TODAS deben matchear
+#   relevance.min_topics: N              → al menos N facetas cualesquiera (default 1)
+# Sin nada declarado (require=[], min_topics=1) se recupera exactamente el comportamiento de hoy.
+def combination_rule(rel: dict, topic_names) -> tuple[list[str], int]:
+    """(require, min_topics) validados desde relevance. `require` debe ⊆ topics: una faceta
+    obligatoria inexistente filtraría TODO a no-core en silencio → falla ruidoso."""
+    require = list(rel.get("require") or [])
+    min_topics = rel.get("min_topics") or 1
+    unknown = [t for t in require if t not in topic_names]
+    if unknown:
+        raise RuntimeError(
+            f"vault/config/objective.yaml: relevance.require nombra facetas ausentes de "
+            f"relevance.topics: {unknown}. Una faceta obligatoria que no existe filtraría TODO a "
+            f"no-core en silencio."
+        )
+    return require, min_topics
+
+
+REQUIRE_TOPICS, MIN_TOPICS = combination_rule(_REL, TOPIC_PATTERNS)
+
 
 def classify(rec: dict) -> tuple[list[str], bool]:
-    """Devuelve (topics, relevant). Relevante si matchea ≥1 topic y no es doctype ruido."""
+    """Devuelve (topics, relevant). Relevante si (a) matchea ≥ MIN_TOPICS facetas, (b) matchea TODAS
+    las de REQUIRE_TOPICS (AND) y (c) no es doctype ruido. Con los defaults (min_topics=1, require=[])
+    es el histórico ≥1 faceta cualquiera."""
     text = " ".join(filter(None, [
         " ".join(rec.get("title", []) or []),
         rec.get("abstract", "") or "",
@@ -67,7 +95,10 @@ def classify(rec: dict) -> tuple[list[str], bool]:
     ])).lower()
     topics = [t for t, pat in TOPIC_PATTERNS.items() if pat.search(text)]
     doctype = rec.get("doctype", "")
-    relevant = bool(topics) and doctype not in NOISE_DOCTYPES
+    matched = set(topics)
+    relevant = (len(topics) >= MIN_TOPICS
+                and matched.issuperset(REQUIRE_TOPICS)
+                and doctype not in NOISE_DOCTYPES)
     return topics, relevant
 
 

@@ -211,7 +211,13 @@ clasificador de papers core). El agente traduce el foco del usuario (en palabras
 **no** escribe regex — y la valida contra papers reales con `python scripts/query_ads.py --probe "<query>"`
 (muestra el corte core/no-core sin bajar nada) iterando hasta que cierre. `relevance.topics` son **facetas**
 (constantes; clasifican tanto papers de estrella como de tema), **no** sujetos (las estrellas/temas van en
-la query, `stars.yaml`/`topics.yaml`). No ingesta nada; después se usan `ingest-star`/`ingest-topic`.
+la query, `stars.yaml`/`topics.yaml`). La **regla de combinación** de facetas es declarativa (no
+hardcodeada): por default OR (≥1 faceta cualquiera), pero una instancia puede declarar
+`relevance.require: [<faceta>, …]` (AND: obligatorias) y/o `relevance.min_topics: N` (≥N cualesquiera) —
+`core = (≥min_topics) Y (todas las de require) Y (doctype no-ruido)`. Es la palanca contra el ruido que
+el citation chaining mete al ampliar el pool (podar regex no alcanza si la combinación sigue siendo OR);
+sin declarar nada, comportamiento histórico. Cambiar la regla **re-clasifica** el corpus → sub-modo
+re-clasificar de `maintain`. No ingesta nada; después se usan `ingest-star`/`ingest-topic`.
 
 ### Ingest (una fuente → cascada de páginas)
 1. Los **orquestadores** corren la cadena mecánica completa (idempotente, no pisa — con una única
