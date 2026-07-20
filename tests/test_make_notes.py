@@ -393,6 +393,69 @@ def test_stamp_fulltext_migra_nota_pre_contrato(toy_vault):
     assert mn.stamp_fulltext(dest, "2019oldC...1..1C", "test_star") is False
 
 
+# ── multi-slug: fulltext determinista aunque el paper viva bajo varios slugs (#16) ──
+
+def _note_con_fulltext(toy_vault, stem, rel, src):
+    return mk_note(toy_vault.PAPERS, stem,
+                   {"bibcode": stem, "pdf": None,
+                    "fulltext": rel, "fulltext_source": src, "tags": ["paper"]}, "cuerpo\n")
+
+
+def test_stamp_fulltext_multi_slug_empate_no_toca(toy_vault):
+    """Mismo paper bajo dos slugs con .txt de igual calidad: la nota apunta a A y correr la
+    cadena de B NO la repunta (primer escritor gana → idempotente, sin ruido de diff)."""
+    stem = "2009ApJ...700.1732K"
+    seed_txt(toy_vault, "tau_ceti", stem)                    # pdftotext
+    seed_txt(toy_vault, "hd40307", stem)                     # pdftotext (contenido igual)
+    dest = _note_con_fulltext(toy_vault, stem,
+                              f"../../raw/fulltext/tau_ceti/{stem}.txt", "pdftotext")
+    assert mn.stamp_fulltext(dest, stem, "hd40307") is False
+    fm = read_fm(dest)
+    assert fm["fulltext"] == f"../../raw/fulltext/tau_ceti/{stem}.txt"
+    assert fm["fulltext_source"] == "pdftotext"
+
+
+def test_stamp_fulltext_multi_slug_prefiere_pdftotext_sobre_ocr(toy_vault):
+    """La nota apunta a una copia OCR; llega un slug con extracción pdftotext limpia → gana la
+    mejor calidad (converge a la fuente más citable, no al último que corrió)."""
+    stem = "2016ApJ...820...89F"
+    seed_txt(toy_vault, "crx-index", stem,
+             header=f"{cfg.FULLTEXT_OCR_MARK}: citable CON SALVEDAD\n")
+    seed_txt(toy_vault, "hd40307", stem)                     # pdftotext limpio
+    dest = _note_con_fulltext(toy_vault, stem,
+                              f"../../raw/fulltext/crx-index/{stem}.txt", "ocr")
+    assert mn.stamp_fulltext(dest, stem, "hd40307") is True
+    fm = read_fm(dest)
+    assert fm["fulltext"] == f"../../raw/fulltext/hd40307/{stem}.txt"
+    assert fm["fulltext_source"] == "pdftotext"
+
+
+def test_stamp_fulltext_multi_slug_no_degrada_a_ocr(toy_vault):
+    """La nota ya apunta a una extracción pdftotext limpia; llega un slug con sólo OCR → NO se
+    degrada (la calidad manda por sobre el orden de ejecución)."""
+    stem = "2018ApJ...864...75K"
+    seed_txt(toy_vault, "tau_ceti", stem)                    # pdftotext
+    seed_txt(toy_vault, "hd40307", stem,
+             header=f"{cfg.FULLTEXT_OCR_MARK}: citable CON SALVEDAD\n")
+    dest = _note_con_fulltext(toy_vault, stem,
+                              f"../../raw/fulltext/tau_ceti/{stem}.txt", "pdftotext")
+    assert mn.stamp_fulltext(dest, stem, "hd40307") is False
+    fm = read_fm(dest)
+    assert fm["fulltext"] == f"../../raw/fulltext/tau_ceti/{stem}.txt"
+    assert fm["fulltext_source"] == "pdftotext"
+
+
+def test_stamp_fulltext_repara_puntero_colgado(toy_vault):
+    """Si el `fulltext:` estampado apunta a un .txt que ya NO existe en disco, la corrida en
+    curso lo repara (la precedencia sólo protege punteros vivos)."""
+    stem = "2020conA...1..1A"
+    seed_txt(toy_vault, "hd40307", stem)                     # única copia que existe
+    dest = _note_con_fulltext(toy_vault, stem,
+                              f"../../raw/fulltext/borrado/{stem}.txt", "pdftotext")
+    assert mn.stamp_fulltext(dest, stem, "hd40307") is True
+    assert read_fm(dest)["fulltext"] == f"../../raw/fulltext/hd40307/{stem}.txt"
+
+
 def test_web_note_nace_con_fulltext(toy_vault):
     """Flujo web: fetch_web escribe el snapshot ANTES de la nota → nace con provenance web."""
     seed_txt(toy_vault, "gp", "2020Smith",

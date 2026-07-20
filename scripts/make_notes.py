@@ -36,6 +36,23 @@ def safe_name(bibcode: str) -> str:
     return bibcode.replace("/", "_")
 
 
+def _txt_provenance(path) -> str:
+    """Provenance de un .txt por la marca de su primera línea: `ocr` (rescate tesseract —
+    citable con salvedad), `web` (snapshot defuddle) o `pdftotext` (extracción determinista,
+    sin marca). Un solo lugar de verdad para leer el header."""
+    with path.open(encoding="utf-8", errors="replace") as fh:
+        first = fh.readline()
+    return ("ocr" if first.startswith(cfg.FULLTEXT_OCR_MARK)
+            else "web" if first.startswith(cfg.FULLTEXT_WEB_MARK)
+            else "pdftotext")
+
+
+# Calidad de fulltext para desempatar entre copias del mismo paper bajo distintos slugs (#16):
+# `pdftotext`/`web` son extracción/snapshot limpios; `ocr` es rescate "citable con salvedad".
+# Mayor = mejor; desconocido = 0.
+_FULLTEXT_QUALITY = {"pdftotext": 2, "web": 2, "ocr": 1}
+
+
 def fulltext_info(slug: str | None, stem: str) -> tuple[str | None, str | None]:
     """(ruta relativa, provenance) del fulltext `.txt` de un paper, por VERDAD DE DISCO —
     (None, None) si no hay extracción. `stem` es el nombre en disco (safe_name del bibcode /
@@ -48,12 +65,7 @@ def fulltext_info(slug: str | None, stem: str) -> tuple[str | None, str | None]:
     p = cfg.FULLTEXT / slug / f"{stem}.txt"
     if not p.exists():
         return None, None
-    with p.open(encoding="utf-8", errors="replace") as fh:
-        first = fh.readline()
-    src = ("ocr" if first.startswith(cfg.FULLTEXT_OCR_MARK)
-           else "web" if first.startswith(cfg.FULLTEXT_WEB_MARK)
-           else "pdftotext")
-    return f"../../raw/fulltext/{slug}/{stem}.txt", src
+    return f"../../raw/fulltext/{slug}/{stem}.txt", _txt_provenance(p)
 
 
 def stamp_fulltext(dest, stem: str, slug: str | None) -> bool:
@@ -63,7 +75,14 @@ def stamp_fulltext(dest, stem: str, slug: str | None) -> bool:
     no traen los campos. Edición QUIRÚRGICA a nivel texto (como unpend_note/merge_frontmatter_list):
     sólo esas dos líneas del frontmatter — actualiza las existentes o las inserta tras `pdf:` —,
     nunca la extracción LLM. Sin .txt en disco no des-estampa (la ausencia ya la surface el lint).
-    Devuelve True si modificó."""
+
+    Precedencia declarada + preferencia por calidad (#16): un paper relevante para varios sujetos
+    tiene su `.txt` extraído bajo CADA slug (contenido idéntico), pero la nota es una sola. Sin
+    esto el campo se repunta al slug que corrió último → ruido de diff y `fulltext_source` que
+    alterna según el orden de ejecución. Regla: si la nota ya apunta a un `.txt` que existe en
+    disco, el candidato de la corrida en curso sólo lo reemplaza si es de MEJOR calidad
+    (`pdftotext`/`web` > `ocr`); en empate gana el primer escritor → re-correr cualquier slug no
+    toca la nota. Devuelve True si modificó."""
     rel, src = fulltext_info(slug, stem)
     if rel is None or not dest.exists():
         return False
@@ -74,6 +93,18 @@ def stamp_fulltext(dest, stem: str, slug: str | None) -> bool:
     if end < 0:
         return False
     lines = text[4:end].split("\n")
+
+    # Si ya hay un `fulltext:` válido (apunta a un .txt que existe), decidir quién gana ANTES de
+    # estampar: sólo un candidato de calidad estrictamente mayor pisa al ya estampado. En empate
+    # (misma calidad, incluido otro slug con el mismo contenido) el existente se queda → idempotente.
+    cur_rel = next((ln.split(":", 1)[1].strip().strip("'\"")
+                    for ln in lines if ln.startswith("fulltext:")), None)
+    if cur_rel and cur_rel not in ("null", "~") and cur_rel != rel:
+        cur_path = (dest.parent / cur_rel).resolve()
+        if cur_path.exists():
+            cur_src = _txt_provenance(cur_path)
+            if _FULLTEXT_QUALITY.get(src, 0) <= _FULLTEXT_QUALITY.get(cur_src, 0):
+                rel, src = cur_rel, cur_src   # el existente gana → estampá SU provenance
 
     def upsert(field: str, value: str, anchors: tuple[str, ...]) -> bool:
         want = f"{field}: {value}"

@@ -163,7 +163,10 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   `.txt` **barato** (grep/lectura — el default de todo consumidor) y `pdf` el respaldo caro (abrir
   sólo para figuras/tablas/ecuaciones o dudas de símbolos); `fulltext_source: ocr` hereda desde el
   frontmatter la salvedad OCR (sin abrir el archivo). Los estampan `make_notes`/`extract_fulltext`
-  por verdad de disco (null si no hay extracción). Opcional
+  por verdad de disco (null si no hay extracción). Cuando un paper vive bajo **varios slugs** (relevante
+  para más de un sujeto → su `.txt` extraído bajo cada uno, contenido idéntico) el campo es **estable**:
+  la copia ya estampada se mantiene salvo que llegue una de **mejor calidad** (`pdftotext`/`web` > `ocr`);
+  no se repunta al slug que corrió último (idempotente, sin ruido de diff). Opcional
   `retracted: true` + `retraction{type,notice_doi,date,source}` — lo estampa `scripts/check_retractions.py`
   (Crossref) cuando el paper fue **retractado**; el lint lo surface como bloqueante (fuente no válida).
 - **concepts/ (áreas **abiertas** — cualquiera según el foco de la bóveda; `concept_areas` en
