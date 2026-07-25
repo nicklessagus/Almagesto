@@ -123,10 +123,6 @@ ningún paper**, con todo lo que afirma trazable a su fuente.
        alt="Demo animada: «bajá HD 40307» → cadena de ingesta → extracción LLM con disputa tagueada → verify-citations → lint">
 </p>
 
-*La sesión de arriba es real en sus hechos: HD 40307 tiene 5 planetas (b–g) en NEA y la
-existencia de g está disputada por Díaz+2016 — la disputa queda tagueada en la ficha, no
-sobreescribe el ground-truth.*
-
 ## La bóveda en Obsidian
 
 La wiki resultante es una bóveda [Obsidian](https://obsidian.md) común — se abre apuntando a
