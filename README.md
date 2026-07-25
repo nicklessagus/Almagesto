@@ -118,6 +118,48 @@ Cuando le pedís ingestar una estrella o un tema, el agente:
 El resultado es una **ficha autosuficiente** (resumen + tablas auto + huecos) que se entiende **sin abrir
 ningún paper**, con todo lo que afirma trazable a su fuente.
 
+<p align="center">
+  <img src="docs/assets/demo-animated.svg" width="740"
+       alt="Demo animada: «bajá HD 40307» → cadena de ingesta → extracción LLM con disputa tagueada → verify-citations → lint">
+</p>
+
+*La sesión de arriba es real en sus hechos: HD 40307 tiene 5 planetas (b–g) en NEA y la
+existencia de g está disputada por Díaz+2016 — la disputa queda tagueada en la ficha, no
+sobreescribe el ground-truth.*
+
+## La bóveda en Obsidian
+
+La wiki resultante es una bóveda [Obsidian](https://obsidian.md) común — se abre apuntando a
+`vault/`. Las capturas de abajo son de **dos instancias reales** del template (una sobre RV, otra
+sobre ciclos de actividad).
+
+**La ficha de estrella.** Arriba, el frontmatter: el **contrato máquina-legible** que consume un
+agente o un script (`teff_K`, `P_rot_days`, `planets[]` con P/K/e/m·sini y sus `disputes`,
+`methods_applied`). Abajo —fuera de cuadro— la prosa destilada de los papers y las tablas Dataview
+que se llenan solas al ingestar.
+
+<p align="center">
+  <img src="docs/assets/obsidian-ficha.png" width="740"
+       alt="Ficha de estrella hd40307 en Obsidian: panel de propiedades con el frontmatter máquina-legible (aliases, teff, P_rot, planets, methods_applied)">
+</p>
+
+**La ficha de concepto.** El otro eje de la wiki. Los `aliases` (EN + ES) hacen que el tema se
+encuentre por `grep` desde cualquier término, y cada afirmación de la síntesis arrastra su
+`[[bibcode]]` — la referencia que viaja con el dato cuando lo usás en un paper o en código.
+
+<p align="center">
+  <img src="docs/assets/obsidian-concepto.png" width="740"
+       alt="Ficha de concepto cycle-shape-and-variability en Obsidian: aliases EN+ES, síntesis con citas [[bibcode]] y la lista de papers del corpus en la barra lateral">
+</p>
+
+**El grafo.** Cada estrella o concepto queda en el centro de su corona de papers, y los nodos que
+comparten fuentes se enlazan entre sí: así se ve de un vistazo qué está bien cubierto y qué no.
+
+<p align="center">
+  <img src="docs/assets/obsidian-graph.png" width="740"
+       alt="Graph view de la instancia: tres estrellas rodeadas de sus papers, conectadas por los papers que comparten">
+</p>
+
 ## Skills del agente (`.claude/skills/`)
 
 Las operaciones del patrón están empaquetadas como skills invocables (Claude las dispara solo por la
