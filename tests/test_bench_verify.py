@@ -98,6 +98,23 @@ def test_seed_max_acota(toy_vault, monkeypatch):
     assert data["n_real"] == 2 and data["n_seeded"] == 2
 
 
+def test_seed_claims_ciegos_sin_wikilinks(toy_vault, monkeypatch):
+    """Issue #18: el claim se guarda CEGADO (sin [[wikilinks]]) — con el bibcode original
+    inline, una sembrada se caza por mismatch de strings sin leer el paper."""
+    seed_fulltext(toy_vault, "2020aaaA...1..1A", "2020bbbB...1..1B")
+    seed_notes(toy_vault)
+    run(monkeypatch, "seed")
+    data = json.loads((cfg.ROOT / "build" / "verify_bench" / "bench.json")
+                      .read_text(encoding="utf-8"))
+    assert data["pairs"], "el toy vault debe producir pares"
+    for p in data["pairs"]:
+        assert "[[" not in p["claim"] and "]]" not in p["claim"]
+        assert "  " not in p["claim"]                 # espacios colapsados
+    # el contenido fáctico sobrevive al cegado
+    claims = "\n".join(p["claim"] for p in data["pairs"])
+    assert "pendiente cromática" in claims and "CRX" in claims
+
+
 # ── score ────────────────────────────────────────────────────────────────────
 
 def write_bench(pairs):

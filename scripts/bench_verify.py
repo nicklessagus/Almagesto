@@ -10,7 +10,9 @@ Uso:
 atribuida a OTRO bibcode del corpus (rotación determinista sobre los bibcodes con fulltext, nunca
 el original). El skill (modo benchmark) verifica todos los pares A CIEGAS —cada subagente recibe
 sólo (afirmación, ruta al fulltext), nunca este archivo ni las etiquetas— y llena `verdict` en el
-JSON; `score` compara veredictos vs etiquetas:
+JSON; `score` compara veredictos vs etiquetas. El claim se guarda ya **cegado** (sin `[[wikilinks]]`):
+con el bibcode original inline, una sembrada se cazaría por mismatch de strings (cita ≠ archivo
+recibido) sin leer el paper — el verificador debe juzgar contenido, no comparar strings.
 
   - sembradas: el verificador debería decir `no-soportada`/`contradice` → **recall** (cuántas cazó).
   - reales (grupo de control): deberían salir `soportada`/`parcial`; una real "caída" es o un flaky
@@ -36,6 +38,7 @@ import lib_config as cfg
 
 BIBCODE_RE = re.compile(r"^\d{4}[A-Za-z]")           # misma heurística que lint/fetch_web
 LINK_RE = re.compile(r"\[\[([^\]\|#]+)")
+WIKILINK_RE = re.compile(r"\[\[[^\]]*\]\]")          # wikilink completo, para CEGAR el claim
 VERIFY_HEADER = "## Verificación de citas"
 MIN_CLAIM_CHARS = 15                                  # un link pelado no es una afirmación
 DEFAULT_MAX = 20                                      # cota de pares reales (costo LLM acotado)
@@ -96,9 +99,13 @@ def extract_pairs(max_pairs: int) -> list[dict]:
             bibs = [t.strip() for t in LINK_RE.findall(line) if BIBCODE_RE.match(t.strip())]
             if not bibs:
                 continue
-            claim = line.strip().lstrip("-* ").strip()
-            if len(LINK_RE.sub("", claim).replace("]]", "")) < MIN_CLAIM_CHARS:
+            raw = line.strip().lstrip("-* ").strip()
+            if len(LINK_RE.sub("", raw).replace("]]", "")) < MIN_CLAIM_CHARS:
                 continue                              # link pelado, no afirma nada
+            # Claim CIEGO: sin wikilinks. Con el [[bibcode]] original inline, una sembrada se
+            # caza por mismatch de strings (cita ≠ archivo recibido) sin leer el paper — y una
+            # real se aprueba por la coincidencia. El verificador debe juzgar contenido.
+            claim = re.sub(r"\s+", " ", WIKILINK_RE.sub("", raw)).strip(" :;,–—")
             for bib in bibs:
                 if bib not in ft or (stem, claim, bib) in seen:
                     continue
