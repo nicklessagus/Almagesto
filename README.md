@@ -184,6 +184,27 @@ skill `verify-citations` la contrasta contra el texto real del paper (un subagen
 textual obligatoria; una contradicción se convierte en disputa tagueada, no en cita rota). La tasa de
 error del verificador se mide con un auto-benchmark que siembra citas falsas y las juzga a ciegas.
 
+## Dónde encaja (related work)
+
+El patrón LLM Wiki ya tiene implementaciones genéricas, y la IA-para-literatura es un mercado con
+productos grandes. La distinción de fondo: casi todos producen una **respuesta efímera** (un chat, un
+informe generado al momento de la consulta) sobre un índice remoto que no controlás; Almagesto
+produce un **artefacto persistente** — una bóveda versionada en git, con corpus propio a fulltext,
+donde cada afirmación arrastra su `[[bibcode]]` y una capa de verificación la contrasta con el paper.
+
+| Herramienta | Qué es | Diferencia con Almagesto |
+|---|---|---|
+| [pathfinder](https://iopscience.iop.org/article/10.3847/1538-4365/ad7c43) | búsqueda semántica en lenguaje natural sobre ~300k abstracts de ADS | **el vecino astro — complementario, no rival**: pathfinder *encuentra* papers; Almagesto los *cura, destila y verifica* a fulltext. Flujo natural: pathfinder encuentra → `ingest` acá |
+| [karpathy-llm-wiki](https://github.com/Astro-Han/karpathy-llm-wiki) y otras implementaciones genéricas del patrón | ingest/query/lint de propósito general | sin plomería de fuentes (ADS/arXiv/NEA), sin ground-truth duro, sin verificación claim↔fuente (la implementación más popular descarta a propósito las citas con nº de línea, que acá son obligatorias) |
+| [Elicit](https://elicit.com) · [SciSpace](https://scispace.com) · [Consensus](https://consensus.app) · [Scite](https://scite.ai) · [Undermind](https://undermind.ai) | asistentes comerciales de literature review (índices de 100–280M papers) | informe efímero en query-time sobre un índice remoto, cerrado y pago; no queda corpus propio ni artefacto curado que componga entre sesiones |
+| [PaperQA2](https://github.com/Future-House/paper-qa) (FutureHouse) | agente open-source de QA científica, SOTA en benchmarks de literatura | responde preguntas sueltas; no mantiene una base curada y versionada — el conocimiento no se acumula entre sesiones |
+| [NotebookLM](https://notebooklm.google) · [Khoj](https://github.com/khoj-ai/khoj) · Obsidian+Zotero | RAG / "second brain" sobre tus documentos | RAG sobre lo que ya tenés: sin regla de admisión (qué paper entra y por qué, `relevance.topics`), sin ground-truth, sin verificación afirmación por afirmación |
+
+Nota sobre la capa de verificación: las herramientas de chequeo de citas (p. ej.
+[CiteCheck](https://arxiv.org/abs/2605.27700)) validan que la referencia **exista** y que su metadata
+sea fiel — no que el paper **respalde** la afirmación. Esa alineación claim↔cita es justamente el
+punto de `verify-citations` (sección anterior).
+
 ## Para seguir
 
 - **Operación día a día** — dependencias completas, layout del repo, scripts sueltos, traer mejoras
