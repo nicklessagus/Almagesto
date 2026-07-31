@@ -98,6 +98,35 @@ def test_seed_max_acota(toy_vault, monkeypatch):
     assert data["n_real"] == 2 and data["n_seeded"] == 2
 
 
+def test_seed_bloques_une_hardwrap_y_protege_rotacion(toy_vault, monkeypatch):
+    """Issue #19: un bullet hard-wrapped es UN claim (sin fragmentos que mezclen cláusulas de
+    citas vecinas) y la rotación excluye TODOS los bibcodes citados en el bloque."""
+    seed_fulltext(toy_vault, "2020aaaA...1..1A", "2020bbbB...1..1B", "2020cccC...1..1C")
+    mk_note(toy_vault.CONCEPTS / "methods", "nota-w", {"tags": ["methods"]},
+            "- **Realización:** [[2020aaaA...1..1A]] (tau Ceti, régimen sub-m/s)\n"
+            "  y [[2020bbbB...1..1B]] (AU Mic, GP dependiente de lambda).\n"
+            "\n"
+            "Otra afirmación suelta que cita a [[2020cccC...1..1C]] con contenido propio.\n"
+            "| fila de tabla con valor 34 d | [[2020cccC...1..1C]] |\n")
+    run(monkeypatch, "seed")
+    data = json.loads((cfg.ROOT / "build" / "verify_bench" / "bench.json")
+                      .read_text(encoding="utf-8"))
+    real = [p for p in data["pairs"] if p["label"] == "real"]
+    bloque = [p for p in real if p["bibcode"] in ("2020aaaA...1..1A", "2020bbbB...1..1B")]
+    assert len(bloque) == 2
+    for p in bloque:
+        # las dos mitades hard-wrapped quedaron unidas en el mismo claim/bloque
+        assert "sub-m/s" in p["claim"] and "AU Mic" in p["claim"]
+        assert p["line"] == bloque[0]["line"]
+    # la fila de tabla es su propio claim atómico (no se pegó al párrafo)
+    tabla = [p for p in real if "fila de tabla" in p["claim"]]
+    assert len(tabla) == 1 and "Otra afirmación" not in tabla[0]["claim"]
+    # rotación: para el bloque que cita A y B, el único cruce falso posible es C
+    for s in (p for p in data["pairs"] if p["label"] == "sembrada"):
+        if s["line"] == bloque[0]["line"]:
+            assert s["bibcode"] == "2020cccC...1..1C"
+
+
 def test_seed_claims_ciegos_sin_wikilinks(toy_vault, monkeypatch):
     """Issue #18: el claim se guarda CEGADO (sin [[wikilinks]]) — con el bibcode original
     inline, una sembrada se caza por mismatch de strings sin leer el paper."""

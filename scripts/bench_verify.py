@@ -61,30 +61,60 @@ def fulltext_map() -> dict[str, str]:
     return out
 
 
-def claim_lines(text: str) -> list[tuple[int, str]]:
-    """(nº de línea, línea) del CUERPO con potencial de afirmación: fuera del frontmatter,
-    antes del bloque de verificación (son registros de auditoría, no claims), sin blockquotes
-    (disclaimers meta) ni code fences (Dataview)."""
+def claim_blocks(text: str) -> list[tuple[int, str]]:
+    """(nº de línea inicial, bloque) del CUERPO con potencial de afirmación: fuera del
+    frontmatter, antes del bloque de verificación (son registros de auditoría, no claims),
+    sin blockquotes (disclaimers meta) ni code fences (Dataview).
+
+    Issue #19: la unidad es el **bloque lógico** —bullet con sus líneas de continuación
+    hard-wrapped unidas, o párrafo—, no la línea física: un claim-fragmento truncado a mitad
+    de oración mezcla cláusulas de citas vecinas (falsas alarmas sobre pares reales) y queda
+    tan genérico que cualquier paper del tema lo "respalda" (sembradas fáciles). Las filas
+    de tabla siguen siendo un claim por fila (afirmaciones atómicas por diseño del schema)."""
     if text.startswith("---"):
         parts = text.split("---", 2)
         body = parts[-1]
         offset = ("---".join(parts[:-1]) + "---").count("\n")   # líneas que consume el frontmatter
     else:
         body, offset = text, 0
-    out, fenced = [], False
+    out: list[tuple[int, str]] = []
+    cur: list[str] = []
+    cur_line = 0
+    fenced = False
+
+    def flush():
+        nonlocal cur
+        if cur:
+            out.append((cur_line, " ".join(cur)))
+        cur = []
+
     for i, line in enumerate(body.split("\n"), 1 + offset):
-        if line.strip().startswith("```"):
+        s = line.strip()
+        if s.startswith("```"):
             fenced = not fenced
+            flush()
             continue
-        if fenced or line.lstrip().startswith(">") or line.lstrip().startswith("#"):
+        if fenced or s.startswith(">") or s.startswith("#") or not s:
+            flush()                                   # separador: cierra el bloque en curso
             continue
-        out.append((i, line))
+        if s.startswith("|"):                         # fila de tabla: claim atómico propio
+            flush()
+            out.append((i, s))
+            continue
+        if s.startswith(("- ", "* ")) or re.match(r"\d+\.\s", s):
+            flush()                                   # bullet nuevo: abre bloque
+            cur, cur_line = [s], i
+        elif cur:
+            cur.append(s)                             # continuación hard-wrapped: se une
+        else:
+            cur, cur_line = [s], i                    # arranque de párrafo
+    flush()
     return out
 
 
 def extract_pairs(max_pairs: int) -> list[dict]:
     """Pares (afirmación, bibcode-con-fulltext) reales de las notas verificables, deterministas
-    (orden por nota y línea; cap en max_pairs)."""
+    (orden por nota y bloque; cap en max_pairs)."""
     ft = fulltext_map()
     files = sorted(glob.glob(str(cfg.QUERIES / "**" / "*.md"), recursive=True)
                    + glob.glob(str(cfg.CONCEPTS / "**" / "*.md"), recursive=True))
@@ -95,7 +125,7 @@ def extract_pairs(max_pairs: int) -> list[dict]:
         if cut >= 0:
             text = text[:cut]
         stem = Path(f).stem
-        for lineno, line in claim_lines(text):
+        for lineno, line in claim_blocks(text):
             bibs = [t.strip() for t in LINK_RE.findall(line) if BIBCODE_RE.match(t.strip())]
             if not bibs:
                 continue
