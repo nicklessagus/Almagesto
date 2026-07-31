@@ -28,7 +28,7 @@ papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** 
    - ¿Qué mecanismo / técnica / concepto querés investigar? (puede ser astro o no).
    - ¿Un paper "core" para vos es…? Pedir **1–2 ejemplos ideales** y, si puede, 1 que NO querría — afina
      muchísimo la regla.
-   - ¿La bibliografía vive en ADS (astro) o fuera (tema no-astro)? Si es **off-ADS**, ver el paso 6.
+   - ¿La bibliografía vive en ADS (astro) o fuera (p. ej. un método de otra disciplina)? Si es **off-ADS**, ver el paso 6.
    No avanzar sin un foco claro.
 
    **Separar dos cosas al escuchar el foco (clave para no equivocar el archivo):**
@@ -83,7 +83,7 @@ papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** 
    **qué papers son core** — **nunca** a quien la consume, ni parámetros/dials/decisiones de
    implementación. Solo bibliografía citable.
 
-6. **Off-ADS (tema no-astro / biblio fuera de ADS).** El objetivo igual define `name`/`description`/
+6. **Off-ADS (biblio fuera de ADS — p. ej. métodos de otra disciplina).** El objetivo igual define `name`/`description`/
    `concept_areas`. Pero `relevance.topics` y el preview `--probe` dependen de ADS (astro): si el tema
    es off-ADS, anotarlo y **no** forzar el preview — la ingesta usa PDFs locales + web (ver `ingest-topic`
    modo off-ADS). `relevance.topics` queda como guía mínima, no como filtro automático.

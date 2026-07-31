@@ -7,7 +7,10 @@ para saber sobre qué estás trabajando. Vos (Claude) **sos el dueño de `vault/
 El usuario cura las fuentes (`vault/raw/`) y hace preguntas.
 
 > Este archivo es el **schema genérico** (forma astro: estrellas, planetas, indicadores de actividad,
-> ground-truth de exoplanetas). Lo único específico de cada instancia es `vault/config/objective.yaml` + el
+> ground-truth de exoplanetas). El eje **tema/concepto** y la capa de calidad (lint, verify,
+> retracciones, benchmark) son agnósticos de disciplina: permiten sumar **métodos de otras
+> disciplinas** (estadística, ML — modo off-ADS) al servicio del foco astro. Lo único específico de
+> cada instancia es `vault/config/objective.yaml` + el
 > contenido de `vault/wiki/`/`vault/raw/`. Para instanciar una bóveda nueva ver `README.md` (sección *Instanciar*).
 
 > **Al iniciar sesión, leé `vault/STATUS.md` (estado + próximos pasos) y `vault/wiki/log.md` (historial
@@ -241,11 +244,15 @@ re-clasificar de `maintain`. No ingesta nada; después se usan `ingest-star`/`in
 > taguear (add-only, con juicio de LLM: uso real, no mención al pasar) los papers que la query ADS
 > no devolvió. Así la entidad nueva ve también lo que ya estaba en el corpus.
 
-> **Tema no-astro / fuera de ADS (opt-in — sólo a pedido explícito).** Por default un tema se baja por
-> **ADS** (plomería astro: ADS/arXiv/NEA). Almagesto es astro por estructura, pero el **modo off-ADS**
-> existe para los **métodos que no son exclusivamente astronómicos** —análisis de datos, machine
-> learning, procesos gaussianos, signal processing— cuya bibliografía canónica vive **fuera de ADS**: si
-> el usuario lo pide **explícitamente**, el skill `ingest-topic` lo soporta (fuente = PDFs locales + web;
+> **Tema fuera de ADS (opt-in — sólo a pedido explícito).** Por default un tema se baja por **ADS**
+> (ADS/arXiv/NEA — la plomería con **descubrimiento automático**: query → clasificar
+> (`relevance.topics`) → bajar). El foco de Almagesto es **astro**; el **modo off-ADS** existe para
+> los **métodos de otras disciplinas** que el trabajo astro usa —análisis de datos, estadística,
+> machine learning, procesos gaussianos, signal processing— y cuya bibliografía canónica vive
+> **fuera de ADS** (el eje tema/concepto y la capa de calidad son agnósticos de disciplina, así que
+> la cadena los soporta igual). Diferencia operativa: sin ADS las fuentes se **declaran**, no se
+> descubren por query — por eso es opt-in: si el usuario lo pide **explícitamente**, el skill
+> `ingest-topic` lo soporta (fuente = PDFs locales + web;
 > sin `query_ads`/`fetch_ground_truth`). Formalizado en el tooling: la
 > entrada del tema en `topics.yaml` lleva `source: ads | web | local-pdfs [+web]` y (si es off-ADS) la
 > lista `sources:`; `scripts/ingest_topic.py <slug>` orquesta la cadena según ese campo — también en

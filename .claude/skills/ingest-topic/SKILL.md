@@ -1,7 +1,7 @@
 ---
 name: ingest-topic
-description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema no-astro / fuera de ADS (desde PDFs locales + web; ver Modo off-ADS).
-version: 1.7.0
+description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema off-ADS — típicamente un método de otra disciplina (estadística, ML) al servicio del foco astro — desde PDFs locales + web (ver Modo off-ADS).
+version: 1.7.1
 ---
 
 # Ingest: agregar un TEMA a la wiki
@@ -17,9 +17,10 @@ del repo.
 - **No** se toca la matriz método×estrella.
 - Las notas de paper llevan `stars: []` y `thesis_links` pre-sembrado al concept.
 
-> **Default = astro vía ADS** (los **Pasos** de abajo). Si el usuario pide **explícitamente** un tema
-> **no-astro** o cuya bibliografía vive **fuera de ADS**, usar el **Modo off-ADS** (al final de los
-> Pasos). `ingest-star` no tiene este modo: es astro-only.
+> **Default = vía ADS** (los **Pasos** de abajo — la plomería con descubrimiento automático). Si el
+> usuario pide **explícitamente** un tema cuya bibliografía vive **fuera de ADS** (típicamente un
+> método de otra disciplina), usar el **Modo off-ADS** (al final de los Pasos). `ingest-star` no
+> tiene este modo: es astro-only.
 
 ## Pasos
 
@@ -102,15 +103,17 @@ del repo.
    **específicos** que tocó la operación (no `-A`) y commitear con mensaje
    descriptivo. Después **preguntar al usuario si hace `push`** — no pushear sin confirmación.
 
-## Modo off-ADS / tema no-astro (opt-in — **sólo a pedido explícito**)
+## Modo off-ADS / biblio fuera de ADS (opt-in — **sólo a pedido explícito**)
 
-Almagesto es astro **por estructura** (la plomería de adquisición —ADS, arXiv, NEA/SIMBAD— es de
-astronomía); por eso un tema, por **default**, se baja por ADS (los **Pasos** de arriba). Este modo
-existe para los **métodos que no son exclusivamente astronómicos** —análisis de datos, machine
-learning, procesos gaussianos, signal processing— que la investigación astro usa pero
-cuya bibliografía canónica vive **fuera de ADS**. Se permite **sólo si el usuario lo pide
-explícitamente** (sea por su naturaleza no-astro o porque las fuentes no están en ADS). **`ingest-star`
-no cambia: sigue siendo astro-only.**
+El foco de Almagesto es **astro**, y su única plomería de **descubrimiento automático** (query →
+clasificar → bajar) es de astronomía —ADS, arXiv, NEA/SIMBAD—; por eso un tema, por **default**, se
+baja por ADS (los **Pasos** de arriba). Este modo existe para los **métodos de otras disciplinas**
+que el trabajo astro usa —análisis de datos, estadística, machine learning, procesos gaussianos,
+signal processing— y cuya bibliografía canónica vive **fuera de ADS** (el eje tema/concepto y la
+capa de calidad son agnósticos de disciplina, así que la cadena los soporta igual), con la
+diferencia operativa de que las fuentes se **declaran**, no se descubren por query. Se permite
+**sólo si el usuario lo pide explícitamente** (porque exige esa curación manual de fuentes).
+**`ingest-star` no cambia: sigue siendo astro-only.**
 
 Qué cambia respecto del flujo ADS de arriba:
 - **Sin ADS:** se saltean `query_ads.py`, `fetch_arxiv.py`, `fetch_pdf.py` y `fetch_ground_truth.py`. En
