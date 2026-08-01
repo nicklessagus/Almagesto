@@ -297,7 +297,8 @@ ingest-topic (concept + papers), query archivada, test de hipótesis — **antes
 **Qué hace:** descompone la nota en pares (afirmación, `[[bibcode]]`) y lanza **un subagente
 independiente por par** que lee SÓLO ese `vault/raw/fulltext/**/<bibcode>.txt` (grounding-first, prohibido de
 memoria) y devuelve `soportada|parcial|no-soportada|contradice` + **cita textual + nº de línea del `.txt`**
-(obligatoria; sin cita ⇒ no-soportada). `no-soportada` = la fuente **calla**; `contradice` = la fuente
+(obligatoria; sin cita ⇒ no-soportada — también para `parcial`: la cita debe tocar el **contenido
+distintivo** de la afirmación, la mera cercanía temática no alcanza). `no-soportada` = la fuente **calla**; `contradice` = la fuente
 **afirma lo contrario** → no es (sólo) cita rota: es corrección de la nota o **disputa** a taguear
 (`planets[].disputes[]` si es parámetro planetario). Cada falla se **resuelve** (bajar la afirmación
 a lo que dice la fuente, reasignar la cita al bibcode correcto, marcar **`inferencia`**, o taguear la

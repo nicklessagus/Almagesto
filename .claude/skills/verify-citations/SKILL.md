@@ -1,7 +1,7 @@
 ---
 name: verify-citations
 description: Usar para verificar, afirmación por afirmación, que las citas [[bibcode]] de una nota de la wiki (query, hipótesis, ficha, concepto) realmente están respaldadas por el texto completo de la fuente. Se corre como paso de cierre al armar/editar una query o hipótesis, o cuando el usuario pide "rechequeá las citas / ¿esto lo dice el paper?". Implementa el chequeo claim↔evidencia (pipeline tipo CiteAudit) sobre el corpus cerrado de la bóveda. Veredictos: soportada / parcial / no-soportada (la fuente calla) / contradice (la fuente afirma lo contrario → candidata a disputa, no sólo cita rota).
-version: 1.2.1
+version: 1.3.0
 ---
 
 # Verify-citations — chequeo claim↔evidencia contra el fulltext
@@ -86,18 +86,28 @@ Cada uno:
     de lo que el paper **sí** dice.
   - `score`: 0–10 (qué tan literal/completo es el respaldo)
   - `evidencia`: **cita textual** del paper + **nº de línea**. **Sin cita textual ⇒ `no-soportada`**
-    (regla dura: si no puede pegar la frase, no está respaldado).
+    (regla dura: si no puede pegar la frase, no está respaldado). **La regla vale también para
+    `parcial`**: exige cita textual que respalde **parte del contenido distintivo** de la
+    afirmación (el sujeto/valor/mecanismo que la hace específica); si lo único que matchea es
+    terreno común del tema (el fenómeno general, un término suelto, la mera cercanía temática)
+    ⇒ `no-soportada`. Ablandar a `parcial` un claim genérico es el modo de falla típico del
+    verificador — es exactamente lo que mide el benchmark.
   - `nota`: una línea de por qué (sobre todo en `parcial`/`no-soportada`: qué dice el paper en cambio).
 
 Prompt sugerido por agente: *"Leé SOLO `<ruta fulltext>`. ¿El paper respalda esta afirmación: «…»?
 Respondé veredicto (soportada/parcial/no-soportada/contradice) + score 0–10 + cita textual con nº de
-línea + nota. Si no encontrás respaldo textual, es no-soportada; si el paper afirma lo CONTRARIO,
-es contradice (pegá la frase que lo contradice). No uses memoria ni otros papers."*
+línea + nota. Si no encontrás respaldo textual, es no-soportada; `parcial` sólo si la cita textual
+respalda parte del contenido distintivo de la afirmación — que el paper hable del mismo tema NO
+alcanza; si el paper afirma lo CONTRARIO, es contradice (pegá la frase que lo contradice). No uses
+memoria ni otros papers."*
 
 ### 3. Umbral y agregación
 - `score ≥ 7` → **soportada**
 - `4 ≤ score ≤ 6` → **parcial** (revisar: matiz, rango distinto, atribución cruzada)
 - `score < 4` → **no-soportada**
+- **Regla del contenido distintivo:** un score 4–6 sólo vale como `parcial` si la evidencia citada
+  toca lo que hace **específica** a la afirmación; coincidencia sólo temática ⇒ `no-soportada`
+  (bajar el score, no promediarlo con la cercanía del tema).
 - **`contradice`** manda sobre el score (no es un grado de soporte sino evidencia **en contra**, con
   cita textual de lo contradicho): se resuelve como corrección o disputa (paso 4), no como cita rota.
 
