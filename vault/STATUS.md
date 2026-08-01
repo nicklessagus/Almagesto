@@ -18,6 +18,30 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.2.1 (2026-07-31) — tanda de issues #18–#21: validez del benchmark verify
+
+> Salida del **primer run real de `bench_verify`** (instancia Almagesto-RV, 40 pares): recall bruto
+> 13/20 (65%); la revisión a mano mostró que 5 "pasadas" eran **soporte casual genuino** (la rotación
+> cayó en un paper que de verdad dice lo mismo) y 2 eran misses reales (`parcial`-blando) → recall
+> efectivo ≈87% sobre las genuinamente falsas; reales 20/20, sin errores de grounding en las notas.
+> El run midió más al *examen* que al examinado → esta tanda arregla el examen (3 fixes al seeder) y
+> al examinado (1 regla al skill). 250 tests verdes, lint 0. `ALMAGESTO_VERSION` 1.2.0 → **1.2.1**
+> (patch: fixes de validez). **El número NO se publica** hasta re-correr con el seeder arreglado.
+
+- **#18** — el claim se guarda **cegado** (sin `[[wikilinks]]` inline): con el bibcode original
+  adentro, una sembrada se caza por mismatch de strings sin leer el paper.
+- **#19** — claims por **bloque lógico** (bullet con continuaciones hard-wrapped unidas, o párrafo;
+  filas de tabla siguen atómicas): el claim-por-línea producía fragmentos que mezclaban cláusulas de
+  citas vecinas (falsas alarmas) y sembradas genéricas fáciles. La protección falso-falso de la
+  rotación pasa a operar sobre el bloque completo.
+- **#20** — rotación con preferencia **cross-nota**: el cruce se busca primero entre bibcodes que la
+  nota de origen no cita en ningún bloque (contra el 25% de soporte casual); fallback histórico si
+  la nota cita todo el pool.
+- **#21** — skill `verify-citations` 1.2.1 → **1.3.0**: regla del **contenido distintivo** para
+  `parcial` (cita textual que toque lo que hace específica a la afirmación; coincidencia sólo
+  temática ⇒ `no-soportada`) — en el contrato del subagente, el prompt sugerido y el umbral;
+  espejo en `CLAUDE.md`.
+
 ## ✅ Framework 1.2.0 (2026-07-19) — tanda de issues #15–#17 resuelta
 
 > Los 3 issues abiertos desde la instancia Almagesto-RV, resueltos en el template (un commit por
