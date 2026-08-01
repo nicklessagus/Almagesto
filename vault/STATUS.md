@@ -18,6 +18,21 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.2.2 (2026-07-31) — issues #22–#23: el residuo multi-cláusula
+
+> Segunda vuelta del mismo run: de las 4 sembradas que sobrevivieron a 1.2.1, **3 venían de que el
+> claim era un bloque multi-cláusula** (el paper rotado respaldaba, con razón, una cláusula vecina
+> —de encuadre o de otra cita—, así que la sembrada "pasaba" como `parcial` sin que nadie se
+> equivocara). 254 tests verdes, lint 0. `ALMAGESTO_VERSION` 1.2.1 → **1.2.2**.
+
+- **#22** — `bench_verify` recorta el claim a la **cláusula que porta esa cita** (partido por
+  oraciones, con la etiqueta del bullet de sujeto; fallback al bloque si no hay corte). El corte
+  exige mayúscula tras el punto → no parte decimales ni `p. ej.`. La veda falso-falso **no** se
+  relaja. De paso: `lstrip("-* ")` mutilaba los `**` de las etiquetas en negrita → `BULLET_RE`.
+- **#23** — skill `verify-citations` 1.3.0 → **1.3.1**: el **prompt sugerido** ahora transmite la
+  regla de claims multi-cláusula que el paso 1 ya exigía (juzgar *la parte que se le atribuye*, y
+  decir qué cláusula) — sin ella el subagente juzga el conjunto y hedgea a `parcial`.
+
 ## ✅ Framework 1.2.1 (2026-07-31) — tanda de issues #18–#21: validez del benchmark verify
 
 > Salida del **primer run real de `bench_verify`** (instancia Almagesto-RV, 40 pares): recall bruto
