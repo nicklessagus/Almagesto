@@ -150,20 +150,31 @@ def seed_pairs(real: list[dict], ft: dict[str, str]) -> list[dict]:
     original) sobre los bibcodes citados en la selección. La rotación excluye TODOS los
     bibcodes que esa misma afirmación cita (una afirmación con [[A]] y [[B]] no puede
     sembrarse con B: sería un falso-falso — la fuente sí la respalda). Si una afirmación
-    cita todo el pool, se saltea (no hay cruce falso posible para ella)."""
+    cita todo el pool, se saltea (no hay cruce falso posible para ella).
+
+    Issue #20 — preferencia CROSS-NOTA: el destino del cruce se busca primero entre los
+    bibcodes que la nota de origen NO cita en ningún bloque (si la nota no lo cita, su autor
+    no lo consideró material del tema → mucha menos chance de que "casualmente" respalde la
+    afirmación; en el run real, sembrar dentro del corpus de la misma nota dio 25% de falsas
+    que el otro paper sí respaldaba). Fallback si la nota cita todo el pool: excluir sólo el
+    bloque (comportamiento histórico). Pool y protecciones se computan sobre la selección
+    (post-cap), igual que siempre — determinista."""
     bibs = sorted({p["bibcode"] for p in real})
     if len(bibs) < 2:
         raise SystemExit("hacen falta ≥2 bibcodes distintos con fulltext para sembrar cruces — "
                          "la bóveda no tiene todavía material para el benchmark.")
     cited: dict[tuple, set] = {}
+    note_cited: dict[str, set] = {}
     for p in real:
         cited.setdefault((p["note"], p["line"]), set()).add(p["bibcode"])
+        note_cited.setdefault(p["note"], set()).add(p["bibcode"])
     out = []
     for p in real:
         own = cited[(p["note"], p["line"])]
         start = bibs.index(p["bibcode"])
-        swapped = next((bibs[(start + k) % len(bibs)] for k in range(1, len(bibs))
-                        if bibs[(start + k) % len(bibs)] not in own), None)
+        ring = [bibs[(start + k) % len(bibs)] for k in range(1, len(bibs))]
+        swapped = next((b for b in ring if b not in note_cited[p["note"]]),   # cross-nota
+                       next((b for b in ring if b not in own), None))         # fallback: bloque
         if swapped is None:
             continue
         out.append({**p, "bibcode": swapped, "fulltext": ft[swapped]})

@@ -79,6 +79,39 @@ def test_seed_rotacion_nunca_el_original(toy_vault, monkeypatch):
         assert s["bibcode"] != r["bibcode"]
 
 
+def test_seed_rotacion_prefiere_cross_nota(toy_vault, monkeypatch):
+    """Issue #20: el cruce prefiere un bibcode que la nota de origen NO cita en ningún
+    bloque (menos soporte casual); el hermano de la misma nota queda como último recurso."""
+    ft = {"2020aaaA...1..1A": "a.txt", "2020bbbB...1..1B": "b.txt", "2020cccC...1..1C": "c.txt"}
+    real = [
+        {"note": "n1", "line": 1, "claim": "afirmación uno", "bibcode": "2020aaaA...1..1A",
+         "fulltext": "a.txt"},
+        {"note": "n1", "line": 5, "claim": "afirmación dos", "bibcode": "2020bbbB...1..1B",
+         "fulltext": "b.txt"},
+        {"note": "n2", "line": 1, "claim": "afirmación tres", "bibcode": "2020cccC...1..1C",
+         "fulltext": "c.txt"},
+    ]
+    by = {(s["note"], s["line"]): s["bibcode"] for s in bv.seed_pairs(real, ft)}
+    # n1 cita A y B → ambos claims cruzan a C (cross-nota), nunca al hermano de la misma nota
+    assert by[("n1", 1)] == "2020cccC...1..1C"
+    assert by[("n1", 5)] == "2020cccC...1..1C"
+    # n2 sólo cita C → cruza a cualquiera de los externos
+    assert by[("n2", 1)] in ("2020aaaA...1..1A", "2020bbbB...1..1B")
+
+
+def test_seed_rotacion_fallback_intra_nota(toy_vault, monkeypatch):
+    """Si la nota cita todo el pool no hay candidato cross-nota: fallback histórico —
+    excluir sólo los bibcodes del bloque."""
+    ft = {"2020aaaA...1..1A": "a.txt", "2020bbbB...1..1B": "b.txt"}
+    real = [
+        {"note": "n", "line": 1, "claim": "uno", "bibcode": "2020aaaA...1..1A", "fulltext": "a.txt"},
+        {"note": "n", "line": 5, "claim": "dos", "bibcode": "2020bbbB...1..1B", "fulltext": "b.txt"},
+    ]
+    sown = bv.seed_pairs(real, ft)
+    assert {(s["line"], s["bibcode"]) for s in sown} == \
+        {(1, "2020bbbB...1..1B"), (5, "2020aaaA...1..1A")}
+
+
 def test_seed_sin_material_sale_amigable(toy_vault, monkeypatch):
     with pytest.raises(SystemExit, match="bóveda ya poblada"):
         run(monkeypatch, "seed")
