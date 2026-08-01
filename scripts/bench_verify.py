@@ -39,6 +39,13 @@ import lib_config as cfg
 BIBCODE_RE = re.compile(r"^\d{4}[A-Za-z]")           # misma heurística que lint/fetch_web
 LINK_RE = re.compile(r"\[\[([^\]\|#]+)")
 WIKILINK_RE = re.compile(r"\[\[[^\]]*\]\]")          # wikilink completo, para CEGAR el claim
+LEADIN_RE = re.compile(r"^(\*\*[^*]{2,80}?\*\*:?)\s*")           # etiqueta del bullet: **Foo:**
+# marcador de lista SOLO (`- `, `* `, `1. `). Un lstrip("-* ") se comería también los `**` de una
+# etiqueta en negrita (`- **Tema:**` → `Tema:**`) y el lead-in dejaría de reconocerse.
+BULLET_RE = re.compile(r"^(?:[-*+]|\d+\.)\s+")
+# corte de oración: punto + espacio ANTES de mayúscula/`[[`/`**`/`(`. Deja intactos los decimales
+# ("1.4 m/s": sin espacio) y las abreviaturas en minúscula ("p. ej.": sigue minúscula).
+SENT_SPLIT_RE = re.compile(r"(?<=\.)\s+(?=[A-ZÁÉÍÓÚÑ¿¡(\[*])")
 VERIFY_HEADER = "## Verificación de citas"
 MIN_CLAIM_CHARS = 15                                  # un link pelado no es una afirmación
 DEFAULT_MAX = 20                                      # cota de pares reales (costo LLM acotado)
@@ -112,6 +119,31 @@ def claim_blocks(text: str) -> list[tuple[int, str]]:
     return out
 
 
+def blind(text: str) -> str:
+    """Claim CIEGO: sin wikilinks, espacios colapsados (issue #18). Con el `[[bibcode]]` original
+    inline, una sembrada se caza por mismatch de strings (cita ≠ archivo recibido) sin leer el
+    paper — y una real se aprueba por la coincidencia. El verificador debe juzgar contenido."""
+    return re.sub(r"\s+", " ", WIKILINK_RE.sub("", text)).strip(" :;,–—")
+
+
+def claim_for_bibcode(block: str, bib: str) -> str:
+    """Recorta el bloque a la cláusula que porta ESA cita, con la etiqueta del bullet de sujeto.
+
+    Issue #22: un bloque suele ser multi-cláusula (etiqueta de encuadre sin cita + la cláusula
+    atribuida + cláusulas de OTRAS citas). Sembrado entero, el paper rotado respalda con razón
+    alguna de esas otras cláusulas y la sembrada "pasa" como `parcial` sin que nadie se
+    equivoque. La etiqueta (`**...:**`) se antepone porque sin ella la cláusula pierde el sujeto
+    ("la trata como limitante de precisión RV" ← ¿qué?). Fallback al bloque completo si no hay
+    corte posible."""
+    m = LEADIN_RE.match(block)
+    leadin, rest = (m.group(1), block[m.end():]) if m else ("", block)
+    segs = SENT_SPLIT_RE.split(rest)
+    own = [s for s in segs if f"[[{bib}" in s]
+    if len(segs) < 2 or not own:
+        return block
+    return " ".join([leadin, *own]).strip() if leadin else " ".join(own).strip()
+
+
 def extract_pairs(max_pairs: int) -> list[dict]:
     """Pares (afirmación, bibcode-con-fulltext) reales de las notas verificables, deterministas
     (orden por nota y bloque; cap en max_pairs)."""
@@ -129,14 +161,13 @@ def extract_pairs(max_pairs: int) -> list[dict]:
             bibs = [t.strip() for t in LINK_RE.findall(line) if BIBCODE_RE.match(t.strip())]
             if not bibs:
                 continue
-            raw = line.strip().lstrip("-* ").strip()
+            raw = BULLET_RE.sub("", line.strip()).strip()
             if len(LINK_RE.sub("", raw).replace("]]", "")) < MIN_CLAIM_CHARS:
                 continue                              # link pelado, no afirma nada
-            # Claim CIEGO: sin wikilinks. Con el [[bibcode]] original inline, una sembrada se
-            # caza por mismatch de strings (cita ≠ archivo recibido) sin leer el paper — y una
-            # real se aprueba por la coincidencia. El verificador debe juzgar contenido.
-            claim = re.sub(r"\s+", " ", WIKILINK_RE.sub("", raw)).strip(" :;,–—")
             for bib in bibs:
+                claim = blind(claim_for_bibcode(raw, bib))
+                if len(claim) < MIN_CLAIM_CHARS:      # recorte demasiado magro → bloque entero
+                    claim = blind(raw)
                 if bib not in ft or (stem, claim, bib) in seen:
                     continue
                 seen.add((stem, claim, bib))
@@ -150,7 +181,10 @@ def seed_pairs(real: list[dict], ft: dict[str, str]) -> list[dict]:
     original) sobre los bibcodes citados en la selección. La rotación excluye TODOS los
     bibcodes que esa misma afirmación cita (una afirmación con [[A]] y [[B]] no puede
     sembrarse con B: sería un falso-falso — la fuente sí la respalda). Si una afirmación
-    cita todo el pool, se saltea (no hay cruce falso posible para ella).
+    cita todo el pool, se saltea (no hay cruce falso posible para ella). El recorte por cláusula
+    (#22) NO relaja esta veda: aunque el claim ya sea sólo la cláusula de A, sembrarla con la B
+    del mismo bloque es el cruce con mayor chance de soporte casual (misma frase, mismo tema) —
+    se prefiere sembrar menos y más limpio.
 
     Issue #20 — preferencia CROSS-NOTA: el destino del cruce se busca primero entre los
     bibcodes que la nota de origen NO cita en ningún bloque (si la nota no lo cita, su autor

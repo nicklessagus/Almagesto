@@ -160,6 +160,56 @@ def test_seed_bloques_une_hardwrap_y_protege_rotacion(toy_vault, monkeypatch):
             assert s["bibcode"] == "2020cccC...1..1C"
 
 
+def test_claim_for_bibcode_recorta_a_la_clausula_con_la_cita():
+    """Issue #22: el claim se recorta a la oración que porta ESA cita, con la etiqueta del
+    bullet de sujeto; las cláusulas de encuadre y las de otras citas quedan afuera."""
+    bloque = ("**Etiqueta del bullet:** cláusula de encuadre sin cita ninguna. "
+              "[[2020aaaA...1..1A]] aporta el dato distintivo de 1.4 unidades. "
+              "Otra cosa la reporta [[2020bbbB...1..1B]] con su propio detalle.")
+    a = bv.claim_for_bibcode(bloque, "2020aaaA...1..1A")
+    assert a.startswith("**Etiqueta del bullet:**")
+    assert "dato distintivo" in a
+    assert "encuadre" not in a and "propio detalle" not in a
+    b = bv.claim_for_bibcode(bloque, "2020bbbB...1..1B")
+    assert "propio detalle" in b and "dato distintivo" not in b
+
+
+def test_claim_for_bibcode_no_parte_decimales_ni_abreviaturas():
+    """El corte de oración exige mayúscula después del punto: '1.4' y 'p. ej.' quedan enteros."""
+    bloque = "**L:** el valor es 1.4 m/s (p. ej. en el caso típico) según [[2020aaaA...1..1A]]."
+    out = bv.claim_for_bibcode(bloque, "2020aaaA...1..1A")
+    assert "1.4 m/s" in out and "p. ej." in out
+
+
+def test_claim_for_bibcode_fallback_bloque_entero():
+    """Sin corte posible (una sola oración, o la cita no cae en ninguna) → bloque completo."""
+    unica = "Una sola oración que cita [[2020aaaA...1..1A]] y nada más."
+    assert bv.claim_for_bibcode(unica, "2020aaaA...1..1A") == unica
+    dos = "Primera oración con [[2020aaaA...1..1A]]. Segunda oración sin citas."
+    assert bv.claim_for_bibcode(dos, "2020cccC...1..1C") == dos
+
+
+def test_seed_usa_claim_recortado_por_cita(toy_vault, monkeypatch):
+    """De punta a punta: dos citas en un bloque → cada par lleva SU cláusula, no el bloque."""
+    seed_fulltext(toy_vault, "2020aaaA...1..1A", "2020bbbB...1..1B", "2020cccC...1..1C")
+    mk_note(toy_vault.CONCEPTS / "methods", "nota-c", {"tags": ["methods"]},
+            "- **Tema:** encuadre general sin ninguna cita adjunta. "
+            "El primero mide la pendiente cromática [[2020aaaA...1..1A]]. "
+            "El segundo mide el período de rotación [[2020bbbB...1..1B]].\n")
+    mk_note(toy_vault.QUERIES, "nota-d", {"tags": ["query"]},   # pool: 3er bibcode para el cruce
+            "Una afirmación aparte con su propia cita [[2020cccC...1..1C]].\n")
+    run(monkeypatch, "seed")
+    data = json.loads((cfg.ROOT / "build" / "verify_bench" / "bench.json")
+                      .read_text(encoding="utf-8"))
+    real = {p["bibcode"]: p["claim"] for p in data["pairs"]
+            if p["label"] == "real" and p["note"] == "nota-c"}
+    assert "pendiente cromática" in real["2020aaaA...1..1A"]
+    assert "período de rotación" not in real["2020aaaA...1..1A"]
+    assert "período de rotación" in real["2020bbbB...1..1B"]
+    assert all("encuadre general" not in c for c in real.values())
+    assert all(c.startswith("**Tema:**") for c in real.values())   # el sujeto se conserva
+
+
 def test_seed_claims_ciegos_sin_wikilinks(toy_vault, monkeypatch):
     """Issue #18: el claim se guarda CEGADO (sin [[wikilinks]]) — con el bibcode original
     inline, una sembrada se caza por mismatch de strings sin leer el paper."""
