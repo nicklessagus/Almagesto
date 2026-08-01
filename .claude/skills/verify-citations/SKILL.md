@@ -1,7 +1,7 @@
 ---
 name: verify-citations
 description: Usar para verificar, afirmación por afirmación, que las citas [[bibcode]] de una nota de la wiki (query, hipótesis, ficha, concepto) realmente están respaldadas por el texto completo de la fuente. Se corre como paso de cierre al armar/editar una query o hipótesis, o cuando el usuario pide "rechequeá las citas / ¿esto lo dice el paper?". Implementa el chequeo claim↔evidencia (pipeline tipo CiteAudit) sobre el corpus cerrado de la bóveda. Veredictos: soportada / parcial / no-soportada (la fuente calla) / contradice (la fuente afirma lo contrario → candidata a disputa, no sólo cita rota).
-version: 1.3.0
+version: 1.3.1
 ---
 
 # Verify-citations — chequeo claim↔evidencia contra el fulltext
@@ -93,13 +93,25 @@ Cada uno:
     ⇒ `no-soportada`. Ablandar a `parcial` un claim genérico es el modo de falla típico del
     verificador — es exactamente lo que mide el benchmark.
   - `nota`: una línea de por qué (sobre todo en `parcial`/`no-soportada`: qué dice el paper en cambio).
+    Si la afirmación es **multi-cláusula**, decir **qué cláusula** respalda el paper y cuáles no.
+
+> **Claims multi-cláusula (espeja la regla del paso 1).** Una afirmación suele arrastrar varias
+> cláusulas: una de encuadre sin cita, la atribuida a *esta* fuente, y a veces las de *otras*
+> fuentes citadas al lado. El subagente juzga **la parte que se le atribuye a su paper** — que el
+> archivo respalde una cláusula vecina (de otra fuente, o el encuadre genérico) **no** hace
+> `soportada` ni `parcial` a la afirmación: es exactamente la mezcla "el dato de A atribuido a B"
+> que este chequeo existe para atrapar. Sin esta instrucción el subagente juzga el conjunto y
+> hedgea a `parcial`.
 
 Prompt sugerido por agente: *"Leé SOLO `<ruta fulltext>`. ¿El paper respalda esta afirmación: «…»?
-Respondé veredicto (soportada/parcial/no-soportada/contradice) + score 0–10 + cita textual con nº de
-línea + nota. Si no encontrás respaldo textual, es no-soportada; `parcial` sólo si la cita textual
-respalda parte del contenido distintivo de la afirmación — que el paper hable del mismo tema NO
-alcanza; si el paper afirma lo CONTRARIO, es contradice (pegá la frase que lo contradice). No uses
-memoria ni otros papers."*
+Si la afirmación tiene varias cláusulas atribuidas a distintas fuentes, juzgá si el archivo respalda
+**la cláusula que le toca** y decí cuál en la nota — que respalde una cláusula vecina de otra fuente,
+o el encuadre genérico, no cuenta. Respondé veredicto
+(soportada/parcial/no-soportada/contradice) + score 0–10 + cita textual con nº de línea + nota. Si no
+encontrás respaldo textual, es no-soportada; `parcial` sólo si la cita textual respalda parte del
+contenido distintivo de la afirmación — que el paper hable del mismo tema NO alcanza; si el paper
+afirma lo CONTRARIO, es contradice (pegá la frase que lo contradice). No uses memoria ni otros
+papers."*
 
 ### 3. Umbral y agregación
 - `score ≥ 7` → **soportada**
