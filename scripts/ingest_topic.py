@@ -14,7 +14,11 @@ campo `source` (formaliza el modo off-ADS del skill ingest-topic en el tooling):
   `url` (fuente web) o `pdf` (ruta a un PDF provisto por el usuario) + metadata opcional
   `title/author/year/venue/n_authors/doi`). El orquestador stubbea el concept, procesa cada
   fuente (`fetch_web.py` para URLs; copia a raw/pdfs/<slug>/<key>.pdf para PDFs) y corre
-  extract_fulltext. Sin query_ads / fetch_ground_truth (no aplican fuera de ADS);
+  extract_fulltext. Tras copiar un PDF, el campo `pdf` del item se **repunta solo** a la
+  copia de la bóveda (`vault/raw/pdfs/<slug>/<key>.pdf`, repo-relative): el path declarado
+  suele ser staging efímero (scratchpad/descargas) que muere y deja un puntero roto en
+  topics.yaml; la copia versionada es la que vale. Rutas `pdf` relativas se resuelven
+  contra la raíz del repo (portable entre máquinas). Sin query_ads / fetch_ground_truth (no aplican fuera de ADS);
   check_retractions SÍ corre cuando algún item declara `doi` (Crossref lo cubre igual).
   **Tema MIXTO:** un tema off-ADS puede además declarar `extra_core: [bibcode, …]` con los
   papers del tema que SÍ están en ADS (un método no-astro casi siempre tiene aplicaciones
@@ -37,6 +41,7 @@ retro-tag) NO es de este script: la hace el agente siguiendo el skill ingest-top
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 import subprocess
 import sys
@@ -56,6 +61,33 @@ def run(script: str, *args: str) -> int:
     print(f"\n→ {script} {' '.join(args)}")
     return subprocess.run([sys.executable, str(cfg.ROOT / "scripts" / script), *args],
                           cwd=cfg.ROOT / "scripts").returncode
+
+
+def repoint_source_pdf(key: str, declared: str, dest: Path) -> None:
+    """Repunta `sources[].pdf` del item a la copia versionada de la bóveda (repo-relative).
+
+    El path declarado suele ser staging efímero (scratchpad, carpeta de descargas): al
+    limpiarse deja un puntero muerto en topics.yaml. Tras la copia, la que vale es la de la
+    bóveda → el campo se reescribe a `vault/raw/pdfs/<slug>/<key>.pdf` (repo-relative,
+    portable entre máquinas; al leer, las relativas se resuelven contra cfg.ROOT).
+    Reescritura quirúrgica de la línea exacta — topics.yaml vive lleno de comentarios que
+    un dump YAML destruiría. Si el path declarado no matchea exactamente UNA línea `pdf:`,
+    se avisa y se deja a mano (no adivinar).
+    """
+    if not dest.exists():
+        return
+    rel = dest.relative_to(cfg.ROOT).as_posix()
+    if declared == rel:
+        return
+    text = cfg.TOPICS_YAML.read_text(encoding="utf-8")
+    pat = re.compile(rf"""^(\s*pdf:\s*)["']?{re.escape(declared)}["']?\s*$""", re.M)
+    n = len(pat.findall(text))
+    if n != 1:
+        print(f"  ⚠ {key}: no repunté `pdf:` en topics.yaml (el path declarado matchea "
+              f"{n} líneas, esperaba 1) — repuntalo a mano a {rel}")
+        return
+    cfg.TOPICS_YAML.write_text(pat.sub(lambda m: m.group(1) + rel, text), encoding="utf-8")
+    print(f"  {key}: sources[].pdf repuntado → {rel}")
 
 
 def ingest_ads(slug: str) -> None:
@@ -129,7 +161,9 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
                 failed_items.append((key, s["url"]))
         else:
             dest = cfg.PDFS / slug / f"{make_notes.safe_name(key)}.pdf"
-            src = Path(s["pdf"]).expanduser()
+            src = Path(str(s["pdf"])).expanduser()
+            if not src.is_absolute():
+                src = cfg.ROOT / src   # repo-relative: la forma canónica post-repunte
             if dest.exists() and not force:
                 print(f"{key}: ya existe {dest} (usá --force para re-copiar)")
             elif not src.exists():
@@ -142,10 +176,14 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
                     fails += 1
                     failed_items.append((key, str(src)))
                     continue
+            elif src.resolve() == dest.resolve():
+                # la fuente declarada YA es la copia de la bóveda (típico post-repunte + --force)
+                print(f"{key}: la fuente declarada es la copia de la bóveda — nada que copiar")
             else:
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src, dest)
                 print(f"{key}: {src.name} → {dest}")
+            repoint_source_pdf(key, str(s["pdf"]), dest)
             n_pdf += 1     # sólo cuenta PDFs presentes en disco (un item fallido no dispara extract)
             # stub de nota (idempotente; detecta solo el PDF copiado y linkea el campo `pdf`)
             make_notes.write_web_paper_note(key, slug=slug, concept=concept,

@@ -22,7 +22,10 @@
 #   sources  : (sólo off-ADS) la bibliografía declarada del tema. Cada item:
 #                - key: 2006RasmussenWilliams       # clave de cita sintética AAAA+Autor (obligatoria)
 #                  url: https://...            # fuente web (snapshot vía fetch_web/defuddle) — o bien
-#                  pdf: ~/ruta/al/archivo.pdf  # PDF provisto (se copia a raw/pdfs/<slug>/<key>.pdf)
+#                  pdf: ~/ruta/al/archivo.pdf  # PDF provisto (se copia a raw/pdfs/<slug>/<key>.pdf;
+#                                              # tras copiar, el orquestador REPUNTA este campo solo
+#                                              # a la copia de la bóveda — repo-relative, portable —
+#                                              # porque el path declarado suele ser staging efímero)
 #                  title/author/year/venue     # opcionales: metadata para la nota de paper
 #                  n_authors/doi               # opcionales: nº de autores; DOI si existe (un PDF con
 #                                              # DOI sigue siendo off-ADS — sin bibcode ADS — y el DOI
