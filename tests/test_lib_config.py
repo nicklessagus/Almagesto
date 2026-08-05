@@ -40,6 +40,15 @@ def test_star_by_slug_desconocido(toy_vault):
         cfg.star_by_slug("nope")
 
 
+def test_star_by_slug_yaml_vacio(toy_vault):
+    """Regresión (#26): stars.yaml vacío (instancia recién creada) parsea a None — el KeyError
+    amigable, no un AttributeError sobre None.items()."""
+    toy_vault.STARS_YAML.write_text("# sólo comentarios\n", encoding="utf-8")
+    assert cfg.load_stars() == {}
+    with pytest.raises(KeyError, match="stars.yaml"):
+        cfg.star_by_slug("nope")
+
+
 def test_load_topics_sin_archivo(toy_vault):
     toy_vault.TOPICS_YAML.unlink()
     assert cfg.load_topics() == {}

@@ -86,9 +86,11 @@ def require_field(meta: dict, key: str, entry: str, yaml_name: str, hint: str = 
 
 
 def load_stars() -> dict:
-    """dict {nombre_canonico: {slug, simbad, ads_object, aliases, data_local}}."""
+    """dict {nombre_canonico: {slug, simbad, ads_object, aliases, data_local}}. Un YAML vacío
+    (instancia recién creada / sólo comentarios) parsea a None → {} para que star_by_slug dé su
+    KeyError amigable y no un AttributeError (mismo guard que load_topics)."""
     with open(STARS_YAML, encoding="utf-8") as fh:
-        return yaml.safe_load(fh)
+        return yaml.safe_load(fh) or {}
 
 
 def star_by_slug(slug: str) -> tuple[str, dict]:
