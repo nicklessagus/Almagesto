@@ -18,6 +18,63 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.3.0 (2026-08-05) — tanda #24–#26: eficiencia del pipeline de ingesta
+
+> Primera tanda de la **revisión del pipeline de ingesta** (2026-08-05: tiempos / tokens /
+> metodología + relevamiento de sistemas de discovery; el resto de la cola quedó como backlog —
+> ver la sección nueva de abajo). 263 tests verdes, lint 0. `ALMAGESTO_VERSION` 1.2.2 → **1.3.0**
+> (minor: modos nuevos, retrocompatible).
+
+- **#24** — `check_retractions --slug` en la cadena: los orquestadores chequean Crossref **sólo**
+  sobre los papers del ingest en curso (bibcodes relevantes de `build/<slug>/ads.json` +
+  `sources[].key`/`extra_core` del tema) en vez de barrer toda la bóveda en cada corrida (minutos,
+  lineal con el corpus). El barrido completo pasa a **pasada periódica**: sub-modo F nuevo del
+  skill `maintain` (1.2.0 → 1.3.0); `ingest-star` 1.5.0 → 1.5.1 (doc).
+- **#25** — `query_ads --sweep`: el barrido full-text 2b de `ingest-star` deja de ser manual — la
+  query `full:` expande sola nombre+aliases con **todas las grafías** (antes: una `--probe` a mano
+  por grafía, fácil de olvidar) y lista **sólo** los core que el ingest no trajo (la lista corta de
+  candidatos a `extra_core`; el diff contra el corpus ya no se hace a ojo). Preview puro: no baja,
+  no encadena, no escribe `build/`. Skill `ingest-star` 1.5.1 → 1.6.0.
+- **#26** — guard `or {}` en `load_stars()` (espejo del que ya tenía `load_topics`): con
+  `stars.yaml` vacío (instancia recién creada) cualquier lookup de slug moría con `AttributeError`
+  en vez del `KeyError` amigable. Destapado por el smoke de #25 en el template.
+
+## Backlog de framework — revisión del pipeline de ingesta 2026-08-05 (cola pendiente)
+
+> De la revisión completa del pipeline (tiempos/tokens/metodología; informe local en
+> `outputs/revision-pipeline-ingesta-2026-08-05.md`, gitignored — lo esencial está acá). La tanda
+> #24–#26 cerró los ítems "check_retractions --slug" y "--sweep". Pendientes, por valor:
+
+1. **Verify batcheado por fuente** (el mayor ahorro de tokens, ×3–5): un subagente por **bibcode**
+   que juzga TODOS los claims atribuidos a esa fuente (hoy: uno por par → el mismo `.txt` se relee
+   hasta 5×; el ahorro es pares ÷ fuentes distintas). Riesgo: anclaje/hedging dentro del lote.
+   **Gate: A/B contra `bench_verify` en una instancia poblada (RV)** — recall no puede caer.
+   Aparte y con el mismo gate: **modelo barato (Haiku) en el fan-out** — medir por separado.
+2. **Pata `similar()` en `query_ads`** (recall por CONTENIDO — papers fuera del grafo de citas, el
+   único hueco estructural del chaining): operadores de segundo orden de ADS
+   (`similar()`/`useful()`/`reviews()`, verificados en vivo 2026-08-05 — misma API, mismo token,
+   bibcodes nativos; `trending()` inestable, fuera). Implementar opt-in y **medir contra baseline
+   en RV** antes de hacerlo default (estilo defuddle).
+3. **Exhaustividad con número**: log del yield por ronda de chaining (Wohlin 2014: la ronda 2
+   aporta poco — disparo condicional), capture-recapture query↔chaining (Lincoln–Petersen,
+   N ≈ n1·n2/m) → "capturamos ~X de ~Y core estimados" al log/Huecos (le da número al backlog de
+   corpus truncado); opcional el fit de saturación f = 1 − e^(−n/τ) (whitepaper de Undermind).
+4. **Verify incremental (diff-mode)**: clave estable por par (hash del claim + bibcode) en el
+   bloque `## Verificación de citas` → un re-run sólo fan-outea claims nuevos/editados (`raw/` es
+   inmutable; invalidar si cambió `fulltext_source`). Gran ahorro en maintain/append.
+5. **`triage.md` determinista** por slug (una línea por core: citas/via/topics/¿pdf?/¿fulltext?)
+   para elegir deep-reads sin cargar los abstracts de `ads.json`; si se hace el **ranking del
+   pool** (Adamic/Adar sobre bibliographic coupling — algoritmo documentado de Inciteful — y/o
+   TF-IDF+NaiveBayes estilo ASReview con las etiquetas de la regex), sus scores entran como
+   columnas y el LLM sólo juzga el borde (patrón RCS de PaperQA2).
+6. **Menores**: fan-out de extracción por paper en ingests grandes (texto de skill — la síntesis
+   se arma desde las notas, no desde fulltexts); `fetch_arxiv` ∥ `fetch_pdf` (hosts distintos;
+   desacoplar `missing_pdf.json`); fusionar `references()`/`citations()` por chunk; adelgazar
+   `CLAUDE.md` (~30–40% de tokens recurrentes por sesión — quirúrgico, con revisión del usuario).
+7. **Pasada de retracciones automática** (surgió al cerrar #24): opciones — cron de GitHub Actions
+   por instancia (no sirve para instancias local-only), cron local, o que `maintain` la dispare
+   si hace >N semanas que no corre (fecha del último barrido en un scratch). Sin decidir.
+
 ## ✅ Framework 1.2.2 (2026-07-31) — issues #22–#23: el residuo multi-cláusula
 
 > Segunda vuelta del mismo run: de las 4 sembradas que sobrevivieron a 1.2.1, **3 venían de que el
@@ -169,10 +226,23 @@ iterado a papel-antiguo + tipografía griega a pedido del usuario.
 **Pendientes menores de eye candy (menú ofrecido, sin decidir):** captura de Obsidian (demo con estrella
 famosa), GIF de terminal (vhs) del `--probe`.
 
-## Backlog de framework — relevar buscadores IA de literatura (Undermind & co.) — A INVESTIGAR
+## ✅ Backlog de framework (RELEVADO 2026-08-05) — buscadores IA de literatura (Undermind & co.)
 
-> Anotado 2026-07-18 a pedido del usuario. **Nada verificado todavía**: lo de abajo es el encuadre de
-> la pregunta, no hallazgos. Es backlog de **framework** → se evalúa/aplica en el template.
+> **Relevamiento hecho 2026-08-05** (3 agentes de research con fuentes verificadas; APIs de
+> S2/OpenAlex/ADS probadas en vivo). **Veredicto: opción (b) — copiar metodología, no consumir
+> APIs.** (1) Ninguno corre sobre ADS (todos S2/OpenAlex/arXiv) y las APIs son pagas/cerradas
+> (Undermind: enterprise-only; Elicit: self-serve pero atada a suscripción; Consensus: por
+> aplicación; SciSpace: sin API) → para astro no aportan sobre la query ADS directa. (2) **Undermind
+> publicó su metodología** (whitepaper Hartke & Ramette 2024, undermind.ai/whitepaper.pdf): lo
+> copiable es el criterio de parada (fit de saturación f = 1 − e^(−n/τ)) y el estimador de
+> exhaustividad tipo capture-recapture → ítem 3 de la cola del pipeline (arriba). (3) Hallazgo de
+> menor fricción, no previsto en el encuadre: **ADS mismo trae operadores de descubrimiento**
+> (`similar()`/`useful()`/`reviews()`, verificados en vivo con el token de la bóveda) → ítem 2 de
+> la cola. (4) Abiertas: S2 Recommendations sigue gratis pero su pool astro es "últimos 60 días"
+> (sólo serviría como modo alertas de `maintain`); OpenAlex pasó a pricing por uso (key gratuita,
+> crédito diario) y su grafo es redundante con ADS; SPECTER2 es Apache-2.0 y corre en CPU → opt-in
+> de ranking si hiciera falta. **Pendiente del entregable original:** medir lo adoptable contra
+> baseline en RV antes de mergear (estilo defuddle). El encuadre original queda abajo como registro.
 
 **Pregunta.** Existen herramientas que hacen búsqueda bibliográfica con IA (**Undermind**, y en la
 misma familia Elicit / Consensus / SciSpace / semantic-search sobre Semantic Scholar u OpenAlex).
