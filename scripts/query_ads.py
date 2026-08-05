@@ -1,7 +1,7 @@
 """Consulta NASA ADS por estrella → metadata de papers + clasificación de relevancia.
 
 Uso:
-    python query_ads.py <slug> [--rows N] [--no-chain]
+    python query_ads.py <slug> [--rows N] [--no-chain] [--sweep]
 
 Escribe build/<slug>/ads.json con la lista de registros (bibcode, título, autores,
 año, abstract, arxiv_id, doctype, citation_count, topics, relevant, via) y, si la query directa
@@ -25,6 +25,10 @@ Desactivar con --no-chain. `--probe` no encadena (es sólo preview; lista TODO e
 **Curación manual persistente:** `extra_core: [bibcode, …]` en la entrada de `stars.yaml`/`topics.yaml`
 lista papers que el clasificador perdió; se traen por bibcode, se marcan core (`via: manual`) y se
 mergean. Vive en config (se commitea) → sobrevive al re-run, a diferencia de editar `build/` (scratch).
+
+**`--sweep` (barrido full-text, paso 2b de ingest-star):** corre `full:` sobre nombre+aliases con
+TODAS las variantes de espaciado y lista SÓLO los core que `build/<slug>/ads.json` no tiene — los
+candidatos a `extra_core`. Preview como `--probe` (no baja nada ni escribe build/). Ver sweep_star.
 """
 from __future__ import annotations
 
@@ -270,12 +274,49 @@ def fetch_bibcodes(bibs: list[str]) -> list[dict]:
     return out
 
 
+def sweep_star(slug: str, rows: int) -> int:
+    """Barrido full-text (paso 2b de ingest-star — antes manual, una --probe por alias y grafía).
+
+    La query directa busca en título+abstract y los surveys de muestra grande tabulan la estrella
+    sin nombrarla ahí; el chaining trae los conectados por citas al corpus, y este barrido caza los
+    que quedan FUERA del grafo: corre `full:` sobre nombre+aliases con TODAS las variantes de
+    espaciado (expand_variants — sin olvidos de grafía) y lista SÓLO los core que
+    build/<slug>/ads.json no tiene, la lista corta de candidatos a `extra_core` en stars.yaml.
+    Preview como --probe: no baja PDFs, no encadena, no escribe build/. El criterio de qué agregar
+    sigue siendo del operador; acá sólo lo mecánico."""
+    name, meta = cfg.star_by_slug(slug)
+    adsfile = cfg.ROOT / "build" / slug / "ads.json"
+    if not adsfile.exists():
+        sys.exit(f"--sweep compara contra build/{slug}/ads.json y no existe — corré primero la "
+                 f"cadena de ingest (o query_ads.py {slug}).")
+    known = {r.get("bibcode") for r in json.loads(adsfile.read_text(encoding="utf-8"))["records"]}
+    names = [cfg.require_field(meta, "ads_object", name, "stars.yaml")] + meta.get("aliases", [])
+    q = build_fulltext_filter(names)
+    print(f"Barrido full-text (2b) de {name} — q: {q}")
+    hits = query_ads(q, rows=rows)
+    news = sorted((r for r in hits if r["relevant"] and r.get("bibcode") not in known),
+                  key=lambda r: r.get("citation_count") or 0, reverse=True)
+    print(f"  {len(hits)} papers con la estrella en el CUERPO · {len(news)} core NUEVOS "
+          "(no están en ads.json)")
+    for r in news:
+        print(_probe_row(r))
+    if news:
+        print("\n  → revisá cuáles corresponden y agregalos a `extra_core: [<bibcode>, …]` en la "
+              "entrada de la estrella en vault/config/stars.yaml (persistente, via: manual); después "
+              "re-corré la cadena (idempotente). Los que decidas NO bajar, listalos en el log — no "
+              "curar en silencio.")
+    else:
+        print("  → el corpus ya cubre el barrido full-text. (Ojo: en papers pre-digitales un 0 acá "
+              "NO prueba ausencia — el OCR del escaneo pierde filas de tabla; ver skill ingest-star.)")
+    return 0
+
+
 def print_probe(q: str, recs: list, noncore_top: int = 25) -> int:
     """Modo preview del skill `setup`: muestra el corte core/no-core de una query sin bajar nada,
     para afinar la regla de relevancia (relevance.topics) contra papers reales. Lista **TODO el core**
-    (el barrido full-text 2b de ingest-star necesita ver el core completo, no un top-N — papers
-    recientes/poco citados caen al fondo del ranking pero pueden ser core); del no-core muestra sólo
-    el top `noncore_top` por citas (chequeo de sanidad del corte)."""
+    (no un top-N: papers recientes/poco citados caen al fondo del ranking pero pueden ser core); del
+    no-core muestra sólo el top `noncore_top` por citas (chequeo de sanidad del corte). El barrido
+    2b de ingest-star, que antes se hacía con probes manuales, hoy corre por --sweep (sweep_star)."""
     core = sorted((r for r in recs if r["relevant"]), key=lambda r: r.get("citation_count") or 0, reverse=True)
     noncore = sorted((r for r in recs if not r["relevant"]), key=lambda r: r.get("citation_count") or 0, reverse=True)
     print(f"Probe (no baja PDFs ni escribe build/). q: {q}")
@@ -312,6 +353,11 @@ def main() -> int:
                     help="PREVIEW (skill setup): corre una query Solr CRUDA y muestra el corte "
                          "core/no-core con títulos, clasificando con relevance.topics de objective.yaml. "
                          "No baja PDFs ni escribe build/ — sólo para afinar la regla de relevancia.")
+    ap.add_argument("--sweep", action="store_true",
+                    help="barrido full-text del paso 2b de ingest-star: corre full: sobre "
+                         "nombre+aliases (todas las grafías, sin probes a mano) y lista SÓLO los "
+                         "core que build/<slug>/ads.json no tiene — candidatos a extra_core en "
+                         "stars.yaml. Preview: no baja nada ni escribe build/. Sólo estrellas.")
     args = ap.parse_args()
 
     if args.probe:
@@ -321,6 +367,12 @@ def main() -> int:
         ap.error('falta el slug (o usá --probe "<query>" para previsualizar la regla de relevancia)')
     if args.extra_only and not args.topic:
         ap.error("--extra-only es de temas (--topic): una estrella siempre tiene query (ads_object)")
+    if args.sweep:
+        if args.topic:
+            ap.error("--sweep es de estrellas (surveys que tabulan la estrella sin nombrarla en "
+                     "título/abstract); el análogo para temas es el retro-tag 3b del skill "
+                     "ingest-topic (grep de aliases sobre el corpus local)")
+        return sweep_star(args.slug, args.rows)
 
     if args.topic:
         _, meta = cfg.topic_by_slug(args.slug)

@@ -371,3 +371,56 @@ def test_probe_lista_todo_el_core(toy_classifier, capsys):
     out = capsys.readouterr().out
     assert "30 CORE" in out
     assert out.count("[CORE]") == 30          # el core se lista completo, no top-N
+
+
+# ── --sweep: barrido full-text 2b (issue #25) ────────────────────────────────
+
+def mk_ads_json(root, slug, bibs):
+    d = root / "build" / slug
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "ads.json").write_text(json.dumps({"records": [{"bibcode": b} for b in bibs]}),
+                                encoding="utf-8")
+
+
+def test_sweep_lista_solo_core_nuevos(toy_vault, toy_classifier, no_sleep, monkeypatch, capsys):
+    """--sweep: query full: con TODAS las grafías de nombre+aliases, y a la salida SÓLO los core
+    que ads.json no tiene (ni los ya bajados, ni los no-core). No encadena ni escribe build/."""
+    mk_ads_json(toy_vault.ROOT, "test_star", ["2020dirA....1A"])
+    hits = [rec("2020dirA....1A", cites=9),               # ya en el corpus → afuera
+            rec("1978survW...1W", cites=100),             # core nuevo → candidato
+            rec("2020non....1N", relevant=False)]         # no-core → afuera
+    queries = []
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda q, rows=2000, **kw: queries.append(q) or [dict(r) for r in hits])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a: pytest.fail("--sweep no encadena"))
+    before = (toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text()
+    assert run_main(monkeypatch, ["test_star", "--sweep"]) == 0
+    out = capsys.readouterr().out
+    # la query expande alias y grafías sola (HD 12345 ↔ HD12345), sin probes a mano
+    assert 'full:"Test Star"' in queries[0]
+    assert 'full:"HD 12345"' in queries[0] and 'full:"HD12345"' in queries[0]
+    assert "1 core NUEVOS" in out
+    assert "t 1978survW...1W" in out
+    assert "t 2020dirA....1A" not in out and "t 2020non....1N" not in out
+    assert "extra_core" in out                            # el próximo paso queda dicho
+    assert (toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text() == before   # preview
+
+
+def test_sweep_corpus_cubierto(toy_vault, toy_classifier, no_sleep, monkeypatch, capsys):
+    """0 candidatos → lo dice con el caveat epistemológico (0 acá NO prueba ausencia)."""
+    mk_ads_json(toy_vault.ROOT, "test_star", ["2020dirA....1A"])
+    monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, **kw: [rec("2020dirA....1A")])
+    assert run_main(monkeypatch, ["test_star", "--sweep"]) == 0
+    out = capsys.readouterr().out
+    assert "ya cubre" in out and "NO prueba ausencia" in out
+
+
+def test_sweep_sin_ads_json_error_amigable(toy_vault, toy_classifier, monkeypatch):
+    with pytest.raises(SystemExit, match="corré primero"):
+        run_main(monkeypatch, ["test_star", "--sweep"])
+
+
+def test_sweep_con_topic_error(toy_vault, toy_classifier, monkeypatch, capsys):
+    with pytest.raises(SystemExit):                       # ap.error → exit 2
+        run_main(monkeypatch, ["gp", "--topic", "--sweep"])
+    assert "retro-tag 3b" in capsys.readouterr().err

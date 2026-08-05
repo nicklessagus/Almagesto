@@ -1,7 +1,7 @@
 ---
 name: ingest-star
 description: Usar cuando el usuario pide bajar/agregar/ingestar una estrella a la bóveda ("bajá GJ 581", "ingest tau ceti", "agregá la estrella X", "traé la bibliografía de AU Mic"). Corre la cadena de ingesta y hace la extracción LLM.
-version: 1.5.1
+version: 1.6.0
 ---
 
 # Ingest: agregar una estrella a la wiki
@@ -43,19 +43,19 @@ procesa. Trabajar desde la raíz del repo.
    **chaining del paso 2 ya trae** los que están conectados por citas a los core encontrados; este
    barrido caza los que quedan **fuera del grafo** (o cuyos core-vecinos no entraron). Correr:
    ```bash
-   # query Solr cruda: papers con la estrella en el CUERPO (no sólo título/abstract)
-   python query_ads.py --probe 'full:"HD 152391"'      # repetir por alias
-   python query_ads.py --probe 'full:"HD152391"'       # …y por la grafía SIN espacio
+   python query_ads.py <slug> --sweep
    ```
-   **Probá ambas grafías** (`HD 152391` y `HD152391`): ADS tokeniza distinto cada forma y los papers usan
-   las dos → una sola se pierde la otra. (El ingest automático ya expande las variantes de espaciado en
-   `build_query`; este barrido `full:` es manual, así que acá lo hacés a mano.)
-   `--probe` **ya lista TODO el core** del corte (no un top-N) — así ves los papers recientes/poco
-   citados que caen al fondo del ranking aunque sean core (así se perdieron Garg+2019 y Willamo+2020,
-   con 21c/9c). Los core que falten se agregan **de forma persistente** con `extra_core: [<bibcode>, …]`
-   en la entrada de la estrella en `vault/config/stars.yaml` (el `query_ads` los trae por bibcode,
-   `via: manual`, y sobreviven al re-run — a diferencia de editar `build/`, que es scratch y se pisa).
-   Si el barrido devuelve muchos, **listá cuántos quedan sin bajar** en el `log` — no cures en silencio.
+   Corre `full:` sobre nombre+aliases expandiendo solo **todas las grafías** (`HD 152391` ↔
+   `HD152391` — ADS tokeniza distinto y los papers usan ambas; antes esto eran probes manuales por
+   grafía, fáciles de olvidar) y lista **sólo los core que el ingest NO trajo** — la lista corta de
+   candidatos (así se recuperan casos tipo Garg+2019 / Willamo+2020, core poco citados que caen al
+   fondo del ranking). Revisarla y agregar los que correspondan **de forma persistente** con
+   `extra_core: [<bibcode>, …]` en la entrada de la estrella en `vault/config/stars.yaml` (el
+   `query_ads` los trae por bibcode, `via: manual`, y sobreviven al re-run — a diferencia de editar
+   `build/`, que es scratch y se pisa); después re-correr la cadena (idempotente). Si el barrido
+   devuelve muchos y no bajás todos, **listá cuántos quedan sin bajar** en el `log` — no cures en
+   silencio. (Un resultado vacío **no prueba ausencia** en papers pre-digitales — ver Notas: el OCR
+   del escaneo pierde filas de tabla.)
 
 3. **Extracción LLM (criterio).** Leer los papers **clave** (discovery / actividad / métodos) desde
    `vault/raw/fulltext/<slug>/` y poblar:
