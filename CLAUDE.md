@@ -332,8 +332,10 @@ en el skill.
 ### Mantenimiento (cuidar lo ya ingestado — skill `maintain`)
 **No crea entidades** (eso es Ingest); opera sobre estrellas/conceptos que **ya existen**. Sub-modos:
 **refrescar** (papers nuevos → re-sintetizar sólo lo nuevo), **borrar** (nota + PDF/fulltext + reparar
-colgados), **renombrar** slug, **re-clasificar** tras cambiar `relevance.topics`, y **resolver el
-backlog del lint** (huérfanos, P_rot nulo, drift PDF↔disco, cobertura). Invariante: la cadena es
+colgados), **renombrar** slug, **re-clasificar** tras cambiar `relevance.topics`, **resolver el
+backlog del lint** (huérfanos, P_rot nulo, drift PDF↔disco, cobertura), y la **pasada periódica de
+retracciones** (`check_retractions.py` sin `--slug`, toda la bóveda — la cadena de ingest sólo
+chequea el slug en curso). Invariante: la cadena es
 idempotente (refrescar es seguro); **nunca** se pisa la extracción LLM ni el ground-truth sin `--force`
 explícito. Detalle en el skill.
 
@@ -343,8 +345,10 @@ explícito. Detalle en el skill.
 Correr `python scripts/lint.py`: debe quedar en **0** para wikilinks rotos, **frontmatter no
 parseable** (nota que empieza con `---` pero cuyo YAML no parsea —p. ej. un `title:` con `:` sin
 comillas editado a mano—: evade en silencio los chequeos de su tipo), **papers retractados**
-(flag `retracted`; lo detecta `scripts/check_retractions.py` vía Crossref —red, correr al ingestar y
-periódicamente— y el lint lo surface offline: una fuente retractada citada rompe la frontera dura),
+(flag `retracted`; lo detecta `scripts/check_retractions.py` vía Crossref —red; la cadena de ingest
+chequea sólo los papers del slug (`--slug`) y el barrido completo de la bóveda es la pasada
+periódica del skill `maintain`— y el lint lo surface offline: una fuente retractada citada rompe la
+frontera dura),
 páginas huérfanas,
 contradicciones ground-truth↔ficha, **masa de ground-truth inconsistente con la m·sini implícita**
 (K/P/e/M\* — atrapa best-mass espurias de NEA), **`thesis_links` sin página destino** (tag que no matchea

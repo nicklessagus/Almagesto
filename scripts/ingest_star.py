@@ -18,8 +18,10 @@ refresca un snapshot existente — refrescar NEA es decisión explícita, no sid
 `--force` acá, a propósito: los flags finos (`--rows`, `--all`, `--force` de un paso) se corren
 en el script puntual.
 
-`check_retractions` cierra la cadena y su exit 1 significa "detectó papers retractados"
-(revisar las notas marcadas; el lint lo surface como bloqueante), NO un fallo de la cadena.
+`check_retractions --slug` cierra la cadena chequeando SÓLO los papers de este ingest (el
+barrido Crossref completo de la bóveda es pasada periódica — skill maintain); su exit 1
+significa "detectó papers retractados" (revisar las notas marcadas; el lint lo surface como
+bloqueante), NO un fallo de la cadena.
 
 La extracción LLM posterior (leer fulltext, poblar notas, síntesis, matriz) NO es de este
 script: la hace el agente siguiendo el skill ingest-star.
@@ -50,7 +52,7 @@ def main() -> int:
         if rc:
             sys.exit(f"{script} falló (rc={rc}) — cadena abortada. Es idempotente: corregí y "
                      "re-corré ingest_star.py (lo ya bajado no se re-baja).")
-    if run("check_retractions.py"):
+    if run("check_retractions.py", "--slug", args.slug):
         sys.exit("check_retractions detectó papers retractados — revisá las notas marcadas "
                  "(el lint las surface como bloqueante).")
     print("\nCadena mecánica lista. Siguiente (LLM, skill ingest-star): barrido full-text (2b) → "

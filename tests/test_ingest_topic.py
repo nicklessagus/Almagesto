@@ -66,6 +66,7 @@ def test_cadena_ads_en_orden(toy_vault, fake_run, fake_notes, monkeypatch):
                                               "check_retractions.py"]
     assert fake_run.calls[0] == ("query_ads.py", "--topic", "gp")
     assert fake_run.calls[3] == ("make_notes.py", "--topic", "gp")
+    assert fake_run.calls[-1] == ("check_retractions.py", "--slug", "gp")   # sólo este ingest
 
 
 def test_cadena_ads_aborta_al_primer_fallo(toy_vault, fake_run, monkeypatch):
@@ -195,7 +196,7 @@ def test_offads_pending_deriva_sin_fallar(toy_vault, fake_run, fake_notes, monke
     assert run_main(monkeypatch) == 0
     key, kw = fake_notes.webs[0]
     assert key == "1999Paywall" and kw["pending"] == "paywall"
-    assert [c[0] for c in fake_run.calls] == ["check_retractions.py"]   # doi → chequeo igual
+    assert fake_run.calls == [("check_retractions.py", "--slug", "gp")]   # doi → chequeo igual
     out = capsys.readouterr().out
     assert "Fuentes PENDIENTES" in out and "10.1/x" in out
 

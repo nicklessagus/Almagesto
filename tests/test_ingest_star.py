@@ -31,7 +31,7 @@ def test_cadena_completa_en_orden(toy_vault, fake_run, monkeypatch):
                               ("fetch_ground_truth.py", "test_star"),
                               ("make_notes.py", "test_star"),
                               ("extract_fulltext.py", "test_star"),
-                              ("check_retractions.py",)]
+                              ("check_retractions.py", "--slug", "test_star")]
 
 
 def test_slug_desconocido_amigable(toy_vault, fake_run, monkeypatch):

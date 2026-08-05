@@ -1,7 +1,7 @@
 ---
 name: maintain
-description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), y resolver el backlog del lint (huérfanos, P_rot faltante, drift PDF↔disco, claims stale).
-version: 1.2.0
+description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), resolver el backlog del lint (huérfanos, P_rot faltante, drift PDF↔disco, claims stale), y la pasada periódica de retracciones sobre toda la bóveda ("chequeá retracciones").
+version: 1.3.0
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
@@ -92,6 +92,16 @@ Pasada de higiene sobre lo que `lint.py` marca como backlog/WARN (no bloqueante,
   sacarlo del vault (frontera dura).
 - **Claims stale** → re-verificar contra la fuente los que quedaron dudosos.
 Cierre: lint (idealmente bajando el conteo de backlog) → `log` → commit → preguntar push.
+
+## F. Pasada periódica de retracciones (bóveda completa)
+La cadena de ingest chequea retracciones **sólo sobre los papers del slug en curso**
+(`check_retractions.py --slug`); un paper puede retractarse **años después** de ingestado, así que
+el barrido completo es tarea periódica (p. ej. mensual, o al cerrar una tanda de ingests):
+```bash
+python check_retractions.py            # toda la bóveda vía Crossref (red)
+```
+Si marca alguno (`retracted: true` en la nota; el lint lo vuelve **bloqueante**): revisar cada
+afirmación que cita ese paper (quitar la cita o reflejar la retracción), `log`, commit.
 
 ## Notas
 - **No es ingest:** si la entidad no existe todavía, esto no aplica → `ingest-star`/`ingest-topic`.

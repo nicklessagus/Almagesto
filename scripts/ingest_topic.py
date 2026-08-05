@@ -101,8 +101,9 @@ def ingest_ads(slug: str) -> None:
         if rc:
             sys.exit(f"{script} falló (rc={rc}) — cadena abortada. La cadena es idempotente: "
                      "corregí y re-corré ingest_topic.py (lo ya bajado no se re-baja).")
-    # cierre: exit 1 acá significa "detectó papers retractados", no un fallo de la cadena
-    if run("check_retractions.py"):
+    # cierre: sólo los papers de ESTE ingest (el barrido completo es pasada periódica — maintain);
+    # exit 1 acá significa "detectó papers retractados", no un fallo de la cadena
+    if run("check_retractions.py", "--slug", slug):
         sys.exit("check_retractions detectó papers retractados — revisá las notas marcadas "
                  "(el lint las surface como bloqueante).")
 
@@ -230,9 +231,10 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
                  "(idempotente: los PDFs ya copiados no se re-copian).")
     # off-ADS no tiene bibcode ADS, pero un DOI declarado en sources alcanza para el chequeo de
     # retracciones (Crossref) — una fuente retractada silenciosa rompe la frontera dura igual.
-    # Con extra_core también corre: los papers ADS del tema mixto traen DOI.
+    # Con extra_core también corre: los papers ADS del tema mixto traen DOI. Sólo los papers de
+    # ESTE tema (--slug: sources + extra_core); el barrido completo es pasada periódica (maintain).
     if any(s.get("doi") for s in sources) or extra:
-        if run("check_retractions.py"):
+        if run("check_retractions.py", "--slug", slug):
             sys.exit("check_retractions detectó papers retractados — revisá las notas marcadas "
                      "(el lint las surface como bloqueante).")
 

@@ -1,9 +1,16 @@
 """Chequea si algún paper de la bóveda fue RETRACTADO y lo marca en su nota.
 
 Uso:
-    python check_retractions.py            # todos los papers de vault/wiki/papers/
+    python check_retractions.py            # todos los papers de vault/wiki/papers/ (pasada periódica)
+    python check_retractions.py --slug <slug>       # sólo los papers de UN ingest (modo de la cadena)
     python check_retractions.py --paper <bibcode>   # uno solo
     python check_retractions.py --force    # re-chequear también los ya marcados
+
+`--slug` es el modo que usan los orquestadores: chequea sólo los papers del ingest en curso
+(bibcodes relevantes de build/<slug>/ads.json + `sources[].key`/`extra_core` de la entrada del
+tema, si es un tema). El barrido completo (sin --slug) re-consulta Crossref por TODA la bóveda
+—minutos, crece linealmente— y queda como pasada PERIÓDICA explícita (skill maintain): un paper
+puede retractarse años después de ingestado.
 
 Para una wiki cuyo contrato es "todo lo que afirma está respaldado por una fuente citable", una
 fuente **retractada** silenciosa es el peor bug posible. Este script cierra ese agujero.
@@ -25,6 +32,7 @@ Exit code: 1 si se detectó al menos una retracción (gateable).
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
 import time
@@ -157,17 +165,58 @@ def title_says_retracted(title: str) -> bool:
     return t.startswith(("retracted", "retraction:", "retracted article", "withdrawn"))
 
 
+def slug_notes(slug: str) -> list:
+    """Notas de paper de UN ingest (modo --slug de la cadena): bibcodes relevantes de
+    build/<slug>/ads.json (vía ADS) + `sources[].key` y `extra_core` de la entrada del tema en
+    topics.yaml (off-ADS/mixto declara ahí su bibliografía). Sólo notas que existen en disco
+    (make_notes acaba de crearlas en la cadena); el barrido completo cubre cualquier drift."""
+    stems: list[str] = []
+    adsfile = cfg.ROOT / "build" / slug / "ads.json"
+    if adsfile.exists():
+        data = json.loads(adsfile.read_text(encoding="utf-8"))
+        stems += [r["bibcode"] for r in data.get("records", [])
+                  if r.get("relevant") and r.get("bibcode")]
+    try:
+        _, meta = cfg.topic_by_slug(slug)
+    except KeyError:
+        meta = {}
+    stems += [s.get("key") for s in (meta.get("sources") or []) if s.get("key")]
+    stems += [b for b in (meta.get("extra_core") or []) if b]
+    if not stems:
+        sys.exit(f"--slug {slug}: no hay build/{slug}/ads.json ni entrada con sources/extra_core "
+                 "en topics.yaml — nada que chequear (¿corriste la cadena de ingest primero?).")
+    notes, seen = [], set()
+    for stem in stems:
+        name = stem.replace("/", "_")
+        if name in seen:
+            continue
+        seen.add(name)
+        p = cfg.PAPERS / f"{name}.md"
+        if p.exists():
+            notes.append(p)
+    return notes
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--paper", help="chequear un solo bibcode (default: todos los de papers/)")
+    ap.add_argument("--slug", help="chequear sólo los papers de un ingest (modo de la cadena; "
+                                   "el barrido completo, sin --slug, es la pasada periódica)")
     ap.add_argument("--force", action="store_true", help="re-chequear también los ya marcados")
     args = ap.parse_args()
+    if args.paper and args.slug:
+        ap.error("--paper y --slug son excluyentes (uno puntual vs los de un ingest)")
 
     if not cfg.PAPERS.exists():
         print("No hay vault/wiki/papers/ — nada que chequear.")
         return 0
-    notes = ([cfg.PAPERS / f"{args.paper.replace('/', '_')}.md"] if args.paper
-             else sorted(cfg.PAPERS.glob("*.md")))
+    if args.slug:
+        notes = slug_notes(args.slug)
+        print(f"--slug {args.slug}: {len(notes)} nota(s) del ingest (el barrido completo de la "
+              "bóveda es la pasada periódica — correr sin --slug)")
+    else:
+        notes = ([cfg.PAPERS / f"{args.paper.replace('/', '_')}.md"] if args.paper
+                 else sorted(cfg.PAPERS.glob("*.md")))
     headers = _ua()
 
     found, checked, marked = [], 0, 0

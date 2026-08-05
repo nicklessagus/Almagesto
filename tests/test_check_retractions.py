@@ -1,4 +1,5 @@
-"""check_retractions: parseo Crossref, fallback por título, estampado idempotente."""
+"""check_retractions: parseo Crossref, fallback por título, estampado idempotente, modo --slug."""
+import json
 import sys
 from types import SimpleNamespace
 
@@ -6,7 +7,8 @@ import pytest
 import requests as real_requests
 
 import check_retractions as cr
-from conftest import mk_note, read_fm
+import lib_config as cfg
+from conftest import mk_note, read_fm, write_yaml
 
 
 class FakeResp:
@@ -216,3 +218,57 @@ def test_main_paper_puntual(toy_vault, monkeypatch, capsys):
     assert len(calls) == 1
     assert run_main(monkeypatch, ["--paper", "2020nadaX..1..1X"]) == 0
     assert "no existe" in capsys.readouterr().out
+
+
+# ── modo --slug (la cadena chequea SÓLO los papers del ingest, issue #24) ────
+
+def mk_ads_json(root, slug, records):
+    d = root / "build" / slug
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "ads.json").write_text(json.dumps({"records": records}), encoding="utf-8")
+
+
+def test_main_slug_solo_papers_del_ingest(toy_vault, monkeypatch):
+    """--slug: chequea los bibcodes RELEVANTES de build/<slug>/ads.json; el resto de la
+    bóveda (otros ingests) no se re-consulta — ese es todo el punto del modo."""
+    for bib, doi in (("2020unoA...1..1A", "10.1/a"), ("2020dosB...1..1B", "10.1/b"),
+                     ("2020ajenoC..1..1C", "10.1/c")):
+        mk_note(toy_vault.PAPERS, bib, {"bibcode": bib, "title": "t", "doi": doi,
+                                        "tags": ["paper"]}, "")
+    mk_ads_json(toy_vault.ROOT, "test_star",
+                [{"bibcode": "2020unoA...1..1A", "relevant": True},
+                 {"bibcode": "2020dosB...1..1B", "relevant": False},    # no-core: sin nota real
+                 {"bibcode": "2020sinNota.1..1N", "relevant": True}])   # core sin nota en disco
+    calls = []
+    patch_net(monkeypatch, [FakeResp(200, {"message": {}})], calls)
+    assert run_main(monkeypatch, ["--slug", "test_star"]) == 0
+    assert len(calls) == 1 and "10.1/a" in calls[0]   # sólo el core CON nota en disco
+
+
+def test_main_slug_offads_sources_y_extra_core(toy_vault, monkeypatch):
+    """Tema off-ADS/mixto sin ads.json: los papers salen de sources[].key + extra_core."""
+    write_yaml(cfg.TOPICS_YAML, {"gp": {"title": "GP", "area": "methods", "concept": "gp",
+                                        "source": "web",
+                                        "sources": [{"key": "2006Rasmussen", "doi": "10.1/r"}],
+                                        "extra_core": ["2012PASP..124.1015B"]}})
+    mk_note(toy_vault.PAPERS, "2006Rasmussen",
+            {"bibcode": "2006Rasmussen", "title": "t", "doi": "10.1/r", "tags": ["paper"]}, "")
+    mk_note(toy_vault.PAPERS, "2012PASP..124.1015B",
+            {"bibcode": "2012PASP..124.1015B", "title": "t", "doi": "10.1/b", "tags": ["paper"]}, "")
+    mk_note(toy_vault.PAPERS, "2020ajenoC..1..1C",
+            {"bibcode": "2020ajenoC..1..1C", "title": "t", "doi": "10.1/c", "tags": ["paper"]}, "")
+    calls = []
+    patch_net(monkeypatch, [FakeResp(200, {"message": {}})], calls)
+    assert run_main(monkeypatch, ["--slug", "gp"]) == 0
+    assert len(calls) == 2                           # sources + extra_core; el ajeno no
+
+
+def test_main_slug_sin_fuentes_error_amigable(toy_vault, monkeypatch):
+    with pytest.raises(SystemExit, match="nada que chequear"):
+        run_main(monkeypatch, ["--slug", "fantasma"])
+
+
+def test_main_slug_y_paper_excluyentes(toy_vault, monkeypatch, capsys):
+    with pytest.raises(SystemExit):
+        run_main(monkeypatch, ["--slug", "x", "--paper", "y"])
+    assert "excluyentes" in capsys.readouterr().err

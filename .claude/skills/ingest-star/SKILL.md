@@ -1,7 +1,7 @@
 ---
 name: ingest-star
 description: Usar cuando el usuario pide bajar/agregar/ingestar una estrella a la bóveda ("bajá GJ 581", "ingest tau ceti", "agregá la estrella X", "traé la bibliografía de AU Mic"). Corre la cadena de ingesta y hace la extracción LLM.
-version: 1.5.0
+version: 1.5.1
 ---
 
 # Ingest: agregar una estrella a la wiki
@@ -30,6 +30,8 @@ procesa. Trabajar desde la raíz del repo.
    ground-truth existente salvo `--force` (refrescar desde NEA es decisión explícita, no side-effect).
    `check_retractions` consulta **Crossref** por DOI y, si un paper fue **retractado**, estampa
    `retracted: true` en su nota (el lint lo vuelve bloqueante) → revisá cada afirmación que lo cita.
+   En la cadena corre con `--slug` (sólo los papers de **este** ingest); el barrido completo de la
+   bóveda es la pasada periódica del skill `maintain`.
    `query_ads` hace además **citation chaining**: pide a ADS references/citations de los core,
    **ancladas al sujeto** con `full:` sobre nombre+alias — trae surveys/catálogos conectados por el
    grafo de citas aunque no nombren la estrella en el abstract (quedan marcados `via: chain:*` en
