@@ -98,6 +98,13 @@ def basename(p: str) -> str:
     return Path(p).name          # no splitear "/" a mano: glob devuelve separador nativo del OS
 
 
+def in_dir(path: str, name: str) -> bool:
+    """¿`name` es un componente de directorio del path? Por `Path.parts` (separador nativo, #33):
+    los literales `"/queries/" in f` no matchean nunca en Windows (glob devuelve `\\`) y los
+    chequeos de verificabilidad/cobertura desaparecían en silencio."""
+    return name in Path(path).parts
+
+
 def note_files() -> list:
     # incluye index.md/log.md (aportan links entrantes); se excluyen de orfandad por nombre.
     files = glob.glob(str(cfg.WIKI / "**" / "*.md"), recursive=True)
@@ -158,7 +165,7 @@ def main() -> int:
             continue
         # precondición de verificabilidad: en queries/concepts/hipótesis, toda cita-bibcode necesita
         # su fulltext para poder correr verify-citations (chequeo claim↔fuente).
-        in_verifiable_note = "/queries/" in f or "/concepts/" in f   # concepts/ incluye hypotheses/
+        in_verifiable_note = in_dir(f, "queries") or in_dir(f, "concepts")   # concepts/ incluye hypotheses/
         nbib = 0                              # citas [[bibcode]] en esta nota
         for tgt in LINK_RE.findall(text):
             tgt = tgt.strip()
@@ -174,7 +181,7 @@ def main() -> int:
                     unverifiable.append((stem, f"cita {tgt} sin fulltext (no chequeable claim↔fuente)"))
         # cobertura: un concepto/hipótesis que afirma sin ninguna cita [[bibcode]] no es chequeable
         # (todo lo apuntable debe ser citable o marcado `inferencia`; ver Verify en CLAUDE.md). Backlog.
-        if "/concepts/" in f and nbib == 0:
+        if in_dir(f, "concepts") and nbib == 0:
             coverage.append((stem, "sin citas [[bibcode]] → afirmaciones no chequeables (cobertura)"))
         # cobertura de VERIFICACIÓN (ALCE-adjacent): una nota apuntable con citas pero sin el bloque
         # `## Verificación de citas` nunca pasó por verify-citations → sus claims no fueron chequeados

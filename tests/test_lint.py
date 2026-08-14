@@ -350,3 +350,17 @@ def test_corpus_no_truncado_no_reporta(toy_vault, capsys):
     rc, out = run_lint(capsys)
     assert rc == 0
     assert "Corpus truncado: la query directa trajo menos de lo que ADS reporta (backlog) (0)" in out
+
+
+# ── in_dir (portabilidad de separador, #33) ──────────────────────────────────
+
+def test_in_dir_componente_no_substring():
+    """Regresión #33: el chequeo es por COMPONENTE de directorio (Path.parts, separador nativo),
+    no por substring "/x/" — que en Windows no matcheaba nunca. Misma semántica que el literal
+    viejo en POSIX: una nota llamada queries.md no es la carpeta queries/."""
+    import lint
+    assert lint.in_dir("vault/wiki/queries/x.md", "queries") is True
+    assert lint.in_dir("vault/wiki/concepts/methods/gp.md", "concepts") is True
+    assert lint.in_dir("vault/wiki/queries.md", "queries") is False       # stem ≠ carpeta
+    assert lint.in_dir("vault/wiki/stars/x.md", "queries") is False
+
