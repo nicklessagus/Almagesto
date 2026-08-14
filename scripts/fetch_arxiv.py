@@ -5,7 +5,10 @@ Uso:
 
 Lee build/<slug>/ads.json y baja el PDF de cada paper relevante con arxiv_id a
 pdfs/<slug>/<bibcode>.pdf. Respeta el rate limit de arXiv: 1 request / 3 s.
-Papers sin arxiv_id (revistas viejas pre-arXiv) se listan como faltantes.
+Al residuo build/<slug>/missing_pdf.json van los papers sin arxiv_id (revistas viejas
+pre-arXiv) Y las bajadas que fallaron (#32: antes un fallo sólo quedaba en el stdout —
+invisible para la cascada manual); fetch_pdf, el siguiente paso de la cadena, intenta
+todo lo que siga sin PDF en disco vía el resolver de ADS.
 """
 from __future__ import annotations
 
@@ -96,7 +99,7 @@ def main() -> int:
     label = data.get("star") or data.get("title") or args.slug
     print(f"{label}: {len(todo)} con arXiv a bajar, "
           f"{len(no_arxiv)} sin arXiv (pre-arXiv / no e-print)")
-    got, skipped = 0, 0
+    got, skipped, failed = 0, 0, []
     for i, r in enumerate(todo, 1):
         dest = destdir / f"{safe_name(r['bibcode'])}.pdf"
         if dest.exists():
@@ -105,15 +108,23 @@ def main() -> int:
         print(f"  [{i}/{len(todo)}] {r['arxiv_id']}  {r['bibcode']}")
         if download_pdf(r["arxiv_id"], dest):
             got += 1
+        else:
+            failed.append(r)
         time.sleep(SLEEP_S)
 
-    print(f"Bajados {got}, ya estaban {skipped}.")
-    if no_arxiv:
+    print(f"Bajados {got}, ya estaban {skipped}"
+          + (f", fallaron {len(failed)}" if failed else "") + ".")
+    # residuo = sin arXiv + bajadas fallidas (#32): la contabilidad de "qué falta" debe cubrir
+    # también los fallos, que antes morían en el stdout. En la cadena, fetch_pdf (siguiente paso)
+    # intenta todo lo que siga sin PDF en disco y reescribe este archivo con el residuo final.
+    residue = no_arxiv + failed
+    if residue:
         miss = cfg.ROOT / "build" / args.slug / "missing_pdf.json"
         miss.write_text(json.dumps(
             [{"bibcode": r["bibcode"], "title": r["title"], "doi": r.get("doi")}
-             for r in no_arxiv], indent=2, ensure_ascii=False), encoding="utf-8")
-        print(f"Papers sin arXiv listados en {miss} (bajar manual vía DOI si hacen falta).")
+             for r in residue], indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"Sin PDF ({len(no_arxiv)} sin arXiv + {len(failed)} fallidos) → {miss} "
+              "(fetch_pdf los intenta vía el resolver de ADS; el residuo final es el suyo).")
     return 0
 
 

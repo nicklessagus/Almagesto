@@ -3,8 +3,9 @@
 Uso:
     python fetch_pdf.py <slug> [--all] [--limit N]
 
-Lee build/<slug>/ads.json y, para cada paper relevante SIN arxiv_id (revistas viejas /
-sin e-print — los que tienen arXiv los baja fetch_arxiv.py) cuyo PDF no esté ya en disco,
+Lee build/<slug>/ads.json y, para cada paper relevante SIN PDF en disco — los sin arxiv_id
+(revistas viejas / sin e-print) y también los CON arXiv cuya bajada falló en fetch_arxiv
+(#32: el resolver suele rescatarlos vía ADS_PDF/PUB_PDF cuando export.arxiv.org no entrega) —,
 consulta el resolver de ADS (`/v1/resolver/<bibcode>/esource`) y prueba las fuentes en orden:
 
   EPRINT_PDF → ADS_PDF (escaneos alojados por ADS; el request VA con el token — verificado
@@ -20,7 +21,8 @@ descartan. Cada respuesta se valida por magic `%PDF` (el HTML de un paywall no s
 se reintenta con backoff (el host de escaneos throttlea ráfagas — medido en el probe).
 
 Lo que ni así se consigue queda en build/<slug>/missing_pdf.json (mismo formato que
-fetch_arxiv: residuo a conseguir a mano vía DOI, o marcar `pending` en la fuente).
+fetch_arxiv; al correr último en la cadena, es el residuo COMPLETO del ingest por verdad
+de disco: a conseguir a mano vía DOI, o marcar `pending` en la fuente).
 Idempotente: no re-baja lo que ya está en vault/raw/pdfs/<slug>/.
 """
 from __future__ import annotations
@@ -160,22 +162,24 @@ def main() -> int:
     destdir = cfg.PDFS / args.slug
     destdir.mkdir(parents=True, exist_ok=True)
 
-    # objetivo: los SIN arXiv (fetch_arxiv cubre el resto) que no estén ya bajados
-    todo = [r for r in recs if not r.get("arxiv_id")]
+    # objetivo: TODO paper relevante sin PDF en disco (#32) — los sin arXiv (su única vía es
+    # este resolver) y los con arXiv cuya bajada falló en fetch_arxiv (antes quedaban invisibles:
+    # ni acá ni en el missing_pdf.json final). Verdad de disco: lo ya bajado no se toca.
+    todo = [r for r in recs if not (destdir / f"{safe_name(r['bibcode'])}.pdf").exists()]
+    skipped = len(recs) - len(todo)
     if args.limit:
         todo = todo[: args.limit]
     token = cfg.get_ads_token()
 
     label = data.get("star") or data.get("title") or args.slug
-    print(f"{label}: {len(todo)} sin arXiv → resolver de ADS (esources)")
-    got = skipped = 0
+    n_arx = sum(1 for r in todo if r.get("arxiv_id"))
+    print(f"{label}: {len(todo)} sin PDF → resolver de ADS (esources)"
+          + (f" ({n_arx} con arXiv cuya bajada falló)" if n_arx else ""))
+    got = 0
     missing = []
     for i, r in enumerate(todo, 1):
         bib = r["bibcode"]
         dest = destdir / f"{safe_name(bib)}.pdf"
-        if dest.exists():
-            skipped += 1
-            continue
         cands = candidate_urls(esource_records(bib, token))
         print(f"  [{i}/{len(todo)}] {bib}: "
               + (", ".join(t for t, _ in cands) if cands else "sin fuentes PDF en el resolver"))

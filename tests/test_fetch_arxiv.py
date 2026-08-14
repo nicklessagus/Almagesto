@@ -131,6 +131,16 @@ def test_main_baja_relevantes_y_lista_faltantes(toy_vault, no_sleep, monkeypatch
     assert miss[0]["doi"] == "10.1/b"
 
 
+def test_main_fallo_arxiv_va_al_residuo(toy_vault, no_sleep, monkeypatch):
+    """Regresión #32: una bajada arXiv FALLIDA entra a missing_pdf.json (antes sólo quedaba
+    en el stdout — invisible para la cascada manual y para fetch_pdf)."""
+    ads_json(toy_vault.ROOT, "test_star", RECORDS)
+    monkeypatch.setattr(fa, "download_pdf", lambda aid, dest: False)
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    miss = json.loads((toy_vault.ROOT / "build" / "test_star" / "missing_pdf.json").read_text())
+    assert [m["bibcode"] for m in miss] == ["1990preA....1B", "2020withA...1A"]
+
+
 def test_main_skip_existente_y_limit(toy_vault, no_sleep, monkeypatch, capsys):
     recs = [dict(RECORDS[0]), dict(RECORDS[0], bibcode="2021otro...1D", arxiv_id="2101.00009")]
     ads_json(toy_vault.ROOT, "test_star", recs)

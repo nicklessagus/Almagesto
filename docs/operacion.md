@@ -63,7 +63,7 @@ cd scripts
 python query_ads.py        <slug>   # ADS → build/<slug>/ads.json (metadata + relevancia + citation chaining;
                                     #   --sweep = barrido full-text 2b: core que faltan → candidatos a extra_core)
 python fetch_arxiv.py      <slug>   # PDFs a vault/raw/pdfs/<slug>/  (rate limit arXiv: 1 req/3 s)
-python fetch_pdf.py        <slug>   # PDFs SIN arXiv vía resolver ADS (escaneos ADS c/token + publisher)
+python fetch_pdf.py        <slug>   # PDFs aún sin bajar (sin arXiv + arXiv fallidos) vía resolver ADS
 python fetch_ground_truth.py <slug> # NEA + SIMBAD → vault/raw/ground_truth/<slug>.json
 python make_notes.py       <slug>   # genera vault/wiki/stars/ y vault/wiki/papers/ (idempotente; --force)
 python extract_fulltext.py <slug>   # PDFs → vault/raw/fulltext/<slug>/*.txt

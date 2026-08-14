@@ -1,7 +1,7 @@
 ---
 name: ingest-topic
 description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema off-ADS — típicamente un método de otra disciplina (estadística, ML) al servicio del foco astro — desde PDFs locales + web (ver Modo off-ADS).
-version: 1.7.1
+version: 1.7.2
 ---
 
 # Ingest: agregar un TEMA a la wiki
@@ -59,9 +59,10 @@ del repo.
    `fetch_arxiv`, `fetch_pdf` y `extract_fulltext` corren sin cambios. Hace **citation chaining anclado a la query
    del tema** (references/citations de los core filtrados por la propia query → recall extra sin traer
    los mega-citados genéricos del área). `fetch_arxiv` respeta el rate limit de arXiv
-   (1 req/3 s) → correr en background si son muchos PDFs. Los papers sin arXiv (A&A viejos) los
-   intenta `fetch_pdf` (escaneo ADS con token → publisher, fallback `curl`); lo que ni así sale
-   queda en `build/<slug>/missing_pdf.json` → bajar manual por DOI si son clave. Curación persistente con
+   (1 req/3 s) → correr en background si son muchos PDFs. Los papers sin arXiv (A&A viejos) —y
+   los con arXiv cuya bajada falló— los intenta `fetch_pdf` (escaneo ADS con token → publisher,
+   fallback `curl`); lo que ni así sale queda en `build/<slug>/missing_pdf.json` (residuo
+   completo del ingest) → bajar manual por DOI si son clave. Curación persistente con
    `extra_core: [<bibcode>, …]` en la entrada del tema en `topics.yaml` (igual que en estrellas).
 
 3. **Extracción LLM (criterio).** Leer los papers **clave del tema** (fundacionales / árbitros /

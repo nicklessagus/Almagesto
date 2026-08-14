@@ -195,15 +195,30 @@ def run_main(monkeypatch, argv):
     return fp.main()
 
 
-def test_main_baja_solo_sin_arxiv(toy_vault, monkeypatch):
+def test_main_baja_todo_relevante_sin_pdf(toy_vault, monkeypatch):
+    """Regresión #32: el barrido es por verdad de disco — cubre el sin-arXiv Y el con-arXiv cuya
+    bajada falló en fetch_arxiv (antes ese quedaba invisible). El no-core nunca se intenta."""
     ads_json(toy_vault.ROOT, "test_star", RECORDS)
     pedidos = []
     monkeypatch.setattr(fp, "esource_records", lambda bib, tok: pedidos.append(bib) or
                         [{"link_type": "ESOURCE|ADS_PDF", "url": f"https://articles.adsabs.harvard.edu/pdf/{bib}"}])
     monkeypatch.setattr(fp, "download_pdf", lambda url, tok: b"%PDF-fake")
     assert run_main(monkeypatch, ["test_star"]) == 0
-    assert pedidos == ["1978oldW...1..1W"]           # ni el arXiv ni el no-core
+    assert pedidos == ["1978oldW...1..1W", "2020newA...1..1A"]     # rescate arXiv fallido; no-core afuera
     assert (toy_vault.PDFS / "test_star" / "1978oldW...1..1W.pdf").read_bytes() == b"%PDF-fake"
+    assert (toy_vault.PDFS / "test_star" / "2020newA...1..1A.pdf").read_bytes() == b"%PDF-fake"
+
+
+def test_main_arxiv_ya_bajado_no_se_toca(toy_vault, monkeypatch):
+    """El con-arXiv que fetch_arxiv SÍ bajó no se re-pide al resolver (verdad de disco)."""
+    ads_json(toy_vault.ROOT, "test_star", RECORDS)
+    destdir = toy_vault.PDFS / "test_star"
+    destdir.mkdir(parents=True, exist_ok=True)
+    (destdir / "2020newA...1..1A.pdf").write_bytes(b"%PDF-arxiv")
+    pedidos = []
+    monkeypatch.setattr(fp, "esource_records", lambda bib, tok: pedidos.append(bib) or [])
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    assert pedidos == ["1978oldW...1..1W"]
 
 
 def test_main_residuo_en_missing_pdf(toy_vault, monkeypatch):
@@ -211,8 +226,8 @@ def test_main_residuo_en_missing_pdf(toy_vault, monkeypatch):
     monkeypatch.setattr(fp, "esource_records", lambda bib, tok: [])
     assert run_main(monkeypatch, ["test_star"]) == 0
     miss = json.loads((d / "missing_pdf.json").read_text())
-    assert [m["bibcode"] for m in miss] == ["1978oldW...1..1W"]
-    assert miss[0]["doi"] == "10.1/w"
+    assert [m["bibcode"] for m in miss] == ["1978oldW...1..1W", "2020newA...1..1A"]
+    assert miss[0]["doi"] == "10.1/w"                # residuo completo del ingest (#32)
 
 
 def test_main_todo_conseguido_limpia_residuo_viejo(toy_vault, monkeypatch):
@@ -230,10 +245,11 @@ def test_main_idempotente_y_fallback_de_fuentes(toy_vault, monkeypatch, capsys):
     destdir = toy_vault.PDFS / "test_star"
     destdir.mkdir(parents=True, exist_ok=True)
     (destdir / "1978oldW...1..1W.pdf").write_bytes(b"%PDF-ya")
+    (destdir / "2020newA...1..1A.pdf").write_bytes(b"%PDF-ya")
     monkeypatch.setattr(fp, "esource_records",
                         lambda bib, tok: (_ for _ in ()).throw(AssertionError("no debería consultar")))
     run_main(monkeypatch, ["test_star"])
-    assert "ya estaban 1" in capsys.readouterr().out
+    assert "ya estaban 2" in capsys.readouterr().out
     # fallback: la primera fuente no entrega PDF, la segunda sí
     (destdir / "1978oldW...1..1W.pdf").unlink()
     monkeypatch.setattr(fp, "esource_records", lambda bib, tok:
