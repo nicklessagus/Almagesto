@@ -66,14 +66,22 @@ def msini_earth(K_ms, P_days, e, mstar_msun):
     return m / Mearth
 
 
-def fetch_planets(host: str, mstar_msun=None) -> list[dict]:
+def fetch_pscomppars(host: str):
+    """Tabla `pscomppars` de NEA para el host — se consulta UNA vez por corrida y la comparten
+    `fetch_host` y `fetch_planets` (#31: antes cada uno repetía la misma query → dos round-trips
+    idénticos por estrella; el parámetro muerto `tab_row` era la huella del reuso nunca cableado).
+    Import lazy: astroquery se carga sólo cuando hay red que consultar."""
     from astroquery.ipac.nexsci.nasa_exoplanet_archive import NasaExoplanetArchive
-    tab = NasaExoplanetArchive.query_object(host, table="pscomppars")
+    return NasaExoplanetArchive.query_object(host, table="pscomppars")
+
+
+def fetch_planets(tab, mstar_msun=None) -> list[dict]:
+    """Planetas desde la tabla pscomppars YA consultada (`fetch_pscomppars`)."""
+    import math
     planets = []
     for row in tab:
         name = _val(row, "pl_name") or ""
         letter = name.split()[-1] if name else None
-        import math
         K, P, e = _val(row, "pl_rvamp"), _val(row, "pl_orbper"), _val(row, "pl_orbeccen")
         msini = _val(row, "pl_msinie")          # columna m·sin i de NEA
         bmass = _val(row, "pl_bmasse")          # best-mass de NEA (provenance variable)
@@ -116,13 +124,14 @@ def fetch_planets(host: str, mstar_msun=None) -> list[dict]:
     return planets
 
 
-def fetch_host(host: str, tab_row=None) -> dict:
-    """Datos del host: primero de NEA (ya en pscomppars), luego SIMBAD para sp_type/coords."""
+def fetch_host(host: str, tab=None) -> dict:
+    """Datos del host: primero de NEA (columnas host de pscomppars — pasar la tabla ya
+    consultada; si viene None se consulta acá, tolerante), luego SIMBAD para sp_type/coords."""
     out = {"name": host}
     # NEA host columns (vienen en pscomppars)
     try:
-        from astroquery.ipac.nexsci.nasa_exoplanet_archive import NasaExoplanetArchive
-        tab = NasaExoplanetArchive.query_object(host, table="pscomppars")
+        if tab is None:
+            tab = fetch_pscomppars(host)
         if len(tab):
             r = tab[0]
             out.update({
@@ -173,8 +182,15 @@ def main() -> int:
     host = cfg.require_field(meta, "simbad", name, "stars.yaml")
     print(f"Ground-truth {name} (host={host!r})")
 
-    host_info = fetch_host(host)
-    planets = fetch_planets(host, host_info.get("mass_msun"))
+    # UNA consulta pscomppars por corrida, compartida por host y planetas (#31). Falla de
+    # NEA → aborto amigable (la cadena es idempotente: reintentar es seguro).
+    try:
+        tab = fetch_pscomppars(host)
+    except Exception as e:
+        sys.exit(f"NEA (pscomppars) no respondió para {host!r}: {e} — reintentá; "
+                 "fetch_ground_truth no pisa un snapshot existente.")
+    host_info = fetch_host(host, tab)
+    planets = fetch_planets(tab, host_info.get("mass_msun"))
     print(f"  planetas confirmados: {len(planets)}  | sp_type: {host_info.get('spectral_type')}"
           f"  | M*: {host_info.get('mass_msun')}")
     for p in planets:

@@ -77,7 +77,7 @@ def test_val_conversiones():
     assert gt._val(r, "l") == 7.25
 
 
-# ── fetch_planets: selección de masa y flags (astroquery falso) ──────────────
+# ── fetch_planets: selección de masa y flags (tabla directa, sin red) ────────
 
 def planet_row(name="Toy 1 b", K=0.0895, P=365.25, e=0.0, msini=None, bmass=None):
     return Row(pl_name=name, pl_rvamp=K, pl_orbper=P, pl_orbeccen=e,
@@ -87,12 +87,14 @@ def planet_row(name="Toy 1 b", K=0.0895, P=365.25, e=0.0, msini=None, bmass=None
 
 @pytest.fixture
 def fake_nea(monkeypatch):
-    """Inyecta astroquery falso en sys.modules; setear .rows antes de llamar."""
-    holder = types.SimpleNamespace(rows=[])
+    """Inyecta astroquery falso en sys.modules; setear .rows antes de llamar. `.calls` cuenta
+    las consultas query_object (regresión #31: main debe consultar UNA sola vez)."""
+    holder = types.SimpleNamespace(rows=[], calls=0)
 
     class FakeNEA:
         @staticmethod
         def query_object(host, table=None):
+            holder.calls += 1
             return list(holder.rows)
 
     leaf = types.ModuleType("astroquery.ipac.nexsci.nasa_exoplanet_archive")
@@ -103,49 +105,44 @@ def fake_nea(monkeypatch):
     return holder
 
 
-def test_masa_msini_consistente(fake_nea):
+def test_masa_msini_consistente():
     # check implícito ~1.0 M⊕; pl_msinie cerca → se elige y no hay flag
-    fake_nea.rows = [planet_row(msini=1.05, bmass=10.0)]
-    p = gt.fetch_planets("Toy 1", 1.0)[0]
+    p = gt.fetch_planets([planet_row(msini=1.05, bmass=10.0)], 1.0)[0]
     assert p["mass_source"] == "pl_msinie"
     assert p["mass_earth"] == 1.05
     assert p["mass_flag"] is None
     assert p["letter"] == "b"
 
 
-def test_masa_best_mass_rescata_msini_espuria(fake_nea):
-    fake_nea.rows = [planet_row(msini=20.0, bmass=1.02)]
-    p = gt.fetch_planets("Toy 1", 1.0)[0]
+def test_masa_best_mass_rescata_msini_espuria():
+    p = gt.fetch_planets([planet_row(msini=20.0, bmass=1.02)], 1.0)[0]
     assert p["mass_source"] == "pl_bmasse"
     assert p["mass_earth"] == 1.02
     assert p["mass_flag"] is None
 
 
-def test_masa_ningun_valor_consistente_flaggea(fake_nea):
-    fake_nea.rows = [planet_row(msini=20.0, bmass=30.0)]
-    p = gt.fetch_planets("Toy 1", 1.0)[0]
+def test_masa_ningun_valor_consistente_flaggea():
+    p = gt.fetch_planets([planet_row(msini=20.0, bmass=30.0)], 1.0)[0]
     assert p["mass_flag"] is not None
     assert "m·sini implícita" in p["mass_flag"]
 
 
-def test_masa_sin_K_no_verifica(fake_nea):
-    fake_nea.rows = [planet_row(K=None, msini=2.0, bmass=None)]
-    p = gt.fetch_planets("Toy 1", 1.0)[0]
+def test_masa_sin_K_no_verifica():
+    p = gt.fetch_planets([planet_row(K=None, msini=2.0, bmass=None)], 1.0)[0]
     assert p["mass_earth"] == 2.0 and p["mass_source"] == "pl_msinie"
     assert p["mass_flag"] is None
 
 
-def test_masa_sin_K_discrepantes_flaggea(fake_nea):
-    fake_nea.rows = [planet_row(K=None, msini=2.0, bmass=50.0)]
-    p = gt.fetch_planets("Toy 1", 1.0)[0]
+def test_masa_sin_K_discrepantes_flaggea():
+    p = gt.fetch_planets([planet_row(K=None, msini=2.0, bmass=50.0)], 1.0)[0]
     assert p["mass_flag"] is not None and "sin K" in p["mass_flag"]
 
 
-def test_planetas_ordenados_por_periodo_none_al_final(fake_nea):
-    fake_nea.rows = [planet_row(name="Toy 1 c", P=5.0),
-                     planet_row(name="Toy 1 d", P=None),
-                     planet_row(name="Toy 1 b", P=1.0)]
-    letters = [p["letter"] for p in gt.fetch_planets("Toy 1", 1.0)]
+def test_planetas_ordenados_por_periodo_none_al_final():
+    rows = [planet_row(name="Toy 1 c", P=5.0),
+            planet_row(name="Toy 1 d", P=None),
+            planet_row(name="Toy 1 b", P=1.0)]
+    letters = [p["letter"] for p in gt.fetch_planets(rows, 1.0)]
     assert letters == ["b", "c", "d"]
 
 
@@ -162,7 +159,7 @@ def test_main_no_pisa_sin_force(toy_vault, monkeypatch):
 
     def boom(*a, **kw):
         raise AssertionError("no debería consultar la red sin --force")
-    monkeypatch.setattr(gt, "fetch_host", boom)
+    monkeypatch.setattr(gt, "fetch_pscomppars", boom)
     assert run_main(monkeypatch, ["test_star"]) == 0
     assert json.loads(out.read_text())["star"] == "vieja"
 
@@ -179,8 +176,30 @@ def test_main_sin_simbad_error_amigable(toy_vault, monkeypatch):
 def test_main_force_refresca(toy_vault, monkeypatch):
     out = toy_vault.GROUND_TRUTH / "test_star.json"
     out.write_text(json.dumps({"star": "vieja"}), encoding="utf-8")
-    monkeypatch.setattr(gt, "fetch_host", lambda h: {"name": h, "mass_msun": 1.0})
-    monkeypatch.setattr(gt, "fetch_planets", lambda h, m: [])
+    monkeypatch.setattr(gt, "fetch_pscomppars", lambda h: [])
+    monkeypatch.setattr(gt, "fetch_host", lambda h, tab=None: {"name": h, "mass_msun": 1.0})
+    monkeypatch.setattr(gt, "fetch_planets", lambda tab, m: [])
     assert run_main(monkeypatch, ["test_star", "--force"]) == 0
     data = json.loads(out.read_text())
     assert data["star"] == "Estrella Test" and data["slug"] == "test_star"
+
+
+def test_main_una_sola_consulta_nea(toy_vault, monkeypatch, fake_nea):
+    """Regresión #31: fetch_host y fetch_planets comparten UNA consulta pscomppars — antes
+    main() pegaba dos round-trips idénticos a NEA por estrella."""
+    fake_nea.rows = [planet_row(msini=1.05)]
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    assert fake_nea.calls == 1
+    data = json.loads((toy_vault.GROUND_TRUTH / "test_star.json").read_text())
+    assert [p["letter"] for p in data["planets"]] == ["b"]
+
+
+def test_main_nea_caida_aborta_amigable(toy_vault, monkeypatch):
+    """Falla de NEA → SystemExit con mensaje (antes: fetch_host la toleraba en vano y
+    fetch_planets moría con traceback crudo)."""
+    def down(host):
+        raise ConnectionError("NEA timeout")
+    monkeypatch.setattr(gt, "fetch_pscomppars", down)
+    with pytest.raises(SystemExit, match="no respondió"):
+        run_main(monkeypatch, ["test_star"])
+
