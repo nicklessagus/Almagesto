@@ -238,6 +238,19 @@ def test_stamp_excluded_agrega_y_quita(toy_vault):
     assert "## Excluidos por el filtro" not in dest.read_text(encoding="utf-8")
 
 
+def test_stamp_excluded_sin_ads_json_no_toca(toy_vault):
+    """build/ es scratch: sin ads.json vigente (post-clone / limpieza) el apéndice existente NO
+    se quita — quitarlo destruiría el snapshot del ingest por ausencia de un archivo regenerable."""
+    ads_json([rec("2020noc....1..1N", relevant=False)])
+    mn.write_star_note("test_star", force=False)
+    dest = cfg.STARS / "test_star.md"
+    before = dest.read_text(encoding="utf-8")
+    assert "## Excluidos por el filtro" in before
+    (cfg.ROOT / "build" / "test_star" / "ads.json").unlink()      # build/ limpiado
+    assert mn.stamp_excluded("test_star", dest) is False
+    assert dest.read_text(encoding="utf-8") == before
+
+
 def test_stamp_excluded_concept_via_publica(toy_vault, capsys):
     """La rama "ya existe" de write_concept_note también re-estampa (temas, D re-clasificar)."""
     seed_topic()

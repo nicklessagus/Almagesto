@@ -248,11 +248,15 @@ def stamp_excluded(slug: str, dest) -> bool:
     del apéndice quedó viejo; regenerar la nota entera con --force pisaría la síntesis LLM).
     Cirugía a nivel texto (familia stamp_fulltext): reemplaza SÓLO la sección estampada por
     máquina —del header del apéndice hasta la sección siguiente o el EOF—, la agrega al final
-    si la nota no la tenía, o la QUITA si ya no hay excluidos que mostrar. Nunca toca la prosa
-    LLM. Idempotente: sin cambios no reescribe. Devuelve True si modificó."""
+    si la nota no la tenía, o la QUITA si la corrida vigente ya no excluye nada. Nunca toca la
+    prosa LLM. Sin `build/<slug>/ads.json` NO hace nada (build/ es scratch — post-clone o
+    limpieza no hay con qué re-estampar, y quitar el apéndice destruiría el snapshot del
+    ingest). Idempotente: sin cambios no reescribe. Devuelve True si modificó."""
     if not dest.exists():
         return False
-    new = excluded_table(slug)                  # "" si no hay ads.json o no hay excluidos
+    if not (cfg.ROOT / "build" / slug / "ads.json").exists():
+        return False                            # sin corrida vigente: ni re-estampa ni quita
+    new = excluded_table(slug)                  # "" si la corrida no dejó excluidos
     text = dest.read_text(encoding="utf-8")
     start = text.find(EXCLUDED_HEADER)
     if start < 0:
