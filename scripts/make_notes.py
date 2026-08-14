@@ -219,14 +219,19 @@ def excluded_table(slug: str) -> str:
         # colapsar espacios/saltos, truncar y RECIÉN escapar (|, []) para no romper el link/tabla
         title = " ".join((r.get("title") or "(sin título)").split())[:70] \
             .replace("|", r"\|").replace("[", r"\[").replace("]", r"\]")
-        motivo = "sin tópico" if not r.get("topics") else f"doctype: {r.get('doctype')}"
+        # motivo REAL persistido por query_ads (`why_excluded`, #30 — cubre también la regla de
+        # combinación require/min_topics); fallback a la dicotomía del OR histórico para un
+        # ads.json viejo sin el campo (build/ es scratch: puede ser pre-#30)
+        motivo = r.get("why_excluded") or (
+            "sin tópico" if not r.get("topics") else f"doctype: {r.get('doctype')}")
         rows.append(f"| [{title}]({url}) | {r.get('year') or ''} | {r.get('citation_count') or 0} | {motivo} |")
     extra = len(out) - len(rows)
     tail = f"\n\n_(+ {extra} más excluidos por el filtro)_" if extra > 0 else ""
     return ("\n## Excluidos por el filtro (no-core · snapshot del ingest)\n"
-            "> Top por citas de lo que el clasificador dejó afuera (no matchea `relevance.topics` o "
-            "doctype ruido). **No se bajan ni se fichan** — esto es un puntero por las dudas. Si ves un "
-            "falso negativo, ajustá `relevance.topics` y re-ingestá con `--force`.\n\n"
+            "> Top por citas de lo que el clasificador dejó afuera (no matchea `relevance.topics`, "
+            "no cumple la regla de combinación `require`/`min_topics`, o doctype ruido). **No se bajan "
+            "ni se fichan** — esto es un puntero por las dudas. Si ves un falso negativo, ajustá "
+            "`relevance.topics` (o la regla de combinación) y re-ingestá con `--force`.\n\n"
             "| Paper | Año | Citas | Motivo |\n|---|---|---|---|\n"
             + "\n".join(rows) + tail + "\n")
 

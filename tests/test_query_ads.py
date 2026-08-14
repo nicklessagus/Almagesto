@@ -80,6 +80,35 @@ def test_classify_require_y_ruido_componen(toy_classifier, monkeypatch):
     assert rel is False                                   # matchea require pero es doctype ruido
 
 
+def test_exclusion_reason_motivos(toy_classifier, monkeypatch):
+    """#30: el motivo de exclusión se computa donde se decide (única implementación de la regla).
+    Un excluido por `require` con facetas matcheadas y doctype limpio NO se etiqueta por doctype
+    (el bug: el apéndice "Excluidos" decía `doctype: article`)."""
+    monkeypatch.setattr(qa, "REQUIRE_TOPICS", ["rv"])
+    assert qa.exclusion_reason([], "article") == "sin tópico"              # rótulo histórico
+    assert qa.exclusion_reason(["actividad"], "catalog") == "doctype: catalog"   # ídem
+    why = qa.exclusion_reason(["actividad"], "article")
+    assert "rv" in why and "require" in why and "doctype" not in why
+    assert qa.exclusion_reason(["rv"], "article") is None                  # core → sin motivo
+
+
+def test_exclusion_reason_min_topics(toy_classifier, monkeypatch):
+    monkeypatch.setattr(qa, "MIN_TOPICS", 2)
+    assert "min_topics=2" in qa.exclusion_reason(["rv"], "article")
+    assert qa.exclusion_reason(["rv", "actividad"], "article") is None
+
+
+def test_classify_coherente_con_exclusion_reason(toy_classifier, monkeypatch):
+    """`relevant` de classify ⟺ exclusion_reason None — no hay dos implementaciones de la regla."""
+    monkeypatch.setattr(qa, "REQUIRE_TOPICS", ["rv"])
+    for rec_, why_topics in [({"title": ["starspot activity"], "doctype": "article"}, ["actividad"]),
+                             ({"title": ["radial velocity"], "doctype": "article"}, ["rv"]),
+                             ({"title": ["asteroseismology"], "doctype": "article"}, [])]:
+        topics, rel = qa.classify(rec_)
+        assert topics == why_topics
+        assert rel is (qa.exclusion_reason(topics, rec_["doctype"]) is None)
+
+
 def test_combination_rule_defaults():
     """Sin declarar nada → (require=[], min_topics=1): el comportamiento histórico (≥1 faceta OR)."""
     assert qa.combination_rule({}, {"rv": None, "actividad": None}) == ([], 1)
@@ -178,6 +207,18 @@ def test_query_ads_mapea_campos(toy_classifier, ads_token, no_sleep, monkeypatch
     assert r["bibstem"] == "ApJ"
     assert r["arxiv_id"] == "2101.00001"
     assert r["topics"] == ["actividad"] and r["relevant"] is True
+    assert r["why_excluded"] is None          # core → sin motivo (#30)
+
+
+def test_query_ads_persiste_why_excluded(toy_classifier, ads_token, no_sleep, monkeypatch):
+    """#30: el registro no-core lleva su motivo REAL en ads.json — acá el caso que el fallback
+    viejo etiquetaba mal (facetas matcheadas + doctype limpio, excluido por `require`)."""
+    monkeypatch.setattr(qa, "REQUIRE_TOPICS", ["rv"])
+    doc = {"bibcode": "2020ApJ...2..2B", "title": ["Starspot survey"], "doctype": "article"}
+    monkeypatch.setattr(qa, "requests", SimpleNamespace(get=fake_get_seq([FakeResp(200, payload([doc]))])))
+    r = qa.query_ads("q", rows=10)[0]
+    assert r["relevant"] is False and r["topics"] == ["actividad"]
+    assert "require" in r["why_excluded"] and "doctype" not in r["why_excluded"]
 
 
 def test_query_ads_retry_429_luego_ok(toy_classifier, ads_token, no_sleep, monkeypatch):

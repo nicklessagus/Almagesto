@@ -150,6 +150,8 @@ def test_excluded_todo_core(toy_vault):
 
 
 def test_excluded_top_n_y_escapes(toy_vault):
+    """Los records acá NO traen `why_excluded` → cubre además el fallback legacy (#30): un
+    ads.json viejo sigue mostrando la dicotomía histórica sin tópico / doctype."""
     noncore = [rec(f"2020n....{i:02d}.nA", relevant=False, cites=i) for i in range(12)]
     noncore[11]["title"] = "Título con | pipe y [brackets] adentro que rompe tablas markdown"
     ruido = rec("2020ruid....1R", relevant=False, cites=100, doctype="catalog")
@@ -160,6 +162,18 @@ def test_excluded_top_n_y_escapes(toy_vault):
     assert "+ 3 más excluidos" in tabla
     assert r"\|" in tabla and r"\[brackets\]" in tabla
     assert "doctype: catalog" in tabla and "sin tópico" in tabla
+
+
+def test_excluded_motivo_regla_combinacion(toy_vault):
+    """Regresión #30: un excluido por require/min_topics (facetas matcheadas, doctype limpio)
+    muestra su motivo REAL persistido (`why_excluded`) — antes la tabla mentía `doctype: article`."""
+    r = rec("2020req....1..1R", relevant=False, cites=5)
+    r["topics"] = ["actividad"]
+    r["why_excluded"] = "sin faceta obligatoria (rv) — relevance.require"
+    ads_json([r])
+    tabla = mn.excluded_table("test_star")
+    assert "sin faceta obligatoria (rv)" in tabla
+    assert "doctype: article" not in tabla
 
 
 # ── write_star_note ──────────────────────────────────────────────────────────

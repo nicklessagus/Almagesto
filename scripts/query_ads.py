@@ -4,7 +4,8 @@ Uso:
     python query_ads.py <slug> [--rows N] [--no-chain] [--sweep]
 
 Escribe build/<slug>/ads.json con la lista de registros (bibcode, título, autores,
-año, abstract, arxiv_id, doctype, citation_count, topics, relevant, via) y, si la query directa
+año, abstract, arxiv_id, doctype, citation_count, topics, relevant, why_excluded —el motivo real
+de exclusión si es no-core; lo consume el apéndice "Excluidos" de make_notes—, via) y, si la query directa
 quedó truncada (numFound > --rows), la marca `truncated: {num_found, rows}` que el lint surface
 como corpus incompleto (si no truncó, `truncated: null`).
 
@@ -88,22 +89,37 @@ def combination_rule(rel: dict, topic_names) -> tuple[list[str], int]:
 REQUIRE_TOPICS, MIN_TOPICS = combination_rule(_REL, TOPIC_PATTERNS)
 
 
+def exclusion_reason(topics: list[str], doctype: str) -> str | None:
+    """Motivo por el que un paper queda FUERA del core (None = es core). ÚNICA implementación de
+    la regla de relevancia: `classify` deriva su booleano de acá y `query_ads` persiste el motivo
+    por registro en ads.json (`why_excluded`), del que lo lee el apéndice "Excluidos por el
+    filtro" (make_notes). Sin esto, la dicotomía vieja "sin tópico"/doctype etiquetaba con un
+    motivo FALSO (`doctype: article`) a los excluidos por la regla de combinación (#15) —
+    require/min_topics con facetas matcheadas y doctype limpio (#30). Precedencia: sin tópico →
+    doctype ruido → require → min_topics (las dos primeras preservan los rótulos históricos)."""
+    if not topics:
+        return "sin tópico"
+    if doctype in NOISE_DOCTYPES:
+        return f"doctype: {doctype}"
+    missing = [t for t in REQUIRE_TOPICS if t not in topics]
+    if missing:
+        return f"sin faceta obligatoria ({', '.join(missing)}) — relevance.require"
+    if len(topics) < MIN_TOPICS:
+        return f"sólo {len(topics)} faceta(s), min_topics={MIN_TOPICS}"
+    return None
+
+
 def classify(rec: dict) -> tuple[list[str], bool]:
-    """Devuelve (topics, relevant). Relevante si (a) matchea ≥ MIN_TOPICS facetas, (b) matchea TODAS
-    las de REQUIRE_TOPICS (AND) y (c) no es doctype ruido. Con los defaults (min_topics=1, require=[])
-    es el histórico ≥1 faceta cualquiera."""
+    """Devuelve (topics, relevant). Relevante ⟺ `exclusion_reason` no encuentra motivo de
+    exclusión (≥ MIN_TOPICS facetas, TODAS las de REQUIRE_TOPICS y doctype no-ruido; con los
+    defaults min_topics=1, require=[] es el histórico ≥1 faceta cualquiera)."""
     text = " ".join(filter(None, [
         " ".join(rec.get("title", []) or []),
         rec.get("abstract", "") or "",
         " ".join(rec.get("keyword", []) or []),
     ])).lower()
     topics = [t for t, pat in TOPIC_PATTERNS.items() if pat.search(text)]
-    doctype = rec.get("doctype", "")
-    matched = set(topics)
-    relevant = (len(topics) >= MIN_TOPICS
-                and matched.issuperset(REQUIRE_TOPICS)
-                and doctype not in NOISE_DOCTYPES)
-    return topics, relevant
+    return topics, exclusion_reason(topics, rec.get("doctype", "")) is None
 
 
 def extract_arxiv(identifiers: list[str]) -> str | None:
@@ -203,6 +219,7 @@ def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
     out = []
     for d in docs:
         topics, relevant = classify(d)
+        why = None if relevant else exclusion_reason(topics, d.get("doctype", ""))
         out.append({
             "bibcode": d.get("bibcode"),
             "title": (d.get("title") or [""])[0],
@@ -218,6 +235,7 @@ def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
             "keyword": d.get("keyword", []),
             "topics": topics,
             "relevant": relevant,
+            "why_excluded": why,   # motivo real de exclusión (None si core) → apéndice "Excluidos"
         })
     return out
 
@@ -268,6 +286,7 @@ def fetch_bibcodes(bibs: list[str]) -> list[dict]:
         q = " OR ".join(f'bibcode:"{b}"' for b in chunk)
         for r in query_ads(q, rows=len(chunk), quiet_truncate=True):
             r["relevant"] = True
+            r["why_excluded"] = None   # forzado core por el usuario: sin motivo de exclusión
             r["via"] = "manual"
             out.append(r)
         time.sleep(1.0)
