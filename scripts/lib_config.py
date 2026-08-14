@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 import yaml
@@ -49,6 +50,22 @@ GROUND_TRUTH = RAW / "ground_truth"
 # si cambia el header, cambia acá.
 FULLTEXT_OCR_MARK = "# Almagesto — fulltext por OCR"
 FULLTEXT_WEB_MARK = "# Almagesto — snapshot web"
+
+
+def snapshot_retrieved(path) -> str | None:
+    """Fecha `retrieved` (AAAA-MM-DD) del header de un snapshot web de fulltext/, o None si el
+    archivo no existe o no la trae. El header lo escribe fetch_web (FULLTEXT_WEB_MARK); el parser
+    vive acá —un solo lugar de verdad, como las marcas— porque lo comparten fetch_web (reuso de
+    la fecha al re-correr sin --force) y make_notes (#34: la nota debe estampar `accessed` = la
+    fecha del snapshot en disco, no la de hoy)."""
+    try:
+        for line in Path(path).read_text(encoding="utf-8", errors="replace").splitlines()[:8]:
+            m = re.match(r"retrieved\s*:\s*(\d{4}-\d{2}-\d{2})", line)
+            if m:
+                return m.group(1)
+    except OSError:
+        pass
+    return None
 
 STARS = WIKI / "stars"
 PAPERS = WIKI / "papers"

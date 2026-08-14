@@ -30,16 +30,16 @@ def test_clean_es_determinista():
     assert fw.clean_markdown(MD) == fw.clean_markdown(MD)
 
 
-# ── snapshot_date_of / CITEKEY_RE ────────────────────────────────────────────
+# ── snapshot_retrieved (parser en lib_config, #34) / CITEKEY_RE ──────────────
 
-def test_snapshot_date_of(tmp_path):
+def test_snapshot_retrieved(tmp_path):
     p = tmp_path / "s.txt"
     p.write_text("# header\nsource_url : http://x\nretrieved  : 2026-01-02 (UTC)\n", encoding="utf-8")
-    assert fw.snapshot_date_of(p) == "2026-01-02"
+    assert fw.cfg.snapshot_retrieved(p) == "2026-01-02"
     p2 = tmp_path / "no.txt"
     p2.write_text("sin fecha", encoding="utf-8")
-    assert fw.snapshot_date_of(p2) is None
-    assert fw.snapshot_date_of(tmp_path / "inexistente.txt") is None
+    assert fw.cfg.snapshot_retrieved(p2) is None
+    assert fw.cfg.snapshot_retrieved(tmp_path / "inexistente.txt") is None
 
 
 @pytest.mark.parametrize("key,ok", [

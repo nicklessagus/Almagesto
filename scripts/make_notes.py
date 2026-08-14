@@ -517,7 +517,8 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
     ingest_topic.py), en cuyo caso se linkea solo (así el chequeo PDF↔disco del lint no marca drift);
     `thesis_links` pre-sembrado al concept. Para fuentes web, `source_url` + `accessed` son la
     provenance bibliográfica (el "Retrieved <fecha>" de una cita web); `accessed` = la fecha del
-    snapshot (la pasa fetch_web.py; si es web y no se pasó, default = hoy UTC). El tag distingue el
+    snapshot (la pasa fetch_web.py; si es web y no se pasó, se reusa la `retrieved` del snapshot
+    en disco y, sólo si no hay, hoy UTC — #34). El tag distingue el
     tipo de fuente: `web` = snapshot de URL; `local-pdf` = PDF provisto (off-ADS).
 
     `pending` (fallback fuentes no-conseguibles): la fuente todavía NO se pudo obtener —
@@ -542,8 +543,13 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
         print(f"  papers: {dest.name} ya existe (no se pisa sin --force)")
         return False
     bibstem = venue or (urlparse(url).netloc if url else None)   # venue: dominio web por default
-    if accessed is None and url and not pending:                 # fuente web sin fecha explícita → hoy
-        accessed = datetime.now(timezone.utc).strftime("%Y-%m-%d")   # (pending: sin snapshot → null)
+    if accessed is None and url and not pending:
+        # fuente web sin fecha explícita: reusar la `retrieved` del snapshot en disco (#34 — la
+        # nota debe coincidir con el .txt; el flujo "sin Node" del skill guarda el snapshot a mano
+        # y stubbea después) y recién si no hay snapshot, hoy UTC. (pending: sin snapshot → null)
+        snap = (cfg.FULLTEXT / slug / f"{safe_name(citekey)}.txt") if slug else None
+        accessed = ((cfg.snapshot_retrieved(snap) if snap and snap.exists() else None)
+                    or datetime.now(timezone.utc).strftime("%Y-%m-%d"))
     # PDF↔disco: si el PDF off-ADS ya está copiado a raw/pdfs/<slug>/, linkearlo (verdad de disco)
     pdf_rel = None
     if slug and (cfg.PDFS / slug / f"{safe_name(citekey)}.pdf").exists():
@@ -623,6 +629,8 @@ def main() -> int:
     ap.add_argument("--n-authors", dest="n_authors", help="(--web) cantidad de autores")
     ap.add_argument("--doi", help="(--web) DOI de la fuente, si existe (habilita check_retractions)")
     ap.add_argument("--venue", help="(--web) venue/bibstem (default: dominio de --url)")
+    ap.add_argument("--accessed", help="(--web) fecha del snapshot AAAA-MM-DD (default: la "
+                                       "`retrieved` del .txt en disco; si no hay, hoy UTC)")
     ap.add_argument("--pending", choices=["paywall", "scan", "unextractable"],
                     help="(--web) fuente aún no conseguible: estampa pending_source y deriva al usuario")
     args = ap.parse_args()
@@ -630,8 +638,8 @@ def main() -> int:
     if args.web:
         write_web_paper_note(args.slug, url=args.url, slug=args.slug_hint, concept=args.concept,
                              title=args.title, first_author=args.author, year=args.year,
-                             n_authors=args.n_authors, doi=args.doi,
-                             venue=args.venue, pending=args.pending, force=args.force)
+                             n_authors=args.n_authors, doi=args.doi, venue=args.venue,
+                             accessed=args.accessed, pending=args.pending, force=args.force)
         return 0
 
     print(f"Generando notas para {args.slug}")

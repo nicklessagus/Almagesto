@@ -65,6 +65,28 @@ def test_parse_year_tolerante(capsys):
     assert mn.parse_int(None, "n_authors") is None
 
 
+def test_web_note_accessed_reusa_retrieved_del_snapshot(toy_vault):
+    """Regresión #34: con un snapshot ya en disco (flujo "sin Node": guardado a mano y stubbeado
+    con make_notes --web), `accessed` debe ser la fecha `retrieved` del .txt — no la de hoy."""
+    d = cfg.FULLTEXT / "gp"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "2020Smith.txt").write_text(
+        f"{cfg.FULLTEXT_WEB_MARK} (off-ADS)\nsource_url : https://x\nretrieved  : 2024-05-01 (UTC)\n",
+        encoding="utf-8")
+    assert mn.write_web_paper_note("2020Smith", slug="gp", url="https://x") is True
+    fm = read_fm(cfg.PAPERS / "2020Smith.md")
+    assert fm["accessed"] == "2024-05-01"
+    assert fm["fulltext_source"] == "web"            # de paso: nace con el contrato completo
+
+
+def test_web_note_accessed_hoy_si_no_hay_snapshot(toy_vault):
+    """Sin snapshot en disco, el default sigue siendo hoy UTC (comportamiento histórico)."""
+    from datetime import datetime, timezone
+    assert mn.write_web_paper_note("2021Doe", slug="gp", url="https://y") is True
+    fm = read_fm(cfg.PAPERS / "2021Doe.md")
+    assert fm["accessed"] == datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
 def test_web_note_year_no_numerico_no_crashea(toy_vault):
     """Regresión (hallazgo 2): '--year \"in press\"' creaba un ValueError crudo."""
     assert mn.write_web_paper_note("2020Smith", slug="gp", url="https://x",

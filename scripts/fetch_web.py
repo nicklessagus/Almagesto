@@ -58,19 +58,6 @@ def clean_markdown(md: str) -> tuple[str, int]:
     return md.strip() + "\n", removed
 
 
-def snapshot_date_of(path) -> str | None:
-    """Fecha `retrieved` del header de un snapshot ya existente, para que la nota coincida con el .txt
-    (si se re-corre sin --force y el .txt es viejo, la nota usa la fecha original, no la de hoy)."""
-    try:
-        for line in path.read_text(encoding="utf-8").splitlines()[:8]:
-            m = re.match(r"retrieved\s*:\s*(\d{4}-\d{2}-\d{2})", line)
-            if m:
-                return m.group(1)
-    except OSError:
-        pass
-    return None
-
-
 def defuddle_version() -> str:
     """Versión del paquete defuddle (para provenance en el header); 'desconocida' si no se puede."""
     try:
@@ -129,7 +116,9 @@ def main() -> int:
     # fecha del snapshot (UTC): la comparte el .txt y la nota. Si el .txt ya existe, se reusa la suya.
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     if out.exists() and not args.force:
-        stamp = snapshot_date_of(out) or stamp
+        # la nota coincide con el .txt: si el snapshot es viejo, vale su fecha original, no hoy
+        # (parser en lib_config — un solo lugar de verdad del header; lo comparte make_notes)
+        stamp = cfg.snapshot_retrieved(out) or stamp
         print(f"{args.citekey}: ya existe {out} (usá --force para re-bajar)")
     else:
         print(f"  defuddle ← {args.url}")
