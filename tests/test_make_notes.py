@@ -198,6 +198,57 @@ def test_excluded_motivo_regla_combinacion(toy_vault):
     assert "doctype: article" not in tabla
 
 
+# ── stamp_excluded (re-estampado quirúrgico del apéndice, #35) ───────────────
+
+def test_stamp_excluded_refresca_sin_tocar_la_sintesis(toy_vault):
+    """Regresión #35 (maintain D, re-clasificar): make_notes sin --force sobre una ficha
+    existente re-estampa SÓLO el apéndice máquina con el ads.json vigente — la prosa LLM
+    queda byte a byte."""
+    ads_json([rec("2020vieja...1V", relevant=False, cites=3, title="Excluida vieja")])
+    mn.write_star_note("test_star", force=False)
+    dest = cfg.STARS / "test_star.md"
+    text = dest.read_text(encoding="utf-8").replace(
+        "_(síntesis por LLM:", "Síntesis LLM valiosa que NO debe tocarse. _(síntesis por LLM:")
+    dest.write_text(text, encoding="utf-8")
+    # cambió la regla → re-clasificación regeneró ads.json con otra excluida y otro motivo
+    r = rec("2021nueva...1N", relevant=False, cites=9, title="Excluida nueva")
+    r["topics"] = ["actividad"]
+    r["why_excluded"] = "sin faceta obligatoria (rv) — relevance.require"
+    ads_json([r])
+    mn.write_star_note("test_star", force=False)          # la vía pública: sin --force
+    out = dest.read_text(encoding="utf-8")
+    assert "Excluida nueva" in out and "sin faceta obligatoria (rv)" in out
+    assert "Excluida vieja" not in out
+    assert "Síntesis LLM valiosa que NO debe tocarse." in out
+    assert out.count("## Excluidos por el filtro") == 1
+
+
+def test_stamp_excluded_agrega_y_quita(toy_vault):
+    """El apéndice se agrega si la nota no lo tenía (no había ads.json al crearla) y se QUITA
+    si ya no hay excluidos; sin cambios, no reescribe (idempotente)."""
+    mn.write_star_note("test_star", force=False)          # sin ads.json → sin apéndice
+    dest = cfg.STARS / "test_star.md"
+    assert "## Excluidos por el filtro" not in dest.read_text(encoding="utf-8")
+    ads_json([rec("2020noc....1..1N", relevant=False)])
+    assert mn.stamp_excluded("test_star", dest) is True   # ahora hay excluidos → se agrega
+    assert "## Excluidos por el filtro" in dest.read_text(encoding="utf-8")
+    assert mn.stamp_excluded("test_star", dest) is False  # idempotente
+    ads_json([rec("2020core...1..1C", relevant=True)])    # re-clasificación: todo core
+    assert mn.stamp_excluded("test_star", dest) is True
+    assert "## Excluidos por el filtro" not in dest.read_text(encoding="utf-8")
+
+
+def test_stamp_excluded_concept_via_publica(toy_vault, capsys):
+    """La rama "ya existe" de write_concept_note también re-estampa (temas, D re-clasificar)."""
+    seed_topic()
+    mn.write_concept_note("gp", force=False)
+    ads_json([rec("2020exc....1..1X", relevant=False, title="Fuera del corte")], slug="gp")
+    mn.write_concept_note("gp", force=False)
+    out = (cfg.CONCEPTS / "methods" / "gaussian-processes.md").read_text(encoding="utf-8")
+    assert "Fuera del corte" in out
+    assert "re-estampado" in capsys.readouterr().out
+
+
 # ── write_star_note ──────────────────────────────────────────────────────────
 
 def test_star_note_desde_ground_truth(toy_vault, capsys):

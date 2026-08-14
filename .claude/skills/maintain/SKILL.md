@@ -1,7 +1,7 @@
 ---
 name: maintain
 description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), resolver el backlog del lint (huérfanos, P_rot faltante, drift PDF↔disco, claims stale), y la pasada periódica de retracciones sobre toda la bóveda ("chequeá retracciones").
-version: 1.3.0
+version: 1.3.1
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
@@ -72,8 +72,10 @@ p. ej. volviste obligatoria la faceta del eje para frenar el ruido del chaining)
 2. **Papers que dejaron de ser core:** decidir con el usuario — dejar la nota marcada (`relevance: low`)
    o borrarla (sub-modo B). No borrar en silencio.
 3. **Papers que ahora sí son core:** ingestarlos (extracción LLM) como en un refresh (sub-modo A).
-4. **Regenerar el apéndice "Excluidos por el filtro"** de las fichas (cambió el corte) — `make_notes`
-   lo re-estampa; revisá que refleje la regla nueva.
+4. **Regenerar el apéndice "Excluidos por el filtro"** de las fichas (cambió el corte): re-correr
+   `python scripts/make_notes.py <slug>` (temas: `--topic <slug>`) **sin `--force`** — re-estampa
+   quirúrgicamente sólo el apéndice máquina con el `ads.json` nuevo (motivo real de exclusión
+   incluido; la síntesis LLM no se toca). Revisá que refleje la regla nueva.
 5. Cierre: verify (si tocaste prosa) → lint → `log` (qué se re-clasificó) → commit → preguntar push.
 
 ## E. Resolver el backlog del lint

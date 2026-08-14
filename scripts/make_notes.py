@@ -6,9 +6,12 @@ Uso:
 - stars/<slug>.md  : ficha índice de la estrella (frontmatter máquina-legible + Dataview).
 - papers/<bibcode>.md : una nota por paper relevante (metadata + abstract + placeholders LLM).
 
-Idempotente: NO pisa notas existentes (protege la extracción LLM) salvo --force. Única
-excepción (add-only, no destructiva): en una nota de paper que ya existía, mergea los seeds
-del ingest actual (`stars` / `thesis_links`) si faltan — retro-linkeo, ver merge_frontmatter_list.
+Idempotente: NO pisa notas existentes (protege la extracción LLM) salvo --force. Dos
+excepciones quirúrgicas, nunca sobre la extracción LLM: (a) add-only, en una nota de paper
+que ya existía mergea los seeds del ingest actual (`stars` / `thesis_links`) si faltan —
+retro-linkeo, ver merge_frontmatter_list; (b) en una ficha/concept que ya existía re-estampa
+el apéndice máquina "## Excluidos por el filtro" con el ads.json vigente — ver stamp_excluded
+(#35: el sub-modo re-clasificar de maintain lo necesita sin pisar la síntesis).
 """
 from __future__ import annotations
 
@@ -236,11 +239,44 @@ def excluded_table(slug: str) -> str:
             + "\n".join(rows) + tail + "\n")
 
 
+EXCLUDED_HEADER = "\n## Excluidos por el filtro"
+
+
+def stamp_excluded(slug: str, dest) -> bool:
+    """Re-estampa el apéndice "Excluidos por el filtro" de una ficha/concept EXISTENTE con el
+    ads.json vigente (#35 — sub-modo re-clasificar de maintain: cambió la regla y el snapshot
+    del apéndice quedó viejo; regenerar la nota entera con --force pisaría la síntesis LLM).
+    Cirugía a nivel texto (familia stamp_fulltext): reemplaza SÓLO la sección estampada por
+    máquina —del header del apéndice hasta la sección siguiente o el EOF—, la agrega al final
+    si la nota no la tenía, o la QUITA si ya no hay excluidos que mostrar. Nunca toca la prosa
+    LLM. Idempotente: sin cambios no reescribe. Devuelve True si modificó."""
+    if not dest.exists():
+        return False
+    new = excluded_table(slug)                  # "" si no hay ads.json o no hay excluidos
+    text = dest.read_text(encoding="utf-8")
+    start = text.find(EXCLUDED_HEADER)
+    if start < 0:
+        if not new:
+            return False
+        out = text.rstrip("\n") + "\n" + new
+    else:
+        nxt = text.find("\n## ", start + 1)
+        end = len(text) if nxt < 0 else nxt
+        out = text[:start] + new.rstrip("\n") + ("\n" if new else "") + text[end:]
+    if out == text:
+        return False
+    dest.write_text(out, encoding="utf-8")
+    return True
+
+
 def write_star_note(slug: str, force: bool) -> None:
     name, meta = cfg.star_by_slug(slug)
     dest = cfg.STARS / f"{slug}.md"
     if dest.exists() and not force:
-        print(f"  star: {dest.name} ya existe (usa --force para regenerar)")
+        # la nota no se pisa; sólo se refresca el apéndice máquina con el ads.json vigente (#35)
+        stamped = stamp_excluded(slug, dest)
+        print(f"  star: {dest.name} ya existe"
+              + (" — apéndice Excluidos re-estampado" if stamped else " (usa --force para regenerar)"))
         return
     gt_file = cfg.GROUND_TRUTH / f"{slug}.json"
     gt = json.loads(gt_file.read_text(encoding="utf-8")) if gt_file.exists() else {"host": {}, "planets": []}
@@ -336,7 +372,11 @@ def write_concept_note(slug: str, force: bool) -> None:
               f"Si es un typo, corregí topics.yaml; si es un área nueva, agregala a la lista. Creo igual.")
     dest = cfg.CONCEPTS / area / f"{concept}.md"
     if dest.exists() and not force:
-        print(f"  concept: {area}/{concept}.md ya existe (no se pisa sin --force; los papers enganchan por thesis_links)")
+        # la síntesis no se pisa; sólo se refresca el apéndice máquina con el ads.json vigente (#35)
+        stamped = stamp_excluded(slug, dest)
+        print(f"  concept: {area}/{concept}.md ya existe"
+              + (" — apéndice Excluidos re-estampado" if stamped
+                 else " (no se pisa sin --force; los papers enganchan por thesis_links)"))
         return
     dest.parent.mkdir(parents=True, exist_ok=True)
     front = {"name": meta.get("title", concept)}
