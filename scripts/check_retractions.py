@@ -236,8 +236,8 @@ def main() -> int:
             continue
         doi, title = fm.get("doi"), fm.get("title") or ""
         retraction, soft = (crossref_retraction(doi, headers) if doi else (None, []))
-        checked += 1
         if doi:
+            checked += 1      # sólo los consultados de verdad (los sin DOI van por prefijo de título)
             time.sleep(0.2)   # cortesía con Crossref
         # fallback offline por título para papers sin DOI (o que Crossref no marcó)
         if retraction is None and title_says_retracted(title):

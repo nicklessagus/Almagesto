@@ -1,7 +1,7 @@
 ---
 name: test-hypothesis
 description: Usar cuando el usuario plantea una hipótesis/supuesto y pide evidencia a favor o en contra en el corpus de la bóveda ("hipótesis: ...", "buscá evidencia que apoye o rechace que ...", "¿el corpus sostiene que ...?", "guardá como hipótesis que ..."). Testea contra el texto completo y responde con veredicto citado; archiva la hipótesis y taggea papers SÓLO si el usuario lo pide.
-version: 1.1.0
+version: 1.1.1
 ---
 
 # Test de hipótesis contra el corpus
@@ -49,7 +49,9 @@ Los pasos 4–9 corren **sólo si el usuario pide archivar**:
    (supports/challenges) de cada paper debe reflejar lo que el texto **realmente** dice.
 
 8. **Chequeo de salud**: correr `python scripts/lint.py` antes de commitear. Debe quedar en **0**
-   para wikilinks rotos, huérfanas, contradicciones y `thesis_links` sin página destino; la **fuga de
+   en las categorías bloqueantes (wikilinks rotos, frontmatter no parseable, papers retractados,
+   huérfanas, contradicciones GT↔ficha, masa inconsistente, `thesis_links`/`disputes[].ref`
+   colgantes — el exit code las separa solo); la **fuga de
    implementación** y las **citas no verificables** son WARN a revisar a mano (los "campos incompletos" son backlog). Ojo con el tag del nuevo
    `thesis_link`: tiene que matchear el nombre de la página de hipótesis (typo típico: guion vs guion_bajo).
 

@@ -1,7 +1,7 @@
 ---
 name: verify-citations
 description: Usar para verificar, afirmación por afirmación, que las citas [[bibcode]] de una nota de la wiki (query, hipótesis, ficha, concepto) realmente están respaldadas por el texto completo de la fuente. Se corre como paso de cierre al armar/editar una query o hipótesis, o cuando el usuario pide "rechequeá las citas / ¿esto lo dice el paper?". Implementa el chequeo claim↔evidencia (pipeline tipo CiteAudit) sobre el corpus cerrado de la bóveda. Veredictos: soportada / parcial / no-soportada (la fuente calla) / contradice (la fuente afirma lo contrario → candidata a disputa, no sólo cita rota).
-version: 1.3.1
+version: 1.3.2
 ---
 
 # Verify-citations — chequeo claim↔evidencia contra el fulltext
@@ -35,7 +35,10 @@ plenamente respaldadas). Acá cada afirmación se contrasta contra el texto real
 > esa afirmación en vez de declararla `no-soportada`/`contradice`.
 
 ## Cuándo correrlo
-- **Paso de cierre obligatorio** de `query-corpus` y `test-hypothesis`, **antes de archivar/commitear**.
+- **Paso de cierre obligatorio de toda operación que escriba prosa con `[[bibcode]]`** (regla de
+  `CLAUDE.md`), **antes de lint/commit**: `ingest-star` (ficha + papers, paso 5b), `ingest-topic`
+  (concept + papers, paso 6b), `append-knowledge` (paso 5), `find-contradictions` (paso 5, las
+  disputas nuevas), y `query-corpus` / `test-hypothesis` cuando archivan.
 - A pedido: "rechequeá las citas", "¿esto lo dice el paper?", al editar una nota con citas.
 
 ## Entrada

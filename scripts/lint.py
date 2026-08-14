@@ -31,7 +31,7 @@ incompletos (P_rot null, papers relevantes sin `methods`, `thesis_links` sin `be
 No modifica nada: reporta para que el agente/usuario decida.
 
 Exit code: 1 si alguna categoría BLOQUEANTE tiene hits (wikilinks rotos, frontmatter no parseable,
-huérfanas, contradicciones
+papers retractados, huérfanas, contradicciones
 GT↔ficha, masa inconsistente, thesis_links/disputes colgantes — las que CLAUDE.md exige "en 0");
 0 si sólo hay WARN/backlog. Gateable en pre-commit/CI.
 """
@@ -361,7 +361,7 @@ def main() -> int:
                          ("Ground-truth: masa inconsistente con m·sini (K,P,e,M*)", mass_issues),
                          ("thesis_links sin página destino", dangling_thesis),
                          ("disputes[].ref sin paper destino", dangling_disputes),
-                         ("⛔ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)", impl_leaks),
+                         ("⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)", impl_leaks),
                          ("Objetivo sin instanciar (WARN — objective.yaml sigue en el placeholder del template)", objective_warn),
                          ("Áreas de concepts/ no declaradas en objective.yaml (WARN, posible typo)", undeclared_areas),
                          ("Obsidian en la raíz del repo (WARN — la bóveda se abre en vault/)", root_obsidian),

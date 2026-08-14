@@ -363,13 +363,17 @@ igual; el lint marca las carpetas fuera de la lista). El **objetivo sin instanci
 sigue siendo el placeholder del template, `<definir con el skill setup>`) es **WARN**: la bóveda estaría
 clasificando "core" con la regex del ejemplo — correr el skill `setup`. El **PDF ↔ disco** es **WARN/higiene**: marca un paper
 cuyo campo `pdf` no refleja el PDF real — está bajado en `vault/raw/pdfs/<slug>/<bibcode>.pdf` pero el
-frontmatter quedó `null` (drift, hay que linkearlo) o apunta a un archivo inexistente (puntero roto). Las **citas no verificables** (bibcode citado en query/concepto/hipótesis sin su `.txt` en
+frontmatter quedó `null` (drift, hay que linkearlo) o apunta a un archivo inexistente (puntero roto).
+Un **`.obsidian/` en la raíz del repo** es **WARN** (la bóveda se abrió mal: el grafo indexa el
+andamiaje — abrir la carpeta `vault/` como vault y borrar ese directorio). Las **citas no verificables** (bibcode citado en query/concepto/hipótesis sin su `.txt` en
 `vault/raw/fulltext/`) se listan como precondición de `verify-citations`; ídem las **fuentes
 pendientes** (`pending_source` en una nota de paper: fuente no conseguida —paywall/escaneo/mojibake—
 derivada al usuario con su puntero doi/url) y el **fulltext ilegible** (un `.txt` que no pasa el
 umbral determinista de legibilidad — mojibake o escaneo sin capa de texto: existe pero no sirve para
 grep ni verify; rescate: PDF sano, OCR, o marcar `pending`). La **cobertura** (concepto/hipótesis
-sin ninguna cita `[[bibcode]]` → afirma sin fuente) es **backlog** que el lint surface para ir citando.
+sin ninguna cita `[[bibcode]]` → afirma sin fuente) es **backlog** que el lint surface para ir citando;
+ídem la **cobertura de verificación** (query/concepto **con** citas pero **sin** bloque
+`## Verificación de citas` → nunca pasó por `verify-citations`: correr el skill).
 El **corpus truncado** (un `build/<slug>/ads.json` con `truncated` seteado → la query directa trajo
 menos papers de los que ADS reporta: al sujeto le falta cola) es **backlog** — `query_ads` persiste la
 marca (default `--rows 2000`, ≈ el máximo de una request; re-ingestar con `--rows` mayor para cubrir la

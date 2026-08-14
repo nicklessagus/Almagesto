@@ -1,7 +1,7 @@
 ---
 name: maintain
 description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), resolver el backlog del lint (huérfanos, P_rot faltante, drift PDF↔disco, claims stale), y la pasada periódica de retracciones sobre toda la bóveda ("chequeá retracciones").
-version: 1.3.1
+version: 1.3.2
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
@@ -67,8 +67,8 @@ cierra con **verify-citations** (si tocó prosa con `[[bibcode]]`) + **lint en 0
 Cuando editaste `objective.yaml` (vía `setup`) y el corte core/no-core cambió — sea porque tocaste
 `relevance.topics` (las regex) **o** la **regla de combinación** (`relevance.require` / `min_topics`;
 p. ej. volviste obligatoria la faceta del eje para frenar el ruido del chaining):
-1. Re-correr `python query_ads.py <slug>` para cada estrella/tema afectado → re-clasifica con la regla
-   nueva (regenera `build/<slug>/ads.json`).
+1. Re-correr `python query_ads.py <slug>` (temas: `python query_ads.py <slug> --topic`) para cada
+   estrella/tema afectado → re-clasifica con la regla nueva (regenera `build/<slug>/ads.json`).
 2. **Papers que dejaron de ser core:** decidir con el usuario — dejar la nota marcada (`relevance: low`)
    o borrarla (sub-modo B). No borrar en silencio.
 3. **Papers que ahora sí son core:** ingestarlos (extracción LLM) como en un refresh (sub-modo A).

@@ -1,7 +1,7 @@
 ---
 name: query-corpus
 description: Usar cuando el usuario hace una búsqueda o pregunta general contra el corpus de la bóveda que NO es un test de hipótesis ("buscá en el corpus ...", "qué se sabe del P_rot de GJ 581", "qué papers usan ESPRESSO", "qué métodos se aplicaron a tau Ceti", "qué celdas de la matriz están vacías").
-version: 1.1.0
+version: 1.1.1
 ---
 
 # Query: búsqueda/pregunta general contra el corpus
@@ -38,8 +38,10 @@ usar `test-hypothesis`).
    `inferencia`) y dejar el bloque `## Verificación de citas` en la nota.
 
 6. **Chequeo de salud (si se escribió en `vault/wiki/`)**: correr `python scripts/lint.py` antes de
-   commitear. Debe quedar en **0** para wikilinks rotos, huérfanas, contradicciones y
-   `thesis_links` sin página destino; la **fuga de implementación** y las **citas no verificables** son
+   commitear. Debe quedar en **0** en las categorías bloqueantes (wikilinks rotos, frontmatter no
+   parseable, papers retractados, huérfanas, contradicciones GT↔ficha, masa inconsistente,
+   `thesis_links`/`disputes[].ref` colgantes — el exit code del lint las separa solo); la **fuga de
+   implementación** y las **citas no verificables** son
    WARN/precondición a revisar a mano (los "campos incompletos" son backlog, no bloquean). Si creaste un `thesis_link`/concepto nuevo, verificá que el tag matchee el
    nombre de la página (typo típico: `shift-vs-shape` vs `shift_vs_shape`).
 
