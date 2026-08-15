@@ -26,7 +26,8 @@ con el skill `verify-citations`), **cobertura** (concepto/hipótesis sin ninguna
 afirmaciones no chequeables; backlog), **cobertura de verificación** (query/concepto CON citas pero
 SIN bloque `## Verificación de citas` → nunca pasó por verify-citations; backlog ALCE-adjacent),
 **corpus truncado** (un `build/<slug>/ads.json` con `truncated` seteado → la query directa trajo
-menos papers de los que ADS reporta: al sujeto le falta cola; backlog), y campos clave
+menos papers de los que ADS reporta: al sujeto le falta cola; ídem `truncated_glyph`, el superset
+del rescate por glifo (#28/#43) cortado por citas ANTES del filtro; backlog), y campos clave
 incompletos (P_rot null, papers relevantes sin `methods`, `thesis_links` sin `bearing`).
 No modifica nada: reporta para que el agente/usuario decida.
 
@@ -331,18 +332,27 @@ def main() -> int:
     # falta cola. El aviso vivía sólo en el stdout de la corrida (que nadie guarda); persistirlo en
     # ads.json y surfacearlo acá convierte un fallo silencioso en backlog visible (#17). build/ es
     # scratch: si no está, no hay nada que reportar (el censo de bóvedas pre-registro es otro modo).
+    # `truncated_glyph` (#43) es la marca hermana pero del RESCATE POR GLIFO (#28): ahí el corte
+    # top-por-citas pasa ANTES del filtro client-side — la cola puede esconder papers del sujeto
+    # (los que escriben `∊ Eri` no son los más citados) → cobertura incompleta del rescate.
     truncated_corpora = []
     for aj in sorted(glob.glob(str(cfg.ROOT / "build" / "*" / "ads.json"))):
         try:
             data = json.loads(open(aj, encoding="utf-8").read())
         except (ValueError, OSError):
             continue
+        slug = data.get("slug") or Path(aj).parent.name
         t = data.get("truncated")
         if t:
-            slug = data.get("slug") or Path(aj).parent.name
             truncated_corpora.append(
                 (slug, f"ADS reporta {t.get('num_found')} y se trajeron {t.get('rows')} → corpus "
                        f"incompleto; re-ingestá con --rows mayor (o paginá) para cubrir la cola"))
+        for tg in data.get("truncated_glyph") or []:
+            consts = "/".join(tg.get("constellations") or []) or tg.get("letter") or "?"
+            truncated_corpora.append(
+                (slug, f"rescate por glifo incompleto: el superset de {consts} reporta "
+                       f"{tg.get('num_found')} y se escanearon {tg.get('rows')} (top por citas, "
+                       f"antes del filtro) → re-ingestá con --rows mayor"))
 
     # reporte
     lines = [f"# Lint de la bóveda — {dt.date.today().isoformat()}", ""]

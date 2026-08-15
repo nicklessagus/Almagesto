@@ -213,8 +213,8 @@ def test_main_rescate_glifo_siembra_el_chaining(toy_vault, toy_classifier, no_sl
                         lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
                         [rec("2020dirA....1A")])
     monkeypatch.setattr(qa, "glyph_rescue",
-                        lambda names, rows: [dict(rec("2000ApJ...544L.145H"), via="glyph"),
-                                             dict(rec("2020dirA....1A"), via="glyph")])  # dup → afuera
+                        lambda names, rows, meta=None: [dict(rec("2000ApJ...544L.145H"), via="glyph"),
+                                                        dict(rec("2020dirA....1A"), via="glyph")])  # dup → afuera
     sembrados = {}
     def fake_chain(bibs, rows, filt):
         sembrados["core"] = list(bibs)
@@ -225,6 +225,50 @@ def test_main_rescate_glifo_siembra_el_chaining(toy_vault, toy_classifier, no_sl
     data = json.loads((toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text())
     bibs = {r["bibcode"]: r["via"] for r in data["records"]}
     assert bibs == {"2020dirA....1A": "query", "2000ApJ...544L.145H": "glyph"}
+    assert data["truncated_glyph"] is None       # el superset no truncó (mock no llena meta) (#43)
+
+
+def test_glyph_rescue_marca_truncamiento_del_superset(toy_classifier, ads_token, no_sleep,
+                                                      monkeypatch, capsys):
+    """#43: si el superset de la constelación supera `rows`, el corte top-por-citas pasa ANTES del
+    filtro por glifo → rescate incompleto. La marca va a `meta["truncated_glyph"]` (para persistir
+    en ads.json) y el warning genérico de query_ads se silencia: hablaría de la marca de la query
+    DIRECTA, que acá no se llena — el aviso mentiría (visto en ε Eri: warning en stdout,
+    `truncated: null` en disco)."""
+    docs = [{"bibcode": "2000ApJ...544L.145H", "title": ["Planet Orbiting ∊ Eridani"],
+             "abstract": "radial velocity", "doctype": "article"}]
+    monkeypatch.setattr(qa, "requests", SimpleNamespace(
+        get=lambda url, headers=None, params=None, timeout=None:
+        FakeResp(200, payload(docs, num_found=2342))))
+    meta = {}
+    out = qa.glyph_rescue(["eps Eridani", "ε Eri"], rows=100, meta=meta)
+    assert [r["bibcode"] for r in out] == ["2000ApJ...544L.145H"]
+    assert meta["truncated_glyph"] == [{"letter": "epsilon", "constellations": ["Eri", "Eridani"],
+                                        "num_found": 2342, "rows": 100}]
+    assert "truncado" not in capsys.readouterr().out     # el warning genérico no se imprime
+
+
+def test_main_persiste_truncado_glifo(toy_vault, toy_classifier, no_sleep, monkeypatch, capsys):
+    """#43: main persiste `truncated_glyph` en ads.json (marca HERMANA de `truncated`, pero del
+    superset del rescate) y avisa en stdout — el lint la surface como rescate incompleto."""
+    stars = {"eps Eridani": {"slug": "test_star", "simbad": "s", "ads_object": "eps Eridani",
+                             "aliases": ["ε Eri"]}}
+    write_yaml(cfg.STARS_YAML, stars)
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        [rec("2020dirA....1A")])
+    marca = [{"letter": "epsilon", "constellations": ["Eri", "Eridani"],
+              "num_found": 2342, "rows": 2000}]
+    def fake_glyph(names, rows, meta=None):
+        if meta is not None:
+            meta["truncated_glyph"] = list(marca)
+        return []
+    monkeypatch.setattr(qa, "glyph_rescue", fake_glyph)
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    data = json.loads((toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text())
+    assert data["truncated"] is None and data["truncated_glyph"] == marca
+    assert "rescate por glifo incompleto" in capsys.readouterr().out
 
 
 def test_main_no_glyph_desactiva(toy_vault, toy_classifier, no_sleep, monkeypatch):

@@ -340,6 +340,22 @@ def test_corpus_truncado_surface_backlog(toy_vault, capsys):
     assert "Corpus truncado" in out and "au_mic" in out and "410" in out
 
 
+def test_rescate_glifo_truncado_surface_backlog(toy_vault, capsys):
+    """#43: `truncated_glyph` en ads.json (el superset del rescate por glifo se cortó por citas
+    ANTES del filtro client-side) → backlog, distinguible del truncamiento de la query directa."""
+    d = toy_vault.ROOT / "build" / "eps_eridani"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "ads.json").write_text(json.dumps(
+        {"kind": "star", "slug": "eps_eridani", "truncated": None,
+         "truncated_glyph": [{"letter": "epsilon", "constellations": ["Eri", "Eridani"],
+                              "num_found": 2342, "rows": 2000}],
+         "records": []}), encoding="utf-8")
+    rc, out = run_lint(capsys)
+    assert rc == 0                                     # backlog, no bloqueante
+    assert "rescate por glifo incompleto" in out and "eps_eridani" in out
+    assert "Eri/Eridani" in out and "2342" in out
+
+
 def test_corpus_no_truncado_no_reporta(toy_vault, capsys):
     """ads.json con `truncated: null` (no truncó) o sin la clave (ads.json viejo) → nada que reportar."""
     for slug, payload in (("hd40307", {"slug": "hd40307", "truncated": None, "records": []}),

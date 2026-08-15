@@ -59,6 +59,9 @@ la constelación y `title:"epsilon Eridani"` no los ve nunca (medido en ε Eri: 
 incluido el descubrimiento). Tras la query directa se trae el superset de la constelación y se filtra
 **client-side** por el glifo pegado al nombre (`via: glyph`); corre antes del chaining, así lo
 recuperado siembra el grafo. Sólo aplica si el nombre/alias es Bayer; se desactiva con `--no-glyph`.
+Si el superset supera `--rows` el corte top-por-citas pasa **antes** del filtro por glifo — justo
+donde vive la señal—: el truncamiento queda marcado aparte (`truncated_glyph` en ads.json, distinto
+del `truncated` de la query directa) y el lint lo surface como rescate incompleto (#43).
 
 **Cero espurio (#27):** la query DIRECTA de un sujeto corre con `expect_hits` — ADS devuelve
 intermitentemente `numFound: 0` con HTTP 200; se reintenta con el mismo backoff y, si persiste, la
@@ -275,22 +278,37 @@ def glyph_pattern(letter: str, consts: set[str]) -> re.Pattern:
     return re.compile(rf"[{glyphs}]{_SPACE}*(?:{alt})\b")
 
 
-def glyph_rescue(names: list[str], rows: int) -> list[dict]:
+def glyph_rescue(names: list[str], rows: int, meta: dict | None = None) -> list[dict]:
     """Recupera los papers que nombran al sujeto con un lookalike Unicode (#28). Por cada letra
     Bayer detectada trae el superset de la constelación (`title:`/`abs:`, degradado y ruidoso: 2342
     hits para 'Eridani') y se queda con los que contienen el glifo pegado a la constelación en
     título/abstract. Devuelve TODOS los que pasan el filtro, clasificados y con `via: glyph`;
-    el caller filtra core + dedup."""
+    el caller filtra core + dedup.
+
+    Si el superset supera `rows`, el corte top-por-citas pasa ANTES del filtro por glifo — y los
+    papers que escriben `∊ Eri` no son necesariamente los más citados: el rescate queda INCOMPLETO,
+    sin forma de saber cuánto quedó en la cola (#43). Cada truncamiento se registra en `meta`
+    (`truncated_glyph`: lista de {letter, constellations, num_found, rows}) para que el caller lo
+    persista en ads.json y el lint lo surface. El warning genérico de `query_ads` se silencia
+    (quiet_truncate): hablaría de la marca de la query DIRECTA, que acá no se llena — el aviso
+    mentiría (visto en la primera corrida real: warning en stdout, `truncated: null` en disco)."""
     out = []
+    truncs = []
     for letter, consts in greek_targets(names).items():
         q = " OR ".join(f'title:"{c}" OR abs:"{c}"' for c in sorted(consts))
         pat = glyph_pattern(letter, consts)
-        for r in query_ads(q, rows=rows):
+        qm: dict = {}
+        for r in query_ads(q, rows=rows, quiet_truncate=True, meta=qm):
             text = f"{r.get('title') or ''} {r.get('abstract') or ''}"
             if pat.search(text):
                 r["via"] = "glyph"
                 out.append(r)
+        if qm.get("truncated"):
+            truncs.append({"letter": letter, "constellations": sorted(consts),
+                           "num_found": qm["num_found"], "rows": qm["rows"]})
         time.sleep(1.0)
+    if meta is not None:
+        meta["truncated_glyph"] = truncs
     return out
 
 
@@ -791,16 +809,22 @@ def main() -> int:
 
     # rescate por glifo (#28) — ANTES del chaining, para que los recuperados (típicamente el paper
     # de descubrimiento) siembren también el grafo de citas.
+    gmeta: dict = {}                # truncamiento del superset del rescate por glifo (#43)
     if not args.no_glyph and star_names and greek_targets(star_names):
         seen = {r["bibcode"] for r in recs if r.get("bibcode")}
         rescued = []
-        for g in glyph_rescue(star_names, args.rows):
+        for g in glyph_rescue(star_names, args.rows, meta=gmeta):
             b = g.get("bibcode")
             if g["relevant"] and b and b not in seen:
                 seen.add(b)
                 rescued.append(g)
         print(f"  glifo: +{len(rescued)} core nuevos que escriben el nombre con un lookalike "
               "Unicode (∊/ϵ) — invisibles a title:/abs:")
+        for t in gmeta.get("truncated_glyph") or []:
+            print(f"  ⚠ rescate por glifo incompleto: el superset de "
+                  f"{'/'.join(t['constellations'])} reporta {t['num_found']} y se escanearon "
+                  f"{t['rows']} (top por citas, ANTES del filtro por glifo) — subí --rows para "
+                  f"cubrir la cola (queda marcado en ads.json → lint)")
         recs += rescued
         rel = [r for r in recs if r["relevant"]]
 
@@ -849,8 +873,12 @@ def main() -> int:
     outdir.mkdir(parents=True, exist_ok=True)
     # `candidates` va en su PROPIA clave: no son core (no se bajan) ni no-core del corte (no
     # inundan el apéndice "Excluidos" de make_notes) — son juicio pendiente. Ver triage.py.
+    # `truncated_glyph` (#43) es la marca HERMANA de `truncated`, pero del superset del rescate por
+    # glifo: ahí el corte pasa antes del filtro, así que la cola puede esconder papers del sujeto.
     payload = {**head, "n_total": len(recs), "n_relevant": len(rel),
-               "truncated": truncated, "records": recs,
+               "truncated": truncated,
+               "truncated_glyph": gmeta.get("truncated_glyph") or None,
+               "records": recs,
                "candidates": sorted(candidatos, key=lambda r: r.get("citation_count") or 0,
                                     reverse=True)}
     (outdir / "ads.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False),

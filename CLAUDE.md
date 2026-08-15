@@ -383,7 +383,9 @@ sin ninguna cita `[[bibcode]]` → afirma sin fuente) es **backlog** que el lint
 El **corpus truncado** (un `build/<slug>/ads.json` con `truncated` seteado → la query directa trajo
 menos papers de los que ADS reporta: al sujeto le falta cola) es **backlog** — `query_ads` persiste la
 marca (default `--rows 2000`, ≈ el máximo de una request; re-ingestar con `--rows` mayor para cubrir la
-cola). Los "campos incompletos" (P_rot null, papers sin `methods`, etc.) son **backlog**, no bloquean. Revisar
+cola); ídem el **rescate por glifo incompleto** (`truncated_glyph`, marca hermana: el superset de la
+constelación del rescate #28 se cortó por citas **antes** del filtro client-side, que es donde vive la
+señal → pueden faltar papers con lookalike). Los "campos incompletos" (P_rot null, papers sin `methods`, etc.) son **backlog**, no bloquean. Revisar
 además a mano: claims stale y conceptos referidos sin página. Si faltan datos, abrir queries para
 imputar (web/ADS).
 
