@@ -1,7 +1,7 @@
 ---
 name: ingest-star
 description: Usar cuando el usuario pide bajar/agregar/ingestar una estrella a la bóveda ("bajá GJ 581", "ingest tau ceti", "agregá la estrella X", "traé la bibliografía de AU Mic"). Corre la cadena de ingesta y hace la extracción LLM.
-version: 1.8.0
+version: 1.9.0
 ---
 
 # Ingest: agregar una estrella a la wiki
@@ -71,6 +71,28 @@ procesa. Trabajar desde la raíz del repo.
    devuelve muchos y no bajás todos, **listá cuántos quedan sin bajar** en el `log` — no cures en
    silencio. (Un resultado vacío **no prueba ausencia** en papers pre-digitales — ver Notas: el OCR
    del escaneo pierde filas de tabla.)
+
+2c. **Compuerta de triage del chaining (juicio, antes de bajar nada).** El chaining trae papers
+   conectados por citas que **mencionan** al sujeto sin hablar de él: la lente clasifica **tema**, no
+   **pertinencia al sujeto** (medido: de 378 core nuevos, 368 del grafo y sólo 18% pertinentes —
+   incluyendo una tesis de física de partículas como "core" de AU Mic). Y no se aproxima con una
+   regla sintáctica: la densidad de mención sale **invertida** (los ruidosos nombran al sujeto 27
+   veces de mediana; los valiosos, 2). Por eso el juicio es tuyo. `query_ads` ya auto-aceptó los que
+   llevan **el sujeto en el título** (1 falso positivo en 310) y dejó el resto como **candidatos**
+   —no bajados—:
+   ```bash
+   python triage.py <slug>            # listar (agregá --report para la tabla en outputs/)
+   ```
+   Clasificá cada candidato **sólo por título+abstract** (no bajes nada para decidir):
+   - **pertinente** → agregalo a `extra_core: [<bibcode>, …]` en `vault/config/stars.yaml` y re-corré
+     la cadena (idempotente: baja sólo los nuevos; `extra_core` es override del clasificador).
+   - **ruido** → `python triage.py <slug> --drop <bib> … --reason "<motivo>"` (persiste en
+     `build/<slug>/triage.json`: el próximo refresh no lo re-propone). Agrupá por categoría y
+     descartá por lote, con el motivo real.
+   - **dudoso** → **al usuario**, junto con (a) los papers que salen del core y ya tienen extracción
+     LLM y (b) el resumen de volumen (core nuevo vs notas actuales). `--report` deja la tabla en
+     `outputs/triage-<slug>.md` para decidir por lote.
+   No curar en silencio: lo descartado queda con motivo, y lo que quede sin decidir se anota en el `log`.
 
 3. **Extracción LLM (criterio).** Leer los papers **clave** (discovery / actividad / métodos) desde
    `vault/raw/fulltext/<slug>/` y poblar:

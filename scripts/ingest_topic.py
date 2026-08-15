@@ -82,7 +82,9 @@ def expansion_guard(slug: str, yes: bool) -> None:
     adsfile = cfg.ROOT / "build" / slug / "ads.json"
     if not adsfile.exists():
         return
-    core = [r for r in json.loads(adsfile.read_text(encoding="utf-8"))["records"] if r.get("relevant")]
+    data = json.loads(adsfile.read_text(encoding="utf-8"))
+    core = [r for r in data["records"] if r.get("relevant")]
+    n_cand = len(data.get("candidates") or [])   # pendientes de triage (#38): no se bajan
     conocidos = {r["bibcode"] for r in core
                  if (cfg.PAPERS / f"{make_notes.safe_name(r['bibcode'])}.md").exists()}
     nuevos = [r for r in core if r["bibcode"] not in conocidos]
@@ -94,6 +96,8 @@ def expansion_guard(slug: str, yes: bool) -> None:
     via_chain = sum(1 for r in nuevos if str(r.get("via") or "").startswith("chain:"))
     print(f"\n⚠ EXPANSIÓN del corpus de {slug}: {len(core)} core vs {len(conocidos)} ya ingestados "
           f"(×{factor:.1f}) → {len(nuevos)} papers NUEVOS, {via_chain} de ellos vía el grafo de citas.")
+    if n_cand:
+        print(f"  (además hay {n_cand} candidatos de chaining pendientes de triage — ésos no se bajan)")
     print("  Con la regla de combinación en OR (default), el chaining trae todo lo que menciona al "
           "sujeto con ≥1 faceta cualquiera. La palanca es la OBLIGATORIEDAD, no podar regex:\n"
           "    relevance.require: [<faceta-eje>]   # AND: la faceta sin la cual el paper no sirve\n"

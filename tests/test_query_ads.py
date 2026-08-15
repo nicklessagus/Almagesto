@@ -443,7 +443,7 @@ def run_main(monkeypatch, argv):
 
 def test_main_estrella_chaining_dedup_y_via(toy_vault, toy_classifier, no_sleep, monkeypatch):
     direct = [rec("2020dirA....1A", cites=5), rec("2020dirB....1B", relevant=False, cites=9)]
-    chained = [rec("2020chC....1C", cites=2),                    # core nuevo → entra
+    chained = [rec("2020chC....1C", cites=2, title="Test Star revisited"),  # sujeto en el título → entra
                rec("2020dirA....1A", cites=5),                   # dup de la query → afuera
                rec("2020chD....1D", relevant=False)]             # no-core encadenado → afuera
     for c in chained:
@@ -760,3 +760,73 @@ def test_sweep_con_topic_error(toy_vault, toy_classifier, monkeypatch, capsys):
     with pytest.raises(SystemExit):                       # ap.error → exit 2
         run_main(monkeypatch, ["gp", "--topic", "--sweep"])
     assert "retro-tag 3b" in capsys.readouterr().err
+
+
+# ── compuerta de triage del chaining (#38) ───────────────────────────────────
+
+def test_subject_in_title_cubre_grafias_y_glifos():
+    assert qa.subject_in_title("HD22049 revisited", ["HD 22049"])          # sin espacio
+    assert qa.subject_in_title("Planet orbiting ∊ Eridani", ["eps Eridani"])   # lookalike (#28)
+    assert not qa.subject_in_title("A survey of nearby K dwarfs", ["eps Eridani"])
+    assert not qa.subject_in_title(None, ["eps Eridani"])
+
+
+def test_main_chaining_solo_auto_acepta_sujeto_en_titulo(toy_vault, toy_classifier, no_sleep,
+                                                         monkeypatch, capsys):
+    """El core del grafo con el sujeto en el título entra; el resto queda como CANDIDATO en
+    ads.json (no se baja) a la espera del juicio."""
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        [rec("2020dirA....1A")])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [
+        dict(rec("2020tit....1T", title="Activity of Test Star"), via="chain:citations"),
+        dict(rec("2023PhDT....1P", title="Hunting for New Physics"), via="chain:references"),
+    ])
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    data = json.loads((toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text())
+    assert {r["bibcode"] for r in data["records"]} == {"2020dirA....1A", "2020tit....1T"}
+    assert [c["bibcode"] for c in data["candidates"]] == ["2023PhDT....1P"]
+    assert "1 candidatos pendientes de juicio" in capsys.readouterr().out
+
+
+def test_main_triage_no_repropone_descartados(toy_vault, toy_classifier, no_sleep, monkeypatch, capsys):
+    d = toy_vault.ROOT / "build" / "test_star"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "triage.json").write_text(json.dumps({"decisiones": {
+        "2023PhDT....1P": {"decision": "descartado", "motivo": "física de partículas"}}}),
+        encoding="utf-8")
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        [rec("2020dirA....1A")])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [
+        dict(rec("2023PhDT....1P", title="Hunting for New Physics"), via="chain:references")])
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    data = json.loads((d / "ads.json").read_text())
+    assert data["candidates"] == [] and len(data["records"]) == 1
+    assert "1 ya descartados antes" in capsys.readouterr().out
+
+
+def test_main_no_triage_restaura_el_comportamiento_viejo(toy_vault, toy_classifier, no_sleep,
+                                                         monkeypatch):
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        [rec("2020dirA....1A")])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [
+        dict(rec("2023PhDT....1P", title="Hunting for New Physics"), via="chain:references")])
+    assert run_main(monkeypatch, ["test_star", "--no-triage"]) == 0
+    data = json.loads((toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text())
+    assert len(data["records"]) == 2 and data["candidates"] == []
+
+
+def test_main_tema_no_aplica_la_compuerta(toy_vault, toy_classifier, no_sleep, monkeypatch):
+    """En un tema la query ES la definición del tema → su core (y el del grafo anclado) entra solo."""
+    write_yaml(cfg.TOPICS_YAML, {"gp": {"title": "GP", "area": "methods", "concept": "gp",
+                                        "query": 'abs:"gaussian process"'}})
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        [rec("2020dirA....1A")])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [
+        dict(rec("2020chX....1X", title="cualquier cosa"), via="chain:references")])
+    assert run_main(monkeypatch, ["gp", "--topic"]) == 0
+    data = json.loads((toy_vault.ROOT / "build" / "gp" / "ads.json").read_text())
+    assert len(data["records"]) == 2 and data["candidates"] == []

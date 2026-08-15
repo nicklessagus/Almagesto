@@ -228,6 +228,12 @@ re-clasificar de `maintain`. No ingesta nada; después se usan `ingest-star`/`in
    `scripts/ingest_topic.py <slug>` para temas. **El orden canónico de cada cadena vive en el
    header de su orquestador** (fuente de verdad única — puntero, no copia: no replicar la lista de
    scripts en docs/skills).
+1b. **Compuerta de triage (estrellas).** El citation chaining amplía el pool con papers del grafo que
+   mencionan al sujeto pero no hablan de él (medido: 18% de precisión). Sólo entra solo el que lleva
+   el **sujeto en el título**; el resto queda como **candidato** en `build/<slug>/ads.json` —**sin
+   bajarse**— y lo juzgás vos por título+abstract (`scripts/triage.py <slug>`): aceptado →
+   `extra_core` en `stars.yaml` + re-correr la cadena; descartado → `triage.py --drop … --reason`
+   (persiste: no se re-propone); **dudoso → al usuario**. Detalle en el skill `ingest-star`.
 2. **Vos (LLM)** leés el **fulltext `.txt`** (el default: barato y greppable; el PDF se abre sólo
    para figuras/tablas/ecuaciones o ante duda de símbolos si `fulltext_source: ocr`) y hacés la
    cascada: poblás la extracción del paper

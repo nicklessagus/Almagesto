@@ -23,6 +23,15 @@ título/abstract pierde (p. ej. surveys que tabulan la estrella sin nombrarla en
 Sólo entran los core: los no-core encadenados no se agregan (inundarían el apéndice "Excluidos").
 Desactivar con --no-chain. `--probe` no encadena (es sólo preview; lista TODO el core del corte).
 
+**Compuerta de triage del chaining (#38, estrellas):** el chaining PROMOVÍA a core todo lo que el
+grafo traía y matcheaba la lente, pero la lente clasifica **tema** y lo que hay que filtrar acá es
+**pertinencia al sujeto** (medido: 18% de precisión en los core nuevos del grafo). Ahora entra solo
+el que lleva **el sujeto en el título** (1 falso positivo en 310) y el resto queda como
+**candidato** —clave `candidates` de `ads.json`, NO se baja— para el juicio del LLM
+(`scripts/triage.py` + paso 2c del skill ingest-star). Las decisiones persisten:
+aceptado → `extra_core`; descartado → `build/<slug>/triage.json` (no se re-propone). En **temas** no
+aplica (la query *es* la definición del tema); se desactiva con `--no-triage`.
+
 **Curación manual persistente:** `extra_core: [bibcode, …]` en la entrada de `stars.yaml`/`topics.yaml`
 lista papers que el clasificador perdió. Es un **override del clasificador** (#39): el que ADS no
 devolvió se trae por bibcode y el que **sí** devolvió pero quedó no-core se **rescata en el lugar**
@@ -406,6 +415,40 @@ def chain_candidates(core_bibcodes: list[str], rows: int, subject_filter: str) -
     return out
 
 
+# ── compuerta de triage del chaining (#38) ───────────────────────────────────
+# El chaining PROMOVÍA a core todo lo que el grafo traía y matcheaba la lente. Pero la lente
+# clasifica TEMA y lo que hay que filtrar acá es PERTINENCIA AL SUJETO: anclado a "menciona al
+# sujeto en el fulltext", el grafo trae cualquier paper del área que tabule la estrella una vez.
+# Medido (4 estrellas, con `require: [rv]` ya declarada): de 378 core nuevos, 368 vinieron del
+# chaining y sólo el 18% era pertinente. Y no es una propiedad sintáctica — la densidad de mención
+# sale INVERTIDA (los ruidosos nombran al sujeto 27 veces de mediana; los valiosos, 2) — así que
+# el juicio no se aproxima con una regex: se le hace lugar en la cadena.
+# Nivel 0 (entra solo): sujeto en el TÍTULO — precisión medida de 1 falso positivo en 310.
+# Nivel 1 (juicio del LLM, skill ingest-star paso 2c): el resto queda como CANDIDATO en ads.json,
+# sin bajarse; `scripts/triage.py` lo lista y persiste las decisiones.
+
+
+def subject_in_title(title: str | None, names: list[str]) -> bool:
+    """¿El sujeto está en el título? Auto-aceptación del nivel 0: cubre las grafías de catálogo
+    (HD 22049 ↔ HD22049) y los lookalikes de nombre Bayer (∊ Eridani ≡ eps Eridani, #28)."""
+    raw = " ".join((title or "").split())
+    low = raw.lower()
+    if any(v.lower() in low for v in expand_variants(names)):
+        return True
+    return any(glyph_pattern(letter, consts).search(raw)
+               for letter, consts in greek_targets(names).items())
+
+
+def load_triage(slug: str) -> set[str]:
+    """Bibcodes ya DESCARTADOS en un triage previo (`build/<slug>/triage.json`) — no se re-proponen
+    en el próximo refresh (si no, cada re-run vuelve a pedir el mismo juicio sobre el mismo ruido)."""
+    f = cfg.ROOT / "build" / slug / "triage.json"
+    if not f.exists():
+        return set()
+    data = json.loads(f.read_text(encoding="utf-8"))
+    return {b for b, d in (data.get("decisiones") or {}).items() if d.get("decision") == "descartado"}
+
+
 def _probe_row(r: dict) -> str:
     mark = "CORE" if r["relevant"] else "—   "
     tp = ",".join(r["topics"]) or "(ninguno)"
@@ -614,6 +657,10 @@ def main() -> int:
                          "marcado en build/<slug>/ads.json y el lint lo surface")
     ap.add_argument("--no-chain", action="store_true",
                     help="desactivar el citation chaining (references/citations de los papers core)")
+    ap.add_argument("--no-triage", action="store_true",
+                    help="desactivar la compuerta de triage del chaining (#38): todo lo que el grafo "
+                         "traiga y clasifique core entra directo, como antes. Sólo aplica a estrellas "
+                         "(en temas la query ES la definición del tema y su core entra solo)")
     ap.add_argument("--no-glyph", action="store_true",
                     help="desactivar el rescate por glifo de nombres Bayer (ε/ϵ/∊ Eri): trae el "
                          "superset de la constelación y filtra client-side. Sólo corre si el "
@@ -721,18 +768,33 @@ def main() -> int:
         recs += rescued
         rel = [r for r in recs if r["relevant"]]
 
+    candidatos: list[dict] = []      # chaining pendiente de triage (#38): NO son core, no se bajan
     if not args.no_chain and rel and chain_filter:
         seen = {r["bibcode"] for r in recs if r.get("bibcode")}
         core_bibs = [r["bibcode"] for r in rel if r.get("bibcode")]
-        chained = []
+        # La compuerta es de ESTRELLAS: en un tema la query ES la definición del tema, así que su
+        # core (y el del grafo anclado a esa query) entra solo.
+        gate = bool(star_names) and not args.no_triage
+        descartados = load_triage(args.slug) if gate else set()
+        chained, ya_descartados = [], 0
         for c in chain_candidates(core_bibs, args.rows, chain_filter):
             b = c.get("bibcode")
-            if c["relevant"] and b and b not in seen:   # sólo core nuevos (dedup vs query y entre ops)
-                seen.add(b)
-                chained.append(c)
+            if not (c["relevant"] and b and b not in seen):  # sólo core nuevos (dedup vs query y ops)
+                continue
+            seen.add(b)
+            if not gate or subject_in_title(c.get("title"), star_names):
+                chained.append(c)          # nivel 0: entra solo (sujeto en el título)
+            elif b in descartados:
+                ya_descartados += 1        # decisión persistida: no re-proponer
+            else:
+                candidatos.append(c)       # nivel 1: al triage (juicio del LLM, sin bajar nada)
         anchor = "full-text del sujeto" if not args.topic else "la query del tema"
         print(f"  chaining: +{len(chained)} core nuevos vía el grafo de citas de {len(core_bibs)} core "
               f"(anclado a {anchor})")
+        if gate:
+            print(f"  triage: {len(candidatos)} candidatos pendientes de juicio "
+                  f"({ya_descartados} ya descartados antes) — no se bajan hasta decidirlos: "
+                  f"python triage.py {args.slug}")
         recs += chained
         rel = [r for r in recs if r["relevant"]]
 
@@ -779,8 +841,12 @@ def main() -> int:
 
     outdir = cfg.ROOT / "build" / args.slug
     outdir.mkdir(parents=True, exist_ok=True)
+    # `candidates` va en su PROPIA clave: no son core (no se bajan) ni no-core del corte (no
+    # inundan el apéndice "Excluidos" de make_notes) — son juicio pendiente. Ver triage.py.
     payload = {**head, "n_total": len(recs), "n_relevant": len(rel),
-               "truncated": truncated, "records": recs}
+               "truncated": truncated, "records": recs,
+               "candidates": sorted(candidatos, key=lambda r: r.get("citation_count") or 0,
+                                    reverse=True)}
     (outdir / "ads.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False),
                                      encoding="utf-8")
     print(f"  → {outdir / 'ads.json'}")
