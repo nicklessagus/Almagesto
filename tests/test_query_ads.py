@@ -806,6 +806,34 @@ def test_main_triage_no_repropone_descartados(toy_vault, toy_classifier, no_slee
     assert "1 ya descartados antes" in capsys.readouterr().out
 
 
+def test_main_extra_core_no_vuelve_a_la_cola_de_triage(toy_vault, toy_classifier, no_sleep,
+                                                       monkeypatch):
+    """#42: el merge de `extra_core` corre ANTES del chaining, así que un paper ya curado (sin el
+    sujeto en el título) que el grafo vuelve a traer NO se re-propone como candidato — la
+    persistencia de la compuerta vale para los DOS lados de la decisión (descartes en triage.json,
+    aceptaciones en extra_core) — y el curado además siembra el grafo de citas."""
+    stars = {"Estrella Test": {"slug": "test_star", "simbad": "s", "ads_object": "Test Star",
+                               "aliases": [], "extra_core": ["2010ext.....1E"]}}
+    write_yaml(cfg.STARS_YAML, stars)
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        [rec("2020dirA....1A")])
+    monkeypatch.setattr(qa, "fetch_bibcodes",
+                        lambda bibs: [dict(rec("2010ext.....1E"), via="manual")])
+    sembrados = {}
+    def fake_chain(bibs, rows, filt):
+        sembrados["core"] = list(bibs)
+        return [dict(rec("2010ext.....1E"), via="chain:citations"),      # ya curado → NO re-proponer
+                dict(rec("2023PhDT....1P", title="Hunting for New Physics"), via="chain:references")]
+    monkeypatch.setattr(qa, "chain_candidates", fake_chain)
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    assert "2010ext.....1E" in sembrados["core"]          # el curado siembra el grafo
+    data = json.loads((toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text())
+    bibs = {r["bibcode"]: r["via"] for r in data["records"]}
+    assert bibs["2010ext.....1E"] == "manual"             # core por decisión del usuario…
+    assert [c["bibcode"] for c in data["candidates"]] == ["2023PhDT....1P"]   # …y FUERA de la cola
+
+
 def test_main_no_triage_restaura_el_comportamiento_viejo(toy_vault, toy_classifier, no_sleep,
                                                          monkeypatch):
     monkeypatch.setattr(qa, "query_ads",

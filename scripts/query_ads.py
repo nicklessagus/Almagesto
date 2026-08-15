@@ -37,7 +37,10 @@ lista papers que el clasificador perdió. Es un **override del clasificador** (#
 devolvió se trae por bibcode y el que **sí** devolvió pero quedó no-core se **rescata en el lugar**
 (`relevant: true`, `via: manual`) — antes sólo se agregaban los ausentes, así que declarar el caso
 más común de la curación (paper del sujeto que la lente descarta) no hacía nada. Vive en config
-(se commitea) → sobrevive al re-run, a diferencia de editar `build/` (scratch).
+(se commitea) → sobrevive al re-run, a diferencia de editar `build/` (scratch). Se mergea **antes**
+del rescate por glifo y del chaining (#42): un paper que el usuario ya aceptó a `extra_core` está en
+`recs` cuando el chaining calcula su dedup — no vuelve a la cola de triage (la persistencia de la
+compuerta vale para los dos lados de la decisión) — y además siembra el grafo de citas.
 
 **`--sweep` (barrido full-text, paso 2b de ingest-star):** corre `full:` sobre nombre+aliases con
 TODAS las variantes de espaciado y lista SÓLO los core que `build/<slug>/ads.json` no tiene — los
@@ -753,6 +756,39 @@ def main() -> int:
         rel = [r for r in recs if r["relevant"]]
         print(f"  query directa: {len(recs)} registros, {len(rel)} relevantes")
 
+    # curación manual persistente: bibcodes en `extra_core` de stars.yaml/topics.yaml que el
+    # clasificador perdió (build/ es scratch y se pisa; esto sobrevive porque vive en config).
+    # Corre ANTES del glifo y del chaining (#42): si mergea después, los curados no están en `recs`
+    # cuando el chaining arma su dedup y la cola de triage RE-PROPONE papers ya aceptados (medido:
+    # 14 de 50 extra_core de ε Eri de vuelta como candidatos). Acá, además, siembran el grafo.
+    extra = [b for b in (meta.get("extra_core") or []) if b]
+    if args.extra_only and not extra:
+        sys.exit(f"--extra-only pero la entrada '{args.slug}' no declara `extra_core` en topics.yaml "
+                 "— listá ahí los bibcodes ADS del tema mixto.")
+    if extra:
+        # `extra_core` es un OVERRIDE del clasificador, no un "sumá lo ausente" (#39): el caso más
+        # común de la curación es el paper que ADS SÍ devuelve y la lente descarta (p. ej. papers
+        # de actividad que arbitran señales pero no dicen "radial velocity" en título/abstract).
+        # Traerlo por bibcode no alcanzaba: el registro ya estaba en `recs` con relevant: False.
+        present = {r["bibcode"]: r for r in recs if r.get("bibcode")}
+        rescued = []
+        for b in extra:
+            r = present.get(b)
+            if r is not None and not r["relevant"]:
+                r["relevant"], r["why_excluded"], r["via"] = True, None, "manual"
+                rescued.append(b)
+        manual = [m for m in fetch_bibcodes([b for b in extra if b not in present])
+                  if m.get("bibcode")]
+        print(f"  extra_core: +{len(manual)} traídos de ADS · {len(rescued)} rescatados del corte "
+              f"(de {len(extra)} en config)")
+        fetched = {m["bibcode"] for m in manual}
+        missing = [b for b in extra if b not in present and b not in fetched]
+        if missing:   # declarados que ADS no devolvió: typo de bibcode o registro retirado
+            print(f"  ⚠ extra_core: {len(missing)} bibcode(s) que ADS no devolvió (¿typo?): "
+                  f"{', '.join(missing)}")
+        recs += manual
+        rel = [r for r in recs if r["relevant"]]
+
     # rescate por glifo (#28) — ANTES del chaining, para que los recuperados (típicamente el paper
     # de descubrimiento) siembren también el grafo de citas.
     if not args.no_glyph and star_names and greek_targets(star_names):
@@ -796,36 +832,6 @@ def main() -> int:
                   f"({ya_descartados} ya descartados antes) — no se bajan hasta decidirlos: "
                   f"python triage.py {args.slug}")
         recs += chained
-        rel = [r for r in recs if r["relevant"]]
-
-    # curación manual persistente: bibcodes en `extra_core` de stars.yaml/topics.yaml que el
-    # clasificador perdió (build/ es scratch y se pisa; esto sobrevive porque vive en config).
-    extra = [b for b in (meta.get("extra_core") or []) if b]
-    if args.extra_only and not extra:
-        sys.exit(f"--extra-only pero la entrada '{args.slug}' no declara `extra_core` en topics.yaml "
-                 "— listá ahí los bibcodes ADS del tema mixto.")
-    if extra:
-        # `extra_core` es un OVERRIDE del clasificador, no un "sumá lo ausente" (#39): el caso más
-        # común de la curación es el paper que ADS SÍ devuelve y la lente descarta (p. ej. papers
-        # de actividad que arbitran señales pero no dicen "radial velocity" en título/abstract).
-        # Traerlo por bibcode no alcanzaba: el registro ya estaba en `recs` con relevant: False.
-        present = {r["bibcode"]: r for r in recs if r.get("bibcode")}
-        rescued = []
-        for b in extra:
-            r = present.get(b)
-            if r is not None and not r["relevant"]:
-                r["relevant"], r["why_excluded"], r["via"] = True, None, "manual"
-                rescued.append(b)
-        manual = [m for m in fetch_bibcodes([b for b in extra if b not in present])
-                  if m.get("bibcode")]
-        print(f"  extra_core: +{len(manual)} traídos de ADS · {len(rescued)} rescatados del corte "
-              f"(de {len(extra)} en config)")
-        fetched = {m["bibcode"] for m in manual}
-        missing = [b for b in extra if b not in present and b not in fetched]
-        if missing:   # declarados que ADS no devolvió: typo de bibcode o registro retirado
-            print(f"  ⚠ extra_core: {len(missing)} bibcode(s) que ADS no devolvió (¿typo?): "
-                  f"{', '.join(missing)}")
-        recs += manual
         rel = [r for r in recs if r["relevant"]]
 
     recs.sort(key=lambda r: r.get("citation_count") or 0, reverse=True)

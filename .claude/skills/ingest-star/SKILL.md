@@ -83,6 +83,9 @@ procesa. Trabajar desde la raíz del repo.
    ```bash
    python triage.py <slug>            # listar (agregá --report para la tabla en outputs/)
    ```
+   Los marcados `◆` **ya tienen nota en la bóveda** (entraron por otro slug): ya están bajados y
+   extraídos — la decisión sigue siendo por-slug (¿pertinente a ESTE sujeto?), pero se despachan
+   rápido (el `stars:` que falte lo cubre el retro-linkeo add-only de `make_notes`).
    Clasificá cada candidato **sólo por título+abstract** (no bajes nada para decidir):
    - **pertinente** → agregalo a `extra_core: [<bibcode>, …]` en `vault/config/stars.yaml` y re-corré
      la cadena (idempotente: baja sólo los nuevos; `extra_core` es override del clasificador).

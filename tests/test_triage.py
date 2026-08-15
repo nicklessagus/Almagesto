@@ -86,6 +86,21 @@ def test_report_escribe_tabla_en_outputs(toy_vault, monkeypatch):
     assert "Título con \\| pipe" in md          # el pipe no rompe la tabla markdown
 
 
+def test_marca_candidatos_que_ya_tienen_nota(toy_vault, monkeypatch, capsys):
+    """#42: un candidato que YA tiene nota en la bóveda (entró por otro slug) se etiqueta ◆ —
+    bajado y extraído, se despacha rápido. No se filtra: la decisión sigue siendo por-slug."""
+    from conftest import mk_note
+    mk_note(cfg.PAPERS, "2020a....1A", {"tags": ["paper"], "bibcode": "2020a....1A"})
+    write_ads(toy_vault, candidates=[cand("2020a....1A", "con nota", cites=9),
+                                     cand("2020b....1B", "sin nota", cites=1)])
+    assert run_main(monkeypatch, ["test_star", "--report"]) == 0
+    out = capsys.readouterr().out
+    assert "◆ 1 ya con nota en la bóveda" in out
+    assert "◆ 2020a....1A" in out and "◆ 2020b....1B" not in out
+    md = (cfg.ROOT / "outputs" / "triage-test_star.md").read_text(encoding="utf-8")
+    assert "| 9 | ◆ |" in md and "| 1 |  |" in md      # columna ◆ sólo para el que tiene nota
+
+
 def test_query_ads_lee_los_descartes_persistidos(toy_vault):
     """El contrato entre los dos scripts: lo que triage descarta, query_ads no re-propone."""
     import query_ads as qa

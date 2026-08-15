@@ -21,7 +21,9 @@ Los tres niveles:
   (paso 2c del skill `ingest-star`) los clasifica pertinente / ruido / dudoso.
   Las decisiones **persisten**: aceptado → `extra_core` en `stars.yaml` (override del clasificador,
   #39); descartado → `build/<slug>/triage.json` (con motivo) para que el próximo refresh no lo
-  vuelva a proponer.
+  vuelva a proponer. Los candidatos que **ya tienen nota** en la bóveda (entraron por OTRO slug —
+  papers de método curados a otra estrella) se marcan `◆` (#42): ya están bajados y extraídos, la
+  decisión sigue siendo por-slug pero se despachan rápido — no se filtran, se etiquetan.
 - **2 — informe al usuario:** `--report` deja la tabla en `outputs/triage-<slug>.md` (título, año,
   citas, vía, tópicos, link a ADS) para decidir los **dudosos** por lote.
 
@@ -82,10 +84,20 @@ def drop(slug: str, bibcodes: list[str], reason: str) -> int:
     return 0
 
 
+def has_note(bibcode: str) -> bool:
+    """¿El candidato ya tiene nota en `vault/wiki/papers/`? Pasa cuando entró por OTRO slug (paper
+    de método curado a otra estrella): ya está bajado y extraído, así que proponerlo sin marcar es
+    trabajo repetido (#42). La decisión sigue siendo legítimamente por-slug (¿pertinente a ESTE
+    sujeto?) — se etiqueta `◆`, no se filtra; el `stars:` que falte lo cubre el retro-linkeo
+    add-only de make_notes."""
+    return (cfg.PAPERS / f"{bibcode.replace('/', '_')}.md").exists()
+
+
 def row(c: dict) -> str:
     cites = c.get("citation_count") or 0
+    nota = "◆" if has_note(c["bibcode"]) else " "
     title = " ".join((c.get("title") or "").split())[:76]
-    return f"  {cites:>5}  {c['bibcode']}  {title}  «{','.join(c.get('topics') or [])}»"
+    return f"  {cites:>5} {nota} {c['bibcode']}  {title}  «{','.join(c.get('topics') or [])}»"
 
 
 def report(slug: str, cands: list[dict]) -> None:
@@ -96,13 +108,16 @@ def report(slug: str, cands: list[dict]) -> None:
              "",
              f"{len(cands)} candidatos pendientes (no bajados). Criterio: ¿el paper es **pertinente "
              "al sujeto** o sólo lo menciona? Aceptados → `extra_core` en `vault/config/stars.yaml`; "
-             "descartados → `python triage.py " + slug + " --drop <bib> --reason \"<motivo>\"`.",
+             "descartados → `python triage.py " + slug + " --drop <bib> --reason \"<motivo>\"`. "
+             "`◆` = ya tiene nota en la bóveda (entró por otro slug): bajado y extraído, se "
+             "despacha rápido.",
              "",
-             "| citas | año | bibcode | título | vía | tópicos |",
-             "|---:|---:|---|---|---|---|"]
+             "| citas | ◆ | año | bibcode | título | vía | tópicos |",
+             "|---:|:-:|---:|---|---|---|---|"]
     for c in cands:
         title = " ".join((c.get("title") or "").split()).replace("|", "\\|")
-        lines.append(f"| {c.get('citation_count') or 0} | {c.get('year') or ''} | "
+        lines.append(f"| {c.get('citation_count') or 0} | {'◆' if has_note(c['bibcode']) else ''} | "
+                     f"{c.get('year') or ''} | "
                      f"[{c['bibcode']}]({ADS_URL}{c['bibcode']}/abstract) | {title} | "
                      f"{c.get('via') or ''} | {','.join(c.get('topics') or [])} |")
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -128,7 +143,9 @@ def main() -> int:
     data = load_ads(args.slug)
     cands = data.get("candidates") or []
     decisiones = load_decisions(args.slug)
-    print(f"Triage de {args.slug}: {len(cands)} candidatos pendientes · "
+    con_nota = sum(1 for c in cands if has_note(c["bibcode"]))
+    print(f"Triage de {args.slug}: {len(cands)} candidatos pendientes "
+          f"(◆ {con_nota} ya con nota en la bóveda, vía otro slug) · "
           f"{len(decisiones)} decisiones persistidas · {data.get('n_relevant', 0)} core actuales")
     if not cands:
         print("  → nada pendiente. (Los candidatos aparecen tras un query_ads con chaining.)")
