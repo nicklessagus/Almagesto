@@ -1,7 +1,7 @@
 ---
 name: verify-citations
 description: Usar para verificar, afirmación por afirmación, que las citas [[bibcode]] de una nota de la wiki (query, hipótesis, ficha, concepto) realmente están respaldadas por el texto completo de la fuente. Se corre como paso de cierre al armar/editar una query o hipótesis, o cuando el usuario pide "rechequeá las citas / ¿esto lo dice el paper?". Implementa el chequeo claim↔evidencia (pipeline tipo CiteAudit) sobre el corpus cerrado de la bóveda. Veredictos: soportada / parcial / no-soportada (la fuente calla) / contradice (la fuente afirma lo contrario → candidata a disputa, no sólo cita rota).
-version: 1.3.2
+version: 1.3.3
 ---
 
 # Verify-citations — chequeo claim↔evidencia contra el fulltext
@@ -24,6 +24,18 @@ plenamente respaldadas). Acá cada afirmación se contrasta contra el texto real
 > de declararla `no-soportada` considerar que puede ser un **artefacto de extracción** (ecuación/tabla)
 > → en ese caso abrir el **PDF** (`vault/raw/pdfs/<slug>/<bibcode>.pdf`) para esa afirmación puntual, o
 > marcarla **`no verificable por extracción`** (distinto de `no-soportada`).
+>
+> **Cómo se cuentan las líneas (convención fija, #29):** el nº de línea de la evidencia se obtiene
+> con **`grep -n`** o leyendo el archivo directamente (Read) — **no** con `splitlines()` de Python:
+> los `.txt` de `pdftotext` traen un **form feed** (`\x0c`) por página que Python cuenta como salto
+> de línea extra → la numeración se corre **+1 por página** y el error CRECE a lo largo del archivo
+> (medido: 532/535 `.txt` del corpus con form feeds; en un paper de 12 páginas la última cita queda
+> ~10 líneas afuera — suficiente para que una revisión posterior no encuentre la frase y la marque
+> como rota). Si hace falta Python, `split("\n")` numera igual que `grep -n`.
+> Relacionado: en papers a **dos columnas** `pdftotext -layout` entrelaza ambas columnas en la misma
+> línea física — un rango de líneas **no** es un rango de lectura contigua (una oración puede
+> arrancar en la columna izquierda de L229 y seguir en la derecha de L204). Los números de línea
+> son **punteros greppables**, no extractos para leer de corrido.
 >
 > **Excepción OCR — citable con salvedad:** si la nota del paper trae `fulltext_source: ocr` (el
 > contrato del frontmatter lo espeja — no hace falta abrir el `.txt` para saberlo) o el `.txt` abre
@@ -88,7 +100,8 @@ Cada uno:
     incompatible más allá del error, existencia negada, signo opuesto) — también exige cita textual,
     de lo que el paper **sí** dice.
   - `score`: 0–10 (qué tan literal/completo es el respaldo)
-  - `evidencia`: **cita textual** del paper + **nº de línea**. **Sin cita textual ⇒ `no-soportada`**
+  - `evidencia`: **cita textual** del paper + **nº de línea** (contado como `grep -n` — ver la
+    convención fija de arriba; nunca `splitlines()` de Python). **Sin cita textual ⇒ `no-soportada`**
     (regla dura: si no puede pegar la frase, no está respaldado). **La regla vale también para
     `parcial`**: exige cita textual que respalde **parte del contenido distintivo** de la
     afirmación (el sujeto/valor/mecanismo que la hace específica); si lo único que matchea es
@@ -110,7 +123,9 @@ Prompt sugerido por agente: *"Leé SOLO `<ruta fulltext>`. ¿El paper respalda e
 Si la afirmación tiene varias cláusulas atribuidas a distintas fuentes, juzgá si el archivo respalda
 **la cláusula que le toca** y decí cuál en la nota — que respalde una cláusula vecina de otra fuente,
 o el encuadre genérico, no cuenta. Respondé veredicto
-(soportada/parcial/no-soportada/contradice) + score 0–10 + cita textual con nº de línea + nota. Si no
+(soportada/parcial/no-soportada/contradice) + score 0–10 + cita textual con nº de línea (el que da
+`grep -n` o la lectura directa del archivo; NO uses `splitlines()` de Python — los form feeds del
+`.txt` corren la numeración) + nota. Si no
 encontrás respaldo textual, es no-soportada; `parcial` sólo si la cita textual respalda parte del
 contenido distintivo de la afirmación — que el paper hable del mismo tema NO alcanza; si el paper
 afirma lo CONTRARIO, es contradice (pegá la frase que lo contradice). No uses memoria ni otros

@@ -170,6 +170,19 @@ def test_fuga_de_implementacion_warn(toy_vault, capsys):
     assert "perilla" in out
 
 
+def test_fuga_numera_lineas_como_grep(toy_vault, capsys):
+    """#29: la línea reportada es la de `grep -n` (convención fija del corpus) — un form feed
+    colado en la nota no corre la numeración (splitlines() lo contaría como salto extra)."""
+    mk_note(toy_vault.CONCEPTS / "methods", "nota", {"tags": ["methods"]},
+            "línea uno\ncon un form feed \x0c en el medio\nla perilla en la línea 3\n")
+    link_from_index(toy_vault, "nota")
+    rc, out = run_lint(capsys)
+    # numeración relativa al cuerpo post-frontmatter: L1 vacía (el \n tras el `---`), L2 "línea
+    # uno", L3 la del form feed, L4 la perilla. Con splitlines() el \x0c partiría L3 en dos y la
+    # perilla se correría a L5.
+    assert "L4 [perilla" in out
+
+
 def test_objetivo_default_warn(toy_vault, capsys):
     """Guard de config: objective.yaml sin instanciar (name = default del template) → WARN."""
     import lib_config as cfg

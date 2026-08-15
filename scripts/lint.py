@@ -186,7 +186,9 @@ def main() -> int:
         # frontera dura: fuga de implementación (código no bibliográfico) al vault (WARN, no bloquea).
         body_full = text.split("---", 2)[-1] if text.startswith("---") else text
         scan_leaks = stem not in NON_ORPHAN    # log/index/README son historia/navegación, no fichas
-        for i, line in enumerate(body_full.splitlines(), 1) if scan_leaks else []:
+        # split("\n"), no splitlines(): un form feed colado no debe correr la numeración (la
+        # convención de conteo es la de `grep -n` — ver skill verify-citations, #29)
+        for i, line in enumerate(body_full.split("\n"), 1) if scan_leaks else []:
             if line.lstrip().startswith(">"):
                 continue                       # blockquote meta (frontera/alcance)
             for rx, label in IMPL_LEAK_RE:
