@@ -18,6 +18,33 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.6.0 (2026-08-15) — tanda #29/#42/#43: follow-ups de la primera corrida real
+
+> Tanda **correctiva**, disparada por la primera corrida real de v1.5.0 (Almagesto-RV, ε Eri): dos
+> promesas de la cadena que no se cumplían (la persistencia de la compuerta de triage y la marca de
+> truncamiento del rescate por glifo) y una ambigüedad del verify que fabricaba citas rotas. 328
+> tests verdes, lint 0. `ALMAGESTO_VERSION` 1.5.0 → **1.6.0** (minor: clave `truncated_glyph` nueva
+> en `ads.json` + marcador ◆ en triage, retrocompatible).
+
+- **#42** — **`extra_core` se mergea ANTES del chaining**: el bloque corría después, así que los
+  bibcodes curados no estaban en `recs` al armar el dedup y la cola de triage **re-proponía papers
+  ya aceptados** (medido: 14 de 50 `extra_core` de ε Eri de vuelta como candidatos — core y
+  candidato a la vez). La persistencia de la compuerta ahora vale para los dos lados de la decisión
+  y los curados siembran el grafo. Además `triage.py` marca `◆` los candidatos que **ya tienen
+  nota** en la bóveda (entraron por otro slug): no se filtran, se despachan rápido.
+- **#43** — **el truncamiento del superset del rescate por glifo se marca** (antes el warning decía
+  "queda marcado en ads.json" y no marcaba nada: la marca `truncated` es de la query directa). El
+  corte top-por-citas pasa **antes** del filtro por glifo —donde vive la señal—, así que ahora cada
+  superset truncado queda en la clave hermana `truncated_glyph` ({letter, constellations,
+  num_found, rows}), main avisa con mensaje propio y el lint lo surface como rescate incompleto,
+  distinguible del truncamiento de la query directa.
+- **#29** — **convención fija de conteo de líneas en `verify-citations`**: los `.txt` de
+  `pdftotext` traen un form feed por página (532/535 del corpus RV) que `splitlines()` de Python
+  cuenta como salto extra → +1 línea por página, y una revisión posterior marcaba como rotas citas
+  correctas (11/24 en un verificador ad-hoc). El skill fija `grep -n`/lectura directa (nunca
+  `splitlines()`), documenta que en papers a dos columnas el nº de línea es puntero, no extracto
+  contiguo, y el scan de fuga del lint numera con `split("\n")` por consistencia.
+
 ## ✅ Framework 1.5.0 (2026-08-15) — tanda #27/#28/#37–#41: la cadena de ingesta
 
 > Tanda de la **cadena de ingesta**, disparada por la aplicación de v1.4.0 en la instancia
