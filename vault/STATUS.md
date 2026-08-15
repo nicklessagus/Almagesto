@@ -18,6 +18,54 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.5.0 (2026-08-15) — tanda #27/#28/#37–#41: la cadena de ingesta
+
+> Tanda de la **cadena de ingesta**, disparada por la aplicación de v1.4.0 en la instancia
+> Almagesto-RV: dos bugs de recall/silencio de `query_ads` y cuatro huecos de control (el pool se
+> ampliaba sin checkpoint ni juicio). 322 tests verdes, lint 0. `ALMAGESTO_VERSION` 1.4.0 →
+> **1.5.0** (minor: modos y clave `candidates` nuevos, retrocompatible).
+
+- **#27** — **cero espurio de ADS**: `numFound: 0` con HTTP 200 (~2/6 corridas de la misma query)
+  hacía que la cadena corriera entera sobre un corpus vacío y saliera con exit 0 (y en un re-ingest
+  pisara el `ads.json` bueno). La query directa corre con `expect_hits`: reintenta con el backoff
+  existente y, si persiste, `EmptyResultError` → exit ≠ 0. Los ceros legítimos (chaining, `--sweep`,
+  `--probe`, `--extra-only`) intactos.
+- **#28** — **agujero de recall por glifo**: ADS unifica `epsilon`/`eps`/`ε` pero **descarta** los
+  lookalikes `ϵ` (U+03F5) y `∊` (U+220A, el glifo de ApJ/AJ/MNRAS) → esos papers quedan indexados
+  sólo por la constelación (ε Eri: **121 core perdidos**, incluido el descubrimiento). Rescate por
+  glifo: superset de la constelación + filtro client-side letra-específico, `via: glyph`, antes del
+  chaining (lo recuperado siembra el grafo). Sólo letras con lookalike; `--no-glyph` lo apaga.
+- **#39** — **`extra_core` es override**, no "sumá lo ausente": el paper que ADS sí devuelve y la
+  lente descarta ahora se rescata en el lugar (`via: manual`). Contador que distingue traídos de
+  rescatados + aviso de bibcodes declarados que ADS no devuelve.
+- **#37** — **guardia de expansión** en los orquestadores: entre `query_ads` y el primer paso que
+  gasta red y disco, frena si el core se multiplicó respecto de lo ya ingestado (×1.5 y >50 nuevos)
+  con el puntero a `relevance.require`/`min_topics`; `--yes` continúa a sabiendas. No aplica al
+  primer ingest.
+- **#38** — **compuerta de triage del chaining** (el grafo **propone**, no promueve): entra solo el
+  candidato con el **sujeto en el título** (1 FP en 310); el resto queda en la clave `candidates` de
+  `ads.json` **sin bajarse** para el juicio del LLM (`scripts/triage.py` + paso 2c de `ingest-star`).
+  Decisiones persistentes: aceptado → `extra_core`; descartado → `build/<slug>/triage.json` (no se
+  re-propone). Medido: 18% de precisión en los core nuevos del grafo. `--no-triage` lo apaga; en
+  temas no aplica.
+- **#40** — **`query_ads --dry-run`**: delta de re-clasificación offline (core antes/después, los
+  que salen separando extracción LLM de stubs, los que entran sin nota por vía). Paso 0 del
+  sub-modo D de `maintain`; antes era arqueología con scripts descartables.
+- **#41** — **`setup` guía la regla de combinación**: pregunta por la **faceta-eje**, propone
+  `relevance.require`, y `--probe` cierra con el **contraste** (qué cortaría cada faceta si fuera
+  obligatoria / cuánto se corta vs OR puro). Corolario documentado: con `require` declarada, afinar
+  las otras facetas ya no cambia el corte — lo que importa es el **recall de la eje**.
+- Skills: `ingest-star` 1.6.1 → **1.9.0**, `ingest-topic` 1.7.2 → **1.8.0**, `maintain` 1.3.2 →
+  **1.5.0**, `setup` 1.0.0 → **1.1.0**. `split_fm` centralizado en `lib_config`.
+
+## ✅ Framework 1.4.0 (2026-08-14) — tanda #30–#36: auditoría de framework
+
+> Registrada acá a posteriori (el release commit `0a83e7d` sólo bumpeó la versión). Aditiva:
+> `why_excluded` por registro en `ads.json` (#30), consulta `pscomppars` única (#31), residuo
+> completo de PDFs por verdad de disco (#32), lint portable por `Path.parts` (#33),
+> `accessed` = `retrieved` del snapshot + `--accessed` (#34), `stamp_excluded` quirúrgico (#35),
+> sync de docs/labels (#36).
+
 ## ✅ Framework 1.3.0 (2026-08-05) — tanda #24–#26: eficiencia del pipeline de ingesta
 
 > Primera tanda de la **revisión del pipeline de ingesta** (2026-08-05: tiempos / tokens /
