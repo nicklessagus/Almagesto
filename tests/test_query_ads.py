@@ -256,6 +256,50 @@ def test_query_ads_avisa_truncado(toy_classifier, ads_token, no_sleep, monkeypat
     assert "truncado" not in capsys.readouterr().out
 
 
+def test_query_ads_cero_espurio_reintenta_y_recupera(toy_classifier, ads_token, no_sleep, monkeypatch):
+    """#27: `numFound: 0` con HTTP 200 es sospechoso cuando se esperan hits — se reintenta con el
+    mismo backoff y la corrida siguiente (338 papers en el caso real) es la que vale."""
+    doc = {"bibcode": "2020ApJ...1..1A", "title": ["Starspots"], "doctype": "article"}
+    monkeypatch.setattr(qa, "requests", SimpleNamespace(get=fake_get_seq([
+        FakeResp(200, payload([], num_found=0)),          # cero espurio
+        FakeResp(200, payload([doc])),                    # la misma query, ahora con datos
+    ])))
+    out = qa.query_ads("q", rows=10, expect_hits=True)
+    assert [r["bibcode"] for r in out] == ["2020ApJ...1..1A"]
+    assert no_sleep == [5]
+
+
+def test_query_ads_cero_persistente_lanza(toy_classifier, ads_token, no_sleep, monkeypatch):
+    """Si el 0 sobrevive a todos los reintentos, falla ruidoso (exit ≠ 0 en el CLI) en vez de
+    persistir un corpus vacío; el mensaje deriva al nombre/alias del sujeto."""
+    monkeypatch.setattr(qa, "requests", SimpleNamespace(
+        get=fake_get_seq([FakeResp(200, payload([], num_found=0))] * 4)))
+    with pytest.raises(qa.EmptyResultError, match="stars.yaml"):
+        qa.query_ads("q", rows=10, expect_hits=True)
+    assert len(no_sleep) == 3                 # 3 backoffs, 4 intentos
+
+
+def test_query_ads_cero_legitimo_sin_expect_hits(toy_classifier, ads_token, no_sleep, monkeypatch):
+    """Los ceros válidos (chaining, --sweep, --probe, fetch_bibcodes) no se tocan: sin
+    `expect_hits` un 0 vuelve como lista vacía, sin reintentos."""
+    monkeypatch.setattr(qa, "requests", SimpleNamespace(
+        get=fake_get_seq([FakeResp(200, payload([], num_found=0))])))
+    assert qa.query_ads("q", rows=10) == []
+    assert no_sleep == []
+
+
+def test_main_query_directa_espera_hits(toy_vault, toy_classifier, no_sleep, monkeypatch):
+    """El call-site de la query directa (estrella) pasa expect_hits=True; el chaining, no."""
+    seen = {}
+    def fake_qa(q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False):
+        seen["expect_hits"] = expect_hits
+        return [rec("2020dirA....1A")]
+    monkeypatch.setattr(qa, "query_ads", fake_qa)
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    assert seen["expect_hits"] is True
+
+
 def test_query_ads_meta_sin_truncar(toy_classifier, ads_token, no_sleep, monkeypatch):
     """meta reporta truncated=False cuando numFound ≤ rows (así el caller escribe `truncated: null`)."""
     monkeypatch.setattr(qa, "requests", SimpleNamespace(
@@ -312,7 +356,7 @@ def test_main_estrella_chaining_dedup_y_via(toy_vault, toy_classifier, no_sleep,
                rec("2020chD....1D", relevant=False)]             # no-core encadenado → afuera
     for c in chained:
         c["via"] = "chain:references"
-    monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, quiet_truncate=False, meta=None: [dict(r) for r in direct])
+    monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False: [dict(r) for r in direct])
     monkeypatch.setattr(qa, "chain_candidates", lambda bibs, rows, filt: [dict(r) for r in chained])
     assert run_main(monkeypatch, ["test_star"]) == 0
     data = json.loads((toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text())
@@ -328,7 +372,7 @@ def test_main_estrella_chaining_dedup_y_via(toy_vault, toy_classifier, no_sleep,
 
 def test_main_no_chain(toy_vault, toy_classifier, no_sleep, monkeypatch):
     called = []
-    monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, quiet_truncate=False, meta=None: [rec("2020dirA....1A")])
+    monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False: [rec("2020dirA....1A")])
     monkeypatch.setattr(qa, "chain_candidates", lambda *a: called.append(a) or [])
     run_main(monkeypatch, ["test_star", "--no-chain"])
     assert called == []
@@ -337,7 +381,7 @@ def test_main_no_chain(toy_vault, toy_classifier, no_sleep, monkeypatch):
 def test_main_persiste_truncado(toy_vault, toy_classifier, no_sleep, monkeypatch):
     """Query directa truncada → main persiste `truncated: {num_found, rows}` en ads.json (#17),
     convirtiendo el aviso de stdout en una marca que el lint surface."""
-    def fake_qa(q, rows=2000, quiet_truncate=False, meta=None):
+    def fake_qa(q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False):
         if meta is not None:
             meta.update(num_found=410, rows=rows, truncated=True)
         return [rec("2020dirA....1A")]
@@ -352,7 +396,7 @@ def test_main_extra_core_persistente(toy_vault, toy_classifier, no_sleep, monkey
     stars = {"Estrella Test": {"slug": "test_star", "simbad": "s", "ads_object": "Test Star",
                                "aliases": [], "extra_core": ["1988old.....1O"]}}
     write_yaml(cfg.STARS_YAML, stars)
-    monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, quiet_truncate=False, meta=None: [rec("2020dirA....1A")])
+    monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False: [rec("2020dirA....1A")])
     monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
     monkeypatch.setattr(qa, "fetch_bibcodes",
                         lambda bibs: [dict(rec("1988old.....1O", relevant=True), via="manual")])

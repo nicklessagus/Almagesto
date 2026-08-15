@@ -30,6 +30,12 @@ mergean. Vive en config (se commitea) → sobrevive al re-run, a diferencia de e
 **`--sweep` (barrido full-text, paso 2b de ingest-star):** corre `full:` sobre nombre+aliases con
 TODAS las variantes de espaciado y lista SÓLO los core que `build/<slug>/ads.json` no tiene — los
 candidatos a `extra_core`. Preview como `--probe` (no baja nada ni escribe build/). Ver sweep_star.
+
+**Cero espurio (#27):** la query DIRECTA de un sujeto corre con `expect_hits` — ADS devuelve
+intermitentemente `numFound: 0` con HTTP 200; se reintenta con el mismo backoff y, si persiste, la
+corrida **falla** (`EmptyResultError`, exit ≠ 0) en vez de persistir un `ads.json` vacío con exit 0
+(que además pisaría el bueno de un re-ingest). Los ceros legítimos —chaining, `--sweep`, `--probe`,
+`--extra-only`— no se tocan.
 """
 from __future__ import annotations
 
@@ -181,12 +187,27 @@ RETRY_STATUS = (429, 500, 502, 503, 504)   # rate-limit / errores transitorios d
 RETRY_WAITS_S = (5, 15, 30)                # backoff entre reintentos
 
 
+class EmptyResultError(RuntimeError):
+    """La query que DEBE traer resultados volvió en 0 tras todos los reintentos (#27).
+
+    ADS devuelve intermitentemente `numFound: 0` con HTTP 200 (medido ~2/6 corridas sobre la misma
+    query): el status no distingue el cero espurio del legítimo, así que sin esto la cadena
+    persistía un corpus vacío y salía con exit 0 (peor: pisaba un `ads.json` bueno). Los callers de
+    la query DIRECTA de estrella/tema pasan `expect_hits=True`; el chaining, `--sweep`, `--probe` y
+    `fetch_bibcodes` no (un cero ahí es un resultado válido)."""
+
+
 def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
-              meta: dict | None = None) -> list[dict]:
+              meta: dict | None = None, expect_hits: bool = False) -> list[dict]:
     """Corre una query Solr `q` ya armada contra ADS y devuelve registros clasificados.
     Para estrellas, armar `q` con build_query(names); para temas, usar la query cruda del topic.
     Reintenta con backoff ante 429/5xx y avisa si el resultado quedó truncado (numFound > rows;
     `quiet_truncate` lo silencia — en el chaining el truncado a top-por-citas es por diseño).
+
+    `expect_hits=True` (sólo la query directa de un sujeto): trata `numFound == 0` como sospechoso
+    —el cero espurio con HTTP 200 de #27— y lo reintenta con el mismo backoff; si persiste, levanta
+    `EmptyResultError` en vez de devolver una lista vacía, para que la cadena aborte en vez de
+    persistir un corpus vacío con exit 0.
 
     Si se pasa `meta` (dict mutable), se rellena con `num_found`/`rows`/`truncated` de ESTA corrida
     — así el caller persiste la marca de truncamiento (`build/<slug>/ads.json`) para que el lint la
@@ -203,13 +224,25 @@ def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
             time.sleep(wait)
             continue
         resp.raise_for_status()
+        try:
+            response = resp.json()["response"]
+            docs = response["docs"]
+        except (ValueError, KeyError) as exc:   # cuerpo de error con 200 / formato inesperado
+            raise RuntimeError(
+                f"Respuesta inesperada de ADS (sin response.docs): {resp.text[:200]}") from exc
+        num_found = response.get("numFound", len(docs))
+        if expect_hits and num_found == 0 and wait is not None:
+            print(f"  ADS devolvió 0 resultados con HTTP 200 (cero espurio) — reintento en {wait} s")
+            time.sleep(wait)
+            continue
         break
-    try:
-        response = resp.json()["response"]
-        docs = response["docs"]
-    except (ValueError, KeyError) as exc:   # cuerpo de error con 200 / formato inesperado
-        raise RuntimeError(f"Respuesta inesperada de ADS (sin response.docs): {resp.text[:200]}") from exc
-    num_found = response.get("numFound", len(docs))
+    if expect_hits and num_found == 0:
+        raise EmptyResultError(
+            "ADS devolvió 0 resultados (HTTP 200) en todos los reintentos para la query directa:\n"
+            f"  {q}\n"
+            "Si el sujeto existe en ADS es el cero espurio de #27 (intermitente): re-corré, la "
+            "cadena es idempotente. Si se repite, revisá el nombre/alias del sujeto en "
+            "vault/config/stars.yaml (`ads_object`, `aliases`) o la `query` en topics.yaml.")
     truncated = num_found > rows
     if meta is not None:
         meta.update(num_found=num_found, rows=rows, truncated=truncated)
@@ -424,7 +457,9 @@ def main() -> int:
     if q is None:
         recs, rel = [], []          # --extra-only: todo entra por el bloque extra_core de abajo
     else:
-        recs = query_ads(q, rows=args.rows, meta=qmeta)
+        # expect_hits: la query directa de un sujeto NO puede volver vacía — un 0 es el cero
+        # espurio de ADS (#27) o un nombre mal escrito; en ambos casos abortar > persistir vacío.
+        recs = query_ads(q, rows=args.rows, meta=qmeta, expect_hits=True)
         for r in recs:
             r["via"] = "query"
         rel = [r for r in recs if r["relevant"]]
@@ -480,4 +515,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except EmptyResultError as exc:   # #27: exit ≠ 0 → el orquestador aborta la cadena
+        sys.exit(str(exc))
