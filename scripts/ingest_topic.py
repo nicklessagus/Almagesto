@@ -1,14 +1,16 @@
 """Orquestador de la cadena mecánica de ingest-topic: despacha según `source` del tema.
 
 Uso:
-    python ingest_topic.py <slug> [--force]
+    python ingest_topic.py <slug> [--force] [--yes]
 
 Lee la entrada del tema en vault/config/topics.yaml y corre la cadena que corresponda a su
 campo `source` (formaliza el modo off-ADS del skill ingest-topic en el tooling):
 
 - `ads` (default si el campo falta): cadena astro estándar —
-  query_ads --topic → fetch_arxiv → fetch_pdf → make_notes --topic → extract_fulltext →
-  check_retractions.
+  query_ads --topic → [guardia de expansión] → fetch_arxiv → fetch_pdf → make_notes --topic →
+  extract_fulltext → check_retractions. La **guardia de expansión** (#37) frena entre la query y
+  el primer paso que gasta red y disco si el core se multiplicó respecto de lo ya ingestado
+  (default ×1.5 y >50 nuevos); `--yes` continúa a sabiendas.
 - `web` | `local-pdfs` | `local-pdfs+web`: modo off-ADS. La bibliografía se declara en la
   lista `sources:` de la entrada (cada item: `key` = clave de cita sintética AAAA+Autor +
   `url` (fuente web) o `pdf` (ruta a un PDF provisto por el usuario) + metadata opcional
@@ -41,6 +43,7 @@ retro-tag) NO es de este script: la hace el agente siguiendo el skill ingest-top
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import shutil
 import subprocess
@@ -61,6 +64,46 @@ def run(script: str, *args: str) -> int:
     print(f"\n→ {script} {' '.join(args)}")
     return subprocess.run([sys.executable, str(cfg.ROOT / "scripts" / script), *args],
                           cwd=cfg.ROOT / "scripts").returncode
+
+
+# ── guardia de expansión (#37) ───────────────────────────────────────────────
+# La cadena es idempotente respecto de NO PISAR, pero no respecto del ALCANCE: un re-run puede
+# convertirse en una expansión masiva sin ningún checkpoint humano (caso real: re-correr au_mic
+# dio 191 core por query directa + 659 por chaining = 850 "core" contra ~230 notas, y el
+# orquestador siguió derecho a bajar PDFs). El conteo ya se imprimía, pero no gateaba nada.
+EXPANSION_FACTOR = 1.5     # salto mínimo (core nuevo / ya ingestado) para frenar
+EXPANSION_NEW = 50         # …y además, mínimo de papers nuevos (evita frenar por ruido chico)
+
+
+def expansion_guard(slug: str, yes: bool) -> None:
+    """Frena la cadena DESPUÉS de query_ads y ANTES del primer paso que gasta red y disco, si el
+    pool core se multiplicó respecto de lo ya ingestado del sujeto. No aplica al primer ingest
+    (sin notas previas no hay expansión que medir: el usuario acaba de pedir el sujeto entero)."""
+    adsfile = cfg.ROOT / "build" / slug / "ads.json"
+    if not adsfile.exists():
+        return
+    core = [r for r in json.loads(adsfile.read_text(encoding="utf-8"))["records"] if r.get("relevant")]
+    conocidos = {r["bibcode"] for r in core
+                 if (cfg.PAPERS / f"{make_notes.safe_name(r['bibcode'])}.md").exists()}
+    nuevos = [r for r in core if r["bibcode"] not in conocidos]
+    if not conocidos:                       # primer ingest del sujeto
+        return
+    factor = len(core) / len(conocidos)
+    if len(nuevos) < EXPANSION_NEW or factor < EXPANSION_FACTOR:
+        return
+    via_chain = sum(1 for r in nuevos if str(r.get("via") or "").startswith("chain:"))
+    print(f"\n⚠ EXPANSIÓN del corpus de {slug}: {len(core)} core vs {len(conocidos)} ya ingestados "
+          f"(×{factor:.1f}) → {len(nuevos)} papers NUEVOS, {via_chain} de ellos vía el grafo de citas.")
+    print("  Con la regla de combinación en OR (default), el chaining trae todo lo que menciona al "
+          "sujeto con ≥1 faceta cualquiera. La palanca es la OBLIGATORIEDAD, no podar regex:\n"
+          "    relevance.require: [<faceta-eje>]   # AND: la faceta sin la cual el paper no sirve\n"
+          "    relevance.min_topics: N             # ≥N facetas cualesquiera\n"
+          "  en vault/config/objective.yaml (skill setup). Después re-corré query_ads.py para "
+          "re-clasificar — todavía no se bajó nada.")
+    if not yes:
+        sys.exit(f"cadena frenada antes de bajar {len(nuevos)} papers. Para continuar a sabiendas: "
+                 f"--yes (el ads.json ya quedó regenerado; nada más se tocó).")
+    print("  → --yes: sigo con la expansión a sabiendas.")
 
 
 def repoint_source_pdf(key: str, declared: str, dest: Path) -> None:
@@ -90,7 +133,7 @@ def repoint_source_pdf(key: str, declared: str, dest: Path) -> None:
     print(f"  {key}: sources[].pdf repuntado → {rel}")
 
 
-def ingest_ads(slug: str) -> None:
+def ingest_ads(slug: str, yes: bool = False) -> None:
     """Cadena astro estándar (paso 2 del skill ingest-topic), abortando al primer fallo."""
     for script, args in (("query_ads.py", ["--topic", slug]),
                          ("fetch_arxiv.py", [slug]),
@@ -101,6 +144,8 @@ def ingest_ads(slug: str) -> None:
         if rc:
             sys.exit(f"{script} falló (rc={rc}) — cadena abortada. La cadena es idempotente: "
                      "corregí y re-corré ingest_topic.py (lo ya bajado no se re-baja).")
+        if script == "query_ads.py":       # checkpoint ANTES del primer paso que gasta red y disco
+            expansion_guard(slug, yes)
     # cierre: sólo los papers de ESTE ingest (el barrido completo es pasada periódica — maintain);
     # exit 1 acá significa "detectó papers retractados", no un fallo de la cadena
     if run("check_retractions.py", "--slug", slug):
@@ -244,6 +289,9 @@ def main() -> int:
     ap.add_argument("slug", help="tema de vault/config/topics.yaml")
     ap.add_argument("--force", action="store_true",
                     help="re-bajar/re-copiar FUENTES ya presentes (snapshot/PDF/fulltext); nunca pisa notas")
+    ap.add_argument("--yes", action="store_true",
+                    help="continuar a sabiendas si la guardia de expansión frena la cadena (el pool "
+                         "core se multiplicó respecto de lo ya ingestado)")
     args = ap.parse_args()
 
     try:
@@ -256,7 +304,7 @@ def main() -> int:
             print("  ⚠ la entrada tiene `sources:` pero source: ads — la lista se ignora en modo ADS.")
         if args.force:
             print("  ⚠ --force no aplica al modo ads (corré el script puntual con --force si hace falta).")
-        ingest_ads(args.slug)
+        ingest_ads(args.slug, args.yes)
     elif source in OFFADS_KINDS:
         ingest_offads(args.slug, {**meta, "source": source}, args.force)
     else:

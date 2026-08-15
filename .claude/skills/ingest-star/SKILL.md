@@ -1,7 +1,7 @@
 ---
 name: ingest-star
 description: Usar cuando el usuario pide bajar/agregar/ingestar una estrella a la bóveda ("bajá GJ 581", "ingest tau ceti", "agregá la estrella X", "traé la bibliografía de AU Mic"). Corre la cadena de ingesta y hace la extracción LLM.
-version: 1.7.0
+version: 1.8.0
 ---
 
 # Ingest: agregar una estrella a la wiki
@@ -37,6 +37,13 @@ procesa. Trabajar desde la raíz del repo.
    **ancladas al sujeto** con `full:` sobre nombre+alias — trae surveys/catálogos conectados por el
    grafo de citas aunque no nombren la estrella en el abstract (quedan marcados `via: chain:*` en
    `ads.json`; se desactiva con `--no-chain`).
+   **Guardia de expansión (checkpoint humano).** Entre `query_ads` y el primer paso que gasta red
+   y disco, el orquestador compara el core del `ads.json` fresco contra las notas ya ingestadas del
+   sujeto: si se multiplicó (default ×1.5 y >50 nuevos) **frena** con el conteo, cuántos vinieron
+   por el grafo de citas y el puntero a `relevance.require`/`min_topics`. Antes de refrescar un
+   sujeto viejo, mirá ese número: si el pool explotó, revisá la **regla de combinación** en
+   `objective.yaml` (skill `setup`) antes de bajar nada — podar las regex no alcanza si la
+   combinación sigue siendo OR. `--yes` continúa a sabiendas.
    Si el nombre es **Bayer** (letra griega + constelación) corre antes el **rescate por glifo**
    (`via: glyph`, se desactiva con `--no-glyph`): ADS unifica `epsilon`/`eps`/`ε` pero **descarta**
    los lookalikes `ϵ` (U+03F5) y `∊` (U+220A, el glifo de ApJ/AJ/MNRAS), así que esos papers quedan

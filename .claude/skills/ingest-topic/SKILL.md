@@ -1,7 +1,7 @@
 ---
 name: ingest-topic
 description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema off-ADS — típicamente un método de otra disciplina (estadística, ML) al servicio del foco astro — desde PDFs locales + web (ver Modo off-ADS).
-version: 1.7.2
+version: 1.8.0
 ---
 
 # Ingest: agregar un TEMA a la wiki
@@ -64,6 +64,13 @@ del repo.
    fallback `curl`); lo que ni así sale queda en `build/<slug>/missing_pdf.json` (residuo
    completo del ingest) → bajar manual por DOI si son clave. Curación persistente con
    `extra_core: [<bibcode>, …]` en la entrada del tema en `topics.yaml` (igual que en estrellas).
+   **Guardia de expansión (checkpoint humano).** Entre `query_ads` y el primer paso que gasta red
+   y disco, el orquestador compara el core del `ads.json` fresco contra las notas ya ingestadas del
+   sujeto: si se multiplicó (default ×1.5 y >50 nuevos) **frena** con el conteo, cuántos vinieron
+   por el grafo de citas y el puntero a `relevance.require`/`min_topics`. Antes de refrescar un
+   sujeto viejo, mirá ese número: si el pool explotó, revisá la **regla de combinación** en
+   `objective.yaml` (skill `setup`) antes de bajar nada — podar las regex no alcanza si la
+   combinación sigue siendo OR. `--yes` continúa a sabiendas.
 
 3. **Extracción LLM (criterio).** Leer los papers **clave del tema** (fundacionales / árbitros /
    metodológicos) desde `vault/raw/fulltext/<slug>/` y poblar cada `vault/wiki/papers/<bibcode>.md`: `methods`,

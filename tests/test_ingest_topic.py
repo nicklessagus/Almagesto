@@ -69,6 +69,24 @@ def test_cadena_ads_en_orden(toy_vault, fake_run, fake_notes, monkeypatch):
     assert fake_run.calls[-1] == ("check_retractions.py", "--slug", "gp")   # sólo este ingest
 
 
+def test_guardia_expansion_frena_la_cadena_ads(toy_vault, fake_run, fake_notes, monkeypatch, capsys):
+    """#37: el checkpoint corre también para temas, entre query_ads y fetch_arxiv."""
+    import json
+    from conftest import mk_note
+    topic()
+    recs = [{"bibcode": f"20{i:02d}core...{i:03d}A", "relevant": True, "via": "chain:references"}
+            for i in range(200)]
+    d = toy_vault.ROOT / "build" / "gp"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "ads.json").write_text(json.dumps({"records": recs}), encoding="utf-8")
+    for r in recs[:10]:
+        mk_note(cfg.PAPERS, r["bibcode"], {"bibcode": r["bibcode"]})
+    with pytest.raises(SystemExit, match="frenada"):
+        run_main(monkeypatch)
+    assert [c[0] for c in fake_run.calls] == ["query_ads.py"]
+    assert "EXPANSIÓN" in capsys.readouterr().out
+
+
 def test_cadena_ads_aborta_al_primer_fallo(toy_vault, fake_run, monkeypatch):
     topic()
     fake_run.rcs["fetch_arxiv.py"] = 1
