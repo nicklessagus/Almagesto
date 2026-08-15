@@ -1,7 +1,7 @@
 ---
 name: maintain
 description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), resolver el backlog del lint (huérfanos, P_rot faltante, drift PDF↔disco, claims stale), y la pasada periódica de retracciones sobre toda la bóveda ("chequeá retracciones").
-version: 1.5.0
+version: 1.6.0
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
@@ -34,6 +34,10 @@ cierra con **verify-citations** (si tocó prosa con `[[bibcode]]`) + **lint en 0
    regla de relevancia quedó laxa, el citation chaining puede multiplicar el pool. La guardia de
    expansión del orquestador frena antes de bajar nada y te manda a revisar
    `relevance.require`/`min_topics` (`--yes` para continuar a sabiendas).
+1b. **Triage de los candidatos del chaining** (estrellas): el refresh deja los candidatos nuevos en
+   `candidates` de `build/<slug>/ads.json`, **sin bajar** — correr `python triage.py <slug>` y
+   juzgarlos por título+abstract (aceptado → `extra_core` + re-correr; descartado → `--drop` con
+   motivo; dudoso → al usuario). Ver paso 2c del skill `ingest-star`.
 2. **Identificar lo nuevo:** `git status` sobre `vault/wiki/papers/` muestra los stubs recién creados. Leer
    **sólo esos** fulltext y hacer su extracción (methods/bearing/thesis_links/P·K/indicadores).
 3. **Re-sintetizar incorporando sólo lo nuevo:** releer la ficha/concepto y **actualizar** la síntesis y
