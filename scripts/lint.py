@@ -65,14 +65,7 @@ LINK_SKIP = {"..", "...", "link", "links", "wikilinks", "bibcode", "related-conc
 NON_ORPHAN = {"index", "log", "README"}  # navegación, no son huérfanos
 
 
-def split_fm(text: str) -> dict:
-    parts = text.split("---")
-    if len(parts) < 3:
-        return {}
-    try:
-        return yaml.safe_load(parts[1]) or {}
-    except Exception:
-        return {}
+split_fm = cfg.split_fm      # implementación única en lib_config (la comparte el dry-run de #40)
 
 
 def fm_error(text: str) -> str | None:

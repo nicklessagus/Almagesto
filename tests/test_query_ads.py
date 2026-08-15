@@ -585,6 +585,83 @@ def test_main_tema_sin_query_sugiere_offads(toy_vault, toy_classifier, monkeypat
         run_main(monkeypatch, ["gp", "--topic"])
 
 
+# ── dry-run del delta de re-clasificación (#40) ──────────────────────────────
+
+def write_ads_json(toy_vault, slug, records):
+    d = toy_vault.ROOT / "build" / slug
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "ads.json").write_text(json.dumps({"kind": "star", "slug": slug,
+                                            "n_total": len(records), "records": records}),
+                                encoding="utf-8")
+
+
+def test_note_state_distingue_extraccion_de_stub(toy_vault):
+    from conftest import mk_note
+    mk_note(cfg.PAPERS, "2020extr....1A", {"bibcode": "2020extr....1A", "methods": ["ccf"]})
+    mk_note(cfg.PAPERS, "2020stub....1B", {"bibcode": "2020stub....1B", "methods": []})
+    assert qa.note_state("2020extr....1A") == "extraida"
+    assert qa.note_state("2020stub....1B") == "stub"
+    assert qa.note_state("2020nada....1C") == "sin_nota"
+
+
+def test_classify_record_lee_el_formato_persistido(toy_classifier):
+    """En ads.json `title` es string (no lista como en la respuesta cruda de ADS)."""
+    assert qa.classify_record({"title": "Starspot evolution", "doctype": "article"})[1] is True
+    # via: manual es override del usuario (#39): la regla no lo re-juzga
+    assert qa.classify_record({"title": "algo ajeno", "doctype": "article", "via": "manual"})[1] is True
+
+
+def test_reclass_diff_reporta_el_delta(toy_vault, toy_classifier, monkeypatch, capsys):
+    """#40: con `require: [rv]` declarada, un paper de actividad SALE del core — y el reporte
+    separa el que tiene extracción LLM (la decisión real) de los stubs."""
+    from conftest import mk_note
+    monkeypatch.setattr(qa, "REQUIRE_TOPICS", ["rv"])
+    write_ads_json(toy_vault, "test_star", [
+        {"bibcode": "1991AJ....102.1813F", "title": "rotation and activity", "abstract": "",
+         "keyword": [], "doctype": "article", "relevant": True, "via": "query", "citation_count": 40},
+        {"bibcode": "2015stub....1S", "title": "starspot survey", "abstract": "",
+         "keyword": [], "doctype": "article", "relevant": True, "via": "chain:citations"},
+        {"bibcode": "2020rv.....1R", "title": "radial velocity of the star", "abstract": "",
+         "keyword": [], "doctype": "article", "relevant": True, "via": "query"},
+        {"bibcode": "2021new....1N", "title": "radial velocity activity", "abstract": "",
+         "keyword": [], "doctype": "article", "relevant": False, "via": "chain:references"},
+    ])
+    mk_note(cfg.PAPERS, "1991AJ....102.1813F", {"bibcode": "1991AJ....102.1813F",
+                                                "methods": ["ccf", "bisector"]})
+    mk_note(cfg.PAPERS, "2015stub....1S", {"bibcode": "2015stub....1S", "methods": []})
+    assert qa.reclass_diff(["test_star"]) == 0
+    out = capsys.readouterr().out
+    assert "core 3 → 2" in out
+    assert "SALEN del core: 2 — con extracción LLM: 1 · stubs: 1" in out
+    assert "1991AJ....102.1813F" in out and "2015stub....1S" not in out   # stubs sólo se cuentan
+    assert "ENTRAN al core: 1 — sin nota (a crear): 1  (1 chain:references)" in out
+
+
+def test_reclass_diff_no_escribe_nada(toy_vault, toy_classifier):
+    """Dry-run: ni ads.json ni la bóveda se tocan."""
+    recs = [{"bibcode": "2020a....1A", "title": "activity", "abstract": "", "keyword": [],
+             "doctype": "article", "relevant": True, "via": "query"}]
+    write_ads_json(toy_vault, "test_star", recs)
+    antes = (toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text()
+    qa.reclass_diff(["test_star"])
+    assert (toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text() == antes
+    assert list(cfg.PAPERS.iterdir()) == []
+
+
+def test_main_dry_run_sin_slug_barre_los_ingestados(toy_vault, toy_classifier, monkeypatch, capsys):
+    write_ads_json(toy_vault, "test_star", [])
+    write_ads_json(toy_vault, "otra", [])
+    monkeypatch.setattr(qa, "query_ads", lambda *a, **kw: pytest.fail("el dry-run no consulta ADS"))
+    assert run_main(monkeypatch, ["--dry-run"]) == 0
+    out = capsys.readouterr().out
+    assert "test_star:" in out and "otra:" in out
+
+
+def test_main_dry_run_sin_corpus_error_amigable(toy_vault, toy_classifier, monkeypatch):
+    with pytest.raises(SystemExit, match="ads.json"):
+        run_main(monkeypatch, ["--dry-run"])
+
+
 def test_probe_lista_todo_el_core(toy_classifier, capsys):
     recs = [rec(f"2020core...{i}A", cites=i) for i in range(30)] + [rec("2020non....1N", relevant=False)]
     qa.print_probe("q", recs)

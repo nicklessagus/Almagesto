@@ -147,6 +147,18 @@ def load_objective() -> dict:
         return yaml.safe_load(fh) or {}
 
 
+def split_fm(text: str) -> dict:
+    """Frontmatter YAML de una nota (dict vacío si no hay o no parsea — el lint reporta aparte las
+    notas cuyo YAML está roto). Compartido: lo usan el lint y el dry-run de re-clasificación."""
+    parts = text.split("---")
+    if len(parts) < 3:
+        return {}
+    try:
+        return yaml.safe_load(parts[1]) or {}
+    except Exception:
+        return {}
+
+
 # Áreas de vault/wiki/concepts/ RESERVADAS (siempre válidas): `methods` es universal;
 # `hypotheses` es estructural (schema name/status + roll-up Dataview). Ver CLAUDE.md.
 RESERVED_CONCEPT_AREAS = ("methods", "hypotheses")

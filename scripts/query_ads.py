@@ -34,6 +34,12 @@ más común de la curación (paper del sujeto que la lente descarta) no hacía n
 TODAS las variantes de espaciado y lista SÓLO los core que `build/<slug>/ads.json` no tiene — los
 candidatos a `extra_core`. Preview como `--probe` (no baja nada ni escribe build/). Ver sweep_star.
 
+**`--dry-run` (delta de re-clasificación, #40):** re-clasifica **en memoria** los `ads.json` ya
+bajados con la regla vigente de `objective.yaml` y reporta el delta —core antes/después, los que
+**salen** del core separando *con extracción LLM* (la decisión real) de *stubs*, y los que **entran**
+sin nota por vía— sin consultar ADS ni escribir nada. Es el paso 2 del sub-modo D de `maintain`,
+que antes había que hacer con scripts descartables.
+
 **Rescate por glifo (#28):** para sujetos con nombre **Bayer** (letra griega + constelación) hay un
 agujero de recall sistemático — ADS unifica `epsilon`/`eps`/`ε`, pero **descarta** los lookalikes
 `ϵ` (U+03F5) y `∊` (U+220A, el glifo de ApJ/AJ/MNRAS), así que esos papers quedan indexados sólo por
@@ -462,6 +468,90 @@ def sweep_star(slug: str, rows: int) -> int:
     return 0
 
 
+# ── dry-run de re-clasificación (#40) ────────────────────────────────────────
+
+def classify_record(r: dict) -> tuple[list[str], bool]:
+    """`classify` sobre un registro YA persistido en ads.json (title es string, no lista como en
+    la respuesta cruda de ADS). Los `via: manual` son core por decisión del usuario (override de
+    `extra_core`, #39): la regla no los toca."""
+    topics, relevant = classify({"title": [r.get("title") or ""],
+                                 "abstract": r.get("abstract") or "",
+                                 "keyword": r.get("keyword") or [],
+                                 "doctype": r.get("doctype") or ""})
+    return topics, True if r.get("via") == "manual" else relevant
+
+
+def note_state(bibcode: str) -> str:
+    """Estado de la nota de un paper: `extraida` (tiene extracción LLM — `methods` poblado),
+    `stub` (existe pero mudo) o `sin_nota`. Es el número que decide en la re-clasificación:
+    "342 notas salen del core" asusta hasta ver que 338 son stubs y sólo 4 tenían trabajo encima."""
+    dest = cfg.PAPERS / f"{bibcode.replace('/', '_')}.md"
+    if not dest.exists():
+        return "sin_nota"
+    fm = cfg.split_fm(dest.read_text(encoding="utf-8"))
+    return "extraida" if (fm.get("methods") or []) else "stub"
+
+
+def reclass_diff(slugs: list[str]) -> int:
+    """Preview del delta de re-clasificación (sub-modo D de `maintain`): re-clasifica **en memoria**
+    los `build/<slug>/ads.json` existentes con la regla VIGENTE de objective.yaml y reporta el delta
+    contra el `relevant` persistido. No consulta ADS, no escribe build/ ni toca la bóveda.
+
+    Reporta por slug: core antes/después, los papers que SALEN del core separando los que tienen
+    extracción LLM (lista completa: son pocos y son la decisión real) de los stubs (sólo conteo), y
+    los que ENTRAN al core sin nota, por vía de entrada."""
+    total_out = total_out_llm = total_in = 0
+    for slug in slugs:
+        adsfile = cfg.ROOT / "build" / slug / "ads.json"
+        if not adsfile.exists():
+            print(f"{slug}: sin build/{slug}/ads.json — nada que re-clasificar")
+            continue
+        recs = json.loads(adsfile.read_text(encoding="utf-8"))["records"]
+        before = [r for r in recs if r.get("relevant")]
+        after, salen, entran = [], [], []
+        for r in recs:
+            _, now = classify_record(r)
+            if now:
+                after.append(r)
+            if r.get("relevant") and not now:
+                salen.append(r)
+            elif now and not r.get("relevant"):
+                entran.append(r)
+        factor = (len(after) / len(before)) if before else float("inf")
+        print(f"\n{slug}: {len(recs)} registros · core {len(before)} → {len(after)}  "
+              f"(factor {factor:.2f})")
+
+        estado = {r["bibcode"]: note_state(r["bibcode"]) for r in salen}
+        con_llm = [r for r in salen if estado[r["bibcode"]] == "extraida"]
+        stubs = [r for r in salen if estado[r["bibcode"]] == "stub"]
+        print(f"  SALEN del core: {len(salen)} — con extracción LLM: {len(con_llm)} · "
+              f"stubs: {len(stubs)} · sin nota: {len(salen) - len(con_llm) - len(stubs)}")
+        for r in sorted(con_llm, key=lambda r: r.get("citation_count") or 0, reverse=True):
+            print(f"    ← {r['bibcode']}  {' '.join((r.get('title') or '').split())[:64]}")
+
+        sin_nota = [r for r in entran if note_state(r["bibcode"]) == "sin_nota"]
+        vias: dict[str, int] = {}
+        for r in sin_nota:
+            vias[r.get("via") or "?"] = vias.get(r.get("via") or "?", 0) + 1
+        detalle = " · ".join(f"{v} {k}" for k, v in sorted(vias.items())) or "—"
+        print(f"  ENTRAN al core: {len(entran)} — sin nota (a crear): {len(sin_nota)}  ({detalle})")
+        total_out += len(salen)
+        total_out_llm += len(con_llm)
+        total_in += len(sin_nota)
+    if len(slugs) > 1:
+        print(f"\nTotal: salen {total_out} (con extracción LLM {total_out_llm}) · "
+              f"entran sin nota {total_in}")
+    print("\n  → dry-run: no se escribió nada. Para aplicar, re-corré la cadena del sujeto "
+          "(query_ads/make_notes) — sub-modo D del skill maintain.")
+    return 0
+
+
+def built_slugs() -> list[str]:
+    """Slugs con `build/<slug>/ads.json` (los sujetos ya ingestados: el universo del dry-run)."""
+    builds = cfg.ROOT / "build"
+    return sorted(p.parent.name for p in builds.glob("*/ads.json")) if builds.exists() else []
+
+
 def print_probe(q: str, recs: list, noncore_top: int = 25) -> int:
     """Modo preview del skill `setup`: muestra el corte core/no-core de una query sin bajar nada,
     para afinar la regla de relevancia (relevance.topics) contra papers reales. Lista **TODO el core**
@@ -509,6 +599,13 @@ def main() -> int:
                     help="PREVIEW (skill setup): corre una query Solr CRUDA y muestra el corte "
                          "core/no-core con títulos, clasificando con relevance.topics de objective.yaml. "
                          "No baja PDFs ni escribe build/ — sólo para afinar la regla de relevancia.")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="PREVIEW de re-clasificación (sub-modo D de maintain): re-clasifica EN "
+                         "MEMORIA los build/<slug>/ads.json ya existentes con la regla vigente de "
+                         "objective.yaml y reporta el delta (core antes/después, papers que salen "
+                         "—separando los que tienen extracción LLM de los stubs— y los que entran "
+                         "sin nota, por vía). No consulta ADS ni escribe nada. Sin slug: TODOS los "
+                         "sujetos ya ingestados.")
     ap.add_argument("--sweep", action="store_true",
                     help="barrido full-text del paso 2b de ingest-star: corre full: sobre "
                          "nombre+aliases (todas las grafías, sin probes a mano) y lista SÓLO los "
@@ -518,6 +615,13 @@ def main() -> int:
 
     if args.probe:
         return print_probe(args.probe, query_ads(args.probe, rows=args.rows))
+
+    if args.dry_run:   # offline: sólo re-clasifica lo que ya está en build/ (no toca ADS)
+        slugs = [args.slug] if args.slug else built_slugs()
+        if not slugs:
+            sys.exit("no hay ningún build/<slug>/ads.json — el dry-run compara contra un corpus "
+                     "ya bajado (corré la cadena de ingest primero).")
+        return reclass_diff(slugs)
 
     if not args.slug:
         ap.error('falta el slug (o usá --probe "<query>" para previsualizar la regla de relevancia)')
