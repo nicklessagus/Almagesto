@@ -1,7 +1,7 @@
 ---
 name: setup
 description: Usar cuando el usuario quiere definir o reescribir el OBJETIVO de la bóveda — el archivo que orienta qué papers son "core" ("configurá la bóveda", "definí el objetivo", "armá el objective.yaml", "quiero usar Almagesto para el tema X", "ajustá la regla de relevancia", "para qué va a servir esta bóveda"). El agente traduce el foco en lenguaje natural a `objective.yaml` (incluida la regex `relevance.topics`) y la afina contra ADS con un preview, para que el usuario NO escriba regex a mano. NO ingesta nada: después se usan ingest-star / ingest-topic.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Setup: definir el OBJETIVO de la bóveda
@@ -15,8 +15,9 @@ qué paper es "core") y nombrar las `concept_areas`. Una regex a mano sale mal (
 papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** antes de cerrar.
 
 **Qué controla el objetivo (tenelo claro al redactar):**
-- `relevance.topics` = **clasificador de relevancia**. Un paper es **core** si matchea **≥1** bucket
-  (OR; regex sobre título+abstract+keywords, case-insensitive) **y** su `doctype` no es ruido. Core →
+- `relevance.topics` = **clasificador de relevancia**. Un paper es **core** si satisface la **regla de
+  combinación** (por default OR: ≥1 bucket; ver `relevance.require`/`min_topics` en el paso 2 — regex
+  sobre título+abstract+keywords, case-insensitive) **y** su `doctype` no es ruido. Core →
   se baja el PDF + fulltext + extracción LLM; no-core → solo se cuenta. **No** define la query a ADS
   (para estrellas la query es por nombre; para temas, la Solr cruda de `topics.yaml`).
 - `name`/`short`/`description` = **lente de síntesis** (orientan qué destila el LLM y qué es un "hueco").
@@ -29,6 +30,10 @@ papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** 
    - ¿Un paper "core" para vos es…? Pedir **1–2 ejemplos ideales** y, si puede, 1 que NO querría — afina
      muchísimo la regla.
    - ¿La bibliografía vive en ADS (astro) o fuera (p. ej. un método de otra disciplina)? Si es **off-ADS**, ver el paso 6.
+   - **¿Cuál es la faceta-eje?** — la que, si falta, el paper **no sirve** por más que matchee todo lo
+     demás (p. ej. `rv` en una bóveda de velocidades radiales: un paper de actividad estelar que nunca
+     toca RV es contexto, no core). Preguntarla explícitamente: define `relevance.require` (paso 2), que
+     es la palanca real contra el ruido. Si el usuario no identifica ninguna, se queda en OR.
    No avanzar sin un foco claro.
 
    **Separar dos cosas al escuchar el foco (clave para no equivocar el archivo):**
@@ -50,13 +55,19 @@ papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** 
      **comillas simples**, **una línea por patrón** (YAML literal: `\b` y demás llegan intactos). Cubrir
      **sinónimos en inglés** (ADS es inglés), instrumentos y términos técnicos. Recordar que por default es
      un **OR**: basta que matchee 1 bucket. Partir del ejemplo del template como molde de formato.
-   - `relevance.require` / `relevance.min_topics` (**opcionales**): la **regla de combinación**. Por default
-     OR (≥1 faceta) — bien para la query directa, pero el citation chaining amplía el pool y esa laxitud deja
-     pasar off-topic. Si hay una **faceta-eje** que todo paper core debería tocar (p. ej. `rv` en una bóveda
-     de velocidades radiales), declarala obligatoria: `require: [rv]` (AND) y/o `min_topics: 2` (al menos N
-     cualesquiera). Core = (≥ min_topics facetas) Y (todas las de require) Y (doctype no-ruido). La palanca
-     contra el ruido del chaining es la **obligatoriedad**, no podar regex. Dejar ambas sin declarar = OR
-     histórico. **Cada faceta de `require` debe existir en `topics`** (si no, el clasificador aborta).
+   - `relevance.require` / `relevance.min_topics`: la **regla de combinación** — parte del objetivo, no
+     config avanzada. Por default es OR (≥1 faceta): está calibrado para el pool chico de la query directa
+     y **se rompe apenas el pool se amplía** por citation chaining, porque una faceta laxa deja de
+     discriminar. Con la faceta-eje del paso 1, proponer `require: [<eje>]` (AND) y/o `min_topics: 2`
+     (≥N cualesquiera). Core = (≥ min_topics facetas) Y (todas las de require) Y (doctype no-ruido).
+     La palanca contra el ruido es la **obligatoriedad**, no podar regex — medido en una bóveda de RV:
+     podar las regex bajó AU Mic de 928 a 762 core (paliativo); declarar `require: [rv]` la llevó de
+     850 a 198. Dejar ambas sin declarar = OR histórico. **Cada faceta de `require` debe existir en
+     `topics`** (si no, el clasificador aborta).
+     **Corolario (decírselo al usuario):** una vez declarada `require` con `min_topics: 1`, afinar las
+     **otras** facetas ya **no cambia el corte** (core ⟺ matchea la eje ∧ doctype limpio) — sólo etiqueta.
+     Lo que hay que cuidar es el **recall de la faceta-eje**: listar todos sus sinónimos e instrumentos.
+     Las demás facetas siguen siendo útiles como etiquetas (y para `min_topics ≥ 2`).
    - `noise_doctypes`: el default (catalog, proposal, abstract, erratum, bookreview, newsletter,
      pressrelease, circular, software) salvo razón.
    - `concept_areas`: sugerir 3–5 áreas según el foco (`methods`/`hypotheses` reservadas + las que
@@ -71,8 +82,12 @@ papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** 
      `abs:"radial velocity" OR abs:"stellar activity"`). **Ojo:** la query de prueba **no es** la regex
      — es solo para traer una muestra de papers del área y ver cómo los corta el clasificador.
    - Correr: `python scripts/query_ads.py --probe "<query de prueba>" --rows 50`
-   - Leer el corte que imprime: `N CORE / no-core`, y el top por citas con marcador `[CORE/—]` + qué
-     tópicos matchearon. **Juzgar:** ¿se cuela ruido (marcó CORE algo que no debería)? ¿se pierde algo
+   - Leer el corte que imprime: `N CORE / no-core`, el top por citas con marcador `[CORE/—]` + qué
+     tópicos matchearon, y el **contraste de la regla de combinación** que cierra el reporte: sin regla
+     declarada lista qué cortaría **cada faceta si fuera la obligatoria** (`require: [rv] → 123 CORE
+     (−52%)`); con regla declarada, cuánto se está cortando respecto del OR puro. **Ese contraste es el
+     que decide `require`** — mostrárselo al usuario en vez de argumentarlo.
+   - **Juzgar:** ¿se cuela ruido (marcó CORE algo que no debería)? ¿se pierde algo
      bueno (marcó — un paper claramente relevante)? **Editar `relevance.topics`** (sumar/sacar términos o
      buckets) y **re-correr `--probe`**. Iterar 1–3 veces hasta que el corte cierre.
    - Mostrar el corte final al usuario y **confirmar** antes de dar por cerrado.

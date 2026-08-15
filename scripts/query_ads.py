@@ -552,16 +552,47 @@ def built_slugs() -> list[str]:
     return sorted(p.parent.name for p in builds.glob("*/ads.json")) if builds.exists() else []
 
 
+def count_core(recs: list, require: list[str], min_topics: int) -> int:
+    """Cuántos registros serían core bajo una regla de combinación HIPOTÉTICA (misma precedencia que
+    `exclusion_reason`, sobre los `topics` ya clasificados). Insumo del contraste del `--probe`."""
+    return sum(1 for r in recs
+               if r["topics"] and r.get("doctype") not in NOISE_DOCTYPES
+               and all(t in r["topics"] for t in require)
+               and len(r["topics"]) >= min_topics)
+
+
+def print_combination_contrast(recs: list) -> None:
+    """Corte CON y SIN faceta obligatoria (#41). La regla de combinación es la palanca real contra el
+    ruido —una faceta laxa deja de discriminar apenas el pool se amplía por chaining— pero `--probe`
+    sólo mostraba el corte vigente, así que la decisión de declarar `require` se discutía en vez de
+    medirse. Si ya hay regla declarada, se contrasta contra el OR puro; si no, se muestra qué pasaría
+    con cada faceta como eje."""
+    base = count_core(recs, [], 1)      # OR puro: ≥1 faceta cualquiera (el default histórico)
+    if REQUIRE_TOPICS or MIN_TOPICS > 1:
+        regla = (f"require={REQUIRE_TOPICS or '[]'}, min_topics={MIN_TOPICS}")
+        print(f"  regla de combinación vigente: {regla} · en OR puro serían {base} CORE")
+        return
+    print(f"  regla de combinación vigente: OR (≥1 faceta cualquiera) → {base} CORE.")
+    print("  Si declararas una faceta-eje obligatoria (relevance.require) el corte sería:")
+    for t in TOPIC_PATTERNS:
+        n = count_core(recs, [t], 1)
+        pct = f"−{100 * (base - n) / base:.0f}%" if base else "—"
+        print(f"    require: [{t}]{' ' * max(0, 14 - len(t))}→ {n:>5} CORE  ({pct})")
+
+
 def print_probe(q: str, recs: list, noncore_top: int = 25) -> int:
     """Modo preview del skill `setup`: muestra el corte core/no-core de una query sin bajar nada,
     para afinar la regla de relevancia (relevance.topics) contra papers reales. Lista **TODO el core**
     (no un top-N: papers recientes/poco citados caen al fondo del ranking pero pueden ser core); del
-    no-core muestra sólo el top `noncore_top` por citas (chequeo de sanidad del corte). El barrido
-    2b de ingest-star, que antes se hacía con probes manuales, hoy corre por --sweep (sweep_star)."""
+    no-core muestra sólo el top `noncore_top` por citas (chequeo de sanidad del corte). Cierra con el
+    contraste de la regla de combinación (#41). El barrido 2b de ingest-star, que antes se hacía con
+    probes manuales, hoy corre por --sweep (sweep_star)."""
     core = sorted((r for r in recs if r["relevant"]), key=lambda r: r.get("citation_count") or 0, reverse=True)
     noncore = sorted((r for r in recs if not r["relevant"]), key=lambda r: r.get("citation_count") or 0, reverse=True)
     print(f"Probe (no baja PDFs ni escribe build/). q: {q}")
-    print(f"  {len(recs)} papers · {len(core)} CORE · {len(noncore)} no-core\n")
+    print(f"  {len(recs)} papers · {len(core)} CORE · {len(noncore)} no-core")
+    print_combination_contrast(recs)
+    print()
     print(f"  CORE (todos, por citas)  [tópicos que matchearon]:")
     for r in core:
         print(_probe_row(r))

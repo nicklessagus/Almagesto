@@ -662,6 +662,45 @@ def test_main_dry_run_sin_corpus_error_amigable(toy_vault, toy_classifier, monke
         run_main(monkeypatch, ["--dry-run"])
 
 
+def test_probe_contrasta_facetas_eje_candidatas(toy_classifier, capsys):
+    """#41: sin regla declarada, el probe muestra qué cortaría cada faceta si fuera obligatoria —
+    el contraste que hace medible la decisión de declarar `require` (antes se discutía)."""
+    recs = [
+        {"title": "radial velocity and activity", "topics": ["rv", "actividad"],
+         "doctype": "article", "relevant": True, "citation_count": 5},
+        {"title": "starspot survey", "topics": ["actividad"], "doctype": "article",
+         "relevant": True, "citation_count": 3},
+        {"title": "asteroseismology", "topics": [], "doctype": "article",
+         "relevant": False, "citation_count": 9},
+    ]
+    qa.print_probe("q", recs)
+    out = capsys.readouterr().out
+    assert "OR (≥1 faceta cualquiera) → 2 CORE" in out
+    assert "require: [rv]" in out and "1 CORE" in out          # la eje corta a la mitad
+    assert "require: [actividad]" in out
+
+
+def test_probe_contrasta_regla_declarada_contra_or(toy_classifier, monkeypatch, capsys):
+    """Con `require` ya declarada, el contraste es contra el OR puro (qué se está cortando)."""
+    monkeypatch.setattr(qa, "REQUIRE_TOPICS", ["rv"])
+    recs = [
+        {"title": "rv", "topics": ["rv"], "doctype": "article", "relevant": True, "citation_count": 1},
+        {"title": "act", "topics": ["actividad"], "doctype": "article", "relevant": False,
+         "citation_count": 1},
+    ]
+    qa.print_probe("q", recs)
+    out = capsys.readouterr().out
+    assert "require=['rv'], min_topics=1" in out and "en OR puro serían 2 CORE" in out
+
+
+def test_count_core_respeta_doctype_ruido(toy_classifier):
+    recs = [{"topics": ["rv"], "doctype": "catalog"}, {"topics": ["rv"], "doctype": "article"},
+            {"topics": [], "doctype": "article"}]
+    assert qa.count_core(recs, [], 1) == 1
+    assert qa.count_core(recs, ["actividad"], 1) == 0
+    assert qa.count_core(recs, [], 2) == 0
+
+
 def test_probe_lista_todo_el_core(toy_classifier, capsys):
     recs = [rec(f"2020core...{i}A", cites=i) for i in range(30)] + [rec("2020non....1N", relevant=False)]
     qa.print_probe("q", recs)
