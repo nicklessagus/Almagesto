@@ -7,7 +7,8 @@
 # `slug`: nombre de archivo/carpeta (sin espacios). `data_local`: puntero a los datos crudos locales
 #   de la estrella (opcional, ruta machine-local; no se commitea).
 # `extra_core`: (opcional) lista de bibcodes que el clasificador perdió y querés forzar como core
-#   (curación manual). `query_ads` los trae por bibcode, los marca core (`via: manual`) y los mergea.
+#   (curación manual). Es un OVERRIDE del clasificador: `query_ads` trae por bibcode los que la query
+#   no devolvió y RESCATA en el lugar los que devolvió pero quedaron no-core (`via: manual`).
 #   Vive acá (config, se commitea) → sobrevive al re-run; editar `build/` no, es scratch y se pisa.
 #
 # Agregá tus estrellas acá (o dejá que `ingest-star` las agregue). Ejemplo comentado:

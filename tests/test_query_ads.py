@@ -406,6 +406,49 @@ def test_main_extra_core_persistente(toy_vault, toy_classifier, no_sleep, monkey
     assert [r["bibcode"] for r in manual] == ["1988old.....1O"]
 
 
+def test_main_extra_core_rescata_del_corte(toy_vault, toy_classifier, no_sleep, monkeypatch, capsys):
+    """#39: el paper que la query SÍ trajo pero la lente descartó se rescata en el lugar
+    (relevant/why_excluded/via) — antes `extra_core` sólo agregaba los ausentes y declararlo no
+    hacía nada. El que ADS no devolvió se sigue trayendo por bibcode."""
+    stars = {"Estrella Test": {"slug": "test_star", "simbad": "s", "ads_object": "Test Star",
+                               "aliases": [], "extra_core": ["1991AJ....102.1813F", "1988old.....1O"]}}
+    write_yaml(cfg.STARS_YAML, stars)
+    directo = [rec("2020dirA....1A"),
+               dict(rec("1991AJ....102.1813F", relevant=False), why_excluded="sin faceta obligatoria (rv)")]
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        [dict(r) for r in directo])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    pedidos = []
+    def fake_fetch(bibs):
+        pedidos.extend(bibs)
+        return [dict(rec("1988old.....1O", relevant=True), via="manual")]
+    monkeypatch.setattr(qa, "fetch_bibcodes", fake_fetch)
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    assert pedidos == ["1988old.....1O"]        # sólo se pide a ADS el que falta
+    data = json.loads((toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text())
+    bibs = {r["bibcode"]: r for r in data["records"]}
+    r = bibs["1991AJ....102.1813F"]
+    assert r["relevant"] is True and r["why_excluded"] is None and r["via"] == "manual"
+    assert bibs["2020dirA....1A"]["via"] == "query"     # el resto no se toca
+    assert data["n_relevant"] == 3
+    assert "1 traídos de ADS · 1 rescatados del corte" in capsys.readouterr().out
+
+
+def test_main_extra_core_avisa_bibcode_inexistente(toy_vault, toy_classifier, no_sleep, monkeypatch, capsys):
+    """Un bibcode declarado que ADS no devuelve (typo) deja de desaparecer en silencio."""
+    stars = {"Estrella Test": {"slug": "test_star", "simbad": "s", "ads_object": "Test Star",
+                               "aliases": [], "extra_core": ["2020typo....1X"]}}
+    write_yaml(cfg.STARS_YAML, stars)
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        [rec("2020dirA....1A")])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    monkeypatch.setattr(qa, "fetch_bibcodes", lambda bibs: [])
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    assert "2020typo....1X" in capsys.readouterr().out
+
+
 def test_main_tema_extra_only(toy_vault, toy_classifier, no_sleep, monkeypatch):
     """Tema off-ADS MIXTO: --extra-only trae SÓLO los extra_core (sin query ni chaining), y no
     exige `query` — la vía ADS de un tema cuya bibliografía canónica vive fuera de ADS."""

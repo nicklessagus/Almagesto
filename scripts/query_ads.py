@@ -24,8 +24,11 @@ Sólo entran los core: los no-core encadenados no se agregan (inundarían el ap�
 Desactivar con --no-chain. `--probe` no encadena (es sólo preview; lista TODO el core del corte).
 
 **Curación manual persistente:** `extra_core: [bibcode, …]` en la entrada de `stars.yaml`/`topics.yaml`
-lista papers que el clasificador perdió; se traen por bibcode, se marcan core (`via: manual`) y se
-mergean. Vive en config (se commitea) → sobrevive al re-run, a diferencia de editar `build/` (scratch).
+lista papers que el clasificador perdió. Es un **override del clasificador** (#39): el que ADS no
+devolvió se trae por bibcode y el que **sí** devolvió pero quedó no-core se **rescata en el lugar**
+(`relevant: true`, `via: manual`) — antes sólo se agregaban los ausentes, así que declarar el caso
+más común de la curación (paper del sujeto que la lente descarta) no hacía nada. Vive en config
+(se commitea) → sobrevive al re-run, a diferencia de editar `build/` (scratch).
 
 **`--sweep` (barrido full-text, paso 2b de ingest-star):** corre `full:` sobre nombre+aliases con
 TODAS las variantes de espaciado y lista SÓLO los core que `build/<slug>/ads.json` no tiene — los
@@ -487,9 +490,26 @@ def main() -> int:
         sys.exit(f"--extra-only pero la entrada '{args.slug}' no declara `extra_core` en topics.yaml "
                  "— listá ahí los bibcodes ADS del tema mixto.")
     if extra:
-        seen = {r["bibcode"] for r in recs if r.get("bibcode")}
-        manual = [m for m in fetch_bibcodes(extra) if m.get("bibcode") and m["bibcode"] not in seen]
-        print(f"  extra_core: +{len(manual)} curados a mano (de {len(extra)} en config)")
+        # `extra_core` es un OVERRIDE del clasificador, no un "sumá lo ausente" (#39): el caso más
+        # común de la curación es el paper que ADS SÍ devuelve y la lente descarta (p. ej. papers
+        # de actividad que arbitran señales pero no dicen "radial velocity" en título/abstract).
+        # Traerlo por bibcode no alcanzaba: el registro ya estaba en `recs` con relevant: False.
+        present = {r["bibcode"]: r for r in recs if r.get("bibcode")}
+        rescued = []
+        for b in extra:
+            r = present.get(b)
+            if r is not None and not r["relevant"]:
+                r["relevant"], r["why_excluded"], r["via"] = True, None, "manual"
+                rescued.append(b)
+        manual = [m for m in fetch_bibcodes([b for b in extra if b not in present])
+                  if m.get("bibcode")]
+        print(f"  extra_core: +{len(manual)} traídos de ADS · {len(rescued)} rescatados del corte "
+              f"(de {len(extra)} en config)")
+        fetched = {m["bibcode"] for m in manual}
+        missing = [b for b in extra if b not in present and b not in fetched]
+        if missing:   # declarados que ADS no devolvió: typo de bibcode o registro retirado
+            print(f"  ⚠ extra_core: {len(missing)} bibcode(s) que ADS no devolvió (¿typo?): "
+                  f"{', '.join(missing)}")
         recs += manual
         rel = [r for r in recs if r["relevant"]]
 

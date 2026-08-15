@@ -11,7 +11,8 @@
 #   query    : query Solr ADS CRUDA (control total; ver scripts/query_ads.py). NO es por nombre de estrella.
 #   aliases  : opcional, sólo para prosa.
 #   extra_core : opcional, lista de bibcodes a forzar como core (curación manual que el clasificador
-#                perdió). query_ads los trae por bibcode (`via: manual`) y los mergea. Persistente
+#                perdió). Override del clasificador: query_ads trae por bibcode los ausentes y
+#                rescata los que la query trajo marcados no-core (`via: manual`). Persistente
 #                (config se commitea), a diferencia de editar build/ (scratch, se pisa).
 #                En un tema OFF-ADS también vale (tema MIXTO): los papers del tema que SÍ tienen
 #                bibcode ADS van acá — NO en sources: con el bibcode de key (degrada el stub:
