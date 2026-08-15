@@ -34,6 +34,14 @@ más común de la curación (paper del sujeto que la lente descarta) no hacía n
 TODAS las variantes de espaciado y lista SÓLO los core que `build/<slug>/ads.json` no tiene — los
 candidatos a `extra_core`. Preview como `--probe` (no baja nada ni escribe build/). Ver sweep_star.
 
+**Rescate por glifo (#28):** para sujetos con nombre **Bayer** (letra griega + constelación) hay un
+agujero de recall sistemático — ADS unifica `epsilon`/`eps`/`ε`, pero **descarta** los lookalikes
+`ϵ` (U+03F5) y `∊` (U+220A, el glifo de ApJ/AJ/MNRAS), así que esos papers quedan indexados sólo por
+la constelación y `title:"epsilon Eridani"` no los ve nunca (medido en ε Eri: **121 core perdidos**,
+incluido el descubrimiento). Tras la query directa se trae el superset de la constelación y se filtra
+**client-side** por el glifo pegado al nombre (`via: glyph`); corre antes del chaining, así lo
+recuperado siembra el grafo. Sólo aplica si el nombre/alias es Bayer; se desactiva con `--no-glyph`.
+
 **Cero espurio (#27):** la query DIRECTA de un sujeto corre con `expect_hits` — ADS devuelve
 intermitentemente `numFound: 0` con HTTP 200; se reintenta con el mismo backoff y, si persiste, la
 corrida **falla** (`EmptyResultError`, exit ≠ 0) en vez de persistir un `ads.json` vacío con exit 0
@@ -178,6 +186,94 @@ def build_query(names: list[str]) -> str:
         clauses.append(f'title:"{v}"')
         clauses.append(f'abs:"{v}"')
     return " OR ".join(clauses)
+
+
+# ── rescate por glifo (#28) ──────────────────────────────────────────────────
+# Los nombres Bayer se escriben con letra griega y la literatura usa lookalikes Unicode que ADS
+# **no** unifica: `ε` (U+03B5) sí se normaliza con `epsilon`/`eps`, pero `ϵ` (U+03F5) y `∊`
+# (U+220A —el glifo de ApJ/AJ/MNRAS—) se los come el tokenizer, así que "Evidence for a Long-Period
+# Planet Orbiting ∊ Eridani" queda indexado sólo como "Eridani" y `title:"epsilon Eridani"` NO lo
+# matchea nunca. Medido en ε Eri: 121 core perdidos por la query canónica, incluido el paper de
+# descubrimiento. Como el carácter se DESCARTA (no es que falte la variante), agregar grafías a
+# expand_variants no alcanza: hay que traer el superset de la constelación y filtrar client-side
+# por el glifo, que es determinista y barato.
+_GREEK = {   # letra → (grafías ASCII: nombre + abreviatura Bayer, glifo canónico, LOOKALIKES)
+    # El glifo canónico ADS lo unifica con la grafía ASCII (verificado: ε/epsilon/eps → mismo
+    # numFound); los lookalikes NO. Sin lookalikes conocidos no hay agujero → no se gasta la query
+    # del superset (el rescate corre sólo para las letras de la última columna).
+    "alpha":   (("alpha", "alf", "alp"), "α", "ⲁ"),
+    "beta":    (("beta", "bet"), "β", "ϐ"),
+    "gamma":   (("gamma", "gam"), "γ", "ɣ"),
+    "delta":   (("delta", "del"), "δ", "ẟ"),
+    "epsilon": (("epsilon", "eps"), "ε", "ϵ∊ɛ"),
+    "zeta":    (("zeta", "zet"), "ζ", ""),
+    "eta":     (("eta",), "η", ""),
+    "theta":   (("theta", "tet", "the"), "θ", "ϑ"),
+    "iota":    (("iota", "iot"), "ι", ""),
+    "kappa":   (("kappa", "kap"), "κ", "ϰ"),
+    "lambda":  (("lambda", "lam"), "λ", ""),
+    "mu":      (("mu",), "μ", "µ"),
+    "nu":      (("nu",), "ν", ""),
+    "xi":      (("xi", "ksi"), "ξ", ""),
+    "omicron": (("omicron", "omi"), "ο", ""),
+    "pi":      (("pi",), "π", "ϖ"),
+    "rho":     (("rho",), "ρ", "ϱ"),
+    "sigma":   (("sigma", "sig"), "σ", "ςϲ"),
+    "tau":     (("tau",), "τ", ""),
+    "upsilon": (("upsilon", "ups"), "υ", "ϒ"),
+    "phi":     (("phi",), "φ", "ϕ"),
+    "chi":     (("chi",), "χ", ""),
+    "psi":     (("psi",), "ψ", ""),
+    "omega":   (("omega", "ome"), "ω", ""),
+}
+_LETTER_BY_TOKEN = {tok: letter for letter, (toks, *_) in _GREEK.items() for tok in toks}
+_LETTER_BY_TOKEN.update({g: letter for letter, (_, canon, look) in _GREEK.items()
+                         for g in canon + look})
+_SPACE = r"[\s\u00a0]"                    # los papers separan con espacio normal o NBSP
+_BAYER = re.compile(rf"^(\S+){_SPACE}+([A-Za-z]{{2,}})$")   # "<letra> <constelación>"
+
+
+def greek_targets(names: list[str]) -> dict[str, set[str]]:
+    """Nombres Bayer del sujeto → {letra canónica: {constelaciones}}, SÓLO para las letras con
+    lookalikes conocidos (las otras no tienen agujero: ADS unifica su glifo canónico con la grafía
+    ASCII → no se gasta la query del superset). 'eps Eridani' + 'ε Eri' → {'epsilon': {'Eridani',
+    'Eri'}}; 'tau Ceti' → {} (τ no tiene lookalike). Los nombres no-Bayer (HD 22049, AU Mic) no aportan."""
+    out: dict[str, set[str]] = {}
+    for n in names:
+        m = _BAYER.match(n.strip())
+        if not m:
+            continue
+        letter = _LETTER_BY_TOKEN.get(m.group(1).lower().rstrip("."))
+        if letter and _GREEK[letter][2]:
+            out.setdefault(letter, set()).add(m.group(2))
+    return out
+
+
+def glyph_pattern(letter: str, consts: set[str]) -> re.Pattern:
+    """Regex del filtro client-side: un lookalike de `letter` pegado a la constelación
+    (`∊ Eridani`, `ϵEri`). Letra-específica: en el superset de 'Eridani' no se cuela `τ Eri`."""
+    glyphs = re.escape(_GREEK[letter][1] + _GREEK[letter][2])
+    alt = "|".join(re.escape(c) for c in sorted(consts, key=len, reverse=True))
+    return re.compile(rf"[{glyphs}]{_SPACE}*(?:{alt})\b")
+
+
+def glyph_rescue(names: list[str], rows: int) -> list[dict]:
+    """Recupera los papers que nombran al sujeto con un lookalike Unicode (#28). Por cada letra
+    Bayer detectada trae el superset de la constelación (`title:`/`abs:`, degradado y ruidoso: 2342
+    hits para 'Eridani') y se queda con los que contienen el glifo pegado a la constelación en
+    título/abstract. Devuelve TODOS los que pasan el filtro, clasificados y con `via: glyph`;
+    el caller filtra core + dedup."""
+    out = []
+    for letter, consts in greek_targets(names).items():
+        q = " OR ".join(f'title:"{c}" OR abs:"{c}"' for c in sorted(consts))
+        pat = glyph_pattern(letter, consts)
+        for r in query_ads(q, rows=rows):
+            text = f"{r.get('title') or ''} {r.get('abstract') or ''}"
+            if pat.search(text):
+                r["via"] = "glyph"
+                out.append(r)
+        time.sleep(1.0)
+    return out
 
 
 def build_fulltext_filter(names: list[str]) -> str:
@@ -397,6 +493,11 @@ def main() -> int:
                          "marcado en build/<slug>/ads.json y el lint lo surface")
     ap.add_argument("--no-chain", action="store_true",
                     help="desactivar el citation chaining (references/citations de los papers core)")
+    ap.add_argument("--no-glyph", action="store_true",
+                    help="desactivar el rescate por glifo de nombres Bayer (ε/ϵ/∊ Eri): trae el "
+                         "superset de la constelación y filtra client-side. Sólo corre si el "
+                         "sujeto tiene nombre de letra griega; desactivarlo si el superset es "
+                         "demasiado grande y preferís curar a mano")
     ap.add_argument("--topic", action="store_true",
                     help="el slug es un TEMA de vault/config/topics.yaml (query Solr cruda), no una estrella")
     ap.add_argument("--extra-only", action="store_true",
@@ -429,6 +530,7 @@ def main() -> int:
                      "ingest-topic (grep de aliases sobre el corpus local)")
         return sweep_star(args.slug, args.rows)
 
+    star_names: list[str] = []      # sólo estrellas: insumo del rescate por glifo (#28)
     if args.topic:
         _, meta = cfg.topic_by_slug(args.slug)
         if args.extra_only:
@@ -451,6 +553,7 @@ def main() -> int:
     else:
         name, meta = cfg.star_by_slug(args.slug)
         names = [cfg.require_field(meta, "ads_object", name, "stars.yaml")] + meta.get("aliases", [])
+        star_names = names
         q = build_query(names)
         chain_filter = build_fulltext_filter(names)
         print(f"Consultando ADS: {name}  (nombres: {', '.join(names)})")
@@ -467,6 +570,21 @@ def main() -> int:
             r["via"] = "query"
         rel = [r for r in recs if r["relevant"]]
         print(f"  query directa: {len(recs)} registros, {len(rel)} relevantes")
+
+    # rescate por glifo (#28) — ANTES del chaining, para que los recuperados (típicamente el paper
+    # de descubrimiento) siembren también el grafo de citas.
+    if not args.no_glyph and star_names and greek_targets(star_names):
+        seen = {r["bibcode"] for r in recs if r.get("bibcode")}
+        rescued = []
+        for g in glyph_rescue(star_names, args.rows):
+            b = g.get("bibcode")
+            if g["relevant"] and b and b not in seen:
+                seen.add(b)
+                rescued.append(g)
+        print(f"  glifo: +{len(rescued)} core nuevos que escriben el nombre con un lookalike "
+              "Unicode (∊/ϵ) — invisibles a title:/abs:")
+        recs += rescued
+        rel = [r for r in recs if r["relevant"]]
 
     if not args.no_chain and rel and chain_filter:
         seen = {r["bibcode"] for r in recs if r.get("bibcode")}

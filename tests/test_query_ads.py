@@ -157,6 +157,98 @@ def test_build_query_y_fulltext_filter():
     assert f == 'full:"tau Ceti"'
 
 
+# ── rescate por glifo: nombres Bayer con lookalike Unicode (#28) ─────────────
+
+def test_greek_targets_detecta_bayer():
+    assert qa.greek_targets(["eps Eridani", "ε Eri", "HD 22049", "GJ 144"]) == {
+        "epsilon": {"Eridani", "Eri"}}
+    assert qa.greek_targets(["epsilon Eridani"]) == {"epsilon": {"Eridani"}}
+
+
+def test_greek_targets_sin_lookalike_no_gasta_query():
+    """τ no tiene lookalike conocido (ADS unifica τ/tau) → sin agujero, sin superset."""
+    assert qa.greek_targets(["tau Ceti", "HD 10700"]) == {}
+
+
+def test_greek_targets_ignora_no_bayer():
+    assert qa.greek_targets(["AU Mic", "HD 197481", "51 Peg"]) == {}
+
+
+def test_glyph_pattern_es_letra_especifica():
+    pat = qa.glyph_pattern("epsilon", {"Eridani", "Eri"})
+    assert pat.search("Evidence for a Long-Period Planet Orbiting ∊ Eridani")   # ∊ (ApJ/AJ)
+    assert pat.search("the disk of ϵEri")                                       # ϵ sin espacio
+    assert pat.search("ε Eridani revisited")                                    # ε canónica
+    assert not pat.search("The τ Eri system")          # otra letra griega: no se cuela
+    assert not pat.search("Eridanus II dwarf galaxy")       # constelación suelta: no alcanza
+
+
+def test_glyph_rescue_filtra_client_side(toy_classifier, ads_token, no_sleep, monkeypatch):
+    """Trae el superset de la constelación y se queda SÓLO con los que llevan el glifo; los
+    devuelve clasificados y marcados via: glyph."""
+    docs = [
+        {"bibcode": "2000ApJ...544L.145H", "title": ["Planet Orbiting ∊ Eridani"],
+         "abstract": "radial velocity", "doctype": "article"},
+        {"bibcode": "2015noise...1..1X", "title": ["Eridanus II dwarf galaxy"],
+         "abstract": "radial velocity of member stars", "doctype": "article"},
+    ]
+    consultas = []
+    def fake_get(url, headers=None, params=None, timeout=None):
+        consultas.append(params["q"])
+        return FakeResp(200, payload(docs))
+    monkeypatch.setattr(qa, "requests", SimpleNamespace(get=fake_get))
+    out = qa.glyph_rescue(["eps Eridani", "ε Eri"], rows=100)
+    assert [r["bibcode"] for r in out] == ["2000ApJ...544L.145H"]
+    assert out[0]["via"] == "glyph" and out[0]["relevant"] is True
+    assert consultas == ['title:"Eri" OR abs:"Eri" OR title:"Eridani" OR abs:"Eridani"']
+
+
+def test_main_rescate_glifo_siembra_el_chaining(toy_vault, toy_classifier, no_sleep, monkeypatch):
+    """El rescate corre ANTES del chaining (el descubrimiento recuperado siembra el grafo) y sus
+    core nuevos entran a ads.json con via: glyph, deduplicados contra la query directa."""
+    stars = {"eps Eridani": {"slug": "test_star", "simbad": "s", "ads_object": "eps Eridani",
+                             "aliases": ["ε Eri"]}}
+    write_yaml(cfg.STARS_YAML, stars)
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        [rec("2020dirA....1A")])
+    monkeypatch.setattr(qa, "glyph_rescue",
+                        lambda names, rows: [dict(rec("2000ApJ...544L.145H"), via="glyph"),
+                                             dict(rec("2020dirA....1A"), via="glyph")])  # dup → afuera
+    sembrados = {}
+    def fake_chain(bibs, rows, filt):
+        sembrados["core"] = list(bibs)
+        return []
+    monkeypatch.setattr(qa, "chain_candidates", fake_chain)
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    assert set(sembrados["core"]) == {"2020dirA....1A", "2000ApJ...544L.145H"}
+    data = json.loads((toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text())
+    bibs = {r["bibcode"]: r["via"] for r in data["records"]}
+    assert bibs == {"2020dirA....1A": "query", "2000ApJ...544L.145H": "glyph"}
+
+
+def test_main_no_glyph_desactiva(toy_vault, toy_classifier, no_sleep, monkeypatch):
+    stars = {"eps Eridani": {"slug": "test_star", "simbad": "s", "ads_object": "eps Eridani",
+                             "aliases": []}}
+    write_yaml(cfg.STARS_YAML, stars)
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        [rec("2020dirA....1A")])
+    monkeypatch.setattr(qa, "glyph_rescue", lambda *a: pytest.fail("no debe rescatar"))
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    assert run_main(monkeypatch, ["test_star", "--no-glyph"]) == 0
+
+
+def test_main_sujeto_no_bayer_no_rescata(toy_vault, toy_classifier, no_sleep, monkeypatch):
+    """toy_vault trae 'Test Star' (no Bayer): el rescate ni se dispara — sin query extra."""
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        [rec("2020dirA....1A")])
+    monkeypatch.setattr(qa, "glyph_rescue", lambda *a: pytest.fail("no debe rescatar"))
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    assert run_main(monkeypatch, ["test_star"]) == 0
+
+
 # ── query_ads() con red falsa ────────────────────────────────────────────────
 
 class FakeResp:

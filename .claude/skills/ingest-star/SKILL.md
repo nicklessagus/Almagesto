@@ -1,7 +1,7 @@
 ---
 name: ingest-star
 description: Usar cuando el usuario pide bajar/agregar/ingestar una estrella a la bóveda ("bajá GJ 581", "ingest tau ceti", "agregá la estrella X", "traé la bibliografía de AU Mic"). Corre la cadena de ingesta y hace la extracción LLM.
-version: 1.6.1
+version: 1.7.0
 ---
 
 # Ingest: agregar una estrella a la wiki
@@ -37,6 +37,13 @@ procesa. Trabajar desde la raíz del repo.
    **ancladas al sujeto** con `full:` sobre nombre+alias — trae surveys/catálogos conectados por el
    grafo de citas aunque no nombren la estrella en el abstract (quedan marcados `via: chain:*` en
    `ads.json`; se desactiva con `--no-chain`).
+   Si el nombre es **Bayer** (letra griega + constelación) corre antes el **rescate por glifo**
+   (`via: glyph`, se desactiva con `--no-glyph`): ADS unifica `epsilon`/`eps`/`ε` pero **descarta**
+   los lookalikes `ϵ` (U+03F5) y `∊` (U+220A, el glifo de ApJ/AJ/MNRAS), así que esos papers quedan
+   indexados sólo por la constelación e **invisibles** a la query canónica (medido en ε Eri: 121
+   core perdidos, incluido el descubrimiento). No hace falta listar las grafías en `aliases`: el
+   carácter se descarta, no falta la variante — el rescate trae el superset de la constelación y
+   filtra client-side por el glifo.
 
 2b. **Barrido full-text (NO perder surveys de muestra grande).** La query directa de `query_ads.py`
    busca en **título+abstract** → punto ciego sistemático: los **surveys de muestra grande**
