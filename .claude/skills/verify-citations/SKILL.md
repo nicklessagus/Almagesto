@@ -1,7 +1,7 @@
 ---
 name: verify-citations
 description: Usar para verificar, afirmación por afirmación, que las citas [[bibcode]] de una nota de la wiki (query, hipótesis, ficha, concepto) realmente están respaldadas por el texto completo de la fuente. Se corre como paso de cierre al armar/editar una query o hipótesis, o cuando el usuario pide "rechequeá las citas / ¿esto lo dice el paper?". Implementa el chequeo claim↔evidencia (pipeline tipo CiteAudit) sobre el corpus cerrado de la bóveda. Veredictos: soportada / parcial / no-soportada (la fuente calla) / contradice (la fuente afirma lo contrario → candidata a disputa, no sólo cita rota).
-version: 1.3.4
+version: 1.3.5
 ---
 
 # Verify-citations — chequeo claim↔evidencia contra el fulltext
@@ -57,7 +57,13 @@ plenamente respaldadas). Acá cada afirmación se contrasta contra el texto real
 > equivalente): en una línea física a dos columnas eso **empalma el final de la columna 1 con el
 > principio de la columna 2**, fabricando adyacencias que el paper no tiene — puede hacer pasar como
 > `soportada` una afirmación **inventada** (falso positivo: el modo peligroso, peor que el falso
-> negativo de arriba). Si hace falta normalizar espacios, hacerlo **por línea**.
+> negativo de arriba). Y normalizar **por línea** tampoco alcanza (#46): colapsar la **canaleta** de
+> la misma línea física fabrica la misma adyacencia col.1→col.2, sólo que dentro de la línea. La
+> forma segura, si hace falta normalizar: **partir antes cada línea física en la canaleta** (un run
+> de 8+ espacios es separador de columnas, no espacio — el umbral vive en
+> `measure_layout.CANALETA_MIN`) y normalizar **por segmento de columna**. Los invariantes están
+> pineados en `tests/test_multicolumn_matching.py`; la prevalencia en una bóveda concreta la mide
+> `scripts/measure_layout.py`.
 >
 > **Excepción OCR — citable con salvedad:** si la nota del paper trae `fulltext_source: ocr` (el
 > contrato del frontmatter lo espeja — no hace falta abrir el `.txt` para saberlo) o el `.txt` abre
@@ -150,8 +156,9 @@ o el encuadre genérico, no cuenta. Respondé veredicto
 `.txt` corren la numeración) + nota. Para localizar: el `.txt` suele entrelazar dos columnas en la
 misma línea física, así que si la oración completa no aparece con grep NO concluyas que falta —
 acortá a un fragmento distintivo de 3–6 palabras (y reintentá partiendo por guión de corte);
-PROHIBIDO normalizar espacios sobre el archivo entero (empalma columnas y fabrica adyacencias
-falsas); si normalizás, por línea. Si no
+PROHIBIDO normalizar espacios sobre el archivo entero Y también colapsar un hueco de 8+ espacios
+dentro de una línea (ambos empalman columnas y fabrican adyacencias falsas); si normalizás, partí
+antes la línea en ese hueco y tratá cada segmento por separado. Si no
 encontrás respaldo textual, es no-soportada; `parcial` sólo si la cita textual respalda parte del
 contenido distintivo de la afirmación — que el paper hable del mismo tema NO alcanza; si el paper
 afirma lo CONTRARIO, es contradice (pegá la frase que lo contradice). No uses memoria ni otros

@@ -1,7 +1,7 @@
 ---
 name: find-contradictions
 description: Usar cuando el usuario quiere detectar desacuerdos entre papers del corpus sobre el mismo hecho ("buscá contradicciones en el corpus", "qué papers se contradicen sobre tau Ceti", "revisá disputas de P_rot", "detectá desacuerdos sobre la señal b de GJ 581", "¿hay papers que discrepen sobre X?"). Barre el corpus por eje (estrella/parámetro o concepto), confirma cada desacuerdo contra el fulltext y PROPONE entradas disputes[] / notas de disputa para que el usuario apruebe.
-version: 1.0.1
+version: 1.0.2
 ---
 
 # Find-contradictions — desacuerdos entre papers (claim↔claim)
@@ -66,8 +66,9 @@ los dos** `vault/raw/fulltext/**/<bibcode>.txt` en juego (grounding-first; prohi
 > el puntero):** conteo de líneas con `grep -n`, no `splitlines()` de Python (#29: los form feeds
 > corren la numeración), y **estrategia de matcheo** en `.txt` multi-columna (#44): escalera de
 > acortamiento (oración completa → fragmento distintivo contenido en una línea física),
-> de-hifenado, y **prohibido normalizar espacios sobre el archivo entero** (empalma columnas →
-> falso positivo). Acá el riesgo se **amplifica**: el par exige cita textual de **dos** fulltexts
+> de-hifenado, y **prohibido normalizar espacios sin partir antes cada línea en la canaleta**
+> (colapsar el hueco de 8+ espacios — sea sobre el archivo entero o por línea, #46 — empalma
+> columnas → falso positivo). Acá el riesgo se **amplifica**: el par exige cita textual de **dos** fulltexts
 > (con ~73% de prevalencia multi-columna por archivo, ~94% de chance de que al menos uno esté
 > afectado) y un falso negativo de matcheo en cualquiera de los dos colapsa el veredicto a
 > `no-concluyente` sobre una disputa real.
@@ -79,7 +80,9 @@ numeración) + una línea
 de resumen. Para localizar, en CADA archivo: el `.txt` suele entrelazar dos columnas en la misma
 línea física, así que si la oración completa no aparece con grep NO concluyas que falta — acortá a
 un fragmento distintivo de 3–6 palabras (y reintentá partiendo por guión de corte); PROHIBIDO
-normalizar espacios sobre el archivo entero (empalma columnas y fabrica adyacencias falsas).
+normalizar espacios sobre el archivo entero Y también colapsar un hueco de 8+ espacios dentro de
+una línea (ambos empalman columnas y fabrican adyacencias falsas); si normalizás, partí antes la
+línea en ese hueco y tratá cada segmento por separado.
 'no-concluyente' sólo si agotaste eso en los dos archivos. 'real' sólo si los valores son
 incompatibles más allá del error, o uno afirma y el otro
 niega. No uses memoria ni otros papers."*
