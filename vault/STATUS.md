@@ -18,6 +18,33 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.6.1 (2026-08-17) — tanda #44/#45: estrategia de matcheo en `.txt` multi-columna
+
+> Tanda **de docs/skills** (sin cambio de scripts), hermana de #29: el `.txt` de `pdftotext -layout`
+> no es un stream de texto plano y los skills que greppean citas tenían el caveat pero no el "cómo
+> buscar". Medido en Almagesto-RV: 472/644 `.txt` (73%) multi-columna. 328 tests verdes.
+> `ALMAGESTO_VERSION` 1.6.0 → **1.6.1** (patch: sólo prescripción en skills, retrocompatible).
+
+- **#44** — **`verify-citations` prescribe CÓMO buscar** (1.3.3 → 1.3.4): escalera de acortamiento
+  (oración completa → fragmento distintivo contenido en una línea física; el largo útil depende del
+  ancho de columna, se acorta hasta encontrar — un paper a una columna sigue matcheando la frase
+  entera), de-hifenado en el corte de línea, y recién agotado eso se considera artefacto de
+  extracción. **Prohibido normalizar espacios sobre el archivo entero** (empalma columna 1 con
+  columna 2 → puede hacer pasar como soportada una afirmación inventada — el modo peligroso, hasta
+  ahora sin documentar). Medido: 9/24 pares (~38%) de falso negativo con la oración completa, 24/24
+  con fragmento corto; 33/68 citas de bloques existentes no localizables con 6 palabras y 7/7
+  muestreadas aparecen con 3–5 → el corpus está sano, fallaba el patrón. La regla viaja también en
+  el prompt sugerido del subagente.
+- **#45** — **`find-contradictions` arrastra las convenciones** (1.0.0 → 1.0.1): puntero explícito
+  a #29/#44 (la convención canónica queda en verify-citations, sin copia), regla condensada en el
+  prompt del subagente aplicada a CADA archivo, y `no-concluyente` sólo agotada la escalera en
+  ambos lados. Acá el riesgo se amplifica: el par exige cita de dos fulltexts (~94% de chance de
+  que al menos uno sea multi-columna) y un falso negativo colapsaba el veredicto a `no-concluyente`
+  sobre una disputa real.
+- Pendiente de la tanda: el script de medición de prevalencia (heurística del hueco de 8+ espacios)
+  como test de regresión — lo pasa el usuario; la escalera NO se re-implementa en `scripts/` (viviría
+  en dos lugares que pueden divergir).
+
 ## ✅ Framework 1.6.0 (2026-08-15) — tanda #29/#42/#43: follow-ups de la primera corrida real
 
 > Tanda **correctiva**, disparada por la primera corrida real de v1.5.0 (Almagesto-RV, ε Eri): dos
