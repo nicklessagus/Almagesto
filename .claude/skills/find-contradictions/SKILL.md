@@ -1,7 +1,7 @@
 ---
 name: find-contradictions
 description: Usar cuando el usuario quiere detectar desacuerdos entre papers del corpus sobre el mismo hecho ("buscá contradicciones en el corpus", "qué papers se contradicen sobre tau Ceti", "revisá disputas de P_rot", "detectá desacuerdos sobre la señal b de GJ 581", "¿hay papers que discrepen sobre X?"). Barre el corpus por eje (estrella/parámetro o concepto), confirma cada desacuerdo contra el fulltext y PROPONE entradas disputes[] / notas de disputa para que el usuario apruebe.
-version: 1.0.0
+version: 1.0.1
 ---
 
 # Find-contradictions — desacuerdos entre papers (claim↔claim)
@@ -55,13 +55,33 @@ los dos** `vault/raw/fulltext/**/<bibcode>.txt` en juego (grounding-first; prohi
     existencia y el otro la niega). Con **cita textual + nº de línea de cada uno**.
   - **aparente** = distinto régimen, distinta definición, distinta época, o dentro de la barra de
     error → **no** es disputa (anotar por qué).
-  - `no-concluyente` = artefacto de extracción (tabla/ecuación) o el texto no alcanza → abrir PDF o marcar.
+  - `no-concluyente` = artefacto de extracción (tabla/ecuación) o el texto no alcanza → abrir PDF o
+    marcar. **Sólo agotada la estrategia de matcheo en AMBOS archivos** (puntero abajo): que la frase
+    entera no aparezca con `grep` no alcanza — degradar por falso negativo de matcheo entierra una
+    contradicción que sí existe.
 - `eje`: qué hecho (`existence` | `P` | `K` | `e` | `msini` | `P_rot` | `mecanismo` | …).
 - `resumen`: una línea de la discrepancia (qué dice cada uno).
 
+> **Convenciones de lectura del `.txt` — rigen las de `verify-citations` (canónicas allá, acá sólo
+> el puntero):** conteo de líneas con `grep -n`, no `splitlines()` de Python (#29: los form feeds
+> corren la numeración), y **estrategia de matcheo** en `.txt` multi-columna (#44): escalera de
+> acortamiento (oración completa → fragmento distintivo contenido en una línea física),
+> de-hifenado, y **prohibido normalizar espacios sobre el archivo entero** (empalma columnas →
+> falso positivo). Acá el riesgo se **amplifica**: el par exige cita textual de **dos** fulltexts
+> (con ~73% de prevalencia multi-columna por archivo, ~94% de chance de que al menos uno esté
+> afectado) y un falso negativo de matcheo en cualquiera de los dos colapsa el veredicto a
+> `no-concluyente` sobre una disputa real.
+
 Prompt sugerido: *"Leé SOLO estos dos archivos: `<A.txt>` y `<B.txt>`. ¿Se contradicen sobre «<hecho>»?
-Respondé real/aparente/no-concluyente + el eje + cita textual con nº de línea de CADA paper + una línea
-de resumen. 'real' sólo si los valores son incompatibles más allá del error, o uno afirma y el otro
+Respondé real/aparente/no-concluyente + el eje + cita textual con nº de línea de CADA paper (el que da
+`grep -n` o la lectura directa; NO uses `splitlines()` de Python — los form feeds corren la
+numeración) + una línea
+de resumen. Para localizar, en CADA archivo: el `.txt` suele entrelazar dos columnas en la misma
+línea física, así que si la oración completa no aparece con grep NO concluyas que falta — acortá a
+un fragmento distintivo de 3–6 palabras (y reintentá partiendo por guión de corte); PROHIBIDO
+normalizar espacios sobre el archivo entero (empalma columnas y fabrica adyacencias falsas).
+'no-concluyente' sólo si agotaste eso en los dos archivos. 'real' sólo si los valores son
+incompatibles más allá del error, o uno afirma y el otro
 niega. No uses memoria ni otros papers."*
 
 ### 3. Proponer las disputas (NO escribir todavía)
