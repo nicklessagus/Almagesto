@@ -28,8 +28,10 @@ from lib_config import RAW, ROOT
 
 # Una línea "útil" tiene suficiente texto como para que la maqueta se note.
 MIN_LINEA = 40
-# Canaleta: dos no-espacios separados por un hueco largo DENTRO de la línea.
-GUTTER = re.compile(r"\S {8,}\S")
+# Canaleta: dos no-espacios separados por un hueco largo DENTRO de la línea. El mínimo de espacios
+# es la definición compartida (la importa tests/test_multicolumn_matching.py — single source, #46).
+CANALETA_MIN = 8
+GUTTER = re.compile(rf"\S {{{CANALETA_MIN},}}\S")
 # Corte de palabra por guión al final de línea.
 HYPHEN = re.compile(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]-$")
 # Un archivo se considera multi-columna si esta fracción de sus líneas útiles tiene canaleta.
