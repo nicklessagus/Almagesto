@@ -237,14 +237,63 @@ def test_pdf_drift_ambas_direcciones(toy_vault, capsys):
     assert "apunta a archivo inexistente" in out
 
 
-def test_pdf_linkeado_correcto_sin_warn(toy_vault, capsys):
+PDF_LABEL = ("PDF ↔ disco / cuerpo (WARN — higiene: frontmatter `pdf` vs PDF bajado vs "
+             "link de cabecera)")
+
+
+def _nota_con_pdf(toy_vault, stem, cuerpo):
+    """Nota de paper con el PDF en disco y el frontmatter apuntándolo; el cuerpo lo pone el test."""
     pdf_dir = toy_vault.PDFS / "test_star"
     pdf_dir.mkdir(parents=True, exist_ok=True)
-    (pdf_dir / "2020okC....1..1C.pdf").write_bytes(b"%PDF")
-    mk_note(toy_vault.PAPERS, "2020okC....1..1C",
-            {"tags": ["paper"], "pdf": "../../raw/pdfs/test_star/2020okC....1..1C.pdf"}, "")
+    (pdf_dir / f"{stem}.pdf").write_bytes(b"%PDF")
+    rel = f"../../raw/pdfs/test_star/{stem}.pdf"
+    mk_note(toy_vault.PAPERS, stem, {"tags": ["paper"], "pdf": rel}, cuerpo.format(rel=rel))
+    return rel
+
+
+def test_pdf_linkeado_correcto_sin_warn(toy_vault, capsys):
+    """Nota sana: PDF en disco, frontmatter apuntándolo y cabecera con el link → 0 hallazgos."""
+    _nota_con_pdf(toy_vault, "2020okC....1..1C",
+                  "# T\n\n**Ana** (2020)\n· ADS: `2020okC....1..1C` · [📄 PDF]({rel})\n")
     rc, out = run_lint(capsys)
-    assert "PDF ↔ disco (WARN — higiene: frontmatter `pdf` vs PDF bajado) (0)" in out
+    assert f"{PDF_LABEL} (0)" in out
+
+
+def test_cuerpo_sin_link_pdf_se_marca(toy_vault, capsys):
+    """#48: el frontmatter está sano (el chequeo viejo no ve nada) pero la cabecera no tiene el
+    link → WARN accionable, apuntando al backfill."""
+    _nota_con_pdf(toy_vault, "2020nolD...1..1D",
+                  "# T\n\n**Ana** (2020)\n· ADS: `2020nolD...1..1D`\n")
+    rc, out = run_lint(capsys)
+    assert rc == 0                                    # WARN, no bloquea
+    assert "sin `[📄 PDF]` en el cuerpo" in out
+    assert "--restamp-pdf-links" in out
+
+
+def test_cabecera_fuera_del_contrato_se_marca(toy_vault, capsys):
+    """#48, el caso que quedaba mudo: sin línea de cabecera reconocible, stamp_pdf_link saltea
+    la nota → el lint la distingue del caso anterior (hay que normalizar la cabecera primero)."""
+    _nota_con_pdf(toy_vault, "2012ApJ...753..122T",
+                  "# T\n\nAna Pérez (2012), escrito a mano sin la línea de cabecera\n")
+    rc, out = run_lint(capsys)
+    assert "cabecera fuera del contrato de stamp_pdf_link" in out
+
+
+def test_link_en_cuerpo_sin_pdf_vigente_se_marca(toy_vault, capsys):
+    """Drift inverso: el cuerpo linkea un PDF que el frontmatter ya no tiene."""
+    mk_note(toy_vault.PAPERS, "2020invE...1..1E", {"tags": ["paper"], "pdf": None},
+            "# T\n\n**Ana** (2020)\n· ADS: `2020invE...1..1E` · "
+            "[📄 PDF](../../raw/pdfs/test_star/2020invE...1..1E.pdf)\n")
+    rc, out = run_lint(capsys)
+    assert "sin PDF vigente en `pdf`" in out
+
+
+def test_nota_sin_pdf_ni_link_sin_warn(toy_vault, capsys):
+    """Paper sin PDF bajado: ni frontmatter ni cuerpo lo mencionan → nada que marcar."""
+    mk_note(toy_vault.PAPERS, "2020nadF...1..1F", {"tags": ["paper"], "pdf": None},
+            "# T\n\n**Ana** (2020)\n· ADS: `2020nadF...1..1F`\n")
+    rc, out = run_lint(capsys)
+    assert f"{PDF_LABEL} (0)" in out
 
 
 def test_fuente_pendiente_listada(toy_vault, capsys):

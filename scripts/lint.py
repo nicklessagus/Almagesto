@@ -16,7 +16,9 @@ instanciar** (objective.name sigue siendo el default del template → la bóveda
 con la regex del ejemplo; WARN), **áreas de concepts/ fuera
 de `concept_areas`** (subcarpeta de concepts/ no declarada en objective.yaml → posible typo/carpeta
 fantasma; WARN), **PDF ↔ disco** (drift: el campo `pdf` de un paper no refleja el PDF bajado — sin linkear
-o puntero a archivo inexistente; WARN), **fuentes pendientes** (`pending_source` en una nota de
+o puntero a archivo inexistente; WARN) y su hermano **cuerpo ↔ frontmatter** (#48: el link `[📄 PDF]`
+de la cabecera no refleja el `pdf` del frontmatter —falta, sobra, o la cabecera está fuera del
+contrato de `stamp_pdf_link` y el re-estampado la saltea en silencio—; WARN), **fuentes pendientes** (`pending_source` en una nota de
 paper: la fuente no se pudo obtener —paywall/escaneo/mojibake— y está derivada al usuario;
 precondición como las citas no verificables), **fulltext ilegible** (un `.txt` de `vault/raw/fulltext/`
 que no pasa el umbral determinista de legibilidad de `extract_fulltext.is_legible` → mojibake o
@@ -49,6 +51,7 @@ import yaml
 import lib_config as cfg
 from extract_fulltext import is_legible      # umbral determinista de legibilidad (mismo que extract)
 from fetch_ground_truth import msini_earth   # verificación de masa (m·sini implícita)
+from make_notes import find_header_line      # contrato de la cabecera (mismo que stamp_pdf_link, #48)
 
 LINK_RE = re.compile(r"\[\[([^\]\|#]+)")
 # Frontera dura (regla #0 de CLAUDE.md): la bóveda es SÓLO bibliografía. Detecta material de
@@ -240,12 +243,33 @@ def main() -> int:
                 thesis_refs.setdefault(str(tl), []).append(stem)
             # PDF ↔ disco (higiene; WARN): el campo `pdf` debe reflejar el PDF real bajado.
             pdf, on_disk = fm.get("pdf"), pdf_on_disk.get(stem)
+            pdf_ok = False
             if pdf:
-                if not (cfg.WIKI / "papers" / pdf).resolve().exists():
+                pdf_ok = (cfg.WIKI / "papers" / pdf).resolve().exists()
+                if not pdf_ok:
                     pdf_issues.append((stem, f"`pdf` apunta a archivo inexistente: {pdf}"))
             elif on_disk:                      # pdf null/vacío pero el PDF está bajado → drift
                 slug_dir = Path(on_disk).parent.name
                 pdf_issues.append((stem, f"PDF en disco sin linkear → poné `pdf: ../../raw/pdfs/{slug_dir}/{stem}.pdf`"))
+            # CUERPO ↔ frontmatter (higiene; WARN, #48): el chequeo de arriba mira frontmatter vs
+            # disco y no ve el cuerpo — en Almagesto-RV el frontmatter estaba sano mientras 351/621
+            # notas no tenían el link `[📄 PDF]`, y el modo de falla sobrevivió invisible hasta que
+            # un humano abrió una nota. La cabecera es metadata DERIVADA: debe llevar el link sii
+            # `pdf` apunta a un PDF que existe. Se distingue "sin link" (lo arregla el backfill
+            # `make_notes.py --restamp-pdf-links`) de "cabecera fuera del contrato" (hay que
+            # normalizarla a mano primero: el re-estampado la saltea, por eso quedaba muda).
+            has_link = "[📄 PDF](" in text
+            if find_header_line(text) is None:
+                if pdf_ok and not has_link:
+                    pdf_issues.append((stem, "cabecera fuera del contrato de stamp_pdf_link "
+                                             "(sin línea `· ` con la clave en backticks) → normalizarla "
+                                             "y correr make_notes.py --restamp-pdf-links"))
+            elif pdf_ok and not has_link:
+                pdf_issues.append((stem, "PDF linkeado en el frontmatter pero sin `[📄 PDF]` en el "
+                                         "cuerpo → correr make_notes.py --restamp-pdf-links"))
+            elif has_link and not pdf_ok:      # drift inverso: link a un PDF que ya no está
+                pdf_issues.append((stem, "link `[📄 PDF]` en el cuerpo sin PDF vigente en `pdf` → "
+                                         "correr make_notes.py --restamp-pdf-links"))
 
     # contradicción ground-truth ↔ ficha (nº de planetas) + masa sospechosa
     mass_issues = []
@@ -370,7 +394,7 @@ def main() -> int:
                          ("Objetivo sin instanciar (WARN — objective.yaml sigue en el placeholder del template)", objective_warn),
                          ("Áreas de concepts/ no declaradas en objective.yaml (WARN, posible typo)", undeclared_areas),
                          ("Obsidian en la raíz del repo (WARN — la bóveda se abre en vault/)", root_obsidian),
-                         ("PDF ↔ disco (WARN — higiene: frontmatter `pdf` vs PDF bajado)", pdf_issues),
+                         ("PDF ↔ disco / cuerpo (WARN — higiene: frontmatter `pdf` vs PDF bajado vs link de cabecera)", pdf_issues),
                          ("⏳ Fuentes pendientes (pending_source — el usuario debe proveer la fuente)", pending_srcs),
                          ("Fulltext ilegible (mojibake/escaneo — existe pero no sirve para grep/verify)", illegible_txt),
                          ("Citas no verificables en query/concepto/hipótesis (sin fulltext)", unverifiable),

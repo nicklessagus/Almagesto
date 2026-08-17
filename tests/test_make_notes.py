@@ -744,3 +744,18 @@ def test_restamp_pdf_links_barrido(toy_vault, capsys):
     assert f"[📄 PDF]({rel})" in (toy_vault.PAPERS / "2015oldD...1..1D.md").read_text(encoding="utf-8")
     assert "📄 PDF" not in (toy_vault.PAPERS / "2016oldE...1..1E.md").read_text(encoding="utf-8")
     assert sana.read_text(encoding="utf-8") == antes_sana
+
+
+def test_find_header_line_es_contrato_compartido(toy_vault):
+    """#48: el lint detecta las notas que stamp_pdf_link saltea usando ESTE helper — si cada uno
+    definiera "cabecera" por su lado, el detector dejaría de cubrir al fixer. Acá se fija el
+    contrato: cabecera reconocida ⇔ stamp_pdf_link actúa."""
+    rel = _pdf_en_disco(toy_vault, "test_star", "2015oldD...1..1D")
+    ok = _nota_vieja(toy_vault, pdf_rel=rel)                       # cabecera en contrato
+    fuera = mk_note(toy_vault.PAPERS, "2012manT...1..1T",
+                    {"bibcode": "2012manT...1..1T", "pdf": rel, "tags": ["paper"]},
+                    "# T\n\nAna Pérez (2012), cabecera escrita a mano\n")
+    assert mn.find_header_line(ok.read_text(encoding="utf-8")) is not None
+    assert mn.stamp_pdf_link(ok) is True                           # reconocida → actúa
+    assert mn.find_header_line(fuera.read_text(encoding="utf-8")) is None
+    assert mn.stamp_pdf_link(fuera) is False                       # fuera del contrato → saltea

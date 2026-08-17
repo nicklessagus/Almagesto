@@ -370,6 +370,10 @@ sigue siendo el placeholder del template, `<definir con el skill setup>`) es **W
 clasificando "core" con la regex del ejemplo — correr el skill `setup`. El **PDF ↔ disco** es **WARN/higiene**: marca un paper
 cuyo campo `pdf` no refleja el PDF real — está bajado en `vault/raw/pdfs/<slug>/<bibcode>.pdf` pero el
 frontmatter quedó `null` (drift, hay que linkearlo) o apunta a un archivo inexistente (puntero roto).
+Su hermano **cuerpo ↔ frontmatter** (mismo bloque, WARN) mira lo que aquél no ve: el link `[📄 PDF]` de la
+**línea de cabecera** —metadata derivada, la re-estampa `make_notes`— debe existir sii `pdf` apunta a un PDF
+vigente. Distingue "sin link" (lo arregla el backfill `python scripts/make_notes.py --restamp-pdf-links`)
+de "cabecera fuera del contrato" (el re-estampado la saltea: hay que normalizar la cabecera primero).
 Un **`.obsidian/` en la raíz del repo** es **WARN** (la bóveda se abrió mal: el grafo indexa el
 andamiaje — abrir la carpeta `vault/` como vault y borrar ese directorio). Las **citas no verificables** (bibcode citado en query/concepto/hipótesis sin su `.txt` en
 `vault/raw/fulltext/`) se listan como precondición de `verify-citations`; ídem las **fuentes

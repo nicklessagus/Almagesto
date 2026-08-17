@@ -138,17 +138,43 @@ def stamp_fulltext(dest, stem: str, slug: str | None) -> bool:
 PDF_LINK_RE = re.compile(r" · \[📄 PDF\]\([^)]*\)")
 
 
+def find_header_line(text: str) -> tuple[int, int] | None:
+    """(inicio, fin) de la línea de CABECERA de una nota de paper, o None si la nota no tiene una
+    que cumpla el contrato. Fuente de verdad ÚNICA de "qué es la cabecera" (#48): la usan
+    stamp_pdf_link para re-estampar y el lint para detectar las notas que quedan fuera del
+    contrato — si cada uno la definiera por su lado, el detector dejaría de cubrir al fixer.
+
+    Contrato: primera línea del cuerpo, ANTES de la primera sección `## `, que empieza con `· `
+    y trae la clave entre backticks (`ADS: \\`bibcode\\`` / `fuente off-ADS · \\`citekey\\``). Las
+    líneas de URL/snapshot de las notas off-ADS no la traen, y una línea `· ` dentro de la
+    extracción LLM queda fuera por el corte en la primera sección."""
+    if not text.startswith("---\n"):
+        return None
+    end = text.find("\n---\n", 4)
+    if end < 0:
+        return None
+    pos = end + len("\n---\n")
+    first_sec = text.find("\n## ", pos)
+    limit = len(text) if first_sec < 0 else first_sec
+    while pos < limit:
+        nl = text.find("\n", pos, limit)
+        line_end = limit if nl < 0 else nl
+        if text[pos:line_end].startswith("· ") and "`" in text[pos:line_end]:
+            return pos, line_end
+        pos = line_end + 1
+    return None
+
+
 def stamp_pdf_link(dest) -> bool:
     """Re-estampa el link `[📄 PDF]` de la línea de cabecera de una nota de paper EXISTENTE
     según el frontmatter `pdf:` (#47). La cabecera es metadata DERIVADA (como `fulltext:` o el
     apéndice Excluidos), no contenido de escritura única: el link nació en #13 y toda nota
     creada antes —o cuyo PDF llegó DESPUÉS del stub— quedó sin él aunque el frontmatter esté
-    sano (el lint sólo compara frontmatter↔disco; el cuerpo no lo miraba nadie). Cirugía a
-    nivel texto (familia stamp_fulltext): toca SÓLO la línea de cabecera —la primera del
-    cuerpo, antes de la primera sección `## `, que empieza con `· ` y trae la clave
-    backtickeada (las líneas de URL/snapshot off-ADS no la traen)—: agrega el link si falta,
-    corrige la ruta si cambió y lo QUITA si `pdf:` es null o apunta a un archivo que ya no
-    existe (drift inverso). Nunca la extracción LLM. Idempotente. Devuelve True si modificó."""
+    sano; el cuerpo no lo miraba nadie hasta el chequeo hermano del lint, #48). Cirugía a
+    nivel texto (familia stamp_fulltext): toca SÓLO la línea de cabecera (ver
+    find_header_line): agrega el link si falta, corrige la ruta si cambió y lo QUITA si `pdf:`
+    es null o apunta a un archivo que ya no existe (drift inverso). Nunca la extracción LLM.
+    Idempotente. Devuelve True si modificó."""
     if not dest.exists():
         return False
     text = dest.read_text(encoding="utf-8")
@@ -165,22 +191,16 @@ def stamp_pdf_link(dest) -> bool:
     # verdad frontmatter + disco: link sólo si el campo apunta a un PDF que existe
     want = (f" · [📄 PDF]({pdf_rel})"
             if pdf_rel and (dest.parent / pdf_rel).resolve().exists() else "")
-    body_start = end + len("\n---\n")
-    first_sec = text.find("\n## ", body_start)
-    limit = len(text) if first_sec < 0 else first_sec
-    pos = body_start
-    while pos < limit:
-        nl = text.find("\n", pos, limit)
-        line_end = limit if nl < 0 else nl
-        line = text[pos:line_end]
-        if line.startswith("· ") and "`" in line:
-            new_line = PDF_LINK_RE.sub("", line) + want
-            if new_line == line:
-                return False
-            dest.write_text(text[:pos] + new_line + text[line_end:], encoding="utf-8")
-            return True
-        pos = line_end + 1
-    return False                        # sin línea de cabecera reconocible: no adivinar
+    span = find_header_line(text)
+    if span is None:
+        return False                    # cabecera fuera del contrato: no adivinar (lo marca el lint)
+    pos, line_end = span
+    line = text[pos:line_end]
+    new_line = PDF_LINK_RE.sub("", line) + want
+    if new_line == line:
+        return False
+    dest.write_text(text[:pos] + new_line + text[line_end:], encoding="utf-8")
+    return True
 
 
 def restamp_pdf_links() -> int:
