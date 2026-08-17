@@ -634,3 +634,113 @@ def test_unpend_sin_fuente_no_toca(toy_vault):
     antes = dest.read_text(encoding="utf-8")
     mn.write_web_paper_note("1999Paywall", slug="gp")   # la fuente sigue faltando
     assert dest.read_text(encoding="utf-8") == antes     # el flag se queda
+
+
+# ── stamp_pdf_link: la cabecera sigue al frontmatter `pdf` (#47) ─────────────
+
+def _nota_vieja(toy_vault, stem="2015oldD...1..1D", pdf_rel=None, link_en_cuerpo=None):
+    """Nota de paper pre-#13: frontmatter con `pdf`, cabecera SIN link (o con el que se pida)."""
+    seg = f" · [📄 PDF]({link_en_cuerpo})" if link_en_cuerpo else ""
+    body = (f"# Un título\n\n**Ana Pérez, Bob** (2015)\n"
+            f"· [[test_star]] · ADS: `{stem}`{seg}\n\n"
+            "## Abstract\nAbstract de prueba\n\n"
+            "## Extracción (LLM)\n- **Métodos:** SENTINEL_LLM con `codigo`\n")
+    return mk_note(toy_vault.PAPERS, stem, {"bibcode": stem, "pdf": pdf_rel, "tags": ["paper"]}, body)
+
+
+def _pdf_en_disco(toy_vault, slug, stem):
+    d = toy_vault.PDFS / slug
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"{stem}.pdf").write_bytes(b"%PDF")
+    return f"../../raw/pdfs/{slug}/{stem}.pdf"
+
+
+def test_stamp_pdf_link_agrega_en_nota_vieja(toy_vault):
+    """#47 caso 1: nota pre-#13 (frontmatter `pdf` sano, cuerpo sin link) → se agrega el link
+    en la cabecera sin tocar la extracción LLM; idempotente."""
+    rel = _pdf_en_disco(toy_vault, "test_star", "2015oldD...1..1D")
+    dest = _nota_vieja(toy_vault, pdf_rel=rel)
+    assert mn.stamp_pdf_link(dest) is True
+    text = dest.read_text(encoding="utf-8")
+    assert f"· [[test_star]] · ADS: `2015oldD...1..1D` · [📄 PDF]({rel})" in text
+    assert "SENTINEL_LLM con `codigo`" in text                # extracción intacta
+    assert mn.stamp_pdf_link(dest) is False                   # idempotente
+
+
+def test_stamp_pdf_link_quita_drift_inverso(toy_vault):
+    """Link en el cuerpo pero `pdf: null` (o apuntando a un archivo que ya no está) → se quita."""
+    dest = _nota_vieja(toy_vault, pdf_rel=None,
+                       link_en_cuerpo="../../raw/pdfs/test_star/2015oldD...1..1D.pdf")
+    assert mn.stamp_pdf_link(dest) is True
+    assert "📄 PDF" not in dest.read_text(encoding="utf-8")
+    # ídem con `pdf` seteado pero sin archivo en disco (puntero roto)
+    dest2 = _nota_vieja(toy_vault, stem="2016oldE...1..1E",
+                        pdf_rel="../../raw/pdfs/test_star/2016oldE...1..1E.pdf",
+                        link_en_cuerpo="../../raw/pdfs/test_star/2016oldE...1..1E.pdf")
+    assert mn.stamp_pdf_link(dest2) is True
+    assert "📄 PDF" not in dest2.read_text(encoding="utf-8")
+
+
+def test_stamp_pdf_link_corrige_ruta(toy_vault):
+    """El link del cuerpo apunta a una ruta vieja y el frontmatter a la vigente → se corrige."""
+    rel = _pdf_en_disco(toy_vault, "test_star", "2015oldD...1..1D")
+    dest = _nota_vieja(toy_vault, pdf_rel=rel,
+                       link_en_cuerpo="../../raw/pdfs/otro_slug/2015oldD...1..1D.pdf")
+    assert mn.stamp_pdf_link(dest) is True
+    text = dest.read_text(encoding="utf-8")
+    assert f"[📄 PDF]({rel})" in text
+    assert "otro_slug" not in text
+
+
+def test_stamp_pdf_link_sin_cabecera_no_adivina(toy_vault):
+    """Sin línea de cabecera reconocible ANTES de la primera sección: no toca nada — una línea
+    `· ` con backticks dentro de la extracción LLM no debe confundirse con la cabecera."""
+    rel = _pdf_en_disco(toy_vault, "test_star", "2017oldF...1..1F")
+    body = ("# Un título\n\n## Extracción (LLM)\n"
+            "· nota del LLM con `backticks` que parece cabecera pero no lo es\n")
+    dest = mk_note(toy_vault.PAPERS, "2017oldF...1..1F",
+                   {"bibcode": "2017oldF...1..1F", "pdf": rel, "tags": ["paper"]}, body)
+    antes = dest.read_text(encoding="utf-8")
+    assert mn.stamp_pdf_link(dest) is False
+    assert dest.read_text(encoding="utf-8") == antes
+
+
+def test_paper_notes_rerun_restamp_cabecera(toy_vault, capsys):
+    """#47 en la cadena: re-correr make_notes sobre una nota existente re-estampa la cabecera
+    (el fix viaja solo con el re-run idempotente, sin --force)."""
+    rel = _pdf_en_disco(toy_vault, "test_star", "2020conA...1..1A")
+    _nota_vieja(toy_vault, stem="2020conA...1..1A", pdf_rel=rel)
+    ads_json([rec("2020conA...1..1A")])
+    mn.write_paper_notes("test_star", include_all=False, force=False)
+    dest = toy_vault.PAPERS / "2020conA...1..1A.md"
+    assert f"[📄 PDF]({rel})" in dest.read_text(encoding="utf-8")
+    assert "re-estampado" in capsys.readouterr().out
+
+
+def test_unpend_al_llegar_pdf_restamp_cabecera(toy_vault):
+    """#47 caso 2 (off-ADS): la fuente pendiente llega como PDF → unpend linkea `pdf:` y la
+    cabecera lo sigue en la misma pasada."""
+    mn.write_web_paper_note("1999Paywall", slug="gp", pending="paywall", doi="10.1/x")
+    pdf_dir = toy_vault.PDFS / "gp"
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    (pdf_dir / "1999Paywall.pdf").write_bytes(b"%PDF")
+    mn.write_web_paper_note("1999Paywall", slug="gp", doi="10.1/x")
+    text = (toy_vault.PAPERS / "1999Paywall.md").read_text(encoding="utf-8")
+    assert "[📄 PDF](../../raw/pdfs/gp/1999Paywall.pdf)" in text
+
+
+def test_restamp_pdf_links_barrido(toy_vault, capsys):
+    """Backfill --restamp-pdf-links: barre todas las notas — agrega donde falta, quita el
+    drift inverso, deja en paz las que ya están bien."""
+    rel = _pdf_en_disco(toy_vault, "test_star", "2015oldD...1..1D")
+    _nota_vieja(toy_vault, stem="2015oldD...1..1D", pdf_rel=rel)                 # falta el link
+    _nota_vieja(toy_vault, stem="2016oldE...1..1E", pdf_rel=None,
+                link_en_cuerpo="../../raw/pdfs/test_star/2016oldE...1..1E.pdf")  # drift inverso
+    rel_ok = _pdf_en_disco(toy_vault, "test_star", "2018okG...1..1G")
+    sana = _nota_vieja(toy_vault, stem="2018okG...1..1G", pdf_rel=rel_ok, link_en_cuerpo=rel_ok)
+    antes_sana = sana.read_text(encoding="utf-8")
+    assert mn.restamp_pdf_links() == 0
+    assert "2 de 3 re-estampados" in capsys.readouterr().out
+    assert f"[📄 PDF]({rel})" in (toy_vault.PAPERS / "2015oldD...1..1D.md").read_text(encoding="utf-8")
+    assert "📄 PDF" not in (toy_vault.PAPERS / "2016oldE...1..1E.md").read_text(encoding="utf-8")
+    assert sana.read_text(encoding="utf-8") == antes_sana

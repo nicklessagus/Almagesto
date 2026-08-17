@@ -101,7 +101,10 @@ Pasada de higiene sobre lo que `lint.py` marca como backlog/WARN (no bloqueante,
 - **Huérfanos** (concepto sin links entrantes) → citarlo desde donde corresponda, o borrarlo si sobra.
 - **P_rot / campos nulos** → abrir una `query-corpus` para imputar desde la literatura (web/ADS) y
   completar el frontmatter con su `[[bibcode]]`.
-- **PDF ↔ disco** (drift del campo `pdf`) → linkear el PDF bajado o corregir el puntero roto.
+- **PDF ↔ disco** (drift del campo `pdf`) → linkear el PDF bajado o corregir el puntero roto; después
+  `python scripts/make_notes.py --restamp-pdf-links` para que el link `[📄 PDF]` de la cabecera del
+  cuerpo siga al frontmatter (#47 — barre todas las notas de papers: agrega/corrige/quita, cirugía
+  sin tocar la extracción LLM; también sirve como backfill del corpus pre-#13, donde el link no existía).
 - **Cobertura** (concepto/hipótesis sin ninguna cita) → agregar las citas que faltan.
 - **Fuentes pendientes** (`pending_source`) → conseguir el PDF/fuente (el lint lista el puntero
   doi/url), reemplazar `pending` por `pdf:`/`url:` en `sources:` y re-correr la cadena.

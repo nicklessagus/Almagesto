@@ -6,12 +6,15 @@ Uso:
 - stars/<slug>.md  : ficha índice de la estrella (frontmatter máquina-legible + Dataview).
 - papers/<bibcode>.md : una nota por paper relevante (metadata + abstract + placeholders LLM).
 
-Idempotente: NO pisa notas existentes (protege la extracción LLM) salvo --force. Dos
+Idempotente: NO pisa notas existentes (protege la extracción LLM) salvo --force. Tres
 excepciones quirúrgicas, nunca sobre la extracción LLM: (a) add-only, en una nota de paper
 que ya existía mergea los seeds del ingest actual (`stars` / `thesis_links`) si faltan —
 retro-linkeo, ver merge_frontmatter_list; (b) en una ficha/concept que ya existía re-estampa
 el apéndice máquina "## Excluidos por el filtro" con el ads.json vigente — ver stamp_excluded
-(#35: el sub-modo re-clasificar de maintain lo necesita sin pisar la síntesis).
+(#35: el sub-modo re-clasificar de maintain lo necesita sin pisar la síntesis); (c) en una
+nota de paper que ya existía re-estampa el link `[📄 PDF]` de la línea de cabecera desde el
+frontmatter `pdf:` — ver stamp_pdf_link (#47: la cabecera es metadata derivada, no contenido
+de escritura única). Backfill masivo: `make_notes.py --restamp-pdf-links` (sin slug).
 """
 from __future__ import annotations
 
@@ -130,6 +133,65 @@ def stamp_fulltext(dest, stem: str, slug: str | None) -> bool:
     if changed:
         dest.write_text("---\n" + "\n".join(lines) + text[end:], encoding="utf-8")
     return changed
+
+
+PDF_LINK_RE = re.compile(r" · \[📄 PDF\]\([^)]*\)")
+
+
+def stamp_pdf_link(dest) -> bool:
+    """Re-estampa el link `[📄 PDF]` de la línea de cabecera de una nota de paper EXISTENTE
+    según el frontmatter `pdf:` (#47). La cabecera es metadata DERIVADA (como `fulltext:` o el
+    apéndice Excluidos), no contenido de escritura única: el link nació en #13 y toda nota
+    creada antes —o cuyo PDF llegó DESPUÉS del stub— quedó sin él aunque el frontmatter esté
+    sano (el lint sólo compara frontmatter↔disco; el cuerpo no lo miraba nadie). Cirugía a
+    nivel texto (familia stamp_fulltext): toca SÓLO la línea de cabecera —la primera del
+    cuerpo, antes de la primera sección `## `, que empieza con `· ` y trae la clave
+    backtickeada (las líneas de URL/snapshot off-ADS no la traen)—: agrega el link si falta,
+    corrige la ruta si cambió y lo QUITA si `pdf:` es null o apunta a un archivo que ya no
+    existe (drift inverso). Nunca la extracción LLM. Idempotente. Devuelve True si modificó."""
+    if not dest.exists():
+        return False
+    text = dest.read_text(encoding="utf-8")
+    if not text.startswith("---\n"):
+        return False
+    end = text.find("\n---\n", 4)
+    if end < 0:
+        return False
+    try:
+        data = yaml.safe_load(text[4:end]) or {}
+    except yaml.YAMLError:
+        return False                    # frontmatter roto: lo surface el lint, acá no se toca
+    pdf_rel = data.get("pdf")
+    # verdad frontmatter + disco: link sólo si el campo apunta a un PDF que existe
+    want = (f" · [📄 PDF]({pdf_rel})"
+            if pdf_rel and (dest.parent / pdf_rel).resolve().exists() else "")
+    body_start = end + len("\n---\n")
+    first_sec = text.find("\n## ", body_start)
+    limit = len(text) if first_sec < 0 else first_sec
+    pos = body_start
+    while pos < limit:
+        nl = text.find("\n", pos, limit)
+        line_end = limit if nl < 0 else nl
+        line = text[pos:line_end]
+        if line.startswith("· ") and "`" in line:
+            new_line = PDF_LINK_RE.sub("", line) + want
+            if new_line == line:
+                return False
+            dest.write_text(text[:pos] + new_line + text[line_end:], encoding="utf-8")
+            return True
+        pos = line_end + 1
+    return False                        # sin línea de cabecera reconocible: no adivinar
+
+
+def restamp_pdf_links() -> int:
+    """Backfill #47: barre TODAS las notas de papers y re-estampa el link de cabecera. Para
+    el corpus pre-#13 de una instancia (re-correr cadena por cadena sería carísimo y build/
+    es scratch que puede no existir); en el flujo normal el re-estampado viaja solo con el
+    re-run idempotente de la cadena."""
+    notes = sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []
+    changed = sum(1 for p in notes if stamp_pdf_link(p))
+    print(f"papers: {changed} de {len(notes)} re-estampados (link [📄 PDF] ↔ frontmatter `pdf`)")
+    return 0
 
 
 def parse_year(year) -> int | None:
@@ -445,7 +507,7 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
     if not include_all:
         recs = [r for r in recs if r["relevant"]]
     cfg.PAPERS.mkdir(parents=True, exist_ok=True)
-    written = skipped = merged = 0
+    written = skipped = merged = restamped = 0
     for r in recs:
         bib = r["bibcode"]
         dest = cfg.PAPERS / f"{safe_name(bib)}.md"
@@ -459,6 +521,8 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
                 merged += 1
             else:
                 skipped += 1
+            if stamp_pdf_link(dest):    # cabecera ↔ frontmatter `pdf` (#47) — cirugía, no pisa nada
+                restamped += 1
             continue
         authors = r.get("authors", [])
         # PDF ↔ disco (verdad de disco, como en off-ADS): linkear sólo el PDF realmente bajado
@@ -511,7 +575,8 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
         dest.write_text(body, encoding="utf-8")
         written += 1
     print(f"  papers: {written} escritos, {skipped} ya existían"
-          + (f", {merged} retro-linkeados (seeds add-only)" if merged else ""))
+          + (f", {merged} retro-linkeados (seeds add-only)" if merged else "")
+          + (f", {restamped} con link [📄 PDF] re-estampado" if restamped else ""))
 
 
 def unpend_note(dest, citekey: str, slug: str | None) -> bool:
@@ -580,9 +645,14 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
         # fulltext: si el snapshot/.txt ya está en disco, se estampa en la nota existente.
         if not pending and unpend_note(dest, citekey, slug):
             stamp_fulltext(dest, safe_name(citekey), slug)
+            stamp_pdf_link(dest)         # unpend_note pudo linkear `pdf:` → la cabecera lo sigue (#47)
             return False
         if not pending and stamp_fulltext(dest, safe_name(citekey), slug):
+            stamp_pdf_link(dest)
             print(f"  papers: {dest.name} — fulltext estampado (contrato máquina)")
+            return False
+        if not pending and stamp_pdf_link(dest):
+            print(f"  papers: {dest.name} — link [📄 PDF] de cabecera re-estampado (#47)")
             return False
         print(f"  papers: {dest.name} ya existe (no se pisa sin --force)")
         return False
@@ -657,8 +727,14 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("slug", help="slug de estrella/tema; en --web es la CLAVE de cita (AAAA+Autor)")
+    ap.add_argument("slug", nargs="?",
+                    help="slug de estrella/tema; en --web es la CLAVE de cita (AAAA+Autor). "
+                         "Opcional sólo con --restamp-pdf-links.")
     ap.add_argument("--all", action="store_true", help="incluir papers no-relevantes")
+    ap.add_argument("--restamp-pdf-links", action="store_true", dest="restamp_pdf_links",
+                    help="backfill #47: barre TODAS las notas de papers y re-estampa el link "
+                         "[📄 PDF] de la cabecera desde el frontmatter `pdf` (agrega/corrige/quita). "
+                         "No toca la extracción LLM; no requiere slug.")
     ap.add_argument("--force", action="store_true", help="pisar notas existentes")
     ap.add_argument("--topic", action="store_true",
                     help="el slug es un TEMA de vault/config/topics.yaml: genera concept en vez de ficha de estrella")
@@ -678,6 +754,11 @@ def main() -> int:
     ap.add_argument("--pending", choices=["paywall", "scan", "unextractable"],
                     help="(--web) fuente aún no conseguible: estampa pending_source y deriva al usuario")
     args = ap.parse_args()
+
+    if args.restamp_pdf_links:
+        return restamp_pdf_links()
+    if not args.slug:
+        ap.error("falta el slug (sólo --restamp-pdf-links corre sin slug)")
 
     if args.web:
         write_web_paper_note(args.slug, url=args.url, slug=args.slug_hint, concept=args.concept,
