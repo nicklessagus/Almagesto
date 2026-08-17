@@ -41,9 +41,15 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
   ambos lados. Acá el riesgo se amplifica: el par exige cita de dos fulltexts (~94% de chance de
   que al menos uno sea multi-columna) y un falso negativo colapsaba el veredicto a `no-concluyente`
   sobre una disputa real.
-- Pendiente de la tanda: el script de medición de prevalencia (heurística del hueco de 8+ espacios)
-  como test de regresión — lo pasa el usuario; la escalera NO se re-implementa en `scripts/` (viviría
-  en dos lugares que pueden divergir).
+- Addendum (2026-08-17): la medición de prevalencia quedó como **diagnóstico**, no test de regresión
+  — el template no trae corpus, un test así no podría correr acá. `scripts/measure_layout.py`
+  (aportado por el usuario) mide cualquier bóveda: archivos multi-columna (heurística: >30% de líneas
+  útiles con hueco interno de 8+ espacios), líneas con canaleta (donde el empalme col.1→col.2 es
+  alcanzable) y cortes por guión; `--json`, `--por-slug`, `--listar N`. Medido en Almagesto-RV: 73%
+  de archivos multi-columna global y 46% de líneas útiles con canaleta, pero el peso depende del
+  origen de la bibliografía — slugs astro 62–86%, el off-ADS de estadística/ML (fastica) 38%: una
+  bóveda de puros métodos necesita menos la regla. La escalera NO se re-implementa en `scripts/`
+  (viviría en dos lugares que pueden divergir).
 
 ## ✅ Framework 1.6.0 (2026-08-15) — tanda #29/#42/#43: follow-ups de la primera corrida real
 
