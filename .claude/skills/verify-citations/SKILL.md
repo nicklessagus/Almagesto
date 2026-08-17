@@ -1,7 +1,7 @@
 ---
 name: verify-citations
 description: Usar para verificar, afirmación por afirmación, que las citas [[bibcode]] de una nota de la wiki (query, hipótesis, ficha, concepto) realmente están respaldadas por el texto completo de la fuente. Se corre como paso de cierre al armar/editar una query o hipótesis, o cuando el usuario pide "rechequeá las citas / ¿esto lo dice el paper?". Implementa el chequeo claim↔evidencia (pipeline tipo CiteAudit) sobre el corpus cerrado de la bóveda. Veredictos: soportada / parcial / no-soportada (la fuente calla) / contradice (la fuente afirma lo contrario → candidata a disputa, no sólo cita rota).
-version: 1.3.3
+version: 1.3.4
 ---
 
 # Verify-citations — chequeo claim↔evidencia contra el fulltext
@@ -20,7 +20,8 @@ plenamente respaldadas). Acá cada afirmación se contrasta contra el texto real
 > sin LLM). Por eso la **cita textual que encuentra el verificador son las palabras reales del
 > paper** y el nº de línea es un localizador greppable estable. **Caveats:** `pdftotext` puede
 > desordenar doble-columna, ecuaciones, tablas, ligaduras y guionado; y un PDF **escaneado sin capa de
-> texto** da `.txt` vacío/basura. Por eso: si una afirmación **no** aparece textual en el `.txt`, antes
+> texto** da `.txt` vacío/basura. Por eso: si una afirmación **no** aparece textual en el `.txt` —
+> **tras agotar la estrategia de matcheo de abajo (#44)** — antes
 > de declararla `no-soportada` considerar que puede ser un **artefacto de extracción** (ecuación/tabla)
 > → en ese caso abrir el **PDF** (`vault/raw/pdfs/<slug>/<bibcode>.pdf`) para esa afirmación puntual, o
 > marcarla **`no verificable por extracción`** (distinto de `no-soportada`).
@@ -36,6 +37,27 @@ plenamente respaldadas). Acá cada afirmación se contrasta contra el texto real
 > línea física — un rango de líneas **no** es un rango de lectura contigua (una oración puede
 > arrancar en la columna izquierda de L229 y seguir en la derecha de L204). Los números de línea
 > son **punteros greppables**, no extractos para leer de corrido.
+>
+> **Cómo buscar en el `.txt` (estrategia de matcheo, #44).** El entrelazado de arriba obliga a
+> buscar distinto: `grep` es orientado a líneas, y en un `.txt` multi-columna (medido: 472/644 del
+> corpus, 73%) una oración cruza el salto de línea física — buscarla entera da **falso negativo**
+> aunque el texto esté y sea legible (medido: 9/24 pares ~38% no encontrados con la oración
+> completa; 24/24 localizados con fragmentos cortos).
+> 1. **Escalera de acortamiento:** empezar por la oración completa y, si no aparece, acortar a un
+>    **fragmento distintivo contenido en una sola línea física** (típicamente 3–6 palabras; el largo
+>    útil depende del ancho de columna del PDF, por eso se **acorta hasta encontrar** en vez de fijar
+>    un largo — así un paper a una columna sigue matcheando la frase entera sin perder precisión).
+> 2. **De-hifenado:** si el fragmento corto tampoco aparece, el corte de línea puede partir una
+>    palabra con guión (`mag-` / `nitude`): reintentar partiendo el patrón por el guión, o buscar
+>    un fragmento que lo esquive.
+> 3. Sólo **agotados 1 y 2** corresponde considerar artefacto de extracción (ecuación/tabla/escaneo)
+>    → abrir el PDF o marcar `no verificable por extracción`.
+>
+> ⛔ **Prohibido normalizar espacios sobre el archivo entero** (`re.sub(r"\s+", " ", texto)` o
+> equivalente): en una línea física a dos columnas eso **empalma el final de la columna 1 con el
+> principio de la columna 2**, fabricando adyacencias que el paper no tiene — puede hacer pasar como
+> `soportada` una afirmación **inventada** (falso positivo: el modo peligroso, peor que el falso
+> negativo de arriba). Si hace falta normalizar espacios, hacerlo **por línea**.
 >
 > **Excepción OCR — citable con salvedad:** si la nota del paper trae `fulltext_source: ocr` (el
 > contrato del frontmatter lo espeja — no hace falta abrir el `.txt` para saberlo) o el `.txt` abre
@@ -125,7 +147,11 @@ Si la afirmación tiene varias cláusulas atribuidas a distintas fuentes, juzgá
 o el encuadre genérico, no cuenta. Respondé veredicto
 (soportada/parcial/no-soportada/contradice) + score 0–10 + cita textual con nº de línea (el que da
 `grep -n` o la lectura directa del archivo; NO uses `splitlines()` de Python — los form feeds del
-`.txt` corren la numeración) + nota. Si no
+`.txt` corren la numeración) + nota. Para localizar: el `.txt` suele entrelazar dos columnas en la
+misma línea física, así que si la oración completa no aparece con grep NO concluyas que falta —
+acortá a un fragmento distintivo de 3–6 palabras (y reintentá partiendo por guión de corte);
+PROHIBIDO normalizar espacios sobre el archivo entero (empalma columnas y fabrica adyacencias
+falsas); si normalizás, por línea. Si no
 encontrás respaldo textual, es no-soportada; `parcial` sólo si la cita textual respalda parte del
 contenido distintivo de la afirmación — que el paper hable del mismo tema NO alcanza; si el paper
 afirma lo CONTRARIO, es contradice (pegá la frase que lo contradice). No uses memoria ni otros
