@@ -300,7 +300,9 @@ suelto sin fuente citable no entra (regla #0). Detalle en el skill.
 afirmación — sólo salud estructural; tapa el *grounding gap* / *epistemic drift*). **Cuándo:** paso de
 cierre de **toda operación que escriba prosa con `[[bibcode]]`** — ingest-star (ficha + papers),
 ingest-topic (concept + papers), query archivada, test de hipótesis — **antes de lint/commit**.
-**Qué hace:** descompone la nota en pares (afirmación, `[[bibcode]]`) y lanza **un subagente
+**Qué hace:** descompone la nota en pares (afirmación, `[[bibcode]]`) —incluidas las **filas de tabla
+y los ítems de lista**, que **heredan la cita del ámbito que las introduce** (caption / párrafo / encabezado
+de sección) en vez de caerse del fan-out por no llevar `[[bibcode]]` propio— y lanza **un subagente
 independiente por par** que lee SÓLO ese `vault/raw/fulltext/**/<bibcode>.txt` (grounding-first, prohibido de
 memoria) y devuelve `soportada|parcial|no-soportada|contradice` + **cita textual + nº de línea del `.txt`**
 (obligatoria; sin cita ⇒ no-soportada — también para `parcial`: la cita debe tocar el **contenido
@@ -308,7 +310,11 @@ distintivo** de la afirmación, la mera cercanía temática no alcanza). `no-sop
 **afirma lo contrario** → no es (sólo) cita rota: es corrección de la nota o **disputa** a taguear
 (`planets[].disputes[]` si es parámetro planetario). Cada falla se **resuelve** (bajar la afirmación
 a lo que dice la fuente, reasignar la cita al bibcode correcto, marcar **`inferencia`**, o taguear la
-disputa) y se deja un bloque `## Verificación de citas` en la nota. El `.txt` es extracción **determinista** (`pdftotext`), así que
+disputa) y se deja un bloque `## Verificación de citas` en la nota. Cuando el par sale de una
+**transcripción** (tabla/lista de la fuente) el subagente contesta además la pregunta de
+**completitud** —¿la fuente tiene más filas/ítems que los transcritos?—: una tabla sin un solo error
+pero **truncada** vuelve 100% soportada y se lee como completa (la nota no afirma falso, afirma **de
+menos**); el faltante se reporta como hallazgo propio y se completa o se declara el recorte. El `.txt` es extracción **determinista** (`pdftotext`), así que
 la cita son las palabras reales del paper; si una afirmación no aparece (artefacto de extracción:
 ecuación/tabla/escaneo) abrir el PDF o marcar `no verificable por extracción`. Un `.txt` con header
 `source: ocr` (rescatado por tesseract cuando la capa de texto era ilegible; la nota del paper lo

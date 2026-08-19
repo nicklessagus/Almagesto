@@ -1,7 +1,7 @@
 ---
 name: verify-citations
-description: Usar para verificar, afirmación por afirmación, que las citas [[bibcode]] de una nota de la wiki (query, hipótesis, ficha, concepto) realmente están respaldadas por el texto completo de la fuente. Se corre como paso de cierre al armar/editar una query o hipótesis, o cuando el usuario pide "rechequeá las citas / ¿esto lo dice el paper?". Implementa el chequeo claim↔evidencia (pipeline tipo CiteAudit) sobre el corpus cerrado de la bóveda. Veredictos: soportada / parcial / no-soportada (la fuente calla) / contradice (la fuente afirma lo contrario → candidata a disputa, no sólo cita rota).
-version: 1.3.5
+description: Usar para verificar, afirmación por afirmación, que las citas [[bibcode]] de una nota de la wiki (query, hipótesis, ficha, concepto) realmente están respaldadas por el texto completo de la fuente. Se corre como paso de cierre al armar/editar una query o hipótesis, o cuando el usuario pide "rechequeá las citas / ¿esto lo dice el paper?". Implementa el chequeo claim↔evidencia (pipeline tipo CiteAudit) sobre el corpus cerrado de la bóveda. Veredictos: soportada / parcial / no-soportada (la fuente calla) / contradice (la fuente afirma lo contrario → candidata a disputa, no sólo cita rota); en transcripciones de tablas/listas chequea además la completitud (lo que la nota omite).
+version: 1.3.6
 ---
 
 # Verify-citations — chequeo claim↔evidencia contra el fulltext
@@ -94,6 +94,19 @@ fila de tabla con un valor, cada bullet o frase que asevera un hecho. Para cada 
 **dos pares** — cada fuente debe respaldar la parte que se le atribuye; así se atrapan las mezclas
 "el dato de A atribuido a B").
 
+> **Herencia de cita en tablas y listas (#49).** Una fila de tabla casi nunca lleva su propio
+> `[[bibcode]]`: la cita vive en el **caption**, en el **párrafo que introduce la tabla** o en el
+> **encabezado de la sección** (p. ej. `**Keywords QC de la receta científica** ([[X]], §9.7.4):`).
+> Emparejar sólo "lo que acompaña" a la afirmación deja esas filas **fuera del fan-out** y la tabla
+> entera se cierra sin chequear (medido en una ficha real: **46 de 64 filas, 72%** — y no era
+> material accesorio: eran las tablas de keywords con su significado y unidad, las extensiones FITS
+> y los defaults de la receta, o sea lo que el consumidor de la bóveda efectivamente lee).
+> **Regla:** cada fila/ítem **hereda el `[[bibcode]]` del ámbito que la introduce** — el más cercano
+> hacia arriba: caption → párrafo introductorio → encabezado de sección — y **entra al fan-out como
+> par propio** con esa atribución. Si **ningún** ámbito hacia arriba cita una fuente, la tabla/lista
+> cae en el flag **"afirmación sin cita"** del final de este paso (no se saltea en silencio). Las
+> filas de la **tabla de inventario** marcadas NEA siguen bajo la excepción de ground-truth de abajo.
+
 **Excepciones (no se verifican, pero se chequea la marca):**
 - **Valores de ground-truth (NEA) en fichas de estrella** → los parámetros planetarios (P/K/e/m·sin i,
   status, nº de planetas) del **frontmatter** y de la **tabla de inventario** vienen de **NEA**
@@ -138,6 +151,10 @@ Cada uno:
     verificador — es exactamente lo que mide el benchmark.
   - `nota`: una línea de por qué (sobre todo en `parcial`/`no-soportada`: qué dice el paper en cambio).
     Si la afirmación es **multi-cláusula**, decir **qué cláusula** respalda el paper y cuáles no.
+  - `completitud` (**sólo cuando el par sale de una transcripción** de tabla o lista de la fuente):
+    ¿la tabla/lista del paper tiene **más filas/ítems** que los que la nota transcribe? Si sí,
+    **listarlos** (con nº de línea). Es un **hallazgo aparte**, no un grado de soporte: no cambia el
+    veredicto de la fila que sí está.
 
 > **Claims multi-cláusula (espeja la regla del paso 1).** Una afirmación suele arrastrar varias
 > cláusulas: una de encuadre sin cita, la atribuida a *esta* fuente, y a veces las de *otras*
@@ -146,6 +163,17 @@ Cada uno:
 > `soportada` ni `parcial` a la afirmación: es exactamente la mezcla "el dato de A atribuido a B"
 > que este chequeo existe para atrapar. Sin esta instrucción el subagente juzga el conjunto y
 > hedgea a `parcial`.
+
+> **Transcripciones: chequear también lo que la nota OMITE (#49).** El fan-out valida lo que la nota
+> **afirma**; una tabla transcrita **sin un solo error** pero a la que le faltan filas vuelve
+> **100% soportada** — cada par verificado era verdadero (medido: 14 registros transcritos, los 14
+> correctos pese a un `.txt` que entrelaza tres columnas… sobre una tabla de **21 filas** en el
+> paper). Es un modo de falla **distinto** del *grounding gap*: la nota no afirma nada falso,
+> **afirma de menos**, y una tabla truncada se lee como completa. Por eso, cuando el par sale de una
+> **transcripción** (tabla o lista de la fuente), el subagente recibe además la pregunta de
+> **completitud** (arriba) y el faltante se reporta como **hallazgo propio**, distinto del veredicto
+> de soporte. Vale para cualquier enumeración que la nota presente como cerrada (una lista de
+> máscaras, de extensiones, de keywords), no sólo para tablas con pipes.
 
 Prompt sugerido por agente: *"Leé SOLO `<ruta fulltext>`. ¿El paper respalda esta afirmación: «…»?
 Si la afirmación tiene varias cláusulas atribuidas a distintas fuentes, juzgá si el archivo respalda
@@ -163,6 +191,12 @@ encontrás respaldo textual, es no-soportada; `parcial` sólo si la cita textual
 contenido distintivo de la afirmación — que el paper hable del mismo tema NO alcanza; si el paper
 afirma lo CONTRARIO, es contradice (pegá la frase que lo contradice). No uses memoria ni otros
 papers."*
+
+**Addendum para transcripciones** (agregar al prompt cuando el par sale de una tabla o lista de la
+fuente): *"Esta afirmación es una fila/ítem de una transcripción. La nota transcribe de este paper la
+lista completa: «…». Decime APARTE del veredicto: ¿la tabla/lista del paper tiene MÁS filas/ítems que
+ésos? Si sí, listá los que faltan con su nº de línea. Ojo con el layout: la tabla puede estar
+entrelazada con otra en las mismas líneas físicas — contá las filas de LA tabla que corresponde."*
 
 ### 3. Umbral y agregación
 - `score ≥ 7` → **soportada**
@@ -189,6 +223,12 @@ Cada **parcial / no-soportada / contradice** se resuelve antes de cerrar:
 - **Sin respaldo en ninguna fuente** pero físicamente razonable → re-etiquetar **`inferencia`**
   (y quitar la cita que no corresponde).
 - **Cita rota / fuente equivocada** → corregir o eliminar.
+- **Omisión en una transcripción** (el `completitud` del par devolvió filas/ítems faltantes) → no es
+  cita rota, es la nota afirmando **de menos**: **completar** la tabla/lista con lo que falta (las
+  filas nuevas se verifican como cualquier par) o, si el recorte es deliberado, **declararlo
+  explícito** en la nota ("los N casos de <tipo>; la Tabla 3 de la fuente lista M"). Nunca dejar una
+  transcripción parcial que se lea como completa. Ídem si la fuente introduce la enumeración con
+  "e.g." y la nota la presenta cerrada → abrir la lista en la nota.
 
 ### 5. Escribir el bloque de veredicto en la nota
 Agregar/refrescar al final de la nota (idempotente — si ya existe, reemplazar):
@@ -204,6 +244,8 @@ Chequeo afirmación↔fulltext (skill `verify-citations`). N pares; X soportadas
 | señal g confirmada | [[2016A&A...585A.134D]] | contradice→disputa | 1 | "is an artifact of... rotation" (L2101) → tagueada en disputes[] |
 
 Inferencias declaradas (sin cita, por diseño): <listar>.
+
+Omisiones en transcripciones: <tabla/lista, qué faltaba, cómo se resolvió> — o "ninguna".
 ```
 Convertir fechas relativas a absolutas. Notación `$...$` en archivos `vault/wiki/` (texto plano en chat).
 
@@ -215,9 +257,10 @@ cuántas soportadas/corregidas).
 
 ## Reporte (al chat)
 Veredicto global honesto: total de pares, cuántas soportadas, **cada corrección hecha** (qué se
-bajó/reasignó/marcó inferencia) y **cada contradicción con su resolución** (corrección o disputa
-tagueada). No maquillar: una afirmación que se estiró y se corrigió es un hallazgo del chequeo, no
-un fracaso. Si algo quedó dudoso, decirlo.
+bajó/reasignó/marcó inferencia), **cada contradicción con su resolución** (corrección o disputa
+tagueada) y **cada omisión** detectada en una transcripción (qué faltaba y si se completó o se
+declaró el recorte). No maquillar: una afirmación que se estiró y se corrigió es un hallazgo del
+chequeo, no un fracaso. Si algo quedó dudoso, decirlo.
 
 ## Límite honesto
 El chequeo es **juicio de un LLM** leyendo la fuente — robusto (independiente por par, grounding-first,

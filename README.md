@@ -181,7 +181,10 @@ descripción, o el usuario con `/<nombre>`). Encapsulan la cadena mecánica + el
 El diferencial sobre el patrón base: el lint de Karpathy chequea salud estructural, no que la fuente
 **respalde** la afirmación. Acá toda afirmación va citada `[[bibcode]]` o marcada `inferencia`, y el
 skill `verify-citations` la contrasta contra el texto real del paper (un subagente por par, con cita
-textual obligatoria; una contradicción se convierte en disputa tagueada, no en cita rota). La tasa de
+textual obligatoria; una contradicción se convierte en disputa tagueada, no en cita rota). Las filas
+de tabla heredan la cita del ámbito que las introduce (si no, se caerían del chequeo), y en las
+transcripciones se pregunta además por lo que la nota **omite**: una tabla truncada no afirma nada
+falso, pero se lee como completa. La tasa de
 error del verificador se mide con un auto-benchmark que siembra citas falsas y las juzga a ciegas.
 
 ## Dónde encaja (related work)
