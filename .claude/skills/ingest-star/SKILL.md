@@ -1,7 +1,7 @@
 ---
 name: ingest-star
 description: Usar cuando el usuario pide bajar/agregar/ingestar una estrella a la bóveda ("bajá GJ 581", "ingest tau ceti", "agregá la estrella X", "traé la bibliografía de AU Mic"). Corre la cadena de ingesta y hace la extracción LLM.
-version: 1.9.0
+version: 1.10.0
 ---
 
 # Ingest: agregar una estrella a la wiki
@@ -26,7 +26,10 @@ procesa. Trabajar desde la raíz del repo.
    `fetch_arxiv` respeta el rate limit de arXiv (1 req/3 s) → puede tardar; correr en background si
    son muchos PDFs. Los papers sin arXiv —y los con arXiv cuya bajada falló— los intenta
    `fetch_pdf` (escaneo ADS con token → PDF del publisher, con fallback `curl`); lo que ni así
-   sale queda en `build/<slug>/missing_pdf.json` (residuo completo del ingest, verdad de disco).
+   sale queda en `build/<slug>/missing_pdf.json` (residuo completo del ingest, verdad de disco) —
+   cada entrada trae su `bibstem` y un `hint` con la rama por donde seguir: la **cascada manual de
+   rescate** está en `## Notas` de este skill (Messenger / página del instrumento / mirrors / tablas
+   del CDN / derivar al usuario), y "bajar manual por DOI" **no alcanza**.
    La cadena es idempotente (no pisa): en un re-ingest, `fetch_ground_truth` **no** refresca un
    ground-truth existente salvo `--force` (refrescar desde NEA es decisión explícita, no side-effect).
    `check_retractions` consulta **Crossref** por DOI y, si un paper fue **retractado**, estampa
@@ -147,18 +150,42 @@ procesa. Trabajar desde la raíz del repo.
   ~½ de las filas** (medido: 12/26 estrellas en Saar & Brandenburg 1999; faltaba hasta HD 81809). Nunca
   afirmar "la estrella no está en ese paper" desde un hit full-text negativo — **corroborar** (papers que
   lo citan y le atribuyen datos) o **abrir el PDF/tabla**. Reportar honesto: es inconcluso, no ausencia.
-- **Cascada de adquisición de PDFs no-arXiv** (antes de rendirse; ver también backlog en `vault/STATUS.md`):
-  (a) **la cubre `fetch_pdf.py`** (resolver ADS: escaneo con token → publisher, fallback `curl`) —
-  si el paper quedó en `missing_pdf.json` ya falló, seguir con (b); (b) **imágenes de tabla del CDN del
-  publisher** (p. ej. IOP `content.cld.iop.org/journals/.../tbN.gif`) — **funcionan aunque el PDF esté tras
-  paywall**, y suelen tener el dato que se busca; (c) HTML legacy del publisher (frameset `…/fulltext/`);
-  (d) si nada funciona, **pedir el PDF al usuario** (tiene acceso institucional; anduvo con Frick 2004 y
-  Saar 1999) — mientras tanto, estampá `pending_source: paywall` en el frontmatter de la nota del paper
-  (el lint la lista como precondición hasta que la fuente llegue). Guardá el artefacto citable (PDF o
-  imagen de tabla) en `vault/raw/`.
+- **Cascada de adquisición de PDFs no-arXiv (canónica — `ingest-topic` y `append-knowledge` apuntan
+  acá; ver también backlog en `vault/STATUS.md`).** Lo que quedó en `build/<slug>/missing_pdf.json`
+  **ya falló** en `fetch_pdf.py` (resolver ADS: `EPRINT_PDF` → `ADS_PDF` con token → `PUB_PDF`, con
+  fallback `curl`), y "bajar manual por DOI" **no alcanza** (medido en un ingest real: el resolver
+  falló en **5 de 17** — pre-arXiv de 2000–2015: SPIE, The Messenger, A&A viejo; **4 de 5 se
+  recuperaron** por estas ramas). `fetch_pdf` imprime el **bibstem** de cada fallo con la rama
+  sugerida y la deja en el `hint` de cada entrada del residuo. En orden de rendimiento:
+  1. **Archivo de The Messenger** (`Msngr`) — **todo el Messenger es abierto**:
+     `eso.org/sci/publications/messenger/archive/no.<N>-<mes><aa>/messenger-no<N>-<pp>-<pp>.pdf`.
+  2. **Página de papers del instrumento** (`SPIE` y proceedings en general) — p. ej.
+     `eso.org/sci/facilities/lasilla/instruments/<inst>/science/papers/<vol>-<pp>.pdf`: tiene **en
+     abierto** SPIE que de otro modo son paywall.
+  3. **Mirrors académicos** por búsqueda web (páginas personales, repositorios institucionales).
+  4. **Imágenes de tabla del CDN del publisher** (p. ej. IOP
+     `content.cld.iop.org/journals/.../tbN.gif`) — **funcionan aunque el PDF esté tras paywall** y
+     suelen tener el dato que se busca; ídem el HTML legacy del publisher (frameset `…/fulltext/`).
+  5. **Pedir el PDF al usuario** (tiene acceso institucional; anduvo con Frick 2004 y Saar 1999) —
+     mientras tanto, estampá `pending_source: paywall` en el frontmatter de la nota del paper (el
+     lint la lista como precondición hasta que la fuente llegue).
+  Guardá el artefacto citable (PDF o imagen de tabla) en `vault/raw/`.
+  ⛔ **No gastar intentos en `aanda.org`:** está detrás de **DataDome** — cualquier `curl` (con UA de
+  navegador, con `Referer`, siguiendo redirects) recibe un challenge JS (`Please enable JS…`,
+  `ct.captcha-delivery.com`). Para un **A&A pre-arXiv** que el resolver no entrega no hay preprint y
+  Semantic Scholar lo da `openAccessPdf: CLOSED` → **derivar al usuario de una** (se resuelve en una
+  vuelta con acceso institucional).
 - **OCR: lo maneja solo `extract_fulltext.py`.** Chequea si el PDF trae **capa de texto** legible
-  (umbral determinista) y, si no (escaneos-imagen puros, p. ej. Baliunas 1995, o fuentes sin
+  (umbral determinista: chars no-espacio, **densidad por página** y fracción de ASCII imprimible) y,
+  si no (escaneos-imagen puros, p. ej. Baliunas 1995, o fuentes sin
   ToUnicode), **cae solo a OCR** cuando hay `tesseract` instalado — el `.txt` queda con header
   `source: ocr`, **citable con salvedad** (ver docs/operacion.md); sin tesseract AVISA y el lint lo lista. Ojo
   con quirks de PostScript viejo en la extracción (p. ej. el signo `-` y `>` pueden salir ambos como
   `[`): los datos están, sólo hay que desambiguar por contexto.
+  - ⚠ **Síntoma "escaneo con marca de agua"**: un `.txt` de unos **cientos de bytes** con el
+    **bibcode repetido** una vez por página **no es un fallo de descarga** — el `ADS_PDF` bajó bien,
+    pero es un escaneo **sin capa de texto** cuya única capa es la marca de agua de ADS. Lo agarra la
+    **densidad por página** del umbral (#50; antes pasaba como "extraído" porque el poco texto que
+    hay *es* legible) → dispara el OCR como cualquier escaneo. Si te topás con un `.txt` viejo así,
+    re-extraé con `python scripts/extract_fulltext.py <slug> --ocr --force`. Caso medido:
+    Baranne+1996, 378 bytes → 77 KB por OCR (`fulltext_source: ocr`).

@@ -168,13 +168,32 @@ def test_curl_pdf_unit(monkeypatch, tmp_path):
     assert fp._curl_pdf("https://pub/x") == b"%PDF-curl ok"
 
 
+# ── cascada manual de rescate (#50) ──────────────────────────────────────────
+
+def test_rescue_hint_por_bibstem():
+    """El bibstem del fallo orienta la rama de la cascada manual (#50)."""
+    assert "Messenger" in fp.rescue_hint("Msngr", 2015)
+    assert "instrumento" in fp.rescue_hint("SPIE", 2004)
+    # A&A pre-arXiv: no hay preprint y aanda.org está tras DataDome → derivar al usuario
+    assert "derivar al usuario" in fp.rescue_hint("A&A", 2001)
+    assert "derivar al usuario" in fp.rescue_hint("A&AS", 1996)
+
+
+def test_rescue_hint_fallback_generico():
+    """A&A moderno (con preprint) y bibstems sin rama propia caen al genérico, no al de DataDome."""
+    for stem, year in [("A&A", 2020), ("ApJ", 1978), (None, None), ("", 2001)]:
+        assert "derivar al usuario" not in fp.rescue_hint(stem, year)
+        assert fp.rescue_hint(stem, year)
+    assert "mirror" in fp.rescue_hint("ApJ", "no-es-año")     # year basura no rompe
+
+
 # ── main() ───────────────────────────────────────────────────────────────────
 
 RECORDS = [
     {"bibcode": "1978oldW...1..1W", "title": "viejo sin arxiv", "relevant": True,
-     "arxiv_id": None, "doi": "10.1/w"},
+     "arxiv_id": None, "doi": "10.1/w", "bibstem": "ApJ", "year": "1978"},
     {"bibcode": "2020newA...1..1A", "title": "con arxiv", "relevant": True,
-     "arxiv_id": "2101.00001", "doi": "10.1/a"},
+     "arxiv_id": "2101.00001", "doi": "10.1/a", "bibstem": "A&A", "year": "2020"},
     {"bibcode": "1990nonB...1..1B", "title": "no core", "relevant": False,
      "arxiv_id": None, "doi": None},
 ]
@@ -228,6 +247,21 @@ def test_main_residuo_en_missing_pdf(toy_vault, monkeypatch):
     miss = json.loads((d / "missing_pdf.json").read_text())
     assert [m["bibcode"] for m in miss] == ["1978oldW...1..1W", "2020newA...1..1A"]
     assert miss[0]["doi"] == "10.1/w"                # residuo completo del ingest (#32)
+    # #50: cada entrada trae el bibstem y la rama de la cascada manual por donde seguir
+    assert miss[0]["bibstem"] == "ApJ" and miss[0]["year"] == "1978"
+    assert miss[0]["hint"] and miss[1]["hint"]
+
+
+def test_main_residuo_hint_por_bibstem(toy_vault, monkeypatch, capsys):
+    """Un Msngr que el resolver no entrega sale orientado al archivo abierto de The Messenger."""
+    d = ads_json(toy_vault.ROOT, "test_star", [
+        {"bibcode": "2015Msngr.162....9L", "title": "fibras de HARPS", "relevant": True,
+         "arxiv_id": None, "doi": None, "bibstem": "Msngr", "year": "2015"}])
+    monkeypatch.setattr(fp, "esource_records", lambda bib, tok: [])
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    miss = json.loads((d / "missing_pdf.json").read_text())
+    assert "Messenger" in miss[0]["hint"]
+    assert "Messenger" in capsys.readouterr().out          # también orienta en el stdout del ingest
 
 
 def test_main_todo_conseguido_limpia_residuo_viejo(toy_vault, monkeypatch):

@@ -12,7 +12,9 @@ de re-preguntar al corpus cuando cambia el pipeline sin re-parsear el PDF). Requ
 Chequeo de legibilidad: un PDF escaneado sin capa de texto o con fuentes Type3/custom sin
 ToUnicode produce un .txt vacío o mojibake — inservible para grep y para `verify-citations`
 (que necesita las palabras reales). Cada .txt recién extraído se valida con `is_legible()`
-(determinista: mínimo de chars no-espacio + fracción de imprimibles ASCII).
+(determinista: mínimo de chars no-espacio + densidad por página + fracción de imprimibles ASCII).
+La densidad por página (#50) agarra el escaneo cuya única capa de texto es la **marca de agua** de
+ADS —el bibcode repetido por página—: pasa el mínimo global y antes se contaba como extraído.
 
 Rescate por OCR (opt-in por instalación): si el texto de `pdftotext` NO es legible y hay
 `tesseract` (+ `pdftoppm`, de poppler) instalado, se cae SOLO a OCR (pdftoppm 300 dpi + tesseract
@@ -45,15 +47,26 @@ OCR_MARK = cfg.FULLTEXT_OCR_MARK                # primera línea de un .txt OCR 
 # ~99% ASCII imprimible (los acentos/símbolos raros no llegan a 15%); el mojibake cae a ~0%.
 LEGIBLE_MIN_RATIO = 0.85   # fracción mínima de chars imprimibles ASCII entre los no-espacio
 LEGIBLE_MIN_CHARS = 200    # mínimo de chars no-espacio (un escaneo sin capa de texto da ~0)
+LEGIBLE_MIN_CHARS_PAGE = 200   # mínimo de chars no-espacio POR PÁGINA (issue #50): un escaneo cuya
+                               # única capa de texto es la MARCA DE AGUA de ADS (el bibcode repetido
+                               # por página) pasaba el mínimo global y se contaba como extraído
+                               # (medido: Baranne+1996, 378 bytes en ~20 páginas ≈ 19 chars/página;
+                               # un paper sano da miles). Conservador: 10× arriba de la marca de agua
+                               # y 10× abajo de una página de texto real.
 
 
 def is_legible(text: str) -> tuple[bool, str]:
     """(ok, motivo) — ¿el texto extraído sirve para grep/verify? Determinista. Falla por
     (a) casi sin contenido (escaneo sin capa de texto: pdftotext devuelve sólo espacios/form
-    feeds) o (b) mojibake (fuentes sin ToUnicode: mayoría de chars fuera de ASCII imprimible)."""
+    feeds), (b) contenido sólo de marca de agua (densidad por página bajísima) o (c) mojibake
+    (fuentes sin ToUnicode: mayoría de chars fuera de ASCII imprimible)."""
     content = [c for c in text if not c.isspace()]
     if len(content) < LEGIBLE_MIN_CHARS:
         return False, f"casi sin texto ({len(content)} chars no-espacio) — ¿escaneo sin capa de texto?"
+    pages = text.count("\f") or 1          # pdftotext deja un form feed por página (OCR las une igual)
+    if pages >= 2 and len(content) / pages < LEGIBLE_MIN_CHARS_PAGE:
+        return False, (f"~{int(len(content) / pages)} chars no-espacio por página ({pages} páginas) — "
+                       "¿escaneo sin capa de texto, con sólo la marca de agua del bibcode?")
     ratio = sum(1 for c in content if " " <= c <= "~") / len(content)
     if ratio < LEGIBLE_MIN_RATIO:
         return False, f"mojibake: {ratio:.0%} de chars legibles (<{LEGIBLE_MIN_RATIO:.0%}) — ¿fuentes sin ToUnicode?"

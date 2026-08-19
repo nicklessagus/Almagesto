@@ -1,7 +1,7 @@
 ---
 name: ingest-topic
 description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema off-ADS — típicamente un método de otra disciplina (estadística, ML) al servicio del foco astro — desde PDFs locales + web (ver Modo off-ADS).
-version: 1.8.0
+version: 1.8.1
 ---
 
 # Ingest: agregar un TEMA a la wiki
@@ -62,7 +62,10 @@ del repo.
    (1 req/3 s) → correr en background si son muchos PDFs. Los papers sin arXiv (A&A viejos) —y
    los con arXiv cuya bajada falló— los intenta `fetch_pdf` (escaneo ADS con token → publisher,
    fallback `curl`); lo que ni así sale queda en `build/<slug>/missing_pdf.json` (residuo
-   completo del ingest) → bajar manual por DOI si son clave. Curación persistente con
+   completo del ingest), con el `bibstem` y un `hint` por entrada → seguir la **cascada manual de
+   rescate**, que vive en `## Notas` del skill `ingest-star` (canónica allá, sin copia: Messenger /
+   página del instrumento / mirrors académicos / tablas del CDN / derivar al usuario — y **no**
+   gastar intentos en `aanda.org`, que está tras DataDome). "Bajar por DOI" solo no alcanza. Curación persistente con
    `extra_core: [<bibcode>, …]` en la entrada del tema en `topics.yaml` (igual que en estrellas).
    **Guardia de expansión (checkpoint humano).** Entre `query_ads` y el primer paso que gasta red
    y disco, el orquestador compara el core del `ads.json` fresco contra las notas ya ingestadas del

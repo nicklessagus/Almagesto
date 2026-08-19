@@ -29,6 +29,22 @@ def test_ilegible_mojibake():
     assert not ok and "mojibake" in why
 
 
+def test_ilegible_marca_de_agua_por_pagina():
+    """#50: escaneo sin capa de texto cuyo único texto es la marca de agua de ADS (el bibcode
+    repetido por página). Pasa el mínimo GLOBAL de chars pero la densidad por página lo delata
+    (caso medido: Baranne+1996, 378 bytes en ~20 páginas)."""
+    watermark = "\f".join(["1996A&AS..119..373B"] * 20)
+    assert len([c for c in watermark if not c.isspace()]) > ef.LEGIBLE_MIN_CHARS   # el global pasa
+    ok, why = ef.is_legible(watermark)
+    assert not ok and "por página" in why and "marca de agua" in why
+
+
+def test_legible_paper_sano_multipagina():
+    """Un paper sano de varias páginas no cae en el umbral por página (no hay falso positivo)."""
+    ok, why = ef.is_legible("\f".join([GOOD_TEXT] * 12))
+    assert ok and why == ""
+
+
 def test_legible_umbrales_limite():
     # valores literales a propósito (no ef.LEGIBLE_*): los umbrales son contrato documentado
     # (200 chars / 85% ASCII, compartidos con el lint) — si alguien los cambia, esto debe fallar.
@@ -36,6 +52,11 @@ def test_legible_umbrales_limite():
     assert ef.is_legible("a" * 199)[0] is False
     assert ef.is_legible("a" * 850 + "ÿ" * 150)[0] is True      # ratio == 0.85 pasa
     assert ef.is_legible("a" * 849 + "ÿ" * 151)[0] is False
+    # densidad por página (#50): 200 chars no-espacio por página, y sólo con 2+ páginas.
+    # Forma real de pdftotext: un form feed DESPUÉS de cada página (los ff cuentan las páginas).
+    assert ef.is_legible("a" * 200 + "\f" + "a" * 200 + "\f")[0] is True
+    assert ef.is_legible("a" * 199 + "\f" + "a" * 199 + "\f")[0] is False
+    assert ef.is_legible("a" * 400)[0] is True                  # una sola página: no aplica
 
 
 # ── herramientas falsas ──────────────────────────────────────────────────────

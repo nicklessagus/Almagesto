@@ -21,7 +21,8 @@ de la cabecera no refleja el `pdf` del frontmatter —falta, sobra, o la cabecer
 contrato de `stamp_pdf_link` y el re-estampado la saltea en silencio—; WARN), **fuentes pendientes** (`pending_source` en una nota de
 paper: la fuente no se pudo obtener —paywall/escaneo/mojibake— y está derivada al usuario;
 precondición como las citas no verificables), **fulltext ilegible** (un `.txt` de `vault/raw/fulltext/`
-que no pasa el umbral determinista de legibilidad de `extract_fulltext.is_legible` → mojibake o
+que no pasa el umbral determinista de legibilidad de `extract_fulltext.is_legible` → mojibake,
+escaneo cuya única capa de texto es la marca de agua del bibcode (#50) o
 escaneo sin capa de texto: existe pero no sirve para grep ni verify), **citas no verificables** (bibcode
 citado en query/concepto/hipótesis sin su `.txt` en `vault/raw/fulltext/` → no se puede chequear claim↔fuente
 con el skill `verify-citations`), **cobertura** (concepto/hipótesis sin ninguna cita `[[bibcode]]` →

@@ -20,9 +20,12 @@ placeholders del resolver (`$SIMBAD$`…) y los links HTML (ADS_SCAN /full/, *_H
 descartan. Cada respuesta se valida por magic `%PDF` (el HTML de un paywall no se guarda) y
 se reintenta con backoff (el host de escaneos throttlea ráfagas — medido en el probe).
 
-Lo que ni así se consigue queda en build/<slug>/missing_pdf.json (mismo formato que
+Lo que ni así se consigue queda en build/<slug>/missing_pdf.json (superset del formato de
 fetch_arxiv; al correr último en la cadena, es el residuo COMPLETO del ingest por verdad
-de disco: a conseguir a mano vía DOI, o marcar `pending` en la fuente).
+de disco). Cada entrada lleva `bibstem`/`year` y un `hint` con la rama de la cascada MANUAL
+por donde seguir (#50: "bajar por DOI" no alcanza — Messenger, página del instrumento,
+mirror académico, o derivar al usuario si es un A&A pre-arXiv); el detalle de cada rama vive
+en `## Notas` del skill ingest-star.
 Idempotente: no re-baja lo que ya está en vault/raw/pdfs/<slug>/.
 """
 from __future__ import annotations
@@ -50,6 +53,33 @@ RETRY_STATUS = (429, 500, 502, 503, 504)
 # Subtipos de esource que son PDF bajable, en orden de preferencia. ADS_SCAN (visor /full/,
 # HTML) y los *_HTML no sirven como fuente de la bóveda.
 PDF_TYPES = ("EPRINT_PDF", "ADS_PDF", "PUB_PDF")
+
+# Ramas de la cascada MANUAL de rescate (issue #50): lo que el resolver no entrega se busca a mano,
+# y el bibstem dice por dónde empezar (medido en un ingest real: 5 de 17 fallaron; 4 se recuperaron
+# por estas ramas). El detalle de cada rama vive en `## Notas` del skill ingest-star — acá sólo el
+# puntero para no re-descubrirla en cada ingest.
+RESCUE_HINTS = {
+    "Msngr": "archivo abierto de The Messenger (eso.org/sci/publications/messenger/archive/)",
+    "SPIE": "página de papers del instrumento (los SPIE suelen estar en abierto ahí) o mirror académico",
+}
+AANDA_STEMS = ("A&A", "A&AS")
+AANDA_PREARXIV_YEAR = 2005     # A&A anterior al depósito sistemático en arXiv: sin preprint
+
+
+def rescue_hint(bibstem: str | None, year=None) -> str:
+    """Rama sugerida de la cascada manual para un fallo del resolver, según el bibstem."""
+    stem = (bibstem or "").strip()
+    for key, hint in RESCUE_HINTS.items():
+        if stem.startswith(key):
+            return hint
+    try:
+        yr = int(year)
+    except (TypeError, ValueError):
+        yr = None
+    if stem.startswith(AANDA_STEMS) and yr is not None and yr < AANDA_PREARXIV_YEAR:
+        return ("A&A pre-arXiv: aanda.org está detrás de DataDome (ningún curl pasa) y no hay preprint "
+                "→ derivar al usuario (acceso institucional), no gastar intentos")
+    return "mirror académico / tablas del CDN del publisher / pedir el PDF al usuario"
 
 
 def safe_name(bibcode: str) -> str:
@@ -194,15 +224,19 @@ def main() -> int:
                 break
             print(f"      · {sub} no entregó PDF")
         if not ok:
-            missing.append({"bibcode": bib, "title": r.get("title"), "doi": r.get("doi")})
+            hint = rescue_hint(r.get("bibstem"), r.get("year"))
+            missing.append({"bibcode": bib, "title": r.get("title"), "doi": r.get("doi"),
+                            "bibstem": r.get("bibstem"), "year": r.get("year"), "hint": hint})
+            print(f"      → rescate manual [{r.get('bibstem') or 'sin bibstem'}]: {hint}")
         time.sleep(SLEEP_S)
 
     print(f"Bajados {got}, ya estaban {skipped}, sin conseguir {len(missing)}.")
     miss = cfg.ROOT / "build" / args.slug / "missing_pdf.json"
     if missing:
         miss.write_text(json.dumps(missing, indent=2, ensure_ascii=False), encoding="utf-8")
-        print(f"Residuo en {miss} — cascada manual del skill (tablas del CDN, HTML legacy) "
-              "o pedir el PDF al usuario / marcar `pending`.")
+        print(f"Residuo en {miss} — cada entrada trae su `hint` (rama de la cascada manual según "
+              "el bibstem); detalle en `## Notas` del skill ingest-star. Lo que no salga: pedir el "
+              "PDF al usuario / marcar `pending`.")
     elif miss.exists():
         miss.unlink()      # el listado de fetch_arxiv quedó cubierto: no dejar un residuo viejo
     return 0

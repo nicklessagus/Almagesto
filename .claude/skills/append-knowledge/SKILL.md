@@ -1,7 +1,7 @@
 ---
 name: append-knowledge
 description: Usar cuando el usuario quiere plegar UNA fuente puntual (paper por bibcode, PDF local, URL) a una entidad YA existente de la wiki — ficha de estrella o concepto — sin re-correr el ingest completo ("agregale este paper a la ficha de tau Ceti", "sumá este PDF al concept de procesos gaussianos", "este bibcode va a GJ 581", "encontré un paper nuevo para el tema X, agregalo"). Plomería mínima + extracción enfocada + síntesis a la nota viva + cierre estándar. NO crea entidades (eso es ingest-star/ingest-topic) ni barre por query lo nuevo (eso es maintain/refrescar).
-version: 1.0.1
+version: 1.0.2
 ---
 
 # Append — plegar una fuente puntual a una ficha o concepto existente
@@ -34,8 +34,11 @@ de fuentes ya citadas, entra marcada como tal.
      ⚠ La cadena re-corre también la query → puede traer **otros** papers nuevos (refresh
      implícito): si aparecen stubs extra, hacé su extracción (maintain A) o anotalos como backlog
      en `vault/STATUS.md` — no los dejes mudos.
-     Si el paper no tiene arXiv (paywall/viejo) y el usuario provee el PDF: copiarlo a
-     `vault/raw/pdfs/<slug>/<bibcode>.pdf` y correr `python scripts/extract_fulltext.py <slug>`.
+     Si el paper no tiene arXiv (paywall/viejo) y el resolver de ADS tampoco lo entrega (queda en
+     `build/<slug>/missing_pdf.json`, con `bibstem` y `hint`), seguí la **cascada manual de rescate**
+     de `## Notas` del skill `ingest-star` antes de pedirlo. Con el PDF en mano (rescatado o provisto
+     por el usuario): copiarlo a `vault/raw/pdfs/<slug>/<bibcode>.pdf` y correr
+     `python scripts/extract_fulltext.py <slug>`.
    - **(ii) PDF off-ADS** a un tema con `source` off-ADS → agregar el item a `sources:` de la
      entrada del tema (`key` + `pdf` + metadata) y `python scripts/ingest_topic.py <slug>` (sólo
      procesa lo nuevo; deja nota con `pdf` linkeado y fulltext extraído).

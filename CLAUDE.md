@@ -385,8 +385,9 @@ andamiaje — abrir la carpeta `vault/` como vault y borrar ese directorio). Las
 `vault/raw/fulltext/`) se listan como precondición de `verify-citations`; ídem las **fuentes
 pendientes** (`pending_source` en una nota de paper: fuente no conseguida —paywall/escaneo/mojibake—
 derivada al usuario con su puntero doi/url) y el **fulltext ilegible** (un `.txt` que no pasa el
-umbral determinista de legibilidad — mojibake o escaneo sin capa de texto: existe pero no sirve para
-grep ni verify; rescate: PDF sano, OCR, o marcar `pending`). La **cobertura** (concepto/hipótesis
+umbral determinista de legibilidad — mojibake, escaneo sin capa de texto, o escaneo cuya única capa
+es la **marca de agua** del bibcode repetida por página (lo agarra la densidad por página): existe
+pero no sirve para grep ni verify; rescate: PDF sano, OCR, o marcar `pending`). La **cobertura** (concepto/hipótesis
 sin ninguna cita `[[bibcode]]` → afirma sin fuente) es **backlog** que el lint surface para ir citando;
 ídem la **cobertura de verificación** (query/concepto **con** citas pero **sin** bloque
 `## Verificación de citas` → nunca pasó por `verify-citations`: correr el skill).
