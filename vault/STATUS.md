@@ -18,6 +18,101 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.7.0 (2026-08-19) — tanda #49/#50: lo que el verify no miraba y el rescate de PDFs
+
+> Disparada por la primera corrida real sobre una ficha grande (17 fuentes, ~110 pares) en
+> Almagesto-RV. 351 tests verdes (+5), lint 0. `ALMAGESTO_VERSION` 1.6.3 → **1.6.4** (#49, patch:
+> sólo skills) → **1.7.0** (#50, minor: claves nuevas en `missing_pdf.json` + umbral de legibilidad
+> por página, retrocompatible).
+
+- **#49** — `verify-citations` 1.3.5 → 1.3.6, dos agujeros medidos: (a) **herencia de cita en tablas
+  y listas** — la fila hereda el `[[bibcode]]` del ámbito que la introduce (caption → párrafo →
+  encabezado) y entra al fan-out como par propio; antes no se formaba el par y la tabla entera se
+  cerraba sin chequear (medido: **46 de 64 filas, 72%**). (b) **Completitud de transcripciones** —
+  campo `completitud` + addendum de prompt: una tabla transcrita sin un solo error pero **truncada**
+  volvía 100% soportada (medido: 14 registros correctos sobre una tabla de **21 filas**). Es un modo
+  de falla distinto del *grounding gap*: la nota no afirma falso, **afirma de menos**.
+- **#50** — **cascada de rescate de PDFs** escrita y canónica en `## Notas` de `ingest-star`
+  (Messenger abierto → página de papers del instrumento → mirrors → tablas del CDN → derivar al
+  usuario), con la excepción **aanda.org / DataDome** (no gastar intentos). El resolver de ADS falló
+  en **5 de 17** en un ingest real; 4 se recuperaron por esas ramas. `fetch_pdf` imprime el
+  **bibstem** de cada fallo con la rama sugerida (`rescue_hint`) y la persiste en el residuo.
+  Además `extract_fulltext.is_legible` suma **densidad por página** (`LEGIBLE_MIN_CHARS_PAGE=200`):
+  el escaneo cuya única capa de texto es la **marca de agua** del bibcode pasaba el mínimo global y
+  se contaba como extraído (medido: Baranne+1996, 378 bytes en ~20 páginas) — ahora cae al OCR y el
+  lint lo surface retroactivamente en cualquier bóveda ya ingestada.
+- Hueco conocido del historial: las tandas **1.6.2** (#46/#47) y **1.6.3** (#48) nunca dejaron
+  entrada acá (sólo commit de fix + bump). Backfillear si se quiere el registro completo.
+
+## Backlog de framework — revisión profunda de skills 2026-08-19 (issues #51–#67)
+
+> Revisión pedida por el usuario: lectura completa de los 9 skills + cross-check contra
+> `scripts/`/`lint.py`/`CLAUDE.md`/`docs/` + búsqueda de sistemas similares (guía oficial de
+> authoring de skills, PaperQA2/OpenScholar, DeepSciVerify, MiniCheck, PRISMA-S). Informe con la
+> evidencia archivo:línea de cada hallazgo: `outputs/revision-skills-2026-08-19.md` (**gitignored y
+> regenerable** — lo durable es esta sección). Los 17 hallazgos están abiertos como issues #51–#67;
+> acá queda lo que GitHub no guarda: **orden, dependencias e ideas descartadas como issue**.
+
+### Orden sugerido de tandas
+1. **Coherencia barata** (docs/skills, sin scripts): **#53** (huérfanos: backlog en `maintain` vs
+   bloqueantes en el lint), **#54** (la convención de matcheo multi-columna no llega a
+   `query-corpus`/`test-hypothesis` — ahí un falso negativo **fabrica una ausencia**), **#58**
+   (`setup` no manda a `maintain D`), **#59** (CWD mezclado en el mismo skill).
+2. **#52** — correcciones no-retractantes (erratum/corrigendum/EoC) hoy se imprimen y se tiran:
+   `corrections:` en frontmatter + categoría de lint + `maintain F`. Patrón ya existente
+   (`retracted`), scripts + tests.
+3. **#56 + #55** — dos categorías nuevas de lint en el mismo archivo: verificación **stale** (fecha
+   del bloque vs `git log -1 --format=%cs`) y **triage pendiente** sin resolver.
+4. **#51 + #64** — el grande: registro de **curación** (descartes de triage → config versionada) y
+   de **búsqueda** (bloque de provenance por sujeto: fecha/query/conteos/rows/truncated/versión).
+   Destraba el **falso limpio** del lint en una máquina sin `build/`.
+5. **#57** — provenance del PDF (`pdf_source: eprint|ads|publisher`) + caveat de versión en
+   `verify-citations`.
+6. **#65 + #66 + #67** — reestructura de skills: `reference/` (progressive disclosure), checklists
+   copiables, deduplicar la cadena ADS entre `ingest-star` e `ingest-topic`.
+7. **#60** — roll-ups Dataview invisibles al consumidor-modelo: materializar la tabla (variante
+   cara) o documentar el fallback `grep` (variante barata).
+8. **#62, #61, #63** — método: presupuesto de extracción cuando el core es enorme, veredicto
+   "el corpus calla" + declaración de sesgo en `test-hypothesis`, persistencia de los `aparente` de
+   `find-contradictions`.
+
+**Dependencias duras:** #55 y #64 heredan el falso limpio mientras el registro viva en `build/` →
+después de #51. #65/#67 **después** de las tandas de contenido (si no, se reescriben los skills dos
+veces).
+
+### Ideas evaluadas y NO abiertas como issue (mejoras, no defectos)
+- **Localizador determinista de la cita** — escalado de evidencia estilo *DeepSciVerify*
+  (arXiv:2605.27710: resuelven **67%** de los casos sin recuperar full-text). Un script correría la
+  escalera #44/#46 y devolvería las líneas candidatas; el subagente sólo **juzga**. Ataca el costo
+  del fan-out, que #49 multiplicó al meter las filas de tabla. ⚠ **Choca con la decisión de #44**
+  ("la escalera NO se re-implementa en `scripts/`: viviría en dos lugares que pueden divergir") —
+  se resolvería invirtiendo la autoridad: el script pasa a ser **la** implementación (ya tiene
+  invariantes en `tests/test_multicolumn_matching.py`) y el skill queda como puntero. Gate
+  obligatorio: el auto-benchmark antes/después.
+- **Verificador barato como pre-filtro** — *MiniCheck* (EMNLP 2024): nivel GPT-4 en fact-checking
+  contra documento de anclaje a **400× menos costo** (74.7% balanced accuracy en LLM-AggreFact). No
+  reemplaza el veredicto (no produce cita textual + nº de línea, que es el contrato), pero sirve
+  para **ordenar** los pares por probabilidad de error o como **segunda opinión** contra el modo de
+  falla ya medido (ablandar a `parcial` un claim genérico). Costo real: dependencia de inferencia
+  local (torch/HF), hoy ajena a `requirements.txt` → experimento medido, no parte de la cadena.
+- **Descubrimiento para el modo off-ADS** — OpenAlex / Semantic Scholar / Crossref exponen abstract,
+  grafo de citas y links de acceso abierto para la bibliografía no-astro. Un `query_openalex.py` que
+  escriba el mismo `ads.json` (mismo clasificador `relevance.topics`) le daría a los temas de método
+  el **descubrimiento automático** que hoy sólo tienen los astro, en vez de fuentes declaradas a
+  mano. Verificar términos y límites vigentes de cada API antes de codificar.
+- **Priorizar la extracción con metadata de calidad** — *PaperQA2* adjunta a cada fragmento citas,
+  venue y estado de retracción. Insumo directo de #62 (ordenar qué se extrae cuando hay 850 core).
+- **Subirle el perfil a `find-contradictions`** — la literatura de RAG con fuentes en conflicto
+  reporta que ~25% de las preguntas abiertas recuperan evidencia contradictoria y que los LLM la
+  **ignoran con exceso de confianza**. Hoy la auditoría es opt-in y nada la dispara; podría
+  proponerse sola al cerrar un ingest grande.
+
+### Lo que la revisión NO tocaría
+División scripts/LLM, frontera dura (regla #0), diseño de la compuerta de triage, dry-run de
+`maintain D` y el auto-benchmark del verificador. Comparado con lo que hay afuera (PaperQA2,
+OpenScholar, Elicit y compañía), ninguno persiste un artefacto curado con verificación
+afirmación-por-afirmación **y un número medido de su propia tasa de error**.
+
 ## ✅ Framework 1.6.1 (2026-08-17) — tanda #44/#45: estrategia de matcheo en `.txt` multi-columna
 
 > Tanda **de docs/skills** (sin cambio de scripts), hermana de #29: el `.txt` de `pdftotext -layout`
