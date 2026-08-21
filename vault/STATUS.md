@@ -18,6 +18,30 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.7.2 (2026-08-20) — #66 + #60(b): lo que faltaba para ampliar una ficha
+
+> Segunda mitad de la misma tanda, elegida por el mismo criterio que #56: **qué protege la operación
+> de ampliar una ficha**. Sólo docs/skills (sin scripts). 357 tests verdes, lint 0.
+> `ALMAGESTO_VERSION` 1.7.1 → **1.7.2** (patch).
+
+- **#66** — **checklist copiable** al inicio de `ingest-star` (9 pasos), `ingest-topic` (7),
+  `append-knowledge` (5) y `maintain A`. Los pasos salteables —barrido full-text, triage,
+  retro-tag, verify— no dejan rastro si se omiten, y el lint sólo tiene red para el último: la
+  categoría "Sin verificar" **existe porque el paso se saltea**. El checklist ataca la causa.
+  Skills: `ingest-star` 1.10.0 → **1.11.0**, `ingest-topic` 1.8.1 → **1.9.0**, `append-knowledge`
+  1.0.3 → **1.1.0**, `maintain` 1.6.1 → **1.7.0**.
+- **#60 (variante barata, issue ABIERTO)** — la **regla de poda** manda lo no-inlineado a la tabla
+  `## Papers`, que es un bloque ```dataview```: el consumidor-modelo ve el **código de la query, no
+  sus resultados**, y el plugin no está versionado — el mecanismo que justifica mantener la ficha
+  compacta no era resoluble por quien la lee. Queda documentado el **fallback determinista**
+  (`grep -l 'stars:.*<nombre>' vault/wiki/papers/*.md`) y el criterio: se descarga a un roll-up sólo
+  si el fallback lo recupera. **#60 sigue abierto** por la variante (a) —materializar la tabla como
+  markdown plano vía `make_notes --stamp-rollups`, con el mecanismo ya probado de `stamp_excluded`—
+  que es la que lo resuelve de verdad.
+- **Sigue pendiente y toca este flujo:** **#57** (`pdf_source: eprint` — verify puede "corregir" una
+  nota hacia un preprint; necesita scripts+tests) y, de la cola vieja del pipeline, el **verify
+  incremental (diff-mode)**, que es el que haría barato re-verificar sólo lo agregado.
+
 ## ✅ Framework 1.7.1 (2026-08-20) — #56: la verificación que quedó vieja y se lee como vigente
 
 > Primera tanda del backlog #51–#67 (orden sugerido: era el ítem 3, adelantado porque protege la
@@ -96,10 +120,11 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
    Destraba el **falso limpio** del lint en una máquina sin `build/`.
 5. **#57** — provenance del PDF (`pdf_source: eprint|ads|publisher`) + caveat de versión en
    `verify-citations`.
-6. **#65 + #66 + #67** — reestructura de skills: `reference/` (progressive disclosure), checklists
-   copiables, deduplicar la cadena ADS entre `ingest-star` e `ingest-topic`.
-7. **#60** — roll-ups Dataview invisibles al consumidor-modelo: materializar la tabla (variante
-   cara) o documentar el fallback `grep` (variante barata).
+6. **#65 + ~~#66~~ ✅ (hecho en 1.7.2) + #67** — reestructura de skills: `reference/` (progressive
+   disclosure) y deduplicar la cadena ADS entre `ingest-star` e `ingest-topic`.
+7. **#60** — roll-ups Dataview invisibles al consumidor-modelo: la variante barata (documentar el
+   fallback `grep`) se hizo en 1.7.2; **queda la cara**: materializar la tabla con
+   `make_notes --stamp-rollups`.
 8. **#62, #61, #63** — método: presupuesto de extracción cuando el core es enorme, veredicto
    "el corpus calla" + declaración de sesgo en `test-hypothesis`, persistencia de los `aparente` de
    `find-contradictions`.
