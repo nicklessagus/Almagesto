@@ -136,3 +136,37 @@ def test_query_ads_lee_los_descartes_persistidos(toy_vault):
         "2020b....1B": {"decision": "aceptado", "motivo": "sí"}})
     assert qa.load_triage("test_star") == {"2020a....1A"}
     assert qa.load_triage("otro_slug") == set()
+
+
+# ── --migrate: consolidar el triage.json viejo (#51) ─────────────────────────
+
+def test_migrate_consolida_sin_esperar_un_drop(toy_vault, monkeypatch, capsys):
+    """El juicio pre-1.9.0 no puede depender de que el usuario justo descarte algo: hasta el
+    próximo --drop seguiría viviendo sólo en scratch, y un clon lo perdería igual que antes."""
+    d = write_ads(toy_vault)
+    (d / "triage.json").write_text(json.dumps({"slug": "test_star", "decisiones": {
+        "2020a....1A": {"decision": "descartado", "motivo": "ruido", "fecha": "2026-01-01"},
+        "2020b....1B": {"decision": "descartado", "motivo": "otro"}}}), encoding="utf-8")
+    assert run_main(monkeypatch, ["test_star", "--migrate"]) == 0
+    dec = yaml.safe_load(cfg.registro_path("test_star").read_text(encoding="utf-8"))["decisiones"]
+    assert set(dec) == {"2020a....1A", "2020b....1B"}
+    assert dec["2020a....1A"]["motivo"] == "ruido"          # el motivo viaja, no sólo el bibcode
+    assert "2 decisión(es) migradas" in capsys.readouterr().out
+
+
+def test_migrate_es_idempotente_y_no_pisa_lo_versionado(toy_vault, monkeypatch, capsys):
+    d = write_ads(toy_vault)
+    (d / "triage.json").write_text(json.dumps({"decisiones": {
+        "2020a....1A": {"decision": "descartado", "motivo": "viejo"}}}), encoding="utf-8")
+    cfg.save_decisiones("test_star", {"2020a....1A": {"decision": "descartado",
+                                                      "motivo": "revisado después"}})
+    assert run_main(monkeypatch, ["test_star", "--migrate"]) == 0
+    dec = cfg.load_registro("test_star")["decisiones"]
+    assert dec["2020a....1A"]["motivo"] == "revisado después"      # gana el registro
+    assert "ya estaban en el registro" in capsys.readouterr().out
+
+
+def test_migrate_sin_legacy_no_rompe(toy_vault, monkeypatch, capsys):
+    write_ads(toy_vault)
+    assert run_main(monkeypatch, ["test_star", "--migrate"]) == 0
+    assert "nada que migrar" in capsys.readouterr().out

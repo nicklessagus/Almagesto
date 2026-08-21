@@ -1,7 +1,7 @@
 ---
 name: ingest-star
 description: Usar cuando el usuario pide bajar/agregar/ingestar una estrella a la bóveda ("bajá GJ 581", "ingest tau ceti", "agregá la estrella X", "traé la bibliografía de AU Mic"). Corre la cadena de ingesta y hace la extracción LLM.
-version: 1.12.0
+version: 1.12.1
 ---
 
 # Ingest: agregar una estrella a la wiki
@@ -102,6 +102,8 @@ Progreso del ingest de <estrella>:
    ```bash
    python scripts/triage.py <slug>            # listar (agregá --report para la tabla en outputs/)
    ```
+   (En una bóveda ingestada antes de 1.9.0, `--migrate` consolida de una vez el juicio que haya
+   quedado en el `build/<slug>/triage.json` viejo; ver `maintain E`.)
    Los marcados `◆` **ya tienen nota en la bóveda** (entraron por otro slug): ya están bajados y
    extraídos — la decisión sigue siendo por-slug (¿pertinente a ESTE sujeto?), pero se despachan
    rápido (el `stars:` que falte lo cubre el retro-linkeo add-only de `make_notes`).

@@ -90,6 +90,38 @@ def drop(slug: str, bibcodes: list[str], reason: str) -> int:
     return 0
 
 
+def migrate(slug: str) -> int:
+    """Consolida en el registro VERSIONADO las decisiones que hayan quedado en el
+    `build/<slug>/triage.json` de una bóveda pre-1.9.0 (#51).
+
+    Sin esto la migración sólo ocurre en el próximo `--drop`: hasta entonces el juicio sigue
+    viviendo únicamente en scratch gitignored, y un clon en otra máquina lo pierde igual que antes
+    —exactamente el bug que #51 arregla—. Depender de que el usuario justo descarte algo no es una
+    migración. Idempotente: ante el mismo bibcode gana lo ya versionado, y si no hay nada que
+    migrar no escribe."""
+    legacy = cfg.legacy_triage_path(slug)
+    if not legacy.exists():
+        print(f"{slug}: no hay {legacy} — nada que migrar "
+              f"(el juicio nuevo ya se escribe en {cfg.registro_path(slug)}).")
+        return 0
+    try:
+        viejas = json.loads(legacy.read_text(encoding="utf-8")).get("decisiones") or {}
+    except ValueError:
+        sys.exit(f"{legacy} no es JSON válido — revisalo a mano antes de migrar.")
+    ya = cfg.load_registro(slug).get("decisiones") or {}
+    nuevas = {b: d for b, d in viejas.items() if b not in ya}
+    if not nuevas:
+        print(f"{slug}: las {len(viejas)} decisión(es) del triage.json viejo ya estaban en el "
+              f"registro — nada que hacer.")
+        return 0
+    cfg.save_decisiones(slug, {**viejas, **ya})       # el registro gana ante el mismo bibcode
+    print(f"{slug}: {len(nuevas)} decisión(es) migradas a {cfg.registro_path(slug)} "
+          f"({len(ya)} ya estaban).")
+    print("  Ahora viajan en git: commiteá el registro. El triage.json viejo queda como estaba "
+          "(build/ es scratch; se puede borrar).")
+    return 0
+
+
 def has_note(bibcode: str) -> bool:
     """¿El candidato ya tiene nota en `vault/wiki/papers/`? Pasa cuando entró por OTRO slug (paper
     de método curado a otra estrella): ya está bajado y extraído, así que proponerlo sin marcar es
@@ -138,8 +170,14 @@ def main() -> int:
     ap.add_argument("--drop", nargs="+", metavar="BIBCODE",
                     help="persistir el descarte de estos candidatos (no se re-proponen)")
     ap.add_argument("--reason", default="",
-                    help="motivo del descarte (obligatorio con --drop; queda en triage.json)")
+                    help="motivo del descarte (obligatorio con --drop; queda en el registro)")
+    ap.add_argument("--migrate", action="store_true",
+                    help="consolidar en el registro versionado las decisiones del "
+                         "build/<slug>/triage.json viejo (bóvedas pre-1.9.0) y salir")
     args = ap.parse_args()
+
+    if args.migrate:
+        return migrate(args.slug)
 
     if args.drop:
         if not args.reason:

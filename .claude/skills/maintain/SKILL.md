@@ -1,7 +1,7 @@
 ---
 name: maintain
 description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), resolver el backlog del lint (P_rot faltante, drift PDF↔disco, cobertura, claims stale), y la pasada periódica de retracciones sobre toda la bóveda ("chequeá retracciones").
-version: 1.8.1
+version: 1.8.2
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
@@ -137,6 +137,10 @@ Pasada de higiene sobre lo que `lint.py` marca como backlog/WARN (no bloqueante,
   donde el link no existía). Si el hallazgo dice **"cabecera fuera del contrato"** (#48), el backfill
   **no** la va a tocar: normalizá primero esa línea a la forma canónica (`· … · ADS: \`<bibcode>\``, o
   `· … fuente off-ADS · \`<citekey>\``) y recién ahí re-corré el backfill.
+- **Juicio de triage todavía en `build/`** (bóveda ingestada antes de 1.9.0) → consolidarlo en el
+  registro versionado, **sin esperar al próximo `--drop`**:
+  `python scripts/triage.py <slug> --migrate` (idempotente; ante el mismo bibcode gana lo ya
+  versionado). Después commitear `vault/config/registro/<slug>.yaml`: recién ahí el juicio viaja.
 - **Papers sin `pdf_source`** (#57 — corpus ingestado antes de 1.10.0: no se sabe si el `.txt`
   salió del eprint o del publicado, y ese caveat es el que evita que `verify-citations` "corrija"
   una nota hacia un v1 pre-referato) → **backfill sin re-bajar nada**:
