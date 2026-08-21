@@ -153,6 +153,13 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   tabla Dataview `## Papers` de la ficha (que lista todo paper con la estrella en `stars:`). No
   re-narrar en la ficha lo que ya está en la extracción del paper. Esto mantiene la ficha **compacta**
   (rápida de ingestar, sin perder contexto) sin perder trazabilidad.
+  ⚠ **El puntero es resoluble sin Obsidian (#60):** los roll-ups `## Papers` y `## Métodos aplicados`
+  son bloques ```dataview``` — un agente que abre el `.md` ve el **código de la query, no sus
+  resultados**, y el plugin ni siquiera está versionado. Para la audiencia-modelo, que es la que este
+  contrato dice servir, el equivalente determinista es un `grep` sobre el frontmatter de los papers:
+  `grep -l 'stars:.*<nombre>' vault/wiki/papers/*.md` (métodos: `contains(methods, …)` →
+  `grep -l 'methods:.*<método>' vault/wiki/papers/*.md`). Si descargás contenido a un roll-up, es
+  porque ese fallback lo recupera; si no, el contenido va inlineado en la ficha.
   **Disputas (`planets[].disputes`):** NEA (ground-truth) es **siempre el valor de verdad**; cuando
   un paper discrepa —sea sobre la **existencia** de la señal o sobre el **valor** de un parámetro—
   se taguea, no se sobreescribe. Cada entrada: `field` (`existence` o el parámetro: `P|K|e|msini`),
