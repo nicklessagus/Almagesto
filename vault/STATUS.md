@@ -18,6 +18,33 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.8.1 (2026-08-21) — tanda 3: #55, el triage que se cerraba sin red
+
+> 364 tests verdes (+2), lint 0. `ALMAGESTO_VERSION` 1.8.0 → **1.8.1** (patch: categoría de backlog
+> nueva, sin schema ni cadena nuevos).
+
+- **#55** — la compuerta de triage (#38) existe porque el chaining mete papers que **mencionan** al
+  sujeto sin hablar de él (18% de precisión medida), y deja los dudosos en `candidates` de
+  `build/<slug>/ads.json` **sin bajar**, esperando juicio. Pero el chequeo que gatea el commit no
+  sabía que esa clave existía (`grep candidates scripts/lint.py` → nada): el único recordatorio era
+  el stdout de `query_ads` y el mensaje final del orquestador, y los dos se pierden apenas scrollea
+  la terminal. **El paso con más juicio de la operación era el único sin red de seguridad** — se
+  podía cerrar un ingest con lint en 0, commit hecho y cientos de candidatos sin decidir.
+- **Categoría nueva en el lint: backlog** (`Triage pendiente`), en el mismo barrido de
+  `build/*/ads.json` que ya hacía el corpus truncado. `candidates` viene **neto** de decisiones —los
+  descartados de `triage.json` no se re-proponen y los aceptados pasaron a `extra_core`, o sea que
+  son core—, así que alcanza con contarlos; el hallazgo lleva los 3 primeros bibcodes y el comando
+  exacto. Documentado en `maintain E`, en el paso 2c de `ingest-star` (1.11.1 → **1.11.2**) y en
+  `CLAUDE.md`; `maintain` 1.7.2 → **1.7.3**.
+- **⚠ Hueco residual declarado, no tapado:** `build/` es scratch **gitignored**, así que la
+  categoría hereda el **falso limpio** — en una máquina que no corrió el ingest da 0 aunque haya
+  candidatos sin juzgar. Es exactamente la dependencia que el backlog anotó (#55 después de #51) y
+  la razón de que el skill siga mandando a dejar el conteo en el `log`, que es lo único que viaja.
+  **"0 pendientes" hoy significa "0 acá".** Lo cierra **#51** (registro de curación en config
+  versionada), que pasa a ser la próxima tanda.
+- **Sigue la tanda 4:** **#51 + #64** — el grande: curación (descartes de triage) y búsqueda
+  (provenance por sujeto) fuera de `build/`.
+
 ## ✅ Framework 1.8.0 (2026-08-21) — tanda 2: #52, la corrección que envejece un número ya extraído
 
 > Tanda 2 del orden sugerido y **primera con scripts + tests**. 362 tests verdes (+3), lint 0.
