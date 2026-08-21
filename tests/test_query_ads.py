@@ -473,8 +473,33 @@ def test_chain_candidates_arma_subqueries_ancladas(no_sleep, monkeypatch):
 
 def test_fetch_bibcodes_marca_manual(no_sleep, monkeypatch):
     monkeypatch.setattr(qa, "query_ads",
-                        lambda q, rows=400, quiet_truncate=False: [rec("2019man....1M", relevant=False)])
+                        lambda q, rows=400, quiet_truncate=False, fq=qa.ASTRO_FQ:
+                        [rec("2019man....1M", relevant=False)])
     out = qa.fetch_bibcodes(["2019man....1M"])
+    assert out[0]["relevant"] is True and out[0]["via"] == "manual"
+
+
+def test_query_ads_aplica_la_lente_astro_por_default(toy_classifier, ads_token, no_sleep, monkeypatch):
+    """Toda query de DESCUBRIMIENTO acota el universo a database:astronomy."""
+    calls = []
+    monkeypatch.setattr(qa, "requests", SimpleNamespace(
+        get=fake_get_seq([FakeResp(200, payload([]))], calls=calls)))
+    qa.query_ads("q", rows=10)
+    assert calls[0]["params"]["fq"] == "database:astronomy"
+
+
+def test_fetch_bibcodes_no_aplica_la_lente_astro(toy_classifier, ads_token, no_sleep, monkeypatch):
+    """#68: `extra_core` es override del clasificador, pero el `fq` era un SEGUNDO filtro que el
+    override no esquivaba — un bibcode real fuera de database:astronomy (eprint de math.ST /
+    eess.SP: el caso central del tema mixto) no volvía y la cadena lo reportaba como typo. Con el
+    universo fijado por el usuario no hay ruido que filtrar: el fq sólo puede sacar de más."""
+    calls = []
+    doc = {"bibcode": "2024arXiv240513912Z", "title": ["Spectral estimators"], "doctype": "eprint"}
+    monkeypatch.setattr(qa, "requests", SimpleNamespace(
+        get=fake_get_seq([FakeResp(200, payload([doc]))], calls=calls)))
+    out = qa.fetch_bibcodes(["2024arXiv240513912Z"])
+    assert "fq" not in calls[0]["params"]                  # sin lente astro
+    assert out[0]["bibcode"] == "2024arXiv240513912Z"
     assert out[0]["relevant"] is True and out[0]["via"] == "manual"
 
 

@@ -1,7 +1,7 @@
 ---
 name: ingest-topic
 description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema off-ADS — típicamente un método de otra disciplina (estadística, ML) al servicio del foco astro — desde PDFs locales + web (ver Modo off-ADS).
-version: 1.9.0
+version: 1.9.1
 ---
 
 # Ingest: agregar un TEMA a la wiki
@@ -185,6 +185,10 @@ Qué cambia respecto del flujo ADS de arriba:
   la **sub-cadena ADS** (`query_ads --extra-only` → `fetch_arxiv` → `fetch_pdf` → `make_notes
   --topic`): stub con metadata ADS real, PDF por arXiv/resolver y chequeo de retracciones por la vía
   ADS. El tema queda mixto: `sources:` para lo off-ADS + `extra_core:` para lo que está en ADS.
+  **Incluye los que ADS indexa fuera de `database:astronomy`** (eprints de `math.ST`, `eess.SP`,
+  `stat.ML`…): la búsqueda por bibcode de `extra_core` corre **sin la lente astro** (#68), así que un
+  paper de estadística/ML con bibcode ADS real entra por acá con su identidad ADS. Si un bibcode
+  igual no vuelve, ahí sí es typo o registro renombrado — no hace falta degradarlo a `sources:`.
 - **Notas de paper (automatizado):** `fetch_web.py` ya crea el stub `vault/wiki/papers/<clave>.md`; para
   fuentes **PDF** off-ADS (sin URL) usá `python make_notes.py --web <clave> --concept <concept>
   --slug-hint <slug> [--title … --author … --year … --n-authors … --doi … --venue …]`. El stub lleva el

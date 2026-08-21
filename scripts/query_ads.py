@@ -84,6 +84,10 @@ import lib_config as cfg
 API = "https://api.adsabs.harvard.edu/v1/search/query"
 FIELDS = ("bibcode,title,author,year,pubdate,abstract,identifier,doctype,"
           "citation_count,bibstem,doi,keyword")
+# Lente astro del BUSCADOR (fq de Solr): acota el universo de toda query de DESCUBRIMIENTO.
+# No se aplica cuando el universo ya lo fijó el usuario con una lista de bibcodes — ver
+# `fetch_bibcodes` y el parámetro `fq` de `query_ads` (#68).
+ASTRO_FQ = "database:astronomy"
 
 # Clasificación de relevancia: se LEE de vault/config/objective.yaml (el archivo que define
 # el objetivo de la bóveda → qué paper es "core"). No hardcodear acá: editar el YAML.
@@ -333,7 +337,8 @@ class EmptyResultError(RuntimeError):
 
 
 def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
-              meta: dict | None = None, expect_hits: bool = False) -> list[dict]:
+              meta: dict | None = None, expect_hits: bool = False,
+              fq: str | None = ASTRO_FQ) -> list[dict]:
     """Corre una query Solr `q` ya armada contra ADS y devuelve registros clasificados.
     Para estrellas, armar `q` con build_query(names); para temas, usar la query cruda del topic.
     Reintenta con backoff ante 429/5xx y avisa si el resultado quedó truncado (numFound > rows;
@@ -347,11 +352,18 @@ def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
     Si se pasa `meta` (dict mutable), se rellena con `num_found`/`rows`/`truncated` de ESTA corrida
     — así el caller persiste la marca de truncamiento (`build/<slug>/ads.json`) para que el lint la
     surface como backlog en vez de que el aviso muera en el stdout (#17). Se mantiene el tipo de
-    retorno (lista) para no tocar al resto de los callers."""
+    retorno (lista) para no tocar al resto de los callers.
+
+    `fq` es la **lente astro** (`ASTRO_FQ`) y es el default correcto para toda query de
+    **descubrimiento** (directa, chaining, glifo, sweep, probe): ahí filtrar lo no-astro es el
+    punto. `fq=None` la apaga, y es lo que corresponde cuando el universo de búsqueda ya lo fijó el
+    usuario —una lista explícita de bibcodes— porque entonces el filtro no puede sacar ruido, sólo
+    sacar de más (#68)."""
     token = cfg.get_ads_token()
     headers = {"Authorization": f"Bearer {token}"}
-    params = {"q": q, "fl": FIELDS, "rows": rows,
-              "sort": "citation_count desc", "fq": "database:astronomy"}
+    params = {"q": q, "fl": FIELDS, "rows": rows, "sort": "citation_count desc"}
+    if fq:
+        params["fq"] = fq
     for wait in (*RETRY_WAITS_S, None):
         resp = requests.get(API, headers=headers, params=params, timeout=60)
         if resp.status_code in RETRY_STATUS and wait is not None:
@@ -481,12 +493,18 @@ def _probe_row(r: dict) -> str:
 def fetch_bibcodes(bibs: list[str]) -> list[dict]:
     """Trae registros ADS de una lista explícita de bibcodes (curación manual `extra_core`). Se
     marcan `relevant: True` a la fuerza (el usuario los declaró core: entraron porque el clasificador
-    los perdió, no para re-juzgarlos) y `via: manual`."""
+    los perdió, no para re-juzgarlos) y `via: manual`.
+
+    Corre **sin la lente astro** (`fq=None`, #68): `extra_core` es override del clasificador, y el
+    `fq` era un segundo filtro que el override no esquivaba — un bibcode real pero fuera de
+    `database:astronomy` (eprint de `math.ST`/`eess.SP`, el caso CENTRAL del tema mixto: métodos de
+    otra disciplina al servicio del foco astro) no volvía, y la cadena lo reportaba como typo. Acá
+    el universo lo fijó el usuario: no hay ruido que filtrar, el `fq` sólo puede sacar de más."""
     out = []
     for i in range(0, len(bibs), CHAIN_CHUNK):
         chunk = bibs[i:i + CHAIN_CHUNK]
         q = " OR ".join(f'bibcode:"{b}"' for b in chunk)
-        for r in query_ads(q, rows=len(chunk), quiet_truncate=True):
+        for r in query_ads(q, rows=len(chunk), quiet_truncate=True, fq=None):
             r["relevant"] = True
             r["why_excluded"] = None   # forzado core por el usuario: sin motivo de exclusión
             r["via"] = "manual"
@@ -801,9 +819,12 @@ def main() -> int:
               f"(de {len(extra)} en config)")
         fetched = {m["bibcode"] for m in manual}
         missing = [b for b in extra if b not in present and b not in fetched]
-        if missing:   # declarados que ADS no devolvió: typo de bibcode o registro retirado
-            print(f"  ⚠ extra_core: {len(missing)} bibcode(s) que ADS no devolvió (¿typo?): "
-                  f"{', '.join(missing)}")
+        if missing:
+            # La búsqueda por bibcode corre SIN la lente astro (#68), así que un faltante ya no se
+            # explica por "está en ADS pero no en database:astronomy" — el diagnóstico honesto es
+            # bibcode mal escrito o registro que ADS retiró/renombró.
+            print(f"  ⚠ extra_core: {len(missing)} bibcode(s) que ADS no encontró — revisá que el "
+                  f"bibcode sea exacto (ADS a veces los renombra): {', '.join(missing)}")
         recs += manual
         rel = [r for r in recs if r["relevant"]]
 
