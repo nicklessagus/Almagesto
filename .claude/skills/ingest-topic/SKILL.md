@@ -1,7 +1,7 @@
 ---
 name: ingest-topic
 description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema off-ADS — típicamente un método de otra disciplina (estadística, ML) al servicio del foco astro — desde PDFs locales + web (ver Modo off-ADS).
-version: 1.8.1
+version: 1.9.0
 ---
 
 # Ingest: agregar un TEMA a la wiki
@@ -23,6 +23,22 @@ del repo.
 > tiene este modo: es astro-only.
 
 ## Pasos
+
+**Copiá este checklist al chat al arrancar y andá tildándolo** — el retro-tag (3b) y la
+verificación (6b) se saltean sin dejar rastro:
+
+```
+Progreso del ingest del tema <tema>:
+- [ ] 1  consulta co-diseñada con el usuario (o `sources:` si es off-ADS)
+- [ ] 2  cadena mecánica (ingest_topic.py) — sin abortos
+- [ ] 3  extracción LLM de los papers clave del tema
+- [ ] 3b retro-tag por grep de aliases sobre el corpus pre-existente
+- [ ] 4  síntesis del concept durable
+- [ ] 5  auto-revisión de autosuficiencia
+- [ ] 6  bookkeeping (index, log, STATUS)
+- [ ] 6b verify-citations sobre el concept + notas nuevas
+- [ ] 7  lint en 0 → commit → preguntar push
+```
 
 1. **Co-diseñar la consulta con el usuario (NO traducir en silencio).** El usuario da el tema en
    lenguaje natural ("actividad y RV", "bisector vs actividad"); el valor del skill está en **pulir

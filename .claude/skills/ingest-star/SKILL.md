@@ -1,7 +1,7 @@
 ---
 name: ingest-star
 description: Usar cuando el usuario pide bajar/agregar/ingestar una estrella a la bóveda ("bajá GJ 581", "ingest tau ceti", "agregá la estrella X", "traé la bibliografía de AU Mic"). Corre la cadena de ingesta y hace la extracción LLM.
-version: 1.10.0
+version: 1.11.0
 ---
 
 # Ingest: agregar una estrella a la wiki
@@ -10,6 +10,22 @@ Operación **ingest** del patrón LLM Wiki (ver `CLAUDE.md`). División: los scr
 procesa. Trabajar desde la raíz del repo.
 
 ## Pasos
+
+**Copiá este checklist al chat al arrancar y andá tildándolo** — tres pasos (2b, 2c, 5b) son
+fáciles de saltear y **ninguno deja rastro si se omite**; el lint sólo tiene red para el último:
+
+```
+Progreso del ingest de <estrella>:
+- [ ] 1  slug resuelto en stars.yaml
+- [ ] 2  cadena mecánica (orquestador) — sin abortos
+- [ ] 2b barrido full-text (--sweep) revisado
+- [ ] 2c triage de candidatos resuelto (aceptado / --drop con motivo / al usuario)
+- [ ] 3  extracción LLM de los papers clave
+- [ ] 4  auto-revisión de autosuficiencia
+- [ ] 5  bookkeeping (index, log, matriz, STATUS)
+- [ ] 5b verify-citations sobre la ficha + notas nuevas
+- [ ] 6  lint en 0 → commit → preguntar push
+```
 
 1. **Resolver el slug.** Buscar la estrella en `vault/config/stars.yaml`. Si no está, agregarla con
    `slug`, `simbad`, `ads_object`, `aliases` y (si aplica) `data_local`. Verificar el nombre en

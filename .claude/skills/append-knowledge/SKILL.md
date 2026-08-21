@@ -1,7 +1,7 @@
 ---
 name: append-knowledge
 description: Usar cuando el usuario quiere plegar UNA fuente puntual (paper por bibcode, PDF local, URL) a una entidad YA existente de la wiki — ficha de estrella o concepto — sin re-correr el ingest completo ("agregale este paper a la ficha de tau Ceti", "sumá este PDF al concept de procesos gaussianos", "este bibcode va a GJ 581", "encontré un paper nuevo para el tema X, agregalo"). Plomería mínima + extracción enfocada + síntesis a la nota viva + cierre estándar. NO crea entidades (eso es ingest-star/ingest-topic) ni barre por query lo nuevo (eso es maintain/refrescar).
-version: 1.0.3
+version: 1.1.0
 ---
 
 # Append — plegar una fuente puntual a una ficha o concepto existente
@@ -18,6 +18,18 @@ sin fuente citable no entra** (frontera dura, regla #0): pedir la fuente; si es 
 de fuentes ya citadas, entra marcada como tal.
 
 ## Pasos
+
+**Copiá este checklist al chat al arrancar y andá tildándolo** — el cierre (5) concentra los pasos
+salteables, y ampliar una nota ya verificada deja su bloque stale si no se re-corre el verify:
+
+```
+Progreso del append de <fuente> → <destino>:
+- [ ] 1 destino confirmado + tipo de fuente clasificado
+- [ ] 2 plomería mínima (extra_core / sources: / piezas sueltas) — fulltext extraído
+- [ ] 3 extracción LLM enfocada en el eje del destino
+- [ ] 4 síntesis a la nota viva (regla de poda; disputes[] si discrepa de NEA)
+- [ ] 5 cierre: autosuficiencia → verify-citations (re-fechar el bloque) → lint 0 → log → commit
+```
 
 1. **Resolver destino y tipo de fuente.** Confirmar que la nota destino existe y clasificar la
    fuente: (i) **bibcode ADS** (con o sin PDF propio), (ii) **PDF sin bibcode ADS** (off-ADS →
