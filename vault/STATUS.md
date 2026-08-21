@@ -18,6 +18,56 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.9.0 (2026-08-21) — tanda 4: #51 + #64, el registro de ingesta sale de `build/`
+
+> El grande de la revisión: la primera tanda que cambia dónde vive un dato. 373 tests verdes (+6),
+> lint 0. `ALMAGESTO_VERSION` 1.8.1 → **1.9.0** (minor: archivo de config nuevo + línea nueva en la
+> cabecera de fichas/concepts, retrocompatible y con migración transparente).
+
+- **Diseño (elegido con el usuario):** un archivo por sujeto, `vault/config/registro/<slug>.yaml`,
+  **versionado**, con dos secciones de dueños distintos — **`busqueda`** (la escribe `query_ads` al
+  cerrar cada corrida) y **`decisiones`** (las escribe `triage.py --drop`). Regla que ordena todo:
+  **`build/` guarda lo regenerable; el registro, lo que no lo es.**
+- **#51** — los descartes del triage vivían en `build/<slug>/triage.json`, gitignored y documentado
+  como "intermedio regenerable". No lo es: un `ads.json` se recupera pidiéndoselo de nuevo a ADS, el
+  juicio sobre título+abstract no. En otra máquina (o tras limpiar `build/`) el triage **re-proponía
+  todo lo descartado, sin el motivo**. La asimetría lo delataba: los candidatos **aceptados** ya
+  persistían en config versionada (`extra_core`), los rechazados no. Ahora los dos lados de la
+  decisión viajan en git.
+- **#64** — no quedaba **registro de búsqueda**: la query de una estrella se armaba en `build_query`
+  y se tiraba, los conteos vivían en `build/` y la fecha sólo como prosa en el `log`. Un consumidor
+  de la ficha —el caso de uso central— no tenía cómo saber **sobre qué universo de papers afirma**,
+  ni con qué lente se filtró. El registro guarda `fecha`, `query` efectiva, `rows`, `n_found`,
+  `n_total`, `n_core`, `n_candidates`, `n_dropped`, `truncated` y `almagesto_version` (los ítems de
+  PRISMA-S llevados a lo que esta cadena hace).
+- **Puntero en la cabecera, no el bloque entero.** El registro completo queda en config y la
+  ficha/concept lleva **una línea** estampada por `make_notes` (`> _Búsqueda 2026-08-21: 1837 → 198
+  core · 42 sin juzgar · registro en config/registro/tau_ceti.yaml._`): el que abre la nota sabe
+  fecha y universo sin abrir nada, y el detalle es resoluble. Cirugía idempotente de la familia
+  `stamp_excluded`: nunca toca la prosa LLM, y si la cabecera está fuera del contrato no inventa
+  nada (criterio de #48).
+- **Muere el falso limpio del lint.** *Triage pendiente* y *corpus truncado* recorrían `build/*` y,
+  sin `build/`, reportaban 0 **sin haber mirado nada**. Ahora caen al registro versionado y reportan
+  el snapshot **con su fecha**, diciendo explícitamente que no es el conteo vigente. Es la
+  dependencia dura que el backlog anotó (#55 y #64 después de #51) — queda saldada.
+- **Migración transparente:** `cfg.load_decisiones` lee el registro **mergeado** con el
+  `build/<slug>/triage.json` viejo (el registro gana ante el mismo bibcode), así una bóveda pre-1.9
+  no re-propone lo ya descartado antes de su primer `--drop`, que es el que consolida. No hay paso
+  manual.
+- **Bug del harness encontrado en el camino:** el fixture `toy_vault` monkeypatchea una lista
+  **explícita** de rutas, así que la constante nueva (`REGISTRO`) no estaba aislada y dos tests
+  escribieron en el repo **real** (`vault/config/registro/*.yaml` aparecieron en `git status`).
+  Se limpió y se agregó un test invariante: **toda constante de `lib_config` que cuelgue de `VAULT`
+  tiene que estar en el `paths` del fixture**. Sin eso, el próximo que agregue una ruta repite la
+  falla en silencio.
+- Docs a los dos públicos (pedido del usuario: el template instruye agentes **y** personas):
+  `CLAUDE.md` (layout, sección propia en Operaciones, Lint, secretos), `README.md` (qué deja un
+  ingest), `docs/operacion.md` (tabla de archivos + **Portabilidad**, que es lo que este cambio
+  cambia), y los skills `ingest-star` 1.11.2 → **1.12.0** y `maintain` 1.7.3 → **1.8.0** (sub-modos
+  B/C/E: el registro se borra, se renombra y se resuelve con el sujeto).
+- **Sigue la tanda 5:** **#57** (`pdf_source: eprint|ads|publisher` — verify puede "corregir" una
+  nota hacia un preprint).
+
 ## ✅ Framework 1.8.1 (2026-08-21) — tanda 3: #55, el triage que se cerraba sin red
 
 > 364 tests verdes (+2), lint 0. `ALMAGESTO_VERSION` 1.8.0 → **1.8.1** (patch: categoría de backlog
