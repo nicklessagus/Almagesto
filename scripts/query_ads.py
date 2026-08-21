@@ -72,6 +72,7 @@ corrida **falla** (`EmptyResultError`, exit ≠ 0) en vez de persistir un `ads.j
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import re
 import sys
@@ -473,13 +474,11 @@ def subject_in_title(title: str | None, names: list[str]) -> bool:
 
 
 def load_triage(slug: str) -> set[str]:
-    """Bibcodes ya DESCARTADOS en un triage previo (`build/<slug>/triage.json`) — no se re-proponen
-    en el próximo refresh (si no, cada re-run vuelve a pedir el mismo juicio sobre el mismo ruido)."""
-    f = cfg.ROOT / "build" / slug / "triage.json"
-    if not f.exists():
-        return set()
-    data = json.loads(f.read_text(encoding="utf-8"))
-    return {b for b, d in (data.get("decisiones") or {}).items() if d.get("decision") == "descartado"}
+    """Bibcodes ya DESCARTADOS en un triage previo — no se re-proponen en el próximo refresh (si no,
+    cada re-run vuelve a pedir el mismo juicio sobre el mismo ruido). Salen del registro VERSIONADO
+    (`vault/config/registro/<slug>.yaml`, #51), con fallback al `build/<slug>/triage.json` viejo:
+    antes el juicio vivía en scratch gitignored y se perdía al clonar o limpiar."""
+    return {b for b, d in cfg.load_decisiones(slug).items() if d.get("decision") == "descartado"}
 
 
 def _probe_row(r: dict) -> str:
@@ -778,7 +777,11 @@ def main() -> int:
         q = build_query(names)
         chain_filter = build_fulltext_filter(names)
         print(f"Consultando ADS: {name}  (nombres: {', '.join(names)})")
-        head = {"kind": "star", "star": name, "slug": args.slug, "ads_object": meta["ads_object"]}
+        # `query`: la Solr EFECTIVA, tal cual se manda (#64). En un tema la escribe el usuario en
+        # topics.yaml (versionada); en una estrella la arma build_query y hasta ahora se tiraba →
+        # no había forma de reconstruir sobre qué universo afirma la ficha.
+        head = {"kind": "star", "star": name, "slug": args.slug, "ads_object": meta["ads_object"],
+                "query": q}
 
     qmeta: dict = {}                # truncamiento de la query DIRECTA (el chaining trunca por diseño)
     if q is None:
@@ -905,6 +908,24 @@ def main() -> int:
     (outdir / "ads.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False),
                                      encoding="utf-8")
     print(f"  → {outdir / 'ads.json'}")
+
+    # Registro de búsqueda VERSIONADO (#64): el ads.json de arriba es scratch regenerable, pero el
+    # registro reproducible de QUÉ se buscó, CUÁNDO, con qué límite y con qué corte tiene que viajar
+    # con la bóveda — es lo que permite saber sobre qué universo de papers afirma una ficha (y con
+    # qué versión del clasificador). Preserva `decisiones` (las escribe triage.py).
+    cfg.save_busqueda(args.slug, {
+        "fecha": dt.date.today().isoformat(),
+        "query": q,                                   # la Solr efectiva (None con --extra-only)
+        "rows": args.rows,
+        "n_found": qmeta.get("num_found"),            # lo que ADS dice que hay (None sin query directa)
+        "n_total": len(recs),                         # lo que se trajo (query + extra_core + chaining)
+        "n_core": len(rel),
+        "n_candidates": len(candidatos),              # triage pendiente al cerrar esta corrida
+        "n_dropped": len(cfg.load_decisiones(args.slug)),
+        "truncated": bool(truncated),
+        "almagesto_version": cfg.ALMAGESTO_VERSION,
+    })
+    print(f"  → {cfg.registro_path(args.slug)} (registro de búsqueda, versionado)")
     return 0
 
 

@@ -355,14 +355,63 @@ def stamp_excluded(slug: str, dest) -> bool:
     return True
 
 
+GENERATOR_LINE = "> _Generado con Almagesto v"
+SEARCH_LINE_RE = re.compile(r"^> _Búsqueda .*_$\n?", re.M)
+
+
+def search_line(slug: str) -> str:
+    """Puntero de UNA línea al registro de búsqueda versionado (#64), para la cabecera de la ficha
+    o del concept. El registro completo —query efectiva, límites, conteos, versión— vive en
+    `vault/config/registro/<slug>.yaml`; acá va sólo lo que el que abre la nota necesita saber sin
+    abrir nada: CUÁNDO se buscó y sobre QUÉ universo afirma la nota. "" si no hay registro."""
+    b = cfg.load_registro(slug).get("busqueda") or {}
+    if not b.get("fecha"):
+        return ""
+    universo = b.get("n_found") or b.get("n_total")
+    partes = [f"> _Búsqueda {b['fecha']}"]
+    partes.append(f": {universo} → {b.get('n_core', '?')} core" if universo
+                  else f": {b.get('n_core', '?')} core")
+    if b.get("n_candidates"):
+        partes.append(f" · {b['n_candidates']} sin juzgar")
+    if b.get("n_dropped"):
+        partes.append(f" · {b['n_dropped']} descartados")
+    if b.get("truncated"):
+        partes.append(" · ⚠ truncada")
+    partes.append(f" · registro en `config/registro/{slug}.yaml`._")
+    return "".join(partes) + "\n"
+
+
+def stamp_search_line(slug: str, dest) -> bool:
+    """Estampa/actualiza el puntero de búsqueda en la cabecera de una nota EXISTENTE (familia
+    stamp_fulltext/stamp_excluded: cirugía a nivel texto, nunca toca la prosa LLM). Va justo antes
+    de la línea `_Generado con Almagesto v…_` del blockquote de cabecera; si esa ancla no está, la
+    cabecera está fuera del contrato y NO se toca nada (mismo criterio que stamp_pdf_link, #48).
+    Idempotente: sin cambios no reescribe. Devuelve True si modificó."""
+    if not dest.exists():
+        return False
+    new = search_line(slug)
+    text = dest.read_text(encoding="utf-8")
+    out = SEARCH_LINE_RE.sub("", text, count=1)      # sacar el puntero viejo (si lo había)
+    if new:
+        i = out.find(GENERATOR_LINE)
+        if i < 0:
+            return False                             # cabecera fuera del contrato: no inventamos
+        out = out[:i] + new + out[i:]
+    if out == text:
+        return False
+    dest.write_text(out, encoding="utf-8")
+    return True
+
+
 def write_star_note(slug: str, force: bool) -> None:
     name, meta = cfg.star_by_slug(slug)
     dest = cfg.STARS / f"{slug}.md"
     if dest.exists() and not force:
         # la nota no se pisa; sólo se refresca el apéndice máquina con el ads.json vigente (#35)
-        stamped = stamp_excluded(slug, dest)
+        stamped = stamp_excluded(slug, dest) | stamp_search_line(slug, dest)
         print(f"  star: {dest.name} ya existe"
-              + (" — apéndice Excluidos re-estampado" if stamped else " (usa --force para regenerar)"))
+              + (" — apéndice Excluidos / puntero de búsqueda re-estampados" if stamped
+                 else " (usa --force para regenerar)"))
         return
     gt_file = cfg.GROUND_TRUTH / f"{slug}.json"
     gt = json.loads(gt_file.read_text(encoding="utf-8")) if gt_file.exists() else {"host": {}, "planets": []}
@@ -440,6 +489,7 @@ SORT method ASC
 """
     body += excluded_table(slug)
     dest.write_text(body, encoding="utf-8")
+    stamp_search_line(slug, dest)
     print(f"  star: {dest.name} escrito")
 
 
@@ -459,9 +509,9 @@ def write_concept_note(slug: str, force: bool) -> None:
     dest = cfg.CONCEPTS / area / f"{concept}.md"
     if dest.exists() and not force:
         # la síntesis no se pisa; sólo se refresca el apéndice máquina con el ads.json vigente (#35)
-        stamped = stamp_excluded(slug, dest)
+        stamped = stamp_excluded(slug, dest) | stamp_search_line(slug, dest)
         print(f"  concept: {area}/{concept}.md ya existe"
-              + (" — apéndice Excluidos re-estampado" if stamped
+              + (" — apéndice Excluidos / puntero de búsqueda re-estampados" if stamped
                  else " (no se pisa sin --force; los papers enganchan por thesis_links)"))
         return
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -509,6 +559,7 @@ SORT year ASC
 """
     body += excluded_table(slug)
     dest.write_text(body, encoding="utf-8")
+    stamp_search_line(slug, dest)
     print(f"  concept: {area}/{concept}.md escrito (stub)")
 
 

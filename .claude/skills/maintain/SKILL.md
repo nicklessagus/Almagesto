@@ -1,7 +1,7 @@
 ---
 name: maintain
 description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), resolver el backlog del lint (P_rot faltante, drift PDF↔disco, cobertura, claims stale), y la pasada periódica de retracciones sobre toda la bóveda ("chequeá retracciones").
-version: 1.7.3
+version: 1.8.0
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
@@ -66,7 +66,8 @@ Progreso del refresh de <entidad>:
    ```
 2. Borrar el/los archivo(s): la nota (`papers/<bib>.md` o `stars/<slug>.md`), su PDF
    (`vault/raw/pdfs/<slug>/…`) y fulltext (`vault/raw/fulltext/<slug>/…`). Si es una estrella/tema entero,
-   también su entrada en `stars.yaml`/`topics.yaml` y su `ground_truth/<slug>.json`.
+   también su entrada en `stars.yaml`/`topics.yaml`, su `ground_truth/<slug>.json` y su
+   `vault/config/registro/<slug>.yaml` (registro de búsqueda + decisiones de triage del sujeto).
 3. **Reparar los colgados:** quitar/re-apuntar cada `[[wikilink]]`, `thesis_links`, `disputes[].ref` y
    celda de matriz que apuntaba al borrado. (La tabla `## Papers` de las fichas es Dataview → se
    actualiza sola.) Sacar la estrella de la matriz método×estrella.
@@ -75,8 +76,9 @@ Progreso del refresh de <entidad>:
 
 ## C. Renombrar un slug
 1. Renombrar en orden: la clave en `stars.yaml`/`topics.yaml`, los directorios
-   `vault/raw/{pdfs,fulltext}/<slug>/` y `ground_truth/<slug>.json`, la nota `stars/<slug>.md` (o el
-   concepto), y **todos** los `[[wikilink]]` al nombre viejo:
+   `vault/raw/{pdfs,fulltext}/<slug>/`, `ground_truth/<slug>.json`,
+   `vault/config/registro/<slug>.yaml` (si no, el juicio de triage queda huérfano y se re-propone
+   todo), la nota `stars/<slug>.md` (o el concepto), y **todos** los `[[wikilink]]` al nombre viejo:
    ```bash
    grep -rln "<slug-viejo>" vault/                            # dónde aparece
    ```
@@ -122,8 +124,10 @@ Pasada de higiene sobre lo que `lint.py` marca como backlog/WARN (no bloqueante,
 - **Triage pendiente** (#55 — candidatos del chaining que nadie juzgó) → `python scripts/triage.py
   <slug>` y decidir cada uno por título+abstract: pertinente → `extra_core` en `stars.yaml` +
   re-correr la cadena; ruido → `--drop … --reason`; dudoso → al usuario. Es el paso con más juicio
-  de un ingest y el que más fácil queda a medias. La categoría lee `build/` (scratch, gitignored):
-  en una máquina que no corrió ese ingest da 0 aunque haya pendientes.
+  de un ingest y el que más fácil queda a medias. Los descartes van a `decisiones` de
+  `vault/config/registro/<slug>.yaml` (versionado: viajan). Si el hallazgo salió del **registro** y
+  no de `build/` (lo dice el texto: "según el registro del <fecha>"), es un **snapshot** de la
+  última corrida: re-corré la cadena antes de decidir, porque el conteo puede estar viejo.
 - **P_rot / campos nulos** → abrir una `query-corpus` para imputar desde la literatura (web/ADS) y
   completar el frontmatter con su `[[bibcode]]`.
 - **PDF ↔ disco / cuerpo** (drift del campo `pdf` o del link de cabecera) → linkear el PDF bajado o

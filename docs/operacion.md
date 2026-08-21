@@ -46,6 +46,7 @@ para ingestar. En Windows, los comandos de shell corren en Git Bash o WSL.
 | `vault/wiki/log.md` | Registro append-only de operaciones. |
 | `vault/config/stars.yaml` · `vault/config/topics.yaml` | Estrellas / temas de la bóveda (nombres canónicos + alias). |
 | `vault/config/ads_dev_key` | Token NASA ADS — **GITIGNORED** (nunca se commitea). |
+| `vault/config/registro/<slug>.yaml` | **Registro de ingesta por sujeto (se commitea).** `busqueda`: qué se le preguntó a ADS, cuándo, con qué límite y con qué corte. `decisiones`: qué candidatos del triage descartaste y por qué. |
 | `build/` · `outputs/` | **GITIGNORED** — intermedios de ingesta y reportes de lint. |
 
 ## Pipeline de ingesta (scripts/)
@@ -132,6 +133,23 @@ extracción LLM) funcionan **sin dependencias externas ni LFS**. Qué **no** via
 - **Datos crudos (FITS/PKL):** gitignored (`*.fits`, `*.pkl`). Cada ficha apunta a ellos con
   `data_local` (ruta local a los datos crudos de la estrella). Ese puntero es **machine-local**.
 - **`build/`, `outputs/`:** gitignored (intermedios regenerables). Los scripts los recrean solos.
+
+Lo que **sí** viaja desde 1.9.0 y antes no: el **registro de ingesta** (`vault/config/registro/<slug>.yaml`).
+Hasta 1.8.x había dos cosas atrapadas en `build/` que no eran regenerables:
+
+- **el juicio del triage** — qué candidato del citation chaining descartaste y **por qué**. Un
+  `ads.json` sí se regenera (se le vuelve a pedir a ADS); tu decisión sobre título+abstract, no. En
+  otra máquina el triage te re-proponía todo lo descartado, sin el motivo, y había que rehacer el
+  trabajo. (Asimetría que lo delataba: los candidatos **aceptados** ya persistían en config
+  versionada, vía `extra_core`; los rechazados no.)
+- **el registro de la búsqueda** — la query efectiva, la fecha, los límites y los conteos. Sin eso no
+  hay forma de saber **sobre qué universo de papers afirma una ficha**, que es lo que cualquier
+  revisión sistemática está obligada a dejar asentado.
+
+Consecuencia práctica: el lint ya no da un **falso limpio** en una máquina sin `build/`. Antes los
+chequeos de *triage pendiente* y *corpus truncado* recorrían `build/` y, si no estaba, reportaban 0
+sin haber mirado nada; ahora caen al registro y reportan el snapshot **con su fecha**, aclarando que
+no es el conteo vigente.
 
 Sin rutas absolutas hardcodeadas: los scripts resuelven el root del repo desde `__file__`
 (`scripts/lib_config.py`), no asumen `cwd` ni `/home/...`.

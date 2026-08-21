@@ -121,6 +121,17 @@ Cuando le pedís ingestar una estrella o un tema, el agente:
 El resultado es una **ficha autosuficiente** (resumen + tablas auto + huecos) que se entiende **sin abrir
 ningún paper**, con todo lo que afirma trazable a su fuente.
 
+Cada ingest deja además un **registro versionado** en `vault/config/registro/<slug>.yaml` que se
+commitea y viaja con la bóveda:
+
+- **`busqueda`** — la query efectiva, la fecha, el límite pedido y los conteos (encontrados → core →
+  bajados → sin juzgar). Es lo que permite saber **sobre qué universo de papers afirma una ficha** y
+  con qué versión del clasificador se filtró; la cabecera de la ficha lleva una línea con el resumen
+  y el puntero al archivo.
+- **`decisiones`** — el juicio del triage: qué candidato del citation chaining descartaste y **por
+  qué**. Es la parte cara y no regenerable de un ingest (los `.json` de ADS se vuelven a pedir; tu
+  criterio, no), así que viaja en git como ya lo hacían los aceptados.
+
 <p align="center">
   <img src="docs/assets/demo-animated.svg" width="740"
        alt="Demo animada: «bajá HD 40307» → cadena de ingesta → extracción LLM con disputa tagueada → verify-citations → lint">

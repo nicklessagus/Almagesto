@@ -3,6 +3,7 @@ import json
 import sys
 
 import pytest
+import yaml
 
 import lib_config as cfg
 import triage
@@ -47,13 +48,17 @@ def test_sin_ads_json_error_amigable(toy_vault, monkeypatch):
         run_main(monkeypatch, ["test_star"])
 
 
-def test_drop_persiste_con_motivo(toy_vault, monkeypatch, capsys):
-    d = write_ads(toy_vault, candidates=[cand("2023PhDT....1P", "Hunting for New Physics")])
+def test_drop_persiste_con_motivo_en_config_versionada(toy_vault, monkeypatch, capsys):
+    """#51: el juicio va a vault/config/registro/<slug>.yaml (se commitea), NO a build/ (scratch)."""
+    write_ads(toy_vault, candidates=[cand("2023PhDT....1P", "Hunting for New Physics")])
     assert run_main(monkeypatch, ["test_star", "--drop", "2023PhDT....1P",
                                   "--reason", "física de partículas, no toca el sujeto"]) == 0
-    data = json.loads((d / "triage.json").read_text())
-    dec = data["decisiones"]["2023PhDT....1P"]
+    reg = cfg.registro_path("test_star")
+    assert reg.exists() and reg.parent == cfg.CONFIG / "registro"
+    dec = yaml.safe_load(reg.read_text(encoding="utf-8"))["decisiones"]["2023PhDT....1P"]
     assert dec["decision"] == "descartado" and "partículas" in dec["motivo"] and dec["fecha"]
+    assert not (cfg.ROOT / "build" / "test_star" / "triage.json").exists()   # ya no se escribe ahí
+    assert "versionado" in capsys.readouterr().out
 
 
 def test_drop_exige_motivo(toy_vault, monkeypatch):
@@ -70,12 +75,33 @@ def test_drop_avisa_bibcode_ajeno(toy_vault, monkeypatch, capsys):
 
 
 def test_drop_acumula_decisiones_previas(toy_vault, monkeypatch):
+    write_ads(toy_vault, candidates=[cand("2020b....1B")])
+    cfg.save_decisiones("test_star", {"2020a....1A": {"decision": "descartado", "motivo": "viejo"}})
+    run_main(monkeypatch, ["test_star", "--drop", "2020b....1B", "--reason", "nuevo"])
+    dec = yaml.safe_load(cfg.registro_path("test_star").read_text(encoding="utf-8"))["decisiones"]
+    assert set(dec) == {"2020a....1A", "2020b....1B"}
+
+
+def test_drop_consolida_el_triage_json_viejo(toy_vault, monkeypatch):
+    """Migración (#51): una bóveda pre-1.9 tiene el juicio en build/<slug>/triage.json. Se sigue
+    leyendo (no se pierde) y el primer --drop lo consolida en el registro versionado."""
     d = write_ads(toy_vault, candidates=[cand("2020b....1B")])
     (d / "triage.json").write_text(json.dumps({"slug": "test_star", "decisiones": {
-        "2020a....1A": {"decision": "descartado", "motivo": "viejo"}}}), encoding="utf-8")
+        "2020a....1A": {"decision": "descartado", "motivo": "juicio viejo"}}}), encoding="utf-8")
+    assert cfg.load_decisiones("test_star")["2020a....1A"]["motivo"] == "juicio viejo"
     run_main(monkeypatch, ["test_star", "--drop", "2020b....1B", "--reason", "nuevo"])
-    dec = json.loads((d / "triage.json").read_text())["decisiones"]
-    assert set(dec) == {"2020a....1A", "2020b....1B"}
+    dec = yaml.safe_load(cfg.registro_path("test_star").read_text(encoding="utf-8"))["decisiones"]
+    assert set(dec) == {"2020a....1A", "2020b....1B"}      # el viejo sobrevive en el lugar nuevo
+
+
+def test_registro_preserva_la_busqueda_al_dropear(toy_vault, monkeypatch):
+    """El registro tiene dos secciones con dueños distintos: `busqueda` la escribe query_ads y
+    `decisiones` triage.py — ninguno pisa al otro."""
+    write_ads(toy_vault, candidates=[cand("2020b....1B")])
+    cfg.save_busqueda("test_star", {"fecha": "2026-08-21", "query": "title:(x)", "n_core": 3})
+    run_main(monkeypatch, ["test_star", "--drop", "2020b....1B", "--reason", "ruido"])
+    reg = yaml.safe_load(cfg.registro_path("test_star").read_text(encoding="utf-8"))
+    assert reg["busqueda"]["n_core"] == 3 and "2020b....1B" in reg["decisiones"]
 
 
 def test_report_escribe_tabla_en_outputs(toy_vault, monkeypatch):
@@ -104,9 +130,9 @@ def test_marca_candidatos_que_ya_tienen_nota(toy_vault, monkeypatch, capsys):
 def test_query_ads_lee_los_descartes_persistidos(toy_vault):
     """El contrato entre los dos scripts: lo que triage descarta, query_ads no re-propone."""
     import query_ads as qa
-    d = write_ads(toy_vault)
-    (d / "triage.json").write_text(json.dumps({"decisiones": {
+    write_ads(toy_vault)
+    cfg.save_decisiones("test_star", {
         "2020a....1A": {"decision": "descartado", "motivo": "ruido"},
-        "2020b....1B": {"decision": "aceptado", "motivo": "sí"}}}), encoding="utf-8")
+        "2020b....1B": {"decision": "aceptado", "motivo": "sí"}})
     assert qa.load_triage("test_star") == {"2020a....1A"}
     assert qa.load_triage("otro_slug") == set()

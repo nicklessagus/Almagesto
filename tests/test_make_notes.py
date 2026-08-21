@@ -759,3 +759,51 @@ def test_find_header_line_es_contrato_compartido(toy_vault):
     assert mn.stamp_pdf_link(ok) is True                           # reconocida → actúa
     assert mn.find_header_line(fuera.read_text(encoding="utf-8")) is None
     assert mn.stamp_pdf_link(fuera) is False                       # fuera del contrato → saltea
+
+
+# ── puntero al registro de búsqueda en la cabecera (#64) ─────────────────────
+
+def test_search_line_estampa_puntero_sin_tocar_la_prosa(toy_vault):
+    """El registro completo vive en config/registro/<slug>.yaml; la ficha lleva UNA línea con
+    fecha, universo→core, pendientes y la ruta. Cirugía: la síntesis LLM queda intacta."""
+    mn.write_star_note("test_star", force=False)
+    dest = cfg.STARS / "test_star.md"
+    dest.write_text(dest.read_text(encoding="utf-8").replace(
+        "## Resumen", "## Resumen\nSíntesis LLM que NO se toca."), encoding="utf-8")
+    cfg.save_busqueda("test_star", {"fecha": "2026-08-21", "query": "title:(x)", "rows": 2000,
+                                    "n_found": 1837, "n_core": 198, "n_candidates": 42,
+                                    "truncated": False})
+    assert mn.stamp_search_line("test_star", dest) is True
+    out = dest.read_text(encoding="utf-8")
+    assert ("> _Búsqueda 2026-08-21: 1837 → 198 core · 42 sin juzgar · registro en "
+            "`config/registro/test_star.yaml`._") in out
+    assert out.index("_Búsqueda") < out.index("_Generado con Almagesto")   # dentro del blockquote
+    assert "Síntesis LLM que NO se toca." in out
+    assert mn.stamp_search_line("test_star", dest) is False                # idempotente
+
+
+def test_search_line_se_actualiza_y_no_duplica(toy_vault):
+    """Un refresh re-estampa la línea vieja en vez de acumular punteros."""
+    mn.write_star_note("test_star", force=False)
+    dest = cfg.STARS / "test_star.md"
+    cfg.save_busqueda("test_star", {"fecha": "2026-08-01", "n_found": 100, "n_core": 10})
+    mn.stamp_search_line("test_star", dest)
+    cfg.save_busqueda("test_star", {"fecha": "2026-08-21", "n_found": 120, "n_core": 14,
+                                    "truncated": True})
+    assert mn.stamp_search_line("test_star", dest) is True
+    out = dest.read_text(encoding="utf-8")
+    assert out.count("> _Búsqueda") == 1
+    assert "2026-08-21: 120 → 14 core" in out and "⚠ truncada" in out and "2026-08-01" not in out
+
+
+def test_search_line_sin_registro_o_sin_ancla_no_toca_nada(toy_vault):
+    """Sin registro no hay nada que estampar; y si la cabecera no tiene la línea `_Generado con
+    Almagesto…_` está fuera del contrato → no se inventa (mismo criterio que stamp_pdf_link, #48)."""
+    mn.write_star_note("test_star", force=False)
+    dest = cfg.STARS / "test_star.md"
+    assert mn.stamp_search_line("test_star", dest) is False
+    fuera = cfg.STARS / "fuera_de_contrato.md"
+    fuera.write_text("---\nname: x\n---\n# x\n\n> cabecera propia\n", encoding="utf-8")
+    cfg.save_busqueda("test_star", {"fecha": "2026-08-21", "n_found": 5, "n_core": 1})
+    assert mn.stamp_search_line("test_star", fuera) is False
+    assert "Búsqueda" not in fuera.read_text(encoding="utf-8")

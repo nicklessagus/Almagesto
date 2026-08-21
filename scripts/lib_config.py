@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 from pathlib import Path
@@ -17,7 +18,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.8.1"
+ALMAGESTO_VERSION = "1.9.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -33,6 +34,16 @@ STARS_YAML = CONFIG / "stars.yaml"
 TOPICS_YAML = CONFIG / "topics.yaml"
 OBJECTIVE_YAML = CONFIG / "objective.yaml"
 ADS_KEY_FILE = CONFIG / "ads_dev_key"
+# Registro de ingesta por sujeto (#51/#64): VERSIONADO (se commitea) porque guarda las dos cosas
+# que `build/` no puede guardar. (a) `decisiones`: el juicio del triage —qué candidato del chaining
+# se descartó y POR QUÉ—, que no es regenerable (un ads.json sí: se le vuelve a pedir a ADS; tu
+# juicio sobre título+abstract, no). Vivía en build/<slug>/triage.json, gitignored: en otra máquina
+# el triage re-proponía todo lo descartado, sin el motivo. (b) `busqueda`: el registro reproducible
+# de la búsqueda (query efectiva, fecha, límites y conteos — los 16 ítems de PRISMA-S llevados a lo
+# que esta cadena hace), que antes no se escribía en ningún lado: la query de una estrella se armaba
+# en memoria y se tiraba. Simetría que faltaba: los candidatos ACEPTADOS ya persistían en config
+# (`extra_core`), los rechazados no.
+REGISTRO = CONFIG / "registro"
 
 # raw/ = fuentes inmutables (el LLM lee, no modifica) | wiki/ = el LLM escribe y mantiene
 RAW = VAULT / "raw"
@@ -177,3 +188,63 @@ def load_concept_areas() -> list:
         return list(dict.fromkeys([*declared, *RESERVED_CONCEPT_AREAS]))
     existing = sorted(p.name for p in CONCEPTS.iterdir() if p.is_dir()) if CONCEPTS.exists() else []
     return list(dict.fromkeys([*existing, *RESERVED_CONCEPT_AREAS]))
+
+
+# ── registro de ingesta por sujeto (#51/#64) ─────────────────────────────────
+
+def registro_path(slug: str) -> Path:
+    return REGISTRO / f"{slug}.yaml"
+
+
+def legacy_triage_path(slug: str) -> Path:
+    """Ubicación PRE-#51 de las decisiones de triage (scratch gitignored). Se sigue LEYENDO para no
+    perder juicio ya hecho en una bóveda vieja; nunca se escribe más ahí."""
+    return ROOT / "build" / slug / "triage.json"
+
+
+def load_registro(slug: str) -> dict:
+    """Registro versionado del sujeto ({} si no existe). No mergea el legacy: para las decisiones
+    usar `load_decisiones`, que sí lo hace."""
+    f = registro_path(slug)
+    if not f.exists():
+        return {}
+    return yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+
+
+def save_registro(slug: str, data: dict) -> None:
+    REGISTRO.mkdir(parents=True, exist_ok=True)
+    registro_path(slug).write_text(
+        yaml.safe_dump(data, sort_keys=False, allow_unicode=True, default_flow_style=False),
+        encoding="utf-8")
+
+
+def load_decisiones(slug: str) -> dict:
+    """Decisiones de triage del sujeto: las del registro versionado MERGEADAS con las del
+    `triage.json` viejo (migración transparente — el registro gana ante el mismo bibcode). Que el
+    legacy siga contando es lo que evita que una bóveda pre-#51 vuelva a proponer lo ya descartado
+    antes de su primer `--drop`."""
+    out: dict = {}
+    legacy = legacy_triage_path(slug)
+    if legacy.exists():
+        try:
+            out.update(json.loads(legacy.read_text(encoding="utf-8")).get("decisiones") or {})
+        except (ValueError, OSError):
+            pass
+    out.update(load_registro(slug).get("decisiones") or {})
+    return out
+
+
+def save_decisiones(slug: str, decisiones: dict) -> None:
+    """Persiste las decisiones preservando `busqueda` (la escribe query_ads, no el triage)."""
+    data = load_registro(slug)
+    data.setdefault("slug", slug)
+    data["decisiones"] = decisiones
+    save_registro(slug, data)
+
+
+def save_busqueda(slug: str, busqueda: dict) -> None:
+    """Persiste el registro de búsqueda preservando `decisiones` (las escribe triage.py)."""
+    data = load_registro(slug)
+    data.setdefault("slug", slug)
+    data["busqueda"] = busqueda
+    save_registro(slug, data)

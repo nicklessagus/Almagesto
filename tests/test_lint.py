@@ -1,6 +1,7 @@
 """lint: cada categoría detecta su caso sembrado; exit code separa bloqueante/WARN/backlog."""
 import json
 
+import lib_config as cfg
 import lint
 from conftest import mk_note
 
@@ -402,6 +403,35 @@ def test_prosa_reconoce_variantes_de_mencion(toy_vault, capsys):
             body)
     rc, out = run_lint(capsys)
     assert "no discutido en prosa" not in out
+
+
+def test_registro_versionado_cubre_la_falta_de_build(toy_vault, capsys):
+    """#51/#64: sin build/ local (post-clone, otra máquina, scratch limpiado) los chequeos de
+    triage y truncamiento reportaban 0 SIN MIRAR NADA — un falso limpio. Ahora caen al registro
+    versionado y reportan el snapshot CON su fecha, diciendo que no es el conteo vigente."""
+    cfg.save_busqueda("au_mic", {"fecha": "2026-08-21", "query": "title:(x)", "rows": 400,
+                                 "n_found": 410, "n_core": 198, "n_candidates": 42,
+                                 "truncated": True})
+    assert not (toy_vault.ROOT / "build" / "au_mic").exists()
+    rc, out = run_lint(capsys)
+    assert rc == 0
+    assert "42 candidato(s) sin juzgar según el registro del 2026-08-21" in out
+    assert "no el conteo vigente" in out
+    assert "corpus truncado según el registro del 2026-08-21" in out and "410" in out
+
+
+def test_build_local_gana_sobre_el_registro(toy_vault, capsys):
+    """Con build/ presente manda la verdad viva: el sujeto no se reporta dos veces."""
+    cfg.save_busqueda("au_mic", {"fecha": "2026-08-01", "n_candidates": 99, "truncated": False})
+    d = toy_vault.ROOT / "build" / "au_mic"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "ads.json").write_text(json.dumps(
+        {"slug": "au_mic", "records": [],
+         "candidates": [{"bibcode": "2020cand0..1..1C"}]}), encoding="utf-8")
+    rc, out = run_lint(capsys)
+    assert rc == 0
+    assert "au_mic → 1 candidato(s) del chaining sin juzgar" in out
+    assert "99 candidato(s)" not in out and "2026-08-01" not in out
 
 
 def test_triage_pendiente_surface_backlog(toy_vault, capsys):

@@ -19,9 +19,13 @@ Los tres niveles:
 - **1 — juicio del LLM (sin bajar nada):** el resto queda en `candidates` de
   `build/<slug>/ads.json`. Este script los lista con título+abstract+vía+citas; el agente
   (paso 2c del skill `ingest-star`) los clasifica pertinente / ruido / dudoso.
-  Las decisiones **persisten**: aceptado → `extra_core` en `stars.yaml` (override del clasificador,
-  #39); descartado → `build/<slug>/triage.json` (con motivo) para que el próximo refresh no lo
-  vuelva a proponer. Los candidatos que **ya tienen nota** en la bóveda (entraron por OTRO slug —
+  Las decisiones **persisten y viajan en git**: aceptado → `extra_core` en `stars.yaml` (override
+  del clasificador, #39); descartado → `decisiones` de `vault/config/registro/<slug>.yaml` (con
+  motivo y fecha) para que el próximo refresh no lo vuelva a proponer. Los dos lados del juicio
+  viven en config versionada (#51): hasta 1.8.x el descarte iba a `build/<slug>/triage.json`
+  —scratch gitignored— y en otra máquina el triage volvía a proponer todo lo descartado, sin el
+  motivo. Ese archivo viejo se sigue LEYENDO (no se pierde juicio hecho) y se consolida solo en el
+  primer `--drop`. Los candidatos que **ya tienen nota** en la bóveda (entraron por OTRO slug —
   papers de método curados a otra estrella) se marcan `◆` (#42): ya están bajados y extraídos, la
   decisión sigue siendo por-slug pero se despachan rápido — no se filtran, se etiquetan.
 - **2 — informe al usuario:** `--report` deja la tabla en `outputs/triage-<slug>.md` (título, año,
@@ -50,21 +54,21 @@ def load_ads(slug: str) -> dict:
 
 
 def triage_file(slug: str):
-    return cfg.ROOT / "build" / slug / "triage.json"
+    """Dónde vive el juicio: el registro VERSIONADO del sujeto (#51). Antes era
+    `build/<slug>/triage.json` —scratch gitignored—, así que en otra máquina (o tras limpiar
+    build/) el triage re-proponía todo lo descartado y el motivo se perdía con el archivo."""
+    return cfg.registro_path(slug)
 
 
 def load_decisions(slug: str) -> dict:
-    f = triage_file(slug)
-    if not f.exists():
-        return {}
-    return json.loads(f.read_text(encoding="utf-8")).get("decisiones") or {}
+    """Decisiones del registro versionado + las del triage.json viejo (migración transparente)."""
+    return cfg.load_decisiones(slug)
 
 
 def save_decisions(slug: str, decisiones: dict) -> None:
-    f = triage_file(slug)
-    f.parent.mkdir(parents=True, exist_ok=True)
-    f.write_text(json.dumps({"slug": slug, "decisiones": decisiones}, indent=2, ensure_ascii=False),
-                 encoding="utf-8")
+    """Escribe SIEMPRE en el registro versionado; `busqueda` (de query_ads) se preserva. Lo que
+    venía del legacy se consolida acá en el primer --drop, sin pasos de migración a mano."""
+    cfg.save_decisiones(slug, decisiones)
 
 
 def drop(slug: str, bibcodes: list[str], reason: str) -> int:
@@ -80,6 +84,8 @@ def drop(slug: str, bibcodes: list[str], reason: str) -> int:
         decisiones[b] = {"decision": "descartado", "motivo": reason, "fecha": hoy}
     save_decisions(slug, decisiones)
     print(f"  {len(bibcodes)} candidato(s) descartados en {triage_file(slug)} — motivo: {reason}")
+    print("  (versionado: se commitea y viaja entre máquinas, como `extra_core` — los dos lados "
+          "de la decisión sobreviven al clon)")
     print("  (los aceptados NO van acá: van a `extra_core` en stars.yaml, curación persistente)")
     return 0
 

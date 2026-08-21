@@ -1,4 +1,5 @@
 """lib_config: token ADS, loaders de config, áreas de concepts (declarado vs tolerante)."""
+from pathlib import Path
 import pytest
 
 import lib_config as cfg
@@ -134,3 +135,16 @@ def test_concept_areas_sin_nada(toy_vault):
     obj.pop("concept_areas")
     write_yaml(toy_vault.OBJECTIVE_YAML, obj)
     assert cfg.load_concept_areas() == ["methods", "hypotheses"]
+
+
+def test_toda_ruta_del_vault_esta_aislada_en_el_fixture(toy_vault):
+    """Invariante del harness: TODA constante de ruta que cuelgue de VAULT tiene que estar
+    monkeypatcheada por el fixture. Si se agrega una nueva (pasó con REGISTRO, #51) y no se declara
+    en conftest, los tests que escriben por ahí lo hacen en el repo REAL — falla silenciosa que sólo
+    se nota mirando `git status`."""
+    real_vault = Path(__file__).resolve().parent.parent / "vault"
+    escapadas = [name for name, val in vars(cfg).items()
+                 if name.isupper() and isinstance(val, Path)
+                 and (val == real_vault or real_vault in val.parents)]
+    assert not escapadas, (f"rutas sin aislar en conftest.toy_vault: {escapadas} — agregalas al "
+                           "dict `paths` del fixture")

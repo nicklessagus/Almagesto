@@ -82,6 +82,7 @@ def toy_vault(tmp_path, monkeypatch):
         "TOPICS_YAML": vault / "config" / "topics.yaml",
         "OBJECTIVE_YAML": vault / "config" / "objective.yaml",
         "ADS_KEY_FILE": vault / "config" / "ads_dev_key",
+        "REGISTRO": vault / "config" / "registro",
         "RAW": vault / "raw",
         "WIKI": vault / "wiki",
         "PDFS": vault / "raw" / "pdfs",

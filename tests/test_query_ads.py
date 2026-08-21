@@ -927,3 +927,25 @@ def test_main_tema_no_aplica_la_compuerta(toy_vault, toy_classifier, no_sleep, m
     assert run_main(monkeypatch, ["gp", "--topic"]) == 0
     data = json.loads((toy_vault.ROOT / "build" / "gp" / "ads.json").read_text())
     assert len(data["records"]) == 2 and data["candidates"] == []
+
+
+def test_main_persiste_el_registro_de_busqueda(toy_vault, toy_classifier, no_sleep, monkeypatch):
+    """#64: al cerrar la corrida queda el registro VERSIONADO del sujeto — query efectiva, fecha,
+    límite, conteos y versión del clasificador. La query de una estrella la arma build_query y
+    antes se tiraba: no había forma de saber sobre qué universo afirma la ficha."""
+    direct = [rec("2020dirA....1A", cites=5), rec("2020dirB....1B", relevant=False, cites=9)]
+
+    def fake_query(q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, fq=None):
+        if meta is not None:
+            meta.update(num_found=1837, rows=rows, truncated=True)
+        return [dict(r) for r in direct]
+    monkeypatch.setattr(qa, "query_ads", fake_query)
+    monkeypatch.setattr(qa, "chain_candidates", lambda bibs, rows, filt: [])
+    cfg.save_decisiones("test_star", {"2019old....1..1O": {"decision": "descartado"}})
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    b = cfg.load_registro("test_star")["busqueda"]
+    assert b["fecha"] and b["query"] and "Test Star" in b["query"]     # la Solr efectiva, no None
+    assert b["n_found"] == 1837 and b["n_core"] == 1 and b["truncated"] is True
+    assert b["n_dropped"] == 1                                        # lee las decisiones vigentes
+    assert b["almagesto_version"] == cfg.ALMAGESTO_VERSION
+    assert cfg.load_registro("test_star")["decisiones"]                # no pisó el juicio del triage

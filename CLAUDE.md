@@ -29,7 +29,7 @@ Almagesto/
 ├── CLAUDE.md  README.md  requirements.txt  scripts/  .claude/skills/   ← andamiaje (framework)
 ├── build/  outputs/                                                    ← scratch del tooling (gitignored)
 └── vault/                                                              ← la bóveda — Obsidian abre ACÁ
-    ├── config/  (objective.yaml, stars.yaml, topics.yaml, ads_dev_key)
+    ├── config/  (objective.yaml, stars.yaml, topics.yaml, ads_dev_key, registro/<slug>.yaml)
     ├── wiki/    (stars, papers, concepts, queries, matrices, index.md, log.md)
     ├── raw/     (pdfs, fulltext, ground_truth, refs)
     ├── STATUS.md
@@ -286,6 +286,24 @@ re-clasificar de `maintain`. No ingesta nada; después se usan `ingest-star`/`in
 > stub de la nota de paper) para que sea citable/verificable. La **frontera dura sigue
 > rigiendo**: sólo bibliografía citable.
 
+### Registro de ingesta (`vault/config/registro/<slug>.yaml` — versionado, #51/#64)
+Cada sujeto ingestado deja un registro que **se commitea y viaja**, con dos secciones de dueños
+distintos: **`busqueda`** (la escribe `query_ads` al cerrar cada corrida: `fecha`, `query` efectiva
+—en una estrella la arma `build_query` y antes se tiraba—, `rows`, `n_found`, `n_total`, `n_core`,
+`n_candidates`, `n_dropped`, `truncated`, `almagesto_version`) y **`decisiones`** (las escribe
+`triage.py --drop`: por bibcode, `decision`/`motivo`/`fecha`). Regla de oro: **`build/` guarda lo
+regenerable, el registro guarda lo que no lo es.** Un `ads.json` se recupera pidiéndoselo de nuevo a
+ADS; el juicio de por qué descartaste un candidato, no —y hasta 1.8.x vivía en `build/`, gitignored,
+así que en otra máquina el triage lo re-proponía todo sin el motivo (los **aceptados** ya persistían
+en `extra_core`: la asimetría era el bug). `busqueda` responde la otra pregunta, la del consumidor:
+**sobre qué universo de papers afirma esta ficha, y con qué lente se filtró.** Efectos: (a)
+`make_notes` estampa en la cabecera de la ficha/concept **una línea** con fecha, universo→core,
+pendientes y la ruta al registro (cirugía idempotente, no toca la prosa LLM); (b) el lint deja de
+dar **falso limpio** sin `build/` — *triage pendiente* y *corpus truncado* caen al registro y
+reportan el snapshot **con su fecha**, aclarando que no es el conteo vigente. Migración: el
+`build/<slug>/triage.json` viejo se sigue **leyendo** (no se pierde juicio) y se consolida solo en el
+primer `--drop`.
+
 ### Append (plegar UNA fuente puntual a una entidad existente — skill `append-knowledge`)
 El usuario trae **una fuente concreta** (bibcode ADS, PDF local o URL) para una ficha/concepto que
 **ya existe**: plomería mínima según el tipo (bibcode → `extra_core` + cadena idempotente; off-ADS →
@@ -417,9 +435,9 @@ El **triage pendiente** (#55: candidatos del chaining en `build/<slug>/ads.json`
 todavía — la compuerta los deja sin bajar, y el aviso vivía sólo en el stdout de la corrida, que se
 pierde al scrollear: un ingest podía cerrarse con lint en 0 y cientos de pendientes) es **backlog**;
 se resuelve con `python scripts/triage.py <slug>` (pertinente → `extra_core`; ruido → `--drop …
---reason`). ⚠ **Hereda el falso limpio de `build/`:** ese registro es scratch **gitignored**, así
-que en una máquina que no corrió el ingest la categoría da 0 aunque haya candidatos sin juzgar —
-mientras la curación no viva en config versionada, "0 pendientes" significa "0 **acá**".
+--reason`). Sin `build/` local **no** da un cero inventado: cae al `busqueda` del registro versionado
+y reporta el snapshot con su fecha (no el conteo vigente — si dropeaste sin re-correr la cadena
+quedó viejo).
 El **corpus truncado** (un `build/<slug>/ads.json` con `truncated` seteado → la query directa trajo
 menos papers de los que ADS reporta: al sujeto le falta cola) es **backlog** — `query_ads` persiste la
 marca (default `--rows 2000`, ≈ el máximo de una request; re-ingestar con `--rows` mayor para cubrir la
@@ -432,4 +450,6 @@ imputar (web/ADS).
 ## Token / secretos
 El token ADS va en `vault/config/ads_dev_key` (**gitignored** — nunca se commitea) o en la variable de
 entorno `ADS_DEV_KEY`. Token gratis en <https://ui.adsabs.harvard.edu/user/settings/token>.
-`build/` y `outputs/` gitignored. PDFs por git-lfs (`vault/raw/pdfs/**/*.pdf`).
+`build/` y `outputs/` gitignored. PDFs por git-lfs (`vault/raw/pdfs/**/*.pdf`). El resto de
+`vault/config/` **sí se commitea**, incluido `registro/<slug>.yaml` (es el punto: el juicio de
+curación y el registro de búsqueda tienen que viajar).

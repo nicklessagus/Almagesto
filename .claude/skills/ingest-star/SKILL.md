@@ -1,7 +1,7 @@
 ---
 name: ingest-star
 description: Usar cuando el usuario pide bajar/agregar/ingestar una estrella a la bóveda ("bajá GJ 581", "ingest tau ceti", "agregá la estrella X", "traé la bibliografía de AU Mic"). Corre la cadena de ingesta y hace la extracción LLM.
-version: 1.11.2
+version: 1.12.0
 ---
 
 # Ingest: agregar una estrella a la wiki
@@ -109,16 +109,19 @@ Progreso del ingest de <estrella>:
    - **pertinente** → agregalo a `extra_core: [<bibcode>, …]` en `vault/config/stars.yaml` y re-corré
      la cadena (idempotente: baja sólo los nuevos; `extra_core` es override del clasificador).
    - **ruido** → `python scripts/triage.py <slug> --drop <bib> … --reason "<motivo>"` (persiste en
-     `build/<slug>/triage.json`: el próximo refresh no lo re-propone). Agrupá por categoría y
-     descartá por lote, con el motivo real.
+     `decisiones` de `vault/config/registro/<slug>.yaml` — **versionado: se commitea y viaja**, como
+     `extra_core`; el próximo refresh no lo re-propone, tampoco en otra máquina). Agrupá por
+     categoría y descartá por lote, con el motivo real: el motivo es lo que hace que la decisión
+     sirva dentro de seis meses.
    - **dudoso** → **al usuario**, junto con (a) los papers que salen del core y ya tienen extracción
      LLM y (b) el resumen de volumen (core nuevo vs notas actuales). `--report` deja la tabla en
      `outputs/triage-<slug>.md` para decidir por lote.
    No curar en silencio: lo descartado queda con motivo, y lo que quede sin decidir se anota en el `log`.
-   **El lint ahora tiene red (#55):** lo que quede en `candidates` sale como backlog *Triage
-   pendiente* — antes el aviso vivía sólo en este stdout y el ingest podía cerrarse "en 0" con
-   cientos sin juzgar. Ojo: `build/` es scratch **gitignored**, así que esa red sólo existe en la
-   máquina que corrió la cadena; dejar el conteo en el `log` sigue siendo lo único que viaja.
+   **El lint tiene red (#55):** lo que quede en `candidates` sale como backlog *Triage pendiente* —
+   antes el aviso vivía sólo en este stdout y el ingest podía cerrarse "en 0" con cientos sin
+   juzgar. Sin `build/` local, el lint cae al `busqueda` del registro versionado y reporta el
+   snapshot con su fecha (#51/#64), así que la red ya no depende de la máquina — pero el conteo del
+   snapshot es el de la última corrida de la cadena, no el vigente.
 
 3. **Extracción LLM (criterio).** Leer los papers **clave** (discovery / actividad / métodos) desde
    `vault/raw/fulltext/<slug>/` y poblar:

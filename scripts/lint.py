@@ -482,12 +482,14 @@ def main() -> int:
     # los aceptados pasaron a extra_core → son core), así que basta con contarlos.
     triage_pending = []
     truncated_corpora = []
+    vistos = set()
     for aj in sorted(glob.glob(str(cfg.ROOT / "build" / "*" / "ads.json"))):
         try:
             data = json.loads(open(aj, encoding="utf-8").read())
         except (ValueError, OSError):
             continue
         slug = data.get("slug") or Path(aj).parent.name
+        vistos.add(slug)
         t = data.get("truncated")
         if t:
             truncated_corpora.append(
@@ -506,6 +508,31 @@ def main() -> int:
                 (slug, f"rescate por glifo incompleto: el superset de {consts} reporta "
                        f"{tg.get('num_found')} y se escanearon {tg.get('rows')} (top por citas, "
                        f"antes del filtro) → re-ingestá con --rows mayor"))
+
+    # Fallback al registro VERSIONADO (#51/#64) para los sujetos SIN build/ local: post-clone, otra
+    # máquina, o después de limpiar el scratch, los dos chequeos de arriba reportaban 0 sin haber
+    # mirado nada — un "limpio" que no significaba limpio. El snapshot no es la verdad viva (si
+    # dropeaste sin re-correr la cadena, el conteo quedó viejo), así que se reporta CON su fecha y
+    # diciendo que falta el scratch: mejor un dato fechado que un cero inventado.
+    for rf in sorted(glob.glob(str(cfg.REGISTRO / "*.yaml"))):
+        slug = Path(rf).stem
+        if slug in vistos:
+            continue                                  # build/ presente: ya se reportó la verdad viva
+        try:
+            b = (yaml.safe_load(open(rf, encoding="utf-8").read()) or {}).get("busqueda") or {}
+        except yaml.YAMLError:
+            continue
+        fecha = b.get("fecha") or "s/f"
+        if b.get("n_candidates"):
+            triage_pending.append(
+                (slug, f"{b['n_candidates']} candidato(s) sin juzgar según el registro del {fecha} "
+                       f"(sin build/{slug}/ local: es el snapshot de esa corrida, no el conteo "
+                       f"vigente) → re-corré la cadena y después `python scripts/triage.py {slug}`"))
+        if b.get("truncated"):
+            truncated_corpora.append(
+                (slug, f"corpus truncado según el registro del {fecha} (ADS reporta "
+                       f"{b.get('n_found')} y se pidieron {b.get('rows')}) → re-ingestá con --rows "
+                       f"mayor para cubrir la cola"))
 
     # reporte
     lines = [f"# Lint de la bóveda — {dt.date.today().isoformat()}", ""]
