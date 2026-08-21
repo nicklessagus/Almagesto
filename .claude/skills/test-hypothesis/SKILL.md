@@ -1,7 +1,7 @@
 ---
 name: test-hypothesis
 description: Usar cuando el usuario plantea una hipótesis/supuesto y pide evidencia a favor o en contra en el corpus de la bóveda ("hipótesis: ...", "buscá evidencia que apoye o rechace que ...", "¿el corpus sostiene que ...?", "guardá como hipótesis que ..."). Testea contra el texto completo y responde con veredicto citado; archiva la hipótesis y taggea papers SÓLO si el usuario lo pide.
-version: 1.1.1
+version: 1.2.0
 ---
 
 # Test de hipótesis contra el corpus
@@ -18,6 +18,23 @@ Distinción: una hipótesis es un supuesto que se sostiene y acumula evidencia �
    grep -ril "<términos>" vault/raw/fulltext/<slug>/                        # una estrella
    ```
    Elegir términos que cubran a favor y en contra (sinónimos, mecanismos alternativos).
+
+> **Cómo grepear el `.txt` — rigen las convenciones de `verify-citations` (canónicas allá, acá sólo
+> el puntero):** el `.txt` de `pdftotext -layout` **entrelaza las dos columnas en la misma línea
+> física** (medido: 472/644 del corpus, 73%), y `grep` es orientado a líneas → buscar la oración
+> entera da **falso negativo** aunque el texto esté y sea legible (medido: 9/24 pares, ~38%).
+> Patrones **cortos** (un fragmento distintivo de 3–6 palabras, o términos sueltos), nunca la frase
+> completa; si tampoco aparece, reintentar **partiendo por el guión de corte** (`mag-`/`nitude`); y
+> **prohibido normalizar espacios** sin partir antes cada línea física en la canaleta (empalma el
+> final de una columna con el principio de la otra y fabrica adyacencias que el paper no tiene).
+>
+> ⛔ **Un `grep` en 0 NO es una ausencia** hasta agotar esa escalera. Acá el modo de falla es **peor**
+> que en `verify-citations`: allá un falso negativo degrada un veredicto visible; acá **fabrica una
+> ausencia** —"el corpus no dice nada de X"— que sale al chat como conclusión, se usa para decidir y
+> no deja ningún rastro de que fue un artefacto de grep. Se suma al caveat de los papers
+> **pre-digitales** (el OCR del escaneo de ADS pierde ~½ de las filas de tabla, y las tablas viejas
+> suelen ser imágenes): ante un 0, o se **corrobora** por otra vía (papers que lo citan, PDF/tabla
+> abiertos) o se reporta **inconcluso**, no ausencia.
 
 2. **Leer los hits** (los `.txt`, no el PDF) y clasificar cada paper: **supports / challenges /
    method**. Ser honesto: buscar activamente contraejemplos, no solo confirmación.

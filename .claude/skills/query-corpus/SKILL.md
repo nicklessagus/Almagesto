@@ -1,7 +1,7 @@
 ---
 name: query-corpus
 description: Usar cuando el usuario hace una búsqueda o pregunta general contra el corpus de la bóveda que NO es un test de hipótesis ("buscá en el corpus ...", "qué se sabe del P_rot de GJ 581", "qué papers usan ESPRESSO", "qué métodos se aplicaron a tau Ceti", "qué celdas de la matriz están vacías").
-version: 1.1.1
+version: 1.2.0
 ---
 
 # Query: búsqueda/pregunta general contra el corpus
@@ -21,6 +21,23 @@ usar `test-hypothesis`).
    grep -in  "<términos>" vault/raw/fulltext/<slug>/<bib>.txt # contexto en uno
    ```
    Leer los `.txt` relevantes (no los PDFs).
+
+> **Cómo grepear el `.txt` — rigen las convenciones de `verify-citations` (canónicas allá, acá sólo
+> el puntero):** el `.txt` de `pdftotext -layout` **entrelaza las dos columnas en la misma línea
+> física** (medido: 472/644 del corpus, 73%), y `grep` es orientado a líneas → buscar la oración
+> entera da **falso negativo** aunque el texto esté y sea legible (medido: 9/24 pares, ~38%).
+> Patrones **cortos** (un fragmento distintivo de 3–6 palabras, o términos sueltos), nunca la frase
+> completa; si tampoco aparece, reintentar **partiendo por el guión de corte** (`mag-`/`nitude`); y
+> **prohibido normalizar espacios** sin partir antes cada línea física en la canaleta (empalma el
+> final de una columna con el principio de la otra y fabrica adyacencias que el paper no tiene).
+>
+> ⛔ **Un `grep` en 0 NO es una ausencia** hasta agotar esa escalera. Acá el modo de falla es **peor**
+> que en `verify-citations`: allá un falso negativo degrada un veredicto visible; acá **fabrica una
+> ausencia** —"el corpus no dice nada de X"— que sale al chat como conclusión, se usa para decidir y
+> no deja ningún rastro de que fue un artefacto de grep. Se suma al caveat de los papers
+> **pre-digitales** (el OCR del escaneo de ADS pierde ~½ de las filas de tabla, y las tablas viejas
+> suelen ser imágenes): ante un 0, o se **corrobora** por otra vía (papers que lo citan, PDF/tabla
+> abiertos) o se reporta **inconcluso**, no ausencia.
 
 3. **Sintetizar** con citas `[[bibcode]]` y, cuando aplique, links a `[[slug]]` y conceptos.
 

@@ -52,14 +52,16 @@ para ingestar. En Windows, los comandos de shell corren en Git Bash o WSL.
 
 División de tareas: **scripts** bajan (determinista, rate-limited); **LLM** procesa (criterio).
 
-**La cadena completa la corren los orquestadores** — `python ingest_star.py <slug>` (estrellas) y
-`python ingest_topic.py <slug>` (temas; despacha por el campo `source`, incluido el modo off-ADS) —
+**La cadena completa la corren los orquestadores** — `python scripts/ingest_star.py <slug>` (estrellas)
+y `python scripts/ingest_topic.py <slug>` (temas; despacha por el campo `source`, incluido el modo
+off-ADS) —
 cuyos headers son la **definición canónica del orden** (docs y skills apuntan ahí, no copian la
 lista). Las piezas, para correr sueltas cuando hace falta un flag fino (`--rows`, `--all`,
 `--force` de un paso):
 
 ```bash
-cd scripts
+cd scripts     # ← el único bloque con CWD propio (cómodo para el listado); en los skills y en el
+               #   resto de los docs los comandos van desde la RAÍZ del repo: python scripts/<x>.py
 python query_ads.py        <slug>   # ADS → build/<slug>/ads.json (metadata + relevancia + citation chaining;
                                     #   --sweep = barrido full-text 2b: core que faltan → candidatos a extra_core)
 python fetch_arxiv.py      <slug>   # PDFs a vault/raw/pdfs/<slug>/  (rate limit arXiv: 1 req/3 s)

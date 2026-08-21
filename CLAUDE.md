@@ -352,7 +352,8 @@ en el skill.
 **No crea entidades** (eso es Ingest); opera sobre estrellas/conceptos que **ya existen**. Sub-modos:
 **refrescar** (papers nuevos → re-sintetizar sólo lo nuevo), **borrar** (nota + PDF/fulltext + reparar
 colgados), **renombrar** slug, **re-clasificar** tras cambiar `relevance.topics`, **resolver el
-backlog del lint** (huérfanos, P_rot nulo, drift PDF↔disco, cobertura), y la **pasada periódica de
+backlog del lint** (P_rot nulo, drift PDF↔disco, cobertura — los **huérfanos no**: son
+bloqueantes, se arreglan al cierre de la operación que los creó), y la **pasada periódica de
 retracciones** (`check_retractions.py` sin `--slug`, toda la bóveda — la cadena de ingest sólo
 chequea el slug en curso). Invariante: la cadena es
 idempotente (refrescar es seguro); **nunca** se pisa la extracción LLM ni el ground-truth sin `--force`

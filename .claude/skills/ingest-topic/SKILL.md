@@ -1,7 +1,7 @@
 ---
 name: ingest-topic
 description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema off-ADS — típicamente un método de otra disciplina (estadística, ML) al servicio del foco astro — desde PDFs locales + web (ver Modo off-ADS).
-version: 1.9.1
+version: 1.9.2
 ---
 
 # Ingest: agregar un TEMA a la wiki
@@ -50,7 +50,7 @@ Progreso del ingest del tema <tema>:
      lo que entendiste, en castellano (vos traducís a `abs:"..."`). Usar `AskUserQuestion` si la
      elección cambia qué se trae.
    - **c. Validar con un conteo barato** antes de bajar nada (y antes de persistir el slug):
-     `python query_ads.py --probe '<query candidata>' --rows 50` y mirar el corte CORE/no-core +
+     `python scripts/query_ads.py --probe '<query candidata>' --rows 50` y mirar el corte CORE/no-core +
      los títulos top (ordenados por citas). Si trae cientos con ruido o muy pocos, reajustar la
      query y reconfirmar. **No** bajar PDFs hasta que el usuario apruebe la query final. (`--probe`
      recibe la query cruda, así que corre sin que el tema exista todavía en `topics.yaml` —
@@ -62,9 +62,9 @@ Progreso del ingest del tema <tema>:
      a stubbear), `query` (la Solr cruda aprobada) y `aliases` opcional. Si el tema ya existía en el
      YAML, ofrecer reusar la query guardada o re-pulirla.
 
-2. **Cadena mecánica** — un solo comando (correr desde `scripts/`):
+2. **Cadena mecánica** — un solo comando (desde la raíz del repo):
    ```bash
-   python ingest_topic.py <slug>
+   python scripts/ingest_topic.py <slug>
    ```
    El orquestador despacha según el campo `source` de la entrada del tema (`ads` si falta). En modo
    ADS corre la cadena de estrellas **sin `fetch_ground_truth`** (no hay NEA para un tema) y con
@@ -105,6 +105,11 @@ Progreso del ingest del tema <tema>:
    hit sin taguear leer el contexto y decidir si el paper **usa/aporta** al tema (no mención al
    pasar) → agregar add-only `thesis_links` (y `methods` si aplica) a su nota. La tabla Dataview del
    concept acumula sola; una ficha-método junta además por `methods:` sin re-taguear.
+   **Alias sueltos y cortos, nunca frases** (#44, convención canónica en `verify-citations`): el
+   `.txt` entrelaza dos columnas en la misma línea física (73% del corpus) → un alias multi-palabra
+   (`"gaussian process regression"`) puede no matchear aunque el paper lo use. Probar la raíz corta
+   y el guión de corte antes de dar por no-taguable un paper; un 0 acá **no** es "el tema no está",
+   es un retro-tag que no se hizo.
 
 4. **Síntesis del concept durable** (`concepts/<area>/<concept>.md`). Destilar lo aprendido a la
    página viva: mecanismos, signos, desfasajes, regímenes, huecos. El roll-up Dataview (papers con
@@ -148,15 +153,15 @@ Qué cambia respecto del flujo ADS de arriba:
   local-pdfs+web`** y la bibliografía **declarada** en la lista `sources:` (cada item: `key`
   AAAA+Autor + `url` o `pdf` + `title/author/year/venue/n_authors/doi` opcionales; ver header del YAML); el resto
   del schema igual (`title`, `area`, `concept`, `aliases`). Con eso, **el mismo comando del paso 2**
-  (`python ingest_topic.py <slug>`) orquesta todo: stub del concept, `fetch_web.py` por cada `url`,
+  (`python scripts/ingest_topic.py <slug>`) orquesta todo: stub del concept, `fetch_web.py` por cada `url`,
   copia de cada `pdf` a `vault/raw/pdfs/<slug>/<key>.pdf` (nota con el campo `pdf` ya linkeado) y
   `extract_fulltext.py`. `--force` re-baja/re-copia **fuentes**, nunca pisa notas. Los bullets de
   abajo documentan las piezas por si hay que correr algo a mano.
 - **Fuente = PDFs locales y/o web:**
   - **PDFs** que provee el usuario → copiarlos a `vault/raw/pdfs/<slug>/` (git-lfs) renombrados a la **clave de
-    cita** (abajo); `python extract_fulltext.py <slug>` los pasa a `vault/raw/fulltext/<slug>/` (es
+    cita** (abajo); `python scripts/extract_fulltext.py <slug>` los pasa a `vault/raw/fulltext/<slug>/` (es
     source-agnostic: sólo corre `pdftotext`).
-  - **Web** (rellenar fundacionales / huecos) → **preferido:** `python fetch_web.py <slug> <clave> <url>
+  - **Web** (rellenar fundacionales / huecos) → **preferido:** `python scripts/fetch_web.py <slug> <clave> <url>
     [--concept <concept> --title … --author … --year …]`. Baja la página con **defuddle** (quita
     nav/menús/clutter → markdown limpio, ~8× menos bytes que el HTML crudo, ~4× menos que pandoc), le pasa
     un **post-clean** determinista (saca bloques HTML de media/embed sueltos) y escribe el **snapshot**
@@ -164,7 +169,7 @@ Qué cambia respecto del flujo ADS de arriba:
     verificable por `verify-citations`). **Además crea el stub `vault/wiki/papers/<clave>.md`** (salvo
     `--no-note`). Requiere Node/npm (`npx defuddle`, JS-only; valida `<clave>` contra `BIBCODE_RE`,
     idempotente salvo `--force`). **Sin Node:** traer con `WebFetch`/`deep-research`, guardar el snapshot a
-    mano (mismo encabezado) y stubbear la nota con `python make_notes.py --web <clave> --url … --concept …`.
+    mano (mismo encabezado) y stubbear la nota con `python scripts/make_notes.py --web <clave> --url … --concept …`.
 - **Fuente no-conseguible (fallback — paywall / escaneo / mojibake):** si una fuente no se puede
   obtener (sin copia libre) o su PDF no rinde texto usable (escaneo sin capa de texto, fuentes sin
   ToUnicode → `extract_fulltext` avisa "ILEGIBLE"; con `tesseract` instalado **cae solo a OCR** y el
@@ -190,7 +195,7 @@ Qué cambia respecto del flujo ADS de arriba:
   paper de estadística/ML con bibcode ADS real entra por acá con su identidad ADS. Si un bibcode
   igual no vuelve, ahí sí es typo o registro renombrado — no hace falta degradarlo a `sources:`.
 - **Notas de paper (automatizado):** `fetch_web.py` ya crea el stub `vault/wiki/papers/<clave>.md`; para
-  fuentes **PDF** off-ADS (sin URL) usá `python make_notes.py --web <clave> --concept <concept>
+  fuentes **PDF** off-ADS (sin URL) usá `python scripts/make_notes.py --web <clave> --concept <concept>
   --slug-hint <slug> [--title … --author … --year … --n-authors … --doi … --venue …]`. El stub lleva el
   **mismo frontmatter** que
   una nota ADS más la provenance web: `bibcode` = clave sintética; `arxiv_id` null; `n_authors`/`doi` los

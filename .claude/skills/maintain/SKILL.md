@@ -1,7 +1,7 @@
 ---
 name: maintain
-description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), resolver el backlog del lint (huérfanos, P_rot faltante, drift PDF↔disco, claims stale), y la pasada periódica de retracciones sobre toda la bóveda ("chequeá retracciones").
-version: 1.7.0
+description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), resolver el backlog del lint (P_rot faltante, drift PDF↔disco, cobertura, claims stale), y la pasada periódica de retracciones sobre toda la bóveda ("chequeá retracciones").
+version: 1.7.1
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
@@ -37,7 +37,7 @@ Progreso del refresh de <entidad>:
 1. Re-correr el **orquestador** (idempotente — sólo agrega lo nuevo, no re-baja ni pisa; el orden
    canónico de la cadena vive en el header del orquestador, no lo copies acá):
    ```bash
-   python ingest_star.py <slug>          # estrella (temas: ingest_topic.py <slug>, despacha por `source`)
+   python scripts/ingest_star.py <slug>          # estrella (temas: ingest_topic.py <slug>, despacha por `source`)
    ```
    Un refresh de un tema **off-ADS** procesa su `sources:` en vez de pegarle a ADS. La cadena
    re-chequea retracciones (papers viejos pueden retractarse) y **no pisa el ground-truth**:
@@ -48,7 +48,7 @@ Progreso del refresh de <entidad>:
    expansión del orquestador frena antes de bajar nada y te manda a revisar
    `relevance.require`/`min_topics` (`--yes` para continuar a sabiendas).
 1b. **Triage de los candidatos del chaining** (estrellas): el refresh deja los candidatos nuevos en
-   `candidates` de `build/<slug>/ads.json`, **sin bajar** — correr `python triage.py <slug>` y
+   `candidates` de `build/<slug>/ads.json`, **sin bajar** — correr `python scripts/triage.py <slug>` y
    juzgarlos por título+abstract (aceptado → `extra_core` + re-correr; descartado → `--drop` con
    motivo; dudoso → al usuario). Ver paso 2c del skill `ingest-star`.
 2. **Identificar lo nuevo:** `git status` sobre `vault/wiki/papers/` muestra los stubs recién creados. Leer
@@ -90,15 +90,15 @@ Cuando editaste `objective.yaml` (vía `setup`) y el corte core/no-core cambió 
 p. ej. volviste obligatoria la faceta del eje para frenar el ruido del chaining):
 0. **Mirar el delta ANTES de tocar nada** (dry-run, offline — no consulta ADS ni escribe):
    ```bash
-   python query_ads.py --dry-run              # todos los sujetos ya ingestados
-   python query_ads.py <slug> --dry-run       # uno solo
+   python scripts/query_ads.py --dry-run              # todos los sujetos ya ingestados
+   python scripts/query_ads.py <slug> --dry-run       # uno solo
    ```
    Re-clasifica en memoria los `build/<slug>/ads.json` con la regla vigente y reporta core
    antes/después, los papers que **salen** del core —separando los que tienen **extracción LLM**
    (la lista completa: son pocos y son la decisión real) de los **stubs** (sólo el conteo)— y los
    que **entran** sin nota, por vía. Sin esto la decisión es a ciegas: "342 notas salen del core"
    suena catastrófico hasta ver que 338 son stubs del chaining y sólo 4 tenían trabajo encima.
-1. Re-correr `python query_ads.py <slug>` (temas: `python query_ads.py <slug> --topic`) para cada
+1. Re-correr `python scripts/query_ads.py <slug>` (temas: `python scripts/query_ads.py <slug> --topic`) para cada
    estrella/tema afectado → re-clasifica con la regla nueva (regenera `build/<slug>/ads.json`).
 2. **Papers que dejaron de ser core:** decidir con el usuario a partir del dry-run del paso 0 —
    dejar la nota marcada (`relevance: low`) o borrarla (sub-modo B). No borrar en silencio.
@@ -110,8 +110,15 @@ p. ej. volviste obligatoria la faceta del eje para frenar el ruido del chaining)
 5. Cierre: verify (si tocaste prosa) → lint → `log` (qué se re-clasificó) → commit → preguntar push.
 
 ## E. Resolver el backlog del lint
-Pasada de higiene sobre lo que `lint.py` marca como backlog/WARN (no bloqueante, pero se acumula):
-- **Huérfanos** (concepto sin links entrantes) → citarlo desde donde corresponda, o borrarlo si sobra.
+Pasada de higiene sobre lo que `lint.py` marca como backlog/WARN (no bloqueante, pero se acumula).
+
+> ⛔ **Los huérfanos NO entran acá: bloquean.** Una nota-concepto sin links entrantes es
+> **inalcanzable** desde la bóveda, y `lint.py` la cuenta en `n_block` (exit 1, igual que un wikilink
+> roto) — dejarla "para la próxima pasada" traba el cierre de la operación siguiente. Se arregla
+> **en el cierre de la operación que la creó, antes de commitear**: citarla desde donde corresponda
+> (la ficha/concepto que la motivó, `index.md`, el hub si es un radio) o borrarla si sobra. Si
+> aparece en una pasada periódica, resolvela en el momento.
+
 - **P_rot / campos nulos** → abrir una `query-corpus` para imputar desde la literatura (web/ADS) y
   completar el frontmatter con su `[[bibcode]]`.
 - **PDF ↔ disco / cuerpo** (drift del campo `pdf` o del link de cabecera) → linkear el PDF bajado o
@@ -143,7 +150,7 @@ La cadena de ingest chequea retracciones **sólo sobre los papers del slug en cu
 (`check_retractions.py --slug`); un paper puede retractarse **años después** de ingestado, así que
 el barrido completo es tarea periódica (p. ej. mensual, o al cerrar una tanda de ingests):
 ```bash
-python check_retractions.py            # toda la bóveda vía Crossref (red)
+python scripts/check_retractions.py            # toda la bóveda vía Crossref (red)
 ```
 Si marca alguno (`retracted: true` en la nota; el lint lo vuelve **bloqueante**): revisar cada
 afirmación que cita ese paper (quitar la cita o reflejar la retracción), `log`, commit.

@@ -1,7 +1,7 @@
 ---
 name: ingest-star
 description: Usar cuando el usuario pide bajar/agregar/ingestar una estrella a la bóveda ("bajá GJ 581", "ingest tau ceti", "agregá la estrella X", "traé la bibliografía de AU Mic"). Corre la cadena de ingesta y hace la extracción LLM.
-version: 1.11.0
+version: 1.11.1
 ---
 
 # Ingest: agregar una estrella a la wiki
@@ -31,9 +31,9 @@ Progreso del ingest de <estrella>:
    `slug`, `simbad`, `ads_object`, `aliases` y (si aplica) `data_local`. Verificar el nombre en
    SIMBAD si hay duda.
 
-2. **Cadena mecánica** (orquestador — correr desde `scripts/`):
+2. **Cadena mecánica** (orquestador — desde la raíz del repo):
    ```bash
-   python ingest_star.py <slug>
+   python scripts/ingest_star.py <slug>
    ```
    Corre la cadena completa (ADS → PDFs arXiv y no-arXiv → ground-truth NEA/SIMBAD → stubs →
    fulltext → retracciones), abortando al primer fallo. **El orden canónico vive en el header de
@@ -77,7 +77,7 @@ Progreso del ingest de <estrella>:
    **chaining del paso 2 ya trae** los que están conectados por citas a los core encontrados; este
    barrido caza los que quedan **fuera del grafo** (o cuyos core-vecinos no entraron). Correr:
    ```bash
-   python query_ads.py <slug> --sweep
+   python scripts/query_ads.py <slug> --sweep
    ```
    Corre `full:` sobre nombre+aliases expandiendo solo **todas las grafías** (`HD 152391` ↔
    `HD152391` — ADS tokeniza distinto y los papers usan ambas; antes esto eran probes manuales por
@@ -100,7 +100,7 @@ Progreso del ingest de <estrella>:
    llevan **el sujeto en el título** (1 falso positivo en 310) y dejó el resto como **candidatos**
    —no bajados—:
    ```bash
-   python triage.py <slug>            # listar (agregá --report para la tabla en outputs/)
+   python scripts/triage.py <slug>            # listar (agregá --report para la tabla en outputs/)
    ```
    Los marcados `◆` **ya tienen nota en la bóveda** (entraron por otro slug): ya están bajados y
    extraídos — la decisión sigue siendo por-slug (¿pertinente a ESTE sujeto?), pero se despachan
@@ -108,7 +108,7 @@ Progreso del ingest de <estrella>:
    Clasificá cada candidato **sólo por título+abstract** (no bajes nada para decidir):
    - **pertinente** → agregalo a `extra_core: [<bibcode>, …]` en `vault/config/stars.yaml` y re-corré
      la cadena (idempotente: baja sólo los nuevos; `extra_core` es override del clasificador).
-   - **ruido** → `python triage.py <slug> --drop <bib> … --reason "<motivo>"` (persiste en
+   - **ruido** → `python scripts/triage.py <slug> --drop <bib> … --reason "<motivo>"` (persiste en
      `build/<slug>/triage.json`: el próximo refresh no lo re-propone). Agrupá por categoría y
      descartá por lote, con el motivo real.
    - **dudoso** → **al usuario**, junto con (a) los papers que salen del core y ya tienen extracción
@@ -157,7 +157,10 @@ Progreso del ingest de <estrella>:
   aportan a la extracción. NO leer las primeras páginas enteras: saltar al contenido con, p. ej.,
   `awk 'tolower($0)~/abstract/{f=1} f' vault/raw/fulltext/<slug>/<bib>.txt | head -60` para el abstract, y
   `grep -inE "P_?rot|K ?=|mass|chromatic|GP|activity indicator" ...` para los números clave. No tocar
-  el `.txt` en disco (se usa para grep); el salto es sólo en la lectura.
+  el `.txt` en disco (se usa para grep); el salto es sólo en la lectura. **Patrones cortos, siempre**
+  (#44, convención canónica en `verify-citations`): el `.txt` entrelaza las dos columnas en la misma
+  línea física (73% del corpus), así que un patrón largo da falso negativo — y acá el falso negativo
+  se lee como "el paper no reporta ese parámetro", que es exactamente lo que la extracción decide.
 - **Mirá las TABLAS, no sólo el texto.** En papers viejos las tablas suelen ser **imágenes** (en el
   escaneo de ADS y a veces hasta en el HTML del publisher). El dato de la estrella (P_cyc, P_rot, rama…)
   vive ahí → **invisible a cualquier búsqueda de texto**. Para confirmar si una estrella está en un paper

@@ -1,7 +1,7 @@
 ---
 name: setup
 description: Usar cuando el usuario quiere definir o reescribir el OBJETIVO de la bóveda — el archivo que orienta qué papers son "core" ("configurá la bóveda", "definí el objetivo", "armá el objective.yaml", "quiero usar Almagesto para el tema X", "ajustá la regla de relevancia", "para qué va a servir esta bóveda"). El agente traduce el foco en lenguaje natural a `objective.yaml` (incluida la regex `relevance.topics`) y la afina contra ADS con un preview, para que el usuario NO escriba regex a mano. NO ingesta nada: después se usan ingest-star / ingest-topic.
-version: 1.1.0
+version: 1.2.0
 ---
 
 # Setup: definir el OBJETIVO de la bóveda
@@ -109,9 +109,21 @@ papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** 
    `vault/config/stars.yaml` / el tema a `vault/config/topics.yaml`, y correr `ingest-star` /
    `ingest-topic`.
 
+   ⛔ **Si la bóveda YA tiene contenido, el cierre no termina acá: hay que re-clasificar.** Cambiar
+   `relevance.topics` (o la regla de combinación `require`/`min_topics`) **re-clasifica el corpus
+   entero**: papers que dejan de ser core, papers que recién ahora entran, y apéndices "Excluidos por
+   el filtro" estampados con el corte viejo. Nada de eso pasa solo — sin este paso el usuario se va
+   con el `objective.yaml` nuevo y el corpus clasificado con la regla vieja, **sin ninguna señal**.
+   Va por el sub-modo **D de `maintain`**, y empieza por el dry-run (offline, no consulta ADS ni
+   escribe): `python scripts/query_ads.py --dry-run` muestra el delta —cuántos salen del core
+   separando los que tienen extracción LLM de los stubs, y cuántos entran— antes de tocar nada.
+   Decirlo explícitamente al usuario en el cierre, no darlo por sabido.
+
 ## Notas
 
 - `objective.yaml` es **archivo de instancia** (`merge=ours`): editarlo es seguro, no se pisa al traer
   updates del framework.
 - Este skill **no ingesta**. Es el paso 0; la bibliografía entra después con `ingest-star`/`ingest-topic`.
-- Reescribir el objetivo más adelante es válido (afinás la lente): re-correr este skill y re-previsualizar.
+- Reescribir el objetivo más adelante es válido (afinás la lente): re-correr este skill y
+  re-previsualizar — pero sobre una bóveda **poblada** eso arrastra el sub-modo **D de `maintain`**
+  (re-clasificar el corpus + re-estampar los apéndices); ver el paso 7.
