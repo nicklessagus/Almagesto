@@ -18,6 +18,47 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.7.4 (2026-08-21) — tanda 1 del backlog #51–#67: coherencia barata (#53/#54/#58/#59)
+
+> La tanda 1 del orden sugerido: **sólo docs/skills, sin tocar scripts**. Cuatro contradicciones o
+> huecos entre documentos que ya se habían medido. 359 tests verdes, lint 0. `ALMAGESTO_VERSION`
+> 1.7.3 → **1.7.4** (patch: ningún cambio de comportamiento en la cadena).
+
+- **#53** — **los huérfanos bloquean, no son backlog.** `lint.py:516` los suma a `n_block` (exit 1)
+  mientras `maintain E` los listaba como "no bloqueante, pero se acumula": un agente que seguía el
+  skill dejaba el huérfano para después y se le trababa el cierre de la operación siguiente.
+  Resuelto por la opción (a) del issue —un concepto sin links entrantes es **inalcanzable** desde la
+  bóveda, así que bloquear es la intención correcta— alineando los docs al lint, no al revés: fuera
+  el bullet de `maintain E`, en su lugar un aviso ⛔ de dónde se arregla (**en el cierre de la
+  operación que lo creó**, citándolo desde la ficha/`index.md`/el hub si es un radio) y la
+  `description` del skill + `CLAUDE.md` corregidas. `maintain` 1.7.0 → **1.7.1**.
+- **#54** — la **convención de matcheo multi-columna** (#44/#46) blindaba la verificación pero no la
+  **búsqueda**: vivía sólo en `verify-citations` y `find-contradictions`. Ahora está —como puntero,
+  sin copiar la canónica— en los cuatro skills que greppean el `.txt` para decidir. **El modo de
+  falla es peor acá:** en verify un falso negativo de matcheo degrada un veredicto visible; en
+  `query-corpus`/`test-hypothesis` **fabrica una ausencia** ("el corpus no dice nada de X") que sale
+  al chat como conclusión y no deja rastro de que fue un artefacto de grep. Regla operativa mínima:
+  patrones cortos (3–6 palabras) o términos sueltos, reintento partiendo por guión de corte, y **un
+  `grep` en 0 no es ausencia** hasta agotar la escalera (se suma al caveat pre-digital: el OCR pierde
+  ~½ de las filas de tabla). En los ingests el mismo hueco tiene otra cara: en `ingest-star` el falso
+  negativo se lee como "el paper no reporta ese parámetro" (que es lo que la extracción decide) y en
+  el retro-tag 3b de `ingest-topic` un alias multi-palabra que no matchea es un paper que **queda sin
+  conectar** al tema. `query-corpus` 1.1.1 → **1.2.0**, `test-hypothesis` 1.1.1 → **1.2.0**,
+  `ingest-star` 1.11.0 → **1.11.1**, `ingest-topic` 1.9.1 → **1.9.2**.
+- **#58** — `setup` invitaba a reescribir el objetivo más adelante ("afinás la lente") y **nunca
+  nombraba** que sobre una bóveda poblada eso **re-clasifica el corpus entero**: el usuario se iba
+  con el `objective.yaml` nuevo y el corte viejo, sin ninguna señal. El paso 7 y las §Notas ahora
+  mandan al sub-modo **D de `maintain`**, empezando por el dry-run offline
+  (`python scripts/query_ads.py --dry-run`), que es el que separa stubs de notas con extracción LLM.
+  `setup` 1.1.0 → **1.2.0**.
+- **#59** — **una sola convención de CWD: la raíz del repo** (la de `CLAUDE.md`). Los skills mezclaban
+  "correr desde `scripts/`" + `python ingest_star.py` con `python scripts/lint.py` y greps a
+  `vault/raw/…` en el **mismo archivo**: no rompía nada (los scripts resuelven el root por `__file__`)
+  pero le costaba un turno a quien hacía `cd scripts` y seguía leyendo. Normalizadas 18 invocaciones
+  en `maintain`/`ingest-star`/`ingest-topic`. `docs/operacion.md` conserva su bloque `cd scripts` para
+  el listado de piezas sueltas, ahora con el comentario de que es el único con CWD propio.
+- **Sigue la tanda 2:** **#52** (erratum/corrigendum/EoC — primer ítem con scripts + tests).
+
 ## ✅ Framework 1.7.3 (2026-08-21) — #68: el override manual que igual pasaba por la lente astro
 
 > Reportado desde la instancia Almagesto-RV (tema `fastica`) con la verificación contra la API ya
