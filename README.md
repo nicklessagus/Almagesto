@@ -1,9 +1,9 @@
 <p align="center">
   <img src="docs/assets/logo-animated.svg" width="180"
-       alt="Almagesto — la rosa de Venus: la trayectoria geocéntrica de Venus en 8 años">
+       alt="Almagesto: la rosa de Venus, la trayectoria geocéntrica de Venus en 8 años">
 </p>
 
-# Almagesto — template de wiki de conocimiento astro (patrón LLM Wiki)
+# Almagesto: template de wiki de conocimiento astro (patrón LLM Wiki)
 
 [![CI](https://github.com/nicklessagus/Almagesto/actions/workflows/ci.yml/badge.svg)](https://github.com/nicklessagus/Almagesto/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/github/v/tag/nicklessagus/Almagesto?label=version)](https://github.com/nicklessagus/Almagesto/tags)
@@ -14,7 +14,7 @@ Base de conocimiento mantenida por un LLM (patrón [LLM Wiki](vault/raw/refs/kar
 Karpathy) sobre **literatura astronómica**, organizada por **estrella** y por **concepto**. Reúne todo
 lo publicado relevante (planetas, actividad, indicadores, métodos), en formato a la vez **legible**
 (notas + grafo Obsidian + síntesis de huecos) y **máquina-legible** (frontmatter YAML que puede
-consumir un agente o humano para armar código, un informe o un paper — siempre arrastrando las citas
+consumir un agente o humano para armar código, un informe o un paper, siempre arrastrando las citas
 `[[bibcode]]` correspondientes).
 
 Es un **template**: el objetivo de cada bóveda (de qué trata, **qué papers son "core"**) se setea en
@@ -29,9 +29,9 @@ flowchart LR
     ADS["ADS · arXiv"]
     NEA["NASA Exoplanet Archive<br/>· SIMBAD"]
     OFF["PDFs locales · web<br/>(off-ADS · opt-in)"]
-    OBJ[["objective.yaml<br/>— qué papers son core"]]
+    OBJ[["objective.yaml<br/>qué papers son core"]]
     RAW[("vault/raw/<br/>PDFs · fulltext · ground-truth<br/><i>inmutable</i>")]
-    LLM{{"LLM — compilador"}}
+    LLM{{"LLM (compilador)"}}
     WIKI[("vault/wiki/<br/>stars · papers · concepts · queries")]
     LINT["lint<br/>salud estructural"]
     VER["verify-citations<br/>claim ↔ fuente"]
@@ -60,17 +60,17 @@ flowchart LR
 
 > Por defecto la bibliografía entra por **ADS**, la plomería con **descubrimiento automático**
 > (query → clasificar → bajar). El **modo off-ADS** (opt-in, sólo a pedido) suma los **métodos de
-> otras disciplinas** que el trabajo astro usa —análisis de datos, estadística, machine learning,
-> procesos gaussianos, signal processing— cuya bibliografía canónica vive **fuera de ADS** (el eje
+> otras disciplinas** que el trabajo astro usa (análisis de datos, estadística, machine learning,
+> procesos gaussianos, signal processing) cuya bibliografía canónica vive **fuera de ADS** (el eje
 > tema/concepto y la capa de calidad son agnósticos de disciplina, así que la cadena los soporta
 > igual): las fuentes se **declaran** (no se descubren por query) en `topics.yaml` con `source: web
 > \| local-pdfs` + su lista `sources:` y entran a `vault/raw/` desde snapshots web + PDFs locales,
-> sin ADS/NEA. Sigue rigiendo la **frontera dura**: sólo bibliografía citable — el método
-> **publicado**, no su implementación.
+> sin ADS/NEA. Sigue rigiendo la **frontera dura**: sólo bibliografía citable, o sea el método
+> **publicado** y no su implementación.
 
 ## Instanciar (crear tu bóveda)
 
-**Recomendado — botón "Use this template":** en la [página del repo](https://github.com/nicklessagus/Almagesto)
+**Recomendado, botón "Use this template":** en la [página del repo](https://github.com/nicklessagus/Almagesto)
 apretá **"Use this template" → Create a new repository**. GitHub te crea un repo **propio** con esta
 estructura e historia limpia. Después cloná *tu* repo nuevo y configurálo:
 
@@ -88,7 +88,7 @@ echo "TU_TOKEN" > vault/config/ads_dev_key  # token ADS (gratis, gitignored)
 > clone` directo y el detalle por OS: ver [`docs/operacion.md`](docs/operacion.md). El token ADS es
 > gratis en <https://ui.adsabs.harvard.edu/user/settings/token>.
 
-Después **definí el objetivo pidiéndoselo al agente** — no hace falta escribir YAML ni regex a mano. El
+Después **definí el objetivo pidiéndoselo al agente**: no hace falta escribir YAML ni regex a mano. El
 skill `setup` traduce tu foco (en palabras) a `relevance.topics` (los buckets que deciden qué paper es
 *core*), lo **prueba contra ADS** y te muestra el corte para que lo apruebes:
 
@@ -97,9 +97,13 @@ skill `setup` traduce tu foco (en palabras) a `relevance.topics` (los buckets qu
 > **Agente (skill `setup`):** arma los buckets (`rv`, `activity`, `method`…) y corre el preview
 > (`query_ads.py --probe`, no baja nada):
 > ```
-> 41/50 CORE · top por citas  [CORE/—  · tópicos que matchearon]:
+>   50 papers · 41 CORE · 9 no-core
+>
+>   CORE (todos, por citas)  [tópicos que matchearon]:
 > [CORE]  812  Stellar activity and radial-velocity jitter in...    «rv,activity»
 > [CORE]  333  Gaussian-process modelling to disentangle planets...  «rv,activity,method»
+>
+>   no-core (top 9 de 9, chequeo de sanidad):
 > [—   ]  210  A catalogue of nearby M dwarfs                        «(ninguno)»
 > ```
 > Afina la regex e itera hasta que el corte cierre → te deja `vault/config/objective.yaml` listo.
@@ -114,23 +118,26 @@ Cuando le pedís ingestar una estrella o un tema, el agente:
 1. **Busca en ADS** (por estrella: nombre + alias; por tema: keywords) y **clasifica** cada paper con tu
    `relevance.topics`: **core** = matchea ≥1 faceta y no es ruido; el resto queda **no-core**.
 2. Los **core** se bajan (PDF + fulltext) y el LLM los **lee y destila** en la ficha: métodos, P/K/e,
-   indicadores y por qué es relevante — cada dato con su cita `[[bibcode]]` (trazable hasta el PDF).
+   indicadores y por qué es relevante, cada dato con su cita `[[bibcode]]` (trazable hasta el PDF).
 3. Los **no-core** no se bajan: quedan sólo listados (top por citas, con link a ADS) en un apéndice
-   *"excluidos, por las dudas"* — por si alguno debería haber entrado.
+   *"excluidos, por las dudas"*, por si alguno debería haber entrado.
 
 El resultado es una **ficha autosuficiente** (resumen + tablas auto + huecos) que se entiende **sin abrir
 ningún paper**, con todo lo que afirma trazable a su fuente.
 
-Cada ingest deja además un **registro versionado** en `vault/config/registro/<slug>.yaml` que se
-commitea y viaja con la bóveda:
+Cada ingest por ADS deja además un **registro versionado** en `vault/config/registro/<slug>.yaml`,
+que se commitea y viaja con la bóveda:
 
-- **`busqueda`** — la query efectiva, la fecha, el límite pedido y los conteos (encontrados → core →
-  bajados → sin juzgar). Es lo que permite saber **sobre qué universo de papers afirma una ficha** y
-  con qué versión del clasificador se filtró; la cabecera de la ficha lleva una línea con el resumen
-  y el puntero al archivo.
-- **`decisiones`** — el juicio del triage: qué candidato del citation chaining descartaste y **por
-  qué**. Es la parte cara y no regenerable de un ingest (los `.json` de ADS se vuelven a pedir; tu
-  criterio, no), así que viaja en git como ya lo hacían los aceptados.
+- **`busqueda`**: la query efectiva, la fecha, el límite pedido y los conteos (encontrados en ADS →
+  traídos → core → sin juzgar → descartados). Es lo que permite saber **sobre qué universo de papers
+  afirma una ficha** y con qué versión del clasificador se filtró; la cabecera de la ficha lleva una
+  línea con el resumen y el puntero al archivo.
+- **`decisiones`**: el juicio del triage, o sea qué candidato del citation chaining descartaste y
+  **por qué**. Es la parte cara y no regenerable de un ingest (los `.json` de ADS se vuelven a pedir;
+  tu criterio, no), así que viaja en git como ya lo hacían los aceptados.
+
+Un tema **off-ADS** no lleva `busqueda`: no hubo query que registrar, porque sus fuentes ya están
+declaradas una por una en `topics.yaml`.
 
 <p align="center">
   <img src="docs/assets/demo-animated.svg" width="740"
@@ -139,13 +146,13 @@ commitea y viaja con la bóveda:
 
 ## La bóveda en Obsidian
 
-La wiki resultante es una bóveda [Obsidian](https://obsidian.md) común — se abre apuntando a
+La wiki resultante es una bóveda [Obsidian](https://obsidian.md) común: se abre apuntando a
 `vault/`. Las capturas de abajo son de **dos instancias reales** del template (una sobre RV, otra
 sobre ciclos de actividad).
 
 **La ficha de estrella.** Arriba, el frontmatter: el **contrato máquina-legible** que consume un
 agente o un script (`teff_K`, `P_rot_days`, `planets[]` con P/K/e/m·sini y sus `disputes`,
-`methods_applied`). Abajo —fuera de cuadro— la prosa destilada de los papers y las tablas Dataview
+`methods_applied`). Abajo, fuera de cuadro, la prosa destilada de los papers y las tablas Dataview
 que se llenan solas al ingestar.
 
 <p align="center">
@@ -155,7 +162,7 @@ que se llenan solas al ingestar.
 
 **La ficha de concepto.** El otro eje de la wiki. Los `aliases` (EN + ES) hacen que el tema se
 encuentre por `grep` desde cualquier término, y cada afirmación de la síntesis arrastra su
-`[[bibcode]]` — la referencia que viaja con el dato cuando lo usás en un paper o en código.
+`[[bibcode]]`, la referencia que viaja con el dato cuando lo usás en un paper o en código.
 
 <p align="center">
   <img src="docs/assets/obsidian-concepto.png" width="740"
@@ -187,7 +194,7 @@ descripción, o el usuario con `/<nombre>`). Encapsulan la cadena mecánica + el
 | `find-contradictions` | "buscá contradicciones", "¿qué papers discrepan sobre X?" | Barre un eje (estrella/parámetro o concepto) y confirma desacuerdos claim↔claim **entre** papers → propone `disputes[]` para que apruebes. |
 | `maintain` | "actualizá X", "borrá el paper Y", "renombrá el slug", "re-clasificá" | Mantiene entidades **ya ingestadas**: refrescar con papers nuevos, borrar/renombrar limpio, re-clasificar tras cambiar `relevance.topics`, resolver backlog del lint. |
 
-## Verify — todo claim tiene fuente
+## Verify: todo claim tiene fuente
 
 El diferencial sobre el patrón base: el lint de Karpathy chequea salud estructural, no que la fuente
 **respalde** la afirmación. Acá toda afirmación va citada `[[bibcode]]` o marcada `inferencia`, y el
@@ -203,33 +210,33 @@ error del verificador se mide con un auto-benchmark que siembra citas falsas y l
 El patrón LLM Wiki ya tiene implementaciones genéricas, y la IA-para-literatura es un mercado con
 productos grandes. La distinción de fondo: casi todos producen una **respuesta efímera** (un chat, un
 informe generado al momento de la consulta) sobre un índice remoto que no controlás; Almagesto
-produce un **artefacto persistente** — una bóveda versionada en git, con corpus propio a fulltext,
+produce un **artefacto persistente**: una bóveda versionada en git, con corpus propio a fulltext,
 donde cada afirmación arrastra su `[[bibcode]]` y una capa de verificación la contrasta con el paper.
 
 | Herramienta | Qué es | Diferencia con Almagesto |
 |---|---|---|
-| [pathfinder](https://iopscience.iop.org/article/10.3847/1538-4365/ad7c43) | búsqueda semántica en lenguaje natural sobre ~300k abstracts de ADS | **el vecino astro — complementario, no rival**: pathfinder *encuentra* papers; Almagesto los *cura, destila y verifica* a fulltext. Flujo natural: pathfinder encuentra → `ingest` acá |
+| [pathfinder](https://iopscience.iop.org/article/10.3847/1538-4365/ad7c43) | búsqueda semántica en lenguaje natural sobre ~300k abstracts de ADS | **el vecino astro, complementario y no rival**: pathfinder *encuentra* papers; Almagesto los *cura, destila y verifica* a fulltext. Flujo natural: pathfinder encuentra → `ingest` acá |
 | [karpathy-llm-wiki](https://github.com/Astro-Han/karpathy-llm-wiki) y otras implementaciones genéricas del patrón | ingest/query/lint de propósito general | sin plomería de fuentes (ADS/arXiv/NEA), sin ground-truth duro, sin verificación claim↔fuente (la implementación más popular descarta a propósito las citas con nº de línea, que acá son obligatorias) |
 | [Elicit](https://elicit.com) · [SciSpace](https://scispace.com) · [Consensus](https://consensus.app) · [Scite](https://scite.ai) · [Undermind](https://undermind.ai) | asistentes comerciales de literature review (índices de 100–280M papers) | informe efímero en query-time sobre un índice remoto, cerrado y pago; no queda corpus propio ni artefacto curado que componga entre sesiones |
-| [PaperQA2](https://github.com/Future-House/paper-qa) (FutureHouse) | agente open-source de QA científica, SOTA en benchmarks de literatura | responde preguntas sueltas; no mantiene una base curada y versionada — el conocimiento no se acumula entre sesiones |
+| [PaperQA2](https://github.com/Future-House/paper-qa) (FutureHouse) | agente open-source de QA científica, SOTA en benchmarks de literatura | responde preguntas sueltas; no mantiene una base curada y versionada, así que el conocimiento no se acumula entre sesiones |
 | [NotebookLM](https://notebooklm.google) · [Khoj](https://github.com/khoj-ai/khoj) · Obsidian+Zotero | RAG / "second brain" sobre tus documentos | RAG sobre lo que ya tenés: sin regla de admisión (qué paper entra y por qué, `relevance.topics`), sin ground-truth, sin verificación afirmación por afirmación |
 
 Nota sobre la capa de verificación: las herramientas de chequeo de citas (p. ej.
 [CiteCheck](https://arxiv.org/abs/2605.27700)) validan que la referencia **exista** y que su metadata
-sea fiel — no que el paper **respalde** la afirmación. Esa alineación claim↔cita es justamente el
+sea fiel, no que el paper **respalde** la afirmación. Esa alineación claim↔cita es justamente el
 punto de `verify-citations` (sección anterior).
 
 ## Para seguir
 
-- **Operación día a día** — dependencias completas, layout del repo, scripts sueltos, traer mejoras
+- **Operación día a día**: dependencias completas, layout del repo, scripts sueltos, traer mejoras
   del framework (`upstream`/`merge=ours`), portabilidad entre máquinas, Obsidian:
   [`docs/operacion.md`](docs/operacion.md)
 - **Schema del agente** (frontmatter, reglas, operaciones): [`CLAUDE.md`](CLAUDE.md) · estado en
   `vault/STATUS.md` · catálogo en `vault/wiki/index.md`
 - **Tests del framework** (suite determinista, corre en CI): [`tests/README.md`](tests/README.md)
-- **Diseño** — [gist de Karpathy](vault/raw/refs/karpathy-llm-wiki.md) ·
+- **Diseño**: [gist de Karpathy](vault/raw/refs/karpathy-llm-wiki.md) ·
   [guía de implementación](vault/raw/refs/starmorph-implementation-guide.md)
 
 ## Licencia
 
-MIT — ver [`LICENSE`](LICENSE).
+MIT. Ver [`LICENSE`](LICENSE).

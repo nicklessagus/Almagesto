@@ -56,7 +56,8 @@ framework es **una sola implementación**: los cambios se hacen en el repo templ
 o parche), se pushean, y se traen por `git pull` / `git merge upstream/main`. Editarlos en la instancia
 **da conflictos** en el próximo merge. En la instancia sólo se edita **contenido** (`vault/wiki/`, `vault/raw/`) y los
 **archivos de instancia** protegidos por `merge=ours` (`vault/config/objective.yaml`, `vault/config/stars.yaml`,
-`vault/config/topics.yaml`, `vault/STATUS.md`, `vault/wiki/index.md`, `vault/wiki/log.md`). **Si una operación revela una mejora
+`vault/config/topics.yaml`, `vault/STATUS.md`, `vault/wiki/index.md`, `vault/wiki/log.md`,
+`vault/wiki/matrices/method_star.md`). **Si una operación revela una mejora
 de framework** (skill nuevo, fix de script, regla), anotala como backlog en `vault/STATUS.md`/`vault/wiki/log.md` y
 aplicala en el template — no la inlines acá. *(Si estás trabajando en el repo template `Almagesto` mismo,
 editar framework **es** la tarea; esta regla rige para las instancias.)*

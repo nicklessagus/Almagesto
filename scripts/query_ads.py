@@ -1,7 +1,11 @@
 """Consulta NASA ADS por estrella → metadata de papers + clasificación de relevancia.
 
 Uso:
-    python query_ads.py <slug> [--rows N] [--no-chain] [--sweep]
+    python query_ads.py <slug> [--rows N] [--no-chain] [--no-glyph] [--no-triage] [--sweep]
+    python query_ads.py <slug> --topic            # tema (query cruda de topics.yaml)
+    python query_ads.py <slug> --extra-only       # sólo los bibcodes de extra_core (tema mixto)
+    python query_ads.py <slug> --dry-run          # re-clasificar en memoria, sin red ni escritura
+    python query_ads.py --probe "<query>"         # previsualizar el corte core/no-core, sin bajar
 
 Escribe build/<slug>/ads.json con la lista de registros (bibcode, título, autores,
 año, abstract, arxiv_id, doctype, citation_count, topics, relevant, why_excluded —el motivo real
@@ -29,7 +33,8 @@ grafo traía y matcheaba la lente, pero la lente clasifica **tema** y lo que hay
 el que lleva **el sujeto en el título** (1 falso positivo en 310) y el resto queda como
 **candidato** —clave `candidates` de `ads.json`, NO se baja— para el juicio del LLM
 (`scripts/triage.py` + paso 2c del skill ingest-star). Las decisiones persisten:
-aceptado → `extra_core`; descartado → `build/<slug>/triage.json` (no se re-propone). En **temas** no
+aceptado → `extra_core`; descartado → `decisiones` de `vault/config/registro/<slug>.yaml` (#51:
+versionado, viaja en git; no se re-propone). En **temas** no
 aplica (la query *es* la definición del tema); se desactiva con `--no-triage`.
 
 **Curación manual persistente:** `extra_core: [bibcode, …]` en la entrada de `stars.yaml`/`topics.yaml`

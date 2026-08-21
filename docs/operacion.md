@@ -34,7 +34,7 @@ para ingestar. En Windows, los comandos de shell corren en Git Bash o WSL.
 |---|---|
 | `vault/config/objective.yaml` | **El objetivo de la bóveda** + clasificador de relevancia (papers core). Editar para instanciar. |
 | `vault/raw/pdfs/<slug>/` | PDFs (git-lfs). |
-| `vault/raw/fulltext/<slug>/*.txt` | Texto completo (pdftotext; si la capa de texto es ilegible, OCR marcado `source: ocr` — citable con salvedad) para búsqueda local y re-extracción. |
+| `vault/raw/fulltext/<slug>/*.txt` | Texto completo (pdftotext; si la capa de texto es ilegible, OCR marcado `source: ocr`, citable con salvedad) para búsqueda local y re-extracción. Ojo: el `.txt` puede venir del **preprint de arXiv** y no de la versión publicada; la nota del paper lo registra en `pdf_source` (ver abajo). |
 | `vault/raw/ground_truth/<slug>.json` | Hechos auditables (NASA Exoplanet Archive + SIMBAD). |
 | `vault/raw/refs/` | Fuentes de diseño del patrón (gist Karpathy, guía de implementación). |
 | `vault/wiki/stars/<slug>.md` | Ficha por estrella (entidad). **Frontmatter = fuente de verdad** (sp_type, P_rot, planetas, indicadores esperados, métodos). |
@@ -63,8 +63,13 @@ lista). Las piezas, para correr sueltas cuando hace falta un flag fino (`--rows`
 ```bash
 cd scripts     # ← el único bloque con CWD propio (cómodo para el listado); en los skills y en el
                #   resto de los docs los comandos van desde la RAÍZ del repo: python scripts/<x>.py
-python query_ads.py        <slug>   # ADS → build/<slug>/ads.json (metadata + relevancia + citation chaining;
+python query_ads.py        <slug>   # ADS → build/<slug>/ads.json + vault/config/registro/<slug>.yaml
+                                    #   (`busqueda`: query efectiva, fecha, límites y conteos — versionado)
+                                    #   (metadata + relevancia + citation chaining;
                                     #   --sweep = barrido full-text 2b: core que faltan → candidatos a extra_core)
+python triage.py           <slug>   # juzgar los candidatos del chaining: --report deja la tabla en
+                                    #   outputs/; --drop <bib> --reason "<motivo>" persiste el descarte
+                                    #   en vault/config/registro/<slug>.yaml. NO se bajan hasta decidirlos
 python fetch_arxiv.py      <slug>   # PDFs a vault/raw/pdfs/<slug>/  (rate limit arXiv: 1 req/3 s)
 python fetch_pdf.py        <slug>   # PDFs aún sin bajar (sin arXiv + arXiv fallidos) vía resolver ADS
 python fetch_ground_truth.py <slug> # NEA + SIMBAD → vault/raw/ground_truth/<slug>.json
@@ -76,8 +81,15 @@ python check_retractions.py         # Crossref → marca `retracted` (bloqueante
 python lint.py                      # chequeo de salud → outputs/lint-<fecha>.md (exit 1 si hay bloqueantes)
 ```
 
+Entre la query y el primer paso que gasta red y disco hay un **checkpoint humano** (la *guardia de
+expansión*): si el core recién clasificado se multiplicó respecto de las notas ya ingestadas del
+sujeto (default: ×1.5 y más de 50 nuevos), la cadena **frena** y muestra el conteo, cuántos vinieron
+por el grafo de citas y el puntero a `relevance.require`/`min_topics` por si el corte quedó flojo.
+`--yes` sigue a sabiendas. No es un error: es el punto donde conviene mirar antes de bajar cientos
+de PDFs.
+
 Para TEMAS (en vez de estrellas): definir el tema en `vault/config/topics.yaml` y correr
-`python ingest_topic.py <slug>` — el orquestador despacha según el campo `source` de la entrada:
+`python scripts/ingest_topic.py <slug>`: el orquestador despacha según el campo `source` de la entrada:
 `ads` (default) corre la cadena de arriba con `--topic` y **sin** `fetch_ground_truth` (no hay
 NEA/SIMBAD para un tema); `web` / `local-pdfs` (modo **off-ADS**, opt-in) procesa la bibliografía
 declarada en la lista `sources:` de la entrada — snapshots web citables vía `fetch_web.py` (defuddle)
@@ -96,8 +108,8 @@ bóveda ya poblada.
 Tu bóveda es **una sola implementación**: el framework (scripts, skills, `CLAUDE.md`, `vault/.obsidian/`)
 vive en Almagesto; vos le agregás contenido. Tu contenido no corre riesgo al mergear:
 `vault/config/objective.yaml`, `vault/config/stars.yaml`, `vault/config/topics.yaml`, `vault/STATUS.md`,
-`vault/wiki/index.md` y `vault/wiki/log.md` están marcados `merge=ours` en `.gitattributes` — un merge del
-framework **nunca** los pisa (registrá el driver una vez por clon: `git config merge.ours.driver true`).
+`vault/wiki/index.md`, `vault/wiki/log.md` y `vault/wiki/matrices/method_star.md` están marcados
+`merge=ours` en `.gitattributes`, así que un merge del framework **nunca** los pisa (registrá el driver una vez por clon: `git config merge.ours.driver true`).
 
 **Si instanciaste con "Use this template" (recomendado):** tu `origin` es *tu* repo y Almagesto es
 `upstream` (lo agregaste al instanciar). Traés mejoras del framework mergeando upstream:
@@ -133,6 +145,8 @@ extracción LLM) funcionan **sin dependencias externas ni LFS**. Qué **no** via
 - **Datos crudos (FITS/PKL):** gitignored (`*.fits`, `*.pkl`). Cada ficha apunta a ellos con
   `data_local` (ruta local a los datos crudos de la estrella). Ese puntero es **machine-local**.
 - **`build/`, `outputs/`:** gitignored (intermedios regenerables). Los scripts los recrean solos.
+- **El token ADS (`vault/config/ads_dev_key`):** gitignored, nunca se commitea. Es lo primero que
+  falta al clonar en otra máquina: ponelo de nuevo ahí (o exportá `ADS_DEV_KEY`).
 
 Lo que **sí** viaja desde 1.9.0 y antes no: el **registro de ingesta** (`vault/config/registro/<slug>.yaml`).
 Hasta 1.8.x había dos cosas atrapadas en `build/` que no eran regenerables:
@@ -150,6 +164,16 @@ Consecuencia práctica: el lint ya no da un **falso limpio** en una máquina sin
 chequeos de *triage pendiente* y *corpus truncado* recorrían `build/` y, si no estaba, reportaban 0
 sin haber mirado nada; ahora caen al registro y reportan el snapshot **con su fecha**, aclarando que
 no es el conteo vigente.
+
+**El `.txt` no siempre es la versión publicada.** Cuando el PDF vino de arXiv, el texto completo es
+el del **eprint**, que en un `v1` pre-referato puede traer valores y secciones distintos de los del
+paper publicado que identifica el bibcode. La nota de cada paper lo registra en `pdf_source`
+(`eprint | ads | publisher | web`, más `eprint_version` cuando se conoce), y `null` significa
+**desconocido**, no "publicado". Importa al citar: ante una diferencia numérica entre lo que dice la
+ficha y lo que dice el `.txt`, con `pdf_source: eprint` lo primero que hay que descartar es que sean
+dos versiones del mismo paper. Un corpus bajado antes de la versión 1.10.0 se completa sin re-bajar
+nada: `python scripts/extract_fulltext.py <slug>` lee la marca que arXiv estampa en el texto que ya
+está en disco.
 
 Sin rutas absolutas hardcodeadas: los scripts resuelven el root del repo desde `__file__`
 (`scripts/lib_config.py`), no asumen `cwd` ni `/home/...`.
