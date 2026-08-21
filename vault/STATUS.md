@@ -18,6 +18,34 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.7.1 (2026-08-20) — #56: la verificación que quedó vieja y se lee como vigente
+
+> Primera tanda del backlog #51–#67 (orden sugerido: era el ítem 3, adelantado porque protege la
+> operación de **ampliar una ficha**). 357 tests verdes (+6), lint 0. `ALMAGESTO_VERSION` 1.7.0 →
+> **1.7.1** (patch: categoría de backlog nueva en el lint, sin cambio de schema ni de cadena).
+
+- **#56** — **detector de verificación stale** en `lint.py`. El bloque `## Verificación de citas`
+  lleva fecha pero nada chequeaba que siguiera vigente: ampliar una nota (`append-knowledge`) o
+  refrescarla (`maintain A`) deja la prosa nueva bajo un encabezado que **se lee como verificado**.
+  Mismo modo de falla que #49/#50 —la nota no afirma falso, **afirma de menos**— aplicado a la
+  garantía misma. La fecha del encabezado se compara contra la del último cambio del archivo por
+  git; **un archivo sucio cuenta como cambiado hoy** (el lint corre ANTES del commit: mirar sólo
+  `git log` no vería la edición que acaba de dejar el bloque atrasado). Un bloque **sin fecha** se
+  marca igual. Fuera de un repo o sin git, el chequeo degrada a silencio. Aplica a **toda** nota con
+  bloque, también fichas de estrella (la cobertura de verificación existente sólo mira
+  queries/concepts). Cierra el ítem que `maintain E` sólo nombraba ("claims stale").
+- **Hallazgo del sondeo a Almagesto-RV** (antes de dar el fix por bueno): 28 notas con bloque pero
+  **39 encabezados fechados** — en la práctica las pasadas sucesivas se **appendean** en vez de
+  reemplazar (`concepts/methods/ica-noise.md` tiene **11 bloques**), pese al "idempotente:
+  reemplazar" del skill. Quedarse con la fecha del primer bloque las dejaba stale para siempre por
+  más que se re-verificara → la vigencia la marca la fecha **máxima**. Documentado en el skill en
+  vez de fingir que el reemplazo se cumple.
+- Skills: `maintain` 1.6.0 → **1.6.1** (definición operativa del ítem), `verify-citations` 1.3.6 →
+  **1.3.7** (la fecha del encabezado es portante + la regla de multi-bloque), `append-knowledge`
+  1.0.2 → **1.0.3** (el paso 5 manda a re-fechar).
+- **Al mergear en una instancia poblada**, esperar backlog retroactivo: toda nota editada después de
+  su último verify aparece listada de una. Es deuda real, no ruido — se resuelve por `maintain E`.
+
 ## ✅ Framework 1.7.0 (2026-08-19) — tanda #49/#50: lo que el verify no miraba y el rescate de PDFs
 
 > Disparada por la primera corrida real sobre una ficha grande (17 fuentes, ~110 pares) en
@@ -61,8 +89,8 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 2. **#52** — correcciones no-retractantes (erratum/corrigendum/EoC) hoy se imprimen y se tiran:
    `corrections:` en frontmatter + categoría de lint + `maintain F`. Patrón ya existente
    (`retracted`), scripts + tests.
-3. **#56 + #55** — dos categorías nuevas de lint en el mismo archivo: verificación **stale** (fecha
-   del bloque vs `git log -1 --format=%cs`) y **triage pendiente** sin resolver.
+3. ~~**#56**~~ ✅ **hecho en 1.7.1** (ver arriba) + **#55** — la otra categoría de lint del mismo
+   archivo: **triage pendiente** sin resolver.
 4. **#51 + #64** — el grande: registro de **curación** (descartes de triage → config versionada) y
    de **búsqueda** (bloque de provenance por sujeto: fecha/query/conteos/rows/truncated/versión).
    Destraba el **falso limpio** del lint en una máquina sin `build/`.
