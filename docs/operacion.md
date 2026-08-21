@@ -69,7 +69,8 @@ python fetch_pdf.py        <slug>   # PDFs aún sin bajar (sin arXiv + arXiv fal
 python fetch_ground_truth.py <slug> # NEA + SIMBAD → vault/raw/ground_truth/<slug>.json
 python make_notes.py       <slug>   # genera vault/wiki/stars/ y vault/wiki/papers/ (idempotente; --force)
 python extract_fulltext.py <slug>   # PDFs → vault/raw/fulltext/<slug>/*.txt
-python check_retractions.py         # Crossref → marca `retracted` (red); la cadena usa --slug <slug>,
+python check_retractions.py         # Crossref → marca `retracted` (bloqueante) y `corrections`
+                                    #   (erratum/corrigendum/EoC: backlog) (red); la cadena usa --slug <slug>,
                                     #   sin --slug barre TODA la bóveda (pasada periódica, skill maintain)
 python lint.py                      # chequeo de salud → outputs/lint-<fecha>.md (exit 1 si hay bloqueantes)
 ```

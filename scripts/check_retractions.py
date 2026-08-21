@@ -19,12 +19,16 @@ Señal (determinista, por DOI): el registro Crossref del propio paper trae `upda
 `type: retraction | partial-retraction | removal | withdrawal` cuando fue retractado (ADS NO expone
 un `property:retracted` — sólo, a veces, el prefijo "RETRACTED"/"Retraction:" en el título, que se
 usa acá como *fallback* para papers sin DOI). Un `erratum`/`corrigendum`/`expression-of-concern` NO
-retracta pero se anota como aviso blando.
+retracta pero **cambia justamente el número que extrajiste** (o, la EoC, deja la fuente en duda):
+se estampa `corrections: [{type, notice_doi, date, source}]` (#52). Antes sólo se imprimía a
+stdout, donde un ingest de cientos de papers se lo come.
 
-Efecto: estampa en el frontmatter de la nota `retracted: true` + `retraction: {...}` (idempotente:
+Efecto: estampa en el frontmatter de la nota `retracted: true` + `retraction: {...}` —y/o
+`corrections: [...]`— (idempotente:
 sólo reescribe notas cuyo estado cambió; edición quirúrgica del texto — no re-serializa el YAML,
 preserva comentarios/orden de la extracción LLM). El flag **viaja en git**, así que un clon ve la retracción
-sin re-consultar, y `lint.py` la surface offline como categoría bloqueante. Parte de RED (como los
+sin re-consultar, y `lint.py` la surface offline como categoría bloqueante (las `corrections`, como backlog: el paper
+sigue siendo citable, lo que hay que revisar son las afirmaciones que lo citan). Parte de RED (como los
 `fetch_*`), separada del lint offline: correr periódicamente y al ingestar.
 
 Exit code: 1 si se detectó al menos una retracción (gateable).
@@ -45,7 +49,7 @@ import lib_config as cfg
 CROSSREF = "https://api.crossref.org/works/{doi}"
 # tipos de `update-type` de Crossref que implican que el paper ya NO es citable como válido
 RETRACTING = ("retraction", "partial-retraction", "removal", "withdrawal")
-# correcciones (no retractan, pero conviene saberlo) → aviso blando, no marca `retracted`
+# correcciones (no retractan, pero conviene saberlo) → se estampan en `corrections`, NO en `retracted`
 SOFT = ("erratum", "corrigendum", "expression-of-concern")
 
 
@@ -82,38 +86,52 @@ def split_note(text: str) -> tuple[dict | None, str]:
         return None, text
 
 
-def stamp_retraction(path, fm: dict, body: str, retraction: dict) -> None:
-    """Estampa `retracted: true` + `retraction{...}` editando el TEXTO del frontmatter
-    (como merge_frontmatter_list de make_notes): NO re-serializa el YAML completo →
-    preserva byte a byte comentarios/orden que haya dejado la extracción LLM. Si la nota
-    ya traía un bloque retraction (re-chequeo con --force), lo reemplaza. Fallback (nota
-    sin estructura `---\\n…\\n---\\n`): re-serializa el frontmatter parseado."""
+def stamp_fields(path, fm: dict, body: str, fields: dict) -> None:
+    """Estampa claves de frontmatter editando el TEXTO (como merge_frontmatter_list de make_notes):
+    NO re-serializa el YAML completo → preserva byte a byte comentarios/orden que haya dejado la
+    extracción LLM. Si la nota ya traía esas claves (re-chequeo con --force, o una corrección nueva
+    sobre un paper ya anotado), las reemplaza —incluidos sus bloques indentados y los ítems `-` de
+    una lista—. Fallback (nota sin estructura `---\\n…\\n---\\n`): re-serializa el frontmatter parseado."""
     text = path.read_text(encoding="utf-8")
+    keys = tuple(f"{k}:" for k in fields)
     end = text.find("\n---\n", 4)
     if text.startswith("---\n") and end > 0:
-        out, in_retraction = [], False
+        out, dropping = [], False
+        # una clave top-level nunca arranca con espacio/tab/`-`: mientras `dropping`, esas líneas
+        # son el bloque (mapa indentado o lista) de la clave vieja que estamos reemplazando
         for ln in text[4:end].split("\n"):
-            if in_retraction and ln[:1] in (" ", "\t"):
-                continue                       # items del bloque retraction viejo
-            in_retraction = False
-            if ln.startswith("retracted:"):
+            if dropping and ln[:1] in (" ", "\t", "-"):
                 continue
-            if ln.startswith("retraction:"):
-                in_retraction = True
+            dropping = False
+            if ln.startswith(keys):
+                dropping = True
                 continue
             out.append(ln)
-        block = yaml.safe_dump({"retracted": True, "retraction": retraction}, sort_keys=False,
-                               allow_unicode=True, default_flow_style=False).rstrip("\n")
+        block = yaml.safe_dump(fields, sort_keys=False, allow_unicode=True,
+                               default_flow_style=False).rstrip("\n")
         path.write_text("---\n" + "\n".join(out + [block]) + text[end:], encoding="utf-8")
     else:
-        dumped = yaml.safe_dump({**fm, "retracted": True, "retraction": retraction},
-                                sort_keys=False, allow_unicode=True, default_flow_style=False)
+        dumped = yaml.safe_dump({**fm, **fields}, sort_keys=False, allow_unicode=True,
+                                default_flow_style=False)
         path.write_text(f"---\n{dumped}---{body}", encoding="utf-8")
+
+
+def stamp_retraction(path, fm: dict, body: str, retraction: dict) -> None:
+    """`retracted: true` + `retraction{...}`: la fuente deja de ser válida (bloqueante en el lint)."""
+    stamp_fields(path, fm, body, {"retracted": True, "retraction": retraction})
+
+
+def stamp_corrections(path, fm: dict, body: str, corrections: list) -> None:
+    """`corrections: [...]` (#52): el paper SIGUE siendo citable — lo que hay que revisar son las
+    afirmaciones que lo citan (un corrigendum cambia justo el valor extraído). Backlog en el lint."""
+    stamp_fields(path, fm, body, {"corrections": corrections})
 
 
 def crossref_retraction(doi: str, headers: dict) -> tuple[dict | None, list]:
     """Consulta Crossref por DOI. Devuelve (retraction | None, soft_updates). `retraction` es el
-    primer `updated-by` con tipo retractante; `soft_updates` lista errata/EoC. Red tolerante: ante
+    primer `updated-by` con tipo retractante; `soft_updates` son las ENTRADAS COMPLETAS
+    (`{type, notice_doi, date, source}`) de errata/corrigenda/EoC, que se estampan en `corrections`
+    (#52 — antes se devolvía sólo el tipo y moría en stdout). Red tolerante: ante
     error de red o 404 devuelve (None, []) —no se puede afirmar retracción→ no se marca."""
     for wait in (2, 6, None):
         try:
@@ -149,7 +167,7 @@ def crossref_retraction(doi: str, headers: dict) -> tuple[dict | None, list]:
         if typ in RETRACTING and retraction is None:
             retraction = entry
         elif typ in SOFT:
-            soft.append(typ)
+            soft.append(entry)          # #52: la entrada COMPLETA (se persiste en `corrections`)
     return retraction, soft
 
 
@@ -220,6 +238,8 @@ def main() -> int:
     headers = _ua()
 
     found, checked, marked = [], 0, 0
+    corrected: list = []               # (bibcode, tipos) — #52: correcciones no-retractantes
+    annotated = 0
     for note in notes:
         if not note.exists():
             print(f"  ! no existe {note.name}")
@@ -243,8 +263,18 @@ def main() -> int:
         if retraction is None and title_says_retracted(title):
             retraction = {"type": "retraction", "notice_doi": None, "date": None,
                           "source": "title-prefix (sin DOI en Crossref — verificar a mano)"}
+        bib = fm.get("bibcode") or note.stem
         if soft:
-            print(f"  · {fm.get('bibcode') or note.stem}: corrección no-retractante ({', '.join(soft)})")
+            # #52: la corrección NO retracta (el paper sigue citable) pero cambia justo el valor
+            # que se extrajo → se persiste en la nota; antes moría en este mismo print.
+            types = ", ".join(dict.fromkeys(c["type"] for c in soft))
+            corrected.append((bib, types))
+            if (fm.get("corrections") or []) != soft:
+                stamp_corrections(note, fm, body, soft)
+                annotated += 1
+                print(f"  · {bib}: corrección publicada ({types}) — anotada en `corrections`")
+            else:
+                print(f"  · {bib}: corrección publicada ({types}) — ya anotada")
         if retraction:
             stamp_retraction(note, fm, body, retraction)
             marked += 1
@@ -254,7 +284,13 @@ def main() -> int:
                   f"— marcado en la nota")
 
     print(f"\n{checked} chequeados vía Crossref, {marked} recién marcados, "
-          f"{len(found)} retractados en total.")
+          f"{len(found)} retractados en total; {len(corrected)} con corrección publicada "
+          f"({annotated} recién anotadas).")
+    if corrected:
+        print("Correcciones no-retractantes (el paper SIGUE siendo citable; revisá los valores que "
+              "le extrajiste — el lint las lista como backlog):")
+        for bib, types in corrected:
+            print(f"  · {bib}: {types}")
     if found:
         print("Retractados (revisá cada afirmación que los cita — quitá o marcá la fuente):")
         for bib, why in found:

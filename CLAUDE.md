@@ -179,6 +179,12 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   no se repunta al slug que corrió último (idempotente, sin ruido de diff). Opcional
   `retracted: true` + `retraction{type,notice_doi,date,source}` — lo estampa `scripts/check_retractions.py`
   (Crossref) cuando el paper fue **retractado**; el lint lo surface como bloqueante (fuente no válida).
+  Del mismo origen y opcional, `corrections: [{type,notice_doi,date,source}]` (#52): la corrección
+  **no retractante** (`erratum` / `corrigendum` / `expression-of-concern`). **No** invalida el paper
+  —sigue siendo citable, por eso el lint la lista como **backlog** y no bloquea— pero es la señal
+  que más directamente **envejece un número ya extraído**: un corrigendum corrige justo el valor
+  que la ficha destiló (P/K/e/m·sini), y una EoC deja la fuente en duda. Al verla, revisar las
+  afirmaciones que citan ese `[[bibcode]]`, no la existencia del paper.
 - **concepts/ (áreas **abiertas** — cualquiera según el foco de la bóveda; `concept_areas` en
   `vault/config/objective.yaml` es sólo referencia para el typo-check, con `methods`/`hypotheses` reservadas)**: `name`, **`aliases`** (lista de sinónimos EN+ES —
   p. ej. `[chromatic index, índice cromático, RV-color]` — para que la ficha se encuentre por `grep`
@@ -395,7 +401,10 @@ pendientes** (`pending_source` en una nota de paper: fuente no conseguida —pay
 derivada al usuario con su puntero doi/url) y el **fulltext ilegible** (un `.txt` que no pasa el
 umbral determinista de legibilidad — mojibake, escaneo sin capa de texto, o escaneo cuya única capa
 es la **marca de agua** del bibcode repetida por página (lo agarra la densidad por página): existe
-pero no sirve para grep ni verify; rescate: PDF sano, OCR, o marcar `pending`). La **cobertura** (concepto/hipótesis
+pero no sirve para grep ni verify; rescate: PDF sano, OCR, o marcar `pending`). Las **correcciones
+publicadas** (`corrections`, #52 — erratum/corrigendum/EoC del mismo barrido de Crossref) son
+**backlog, no bloquean**: el paper sigue siendo citable; lo que hay que revisar son los valores que
+se le extrajeron (un corrigendum cambia justamente ese número). La **cobertura** (concepto/hipótesis
 sin ninguna cita `[[bibcode]]` → afirma sin fuente) es **backlog** que el lint surface para ir citando;
 ídem la **cobertura de verificación** (query/concepto **con** citas pero **sin** bloque
 `## Verificación de citas` → nunca pasó por `verify-citations`: correr el skill) y la **verificación

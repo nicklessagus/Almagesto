@@ -1,7 +1,7 @@
 ---
 name: maintain
 description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), resolver el backlog del lint (P_rot faltante, drift PDF↔disco, cobertura, claims stale), y la pasada periódica de retracciones sobre toda la bóveda ("chequeá retracciones").
-version: 1.7.1
+version: 1.7.2
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
@@ -154,6 +154,17 @@ python scripts/check_retractions.py            # toda la bóveda vía Crossref (
 ```
 Si marca alguno (`retracted: true` en la nota; el lint lo vuelve **bloqueante**): revisar cada
 afirmación que cita ese paper (quitar la cita o reflejar la retracción), `log`, commit.
+
+La misma pasada estampa las **correcciones no-retractantes** (#52): `corrections: [{type,
+notice_doi, date, source}]` para cada `erratum` / `corrigendum` / `expression-of-concern` que
+Crossref reporte. **No bloquean** —el paper sigue siendo citable— y el lint las lista como
+**backlog**, pero son la señal que más directamente **envejece un número ya extraído**: no se
+revisa la existencia del paper sino los **valores que se le sacaron**. Al resolver el backlog,
+por cada paper con `corrections`: abrir el aviso (`notice_doi`), ver qué corrigió, y comparar
+contra lo que la ficha/concepto afirma citando ese `[[bibcode]]` —si el valor cambió, es una
+edición de la nota (y, si toca un parámetro planetario, puede ser una `disputes[]`)—. Una
+`expression-of-concern` no cambia ningún número: baja la confianza de lo que se apoya sólo en esa
+fuente. Dejar en el `log` qué se revisó.
 
 ## Notas
 - **No es ingest:** si la entidad no existe todavía, esto no aplica → `ingest-star`/`ingest-topic`.

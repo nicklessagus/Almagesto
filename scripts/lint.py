@@ -6,7 +6,10 @@ Uso:
 Detecta: wikilinks rotos (página faltante), **frontmatter no parseable** (nota que empieza con
 `---` pero cuyo YAML no parsea → evade en silencio los chequeos de su tipo; bloqueante),
 **papers retractados** (flag `retracted` que estampa
-`check_retractions.py` vía Crossref → acá se surface offline; bloqueante), notas huérfanas (sin links entrantes),
+`check_retractions.py` vía Crossref → acá se surface offline; bloqueante), **papers con corrección
+publicada** (`corrections`: erratum/corrigendum/expression-of-concern, mismo origen — NO bloquea,
+el paper sigue citable, pero un corrigendum cambia justo el valor extraído; backlog),
+notas huérfanas (sin links entrantes),
 contradicciones ground-truth ↔ ficha, **masa de ground-truth inconsistente** con la
 m·sini implícita por K/P/e/M* (atrapa best-mass espurias de NEA), `thesis_links` sin
 página destino (tag que no matchea ninguna nota concepto/hipótesis → no acumula),
@@ -213,6 +216,7 @@ def main() -> int:
     broken, incomplete, contradictions = [], [], []
     fm_broken: list = []               # (stem, motivo) — frontmatter no parseable (evade chequeos)
     retracted: list = []               # (stem, "<tipo> <fecha>") — papers marcados retracted (check_retractions)
+    corrections: list = []             # (stem, "<tipo> (<fecha>)") — corrección no-retractante (#52)
     pending_srcs: list = []            # (stem, "<motivo> — puntero") — fuentes derivadas al usuario
     impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
     pdf_issues: list = []              # (stem, ...) — drift frontmatter `pdf` ↔ PDF en disco
@@ -307,6 +311,15 @@ def main() -> int:
             if fm.get("retracted"):
                 rt = fm.get("retraction") or {}
                 retracted.append((stem, f"{rt.get('type', 'retraction')} ({rt.get('date') or 's/f'})"))
+            # corrección no-retractante (#52, backlog): erratum/corrigendum/expression-of-concern.
+            # NO bloquea —el paper sigue siendo citable—, pero un corrigendum cambia justamente el
+            # valor que se extrajo y una EoC deja la fuente en duda → revisar lo que la cita.
+            for c in (fm.get("corrections") or []):
+                if not isinstance(c, dict):
+                    continue
+                notice = c.get("notice_doi") or "sin DOI del aviso"
+                corrections.append((stem, f"{c.get('type', 'corrección')} "
+                                          f"({c.get('date') or 's/f'}) → {notice}"))
             # fuente pendiente (issue #7): derivada al usuario — precondición, como las citas no
             # verificables: sin la fuente no hay fulltext ni verify. Se estampa en el ingest
             # (ingest_topic/make_notes --web con `pending`) o a mano en la nota.
@@ -482,6 +495,8 @@ def main() -> int:
                          ("⛔ Frontmatter no parseable (la nota evade los chequeos de su tipo)", fm_broken),
                          ("⛔ Papers RETRACTADOS citados (frontera dura: fuente no válida)", retracted),
                          ("Notas huérfanas (sin links entrantes)", [(o, "") for o in orphans]),
+                         ("Papers con corrección publicada (erratum/corrigendum/EoC) — revisar los "
+                          "valores extraídos de ellos (backlog, el paper sigue siendo citable)", corrections),
                          ("Contradicciones ground-truth ↔ ficha", contradictions),
                          ("Ground-truth: masa inconsistente con m·sini (K,P,e,M*)", mass_issues),
                          ("thesis_links sin página destino", dangling_thesis),

@@ -91,6 +91,20 @@ def test_paper_retractado_bloquea(toy_vault, capsys):
     assert "RETRACTADOS" in out and "retraction (2021-05-01)" in out
 
 
+def test_paper_con_correccion_es_backlog_no_bloquea(toy_vault, capsys):
+    """#52: erratum/corrigendum/EoC se surface (un corrigendum cambia justo el valor extraído)
+    pero NO bloquea — el paper sigue siendo citable, a diferencia de una retracción."""
+    mk_note(toy_vault.PAPERS, "2020corC...1..1C",
+            {"tags": ["paper"], "corrections": [
+                {"type": "corrigendum", "notice_doi": "10.1/corr", "date": "2023-07-01"},
+                {"type": "expression-of-concern", "notice_doi": None, "date": None}]}, "")
+    rc, out = run_lint(capsys)
+    assert rc == 0
+    assert "corrección publicada (erratum/corrigendum/EoC)" in out
+    assert "corrigendum (2023-07-01) → 10.1/corr" in out
+    assert "expression-of-concern (s/f) → sin DOI del aviso" in out
+
+
 def test_contradiccion_gt_ficha(toy_vault, capsys):
     write_gt(toy_vault, [gt_planet("b"), gt_planet("c")])
     mk_note(toy_vault.STARS, "test_star",

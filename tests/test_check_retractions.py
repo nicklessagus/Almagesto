@@ -112,9 +112,14 @@ def test_crossref_retraction_parsea(monkeypatch):
 
 
 def test_crossref_soft_no_retracta(monkeypatch):
-    patch_net(monkeypatch, [FakeResp(200, {"message": {"updated-by": [{"type": "erratum"}]}})])
+    """#52: la corrección no retracta, pero vuelve COMPLETA (se persiste en `corrections`)."""
+    patch_net(monkeypatch, [FakeResp(200, {"message": {"updated-by": [
+        {"type": "Corrigendum", "DOI": "10.1/corr",
+         "updated": {"date-parts": [[2023, 7, 1]]}, "source": "publisher"}]}})])
     ret, soft = cr.crossref_retraction("10.1/x", {})
-    assert ret is None and soft == ["erratum"]
+    assert ret is None
+    assert soft == [{"type": "corrigendum", "notice_doi": "10.1/corr",
+                     "date": "2023-07-01", "source": "publisher"}]
 
 
 def test_crossref_tolerante_a_errores(monkeypatch):
@@ -176,14 +181,68 @@ def test_main_fallback_por_titulo_sin_doi(toy_vault, monkeypatch, capsys):
     assert calls == []                               # sin DOI no consulta Crossref
 
 
-def test_main_soft_avisa_sin_marcar(toy_vault, monkeypatch, capsys):
+CORRIGENDUM_MSG = {"message": {"updated-by": [
+    {"type": "Corrigendum", "DOI": "10.1/corr",
+     "updated": {"date-parts": [[2023, 7, 1]]}, "source": "publisher"}]}}
+
+
+def test_main_corrección_se_estampa_sin_retractar(toy_vault, monkeypatch, capsys):
+    """#52: erratum/corrigendum/EoC NO marcan `retracted` (el paper sigue citable) pero SÍ se
+    persisten en `corrections` — antes se imprimían a stdout y se perdían. Exit 0: no bloquea."""
+    body = "# Paper\n\nExtracción LLM.\n"
     mk_note(toy_vault.PAPERS, "2020errE...1..1E",
             {"bibcode": "2020errE...1..1E", "title": "Con errata", "doi": "10.1/e",
-             "tags": ["paper"]}, "")
-    patch_net(monkeypatch, [FakeResp(200, {"message": {"updated-by": [{"type": "erratum"}]}})])
+             "tags": ["paper"]}, body)
+    patch_net(monkeypatch, [FakeResp(200, CORRIGENDUM_MSG)])
     assert run_main(monkeypatch) == 0
-    assert "corrección no-retractante (erratum)" in capsys.readouterr().out
-    assert "retracted" not in read_fm(toy_vault.PAPERS / "2020errE...1..1E.md")
+    out = capsys.readouterr().out
+    assert "corrección publicada (corrigendum) — anotada en `corrections`" in out
+    note = toy_vault.PAPERS / "2020errE...1..1E.md"
+    fm = read_fm(note)
+    assert "retracted" not in fm
+    assert fm["corrections"] == [{"type": "corrigendum", "notice_doi": "10.1/corr",
+                                  "date": "2023-07-01", "source": "publisher"}]
+    assert body.strip() in note.read_text(encoding="utf-8")      # cuerpo intacto
+    # segunda corrida: mismo estado → no re-estampa (idempotente), pero sigue avisando
+    before = note.read_text(encoding="utf-8")
+    patch_net(monkeypatch, [FakeResp(200, CORRIGENDUM_MSG)])
+    assert run_main(monkeypatch) == 0
+    assert "ya anotada" in capsys.readouterr().out
+    assert note.read_text(encoding="utf-8") == before
+
+
+def test_main_corrección_nueva_reemplaza_la_lista(toy_vault, monkeypatch):
+    """Una EoC posterior a un corrigendum ya anotado: la lista se reemplaza entera (el bloque
+    viejo, ítems `-` incluidos, no queda duplicado) y el resto del frontmatter sobrevive."""
+    mk_note(toy_vault.PAPERS, "2020eocE...1..1E",
+            {"bibcode": "2020eocE...1..1E", "title": "En duda", "doi": "10.1/eoc",
+             "tags": ["paper"], "corrections": [{"type": "corrigendum", "notice_doi": "10.1/corr",
+                                                 "date": "2023-07-01", "source": "publisher"}]}, "")
+    patch_net(monkeypatch, [FakeResp(200, {"message": {"updated-by": [
+        {"type": "Corrigendum", "DOI": "10.1/corr", "updated": {"date-parts": [[2023, 7, 1]]},
+         "source": "publisher"},
+        {"type": "expression-of-concern", "DOI": "10.1/eoc-notice",
+         "updated": {"date-parts": [[2024, 2, 9]]}, "source": "publisher"}]}})])
+    assert run_main(monkeypatch) == 0
+    fm = read_fm(toy_vault.PAPERS / "2020eocE...1..1E.md")
+    assert [c["type"] for c in fm["corrections"]] == ["corrigendum", "expression-of-concern"]
+    assert fm["title"] == "En duda" and fm["tags"] == ["paper"]   # el resto del YAML intacto
+
+
+def test_main_retractado_y_corregido_conviven(toy_vault, monkeypatch):
+    """Un paper con las dos señales: `retracted` (bloqueante) y `corrections` (backlog) coexisten
+    en el mismo frontmatter — el segundo estampado no pisa al primero."""
+    mk_note(toy_vault.PAPERS, "2020bothB..1..1B",
+            {"bibcode": "2020bothB..1..1B", "title": "Las dos", "doi": "10.1/b",
+             "tags": ["paper"]}, "cuerpo\n")
+    patch_net(monkeypatch, [FakeResp(200, {"message": {"updated-by": [
+        {"type": "erratum", "DOI": "10.1/err", "updated": {"date-parts": [[2021, 1, 1]]}},
+        {"type": "Retraction", "DOI": "10.1/notice",
+         "updated": {"date-parts": [[2022, 3, 4]]}, "source": "publisher"}]}})])
+    assert run_main(monkeypatch) == 1                             # la retracción sigue gateando
+    fm = read_fm(toy_vault.PAPERS / "2020bothB..1..1B.md")
+    assert fm["retracted"] is True and fm["retraction"]["type"] == "retraction"
+    assert [c["type"] for c in fm["corrections"]] == ["erratum"]
 
 
 def test_main_avisa_nota_no_parseable(toy_vault, monkeypatch, capsys):
