@@ -1,7 +1,7 @@
 ---
 name: verify-citations
 description: Usar para verificar, afirmación por afirmación, que las citas [[bibcode]] de una nota de la wiki (query, hipótesis, ficha, concepto) realmente están respaldadas por el texto completo de la fuente. Se corre como paso de cierre al armar/editar una query o hipótesis, o cuando el usuario pide "rechequeá las citas / ¿esto lo dice el paper?". Implementa el chequeo claim↔evidencia (pipeline tipo CiteAudit) sobre el corpus cerrado de la bóveda. Veredictos: soportada / parcial / no-soportada (la fuente calla) / contradice (la fuente afirma lo contrario → candidata a disputa, no sólo cita rota); en transcripciones de tablas/listas chequea además la completitud (lo que la nota omite).
-version: 1.3.6
+version: 1.3.7
 ---
 
 # Verify-citations — chequeo claim↔evidencia contra el fulltext
@@ -248,6 +248,11 @@ Inferencias declaradas (sin cita, por diseño): <listar>.
 Omisiones en transcripciones: <tabla/lista, qué faltaba, cómo se resolvió> — o "ninguna".
 ```
 Convertir fechas relativas a absolutas. Notación `$...$` en archivos `vault/wiki/` (texto plano en chat).
+
+**La fecha del encabezado es portante** (#56): el lint la compara contra la fecha del último cambio
+del archivo (git) y marca **verificación stale** cuando la nota se editó después — el caso de
+ampliarla con `append-knowledge` o refrescarla. Un bloque sin fecha se marca igual: sin ella no hay
+forma de saber si sigue vigente. Al re-verificar, re-fechar.
 
 ### 6. Lint + cierre
 Correr `python scripts/lint.py` (0 en lo bloqueante; la **fuga de implementación** es WARN a revisar a

@@ -1,7 +1,7 @@
 ---
 name: maintain
 description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), resolver el backlog del lint (huérfanos, P_rot faltante, drift PDF↔disco, claims stale), y la pasada periódica de retracciones sobre toda la bóveda ("chequeá retracciones").
-version: 1.6.0
+version: 1.6.1
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
@@ -116,6 +116,12 @@ Pasada de higiene sobre lo que `lint.py` marca como backlog/WARN (no bloqueante,
   uno con capa de texto sana; si no se consigue, marcar la fuente `pending`.
 - **Fuga de implementación** (WARN) → revisar el hit; si es material de código no bibliográfico,
   sacarlo del vault (frontera dura).
+- **Verificación stale** (#56 — la nota se editó **después** de la fecha de su bloque
+  `## Verificación de citas`: típico de una ampliación por `append-knowledge` o un refresh de A) →
+  correr `verify-citations` **sobre lo agregado** y re-fechar el bloque. La prosa nueva vive bajo un
+  encabezado que se lee como vigente: la nota no afirma falso, afirma **de menos** sobre lo que
+  chequeó. Si el hallazgo es "bloque sin fecha en el encabezado", re-fechalo
+  (`## Verificación de citas (AAAA-MM-DD)`): sin fecha el chequeo no puede saber si sigue vigente.
 - **Claims stale** → re-verificar contra la fuente los que quedaron dudosos.
 Cierre: lint (idealmente bajando el conteo de backlog) → `log` → commit → preguntar push.
 

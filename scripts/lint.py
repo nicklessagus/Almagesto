@@ -28,6 +28,9 @@ citado en query/concepto/hipótesis sin su `.txt` en `vault/raw/fulltext/` → n
 con el skill `verify-citations`), **cobertura** (concepto/hipótesis sin ninguna cita `[[bibcode]]` →
 afirmaciones no chequeables; backlog), **cobertura de verificación** (query/concepto CON citas pero
 SIN bloque `## Verificación de citas` → nunca pasó por verify-citations; backlog ALCE-adjacent),
+**verificación stale** (la nota se editó DESPUÉS de la fecha de su bloque de verificación → las
+afirmaciones nuevas nunca pasaron por el fan-out pero quedan bajo un encabezado que se lee como
+vigente; backlog),
 **corpus truncado** (un `build/<slug>/ads.json` con `truncated` seteado → la query directa trajo
 menos papers de los que ADS reporta: al sujeto le falta cola; ídem `truncated_glyph`, el superset
 del rescate por glifo (#28/#43) cortado por citas ANTES del filtro; backlog), y campos clave
@@ -45,6 +48,7 @@ import datetime as dt
 import glob
 import json
 import re
+import subprocess
 from pathlib import Path
 
 import yaml
@@ -92,6 +96,69 @@ def fm_error(text: str) -> str | None:
     return None
 
 
+VERIF_HEAD_RE = re.compile(r"^##\s+Verificaci[oó]n de citas\b(.*)$", re.M)
+DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def verify_block(text: str) -> tuple[bool, str | None]:
+    """(¿la nota tiene bloque `## Verificación de citas`?, fecha de su encabezado o None).
+
+    La fecha vive en el encabezado por convención del skill (`## Verificación de citas
+    (AAAA-MM-DD)`): es lo único que permite saber si el bloque sigue vigente o quedó atrás de
+    una edición posterior."""
+    m = VERIF_HEAD_RE.search(text)
+    if not m:
+        return False, None
+    d = DATE_RE.search(m.group(1))
+    return True, d.group(0) if d else None
+
+
+def git_out(*args: str) -> str | None:
+    """stdout de un `git` corrido en la raíz del repo; None si no hay git, no es repo o falló.
+    El chequeo de verificación stale degrada a silencio fuera de un repo — una bóveda puede vivir
+    sin git y el resto del lint no depende de esto."""
+    try:
+        r = subprocess.run(["git", "-C", str(cfg.ROOT), "-c", "core.quotePath=false", *args],
+                           capture_output=True, text=True, encoding="utf-8", timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return r.stdout if r.returncode == 0 else None
+
+
+def last_change_dates(paths: list[str]) -> dict[str, str]:
+    """Fecha (AAAA-MM-DD) del último cambio de cada archivo, por git.
+
+    Con ediciones **sin commitear** devuelve HOY: ese es el caso que importa —el lint corre como
+    paso de cierre, ANTES del commit, así que comparar sólo contra `git log` no vería la edición
+    que acaba de dejar el bloque atrasado. Si el archivo está limpio, la fecha del último commit
+    que lo tocó. `{}` si no hay git (chequeo desactivado)."""
+    if not paths or git_out("rev-parse", "--git-dir") is None:
+        return {}
+    root = cfg.ROOT.resolve()
+    rel = {}
+    for f in paths:
+        try:
+            rel[f] = Path(f).resolve().relative_to(root).as_posix()
+        except ValueError:
+            continue                       # fuera del repo → sin fecha, no se reporta
+    dirty = set()
+    for line in (git_out("status", "--porcelain", "--", *rel.values()) or "").splitlines():
+        p = line[3:].strip()
+        if " -> " in p:                    # rename: interesa el destino
+            p = p.split(" -> ", 1)[1]
+        dirty.add(p.strip('"'))
+    today = dt.date.today().isoformat()
+    dates = {}
+    for f, r in rel.items():
+        if r in dirty:                     # editado y sin commitear → cambió hoy
+            dates[f] = today
+            continue
+        d = (git_out("log", "-1", "--format=%cs", "--", r) or "").strip()
+        if d:                              # sin commits (archivo nuevo y limpio): sin fecha
+            dates[f] = d
+    return dates
+
+
 def basename(p: str) -> str:
     return Path(p).name          # no splitear "/" a mano: glob devuelve separador nativo del OS
 
@@ -136,6 +203,7 @@ def main() -> int:
     unverifiable: list = []            # (stem, "cita <bibcode> sin fulltext")
     coverage: list = []                # concept/hipótesis sin citas [[bibcode]] → no chequeable
     unverified: list = []              # query/concept CON citas pero SIN bloque de verify-citations
+    verif_blocks: list = []            # (archivo, fecha del bloque|None) — notas CON bloque de verify
     names = {basename(p)[:-3] for p in files}  # stems referenciables por [[..]]
     incoming: dict[str, int] = {n: 0 for n in names}
     kinds: dict[str, list] = {}
@@ -185,8 +253,14 @@ def main() -> int:
         # `## Verificación de citas` nunca pasó por verify-citations → sus claims no fueron chequeados
         # claim↔fuente. Backlog (no bloquea): correr el skill. Sólo queries/concepts (las fichas de
         # estrella mezclan valores NEA que no se verifican contra papers).
-        if in_verifiable_note and nbib > 0 and "## Verificación de citas" not in text:
+        has_verif, verif_date = verify_block(text)
+        if in_verifiable_note and nbib > 0 and not has_verif:
             unverified.append((stem, f"{nbib} cita(s) sin bloque de verify-citations → correr el skill"))
+        # la vigencia del bloque se evalúa después del loop (necesita git; ver `stale_verif`). Vale
+        # para TODA nota con bloque —también fichas de estrella—, no sólo las de la cobertura de
+        # arriba: ampliar una ficha es justo cuando el bloque queda atrás.
+        if has_verif and stem not in NON_ORPHAN:
+            verif_blocks.append((f, verif_date))
         # frontera dura: fuga de implementación (código no bibliográfico) al vault (WARN, no bloquea).
         body_full = text.split("---", 2)[-1] if text.startswith("---") else text
         scan_leaks = stem not in NON_ORPHAN    # log/index/README son historia/navegación, no fichas
@@ -271,6 +345,24 @@ def main() -> int:
             elif has_link and not pdf_ok:      # drift inverso: link a un PDF que ya no está
                 pdf_issues.append((stem, "link `[📄 PDF]` en el cuerpo sin PDF vigente en `pdf` → "
                                          "correr make_notes.py --restamp-pdf-links"))
+
+    # verificación STALE (backlog, #56): el bloque `## Verificación de citas` lleva fecha; si la nota
+    # se editó DESPUÉS —un refresh de `maintain A`, un `append-knowledge`, una síntesis nueva—, las
+    # afirmaciones nuevas nunca pasaron por el fan-out y quedan bajo un encabezado que se lee como
+    # vigente. Es el modo de falla de #49/#50 aplicado a la garantía misma: la nota no afirma falso,
+    # afirma **de menos** sobre lo que chequeó. La comparación es a nivel día (granularidad del
+    # bloque): re-verificar y re-fechar el mismo día no se marca.
+    stale_verif = []
+    changed = last_change_dates([f for f, _ in verif_blocks])
+    for f, d in sorted(verif_blocks):
+        stem = basename(f)[:-3]
+        if d is None:
+            stale_verif.append((stem, "bloque de verificación sin fecha en el encabezado → re-fechalo "
+                                      "(`## Verificación de citas (AAAA-MM-DD)`): sin fecha no hay "
+                                      "forma de saber si sigue vigente"))
+        elif (c := changed.get(f)) and c > d:
+            stale_verif.append((stem, f"la nota se editó el {c} y su último verify es del {d} → "
+                                      f"correr `verify-citations` sobre lo agregado"))
 
     # contradicción ground-truth ↔ ficha (nº de planetas) + masa sospechosa
     mass_issues = []
@@ -400,6 +492,7 @@ def main() -> int:
                          ("Fulltext ilegible (mojibake/escaneo — existe pero no sirve para grep/verify)", illegible_txt),
                          ("Citas no verificables en query/concepto/hipótesis (sin fulltext)", unverifiable),
                          ("Sin verificar: query/concepto con citas pero sin bloque verify-citations (backlog)", unverified),
+                         ("Verificación stale: la nota se editó después de su último verify-citations (backlog)", stale_verif),
                          ("Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog)", coverage),
                          ("Corpus truncado: la query directa trajo menos de lo que ADS reporta (backlog)", truncated_corpora),
                          ("Campos incompletos", incomplete)]:

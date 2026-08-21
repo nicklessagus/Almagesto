@@ -430,6 +430,114 @@ def test_corpus_no_truncado_no_reporta(toy_vault, capsys):
     assert "Corpus truncado: la query directa trajo menos de lo que ADS reporta (backlog) (0)" in out
 
 
+# ── verificación stale (#56) ─────────────────────────────────────────────────
+
+def test_verify_block_parsea_encabezado():
+    """El bloque se reconoce por su encabezado y la fecha sale de ahí (convención del skill)."""
+    assert lint.verify_block("prosa\n") == (False, None)
+    assert lint.verify_block("## Verificación de citas (2026-08-19)\n| a | b |\n") == (True, "2026-08-19")
+    assert lint.verify_block("## Verificacion de citas\nok\n") == (True, None)   # sin tilde, sin fecha
+    # una fecha en la prosa no es la del bloque: sólo cuenta la del encabezado
+    assert lint.verify_block("El 2020-01-01 pasó algo.\n## Verificación de citas\nok\n") == (True, None)
+
+
+SIN_STALE = "Verificación stale: la nota se editó después de su último verify-citations (backlog) (0)"
+
+
+def _git(root, *args, fecha=None):
+    import os
+    import subprocess
+    env = dict(os.environ)
+    if fecha:                                   # %cs sale del committer date
+        env["GIT_COMMITTER_DATE"] = env["GIT_AUTHOR_DATE"] = f"{fecha}T12:00:00"
+    return subprocess.run(["git", "-C", str(root), "-c", "user.email=t@t", "-c", "user.name=t",
+                           "-c", "commit.gpgsign=false", *args],
+                          capture_output=True, text=True, env=env)
+
+
+def _nota_verif(toy_vault, stem, cuerpo):
+    """Nota-concepto con bloque de verificación + el paper que cita (para no romper el wikilink)."""
+    mk_note(toy_vault.PAPERS, "2020citC...1..1C", {"tags": ["paper"]}, "")
+    mk_note(toy_vault.CONCEPTS / "methods", stem, {"tags": ["methods"]}, cuerpo)
+    link_from_index(toy_vault, stem)
+
+
+def _repo_con_nota(toy_vault, cuerpo, fecha="2020-01-01"):
+    """Repo git de juguete con la nota ya committeada en `fecha` (para separar la rama
+    `git log` de la rama working-tree). False si no hay git → el test se saltea."""
+    _nota_verif(toy_vault, "nota-verif", cuerpo)
+    if _git(toy_vault.ROOT, "init", "-q").returncode != 0:
+        return False
+    _git(toy_vault.ROOT, "add", "-A")
+    return _git(toy_vault.ROOT, "commit", "-q", "-m", "seed", fecha=fecha).returncode == 0
+
+
+def _skip_sin_git(ok):
+    if not ok:
+        import pytest
+        pytest.skip("git no disponible")
+
+
+def test_verificacion_stale_por_edicion_sin_commitear(toy_vault, capsys):
+    """El caso que importa: el lint corre ANTES del commit, así que la edición que dejó el bloque
+    atrasado todavía no está en `git log` — un archivo sucio se toma como cambiado hoy."""
+    cuerpo = "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-01-01)\nok\n"
+    _skip_sin_git(_repo_con_nota(toy_vault, cuerpo, fecha="2020-01-01"))
+    rc, out = run_lint(capsys)
+    assert rc == 0                                     # backlog, no bloqueante
+    assert SIN_STALE in out                            # verificada el mismo día del commit: al día
+    # ahora se amplía la nota sin re-verificar (append-knowledge / maintain A)
+    p = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    p.write_text(p.read_text(encoding="utf-8").replace("Afirmación", "Afirmación nueva y otra más"),
+                 encoding="utf-8")
+    rc, out = run_lint(capsys)
+    assert rc == 0
+    assert "- nota-verif → la nota se editó el" in out
+    assert "su último verify es del 2020-01-01" in out
+
+
+def test_verificacion_stale_por_commit_posterior(toy_vault, capsys):
+    """La otra rama: la edición ya está committeada — la fecha sale de `git log -1 --format=%cs`."""
+    cuerpo = "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-01-01)\nok\n"
+    _skip_sin_git(_repo_con_nota(toy_vault, cuerpo, fecha="2020-01-01"))
+    p = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    p.write_text(p.read_text(encoding="utf-8") + "\nPárrafo agregado después.\n", encoding="utf-8")
+    _git(toy_vault.ROOT, "add", "-A")
+    _git(toy_vault.ROOT, "commit", "-q", "-m", "amplía", fecha="2020-06-01")
+    rc, out = run_lint(capsys)
+    assert rc == 0
+    assert "la nota se editó el 2020-06-01 y su último verify es del 2020-01-01" in out
+
+
+def test_verificacion_al_dia_no_se_marca(toy_vault, capsys):
+    """Bloque fechado DESPUÉS del último cambio del archivo: verificada al día → no se marca."""
+    cuerpo = "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-03-01)\nok\n"
+    _skip_sin_git(_repo_con_nota(toy_vault, cuerpo, fecha="2020-01-01"))
+    rc, out = run_lint(capsys)
+    assert rc == 0
+    assert SIN_STALE in out
+
+
+def test_bloque_sin_fecha_se_marca(toy_vault, capsys):
+    """Sin fecha en el encabezado no hay forma de saber si el bloque sigue vigente (no necesita git)."""
+    _nota_verif(toy_vault, "sin-fecha",
+                "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas\nok\n")
+    rc, out = run_lint(capsys)
+    assert rc == 0
+    assert "- sin-fecha → bloque de verificación sin fecha en el encabezado" in out
+
+
+def test_stale_sin_git_no_rompe(toy_vault, capsys, monkeypatch):
+    """Fuera de un repo (o sin git en el PATH) el chequeo se omite en silencio: el resto del lint
+    no depende de él."""
+    monkeypatch.setattr(lint, "git_out", lambda *a: None)
+    _nota_verif(toy_vault, "nota-verif",
+                "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-01-01)\nok\n")
+    rc, out = run_lint(capsys)
+    assert rc == 0
+    assert SIN_STALE in out
+
+
 # ── in_dir (portabilidad de separador, #33) ──────────────────────────────────
 
 def test_in_dir_componente_no_substring():

@@ -390,7 +390,12 @@ es la **marca de agua** del bibcode repetida por página (lo agarra la densidad 
 pero no sirve para grep ni verify; rescate: PDF sano, OCR, o marcar `pending`). La **cobertura** (concepto/hipótesis
 sin ninguna cita `[[bibcode]]` → afirma sin fuente) es **backlog** que el lint surface para ir citando;
 ídem la **cobertura de verificación** (query/concepto **con** citas pero **sin** bloque
-`## Verificación de citas` → nunca pasó por `verify-citations`: correr el skill).
+`## Verificación de citas` → nunca pasó por `verify-citations`: correr el skill) y la **verificación
+stale** (la nota se editó **después** de la fecha de su bloque —lo que pasa al ampliarla con
+`append-knowledge` o refrescarla— así que las afirmaciones nuevas nunca pasaron por el fan-out pero
+quedan bajo un encabezado que se lee como vigente: es el modo de falla de "afirmar de menos"
+aplicado a la garantía misma; el lint lo mide por `git` contra la fecha del encabezado —por eso el
+bloque **debe** llevar fecha— y degrada a silencio fuera de un repo).
 El **corpus truncado** (un `build/<slug>/ads.json` con `truncated` seteado → la query directa trajo
 menos papers de los que ADS reporta: al sujeto le falta cola) es **backlog** — `query_ads` persiste la
 marca (default `--rows 2000`, ≈ el máximo de una request; re-ingestar con `--rows` mayor para cubrir la

@@ -1,7 +1,7 @@
 ---
 name: append-knowledge
 description: Usar cuando el usuario quiere plegar UNA fuente puntual (paper por bibcode, PDF local, URL) a una entidad YA existente de la wiki — ficha de estrella o concepto — sin re-correr el ingest completo ("agregale este paper a la ficha de tau Ceti", "sumá este PDF al concept de procesos gaussianos", "este bibcode va a GJ 581", "encontré un paper nuevo para el tema X, agregalo"). Plomería mínima + extracción enfocada + síntesis a la nota viva + cierre estándar. NO crea entidades (eso es ingest-star/ingest-topic) ni barre por query lo nuevo (eso es maintain/refrescar).
-version: 1.0.2
+version: 1.0.3
 ---
 
 # Append — plegar una fuente puntual a una ficha o concepto existente
@@ -67,7 +67,9 @@ de fuentes ya citadas, entra marcada como tal.
 
 5. **Cierre estándar** (idéntico a ingest): **auto-revisión de autosuficiencia** de la nota destino
    (¿se entiende sin abrir el paper nuevo?) → **`verify-citations`** sobre la prosa tocada y la
-   nota de paper nueva → `python scripts/lint.py` en 0 → bookkeeping (`vault/wiki/log.md` SIEMPRE —
+   nota de paper nueva —si la nota destino ya traía bloque `## Verificación de citas`, **re-fechar
+   el encabezado**: el lint compara esa fecha contra la del último cambio del archivo y marca
+   **verificación stale** si quedó atrás (#56)— → `python scripts/lint.py` en 0 → bookkeeping (`vault/wiki/log.md` SIEMPRE —
    entrada `append: <fuente> → <destino>`; `vault/wiki/index.md` y `vault/STATUS.md` sólo si cambió
    algo catalogable/de estado) → `git add` de archivos específicos + commit → **preguntar antes de
    `push`**.
