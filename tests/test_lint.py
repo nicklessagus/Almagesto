@@ -439,6 +439,13 @@ def test_verify_block_parsea_encabezado():
     assert lint.verify_block("## Verificacion de citas\nok\n") == (True, None)   # sin tilde, sin fecha
     # una fecha en la prosa no es la del bloque: sólo cuenta la del encabezado
     assert lint.verify_block("El 2020-01-01 pasó algo.\n## Verificación de citas\nok\n") == (True, None)
+    # varios bloques (pasadas sucesivas): vigencia = la más reciente, no la primera
+    assert lint.verify_block("## Verificación de citas (2026-01-05)\na\n"
+                             "## Verificación de citas (2026-03-02)\nb\n"
+                             "## Verificación de citas (2026-02-01)\nc\n") == (True, "2026-03-02")
+    # con fecha en alguno alcanza: no se marca "sin fecha"
+    assert lint.verify_block("## Verificación de citas\na\n"
+                             "## Verificación de citas (2026-02-01)\nb\n") == (True, "2026-02-01")
 
 
 SIN_STALE = "Verificación stale: la nota se editó después de su último verify-citations (backlog) (0)"

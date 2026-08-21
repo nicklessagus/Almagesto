@@ -101,16 +101,19 @@ DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
 def verify_block(text: str) -> tuple[bool, str | None]:
-    """(¿la nota tiene bloque `## Verificación de citas`?, fecha de su encabezado o None).
+    """(¿la nota tiene bloque `## Verificación de citas`?, fecha de la verificación más reciente).
 
     La fecha vive en el encabezado por convención del skill (`## Verificación de citas
-    (AAAA-MM-DD)`): es lo único que permite saber si el bloque sigue vigente o quedó atrás de
-    una edición posterior."""
-    m = VERIF_HEAD_RE.search(text)
-    if not m:
+    (AAAA-MM-DD)`): es lo único que permite saber si lo verificado sigue vigente o quedó atrás de
+    una edición posterior. Una nota puede acumular **varios** bloques (medido en una bóveda real:
+    hasta 11 — pasadas sucesivas sobre secciones distintas), así que la vigencia la marca la fecha
+    **máxima**, no la del primero: quedarse con el primero dejaría la nota stale para siempre por
+    más que se re-verifique."""
+    heads = VERIF_HEAD_RE.findall(text)
+    if not heads:
         return False, None
-    d = DATE_RE.search(m.group(1))
-    return True, d.group(0) if d else None
+    dates = [m.group(0) for m in (DATE_RE.search(h) for h in heads) if m]
+    return True, max(dates) if dates else None
 
 
 def git_out(*args: str) -> str | None:

@@ -252,7 +252,9 @@ Convertir fechas relativas a absolutas. Notación `$...$` en archivos `vault/wik
 **La fecha del encabezado es portante** (#56): el lint la compara contra la fecha del último cambio
 del archivo (git) y marca **verificación stale** cuando la nota se editó después — el caso de
 ampliarla con `append-knowledge` o refrescarla. Un bloque sin fecha se marca igual: sin ella no hay
-forma de saber si sigue vigente. Al re-verificar, re-fechar.
+forma de saber si sigue vigente. Al re-verificar, re-fechar. Si la nota acumuló **varios** bloques
+(pasadas sucesivas sobre secciones distintas — pasa en la práctica pese al "reemplazar" de arriba),
+la vigencia la marca la fecha **más reciente**.
 
 ### 6. Lint + cierre
 Correr `python scripts/lint.py` (0 en lo bloqueante; la **fuga de implementación** es WARN a revisar a
