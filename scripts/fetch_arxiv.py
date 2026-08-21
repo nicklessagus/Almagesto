@@ -9,6 +9,10 @@ Al residuo build/<slug>/missing_pdf.json van los papers sin arxiv_id (revistas v
 pre-arXiv) Y las bajadas que fallaron (#32: antes un fallo sólo quedaba en el stdout —
 invisible para la cascada manual); fetch_pdf, el siguiente paso de la cadena, intenta
 todo lo que siga sin PDF en disco vía el resolver de ADS.
+
+Deja además en build/<slug>/pdf_source.json de qué rama salió cada PDF (acá siempre `eprint`:
+arXiv sirve el EPRINT, que puede ser un v1 pre-referato distinto del publicado que cita el
+bibcode). Lo consume make_notes para estampar `pdf_source` (#57).
 """
 from __future__ import annotations
 

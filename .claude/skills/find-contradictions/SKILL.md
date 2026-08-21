@@ -1,7 +1,7 @@
 ---
 name: find-contradictions
 description: Usar cuando el usuario quiere detectar desacuerdos entre papers del corpus sobre el mismo hecho ("buscá contradicciones en el corpus", "qué papers se contradicen sobre tau Ceti", "revisá disputas de P_rot", "detectá desacuerdos sobre la señal b de GJ 581", "¿hay papers que discrepen sobre X?"). Barre el corpus por eje (estrella/parámetro o concepto), confirma cada desacuerdo contra el fulltext y PROPONE entradas disputes[] / notas de disputa para que el usuario apruebe.
-version: 1.1.0
+version: 1.2.0
 ---
 
 # Find-contradictions — desacuerdos entre papers (claim↔claim)
@@ -47,13 +47,22 @@ Juntar, para el eje elegido, qué afirma **cada** paper sobre **cada** hecho:
 
 > **Cómo juntar esos papers sin Obsidian.** La tabla `## Papers` de la ficha es un bloque
 > ```dataview```: un agente que abre el `.md` ve el **código de la query, no sus resultados**. El
-> equivalente determinista (canónico en `CLAUDE.md`) es un matcher **con ámbito de campo** — un
-> `grep -l 'stars:.*<nombre>'` da **0 hits** aunque el paper esté, porque las listas del frontmatter
-> se serializan en bloque:
+> equivalente determinista (canónico en `CLAUDE.md`) **parsea el frontmatter con el parser del
+> tooling** — `grep`/`awk` fallan acá porque las listas conviven en dos formas (bloque al crear la
+> nota, flow style `stars: [x]` tras el retro-linkeo add-only) y además confunden `GJ 71` con
+> `GJ 710`:
 > ```bash
-> awk '/^stars:/{f=1;next} /^[a-z_]+:/{f=0} f&&/<nombre>/{print FILENAME; nextfile}' vault/wiki/papers/*.md
-> awk '/^thesis_links:/{f=1;next} /^[a-z_]+:/{f=0} f&&/<concept>/{print FILENAME; nextfile}' vault/wiki/papers/*.md
+> python -c "import sys,glob;sys.path.insert(0,'scripts');import lib_config as c;[print(f) for f in sorted(glob.glob('vault/wiki/papers/*.md')) if '<nombre>' in (c.split_fm(open(f,encoding='utf-8').read()).get('stars') or [])]"
 > ```
+> (para un concepto, misma línea con `thesis_links` en vez de `stars`).
+>
+> ⚠ **Mirá el estado de cada fuente ACÁ, en el andamiaje** (no en el fan-out: el subagente del paso 2
+> tiene prohibido leer otra cosa que los dos `.txt`, y esto vive en el frontmatter de la nota):
+> `retracted: true` → el paper **sale del corpus**, no se disputa (frontera dura; el lint ya lo
+> bloquea). `corrections:` (corrigendum) → puede explicar una diferencia de valor sin que haya
+> desacuerdo: leé el aviso antes de comparar. `pdf_source: eprint` → ese `.txt` es el **preprint**,
+> así que una diferencia numérica puede ser **de versión y no entre fuentes** (#57). Un par con
+> alguna de esas marcas se anota y se excluye del fan-out, o entra con la salvedad explícita.
 Armar una tabla mental `(hecho, papel A dice …, papel B dice …, NEA dice …)`. Los que coinciden se
 descartan; los que difieren pasan al fan-out.
 
@@ -63,12 +72,8 @@ los dos** `vault/raw/fulltext/**/<bibcode>.txt` en juego (grounding-first; prohi
 - `desacuerdo`: `real` | `aparente` | `no-concluyente`
   - **real** = ambos papers afirman valores/hechos incompatibles **más allá del error** (o uno afirma
     existencia y el otro la niega). Con **cita textual + nº de línea de cada uno**.
-    ⚠ **Antes de clasificar `real`, mirá el frontmatter de las dos notas** (#57/#52): un
-    `pdf_source: eprint` significa que ese `.txt` es el **preprint** —un `v1` pre-referato puede
-    traer otros valores que el publicado—, así que la diferencia numérica puede ser **de versión y
-    no entre fuentes**; un `corrections:` (corrigendum) puede explicar la discrepancia sin que haya
-    desacuerdo alguno; y un `retracted: true` no se disputa, se saca (frontera dura). En los tres
-    casos el veredicto es `aparente` con el motivo anotado, no `real`.
+    (El estado de las fuentes —`retracted`, `corrections`, `pdf_source: eprint`— se filtró en el
+    paso 1: el subagente sólo ve los dos `.txt`, así que no puede juzgarlo.)
   - **aparente** = distinto régimen, distinta definición, distinta época, o dentro de la barra de
     error → **no** es disputa (anotar por qué).
   - `no-concluyente` = artefacto de extracción (tabla/ecuación) o el texto no alcanza → abrir PDF o

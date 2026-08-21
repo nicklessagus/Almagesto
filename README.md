@@ -98,13 +98,17 @@ skill `setup` traduce tu foco (en palabras) a `relevance.topics` (los buckets qu
 > (`query_ads.py --probe`, no baja nada):
 > ```
 >   50 papers · 41 CORE · 9 no-core
+>   regla de combinación vigente: OR (≥1 faceta cualquiera) → 41 CORE.
+>   Si declararas una faceta-eje obligatoria (relevance.require) el corte sería:
+>     require: [rv]            →    41 CORE  (−0%)
+>     require: [activity]      →     9 CORE  (−78%)
 >
 >   CORE (todos, por citas)  [tópicos que matchearon]:
-> [CORE]  812  Stellar activity and radial-velocity jitter in...    «rv,activity»
-> [CORE]  333  Gaussian-process modelling to disentangle planets...  «rv,activity,method»
+>   [CORE]   812  Stellar activity and radial-velocity jitter in...  «rv,activity»
+>   [CORE]   333  Gaussian-process modelling to disentangle planets...  «rv,activity,method»
 >
 >   no-core (top 9 de 9, chequeo de sanidad):
-> [—   ]  210  A catalogue of nearby M dwarfs                        «(ninguno)»
+>   [—   ]   210  A catalogue of nearby M dwarfs  «(ninguno)»
 > ```
 > Afina la regex e itera hasta que el corte cierre → te deja `vault/config/objective.yaml` listo.
 
@@ -116,7 +120,10 @@ Con el objetivo definido, sumás estrellas/temas y los ingestás, también pidi�
 Cuando le pedís ingestar una estrella o un tema, el agente:
 
 1. **Busca en ADS** (por estrella: nombre + alias; por tema: keywords) y **clasifica** cada paper con tu
-   `relevance.topics`: **core** = matchea ≥1 faceta y no es ruido; el resto queda **no-core**.
+   `relevance.topics`: por default **core** = matchea ≥1 faceta y no es ruido; el resto queda
+   **no-core**. Si esa regla deja entrar demasiado, se puede exigir facetas **obligatorias**
+   (`relevance.require`) o un mínimo de facetas (`relevance.min_topics`); las configura el skill
+   `setup` y el preview muestra cuánto cambiaría el corte.
 2. Los **core** se bajan (PDF + fulltext) y el LLM los **lee y destila** en la ficha: métodos, P/K/e,
    indicadores y por qué es relevante, cada dato con su cita `[[bibcode]]` (trazable hasta el PDF).
 3. Los **no-core** no se bajan: quedan sólo listados (top por citas, con link a ADS) en un apéndice
@@ -130,14 +137,17 @@ que se commitea y viaja con la bóveda:
 
 - **`busqueda`**: la query efectiva, la fecha, el límite pedido y los conteos (encontrados en ADS →
   traídos → core → sin juzgar → descartados). Es lo que permite saber **sobre qué universo de papers
-  afirma una ficha** y con qué versión del clasificador se filtró; la cabecera de la ficha lleva una
-  línea con el resumen y el puntero al archivo.
+  afirma una ficha** y con qué **lente** se filtró: el registro guarda también las facetas de
+  `relevance.topics` con sus regex y la regla de combinación vigente, porque cambiar una regex mueve
+  el corte core/no-core sin mover la versión del framework. La cabecera de la ficha lleva una línea
+  con el resumen y el puntero al archivo.
 - **`decisiones`**: el juicio del triage, o sea qué candidato del citation chaining descartaste y
   **por qué**. Es la parte cara y no regenerable de un ingest (los `.json` de ADS se vuelven a pedir;
   tu criterio, no), así que viaja en git como ya lo hacían los aceptados.
 
-Un tema **off-ADS** no lleva `busqueda`: no hubo query que registrar, porque sus fuentes ya están
-declaradas una por una en `topics.yaml`.
+Un tema **off-ADS puro** no lleva `busqueda`: no hubo query que registrar, porque sus fuentes ya
+están declaradas una por una en `topics.yaml`. Uno **mixto** (fuentes declaradas + `extra_core:` con
+bibcodes de ADS) sí lo lleva, con `query: null`: registra lo que entró por la vía ADS.
 
 <p align="center">
   <img src="docs/assets/demo-animated.svg" width="740"
@@ -215,7 +225,7 @@ donde cada afirmación arrastra su `[[bibcode]]` y una capa de verificación la 
 
 | Herramienta | Qué es | Diferencia con Almagesto |
 |---|---|---|
-| [pathfinder](https://iopscience.iop.org/article/10.3847/1538-4365/ad7c43) | búsqueda semántica en lenguaje natural sobre ~300k abstracts de ADS | **el vecino astro, complementario y no rival**: pathfinder *encuentra* papers; Almagesto los *cura, destila y verifica* a fulltext. Flujo natural: pathfinder encuentra → `ingest` acá |
+| [pathfinder](https://iopscience.iop.org/article/10.3847/1538-4365/ad7c43) | búsqueda semántica en lenguaje natural sobre ~385k papers de ADS | **el vecino astro, complementario y no rival**: pathfinder *encuentra* papers; Almagesto los *cura, destila y verifica* a fulltext. Flujo natural: pathfinder encuentra → `ingest` acá |
 | [karpathy-llm-wiki](https://github.com/Astro-Han/karpathy-llm-wiki) y otras implementaciones genéricas del patrón | ingest/query/lint de propósito general | sin plomería de fuentes (ADS/arXiv/NEA), sin ground-truth duro, sin verificación claim↔fuente (la implementación más popular descarta a propósito las citas con nº de línea, que acá son obligatorias) |
 | [Elicit](https://elicit.com) · [SciSpace](https://scispace.com) · [Consensus](https://consensus.app) · [Scite](https://scite.ai) · [Undermind](https://undermind.ai) | asistentes comerciales de literature review (índices de 100–280M papers) | informe efímero en query-time sobre un índice remoto, cerrado y pago; no queda corpus propio ni artefacto curado que componga entre sesiones |
 | [PaperQA2](https://github.com/Future-House/paper-qa) (FutureHouse) | agente open-source de QA científica, SOTA en benchmarks de literatura | responde preguntas sueltas; no mantiene una base curada y versionada, así que el conocimiento no se acumula entre sesiones |

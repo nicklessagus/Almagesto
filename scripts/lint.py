@@ -38,7 +38,10 @@ vigente; backlog),
 la compuerta #38 los deja sin bajar y el aviso vivía sólo en el stdout de la corrida; backlog),
 **corpus truncado** (un `build/<slug>/ads.json` con `truncated` seteado → la query directa trajo
 menos papers de los que ADS reporta: al sujeto le falta cola; ídem `truncated_glyph`, el superset
-del rescate por glifo (#28/#43) cortado por citas ANTES del filtro; backlog), y campos clave
+del rescate por glifo (#28/#43) cortado por citas ANTES del filtro; backlog). Esas dos categorías
+NO dependen de `build/`: si el scratch no está (post-clone, otra máquina), caen al registro
+VERSIONADO del sujeto (`vault/config/registro/<slug>.yaml`, #51/#64) y reportan ese snapshot **con
+su fecha** — antes devolvían 0 sin mirar nada, un "limpio" que no significaba limpio. Y campos clave
 incompletos (P_rot null, papers relevantes sin `methods`, `thesis_links` sin `bearing`).
 No modifica nada: reporta para que el agente/usuario decida.
 

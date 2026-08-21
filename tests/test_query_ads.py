@@ -948,4 +948,9 @@ def test_main_persiste_el_registro_de_busqueda(toy_vault, toy_classifier, no_sle
     assert b["n_found"] == 1837 and b["n_core"] == 1 and b["truncated"] is True
     assert b["n_dropped"] == 1                                        # lee las decisiones vigentes
     assert b["almagesto_version"] == cfg.ALMAGESTO_VERSION
+    # la LENTE queda registrada textual: almagesto_version es la del framework, no la de la regla
+    # (cambiar una regex mueve el corte sin mover la versión)
+    assert b["lente"]["topics"] and isinstance(b["lente"]["topics"], dict)
+    assert b["lente"]["require"] == list(qa.REQUIRE_TOPICS)
+    assert b["lente"]["min_topics"] == qa.MIN_TOPICS
     assert cfg.load_registro("test_star")["decisiones"]                # no pisó el juicio del triage

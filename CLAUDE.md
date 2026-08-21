@@ -157,20 +157,24 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   ⚠ **El puntero es resoluble sin Obsidian (#60):** los roll-ups `## Papers` y `## Métodos aplicados`
   son bloques ```dataview``` — un agente que abre el `.md` ve el **código de la query, no sus
   resultados**, y el plugin ni siquiera está versionado. Para la audiencia-modelo, que es la que este
-  contrato dice servir, el equivalente determinista es un matcher **con ámbito de campo** sobre el
-  frontmatter de los papers (el heading real del segundo roll-up es `## Métodos aplicados a esta
-  estrella`):
+  contrato dice servir, el equivalente determinista **parsea el frontmatter con el mismo parser que
+  el tooling** (`lib_config.split_fm`), corriendo desde la raíz del repo:
   ```bash
-  awk '/^stars:/{f=1;next} /^[a-z_]+:/{f=0} f&&/<nombre>/{print FILENAME; nextfile}' vault/wiki/papers/*.md
-  awk '/^methods:/{f=1;next} /^[a-z_]+:/{f=0} f&&/<método>/{print FILENAME; nextfile}' vault/wiki/papers/*.md
+  # papers de una estrella (equivale al roll-up `## Papers`)
+  python -c "import sys,glob;sys.path.insert(0,'scripts');import lib_config as c;[print(f) for f in sorted(glob.glob('vault/wiki/papers/*.md')) if '<nombre>' in (c.split_fm(open(f,encoding='utf-8').read()).get('stars') or [])]"
+  # métodos aplicados a esa estrella (equivale a `## Métodos aplicados a esta estrella`: los métodos
+  # DE los papers de la estrella, no todo paper de la bóveda que use el método)
+  python -c "import sys,glob;sys.path.insert(0,'scripts');import lib_config as c;[print(f,'→',fm.get('methods')) for f in sorted(glob.glob('vault/wiki/papers/*.md')) for fm in [c.split_fm(open(f,encoding='utf-8').read())] if '<nombre>' in (fm.get('stars') or []) and fm.get('methods')]"
   ```
-  ⛔ **`grep -l 'stars:.*<nombre>'` NO sirve**, y es un error medido de este mismo documento (lo dijo
-  hasta 1.10.1): `make_notes` serializa con `default_flow_style=False`, así que las listas van en
-  **bloque** (`stars:` y en la línea siguiente `- tau Cet`) y `grep` es orientado a líneas → **0 hits
-  sobre un corpus donde el paper sí está**. Es el modo de falla de #54 —fabricar una ausencia— dentro
-  del fallback que existe justamente para no depender de Dataview. Atajo aceptable cuando el término
-  no colisiona entre campos: `grep -l '^- <nombre>$' vault/wiki/papers/*.md`. Si descargás contenido
-  a un roll-up, es porque ese fallback lo recupera; si no, el contenido va inlineado en la ficha.
+  ⛔ **No uses `grep`/`awk` sobre el frontmatter para esto** — es un error medido **dos veces** en
+  este mismo documento. (a) `grep -l 'stars:.*<nombre>'` (lo que decía hasta 1.10.1) da **0 hits**
+  cuando la lista está en **bloque**, que es como la escribe `make_notes` al crear la nota. (b) El
+  `awk` con ámbito de campo que lo reemplazó (1.10.2) da 0 hits cuando la lista está en **flow
+  style** (`stars: [tau Cet]`), que es como la deja `merge_frontmatter_list` — o sea **todo paper
+  retro-linkeado**, justo la población que el roll-up existe para recuperar. Las dos formas conviven
+  en el mismo corpus. Además el matcheo textual confunde `GJ 71` con `GJ 710`, y `split_fm` compara
+  por elemento. Si descargás contenido a un roll-up, es porque ese fallback lo recupera; si no, el
+  contenido va inlineado en la ficha.
   **Disputas (`planets[].disputes`):** NEA (ground-truth) es **siempre el valor de verdad**; cuando
   un paper discrepa —sea sobre la **existencia** de la señal o sobre el **valor** de un parámetro—
   se taguea, no se sobreescribe. Cada entrada: `field` (`existence` o el parámetro: `P|K|e|msini`),
@@ -273,7 +277,12 @@ re-clasificar de `maintain`. No ingesta nada; después se usan `ingest-star`/`in
    (persiste: no se re-propone); **dudoso → al usuario**. Detalle en el skill `ingest-star`.
 2. **Vos (LLM)** leés el **fulltext `.txt`** (el default: barato y greppable; el PDF se abre sólo
    para figuras/tablas/ecuaciones o ante duda de símbolos si `fulltext_source: ocr`) y hacés la
-   cascada: poblás la extracción del paper
+   cascada. ⚠ **Mirá `pdf_source` antes de copiar un número:** con `eprint` el `.txt` es el
+   **preprint** (un `v1` pre-referato puede traer otros valores que el publicado), así que un valor
+   que contradice al ground-truth o al abstract de ADS es candidato a **diferencia de versión** —
+   abrí el PDF publicado o anotá la salvedad en la nota. El verify lo detecta después; acá es donde
+   el valor **entra** a la ficha.
+   Cascada: poblás la extracción del paper
    (`methods`, `thesis_links`, `bearing`, P/K/indicadores), actualizás la ficha de la estrella
    (síntesis, huecos), tocás conceptos/hipótesis relacionados y la matriz método×estrella.
 3. Actualizás `index.md` y appendeás a `log.md`.
@@ -406,14 +415,16 @@ colgados), **renombrar** slug, **re-clasificar** tras cambiar `relevance.topics`
 backlog del lint** (P_rot nulo, drift PDF↔disco, cobertura — los **huérfanos no**: son
 bloqueantes, se arreglan al cierre de la operación que los creó), y la **pasada periódica de
 retracciones** (`check_retractions.py` sin `--slug`, toda la bóveda — la cadena de ingest sólo
-chequea el slug en curso; **esa misma pasada estampa `corrections`**, así que es la que llena ese
-backlog: sin correrla figura en 0 porque el dato nunca se pidió). Invariante: la cadena es
+chequea el slug en curso; **esa misma pasada estampa también `corrections`**, con el mismo valor
+que para las retracciones: cazar lo publicado **después** del ingest y cubrir el corpus anterior a
+1.8.0. Lo ingestado desde entonces ya trae sus `corrections` estampadas por la cadena). Invariante: la cadena es
 idempotente (refrescar es seguro); **nunca** se pisa la extracción LLM ni el ground-truth sin `--force`
 explícito. Detalle en el skill.
 
 ### Lint (chequeo de salud)
-**Cuándo:** como **paso de cierre de toda operación que escriba en `vault/wiki/`** (ingest / query archivada
-/ test de hipótesis), **antes de commitear**; más una pasada completa periódica. Es barato.
+**Cuándo:** como **paso de cierre de toda operación que escriba en `vault/wiki/`** (ingest,
+append-knowledge, maintain, find-contradictions, query archivada, test de hipótesis), **antes de
+commitear** y **después** del verify (resolver una cita no-soportada cambia la prosa); más una pasada completa periódica. Es barato.
 Correr `python scripts/lint.py`: debe quedar en **0** para wikilinks rotos, **frontmatter no
 parseable** (nota que empieza con `---` pero cuyo YAML no parsea —p. ej. un `title:` con `:` sin
 comillas editado a mano—: evade en silencio los chequeos de su tipo), **papers retractados**

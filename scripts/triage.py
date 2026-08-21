@@ -4,6 +4,7 @@ Uso:
     python scripts/triage.py <slug>                                   # listar los candidatos pendientes
     python scripts/triage.py <slug> --report                          # + tabla en outputs/triage-<slug>.md
     python scripts/triage.py <slug> --drop <bib> [<bib> …] --reason "<motivo>"
+    python scripts/triage.py <slug> --migrate                 # consolidar el triage.json pre-1.9.0
 
 El chaining trae papers conectados por citas al corpus del sujeto. La lente
 (`relevance.topics`) clasifica **tema**, no **pertinencia al sujeto**: anclado a "menciona al

@@ -1,7 +1,7 @@
 ---
 name: query-corpus
 description: Usar cuando el usuario hace una búsqueda o pregunta general contra el corpus de la bóveda que NO es un test de hipótesis ("buscá en el corpus ...", "qué se sabe del P_rot de GJ 581", "qué papers usan ESPRESSO", "qué métodos se aplicaron a tau Ceti", "qué celdas de la matriz están vacías").
-version: 1.2.0
+version: 1.3.0
 ---
 
 # Query: búsqueda/pregunta general contra el corpus
@@ -38,6 +38,10 @@ usar `test-hypothesis`).
 > **pre-digitales** (el OCR del escaneo de ADS pierde ~½ de las filas de tabla, y las tablas viejas
 > suelen ser imágenes): ante un 0, o se **corrobora** por otra vía (papers que lo citan, PDF/tabla
 > abiertos) o se reporta **inconcluso**, no ausencia.
+
+> ⚠ **Si vas a reportar un número, mirá `pdf_source` de la nota del paper** (#57): con `eprint` el
+> `.txt` es el **preprint** y el valor puede no ser el de la versión publicada; con `null` no se
+> sabe. Decilo al reportar ("según el eprint de X") en vez de presentarlo como el valor publicado.
 
 3. **Sintetizar** con citas `[[bibcode]]` y, cuando aplique, links a `[[slug]]` y conceptos.
 

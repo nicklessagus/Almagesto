@@ -27,6 +27,10 @@ por donde seguir (#50: "bajar por DOI" no alcanza — Messenger, página del ins
 mirror académico, o derivar al usuario si es un A&A pre-arXiv); el detalle de cada rama vive
 en `## Notas` del skill ingest-star.
 Idempotente: no re-baja lo que ya está en vault/raw/pdfs/<slug>/.
+
+Deja además en build/<slug>/pdf_source.json qué rama entregó cada PDF (`eprint` | `ads` |
+`publisher`), que make_notes estampa como `pdf_source` en la nota (#57): distinguir el preprint
+de la versión publicada cambia cómo se lee una discrepancia numérica al verificar citas.
 """
 from __future__ import annotations
 

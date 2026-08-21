@@ -13,6 +13,13 @@ de exclusión si es no-core; lo consume el apéndice "Excluidos" de make_notes�
 quedó truncada (numFound > --rows), la marca `truncated: {num_found, rows}` que el lint surface
 como corpus incompleto (si no truncó, `truncated: null`).
 
+Escribe TAMBIÉN el registro de búsqueda VERSIONADO del sujeto, `vault/config/registro/<slug>.yaml`
+(clave `busqueda`: fecha, query efectiva, rows, conteos, truncado, versión del framework y la
+**lente** con la que se clasificó) — #64: el ads.json es scratch regenerable, pero saber sobre qué
+universo afirma una ficha y con qué filtro se recortó tiene que viajar con la bóveda. No se escribe
+en los modos que no consultan un sujeto (`--probe`) ni en los que no clasifican de nuevo
+(`--dry-run`), que retornan antes.
+
 Usa la API REST de ADS directamente (control total de campos y filas). Rate: ~5000/día.
 La query por estrella se arma con `title:`/`abs:` sobre nombre+alias (ver `build_query`; `object:`
 no es campo válido en la API Solr de ADS). Para temas, query Solr cruda de `topics.yaml`.
@@ -883,7 +890,7 @@ def main() -> int:
         if gate:
             print(f"  triage: {len(candidatos)} candidatos pendientes de juicio "
                   f"({ya_descartados} ya descartados antes) — no se bajan hasta decidirlos: "
-                  f"python triage.py {args.slug}")
+                  f"python scripts/triage.py {args.slug}")
         recs += chained
         rel = [r for r in recs if r["relevant"]]
 
@@ -929,6 +936,14 @@ def main() -> int:
         "n_dropped": len(cfg.load_decisiones(args.slug)),
         "truncated": bool(truncated),
         "almagesto_version": cfg.ALMAGESTO_VERSION,
+        # La LENTE con la que se clasificó, textual (#64 → auditoría 1.10.3). `almagesto_version`
+        # es la versión del framework, NO la de la regla: cambiar una regex de `relevance.topics`
+        # mueve el corte core/no-core sin mover la versión. Sin esto el registro dice sobre qué
+        # universo se buscó pero no con qué filtro se recortó, que es la otra mitad de "reproducible".
+        "lente": {"topics": dict((_REL.get("topics") or {})),
+                  "require": list(REQUIRE_TOPICS),
+                  "min_topics": MIN_TOPICS,
+                  "noise_doctypes": sorted(NOISE_DOCTYPES)},
     })
     print(f"  → {cfg.registro_path(args.slug)} (registro de búsqueda, versionado)")
     return 0

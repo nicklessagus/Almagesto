@@ -12,6 +12,11 @@
 #   (curación manual). Es un OVERRIDE del clasificador: `query_ads` trae por bibcode los que la query
 #   no devolvió y RESCATA en el lugar los que devolvió pero quedaron no-core (`via: manual`).
 #   Vive acá (config, se commitea) → sobrevive al re-run; editar `build/` no, es scratch y se pisa.
+# La otra mitad de esa decisión —los candidatos que DESCARTÁS— no se escribe a mano acá: va con
+#   `python scripts/triage.py <slug> --drop <bibcode> --reason "<motivo>"` y persiste, también
+#   versionada, en `vault/config/registro/<slug>.yaml` (clave `decisiones`, con motivo y fecha).
+#   Los dos lados del juicio viajan en git: sin eso, en otra máquina el triage vuelve a proponer
+#   todo lo ya descartado y el motivo se pierde.
 #
 # Agregá tus estrellas acá (o dejá que `ingest-star` las agregue). Ejemplo comentado:
 #

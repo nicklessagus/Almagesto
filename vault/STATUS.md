@@ -18,6 +18,77 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.10.3 (2026-08-21) — segunda pasada de auditoría: lo que la primera introdujo
+
+> Pedida por el usuario: repetir la revisión profunda de doc técnica y de uso. Tres frentes en
+> paralelo, incluido uno que la primera pasada no miró (la doc **embebida en config y en los
+> docstrings**, que los skills declaran fuente de verdad canónica). **Cada hallazgo re-verificado a
+> mano**; dos de los reportados resultaron falsos. 382 tests verdes, lint 0. 1.10.2 → **1.10.3**.
+
+- **⛔ La corrección de #60 de 1.10.2 estaba mal, y por el mismo motivo que la original.** El `awk`
+  con ámbito de campo que reemplazó al `grep` roto pierde las listas en **flow style**
+  (`stars: [tau Cet]`) — y ésa es exactamente la forma que deja `merge_frontmatter_list`, o sea
+  **todo paper retro-linkeado**, que es la población que el roll-up existe para recuperar. Las dos
+  formas conviven en el mismo corpus (bloque al crear la nota, flow al retro-linkear). Verificado
+  llamando a las funciones reales, no a una imitación. **Tercera versión, ahora probada contra los
+  cuatro casos** (bloque, flow, mención sólo en prosa, `stars:` como último campo del frontmatter):
+  la receta parsea el frontmatter con `lib_config.split_fm`, **el mismo parser que el tooling**, en
+  vez de matchear texto. Beneficio lateral verificado: compara por elemento, así que `GJ 71` ya no
+  matchea a `GJ 710`. Lección anotada: una receta prescrita se prueba **antes** de documentarla; van
+  dos iteraciones perdidas por no hacerlo.
+- **El segundo `awk` contestaba otra pregunta.** El roll-up `## Métodos aplicados a esta estrella`
+  es *los métodos de los papers de esta estrella*; el awk devolvía *todo paper de la bóveda que use
+  el método*. Corregido a la intersección real.
+- **El caveat que agregué a `find-contradictions` era inaplicable:** lo puse dentro del contrato del
+  veredicto, es decir dentro de lo que decide el subagente del fan-out — que tiene prohibido leer
+  otra cosa que los dos `.txt`, y el frontmatter no está ahí. Movido al **paso 1** (andamiaje), donde
+  el orquestador ya lee notas. De paso: un paper `retracted` no es un desacuerdo "aparente", **sale
+  del corpus** (frontera dura).
+- **Afirmación causal falsa que escribí sobre `corrections`:** "sin correr la pasada periódica figura
+  en 0 porque el dato nunca se pidió". Falso: la cadena de ingest cierra con
+  `check_retractions --slug`, así que todo lo ingestado desde 1.8.0 ya trae sus `corrections`. El
+  valor del barrido completo es el mismo que para retracciones: cazar lo publicado **después** del
+  ingest y cubrir el corpus viejo.
+- **El caveat de preprint (#57) no había llegado al paso donde los números entran a la bóveda.**
+  Estaba en `verify-citations` (que lo detecta *después*) pero no en la extracción LLM de los dos
+  ingests, ni en `query-corpus`/`test-hypothesis`, que reportan valores al chat. Agregado en los
+  cuatro y en el paso 2 de la sección Ingest de `CLAUDE.md`.
+- **`maintain B` prescribía un borrado que la cadena deshace:** `make_notes` re-escribe el stub de
+  todo registro `relevant` sin nota, y los fetchers re-bajan el PDF; las `decisiones` del registro
+  sólo cubren candidatos del chaining, no el core de la query. Ahora B obliga a decidir la
+  durabilidad (sacar de `extra_core`, re-clasificar, o asumirlo) y dejarlo en el `log`.
+- **`maintain A` no releía la nota como agente externo** (el estándar de autosuficiencia que sí
+  tienen los tres skills de escritura). Agregar cinco papers sin releer el conjunto es cómo una
+  ficha deja de alcanzar sola sin que nadie lo note.
+- **La promesa del registro ahora es cierta.** El README decía que `busqueda` permite saber "con qué
+  versión del clasificador se filtró", pero `almagesto_version` es la del **framework**: cambiar una
+  regex de `relevance.topics` mueve el corte sin mover la versión. En vez de bajar la afirmación, se
+  agregó al registro el campo **`lente`** (facetas con sus regex + `require`/`min_topics` +
+  `noise_doctypes`), que es lo que PRISMA-S llama los límites aplicados.
+- **La doc de uso mandaba un comando que falla en el camino recomendado.** `git merge upstream/main`
+  sobre un repo creado con "Use this template" devuelve `fatal: refusing to merge unrelated
+  histories` (reproducido con un fixture): la historia limpia del template no tiene ancestro común.
+  Documentado el primer merge con `--allow-unrelated-histories`, cómo resolver los conflictos add/add
+  a favor de upstream, y que del segundo en adelante vale el comando simple.
+- **La guardia de expansión no protege el primer ingest** —`if not conocidos: return`—, que es justo
+  el caso con el que yo la había justificado en la pasada anterior. Corregido en `docs/operacion.md`
+  y en la entrada 1.10.2 de este archivo. Umbral real: `>= 50` nuevos, no `> 50`.
+- **Otros:** el registro de un tema off-ADS **mixto** sí existe (el README decía que no);
+  `python triage.py` generado por `query_ads` era el último resto de #59 (falla desde la raíz);
+  Node/npx faltaba en las dos listas de dependencias (es dura para el modo web); `stars.yaml`
+  documentaba sólo la mitad aceptada de la curación; los headers de `make_notes`, `extract_fulltext`,
+  los dos fetchers, `query_ads`, `lint` y `triage` describían versiones anteriores de sus módulos; el
+  ejemplo de `--probe` omitía el bloque de la regla de combinación que el programa siempre imprime;
+  pathfinder son **385k** papers de ADS, no 300k (verificado contra la versión publicada que el
+  README enlaza); y el conteo de tests de la entrada 1.9.0 decía +6 cuando fueron +9.
+- **Dos hallazgos reportados que resultaron FALSOS** (y por eso se verifica todo): "faltan los tags
+  v1.10.x" — están, `git tag -l` los ordena lexicográficamente y `v1.10.0` cae antes de `v1.7.2`; y
+  "el corpus de pathfinder es ADS + arXiv" — la versión publicada dice que es sólo ADS.
+- Skills: `find-contradictions` 1.1.0 → **1.2.0**, `ingest-star` 1.12.2 → **1.13.0**, `ingest-topic`
+  1.9.4 → **1.10.0**, `maintain` 1.9.0 → **1.10.0**, `query-corpus` y `test-hypothesis` 1.2.0 →
+  **1.3.0**, `verify-citations` 1.4.0 → **1.4.1** (de la pasada anterior), `append-knowledge`
+  1.1.0 → **1.2.0** (ídem).
+
 ## ✅ Framework 1.10.2 (2026-08-21) — auditoría de coherencia de la documentación
 
 > Pedida por el usuario al cerrar las tandas 1-5: revisión profunda de la doc **técnica** (CLAUDE.md
@@ -57,7 +128,9 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
   antes que los fetchers y no puede saberlo); y su ejemplo de `--probe` decía "top por citas" del
   core justo donde el código garantiza listarlo **completo**. `docs/operacion.md` no nombraba
   `triage.py` (el único paso con juicio humano), ni la guardia de expansión y `--yes` (un primer
-  ingest grande termina en un abort inexplicado), ni el token ADS entre lo que no viaja.
+  ingest grande **re**-ingestado termina en un abort inexplicado — ojo: la guardia compara contra
+  las notas ya ingestadas, así que en el **primer** ingest de un sujeto no dispara; eso se corrigió
+  en la pasada siguiente), ni el token ADS entre lo que no viaja.
 - **CWD (#59) completado:** los 13 headers `Uso:` de `scripts/` seguían en la convención vieja
   aunque los skills los declaran "fuente de verdad canónica", y `triage.py` **generaba** texto de
   usuario con ella. A pedido del usuario, el README además quedó **sin guiones largos** (reescribiendo
@@ -101,7 +174,7 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 
 ## ✅ Framework 1.9.0 (2026-08-21) — tanda 4: #51 + #64, el registro de ingesta sale de `build/`
 
-> El grande de la revisión: la primera tanda que cambia dónde vive un dato. 373 tests verdes (+6),
+> El grande de la revisión: la primera tanda que cambia dónde vive un dato. 373 tests verdes (+9),
 > lint 0. `ALMAGESTO_VERSION` 1.8.1 → **1.9.0** (minor: archivo de config nuevo + línea nueva en la
 > cabecera de fichas/concepts, retrocompatible y con migración transparente).
 
@@ -217,7 +290,7 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 > huecos entre documentos que ya se habían medido. 359 tests verdes, lint 0. `ALMAGESTO_VERSION`
 > 1.7.3 → **1.7.4** (patch: ningún cambio de comportamiento en la cadena).
 
-- **#53** — **los huérfanos bloquean, no son backlog.** `lint.py:516` los suma a `n_block` (exit 1)
+- **#53** — **los huérfanos bloquean, no son backlog.** `lint.py` los suma a `n_block` (exit 1)
   mientras `maintain E` los listaba como "no bloqueante, pero se acumula": un agente que seguía el
   skill dejaba el huérfano para después y se le trababa el cierre de la operación siguiente.
   Resuelto por la opción (a) del issue —un concepto sin links entrantes es **inalcanzable** desde la

@@ -1,20 +1,28 @@
 """Genera notas markdown de la bóveda a partir de lo bajado por los otros scripts.
 
 Uso:
-    python scripts/make_notes.py <slug> [--all] [--force]
+    python scripts/make_notes.py <slug> [--all] [--force]        # estrella
+    python scripts/make_notes.py --topic <slug> [--all] [--force]  # tema (concept + papers)
+    python scripts/make_notes.py --web <clave> --concept <c> [--url … | --pending …] [--slug-hint <s>]
+    python scripts/make_notes.py --restamp-pdf-links             # backfill masivo, sin slug
 
-- stars/<slug>.md  : ficha índice de la estrella (frontmatter máquina-legible + Dataview).
-- papers/<bibcode>.md : una nota por paper relevante (metadata + abstract + placeholders LLM).
+- vault/wiki/stars/<slug>.md            : ficha índice de la estrella (frontmatter + Dataview).
+- vault/wiki/concepts/<area>/<c>.md     : stub del concept durable de un tema (--topic).
+- vault/wiki/papers/<bibcode>.md        : una nota por paper relevante (metadata + placeholders LLM).
 
-Idempotente: NO pisa notas existentes (protege la extracción LLM) salvo --force. Tres
-excepciones quirúrgicas, nunca sobre la extracción LLM: (a) add-only, en una nota de paper
+Idempotente: NO pisa notas existentes (protege la extracción LLM) salvo --force. Las
+excepciones son quirúrgicas y nunca tocan la extracción LLM: (a) add-only, en una nota de paper
 que ya existía mergea los seeds del ingest actual (`stars` / `thesis_links`) si faltan —
 retro-linkeo, ver merge_frontmatter_list; (b) en una ficha/concept que ya existía re-estampa
 el apéndice máquina "## Excluidos por el filtro" con el ads.json vigente — ver stamp_excluded
 (#35: el sub-modo re-clasificar de maintain lo necesita sin pisar la síntesis); (c) en una
 nota de paper que ya existía re-estampa el link `[📄 PDF]` de la línea de cabecera desde el
 frontmatter `pdf:` — ver stamp_pdf_link (#47: la cabecera es metadata derivada, no contenido
-de escritura única). Backfill masivo: `make_notes.py --restamp-pdf-links` (sin slug).
+de escritura única); (d) en una ficha/concept que ya existía re-estampa la línea de puntero
+`> _Búsqueda …_` de la cabecera desde `vault/config/registro/<slug>.yaml` — ver stamp_search_line
+(#64). Aparte, `stamp_fulltext` (lo llama extract_fulltext al cerrar) estampa
+`fulltext`/`fulltext_source`/`pdf_source` sobre notas ya existentes. Backfill masivo del link PDF:
+`python scripts/make_notes.py --restamp-pdf-links` (sin slug).
 """
 from __future__ import annotations
 

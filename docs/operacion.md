@@ -21,6 +21,9 @@
   marcado `source: ocr` (**citable con salvedad**: símbolos/notación pueden diferir).
 - **Opcional `curl`** (estándar en Linux/macOS) — `fetch_pdf.py` lo usa de fallback para
   publishers cuyo WAF rechaza a python-requests.
+- **Node/npm — sólo para el modo off-ADS por web.** `fetch_web.py` toma el snapshot con
+  `npx defuddle` y **aborta** si no encuentra `npx`. No hace falta para el flujo ADS (estrellas y
+  temas por query); sí para ingestar una fuente declarada por URL.
 
 **Token ADS** gratis en <https://ui.adsabs.harvard.edu/user/settings/token> (~5000 consultas/día);
 va en `vault/config/ads_dev_key` (gitignored) o en la variable `ADS_DEV_KEY`.
@@ -37,7 +40,7 @@ para ingestar. En Windows, los comandos de shell corren en Git Bash o WSL.
 | `vault/raw/fulltext/<slug>/*.txt` | Texto completo (pdftotext; si la capa de texto es ilegible, OCR marcado `source: ocr`, citable con salvedad) para búsqueda local y re-extracción. Ojo: el `.txt` puede venir del **preprint de arXiv** y no de la versión publicada; la nota del paper lo registra en `pdf_source` (ver abajo). |
 | `vault/raw/ground_truth/<slug>.json` | Hechos auditables (NASA Exoplanet Archive + SIMBAD). |
 | `vault/raw/refs/` | Fuentes de diseño del patrón (gist Karpathy, guía de implementación). |
-| `vault/wiki/stars/<slug>.md` | Ficha por estrella (entidad). **Frontmatter = fuente de verdad** (sp_type, P_rot, planetas, indicadores esperados, métodos). |
+| `vault/wiki/stars/<slug>.md` | Ficha por estrella (entidad). **Frontmatter = fuente de verdad** (`spectral_type`, `P_rot_days`, planetas, indicadores esperados, métodos). |
 | `vault/wiki/papers/<bibcode>.md` | Una nota por paper (metadata ADS + abstract + extracción LLM). |
 | `vault/wiki/concepts/<área>/` | Notas transversales. Áreas **abiertas** (cualquiera); `concept_areas` (objective.yaml) es referencia para el typo-check, no restricción — `methods`/`hypotheses` reservadas. |
 | `vault/wiki/queries/` | Preguntas contestadas contra el corpus. |
@@ -83,10 +86,12 @@ python lint.py                      # chequeo de salud → outputs/lint-<fecha>.
 
 Entre la query y el primer paso que gasta red y disco hay un **checkpoint humano** (la *guardia de
 expansión*): si el core recién clasificado se multiplicó respecto de las notas ya ingestadas del
-sujeto (default: ×1.5 y más de 50 nuevos), la cadena **frena** y muestra el conteo, cuántos vinieron
-por el grafo de citas y el puntero a `relevance.require`/`min_topics` por si el corte quedó flojo.
-`--yes` sigue a sabiendas. No es un error: es el punto donde conviene mirar antes de bajar cientos
-de PDFs.
+sujeto (default: ×1.5 y 50 papers nuevos o más), la cadena **frena** y muestra el conteo, cuántos
+vinieron por el grafo de citas y el puntero a `relevance.require`/`min_topics` por si el corte quedó
+flojo. `--yes` sigue a sabiendas. No es un error: es el punto donde conviene mirar antes de bajar
+cientos de PDFs. **Ojo: sólo aplica a re-ingestas.** En el **primer** ingest de un sujeto no hay
+notas previas con qué comparar, así que la cadena sigue derecho por más grande que sea el corte —
+ahí el control es el `--probe` del skill `setup` (previsualizar la lente antes de bajar nada).
 
 Para TEMAS (en vez de estrellas): definir el tema en `vault/config/topics.yaml` y correr
 `python scripts/ingest_topic.py <slug>`: el orquestador despacha según el campo `source` de la entrada:
@@ -117,6 +122,20 @@ vive en Almagesto; vos le agregás contenido. Tu contenido no corre riesgo al me
 ```bash
 git fetch upstream && git merge upstream/main   # trae mejoras del framework; tu contenido (merge=ours) queda intacto
 ```
+
+⚠ **La primera vez ese comando falla** con `fatal: refusing to merge unrelated histories`, y es
+esperable: "Use this template" te crea el repo con **historia limpia**, o sea sin ancestro común con
+Almagesto. El primer merge se hace con el flag, y una sola vez:
+
+```bash
+git merge upstream/main --allow-unrelated-histories
+```
+
+Ahí van a aparecer **conflictos add/add en archivos de framework** que tu instancia nunca tocó (git
+no tiene con qué compararlos). Se resuelven a favor de upstream — es la regla de oro: en una
+instancia no se edita framework —, p. ej. `git checkout --theirs <path>` por archivo, o
+`-X theirs` en el merge. Tus archivos de instancia están cubiertos aparte por `merge=ours`. Una vez
+commiteado ese merge ya hay ancestro común: **del segundo en adelante alcanza el comando de arriba**.
 
 **Si clonaste directo** (`origin` = Almagesto): traés updates con `git pull`. Para pasarte a tu **propio**
 repo, creá uno vacío, convertí Almagesto en `upstream` y poné el tuyo como `origin`:

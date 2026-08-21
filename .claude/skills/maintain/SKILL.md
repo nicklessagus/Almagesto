@@ -1,7 +1,7 @@
 ---
 name: maintain
 description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), resolver el backlog del lint (P_rot faltante, drift PDF↔disco, cobertura, claims stale), y la pasada periódica de retracciones sobre toda la bóveda ("chequeá retracciones").
-version: 1.9.0
+version: 1.10.0
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
@@ -57,6 +57,12 @@ Progreso del refresh de <entidad>:
    los huecos con lo que aportan los papers nuevos — no reescribir de cero lo ya destilado. Si un paper
    nuevo discrepa, taguear `disputes[]` (o correr `find-contradictions`). Actualizar la matriz
    método×estrella si hay métodos nuevos.
+3b. **Auto-revisión de autosuficiencia** (igual que el paso 4 de `ingest-star` / 5 de
+   `ingest-topic`, que un refresh también tiene que cumplir): releer la nota **completa** como un
+   agente externo que no vio los papers. ¿Alcanza sola? ¿Los papers nuevos abrieron **huecos** que
+   la sección `## Huecos` no lista (un parámetro que ahora tiene dos valores, un método aplicado sin
+   registrar)? Agregar cinco papers sin releer el conjunto es cómo una ficha deja de alcanzar sola
+   sin que nadie lo note.
 4. Cierre: verify-citations sobre la prosa cambiada → lint → `log` → commit → preguntar push.
 
 ## B. Borrar un paper / estrella / tema
@@ -71,7 +77,15 @@ Progreso del refresh de <entidad>:
 3. **Reparar los colgados:** quitar/re-apuntar cada `[[wikilink]]`, `thesis_links`, `disputes[].ref` y
    celda de matriz que apuntaba al borrado. (La tabla `## Papers` de las fichas es Dataview → se
    actualiza sola.) Sacar la estrella de la matriz método×estrella.
-4. Cierre: **lint en 0** (0 wikilinks rotos / thesis_links colgados / disputes.ref sin destino) → `log`
+4. **Hacer durable el borrado de un paper** (si no, el próximo refresh lo resucita: `make_notes`
+   re-escribe el stub de **todo** registro `relevant` sin nota en disco, y los fetchers re-bajan el
+   PDF). Las `decisiones` del registro **no** cubren esto: sólo se aplican a candidatos del
+   chaining, no al core de la query directa ni a `extra_core`. Según por qué entró:
+   - entró por **`extra_core`** → sacarlo de esa lista en `stars.yaml`/`topics.yaml`;
+   - entró por la **query** y la lente lo clasifica core → o ajustás la lente y re-clasificás
+     (sub-modo D), o lo dejás con `relevance: low` en vez de borrarlo, o asumís que va a volver.
+   Decidilo explícitamente y dejalo en el `log`: "borrado y no durable" es un estado, no un olvido.
+5. Cierre: **lint en 0** (0 wikilinks rotos / thesis_links colgados / disputes.ref sin destino) → `log`
    (qué se borró y por qué) → commit → preguntar push.
 
 ## C. Renombrar un slug
@@ -163,8 +177,9 @@ Pasada de higiene sobre lo que `lint.py` marca como backlog/WARN (no bloqueante,
   encabezado que se lee como vigente: la nota no afirma falso, afirma **de menos** sobre lo que
   chequeó. Si el hallazgo es "bloque sin fecha en el encabezado", re-fechalo
   (`## Verificación de citas (AAAA-MM-DD)`): sin fecha el chequeo no puede saber si sigue vigente.
-- **Corpus truncado** (y su hermano `truncated_glyph`) → a la query directa le faltó cola: re-ingestar
-  el sujeto con `--rows` mayor. Mientras tanto, la ficha afirma sobre un universo recortado.
+- **Corpus truncado** (y su hermano `truncated_glyph`) → a la query directa le faltó cola. El
+  orquestador **no** acepta `--rows`: se corre la pieza suelta y después la cadena —
+  `python scripts/query_ads.py <slug> --rows 5000` y luego `python scripts/ingest_star.py <slug>`. Mientras tanto, la ficha afirma sobre un universo recortado.
 - **Papers con corrección publicada** (`corrections`) → se resuelve como dice **F** (abrir el
   `notice_doi`, comparar contra lo que la nota afirma citando ese `[[bibcode]]`).
 - **Sin verificar** (query/concepto con citas pero sin bloque `## Verificación de citas`) → correr

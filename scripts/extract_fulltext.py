@@ -3,7 +3,13 @@
 Uso:
     python scripts/extract_fulltext.py <slug> [--force] [--ocr]
 
-pdfs/<slug>/<bibcode>.pdf  →  fulltext/<slug>/<bibcode>.txt
+vault/raw/pdfs/<slug>/<bibcode>.pdf  →  vault/raw/fulltext/<slug>/<bibcode>.txt
+
+Al cerrar estampa en las notas de paper (cirugía de make_notes.stamp_fulltext, nunca sobre la
+extracción LLM): `fulltext`, `fulltext_source` (pdftotext|ocr|web) y `pdf_source` (#57: de qué
+DOCUMENTO salió el texto — eprint|ads|publisher|web — leyendo la marca que arXiv estampa en el
+propio .txt). Por eso re-correrlo es el **backfill** de `pdf_source` en un corpus ya bajado: no
+re-baja ningún PDF, sólo re-lee lo que ya está en disco.
 
 El .txt se commitea (es liviano, greppable y permite `git grep` sobre todo el corpus, además
 de re-preguntar al corpus cuando cambia el pipeline sin re-parsear el PDF). Requiere `pdftotext`

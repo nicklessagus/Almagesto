@@ -1,7 +1,7 @@
 ---
 name: ingest-star
 description: Usar cuando el usuario pide bajar/agregar/ingestar una estrella a la bóveda ("bajá GJ 581", "ingest tau ceti", "agregá la estrella X", "traé la bibliografía de AU Mic"). Corre la cadena de ingesta y hace la extracción LLM.
-version: 1.12.2
+version: 1.13.0
 ---
 
 # Ingest: agregar una estrella a la wiki
@@ -129,6 +129,12 @@ Progreso del ingest de <estrella>:
    `vault/raw/fulltext/<slug>/` y poblar:
    - en `vault/wiki/papers/<bibcode>.md`: `methods`, `thesis_links`, `bearing`, y la sección "Extracción"
      (P/K por planeta, indicadores, relevancia para la tesis).
+   ⚠ **`pdf_source` antes de copiar un número** (#57): con `eprint` el `.txt` es el **preprint**
+   (un `v1` pre-referato puede traer otros valores que el publicado que identifica el bibcode), y con
+   `null` no se sabe —que **no** es "publicado"—. Un valor que choca con el ground-truth o con el
+   abstract de ADS es candidato a **diferencia de versión**: abrí el PDF publicado o dejá la
+   salvedad en la nota. `verify-citations` lo detecta después; **acá es donde el número entra a la
+   bóveda**.
    - en `vault/wiki/stars/<slug>.md`: completar frontmatter (`P_rot_days`,
      `activity_indicators_expected`, caveats por planeta) y escribir la **síntesis** (qué se sabe,
      qué indicador debería trazar actividad para ese tipo espectral, huecos).

@@ -1,7 +1,7 @@
 ---
 name: test-hypothesis
 description: Usar cuando el usuario plantea una hipótesis/supuesto y pide evidencia a favor o en contra en el corpus de la bóveda ("hipótesis: ...", "buscá evidencia que apoye o rechace que ...", "¿el corpus sostiene que ...?", "guardá como hipótesis que ..."). Testea contra el texto completo y responde con veredicto citado; archiva la hipótesis y taggea papers SÓLO si el usuario lo pide.
-version: 1.2.0
+version: 1.3.0
 ---
 
 # Test de hipótesis contra el corpus
@@ -38,6 +38,10 @@ Distinción: una hipótesis es un supuesto que se sostiene y acumula evidencia �
 
 2. **Leer los hits** (los `.txt`, no el PDF) y clasificar cada paper: **supports / challenges /
    method**. Ser honesto: buscar activamente contraejemplos, no solo confirmación.
+
+> ⚠ **Si vas a reportar un número, mirá `pdf_source` de la nota del paper** (#57): con `eprint` el
+> `.txt` es el **preprint** y el valor puede no ser el de la versión publicada; con `null` no se
+> sabe. Decilo al reportar ("según el eprint de X") en vez de presentarlo como el valor publicado.
 
 3. **Reportar en el chat**: veredicto (sostiene / falla / parcial) con la evidencia citada
    `[[bibcode]]` y la búsqueda usada. **No archivar por default** (regla de `CLAUDE.md`: persistir
