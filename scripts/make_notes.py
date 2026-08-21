@@ -53,6 +53,39 @@ def _txt_provenance(path) -> str:
             else "pdftotext")
 
 
+def pdf_source_info(slug: str | None, stem: str) -> tuple[str | None, str | None]:
+    """(pdf_source, eprint_version) de un paper: de QUÉ DOCUMENTO salió el PDF/texto (#57), no con
+    qué método se extrajo (eso es `fulltext_source`). Valores: `eprint` (arXiv — puede ser un v1
+    pre-referato), `ads` (escaneo alojado por ADS), `publisher` (versión publicada), `web`
+    (snapshot) o None si no se sabe.
+
+    Precedencia: manda la **verdad de disco** —la marca que arXiv estampa en cada página, visible
+    en el .txt—, porque no depende de que el fetcher haya dejado registro y por eso funciona
+    retroactivamente sobre un corpus ya bajado (y porque un ADS_PDF que sirve el eprint ES el
+    eprint, diga lo que diga la rama). Sin marca, vale lo que registró el fetcher de la corrida
+    (`build/<slug>/pdf_source.json`). Sin ninguna de las dos: None (desconocido, no "publicado":
+    afirmar de más acá sería peor que no saber)."""
+    if not slug:
+        return None, None
+    txt = cfg.FULLTEXT / slug / f"{stem}.txt"
+    if txt.exists():
+        if _txt_provenance(txt) == "web":
+            return "web", None
+        head = txt.read_text(encoding="utf-8", errors="replace")[:cfg.ARXIV_STAMP_SCAN_CHARS]
+        ver = cfg.arxiv_stamp(head)
+        if ver is not None:
+            return "eprint", (ver or None)
+    reg = cfg.ROOT / "build" / slug / "pdf_source.json"
+    if reg.exists():
+        try:
+            src = (json.loads(reg.read_text(encoding="utf-8")) or {}).get(stem)
+        except ValueError:
+            src = None
+        if src:
+            return src, None
+    return None, None
+
+
 # Calidad de fulltext para desempatar entre copias del mismo paper bajo distintos slugs (#16):
 # `pdftotext`/`web` son extracción/snapshot limpios; `ocr` es rescate "citable con salvedad".
 # Mayor = mejor; desconocido = 0.
@@ -130,6 +163,14 @@ def stamp_fulltext(dest, stem: str, slug: str | None) -> bool:
 
     changed = upsert("fulltext", rel, ("pdf",))
     changed = upsert("fulltext_source", src, ("fulltext", "pdf")) or changed
+    # `pdf_source` viaja con los otros dos porque se conoce en el mismo momento (el .txt ya está en
+    # disco) y porque así se estampa RETROACTIVAMENTE en cualquier bóveda ya ingestada: re-correr
+    # extract_fulltext alcanza, no hay que re-bajar nada.
+    psrc, pver = pdf_source_info(slug, stem)
+    if psrc:
+        changed = upsert("pdf_source", psrc, ("fulltext_source", "fulltext", "pdf")) or changed
+        if pver:
+            changed = upsert("eprint_version", pver, ("pdf_source",)) or changed
     if changed:
         dest.write_text("---\n" + "\n".join(lines) + text[end:], encoding="utf-8")
     return changed
@@ -604,6 +645,7 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
         # En la cadena el .txt suele no existir todavía (extract_fulltext corre después y
         # estampa vía stamp_fulltext); en un re-run sí está y el stub nace completo.
         txt_rel, txt_src = fulltext_info(slug, safe_name(bib))
+        pdf_src, pdf_ver = pdf_source_info(slug, safe_name(bib))
         front = {
             "bibcode": bib,
             "title": r.get("title"),
@@ -623,6 +665,10 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
             "pdf": pdf_rel,
             "fulltext": txt_rel,           # el artefacto BARATO del contrato: leer/grep esto, no el PDF
             "fulltext_source": txt_src,    # pdftotext | ocr (citable con salvedad) | web
+            # de QUÉ documento salió (#57), distinto del método de extracción de arriba:
+            # eprint (arXiv, puede ser un v1 pre-referato) | ads | publisher | web | null
+            "pdf_source": pdf_src,
+            **({"eprint_version": pdf_ver} if pdf_ver else {}),
             "confidence": "medium",      # patrón LLM Wiki
             "tags": ["paper"],
             "generator": f"Almagesto v{cfg.ALMAGESTO_VERSION}",   # provenance (con qué versión se armó)
@@ -742,6 +788,7 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
     # fulltext↔disco: fetch_web escribe el snapshot ANTES de llamar acá → la nota web nace con el
     # contrato completo; para local-pdfs lo estampa extract_fulltext al extraer (stamp_fulltext).
     txt_rel, txt_src = fulltext_info(slug, safe_name(citekey))
+    pdf_src, pdf_ver = pdf_source_info(slug, safe_name(citekey))
     front = {
         "bibcode": citekey,
         "title": title,
@@ -763,6 +810,8 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
         "pdf": pdf_rel,                      # off-ADS: null salvo PDF local ya copiado a raw/pdfs/<slug>/
         "fulltext": txt_rel,                 # el artefacto BARATO del contrato: leer/grep esto, no el PDF
         "fulltext_source": txt_src,          # pdftotext | ocr (citable con salvedad) | web
+        "pdf_source": pdf_src,               # de QUÉ documento salió (#57): web | eprint | … | null
+        **({"eprint_version": pdf_ver} if pdf_ver else {}),
         # fuente aún no obtenida (paywall|scan|unextractable) → derivada al usuario; sólo si aplica
         **({"pending_source": pending} if pending else {}),
         "confidence": "medium",

@@ -1,7 +1,7 @@
 ---
 name: maintain
 description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), resolver el backlog del lint (P_rot faltante, drift PDF↔disco, cobertura, claims stale), y la pasada periódica de retracciones sobre toda la bóveda ("chequeá retracciones").
-version: 1.8.0
+version: 1.8.1
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
@@ -137,6 +137,11 @@ Pasada de higiene sobre lo que `lint.py` marca como backlog/WARN (no bloqueante,
   donde el link no existía). Si el hallazgo dice **"cabecera fuera del contrato"** (#48), el backfill
   **no** la va a tocar: normalizá primero esa línea a la forma canónica (`· … · ADS: \`<bibcode>\``, o
   `· … fuente off-ADS · \`<citekey>\``) y recién ahí re-corré el backfill.
+- **Papers sin `pdf_source`** (#57 — corpus ingestado antes de 1.10.0: no se sabe si el `.txt`
+  salió del eprint o del publicado, y ese caveat es el que evita que `verify-citations` "corrija"
+  una nota hacia un v1 pre-referato) → **backfill sin re-bajar nada**:
+  `python scripts/extract_fulltext.py <slug>` re-estampa el campo leyendo la marca de arXiv del
+  `.txt` que ya está en disco. Lo que quede en `null` es **desconocido**, no "publicado".
 - **Cobertura** (concepto/hipótesis sin ninguna cita) → agregar las citas que faltan.
 - **Fuentes pendientes** (`pending_source`) → conseguir el PDF/fuente (el lint lista el puntero
   doi/url), reemplazar `pending` por `pdf:`/`url:` en `sources:` y re-correr la cadena.

@@ -108,6 +108,9 @@ def main() -> int:
         print(f"  [{i}/{len(todo)}] {r['arxiv_id']}  {r['bibcode']}")
         if download_pdf(r["arxiv_id"], dest):
             got += 1
+            # de dónde salió este PDF (#57): arXiv sirve el EPRINT, que puede ser un v1
+            # pre-referato — distinto de la versión publicada que cita el bibcode.
+            cfg.record_pdf_source(args.slug, safe_name(r["bibcode"]), "eprint")
         else:
             failed.append(r)
         time.sleep(SLEEP_S)

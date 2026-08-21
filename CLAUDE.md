@@ -169,14 +169,24 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   no diferencias cosméticas dentro de la barra). Reflejar la disputa también en la tabla/prosa.
 - **papers/**: `bibcode, title, first_author, n_authors, year, arxiv_id, doi, bibstem, stars[], topics[], methods[],
   thesis_links[], bearing(supports|challenges|method), relevance, citation_count, pdf, fulltext,
-  fulltext_source(pdftotext|ocr|web)`. El contrato apunta a **ambos artefactos**: `fulltext` es el
+  fulltext_source(pdftotext|ocr|web), pdf_source(eprint|ads|publisher|web)`. El contrato apunta a **ambos artefactos**: `fulltext` es el
   `.txt` **barato** (grep/lectura — el default de todo consumidor) y `pdf` el respaldo caro (abrir
   sólo para figuras/tablas/ecuaciones o dudas de símbolos); `fulltext_source: ocr` hereda desde el
   frontmatter la salvedad OCR (sin abrir el archivo). Los estampan `make_notes`/`extract_fulltext`
   por verdad de disco (null si no hay extracción). Cuando un paper vive bajo **varios slugs** (relevante
   para más de un sujeto → su `.txt` extraído bajo cada uno, contenido idéntico) el campo es **estable**:
   la copia ya estampada se mantiene salvo que llegue una de **mejor calidad** (`pdftotext`/`web` > `ocr`);
-  no se repunta al slug que corrió último (idempotente, sin ruido de diff). Opcional
+  no se repunta al slug que corrió último (idempotente, sin ruido de diff).
+  **`fulltext_source` vs `pdf_source` (#57):** el primero dice **cómo se extrajo** el texto, el
+  segundo **de qué documento salió** — `eprint` (arXiv: puede ser un **v1 pre-referato**, con
+  `eprint_version` cuando se conoce), `ads` (escaneo alojado por ADS), `publisher`, `web`
+  (snapshot), o `null` = **desconocido** (que **no** es "publicado"). Manda la verdad de disco: la
+  marca que arXiv estampa en cada página, visible en el `.txt` — por eso se detecta
+  retroactivamente en un corpus ya bajado (re-correr `extract_fulltext`, sin re-bajar nada); si no
+  hay marca, vale la rama que registró el fetcher. Importa porque `verify-citations` promete que la
+  cita textual son "las palabras reales del paper": con `eprint`, una discrepancia numérica contra
+  un valor publicado es candidata a **diferencia de versión** y NO se "corrige" la nota hacia el
+  preprint (ver el caveat del skill). Opcional
   `retracted: true` + `retraction{type,notice_doi,date,source}` — lo estampa `scripts/check_retractions.py`
   (Crossref) cuando el paper fue **retractado**; el lint lo surface como bloqueante (fuente no válida).
   Del mismo origen y opcional, `corrections: [{type,notice_doi,date,source}]` (#52): la corrección

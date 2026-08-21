@@ -18,7 +18,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.9.0"
+ALMAGESTO_VERSION = "1.10.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -61,6 +61,23 @@ GROUND_TRUTH = RAW / "ground_truth"
 # si cambia el header, cambia acá.
 FULLTEXT_OCR_MARK = "# Almagesto — fulltext por OCR"
 FULLTEXT_WEB_MARK = "# Almagesto — snapshot web"
+
+# Marca que arXiv estampa en el margen de CADA página del PDF que sirve
+# ("arXiv:2201.01234v3 [astro-ph.EP] 5 Jan 2022"; los IDs viejos son "astro-ph/0601123v2").
+# Es la señal de DISCO de que el .txt salió del **eprint** y no de la versión publicada (#57):
+# no depende de que el fetcher haya dejado registro, así que funciona retroactivamente sobre un
+# corpus ya bajado. Importa porque `verify-citations` promete que la cita textual son "las palabras
+# reales del paper" y un v1 pre-referato puede decir otra cosa que el publicado.
+ARXIV_STAMP_RE = re.compile(r"arXiv:\s*(\d{4}\.\d{4,5}|[a-z-]+(?:\.[A-Z]{2})?/\d{7})(v\d+)?",
+                            re.I)
+ARXIV_STAMP_SCAN_CHARS = 4000     # la marca está en la 1ª página; no hace falta leer el paper entero
+
+
+def arxiv_stamp(text: str) -> str | None:
+    """Versión del eprint ("v3", o "" si la marca no la trae) si el texto arranca con la marca de
+    arXiv; None si no está. Sólo mira el principio (la marca va en el margen de la 1ª página)."""
+    m = ARXIV_STAMP_RE.search(text[:ARXIV_STAMP_SCAN_CHARS])
+    return (m.group(2) or "") if m else None
 
 
 def snapshot_retrieved(path) -> str | None:
@@ -248,3 +265,22 @@ def save_busqueda(slug: str, busqueda: dict) -> None:
     data.setdefault("slug", slug)
     data["busqueda"] = busqueda
     save_registro(slug, data)
+
+
+def record_pdf_source(slug: str, stem: str, source: str) -> None:
+    """Deja constancia de QUÉ rama entregó el PDF de un paper (#57): `eprint` (arXiv), `ads`
+    (escaneo alojado por ADS) o `publisher`. Vive en `build/<slug>/pdf_source.json` —scratch a
+    propósito: es un puente dentro de la MISMA corrida de la cadena (fetch_* → make_notes), y lo
+    durable termina en el frontmatter de la nota, que se commitea. La señal fuerte igual es la
+    marca de arXiv en el .txt (verdad de disco, retroactiva); esto cubre lo que la marca no
+    distingue (ads vs publisher, y un eprint sin marca)."""
+    f = ROOT / "build" / slug / "pdf_source.json"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    data = {}
+    if f.exists():
+        try:
+            data = json.loads(f.read_text(encoding="utf-8")) or {}
+        except ValueError:
+            data = {}
+    data[stem] = source
+    f.write_text(json.dumps(data, indent=2, ensure_ascii=False, sort_keys=True), encoding="utf-8")

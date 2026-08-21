@@ -216,15 +216,17 @@ def main() -> int:
           + (f", {illegible} ilegibles (⚠ ver arriba)" if illegible else "")
           + f" → {outdir}")
 
-    # Contrato máquina: estampar `fulltext:`/`fulltext_source:` en las notas de paper para TODOS
-    # los .txt del slug (recién extraídos, viejos y snapshots web) — el stub nace antes que el
-    # .txt (make_notes corre primero en la cadena), así que este paso cierra el contrato; de paso
-    # un re-run idempotente migra notas pre-contrato sin los campos. Cirugía de make_notes: nunca
-    # toca la extracción LLM.
+    # Contrato máquina: estampar `fulltext:`/`fulltext_source:`/`pdf_source:` en las notas de paper
+    # para TODOS los .txt del slug (recién extraídos, viejos y snapshots web) — el stub nace antes
+    # que el .txt (make_notes corre primero en la cadena), así que este paso cierra el contrato; de
+    # paso un re-run idempotente migra notas pre-contrato sin los campos (es el backfill de
+    # `pdf_source` en un corpus ya bajado, #57: la marca de arXiv ya está en el .txt, no hay que
+    # re-bajar ningún PDF). Cirugía de make_notes: nunca toca la extracción LLM.
     stamped = sum(make_notes.stamp_fulltext(cfg.PAPERS / f"{t.stem}.md", t.stem, args.slug)
                   for t in sorted(outdir.glob("*.txt")))
     if stamped:
-        print(f"  notas: {stamped} con fulltext:/fulltext_source: estampados (contrato máquina)")
+        print(f"  notas: {stamped} con fulltext:/fulltext_source:/pdf_source: estampados "
+              "(contrato máquina)")
     return 1 if failed else 0
 
 

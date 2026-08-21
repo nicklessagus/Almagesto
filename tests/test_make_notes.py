@@ -807,3 +807,64 @@ def test_search_line_sin_registro_o_sin_ancla_no_toca_nada(toy_vault):
     cfg.save_busqueda("test_star", {"fecha": "2026-08-21", "n_found": 5, "n_core": 1})
     assert mn.stamp_search_line("test_star", fuera) is False
     assert "Búsqueda" not in fuera.read_text(encoding="utf-8")
+
+
+# ── pdf_source: de qué DOCUMENTO salió el texto (#57) ────────────────────────
+
+def _txt(slug, stem, body):
+    d = cfg.FULLTEXT / slug
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"{stem}.txt").write_text(body, encoding="utf-8")
+
+
+def test_pdf_source_detecta_el_eprint_por_la_marca_de_arxiv(toy_vault):
+    """Verdad de disco: la marca que arXiv estampa en cada página delata que el .txt salió del
+    EPRINT (posible v1 pre-referato), sin depender de que el fetcher haya dejado registro — así
+    funciona retroactivamente sobre un corpus ya bajado."""
+    _txt("test_star", "2020arx....1..1A",
+         "arXiv:2201.01234v3 [astro-ph.EP] 5 Jan 2022\n\nA Study of Something\n")
+    assert mn.pdf_source_info("test_star", "2020arx....1..1A") == ("eprint", "v3")
+
+
+def test_pdf_source_sin_marca_usa_lo_que_registro_el_fetcher(toy_vault):
+    """Sin marca de arXiv vale la rama que entregó el PDF en la corrida (ads vs publisher es
+    justo lo que la marca NO distingue)."""
+    _txt("test_star", "2020pub....1..1P", "A&A 641, A1 (2020)\n\nPublished version\n")
+    cfg.record_pdf_source("test_star", "2020pub....1..1P", "publisher")
+    assert mn.pdf_source_info("test_star", "2020pub....1..1P") == ("publisher", None)
+
+
+def test_pdf_source_la_marca_gana_sobre_el_registro(toy_vault):
+    """Un ADS_PDF que sirve el eprint ES el eprint, diga lo que diga la rama: manda el disco."""
+    _txt("test_star", "2020mix....1..1M", "arXiv:2201.09999v1 [astro-ph.SR] 1 Jan 2022\n\nx\n")
+    cfg.record_pdf_source("test_star", "2020mix....1..1M", "ads")
+    assert mn.pdf_source_info("test_star", "2020mix....1..1M") == ("eprint", "v1")
+
+
+def test_pdf_source_desconocido_no_afirma_publicado(toy_vault):
+    """Sin marca y sin registro: None. Asumir 'publisher' sería afirmar de más justo donde el
+    caveat importa (verify podría 'corregir' la nota hacia un preprint sin saberlo)."""
+    _txt("test_star", "2020unk....1..1U", "Sin marcas de nada\n")
+    assert mn.pdf_source_info("test_star", "2020unk....1..1U") == (None, None)
+    assert mn.pdf_source_info("test_star", "2020sinTxt.1..1S") == (None, None)
+
+
+def test_pdf_source_snapshot_web(toy_vault):
+    _txt("test_star", "2020Autor", f"{cfg.FULLTEXT_WEB_MARK}\nurl: https://x\n\ncontenido\n")
+    assert mn.pdf_source_info("test_star", "2020Autor") == ("web", None)
+
+
+def test_stamp_fulltext_estampa_pdf_source_retroactivamente(toy_vault):
+    """La vía retroactiva: en una bóveda ya ingestada alcanza con re-correr extract_fulltext
+    (que llama a stamp_fulltext) — no hay que re-bajar ningún PDF."""
+    from conftest import mk_note, read_fm
+    mk_note(cfg.PAPERS, "2020arx....1..1A", {"bibcode": "2020arx....1..1A", "tags": ["paper"],
+                                             "pdf": None}, "# Paper\n\nExtracción LLM.\n")
+    _txt("test_star", "2020arx....1..1A", "arXiv:2201.01234v2 [astro-ph.EP] 5 Jan 2022\n\nx\n")
+    dest = cfg.PAPERS / "2020arx....1..1A.md"
+    assert mn.stamp_fulltext(dest, "2020arx....1..1A", "test_star") is True
+    fm = read_fm(dest)
+    assert fm["pdf_source"] == "eprint" and fm["eprint_version"] == "v2"
+    assert fm["fulltext_source"] == "pdftotext"          # el método de extracción, aparte
+    assert "Extracción LLM." in dest.read_text(encoding="utf-8")
+    assert mn.stamp_fulltext(dest, "2020arx....1..1A", "test_star") is False   # idempotente

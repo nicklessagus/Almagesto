@@ -53,6 +53,10 @@ RETRY_STATUS = (429, 500, 502, 503, 504)
 # Subtipos de esource que son PDF bajable, en orden de preferencia. ADS_SCAN (visor /full/,
 # HTML) y los *_HTML no sirven como fuente de la bóveda.
 PDF_TYPES = ("EPRINT_PDF", "ADS_PDF", "PUB_PDF")
+# Qué DOCUMENTO entrega cada rama del resolver (#57): el eprint de arXiv puede ser un v1
+# pre-referato (valores y secciones distintos de la versión publicada que cita el bibcode);
+# ADS_PDF suele ser el escaneo del publicado; PUB_PDF es el publicado. Se registra al bajar.
+PDF_SOURCE = {"EPRINT_PDF": "eprint", "ADS_PDF": "ads", "PUB_PDF": "publisher"}
 
 # Ramas de la cascada MANUAL de rescate (issue #50): lo que el resolver no entrega se busca a mano,
 # y el bibstem dice por dónde empezar (medido en un ingest real: 5 de 17 fallaron; 4 se recuperaron
@@ -220,6 +224,7 @@ def main() -> int:
                 dest.write_bytes(pdf)
                 print(f"      ✓ {sub} → {dest.name} ({len(pdf)} bytes)")
                 got += 1
+                cfg.record_pdf_source(args.slug, safe_name(bib), PDF_SOURCE[sub])   # #57
                 ok = True
                 break
             print(f"      · {sub} no entregó PDF")

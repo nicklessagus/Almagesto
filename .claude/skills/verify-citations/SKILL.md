@@ -1,7 +1,7 @@
 ---
 name: verify-citations
 description: Usar para verificar, afirmación por afirmación, que las citas [[bibcode]] de una nota de la wiki (query, hipótesis, ficha, concepto) realmente están respaldadas por el texto completo de la fuente. Se corre como paso de cierre al armar/editar una query o hipótesis, o cuando el usuario pide "rechequeá las citas / ¿esto lo dice el paper?". Implementa el chequeo claim↔evidencia (pipeline tipo CiteAudit) sobre el corpus cerrado de la bóveda. Veredictos: soportada / parcial / no-soportada (la fuente calla) / contradice (la fuente afirma lo contrario → candidata a disputa, no sólo cita rota); en transcripciones de tablas/listas chequea además la completitud (lo que la nota omite).
-version: 1.3.7
+version: 1.4.0
 ---
 
 # Verify-citations — chequeo claim↔evidencia contra el fulltext
@@ -73,6 +73,20 @@ plenamente respaldadas). Acá cada afirmación se contrasta contra el texto real
 > pero el OCR puede errar **símbolos, ligaduras y notación matemática**: la verificación vale para
 > **prosa**; ante una discrepancia puntual de símbolos/números en una ecuación, abrir el **PDF** para
 > esa afirmación en vez de declararla `no-soportada`/`contradice`.
+>
+> ⚠ **Excepción preprint — el `.txt` puede ser OTRA VERSIÓN del paper (#57).** Si la nota trae
+> `pdf_source: eprint` (y, cuando se conoce, `eprint_version: v1`), el texto salió de **arXiv**, no
+> de la versión publicada que identifica el `[[bibcode]]`. Un **v1 pre-referato** puede traer
+> valores, secciones y hasta conclusiones distintas. El daño va en la dirección **menos obvia**:
+> ante una discrepancia entre la nota (valor **publicado** — típicamente de NEA o del abstract de
+> ADS) y el `.txt` (eprint), el protocolo de acá manda "bajar la afirmación a lo que dice la
+> fuente" → **se corrompería el valor publicado con el del preprint, y quedaría registrado como un
+> hallazgo del chequeo**. Regla: con `pdf_source: eprint`, una discrepancia **numérica** contra un
+> valor publicado es candidata a **diferencia de versión**, no a cita rota → abrir el PDF publicado
+> para esa afirmación, o marcarla como diferencia de versión; **no** "corregir" la nota hacia el
+> eprint. Con `pdf_source: null` (desconocido: ni marca de arXiv ni registro del fetcher) aplicá el
+> mismo cuidado ante una discrepancia numérica — desconocido **no** es "publicado". La prosa y los
+> mecanismos se verifican igual.
 
 ## Cuándo correrlo
 - **Paso de cierre obligatorio de toda operación que escriba prosa con `[[bibcode]]`** (regla de
