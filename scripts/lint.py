@@ -34,6 +34,8 @@ SIN bloque `## Verificación de citas` → nunca pasó por verify-citations; bac
 **verificación stale** (la nota se editó DESPUÉS de la fecha de su bloque de verificación → las
 afirmaciones nuevas nunca pasaron por el fan-out pero quedan bajo un encabezado que se lee como
 vigente; backlog),
+**triage pendiente** (candidatos del chaining en `build/<slug>/ads.json` que nadie juzgó todavía —
+la compuerta #38 los deja sin bajar y el aviso vivía sólo en el stdout de la corrida; backlog),
 **corpus truncado** (un `build/<slug>/ads.json` con `truncated` seteado → la query directa trajo
 menos papers de los que ADS reporta: al sujeto le falta cola; ídem `truncated_glyph`, el superset
 del rescate por glifo (#28/#43) cortado por citas ANTES del filtro; backlog), y campos clave
@@ -470,6 +472,15 @@ def main() -> int:
     # `truncated_glyph` (#43) es la marca hermana pero del RESCATE POR GLIFO (#28): ahí el corte
     # top-por-citas pasa ANTES del filtro client-side — la cola puede esconder papers del sujeto
     # (los que escriben `∊ Eri` no son los más citados) → cobertura incompleta del rescate.
+    #
+    # Candidatos de triage sin juzgar (#55, backlog): la compuerta (#38) deja en `candidates` los
+    # papers que el chaining trajo y NADIE decidió todavía (no se bajan: 18% de precisión medida).
+    # El único recordatorio era el stdout de query_ads y el mensaje final del orquestador — los dos
+    # se pierden apenas scrollea la terminal, así que un ingest podía cerrarse con lint en 0 y
+    # cientos de candidatos pendientes: el paso con más juicio de la operación era el único sin red.
+    # `candidates` ya viene NETO de decisiones (los descartados de triage.json no se re-proponen y
+    # los aceptados pasaron a extra_core → son core), así que basta con contarlos.
+    triage_pending = []
     truncated_corpora = []
     for aj in sorted(glob.glob(str(cfg.ROOT / "build" / "*" / "ads.json"))):
         try:
@@ -482,6 +493,13 @@ def main() -> int:
             truncated_corpora.append(
                 (slug, f"ADS reporta {t.get('num_found')} y se trajeron {t.get('rows')} → corpus "
                        f"incompleto; re-ingestá con --rows mayor (o paginá) para cubrir la cola"))
+        cands = data.get("candidates") or []
+        if cands:
+            top = ", ".join(c.get("bibcode", "?") for c in cands[:3])
+            triage_pending.append(
+                (slug, f"{len(cands)} candidato(s) del chaining sin juzgar (p. ej. {top}"
+                       f"{' …' if len(cands) > 3 else ''}) → `python scripts/triage.py {slug}`: "
+                       f"pertinente → `extra_core` en stars.yaml; ruido → `--drop … --reason`"))
         for tg in data.get("truncated_glyph") or []:
             consts = "/".join(tg.get("constellations") or []) or tg.get("letter") or "?"
             truncated_corpora.append(
@@ -512,6 +530,7 @@ def main() -> int:
                          ("Sin verificar: query/concepto con citas pero sin bloque verify-citations (backlog)", unverified),
                          ("Verificación stale: la nota se editó después de su último verify-citations (backlog)", stale_verif),
                          ("Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog)", coverage),
+                         ("Triage pendiente: candidatos del chaining sin juzgar (backlog)", triage_pending),
                          ("Corpus truncado: la query directa trajo menos de lo que ADS reporta (backlog)", truncated_corpora),
                          ("Campos incompletos", incomplete)]:
         lines.append(f"## {title} ({len(items)})")

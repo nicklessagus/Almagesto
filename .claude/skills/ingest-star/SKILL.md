@@ -1,7 +1,7 @@
 ---
 name: ingest-star
 description: Usar cuando el usuario pide bajar/agregar/ingestar una estrella a la bóveda ("bajá GJ 581", "ingest tau ceti", "agregá la estrella X", "traé la bibliografía de AU Mic"). Corre la cadena de ingesta y hace la extracción LLM.
-version: 1.11.1
+version: 1.11.2
 ---
 
 # Ingest: agregar una estrella a la wiki
@@ -115,6 +115,10 @@ Progreso del ingest de <estrella>:
      LLM y (b) el resumen de volumen (core nuevo vs notas actuales). `--report` deja la tabla en
      `outputs/triage-<slug>.md` para decidir por lote.
    No curar en silencio: lo descartado queda con motivo, y lo que quede sin decidir se anota en el `log`.
+   **El lint ahora tiene red (#55):** lo que quede en `candidates` sale como backlog *Triage
+   pendiente* — antes el aviso vivía sólo en este stdout y el ingest podía cerrarse "en 0" con
+   cientos sin juzgar. Ojo: `build/` es scratch **gitignored**, así que esa red sólo existe en la
+   máquina que corrió la cadena; dejar el conteo en el `log` sigue siendo lo único que viaja.
 
 3. **Extracción LLM (criterio).** Leer los papers **clave** (discovery / actividad / métodos) desde
    `vault/raw/fulltext/<slug>/` y poblar:

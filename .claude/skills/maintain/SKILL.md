@@ -1,7 +1,7 @@
 ---
 name: maintain
 description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), resolver el backlog del lint (P_rot faltante, drift PDF↔disco, cobertura, claims stale), y la pasada periódica de retracciones sobre toda la bóveda ("chequeá retracciones").
-version: 1.7.2
+version: 1.7.3
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
@@ -119,6 +119,11 @@ Pasada de higiene sobre lo que `lint.py` marca como backlog/WARN (no bloqueante,
 > (la ficha/concepto que la motivó, `index.md`, el hub si es un radio) o borrarla si sobra. Si
 > aparece en una pasada periódica, resolvela en el momento.
 
+- **Triage pendiente** (#55 — candidatos del chaining que nadie juzgó) → `python scripts/triage.py
+  <slug>` y decidir cada uno por título+abstract: pertinente → `extra_core` en `stars.yaml` +
+  re-correr la cadena; ruido → `--drop … --reason`; dudoso → al usuario. Es el paso con más juicio
+  de un ingest y el que más fácil queda a medias. La categoría lee `build/` (scratch, gitignored):
+  en una máquina que no corrió ese ingest da 0 aunque haya pendientes.
 - **P_rot / campos nulos** → abrir una `query-corpus` para imputar desde la literatura (web/ADS) y
   completar el frontmatter con su `[[bibcode]]`.
 - **PDF ↔ disco / cuerpo** (drift del campo `pdf` o del link de cabecera) → linkear el PDF bajado o

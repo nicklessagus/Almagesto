@@ -404,6 +404,35 @@ def test_prosa_reconoce_variantes_de_mencion(toy_vault, capsys):
     assert "no discutido en prosa" not in out
 
 
+def test_triage_pendiente_surface_backlog(toy_vault, capsys):
+    """#55: candidatos del chaining sin juzgar → backlog visible. Antes el único recordatorio era
+    el stdout de query_ads: un ingest podía cerrarse con lint en 0 y cientos de pendientes."""
+    d = toy_vault.ROOT / "build" / "au_mic"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "ads.json").write_text(json.dumps(
+        {"kind": "star", "slug": "au_mic", "records": [],
+         "candidates": [{"bibcode": f"2020cand{i}..1..1C"} for i in range(4)]}), encoding="utf-8")
+    rc, out = run_lint(capsys)
+    assert rc == 0                                     # backlog, no bloqueante
+    assert "Triage pendiente" in out
+    assert "au_mic → 4 candidato(s) del chaining sin juzgar" in out
+    assert "2020cand0..1..1C" in out and "…" in out    # muestra los 3 primeros + elipsis
+    assert "python scripts/triage.py au_mic" in out
+
+
+def test_triage_sin_candidatos_no_reporta(toy_vault, capsys):
+    """`candidates: []` (todos juzgados) o ads.json sin la clave (corpus de tema, --no-triage,
+    ads.json viejo) → nada que reportar."""
+    for slug, payload in (("sin_cands", {"slug": "sin_cands", "records": [], "candidates": []}),
+                          ("sin_clave", {"slug": "sin_clave", "records": []})):
+        d = toy_vault.ROOT / "build" / slug
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "ads.json").write_text(json.dumps(payload), encoding="utf-8")
+    rc, out = run_lint(capsys)
+    assert rc == 0
+    assert "## Triage pendiente: candidatos del chaining sin juzgar (backlog) (0)" in out
+
+
 def test_corpus_truncado_surface_backlog(toy_vault, capsys):
     """build/<slug>/ads.json con `truncated` seteado → el lint lo surface como backlog (no bloquea, #17)."""
     d = toy_vault.ROOT / "build" / "au_mic"

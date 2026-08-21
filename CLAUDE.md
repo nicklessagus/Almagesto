@@ -413,6 +413,13 @@ stale** (la nota se editó **después** de la fecha de su bloque —lo que pasa 
 quedan bajo un encabezado que se lee como vigente: es el modo de falla de "afirmar de menos"
 aplicado a la garantía misma; el lint lo mide por `git` contra la fecha del encabezado —por eso el
 bloque **debe** llevar fecha— y degrada a silencio fuera de un repo).
+El **triage pendiente** (#55: candidatos del chaining en `build/<slug>/ads.json` que **nadie juzgó**
+todavía — la compuerta los deja sin bajar, y el aviso vivía sólo en el stdout de la corrida, que se
+pierde al scrollear: un ingest podía cerrarse con lint en 0 y cientos de pendientes) es **backlog**;
+se resuelve con `python scripts/triage.py <slug>` (pertinente → `extra_core`; ruido → `--drop …
+--reason`). ⚠ **Hereda el falso limpio de `build/`:** ese registro es scratch **gitignored**, así
+que en una máquina que no corrió el ingest la categoría da 0 aunque haya candidatos sin juzgar —
+mientras la curación no viva en config versionada, "0 pendientes" significa "0 **acá**".
 El **corpus truncado** (un `build/<slug>/ads.json` con `truncated` seteado → la query directa trajo
 menos papers de los que ADS reporta: al sujeto le falta cola) es **backlog** — `query_ads` persiste la
 marca (default `--rows 2000`, ≈ el máximo de una request; re-ingestar con `--rows` mayor para cubrir la
