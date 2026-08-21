@@ -18,6 +18,41 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.8.0 (2026-08-21) — tanda 2: #52, la corrección que envejece un número ya extraído
+
+> Tanda 2 del orden sugerido y **primera con scripts + tests**. 362 tests verdes (+3), lint 0.
+> `ALMAGESTO_VERSION` 1.7.4 → **1.8.0** (minor: clave nueva de frontmatter + categoría nueva de
+> lint, retrocompatible — una nota sin `corrections` se comporta igual que antes).
+
+- **#52** — `check_retractions.py` ya **detectaba** las correcciones no-retractantes
+  (`erratum` / `corrigendum` / `expression-of-concern`: la constante `SOFT` existe desde el
+  principio) pero las **imprimía y las tiraba**: sin campo en el frontmatter, sin categoría en el
+  lint, sin nada en el `log`. En un ingest de cientos de papers eso es stdout que nadie lee. El
+  docstring incluso prometía que se "anotaba".
+- **Por qué importa más que una retracción para esta bóveda:** una retracción invalida el paper
+  entero (ya cubierto, bloqueante). Un **corrigendum corrige justo el valor que se destiló** a la
+  ficha (P/K/e/m·sini) — el paper sigue siendo perfectamente citable y el número que le sacaste ya
+  no es el suyo. Es el modo de falla más traicionero para una wiki cuyo contrato es
+  "todo lo que afirma está respaldado por una fuente citable". Una EoC es literalmente el estado
+  "esta fuente está en duda".
+- **Cómo quedó** (mismo mecanismo quirúrgico que `retracted`, sin re-serializar el YAML):
+  `crossref_retraction` devuelve las **entradas completas** de las correcciones (antes sólo el
+  tipo, que era lo que forzaba a perderlas); `stamp_retraction` se generalizó a **`stamp_fields`**
+  —ahora también borra los ítems `-` de una lista vieja, que es lo que necesita `corrections`— y
+  `stamp_corrections` estampa `corrections: [{type, notice_doi, date, source}]`. Idempotente:
+  re-estampa sólo si la lista cambió (una EoC posterior a un corrigendum reemplaza la lista entera,
+  sin duplicar). Las dos señales **conviven** en el mismo frontmatter y la retracción sigue siendo
+  la que gatea el exit 1.
+- **Categoría nueva en el lint: backlog, NO bloqueante** — el paper sigue siendo citable; lo que hay
+  que revisar son **los valores que se le extrajeron**. `maintain F` documenta la resolución (abrir
+  el `notice_doi`, ver qué corrigió, comparar contra lo que la nota afirma citando ese `[[bibcode]]`;
+  si toca un parámetro planetario puede terminar en una `disputes[]`). `maintain` 1.7.1 → **1.7.2**.
+- **Al mergear en una instancia poblada:** el barrido completo (`python scripts/check_retractions.py`
+  sin `--slug`, pasada periódica de `maintain F`) es el que estampa retroactivamente — hasta
+  correrlo, el backlog figura en 0 porque el dato nunca se guardó.
+- **Sigue la tanda 3:** **#55** (candidatos de triage sin juzgar, invisibles al lint — la otra
+  categoría del mismo archivo).
+
 ## ✅ Framework 1.7.4 (2026-08-21) — tanda 1 del backlog #51–#67: coherencia barata (#53/#54/#58/#59)
 
 > La tanda 1 del orden sugerido: **sólo docs/skills, sin tocar scripts**. Cuatro contradicciones o
