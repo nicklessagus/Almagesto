@@ -18,6 +18,30 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.7.3 (2026-08-21) — #68: el override manual que igual pasaba por la lente astro
+
+> Reportado desde la instancia Almagesto-RV (tema `fastica`) con la verificación contra la API ya
+> hecha. 359 tests verdes (+2), lint 0. `ALMAGESTO_VERSION` 1.7.2 → **1.7.3** (patch: el default de
+> toda query de descubrimiento no cambia).
+
+- **#68** — `extra_core` es **override del clasificador**, pero sólo esquivaba **un** filtro (la
+  regex de `relevance.topics`). Arriba quedaba el `fq: database:astronomy` que `query_ads` aplicaba
+  a **toda** query, incluida la de `fetch_bibcodes`: un bibcode **real** pero indexado fuera de
+  `astronomy` (eprints de `math.ST` / `eess.SP`) no volvía, y la cadena lo reportaba como *"¿typo?"*.
+  Ahora la lente es un **parámetro** (`query_ads(fq=ASTRO_FQ)`) y `fetch_bibcodes` pasa `fq=None`:
+  donde el universo lo fijó el usuario con una lista de bibcodes no hay ruido que filtrar, el `fq`
+  sólo puede **sacar de más**. Los demás callers son de descubrimiento y conservan la lente.
+- **Dónde pegaba:** justo en el caso que la feature existe para cubrir — el **tema MIXTO** (#11),
+  cuyo `extra_core` es textualmente "los papers del tema que sí tienen bibcode ADS", o sea métodos
+  de otra disciplina al servicio del foco astro. En RV hubo que meter Zhang & Mondelli 2024
+  (NeurIPS, `math.ST`) y SHASTA-PCA (`eess.SP`) por `sources:` con clave sintética, **perdiendo el
+  bibcode ADS real como identidad de la nota** — la migración inversa de la que el propio
+  `topics.yaml` había dejado constancia en julio.
+- **El aviso mentía** y mandaba a buscar un typo inexistente. Con la búsqueda por bibcode ya sin
+  `fq`, un faltante sí es bibcode mal escrito o registro renombrado, y el mensaje lo dice.
+- `ingest-topic` 1.9.0 → **1.9.1**: el tema mixto documenta que un bibcode fuera de
+  `database:astronomy` entra por `extra_core` y ya no hay que degradarlo a `sources:`.
+
 ## ✅ Framework 1.7.2 (2026-08-20) — #66 + #60(b): lo que faltaba para ampliar una ficha
 
 > Segunda mitad de la misma tanda, elegida por el mismo criterio que #56: **qué protege la operación
