@@ -1,7 +1,7 @@
 ---
 name: ingest-topic
 description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema off-ADS — típicamente un método de otra disciplina (estadística, ML) al servicio del foco astro — desde PDFs locales + web (ver Modo off-ADS).
-version: 1.9.2
+version: 1.9.4
 ---
 
 # Ingest: agregar un TEMA a la wiki
@@ -122,8 +122,9 @@ Progreso del ingest del tema <tema>:
    concepts — la suficiencia la juzgás vos, igual que en la ficha de estrella.)
 
 6. **Bookkeeping.** Actualizar `vault/wiki/index.md` (agregar el concept si es nuevo), appendear a
-   `vault/wiki/log.md`, y `vault/STATUS.md` si cambió el estado. **No** tocar la matriz método×estrella. Correr
-   `python scripts/lint.py` y revisar (0 wikilinks rotos / huérfanos / `thesis_links` colgados).
+   `vault/wiki/log.md`, y `vault/STATUS.md` si cambió el estado. **No** tocar la matriz método×estrella.
+   (El `lint` va **después** del verify del paso 6b: `CLAUDE.md` lo pide "antes de lint/commit",
+   porque resolver una cita no-soportada suele cambiar la prosa.)
 
 6b. **Verificar citas.** Correr el skill `verify-citations` sobre el **concept** (y las notas de paper
    nuevas). El concept es dual-audiencia e implementation-ready: cada afirmación con `[[bibcode]]`
@@ -202,7 +203,9 @@ Qué cambia respecto del flujo ADS de arriba:
   del item de `sources:` si se declararon (un PDF con DOI sigue siendo off-ADS; con `doi`,
   `ingest_topic.py` corre además `check_retractions.py`); `source_url` +
   `accessed` (la **fecha del snapshot** — el "Retrieved <fecha>" de una cita web, la toma del `.txt`);
-  `bibstem` = venue o dominio; `pdf: null` (el respaldo es el snapshot `.txt`); `stars: []`; `thesis_links`
+  `bibstem` = venue o dominio; `pdf`: null para un snapshot web (el respaldo es el `.txt`), pero
+  **linkeado** si el PDF ya se copió a `vault/raw/pdfs/<slug>/` (fuente `local-pdfs`: verdad de
+  disco, y así el chequeo PDF↔disco del lint no marca drift); `stars: []`; `thesis_links`
   al concept; `tags: [paper, web]` (snapshot de URL) o `[paper, local-pdf]` (PDF provisto).
   Completar la extracción LLM a mano.
 - **Todo lo demás igual:** extracción enfocada en el eje del tema, síntesis al concept durable,

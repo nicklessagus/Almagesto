@@ -157,10 +157,20 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   ⚠ **El puntero es resoluble sin Obsidian (#60):** los roll-ups `## Papers` y `## Métodos aplicados`
   son bloques ```dataview``` — un agente que abre el `.md` ve el **código de la query, no sus
   resultados**, y el plugin ni siquiera está versionado. Para la audiencia-modelo, que es la que este
-  contrato dice servir, el equivalente determinista es un `grep` sobre el frontmatter de los papers:
-  `grep -l 'stars:.*<nombre>' vault/wiki/papers/*.md` (métodos: `contains(methods, …)` →
-  `grep -l 'methods:.*<método>' vault/wiki/papers/*.md`). Si descargás contenido a un roll-up, es
-  porque ese fallback lo recupera; si no, el contenido va inlineado en la ficha.
+  contrato dice servir, el equivalente determinista es un matcher **con ámbito de campo** sobre el
+  frontmatter de los papers (el heading real del segundo roll-up es `## Métodos aplicados a esta
+  estrella`):
+  ```bash
+  awk '/^stars:/{f=1;next} /^[a-z_]+:/{f=0} f&&/<nombre>/{print FILENAME; nextfile}' vault/wiki/papers/*.md
+  awk '/^methods:/{f=1;next} /^[a-z_]+:/{f=0} f&&/<método>/{print FILENAME; nextfile}' vault/wiki/papers/*.md
+  ```
+  ⛔ **`grep -l 'stars:.*<nombre>'` NO sirve**, y es un error medido de este mismo documento (lo dijo
+  hasta 1.10.1): `make_notes` serializa con `default_flow_style=False`, así que las listas van en
+  **bloque** (`stars:` y en la línea siguiente `- tau Cet`) y `grep` es orientado a líneas → **0 hits
+  sobre un corpus donde el paper sí está**. Es el modo de falla de #54 —fabricar una ausencia— dentro
+  del fallback que existe justamente para no depender de Dataview. Atajo aceptable cuando el término
+  no colisiona entre campos: `grep -l '^- <nombre>$' vault/wiki/papers/*.md`. Si descargás contenido
+  a un roll-up, es porque ese fallback lo recupera; si no, el contenido va inlineado en la ficha.
   **Disputas (`planets[].disputes`):** NEA (ground-truth) es **siempre el valor de verdad**; cuando
   un paper discrepa —sea sobre la **existencia** de la señal o sobre el **valor** de un parámetro—
   se taguea, no se sobreescribe. Cada entrada: `field` (`existence` o el parámetro: `P|K|e|msini`),
@@ -190,6 +200,9 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   preprint (ver el caveat del skill). Opcional
   `retracted: true` + `retraction{type,notice_doi,date,source}` — lo estampa `scripts/check_retractions.py`
   (Crossref) cuando el paper fue **retractado**; el lint lo surface como bloqueante (fuente no válida).
+  En notas **off-ADS** el schema suma `source_url` (URL de la fuente web; null si es PDF local),
+  `accessed` (fecha del snapshot — es la cita "Retrieved <fecha>") y, si la fuente no se pudo
+  conseguir, `pending_source: paywall|scan|unextractable` (el lint la lista como precondición).
   Del mismo origen y opcional, `corrections: [{type,notice_doi,date,source}]` (#52): la corrección
   **no retractante** (`erratum` / `corrigendum` / `expression-of-concern`). **No** invalida el paper
   —sigue siendo citable, por eso el lint la lista como **backlog** y no bloquea— pero es la señal
@@ -248,14 +261,14 @@ re-clasificar de `maintain`. No ingesta nada; después se usan `ingest-star`/`in
 
 ### Ingest (una fuente → cascada de páginas)
 1. Los **orquestadores** corren la cadena mecánica completa (idempotente, no pisa — con una única
-   excepción add-only: el retro-linkeo de abajo): `scripts/ingest_star.py <slug>` para estrellas,
-   `scripts/ingest_topic.py <slug>` para temas. **El orden canónico de cada cadena vive en el
+   excepción add-only: el retro-linkeo de abajo): `python scripts/ingest_star.py <slug>` para estrellas,
+   `python scripts/ingest_topic.py <slug>` para temas. **El orden canónico de cada cadena vive en el
    header de su orquestador** (fuente de verdad única — puntero, no copia: no replicar la lista de
    scripts en docs/skills).
 1b. **Compuerta de triage (estrellas).** El citation chaining amplía el pool con papers del grafo que
    mencionan al sujeto pero no hablan de él (medido: 18% de precisión). Sólo entra solo el que lleva
    el **sujeto en el título**; el resto queda como **candidato** en `build/<slug>/ads.json` —**sin
-   bajarse**— y lo juzgás vos por título+abstract (`scripts/triage.py <slug>`): aceptado →
+   bajarse**— y lo juzgás vos por título+abstract (`python scripts/triage.py <slug>`): aceptado →
    `extra_core` en `stars.yaml` + re-correr la cadena; descartado → `triage.py --drop … --reason`
    (persiste: no se re-propone); **dudoso → al usuario**. Detalle en el skill `ingest-star`.
 2. **Vos (LLM)** leés el **fulltext `.txt`** (el default: barato y greppable; el PDF se abre sólo
@@ -313,7 +326,9 @@ pendientes y la ruta al registro (cirugía idempotente, no toca la prosa LLM); (
 dar **falso limpio** sin `build/` — *triage pendiente* y *corpus truncado* caen al registro y
 reportan el snapshot **con su fecha**, aclarando que no es el conteo vigente. Migración: el
 `build/<slug>/triage.json` viejo se sigue **leyendo** (no se pierde juicio) y se consolida solo en el
-primer `--drop`.
+primer `--drop`; para no depender de que el usuario justo descarte algo,
+`python scripts/triage.py <slug> --migrate` lo consolida de una vez (idempotente: ante el mismo
+bibcode gana lo ya versionado).
 
 ### Append (plegar UNA fuente puntual a una entidad existente — skill `append-knowledge`)
 El usuario trae **una fuente concreta** (bibcode ADS, PDF local o URL) para una ficha/concepto que
@@ -341,7 +356,8 @@ suelto sin fuente citable no entra (regla #0). Detalle en el skill.
 **Extensión propia de esta wiki** (el lint canónico de Karpathy NO valida que la fuente respalde la
 afirmación — sólo salud estructural; tapa el *grounding gap* / *epistemic drift*). **Cuándo:** paso de
 cierre de **toda operación que escriba prosa con `[[bibcode]]`** — ingest-star (ficha + papers),
-ingest-topic (concept + papers), query archivada, test de hipótesis — **antes de lint/commit**.
+ingest-topic (concept + papers), append-knowledge, find-contradictions (las disputas nuevas),
+maintain cuando re-sintetiza, query archivada, test de hipótesis — **antes de lint/commit**.
 **Qué hace:** descompone la nota en pares (afirmación, `[[bibcode]]`) —incluidas las **filas de tabla
 y los ítems de lista**, que **heredan la cita del ámbito que las introduce** (caption / párrafo / encabezado
 de sección) en vez de caerse del fan-out por no llevar `[[bibcode]]` propio— y lanza **un subagente
@@ -364,7 +380,7 @@ espeja en `fulltext_source: ocr`) es **citable con
 salvedad**: el OCR puede errar símbolos/notación — la verificación vale para prosa; ante discrepancia
 de símbolos, abrir el PDF. Es **juicio de LLM**,
 robusto pero no prueba — su tasa de error se mide con el **auto-benchmark** (modo benchmark del
-skill, a pedido): `scripts/bench_verify.py seed` siembra citas falsas deterministas entre pares
+skill, a pedido): `python scripts/bench_verify.py seed` siembra citas falsas deterministas entre pares
 reales (misma afirmación, bibcode rotado), el verificador las juzga **a ciegas** y `score`
 reporta el recall; nada del benchmark entra al vault (vive en `build/`/`outputs/`).
 **Regla dura — todo lo apuntable es chequeable:** toda afirmación fáctica va
@@ -390,7 +406,8 @@ colgados), **renombrar** slug, **re-clasificar** tras cambiar `relevance.topics`
 backlog del lint** (P_rot nulo, drift PDF↔disco, cobertura — los **huérfanos no**: son
 bloqueantes, se arreglan al cierre de la operación que los creó), y la **pasada periódica de
 retracciones** (`check_retractions.py` sin `--slug`, toda la bóveda — la cadena de ingest sólo
-chequea el slug en curso). Invariante: la cadena es
+chequea el slug en curso; **esa misma pasada estampa `corrections`**, así que es la que llena ese
+backlog: sin correrla figura en 0 porque el dato nunca se pidió). Invariante: la cadena es
 idempotente (refrescar es seguro); **nunca** se pisa la extracción LLM ni el ground-truth sin `--force`
 explícito. Detalle en el skill.
 

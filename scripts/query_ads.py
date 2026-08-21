@@ -1,11 +1,11 @@
 """Consulta NASA ADS por estrella → metadata de papers + clasificación de relevancia.
 
 Uso:
-    python query_ads.py <slug> [--rows N] [--no-chain] [--no-glyph] [--no-triage] [--sweep]
-    python query_ads.py <slug> --topic            # tema (query cruda de topics.yaml)
-    python query_ads.py <slug> --extra-only       # sólo los bibcodes de extra_core (tema mixto)
-    python query_ads.py <slug> --dry-run          # re-clasificar en memoria, sin red ni escritura
-    python query_ads.py --probe "<query>"         # previsualizar el corte core/no-core, sin bajar
+    python scripts/query_ads.py <slug> [--rows N] [--no-chain] [--no-glyph] [--no-triage] [--sweep]
+    python scripts/query_ads.py <slug> --topic            # tema (query cruda de topics.yaml)
+    python scripts/query_ads.py <slug> --extra-only       # sólo los bibcodes de extra_core (tema mixto)
+    python scripts/query_ads.py <slug> --dry-run          # re-clasificar en memoria, sin red ni escritura
+    python scripts/query_ads.py --probe "<query>"         # previsualizar el corte core/no-core, sin bajar
 
 Escribe build/<slug>/ads.json con la lista de registros (bibcode, título, autores,
 año, abstract, arxiv_id, doctype, citation_count, topics, relevant, why_excluded —el motivo real

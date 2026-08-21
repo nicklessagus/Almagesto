@@ -1,7 +1,7 @@
 """Orquestador de la cadena mecánica de ingest-star — fuente de verdad ÚNICA del orden.
 
 Uso:
-    python ingest_star.py <slug> [--yes]
+    python scripts/ingest_star.py <slug> [--yes]
 
 Corre, en orden y abortando al primer fallo, la cadena astro completa para una estrella de
 vault/config/stars.yaml:
@@ -66,7 +66,8 @@ def main() -> int:
         sys.exit("check_retractions detectó papers retractados — revisá las notas marcadas "
                  "(el lint las surface como bloqueante).")
     print("\nCadena mecánica lista. Siguiente (LLM, skill ingest-star): barrido full-text (2b) → "
-          "extracción por paper → ficha de la estrella → verify-citations → lint.")
+          "TRIAGE de los candidatos del chaining (2c) → extracción por paper → ficha de la "
+          "estrella → verify-citations → lint.")
     return 0
 
 

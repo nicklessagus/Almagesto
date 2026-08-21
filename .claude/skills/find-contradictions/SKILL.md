@@ -1,7 +1,7 @@
 ---
 name: find-contradictions
 description: Usar cuando el usuario quiere detectar desacuerdos entre papers del corpus sobre el mismo hecho ("buscá contradicciones en el corpus", "qué papers se contradicen sobre tau Ceti", "revisá disputas de P_rot", "detectá desacuerdos sobre la señal b de GJ 581", "¿hay papers que discrepen sobre X?"). Barre el corpus por eje (estrella/parámetro o concepto), confirma cada desacuerdo contra el fulltext y PROPONE entradas disputes[] / notas de disputa para que el usuario apruebe.
-version: 1.0.2
+version: 1.1.0
 ---
 
 # Find-contradictions — desacuerdos entre papers (claim↔claim)
@@ -34,7 +34,7 @@ tomar la última entidad tocada.
 
 ### 1. Reunir los claims comparables (andamiaje)
 Juntar, para el eje elegido, qué afirma **cada** paper sobre **cada** hecho:
-- **Estrella:** los papers con la estrella en `stars:` (tabla `## Papers` de la ficha) + su
+- **Estrella:** los papers con la estrella en `stars:` + su
   `vault/raw/ground_truth/<slug>.json` (NEA). Ejes típicos: existencia de cada señal RV, y sus
   valores `P/K/e/m·sini`; `P_rot`; indicadores de actividad; naturaleza de una señal (planeta vs
   actividad). Grep barato para juntar candidatos:
@@ -44,6 +44,16 @@ Juntar, para el eje elegido, qué afirma **cada** paper sobre **cada** hecho:
   ```
 - **Concepto:** los papers con `thesis_links: <concept>`. Ejes: signo de una correlación, magnitud de
   un lag/desfasaje, mecanismo propuesto, régimen de validez.
+
+> **Cómo juntar esos papers sin Obsidian.** La tabla `## Papers` de la ficha es un bloque
+> ```dataview```: un agente que abre el `.md` ve el **código de la query, no sus resultados**. El
+> equivalente determinista (canónico en `CLAUDE.md`) es un matcher **con ámbito de campo** — un
+> `grep -l 'stars:.*<nombre>'` da **0 hits** aunque el paper esté, porque las listas del frontmatter
+> se serializan en bloque:
+> ```bash
+> awk '/^stars:/{f=1;next} /^[a-z_]+:/{f=0} f&&/<nombre>/{print FILENAME; nextfile}' vault/wiki/papers/*.md
+> awk '/^thesis_links:/{f=1;next} /^[a-z_]+:/{f=0} f&&/<concept>/{print FILENAME; nextfile}' vault/wiki/papers/*.md
+> ```
 Armar una tabla mental `(hecho, papel A dice …, papel B dice …, NEA dice …)`. Los que coinciden se
 descartan; los que difieren pasan al fan-out.
 
@@ -53,6 +63,12 @@ los dos** `vault/raw/fulltext/**/<bibcode>.txt` en juego (grounding-first; prohi
 - `desacuerdo`: `real` | `aparente` | `no-concluyente`
   - **real** = ambos papers afirman valores/hechos incompatibles **más allá del error** (o uno afirma
     existencia y el otro la niega). Con **cita textual + nº de línea de cada uno**.
+    ⚠ **Antes de clasificar `real`, mirá el frontmatter de las dos notas** (#57/#52): un
+    `pdf_source: eprint` significa que ese `.txt` es el **preprint** —un `v1` pre-referato puede
+    traer otros valores que el publicado—, así que la diferencia numérica puede ser **de versión y
+    no entre fuentes**; un `corrections:` (corrigendum) puede explicar la discrepancia sin que haya
+    desacuerdo alguno; y un `retracted: true` no se disputa, se saca (frontera dura). En los tres
+    casos el veredicto es `aparente` con el motivo anotado, no `real`.
   - **aparente** = distinto régimen, distinta definición, distinta época, o dentro de la barra de
     error → **no** es disputa (anotar por qué).
   - `no-concluyente` = artefacto de extracción (tabla/ecuación) o el texto no alcanza → abrir PDF o

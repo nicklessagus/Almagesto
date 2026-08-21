@@ -1,7 +1,7 @@
 """Snapshot determinista de una página web → fulltext citable (modo off-ADS de ingest-topic).
 
 Uso:
-    python fetch_web.py <slug> <citekey> <url> [--concept C] [--title T] [--author A]
+    python scripts/fetch_web.py <slug> <citekey> <url> [--concept C] [--title T] [--author A]
                         [--year Y] [--n-authors N] [--doi D] [--venue V] [--no-note] [--force]
 
 Baja la URL con **defuddle** (extractor de contenido de Obsidian: quita nav/menús/clutter y

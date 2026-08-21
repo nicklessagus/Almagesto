@@ -1,7 +1,7 @@
 """Ground-truth estructurado por estrella desde NASA Exoplanet Archive + SIMBAD.
 
 Uso:
-    python fetch_ground_truth.py <slug> [--force]
+    python scripts/fetch_ground_truth.py <slug> [--force]
 
 Escribe ground_truth/<slug>.json con:
   - host: tipo espectral, Teff, distancia, coords, V, masa estelar (lo que haya).

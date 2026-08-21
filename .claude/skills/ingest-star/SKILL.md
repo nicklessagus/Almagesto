@@ -1,7 +1,7 @@
 ---
 name: ingest-star
 description: Usar cuando el usuario pide bajar/agregar/ingestar una estrella a la bóveda ("bajá GJ 581", "ingest tau ceti", "agregá la estrella X", "traé la bibliografía de AU Mic"). Corre la cadena de ingesta y hace la extracción LLM.
-version: 1.12.1
+version: 1.12.2
 ---
 
 # Ingest: agregar una estrella a la wiki
@@ -145,7 +145,8 @@ Progreso del ingest de <estrella>:
 
 5. **Bookkeeping.** Actualizar `vault/wiki/index.md` (agregar la estrella), appendear a `vault/wiki/log.md`,
    tocar `vault/wiki/matrices/method_star.md` (qué métodos se aplicaron en la literatura) y `vault/STATUS.md`
-   si cambió el estado. Correr `python scripts/lint.py` y revisar.
+   si cambió el estado. (El `lint` va **después** del verify del paso 5b: `CLAUDE.md` lo pide
+   "antes de lint/commit", porque resolver una cita no-soportada suele cambiar la prosa.)
 
 5b. **Verificar citas.** Correr el skill `verify-citations` sobre la **ficha de la estrella** (y sobre
    las notas de paper nuevas con extracción). La ficha es el artefacto **más reusado** (se arma un

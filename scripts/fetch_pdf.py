@@ -1,7 +1,7 @@
 """Baja PDFs de papers SIN arXiv vía el resolver de ADS (esources) — completa a fetch_arxiv.
 
 Uso:
-    python fetch_pdf.py <slug> [--all] [--limit N]
+    python scripts/fetch_pdf.py <slug> [--all] [--limit N]
 
 Lee build/<slug>/ads.json y, para cada paper relevante SIN PDF en disco — los sin arxiv_id
 (revistas viejas / sin e-print) y también los CON arXiv cuya bajada falló en fetch_arxiv

@@ -1,10 +1,10 @@
 """Chequea si algún paper de la bóveda fue RETRACTADO y lo marca en su nota.
 
 Uso:
-    python check_retractions.py            # todos los papers de vault/wiki/papers/ (pasada periódica)
-    python check_retractions.py --slug <slug>       # sólo los papers de UN ingest (modo de la cadena)
-    python check_retractions.py --paper <bibcode>   # uno solo
-    python check_retractions.py --force    # re-chequear también los ya marcados
+    python scripts/check_retractions.py            # todos los papers de vault/wiki/papers/ (pasada periódica)
+    python scripts/check_retractions.py --slug <slug>       # sólo los papers de UN ingest (modo de la cadena)
+    python scripts/check_retractions.py --paper <bibcode>   # uno solo
+    python scripts/check_retractions.py --force    # re-chequear también los ya marcados
 
 `--slug` es el modo que usan los orquestadores: chequea sólo los papers del ingest en curso
 (bibcodes relevantes de build/<slug>/ads.json + `sources[].key`/`extra_core` de la entrada del

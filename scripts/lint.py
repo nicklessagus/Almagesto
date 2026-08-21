@@ -1,7 +1,7 @@
 """Lint de la wiki — chequeo de salud (operación del patrón LLM Wiki).
 
 Uso:
-    python lint.py            # imprime resumen y escribe outputs/lint-<fecha>.md
+    python scripts/lint.py            # imprime resumen y escribe outputs/lint-<fecha>.md
 
 Detecta: wikilinks rotos (página faltante), **frontmatter no parseable** (nota que empieza con
 `---` pero cuyo YAML no parsea → evade en silencio los chequeos de su tipo; bloqueante),

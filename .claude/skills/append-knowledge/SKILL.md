@@ -1,7 +1,7 @@
 ---
 name: append-knowledge
 description: Usar cuando el usuario quiere plegar UNA fuente puntual (paper por bibcode, PDF local, URL) a una entidad YA existente de la wiki — ficha de estrella o concepto — sin re-correr el ingest completo ("agregale este paper a la ficha de tau Ceti", "sumá este PDF al concept de procesos gaussianos", "este bibcode va a GJ 581", "encontré un paper nuevo para el tema X, agregalo"). Plomería mínima + extracción enfocada + síntesis a la nota viva + cierre estándar. NO crea entidades (eso es ingest-star/ingest-topic) ni barre por query lo nuevo (eso es maintain/refrescar).
-version: 1.1.0
+version: 1.2.0
 ---
 
 # Append — plegar una fuente puntual a una ficha o concepto existente
@@ -45,7 +45,12 @@ Progreso del append de <fuente> → <destino>:
      `python scripts/ingest_topic.py <slug>`. `query_ads` lo trae por bibcode (`via: manual`).
      ⚠ La cadena re-corre también la query → puede traer **otros** papers nuevos (refresh
      implícito): si aparecen stubs extra, hacé su extracción (maintain A) o anotalos como backlog
-     en `vault/STATUS.md` — no los dejes mudos.
+     en `vault/STATUS.md` — no los dejes mudos. Dos compuertas que ese refresh puede disparar y
+     conviene esperar: (a) la **guardia de expansión** (#37) **aborta** la cadena si el core se
+     multiplicó (×1.5 y más de 50 nuevos) — mirá el conteo antes de continuar con `--yes`, no lo
+     pases de taquito; (b) el chaining deja **candidatos sin juzgar** en `candidates`, que el lint
+     surface como *Triage pendiente* (#55): resolvelos con `python scripts/triage.py <slug>` o dejá
+     el conteo en el `log`, para no cerrar el append con juicio pendiente mudo.
      Si el paper no tiene arXiv (paywall/viejo) y el resolver de ADS tampoco lo entrega (queda en
      `build/<slug>/missing_pdf.json`, con `bibstem` y `hint`), seguí la **cascada manual de rescate**
      de `## Notas` del skill `ingest-star` antes de pedirlo. Con el PDF en mano (rescatado o provisto

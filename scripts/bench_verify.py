@@ -1,8 +1,8 @@
 """Auto-benchmark del verificador de citas (CiteAudit-style): siembra citas falsas y puntúa.
 
 Uso:
-    python bench_verify.py seed [--max N]     # arma build/verify_bench/bench.json
-    python bench_verify.py score              # puntúa los veredictos → outputs/verify-bench-<fecha>.md
+    python scripts/bench_verify.py seed [--max N]     # arma build/verify_bench/bench.json
+    python scripts/bench_verify.py score              # puntúa los veredictos → outputs/verify-bench-<fecha>.md
 
 `verify-citations` es juicio de LLM ("robusto pero no prueba"). Este benchmark le pone un número:
 `seed` toma pares (afirmación, [[bibcode]]) REALES de las notas verificables de la bóveda

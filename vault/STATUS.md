@@ -18,6 +18,53 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.10.2 (2026-08-21) — auditoría de coherencia de la documentación
+
+> Pedida por el usuario al cerrar las tandas 1-5: revisión profunda de la doc **técnica** (CLAUDE.md
+> + los 9 skills) y **de uso** (README + docs/), cruzando cada afirmación contra el código. Dos
+> auditorías en paralelo; **cada hallazgo se re-verificó a mano antes de aplicarlo**. 382 tests
+> verdes, lint 0. 1.10.1 (`triage --migrate`) → **1.10.2** (patch: docs + textos de usuario).
+
+- **⛔ El hallazgo grande: el fallback determinista de #60 no funcionaba.** `CLAUDE.md` mandaba a
+  resolver los roll-ups Dataview con `grep -l 'stars:.*<nombre>' vault/wiki/papers/*.md`, pero
+  `make_notes.fm()` serializa con `default_flow_style=False` → las listas van **en bloque** (`stars:`
+  y abajo `- tau Cet`) y `grep` es orientado a líneas: **0 hits sobre un corpus donde el paper sí
+  está**. El mecanismo que existe para que la audiencia-modelo no dependa de Obsidian **fabricaba
+  una ausencia** — el modo de falla de #54 dentro del documento que lo prescribe. Reemplazado por un
+  matcher con ámbito de campo (`awk`), **probado contra un fixture** con caso de control (un paper
+  que menciona la estrella sólo en prosa y no debe matchear). Anotado en el issue #60, que sigue
+  abierto por la variante cara.
+- **`find-contradictions` era el único skill que usaba la tabla Dataview como mecanismo de
+  recuperación** (los demás sólo dicen que "acumula sola") → ahora usa el matcher. Y le faltaba el
+  caveat de la tanda 5: antes de declarar `real` un desacuerdo hay que mirar `pdf_source` (una
+  diferencia numérica puede ser **de versión**, no entre fuentes), `corrections` (un corrigendum la
+  explica) y `retracted` (no se disputa: se saca). Es el skill donde ese error hace más daño, porque
+  de ahí salen las `disputes[]`. `find-contradictions` 1.0.2 → **1.1.0**.
+- **Un bullet mío de la tanda 5 tenía el bug de #53:** "Papers sin `pdf_source`" colgaba de
+  `maintain E`, declarada como "backlog **del lint**", pero el lint no emite esa categoría. Se marcó
+  como migración one-shot en vez de agregar la categoría: `null` es un estado **legítimo** (fuente
+  desconocida), así que una categoría permanente sería ruido puro.
+- **Listas desalineadas:** las operaciones que cierran con `verify-citations` diferían entre
+  `CLAUDE.md` (omitía append-knowledge y find-contradictions) y el skill (omitía `maintain`, cuyo
+  invariante lo exige). `maintain E` no cubría 4 categorías que el lint sí emite (corpus truncado,
+  correcciones, sin verificar, citas no verificables). El schema de `papers/` no documentaba
+  `source_url`, `accessed` ni `pending_source`, que el código estampa.
+- **Contradicción de orden dentro del mismo skill:** el paso de bookkeeping de los dos ingests
+  mandaba a correr `lint` **antes** del verify, mientras su propio checklist y `CLAUDE.md` piden
+  verify primero ("antes de lint/commit") — resolver una cita no-soportada cambia la prosa.
+- **Doc de uso:** el README afirmaba que "cada ingest" deja registro (falso para off-ADS, que no
+  corre `query_ads`); listaba conteos que no existen (**no hay `n_downloaded`**: `query_ads` corre
+  antes que los fetchers y no puede saberlo); y su ejemplo de `--probe` decía "top por citas" del
+  core justo donde el código garantiza listarlo **completo**. `docs/operacion.md` no nombraba
+  `triage.py` (el único paso con juicio humano), ni la guardia de expansión y `--yes` (un primer
+  ingest grande termina en un abort inexplicado), ni el token ADS entre lo que no viaja.
+- **CWD (#59) completado:** los 13 headers `Uso:` de `scripts/` seguían en la convención vieja
+  aunque los skills los declaran "fuente de verdad canónica", y `triage.py` **generaba** texto de
+  usuario con ella. A pedido del usuario, el README además quedó **sin guiones largos** (reescribiendo
+  cada frase; se conservan los del ejemplo de salida del programa, que es texto literal).
+- **Pendiente conversado:** un disclaimer explícito sobre qué partes son capa LLM y cuánto se puede
+  afirmar. Es decisión de fondo sobre lo que el proyecto promete → se define con el usuario.
+
 ## ✅ Framework 1.10.0 (2026-08-21) — tanda 5: #57, el `.txt` que puede ser otra versión del paper
 
 > 379 tests verdes (+6), lint 0. `ALMAGESTO_VERSION` 1.9.0 → **1.10.0** (minor: campos nuevos de

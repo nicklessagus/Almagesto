@@ -1,7 +1,7 @@
 """Orquestador de la cadena mecánica de ingest-topic: despacha según `source` del tema.
 
 Uso:
-    python ingest_topic.py <slug> [--force] [--yes]
+    python scripts/ingest_topic.py <slug> [--force] [--yes]
 
 Lee la entrada del tema en vault/config/topics.yaml y corre la cadena que corresponda a su
 campo `source` (formaliza el modo off-ADS del skill ingest-topic en el tooling):

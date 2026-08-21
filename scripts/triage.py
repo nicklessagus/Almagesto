@@ -1,9 +1,9 @@
 """Compuerta de triage de los candidatos del citation chaining (#38).
 
 Uso:
-    python triage.py <slug>                                   # listar los candidatos pendientes
-    python triage.py <slug> --report                          # + tabla en outputs/triage-<slug>.md
-    python triage.py <slug> --drop <bib> [<bib> …] --reason "<motivo>"
+    python scripts/triage.py <slug>                                   # listar los candidatos pendientes
+    python scripts/triage.py <slug> --report                          # + tabla en outputs/triage-<slug>.md
+    python scripts/triage.py <slug> --drop <bib> [<bib> …] --reason "<motivo>"
 
 El chaining trae papers conectados por citas al corpus del sujeto. La lente
 (`relevance.topics`) clasifica **tema**, no **pertinencia al sujeto**: anclado a "menciona al
@@ -49,7 +49,7 @@ def load_ads(slug: str) -> dict:
     f = cfg.ROOT / "build" / slug / "ads.json"
     if not f.exists():
         sys.exit(f"no existe build/{slug}/ads.json — corré primero la cadena de ingest "
-                 f"(o query_ads.py {slug}).")
+                 f"(o python scripts/query_ads.py {slug}).")
     return json.loads(f.read_text(encoding="utf-8"))
 
 
@@ -146,7 +146,7 @@ def report(slug: str, cands: list[dict]) -> None:
              "",
              f"{len(cands)} candidatos pendientes (no bajados). Criterio: ¿el paper es **pertinente "
              "al sujeto** o sólo lo menciona? Aceptados → `extra_core` en `vault/config/stars.yaml`; "
-             "descartados → `python triage.py " + slug + " --drop <bib> --reason \"<motivo>\"`. "
+             "descartados → `python scripts/triage.py " + slug + " --drop <bib> --reason \"<motivo>\"`. "
              "`◆` = ya tiene nota en la bóveda (entró por otro slug): bajado y extraído, se "
              "despacha rápido.",
              "",
@@ -201,7 +201,7 @@ def main() -> int:
     print("\n  → juicio (LLM/usuario) por título+abstract: pertinente al SUJETO / ruido / dudoso.\n"
           "     aceptados  → `extra_core: [<bibcode>, …]` en vault/config/stars.yaml y re-correr la "
           "cadena (idempotente: sólo baja los nuevos).\n"
-          "     descartados → python triage.py <slug> --drop <bib> … --reason \"<motivo>\".\n"
+          "     descartados → python scripts/triage.py <slug> --drop <bib> … --reason \"<motivo>\".\n"
           "     dudosos    → al usuario (--report deja la tabla en outputs/).")
     return 0
 

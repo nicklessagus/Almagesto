@@ -1,7 +1,7 @@
 """Genera notas markdown de la bóveda a partir de lo bajado por los otros scripts.
 
 Uso:
-    python make_notes.py <slug> [--all] [--force]
+    python scripts/make_notes.py <slug> [--all] [--force]
 
 - stars/<slug>.md  : ficha índice de la estrella (frontmatter máquina-legible + Dataview).
 - papers/<bibcode>.md : una nota por paper relevante (metadata + abstract + placeholders LLM).

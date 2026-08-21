@@ -1,7 +1,7 @@
 """Baja PDFs desde export.arxiv.org para los papers relevantes de una estrella.
 
 Uso:
-    python fetch_arxiv.py <slug> [--all] [--limit N]
+    python scripts/fetch_arxiv.py <slug> [--all] [--limit N]
 
 Lee build/<slug>/ads.json y baja el PDF de cada paper relevante con arxiv_id a
 pdfs/<slug>/<bibcode>.pdf. Respeta el rate limit de arXiv: 1 request / 3 s.

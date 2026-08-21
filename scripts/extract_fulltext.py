@@ -1,7 +1,7 @@
 """Convierte los PDFs de una estrella a texto plano para búsqueda local y re-extracción.
 
 Uso:
-    python extract_fulltext.py <slug> [--force] [--ocr]
+    python scripts/extract_fulltext.py <slug> [--force] [--ocr]
 
 pdfs/<slug>/<bibcode>.pdf  →  fulltext/<slug>/<bibcode>.txt
 
