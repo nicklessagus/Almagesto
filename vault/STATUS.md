@@ -18,6 +18,40 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.10.0 (2026-08-21) — tanda 5: #57, el `.txt` que puede ser otra versión del paper
+
+> 379 tests verdes (+6), lint 0. `ALMAGESTO_VERSION` 1.9.0 → **1.10.0** (minor: campos nuevos de
+> frontmatter, retrocompatibles — una nota sin `pdf_source` se comporta como antes).
+
+- **#57** — `fetch_arxiv` baja de `export.arxiv.org` y guarda el PDF con el bibcode **publicado**;
+  `make_notes` estampaba `fulltext_source` (`pdftotext|ocr|web`), que es el **método de extracción**
+  y nunca el **documento de origen**; `fetch_pdf` sabía qué rama usó (`EPRINT_PDF`/`ADS_PDF`/
+  `PUB_PDF`) y no lo persistía. Resultado: nada distinguía un `.txt` sacado del **eprint** de uno
+  sacado de la versión publicada, y la palabra "preprint" no aparecía en ningún skill.
+- **Por qué es el caveat que faltaba:** `verify-citations` promete que la cita textual son "las
+  palabras reales del paper". Si el `.txt` salió de un **v1 pre-referato**, son las palabras de otra
+  versión. Y el daño va en la dirección **menos obvia**: ante una discrepancia entre la nota (valor
+  publicado, típicamente de NEA o del abstract de ADS) y el `.txt` (eprint), el protocolo manda
+  *"bajar la afirmación a lo que dice la fuente"* → **se corrompe el valor publicado con el del
+  preprint, y queda registrado como un hallazgo del chequeo**.
+- **Señal primaria = verdad de disco:** la marca que arXiv estampa en cada página
+  (`arXiv:2201.01234v3 [astro-ph.EP] …`), detectada en el `.txt`. No depende de que el fetcher haya
+  dejado registro, así que **funciona retroactivamente sobre un corpus ya bajado** — el backfill es
+  `python scripts/extract_fulltext.py <slug>`, sin re-bajar un solo PDF (`maintain E` lo documenta).
+  Los fetchers además registran su rama (`build/<slug>/pdf_source.json`) para lo que la marca no
+  distingue (`ads` vs `publisher`). La marca **gana** sobre el registro: un ADS_PDF que sirve el
+  eprint *es* el eprint.
+- **Campos nuevos:** `pdf_source: eprint|ads|publisher|web` + `eprint_version` (cuando se conoce).
+  `null` significa **desconocido**, explícitamente **no** "publicado": afirmar de más justo acá
+  sería peor que no saber. Van junto a `fulltext`/`fulltext_source` en el mismo estampado
+  quirúrgico, que ya era idempotente.
+- `verify-citations` 1.3.7 → **1.4.0** (caveat propio, hermano del de OCR: con `eprint`, una
+  discrepancia **numérica** contra un valor publicado es candidata a **diferencia de versión**, no
+  a cita rota → abrir el PDF publicado o marcarla; **no** "corregir" la nota). `maintain` 1.8.0 →
+  **1.8.1** (backfill).
+- **Sigue:** quedan #60 (materializar los roll-ups Dataview), #61/#62/#63 (método) y #65/#67
+  (reestructura de skills, que el backlog manda hacer **después** de las tandas de contenido).
+
 ## ✅ Framework 1.9.0 (2026-08-21) — tanda 4: #51 + #64, el registro de ingesta sale de `build/`
 
 > El grande de la revisión: la primera tanda que cambia dónde vive un dato. 373 tests verdes (+6),
