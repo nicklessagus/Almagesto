@@ -437,6 +437,56 @@ LLM_DISCLAIMER = {
 SEARCH_LINE_RE = re.compile(r"^> _Búsqueda .*_$\n?", re.M)
 
 
+# Bullets de `## Extracción (LLM)` del stub de nota de paper. Viven acá y NO inline en los dos
+# templates de cuerpo —la rama ADS (write_paper_notes) y la off-ADS (write_web_paper_note)— por el
+# mismo motivo que LLM_DISCLAIMER: los escriben varios caminos y divergirían. Ramifican por TIPO DE
+# SUJETO (#76), como ya ramificaban los seeds del frontmatter: el eje tema/concepto es agnóstico de
+# disciplina, así que un tema no puede nacer pidiendo planetas y actividad; y el eje estrella es
+# astro por schema (ground-truth NEA) pero sus ejes de CONTENIDO salen del objetivo de la bóveda,
+# no de un hardcodeo a "actividad".
+_BULLET_METHODS = "- **Métodos:** _(llenar `methods:` del frontmatter con `concepts/methods/`)_"
+
+
+def objective_lens() -> tuple[list, str]:
+    """La LENTE de la bóveda para orientar el stub: (facetas declaradas en `relevance.topics`,
+    `short` del objetivo). Es lo único que sabe de qué trata ESTA instancia. Degrada a ([], "")
+    si no hay objective.yaml (make_notes corrido suelto, fuera de la cadena): el stub sale
+    genérico, nunca inventado."""
+    try:
+        obj = cfg.load_objective()
+    except Exception:
+        return [], ""
+    facetas = list((obj.get("relevance") or {}).get("topics") or {})
+    return facetas, (obj.get("short") or "").strip()
+
+
+def extraction_block(topic: bool) -> str:
+    """Sección `## Extracción (LLM)` del stub de una nota de paper, ramificada por tipo de sujeto
+    (#76). Tema → el eje del concept (aporte, mecanismo/ecuación, régimen). Estrella → el
+    ground-truth (que es del schema de `stars/`, no del objetivo) y los ejes de la lente. El rol
+    del paper (fundacional/aplicación/árbitro) es #73, que define el campo antes que el bullet."""
+    facetas, short = objective_lens()
+    objetivo = (f"«{short}»: qué aporta, qué hueco deja" if short
+                else "relevancia para el objetivo de la bóveda / huecos")
+    if topic:
+        bullets = [
+            "- **Aporte al tema:** _(qué agrega al eje del concept: definición, mecanismo/ecuación, "
+            "método, signo)_",
+            "- **Régimen de validez:** _(en qué condiciones vale lo que aporta: rango de parámetros, "
+            "tipo de dato, supuestos)_",
+        ]
+    else:
+        ejes = f" ({' · '.join(facetas)})" if facetas else ""
+        bullets = [
+            "- **Ground-truth (planetas / parámetros):** _(P, K, e por planeta; comparar contra "
+            "`vault/raw/ground_truth/`)_",
+            f"- **Ejes del objetivo{ejes}:** _(qué dice el paper sobre cada eje de la lente; salen "
+            "de `relevance.topics` en `objective.yaml`)_",
+        ]
+    bullets += [_BULLET_METHODS, f"- **Para el objetivo:** _({objetivo})_"]
+    return "## Extracción (LLM)\n" + "\n".join(bullets) + "\n"
+
+
 def search_line(slug: str) -> str:
     """Puntero de UNA línea al registro de búsqueda versionado (#64), para la cabecera de la ficha
     o del concept. El registro completo —query efectiva, límites, conteos, versión— vive en
@@ -701,6 +751,7 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
     if not include_all:
         recs = [r for r in recs if r["relevant"]]
     cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    extraccion = extraction_block(topic)     # una sola lectura del objetivo para toda la corrida
     written = skipped = merged = restamped = 0
     for r in recs:
         bib = r["bibcode"]
@@ -765,12 +816,7 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
 ## Abstract
 {abstract or '_(no disponible)_'}
 
-## Extracción (LLM)
-- **Planetas / parámetros:** _(P, K, e por planeta; comparar contra ground-truth)_
-- **Actividad / indicadores:** _(qué indicadores se usaron y qué correlaciones se reportan)_
-- **Métodos:** _(llenar `methods:` del frontmatter con `concepts/methods/`)_
-- **Para mi objetivo:** _(relevancia para el objetivo de la bóveda / huecos)_
-"""
+{extraccion}"""
         dest.write_text(body, encoding="utf-8")
         written += 1
     print(f"  papers: {written} escritos, {skipped} ya existían"
@@ -907,6 +953,7 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
                  f"\n> ⏳ **Fuente pendiente (`{pending}`):** todavía sin fulltext — el usuario debe "
                  "proveer el PDF/fuente (puntero `doi`/`source_url` en el frontmatter). Al conseguirla, "
                  "re-correr la cadena y completar la extracción.\n")
+    # off-ADS es el modo opt-in de ingest-topic (CLAUDE.md): acá el sujeto es SIEMPRE un tema.
     body = f"""{fm(front)}
 # {title or citekey}
 
@@ -917,11 +964,7 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
 > `{txt_ptr}` (`source_url` + `accessed` en el frontmatter), verificable por `verify-citations`.
 > El frontmatter es máquina-legible como en cualquier nota de paper.
 {pend_line}
-## Extracción (LLM)
-- **Aporte al tema:** _(qué agrega al eje del concept: definición, ecuación, método, signo, régimen)_
-- **Métodos:** _(llenar `methods:` del frontmatter con `concepts/methods/`)_
-- **Para mi objetivo:** _(relevancia para el objetivo de la bóveda / huecos)_
-"""
+{extraction_block(topic=True)}"""
     dest.write_text(body, encoding="utf-8")
     print(f"  papers: {dest.name} escrito (stub off-ADS)")
     return True

@@ -172,7 +172,11 @@ LLM citada. El roll-up junta por `thesis_links` (y por `methods` si el área es 
 
 En la nota de **paper**: la metadata (bibcode, autores, año, doi, `citation_count`, `pdf`,
 `fulltext`, `fulltext_source`, `pdf_source`) la estampan los scripts por **verdad de disco**; el LLM
-llena `methods`, `thesis_links`, `bearing` y la sección `## Extracción`.
+llena `methods`, `thesis_links`, `bearing` y la sección `## Extracción`. Los **bullets** de esa
+sección los ramifica el stub por **tipo de sujeto**: para una estrella, el ground-truth (P/K/e por
+planeta) más los **ejes de `relevance.topics`** —o sea la lente de *tu* bóveda, no una lista fija—;
+para un tema, *aporte al tema* y *régimen de validez*, sin planetas ni actividad. Las dos ramas de
+tema (ADS y off-ADS) escriben el mismo bloque.
 
 ## 4. Las reglas que gobiernan qué entra
 
@@ -200,7 +204,6 @@ Esta ingesta tiene huecos conocidos y numerados; el detalle de cada uno está en
 | Rol del paper (fundacional / aplicación / árbitro) | #73 |
 | Régimen de validez explícito en conceptos | #74, #63 |
 | Red para "extraído pero no sintetizado" | #75 |
-| El stub de paper no ramifica por tipo de sujeto | #76 |
 | Descubrimiento fuera de ADS (OpenAlex) | #77 |
 | Tema mixto sólo off-ADS-first | #78 |
 | Sesgo de edad en el orden por citas | #79 |

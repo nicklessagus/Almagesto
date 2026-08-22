@@ -1,7 +1,7 @@
 ---
 name: ingest-topic
 description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema off-ADS — típicamente un método de otra disciplina (estadística, ML) al servicio del foco astro — desde PDFs locales + web (ver Modo off-ADS).
-version: 1.10.0
+version: 1.10.1
 ---
 
 # Ingest: agregar un TEMA a la wiki
@@ -94,8 +94,9 @@ Progreso del ingest del tema <tema>:
 3. **Extracción LLM (criterio).** Leer los papers **clave del tema** (fundacionales / árbitros /
    metodológicos) desde `vault/raw/fulltext/<slug>/` y poblar cada `vault/wiki/papers/<bibcode>.md`: `methods`,
    `bearing`, `thesis_links` (ya pre-sembrado al concept; agregar otros si toca) y la sección
-   "Extracción" enfocada **en el eje del tema** (qué aporta al tópico: signo, lag, mecanismo, método),
-   no en una estrella concreta.
+   "Extracción" enfocada **en el eje del tema** — el stub la trae ya ramificada por tipo de sujeto
+   (#76): *aporte al tema* (definición, mecanismo/ecuación, método, signo) y *régimen de validez*,
+   no planetas ni actividad de una estrella concreta.
    ⚠ **`pdf_source` antes de copiar un número** (#57): con `eprint` el `.txt` es el **preprint**
    (un `v1` pre-referato puede traer otros valores que el publicado que identifica el bibcode), y con
    `null` no se sabe —que **no** es "publicado"—. Un valor que choca con el ground-truth o con el

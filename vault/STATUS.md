@@ -18,6 +18,43 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.11.1 (2026-08-22) — #76: el stub de paper ramifica por tipo de sujeto
+
+> Primer issue de la tanda 1 del backlog del 2026-08-22 (quedan #79 puntos 1-2 y #81). 401 tests
+> verdes (+11), lint 0. 1.11.0 → **1.11.1** (patch: cambia el texto que genera el stub; sin campos,
+> sin flags, sin categoría de lint nueva — las notas ya escritas no se tocan).
+
+- **El defecto:** `make_notes` ramificaba por tipo de sujeto **sólo en el frontmatter** (`stars` vs
+  `thesis_links`); el **cuerpo** era el mismo para los dos. O sea que un **tema** ingestado por ADS
+  nacía pidiendo *"Planetas / parámetros"* y *"Actividad / indicadores"* — justo lo que `CLAUDE.md`
+  declara que el eje tema/concepto **no** presupone ("agnóstico de disciplina"). La única variante
+  con eje de tema vivía en la rama **off-ADS**, que es el modo opt-in y el que menos se usa.
+- **Por qué no lo agarraba nada:** el lint sólo mira `methods` vacío, así que una plantilla mal
+  orientada se propaga en silencio. Mismo patrón que #69: no falla, sale mal.
+- **Fix:** `extraction_block(topic)` — un solo lugar de verdad para los bullets, por el mismo motivo
+  que `LLM_DISCLAIMER` (lo escriben la rama ADS y la off-ADS; inline divergirían). Tema → *aporte al
+  tema* (definición, mecanismo/ecuación, método, signo) + *régimen de validez*. Estrella → el
+  ground-truth (P/K/e por planeta) **y los ejes de la lente**.
+- **Lo que hace al bullet de estrella distinto del que reemplaza:** los ejes ya no están
+  hardcodeados a actividad/planetas, salen de `relevance.topics` de `objective.yaml` — que es lo
+  único que sabe de qué trata *esta* instancia — y el bullet de objetivo cita el `short` textual
+  (`«actividad estelar vs RV planetaria»`). El ground-truth se queda porque **no** es lente: es
+  schema de `stars/` (NEA + `planets[]`), y ahí el eje estrella sí es astro por diseño.
+- **Sin `objective.yaml` degrada a genérico** (make_notes corrido suelto, fuera de la cadena): el
+  stub sale sin facetas y con el texto de siempre, nunca inventado. Criterio de #48.
+- **Lo que este issue NO hizo, a propósito:** el bullet *rol del paper* que su fix proponía es el
+  punto 3 del fix de **#73**, que es donde se define el campo y el vocabulario
+  (fundacional/aplicación/árbitro). Meterlo acá sería pedirle al LLM que llene algo sin lugar donde
+  ponerlo. La dependencia declarada va en ese sentido: #73 se apoya en este stub, no al revés.
+- Skills: `ingest-star` 1.13.0 → **1.13.1**, `ingest-topic` 1.10.0 → **1.10.1** (los dos repetían de
+  memoria una lista de bullets que ahora la genera el stub; ahora apuntan a él).
+- **Tests (+11):** unitarios de las dos funciones nuevas (`objective_lens` con objetivo completo,
+  a medias y ausente; forma del bloque —encabezado, 4 bullets, newline final— que es el contrato que
+  asumen los dos templates al interpolarlo) **más** la matriz de ramas `topic × facetas × short`, y
+  regresión de punta a punta por `write_paper_notes` (estrella, tema, off-ADS comparte bloque).
+  Cobertura de sentencias del bloque nuevo: **100%**, medida con el `trace` de la stdlib (no hay
+  `coverage`/`pytest-cov` en el entorno y no se agregó dependencia).
+
 ## ✅ Framework 1.10.3 (2026-08-21) — segunda pasada de auditoría: lo que la primera introdujo
 
 > Pedida por el usuario: repetir la revisión profunda de doc técnica y de uso. Tres frentes en

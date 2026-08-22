@@ -424,6 +424,106 @@ def test_paper_notes_topic_siembra_thesis_links(toy_vault):
     assert fm["thesis_links"] == ["gaussian-processes"] and fm["stars"] == []
 
 
+# ── #76: el CUERPO del stub ramifica por tipo de sujeto (los seeds ya ramificaban) ───────────
+
+def test_stub_estrella_no_hardcodea_los_ejes(toy_vault):
+    """El eje estrella es astro por schema (ground-truth NEA), pero los ejes de CONTENIDO salen
+    del objetivo de la bóveda — no de un hardcodeo a actividad/planetas."""
+    ads_json([rec("2020conA...1..1A")])
+    mn.write_paper_notes("test_star", include_all=False, force=False)
+    body = (toy_vault.PAPERS / "2020conA...1..1A.md").read_text(encoding="utf-8")
+    assert "- **Ground-truth (planetas / parámetros):**" in body
+    assert "**Ejes del objetivo (actividad · rv):**" in body   # las facetas de la lente de juguete
+    assert "«toy»" in body                                     # objective.short, no un texto fijo
+    assert "Aporte al tema" not in body
+
+
+def test_stub_tema_no_pide_planetas_ni_actividad(toy_vault):
+    """El defecto de #76: un tema ingestado por ADS recibía los bullets de planetas y actividad,
+    contradiciendo que el eje tema/concepto es agnóstico de disciplina."""
+    seed_topic()
+    ads_json([rec("2020gpsA...1..1A")], slug="gp")
+    mn.write_paper_notes("gp", include_all=False, force=False, topic=True)
+    body = (toy_vault.PAPERS / "2020gpsA...1..1A.md").read_text(encoding="utf-8")
+    assert "- **Aporte al tema:**" in body and "- **Régimen de validez:**" in body
+    assert "planeta" not in body.lower() and "Ejes del objetivo" not in body
+
+
+def test_stub_off_ads_comparte_el_bloque_del_tema(toy_vault):
+    """Un solo lugar de verdad (criterio de LLM_DISCLAIMER): la rama off-ADS —que ya tenía su
+    propio bullet de tema— y la rama ADS de tema escriben el MISMO bloque, así que no divergen."""
+    mn.write_web_paper_note("2020Smith", slug="gp", concept="gaussian-processes", url="https://x")
+    body = (toy_vault.PAPERS / "2020Smith.md").read_text(encoding="utf-8")
+    assert mn.extraction_block(topic=True) in body
+
+
+def test_extraction_block_sin_objetivo_degrada_a_generico(toy_vault):
+    """make_notes corrido suelto, fuera de la cadena: sin objective.yaml el stub sale genérico
+    (nunca inventado) y no rompe la generación."""
+    toy_vault.OBJECTIVE_YAML.unlink()
+    block = mn.extraction_block(topic=False)
+    assert "- **Ejes del objetivo:**" in block           # sin facetas: sin paréntesis
+    assert "objetivo de la bóveda / huecos" in block     # sin `short`: texto genérico
+
+
+# ── #76 (unitario): objective_lens + la matriz de ramas de extraction_block ──────────────────
+
+def write_objective(toy_vault, **cambios):
+    """objective.yaml de juguete con los campos pisados (o borrados con None)."""
+    from conftest import OBJECTIVE
+    obj = {k: v for k, v in {**OBJECTIVE, **cambios}.items() if v is not None}
+    write_yaml(toy_vault.OBJECTIVE_YAML, obj)
+
+
+def test_objective_lens_lee_facetas_y_short(toy_vault):
+    """La lente sale del objetivo, en el ORDEN declarado (es lo que se lista en el bullet)."""
+    assert mn.objective_lens() == (["actividad", "rv"], "toy")
+
+
+def test_objective_lens_tolera_objetivo_incompleto(toy_vault):
+    """Un objective.yaml a medio escribir (sin `relevance`, o con `short` vacío) no rompe la
+    generación de notas: la lente queda vacía y el stub cae al texto genérico."""
+    write_objective(toy_vault, relevance=None)
+    assert mn.objective_lens() == ([], "toy")
+    write_objective(toy_vault, relevance={"topics": {}}, short="   ")
+    assert mn.objective_lens() == ([], "")
+
+
+def test_objective_lens_sin_archivo_no_propaga_el_error(toy_vault):
+    """load_objective() levanta si falta el archivo; el stub NO es el lugar donde eso aborta."""
+    toy_vault.OBJECTIVE_YAML.unlink()
+    assert mn.objective_lens() == ([], "")
+
+
+@pytest.mark.parametrize("topic,cabeza", [(True, "Aporte al tema"),
+                                          (False, "Ground-truth (planetas / parámetros)")])
+def test_extraction_block_forma(toy_vault, topic, cabeza):
+    """Contrato de forma que asumen los dos templates de cuerpo (se interpolan como `{bloque}`
+    al final del f-string): encabezado propio, cuatro bullets y newline final."""
+    block = mn.extraction_block(topic)
+    lineas = block.rstrip("\n").split("\n")
+    assert block.startswith("## Extracción (LLM)\n") and block.endswith("\n")
+    assert len(lineas) == 5 and all(ln.startswith("- **") for ln in lineas[1:])
+    assert cabeza in lineas[1]
+    assert lineas[-2] == mn._BULLET_METHODS and lineas[-1].startswith("- **Para el objetivo:**")
+
+
+def test_extraction_block_tema_sin_short_cae_al_generico(toy_vault):
+    """La rama que faltaba de la matriz: tema + objetivo sin `short`."""
+    write_objective(toy_vault, short=None)
+    block = mn.extraction_block(topic=True)
+    assert "- **Aporte al tema:**" in block
+    assert "- **Para el objetivo:** _(relevancia para el objetivo de la bóveda / huecos)_" in block
+
+
+def test_extraction_block_estrella_sin_facetas_pero_con_short(toy_vault):
+    """Y la simétrica: sin facetas el bullet va sin paréntesis, pero el `short` sigue citándose."""
+    write_objective(toy_vault, relevance={"topics": {}})
+    block = mn.extraction_block(topic=False)
+    assert "- **Ejes del objetivo:** _(qué dice el paper" in block
+    assert "«toy»" in block
+
+
 # ── contrato fulltext (fulltext: / fulltext_source:) ─────────────────────────
 
 def seed_txt(toy_vault, slug, stem, header=""):
