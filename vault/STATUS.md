@@ -697,6 +697,40 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
   bóveda real lo contradecía en el 84% de sus notas; se acotó en `d5713cd` mientras esto no existía.
   Con el backfill corrido, la afirmación general vuelve a ser cierta para esa bóveda.
 
+## Backlog — keywords del paper como capa de linkeo (2026-08-22, issue #92)
+
+> Sale de una pregunta del usuario mientras corría la tanda 2: *"¿esas keywords las suponés vos? ¿no
+> deberían usarse primero las del paper?"*. Tenía razón, y el hallazgo se verificó en el código antes
+> de abrir el issue.
+
+**El estado real:** las keywords propias de cada paper **ya llegan** en toda request a ADS
+(`query_ads.py:108`), `classify()` las usa **apelmazadas** con título+abstract en un blob lowercased
+para la regex (`:183` — se leen como *más texto*, no como vocabulario), quedan en
+`build/<slug>/ads.json` (`:447`) y **`make_notes` no las menciona**: no entran a la nota y mueren con
+el scratch.
+
+**Por qué importa más de lo que parece.** Todo lo que hoy relaciona notas es **supuesto**: `topics`
+sale de la regex de *esta* instancia (dos bóvedas no son comparables), y `methods`/`thesis_links`/
+`aliases` los escribe el LLM. Las keywords son el **único vocabulario que no inventamos** y caerían
+del lado **auditable** de la línea que el README promete, junto a `doi` y `bibstem`. El uso primario
+que marcó el usuario es **linkear conceptos**: dos papers que comparten una keyword asignada al
+publicar tienen una relación *declarada por la fuente*, no una que el LLM decidió escribir.
+
+**Y destraba, por la puerta de atrás, lo que estaba bloqueado por licencia.** El vocabulario de
+AstroMLab 5 (backlog de la revisión 2026-07-03, ítem 5) sigue sin `LICENSE` — re-chequeado
+**2026-08-22**: GitHub API `license: null`, último push 2025-11-15. Las keywords que la revista
+asigna al publicar están estandarizadas y llegan por la API que ya usamos: sin dependencia nueva ni
+problema de licencia.
+
+**Decidido en la conversación:** la **capa LLM encima** (normalizar variantes, agrupar, mapear a los
+conceptos de la bóveda) queda **fuera del primer issue**, a propósito. Primero la capa determinista;
+sin ella la capa LLM no tiene de dónde partir y volvemos a un vocabulario supuesto.
+
+**A verificar antes de implementar** (en el issue): si ADS expone el **esquema** de cada keyword
+(autor vs revista/UAT — es lo que permitiría separar la parte controlada de la libre); la cobertura
+real del corpus (los pre-digitales probablemente no traen, mismo sesgo que #86); y si el campo nuevo
+pide backfill quirúrgico o vale sólo para notas nuevas.
+
 ## Backlog de framework — sesión de diseño 2026-08-22 (issues #70–#81)
 
 > Sesión pedida por el usuario: cómo se extrae la información de un paper y cómo se sintetiza entre
@@ -1527,6 +1561,11 @@ sola, sin el resto del pack ni la ruta MCP.
    `license: null` (sin archivo LICENSE); el `## License` del README sólo lista las licencias de las
    FUENTES agregadas (arXiv non-exclusive, ADS) y pide respetarlas, **sin grant propio del dataset**;
    último push del repo 2025-11-15 (nada cambió desde la evaluación de 2026-07-03).
+   **Re-chequeado 2026-08-22: sigue igual** (`license: null`, sin archivo `LICENSE` —404 en la API—,
+   mismo último push). Novedad del mismo día: parte de lo que este vocabulario venía a resolver
+   —anti-drift taxonómico y linkeo entre notas— se cubre **sin licencia** con las **keywords del
+   propio paper**, que ADS ya devuelve y la cadena tira (**#92**). Eso baja todavía más la prioridad
+   de adoptar este recurso: primero agotar lo que llega gratis por la fuente.
 6. ✅ **HECHO (2026-07-03)** — **Skill de mantenimiento** `maintain` (v1.0.0): opera sobre entidades
    **ya ingestadas** — refrescar (papers nuevos → re-sintetizar sólo lo nuevo), borrar (nota + PDF +
    reparar colgados), renombrar slug, re-clasificar tras cambiar `relevance.topics`, y resolver el
