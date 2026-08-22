@@ -18,6 +18,44 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.15.0 (2026-08-22) — #75: la red que le faltaba al paso más caro de la cadena
+
+> Segundo de la **tanda 2** (procedencia): #70 → #75 → **#73** (queda). 448 tests verdes (+8),
+> lint 0. 1.14.0 → **1.15.0** (minor: categoría de lint nueva —backlog, no bloquea— y campo
+> opcional `no_sintetizado` en `papers/`).
+
+- **El hallazgo de fondo de la sesión de diseño, hecho red.** Todo paso salteable de la cadena tiene
+  una: #55 el triage, #56 la verificación stale, #69 la cabecera. El de **síntesis** —el más caro y
+  el que define la calidad de la ficha— no tenía ninguna. Y su modo de falla es **omisión**, que no
+  deja rastro: nada queda mal escrito, el paper simplemente nunca llegó.
+- **`verify-citations` no puede verlo, por diseño.** Valida cada afirmación contra su fuente, no la
+  **cobertura del conjunto**: una ficha sintetizada desde 3 papers de 40 vuelve **100% soportada**.
+  Es el mismo modo de falla de "afirmar de menos" que ya apareció en las tablas truncadas (#29) y en
+  la garantía vencida (#56), ahora en el eslabón que produce la ficha.
+- **La regla:** paper con `methods` poblado —o sea que **ya pagó** la extracción— cuyo bibcode **no
+  aparece citado en ninguna ficha ni concepto** → backlog *extraído pero no sintetizado*. Mide si el
+  paper **llegó**, no si la síntesis es buena: es el análogo exacto del proxy que ya existía para
+  planetas (cada planeta del frontmatter discutido en prosa).
+- **Por qué la población son los YA extraídos y no todo el core.** La **regla de poda** manda dejar
+  lo tangencial fuera de la prosa, así que exigirle a cada core aterrizar sería ruido puro. Pero lo
+  tangencial normalmente **ni se extrae**: `methods` poblado significa que alguien decidió que ese
+  paper importaba. El core sin extraer ya tiene su propia categoría, y reportarlo en las dos sería
+  el mismo hallazgo dos veces.
+- **La escotilla lleva motivo obligatorio.** `no_sintetizado: <motivo>` en la nota del paper cierra
+  el hallazgo (regla de poda, aporta sólo vía roll-up, …); la marca **pelada** —`true`, o vacía— se
+  sigue reportando. Mismo criterio que el `--reason` del triage: no curar en silencio, porque el
+  motivo es lo único no regenerable.
+- **"Llegó" es a una nota de ENTIDAD** (`stars/`, `concepts/`), no a cualquier nota: una `queries/`
+  es una respuesta puntual, no la síntesis durable de un sujeto.
+- **Tests (+8):** el hallazgo y sus tres formas de cerrarse (citado en ficha, citado en concepto,
+  `no_sintetizado` con motivo), los tres casos que NO deben entrar (citado sólo en una query, paper
+  sin extraer, paper no-core) y la marca sin motivo. Cobertura de sentencias del código nuevo:
+  **100%**.
+- Skills: `ingest-star` 1.14.0 → **1.15.0** (el checklist decía que el lint sólo tenía red para el
+  último paso; ahora dice cuál cubre a cuál, y el paso 4 cierra con este backlog), `ingest-topic`
+  1.11.0 → **1.12.0** (decía que no había proxy estructural para concepts: ahora hay uno),
+  `maintain` 1.12.0 → **1.13.0** (cómo se resuelve). `CLAUDE.md` y `docs/ingesta.md` sincronizados.
+
 ## ✅ Framework 1.14.0 (2026-08-22) — #70: el frontmatter de `stars/` es espejo puro de NEA
 
 > Primero de la **tanda 2** (procedencia): #70 → #75 → #73. 440 tests verdes (+15), lint 0.

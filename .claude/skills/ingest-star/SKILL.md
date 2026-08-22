@@ -1,7 +1,7 @@
 ---
 name: ingest-star
 description: Usar cuando el usuario pide bajar/agregar/ingestar una estrella a la bóveda ("bajá GJ 581", "ingest tau ceti", "agregá la estrella X", "traé la bibliografía de AU Mic"). Corre la cadena de ingesta y hace la extracción LLM.
-version: 1.14.0
+version: 1.15.0
 ---
 
 # Ingest: agregar una estrella a la wiki
@@ -12,7 +12,10 @@ procesa. Trabajar desde la raíz del repo.
 ## Pasos
 
 **Copiá este checklist al chat al arrancar y andá tildándolo** — tres pasos (2b, 2c, 5b) son
-fáciles de saltear y **ninguno deja rastro si se omite**; el lint sólo tiene red para el último:
+fáciles de saltear y **ninguno deja rastro si se omite**. El lint tiene red para **2c** (*triage
+pendiente*, #55), para **5b** (*sin verificar* / *verificación stale*, #56) y para lo que la
+síntesis del paso **3** dejó afuera (*extraído pero no sintetizado*, #75); para **2b** no hay red
+todavía:
 
 ```
 Progreso del ingest de <estrella>:
@@ -156,8 +159,13 @@ Progreso del ingest de <estrella>:
    sólo tiene ese archivo**: ¿se entiende la estrella sin abrir ningún paper? Checklist: parámetros
    estelares clave, inventario de señales RV (tabla $P/K/e/m\sin i$ + estado), señales
    disputadas/descartadas, indicadores de actividad esperados, métodos aplicados y huecos. Si para
-   responder algo hay que abrir un paper, falta en la ficha → agregarlo. (`lint.py` chequea el proxy
-   estructural — cada planeta del frontmatter discutido en prosa — pero la suficiencia la juzgás vos.)
+   responder algo hay que abrir un paper, falta en la ficha → agregarlo. (`lint.py` chequea dos
+   proxies estructurales — cada planeta del frontmatter discutido en prosa, y cada paper **extraído**
+   citado en alguna ficha o concepto (#75) — pero la suficiencia la juzgás vos.)
+   ⚠ **El backlog *extraído pero no sintetizado* es el que cierra este paso:** un paper que pagó la
+   extracción y no aparece citado en ninguna entidad es extracción perdida. O lo sintetizás donde
+   corresponda, o declarás por qué no va: `no_sintetizado: <motivo>` en su nota (la **regla de poda**
+   es motivo válido; la marca sin motivo se sigue reportando).
 
 5. **Bookkeeping.** Actualizar `vault/wiki/index.md` (agregar la estrella), appendear a `vault/wiki/log.md`,
    tocar `vault/wiki/matrices/method_star.md` (qué métodos se aplicaron en la literatura) y `vault/STATUS.md`

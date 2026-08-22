@@ -119,6 +119,95 @@ def test_contradiccion_gt_ficha(toy_vault, capsys):
     assert "ficha 1 planetas vs ground-truth 2" in out
 
 
+# ── #75: extraído pero no sintetizado ────────────────────────────────────────
+
+def paper_extraido(toy_vault, stem="2020ext....1E", **extra):
+    """Nota de paper que YA pasó por la extracción cara (`methods` poblado)."""
+    fm = {"tags": ["paper"], "relevance": "high", "methods": ["periodograma"],
+          "thesis_links": [], "bearing": None}
+    fm.update(extra)
+    return mk_note(toy_vault.PAPERS, stem, fm, "")
+
+
+def test_extraido_sin_llegar_a_ninguna_entidad_es_backlog(toy_vault, capsys):
+    """El paso más caro de la cadena era el único sin red, y su modo de falla es OMISIÓN: nada
+    quedaba mal escrito, simplemente el paper nunca llegó a la ficha. `verify-citations` tampoco lo
+    ve — valida cada afirmación contra su fuente, no la cobertura del conjunto."""
+    paper_extraido(toy_vault)
+    mk_note(toy_vault.STARS, "test_star", {"tags": ["star"], "P_rot_days": 34.0,
+                                           "activity_indicators_expected": ["halpha"]}, "Síntesis.\n")
+    rc, out = run_lint(capsys)
+    assert rc == 0                                        # backlog: no bloquea
+    assert "Extraído pero no sintetizado" in out
+    assert "2020ext....1E" in out and "no está citado en ninguna ficha ni concepto" in out
+
+
+def test_citado_en_la_ficha_no_es_hallazgo(toy_vault, capsys):
+    paper_extraido(toy_vault)
+    mk_note(toy_vault.STARS, "test_star", {"tags": ["star"], "P_rot_days": 34.0,
+                                           "activity_indicators_expected": ["halpha"]},
+            "La señal la arbitra [[2020ext....1E]].\n")
+    rc, out = run_lint(capsys)
+    assert "Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog) (0)" in out
+
+
+def test_citado_en_un_concepto_tambien_cuenta(toy_vault, capsys):
+    """"Llegó" es a cualquier nota de ENTIDAD: un paper de método puede aterrizar en el concepto y
+    no en la ficha de la estrella, y eso es síntesis igual."""
+    paper_extraido(toy_vault)
+    mk_note(toy_vault.CONCEPTS / "methods", "periodograma", {"tags": ["methods"]},
+            "Definido en [[2020ext....1E]].\n")
+    link_from_index(toy_vault, "periodograma")
+    rc, out = run_lint(capsys)
+    assert "Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog) (0)" in out
+
+
+def test_citado_solo_en_una_query_no_alcanza(toy_vault, capsys):
+    """Una query es una respuesta puntual, no la síntesis durable de un sujeto: que el paper aparezca
+    ahí no significa que haya llegado a la bóveda."""
+    paper_extraido(toy_vault)
+    mk_note(toy_vault.QUERIES, "una-pregunta", {"tags": ["query"]},
+            "Respuesta con [[2020ext....1E]].\n")
+    link_from_index(toy_vault, "una-pregunta")
+    rc, out = run_lint(capsys)
+    assert "Extraído pero no sintetizado" in out and "2020ext....1E" in out
+
+
+def test_paper_sin_extraer_no_entra_en_esta_categoria(toy_vault, capsys):
+    """La población son los YA extraídos. El core sin extraer tiene su propia categoría ("paper
+    relevante sin methods"): reportarlo en las dos sería el mismo hallazgo dos veces."""
+    mk_note(toy_vault.PAPERS, "2020raw....1R",
+            {"tags": ["paper"], "relevance": "high", "methods": [], "thesis_links": []}, "")
+    rc, out = run_lint(capsys)
+    assert "paper relevante sin methods" in out
+    assert "Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog) (0)" in out
+
+
+def test_paper_no_core_no_entra(toy_vault, capsys):
+    """Una nota escrita con `--all` (no-core) no tiene por qué aterrizar en ninguna síntesis."""
+    paper_extraido(toy_vault, relevance="low")
+    rc, out = run_lint(capsys)
+    assert "Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog) (0)" in out
+
+
+def test_no_sintetizado_con_motivo_cierra_el_hallazgo(toy_vault, capsys):
+    """La escotilla que pide el issue: la regla de poda manda dejar lo tangencial fuera de la prosa,
+    así que un extraído puede legítimamente no aterrizar — pero se declara, con su motivo."""
+    paper_extraido(toy_vault, no_sintetizado="metodología RV genérica: no cambia cómo se lee ninguna señal")
+    rc, out = run_lint(capsys)
+    assert rc == 0
+    assert "Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog) (0)" in out
+
+
+def test_no_sintetizado_sin_motivo_sigue_reportando(toy_vault, capsys):
+    """Mismo criterio que el `--reason` obligatorio del triage: no curar en silencio. Una marca
+    pelada cierra el hallazgo sin dejar el porqué, que es lo único no regenerable."""
+    paper_extraido(toy_vault, no_sintetizado=True)
+    rc, out = run_lint(capsys)
+    assert rc == 0
+    assert "`no_sintetizado` sin motivo" in out and "2020ext....1E" in out
+
+
 # ── #70: el frontmatter de stars/ es espejo puro de NEA ──────────────────────
 
 def ficha_espejo(toy_vault, front=None, body="**b** (P=365 d)\n"):

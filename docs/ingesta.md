@@ -21,6 +21,7 @@ n_found  (lo que ADS dice que hay)
               └─ candidatos del chaining      ← no se bajan hasta que los juzgues (triage)
                   └─ los que el PDF falló     ← build/<slug>/missing_pdf.json → sin fulltext
                       └─ "papers clave"       ← la extracción LLM (criterio no definido, #62)
+                          └─ lo que llegó a la ficha  ← la síntesis (con red desde #75)
 ```
 
 Los **no-core no se bajan ni se extraen**: quedan como puntero en el apéndice *Excluidos por el
@@ -204,6 +205,10 @@ tema (ADS y off-ADS) escriben el mismo bloque.
   paper, eso falta en la ficha. Los `[[bibcode]]` son trazabilidad, no lectura obligatoria.
 - **Todo lo apuntable es chequeable.** Cada afirmación fáctica va **citada** o marcada
   **`inferencia`**. Excepción: los valores de ground-truth NEA, que no se verifican contra papers.
+- **La extracción tiene que llegar (#75).** Un paper con `methods` poblado ya pagó el paso más caro
+  de la cadena; si su bibcode no aparece citado en ninguna ficha ni concepto, esa extracción se
+  perdió. El lint lo reporta como backlog. Se cierra sintetizándolo, o declarando `no_sintetizado:
+  <motivo>` en su nota cuando la regla de poda manda dejarlo fuera de la prosa.
 
 ## 5. Backlog abierto
 
@@ -215,7 +220,6 @@ Esta ingesta tiene huecos conocidos y numerados; el detalle de cada uno está en
 | Falta el paso de contraste cross-paper antes de sintetizar | #72, y #62 (qué papers leer) |
 | Rol del paper (fundacional / aplicación / árbitro) | #73 |
 | Régimen de validez explícito en conceptos | #74, #63 |
-| Red para "extraído pero no sintetizado" | #75 |
 | Descubrimiento fuera de ADS (OpenAlex) | #77 |
 | Tema mixto sólo off-ADS-first | #78 |
 | Sesgo de edad en el orden por citas | #79 |

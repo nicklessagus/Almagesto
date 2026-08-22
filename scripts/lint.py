@@ -31,6 +31,9 @@ citado en query/concepto/hipótesis sin su `.txt` en `vault/raw/fulltext/` → n
 con el skill `verify-citations`), **cobertura** (concepto/hipótesis sin ninguna cita `[[bibcode]]` →
 afirmaciones no chequeables; backlog), **cobertura de verificación** (query/concepto CON citas pero
 SIN bloque `## Verificación de citas` → nunca pasó por verify-citations; backlog ALCE-adjacent),
+**extraído pero no sintetizado** (#75: paper con `methods` poblado cuyo bibcode no aparece citado en
+ninguna ficha/concepto → la extracción, que es el paso más caro, nunca llegó a la síntesis; se cierra
+sintetizándolo o marcando `no_sintetizado: <motivo>` en la nota del paper; backlog),
 **verificación stale** (la nota se editó DESPUÉS de la fecha de su bloque de verificación → las
 afirmaciones nuevas nunca pasaron por el fan-out pero quedan bajo un encabezado que se lee como
 vigente; backlog),
@@ -288,6 +291,8 @@ def main() -> int:
     headerless: list = []              # (stem, motivo) — ficha/concepto sin cabecera estampable (#69)
     thesis_refs: dict[str, list] = {}  # valor de thesis_link -> notas que lo usan
     dispute_refs: list = []            # (estrella, planeta, ref) de planets[].disputes
+    cited_in_entity: set = set()       # bibcodes citados desde una ficha/concepto (#75)
+    extracted: list = []               # (stem, marca `no_sintetizado`) de papers YA extraídos (#75)
 
     refs_dir = str(cfg.RAW / "refs")
     refs_stems = {basename(f)[:-3] for f in files if f.startswith(refs_dir)}  # docs de diseño, no fichas
@@ -305,6 +310,9 @@ def main() -> int:
         # precondición de verificabilidad: en queries/concepts/hipótesis, toda cita-bibcode necesita
         # su fulltext para poder correr verify-citations (chequeo claim↔fuente).
         in_verifiable_note = in_dir(f, "queries") or in_dir(f, "concepts")   # concepts/ incluye hypotheses/
+        # notas de ENTIDAD (#75): son las que sintetizan un sujeto. Una cita que sólo aparece en una
+        # query no es "el paper llegó a la bóveda": la query es una respuesta puntual, no la síntesis.
+        in_entity_note = f.startswith((str(cfg.STARS), str(cfg.CONCEPTS)))
         nbib = 0                              # citas [[bibcode]] en esta nota
         for tgt in LINK_RE.findall(text):
             tgt = tgt.strip()
@@ -316,6 +324,8 @@ def main() -> int:
                 broken.append((stem, tgt))
             if BIBCODE_RE.match(tgt):
                 nbib += 1
+                if in_entity_note:
+                    cited_in_entity.add(tgt)
                 if in_verifiable_note and tgt not in fulltext:
                     unverifiable.append((stem, f"cita {tgt} sin fulltext (no chequeable claim↔fuente)"))
         # cobertura: un concepto/hipótesis que afirma sin ninguna cita [[bibcode]] no es chequeable
@@ -411,6 +421,12 @@ def main() -> int:
                 pending_srcs.append((stem, f"{fm['pending_source']} — proveer la fuente; puntero: {ptr}"))
             if fm.get("relevance") == "high" and not fm.get("methods"):
                 incomplete.append((stem, "paper relevante sin methods (sin extraer)"))
+            # El eslabón SIGUIENTE (#75): el paper que SÍ se extrajo. `methods` poblado significa
+            # que alguien gastó en él el paso más caro de la cadena; si su contenido nunca llegó a
+            # una ficha ni a un concepto, la extracción se perdió. Se recolecta acá y se resuelve
+            # después del barrido, cuando ya se sabe qué citó cada nota de entidad.
+            if fm.get("methods") and fm.get("relevance") != "low":
+                extracted.append((stem, fm.get("no_sintetizado")))
             if fm.get("thesis_links") and not fm.get("bearing"):
                 incomplete.append((stem, "thesis_links sin bearing"))
             for tl in (fm.get("thesis_links") or []):
@@ -496,6 +512,28 @@ def main() -> int:
         return (not ({"paper", "star", "matrix"} & set(tags))
                 and n not in NON_ORPHAN and n not in refs_stems)
     orphans = [n for n, c in incoming.items() if c == 0 and is_orphan_candidate(n)]
+
+    # Extraído pero no sintetizado (#75, backlog): el análogo del proxy que ya existe para planetas
+    # (cada planeta del frontmatter discutido en prosa). Mide si el paper LLEGÓ, no si la síntesis
+    # es buena. Es el único paso salteable de la cadena que no tenía red —y su modo de falla es
+    # OMISIÓN, que no deja rastro: `verify-citations` valida cada afirmación contra su fuente, no la
+    # cobertura del conjunto, así que una ficha sintetizada desde 3 papers de 40 vuelve 100%
+    # soportada. La población son los papers YA extraídos, no todo el core: la regla de poda manda
+    # dejar fuera de la prosa lo tangencial, pero eso normalmente ni se extrae. Escotilla explícita
+    # para el que sí se extrajo y legítimamente no se inlinea: `no_sintetizado: <motivo>` en la nota
+    # del paper — con motivo, como el `--reason` del triage: no curar en silencio.
+    unsynthesized = []
+    for stem, marca in sorted(extracted):
+        if stem in cited_in_entity:
+            continue
+        if marca:
+            if not str(marca).strip() or str(marca).strip().lower() in ("true", "sí", "si", "yes"):
+                unsynthesized.append((stem, "`no_sintetizado` sin motivo → poné POR QUÉ no se "
+                                            "inlinea (regla de poda, aporta sólo vía roll-up, …)"))
+            continue
+        unsynthesized.append((stem, "extraído (`methods` poblado) pero su bibcode no está citado en "
+                                    "ninguna ficha ni concepto → sintetizarlo donde corresponda, o "
+                                    "marcar `no_sintetizado: <motivo>` en la nota del paper"))
 
     # thesis_links sin página destino: el tag no matchea ninguna nota → no acumula en el roll-up
     # Dataview de ninguna hipótesis/concepto (típico typo: shift-vs-shape vs shift_vs_shape).
@@ -646,6 +684,8 @@ def main() -> int:
                          ("Sin verificar: query/concepto con citas pero sin bloque verify-citations (backlog)", unverified),
                          ("Verificación stale: la nota se editó después de su último verify-citations (backlog)", stale_verif),
                          ("Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog)", coverage),
+                         ("Extraído pero no sintetizado: el paper se extrajo y su contenido nunca "
+                          "llegó a una ficha/concepto (backlog)", unsynthesized),
                          ("Cabecera no estampable: ficha/concepto sin la línea del generador — los "
                           "estampadores de cabecera no-opean en silencio (backlog)", headerless),
                          ("Triage pendiente: candidatos del chaining sin juzgar (backlog)", triage_pending),

@@ -1,7 +1,7 @@
 ---
 name: ingest-topic
 description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema off-ADS — típicamente un método de otra disciplina (estadística, ML) al servicio del foco astro — desde PDFs locales + web (ver Modo off-ADS).
-version: 1.11.0
+version: 1.12.0
 ---
 
 # Ingest: agregar un TEMA a la wiki
@@ -125,8 +125,12 @@ Progreso del ingest del tema <tema>:
 
 5. **Auto-revisión de autosuficiencia (semántica).** Releer el concept como un agente externo que
    **sólo tiene ese archivo**: ¿se entiende el tema sin abrir ningún paper? Si para responder algo hay
-   que abrir un paper, falta en el concept → agregarlo. (No hay proxy estructural en `lint.py` para
-   concepts — la suficiencia la juzgás vos, igual que en la ficha de estrella.)
+   que abrir un paper, falta en el concept → agregarlo. (El único proxy estructural de `lint.py` acá
+   es *extraído pero no sintetizado* (#75): cada paper con `methods` poblado tiene que estar citado
+   en alguna ficha o concepto. La suficiencia la juzgás vos, igual que en la ficha de estrella.)
+   ⚠ Ese backlog es el que cierra este paso: un paper que pagó la extracción y no aparece citado en
+   ninguna entidad es extracción perdida. O lo sintetizás donde corresponda, o declarás por qué no
+   va: `no_sintetizado: <motivo>` en su nota (la marca sin motivo se sigue reportando).
 
 6. **Bookkeeping.** Actualizar `vault/wiki/index.md` (agregar el concept si es nuevo), appendear a
    `vault/wiki/log.md`, y `vault/STATUS.md` si cambió el estado. **No** tocar la matriz método×estrella.

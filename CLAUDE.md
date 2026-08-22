@@ -213,7 +213,11 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   hay marca, vale la rama que registró el fetcher. Importa porque `verify-citations` promete que la
   cita textual son "las palabras reales del paper": con `eprint`, una discrepancia numérica contra
   un valor publicado es candidata a **diferencia de versión** y NO se "corrige" la nota hacia el
-  preprint (ver el caveat del skill). Opcional
+  preprint (ver el caveat del skill). Opcional `no_sintetizado: <motivo>` (#75): declara que este
+  paper **ya extraído** legítimamente no se inlinea en ninguna ficha/concepto —típicamente por la
+  **regla de poda**, o porque aporta sólo vía roll-up—. Es una escotilla con **motivo obligatorio**
+  (mismo criterio que el `--reason` del triage: no curar en silencio); sin ella, el lint lo reporta
+  como *extraído pero no sintetizado*. Opcional
   `retracted: true` + `retraction{type,notice_doi,date,source}` — lo estampa `scripts/check_retractions.py`
   (Crossref) cuando el paper fue **retractado**; el lint lo surface como bloqueante (fuente no válida).
   En notas **off-ADS** el schema suma `source_url` (URL de la fuente web; null si es PDF local),
@@ -480,7 +484,16 @@ es la **marca de agua** del bibcode repetida por página (lo agarra la densidad 
 pero no sirve para grep ni verify; rescate: PDF sano, OCR, o marcar `pending`). Las **correcciones
 publicadas** (`corrections`, #52 — erratum/corrigendum/EoC del mismo barrido de Crossref) son
 **backlog, no bloquean**: el paper sigue siendo citable; lo que hay que revisar son los valores que
-se le extrajeron (un corrigendum cambia justamente ese número). La **cobertura** (concepto/hipótesis
+se le extrajeron (un corrigendum cambia justamente ese número). El **extraído pero no sintetizado** (#75: un paper con `methods` poblado —o sea que ya pagó el paso
+más caro de la cadena— cuyo bibcode **no aparece citado en ninguna ficha ni concepto**) es
+**backlog**: la extracción nunca llegó a la síntesis. Es el análogo del proxy que ya existe para
+planetas (cada planeta del frontmatter discutido en prosa) y mide si el paper **llegó**, no si la
+síntesis es buena. Existe porque **todo paso salteable de la cadena tiene red** (#55 triage, #56
+verificación stale, #69 cabecera) menos justamente el de síntesis, cuyo modo de falla es **omisión**
+—no deja rastro— y que `verify-citations` no puede ver: valida cada afirmación contra su fuente, no
+la cobertura del conjunto, así que una ficha sintetizada desde 3 papers de 40 vuelve 100% soportada.
+Se cierra sintetizándolo donde corresponda o declarando `no_sintetizado: <motivo>` en la nota del
+paper. La **cobertura** (concepto/hipótesis
 sin ninguna cita `[[bibcode]]` → afirma sin fuente) es **backlog** que el lint surface para ir citando;
 ídem la **cobertura de verificación** (query/concepto **con** citas pero **sin** bloque
 `## Verificación de citas` → nunca pasó por `verify-citations`: correr el skill) y la **verificación

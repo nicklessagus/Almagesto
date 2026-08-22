@@ -1,7 +1,7 @@
 ---
 name: maintain
 description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), resolver el backlog del lint (P_rot sin documentar, drift PDF↔disco, cobertura, claims stale), y la pasada periódica de retracciones sobre toda la bóveda ("chequeá retracciones").
-version: 1.12.0
+version: 1.13.0
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
@@ -148,6 +148,12 @@ Pasada de higiene sobre lo que `lint.py` marca como backlog/WARN (no bloqueante,
   NEA** (#70) y un null ahí es el estado correcto, no un hueco a tapar. El hallazgo del lint es
   justamente "NEA no lo trae **y** el cuerpo no documenta uno citado": lo que se completa es la
   prosa. Rellenar el campo lo convierte en un hallazgo **bloqueante** (espejo roto).
+- **Extraído pero no sintetizado** (#75) → el paper pagó el paso más caro y su contenido nunca llegó
+  a una ficha ni a un concepto. Releer su `## Extracción` y decidir: si aporta algo al sujeto,
+  **sintetizarlo** en la nota viva (rige la regla de poda) y cerrar con `verify-citations`; si
+  legítimamente no se inlinea —tangencial, o aporta sólo vía roll-up—, declararlo en la nota del
+  paper con `no_sintetizado: <motivo>`. La marca **sin motivo** vuelve a reportarse: mismo criterio
+  que el `--reason` del triage, no curar en silencio.
 - **PDF ↔ disco / cuerpo** (drift del campo `pdf` o del link de cabecera) → linkear el PDF bajado o
   corregir el puntero roto; después `python scripts/make_notes.py --restamp-pdf-links` para que el link
   `[📄 PDF]` de la cabecera siga al frontmatter (#47 — barre todas las notas de papers:
