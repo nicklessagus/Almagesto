@@ -18,6 +18,43 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.13.0 (2026-08-22) — #81: el rechazo de una fuente declarada no quedaba en ningún lado
+
+> Cierra la **tanda 1** del backlog del 2026-08-22 (#76, #79 puntos 1-2, #81). 425 tests verdes
+> (+9), lint 0. 1.12.0 → **1.13.0** (minor: flag nuevo + dos claves opcionales en `decisiones`,
+> aditivas — un registro viejo se lee igual y el descarte del chaining no cambia de forma).
+
+- **La asimetría de #51, en el otro carril.** La compuerta de triage tiene las dos mitades del
+  juicio persistidas: el aceptado va a `extra_core`, el descartado a `decisiones` con su motivo. Las
+  fuentes **declaradas** de un tema off-ADS no: `sources:` registra lo aceptado y *"miré este libro /
+  esta URL y decidí que no es core"* no quedaba escrito. En un modo donde el usuario **define** qué
+  es core (que es el diseño del off-ADS), ese juicio es tan **no regenerable** como el del triage —
+  y se perdía igual al cambiar de máquina o al volver seis meses después.
+- **`triage.py --drop-source <clave> --reason "…" [--pointer <url|doi>]`.** Escribe en las **mismas**
+  `decisiones` del registro versionado (reusa el mecanismo, no inventa otro). Dos diferencias que
+  salen del carril: no valida contra una lista de pendientes ni necesita `build/<slug>/ads.json`
+  —un off-ADS puro nunca lo tuvo, no hubo query— y guarda `fuente:`, porque una clave sintética
+  (`2006RasmussenWilliams`) sin url/doi es irresoluble seis meses después. `origen:
+  fuente-declarada` distingue el carril; **sin `origen` = chaining**, así que los registros
+  existentes se leen igual.
+- **Que el juicio HAGA algo, no sólo quede anotado.** En el carril del chaining la persistencia sirve
+  para *no re-proponer*; acá no hay descubrimiento que filtrar —la fuente la declara el usuario—,
+  así que el equivalente es que `ingest_topic` **avise** con la fecha y el motivo si un item de
+  `sources:` lleva una clave ya descartada. **Avisa, no frena:** volver a declararla puede ser un
+  cambio de opinión deliberado.
+- **`triage.py <slug>` sin `ads.json` ya no muere.** Moría con *"corré primero la cadena"*, que para
+  un tema off-ADS puro es un consejo **imposible** (nunca va a haber `ads.json`). Ahora, si hay
+  juicio registrado, lo lista con carril, fecha, motivo y puntero; sin juicio, el diagnóstico viejo
+  sigue siendo el correcto (una estrella a la que le falta el ingest) y se mantiene.
+- **`--drop` y `--drop-source` no se mezclan en una corrida:** son dos juicios distintos que
+  comparten `--reason`, y mezclarlos escribiría el mismo motivo para los dos.
+- **Tests (+9):** persistencia sin `ads.json`, motivo obligatorio, puntero ausente no se inventa,
+  los dos carriles conviviendo sin pisarse ni tocar `busqueda`, carriles mutuamente excluyentes,
+  listado sin `ads.json` (con y sin decisiones registradas), aviso de `ingest_topic` con su caso de
+  control (otra clave / `aceptado` no disparan). Cobertura de sentencias del código nuevo: **100%**.
+- Skill `ingest-topic` 1.10.1 → **1.11.0**; `CLAUDE.md`, `README.md` y `docs/operacion.md`
+  actualizados (el registro ya no describe `decisiones` como "sólo triage").
+
 ## ✅ Framework 1.12.0 (2026-08-22) — #79 (puntos 1-2): el orden por citas dejaba afuera lo reciente
 
 > Segundo issue de la tanda 1 del backlog del 2026-08-22 (queda #81). 416 tests verdes (+13), lint 0.
@@ -558,9 +595,10 @@ fuente, no que la síntesis represente al conjunto: una ficha sintetizada desde 
 paper, sin el cual "contrastar" no está definido).
 
 ### Orden sugerido de tandas
-1. **Barato y sin dependencias:** ~~**#76**~~ ✅ (el stub de paper no ramifica por sujeto — el cuerpo,
-   los seeds ya ramifican), ~~**#79** puntos 1-2~~ ✅ (ranking del `--sweep` por citas/año; segunda
-   pasada por fecha al truncar), **#81** (registrar el rechazo de una fuente declarada).
+1. **Barato y sin dependencias — TANDA CERRADA (1.11.1–1.13.0):** ~~**#76**~~ ✅ (el stub de paper no
+   ramifica por sujeto — el cuerpo, los seeds ya ramifican), ~~**#79** puntos 1-2~~ ✅ (ranking del
+   `--sweep` por citas/año; segunda pasada por fecha al truncar), ~~**#81**~~ ✅ (registrar el rechazo
+   de una fuente declarada).
 2. **Procedencia:** **#70** (frontmatter = espejo puro de NEA; corregir el comentario de
    `make_notes.py:561`, que hoy instruye lo contrario, y re-apuntar `lint.py:303`) → **#75** (la red
    "extraído pero no sintetizado") → **#73** (campo `role`, que se apoya en el stub de #76).

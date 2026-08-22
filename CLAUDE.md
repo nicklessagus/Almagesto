@@ -323,9 +323,14 @@ re-clasificar de `maintain`. No ingesta nada; después se usan `ingest-star`/`in
 Cada sujeto ingestado deja un registro que **se commitea y viaja**, con dos secciones de dueños
 distintos: **`busqueda`** (la escribe `query_ads` al cerrar cada corrida: `fecha`, `query` efectiva
 —en una estrella la arma `build_query` y antes se tiraba—, `rows`, `n_found`, `n_total`, `n_core`,
-`n_candidates`, `n_dropped`, `truncated`, `almagesto_version`) y **`decisiones`** (las escribe
-`triage.py --drop`: por bibcode, `decision`/`motivo`/`fecha`). Regla de oro: **`build/` guarda lo
-regenerable, el registro guarda lo que no lo es.** Un `ads.json` se recupera pidiéndoselo de nuevo a
+`n_candidates`, `n_dropped`, `truncated`, `almagesto_version`) y **`decisiones`** (el juicio de
+curación, por clave: `decision`/`motivo`/`fecha`). Las `decisiones` cubren los **dos carriles**:
+`triage.py --drop` para el candidato del citation chaining (por bibcode) y `triage.py --drop-source`
+para la **fuente declarada** de un tema off-ADS (#81 — clave sintética o url, con `origen:
+fuente-declarada` y un `fuente:` que la resuelva; sin `origen` = chaining). El segundo existe porque
+en off-ADS `sources:` registra sólo lo aceptado: es la misma asimetría de #51 en el otro carril, y
+`ingest_topic` **avisa** —no frena— si un item de `sources:` lleva una clave ya descartada. Regla de
+oro: **`build/` guarda lo regenerable, el registro guarda lo que no lo es.** Un `ads.json` se recupera pidiéndoselo de nuevo a
 ADS; el juicio de por qué descartaste un candidato, no —y hasta 1.8.x vivía en `build/`, gitignored,
 así que en otra máquina el triage lo re-proponía todo sin el motivo (los **aceptados** ya persistían
 en `extra_core`: la asimetría era el bug). `busqueda` responde la otra pregunta, la del consumidor:

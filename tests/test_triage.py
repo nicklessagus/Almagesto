@@ -138,6 +138,81 @@ def test_query_ads_lee_los_descartes_persistidos(toy_vault):
     assert qa.load_triage("otro_slug") == set()
 
 
+# ── #81: rechazo de una fuente DECLARADA (el otro carril de curación) ────────
+
+def leer_decisiones(slug="gp"):
+    return yaml.safe_load(cfg.registro_path(slug).read_text(encoding="utf-8"))["decisiones"]
+
+
+def test_drop_source_persiste_sin_ads_json(toy_vault, monkeypatch, capsys):
+    """Un tema off-ADS puro NUNCA tiene build/<slug>/ads.json (no hubo query que lo genere), así
+    que este carril tiene que funcionar sin él. Misma forma que el descarte del triage, más
+    `origen` (qué carril) y el puntero que vuelve resoluble una clave sintética meses después."""
+    assert run_main(monkeypatch, [
+        "gp", "--drop-source", "2006RasmussenWilliams",
+        "--reason", "libro de texto general; el capítulo relevante ya está sintetizado en el hub",
+        "--pointer", "https://gaussianprocess.org/gpml/"]) == 0
+    d = leer_decisiones()["2006RasmussenWilliams"]
+    assert d["decision"] == "descartado" and d["origen"] == "fuente-declarada" and d["fecha"]
+    assert "capítulo relevante" in d["motivo"]
+    assert d["fuente"] == "https://gaussianprocess.org/gpml/"
+
+
+def test_drop_source_exige_motivo(toy_vault, monkeypatch):
+    """Simétrico con --drop: no curar en silencio. El motivo ES lo no regenerable."""
+    with pytest.raises(SystemExit):
+        run_main(monkeypatch, ["gp", "--drop-source", "2006RasmussenWilliams"])
+
+
+def test_drop_source_sin_pointer_no_lo_inventa(toy_vault, monkeypatch, capsys):
+    assert run_main(monkeypatch, ["gp", "--drop-source", "2019Fulano",
+                                  "--reason", "no es del tema"]) == 0
+    assert "fuente" not in leer_decisiones()["2019Fulano"]
+    assert "sin --pointer" in capsys.readouterr().out          # lo avisa, no lo rellena
+
+
+def test_drop_source_convive_con_el_triage_sin_pisar(toy_vault, monkeypatch):
+    """Los dos carriles escriben las MISMAS `decisiones` (reusa el mecanismo, no inventa otro) sin
+    pisarse entre sí ni pisar `busqueda`, que es de query_ads. El descarte del chaining NO cambia
+    de forma: sin `origen` significa chaining (compatibilidad hacia atrás)."""
+    write_ads(toy_vault, slug="gp", candidates=[cand("2020b....1B")])
+    cfg.save_busqueda("gp", {"fecha": "2026-08-21", "n_core": 3})
+    run_main(monkeypatch, ["gp", "--drop", "2020b....1B", "--reason", "ruido"])
+    run_main(monkeypatch, ["gp", "--drop-source", "2006Rasmussen", "--reason", "libro general"])
+    reg = yaml.safe_load(cfg.registro_path("gp").read_text(encoding="utf-8"))
+    assert reg["busqueda"]["n_core"] == 3
+    assert set(reg["decisiones"]) == {"2020b....1B", "2006Rasmussen"}
+    assert "origen" not in reg["decisiones"]["2020b....1B"]
+    assert reg["decisiones"]["2006Rasmussen"]["origen"] == "fuente-declarada"
+
+
+def test_drop_y_drop_source_no_se_mezclan(toy_vault, monkeypatch):
+    """Son dos juicios distintos (candidato del chaining vs fuente declarada) y comparten
+    --reason: mezclarlos en una corrida escribiría el mismo motivo para los dos."""
+    with pytest.raises(SystemExit):
+        run_main(monkeypatch, ["gp", "--drop", "2020b....1B", "--drop-source", "2006R",
+                               "--reason", "x"])
+
+
+def test_listado_sin_ads_json_muestra_el_juicio_registrado(toy_vault, monkeypatch, capsys):
+    """Antes moría con "corré primero la cadena", que para un off-ADS puro es un consejo imposible
+    (nunca va a haber ads.json). Ahora lista lo registrado, con motivo, carril y puntero."""
+    run_main(monkeypatch, ["gp", "--drop-source", "2006Rasmussen", "--reason", "libro general",
+                           "--pointer", "https://x"])
+    capsys.readouterr()
+    assert run_main(monkeypatch, ["gp"]) == 0
+    out = capsys.readouterr().out
+    assert "1 decisión(es) persistidas" in out and "fuente-declarada" in out
+    assert "libro general" in out and "https://x" in out
+
+
+def test_listado_sin_ads_json_ni_decisiones_sigue_avisando(toy_vault, monkeypatch):
+    """Sin juicio registrado el diagnóstico correcto sigue siendo "corré la cadena" — el fallback
+    no puede tapar el caso de la estrella a la que le falta el ingest."""
+    with pytest.raises(SystemExit, match="ads.json"):
+        run_main(monkeypatch, ["test_star"])
+
+
 # ── --migrate: consolidar el triage.json viejo (#51) ─────────────────────────
 
 def test_migrate_consolida_sin_esperar_un_drop(toy_vault, monkeypatch, capsys):

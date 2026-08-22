@@ -217,7 +217,6 @@ Esta ingesta tiene huecos conocidos y numerados; el detalle de cada uno está en
 | Tema mixto sólo off-ADS-first | #78 |
 | Sesgo de edad en el orden por citas | #79 |
 | Libros: `pending` y unidad de cita | #80 |
-| Rechazo de una fuente declarada sin registro | #81 |
 
 Y los del recorrido paso a paso del embudo, por escalón:
 

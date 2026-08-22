@@ -49,7 +49,7 @@ para ingestar. En Windows, los comandos de shell corren en Git Bash o WSL.
 | `vault/wiki/log.md` | Registro append-only de operaciones. |
 | `vault/config/stars.yaml` · `vault/config/topics.yaml` | Estrellas / temas de la bóveda (nombres canónicos + alias). |
 | `vault/config/ads_dev_key` | Token NASA ADS — **GITIGNORED** (nunca se commitea). |
-| `vault/config/registro/<slug>.yaml` | **Registro de ingesta por sujeto (se commitea).** `busqueda`: qué se le preguntó a ADS, cuándo, con qué límite y con qué corte. `decisiones`: qué candidatos del triage descartaste y por qué. |
+| `vault/config/registro/<slug>.yaml` | **Registro de ingesta por sujeto (se commitea).** `busqueda`: qué se le preguntó a ADS, cuándo, con qué límite y con qué corte. `decisiones`: qué descartaste y por qué, en los dos carriles (candidatos del triage y fuentes declaradas de un tema off-ADS). |
 | `build/` · `outputs/` | **GITIGNORED** — intermedios de ingesta y reportes de lint. |
 
 ## Pipeline de ingesta (scripts/)
@@ -76,6 +76,9 @@ python query_ads.py        <slug>   # ADS → build/<slug>/ads.json + vault/conf
 python triage.py           <slug>   # juzgar los candidatos del chaining: --report deja la tabla en
                                     #   outputs/; --drop <bib> --reason "<motivo>" persiste el descarte
                                     #   en vault/config/registro/<slug>.yaml. NO se bajan hasta decidirlos
+                                    #   --drop-source <clave> --reason "…" [--pointer <url|doi>]:
+                                    #   el otro carril — fuente DECLARADA de un tema off-ADS que
+                                    #   evaluaste y dejaste afuera (no necesita ads.json)
 python fetch_arxiv.py      <slug>   # PDFs a vault/raw/pdfs/<slug>/  (rate limit arXiv: 1 req/3 s)
 python fetch_pdf.py        <slug>   # PDFs aún sin bajar (sin arXiv + arXiv fallidos) vía resolver ADS
 python fetch_ground_truth.py <slug> # NEA + SIMBAD → vault/raw/ground_truth/<slug>.json
@@ -175,7 +178,9 @@ extracción LLM) funcionan **sin dependencias externas ni LFS**. Qué **no** via
 Lo que **sí** viaja desde 1.9.0 y antes no: el **registro de ingesta** (`vault/config/registro/<slug>.yaml`).
 Hasta 1.8.x había dos cosas atrapadas en `build/` que no eran regenerables:
 
-- **el juicio del triage** — qué candidato del citation chaining descartaste y **por qué**. Un
+- **el juicio de curación** — qué descartaste y **por qué**: el candidato del citation chaining, y
+  también la fuente declarada de un tema off-ADS que evaluaste y dejaste afuera
+  (`triage.py <slug> --drop-source <clave> --reason "…"`). Un
   `ads.json` sí se regenera (se le vuelve a pedir a ADS); tu decisión sobre título+abstract, no. En
   otra máquina el triage te re-proponía todo lo descartado, sin el motivo, y había que rehacer el
   trabajo. (Asimetría que lo delataba: los candidatos **aceptados** ya persistían en config

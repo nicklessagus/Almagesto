@@ -143,9 +143,11 @@ que se commitea y viaja con la bóveda:
   `relevance.topics` con sus regex y la regla de combinación vigente, porque cambiar una regex mueve
   el corte core/no-core sin mover la versión del framework. La cabecera de la ficha lleva una línea
   con el resumen y el puntero al archivo.
-- **`decisiones`**: el juicio del triage, o sea qué candidato del citation chaining descartaste y
-  **por qué**. Es la parte cara y no regenerable de un ingest (los `.json` de ADS se vuelven a pedir;
-  tu criterio, no), así que viaja en git como ya lo hacían los aceptados.
+- **`decisiones`**: el juicio de curación, o sea qué descartaste y **por qué**. Cubre los dos
+  carriles: el candidato del citation chaining que no era pertinente, y la fuente declarada de un
+  tema off-ADS que miraste y decidiste que no es core. Es la parte cara y no regenerable de un
+  ingest (los `.json` de ADS se vuelven a pedir; tu criterio, no), así que viaja en git como ya lo
+  hacían los aceptados.
 
 Un tema **off-ADS puro** no lleva `busqueda`: no hubo query que registrar, porque sus fuentes ya
 están declaradas una por una en `topics.yaml`. Uno **mixto** (fuentes declaradas + `extra_core:` con

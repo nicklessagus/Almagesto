@@ -219,6 +219,32 @@ def test_offads_pending_deriva_sin_fallar(toy_vault, fake_run, fake_notes, monke
     assert "Fuentes PENDIENTES" in out and "10.1/x" in out
 
 
+def test_offads_avisa_si_la_fuente_estaba_descartada(toy_vault, fake_run, fake_notes,
+                                                     monkeypatch, capsys):
+    """#81: el rechazo registrado tiene que HACER algo, no ser sólo un apunte. Acá la fuente la
+    declara el usuario (no hay descubrimiento que filtrar), así que el equivalente de "no
+    re-proponer" es avisar con el motivo — y seguir: quizá cambió de opinión a propósito."""
+    cfg.save_decisiones("gp", {"2006Rasmussen": {"decision": "descartado", "fecha": "2026-01-15",
+                                                 "motivo": "libro de texto general",
+                                                 "origen": "fuente-declarada"}})
+    topic(source="web", sources=[{"key": "2006Rasmussen", "url": "https://x"}])
+    assert run_main(monkeypatch) == 0
+    out = capsys.readouterr().out
+    assert "figura DESCARTADA en el registro (2026-01-15)" in out
+    assert "libro de texto general" in out
+    assert ("fetch_web.py", "gp", "2006Rasmussen", "https://x",
+            "--concept", "gaussian-processes") in fake_run.calls    # avisa pero NO frena
+
+
+def test_offads_fuente_no_descartada_no_avisa(toy_vault, fake_run, fake_notes, monkeypatch, capsys):
+    """Caso de control: una decisión de OTRA clave (o `aceptado`) no dispara el aviso."""
+    cfg.save_decisiones("gp", {"2019Otro": {"decision": "descartado", "motivo": "x"},
+                               "2006Rasmussen": {"decision": "aceptado", "motivo": "sí"}})
+    topic(source="web", sources=[{"key": "2006Rasmussen", "url": "https://x"}])
+    assert run_main(monkeypatch) == 0
+    assert "DESCARTADA" not in capsys.readouterr().out
+
+
 def test_offads_pdf_copia_y_extrae(toy_vault, fake_run, fake_notes, monkeypatch, tmp_path):
     src = tmp_path / "externo.pdf"
     src.write_bytes(b"%PDF-contenido")

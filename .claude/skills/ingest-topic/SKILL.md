@@ -1,7 +1,7 @@
 ---
 name: ingest-topic
 description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema off-ADS — típicamente un método de otra disciplina (estadística, ML) al servicio del foco astro — desde PDFs locales + web (ver Modo off-ADS).
-version: 1.10.1
+version: 1.11.0
 ---
 
 # Ingest: agregar un TEMA a la wiki
@@ -188,6 +188,17 @@ Qué cambia respecto del flujo ADS de arriba:
   final y el lint la lista como precondición. El resto del tema se arma igual con las fuentes
   limpias; la pendiente queda como hueco citado. Cuando el usuario provea el PDF/fuente: reemplazar
   `pending` por `pdf:`/`url:`, re-correr la cadena (idempotente) y completar la extracción.
+- **Fuente evaluada y RECHAZADA (#81):** `sources:` registra lo que **aceptaste**; "miré este libro
+  / esta URL y decidí que no es core" no queda en ningún lado si no lo escribís. Es el mismo juicio
+  no regenerable que el del triage, en el otro carril — se pierde igual al cambiar de máquina o al
+  volver seis meses después. Registralo en las **mismas `decisiones`** del registro versionado:
+  ```bash
+  python scripts/triage.py <slug> --drop-source <clave> --reason "<motivo>" --pointer <url|doi>
+  ```
+  No necesita `ads.json` (un off-ADS puro no lo tiene). Queda con `origen: fuente-declarada`, y si
+  más adelante volvés a declarar esa clave en `sources:` la cadena **avisa** con el motivo antes de
+  bajarla (avisa, no frena: quizá cambiaste de opinión a propósito). `python scripts/triage.py
+  <slug>` sin `ads.json` lista lo registrado. **No cures en silencio:** el `--reason` es obligatorio.
 - **Clave de cita sintética (papers sin bibcode ADS):** `AAAA+Autor` (p. ej. `2006RasmussenWilliams`,
   `2006Tichavsky`, `2025sklearn`). Debe **empezar con `AAAA`+letra** (lo exige `BIBCODE_RE` del lint) y
   coincidir con el nombre del `.txt`.

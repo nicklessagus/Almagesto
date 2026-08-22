@@ -4,6 +4,7 @@ Uso:
     python scripts/triage.py <slug>                                   # listar los candidatos pendientes
     python scripts/triage.py <slug> --report                          # + tabla en outputs/triage-<slug>.md
     python scripts/triage.py <slug> --drop <bib> [<bib> …] --reason "<motivo>"
+    python scripts/triage.py <slug> --drop-source <clave> […] --reason "<motivo>" [--pointer <url|doi>]
     python scripts/triage.py <slug> --migrate                 # consolidar el triage.json pre-1.9.0
 
 El chaining trae papers conectados por citas al corpus del sujeto. La lente
@@ -31,6 +32,17 @@ Los tres niveles:
   decisión sigue siendo por-slug pero se despachan rápido — no se filtran, se etiquetan.
 - **2 — informe al usuario:** `--report` deja la tabla en `outputs/triage-<slug>.md` (título, año,
   citas, vía, tópicos, link a ADS) para decidir los **dudosos** por lote.
+
+**El otro carril de curación: las fuentes DECLARADAS (`--drop-source`, #81).** En un tema off-ADS
+no hay descubrimiento —la bibliografía se declara una por una en `sources:` de `topics.yaml`—, así
+que ahí `sources:` registra lo aceptado y el rechazo ("miré este libro / esta URL y decidí que no es
+core") no quedaba en ningún lado. Es la misma asimetría de #51 en el otro carril: el juicio de
+rechazo es tan **no regenerable** como el del triage y se perdía igual al cambiar de máquina o al
+volver seis meses después. `--drop-source` lo escribe en las MISMAS `decisiones` del registro
+versionado (no inventa mecanismo), con `origen: fuente-declarada` para distinguir el carril y un
+`fuente:` opcional (url/doi/ruta), que es lo que vuelve resoluble una clave sintética. No necesita
+`build/<slug>/ads.json`: un tema off-ADS puro no lo tiene. Lo consume `ingest_topic`, que **avisa**
+si un item de `sources:` lleva una clave ya descartada — el equivalente de "no re-proponer".
 
 Este script NO decide: lista y persiste. El juicio es del agente/usuario.
 """
@@ -91,6 +103,31 @@ def drop(slug: str, bibcodes: list[str], reason: str) -> int:
     return 0
 
 
+def drop_source(slug: str, claves: list[str], reason: str, pointer: str | None) -> int:
+    """Persiste el rechazo de una fuente DECLARADA de un tema off-ADS (#81).
+
+    Hermano de `drop()` en el otro carril de curación, con dos diferencias que salen del carril, no
+    del capricho: (a) no hay lista de pendientes contra la cual validar —las fuentes off-ADS no se
+    descubren, se declaran—, así que tampoco hay `build/<slug>/ads.json` que leer; (b) la clave es
+    sintética (`AAAA+Autor`) o directamente una URL, así que se guarda el `fuente:` que la vuelve
+    resoluble dentro de seis meses. Misma forma que el descarte del triage: la decisión vive en
+    `decisiones` del registro versionado y viaja en git."""
+    decisiones = load_decisions(slug)
+    hoy = dt.date.today().isoformat()
+    for k in claves:
+        decisiones[k] = {"decision": "descartado", "motivo": reason, "fecha": hoy,
+                         "origen": "fuente-declarada",
+                         **({"fuente": pointer} if pointer else {})}
+    save_decisions(slug, decisiones)
+    print(f"  {len(claves)} fuente(s) declarada(s) descartada(s) en {triage_file(slug)} — "
+          f"motivo: {reason}")
+    if not pointer:
+        print("  (sin --pointer: la clave queda sin url/doi que la resuelva — conviene pasarlo)")
+    print("  (versionado: se commitea y viaja. `ingest_topic` avisa si volvés a declarar esta "
+          "clave en `sources:`)")
+    return 0
+
+
 def migrate(slug: str) -> int:
     """Consolida en el registro VERSIONADO las decisiones que hayan quedado en el
     `build/<slug>/triage.json` de una bóveda pre-1.9.0 (#51).
@@ -120,6 +157,23 @@ def migrate(slug: str) -> int:
           f"({len(ya)} ya estaban).")
     print("  Ahora viajan en git: commiteá el registro. El triage.json viejo queda como estaba "
           "(build/ es scratch; se puede borrar).")
+    return 0
+
+
+def show_decisions(slug: str, decisiones: dict) -> int:
+    """Sin `build/<slug>/ads.json` no hay candidatos que juzgar, pero el juicio YA registrado sí
+    existe y hay que poder verlo: es el caso normal de un tema **off-ADS puro** (nunca hubo query,
+    así que nunca hubo ads.json) y el de cualquier sujeto tras limpiar `build/`. Antes esto moría
+    con "corré primero la cadena", que para un off-ADS es un consejo imposible."""
+    print(f"Registro de {slug}: {len(decisiones)} decisión(es) persistidas · sin "
+          f"build/{slug}/ads.json (no hay candidatos del chaining pendientes)")
+    for k, d in sorted(decisiones.items()):
+        origen = d.get("origen") or "chaining"
+        ptr = f" → {d['fuente']}" if d.get("fuente") else ""
+        print(f"  [{d.get('decision', '?')}] {k}  ({origen}, {d.get('fecha', 's/f')}){ptr}\n"
+              f"      motivo: {d.get('motivo') or '(sin motivo registrado)'}")
+    print(f"\n  → viven en {triage_file(slug)} (versionado). Para juzgar candidatos del chaining "
+          f"hace falta la cadena de ingest; un tema off-ADS no los tiene por diseño.")
     return 0
 
 
@@ -165,13 +219,21 @@ def report(slug: str, cands: list[dict]) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("slug", help="estrella (o tema) con build/<slug>/ads.json")
+    ap.add_argument("slug", help="estrella (o tema) con build/<slug>/ads.json; con --drop-source "
+                                 "(fuente declarada off-ADS) no hace falta el ads.json")
     ap.add_argument("--report", action="store_true",
                     help="además de listar, escribir la tabla en outputs/triage-<slug>.md")
     ap.add_argument("--drop", nargs="+", metavar="BIBCODE",
                     help="persistir el descarte de estos candidatos (no se re-proponen)")
+    ap.add_argument("--drop-source", nargs="+", metavar="CLAVE", dest="drop_source",
+                    help="#81: persistir el rechazo de una FUENTE DECLARADA (tema off-ADS): la "
+                         "clave de cita sintética, o la url si no tiene. No requiere ads.json")
+    ap.add_argument("--pointer", default="",
+                    help="(--drop-source) url/doi/ruta de la fuente rechazada — lo que vuelve "
+                         "resoluble una clave sintética meses después")
     ap.add_argument("--reason", default="",
-                    help="motivo del descarte (obligatorio con --drop; queda en el registro)")
+                    help="motivo del descarte (obligatorio con --drop/--drop-source; queda en el "
+                         "registro)")
     ap.add_argument("--migrate", action="store_true",
                     help="consolidar en el registro versionado las decisiones del "
                          "build/<slug>/triage.json viejo (bóvedas pre-1.9.0) y salir")
@@ -180,14 +242,26 @@ def main() -> int:
     if args.migrate:
         return migrate(args.slug)
 
+    if args.drop and args.drop_source:
+        ap.error("--drop y --drop-source son los dos carriles de curación (candidato del chaining "
+                 "vs fuente declarada): usá uno por corrida, con su motivo")
+
     if args.drop:
         if not args.reason:
             ap.error("--drop necesita --reason (el motivo queda registrado; no curar en silencio)")
         return drop(args.slug, args.drop, args.reason)
 
+    if args.drop_source:
+        if not args.reason:
+            ap.error("--drop-source necesita --reason (el motivo queda registrado; no curar en "
+                     "silencio)")
+        return drop_source(args.slug, args.drop_source, args.reason, args.pointer or None)
+
+    decisiones = load_decisions(args.slug)
+    if not (cfg.ROOT / "build" / args.slug / "ads.json").exists() and decisiones:
+        return show_decisions(args.slug, decisiones)
     data = load_ads(args.slug)
     cands = data.get("candidates") or []
-    decisiones = load_decisions(args.slug)
     con_nota = sum(1 for c in cands if has_note(c["bibcode"]))
     print(f"Triage de {args.slug}: {len(cands)} candidatos pendientes "
           f"(◆ {con_nota} ya con nota en la bóveda, vía otro slug) · "
