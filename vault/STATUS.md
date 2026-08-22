@@ -18,6 +18,50 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.12.0 (2026-08-22) — #79 (puntos 1-2): el orden por citas dejaba afuera lo reciente
+
+> Segundo issue de la tanda 1 del backlog del 2026-08-22 (queda #81). 416 tests verdes (+13), lint 0.
+> 1.11.1 → **1.12.0** (minor: la cadena hace una request más al truncar, `ads.json` suma la clave
+> `truncated.recent` y el valor `via: query:recent` — aditivos, un `ads.json` viejo se lee igual).
+
+- **El defecto.** La cadena decide **relevancia** sin mirar citas (`classify()` es regex sobre el
+  contenido), pero **ordena** por citas crudas — y la cuenta de citas está sesgada por la **edad**
+  (*ageing bias*): los viejos tuvieron más tiempo de acumularlas. Donde el orden decide qué
+  sobrevive a un corte, eso manda lo reciente al fondo.
+- **Punto 2, el que borraba papers (server-side).** El `sort` viaja en la **request** a ADS: con
+  `numFound > rows`, ADS devuelve el top por citas y **corta el resto**, así que lo truncado es
+  sistemáticamente lo nuevo. Ningún re-ordenamiento local lo arregla — hay que **volver a
+  preguntar**: `recent_pass` re-corre la MISMA query con `sort: date desc` y mergea lo que la
+  primera no trajo, con `via: query:recent`. Corre **antes** de extra_core/glifo/chaining, así que
+  lo recuperado siembra también el grafo de citas (mismo criterio que #42).
+- **La marca NO se levanta.** Sigue faltando **el medio** del universo, así que `truncated` queda y
+  se le agrega `recent`: cuántos rescató la pasada. El lint lo dice —"la cola RECIENTE ya está
+  cubierta; falta el medio"— y **sólo** cuando el dato está: un `ads.json` anterior a 1.12.0 no
+  trae `recent` y el mensaje no afirma nada sobre él (afirmar de más justo acá sería peor que no
+  saber, criterio de #57).
+- **Punto 1, el `--sweep` (client-side).** El barrido existe para rescatar "core poco citados que
+  caen al fondo del ranking" (Garg+2019 / Willamo+2020) y **rankeaba por citas crudas**: repetía el
+  sesgo del mecanismo que le falló. Ahora ordena por **citas/año**.
+- **La política vive en un solo lugar** (`lib_config.citation_rate` / `sort_by_citation_rate`),
+  que es lo que pide el **patrón B**: hay varias listas que ordenar en archivos distintos y, si se
+  cambia una, las otras quedan viejas sin que nadie lo note. Cuidado registrado en el docstring:
+  citas/año **también** sesga, al revés — por eso la edad cuenta el año de publicación y nunca baja
+  de 1 (lo publicado este año se compara a 1 año, no a una fracción), en vez de la tasa cruda que
+  le daría 6/año a un paper de dos meses con 1 cita.
+- **Tests (+13):** unitarios de la política (edad, año ausente/no numérico/futuro, `citation_count`
+  null, desempate determinista, no muta la entrada, default al año en curso), unitarios de
+  `recent_pass` (orden pedido, `quiet_truncate`, dedup in situ, marca `via`, no-core incluidos),
+  regresión de punta a punta (la segunda pasada corre **sólo** al truncar, lo rescatado siembra el
+  chaining, `truncated.recent` persistido) y del lint (mensaje con y sin `recent`). Cobertura de
+  sentencias del código nuevo: **100%** (medida con el `trace` de la stdlib).
+- **Sigue abierto #79:** el punto **2b** (apéndice de excluidos — ahí el issue pide **dos bloques**,
+  top citas + top reciente, no citas/año, y cambia el formato de la nota) y el **listado del
+  triage**, que son las otras dos ocurrencias client-side del patrón B; el punto **3** (señales de
+  ADS que no son citas: `read_count`, `trending()`, `useful()`); y el punto **4** (documentar la
+  neutralidad a citas), que el backlog manda hacer **después** de #77/#78.
+- Skills: `ingest-star` 1.13.1 → **1.13.2** (el ranking del sweep), `maintain` 1.11.0 → **1.11.1**
+  (cómo leer el backlog de corpus truncado ahora).
+
 ## ✅ Framework 1.11.1 (2026-08-22) — #76: el stub de paper ramifica por tipo de sujeto
 
 > Primer issue de la tanda 1 del backlog del 2026-08-22 (quedan #79 puntos 1-2 y #81). 401 tests
@@ -514,9 +558,9 @@ fuente, no que la síntesis represente al conjunto: una ficha sintetizada desde 
 paper, sin el cual "contrastar" no está definido).
 
 ### Orden sugerido de tandas
-1. **Barato y sin dependencias:** **#76** (el stub de paper no ramifica por sujeto — el cuerpo, los
-   seeds ya ramifican), **#79** puntos 1-2 (ranking del `--sweep` por citas/año; segunda pasada por
-   fecha al truncar), **#81** (registrar el rechazo de una fuente declarada).
+1. **Barato y sin dependencias:** ~~**#76**~~ ✅ (el stub de paper no ramifica por sujeto — el cuerpo,
+   los seeds ya ramifican), ~~**#79** puntos 1-2~~ ✅ (ranking del `--sweep` por citas/año; segunda
+   pasada por fecha al truncar), **#81** (registrar el rechazo de una fuente declarada).
 2. **Procedencia:** **#70** (frontmatter = espejo puro de NEA; corregir el comentario de
    `make_notes.py:561`, que hoy instruye lo contrario, y re-apuntar `lint.py:303`) → **#75** (la red
    "extraído pero no sintetizado") → **#73** (campo `role`, que se apoya en el stub de #76).
@@ -559,7 +603,9 @@ lo es* — y los tres hechos que faltan son irrecuperables.
 apéndice de excluidos y listado del triage. Se parte en dos: el truncamiento es **server-side** (el
 `sort` va en la request a ADS → sólo lo arregla la segunda pasada por fecha); las otras tres son
 `sort(key=…)` inline en archivos distintos y piden **una sola función de orden compartida**, para que
-la política no diverja. Cuidado con el reemplazo: citas/año también sesga (un paper de dos meses con
+la política no diverja. *(1.12.0: hechas la server-side y el `--sweep`; la función compartida ya vive
+en `lib_config.sort_by_citation_rate` y faltan migrar el apéndice —que quiere dos bloques, no
+citas/año— y el listado del triage.)* Cuidado con el reemplazo: citas/año también sesga (un paper de dos meses con
 1 cita tiene tasa enorme); el estándar normaliza contra la cohorte del año. Donde la lista es corta,
 dos bloques (top citas + top reciente) en vez de un score compuesto.
 

@@ -1,7 +1,7 @@
 ---
 name: ingest-star
 description: Usar cuando el usuario pide bajar/agregar/ingestar una estrella a la bóveda ("bajá GJ 581", "ingest tau ceti", "agregá la estrella X", "traé la bibliografía de AU Mic"). Corre la cadena de ingesta y hace la extracción LLM.
-version: 1.13.1
+version: 1.13.2
 ---
 
 # Ingest: agregar una estrella a la wiki
@@ -82,8 +82,9 @@ Progreso del ingest de <estrella>:
    Corre `full:` sobre nombre+aliases expandiendo solo **todas las grafías** (`HD 152391` ↔
    `HD152391` — ADS tokeniza distinto y los papers usan ambas; antes esto eran probes manuales por
    grafía, fáciles de olvidar) y lista **sólo los core que el ingest NO trajo** — la lista corta de
-   candidatos (así se recuperan casos tipo Garg+2019 / Willamo+2020, core poco citados que caen al
-   fondo del ranking). Revisarla y agregar los que correspondan **de forma persistente** con
+   candidatos, ordenada por **citas/año** y no por citas crudas (#79: el barrido existe para
+   recuperar casos tipo Garg+2019 / Willamo+2020, core poco citados que caen al fondo del ranking;
+   rankearlo por citas repetía el sesgo de edad del mecanismo que le falló). Revisarla y agregar los que correspondan **de forma persistente** con
    `extra_core: [<bibcode>, …]` en la entrada de la estrella en `vault/config/stars.yaml` (el
    `query_ads` los trae por bibcode, `via: manual`, y sobreviven al re-run — a diferencia de editar
    `build/`, que es scratch y se pisa); después re-correr la cadena (idempotente). Si el barrido

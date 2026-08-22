@@ -15,6 +15,7 @@ es visible en el stdout de la corrida:
 ```
 n_found  (lo que ADS dice que hay)
   └─ rows=2000, sort citation_count desc     ← el corte por citas: SÓLO si n_found > rows
+      └─ 2ª pasada, sort date desc           ← sólo si truncó: rescata la cola reciente (#79)
       └─ classify(): core / no-core          ← regex relevance.topics sobre título+abstract+keywords
           └─ SÓLO los core se bajan          ← fetch_arxiv.py:93 · make_notes.py:702
               └─ candidatos del chaining      ← no se bajan hasta que los juzgues (triage)
@@ -31,7 +32,7 @@ fulltext**, no sobre todo el universo.
 | Escalón | Decide | Criterio | ¿Usa citas? |
 |---|---|---|---|
 | Query | `build_query` / query cruda | nombre+alias sobre `title:`/`abs:` | no |
-| Corte de `rows` | ADS | `sort: citation_count desc` | **sí** (sólo al truncar) |
+| Corte de `rows` | ADS | `sort: citation_count desc` + 2ª pasada `date desc` | **sí** (sólo al truncar) |
 | Core / no-core | `classify()` | regex `relevance.topics` + doctype + `require`/`min_topics` | no |
 | Recall extra | chaining, glifo, `--sweep` | grafo de citas anclado al sujeto; full-text | ranking del sweep: **sí** |
 | Triage | **vos / el LLM** | título+abstract, pertinencia al sujeto | no |
@@ -41,6 +42,14 @@ Las dos decisiones que importan —qué es core y qué es pertinente— son **ci
 sólo ordenan. El chaining corre en **las dos direcciones** (`references()` hacia atrás,
 `citations()` hacia adelante), así que un paper reciente que cite a un core entra por el grafo sin
 necesitar citas propias.
+
+Donde el orden **sí** decide qué entra es al **truncar**: el `sort` viaja en la request a ADS, y un
+corte por citas se queda con lo viejo (las citas se acumulan con la edad). Por eso, si la query
+directa trunca, se corre una **segunda pasada con la misma query ordenada por fecha** (#79): lo que
+la primera no trajo entra con `via: query:recent`, antes del chaining, así que además siembra el
+grafo. El corpus sigue **truncado** —falta el medio— y la marca lo dice con cuántos rescató. Los
+órdenes de las listas que se **muestran** (el ranking del `--sweep`) usan **citas/año**, política
+única en `lib_config.sort_by_citation_rate`.
 
 ### Los dos mundos de fulltext
 

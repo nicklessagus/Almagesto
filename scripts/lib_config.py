@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import datetime as _dt
 import json
 import os
 import re
@@ -18,7 +19,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.11.1"
+ALMAGESTO_VERSION = "1.12.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -205,6 +206,44 @@ def load_concept_areas() -> list:
         return list(dict.fromkeys([*declared, *RESERVED_CONCEPT_AREAS]))
     existing = sorted(p.name for p in CONCEPTS.iterdir() if p.is_dir()) if CONCEPTS.exists() else []
     return list(dict.fromkeys([*existing, *RESERVED_CONCEPT_AREAS]))
+
+
+# ── orden de listas de papers (política única, #79) ──────────────────────────
+# La cadena decide RELEVANCIA sin mirar citas (`classify()` es regex sobre el contenido), pero
+# ORDENA por citas en varios lados, y la cuenta cruda de citas está sesgada por la EDAD del paper:
+# los viejos tuvieron más tiempo de acumularlas (*ageing bias*). Donde el orden decide qué se ve —o
+# qué sobrevive a un corte— eso empuja lo reciente al fondo, justo lo que los rescates existen para
+# recuperar. La política vive acá, en un solo lugar, porque hay varias listas que ordenar en
+# archivos distintos y si se cambia una las otras quedan viejas sin que nadie lo note.
+
+def citation_rate(rec: dict, now_year: int | None = None) -> float:
+    """Citas por año desde la publicación — el orden que no castiga a lo reciente.
+
+    La tasa cruda tiene el sesgo simétrico (un paper de dos meses con 1 cita tendría una tasa
+    enorme), así que la edad se cuenta en años **cumplidos incluyendo el de publicación** y nunca
+    baja de 1: lo publicado este año se compara a 1 año, no a una fracción. Es simple y auditable;
+    el estándar bibliométrico normaliza por percentil dentro de la cohorte del año, que necesita
+    la distribución completa y no la tenemos acá.
+
+    Un `year` ausente, no numérico o futuro (in-press) vale edad 1: no lo premiamos con una tasa
+    inventada ni lo castigamos mandándolo al fondo."""
+    cites = rec.get("citation_count") or 0
+    try:
+        year = int(rec.get("year") or 0)
+    except (TypeError, ValueError):
+        year = 0
+    now = now_year if now_year is not None else _dt.date.today().year
+    edad = max(1, now - year + 1) if 0 < year <= now else 1
+    return cites / edad
+
+
+def sort_by_citation_rate(recs, now_year: int | None = None) -> list:
+    """Lista ordenada por citas/año descendente, DETERMINISTA: ante empate de tasa desempata la
+    cuenta cruda y después el bibcode, para que dos corridas sobre el mismo `ads.json` impriman lo
+    mismo (los listados se comparan a ojo entre corridas)."""
+    return sorted(recs, key=lambda r: (-citation_rate(r, now_year),
+                                       -(r.get("citation_count") or 0),
+                                       r.get("bibcode") or ""))
 
 
 # ── registro de ingesta por sujeto (#51/#64) ─────────────────────────────────

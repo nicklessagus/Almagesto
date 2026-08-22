@@ -494,6 +494,21 @@ def test_corpus_truncado_surface_backlog(toy_vault, capsys):
     rc, out = run_lint(capsys)
     assert rc == 0                                     # backlog, no bloqueante
     assert "Corpus truncado" in out and "au_mic" in out and "410" in out
+    assert "segunda pasada" not in out                 # ads.json viejo (sin `recent`): no lo afirma
+
+
+def test_corpus_truncado_reporta_la_segunda_pasada(toy_vault, capsys):
+    """#79: con `recent` en la marca, el backlog dice qué parte del universo YA se cubrió — sin
+    eso, "corpus truncado" se lee como "falta todo", y lo que falta es el medio, no la cola."""
+    d = toy_vault.ROOT / "build" / "au_mic"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "ads.json").write_text(json.dumps(
+        {"kind": "star", "slug": "au_mic",
+         "truncated": {"num_found": 5000, "rows": 2000, "recent": 137}, "records": []}),
+        encoding="utf-8")
+    rc, out = run_lint(capsys)
+    assert rc == 0
+    assert "+ 137 de la segunda pasada por fecha" in out and "falta el medio" in out
 
 
 def test_rescate_glifo_truncado_surface_backlog(toy_vault, capsys):

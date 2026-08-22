@@ -1,7 +1,7 @@
 ---
 name: maintain
 description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), resolver el backlog del lint (P_rot faltante, drift PDF↔disco, cobertura, claims stale), y la pasada periódica de retracciones sobre toda la bóveda ("chequeá retracciones").
-version: 1.11.0
+version: 1.11.1
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
@@ -185,6 +185,9 @@ Pasada de higiene sobre lo que `lint.py` marca como backlog/WARN (no bloqueante,
 - **Corpus truncado** (y su hermano `truncated_glyph`) → a la query directa le faltó cola. El
   orquestador **no** acepta `--rows`: se corre la pieza suelta y después la cadena —
   `python scripts/query_ads.py <slug> --rows 5000` y luego `python scripts/ingest_star.py <slug>`. Mientras tanto, la ficha afirma sobre un universo recortado.
+  Leer el `+ N de la segunda pasada por fecha` del mensaje: lo que falta es el **medio** del
+  universo, no la cola reciente (#79 — esa la cubre la segunda pasada al truncar). Un corpus viejo
+  (ads.json anterior a 1.12.0) no trae el dato y el mensaje no lo afirma: ahí falta también la cola.
 - **Papers con corrección publicada** (`corrections`) → se resuelve como dice **F** (abrir el
   `notice_doi`, comparar contra lo que la nota afirma citando ese `[[bibcode]]`).
 - **Sin verificar** (query/concepto con citas pero sin bloque `## Verificación de citas`) → correr

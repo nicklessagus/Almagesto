@@ -10,8 +10,17 @@ Uso:
 Escribe build/<slug>/ads.json con la lista de registros (bibcode, título, autores,
 año, abstract, arxiv_id, doctype, citation_count, topics, relevant, why_excluded —el motivo real
 de exclusión si es no-core; lo consume el apéndice "Excluidos" de make_notes—, via) y, si la query directa
-quedó truncada (numFound > --rows), la marca `truncated: {num_found, rows}` que el lint surface
-como corpus incompleto (si no truncó, `truncated: null`).
+quedó truncada (numFound > --rows), la marca `truncated: {num_found, rows, recent}` que el lint
+surface como corpus incompleto (si no truncó, `truncated: null`).
+
+**Segunda pasada por fecha al truncar (#79):** el `sort` viaja en la request, así que cuando ADS
+corta se queda con el top por CITAS — y las citas se acumulan con la edad, o sea que lo que queda
+afuera es sistemáticamente lo reciente (un árbitro nuevo tiene pocas citas por construcción). Ningún
+re-ordenamiento local lo arregla: si truncó, se vuelve a preguntar la MISMA query ordenada por fecha
+(`recent_pass`) y lo que la primera no trajo entra con `via: query:recent`. Corre antes de
+extra_core/glifo/chaining, así que lo recuperado siembra también el grafo de citas. La marca
+`truncated` NO se levanta —sigue faltando el medio del universo—: se le agrega `recent`, cuántos
+rescató la pasada.
 
 Escribe TAMBIÉN el registro de búsqueda VERSIONADO del sujeto, `vault/config/registro/<slug>.yaml`
 (clave `busqueda`: fecha, query efectiva, rows, conteos, truncado, versión del framework y la
@@ -349,9 +358,14 @@ class EmptyResultError(RuntimeError):
     `fetch_bibcodes` no (un cero ahí es un resultado válido)."""
 
 
+# Órdenes que se le piden a ADS. Sólo actúan al truncar (ver `sort` en query_ads).
+CITES_SORT = "citation_count desc"     # el histórico: top por citas
+RECENT_SORT = "date desc"              # la segunda pasada de #79: la cola reciente
+
+
 def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
               meta: dict | None = None, expect_hits: bool = False,
-              fq: str | None = ASTRO_FQ) -> list[dict]:
+              fq: str | None = ASTRO_FQ, sort: str = CITES_SORT) -> list[dict]:
     """Corre una query Solr `q` ya armada contra ADS y devuelve registros clasificados.
     Para estrellas, armar `q` con build_query(names); para temas, usar la query cruda del topic.
     Reintenta con backoff ante 429/5xx y avisa si el resultado quedó truncado (numFound > rows;
@@ -367,6 +381,11 @@ def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
     surface como backlog en vez de que el aviso muera en el stdout (#17). Se mantiene el tipo de
     retorno (lista) para no tocar al resto de los callers.
 
+    `sort` es el orden que se le pide a ADS y sólo importa cuando la query TRUNCA (`numFound >
+    rows`): ahí decide qué mitad del universo vuelve. El default `CITES_SORT` es el histórico; la
+    segunda pasada de `recent_pass` pide `RECENT_SORT` para recuperar la cola que ese orden esconde
+    (#79). Es server-side: no hay forma de arreglarlo re-ordenando lo que ya volvió.
+
     `fq` es la **lente astro** (`ASTRO_FQ`) y es el default correcto para toda query de
     **descubrimiento** (directa, chaining, glifo, sweep, probe): ahí filtrar lo no-astro es el
     punto. `fq=None` la apaga, y es lo que corresponde cuando el universo de búsqueda ya lo fijó el
@@ -374,7 +393,7 @@ def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
     sacar de más (#68)."""
     token = cfg.get_ads_token()
     headers = {"Authorization": f"Bearer {token}"}
-    params = {"q": q, "fl": FIELDS, "rows": rows, "sort": "citation_count desc"}
+    params = {"q": q, "fl": FIELDS, "rows": rows, "sort": sort}
     if fq:
         params["fq"] = fq
     for wait in (*RETRY_WAITS_S, None):
@@ -430,6 +449,32 @@ def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
             "relevant": relevant,
             "why_excluded": why,   # motivo real de exclusión (None si core) → apéndice "Excluidos"
         })
+    return out
+
+
+def recent_pass(q: str, rows: int, known: set[str]) -> list[dict]:
+    """Segunda pasada de la query directa ordenada por FECHA, para cuando la primera truncó (#79).
+
+    Con `numFound > rows` ADS devuelve el top por citas y **corta el resto**. Ese corte no es
+    neutral: las citas se acumulan con la edad, así que lo que queda afuera es sistemáticamente lo
+    reciente — y un árbitro nuevo (el reanálisis que resuelve una tensión, el paper de este año que
+    revisa la señal) tiene pocas citas por construcción. Como el `sort` viaja en la request, ningún
+    re-ordenamiento local lo arregla: hay que volver a preguntar.
+
+    Misma `q` y mismo `rows`, sólo cambia el orden; se devuelven los registros que la primera pasada
+    no trajo (dedup contra `known`, que se actualiza in situ), marcados `via: query:recent` para que
+    la provenance diga por qué entraron. No filtra por core: es la misma query, otra página — los
+    no-core alimentan el apéndice "Excluidos" igual que los de la primera.
+
+    Sigue siendo un corpus incompleto (faltan los del medio): la marca `truncated` NO se levanta,
+    se le agrega cuántos rescató esta pasada."""
+    out = []
+    for r in query_ads(q, rows=rows, quiet_truncate=True, sort=RECENT_SORT):
+        b = r.get("bibcode")
+        if b and b not in known:
+            known.add(b)
+            r["via"] = "query:recent"
+            out.append(r)
     return out
 
 
@@ -544,8 +589,11 @@ def sweep_star(slug: str, rows: int) -> int:
     q = build_fulltext_filter(names)
     print(f"Barrido full-text (2b) de {name} — q: {q}")
     hits = query_ads(q, rows=rows)
-    news = sorted((r for r in hits if r["relevant"] and r.get("bibcode") not in known),
-                  key=lambda r: r.get("citation_count") or 0, reverse=True)
+    # Orden por citas/AÑO (#79 punto 1, política única en lib_config): este barrido existe para
+    # rescatar "core poco citados que caen al fondo del ranking", así que rankearlo por citas crudas
+    # lo hacía repetir el sesgo del mecanismo que le falló.
+    news = cfg.sort_by_citation_rate(r for r in hits
+                                     if r["relevant"] and r.get("bibcode") not in known)
     print(f"  {len(hits)} papers con la estrella en el CUERPO · {len(news)} core NUEVOS "
           "(no están en ads.json)")
     for r in news:
@@ -806,6 +854,17 @@ def main() -> int:
             r["via"] = "query"
         rel = [r for r in recs if r["relevant"]]
         print(f"  query directa: {len(recs)} registros, {len(rel)} relevantes")
+        # Segunda pasada por fecha (#79): el corte por citas de la primera es ciego a la edad, así
+        # que lo que truncó es sistemáticamente lo reciente. Corre ANTES de extra_core/glifo/
+        # chaining para que lo recuperado siembre también el grafo de citas (mismo criterio que #42).
+        if qmeta.get("truncated"):
+            conocidos = {r["bibcode"] for r in recs if r.get("bibcode")}
+            recientes = recent_pass(q, args.rows, conocidos)
+            qmeta["recent"] = len(recientes)
+            recs += recientes
+            rel = [r for r in recs if r["relevant"]]
+            print(f"  segunda pasada por fecha: +{len(recientes)} registros que el top por citas "
+                  f"dejaba afuera ({sum(1 for r in recientes if r['relevant'])} core)")
 
     # curación manual persistente: bibcodes en `extra_core` de stars.yaml/topics.yaml que el
     # clasificador perdió (build/ es scratch y se pisa; esto sobrevive porque vive en config).
@@ -899,11 +958,13 @@ def main() -> int:
 
     # marca de truncamiento de la query directa (sólo si realmente se cortó): persistida para que el
     # lint la surface como corpus incompleto. El truncado del chaining NO se registra (es por diseño).
-    truncated = ({"num_found": qmeta["num_found"], "rows": qmeta["rows"]}
+    truncated = ({"num_found": qmeta["num_found"], "rows": qmeta["rows"],
+                  "recent": qmeta.get("recent", 0)}
                  if qmeta.get("truncated") else None)
     if truncated:
         print(f"  ⚠ corpus truncado: ADS reporta {truncated['num_found']} y se trajeron "
-              f"{truncated['rows']} — marcado en ads.json (el lint lo surface)")
+              f"{truncated['rows']} + {truncated['recent']} de la segunda pasada por fecha — sigue "
+              "faltando el medio del universo; marcado en ads.json (el lint lo surface)")
 
     outdir = cfg.ROOT / "build" / args.slug
     outdir.mkdir(parents=True, exist_ok=True)

@@ -507,9 +507,16 @@ def main() -> int:
         vistos.add(slug)
         t = data.get("truncated")
         if t:
+            # `recent` (#79) = cuántos rescató la segunda pasada por fecha. Sólo lo traen los
+            # ads.json de 1.12.0 en adelante; sin la clave, el mensaje es el de antes (la marca de
+            # un corpus viejo no puede afirmar que la cola reciente se cubrió).
+            rec_n = t.get("recent")
+            pasada = ("" if rec_n is None else
+                      f" + {rec_n} de la segunda pasada por fecha (la cola RECIENTE ya está "
+                      f"cubierta; falta el medio)")
             truncated_corpora.append(
-                (slug, f"ADS reporta {t.get('num_found')} y se trajeron {t.get('rows')} → corpus "
-                       f"incompleto; re-ingestá con --rows mayor (o paginá) para cubrir la cola"))
+                (slug, f"ADS reporta {t.get('num_found')} y se trajeron {t.get('rows')}{pasada} → "
+                       f"corpus incompleto; re-ingestá con --rows mayor (o paginá) para cubrir el resto"))
         cands = data.get("candidates") or []
         if cands:
             top = ", ".join(c.get("bibcode", "?") for c in cands[:3])

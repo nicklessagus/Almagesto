@@ -540,17 +540,90 @@ def test_main_no_chain(toy_vault, toy_classifier, no_sleep, monkeypatch):
 
 
 def test_main_persiste_truncado(toy_vault, toy_classifier, no_sleep, monkeypatch):
-    """Query directa truncada → main persiste `truncated: {num_found, rows}` en ads.json (#17),
-    convirtiendo el aviso de stdout en una marca que el lint surface."""
-    def fake_qa(q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False):
+    """Query directa truncada → main persiste `truncated: {num_found, rows, recent}` en ads.json
+    (#17 + #79), convirtiendo el aviso de stdout en una marca que el lint surface. La segunda
+    pasada NO levanta la marca: sigue faltando el medio del universo."""
+    def fake_qa(q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False,
+                sort=qa.CITES_SORT):
         if meta is not None:
             meta.update(num_found=410, rows=rows, truncated=True)
-        return [rec("2020dirA....1A")]
+        return [rec("2020dirA....1A")]           # la pasada por fecha no trae nada nuevo
     monkeypatch.setattr(qa, "query_ads", fake_qa)
     monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
     assert run_main(monkeypatch, ["test_star", "--rows", "400"]) == 0
     data = json.loads((toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text())
-    assert data["truncated"] == {"num_found": 410, "rows": 400}
+    assert data["truncated"] == {"num_found": 410, "rows": 400, "recent": 0}
+
+
+def test_main_segunda_pasada_por_fecha_al_truncar(toy_vault, toy_classifier, no_sleep, monkeypatch,
+                                                  capsys):
+    """#79 punto 2: con la query truncada, el `sort: citation_count desc` que viaja en la request
+    se queda con lo VIEJO (las citas se acumulan con la edad) y corta la cola reciente. Como el
+    orden es server-side, la única salida es volver a preguntar por fecha; lo recuperado entra con
+    `via: query:recent` y —por correr antes del chaining— siembra también el grafo de citas."""
+    ordenes = []
+
+    def fake_qa(q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False,
+                sort=qa.CITES_SORT):
+        ordenes.append(sort)
+        if sort == qa.CITES_SORT:
+            if meta is not None:
+                meta.update(num_found=5000, rows=rows, truncated=True)
+            return [rec("1995oldA....1A", cites=500, year="1995")]
+        return [rec("1995oldA....1A", cites=500, year="1995"),      # ya estaba → dedup
+                rec("2026newB....1B", cites=1, year="2026"),        # la cola reciente
+                rec("2026nonC....1C", relevant=False, year="2026")]  # no-core: es la misma query
+    monkeypatch.setattr(qa, "query_ads", fake_qa)
+    sembrados = {}
+    monkeypatch.setattr(qa, "chain_candidates",
+                        lambda bibs, rows, filt: sembrados.setdefault("core", list(bibs)) and [])
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    assert ordenes == [qa.CITES_SORT, qa.RECENT_SORT]
+    data = json.loads((toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text())
+    vias = {r["bibcode"]: r["via"] for r in data["records"]}
+    assert vias == {"1995oldA....1A": "query", "2026newB....1B": "query:recent",
+                    "2026nonC....1C": "query:recent"}
+    assert data["truncated"]["recent"] == 2
+    assert set(sembrados["core"]) == {"1995oldA....1A", "2026newB....1B"}   # siembra el grafo
+    assert "segunda pasada por fecha: +2" in capsys.readouterr().out
+
+
+def test_main_sin_truncar_no_hay_segunda_pasada(toy_vault, toy_classifier, no_sleep, monkeypatch):
+    """La pasada extra cuesta una request a ADS: sólo corre si la primera realmente se cortó."""
+    ordenes = []
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False,
+                        sort=qa.CITES_SORT: ordenes.append(sort) or [rec("2020dirA....1A")])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    assert ordenes == [qa.CITES_SORT]
+
+
+def test_recent_pass_pide_fecha_dedup_y_marca_via(toy_classifier, monkeypatch):
+    """Unitario de la segunda pasada: misma `q` y mismo `rows`, sólo cambia el orden; silencia el
+    aviso de truncado (hablaría del mismo corte que ya se reportó); devuelve SÓLO lo que la primera
+    no trajo, actualizando `known` in situ (el caller lo usa después para el dedup del chaining)."""
+    llamadas = []
+
+    def fake_qa(q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False,
+                sort=qa.CITES_SORT):
+        llamadas.append({"q": q, "rows": rows, "sort": sort, "quiet": quiet_truncate})
+        return [rec("2020viejo...1V"), rec("2026nuevo...1N"),
+                rec("2026noncore..1C", relevant=False)]
+    monkeypatch.setattr(qa, "query_ads", fake_qa)
+    known = {"2020viejo...1V"}
+    out = qa.recent_pass("title:x", rows=400, known=known)
+    assert llamadas == [{"q": "title:x", "rows": 400, "sort": qa.RECENT_SORT, "quiet": True}]
+    assert [r["bibcode"] for r in out] == ["2026nuevo...1N", "2026noncore..1C"]
+    assert all(r["via"] == "query:recent" for r in out)   # provenance: por qué entró
+    assert known == {"2020viejo...1V", "2026nuevo...1N", "2026noncore..1C"}
+
+
+def test_recent_pass_sin_novedad_devuelve_vacio(toy_classifier, monkeypatch):
+    """Si la cola por fecha es la misma que ya trajo el top por citas, no inventa registros."""
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda q, rows=2000, **kw: [rec("2020viejo...1V")])
+    assert qa.recent_pass("title:x", rows=400, known={"2020viejo...1V"}) == []
 
 
 def test_main_extra_core_persistente(toy_vault, toy_classifier, no_sleep, monkeypatch):
@@ -811,6 +884,20 @@ def test_sweep_lista_solo_core_nuevos(toy_vault, toy_classifier, no_sleep, monke
     assert (toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text() == before   # preview
 
 
+def test_sweep_rankea_por_citas_por_ano(toy_vault, toy_classifier, no_sleep, monkeypatch, capsys):
+    """#79 punto 1: el barrido existe para rescatar core POCO CITADO que se cayó del ranking, así
+    que ordenarlo por citas crudas repetía el sesgo del mecanismo que le falló. Con citas/año el
+    paper reciente que casi no tuvo tiempo de acumular citas deja de salir último."""
+    mk_ads_json(toy_vault.ROOT, "test_star", [])
+    hits = [rec("1978survW...1W", cites=100, year="1978"),   # tasa ~2/año
+            rec("2026arbX....1X", cites=50, year="2026")]    # tasa 50/año pese a la mitad de citas
+    monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, **kw: [dict(r) for r in hits])
+    assert run_main(monkeypatch, ["test_star", "--sweep"]) == 0
+    filas = [ln for ln in capsys.readouterr().out.splitlines() if "[CORE]" in ln]
+    assert len(filas) == 2                                       # los dos son core nuevos
+    assert "2026arbX....1X" in filas[0] and "1978survW...1W" in filas[1]
+
+
 def test_sweep_corpus_cubierto(toy_vault, toy_classifier, no_sleep, monkeypatch, capsys):
     """0 candidatos → lo dice con el caveat epistemológico (0 acá NO prueba ausencia)."""
     mk_ads_json(toy_vault.ROOT, "test_star", ["2020dirA....1A"])
@@ -935,7 +1022,8 @@ def test_main_persiste_el_registro_de_busqueda(toy_vault, toy_classifier, no_sle
     antes se tiraba: no había forma de saber sobre qué universo afirma la ficha."""
     direct = [rec("2020dirA....1A", cites=5), rec("2020dirB....1B", relevant=False, cites=9)]
 
-    def fake_query(q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, fq=None):
+    def fake_query(q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, fq=None,
+                   sort=qa.CITES_SORT):
         if meta is not None:
             meta.update(num_found=1837, rows=rows, truncated=True)
         return [dict(r) for r in direct]
