@@ -287,9 +287,9 @@ implícita a partir de K, P, e y la masa estelar, y marca las inconsistencias.
 repo, así que verificarlo es un `grep` de la frase. El frontmatter es auditable contra el archivo de
 la NASA.
 
-**Escribir la síntesis.** Toda afirmación va citada o marcada explícitamente como inferencia, la
-cabecera de cada ficha avisa que la prosa es capa LLM, y el lint lista los conceptos que no citan
-ninguna fuente.
+**Escribir la síntesis.** Toda afirmación va citada o marcada explícitamente como inferencia, cada
+ficha y concepto que genera el template abre avisando que esa prosa es capa LLM, y el lint lista los
+conceptos que no citan ninguna fuente.
 *Chequeo humano:* leerla con los `.txt` al lado. Cada cambio es un diff de git, así que se revisa
 como se revisa código.
 
