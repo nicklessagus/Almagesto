@@ -427,6 +427,45 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 - Hueco conocido del historial: las tandas **1.6.2** (#46/#47) y **1.6.3** (#48) nunca dejaron
   entrada acá (sólo commit de fix + bump). Backfillear si se quiere el registro completo.
 
+## Backlog — capturas y assets del README (anotado 2026-08-21)
+
+Las tres capturas de Obsidian son del **2026-07-25** y el framework cambió bastante desde entonces.
+Revisadas una por una; qué le falta a cada una, en orden de urgencia:
+
+1. **`docs/assets/obsidian-concepto.png` — la más urgente, porque contradice al propio README.** El
+   blockquote de cabecera de esa nota es prosa del LLM y **no** trae el disclaimer
+   ⚠ *"Capa LLM — revisar antes de citar"* que `make_notes` estampa hoy. La sección nueva
+   *La capa LLM* afirma que "la cabecera de cada ficha avisa que la prosa es capa LLM": quien mire
+   la captura ve lo contrario. Re-sacarla de una nota generada con el template actual.
+2. **`docs/assets/obsidian-ficha.png`** — el panel de propiedades **sigue siendo correcto** (el
+   schema de `stars/` no cambió en las tandas 1.7.4–1.10.3). Lo que falta es lo nuevo: el cuerpo
+   queda fuera de cuadro, así que no se ve la línea `> _Búsqueda …_` que estampa `make_notes` desde
+   1.9.0. Al re-sacarla, encuadrar para que entre esa línea: es la cara visible del registro.
+3. **`docs/assets/obsidian-graph.png`** — nada factualmente falso, pero es una foto de un corpus de
+   3 estrellas; la instancia creció desde julio.
+4. **`docs/assets/demo-animated.svg`** (regenerable con `make_demo.py`) — el guion no muestra la
+   **compuerta de triage (2c)**, que hoy es el paso con más juicio de la operación y que el propio
+   mensaje de cierre del orquestador nombra; tampoco el registro de búsqueda. Los comandos que
+   muestra ya están en la convención de CWD correcta.
+
+Al re-sacarlas: son de instancias del usuario, así que conviene elegir notas que no expongan nada que
+no quiera publicar, y encuadrar para que se vea lo que el texto de al lado promete.
+
+## Confirmación empírica desde una instancia (2026-08-21) — por qué el bug del roll-up importaba
+
+Reporte del update de Almagesto-RV a 1.10.3, que **mide** lo que la corrección de 1.10.3 argumentaba:
+en esa bóveda hay **2 `stars`, 116 `methods` y 65 `thesis_links` en flow style**. O sea que el `awk`
+de 1.10.2 —el que perdía flow style— habría dejado invisible la mayor parte de los métodos del
+corpus. La receta con `split_fm` no era una preferencia de estilo.
+
+Hallazgo propio de esa instancia con lectura de framework: al rehacer los roll-ups bien, la
+procedencia de fuentes de dos conceptos **estaba subestimada** (13 de 21 `eprint` donde se había
+reportado 9 de 17; 13 de 24 donde se había reportado 6 de 17), porque la medición se había hecho
+sobre lo **citado** y el roll-up por `thesis_links` es más grande. Es "afirmar de menos" otra vez, y
+sugiere una regla que hoy no está escrita en ningún skill: **cuando se reporta una medición sobre las
+fuentes de una nota, hay que declarar la población** (¿lo citado? ¿el roll-up completo?). Candidato a
+issue si vuelve a aparecer.
+
 ## Backlog de framework — revisión profunda de skills 2026-08-19 (issues #51–#67)
 
 > Revisión pedida por el usuario: lectura completa de los 9 skills + cross-check contra

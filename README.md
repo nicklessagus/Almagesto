@@ -159,8 +159,8 @@ bibcodes de ADS) sí lo lleva, con `query: null`: registra lo que entró por la 
 ## La bóveda en Obsidian
 
 La wiki resultante es una bóveda [Obsidian](https://obsidian.md) común: se abre apuntando a
-`vault/`. Las capturas de abajo son de **dos instancias reales** del template (una sobre RV, otra
-sobre ciclos de actividad).
+`vault/`. Las capturas de abajo son de dos instancias del template (una sobre RV, otra sobre ciclos
+de actividad).
 
 **La ficha de estrella.** Arriba, el frontmatter: el **contrato máquina-legible** que consume un
 agente o un script (`teff_K`, `P_rot_days`, `planets[]` con P/K/e/m·sini y sus `disputes`,
