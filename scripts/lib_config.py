@@ -19,7 +19,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.19.0"
+ALMAGESTO_VERSION = "1.20.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -195,17 +195,16 @@ RESERVED_CONCEPT_AREAS = ("methods", "hypotheses")
 
 def load_concept_areas() -> list:
     """Lista de REFERENCIA de áreas de vault/wiki/concepts/ (para el typo-check; NO restringe — las
-    áreas son abiertas). Salen de `concept_areas` en objective.yaml; siempre incluyen las reservadas
-    (methods, hypotheses).
+    áreas son abiertas). Salen de `concept_areas` en objective.yaml, más las reservadas
+    (methods, hypotheses). Devuelve los nombres en orden, deduplicados.
 
-    Si objective.yaml NO declara `concept_areas` (instancia vieja, pre-feature), cae a un
-    modo tolerante: reservadas + las carpetas ya existentes en concepts/ (no marca falsos
-    positivos hasta que declares la lista). Devuelve los nombres en orden, deduplicados."""
+    **`[]` = typo-check APAGADO**: el objetivo no declara la lista. Antes había un modo tolerante
+    (inferir las áreas de las carpetas existentes) para instancias pre-feature; se sacó junto con las
+    demás capas de compatibilidad — inferir la lista de lo que hay en disco convierte cualquier typo
+    ya cometido en "área declarada", que es lo contrario de lo que el chequeo hace. El lint reporta
+    la lista ausente para que se declare."""
     declared = load_objective().get("concept_areas") or []
-    if declared:
-        return list(dict.fromkeys([*declared, *RESERVED_CONCEPT_AREAS]))
-    existing = sorted(p.name for p in CONCEPTS.iterdir() if p.is_dir()) if CONCEPTS.exists() else []
-    return list(dict.fromkeys([*existing, *RESERVED_CONCEPT_AREAS]))
+    return list(dict.fromkeys([*declared, *RESERVED_CONCEPT_AREAS])) if declared else []
 
 
 # ── orden de listas de papers (política única, #79) ──────────────────────────
@@ -253,8 +252,9 @@ def registro_path(slug: str) -> Path:
 
 
 def legacy_triage_path(slug: str) -> Path:
-    """Ubicación PRE-#51 de las decisiones de triage (scratch gitignored). Se sigue LEYENDO para no
-    perder juicio ya hecho en una bóveda vieja; nunca se escribe más ahí."""
+    """Ubicación PRE-#51 de las decisiones de triage (scratch gitignored). Ya NO se lee en el flujo
+    normal: sólo la usan el migrador (`triage.py --migrate`) y el detector del lint, que la reporta
+    como bloqueante mientras exista. Nunca se escribe ahí."""
     return ROOT / "build" / slug / "triage.json"
 
 
@@ -275,19 +275,14 @@ def save_registro(slug: str, data: dict) -> None:
 
 
 def load_decisiones(slug: str) -> dict:
-    """Decisiones de triage del sujeto: las del registro versionado MERGEADAS con las del
-    `triage.json` viejo (migración transparente — el registro gana ante el mismo bibcode). Que el
-    legacy siga contando es lo que evita que una bóveda pre-#51 vuelva a proponer lo ya descartado
-    antes de su primer `--drop`."""
-    out: dict = {}
-    legacy = legacy_triage_path(slug)
-    if legacy.exists():
-        try:
-            out.update(json.loads(legacy.read_text(encoding="utf-8")).get("decisiones") or {})
-        except (ValueError, OSError):
-            pass
-    out.update(load_registro(slug).get("decisiones") or {})
-    return out
+    """Decisiones de triage del sujeto, **del registro versionado y nada más**.
+
+    Antes esto mergeaba también el `build/<slug>/triage.json` pre-1.9.0 (migración transparente).
+    Se sacó: una capa de compatibilidad en el lector es complejidad permanente, y el juicio viejo
+    tiene un camino explícito —`python scripts/triage.py <slug> --migrate`—. Lo que NO puede pasar
+    es que ese archivo quede **mudo** y el triage vuelva a proponer lo ya descartado sin decir nada:
+    el lint lo detecta y bloquea."""
+    return dict(load_registro(slug).get("decisiones") or {})
 
 
 def save_decisiones(slug: str, decisiones: dict) -> None:

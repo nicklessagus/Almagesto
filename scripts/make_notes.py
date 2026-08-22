@@ -832,7 +832,7 @@ def write_concept_note(slug: str, force: bool) -> None:
     # `concept_areas` (objective.yaml) es sólo una REFERENCIA para distinguir un typo de un área nueva
     # legítima → si el área no está declarada, AVISAR (nunca bloquear) para que un typo no pase mudo.
     # El lint la marca después; si era un área nueva real, agregala a concept_areas para silenciar el aviso.
-    if area not in cfg.load_concept_areas():
+    if (areas_ref := cfg.load_concept_areas()) and area not in areas_ref:
         print(f"  ⚠ área '{area}' (topic '{slug}') no está en concept_areas (objective.yaml). "
               f"Si es un typo, corregí topics.yaml; si es un área nueva, agregala a la lista. Creo igual.")
     dest = cfg.CONCEPTS / area / f"{concept}.md"

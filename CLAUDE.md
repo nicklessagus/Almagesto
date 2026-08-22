@@ -415,10 +415,11 @@ en `extra_core`: la asimetría era el bug). `busqueda` responde la otra pregunta
 pendientes y la ruta al registro (cirugía idempotente, no toca la prosa LLM); (b) el lint deja de
 dar **falso limpio** sin `build/` — *triage pendiente* y *corpus truncado* caen al registro y
 reportan el snapshot **con su fecha**, aclarando que no es el conteo vigente. Migración: el
-`build/<slug>/triage.json` viejo se sigue **leyendo** (no se pierde juicio) y se consolida solo en el
-primer `--drop`; para no depender de que el usuario justo descarte algo,
-`python scripts/triage.py <slug> --migrate` lo consolida de una vez (idempotente: ante el mismo
-bibcode gana lo ya versionado).
+`build/<slug>/triage.json` viejo **ya no se lee** —el framework no lleva capas de compatibilidad,
+que son complejidad permanente en el lector— y se consolida con
+`python scripts/triage.py <slug> --migrate` (idempotente: ante el mismo bibcode gana lo ya
+versionado). Mientras exista, el **lint lo reporta como bloqueante**: que un juicio viejo quede mudo
+es justamente el bug que #51 arregló.
 
 ### Append (plegar UNA fuente puntual a una entidad existente — skill `append-knowledge`)
 El usuario trae **una fuente concreta** (bibcode ADS, PDF local o URL) para una ficha/concepto que
@@ -536,7 +537,9 @@ señal (perilla/dial/`w_j`/`peso(`); cada hit se revisa a mano y se saca del vau
 implementación (no es bibliografía). Las **áreas de `concepts/` fuera de `concept_areas`** (subcarpeta no
 declarada en `vault/config/objective.yaml`) son **WARN** — las áreas son **abiertas**: la lista es sólo
 referencia para distinguir un typo de un área nueva, **nunca se bloquea** (`make_notes` **avisa** pero crea
-igual; el lint marca las carpetas fuera de la lista). El **objetivo sin instanciar** (`objective.name`
+igual; el lint marca las carpetas fuera de la lista). Si el objetivo **no declara** `concept_areas`,
+el typo-check queda **apagado** y el lint reporta eso (una línea, no una por carpeta): la lista no se
+infiere de lo que hay en disco, porque eso convertiría un typo ya cometido en "área declarada". El **objetivo sin instanciar** (`objective.name`
 sigue siendo el placeholder del template, `<definir con el skill setup>`) es **WARN**: la bóveda estaría
 clasificando "core" con la regex del ejemplo — correr el skill `setup`. El **PDF ↔ disco** es **WARN/higiene**: marca un paper
 cuyo campo `pdf` no refleja el PDF real — está bajado en `vault/raw/pdfs/<slug>/<bibcode>.pdf` pero el

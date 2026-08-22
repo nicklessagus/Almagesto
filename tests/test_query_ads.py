@@ -948,9 +948,8 @@ def test_main_chaining_solo_auto_acepta_sujeto_en_titulo(toy_vault, toy_classifi
 def test_main_triage_no_repropone_descartados(toy_vault, toy_classifier, no_sleep, monkeypatch, capsys):
     d = toy_vault.ROOT / "build" / "test_star"
     d.mkdir(parents=True, exist_ok=True)
-    (d / "triage.json").write_text(json.dumps({"decisiones": {
-        "2023PhDT....1P": {"decision": "descartado", "motivo": "física de partículas"}}}),
-        encoding="utf-8")
+    cfg.save_decisiones("test_star", {
+        "2023PhDT....1P": {"decision": "descartado", "motivo": "física de partículas"}})
     monkeypatch.setattr(qa, "query_ads",
                         lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
                         [rec("2020dirA....1A")])

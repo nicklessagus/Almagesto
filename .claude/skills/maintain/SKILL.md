@@ -1,7 +1,7 @@
 ---
 name: maintain
 description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), resolver el backlog del lint (P_rot sin documentar, drift PDF↔disco, cobertura, claims stale), y la pasada periódica de retracciones sobre toda la bóveda ("chequeá retracciones").
-version: 1.15.0
+version: 1.16.0
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
@@ -156,6 +156,13 @@ Pasada de higiene sobre lo que `lint.py` marca como backlog/WARN (no bloqueante,
   NEA** (#70) y un null ahí es el estado correcto, no un hueco a tapar. El hallazgo del lint es
   justamente "NEA no lo trae **y** el cuerpo no documenta uno citado": lo que se completa es la
   prosa. Rellenar el campo lo convierte en un hallazgo **bloqueante** (espejo roto).
+- **Juicio de triage en `build/<slug>/triage.json`** → **bloqueante**: el lector dejó de mergear ese
+  archivo pre-1.9.0 (el framework no lleva capas de compatibilidad). Mientras exista, el triage
+  vuelve a proponer lo ya descartado **sin el motivo**, que es el bug que #51 arregló. Una sola
+  corrida: `python scripts/triage.py <slug> --migrate`.
+- **`concept_areas` sin declarar** (WARN) → el typo-check de áreas de `concepts/` está **apagado**.
+  Declarar la lista en `vault/config/objective.yaml` —aunque sea con las áreas que ya usás—: no se
+  infiere de las carpetas en disco porque eso convertiría un typo ya cometido en área legítima.
 - **disputes en el schema viejo** (#71) → **bloqueante**: el lint dejó de leer
   `planets[].disputes[]` a propósito (una sola semántica), así que esas disputas están **mudas**
   hasta migrarlas. Correr la migración una vez:

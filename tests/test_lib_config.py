@@ -89,14 +89,16 @@ def test_concept_areas_reservadas_se_agregan(toy_vault):
     assert cfg.load_concept_areas() == ["indicators", "methods", "hypotheses"]
 
 
-def test_concept_areas_modo_tolerante(toy_vault):
-    """Sin `concept_areas` declarado: carpetas existentes + reservadas (instancia vieja)."""
+def test_concept_areas_sin_declarar_apaga_el_chequeo(toy_vault):
+    """Sin `concept_areas` declarado el typo-check queda APAGADO (`[]`), no inferido de las carpetas
+    que hay en disco: inferirlo convertiría cualquier typo ya cometido en "área declarada", que es
+    lo contrario de lo que el chequeo hace. El lint reporta la lista ausente."""
     obj = dict(cfg.load_objective())
     obj.pop("concept_areas")
     write_yaml(toy_vault.OBJECTIVE_YAML, obj)
     (toy_vault.CONCEPTS / "zzz").mkdir()
     (toy_vault.CONCEPTS / "activity").mkdir()
-    assert cfg.load_concept_areas() == ["activity", "zzz", "methods", "hypotheses"]
+    assert cfg.load_concept_areas() == []
 
 
 def test_version_unica_fuente():
@@ -134,7 +136,7 @@ def test_concept_areas_sin_nada(toy_vault):
     obj = dict(cfg.load_objective())
     obj.pop("concept_areas")
     write_yaml(toy_vault.OBJECTIVE_YAML, obj)
-    assert cfg.load_concept_areas() == ["methods", "hypotheses"]
+    assert cfg.load_concept_areas() == []
 
 
 # ── orden por citas/año (política única de #79) ──────────────────────────────

@@ -50,7 +50,10 @@ No modifica nada: reporta para que el agente/usuario decida.
 
 Exit code: 1 si alguna categoría BLOQUEANTE tiene hits (wikilinks rotos, frontmatter no parseable,
 papers retractados, huérfanas, contradicciones
-GT↔ficha, masa inconsistente, thesis_links/disputes colgantes — las que CLAUDE.md exige "en 0");
+GT↔ficha, masa inconsistente, thesis_links/disputes colgantes, y los **restos de schemas viejos**
+—`planets[].disputes[]`, `build/<slug>/triage.json`— que el lector ya no mira: el framework no lleva
+capas de compatibilidad, así que lo viejo se detecta y se migra en vez de tolerarse — las que
+CLAUDE.md exige "en 0");
 0 si sólo hay WARN/backlog. Gateable en pre-commit/CI.
 """
 from __future__ import annotations
@@ -574,7 +577,10 @@ def main() -> int:
                 continue
             chk = msini_earth(p.get("K_ms"), p.get("P_days"), p.get("e"), mstar)
             m = p.get("mass_earth")
-            if chk and m and not (1 / 3 < m / chk < 3):  # fallback (json viejo sin flag)
+            # NO es un fallback de compatibilidad: es el chequeo INDEPENDIENTE del lint sobre todo
+            # planeta que el fetch no marcó (que son casi todos). `mass_flag` es la marca del fetch;
+            # esto la re-deriva offline, que es el trabajo del lint.
+            if chk and m and not (1 / 3 < m / chk < 3):
                 mass_issues.append((slug, f"{p.get('letter')}: mass_earth={m:.3g} M⊕ "
                                           f"≠ m·sini implícita {chk:.3g} M⊕"))
         sf = cfg.STARS / f"{slug}.md"
@@ -646,9 +652,17 @@ def main() -> int:
     # áreas de concepts/ no declaradas en concept_areas (objective.yaml) → posible typo / carpeta
     # fantasma: un `area` mal tipeado en topics.yaml crea carpeta en silencio (ver make_notes). WARN
     # blando (un typo y un área nueva legítima se ven igual → no se bloquea, se marca para revisar).
+    # Sin `concept_areas` declarado el typo-check está APAGADO (no se infiere de las carpetas que
+    # hay en disco: eso convertiría un typo ya cometido en "área declarada"). Se reporta la ausencia
+    # una vez, en vez de marcar todas las carpetas como no declaradas.
     declared_areas = set(cfg.load_concept_areas())
     undeclared_areas = []
-    if cfg.CONCEPTS.exists():
+    if not declared_areas:
+        undeclared_areas.append(
+            ("vault/config/objective.yaml",
+             "no declara `concept_areas` → el typo-check de áreas de concepts/ está APAGADO; "
+             "declarala (aunque sea con las que ya usás) para que un `indicatorz` no pase mudo"))
+    elif cfg.CONCEPTS.exists():
         for d in sorted(cfg.CONCEPTS.iterdir()):
             if d.is_dir() and d.name not in declared_areas:
                 n = len(list(d.glob("*.md")))
@@ -685,6 +699,7 @@ def main() -> int:
     # los aceptados pasaron a extra_core → son core), así que basta con contarlos.
     triage_pending = []
     truncated_corpora = []
+    legacy_triage = []                 # (slug, motivo) — juicio en el build/<slug>/triage.json viejo
     vistos = set()
     for aj in sorted(glob.glob(str(cfg.ROOT / "build" / "*" / "ads.json"))):
         try:
@@ -705,6 +720,18 @@ def main() -> int:
             truncated_corpora.append(
                 (slug, f"ADS reporta {t.get('num_found')} y se trajeron {t.get('rows')}{pasada} → "
                        f"corpus incompleto; re-ingestá con --rows mayor (o paginá) para cubrir el resto"))
+        legacy_tri = cfg.legacy_triage_path(slug)
+        if legacy_tri.exists():
+            try:
+                n_viejas = len(json.loads(legacy_tri.read_text(encoding="utf-8"))
+                               .get("decisiones") or {})
+            except (ValueError, OSError):
+                n_viejas = -1
+            legacy_triage.append(
+                (slug, f"{'?' if n_viejas < 0 else n_viejas} decisión(es) en "
+                       f"build/{slug}/triage.json, el lugar pre-1.9.0 que el lector ya no mira → "
+                       f"`python scripts/triage.py {slug} --migrate` (si no, el triage vuelve a "
+                       f"proponer lo que ya descartaste, sin el motivo)"))
         cands = data.get("candidates") or []
         if cands:
             top = ", ".join(c.get("bibcode", "?") for c in cands[:3])
@@ -758,6 +785,7 @@ def main() -> int:
                          ("disputes: ref de una posición sin paper destino", dangling_disputes),
                          ("disputes mal formadas (posiciones explícitas, #71)", bad_disputes),
                          ("disputes en el schema viejo (planets[].disputes[]) — el lint ya no las lee", old_disputes),
+                         ("Juicio de triage en build/<slug>/triage.json (pre-1.9.0) — el lector ya no lo mira", legacy_triage),
                          ("`role` fuera del vocabulario (fundacional/aplicacion/arbitro)", bad_roles),
                          ("⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)", impl_leaks),
                          ("Objetivo sin instanciar (WARN — objective.yaml sigue en el placeholder del template)", objective_warn),
@@ -793,7 +821,7 @@ def main() -> int:
     # implementación, áreas, PDF↔disco) y backlog (verificabilidad, cobertura, incompletos) no.
     n_block = sum(len(x) for x in (broken, fm_broken, retracted, orphans, contradictions,
                                    mass_issues, dangling_thesis, dangling_disputes, bad_roles,
-                                   bad_disputes, old_disputes))
+                                   bad_disputes, old_disputes, legacy_triage))
     if n_block:
         print(f"✗ {n_block} hallazgo(s) en categorías bloqueantes → exit 1")
         return 1

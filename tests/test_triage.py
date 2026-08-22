@@ -82,16 +82,22 @@ def test_drop_acumula_decisiones_previas(toy_vault, monkeypatch):
     assert set(dec) == {"2020a....1A", "2020b....1B"}
 
 
-def test_drop_consolida_el_triage_json_viejo(toy_vault, monkeypatch):
-    """Migración (#51): una bóveda pre-1.9 tiene el juicio en build/<slug>/triage.json. Se sigue
-    leyendo (no se pierde) y el primer --drop lo consolida en el registro versionado."""
+def test_el_triage_json_viejo_ya_no_se_lee_solo(toy_vault, monkeypatch):
+    """El lector NO mergea el `triage.json` pre-1.9.0: una capa de compatibilidad es complejidad
+    permanente, y el juicio viejo tiene un camino explícito (`--migrate`). El riesgo que eso
+    introduce —que el archivo quede mudo— lo cubre el detector bloqueante del lint."""
     d = write_ads(toy_vault, candidates=[cand("2020b....1B")])
     (d / "triage.json").write_text(json.dumps({"slug": "test_star", "decisiones": {
         "2020a....1A": {"decision": "descartado", "motivo": "juicio viejo"}}}), encoding="utf-8")
-    assert cfg.load_decisiones("test_star")["2020a....1A"]["motivo"] == "juicio viejo"
+    assert cfg.load_decisiones("test_star") == {}
     run_main(monkeypatch, ["test_star", "--drop", "2020b....1B", "--reason", "nuevo"])
     dec = yaml.safe_load(cfg.registro_path("test_star").read_text(encoding="utf-8"))["decisiones"]
-    assert set(dec) == {"2020a....1A", "2020b....1B"}      # el viejo sobrevive en el lugar nuevo
+    assert set(dec) == {"2020b....1B"}
+    # y el camino explícito sí lo recupera, sin perder el motivo
+    run_main(monkeypatch, ["test_star", "--migrate"])
+    dec = yaml.safe_load(cfg.registro_path("test_star").read_text(encoding="utf-8"))["decisiones"]
+    assert set(dec) == {"2020a....1A", "2020b....1B"}
+    assert dec["2020a....1A"]["motivo"] == "juicio viejo"
 
 
 def test_registro_preserva_la_busqueda_al_dropear(toy_vault, monkeypatch):

@@ -5,7 +5,7 @@ import pytest
 
 import lib_config as cfg
 import lint
-from conftest import mk_note
+from conftest import mk_note, write_yaml
 
 MOJIBAKE = "ˆÿþ" * 150
 
@@ -117,6 +117,49 @@ def test_contradiccion_gt_ficha(toy_vault, capsys):
     rc, out = run_lint(capsys)
     assert rc == 1
     assert "ficha 1 planetas vs ground-truth 2" in out
+
+
+# ── sin capas de compatibilidad: cada tolerancia sacada deja un detector ─────
+
+def test_triage_json_viejo_es_bloqueante(toy_vault, capsys):
+    """`load_decisiones` dejó de mergear el `build/<slug>/triage.json` pre-1.9.0. Sin detector eso
+    sería una pérdida SILENCIOSA: el triage volvería a proponer lo ya descartado, sin el motivo."""
+    d = toy_vault.ROOT / "build" / "test_star"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "ads.json").write_text(json.dumps({"slug": "test_star", "records": []}), encoding="utf-8")
+    (d / "triage.json").write_text(json.dumps({"decisiones": {
+        "2020a....1A": {"decision": "descartado", "motivo": "ruido"},
+        "2020b....1B": {"decision": "descartado", "motivo": "ruido"}}}), encoding="utf-8")
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert "2 decisión(es) en build/test_star/triage.json" in out
+    assert "triage.py test_star --migrate" in out
+
+
+def test_triage_json_ilegible_igual_se_reporta(toy_vault, capsys):
+    """Un JSON roto no puede convertirse en "no hay nada que migrar": se reporta sin el conteo."""
+    d = toy_vault.ROOT / "build" / "test_star"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "ads.json").write_text(json.dumps({"slug": "test_star", "records": []}), encoding="utf-8")
+    (d / "triage.json").write_text("{roto", encoding="utf-8")
+    rc, out = run_lint(capsys)
+    assert rc == 1 and "? decisión(es) en build/test_star/triage.json" in out
+
+
+def test_concept_areas_sin_declarar_se_reporta_una_vez(toy_vault, capsys):
+    """Al sacar el modo tolerante, un objetivo sin `concept_areas` deja el typo-check APAGADO. Se
+    reporta esa ausencia (WARN, una línea) en vez de marcar cada carpeta como no declarada — que
+    sería ruido sobre un chequeo que ni siquiera está corriendo."""
+    obj = dict(cfg.load_objective())
+    obj.pop("concept_areas")
+    write_yaml(toy_vault.OBJECTIVE_YAML, obj)
+    mk_note(toy_vault.CONCEPTS / "activity", "algo", {"tags": ["activity"]}, "texto\n")
+    mk_note(toy_vault.CONCEPTS / "zzz", "otro", {"tags": ["zzz"]}, "texto\n")
+    link_from_index(toy_vault, "algo", "otro")
+    rc, out = run_lint(capsys)
+    assert rc == 0                                        # WARN, no bloquea
+    assert "no declara `concept_areas`" in out and "está APAGADO" in out
+    assert "concepts/zzz/" not in out                     # no se duplica por carpeta
 
 
 # ── #71: disputas con posiciones explícitas ─────────────────────────────────

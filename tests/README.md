@@ -22,10 +22,13 @@ Requiere `pytest` (dev-only, no está en `requirements.txt`; los scripts no lo n
    de `__file__`; la fixture `toy_vault` (en `conftest.py`) re-apunta **todas** esas constantes a
    un árbol temporal (`tmp_path`), incluidos los alias que otros módulos toman al importar
    (`extract_fulltext.FULLTEXT`). Ningún test lee ni escribe la bóveda real.
-3. **Testear el contrato documentado.** Las expectativas salen de los docstrings, `CLAUDE.md` y
+3. **Sin capas de compatibilidad.** El framework no tolera schemas viejos en el lector: cada vez
+   que uno cambia, hay un **migrador de un solo uso** y un **detector** en el lint. Los tests fijan
+   las dos mitades — que el lector NO lea lo viejo, y que lo viejo **grite** en vez de volverse mudo.
+4. **Testear el contrato documentado.** Las expectativas salen de los docstrings, `CLAUDE.md` y
    `README.md` — no de "lo que el código hace hoy". Si un test falla, primero se triagea:
    ¿bug del script o expectativa mal leída?
-4. **Los invariantes críticos primero.** Lo más cubierto es lo que más duele si se rompe:
+5. **Los invariantes críticos primero.** Lo más cubierto es lo que más duele si se rompe:
    - **Idempotencia / no pisar extracción LLM** (`make_notes`, `unpend_note`,
      `merge_frontmatter_list` byte-a-byte, `--force` sólo donde está prometido).
    - **Cada categoría del lint** detecta su caso sembrado y el exit code separa
@@ -49,9 +52,9 @@ Requiere `pytest` (dev-only, no está en `requirements.txt`; los scripts no lo n
 | `test_extract_fulltext.py` | `is_legible` (umbrales), flujo pdftotext→OCR (fallback, upgrade automático, ya-OCR no reintenta), degradación limpia | `subprocess`/`shutil` falsos |
 | `test_fetch_web.py` | `clean_markdown` (determinista), `snapshot_date_of`, header del snapshot, reuso de fecha, `CITEKEY_RE` | `defuddle` mockeado |
 | `test_make_notes.py` | stubs (star/concept/paper/web), migración de `disputes` a posiciones explícitas (#71: materializa el polo implícito, degrada sin destruir), `extraction_block` ramificado por tipo de sujeto (unitario + matriz de ramas), retro-linkeo add-only, `unpend_note`, `excluded_table` (escapes), puntero de búsqueda en la cabecera, `pdf_source` (eprint vs publicado), idempotencia | puro FS |
-| `test_triage.py` | carga y persistencia de decisiones en el registro versionado, `--drop` y `--drop-source` (motivo obligatorio, carriles que no se pisan), listado sin `ads.json`, `--migrate` del `triage.json` legacy, contrato con `query_ads.load_triage` | puro FS |
+| `test_triage.py` | carga y persistencia de decisiones en el registro versionado (sin mergear el `triage.json` viejo), `--drop` y `--drop-source` (motivo obligatorio, carriles que no se pisan), listado sin `ads.json`, `--migrate` del `triage.json` legacy, contrato con `query_ads.load_triage` | puro FS |
 | `test_multicolumn_matching.py` | invariantes de la estrategia de matcheo en `.txt` a dos columnas (#44/#46): escalera de acortamiento, canaleta, normalización que empalma columnas | fixtures sintéticos |
-| `test_lint.py` | cada categoría con su caso sembrado + exit codes; espejo ficha↔ground-truth campo por campo (#70), extraído pero no sintetizado (#75), vocabulario cerrado de `role` (#73), disputas con posiciones explícitas + fallback del schema viejo (#71) | bóvedas mínimas por escenario |
+| `test_lint.py` | cada categoría con su caso sembrado + exit codes; espejo ficha↔ground-truth campo por campo (#70), extraído pero no sintetizado (#75), vocabulario cerrado de `role` (#73), disputas con posiciones explícitas (#71), detectores de los schemas viejos que el lector ya no mira | bóvedas mínimas por escenario |
 | `test_check_retractions.py` | parseo Crossref (`updated-by`, fechas), fallback por título, estampado idempotente de `retracted` y `corrections`, exit codes | `requests` falso |
 | `test_ingest_topic.py` | despacho por `source`, validaciones de `sources:`, flujo `pending`, aviso de fuente ya descartada, copia de PDFs, orden de la cadena ads | `run()` y `make_notes.*` grabadores |
 | `test_ingest_star.py` | orden canónico de la cadena de estrellas, aborto al primer fallo, retracción ≠ fallo | `run()` grabador |

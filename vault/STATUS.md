@@ -18,6 +18,45 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.20.0 (2026-08-22) — sin capas de compatibilidad: la misma regla, aplicada a todo
+
+> Pedido del usuario al ver la de #71: *"sí, quiero el mismo tratamiento para todo, simplifiquemos"*.
+> 480 tests verdes (+3), lint 0. 1.19.0 → **1.20.0** (minor: dos categorías de lint nuevas; el
+> lector queda **más chico** que antes).
+
+- **La regla, ya explícita:** el framework **no lleva capas de compatibilidad**. Una tolerancia en el
+  lector es complejidad **permanente** (dos semánticas que mantener y testear para siempre) a cambio
+  de una compatibilidad que hoy no le sirve a nadie —una sola persona lo usa— y que además suele
+  **mentir**, porque la forma vieja no sabe expresar lo que la nueva agrega. Reemplazo: **migrador de
+  un solo uso + detector**. Lo único que no se negocia es que lo viejo **no quede mudo**: un lector
+  que lo ignora en silencio es peor que un error (criterio de #69).
+- **Barrido de lo que quedaba** (grep por `legacy|pre-1\.|tolerante|json viejo`), tres candidatos y
+  un falso positivo:
+  - **`load_decisiones` mergeaba `build/<slug>/triage.json`** (pre-1.9.0, #51). Sacado. El camino es
+    `triage.py <slug> --migrate`, que ya existía, y el lint reporta el archivo como **bloqueante**
+    mientras exista — si quedara mudo, el triage volvería a proponer lo ya descartado **sin el
+    motivo**, que es exactamente el bug que #51 arregló.
+  - **`load_concept_areas` infería la lista de las carpetas en disco** cuando `objective.yaml` no la
+    declaraba ("instancia vieja, pre-feature"). Sacado, y de paso era **peor que inútil**: inferir la
+    lista convierte cualquier typo **ya cometido** en "área declarada", o sea lo contrario del
+    chequeo. Ahora sin declarar = typo-check **apagado**, y el lint lo dice **una vez** (WARN) en vez
+    de marcar cada carpeta.
+  - **`planets[].disputes[]`** ya se había resuelto así en 1.19.0 (mismo pedido).
+  - **Falso positivo:** el recompute de masa del lint (`# fallback (json viejo sin flag)`) **no** es
+    compatibilidad — corre sobre todo planeta que el fetch no marcó, que son casi todos: es el
+    chequeo **independiente** del lint, que es su trabajo. Sólo se corrigió el comentario, que
+    llevaba a leerlo como un resto.
+  - **Fuera de alcance por criterio:** las claves ausentes en `build/` (p. ej. `truncated.recent`).
+    `build/` es scratch **regenerable**: no hay juicio que perder ni migración que correr, así que
+    ahí "el dato puede no estar" no es una capa de compatibilidad sino un desconocido honesto.
+- **Tests (+3):** el `triage.json` viejo bloquea (y un JSON **ilegible** también se reporta, sin
+  inventar un conteo de 0), y `concept_areas` sin declarar se reporta **una vez** y no por carpeta.
+  Más los tres tests existentes reescritos: el lector ya no mergea, `--migrate` sí recupera el motivo,
+  y el modo tolerante de áreas devuelve `[]`.
+- Skill `maintain` 1.15.0 → **1.16.0** (los dos hallazgos nuevos y cómo se resuelven). `CLAUDE.md`,
+  `triage.py`, el docstring del lint, `objective.yaml` y `tests/README.md` (principio de diseño nuevo)
+  sincronizados.
+
 ## ✅ Framework 1.19.0 (2026-08-22) — #71: las disputas dejan de tener el polo de verdad hardcodeado
 
 > **Tanda 4** — el ítem más caro del lote: el único que toca instancias ya ingestadas con cambio de

@@ -26,8 +26,9 @@ Los tres niveles:
   motivo y fecha) para que el próximo refresh no lo vuelva a proponer. Los dos lados del juicio
   viven en config versionada (#51): hasta 1.8.x el descarte iba a `build/<slug>/triage.json`
   —scratch gitignored— y en otra máquina el triage volvía a proponer todo lo descartado, sin el
-  motivo. Ese archivo viejo se sigue LEYENDO (no se pierde juicio hecho) y se consolida solo en el
-  primer `--drop`. Los candidatos que **ya tienen nota** en la bóveda (entraron por OTRO slug —
+  motivo. Ese archivo viejo **ya no se lee** (sin capas de compatibilidad: son complejidad permanente
+  en el lector): se consolida con `--migrate`, y mientras exista el **lint lo reporta como
+  bloqueante** — que quede mudo sería justamente el bug que #51 arregló. Los candidatos que **ya tienen nota** en la bóveda (entraron por OTRO slug —
   papers de método curados a otra estrella) se marcan `◆` (#42): ya están bajados y extraídos, la
   decisión sigue siendo por-slug pero se despachan rápido — no se filtran, se etiquetan.
 - **2 — informe al usuario:** `--report` deja la tabla en `outputs/triage-<slug>.md` (título, año,
@@ -74,13 +75,14 @@ def triage_file(slug: str):
 
 
 def load_decisions(slug: str) -> dict:
-    """Decisiones del registro versionado + las del triage.json viejo (migración transparente)."""
+    """Decisiones del registro versionado. El `triage.json` pre-1.9.0 NO se lee acá: se migra con
+    `--migrate` y, mientras exista, el lint lo reporta como bloqueante."""
     return cfg.load_decisiones(slug)
 
 
 def save_decisions(slug: str, decisiones: dict) -> None:
     """Escribe SIEMPRE en el registro versionado; `busqueda` (de query_ads) se preserva. Lo que
-    venía del legacy se consolida acá en el primer --drop, sin pasos de migración a mano."""
+    venía del legacy entra por `--migrate`, que es el único camino."""
     cfg.save_decisiones(slug, decisiones)
 
 
@@ -132,10 +134,10 @@ def migrate(slug: str) -> int:
     """Consolida en el registro VERSIONADO las decisiones que hayan quedado en el
     `build/<slug>/triage.json` de una bóveda pre-1.9.0 (#51).
 
-    Sin esto la migración sólo ocurre en el próximo `--drop`: hasta entonces el juicio sigue
-    viviendo únicamente en scratch gitignored, y un clon en otra máquina lo pierde igual que antes
-    —exactamente el bug que #51 arregla—. Depender de que el usuario justo descarte algo no es una
-    migración. Idempotente: ante el mismo bibcode gana lo ya versionado, y si no hay nada que
+    Es el **único** camino: el lector no mergea el archivo viejo (sin capas de compatibilidad), así
+    que mientras no se corra esto el juicio sigue viviendo únicamente en scratch gitignored y un
+    clon en otra máquina lo pierde — exactamente el bug que #51 arregla. Por eso el lint lo reporta
+    como bloqueante. Idempotente: ante el mismo bibcode gana lo ya versionado, y si no hay nada que
     migrar no escribe."""
     legacy = cfg.legacy_triage_path(slug)
     if not legacy.exists():
