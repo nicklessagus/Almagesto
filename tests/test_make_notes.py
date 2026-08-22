@@ -499,6 +499,43 @@ def test_inventario_no_tiene_columna_de_valor_adoptado(toy_vault):
     assert 'Sin columna "valor adoptado"' in t and "regla #0" in t
 
 
+# ── #74: régimen de validez (sólo en conceptos) ─────────────────────────────────────────────
+
+def test_regimen_solo_en_concepts(toy_vault):
+    """En una estrella comparás el mismo número medido dos veces; en un método, dos papers pueden
+    decir cosas distintas y estar los dos bien. La tabla existe donde el modo de falla es
+    generalizar de más, no donde hay ground-truth."""
+    seed_topic()
+    mn.write_star_note("test_star", force=False)
+    mn.write_concept_note("gp", force=False)
+    ficha = (toy_vault.STARS / "test_star.md").read_text(encoding="utf-8")
+    concept = (toy_vault.CONCEPTS / "methods" / "gaussian-processes.md").read_text(encoding="utf-8")
+    assert mn.REGIMEN in concept and "## Régimen de validez" not in ficha
+
+
+def test_regimen_va_entre_el_inventario_y_los_huecos(toy_vault):
+    """Los dos son productos del contraste y son complementarios: el inventario es el desacuerdo
+    REAL bajo las mismas condiciones, el régimen es el aparente (que acá es el hallazgo)."""
+    seed_topic()
+    mn.write_concept_note("gp", force=False)
+    t = (toy_vault.CONCEPTS / "methods" / "gaussian-processes.md").read_text(encoding="utf-8")
+    assert t.index("## Síntesis") < t.index("## Inventario por eje") \
+        < t.index("## Régimen de validez") < t.index("## Huecos")
+
+
+def test_regimen_es_la_unidad_del_issue_y_cierra_en_huecos(toy_vault):
+    """La unidad de síntesis de un concepto es (afirmación, condiciones, fuente, rol) — el `rol` es
+    el de #73 — y el hueco accionable que sale de la tabla es "régimen no cubierto"."""
+    seed_topic()
+    mn.write_concept_note("gp", force=False)
+    t = (toy_vault.CONCEPTS / "methods" / "gaussian-processes.md").read_text(encoding="utf-8")
+    cabecera = next(l for l in t.split("\n") if l.startswith("| Afirmación |"))
+    assert [c.strip() for c in cabecera.strip("|").split("|")] == [
+        "Afirmación", "Vale bajo (régimen)", "Fuente", "Rol"]
+    # [-1]: el propio bloque de régimen menciona `## Huecos` al decir a dónde va el hallazgo
+    assert "regímenes no cubiertos" in t.split("## Huecos")[-1]
+
+
 # ── #76 (unitario): objective_lens + la matriz de ramas de extraction_block ──────────────────
 
 def write_objective(toy_vault, **cambios):

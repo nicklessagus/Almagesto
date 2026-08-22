@@ -247,8 +247,21 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   `vault/config/objective.yaml` es sólo referencia para el typo-check, con `methods`/`hypotheses` reservadas)**: `name`, **`aliases`** (lista de sinónimos EN+ES —
   p. ej. `[chromatic index, índice cromático, RV-color]` — para que la ficha se encuentre por `grep`
   desde **cualquier término**, no sólo el nombre canónico; espeja la idea de `aliases` de `stars/`),
-  `tags`, `confidence`. El cuerpo trae `## Síntesis`, `## Inventario por eje`, `## Huecos` y el
-  apéndice `## Excluidos por el filtro` (igual que la ficha de estrella). Rige el *Estándar transversal* (autosuficiente + implementation-ready).
+  `tags`, `confidence`. El cuerpo trae `## Síntesis`, `## Inventario por eje`,
+  **`## Régimen de validez`**, `## Huecos` y el
+  apéndice `## Excluidos por el filtro` (igual que la ficha de estrella).
+  **Régimen de validez (#74) — sólo en conceptos.** Acá no hay ground-truth ni árbitro externo, y
+  el eje de contraste **no es el mismo que en una estrella**: allá comparás el mismo número medido
+  dos veces; en un método, dos papers pueden decir cosas distintas y **estar los dos bien**, porque
+  valen bajo condiciones distintas (SNR, muestreo, tamaño de muestra, definición del observable).
+  Por eso el modo de falla dominante en un concepto **no** es "dos números no coinciden" sino
+  **generalizar de más**: el paper afirma X bajo condiciones C y el concepto afirma X pelado. La
+  unidad de síntesis no es `(campo, valor, fuente)` sino **`(afirmación, condiciones bajo las que
+  vale, fuente, rol)`**, y esa es la tabla. Es el destino de los veredictos **`aparente`** de
+  `find-contradictions` ("distinto régimen, distinta definición, distinta época"): en una estrella
+  se descartan como no-disputa; acá **son el hallazgo**. El `## Inventario por eje` queda para el
+  desacuerdo **real bajo las mismas condiciones**, que acá es el caso minoritario. De la tabla sale
+  además un hueco accionable que antes no tenía forma: **"régimen no cubierto"**. Rige el *Estándar transversal* (autosuficiente + implementation-ready).
   **Convención hub/radios (tema grande → varias notas):** cuando un tema no cabe en una sola nota sin
   perder foco, se estructura como **hub** (la nota central: síntesis del tema completo) + **radios**
   (notas satélite del mismo área que profundizan un sub-aspecto; p. ej. hub `procesos-gaussianos`, radio
@@ -266,7 +279,9 @@ modelo)** y llevar `[[bibcode]]` en cada afirmación para **citar/trazar** (un a
 informe saca de la nota las referencias correctas sin abrir el paper). Requisitos extra por tipo:
 - **métodos e indicadores** (`concepts/methods`, `concepts/indicators`): además
   **implementation-ready** — ecuaciones, inputs/outputs y pasos suficientes para **codificar el método
-  tal como lo detallan los papers, sin abrir la fuente**; el detalle fino vive en los `[[links]]`.
+  tal como lo detallan los papers, sin abrir la fuente**; el detalle fino vive en los `[[links]]`. Y
+  **con el régimen explícito** (#74): una ecuación sin las condiciones bajo las que vale es
+  implementable y **equivocada** — quien la codifica no tiene cómo saber que estaba fuera de rango.
 - **queries/hypotheses**: pregunta, **búsqueda reproducible** (el `grep` usado), evidencia citada
   for/against con `bearing`, y veredicto.
 Si para implementar o citar algo hace falta abrir el paper, eso que falta **debe agregarse a la nota**.
@@ -426,7 +441,11 @@ distintivo** de la afirmación, la mera cercanía temática no alcanza). `no-sop
 **afirma lo contrario** → no es (sólo) cita rota: es corrección de la nota o **disputa** a taguear
 (`planets[].disputes[]` si es parámetro planetario). Cada falla se **resuelve** (bajar la afirmación
 a lo que dice la fuente, reasignar la cita al bibcode correcto, marcar **`inferencia`**, o taguear la
-disputa) y se deja un bloque `## Verificación de citas` en la nota. Cuando el par sale de una
+disputa) y se deja un bloque `## Verificación de citas` en la nota. El subagente contesta además, **en todos los casos**, si el paper
+afirma eso **bajo condiciones** que la nota no dice (#74): la afirmación pelada sí está en la fuente,
+así que el veredicto es `soportada` y la **sobre-generalización pasaba entera** — la nota no afirma
+falso, afirma **de más**. Se reporta como hallazgo aparte y se resuelve agregando la condición (en un
+concepto, como fila de `## Régimen de validez`). Cuando el par sale de una
 **transcripción** (tabla/lista de la fuente) el subagente contesta además la pregunta de
 **completitud** —¿la fuente tiene más filas/ítems que los transcritos?—: una tabla sin un solo error
 pero **truncada** vuelve 100% soportada y se lee como completa (la nota no afirma falso, afirma **de

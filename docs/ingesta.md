@@ -179,8 +179,12 @@ flowchart LR
 | cuerpo | `## Verificación de citas` | **LLM** | salida de `verify-citations`, **con fecha** |
 
 En la nota de **concepto** la tabla es más corta porque **no hay ground-truth**: frontmatter
-`name` / `aliases` / `tags` / `confidence`, y todo lo demás (`## Síntesis`, `## Huecos`) es síntesis
-LLM citada. El roll-up junta por `thesis_links` (y por `methods` si el área es `methods`).
+`name` / `aliases` / `tags` / `confidence`, y todo lo demás (`## Síntesis`, `## Inventario por eje`,
+`## Régimen de validez`, `## Huecos`) es síntesis LLM citada. La sección propia del concepto es el
+**régimen** (#74): acá dos papers pueden decir cosas distintas y **estar los dos bien** porque valen
+bajo condiciones distintas, así que el modo de falla no es "no coinciden" sino **generalizar de
+más** — y ése `verify-citations` lo devolvía `soportada`, porque la afirmación pelada sí está en el
+paper. El roll-up junta por `thesis_links` (y por `methods` si el área es `methods`).
 
 En la nota de **paper**: la metadata (bibcode, autores, año, doi, `citation_count`, `pdf`,
 `fulltext`, `fulltext_source`, `pdf_source`) la estampan los scripts por **verdad de disco**; el LLM
@@ -225,7 +229,7 @@ Esta ingesta tiene huecos conocidos y numerados; el detalle de cada uno está en
 |---|---|
 | `disputes[]` no expresa desacuerdo paper↔paper | #71 |
 | Qué papers leer (criterio de la extracción) | #62 |
-| Régimen de validez explícito en conceptos | #74, #63 |
+| Persistir los veredictos `aparente` de find-contradictions | #63 |
 | Descubrimiento fuera de ADS (OpenAlex) | #77 |
 | Tema mixto sólo off-ADS-first | #78 |
 | Sesgo de edad en el orden por citas | #79 |

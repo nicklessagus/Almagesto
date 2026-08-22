@@ -1,7 +1,7 @@
 ---
 name: verify-citations
 description: Usar para verificar, afirmación por afirmación, que las citas [[bibcode]] de una nota de la wiki (query, hipótesis, ficha, concepto) realmente están respaldadas por el texto completo de la fuente. Se corre como paso de cierre al armar/editar una query o hipótesis, o cuando el usuario pide "rechequeá las citas / ¿esto lo dice el paper?". Implementa el chequeo claim↔evidencia (pipeline tipo CiteAudit) sobre el corpus cerrado de la bóveda. Veredictos: soportada / parcial / no-soportada (la fuente calla) / contradice (la fuente afirma lo contrario → candidata a disputa, no sólo cita rota); en transcripciones de tablas/listas chequea además la completitud (lo que la nota omite).
-version: 1.5.0
+version: 1.6.0
 ---
 
 # Verify-citations — chequeo claim↔evidencia contra el fulltext
@@ -166,6 +166,14 @@ Cada uno:
     verificador — es exactamente lo que mide el benchmark.
   - `nota`: una línea de por qué (sobre todo en `parcial`/`no-soportada`: qué dice el paper en cambio).
     Si la afirmación es **multi-cláusula**, decir **qué cláusula** respalda el paper y cuáles no.
+  - `condicion` (**siempre; el hallazgo que ninguna capa veía, #74**): ¿el paper afirma esto **bajo
+    condiciones** que la nota no dice? (SNR, muestreo, tamaño de muestra, definición del observable,
+    época, rango de parámetros). Si sí, **citarlas**. Es un **hallazgo aparte**, no un grado de
+    soporte: la afirmación pelada **sí está** en el paper, así que el veredicto sigue siendo
+    `soportada` — por eso la sobre-generalización pasaba entera por este chequeo. Es el "afirmar de
+    menos" de las tablas truncadas, en versión conceptual: la nota no afirma falso, afirma **de
+    más**. En una nota de **concepto** la resolución tiene lugar propio: la condición va a
+    `## Régimen de validez`; en una ficha, se agrega a la afirmación.
   - `completitud` (**sólo cuando el par sale de una transcripción** de tabla o lista de la fuente):
     ¿la tabla/lista del paper tiene **más filas/ítems** que los que la nota transcribe? Si sí,
     **listarlos** (con nº de línea). Es un **hallazgo aparte**, no un grado de soporte: no cambia el
@@ -210,7 +218,10 @@ dentro de una línea (ambos empalman columnas y fabrican adyacencias falsas); si
 antes la línea en ese hueco y tratá cada segmento por separado. Si no
 encontrás respaldo textual, es no-soportada; `parcial` sólo si la cita textual respalda parte del
 contenido distintivo de la afirmación — que el paper hable del mismo tema NO alcanza; si el paper
-afirma lo CONTRARIO, es contradice (pegá la frase que lo contradice). No uses memoria ni otros
+afirma lo CONTRARIO, es contradice (pegá la frase que lo contradice). Decime APARTE del veredicto:
+¿el paper afirma esto bajo CONDICIONES que la afirmación no menciona (SNR, muestreo, tamaño de
+muestra, definición del observable, época, rango)? Si sí, citalas con su nº de línea — la afirmación
+puede estar bien y aun así estar sobre-generalizada. No uses memoria ni otros
 papers."*
 
 **Addendum para transcripciones** (agregar al prompt cuando el par sale de una tabla o lista de la
@@ -267,6 +278,9 @@ Chequeo afirmación↔fulltext (skill `verify-citations`). N pares; X soportadas
 Inferencias declaradas (sin cita, por diseño): <listar>.
 
 Omisiones en transcripciones: <tabla/lista, qué faltaba, cómo se resolvió> — o "ninguna".
+
+Condiciones perdidas (afirmaciones sobre-generalizadas): <afirmación, condición que el paper le pone,
+cómo se resolvió — en un concepto, fila de `## Régimen de validez`> — o "ninguna".
 ```
 Convertir fechas relativas a absolutas. Notación `$...$` en archivos `vault/wiki/` (texto plano en chat).
 

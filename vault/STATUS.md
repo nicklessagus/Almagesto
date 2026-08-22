@@ -18,6 +18,49 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.18.0 (2026-08-22) — #74: el régimen de validez, y la sobre-generalización que el verify daba por buena
+
+> Cierra la **tanda 3** (síntesis: #72 → #74). 461 tests verdes (+3), lint 0. 1.17.0 → **1.18.0**
+> (minor: sección nueva en el stub de concept + campo nuevo en el contrato del fan-out de
+> `verify-citations`).
+
+- **El eje de contraste de un concepto no es el de una estrella.** En una estrella comparás el mismo
+  número medido dos veces. En un método, dos papers pueden decir cosas distintas y **estar los dos
+  bien**, porque valen bajo condiciones distintas (SNR, muestreo, tamaño de muestra, definición del
+  observable). Nada obligaba a registrar esas condiciones: la nota pedía `## Síntesis` y `## Huecos`,
+  y el estándar *implementation-ready* pedía ecuaciones e inputs/outputs — no régimen.
+- **El modo de falla dominante acá no es "dos números no coinciden" sino GENERALIZAR DE MÁS:** el
+  paper afirma X bajo condiciones C y el concepto afirma X pelado.
+- **Y `verify-citations` lo daba por bueno.** La afirmación pelada **sí está** en el paper, así que
+  el fan-out devolvía `soportada` y la condición perdida no la veía **ninguna capa**. Es el
+  "afirmar de menos" de las tablas truncadas en versión conceptual — sólo que acá la nota no afirma
+  de menos: afirma **de más**.
+- **`## Régimen de validez`** en el stub de concept (no en la ficha de estrella: allá hay
+  ground-truth y el eje es otro), con la unidad que pide el issue:
+  `Afirmación | Vale bajo (régimen) | Fuente | Rol`. El `Rol` es el `role` de #73 — **una aplicación
+  acota el régimen de una fundacional, no la contradice**, que es el mismo encastre de la tanda 2.
+- **Los `aparente` de un concepto dejan de tirarse** (`find-contradictions`). Hasta ahora se
+  listaban aparte "para no re-flaggearlos": en una estrella está bien, en un concepto **es el
+  hallazgo**. Ahora cada `aparente` de un concepto se propone como **fila de régimen**, y el
+  contrato del subagente cambió para que devuelva **cuál es la condición** que separa a los dos
+  papers, con cita: un "aparente" sin la condición explícita no sirve para escribir la fila.
+- **El fan-out del verify gana un campo `condicion`**, y va **siempre**, no sólo en transcripciones:
+  *"¿el paper afirma esto bajo condiciones que la nota no dice?"*. Hallazgo aparte, **no** cambia el
+  veredicto (la afirmación está respaldada) — se resuelve agregando la condición, o como fila de
+  régimen si es un concepto. El bloque de la nota suma la línea *Condiciones perdidas*.
+- **`## Huecos` gana la entrada accionable que no tenía forma:** *régimen no cubierto* — las
+  condiciones que la tabla deja fuera, o sea en qué régimen **nadie lo midió**.
+- **Sin categoría de lint nueva, a propósito.** La red de este paso es la operación que ya corre al
+  cierre: el verify pregunta por la condición en cada par. Una categoría "concepto sin tabla de
+  régimen" encendería toda bóveda existente sin distinguir el concepto que legítimamente no tiene
+  afirmaciones condicionadas.
+- **Tests (+3):** la tabla está en el concept y **no** en la ficha, el orden
+  Síntesis → Inventario → Régimen → Huecos, y la cabecera con la unidad del issue + el cierre en
+  `## Huecos`.
+- Skills: `find-contradictions` 1.3.0 → **1.4.0**, `verify-citations` 1.5.0 → **1.6.0**.
+  `CLAUDE.md` (schema de concepts, estándar *implementation-ready* y la sección de Verify) y
+  `docs/ingesta.md` sincronizados.
+
 ## ✅ Framework 1.17.0 (2026-08-22) — #72: el paso que estaba entre leer los papers y escribir la síntesis
 
 > Primero de la **tanda 3** (síntesis): #72 → **#74** (queda). 458 tests verdes (+3), lint 0.
@@ -798,8 +841,9 @@ paper, sin el cual "contrastar" no está definido).
    corregido el comentario que instruía lo contrario y re-apuntado el backlog de `P_rot`) →
    ~~**#75**~~ ✅ (la red "extraído pero no sintetizado") → ~~**#73**~~ ✅ (campo `role`, apoyado en
    el stub de #76).
-3. **Síntesis:** **#72** (inventario por eje, **sin** columna "valor adoptado") y **#74** (régimen
-   explícito en conceptos, que es el destino natural de los `aparente` que **#63** propone persistir).
+3. **Síntesis — TANDA CERRADA (1.17.0–1.18.0):** ~~**#72**~~ ✅ (inventario por eje, **sin** columna
+   "valor adoptado") y ~~**#74**~~ ✅ (régimen explícito en conceptos — quedó cableado al destino de
+   los `aparente`, que **#63** todavía tiene que persistir del lado del barrido).
 4. **Caro — migración de corpus:** **#71** (`disputes[]` con posiciones explícitas y a nivel nota).
    Es el único que toca instancias ya ingestadas: necesita script + lectura del schema viejo.
 5. **Descubrimiento:** **#77** (OpenAlex escribiendo el mismo `ads.json`) + **#78** (el tema mixto

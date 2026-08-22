@@ -444,6 +444,32 @@ SEARCH_LINE_RE = re.compile(r"^> _Búsqueda .*_$\n?", re.M)
 # con un solo `[[bibcode]]`, y se evapora que los otros dos existen.
 # ⛔ La columna que NO está es deliberada: "valor adoptado" sería juicio de LLM en un artefacto que
 # se lee como bibliografía, y **decide por el consumidor** — flujo unidireccional de la regla #0.
+# Régimen de validez (#74) — SÓLO en conceptos. En una estrella comparás el mismo número medido dos
+# veces; en un método, dos papers pueden decir cosas distintas y **estar los dos bien**, porque valen
+# bajo condiciones distintas (SNR, muestreo, tamaño de muestra, definición del observable). Por eso
+# el modo de falla dominante acá no es "dos números no coinciden" sino **generalizar de más**: el
+# paper afirma X bajo condiciones C y el concepto afirma X pelado. `verify-citations` NO lo agarra —
+# la afirmación pelada sí está en el paper, así que el fan-out la devuelve `soportada` y la condición
+# perdida no la ve ninguna capa. Es el "afirmar de menos" de las tablas truncadas, en versión
+# conceptual. La unidad de síntesis de un concepto no es (campo, valor, fuente) sino
+# **(afirmación, condiciones bajo las que vale, fuente, rol)**.
+REGIMEN = """## Régimen de validez
+_(Una fila por afirmación **condicionada**: bajo qué condiciones vale y de dónde sale. Es el destino
+de los desacuerdos que `find-contradictions` juzga **`aparente`** —"distinto régimen, distinta
+definición, distinta época"—: en una estrella eso se descarta como no-disputa, acá **es el
+hallazgo**._
+_Distinto del `## Inventario por eje`, que es para el desacuerdo **real bajo las mismas
+condiciones**: si dos papers dicen cosas distintas y los dos tienen razón, la fila va acá._
+_`Rol` es el `role` de la nota del paper (#73): una **aplicación** acota el régimen de una
+**fundacional**, no la contradice._
+_El hueco accionable que sale de esta tabla es **"régimen no cubierto"** → a `## Huecos`.)_
+
+| Afirmación | Vale bajo (régimen) | Fuente | Rol |
+|---|---|---|---|
+|  |  |  |  |
+"""
+
+
 INVENTARIO = """## Inventario por eje
 _(Paso de **contraste**, antes de escribir la síntesis: una fila por paper para cada eje —parámetro
 o hecho— donde los papers **no coinciden**. Los ejes con acuerdo unánime no entran (misma regla de
@@ -761,9 +787,11 @@ def write_concept_note(slug: str, force: bool) -> None:
 _(qué se sabe del tema: mecanismos, signos, desfasajes, regímenes)._
 
 {INVENTARIO}
+{REGIMEN}
 ## Huecos
 _(qué falta para entender/implementar el tema sin abrir papers: pasos o ecuaciones faltantes,
-regímenes no cubiertos, contradicciones sin resolver.)_
+**regímenes no cubiertos** (los que la tabla de arriba deja fuera: ¿en qué condiciones nadie lo
+midió?), contradicciones sin resolver.)_
 
 ## Papers que tocan este tema (auto)
 ```dataview

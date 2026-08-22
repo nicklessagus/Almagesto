@@ -1,7 +1,7 @@
 ---
 name: find-contradictions
 description: Usar cuando el usuario quiere detectar desacuerdos entre papers del corpus sobre el mismo hecho ("buscá contradicciones en el corpus", "qué papers se contradicen sobre tau Ceti", "revisá disputas de P_rot", "detectá desacuerdos sobre la señal b de GJ 581", "¿hay papers que discrepen sobre X?"). Barre el corpus por eje (estrella/parámetro o concepto), confirma cada desacuerdo contra el fulltext y PROPONE entradas disputes[] / notas de disputa para que el usuario apruebe.
-version: 1.3.0
+version: 1.4.0
 ---
 
 # Find-contradictions — desacuerdos entre papers (claim↔claim)
@@ -90,7 +90,9 @@ los dos** `vault/raw/fulltext/**/<bibcode>.txt` en juego (grounding-first; prohi
     (El estado de las fuentes —`retracted`, `corrections`, `pdf_source: eprint`— se filtró en el
     paso 1: el subagente sólo ve los dos `.txt`, así que no puede juzgarlo.)
   - **aparente** = distinto régimen, distinta definición, distinta época, o dentro de la barra de
-    error → **no** es disputa (anotar por qué).
+    error → **no** es disputa. Devolver **cuál es la condición** que los separa, con su cita: en un
+    **concepto** eso no se tira, es la fila de `## Régimen de validez` (#74), y un "aparente" sin la
+    condición explícita no sirve para escribirla.
   - `no-concluyente` = artefacto de extracción (tabla/ecuación) o el texto no alcanza → abrir PDF o
     marcar. **Sólo agotada la estrategia de matcheo en AMBOS archivos** (puntero abajo): que la frase
     entera no aparezca con `grep` no alcanza — degradar por falso negativo de matcheo entierra una
@@ -121,7 +123,9 @@ una línea (ambos empalman columnas y fabrican adyacencias falsas); si normaliz�
 línea en ese hueco y tratá cada segmento por separado.
 'no-concluyente' sólo si agotaste eso en los dos archivos. 'real' sólo si los valores son
 incompatibles más allá del error, o uno afirma y el otro
-niega. No uses memoria ni otros papers."*
+niega. Si es 'aparente', decí EXACTAMENTE bajo qué condiciones vale cada uno (SNR, muestreo, tamaño
+de muestra, definición del observable, época) con su cita — no alcanza el rótulo. No uses memoria ni
+otros papers."*
 
 ### 3. Proponer las disputas (NO escribir todavía)
 Presentar al usuario la lista de desacuerdos **reales** como tabla, con la entrada `disputes[]` (o nota
@@ -130,8 +134,19 @@ de concepto) que se agregaría en cada caso, y **pedir aprobación**. Formato de
   `ref` (el bibcode discrepante — **debe** existir como nota de paper, lo chequea el lint), `note` (qué
   dice ese paper), y `alt` (el valor según ese paper, para disputas de valor). NEA queda como verdad.
 - **Concepto (mecanismo/signo/lag):** una línea en la prosa citando **ambos** `[[bibcode]]` con el
-  desacuerdo explícito, y ajustar el `bearing` del paper discrepante si aplica.
-Los **aparentes**/**no-concluyentes** se listan aparte (no se tocan; sirven para no re-flaggearlos).
+  desacuerdo explícito, y ajustar el `bearing` del paper discrepante si aplica. Si el concepto tiene
+  `## Inventario por eje` (#72), el desacuerdo real va **además** como filas de ese eje.
+Los **no-concluyentes** se listan aparte (no se tocan; sirven para no re-flaggearlos).
+
+⛔ **Los `aparente` de un CONCEPTO no se descartan (#74).** En una estrella, "distinto régimen,
+distinta definición, distinta época" es un no-hallazgo y se tira. En un concepto **es el hallazgo**:
+dos papers dicen cosas distintas y **los dos tienen razón** porque valen bajo condiciones distintas
+(SNR, muestreo, tamaño de muestra, definición del observable). Cada `aparente` de un concepto se
+propone como **fila de `## Régimen de validez`** (`Afirmación | Vale bajo (régimen) | Fuente | Rol`),
+con la condición que el subagente identificó y el `role` (#73) de cada paper — recordando que una
+**aplicación** acota el régimen de una **fundacional**, no la contradice. Y si de ahí sale una
+condición que **nadie midió**, eso es un *régimen no cubierto* → `## Huecos`. Descartarlos es
+perder justamente lo que el barrido encontró.
 
 ### 4. Aplicar lo aprobado
 Sólo lo que el usuario aprobó: taguear `planets[].disputes[]` en la ficha (y reflejar la disputa en la
@@ -147,8 +162,10 @@ tabla/prosa), o escribir la línea de desacuerdo en el concepto. Nada de sobrees
 
 ## Reporte (al chat)
 Cuántos pares en tensión se evaluaron, cuántos **reales** vs aparentes, y cada disputa propuesta con su
-resolución. Honesto: un "aparente" bien descartado (mismo valor, distinto régimen) es tan valioso como
-una disputa real — evita tagged espurios.
+resolución. Honesto: un "aparente" bien resuelto (mismo valor, distinto régimen) es tan valioso como
+una disputa real — evita tagueos espurios. En un **concepto**, además, cada aparente que sobrevive
+es una **fila de régimen** propuesta (#74): reportar cuántas, porque ahí el aparente no es un
+descarte sino el producto.
 
 ## Límite honesto
 Es **juicio de LLM** claim↔claim, robusto (par independiente, grounding-first, cita de ambos lados) pero
