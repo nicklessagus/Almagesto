@@ -54,6 +54,9 @@ para ingestar. En Windows, los comandos de shell corren en Git Bash o WSL.
 
 ## Pipeline de ingesta (scripts/)
 
+> Para el **embudo de selección** (de cuántos papers se parte y cuántos llegan a la ficha), las
+> dos ingestas lado a lado y **campo por campo quién llena la ficha**, ver `docs/ingesta.md`.
+
 División de tareas: **scripts** bajan (determinista, rate-limited); **LLM** procesa (criterio).
 
 **La cadena completa la corren los orquestadores** — `python scripts/ingest_star.py <slug>` (estrellas)
