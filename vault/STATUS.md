@@ -18,6 +18,44 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.16.0 (2026-08-22) — #73: sin el rol del paper, "contrastar" no está definido
+
+> Cierra la **tanda 2** (procedencia: #70 → #75 → #73). 455 tests verdes (+7), lint 0.
+> 1.15.0 → **1.16.0** (minor: campo nuevo `role` en `papers/` + categoría de lint bloqueante que
+> **no puede encenderse** en un corpus viejo —ninguna nota tiene el campo todavía— y un backlog que
+> sí).
+
+- **El defecto.** La nota registraba `bearing` (la **postura** respecto de una tesis) pero no **qué
+  tipo de aporte** es el paper. Y el clasificador no puede darlo: `classify()` es regex sobre
+  título+abstract+keywords, o sea clasifica **tema**, no rol.
+- **Por qué es fundacional para la tanda 3.** Sin rol, *"contrastar dos papers"* no está bien
+  definido, porque **no siempre es la misma operación**: fundacional↔fundacional se comparan
+  supuestos y derivaciones; aplicación↔aplicación se pregunta si replica y **en qué régimen**;
+  **fundacional↔aplicación NO es contraste, es instanciación** —la aplicación no contradice la
+  ecuación, la pone a prueba—; y el `arbitro` (reanálisis que resuelve una tensión previa) **pesa
+  distinto**, no se promedia. Por eso el backlog lo pone antes de #72 y #74.
+- **Dónde hace daño hoy, no en el futuro:** `find-contradictions` es de donde salen las
+  `disputes[]`. Mandar un par fundacional↔aplicación al fan-out **fabrica disputas falsas**, que es
+  el error más caro de esa operación. El skill ahora descarta ese par en el paso 1 (andamiaje), que
+  es donde puede leer el frontmatter — el subagente del fan-out sólo ve los dos `.txt`.
+- **Vocabulario cerrado y bloqueante.** `fundacional | aplicacion | arbitro`, uno o varios (escalar o
+  lista). Un typo dejaría el campo **mudo** para la única operación que existe para consumirlo:
+  mismo modo de falla que un `thesis_links` que no matchea ninguna nota, y por eso el mismo trato.
+  **No enciende ninguna bóveda existente**: ninguna nota tiene el campo todavía.
+- **La red para que no nazca muerto** (backlog, sí enciende): paper **extraído** (`methods` poblado)
+  sin `role`. Es el patrón de #87 —"se computa/guarda y nunca se usa"— atajado antes de que pase:
+  un campo que sólo puebla la extracción, sin red, queda null para siempre.
+- **Se apoya en #76**, como decía la dependencia: el bullet del rol entra en la **cola compartida**
+  del stub (`_BULLET_ROLE`, junto a Métodos), porque el rol es del **paper**, no del tipo de sujeto.
+- **Tests (+7):** valor fuera del vocabulario (bloqueante), las tres formas válidas × escalar y
+  lista, validación elemento por elemento en un rol múltiple, el backlog del extraído sin rol y el
+  caso de control (al no extraído no se le pide, sería el mismo hallazgo dos veces). Cobertura de
+  sentencias del código nuevo: **100%**.
+- Skills: `find-contradictions` 1.2.0 → **1.3.0** (la regla de contraste por rol, con la nota de que
+  un corpus sin `role` no habilita el descarte), `ingest-star` 1.15.0 → **1.16.0**, `ingest-topic`
+  1.12.0 → **1.13.0** (donde más pega: en temas de método, fundamentos y aplicaciones astro conviven
+  en el mismo concepto por diseño), `append-knowledge` 1.2.0 → **1.3.0**.
+
 ## ✅ Framework 1.15.0 (2026-08-22) — #75: la red que le faltaba al paso más caro de la cadena
 
 > Segundo de la **tanda 2** (procedencia): #70 → #75 → **#73** (queda). 448 tests verdes (+8),
@@ -679,9 +717,10 @@ paper, sin el cual "contrastar" no está definido).
    ramifica por sujeto — el cuerpo, los seeds ya ramifican), ~~**#79** puntos 1-2~~ ✅ (ranking del
    `--sweep` por citas/año; segunda pasada por fecha al truncar), ~~**#81**~~ ✅ (registrar el rechazo
    de una fuente declarada).
-2. **Procedencia:** **#70** (frontmatter = espejo puro de NEA; corregir el comentario de
-   `make_notes.py:561`, que hoy instruye lo contrario, y re-apuntar `lint.py:303`) → **#75** (la red
-   "extraído pero no sintetizado") → **#73** (campo `role`, que se apoya en el stub de #76).
+2. **Procedencia — TANDA CERRADA (1.14.0–1.16.0):** ~~**#70**~~ ✅ (frontmatter = espejo puro de NEA;
+   corregido el comentario que instruía lo contrario y re-apuntado el backlog de `P_rot`) →
+   ~~**#75**~~ ✅ (la red "extraído pero no sintetizado") → ~~**#73**~~ ✅ (campo `role`, apoyado en
+   el stub de #76).
 3. **Síntesis:** **#72** (inventario por eje, **sin** columna "valor adoptado") y **#74** (régimen
    explícito en conceptos, que es el destino natural de los `aparente` que **#63** propone persistir).
 4. **Caro — migración de corpus:** **#71** (`disputes[]` con posiciones explícitas y a nivel nota).

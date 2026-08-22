@@ -1,7 +1,7 @@
 ---
 name: ingest-star
 description: Usar cuando el usuario pide bajar/agregar/ingestar una estrella a la bóveda ("bajá GJ 581", "ingest tau ceti", "agregá la estrella X", "traé la bibliografía de AU Mic"). Corre la cadena de ingesta y hace la extracción LLM.
-version: 1.15.0
+version: 1.16.0
 ---
 
 # Ingest: agregar una estrella a la wiki
@@ -131,7 +131,7 @@ Progreso del ingest de <estrella>:
 
 3. **Extracción LLM (criterio).** Leer los papers **clave** (discovery / actividad / métodos) desde
    `vault/raw/fulltext/<slug>/` y poblar:
-   - en `vault/wiki/papers/<bibcode>.md`: `methods`, `thesis_links`, `bearing`, y la sección
+   - en `vault/wiki/papers/<bibcode>.md`: `methods`, `thesis_links`, `bearing`, `role` (#73: `fundacional` introduce el método/mecanismo · `aplicacion` lo instancia en un caso · `arbitro` reanaliza y resuelve una tensión previa — sale de leer el paper, la regex del clasificador no puede inferirlo, y sin él contrastarlo contra otro no está definido), y la sección
      "Extracción" — sus bullets ya vienen ramificados por tipo de sujeto (#76): ground-truth
      (P/K/e por planeta), los **ejes de `relevance.topics`** del objetivo de esta bóveda, métodos y
      aporte al objetivo. Llenar los que el stub trae, no una lista fija de memoria.

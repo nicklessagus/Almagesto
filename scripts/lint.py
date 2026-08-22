@@ -194,6 +194,13 @@ def note_files() -> list:
 
 BIBCODE_RE = re.compile(r"^\d{4}[A-Za-z]")   # heurística: target de link que parece bibcode
 
+# Vocabulario CERRADO de `role` (#73). Es chico y cerrado a propósito: el rol define QUÉ OPERACIÓN
+# de contraste corresponde entre dos papers, y un valor libre no la determina. Un typo deja el campo
+# mudo para esa operación sin que nadie se entere — el mismo modo de falla de `thesis_links` que no
+# matchea ninguna nota, y por eso se trata igual (bloqueante).
+ROLES = ("fundacional", "aplicacion", "arbitro")
+
+
 # ── espejo puro de NEA (#70) ─────────────────────────────────────────────────
 # Campos de `stars/` que los scripts copian del ground-truth: (campo en la ficha, clave en el JSON).
 # El contrato es que valen lo que dice NEA/SIMBAD **o nada** — la cabecera promete que el
@@ -291,6 +298,7 @@ def main() -> int:
     headerless: list = []              # (stem, motivo) — ficha/concepto sin cabecera estampable (#69)
     thesis_refs: dict[str, list] = {}  # valor de thesis_link -> notas que lo usan
     dispute_refs: list = []            # (estrella, planeta, ref) de planets[].disputes
+    bad_roles: list = []               # (stem, valor) — `role` fuera del vocabulario cerrado (#73)
     cited_in_entity: set = set()       # bibcodes citados desde una ficha/concepto (#75)
     extracted: list = []               # (stem, marca `no_sintetizado`) de papers YA extraídos (#75)
 
@@ -429,6 +437,21 @@ def main() -> int:
                 extracted.append((stem, fm.get("no_sintetizado")))
             if fm.get("thesis_links") and not fm.get("bearing"):
                 incomplete.append((stem, "thesis_links sin bearing"))
+            # ROL del paper (#73). `bearing` dice la POSTURA respecto de una tesis; `role` dice qué
+            # tipo de aporte es, que es lo que determina la operación de contraste: fundacional ↔
+            # aplicación NO es contraste sino instanciación, y leerlo como desacuerdo fabrica
+            # disputas falsas. Se puebla en la extracción (la regex del clasificador no puede
+            # inferirlo) — por eso el aviso cuelga de `methods`, la marca de "ya se extrajo".
+            rol = fm.get("role")
+            roles = rol if isinstance(rol, list) else ([rol] if rol else [])
+            for r in roles:
+                if str(r).strip() not in ROLES:
+                    bad_roles.append((stem, f"`role: {r}` no está en el vocabulario "
+                                            f"({'/'.join(ROLES)}) → typo: el rol queda mudo para el "
+                                            f"contraste cross-paper"))
+            if fm.get("methods") and not roles:
+                incomplete.append((stem, "paper extraído sin `role` (fundacional/aplicacion/arbitro) "
+                                         "→ sin rol, contrastarlo contra otro no está definido"))
             for tl in (fm.get("thesis_links") or []):
                 thesis_refs.setdefault(str(tl), []).append(stem)
             # PDF ↔ disco (higiene; WARN): el campo `pdf` debe reflejar el PDF real bajado.
@@ -673,6 +696,7 @@ def main() -> int:
                          ("Ground-truth: masa inconsistente con m·sini (K,P,e,M*)", mass_issues),
                          ("thesis_links sin página destino", dangling_thesis),
                          ("disputes[].ref sin paper destino", dangling_disputes),
+                         ("`role` fuera del vocabulario (fundacional/aplicacion/arbitro)", bad_roles),
                          ("⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)", impl_leaks),
                          ("Objetivo sin instanciar (WARN — objective.yaml sigue en el placeholder del template)", objective_warn),
                          ("Áreas de concepts/ no declaradas en objective.yaml (WARN, posible typo)", undeclared_areas),
@@ -706,7 +730,7 @@ def main() -> int:
     # Exit code gateable: las categorías que CLAUDE.md exige "en 0" bloquean; WARN (fuga de
     # implementación, áreas, PDF↔disco) y backlog (verificabilidad, cobertura, incompletos) no.
     n_block = sum(len(x) for x in (broken, fm_broken, retracted, orphans, contradictions,
-                                   mass_issues, dangling_thesis, dangling_disputes))
+                                   mass_issues, dangling_thesis, dangling_disputes, bad_roles))
     if n_block:
         print(f"✗ {n_block} hallazgo(s) en categorías bloqueantes → exit 1")
         return 1

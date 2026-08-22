@@ -499,13 +499,15 @@ def test_objective_lens_sin_archivo_no_propaga_el_error(toy_vault):
                                           (False, "Ground-truth (planetas / parámetros)")])
 def test_extraction_block_forma(toy_vault, topic, cabeza):
     """Contrato de forma que asumen los dos templates de cuerpo (se interpolan como `{bloque}`
-    al final del f-string): encabezado propio, cuatro bullets y newline final."""
+    al final del f-string): encabezado propio, bullets con la cola compartida y newline final. La
+    cola es compartida a propósito: métodos y rol (#73) son del paper, no del tipo de sujeto."""
     block = mn.extraction_block(topic)
     lineas = block.rstrip("\n").split("\n")
     assert block.startswith("## Extracción (LLM)\n") and block.endswith("\n")
-    assert len(lineas) == 5 and all(ln.startswith("- **") for ln in lineas[1:])
+    assert len(lineas) == 6 and all(ln.startswith("- **") for ln in lineas[1:])
     assert cabeza in lineas[1]
-    assert lineas[-2] == mn._BULLET_METHODS and lineas[-1].startswith("- **Para el objetivo:**")
+    assert lineas[-3] == mn._BULLET_METHODS and lineas[-2] == mn._BULLET_ROLE
+    assert lineas[-1].startswith("- **Para el objetivo:**")
 
 
 def test_extraction_block_tema_sin_short_cae_al_generico(toy_vault):

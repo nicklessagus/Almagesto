@@ -195,7 +195,7 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   **simétrica** existencia↔valor. Sólo taguear discrepancias **materiales** (mayores que el error;
   no diferencias cosméticas dentro de la barra). Reflejar la disputa también en la tabla/prosa.
 - **papers/**: `bibcode, title, first_author, n_authors, year, arxiv_id, doi, bibstem, stars[], topics[], methods[],
-  thesis_links[], bearing(supports|challenges|method), relevance, citation_count, pdf, fulltext,
+  thesis_links[], bearing(supports|challenges|method), role[], relevance, citation_count, pdf, fulltext,
   fulltext_source(pdftotext|ocr|web), pdf_source(eprint|ads|publisher|web)`. El contrato apunta a **ambos artefactos**: `fulltext` es el
   `.txt` **barato** (grep/lectura — el default de todo consumidor) y `pdf` el respaldo caro (abrir
   sólo para figuras/tablas/ecuaciones o dudas de símbolos); `fulltext_source: ocr` hereda desde el
@@ -213,7 +213,20 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   hay marca, vale la rama que registró el fetcher. Importa porque `verify-citations` promete que la
   cita textual son "las palabras reales del paper": con `eprint`, una discrepancia numérica contra
   un valor publicado es candidata a **diferencia de versión** y NO se "corrige" la nota hacia el
-  preprint (ver el caveat del skill). Opcional `no_sintetizado: <motivo>` (#75): declara que este
+  preprint (ver el caveat del skill). **`role` (#73) — qué TIPO de aporte es el paper**, distinto de `bearing` (que dice la *postura*
+  respecto de una tesis): `fundacional` (introduce el método/mecanismo/formalismo — la fuente de la
+  ecuación), `aplicacion` (lo instancia en un caso: una estrella, un dataset) o `arbitro` (reanaliza
+  y **resuelve** —o reabre— una tensión previa sobre el mismo hecho). Uno o varios; lo puebla la
+  **extracción**, no la selección: `classify()` es regex sobre título+abstract+keywords y clasifica
+  **tema**, no rol. Sin él, *"contrastar dos papers" no está definido*, porque no siempre es la misma
+  operación: fundacional↔fundacional se comparan supuestos y derivaciones; aplicación↔aplicación se
+  pregunta si replica y **en qué régimen**; **fundacional↔aplicación NO es contraste, es
+  instanciación** —la aplicación no contradice la ecuación, la pone a prueba— y tratarlo como
+  desacuerdo **fabrica disputas falsas**; el `arbitro` pesa distinto (resuelve, no promedia). El
+  vocabulario es **cerrado** y el lint lo valida como bloqueante: un typo deja el campo mudo para la
+  única operación que existe para consumirlo. Es especialmente agudo en temas de **método**, donde
+  fundamentos y aplicaciones astro conviven en el mismo concepto por diseño (tema mixto).
+  Opcional `no_sintetizado: <motivo>` (#75): declara que este
   paper **ya extraído** legítimamente no se inlinea en ninguna ficha/concepto —típicamente por la
   **regla de poda**, o porque aporta sólo vía roll-up—. Es una escotilla con **motivo obligatorio**
   (mismo criterio que el `--reason` del triage: no curar en silencio); sin ella, el lint lo reporta
@@ -459,7 +472,9 @@ valor que difiere del ground-truth, o que existe en la ficha cuando NEA no lo ti
 (#70)—, **masa de ground-truth inconsistente con la m·sini implícita**
 (K/P/e/M\* — atrapa best-mass espurias de NEA), **`thesis_links` sin página destino** (tag que no matchea
 ninguna nota → no acumula en el roll-up; typo típico `shift-vs-shape` vs `shift_vs_shape`) y
-**`planets[].disputes[].ref` sin paper destino** (bibcode discrepante que no existe como nota). La
+**`planets[].disputes[].ref` sin paper destino** (bibcode discrepante que no existe como nota) y
+**`role` fuera del vocabulario** (`fundacional|aplicacion|arbitro`: un typo deja el rol mudo para el
+contraste cross-paper, mismo modo de falla que un `thesis_links` sin destino). El
 **fuga de implementación** (regla #0 / frontera dura) es **WARN no bloqueante** — heurística de alta
 señal (perilla/dial/`w_j`/`peso(`); cada hit se revisa a mano y se saca del vault si es material de
 implementación (no es bibliografía). Las **áreas de `concepts/` fuera de `concept_areas`** (subcarpeta no

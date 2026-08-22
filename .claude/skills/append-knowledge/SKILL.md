@@ -1,7 +1,7 @@
 ---
 name: append-knowledge
 description: Usar cuando el usuario quiere plegar UNA fuente puntual (paper por bibcode, PDF local, URL) a una entidad YA existente de la wiki — ficha de estrella o concepto — sin re-correr el ingest completo ("agregale este paper a la ficha de tau Ceti", "sumá este PDF al concept de procesos gaussianos", "este bibcode va a GJ 581", "encontré un paper nuevo para el tema X, agregalo"). Plomería mínima + extracción enfocada + síntesis a la nota viva + cierre estándar. NO crea entidades (eso es ingest-star/ingest-topic) ni barre por query lo nuevo (eso es maintain/refrescar).
-version: 1.2.0
+version: 1.3.0
 ---
 
 # Append — plegar una fuente puntual a una ficha o concepto existente
@@ -69,7 +69,7 @@ Progreso del append de <fuente> → <destino>:
 
 3. **Extracción LLM enfocada en el eje del destino.** Leer SÓLO el fulltext nuevo
    (`vault/raw/fulltext/<slug>/<clave>.txt`; saltar afiliaciones como en `ingest-star`) y poblar la
-   nota del paper: `methods`, `bearing`, `thesis_links`/`stars`, y la sección "Extracción"
+   nota del paper: `methods`, `bearing`, `role` (#73: `fundacional` introduce el método/mecanismo · `aplicacion` lo instancia en un caso · `arbitro` reanaliza y resuelve una tensión previa — sale de leer el paper, la regex del clasificador no puede inferirlo, y sin él contrastarlo contra otro no está definido), `thesis_links`/`stars`, y la sección "Extracción"
    orientada a **lo que aporta a la entidad destino** (una señal RV, un mecanismo, una ecuación del
    método), no un resumen genérico.
 

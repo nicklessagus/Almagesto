@@ -445,6 +445,13 @@ SEARCH_LINE_RE = re.compile(r"^> _Búsqueda .*_$\n?", re.M)
 # astro por schema (ground-truth NEA) pero sus ejes de CONTENIDO salen del objetivo de la bóveda,
 # no de un hardcodeo a "actividad".
 _BULLET_METHODS = "- **Métodos:** _(llenar `methods:` del frontmatter con `concepts/methods/`)_"
+# El ROL es del paper, no del tipo de sujeto (#73): va en las dos ramas. Sin él, "contrastar dos
+# papers" no está definido — fundacional↔aplicación NO es contraste sino instanciación, y tratarlo
+# como desacuerdo fabrica disputas falsas. La regex del clasificador no puede inferirlo (clasifica
+# TEMA), así que sale de la extracción o no sale.
+_BULLET_ROLE = ("- **Rol del paper:** _(`fundacional` introduce el método/mecanismo · `aplicacion` lo "
+                "instancia en un caso · `arbitro` reanaliza y resuelve una tensión previa; llenar "
+                "`role:` del frontmatter, uno o varios)_")
 
 
 def objective_lens() -> tuple[list, str]:
@@ -483,7 +490,7 @@ def extraction_block(topic: bool) -> str:
             f"- **Ejes del objetivo{ejes}:** _(qué dice el paper sobre cada eje de la lente; salen "
             "de `relevance.topics` en `objective.yaml`)_",
         ]
-    bullets += [_BULLET_METHODS, f"- **Para el objetivo:** _({objetivo})_"]
+    bullets += [_BULLET_METHODS, _BULLET_ROLE, f"- **Para el objetivo:** _({objetivo})_"]
     return "## Extracción (LLM)\n" + "\n".join(bullets) + "\n"
 
 
@@ -803,6 +810,11 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
             "methods": [],                 # poblar con extracción LLM
             "thesis_links": list(seed_links),  # tema: pre-sembrado al concept; estrella: vacío
             "bearing": None,               # supports | challenges | method (respecto a thesis_links)
+            # ROL del paper dentro del tema/entidad (#73), poblado por la EXTRACCIÓN:
+            # fundacional | aplicacion | arbitro (uno o varios). `bearing` dice la POSTURA respecto
+            # de una tesis; `role` dice QUÉ TIPO DE APORTE es, que es lo que define la operación de
+            # contraste. El clasificador no puede darlo: la regex clasifica tema, no rol.
+            "role": [],
             "relevance": "high" if r.get("relevant") else "low",
             "citation_count": r.get("citation_count", 0),
             "pdf": pdf_rel,
@@ -943,6 +955,7 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
         "methods": [],                       # poblar con extracción LLM
         "thesis_links": [concept] if concept else [],   # pre-sembrado al concept
         "bearing": None,                     # supports | challenges | method
+        "role": [],                          # fundacional | aplicacion | arbitro (#73) — extracción
         "relevance": "high",
         "citation_count": 0,
         "pdf": pdf_rel,                      # off-ADS: null salvo PDF local ya copiado a raw/pdfs/<slug>/

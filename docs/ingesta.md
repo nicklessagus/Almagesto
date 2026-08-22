@@ -182,7 +182,12 @@ LLM citada. El roll-up junta por `thesis_links` (y por `methods` si el área es 
 
 En la nota de **paper**: la metadata (bibcode, autores, año, doi, `citation_count`, `pdf`,
 `fulltext`, `fulltext_source`, `pdf_source`) la estampan los scripts por **verdad de disco**; el LLM
-llena `methods`, `thesis_links`, `bearing` y la sección `## Extracción`. Los **bullets** de esa
+llena `methods`, `thesis_links`, `bearing`, `role` y la sección `## Extracción`. **`bearing` vs
+`role`:** el primero dice la *postura* respecto de una tesis (`supports`/`challenges`/`method`); el
+segundo, **qué tipo de aporte es** — `fundacional` (introduce el método) · `aplicacion` (lo instancia
+en un caso) · `arbitro` (resuelve una tensión previa). El rol es el que define **cómo se contrasta**
+un paper contra otro: fundacional↔aplicación no es contraste sino instanciación, y leerlo como
+desacuerdo fabrica disputas falsas (#73). Los **bullets** de esa
 sección los ramifica el stub por **tipo de sujeto**: para una estrella, el ground-truth (P/K/e por
 planeta) más los **ejes de `relevance.topics`** —o sea la lente de *tu* bóveda, no una lista fija—;
 para un tema, *aporte al tema* y *régimen de validez*, sin planetas ni actividad. Las dos ramas de
@@ -218,7 +223,6 @@ Esta ingesta tiene huecos conocidos y numerados; el detalle de cada uno está en
 |---|---|
 | `disputes[]` no expresa desacuerdo paper↔paper | #71 |
 | Falta el paso de contraste cross-paper antes de sintetizar | #72, y #62 (qué papers leer) |
-| Rol del paper (fundacional / aplicación / árbitro) | #73 |
 | Régimen de validez explícito en conceptos | #74, #63 |
 | Descubrimiento fuera de ADS (OpenAlex) | #77 |
 | Tema mixto sólo off-ADS-first | #78 |

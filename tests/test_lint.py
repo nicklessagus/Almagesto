@@ -119,6 +119,57 @@ def test_contradiccion_gt_ficha(toy_vault, capsys):
     assert "ficha 1 planetas vs ground-truth 2" in out
 
 
+# ── #73: el ROL del paper ────────────────────────────────────────────────────
+
+def test_role_fuera_del_vocabulario_es_bloqueante(toy_vault, capsys):
+    """Mismo trato que un `thesis_links` que no matchea ninguna nota: un typo deja el campo mudo
+    para la operación que existe para consumirlo, sin que nadie se entere."""
+    paper_extraido(toy_vault, role=["fundacinal"], no_sintetizado="tangencial")
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert "`role: fundacinal` no está en el vocabulario" in out
+
+
+@pytest.mark.parametrize("rol", ["fundacional", "aplicacion", "arbitro"])
+def test_role_valido_escalar_o_lista(toy_vault, capsys, rol):
+    """El issue admite "uno o varios": un rol solo se puede escribir como escalar o como lista de
+    un elemento, y las dos formas valen (`merge_frontmatter_list` deja una, `make_notes` la otra)."""
+    paper_extraido(toy_vault, stem="2020esc....1E", role=rol, no_sintetizado="tangencial")
+    paper_extraido(toy_vault, stem="2020lis....1L", role=[rol], no_sintetizado="tangencial")
+    rc, out = run_lint(capsys)
+    assert rc == 0
+    assert "`role` fuera del vocabulario (fundacional/aplicacion/arbitro) (0)" in out
+
+
+def test_role_multiple_valida_cada_elemento(toy_vault, capsys):
+    paper_extraido(toy_vault, role=["fundacional", "arbitro"], no_sintetizado="tangencial")
+    rc, out = run_lint(capsys)
+    assert rc == 0
+    paper_extraido(toy_vault, stem="2021mal....1M", role=["arbitro", "revisión"],
+                   no_sintetizado="tangencial")
+    rc, out = run_lint(capsys)
+    assert rc == 1 and "`role: revisión`" in out
+
+
+def test_paper_extraido_sin_role_es_backlog(toy_vault, capsys):
+    """El campo lo puebla la EXTRACCIÓN (la regex del clasificador clasifica tema, no rol), así que
+    sin red nace muerto — el patrón de #87, "se guarda y nunca se usa", en su versión previa."""
+    paper_extraido(toy_vault, no_sintetizado="tangencial")
+    rc, out = run_lint(capsys)
+    assert rc == 0                                       # backlog: no bloquea
+    assert "paper extraído sin `role`" in out
+
+
+def test_paper_sin_extraer_no_se_le_pide_role(toy_vault, capsys):
+    """El rol sale de leer el paper: pedírselo a uno que nadie extrajo sería el mismo hallazgo que
+    "paper relevante sin methods", dos veces."""
+    mk_note(toy_vault.PAPERS, "2020raw....1R",
+            {"tags": ["paper"], "relevance": "high", "methods": [], "thesis_links": []}, "")
+    rc, out = run_lint(capsys)
+    assert "paper relevante sin methods" in out
+    assert "sin `role`" not in out
+
+
 # ── #75: extraído pero no sintetizado ────────────────────────────────────────
 
 def paper_extraido(toy_vault, stem="2020ext....1E", **extra):

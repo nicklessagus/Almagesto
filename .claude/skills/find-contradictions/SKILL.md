@@ -1,7 +1,7 @@
 ---
 name: find-contradictions
 description: Usar cuando el usuario quiere detectar desacuerdos entre papers del corpus sobre el mismo hecho ("buscá contradicciones en el corpus", "qué papers se contradicen sobre tau Ceti", "revisá disputas de P_rot", "detectá desacuerdos sobre la señal b de GJ 581", "¿hay papers que discrepen sobre X?"). Barre el corpus por eje (estrella/parámetro o concepto), confirma cada desacuerdo contra el fulltext y PROPONE entradas disputes[] / notas de disputa para que el usuario apruebe.
-version: 1.2.0
+version: 1.3.0
 ---
 
 # Find-contradictions — desacuerdos entre papers (claim↔claim)
@@ -63,6 +63,21 @@ Juntar, para el eje elegido, qué afirma **cada** paper sobre **cada** hecho:
 > desacuerdo: leé el aviso antes de comparar. `pdf_source: eprint` → ese `.txt` es el **preprint**,
 > así que una diferencia numérica puede ser **de versión y no entre fuentes** (#57). Un par con
 > alguna de esas marcas se anota y se excluye del fan-out, o entra con la salvedad explícita.
+>
+> ⛔ **Mirá también el `role` de cada nota (#73): no todo par se contrasta igual, y uno de los cuatro
+> casos NO es contraste.** El rol lo pobló la extracción (`fundacional` introduce el
+> método/mecanismo · `aplicacion` lo instancia en un caso · `arbitro` reanaliza y resuelve una
+> tensión previa):
+> - **fundacional ↔ fundacional** → comparar supuestos y derivaciones.
+> - **aplicación ↔ aplicación** → ¿replica?, ¿en qué **régimen**?
+> - **fundacional ↔ aplicación** → **NO es contraste, es instanciación.** La aplicación no
+>   contradice la ecuación: la pone a prueba. Mandarlo al fan-out **fabrica disputas falsas**, que es
+>   el daño más caro de esta operación (de acá salen las `disputes[]`). Excluir del par.
+> - **árbitro** → pesa distinto: es el que **resuelve** la tensión, no un paper más. Su valor no se
+>   promedia con los otros; se reporta como resolución.
+>
+> Una nota **sin `role`** (corpus anterior a 1.16.0, o extracción incompleta) no habilita este
+> descarte: contrastá con cuidado y anotá el hueco — el lint lo lista como backlog.
 Armar una tabla mental `(hecho, papel A dice …, papel B dice …, NEA dice …)`. Los que coinciden se
 descartan; los que difieren pasan al fan-out.
 
