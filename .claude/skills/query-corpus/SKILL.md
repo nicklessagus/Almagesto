@@ -1,7 +1,7 @@
 ---
 name: query-corpus
 description: Usar cuando el usuario hace una búsqueda o pregunta general contra el corpus de la bóveda que NO es un test de hipótesis ("buscá en el corpus ...", "qué se sabe del P_rot de GJ 581", "qué papers usan ESPRESSO", "qué métodos se aplicaron a tau Ceti", "qué celdas de la matriz están vacías").
-version: 1.3.0
+version: 1.4.0
 ---
 
 # Query: búsqueda/pregunta general contra el corpus
@@ -14,6 +14,11 @@ usar `test-hypothesis`).
 1. **Mirar el índice y el frontmatter** primero: `vault/wiki/index.md`, las fichas `vault/wiki/stars/*.md`
    (frontmatter máquina-legible) y `vault/raw/ground_truth/*.json` suelen tener la respuesta directa
    (P_rot, planetas, indicadores, métodos aplicados).
+   ⚠ **Un campo de ground-truth en `null` NO significa "no se sabe" (#70):** el frontmatter es
+   **espejo puro de NEA**, y NEA calla seguido (`K`, `e`, `P_rot`). El valor de la literatura vive
+   en el **cuerpo, citado** — leelo antes de responder "no hay dato". Y si el eje está en disputa, la
+   respuesta completa está en el **`## Inventario por eje`** (#72): ahí figura qué dice cada paper,
+   con su método. La bóveda **no adopta** un valor; reportá el estado de la literatura igual.
 
 2. **Si hace falta el texto**, grep sobre el texto completo local:
    ```bash
@@ -59,11 +64,10 @@ usar `test-hypothesis`).
    `inferencia`) y dejar el bloque `## Verificación de citas` en la nota.
 
 6. **Chequeo de salud (si se escribió en `vault/wiki/`)**: correr `python scripts/lint.py` antes de
-   commitear. Debe quedar en **0** en las categorías bloqueantes (wikilinks rotos, frontmatter no
-   parseable, papers retractados, huérfanas, contradicciones GT↔ficha, masa inconsistente,
-   `thesis_links`/`disputes[].ref` colgantes — el exit code del lint las separa solo); la **fuga de
-   implementación** y las **citas no verificables** son
-   WARN/precondición a revisar a mano (los "campos incompletos" son backlog, no bloquean). Si creaste un `thesis_link`/concepto nuevo, verificá que el tag matchee el
+   commitear. Debe quedar en **0** en las **categorías bloqueantes**: cuáles son lo decide el
+   `exit code` del lint (1 si hay), y la lista canónica vive en `CLAUDE.md` — **no la copies acá**,
+   que es cómo se desincronizó antes. La **fuga de implementación** y las **citas no verificables**
+   son WARN/precondición a revisar a mano (los "campos incompletos" son backlog, no bloquean). Si creaste un `thesis_link`/concepto nuevo, verificá que el tag matchee el
    nombre de la página (typo típico: `shift-vs-shape` vs `shift_vs_shape`).
 
 7. **Cierre (commit + push).** **Solo si se archivó algo en `vault/wiki/`** (si la respuesta quedó solo en

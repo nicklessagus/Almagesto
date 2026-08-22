@@ -82,7 +82,8 @@ Progreso del refresh de <entidad>:
    (`vault/raw/pdfs/<slug>/…`) y fulltext (`vault/raw/fulltext/<slug>/…`). Si es una estrella/tema entero,
    también su entrada en `stars.yaml`/`topics.yaml`, su `ground_truth/<slug>.json` y su
    `vault/config/registro/<slug>.yaml` (registro de búsqueda + decisiones de triage del sujeto).
-3. **Reparar los colgados:** quitar/re-apuntar cada `[[wikilink]]`, `thesis_links`, `disputes[].ref` y
+3. **Reparar los colgados:** quitar/re-apuntar cada `[[wikilink]]`, `thesis_links`,
+   `disputes[].posiciones[].ref` y
    celda de matriz que apuntaba al borrado. (La tabla `## Papers` de las fichas es Dataview → se
    actualiza sola.) Sacar la estrella de la matriz método×estrella.
 4. **Hacer durable el borrado de un paper** (si no, el próximo refresh lo resucita: `make_notes`

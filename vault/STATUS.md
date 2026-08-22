@@ -18,6 +18,50 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.20.1 (2026-08-22) — auditoría de coherencia de las tandas 1-4
+
+> Pedida por el usuario antes de limpiar contexto: revisar en profundidad todo lo hecho (1.13.0 →
+> 1.20.0, nueve issues) y que la **doc de implementación** sea acorde. **Doce hallazgos, cada uno
+> verificado contra el código antes de tocar nada** — la lección de las auditorías de 1.10.2/1.10.3.
+> 480 tests verdes, lint 0. Patch: sólo doc y textos.
+
+- **⛔ El grande: `CLAUDE.md` tenía el mismo bug de orden que corregí en `ingest-star`.** Su paso 2
+  de *Ingest* decía "poblás la extracción del paper … **actualizás la ficha** (síntesis, huecos)" y
+  recién después venía el 2b del contraste. O sea: el documento canónico mandaba **sintetizar antes
+  de contrastar**, que es exactamente lo que #72 existe para evitar. Partido igual que el skill:
+  **2 (notas de paper) → 2b (contraste) → 2c (síntesis a la nota viva)**. De paso al paso 2 le
+  faltaba `role` (#73) en la lista de lo que puebla la extracción.
+- **Un bloqueante del lint no estaba en la lista canónica.** *Juicio de triage en
+  `build/<slug>/triage.json`* (1.20.0) bloquea en el código pero `CLAUDE.md` no lo enumeraba.
+  Verificado ahora **mecánicamente**: los 12 símbolos del `n_block` del lint tienen su marca en el
+  párrafo. (Y quedó un typo mío de #73: *"El* fuga de implementación" por *"La"*.)
+- **`query-corpus` mandaba responder con el frontmatter, que después de #70 miente por omisión.**
+  Decía que la ficha "suele tener la respuesta directa (P_rot, planetas…)"; con el espejo puro, un
+  `null` significa **"NEA no lo tiene"**, no "no se sabe" — el valor de literatura está en el cuerpo,
+  citado. Un agente siguiendo ese paso contestaba "no hay dato" con el dato en la nota. Corregido, y
+  apuntando al `## Inventario por eje` cuando el eje está en disputa.
+- **Las dos listas de bloqueantes copiadas a mano** (`query-corpus`, `test-hypothesis`) estaban
+  viejas otra vez — el mismo drift que la auditoría de 1.10.2 ya había arreglado una vez. Esta vez no
+  se re-sincronizaron: se **borraron**, apuntando al `exit code` del lint y a `CLAUDE.md`. Copiar una
+  lista que cambia es el bug; mantenerla al día no lo arregla, sólo lo pospone.
+- **Restos del schema viejo de disputas** en tres lugares que el barrido de 1.19.0 no tocó:
+  `ingest-star` (el frontmatter propio de la ficha, y el foco del verify) y `maintain` (la reparación
+  de colgados, que ahora es `disputes[].posiciones[].ref`).
+- **El header de `make_notes` afirmaba de más:** "las excepciones son **quirúrgicas**". Desde 1.19.0
+  hay una que no lo es (`--migrate-disputes` re-serializa el frontmatter). Acotado, y sumada como
+  excepción (e) con su porqué.
+- **Menores:** `docs/operacion.md` no listaba `--migrate-disputes`; `docs/ingesta.md` no tenía #92 en
+  el backlog (ni en el escalón 3, que es donde las keywords se apelmazan) y no decía que dos de las
+  cuatro ocurrencias de #79 ya están hechas; el README no mencionaba el paso de contraste (que es un
+  diferencial: *sin* columna de valor adoptado); el checklist de `ingest-topic` no nombraba el paso
+  nuevo; el orden de claves del schema de `concepts/` en `CLAUDE.md` no era el que genera el código.
+- **Verificado y NO tocado** (para que no se re-abra): las versiones de los 9 skills coinciden con lo
+  que declara cada entrada de STATUS; `tests/README.md` cubre los 15 archivos de test; las secciones
+  y claves de frontmatter que genera `make_notes` coinciden con los schemas documentados; los
+  `[[bibcode]]` de los bloques nuevos **no** generan wikilinks rotos (`bibcode` está en `LINK_SKIP`);
+  y el "fallback (json viejo sin flag)" del recompute de masa **no** era una capa de compatibilidad
+  (ya corregido el comentario en 1.20.0).
+
 ## ✅ Framework 1.20.0 (2026-08-22) — sin capas de compatibilidad: la misma regla, aplicada a todo
 
 > Pedido del usuario al ver la de #71: *"sí, quiero el mismo tratamiento para todo, simplifiquemos"*.

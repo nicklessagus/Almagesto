@@ -263,8 +263,8 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   `vault/config/objective.yaml` es sólo referencia para el typo-check, con `methods`/`hypotheses` reservadas)**: `name`, **`aliases`** (lista de sinónimos EN+ES —
   p. ej. `[chromatic index, índice cromático, RV-color]` — para que la ficha se encuentre por `grep`
   desde **cualquier término**, no sólo el nombre canónico; espeja la idea de `aliases` de `stars/`),
-  `tags`, **`disputes[]`** (mismo schema de posiciones explícitas que en `stars/`, #71 — acá la
-  disputa es simétrica por definición), `confidence`. El cuerpo trae `## Síntesis`, `## Inventario por eje`,
+  **`disputes[]`** (mismo schema de posiciones explícitas que en `stars/`, #71 — acá la disputa es
+  simétrica por definición), `tags`, `confidence`. El cuerpo trae `## Síntesis`, `## Inventario por eje`,
   **`## Régimen de validez`**, `## Huecos` y el
   apéndice `## Excluidos por el filtro` (igual que la ficha de estrella).
   **Régimen de validez (#74) — sólo en conceptos.** Acá no hay ground-truth ni árbitro externo, y
@@ -344,9 +344,9 @@ re-clasificar de `maintain`. No ingesta nada; después se usan `ingest-star`/`in
    que contradice al ground-truth o al abstract de ADS es candidato a **diferencia de versión** —
    abrí el PDF publicado o anotá la salvedad en la nota. El verify lo detecta después; acá es donde
    el valor **entra** a la ficha.
-   Cascada: poblás la extracción del paper
-   (`methods`, `thesis_links`, `bearing`, P/K/indicadores), actualizás la ficha de la estrella
-   (síntesis, huecos), tocás conceptos/hipótesis relacionados y la matriz método×estrella.
+   Cascada: poblás la extracción **de las notas de paper**
+   (`methods`, `thesis_links`, `bearing`, `role`, P/K/indicadores). La ficha se escribe **después**
+   del contraste (2b) — no saltar de leer a la prosa.
 2b. **Contraste cross-paper (#72) — entre leer los papers y escribir la síntesis.** Es el paso con
    más apalancamiento de la cadena y el que más fácil se saltea, porque su producto no se nota si
    falta. Produce el **`## Inventario por eje`** de la nota: una fila por paper para cada **eje**
@@ -361,6 +361,10 @@ re-clasificar de `maintain`. No ingesta nada; después se usan `ingest-star`/`in
    un paper, y lo que hace que un refresh no tenga que re-derivar la síntesis de cero. El `role`
    (#73) dice qué operación corresponde entre dos filas; la red de que el paso ocurrió es el backlog
    *extraído pero no sintetizado* (#75).
+2c. **Síntesis a la nota viva**, apoyada en el inventario de 2b: la ficha de la estrella
+   (frontmatter propio —`activity_indicators_expected`, `methods_applied.literature`, `disputes`—,
+   prosa y huecos), los conceptos/hipótesis relacionados y la matriz método×estrella. ⛔ Los campos
+   de ground-truth **no se tocan**: son espejo de NEA (#70).
 3. Actualizás `index.md` y appendeás a `log.md`.
 
 > **Retro-linkeo (papers pre-existentes ↔ entidad nueva) — tres capas:** (a) una **ficha-método**
@@ -531,7 +535,9 @@ menos de dos posiciones —con una sola es una afirmación, no un desacuerdo—,
 dice quién la sostiene, o con un `source` fuera del vocabulario), **`disputes` en el schema viejo**
 (`planets[].disputes[]`, que el lint ya no lee: migrar) y
 **`role` fuera del vocabulario** (`fundacional|aplicacion|arbitro`: un typo deja el rol mudo para el
-contraste cross-paper, mismo modo de falla que un `thesis_links` sin destino). El
+contraste cross-paper, mismo modo de falla que un `thesis_links` sin destino) y el **juicio de triage
+en `build/<slug>/triage.json`** (el lugar pre-1.9.0 que el lector ya no mira: mientras exista, el
+triage vuelve a proponer lo ya descartado **sin el motivo** → `triage.py <slug> --migrate`). La
 **fuga de implementación** (regla #0 / frontera dura) es **WARN no bloqueante** — heurística de alta
 señal (perilla/dial/`w_j`/`peso(`); cada hit se revisa a mano y se saca del vault si es material de
 implementación (no es bibliografía). Las **áreas de `concepts/` fuera de `concept_areas`** (subcarpeta no

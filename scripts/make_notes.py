@@ -13,7 +13,8 @@ Uso:
 - vault/wiki/papers/<bibcode>.md        : una nota por paper relevante (metadata + placeholders LLM).
 
 Idempotente: NO pisa notas existentes (protege la extracción LLM) salvo --force. Las
-excepciones son quirúrgicas y nunca tocan la extracción LLM: (a) add-only, en una nota de paper
+excepciones NUNCA tocan la extracción LLM; todas menos la última son además quirúrgicas (editan
+líneas puntuales, no re-serializan): (a) add-only, en una nota de paper
 que ya existía mergea los seeds del ingest actual (`stars` / `thesis_links`) si faltan —
 retro-linkeo, ver merge_frontmatter_list; (b) en una ficha/concept que ya existía re-estampa
 el apéndice máquina "## Excluidos por el filtro" con el ads.json vigente — ver stamp_excluded
@@ -25,6 +26,9 @@ de escritura única); (d) en una ficha/concept que ya existía re-estampa la lí
 (#64). Aparte, `stamp_fulltext` (lo llama extract_fulltext al cerrar) estampa
 `fulltext`/`fulltext_source`/`pdf_source` sobre notas ya existentes. Backfill masivo del link PDF:
 `python scripts/make_notes.py --restamp-pdf-links` (sin slug).
+(e) `--migrate-disputes` (#71) es la ÚNICA que no es quirúrgica: cambia la estructura del
+frontmatter, así que lo re-serializa — por eso toca sólo las fichas con disputas del schema viejo y
+el cuerpo se conserva byte a byte. Ver migrate_disputes.
 """
 from __future__ import annotations
 

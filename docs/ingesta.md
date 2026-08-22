@@ -233,6 +233,7 @@ Esta ingesta tiene huecos conocidos y numerados; el detalle de cada uno está en
 |---|---|
 | Qué papers leer (criterio de la extracción) | #62 |
 | Persistir los veredictos `aparente` de find-contradictions | #63 |
+| Las keywords del propio paper se piden, se usan como texto plano y se tiran | #92 |
 | Descubrimiento fuera de ADS (OpenAlex) | #77 |
 | Tema mixto sólo off-ADS-first | #78 |
 | Sesgo de edad en el orden por citas | #79 |
@@ -244,7 +245,7 @@ Y los del recorrido paso a paso del embudo, por escalón:
 |---|---|
 | 1 · resolver el sujeto | #82 (aliases desde SIMBAD, con checkpoint), #83 (`setup` no propone facetas) |
 | 2 · `query_ads` | #85 (`fq` de la lente astro hardcodeado), #79 |
-| 3 · `classify()` | #86 (registro sin abstract), #87 (facetas matcheadas sin usar; sacar `relevance`) |
+| 3 · `classify()` | #86 (registro sin abstract), #87 (facetas matcheadas sin usar; sacar `relevance`), #92 (las keywords del paper se apelmazan como texto y no llegan a la nota) |
 | 4-5 · recall extra | #88 (el `--sweep` no deja rastro), #79 |
 | 6 · triage | #89 (el aceptado sin motivo ni origen), #79 |
 | 7 · PDFs y fulltext | #90 (core sin PDF no se marca en su nota), #80 |
@@ -253,4 +254,5 @@ Y los del recorrido paso a paso del embudo, por escalón:
 **Dos patrones transversales**, que valen más que los issues sueltos: (a) #86/#88/#89/#90 escriben
 los cuatro al registro versionado → **una tanda de schema, no cuatro migraciones**; (b) #79 acumula
 cuatro ocurrencias del mismo orden por citas (truncamiento, ranking del sweep, apéndice de excluidos,
-listado del triage), y sólo la primera es server-side.
+listado del triage), y sólo la primera es server-side — **las dos primeras están hechas** (1.12.0),
+quedan el apéndice y el listado del triage.

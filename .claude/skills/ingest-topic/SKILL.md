@@ -24,8 +24,10 @@ del repo.
 
 ## Pasos
 
-**Copiá este checklist al chat al arrancar y andá tildándolo** — el retro-tag (3b) y la
-verificación (6b) se saltean sin dejar rastro:
+**Copiá este checklist al chat al arrancar y andá tildándolo** — el retro-tag (3b), el contraste
+(3c) y la verificación (6b) se saltean sin dejar rastro. El lint tiene red para **6b** (*sin
+verificar* / *verificación stale*, #56) y para lo que la síntesis dejó afuera (*extraído pero no
+sintetizado*, #75 — que es también la red del contraste de 3c); para **3b** no hay red:
 
 ```
 Progreso del ingest del tema <tema>:

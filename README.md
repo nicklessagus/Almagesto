@@ -126,11 +126,14 @@ Cuando le pedís ingestar una estrella o un tema, el agente:
    `setup` y el preview muestra cuánto cambiaría el corte.
 2. Los **core** se bajan (PDF + fulltext) y el LLM los **lee y destila** en la ficha: métodos, P/K/e,
    indicadores y por qué es relevante, cada dato con su cita `[[bibcode]]` (trazable hasta el PDF).
+   Antes de escribir la prosa hay un paso de **contraste**: donde los papers no coinciden, la ficha
+   lleva una tabla con qué dice cada uno y con qué método. Esa tabla **no tiene columna de "valor
+   adoptado"**: la bóveda reporta el estado de la literatura, no elige por vos.
 3. Los **no-core** no se bajan: quedan sólo listados (top por citas, con link a ADS) en un apéndice
    *"excluidos, por las dudas"*, por si alguno debería haber entrado.
 
-El resultado es una **ficha autosuficiente** (resumen + tablas auto + huecos) que se entiende **sin abrir
-ningún paper**, con todo lo que afirma trazable a su fuente. Esa prosa la escribe un modelo: qué
+El resultado es una **ficha autosuficiente** (resumen + contraste + tablas auto + huecos) que se
+entiende **sin abrir ningún paper**, con todo lo que afirma trazable a su fuente. Esa prosa la escribe un modelo: qué
 partes del sistema son deterministas, cuáles no, y cómo revisar las que no, está en
 [La capa LLM](#la-capa-llm).
 

@@ -163,7 +163,7 @@ Progreso del ingest de <estrella>:
 
 3c. **Síntesis a la ficha** (`vault/wiki/stars/<slug>.md`), apoyada en el inventario de 3b.
    Completar el frontmatter que es **tuyo** (`activity_indicators_expected`,
-   `methods_applied.literature`, `planets[].disputes[]`) y escribir la prosa: qué se sabe, qué
+   `methods_applied.literature`, `disputes` —a nivel nota, #71—) y escribir la prosa: qué se sabe, qué
    indicador debería trazar actividad para ese tipo espectral, huecos.
    ⛔ **No toques los campos de ground-truth** (`spectral_type`, `teff_K`, `dist_pc`, `P_rot_days` y
    los cinco de cada `planets[]`): son **espejo de NEA** (#70). Si NEA no tiene el valor —pasa
@@ -202,7 +202,8 @@ Progreso del ingest de <estrella>:
    informe desde ahí), así que su prosa con `[[bibcode]]` —parámetros estelares, señales RV, disputas—
    debe estar respaldada por el fulltext (cita textual + nº de línea del `.txt`; sin respaldo ⇒
    no-soportada). Prioridad: las afirmaciones que **cambian cómo se lee una señal RV** y las
-   `planets[].disputes` (alt/note vs el paper). Resolver cada no-soportada/parcial (corregir el valor,
+   `disputes` (cada `posiciones[].value` y el `note` vs el paper que la sostiene; la posición
+   `{source: ground_truth}` no se verifica contra papers). Resolver cada no-soportada/parcial (corregir el valor,
    reasignar la cita, o marcar `inferencia`) y dejar el bloque `## Verificación de citas`.
 
 6. **Cierre (commit + push).** Tras la verificación (lint en 0), `git add` de los archivos
