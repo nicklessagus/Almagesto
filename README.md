@@ -165,7 +165,8 @@ La wiki resultante es una bóveda [Obsidian](https://obsidian.md) común: se abr
 de actividad).
 
 **La ficha de estrella.** Arriba, el frontmatter: el **contrato máquina-legible** que consume un
-agente o un script (`teff_K`, `P_rot_days`, `planets[]` con P/K/e/m·sini y sus `disputes`,
+agente o un script (`teff_K`, `P_rot_days`, `planets[]` con P/K/e/m·sini, las `disputes` con las
+posiciones de cada fuente,
 `methods_applied`). Abajo, fuera de cuadro, la prosa destilada de los papers y las tablas Dataview
 que se llenan solas al ingestar.
 
@@ -205,7 +206,7 @@ descripción, o el usuario con `/<nombre>`). Encapsulan la cadena mecánica + el
 | `test-hypothesis` | "hipótesis: …", "evidencia a favor/contra de …" | Testea un supuesto **durable** contra el fulltext y responde con veredicto citado; **a pedido del usuario** lo archiva en `concepts/hypotheses/` y taggea papers (`thesis_links`/`bearing`). |
 | `query-corpus` | búsqueda/pregunta general (no hipótesis) | Responde contra índice + frontmatter + fulltext; archiva en `vault/wiki/queries/` **sólo si el usuario lo pide**. |
 | `verify-citations` | cierre de toda operación con prosa `[[bibcode]]` | Chequea, afirmación por afirmación, que la fuente respalde el claim (1 subagente/par lee el fulltext). |
-| `find-contradictions` | "buscá contradicciones", "¿qué papers discrepan sobre X?" | Barre un eje (estrella/parámetro o concepto) y confirma desacuerdos claim↔claim **entre** papers → propone `disputes[]` para que apruebes. |
+| `find-contradictions` | "buscá contradicciones", "¿qué papers discrepan sobre X?" | Barre un eje (estrella/parámetro o concepto) y confirma desacuerdos claim↔claim **entre** papers → propone `disputes` (con una posición por fuente, y un marcador propio cuando quien arbitra es la NASA) para que apruebes. |
 | `maintain` | "actualizá X", "borrá el paper Y", "renombrá el slug", "re-clasificá" | Mantiene entidades **ya ingestadas**: refrescar con papers nuevos, borrar/renombrar limpio, re-clasificar tras cambiar `relevance.topics`, resolver backlog del lint. |
 
 ## Verify: todo claim tiene fuente

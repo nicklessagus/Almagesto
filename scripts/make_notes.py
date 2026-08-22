@@ -6,6 +6,7 @@ Uso:
     python scripts/make_notes.py --web <clave> --concept <c> [--url … | --pending …] [--slug-hint <s>]
     python scripts/make_notes.py --restamp-pdf-links             # backfill del link PDF, sin slug
     python scripts/make_notes.py --restamp-headers               # backfill de la cabecera, sin slug
+    python scripts/make_notes.py --migrate-disputes              # migración #71 de disputes, sin slug
 
 - vault/wiki/stars/<slug>.md            : ficha índice de la estrella (frontmatter + Dataview).
 - vault/wiki/concepts/<area>/<c>.md     : stub del concept durable de un tema (--topic).
@@ -277,6 +278,85 @@ def restamp_headers() -> int:
     if changed:
         print("  → ahora los estampadores de cabecera (p. ej. el puntero de búsqueda de #64) "
               "pueden actuar sobre esas notas; re-corré la cadena o make_notes del sujeto.")
+    return 0
+
+
+# `field` viejo (dentro de planets[]) → clave del frontmatter con el valor de NEA, para materializar
+# la posición `{source: ground_truth}` con su valor real. `existence` no tiene valor numérico: lo que
+# NEA sostiene es el `status` del planeta.
+LEGACY_FIELD_TO_GT = {"P": "P_days", "K": "K_ms", "e": "e", "msini": "mass_earth",
+                      "existence": "status"}
+
+
+def migrate_disputes(dest) -> bool:
+    """Migración #71 de UNA ficha: `planets[].disputes[]` (polo de verdad hardcodeado) → `disputes`
+    a nivel nota, con **posiciones explícitas**.
+
+    Cada disputa vieja tenía un solo lado escrito (el paper discrepante, con `alt`); el otro era
+    implícito: el valor del frontmatter, o sea NEA. Acá ese lado se **materializa** como
+    `{source: ground_truth, value: <el valor que la ficha tiene hoy>}` — que es justamente la
+    información que el schema viejo no podía expresar y el consumidor necesita ver ("hay autoridad"
+    vs "la bóveda no sabe").
+
+    A diferencia del resto de la familia `--restamp-*`, esto NO es cirugía a nivel línea: cambia la
+    ESTRUCTURA del frontmatter, así que se re-serializa. Por eso toca **sólo** las fichas que
+    realmente tienen disputas viejas (una bóveda sin disputas no se reescribe) y **nunca** el
+    cuerpo: la prosa se conserva byte a byte. Idempotente: sin `planets[].disputes[]` no hace nada."""
+    if not dest.exists():
+        return False
+    text = dest.read_text(encoding="utf-8")
+    if not text.startswith("---\n"):
+        return False
+    end = text.find("\n---\n", 4)
+    if end < 0:
+        return False
+    try:
+        front = yaml.safe_load(text[4:end]) or {}
+    except yaml.YAMLError:
+        print(f"  ⚠ {dest.name}: frontmatter no parseable — migralo a mano")
+        return False
+    if not any((pl or {}).get("disputes") for pl in (front.get("planets") or [])):
+        return False
+    nuevas = list(front.get("disputes") or [])
+    for pl in front.get("planets") or []:
+        letra = str((pl or {}).get("letter", "")).strip()
+        for d in (pl.pop("disputes", None) or []):
+            campo = str(d.get("field", "")).strip()
+            gt_key = LEGACY_FIELD_TO_GT.get(campo)
+            gt_pos = {"source": "ground_truth"}
+            if gt_key is not None and pl.get(gt_key) is not None:
+                gt_pos["value"] = pl.get(gt_key)
+            nueva = {"field": f"{letra}.{campo}" if letra else campo,
+                     "posiciones": [{"ref": d.get("ref"), "value": d.get("alt")}, gt_pos]}
+            if d.get("note"):
+                nueva["note"] = d["note"]
+            nuevas.append(nueva)
+    # `disputes` va después de `planets` (donde vivía la información) si todavía no está
+    if "disputes" in front:
+        front["disputes"] = nuevas
+    else:
+        reordenado = {}
+        for k, v in front.items():
+            reordenado[k] = v
+            if k == "planets":
+                reordenado["disputes"] = nuevas
+        front = reordenado if "disputes" in reordenado else {**front, "disputes": nuevas}
+    dest.write_text(fm(front) + text[end + 5:], encoding="utf-8")
+    print(f"  {dest.name}: {len(nuevas)} disputa(s) migradas a posiciones explícitas")
+    return True
+
+
+def migrate_all_disputes() -> int:
+    """Backfill #71 sobre toda la bóveda. Ver migrate_disputes para el porqué del alcance."""
+    notes = sorted(cfg.STARS.glob("*.md")) if cfg.STARS.exists() else []
+    changed = sum(1 for n in notes if migrate_disputes(n))
+    print(f"disputas: {changed} de {len(notes)} ficha(s) migradas al schema con posiciones (#71)")
+    if changed:
+        print("  → el frontmatter se re-serializó (la prosa NO se tocó): revisá el diff antes de "
+              "commitear.")
+    else:
+        print("  → nada que migrar. (El lint NO lee el schema viejo: si queda alguno, lo reporta "
+              "como bloqueante en vez de ignorarlo en silencio.)")
     return 0
 
 
@@ -676,6 +756,12 @@ def write_star_note(slug: str, force: bool) -> None:
         "P_rot_days": host.get("st_rotp_days"),
         "activity_indicators_expected": [],           # poblar con extracción LLM
         "planets": planets,
+        # Desacuerdos con POSICIONES EXPLÍCITAS (#71), a nivel nota: `field` nombra el eje
+        # (`P_rot`, `b.K`, `b.existence`) y cada posición dice quién la sostiene —`ref` un paper, o
+        # `source: ground_truth` cuando NEA arbitra—. El schema viejo (dentro de `planets[]`) tenía
+        # el polo de verdad hardcodeado y no podía expresar paper↔paper, que es el caso normal
+        # cuando NEA calla. Migración: make_notes.py --migrate-disputes.
+        "disputes": [],
         "data_local": meta.get("data_local"),
         "methods_applied": {"literature": [], "ours": []},
         "confidence": "medium",          # patrón LLM Wiki; subir a high tras síntesis revisada
@@ -763,6 +849,9 @@ def write_concept_note(slug: str, force: bool) -> None:
         front["status"] = "active"
     front.update({
         "aliases": meta.get("aliases", []),   # sinónimos EN+ES para grep; sembrado del topic, el LLM enriquece
+        # Acá la disputa es SIMÉTRICA por definición (#71): no hay valor de frontmatter contra el
+        # cual poner un `alt`, así que las posiciones explícitas son la única forma que sirve.
+        "disputes": [],
         "tags": [area, "thesis"],
         "confidence": "medium",
         "generator": f"Almagesto v{cfg.ALMAGESTO_VERSION}",   # provenance (con qué versión se armó)
@@ -1062,6 +1151,10 @@ def main() -> int:
                          "(aviso de capa LLM + línea del generador) a las que nacieron sin ella. "
                          "La versión sale del `generator` del frontmatter, no se inventa. No toca "
                          "la síntesis LLM; no requiere slug.")
+    ap.add_argument("--migrate-disputes", action="store_true", dest="migrate_disputes",
+                    help="migración #71: pasa `planets[].disputes[]` (polo de verdad hardcodeado) a "
+                         "`disputes` a nivel nota con posiciones explícitas. Toca sólo las fichas "
+                         "que tienen disputas viejas; no toca el cuerpo. No requiere slug.")
     ap.add_argument("--force", action="store_true", help="pisar notas existentes")
     ap.add_argument("--topic", action="store_true",
                     help="el slug es un TEMA de vault/config/topics.yaml: genera concept en vez de ficha de estrella")
@@ -1086,8 +1179,11 @@ def main() -> int:
         return restamp_pdf_links()
     if args.restamp_headers:
         return restamp_headers()
+    if args.migrate_disputes:
+        return migrate_all_disputes()
     if not args.slug:
-        ap.error("falta el slug (sólo --restamp-pdf-links y --restamp-headers corren sin slug)")
+        ap.error("falta el slug (sólo --restamp-pdf-links, --restamp-headers y --migrate-disputes "
+                 "corren sin slug)")
 
     if args.web:
         write_web_paper_note(args.slug, url=args.url, slug=args.slug_hint, concept=args.concept,

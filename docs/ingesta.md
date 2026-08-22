@@ -164,7 +164,7 @@ flowchart LR
 | frontmatter | `spectral_type`, `teff_K`, `dist_pc` | script | SIMBAD / NEA |
 | frontmatter | `P_rot_days` | script (NEA `st_rotp`) | **espejo puro**: si NEA no lo tiene queda null; el valor de literatura va al cuerpo, citado |
 | frontmatter | `planets[]` (`letter`, `P_days`, `K_ms`, `e`, `mass_earth`, `status`) | script | **NEA — ground-truth** (espejo puro: `K_ms`/`e` faltan seguido y el null se respeta) |
-| frontmatter | `planets[].disputes[]` | **LLM** | paper que discrepa de NEA (`field`/`ref`/`note`/`alt`) |
+| frontmatter | `disputes[]` (nivel nota) | **LLM** | desacuerdo sobre un eje, con **una posición por fuente**: `{ref, value}` por paper y `{source: ground_truth, value}` si NEA arbitra |
 | frontmatter | `activity_indicators_expected` | **LLM** | extracción de los papers |
 | frontmatter | `methods_applied.literature` | **LLM** | `methods` de los papers de la estrella |
 | frontmatter | `methods_applied.ours`, `data_local` | usuario | rutas locales (no se commitean) |
@@ -206,8 +206,12 @@ tema (ADS y off-ADS) escriben el mismo bloque.
   decisiones de implementación.
 - **Regla de poda.** Un hecho de un paper tangencial entra a la prosa de la ficha **sólo si cambia
   cómo se lee una señal RV**; el resto vive en su nota de paper.
-- **Disputas.** NEA es siempre el valor de verdad: cuando un paper discrepa se **taguea**, no se
-  sobreescribe. Sólo discrepancias **materiales** (mayores que el error).
+- **Disputas.** Cuando NEA arbitra sigue siendo el valor de verdad: el paper que discrepa se
+  **taguea**, no se sobreescribe. Pero la estructura no asume que haya árbitro: cada disputa lista
+  **una posición por fuente**, y `{source: ground_truth}` es lo que distingue "hay autoridad" de "la
+  bóveda no sabe" (#71). Eso es lo que permite expresar un desacuerdo **paper↔paper** —el caso normal
+  cuando NEA calla— que antes terminaba en prosa suelta. Sólo discrepancias **materiales** (mayores
+  que el error).
 - **Espejo puro (#70).** Los campos que el script copia del ground-truth valen lo que dice NEA **o
   nada**. Un null de NEA no es un hueco a completar: rellenarlo con literatura vuelve ese número
   indistinguible del auditable, que es justo la distinción que la cabecera promete. El valor de
@@ -227,7 +231,6 @@ Esta ingesta tiene huecos conocidos y numerados; el detalle de cada uno está en
 
 | Tema | Issues |
 |---|---|
-| `disputes[]` no expresa desacuerdo paper↔paper | #71 |
 | Qué papers leer (criterio de la extracción) | #62 |
 | Persistir los veredictos `aparente` de find-contradictions | #63 |
 | Descubrimiento fuera de ADS (OpenAlex) | #77 |

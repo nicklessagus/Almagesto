@@ -18,6 +18,59 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.19.0 (2026-08-22) — #71: las disputas dejan de tener el polo de verdad hardcodeado
+
+> **Tanda 4** — el ítem más caro del lote: el único que toca instancias ya ingestadas con cambio de
+> schema. 477 tests verdes (+16), lint 0. 1.18.0 → **1.19.0** (minor: estructura nueva + migrador de
+> un solo uso; **sin** capa de compatibilidad — ver la decisión de abajo).
+
+- **El defecto era de FORMA, no de contenido.** `planets[].disputes[]` (`field`/`ref`/`note`/`alt`)
+  tenía el polo de verdad **hardcodeado**: el otro lado del desacuerdo era, implícitamente, el valor
+  del frontmatter. Servía para paper↔NEA y **no podía expresar paper↔paper** — sin NEA no hay contra
+  qué poner `alt`.
+- **Y ese caso no es raro, es el normal.** NEA calla seguido (`K` y `e` enmascarados, `P_rot` sin
+  `st_rotp`), que es justo lo que #70 dejó explícito. Encima `P_rot` es de la **estrella**, no de un
+  planeta: ni siquiera tenía dónde colgar. El propio `find-contradictions` ya lo había identificado y
+  lo mandaba a **prosa** — o sea: no acumulable, no chequeable por el lint, invisible al consumidor
+  máquina, que es exactamente lo que la estructura existía para evitar.
+- **`disputes` a nivel nota, con posiciones explícitas.** `field` nombra el eje (`P_rot`, `b.K`,
+  `b.existence`) y cada posición dice **quién la sostiene**: `{ref, value}` por paper, o
+  `{source: ground_truth, value}` cuando NEA arbitra. **Ese marcador es el punto del issue:**
+  distingue *"hay autoridad y dice X"* de *"la bóveda genuinamente no sabe"*. Vale igual para
+  **conceptos**, donde la disputa es simétrica por definición.
+- **Chequeos nuevos (bloqueantes):** `ref` de una posición sin nota de paper (el de antes, ahora por
+  posición), **disputas en el schema viejo** (que el lint ya no lee: migrar), y **disputa mal formada** — sin `field`, con **menos de dos posiciones** (con una sola
+  no hay desacuerdo: es una afirmación y va a la prosa citada), con una posición que no dice quién la
+  sostiene, o con un `source` fuera del vocabulario.
+- **Migración: `python scripts/make_notes.py --migrate-disputes`.** Materializa el lado implícito
+  como `{source: ground_truth, value: <el valor que la ficha tiene hoy>}` — y **no lo inventa**: si
+  NEA no tiene el valor (el caso de #70), la posición queda sin `value`, que es "hay autoridad y
+  calla". Es el único miembro de la familia `--restamp-*` que **no** es cirugía por línea: cambia la
+  estructura del frontmatter, así que re-serializa. Por eso toca **sólo** las fichas con disputas
+  viejas —una bóveda sin disputas no se reescribe— y **nunca** el cuerpo.
+- **⛔ El lint NO lee el schema viejo — decisión del usuario, y es la correcta.** La primera versión
+  traía tolerancia de lectura (los dos schemas a la vez, como #51 con el `triage.json`). El usuario
+  la bajó: *"no compliques esto para mantener la retrocompatibilidad, sólo yo lo estoy usando por
+  ahora"*. Tenía razón — esa tolerancia es **complejidad permanente en el lector** a cambio de una
+  compatibilidad que nadie necesita, y encima el schema viejo no sabe expresar la mitad de los casos.
+  Lo que **sí** hacía falta salvar de esa idea es que las disputas viejas no queden **mudas**: al
+  sacar la lectura, el lint las **detecta y bloquea** con el comando de migración. Un lector que
+  ignora en silencio es peor que un error — el mismo criterio de #69.
+- **Tests (+16):** paper↔paper sobre un campo estelar (el caso que antes no se podía escribir), la
+  posición `ground_truth`, disputa en un **concepto**, las cuatro formas mal formadas, y que el
+  schema viejo **grita en vez de volverse mudo**; del
+  migrador: materialización del polo implícito, `existence` → `status`, **no inventar** el valor que
+  NEA no tiene, idempotencia, preservación de las ya migradas y del orden de claves, prosa byte a
+  byte, y —lo que el coverage destapó— los **caminos defensivos**: archivo inexistente, nota sin
+  frontmatter, frontmatter sin cerrar y **YAML roto** (ahí reescribir sería destruir la nota).
+  Cobertura de sentencias del código nuevo: **100%**.
+- Skills: `find-contradictions` 1.4.0 → **1.5.0** (cambia la forma de su propuesta, que es su
+  salida principal), `verify-citations` 1.6.0 → **1.7.0** (verifica cada `posiciones[].value` contra
+  el paper que la sostiene; la posición de ground-truth **no** se verifica contra papers),
+  `maintain` 1.14.0 → **1.15.0** (la migración, con el aviso de revisar el diff), `ingest-star` y
+  `append-knowledge` (la instrucción de taguear). `CLAUDE.md`, `README` y `docs/ingesta.md`
+  sincronizados.
+
 ## ✅ Framework 1.18.0 (2026-08-22) — #74: el régimen de validez, y la sobre-generalización que el verify daba por buena
 
 > Cierra la **tanda 3** (síntesis: #72 → #74). 461 tests verdes (+3), lint 0. 1.17.0 → **1.18.0**
@@ -844,8 +897,10 @@ paper, sin el cual "contrastar" no está definido).
 3. **Síntesis — TANDA CERRADA (1.17.0–1.18.0):** ~~**#72**~~ ✅ (inventario por eje, **sin** columna
    "valor adoptado") y ~~**#74**~~ ✅ (régimen explícito en conceptos — quedó cableado al destino de
    los `aparente`, que **#63** todavía tiene que persistir del lado del barrido).
-4. **Caro — migración de corpus:** **#71** (`disputes[]` con posiciones explícitas y a nivel nota).
-   Es el único que toca instancias ya ingestadas: necesita script + lectura del schema viejo.
+4. **Caro — migración de corpus — TANDA CERRADA (1.19.0):** ~~**#71**~~ ✅ (`disputes[]` con
+   posiciones explícitas y a nivel nota). Era el único que toca instancias ya ingestadas: se
+   resolvió con `--migrate-disputes` (un solo uso) **más** un chequeo bloqueante que detecta el
+   schema viejo — sin capa de compatibilidad, por decisión explícita del usuario.
 5. **Descubrimiento:** **#77** (OpenAlex escribiendo el mismo `ads.json`) + **#78** (el tema mixto
    deja de ser off-ADS-first: el eje pasa a ser *motor de descubrimiento × fuentes declaradas*).
    Recién con eso cerrado tiene sentido **#79** punto 4 (documentar la neutralidad a citas).

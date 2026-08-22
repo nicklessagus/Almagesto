@@ -1,7 +1,7 @@
 ---
 name: find-contradictions
 description: Usar cuando el usuario quiere detectar desacuerdos entre papers del corpus sobre el mismo hecho ("buscá contradicciones en el corpus", "qué papers se contradicen sobre tau Ceti", "revisá disputas de P_rot", "detectá desacuerdos sobre la señal b de GJ 581", "¿hay papers que discrepen sobre X?"). Barre el corpus por eje (estrella/parámetro o concepto), confirma cada desacuerdo contra el fulltext y PROPONE entradas disputes[] / notas de disputa para que el usuario apruebe.
-version: 1.4.0
+version: 1.5.0
 ---
 
 # Find-contradictions — desacuerdos entre papers (claim↔claim)
@@ -16,7 +16,8 @@ discrepa y lo tagueás). A escala se escapan (la literatura tiene ~2 claims en t
 skill hace la pasada batch que las caza sistemáticamente.
 
 **Frontera dura / ground-truth:** para estrellas, **NEA (ground-truth) es siempre el valor de verdad**
-— una discrepancia paper↔NEA se taguea en `planets[].disputes[]`, **no** se sobreescribe NEA. Un
+— una discrepancia paper↔NEA se taguea en `disputes` (con una posición `{source: ground_truth}`),
+**no** se sobreescribe NEA. Un
 desacuerdo paper↔paper sobre algo que NEA no arbitra (P_rot, mecanismo de actividad, naturaleza de una
 señal) se refleja en la prosa de la ficha/concepto citando **ambas** fuentes. Sólo desacuerdos
 **materiales** (mayores que el error reportado; no diferencias cosméticas dentro de la barra).
@@ -130,12 +131,30 @@ otros papers."*
 ### 3. Proponer las disputas (NO escribir todavía)
 Presentar al usuario la lista de desacuerdos **reales** como tabla, con la entrada `disputes[]` (o nota
 de concepto) que se agregaría en cada caso, y **pedir aprobación**. Formato de la propuesta:
-- **Estrella (parámetro/existencia):** `planets[].disputes[]` con `field` (`existence`|`P`|`K`|`e`|`msini`),
-  `ref` (el bibcode discrepante — **debe** existir como nota de paper, lo chequea el lint), `note` (qué
-  dice ese paper), y `alt` (el valor según ese paper, para disputas de valor). NEA queda como verdad.
-- **Concepto (mecanismo/signo/lag):** una línea en la prosa citando **ambos** `[[bibcode]]` con el
-  desacuerdo explícito, y ajustar el `bearing` del paper discrepante si aplica. Si el concepto tiene
-  `## Inventario por eje` (#72), el desacuerdo real va **además** como filas de ese eje.
+- **Estrella (parámetro/existencia):** `disputes` **a nivel nota**, con **posiciones explícitas**
+  (#71). `field` nombra el eje: `P_rot` para un campo estelar, `<letra>.<param>` para uno planetario
+  (`b.K`, `b.existence`). `posiciones[]` lleva **una por cada lado**: `{ref: <bibcode>, value: …}`
+  por paper (el bibcode **debe** existir como nota, lo chequea el lint) y, **si NEA arbitra**,
+  `{source: ground_truth, value: …}` — NEA queda como verdad y el frontmatter no se toca.
+  ```yaml
+  disputes:
+    - field: P_rot
+      posiciones:
+        - {ref: 2018Autor..., value: 33}
+        - {ref: 2021Autor..., value: 11.5}
+      note: 11.5 d podría ser el armónico
+  ```
+  **Esto es lo que antes no se podía escribir:** el schema viejo tenía el polo de verdad hardcodeado
+  (el otro lado era el frontmatter), así que un desacuerdo **paper↔paper** —el caso normal cuando NEA
+  calla— terminaba en prosa: no acumulable, no chequeable por el lint, invisible al consumidor
+  máquina. Y `P_rot`, que es de la estrella, no tenía dónde colgar. El lint **no lee** el schema
+  viejo: si la bóveda todavía lo tiene, lo reporta como bloqueante y hay que migrar
+  (`make_notes.py --migrate-disputes`) antes de taguear nada nuevo.
+- **Concepto (mecanismo/signo/lag):** `disputes` a nivel nota **igual que en una ficha** (#71) —
+  acá la disputa es **simétrica por definición**, no hay valor de frontmatter contra el cual poner un
+  `alt`, así que las dos posiciones son `{ref: …, value: …}`. Más una línea en la prosa citando
+  **ambos** `[[bibcode]]`, y ajustar el `bearing` del paper discrepante si aplica. Si el concepto
+  tiene `## Inventario por eje` (#72), el desacuerdo real va **además** como filas de ese eje.
 Los **no-concluyentes** se listan aparte (no se tocan; sirven para no re-flaggearlos).
 
 ⛔ **Los `aparente` de un CONCEPTO no se descartan (#74).** En una estrella, "distinto régimen,
@@ -149,13 +168,15 @@ condición que **nadie midió**, eso es un *régimen no cubierto* → `## Huecos
 perder justamente lo que el barrido encontró.
 
 ### 4. Aplicar lo aprobado
-Sólo lo que el usuario aprobó: taguear `planets[].disputes[]` en la ficha (y reflejar la disputa en la
+Sólo lo que el usuario aprobó: taguear `disputes` a nivel nota en la ficha (y reflejar la disputa en la
 tabla/prosa), o escribir la línea de desacuerdo en el concepto. Nada de sobreescribir NEA.
 
 ### 5. Verificar, lint, cierre
 - **verify-citations** sobre las disputas nuevas (cada `note`/`alt` debe estar respaldada por el
   fulltext del `ref` — es prosa con `[[bibcode]]` nueva).
-- `python scripts/lint.py` (0 bloqueante — atención a `disputes[].ref sin paper destino`: el bibcode
+- `python scripts/lint.py` (0 bloqueante — atención a *ref de una posición sin paper destino* y a
+  *disputes mal formadas*: una disputa con **una sola** posición no es un desacuerdo, es una
+  afirmación, y va a la prosa citada; el bibcode
   discrepante tiene que existir como nota).
 - Appendear a `vault/wiki/log.md` (cuántos desacuerdos reales, cuántos tagueados). `git add` de los
   archivos **específicos**; **preguntar antes de `push`**.

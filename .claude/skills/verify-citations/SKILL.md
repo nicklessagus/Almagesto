@@ -1,7 +1,7 @@
 ---
 name: verify-citations
 description: Usar para verificar, afirmación por afirmación, que las citas [[bibcode]] de una nota de la wiki (query, hipótesis, ficha, concepto) realmente están respaldadas por el texto completo de la fuente. Se corre como paso de cierre al armar/editar una query o hipótesis, o cuando el usuario pide "rechequeá las citas / ¿esto lo dice el paper?". Implementa el chequeo claim↔evidencia (pipeline tipo CiteAudit) sobre el corpus cerrado de la bóveda. Veredictos: soportada / parcial / no-soportada (la fuente calla) / contradice (la fuente afirma lo contrario → candidata a disputa, no sólo cita rota); en transcripciones de tablas/listas chequea además la completitud (lo que la nota omite).
-version: 1.6.0
+version: 1.7.0
 ---
 
 # Verify-citations — chequeo claim↔evidencia contra el fulltext
@@ -131,7 +131,8 @@ fila de tabla con un valor, cada bullet o frase que asevera un hecho. Para cada 
   valor algo distinto al best-value combinado de NEA, y eso NO es una cita rota). Regla: si el número
   está en la tabla de inventario / frontmatter y la fila dice "NEA", se **saltea**.
 - **Sí se verifican** (van al fan-out) las afirmaciones atribuidas a un `[[bibcode]]`: las
-  **disputas** (`disputes[].alt` y `.note` vs el paper discrepante — p. ej. la Tabla 9 de Díaz+2016),
+  **disputas** (cada `posiciones[].value` y el `note` vs el paper que la sostiene — p. ej. la Tabla 9
+  de Díaz+2016; la posición `{source: ground_truth}` NO se verifica contra papers, es ground-truth),
   los **mecanismos**, la **síntesis**, y cualquier **valor que el prose atribuya a un paper** (si la
   oración cita a Mayor+2009, el número debe ser el de Mayor, no el de NEA → si no, corregir el prose a
   los valores de la fuente y dejar NEA en la tabla).
@@ -244,7 +245,7 @@ entrelazada con otra en las mismas líneas físicas — contá las filas de LA t
 Cada **parcial / no-soportada / contradice** se resuelve antes de cerrar:
 - **Contradicción** (`contradice`) → decidir cuál de dos casos es. (a) **La nota está mal** →
   corregirla a lo que dice la fuente. (b) **Desacuerdo real entre fuentes** → es una **disputa**:
-  si es un parámetro planetario de una ficha, taguearla en `planets[].disputes[]`
+  si es un parámetro de una ficha, taguearla en `disputes` (posiciones explícitas, #71)
   (`field`/`ref`/`note`/`alt`; NEA sigue siendo el valor de verdad) y reflejarla en la prosa; si es
   un claim de concepto/query, citar **ambas** fuentes con el desacuerdo explícito (y ajustar el
   `bearing` del paper si aplica). Una contradicción detectada es un **hallazgo**, no un fracaso.

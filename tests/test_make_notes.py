@@ -499,6 +499,131 @@ def test_inventario_no_tiene_columna_de_valor_adoptado(toy_vault):
     assert 'Sin columna "valor adoptado"' in t and "regla #0" in t
 
 
+# ── #71: migración de disputes a posiciones explícitas ──────────────────────────────────────
+
+PROSA = ("# Estrella Test\n\n> Cabecera.\n>\n> _Generado con Almagesto v1.0.0._\n\n"
+         "## Resumen\nLa señal **b** es dudosa según [[2020disD...1..1D]].\n")
+
+
+def ficha_vieja(toy_vault, planets):
+    return mk_note(toy_vault.STARS, "test_star",
+                   {"name": "Estrella Test", "slug": "test_star", "P_rot_days": 34.0,
+                    "planets": planets, "tags": ["star"]}, PROSA)
+
+
+def test_migrate_disputes_materializa_el_polo_implicito(toy_vault, capsys):
+    """El schema viejo escribía UN solo lado (el paper, con `alt`); el otro era implícito — el valor
+    del frontmatter, o sea NEA. La migración lo hace explícito, que es justo lo que el consumidor
+    necesita ver: "hay autoridad" vs "la bóveda no sabe"."""
+    dest = ficha_vieja(toy_vault, [
+        {"letter": "b", "P_days": 20.0, "K_ms": 0.9, "e": 0.1, "mass_earth": 2.0,
+         "status": "confirmed",
+         "disputes": [{"field": "K", "ref": "2020disD...1..1D", "alt": 1.4, "note": "K distinto"}]}])
+    assert mn.migrate_disputes(dest) is True
+    fm = read_fm(dest)
+    assert fm["disputes"] == [{"field": "b.K", "note": "K distinto", "posiciones": [
+        {"ref": "2020disD...1..1D", "value": 1.4},
+        {"source": "ground_truth", "value": 0.9}]}]
+    assert "disputes" not in fm["planets"][0]        # no queda duplicada en el schema viejo
+
+
+def test_migrate_disputes_existence_usa_el_status_de_nea(toy_vault):
+    """`existence` no tiene valor numérico: lo que NEA sostiene es el `status` del planeta."""
+    dest = ficha_vieja(toy_vault, [
+        {"letter": "b", "P_days": 20.0, "status": "confirmed",
+         "disputes": [{"field": "existence", "ref": "2020disD...1..1D", "note": "no la ve"}]}])
+    mn.migrate_disputes(dest)
+    d = read_fm(dest)["disputes"][0]
+    assert d["field"] == "b.existence"
+    assert d["posiciones"][1] == {"source": "ground_truth", "value": "confirmed"}
+
+
+def test_migrate_disputes_sin_valor_en_nea_no_lo_inventa(toy_vault):
+    """Si NEA no tiene el valor —el caso normal con K y e (#70)— la posición queda SIN `value`: es
+    "hay autoridad y calla", no un número supuesto."""
+    dest = ficha_vieja(toy_vault, [
+        {"letter": "b", "P_days": 20.0, "K_ms": None,
+         "disputes": [{"field": "K", "ref": "2020disD...1..1D", "alt": 1.4}]}])
+    mn.migrate_disputes(dest)
+    assert read_fm(dest)["disputes"][0]["posiciones"][1] == {"source": "ground_truth"}
+
+
+def test_migrate_disputes_no_toca_la_prosa_ni_las_fichas_sin_disputas(toy_vault, capsys):
+    """La migración re-serializa el FRONTMATTER (cambia la estructura, no se puede hacer por línea),
+    así que el cuerpo tiene que sobrevivir byte a byte — y una ficha sin disputas viejas no se
+    reescribe: sin esto, un backfill tocaría toda la bóveda para nada."""
+    limpia = ficha_vieja(toy_vault, [{"letter": "b", "P_days": 20.0}])
+    antes = limpia.read_text(encoding="utf-8")
+    assert mn.migrate_disputes(limpia) is False
+    assert limpia.read_text(encoding="utf-8") == antes          # byte a byte
+
+    dest = mk_note(toy_vault.STARS, "otra",
+                   {"name": "Otra", "planets": [{"letter": "b", "K_ms": 0.9, "disputes": [
+                       {"field": "K", "ref": "2020disD...1..1D", "alt": 1.4}]}], "tags": ["star"]},
+                   PROSA)
+    mn.migrate_disputes(dest)
+    assert dest.read_text(encoding="utf-8").split("---\n", 2)[2] == PROSA
+
+
+def test_migrate_disputes_es_idempotente(toy_vault):
+    dest = ficha_vieja(toy_vault, [
+        {"letter": "b", "K_ms": 0.9,
+         "disputes": [{"field": "K", "ref": "2020disD...1..1D", "alt": 1.4}]}])
+    assert mn.migrate_disputes(dest) is True
+    texto = dest.read_text(encoding="utf-8")
+    assert mn.migrate_disputes(dest) is False                   # ya no hay schema viejo que migrar
+    assert dest.read_text(encoding="utf-8") == texto
+
+
+def test_migrate_disputes_preserva_las_ya_migradas_y_el_orden(toy_vault):
+    """Una ficha a medio migrar (o con disputas nuevas escritas a mano) no pierde las que ya
+    estaban, y `disputes` queda donde vivía la información: después de `planets`."""
+    dest = mk_note(toy_vault.STARS, "test_star",
+                   {"name": "Estrella Test", "planets": [
+                       {"letter": "b", "K_ms": 0.9,
+                        "disputes": [{"field": "K", "ref": "2020disD...1..1D", "alt": 1.4}]}],
+                    "disputes": [{"field": "P_rot", "posiciones": [
+                        {"ref": "2018autA...1..1A", "value": 33},
+                        {"ref": "2021autB...1..1B", "value": 11.5}]}],
+                    "data_local": None, "tags": ["star"]}, PROSA)
+    mn.migrate_disputes(dest)
+    fm = read_fm(dest)
+    assert [d["field"] for d in fm["disputes"]] == ["P_rot", "b.K"]
+    assert list(fm).index("disputes") == list(fm).index("planets") + 1
+
+
+def test_migrate_disputes_degrada_sin_romper_nada(toy_vault, capsys):
+    """Una migración que reescribe frontmatter tiene que ser cobarde: ante cualquier cosa que no
+    entiende, NO toca el archivo. Sobre todo con el YAML roto — ahí reescribir sería destruir la
+    nota (el lint ya reporta el frontmatter no parseable como bloqueante)."""
+    assert mn.migrate_disputes(toy_vault.STARS / "no-existe.md") is False
+
+    sin_fm = toy_vault.STARS / "sin_fm.md"
+    sin_fm.write_text("# Sólo prosa, sin frontmatter\n", encoding="utf-8")
+    assert mn.migrate_disputes(sin_fm) is False
+    assert sin_fm.read_text(encoding="utf-8") == "# Sólo prosa, sin frontmatter\n"
+
+    abierto = toy_vault.STARS / "abierto.md"
+    abierto.write_text("---\nname: X\n", encoding="utf-8")     # frontmatter sin cerrar
+    assert mn.migrate_disputes(abierto) is False
+
+    roto = toy_vault.STARS / "roto.md"
+    contenido = "---\ntitle: dos: puntos sin comillas\n---\n# Cuerpo\n"
+    roto.write_text(contenido, encoding="utf-8")
+    assert mn.migrate_disputes(roto) is False
+    assert roto.read_text(encoding="utf-8") == contenido        # intacta, no destruida
+    assert "no parseable — migralo a mano" in capsys.readouterr().out
+
+
+def test_migrate_all_disputes_barre_y_reporta(toy_vault, capsys):
+    ficha_vieja(toy_vault, [{"letter": "b", "K_ms": 0.9, "disputes": [
+        {"field": "K", "ref": "2020disD...1..1D", "alt": 1.4}]}])
+    mk_note(toy_vault.STARS, "sin_disputas", {"name": "X", "tags": ["star"]}, PROSA)
+    assert mn.migrate_all_disputes() == 0
+    out = capsys.readouterr().out
+    assert "1 de 2 ficha(s) migradas" in out and "la prosa NO se tocó" in out
+
+
 # ── #74: régimen de validez (sólo en conceptos) ─────────────────────────────────────────────
 
 def test_regimen_solo_en_concepts(toy_vault):

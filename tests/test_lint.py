@@ -119,6 +119,101 @@ def test_contradiccion_gt_ficha(toy_vault, capsys):
     assert "ficha 1 planetas vs ground-truth 2" in out
 
 
+# ── #71: disputas con posiciones explícitas ─────────────────────────────────
+
+def ficha_con_disputas(toy_vault, disputes, planets=None):
+    fm = {"tags": ["star"], "P_rot_days": 1.0, "activity_indicators_expected": ["x"],
+          "planets": planets if planets is not None else [{"letter": "b"}],
+          "disputes": disputes}
+    return mk_note(toy_vault.STARS, "test_star", fm, "**b** (P=1 d)\n")
+
+
+def test_disputa_paper_contra_paper_sobre_un_campo_estelar(toy_vault, capsys):
+    """El caso que el schema viejo NO podía expresar: NEA calla (no hay `st_rotp`), así que no hay
+    contra qué poner un `alt` — y `P_rot` es de la ESTRELLA, ni siquiera tenía dónde colgar."""
+    mk_note(toy_vault.PAPERS, "2018autA...1..1A", {"tags": ["paper"]}, "")
+    mk_note(toy_vault.PAPERS, "2021autB...1..1B", {"tags": ["paper"]}, "")
+    ficha_con_disputas(toy_vault, [
+        {"field": "P_rot", "note": "11.5 d podría ser el armónico",
+         "posiciones": [{"ref": "2018autA...1..1A", "value": 33},
+                        {"ref": "2021autB...1..1B", "value": 11.5}]}])
+    rc, out = run_lint(capsys)
+    assert rc == 0
+    assert "## disputes mal formadas (posiciones explícitas, #71) (0)" in out
+    assert "## disputes: ref de una posición sin paper destino (0)" in out
+
+
+def test_disputa_con_ground_truth_como_posicion(toy_vault, capsys):
+    """`{source: ground_truth}` es lo que distingue "hay autoridad" de "la bóveda no sabe" — la
+    diferencia que el consumidor necesita ver."""
+    mk_note(toy_vault.PAPERS, "2020disD...1..1D", {"tags": ["paper"]}, "")
+    ficha_con_disputas(toy_vault, [
+        {"field": "b.K", "posiciones": [{"ref": "2020disD...1..1D", "value": 1.4},
+                                        {"source": "ground_truth", "value": 0.9}]}])
+    rc, out = run_lint(capsys)
+    assert rc == 0 and "(posiciones explícitas, #71) (0)" in out
+
+
+def test_disputa_ref_colgante_en_posicion(toy_vault, capsys):
+    ficha_con_disputas(toy_vault, [
+        {"field": "P_rot", "posiciones": [{"ref": "2018noExiste...1A", "value": 33},
+                                          {"source": "ground_truth"}]}])
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert "disputa `P_rot`: ref `2018noExiste...1A` sin nota de paper" in out
+
+
+def test_disputa_con_una_sola_posicion_no_es_disputa(toy_vault, capsys):
+    """Con un solo lado no hay desacuerdo: es una afirmación, y va a la prosa citada."""
+    mk_note(toy_vault.PAPERS, "2020disD...1..1D", {"tags": ["paper"]}, "")
+    ficha_con_disputas(toy_vault, [
+        {"field": "P_rot", "posiciones": [{"ref": "2020disD...1..1D", "value": 33}]}])
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert "con 1 posición(es)" in out and "va a la prosa citada" in out
+
+
+def test_disputa_sin_field_o_con_posicion_muda(toy_vault, capsys):
+    mk_note(toy_vault.PAPERS, "2020disD...1..1D", {"tags": ["paper"]}, "")
+    ficha_con_disputas(toy_vault, [
+        {"posiciones": [{"ref": "2020disD...1..1D"}, {"source": "ground_truth"}]},
+        {"field": "b.e", "posiciones": [{"ref": "2020disD...1..1D"}, {"value": 0.3}]},
+        {"field": "b.P", "posiciones": [{"ref": "2020disD...1..1D"}, {"source": "nea"}]}])
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert "disputa sin `field`" in out
+    assert "posición sin `ref` ni `source`" in out
+    assert "`source: nea` fuera del vocabulario" in out
+
+
+def test_disputa_con_formas_basura_no_crashea_el_lint(toy_vault, capsys):
+    """El lint corre sobre notas escritas a mano: una disputa que es un string suelto, o una
+    posición que no es un mapa, tiene que reportarse (o saltearse) sin voltear el barrido entero."""
+    ficha_con_disputas(toy_vault, [
+        "esto no es un mapa",                                   # la disputa entera es basura
+        {"field": "P_rot", "posiciones": ["2018autA", "2021autB"]}])
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert out.count("posición que no es un mapa") == 2     # las dos posiciones basura
+    assert "Traceback" not in out
+
+
+def test_disputa_en_un_concepto(toy_vault, capsys):
+    """Punto 3 del issue: en un concepto la disputa es simétrica por definición — no hay valor de
+    frontmatter contra el cual poner un `alt`."""
+    mk_note(toy_vault.PAPERS, "2018autA...1..1A", {"tags": ["paper"]}, "")
+    mk_note(toy_vault.PAPERS, "2021autB...1..1B", {"tags": ["paper"]}, "")
+    mk_note(toy_vault.CONCEPTS / "methods", "gp",
+            {"tags": ["methods"], "disputes": [
+                {"field": "signo de la correlación",
+                 "posiciones": [{"ref": "2018autA...1..1A", "value": "positiva"},
+                                {"ref": "2021autB...1..1B", "value": "negativa"}]}]},
+            "Síntesis con [[2018autA...1..1A]] y [[2021autB...1..1B]].\n")
+    link_from_index(toy_vault, "gp")
+    rc, out = run_lint(capsys)
+    assert rc == 0 and "(posiciones explícitas, #71) (0)" in out
+
+
 # ── #73: el ROL del paper ────────────────────────────────────────────────────
 
 def test_role_fuera_del_vocabulario_es_bloqueante(toy_vault, capsys):
@@ -409,30 +504,52 @@ def test_thesis_link_colgante(toy_vault, capsys):
 
 
 def test_dispute_ref_colgante(toy_vault, capsys):
-    star_fm = {"tags": ["star"], "P_rot_days": 1.0, "activity_indicators_expected": ["x"],
-               "planets": [{"letter": "b",
-                            "disputes": [{"field": "existence", "ref": "2020disD...1..1D",
-                                          "note": "no la ve"}]}]}
-    mk_note(toy_vault.STARS, "test_star", star_fm, "**b** (P=1 d)\n")
+    """El bibcode que sostiene una posición tiene que existir como nota de paper: si no, la disputa
+    no es trazable (typo, o paper sin ingestar)."""
+    mk_note(toy_vault.STARS, "test_star",
+            {"tags": ["star"], "P_rot_days": 1.0, "activity_indicators_expected": ["x"],
+             "planets": [{"letter": "b"}],
+             "disputes": [{"field": "b.existence",
+                           "posiciones": [{"ref": "2020disD...1..1D"},
+                                          {"source": "ground_truth", "value": "confirmed"}]}]},
+            "**b** (P=1 d)\n")
     rc, out = run_lint(capsys)
     assert rc == 1
-    assert "## disputes[].ref sin paper destino (1)" in out
+    assert "## disputes: ref de una posición sin paper destino (1)" in out
     # la ref existe pero NO es nota de paper → sigue colgante
     mk_note(toy_vault.QUERIES, "2020disD...1..1D", {"tags": ["query"]}, "")
     link_from_index(toy_vault, "2020disD...1..1D")
     rc, out = run_lint(capsys)
-    assert "## disputes[].ref sin paper destino (1)" in out
+    assert "## disputes: ref de una posición sin paper destino (1)" in out
 
 
 def test_dispute_ref_con_paper_ok(toy_vault, capsys):
-    star_fm = {"tags": ["star"], "P_rot_days": 1.0, "activity_indicators_expected": ["x"],
-               "planets": [{"letter": "b",
-                            "disputes": [{"field": "K", "ref": "2020disD...1..1D",
-                                          "alt": 1.4, "note": "K distinto"}]}]}
-    mk_note(toy_vault.STARS, "test_star", star_fm, "**b** (P=1 d)\n")
+    mk_note(toy_vault.STARS, "test_star",
+            {"tags": ["star"], "P_rot_days": 1.0, "activity_indicators_expected": ["x"],
+             "planets": [{"letter": "b"}],
+             "disputes": [{"field": "b.K", "note": "K distinto",
+                           "posiciones": [{"ref": "2020disD...1..1D", "value": 1.4},
+                                          {"source": "ground_truth", "value": 0.9}]}]},
+            "**b** (P=1 d)\n")
     mk_note(toy_vault.PAPERS, "2020disD...1..1D", {"tags": ["paper"]}, "")
     rc, out = run_lint(capsys)
-    assert "## disputes[].ref sin paper destino (0)" in out
+    assert "## disputes: ref de una posición sin paper destino (0)" in out
+
+
+def test_schema_viejo_de_disputes_grita_en_vez_de_volverse_mudo(toy_vault, capsys):
+    """El lint dejó de leer `planets[].disputes[]` a propósito (una sola semántica). Lo que NO puede
+    pasar es que esas disputas queden invisibles y la bóveda siga en verde: se reportan como
+    bloqueante, con el comando de migración."""
+    mk_note(toy_vault.STARS, "test_star",
+            {"tags": ["star"], "P_rot_days": 1.0, "activity_indicators_expected": ["x"],
+             "planets": [{"letter": "b", "disputes": [
+                 {"field": "K", "ref": "2020disD...1..1D", "alt": 1.4},
+                 {"field": "existence", "ref": "2020disD...1..1D"}]}]},
+            "**b** (P=1 d)\n")
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert "2 disputa(s) en `planets[].disputes[]`" in out
+    assert "--migrate-disputes" in out
 
 
 # ── WARN (no bloquean) ───────────────────────────────────────────────────────

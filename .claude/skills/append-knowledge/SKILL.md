@@ -82,7 +82,7 @@ Progreso del append de <fuente> → <destino>:
    desacuerdo (fundacional↔aplicación es instanciación, no contraste).
    - **Ficha de estrella:** rige la **regla de poda** de `CLAUDE.md` (un paper tangencial entra a
      la prosa únicamente si cambia cómo se lee una señal RV). Si discrepa del ground-truth NEA →
-     `planets[].disputes[]` (no sobreescribir) + `bearing: challenges`. Actualizar `## Huecos` y la
+     `disputes` a nivel nota con posiciones explícitas (#71; no sobreescribir) + `bearing: challenges`. Actualizar `## Huecos` y la
      matriz método×estrella si el paper aplica un método nuevo a la estrella.
    - **Concept:** integrar al eje del tema (mecanismo, rango, régimen, paso del método) citando
      `[[clave]]`; actualizar `## Huecos`. Si es un radio de un hub, tocar el radio que corresponda

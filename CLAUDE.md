@@ -129,9 +129,10 @@ Toda nota de `vault/wiki/` lleva frontmatter YAML. Campos comunes: `tags`, `gene
 (`Almagesto v<x>`, provenance — lo estampa `make_notes` desde `lib_config.ALMAGESTO_VERSION`), y
 cuando aplique `confidence: high|medium|low`. Schemas específicos:
 - **stars/**: `name, slug, aliases, simbad_id, spectral_type, teff_K, dist_pc, P_rot_days,
-  activity_indicators_expected, planets[], data_local, methods_applied{literature,ours}`. Cada
+  activity_indicators_expected, planets[], disputes[], data_local, methods_applied{literature,ours}`. Cada
   `planets[]` lleva `letter, P_days, K_ms, e, mass_earth, status` (de ground-truth NEA; `mass_earth`
-  RV-only ≈ $m\sin i$) + `disputes[]` cuando un paper discrepa.
+  RV-only ≈ $m\sin i$). Los desacuerdos van en `disputes` **a nivel nota** (ver abajo), no dentro de
+  `planets[]`.
   ⛔ **Espejo puro de NEA (#70) — los campos de arriba valen lo que dice el ground-truth o NADA.**
   `spectral_type`, `teff_K`, `dist_pc`, `P_rot_days` y los cinco campos de cada `planets[]` los
   copia el script del JSON de `vault/raw/ground_truth/`: si NEA no tiene el valor, el campo queda
@@ -188,13 +189,28 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   en el mismo corpus. Además el matcheo textual confunde `GJ 71` con `GJ 710`, y `split_fm` compara
   por elemento. Si descargás contenido a un roll-up, es porque ese fallback lo recupera; si no, el
   contenido va inlineado en la ficha.
-  **Disputas (`planets[].disputes`):** NEA (ground-truth) es **siempre el valor de verdad**; cuando
-  un paper discrepa —sea sobre la **existencia** de la señal o sobre el **valor** de un parámetro—
-  se taguea, no se sobreescribe. Cada entrada: `field` (`existence` o el parámetro: `P|K|e|msini`),
-  `ref` (bibcode discrepante, **debe** existir como nota de paper — lo chequea el lint), `note`
-  (qué dice ese paper) y, para disputas de valor, `alt` (el valor según ese paper). Convención
-  **simétrica** existencia↔valor. Sólo taguear discrepancias **materiales** (mayores que el error;
-  no diferencias cosméticas dentro de la barra). Reflejar la disputa también en la tabla/prosa.
+  **Disputas (`disputes`, a NIVEL NOTA, con posiciones explícitas — #71):** cuando dos fuentes
+  discrepan sobre el mismo hecho —la **existencia** de una señal o el **valor** de un parámetro— se
+  taguea, no se sobreescribe. Cada entrada: `field` (qué se discute: `P_rot` para un campo estelar,
+  `<letra>.<param>` para uno planetario — `b.K`, `b.existence`), `posiciones[]` (**al menos dos**;
+  con una sola no hay desacuerdo: es una afirmación y va a la prosa citada) y `note` opcional. Cada
+  posición dice **quién la sostiene**: `{ref: <bibcode>, value: …}` para un paper (el bibcode
+  **debe** existir como nota — lo chequea el lint) o `{source: ground_truth, value: …}` cuando NEA
+  arbitra. **Ese marcador es el punto:** distingue *"hay autoridad y dice X"* de *"la bóveda
+  genuinamente no sabe"*, que es la diferencia que el consumidor necesita ver. Cuando NEA arbitra
+  **sigue siendo el valor de verdad** y el frontmatter no se toca (espejo puro, #70).
+  ⚠ **El schema viejo** (`planets[].disputes[]` con `field`/`ref`/`note`/`alt`) tenía el polo de
+  verdad **hardcodeado en la forma**: el otro lado era, implícitamente, el valor del frontmatter.
+  Servía para paper↔NEA y **no podía expresar paper↔paper** —el caso normal cuando NEA calla (`K` y
+  `e` enmascarados, `P_rot` sin `st_rotp`)—, y `P_rot`, que es de la **estrella**, ni siquiera tenía
+  dónde colgar. **El lint NO lee el schema viejo** (una sola semántica; mantener las dos sería
+  complejidad permanente en el lector): lo **detecta y bloquea**, con el comando de migración —
+  `python scripts/make_notes.py --migrate-disputes`—, porque una disputa que el lector ignora en
+  silencio es peor que un error.
+  Vale igual para **conceptos**, donde la disputa es **simétrica por definición** (no hay valor de
+  frontmatter contra el cual poner un `alt`). Sólo taguear discrepancias **materiales** (mayores que
+  el error; no diferencias cosméticas dentro de la barra). Reflejar la disputa también en la
+  tabla/prosa.
 - **papers/**: `bibcode, title, first_author, n_authors, year, arxiv_id, doi, bibstem, stars[], topics[], methods[],
   thesis_links[], bearing(supports|challenges|method), role[], relevance, citation_count, pdf, fulltext,
   fulltext_source(pdftotext|ocr|web), pdf_source(eprint|ads|publisher|web)`. El contrato apunta a **ambos artefactos**: `fulltext` es el
@@ -247,7 +263,8 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   `vault/config/objective.yaml` es sólo referencia para el typo-check, con `methods`/`hypotheses` reservadas)**: `name`, **`aliases`** (lista de sinónimos EN+ES —
   p. ej. `[chromatic index, índice cromático, RV-color]` — para que la ficha se encuentre por `grep`
   desde **cualquier término**, no sólo el nombre canónico; espeja la idea de `aliases` de `stars/`),
-  `tags`, `confidence`. El cuerpo trae `## Síntesis`, `## Inventario por eje`,
+  `tags`, **`disputes[]`** (mismo schema de posiciones explícitas que en `stars/`, #71 — acá la
+  disputa es simétrica por definición), `confidence`. El cuerpo trae `## Síntesis`, `## Inventario por eje`,
   **`## Régimen de validez`**, `## Huecos` y el
   apéndice `## Excluidos por el filtro` (igual que la ficha de estrella).
   **Régimen de validez (#74) — sólo en conceptos.** Acá no hay ground-truth ni árbitro externo, y
@@ -408,7 +425,7 @@ El usuario trae **una fuente concreta** (bibcode ADS, PDF local o URL) para una 
 **ya existe**: plomería mínima según el tipo (bibcode → `extra_core` + cadena idempotente; off-ADS →
 item en `sources:` + `ingest_topic.py`, o las piezas sueltas `fetch_web`/`make_notes --web`),
 extracción enfocada en el eje del destino, síntesis a la nota viva (rige la regla de poda y
-`disputes[]`) y cierre estándar (autosuficiencia + verify-citations + lint + log). **No crea
+`disputes`) y cierre estándar (autosuficiencia + verify-citations + lint + log). **No crea
 entidades** (eso es Ingest) **ni barre por query lo nuevo** (eso es Mantenimiento/refrescar); un dato
 suelto sin fuente citable no entra (regla #0). Detalle en el skill.
 
@@ -439,7 +456,7 @@ memoria) y devuelve `soportada|parcial|no-soportada|contradice` + **cita textual
 (obligatoria; sin cita ⇒ no-soportada — también para `parcial`: la cita debe tocar el **contenido
 distintivo** de la afirmación, la mera cercanía temática no alcanza). `no-soportada` = la fuente **calla**; `contradice` = la fuente
 **afirma lo contrario** → no es (sólo) cita rota: es corrección de la nota o **disputa** a taguear
-(`planets[].disputes[]` si es parámetro planetario). Cada falla se **resuelve** (bajar la afirmación
+(`disputes` con posiciones explícitas, #71). Cada falla se **resuelve** (bajar la afirmación
 a lo que dice la fuente, reasignar la cita al bibcode correcto, marcar **`inferencia`**, o taguear la
 disputa) y se deja un bloque `## Verificación de citas` en la nota. El subagente contesta además, **en todos los casos**, si el paper
 afirma eso **bajo condiciones** que la nota no dice (#74): la afirmación pelada sí está en la fuente,
@@ -472,7 +489,8 @@ backlog los conceptos/hipótesis **sin ninguna cita** (cobertura: afirman sin fu
 hecho?). **Cuándo:** auditoría **explícita** (a pedido, o tras un ingest grande) — **no** es paso de
 cierre automático. **Qué hace:** barre un eje (estrella/parámetro o concepto), confirma cada desacuerdo
 candidato con un subagente por par (lee los **dos** fulltext, `real|aparente|no-concluyente` + cita de
-ambos lados) y **propone** disputas —`planets[].disputes[]` para estrellas (NEA sigue siendo la verdad),
+ambos lados) y **propone** disputas —`disputes` a nivel nota con posiciones explícitas (#71); si NEA
+arbitra, una posición es `{source: ground_truth}` y sigue siendo la verdad—,
 línea citando ambos `[[bibcode]]` para conceptos— que **el usuario aprueba** antes de escribir. Detalle
 en el skill.
 
@@ -506,7 +524,11 @@ valor que difiere del ground-truth, o que existe en la ficha cuando NEA no lo ti
 (#70)—, **masa de ground-truth inconsistente con la m·sini implícita**
 (K/P/e/M\* — atrapa best-mass espurias de NEA), **`thesis_links` sin página destino** (tag que no matchea
 ninguna nota → no acumula en el roll-up; typo típico `shift-vs-shape` vs `shift_vs_shape`) y
-**`planets[].disputes[].ref` sin paper destino** (bibcode discrepante que no existe como nota) y
+**`disputes` con la `ref` de una posición sin paper destino** (el bibcode que sostiene esa posición
+no existe como nota → la disputa no es trazable), **`disputes` mal formadas** (#71: sin `field`, con
+menos de dos posiciones —con una sola es una afirmación, no un desacuerdo—, con una posición que no
+dice quién la sostiene, o con un `source` fuera del vocabulario), **`disputes` en el schema viejo**
+(`planets[].disputes[]`, que el lint ya no lee: migrar) y
 **`role` fuera del vocabulario** (`fundacional|aplicacion|arbitro`: un typo deja el rol mudo para el
 contraste cross-paper, mismo modo de falla que un `thesis_links` sin destino). El
 **fuga de implementación** (regla #0 / frontera dura) es **WARN no bloqueante** — heurística de alta

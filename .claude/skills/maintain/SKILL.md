@@ -1,7 +1,7 @@
 ---
 name: maintain
 description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), resolver el backlog del lint (P_rot sin documentar, drift PDF↔disco, cobertura, claims stale), y la pasada periódica de retracciones sobre toda la bóveda ("chequeá retracciones").
-version: 1.14.0
+version: 1.15.0
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
@@ -30,7 +30,7 @@ Progreso del refresh de <entidad>:
 - [ ] 1  orquestador re-corrido — guardia de expansión revisada
 - [ ] 1b triage de los candidatos nuevos del chaining
 - [ ] 2  stubs nuevos identificados (git status) y extraídos
-- [ ] 3  síntesis actualizada con SÓLO lo nuevo (+ disputes[] / matriz)
+- [ ] 3  síntesis actualizada con SÓLO lo nuevo (+ disputes / matriz)
 - [ ] 4  verify-citations sobre la prosa cambiada (re-fechar el bloque) → lint 0 → log → commit
 ```
 
@@ -156,6 +156,18 @@ Pasada de higiene sobre lo que `lint.py` marca como backlog/WARN (no bloqueante,
   NEA** (#70) y un null ahí es el estado correcto, no un hueco a tapar. El hallazgo del lint es
   justamente "NEA no lo trae **y** el cuerpo no documenta uno citado": lo que se completa es la
   prosa. Rellenar el campo lo convierte en un hallazgo **bloqueante** (espejo roto).
+- **disputes en el schema viejo** (#71) → **bloqueante**: el lint dejó de leer
+  `planets[].disputes[]` a propósito (una sola semántica), así que esas disputas están **mudas**
+  hasta migrarlas. Correr la migración una vez:
+  `python scripts/make_notes.py --migrate-disputes`. Pasa `planets[].disputes[]` (que tenía el polo
+  de verdad hardcodeado) a `disputes` a nivel nota con posiciones explícitas, materializando el lado
+  implícito como `{source: ground_truth, value: <el valor que la ficha tiene hoy>}`. Toca **sólo**
+  las fichas con disputas viejas y **no** el cuerpo, pero re-serializa el frontmatter: **revisá el
+  diff antes de commitear**. (La otra vía válida es **re-ingestar** el sujeto y rehacer las disputas
+  con la extracción, que de paso compara.)
+- **disputes mal formadas / ref de una posición sin paper** (#71) → resolver a mano: una disputa con
+  **una sola** posición no es un desacuerdo (va a la prosa citada), y una `ref` colgante es un typo
+  de bibcode o un paper sin ingestar.
 - **Extraído pero no sintetizado** (#75) → el paper pagó el paso más caro y su contenido nunca llegó
   a una ficha ni a un concepto. Releer su `## Extracción` y decidir: si aporta algo al sujeto,
   **sintetizarlo** en la nota viva (rige la regla de poda) y cerrar con `verify-citations`; si

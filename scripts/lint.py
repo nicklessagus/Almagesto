@@ -194,6 +194,38 @@ def note_files() -> list:
 
 BIBCODE_RE = re.compile(r"^\d{4}[A-Za-z]")   # heurística: target de link que parece bibcode
 
+# ── disputas con posiciones explícitas (#71) ─────────────────────────────────
+# El schema VIEJO (`planets[].disputes[]` con `field`/`ref`/`note`/`alt`) tenía el polo de verdad
+# **hardcodeado en la forma**: el otro lado del desacuerdo era, implícitamente, el valor del
+# frontmatter (NEA). Servía para paper↔NEA y **no podía expresar paper↔paper** — que es el caso
+# NORMAL cuando NEA calla (K y e enmascarados, `P_rot` sin `st_rotp`), y encima `P_rot` es de la
+# ESTRELLA, así que ni siquiera tenía dónde colgar. El schema nuevo sube `disputes` a nivel nota y
+# hace explícitas las posiciones; la posición `{source: ground_truth}` es lo que distingue "hay
+# autoridad" de "la bóveda genuinamente no sabe", que es la diferencia que el consumidor necesita ver.
+# El schema viejo NO se lee: mantener las dos formas sería complejidad permanente en el lector para
+# una compatibilidad que nadie necesita (decisión del usuario, 2026-08-22 — la bóveda que existe se
+# migra con `python scripts/make_notes.py --migrate-disputes`, o se re-ingesta). Lo que sí se hace es
+# **detectarlo y bloquear**: una disputa vieja que el lector ignora en silencio es peor que un error.
+DISPUTE_SOURCES = ("ground_truth",)
+
+
+def note_disputes(fm: dict) -> list:
+    """Disputas de una nota como `(field, posiciones)`. **Un solo schema**: leer también el viejo
+    sería cargar el lint con dos semánticas para siempre, y el schema viejo no sabe expresar la
+    mitad de los casos. Lo que sí hace falta es que la presencia del viejo **grite** en vez de
+    volverse invisible — eso lo reporta `legacy_disputes` como bloqueante, con el comando."""
+    return [(str(d.get("field", "")).strip(), d.get("posiciones") or [])
+            for d in (fm.get("disputes") or []) if isinstance(d, dict)]
+
+
+def legacy_disputes(fm: dict) -> int:
+    """Cuántas disputas quedan en el schema PRE-1.19.0 (`planets[].disputes[]`). Sin este chequeo, al
+    sacar la tolerancia de lectura esas disputas quedarían **mudas**: el lint no las vería y la
+    bóveda seguiría en verde afirmando que no hay desacuerdos tagueados."""
+    return sum(len(pl.get("disputes") or []) for pl in (fm.get("planets") or [])
+               if isinstance(pl, dict))
+
+
 # Vocabulario CERRADO de `role` (#73). Es chico y cerrado a propósito: el rol define QUÉ OPERACIÓN
 # de contraste corresponde entre dos papers, y un valor libre no la determina. Un typo deja el campo
 # mudo para esa operación sin que nadie se entere — el mismo modo de falla de `thesis_links` que no
@@ -297,7 +329,9 @@ def main() -> int:
     pdf_issues: list = []              # (stem, ...) — drift frontmatter `pdf` ↔ PDF en disco
     headerless: list = []              # (stem, motivo) — ficha/concepto sin cabecera estampable (#69)
     thesis_refs: dict[str, list] = {}  # valor de thesis_link -> notas que lo usan
-    dispute_refs: list = []            # (estrella, planeta, ref) de planets[].disputes
+    dispute_refs: list = []            # (nota, field, ref) de las posiciones de cada disputa (#71)
+    bad_disputes: list = []            # (nota, motivo) — disputa mal formada (#71)
+    old_disputes: list = []            # (nota, motivo) — disputas en el schema pre-1.19.0 (#71)
     bad_roles: list = []               # (stem, valor) — `role` fuera del vocabulario cerrado (#73)
     cited_in_entity: set = set()       # bibcodes citados desde una ficha/concepto (#75)
     extracted: list = []               # (stem, marca `no_sintetizado`) de papers YA extraídos (#75)
@@ -374,6 +408,36 @@ def main() -> int:
                                      "de cabecera no pueden actuar → `python scripts/make_notes.py "
                                      "--restamp-headers`"))
 
+        # Disputas (#71): a nivel NOTA y con posiciones explícitas — vale para estrellas y para
+        # conceptos, donde la disputa es simétrica por definición (no hay valor de frontmatter
+        # contra el cual poner un `alt`). Se leen también las del schema viejo (ver note_disputes).
+        if (n_viejas := legacy_disputes(fm)):
+            old_disputes.append((stem, f"{n_viejas} disputa(s) en `planets[].disputes[]`, el schema "
+                                       f"pre-1.19.0 que el lint ya no lee → migralas con "
+                                       f"`python scripts/make_notes.py --migrate-disputes` (#71)"))
+        for campo, posiciones in note_disputes(fm):
+            if not campo:
+                bad_disputes.append((stem, "disputa sin `field`: no se sabe sobre QUÉ es el desacuerdo"))
+            if len(posiciones) < 2:
+                bad_disputes.append((stem, f"disputa `{campo or '?'}` con {len(posiciones)} "
+                                           f"posición(es): un desacuerdo necesita al menos dos — con "
+                                           f"una sola es una afirmación, y va a la prosa citada"))
+            for pos in posiciones:
+                if not isinstance(pos, dict):
+                    bad_disputes.append((stem, f"disputa `{campo}`: posición que no es un mapa "
+                                               f"(`ref`/`source` + `value`)"))
+                    continue
+                ref, src = str(pos.get("ref") or "").strip(), str(pos.get("source") or "").strip()
+                if ref:
+                    dispute_refs.append((stem, campo, ref))
+                elif src:
+                    if src not in DISPUTE_SOURCES:
+                        bad_disputes.append((stem, f"disputa `{campo}`: `source: {src}` fuera del "
+                                                   f"vocabulario ({'/'.join(DISPUTE_SOURCES)})"))
+                else:
+                    bad_disputes.append((stem, f"disputa `{campo}`: posición sin `ref` ni `source` "
+                                               f"→ no se sabe quién la sostiene"))
+
         # chequeos de completitud por tipo
         tags = fm.get("tags", []) or []
         if "star" in tags:
@@ -401,10 +465,6 @@ def main() -> int:
                         rf"\b{re.escape(l)}\s*\("]                   # "b (P=...)"
                 if not any(re.search(p, body) for p in pats):
                     incomplete.append((stem, f"planeta {l} en frontmatter pero no discutido en prosa"))
-                for d in (pl.get("disputes") or []):       # disputa de existencia/valor → traza paper
-                    ref = str(d.get("ref", "")).strip()
-                    if ref:
-                        dispute_refs.append((stem, l, ref))
         if "paper" in tags:
             # retracción (bloqueante): el flag lo estampa check_retractions.py (red); acá se surface
             # offline. Una fuente retractada citada viola el contrato de la bóveda (todo respaldado
@@ -565,11 +625,11 @@ def main() -> int:
              + (" …" if len(refs) > 3 else ""))
         for tl, refs in thesis_refs.items() if tl not in names)
 
-    # planets[].disputes[].ref sin paper destino: el bibcode discrepante no existe como nota →
-    # la disputa no es trazable (typo en el bibcode o paper sin ingestar).
+    # `ref` de una posición sin paper destino: el bibcode que sostiene esa posición no existe como
+    # nota → la disputa no es trazable (typo en el bibcode o paper sin ingestar).
     dangling_disputes = sorted(
-        (f"{star}", f"planeta {l}: ref `{ref}` sin nota de paper")
-        for star, l, ref in dispute_refs if ref not in names or "paper" not in kinds.get(ref, []))
+        (nota, f"disputa `{campo}`: ref `{ref}` sin nota de paper")
+        for nota, campo, ref in dispute_refs if ref not in names or "paper" not in kinds.get(ref, []))
 
     # objetivo sin instanciar (WARN): el template trae objective.yaml con `name` placeholder;
     # si sigue así, la bóveda clasifica "core" con la regex del ejemplo, no con TU tema — típico
@@ -695,7 +755,9 @@ def main() -> int:
                          ("Contradicciones ground-truth ↔ ficha", contradictions),
                          ("Ground-truth: masa inconsistente con m·sini (K,P,e,M*)", mass_issues),
                          ("thesis_links sin página destino", dangling_thesis),
-                         ("disputes[].ref sin paper destino", dangling_disputes),
+                         ("disputes: ref de una posición sin paper destino", dangling_disputes),
+                         ("disputes mal formadas (posiciones explícitas, #71)", bad_disputes),
+                         ("disputes en el schema viejo (planets[].disputes[]) — el lint ya no las lee", old_disputes),
                          ("`role` fuera del vocabulario (fundacional/aplicacion/arbitro)", bad_roles),
                          ("⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)", impl_leaks),
                          ("Objetivo sin instanciar (WARN — objective.yaml sigue en el placeholder del template)", objective_warn),
@@ -730,7 +792,8 @@ def main() -> int:
     # Exit code gateable: las categorías que CLAUDE.md exige "en 0" bloquean; WARN (fuga de
     # implementación, áreas, PDF↔disco) y backlog (verificabilidad, cobertura, incompletos) no.
     n_block = sum(len(x) for x in (broken, fm_broken, retracted, orphans, contradictions,
-                                   mass_issues, dangling_thesis, dangling_disputes, bad_roles))
+                                   mass_issues, dangling_thesis, dangling_disputes, bad_roles,
+                                   bad_disputes, old_disputes))
     if n_block:
         print(f"✗ {n_block} hallazgo(s) en categorías bloqueantes → exit 1")
         return 1

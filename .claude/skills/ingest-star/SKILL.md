@@ -172,8 +172,13 @@ Progreso del ingest de <estrella>:
    `inferencia`. Rellenarlos vuelve el número indistinguible del auditable y el lint lo marca como
    **bloqueante**.
    - **Contrastar contra `vault/raw/ground_truth/<slug>.json`**: si un paper discrepa del archivo
-     (p. ej. planeta dudoso), taguearlo en `planets[].disputes[]` de la ficha (`field`/`ref`/`note`/`alt`;
-     ver *Disputas* en `CLAUDE.md`) y `bearing: challenges` en la nota del paper — no celebrar.
+     (p. ej. planeta dudoso), taguearlo en `disputes` **a nivel nota** con posiciones explícitas
+     (#71) —`field: b.existence`, una posición `{ref, value}` por el paper y otra
+     `{source: ground_truth, value}` por NEA— y `bearing: challenges` en la nota del paper; ver
+     *Disputas* en `CLAUDE.md`. No celebrar.
+     Si el desacuerdo es **paper↔paper** sobre algo que NEA no arbitra (`P_rot`, la naturaleza de
+     una señal), va en la MISMA estructura con dos posiciones `{ref, value}`: eso es lo que antes
+     terminaba en prosa suelta.
 
 4. **Auto-revisión de autosuficiencia (semántica).** Releer la ficha **como un agente externo que
    sólo tiene ese archivo**: ¿se entiende la estrella sin abrir ningún paper? Checklist: parámetros
