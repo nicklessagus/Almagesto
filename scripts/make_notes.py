@@ -437,6 +437,30 @@ LLM_DISCLAIMER = {
 SEARCH_LINE_RE = re.compile(r"^> _Búsqueda .*_$\n?", re.M)
 
 
+# Paso de CONTRASTE cross-paper (#72): la sección que va entre leer los papers y escribir la
+# síntesis. Vive acá, compartida por la ficha y el concept, por el mismo motivo que LLM_DISCLAIMER:
+# la escriben dos templates y divergirían. Es el paso con más apalancamiento de la cadena y era el
+# menos especificado — sin él, tres papers que reportan tres valores distintos terminan en una frase
+# con un solo `[[bibcode]]`, y se evapora que los otros dos existen.
+# ⛔ La columna que NO está es deliberada: "valor adoptado" sería juicio de LLM en un artefacto que
+# se lee como bibliografía, y **decide por el consumidor** — flujo unidireccional de la regla #0.
+INVENTARIO = """## Inventario por eje
+_(Paso de **contraste**, antes de escribir la síntesis: una fila por paper para cada eje —parámetro
+o hecho— donde los papers **no coinciden**. Los ejes con acuerdo unánime no entran (misma regla de
+poda que la prosa): el inventario existe para lo que está en disputa._
+_⛔ **Sin columna "valor adoptado" ni "por qué"**: la bóveda reporta el **estado de la literatura**,
+no decide por quien la consume (regla #0). Si hay lectura propia —p. ej. "11.5 d es el armónico de
+34 d"— va aparte y marcada `inferencia`._
+_Cada fila es una transcripción citada: `verify-citations` la chequea, incluida la **completitud**
+(¿hay más papers del corpus que reportan este eje?). Si no hay ningún eje en disputa, borrar la
+sección y decirlo en el `log`.)_
+
+| Eje | Paper | Dice | Método / baseline |
+|---|---|---|---|
+|  |  |  |  |
+"""
+
+
 # Bullets de `## Extracción (LLM)` del stub de nota de paper. Viven acá y NO inline en los dos
 # templates de cuerpo —la rama ADS (write_paper_notes) y la off-ADS (write_web_paper_note)— por el
 # mismo motivo que LLM_DISCLAIMER: los escriben varios caminos y divergirían. Ramifican por TIPO DE
@@ -646,6 +670,7 @@ def write_star_note(slug: str, force: bool) -> None:
 _(síntesis por LLM: qué se sabe, qué indicadores deberían correlacionar con actividad para este
 tipo espectral, planetas confirmados/dudosos)._
 
+{INVENTARIO}
 ## Huecos
 _(qué falta para que la ficha alcance sola: parámetros sin valor (¿`P_rot`?), señales RV sin árbitro,
 indicadores esperados no medidos, métodos no aplicados. Lista corta y accionable — abrir queries para imputar.
@@ -735,6 +760,7 @@ def write_concept_note(slug: str, force: bool) -> None:
 ## Síntesis
 _(qué se sabe del tema: mecanismos, signos, desfasajes, regímenes)._
 
+{INVENTARIO}
 ## Huecos
 _(qué falta para entender/implementar el tema sin abrir papers: pasos o ecuaciones faltantes,
 regímenes no cubiertos, contradicciones sin resolver.)_

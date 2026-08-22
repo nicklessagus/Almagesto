@@ -18,6 +18,49 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.17.0 (2026-08-22) — #72: el paso que estaba entre leer los papers y escribir la síntesis
+
+> Primero de la **tanda 3** (síntesis): #72 → **#74** (queda). 458 tests verdes (+3), lint 0.
+> 1.16.0 → **1.17.0** (minor: sección nueva en el stub de ficha/concept; las notas ya escritas no se
+> tocan).
+
+- **El defecto.** Entre *"leí N papers"* y *"escribo el `## Resumen`"* no había **ninguna operación
+  descrita**: `ingest-star` decía "actualizás la ficha (síntesis, huecos)" y el stub dejaba
+  `_(síntesis por LLM: qué se sabe…)_`. El paso con más apalancamiento de la cadena era el menos
+  especificado.
+- **Consecuencia medible:** cuando tres papers reportan tres `P_rot` distintos, la ficha termina con
+  **una frase y un `[[bibcode]]`**. Se evapora que los otros dos valores existen, con qué método y
+  qué baseline se midieron, y cuáles de los core ni se miraron.
+- **`## Inventario por eje`**, entre la síntesis y los huecos, en la ficha **y** en el concept
+  (bloque único compartido, criterio de `LLM_DISCLAIMER`): `Eje | Paper | Dice | Método / baseline`.
+  Sólo los ejes **en disputa** — los de acuerdo unánime no entran, misma regla de poda que la prosa.
+- **⛔ La columna que NO está es el punto.** "Valor adoptado" / "por qué" sería juicio de LLM en un
+  artefacto que se lee como bibliografía, y sobre todo **decide por el consumidor**: rompe el flujo
+  unidireccional de la regla #0. El inventario reporta el **estado de la literatura**; la lectura
+  propia va aparte y marcada `inferencia`. Es la misma decisión que ya se había tomado al descartar
+  las reglas de precedencia declarativas en `objective.yaml`.
+- **Dónde paga:** (a) **autosuficiencia** — *"¿por qué el corpus dice 34 y no 11.5?"* es justo lo que
+  la ficha promete responder sin abrir un paper; (b) **refresh** — `maintain A` ya no re-deriva la
+  síntesis de cero: el inventario dice qué la sostenía, y un paper nuevo **agrega una fila**;
+  (c) **verify** — cada fila es una transcripción citada, así que hereda el chequeo de
+  **completitud** (¿hay más papers del corpus que reportan este eje?).
+- **Encastra con la tanda 2, como decía el backlog.** El `role` (#73) dice **qué operación**
+  corresponde entre dos filas (fundacional↔aplicación no es contraste, es instanciación), y la red
+  de que el paso ocurrió **ya existe**: es el backlog *extraído pero no sintetizado* (#75). Por eso
+  el orden era #73 → #75 → #72 y no al revés; no hizo falta categoría de lint nueva.
+- **Los dos ingests quedaron con el paso explícito y en el orden correcto.** En `ingest-star` el
+  paso 3 escribía la ficha, así que un "3b después de 3" habría quedado **después** de la síntesis:
+  se partió en **3 (extracción a las notas de paper) → 3b (contraste) → 3c (síntesis a la ficha)**.
+  En `ingest-topic` el contraste entró como **3c**, antes del paso 4 (síntesis del concept).
+- **Tests (+3):** el bloque está en los dos tipos de entidad y es el mismo objeto, el orden
+  Resumen → Inventario → Huecos, y la cabecera de la tabla **sin** columna de valor adoptado (más la
+  prohibición dicha, no sólo omitida: quien llena la tabla tiene que saber por qué falta).
+- Skills: `ingest-star` 1.16.0 → **1.17.0**, `ingest-topic` 1.13.0 → **1.14.0**, `maintain` 1.13.0 →
+  **1.14.0** (el refresh se apoya en el inventario), `append-knowledge` 1.3.0 → **1.4.0** (una fuente
+  nueva agrega una fila o abre un eje), `verify-citations` 1.4.1 → **1.5.0** (el inventario es el
+  caso más frecuente de transcripción, y su pregunta de completitud es *"¿faltan papers?"*, no
+  *"¿faltan filas de la fuente?"*).
+
 ## ✅ Framework 1.16.0 (2026-08-22) — #73: sin el rol del paper, "contrastar" no está definido
 
 > Cierra la **tanda 2** (procedencia: #70 → #75 → #73). 455 tests verdes (+7), lint 0.

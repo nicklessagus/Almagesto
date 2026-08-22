@@ -1,7 +1,7 @@
 ---
 name: append-knowledge
 description: Usar cuando el usuario quiere plegar UNA fuente puntual (paper por bibcode, PDF local, URL) a una entidad YA existente de la wiki — ficha de estrella o concepto — sin re-correr el ingest completo ("agregale este paper a la ficha de tau Ceti", "sumá este PDF al concept de procesos gaussianos", "este bibcode va a GJ 581", "encontré un paper nuevo para el tema X, agregalo"). Plomería mínima + extracción enfocada + síntesis a la nota viva + cierre estándar. NO crea entidades (eso es ingest-star/ingest-topic) ni barre por query lo nuevo (eso es maintain/refrescar).
-version: 1.3.0
+version: 1.4.0
 ---
 
 # Append — plegar una fuente puntual a una ficha o concepto existente
@@ -73,7 +73,13 @@ Progreso del append de <fuente> → <destino>:
    orientada a **lo que aporta a la entidad destino** (una señal RV, un mecanismo, una ecuación del
    método), no un resumen genérico.
 
-4. **Síntesis a la nota viva.** Plegar a la ficha/concept **sólo lo que cambia la lectura**:
+4. **Síntesis a la nota viva.** Plegar a la ficha/concept **sólo lo que cambia la lectura**.
+   ⚠ **Antes de la prosa, mirá el `## Inventario por eje` (#72):** si la fuente nueva reporta un eje
+   que ya está inventariado, **agregá su fila** —es lo que evita re-derivar la síntesis desde cero—;
+   si aporta un valor que **discrepa** de otro paper sobre un eje que todavía no está, ése es el
+   momento de abrir el eje. Si la nota no tiene inventario, armalo con los papers en juego. Rige el
+   ⛔ de siempre: **sin columna "valor adoptado"**, y `role` (#73) antes de leer dos filas como
+   desacuerdo (fundacional↔aplicación es instanciación, no contraste).
    - **Ficha de estrella:** rige la **regla de poda** de `CLAUDE.md` (un paper tangencial entra a
      la prosa únicamente si cambia cómo se lee una señal RV). Si discrepa del ground-truth NEA →
      `planets[].disputes[]` (no sobreescribir) + `bearing: challenges`. Actualizar `## Huecos` y la

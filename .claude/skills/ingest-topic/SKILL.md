@@ -1,7 +1,7 @@
 ---
 name: ingest-topic
 description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema off-ADS — típicamente un método de otra disciplina (estadística, ML) al servicio del foco astro — desde PDFs locales + web (ver Modo off-ADS).
-version: 1.13.0
+version: 1.14.0
 ---
 
 # Ingest: agregar un TEMA a la wiki
@@ -33,6 +33,7 @@ Progreso del ingest del tema <tema>:
 - [ ] 2  cadena mecánica (ingest_topic.py) — sin abortos
 - [ ] 3  extracción LLM de los papers clave del tema
 - [ ] 3b retro-tag por grep de aliases sobre el corpus pre-existente
+- [ ] 3c contraste cross-paper (inventario por eje)
 - [ ] 4  síntesis del concept durable
 - [ ] 5  auto-revisión de autosuficiencia
 - [ ] 6  bookkeeping (index, log, STATUS)
@@ -120,6 +121,22 @@ Progreso del ingest del tema <tema>:
    y el guión de corte antes de dar por no-taguable un paper; un 0 acá **no** es "el tema no está",
    es un retro-tag que no se hizo.
 
+3c. **Contraste cross-paper (#72) — antes de escribir la síntesis.** Entre "leí los papers" y
+   "escribo la síntesis" hay una operación, y es la de más apalancamiento de la cadena: armar el
+   **`## Inventario por eje`** del concept. Una fila por paper para cada **eje** —parámetro, efecto o
+   hecho— donde los papers **no coinciden** (`Eje | Paper | Dice | Método / baseline`). Los ejes con
+   acuerdo unánime **no entran**: misma regla de poda que la prosa.
+   ⛔ **Sin columna "valor adoptado" ni "por qué".** Adoptar un valor es **decidir por el
+   consumidor** y rompe el flujo unidireccional de la regla #0: la bóveda reporta el **estado de la
+   literatura**. La lectura propia va aparte y marcada `inferencia`.
+   ⚠ **Mirá el `role` (#73) antes de leer dos filas como desacuerdo:** fundacional↔aplicación **no
+   es contraste, es instanciación** — y en un tema de método eso es el caso NORMAL, porque
+   fundamentos y aplicaciones astro conviven en el mismo concept por diseño. El `arbitro` no es una
+   fila más: es el que resuelve.
+   Sin esto, tres papers con tres valores del mismo efecto terminan en una frase con un solo
+   `[[bibcode]]` y se evapora que los otros dos existen — que es exactamente lo que el concept
+   promete responder sin abrir un paper. La red de que el contraste ocurrió es #75 (*extraído pero
+   no sintetizado*).
 4. **Síntesis del concept durable** (`concepts/<area>/<concept>.md`). Destilar lo aprendido a la
    página viva: mecanismos, signos, desfasajes, regímenes, huecos. El roll-up Dataview (papers con
    `thesis_links: <concept>`) acumula solo. **Citar los papers clave por `[[bibcode]]`** en la prosa

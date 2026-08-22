@@ -1,7 +1,7 @@
 ---
 name: maintain
 description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), resolver el backlog del lint (P_rot sin documentar, drift PDF↔disco, cobertura, claims stale), y la pasada periódica de retracciones sobre toda la bóveda ("chequeá retracciones").
-version: 1.13.0
+version: 1.14.0
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
@@ -53,8 +53,16 @@ Progreso del refresh de <entidad>:
    motivo; dudoso → al usuario). Ver paso 2c del skill `ingest-star`.
 2. **Identificar lo nuevo:** `git status` sobre `vault/wiki/papers/` muestra los stubs recién creados. Leer
    **sólo esos** fulltext y hacer su extracción (methods/bearing/thesis_links/P·K/indicadores).
+2b. **Contraste con lo que ya estaba (#72):** el `## Inventario por eje` de la nota es **lo que
+   evita re-derivar la síntesis desde cero** — dice qué papers sostienen cada eje en disputa, con qué
+   método y qué baseline. Para cada paper nuevo: si toca un eje ya inventariado, **agregar su fila**;
+   si abre una discrepancia sobre un eje que no estaba, **abrir el eje**. Si la nota es anterior a
+   1.17.0 y no tiene inventario, éste es el momento de armarlo con los papers en juego. Rige el ⛔:
+   **sin columna "valor adoptado"** (adoptar decide por el consumidor, regla #0), y mirar el `role`
+   (#73) antes de leer dos filas como desacuerdo — fundacional↔aplicación es instanciación.
 3. **Re-sintetizar incorporando sólo lo nuevo:** releer la ficha/concepto y **actualizar** la síntesis y
-   los huecos con lo que aportan los papers nuevos — no reescribir de cero lo ya destilado. Si un paper
+   los huecos con lo que aportan los papers nuevos, apoyándose en el inventario de 2b — no reescribir
+   de cero lo ya destilado. Si un paper
    nuevo discrepa, taguear `disputes[]` (o correr `find-contradictions`). Actualizar la matriz
    método×estrella si hay métodos nuevos.
 3b. **Auto-revisión de autosuficiencia** (igual que el paso 4 de `ingest-star` / 5 de

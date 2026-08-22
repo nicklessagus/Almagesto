@@ -466,6 +466,39 @@ def test_extraction_block_sin_objetivo_degrada_a_generico(toy_vault):
     assert "objetivo de la bóveda / huecos" in block     # sin `short`: texto genérico
 
 
+# ── #72: el paso de contraste (inventario por eje) ──────────────────────────────────────────
+
+def test_inventario_en_ficha_y_concept(toy_vault):
+    """El paso de contraste es el mismo para los dos tipos de entidad, así que el bloque es UNO
+    (criterio de LLM_DISCLAIMER: lo escriben dos templates y divergirían)."""
+    seed_topic()
+    mn.write_star_note("test_star", force=False)
+    mn.write_concept_note("gp", force=False)
+    ficha = (toy_vault.STARS / "test_star.md").read_text(encoding="utf-8")
+    concept = (toy_vault.CONCEPTS / "methods" / "gaussian-processes.md").read_text(encoding="utf-8")
+    assert mn.INVENTARIO in ficha and mn.INVENTARIO in concept
+
+
+def test_inventario_va_entre_la_sintesis_y_los_huecos(toy_vault):
+    """El orden es el del razonamiento: primero la evidencia contrastada, después la síntesis que se
+    apoya en ella y los huecos que deja."""
+    mn.write_star_note("test_star", force=False)
+    t = (toy_vault.STARS / "test_star.md").read_text(encoding="utf-8")
+    assert t.index("## Resumen") < t.index("## Inventario por eje") < t.index("## Huecos")
+
+
+def test_inventario_no_tiene_columna_de_valor_adoptado(toy_vault):
+    """La columna que NO está es el punto del issue: adoptar un valor es decidir por el consumidor
+    (regla #0, flujo unidireccional). El inventario reporta el estado de la literatura."""
+    mn.write_star_note("test_star", force=False)
+    t = (toy_vault.STARS / "test_star.md").read_text(encoding="utf-8")
+    cabecera = next(l for l in t.split("\n") if l.startswith("| Eje |"))
+    assert [c.strip() for c in cabecera.strip("|").split("|")] == [
+        "Eje", "Paper", "Dice", "Método / baseline"]
+    # y la ausencia está DICHA, no sólo omitida: el que llena la tabla tiene que saber por qué
+    assert 'Sin columna "valor adoptado"' in t and "regla #0" in t
+
+
 # ── #76 (unitario): objective_lens + la matriz de ramas de extraction_block ──────────────────
 
 def write_objective(toy_vault, **cambios):

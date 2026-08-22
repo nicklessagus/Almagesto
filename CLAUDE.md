@@ -143,7 +143,8 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   consume**, contra el flujo unidireccional de la regla #0. El valor de literatura va **al cuerpo,
   citado `[[bibcode]]`** (la autosuficiencia se cumple igual: el dato está, con su fuente); si
   discrepa de NEA es una `disputes[]`; si es lectura propia va marcado **`inferencia`**. Lo vigila el
-  lint, campo por campo. El cuerpo trae además una sección
+  lint, campo por campo. El cuerpo trae además **`## Inventario por eje`**
+  (el paso de contraste, ver abajo), una sección
   **`## Huecos`** (qué falta para que la ficha alcance sola: parámetros sin valor, señales sin árbitro,
   métodos no aplicados) y un apéndice **`## Excluidos por el filtro`** (snapshot de los no-core, top por
   citas con link a ADS — puntero por las dudas, no se bajan). El blockquote de cabecera lleva un
@@ -246,8 +247,8 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   `vault/config/objective.yaml` es sólo referencia para el typo-check, con `methods`/`hypotheses` reservadas)**: `name`, **`aliases`** (lista de sinónimos EN+ES —
   p. ej. `[chromatic index, índice cromático, RV-color]` — para que la ficha se encuentre por `grep`
   desde **cualquier término**, no sólo el nombre canónico; espeja la idea de `aliases` de `stars/`),
-  `tags`, `confidence`. El cuerpo trae `## Síntesis`, `## Huecos` y el apéndice `## Excluidos por el
-  filtro` (igual que la ficha de estrella). Rige el *Estándar transversal* (autosuficiente + implementation-ready).
+  `tags`, `confidence`. El cuerpo trae `## Síntesis`, `## Inventario por eje`, `## Huecos` y el
+  apéndice `## Excluidos por el filtro` (igual que la ficha de estrella). Rige el *Estándar transversal* (autosuficiente + implementation-ready).
   **Convención hub/radios (tema grande → varias notas):** cuando un tema no cabe en una sola nota sin
   perder foco, se estructura como **hub** (la nota central: síntesis del tema completo) + **radios**
   (notas satélite del mismo área que profundizan un sub-aspecto; p. ej. hub `procesos-gaussianos`, radio
@@ -314,6 +315,20 @@ re-clasificar de `maintain`. No ingesta nada; después se usan `ingest-star`/`in
    Cascada: poblás la extracción del paper
    (`methods`, `thesis_links`, `bearing`, P/K/indicadores), actualizás la ficha de la estrella
    (síntesis, huecos), tocás conceptos/hipótesis relacionados y la matriz método×estrella.
+2b. **Contraste cross-paper (#72) — entre leer los papers y escribir la síntesis.** Es el paso con
+   más apalancamiento de la cadena y el que más fácil se saltea, porque su producto no se nota si
+   falta. Produce el **`## Inventario por eje`** de la nota: una fila por paper para cada **eje**
+   —parámetro o hecho— donde los papers **no coinciden** (`Eje | Paper | Dice | Método / baseline`).
+   Los ejes con acuerdo unánime **no entran** (misma regla de poda que la prosa).
+   ⛔ **Sin columna "valor adoptado" ni "por qué":** eso sería juicio de LLM en un artefacto que se
+   lee como bibliografía y **decide por el consumidor** — rompe el flujo unidireccional de la regla
+   #0. La bóveda reporta el **estado de la literatura**; la lectura propia va aparte, marcada
+   `inferencia`. Sin este paso, tres papers que reportan tres `P_rot` terminan en una frase con un
+   solo `[[bibcode]]` y se evapora que los otros dos valores existen, con qué método se midieron y
+   cuáles de los core ni se miraron — que es exactamente lo que la ficha promete responder sin abrir
+   un paper, y lo que hace que un refresh no tenga que re-derivar la síntesis de cero. El `role`
+   (#73) dice qué operación corresponde entre dos filas; la red de que el paso ocurrió es el backlog
+   *extraído pero no sintetizado* (#75).
 3. Actualizás `index.md` y appendeás a `log.md`.
 
 > **Retro-linkeo (papers pre-existentes ↔ entidad nueva) — tres capas:** (a) una **ficha-método**

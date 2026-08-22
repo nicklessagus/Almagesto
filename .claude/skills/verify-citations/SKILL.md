@@ -1,7 +1,7 @@
 ---
 name: verify-citations
 description: Usar para verificar, afirmación por afirmación, que las citas [[bibcode]] de una nota de la wiki (query, hipótesis, ficha, concepto) realmente están respaldadas por el texto completo de la fuente. Se corre como paso de cierre al armar/editar una query o hipótesis, o cuando el usuario pide "rechequeá las citas / ¿esto lo dice el paper?". Implementa el chequeo claim↔evidencia (pipeline tipo CiteAudit) sobre el corpus cerrado de la bóveda. Veredictos: soportada / parcial / no-soportada (la fuente calla) / contradice (la fuente afirma lo contrario → candidata a disputa, no sólo cita rota); en transcripciones de tablas/listas chequea además la completitud (lo que la nota omite).
-version: 1.4.1
+version: 1.5.0
 ---
 
 # Verify-citations — chequeo claim↔evidencia contra el fulltext
@@ -189,6 +189,12 @@ Cada uno:
 > **completitud** (arriba) y el faltante se reporta como **hallazgo propio**, distinto del veredicto
 > de soporte. Vale para cualquier enumeración que la nota presente como cerrada (una lista de
 > máscaras, de extensiones, de keywords), no sólo para tablas con pipes.
+>
+> El caso más frecuente de esto en una bóveda es el **`## Inventario por eje`** (#72), que es
+> transcripción por construcción: cada fila dice qué reporta un paper sobre un eje en disputa. Ahí
+> la pregunta de completitud no es "¿la fuente tiene más filas?" sino **"¿hay más papers del corpus
+> que reportan este eje y no están en la tabla?"** — un inventario sin errores pero **incompleto**
+> vuelve 100% soportado y se lee como el estado de la literatura.
 
 Prompt sugerido por agente: *"Leé SOLO `<ruta fulltext>`. ¿El paper respalda esta afirmación: «…»?
 Si la afirmación tiene varias cláusulas atribuidas a distintas fuentes, juzgá si el archivo respalda

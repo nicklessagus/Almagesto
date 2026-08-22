@@ -1,7 +1,7 @@
 ---
 name: ingest-star
 description: Usar cuando el usuario pide bajar/agregar/ingestar una estrella a la bóveda ("bajá GJ 581", "ingest tau ceti", "agregá la estrella X", "traé la bibliografía de AU Mic"). Corre la cadena de ingesta y hace la extracción LLM.
-version: 1.16.0
+version: 1.17.0
 ---
 
 # Ingest: agregar una estrella a la wiki
@@ -14,8 +14,8 @@ procesa. Trabajar desde la raíz del repo.
 **Copiá este checklist al chat al arrancar y andá tildándolo** — tres pasos (2b, 2c, 5b) son
 fáciles de saltear y **ninguno deja rastro si se omite**. El lint tiene red para **2c** (*triage
 pendiente*, #55), para **5b** (*sin verificar* / *verificación stale*, #56) y para lo que la
-síntesis del paso **3** dejó afuera (*extraído pero no sintetizado*, #75); para **2b** no hay red
-todavía:
+síntesis del paso **3c** dejó afuera (*extraído pero no sintetizado*, #75 — que es también la red
+del contraste de **3b**); para **2b** no hay red todavía:
 
 ```
 Progreso del ingest de <estrella>:
@@ -24,6 +24,8 @@ Progreso del ingest de <estrella>:
 - [ ] 2b barrido full-text (--sweep) revisado
 - [ ] 2c triage de candidatos resuelto (aceptado / --drop con motivo / al usuario)
 - [ ] 3  extracción LLM de los papers clave
+- [ ] 3b contraste cross-paper (inventario por eje)
+- [ ] 3c síntesis a la ficha (frontmatter propio + prosa + disputes)
 - [ ] 4  auto-revisión de autosuficiencia
 - [ ] 5  bookkeeping (index, log, matriz, STATUS)
 - [ ] 5b verify-citations sobre la ficha + notas nuevas
@@ -130,7 +132,8 @@ Progreso del ingest de <estrella>:
    snapshot es el de la última corrida de la cadena, no el vigente.
 
 3. **Extracción LLM (criterio).** Leer los papers **clave** (discovery / actividad / métodos) desde
-   `vault/raw/fulltext/<slug>/` y poblar:
+   `vault/raw/fulltext/<slug>/` y poblar **las notas de paper** (la ficha se escribe en 3c, después
+   del contraste — no saltear directo a la prosa):
    - en `vault/wiki/papers/<bibcode>.md`: `methods`, `thesis_links`, `bearing`, `role` (#73: `fundacional` introduce el método/mecanismo · `aplicacion` lo instancia en un caso · `arbitro` reanaliza y resuelve una tensión previa — sale de leer el paper, la regex del clasificador no puede inferirlo, y sin él contrastarlo contra otro no está definido), y la sección
      "Extracción" — sus bullets ya vienen ramificados por tipo de sujeto (#76): ground-truth
      (P/K/e por planeta), los **ejes de `relevance.topics`** del objetivo de esta bóveda, métodos y
@@ -141,16 +144,33 @@ Progreso del ingest de <estrella>:
    abstract de ADS es candidato a **diferencia de versión**: abrí el PDF publicado o dejá la
    salvedad en la nota. `verify-citations` lo detecta después; **acá es donde el número entra a la
    bóveda**.
-   - en `vault/wiki/stars/<slug>.md`: completar el frontmatter que es **tuyo**
-     (`activity_indicators_expected`, `methods_applied.literature`, `planets[].disputes[]`) y
-     escribir la **síntesis** (qué se sabe, qué indicador debería trazar actividad para ese tipo
-     espectral, huecos).
-     ⛔ **No toques los campos de ground-truth** (`spectral_type`, `teff_K`, `dist_pc`,
-     `P_rot_days` y los cinco de cada `planets[]`): son **espejo de NEA** (#70). Si NEA no tiene el
-     valor —pasa seguido con `K_ms` y `e`— el campo queda **null** y el valor de literatura va **al
-     cuerpo, citado `[[bibcode]]`**; si discrepa de NEA es una `disputes[]`; si es lectura tuya va
-     marcado `inferencia`. Rellenarlos vuelve el número indistinguible del auditable y el lint lo
-     marca como **bloqueante**.
+
+3b. **Contraste cross-paper (#72) — antes de escribir la síntesis.** Entre "leí los papers" y
+   "escribo el resumen" hay una operación, y es la de más apalancamiento de la cadena: armar el
+   **`## Inventario por eje`** de la nota. Una fila por paper para cada **eje** —parámetro o hecho—
+   donde los papers **no coinciden** (`Eje | Paper | Dice | Método / baseline`). Los ejes con acuerdo
+   unánime **no entran**: misma regla de poda que la prosa.
+   ⛔ **Sin columna "valor adoptado" ni "por qué".** Adoptar un valor es **decidir por el
+   consumidor** y rompe el flujo unidireccional de la regla #0: la bóveda reporta el **estado de la
+   literatura**. La lectura propia —"11.5 d es el armónico de 34 d"— va aparte y marcada
+   `inferencia`.
+   ⚠ **Mirá el `role` (#73) antes de leer dos filas como desacuerdo:** fundacional↔aplicación **no
+   es contraste, es instanciación**. Y el `arbitro` no es una fila más: es el que resuelve.
+   Sin esto, tres papers con tres `P_rot` terminan en una frase con un solo `[[bibcode]]` y se
+   evapora que los otros dos valores existen — que es exactamente lo que la ficha promete responder
+   sin abrir un paper. La red de que el contraste ocurrió es #75 (*extraído pero no sintetizado*):
+   un paper que pagó la extracción y no aparece en la nota sale como backlog.
+
+3c. **Síntesis a la ficha** (`vault/wiki/stars/<slug>.md`), apoyada en el inventario de 3b.
+   Completar el frontmatter que es **tuyo** (`activity_indicators_expected`,
+   `methods_applied.literature`, `planets[].disputes[]`) y escribir la prosa: qué se sabe, qué
+   indicador debería trazar actividad para ese tipo espectral, huecos.
+   ⛔ **No toques los campos de ground-truth** (`spectral_type`, `teff_K`, `dist_pc`, `P_rot_days` y
+   los cinco de cada `planets[]`): son **espejo de NEA** (#70). Si NEA no tiene el valor —pasa
+   seguido con `K_ms` y `e`— el campo queda **null** y el valor de literatura va **al cuerpo, citado
+   `[[bibcode]]`**; si discrepa de NEA es una `disputes[]`; si es lectura tuya va marcado
+   `inferencia`. Rellenarlos vuelve el número indistinguible del auditable y el lint lo marca como
+   **bloqueante**.
    - **Contrastar contra `vault/raw/ground_truth/<slug>.json`**: si un paper discrepa del archivo
      (p. ej. planeta dudoso), taguearlo en `planets[].disputes[]` de la ficha (`field`/`ref`/`note`/`alt`;
      ver *Disputas* en `CLAUDE.md`) y `bearing: challenges` en la nota del paper — no celebrar.

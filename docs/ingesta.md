@@ -21,7 +21,8 @@ n_found  (lo que ADS dice que hay)
               └─ candidatos del chaining      ← no se bajan hasta que los juzgues (triage)
                   └─ los que el PDF falló     ← build/<slug>/missing_pdf.json → sin fulltext
                       └─ "papers clave"       ← la extracción LLM (criterio no definido, #62)
-                          └─ lo que llegó a la ficha  ← la síntesis (con red desde #75)
+                          └─ ejes en disputa       ← el contraste cross-paper (#72)
+                              └─ lo que llegó a la ficha  ← la síntesis (con red desde #75)
 ```
 
 Los **no-core no se bajan ni se extraen**: quedan como puntero en el apéndice *Excluidos por el
@@ -169,7 +170,8 @@ flowchart LR
 | frontmatter | `methods_applied.ours`, `data_local` | usuario | rutas locales (no se commitean) |
 | frontmatter | `generator`, `tags`, `confidence` | script | provenance |
 | cabecera | disclaimer ⚠ + línea de búsqueda (fecha, universo→core, pendientes) | script | `registro/<slug>.yaml` |
-| cuerpo | `## Resumen` | **LLM** | síntesis de los papers, con `[[bibcode]]` |
+| cuerpo | `## Inventario por eje` | **LLM** | el paso de **contraste**: qué dice cada paper sobre cada eje en disputa (sin columna "valor adoptado") |
+| cuerpo | `## Resumen` | **LLM** | síntesis de los papers, apoyada en el inventario, con `[[bibcode]]` |
 | cuerpo | `## Huecos` | **LLM** | qué falta para que la ficha alcance sola |
 | cuerpo | `## Planetas` | script (Dataview) | render del frontmatter |
 | cuerpo | `## Papers`, `## Métodos aplicados` | script (Dataview) | roll-up — ⚠ no resuelve sin Obsidian (#60) |
@@ -222,7 +224,7 @@ Esta ingesta tiene huecos conocidos y numerados; el detalle de cada uno está en
 | Tema | Issues |
 |---|---|
 | `disputes[]` no expresa desacuerdo paper↔paper | #71 |
-| Falta el paso de contraste cross-paper antes de sintetizar | #72, y #62 (qué papers leer) |
+| Qué papers leer (criterio de la extracción) | #62 |
 | Régimen de validez explícito en conceptos | #74, #63 |
 | Descubrimiento fuera de ADS (OpenAlex) | #77 |
 | Tema mixto sólo off-ADS-first | #78 |
