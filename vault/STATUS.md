@@ -553,6 +553,15 @@ contra papers reales; el chaining corre en las dos direcciones, así que tiene c
   muestra) — descartada dos veces: el criterio correcto depende del parámetro, no de la bóveda; y
   sobre todo **adoptar un valor es decidir por el consumidor**, que rompe el flujo unidireccional de
   la regla #0. Lo correcto es no adoptar: reportar el estado de la literatura con sus fuentes.
+- **Acotar la lente a un sujeto** (`facetas: [activity, rv]` en `stars.yaml`) — abierto como #84 y
+  **cerrado en la misma sesión**: la necesidad ya está cubierta instanciando **otra bóveda** (es lo
+  que hay en la práctica: dos instancias con `objective.yaml` propios, independientes por
+  `merge=ours`), y esa vía **preserva** la propiedad de la que dependen la comparabilidad entre
+  fichas y la matriz método×estrella —"core" significa una sola cosa dentro de una bóveda— en vez de
+  agujerearla con excepciones por sujeto. El volumen, que era el otro argumento, ya lo corta
+  `relevance.require` de forma global y más fuerte (850 → 198 core en AU Mic, contra 928 → 762
+  podando regex). Lo reabriría: querer, *dentro de un mismo foco*, una estrella bajo un recorte más
+  angosto, con `extra_core`/`--drop` volviéndose tediosos para sostenerlo.
 - **Un tercer tipo de sujeto, "aplicación de método a astro"** — descartado: colapsa con el método.
   El destino es la misma nota con el mismo contrato *implementation-ready*, y si crece hay hub/radio.
   La distinción fundacional/aplicación es **rol del paper**, no tipo de sujeto (#73).

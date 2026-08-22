@@ -211,7 +211,7 @@ Y los del recorrido paso a paso del embudo, por escalón:
 
 | Escalón | Issues |
 |---|---|
-| 1 · resolver el sujeto | #82 (aliases desde SIMBAD, con checkpoint), #83 (`setup` no propone facetas), #84 (acotar la lente a un sujeto) |
+| 1 · resolver el sujeto | #82 (aliases desde SIMBAD, con checkpoint), #83 (`setup` no propone facetas) |
 | 2 · `query_ads` | #85 (`fq` de la lente astro hardcodeado), #79 |
 | 3 · `classify()` | #86 (registro sin abstract), #87 (facetas matcheadas sin usar; sacar `relevance`) |
 | 4-5 · recall extra | #88 (el `--sweep` no deja rastro), #79 |
