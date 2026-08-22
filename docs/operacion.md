@@ -81,6 +81,8 @@ python extract_fulltext.py <slug>   # PDFs → vault/raw/fulltext/<slug>/*.txt
 python check_retractions.py         # Crossref → marca `retracted` (bloqueante) y `corrections`
                                     #   (erratum/corrigendum/EoC: backlog) (red); la cadena usa --slug <slug>,
                                     #   sin --slug barre TODA la bóveda (pasada periódica, skill maintain)
+python make_notes.py --restamp-headers  # backfill: cabecera (aviso de capa LLM + generador) a las
+                                    #   fichas/conceptos que nacieron sin ella; no toca la síntesis
 python lint.py                      # chequeo de salud → outputs/lint-<fecha>.md (exit 1 si hay bloqueantes)
 ```
 

@@ -434,6 +434,27 @@ def test_build_local_gana_sobre_el_registro(toy_vault, capsys):
     assert "99 candidato(s)" not in out and "2026-08-01" not in out
 
 
+def test_cabecera_no_estampable_surface_backlog(toy_vault, capsys):
+    """#69: una ficha sin la línea del generador deja sin efecto a TODOS los estampadores de
+    cabecera, y hasta ahora el no-op era silencioso. Backlog, no bloqueante: la nota es válida."""
+    mk_note(toy_vault.STARS, "vieja", {"tags": ["star"], "P_rot_days": 1.0,
+                                       "activity_indicators_expected": ["halpha"]},
+            "# vieja\n\n> Prosa del LLM, sin la cabecera del template.\n")
+    rc, out = run_lint(capsys)
+    assert rc == 0
+    assert "Cabecera no estampable" in out
+    assert "vieja" in out and "--restamp-headers" in out
+
+
+def test_cabecera_con_ancla_no_se_reporta(toy_vault, capsys):
+    mk_note(toy_vault.STARS, "nueva", {"tags": ["star"], "P_rot_days": 1.0,
+                                       "activity_indicators_expected": ["halpha"]},
+            "# nueva\n\n> _Generado con Almagesto v1.9.0._\n")
+    rc, out = run_lint(capsys)
+    assert "## Cabecera no estampable" in out
+    assert "nueva" not in out.split("## Cabecera no estampable")[1].split("##")[0]
+
+
 def test_triage_pendiente_surface_backlog(toy_vault, capsys):
     """#55: candidatos del chaining sin juzgar → backlog visible. Antes el único recordatorio era
     el stdout de query_ads: un ingest podía cerrarse con lint en 0 y cientos de pendientes."""

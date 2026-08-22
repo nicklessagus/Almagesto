@@ -65,6 +65,7 @@ import lib_config as cfg
 from extract_fulltext import is_legible      # umbral determinista de legibilidad (mismo que extract)
 from fetch_ground_truth import msini_earth   # verificación de masa (m·sini implícita)
 from make_notes import find_header_line      # contrato de la cabecera (mismo que stamp_pdf_link, #48)
+from make_notes import GENERATOR_LINE        # ancla de la cabecera de fichas/concepts (#69)
 
 LINK_RE = re.compile(r"\[\[([^\]\|#]+)")
 # Frontera dura (regla #0 de CLAUDE.md): la bóveda es SÓLO bibliografía. Detecta material de
@@ -225,6 +226,7 @@ def main() -> int:
     pending_srcs: list = []            # (stem, "<motivo> — puntero") — fuentes derivadas al usuario
     impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
     pdf_issues: list = []              # (stem, ...) — drift frontmatter `pdf` ↔ PDF en disco
+    headerless: list = []              # (stem, motivo) — ficha/concepto sin cabecera estampable (#69)
     thesis_refs: dict[str, list] = {}  # valor de thesis_link -> notas que lo usan
     dispute_refs: list = []            # (estrella, planeta, ref) de planets[].disputes
 
@@ -285,6 +287,16 @@ def main() -> int:
                 if rx.search(line):
                     impl_leaks.append((stem, f"L{i} [{label}]: {line.strip()[:80]}"))
                     break
+        # Cabecera no estampable (#69, backlog): una ficha/concepto sin la línea
+        # `> _Generado con Almagesto v…_` deja SIN EFECTO a todos los estampadores de cabecera
+        # —hoy el puntero de búsqueda de #64—, que anclan ahí y devuelven False en silencio. Sin
+        # esta categoría el no-op no deja rastro: la feature no llega a la nota y nadie se entera
+        # (medido en una bóveda real: 22 de 25). Se arregla con `make_notes.py --restamp-headers`.
+        if f.startswith((str(cfg.STARS), str(cfg.CONCEPTS))) and GENERATOR_LINE not in text:
+            headerless.append((stem, "sin la línea `_Generado con Almagesto v…_`: los estampadores "
+                                     "de cabecera no pueden actuar → `python scripts/make_notes.py "
+                                     "--restamp-headers`"))
+
         # chequeos de completitud por tipo
         tags = fm.get("tags", []) or []
         if "star" in tags:
@@ -560,6 +572,8 @@ def main() -> int:
                          ("Sin verificar: query/concepto con citas pero sin bloque verify-citations (backlog)", unverified),
                          ("Verificación stale: la nota se editó después de su último verify-citations (backlog)", stale_verif),
                          ("Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog)", coverage),
+                         ("Cabecera no estampable: ficha/concepto sin la línea del generador — los "
+                          "estampadores de cabecera no-opean en silencio (backlog)", headerless),
                          ("Triage pendiente: candidatos del chaining sin juzgar (backlog)", triage_pending),
                          ("Corpus truncado: la query directa trajo menos de lo que ADS reporta (backlog)", truncated_corpora),
                          ("Campos incompletos", incomplete)]:

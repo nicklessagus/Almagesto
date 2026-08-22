@@ -1,7 +1,7 @@
 ---
 name: maintain
 description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), resolver el backlog del lint (P_rot faltante, drift PDF↔disco, cobertura, claims stale), y la pasada periódica de retracciones sobre toda la bóveda ("chequeá retracciones").
-version: 1.10.0
+version: 1.11.0
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
@@ -156,6 +156,11 @@ Pasada de higiene sobre lo que `lint.py` marca como backlog/WARN (no bloqueante,
   registro versionado, **sin esperar al próximo `--drop`**:
   `python scripts/triage.py <slug> --migrate` (idempotente; ante el mismo bibcode gana lo ya
   versionado). Después commitear `vault/config/registro/<slug>.yaml`: recién ahí el juicio viaja.
+- **Cabecera no estampable** (#69 — ficha/concepto sin la línea `> _Generado con Almagesto v…_`:
+  los estampadores de cabecera no-opean en silencio sobre ella, así que el puntero de búsqueda de
+  #64 nunca aterriza) → `python scripts/make_notes.py --restamp-headers` (barre todas, idempotente,
+  la versión sale del `generator` de cada nota). Después re-correr `make_notes` del sujeto para que
+  el puntero de búsqueda se estampe ahora que hay dónde.
 - **Papers sin `pdf_source`** (#57 — corpus ingestado antes de 1.10.0: no se sabe si el `.txt`
   salió del eprint o del publicado, y ese caveat es el que evita que `verify-citations` "corrija"
   una nota hacia un v1 pre-referato). Migración one-shot: **el lint tampoco la surface** —`null` es

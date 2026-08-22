@@ -427,6 +427,40 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 - Hueco conocido del historial: las tandas **1.6.2** (#46/#47) y **1.6.3** (#48) nunca dejaron
   entrada acá (sólo commit de fix + bump). Backfillear si se quiere el registro completo.
 
+## ✅ Framework 1.11.0 (2026-08-21) — #69: la cabecera que nunca se backfilleó y el no-op silencioso
+
+> Disparado por una medición de la instancia Almagesto-RV al actualizar. 390 tests verdes (+8),
+> lint 0. `ALMAGESTO_VERSION` 1.10.3 → **1.11.0** (minor: flag nuevo + categoría de lint nueva).
+
+- **Lo que se midió** (25 fichas + conceptos de una bóveda real): **21 sin** el blockquote ⚠ "Capa
+  LLM — revisar antes de citar" (84%) y **22 sin** la línea `> _Generado con Almagesto v…_`, con
+  **correlación perfecta** entre ambas ausencias. El aviso se escribe **sólo al crear la nota** y
+  nada lo backfilleaba.
+- **El defecto que importaba no era el aviso, era el silencio.** Esa línea del generador es el ancla
+  de **todos** los estampadores de cabecera, que se niegan a actuar sin ella (criterio de #48, "no
+  inventamos") y devuelven `False` sin decir nada. Consecuencia medida: el puntero de búsqueda de
+  **#64, entregado horas antes, no aterrizaba en 22 de 25 notas de esa bóveda** y no había ninguna
+  señal. Un no-op silencioso se lee como éxito: es "afirmar de menos" del lado del tooling.
+- **Por qué no alcanzaba con lo que ya había:** `make_notes` sin `--force` no toca el cuerpo (así que
+  re-correr la cadena no cambia nada) y con `--force` reescribe la nota entera, **pisando la síntesis
+  LLM**, que es el trabajo caro. Las dos opciones eran "no pasa nada" o "perdés la ficha".
+- **`stamp_header` + `--restamp-headers`:** ancla en el `# H1` (que toda nota tiene) en vez de en la
+  línea que falta, inserta el aviso y la línea del generador, y **no toca una línea de la prosa** (el
+  blockquote que esas notas ya tienen es texto del LLM y sobrevive debajo). **La versión no se
+  inventa: sale del `generator` del propio frontmatter**, que registra con qué versión se creó la
+  nota; si ni eso hay, la línea va sin versión. Aporte del usuario: fue quien señaló que la versión
+  ya estaba en el frontmatter, lo que eliminó la única objeción de diseño que quedaba.
+- **Categoría de lint nueva** (backlog): ficha/concepto sin el ancla → "los estampadores de cabecera
+  no pueden actuar". Es lo que vuelve visible el estado y lo que evita que el **próximo** estampador
+  de cabecera repita el silencio. Va primero por diseño: el backfill tapa el agujero de hoy, la
+  categoría protege de los de mañana.
+- **El texto del aviso pasó a ser constante única** (`LLM_DISCLAIMER`), porque ahora lo escriben dos
+  caminos (creación y backfill) y si divergen el backfill estampa algo distinto de lo que el README
+  promete. Mismo criterio que viene fallando toda la jornada cuando algo se escribe dos veces.
+- **Contexto:** el README afirmaba "la cabecera de cada ficha avisa que la prosa es capa LLM" y una
+  bóveda real lo contradecía en el 84% de sus notas; se acotó en `d5713cd` mientras esto no existía.
+  Con el backfill corrido, la afirmación general vuelve a ser cierta para esa bóveda.
+
 ## Backlog — capturas y assets del README (anotado 2026-08-21)
 
 Las tres capturas de Obsidian son del **2026-07-25** y el framework cambió bastante desde entonces.

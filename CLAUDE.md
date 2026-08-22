@@ -470,6 +470,14 @@ stale** (la nota se editó **después** de la fecha de su bloque —lo que pasa 
 quedan bajo un encabezado que se lee como vigente: es el modo de falla de "afirmar de menos"
 aplicado a la garantía misma; el lint lo mide por `git` contra la fecha del encabezado —por eso el
 bloque **debe** llevar fecha— y degrada a silencio fuera de un repo).
+La **cabecera no estampable** (#69: una ficha o concepto **sin** la línea
+`> _Generado con Almagesto v…_`, que es el ancla de **todos** los estampadores de cabecera) es
+**backlog**: la nota es válida, pero cualquier cirugía de cabecera —hoy el puntero de búsqueda de
+#64— devuelve `False` **en silencio** sobre ella, así que la feature no llega y no queda rastro
+(medido en una bóveda real: 22 de 25 notas). Pasa en todo lo creado antes de que la cabecera
+existiera; se arregla con `python scripts/make_notes.py --restamp-headers`, que la sintetiza
+anclando en el `# H1` y **lee la versión del `generator` del frontmatter** en vez de inventarla.
+Regenerar con `--force` también la escribiría, pero pisa la síntesis LLM: por eso es cirugía.
 El **triage pendiente** (#55: candidatos del chaining en `build/<slug>/ads.json` que **nadie juzgó**
 todavía — la compuerta los deja sin bajar, y el aviso vivía sólo en el stdout de la corrida, que se
 pierde al scrollear: un ingest podía cerrarse con lint en 0 y cientos de pendientes) es **backlog**;

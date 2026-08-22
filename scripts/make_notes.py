@@ -4,7 +4,8 @@ Uso:
     python scripts/make_notes.py <slug> [--all] [--force]        # estrella
     python scripts/make_notes.py --topic <slug> [--all] [--force]  # tema (concept + papers)
     python scripts/make_notes.py --web <clave> --concept <c> [--url … | --pending …] [--slug-hint <s>]
-    python scripts/make_notes.py --restamp-pdf-links             # backfill masivo, sin slug
+    python scripts/make_notes.py --restamp-pdf-links             # backfill del link PDF, sin slug
+    python scripts/make_notes.py --restamp-headers               # backfill de la cabecera, sin slug
 
 - vault/wiki/stars/<slug>.md            : ficha índice de la estrella (frontmatter + Dataview).
 - vault/wiki/concepts/<area>/<c>.md     : stub del concept durable de un tema (--topic).
@@ -263,6 +264,22 @@ def restamp_pdf_links() -> int:
     return 0
 
 
+def restamp_headers() -> int:
+    """Backfill #69: barre TODAS las fichas y conceptos y les estampa la cabecera si les falta.
+    Para el corpus creado antes de que la cabecera existiera (medido en una bóveda real: 21 de 25
+    notas sin el aviso de capa LLM). Regenerar con --force sí escribiría la cabecera, pero PISA la
+    síntesis LLM, que es el trabajo caro: por eso esto es cirugía y no regeneración."""
+    notes = sorted(cfg.STARS.glob("*.md")) if cfg.STARS.exists() else []
+    notes += sorted(cfg.CONCEPTS.glob("*/*.md")) if cfg.CONCEPTS.exists() else []
+    changed = sum(1 for n in notes if stamp_header(n))
+    print(f"cabeceras: {changed} de {len(notes)} estampadas "
+          f"(aviso de capa LLM + línea del generador, versión leída del frontmatter)")
+    if changed:
+        print("  → ahora los estampadores de cabecera (p. ej. el puntero de búsqueda de #64) "
+              "pueden actuar sobre esas notas; re-corré la cadena o make_notes del sujeto.")
+    return 0
+
+
 def parse_year(year) -> int | None:
     """Año tolerante para metadata off-ADS (provista a mano): acepta int, '2020', '2020a'
     (→ 2020); un valor sin año reconocible ('in press') queda null con aviso — la metadata
@@ -405,6 +422,18 @@ def stamp_excluded(slug: str, dest) -> bool:
 
 
 GENERATOR_LINE = "> _Generado con Almagesto v"
+# Aviso de capa LLM de la cabecera. Vive acá y NO inline en los templates de cuerpo porque lo
+# escriben dos caminos —la creación de la nota y el backfill `stamp_header` (#69)— y si divergen, el
+# backfill estampa un texto distinto del que promete el README. Un solo lugar de verdad.
+LLM_DISCLAIMER = {
+    "star": """> ⚠ **Capa LLM — revisar antes de citar.** El ground-truth del frontmatter (NEA/SIMBAD) es auditable, pero
+> la prosa (Resumen, Huecos, extracción) la sintetizó un LLM desde las fuentes: trazable por `[[bibcode]]` y
+> chequeable con `verify-citations`, que es **juicio de LLM, no prueba**. Verificá contra la fuente antes de
+> llevar un dato a un paper/tesis.""",
+    "concept": """> ⚠ **Capa LLM — revisar antes de citar.** La síntesis la compiló un LLM desde los papers citados:
+> chequeable con `verify-citations`, que es **juicio de LLM, no prueba**. Verificá contra la fuente antes
+> de llevar un dato a un paper/tesis.""",
+}
 SEARCH_LINE_RE = re.compile(r"^> _Búsqueda .*_$\n?", re.M)
 
 
@@ -428,6 +457,56 @@ def search_line(slug: str) -> str:
         partes.append(" · ⚠ truncada")
     partes.append(f" · registro en `config/registro/{slug}.yaml`._")
     return "".join(partes) + "\n"
+
+
+H1_RE = re.compile(r"^# .+$", re.M)
+
+
+def note_kind(dest) -> str | None:
+    """`star` | `concept` según DÓNDE vive la nota (verdad de disco, no heurística sobre el texto).
+    None si no es ninguna de las dos (una nota de paper tiene su propio contrato de cabecera, #48)."""
+    d = str(dest.resolve())
+    if d.startswith(str(cfg.STARS.resolve())):
+        return "star"
+    if d.startswith(str(cfg.CONCEPTS.resolve())):
+        return "concept"
+    return None
+
+
+def stamp_header(dest) -> bool:
+    """Backfill de la CABECERA de una ficha/concepto que nació sin ella (#69).
+
+    Por qué hace falta un estampador propio y no alcanza con la familia `stamp_*`: todas ellas
+    anclan en `GENERATOR_LINE` y se niegan a actuar si falta (criterio de #48, "no inventamos"),
+    que es exactamente la población a arreglar — medido en una bóveda real: 21 de 25 notas sin el
+    aviso, y las mismas 21 sin el ancla. Un backfill anclado ahí sería no-op sobre el 100% de los
+    casos. Éste ancla en el `# H1`, que toda nota tiene.
+
+    La **versión no se inventa**: sale del `generator` del propio frontmatter, que es la versión con
+    la que la nota se creó de verdad. Si la nota es tan vieja que ni eso tiene, la línea va SIN
+    versión (mejor sin dato que con uno supuesto). Quirúrgico: inserta después del H1 y no toca una
+    línea de la prosa — el blockquote que esas notas ya tienen es texto del LLM, no la cabecera del
+    template, y se conserva debajo. Idempotente: si ya hay aviso o ancla, no hace nada."""
+    if not dest.exists():
+        return False
+    kind = note_kind(dest)
+    if kind is None:
+        return False
+    text = dest.read_text(encoding="utf-8")
+    if "Capa LLM" in text or GENERATOR_LINE in text:
+        return False                                  # ya tiene cabecera: nada que backfillear
+    m = H1_RE.search(text)
+    if not m:
+        return False                                  # sin H1 no hay ancla honesta: no inventamos
+    gen = (cfg.split_fm(text) or {}).get("generator")
+    linea_gen = (f"> _{gen.replace('Almagesto v', 'Generado con Almagesto v')}._"
+                 if isinstance(gen, str) and gen.startswith("Almagesto v")
+                 else "> _Cabecera normalizada por Almagesto; la nota no registra con qué versión "
+                      "se creó._")
+    bloque = f"\n\n{LLM_DISCLAIMER[kind]}\n>\n{linea_gen}"
+    out = text[:m.end()] + bloque + text[m.end():]
+    dest.write_text(out, encoding="utf-8")
+    return True
 
 
 def stamp_search_line(slug: str, dest) -> bool:
@@ -494,10 +573,7 @@ def write_star_note(slug: str, force: bool) -> None:
 > Ficha índice. El frontmatter de arriba es la fuente de verdad máquina-legible
 > (lo leen Obsidian/Dataview y cualquier consumidor de la bóveda); la prosa y los `[[links]]` son la capa humana.
 >
-> ⚠ **Capa LLM — revisar antes de citar.** El ground-truth del frontmatter (NEA/SIMBAD) es auditable, pero
-> la prosa (Resumen, Huecos, extracción) la sintetizó un LLM desde las fuentes: trazable por `[[bibcode]]` y
-> chequeable con `verify-citations`, que es **juicio de LLM, no prueba**. Verificá contra la fuente antes de
-> llevar un dato a un paper/tesis.
+{LLM_DISCLAIMER["star"]}
 >
 > _Generado con Almagesto v{cfg.ALMAGESTO_VERSION}._
 
@@ -585,9 +661,7 @@ def write_concept_note(slug: str, force: bool) -> None:
 > Concept durable (tema). Síntesis por LLM: destilar acá lo que aprenden los papers de abajo, de modo
 > que el tema se entienda **sin abrir ningún paper**. Trazabilidad por `[[bibcode]]`.
 >
-> ⚠ **Capa LLM — revisar antes de citar.** La síntesis la compiló un LLM desde los papers citados:
-> chequeable con `verify-citations`, que es **juicio de LLM, no prueba**. Verificá contra la fuente antes
-> de llevar un dato a un paper/tesis.
+{LLM_DISCLAIMER["concept"]}
 >
 > _Generado con Almagesto v{cfg.ALMAGESTO_VERSION}._
 
@@ -863,6 +937,11 @@ def main() -> int:
                     help="backfill #47: barre TODAS las notas de papers y re-estampa el link "
                          "[📄 PDF] de la cabecera desde el frontmatter `pdf` (agrega/corrige/quita). "
                          "No toca la extracción LLM; no requiere slug.")
+    ap.add_argument("--restamp-headers", action="store_true", dest="restamp_headers",
+                    help="backfill #69: barre TODAS las fichas/conceptos y estampa la cabecera "
+                         "(aviso de capa LLM + línea del generador) a las que nacieron sin ella. "
+                         "La versión sale del `generator` del frontmatter, no se inventa. No toca "
+                         "la síntesis LLM; no requiere slug.")
     ap.add_argument("--force", action="store_true", help="pisar notas existentes")
     ap.add_argument("--topic", action="store_true",
                     help="el slug es un TEMA de vault/config/topics.yaml: genera concept en vez de ficha de estrella")
@@ -885,8 +964,10 @@ def main() -> int:
 
     if args.restamp_pdf_links:
         return restamp_pdf_links()
+    if args.restamp_headers:
+        return restamp_headers()
     if not args.slug:
-        ap.error("falta el slug (sólo --restamp-pdf-links corre sin slug)")
+        ap.error("falta el slug (sólo --restamp-pdf-links y --restamp-headers corren sin slug)")
 
     if args.web:
         write_web_paper_note(args.slug, url=args.url, slug=args.slug_hint, concept=args.concept,

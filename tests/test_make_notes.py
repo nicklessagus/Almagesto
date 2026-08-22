@@ -868,3 +868,93 @@ def test_stamp_fulltext_estampa_pdf_source_retroactivamente(toy_vault):
     assert fm["fulltext_source"] == "pdftotext"          # el método de extracción, aparte
     assert "Extracción LLM." in dest.read_text(encoding="utf-8")
     assert mn.stamp_fulltext(dest, "2020arx....1..1A", "test_star") is False   # idempotente
+
+
+# ── backfill de la cabecera (#69) ────────────────────────────────────────────
+
+VIEJA = """---
+name: Forma y variabilidad de los ciclos
+tags:
+- activity
+generator: Almagesto v1.4.0
+---
+# cycle-shape-and-variability
+
+> Concept durable. Marco para leer las "señales secundarias" de un ciclo de actividad.
+> Trazabilidad por `[[bibcode]]`.
+
+## Síntesis
+
+Un ciclo tipo-solar no es una sinusoide fija [[2020A&A...638A..69W]].
+"""
+
+
+def test_stamp_header_backfillea_la_nota_que_nacio_sin_cabecera(toy_vault):
+    """#69: la nota vieja tiene blockquote propio (prosa del LLM) pero no la cabecera del template.
+    El estampador ancla en el H1, no en la línea del generador, que es justo la que falta."""
+    dest = cfg.CONCEPTS / "activity" / "cycle-shape-and-variability.md"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(VIEJA, encoding="utf-8")
+    assert mn.stamp_header(dest) is True
+    out = dest.read_text(encoding="utf-8")
+    assert "⚠ **Capa LLM — revisar antes de citar.**" in out
+    assert "La síntesis la compiló un LLM" in out                  # variante de concepto, no la de star
+    # la versión sale del frontmatter de la nota, NO de la del framework corriendo
+    assert "> _Generado con Almagesto v1.4.0._" in out
+    assert f"v{cfg.ALMAGESTO_VERSION}" not in out
+    # la prosa del LLM sobrevive entera y queda DEBAJO del H1
+    assert 'Marco para leer las "señales secundarias"' in out
+    assert "Un ciclo tipo-solar no es una sinusoide fija [[2020A&A...638A..69W]]." in out
+    assert out.index("Capa LLM") < out.index("Marco para leer")
+    assert mn.stamp_header(dest) is False                          # idempotente
+
+
+def test_stamp_header_usa_la_variante_de_estrella(toy_vault):
+    dest = cfg.STARS / "hd40307.md"
+    dest.write_text("---\nname: HD 40307\ntags:\n- star\ngenerator: Almagesto v1.2.0\n---\n"
+                    "# hd40307\n\n## Resumen\n\nProsa.\n", encoding="utf-8")
+    assert mn.stamp_header(dest) is True
+    out = dest.read_text(encoding="utf-8")
+    assert "El ground-truth del frontmatter (NEA/SIMBAD) es auditable" in out
+    assert "> _Generado con Almagesto v1.2.0._" in out
+
+
+def test_stamp_header_sin_generator_no_inventa_version(toy_vault):
+    """Una nota tan vieja que ni `generator` tiene: la línea va SIN versión, no con una supuesta."""
+    dest = cfg.STARS / "vieja.md"
+    dest.write_text("---\nname: Vieja\ntags:\n- star\n---\n# vieja\n\nProsa.\n", encoding="utf-8")
+    assert mn.stamp_header(dest) is True
+    out = dest.read_text(encoding="utf-8")
+    assert "no registra con qué versión se creó" in out
+    assert "Generado con Almagesto v" not in out
+
+
+def test_stamp_header_no_toca_lo_que_ya_tiene_cabecera_ni_las_notas_de_paper(toy_vault):
+    mn.write_star_note("test_star", force=False)                   # nace con cabecera
+    assert mn.stamp_header(cfg.STARS / "test_star.md") is False
+    from conftest import mk_note
+    mk_note(cfg.PAPERS, "2020a....1A", {"tags": ["paper"], "bibcode": "2020a....1A"}, "# Paper\n")
+    assert mn.stamp_header(cfg.PAPERS / "2020a....1A.md") is False  # los papers tienen su contrato (#48)
+
+
+def test_stamp_header_destraba_el_puntero_de_busqueda(toy_vault):
+    """El punto del backfill: sin cabecera, stamp_search_line no-opea EN SILENCIO (medido: 22 de 25
+    notas de una bóveda real). Después del backfill, la misma llamada sí estampa."""
+    dest = cfg.STARS / "test_star.md"
+    dest.write_text("---\nname: Test Star\ntags:\n- star\ngenerator: Almagesto v1.5.0\n---\n"
+                    "# test_star\n\n## Resumen\n\nProsa.\n", encoding="utf-8")
+    cfg.save_busqueda("test_star", {"fecha": "2026-08-21", "n_found": 100, "n_core": 10})
+    assert mn.stamp_search_line("test_star", dest) is False        # antes: silencio
+    assert mn.stamp_header(dest) is True
+    assert mn.stamp_search_line("test_star", dest) is True         # después: aterriza
+    assert "> _Búsqueda 2026-08-21" in dest.read_text(encoding="utf-8")
+
+
+def test_restamp_headers_barre_fichas_y_conceptos(toy_vault, capsys):
+    (cfg.CONCEPTS / "activity").mkdir(parents=True, exist_ok=True)
+    (cfg.CONCEPTS / "activity" / "c.md").write_text(VIEJA, encoding="utf-8")
+    (cfg.STARS / "s.md").write_text("---\nname: S\ntags:\n- star\n---\n# s\n\nProsa.\n",
+                                    encoding="utf-8")
+    mn.write_star_note("test_star", force=False)                   # ésta ya tiene cabecera
+    assert mn.restamp_headers() == 0
+    assert "2 de 3 estampadas" in capsys.readouterr().out
