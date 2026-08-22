@@ -33,7 +33,10 @@ relevance:
     rv:        'radial[ -]velocit|doppler|HARPS|ESPRESSO|HIRES|spectrograph|CCF'
     activity:  '\bactivit|magnetic|rotation|starspot|chromospher|faculae|granulation|stellar cycle|flare|S-?index|log ?R'
     planet:    '\bplanet|exoplanet|habitable|orbit|transit|mass-radius'
-    method:    'gaussian process|independent component|principal component|\bICA\b|\bPCA\b|SCALPELS|YARARA|line-?by-?line|periodogram|machine learning|deconvolution|disentangl'
+    # En `method` van las familias de método (genéricas) Y los nombres propios de las
+    # herramientas de TU área — un pipeline con nombre propio no matchea ninguna palabra genérica,
+    # así que si no lo listás acá sus papers salen no-core. Reemplazá los de abajo por los tuyos.
+    method:    'gaussian process|independent component|principal component|\bICA\b|\bPCA\b|neural network|deep learning|machine learning|periodogram|line-?by-?line|deconvolution|disentangl'
 
   # ── Regla de COMBINACIÓN de facetas (opcional) ──────────────────────────────
   # Por default la combinación es OR: alcanza con matchear UNA faceta cualquiera.
