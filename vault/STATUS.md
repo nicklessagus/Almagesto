@@ -461,6 +461,59 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
   bóveda real lo contradecía en el 84% de sus notas; se acotó en `d5713cd` mientras esto no existía.
   Con el backfill corrido, la afirmación general vuelve a ser cierta para esa bóveda.
 
+## Backlog de framework — sesión de diseño 2026-08-22 (issues #70–#81)
+
+> Sesión pedida por el usuario: cómo se extrae la información de un paper y cómo se sintetiza entre
+> papers para armar la ficha. Doce hallazgos, abiertos como **#70–#81**. La referencia narrativa del
+> flujo quedó en `docs/ingesta.md` (embudo de selección, las dos ingestas, campo por campo de la
+> ficha). Acá queda lo que GitHub no guarda: **orden, dependencias e ideas descartadas**.
+
+### El hallazgo de fondo
+La cadena tiene red para casi todo paso salteable (#55 triage, #56 verify stale, #69 cabecera), pero
+**el paso de síntesis —el más caro y el que define la calidad de la ficha— no tiene ninguna**, y su
+modo de falla es **omisión**, que no deja rastro. `verify-citations` valida cada afirmación contra su
+fuente, no que la síntesis represente al conjunto: una ficha sintetizada desde 3 papers de 40 vuelve
+100% soportada. De ahí salen #72 (el paso de contraste que falta), #75 (la red) y #73 (el rol del
+paper, sin el cual "contrastar" no está definido).
+
+### Orden sugerido de tandas
+1. **Barato y sin dependencias:** **#76** (el stub de paper no ramifica por sujeto — el cuerpo, los
+   seeds ya ramifican), **#79** puntos 1-2 (ranking del `--sweep` por citas/año; segunda pasada por
+   fecha al truncar), **#81** (registrar el rechazo de una fuente declarada).
+2. **Procedencia:** **#70** (frontmatter = espejo puro de NEA; corregir el comentario de
+   `make_notes.py:561`, que hoy instruye lo contrario, y re-apuntar `lint.py:303`) → **#75** (la red
+   "extraído pero no sintetizado") → **#73** (campo `role`, que se apoya en el stub de #76).
+3. **Síntesis:** **#72** (inventario por eje, **sin** columna "valor adoptado") y **#74** (régimen
+   explícito en conceptos, que es el destino natural de los `aparente` que **#63** propone persistir).
+4. **Caro — migración de corpus:** **#71** (`disputes[]` con posiciones explícitas y a nivel nota).
+   Es el único que toca instancias ya ingestadas: necesita script + lectura del schema viejo.
+5. **Descubrimiento:** **#77** (OpenAlex escribiendo el mismo `ads.json`) + **#78** (el tema mixto
+   deja de ser off-ADS-first: el eje pasa a ser *motor de descubrimiento × fuentes declaradas*).
+   Recién con eso cerrado tiene sentido **#79** punto 4 (documentar la neutralidad a citas).
+6. **Libros:** **#80** (`pending` no distingue fallo de adquisición; la unidad de cita del verify no
+   escala a un documento largo; declarar el recorte de un fragmento).
+
+### Dependencias duras
+- **#73 antes de #72 y #74**: sin rol (fundacional / aplicación / árbitro) la operación de contraste
+  no está definida — fundacional↔aplicación **no es contraste, es instanciación**, y tratarlo como
+  desacuerdo fabrica disputas falsas.
+- **#75 junto con #72**: un paso más en el checklist se saltea igual que 2b/2c/5b; sin la red, se
+  evapora.
+- **#70 antes de #71**: primero se decide que el frontmatter es espejo de NEA, después se generaliza
+  la estructura de disputas.
+
+### Ideas evaluadas y NO abiertas como issue
+- **Google Scholar como motor de descubrimiento** — descartado **por reproducibilidad, no por
+  precio**: sin API pública, sin IDs estables y con resultados no deterministas, el `busqueda` del
+  registro no podría persistir una query re-corrible. OpenAlex y Semantic Scholar sí.
+- **Regla de precedencia declarativa en `objective.yaml`** (tie-breakers tipo recencia > tamaño de
+  muestra) — descartada dos veces: el criterio correcto depende del parámetro, no de la bóveda; y
+  sobre todo **adoptar un valor es decidir por el consumidor**, que rompe el flujo unidireccional de
+  la regla #0. Lo correcto es no adoptar: reportar el estado de la literatura con sus fuentes.
+- **Un tercer tipo de sujeto, "aplicación de método a astro"** — descartado: colapsa con el método.
+  El destino es la misma nota con el mismo contrato *implementation-ready*, y si crece hay hub/radio.
+  La distinción fundacional/aplicación es **rol del paper**, no tipo de sujeto (#73).
+
 ## Backlog — longitud y estructura del README (anotado 2026-08-21)
 
 Pedido del usuario: revisarlo la próxima sesión, probablemente está largo. Medido hoy: **336 líneas,
