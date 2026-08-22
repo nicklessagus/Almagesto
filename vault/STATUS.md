@@ -461,6 +461,35 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
   bóveda real lo contradecía en el 84% de sus notas; se acotó en `d5713cd` mientras esto no existía.
   Con el backfill corrido, la afirmación general vuelve a ser cierta para esa bóveda.
 
+## Backlog — longitud y estructura del README (anotado 2026-08-21)
+
+Pedido del usuario: revisarlo la próxima sesión, probablemente está largo. Medido hoy: **336 líneas,
+3409 palabras**, repartidas así (líneas por sección, de mayor a menor):
+
+| Sección | Líneas |
+|---|---:|
+| La capa LLM | 81 |
+| Instanciar (crear tu bóveda) | 46 |
+| De un objetivo a una ficha | 40 |
+| La bóveda en Obsidian | 32 |
+| Dónde encaja (related work) | 20 |
+| Skills del agente | 16 |
+| Verify: todo claim tiene fuente | 10 |
+| Para seguir | 10 |
+
+Lo que conviene mirar cuando se retome, sin decidirlo ahora:
+- **La capa LLM** es hoy la sección más larga del README, más del doble que la que explica qué hace
+  el proyecto. Se escribió de una y no se podó. Candidata natural a quedar más corta arriba (tabla de
+  quién decide cada cosa + el párrafo del límite) y mandar el detalle de mitigaciones a `docs/`, que
+  es donde ya vive lo operativo. **Cuidado al podar:** la sección existe para no sobrevender, así que
+  recortarla hasta que quede sólo el título y una promesa sería justamente lo contrario de su punto.
+- **Instanciar** (46) mezcla el camino recomendado con dos variantes; parte podría ir a
+  `docs/operacion.md`, que ya tiene la sección de portabilidad y upstream.
+- **Verify** (10) quedó chica y ahora se solapa con "La capa LLM", que la explica mejor y más largo.
+  O se fusionan, o Verify queda como puntero.
+- Chequear si sigue habiendo una lectura de 2 minutos posible: alguien que entra al repo debería
+  entender qué es esto antes de la primera sección larga.
+
 ## Backlog — capturas y assets del README (anotado 2026-08-21)
 
 Las tres capturas de Obsidian son del **2026-07-25** y el framework cambió bastante desde entonces.
