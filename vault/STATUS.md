@@ -18,6 +18,23 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## Criterio de auditoría — una pasada, un instrumento (2026-08-22)
+
+> Sale de las tres auditorías seguidas de las tandas 1-4. Cada una encontró una **clase distinta**
+> de error, y no por leer con más cuidado sino por **cambiar de instrumento**.
+
+| Pasada | Instrumento | Qué encontró |
+|---|---|---|
+| 1ª (1.20.1) | leer la doc contra el código | doc que contradecía al código (el orden síntesis↔contraste en `CLAUDE.md`, listas de bloqueantes viejas) |
+| 2ª (1.20.2) | **medir**: worktree por commit, greps de referencias cruzadas | números escritos de memoria (un delta de tests inventado), punteros podridos (`archivo.py:NN`) |
+| 3ª (1.20.3) | **diff de código completo + cobertura AST + mutación** | defectos de código (un detector con agujero, una heurística ciega a la notación del propio schema, una rama inalcanzable) |
+
+**Regla:** releer más despacio no encuentra nada nuevo. Si una pasada tiene que agregar valor sobre
+la anterior, tiene que **cambiar de instrumento**, y conviene planificarla así desde el principio:
+(1) doc↔código, (2) medir lo declarado, (3) leer el diff entero y medir cobertura. Corolario del
+tercero: un fix sin **mutación** (revertirlo y ver que su test falla) no está verificado, está
+supuesto.
+
 ## ✅ Framework 1.20.3 (2026-08-22) — tercera pasada: el código, línea por línea
 
 > Pedida por el usuario ("de nuevo, en detalle y con cuidado, **no de memoria**"). Las dos primeras
