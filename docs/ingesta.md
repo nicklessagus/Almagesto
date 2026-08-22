@@ -206,3 +206,20 @@ Esta ingesta tiene huecos conocidos y numerados; el detalle de cada uno está en
 | Sesgo de edad en el orden por citas | #79 |
 | Libros: `pending` y unidad de cita | #80 |
 | Rechazo de una fuente declarada sin registro | #81 |
+
+Y los del recorrido paso a paso del embudo, por escalón:
+
+| Escalón | Issues |
+|---|---|
+| 1 · resolver el sujeto | #82 (aliases desde SIMBAD, con checkpoint), #83 (`setup` no propone facetas), #84 (acotar la lente a un sujeto) |
+| 2 · `query_ads` | #85 (`fq` de la lente astro hardcodeado), #79 |
+| 3 · `classify()` | #86 (registro sin abstract), #87 (facetas matcheadas sin usar; sacar `relevance`) |
+| 4-5 · recall extra | #88 (el `--sweep` no deja rastro), #79 |
+| 6 · triage | #89 (el aceptado sin motivo ni origen), #79 |
+| 7 · PDFs y fulltext | #90 (core sin PDF no se marca en su nota), #80 |
+| 13-14 · verify → lint | #91 (veredictos sin resolver bajo un encabezado que certifica) |
+
+**Dos patrones transversales**, que valen más que los issues sueltos: (a) #86/#88/#89/#90 escriben
+los cuatro al registro versionado → **una tanda de schema, no cuatro migraciones**; (b) #79 acumula
+cuatro ocurrencias del mismo orden por citas (truncamiento, ranking del sweep, apéndice de excluidos,
+listado del triage), y sólo la primera es server-side.

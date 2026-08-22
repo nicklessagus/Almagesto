@@ -502,15 +502,18 @@ paper, sin el cual "contrastar" no está definido).
 - **#70 antes de #71**: primero se decide que el frontmatter es espejo de NEA, después se generaliza
   la estructura de disputas.
 
-### Recorrido paso a paso del embudo (2026-08-22, issues #82–#89)
-Segunda mitad de la sesión: se recorrió la ingesta escalón por escalón. Ocho issues más, y **dos
-patrones transversales** que valen más que los issues sueltos.
+### Recorrido paso a paso del embudo (2026-08-22, issues #82–#91)
+Segunda mitad de la sesión: se recorrió la ingesta escalón por escalón, de la resolución del sujeto
+al cierre del lint. Diez issues más, y **dos patrones transversales** que valen más que los issues
+sueltos.
 
 **Patrón A — el motivo se registra en unos escalones y no en otros (#86, #88, #89).** Mecánicamente
 son tres cosas distintas, pero las tres escriben al mismo archivo:
 `vault/config/registro/<slug>.yaml`. Hoy responde *"con qué query y qué lente se buscó"*; le faltan
-tres hechos: si se corrió el barrido full-text (#88), qué se aceptó y por qué (#89), y cuántos
-registros se juzgaron sin abstract (#86). **Hacerlos por separado son tres migraciones del mismo
+cuatro hechos: si se corrió el barrido full-text (#88), qué se aceptó y por qué (#89), cuántos
+registros se juzgaron sin abstract (#86) y qué core quedaron sin PDF y por qué rama se abandonó
+(#90 — que además pide estampar `pending_source` en la nota, para que el lint deje de confundir
+"falta leerlo" con "falta la fuente"). **Hacerlos por separado son cuatro migraciones del mismo
 archivo**, cada una con su compatibilidad hacia atrás; como tanda es un solo cambio de schema. El
 criterio que los unifica es el de #51: *`build/` guarda lo regenerable, el registro guarda lo que no
 lo es* — y los tres hechos que faltan son irrecuperables.
@@ -522,6 +525,21 @@ apéndice de excluidos y listado del triage. Se parte en dos: el truncamiento es
 la política no diverja. Cuidado con el reemplazo: citas/año también sesga (un paper de dos meses con
 1 cita tiene tasa enorme); el estándar normaliza contra la cohorte del año. Donde la lista es corta,
 dos bloques (top citas + top reciente) en vez de un score compuesto.
+
+**Patrón C — la garantía existe, el rastro de que se cumplió no.** Es el mismo patrón de #55 (triage)
+y #56 (verify stale), y reapareció cuatro veces más: el sweep corre y no queda registro (#88), se
+acepta un paper y no queda el motivo (#89), no se consigue un PDF y la nota no lo dice (#90), y
+—el más grave— `verify-citations` deja una falla **sin resolver** bajo un encabezado que certifica lo
+contrario, porque el lint mira que el bloque exista y esté fresco pero **nunca qué dice** (#91). Ese
+último es frontera dura: una afirmación que la bóveda hace y su propia fuente no respalda. El fix es
+barato porque la convención del skill ya codifica la resolución con flecha (`no-soportada→corregida`),
+así que "sin resolver" es greppable.
+
+**Decisión de schema (2026-08-22): sacar `relevance` de las notas de paper.** Siempre vale `high`
+(la rama ADS lo pone así para todo core y `make_notes` sin `--all` sólo escribe core; la rama off-ADS
+lo hardcodea). La existencia de la nota ya significa core; el caso raro de `--all` lleva
+`core: false` explícito. Cambia el disparador de `lint.py:346` y necesita tolerancia hacia atrás +
+backfill quirúrgico. Queda dentro de #87, que es donde va la señal que sí informa.
 
 **Lo que el recorrido confirmó del diseño (no son defectos):** la lente es configurable y se valida
 contra papers reales; el chaining corre en las dos direcciones, así que tiene camino de recencia; el
