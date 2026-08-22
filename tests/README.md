@@ -32,6 +32,8 @@ Requiere `pytest` (dev-only, no está en `requirements.txt`; los scripts no lo n
      bloqueante / WARN / backlog.
    - **Física del ground-truth** (`msini_earth` contra valores conocidos: Tierra, 51 Peg b)
      y la selección de masa NEA (msini vs best-mass, flags).
+   - **Espejo ficha ↔ ground-truth** (#70): el frontmatter de `stars/` vale lo que dice NEA o nada;
+     un valor rellenado con literatura es indistinguible del auditable si nadie lo compara.
    - **Validaciones de entrada** que abortan la cadena (`ingest_topic`, citekeys, sources).
 
 ## Layout
@@ -49,7 +51,7 @@ Requiere `pytest` (dev-only, no está en `requirements.txt`; los scripts no lo n
 | `test_make_notes.py` | stubs (star/concept/paper/web), `extraction_block` ramificado por tipo de sujeto (unitario + matriz de ramas), retro-linkeo add-only, `unpend_note`, `excluded_table` (escapes), puntero de búsqueda en la cabecera, `pdf_source` (eprint vs publicado), idempotencia | puro FS |
 | `test_triage.py` | carga y persistencia de decisiones en el registro versionado, `--drop` y `--drop-source` (motivo obligatorio, carriles que no se pisan), listado sin `ads.json`, `--migrate` del `triage.json` legacy, contrato con `query_ads.load_triage` | puro FS |
 | `test_multicolumn_matching.py` | invariantes de la estrategia de matcheo en `.txt` a dos columnas (#44/#46): escalera de acortamiento, canaleta, normalización que empalma columnas | fixtures sintéticos |
-| `test_lint.py` | cada categoría con su caso sembrado + exit codes | bóvedas mínimas por escenario |
+| `test_lint.py` | cada categoría con su caso sembrado + exit codes; espejo ficha↔ground-truth campo por campo (#70) | bóvedas mínimas por escenario |
 | `test_check_retractions.py` | parseo Crossref (`updated-by`, fechas), fallback por título, estampado idempotente de `retracted` y `corrections`, exit codes | `requests` falso |
 | `test_ingest_topic.py` | despacho por `source`, validaciones de `sources:`, flujo `pending`, aviso de fuente ya descartada, copia de PDFs, orden de la cadena ads | `run()` y `make_notes.*` grabadores |
 | `test_ingest_star.py` | orden canónico de la cadena de estrellas, aborto al primer fallo, retracción ≠ fallo | `run()` grabador |

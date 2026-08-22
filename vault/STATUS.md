@@ -18,6 +18,48 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.14.0 (2026-08-22) — #70: el frontmatter de `stars/` es espejo puro de NEA
+
+> Primero de la **tanda 2** (procedencia): #70 → #75 → #73. 440 tests verdes (+15), lint 0.
+> 1.13.0 → **1.14.0** (minor: chequeo nuevo del lint, **bloqueante**, que puede encender una bóveda
+> ya ingestada — ver *Migración*).
+
+- **El defecto.** `make_notes` copiaba `P_rot_days` del ground-truth con el comentario *"llenar con
+  literatura si falta"* — o sea que el propio código **instruía** romper el contrato. Y los nulls de
+  NEA no son excepcionales: `pl_rvamp` (K) y `pl_orbeccen` (e) faltan seguido, así que el caso es el
+  **normal**. Resultado: un mismo campo podía traer un valor auditable de NEA o un número extraído
+  por un LLM, con **idéntico aspecto y ninguna marca**.
+- **Por qué importa más de lo que parece.** La cabecera de la ficha promete que *"el ground-truth del
+  frontmatter es auditable"* mientras la prosa es síntesis a revisar. Rellenar el campo **borra esa
+  distinción**, que es el contrato máquina-legible con el consumidor. Y adoptar un valor cuando las
+  fuentes discrepan es **decidir por quien consume**: rompe el flujo unidireccional de la regla #0.
+- **Nada lo detectaba.** El único chequeo ficha↔ground-truth comparaba el **número de planetas**,
+  nunca los valores. La promesa no tenía quién la sostuviera — el mismo patrón C de la sesión (la
+  garantía existe, el rastro de que se cumplió no).
+- **El fix es de detección, no de generación** (el script ya copiaba bien; lo que fallaba era la
+  instrucción y la ausencia de red): el lint compara ahora **campo por campo** los cuatro del host
+  (`spectral_type`, `teff_K`, `dist_pc`, `P_rot_days`) y los cinco de cada `planets[]`. Dos formas
+  con **mensajes distintos porque el arreglo es distinto**: *difiere de NEA* → si sale de un paper es
+  una `disputes[]`, no una sobreescritura; *NEA no lo tiene y la ficha sí* → al cuerpo, citado.
+- **`P_rot_days` nulo deja de ser "campo incompleto"** (punto 4 del issue). No era accionable: NEA no
+  lo tiene y "completarlo" era exactamente lo prohibido, así que se reportaba **para siempre**. Ahora
+  lo accionable es lo correcto: *"NEA no lo trae **y** el cuerpo no documenta un P_rot citado"* — si
+  la prosa lo documenta con su `[[bibcode]]` (o marcado `inferencia`), no hay hallazgo. Heurística
+  deliberada, de la familia de la fuga de implementación: mención + respaldo en la misma línea.
+- **⚠ Migración (instancias ya ingestadas).** El chequeo es **bloqueante** y una bóveda que rellenó
+  campos a mano va a encenderse al mergear. Es el punto: son valores que hoy se leen como auditables
+  sin serlo. Arreglo por hallazgo: mover el número al cuerpo con su cita y dejar el campo `null`
+  (o taguear `disputes[]` si contradice a NEA); `python scripts/ingest_star.py <slug>` restaura el
+  valor de NEA sin tocar la prosa.
+- **Tests (+15):** las dos formas del hallazgo con su mensaje, nulls espejados y `34` vs `34.0` como
+  no-hallazgo, los parámetros de cada planeta, el planeta que no está en NEA (no se duplica sobre el
+  chequeo de cantidad), P_rot documentado vs no documentado, la regex de P_rot citado
+  (6 variantes, con casos de control) y unitarios de `same_value`/`mirror_issues`. Cobertura de
+  sentencias del código nuevo: **100%**.
+- Skills: `ingest-star` 1.13.2 → **1.14.0** (su paso 3 mandaba completar `P_rot_days`), `maintain`
+  1.11.1 → **1.12.0** (su backlog E mandaba completar el frontmatter). `CLAUDE.md`, `README`,
+  `docs/ingesta.md` y `docs/operacion.md` sincronizados.
+
 ## ✅ Framework 1.13.0 (2026-08-22) — #81: el rechazo de una fuente declarada no quedaba en ningún lado
 
 > Cierra la **tanda 1** del backlog del 2026-08-22 (#76, #79 puntos 1-2, #81). 425 tests verdes

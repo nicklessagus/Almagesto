@@ -40,7 +40,7 @@ para ingestar. En Windows, los comandos de shell corren en Git Bash o WSL.
 | `vault/raw/fulltext/<slug>/*.txt` | Texto completo (pdftotext; si la capa de texto es ilegible, OCR marcado `source: ocr`, citable con salvedad) para búsqueda local y re-extracción. Ojo: el `.txt` puede venir del **preprint de arXiv** y no de la versión publicada; la nota del paper lo registra en `pdf_source` (ver abajo). |
 | `vault/raw/ground_truth/<slug>.json` | Hechos auditables (NASA Exoplanet Archive + SIMBAD). |
 | `vault/raw/refs/` | Fuentes de diseño del patrón (gist Karpathy, guía de implementación). |
-| `vault/wiki/stars/<slug>.md` | Ficha por estrella (entidad). **Frontmatter = fuente de verdad** (`spectral_type`, `P_rot_days`, planetas, indicadores esperados, métodos). |
+| `vault/wiki/stars/<slug>.md` | Ficha por estrella (entidad). **Frontmatter = fuente de verdad** (`spectral_type`, `P_rot_days`, planetas, indicadores esperados, métodos). Lo que sale de NEA/SIMBAD es **espejo puro**: si el ground-truth no tiene el valor, el campo queda null y el dato de literatura va al cuerpo, citado. |
 | `vault/wiki/papers/<bibcode>.md` | Una nota por paper (metadata ADS + abstract + extracción LLM). |
 | `vault/wiki/concepts/<área>/` | Notas transversales. Áreas **abiertas** (cualquiera); `concept_areas` (objective.yaml) es referencia para el typo-check, no restricción — `methods`/`hypotheses` reservadas. |
 | `vault/wiki/queries/` | Preguntas contestadas contra el corpus. |

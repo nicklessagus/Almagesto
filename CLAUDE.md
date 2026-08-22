@@ -131,7 +131,19 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
 - **stars/**: `name, slug, aliases, simbad_id, spectral_type, teff_K, dist_pc, P_rot_days,
   activity_indicators_expected, planets[], data_local, methods_applied{literature,ours}`. Cada
   `planets[]` lleva `letter, P_days, K_ms, e, mass_earth, status` (de ground-truth NEA; `mass_earth`
-  RV-only ≈ $m\sin i$) + `disputes[]` cuando un paper discrepa. El cuerpo trae además una sección
+  RV-only ≈ $m\sin i$) + `disputes[]` cuando un paper discrepa.
+  ⛔ **Espejo puro de NEA (#70) — los campos de arriba valen lo que dice el ground-truth o NADA.**
+  `spectral_type`, `teff_K`, `dist_pc`, `P_rot_days` y los cinco campos de cada `planets[]` los
+  copia el script del JSON de `vault/raw/ground_truth/`: si NEA no tiene el valor, el campo queda
+  **null** y **no se rellena con literatura**. Los nulls de NEA son el caso **normal**, no la
+  excepción (`pl_rvamp` y `pl_orbeccen` faltan seguido). El motivo es el contrato mismo: la cabecera
+  promete que el frontmatter es la capa **auditable** frente a la prosa (síntesis LLM a revisar), y
+  un número extraído por un LLM ahí queda **indistinguible** del de NEA — se borra la distinción que
+  el consumidor usa. Además, adoptar un valor cuando las fuentes discrepan es **decidir por quien
+  consume**, contra el flujo unidireccional de la regla #0. El valor de literatura va **al cuerpo,
+  citado `[[bibcode]]`** (la autosuficiencia se cumple igual: el dato está, con su fuente); si
+  discrepa de NEA es una `disputes[]`; si es lectura propia va marcado **`inferencia`**. Lo vigila el
+  lint, campo por campo. El cuerpo trae además una sección
   **`## Huecos`** (qué falta para que la ficha alcance sola: parámetros sin valor, señales sin árbitro,
   métodos no aplicados) y un apéndice **`## Excluidos por el filtro`** (snapshot de los no-core, top por
   citas con link a ADS — puntero por las dudas, no se bajan). El blockquote de cabecera lleva un
@@ -417,7 +429,7 @@ en el skill.
 **No crea entidades** (eso es Ingest); opera sobre estrellas/conceptos que **ya existen**. Sub-modos:
 **refrescar** (papers nuevos → re-sintetizar sólo lo nuevo), **borrar** (nota + PDF/fulltext + reparar
 colgados), **renombrar** slug, **re-clasificar** tras cambiar `relevance.topics`, **resolver el
-backlog del lint** (P_rot nulo, drift PDF↔disco, cobertura — los **huérfanos no**: son
+backlog del lint** (P_rot sin documentar, drift PDF↔disco, cobertura — los **huérfanos no**: son
 bloqueantes, se arreglan al cierre de la operación que los creó), y la **pasada periódica de
 retracciones** (`check_retractions.py` sin `--slug`, toda la bóveda — la cadena de ingest sólo
 chequea el slug en curso; **esa misma pasada estampa también `corrections`**, con el mismo valor
@@ -438,7 +450,9 @@ chequea sólo los papers del slug (`--slug`) y el barrido completo de la bóveda
 periódica del skill `maintain`— y el lint lo surface offline: una fuente retractada citada rompe la
 frontera dura),
 páginas huérfanas,
-contradicciones ground-truth↔ficha, **masa de ground-truth inconsistente con la m·sini implícita**
+contradicciones ground-truth↔ficha —**tanto en el número de planetas como campo por campo**: un
+valor que difiere del ground-truth, o que existe en la ficha cuando NEA no lo tiene, rompe el espejo
+(#70)—, **masa de ground-truth inconsistente con la m·sini implícita**
 (K/P/e/M\* — atrapa best-mass espurias de NEA), **`thesis_links` sin página destino** (tag que no matchea
 ninguna nota → no acumula en el roll-up; typo típico `shift-vs-shape` vs `shift_vs_shape`) y
 **`planets[].disputes[].ref` sin paper destino** (bibcode discrepante que no existe como nota). La

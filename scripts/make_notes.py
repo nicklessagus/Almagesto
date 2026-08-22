@@ -594,6 +594,9 @@ def write_star_note(slug: str, force: bool) -> None:
     gt_file = cfg.GROUND_TRUTH / f"{slug}.json"
     gt = json.loads(gt_file.read_text(encoding="utf-8")) if gt_file.exists() else {"host": {}, "planets": []}
     host = gt.get("host", {})
+    # Espejo puro de NEA (#70): un null acá es un null de NEA (pl_rvamp/pl_orbeccen faltan seguido,
+    # el caso es normal, no excepcional) y NO se rellena con el valor de un paper — ése va al cuerpo
+    # con su `[[bibcode]]`, o a `disputes[]` si discrepa. Lo vigila el lint.
     planets = [{"letter": p.get("letter"), "P_days": p.get("P_days"),
                 "K_ms": p.get("K_ms"), "e": p.get("e"),
                 "mass_earth": p.get("mass_earth"),   # masa NEA (M⊕); RV-only ≈ m·sini. Lint valida consistencia.
@@ -608,7 +611,12 @@ def write_star_note(slug: str, force: bool) -> None:
         "spectral_type": host.get("spectral_type"),
         "teff_K": host.get("teff_K"),
         "dist_pc": host.get("dist_pc"),
-        "P_rot_days": host.get("st_rotp_days"),      # llenar con literatura si falta
+        # ESPEJO PURO de NEA (#70): si NEA no lo tiene, el campo queda NULL — no se rellena con
+        # literatura. El frontmatter es la capa auditable que la cabecera promete; meterle un
+        # número extraído por un LLM lo vuelve indistinguible del de NEA y borra esa distinción.
+        # El valor de literatura va al CUERPO, citado `[[bibcode]]` (la autosuficiencia se cumple
+        # igual: el dato está, con su fuente). Lo vigila el lint.
+        "P_rot_days": host.get("st_rotp_days"),
         "activity_indicators_expected": [],           # poblar con extracción LLM
         "planets": planets,
         "data_local": meta.get("data_local"),
@@ -633,7 +641,9 @@ tipo espectral, planetas confirmados/dudosos)._
 
 ## Huecos
 _(qué falta para que la ficha alcance sola: parámetros sin valor (¿`P_rot`?), señales RV sin árbitro,
-indicadores esperados no medidos, métodos no aplicados. Lista corta y accionable — abrir queries para imputar.)_
+indicadores esperados no medidos, métodos no aplicados. Lista corta y accionable — abrir queries para imputar.
+El valor que NEA no tiene NO se copia al frontmatter: va acá o en el Resumen, citado `[[bibcode]]`,
+o marcado `inferencia` si es lectura propia.)_
 
 ## Planetas (ground-truth NASA Exoplanet Archive)
 ```dataviewjs

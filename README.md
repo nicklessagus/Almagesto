@@ -287,7 +287,10 @@ cuando un paper discrepa se marca como disputa en vez de sobreescribir. El lint 
 implícita a partir de K, P, e y la masa estelar, y marca las inconsistencias.
 *Chequeo humano:* cada dato lleva su `[[bibcode]]` y el `.txt` de esa fuente está versionado en el
 repo, así que verificarlo es un `grep` de la frase. El frontmatter es auditable contra el archivo de
-la NASA.
+la NASA, y el lint lo compara **campo por campo**: vale lo que dice el ground truth o queda vacío.
+Que la NASA no tenga un valor es lo normal (la semiamplitud y la excentricidad faltan seguido), y ese
+hueco **no se rellena** con lo que dice un paper — ese número va a la prosa, con su cita. Si no,
+quedaría con el mismo aspecto que el auditable.
 
 **Escribir la síntesis.** Toda afirmación va citada o marcada explícitamente como inferencia, cada
 ficha y concepto que genera el template abre avisando que esa prosa es capa LLM, y el lint lista los

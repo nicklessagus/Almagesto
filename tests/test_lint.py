@@ -1,6 +1,8 @@
 """lint: cada categoría detecta su caso sembrado; exit code separa bloqueante/WARN/backlog."""
 import json
 
+import pytest
+
 import lib_config as cfg
 import lint
 from conftest import mk_note
@@ -21,12 +23,13 @@ def link_from_index(toy_vault, *stems):
 def gt_planet(letter="b", mass=1.0, flag=None):
     """Planeta de GT consistente por construcción (K,P,e,M*=1 → m·sini ≈ 1 M⊕)."""
     return {"letter": letter, "P_days": 365.25, "K_ms": 0.0895, "e": 0.0,
-            "mass_earth": mass, "mass_flag": flag}
+            "mass_earth": mass, "status": "confirmed", "mass_flag": flag}
 
 
-def write_gt(toy_vault, planets, mstar=1.0):
+def write_gt(toy_vault, planets, mstar=1.0, host=None):
     (toy_vault.GROUND_TRUTH / "test_star.json").write_text(
-        json.dumps({"slug": "test_star", "host": {"mass_msun": mstar}, "planets": planets}),
+        json.dumps({"slug": "test_star", "host": {"mass_msun": mstar, **(host or {})},
+                    "planets": planets}),
         encoding="utf-8")
 
 
@@ -114,6 +117,127 @@ def test_contradiccion_gt_ficha(toy_vault, capsys):
     rc, out = run_lint(capsys)
     assert rc == 1
     assert "ficha 1 planetas vs ground-truth 2" in out
+
+
+# ── #70: el frontmatter de stars/ es espejo puro de NEA ──────────────────────
+
+def ficha_espejo(toy_vault, front=None, body="**b** (P=365 d)\n"):
+    """Ficha que ESPEJA el `gt_planet` por defecto; los tests pisan sólo el campo que prueban.
+    Crea también el paper citable, para que un `[[bibcode]]` en el cuerpo no sea link roto."""
+    mk_note(toy_vault.PAPERS, "2019A....1A", {"tags": ["paper"], "relevance": "low"}, "")
+    fm = {"tags": ["star"], "activity_indicators_expected": ["halpha"],
+          "planets": [{"letter": "b", "P_days": 365.25, "K_ms": 0.0895, "e": 0.0,
+                       "mass_earth": 1.0, "status": "confirmed"}]}
+    fm.update(front or {})
+    return mk_note(toy_vault.STARS, "test_star", fm, body)
+
+
+def test_espejo_valor_que_nea_no_tiene_es_bloqueante(toy_vault, capsys):
+    """El caso de #70: NEA no trae `st_rotp` (pasa seguido) y alguien completó el campo con el
+    valor de un paper. Queda con el MISMO aspecto que un valor auditable de NEA y hasta ahora nada
+    lo detectaba — el único chequeo comparaba el NÚMERO de planetas, nunca los valores."""
+    write_gt(toy_vault, [gt_planet("b")])
+    ficha_espejo(toy_vault, {"P_rot_days": 34.0}, "**b** (P=365 d) · P_rot 34 d [[2019A....1A]]\n")
+    rc, out = run_lint(capsys)
+    assert rc == 1                                       # bloqueante: rompe la capa auditable
+    assert "`P_rot_days: 34.0` pero el ground-truth no tiene el valor" in out
+    assert "dejalo null y poné el valor de literatura en el cuerpo" in out
+
+
+def test_espejo_valor_que_contradice_a_nea_manda_a_disputes(toy_vault, capsys):
+    """Distinto arreglo, distinto mensaje: acá NEA SÍ tiene el valor y la ficha dice otra cosa —
+    si sale de un paper es una `disputes[]`, no una sobreescritura."""
+    write_gt(toy_vault, [gt_planet("b")], host={"st_rotp_days": 34.0})
+    ficha_espejo(toy_vault, {"P_rot_days": 20.0})
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert "contradice el ground-truth (34.0)" in out and "`disputes[]`" in out
+
+
+def test_espejo_nulls_y_formato_numerico_no_son_hallazgo(toy_vault, capsys):
+    """Un null de NEA espejado como null es el estado CORRECTO (no un campo a completar), y 34 vs
+    34.0 es formato de YAML/JSON, no discrepancia."""
+    write_gt(toy_vault, [gt_planet("b")], host={"st_rotp_days": 34})
+    ficha_espejo(toy_vault, {"P_rot_days": 34.0, "teff_K": None, "dist_pc": None})
+    rc, out = run_lint(capsys)
+    assert rc == 0
+    assert "Contradicciones ground-truth ↔ ficha (0)" in out
+
+
+def test_espejo_cubre_los_parametros_de_cada_planeta(toy_vault, capsys):
+    """La evidencia del issue nombra `planets[]`: en NEA `pl_rvamp` (K) y `pl_orbeccen` (e) faltan
+    seguido, así que el rellenado con literatura es MÁS probable ahí que en el host."""
+    write_gt(toy_vault, [{"letter": "b", "P_days": 365.25, "K_ms": None, "e": 0.0,
+                          "mass_earth": 1.0, "status": "confirmed"}])
+    ficha_espejo(toy_vault, {"planets": [{"letter": "b", "P_days": 365.25, "K_ms": 2.5,
+                                          "e": 0.3, "mass_earth": 1.0, "status": "confirmed"}]})
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert "`b.K_ms: 2.5` pero el ground-truth no tiene el valor" in out
+    assert "`b.e: 0.3` contradice el ground-truth (0.0)" in out
+
+
+def test_espejo_no_duplica_el_planeta_que_no_esta_en_nea(toy_vault, capsys):
+    """Un planeta de más ya lo reporta el chequeo de cantidad; repetirlo campo por campo sería
+    ruido sobre el mismo hallazgo."""
+    write_gt(toy_vault, [gt_planet("b")])
+    ficha_espejo(toy_vault, {"planets": [{"letter": "b", "P_days": 365.25, "K_ms": 0.0895,
+                                          "e": 0.0, "mass_earth": 1.0, "status": "confirmed"},
+                                         {"letter": "z", "P_days": 9.9, "K_ms": 3.0}]},
+                 "**b** (P=365 d) y **z** (P=9.9 d)\n")
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert "ficha 2 planetas vs ground-truth 1" in out
+    assert "z.P_days" not in out and "z.K_ms" not in out
+
+
+def test_p_rot_documentado_en_la_prosa_no_es_backlog(toy_vault, capsys):
+    """#70 punto 4: `P_rot_days` nulo dejó de ser "campo incompleto" (no era accionable: NEA no lo
+    tiene y completarlo es justo lo prohibido). Lo accionable es que el P_rot esté DOCUMENTADO en
+    la prosa con su cita — si está, no hay nada que reportar."""
+    write_gt(toy_vault, [gt_planet("b")])
+    ficha_espejo(toy_vault, {"P_rot_days": None},
+                 "**b** (P=365 d)\n\nEl período de rotación es 34 d [[2019A....1A]].\n")
+    rc, out = run_lint(capsys)
+    assert rc == 0
+    assert "sin P_rot" not in out
+
+
+def test_p_rot_ni_en_nea_ni_citado_sigue_siendo_backlog(toy_vault, capsys):
+    write_gt(toy_vault, [gt_planet("b")])
+    ficha_espejo(toy_vault, {"P_rot_days": None})
+    rc, out = run_lint(capsys)
+    assert rc == 0                                       # backlog, no bloquea
+    assert "sin P_rot: NEA no lo trae y el cuerpo no documenta uno citado" in out
+
+
+@pytest.mark.parametrize("linea,documentado", [
+    ("P_rot = 34 d [[2019A....1A]]", True),
+    ("El período de rotación es 34 d [[2019A....1A]]", True),
+    ("The rotation period is 34 d [[2019A....1A]]", True),
+    ("$P_{rot}$ ≈ 34 d, inferencia a partir del ciclo", True),      # lectura propia, marcada
+    ("P_rot = 34 d", False),                                        # sin respaldo: no cuenta
+    ("Nada que ver [[2019A....1A]]", False),                        # cita sin la afirmación
+])
+def test_prot_citado_regex(linea, documentado):
+    assert bool(lint.PROT_CITED_RE.search(linea)) is documentado
+
+
+def test_same_value_tolerancias():
+    """Unitario del comparador: los números viajan por YAML y JSON y vuelven con otro tipo."""
+    assert lint.same_value(34, 34.0) and lint.same_value(None, None)
+    assert lint.same_value("G8V", " G8V ") and lint.same_value(0.0, 0.0)
+    assert not lint.same_value(34.0, None) and not lint.same_value(None, 34.0)
+    assert not lint.same_value(34.0, 20.0) and not lint.same_value("G8V", "K0V")
+    assert lint.same_value(1e6, 1e6 + 0.5)               # tolerancia relativa
+    assert not lint.same_value(1.0, 1.1)
+
+
+def test_mirror_issues_sin_ground_truth_no_inventa():
+    """Unitario: con un GT vacío y una ficha vacía no hay nada que reportar (una bóveda recién
+    creada no puede empezar en rojo)."""
+    assert lint.mirror_issues("x", {}, {}) == []
+    assert lint.mirror_issues("x", {"planets": []}, {"host": {}, "planets": []}) == []
 
 
 def test_masa_inconsistente(toy_vault, capsys):
@@ -386,7 +510,7 @@ def test_campos_incompletos(toy_vault, capsys):
     link_from_index(toy_vault, "algo")
     rc, out = run_lint(capsys)
     assert rc == 0
-    assert "P_rot_days nulo" in out
+    assert "sin P_rot: NEA no lo trae y el cuerpo no documenta uno citado" in out
     assert "activity_indicators_expected vacío" in out
     assert "planeta c en frontmatter pero no discutido en prosa" in out
     assert "planeta b" not in out                     # b sí está discutida

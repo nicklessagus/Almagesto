@@ -160,8 +160,8 @@ flowchart LR
 |---|---|---|---|
 | frontmatter | `name`, `slug`, `aliases`, `simbad_id` | script | `stars.yaml` + SIMBAD |
 | frontmatter | `spectral_type`, `teff_K`, `dist_pc` | script | SIMBAD / NEA |
-| frontmatter | `P_rot_days` | script (NEA `st_rotp`) | ⚠ hoy también se rellena a mano — ver #70 |
-| frontmatter | `planets[]` (`letter`, `P_days`, `K_ms`, `e`, `mass_earth`, `status`) | script | **NEA — ground-truth** |
+| frontmatter | `P_rot_days` | script (NEA `st_rotp`) | **espejo puro**: si NEA no lo tiene queda null; el valor de literatura va al cuerpo, citado |
+| frontmatter | `planets[]` (`letter`, `P_days`, `K_ms`, `e`, `mass_earth`, `status`) | script | **NEA — ground-truth** (espejo puro: `K_ms`/`e` faltan seguido y el null se respeta) |
 | frontmatter | `planets[].disputes[]` | **LLM** | paper que discrepa de NEA (`field`/`ref`/`note`/`alt`) |
 | frontmatter | `activity_indicators_expected` | **LLM** | extracción de los papers |
 | frontmatter | `methods_applied.literature` | **LLM** | `methods` de los papers de la estrella |
@@ -196,6 +196,10 @@ tema (ADS y off-ADS) escriben el mismo bloque.
   cómo se lee una señal RV**; el resto vive en su nota de paper.
 - **Disputas.** NEA es siempre el valor de verdad: cuando un paper discrepa se **taguea**, no se
   sobreescribe. Sólo discrepancias **materiales** (mayores que el error).
+- **Espejo puro (#70).** Los campos que el script copia del ground-truth valen lo que dice NEA **o
+  nada**. Un null de NEA no es un hueco a completar: rellenarlo con literatura vuelve ese número
+  indistinguible del auditable, que es justo la distinción que la cabecera promete. El valor de
+  literatura vive en el cuerpo, con su `[[bibcode]]`. El lint lo compara campo por campo.
 - **Autosuficiencia.** La ficha tiene que alcanzar sola: si para responder algo hay que abrir un
   paper, eso falta en la ficha. Los `[[bibcode]]` son trazabilidad, no lectura obligatoria.
 - **Todo lo apuntable es chequeable.** Cada afirmación fáctica va **citada** o marcada
@@ -207,7 +211,6 @@ Esta ingesta tiene huecos conocidos y numerados; el detalle de cada uno está en
 
 | Tema | Issues |
 |---|---|
-| Procedencia de valores en la ficha (NEA vs literatura) | #70 |
 | `disputes[]` no expresa desacuerdo paper↔paper | #71 |
 | Falta el paso de contraste cross-paper antes de sintetizar | #72, y #62 (qué papers leer) |
 | Rol del paper (fundacional / aplicación / árbitro) | #73 |

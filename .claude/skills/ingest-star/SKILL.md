@@ -1,7 +1,7 @@
 ---
 name: ingest-star
 description: Usar cuando el usuario pide bajar/agregar/ingestar una estrella a la bóveda ("bajá GJ 581", "ingest tau ceti", "agregá la estrella X", "traé la bibliografía de AU Mic"). Corre la cadena de ingesta y hace la extracción LLM.
-version: 1.13.2
+version: 1.14.0
 ---
 
 # Ingest: agregar una estrella a la wiki
@@ -138,9 +138,16 @@ Progreso del ingest de <estrella>:
    abstract de ADS es candidato a **diferencia de versión**: abrí el PDF publicado o dejá la
    salvedad en la nota. `verify-citations` lo detecta después; **acá es donde el número entra a la
    bóveda**.
-   - en `vault/wiki/stars/<slug>.md`: completar frontmatter (`P_rot_days`,
-     `activity_indicators_expected`, caveats por planeta) y escribir la **síntesis** (qué se sabe,
-     qué indicador debería trazar actividad para ese tipo espectral, huecos).
+   - en `vault/wiki/stars/<slug>.md`: completar el frontmatter que es **tuyo**
+     (`activity_indicators_expected`, `methods_applied.literature`, `planets[].disputes[]`) y
+     escribir la **síntesis** (qué se sabe, qué indicador debería trazar actividad para ese tipo
+     espectral, huecos).
+     ⛔ **No toques los campos de ground-truth** (`spectral_type`, `teff_K`, `dist_pc`,
+     `P_rot_days` y los cinco de cada `planets[]`): son **espejo de NEA** (#70). Si NEA no tiene el
+     valor —pasa seguido con `K_ms` y `e`— el campo queda **null** y el valor de literatura va **al
+     cuerpo, citado `[[bibcode]]`**; si discrepa de NEA es una `disputes[]`; si es lectura tuya va
+     marcado `inferencia`. Rellenarlos vuelve el número indistinguible del auditable y el lint lo
+     marca como **bloqueante**.
    - **Contrastar contra `vault/raw/ground_truth/<slug>.json`**: si un paper discrepa del archivo
      (p. ej. planeta dudoso), taguearlo en `planets[].disputes[]` de la ficha (`field`/`ref`/`note`/`alt`;
      ver *Disputas* en `CLAUDE.md`) y `bearing: challenges` en la nota del paper — no celebrar.

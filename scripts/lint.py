@@ -191,6 +191,65 @@ def note_files() -> list:
 
 BIBCODE_RE = re.compile(r"^\d{4}[A-Za-z]")   # heurística: target de link que parece bibcode
 
+# ── espejo puro de NEA (#70) ─────────────────────────────────────────────────
+# Campos de `stars/` que los scripts copian del ground-truth: (campo en la ficha, clave en el JSON).
+# El contrato es que valen lo que dice NEA/SIMBAD **o nada** — la cabecera promete que el
+# frontmatter es la capa auditable, y un número extraído por un LLM ahí es indistinguible del de
+# NEA. Los nulls de NEA son el caso NORMAL (pl_rvamp y pl_orbeccen faltan seguido): rellenarlos con
+# literatura borra la distinción. Hasta 1.13.0 nada lo detectaba —el único chequeo comparaba el
+# NÚMERO de planetas, nunca los valores—, así que la promesa no tenía quién la sostuviera.
+MIRROR_HOST = (("spectral_type", "spectral_type"), ("teff_K", "teff_K"),
+               ("dist_pc", "dist_pc"), ("P_rot_days", "st_rotp_days"))
+MIRROR_PLANET = ("P_days", "K_ms", "e", "mass_earth", "status")
+# P_rot documentado en la PROSA (que es donde va cuando NEA no lo tiene): mención + respaldo en la
+# misma línea. Heurística deliberada, como la de fuga de implementación: barata y de alta señal.
+PROT_CITED_RE = re.compile(r"(?i)(P_?\{?rot|per[ií]odo de rotaci[óo]n|rotation period)"
+                           r"[^\n]*(\[\[[^\]]+\]\]|inferencia)")
+
+
+def same_value(a, b) -> bool:
+    """¿El valor de la ficha es el del ground-truth? Los números viajan por YAML y JSON, así que se
+    comparan con tolerancia relativa (un 34.0 vs 34 no es una discrepancia); el resto, textual."""
+    if a is None or b is None:
+        return a is None and b is None
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)) and not isinstance(a, bool):
+        return abs(a - b) <= 1e-6 * max(1.0, abs(b))
+    return str(a).strip() == str(b).strip()
+
+
+def mirror_issues(slug: str, fm: dict, gt: dict) -> list:
+    """Campos de la ficha que NO son espejo del ground-truth (#70). Dos formas, y la distinción
+    importa porque el arreglo es distinto: **difiere** (la ficha dice otra cosa que NEA → si viene
+    de un paper es una `disputes[]`, no una sobreescritura) y **sin respaldo** (NEA no tiene el
+    valor y la ficha sí → el número salió de la literatura y va al cuerpo, citado)."""
+    host = gt.get("host") or {}
+    out = []
+
+    def check(campo: str, val_ficha, val_gt):
+        if same_value(val_ficha, val_gt):
+            return
+        if val_gt is None:
+            out.append((slug, f"`{campo}: {val_ficha}` pero el ground-truth no tiene el valor → el "
+                              f"frontmatter es espejo de NEA (#70): dejalo null y poné el valor de "
+                              f"literatura en el cuerpo con su `[[bibcode]]`"))
+        else:
+            out.append((slug, f"`{campo}: {val_ficha}` contradice el ground-truth "
+                              f"({val_gt!r}) → si sale de un paper es una `disputes[]`, no una "
+                              f"sobreescritura; re-corré la cadena para restaurar el valor de NEA"))
+
+    for campo, key in MIRROR_HOST:
+        check(campo, fm.get(campo), host.get(key))
+    gt_planets = {str(p.get("letter")): p for p in (gt.get("planets") or [])}
+    for pl in (fm.get("planets") or []):
+        letra = str(pl.get("letter"))
+        ref = gt_planets.get(letra)
+        if ref is None:
+            continue          # planeta que no está en NEA: lo reporta el chequeo de cantidad
+        for campo in MIRROR_PLANET:
+            check(f"{letra}.{campo}", pl.get(campo), ref.get(campo))
+    return out
+
+
 
 def main() -> int:
     files = note_files()
@@ -300,13 +359,20 @@ def main() -> int:
         # chequeos de completitud por tipo
         tags = fm.get("tags", []) or []
         if "star" in tags:
-            if fm.get("P_rot_days") in (None, ""):
-                incomplete.append((stem, "P_rot_days nulo"))
+            body = text.split("---", 2)[-1] if text.startswith("---") else text
+            # `P_rot_days` nulo NO es de por sí un campo incompleto (#70): el frontmatter es espejo
+            # de NEA y NEA muchas veces no lo tiene — pedir que se "complete" ahí es pedir que se
+            # rellene con literatura, justo lo que rompe la capa auditable. Lo accionable es otra
+            # cosa: que el P_rot esté DOCUMENTADO en la prosa, con su cita (o marcado `inferencia`
+            # si es lectura propia). Antes esto se reportaba para siempre, sin arreglo posible.
+            if fm.get("P_rot_days") in (None, "") and not PROT_CITED_RE.search(body):
+                incomplete.append((stem, "sin P_rot: NEA no lo trae y el cuerpo no documenta uno "
+                                         "citado → buscarlo en la literatura y dejarlo en la prosa "
+                                         "con su `[[bibcode]]` (el frontmatter NO se rellena)"))
             if not fm.get("activity_indicators_expected"):
                 incomplete.append((stem, "activity_indicators_expected vacío"))
             # autosuficiencia (proxy estructural): cada planeta del frontmatter debe discutirse en
             # la prosa (la ficha tiene que alcanzar sola; ver "estándar de la ficha" en CLAUDE.md).
-            body = text.split("---", 2)[-1] if text.startswith("---") else text
             for pl in (fm.get("planets") or []):
                 l = str(pl.get("letter", "")).strip()
                 if not l:
@@ -419,6 +485,7 @@ def main() -> int:
             n_gt = len(gt.get("planets", []) or [])
             if n_note != n_gt:
                 contradictions.append((slug, f"ficha {n_note} planetas vs ground-truth {n_gt}"))
+            contradictions += mirror_issues(slug, fm, gt)
 
     # huérfanos: notas-concepto sin links entrantes. Papers/estrellas se acceden por
     # Dataview/index, no por wikilink → no son huérfanos genuinos. README tampoco. Las **matrices**
