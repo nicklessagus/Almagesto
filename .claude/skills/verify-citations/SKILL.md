@@ -1,7 +1,7 @@
 ---
 name: verify-citations
 description: Usar para verificar, afirmación por afirmación, que las citas [[bibcode]] de una nota de la wiki (query, hipótesis, ficha, concepto) realmente están respaldadas por el texto completo de la fuente. Se corre como paso de cierre al armar/editar una query o hipótesis, o cuando el usuario pide "rechequeá las citas / ¿esto lo dice el paper?". Implementa el chequeo claim↔evidencia (pipeline tipo CiteAudit) sobre el corpus cerrado de la bóveda. Veredictos: soportada / parcial / no-soportada (la fuente calla) / contradice (la fuente afirma lo contrario → candidata a disputa, no sólo cita rota); en transcripciones de tablas/listas chequea además la completitud (lo que la nota omite).
-version: 1.7.0
+version: 1.7.1
 ---
 
 # Verify-citations — chequeo claim↔evidencia contra el fulltext
@@ -301,9 +301,10 @@ cuántas soportadas/corregidas).
 ## Reporte (al chat)
 Veredicto global honesto: total de pares, cuántas soportadas, **cada corrección hecha** (qué se
 bajó/reasignó/marcó inferencia), **cada contradicción con su resolución** (corrección o disputa
-tagueada) y **cada omisión** detectada en una transcripción (qué faltaba y si se completó o se
-declaró el recorte). No maquillar: una afirmación que se estiró y se corrigió es un hallazgo del
-chequeo, no un fracaso. Si algo quedó dudoso, decirlo.
+tagueada), **cada omisión** detectada en una transcripción (qué faltaba y si se completó o se
+declaró el recorte) y **cada condición perdida** (#74: la afirmación estaba respaldada pero el paper
+la condiciona — qué condición, y si se agregó a la prosa o como fila de `## Régimen de validez`).
+No maquillar: una afirmación que se estiró y se corrigió es un hallazgo del chequeo, no un fracaso. Si algo quedó dudoso, decirlo.
 
 ## Límite honesto
 El chequeo es **juicio de un LLM** leyendo la fuente — robusto (independiente por par, grounding-first,

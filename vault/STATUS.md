@@ -18,6 +18,66 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.20.2 (2026-08-22) — segunda pasada: lo que la primera no miró
+
+> Pedida por el usuario ("revisá de nuevo, en detalle y con cuidado"). La primera pasada auditó la
+> **doc contra el código**; ésta miró lo que aquélla no tocó: los **números que declaré**, las
+> **referencias cruzadas** entre skills tras renumerar pasos, y el **código muerto** de las
+> remociones. Cinco hallazgos. 480 tests verdes, lint 0. Patch.
+
+- **⛔ Un delta de tests estaba inventado.** La entrada 1.12.0 decía "416 tests (+13)"; el total era
+  correcto pero el delta real es **+15**. Lo medí en serio esta vez: un `git worktree` detached,
+  `pytest --collect-only` en cada uno de los 12 commits. **Los otros diez deltas y los doce totales
+  dan exactos**, y `ALMAGESTO_VERSION` coincide con la entrada en cada commit. Es el mismo error que
+  la auditoría de 1.10.3 encontró en la entrada 1.9.0 (+6 declarado, +9 real): un delta que se
+  escribe de memoria en vez de medirse. El mensaje del commit `68264e2` conserva el número viejo
+  —corregirlo pediría reescribir diez commits, y el registro durable es éste—.
+- **El checklist de `maintain A` no tenía los dos pasos que más se saltean.** La prosa tiene 2b
+  (contraste, #72) y 3b (auto-revisión, de 1.10.3); el checklist saltaba de 2 a 3 y de 3 a 4.
+  Justamente el checklist existe (#66) para los pasos que **no dejan rastro si se omiten** — y esos
+  dos son de ésos. Agregados.
+- **El reporte al chat de `verify-citations` no mencionaba las condiciones perdidas.** El bloque que
+  va *en la nota* sí las lleva (#74), pero el reporte enumeraba correcciones, contradicciones y
+  omisiones — y el campo `condicion` es de la misma familia: un hallazgo que no cambia el veredicto.
+  Media feature entregada.
+- **Dos números de línea podridos en el embudo de `docs/ingesta.md`.** `make_notes.py:702` ahora
+  apunta a `stamp_search_line`, no al filtro de core (mis propias tandas movieron ~100 líneas);
+  `fetch_arxiv.py:93` seguía bien de casualidad. Reemplazados por **nombres de función**, que no se
+  pudren. Eran los dos únicos `archivo.py:NN` de toda la doc.
+- **El embudo había quedado mal anidado** al insertar la segunda pasada por fecha (#79) y los dos
+  escalones de síntesis (#72/#75): la 2ª pasada colgaba como hermana de `classify()` cuando en
+  realidad la alimenta. Reescrito el árbol completo.
+- **Verificado y limpio:** las 26 referencias cruzadas a pasos numerados entre skills siguen
+  resolviendo (renumeré `ingest-star` 3→3/3b/3c y agregué 3c a `ingest-topic`, y nadie apuntaba a
+  esos números); no quedó **ningún símbolo muerto** tras sacar las capas de compatibilidad
+  (`LEGACY_DISPUTE_FIELDS` desapareció, `LEGACY_FIELD_TO_GT` sigue en uso por el migrador); y el
+  `[[bibcode]]` literal de los bloques nuevos **no** contamina `bench_verify` (exige
+  `BIBCODE_RE` + fulltext, así que el placeholder no puede sembrarse como par).
+
+## Backlog — ¿esto sirve con cualquier agente, no sólo Claude? (anotado 2026-08-22)
+
+> Pedido del usuario mientras corría la segunda auditoría: *"si todo esto es compatible con cualquier
+> agente no sólo Claude, analicemos cómo se puede hacer eso, pero más adelante"*. Se analiza cuando
+> cierre la tanda en curso — **no** empezar sin conversarlo.
+
+Lo que ya es agnóstico: `scripts/` (Python puro), el schema de frontmatter, `lint.py` (el "test suite"
+del contenido), el registro versionado y `vault/` entero. Un agente cualquiera puede correr la cadena
+y el lint sin saber nada de Claude.
+
+Lo que **no** lo es: la capa de instrucciones. `.claude/skills/*/SKILL.md` es formato de Claude Code
+(frontmatter `name`/`description`/`version` + invocación por slash), `CLAUDE.md` es el archivo que
+Claude carga solo, y varias operaciones asumen primitivas concretas —el **fan-out de subagentes** de
+`verify-citations` y `find-contradictions`, y las herramientas de lectura/grep—.
+
+Ejes a evaluar cuando se retome (sin decidir nada todavía): (a) si el contenido de los skills puede
+vivir en un directorio neutral (`docs/operaciones/`) con `CLAUDE.md` y los `SKILL.md` como punteros
+finos, para que otro agente lea lo mismo; (b) qué reemplaza al fan-out donde no hay subagentes —¿un
+script que orquesta llamadas?—, y si el skill puede declarar ese requisito en vez de asumirlo; (c) si
+conviene un `AGENTS.md` (la convención que están adoptando otros agentes) que apunte al mismo
+contenido; (d) el costo real: hoy la doc está en **un** lugar por operación, y partirla en
+contenido+puntero es exactamente el tipo de duplicación que ya nos mordió dos veces (las listas de
+bloqueantes copiadas a mano). Medir eso antes de mover nada.
+
 ## ✅ Framework 1.20.1 (2026-08-22) — auditoría de coherencia de las tandas 1-4
 
 > Pedida por el usuario antes de limpiar contexto: revisar en profundidad todo lo hecho (1.13.0 →
@@ -397,7 +457,7 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 
 ## ✅ Framework 1.12.0 (2026-08-22) — #79 (puntos 1-2): el orden por citas dejaba afuera lo reciente
 
-> Segundo issue de la tanda 1 del backlog del 2026-08-22 (queda #81). 416 tests verdes (+13), lint 0.
+> Segundo issue de la tanda 1 del backlog del 2026-08-22 (queda #81). 416 tests verdes (+15), lint 0.
 > 1.11.1 → **1.12.0** (minor: la cadena hace una request más al truncar, `ads.json` suma la clave
 > `truncated.recent` y el valor `via: query:recent` — aditivos, un `ads.json` viejo se lee igual).
 

@@ -14,15 +14,15 @@ es visible en el stdout de la corrida:
 
 ```
 n_found  (lo que ADS dice que hay)
-  └─ rows=2000, sort citation_count desc     ← el corte por citas: SÓLO si n_found > rows
-      └─ 2ª pasada, sort date desc           ← sólo si truncó: rescata la cola reciente (#79)
-      └─ classify(): core / no-core          ← regex relevance.topics sobre título+abstract+keywords
-          └─ SÓLO los core se bajan          ← fetch_arxiv.py:93 · make_notes.py:702
-              └─ candidatos del chaining      ← no se bajan hasta que los juzgues (triage)
-                  └─ los que el PDF falló     ← build/<slug>/missing_pdf.json → sin fulltext
-                      └─ "papers clave"       ← la extracción LLM (criterio no definido, #62)
-                          └─ ejes en disputa       ← el contraste cross-paper (#72)
-                              └─ lo que llegó a la ficha  ← la síntesis (con red desde #75)
+  └─ rows=2000, sort citation_count desc   ← el corte por citas: SÓLO si n_found > rows
+     + 2ª pasada, sort date desc           ← sólo si truncó: rescata la cola reciente (#79)
+      └─ classify(): core / no-core        ← regex relevance.topics sobre título+abstract+keywords
+         └─ SÓLO los core se bajan         ← fetch_arxiv.main · make_notes.write_paper_notes
+            └─ candidatos del chaining     ← no se bajan hasta que los juzgues (triage)
+               └─ los que el PDF falló     ← build/<slug>/missing_pdf.json → sin fulltext
+                  └─ "papers clave"        ← la extracción LLM (criterio no definido, #62)
+                     └─ ejes en disputa    ← el contraste cross-paper (#72)
+                        └─ lo que llegó a la ficha  ← la síntesis (red: #75)
 ```
 
 Los **no-core no se bajan ni se extraen**: quedan como puntero en el apéndice *Excluidos por el

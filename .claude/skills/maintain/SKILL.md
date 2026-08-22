@@ -1,7 +1,7 @@
 ---
 name: maintain
 description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), resolver el backlog del lint (P_rot sin documentar, drift PDF↔disco, cobertura, claims stale), y la pasada periódica de retracciones sobre toda la bóveda ("chequeá retracciones").
-version: 1.16.0
+version: 1.16.1
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
@@ -22,15 +22,17 @@ cierra con **verify-citations** (si tocó prosa con `[[bibcode]]`) + **lint en 0
 
 ## A. Refrescar una estrella / concepto (papers nuevos desde el último ingest)
 
-**Copiá este checklist al chat al arrancar y andá tildándolo** (el triage y el verify se saltean sin
-dejar rastro):
+**Copiá este checklist al chat al arrancar y andá tildándolo** (el triage, el contraste, la
+auto-revisión y el verify se saltean sin dejar rastro):
 
 ```
 Progreso del refresh de <entidad>:
 - [ ] 1  orquestador re-corrido — guardia de expansión revisada
 - [ ] 1b triage de los candidatos nuevos del chaining
 - [ ] 2  stubs nuevos identificados (git status) y extraídos
+- [ ] 2b inventario por eje actualizado con lo nuevo (fila nueva / eje nuevo)
 - [ ] 3  síntesis actualizada con SÓLO lo nuevo (+ disputes / matriz)
+- [ ] 3b auto-revisión de autosuficiencia sobre la nota COMPLETA
 - [ ] 4  verify-citations sobre la prosa cambiada (re-fechar el bloque) → lint 0 → log → commit
 ```
 
