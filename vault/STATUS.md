@@ -502,6 +502,31 @@ paper, sin el cual "contrastar" no está definido).
 - **#70 antes de #71**: primero se decide que el frontmatter es espejo de NEA, después se generaliza
   la estructura de disputas.
 
+### Recorrido paso a paso del embudo (2026-08-22, issues #82–#89)
+Segunda mitad de la sesión: se recorrió la ingesta escalón por escalón. Ocho issues más, y **dos
+patrones transversales** que valen más que los issues sueltos.
+
+**Patrón A — el motivo se registra en unos escalones y no en otros (#86, #88, #89).** Mecánicamente
+son tres cosas distintas, pero las tres escriben al mismo archivo:
+`vault/config/registro/<slug>.yaml`. Hoy responde *"con qué query y qué lente se buscó"*; le faltan
+tres hechos: si se corrió el barrido full-text (#88), qué se aceptó y por qué (#89), y cuántos
+registros se juzgaron sin abstract (#86). **Hacerlos por separado son tres migraciones del mismo
+archivo**, cada una con su compatibilidad hacia atrás; como tanda es un solo cambio de schema. El
+criterio que los unifica es el de #51: *`build/` guarda lo regenerable, el registro guarda lo que no
+lo es* — y los tres hechos que faltan son irrecuperables.
+
+**Patrón B — el orden por citas, cuatro ocurrencias (#79).** Truncamiento, ranking del `--sweep`,
+apéndice de excluidos y listado del triage. Se parte en dos: el truncamiento es **server-side** (el
+`sort` va en la request a ADS → sólo lo arregla la segunda pasada por fecha); las otras tres son
+`sort(key=…)` inline en archivos distintos y piden **una sola función de orden compartida**, para que
+la política no diverja. Cuidado con el reemplazo: citas/año también sesga (un paper de dos meses con
+1 cita tiene tasa enorme); el estándar normaliza contra la cohorte del año. Donde la lista es corta,
+dos bloques (top citas + top reciente) en vez de un score compuesto.
+
+**Lo que el recorrido confirmó del diseño (no son defectos):** la lente es configurable y se valida
+contra papers reales; el chaining corre en las dos direcciones, así que tiene camino de recencia; el
+`--drop` **exige** motivo; el apéndice de excluidos linkea a ADS con el motivo real de exclusión.
+
 ### Ideas evaluadas y NO abiertas como issue
 - **Google Scholar como motor de descubrimiento** — descartado **por reproducibilidad, no por
   precio**: sin API pública, sin IDs estables y con resultados no deterministas, el `busqueda` del
