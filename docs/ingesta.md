@@ -42,6 +42,47 @@ sólo ordenan. El chaining corre en **las dos direcciones** (`references()` haci
 `citations()` hacia adelante), así que un paper reciente que cite a un core entra por el grafo sin
 necesitar citas propias.
 
+### Los dos mundos de fulltext
+
+ADS indexa el **texto completo** de los papers, no sólo el abstract: el campo `full:` busca *adentro*
+del paper. Eso es lo que permite encontrar una estrella que aparece **sólo en una tabla** — si la
+tabla es texto, es parte del texto indexado. **La búsqueda la hace ADS, no nosotros.**
+
+| | Dónde vive | Para qué | Cuándo |
+|---|---|---|---|
+| Índice `full:` de ADS | servidor de ADS | **descubrir** qué papers mencionan al sujeto | **antes** de bajar nada |
+| `raw/fulltext/<slug>/*.txt` | tu disco | **leer y grepear** — extracción, `verify-citations`, retro-tag | **después** de bajar el PDF |
+
+Corolario práctico: el corpus local sólo tiene los core bajados, así que **un `grep` local nunca va a
+encontrar un paper que ADS no trajo**. Para eso está el `--sweep`, que le pregunta al índice grande.
+
+Qué usa cada camino:
+
+| Camino | Campo | Alcanza tablas |
+|---|---|---|
+| Query directa | `title:` + `abs:` | **no** |
+| Chaining (`references()`/`citations()`) | `full:` como ancla al sujeto | sí, si el paper está en el grafo de citas |
+| `--sweep` (paso 2b, **manual**) | `full:` con todas las variantes de grafía | sí, también fuera del grafo |
+| Rescate por glifo | superset de la constelación + filtro client-side | — |
+
+⚠ **Cuándo falla igual:** si la tabla es una **imagen** (papers viejos escaneados) no hay texto que
+indexar, y si el OCR del escaneo se comió la fila tampoco. Medido: el OCR de ADS perdió **12 de 26**
+estrellas en Saar & Brandenburg 1999. Por eso un `full:` que devuelve **0 es inconcluso, no
+ausencia** → abrir el PDF/tabla, corroborar por papers que lo citan, o meterlo a mano con
+`extra_core`.
+
+### Rescate por glifo
+
+Los nombres **Bayer** (letra griega + constelación) se escriben con varios caracteres Unicode que se
+ven iguales, y ADS **no los trata igual**: unifica `ε` (U+03B5) con `epsilon`/`eps`, pero el
+tokenizer **descarta** los lookalikes `ϵ` (U+03F5) y `∊` (U+220A — el glifo de ApJ/AJ/MNRAS). Un
+paper titulado *"…Orbiting ∊ Eridani"* queda indexado sólo como "Eridani": `title:"epsilon Eridani"`
+**no lo matchea nunca**. Medido en ε Eri: **121 core perdidos**, incluido el descubrimiento.
+
+Agregar grafías a `aliases` no sirve —el carácter se descarta, no falta la variante—, así que el
+rescate trae el **superset de la constelación** y filtra client-side por el glifo. Corre solo, sólo
+para letras con lookalikes conocidos, y marca los papers `via: glyph`.
+
 ## 2. Las dos ingestas
 
 ```mermaid
