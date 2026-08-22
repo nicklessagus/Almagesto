@@ -28,7 +28,8 @@ Los tres niveles:
   —scratch gitignored— y en otra máquina el triage volvía a proponer todo lo descartado, sin el
   motivo. Ese archivo viejo **ya no se lee** (sin capas de compatibilidad: son complejidad permanente
   en el lector): se consolida con `--migrate`, y mientras exista el **lint lo reporta como
-  bloqueante** — que quede mudo sería justamente el bug que #51 arregló. Los candidatos que **ya tienen nota** en la bóveda (entraron por OTRO slug —
+  bloqueante** — que quede mudo sería justamente el bug que #51 arregló.
+  Los candidatos que **ya tienen nota** en la bóveda (entraron por OTRO slug —
   papers de método curados a otra estrella) se marcan `◆` (#42): ya están bajados y extraídos, la
   decisión sigue siendo por-slug pero se despachan rápido — no se filtran, se etiquetan.
 - **2 — informe al usuario:** `--report` deja la tabla en `outputs/triage-<slug>.md` (título, año,

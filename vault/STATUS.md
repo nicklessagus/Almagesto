@@ -18,6 +18,48 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.20.3 (2026-08-22) — tercera pasada: el código, línea por línea
+
+> Pedida por el usuario ("de nuevo, en detalle y con cuidado, **no de memoria**"). Las dos primeras
+> pasadas auditaron **doc contra código** y **números y referencias**; ésta leyó el **diff de código
+> completo** (`v1.11.0..HEAD`, 6 scripts) hunk por hunk y midió lo que no se puede leer: cobertura
+> AST de cada línea nueva y **mutación** de cada fix. Siete hallazgos, **cuatro de ellos defectos
+> reales de código**, no de doc. 490 tests verdes (+10), lint 0.
+
+- **⛔ El detector de `triage.json` viejo (1.20.0) tenía un agujero, y justo en su caso de uso.**
+  Colgaba del barrido de `build/*/ads.json`, así que un `build/` limpiado a medias —o una bóveda
+  vieja sin `ads.json`— lo evadía por completo: el archivo quedaba **mudo**, que es exactamente lo
+  que ese chequeo existe para impedir. **Reproducido con un test antes de tocar nada** (lint en 0 con
+  el archivo presente). Ahora tiene barrido propio sobre `build/*/triage.json`.
+- **La heurística de `P_rot` (#70) no reconocía la notación que el propio `CLAUDE.md` exige.** En
+  `vault/wiki/` la regla es `$...$`, o sea `$P_{\rm rot}$` / `$P_\mathrm{rot}$` / `P$_{\rm rot}$`
+  — y el regex sólo cubría `P_rot` y `$P_{rot}$`. Resultado: le habría dicho *"el cuerpo no documenta
+  un P_rot citado"* a notas que **sí** lo documentan, que es el falso positivo más molesto posible.
+  Ampliado y probado contra las cinco formas más un control (`Protostellar` ya no cuenta como
+  mención).
+- **`recent_pass` (#79) disparaba su request a ADS sin la pausa de cortesía** que el resto del
+  módulo respeta (chaining, rescate por glifo y `fetch_bibcodes` duermen 1 s entre requests). Una
+  incoherencia con la convención del propio archivo, en el único lugar que agrega una request.
+- **Rama inalcanzable en el migrador de #71:** el `else` del reordenamiento no podía ejecutarse nunca
+  (si la función llegó ahí, `planets` existe sí o sí). Código muerto que nació con la feature.
+- **Dos incoherencias entre chequeos hermanos:** el backlog de `role` (#73) no excluía las notas
+  **no-core** aunque su hermano de #75 sí lo hace, y `same_value` (#70) guardaba contra `bool` sólo
+  de un lado de la comparación. Alineados.
+- **El cableado CLI del migrador no lo tocaba ningún test.** `--migrate-disputes` sólo existe por
+  línea de comandos, así que un `dest` mal escrito habría pasado los 480 tests y fallado en la
+  primera corrida real. `test_make_notes.py` no tenía siquiera un helper para invocar `main()`; ahora
+  lo tiene, y cubre los tres modos sin slug.
+- **Un wrap destruido:** una edición de la segunda pasada dejó dos oraciones en una línea de 156
+  caracteres en el docstring de `triage.py`. (Chequeado además que las líneas largas **no** son una
+  violación de convención: el resto del repo también las tiene.)
+- **Lo medido, no estimado:** **226 líneas ejecutables nuevas** en `scripts/`, **0 sin ejercitar**
+  (cobertura por AST, no por heurística de texto: se cuentan sentencias, no docstrings ni
+  continuaciones). Y los cuatro fixes de esta pasada pasaron **mutación** — se revirtió cada uno y se
+  verificó que su test falla; ninguno es vacuo.
+- **Verificado y limpio:** ningún import muerto en los 15 scripts; `json` sigue en uso en
+  `lib_config` tras vaciar `load_decisiones`; las 12 assertions negativas de `test_lint.py` no caen
+  en la trampa del path temporal (que ya mordió una vez en esta tanda).
+
 ## ✅ Framework 1.20.2 (2026-08-22) — segunda pasada: lo que la primera no miró
 
 > Pedida por el usuario ("revisá de nuevo, en detalle y con cuidado"). La primera pasada auditó la

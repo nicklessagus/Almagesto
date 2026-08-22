@@ -136,6 +136,28 @@ def test_triage_json_viejo_es_bloqueante(toy_vault, capsys):
     assert "triage.py test_star --migrate" in out
 
 
+def test_triage_json_se_detecta_sin_ads_json(toy_vault, capsys):
+    """El detector NO puede colgar del barrido de `ads.json`: un `build/` limpiado a medias (o una
+    bóveda vieja sin ads.json) tiene el triage.json igual, y ése es justo el caso que este chequeo
+    existe para cubrir."""
+    d = toy_vault.ROOT / "build" / "test_star"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "triage.json").write_text(json.dumps({"decisiones": {
+        "2020a....1A": {"decision": "descartado", "motivo": "ruido"}}}), encoding="utf-8")
+    assert not (d / "ads.json").exists()
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert "1 decisión(es) en build/test_star/triage.json" in out
+
+
+def test_paper_no_core_extraido_tampoco_pide_role(toy_vault, capsys):
+    """Simétrico con #75: a una nota escrita con `--all` (no-core) no se le pide que aterrice en una
+    síntesis, así que tampoco se le pide rol."""
+    paper_extraido(toy_vault, relevance="low")
+    rc, out = run_lint(capsys)
+    assert rc == 0 and "sin `role`" not in out
+
+
 def test_triage_json_ilegible_igual_se_reporta(toy_vault, capsys):
     """Un JSON roto no puede convertirse en "no hay nada que migrar": se reporta sin el conteo."""
     d = toy_vault.ROOT / "build" / "test_star"
@@ -494,8 +516,15 @@ def test_p_rot_ni_en_nea_ni_citado_sigue_siendo_backlog(toy_vault, capsys):
     ("El período de rotación es 34 d [[2019A....1A]]", True),
     ("The rotation period is 34 d [[2019A....1A]]", True),
     ("$P_{rot}$ ≈ 34 d, inferencia a partir del ciclo", True),      # lectura propia, marcada
+    # la notación que el propio CLAUDE.md pide en vault/wiki/ ($...$) — sin esto la heurística
+    # marcaba "sin P_rot" sobre notas que SÍ lo documentan
+    (r"con $P_{\rm rot}$ = 34 d [[2019A....1A]]", True),
+    (r"P$_{\rm rot}$ ≈ 34 d [[2019A....1A]]", True),
+    (r"$P_\mathrm{rot}$ = 34 d [[2019A....1A]]", True),
     ("P_rot = 34 d", False),                                        # sin respaldo: no cuenta
     ("Nada que ver [[2019A....1A]]", False),                        # cita sin la afirmación
+    ("Protostellar disks en [[2019A....1A]]", False),               # "Prot" de otra palabra
+    ("la rotación estelar de la muestra [[2019A....1A]]", False),   # sin "período de"
 ])
 def test_prot_citado_regex(linea, documentado):
     assert bool(lint.PROT_CITED_RE.search(linea)) is documentado

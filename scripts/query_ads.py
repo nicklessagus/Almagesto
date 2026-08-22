@@ -468,6 +468,7 @@ def recent_pass(q: str, rows: int, known: set[str]) -> list[dict]:
 
     Sigue siendo un corpus incompleto (faltan los del medio): la marca `truncated` NO se levanta,
     se le agrega cuántos rescató esta pasada."""
+    time.sleep(1.0)          # cortesía entre requests, como el chaining y el rescate por glifo
     out = []
     for r in query_ads(q, rows=rows, quiet_truncate=True, sort=RECENT_SORT):
         b = r.get("bibcode")

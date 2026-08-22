@@ -599,7 +599,7 @@ def test_main_sin_truncar_no_hay_segunda_pasada(toy_vault, toy_classifier, no_sl
     assert ordenes == [qa.CITES_SORT]
 
 
-def test_recent_pass_pide_fecha_dedup_y_marca_via(toy_classifier, monkeypatch):
+def test_recent_pass_pide_fecha_dedup_y_marca_via(toy_classifier, no_sleep, monkeypatch):
     """Unitario de la segunda pasada: misma `q` y mismo `rows`, sólo cambia el orden; silencia el
     aviso de truncado (hablaría del mismo corte que ya se reportó); devuelve SÓLO lo que la primera
     no trajo, actualizando `known` in situ (el caller lo usa después para el dedup del chaining)."""
@@ -614,12 +614,13 @@ def test_recent_pass_pide_fecha_dedup_y_marca_via(toy_classifier, monkeypatch):
     known = {"2020viejo...1V"}
     out = qa.recent_pass("title:x", rows=400, known=known)
     assert llamadas == [{"q": "title:x", "rows": 400, "sort": qa.RECENT_SORT, "quiet": True}]
+    assert no_sleep == [1.0]      # cortesía entre requests, como el resto de las queries a ADS
     assert [r["bibcode"] for r in out] == ["2026nuevo...1N", "2026noncore..1C"]
     assert all(r["via"] == "query:recent" for r in out)   # provenance: por qué entró
     assert known == {"2020viejo...1V", "2026nuevo...1N", "2026noncore..1C"}
 
 
-def test_recent_pass_sin_novedad_devuelve_vacio(toy_classifier, monkeypatch):
+def test_recent_pass_sin_novedad_devuelve_vacio(toy_classifier, no_sleep, monkeypatch):
     """Si la cola por fecha es la misma que ya trajo el top por citas, no inventa registros."""
     monkeypatch.setattr(qa, "query_ads",
                         lambda q, rows=2000, **kw: [rec("2020viejo...1V")])

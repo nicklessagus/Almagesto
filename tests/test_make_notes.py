@@ -4,6 +4,7 @@ El invariante más importante acá es el del header del script: idempotente, NUN
 extracción LLM salvo --force; la única excepción es el merge add-only de seeds.
 """
 import json
+import sys
 
 import pytest
 import yaml
@@ -26,6 +27,13 @@ def rec(bib, relevant=True, arxiv=None, cites=0, title="Un título", topics=("ac
             "abstract": "Abstract de prueba", "arxiv_id": arxiv, "doi": "10.1/x", "bibstem": "ApJ",
             "topics": list(topics) if relevant else [], "relevant": relevant,
             "citation_count": cites, "doctype": doctype}
+
+
+def run_main(monkeypatch, argv):
+    """`make_notes.py <argv>` de punta a punta. Los backfills son CLI-only (nadie los llama desde
+    otro script), así que sin esto su cableado —flag, dest, despacho— no lo cubre ningún test."""
+    monkeypatch.setattr(sys, "argv", ["make_notes.py", *argv])
+    return mn.main()
 
 
 def ads_json(records, slug="test_star"):
@@ -590,6 +598,31 @@ def test_migrate_disputes_preserva_las_ya_migradas_y_el_orden(toy_vault):
     fm = read_fm(dest)
     assert [d["field"] for d in fm["disputes"]] == ["P_rot", "b.K"]
     assert list(fm).index("disputes") == list(fm).index("planets") + 1
+
+
+def test_cli_migrate_disputes_no_pide_slug(toy_vault, monkeypatch, capsys):
+    """El cableado del backfill (flag → dest → despacho) sólo existe en el CLI: sin un test de punta
+    a punta, un `dest` mal escrito pasaría los 480 tests y fallaría en la primera corrida real."""
+    ficha_vieja(toy_vault, [{"letter": "b", "K_ms": 0.9, "disputes": [
+        {"field": "K", "ref": "2020disD...1..1D", "alt": 1.4}]}])
+    assert run_main(monkeypatch, ["--migrate-disputes"]) == 0
+    assert read_fm(toy_vault.STARS / "test_star.md")["disputes"][0]["field"] == "b.K"
+    assert "1 de 1 ficha(s) migradas" in capsys.readouterr().out
+
+
+def test_cli_migrate_disputes_sin_nada_que_migrar_lo_dice(toy_vault, monkeypatch, capsys):
+    """Y el mensaje del caso vacío no puede leerse como "todo bien": aclara que el lector no mira el
+    schema viejo, así que un cero acá no significa que no queden disputas viejas en otra bóveda."""
+    assert run_main(monkeypatch, ["--migrate-disputes"]) == 0
+    out = capsys.readouterr().out
+    assert "0 de 0 ficha(s) migradas" in out and "NO lee el schema viejo" in out
+
+
+def test_cli_sin_slug_ni_backfill_es_error_amigable(toy_vault, monkeypatch):
+    """El `ap.error` nombra los tres modos que corren sin slug — si se agrega un cuarto y no se
+    actualiza, el mensaje manda al usuario a adivinar."""
+    with pytest.raises(SystemExit):
+        run_main(monkeypatch, [])
 
 
 def test_migrate_disputes_degrada_sin_romper_nada(toy_vault, capsys):

@@ -248,7 +248,11 @@ MIRROR_HOST = (("spectral_type", "spectral_type"), ("teff_K", "teff_K"),
 MIRROR_PLANET = ("P_days", "K_ms", "e", "mass_earth", "status")
 # P_rot documentado en la PROSA (que es donde va cuando NEA no lo tiene): mención + respaldo en la
 # misma línea. Heurística deliberada, como la de fuga de implementación: barata y de alta señal.
-PROT_CITED_RE = re.compile(r"(?i)(P_?\{?rot|per[ií]odo de rotaci[óo]n|rotation period)"
+# La clase entre `P` y `rot` cubre la notación que el propio CLAUDE.md pide en `vault/wiki/`
+# ($...$): `P_rot`, `$P_{rot}$`, `$P_{\rm rot}$`, `P$_{\rm rot}$`, `$P_\mathrm{rot}$`. El
+# `(?![a-z])` evita que "Protostellar" cuente como mención.
+PROT_CITED_RE = re.compile(r"(?i)(P[\s_${}\\]*(?:(?:rm|mathrm|text)[\s{]*)?rot(?![a-z])"
+                           r"|per[ií]odo de rotaci[óo]n|rotation period)"
                            r"[^\n]*(\[\[[^\]]+\]\]|inferencia)")
 
 
@@ -257,7 +261,8 @@ def same_value(a, b) -> bool:
     comparan con tolerancia relativa (un 34.0 vs 34 no es una discrepancia); el resto, textual."""
     if a is None or b is None:
         return a is None and b is None
-    if isinstance(a, (int, float)) and isinstance(b, (int, float)) and not isinstance(a, bool):
+    if (isinstance(a, (int, float)) and isinstance(b, (int, float))
+            and not isinstance(a, bool) and not isinstance(b, bool)):
         return abs(a - b) <= 1e-6 * max(1.0, abs(b))
     return str(a).strip() == str(b).strip()
 
@@ -293,7 +298,6 @@ def mirror_issues(slug: str, fm: dict, gt: dict) -> list:
         for campo in MIRROR_PLANET:
             check(f"{letra}.{campo}", pl.get(campo), ref.get(campo))
     return out
-
 
 
 def main() -> int:
@@ -413,7 +417,7 @@ def main() -> int:
 
         # Disputas (#71): a nivel NOTA y con posiciones explícitas — vale para estrellas y para
         # conceptos, donde la disputa es simétrica por definición (no hay valor de frontmatter
-        # contra el cual poner un `alt`). Se leen también las del schema viejo (ver note_disputes).
+        # contra el cual poner un `alt`). Las del schema viejo NO se leen: se detectan y bloquean.
         if (n_viejas := legacy_disputes(fm)):
             old_disputes.append((stem, f"{n_viejas} disputa(s) en `planets[].disputes[]`, el schema "
                                        f"pre-1.19.0 que el lint ya no lee → migralas con "
@@ -427,7 +431,7 @@ def main() -> int:
                                            f"una sola es una afirmación, y va a la prosa citada"))
             for pos in posiciones:
                 if not isinstance(pos, dict):
-                    bad_disputes.append((stem, f"disputa `{campo}`: posición que no es un mapa "
+                    bad_disputes.append((stem, f"disputa `{campo or '?'}`: posición que no es un mapa "
                                                f"(`ref`/`source` + `value`)"))
                     continue
                 ref, src = str(pos.get("ref") or "").strip(), str(pos.get("source") or "").strip()
@@ -512,7 +516,9 @@ def main() -> int:
                     bad_roles.append((stem, f"`role: {r}` no está en el vocabulario "
                                             f"({'/'.join(ROLES)}) → typo: el rol queda mudo para el "
                                             f"contraste cross-paper"))
-            if fm.get("methods") and not roles:
+            # Mismo recorte que el de #75 tres líneas arriba: a una nota no-core (escrita con
+            # `--all`) no se le pide rol, igual que no se le pide que aterrice en una síntesis.
+            if fm.get("methods") and not roles and fm.get("relevance") != "low":
                 incomplete.append((stem, "paper extraído sin `role` (fundacional/aplicacion/arbitro) "
                                          "→ sin rol, contrastarlo contra otro no está definido"))
             for tl in (fm.get("thesis_links") or []):
@@ -720,18 +726,6 @@ def main() -> int:
             truncated_corpora.append(
                 (slug, f"ADS reporta {t.get('num_found')} y se trajeron {t.get('rows')}{pasada} → "
                        f"corpus incompleto; re-ingestá con --rows mayor (o paginá) para cubrir el resto"))
-        legacy_tri = cfg.legacy_triage_path(slug)
-        if legacy_tri.exists():
-            try:
-                n_viejas = len(json.loads(legacy_tri.read_text(encoding="utf-8"))
-                               .get("decisiones") or {})
-            except (ValueError, OSError):
-                n_viejas = -1
-            legacy_triage.append(
-                (slug, f"{'?' if n_viejas < 0 else n_viejas} decisión(es) en "
-                       f"build/{slug}/triage.json, el lugar pre-1.9.0 que el lector ya no mira → "
-                       f"`python scripts/triage.py {slug} --migrate` (si no, el triage vuelve a "
-                       f"proponer lo que ya descartaste, sin el motivo)"))
         cands = data.get("candidates") or []
         if cands:
             top = ", ".join(c.get("bibcode", "?") for c in cands[:3])
@@ -745,6 +739,22 @@ def main() -> int:
                 (slug, f"rescate por glifo incompleto: el superset de {consts} reporta "
                        f"{tg.get('num_found')} y se escanearon {tg.get('rows')} (top por citas, "
                        f"antes del filtro) → re-ingestá con --rows mayor"))
+
+    # Juicio de triage en el lugar pre-1.9.0 (bloqueante): barrido PROPIO, no colgado del de
+    # ads.json — un `build/` limpiado a medias (o una bóveda vieja sin ads.json) tendría el
+    # triage.json igual, y colgarlo del otro loop lo volvía indetectable justo en el caso que este
+    # chequeo existe para cubrir.
+    for lt in sorted(glob.glob(str(cfg.ROOT / "build" / "*" / "triage.json"))):
+        slug = Path(lt).parent.name
+        try:
+            n_viejas = len(json.loads(open(lt, encoding="utf-8").read()).get("decisiones") or {})
+        except (ValueError, OSError):
+            n_viejas = -1
+        legacy_triage.append(
+            (slug, f"{'?' if n_viejas < 0 else n_viejas} decisión(es) en "
+                   f"build/{slug}/triage.json, el lugar pre-1.9.0 que el lector ya no mira → "
+                   f"`python scripts/triage.py {slug} --migrate` (si no, el triage vuelve a "
+                   f"proponer lo que ya descartaste, sin el motivo)"))
 
     # Fallback al registro VERSIONADO (#51/#64) para los sujetos SIN build/ local: post-clone, otra
     # máquina, o después de limpiar el scratch, los dos chequeos de arriba reportaban 0 sin haber

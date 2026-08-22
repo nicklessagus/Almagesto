@@ -335,7 +335,9 @@ def migrate_disputes(dest) -> bool:
             if d.get("note"):
                 nueva["note"] = d["note"]
             nuevas.append(nueva)
-    # `disputes` va después de `planets` (donde vivía la información) si todavía no está
+    # `disputes` va donde vivía la información: justo después de `planets`. Si la ficha ya lo tiene
+    # (migración a medias, o disputas nuevas escritas a mano), se respeta su lugar y se acumula.
+    # `planets` existe sí o sí: sin él la función ya habría vuelto arriba.
     if "disputes" in front:
         front["disputes"] = nuevas
     else:
@@ -344,7 +346,7 @@ def migrate_disputes(dest) -> bool:
             reordenado[k] = v
             if k == "planets":
                 reordenado["disputes"] = nuevas
-        front = reordenado if "disputes" in reordenado else {**front, "disputes": nuevas}
+        front = reordenado
     dest.write_text(fm(front) + text[end + 5:], encoding="utf-8")
     print(f"  {dest.name}: {len(nuevas)} disputa(s) migradas a posiciones explícitas")
     return True
