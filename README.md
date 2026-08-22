@@ -130,7 +130,9 @@ Cuando le pedís ingestar una estrella o un tema, el agente:
    *"excluidos, por las dudas"*, por si alguno debería haber entrado.
 
 El resultado es una **ficha autosuficiente** (resumen + tablas auto + huecos) que se entiende **sin abrir
-ningún paper**, con todo lo que afirma trazable a su fuente.
+ningún paper**, con todo lo que afirma trazable a su fuente. Esa prosa la escribe un modelo: qué
+partes del sistema son deterministas, cuáles no, y cómo revisar las que no, está en
+[La capa LLM](#la-capa-llm).
 
 Cada ingest por ADS deja además un **registro versionado** en `vault/config/registro/<slug>.yaml`,
 que se commitea y viaja con la bóveda:
@@ -235,6 +237,88 @@ Nota sobre la capa de verificación: las herramientas de chequeo de citas (p. ej
 [CiteCheck](https://arxiv.org/abs/2605.27700)) validan que la referencia **exista** y que su metadata
 sea fiel, no que el paper **respalde** la afirmación. Esa alineación claim↔cita es justamente el
 punto de `verify-citations` (sección anterior).
+
+## La capa LLM
+
+Contrario a lo que parecería indicar el "hype de la IA", los modelos de lenguaje pueden, y van a,
+cometer errores. Se trató de que las partes del template que usan un modelo de lenguaje sean
+solamente las necesarias y donde estas herramientas realmente pueden aportar un diferencial, se hizo
+todo lo posible para mitigar sus problemas conocidos, así y todo siempre se recomienda una revisión
+por una persona humana con criterio, sin límite de tokens y con su propio sesgo.
+
+La división de fondo es la del patrón: **los scripts bajan y chequean, el modelo lee y destila.**
+Todo lo que puede ser determinista lo es, y lo que no, queda marcado como tal en la propia bóveda.
+
+### Quién decide cada cosa
+
+| Etapa | Quién |
+|---|---|
+| Definir la lente (qué paper es "core") | **El modelo propone, vos aprobás**: traduce tu foco a una regla y el preview te muestra el corte real antes de guardar nada |
+| Buscar en ADS y clasificar core / no-core | **Determinista**: la misma regla aplicada igual a todos |
+| Bajar PDFs y extraer el texto | **Determinista** (`pdftotext`; OCR sólo si la capa de texto es ilegible, y queda marcado) |
+| Parámetros de la estrella y de sus planetas | **Determinista**: NASA Exoplanet Archive + SIMBAD. El modelo **no** los escribe |
+| Juzgar los candidatos del citation chaining | **El modelo**, con los dudosos derivados a vos |
+| Extraer de cada paper qué método usa y qué aporta | **El modelo** |
+| Escribir la síntesis de fichas y conceptos | **El modelo** |
+| Verificar que cada cita respalde su afirmación | **El modelo**, con un subagente independiente por afirmación |
+| Detectar contradicciones entre papers | **El modelo propone, vos aprobás** antes de que se escriba nada |
+| Retracciones y correcciones publicadas | **Determinista**: Crossref por DOI |
+| Salud estructural (lint) y registro de qué se buscó | **Determinista** |
+
+### Cómo se acota cada parte que hace el modelo, y cómo la chequeás
+
+**Definir la lente.** El agente no la aplica a ciegas: el preview corre la regla candidata contra ADS
+y muestra el corte con títulos reales, más cuánto cambiaría si exigieras facetas obligatorias.
+*Chequeo humano:* mirás esa lista. Si un paper que conocés cae del lado equivocado, la regla está
+mal, no el paper. Además el registro de cada ingest guarda la lente exacta con la que se clasificó.
+
+**Juzgar los candidatos del chaining.** El grafo de citas trae muchos papers que apenas mencionan al
+sujeto sin hablar de él, así que nada del grafo entra automáticamente salvo que el sujeto esté en el
+**título**. El resto **no se baja** hasta que alguien lo juzgue, cada descarte queda con su motivo y
+su fecha en config versionada, y los dudosos van a vos.
+*Chequeo humano:* el triage deja una tabla con título, año, citas y link a ADS de todo lo pendiente,
+y el registro te dice después qué se descartó y por qué.
+
+**Extraer datos de un paper.** El modelo lee el texto completo, no su memoria. Los valores duros
+(período, semiamplitud, excentricidad, masa) **no** los escribe el modelo: vienen del ground truth, y
+cuando un paper discrepa se marca como disputa en vez de sobreescribir. El lint recalcula la masa
+implícita a partir de K, P, e y la masa estelar, y marca las inconsistencias.
+*Chequeo humano:* cada dato lleva su `[[bibcode]]` y el `.txt` de esa fuente está versionado en el
+repo, así que verificarlo es un `grep` de la frase. El frontmatter es auditable contra el archivo de
+la NASA.
+
+**Escribir la síntesis.** Toda afirmación va citada o marcada explícitamente como inferencia, la
+cabecera de cada ficha avisa que la prosa es capa LLM, y el lint lista los conceptos que no citan
+ninguna fuente.
+*Chequeo humano:* leerla con los `.txt` al lado. Cada cambio es un diff de git, así que se revisa
+como se revisa código.
+
+**Verificar las citas.** Acá hay un modelo chequeando a otro modelo, y eso tiene un techo: es juicio
+robusto, no prueba. Lo que se hizo para acotarlo: cada afirmación la juzga un subagente
+**independiente** que lee **solamente** el texto de esa fuente y tiene prohibido responder de
+memoria; está obligado a devolver **cita textual y número de línea**, y sin eso la afirmación cuenta
+como no soportada; los veredictos distinguen "la fuente no lo dice" de "la fuente dice lo
+contrario", que son problemas distintos; y en tablas y listas se chequea además lo que la nota
+**omite**, porque una transcripción sin errores pero incompleta se lee como completa. Además el
+verificador **se puede medir**: el template incluye un benchmark que siembra citas falsas por
+construcción entre las reales de tu propia bóveda y calcula, a ciegas, qué fracción caza. El número
+que da es el de **tu** bóveda: depende de tu corpus, de tu modelo y de cómo estén escritas tus notas.
+*Chequeo humano:* el bloque `## Verificación de citas` queda fechado en la nota, y el lint avisa
+cuando la nota se editó después de esa fecha, o sea cuando hay prosa que nunca pasó por el chequeo.
+
+**Detectar contradicciones.** Cada desacuerdo lo confirma un subagente que lee **los dos** textos y
+tiene que citar de ambos lados, y nada se escribe sin que vos lo apruebes.
+*Chequeo humano:* la propuesta viene con las dos citas; si una no dice lo que se afirma, se cae sola.
+
+### El límite
+
+Nada de esto vuelve infalible a la bóveda. Un modelo puede leer bien y resumir mal, puede afirmar de
+menos (omitir sin mentir, que es el modo de falla más difícil de ver) y puede sonar igual de seguro
+en los dos casos. Lo que el diseño intenta garantizar es algo más modesto y más verificable: que
+**todo lo que la wiki afirma tenga una fuente citable al lado**, que esa fuente esté en el repo para
+que la puedas abrir, y que quede registrado qué se buscó, con qué filtro y qué se decidió descartar.
+El juicio final sobre lo que importa sigue siendo tuyo, y para lo que vayas a publicar conviene
+seguir leyendo los papers centrales de tu tema.
 
 ## Para seguir
 
