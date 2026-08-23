@@ -1389,8 +1389,15 @@ def test_lint_no_muere_en_una_consola_no_utf8():
     """El reporte lleva `⛔`/`⚠`/`→` y español. En una consola `cp1252` o `ascii` el `print` final
     tira `UnicodeEncodeError` y el lint sale con exit 1 —indistinguible de "hay bloqueantes"—
     aunque el `.md` en disco haya quedado perfecto. La compuerta de CI tiene que dar su veredicto
-    en cualquier consola."""
-    r = subprocess.run([sys.executable, "scripts/lint.py"], cwd=cfg.ROOT, capture_output=True,
+    en cualquier consola.
+
+    El `cwd` sale de `__file__`, **no** de `cfg.ROOT`: este test invoca el repo REAL como subproceso,
+    y `cfg.ROOT` es una constante de módulo que cualquier fixture re-apunta (es justo el mecanismo de
+    `toy_vault`). Con el tier `instancia` corriendo en la misma sesión, `cfg.ROOT` apuntaba a la copia
+    de la instancia —que no tiene `scripts/`— y este test rompía; el síntoma sólo aparecía en el modo
+    combinado `-m ""`, nunca en un tier corrido solo."""
+    repo = Path(__file__).resolve().parent.parent
+    r = subprocess.run([sys.executable, "scripts/lint.py"], cwd=repo, capture_output=True,
                        env={"PATH": "/usr/bin:/bin", "LC_ALL": "C", "PYTHONIOENCODING": "ascii",
                             "HOME": str(Path.home())})
     assert b"UnicodeEncodeError" not in r.stderr, r.stderr[-400:].decode("utf-8", "replace")

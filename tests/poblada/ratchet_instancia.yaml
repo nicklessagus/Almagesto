@@ -1,0 +1,128 @@
+# Ratchet de deuda conocida — instancia real (tier `instancia`, gate del deploy).
+#
+# QUÉ ES ESTO. Un corpus real (Almagesto-RV) no está limpio y no lo va a estar pronto: cada número
+# de abajo es DEUDA MEDIDA, no un objetivo a alcanzar. `test_invariantes_instancia.py::
+# test_ratchet_categorias_no_superan_el_techo` lee este archivo y afirma que el lint, corrido sobre
+# una COPIA read-only de la instancia (fixture `instancia_real`), reporta CADA categoría por debajo
+# o igual a su `techo`. El sentido de la flecha importa: el techo SÓLO PUEDE BAJAR.
+#   - si el conteo medido SUBE por encima del techo → el test FALLA (alguien metió una regresión,
+#     o la instancia creció con más deuda de la que había — cualquiera de las dos merece que un
+#     humano lo mire antes de que se pierda en el ruido).
+#   - si el conteo medido BAJA por debajo del techo → el test PASA pero emite un `UserWarning`
+#     pidiendo que se baje el techo acá — un techo viejo que nadie ajusta deja de servir de ratchet
+#     y se vuelve un número decorativo.
+#   - el techo NUNCA se sube para que un test rojo se ponga verde: eso es maquillar la deuda, no
+#     medirla. Subirlo sólo se justifica si la categoría cambió de DEFINICIÓN (otra versión del
+#     lint que cuenta distinto) — y en ese caso el commit que lo sube tiene que decir por qué.
+#
+# CÓMO SE ACTUALIZA. Correr:
+#   ALMAGESTO_INSTANCIA=/ruta/a/la/instancia python -m pytest tests/poblada/test_invariantes_instancia.py -m instancia -q -W error::UserWarning
+# (el `-W error` convierte el aviso de "podés bajar el techo" en una falla que apunta la categoría
+# exacta) y copiar el conteo nuevo en `techo` de la categoría correspondiente, con la fecha de HOY
+# en el comentario `# medido: AAAA-MM-DD`. Si SUBIÓ (regresión real, no legítima), el techo se
+# queda como está y el test rojo es la señal de que hay que arreglar el framework o revisar qué
+# entró a la bóveda antes de tocar este archivo.
+#
+# ORIGEN DE LOS NÚMEROS. Medidos el 2026-08-23 corriendo `python scripts/lint.py` (Almagesto
+# v1.22.1) sobre una copia scratch de `/home/agus/Data/Sincronizando/UNSAM/PhD/Repos/Almagesto-RV`
+# (instancia real del usuario, todavía en su propio `Almagesto v1.11.0` — el deploy 1.11.0→1.22.1
+# descrito en el plan de la 7ª auditoría AÚN NO CORRIÓ sobre ella). No son los números que trae el
+# plan de la tarea (esos se citan ahí como "medidos ANTES de los fixes de --sync-mirror/#69" y
+# quedaron desactualizados apenas esos fixes se mergearon al framework): estos son una remedición
+# fresca, en esta sesión, después de esos fixes — que por eso mismo dan LOS MISMOS 16 bloqueantes:
+# los fixes agregan el COMANDO para cerrar la brecha (`--sync-mirror`, `--restamp-headers`
+# reparado), no la corren solos sobre la instancia real. Correr esos comandos es el trabajo de
+# deploy (plan §5), no de este archivo.
+
+medido_en: "2026-08-23"
+almagesto_version_framework: "1.22.1"
+almagesto_version_instancia: "1.11.0"
+instancia_referencia: "Almagesto-RV"
+
+categorias:
+  # ── bloqueantes (cuentan para el exit code 1 del lint; CLAUDE.md las exige "en 0") ────────────
+  contradicciones_gt:
+    titulo: "Contradicciones ground-truth ↔ ficha"
+    severidad: bloqueante
+    techo: 13          # medido: 2026-08-23 — 4 planetas de au_mic + 6 de hd40307 (+ 1 P_rot_days
+                        # sin respaldo NEA) + 3 de tau_ceti, todos `mass_earth: None` de la ficha
+                        # 1.11.0 (ese schema no traía el campo). Se cierra con
+                        # `python scripts/make_notes.py --sync-mirror` + 1 residuo a mano
+                        # (hd40307 P_rot_days, ver plan §5 paso 8).
+  disputes_schema_viejo:
+    titulo: "disputes en el schema viejo"
+    severidad: bloqueante
+    techo: 2            # medido: 2026-08-23 — au_mic + hd40307, las dos estrellas con planetas
+                         # (planets[].disputes[] pre-#71). Se cierra con
+                         # `python scripts/make_notes.py --migrate-disputes`.
+  triage_legacy:
+    titulo: "Juicio de triage en build"
+    severidad: bloqueante
+    techo: 1             # medido: 2026-08-23 — build/eps_eridani/triage.json (pre-1.9.0). Se
+                          # cierra con `python scripts/triage.py eps_eridani --migrate`.
+
+  # ── WARN (no bloquean el exit code; higiene/typo a revisar a mano) ─────────────────────────────
+  areas_no_declaradas:
+    titulo: "Áreas de concepts/ no declaradas"
+    severidad: warn
+    techo: 1              # medido: 2026-08-23 — `objective.yaml` de la instancia no declara
+                           # `concept_areas` (el typo-check queda apagado; 1 línea de aviso, no una
+                           # por carpeta). Se cierra declarando la lista en objective.yaml.
+  pdf_drift:
+    titulo: "PDF ↔ disco / cuerpo"
+    severidad: warn
+    techo: 1               # medido: 2026-08-23 — un paper con drift frontmatter↔disco↔cabecera.
+
+  # ── backlog (no bloquean; trabajo de contenido pendiente, no bug de framework) ─────────────────
+  citas_no_verificables:
+    titulo: "Citas no verificables en query/concepto/hipótesis"
+    severidad: backlog
+    techo: 1               # medido: 2026-08-23 — una cita sin su .txt en fulltext/.
+  sin_verificar:
+    titulo: "Sin verificar: query/concepto con citas"
+    severidad: backlog
+    techo: 1                # medido: 2026-08-23 — una nota con citas que nunca pasó por
+                             # verify-citations.
+  cobertura_citas:
+    titulo: "Cobertura: concepto/hipótesis sin citas"
+    severidad: backlog
+    techo: 4                # medido: 2026-08-23 — 4 conceptos sin ningún [[bibcode]].
+  no_sintetizado:
+    titulo: "Extraído pero no sintetizado"
+    severidad: backlog
+    techo: 86                # medido: 2026-08-23 — papers con `methods` poblado cuyo bibcode no
+                              # aparece citado en ninguna ficha/concepto (#75).
+  cabecera_no_estampable:
+    titulo: "Cabecera no estampable"
+    severidad: backlog
+    techo: 22                 # medido: 2026-08-23 — fichas/conceptos sin la línea del generador
+                               # (#69; corpus creado antes de que la cabecera existiera). Se cierra
+                               # con `python scripts/make_notes.py --restamp-headers`.
+  triage_pendiente:
+    titulo: "Triage pendiente: candidatos del chaining"
+    severidad: backlog
+    techo: 1                   # medido: 2026-08-23 — un sujeto con candidatos del chaining sin
+                                # juzgar (`python scripts/triage.py <slug>`).
+  corpus_truncado:
+    titulo: "Corpus truncado"
+    severidad: backlog
+    techo: 1                    # medido: 2026-08-23 — un sujeto con `ads.json` truncado.
+  campos_incompletos:
+    titulo: "Campos incompletos"
+    severidad: backlog
+    techo: 770                  # medido: 2026-08-23 — agrega P_rot sin documentar, papers
+                                 # relevantes sin `methods`, extraídos sin `role` (el campo no
+                                 # existía en 1.11.0), `thesis_links` sin `bearing`, y el hueco
+                                 # ds_tuc (GT sin ficha — ver también el invariante dedicado
+                                 # `test_gt_y_fichas_apareados`, que lo aísla del ruido de este
+                                 # balde). Es la categoría más gruesa y la que más va a moverse con
+                                 # trabajo de contenido legítimo (extraer un paper más, etc.) —
+                                 # revisar el desglose del reporte del lint antes de asumir
+                                 # regresión si sube.
+
+# Bloqueantes NO cubiertos acá (wikilinks rotos, frontmatter roto, retracted, huérfanas, masa
+# inconsistente, thesis_links colgantes, disputes colgantes/mal formadas, `role` fuera de
+# vocabulario, decisión de registro con forma inválida) están en CERO medido y se prueban como
+# INVARIANTES DUROS en `test_invariantes_instancia.py` (no acá): si alguna de esas categorías deja
+# de ser cero, el ratchet no es el mecanismo correcto para avisarlo — tiene que fallar directo, sin
+# techo que pisar.

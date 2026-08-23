@@ -185,7 +185,7 @@ def sembrar(tmp_path, monkeypatch):
 
 
 @pytest.fixture(scope="session")
-def instancia_real(tmp_path_factory):
+def _instancia_arbol(tmp_path_factory):
     """La instancia real del usuario (`ALMAGESTO_INSTANCIA`), SIEMPRE read-only. Opt-in: sin la
     variable de entorno, SKIP con motivo VISIBLE — nunca "pasa" en silencio (mismo principio que
     "el 0 que no miró" del lint: un tier que se saltea sin decirlo es el mismo bug con otro nombre).
@@ -236,13 +236,34 @@ def instancia_real(tmp_path_factory):
         (root / "build").mkdir()
 
     paths = _build_paths(root)
-    saved = _patch_cfg(paths, monkeypatch=None)
     try:
         yield SimpleNamespace(**vars(paths), instancia_src=src)
     finally:
-        _restore_cfg(saved)
         despues = {**_snapshot_mtimes(src / "vault"), **_snapshot_mtimes(src / "build")}
         assert antes == despues, (
             f"ALMAGESTO_INSTANCIA={src}: `vault/`/`build/` cambiaron durante la sesión de tests — "
             "la garantía read-only se rompió (algún test escribió en la instancia real en vez de "
             "su copia). Revisar qué fixture/test tocó la ruta original.")
+
+
+@pytest.fixture(scope="module")
+def instancia_real(_instancia_arbol):
+    """La copia de la instancia real, con `lib_config` re-apuntado mientras dure ESTE módulo.
+
+    Dos scopes distintos a propósito. El **árbol** (`_instancia_arbol`) es de sesión porque copiarlo
+    es caro. El **re-apuntado de `lib_config`** vive acá, en scope de módulo, y se **revierte al
+    cerrar el módulo**: mientras estuvo en el fixture de sesión, las constantes quedaban apuntando a
+    la copia de la instancia **durante todo el resto de la corrida**, así que cualquier test de otro
+    archivo que confiara en `cfg.ROOT` corría contra la instancia sin saberlo. Se detectó corriendo
+    el modo "todo junto" (`-m ""` con `ALMAGESTO_INSTANCIA` seteada): `tests/test_lint.py` rompía por
+    eso, y el síntoma **no aparecía en ningún tier corrido por separado**.
+
+    ¿Por qué módulo y no función (que auto-revertiría con `monkeypatch`)? Porque los tests de este
+    tier comparten un fixture module-scoped que corre el lint UNA vez sobre la instancia (~5 s) y
+    reparte el reporte; con `instancia_real` function-scoped eso es un `ScopeMismatch`. Módulo es el
+    scope más chico que sostiene esa optimización, y alcanza para que la fuga no cruce de archivo."""
+    saved = _patch_cfg(_instancia_arbol, monkeypatch=None)
+    try:
+        yield _instancia_arbol
+    finally:
+        _restore_cfg(saved)
