@@ -429,28 +429,29 @@ Costo: el vocabulario de `disputes[].posiciones[].source` tiene un solo valor de
 cambian en un corpus real. Y ver la entrada de abajo: si el camino es re-ingestar, este cambio deja
 de costar casi nada.
 
-## Criterio — migrar NO es el camino largo; re-ingestar sí (anotado 2026-08-23)
+## Criterio TRANSITORIO — re-ingestar es la escotilla de esta fase, no la política (anotado 2026-08-23)
 
-> Del usuario, cerrando la discusión de NEA+SIMBAD: *"lo mejor más adelante va a ser hacer una bóveda
-> nueva antes que andar migrando lo que está; no me preocuparía por la retrocompatibilidad más que
-> para poder testear las cosas"*.
+> Del usuario, cerrando la discusión de NEA+SIMBAD: *"no sé si la re-ingesta va a ser lo estándar,
+> es porque acá hicimos muchos cambios; lo ideal sería que ya esté lo suficientemente estable como
+> para que los updates que sigan no tengan que tocar cosas que requieran mucha migración — estoy
+> pensando en estos saltos grandes que estamos dando ahora, lo que está ahora más los issues que
+> faltan"*.
 
-**Decisión de rumbo, no de implementación.** Extiende [sin-capa-de-retrocompatibilidad]: el
-framework ya no lleva lectores tolerantes, y ahora tampoco asume que una bóveda existente deba
-sobrevivir indefinidamente a los cambios de schema. Ante un cambio grande, **re-ingestar en una
-bóveda nueva** le gana a encadenar migradores.
+**El objetivo es la estabilidad del schema, no la re-ingesta.** La re-ingesta es la **escotilla**
+mientras dure la fase de saltos grandes (lo de esta tanda + los issues que quedan): sirve para que
+el costo de migrar **no sea** el factor que decide un cambio correcto. No es el modo normal de
+actualizar, y proponerla como tal sería convertir una salida de emergencia en un procedimiento.
 
 Consecuencias prácticas:
-- Un cambio de schema **deja de costar la migración**, que es lo caro y lo que frena decisiones
-  correctas (ver la entrada de arriba: NEA+SIMBAD era caro *sólo* por eso).
-- Los migradores (`--migrate-disputes`, `--sync-mirror`, `triage --migrate`) siguen valiendo como
-  **herramientas de una sola vez** para la instancia que ya existe, no como contrato permanente.
+- Al evaluar un cambio de schema **durante esta fase**, la migración no manda: si el cambio es
+  correcto y migrar es caro, re-ingestar es una salida legítima (ver la entrada de arriba —
+  NEA+SIMBAD era caro *sólo* por la migración).
+- **Después** de esta fase el criterio se invierte: un schema que todavía obliga a migrar seguido es
+  señal de que no está estable, y eso es lo que hay que arreglar, no la migración.
+- Los migradores (`--migrate-disputes`, `--sync-mirror`, `triage --migrate`) son herramientas de una
+  sola vez para la instancia que ya existe, no contrato permanente.
 - El `vintage="1.11.0"` del generador (`tests/poblada/`) queda justificado por **testear los
-  detectores** de schema viejo, no por soportar bóvedas viejas a perpetuidad. Ésa es la parte de la
-  retrocompatibilidad que sí importa.
-- Lo que se vuelve crítico entonces es que **la ingesta sea reproducible y barata**, porque pasa a
-  ser la vía normal de actualización. Se cruza con el backlog de la bóveda en paralelo: partir del
-  `ads.json` congelado en vez de re-pegarle a ADS.
+  detectores** de schema viejo — ésa es la parte de la retrocompatibilidad que sí importa siempre.
 
 ## Backlog — los DOS ejes de prueba con bóveda poblada (anotado 2026-08-23)
 
