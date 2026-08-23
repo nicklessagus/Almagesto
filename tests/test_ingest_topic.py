@@ -87,6 +87,17 @@ def test_guardia_expansion_frena_la_cadena_ads(toy_vault, fake_run, fake_notes, 
     assert "EXPANSIÓN" in capsys.readouterr().out
 
 
+def test_handoff_nombra_los_pasos_salteables(toy_vault, fake_run, fake_notes, monkeypatch, capsys):
+    """Hermano del de `ingest_star`: el hand-off es lo que el operador lee al terminar la cadena.
+    Le faltaba el contraste (3c, #72) —saltaba del retro-tag a la síntesis— y el régimen (#74), que
+    es la sección propia de un concepto."""
+    topic()
+    assert run_main(monkeypatch) == 0
+    out = capsys.readouterr().out
+    assert "(3b)" in out and "(3c)" in out and "(6b)" in out
+    assert "CONTRASTE" in out and "régimen de validez" in out
+
+
 def test_cadena_ads_aborta_al_primer_fallo(toy_vault, fake_run, monkeypatch):
     topic()
     fake_run.rcs["fetch_arxiv.py"] = 1
@@ -234,6 +245,22 @@ def test_offads_avisa_si_la_fuente_estaba_descartada(toy_vault, fake_run, fake_n
     assert "libro de texto general" in out
     assert ("fetch_web.py", "gp", "2006Rasmussen", "https://x",
             "--concept", "gaussian-processes") in fake_run.calls    # avisa pero NO frena
+
+
+def test_offads_avisa_si_la_fuente_se_descarto_por_url(toy_vault, fake_run, fake_notes,
+                                                       monkeypatch, capsys):
+    """`--drop-source` acepta la URL como clave (la fuente que no tiene una sintética), pero un item
+    de `sources:` SIEMPRE trae una clave con forma de citekey — así que ese descarte no se cruzaba
+    nunca con la mitad que lo consume y el aviso quedaba mudo justo en el caso para el que la url
+    existe. Se busca por clave y por url."""
+    cfg.save_decisiones("gp", {"https://x": {"decision": "descartado", "fecha": "2026-02-01",
+                                             "motivo": "blog, no fuente citable",
+                                             "origen": "fuente-declarada"}})
+    topic(source="web", sources=[{"key": "2006Rasmussen", "url": "https://x"}])
+    assert run_main(monkeypatch) == 0
+    out = capsys.readouterr().out
+    assert "figura DESCARTADA en el registro (2026-02-01, por url https://x)" in out
+    assert "blog, no fuente citable" in out
 
 
 def test_offads_fuente_no_descartada_no_avisa(toy_vault, fake_run, fake_notes, monkeypatch, capsys):

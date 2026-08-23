@@ -409,7 +409,7 @@ curación, por clave: `decision`/`motivo`/`fecha`). Las `decisiones` cubren los 
 para la **fuente declarada** de un tema off-ADS (#81 — clave sintética o url, con `origen:
 fuente-declarada` y un `fuente:` que la resuelva; sin `origen` = chaining). El segundo existe porque
 en off-ADS `sources:` registra sólo lo aceptado: es la misma asimetría de #51 en el otro carril, y
-`ingest_topic` **avisa** —no frena— si un item de `sources:` lleva una clave ya descartada. Regla de
+`ingest_topic` **avisa** —no frena— si un item de `sources:` lleva una clave (o una url) ya descartada. Regla de
 oro: **`build/` guarda lo regenerable, el registro guarda lo que no lo es.** Un `ads.json` se recupera pidiéndoselo de nuevo a
 ADS; el juicio de por qué descartaste un candidato, no —y hasta 1.8.x vivía en `build/`, gitignored,
 así que en otra máquina el triage lo re-proponía todo sin el motivo (los **aceptados** ya persistían
@@ -524,9 +524,12 @@ chequea sólo los papers del slug (`--slug`) y el barrido completo de la bóveda
 periódica del skill `maintain`— y el lint lo surface offline: una fuente retractada citada rompe la
 frontera dura),
 páginas huérfanas,
-contradicciones ground-truth↔ficha —**tanto en el número de planetas como campo por campo**: un
-valor que difiere del ground-truth, o que existe en la ficha cuando NEA no lo tiene, rompe el espejo
-(#70)—, **masa de ground-truth inconsistente con la m·sini implícita**
+contradicciones ground-truth↔ficha —**qué planetas (no cuántos) y campo por campo**: un planeta
+que la ficha lista y NEA no (típicamente una señal no confirmada escrita en `planets[]` en vez de
+`disputes` como `<letra>.existence`), uno que NEA confirma y la ficha no lista, una letra repetida, y
+un valor que difiere del ground-truth o que existe en la ficha cuando NEA no lo tiene: todos rompen
+el espejo (#70), y comparar **cuántos** dejaba pasar el caso peor, dos listas del mismo largo que no
+son los mismos planetas—, **masa de ground-truth inconsistente con la m·sini implícita**
 (K/P/e/M\* — atrapa best-mass espurias de NEA), **`thesis_links` sin página destino** (tag que no matchea
 ninguna nota → no acumula en el roll-up; typo típico `shift-vs-shape` vs `shift_vs_shape`) y
 **`disputes` con la `ref` de una posición sin paper destino** (el bibcode que sostiene esa posición
@@ -573,7 +576,10 @@ verificación stale, #69 cabecera) menos justamente el de síntesis, cuyo modo d
 —no deja rastro— y que `verify-citations` no puede ver: valida cada afirmación contra su fuente, no
 la cobertura del conjunto, así que una ficha sintetizada desde 3 papers de 40 vuelve 100% soportada.
 Se cierra sintetizándolo donde corresponda o declarando `no_sintetizado: <motivo>` en la nota del
-paper. La **cobertura** (concepto/hipótesis
+paper. Dos recortes de la población, los mismos que usa el backlog hermano de `role`: la cita tiene
+que estar en una nota de **entidad** (`stars/` o `concepts/`) —una `queries/` es una respuesta
+puntual, no la síntesis durable de un sujeto— y la nota **no-core** (`relevance: low`, escrita con
+`--all`) no entra: no se le pide aterrizar en ninguna síntesis. La **cobertura** (concepto/hipótesis
 sin ninguna cita `[[bibcode]]` → afirma sin fuente) es **backlog** que el lint surface para ir citando;
 ídem la **cobertura de verificación** (query/concepto **con** citas pero **sin** bloque
 `## Verificación de citas` → nunca pasó por `verify-citations`: correr el skill) y la **verificación
@@ -598,11 +604,17 @@ se resuelve con `python scripts/triage.py <slug>` (pertinente → `extra_core`; 
 y reporta el snapshot con su fecha (no el conteo vigente — si dropeaste sin re-correr la cadena
 quedó viejo).
 El **corpus truncado** (un `build/<slug>/ads.json` con `truncated` seteado → la query directa trajo
-menos papers de los que ADS reporta: al sujeto le falta cola) es **backlog** — `query_ads` persiste la
-marca (default `--rows 2000`, ≈ el máximo de una request; re-ingestar con `--rows` mayor para cubrir la
-cola); ídem el **rescate por glifo incompleto** (`truncated_glyph`, marca hermana: el superset de la
-constelación del rescate #28 se cortó por citas **antes** del filtro client-side, que es donde vive la
-señal → pueden faltar papers con lookalike). Los "campos incompletos" (P_rot null, papers sin `methods`, etc.) son **backlog**, no bloquean. Revisar
+menos papers de los que ADS reporta) es **backlog** — `query_ads` persiste la marca (default
+`--rows 2000`, ≈ el máximo de una request; re-ingestar con `--rows` mayor para cubrir el resto). Lo
+que falta ahí es **el medio**, no la cola: al truncar, `query_ads` corre una **segunda pasada con la
+misma query ordenada por fecha** (#79) y la marca guarda en `truncated.recent` cuántos rescató, así
+que lo reciente —lo que el orden por citas esconde por construcción— ya está cubierto; ídem el
+**rescate por glifo incompleto** (`truncated_glyph`, marca hermana: el superset de la constelación
+del rescate #28 se cortó por citas **antes** del filtro client-side, que es donde vive la señal →
+pueden faltar papers con lookalike). Los **campos incompletos** son **backlog** y no bloquean; hoy son seis:
+`P_rot` sin documentar en la prosa (el frontmatter nulo **no** es hallazgo desde #70),
+`activity_indicators_expected` vacío, planeta del frontmatter no discutido en la prosa, paper core
+sin `methods` (sin extraer), paper extraído sin `role`, y `thesis_links` sin `bearing`. Revisar
 además a mano: claims stale y conceptos referidos sin página. Si faltan datos, abrir queries para
 imputar (web/ADS).
 

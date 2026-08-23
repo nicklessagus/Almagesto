@@ -29,6 +29,7 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 | 2ª (1.20.2) | **medir**: worktree por commit, greps de referencias cruzadas | números escritos de memoria (un delta de tests inventado), punteros podridos (`archivo.py:NN`) |
 | 3ª (1.20.3) | **diff de código completo + cobertura AST + mutación** | defectos de código (un detector con agujero, una heurística ciega a la notación del propio schema, una rama inalcanzable) |
 | 4ª (1.20.4) | **mutación sobre las FEATURES + corrida real de la cadena + mirar los assets** | tests que pasaban por el motivo equivocado, contratos de schema sin test, features no propagadas a los skills, una captura que ya no es el schema |
+| 5ª (1.21.0) | **invariantes cross-artefacto medidos + recorrer la cadena de punta a punta** | agujeros de lógica (el espejo comparaba `len(planets)`), un crash del lint, chequeos hermanos asimétricos, el hand-off de los orquestadores sin el paso nuevo |
 
 **Regla:** releer más despacio no encuentra nada nuevo. Si una pasada tiene que agregar valor sobre
 la anterior, tiene que **cambiar de instrumento**, y conviene planificarla así desde el principio:
@@ -38,12 +39,68 @@ falla) no está verificado, está supuesto — y la **cobertura no es assertion*
 sentencias nuevas ejecutadas y la 4ª encontró siete mutantes vivos justo ahí. Un test verde no dice
 por qué está verde: sólo la mutación lo dice.
 
+## ✅ Framework 1.21.0 (2026-08-22) — quinta pasada: recorrer la cadena entera, issue por issue
+
+> Pedida por el usuario antes del push ("revisión completa del código, y del código nuevo contra la
+> documentación; después mirá los issues de hoy uno por uno y seguí el camino de una estrella y de un
+> método hasta el final"). Instrumentos nuevos otra vez: **invariantes cross-artefacto medidos**
+> (no leídos), **correr la cadena de punta a punta** sobre una bóveda sintética, y **recorrer cada
+> issue de hoy contra su código y su doc**. 501 tests verdes (**+8** sobre la pasada 4, medidos con `--collect-only` en los dos commits), lint 0.
+> 1.20.4 → **1.21.0** (minor: el espejo de #70 detecta casos que antes pasaban, así que una bóveda
+> existente puede pasar a exit 1 — la instancia tiene que mirarlo).
+
+- **El agujero grande, en #70: el espejo comparaba `len(planets)`, no QUÉ planetas.** Una ficha con
+  **b** y **d** contra un ground-truth con **b** y **c** —mismo largo, planetas distintos— volvía
+  **limpia**. Y no es un caso raro: es exactamente cómo una señal no confirmada termina escrita en
+  `planets[]`, donde se lee como ground-truth, en vez de en `disputes` como `d.existence`. O sea que
+  el modo de falla que #70 existe para impedir —un número que no es de NEA en la capa auditable— era
+  invisible en su versión más grave, un planeta entero. Ahora se comparan las **letras** en los dos
+  sentidos (la ficha inventa uno / NEA confirma uno que la ficha no lista) y se reporta la **letra
+  repetida**, que es lo único que el conteo veía y el conjunto no.
+- **Un crash del lint (#75).** `sorted(extracted)` comparaba la tupla entera: dos notas con el mismo
+  stem —una copia de trabajo de una nota de paper en otra carpeta— comparaban `no_sintetizado` (str
+  contra `None`) y **volteaban el lint con un TypeError**. El lint es la compuerta de CI: ante una
+  bóveda rara reporta, no se muere. Reproducido corriendo la cadena, no leyendo.
+- **Chequeos hermanos asimétricos (#71).** Una **posición** que no es un mapa se reportaba; una
+  **disputa** que no es un mapa se filtraba **en silencio** en `note_disputes` — y `disputes:` como
+  escalar dejaba la nota como si no tuviera disputas. Es el mismo modo de falla que #71 vino a
+  cerrar (lo que el lector ignora sin decir nada). Ahora hay un chequeo de forma, y reporta **una
+  vez**, no una por carácter.
+- **El hand-off de los dos orquestadores no nombraba el paso de #72.** El último `print` de
+  `ingest_star.py` / `ingest_topic.py` es lo que el operador lee al terminar la cadena mecánica, y
+  saltaba de "extracción por paper" a "síntesis": justo el orden que el contraste existe para
+  impedir. Los dos ahora nombran los pasos **salteables** con su número del skill (2b/2c/3/3b/3c/5b
+  y 3/3b/3c/4/6b), y el del tema nombra además el régimen (#74).
+- **#81 tenía media feature muerta:** `--drop-source` acepta la **url** como clave, pero el consumidor
+  (`ingest_topic`) sólo miraba la `key` del item — y un item de `sources:` **siempre** trae una clave
+  con forma de citekey, así que un descarte registrado por url no se cruzaba nunca con la mitad que
+  lo consume. Ahora se busca por clave **y** por url, y el aviso dice por cuál matcheó.
+- **`write_star_note` era el único writer sin `mkdir`**: git no versiona directorios vacíos, así que
+  una bóveda sin `vault/wiki/stars/` moría con un traceback de `FileNotFound` en el primer ingest.
+- **Doc contra código, issue por issue** (los nueve de hoy): `CLAUDE.md` decía *"tanto en el número
+  de planetas"* (#70), listaba *"P_rot null"* como campo incompleto —criterio **pre**-#70, donde el
+  frontmatter nulo dejó de ser hallazgo—, enumeraba los campos incompletos con un "etc." que ocultaba
+  dos de los seis, mandaba re-ingestar "para cubrir la cola" cuando desde #79 lo que falta es **el
+  medio**, y no decía los dos recortes de la población de #75 (nota de entidad, y no-core afuera).
+- **Invariantes medidos, no leídos:** las **29 categorías** del reporte del lint tienen su caso
+  sembrado en la suite (instrumentando el lint y corriendo los tests, no grepeando), las 29 están
+  documentadas en `CLAUDE.md` y las **12 bloqueantes** también; las **claves de frontmatter** que
+  generan los cuatro tipos de nota coinciden **exactamente** con los schemas documentados; las **475
+  funciones** `test_*` no tienen nombres duplicados (en pytest uno tapa al otro) ni ninguna sin
+  `assert`; y de los **103 casos** de `test_lint.py`, los 43 que sobreviven a un "lint ciego"
+  (mutante que reporta 0 en todo) son **31 funciones**, todas negativas o unitarias legítimas.
+- **Mutación de los seis arreglos** (diez mutantes, uno por rama): cada uno revertido, cada test
+  correspondiente falla.
+
 ## ✅ Framework 1.20.4 (2026-08-22) — cuarta pasada: los tests que pasaban por el motivo equivocado
 
 > Pedida por el usuario ("auditá todo lo que se hizo hoy, en profundidad"). Instrumentos **nuevos**
-> —la 3ª ya había leído el diff entero—: **mutación sobre las features** (47 mutantes, no sólo los
-> cuatro fixes), **correr la cadena de verdad** en una bóveda sintética, y **mirar los assets**.
+> —la 3ª ya había leído el diff entero—: **mutación sobre las features** (47 mutantes escritos, 46
+> aplicados —uno no matcheó—, y no sólo sobre los cuatro fixes), **correr la cadena de verdad** en una bóveda sintética, y **mirar los assets**.
 > 493 tests verdes (+3), lint 0. 1.20.3 → **1.20.4** (patch: tests, doc de skills y textos).
+> *(Tres números de esta entrada se corrigieron en la 5ª pasada —mutantes aplicados, comandos
+> documentados, versiones sin tag—; el mensaje del commit conserva los viejos, como en
+> 1.20.2: el registro durable es STATUS.)*
 
 - **El hallazgo de fondo: cobertura ≠ assertion.** La 3ª pasada midió *"226 líneas ejecutables
   nuevas, 0 sin ejercitar"* y era cierto — pero **siete mutantes sobrevivieron** en ese mismo
@@ -81,16 +138,17 @@ por qué está verde: sólo la mutación lo dice.
   contrario ("sigue siendo correcto"), escrito el 21 y cierto hasta 1.13.0. No tiene `disputes`, sus
   `planets[]` traen `msini_earth`. Encima el README **enumeraba `disputes` como si se viera en la
   captura** (texto agregado hoy mismo). Corregidos los dos.
-- **Tags de git faltantes:** `ALMAGESTO_VERSION` iba por 1.20.3 y el último tag era `v1.13.0` — siete
-  bumps sin tag. No es cosmético: el badge del README lee `github/v/tag`, así que **publicaba
-  1.13.0**. Tageados 1.14.0–1.20.4.
+- **Tags de git faltantes:** `ALMAGESTO_VERSION` iba por 1.20.3 y el último tag era `v1.13.0` —
+  **diez** versiones sin tag (1.14.0 … 1.20.3). No es cosmético: el badge del README lee
+  `github/v/tag`, así que **publicaba 1.13.0**. Tageados 1.14.0–1.20.4 (once tags).
 - **Menor:** `maintain` mandaba grepear `disputes[].ref`, una ruta que ya no existe
   (`disputes[].posiciones[].ref`).
 - **Verificado corriendo, no leyendo:** en una bóveda sintética con el schema viejo, la cadena
   completa —lint detecta y bloquea → `--migrate-disputes` migra materializando el polo
   `ground_truth` → lint 0 → segunda corrida idempotente—; el espejo #70 y el backlog #75 disparan y
   se apagan con el caso sembrado; los **dos one-liners de roll-up** de `CLAUDE.md` corren y devuelven
-  lo que prometen; y los ~35 comandos documentados en docs/skills usan sólo flags que existen.
+  lo que prometen; y las **21 invocaciones** distintas de `python scripts/*.py` que aparecen en docs
+  y skills (10 scripts) usan sólo flags que existen.
 - Skills: `append-knowledge` 1.4.0 → **1.5.0**, `ingest-topic` 1.14.0 → **1.15.0**, `maintain`
   1.16.1 → **1.17.0**.
 

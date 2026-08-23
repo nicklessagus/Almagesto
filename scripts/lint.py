@@ -221,6 +221,22 @@ def note_disputes(fm: dict) -> list:
             for d in (fm.get("disputes") or []) if isinstance(d, dict)]
 
 
+def dispute_shape_issues(fm: dict) -> list:
+    """Motivos por los que `disputes` no tiene la FORMA del schema, antes de mirar su contenido.
+
+    Hermano del chequeo de "posición que no es un mapa": sin esto, una disputa escrita como string
+    (o un `disputes:` que no es lista) la filtraba `note_disputes` **en silencio** — y una disputa
+    que el lector ignora sin decir nada es exactamente el modo de falla que #71 vino a cerrar."""
+    d = fm.get("disputes")
+    if not d:
+        return []
+    if not isinstance(d, list):
+        return [f"`disputes` no es una lista (es {type(d).__name__}) → el lint no puede leer "
+                f"ninguna disputa de esta nota"]
+    n = sum(1 for x in d if not isinstance(x, dict))
+    return [f"{n} entrada(s) de `disputes` que no son un mapa (`field` + `posiciones`)"] if n else []
+
+
 def legacy_disputes(fm: dict) -> int:
     """Cuántas disputas quedan en el schema PRE-1.19.0 (`planets[].disputes[]`). Sin este chequeo, al
     sacar la tolerancia de lectura esas disputas quedarían **mudas**: el lint no las vería y la
@@ -290,11 +306,27 @@ def mirror_issues(slug: str, fm: dict, gt: dict) -> list:
     for campo, key in MIRROR_HOST:
         check(campo, fm.get(campo), host.get(key))
     gt_planets = {str(p.get("letter")): p for p in (gt.get("planets") or [])}
+    letras = [str(pl.get("letter")) for pl in (fm.get("planets") or []) if isinstance(pl, dict)]
+    # QUÉ planetas, no CUÁNTOS. Comparar los largos deja pasar el caso que más importa: dos listas
+    # del mismo tamaño que no son los mismos planetas —una señal no confirmada escrita en
+    # `planets[]` mientras falta uno que NEA sí confirma—. Ese es justo el modo de falla que el
+    # espejo existe para impedir, y con `len()` volvía limpio: un planeta entero inventado en la
+    # capa auditable, indistinguible de NEA, que es la distinción que la cabecera promete.
+    for letra in [l for l in letras if l not in gt_planets]:
+        out.append((slug, f"planeta `{letra}` en la ficha y NO en el ground-truth → si es una señal "
+                          f"no confirmada va a `disputes` (`{letra}.existence`), no a `planets[]`: "
+                          f"el frontmatter es espejo de NEA (#70)"))
+    for letra in [l for l in gt_planets if l not in letras]:
+        out.append((slug, f"el ground-truth trae el planeta `{letra}` y la ficha no lo lista → "
+                          f"re-corré la cadena (`make_notes` no pisa una ficha existente: la lista "
+                          f"se actualiza a mano o con `--force`)"))
+    for letra in sorted({l for l in letras if letras.count(l) > 1}):
+        out.append((slug, f"planeta `{letra}` repetido en `planets[]` ({letras.count(letra)} veces)"))
     for pl in (fm.get("planets") or []):
         letra = str(pl.get("letter"))
         ref = gt_planets.get(letra)
         if ref is None:
-            continue          # planeta que no está en NEA: lo reporta el chequeo de cantidad
+            continue          # el planeta de más ya se reportó entero: campo por campo sería ruido
         for campo in MIRROR_PLANET:
             check(f"{letra}.{campo}", pl.get(campo), ref.get(campo))
     return out
@@ -422,6 +454,8 @@ def main() -> int:
             old_disputes.append((stem, f"{n_viejas} disputa(s) en `planets[].disputes[]`, el schema "
                                        f"pre-1.19.0 que el lint ya no lee → migralas con "
                                        f"`python scripts/make_notes.py --migrate-disputes` (#71)"))
+        for motivo in dispute_shape_issues(fm):
+            bad_disputes.append((stem, motivo))
         for campo, posiciones in note_disputes(fm):
             if not campo:
                 bad_disputes.append((stem, "disputa sin `field`: no se sabe sobre QUÉ es el desacuerdo"))
@@ -571,7 +605,7 @@ def main() -> int:
             stale_verif.append((stem, f"la nota se editó el {c} y su último verify es del {d} → "
                                       f"correr `verify-citations` sobre lo agregado"))
 
-    # contradicción ground-truth ↔ ficha (nº de planetas) + masa sospechosa
+    # contradicción ground-truth ↔ ficha (qué planetas + campo por campo) + masa sospechosa
     mass_issues = []
     for gtf in glob.glob(str(cfg.GROUND_TRUTH / "*.json")):
         gt = json.loads(open(gtf, encoding="utf-8").read())
@@ -591,12 +625,7 @@ def main() -> int:
                                           f"≠ m·sini implícita {chk:.3g} M⊕"))
         sf = cfg.STARS / f"{slug}.md"
         if sf.exists():
-            fm = split_fm(sf.read_text(encoding="utf-8"))
-            n_note = len(fm.get("planets", []) or [])
-            n_gt = len(gt.get("planets", []) or [])
-            if n_note != n_gt:
-                contradictions.append((slug, f"ficha {n_note} planetas vs ground-truth {n_gt}"))
-            contradictions += mirror_issues(slug, fm, gt)
+            contradictions += mirror_issues(slug, split_fm(sf.read_text(encoding="utf-8")), gt)
 
     # huérfanos: notas-concepto sin links entrantes. Papers/estrellas se acceden por
     # Dataview/index, no por wikilink → no son huérfanos genuinos. README tampoco. Las **matrices**
@@ -618,7 +647,11 @@ def main() -> int:
     # para el que sí se extrajo y legítimamente no se inlinea: `no_sintetizado: <motivo>` en la nota
     # del paper — con motivo, como el `--reason` del triage: no curar en silencio.
     unsynthesized = []
-    for stem, marca in sorted(extracted):
+    # ordenar por STEM, no por la tupla: dos notas con el mismo stem (una copia de trabajo
+    # de una nota de paper en otra carpeta) comparaban `no_sintetizado` —str contra None—
+    # y volteaban el lint entero con un TypeError. El lint es la compuerta de CI: tiene que
+    # reportar una bóveda rara, no morirse con ella.
+    for stem, marca in sorted(extracted, key=lambda t: t[0]):
         if stem in cited_in_entity:
             continue
         if marca:

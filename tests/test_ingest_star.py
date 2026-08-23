@@ -34,6 +34,17 @@ def test_cadena_completa_en_orden(toy_vault, fake_run, monkeypatch):
                               ("check_retractions.py", "--slug", "test_star")]
 
 
+def test_handoff_nombra_los_pasos_salteables(toy_vault, fake_run, monkeypatch, capsys):
+    """El último print es el hand-off a la capa LLM: es donde el operador lee qué sigue. Los pasos
+    que nombra tienen que ser los SALTEABLES del skill —los que no dejan rastro si se omiten—, y el
+    contraste (3b, #72) faltaba: la línea saltaba de la extracción a la ficha, que es exactamente el
+    orden que ese issue existe para impedir."""
+    assert run_main(monkeypatch) == 0
+    out = capsys.readouterr().out
+    assert "(2b)" in out and "(2c)" in out and "(3b)" in out and "(5b)" in out
+    assert "CONTRASTE" in out
+
+
 def test_slug_desconocido_amigable(toy_vault, fake_run, monkeypatch):
     with pytest.raises(SystemExit, match="stars.yaml"):
         run_main(monkeypatch, ("no-existe",))

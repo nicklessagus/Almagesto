@@ -303,6 +303,16 @@ def test_star_note_sin_ground_truth(toy_vault):
     assert read_fm(toy_vault.STARS / "test_star.md")["planets"] == []
 
 
+def test_star_note_crea_la_carpeta_si_no_existe(toy_vault):
+    """git no versiona directorios vacíos: un clon con el scratch limpiado (o un árbol armado a
+    mano) puede no tener `vault/wiki/stars/`. Los otros dos writers hacen `mkdir`; éste no, y la
+    cadena moría con un traceback de FileNotFound en el primer ingest."""
+    import shutil
+    shutil.rmtree(toy_vault.STARS)
+    mn.write_star_note("test_star", force=False)
+    assert (toy_vault.STARS / "test_star.md").exists()
+
+
 def test_star_note_idempotente(toy_vault):
     mn.write_star_note("test_star", force=False)
     dest = toy_vault.STARS / "test_star.md"

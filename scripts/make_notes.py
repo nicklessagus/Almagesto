@@ -823,6 +823,10 @@ SORT method ASC
 `{meta.get('data_local')}`
 """
     body += excluded_table(slug)
+    # como los otros dos writers (concept y papers): la carpeta puede no existir — git no
+    # versiona directorios vacíos, así que una bóveda sin `vault/wiki/stars/` (clon con el
+    # scratch limpiado, árbol armado a mano) moría con un traceback de FileNotFound.
+    dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(body, encoding="utf-8")
     stamp_search_line(slug, dest)
     print(f"  star: {dest.name} escrito")

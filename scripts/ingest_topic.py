@@ -185,9 +185,14 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
         if not CITEKEY_RE.match(key):
             sys.exit(f"key inválida en sources de '{slug}': {key!r}. Debe empezar con AAAA+letra "
                      "(clave de cita sintética, p. ej. 2006RasmussenWilliams).")
-        if key in descartadas:
-            d = descartadas[key]
-            print(f"  ⚠ {key}: figura DESCARTADA en el registro ({d.get('fecha', 's/f')}): "
+        # Se busca por clave Y por url: `--drop-source` acepta las dos (la url es la clave cuando
+        # la fuente no tiene una sintética), pero un item de `sources:` siempre trae una clave que
+        # matchea CITEKEY_RE — así que un descarte registrado por url no se habría cruzado nunca
+        # con la mitad que lo consume, y el aviso quedaba mudo justo en ese caso.
+        if (dk := next((k for k in (key, s.get("url")) if k and k in descartadas), None)):
+            d = descartadas[dk]
+            print(f"  ⚠ {key}: figura DESCARTADA en el registro ({d.get('fecha', 's/f')}"
+                  f"{'' if dk == key else f', por url {dk}'}): "
                   f"{d.get('motivo') or '(sin motivo)'} — se ingesta igual; si cambiaste de "
                   f"opinión, sacá la entrada de `decisiones` en {cfg.registro_path(slug)}")
         if s.get("pending"):
@@ -325,8 +330,11 @@ def main() -> int:
     else:
         sys.exit(f"source desconocido en '{args.slug}': {source!r} "
                  f"(válidos: ads | {' | '.join(OFFADS_KINDS)}).")
-    print("\nCadena mecánica lista. Siguiente (LLM, skill ingest-topic): extracción por paper → "
-          "retro-tag (3b) → síntesis del concept → verify-citations → lint.")
+    # Mismo criterio que en ingest_star: el hand-off nombra los pasos salteables con su número.
+    # El contraste (3c, #72) faltaba, y es el que decide si la síntesis mira un paper o todos.
+    print("\nCadena mecánica lista. Siguiente (LLM, skill ingest-topic): extracción por paper (3) → "
+          "retro-tag por aliases (3b) → CONTRASTE cross-paper / inventario por eje (3c) → síntesis "
+          "del concept, con régimen de validez (4) → verify-citations (6b) → lint.")
     return 0
 
 

@@ -116,7 +116,7 @@ def test_contradiccion_gt_ficha(toy_vault, capsys):
              "planets": [{"letter": "b"}]}, "**b** (P=365 d)\n")
     rc, out = run_lint(capsys)
     assert rc == 1
-    assert "ficha 1 planetas vs ground-truth 2" in out
+    assert "el ground-truth trae el planeta `c` y la ficha no lo lista" in out
 
 
 # ── sin capas de compatibilidad: cada tolerancia sacada deja un detector ─────
@@ -260,7 +260,19 @@ def test_disputa_con_formas_basura_no_crashea_el_lint(toy_vault, capsys):
     rc, out = run_lint(capsys)
     assert rc == 1
     assert out.count("posición que no es un mapa") == 2     # las dos posiciones basura
+    # y la disputa que ni siquiera es un mapa se REPORTA: filtrarla en silencio era el mismo modo
+    # de falla que #71 vino a cerrar (lo que el lector ignora sin decir nada).
+    assert "1 entrada(s) de `disputes` que no son un mapa" in out
     assert "Traceback" not in out
+
+
+def test_disputes_que_no_es_una_lista_se_reporta(toy_vault, capsys):
+    """`disputes: "b.K"` (escrito a mano como escalar): iterarlo daba caracteres, ninguno un mapa,
+    y la nota pasaba como si no tuviera disputas. Se reporta una vez, no una por carácter."""
+    ficha_con_disputas(toy_vault, "b.K")
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert out.count("`disputes` no es una lista") == 1
 
 
 def test_disputa_en_un_concepto(toy_vault, capsys):
@@ -409,6 +421,22 @@ def test_citado_solo_en_una_query_no_alcanza(toy_vault, capsys):
     assert "2020ext....1E → extraído" in out
 
 
+def test_dos_notas_con_el_mismo_stem_no_voltean_el_lint(toy_vault, capsys):
+    """Regresión: `sorted(extracted)` comparaba la tupla entera, así que dos notas de paper con el
+    mismo stem —una copia de trabajo en otra carpeta— comparaban `no_sintetizado` (str contra None)
+    y el lint MORÍA con un TypeError. El lint es la compuerta de CI: ante una bóveda rara reporta,
+    no se cae."""
+    paper_extraido(toy_vault, role=["arbitro"])
+    mk_note(toy_vault.QUERIES, "2020ext....1E",
+            {"tags": ["paper"], "relevance": "high", "methods": ["periodograma"],
+             "no_sintetizado": "copia de trabajo"}, "")
+    link_from_index(toy_vault, "2020ext....1E")
+    rc, out = run_lint(capsys)
+    assert "Traceback" not in out
+    # y reporta: la copia lleva `no_sintetizado` con motivo (se cierra sola), la original no
+    assert "Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog) (1)" in out
+
+
 def test_paper_sin_extraer_no_entra_en_esta_categoria(toy_vault, capsys):
     """La población son los YA extraídos. El core sin extraer tiene su propia categoría ("paper
     relevante sin methods"): reportarlo en las dos sería el mismo hallazgo dos veces."""
@@ -503,8 +531,8 @@ def test_espejo_cubre_los_parametros_de_cada_planeta(toy_vault, capsys):
 
 
 def test_espejo_no_duplica_el_planeta_que_no_esta_en_nea(toy_vault, capsys):
-    """Un planeta de más ya lo reporta el chequeo de cantidad; repetirlo campo por campo sería
-    ruido sobre el mismo hallazgo."""
+    """Un planeta de más se reporta ENTERO (una línea); repetirlo campo por campo sería ruido sobre
+    el mismo hallazgo."""
     write_gt(toy_vault, [gt_planet("b")])
     ficha_espejo(toy_vault, {"planets": [{"letter": "b", "P_days": 365.25, "K_ms": 0.0895,
                                           "e": 0.0, "mass_earth": 1.0, "status": "confirmed"},
@@ -512,8 +540,38 @@ def test_espejo_no_duplica_el_planeta_que_no_esta_en_nea(toy_vault, capsys):
                  "**b** (P=365 d) y **z** (P=9.9 d)\n")
     rc, out = run_lint(capsys)
     assert rc == 1
-    assert "ficha 2 planetas vs ground-truth 1" in out
+    assert "planeta `z` en la ficha y NO en el ground-truth" in out
     assert "z.P_days" not in out and "z.K_ms" not in out
+
+
+def test_espejo_compara_que_planetas_no_cuantos(toy_vault, capsys):
+    """El agujero que dejaba el `len()`: la ficha lista **b** y **d**, NEA confirma **b** y **c** —
+    mismo largo, planetas distintos, lint en verde. Y no es un caso raro: es exactamente cómo una
+    señal no confirmada termina en `planets[]` (donde se lee como ground-truth) en vez de en
+    `disputes` como `d.existence`. Un planeta entero inventado en la capa auditable era invisible."""
+    write_gt(toy_vault, [gt_planet("b"), gt_planet("c")])
+    ficha_espejo(toy_vault, {"planets": [{"letter": "b", "P_days": 365.25, "K_ms": 0.0895,
+                                          "e": 0.0, "mass_earth": 1.0, "status": "confirmed"},
+                                         {"letter": "d", "P_days": 11.5, "K_ms": 0.6}]},
+                 "**b** (P=365 d) y **d** (P=11.5 d)\n")
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert "planeta `d` en la ficha y NO en el ground-truth" in out
+    assert "el ground-truth trae el planeta `c` y la ficha no lo lista" in out
+
+
+def test_espejo_reporta_la_letra_repetida(toy_vault, capsys):
+    """Lo único que el conteo veía y el conjunto de letras no: `planets[]` con la misma letra dos
+    veces (dos fuentes pegadas a mano). Sin esto, el reemplazo perdía un chequeo."""
+    write_gt(toy_vault, [gt_planet("b")])
+    ficha_espejo(toy_vault, {"planets": [{"letter": "b", "P_days": 365.25, "K_ms": 0.0895,
+                                          "e": 0.0, "mass_earth": 1.0, "status": "confirmed"},
+                                         {"letter": "b", "P_days": 365.25, "K_ms": 0.0895,
+                                          "e": 0.0, "mass_earth": 1.0, "status": "confirmed"}]},
+                 "**b** (P=365 d)\n")
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert "planeta `b` repetido en `planets[]` (2 veces)" in out
 
 
 def test_p_rot_documentado_en_la_prosa_no_es_backlog(toy_vault, capsys):
