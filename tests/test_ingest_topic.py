@@ -272,6 +272,20 @@ def test_offads_fuente_no_descartada_no_avisa(toy_vault, fake_run, fake_notes, m
     assert "DESCARTADA" not in capsys.readouterr().out
 
 
+def test_offads_descarte_del_chaining_no_avisa_como_fuente_declarada(toy_vault, fake_run,
+                                                                      fake_notes, monkeypatch,
+                                                                      capsys):
+    """Un descarte del CHAINING (`triage --drop`, sin `origen`) no tiene nada que ver con las
+    fuentes declaradas de un tema off-ADS: avisar ahí es la mezcla que #81 vino a separar, y los
+    otros dos consumidores del registro sí filtran."""
+    cfg.save_decisiones("gp", {"2006Rasmussen": {"decision": "descartado", "fecha": "2026-01-15",
+                                                 "motivo": "ruido del grafo de citas"}})
+    topic(source="web", sources=[{"key": "2006Rasmussen", "url": "https://x"}])
+    run_main(monkeypatch)
+    assert "DESCARTADA" not in capsys.readouterr().out, (
+        "un descarte del carril chaining se avisa como si fuera de fuente declarada")
+
+
 def test_offads_pdf_copia_y_extrae(toy_vault, fake_run, fake_notes, monkeypatch, tmp_path):
     src = tmp_path / "externo.pdf"
     src.write_bytes(b"%PDF-contenido")

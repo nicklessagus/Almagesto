@@ -191,7 +191,11 @@ def test_excluded_top_n_y_escapes(toy_vault):
     assert tabla.count("| [") == mn.EXCLUDED_TOP_N    # top-N filas
     assert "+ 3 más excluidos" in tabla
     assert r"\|" in tabla and r"\[brackets\]" in tabla
-    assert "doctype: catalog" in tabla and "sin tópico" in tabla
+    # sin `why_excluded` (ads.json pre-#30) NO se reconstruye el motivo: la dicotomía vieja
+    # etiquetaba `doctype: article` a los excluidos por la regla de combinación, o sea escribía un
+    # motivo FALSO en la bóveda. Mejor decir que no se registró.
+    assert "motivo no registrado" in tabla
+    assert "doctype: catalog" not in tabla and "sin tópico" not in tabla
 
 
 def test_excluded_motivo_regla_combinacion(toy_vault):
@@ -204,6 +208,17 @@ def test_excluded_motivo_regla_combinacion(toy_vault):
     tabla = mn.excluded_table("test_star")
     assert "sin faceta obligatoria (rv)" in tabla
     assert "doctype: article" not in tabla
+
+
+def test_excluded_table_no_voltea_la_generacion_de_notas(toy_vault):
+    """`excluded_table` se llama desde `write_star_note`/`write_concept_note`: si revienta, la
+    cadena muere DESPUÉS de gastar la red. Un `ads.json` truncado por un Ctrl-C en `query_ads` es
+    el caso natural."""
+    d = cfg.ROOT / "build" / "test_star"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "ads.json").write_text('{"records": [{"bibcode": 42, "relevant": false,'
+                                ' "citation_count": "muchas"}]}', encoding="utf-8")
+    assert isinstance(mn.excluded_table("test_star"), str)
 
 
 # ── stamp_excluded (re-estampado quirúrgico del apéndice, #35) ───────────────
@@ -600,6 +615,100 @@ def test_migrate_disputes_no_toca_la_prosa_ni_las_fichas_sin_disputas(toy_vault,
                    PROSA)
     mn.migrate_disputes(dest)
     assert dest.read_text(encoding="utf-8").split("---\n", 2)[2] == PROSA
+
+
+def test_migrate_disputes_tampoco_inventa_el_valor_del_paper(toy_vault):
+    """La regla "si no hay valor, la posición va sin `value`" se aplicaba SÓLO al polo ground_truth.
+    `alt` era exclusivo de las disputas de VALOR, así que toda disputa de `existence` —el caso más
+    frecuente— migraba con `value: null` del lado del paper, que por la convención del otro polo se
+    lee como "esta fuente calla": lo contrario de lo que el paper sostiene."""
+    dest = ficha_vieja(toy_vault, [{"letter": "b", "status": "confirmed", "disputes": [
+        {"field": "existence", "ref": "2020disD...1..1D", "note": "no la ve"}]}])
+    mn.migrate_disputes(dest)
+    assert read_fm(dest)["disputes"][0]["posiciones"][0] == {"ref": "2020disD...1..1D"}
+
+
+def test_migrate_disputes_avisa_cuando_la_vieja_no_tiene_ref(toy_vault, capsys):
+    """El lint pre-1.19.0 aceptaba una disputa sin `ref`; migrada queda como posición sin quién la
+    sostenga y el lint la bloquea. El migrador es idempotente, así que sin aviso la bóveda quedaba
+    en exit 1 tras correr exactamente el comando que el lint recomienda, sin pista de qué pasó."""
+    dest = ficha_vieja(toy_vault, [{"letter": "b", "K_ms": 0.9, "disputes": [
+        {"field": "K", "alt": 1.4, "note": "sin ref"}]}])
+    mn.migrate_disputes(dest)
+    assert "sin `ref`" in capsys.readouterr().out
+
+
+def test_migrate_all_disputes_no_muere_a_mitad_del_barrido(toy_vault, capsys):
+    """Una ficha con `planets` mal formado tiraba el backfill con AttributeError y dejaba la bóveda
+    a MEDIO migrar: las fichas posteriores quedaban con el schema viejo y sin aviso."""
+    for stem in ("a_sana", "c_sana"):
+        mk_note(toy_vault.STARS, stem, {"name": stem, "tags": ["star"], "planets": [
+            {"letter": "b", "K_ms": 0.9,
+             "disputes": [{"field": "K", "ref": "2020disD...1..1D", "alt": 1.4}]}]}, PROSA)
+    mk_note(toy_vault.STARS, "b_rara", {"name": "B", "tags": ["star"], "planets": ["b"]}, PROSA)
+    mn.migrate_all_disputes()
+    assert "disputes" in read_fm(toy_vault.STARS / "c_sana.md")      # la de después SÍ se migró
+    assert "no es una lista de mapas" in capsys.readouterr().out     # y la rara se avisó
+
+
+def test_migrate_disputes_no_escribe_basura_si_disputes_no_es_lista(toy_vault, capsys):
+    """`disputes: "b.K"` a nivel nota + una disputa vieja escribía la lista de CARACTERES a disco
+    (y con un mapa, sus claves). Cobarde: no toca el archivo."""
+    dest = mk_note(toy_vault.STARS, "test_star",
+                   {"name": "T", "tags": ["star"], "disputes": "b.K", "planets": [
+                       {"letter": "b", "K_ms": 0.9,
+                        "disputes": [{"field": "K", "ref": "2020disD...1..1D", "alt": 1.4}]}]}, PROSA)
+    antes = dest.read_text(encoding="utf-8")
+    assert mn.migrate_disputes(dest) is False
+    assert dest.read_text(encoding="utf-8") == antes
+    assert "no es una lista" in capsys.readouterr().out
+
+
+def test_migrate_disputes_no_pierde_la_disputa_que_deja_sin_migrar(toy_vault, capsys):
+    """`pop("disputes")` corre ANTES del `isinstance`, así que el `continue` "cobarde" salta la
+    migración con el dato ya fuera del dict y el `write_text` final lo borra del disco. El mensaje
+    dice "esa quedó sin migrar, revisala a mano" y no queda nada que revisar: se pierden el bibcode
+    y el valor discrepante, y después el lint queda en verde afirmando que no hay desacuerdos."""
+    dest = ficha_vieja(toy_vault, [
+        {"letter": "b", "disputes": "Feng+2017 dice que b no existe (ref 2017AJ....154..135F)"},
+        {"letter": "c", "disputes": [{"field": "K", "ref": "2019MNRAS.484L...8K", "alt": 1.6}]},
+    ])
+    mn.migrate_disputes(dest)
+    texto = dest.read_text(encoding="utf-8")
+    assert "2017AJ....154..135F" in texto, (
+        "la disputa que el mensaje manda revisar a mano desapareció del archivo")
+
+
+def test_migrate_disputes_no_pierde_la_entrada_vieja_que_no_es_un_mapa(toy_vault, capsys):
+    """Hermano del anterior por la otra rama cobarde: el elemento que no es un mapa también se
+    pierde, porque `viejas` ya salió del planeta cuando el `continue` lo saltea."""
+    dest = ficha_vieja(toy_vault, [{"letter": "b", "disputes": ["esto-no-es-un-mapa",
+                                                                {"field": "K",
+                                                                 "ref": "2019MNRAS.484L...8K"}]}])
+    mn.migrate_disputes(dest)
+    assert "esto-no-es-un-mapa" in dest.read_text(encoding="utf-8")
+
+
+def test_migrate_disputes_letter_nulo_no_inventa_un_eje(toy_vault):
+    """`letter: null` es estado normal (lo copia el ground-truth cuando NEA no nombra el planeta):
+    producía `field: None.K`, un eje que no existe y que el lint no valida."""
+    dest = ficha_vieja(toy_vault, [{"letter": None, "K_ms": 0.9, "disputes": [
+        {"field": "K", "ref": "2020disD...1..1D", "alt": 1.4}]}])
+    mn.migrate_disputes(dest)
+    assert read_fm(dest)["disputes"][0]["field"] == "K"
+
+
+@pytest.mark.parametrize("obj", [{"short": 2026}, {"short": "s", "relevance": "rv"},
+                                 {"short": "s", "relevance": {"topics": "radial velocity"}},
+                                 {"short": "s", "relevance": {"topics": [{"rv": "x"}]}}])
+def test_objetivo_mal_formado_degrada_sin_romper_ni_inventar(toy_vault, obj):
+    """El stub es el ÚNICO lector de `objective.short` (ni query_ads ni el lint lo miran), así que
+    un `short: 2026` mataba la generación de notas a mitad de cadena, después de gastar la red. Y
+    `topics` como string se deshacía en caracteres: facetas fabricadas escritas a la bóveda."""
+    write_yaml(cfg.OBJECTIVE_YAML, obj)
+    block = mn.extraction_block(topic=False)
+    assert "## Extracción (LLM)" in block
+    assert "· " not in block.split("Ejes del objetivo")[1].split(":**")[0]   # sin facetas inventadas
 
 
 def test_migrate_disputes_es_idempotente(toy_vault):
@@ -1168,6 +1277,13 @@ def test_search_line_sin_registro_o_sin_ancla_no_toca_nada(toy_vault):
     assert "Búsqueda" not in fuera.read_text(encoding="utf-8")
 
 
+def test_search_line_con_busqueda_no_mapa_no_crashea(toy_vault):
+    """El lector (`load_registro`) es tolerante y sus dos consumidores no."""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    cfg.registro_path("test_star").write_text("busqueda: 2026-08-22\n", encoding="utf-8")
+    assert isinstance(mn.search_line("test_star"), str)
+
+
 # ── pdf_source: de qué DOCUMENTO salió el texto (#57) ────────────────────────
 
 def _txt(slug, stem, body):
@@ -1317,3 +1433,16 @@ def test_restamp_headers_barre_fichas_y_conceptos(toy_vault, capsys):
     mn.write_star_note("test_star", force=False)                   # ésta ya tiene cabecera
     assert mn.restamp_headers() == 0
     assert "2 de 3 estampadas" in capsys.readouterr().out
+
+
+def test_restamp_headers_actua_sobre_la_nota_que_el_lint_marca(toy_vault, capsys):
+    """El lint marca la nota si le falta `GENERATOR_LINE`; `restamp_headers` la saltea si tiene
+    "Capa LLM". Una nota con el disclaimer pero sin la línea del generador —22 de 25 en el corpus
+    real— queda marcada para siempre y el comando que el propio mensaje receta no-opea en silencio.
+    El backlog no se puede cerrar con la herramienta documentada."""
+    nota = mk_note(toy_vault.STARS, "test_star",
+                   {"tags": ["star"], "generator": "Almagesto v1.13.0"},
+                   "# test_star\n\n> ⚠ **Capa LLM:** la prosa es síntesis a revisar.\n\nprosa\n")
+    mn.restamp_headers()
+    assert mn.GENERATOR_LINE in nota.read_text(encoding="utf-8"), (
+        "la nota que el lint marca sigue sin la línea del generador tras --restamp-headers")

@@ -173,7 +173,7 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
     # fuente la declara el usuario, así que no se puede filtrar sola — pero volver a declarar algo
     # que se descartó (típico al retomar el tema meses después) merece un aviso con el motivo.
     descartadas = {k: d for k, d in cfg.load_decisiones(slug).items()
-                   if d.get("decision") == "descartado"}
+                   if d.get("decision") == "descartado" and cfg.es_del_carril(d, "fuente-declarada")}
 
     make_notes.write_concept_note(slug, force=False)   # nunca --force acá: protege la síntesis LLM
 

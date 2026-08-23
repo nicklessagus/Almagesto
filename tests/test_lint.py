@@ -33,6 +33,20 @@ def write_gt(toy_vault, planets, mstar=1.0, host=None):
         encoding="utf-8")
 
 
+def run_lint_reporte(capsys):
+    """Devuelve `(rc, reporte)` leyendo el .md, NO stdout. `run_lint` de más arriba captura
+    `capsys.readouterr().out`, que trae el reporte PERO TAMBIÉN la última línea (`→ <ruta>`), y esa
+    ruta vive bajo el tmpdir de pytest —cuyo nombre es el del test—: un assert de substring contra
+    ese stdout puede pasar por el texto del path en vez de por un hallazgo real del lint. Ya mordió
+    dos veces en este repo (ver STATUS.md); los tests que comparan contenido puntual usan este
+    helper en vez de `run_lint`."""
+    rc = lint.main()
+    capsys.readouterr()
+    import datetime as dt
+    return rc, (cfg.ROOT / "outputs" / f"lint-{dt.date.today().isoformat()}.md").read_text(
+        encoding="utf-8")
+
+
 # ── bóveda vacía / reporte ───────────────────────────────────────────────────
 
 def test_boveda_vacia_pasa(toy_vault, capsys):
@@ -62,7 +76,7 @@ def test_frontmatter_roto_bloquea(toy_vault, capsys):
                                                      encoding="utf-8")
     rc, out = run_lint(capsys)
     assert rc == 1
-    assert "## ⛔ Frontmatter no parseable (la nota evade los chequeos de su tipo) (2)" in out
+    assert "## ⛔ Frontmatter no parseable o con forma inválida (la nota evade los chequeos de su tipo) (2)" in out
     assert "YAML inválido" in out and "sin cierre `---`" in out
 
 
@@ -71,7 +85,33 @@ def test_prosa_plana_sin_frontmatter_es_legitima(toy_vault, capsys):
     toy_vault.LOG.write_text("# Log\n", encoding="utf-8")
     rc, out = run_lint(capsys)
     assert rc == 0
-    assert "## ⛔ Frontmatter no parseable (la nota evade los chequeos de su tipo) (0)" in out
+    assert "## ⛔ Frontmatter no parseable o con forma inválida (la nota evade los chequeos de su tipo) (0)" in out
+
+
+def test_planets_con_forma_invalida_se_reporta_y_no_voltea_el_lint(toy_vault, capsys):
+    """El lint es la compuerta de CI: ante un frontmatter raro reporta, no se muere. Un `planets:`
+    con un elemento que no es mapa (lista a medio escribir, edición a mano) volteaba el barrido
+    entero con un AttributeError — y el resto de la bóveda quedaba sin chequear."""
+    mk_note(toy_vault.STARS, "test_star",
+            {"tags": ["star"], "P_rot_days": 1.0, "activity_indicators_expected": ["s"],
+             "planets": ["b", {"letter": "c"}]}, "**b** (P=1 d) y **c** (P=2 d)\n")
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert "Traceback" not in out
+    assert "1 entrada(s) de `planets` que no son un mapa" in out
+    assert "## Campos incompletos" in out          # el resto de los chequeos siguió corriendo
+
+
+def test_campo_de_lista_escrito_como_escalar_se_reporta_una_vez(toy_vault, capsys):
+    """`thesis_links: shift` (sin corchetes) se iteraba CARÁCTER POR CARÁCTER: cinco `thesis_links`
+    colgantes inventados, uno por letra. Ahora es un hallazgo de forma, uno solo."""
+    mk_note(toy_vault.PAPERS, "2020strS...1..1S",
+            {"tags": ["paper"], "relevance": "high", "methods": ["x"], "role": ["arbitro"],
+             "thesis_links": "shift", "bearing": "supports"}, "")
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert out.count("`thesis_links` no es una lista") == 1
+    assert "thesis_links sin página destino (0)" in out      # ningún colgante inventado
 
 
 def test_huerfanas_solo_conceptos_sueltos(toy_vault, capsys):
@@ -107,6 +147,14 @@ def test_paper_con_correccion_es_backlog_no_bloquea(toy_vault, capsys):
     assert "corrección publicada (erratum/corrigendum/EoC)" in out
     assert "corrigendum (2023-07-01) → 10.1/corr" in out
     assert "expression-of-concern (s/f) → sin DOI del aviso" in out
+
+
+def test_retraction_escalar_no_voltea_el_lint(toy_vault, capsys):
+    """El lint es la compuerta de CI: `retraction` mal formado (un string suelto en vez del mapa
+    `{type,date,...}`) tiene que reportarse, no tumbar la corrida entera."""
+    mk_note(toy_vault.PAPERS, "2020aaa...1..1A",
+            {"tags": ["paper"], "retracted": True, "retraction": "retractado en 2021"}, "")
+    assert run_lint(capsys)[0] in (0, 1)
 
 
 def test_contradiccion_gt_ficha(toy_vault, capsys):
@@ -308,6 +356,51 @@ def test_disputa_mal_formada_en_un_concepto_tambien_bloquea(toy_vault, capsys):
     assert rc == 1
     assert "disputa `signo` con 1 posición(es)" in out
     assert "disputa `escala`: ref `2099fantasma..1..1F` sin nota de paper" in out
+
+
+def test_posiciones_escalar_no_voltea_el_lint(toy_vault, capsys):
+    """`posiciones:` escalar es frontmatter editado a mano: se REPORTA, no voltea el barrido — y un
+    string se reporta UNA vez, no una por carácter (`normalize_lists` sanea el primer nivel del
+    frontmatter y esto está anidado, así que necesita su propia guarda)."""
+    ficha_con_disputas(toy_vault, [{"field": "b.K", "posiciones": 5},
+                                   {"field": "b.e", "posiciones": "2020disD"}])
+    rc, out = run_lint(capsys)
+    assert rc == 1 and "Traceback" not in out
+    assert out.count("`posiciones` no es una lista") == 2
+
+
+def test_disputes_escalar_dentro_de_un_planeta_no_voltea_el_lint(toy_vault, capsys):
+    """El detector del schema VIEJO mira justamente frontmatter viejo y editado a mano: un
+    `planets[].disputes` escalar llegaba a `len()` y lo mataba."""
+    mk_note(toy_vault.STARS, "test_star",
+            {"tags": ["star"], "P_rot_days": 1.0, "activity_indicators_expected": ["x"],
+             "planets": [{"letter": "b", "disputes": 5}]}, "**b** (P=1 d)\n")
+    rc, out = run_lint(capsys)
+    assert "Traceback" not in out
+
+
+def test_disputa_con_field_nulo_tambien_bloquea(toy_vault, capsys):
+    """`field:` a secas es la forma normal de dejarlo sin llenar. `.get("field", "")` devuelve None
+    con la clave presente y nula, y `str(None)` == "None" (truthy): el bloqueante no disparaba y el
+    resto de los mensajes la nombraban "disputa None"."""
+    mk_note(toy_vault.PAPERS, "2020disD...1..1D", {"tags": ["paper"]}, "")
+    ficha_con_disputas(toy_vault, [{"field": None, "posiciones": [
+        {"ref": "2020disD...1..1D", "value": 1}, {"source": "ground_truth", "value": 2}]}])
+    rc, out = run_lint(capsys)
+    assert rc == 1 and "disputa sin `field`" in out
+
+
+def test_posicion_con_ref_y_source_no_esquiva_el_vocabulario(toy_vault, capsys):
+    """Con `ref` presente el `elif` nunca miraba `source`: una posición que declara DOS dueños
+    distintos pasaba entera y el vocabulario cerrado se salteaba."""
+    mk_note(toy_vault.PAPERS, "2020disD...1..1D", {"tags": ["paper"]}, "")
+    ficha_con_disputas(toy_vault, [{"field": "b.K", "posiciones": [
+        {"ref": "2020disD...1..1D", "source": "wikipedia", "value": 1},
+        {"source": "ground_truth", "value": 2}]}])
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert "`source: wikipedia` fuera del vocabulario" in out
+    assert "posición con `ref` Y `source`" in out
 
 
 # ── #73: el ROL del paper ────────────────────────────────────────────────────
@@ -574,6 +667,126 @@ def test_espejo_reporta_la_letra_repetida(toy_vault, capsys):
     assert "planeta `b` repetido en `planets[]` (2 veces)" in out
 
 
+def test_ficha_sin_ground_truth_se_reporta(toy_vault, capsys):
+    """El barrido del espejo lo maneja el JSON, así que una ficha SIN archivo no la miraba nadie:
+    se le podían inventar `teff_K`, `P_rot_days` o planetas enteros con el lint en verde. Es
+    alcanzable sin salirse de lo documentado (`make_notes.py <slug>` corre solo, y el sub-modo
+    borrar de `maintain` saca el JSON). Backlog, no bloqueante: la garantía no corrió acá, que es
+    distinto de una violación (mismo criterio que #55 y #56)."""
+    ficha_espejo(toy_vault, {"teff_K": 9999.0, "P_rot_days": 34.0, "planets": []},
+                 "Prosa con P_rot 34 d [[2019A....1A]]\n")
+    rc, out = run_lint(capsys)
+    assert rc == 0
+    assert "ficha sin `raw/ground_truth/<slug>.json`" in out
+
+
+def test_slug_interno_del_ground_truth_que_no_matchea_el_archivo(toy_vault, capsys):
+    """El campo `slug` de adentro ganaba sobre el nombre del archivo, así que un renombre a medias
+    —el sub-modo C de `maintain` nombra el archivo, la nota y el registro, no el campo— dejaba al
+    espejo buscando una ficha inexistente: MUDO en silencio, que es lo que #70 existe para impedir."""
+    (toy_vault.GROUND_TRUTH / "test_star.json").write_text(
+        json.dumps({"slug": "otro_slug", "host": {"teff_K": 5344.0}, "planets": []}),
+        encoding="utf-8")
+    ficha_espejo(toy_vault, {"teff_K": 9999.0, "planets": []}, "Prosa.\n")
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert "declara `slug: otro_slug` y el archivo es test_star.json" in out
+    assert "`teff_K: 9999.0` contradice el ground-truth" in out       # y la ficha SÍ se compara
+
+
+def test_ground_truth_ilegible_se_reporta_y_no_voltea_el_lint(toy_vault, capsys):
+    """Un JSON corrupto abortaba la corrida entera con JSONDecodeError. El lint es la compuerta de
+    CI: reporta la bóveda rara y sigue con el resto."""
+    (toy_vault.GROUND_TRUTH / "test_star.json").write_text("{no es json", encoding="utf-8")
+    mk_note(toy_vault.CONCEPTS / "methods", "suelta", {"tags": ["methods"]}, "sin links\n")
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert "Traceback" not in out
+    assert "no se pudo leer" in out
+    assert "## Notas huérfanas (sin links entrantes) (1)" in out      # el barrido siguió
+
+
+def test_ground_truth_con_planetas_mal_formados_no_voltea_el_lint(toy_vault, capsys):
+    """`raw/` lo cura el usuario a mano: un `planets` con un elemento que no es mapa rompía el
+    espejo con AttributeError."""
+    (toy_vault.GROUND_TRUTH / "test_star.json").write_text(
+        json.dumps({"slug": "test_star", "host": {"mass_msun": 1.0},
+                    "planets": ["b", {"letter": "c", "P_days": 1.0}]}), encoding="utf-8")
+    ficha_espejo(toy_vault, {"planets": [{"letter": "c", "P_days": 1.0}]}, "**c** (P=1 d)\n")
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert "Traceback" not in out
+    assert "1 entrada(s) de `planets` del ground-truth que no son un mapa" in out
+
+
+def test_host_del_ground_truth_no_mapa_se_reporta(toy_vault, capsys):
+    """Con `host` escalar el espejo deja de vigilar los cuatro campos estelares SIN reportar nada,
+    mientras el hermano `planets` no-lista sí reporta. Falso limpio asimétrico."""
+    (toy_vault.GROUND_TRUTH / "test_star.json").write_text(
+        json.dumps({"slug": "test_star", "host": "no-soy-un-mapa", "planets": []}),
+        encoding="utf-8")
+    mk_note(toy_vault.STARS, "test_star",
+            {"tags": ["star"], "P_rot_days": 1.0, "activity_indicators_expected": ["x"],
+             "planets": []}, "**b** (P=1 d)\n")
+    rc, rep = run_lint_reporte(capsys)
+    assert "host" in rep, "el `host` malformado del ground-truth no se reporta"
+
+
+def test_ground_truth_con_valores_no_numericos_no_voltea_el_lint(toy_vault, capsys):
+    """Ground-truth corrupto (K_ms/P_days/e/mass_msun editado a mano como texto) alimentado a
+    `msini_earth` revienta comparando un string con 0 — se detecta ANTES de llamarlo y se reporta
+    en vez de tumbar el barrido con un TypeError."""
+    write_gt(toy_vault, [{"letter": "b", "P_days": 365.0, "K_ms": "no-numérico", "e": 0.0,
+                          "mass_earth": 1.0, "status": "confirmed"}])
+    assert run_lint(capsys)[0] in (0, 1)
+
+
+def test_ficha_sin_frontmatter_no_genera_hallazgos_fantasma(toy_vault, capsys):
+    """Sin frontmatter legible, comparar campo por campo producía un hallazgo por cada valor de NEA
+    ('teff_K: None contradice…') apuntando al síntoma equivocado."""
+    write_gt(toy_vault, [gt_planet("b")], host={"teff_K": 5344.0, "spectral_type": "G8V"})
+    (toy_vault.STARS / "test_star.md").write_text("# Estrella\n\nprosa sin frontmatter\n",
+                                                  encoding="utf-8")
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert "no tiene frontmatter legible" in out
+    assert "contradice el ground-truth" not in out
+
+
+def test_el_template_no_satisface_el_proxy_de_planeta(toy_vault, capsys):
+    """Regresión de #72: el patrón de negrita usaba `[^*]*`, que cruza saltos de línea, así que
+    matcheaba el texto ENTRE dos negritas cualesquiera. El ejemplo que #72 metió en el template
+    ("11.5 d es el armónico de 34 d") dejaba al planeta **d** —de las letras más frecuentes del
+    corpus— "discutido" en una ficha con CERO líneas de prosa."""
+    write_gt(toy_vault, [gt_planet(l) for l in "bcdefg"])
+    import make_notes as mn
+    mn.write_star_note("test_star", force=False)
+    link_from_index(toy_vault, "test_star")
+    rc, out = run_lint(capsys)
+    faltan = [l for l in "bcdefg" if f"planeta {l} en frontmatter pero no discutido en prosa" not in out]
+    assert faltan == [], f"el template ya 'discute' {faltan} sin una sola línea de prosa"
+
+
+def test_triage_json_valido_pero_no_objeto_se_reporta(toy_vault, capsys):
+    """JSON válido que no es un objeto (`["x"]`, `null`) llegaba a `.get` y volteaba el reporte
+    entero — el modo de falla equivocado justo para el chequeo que existe para no quedar mudo."""
+    d = toy_vault.ROOT / "build" / "test_star"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "triage.json").write_text('["2019A....1A"]', encoding="utf-8")
+    rc, out = run_lint(capsys)
+    assert rc == 1 and "Traceback" not in out
+    assert "? decisión(es) en build/test_star/triage.json" in out
+
+
+def test_triage_json_con_decisiones_escalar_no_voltea_el_lint(toy_vault, capsys):
+    """El guard `isinstance(data_lt, dict)` quedó un nivel arriba del uso: `{"decisiones": 3}` es un
+    objeto JSON válido, pero `decisiones` no es un mapa y llega igual a `len()`."""
+    d = toy_vault.ROOT / "build" / "test_star"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "triage.json").write_text('{"decisiones": 3}', encoding="utf-8")
+    assert run_lint(capsys)[0] in (0, 1)
+
+
 def test_p_rot_documentado_en_la_prosa_no_es_backlog(toy_vault, capsys):
     """#70 punto 4: `P_rot_days` nulo dejó de ser "campo incompleto" (no era accionable: NEA no lo
     tiene y completarlo es justo lo prohibido). Lo accionable es que el P_rot esté DOCUMENTADO en
@@ -610,7 +823,22 @@ def test_p_rot_ni_en_nea_ni_citado_sigue_siendo_backlog(toy_vault, capsys):
     ("la rotación estelar de la muestra [[2019A....1A]]", False),   # sin "período de"
 ])
 def test_prot_citado_regex(linea, documentado):
-    assert bool(lint.PROT_CITED_RE.search(linea)) is documentado
+    assert lint.prot_documentado(linea) is documentado
+
+
+@pytest.mark.parametrize("texto,documentado", [
+    ("El período de rotación es\n34 d [[2019A....1A]].", True),      # prosa envuelta a 100 columnas
+    ("[[2019A....1A]] mide un período de rotación de 34 d.", True),  # la cita, antes de la mención
+    ("No se conoce el período de rotación [[2019A....1A]].", False), # el hueco, no el dato
+    ("El P_rot no está medido [[2019A....1A]].", False),
+    ("Falta el P_rot; ver [[2019A....1A]].", False),
+    ("El P_rot es 34 d. Otra cosa [[2019A....1A]].", False),         # cita de OTRA oración
+])
+def test_prot_documentado_por_oracion(texto, documentado):
+    """#70: el ámbito es la ORACIÓN (mención + cita en cualquier orden, sin negador), no la línea.
+    Los tres modos de falla medidos: prosa envuelta, cita antes de la mención, y el hueco declarado
+    —"no se conoce el período de rotación [[ref]]"— que apagaba el backlog que existe para eso."""
+    assert lint.prot_documentado(texto) is documentado
 
 
 def test_same_value_tolerancias():
@@ -707,6 +935,25 @@ def test_schema_viejo_de_disputes_grita_en_vez_de_volverse_mudo(toy_vault, capsy
     assert "--migrate-disputes" in out
 
 
+def test_disputes_escalar_dentro_de_un_planeta_del_schema_viejo_se_reporta(toy_vault, capsys):
+    """`isinstance(d,(list,dict,str))` filtra el escalar: sección "(0)", exit 0. Un crash cambiado
+    por SILENCIO es el modo de falla que el docstring de `legacy_disputes` dice impedir."""
+    mk_note(toy_vault.STARS, "test_star",
+            {"tags": ["star"], "P_rot_days": 1.0, "activity_indicators_expected": ["x"],
+             "planets": [{"letter": "b", "disputes": 5}]}, "**b** (P=1 d)\n")
+    rc, rep = run_lint(capsys)
+    assert rc == 1, "una disputa en el schema viejo mal formada no bloquea ni se reporta"
+
+
+def test_disputes_string_del_schema_viejo_no_cuenta_una_por_caracter(toy_vault, capsys):
+    """`len("abcdefg")` = 7 disputas inventadas, una por letra."""
+    mk_note(toy_vault.STARS, "test_star",
+            {"tags": ["star"], "P_rot_days": 1.0, "activity_indicators_expected": ["x"],
+             "planets": [{"letter": "b", "disputes": "abcdefg"}]}, "**b** (P=1 d)\n")
+    rc, rep = run_lint_reporte(capsys)
+    assert "7 disputa(s)" not in rep, "se cuenta una disputa por carácter"
+
+
 # ── WARN (no bloquean) ───────────────────────────────────────────────────────
 
 def test_fuga_de_implementacion_warn(toy_vault, capsys):
@@ -750,6 +997,14 @@ def test_objetivo_default_warn(toy_vault, capsys):
 def test_objetivo_propio_sin_warn(toy_vault, capsys):
     rc, out = run_lint(capsys)                       # el toy objective ya tiene name propio
     assert "Objetivo sin instanciar (WARN — objective.yaml sigue en el placeholder del template) (0)" in out
+
+
+def test_objective_yaml_invalido_no_voltea_el_lint(toy_vault, capsys):
+    """El skill `setup` hace que el agente escriba REGEX dentro de YAML: un `:` sin comillas es el
+    error más probable de toda la config. El lint es la compuerta de CI: reporta, no se muere."""
+    cfg.OBJECTIVE_YAML.write_text("name: x\nrelevance:\n  topics:\n    rv: v: mal\n",
+                                  encoding="utf-8")
+    assert run_lint(capsys)[0] in (0, 1)
 
 
 def test_area_no_declarada_warn(toy_vault, capsys):
@@ -970,6 +1225,52 @@ def test_build_local_gana_sobre_el_registro(toy_vault, capsys):
     assert "99 candidato(s)" not in out and "2026-08-01" not in out
 
 
+# ── robustez del lint ante el registro malformado (blindaje de load_registro) ─
+
+REGISTRO_ROTO = 'busqueda:\n  motivo: "sin cerrar\n  fecha: 2026-08-01\n'
+
+
+def test_registro_no_es_un_mapa_no_voltea_el_lint(toy_vault, capsys):
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    cfg.registro_path("test_star").write_text("- a\n- b\n", encoding="utf-8")
+    assert run_lint(capsys)[0] in (0, 1)
+
+
+def test_busqueda_del_registro_no_es_un_mapa_no_voltea_el_lint(toy_vault, capsys):
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    cfg.registro_path("test_star").write_text("busqueda: 2026-08-22\n", encoding="utf-8")
+    assert run_lint(capsys)[0] in (0, 1)
+
+
+def test_registro_ilegible_se_reporta(toy_vault, capsys):
+    """Sin `build/`, el lint cae al registro para saber si hay triage pendiente y corpus truncado.
+    Si el archivo no parsea lo saltea MUDO: exit 0 y "Triage pendiente (0)" sobre un registro que
+    declara 3 candidatos sin juzgar. Es el "cero inventado" que #64 cerró, por otra puerta — y la
+    docstring de `load_registro` afirma justamente que el lint lo reporta."""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    cfg.registro_path("test_star").write_text(REGISTRO_ROTO, encoding="utf-8")
+    rc, rep = run_lint_reporte(capsys)
+    assert "test_star" in rep and "registro" in rep.lower(), (
+        "el registro ilegible no aparece en el reporte del lint")
+
+
+def test_lint_usa_el_lector_blindado_del_registro():
+    """`lint.py` es el único de seis lectores del registro que reimplementa la lectura cruda, y por
+    eso se saltea el blindaje que la 6ª pasada le puso a `load_registro`."""
+    import inspect
+    assert "load_registro" in inspect.getsource(lint.main), "lint.main no usa cfg.load_registro"
+
+
+def test_decision_que_no_es_un_mapa_se_reporta(toy_vault, capsys):
+    """`lib_config.py:303` promete que el lint reporta esta forma. No existe: la entrada queda muda
+    y el triage vuelve a proponer lo ya descartado SIN el motivo — el bug que #51 cerró."""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    cfg.registro_path("test_star").write_text(
+        "decisiones:\n  2006Rasmussen: descartado\n", encoding="utf-8")
+    rc, rep = run_lint_reporte(capsys)
+    assert "2006Rasmussen" in rep, "la decisión mal formada no se reporta en ninguna categoría"
+
+
 def test_cabecera_no_estampable_surface_backlog(toy_vault, capsys):
     """#69: una ficha sin la línea del generador deja sin efecto a TODOS los estampadores de
     cabecera, y hasta ahora el no-op era silencioso. Backlog, no bloqueante: la nota es válida."""
@@ -1073,6 +1374,16 @@ def test_corpus_no_truncado_no_reporta(toy_vault, capsys):
     rc, out = run_lint(capsys)
     assert rc == 0
     assert "Corpus truncado: la query directa trajo menos de lo que ADS reporta (backlog) (0)" in out
+
+
+def test_ads_json_no_es_un_objeto_no_voltea_el_lint(toy_vault, capsys):
+    """`ads.json` con forma rara (`[]` en vez de un objeto) es un camino documentado — un Ctrl-C a
+    mitad de `query_ads` o un archivo a medio escribir— y el lint es la compuerta de CI: reporta,
+    no se muere."""
+    d = cfg.ROOT / "build" / "test_star"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "ads.json").write_text("[]", encoding="utf-8")
+    assert run_lint(capsys)[0] in (0, 1)
 
 
 # ── verificación stale (#56) ─────────────────────────────────────────────────

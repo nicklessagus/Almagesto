@@ -426,8 +426,12 @@ def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
     if meta is not None:
         meta.update(num_found=num_found, rows=rows, truncated=truncated)
     if truncated and not quiet_truncate:
+        # la coletilla sólo vale si alguien PERSISTE la marca: con `meta=None` (--sweep, --probe)
+        # el aviso prometía un backlog que nadie escribe (mismo defecto que #43 arregló en el glifo).
+        marca = " (queda marcado en ads.json → lint)" if meta is not None else \
+                " (esta query NO deja marca en ads.json: el corte no queda registrado)"
         print(f"  ⚠ truncado: ADS reporta {num_found} resultados y sólo se trajeron {rows} "
-              f"(top por citas) — subí --rows para cubrir todo (queda marcado en ads.json → lint)")
+              f"(top por citas) — subí --rows para cubrir todo{marca}")
     out = []
     for d in docs:
         topics, relevant = classify(d)
@@ -467,10 +471,15 @@ def recent_pass(q: str, rows: int, known: set[str]) -> list[dict]:
     no-core alimentan el apéndice "Excluidos" igual que los de la primera.
 
     Sigue siendo un corpus incompleto (faltan los del medio): la marca `truncated` NO se levanta,
-    se le agrega cuántos rescató esta pasada."""
+    se le agrega cuántos rescató esta pasada.
+
+    Corre con `expect_hits`: es **la misma query** que acaba de reportar `numFound > rows`, así que
+    un cero acá es imposible como resultado — es el cero espurio de ADS (#27). Sin esa guarda volvía
+    `[]` en silencio y la marca quedaba en `recent: 0`, que el lint lee como "la cola reciente ya
+    está cubierta": afirmar de más justo donde #57 dice que no saber es mejor."""
     time.sleep(1.0)          # cortesía entre requests, como el chaining y el rescate por glifo
     out = []
-    for r in query_ads(q, rows=rows, quiet_truncate=True, sort=RECENT_SORT):
+    for r in query_ads(q, rows=rows, quiet_truncate=True, sort=RECENT_SORT, expect_hits=True):
         b = r.get("bibcode")
         if b and b not in known:
             known.add(b)
@@ -534,9 +543,14 @@ def subject_in_title(title: str | None, names: list[str]) -> bool:
 def load_triage(slug: str) -> set[str]:
     """Bibcodes ya DESCARTADOS en un triage previo — no se re-proponen en el próximo refresh (si no,
     cada re-run vuelve a pedir el mismo juicio sobre el mismo ruido). Salen del registro VERSIONADO
-    (`vault/config/registro/<slug>.yaml`, #51), con fallback al `build/<slug>/triage.json` viejo:
-    antes el juicio vivía en scratch gitignored y se perdía al clonar o limpiar."""
-    return {b for b, d in cfg.load_decisiones(slug).items() if d.get("decision") == "descartado"}
+    (`vault/config/registro/<slug>.yaml`, #51): antes el juicio vivía en scratch gitignored y se
+    perdía al clonar o limpiar (el `build/<slug>/triage.json` pre-1.9.0 ya NO se lee — se migra con
+    `triage.py --migrate` y el lint lo bloquea mientras exista).
+
+    **Sólo el carril del chaining** (#81): un rechazo de *fuente declarada* de un tema off-ADS vive
+    en las mismas `decisiones` y no tiene nada que ver con los candidatos del grafo de citas."""
+    return {b for b, d in cfg.load_decisiones(slug).items()
+            if d.get("decision") == "descartado" and cfg.es_del_carril(d, "chaining")}
 
 
 def _probe_row(r: dict) -> str:
@@ -860,12 +874,23 @@ def main() -> int:
         # chaining para que lo recuperado siembre también el grafo de citas (mismo criterio que #42).
         if qmeta.get("truncated"):
             conocidos = {r["bibcode"] for r in recs if r.get("bibcode")}
-            recientes = recent_pass(q, args.rows, conocidos)
-            qmeta["recent"] = len(recientes)
-            recs += recientes
-            rel = [r for r in recs if r["relevant"]]
-            print(f"  segunda pasada por fecha: +{len(recientes)} registros que el top por citas "
-                  f"dejaba afuera ({sum(1 for r in recientes if r['relevant'])} core)")
+            try:
+                recientes = recent_pass(q, args.rows, conocidos)
+            except (EmptyResultError, RuntimeError, requests.RequestException) as e:
+                # Rescate BEST-EFFORT: la query directa ya volvió bien y su `ads.json` vale. Antes
+                # cualquier excepción acá abortaba antes de escribirlo y tiraba la corrida entera.
+                # Se degrada al estado honesto: `recent` AUSENTE = "no sé si la cola está cubierta"
+                # (que es lo que el lint distingue de `0`), no un cero que afirma cobertura.
+                print(f"  ⚠ la segunda pasada por fecha falló ({type(e).__name__}): "
+                      f"{e or 'sin detalle'} — sigo con lo que trajo la query directa; el corpus "
+                      f"queda marcado truncado SIN afirmar nada sobre la cola reciente")
+                recientes = None
+            if recientes is not None:
+                qmeta["recent"] = len(recientes)
+                recs += recientes
+                rel = [r for r in recs if r["relevant"]]
+                print(f"  segunda pasada por fecha: +{len(recientes)} registros que el top por "
+                      f"citas dejaba afuera ({sum(1 for r in recientes if r['relevant'])} core)")
 
     # curación manual persistente: bibcodes en `extra_core` de stars.yaml/topics.yaml que el
     # clasificador perdió (build/ es scratch y se pisa; esto sobrevive porque vive en config).
@@ -959,13 +984,18 @@ def main() -> int:
 
     # marca de truncamiento de la query directa (sólo si realmente se cortó): persistida para que el
     # lint la surface como corpus incompleto. El truncado del chaining NO se registra (es por diseño).
+    # `recent` SIN default: la clave ausente es el estado "la pasada no corrió / falló" y el lint
+    # discrimina por eso (`rec_n is None`) — un `0` es la afirmación positiva "corrió y no encontró
+    # nada", que es lo contrario de lo que pasó.
     truncated = ({"num_found": qmeta["num_found"], "rows": qmeta["rows"],
-                  "recent": qmeta.get("recent", 0)}
+                  **({"recent": qmeta["recent"]} if "recent" in qmeta else {})}
                  if qmeta.get("truncated") else None)
     if truncated:
+        rescate = (f" + {truncated['recent']} de la segunda pasada por fecha"
+                   if "recent" in truncated else " (la segunda pasada por fecha no pudo correr)")
         print(f"  ⚠ corpus truncado: ADS reporta {truncated['num_found']} y se trajeron "
-              f"{truncated['rows']} + {truncated['recent']} de la segunda pasada por fecha — sigue "
-              "faltando el medio del universo; marcado en ads.json (el lint lo surface)")
+              f"{truncated['rows']}{rescate} — sigue faltando el medio del universo; marcado en "
+              "ads.json (el lint lo surface)")
 
     outdir = cfg.ROOT / "build" / args.slug
     outdir.mkdir(parents=True, exist_ok=True)
@@ -995,7 +1025,12 @@ def main() -> int:
         "n_total": len(recs),                         # lo que se trajo (query + extra_core + chaining)
         "n_core": len(rel),
         "n_candidates": len(candidatos),              # triage pendiente al cerrar esta corrida
-        "n_dropped": len(cfg.load_decisiones(args.slug)),
+        # sólo el carril del chaining: `busqueda` describe la BÚSQUEDA (encontrados → core →
+        # sin juzgar → descartados) y una fuente declarada de un tema off-ADS no participó de
+        # ninguna búsqueda — contarla ahí hace que la cabecera de la nota publique un descarte
+        # que nadie descartó de la query (#81).
+        "n_dropped": sum(1 for d in cfg.load_decisiones(args.slug).values()
+                         if cfg.es_del_carril(d, "chaining")),
         "truncated": bool(truncated),
         "almagesto_version": cfg.ALMAGESTO_VERSION,
         # La LENTE con la que se clasificó, textual (#64 → auditoría 1.10.3). `almagesto_version`

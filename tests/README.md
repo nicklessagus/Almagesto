@@ -38,6 +38,16 @@ Requiere `pytest` (dev-only, no está en `requirements.txt`; los scripts no lo n
    - **Espejo ficha ↔ ground-truth** (#70): el frontmatter de `stars/` vale lo que dice NEA o nada;
      un valor rellenado con literatura es indistinguible del auditable si nadie lo compara.
    - **Validaciones de entrada** que abortan la cadena (`ingest_topic`, citekeys, sources).
+6. **Un test de fix se escribe ANTES del fix y se lo ve fallar.** El orden es
+   **test → rojo → fix → verde**, verificando el rojo. Un test que nunca estuvo rojo no distingue
+   la presencia de la ausencia del fix: no es evidencia. Reemplaza a la mutación post-hoc como
+   camino por defecto (la mutación queda para auditar tests **que ya existen**, donde no hay un
+   "antes"). El protocolo completo —incluidos el porqué medido, la trampa del `.pyc` al mutar y la
+   forma de repartir una tanda grande— está en `vault/STATUS.md`, *Protocolo de fixes*.
+   ⚠ Corolario que ya mordió dos veces: **los asserts de contenido del lint van contra el archivo
+   de reporte, no contra stdout** — la última línea de stdout es la ruta del reporte, que vive bajo
+   el tmpdir de pytest, **cuyo nombre es el del test**, así que cualquier substring del nombre del
+   test matchea sin que el lint haya reportado nada.
 
 ## Layout
 

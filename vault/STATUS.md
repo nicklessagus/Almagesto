@@ -30,14 +30,144 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 | 3ª (1.20.3) | **diff de código completo + cobertura AST + mutación** | defectos de código (un detector con agujero, una heurística ciega a la notación del propio schema, una rama inalcanzable) |
 | 4ª (1.20.4) | **mutación sobre las FEATURES + corrida real de la cadena + mirar los assets** | tests que pasaban por el motivo equivocado, contratos de schema sin test, features no propagadas a los skills, una captura que ya no es el schema |
 | 5ª (1.21.0) | **invariantes cross-artefacto medidos + recorrer la cadena de punta a punta** | agujeros de lógica (el espejo comparaba `len(planets)`), un crash del lint, chequeos hermanos asimétricos, el hand-off de los orquestadores sin el paso nuevo |
+| 6ª (1.22.0) | **diferencial HEAD↔working tree + fuzzing por propiedades + contratos de datos + las afirmaciones del diff ejecutadas + idempotencia/atomicidad + cobertura por mensaje y por flag** | dos pérdidas silenciosas de datos versionados, seis crashes de la compuerta de CI, tres falsos limpios, un test que rompía CI en un clone limpio, garantías afirmadas que no existían |
 
 **Regla:** releer más despacio no encuentra nada nuevo. Si una pasada tiene que agregar valor sobre
 la anterior, tiene que **cambiar de instrumento**, y conviene planificarla así desde el principio:
 (1) doc↔código, (2) medir lo declarado, (3) leer el diff entero y medir cobertura, (4) atacar los
-tests y correr la cosa de verdad. Corolarios: un fix sin **mutación** (revertirlo y ver que su test
-falla) no está verificado, está supuesto — y la **cobertura no es assertion**: la 3ª midió 100% de
-sentencias nuevas ejecutadas y la 4ª encontró siete mutantes vivos justo ahí. Un test verde no dice
-por qué está verde: sólo la mutación lo dice.
+tests y correr la cosa de verdad, (5) medir invariantes cross-artefacto, (6) **generar entradas en
+vez de elegirlas** (fuzzing) y **ejecutar lo que la doc afirma** en vez de leerlo.
+La 6ª agregó un corolario propio: **la clase de defecto viaja más lejos que el sitio**. Su tanda
+previa diagnosticó bien (`X.get(k) or {}` sobre forma no garantizada) y arregló **cuatro sitios**;
+el fuzz mostró los cuatro verdes y el mismo idioma vivo en **59 líneas** más. Cuando una pasada
+identifica un defecto de clase, lo que sigue no es el guard: es el **barrido** (helper único +
+fuzz permanente).
+El instrumento que **todavía falta** —y que estas seis no pueden dar— es correr sobre un **corpus
+poblado**: tres hallazgos de la 6ª salieron de ahí (el deadlock de #69 con 22 de 25 notas reales) y
+ninguna pasada sobre bóveda vacía podía verlos, porque en vacío toda categoría da `(0)` y el test no
+distingue "pasa" de "ni miró". Corolarios: un fix **cuyo test nunca se vio fallar** no está
+verificado, está supuesto (ver el protocolo de abajo) — y la **cobertura no es assertion**: la 3ª
+midió 100% de sentencias nuevas ejecutadas y la 4ª encontró siete mutantes vivos justo ahí. Un test
+verde no dice por qué está verde.
+
+## Protocolo de fixes — test rojo primero (2026-08-23)
+
+**Regla dura: ningún fix entra sin que su test se haya visto FALLAR contra el código con el
+defecto vivo.** Un test que nunca estuvo rojo no es evidencia de nada: no distingue la presencia de
+la ausencia del fix. El orden es **test → rojo → fix → verde**, en ese orden y verificando el rojo,
+no al revés.
+
+Esto **reemplaza** a la mutación post-hoc (arreglar, revertir el fix, ver que el test falla,
+restaurar) como camino por defecto. Las dos prueban lo mismo; el rojo-primero es mejor por tres
+motivos medidos en la auditoría del 2026-08-23:
+
+1. **La mutación post-hoc mide una reconstrucción, no el bug.** Al revertir "el fix" estás
+   adivinando cómo era el código sin él. Medido: de los tests de la 6ª pasada, **7 fallaban contra
+   el código viejo sólo por símbolo ausente** (`ImportError` de una función que todavía no
+   existía) — lo que **no** prueba que el test ejercite el comportamiento. Hubo que escribir
+   mutantes dirigidos para saberlo. El rojo-primero corre contra el defecto real.
+2. **Cuesta una corrida en vez de tres**, y no se puede saltear en silencio: la mutación post-hoc
+   es un paso separado que se olvida, y este repo ya registró que se olvidaba.
+3. **Caza el verde-falso antes de que se fosilice.** Escribiendo los tests rojos de esta tanda, uno
+   pasó en verde desde el principio y sólo se notó porque *se esperaba rojo*: asertaba un substring
+   contra **stdout**, y el lint imprime al final la ruta del reporte, que vive bajo el tmpdir de
+   pytest —cuyo nombre es el del test—. Con mutación post-hoc ese test habría entrado a la suite
+   como cobertura falsa. Corolario operativo: **los asserts de contenido del lint van contra el
+   archivo de reporte, nunca contra stdout.**
+
+**La mutación sigue siendo obligatoria en un caso**, porque el rojo-primero no puede cubrirlo: para
+**auditar tests que ya existen** (no hay un "antes"), que es justo lo que hacen las pasadas de
+auditoría. Ahí sí: revertir la línea del fix y verificar que su test cae.
+
+⚠ **Al mutar hay que borrar `__pycache__` y correr `python -B`.** Una mutación que conserva el
+tamaño del archivo dentro del mismo segundo revalida el `.pyc` y da un falso *"ningún test muere"* —
+pasó en la primera tanda de mutación de esta auditoría.
+
+**Forma de trabajo cuando la tanda es grande** (probada en esta auditoría, 12 hallazgos):
+escribir **todos** los tests rojos primero en un archivo `tests/test_zz_fix_*.py` con un test por
+defecto y el *por qué* en el docstring; verificar que **todos** fallan; recién ahí repartir los
+fixes **por archivo dueño** (un ejecutor por script, sin solapamiento, y **prohibido tocar
+`tests/`**: los tests son el criterio de aceptación, no material del ejecutor); al cerrar, migrar
+los casos a los archivos de test definitivos y borrar el temporal.
+
+## ✅ Framework 1.22.0 (2026-08-23) — sexta pasada: fuzzing, contratos y el registro que se perdía
+
+> Pedida por el usuario ("auditoría de todo lo que se hizo ayer, en profundidad ... buscar errores de
+> implementación y documentación"), planificada con Fable y ejecutada con Opus en cuatro subagentes.
+> **Cubre dos cosas**: la tanda del 22-08 (#70–#81 + cinco pasadas de auditoría) y —sobre todo— la
+> **sexta pasada que había quedado sin commitear, sin entrada de STATUS y sin tag** (+832/−119,
+> 22:11–22:32 del 22-08), que era el material menos revisado de todo.
+> **562 tests verdes** (540 baseline + 22 casos nuevos), lint 0, **30 categorías** de reporte
+> (una nueva), 12 bloqueantes. 1.21.0 → **1.22.0** — es **minor, medido**: sobre la misma bóveda de
+> juguete HEAD daba exit 0 y el working tree da exit 1 con 6 bloqueantes (`normalize_lists` llevó el
+> chequeo de forma de 1 campo a 10), así que **una bóveda existente que hoy pasa puede empezar a
+> fallar**: la instancia tiene que mirarlo.
+
+**Instrumentos nuevos** (las cinco pasadas previas ya habían usado doc↔código, medir lo declarado,
+diff+cobertura+mutación, mutación de features + correr la cadena, e invariantes cross-artefacto):
+**ejecución diferencial HEAD↔working tree** (el propio HEAD como mutante natural de todos los fixes
+a la vez), **fuzzing por propiedades con semilla** (~5000 casos), **contratos de datos campo por
+campo** entre productores y consumidores, **las afirmaciones del propio diff ejecutadas como
+hipótesis**, **idempotencia/orden/atomicidad**, y **cobertura a nivel mensaje de hallazgo y flag de
+CLI** (45 mutaciones dirigidas). Informe completo: `outputs/auditoria-sexta-pasada-2026-08-23.md`.
+
+**El diagnóstico de fondo: la 6ª pasada acertó la tesis y falló el alcance.** Su tesis —un lector que
+hace `X.get(k) or {}` sobre un `X` de forma no garantizada revienta o miente— es correcta, y los
+cuatro lugares donde la aplicó salieron **verdes en el fuzz** (`normalize_lists` 960/960,
+`load_registro`/`load_decisiones` 343/343, `objective_lens` 344/344, round-trip de decisiones
+320/320 con claves hostiles a YAML). Lo que faltó fue el **barrido**: el mismo idioma vive en **59
+líneas** de los 5 scripts que tocó. De ahí el helper único `as_map`/`as_list` en `lib_config`.
+
+- **⛔ Pérdida de datos I — `--migrate-disputes` borraba la disputa que su propio mensaje decía no
+  haber migrado.** El `pop("disputes")` corría **antes** de las guardas de forma, así que los dos
+  `continue` "cobardes" saltaban la migración con el dato ya fuera del dict y el `write_text` final
+  lo borraba del disco: se perdían el `ref` (bibcode) y el `alt` (valor discrepante), y después el
+  lint quedaba **en verde afirmando que no hay desacuerdos** — lo que #71 existe para impedir.
+  Contradecía el comentario de cabecera de la propia función ("NO toca el archivo"). Lo encontraron
+  los cuatro subagentes por caminos distintos.
+- **⛔ Pérdida de datos II — el registro versionado se perdía en silencio.** Registro corrupto →
+  `load_registro` devuelve `{}` (tolerancia **nueva** de la 6ª) → el siguiente `save_decisiones`
+  reescribe el archivo dejándolo en 4 líneas, con `busqueda` entera y 2 de 3 juicios borrados,
+  `exit 0`, **imprimiendo** *"los dos lados de la decisión sobreviven al clon"* justo cuando los
+  destruyó. Tres vectores medidos: write truncado; un `:` sin comillas en un motivo en español —**la
+  edición a mano que el propio framework instruye**—; y concurrencia (registro de 111 KB: **17 de 46
+  lecturas** vieron el archivo torn; dos `--drop` en paralelo ×20: **19 de 40 decisiones perdidas**).
+  `save_registro` ahora es atómico (tmp+rename) y **rehúsa pisar** un registro que no parsea.
+- **⛔ Seis clases de traceback tumbaban la compuerta de CI** (`retraction:` escalar, `objective.yaml`
+  inválido —reachability máxima: el skill `setup` hace que el agente escriba **regex dentro de
+  YAML**—, registro no-mapa, `ads.json` no-objeto, `triage.json` con `decisiones: 3`, ground-truth
+  con `K_ms` no numérico). Doblemente malo: el proceso sale con **exit 1**, indistinguible de "hay
+  bloqueantes", y como el reporte se escribe al final **no se reescribe** → queda el de una corrida
+  previa leyéndose como vigente.
+- **⛔ Un test nuevo rompía la suite en un clone limpio.** `test_segunda_pasada_vacia_...` no era
+  hermético: leía el `vault/config/ads_dev_key` **real**, que está gitignored, así que en CI o en una
+  máquina nueva moría con `RuntimeError` antes de ejercitar nada. Verificado en un worktree sin
+  archivos gitignored.
+- **Tres falsos limpios más.** El **registro ilegible** devolvía "Triage pendiente (0)" sobre un
+  registro que declaraba 3 candidatos sin juzgar (el cero inventado de #64, por otra puerta), y la
+  docstring nueva de `load_registro` **afirmaba lo contrario** ("el lint lo reporta"). El **`host`
+  del ground-truth no-mapa** dejaba de vigilar los cuatro campos estelares sin reportar nada, y
+  encima producía hallazgos fantasma. Y `planets[].disputes` escalar dejaba el lint **mudo** —se
+  cambió un crash por silencio— mientras un string contaba **una disputa por carácter**.
+- **Un chequeo prometido que no existía:** el comentario de `load_decisiones` afirmaba que el lint
+  reporta una entrada de `decisiones` que no es un mapa. No existía → el triage volvía a proponer lo
+  ya descartado **sin el motivo**, el bug que #51 cerró. Es la categoría 30 del reporte.
+- **Deadlock de #69:** el lint marcaba la nota sin `GENERATOR_LINE` y recetaba `--restamp-headers`,
+  que la salteaba si tenía `"Capa LLM"` — o sea **justo las notas marcadas**: 22 de 25 en el corpus
+  real de Almagesto-RV, estampando **0 de 25**. El backlog no se podía cerrar con la herramienta
+  documentada, y el modo de falla era el no-op silencioso que #69 existe para detectar.
+- **`es_del_carril` no había llegado al tercer consumidor** (`ingest_topic`), y **ninguno de los dos
+  que sí filtran tenía test**: los mutantes que les sacan el filtro sobrevivían la suite entera.
+- **Lo que salió bien, medido:** **cero tests decorativos** (39/39 node-ids nuevos fallan en
+  `v1.21.0`), cadena **idempotente** (`lint` ×2, `make_notes` ×2, `--migrate-disputes` ×2,
+  `--drop-source` ×2), cero código muerto, hallazgos acotados (un `tags:` de 10 000 caracteres da 3
+  hallazgos, no 10 000).
+- **Doc:** `CLAUDE.md` decía *"hoy son seis"* campos incompletos y eran **siete**; los seis hallazgos
+  de robustez del ground-truth **bloqueaban sin estar documentados**; la categoría renombrada
+  ("frontmatter no parseable **o con forma inválida**") no se había propagado a los docstrings de
+  `lint.py`. Corregidos.
+- **Sigue abierto (no es de esta tanda):** el remoto está en **v1.13.0** con 12 tags y 14 commits sin
+  pushear, así que el badge del README publica 1.13.0 — ya fue hallazgo de la 4ª pasada.
 
 ## ✅ Framework 1.21.0 (2026-08-22) — quinta pasada: recorrer la cadena entera, issue por issue
 
@@ -231,6 +361,32 @@ por qué está verde: sólo la mutación lo dice.
   (`LEGACY_DISPUTE_FIELDS` desapareció, `LEGACY_FIELD_TO_GT` sigue en uso por el migrador); y el
   `[[bibcode]]` literal de los bloques nuevos **no** contamina `bench_verify` (exige
   `BIBCODE_RE` + fulltext, así que el placeholder no puede sembrarse como par).
+
+## Backlog — los DOS ejes de prueba con bóveda poblada (anotado 2026-08-23)
+
+> Pedido del usuario durante la auditoría del 23-08. Son **dos pruebas distintas**, con sujeto y
+> variable de control distintos; confundirlas hace que ninguna mida lo que promete.
+
+**(1) Prueba del CÓDIGO — se hace sobre lo que YA está.** Sujeto: el framework. Se corre contra el
+corpus existente de la instancia (**Almagesto-RV**: 908 papers, 4 estrellas, 5 conceptos, 5
+ground-truth, framework en 1.11.0) o contra el `ads.json` congelado de sus corridas. Variable de
+control: **sólo cambia el código**. Es lo que caza los bugs que una bóveda vacía no puede revelar —
+escala (medido: `is_legible` es el **77%** de los 5,6 s del lint sobre 908 notas, con doble parseo
+YAML, 941 → 1882 `safe_load`), cross-referencias, roll-ups, invariantes globales, y el **upgrade
+1.11.0 → 1.22.0**, que es el deploy real. Plan detallado y ensayado: `PLAN_TESTS_BOVEDA_POBLADA.md`
+(generador sintético determinista + la instancia real como tier opt-in; tres tiers de pytest).
+
+**(2) Prueba de CALIDAD — la bóveda en paralelo.** Sujeto: el resultado bibliográfico. Re-ingestar
+lo que tiene Almagesto-RV en una bóveda paralela y comparar las dos síntesis, para ver cómo quedaron
+las mejoras. Mide **calidad del producto**, no corrección del código. **Se espera a que esté todo
+implementado — no empezar sin conversarlo.**
+
+⚠ **Salvedad para (2):** re-ingestar contra ADS hoy **no aísla la variable framework** — las queries
+traen papers nuevos y los conteos de citas cambiaron desde la ingesta original, así que un diff
+crudo mezcla "mejora del framework" con "pasó el tiempo". Para que mida lo que se quiere, la corrida
+nueva tiene que partir del **`ads.json` congelado** de la instancia vieja (o de un snapshot de la
+respuesta de ADS) y variar sólo el código. Eso además la vuelve reproducible y barata de repetir en
+cada versión.
 
 ## Backlog — ¿esto sirve con cualquier agente, no sólo Claude? (anotado 2026-08-22)
 

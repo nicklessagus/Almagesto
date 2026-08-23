@@ -3,8 +3,9 @@
 Uso:
     python scripts/lint.py            # imprime resumen y escribe outputs/lint-<fecha>.md
 
-Detecta: wikilinks rotos (página faltante), **frontmatter no parseable** (nota que empieza con
-`---` pero cuyo YAML no parsea → evade en silencio los chequeos de su tipo; bloqueante),
+Detecta: wikilinks rotos (página faltante), **frontmatter no parseable o con forma inválida**
+(nota que empieza con `---` pero cuyo YAML no parsea, o un campo que el schema declara lista escrito
+como escalar → evade en silencio los chequeos por elemento de su tipo; bloqueante),
 **papers retractados** (flag `retracted` que estampa
 `check_retractions.py` vía Crossref → acá se surface offline; bloqueante), **papers con corrección
 publicada** (`corrections`: erratum/corrigendum/expression-of-concern, mismo origen — NO bloquea,
@@ -48,7 +49,8 @@ su fecha** — antes devolvían 0 sin mirar nada, un "limpio" que no significaba
 incompletos (P_rot null, papers relevantes sin `methods`, `thesis_links` sin `bearing`).
 No modifica nada: reporta para que el agente/usuario decida.
 
-Exit code: 1 si alguna categoría BLOQUEANTE tiene hits (wikilinks rotos, frontmatter no parseable,
+Exit code: 1 si alguna categoría BLOQUEANTE tiene hits (wikilinks rotos, frontmatter no parseable
+o con forma inválida,
 papers retractados, huérfanas, contradicciones
 GT↔ficha, masa inconsistente, thesis_links/disputes colgantes, y los **restos de schemas viejos**
 —`planets[].disputes[]`, `build/<slug>/triage.json`— que el lector ya no mira: el framework no lleva
@@ -197,6 +199,10 @@ def note_files() -> list:
 
 BIBCODE_RE = re.compile(r"^\d{4}[A-Za-z]")   # heurística: target de link que parece bibcode
 
+# Centinela para distinguir "el campo no está" de "está y no sirve" (#75): `fm.get(campo)` colapsa
+# `ausente`, `null`, `""` y `false` en `None`, y esas cuatro exigen mensajes distintos.
+_SIN_MARCA = object()
+
 # ── disputas con posiciones explícitas (#71) ─────────────────────────────────
 # El schema VIEJO (`planets[].disputes[]` con `field`/`ref`/`note`/`alt`) tenía el polo de verdad
 # **hardcodeado en la forma**: el otro lado del desacuerdo era, implícitamente, el valor del
@@ -216,33 +222,90 @@ def note_disputes(fm: dict) -> list:
     """Disputas de una nota como `(field, posiciones)`. **Un solo schema**: leer también el viejo
     sería cargar el lint con dos semánticas para siempre, y el schema viejo no sabe expresar la
     mitad de los casos. Lo que sí hace falta es que la presencia del viejo **grite** en vez de
-    volverse invisible — eso lo reporta `legacy_disputes` como bloqueante, con el comando."""
-    return [(str(d.get("field", "")).strip(), d.get("posiciones") or [])
-            for d in (fm.get("disputes") or []) if isinstance(d, dict)]
+    volverse invisible — eso lo reporta `legacy_disputes` como bloqueante, con el comando.
+
+    Devuelve `(field, posiciones, motivos_de_forma)`. Dos detalles que costaron un bug cada uno:
+    `field` se lee con `or ""` y **no** con el default de `.get` —la clave presente y **nula**
+    (`field:` a secas, la forma normal de dejarla sin llenar) devuelve `None`, y `str(None)` es
+    `"None"`, truthy: el chequeo bloqueante "disputa sin `field`" no disparaba—; y `posiciones`
+    escalar se reporta en vez de llegar a un `len()` que voltea el lint (o a un string que se
+    recorre carácter por carácter, un hallazgo por letra). `normalize_lists` no llega acá: sanea
+    el primer nivel del frontmatter, y esto está anidado."""
+    out = []
+    for d in (fm.get("disputes") or []):
+        if not isinstance(d, dict):
+            continue                       # la forma de la lista ya la reportó normalize_lists
+        campo = str(d.get("field") or "").strip()
+        pos, motivos = d.get("posiciones"), []
+        if pos is not None and not isinstance(pos, list):
+            motivos.append(f"disputa `{campo or '?'}`: `posiciones` no es una lista (es "
+                           f"{type(pos).__name__}) → no se puede leer ninguna posición")
+            pos = []
+        out.append((campo, pos or [], motivos))
+    return out
 
 
-def dispute_shape_issues(fm: dict) -> list:
-    """Motivos por los que `disputes` no tiene la FORMA del schema, antes de mirar su contenido.
-
-    Hermano del chequeo de "posición que no es un mapa": sin esto, una disputa escrita como string
-    (o un `disputes:` que no es lista) la filtraba `note_disputes` **en silencio** — y una disputa
-    que el lector ignora sin decir nada es exactamente el modo de falla que #71 vino a cerrar."""
-    d = fm.get("disputes")
-    if not d:
-        return []
-    if not isinstance(d, list):
-        return [f"`disputes` no es una lista (es {type(d).__name__}) → el lint no puede leer "
-                f"ninguna disputa de esta nota"]
-    n = sum(1 for x in d if not isinstance(x, dict))
-    return [f"{n} entrada(s) de `disputes` que no son un mapa (`field` + `posiciones`)"] if n else []
+# Campos que el schema declara **lista** (CLAUDE.md). `True` = lista de MAPAS.
+# `role` no está: su contrato admite escalar o lista, y se valida aparte.
+LIST_FIELDS = {"tags": False, "aliases": False, "stars": False, "topics": False, "methods": False,
+               "thesis_links": False, "activity_indicators_expected": False,
+               "planets": True, "disputes": True, "corrections": True}
 
 
-def legacy_disputes(fm: dict) -> int:
-    """Cuántas disputas quedan en el schema PRE-1.19.0 (`planets[].disputes[]`). Sin este chequeo, al
-    sacar la tolerancia de lectura esas disputas quedarían **mudas**: el lint no las vería y la
-    bóveda seguiría en verde afirmando que no hay desacuerdos tagueados."""
-    return sum(len(pl.get("disputes") or []) for pl in (fm.get("planets") or [])
-               if isinstance(pl, dict))
+def normalize_lists(fm: dict) -> list:
+    """Deja una LISTA en cada campo que el schema declara lista y devuelve los motivos de las formas
+    inválidas. Normalizar **una vez, al parsear** es lo que evita que cada lector tenga que
+    defenderse por su cuenta: el lint es la compuerta de CI y ante un frontmatter raro tiene que
+    **reportar**, no morirse — un escalar donde va una lista lo volteaba con un `TypeError`, y un
+    escalar iterable (un string) se recorría **carácter por carácter**, inventando un hallazgo por
+    letra. Medido con un fuzz de tipos sobre los campos documentados: 32 combinaciones lo volteaban.
+
+    La nota no se "arregla": los elementos inservibles se sacan de la vista del lint y se reportan,
+    que es la misma política que el resto de los chequeos de forma (#71)."""
+    motivos = []
+    for campo, de_mapas in LIST_FIELDS.items():
+        v = fm.get(campo)
+        if v is None or v == "" or v == []:
+            continue
+        if not isinstance(v, list):
+            motivos.append(f"`{campo}` no es una lista (es {type(v).__name__}) → los chequeos por "
+                           f"elemento de esta nota no corren")
+            fm[campo] = []
+            continue
+        ok = [x for x in v if isinstance(x, dict)] if de_mapas else \
+             [x for x in v if isinstance(x, (str, int, float, bool))]
+        if len(ok) != len(v):
+            que = "un mapa" if de_mapas else "un valor simple"
+            motivos.append(f"{len(v) - len(ok)} entrada(s) de `{campo}` que no son {que} → esas "
+                           f"quedan fuera de todo chequeo por elemento")
+            fm[campo] = ok
+    return motivos
+
+
+def legacy_disputes(fm: dict) -> tuple[int, list]:
+    """`(n_disputas, motivos_forma)` del schema PRE-1.19.0 (`planets[].disputes[]`). Sin este
+    chequeo, al sacar la tolerancia de lectura esas disputas quedarían **mudas**: el lint no las
+    vería y la bóveda seguiría en verde afirmando que no hay desacuerdos tagueados.
+
+    Sólo una LISTA es la forma real del schema viejo (una entrada por disputa): se cuenta con
+    `len()`. Cualquier otra forma —`disputes: 5` (escalar: `len()` revienta con `TypeError` y
+    volteaba el lint entero) o `disputes: "abcdefg"` (string: `len()` no revienta pero cuenta 7
+    disputas, UNA POR CARÁCTER)— no es N disputas, es `disputes` corrupto: se reporta como motivo
+    de forma inválida en vez de inflar (o voltear) el conteo."""
+    n, motivos = 0, []
+    for pl in (fm.get("planets") or []):
+        if not isinstance(pl, dict):
+            continue
+        d = pl.get("disputes")
+        if d is None:
+            continue
+        if isinstance(d, list):
+            n += len(d)
+        else:
+            letra = pl.get("letter", "?")
+            motivos.append(f"planeta `{letra}`: `disputes` no es una lista (es {type(d).__name__}) "
+                           f"→ schema viejo con forma inválida, no se puede leer ni migrar")
+    return n, motivos
 
 
 # Vocabulario CERRADO de `role` (#73). Es chico y cerrado a propósito: el rol define QUÉ OPERACIÓN
@@ -262,14 +325,33 @@ ROLES = ("fundacional", "aplicacion", "arbitro")
 MIRROR_HOST = (("spectral_type", "spectral_type"), ("teff_K", "teff_K"),
                ("dist_pc", "dist_pc"), ("P_rot_days", "st_rotp_days"))
 MIRROR_PLANET = ("P_days", "K_ms", "e", "mass_earth", "status")
-# P_rot documentado en la PROSA (que es donde va cuando NEA no lo tiene): mención + respaldo en la
-# misma línea. Heurística deliberada, como la de fuga de implementación: barata y de alta señal.
-# La clase entre `P` y `rot` cubre la notación que el propio CLAUDE.md pide en `vault/wiki/`
-# ($...$): `P_rot`, `$P_{rot}$`, `$P_{\rm rot}$`, `P$_{\rm rot}$`, `$P_\mathrm{rot}$`. El
-# `(?![a-z])` evita que "Protostellar" cuente como mención.
-PROT_CITED_RE = re.compile(r"(?i)(P[\s_${}\\]*(?:(?:rm|mathrm|text)[\s{]*)?rot(?![a-z])"
-                           r"|per[ií]odo de rotaci[óo]n|rotation period)"
-                           r"[^\n]*(\[\[[^\]]+\]\]|inferencia)")
+# P_rot documentado en la PROSA (que es donde va cuando NEA no lo tiene). Heurística deliberada,
+# como la de fuga de implementación: barata y de alta señal. Tres decisiones, cada una por un modo
+# de falla medido:
+#   · la clase entre `P` y `rot` cubre la notación que el propio CLAUDE.md pide en `vault/wiki/`
+#     (`$P_{\rm rot}$`, `P$_{\rm rot}$`, `$P_\mathrm{rot}$`); `(?![a-z])` evita que "Protostellar"
+#     cuente como mención;
+#   · el ámbito es la ORACIÓN, no la línea: el repo envuelve la prosa a ~100 columnas, así que
+#     "El período de rotación es\n34 d [[bib]]" quedaba sin respaldo, y la cita puede ir **antes**
+#     de la mención ("[[bib]] mide un período de rotación de 34 d");
+#   · un negador descarta la oración: "no se conoce el período de rotación [[bib]]" es literalmente
+#     lo que un LLM escribe en `## Huecos`, y apagaba el único backlog que existe para ese hueco.
+PROT_MENTION = re.compile(r"(?i)P[\s_${}\\]*(?:(?:rm|mathrm|text)[\s{]*)?rot(?![a-z])"
+                          r"|per[ií]odo de rotaci[óo]n|rotation period")
+PROT_CITE = re.compile(r"\[\[[^\]]+\]\]|inferencia")
+PROT_NEG = re.compile(r"(?i)no se conoce|no se sabe|sin medir|desconocid|no hay |ausen"
+                      r"|falta[ns]? |sin determinar|nunca se|no\s+(?:est[áa]|fue|ha sido)?"
+                      r"\s*(?:medid|determinad|conocid|publicad)")
+
+
+def prot_documentado(body: str) -> bool:
+    """¿El cuerpo documenta un `P_rot` con respaldo? Por ORACIÓN: mención + cita (en cualquier
+    orden) y sin negador. Ver el comentario de arriba para el porqué de cada parte."""
+    for oracion in re.split(r"(?<=[.;])\s+|\n\s*\n", body):
+        if PROT_MENTION.search(oracion) and PROT_CITE.search(oracion) \
+                and not PROT_NEG.search(oracion):
+            return True
+    return False
 
 
 def same_value(a, b) -> bool:
@@ -301,12 +383,15 @@ def mirror_issues(slug: str, fm: dict, gt: dict) -> list:
         else:
             out.append((slug, f"`{campo}: {val_ficha}` contradice el ground-truth "
                               f"({val_gt!r}) → si sale de un paper es una `disputes[]`, no una "
-                              f"sobreescritura; re-corré la cadena para restaurar el valor de NEA"))
+                              f"sobreescritura; restauralo a mano (`make_notes` NO pisa una ficha "
+                              f"existente: `--force` la regenera entera y borra la prosa)"))
 
     for campo, key in MIRROR_HOST:
         check(campo, fm.get(campo), host.get(key))
     gt_planets = {str(p.get("letter")): p for p in (gt.get("planets") or [])}
-    letras = [str(pl.get("letter")) for pl in (fm.get("planets") or []) if isinstance(pl, dict)]
+    normalize_lists(fm)        # la forma ya la reportó el barrido de notas; acá sólo hace falta
+    usables = fm.get("planets") or []                                  # que no rompa el espejo
+    letras = [str(pl.get("letter")) for pl in usables]
     # QUÉ planetas, no CUÁNTOS. Comparar los largos deja pasar el caso que más importa: dos listas
     # del mismo tamaño que no son los mismos planetas —una señal no confirmada escrita en
     # `planets[]` mientras falta uno que NEA sí confirma—. Ese es justo el modo de falla que el
@@ -322,7 +407,7 @@ def mirror_issues(slug: str, fm: dict, gt: dict) -> list:
                           f"se actualiza a mano o con `--force`)"))
     for letra in sorted({l for l in letras if letras.count(l) > 1}):
         out.append((slug, f"planeta `{letra}` repetido en `planets[]` ({letras.count(letra)} veces)"))
-    for pl in (fm.get("planets") or []):
+    for pl in usables:
         letra = str(pl.get("letter"))
         ref = gt_planets.get(letra)
         if ref is None:
@@ -360,7 +445,8 @@ def main() -> int:
     incoming: dict[str, int] = {n: 0 for n in names}
     kinds: dict[str, list] = {}
     broken, incomplete, contradictions = [], [], []
-    fm_broken: list = []               # (stem, motivo) — frontmatter no parseable (evade chequeos)
+    fm_broken: list = []               # (stem, motivo) — frontmatter no parseable o con forma
+                                       # inválida (evade los chequeos por elemento de su tipo)
     retracted: list = []               # (stem, "<tipo> <fecha>") — papers marcados retracted (check_retractions)
     corrections: list = []             # (stem, "<tipo> (<fecha>)") — corrección no-retractante (#52)
     pending_srcs: list = []            # (stem, "<motivo> — puntero") — fuentes derivadas al usuario
@@ -374,6 +460,7 @@ def main() -> int:
     bad_roles: list = []               # (stem, valor) — `role` fuera del vocabulario cerrado (#73)
     cited_in_entity: set = set()       # bibcodes citados desde una ficha/concepto (#75)
     extracted: list = []               # (stem, marca `no_sintetizado`) de papers YA extraídos (#75)
+    bad_decisions: list = []           # (slug, clave) — decisión del registro que no es un mapa
 
     refs_dir = str(cfg.RAW / "refs")
     refs_stems = {basename(f)[:-3] for f in files if f.startswith(refs_dir)}  # docs de diseño, no fichas
@@ -381,6 +468,8 @@ def main() -> int:
         text = open(f, encoding="utf-8").read()
         fm = split_fm(text)
         stem = basename(f)[:-3]
+        for motivo in normalize_lists(fm):     # ANTES de cualquier lector (ver normalize_lists)
+            fm_broken.append((stem, motivo))
         kinds[stem] = fm.get("tags", []) or []
         err = fm_error(text)
         if err:
@@ -393,7 +482,8 @@ def main() -> int:
         in_verifiable_note = in_dir(f, "queries") or in_dir(f, "concepts")   # concepts/ incluye hypotheses/
         # notas de ENTIDAD (#75): son las que sintetizan un sujeto. Una cita que sólo aparece en una
         # query no es "el paper llegó a la bóveda": la query es una respuesta puntual, no la síntesis.
-        in_entity_note = f.startswith((str(cfg.STARS), str(cfg.CONCEPTS)))
+        in_entity_note = in_dir(f, "stars") or in_dir(f, "concepts")   # #33: no comparar paths
+                                                                       # como texto (stars-borradores)
         nbib = 0                              # citas [[bibcode]] en esta nota
         for tgt in LINK_RE.findall(text):
             tgt = tgt.strip()
@@ -403,10 +493,15 @@ def main() -> int:
                 incoming[tgt] += 1
             elif tgt not in names:
                 broken.append((stem, tgt))
+            # #75: "citado" se mide contra el STEM de la nota de paper, así que se registra todo
+            # target de una nota de entidad — no sólo los que parecen bibcode. Una clave sintética
+            # off-ADS (`2006RasmussenWilliams`, y peor: cualquiera que no empiece con AAAA+letra)
+            # sí matchea BIBCODE_RE… pero un citekey inválido no, y el paper quedaba reportado como
+            # "no sintetizado" para siempre AUNQUE la ficha lo citara, sin forma de cerrarlo.
+            if in_entity_note:
+                cited_in_entity.add(tgt)
             if BIBCODE_RE.match(tgt):
                 nbib += 1
-                if in_entity_note:
-                    cited_in_entity.add(tgt)
                 if in_verifiable_note and tgt not in fulltext:
                     unverifiable.append((stem, f"cita {tgt} sin fulltext (no chequeable claim↔fuente)"))
         # cobertura: un concepto/hipótesis que afirma sin ninguna cita [[bibcode]] no es chequeable
@@ -450,13 +545,16 @@ def main() -> int:
         # Disputas (#71): a nivel NOTA y con posiciones explícitas — vale para estrellas y para
         # conceptos, donde la disputa es simétrica por definición (no hay valor de frontmatter
         # contra el cual poner un `alt`). Las del schema viejo NO se leen: se detectan y bloquean.
-        if (n_viejas := legacy_disputes(fm)):
+        n_viejas, motivos_viejas = legacy_disputes(fm)
+        if n_viejas:
             old_disputes.append((stem, f"{n_viejas} disputa(s) en `planets[].disputes[]`, el schema "
                                        f"pre-1.19.0 que el lint ya no lee → migralas con "
                                        f"`python scripts/make_notes.py --migrate-disputes` (#71)"))
-        for motivo in dispute_shape_issues(fm):
-            bad_disputes.append((stem, motivo))
-        for campo, posiciones in note_disputes(fm):
+        for motivo in motivos_viejas:
+            old_disputes.append((stem, motivo))
+        for campo, posiciones, motivos_forma in note_disputes(fm):
+            for motivo in motivos_forma:
+                bad_disputes.append((stem, motivo))
             if not campo:
                 bad_disputes.append((stem, "disputa sin `field`: no se sabe sobre QUÉ es el desacuerdo"))
             if len(posiciones) < 2:
@@ -469,18 +567,29 @@ def main() -> int:
                                                f"(`ref`/`source` + `value`)"))
                     continue
                 ref, src = str(pos.get("ref") or "").strip(), str(pos.get("source") or "").strip()
+                # `source` se valida SIEMPRE que esté, no sólo cuando falta `ref`: una posición con
+                # los dos declara dos dueños distintos y esquivaba el vocabulario cerrado entero.
+                if src and src not in DISPUTE_SOURCES:
+                    bad_disputes.append((stem, f"disputa `{campo}`: `source: {src}` fuera del "
+                                               f"vocabulario ({'/'.join(DISPUTE_SOURCES)})"))
+                if ref and src:
+                    bad_disputes.append((stem, f"disputa `{campo}`: posición con `ref` Y `source` "
+                                               f"→ una posición la sostiene UNA fuente"))
                 if ref:
                     dispute_refs.append((stem, campo, ref))
-                elif src:
-                    if src not in DISPUTE_SOURCES:
-                        bad_disputes.append((stem, f"disputa `{campo}`: `source: {src}` fuera del "
-                                                   f"vocabulario ({'/'.join(DISPUTE_SOURCES)})"))
-                else:
+                elif not src:
                     bad_disputes.append((stem, f"disputa `{campo}`: posición sin `ref` ni `source` "
                                                f"→ no se sabe quién la sostiene"))
 
         # chequeos de completitud por tipo
         tags = fm.get("tags", []) or []
+        # Una nota en `papers/` sin `tags: [paper]` queda invisible para TODOS los chequeos de su
+        # tipo —incluido `retracted`, que es frontera dura— y basta un link entrante para que
+        # tampoco salga como huérfana: muda del todo. Es el hermano del frontmatter no parseable
+        # ("la nota evade los chequeos de su tipo"), que ya es bloqueante por el mismo motivo.
+        if in_dir(f, "papers") and "paper" not in tags and not err:   # con YAML roto ya se reportó
+            fm_broken.append((stem, "nota en `papers/` sin `tags: [paper]` → evade TODOS los "
+                                    "chequeos de su tipo (retracción, PDF, role, citas)"))
         if "star" in tags:
             body = text.split("---", 2)[-1] if text.startswith("---") else text
             # `P_rot_days` nulo NO es de por sí un campo incompleto (#70): el frontmatter es espejo
@@ -488,7 +597,7 @@ def main() -> int:
             # rellene con literatura, justo lo que rompe la capa auditable. Lo accionable es otra
             # cosa: que el P_rot esté DOCUMENTADO en la prosa, con su cita (o marcado `inferencia`
             # si es lectura propia). Antes esto se reportaba para siempre, sin arreglo posible.
-            if fm.get("P_rot_days") in (None, "") and not PROT_CITED_RE.search(body):
+            if fm.get("P_rot_days") in (None, "") and not prot_documentado(body):
                 incomplete.append((stem, "sin P_rot: NEA no lo trae y el cuerpo no documenta uno "
                                          "citado → buscarlo en la literatura y dejarlo en la prosa "
                                          "con su `[[bibcode]]` (el frontmatter NO se rellena)"))
@@ -496,11 +605,17 @@ def main() -> int:
                 incomplete.append((stem, "activity_indicators_expected vacío"))
             # autosuficiencia (proxy estructural): cada planeta del frontmatter debe discutirse en
             # la prosa (la ficha tiene que alcanzar sola; ver "estándar de la ficha" en CLAUDE.md).
-            for pl in (fm.get("planets") or []):
+            for pl in fm.get("planets") or []:
                 l = str(pl.get("letter", "")).strip()
                 if not l:
                     continue
-                pats = [rf"\*\*[^*]*\b{re.escape(l)}\b[^*]*\*\*",  # negrita (incl. **b/c/d**)
+                # `[^*\n]*`, no `[^*]*`: sin el `\n` el patrón no matchea UNA negrita sino todo
+                # el texto ENTRE dos negritas cualesquiera. Con el texto que #72 agregó al template
+                # ("11.5 d es el armónico de 34 d", entre dos negritas), el planeta **d** —de las
+                # letras más frecuentes del corpus— quedaba "discutido" en una ficha con CERO
+                # líneas de prosa: falso limpio permanente en el único proxy estructural de
+                # autosuficiencia que la doc publicita.
+                pats = [rf"\*\*[^*\n]*\b{re.escape(l)}\b[^*\n]*\*\*",  # negrita (incl. **b/c/d**)
                         rf"\|\s*{re.escape(l)}\s*\|",               # celda de tabla
                         rf"_{re.escape(l)}\b",                       # subíndice $M_b$/$K_b$
                         rf"\b{re.escape(l)}\s*\("]                   # "b (P=...)"
@@ -511,7 +626,11 @@ def main() -> int:
             # offline. Una fuente retractada citada viola el contrato de la bóveda (todo respaldado
             # por fuente citable válida) → revisar cada afirmación que la cita.
             if fm.get("retracted"):
-                rt = fm.get("retraction") or {}
+                # `or {}` no alcanza si `retraction` es un ESCALAR (edición a mano, p. ej.
+                # `retraction: "retractado en 2021"`): un string es truthy, no cae en el `or`, y
+                # `.get` revienta con AttributeError — la compuerta de CI muerta por el mismo
+                # frontmatter raro que este chequeo existe para reportar (#h03).
+                rt = cfg.as_map(fm.get("retraction"))
                 retracted.append((stem, f"{rt.get('type', 'retraction')} ({rt.get('date') or 's/f'})"))
             # corrección no-retractante (#52, backlog): erratum/corrigendum/expression-of-concern.
             # NO bloquea —el paper sigue siendo citable—, pero un corrigendum cambia justamente el
@@ -528,14 +647,20 @@ def main() -> int:
             if fm.get("pending_source"):
                 ptr = fm.get("doi") or fm.get("source_url") or "(sin puntero conocido)"
                 pending_srcs.append((stem, f"{fm['pending_source']} — proveer la fuente; puntero: {ptr}"))
-            if fm.get("relevance") == "high" and not fm.get("methods"):
+            # el tooling escribe siempre `high`/`low`; el `.lower()` cubre la edición a mano,
+            # donde un `Low` entraba a la población que el recorte quería dejar afuera.
+            relevancia = str(fm.get("relevance") or "").strip().lower()
+            if relevancia == "high" and not fm.get("methods"):
                 incomplete.append((stem, "paper relevante sin methods (sin extraer)"))
             # El eslabón SIGUIENTE (#75): el paper que SÍ se extrajo. `methods` poblado significa
             # que alguien gastó en él el paso más caro de la cadena; si su contenido nunca llegó a
             # una ficha ni a un concepto, la extracción se perdió. Se recolecta acá y se resuelve
             # después del barrido, cuando ya se sabe qué citó cada nota de entidad.
-            if fm.get("methods") and fm.get("relevance") != "low":
-                extracted.append((stem, fm.get("no_sintetizado")))
+            if fm.get("methods") and relevancia != "low":
+                # centinela: `no_sintetizado: ""` / `null` / `false` / `0` son marca PRESENTE pero
+                # sin motivo — con `.get(campo)` a secas colapsaban con "no hay marca" y el lint
+                # respondía "poné `no_sintetizado`" sobre una nota que ya lo tenía puesto.
+                extracted.append((stem, fm.get("no_sintetizado", _SIN_MARCA)))
             if fm.get("thesis_links") and not fm.get("bearing"):
                 incomplete.append((stem, "thesis_links sin bearing"))
             # ROL del paper (#73). `bearing` dice la POSTURA respecto de una tesis; `role` dice qué
@@ -552,13 +677,17 @@ def main() -> int:
                                             f"contraste cross-paper"))
             # Mismo recorte que el de #75 tres líneas arriba: a una nota no-core (escrita con
             # `--all`) no se le pide rol, igual que no se le pide que aterrice en una síntesis.
-            if fm.get("methods") and not roles and fm.get("relevance") != "low":
+            if fm.get("methods") and not roles and relevancia != "low":
                 incomplete.append((stem, "paper extraído sin `role` (fundacional/aplicacion/arbitro) "
                                          "→ sin rol, contrastarlo contra otro no está definido"))
-            for tl in (fm.get("thesis_links") or []):
+            for tl in fm.get("thesis_links") or []:
                 thesis_refs.setdefault(str(tl), []).append(stem)
             # PDF ↔ disco (higiene; WARN): el campo `pdf` debe reflejar el PDF real bajado.
             pdf, on_disk = fm.get("pdf"), pdf_on_disk.get(stem)
+            if pdf is not None and not isinstance(pdf, str):
+                fm_broken.append((stem, f"`pdf` no es una ruta (es {type(pdf).__name__}) → el "
+                                        f"chequeo PDF ↔ disco de esta nota no corre"))
+                pdf = None
             pdf_ok = False
             if pdf:
                 pdf_ok = (cfg.WIKI / "papers" / pdf).resolve().exists()
@@ -607,13 +736,71 @@ def main() -> int:
 
     # contradicción ground-truth ↔ ficha (qué planetas + campo por campo) + masa sospechosa
     mass_issues = []
-    for gtf in glob.glob(str(cfg.GROUND_TRUTH / "*.json")):
-        gt = json.loads(open(gtf, encoding="utf-8").read())
-        slug = gt.get("slug") or basename(gtf)[:-5]   # robusto si un GT a mano no trae 'slug'
-        mstar = (gt.get("host") or {}).get("mass_msun")
-        for p in gt.get("planets", []) or []:
+    vistos_gt = set()
+    for gtf in sorted(glob.glob(str(cfg.GROUND_TRUTH / "*.json"))):
+        # El NOMBRE DEL ARCHIVO manda, no el campo `slug` de adentro: el archivo lo escribe
+        # `fetch_ground_truth --slug <slug>` con el mismo slug que nombra a `stars/<slug>.md`, así
+        # que es el que aparea el espejo con su ficha. Cuando el campo interno decía otra cosa
+        # —renombre a medias: el skill `maintain` C nombra el archivo, la nota y el registro, pero
+        # no el campo— el espejo buscaba una ficha inexistente y quedaba MUDO en silencio, que es
+        # justo lo que #70 existe para impedir.
+        slug = basename(gtf)[:-5]
+        vistos_gt.add(slug)
+        try:
+            gt = json.loads(open(gtf, encoding="utf-8").read())
+        except (ValueError, OSError) as e:
+            # El lint es la compuerta de CI: un ground-truth ilegible se REPORTA (y su ficha queda
+            # sin vigilancia), no voltea el barrido entero.
+            contradictions.append((slug, f"`raw/ground_truth/{slug}.json` no se pudo leer "
+                                         f"({type(e).__name__}) → el espejo #70 no puede vigilar "
+                                         f"esa ficha; re-corré `fetch_ground_truth.py {slug}`"))
+            continue
+        if not isinstance(gt, dict):
+            contradictions.append((slug, f"`raw/ground_truth/{slug}.json` no es un objeto JSON "
+                                         f"(es {type(gt).__name__}) → el espejo no puede leerlo"))
+            continue
+        if (interno := gt.get("slug")) and str(interno) != slug:
+            contradictions.append((slug, f"el JSON declara `slug: {interno}` y el archivo es "
+                                         f"{slug}.json → renombre a medias; corregí el campo (el "
+                                         f"archivo es el que aparea con `stars/{slug}.md`)"))
+        host = gt.get("host")
+        if host is not None and not isinstance(host, dict):
+            # Hermano del `planets` no-lista de abajo: sin este chequeo un `host` malformado se
+            # reemplazaba por `{}` MÁS ABAJO en silencio y el espejo #70 dejaba de vigilar los
+            # cuatro campos estelares (spectral_type/teff_K/dist_pc/P_rot_days) sin reportar nada
+            # — y de paso disparaba hallazgos FALSOS ("P_rot_days: 1.0 contradice el ground-truth")
+            # que apuntan al síntoma equivocado (host vacío, no el valor de la ficha).
+            contradictions.append((slug, f"`host` del ground-truth no es un mapa (es "
+                                         f"{type(host).__name__}) → el espejo #70 no puede vigilar "
+                                         f"spectral_type/teff_K/dist_pc/P_rot_days de esta ficha"))
+        mstar = host.get("mass_msun") if isinstance(host, dict) else None
+        planetas_gt = gt.get("planets") or []
+        if not isinstance(planetas_gt, list):
+            contradictions.append((slug, f"`planets` del ground-truth no es una lista (es "
+                                         f"{type(planetas_gt).__name__})"))
+            planetas_gt = []
+        malformados = [x for x in planetas_gt if not isinstance(x, dict)]
+        if malformados:
+            contradictions.append((slug, f"{len(malformados)} entrada(s) de `planets` del "
+                                         f"ground-truth que no son un mapa → quedan fuera del espejo"))
+        planetas_gt = [x for x in planetas_gt if isinstance(x, dict)]
+        gt = {**gt, "planets": planetas_gt, "host": host if isinstance(host, dict) else {}}
+        for p in planetas_gt:
             if p.get("mass_flag"):                       # ya marcado por el fetch
                 mass_issues.append((slug, f"{p.get('letter')}: {p['mass_flag']}"))
+                continue
+            # Ground-truth corrupto (K_ms/P_days/e/mass_msun editado a mano como texto): alimentar
+            # eso a `msini_earth` revienta comparando un string con 0 (`K_ms <= 0`) — se detecta
+            # ANTES de llamarlo y se reporta como ground-truth corrupto en vez de tumbar el barrido
+            # con un TypeError (#h03).
+            no_numericos = [c for c, v in (("K_ms", p.get("K_ms")), ("P_days", p.get("P_days")),
+                                           ("e", p.get("e")), ("mass_msun", mstar))
+                            if v is not None and (isinstance(v, bool)
+                                                   or not isinstance(v, (int, float)))]
+            if no_numericos:
+                mass_issues.append((slug, f"{p.get('letter')}: ground-truth con valor no numérico "
+                                          f"en {', '.join(no_numericos)} → no se puede calcular la "
+                                          f"m·sini implícita; revisá `raw/ground_truth/{slug}.json`"))
                 continue
             chk = msini_earth(p.get("K_ms"), p.get("P_days"), p.get("e"), mstar)
             m = p.get("mass_earth")
@@ -625,7 +812,29 @@ def main() -> int:
                                           f"≠ m·sini implícita {chk:.3g} M⊕"))
         sf = cfg.STARS / f"{slug}.md"
         if sf.exists():
-            contradictions += mirror_issues(slug, split_fm(sf.read_text(encoding="utf-8")), gt)
+            texto_ficha = sf.read_text(encoding="utf-8")
+            fm_ficha = split_fm(texto_ficha)
+            if not fm_ficha:
+                # Sin frontmatter legible, comparar campo por campo produciría un hallazgo fantasma
+                # por cada valor de NEA ("teff_K: None contradice…") apuntando al síntoma
+                # equivocado: el hallazgo real es que la ficha no tiene contrato.
+                contradictions.append((slug, "la ficha no tiene frontmatter legible → el espejo #70 "
+                                             "no puede compararla con el ground-truth"))
+            else:
+                contradictions += mirror_issues(slug, fm_ficha, gt)
+
+    # Ficha SIN su ground-truth: el barrido de arriba lo maneja el JSON, así que una ficha sin
+    # archivo no la miraba NADIE — se le podía inventar `teff_K`/`P_rot_days`/planetas enteros con
+    # el lint en verde. Es alcanzable sin salirse de lo documentado (`make_notes.py <slug>` corre
+    # solo, y el sub-modo *borrar* de `maintain` saca el JSON), y anula la garantía entera de #70
+    # justo donde promete vigilar.
+    # Backlog, no bloqueante: la distinción del framework es "hay una violación" (bloquea) vs "la
+    # garantía no corrió acá" (backlog, como #55 triage pendiente y #56 verificación stale).
+    for sf in sorted(cfg.STARS.glob("*.md")) if cfg.STARS.exists() else []:
+        if sf.stem not in vistos_gt:
+            incomplete.append((sf.stem, "ficha sin `raw/ground_truth/<slug>.json` → el espejo #70 "
+                                        "no la vigila: los campos de NEA quedan sin nadie que los "
+                                        f"compare (corré `fetch_ground_truth.py {sf.stem}`)"))
 
     # huérfanos: notas-concepto sin links entrantes. Papers/estrellas se acceden por
     # Dataview/index, no por wikilink → no son huérfanos genuinos. README tampoco. Las **matrices**
@@ -654,8 +863,12 @@ def main() -> int:
     for stem, marca in sorted(extracted, key=lambda t: t[0]):
         if stem in cited_in_entity:
             continue
-        if marca:
-            if not str(marca).strip() or str(marca).strip().lower() in ("true", "sí", "si", "yes"):
+        if marca is not _SIN_MARCA:
+            # Un motivo es TEXTO con contenido. Cualquier otra cosa (número, lista, mapa, `true`,
+            # vacío) es la marca pelada que la doc dice seguir reportando: cerraba el hallazgo en
+            # silencio, que es exactamente lo que "motivo obligatorio" existe para impedir.
+            if (not isinstance(marca, str) or not marca.strip()
+                    or marca.strip().lower() in ("true", "sí", "si", "yes")):
                 unsynthesized.append((stem, "`no_sintetizado` sin motivo → poné POR QUÉ no se "
                                             "inlinea (regla de poda, aporta sólo vía roll-up, …)"))
             continue
@@ -742,7 +955,10 @@ def main() -> int:
     vistos = set()
     for aj in sorted(glob.glob(str(cfg.ROOT / "build" / "*" / "ads.json"))):
         try:
-            data = json.loads(open(aj, encoding="utf-8").read())
+            # JSON válido pero no-objeto (`[]`, `null` — un ads.json cortado por un Ctrl-C a mitad
+            # de escritura) llegaba tal cual a `.get` y volteaba el barrido con AttributeError:
+            # build/ es scratch regenerable, no motivo para tumbar la compuerta de CI (#h03).
+            data = cfg.as_map(json.loads(open(aj, encoding="utf-8").read()))
         except (ValueError, OSError):
             continue
         slug = data.get("slug") or Path(aj).parent.name
@@ -759,14 +975,21 @@ def main() -> int:
             truncated_corpora.append(
                 (slug, f"ADS reporta {t.get('num_found')} y se trajeron {t.get('rows')}{pasada} → "
                        f"corpus incompleto; re-ingestá con --rows mayor (o paginá) para cubrir el resto"))
-        cands = data.get("candidates") or []
+        # elementos de `candidates` que no son mapas (edición a mano / artefacto de red) se sacan
+        # de la vista en vez de reventar en `c.get('bibcode', ...)` — misma política que
+        # `normalize_lists` sobre el frontmatter (#h03).
+        cands = [c for c in cfg.as_list(data.get("candidates")) if isinstance(c, dict)]
         if cands:
             top = ", ".join(c.get("bibcode", "?") for c in cands[:3])
             triage_pending.append(
                 (slug, f"{len(cands)} candidato(s) del chaining sin juzgar (p. ej. {top}"
                        f"{' …' if len(cands) > 3 else ''}) → `python scripts/triage.py {slug}`: "
                        f"pertinente → `extra_core` en stars.yaml; ruido → `--drop … --reason`"))
-        for tg in data.get("truncated_glyph") or []:
+        # `truncated_glyph` no iterable (escalar en vez de lista) revienta el `for`; `as_list` lo
+        # degrada a `[]` en vez de tumbar el barrido (#h03).
+        for tg in cfg.as_list(data.get("truncated_glyph")):
+            if not isinstance(tg, dict):
+                continue
             consts = "/".join(tg.get("constellations") or []) or tg.get("letter") or "?"
             truncated_corpora.append(
                 (slug, f"rescate por glifo incompleto: el superset de {consts} reporta "
@@ -780,7 +1003,14 @@ def main() -> int:
     for lt in sorted(glob.glob(str(cfg.ROOT / "build" / "*" / "triage.json"))):
         slug = Path(lt).parent.name
         try:
-            n_viejas = len(json.loads(open(lt, encoding="utf-8").read()).get("decisiones") or {})
+            data_lt = json.loads(open(lt, encoding="utf-8").read())
+            # El guard `isinstance(data_lt, dict)` sólo cubría data_lt mismo: un
+            # `{"decisiones": 3}` (JSON válido, forma inválida un nivel más abajo) lo pasaba igual
+            # y `len(3)` volteaba el reporte ENTERO — el modo de falla equivocado para el chequeo
+            # que existe para no quedar mudo. `as_map` + el `isinstance` sobre `dec` mueven el
+            # guard al nivel donde de verdad se usa (#h03).
+            dec = cfg.as_map(data_lt).get("decisiones")
+            n_viejas = len(dec) if isinstance(dec, (dict, list)) else -1
         except (ValueError, OSError):
             n_viejas = -1
         legacy_triage.append(
@@ -796,12 +1026,40 @@ def main() -> int:
     # diciendo que falta el scratch: mejor un dato fechado que un cero inventado.
     for rf in sorted(glob.glob(str(cfg.REGISTRO / "*.yaml"))):
         slug = Path(rf).stem
+        raw = Path(rf).read_text(encoding="utf-8")
+        # Lector BLINDADO (#h05): antes esto reimplementaba `yaml.safe_load` a mano acá mismo —
+        # el único de seis lectores del registro que lo hacía— y por eso se saltaba el blindaje
+        # que `cfg.load_registro` ya tiene (YAML roto / forma inválida → `{}`, no una excepción).
+        reg = cfg.load_registro(slug)
+        if not reg and raw.strip():
+            # `load_registro` es TOLERANTE a propósito (el framework instruye editar el registro a
+            # mano): un YAML roto o con forma inválida vuelve `{}` en vez de tumbar a sus lectores.
+            # Pero saltearlo MUDO acá es el "cero inventado" que #64 cerró, por otra puerta: un
+            # registro con 3 candidatos sin juzgar volvía "Triage pendiente (0)" y exit 0. Se
+            # reporta como backlog —"la garantía no corrió acá", no una violación del vault— para
+            # que quede a la vista sin bloquear (misma distinción que #55/#56).
+            triage_pending.append(
+                (slug, f"`vault/config/registro/{slug}.yaml` no se pudo leer (YAML roto o con "
+                       f"forma inválida) → no se puede saber si hay triage pendiente / corpus "
+                       f"truncado para este sujeto; arreglalo a mano y volvé a correr el lint"))
+            continue
+        # Decisión que no es un mapa (#h12): `2006Rasmussen: descartado`, sin `motivo`/`fecha`/
+        # `decision`. `load_decisiones` la filtra en silencio (documentado en su docstring, que
+        # promete que EL LINT la reporta) — sin este chequeo el triage vuelve a proponer lo ya
+        # descartado sin el motivo, el mismo bug que #51 cerró. Corre para TODO registro, tenga o
+        # no `build/` local: es independiente del fallback de triage-pendiente/corpus-truncado de
+        # abajo.
+        dec = reg.get("decisiones")
+        if isinstance(dec, dict):
+            for clave, v in dec.items():
+                if not isinstance(v, dict):
+                    bad_decisions.append(
+                        (slug, f"decisión `{clave}` no es un mapa (es {type(v).__name__}, falta "
+                               f"`decision`/`motivo`/`fecha`) → `load_decisiones` la descarta en "
+                               f"silencio y el triage vuelve a proponerla sin el motivo"))
         if slug in vistos:
             continue                                  # build/ presente: ya se reportó la verdad viva
-        try:
-            b = (yaml.safe_load(open(rf, encoding="utf-8").read()) or {}).get("busqueda") or {}
-        except yaml.YAMLError:
-            continue
+        b = cfg.as_map(reg.get("busqueda"))
         fecha = b.get("fecha") or "s/f"
         if b.get("n_candidates"):
             triage_pending.append(
@@ -817,7 +1075,7 @@ def main() -> int:
     # reporte
     lines = [f"# Lint de la bóveda — {dt.date.today().isoformat()}", ""]
     for title, items in [("Wikilinks rotos (página faltante)", broken),
-                         ("⛔ Frontmatter no parseable (la nota evade los chequeos de su tipo)", fm_broken),
+                         ("⛔ Frontmatter no parseable o con forma inválida (la nota evade los chequeos de su tipo)", fm_broken),
                          ("⛔ Papers RETRACTADOS citados (frontera dura: fuente no válida)", retracted),
                          ("Notas huérfanas (sin links entrantes)", [(o, "") for o in orphans]),
                          ("Papers con corrección publicada (erratum/corrigendum/EoC) — revisar los "
@@ -847,6 +1105,8 @@ def main() -> int:
                           "estampadores de cabecera no-opean en silencio (backlog)", headerless),
                          ("Triage pendiente: candidatos del chaining sin juzgar (backlog)", triage_pending),
                          ("Corpus truncado: la query directa trajo menos de lo que ADS reporta (backlog)", truncated_corpora),
+                         ("Decisión del registro con forma inválida — load_decisiones la descarta "
+                          "en silencio, el triage la vuelve a proponer sin el motivo (backlog)", bad_decisions),
                          ("Campos incompletos", incomplete)]:
         lines.append(f"## {title} ({len(items)})")
         for a, b in items:

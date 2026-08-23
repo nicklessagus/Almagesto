@@ -205,3 +205,69 @@ def test_toda_ruta_del_vault_esta_aislada_en_el_fixture(toy_vault):
                  and (val == real_vault or real_vault in val.parents)]
     assert not escapadas, (f"rutas sin aislar en conftest.toy_vault: {escapadas} — agregalas al "
                            "dict `paths` del fixture")
+
+
+# ── forma del objetivo y del registro (robustez del lector) ──────────────────
+
+def test_concept_areas_escalar_no_se_deshace_en_caracteres(toy_vault):
+    """`concept_areas: indicators` (una bóveda de un área, el caso natural) se desempaquetaba
+    CARÁCTER POR CARÁCTER y el typo-check se invertía: marcaba como no declarada justo el área
+    recién declarada. Un escalar = lista no declarada → chequeo apagado."""
+    write_yaml(cfg.OBJECTIVE_YAML, {"name": "x", "concept_areas": "indicators"})
+    assert cfg.load_concept_areas() == []
+
+
+def test_registro_ilegible_no_tumba_a_sus_lectores(toy_vault):
+    """El framework INSTRUYE editar el registro a mano ("sacá la entrada de `decisiones`"), así que
+    un YAML roto o que no parsea a mapa tiene que degradar, no reventar al lint/triage/query_ads."""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    cfg.registro_path("x").write_text("- esto es una lista\n", encoding="utf-8")
+    assert cfg.load_registro("x") == {} and cfg.load_decisiones("x") == {}
+    cfg.registro_path("y").write_text("decisiones:\n  2019A: descartado\n", encoding="utf-8")
+    assert cfg.load_decisiones("y") == {}          # la entrada escalar se descarta, no rompe
+
+
+def test_es_del_carril_distingue_los_dos_juicios():
+    """Sin este filtro `origen` es decorativo: el gate de candidatos del chaining se comía los
+    rechazos de fuentes declaradas (#81) y al revés."""
+    assert cfg.es_del_carril({"decision": "descartado"}, "chaining")             # sin origen = chaining
+    assert cfg.es_del_carril({"origen": "fuente-declarada"}, "fuente-declarada")
+    assert not cfg.es_del_carril({"origen": "fuente-declarada"}, "chaining")
+
+
+# ── escritura del registro: atomicidad y no pisar lo ilegible (#51/#64) ──────
+
+REGISTRO_ROTO = 'busqueda:\n  motivo: "sin cerrar\n  fecha: 2026-08-01\n'
+
+
+def test_no_se_pisa_un_registro_ilegible(toy_vault):
+    """El registro es, por definición del repo, lo que NO es regenerable (#51/#64). Si la lectura
+    falló, escribir encima destruye `busqueda` y todos los juicios de curación en silencio — y el
+    framework INSTRUYE editar ese archivo a mano (`ingest_topic.py:197`), así que un YAML roto es
+    un estado alcanzable, no una hipótesis."""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    f = cfg.registro_path("test_star")
+    f.write_text(REGISTRO_ROTO, encoding="utf-8")
+    with pytest.raises(Exception):
+        cfg.save_decisiones("test_star", {"2020aaa...1..1A": {"decision": "descartado",
+                                                             "motivo": "ruido",
+                                                             "fecha": "2026-08-23"}})
+    assert f.read_text(encoding="utf-8") == REGISTRO_ROTO, "se pisó un registro que no se pudo leer"
+
+
+def test_save_registro_es_atomico(toy_vault, monkeypatch):
+    """`write_text` directo deja el archivo torn si el proceso muere a mitad — medido: con un
+    registro de 111 KB, 17 de 46 lecturas concurrentes vieron el archivo cortado. tmp+rename hace
+    que el original sobreviva a cualquier fallo posterior a la escritura del temporal."""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    cfg.save_registro("test_star", {"busqueda": {"fecha": "2026-08-01", "n_core": 37}})
+    original = cfg.registro_path("test_star").read_text(encoding="utf-8")
+
+    import os
+    def boom(*a, **k):
+        raise OSError("corte simulado al publicar el temporal")
+    monkeypatch.setattr(os, "replace", boom)
+    with pytest.raises(OSError):
+        cfg.save_registro("test_star", {"busqueda": {"fecha": "2026-08-23", "n_core": 99}})
+    assert cfg.registro_path("test_star").read_text(encoding="utf-8") == original, (
+        "el registro original no sobrevivió a un fallo de escritura → save_registro no es atómico")

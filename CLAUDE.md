@@ -517,8 +517,10 @@ explícito. Detalle en el skill.
 append-knowledge, maintain, find-contradictions, query archivada, test de hipótesis), **antes de
 commitear** y **después** del verify (resolver una cita no-soportada cambia la prosa); más una pasada completa periódica. Es barato.
 Correr `python scripts/lint.py`: debe quedar en **0** para wikilinks rotos, **frontmatter no
-parseable** (nota que empieza con `---` pero cuyo YAML no parsea —p. ej. un `title:` con `:` sin
-comillas editado a mano—: evade en silencio los chequeos de su tipo), **papers retractados**
+parseable o con forma inválida** (nota que empieza con `---` pero cuyo YAML no parsea —p. ej. un
+`title:` con `:` sin comillas editado a mano—, o un campo que el schema declara **lista** escrito
+como escalar / con elementos que no son mapas —`planets:`, `thesis_links:`—: en los dos casos la
+nota **evade en silencio** los chequeos por elemento de su tipo), **papers retractados**
 (flag `retracted`; lo detecta `scripts/check_retractions.py` vía Crossref —red; la cadena de ingest
 chequea sólo los papers del slug (`--slug`) y el barrido completo de la bóveda es la pasada
 periódica del skill `maintain`— y el lint lo surface offline: una fuente retractada citada rompe la
@@ -529,7 +531,12 @@ que la ficha lista y NEA no (típicamente una señal no confirmada escrita en `p
 `disputes` como `<letra>.existence`), uno que NEA confirma y la ficha no lista, una letra repetida, y
 un valor que difiere del ground-truth o que existe en la ficha cuando NEA no lo tiene: todos rompen
 el espejo (#70), y comparar **cuántos** dejaba pasar el caso peor, dos listas del mismo largo que no
-son los mismos planetas—, **masa de ground-truth inconsistente con la m·sini implícita**
+son los mismos planetas—; **también bloquea el ground-truth que el espejo no puede leer** (JSON
+ilegible o no-objeto, `host` que no es un mapa, `planets` que no es una lista, `slug` interno que no
+matchea el nombre del archivo, ficha sin frontmatter legible): no es "la garantía no corrió" sino
+que el archivo que **es** la autoridad está roto, y callarlo deja la ficha sin vigilancia mientras
+el lint afirma que está limpia —el `host` no-mapa, además, silenciaba los cuatro campos estelares y
+encima producía hallazgos fantasma apuntando al síntoma equivocado—, **masa de ground-truth inconsistente con la m·sini implícita**
 (K/P/e/M\* — atrapa best-mass espurias de NEA), **`thesis_links` sin página destino** (tag que no matchea
 ninguna nota → no acumula en el roll-up; typo típico `shift-vs-shape` vs `shift_vs_shape`) y
 **`disputes` con la `ref` de una posición sin paper destino** (el bibcode que sostiene esa posición
@@ -602,7 +609,16 @@ pierde al scrollear: un ingest podía cerrarse con lint en 0 y cientos de pendie
 se resuelve con `python scripts/triage.py <slug>` (pertinente → `extra_core`; ruido → `--drop …
 --reason`). Sin `build/` local **no** da un cero inventado: cae al `busqueda` del registro versionado
 y reporta el snapshot con su fecha (no el conteo vigente — si dropeaste sin re-correr la cadena
-quedó viejo).
+quedó viejo). Y si ese registro **no se puede leer** (YAML roto o con forma inválida) se reporta
+**ahí mismo**, nombrando el archivo: saltearlo en silencio devolvía un `(0)` sobre un registro que
+declaraba candidatos sin juzgar — el mismo cero inventado que #64 cerró, por otra puerta. El
+registro es además el **único** artefacto de la bóveda que no es regenerable, así que la lectura
+tolerante que evita tumbar al lint **no** habilita pisarlo: `save_registro` es atómico (tmp+rename)
+y **rehúsa escribir** sobre un registro existente que no parsea, en vez de perder `busqueda` y los
+juicios de curación en silencio. Su hermana, la **decisión con forma inválida** (una entrada de
+`decisiones` que no es un mapa — `2006Rasmussen: descartado` a secas), es **backlog** propio:
+`load_decisiones` la descarta y sin el aviso el triage vuelve a proponer lo ya descartado **sin el
+motivo**, que es exactamente el bug que #51 cerró.
 El **corpus truncado** (un `build/<slug>/ads.json` con `truncated` seteado → la query directa trajo
 menos papers de los que ADS reporta) es **backlog** — `query_ads` persiste la marca (default
 `--rows 2000`, ≈ el máximo de una request; re-ingestar con `--rows` mayor para cubrir el resto). Lo
@@ -611,10 +627,14 @@ misma query ordenada por fecha** (#79) y la marca guarda en `truncated.recent` c
 que lo reciente —lo que el orden por citas esconde por construcción— ya está cubierto; ídem el
 **rescate por glifo incompleto** (`truncated_glyph`, marca hermana: el superset de la constelación
 del rescate #28 se cortó por citas **antes** del filtro client-side, que es donde vive la señal →
-pueden faltar papers con lookalike). Los **campos incompletos** son **backlog** y no bloquean; hoy son seis:
+pueden faltar papers con lookalike). Los **campos incompletos** son **backlog** y no bloquean; hoy son siete:
 `P_rot` sin documentar en la prosa (el frontmatter nulo **no** es hallazgo desde #70),
 `activity_indicators_expected` vacío, planeta del frontmatter no discutido en la prosa, paper core
-sin `methods` (sin extraer), paper extraído sin `role`, y `thesis_links` sin `bearing`. Revisar
+sin `methods` (sin extraer), paper extraído sin `role`, `thesis_links` sin `bearing`, y **ficha sin
+su `raw/ground_truth/<slug>.json`** (el barrido del espejo #70 lo maneja el JSON, así que una ficha
+sin archivo no la mira **nadie**: se le pueden inventar `teff_K`/`P_rot_days`/planetas enteros con
+el lint en verde — es backlog y no bloqueante porque es "la garantía no corrió acá", no "hay una
+violación"). Revisar
 además a mano: claims stale y conceptos referidos sin página. Si faltan datos, abrir queries para
 imputar (web/ADS).
 

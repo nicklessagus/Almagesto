@@ -19,7 +19,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.21.0"
+ALMAGESTO_VERSION = "1.22.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -166,14 +166,25 @@ def topic_by_slug(slug: str) -> tuple[str, dict]:
 def load_objective() -> dict:
     """El OBJETIVO de la bóveda (vault/config/objective.yaml): name/short/description y el
     clasificador de relevancia (`relevance.topics`, `relevance.noise_doctypes`). Es
-    lo que define qué papers son 'core'."""
+    lo que define qué papers son 'core'.
+
+    Un YAML inválido degrada a `{}` (no propaga `YAMLError`/`OSError`): el skill `setup` hace que
+    el agente escriba REGEX dentro de YAML —un `:` sin comillas dentro de un patrón es el error más
+    probable de toda la config— y `load_objective` lo llama el lint, que es la compuerta de CI y
+    cuyo contrato es "ante una bóveda rara reporta, no se muere". El archivo AUSENTE sigue siendo
+    un error duro (`RuntimeError` explícito): no hay ejemplo del template que copiar por default,
+    así que ahí sí conviene frenar en vez de seguir con un objetivo vacío."""
     if not OBJECTIVE_YAML.exists():
         raise RuntimeError(
             "Falta vault/config/objective.yaml. Es el archivo que define el objetivo de la "
             "bóveda y el clasificador de relevancia. Partí del ejemplo del template."
         )
-    with open(OBJECTIVE_YAML, encoding="utf-8") as fh:
-        return yaml.safe_load(fh) or {}
+    try:
+        with open(OBJECTIVE_YAML, encoding="utf-8") as fh:
+            data = yaml.safe_load(fh)
+    except (yaml.YAMLError, OSError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def split_fm(text: str) -> dict:
@@ -186,6 +197,25 @@ def split_fm(text: str) -> dict:
         return yaml.safe_load(parts[1]) or {}
     except Exception:
         return {}
+
+
+def as_map(v) -> dict:
+    """`v` si es un dict; `{}` si no. El idioma `X.get(k) or {}` asume que `X` tiene la forma
+    esperada, pero `X` sale seguido de YAML/JSON editado a mano o de disco ajeno: si el valor es un
+    escalar o una lista, ese `or {}` NO salva nada (un escalar truthy no cae en el `or`) y el
+    `.get`/`[...]` siguiente revienta con `AttributeError`/`TypeError`. La auditoría encontró el
+    mismo guard faltante repetido en 59 líneas de los scripts — centralizarlo acá evita un chequeo
+    por sitio (y el que se olvida)."""
+    return v if isinstance(v, dict) else {}
+
+
+def as_list(v) -> list:
+    """`v` si es una lista; `[]` si no. Hermano de `as_map` para el otro lado del mismo defecto: un
+    campo que el schema declara lista (`planets`, `thesis_links`, `posiciones`) pero que llega
+    escalar o `None` desde un YAML editado a mano — iterarlo a pelo itera caracteres de un string o
+    revienta con `TypeError` en vez de comportarse como la lista vacía que es el caso degenerado
+    correcto."""
+    return v if isinstance(v, list) else []
 
 
 # Áreas de vault/wiki/concepts/ RESERVADAS (siempre válidas): `methods` es universal;
@@ -204,7 +234,12 @@ def load_concept_areas() -> list:
     ya cometido en "área declarada", que es lo contrario de lo que el chequeo hace. El lint reporta
     la lista ausente para que se declare."""
     declared = load_objective().get("concept_areas") or []
-    return list(dict.fromkeys([*declared, *RESERVED_CONCEPT_AREAS])) if declared else []
+    # `isinstance(list)`: un `concept_areas: indicators` (escalar, el caso natural de una bóveda de
+    # un área) se desempaquetaba CARÁCTER POR CARÁCTER y el typo-check se invertía — marcaba como
+    # no declarada justo el área recién declarada. Un escalar = lista no declarada: chequeo apagado.
+    if not isinstance(declared, list) or not declared:
+        return []
+    return list(dict.fromkeys([*[str(a) for a in declared], *RESERVED_CONCEPT_AREAS]))
 
 
 # ── orden de listas de papers (política única, #79) ──────────────────────────
@@ -259,19 +294,73 @@ def legacy_triage_path(slug: str) -> Path:
 
 
 def load_registro(slug: str) -> dict:
-    """Registro versionado del sujeto ({} si no existe). No mergea el legacy: para las decisiones
-    usar `load_decisiones`, que sí lo hace."""
+    """Registro versionado del sujeto ({} si no existe o si no es legible).
+
+    **Tolerante a la edición a mano, que el framework instruye explícitamente** (el aviso de #81
+    manda "sacá la entrada de `decisiones`"): un YAML roto o que no parsea a mapa devuelve `{}` en
+    vez de tumbar a sus tres lectores (lint, triage, query_ads). No es una capa de compatibilidad
+    —no hay dos schemas— sino la misma política que el frontmatter: ante una bóveda rara se reporta
+    y se sigue. El lint reporta el registro ilegible como hallazgo."""
     f = registro_path(slug)
     if not f.exists():
         return {}
-    return yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+    try:
+        data = yaml.safe_load(f.read_text(encoding="utf-8"))
+    except (yaml.YAMLError, OSError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def save_registro(slug: str, data: dict) -> None:
+    """Escribe el registro. Punto único por el que pasan `save_decisiones` y `save_busqueda` — las
+    dos garantías de abajo cubren a los dos.
+
+    **No pisa un registro existente que no se pudo leer.** El registro es, por definición del
+    repo, lo que NO es regenerable (#51/#64: `busqueda` — sobre qué universo de papers afirma la
+    ficha — y `decisiones` — el juicio de curación). `load_registro` degrada un YAML roto a `{}`
+    para no tumbar a sus lectores (lint, triage, query_ads); pero si ESE `{}` tolerante después se
+    guarda acá, el archivo original se pierde en silencio. Y el framework instruye editar este
+    archivo a mano (`ingest_topic.py` avisa "sacá la entrada de `decisiones`"), así que un YAML
+    roto es un estado alcanzable, no una hipótesis: mejor frenar con un mensaje accionable que
+    perder curación que nadie puede reconstruir.
+
+    **Escritura atómica.** `write_text` directo deja el archivo torn si el proceso muere a mitad de
+    la escritura (medido: con un registro de 111 KB, 17 de 46 lecturas concurrentes vieron el
+    archivo cortado). Se escribe a un temporal en el MISMO directorio (mismo filesystem, para que
+    el rename sea atómico en POSIX) y se publica con `os.replace`, que sustituye el archivo de una
+    sola vez — un fallo antes del `replace` deja el original intacto."""
     REGISTRO.mkdir(parents=True, exist_ok=True)
-    registro_path(slug).write_text(
+    f = registro_path(slug)
+    if f.exists():
+        try:
+            existente = yaml.safe_load(f.read_text(encoding="utf-8"))
+        except (yaml.YAMLError, OSError) as exc:
+            raise RuntimeError(
+                f"{f} existe pero no se pudo leer (YAML roto) — no lo piso a ciegas: se "
+                "perderían `busqueda` y las `decisiones` de curación que tiene adentro, y no son "
+                "regenerables. Arreglalo a mano (es un archivo que el framework instruye editar "
+                "directamente) y volvé a correr la operación."
+            ) from exc
+        if not isinstance(existente, dict):
+            raise RuntimeError(
+                f"{f} existe pero no parsea a un mapa (YAML válido con forma equivocada) — no lo "
+                "piso a ciegas: se perderían `busqueda` y las `decisiones` de curación. Arreglalo "
+                "a mano y volvé a correr la operación."
+            )
+    tmp = f.with_name(f.name + f".tmp{os.getpid()}")
+    tmp.write_text(
         yaml.safe_dump(data, sort_keys=False, allow_unicode=True, default_flow_style=False),
         encoding="utf-8")
+    try:
+        os.replace(tmp, f)
+    except Exception:
+        # publicación fallida: no dejar el temporal como basura silenciosa, pero priorizar
+        # propagar el error real por sobre uno de limpieza.
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
 
 
 def load_decisiones(slug: str) -> dict:
@@ -282,7 +371,21 @@ def load_decisiones(slug: str) -> dict:
     tiene un camino explícito —`python scripts/triage.py <slug> --migrate`—. Lo que NO puede pasar
     es que ese archivo quede **mudo** y el triage vuelva a proponer lo ya descartado sin decir nada:
     el lint lo detecta y bloquea."""
-    return dict(load_registro(slug).get("decisiones") or {})
+    d = load_registro(slug).get("decisiones") or {}
+    if not isinstance(d, dict):
+        return {}
+    # una entrada que no es mapa (edición a mano: `2006R: descartado`) se descarta en vez de
+    # reventar a los lectores con AttributeError; el lint la reporta.
+    return {k: v for k, v in d.items() if isinstance(v, dict)}
+
+
+# Los DOS CARRILES de curación viven en las mismas `decisiones` (#51 chaining, #81 fuente
+# declarada) y se distinguen por `origen`. Sin `origen` = chaining (las decisiones anteriores a #81).
+def es_del_carril(d: dict, carril: str) -> bool:
+    """¿Esta decisión es del carril pedido? Sin este filtro `origen` es **decorativo**: el gate de
+    candidatos del chaining se comía los rechazos de fuentes declaradas (y al revés), que es
+    justamente la distinción que #81 introdujo."""
+    return (d.get("origen") or "chaining") == carril
 
 
 def save_decisiones(slug: str, decisiones: dict) -> None:

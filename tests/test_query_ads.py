@@ -613,6 +613,43 @@ def test_main_sin_truncar_no_hay_segunda_pasada(toy_vault, toy_classifier, no_sl
     assert ordenes == [qa.CITES_SORT]
 
 
+def test_fallo_de_la_segunda_pasada_no_tira_la_corrida(toy_vault, toy_classifier, no_sleep,
+                                                      monkeypatch, capsys):
+    """La 2ª pasada es un rescate BEST-EFFORT sobre una query directa que ya volvió bien: cualquier
+    excepción abortaba antes de escribir `ads.json` y el registro, tirando trabajo bueno. Degrada al
+    estado honesto: `recent` AUSENTE = "no sé si la cola está cubierta", que es lo que el lint
+    distingue de un `0` (que afirma cobertura)."""
+    def fake_qa(q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False,
+                sort=qa.CITES_SORT):
+        if sort == qa.RECENT_SORT:
+            raise RuntimeError("ADS 502")
+        if meta is not None:
+            meta.update(num_found=5000, rows=rows, truncated=True)
+        return [rec("2020dirA....1A")]
+    monkeypatch.setattr(qa, "query_ads", fake_qa)
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    data = json.loads((toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text())
+    assert data["truncated"]["num_found"] == 5000
+    assert "recent" not in data["truncated"]          # no afirma nada sobre la cola
+    out = capsys.readouterr().out
+    assert "la segunda pasada por fecha falló" in out
+
+
+def test_segunda_pasada_vacia_no_se_traga_el_cero_espurio(toy_classifier, no_sleep, monkeypatch):
+    """Es la MISMA query que acaba de reportar numFound > rows: un cero ahí es el cero espurio de
+    ADS (#27), no un resultado. Sin `expect_hits` volvía [] y la marca quedaba en `recent: 0`, que
+    el lint lee como "la cola reciente ya está cubierta"."""
+    # Hermético: `recent_pass` llega a `query_ads`, que pide el token ANTES de la request. Sin esto
+    # el test lee el `vault/config/ads_dev_key` real —gitignored— y en un clone limpio o en CI muere
+    # con RuntimeError antes de ejercitar nada de lo que dice testear.
+    monkeypatch.setenv("ADS_DEV_KEY", "tok-test")
+    vacías = [FakeResp(200, payload([], num_found=0))] * (len(qa.RETRY_WAITS_S) + 1)
+    monkeypatch.setattr(qa, "requests", SimpleNamespace(get=fake_get_seq(vacías)))
+    with pytest.raises(qa.EmptyResultError):
+        qa.recent_pass("title:x", 10, set())
+
+
 def test_recent_pass_pide_fecha_dedup_y_marca_via(toy_classifier, no_sleep, monkeypatch):
     """Unitario de la segunda pasada: misma `q` y mismo `rows`, sólo cambia el orden; silencia el
     aviso de truncado (hablaría del mismo corte que ya se reportó); devuelve SÓLO lo que la primera

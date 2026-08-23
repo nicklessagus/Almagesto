@@ -319,22 +319,69 @@ def migrate_disputes(dest) -> bool:
     except yaml.YAMLError:
         print(f"  ⚠ {dest.name}: frontmatter no parseable — migralo a mano")
         return False
-    if not any((pl or {}).get("disputes") for pl in (front.get("planets") or [])):
+    # Cobarde ante cualquier forma que no entiende: si `planets` no es una lista de mapas, o
+    # `disputes` a nivel nota no es una lista, NO toca el archivo. Antes un solo planeta mal formado
+    # tiraba `migrate_all_disputes` a mitad del barrido y dejaba la bóveda medio migrada, y un
+    # `disputes:` escalar se convertía en una lista de CARACTERES escrita a disco.
+    planets = front.get("planets")
+    if not isinstance(planets, list) or not all(isinstance(pl, dict) for pl in planets if pl):
+        print(f"  ⚠ {dest.name}: `planets` no es una lista de mapas — migralo a mano")
+        return False
+    if "disputes" in front and not isinstance(front.get("disputes") or [], list):
+        print(f"  ⚠ {dest.name}: `disputes` a nivel nota no es una lista — migralo a mano")
+        return False
+    if not any((pl or {}).get("disputes") for pl in planets):
         return False
     nuevas = list(front.get("disputes") or [])
-    for pl in front.get("planets") or []:
-        letra = str((pl or {}).get("letter", "")).strip()
-        for d in (pl.pop("disputes", None) or []):
-            campo = str(d.get("field", "")).strip()
+    for pl in planets:
+        letra = str((pl or {}).get("letter") or "").strip()      # `letter: null` daba "None.K"
+        # NO hacer `pop` acá: hasta no saber que la entrada efectivamente migró, el dato sigue
+        # siendo el único respaldo en disco de esa disputa (bibcode + valor discrepante). `pop`
+        # antes de las guardas de forma era el bug — el `continue` "cobarde" saltaba con el dato
+        # YA fuera del dict, y el `write_text` de abajo lo borraba para siempre.
+        viejas = (pl or {}).get("disputes")
+        if viejas is None:
+            continue
+        if not isinstance(viejas, list):
+            print(f"  ⚠ {dest.name}: `planets[{letra or '?'}].disputes` no es una lista — esa quedó "
+                  f"sin migrar, revisala a mano")
+            continue                          # se deja intacta en el planeta: nada que pop-ear
+        sin_migrar = []                       # elementos que no se pudieron migrar: se quedan acá
+        for d in viejas:
+            if not isinstance(d, dict):
+                print(f"  ⚠ {dest.name}: disputa vieja de `{letra or '?'}` que no es un mapa — sin "
+                      f"migrar, revisala a mano")
+                sin_migrar.append(d)
+                continue
+            campo = str(d.get("field") or "").strip()
             gt_key = LEGACY_FIELD_TO_GT.get(campo)
             gt_pos = {"source": "ground_truth"}
             if gt_key is not None and pl.get(gt_key) is not None:
                 gt_pos["value"] = pl.get(gt_key)
-            nueva = {"field": f"{letra}.{campo}" if letra else campo,
-                     "posiciones": [{"ref": d.get("ref"), "value": d.get("alt")}, gt_pos]}
+            # El lado del paper se arma con la MISMA regla que el de NEA: `value` sólo si hay valor.
+            # `alt` era exclusivo de las disputas de VALOR, así que en una de `existence` —el caso
+            # más frecuente— quedaba `value: null`, que por la convención del otro polo se lee como
+            # "esta fuente calla": lo contrario de lo que el paper sostiene.
+            paper_pos = {"ref": d.get("ref")}
+            if d.get("alt") is not None:
+                paper_pos["value"] = d["alt"]
+            if not d.get("ref"):
+                print(f"  ⚠ {dest.name}: disputa `{campo or '?'}` sin `ref` → la posición queda sin "
+                      f"quién la sostenga y el lint la va a bloquear: agregá el bibcode a mano")
+            if not campo:
+                print(f"  ⚠ {dest.name}: disputa de `{letra or '?'}` sin `field` → queda sin eje y "
+                      f"el lint la va a bloquear: nombrá el eje a mano")
+            nueva = {"field": f"{letra}.{campo}" if (letra and campo) else campo,
+                     "posiciones": [paper_pos, gt_pos]}
             if d.get("note"):
                 nueva["note"] = d["note"]
             nuevas.append(nueva)
+        # Recién acá se decide qué pasa con `planets[].disputes`: lo que migró se saca (ya vive en
+        # `nuevas`), lo que no migró se queda escrito — visible, no perdido — para revisar a mano.
+        if sin_migrar:
+            pl["disputes"] = sin_migrar
+        else:
+            pl.pop("disputes", None)
     # `disputes` va donde vivía la información: justo después de `planets`. Si la ficha ya lo tiene
     # (migración a medias, o disputas nuevas escritas a mano), se respeta su lugar y se acumula.
     # `planets` existe sí o sí: sin él la función ya habría vuelto arriba.
@@ -441,27 +488,48 @@ def excluded_table(slug: str) -> str:
     """Tabla breve (snapshot del ingest) de los papers que el clasificador dejó AFUERA (no-core):
     top por citas, con motivo y link a ADS. Es un puntero "por las dudas" para cazar falsos negativos
     y afinar relevance.topics — los no-core NO se bajan ni se fichan. Vacío si no hay ads.json/excluidos.
-    Frontera dura OK: son papers reales (bibcode citable) con motivo reproducible, no afirmación suelta."""
+    Frontera dura OK: son papers reales (bibcode citable) con motivo reproducible, no afirmación suelta.
+
+    Se llama desde `write_star_note`/`write_concept_note`: si esto lanza, la cadena muere DESPUÉS de
+    gastar la red. Un `ads.json` truncado por un Ctrl-C a mitad de `query_ads` (JSON incompleto) o con
+    tipos torcidos (`bibcode` no-str, `citation_count` string) es un estado alcanzable, no hipotético
+    — así que acá se DEGRADA (registro que no es mapa se saltea, valores se coercen) y nunca se lanza;
+    siempre devuelve un `str` (`""` si no hay nada mostrable)."""
     adsfile = cfg.ROOT / "build" / slug / "ads.json"
     if not adsfile.exists():
         return ""
-    out = [r for r in json.loads(adsfile.read_text(encoding="utf-8")).get("records", [])
-           if not r.get("relevant")]
+    try:
+        data = json.loads(adsfile.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ""                             # JSON truncado/corrupto: sin snapshot confiable
+    records = data.get("records") if isinstance(data, dict) else None
+    if not isinstance(records, list):
+        return ""
+    out = [r for r in records if isinstance(r, dict) and not r.get("relevant")]
     if not out:
         return ""
-    out.sort(key=lambda r: r.get("citation_count", 0) or 0, reverse=True)
+
+    def citas(r: dict) -> int:
+        try:
+            return int(r.get("citation_count") or 0)
+        except (TypeError, ValueError):
+            return 0                          # `citation_count` no numérico: no ordena, no rompe
+
+    out.sort(key=citas, reverse=True)
     rows = []
     for r in out[:EXCLUDED_TOP_N]:
-        url = f"https://ui.adsabs.harvard.edu/abs/{quote(r.get('bibcode', ''), safe='')}"
+        bibcode = str(r.get("bibcode") or "")   # `bibcode` no-str (p. ej. int): coercer, no crashear
+        url = f"https://ui.adsabs.harvard.edu/abs/{quote(bibcode, safe='')}"
         # colapsar espacios/saltos, truncar y RECIÉN escapar (|, []) para no romper el link/tabla
-        title = " ".join((r.get("title") or "(sin título)").split())[:70] \
+        title = " ".join(str(r.get("title") or "(sin título)").split())[:70] \
             .replace("|", r"\|").replace("[", r"\[").replace("]", r"\]")
         # motivo REAL persistido por query_ads (`why_excluded`, #30 — cubre también la regla de
-        # combinación require/min_topics); fallback a la dicotomía del OR histórico para un
-        # ads.json viejo sin el campo (build/ es scratch: puede ser pre-#30)
-        motivo = r.get("why_excluded") or (
-            "sin tópico" if not r.get("topics") else f"doctype: {r.get('doctype')}")
-        rows.append(f"| [{title}]({url}) | {r.get('year') or ''} | {r.get('citation_count') or 0} | {motivo} |")
+        # combinación require/min_topics). Sin el campo (ads.json pre-#30) NO se reconstruye con la
+        # dicotomía vieja: etiquetaba con un motivo FALSO (`doctype: article`) a los excluidos por
+        # la regla de combinación — y ese texto se ESCRIBE en la bóveda, en el apéndice de la ficha.
+        motivo = r.get("why_excluded") or ("(motivo no registrado: `ads.json` anterior a #30 — "
+                                           "re-corré `query_ads`)")
+        rows.append(f"| [{title}]({url}) | {r.get('year') or ''} | {citas(r)} | {motivo} |")
     extra = len(out) - len(rows)
     tail = f"\n\n_(+ {extra} más excluidos por el filtro)_" if extra > 0 else ""
     return ("\n## Excluidos por el filtro (no-core · snapshot del ingest)\n"
@@ -593,14 +661,23 @@ _BULLET_ROLE = ("- **Rol del paper:** _(`fundacional` introduce el método/mecan
 def objective_lens() -> tuple[list, str]:
     """La LENTE de la bóveda para orientar el stub: (facetas declaradas en `relevance.topics`,
     `short` del objetivo). Es lo único que sabe de qué trata ESTA instancia. Degrada a ([], "")
-    si no hay objective.yaml (make_notes corrido suelto, fuera de la cadena): el stub sale
-    genérico, nunca inventado."""
+    si no hay objective.yaml (make_notes corrido suelto, fuera de la cadena) **y también si lo hay
+    pero está mal formado**: el `try` cubre la lectura Y la forma, porque el stub es el único lector
+    de `short` —ni `query_ads` ni el lint lo miran— y un `short: 2026` mataba la generación de notas
+    a mitad de cadena, después de gastar la red. El stub sale genérico, nunca inventado."""
     try:
         obj = cfg.load_objective()
+        obj = obj if isinstance(obj, dict) else {}
+        rel = obj.get("relevance")
+        topics = (rel or {}).get("topics") if isinstance(rel, dict) else None
+        # `isinstance(topics, dict)`, no `list(...)` a secas: con `topics` escrito como string (una
+        # regex sin nombre de faceta) el `list()` lo deshace en CARACTERES y el stub sale pidiendo
+        # facetas fabricadas — justo lo que la degradación promete que nunca pasa.
+        facetas = [str(f) for f in topics] if isinstance(topics, dict) else []
+        short = obj.get("short")
+        return facetas, (short.strip() if isinstance(short, str) else "")
     except Exception:
         return [], ""
-    facetas = list((obj.get("relevance") or {}).get("topics") or {})
-    return facetas, (obj.get("short") or "").strip()
 
 
 def extraction_block(topic: bool) -> str:
@@ -635,8 +712,12 @@ def search_line(slug: str) -> str:
     o del concept. El registro completo —query efectiva, límites, conteos, versión— vive en
     `vault/config/registro/<slug>.yaml`; acá va sólo lo que el que abre la nota necesita saber sin
     abrir nada: CUÁNDO se buscó y sobre QUÉ universo afirma la nota. "" si no hay registro."""
-    b = cfg.load_registro(slug).get("busqueda") or {}
-    if not b.get("fecha"):
+    # `cfg.load_registro` es tolerante (puede devolver `busqueda` en cualquier forma que haya en el
+    # YAML — el archivo lo edita gente a mano); este consumidor no lo es, así que hay que chequear
+    # `isinstance` ANTES de usarlo. Con `busqueda: 2026-08-22` (escalar, no mapa) `.get("fecha")`
+    # sobre un string revienta con AttributeError — igual que se comporta como si no hubiera registro.
+    b = cfg.load_registro(slug).get("busqueda")
+    if not isinstance(b, dict) or not b.get("fecha"):
         return ""
     universo = b.get("n_found") or b.get("n_total")
     partes = [f"> _Búsqueda {b['fecha']}"]
@@ -679,23 +760,44 @@ def stamp_header(dest) -> bool:
     la que la nota se creó de verdad. Si la nota es tan vieja que ni eso tiene, la línea va SIN
     versión (mejor sin dato que con uno supuesto). Quirúrgico: inserta después del H1 y no toca una
     línea de la prosa — el blockquote que esas notas ya tienen es texto del LLM, no la cabecera del
-    template, y se conserva debajo. Idempotente: si ya hay aviso o ancla, no hace nada."""
+    template, y se conserva debajo. Idempotente: si ya está `GENERATOR_LINE`, no hace nada.
+
+    El ancla de "ya tiene cabecera" es **sólo** `GENERATOR_LINE` — es lo único que el lint mide
+    (`lint.py`, categoría "cabecera no estampable", #69). La versión vieja frenaba también con sólo
+    "Capa LLM" en el texto, y eso era el deadlock: una nota con el disclaimer pero sin la línea del
+    generador —22 de 25 en el corpus real de Almagesto-RV, típicamente porque el disclaimer se
+    escribió a mano antes de que `GENERATOR_LINE` existiera— quedaba marcada por el lint para
+    siempre, y el comando que el propio mensaje del lint receta no-opeaba en silencio (0 de 25
+    estampadas). Acá, si falta sólo la línea, se agrega al pie del blockquote de "Capa LLM" que ya
+    hay — sin duplicar el disclaimer."""
     if not dest.exists():
         return False
     kind = note_kind(dest)
     if kind is None:
         return False
     text = dest.read_text(encoding="utf-8")
-    if "Capa LLM" in text or GENERATOR_LINE in text:
-        return False                                  # ya tiene cabecera: nada que backfillear
-    m = H1_RE.search(text)
-    if not m:
-        return False                                  # sin H1 no hay ancla honesta: no inventamos
+    if GENERATOR_LINE in text:
+        return False                                  # ya tiene la línea que el lint mide: nada que hacer
     gen = (cfg.split_fm(text) or {}).get("generator")
     linea_gen = (f"> _{gen.replace('Almagesto v', 'Generado con Almagesto v')}._"
                  if isinstance(gen, str) and gen.startswith("Almagesto v")
                  else "> _Cabecera normalizada por Almagesto; la nota no registra con qué versión "
                       "se creó._")
+    idx = text.find("Capa LLM")
+    if idx >= 0:
+        # Tiene disclaimer pero no la línea: no re-estampar el bloque entero (duplicaría el aviso),
+        # sólo agregar `linea_gen` al final del párrafo blockquote que ya existe — la primera línea
+        # después de "Capa LLM" que deja de empezar con ">" (o el EOF) marca el final del párrafo.
+        pos = text.find("\n", idx)
+        while pos >= 0 and text[pos + 1:pos + 2] == ">":
+            pos = text.find("\n", pos + 1)
+        insert_at = pos + 1 if pos >= 0 else len(text)
+        out = text[:insert_at] + f">\n{linea_gen}\n" + text[insert_at:]
+        dest.write_text(out, encoding="utf-8")
+        return True
+    m = H1_RE.search(text)
+    if not m:
+        return False                                  # sin H1 no hay ancla honesta: no inventamos
     bloque = f"\n\n{LLM_DISCLAIMER[kind]}\n>\n{linea_gen}"
     out = text[:m.end()] + bloque + text[m.end():]
     dest.write_text(out, encoding="utf-8")

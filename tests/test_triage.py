@@ -7,6 +7,7 @@ import yaml
 
 import lib_config as cfg
 import triage
+from conftest import write_yaml
 
 
 def write_ads(toy_vault, slug="test_star", candidates=None, n_relevant=3):
@@ -21,6 +22,13 @@ def write_ads(toy_vault, slug="test_star", candidates=None, n_relevant=3):
 def cand(bib, title="un título", cites=0, via="chain:citations", year="2020"):
     return {"bibcode": bib, "title": title, "citation_count": cites, "via": via,
             "year": year, "topics": ["rv"], "abstract": "resumen"}
+
+
+def seed_topic_offads(slug="gp"):
+    """Tema off-ADS declarado en topics.yaml. Hace falta porque `--drop-source` ahora valida que el
+    sujeto exista: un registro de un slug inexistente no lo lee nadie."""
+    write_yaml(cfg.TOPICS_YAML, {slug: {"concept": slug, "area": "methods", "source": "web",
+                                        "sources": [{"key": "2006Rasmussen", "url": "https://x"}]}})
 
 
 def run_main(monkeypatch, argv):
@@ -121,7 +129,7 @@ def test_report_escribe_tabla_en_outputs(toy_vault, monkeypatch):
 def test_marca_candidatos_que_ya_tienen_nota(toy_vault, monkeypatch, capsys):
     """#42: un candidato que YA tiene nota en la bóveda (entró por otro slug) se etiqueta ◆ —
     bajado y extraído, se despacha rápido. No se filtra: la decisión sigue siendo por-slug."""
-    from conftest import mk_note
+    from conftest import mk_note, write_yaml
     mk_note(cfg.PAPERS, "2020a....1A", {"tags": ["paper"], "bibcode": "2020a....1A"})
     write_ads(toy_vault, candidates=[cand("2020a....1A", "con nota", cites=9),
                                      cand("2020b....1B", "sin nota", cites=1)])
@@ -154,6 +162,7 @@ def test_drop_source_persiste_sin_ads_json(toy_vault, monkeypatch, capsys):
     """Un tema off-ADS puro NUNCA tiene build/<slug>/ads.json (no hubo query que lo genere), así
     que este carril tiene que funcionar sin él. Misma forma que el descarte del triage, más
     `origen` (qué carril) y el puntero que vuelve resoluble una clave sintética meses después."""
+    seed_topic_offads()
     assert run_main(monkeypatch, [
         "gp", "--drop-source", "2006RasmussenWilliams",
         "--reason", "libro de texto general; el capítulo relevante ya está sintetizado en el hub",
@@ -171,6 +180,7 @@ def test_drop_source_exige_motivo(toy_vault, monkeypatch):
 
 
 def test_drop_source_sin_pointer_no_lo_inventa(toy_vault, monkeypatch, capsys):
+    seed_topic_offads()
     assert run_main(monkeypatch, ["gp", "--drop-source", "2019Fulano",
                                   "--reason", "no es del tema"]) == 0
     assert "fuente" not in leer_decisiones()["2019Fulano"]
@@ -181,6 +191,8 @@ def test_drop_source_convive_con_el_triage_sin_pisar(toy_vault, monkeypatch):
     """Los dos carriles escriben las MISMAS `decisiones` (reusa el mecanismo, no inventa otro) sin
     pisarse entre sí ni pisar `busqueda`, que es de query_ads. El descarte del chaining NO cambia
     de forma: sin `origen` significa chaining (compatibilidad hacia atrás)."""
+    seed_topic_offads()
+    seed_topic_offads()
     write_ads(toy_vault, slug="gp", candidates=[cand("2020b....1B")])
     cfg.save_busqueda("gp", {"fecha": "2026-08-21", "n_core": 3})
     run_main(monkeypatch, ["gp", "--drop", "2020b....1B", "--reason", "ruido"])
@@ -210,6 +222,7 @@ def test_drop_y_drop_source_no_se_mezclan(toy_vault, monkeypatch):
 def test_listado_sin_ads_json_muestra_el_juicio_registrado(toy_vault, monkeypatch, capsys):
     """Antes moría con "corré primero la cadena", que para un off-ADS puro es un consejo imposible
     (nunca va a haber ads.json). Ahora lista lo registrado, con motivo, carril y puntero."""
+    seed_topic_offads()
     run_main(monkeypatch, ["gp", "--drop-source", "2006Rasmussen", "--reason", "libro general",
                            "--pointer", "https://x"])
     capsys.readouterr()
@@ -219,11 +232,86 @@ def test_listado_sin_ads_json_muestra_el_juicio_registrado(toy_vault, monkeypatc
     assert "libro general" in out and "https://x" in out
 
 
+def test_drop_source_rechaza_un_slug_inexistente(toy_vault, monkeypatch):
+    """`drop()` valida el slug de rebote (muere en `load_ads`); este carril no leía nada, así que un
+    typo escribía un registro huérfano que nadie lee jamás — el juicio se pierde en silencio, que es
+    exactamente lo que #81 existe para impedir."""
+    with pytest.raises(SystemExit, match="slug desconocido"):
+        run_main(monkeypatch, ["gpp", "--drop-source", "2006R", "--reason", "x"])
+    assert not cfg.registro_path("gpp").exists()
+
+
+def test_drop_source_normaliza_las_claves_y_rechaza_la_basura(toy_vault, monkeypatch, capsys):
+    """Una clave vacía queda invisible para el aviso de `ingest_topic` (que filtra `if k`), y una
+    con espacios no matchea nunca el item de `sources:`. El motivo en blanco esquivaba el
+    "no curar en silencio"."""
+    seed_topic_offads()
+    with pytest.raises(SystemExit, match="--reason"):
+        run_main(monkeypatch, ["gp", "--drop-source", "2006R", "--reason", "   "])
+    assert run_main(monkeypatch, ["gp", "--drop-source", "", "  2006R  ", "2006R",
+                                  "--reason", " no es del tema "]) == 0
+    d = leer_decisiones()
+    assert list(d) == ["2006R"]                      # normalizada y deduplicada
+    assert d["2006R"]["motivo"] == "no es del tema"
+    assert "1 fuente(s)" in capsys.readouterr().out   # el conteo dice lo que escribió
+
+
+def test_drop_source_avisa_si_la_clave_ya_tenia_decision(toy_vault, monkeypatch, capsys):
+    """Los dos carriles comparten espacio de claves: pisar el juicio del otro sin decir nada borra
+    un motivo que no es regenerable."""
+    seed_topic_offads()
+    cfg.save_decisiones("gp", {"2006R": {"decision": "aceptado", "motivo": "sí va",
+                                         "fecha": "2026-01-01"}})
+    run_main(monkeypatch, ["gp", "--drop-source", "2006R", "--reason", "cambié de opinión"])
+    out = capsys.readouterr().out
+    assert "ya tenía decisión" in out and "sí va" in out
+
+
+def test_offads_puro_sin_decisiones_no_da_un_consejo_imposible(toy_vault, monkeypatch):
+    """Un tema off-ADS NUNCA va a tener ads.json: mandarlo a "corré la cadena" (con un comando que
+    además no resuelve su slug, porque busca en stars.yaml) es el consejo imposible que #81 vino a
+    sacar; el fallback sólo se activaba si ya había decisiones, o sea nunca al empezar."""
+    seed_topic_offads()
+    with pytest.raises(SystemExit, match="off-ADS"):
+        run_main(monkeypatch, ["gp"])
+
+
+def test_migrate_consume_el_triage_json_viejo(toy_vault, monkeypatch, capsys):
+    """El detector del lint bloquea por EXISTENCIA del archivo: sin borrarlo, correr el único
+    comando que el propio mensaje recomienda dejaba el lint en 1 para siempre, sin ninguna acción
+    disponible. Borrarlo es lo que el mismo mensaje declara seguro (`build/` es scratch)."""
+    legacy = cfg.legacy_triage_path("test_star")
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    legacy.write_text(json.dumps({"decisiones": {"2019A....1A": {"decision": "descartado",
+                                                                "motivo": "ruido"}}}),
+                      encoding="utf-8")
+    assert run_main(monkeypatch, ["test_star", "--migrate"]) == 0
+    assert not legacy.exists()
+    assert cfg.load_decisiones("test_star")["2019A....1A"]["motivo"] == "ruido"
+
+
+def test_migrate_con_json_valido_pero_no_objeto(toy_vault, monkeypatch):
+    legacy = cfg.legacy_triage_path("test_star")
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    legacy.write_text('["2019A....1A"]', encoding="utf-8")
+    with pytest.raises(SystemExit, match="no es un objeto JSON"):
+        run_main(monkeypatch, ["test_star", "--migrate"])
+
+
 def test_listado_sin_ads_json_ni_decisiones_sigue_avisando(toy_vault, monkeypatch):
     """Sin juicio registrado el diagnóstico correcto sigue siendo "corré la cadena" — el fallback
     no puede tapar el caso de la estrella a la que le falta el ingest."""
     with pytest.raises(SystemExit, match="ads.json"):
         run_main(monkeypatch, ["test_star"])
+
+
+def test_show_decisions_con_busqueda_no_mapa_no_crashea(toy_vault, capsys):
+    """El lector (`load_registro`) es tolerante y sus dos consumidores no."""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    cfg.registro_path("test_star").write_text(
+        "busqueda: 2026-08-22\ndecisiones:\n  2020aaa...1..1A:\n    decision: descartado\n",
+        encoding="utf-8")
+    assert triage.show_decisions("test_star", cfg.load_decisiones("test_star")) == 0
 
 
 # ── --migrate: consolidar el triage.json viejo (#51) ─────────────────────────

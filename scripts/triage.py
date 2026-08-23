@@ -115,14 +115,35 @@ def drop_source(slug: str, claves: list[str], reason: str, pointer: str | None) 
     sintética (`AAAA+Autor`) o directamente una URL, así que se guarda el `fuente:` que la vuelve
     resoluble dentro de seis meses. Misma forma que el descarte del triage: la decisión vive en
     `decisiones` del registro versionado y viaja en git."""
+    # El sujeto tiene que EXISTIR: `drop()` lo valida de rebote (muere en `load_ads` si no hay
+    # ads.json), este carril no leía nada, así que un typo en el slug escribía un registro huérfano
+    # que nadie lee jamás — el juicio se pierde en silencio, que es lo que #81 existe para impedir.
+    try:
+        cfg.topic_by_slug(slug)
+    except KeyError:
+        try:
+            cfg.star_by_slug(slug)
+        except KeyError:
+            sys.exit(f"slug desconocido: '{slug}' — no está en topics.yaml ni en stars.yaml. "
+                     f"El registro de un sujeto que no existe no lo lee nadie.")
+    limpias = list(dict.fromkeys(k.strip() for k in claves if k and k.strip()))
+    if not limpias:
+        sys.exit("--drop-source necesita al menos una clave no vacía.")
+    reason = reason.strip()
+    if not reason:
+        sys.exit("--drop-source necesita un --reason con contenido (no espacios).")
     decisiones = load_decisions(slug)
     hoy = dt.date.today().isoformat()
-    for k in claves:
+    for k in limpias:
+        if (previa := decisiones.get(k)):
+            print(f"  ⚠ {k} ya tenía decisión ({previa.get('decision', '?')}, "
+                  f"{previa.get('origen') or 'chaining'}, {previa.get('fecha', 's/f')}): "
+                  f"{previa.get('motivo') or '(sin motivo)'} — la piso con ésta")
         decisiones[k] = {"decision": "descartado", "motivo": reason, "fecha": hoy,
                          "origen": "fuente-declarada",
-                         **({"fuente": pointer} if pointer else {})}
+                         **({"fuente": pointer.strip()} if pointer and pointer.strip() else {})}
     save_decisions(slug, decisiones)
-    print(f"  {len(claves)} fuente(s) declarada(s) descartada(s) en {triage_file(slug)} — "
+    print(f"  {len(limpias)} fuente(s) declarada(s) descartada(s) en {triage_file(slug)} — "
           f"motivo: {reason}")
     if not pointer:
         print("  (sin --pointer: la clave queda sin url/doi que la resuelva — conviene pasarlo)")
@@ -146,20 +167,29 @@ def migrate(slug: str) -> int:
               f"(el juicio nuevo ya se escribe en {cfg.registro_path(slug)}).")
         return 0
     try:
-        viejas = json.loads(legacy.read_text(encoding="utf-8")).get("decisiones") or {}
-    except ValueError:
-        sys.exit(f"{legacy} no es JSON válido — revisalo a mano antes de migrar.")
+        data = json.loads(legacy.read_text(encoding="utf-8"))
+    except (ValueError, OSError) as e:
+        sys.exit(f"{legacy} no se pudo leer ({type(e).__name__}) — revisalo a mano antes de migrar.")
+    if not isinstance(data, dict):
+        sys.exit(f"{legacy} no es un objeto JSON (es {type(data).__name__}) — revisalo a mano.")
+    viejas = data.get("decisiones") or {}
     ya = cfg.load_registro(slug).get("decisiones") or {}
     nuevas = {b: d for b, d in viejas.items() if b not in ya}
-    if not nuevas:
+    if nuevas:
+        cfg.save_decisiones(slug, {**viejas, **ya})   # el registro gana ante el mismo bibcode
+        print(f"{slug}: {len(nuevas)} decisión(es) migradas a {cfg.registro_path(slug)} "
+              f"({len(ya)} ya estaban).")
+    else:
         print(f"{slug}: las {len(viejas)} decisión(es) del triage.json viejo ya estaban en el "
-              f"registro — nada que hacer.")
-        return 0
-    cfg.save_decisiones(slug, {**viejas, **ya})       # el registro gana ante el mismo bibcode
-    print(f"{slug}: {len(nuevas)} decisión(es) migradas a {cfg.registro_path(slug)} "
-          f"({len(ya)} ya estaban).")
-    print("  Ahora viajan en git: commiteá el registro. El triage.json viejo queda como estaba "
-          "(build/ es scratch; se puede borrar).")
+              f"registro.")
+    # El migrador CONSUME su entrada. Sin esto, el detector del lint —que bloquea por EXISTENCIA del
+    # archivo— seguía en 1 después de correr el único comando que el propio mensaje recomienda, sin
+    # ninguna acción disponible: el círculo migrador→detector no cerraba. Borrarlo es exactamente lo
+    # que este mismo mensaje declaraba seguro ("build/ es scratch"), y lo que ya está en el registro
+    # versionado sobrevive al borrado (que es el punto de #51).
+    legacy.unlink()
+    print(f"  Ahora viajan en git: commiteá el registro. Borré {legacy} (scratch, ya consolidado): "
+          f"el lint deja de reportarlo.")
     return 0
 
 
@@ -168,8 +198,20 @@ def show_decisions(slug: str, decisiones: dict) -> int:
     existe y hay que poder verlo: es el caso normal de un tema **off-ADS puro** (nunca hubo query,
     así que nunca hubo ads.json) y el de cualquier sujeto tras limpiar `build/`. Antes esto moría
     con "corré primero la cadena", que para un off-ADS es un consejo imposible."""
-    print(f"Registro de {slug}: {len(decisiones)} decisión(es) persistidas · sin "
-          f"build/{slug}/ads.json (no hay candidatos del chaining pendientes)")
+    # NO afirmar "no hay pendientes": sin `build/` no se miró nada. El registro sí sabe cuántos
+    # candidatos dejó la última corrida — y es justo el caso (post-clone) donde el lint los reporta
+    # y manda correr este comando: negarlos acá reintroduce el falso limpio que #64 cerró.
+    b = cfg.load_registro(slug).get("busqueda") or {}
+    # #H11: una `busqueda:` editada a mano puede ser un escalar en vez de un mapa;
+    # el lector es tolerante, pero este consumidor no → tratala como ausente.
+    if not isinstance(b, dict):
+        b = {}
+    pend = b.get("n_candidates")
+    cola = (f"sin build/{slug}/ads.json: no se puede juzgar candidatos hasta re-correr la cadena"
+            if not pend else
+            f"sin build/{slug}/ads.json, y el registro del {b.get('fecha', 's/f')} anotó "
+            f"{pend} candidato(s) sin juzgar → re-corré la cadena para poder juzgarlos")
+    print(f"Registro de {slug}: {len(decisiones)} decisión(es) persistidas · {cola}")
     for k, d in sorted(decisiones.items()):
         origen = d.get("origen") or "chaining"
         ptr = f" → {d['fuente']}" if d.get("fuente") else ""
@@ -261,8 +303,20 @@ def main() -> int:
         return drop_source(args.slug, args.drop_source, args.reason, args.pointer or None)
 
     decisiones = load_decisions(args.slug)
-    if not (cfg.ROOT / "build" / args.slug / "ads.json").exists() and decisiones:
-        return show_decisions(args.slug, decisiones)
+    if not (cfg.ROOT / "build" / args.slug / "ads.json").exists():
+        if decisiones:
+            return show_decisions(args.slug, decisiones)
+        # Un tema off-ADS PURO no tiene `ads.json` por diseño: mandarlo a "corré la cadena" (con un
+        # comando que además no resuelve su slug) es el consejo imposible que #81 vino a sacar.
+        try:
+            _, meta = cfg.topic_by_slug(args.slug)
+        except KeyError:
+            meta = None
+        if meta is not None and (meta.get("source") or "ads") != "ads":
+            sys.exit(f"'{args.slug}' es un tema off-ADS (source: {meta.get('source')}): no tiene "
+                     f"candidatos del chaining por diseño y no hay decisiones registradas. El "
+                     f"carril de este tema es `triage.py {args.slug} --drop-source <clave> "
+                     f"--reason \"<motivo>\"`.")
     data = load_ads(args.slug)
     cands = data.get("candidates") or []
     con_nota = sum(1 for c in cands if has_note(c["bibcode"]))
