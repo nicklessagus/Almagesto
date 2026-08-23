@@ -44,6 +44,7 @@ CHAIN = ("query_ads.py", "fetch_arxiv.py", "fetch_pdf.py", "fetch_ground_truth.p
 
 
 def main() -> int:
+    cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser()
     ap.add_argument("slug", help="estrella de vault/config/stars.yaml (por slug)")
     ap.add_argument("--yes", action="store_true",

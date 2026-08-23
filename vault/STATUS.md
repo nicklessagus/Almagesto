@@ -18,6 +18,80 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
    `ingest-star` / `ingest-topic`.
 
+## ✅ Framework 1.23.0 (2026-08-23) — séptima pasada: el código que ninguna auditoría había mirado
+
+> **La tesis, verificada antes de empezar:** las seis pasadas previas apuntaron **todas al diff del
+> 22-08. Ocho scripts —1.754 líneas— eran byte-idénticos a `v1.11.0`** (`git diff v1.11.0..HEAD`
+> sobre ellos: cero archivos) y **ningún instrumento los había tocado**. El alcance de esta pasada no
+> es un diff: es el código acumulado. Minor porque el fix de `lint.py:805` hace que un `planets: 0`
+> del ground-truth pase a **reportarse**, así que una bóveda existente puede cambiar de veredicto.
+
+**Nota de método que vale más que varios hallazgos:** ninguna de las 21 hipótesis confirmadas
+necesitó una línea sin cubrir. Esos scripts están en **83–99% de cobertura** y **todo pasa por
+líneas que los tests ejecutan**. Es la lección de la 3ª —la cobertura no es assertion— reconfirmada
+sobre un corpus nuevo. (Lo que **no** está demostrado, y conviene no sobrevender: que los tests
+fijen el statu quo en vez del contrato. Eso lo decide una pasada de mutación sobre esos 122 tests,
+que no se corrió.)
+
+### Pérdida y corrupción silenciosa de lo que el código dice preservar
+- **`check_retractions.stamp_fields` destruía la extracción LLM.** Reescribía notas de
+  `wiki/papers/` sin tmp+rename. Medido con `ulimit -f`: 16.071 B → **8.192 B**, 198 de 400
+  ocurrencias perdidas — sobre lo MENOS regenerable de la bóveda. Es la misma clase que la 6ª
+  arregló en `save_registro`; el barrido nunca se había hecho. **14 writers, cero atómicos.**
+- **El drop de la clave vieja corrompía el frontmatter en silencio**: con una línea en blanco el
+  YAML parsea igual y el ítem huérfano se absorbe en la clave anterior
+  (`tags: ['paper', {...}]`) — y **ninguna categoría del lint lo veía**.
+- **`fetch_ground_truth --force`** pisaba el snapshot de NEA sin atomicidad: 162 B → 1.024 B de JSON
+  inválido, irrecuperable, sobre un archivo que su propio docstring dice que no es regenerable.
+
+### Un `---` en el frontmatter bloqueaba notas válidas (el más urgente, y fuera de los ocho)
+`split_fm` y `fm_error` delimitaban el frontmatter buscando la **subcadena** `---`, así que un guion
+triple dentro de un escalar entrecomillado cortaba a la mitad del valor: el lint reportaba **"YAML
+inválido"** —categoría **bloqueante**— sobre YAML **válido**, mandando a arreglar lo que no estaba
+roto. La misma clase en `check_retractions.split_note` **salteaba el paper** del chequeo de
+retracciones: falso limpio en la frontera dura. Ahora hay `lib_config.frontmatter_span`, que delimita
+por **líneas** que son sólo `---`.
+
+### Compuertas y filtros que mentían en vez de fallar
+- **El filtro de ruido, apagado por un escalar.** `noise_doctypes: erratum` ⇒ `set('erratum')` =
+  `{'t','u','a','e','m','r'}`: ningún doctype real matchea y un erratum entra como core.
+- **La curación manual, evaporada.** `extra_core: 1988old.....1O` ⇒ a ADS se le piden catorce
+  caracteres sueltos y **el bibcode nunca se pide**. Es el único lugar donde sobrevive una
+  *aceptación* del triage.
+- **Una fecha fabricada en la capa auditable:** `date-parts: "2021"` ⇒ `retraction.date = "2"`.
+- **El barrido de retracciones cerraba en verde sin haber consultado nada**, y un solo registro raro
+  de Crossref lo mataba entero (sin `try/except` por paper).
+- **`measure_layout` publicaba `0 / 0 (0%)` sobre 5 archivos reales** — el "(0) que significa no
+  miré" — y prometía *"Exit 0 siempre"* mientras salía con 1. Era el **único script sin un solo
+  test**: pasó de 0 a 11.
+- **11 CLIs salían con exit 1 en consola no-UTF8.** El fix de la 6ª vivía sólo en `lint.py`. Ahora
+  `print_seguro` cubre los `print` propios y `stdout_tolerante()` —llamado desde cada `main()`, no al
+  importar, para no romper `capsys`— cubre lo que **argparse** escribe directo a stdout.
+- **`fetch_pdf --limit` borraba el residuo de `fetch_arxiv`**, y un PDF truncado quedaba congelado
+  para siempre (ninguno validaba magic ni tamaño en disco, ninguno tenía `--force`).
+- **`is_ads_host('https://xadsabs.harvard.edu/x')` daba `True`** — el `endswith` aceptaba hosts que
+  no son subdominios, contra la promesa de que el token no sale de `*.adsabs.harvard.edu`.
+
+### El hallazgo transversal: la clase NO viaja uniformemente
+Era la hipótesis de partida —"si el defecto es de clase, hay que barrer los 46 sitios"— y la
+clasificación la **corrigió**: **19 garantizados · 8 inalcanzables · 19 alcanzables**. `lint.py` está
+**11 de 12 garantizado** porque tiene `normalize_lists` antes de todo lector; `check_retractions`
+está **0 de 6** porque no tiene nada. La clase se concentra donde falta ese saneo, no se esparce
+parejo — migrar los 12 de `lint.py` habría sido casi todo ruido. Y hay **dos sitios donde migrar
+mecánicamente empeora**: en `make_notes.py:333` el `or []` es correcto y `as_list` apagaría un aviso;
+en `lint.py:805` el fix era **borrar** el `or []`, no migrarlo.
+
+### Dos lecciones de método, para la próxima
+- **Un test puede empujar a la implementación equivocada.** El rojo de la escritura atómica inyectaba
+  el fallo **sólo en la ruta destino**, así que con tmp+rename no disparaba: premiaba escribir
+  directo y "restaurar" desde un backup — que **no sobrevive a un `SIGKILL`**, porque ahí no corre
+  ningún `except`. Un test que fija el **mecanismo** en vez del **contrato** conduce el diseño a
+  donde no querés.
+- **Lo que salió limpio, medido:** `bench_verify` cumple sus cuatro garantías (determinismo byte a
+  byte, `vault/` intacto, "nunca el original", sin `ZeroDivisionError`); idempotencia confirmada por
+  corrida en cinco scripts; y la higiene del token verificada extremo a extremo con una cadena real
+  de redirects ADS→doi.org→publisher usando el `should_strip_auth` de `requests`.
+
 ## Criterio de auditoría — una pasada, un instrumento (2026-08-22)
 
 > Sale de las tres auditorías seguidas de las tandas 1-4. Cada una encontró una **clase distinta**
@@ -30,6 +104,7 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 | 3ª (1.20.3) | **diff de código completo + cobertura AST + mutación** | defectos de código (un detector con agujero, una heurística ciega a la notación del propio schema, una rama inalcanzable) |
 | 4ª (1.20.4) | **mutación sobre las FEATURES + corrida real de la cadena + mirar los assets** | tests que pasaban por el motivo equivocado, contratos de schema sin test, features no propagadas a los skills, una captura que ya no es el schema |
 | 5ª (1.21.0) | **invariantes cross-artefacto medidos + recorrer la cadena de punta a punta** | agujeros de lógica (el espejo comparaba `len(planets)`), un crash del lint, chequeos hermanos asimétricos, el hand-off de los orquestadores sin el paso nuevo |
+| 7ª (1.23.0) | **el código que ninguna pasada había mirado** (8 scripts congelados desde v1.11.0) + barrido del defecto de clase | pérdida de datos en el writer de notas, un `---` que bloqueaba notas válidas, filtros que mentían en vez de fallar, el único script sin tests |
 | 6ª (1.22.0) | **diferencial HEAD↔working tree + fuzzing por propiedades + contratos de datos + las afirmaciones del diff ejecutadas + idempotencia/atomicidad + cobertura por mensaje y por flag** | dos pérdidas silenciosas de datos versionados, seis crashes de la compuerta de CI, tres falsos limpios, un test que rompía CI en un clone limpio, garantías afirmadas que no existían |
 
 **Regla:** releer más despacio no encuentra nada nuevo. Si una pasada tiene que agregar valor sobre

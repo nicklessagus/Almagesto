@@ -89,10 +89,10 @@ def save_decisions(slug: str, decisiones: dict) -> None:
 
 def drop(slug: str, bibcodes: list[str], reason: str) -> int:
     """Persiste el descarte de candidatos (no se re-proponen en el próximo refresh)."""
-    pendientes = {c["bibcode"] for c in load_ads(slug).get("candidates") or []}
+    pendientes = {c["bibcode"] for c in cfg.as_list(load_ads(slug).get("candidates"))}
     desconocidos = [b for b in bibcodes if b not in pendientes]
     if desconocidos:
-        print(f"  ⚠ {len(desconocidos)} bibcode(s) no están entre los candidatos pendientes "
+        cfg.print_seguro(f"  ⚠ {len(desconocidos)} bibcode(s) no están entre los candidatos pendientes "
               f"(¿ya decididos, o typo?): {', '.join(desconocidos)}")
     decisiones = load_decisions(slug)
     hoy = dt.date.today().isoformat()
@@ -102,15 +102,15 @@ def drop(slug: str, bibcodes: list[str], reason: str) -> int:
         # `origen` de un juicio anterior — justo lo que #51 existe para que no se pierda. Mismo
         # aviso que su hermano `drop_source`, para que los dos carriles se comporten igual.
         if (previa := decisiones.get(b)):
-            print(f"  ⚠ {b} ya tenía decisión ({previa.get('decision', '?')}, "
+            cfg.print_seguro(f"  ⚠ {b} ya tenía decisión ({previa.get('decision', '?')}, "
                   f"{previa.get('origen') or 'chaining'}, {previa.get('fecha', 's/f')}): "
                   f"{previa.get('motivo') or '(sin motivo)'} — la piso con ésta")
         decisiones[b] = {"decision": "descartado", "motivo": reason, "fecha": hoy}
     save_decisions(slug, decisiones)
-    print(f"  {len(bibcodes)} candidato(s) descartados en {triage_file(slug)} — motivo: {reason}")
-    print("  (versionado: se commitea y viaja entre máquinas, como `extra_core` — los dos lados "
+    cfg.print_seguro(f"  {len(bibcodes)} candidato(s) descartados en {triage_file(slug)} — motivo: {reason}")
+    cfg.print_seguro("  (versionado: se commitea y viaja entre máquinas, como `extra_core` — los dos lados "
           "de la decisión sobreviven al clon)")
-    print("  (los aceptados NO van acá: van a `extra_core` en stars.yaml, curación persistente)")
+    cfg.print_seguro("  (los aceptados NO van acá: van a `extra_core` en stars.yaml, curación persistente)")
     return 0
 
 
@@ -144,18 +144,18 @@ def drop_source(slug: str, claves: list[str], reason: str, pointer: str | None) 
     hoy = dt.date.today().isoformat()
     for k in limpias:
         if (previa := decisiones.get(k)):
-            print(f"  ⚠ {k} ya tenía decisión ({previa.get('decision', '?')}, "
+            cfg.print_seguro(f"  ⚠ {k} ya tenía decisión ({previa.get('decision', '?')}, "
                   f"{previa.get('origen') or 'chaining'}, {previa.get('fecha', 's/f')}): "
                   f"{previa.get('motivo') or '(sin motivo)'} — la piso con ésta")
         decisiones[k] = {"decision": "descartado", "motivo": reason, "fecha": hoy,
                          "origen": "fuente-declarada",
                          **({"fuente": pointer.strip()} if pointer and pointer.strip() else {})}
     save_decisions(slug, decisiones)
-    print(f"  {len(limpias)} fuente(s) declarada(s) descartada(s) en {triage_file(slug)} — "
+    cfg.print_seguro(f"  {len(limpias)} fuente(s) declarada(s) descartada(s) en {triage_file(slug)} — "
           f"motivo: {reason}")
     if not pointer:
-        print("  (sin --pointer: la clave queda sin url/doi que la resuelva — conviene pasarlo)")
-    print("  (versionado: se commitea y viaja. `ingest_topic` avisa si volvés a declarar esta "
+        cfg.print_seguro("  (sin --pointer: la clave queda sin url/doi que la resuelva — conviene pasarlo)")
+    cfg.print_seguro("  (versionado: se commitea y viaja. `ingest_topic` avisa si volvés a declarar esta "
           "clave en `sources:`)")
     return 0
 
@@ -171,7 +171,7 @@ def migrate(slug: str) -> int:
     migrar no escribe."""
     legacy = cfg.legacy_triage_path(slug)
     if not legacy.exists():
-        print(f"{slug}: no hay {legacy} — nada que migrar "
+        cfg.print_seguro(f"{slug}: no hay {legacy} — nada que migrar "
               f"(el juicio nuevo ya se escribe en {cfg.registro_path(slug)}).")
         return 0
     try:
@@ -185,20 +185,26 @@ def migrate(slug: str) -> int:
     # leer (no consolidó nada, no toca borrar); lo segundo es un legado sin decisiones pendientes,
     # que sigue siendo un migrar-y-borrar legítimo.
     if "decisiones" not in data:
-        print(f"{slug}: {legacy} no tiene la clave 'decisiones' — no es el formato que este "
+        cfg.print_seguro(f"{slug}: {legacy} no tiene la clave 'decisiones' — no es el formato que este "
               f"migrador consolida, así que no se leyó ni se migró nada. Lo dejo: si es scratch "
               f"viejo sin valor, borralo a mano; si trae un juicio en otra forma, migralo primero "
               f"a `decisiones` y volvé a correr `--migrate`.")
         return 1
     viejas = data["decisiones"] or {}
-    ya = cfg.load_registro(slug).get("decisiones") or {}
+    # `cfg.load_decisiones`, no un `.get(...) or {}` propio: el registro es el ÚNICO artefacto no
+    # regenerable de la bóveda y el framework instruye editarlo a mano — una `decisiones:` escalar
+    # (edición a mano rota) es YAML válido. `cfg.load_decisiones` ya trae el `isinstance` que hace
+    # falta (lib_config:412); duplicar el lector acá es donde vivía el defecto (R15): con `ya`
+    # escalar, `b not in ya` se volvía un substring match silencioso y `{**viejas, **ya}` reventaba
+    # con `TypeError: 'str' object is not a mapping` a mitad de la migración.
+    ya = cfg.load_decisiones(slug)
     nuevas = {b: d for b, d in viejas.items() if b not in ya}
     if nuevas:
         cfg.save_decisiones(slug, {**viejas, **ya})   # el registro gana ante el mismo bibcode
-        print(f"{slug}: {len(nuevas)} decisión(es) migradas a {cfg.registro_path(slug)} "
+        cfg.print_seguro(f"{slug}: {len(nuevas)} decisión(es) migradas a {cfg.registro_path(slug)} "
               f"({len(ya)} ya estaban).")
     else:
-        print(f"{slug}: las {len(viejas)} decisión(es) del triage.json viejo ya estaban en el "
+        cfg.print_seguro(f"{slug}: las {len(viejas)} decisión(es) del triage.json viejo ya estaban en el "
               f"registro.")
     # El migrador CONSUME su entrada. Sin esto, el detector del lint —que bloquea por EXISTENCIA del
     # archivo— seguía en 1 después de correr el único comando que el propio mensaje recomienda, sin
@@ -208,7 +214,7 @@ def migrate(slug: str) -> int:
     # acá: con `viejas` vacío (clave presente pero sin contenido) o ya cubierto por `ya`, seguimos
     # habiendo LEÍDO y consolidado la clave — es distinto del caso de arriba, que nunca la leyó.
     legacy.unlink()
-    print(f"  Ahora viajan en git: commiteá el registro. Borré {legacy} (scratch, ya consolidado): "
+    cfg.print_seguro(f"  Ahora viajan en git: commiteá el registro. Borré {legacy} (scratch, ya consolidado): "
           f"el lint deja de reportarlo.")
     return 0
 
@@ -231,13 +237,13 @@ def show_decisions(slug: str, decisiones: dict) -> int:
             if not pend else
             f"sin build/{slug}/ads.json, y el registro del {b.get('fecha', 's/f')} anotó "
             f"{pend} candidato(s) sin juzgar → re-corré la cadena para poder juzgarlos")
-    print(f"Registro de {slug}: {len(decisiones)} decisión(es) persistidas · {cola}")
+    cfg.print_seguro(f"Registro de {slug}: {len(decisiones)} decisión(es) persistidas · {cola}")
     for k, d in sorted(decisiones.items()):
         origen = d.get("origen") or "chaining"
         ptr = f" → {d['fuente']}" if d.get("fuente") else ""
-        print(f"  [{d.get('decision', '?')}] {k}  ({origen}, {d.get('fecha', 's/f')}){ptr}\n"
+        cfg.print_seguro(f"  [{d.get('decision', '?')}] {k}  ({origen}, {d.get('fecha', 's/f')}){ptr}\n"
               f"      motivo: {d.get('motivo') or '(sin motivo registrado)'}")
-    print(f"\n  → viven en {triage_file(slug)} (versionado). Para juzgar candidatos del chaining "
+    cfg.print_seguro(f"\n  → viven en {triage_file(slug)} (versionado). Para juzgar candidatos del chaining "
           f"hace falta la cadena de ingest; un tema off-ADS no los tiene por diseño.")
     return 0
 
@@ -255,7 +261,7 @@ def row(c: dict) -> str:
     cites = c.get("citation_count") or 0
     nota = "◆" if has_note(c["bibcode"]) else " "
     title = " ".join((c.get("title") or "").split())[:76]
-    return f"  {cites:>5} {nota} {c['bibcode']}  {title}  «{','.join(c.get('topics') or [])}»"
+    return f"  {cites:>5} {nota} {c['bibcode']}  {title}  «{','.join(cfg.as_list(c.get('topics')))}»"
 
 
 def report(slug: str, cands: list[dict]) -> None:
@@ -277,12 +283,13 @@ def report(slug: str, cands: list[dict]) -> None:
         lines.append(f"| {c.get('citation_count') or 0} | {'◆' if has_note(c['bibcode']) else ''} | "
                      f"{c.get('year') or ''} | "
                      f"[{c['bibcode']}]({ADS_URL}{c['bibcode']}/abstract) | {title} | "
-                     f"{c.get('via') or ''} | {','.join(c.get('topics') or [])} |")
+                     f"{c.get('via') or ''} | {','.join(cfg.as_list(c.get('topics')))} |")
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"  → {out}")
+    cfg.print_seguro(f"  → {out}")
 
 
 def main() -> int:
+    cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser()
     ap.add_argument("slug", help="estrella (o tema) con build/<slug>/ads.json; con --drop-source "
                                  "(fuente declarada off-ADS) no hace falta el ads.json")
@@ -338,19 +345,19 @@ def main() -> int:
                      f"carril de este tema es `triage.py {args.slug} --drop-source <clave> "
                      f"--reason \"<motivo>\"`.")
     data = load_ads(args.slug)
-    cands = data.get("candidates") or []
+    cands = cfg.as_list(data.get("candidates"))
     con_nota = sum(1 for c in cands if has_note(c["bibcode"]))
-    print(f"Triage de {args.slug}: {len(cands)} candidatos pendientes "
+    cfg.print_seguro(f"Triage de {args.slug}: {len(cands)} candidatos pendientes "
           f"(◆ {con_nota} ya con nota en la bóveda, vía otro slug) · "
           f"{len(decisiones)} decisiones persistidas · {data.get('n_relevant', 0)} core actuales")
     if not cands:
-        print("  → nada pendiente. (Los candidatos aparecen tras un query_ads con chaining.)")
+        cfg.print_seguro("  → nada pendiente. (Los candidatos aparecen tras un query_ads con chaining.)")
         return 0
     for c in sorted(cands, key=lambda c: c.get("citation_count") or 0, reverse=True):
-        print(row(c))
+        cfg.print_seguro(row(c))
     if args.report:
         report(args.slug, cands)
-    print("\n  → juicio (LLM/usuario) por título+abstract: pertinente al SUJETO / ruido / dudoso.\n"
+    cfg.print_seguro("\n  → juicio (LLM/usuario) por título+abstract: pertinente al SUJETO / ruido / dudoso.\n"
           "     aceptados  → `extra_core: [<bibcode>, …]` en vault/config/stars.yaml y re-correr la "
           "cadena (idempotente: sólo baja los nuevos).\n"
           "     descartados → python scripts/triage.py <slug> --drop <bib> … --reason \"<motivo>\".\n"

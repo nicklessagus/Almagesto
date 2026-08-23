@@ -1682,6 +1682,35 @@ def test_sync_mirror_rellena_tambien_los_campos_estelares(toy_vault):
     assert (fm["teff_K"], fm["dist_pc"]) == (5344.0, 3.6)
 
 
+# ── formas inesperadas del ground_truth: host/planets escalares ────────────
+
+def test_sync_mirror_con_host_escalar_no_revienta(toy_vault, capsys):
+    """`make_notes.py:489` — `host = gt.get("host") or {}`.
+
+    `--sync-mirror` es el consumidor NUEVO (23-08) de un formato viejo. `lint.py:795-815` ya
+    endurece exactamente este ground-truth (`host` no-mapa → contradicción reportada, `planets`
+    no-lista → reportada, entradas no-mapa → filtradas) y sigue funcionando; `sync_mirror` lee lo
+    mismo sin ninguna de esas guardas y muere con `AttributeError`. Dos lectores del mismo
+    artefacto con dos niveles de tolerancia: el que ESCRIBE en las fichas es el frágil."""
+    (cfg.GROUND_TRUTH / "s.json").write_text(
+        json.dumps({"slug": "s", "host": "G8V", "planets": []}), encoding="utf-8")
+    mk_note(cfg.STARS, "s", {"tags": ["star"], "teff_K": None, "planets": []}, "# s\n\nprosa\n")
+    mn.sync_mirror()
+    assert "s.md" in capsys.readouterr().out
+
+
+def test_sync_mirror_con_planets_escalar_no_revienta(toy_vault, capsys):
+    """Hermano del anterior sobre el otro campo. Un `planets` string se recorre carácter por
+    carácter y `p.get` revienta. El lint reporta este mismo ground-truth ("`planets` del
+    ground-truth no es una lista"); `sync_mirror` no."""
+    (cfg.GROUND_TRUTH / "s.json").write_text(
+        json.dumps({"slug": "s", "host": {}, "planets": "b"}), encoding="utf-8")
+    mk_note(cfg.STARS, "s", {"tags": ["star"], "planets": [{"letter": "b", "P_days": None}]},
+            "# s\n\nprosa **b**\n")
+    mn.sync_mirror()
+    assert "s.md" in capsys.readouterr().out
+
+
 # ── la frontera: lo que NO puede tocar ─────────────────────────────────────
 
 def test_sync_mirror_no_toca_un_valor_que_nea_no_tiene(toy_vault, capsys):

@@ -146,6 +146,75 @@ def test_planetas_ordenados_por_periodo_none_al_final():
     assert letters == ["b", "c", "d"]
 
 
+# ── fetch_host: errores de SIMBAD/NEA no dejan campos muertos (H-14/H-15) ────
+#
+# Decisión: se dejan de escribir `_nea_host_error`/`_simbad_error` al ground-truth (0
+# consumidores, medido por grep — nada en el repo los lee, ni el lint) y en su lugar se avisa por
+# stdout en el momento del ingest, que es donde alguien puede efectivamente actuar. Escribir un
+# campo nuevo con lector recién en `lint.py` no era una opción: ese script quedaba fuera del
+# alcance de la tanda que encontró este defecto.
+
+def test_simbad_error_no_se_escribe_como_campo_muerto(monkeypatch, capsys):
+    """`_simbad_error` se escribía al ground-truth y nadie lo leía — indistinguible para
+    cualquier lector real de un campo cualquiera del payload. Ahora se avisa por stdout y NO se
+    persiste un campo sin lector."""
+    class BoomSimbad:
+        def add_votable_fields(self, *a, **k):
+            raise RuntimeError("campo no soportado por esta versión de astroquery")
+        def query_object(self, host):
+            raise RuntimeError("SIMBAD no respondió")
+
+    mod = types.ModuleType("astroquery.simbad")
+    mod.Simbad = BoomSimbad
+    monkeypatch.setitem(sys.modules, "astroquery.simbad", mod)
+    monkeypatch.setitem(sys.modules, "astroquery", types.ModuleType("astroquery"))
+
+    out = gt.fetch_host("Test Star", tab=[])
+    assert "_simbad_error" not in out, f"campo muerto sin lector todavía presente: {out!r}"
+    assert "SIMBAD" in capsys.readouterr().out
+
+
+def test_nea_host_error_no_se_escribe_como_campo_muerto(monkeypatch, capsys):
+    """Mismo defecto, del lado de NEA: `_nea_host_error` tampoco tenía lector."""
+    monkeypatch.setattr(gt, "fetch_pscomppars",
+                        lambda h: (_ for _ in ()).throw(RuntimeError("NEA no respondió")))
+
+    class NoOpSimbad:
+        def add_votable_fields(self, *a, **k):
+            raise RuntimeError("sin red")
+        def query_object(self, host):
+            raise RuntimeError("sin red")
+
+    mod = types.ModuleType("astroquery.simbad")
+    mod.Simbad = NoOpSimbad
+    monkeypatch.setitem(sys.modules, "astroquery.simbad", mod)
+    monkeypatch.setitem(sys.modules, "astroquery", types.ModuleType("astroquery"))
+
+    out = gt.fetch_host("Test Star", tab=None)
+    assert "_nea_host_error" not in out, f"campo muerto sin lector todavía presente: {out!r}"
+    assert "NEA" in capsys.readouterr().out
+
+
+def test_simbad_sin_ningun_campo_agregable_avisa(monkeypatch, capsys):
+    """Si NINGUNO de los dos nombres de campo (sp_type/sptype) se puede agregar, antes no había
+    ni excepción ni marcador: `spectral_type` quedaba `None`, indistinguible (desde #70) de "NEA
+    no lo tiene". Ahora se avisa explícitamente de esta ambigüedad."""
+    class SimbadSinCampos:
+        def add_votable_fields(self, *a, **k):
+            raise RuntimeError("campo desconocido")
+        def query_object(self, host):
+            return None    # SIMBAD "responde" pero sin resultados — no dispara el except general
+
+    mod = types.ModuleType("astroquery.simbad")
+    mod.Simbad = SimbadSinCampos
+    monkeypatch.setitem(sys.modules, "astroquery.simbad", mod)
+    monkeypatch.setitem(sys.modules, "astroquery", types.ModuleType("astroquery"))
+
+    gt.fetch_host("Test Star", tab=[])
+    salida = capsys.readouterr().out
+    assert "sp_type" in salida or "sptype" in salida
+
+
 # ── main(): idempotencia del snapshot ────────────────────────────────────────
 
 def run_main(monkeypatch, argv):
@@ -202,4 +271,26 @@ def test_main_nea_caida_aborta_amigable(toy_vault, monkeypatch):
     monkeypatch.setattr(gt, "fetch_pscomppars", down)
     with pytest.raises(SystemExit, match="no respondió"):
         run_main(monkeypatch, ["test_star"])
+
+
+# ── H-06: --force reescribe el snapshot sin atomicidad ───────────────────────
+
+def test_force_no_destruye_el_snapshot_si_falla_la_escritura(toy_vault, monkeypatch):
+    """`fetch_ground_truth --force` reescribe `raw/ground_truth/<slug>.json` directo. Medido: 162 B
+    de snapshot previo → 1.024 B de JSON inválido, contenido viejo irrecuperable — y su propio
+    docstring dice que NEA cambia entre releases, o sea que NO es regenerable."""
+    dest = toy_vault.GROUND_TRUTH / "s.json"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    previo = json.dumps({"slug": "s", "host": {"teff_K": 5344.0}, "planets": []})
+    dest.write_text(previo, encoding="utf-8")
+
+    import os
+    monkeypatch.setattr(os, "replace", lambda *a, **k: (_ for _ in ()).throw(OSError("corte")))
+    escribir = getattr(gt, "write_ground_truth", None)
+    if escribir is None:
+        pytest.skip("fetch_ground_truth no expone un writer aislado todavía — parte del fix")
+    with pytest.raises(OSError):
+        escribir("s", {"slug": "s", "host": {}, "planets": []})
+    assert dest.read_text(encoding="utf-8") == previo, (
+        "el snapshot previo no sobrevivió a un fallo de escritura → el writer no es atómico")
 

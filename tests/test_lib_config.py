@@ -235,6 +235,27 @@ def test_es_del_carril_distingue_los_dos_juicios():
     assert not cfg.es_del_carril({"origen": "fuente-declarada"}, "chaining")
 
 
+# ── split_fm: un `---` dentro de un valor no debe cortar el frontmatter ──────
+
+NOTA_CON_GUIONES = (
+    '---\n'
+    'bibcode: 2020aaa...1..1A\n'
+    'title: "Un titulo con --- adentro"\n'
+    'tags:\n'
+    '- paper\n'
+    '---\n'
+    'cuerpo\n'
+)
+
+
+def test_split_fm_no_corta_dentro_de_un_valor():
+    """El split por `---` es TEXTUAL y corta a la mitad de un escalar entrecomillado, así que
+    `split_fm` devuelve `{}` sobre un frontmatter que **es YAML válido**. Todo lo que cuelga del
+    frontmatter (tipo de nota, retracción, espejo, roles) queda mudo para esa nota."""
+    fm = cfg.split_fm(NOTA_CON_GUIONES)
+    assert fm.get("bibcode") == "2020aaa...1..1A", f"frontmatter perdido: {fm!r}"
+
+
 # ── escritura del registro: atomicidad y no pisar lo ilegible (#51/#64) ──────
 
 REGISTRO_ROTO = 'busqueda:\n  motivo: "sin cerrar\n  fecha: 2026-08-01\n'

@@ -1,4 +1,5 @@
 """query_ads: clasificador, variantes de designación, retry/truncado, chaining, main()."""
+import importlib.util
 import json
 import re
 import sys
@@ -8,7 +9,7 @@ import pytest
 import requests as real_requests
 
 import query_ads as qa
-from conftest import write_yaml
+from conftest import SCRIPTS, write_yaml
 import lib_config as cfg
 
 
@@ -121,6 +122,79 @@ def test_require_faceta_inexistente_falla():
     falla ruidoso (mismo camino que corre al importar el módulo)."""
     with pytest.raises(RuntimeError, match="require nombra facetas ausentes"):
         qa.combination_rule({"require": ["no-existe"]}, {"rv": None})
+
+
+# ── objective.yaml compilado a nivel de módulo: formas raras editadas a mano ──
+
+def fresh_query_ads(monkeypatch, objective: dict):
+    """Instancia FRESCA de `query_ads` compilada contra `objective`.
+
+    Los tres sitios de `query_ads` que leen `objective.yaml` (líneas 117/120/122) corren a
+    **nivel de módulo**: la lente se compila al importar. Para ejercitarlos hay que volver a
+    ejecutar el módulo, y se hace bajo OTRO nombre para no dejar el `query_ads` compartido de la
+    suite en un estado raro.
+    """
+    monkeypatch.setattr(cfg, "load_objective", lambda: objective)
+    spec = importlib.util.spec_from_file_location("query_ads_f3probe", SCRIPTS / "query_ads.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)          # ← acá corren las líneas 117/120/122
+    return mod
+
+
+def test_noise_doctypes_escalar_no_desarma_el_filtro_de_ruido(monkeypatch):
+    """`query_ads.py:122` — `NOISE_DOCTYPES = set(_REL.get("noise_doctypes") or [])`.
+
+    Declarar UN solo doctype de ruido sin corchetes (`noise_doctypes: erratum`) es YAML válido y
+    el error de edición más natural que existe. El `or []` no dispara (string truthy) y `set()`
+    lo desarma en LETRAS: el filtro de ruido queda apagado en silencio y un erratum entra como
+    **core**. Es exactamente el bug que `lib_config:236` ya documenta para `concept_areas`
+    ("un `concept_areas: indicators` se desempaquetaba CARÁCTER POR CARÁCTER"), sin arreglar acá.
+    """
+    obj = {"relevance": {"topics": {"rv": "radial velocity"}, "noise_doctypes": "erratum"}}
+    mod = fresh_query_ads(monkeypatch, obj)
+    assert mod.NOISE_DOCTYPES == {"erratum"}, (
+        f"la lente se desarmó en letras: {sorted(mod.NOISE_DOCTYPES)}")
+    _, relevante = mod.classify({"title": ["a radial velocity survey"], "doctype": "erratum"})
+    assert relevante is False, "un erratum entró como CORE: el filtro de ruido está apagado"
+
+
+def test_relevance_escalar_reporta_en_vez_de_reventar_al_importar(monkeypatch):
+    """`query_ads.py:117` — `_REL = (_OBJ.get("relevance") or {})`.
+
+    Tres líneas más abajo el módulo YA tiene el error correcto para "objective.yaml sin
+    relevance.topics": un `RuntimeError` que dice qué completar. Con `relevance:` escalar nunca
+    se llega: el `_REL.get` de la línea 120 revienta antes con un `AttributeError` pelado, y como
+    es a nivel de módulo se lleva puesto el import entero.
+    """
+    obj = {"relevance": "topics"}
+    with pytest.raises(RuntimeError, match="relevance.topics"):
+        fresh_query_ads(monkeypatch, obj)
+
+
+def test_topics_como_lista_reporta_en_vez_de_reventar(monkeypatch):
+    """`query_ads.py:120` — `(_REL.get("topics") or {}).items()`.
+
+    `topics` es un MAPA faceta→regex. Escribirlo como lista de nombres es el error de forma
+    esperable de un humano que copia la lista de facetas de la prosa del skill. Debería caer en
+    el `RuntimeError` documentado ("no define relevance.topics"), no en un `AttributeError`.
+    """
+    obj = {"relevance": {"topics": ["actividad", "rv"]}}
+    with pytest.raises(RuntimeError, match="relevance.topics"):
+        fresh_query_ads(monkeypatch, obj)
+
+
+def test_require_escalar_no_se_desarma_en_letras(monkeypatch):
+    """`query_ads.py:141` — `require = list(rel.get("require") or [])`.
+
+    `require: rv` (escalar, la forma natural para UNA faceta obligatoria) se convierte en
+    `['r','v']`. El módulo sí aborta —bien—, pero el mensaje le dice al usuario que faltan las
+    facetas `['r', 'v']` cuando lo que escribió es `rv`: el diagnóstico apunta al síntoma
+    equivocado y manda a editar `topics`, que está bien.
+    """
+    obj = {"relevance": {"topics": {"rv": "radial velocity"}, "require": "rv"}}
+    with pytest.raises(RuntimeError) as exc:
+        fresh_query_ads(monkeypatch, obj)
+    assert "'r'" not in str(exc.value), f"el require se desarmó en letras: {exc.value}"
 
 
 # ── designaciones / queries ──────────────────────────────────────────────────
@@ -746,6 +820,57 @@ def test_main_extra_core_avisa_bibcode_inexistente(toy_vault, toy_classifier, no
     monkeypatch.setattr(qa, "fetch_bibcodes", lambda bibs: [])
     assert run_main(monkeypatch, ["test_star"]) == 0
     assert "2020typo....1X" in capsys.readouterr().out
+
+
+def test_main_extra_core_escalar_no_pierde_la_curacion(toy_vault, monkeypatch, capsys):
+    """`query_ads.py:910` — `extra = [b for b in (meta.get("extra_core") or []) if b]`.
+
+    Gemelo de R5 (`test_check_retractions.py`) en el consumidor donde más duele. `extra_core` es
+    el ÚNICO lugar donde sobrevive la aceptación de un candidato del triage (`build/` es scratch;
+    los rechazos van al registro, las aceptaciones acá). Con un escalar, lo que se le pide a ADS
+    son N bibcodes de una letra y el bibcode real **no se pide nunca**: el paper que el usuario
+    acaba de curar a mano no entra al core y nadie avisa. El aviso de "bibcode inexistente" que
+    existe desde #39 dispara, pero nombrando las letras.
+    """
+    write_yaml(cfg.STARS_YAML, {"Estrella Test": {
+        "slug": "test_star", "simbad": "s", "ads_object": "Test Star",
+        "aliases": [], "extra_core": "1988old.....1O"}})
+    monkeypatch.setattr(qa, "TOPIC_PATTERNS", {"rv": re.compile("radial velocity", 2)})
+    monkeypatch.setattr(qa, "NOISE_DOCTYPES", set())
+    monkeypatch.setattr(qa, "REQUIRE_TOPICS", [])
+    monkeypatch.setattr(qa, "MIN_TOPICS", 1)
+    monkeypatch.setattr(qa, "time", type("T", (), {"sleep": staticmethod(lambda s: None)})())
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False: [])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    pedidos: list = []
+    monkeypatch.setattr(qa, "fetch_bibcodes", lambda bibs: pedidos.extend(bibs) or [])
+    run_main(monkeypatch, ["test_star"])
+    assert pedidos == ["1988old.....1O"], f"se le pidió a ADS: {pedidos}"
+
+
+def test_main_aliases_escalar_en_stars_yaml(toy_vault, monkeypatch):
+    """`query_ads.py:860` (y su gemelo 613, `make_notes.py:984/1093`) —
+    `[cfg.require_field(...)] + meta.get("aliases", [])`.
+
+    Fuera del grep canónico (usa el default posicional en vez de `or []`) pero es el MISMO
+    defecto: el default sólo actúa si la clave está **ausente**; una `aliases:` presente y
+    escalar pasa igual y `list + str` levanta `TypeError`. Escribir UN alias sin corchetes es la
+    forma natural de la primera edición de `stars.yaml`, que es un archivo de instancia editado a
+    mano por definición. El fallo cae en el arranque mismo del ingest, sin decir qué corregir.
+    """
+    write_yaml(cfg.STARS_YAML, {"Estrella Test": {
+        "slug": "test_star", "simbad": "s", "ads_object": "Test Star", "aliases": "HD 12345"}})
+    monkeypatch.setattr(qa, "TOPIC_PATTERNS", {"rv": re.compile("radial velocity", 2)})
+    monkeypatch.setattr(qa, "NOISE_DOCTYPES", set())
+    monkeypatch.setattr(qa, "REQUIRE_TOPICS", [])
+    monkeypatch.setattr(qa, "MIN_TOPICS", 1)
+    monkeypatch.setattr(qa, "time", type("T", (), {"sleep": staticmethod(lambda s: None)})())
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False: [])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    monkeypatch.setattr(qa, "fetch_bibcodes", lambda bibs: [])
+    run_main(monkeypatch, ["test_star"])      # no debe reventar con TypeError: el alias mal escrito se reporta
 
 
 def test_main_tema_extra_only(toy_vault, toy_classifier, no_sleep, monkeypatch):

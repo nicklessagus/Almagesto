@@ -83,6 +83,24 @@ def test_frontmatter_roto_bloquea(toy_vault, capsys):
     assert "YAML inválido" in out and "sin cierre `---`" in out
 
 
+NOTA_CON_GUIONES = (
+    '---\n'
+    'bibcode: 2020aaa...1..1A\n'
+    'title: "Un titulo con --- adentro"\n'
+    'tags:\n'
+    '- paper\n'
+    '---\n'
+    'cuerpo\n'
+)
+
+
+def test_el_lint_no_reporta_yaml_invalido_sobre_yaml_valido():
+    """Peor que perderlo: el lint lo reporta como **YAML inválido** —categoría BLOQUEANTE— y manda a
+    arreglar un frontmatter que no está roto. Falso positivo que frena un commit."""
+    assert lint.fm_error(NOTA_CON_GUIONES) is None, (
+        f"falso positivo bloqueante: {lint.fm_error(NOTA_CON_GUIONES)!r}")
+
+
 def test_paper_sin_tag_paper_evade_los_chequeos_de_su_tipo(toy_vault, capsys):
     """Sin `tags: [paper]` la nota queda invisible para TODOS los chequeos de su tipo —incluida la
     frontera dura de `retracted`— y ni siquiera sale como huérfana si algo la linkea: se pierde del
@@ -1505,6 +1523,25 @@ def test_rescate_glifo_truncado_surface_backlog(toy_vault, capsys):
     assert rc == 0                                     # backlog, no bloqueante
     assert "rescate por glifo incompleto" in out and "eps_eridani" in out
     assert "Eri/Eridani" in out and "2342" in out
+
+
+def test_constellations_no_lista_no_tumba_el_lint(toy_vault, capsys):
+    """`lint.py:1032` — `"/".join(tg.get("constellations") or [])`.
+
+    Las dos líneas de alrededor (1019 `candidates`, 1030 `truncated_glyph`) YA fueron migradas a
+    `cfg.as_list` por la 6ª pasada; el `constellations` de adentro quedó sin migrar. Con un
+    entero el `join` levanta `TypeError` y **voltea la compuerta de CI**, cuyo contrato
+    documentado es "ante una bóveda rara reporta, no se muere". Alcanzabilidad baja (`query_ads`
+    siempre escribe `sorted(consts)`), pero es el mismo sitio, el mismo bloque y el mismo helper:
+    migrar el vecino y dejar el de adentro es la definición de barrido incompleto."""
+    build = cfg.ROOT / "build" / "test_star"
+    build.mkdir(parents=True, exist_ok=True)
+    (build / "ads.json").write_text(json.dumps(
+        {"records": [], "candidates": [],
+         "truncated_glyph": [{"letter": "e", "constellations": 5, "num_found": 9, "rows": 2}]}),
+        encoding="utf-8")
+    mk_note(cfg.STARS, "test_star", {"tags": ["star"], "planets": []}, "# t\n")
+    run_lint(capsys)          # no debe reventar: la compuerta reporta, no se muere
 
 
 def test_corpus_no_truncado_no_reporta(toy_vault, capsys):

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 
@@ -34,6 +35,29 @@ HEADERS = {"User-Agent": f"Almagesto/{cfg.ALMAGESTO_VERSION} (academic literatur
 
 def safe_name(bibcode: str) -> str:
     return bibcode.replace("/", "_")
+
+
+def write_pdf_atomic(dest, data: bytes) -> bool:
+    """Escritura atómica del PDF final: temporal en el MISMO directorio + `os.replace` (mismo
+    patrón que `lib_config.save_registro` / `fetch_ground_truth.write_ground_truth` /
+    `fetch_pdf.write_pdf_atomic`, que es la implementación gemela para la otra vía de bajada).
+    H-07: antes se hacía `dest.write_bytes(buf)` directo — un corte a mitad de esa escritura
+    (proceso matado, disco lleno) deja un PDF TRUNCADO en el destino FINAL (medido: 35 B), y el
+    único chequeo de idempotencia de la cadena (acá y en `fetch_pdf`) es `dest.exists()`: ese PDF
+    roto se cuenta como "ya bajado" para siempre. Con la escritura atómica un corte nunca deja
+    nada en `dest`."""
+    tmp = dest.with_name(dest.name + f".tmp{os.getpid()}")
+    try:
+        tmp.write_bytes(data)
+        os.replace(tmp, dest)
+        return True
+    except OSError as e:
+        cfg.print_seguro(f"    ! no se pudo escribir {dest.name} en disco: {e}")
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        return False
 
 
 def download_pdf(arxiv_id: str, dest) -> bool:
@@ -56,7 +80,7 @@ def download_pdf(arxiv_id: str, dest) -> bool:
                     time.sleep(15)
                     continue
                 if r.status_code not in (200, 206):
-                    print(f"    ! {arxiv_id}: HTTP {r.status_code}")
+                    cfg.print_seguro(f"    ! {arxiv_id}: HTTP {r.status_code}")
                     time.sleep(8)
                     continue
                 if r.status_code == 200 and buf:
@@ -67,25 +91,29 @@ def download_pdf(arxiv_id: str, dest) -> bool:
         except requests.RequestException:
             time.sleep(4)  # conexión cortada → reanudar desde len(buf)
     else:
-        print(f"    ! fallo {arxiv_id}: incompleto tras {MAX_ATTEMPTS} intentos ({len(buf)} bytes)")
+        cfg.print_seguro(f"    ! fallo {arxiv_id}: incompleto tras {MAX_ATTEMPTS} intentos ({len(buf)} bytes)")
         return False
     if bytes(buf[:4]) != b"%PDF":
-        print(f"    ! {arxiv_id}: respuesta no es PDF (¿aún sin procesar en arXiv?)")
+        cfg.print_seguro(f"    ! {arxiv_id}: respuesta no es PDF (¿aún sin procesar en arXiv?)")
         return False
-    dest.write_bytes(buf)
-    return True
+    return write_pdf_atomic(dest, bytes(buf))
 
 
 def main() -> int:
+    cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser()
     ap.add_argument("slug")
     ap.add_argument("--all", action="store_true", help="incluir no-relevantes")
     ap.add_argument("--limit", type=int, default=0, help="máximo a bajar (0 = sin límite)")
+    ap.add_argument("--force", action="store_true",
+                    help="re-bajar incluso lo que ya tiene PDF en disco (p. ej. un PDF truncado "
+                         "por un corte anterior — H-07: nada valida el contenido de lo ya "
+                         "bajado, ésta es la vía de escape manual)")
     args = ap.parse_args()
 
     adsfile = cfg.ROOT / "build" / args.slug / "ads.json"
     if not adsfile.exists():
-        print(f"No existe {adsfile}. Corré primero query_ads.py {args.slug}")
+        cfg.print_seguro(f"No existe {adsfile}. Corré primero query_ads.py {args.slug}")
         return 1
     data = json.loads(adsfile.read_text(encoding="utf-8"))
     recs = data["records"]
@@ -101,15 +129,15 @@ def main() -> int:
         todo = todo[: args.limit]
 
     label = data.get("star") or data.get("title") or args.slug
-    print(f"{label}: {len(todo)} con arXiv a bajar, "
-          f"{len(no_arxiv)} sin arXiv (pre-arXiv / no e-print)")
+    cfg.print_seguro(f"{label}: {len(todo)} con arXiv a bajar, "
+                      f"{len(no_arxiv)} sin arXiv (pre-arXiv / no e-print)")
     got, skipped, failed = 0, 0, []
     for i, r in enumerate(todo, 1):
         dest = destdir / f"{safe_name(r['bibcode'])}.pdf"
-        if dest.exists():
+        if dest.exists() and not args.force:
             skipped += 1
             continue
-        print(f"  [{i}/{len(todo)}] {r['arxiv_id']}  {r['bibcode']}")
+        cfg.print_seguro(f"  [{i}/{len(todo)}] {r['arxiv_id']}  {r['bibcode']}")
         if download_pdf(r["arxiv_id"], dest):
             got += 1
             # de dónde salió este PDF (#57): arXiv sirve el EPRINT, que puede ser un v1
@@ -119,8 +147,8 @@ def main() -> int:
             failed.append(r)
         time.sleep(SLEEP_S)
 
-    print(f"Bajados {got}, ya estaban {skipped}"
-          + (f", fallaron {len(failed)}" if failed else "") + ".")
+    cfg.print_seguro(f"Bajados {got}, ya estaban {skipped}"
+                      + (f", fallaron {len(failed)}" if failed else "") + ".")
     # residuo = sin arXiv + bajadas fallidas (#32): la contabilidad de "qué falta" debe cubrir
     # también los fallos, que antes morían en el stdout. En la cadena, fetch_pdf (siguiente paso)
     # intenta todo lo que siga sin PDF en disco y reescribe este archivo con el residuo final.
@@ -130,8 +158,8 @@ def main() -> int:
         miss.write_text(json.dumps(
             [{"bibcode": r["bibcode"], "title": r["title"], "doi": r.get("doi")}
              for r in residue], indent=2, ensure_ascii=False), encoding="utf-8")
-        print(f"Sin PDF ({len(no_arxiv)} sin arXiv + {len(failed)} fallidos) → {miss} "
-              "(fetch_pdf los intenta vía el resolver de ADS; el residuo final es el suyo).")
+        cfg.print_seguro(f"Sin PDF ({len(no_arxiv)} sin arXiv + {len(failed)} fallidos) → {miss} "
+                          "(fetch_pdf los intenta vía el resolver de ADS; el residuo final es el suyo).")
     return 0
 
 

@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import time
@@ -73,17 +74,51 @@ def _ua() -> dict:
 
 
 def split_note(text: str) -> tuple[dict | None, str]:
-    """(frontmatter dict, body) de una nota `---\\n<yaml>---\\n<body>`. maxsplit=2 preserva
-    cualquier `---` (regla horizontal) del cuerpo. (None, text) si no hay frontmatter parseable."""
-    if not text.startswith("---"):
+    """(frontmatter dict, body) de una nota `---\\n<yaml>---\\n<body>`. Delimita con
+    `cfg.frontmatter_span` (por LÍNEA delimitadora, no por búsqueda textual de la subcadena
+    `---`, H-11): un `text.split("---", 2)` corta también dentro de un escalar entrecomillado que
+    trae un `---` adentro (`title: "Un titulo con --- adentro"`, YAML perfectamente válido) — el
+    split textual parte el valor a la mitad, `yaml.safe_load` sobre ese pedazo no parsea, y el
+    paper **se saltea del chequeo de retracciones** con el mensaje falso "arreglá el YAML": falso
+    limpio justo en la frontera dura (regla #0 — una fuente retractada citada sin chequear).
+    (None, text) si no hay frontmatter o no parsea."""
+    span = cfg.frontmatter_span(text)
+    if span is None:
         return None, text
-    parts = text.split("---", 2)
-    if len(parts) < 3:
-        return None, text
+    yaml_block, body = span
     try:
-        return (yaml.safe_load(parts[1]) or {}), parts[2]
+        return (yaml.safe_load(yaml_block) or {}), body
     except yaml.YAMLError:
         return None, text
+
+
+def _write_atomic(path, new_text: str) -> None:
+    """Publica `new_text` en `path` sin dejarla nunca a medio escribir (H-01).
+
+    Medido con `ulimit -f`: el `write_text` directo dejaba una nota de 16.071 B en 8.192 B, con 198
+    de 400 ocurrencias de la extracción LLM —lo MENOS regenerable de la bóveda— desaparecidas sin
+    aviso.
+
+    El contenido nuevo se escribe primero a un temporal en el MISMO directorio (mismo filesystem) y
+    recién se publica con `os.replace`, que es un **rename atómico**: o está el archivo viejo entero
+    o el nuevo entero, nunca la mitad. Si el corte pasa mientras se llena el temporal, `path` **no
+    se tocó**.
+
+    ⚠ Por qué NO alcanza el patrón "respaldar el original y restaurar en el `except`": ese sólo
+    cubre el corte que llega como **excepción**. Ante un `SIGKILL` o un corte de energía no corre
+    ningún `except` y la nota queda truncada igual — que es exactamente el escenario que la
+    docstring afirmaba cubrir. Mismo mecanismo que `lib_config.save_registro`, y `os.replace` se
+    llama como atributo del módulo `os` para que un test pueda interceptarlo."""
+    tmp = path.with_name(path.name + f".tmp{os.getpid()}")
+    try:
+        tmp.write_text(new_text, encoding="utf-8")
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
 
 
 def stamp_fields(path, fm: dict, body: str, fields: dict) -> None:
@@ -91,7 +126,9 @@ def stamp_fields(path, fm: dict, body: str, fields: dict) -> None:
     NO re-serializa el YAML completo → preserva byte a byte comentarios/orden que haya dejado la
     extracción LLM. Si la nota ya traía esas claves (re-chequeo con --force, o una corrección nueva
     sobre un paper ya anotado), las reemplaza —incluidos sus bloques indentados y los ítems `-` de
-    una lista—. Fallback (nota sin estructura `---\\n…\\n---\\n`): re-serializa el frontmatter parseado."""
+    una lista—. Fallback (nota sin estructura `---\\n…\\n---\\n`): re-serializa el frontmatter parseado.
+    La publicación en disco es atómica (`_write_atomic`, H-01): un corte a mitad de camino nunca
+    deja la nota truncada."""
     text = path.read_text(encoding="utf-8")
     keys = tuple(f"{k}:" for k in fields)
     end = text.find("\n---\n", 4)
@@ -99,21 +136,48 @@ def stamp_fields(path, fm: dict, body: str, fields: dict) -> None:
         out, dropping = [], False
         # una clave top-level nunca arranca con espacio/tab/`-`: mientras `dropping`, esas líneas
         # son el bloque (mapa indentado o lista) de la clave vieja que estamos reemplazando
-        for ln in text[4:end].split("\n"):
-            if dropping and ln[:1] in (" ", "\t", "-"):
-                continue
-            dropping = False
+        lines = text[4:end].split("\n")
+        i, n = 0, len(lines)
+        while i < n:
+            ln = lines[i]
+            if dropping:
+                if ln.strip() == "":
+                    # H-02: una línea EN BLANCO dentro del bloque (mapa/lista multilínea) es YAML
+                    # válido y no corta el bloque — el bug viejo la trataba como "clave nueva",
+                    # dejaba de dropear ahí, y el ítem huérfano que seguía se absorbía en la clave
+                    # anterior en silencio (`tags: ['paper', {'type': 'corrigendum'}]`, ninguna
+                    # categoría del lint lo veía). Se mira hacia adelante, saltando blancas: si lo
+                    # que sigue todavía está indentado, la(s) blanca(s) eran parte del bloque viejo
+                    # y se descartan con él; si lo que sigue es una clave nueva a nivel top, eran
+                    # separador legítimo y se conservan.
+                    j = i + 1
+                    while j < n and lines[j].strip() == "":
+                        j += 1
+                    if j < n and lines[j][:1] in (" ", "\t", "-"):
+                        i += 1
+                        continue
+                    dropping = False
+                    out.append(ln)
+                    i += 1
+                    continue
+                if ln[:1] in (" ", "\t", "-"):
+                    i += 1
+                    continue
+                dropping = False
             if ln.startswith(keys):
                 dropping = True
+                i += 1
                 continue
             out.append(ln)
+            i += 1
         block = yaml.safe_dump(fields, sort_keys=False, allow_unicode=True,
                                default_flow_style=False).rstrip("\n")
-        path.write_text("---\n" + "\n".join(out + [block]) + text[end:], encoding="utf-8")
+        new_text = "---\n" + "\n".join(out + [block]) + text[end:]
     else:
         dumped = yaml.safe_dump({**fm, **fields}, sort_keys=False, allow_unicode=True,
                                 default_flow_style=False)
-        path.write_text(f"---\n{dumped}---{body}", encoding="utf-8")
+        new_text = f"---\n{dumped}---{body}"
+    _write_atomic(path, new_text)
 
 
 def stamp_retraction(path, fm: dict, body: str, retraction: dict) -> None:
@@ -156,7 +220,13 @@ def crossref_retraction(doi: str, headers: dict) -> tuple[dict | None, list]:
     except (ValueError, KeyError):
         return None, []
     retraction, soft = None, []
-    for upd in msg.get("updated-by", []) or []:
+    # H-10: Crossref es una API ajena — `updated-by` "debería" ser una lista de mapas, pero un
+    # registro hostil (mapa en vez de lista, o una lista con un elemento que no es mapa) hacía
+    # `AttributeError` acá (`upd.get(...)` sobre un `str`, al iterar las CLAVES de un dict). La
+    # promesa de la función es "red tolerante: ante forma rara, (None, [])" — `cfg.as_list`/
+    # `cfg.as_map` cierran las dos formas que la rompían sin dejar de cumplirla.
+    for upd in cfg.as_list(msg.get("updated-by")):
+        upd = cfg.as_map(upd)
         typ = str(upd.get("type", "")).lower()
         entry = {
             "type": typ,
@@ -172,15 +242,44 @@ def crossref_retraction(doi: str, headers: dict) -> tuple[dict | None, list]:
 
 
 def _upd_date(upd: dict) -> str | None:
-    dp = (upd.get("updated") or {}).get("date-parts") or [[]]
-    parts = dp[0] if dp else []
-    return "-".join(f"{p:02d}" if i else str(p) for i, p in enumerate(parts)) if parts else None
+    """Fecha `AAAA[-MM[-DD]]` de un `updated-by` de Crossref, o `None` si la forma no es la
+    esperada (R11). `date-parts` debe ser una lista de listas de enteros (`[[2021, 5, 3]]`); una
+    respuesta que trae otra forma (p. ej. `date-parts: "2021"`, string en vez de lista) NO debe
+    FABRICAR una fecha truncada — el `dp[0]` de un string da su primer CARÁCTER (`"2"`), que antes
+    se estampaba tal cual como `retraction.date`/`corrections[].date`. Un dato inventado en la
+    capa auditable del frontmatter es peor que una excepción: no deja rastro de que la fuente no
+    se pudo interpretar. Ante forma inesperada, `None` (el llamador ya sabe leer un date ausente)."""
+    dp = cfg.as_list(cfg.as_map(upd.get("updated")).get("date-parts"))
+    parts = cfg.as_list(dp[0]) if dp else []
+    if not parts or not all(isinstance(p, int) for p in parts):
+        return None
+    return "-".join(f"{p:02d}" if i else str(p) for i, p in enumerate(parts))
 
 
 def title_says_retracted(title: str) -> bool:
     """Fallback offline para papers SIN DOI: prefijo del título que los publishers ponen al retractar."""
     t = (title or "").strip().lower()
     return t.startswith(("retracted", "retraction:", "retracted article", "withdrawn"))
+
+
+def _listify_curado(v, campo: str):
+    """Normaliza un campo de CURACIÓN MANUAL (`extra_core`, `sources`) que el framework instruye
+    editar a mano en YAML. Gemelo de `query_ads.py:_listify_curado`/`ingest_topic.py:_listify_curado`
+    (R5/R7): un `campo: <valor>` sin corchetes es la forma natural de declarar UN solo elemento y
+    es YAML válido — a diferencia de `cfg.as_list` (que trataría el escalar como forma inválida y
+    lo degradaría a `[]`), acá conviene PRESERVAR la intención. El `or []` viejo no disparaba con
+    un escalar truthy y la comprensión de abajo lo recorría CARÁCTER POR CARÁCTER: con
+    `extra_core: 2020ApJ...900....1X` el paper real nunca se pedía a Crossref y el paso cerraba en
+    verde sin haber chequeado nada — falso limpio en la frontera dura."""
+    if isinstance(v, list):
+        return v
+    if v:
+        cfg.print_seguro(
+            f"  ⚠ `{campo}` está escrito como escalar ({v!r}) en vez de lista — se toma como un "
+            f"solo elemento; para declarar más de uno usá `{campo}: [{v!r}, ...]`."
+        )
+        return [v]
+    return []
 
 
 def slug_notes(slug: str) -> list:
@@ -198,8 +297,12 @@ def slug_notes(slug: str) -> list:
         _, meta = cfg.topic_by_slug(slug)
     except KeyError:
         meta = {}
-    stems += [s.get("key") for s in (meta.get("sources") or []) if s.get("key")]
-    stems += [b for b in (meta.get("extra_core") or []) if b]
+    # `_listify_curado`, no `or []` (R5/R7): `sources`/`extra_core` son campos de curación manual
+    # y un escalar (UN solo bibcode/clave, sin corchetes) es YAML válido. Un `s` de `sources` que
+    # además llegue escalar (en vez de `{key: ..., ...}`) se toma como si fuera él mismo la clave.
+    stems += [key for s in _listify_curado(meta.get("sources"), "sources")
+              for key in [s.get("key") if isinstance(s, dict) else s] if key]
+    stems += [b for b in _listify_curado(meta.get("extra_core"), "extra_core") if b]
     if not stems:
         sys.exit(f"--slug {slug}: no hay build/{slug}/ads.json ni entrada con sources/extra_core "
                  "en topics.yaml — nada que chequear (¿corriste la cadena de ingest primero?).")
@@ -216,6 +319,7 @@ def slug_notes(slug: str) -> list:
 
 
 def main() -> int:
+    cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser()
     ap.add_argument("--paper", help="chequear un solo bibcode (default: todos los de papers/)")
     ap.add_argument("--slug", help="chequear sólo los papers de un ingest (modo de la cadena; "
@@ -226,11 +330,11 @@ def main() -> int:
         ap.error("--paper y --slug son excluyentes (uno puntual vs los de un ingest)")
 
     if not cfg.PAPERS.exists():
-        print("No hay vault/wiki/papers/ — nada que chequear.")
+        cfg.print_seguro("No hay vault/wiki/papers/ — nada que chequear.")
         return 0
     if args.slug:
         notes = slug_notes(args.slug)
-        print(f"--slug {args.slug}: {len(notes)} nota(s) del ingest (el barrido completo de la "
+        cfg.print_seguro(f"--slug {args.slug}: {len(notes)} nota(s) del ingest (el barrido completo de la "
               "bóveda es la pasada periódica — correr sin --slug)")
     else:
         notes = ([cfg.PAPERS / f"{args.paper.replace('/', '_')}.md"] if args.paper
@@ -240,61 +344,74 @@ def main() -> int:
     found, checked, marked = [], 0, 0
     corrected: list = []               # (bibcode, tipos) — #52: correcciones no-retractantes
     annotated = 0
+    errors: list = []                  # (nombre, motivo) — H-10: un paper raro no tumba el barrido
     for note in notes:
         if not note.exists():
-            print(f"  ! no existe {note.name}")
+            cfg.print_seguro(f"  ! no existe {note.name}")
             continue
-        fm, body = split_note(note.read_text(encoding="utf-8"))
-        if fm is None:
-            print(f"  ⚠ {note.name}: sin frontmatter parseable — no chequeable "
-                  "(arreglá el YAML; el lint lo marca)")
-            continue
-        if "paper" not in (fm.get("tags") or []):
-            continue
-        if fm.get("retracted") and not args.force:
-            found.append((fm.get("bibcode") or note.stem, "ya marcado"))
-            continue
-        doi, title = fm.get("doi"), fm.get("title") or ""
-        retraction, soft = (crossref_retraction(doi, headers) if doi else (None, []))
-        if doi:
-            checked += 1      # sólo los consultados de verdad (los sin DOI van por prefijo de título)
-            time.sleep(0.2)   # cortesía con Crossref
-        # fallback offline por título para papers sin DOI (o que Crossref no marcó)
-        if retraction is None and title_says_retracted(title):
-            retraction = {"type": "retraction", "notice_doi": None, "date": None,
-                          "source": "title-prefix (sin DOI en Crossref — verificar a mano)"}
-        bib = fm.get("bibcode") or note.stem
-        if soft:
-            # #52: la corrección NO retracta (el paper sigue citable) pero cambia justo el valor
-            # que se extrajo → se persiste en la nota; antes moría en este mismo print.
-            types = ", ".join(dict.fromkeys(c["type"] for c in soft))
-            corrected.append((bib, types))
-            if (fm.get("corrections") or []) != soft:
-                stamp_corrections(note, fm, body, soft)
-                annotated += 1
-                print(f"  · {bib}: corrección publicada ({types}) — anotada en `corrections`")
-            else:
-                print(f"  · {bib}: corrección publicada ({types}) — ya anotada")
-        if retraction:
-            stamp_retraction(note, fm, body, retraction)
-            marked += 1
-            found.append((fm.get("bibcode") or note.stem,
-                          f"{retraction['type']} ({retraction.get('date') or 's/f'})"))
-            print(f"  ⛔ RETRACTADO {fm.get('bibcode') or note.stem}: {retraction['type']} "
-                  f"— marcado en la nota")
+        # H-10: la pasada periódica barre TODA la bóveda — un registro de Crossref legal-pero-de-
+        # otra-forma (u otra sorpresa puntual de un paper) no debe abortar el barrido entero; se
+        # reporta el paper como no chequeado y se sigue con el resto (antes, `main()` no tenía
+        # try/except por paper y un solo caso raro tumbaba la corrida completa).
+        try:
+            fm, body = split_note(note.read_text(encoding="utf-8"))
+            if fm is None:
+                cfg.print_seguro(f"  ⚠ {note.name}: sin frontmatter parseable — no chequeable "
+                      "(arreglá el YAML; el lint lo marca)")
+                continue
+            if "paper" not in (fm.get("tags") or []):
+                continue
+            if fm.get("retracted") and not args.force:
+                found.append((fm.get("bibcode") or note.stem, "ya marcado"))
+                continue
+            doi, title = fm.get("doi"), fm.get("title") or ""
+            retraction, soft = (crossref_retraction(doi, headers) if doi else (None, []))
+            if doi:
+                checked += 1      # sólo los consultados de verdad (los sin DOI van por prefijo de título)
+                time.sleep(0.2)   # cortesía con Crossref
+            # fallback offline por título para papers sin DOI (o que Crossref no marcó)
+            if retraction is None and title_says_retracted(title):
+                retraction = {"type": "retraction", "notice_doi": None, "date": None,
+                              "source": "title-prefix (sin DOI en Crossref — verificar a mano)"}
+            bib = fm.get("bibcode") or note.stem
+            if soft:
+                # #52: la corrección NO retracta (el paper sigue citable) pero cambia justo el valor
+                # que se extrajo → se persiste en la nota; antes moría en este mismo print.
+                types = ", ".join(dict.fromkeys(c["type"] for c in soft))
+                corrected.append((bib, types))
+                if (fm.get("corrections") or []) != soft:
+                    stamp_corrections(note, fm, body, soft)
+                    annotated += 1
+                    cfg.print_seguro(f"  · {bib}: corrección publicada ({types}) — anotada en `corrections`")
+                else:
+                    cfg.print_seguro(f"  · {bib}: corrección publicada ({types}) — ya anotada")
+            if retraction:
+                stamp_retraction(note, fm, body, retraction)
+                marked += 1
+                found.append((fm.get("bibcode") or note.stem,
+                              f"{retraction['type']} ({retraction.get('date') or 's/f'})"))
+                cfg.print_seguro(f"  ⛔ RETRACTADO {fm.get('bibcode') or note.stem}: {retraction['type']} "
+                      f"— marcado en la nota")
+        except Exception as exc:
+            errors.append((note.stem, str(exc)))
+            cfg.print_seguro(f"  ✗ {note.stem}: no se pudo chequear ({exc}) — sigo con el resto")
 
-    print(f"\n{checked} chequeados vía Crossref, {marked} recién marcados, "
+    cfg.print_seguro(f"\n{checked} chequeados vía Crossref, {marked} recién marcados, "
           f"{len(found)} retractados en total; {len(corrected)} con corrección publicada "
-          f"({annotated} recién anotadas).")
+          f"({annotated} recién anotadas); {len(errors)} con error al chequear.")
     if corrected:
-        print("Correcciones no-retractantes (el paper SIGUE siendo citable; revisá los valores que "
+        cfg.print_seguro("Correcciones no-retractantes (el paper SIGUE siendo citable; revisá los valores que "
               "le extrajiste — el lint las lista como backlog):")
         for bib, types in corrected:
-            print(f"  · {bib}: {types}")
+            cfg.print_seguro(f"  · {bib}: {types}")
+    if errors:
+        cfg.print_seguro("No se pudieron chequear (error inesperado — no tumbaron el barrido; revisar a mano):")
+        for name, why in errors:
+            cfg.print_seguro(f"  · {name}: {why}")
     if found:
-        print("Retractados (revisá cada afirmación que los cita — quitá o marcá la fuente):")
+        cfg.print_seguro("Retractados (revisá cada afirmación que los cita — quitá o marcá la fuente):")
         for bib, why in found:
-            print(f"  - {bib}: {why}")
+            cfg.print_seguro(f"  - {bib}: {why}")
         return 1
     return 0
 

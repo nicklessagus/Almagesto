@@ -135,6 +135,20 @@ def test_offads_sin_sources(toy_vault, fake_run, monkeypatch):
         run_main(monkeypatch)
 
 
+def test_offads_sources_escalar_no_revienta_la_cadena(toy_vault, fake_run, monkeypatch):
+    """`ingest_topic.py:165` — `sources = meta.get("sources") or []`.
+
+    Un `sources:` escalar es truthy, así que esquiva el `sys.exit` amable de la línea siguiente
+    ("no declara `sources:` … listá ahí su bibliografía") y llega al `for s in sources`, que
+    recorre el string: `s.get("key")` sobre un `str` → `AttributeError` pelado a mitad de la
+    cadena de ingest, sin decir qué hay que arreglar en `topics.yaml`."""
+    meta = {"title": "T", "area": "methods", "concept": "gp", "source": "web",
+            "sources": "https://example.org/paper"}
+    write_yaml(cfg.TOPICS_YAML, {"tema": meta})
+    with pytest.raises(SystemExit, match="sources"):
+        it.ingest_offads("tema", meta, force=False)
+
+
 def test_offads_key_invalida(toy_vault, fake_run, fake_notes, monkeypatch):
     topic(source="web", sources=[{"key": "SinAnio", "url": "https://x"}])
     with pytest.raises(SystemExit, match="key inválida"):

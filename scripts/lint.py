@@ -100,14 +100,20 @@ def fm_error(text: str) -> str | None:
     `title: RETRACTED: x` editado a mano sin comillas — o sin cierre `---`). split_fm devuelve
     {} y la nota EVADE en silencio todos los chequeos de su tipo (paper/star/concept), y
     check_retractions la saltea: peor que fallar. Devuelve el motivo, o None si está sana
-    o no tiene frontmatter (index/log son prosa plana, legítimo)."""
+    o no tiene frontmatter (index/log son prosa plana, legítimo).
+
+    Delimita el frontmatter con `cfg.frontmatter_span` (por LÍNEA `---`, no por texto crudo,
+    H-11): un `---` dentro de un escalar entrecomillado (`title: "... --- ..."`) es YAML válido y
+    no puede cortar el bloque, o esta función reporta "YAML inválido" —categoría BLOQUEANTE—
+    sobre un frontmatter que no tiene nada roto."""
     if not text.startswith("---"):
         return None
-    parts = text.split("---")
-    if len(parts) < 3:
+    span = cfg.frontmatter_span(text)
+    if span is None:
         return "frontmatter sin cierre `---`"
+    yaml_block, _body = span
     try:
-        yaml.safe_load(parts[1])
+        yaml.safe_load(yaml_block)
     except Exception as e:
         first = (str(e).splitlines() or [e.__class__.__name__])[0]
         return f"YAML inválido: {first[:80]}"
@@ -431,21 +437,13 @@ def mirror_issues(slug: str, fm: dict, gt: dict) -> list:
     return out
 
 
-def _print_seguro(texto: str) -> None:
-    """`print` tolerante a consolas no-UTF8. El reporte lleva `⛔`/`⚠`/`→` y está en español: en una
-    consola `ascii`/`cp1252` (CI mal configurado, alguna terminal Windows) el encode del stream por
-    defecto tira `UnicodeEncodeError` y el proceso muere con exit 1 — indistinguible de "hay
-    hallazgos bloqueantes" — aunque el `.md` en disco (que se escribe aparte, siempre en UTF-8) haya
-    quedado perfecto. La compuerta de CI vive del exit code, no de la letra bonita: si el stream no
-    puede con los caracteres, se degrada el texto en vez de dejar morir la corrida."""
-    try:
-        print(texto)
-    except UnicodeEncodeError:
-        enc = getattr(sys.stdout, "encoding", None) or "ascii"
-        print(texto.encode(enc, errors="replace").decode(enc))
+# Impresión tolerante a consolas no-UTF8 (6ª pasada de auditoría) — implementación única en
+# lib_config (la comparten los otros scripts que mueren por el mismo motivo, ver su docstring).
+_print_seguro = cfg.print_seguro
 
 
 def main() -> int:
+    cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     files = note_files()
     # fulltext disponible (un .txt por bibcode, bajo cualquier slug/tema) → precondición de
     # verificabilidad: una cita en query/hipótesis sin su .txt no se puede chequear claim↔fuente.
@@ -802,7 +800,11 @@ def main() -> int:
                                          f"{type(host).__name__}) → el espejo #70 no puede vigilar "
                                          f"spectral_type/teff_K/dist_pc/P_rot_days de esta ficha"))
         mstar = host.get("mass_msun") if isinstance(host, dict) else None
-        planetas_gt = gt.get("planets") or []
+        # SIN `or []`: el `isinstance` de abajo ya neutraliza el caso None/ausente (cae al mismo
+        # `else []`), pero un `or []` acá tapaba el caso falsy-no-None — `planets: 0` (int) — que
+        # es justo lo que el chequeo existe para atrapar: se degradaba a `[]` en silencio (0 or []
+        # → []) y el espejo #70 dejaba de vigilar la ficha sin reportar nada.
+        planetas_gt = gt.get("planets")
         if not isinstance(planetas_gt, list):
             contradictions.append((slug, f"`planets` del ground-truth no es una lista (es "
                                          f"{type(planetas_gt).__name__})"))
@@ -1029,7 +1031,7 @@ def main() -> int:
         for tg in cfg.as_list(data.get("truncated_glyph")):
             if not isinstance(tg, dict):
                 continue
-            consts = "/".join(tg.get("constellations") or []) or tg.get("letter") or "?"
+            consts = "/".join(cfg.as_list(tg.get("constellations"))) or tg.get("letter") or "?"
             truncated_corpora.append(
                 (slug, f"rescate por glifo incompleto: el superset de {consts} reporta "
                        f"{tg.get('num_found')} y se escanearon {tg.get('rows')} (top por citas, "

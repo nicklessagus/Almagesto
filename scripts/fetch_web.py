@@ -77,12 +77,13 @@ def fetch(url: str) -> str:
                        capture_output=True, text=True, encoding="utf-8", errors="replace",
                        timeout=180)
     if r.returncode != 0:
-        print(f"    ! defuddle falló ({r.returncode}): {r.stderr.strip()[:200]}")
+        cfg.print_seguro(f"    ! defuddle falló ({r.returncode}): {r.stderr.strip()[:200]}")
         return ""
     return r.stdout
 
 
 def main() -> int:
+    cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser()
     ap.add_argument("slug", help="tema (subcarpeta de raw/fulltext)")
     ap.add_argument("citekey", help="clave de cita sintética AAAA+Autor (p. ej. 2006RasmussenWilliams)")
@@ -119,12 +120,12 @@ def main() -> int:
         # la nota coincide con el .txt: si el snapshot es viejo, vale su fecha original, no hoy
         # (parser en lib_config — un solo lugar de verdad del header; lo comparte make_notes)
         stamp = cfg.snapshot_retrieved(out) or stamp
-        print(f"{args.citekey}: ya existe {out} (usá --force para re-bajar)")
+        cfg.print_seguro(f"{args.citekey}: ya existe {out} (usá --force para re-bajar)")
     else:
-        print(f"  defuddle ← {args.url}")
+        cfg.print_seguro(f"  defuddle ← {args.url}")
         raw = fetch(args.url)
         if not raw.strip():
-            print("  ! snapshot vacío — no se escribe nada")
+            cfg.print_seguro("  ! snapshot vacío — no se escribe nada")
             return 1
         body, removed = clean_markdown(raw)
         # Encabezado citable: URL + fecha de acceso (UTC) + provenance del extractor. El cuerpo es
@@ -138,7 +139,7 @@ def main() -> int:
             "# ---- contenido extraído (defuddle) ----\n\n"
         )
         out.write_text(header + body, encoding="utf-8")
-        print(f"{args.citekey}: {len(body)} bytes → {out}  (post-clean: {removed} bloques HTML removidos)")
+        cfg.print_seguro(f"{args.citekey}: {len(body)} bytes → {out}  (post-clean: {removed} bloques HTML removidos)")
 
     # Stub de la nota de paper (mismo template que las notas ADS; idempotente). Delega en make_notes.
     if not args.no_note:
@@ -148,7 +149,7 @@ def main() -> int:
             n_authors=args.n_authors, doi=args.doi,
             venue=args.venue, accessed=stamp, force=args.force,
         )
-        print("  siguiente: completar la extracción LLM en la nota y verificar con verify-citations")
+        cfg.print_seguro("  siguiente: completar la extracción LLM en la nota y verificar con verify-citations")
     return 0
 
 

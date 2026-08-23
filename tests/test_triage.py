@@ -388,3 +388,23 @@ def test_migrate_no_borra_un_triage_json_que_no_consolido(toy_vault, monkeypatch
     legacy.write_text('{"otra_cosa": 1}', encoding="utf-8")
     triage.migrate("test_star")
     assert legacy.exists(), "se borró un triage.json del que no se consolidó ninguna decisión"
+
+
+def test_migrate_con_decisiones_escalar_en_el_registro(toy_vault, capsys):
+    """`triage.py:194` — `ya = cfg.load_registro(slug).get("decisiones") or {}`.
+
+    El registro es el archivo que el framework **manda editar a mano** (el aviso de #81 dice
+    literalmente "sacá la entrada de `decisiones`"). `cfg.load_decisiones` (lib_config:374) ya
+    tiene el `isinstance` que hace falta; este lector paralelo del migrador no lo usa. Con
+    `decisiones` escalar el `b not in ya` de la línea siguiente se vuelve un **substring match**
+    silencioso y el `{**viejas, **ya}` termina en `TypeError: 'str' object is not a mapping` —
+    a mitad de una migración que toca el único artefacto no regenerable de la bóveda."""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    cfg.registro_path("test_star").write_text(
+        yaml.safe_dump({"slug": "test_star", "decisiones": "ninguna"}), encoding="utf-8")
+    legacy = cfg.legacy_triage_path("test_star")
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    legacy.write_text(json.dumps(
+        {"decisiones": {"2020a....1A": {"decision": "descartado", "motivo": "ruido"}}}),
+        encoding="utf-8")
+    assert triage.migrate("test_star") == 0

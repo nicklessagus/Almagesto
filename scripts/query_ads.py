@@ -111,15 +111,41 @@ FIELDS = ("bibcode,title,author,year,pubdate,abstract,identifier,doctype,"
 # `fetch_bibcodes` y el parámetro `fq` de `query_ads` (#68).
 ASTRO_FQ = "database:astronomy"
 
+
+def _listify_curado(v, campo: str):
+    """Normaliza un campo de CURACIÓN MANUAL (`extra_core`, `aliases`, `noise_doctypes`) que el
+    framework instruye editar a mano en YAML. Un `campo: <valor>` sin corchetes es la forma natural
+    de declarar UN solo elemento y es YAML válido — a diferencia de `cfg.as_list` (que trataría el
+    escalar como forma inválida y lo degradaría a `[]`), acá conviene PRESERVAR la intención: la
+    curación del usuario no se pierde por no poner corchetes (gemelo de R1/R13/R16 — perder un
+    `extra_core`/alias/doctype escalar en silencio es justo el defecto que esto reemplaza). Reporta
+    igual, para que la forma se corrija en origen."""
+    if isinstance(v, list):
+        return v
+    if v:
+        cfg.print_seguro(
+            f"  ⚠ `{campo}` está escrito como escalar ({v!r}) en vez de lista — se toma como un "
+            f"solo elemento; para declarar más de uno usá `{campo}: [{v!r}, ...]`."
+        )
+        return [v]
+    return []
+
+
 # Clasificación de relevancia: se LEE de vault/config/objective.yaml (el archivo que define
 # el objetivo de la bóveda → qué paper es "core"). No hardcodear acá: editar el YAML.
 _OBJ = cfg.load_objective()
-_REL = (_OBJ.get("relevance") or {})
+# `cfg.as_map`, no `or {}`: un `relevance:` escalar es truthy y el `or` no dispara — el `.get`
+# siguiente reventaba con `AttributeError` a nivel de MÓDULO, llevándose puesto el import entero,
+# tres líneas antes de llegar al RuntimeError con instrucciones que ya existe para este caso (R2).
+_REL = cfg.as_map(_OBJ.get("relevance"))
 TOPIC_PATTERNS = {
+    # ídem: `topics` es un MAPA faceta→regex; escribirlo como lista (copiando los nombres de la
+    # prosa del skill) revienta `.items()` con `AttributeError` en vez de caer en el RuntimeError
+    # de abajo (R3). `as_map` de una lista da `{}` → TOPIC_PATTERNS queda vacío → cae ahí, prolijo.
     name: re.compile(pat, re.I)
-    for name, pat in (_REL.get("topics") or {}).items()
+    for name, pat in cfg.as_map(_REL.get("topics")).items()
 }
-NOISE_DOCTYPES = set(_REL.get("noise_doctypes") or [])
+NOISE_DOCTYPES = set(_listify_curado(_REL.get("noise_doctypes"), "relevance.noise_doctypes"))
 if not TOPIC_PATTERNS:
     raise RuntimeError(
         "vault/config/objective.yaml no define relevance.topics (el clasificador de papers core). "
@@ -138,7 +164,19 @@ if not TOPIC_PATTERNS:
 def combination_rule(rel: dict, topic_names) -> tuple[list[str], int]:
     """(require, min_topics) validados desde relevance. `require` debe ⊆ topics: una faceta
     obligatoria inexistente filtraría TODO a no-core en silencio → falla ruidoso."""
-    require = list(rel.get("require") or [])
+    raw_require = rel.get("require")
+    # A diferencia de `extra_core`/`aliases`/`noise_doctypes`, ACÁ no conviene adivinar un solo
+    # elemento: `require: rv` (escalar) truthy no caía en el `or []` y `list("rv")` lo desarmaba
+    # CARÁCTER POR CARÁCTER (`['r','v']`) — el módulo abortaba igual (ninguna letra sola es una
+    # faceta real) pero el RuntimeError de abajo culpaba a `['r', 'v']`, un valor que el usuario
+    # nunca escribió (R4). `cfg.as_list` de un escalar da `[]`; si la forma cruda era truthy y el
+    # resultado quedó vacío, es que no era una lista — se rechaza con el valor REAL, no sus letras.
+    require = cfg.as_list(raw_require)
+    if raw_require and not require:
+        raise RuntimeError(
+            f"vault/config/objective.yaml: relevance.require debe ser una lista — aunque sea de "
+            f"un solo elemento, [{raw_require!r}] — no un escalar suelto: {raw_require!r}."
+        )
     min_topics = rel.get("min_topics") or 1
     unknown = [t for t in require if t not in topic_names]
     if unknown:
@@ -178,9 +216,9 @@ def classify(rec: dict) -> tuple[list[str], bool]:
     exclusión (≥ MIN_TOPICS facetas, TODAS las de REQUIRE_TOPICS y doctype no-ruido; con los
     defaults min_topics=1, require=[] es el histórico ≥1 faceta cualquiera)."""
     text = " ".join(filter(None, [
-        " ".join(rec.get("title", []) or []),
+        " ".join(cfg.as_list(rec.get("title"))),
         rec.get("abstract", "") or "",
-        " ".join(rec.get("keyword", []) or []),
+        " ".join(cfg.as_list(rec.get("keyword"))),
     ])).lower()
     topics = [t for t, pat in TOPIC_PATTERNS.items() if pat.search(text)]
     return topics, exclusion_reason(topics, rec.get("doctype", "")) is None
@@ -399,7 +437,7 @@ def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
     for wait in (*RETRY_WAITS_S, None):
         resp = requests.get(API, headers=headers, params=params, timeout=60)
         if resp.status_code in RETRY_STATUS and wait is not None:
-            print(f"  ADS HTTP {resp.status_code} — reintento en {wait} s")
+            cfg.print_seguro(f"  ADS HTTP {resp.status_code} — reintento en {wait} s")
             time.sleep(wait)
             continue
         resp.raise_for_status()
@@ -411,7 +449,7 @@ def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
                 f"Respuesta inesperada de ADS (sin response.docs): {resp.text[:200]}") from exc
         num_found = response.get("numFound", len(docs))
         if expect_hits and num_found == 0 and wait is not None:
-            print(f"  ADS devolvió 0 resultados con HTTP 200 (cero espurio) — reintento en {wait} s")
+            cfg.print_seguro(f"  ADS devolvió 0 resultados con HTTP 200 (cero espurio) — reintento en {wait} s")
             time.sleep(wait)
             continue
         break
@@ -430,7 +468,7 @@ def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
         # el aviso prometía un backlog que nadie escribe (mismo defecto que #43 arregló en el glifo).
         marca = " (queda marcado en ads.json → lint)" if meta is not None else \
                 " (esta query NO deja marca en ads.json: el corte no queda registrado)"
-        print(f"  ⚠ truncado: ADS reporta {num_found} resultados y sólo se trajeron {rows} "
+        cfg.print_seguro(f"  ⚠ truncado: ADS reporta {num_found} resultados y sólo se trajeron {rows} "
               f"(top por citas) — subí --rows para cubrir todo{marca}")
     out = []
     for d in docs:
@@ -610,26 +648,30 @@ def sweep_star(slug: str, rows: int) -> int:
         sys.exit(f"--sweep compara contra build/{slug}/ads.json y no existe — corré primero la "
                  f"cadena de ingest (o query_ads.py {slug}).")
     known = {r.get("bibcode") for r in json.loads(adsfile.read_text(encoding="utf-8"))["records"]}
-    names = [cfg.require_field(meta, "ads_object", name, "stars.yaml")] + meta.get("aliases", [])
+    # `_listify_curado`, no el default posicional `get(..., [])`: éste sólo actúa si la clave está
+    # AUSENTE — un `aliases: HD 12345` (un solo alias, sin corchetes) sigue presente y `list + str`
+    # revienta con TypeError antes de mandar una sola query a ADS (R16, Anexo A).
+    names = [cfg.require_field(meta, "ads_object", name, "stars.yaml")] + \
+        _listify_curado(meta.get("aliases"), "aliases")
     q = build_fulltext_filter(names)
-    print(f"Barrido full-text (2b) de {name} — q: {q}")
+    cfg.print_seguro(f"Barrido full-text (2b) de {name} — q: {q}")
     hits = query_ads(q, rows=rows)
     # Orden por citas/AÑO (#79 punto 1, política única en lib_config): este barrido existe para
     # rescatar "core poco citados que caen al fondo del ranking", así que rankearlo por citas crudas
     # lo hacía repetir el sesgo del mecanismo que le falló.
     news = cfg.sort_by_citation_rate(r for r in hits
                                      if r["relevant"] and r.get("bibcode") not in known)
-    print(f"  {len(hits)} papers con la estrella en el CUERPO · {len(news)} core NUEVOS "
+    cfg.print_seguro(f"  {len(hits)} papers con la estrella en el CUERPO · {len(news)} core NUEVOS "
           "(no están en ads.json)")
     for r in news:
-        print(_probe_row(r))
+        cfg.print_seguro(_probe_row(r))
     if news:
-        print("\n  → revisá cuáles corresponden y agregalos a `extra_core: [<bibcode>, …]` en la "
+        cfg.print_seguro("\n  → revisá cuáles corresponden y agregalos a `extra_core: [<bibcode>, …]` en la "
               "entrada de la estrella en vault/config/stars.yaml (persistente, via: manual); después "
               "re-corré la cadena (idempotente). Los que decidas NO bajar, listalos en el log — no "
               "curar en silencio.")
     else:
-        print("  → el corpus ya cubre el barrido full-text. (Ojo: en papers pre-digitales un 0 acá "
+        cfg.print_seguro("  → el corpus ya cubre el barrido full-text. (Ojo: en papers pre-digitales un 0 acá "
               "NO prueba ausencia — el OCR del escaneo pierde filas de tabla; ver skill ingest-star.)")
     return 0
 
@@ -642,7 +684,7 @@ def classify_record(r: dict) -> tuple[list[str], bool]:
     `extra_core`, #39): la regla no los toca."""
     topics, relevant = classify({"title": [r.get("title") or ""],
                                  "abstract": r.get("abstract") or "",
-                                 "keyword": r.get("keyword") or [],
+                                 "keyword": cfg.as_list(r.get("keyword")),
                                  "doctype": r.get("doctype") or ""})
     return topics, True if r.get("via") == "manual" else relevant
 
@@ -655,7 +697,7 @@ def note_state(bibcode: str) -> str:
     if not dest.exists():
         return "sin_nota"
     fm = cfg.split_fm(dest.read_text(encoding="utf-8"))
-    return "extraida" if (fm.get("methods") or []) else "stub"
+    return "extraida" if cfg.as_list(fm.get("methods")) else "stub"
 
 
 def reclass_diff(slugs: list[str]) -> int:
@@ -670,7 +712,7 @@ def reclass_diff(slugs: list[str]) -> int:
     for slug in slugs:
         adsfile = cfg.ROOT / "build" / slug / "ads.json"
         if not adsfile.exists():
-            print(f"{slug}: sin build/{slug}/ads.json — nada que re-clasificar")
+            cfg.print_seguro(f"{slug}: sin build/{slug}/ads.json — nada que re-clasificar")
             continue
         recs = json.loads(adsfile.read_text(encoding="utf-8"))["records"]
         before = [r for r in recs if r.get("relevant")]
@@ -684,30 +726,30 @@ def reclass_diff(slugs: list[str]) -> int:
             elif now and not r.get("relevant"):
                 entran.append(r)
         factor = (len(after) / len(before)) if before else float("inf")
-        print(f"\n{slug}: {len(recs)} registros · core {len(before)} → {len(after)}  "
+        cfg.print_seguro(f"\n{slug}: {len(recs)} registros · core {len(before)} → {len(after)}  "
               f"(factor {factor:.2f})")
 
         estado = {r["bibcode"]: note_state(r["bibcode"]) for r in salen}
         con_llm = [r for r in salen if estado[r["bibcode"]] == "extraida"]
         stubs = [r for r in salen if estado[r["bibcode"]] == "stub"]
-        print(f"  SALEN del core: {len(salen)} — con extracción LLM: {len(con_llm)} · "
+        cfg.print_seguro(f"  SALEN del core: {len(salen)} — con extracción LLM: {len(con_llm)} · "
               f"stubs: {len(stubs)} · sin nota: {len(salen) - len(con_llm) - len(stubs)}")
         for r in sorted(con_llm, key=lambda r: r.get("citation_count") or 0, reverse=True):
-            print(f"    ← {r['bibcode']}  {' '.join((r.get('title') or '').split())[:64]}")
+            cfg.print_seguro(f"    ← {r['bibcode']}  {' '.join((r.get('title') or '').split())[:64]}")
 
         sin_nota = [r for r in entran if note_state(r["bibcode"]) == "sin_nota"]
         vias: dict[str, int] = {}
         for r in sin_nota:
             vias[r.get("via") or "?"] = vias.get(r.get("via") or "?", 0) + 1
         detalle = " · ".join(f"{v} {k}" for k, v in sorted(vias.items())) or "—"
-        print(f"  ENTRAN al core: {len(entran)} — sin nota (a crear): {len(sin_nota)}  ({detalle})")
+        cfg.print_seguro(f"  ENTRAN al core: {len(entran)} — sin nota (a crear): {len(sin_nota)}  ({detalle})")
         total_out += len(salen)
         total_out_llm += len(con_llm)
         total_in += len(sin_nota)
     if len(slugs) > 1:
-        print(f"\nTotal: salen {total_out} (con extracción LLM {total_out_llm}) · "
+        cfg.print_seguro(f"\nTotal: salen {total_out} (con extracción LLM {total_out_llm}) · "
               f"entran sin nota {total_in}")
-    print("\n  → dry-run: no se escribió nada. Para aplicar, re-corré la cadena del sujeto "
+    cfg.print_seguro("\n  → dry-run: no se escribió nada. Para aplicar, re-corré la cadena del sujeto "
           "(query_ads/make_notes) — sub-modo D del skill maintain.")
     return 0
 
@@ -736,14 +778,14 @@ def print_combination_contrast(recs: list) -> None:
     base = count_core(recs, [], 1)      # OR puro: ≥1 faceta cualquiera (el default histórico)
     if REQUIRE_TOPICS or MIN_TOPICS > 1:
         regla = (f"require={REQUIRE_TOPICS or '[]'}, min_topics={MIN_TOPICS}")
-        print(f"  regla de combinación vigente: {regla} · en OR puro serían {base} CORE")
+        cfg.print_seguro(f"  regla de combinación vigente: {regla} · en OR puro serían {base} CORE")
         return
-    print(f"  regla de combinación vigente: OR (≥1 faceta cualquiera) → {base} CORE.")
-    print("  Si declararas una faceta-eje obligatoria (relevance.require) el corte sería:")
+    cfg.print_seguro(f"  regla de combinación vigente: OR (≥1 faceta cualquiera) → {base} CORE.")
+    cfg.print_seguro("  Si declararas una faceta-eje obligatoria (relevance.require) el corte sería:")
     for t in TOPIC_PATTERNS:
         n = count_core(recs, [t], 1)
         pct = f"−{100 * (base - n) / base:.0f}%" if base else "—"
-        print(f"    require: [{t}]{' ' * max(0, 14 - len(t))}→ {n:>5} CORE  ({pct})")
+        cfg.print_seguro(f"    require: [{t}]{' ' * max(0, 14 - len(t))}→ {n:>5} CORE  ({pct})")
 
 
 def print_probe(q: str, recs: list, noncore_top: int = 25) -> int:
@@ -755,22 +797,23 @@ def print_probe(q: str, recs: list, noncore_top: int = 25) -> int:
     probes manuales, hoy corre por --sweep (sweep_star)."""
     core = sorted((r for r in recs if r["relevant"]), key=lambda r: r.get("citation_count") or 0, reverse=True)
     noncore = sorted((r for r in recs if not r["relevant"]), key=lambda r: r.get("citation_count") or 0, reverse=True)
-    print(f"Probe (no baja PDFs ni escribe build/). q: {q}")
-    print(f"  {len(recs)} papers · {len(core)} CORE · {len(noncore)} no-core")
+    cfg.print_seguro(f"Probe (no baja PDFs ni escribe build/). q: {q}")
+    cfg.print_seguro(f"  {len(recs)} papers · {len(core)} CORE · {len(noncore)} no-core")
     print_combination_contrast(recs)
-    print()
-    print(f"  CORE (todos, por citas)  [tópicos que matchearon]:")
+    cfg.print_seguro("")
+    cfg.print_seguro(f"  CORE (todos, por citas)  [tópicos que matchearon]:")
     for r in core:
-        print(_probe_row(r))
+        cfg.print_seguro(_probe_row(r))
     shown = noncore[:noncore_top]
-    print(f"\n  no-core (top {len(shown)} de {len(noncore)}, chequeo de sanidad):")
+    cfg.print_seguro(f"\n  no-core (top {len(shown)} de {len(noncore)}, chequeo de sanidad):")
     for r in shown:
-        print(_probe_row(r))
-    print("\n  → ajustá relevance.topics en objective.yaml y re-corré --probe hasta que el corte cierre.")
+        cfg.print_seguro(_probe_row(r))
+    cfg.print_seguro("\n  → ajustá relevance.topics en objective.yaml y re-corré --probe hasta que el corte cierre.")
     return 0
 
 
 def main() -> int:
+    cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser()
     ap.add_argument("slug", nargs="?",
                     help="slug de estrella (o tema con --topic). Se omite con --probe.")
@@ -842,7 +885,7 @@ def main() -> int:
             # Tema MIXTO (off-ADS + extra_core): sin `query` no hay búsqueda ni chaining — la
             # única fuente ADS es la curación manual de `extra_core` (el bloque de abajo).
             q, chain_filter = None, None
-            print(f"Consultando ADS (tema, sólo extra_core): {meta.get('title', args.slug)}")
+            cfg.print_seguro(f"Consultando ADS (tema, sólo extra_core): {meta.get('title', args.slug)}")
             head = {"kind": "topic", "slug": args.slug, "title": meta.get("title"),
                     "concept": meta.get("concept"), "area": meta.get("area"), "query": None}
         else:
@@ -852,16 +895,19 @@ def main() -> int:
             # el "sujeto" de un tema es su propia query: anclar el chaining con ella deja on-topic a los
             # papers del grafo de citas (sin ancla traería los mega-citados genéricos, como en estrellas).
             chain_filter = f"({q})"
-            print(f"Consultando ADS (tema): {meta.get('title', args.slug)}\n  q: {q}")
+            cfg.print_seguro(f"Consultando ADS (tema): {meta.get('title', args.slug)}\n  q: {q}")
             head = {"kind": "topic", "slug": args.slug, "title": meta.get("title"),
                     "concept": meta.get("concept"), "area": meta.get("area"), "query": q}
     else:
         name, meta = cfg.star_by_slug(args.slug)
-        names = [cfg.require_field(meta, "ads_object", name, "stars.yaml")] + meta.get("aliases", [])
+        # mismo motivo que en `sweep_fulltext`: un `aliases:` escalar no debe tumbar el arranque
+        # del ingest con un TypeError que no dice qué corregir (R16).
+        names = [cfg.require_field(meta, "ads_object", name, "stars.yaml")] + \
+            _listify_curado(meta.get("aliases"), "aliases")
         star_names = names
         q = build_query(names)
         chain_filter = build_fulltext_filter(names)
-        print(f"Consultando ADS: {name}  (nombres: {', '.join(names)})")
+        cfg.print_seguro(f"Consultando ADS: {name}  (nombres: {', '.join(names)})")
         # `query`: la Solr EFECTIVA, tal cual se manda (#64). En un tema la escribe el usuario en
         # topics.yaml (versionada); en una estrella la arma build_query y hasta ahora se tiraba →
         # no había forma de reconstruir sobre qué universo afirma la ficha.
@@ -878,7 +924,7 @@ def main() -> int:
         for r in recs:
             r["via"] = "query"
         rel = [r for r in recs if r["relevant"]]
-        print(f"  query directa: {len(recs)} registros, {len(rel)} relevantes")
+        cfg.print_seguro(f"  query directa: {len(recs)} registros, {len(rel)} relevantes")
         # Segunda pasada por fecha (#79): el corte por citas de la primera es ciego a la edad, así
         # que lo que truncó es sistemáticamente lo reciente. Corre ANTES de extra_core/glifo/
         # chaining para que lo recuperado siembre también el grafo de citas (mismo criterio que #42).
@@ -891,7 +937,7 @@ def main() -> int:
                 # cualquier excepción acá abortaba antes de escribirlo y tiraba la corrida entera.
                 # Se degrada al estado honesto: `recent` AUSENTE = "no sé si la cola está cubierta"
                 # (que es lo que el lint distingue de `0`), no un cero que afirma cobertura.
-                print(f"  ⚠ la segunda pasada por fecha falló ({type(e).__name__}): "
+                cfg.print_seguro(f"  ⚠ la segunda pasada por fecha falló ({type(e).__name__}): "
                       f"{e or 'sin detalle'} — sigo con lo que trajo la query directa; el corpus "
                       f"queda marcado truncado SIN afirmar nada sobre la cola reciente")
                 recientes = None
@@ -899,7 +945,7 @@ def main() -> int:
                 qmeta["recent"] = len(recientes)
                 recs += recientes
                 rel = [r for r in recs if r["relevant"]]
-                print(f"  segunda pasada por fecha: +{len(recientes)} registros que el top por "
+                cfg.print_seguro(f"  segunda pasada por fecha: +{len(recientes)} registros que el top por "
                       f"citas dejaba afuera ({sum(1 for r in recientes if r['relevant'])} core)")
 
     # curación manual persistente: bibcodes en `extra_core` de stars.yaml/topics.yaml que el
@@ -907,7 +953,11 @@ def main() -> int:
     # Corre ANTES del glifo y del chaining (#42): si mergea después, los curados no están en `recs`
     # cuando el chaining arma su dedup y la cola de triage RE-PROPONE papers ya aceptados (medido:
     # 14 de 50 extra_core de ε Eri de vuelta como candidatos). Acá, además, siembran el grafo.
-    extra = [b for b in (meta.get("extra_core") or []) if b]
+    # `_listify_curado`, no `or []`: un `extra_core: <bibcode>` sin corchetes (aceptar UN candidato
+    # del triage, el caso más común) es truthy y no caía en el `or` — la comprensión de abajo
+    # recorría el string letra por letra y el bibcode real NUNCA se pedía a ADS: la curación manual
+    # del usuario se evaporaba en silencio (R13, el más grave de la clase).
+    extra = [b for b in _listify_curado(meta.get("extra_core"), "extra_core") if b]
     if args.extra_only and not extra:
         sys.exit(f"--extra-only pero la entrada '{args.slug}' no declara `extra_core` en topics.yaml "
                  "— listá ahí los bibcodes ADS del tema mixto.")
@@ -925,7 +975,7 @@ def main() -> int:
                 rescued.append(b)
         manual = [m for m in fetch_bibcodes([b for b in extra if b not in present])
                   if m.get("bibcode")]
-        print(f"  extra_core: +{len(manual)} traídos de ADS · {len(rescued)} rescatados del corte "
+        cfg.print_seguro(f"  extra_core: +{len(manual)} traídos de ADS · {len(rescued)} rescatados del corte "
               f"(de {len(extra)} en config)")
         fetched = {m["bibcode"] for m in manual}
         missing = [b for b in extra if b not in present and b not in fetched]
@@ -933,7 +983,7 @@ def main() -> int:
             # La búsqueda por bibcode corre SIN la lente astro (#68), así que un faltante ya no se
             # explica por "está en ADS pero no en database:astronomy" — el diagnóstico honesto es
             # bibcode mal escrito o registro que ADS retiró/renombró.
-            print(f"  ⚠ extra_core: {len(missing)} bibcode(s) que ADS no encontró — revisá que el "
+            cfg.print_seguro(f"  ⚠ extra_core: {len(missing)} bibcode(s) que ADS no encontró — revisá que el "
                   f"bibcode sea exacto (ADS a veces los renombra): {', '.join(missing)}")
         recs += manual
         rel = [r for r in recs if r["relevant"]]
@@ -949,10 +999,10 @@ def main() -> int:
             if g["relevant"] and b and b not in seen:
                 seen.add(b)
                 rescued.append(g)
-        print(f"  glifo: +{len(rescued)} core nuevos que escriben el nombre con un lookalike "
+        cfg.print_seguro(f"  glifo: +{len(rescued)} core nuevos que escriben el nombre con un lookalike "
               "Unicode (∊/ϵ) — invisibles a title:/abs:")
         for t in gmeta.get("truncated_glyph") or []:
-            print(f"  ⚠ rescate por glifo incompleto: el superset de "
+            cfg.print_seguro(f"  ⚠ rescate por glifo incompleto: el superset de "
                   f"{'/'.join(t['constellations'])} reporta {t['num_found']} y se escanearon "
                   f"{t['rows']} (top por citas, ANTES del filtro por glifo) — subí --rows para "
                   f"cubrir la cola (queda marcado en ads.json → lint)")
@@ -980,17 +1030,17 @@ def main() -> int:
             else:
                 candidatos.append(c)       # nivel 1: al triage (juicio del LLM, sin bajar nada)
         anchor = "full-text del sujeto" if not args.topic else "la query del tema"
-        print(f"  chaining: +{len(chained)} core nuevos vía el grafo de citas de {len(core_bibs)} core "
+        cfg.print_seguro(f"  chaining: +{len(chained)} core nuevos vía el grafo de citas de {len(core_bibs)} core "
               f"(anclado a {anchor})")
         if gate:
-            print(f"  triage: {len(candidatos)} candidatos pendientes de juicio "
+            cfg.print_seguro(f"  triage: {len(candidatos)} candidatos pendientes de juicio "
                   f"({ya_descartados} ya descartados antes) — no se bajan hasta decidirlos: "
                   f"python scripts/triage.py {args.slug}")
         recs += chained
         rel = [r for r in recs if r["relevant"]]
 
     recs.sort(key=lambda r: r.get("citation_count") or 0, reverse=True)
-    print(f"  total: {len(recs)} registros, {len(rel)} relevantes")
+    cfg.print_seguro(f"  total: {len(recs)} registros, {len(rel)} relevantes")
 
     # marca de truncamiento de la query directa (sólo si realmente se cortó): persistida para que el
     # lint la surface como corpus incompleto. El truncado del chaining NO se registra (es por diseño).
@@ -1003,7 +1053,7 @@ def main() -> int:
     if truncated:
         rescate = (f" + {truncated['recent']} de la segunda pasada por fecha"
                    if "recent" in truncated else " (la segunda pasada por fecha no pudo correr)")
-        print(f"  ⚠ corpus truncado: ADS reporta {truncated['num_found']} y se trajeron "
+        cfg.print_seguro(f"  ⚠ corpus truncado: ADS reporta {truncated['num_found']} y se trajeron "
               f"{truncated['rows']}{rescate} — sigue faltando el medio del universo; marcado en "
               "ads.json (el lint lo surface)")
 
@@ -1021,7 +1071,7 @@ def main() -> int:
                                     reverse=True)}
     (outdir / "ads.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False),
                                      encoding="utf-8")
-    print(f"  → {outdir / 'ads.json'}")
+    cfg.print_seguro(f"  → {outdir / 'ads.json'}")
 
     # Registro de búsqueda VERSIONADO (#64): el ads.json de arriba es scratch regenerable, pero el
     # registro reproducible de QUÉ se buscó, CUÁNDO, con qué límite y con qué corte tiene que viajar
@@ -1051,7 +1101,7 @@ def main() -> int:
                   "min_topics": MIN_TOPICS,
                   "noise_doctypes": sorted(NOISE_DOCTYPES)},
     })
-    print(f"  → {cfg.registro_path(args.slug)} (registro de búsqueda, versionado)")
+    cfg.print_seguro(f"  → {cfg.registro_path(args.slug)} (registro de búsqueda, versionado)")
     return 0
 
 

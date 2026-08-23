@@ -1,4 +1,5 @@
 """fetch_pdf: resolver ADS (esources), higiene del token, magic %PDF, residuo missing_pdf."""
+import io
 import json
 import sys
 from pathlib import Path
@@ -48,6 +49,14 @@ def test_is_ads_host():
     assert fp.is_ads_host("https://api.adsabs.harvard.edu/v1/resolver/x")
     assert not fp.is_ads_host("https://iopscience.iop.org/article/x/pdf")
     assert not fp.is_ads_host("https://evil.com/adsabs.harvard.edu/x")
+
+
+def test_is_ads_host_no_acepta_lookalike():
+    """`netloc.endswith("adsabs.harvard.edu")` sin chequear el punto de borde acepta
+    "xadsabs.harvard.edu" como si fuera un subdominio de ADS — y el token Bearer viaja ahí
+    (higiene de credenciales: la garantía documentada es que el token SÓLO va a
+    *.adsabs.harvard.edu)."""
+    assert fp.is_ads_host("https://xadsabs.harvard.edu/x") is False
 
 
 # ── red falsa ────────────────────────────────────────────────────────────────
@@ -106,6 +115,35 @@ def test_esource_manda_token_al_resolver(monkeypatch):
     patch_net(monkeypatch, [FakeResp(200, {"links": {"records": []}})], calls)
     fp.esource_records("x", "tok-123")
     assert calls[0]["headers"]["Authorization"] == "Bearer tok-123"
+
+
+def test_resolver_con_forma_inesperada_no_revienta(monkeypatch):
+    """`fetch_pdf.py:116` — `recs = (data.get("links") or {}).get("records") or []`.
+
+    El docstring de `esource_records` promete `[]` "si no hay o falla (tolerante — un resolver
+    caído no aborta el barrido)", y los tests existentes cubren 404, `ConnectionError` y JSON
+    ilegible. Lo que NO cubren es un JSON **legal con otra forma**: `links` escalar revienta en el
+    segundo `.get`, y `records` escalar entrega los caracteres a `candidate_urls`, donde
+    `r.get("link_type")` muere. Un barrido de PDFs de 900 papers se corta en el primero."""
+    class FakeResp:
+        status_code = 200
+
+        def __init__(self, payload):
+            self._p = payload
+
+        def json(self):
+            return self._p
+
+    def patch(payload):
+        monkeypatch.setattr(
+            __import__("fetch_pdf"), "requests",
+            type("R", (), {"get": staticmethod(lambda *a, **k: FakeResp(payload)),
+                           "RequestException": Exception})())
+
+    patch({"links": "https://x/p.pdf"})
+    assert fp.esource_records("2020X", "tok") == []
+    patch({"links": {"records": "abc"}})
+    assert fp.candidate_urls(fp.esource_records("2020X", "tok")) == []
 
 
 # ── download_pdf ─────────────────────────────────────────────────────────────
@@ -252,6 +290,33 @@ def test_main_residuo_en_missing_pdf(toy_vault, monkeypatch):
     assert miss[0]["hint"] and miss[1]["hint"]
 
 
+RECORDS_LIMIT = [
+    {"bibcode": f"202{i}xxxA...1..{i}A", "title": f"paper {i}", "relevant": True,
+     "arxiv_id": None, "doi": f"10.1/{i}", "bibstem": "ApJ", "year": "2020"}
+    for i in range(4)
+]
+
+
+def test_main_limit_no_borra_el_residuo_completo(toy_vault, monkeypatch):
+    """4 papers relevantes sin PDF; `--limit 1` sólo intenta el primero (y lo consigue). Antes:
+    como `missing` (calculado SOLO sobre lo intentado) daba vacío, el código borraba
+    `missing_pdf.json` entero — perdiendo el residuo de fetch_arxiv sobre los otros 3 papers que
+    ni se miraron esta corrida. Medido en el hallazgo: "4 papers, 1 bajado, residuo borrado,
+    cierre sin conseguir 0" — un residuo que el docstring llama "COMPLETO del ingest" deja de
+    serlo bajo --limit, así que no debería tocarse."""
+    d = ads_json(toy_vault.ROOT, "test_star", RECORDS_LIMIT)
+    residuo_previo = [{"bibcode": r["bibcode"], "title": r["title"], "doi": r["doi"]}
+                      for r in RECORDS_LIMIT[1:]]      # lo que fetch_arxiv habría dejado
+    (d / "missing_pdf.json").write_text(json.dumps(residuo_previo), encoding="utf-8")
+    monkeypatch.setattr(fp, "esource_records", lambda bib, tok:
+                        [{"link_type": "ESOURCE|ADS_PDF", "url": f"https://articles.adsabs.harvard.edu/pdf/{bib}"}])
+    monkeypatch.setattr(fp, "download_pdf", lambda url, tok: b"%PDF-fake")
+    assert run_main(monkeypatch, ["test_star", "--limit", "1"]) == 0
+    assert (d / "missing_pdf.json").exists(), (
+        "el residuo de los 3 papers sin intentar se borró: --limit no debería tocar un residuo "
+        "que no puede ser completo")
+
+
 def test_main_residuo_hint_por_bibstem(toy_vault, monkeypatch, capsys):
     """Un Msngr que el resolver no entrega sale orientado al archivo abierto de The Messenger."""
     d = ads_json(toy_vault.ROOT, "test_star", [
@@ -297,3 +362,65 @@ def test_main_idempotente_y_fallback_de_fuentes(toy_vault, monkeypatch, capsys):
 
 def test_main_sin_ads_json(toy_vault, monkeypatch):
     assert run_main(monkeypatch, ["test_star"]) == 1
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# H-07 · fetch_pdf.py — PDF truncado congelado para siempre
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Decisión: en vez de agregar un umbral de tamaño al chequeo "¿ya está en disco?" (que rompería
+# fixtures de tests existentes con PDFs de juguete de pocos bytes, usados como "ya bajado
+# válido"), se ataca la RAÍZ: la escritura del PDF final deja de ser `dest.write_bytes(...)`
+# directo (no atómica: un corte a mitad deja lo que se llegó a escribir en el destino FINAL) y
+# pasa a ser temporal-mismo-dir + `os.replace` (mismo patrón que `lib_config.save_registro` /
+# `fetch_ground_truth.write_ground_truth`). Con esto un corte YA NO puede dejar nada truncado en
+# el destino: o el PDF completo se publica, o `dest` sigue sin existir.
+
+def _interceptor_write_bytes(dest_name: str):
+    """Parcha `Path.write_bytes` para simular un corte a mitad de la escritura del PDF que
+    termina en `dest_name` (exacto, la escritura vieja no-atómica) O que EMPIEZA con `dest_name`
+    (el temporal `<dest>.tmpNNN` de la escritura atómica nueva) — así el mismo test funciona
+    idéntico contra el código viejo (escribe directo al destino final) y el nuevo (escribe a un
+    temporal y publica con `os.replace`), sin depender de qué función interna exista."""
+    real_write_bytes = Path.write_bytes
+
+    def corte(self, data, *a, **k):
+        if self.name == dest_name or self.name.startswith(dest_name + ".tmp"):
+            real_write_bytes(self, bytes(data)[: len(data) // 2])
+            raise OSError("disco lleno a mitad del corte")
+        return real_write_bytes(self, data, *a, **k)
+    return corte
+
+
+def test_fetch_pdf_no_deja_pdf_truncado_en_el_destino(toy_vault, monkeypatch):
+    """Mismo defecto que en `fetch_arxiv.py` (ver `test_fetch_arxiv.py`), del lado de
+    `fetch_pdf.py` (la otra vía de bajada, vía resolver de ADS)."""
+    d = ads_json(toy_vault.ROOT, "test_star", RECORDS_LIMIT[:1])
+    monkeypatch.setattr(fp, "esource_records", lambda bib, tok:
+                        [{"link_type": "ESOURCE|ADS_PDF",
+                          "url": f"https://articles.adsabs.harvard.edu/pdf/{bib}"}])
+    monkeypatch.setattr(fp, "download_pdf", lambda url, tok: b"%PDF-contenido-completo-del-paper")
+    destdir = toy_vault.PDFS / "test_star"
+    destdir.mkdir(parents=True, exist_ok=True)
+    dest = destdir / f"{fp.safe_name(RECORDS_LIMIT[0]['bibcode'])}.pdf"
+    monkeypatch.setattr(Path, "write_bytes", _interceptor_write_bytes(dest.name))
+    try:
+        run_main(monkeypatch, ["test_star"])
+    except OSError:
+        pass    # versión sin atomicidad: la excepción del corte escapa sin capturar
+    assert not dest.exists(), (
+        "quedó un PDF (parcial) en el destino final tras un corte de escritura — la próxima "
+        "corrida lo va a contar como 'ya bajado' y nunca lo va a reintentar (H-07)")
+
+
+# ── consolas no-UTF8: fetch_pdf muere con UnicodeEncodeError bajo ascii (medido) ──
+
+def test_unicode_no_muere_en_consola_ascii(toy_vault, monkeypatch):
+    buf = io.BytesIO()
+    wrapper = io.TextIOWrapper(buf, encoding="ascii", errors="strict")
+    monkeypatch.setattr(sys, "stdout", wrapper)
+    monkeypatch.setattr(sys, "argv", ["fetch_pdf.py", "test_star"])
+    rc = fp.main()          # sin ads.json: imprime "Corré primero query_ads.py ..." (con tilde)
+    wrapper.flush()
+    assert rc == 1
+    assert b"query_ads" in buf.getvalue()

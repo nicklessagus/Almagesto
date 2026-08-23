@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -94,8 +95,40 @@ def safe_name(bibcode: str) -> str:
     return bibcode.replace("/", "_")
 
 
+def write_pdf_atomic(dest: Path, data: bytes) -> bool:
+    """Escritura atómica del PDF final: temporal en el MISMO directorio + `os.replace` (mismo
+    patrón que `lib_config.save_registro` / `fetch_ground_truth.write_ground_truth`). H-07: antes
+    se hacía `dest.write_bytes(pdf)` directo — un corte a mitad de esa escritura (proceso matado,
+    disco lleno) deja un PDF TRUNCADO en el destino FINAL (medido: 35 B), y el único chequeo de
+    idempotencia de la cadena es `dest.exists()`: ese PDF roto se cuenta como "ya bajado" para
+    siempre — nada valida magic/tamaño en disco (sólo se validaba al bajar), y no hay forma de
+    volver a intentarlo salvo borrarlo a mano. Con la escritura atómica un corte NUNCA deja nada
+    en `dest`: o el PDF completo se publica, o `dest` sigue sin existir y la próxima corrida lo
+    reintenta sola. `False` si la publicación falló (queda como "no conseguido" → entra al
+    residuo, igual que si la fuente no hubiera entregado nada)."""
+    tmp = dest.with_name(dest.name + f".tmp{os.getpid()}")
+    try:
+        tmp.write_bytes(data)
+        os.replace(tmp, dest)
+        return True
+    except OSError as e:
+        cfg.print_seguro(f"      ✗ no se pudo escribir {dest.name} en disco: {e}")
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        return False
+
+
 def is_ads_host(url: str) -> bool:
-    return urlparse(url).netloc.endswith("adsabs.harvard.edu")
+    """True sólo para *.adsabs.harvard.edu (o el host pelado). H-19: `netloc.endswith(...)` sin
+    chequear el punto de borde acepta hosts que NO son subdominios — `is_ads_host
+    ('https://xadsabs.harvard.edu/x')` daba `True`, y el token ADS (higiene de credenciales, ver
+    `download_pdf`) viajaría a un host que sólo se PARECE al de ADS. `.hostname` (vía urlparse)
+    ya descarta userinfo/puerto; el chequeo de igualdad + sufijo CON el punto (`.adsabs...`) es lo
+    que impone el límite de subdominio."""
+    host = (urlparse(url).hostname or "").lower()
+    return host == "adsabs.harvard.edu" or host.endswith(".adsabs.harvard.edu")
 
 
 def esource_records(bibcode: str, token: str) -> list[dict]:
@@ -113,9 +146,13 @@ def esource_records(bibcode: str, token: str) -> list[dict]:
         data = resp.json()
     except ValueError:
         return []
-    recs = (data.get("links") or {}).get("records") or []
-    if not recs and data.get("link"):
-        recs = [{"url": data["link"], "link_type": data.get("link_type", "")}]
+    # La respuesta viene de la RED: su forma no está garantizada. Un `links` que no es mapa —o un
+    # `records` que no es lista— llegaba tal cual al `.get`/iteración y volteaba el resolver con
+    # AttributeError, abortando la bajada de TODO el slug por un solo registro raro.
+    data = cfg.as_map(data)
+    recs = [r for r in cfg.as_list(cfg.as_map(data.get("links")).get("records")) if isinstance(r, dict)]
+    if not recs and isinstance(data.get("link"), str):
+        recs = [{"url": data["link"], "link_type": str(data.get("link_type") or "")}]
     return recs
 
 
@@ -182,15 +219,20 @@ def download_pdf(url: str, token: str) -> bytes | None:
 
 
 def main() -> int:
+    cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser()
     ap.add_argument("slug")
     ap.add_argument("--all", action="store_true", help="incluir no-relevantes")
     ap.add_argument("--limit", type=int, default=0, help="máximo a intentar (0 = sin límite)")
+    ap.add_argument("--force", action="store_true",
+                    help="re-intentar incluso lo que ya tiene PDF en disco (p. ej. un PDF "
+                         "truncado por un corte anterior — H-07: nada valida el contenido de lo "
+                         "ya bajado, ésta es la vía de escape manual)")
     args = ap.parse_args()
 
     adsfile = cfg.ROOT / "build" / args.slug / "ads.json"
     if not adsfile.exists():
-        print(f"No existe {adsfile}. Corré primero query_ads.py {args.slug}")
+        cfg.print_seguro(f"No existe {adsfile}. Corré primero query_ads.py {args.slug}")
         return 1
     data = json.loads(adsfile.read_text(encoding="utf-8"))
     recs = data["records"]
@@ -202,50 +244,65 @@ def main() -> int:
 
     # objetivo: TODO paper relevante sin PDF en disco (#32) — los sin arXiv (su única vía es
     # este resolver) y los con arXiv cuya bajada falló en fetch_arxiv (antes quedaban invisibles:
-    # ni acá ni en el missing_pdf.json final). Verdad de disco: lo ya bajado no se toca.
-    todo = [r for r in recs if not (destdir / f"{safe_name(r['bibcode'])}.pdf").exists()]
-    skipped = len(recs) - len(todo)
-    if args.limit:
-        todo = todo[: args.limit]
+    # ni acá ni en el missing_pdf.json final). Verdad de disco: lo ya bajado no se toca (salvo
+    # --force, H-07: la única forma de reemplazar un PDF truncado congelado).
+    pendientes = [r for r in recs
+                  if args.force or not (destdir / f"{safe_name(r['bibcode'])}.pdf").exists()]
+    skipped = len(recs) - len(pendientes)
+    todo = pendientes[: args.limit] if args.limit else pendientes
+    # H-05: con --limit, `todo` es un SUBSET arbitrario de lo pendiente — lo que queda afuera no
+    # se intentó, no "falló". Antes `missing` (calculado sólo sobre `todo`) se escribía igual, y
+    # si daba vacío se BORRABA el residuo completo (medido: 4 papers, 1 bajado con --limit 1,
+    # residuo de los otros 3 borrado, cierre "sin conseguir 0"). El residuo es, por contrato
+    # (docstring del módulo), "el residuo COMPLETO del ingest" — con --limit no puede serlo, así
+    # que ni se escribe ni se borra: se deja el archivo tal como estaba.
+    limited = bool(args.limit) and len(todo) < len(pendientes)
     token = cfg.get_ads_token()
 
     label = data.get("star") or data.get("title") or args.slug
     n_arx = sum(1 for r in todo if r.get("arxiv_id"))
-    print(f"{label}: {len(todo)} sin PDF → resolver de ADS (esources)"
-          + (f" ({n_arx} con arXiv cuya bajada falló)" if n_arx else ""))
+    cfg.print_seguro(f"{label}: {len(todo)} sin PDF → resolver de ADS (esources)"
+                      + (f" ({n_arx} con arXiv cuya bajada falló)" if n_arx else ""))
     got = 0
     missing = []
     for i, r in enumerate(todo, 1):
         bib = r["bibcode"]
         dest = destdir / f"{safe_name(bib)}.pdf"
         cands = candidate_urls(esource_records(bib, token))
-        print(f"  [{i}/{len(todo)}] {bib}: "
-              + (", ".join(t for t, _ in cands) if cands else "sin fuentes PDF en el resolver"))
+        cfg.print_seguro(f"  [{i}/{len(todo)}] {bib}: "
+                          + (", ".join(t for t, _ in cands) if cands
+                             else "sin fuentes PDF en el resolver"))
         ok = False
         for sub, url in cands:
             pdf = download_pdf(url, token)
-            if pdf:
-                dest.write_bytes(pdf)
-                print(f"      ✓ {sub} → {dest.name} ({len(pdf)} bytes)")
+            if pdf and write_pdf_atomic(dest, pdf):
+                cfg.print_seguro(f"      ✓ {sub} → {dest.name} ({len(pdf)} bytes)")
                 got += 1
                 cfg.record_pdf_source(args.slug, safe_name(bib), PDF_SOURCE[sub])   # #57
                 ok = True
                 break
-            print(f"      · {sub} no entregó PDF")
+            elif pdf:
+                pass    # write_pdf_atomic ya imprimió el motivo; probar la siguiente fuente
+            else:
+                cfg.print_seguro(f"      · {sub} no entregó PDF")
         if not ok:
             hint = rescue_hint(r.get("bibstem"), r.get("year"))
             missing.append({"bibcode": bib, "title": r.get("title"), "doi": r.get("doi"),
                             "bibstem": r.get("bibstem"), "year": r.get("year"), "hint": hint})
-            print(f"      → rescate manual [{r.get('bibstem') or 'sin bibstem'}]: {hint}")
+            cfg.print_seguro(f"      → rescate manual [{r.get('bibstem') or 'sin bibstem'}]: {hint}")
         time.sleep(SLEEP_S)
 
-    print(f"Bajados {got}, ya estaban {skipped}, sin conseguir {len(missing)}.")
+    cfg.print_seguro(f"Bajados {got}, ya estaban {skipped}, sin conseguir {len(missing)}.")
     miss = cfg.ROOT / "build" / args.slug / "missing_pdf.json"
-    if missing:
+    if limited:
+        cfg.print_seguro(f"  ⚠ --limit activo: quedaron {len(pendientes) - len(todo)} paper(s) "
+                          "sin intentar — el residuo en missing_pdf.json NO se toca (no sería "
+                          "completo). Corré sin --limit para cerrar el residuo por verdad de disco.")
+    elif missing:
         miss.write_text(json.dumps(missing, indent=2, ensure_ascii=False), encoding="utf-8")
-        print(f"Residuo en {miss} — cada entrada trae su `hint` (rama de la cascada manual según "
-              "el bibstem); detalle en `## Notas` del skill ingest-star. Lo que no salga: pedir el "
-              "PDF al usuario / marcar `pending`.")
+        cfg.print_seguro(f"Residuo en {miss} — cada entrada trae su `hint` (rama de la cascada "
+                          "manual según el bibstem); detalle en `## Notas` del skill ingest-star. "
+                          "Lo que no salga: pedir el PDF al usuario / marcar `pending`.")
     elif miss.exists():
         miss.unlink()      # el listado de fetch_arxiv quedó cubierto: no dejar un residuo viejo
     return 0

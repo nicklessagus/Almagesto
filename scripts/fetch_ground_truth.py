@@ -20,7 +20,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+from pathlib import Path
 
 import lib_config as cfg
 
@@ -64,6 +66,31 @@ def msini_earth(K_ms, P_days, e, mstar_msun):
     P, Mstar = P_days * day, mstar_msun * Msun
     m = K_ms * Mstar ** (2 / 3) * (P / (2 * math.pi * G)) ** (1 / 3) * math.sqrt(1 - ecc ** 2)
     return m / Mearth
+
+
+def write_ground_truth(slug: str, payload: dict) -> Path:
+    """Escritura atómica de ground_truth/<slug>.json: temporal en el MISMO directorio (mismo
+    filesystem, para que el rename sea atómico en POSIX) + `os.replace` — mismo patrón que
+    `lib_config.save_registro`. Sin esto, `--force` reescribía el archivo directo con
+    `write_text` y un corte a mitad de la escritura (proceso matado, disco lleno) dejaba el JSON
+    TRUNCADO: medido, 162 B de snapshot previo → 1.024 B de JSON inválido, contenido viejo
+    IRRECUPERABLE. El propio docstring del módulo dice que NEA cambia valores entre releases: el
+    snapshot no es regenerable, así que perderlo a mitad de una escritura no es aceptable."""
+    cfg.GROUND_TRUTH.mkdir(parents=True, exist_ok=True)
+    out = cfg.GROUND_TRUTH / f"{slug}.json"
+    tmp = out.with_name(out.name + f".tmp{os.getpid()}")
+    tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    try:
+        os.replace(tmp, out)
+    except Exception:
+        # publicación fallida: no dejar el temporal como basura silenciosa, pero priorizar
+        # propagar el error real (el snapshot previo, si había uno, sobrevive intacto).
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
+    return out
 
 
 def fetch_pscomppars(host: str):
@@ -126,7 +153,17 @@ def fetch_planets(tab, mstar_msun=None) -> list[dict]:
 
 def fetch_host(host: str, tab=None) -> dict:
     """Datos del host: primero de NEA (columnas host de pscomppars — pasar la tabla ya
-    consultada; si viene None se consulta acá, tolerante), luego SIMBAD para sp_type/coords."""
+    consultada; si viene None se consulta acá, tolerante), luego SIMBAD para sp_type/coords.
+
+    H-14/H-15: antes, una falla de NEA o de SIMBAD acá se escribía al payload como
+    `_nea_host_error`/`_simbad_error` — campos que NINGÚN lector consume (0 consumidores, medido
+    por grep): quedaban muertos en el JSON para siempre. Peor, si la falla era en SIMBAD,
+    `spectral_type` quedaba `None` exactamente igual que cuando NEA/SIMBAD genuinamente no tienen
+    el dato — desde #70 (espejo puro) un `None` de host es "normal", así que la falla técnica
+    quedaba INDISTINGUIBLE de una ausencia legítima. Se decidió no escribir esos campos (nada los
+    lee) y en cambio avisar por stdout en el momento del ingest, que es donde alguien puede
+    efectivamente actuar (reintentar, revisar el host, etc.) — sin inventar un nuevo campo
+    write-only que reproduciría el mismo problema."""
     out = {"name": host}
     # NEA host columns (vienen en pscomppars)
     try:
@@ -145,17 +182,25 @@ def fetch_host(host: str, tab=None) -> dict:
                 "dec_deg": _val(r, "dec"),
             })
     except Exception as e:
-        out["_nea_host_error"] = str(e)
+        cfg.print_seguro(f"  ⚠ NEA (columnas de host) no respondió para {host!r}: {e} — los "
+                          "campos de host quedan sin completar (no es lo mismo que NEA sin el "
+                          "dato: revisar a mano si hace falta).")
     # SIMBAD (defensivo: la API de fields cambia entre versiones)
     try:
         from astroquery.simbad import Simbad
         s = Simbad()
+        agregado = False
         for f in ("sp_type", "sptype"):
             try:
                 s.add_votable_fields(f)
+                agregado = True
                 break
             except Exception:
                 continue
+        if not agregado:
+            cfg.print_seguro(f"  ⚠ SIMBAD: no se pudo agregar sp_type/sptype como campo para "
+                              f"{host!r} — si spectral_type queda null, puede ser por esto y no "
+                              "porque SIMBAD no tenga el dato (indistinguible desde #70).")
         res = s.query_object(host)
         if res is not None and len(res):
             r = res[0]
@@ -164,11 +209,13 @@ def fetch_host(host: str, tab=None) -> dict:
                     out["spectral_type"] = _val(r, k)
                     break
     except Exception as e:
-        out["_simbad_error"] = str(e)
+        cfg.print_seguro(f"  ⚠ SIMBAD no respondió para {host!r}: {e} — spectral_type puede "
+                          "quedar null por esto y no por ausencia real del dato.")
     return out
 
 
 def main() -> int:
+    cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser()
     ap.add_argument("slug")
     ap.add_argument("--force", action="store_true",
@@ -202,8 +249,7 @@ def main() -> int:
 
     payload = {"star": name, "slug": args.slug, "host": host_info, "planets": planets,
                "source": "NASA Exoplanet Archive (pscomppars) + SIMBAD"}
-    cfg.GROUND_TRUTH.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    out = write_ground_truth(args.slug, payload)
     print(f"  → {out}")
     return 0
 

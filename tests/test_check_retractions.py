@@ -89,10 +89,100 @@ def test_split_note_sin_frontmatter():
     assert cr.split_note("---\nyaml: [roto\n---\n") == (None, "---\nyaml: [roto\n---\n")
 
 
+NOTA_CON_GUIONES = (
+    '---\n'
+    'bibcode: 2020aaa...1..1A\n'
+    'title: "Un titulo con --- adentro"\n'
+    'tags:\n'
+    '- paper\n'
+    '---\n'
+    'cuerpo\n'
+)
+
+
+def test_split_note_no_saltea_el_paper():
+    """Tercer sitio de la misma clase que `test_split_fm_no_corta_dentro_de_un_valor`
+    (`tests/test_lib_config.py`). `split("---", 2)` parece defensivo (el `maxsplit` preserva las
+    reglas horizontales del cuerpo) pero corta igual **dentro del valor**: devuelve `(None, …)`
+    y el paper **se saltea del chequeo de retracciones** con el mensaje falso "arreglá el YAML".
+    Falso limpio en la frontera dura: una fuente retractada citada rompe la regla #0.
+    (Se escribió creyendo que era un control de no-regresión; falló, y por eso está acá.)"""
+    fm, _ = cr.split_note(NOTA_CON_GUIONES)
+    assert fm and fm.get("bibcode") == "2020aaa...1..1A"
+
+
+def test_stamp_fields_no_deja_la_nota_a_medias(toy_vault, monkeypatch):
+    """`stamp_fields` reescribe notas de `papers/` —con la extracción LLM adentro— sin tmp+rename.
+    Medido con `ulimit -f`: 16.071 B → 8.192 B, 198 de 400 ocurrencias de la extracción destruidas.
+    Es la misma clase que la 6ª pasada arregló en `save_registro`, sobre lo MENOS regenerable de la
+    bóveda. Acá se simula el corte fallando la escritura: el original tiene que sobrevivir."""
+    cuerpo = "".join(f"## Extracción {i}\n\nprosa LLM irrecuperable {i}\n\n" for i in range(80))
+    p = mk_note(toy_vault.PAPERS, "2020aaa...1..1A",
+                {"bibcode": "2020aaa...1..1A", "tags": ["paper"]}, cuerpo)
+    original = p.read_bytes()
+
+    real_write = type(p).write_text
+
+    def write_que_se_corta(self, data, *a, **k):
+        # El corte se inyecta en CUALQUIER escritura dentro de papers/, no sólo en la ruta destino.
+        # Inyectarlo sólo en el destino premiaba la implementación equivocada: con tmp+rename el
+        # fallo nunca dispara y el test pasa sin probar nada, así que el test empujaba a escribir
+        # directo sobre la nota y "restaurar" desde un backup — que NO sobrevive a un SIGKILL,
+        # porque ahí no corre ningún `except`. Lo que se exige es el contrato, no el mecanismo:
+        # si la escritura falla, el original queda intacto.
+        if self.parent == p.parent:
+            real_write(self, data[:len(data) // 2], *a, **k)
+            raise OSError("disco lleno")
+        return real_write(self, data, *a, **k)
+
+    monkeypatch.setattr(type(p), "write_text", write_que_se_corta)
+    fm, body = cr.split_note(p.read_text(encoding="utf-8"))
+    with pytest.raises(OSError):
+        cr.stamp_fields(p, fm, body, {"retracted": True})
+    assert p.read_bytes() == original, "la nota quedó truncada: se perdió la extracción LLM"
+
+
+def test_stamp_fields_drop_de_la_clave_vieja_no_corrompe_el_frontmatter(toy_vault):
+    """El borrado del bloque viejo se corta ante cualquier línea que no empiece con espacio/tab/`-`
+    y deja el resto huérfano. Con una línea EN BLANCO el YAML parsea igual y el ítem huérfano se
+    absorbe en la clave anterior (`tags: ['paper', {'type': 'corrigendum'}]`) — y **ninguna
+    categoría del lint lo ve**. La docstring promete preservar byte a byte."""
+    texto = (
+        '---\n'
+        'bibcode: 2020aaa...1..1A\n'
+        'retraction:\n'
+        '  type: corrigendum\n'
+        '\n'
+        '  date: "2021-01-01"\n'
+        'tags:\n'
+        '- paper\n'
+        '---\n'
+        'cuerpo\n'
+    )
+    p = toy_vault.PAPERS / "2020aaa...1..1A.md"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(texto, encoding="utf-8")
+    fm0, body0 = cr.split_note(texto)
+    cr.stamp_fields(p, fm0, body0, {"retraction": {"type": "retraction", "date": "2022-01-01"}})
+    fm = cfg.split_fm(p.read_text(encoding="utf-8"))
+    assert fm.get("tags") == ["paper"], f"`tags` contaminado por el drop: {fm.get('tags')!r}"
+
+
 def test_upd_date():
     assert cr._upd_date({"updated": {"date-parts": [[2021, 5, 3]]}}) == "2021-05-03"
     assert cr._upd_date({"updated": {"date-parts": [[2021]]}}) == "2021"
     assert cr._upd_date({}) is None
+
+
+def test_upd_date_date_parts_escalar_no_inventa_una_fecha():
+    """`check_retractions.py:175` — `dp = (upd.get("updated") or {}).get("date-parts") or [[]]`.
+
+    Este NO crashea: miente. Con `date-parts: "2021"` (escalar en vez de `[[2021,5,3]]`) el
+    `or [[]]` no dispara, `dp[0]` es el carácter `"2"` y la función devuelve la fecha **"2"**,
+    que se estampa en el frontmatter como `retraction.date` / `corrections[].date`. Un dato
+    inventado en la capa auditable es peor que una excepción: no deja rastro."""
+    assert cr._upd_date({"updated": {"date-parts": "2021"}}) is None, (
+        "se fabricó una fecha a partir de un `date-parts` que no es una lista")
 
 
 def test_title_says_retracted():
@@ -130,6 +220,26 @@ def test_crossref_tolerante_a_errores(monkeypatch):
     patch_net(monkeypatch, [real_requests.ConnectionError("sin red")])
     assert cr.crossref_retraction("10.1/x", {}) == (None, [])
     patch_net(monkeypatch, [FakeResp(200, None)])    # 200 con cuerpo no-json
+    assert cr.crossref_retraction("10.1/x", {}) == (None, [])
+
+
+def test_crossref_retraction_updated_by_como_mapa_no_revienta(monkeypatch):
+    """`check_retractions.py:159` — `for upd in msg.get("updated-by", []) or []`.
+
+    Si Crossref devuelve un mapa donde el lector espera lista, el `for` itera las CLAVES
+    (strings) y `upd.get` revienta. `crossref_retraction` promete tolerancia (todos sus otros
+    caminos de error devuelven `(None, [])`); esta forma no está cubierta y se lleva puesta la
+    cadena de ingest."""
+    class FakeResp:
+        status_code = 200
+        headers: dict = {}
+
+        def json(self):
+            return {"message": {"updated-by": {"0": {"type": "retraction", "DOI": "10.1/r"}}}}
+
+    monkeypatch.setattr(cr, "requests",
+                        type("R", (), {"get": staticmethod(lambda *a, **k: FakeResp()),
+                                       "RequestException": Exception})())
     assert cr.crossref_retraction("10.1/x", {}) == (None, [])
 
 
@@ -320,6 +430,37 @@ def test_main_slug_offads_sources_y_extra_core(toy_vault, monkeypatch):
     patch_net(monkeypatch, [FakeResp(200, {"message": {}})], calls)
     assert run_main(monkeypatch, ["--slug", "gp"]) == 0
     assert len(calls) == 2                           # sources + extra_core; el ajeno no
+
+
+def test_slug_notes_extra_core_escalar_no_se_desarma_en_letras(toy_vault):
+    """`check_retractions.py:202` (y sus gemelos `query_ads.py:910`, `ingest_topic.py:263`) —
+    `[b for b in (meta.get("extra_core") or []) if b]`.
+
+    `extra_core: 2020ApJ...900....1X` sin corchetes es YAML válido y es lo que sale de agregar UN
+    bibcode a mano (el caso que documentan `append-knowledge` y `ingest-star`: "aceptado →
+    extra_core"). El `or []` no dispara y la comprensión recorre el string: 18 "bibcodes" de una
+    letra. Consecuencia en este sitio: la nota real NUNCA se chequea contra Crossref y el paso de
+    retracciones de la cadena cierra en verde sin haber mirado nada — falso limpio en la frontera
+    dura de la bóveda."""
+    write_yaml(cfg.TOPICS_YAML, {"tema": {"title": "T", "area": "methods", "concept": "c",
+                                          "source": "ads", "extra_core": "2020ApJ...900....1X"}})
+    mk_note(cfg.PAPERS, "2020ApJ...900....1X", {"tags": ["paper"], "bibcode": "2020ApJ...900....1X"})
+    notas = cr.slug_notes("tema")
+    assert [p.stem for p in notas] == ["2020ApJ...900....1X"], (
+        "el extra_core se desarmó en letras: la nota real no entró al chequeo de retracciones")
+
+
+def test_slug_notes_sources_escalar(toy_vault):
+    """`check_retractions.py:201` — `[s.get("key") for s in (meta.get("sources") or []) if s.get("key")]`.
+
+    Mismo `sources:` escalar que en `ingest_topic.ingest_offads` (ver `test_ingest_topic.py`),
+    otro consumidor: acá ni siquiera hay un `sys.exit` que esquivar — el `AttributeError` sale
+    directo. El contrato del paso es "chequear los papers de ESTE ingest"; lo que hace es matar
+    la cadena."""
+    write_yaml(cfg.TOPICS_YAML, {"tema": {"title": "T", "area": "methods", "concept": "c",
+                                          "source": "web", "sources": "2006Rasmussen"}})
+    mk_note(cfg.PAPERS, "2006Rasmussen", {"tags": ["paper"], "bibcode": "2006Rasmussen"})
+    assert [p.stem for p in cr.slug_notes("tema")] == ["2006Rasmussen"]
 
 
 def test_main_slug_sin_fuentes_error_amigable(toy_vault, monkeypatch):

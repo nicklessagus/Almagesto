@@ -150,6 +150,41 @@ def test_pdftotext_falla_sin_ocr(toy_vault, fake_tools, monkeypatch):
     assert not out.exists()                          # no queda un .txt a medias
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# H-04 · un fallo TOTAL (sin OCR que rescate) queda mudo
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Decisión: el exit code SIGUE frenando la cadena cuando no hay NINGÚN contenido rescatable (ni
+# pdftotext ni OCR) — `test_pdftotext_falla_sin_ocr` de acá arriba fija ese contrato (`rc == 1`)
+# y no se toca. Lo que SÍ estaba mal — y es lo que se arregla — es que ese freno era MUDO:
+# `out.unlink(missing_ok=True)` + `continue`, sin una sola línea que le diga al operador qué pasó
+# ni qué hacer. El "corregí y re-corré" del orquestador (ingest_star.py) es ambiguo sin esa guía:
+# un re-run sin cambiar nada repite el mismo fallo para siempre. El fix agrega el aviso; no
+# cambia el rc.
+
+def test_fallo_total_sin_ocr_avisa_que_hacer(toy_vault, fake_tools, monkeypatch, capsys):
+    """Sin capa de texto y sin tesseract: el .txt se unlinkea y el rc sigue siendo 1 (contrato
+    fijado por el test existente), pero AHORA hay una línea explícita que dice por qué y qué
+    hacer — antes no había ninguna, sólo el freno silencioso."""
+    seed_pdf(toy_vault)
+    fake_tools.pdftotext_rc = 1     # pdftotext falla → sin contenido rescatable
+    assert run_main(monkeypatch, ["test_star"]) == 1     # contrato preexistente: sigue frenando
+    salida = capsys.readouterr().out
+    assert "SIN contenido rescatable" in salida
+    assert "no arregla esto" in salida
+    assert "pending" in salida
+
+
+def test_promesa_docstring_distingue_fallo_total_de_ilegible():
+    """El docstring de `extract_fulltext.py` decía sin condiciones "se AVISA sin frenar la
+    cadena" para CUALQUIER fallo de OCR — pero el propio código frena (`return 1 if failed else
+    0`) exactamente en el caso de fallo total. La promesa tenía que acotarse al caso
+    ilegible-pero-con-contenido (que sí devuelve 0, sin frenar); el caso de CERO contenido
+    frena a propósito y ahora el docstring lo dice."""
+    doc = Path(ef.__file__).read_text(encoding="utf-8")
+    assert "cero contenido rescatable" in doc.lower()
+
+
 def test_fallback_ocr(toy_vault, fake_tools, monkeypatch, capsys):
     out = seed_pdf(toy_vault)
     fake_tools.pdftotext_out = MOJIBAKE

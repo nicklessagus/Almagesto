@@ -24,7 +24,7 @@ import re
 import sys
 from collections import Counter
 
-from lib_config import RAW, ROOT
+from lib_config import RAW, ROOT, print_seguro, stdout_tolerante
 
 # Una línea "útil" tiene suficiente texto como para que la maqueta se note.
 MIN_LINEA = 40
@@ -53,6 +53,7 @@ def analizar(texto: str) -> dict:
 
 
 def main() -> int:
+    stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser(
         description="Mide cuánto del corpus de fulltext es multi-columna (#44).",
         epilog="Sin argumentos analiza toda la bóveda. Exit 0 siempre: es diagnóstico.",
@@ -85,30 +86,40 @@ def main() -> int:
 
     total = Counter()
     multi = 0
+    saltados = 0
     por_slug: dict[str, Counter] = {}
     detalle = []
 
+    # Recorrer TODOS los `.txt` encontrados, no sólo los que aportan líneas útiles: un archivo sin
+    # líneas útiles cuenta igual como "encontrado, pero no medible" — si se lo salteaba del todo
+    # (como antes), el denominador de "archivos" pasaba a contar sólo los medidos y un corpus real
+    # con puros archivos vacíos de contenido quedaba indistinguible de un corpus vacío (#dos
+    # defectos medidos en la 7ª auditoría: el "(0)" que significa "no miré", y el denominador que
+    # bajaba de 3 a 2 con sólo un archivo saltado).
     for f in archivos:
         m = analizar(f.read_text(errors="replace"))
-        if not m["utiles"]:
-            continue
-        es_multi = m["frac"] > UMBRAL_ARCHIVO
-        multi += es_multi
-        total["archivos"] += 1
-        for k in ("utiles", "canaleta", "guion"):
-            total[k] += m[k]
         slug = f.parent.name
         s = por_slug.setdefault(slug, Counter())
         s["archivos"] += 1
+        if not m["utiles"]:
+            saltados += 1
+            s["saltados"] += 1
+            continue
+        es_multi = m["frac"] > UMBRAL_ARCHIVO
+        multi += es_multi
+        for k in ("utiles", "canaleta", "guion"):
+            total[k] += m[k]
         s["multi"] += es_multi
         detalle.append((m["frac"], f"{slug}/{f.stem}"))
 
+    archivos_totales = len(archivos)
     total["multi"] = multi
     pct = lambda a, b: (100 * a / b) if b else 0.0
 
     if args.json:
         salida = {
-            "archivos": total["archivos"],
+            "archivos": archivos_totales,
+            "archivos_saltados": saltados,
             "multicolumna": multi,
             "lineas_utiles": total["utiles"],
             "lineas_con_canaleta": total["canaleta"],
@@ -116,31 +127,39 @@ def main() -> int:
             "umbral_archivo": UMBRAL_ARCHIVO,
         }
         if args.por_slug:
-            salida["por_slug"] = {s: {"archivos": c["archivos"], "multicolumna": c["multi"]}
+            salida["por_slug"] = {s: {"archivos": c["archivos"], "multicolumna": c["multi"],
+                                       "saltados": c.get("saltados", 0)}
                                   for s, c in sorted(por_slug.items())}
         print(json.dumps(salida, indent=2))
         return 0
 
-    print(f"Maqueta del fulltext en {raiz.relative_to(ROOT)}\n")
-    print(f"  archivos multi-columna   {multi:>6} / {total['archivos']:<6} "
-          f"({pct(multi, total['archivos']):.0f}%)   ← sobre estos rige la estrategia de matcheo")
-    print(f"  líneas con canaleta      {total['canaleta']:>6} / {total['utiles']:<6} "
-          f"({pct(total['canaleta'], total['utiles']):.0f}%)   ← empalme col.1→col.2 alcanzable")
-    print(f"  líneas con corte-guión   {total['guion']:>6} / {total['utiles']:<6} "
-          f"({pct(total['guion'], total['utiles']):.0f}%)   ← hace falta de-hifenado")
-    print(f"\n  (multi-columna = más del {UMBRAL_ARCHIVO:.0%} de sus líneas útiles con canaleta;"
-          f" línea útil = {MIN_LINEA}+ caracteres)")
+    # print_seguro (no print a secas): en una consola/CI ascii, la tabla de abajo lleva '←' — sin
+    # esto el corte por defecto (sin --json) muere con UnicodeEncodeError/exit 1, que es exactamente
+    # la garantía "Exit 0 siempre" que este script promete arriba y en el epilog (#defecto 1).
+    print_seguro(f"Maqueta del fulltext en {raiz.relative_to(ROOT)}\n")
+    if saltados:
+        print_seguro(f"  archivos saltados (sin líneas útiles)   {saltados:>6} / {archivos_totales:<6}"
+                     f"   ← no se midieron: no había línea de {MIN_LINEA}+ caracteres")
+    print_seguro(f"  archivos multi-columna   {multi:>6} / {archivos_totales:<6} "
+                 f"({pct(multi, archivos_totales):.0f}%)   ← sobre estos rige la estrategia de matcheo")
+    print_seguro(f"  líneas con canaleta      {total['canaleta']:>6} / {total['utiles']:<6} "
+                 f"({pct(total['canaleta'], total['utiles']):.0f}%)   ← empalme col.1→col.2 alcanzable")
+    print_seguro(f"  líneas con corte-guión   {total['guion']:>6} / {total['utiles']:<6} "
+                 f"({pct(total['guion'], total['utiles']):.0f}%)   ← hace falta de-hifenado")
+    print_seguro(f"\n  (multi-columna = más del {UMBRAL_ARCHIVO:.0%} de sus líneas útiles con canaleta;"
+                 f" línea útil = {MIN_LINEA}+ caracteres)")
 
     if args.por_slug:
-        print("\n  por slug:")
+        print_seguro("\n  por slug:")
         for slug in sorted(por_slug):
             s = por_slug[slug]
-            print(f"    {slug:<18} {s['multi']:>4} / {s['archivos']:<4} multi-columna")
+            print_seguro(f"    {slug:<18} {s['multi']:>4} / {s['archivos']:<4} multi-columna"
+                         + (f"   ({s['saltados']} saltados)" if s.get("saltados") else ""))
 
     if args.listar:
-        print(f"\n  top {args.listar} por fracción de canaleta:")
+        print_seguro(f"\n  top {args.listar} por fracción de canaleta:")
         for frac, nombre in sorted(detalle, reverse=True)[:args.listar]:
-            print(f"    {frac:5.0%}  {nombre}")
+            print_seguro(f"    {frac:5.0%}  {nombre}")
 
     return 0
 

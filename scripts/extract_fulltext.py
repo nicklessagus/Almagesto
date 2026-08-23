@@ -28,9 +28,19 @@ por página) y el .txt queda marcado con un header `source: ocr` — **citable c
 puede errar símbolos/ligaduras/notación matemática; la cita textual vale para prosa (ver
 verify-citations). `--ocr` fuerza la vía OCR aunque la capa de texto pase el umbral (con --force
 re-extrae también los existentes). Un .txt viejo ilegible se re-extrae solo cuando aparece
-tesseract (upgrade automático; un .txt ya-OCR ilegible no se reintenta). Si tampoco hay OCR o
-tampoco rinde, se AVISA sin frenar la cadena (el lint lo surfacea); el rescate restante es un PDF
-con capa de texto sana o marcar la fuente `pending` en `sources:`.
+tesseract (upgrade automático; un .txt ya-OCR ilegible no se reintenta). Si el rescate por OCR
+RINDE ALGO (texto, aunque siga sin pasar `is_legible` — p. ej. mojibake u OCR de baja calidad), se
+AVISA sin frenar la cadena (el lint lo surfacea); el rescate restante es un PDF con capa de texto
+sana o marcar la fuente `pending` en `sources:`.
+
+Distinto es el caso de **cero contenido rescatable** (ni pdftotext ni, si corresponde, OCR
+devuelven nada usable — típicamente un PDF corrupto/ilegible como archivo, no sólo "sin capa de
+texto"): ESE sí hace que `main()` devuelva 1 y frene la cadena (issue H-04). Es deliberado, no un
+resabio: sin ningún .txt que dejar como evidencia no hay nada que el lint pueda surfacear después
+—al contrario que el caso ilegible-pero-con-contenido de arriba—, así que la única forma de que un
+humano se entere es que la cadena pare y lo diga. El mensaje en pantalla explica qué hacer: un
+re-run sin cambiar nada no arregla esto (no es transitorio); hace falta reemplazar el PDF,
+instalar/arreglar OCR, o marcar la fuente `pending` en `sources:`.
 """
 from __future__ import annotations
 
@@ -131,6 +141,7 @@ def ocr_pdf(pdf: Path) -> str | None:
 
 
 def main() -> int:
+    cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser()
     ap.add_argument("slug")
     ap.add_argument("--force", action="store_true")
@@ -191,11 +202,25 @@ def main() -> int:
             if not ocr_available():
                 failed += 1
                 out.unlink(missing_ok=True)  # no dejar un .txt vacío/a medias que la idempotencia congele
+                # H-04: antes este caso quedaba MUDO (sólo el "! fallo pdftotext" de arriba, si
+                # aplicaba) y `main()` devuelve 1 más abajo — frena la cadena de ingest a propósito
+                # (ver docstring del módulo), pero sin este aviso el operador no tenía ninguna
+                # pista de QUÉ hacer, y "corregí y re-corré" (mensaje del orquestador) es ambiguo:
+                # un re-run sin cambiar nada repite el mismo fallo para siempre.
+                cfg.print_seguro(
+                    f"  ⛔ {pdf.name}: SIN contenido rescatable (pdftotext no devolvió texto usable "
+                    "y no hay tesseract instalado) — un re-run SIN cambiar nada no arregla esto: "
+                    "instalá tesseract-ocr, reemplazá el PDF, o marcá la fuente `pending` en sources:.")
                 continue
             ocr_text = ocr_pdf(pdf)
             if ocr_text is None:
                 failed += 1
                 out.unlink(missing_ok=True)
+                cfg.print_seguro(
+                    f"  ⛔ {pdf.name}: SIN contenido rescatable (pdftotext falló y el propio OCR "
+                    "también falló técnicamente — ver el error de pdftoppm/tesseract arriba) — un "
+                    "re-run SIN cambiar nada no arregla esto: reemplazá el PDF o marcá la fuente "
+                    "`pending` en sources:.")
                 continue
             ok, _why2 = is_legible(ocr_text)
             text = ocr_header(why) + ocr_text        # header source: ocr → citable con salvedad

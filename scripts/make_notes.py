@@ -49,6 +49,24 @@ import lib_config as cfg
 EXCLUDED_TOP_N = 10  # cuántos no-core mostrar en la tabla de excluidos (top por citas)
 
 
+def _listify_curado(v, campo: str):
+    """Normaliza un campo de CURACIÓN MANUAL (`aliases`) que `stars.yaml`/`topics.yaml` instruye
+    editar a mano. Un `campo: <valor>` sin corchetes es la forma natural de declarar UN solo
+    elemento y es YAML válido — a diferencia de `cfg.as_list` (que trataría el escalar como forma
+    inválida y lo degradaría a `[]`), acá conviene PRESERVAR la intención en vez de perder el
+    alias en silencio en el frontmatter que se escribe (gemelo, otro destino, del mismo defecto
+    medido en `query_ads.py` — R16, Anexo A). Reporta igual, para que la forma se corrija en origen."""
+    if isinstance(v, list):
+        return v
+    if v:
+        cfg.print_seguro(
+            f"  ⚠ `{campo}` está escrito como escalar ({v!r}) en vez de lista — se toma como un "
+            f"solo elemento; para declarar más de uno usá `{campo}: [{v!r}, ...]`."
+        )
+        return [v]
+    return []
+
+
 def fm(d: dict) -> str:
     """Frontmatter YAML entre --- ---."""
     body = yaml.safe_dump(d, sort_keys=False, allow_unicode=True, default_flow_style=False)
@@ -268,7 +286,7 @@ def restamp_pdf_links() -> int:
     re-run idempotente de la cadena."""
     notes = sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []
     changed = sum(1 for p in notes if stamp_pdf_link(p))
-    print(f"papers: {changed} de {len(notes)} re-estampados (link [📄 PDF] ↔ frontmatter `pdf`)")
+    cfg.print_seguro(f"papers: {changed} de {len(notes)} re-estampados (link [📄 PDF] ↔ frontmatter `pdf`)")
     return 0
 
 
@@ -280,10 +298,10 @@ def restamp_headers() -> int:
     notes = sorted(cfg.STARS.glob("*.md")) if cfg.STARS.exists() else []
     notes += sorted(cfg.CONCEPTS.glob("*/*.md")) if cfg.CONCEPTS.exists() else []
     changed = sum(1 for n in notes if stamp_header(n))
-    print(f"cabeceras: {changed} de {len(notes)} estampadas "
+    cfg.print_seguro(f"cabeceras: {changed} de {len(notes)} estampadas "
           f"(aviso de capa LLM + línea del generador, versión leída del frontmatter)")
     if changed:
-        print("  → ahora los estampadores de cabecera (p. ej. el puntero de búsqueda de #64) "
+        cfg.print_seguro("  → ahora los estampadores de cabecera (p. ej. el puntero de búsqueda de #64) "
               "pueden actuar sobre esas notas; re-corré la cadena o make_notes del sujeto.")
     return 0
 
@@ -320,7 +338,7 @@ def migrate_disputes(dest) -> bool:
     try:
         front = yaml.safe_load(text[4:end]) or {}
     except yaml.YAMLError:
-        print(f"  ⚠ {dest.name}: frontmatter no parseable — migralo a mano")
+        cfg.print_seguro(f"  ⚠ {dest.name}: frontmatter no parseable — migralo a mano")
         return False
     # Cobarde ante cualquier forma que no entiende: si `planets` no es una lista de mapas, o
     # `disputes` a nivel nota no es una lista, NO toca el archivo. Antes un solo planeta mal formado
@@ -328,10 +346,10 @@ def migrate_disputes(dest) -> bool:
     # `disputes:` escalar se convertía en una lista de CARACTERES escrita a disco.
     planets = front.get("planets")
     if not isinstance(planets, list) or not all(isinstance(pl, dict) for pl in planets if pl):
-        print(f"  ⚠ {dest.name}: `planets` no es una lista de mapas — migralo a mano")
+        cfg.print_seguro(f"  ⚠ {dest.name}: `planets` no es una lista de mapas — migralo a mano")
         return False
     if "disputes" in front and not isinstance(front.get("disputes") or [], list):
-        print(f"  ⚠ {dest.name}: `disputes` a nivel nota no es una lista — migralo a mano")
+        cfg.print_seguro(f"  ⚠ {dest.name}: `disputes` a nivel nota no es una lista — migralo a mano")
         return False
     if not any((pl or {}).get("disputes") for pl in planets):
         return False
@@ -346,13 +364,13 @@ def migrate_disputes(dest) -> bool:
         if viejas is None:
             continue
         if not isinstance(viejas, list):
-            print(f"  ⚠ {dest.name}: `planets[{letra or '?'}].disputes` no es una lista — esa quedó "
+            cfg.print_seguro(f"  ⚠ {dest.name}: `planets[{letra or '?'}].disputes` no es una lista — esa quedó "
                   f"sin migrar, revisala a mano")
             continue                          # se deja intacta en el planeta: nada que pop-ear
         sin_migrar = []                       # elementos que no se pudieron migrar: se quedan acá
         for d in viejas:
             if not isinstance(d, dict):
-                print(f"  ⚠ {dest.name}: disputa vieja de `{letra or '?'}` que no es un mapa — sin "
+                cfg.print_seguro(f"  ⚠ {dest.name}: disputa vieja de `{letra or '?'}` que no es un mapa — sin "
                       f"migrar, revisala a mano")
                 sin_migrar.append(d)
                 continue
@@ -369,10 +387,10 @@ def migrate_disputes(dest) -> bool:
             if d.get("alt") is not None:
                 paper_pos["value"] = d["alt"]
             if not d.get("ref"):
-                print(f"  ⚠ {dest.name}: disputa `{campo or '?'}` sin `ref` → la posición queda sin "
+                cfg.print_seguro(f"  ⚠ {dest.name}: disputa `{campo or '?'}` sin `ref` → la posición queda sin "
                       f"quién la sostenga y el lint la va a bloquear: agregá el bibcode a mano")
             if not campo:
-                print(f"  ⚠ {dest.name}: disputa de `{letra or '?'}` sin `field` → queda sin eje y "
+                cfg.print_seguro(f"  ⚠ {dest.name}: disputa de `{letra or '?'}` sin `field` → queda sin eje y "
                       f"el lint la va a bloquear: nombrá el eje a mano")
             nueva = {"field": f"{letra}.{campo}" if (letra and campo) else campo,
                      "posiciones": [paper_pos, gt_pos]}
@@ -398,7 +416,7 @@ def migrate_disputes(dest) -> bool:
                 reordenado["disputes"] = nuevas
         front = reordenado
     dest.write_text(fm(front) + text[end + 5:], encoding="utf-8")
-    print(f"  {dest.name}: {len(nuevas)} disputa(s) migradas a posiciones explícitas")
+    cfg.print_seguro(f"  {dest.name}: {len(nuevas)} disputa(s) migradas a posiciones explícitas")
     return True
 
 
@@ -406,12 +424,12 @@ def migrate_all_disputes() -> int:
     """Backfill #71 sobre toda la bóveda. Ver migrate_disputes para el porqué del alcance."""
     notes = sorted(cfg.STARS.glob("*.md")) if cfg.STARS.exists() else []
     changed = sum(1 for n in notes if migrate_disputes(n))
-    print(f"disputas: {changed} de {len(notes)} ficha(s) migradas al schema con posiciones (#71)")
+    cfg.print_seguro(f"disputas: {changed} de {len(notes)} ficha(s) migradas al schema con posiciones (#71)")
     if changed:
-        print("  → el frontmatter se re-serializó (la prosa NO se tocó): revisá el diff antes de "
+        cfg.print_seguro("  → el frontmatter se re-serializó (la prosa NO se tocó): revisá el diff antes de "
               "commitear.")
     else:
-        print("  → nada que migrar. (El lint NO lee el schema viejo: si queda alguno, lo reporta "
+        cfg.print_seguro("  → nada que migrar. (El lint NO lee el schema viejo: si queda alguno, lo reporta "
               "como bloqueante en vez de ignorarlo en silencio.)")
     return 0
 
@@ -454,12 +472,12 @@ def sync_mirror() -> int:
     def reportar(nombre: str, dest_name: str, val_ficha, val_gt) -> None:
         nonlocal reportados
         if val_gt is None:
-            print(f"  {dest_name}: `{nombre}` sin tocar — la ficha tiene {val_ficha!r} y el "
+            cfg.print_seguro(f"  {dest_name}: `{nombre}` sin tocar — la ficha tiene {val_ficha!r} y el "
                   f"ground-truth no trae el valor: es un número de literatura, no relleno mecánico "
                   f"(documentalo en el cuerpo con su [[bibcode]], o revisá si corresponde una "
                   f"`disputes[]`)")
         else:
-            print(f"  {dest_name}: `{nombre}` sin tocar — ficha={val_ficha!r} vs "
+            cfg.print_seguro(f"  {dest_name}: `{nombre}` sin tocar — ficha={val_ficha!r} vs "
                   f"ground-truth={val_gt!r}: valores distintos son una `disputes[]`, no un error de "
                   f"sincronización")
         reportados += 1
@@ -476,7 +494,7 @@ def sync_mirror() -> int:
         try:
             front = yaml.safe_load(text[4:end]) or {}
         except yaml.YAMLError:
-            print(f"  ⚠ {dest.name}: frontmatter no parseable — sincronizalo a mano")
+            cfg.print_seguro(f"  ⚠ {dest.name}: frontmatter no parseable — sincronizalo a mano")
             continue
         gt_path = cfg.GROUND_TRUTH / f"{dest.stem}.json"
         if not gt_path.exists():
@@ -484,17 +502,33 @@ def sync_mirror() -> int:
         try:
             gt = json.loads(gt_path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
-            print(f"  ⚠ {dest.name}: ground-truth no parseable — sincronizalo a mano")
+            cfg.print_seguro(f"  ⚠ {dest.name}: ground-truth no parseable — sincronizalo a mano")
             continue
-        host = gt.get("host") or {}
+        # `--sync-mirror` es el consumidor NUEVO (23-08) del ground-truth en disco; `lint.py`
+        # (795-815) ya endurece este mismo artefacto campo por campo y sigue vivo — acá no había
+        # NINGUNA de esas guardas y un `host`/`planets` con forma inesperada (edición a mano del
+        # JSON, poco común pero posible) reventaba con `AttributeError` a mitad de la escritura en
+        # las fichas (R8/R9). `cfg.as_map`/`cfg.as_list` no alcanzan solos: acá SÍ hace falta
+        # reportar la forma inválida (con el nombre de la ficha) en vez de degradarla en silencio —
+        # un backfill que no rellena nada y tampoco avisa es un falso limpio.
+        raw_host = gt.get("host")
+        if raw_host and not isinstance(raw_host, dict):
+            cfg.print_seguro(f"  ⚠ {dest.name}: `host` del ground-truth no es un mapa ({raw_host!r}) "
+                  "— sincronizalo a mano")
+        host = cfg.as_map(raw_host)
         planets = front.get("planets")
         # Cobarde ante una forma que no entiende, mismo criterio que migrate_disputes: si
         # `planets` no es una lista de mapas, no tocar nada en vez de arriesgar basura escrita.
         if planets is not None and (not isinstance(planets, list)
                                      or not all(isinstance(pl, dict) for pl in planets if pl)):
-            print(f"  ⚠ {dest.name}: `planets` no es una lista de mapas — sincronizalo a mano")
+            cfg.print_seguro(f"  ⚠ {dest.name}: `planets` no es una lista de mapas — sincronizalo a mano")
             continue
-        gt_planets = {str(p.get("letter")): p for p in (gt.get("planets") or [])}
+        raw_gt_planets = gt.get("planets")
+        if raw_gt_planets and not isinstance(raw_gt_planets, list):
+            cfg.print_seguro(f"  ⚠ {dest.name}: `planets` del ground-truth no es una lista — "
+                  "sincronizalo a mano")
+        gt_planets = {str(p.get("letter")): p for p in cfg.as_list(raw_gt_planets)
+                      if isinstance(p, dict)}
         changed = False
 
         for campo, key in MIRROR_HOST:
@@ -526,10 +560,10 @@ def sync_mirror() -> int:
         if changed:
             dest.write_text(fm(front) + text[end + 5:], encoding="utf-8")
 
-    print(f"sync-mirror: {rellenados} campo(s) rellenados desde el ground-truth "
+    cfg.print_seguro(f"sync-mirror: {rellenados} campo(s) rellenados desde el ground-truth "
           f"({len(notes)} ficha(s) revisadas); {reportados} sin tocar (motivo arriba de cada uno).")
     if reportados:
-        print("  → lo sin tocar no es un fallo del backfill: es la parte que necesita juicio "
+        cfg.print_seguro("  → lo sin tocar no es un fallo del backfill: es la parte que necesita juicio "
               "humano (número de literatura o disputa real). Resolvelo a mano.")
     return 0
 
@@ -543,7 +577,7 @@ def parse_year(year) -> int | None:
     m = re.search(r"(?<!\d)(\d{4})(?!\d)", str(year))   # 4 dígitos no rodeados de dígitos ('2020a' → 2020)
     if m:
         return int(m.group(1))
-    print(f"  ⚠ year no numérico: {year!r} → queda null (completalo a mano en la nota si aplica)")
+    cfg.print_seguro(f"  ⚠ year no numérico: {year!r} → queda null (completalo a mano en la nota si aplica)")
     return None
 
 
@@ -554,7 +588,7 @@ def parse_int(value, field: str) -> int | None:
     try:
         return int(value)
     except (TypeError, ValueError):
-        print(f"  ⚠ {field} no numérico: {value!r} → queda null")
+        cfg.print_seguro(f"  ⚠ {field} no numérico: {value!r} → queda null")
         return None
 
 
@@ -962,7 +996,7 @@ def write_star_note(slug: str, force: bool) -> None:
     if dest.exists() and not force:
         # la nota no se pisa; sólo se refresca el apéndice máquina con el ads.json vigente (#35)
         stamped = stamp_excluded(slug, dest) | stamp_search_line(slug, dest)
-        print(f"  star: {dest.name} ya existe"
+        cfg.print_seguro(f"  star: {dest.name} ya existe"
               + (" — apéndice Excluidos / puntero de búsqueda re-estampados" if stamped
                  else " (usa --force para regenerar)"))
         return
@@ -981,7 +1015,7 @@ def write_star_note(slug: str, force: bool) -> None:
     front = {
         "name": name,
         "slug": slug,
-        "aliases": meta.get("aliases", []),
+        "aliases": _listify_curado(meta.get("aliases"), "aliases"),
         "simbad_id": meta.get("simbad"),
         "spectral_type": host.get("spectral_type"),
         "teff_K": host.get("teff_K"),
@@ -1061,7 +1095,7 @@ SORT method ASC
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(body, encoding="utf-8")
     stamp_search_line(slug, dest)
-    print(f"  star: {dest.name} escrito")
+    cfg.print_seguro(f"  star: {dest.name} escrito")
 
 
 def write_concept_note(slug: str, force: bool) -> None:
@@ -1075,13 +1109,13 @@ def write_concept_note(slug: str, force: bool) -> None:
     # legítima → si el área no está declarada, AVISAR (nunca bloquear) para que un typo no pase mudo.
     # El lint la marca después; si era un área nueva real, agregala a concept_areas para silenciar el aviso.
     if (areas_ref := cfg.load_concept_areas()) and area not in areas_ref:
-        print(f"  ⚠ área '{area}' (topic '{slug}') no está en concept_areas (objective.yaml). "
+        cfg.print_seguro(f"  ⚠ área '{area}' (topic '{slug}') no está en concept_areas (objective.yaml). "
               f"Si es un typo, corregí topics.yaml; si es un área nueva, agregala a la lista. Creo igual.")
     dest = cfg.CONCEPTS / area / f"{concept}.md"
     if dest.exists() and not force:
         # la síntesis no se pisa; sólo se refresca el apéndice máquina con el ads.json vigente (#35)
         stamped = stamp_excluded(slug, dest) | stamp_search_line(slug, dest)
-        print(f"  concept: {area}/{concept}.md ya existe"
+        cfg.print_seguro(f"  concept: {area}/{concept}.md ya existe"
               + (" — apéndice Excluidos / puntero de búsqueda re-estampados" if stamped
                  else " (no se pisa sin --force; los papers enganchan por thesis_links)"))
         return
@@ -1090,7 +1124,7 @@ def write_concept_note(slug: str, force: bool) -> None:
     if area == "hypotheses":          # `status` sólo en hipótesis (schema name,status; ver CLAUDE.md)
         front["status"] = "active"
     front.update({
-        "aliases": meta.get("aliases", []),   # sinónimos EN+ES para grep; sembrado del topic, el LLM enriquece
+        "aliases": _listify_curado(meta.get("aliases"), "aliases"),   # sinónimos EN+ES para grep; sembrado del topic, el LLM enriquece
         # Acá la disputa es SIMÉTRICA por definición (#71): no hay valor de frontmatter contra el
         # cual poner un `alt`, así que las posiciones explícitas son la única forma que sirve.
         "disputes": [],
@@ -1135,7 +1169,7 @@ SORT year ASC
     body += excluded_table(slug)
     dest.write_text(body, encoding="utf-8")
     stamp_search_line(slug, dest)
-    print(f"  concept: {area}/{concept}.md escrito (stub)")
+    cfg.print_seguro(f"  concept: {area}/{concept}.md escrito (stub)")
 
 
 def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = False) -> None:
@@ -1147,7 +1181,7 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
         link, seed_links = slug, []
     adsfile = cfg.ROOT / "build" / slug / "ads.json"
     if not adsfile.exists():
-        print(f"  (sin {adsfile}; corré query_ads.py primero)")
+        cfg.print_seguro(f"  (sin {adsfile}; corré query_ads.py primero)")
         return
     recs = json.loads(adsfile.read_text(encoding="utf-8"))["records"]
     if not include_all:
@@ -1226,7 +1260,7 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
 {extraccion}"""
         dest.write_text(body, encoding="utf-8")
         written += 1
-    print(f"  papers: {written} escritos, {skipped} ya existían"
+    cfg.print_seguro(f"  papers: {written} escritos, {skipped} ya existían"
           + (f", {merged} retro-linkeados (seeds add-only)" if merged else "")
           + (f", {restamped} con link [📄 PDF] re-estampado" if restamped else ""))
 
@@ -1257,7 +1291,7 @@ def unpend_note(dest, citekey: str, slug: str | None) -> bool:
     body = "\n".join(ln for ln in body.split("\n")
                      if not ln.startswith("> ⏳ **Fuente pendiente"))
     dest.write_text("---\n" + "\n".join(lines) + body, encoding="utf-8")
-    print(f"  papers: {dest.name} — fuente obtenida → pending_source removido"
+    cfg.print_seguro(f"  papers: {dest.name} — fuente obtenida → pending_source removido"
           + (" y `pdf` linkeado" if has_pdf else ""))
     return True
 
@@ -1301,12 +1335,12 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
             return False
         if not pending and stamp_fulltext(dest, safe_name(citekey), slug):
             stamp_pdf_link(dest)
-            print(f"  papers: {dest.name} — fulltext estampado (contrato máquina)")
+            cfg.print_seguro(f"  papers: {dest.name} — fulltext estampado (contrato máquina)")
             return False
         if not pending and stamp_pdf_link(dest):
-            print(f"  papers: {dest.name} — link [📄 PDF] de cabecera re-estampado (#47)")
+            cfg.print_seguro(f"  papers: {dest.name} — link [📄 PDF] de cabecera re-estampado (#47)")
             return False
-        print(f"  papers: {dest.name} ya existe (no se pisa sin --force)")
+        cfg.print_seguro(f"  papers: {dest.name} ya existe (no se pisa sin --force)")
         return False
     bibstem = venue or (urlparse(url).netloc if url else None)   # venue: dominio web por default
     if accessed is None and url and not pending:
@@ -1374,11 +1408,12 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
 {pend_line}
 {extraction_block(topic=True)}"""
     dest.write_text(body, encoding="utf-8")
-    print(f"  papers: {dest.name} escrito (stub off-ADS)")
+    cfg.print_seguro(f"  papers: {dest.name} escrito (stub off-ADS)")
     return True
 
 
 def main() -> int:
+    cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser()
     ap.add_argument("slug", nargs="?",
                     help="slug de estrella/tema; en --web es la CLAVE de cita (AAAA+Autor). "
@@ -1441,7 +1476,7 @@ def main() -> int:
                              accessed=args.accessed, pending=args.pending, force=args.force)
         return 0
 
-    print(f"Generando notas para {args.slug}")
+    cfg.print_seguro(f"Generando notas para {args.slug}")
     if args.topic:
         write_concept_note(args.slug, args.force)
     else:

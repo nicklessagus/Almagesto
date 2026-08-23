@@ -10,6 +10,7 @@ import datetime as _dt
 import json
 import os
 import re
+import sys
 from pathlib import Path
 
 import yaml
@@ -19,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.22.1"
+ALMAGESTO_VERSION = "1.23.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -187,14 +188,40 @@ def load_objective() -> dict:
     return data if isinstance(data, dict) else {}
 
 
+# Línea delimitadora de frontmatter: `---` SOLA en su propia línea (con espacio final tolerado).
+# `re.MULTILINE` para que `^`/`$` anclen a cada línea, no a los bordes del string entero.
+_FM_DELIM_RE = re.compile(r"^---[ \t]*$", re.MULTILINE)
+
+
+def frontmatter_span(text: str) -> tuple[str, str] | None:
+    """Ubica el frontmatter por DELIMITADOR DE LÍNEA, no por búsqueda textual de la subcadena
+    `---` (H-11). Un `text.split("---")`/`text.split("---", 2)` corta también dentro de un
+    escalar entrecomillado que lleva un `---` adentro (p. ej. `title: "Un titulo con ---
+    adentro"`, YAML perfectamente válido): el split textual parte el valor a la mitad y el
+    frontmatter que resulta ya no es el YAML real de la nota. Acá una línea sólo cuenta como
+    delimitador si, ELLA SOLA (salvo espacio en blanco final), es `---`; un `---` en medio de una
+    línea con más contenido no cuenta.
+
+    Devuelve `(bloque_yaml, resto_del_texto)` recortados entre la primera línea delimitadora
+    (debe estar en la posición 0 del texto) y la segunda, o `None` si no hay esa apertura en la
+    posición 0 o no hay una segunda línea delimitadora (frontmatter sin cerrar) — en ambos casos
+    el llamador decide qué reportar (nota sin frontmatter vs. frontmatter roto)."""
+    matches = list(_FM_DELIM_RE.finditer(text))
+    if len(matches) < 2 or matches[0].start() != 0:
+        return None
+    apertura, cierre = matches[0], matches[1]
+    return text[apertura.end():cierre.start()], text[cierre.end():]
+
+
 def split_fm(text: str) -> dict:
     """Frontmatter YAML de una nota (dict vacío si no hay o no parsea — el lint reporta aparte las
     notas cuyo YAML está roto). Compartido: lo usan el lint y el dry-run de re-clasificación."""
-    parts = text.split("---")
-    if len(parts) < 3:
+    span = frontmatter_span(text)
+    if span is None:
         return {}
+    yaml_block, _body = span
     try:
-        return yaml.safe_load(parts[1]) or {}
+        return yaml.safe_load(yaml_block) or {}
     except Exception:
         return {}
 
@@ -207,6 +234,44 @@ def as_map(v) -> dict:
     mismo guard faltante repetido en 59 líneas de los scripts — centralizarlo acá evita un chequeo
     por sitio (y el que se olvida)."""
     return v if isinstance(v, dict) else {}
+
+
+def stdout_tolerante() -> None:
+    """Hace que **todo** lo que salga por stdout/stderr degrade en vez de matar el proceso en una
+    consola no-UTF8 (`ascii`, `cp1252`).
+
+    `print_seguro` cubre los `print` propios, pero **no lo que escribe argparse**: el texto de
+    `--help` (con sus `⚠`, `→` y acentos) va directo a `sys.stdout`, así que un `--help` seguía
+    saliendo con **exit 1** en los 11 CLIs del repo. Es el mismo modo de falla —un exit code que
+    miente— por la única puerta que el helper no podía tapar.
+
+    Se llama desde cada `main()`, no al importar: reconfigurar el stdout del proceso es correcto
+    para un CLI, pero sería un efecto colateral inaceptable en una librería que los tests importan
+    (rompería la captura de `capsys`)."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")     # 3.7+; no-op si ya es UTF-8
+        except (AttributeError, ValueError, OSError):
+            pass                                     # stream reemplazado por un test o no reconfigurable
+
+
+def print_seguro(texto: str) -> None:
+    """`print` tolerante a consolas no-UTF8. Compartido (nace en `lint.py` como `_print_seguro`,
+    6ª pasada de auditoría; se midió después que otros 10 scripts mueren por el mismo motivo —
+    quedan acá para que los usen).
+
+    Los mensajes de esta bóveda llevan `⛔`/`⚠`/`→` y están en español: en una consola
+    `ascii`/`cp1252` (CI mal configurado, alguna terminal Windows) el encode del stream por
+    defecto tira `UnicodeEncodeError` y el proceso muere con exit 1 — indistinguible de "hay
+    hallazgos" en un script que usa el exit code como compuerta — aunque el artefacto en disco
+    (que se escribe aparte, siempre en UTF-8) haya quedado perfecto. El exit code es la salida
+    real de una compuerta de CI; el texto lindo en pantalla es el lujo. Si el stream no puede con
+    los caracteres, se degrada el texto en vez de dejar morir la corrida."""
+    try:
+        print(texto)
+    except UnicodeEncodeError:
+        enc = getattr(sys.stdout, "encoding", None) or "ascii"
+        print(texto.encode(enc, errors="replace").decode(enc))
 
 
 def as_list(v) -> list:

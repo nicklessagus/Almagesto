@@ -59,9 +59,27 @@ OFFADS_KINDS = {"web": ("url",), "local-pdfs": ("pdf",),
                 "local-pdfs+web": ("url", "pdf"), "web+local-pdfs": ("url", "pdf")}
 
 
+def _listify_curado(v, campo: str):
+    """Normaliza un campo de CURACIÓN MANUAL (`extra_core`) que `topics.yaml` instruye editar a
+    mano. Un `campo: <valor>` sin corchetes es la forma natural de declarar UN solo elemento y es
+    YAML válido — a diferencia de `cfg.as_list` (que trataría el escalar como forma inválida y lo
+    degradaría a `[]`), acá conviene PRESERVAR la intención: la curación no se pierde por no poner
+    corchetes (gemelo de `query_ads._listify_curado`, mismo defecto medido en R13). Reporta igual,
+    para que la forma se corrija en origen."""
+    if isinstance(v, list):
+        return v
+    if v:
+        cfg.print_seguro(
+            f"  ⚠ `{campo}` está escrito como escalar ({v!r}) en vez de lista — se toma como un "
+            f"solo elemento; para declarar más de uno usá `{campo}: [{v!r}, ...]`."
+        )
+        return [v]
+    return []
+
+
 def run(script: str, *args: str) -> int:
     """Corre un script de la cadena con el mismo intérprete (rutas absolutas vía lib_config)."""
-    print(f"\n→ {script} {' '.join(args)}")
+    cfg.print_seguro(f"\n→ {script} {' '.join(args)}")
     return subprocess.run([sys.executable, str(cfg.ROOT / "scripts" / script), *args],
                           cwd=cfg.ROOT / "scripts").returncode
 
@@ -84,7 +102,7 @@ def expansion_guard(slug: str, yes: bool) -> None:
         return
     data = json.loads(adsfile.read_text(encoding="utf-8"))
     core = [r for r in data["records"] if r.get("relevant")]
-    n_cand = len(data.get("candidates") or [])   # pendientes de triage (#38): no se bajan
+    n_cand = len(cfg.as_list(data.get("candidates")))   # pendientes de triage (#38): no se bajan
     conocidos = {r["bibcode"] for r in core
                  if (cfg.PAPERS / f"{make_notes.safe_name(r['bibcode'])}.md").exists()}
     nuevos = [r for r in core if r["bibcode"] not in conocidos]
@@ -94,11 +112,11 @@ def expansion_guard(slug: str, yes: bool) -> None:
     if len(nuevos) < EXPANSION_NEW or factor < EXPANSION_FACTOR:
         return
     via_chain = sum(1 for r in nuevos if str(r.get("via") or "").startswith("chain:"))
-    print(f"\n⚠ EXPANSIÓN del corpus de {slug}: {len(core)} core vs {len(conocidos)} ya ingestados "
+    cfg.print_seguro(f"\n⚠ EXPANSIÓN del corpus de {slug}: {len(core)} core vs {len(conocidos)} ya ingestados "
           f"(×{factor:.1f}) → {len(nuevos)} papers NUEVOS, {via_chain} de ellos vía el grafo de citas.")
     if n_cand:
-        print(f"  (además hay {n_cand} candidatos de chaining pendientes de triage — ésos no se bajan)")
-    print("  Con la regla de combinación en OR (default), el chaining trae todo lo que menciona al "
+        cfg.print_seguro(f"  (además hay {n_cand} candidatos de chaining pendientes de triage — ésos no se bajan)")
+    cfg.print_seguro("  Con la regla de combinación en OR (default), el chaining trae todo lo que menciona al "
           "sujeto con ≥1 faceta cualquiera. La palanca es la OBLIGATORIEDAD, no podar regex:\n"
           "    relevance.require: [<faceta-eje>]   # AND: la faceta sin la cual el paper no sirve\n"
           "    relevance.min_topics: N             # ≥N facetas cualesquiera\n"
@@ -107,7 +125,7 @@ def expansion_guard(slug: str, yes: bool) -> None:
     if not yes:
         sys.exit(f"cadena frenada antes de bajar {len(nuevos)} papers. Para continuar a sabiendas: "
                  f"--yes (el ads.json ya quedó regenerado; nada más se tocó).")
-    print("  → --yes: sigo con la expansión a sabiendas.")
+    cfg.print_seguro("  → --yes: sigo con la expansión a sabiendas.")
 
 
 def repoint_source_pdf(key: str, declared: str, dest: Path) -> None:
@@ -130,11 +148,11 @@ def repoint_source_pdf(key: str, declared: str, dest: Path) -> None:
     pat = re.compile(rf"""^(\s*pdf:\s*)["']?{re.escape(declared)}["']?\s*$""", re.M)
     n = len(pat.findall(text))
     if n != 1:
-        print(f"  ⚠ {key}: no repunté `pdf:` en topics.yaml (el path declarado matchea "
+        cfg.print_seguro(f"  ⚠ {key}: no repunté `pdf:` en topics.yaml (el path declarado matchea "
               f"{n} líneas, esperaba 1) — repuntalo a mano a {rel}")
         return
     cfg.TOPICS_YAML.write_text(pat.sub(lambda m: m.group(1) + rel, text), encoding="utf-8")
-    print(f"  {key}: sources[].pdf repuntado → {rel}")
+    cfg.print_seguro(f"  {key}: sources[].pdf repuntado → {rel}")
 
 
 def ingest_ads(slug: str, yes: bool = False) -> None:
@@ -162,7 +180,12 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
     for k in ("area", "concept"):
         if not meta.get(k):
             sys.exit(f"la entrada '{slug}' no tiene `{k}` en topics.yaml (requerido para el concept).")
-    sources = meta.get("sources") or []
+    # `cfg.as_list`, no `or []`: `sources:` es un archivo de instancia editado a mano y un escalar
+    # truthy (una sola fuente sin corchetes) no caía en el `or` — esquivaba el `sys.exit` amable
+    # de abajo y moría más adelante con `AttributeError` sin decir qué corregir (R6). Acá SÍ
+    # conviene degradar a `[]` (no adivinar un elemento): el mensaje de abajo ya explica el formato
+    # correcto (`sources:` con items `key + url|pdf`), y un escalar no alcanza para reconstruir eso.
+    sources = cfg.as_list(meta.get("sources"))
     if not sources:
         sys.exit(f"'{slug}' es off-ADS (source: {meta.get('source')}) pero no declara `sources:` en "
                  "topics.yaml — listá ahí su bibliografía (items con key + url|pdf; ver header del YAML).")
@@ -191,7 +214,7 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
         # con la mitad que lo consume, y el aviso quedaba mudo justo en ese caso.
         if (dk := next((k for k in (key, s.get("url")) if k and k in descartadas), None)):
             d = descartadas[dk]
-            print(f"  ⚠ {key}: figura DESCARTADA en el registro ({d.get('fecha', 's/f')}"
+            cfg.print_seguro(f"  ⚠ {key}: figura DESCARTADA en el registro ({d.get('fecha', 's/f')}"
                   f"{'' if dk == key else f', por url {dk}'}): "
                   f"{d.get('motivo') or '(sin motivo)'} — se ingesta igual; si cambiaste de "
                   f"opinión, sacá la entrada de `decisiones` en {cfg.registro_path(slug)}")
@@ -231,24 +254,24 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
             if not src.is_absolute():
                 src = cfg.ROOT / src   # repo-relative: la forma canónica post-repunte
             if dest.exists() and not force:
-                print(f"{key}: ya existe {dest} (usá --force para re-copiar)")
+                cfg.print_seguro(f"{key}: ya existe {dest} (usá --force para re-copiar)")
             elif not src.exists():
                 if dest.exists():
                     # --force en una máquina sin la fuente externa (post-clone): la copia versionada
                     # en la bóveda es la que vale — conservarla no es un fallo.
-                    print(f"  ⚠ {key}: no existe el PDF fuente {src}; conservo la copia de la bóveda ({dest})")
+                    cfg.print_seguro(f"  ⚠ {key}: no existe el PDF fuente {src}; conservo la copia de la bóveda ({dest})")
                 else:
-                    print(f"  ! {key}: no existe el PDF fuente {src} — item salteado")
+                    cfg.print_seguro(f"  ! {key}: no existe el PDF fuente {src} — item salteado")
                     fails += 1
                     failed_items.append((key, str(src)))
                     continue
             elif src.resolve() == dest.resolve():
                 # la fuente declarada YA es la copia de la bóveda (típico post-repunte + --force)
-                print(f"{key}: la fuente declarada es la copia de la bóveda — nada que copiar")
+                cfg.print_seguro(f"{key}: la fuente declarada es la copia de la bóveda — nada que copiar")
             else:
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src, dest)
-                print(f"{key}: {src.name} → {dest}")
+                cfg.print_seguro(f"{key}: {src.name} → {dest}")
             repoint_source_pdf(key, str(s["pdf"]), dest)
             n_pdf += 1     # sólo cuenta PDFs presentes en disco (un item fallido no dispara extract)
             # stub de nota (idempotente; detecta solo el PDF copiado y linkea el campo `pdf`)
@@ -260,9 +283,13 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
     # revista astro — papers con bibcode ADS real. Van en `extra_core:` (no en `sources:`, que
     # degradaría el stub: clave sintética, citation_count 0, blockquote off-ADS falso) y para
     # ellos corre la sub-cadena ADS. Antes extra_core se ignoraba acá en silencio.
-    extra = [b for b in (meta.get("extra_core") or []) if b]
+    # `_listify_curado`, no `or []`: gemelo de query_ads.py:910 (R13) — un `extra_core: <bibcode>`
+    # sin corchetes (un solo paper con bibcode ADS en un tema mixto) es truthy y no caía en el
+    # `or`; la comprensión de abajo recorría el string letra por letra y el bibcode real nunca
+    # entraba a la sub-cadena ADS: la curación manual se perdía en silencio.
+    extra = [b for b in _listify_curado(meta.get("extra_core"), "extra_core") if b]
     if extra:
-        print(f"\nextra_core: {len(extra)} paper(s) con bibcode ADS (tema mixto) → sub-cadena ADS")
+        cfg.print_seguro(f"\nextra_core: {len(extra)} paper(s) con bibcode ADS (tema mixto) → sub-cadena ADS")
         for script, sargs in (("query_ads.py", ["--topic", slug, "--extra-only"]),
                               ("fetch_arxiv.py", [slug]),
                               ("fetch_pdf.py", [slug]),
@@ -279,16 +306,16 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
     # Aviso claro al operador (issue #7): qué fuentes faltan y con qué puntero, para que el
     # usuario las provea. Las pendientes NO son fallos (la cadena degrada limpio y sigue).
     if pending_items:
-        print("\n⏳ Fuentes PENDIENTES (derivadas al usuario — no frenan la cadena):")
+        cfg.print_seguro("\n⏳ Fuentes PENDIENTES (derivadas al usuario — no frenan la cadena):")
         for key, why, ptr in pending_items:
-            print(f"  - {key} [{why}] → {ptr}")
-        print("  Cuando esté la fuente: reemplazá `pending` por `pdf:`/`url:` en sources: y re-corré.")
+            cfg.print_seguro(f"  - {key} [{why}] → {ptr}")
+        cfg.print_seguro("  Cuando esté la fuente: reemplazá `pending` por `pdf:`/`url:` en sources: y re-corré.")
     if failed_items:
-        print("\n! Fuentes que FALLARON (¿transitorio? → re-corré; si la fuente no se puede "
+        cfg.print_seguro("\n! Fuentes que FALLARON (¿transitorio? → re-corré; si la fuente no se puede "
               "conseguir, marcá el item con `pending: paywall|scan|unextractable` para derivarla "
               "al usuario sin frenar la cadena):")
         for key, ptr in failed_items:
-            print(f"  - {key} → {ptr}")
+            cfg.print_seguro(f"  - {key} → {ptr}")
     if fails:
         sys.exit(f"{fails} fuente(s) fallaron — revisá arriba y re-corré (idempotente).")
     if extract_rc:
@@ -305,6 +332,7 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
 
 
 def main() -> int:
+    cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser()
     ap.add_argument("slug", help="tema de vault/config/topics.yaml")
     ap.add_argument("--force", action="store_true",
@@ -321,9 +349,9 @@ def main() -> int:
     source = meta.get("source") or "ads"
     if source == "ads":
         if meta.get("sources"):
-            print("  ⚠ la entrada tiene `sources:` pero source: ads — la lista se ignora en modo ADS.")
+            cfg.print_seguro("  ⚠ la entrada tiene `sources:` pero source: ads — la lista se ignora en modo ADS.")
         if args.force:
-            print("  ⚠ --force no aplica al modo ads (corré el script puntual con --force si hace falta).")
+            cfg.print_seguro("  ⚠ --force no aplica al modo ads (corré el script puntual con --force si hace falta).")
         ingest_ads(args.slug, args.yes)
     elif source in OFFADS_KINDS:
         ingest_offads(args.slug, {**meta, "source": source}, args.force)
@@ -332,7 +360,7 @@ def main() -> int:
                  f"(válidos: ads | {' | '.join(OFFADS_KINDS)}).")
     # Mismo criterio que en ingest_star: el hand-off nombra los pasos salteables con su número.
     # El contraste (3c, #72) faltaba, y es el que decide si la síntesis mira un paper o todos.
-    print("\nCadena mecánica lista. Siguiente (LLM, skill ingest-topic): extracción por paper (3) → "
+    cfg.print_seguro("\nCadena mecánica lista. Siguiente (LLM, skill ingest-topic): extracción por paper (3) → "
           "retro-tag por aliases (3b) → CONTRASTE cross-paper / inventario por eje (3c) → síntesis "
           "del concept, con régimen de validez (4) → verify-citations (6b) → lint.")
     return 0

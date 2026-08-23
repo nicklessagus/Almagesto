@@ -1,4 +1,5 @@
 """fetch_web: post-clean determinista, header del snapshot, reuso de fecha, citekeys."""
+import io
 import sys
 from types import SimpleNamespace
 
@@ -121,3 +122,18 @@ def test_main_idempotente_reusa_fecha_del_snapshot(toy_vault, fake_defuddle, mon
 def test_main_no_note(toy_vault, fake_defuddle, monkeypatch):
     assert run_main(monkeypatch, [*ARGS, "--no-note"]) == 0
     assert not (toy_vault.PAPERS / "2006RasmussenWilliams.md").exists()
+
+
+# ── consola no-UTF8: fetch_web muere con UnicodeEncodeError bajo ascii (medido) ──
+
+def test_unicode_no_muere_en_consola_ascii(toy_vault, monkeypatch):
+    monkeypatch.setattr(fw, "shutil", SimpleNamespace(which=lambda c: "/usr/bin/npx"))
+    monkeypatch.setattr(fw, "fetch", lambda url: "")     # evita invocar defuddle de verdad
+    buf = io.BytesIO()
+    wrapper = io.TextIOWrapper(buf, encoding="ascii", errors="strict")
+    monkeypatch.setattr(sys, "stdout", wrapper)
+    monkeypatch.setattr(sys, "argv", ["fetch_web.py", "gp", "2006RasmussenWilliams",
+                                      "https://example.org/gp", "--no-note"])
+    rc = fw.main()
+    wrapper.flush()
+    assert rc == 1
