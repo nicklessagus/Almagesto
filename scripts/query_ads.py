@@ -553,6 +553,16 @@ def load_triage(slug: str) -> set[str]:
             if d.get("decision") == "descartado" and cfg.es_del_carril(d, "chaining")}
 
 
+def n_dropped_chaining(slug: str) -> int:
+    """Cuántas decisiones del carril chaining son DESCARTES — no toda decisión del carril, que
+    también incluye `aceptado` (candidatos que pasaron a `extra_core`). Este número lo persiste
+    `busqueda` en el registro y la cabecera de la ficha lo publica tal cual como "N descartados": si
+    no mirara `decision`, un aceptado inflaría lo que la bóveda afirma sobre su propio universo de
+    papers (alcanzable con `--migrate`, que importa el juicio viejo tal cual)."""
+    return sum(1 for d in cfg.load_decisiones(slug).values()
+               if d.get("decision") == "descartado" and cfg.es_del_carril(d, "chaining"))
+
+
 def _probe_row(r: dict) -> str:
     mark = "CORE" if r["relevant"] else "—   "
     tp = ",".join(r["topics"]) or "(ninguno)"
@@ -1029,8 +1039,7 @@ def main() -> int:
         # sin juzgar → descartados) y una fuente declarada de un tema off-ADS no participó de
         # ninguna búsqueda — contarla ahí hace que la cabecera de la nota publique un descarte
         # que nadie descartó de la query (#81).
-        "n_dropped": sum(1 for d in cfg.load_decisiones(args.slug).values()
-                         if cfg.es_del_carril(d, "chaining")),
+        "n_dropped": n_dropped_chaining(args.slug),
         "truncated": bool(truncated),
         "almagesto_version": cfg.ALMAGESTO_VERSION,
         # La LENTE con la que se clasificó, textual (#64 → auditoría 1.10.3). `almagesto_version`

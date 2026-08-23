@@ -97,6 +97,14 @@ def drop(slug: str, bibcodes: list[str], reason: str) -> int:
     decisiones = load_decisions(slug)
     hoy = dt.date.today().isoformat()
     for b in bibcodes:
+        # Los dos carriles (chaining acá, fuente-declarada en `drop_source`) comparten el mismo
+        # espacio de claves en `decisiones`: pisar sin avisar borra en silencio el `motivo` y el
+        # `origen` de un juicio anterior — justo lo que #51 existe para que no se pierda. Mismo
+        # aviso que su hermano `drop_source`, para que los dos carriles se comporten igual.
+        if (previa := decisiones.get(b)):
+            print(f"  ⚠ {b} ya tenía decisión ({previa.get('decision', '?')}, "
+                  f"{previa.get('origen') or 'chaining'}, {previa.get('fecha', 's/f')}): "
+                  f"{previa.get('motivo') or '(sin motivo)'} — la piso con ésta")
         decisiones[b] = {"decision": "descartado", "motivo": reason, "fecha": hoy}
     save_decisions(slug, decisiones)
     print(f"  {len(bibcodes)} candidato(s) descartados en {triage_file(slug)} — motivo: {reason}")
@@ -172,7 +180,17 @@ def migrate(slug: str) -> int:
         sys.exit(f"{legacy} no se pudo leer ({type(e).__name__}) — revisalo a mano antes de migrar.")
     if not isinstance(data, dict):
         sys.exit(f"{legacy} no es un objeto JSON (es {type(data).__name__}) — revisalo a mano.")
-    viejas = data.get("decisiones") or {}
+    # `"decisiones" not in data` (no `.get(...) or {}`) porque acá SÍ hace falta distinguir "no
+    # tiene la clave" de "la tiene vacía": lo primero es un triage.json que este migrador no sabe
+    # leer (no consolidó nada, no toca borrar); lo segundo es un legado sin decisiones pendientes,
+    # que sigue siendo un migrar-y-borrar legítimo.
+    if "decisiones" not in data:
+        print(f"{slug}: {legacy} no tiene la clave 'decisiones' — no es el formato que este "
+              f"migrador consolida, así que no se leyó ni se migró nada. Lo dejo: si es scratch "
+              f"viejo sin valor, borralo a mano; si trae un juicio en otra forma, migralo primero "
+              f"a `decisiones` y volvé a correr `--migrate`.")
+        return 1
+    viejas = data["decisiones"] or {}
     ya = cfg.load_registro(slug).get("decisiones") or {}
     nuevas = {b: d for b, d in viejas.items() if b not in ya}
     if nuevas:
@@ -186,7 +204,9 @@ def migrate(slug: str) -> int:
     # archivo— seguía en 1 después de correr el único comando que el propio mensaje recomienda, sin
     # ninguna acción disponible: el círculo migrador→detector no cerraba. Borrarlo es exactamente lo
     # que este mismo mensaje declaraba seguro ("build/ es scratch"), y lo que ya está en el registro
-    # versionado sobrevive al borrado (que es el punto de #51).
+    # versionado sobrevive al borrado (que es el punto de #51). Pero eso vale sólo llegados hasta
+    # acá: con `viejas` vacío (clave presente pero sin contenido) o ya cubierto por `ya`, seguimos
+    # habiendo LEÍDO y consolidado la clave — es distinto del caso de arriba, que nunca la leyó.
     legacy.unlink()
     print(f"  Ahora viajan en git: commiteá el registro. Borré {legacy} (scratch, ya consolidado): "
           f"el lint deja de reportarlo.")

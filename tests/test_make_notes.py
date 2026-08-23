@@ -338,6 +338,18 @@ def test_star_note_idempotente(toy_vault):
     assert dest.read_text(encoding="utf-8") != "EXTRACCIÓN LLM"
 
 
+def test_cli_force_pisa_nota_existente(toy_vault, monkeypatch):
+    """`--force` es la única forma pública de pisar una nota ya extraída (`write_star_note(force=…)`
+    ya lo cubre directo; falta el cableado del CLI). Con el `dest` roto `args.force` queda en
+    `False` pase lo que pase en la línea de comandos, y `make_notes.py <slug> --force` no-opea en
+    silencio sobre una ficha existente — el modo de falla real de un dest typeado."""
+    mn.write_star_note("test_star", force=False)
+    dest = toy_vault.STARS / "test_star.md"
+    dest.write_text("EXTRACCIÓN LLM QUE --force DEBE REEMPLAZAR", encoding="utf-8")
+    assert run_main(monkeypatch, ["test_star", "--force"]) == 0
+    assert dest.read_text(encoding="utf-8") != "EXTRACCIÓN LLM QUE --force DEBE REEMPLAZAR"
+
+
 # ── write_concept_note ───────────────────────────────────────────────────────
 
 def test_concept_note_methods(toy_vault):
@@ -444,6 +456,16 @@ def test_paper_notes_all_incluye_no_core(toy_vault):
     assert read_fm(toy_vault.PAPERS / "2020nonC....1..1C.md")["relevance"] == "low"
 
 
+def test_cli_all_incluye_no_relevantes(toy_vault, monkeypatch):
+    """`--all` es lo único que hace público `include_all=True` (la función ya está cubierta
+    directo arriba); falta el cableado del CLI. Con el `dest` roto `args.all` es siempre `False`
+    pase lo que pase en la línea de comandos: la nota del paper no-core nunca se escribe, sin
+    ningún aviso — un `make_notes.py <slug> --all` que se comporta como si no lo hubieran pasado."""
+    ads_json([rec("2020nonC....1..1C", relevant=False)])
+    assert run_main(monkeypatch, ["test_star", "--all"]) == 0
+    assert read_fm(toy_vault.PAPERS / "2020nonC....1..1C.md")["relevance"] == "low"
+
+
 def test_paper_notes_no_pisa_extraccion(toy_vault):
     ads_json([rec("2020conA...1..1A")])
     mn.write_paper_notes("test_star", include_all=False, force=False)
@@ -472,6 +494,18 @@ def test_paper_notes_topic_siembra_thesis_links(toy_vault):
     mn.write_paper_notes("gp", include_all=False, force=False, topic=True)
     fm = read_fm(toy_vault.PAPERS / "2020gpsA...1..1A.md")
     assert fm["thesis_links"] == ["gaussian-processes"] and fm["stars"] == []
+
+
+def test_cli_topic_genera_concept_en_vez_de_ficha(toy_vault, monkeypatch):
+    """`--topic` decide, en `main()`, entre `write_concept_note` (tema) y `write_star_note`
+    (estrella) — y además el modo `topic=True` de `write_paper_notes`. Todo eso ya está cubierto
+    llamando a las funciones directo; sin este test nadie ejercita el `if args.topic:` del propio
+    despacho. Con el `dest` roto, `gp` (un slug de `topics.yaml`, no de `stars.yaml`) generaría una
+    ficha de ESTRELLA en `vault/wiki/stars/` en vez del concept que pidió `--topic`."""
+    seed_topic()
+    assert run_main(monkeypatch, ["gp", "--topic"]) == 0
+    assert (toy_vault.CONCEPTS / "methods" / "gaussian-processes.md").exists()
+    assert not (toy_vault.STARS / "gp.md").exists()
 
 
 # ── #76: el CUERPO del stub ramifica por tipo de sujeto (los seeds ya ramificaban) ───────────
@@ -1068,6 +1102,49 @@ def test_web_note_idempotente(toy_vault):
     assert dest.read_text(encoding="utf-8") == antes
 
 
+def test_cli_web_conecta_los_flags_de_metadata(toy_vault, monkeypatch):
+    """`main()` con `--web` despacha DIEZ flags de metadata a `write_web_paper_note` por nombre
+    (`--url`→url, `--slug-hint`→slug, `--concept`→concept, `--title`→title, `--author`→
+    first_author, `--year`→year, `--n-authors`→n_authors, `--doi`→doi, `--venue`→venue,
+    `--accessed`→accessed): eso sólo lo ejercita el CLI, no las llamadas directas a la función que
+    ya cubre el resto del archivo. Con cualquiera de esos `dest` mal escrito, ese valor le llega
+    `None`/default a la función y la nota sale con el dato que la línea de comandos pidió pisado
+    en silencio — el modo de falla real de un `--migrate-disputes` con el dest typeado."""
+    seed_topic()
+    assert run_main(monkeypatch, [
+        "2020Smith", "--web", "--url", "https://example.org/x",
+        "--slug-hint", "gp", "--concept", "gaussian-processes",
+        "--title", "Un título pasado por CLI", "--author", "Fulano CLI",
+        "--year", "2021", "--n-authors", "3", "--doi", "10.1/cli",
+        "--venue", "arxiv.org", "--accessed", "2026-01-02"]) == 0
+    dest = toy_vault.PAPERS / "2020Smith.md"
+    fm = read_fm(dest)
+    assert fm["source_url"] == "https://example.org/x"
+    assert fm["title"] == "Un título pasado por CLI"
+    assert fm["first_author"] == "Fulano CLI"
+    assert fm["year"] == 2021
+    assert fm["n_authors"] == 3
+    assert fm["doi"] == "10.1/cli"
+    assert fm["bibstem"] == "arxiv.org"
+    assert fm["accessed"] == "2026-01-02"
+    assert fm["thesis_links"] == ["gaussian-processes"]
+    # --slug-hint no queda sólo en el frontmatter que ya cubrimos vía `slug`: el puntero al .txt
+    # del cuerpo también lo usa, así que un dest roto ahí lo dejaría en el placeholder `<slug>`.
+    assert "vault/raw/fulltext/gp/2020Smith.txt" in dest.read_text(encoding="utf-8")
+
+
+def test_cli_web_pending_estampa_pending_source(toy_vault, monkeypatch):
+    """`--pending` es la escotilla que declara una fuente off-ADS todavía no conseguida
+    (paywall/scan/unextractable, #81). Con el `dest` roto `args.pending` es siempre `None` pase lo
+    que pase en la línea de comandos: la nota sale SIN `pending_source`, que es justo lo que el
+    lint lista como precondición — el usuario nunca se entera de que hay que proveer la fuente."""
+    assert run_main(monkeypatch, ["1999Paywall", "--web", "--slug-hint", "gp",
+                                  "--url", "https://pay.wall/x", "--pending", "paywall"]) == 0
+    fm = read_fm(toy_vault.PAPERS / "1999Paywall.md")
+    assert fm["pending_source"] == "paywall"
+    assert fm["accessed"] is None       # pending suprime el default "hoy UTC": sin snapshot todavía
+
+
 def test_unpend_al_llegar_fulltext(toy_vault):
     mn.write_web_paper_note("1999Paywall", slug="gp", concept="gaussian-processes",
                             url="https://pay.wall/x", pending="paywall")
@@ -1212,6 +1289,18 @@ def test_restamp_pdf_links_barrido(toy_vault, capsys):
     assert f"[📄 PDF]({rel})" in (toy_vault.PAPERS / "2015oldD...1..1D.md").read_text(encoding="utf-8")
     assert "📄 PDF" not in (toy_vault.PAPERS / "2016oldE...1..1E.md").read_text(encoding="utf-8")
     assert sana.read_text(encoding="utf-8") == antes_sana
+
+
+def test_cli_restamp_pdf_links_no_pide_slug(toy_vault, monkeypatch, capsys):
+    """El cableado del backfill (flag → dest → despacho ANTES de exigir slug) sólo lo ejercita el
+    CLI: la suite entera llama a `mn.restamp_pdf_links()` directo, así que un `dest` mal escrito
+    —o el despacho movido después del chequeo de slug obligatorio— pasaría los tests igual y
+    fallaría recién en la primera corrida real de `make_notes.py --restamp-pdf-links` (sin slug)."""
+    rel = _pdf_en_disco(toy_vault, "test_star", "2015oldD...1..1D")
+    _nota_vieja(toy_vault, stem="2015oldD...1..1D", pdf_rel=rel)
+    assert run_main(monkeypatch, ["--restamp-pdf-links"]) == 0
+    assert "1 de 1 re-estampados" in capsys.readouterr().out
+    assert f"[📄 PDF]({rel})" in (toy_vault.PAPERS / "2015oldD...1..1D.md").read_text(encoding="utf-8")
 
 
 def test_find_header_line_es_contrato_compartido(toy_vault):
@@ -1433,6 +1522,16 @@ def test_restamp_headers_barre_fichas_y_conceptos(toy_vault, capsys):
     mn.write_star_note("test_star", force=False)                   # ésta ya tiene cabecera
     assert mn.restamp_headers() == 0
     assert "2 de 3 estampadas" in capsys.readouterr().out
+
+
+def test_cli_restamp_headers_no_pide_slug(toy_vault, monkeypatch):
+    """Mismo cableado que --restamp-pdf-links, para el otro backfill sin slug: la suite llama a
+    `mn.restamp_headers()` directo en todos lados, así que sólo el CLI de punta a punta detecta un
+    `dest` mal escrito o el despacho movido después del `ap.error` que exige slug."""
+    dest = cfg.STARS / "vieja.md"
+    dest.write_text("---\nname: Vieja\ntags:\n- star\n---\n# vieja\n\nProsa.\n", encoding="utf-8")
+    assert run_main(monkeypatch, ["--restamp-headers"]) == 0
+    assert "no registra con qué versión se creó" in dest.read_text(encoding="utf-8")
 
 
 def test_restamp_headers_actua_sobre_la_nota_que_el_lint_marca(toy_vault, capsys):

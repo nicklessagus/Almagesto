@@ -82,6 +82,24 @@ def test_drop_avisa_bibcode_ajeno(toy_vault, monkeypatch, capsys):
     assert "no están entre los candidatos pendientes" in capsys.readouterr().out
 
 
+def test_drop_avisa_si_la_clave_ya_tenia_decision(toy_vault, monkeypatch, capsys):
+    """`drop_source` avisa antes de pisar ("la piso"); su hermano `drop` no. Los dos carriles
+    comparten espacio de claves, así que pisar en silencio borra el motivo y el `origen` de un
+    juicio anterior — y el motivo es justamente lo que #51 existe para que no se pierda."""
+    d = cfg.ROOT / "build" / "test_star"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "ads.json").write_text(json.dumps(
+        {"candidates": [{"bibcode": "2020aaa...1..1A", "title": "t"}]}), encoding="utf-8")
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    cfg.save_decisiones("test_star", {"2020aaa...1..1A": {
+        "decision": "descartado", "motivo": "motivo viejo que no hay que perder en silencio",
+        "fecha": "2026-01-01", "origen": "fuente-declarada"}})
+    triage.drop("test_star", ["2020aaa...1..1A"], "motivo nuevo")
+    out = capsys.readouterr().out
+    assert "motivo viejo que no hay que perder en silencio" in out, (
+        "se pisó un juicio previo sin decir qué decía")
+
+
 def test_drop_acumula_decisiones_previas(toy_vault, monkeypatch):
     write_ads(toy_vault, candidates=[cand("2020b....1B")])
     cfg.save_decisiones("test_star", {"2020a....1A": {"decision": "descartado", "motivo": "viejo"}})
@@ -232,6 +250,19 @@ def test_listado_sin_ads_json_muestra_el_juicio_registrado(toy_vault, monkeypatc
     assert "libro general" in out and "https://x" in out
 
 
+def test_listado_sin_ads_json_nombra_los_candidatos_pendientes_con_fecha(toy_vault, monkeypatch, capsys):
+    """#64: sin `build/` no se puede juzgar, pero el registro versionado SÍ sabe cuántos candidatos
+    dejó la última corrida (lo anota `query_ads` en `busqueda.n_candidates`). Negar ese dato y decir
+    genéricamente "no se puede juzgar candidatos" reintroduce el falso limpio que #64 cerró: hay que
+    nombrarlos, con la fecha de la corrida que los dejó."""
+    cfg.save_decisiones("test_star", {"2020a....1A": {"decision": "descartado", "motivo": "ruido"}})
+    cfg.save_busqueda("test_star", {"fecha": "2026-08-20", "n_candidates": 3})
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    out = capsys.readouterr().out
+    assert "anotó 3 candidato(s) sin juzgar" in out and "2026-08-20" in out
+    assert "no se puede juzgar candidatos hasta re-correr la cadena" not in out
+
+
 def test_drop_source_rechaza_un_slug_inexistente(toy_vault, monkeypatch):
     """`drop()` valida el slug de rebote (muere en `load_ads`); este carril no leía nada, así que un
     typo escribía un registro huérfano que nadie lee jamás — el juicio se pierde en silencio, que es
@@ -346,3 +377,14 @@ def test_migrate_sin_legacy_no_rompe(toy_vault, monkeypatch, capsys):
     write_ads(toy_vault)
     assert run_main(monkeypatch, ["test_star", "--migrate"]) == 0
     assert "nada que migrar" in capsys.readouterr().out
+
+
+def test_migrate_no_borra_un_triage_json_que_no_consolido(toy_vault, monkeypatch, capsys):
+    """El `unlink` es correcto cuando el migrador CONSUMIÓ su entrada. Si el JSON no trae la clave
+    `decisiones` no se consolidó nada: borrarlo diciendo "ya consolidado" destruye un archivo que
+    nadie leyó y cierra el hallazgo del lint con una afirmación falsa."""
+    legacy = cfg.ROOT / "build" / "test_star" / "triage.json"
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    legacy.write_text('{"otra_cosa": 1}', encoding="utf-8")
+    triage.migrate("test_star")
+    assert legacy.exists(), "se borró un triage.json del que no se consolidó ninguna decisión"

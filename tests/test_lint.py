@@ -1,5 +1,8 @@
 """lint: cada categoría detecta su caso sembrado; exit code separa bloqueante/WARN/backlog."""
 import json
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -78,6 +81,26 @@ def test_frontmatter_roto_bloquea(toy_vault, capsys):
     assert rc == 1
     assert "## ⛔ Frontmatter no parseable o con forma inválida (la nota evade los chequeos de su tipo) (2)" in out
     assert "YAML inválido" in out and "sin cierre `---`" in out
+
+
+def test_paper_sin_tag_paper_evade_los_chequeos_de_su_tipo(toy_vault, capsys):
+    """Sin `tags: [paper]` la nota queda invisible para TODOS los chequeos de su tipo —incluida la
+    frontera dura de `retracted`— y ni siquiera sale como huérfana si algo la linkea: se pierde del
+    todo, en silencio. Este chequeo es la única red para ese modo de falla."""
+    mk_note(toy_vault.PAPERS, "2020notg....1N", {"relevance": "high"}, "cuerpo\n")
+    rc, out = run_lint_reporte(capsys)
+    assert rc == 1
+    assert "nota en `papers/` sin `tags: [paper]`" in out
+
+
+def test_pdf_no_string_bloquea_el_chequeo_pdf_disco(toy_vault, capsys):
+    """Un `pdf: 42` (edición a mano, o un estampador con bug) se comparaba contra el disco como si
+    fuera una ruta; sin este chequeo el drift PDF↔disco de esa nota queda silenciado para siempre,
+    sin dejar rastro de que dejó de correr."""
+    mk_note(toy_vault.PAPERS, "2020pdfN...1N", {"tags": ["paper"], "pdf": 42}, "")
+    rc, out = run_lint_reporte(capsys)
+    assert rc == 1
+    assert "`pdf` no es una ruta (es int)" in out
 
 
 def test_prosa_plana_sin_frontmatter_es_legitima(toy_vault, capsys):
@@ -497,6 +520,20 @@ def test_citado_en_un_concepto_tambien_cuenta(toy_vault, capsys):
     assert "Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog) (0)" in out
 
 
+def test_clave_sintetica_off_ads_citada_cierra_extraido_no_sintetizado(toy_vault, capsys):
+    """Una clave de cita off-ADS que NO matchea `BIBCODE_RE` (a diferencia de la convención
+    `AAAA+Autor`, que sí matchea) es sólo un target de link más para #75: "citado" se mide contra el
+    STEM de la nota de paper, así que se registra TODO target de una nota de entidad, no sólo los
+    que parecen bibcode. Sin eso, un paper así queda reportado como "no sintetizado" PARA SIEMPRE
+    aunque la ficha lo cite, sin forma de cerrar el hallazgo."""
+    paper_extraido(toy_vault, stem="misc-blog-note")
+    mk_note(toy_vault.STARS, "test_star", {"tags": ["star"], "P_rot_days": 34.0,
+                                           "activity_indicators_expected": ["halpha"]},
+            "Dato de [[misc-blog-note]].\n")
+    rc, out = run_lint(capsys)
+    assert "Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog) (0)" in out
+
+
 def test_citado_solo_en_una_query_no_alcanza(toy_vault, capsys):
     """Una query es una respuesta puntual, no la síntesis durable de un sujeto: que el paper aparezca
     ahí no significa que haya llegado a la bóveda.
@@ -547,6 +584,15 @@ def test_paper_no_core_no_entra(toy_vault, capsys):
     assert "Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog) (0)" in out
 
 
+def test_relevance_low_capitalizado_tambien_excluye_de_extraido(toy_vault, capsys):
+    """El tooling siempre escribe `low` en minúscula, pero una edición a mano puede dejar `Low`. Sin
+    el `.lower()` del lector, ese paper entra a la población de #75 de la que el recorte lo quería
+    dejar afuera (a una nota no-core no se le pide aterrizar en ninguna síntesis)."""
+    paper_extraido(toy_vault, relevance="Low")
+    rc, out = run_lint(capsys)
+    assert "Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog) (0)" in out
+
+
 def test_no_sintetizado_con_motivo_cierra_el_hallazgo(toy_vault, capsys):
     """La escotilla que pide el issue: la regla de poda manda dejar lo tangencial fuera de la prosa,
     así que un extraído puede legítimamente no aterrizar — pero se declara, con su motivo."""
@@ -560,6 +606,17 @@ def test_no_sintetizado_sin_motivo_sigue_reportando(toy_vault, capsys):
     """Mismo criterio que el `--reason` obligatorio del triage: no curar en silencio. Una marca
     pelada cierra el hallazgo sin dejar el porqué, que es lo único no regenerable."""
     paper_extraido(toy_vault, no_sintetizado=True)
+    rc, out = run_lint(capsys)
+    assert rc == 0
+    assert "`no_sintetizado` sin motivo" in out and "2020ext....1E" in out
+
+
+def test_no_sintetizado_no_string_tambien_se_reporta_sin_motivo(toy_vault, capsys):
+    """`no_sintetizado: 5` (o una lista, o un mapa) es marca PRESENTE pero sin motivo TEXTUAL. El
+    chequeo de tipo tiene que atraparla antes de llegar a `.strip()`, que sólo existe en `str`: sin
+    el `isinstance`, un valor no-string cierra el hallazgo #75 en falso (o revienta el barrido, si
+    el tipo no tiene `.strip()`) en vez de seguir pidiendo el motivo."""
+    paper_extraido(toy_vault, no_sintetizado=5)
     rc, out = run_lint(capsys)
     assert rc == 0
     assert "`no_sintetizado` sin motivo" in out and "2020ext....1E" in out
@@ -667,6 +724,21 @@ def test_espejo_reporta_la_letra_repetida(toy_vault, capsys):
     assert "planeta `b` repetido en `planets[]` (2 veces)" in out
 
 
+def test_ficha_con_planets_mal_formado_no_revienta_el_espejo(toy_vault, capsys):
+    """`mirror_issues` recibe la ficha RE-PARSEADA aparte del barrido principal de notas —`fm_ficha`
+    es un dict nuevo, no el que ese barrido ya normalizó—: sin volver a normalizar ADENTRO de
+    `mirror_issues`, un elemento de `planets` que no es mapa llega crudo a `pl.get("letter")` y
+    revienta el espejo #70 con un AttributeError en cuanto la ficha tiene ground-truth."""
+    write_gt(toy_vault, [gt_planet("b")])
+    ficha_espejo(toy_vault, {"planets": ["b_a_medio_escribir",
+                                         {"letter": "b", "P_days": 365.25, "K_ms": 0.0895,
+                                          "e": 0.0, "mass_earth": 1.0, "status": "confirmed"}]})
+    rc, out = run_lint(capsys)
+    assert "Traceback" not in out
+    assert "en la ficha y NO en el ground-truth" not in out
+    assert "el ground-truth trae el planeta" not in out
+
+
 def test_ficha_sin_ground_truth_se_reporta(toy_vault, capsys):
     """El barrido del espejo lo maneja el JSON, así que una ficha SIN archivo no la miraba nadie:
     se le podían inventar `teff_K`, `P_rot_days` o planetas enteros con el lint en verde. Es
@@ -678,6 +750,17 @@ def test_ficha_sin_ground_truth_se_reporta(toy_vault, capsys):
     rc, out = run_lint(capsys)
     assert rc == 0
     assert "ficha sin `raw/ground_truth/<slug>.json`" in out
+
+
+def test_ground_truth_sin_ficha_se_reporta(toy_vault, capsys):
+    """Hermano simétrico de "ficha sin ground-truth". Un `raw/ground_truth/<slug>.json` sin su
+    `stars/<slug>.md` es un renombre a medias o una ficha borrada sin limpiar: el espejo #70 no
+    compara nada y nadie avisa que ese ground-truth quedó colgado."""
+    (toy_vault.GROUND_TRUTH / "huerfana.json").write_text(
+        json.dumps({"slug": "huerfana", "host": {"mass_msun": 1.0}, "planets": []}),
+        encoding="utf-8")
+    rc, rep = run_lint_reporte(capsys)
+    assert "huerfana" in rep, "un ground-truth sin ficha no aparece en el reporte"
 
 
 def test_slug_interno_del_ground_truth_que_no_matchea_el_archivo(toy_vault, capsys):
@@ -704,6 +787,32 @@ def test_ground_truth_ilegible_se_reporta_y_no_voltea_el_lint(toy_vault, capsys)
     assert "Traceback" not in out
     assert "no se pudo leer" in out
     assert "## Notas huérfanas (sin links entrantes) (1)" in out      # el barrido siguió
+
+
+def test_ground_truth_no_es_objeto_se_reporta(toy_vault, capsys):
+    """Distinto del JSON ilegible de arriba: acá el JSON SÍ parsea (`json.loads` no revienta) pero
+    no es un objeto (un array pelado, un número, …). Sin este chequeo `gt.get("slug")` tres líneas
+    más abajo revienta con AttributeError sobre una lista, y el barrido entero se cae con él."""
+    (toy_vault.GROUND_TRUTH / "test_star.json").write_text(json.dumps(["x"]), encoding="utf-8")
+    mk_note(toy_vault.CONCEPTS / "methods", "suelta", {"tags": ["methods"]}, "sin links\n")
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert "Traceback" not in out
+    assert "no es un objeto JSON (es list)" in out
+    assert "## Notas huérfanas (sin links entrantes) (1)" in out      # el barrido siguió
+
+
+def test_ground_truth_planets_no_es_lista_se_reporta(toy_vault, capsys):
+    """Hermano del `host` no-mapa: un `planets` de nivel superior que no es lista (edición a mano)
+    se itera más abajo (`for x in planetas_gt`) para separar los elementos malformados de los
+    válidos — sin reportarlo y sanearlo a `[]` acá, ese `for` revienta iterando un entero."""
+    (toy_vault.GROUND_TRUTH / "test_star.json").write_text(
+        json.dumps({"slug": "test_star", "host": {"mass_msun": 1.0}, "planets": 5}),
+        encoding="utf-8")
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert "Traceback" not in out
+    assert "`planets` del ground-truth no es una lista (es int)" in out
 
 
 def test_ground_truth_con_planetas_mal_formados_no_voltea_el_lint(toy_vault, capsys):
@@ -838,6 +947,21 @@ def test_prot_documentado_por_oracion(texto, documentado):
     """#70: el ámbito es la ORACIÓN (mención + cita en cualquier orden, sin negador), no la línea.
     Los tres modos de falla medidos: prosa envuelta, cita antes de la mención, y el hueco declarado
     —"no se conoce el período de rotación [[ref]]"— que apagaba el backlog que existe para eso."""
+    assert lint.prot_documentado(texto) is documentado
+
+
+@pytest.mark.parametrize("texto,documentado", [
+    # el negador niega OTRA cosa en la misma oración: el P_rot SÍ está documentado y citado
+    ("El período de rotación es 34 d [[2019abc]] y no hay señal en el bisector.", True),
+    ("P_rot = 34 d [[2019abc]], aunque no se conoce la inclinación.", True),
+    # el negador sí niega el P_rot: sigue siendo hueco
+    ("No se conoce el período de rotación [[2019abc]].", False),
+    ("El período de rotación no fue medido [[2019abc]].", False),
+])
+def test_prot_negador_de_otra_cosa_no_apaga_el_hallazgo(texto, documentado):
+    """El negador se busca en toda la oración, así que cualquier "no hay …" que conviva con la
+    mención apaga el backlog de `P_rot`. Es el falso NEGATIVO del chequeo: la ficha queda sin el
+    hueco marcado justamente cuando el dato SÍ está."""
     assert lint.prot_documentado(texto) is documentado
 
 
@@ -1261,6 +1385,18 @@ def test_lint_usa_el_lector_blindado_del_registro():
     assert "load_registro" in inspect.getsource(lint.main), "lint.main no usa cfg.load_registro"
 
 
+def test_lint_no_muere_en_una_consola_no_utf8():
+    """El reporte lleva `⛔`/`⚠`/`→` y español. En una consola `cp1252` o `ascii` el `print` final
+    tira `UnicodeEncodeError` y el lint sale con exit 1 —indistinguible de "hay bloqueantes"—
+    aunque el `.md` en disco haya quedado perfecto. La compuerta de CI tiene que dar su veredicto
+    en cualquier consola."""
+    r = subprocess.run([sys.executable, "scripts/lint.py"], cwd=cfg.ROOT, capture_output=True,
+                       env={"PATH": "/usr/bin:/bin", "LC_ALL": "C", "PYTHONIOENCODING": "ascii",
+                            "HOME": str(Path.home())})
+    assert b"UnicodeEncodeError" not in r.stderr, r.stderr[-400:].decode("utf-8", "replace")
+    assert r.returncode == 0
+
+
 def test_decision_que_no_es_un_mapa_se_reporta(toy_vault, capsys):
     """`lib_config.py:303` promete que el lint reporta esta forma. No existe: la entrada queda muda
     y el triage vuelve a proponer lo ya descartado SIN el motivo — el bug que #51 cerró."""
@@ -1512,4 +1648,19 @@ def test_in_dir_componente_no_substring():
     assert lint.in_dir("vault/wiki/concepts/methods/gp.md", "concepts") is True
     assert lint.in_dir("vault/wiki/queries.md", "queries") is False       # stem ≠ carpeta
     assert lint.in_dir("vault/wiki/stars/x.md", "queries") is False
+
+
+def test_in_dir_no_confunde_carpeta_hermana_stars_borradores(toy_vault, capsys):
+    """Regresión #33 a nivel CONSUMIDOR (el predicado ya tiene su test de arriba, pero eso no
+    protege al que lo LLAMA): comparar rutas como texto (`f.startswith(str(cfg.STARS))`) matchea
+    `wiki/stars-borradores/` como si fuera `wiki/stars/`. Una carpeta de trabajo vecina con ese
+    prefijo cerraría en falso el backlog de #75 — la cita desde un borrador NO cuenta como que el
+    paper llegó a una nota de entidad."""
+    paper_extraido(toy_vault)
+    mk_note(toy_vault.WIKI / "stars-borradores", "borrador", {"tags": ["draft"]},
+            "Mención de [[2020ext....1E]] en un borrador.\n")
+    link_from_index(toy_vault, "borrador")
+    rc, out = run_lint(capsys)
+    assert "Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog) (1)" in out
+    assert "2020ext....1E → extraído" in out
 

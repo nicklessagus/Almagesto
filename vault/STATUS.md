@@ -90,6 +90,51 @@ fixes **por archivo dueño** (un ejecutor por script, sin solapamiento, y **proh
 `tests/`**: los tests son el criterio de aceptación, no material del ejecutor); al cerrar, migrar
 los casos a los archivos de test definitivos y borrar el temporal.
 
+## ✅ Framework 1.22.1 (2026-08-23) — los S3 de la sexta pasada: siete defectos menores y la cobertura que faltaba
+
+> Segunda tanda de la auditoría del 23-08. **592 tests verdes** (+21 sobre 1.22.0), lint 0. Patch:
+> todos los hallazgos nuevos del lint son **backlog**, así que ninguna bóveda que hoy pasa empieza a
+> fallar.
+
+Los S3 eran de **dos naturalezas** que piden instrumentos distintos, y mezclarlos es lo que hace que
+una tanda de "arreglar lo menor" no arregle nada:
+
+**(a) Defectos reales → test rojo primero** (protocolo de arriba). Siete:
+- **`PROT_NEG` producía un falso NEGATIVO.** El negador se buscaba en la oración entera, así que
+  *"El período de rotación es 34 d [[bib]] y no hay señal en el bisector"* apagaba el backlog: la
+  ficha perdía el hueco marcado justo cuando el dato SÍ está. Ahora el negador sólo cuenta hasta
+  donde cerraron la mención y la cita. Verificado con los ocho casos, incluidos los que motivaron el
+  negador (`## Huecos`), el wrap a 100 columnas y la cita antes de la mención.
+- **El lint moría al imprimir en consolas no-UTF8** (`ascii`, `cp1252`): `UnicodeEncodeError` en el
+  `print` final → exit 1 indistinguible de "hay bloqueantes", con el `.md` en disco perfecto. La
+  compuerta vive del exit code, no de la letra bonita.
+- **`n_dropped` contaba decisiones que no son descartes** → la cabecera de la ficha publicaba un
+  descarte que nadie hizo. Extraído a `n_dropped_chaining()`, que además ahora es testeable.
+- **`drop()` pisaba el juicio previo sin avisar** mientras su hermano `drop_source` sí avisa: los dos
+  carriles comparten espacio de claves, así que se perdía el motivo y el `origen`.
+- **`--migrate` borraba un `triage.json` del que no consolidó nada**, diciendo "ya consolidado".
+- **Ground-truth sin ficha no lo miraba nadie** — hermano simétrico de "ficha sin ground-truth".
+
+**(b) Cobertura → el test ES el entregable, y el mutante se especifica de antemano.** Acá el código
+ya estaba bien: un test escrito contra código correcto **nace verde y no prueba nada**, que es el
+modo de falla que esta misma auditoría encontró siete veces. Por eso el criterio no fue "rojo →
+verde" sino **"pasa sobre el código actual y muere con ESTE mutante"**, con los mutantes fijados
+línea por línea en un catálogo *antes* de escribir un solo test — si el ejecutor elige el mutante,
+elige el que su propio test ya mata. **22 mutantes, 22 muertos**:
+- **4 sitios de hallazgo BLOQUEANTE que ningún test ejecutaba** (medidos con `coverage`, no
+  estimados): paper sin `tags:[paper]`, `pdf` no-str, ground-truth no-objeto, `planets` del GT
+  no-lista. Cero sitios de backlog/WARN sin cubrir.
+- **9 fixes que estaban *supuestos, no verificados*** (su mutante sobrevivía la suite entera):
+  `relevance` case-insensitive, `show_decisions` con el registro, `cited_in_entity`, `in_dir` vs
+  `startswith` (#33), marca `no_sintetizado` no-`str`, `normalize_lists` en `mirror_issues`, la
+  coletilla del truncado, y **los dos consumidores de `es_del_carril`** — el predicado tenía test,
+  pero ningún test sembraba `origen: fuente-declarada` para verificar que el consumidor lo excluya.
+- **La superficie de CLI**: `triage.py` ya tenía sus 6 flags cubiertos; en `make_notes.py` **16
+  flags** pasaban por sus funciones pero **nunca por argparse**, y en `query_ads.py` faltaba el
+  despacho de `--probe` en `main()`. Ahí el mutante es romper el cableado (`dest` renombrado): es el
+  modo de falla real, un `dest` mal escrito pasa la suite y falla en la primera corrida de verdad
+  —ya pasó con `--migrate-disputes`—.
+
 ## ✅ Framework 1.22.0 (2026-08-23) — sexta pasada: fuzzing, contratos y el registro que se perdía
 
 > Pedida por el usuario ("auditoría de todo lo que se hizo ayer, en profundidad ... buscar errores de

@@ -392,6 +392,19 @@ def test_query_ads_avisa_truncado(toy_classifier, ads_token, no_sleep, monkeypat
     assert "truncado" not in capsys.readouterr().out
 
 
+def test_query_ads_avisa_truncado_sin_meta_no_promete_marca(toy_classifier, ads_token, no_sleep,
+                                                             monkeypatch, capsys):
+    """`--sweep` y `--probe` llaman query_ads() sin `meta` (nadie va a persistir el corte en
+    ads.json): la coletilla del aviso tiene que decirlo, no repetir la promesa de "queda marcado en
+    ads.json → lint" que sólo vale cuando SÍ hay un `meta` para escribir esa marca (#17 al revés)."""
+    monkeypatch.setattr(qa, "requests", SimpleNamespace(
+        get=fake_get_seq([FakeResp(200, payload([], num_found=500))])))
+    qa.query_ads("q", rows=10, meta=None)
+    out = capsys.readouterr().out
+    assert "esta query NO deja marca en ads.json" in out
+    assert "queda marcado en ads.json" not in out
+
+
 def test_query_ads_cero_espurio_reintenta_y_recupera(toy_classifier, ads_token, no_sleep, monkeypatch):
     """#27: `numFound: 0` con HTTP 200 es sospechoso cuando se esperan hits — se reintenta con el
     mismo backoff y la corrida siguiente (338 papers en el caso real) es la que vale."""
@@ -903,6 +916,23 @@ def test_probe_lista_todo_el_core(toy_classifier, capsys):
     assert out.count("[CORE]") == 30          # el core se lista completo, no top-N
 
 
+def test_main_probe_no_pide_slug_y_cablea_query_y_rows(toy_classifier, monkeypatch, capsys):
+    """`--probe` es el único modo que `main()` despacha SIN pedir `slug` (ni siquiera lo mira: el
+    `ap.error` de slug faltante queda más abajo). Nadie ejercita ese cableado a través de `main()` —
+    los tests de arriba llaman `print_probe` directo—, así que un `dest` roto en el argumento (p.
+    ej. `args.probe_query` sin actualizar el `if args.probe:`) o un default que apague la rama
+    pasarían la suite entera y recién explotarían en el primer preview real del skill `setup`."""
+    seen = {}
+    def fake_qa(q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, fq=None,
+                sort=qa.CITES_SORT):
+        seen["q"], seen["rows"] = q, rows
+        return [rec("2020probe.1P", cites=3)]
+    monkeypatch.setattr(qa, "query_ads", fake_qa)
+    assert run_main(monkeypatch, ["--probe", 'abs:"radial velocity"', "--rows", "50"]) == 0
+    assert seen == {"q": 'abs:"radial velocity"', "rows": 50}
+    assert "1 CORE" in capsys.readouterr().out
+
+
 # ── --sweep: barrido full-text 2b (issue #25) ────────────────────────────────
 
 def mk_ads_json(root, slug, bibs):
@@ -1011,6 +1041,50 @@ def test_main_triage_no_repropone_descartados(toy_vault, toy_classifier, no_slee
     data = json.loads((d / "ads.json").read_text())
     assert data["candidates"] == [] and len(data["records"]) == 1
     assert "1 ya descartados antes" in capsys.readouterr().out
+
+
+def test_load_triage_no_suprime_descartes_de_fuente_declarada(toy_vault):
+    """#81: `decisiones` mezcla los DOS carriles — el candidato del citation chaining (`triage
+    --drop`, sin `origen`) y la fuente DECLARADA de un tema off-ADS (`triage --drop-source`,
+    `origen: fuente-declarada`). `load_triage` alimenta la compuerta del chaining (#38): un rechazo
+    del otro carril no es un candidato del grafo de citas y no tiene que apagar la cola de
+    candidatos por triage.py. Sin el filtro `es_del_carril` (query_ads.py:553) los dos descartes se
+    confunden y el gate suprime de más."""
+    cfg.save_decisiones("test_star", {
+        "2020a....1A": {"decision": "descartado", "motivo": "ruido"},                       # chaining
+        "2006RasmussenWilliams": {"decision": "descartado", "origen": "fuente-declarada",
+                                  "motivo": "libro de texto general"},                       # otro carril
+    })
+    assert qa.load_triage("test_star") == {"2020a....1A"}
+
+
+def test_n_dropped_chaining_no_cuenta_fuente_declarada(toy_vault):
+    """#81/#64: `n_dropped_chaining` alimenta `busqueda.n_dropped`, que la cabecera de la ficha
+    publica tal cual como "N descartados" del universo que trajo la QUERY del sujeto. Una fuente
+    declarada de un tema off-ADS nunca participó de esa búsqueda (no hay `busqueda` en un tema
+    off-ADS puro): contarla infla el número que se lee como el recorte del chaining. Tampoco cuenta
+    un `aceptado` del propio carril chaining (pasó a `extra_core`, no es un descarte)."""
+    cfg.save_decisiones("test_star", {
+        "2020a....1A": {"decision": "descartado", "motivo": "ruido"},                       # cuenta
+        "2020b....1B": {"decision": "aceptado", "motivo": "sí, va a extra_core"},           # no cuenta
+        "2006RasmussenWilliams": {"decision": "descartado", "origen": "fuente-declarada",
+                                  "motivo": "libro de texto general"},                       # no cuenta
+    })
+    assert qa.n_dropped_chaining("test_star") == 1
+
+
+def test_n_dropped_chaining_no_cuenta_decision_no_descartada(toy_vault):
+    """`n_dropped` es el campo del registro que la cabecera de la ficha PUBLICA como "N
+    descartados". Hoy cuenta toda decisión del carril chaining sin mirar el campo `decision`, así
+    que una decisión que no es un descarte —`--migrate` importa el juicio viejo tal cual, y el
+    registro se edita a mano por instrucción del propio framework— infla el número que la bóveda
+    afirma sobre su propio universo de papers."""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    cfg.save_decisiones("test_star", {
+        "2020aaa...1..1A": {"decision": "descartado", "motivo": "ruido", "fecha": "2026-08-01"},
+        "2020bbb...1..1B": {"decision": "aceptado", "motivo": "pertinente", "fecha": "2026-08-01"},
+    })
+    assert qa.n_dropped_chaining("test_star") == 1
 
 
 def test_main_extra_core_no_vuelve_a_la_cola_de_triage(toy_vault, toy_classifier, no_sleep,

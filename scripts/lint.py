@@ -65,6 +65,7 @@ import glob
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import yaml
@@ -334,8 +335,13 @@ MIRROR_PLANET = ("P_days", "K_ms", "e", "mass_earth", "status")
 #   · el ámbito es la ORACIÓN, no la línea: el repo envuelve la prosa a ~100 columnas, así que
 #     "El período de rotación es\n34 d [[bib]]" quedaba sin respaldo, y la cita puede ir **antes**
 #     de la mención ("[[bib]] mide un período de rotación de 34 d");
-#   · un negador descarta la oración: "no se conoce el período de rotación [[bib]]" es literalmente
-#     lo que un LLM escribe en `## Huecos`, y apagaba el único backlog que existe para ese hueco.
+#   · un negador descarta la oración — pero SÓLO si niega la mención de `P_rot` y no otra cosa que
+#     conviva en la misma oración ("...34 d [[bib]] y no hay señal en el bisector."): "no se conoce
+#     el período de rotación [[bib]]" es literalmente lo que un LLM escribe en `## Huecos`, y
+#     apagaba el único backlog que existe para ese hueco, pero un "no hay"/"no se conoce" que
+#     aparece DESPUÉS de que la mención y la cita ya cerraron es un comentario aparte, no una
+#     negación del `P_rot`. Por eso el negador se busca sólo hasta donde termina la mención o la
+#     cita, la que venga después (`limite` abajo) — no en la oración entera.
 PROT_MENTION = re.compile(r"(?i)P[\s_${}\\]*(?:(?:rm|mathrm|text)[\s{]*)?rot(?![a-z])"
                           r"|per[ií]odo de rotaci[óo]n|rotation period")
 PROT_CITE = re.compile(r"\[\[[^\]]+\]\]|inferencia")
@@ -346,10 +352,18 @@ PROT_NEG = re.compile(r"(?i)no se conoce|no se sabe|sin medir|desconocid|no hay 
 
 def prot_documentado(body: str) -> bool:
     """¿El cuerpo documenta un `P_rot` con respaldo? Por ORACIÓN: mención + cita (en cualquier
-    orden) y sin negador. Ver el comentario de arriba para el porqué de cada parte."""
+    orden) y sin negador que niegue esa mención en particular. Ver el comentario de arriba para el
+    porqué de cada parte."""
     for oracion in re.split(r"(?<=[.;])\s+|\n\s*\n", body):
-        if PROT_MENTION.search(oracion) and PROT_CITE.search(oracion) \
-                and not PROT_NEG.search(oracion):
+        m_mencion = PROT_MENTION.search(oracion)
+        m_cita = PROT_CITE.search(oracion)
+        if not (m_mencion and m_cita):
+            continue
+        # el negador sólo cuenta hasta acá: lo que viene después de que la mención Y la cita ya
+        # cerraron es, en la práctica medida, una cláusula distinta ("y no hay señal en el
+        # bisector.", "aunque no se conoce la inclinación.") que niega otra cosa.
+        limite = max(m_mencion.end(), m_cita.end())
+        if not PROT_NEG.search(oracion[:limite]):
             return True
     return False
 
@@ -415,6 +429,20 @@ def mirror_issues(slug: str, fm: dict, gt: dict) -> list:
         for campo in MIRROR_PLANET:
             check(f"{letra}.{campo}", pl.get(campo), ref.get(campo))
     return out
+
+
+def _print_seguro(texto: str) -> None:
+    """`print` tolerante a consolas no-UTF8. El reporte lleva `⛔`/`⚠`/`→` y está en español: en una
+    consola `ascii`/`cp1252` (CI mal configurado, alguna terminal Windows) el encode del stream por
+    defecto tira `UnicodeEncodeError` y el proceso muere con exit 1 — indistinguible de "hay
+    hallazgos bloqueantes" — aunque el `.md` en disco (que se escribe aparte, siempre en UTF-8) haya
+    quedado perfecto. La compuerta de CI vive del exit code, no de la letra bonita: si el stream no
+    puede con los caracteres, se degrada el texto en vez de dejar morir la corrida."""
+    try:
+        print(texto)
+    except UnicodeEncodeError:
+        enc = getattr(sys.stdout, "encoding", None) or "ascii"
+        print(texto.encode(enc, errors="replace").decode(enc))
 
 
 def main() -> int:
@@ -822,6 +850,17 @@ def main() -> int:
                                              "no puede compararla con el ground-truth"))
             else:
                 contradictions += mirror_issues(slug, fm_ficha, gt)
+        else:
+            # Hermano simétrico de "ficha sin ground-truth" (más abajo): un ground-truth sin su
+            # ficha es un renombre a medias (el skill `maintain` renombra el JSON pero no llegó a
+            # crear/renombrar `stars/<slug>.md`) o una ficha borrada sin limpiar el JSON que la
+            # acompañaba. El espejo #70 no tiene con qué comparar → nadie lo mira. Backlog, no
+            # bloqueante: es "la garantía no corrió acá" (no hay ficha con la que contradecir),
+            # no "hay una violación" — misma severidad que el hermano.
+            incomplete.append((slug, f"`raw/ground_truth/{slug}.json` sin su `stars/{slug}.md` → "
+                                     "el espejo #70 no tiene ficha con la que comparar (renombre a "
+                                     "medias o ficha borrada sin limpiar); recreá la ficha "
+                                     f"(`make_notes.py {slug}`) o borrá el ground-truth colgado"))
 
     # Ficha SIN su ground-truth: el barrido de arriba lo maneja el JSON, así que una ficha sin
     # archivo no la miraba NADIE — se le podía inventar `teff_K`/`P_rot_days`/planetas enteros con
@@ -1118,19 +1157,18 @@ def main() -> int:
     outdir.mkdir(exist_ok=True)
     out = outdir / f"lint-{dt.date.today().isoformat()}.md"
     out.write_text(report, encoding="utf-8")
-    print(report)
-    print(f"→ {out}")
+    _print_seguro(report)
+    _print_seguro(f"→ {out}")
     # Exit code gateable: las categorías que CLAUDE.md exige "en 0" bloquean; WARN (fuga de
     # implementación, áreas, PDF↔disco) y backlog (verificabilidad, cobertura, incompletos) no.
     n_block = sum(len(x) for x in (broken, fm_broken, retracted, orphans, contradictions,
                                    mass_issues, dangling_thesis, dangling_disputes, bad_roles,
                                    bad_disputes, old_disputes, legacy_triage))
     if n_block:
-        print(f"✗ {n_block} hallazgo(s) en categorías bloqueantes → exit 1")
+        _print_seguro(f"✗ {n_block} hallazgo(s) en categorías bloqueantes → exit 1")
         return 1
     return 0
 
 
 if __name__ == "__main__":
-    import sys
     sys.exit(main())
