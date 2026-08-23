@@ -10,6 +10,23 @@ bóveda real — para eso está `lint.py`, que es el "test suite" del *contenido
 python -m pytest tests/ -q
 ```
 
+## Los tres tiers
+
+La suite está partida en tiers por `pytest.ini`, cuyo `addopts` deja fuera por default lo caro. Esa
+línea es lo que hace viable la capa de bóveda poblada: ~900 notas convertirían el default de 2 s en
+minutos, **y una suite que tarda es una suite que se deja de correr antes de commitear** — que es
+justo cuando más sirve.
+
+| Tier | Qué corre | Comando | Presupuesto |
+|---|---|---|---|
+| **0** — siempre (default, CI en cada push) | todo `tests/*.py` | `python -m pytest tests/ -q` | ≤ 2,5 s |
+| **1** — `poblada` (nightly / pre-release) | `tests/poblada/` sobre corpus sintético (~900 notas) | `python -m pytest tests/ -m poblada -q` | ≤ 90 s |
+| **2** — `instancia` (sólo en la máquina del usuario; gate del deploy) | invariantes sobre una instancia REAL | `ALMAGESTO_INSTANCIA=/ruta/a/la/instancia python -m pytest tests/ -m instancia -q` | ≤ 60 s |
+| todos | los tres | `ALMAGESTO_INSTANCIA=... python -m pytest tests/ -m "" -q` | ≤ 3 min |
+
+`instancia` **sin** la env var **skipea con motivo visible**, nunca pasa en silencio: un tier que se
+saltea sin decirlo es el mismo modo de falla que el "0 que no miró" (ver abajo).
+
 Requiere `pytest` (dev-only, no está en `requirements.txt`; los scripts no lo necesitan).
 
 ## Principios de diseño
@@ -69,6 +86,33 @@ Requiere `pytest` (dev-only, no está en `requirements.txt`; los scripts no lo n
 | `test_ingest_topic.py` | despacho por `source`, validaciones de `sources:`, flujo `pending`, aviso de fuente ya descartada, copia de PDFs, orden de la cadena ads | `run()` y `make_notes.*` grabadores |
 | `test_ingest_star.py` | orden canónico de la cadena de estrellas, aborto al primer fallo, retracción ≠ fallo, hand-off que nombra los pasos salteables | `run()` grabador |
 | `test_bench_verify.py` | extracción de pares (excluye blockquotes/fences/bloque de verificación), siembra por rotación (sin falsos-falsos), determinismo byte a byte, puntaje | puro FS |
+
+### `tests/poblada/` — la capa de corpus (tiers 1 y 2)
+
+Existe porque **la bóveda vacía no puede revelar una clase entera de bugs**: en vacío toda categoría
+del lint da `(0)` y un test **no distingue "pasa" de "ni miró"**. No es teórico — tres hallazgos de la
+auditoría del 2026-08-23 salieron de mirar corpus real y ninguna de las seis pasadas previas podía
+verlos. El caso claro es el deadlock #69: con una nota de juguete el fix pasaba; con 25 notas reales,
+21 caían en la rama rota.
+
+| Archivo | Cubre | Estrategia |
+|---|---|---|
+| `generador.py` | `sembrar_corpus(...) -> Censo` | **fabrica** el corpus (no baja nada, no copia la instancia) con la distribución medida en una instancia real; determinista por `seed`; `vintage="1.11.0"` emite el schema viejo |
+| `conftest.py` | `arbol_poblado` (siembra 1× por sesión), `boveda_poblada[_mutable]`, `instancia_real` | `instancia_real` copia lo liviano y **symlinkea** lo pesado; jamás escribe en la instancia |
+| `test_generador.py` | la red del propio generador: determinismo por hash, censo == disco, corpus limpio ⇒ lint exit 0 | — |
+| `test_conteos_exactos.py` | **la forma canónica**: K anomalías entre ~900 notas ⇒ el lint reporta exactamente esas K y los **stems** coinciden con el censo; sin doble conteo ni contaminación cruzada | — |
+| `test_escala.py` | comportamiento cuadrático por **ratio** `t(800)/t(200)` (no tiempos absolutos, frágiles entre máquinas) + el hotspot del doble parseo YAML anclado para que no empeore | — |
+| `test_golden.py` | salida del lint congelada con seed fija; normalizador justificado midiendo (5 `PYTHONHASHSEED`) | regenerar: `UPDATE_GOLDEN=1 python -m pytest tests/poblada/test_golden.py -m poblada -q` |
+| `test_upgrade.py` | el **ciclo completo**: vintage bloquea → migradores → el lint **cierra el hallazgo** → 2ª pasada byte a byte idéntica | — |
+
+⚠ **El `Censo` es lo que hace útil al corpus grande**: devuelve los *stems* exactos de lo sembrado,
+no un conteo. Sin eso, más notas sólo agregan ruido.
+⚠ **En `test_upgrade.py`, verificar que el migrador "corrió sin error" NO alcanza**: hay que verificar
+que el conteo del lint **baja a 0**. El deadlock #69 informaba éxito en cada corrida mientras el lint
+seguía contando — dos veces.
+⚠ `tests/poblada/__init__.py` **no es opcional**: sin él, pytest importa `tests/conftest.py` y
+`tests/poblada/conftest.py` los dos como módulo `conftest` y el segundo pisa al primero, rompiendo
+los `from conftest import ...` de la suite vieja. Sólo se ve corriendo la suite **completa**.
 
 ## Fuera de alcance (deliberado)
 
