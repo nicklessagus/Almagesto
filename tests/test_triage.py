@@ -194,10 +194,17 @@ def test_drop_source_convive_con_el_triage_sin_pisar(toy_vault, monkeypatch):
 
 def test_drop_y_drop_source_no_se_mezclan(toy_vault, monkeypatch):
     """Son dos juicios distintos (candidato del chaining vs fuente declarada) y comparten
-    --reason: mezclarlos en una corrida escribiría el mismo motivo para los dos."""
+    --reason: mezclarlos en una corrida escribiría el mismo motivo para los dos.
+
+    El `ads.json` sembrado es parte del test: sin él, `--drop` moría igual en `load_ads` ("corré
+    primero la cadena") y el `pytest.raises` pasaba **sin la guarda** — verde por el motivo
+    equivocado. Con el archivo puesto, el único SystemExit posible es el del argparse, y el registro
+    tiene que quedar intacto."""
+    write_ads(toy_vault, slug="gp", candidates=[cand("2020b....1B")])
     with pytest.raises(SystemExit):
         run_main(monkeypatch, ["gp", "--drop", "2020b....1B", "--drop-source", "2006R",
                                "--reason", "x"])
+    assert not cfg.registro_path("gp").exists()      # ninguno de los dos carriles escribió
 
 
 def test_listado_sin_ads_json_muestra_el_juicio_registrado(toy_vault, monkeypatch, capsys):

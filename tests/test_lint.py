@@ -279,6 +279,25 @@ def test_disputa_en_un_concepto(toy_vault, capsys):
     assert rc == 0 and "(posiciones explícitas, #71) (0)" in out
 
 
+def test_disputa_mal_formada_en_un_concepto_tambien_bloquea(toy_vault, capsys):
+    """Hermano del de arriba, y el que hace que ese valga: el caso feliz de un concepto da 0 hits
+    tanto si la disputa se validó como si el chequeo ni la miró. Acá el concepto trae las dos fallas
+    —una posición sola (afirmación, no desacuerdo) y una `ref` sin nota de paper— así que un lint que
+    saltee los conceptos vuelve limpio y miente."""
+    mk_note(toy_vault.PAPERS, "2018autA...1..1A", {"tags": ["paper"]}, "")
+    mk_note(toy_vault.CONCEPTS / "methods", "gp",
+            {"tags": ["methods"], "disputes": [
+                {"field": "signo", "posiciones": [{"ref": "2018autA...1..1A", "value": "positiva"}]},
+                {"field": "escala", "posiciones": [{"ref": "2018autA...1..1A", "value": 1},
+                                                   {"ref": "2099fantasma..1..1F", "value": 2}]}]},
+            "Síntesis con [[2018autA...1..1A]].\n")
+    link_from_index(toy_vault, "gp")
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert "disputa `signo` con 1 posición(es)" in out
+    assert "disputa `escala`: ref `2099fantasma..1..1F` sin nota de paper" in out
+
+
 # ── #73: el ROL del paper ────────────────────────────────────────────────────
 
 def test_role_fuera_del_vocabulario_es_bloqueante(toy_vault, capsys):
@@ -375,13 +394,19 @@ def test_citado_en_un_concepto_tambien_cuenta(toy_vault, capsys):
 
 def test_citado_solo_en_una_query_no_alcanza(toy_vault, capsys):
     """Una query es una respuesta puntual, no la síntesis durable de un sujeto: que el paper aparezca
-    ahí no significa que haya llegado a la bóveda."""
-    paper_extraido(toy_vault)
+    ahí no significa que haya llegado a la bóveda.
+
+    El assert va contra el **conteo de la categoría**, no contra el título: los encabezados se
+    imprimen con (0) hits igual, y el bibcode aparece además en otras categorías del mismo paper
+    (`role` sin llenar), así que "el título está y el bibcode está" pasaba también cuando la
+    distinción entre nota de entidad y query no se aplicaba."""
+    paper_extraido(toy_vault, role=["arbitro"])
     mk_note(toy_vault.QUERIES, "una-pregunta", {"tags": ["query"]},
             "Respuesta con [[2020ext....1E]].\n")
     link_from_index(toy_vault, "una-pregunta")
     rc, out = run_lint(capsys)
-    assert "Extraído pero no sintetizado" in out and "2020ext....1E" in out
+    assert "Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog) (1)" in out
+    assert "2020ext....1E → extraído" in out
 
 
 def test_paper_sin_extraer_no_entra_en_esta_categoria(toy_vault, capsys):

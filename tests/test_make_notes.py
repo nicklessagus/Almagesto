@@ -284,6 +284,20 @@ def test_star_note_desde_ground_truth(toy_vault, capsys):
     assert fm["generator"].startswith("Almagesto v")
 
 
+def test_star_note_siembra_los_campos_que_llena_el_llm(toy_vault):
+    """Los seeds vacíos NO son decoración: son el contrato de schema que la extracción LLM viene a
+    llenar. Si `disputes` desaparece del stub la ficha nace sin dónde colgar un desacuerdo (#71) y
+    nada falla — el modo de falla de #69: no rompe, sale mal. `disputes` va **justo después de
+    `planets`**, donde vive la información que discute."""
+    (toy_vault.GROUND_TRUTH / "test_star.json").write_text(json.dumps(GT), encoding="utf-8")
+    mn.write_star_note("test_star", force=False)
+    fm = read_fm(toy_vault.STARS / "test_star.md")
+    assert fm["disputes"] == [] and fm["activity_indicators_expected"] == []
+    assert fm["methods_applied"] == {"literature": [], "ours": []}
+    claves = list(fm)
+    assert claves.index("disputes") == claves.index("planets") + 1
+
+
 def test_star_note_sin_ground_truth(toy_vault):
     mn.write_star_note("test_star", force=False)
     assert read_fm(toy_vault.STARS / "test_star.md")["planets"] == []
@@ -362,6 +376,9 @@ def test_paper_notes_estrella(toy_vault):
     fm_a = read_fm(toy_vault.PAPERS / "2020conA...1..1A.md")
     assert fm_a["stars"] == ["Estrella Test"]
     assert fm_a["relevance"] == "high" and fm_a["thesis_links"] == []
+    # `role` (#73) lo llena la extracción, pero el campo tiene que EXISTIR en el stub: sin él, el
+    # bullet del cuerpo pide un rol que no tiene dónde ir y el contraste cross-paper queda mudo.
+    assert fm_a["role"] == [] and fm_a["bearing"] is None
     assert fm_a["pdf"] == "../../raw/pdfs/test_star/2020conA...1..1A.pdf"
     assert fm_a["first_author"] == "Ana Pérez" and fm_a["n_authors"] == 2
     assert read_fm(toy_vault.PAPERS / "1990preB....1..1B.md")["pdf"] is None
@@ -533,6 +550,8 @@ def test_migrate_disputes_materializa_el_polo_implicito(toy_vault, capsys):
         {"ref": "2020disD...1..1D", "value": 1.4},
         {"source": "ground_truth", "value": 0.9}]}]
     assert "disputes" not in fm["planets"][0]        # no queda duplicada en el schema viejo
+    claves = list(fm)                               # va donde vivía la información que discute
+    assert claves.index("disputes") == claves.index("planets") + 1
 
 
 def test_migrate_disputes_existence_usa_el_status_de_nea(toy_vault):

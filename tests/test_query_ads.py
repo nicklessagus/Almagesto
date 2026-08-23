@@ -488,6 +488,20 @@ def test_query_ads_aplica_la_lente_astro_por_default(toy_classifier, ads_token, 
     assert calls[0]["params"]["fq"] == "database:astronomy"
 
 
+def test_el_sort_pedido_viaja_en_la_request(toy_classifier, ads_token, no_sleep, monkeypatch):
+    """#79 punto 2 es **server-side**: con `numFound > rows` ADS devuelve el top por `sort` y CORTA
+    el resto, así que la segunda pasada rescata algo sólo si su `date desc` llega a los params. El
+    cableado `sort` → request no lo miraba nadie (los tests de `recent_pass` mockean `query_ads`, o
+    sea el lado de acá del parámetro): hardcodear el orden dejaba la pasada re-pidiendo la MISMA
+    página —el rescate entero mudo— con la suite entera en verde."""
+    calls = []
+    monkeypatch.setattr(qa, "requests", SimpleNamespace(
+        get=fake_get_seq([FakeResp(200, payload([])), FakeResp(200, payload([]))], calls=calls)))
+    qa.query_ads("q", rows=10)                                   # default: el histórico
+    qa.query_ads("q", rows=10, sort=qa.RECENT_SORT)              # el de la segunda pasada
+    assert [c["params"]["sort"] for c in calls] == [qa.CITES_SORT, qa.RECENT_SORT]
+
+
 def test_fetch_bibcodes_no_aplica_la_lente_astro(toy_classifier, ads_token, no_sleep, monkeypatch):
     """#68: `extra_core` es override del clasificador, pero el `fq` era un SEGUNDO filtro que el
     override no esquivaba — un bibcode real fuera de database:astronomy (eprint de math.ST /

@@ -28,12 +28,71 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 | 1ª (1.20.1) | leer la doc contra el código | doc que contradecía al código (el orden síntesis↔contraste en `CLAUDE.md`, listas de bloqueantes viejas) |
 | 2ª (1.20.2) | **medir**: worktree por commit, greps de referencias cruzadas | números escritos de memoria (un delta de tests inventado), punteros podridos (`archivo.py:NN`) |
 | 3ª (1.20.3) | **diff de código completo + cobertura AST + mutación** | defectos de código (un detector con agujero, una heurística ciega a la notación del propio schema, una rama inalcanzable) |
+| 4ª (1.20.4) | **mutación sobre las FEATURES + corrida real de la cadena + mirar los assets** | tests que pasaban por el motivo equivocado, contratos de schema sin test, features no propagadas a los skills, una captura que ya no es el schema |
 
 **Regla:** releer más despacio no encuentra nada nuevo. Si una pasada tiene que agregar valor sobre
 la anterior, tiene que **cambiar de instrumento**, y conviene planificarla así desde el principio:
-(1) doc↔código, (2) medir lo declarado, (3) leer el diff entero y medir cobertura. Corolario del
-tercero: un fix sin **mutación** (revertirlo y ver que su test falla) no está verificado, está
-supuesto.
+(1) doc↔código, (2) medir lo declarado, (3) leer el diff entero y medir cobertura, (4) atacar los
+tests y correr la cosa de verdad. Corolarios: un fix sin **mutación** (revertirlo y ver que su test
+falla) no está verificado, está supuesto — y la **cobertura no es assertion**: la 3ª midió 100% de
+sentencias nuevas ejecutadas y la 4ª encontró siete mutantes vivos justo ahí. Un test verde no dice
+por qué está verde: sólo la mutación lo dice.
+
+## ✅ Framework 1.20.4 (2026-08-22) — cuarta pasada: los tests que pasaban por el motivo equivocado
+
+> Pedida por el usuario ("auditá todo lo que se hizo hoy, en profundidad"). Instrumentos **nuevos**
+> —la 3ª ya había leído el diff entero—: **mutación sobre las features** (47 mutantes, no sólo los
+> cuatro fixes), **correr la cadena de verdad** en una bóveda sintética, y **mirar los assets**.
+> 493 tests verdes (+3), lint 0. 1.20.3 → **1.20.4** (patch: tests, doc de skills y textos).
+
+- **El hallazgo de fondo: cobertura ≠ assertion.** La 3ª pasada midió *"226 líneas ejecutables
+  nuevas, 0 sin ejercitar"* y era cierto — pero **siete mutantes sobrevivieron** en ese mismo
+  código. Ejecutar una línea no es afirmar nada sobre ella.
+- **Tres tests verde-falso** (pasaban sin la cosa que decían testear):
+  - `test_drop_y_drop_source_no_se_mezclan` — el `SystemExit` que esperaba venía de `load_ads`
+    ("corré primero la cadena"), no de la guarda del argparse. Sin `ads.json` en la bóveda de
+    juguete, la guarda podía borrarse entera. Ahora siembra el `ads.json` y exige además que el
+    registro quede **intacto**.
+  - `test_citado_solo_en_una_query_no_alcanza` (#75) — afirmaba `"Extraído pero no sintetizado" in
+    out`, y ese **encabezado se imprime con (0) hits igual**; el bibcode que también buscaba salía
+    de otra categoría del mismo paper (`role` sin llenar). Ahora va contra el **conteo** `(1)`.
+  - `test_disputa_en_un_concepto` (#71) — sólo tenía el caso feliz, que da 0 hits tanto si el lint
+    valida los conceptos como si **ni los mira**. Se le sumó el hermano con las dos fallas (una
+    posición sola, `ref` sin nota) que un lint restringido a `stars/` dejaría pasar.
+- **Cuatro contratos sin ningún test**, todos del tipo "no rompe, sale mal" (#69):
+  - **el `sort` que viaja en la request** — el más caro: los tests de `recent_pass` mockean
+    `query_ads`, o sea el lado de acá del parámetro. Hardcodear el orden dejaba la segunda pasada de
+    #79 re-pidiendo la MISMA página —el rescate entero mudo— con la suite en verde.
+  - los **seeds** `disputes: []` (ficha) y `role: []` (nota de paper): son el contrato de schema que
+    la extracción viene a llenar; se podían borrar sin que fallara nada.
+  - la **ubicación** de `disputes` justo después de `planets` en el migrador de #71.
+- **Rollout incompleto de #71/#74 en los skills que escriben conceptos.** `ingest-topic` no
+  nombraba `disputes` **ni una vez** aunque `write_concept_note` siembra el campo desde 1.19.0, y ni
+  él ni `maintain` ni `append-knowledge` nombraban el **`## Régimen de validez`** que el template
+  genera desde 1.18.0. Es la sección cuyo modo de falla (*generalizar de más*) `verify-citations`
+  devuelve `soportada`: si el skill no la nombra, la condición se pierde sin dejar rastro. Agregada
+  a los tres, con la distinción que la hace usable — **desacuerdo por régimen → fila; desacuerdo
+  real bajo las mismas condiciones → `disputes`**.
+- **El checklist de `append-knowledge` seguía en el modelo pre-#71** ("disputes[] si discrepa de
+  NEA"): el polo de verdad hardcodeado que #71 vino a sacar, en el artefacto que el agente **copia
+  al chat**, o sea el que efectivamente conduce. Mismo bug que la 2ª pasada encontró en el checklist
+  de `maintain`: la prosa se actualiza y el checklist queda.
+- **La captura `obsidian-ficha.png` ya no es el schema** — y el backlog de capturas afirmaba lo
+  contrario ("sigue siendo correcto"), escrito el 21 y cierto hasta 1.13.0. No tiene `disputes`, sus
+  `planets[]` traen `msini_earth`. Encima el README **enumeraba `disputes` como si se viera en la
+  captura** (texto agregado hoy mismo). Corregidos los dos.
+- **Tags de git faltantes:** `ALMAGESTO_VERSION` iba por 1.20.3 y el último tag era `v1.13.0` — siete
+  bumps sin tag. No es cosmético: el badge del README lee `github/v/tag`, así que **publicaba
+  1.13.0**. Tageados 1.14.0–1.20.4.
+- **Menor:** `maintain` mandaba grepear `disputes[].ref`, una ruta que ya no existe
+  (`disputes[].posiciones[].ref`).
+- **Verificado corriendo, no leyendo:** en una bóveda sintética con el schema viejo, la cadena
+  completa —lint detecta y bloquea → `--migrate-disputes` migra materializando el polo
+  `ground_truth` → lint 0 → segunda corrida idempotente—; el espejo #70 y el backlog #75 disparan y
+  se apagan con el caso sembrado; los **dos one-liners de roll-up** de `CLAUDE.md` corren y devuelven
+  lo que prometen; y los ~35 comandos documentados en docs/skills usan sólo flags que existen.
+- Skills: `append-knowledge` 1.4.0 → **1.5.0**, `ingest-topic` 1.14.0 → **1.15.0**, `maintain`
+  1.16.1 → **1.17.0**.
 
 ## ✅ Framework 1.20.3 (2026-08-22) — tercera pasada: el código, línea por línea
 
@@ -106,6 +165,8 @@ supuesto.
 - **El embudo había quedado mal anidado** al insertar la segunda pasada por fecha (#79) y los dos
   escalones de síntesis (#72/#75): la 2ª pasada colgaba como hermana de `classify()` cuando en
   realidad la alimenta. Reescrito el árbol completo.
+- Skills: `maintain` 1.16.0 → **1.16.1** (el checklist con 2b y 3b), `verify-citations` 1.7.0 →
+  **1.7.1** (el reporte al chat menciona las condiciones perdidas).
 - **Verificado y limpio:** las 26 referencias cruzadas a pasos numerados entre skills siguen
   resolviendo (renumeré `ingest-star` 3→3/3b/3c y agregué 3c a `ingest-topic`, y nadie apuntaba a
   esos números); no quedó **ningún símbolo muerto** tras sacar las capas de compatibilidad
@@ -174,6 +235,8 @@ bloqueantes copiadas a mano). Medir eso antes de mover nada.
   cuatro ocurrencias de #79 ya están hechas; el README no mencionaba el paso de contraste (que es un
   diferencial: *sin* columna de valor adoptado); el checklist de `ingest-topic` no nombraba el paso
   nuevo; el orden de claves del schema de `concepts/` en `CLAUDE.md` no era el que genera el código.
+- Skills: `query-corpus` 1.3.0 → **1.4.0**, `test-hypothesis` 1.3.0 → **1.4.0** (los dos
+  reportan valores al chat, y los dos cambios son sobre qué leer y qué copiar).
 - **Verificado y NO tocado** (para que no se re-abra): las versiones de los 9 skills coinciden con lo
   que declara cada entrada de STATUS; `tests/README.md` cubre los 15 archivos de test; las secciones
   y claves de frontmatter que genera `make_notes` coinciden con los schemas documentados; los
@@ -1223,10 +1286,15 @@ Revisadas una por una; qué le falta a cada una, en orden de urgencia:
    ⚠ *"Capa LLM — revisar antes de citar"* que `make_notes` estampa hoy. La sección nueva
    *La capa LLM* afirma que "la cabecera de cada ficha avisa que la prosa es capa LLM": quien mire
    la captura ve lo contrario. Re-sacarla de una nota generada con el template actual.
-2. **`docs/assets/obsidian-ficha.png`** — el panel de propiedades **sigue siendo correcto** (el
-   schema de `stars/` no cambió en las tandas 1.7.4–1.10.3). Lo que falta es lo nuevo: el cuerpo
-   queda fuera de cuadro, así que no se ve la línea `> _Búsqueda …_` que estampa `make_notes` desde
-   1.9.0. Al re-sacarla, encuadrar para que entre esa línea: es la cara visible del registro.
+2. **`docs/assets/obsidian-ficha.png` — el panel de propiedades ya NO es el schema vigente**
+   (revisado 2026-08-22, contra la captura misma; la nota de arriba decía que "seguía siendo
+   correcto" y era cierto hasta 1.13.0). Le falta `disputes` a nivel nota (#71 — el README enumeraba
+   ese campo como si se viera) y sus `planets[]` traen `msini_earth`, no `mass_earth`; muestra
+   además campos que no son del schema (`feh`, `mass_msun`, `logrhk`), legítimos como extras de
+   instancia pero confusos en la captura de referencia del template. Y sigue faltando lo que ya
+   faltaba: el cuerpo queda fuera de cuadro, así que no se ve la línea `> _Búsqueda …_` que estampa
+   `make_notes` desde 1.9.0. Al re-sacarla, encuadrar para que entre esa línea y elegir una ficha
+   **con una disputa tagueada**: es lo que el texto de al lado promete.
 3. **`docs/assets/obsidian-graph.png`** — nada factualmente falso, pero es una foto de un corpus de
    3 estrellas; la instancia creció desde julio.
 4. **`docs/assets/demo-animated.svg`** (regenerable con `make_demo.py`) — el guion no muestra la

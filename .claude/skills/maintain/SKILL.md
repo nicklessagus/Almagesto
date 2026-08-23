@@ -1,7 +1,7 @@
 ---
 name: maintain
 description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), resolver el backlog del lint (P_rot sin documentar, drift PDF↔disco, cobertura, claims stale), y la pasada periódica de retracciones sobre toda la bóveda ("chequeá retracciones").
-version: 1.16.1
+version: 1.17.0
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
@@ -31,7 +31,7 @@ Progreso del refresh de <entidad>:
 - [ ] 1b triage de los candidatos nuevos del chaining
 - [ ] 2  stubs nuevos identificados (git status) y extraídos
 - [ ] 2b inventario por eje actualizado con lo nuevo (fila nueva / eje nuevo)
-- [ ] 3  síntesis actualizada con SÓLO lo nuevo (+ disputes / matriz)
+- [ ] 3  síntesis actualizada con SÓLO lo nuevo (+ disputes / régimen si es concepto / matriz)
 - [ ] 3b auto-revisión de autosuficiencia sobre la nota COMPLETA
 - [ ] 4  verify-citations sobre la prosa cambiada (re-fechar el bloque) → lint 0 → log → commit
 ```
@@ -65,8 +65,15 @@ Progreso del refresh de <entidad>:
 3. **Re-sintetizar incorporando sólo lo nuevo:** releer la ficha/concepto y **actualizar** la síntesis y
    los huecos con lo que aportan los papers nuevos, apoyándose en el inventario de 2b — no reescribir
    de cero lo ya destilado. Si un paper
-   nuevo discrepa, taguear `disputes[]` (o correr `find-contradictions`). Actualizar la matriz
-   método×estrella si hay métodos nuevos.
+   nuevo discrepa, taguear `disputes` a nivel nota con posiciones explícitas (#71) —o correr
+   `find-contradictions`—. Actualizar la matriz método×estrella si hay métodos nuevos.
+   **Si la entidad es un concepto**, el paper nuevo entra además por la puerta del **`## Régimen de
+   validez`** (#74): si afirma bajo condiciones (SNR, muestreo, tamaño de muestra, definición del
+   observable), la fila va ahí — y si contradice a uno viejo **sólo porque el régimen es otro**, eso
+   **no** es una `disputes`, es una fila nueva de esa tabla. Es el modo de falla propio de un
+   concepto (**generalizar de más**) y el que `verify-citations` devuelve `soportada`: si nadie lo
+   escribe en el refresh, la condición se pierde sin dejar rastro. Un régimen que ningún paper cubre
+   es un hueco → `## Huecos`.
 3b. **Auto-revisión de autosuficiencia** (igual que el paso 4 de `ingest-star` / 5 de
    `ingest-topic`, que un refresh también tiene que cumplir): releer la nota **completa** como un
    agente externo que no vio los papers. ¿Alcanza sola? ¿Los papers nuevos abrieron **huecos** que
@@ -78,7 +85,7 @@ Progreso del refresh de <entidad>:
 ## B. Borrar un paper / estrella / tema
 1. **Antes de borrar, mapear lo que cuelga** (el lint los detectaría, pero resolvelos vos limpio):
    ```bash
-   grep -rn "<bibcode-o-slug>" vault/wiki/                    # wikilinks, thesis_links, disputes[].ref, matriz
+   grep -rn "<bibcode-o-slug>" vault/wiki/                    # wikilinks, thesis_links, disputes[].posiciones[].ref, matriz
    ```
 2. Borrar el/los archivo(s): la nota (`papers/<bib>.md` o `stars/<slug>.md`), su PDF
    (`vault/raw/pdfs/<slug>/…`) y fulltext (`vault/raw/fulltext/<slug>/…`). Si es una estrella/tema entero,

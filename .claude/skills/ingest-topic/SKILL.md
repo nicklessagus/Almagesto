@@ -1,7 +1,7 @@
 ---
 name: ingest-topic
 description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema off-ADS — típicamente un método de otra disciplina (estadística, ML) al servicio del foco astro — desde PDFs locales + web (ver Modo off-ADS).
-version: 1.14.0
+version: 1.15.0
 ---
 
 # Ingest: agregar un TEMA a la wiki
@@ -36,7 +36,7 @@ Progreso del ingest del tema <tema>:
 - [ ] 3  extracción LLM de los papers clave del tema
 - [ ] 3b retro-tag por grep de aliases sobre el corpus pre-existente
 - [ ] 3c contraste cross-paper (inventario por eje)
-- [ ] 4  síntesis del concept durable
+- [ ] 4  síntesis del concept durable (+ régimen de validez / disputes)
 - [ ] 5  auto-revisión de autosuficiencia
 - [ ] 6  bookkeeping (index, log, STATUS)
 - [ ] 6b verify-citations sobre el concept + notas nuevas
@@ -143,6 +143,22 @@ Progreso del ingest del tema <tema>:
    página viva: mecanismos, signos, desfasajes, regímenes, huecos. El roll-up Dataview (papers con
    `thesis_links: <concept>`) acumula solo. **Citar los papers clave por `[[bibcode]]`** en la prosa
    (además de trazabilidad, da links entrantes → no quedan huérfanos).
+   Dos secciones del template que **son de un concepto** y hay que llenar acá, no dejarlas vacías:
+   - **`## Régimen de validez` (#74).** El modo de falla dominante de un concepto **no** es "dos
+     números no coinciden" sino **generalizar de más**: el paper afirma X bajo condiciones C (SNR,
+     muestreo, tamaño de muestra, definición del observable) y el concepto termina afirmando X
+     pelado. `verify-citations` **no** lo agarra —la afirmación pelada sí está en el paper, así que
+     vuelve `soportada`—, por eso la condición se escribe acá: una fila por afirmación
+     condicionada (`Afirmación | Vale bajo | Fuente | Rol`). Es el destino de los desacuerdos que
+     resultan **`aparente`** (distinto régimen, distinta definición, distinta época): en una
+     estrella eso se descarta como no-disputa, en un concepto **es el hallazgo**. De la tabla sale
+     un hueco accionable propio: **"régimen no cubierto"** → a `## Huecos`.
+   - **`disputes` (#71), sólo para el desacuerdo REAL bajo las mismas condiciones.** Acá la disputa
+     es **simétrica por definición** (no hay ground-truth que arbitre, así que ninguna posición es
+     "la verdad"): `field` nombra el eje y cada posición dice quién la sostiene (`{ref, value}`).
+     Si el desacuerdo se explica por el régimen, **no** es una disputa: es una fila de la tabla de
+     arriba. Una posición sola no es desacuerdo — es una afirmación, y va a la prosa citada (el
+     lint bloquea las disputas con menos de dos posiciones).
 
 5. **Auto-revisión de autosuficiencia (semántica).** Releer el concept como un agente externo que
    **sólo tiene ese archivo**: ¿se entiende el tema sin abrir ningún paper? Si para responder algo hay

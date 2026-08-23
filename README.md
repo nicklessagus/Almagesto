@@ -168,10 +168,11 @@ La wiki resultante es una bóveda [Obsidian](https://obsidian.md) común: se abr
 de actividad).
 
 **La ficha de estrella.** Arriba, el frontmatter: el **contrato máquina-legible** que consume un
-agente o un script (`teff_K`, `P_rot_days`, `planets[]` con P/K/e/m·sini, las `disputes` con las
-posiciones de cada fuente,
-`methods_applied`). Abajo, fuera de cuadro, la prosa destilada de los papers y las tablas Dataview
-que se llenan solas al ingestar.
+agente o un script (`teff_K`, `P_rot_days`, `planets[]` con P/K/e/m·sini, `methods_applied`; cuando
+dos fuentes discrepan sobre un eje se suma `disputes`, con una posición por fuente). Abajo, fuera de
+cuadro, la prosa destilada de los papers y las tablas Dataview que se llenan solas al ingestar.
+La captura es de una instancia de julio: el schema creció desde entonces (ver el backlog de capturas
+en `vault/STATUS.md`).
 
 <p align="center">
   <img src="docs/assets/obsidian-ficha.png" width="740"

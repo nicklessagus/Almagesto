@@ -1,7 +1,7 @@
 ---
 name: append-knowledge
 description: Usar cuando el usuario quiere plegar UNA fuente puntual (paper por bibcode, PDF local, URL) a una entidad YA existente de la wiki — ficha de estrella o concepto — sin re-correr el ingest completo ("agregale este paper a la ficha de tau Ceti", "sumá este PDF al concept de procesos gaussianos", "este bibcode va a GJ 581", "encontré un paper nuevo para el tema X, agregalo"). Plomería mínima + extracción enfocada + síntesis a la nota viva + cierre estándar. NO crea entidades (eso es ingest-star/ingest-topic) ni barre por query lo nuevo (eso es maintain/refrescar).
-version: 1.4.0
+version: 1.5.0
 ---
 
 # Append — plegar una fuente puntual a una ficha o concepto existente
@@ -27,7 +27,7 @@ Progreso del append de <fuente> → <destino>:
 - [ ] 1 destino confirmado + tipo de fuente clasificado
 - [ ] 2 plomería mínima (extra_core / sources: / piezas sueltas) — fulltext extraído
 - [ ] 3 extracción LLM enfocada en el eje del destino
-- [ ] 4 síntesis a la nota viva (regla de poda; disputes[] si discrepa de NEA)
+- [ ] 4 síntesis a la nota viva (regla de poda; disputes con posiciones / régimen si es concepto)
 - [ ] 5 cierre: autosuficiencia → verify-citations (re-fechar el bloque) → lint 0 → log → commit
 ```
 
@@ -84,9 +84,13 @@ Progreso del append de <fuente> → <destino>:
      la prosa únicamente si cambia cómo se lee una señal RV). Si discrepa del ground-truth NEA →
      `disputes` a nivel nota con posiciones explícitas (#71; no sobreescribir) + `bearing: challenges`. Actualizar `## Huecos` y la
      matriz método×estrella si el paper aplica un método nuevo a la estrella.
-   - **Concept:** integrar al eje del tema (mecanismo, rango, régimen, paso del método) citando
+   - **Concept:** integrar al eje del tema (mecanismo, rango, paso del método) citando
      `[[clave]]`; actualizar `## Huecos`. Si es un radio de un hub, tocar el radio que corresponda
-     (y el hub sólo si cambia la síntesis global).
+     (y el hub sólo si cambia la síntesis global). **Si la fuente afirma bajo condiciones**, la fila
+     va al **`## Régimen de validez`** (#74) —no a la prosa pelada—: agregar una fuente es
+     exactamente cuando se generaliza de más, y ése es el modo de falla que `verify-citations`
+     devuelve `soportada` (la afirmación sin condiciones sí está en el paper). Si discrepa de otra
+     fuente **sólo por el régimen**, es una fila de esa tabla y **no** una `disputes`.
 
 5. **Cierre estándar** (idéntico a ingest): **auto-revisión de autosuficiencia** de la nota destino
    (¿se entiende sin abrir el paper nuevo?) → **`verify-citations`** sobre la prosa tocada y la
