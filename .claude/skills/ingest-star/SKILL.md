@@ -63,7 +63,7 @@ Progreso del ingest de <estrella>:
    `ads.json`; se desactiva con `--no-chain`).
    **Guardia de expansión (checkpoint humano).** Entre `query_ads` y el primer paso que gasta red
    y disco, el orquestador compara el core del `ads.json` fresco contra las notas ya ingestadas del
-   sujeto: si se multiplicó (default ×1.5 y >50 nuevos) **frena** con el conteo, cuántos vinieron
+   sujeto: si se multiplicó (default ×1.5 y 50 o más nuevos) **frena** con el conteo, cuántos vinieron
    por el grafo de citas y el puntero a `relevance.require`/`min_topics`. Antes de refrescar un
    sujeto viejo, mirá ese número: si el pool explotó, revisá la **regla de combinación** en
    `objective.yaml` (skill `setup`) antes de bajar nada — podar las regex no alcanza si la

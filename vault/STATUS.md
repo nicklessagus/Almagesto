@@ -92,6 +92,85 @@ en `lint.py:805` el fix era **borrar** el `or []`, no migrarlo.
   corrida en cinco scripts; y la higiene del token verificada extremo a extremo con una cadena real
   de redirects ADS→doi.org→publisher usando el `should_strip_auth` de `requests`.
 
+## ✅ Framework 1.23.1 (2026-08-23) — octava pasada: la documentación como oráculo
+
+> **El instrumento:** el oráculo deja de ser el código y pasa a ser la **documentación**. La pregunta
+> no es "¿esto tiene bugs?" sino **"¿el sistema hace lo que la doc dice que hace?"**. Cada *siempre /
+> nunca / idempotente / atómico / bloquea / avisa sin frenar* se extrajo como afirmación falsable y
+> se **midió ejecutando**. La 1ª pasada leyó doc contra código; ésta la ejecuta, sobre el sistema
+> entero, y cubre superficies que ninguna había tocado: los **9 skills**, `docs/`, `README.md` y el
+> **libro mayor de este mismo archivo**.
+
+**Lo medido:** 139 líneas-garantía → 46 afirmaciones falsables → **41 ejecutadas** (34 confirmadas,
+5 refutadas, 2 parciales); 30 garantías dinámicas a escala; las 30 categorías del lint sembradas
+**una por una**; los 9 skills con sus 45 invocaciones; el ledger de versiones por worktree.
+
+### Lo que salió bien, y es la mayor parte
+Las garantías caras se sostienen **ejecutadas, no leídas**: el espejo #70 bloquea campo por campo; el
+ciclo de upgrade completo (vintage 1.11.0 → migradores → el **conteo** del lint a 0 → 2ª pasada byte
+a byte idéntica); `save_registro` no pisa un registro roto; los **45 comandos** que nombran los
+skills existen y parsean, y **todas** las referencias cruzadas entre pasos resuelven —cero punteros
+podridos, a diferencia de pasadas anteriores—; las **30 categorías** mapean 1:1 contra `CLAUDE.md`
+con la severidad correcta; y los **siete números** que la doc usa como justificación siguen ciertos
+(*22 de 25 cabeceras* da hoy exactamente 22/25; *73% multi-columna* pasó de 472/644 a 489/672).
+
+### Lo refutado
+- **`lint.py --help` corría el lint entero** y pisaba `outputs/lint-<fecha>.md`: era el único CLI
+  **sin argparse**, así que cualquier flag se ignoraba en silencio y salía 0. Un CLI que acepta lo
+  que no entiende y actúa igual es la misma familia que todo lo demás de esta auditoría. Ahora
+  `--help` documenta y sale 0, un flag inexistente sale **2 sin correr nada**.
+- **El presupuesto del tier 0 estaba vencido al doble** (5,0 s contra ≤2,5 s documentado). Causa: un
+  solo test sin el fixture `no_sleep` dormía **3 s reales** por cortesía con arXiv, violando el
+  principio 1 del propio `tests/README.md`. Vuelto a **2,03 s**. El presupuesto tenía razón; el que
+  estaba mal era el test.
+- **Off-by-one en la frontera de la guardia de expansión.** El código frena con **exactamente 50**
+  papers nuevos (dirimido sembrando 49/50/51, no discutiendo la redacción). `docs/operacion.md`
+  decía bien "50 o más"; el header de `ingest_star.py` —que **se autodeclara "la definición canónica
+  de la cadena"**— decía `>50`, y los tres skills copiaron esa versión. **La fuente que se proclama
+  canónica era la equivocada y ganó por repetición.** Corregidos los cinco.
+- **`CLAUDE.md` decía "siete" campos incompletos y el lint tiene ocho** — faltaba el hermano
+  simétrico (ground-truth sin ficha) que agregó la propia tanda anterior.
+- **`check_retractions` sobrecarga el exit 1**: vale "detecté retractados" y "no había nada que
+  chequear", y `ingest_star.py` traduce cualquier 1 al primer mensaje. **Pendiente.**
+
+### El libro mayor: el mismo error por TERCERA vez
+La entrada 1.22.1 declaraba **+21 tests**; el delta real es **+30**, medido node-id por node-id con
+`comm`. Ya había pasado en 1.9.0 (+6 vs +9) y en 1.12.0 (+13 vs +15). Y decía *"Siete"* defectos
+enumerando seis. Tres veces deja de ser distracción: **los deltas se miden, no se recuerdan.**
+
+### Nueve flags operativos sin documentar
+El más delicado no es el que se esperaba: **`--no-triage`** apaga en silencio la compuerta de triage
+del chaining, que los propios skills describen como el paso de más juicio del ingest. Le siguen
+**`--sync-mirror`** (implementado el 23-08, cierra el drift del espejo, y ni la doc lo nombra ni el
+lint tiene categoría que reclame cuándo correrlo), `--pending` y `--limit`.
+
+### Nace `docs/contrato.md`
+Los invariantes vivían **dentro de los docstrings**, que son a la vez la especificación y el
+comentario de la implementación, escritos por la misma mano: nada los contrastaba. Por eso la 7ª
+encontró docstrings afirmando garantías falsas. Ahora hay un contrato **separado del código**,
+construido cruzando dos documentos independientes: lo que el sistema **hace** (medido) contra lo que
+**debería garantizar** — esto último derivado sólo del propósito por un agente **ciego**, que no vio
+`scripts/`, `tests/`, `STATUS.md` ni los informes. De ese cruce salen los **huecos**: garantías que
+deberían existir y que nadie sabía que faltaban.
+
+## 🔜 Cola de pendientes (al 2026-08-23)
+
+> Explícita para que no dependa de la memoria de una sesión.
+
+1. **Revisar `docs/contrato.md` con el usuario** — sobre todo las **decisiones de intención**, que
+   son suyas y no del agente (¿el lint es gate duro o consejo? ¿`inferencia` debe nombrar sus
+   fuentes o es una escotilla que vacía la regla #0? ¿la frontera dura puede quedar custodiada por un
+   chequeo no bloqueante?).
+2. **Deploy a la instancia real** (Almagesto-RV, 1.11.0 → 1.23.x). Ensayado completo sobre copia:
+   16 bloqueantes → 1, y ese 1 (el `P_rot` de literatura de hd40307) ya tiene resolución escrita.
+   **Se hace cuando cierren los issues**, no antes: cada cambio de schema le agrega una migración.
+3. **Documentar los 9 flags**, empezando por `--no-triage` y `--sync-mirror`.
+4. **`check_retractions` exit 1 sobrecargado** (refutado en la 8ª, sin arreglar).
+5. **`.tmp<pid>` huérfano** en `save_registro`/`write_ground_truth` si el fallo ocurre mientras se
+   escribe el temporal (S3 de F4: el archivo real nunca se corrompe, es basura de disco).
+6. **Ground-truth NEA+SIMBAD con autoridad por campo** (backlog anotado).
+7. **La bóveda en paralelo** para medir calidad — espera a que esté todo implementado.
+
 ## Criterio de auditoría — una pasada, un instrumento (2026-08-22)
 
 > Sale de las tres auditorías seguidas de las tandas 1-4. Cada una encontró una **clase distinta**
@@ -104,6 +183,7 @@ en `lint.py:805` el fix era **borrar** el `or []`, no migrarlo.
 | 3ª (1.20.3) | **diff de código completo + cobertura AST + mutación** | defectos de código (un detector con agujero, una heurística ciega a la notación del propio schema, una rama inalcanzable) |
 | 4ª (1.20.4) | **mutación sobre las FEATURES + corrida real de la cadena + mirar los assets** | tests que pasaban por el motivo equivocado, contratos de schema sin test, features no propagadas a los skills, una captura que ya no es el schema |
 | 5ª (1.21.0) | **invariantes cross-artefacto medidos + recorrer la cadena de punta a punta** | agujeros de lógica (el espejo comparaba `len(planets)`), un crash del lint, chequeos hermanos asimétricos, el hand-off de los orquestadores sin el paso nuevo |
+| 8ª (1.23.1) | **la documentación como oráculo ejecutable** (todo el sistema, no un diff) + libro mayor por worktree | un CLI sin argparse que corría el lint con `--help`, el presupuesto del tier 0 vencido al doble por un test sin `no_sleep`, un off-by-one donde la fuente "canónica" era la equivocada, y el mismo delta mal medido por tercera vez |
 | 7ª (1.23.0) | **el código que ninguna pasada había mirado** (8 scripts congelados desde v1.11.0) + barrido del defecto de clase | pérdida de datos en el writer de notas, un `---` que bloqueaba notas válidas, filtros que mentían en vez de fallar, el único script sin tests |
 | 6ª (1.22.0) | **diferencial HEAD↔working tree + fuzzing por propiedades + contratos de datos + las afirmaciones del diff ejecutadas + idempotencia/atomicidad + cobertura por mensaje y por flag** | dos pérdidas silenciosas de datos versionados, seis crashes de la compuerta de CI, tres falsos limpios, un test que rompía CI en un clone limpio, garantías afirmadas que no existían |
 
@@ -167,14 +247,18 @@ los casos a los archivos de test definitivos y borrar el temporal.
 
 ## ✅ Framework 1.22.1 (2026-08-23) — los S3 de la sexta pasada: siete defectos menores y la cobertura que faltaba
 
-> Segunda tanda de la auditoría del 23-08. **592 tests verdes** (+21 sobre 1.22.0), lint 0. Patch:
+> Segunda tanda de la auditoría del 23-08. **592 tests verdes** (**+30** sobre 1.22.0 — la
+> entrada decía +21; el delta real, medido node-id por node-id con `comm` en la 8ª pasada,
+> es 30 nuevos y 0 borrados. Tercera vez que un delta escrito de memoria sale mal en este
+> repo: pasó en 1.9.0 (+6 vs +9) y en 1.12.0 (+13 vs +15). **Medirlo, no recordarlo**), lint 0. Patch:
 > todos los hallazgos nuevos del lint son **backlog**, así que ninguna bóveda que hoy pasa empieza a
 > fallar.
 
 Los S3 eran de **dos naturalezas** que piden instrumentos distintos, y mezclarlos es lo que hace que
 una tanda de "arreglar lo menor" no arregle nada:
 
-**(a) Defectos reales → test rojo primero** (protocolo de arriba). Siete:
+**(a) Defectos reales → test rojo primero** (protocolo de arriba). Seis (la entrada decía
+"siete" y enumeraba seis — error de conteo, corregido en la 8ª pasada):
 - **`PROT_NEG` producía un falso NEGATIVO.** El negador se buscaba en la oración entera, así que
   *"El período de rotación es 34 d [[bib]] y no hay señal en el bisector"* apagaba el backlog: la
   ficha perdía el hueco marcado justo cuando el dato SÍ está. Ahora el negador sólo cuenta hasta
@@ -286,8 +370,10 @@ líneas** de los 5 scripts que tocó. De ahí el helper único `as_map`/`as_list
   de robustez del ground-truth **bloqueaban sin estar documentados**; la categoría renombrada
   ("frontmatter no parseable **o con forma inválida**") no se había propagado a los docstrings de
   `lint.py`. Corregidos.
-- **Sigue abierto (no es de esta tanda):** el remoto está en **v1.13.0** con 12 tags y 14 commits sin
-  pushear, así que el badge del README publica 1.13.0 — ya fue hallazgo de la 4ª pasada.
+- ~~**Sigue abierto:** el remoto está en **v1.13.0**…~~ **CERRADO el 2026-08-23**: se pushearon los
+  commits y los 14 tags; el remoto quedó en v1.23.0 y el badge publica la versión real. (La línea
+  quedó desactualizada por una semana en horas: la 8ª pasada la encontró midiendo
+  `git ls-remote --tags` en vez de leer el texto.)
 
 ## ✅ Framework 1.21.0 (2026-08-22) — quinta pasada: recorrer la cadena entera, issue por issue
 

@@ -61,6 +61,7 @@ CLAUDE.md exige "en 0");
 from __future__ import annotations
 
 import datetime as dt
+import argparse
 import glob
 import json
 import re
@@ -442,8 +443,22 @@ def mirror_issues(slug: str, fm: dict, gt: dict) -> list:
 _print_seguro = cfg.print_seguro
 
 
-def main() -> int:
-    cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
+def main(argv=()) -> int:
+    # `argv` por defecto VACÍO, no `sys.argv`: los tests llaman `lint.main()` directo y con el
+    # default de argparse leerían los argumentos de **pytest**. El `__main__` de abajo pasa los
+    # reales. (Si esto se olvida, 125 tests caen de golpe — pasó al escribir este fix.)
+    # `lint.py` no toma argumentos, pero SÍ necesita el parser: sin él, `lint.py --help` —o
+    # cualquier flag tipeado de más— corría el lint entero **ignorando el argumento en silencio** y
+    # pisando `outputs/lint-<fecha>.md`. Un CLI que acepta lo que no entiende y actúa igual es la
+    # misma familia que el resto de esta auditoría: hace algo distinto de lo que le pediste y no
+    # avisa. Con el parser, `--help` documenta y sale 0, y un flag inexistente sale 2 sin correr nada.
+    cfg.stdout_tolerante()   # ANTES de parse_args: el texto del parser lleva acentos y `--help`
+                             # sale por SystemExit sin volver acá — si no, muere en consola ascii.
+    argparse.ArgumentParser(
+        description="Chequeo de salud de la bóveda. No toma argumentos: analiza `vault/` entera, "
+                    "imprime el resumen y escribe `outputs/lint-<fecha>.md`.",
+        epilog="Exit 1 si alguna categoría BLOQUEANTE tiene hits; los WARN y el backlog no bloquean."
+    ).parse_args(list(argv))
     files = note_files()
     # fulltext disponible (un .txt por bibcode, bajo cualquier slug/tema) → precondición de
     # verificabilidad: una cita en query/hipótesis sin su .txt no se puede chequear claim↔fuente.
@@ -1173,4 +1188,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

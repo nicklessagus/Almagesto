@@ -10,7 +10,7 @@ campo `source` (formaliza el modo off-ADS del skill ingest-topic en el tooling):
   query_ads --topic → [guardia de expansión] → fetch_arxiv → fetch_pdf → make_notes --topic →
   extract_fulltext → check_retractions. La **guardia de expansión** (#37) frena entre la query y
   el primer paso que gasta red y disco si el core se multiplicó respecto de lo ya ingestado
-  (default ×1.5 y >50 nuevos); `--yes` continúa a sabiendas.
+  (default ×1.5 y 50 o más nuevos); `--yes` continúa a sabiendas.
 - `web` | `local-pdfs` | `local-pdfs+web`: modo off-ADS. La bibliografía se declara en la
   lista `sources:` de la entrada (cada item: `key` = clave de cita sintética AAAA+Autor +
   `url` (fuente web) o `pdf` (ruta a un PDF provisto por el usuario) + metadata opcional

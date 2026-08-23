@@ -11,7 +11,7 @@ vault/config/stars.yaml:
 
 La **guardia de expansión** (#37) es un checkpoint humano entre la query y el primer paso que
 gasta red y disco: si el core del `ads.json` fresco se multiplicó respecto de las notas ya
-ingestadas del sujeto (default: ×1.5 y >50 nuevos), frena con el conteo, cuántos vinieron por
+ingestadas del sujeto (default: ×1.5 y 50 o más nuevos), frena con el conteo, cuántos vinieron por
 el grafo de citas y el puntero a `relevance.require`/`min_topics`. `--yes` continúa a sabiendas.
 
 **Este header ES la definición canónica de la cadena de estrellas** (el análogo para temas es

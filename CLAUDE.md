@@ -627,14 +627,16 @@ misma query ordenada por fecha** (#79) y la marca guarda en `truncated.recent` c
 que lo reciente —lo que el orden por citas esconde por construcción— ya está cubierto; ídem el
 **rescate por glifo incompleto** (`truncated_glyph`, marca hermana: el superset de la constelación
 del rescate #28 se cortó por citas **antes** del filtro client-side, que es donde vive la señal →
-pueden faltar papers con lookalike). Los **campos incompletos** son **backlog** y no bloquean; hoy son siete:
+pueden faltar papers con lookalike). Los **campos incompletos** son **backlog** y no bloquean; hoy son ocho:
 `P_rot` sin documentar en la prosa (el frontmatter nulo **no** es hallazgo desde #70),
 `activity_indicators_expected` vacío, planeta del frontmatter no discutido en la prosa, paper core
 sin `methods` (sin extraer), paper extraído sin `role`, `thesis_links` sin `bearing`, y **ficha sin
 su `raw/ground_truth/<slug>.json`** (el barrido del espejo #70 lo maneja el JSON, así que una ficha
 sin archivo no la mira **nadie**: se le pueden inventar `teff_K`/`P_rot_days`/planetas enteros con
 el lint en verde — es backlog y no bloqueante porque es "la garantía no corrió acá", no "hay una
-violación"). Revisar
+violación"), y su **hermano simétrico**: un `raw/ground_truth/<slug>.json` **sin** su
+`stars/<slug>.md`, que es un renombre a medias o una ficha borrada sin limpiar — el espejo no tiene
+con qué comparar y nadie avisa que ese ground-truth quedó colgado. Revisar
 además a mano: claims stale y conceptos referidos sin página. Si faltan datos, abrir queries para
 imputar (web/ADS).
 

@@ -221,7 +221,7 @@ def test_main_sin_ads_json(toy_vault, monkeypatch):
     assert run_main(monkeypatch, ["test_star"]) == 1
 
 
-def test_main_tiene_force_para_re_bajar_lo_congelado(toy_vault, monkeypatch):
+def test_main_tiene_force_para_re_bajar_lo_congelado(toy_vault, no_sleep, monkeypatch):
     """Sin --force, un PDF ya en disco (aunque esté truncado por un corte previo a este fix)
     nunca se reintenta — no hay escape manual. `--force` lo da (H-07)."""
     d = toy_vault.ROOT / "build" / "test_star"
