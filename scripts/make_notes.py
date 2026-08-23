@@ -7,6 +7,7 @@ Uso:
     python scripts/make_notes.py --restamp-pdf-links             # backfill del link PDF, sin slug
     python scripts/make_notes.py --restamp-headers               # backfill de la cabecera, sin slug
     python scripts/make_notes.py --migrate-disputes              # migración #71 de disputes, sin slug
+    python scripts/make_notes.py --sync-mirror                   # backfill espejo NEA (#70), sin slug
 
 - vault/wiki/stars/<slug>.md            : ficha índice de la estrella (frontmatter + Dataview).
 - vault/wiki/concepts/<area>/<c>.md     : stub del concept durable de un tema (--topic).
@@ -26,9 +27,11 @@ de escritura única); (d) en una ficha/concept que ya existía re-estampa la lí
 (#64). Aparte, `stamp_fulltext` (lo llama extract_fulltext al cerrar) estampa
 `fulltext`/`fulltext_source`/`pdf_source` sobre notas ya existentes. Backfill masivo del link PDF:
 `python scripts/make_notes.py --restamp-pdf-links` (sin slug).
-(e) `--migrate-disputes` (#71) es la ÚNICA que no es quirúrgica: cambia la estructura del
-frontmatter, así que lo re-serializa — por eso toca sólo las fichas con disputas del schema viejo y
-el cuerpo se conserva byte a byte. Ver migrate_disputes.
+(e) `--migrate-disputes` (#71) cambia la estructura del frontmatter, así que lo re-serializa — por
+eso toca sólo las fichas con disputas del schema viejo y el cuerpo se conserva byte a byte. Ver
+migrate_disputes. (f) `--sync-mirror` rellena en `stars/` los campos espejo de NEA (#70) que están
+en null y el ground-truth trae — también re-serializa sólo el frontmatter, add-only y en un solo
+sentido (nunca pisa un valor existente ni distinto del ground-truth). Ver sync_mirror.
 """
 from __future__ import annotations
 
@@ -413,6 +416,124 @@ def migrate_all_disputes() -> int:
     return 0
 
 
+def sync_mirror() -> int:
+    """Backfill: rellena el frontmatter de `stars/` —espejo puro de NEA (#70)— con lo que el
+    ground-truth trae y la ficha todavía tiene en `null`. Resuelve el residuo medido al migrar una
+    instancia de una versión anterior (1.11.0 → 1.22.1): 13 contradicciones que el lint bloqueaba
+    campo por campo, 12 de ellas el mismo caso trivial —`campo: null` en la ficha, valor en NEA—
+    que hoy hay que llenar a mano, planeta por planeta.
+
+    **Contrato ADD-ONLY y en un solo sentido.** La 13ª contradicción medida (`hd40307
+    P_rot_days: 48` con NEA sin `st_rotp`) es la que define la frontera, no una excepción a
+    ignorar: ese número salió de literatura, y decidir qué hacer con él —adoptarlo, borrarlo, o
+    copiarlo hacia el ground-truth— es DECISIÓN DEL CONSUMIDOR, que es justo lo que la regla #0 de
+    CLAUDE.md le prohíbe al migrador (y volvería a romper #70, en la otra dirección). Por eso:
+      · ficha en `null` + ground-truth con valor  → se copia (el único caso que se toca).
+      · ficha con valor + ground-truth en `null`  → se deja y se reporta: es un número de
+        literatura, no relleno mecánico (va al cuerpo citado, o a `disputes[]` si hay desacuerdo).
+      · ficha y ground-truth con valores DISTINTOS → se deja y se reporta: es una `disputes[]`, no
+        un error de sincronización — pisarlo borraría una posición sin dejar rastro.
+      · planeta en la ficha sin contraparte en el ground-truth (o viceversa) → no se toca: qué
+        planetas lista la ficha es una contradicción aparte que el lint ya reporta (podría ser una
+        señal no confirmada → `disputes` como `<letra>.existence`); agregar un planeta entero no es
+        sincronizar un campo.
+
+    Reusa el mapeo y el comparador de `lint.py` (`MIRROR_HOST`, `MIRROR_PLANET`, `same_value`) para
+    que el espejo del lint y el del migrador no puedan divergir — si el lint cambia qué campos
+    espeja, este backfill los sigue solo. El import es LOCAL (no al tope del archivo): `lint.py`
+    importa de `make_notes.py` a nivel de módulo (`find_header_line`, `GENERATOR_LINE`), así que un
+    import arriba crearía un ciclo; adentro de la función, cuando se llama, `make_notes` ya terminó
+    de cargar y el ciclo no existe.
+
+    Como el resto de la familia de migradores del archivo: no toca la prosa (re-serializa sólo el
+    frontmatter, igual que `migrate_disputes`), es idempotente (segunda corrida, cero cambios: ya
+    no hay más `null` que rellenar) y sin ground-truth para una ficha no hace nada —sin autoridad
+    no hay contra qué espejar, y tocarla igual sería inventar."""
+    from lint import MIRROR_HOST, MIRROR_PLANET, same_value
+
+    def reportar(nombre: str, dest_name: str, val_ficha, val_gt) -> None:
+        nonlocal reportados
+        if val_gt is None:
+            print(f"  {dest_name}: `{nombre}` sin tocar — la ficha tiene {val_ficha!r} y el "
+                  f"ground-truth no trae el valor: es un número de literatura, no relleno mecánico "
+                  f"(documentalo en el cuerpo con su [[bibcode]], o revisá si corresponde una "
+                  f"`disputes[]`)")
+        else:
+            print(f"  {dest_name}: `{nombre}` sin tocar — ficha={val_ficha!r} vs "
+                  f"ground-truth={val_gt!r}: valores distintos son una `disputes[]`, no un error de "
+                  f"sincronización")
+        reportados += 1
+
+    notes = sorted(cfg.STARS.glob("*.md")) if cfg.STARS.exists() else []
+    rellenados = reportados = 0
+    for dest in notes:
+        text = dest.read_text(encoding="utf-8")
+        if not text.startswith("---\n"):
+            continue
+        end = text.find("\n---\n", 4)
+        if end < 0:
+            continue
+        try:
+            front = yaml.safe_load(text[4:end]) or {}
+        except yaml.YAMLError:
+            print(f"  ⚠ {dest.name}: frontmatter no parseable — sincronizalo a mano")
+            continue
+        gt_path = cfg.GROUND_TRUTH / f"{dest.stem}.json"
+        if not gt_path.exists():
+            continue    # sin autoridad no hay contra qué espejar: no inventar
+        try:
+            gt = json.loads(gt_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            print(f"  ⚠ {dest.name}: ground-truth no parseable — sincronizalo a mano")
+            continue
+        host = gt.get("host") or {}
+        planets = front.get("planets")
+        # Cobarde ante una forma que no entiende, mismo criterio que migrate_disputes: si
+        # `planets` no es una lista de mapas, no tocar nada en vez de arriesgar basura escrita.
+        if planets is not None and (not isinstance(planets, list)
+                                     or not all(isinstance(pl, dict) for pl in planets if pl)):
+            print(f"  ⚠ {dest.name}: `planets` no es una lista de mapas — sincronizalo a mano")
+            continue
+        gt_planets = {str(p.get("letter")): p for p in (gt.get("planets") or [])}
+        changed = False
+
+        for campo, key in MIRROR_HOST:
+            val, val_gt = front.get(campo), host.get(key)
+            if same_value(val, val_gt):
+                continue
+            if val is None:
+                front[campo] = val_gt
+                changed = True
+                rellenados += 1
+            else:
+                reportar(campo, dest.name, val, val_gt)
+
+        for pl in (planets or []):
+            ref = gt_planets.get(str((pl or {}).get("letter")))
+            if ref is None:
+                continue    # planeta sin contraparte en el GT: otra contradicción, no se toca acá
+            for campo in MIRROR_PLANET:
+                val, val_gt = pl.get(campo), ref.get(campo)
+                if same_value(val, val_gt):
+                    continue
+                if val is None:
+                    pl[campo] = val_gt
+                    changed = True
+                    rellenados += 1
+                else:
+                    reportar(f"{pl.get('letter')}.{campo}", dest.name, val, val_gt)
+
+        if changed:
+            dest.write_text(fm(front) + text[end + 5:], encoding="utf-8")
+
+    print(f"sync-mirror: {rellenados} campo(s) rellenados desde el ground-truth "
+          f"({len(notes)} ficha(s) revisadas); {reportados} sin tocar (motivo arriba de cada uno).")
+    if reportados:
+        print("  → lo sin tocar no es un fallo del backfill: es la parte que necesita juicio "
+              "humano (número de literatura o disputa real). Resolvelo a mano.")
+    return 0
+
+
 def parse_year(year) -> int | None:
     """Año tolerante para metadata off-ADS (provista a mano): acepta int, '2020', '2020a'
     (→ 2020); un valor sin año reconocible ('in press') queda null con aviso — la metadata
@@ -779,10 +900,19 @@ def stamp_header(dest) -> bool:
     if GENERATOR_LINE in text:
         return False                                  # ya tiene la línea que el lint mide: nada que hacer
     gen = (cfg.split_fm(text) or {}).get("generator")
+    # La rama de fallback TIENE que llevar `GENERATOR_LINE`. Medido corriendo el ensayo de deploy
+    # sobre un corpus real: la línea vieja ("Cabecera normalizada por Almagesto; la nota no registra
+    # con qué versión se creó") no la llevaba, y `GENERATOR_LINE` no es decorativa — es el **punto de
+    # inserción** que `stamp_search_line` busca (`if i < 0: return False`). O sea que la cabecera
+    # "arreglada" no servía para lo único que la cabecera existe para habilitar: el lint seguía
+    # marcando la nota y `--restamp-headers` informaba éxito **en cada corrida** (22 estampadas, 21
+    # reportadas, para siempre). Es el no-op silencioso de #69 una capa más abajo.
+    # La versión NO se inventa (criterio de #48, "mejor sin dato que con uno supuesto"): se lleva el
+    # ancla y se dice explícitamente que se desconoce.
     linea_gen = (f"> _{gen.replace('Almagesto v', 'Generado con Almagesto v')}._"
                  if isinstance(gen, str) and gen.startswith("Almagesto v")
-                 else "> _Cabecera normalizada por Almagesto; la nota no registra con qué versión "
-                      "se creó._")
+                 else f"{GENERATOR_LINE}desconocida — la nota no registra con qué versión se creó "
+                      "(cabecera normalizada)._")
     idx = text.find("Capa LLM")
     if idx >= 0:
         # Tiene disclaimer pero no la línea: no re-estampar el bloque entero (duplicaría el aviso),
@@ -1267,6 +1397,11 @@ def main() -> int:
                     help="migración #71: pasa `planets[].disputes[]` (polo de verdad hardcodeado) a "
                          "`disputes` a nivel nota con posiciones explícitas. Toca sólo las fichas "
                          "que tienen disputas viejas; no toca el cuerpo. No requiere slug.")
+    ap.add_argument("--sync-mirror", action="store_true", dest="sync_mirror",
+                    help="backfill: rellena en `stars/` los campos espejo de NEA (#70) que están en "
+                         "null y el ground-truth sí trae (spectral_type/teff_K/dist_pc/P_rot_days y "
+                         "los cinco de cada planeta). Add-only: nunca pisa un valor existente ni "
+                         "distinto del ground-truth (eso se reporta, no se toca). No requiere slug.")
     ap.add_argument("--force", action="store_true", help="pisar notas existentes")
     ap.add_argument("--topic", action="store_true",
                     help="el slug es un TEMA de vault/config/topics.yaml: genera concept en vez de ficha de estrella")
@@ -1293,9 +1428,11 @@ def main() -> int:
         return restamp_headers()
     if args.migrate_disputes:
         return migrate_all_disputes()
+    if args.sync_mirror:
+        return sync_mirror()
     if not args.slug:
-        ap.error("falta el slug (sólo --restamp-pdf-links, --restamp-headers y --migrate-disputes "
-                 "corren sin slug)")
+        ap.error("falta el slug (sólo --restamp-pdf-links, --restamp-headers, --migrate-disputes y "
+                 "--sync-mirror corren sin slug)")
 
     if args.web:
         write_web_paper_note(args.slug, url=args.url, slug=args.slug_hint, concept=args.concept,

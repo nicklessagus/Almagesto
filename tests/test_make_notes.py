@@ -10,6 +10,7 @@ import pytest
 import yaml
 
 import lib_config as cfg
+import lint
 import make_notes as mn
 from conftest import mk_note, read_fm, write_yaml
 
@@ -1484,13 +1485,22 @@ def test_stamp_header_usa_la_variante_de_estrella(toy_vault):
 
 
 def test_stamp_header_sin_generator_no_inventa_version(toy_vault):
-    """Una nota tan vieja que ni `generator` tiene: la línea va SIN versión, no con una supuesta."""
+    """Una nota tan vieja que ni `generator` tiene: la línea va SIN versión, no con una supuesta.
+
+    El assert **sí** exige el ancla `GENERATOR_LINE`. Antes la prohibía —era más fuerte que la
+    intención de este test— y esa parte de más producía el deadlock que el ensayo de deploy midió
+    sobre un corpus real: sin el ancla la nota queda permanentemente fuera del alcance de
+    `stamp_search_line` (`if i < 0: return False`), así que el lint la reporta para siempre y
+    `--restamp-headers` informa éxito en cada corrida. Lo que este test protege es que no se
+    **invente** una versión, no que falte el ancla."""
     dest = cfg.STARS / "vieja.md"
     dest.write_text("---\nname: Vieja\ntags:\n- star\n---\n# vieja\n\nProsa.\n", encoding="utf-8")
     assert mn.stamp_header(dest) is True
     out = dest.read_text(encoding="utf-8")
     assert "no registra con qué versión se creó" in out
-    assert "Generado con Almagesto v" not in out
+    assert mn.GENERATOR_LINE in out                  # estampable: el ancla está
+    assert cfg.ALMAGESTO_VERSION not in out          # pero no se inventó ninguna versión
+    assert "desconocida" in out
 
 
 def test_stamp_header_no_toca_lo_que_ya_tiene_cabecera_ni_las_notas_de_paper(toy_vault):
@@ -1545,3 +1555,203 @@ def test_restamp_headers_actua_sobre_la_nota_que_el_lint_marca(toy_vault, capsys
     mn.restamp_headers()
     assert mn.GENERATOR_LINE in nota.read_text(encoding="utf-8"), (
         "la nota que el lint marca sigue sin la línea del generador tras --restamp-headers")
+
+
+# ── deadlock #69 en la rama de fallback de stamp_header ──────────────────────
+#
+# Encontrado corriendo el ensayo de deploy sobre el corpus real de una instancia (1.11.0 →
+# 1.22.1), no leyendo código: `--restamp-headers` informó "22 de 25 estampadas" y el lint siguió
+# reportando 21 cabeceras no estampables, corrida tras corrida.
+#
+# Causa: cuando la nota no registra `generator` en su frontmatter —lo normal en todo lo creado
+# antes de que el campo existiera— `stamp_header` cae a una línea de fallback ("Cabecera
+# normalizada por Almagesto; la nota no registra con qué versión se creó") que no contiene
+# `GENERATOR_LINE`. Y `GENERATOR_LINE` no es decorativo: es el punto de inserción que
+# `stamp_search_line` busca para poder actuar (`if i < 0: return False`, "no inventamos"). O sea
+# que la cabecera "arreglada" no sirve para lo único que la cabecera existe para habilitar, el
+# lint tiene razón en seguir marcándola, y el comando que el propio mensaje del lint receta
+# informa éxito cada vez.
+#
+# Es el mismo modo de falla que #69 vino a cerrar —el no-op silencioso— una capa más abajo: antes
+# el estampador salteaba la nota, ahora la escribe y miente sobre el resultado.
+#
+# El fix no puede inventar la versión (regla del repo: "mejor sin dato que con uno supuesto"), así
+# que la línea de fallback tiene que llevar el ancla y decir explícitamente que la versión es
+# desconocida.
+
+CUERPO_SIN_GENERATOR = "# s\n\n> ⚠ **Capa LLM:** la prosa es síntesis a revisar.\n\nprosa\n"
+
+
+def nota_sin_generator():
+    """Ficha con el disclaimer de capa LLM pero SIN `generator` — el estado de todo lo creado antes
+    de que el campo existiera, que es justo la población que `--restamp-headers` viene a rescatar."""
+    return mk_note(cfg.STARS, "s", {"tags": ["star"], "planets": []}, CUERPO_SIN_GENERATOR)
+
+
+def test_restamp_headers_deja_la_nota_estampable(toy_vault):
+    """El criterio no es "se escribió algo": es que la cabecera quede **utilizable por los
+    estampadores**, que es para lo que existe."""
+    p = nota_sin_generator()
+    mn.restamp_headers()
+    assert mn.GENERATOR_LINE in p.read_text(encoding="utf-8")
+
+
+def test_restamp_headers_no_inventa_la_version(toy_vault):
+    """"No inventamos" (#48): sin `generator` en el frontmatter, la línea no puede afirmar una
+    versión concreta — tiene que decir que no se sabe."""
+    p = nota_sin_generator()
+    mn.restamp_headers()
+    texto = p.read_text(encoding="utf-8")
+    assert cfg.ALMAGESTO_VERSION not in texto
+    assert "desconocid" in texto.lower()
+
+
+def test_el_lint_deja_de_reportar_la_nota_tras_el_restamp(toy_vault, capsys):
+    """El círculo lint→comando→lint tiene que **cerrar**. Éste es el test que el ensayo de deploy
+    falsó: 22 estampadas y 21 seguían reportadas."""
+    nota_sin_generator()
+    mn.restamp_headers()
+    capsys.readouterr()
+    lint.main()
+    rep = (cfg.ROOT / "outputs").glob("lint-*.md")
+    texto = next(rep).read_text(encoding="utf-8")
+    assert "Cabecera no estampable" in texto
+    seccion = texto.split("## Cabecera no estampable")[1].split("\n##")[0]
+    assert "(0)" in seccion.split("\n")[0], f"el lint sigue reportando la nota:\n{seccion}"
+
+
+def test_stamp_search_line_puede_actuar_tras_el_restamp(toy_vault):
+    """El punto de todo el ejercicio: `GENERATOR_LINE` es el punto de INSERCIÓN de
+    `stamp_search_line`. Si tras el restamp sigue sin poder actuar, la cabecera no se arregló —
+    sólo se le escribió texto encima."""
+    p = nota_sin_generator()
+    mn.restamp_headers()
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    cfg.save_registro("s", {"busqueda": {"fecha": "2026-08-01", "n_found": 412, "n_core": 37,
+                                         "n_total": 40, "n_candidates": 3, "n_dropped": 0,
+                                         "rows": 2000, "truncated": False,
+                                         "almagesto_version": cfg.ALMAGESTO_VERSION}})
+    assert mn.stamp_search_line("s", p) is True
+
+
+# ── --sync-mirror: backfill del espejo ficha↔ground-truth (#70) ──────────────
+#
+# Qué es `--sync-mirror` y, sobre todo, qué NO es. El frontmatter de `stars/` es espejo puro de
+# NEA (#70): vale lo que dice el ground-truth o NADA. Una instancia que viene de una versión
+# anterior tiene el espejo desincronizado, y el lint lo bloquea campo por campo. Medido en la
+# instancia real (1.11.0 → 1.22.1): 13 contradicciones, 12 de ellas el mismo caso trivial — la
+# ficha tiene el campo en `null` y NEA sí trae el valor. Eso es relleno mecánico y no necesita
+# juicio.
+#
+# La 13ª es la que define la frontera: `hd40307 P_rot_days: 48` con NEA sin el valor. Ahí el
+# número salió de literatura, y adoptarlo o no es decisión del consumidor, no del migrador —
+# copiarlo al revés (ficha → GT) o borrarlo sería justamente romper #70 en la otra dirección. Por
+# eso el contrato es add-only y en un solo sentido: null en la ficha + valor en NEA → se copia;
+# todo lo demás se deja y se reporta.
+
+def gt(slug, planets, **host):
+    (cfg.GROUND_TRUTH / f"{slug}.json").write_text(
+        json.dumps({"slug": slug, "host": host, "planets": planets}), encoding="utf-8")
+
+
+def ficha(slug, fm, body="# x\n\nprosa que no se toca\n"):
+    return mk_note(cfg.STARS, slug, {"tags": ["star"], **fm}, body)
+
+
+# ── el caso trivial: 12 de los 13 residuos medidos ──────────────────────────
+
+def test_sync_mirror_rellena_el_campo_nulo_desde_el_ground_truth(toy_vault):
+    """El caso que domina el residuo real: la ficha tiene `mass_earth: null` y NEA trae el valor.
+    Es relleno mecánico —el frontmatter es espejo de NEA— y hoy hay que hacerlo a mano en cada
+    planeta de cada ficha."""
+    gt("s", [{"letter": "b", "P_days": 5.0, "K_ms": 2.0, "e": 0.0, "mass_earth": 8.99,
+              "status": "confirmed"}], mass_msun=1.0)
+    ficha("s", {"planets": [{"letter": "b", "P_days": 5.0, "K_ms": 2.0, "e": 0.0,
+                             "mass_earth": None, "status": "confirmed"}]})
+    mn.sync_mirror()
+    assert read_fm(cfg.STARS / "s.md")["planets"][0]["mass_earth"] == 8.99
+
+
+def test_sync_mirror_rellena_tambien_los_campos_estelares(toy_vault):
+    """Los cuatro campos de la estrella (`spectral_type`, `teff_K`, `dist_pc`, `P_rot_days`) son
+    espejo igual que los del planeta: mismo criterio, mismo relleno."""
+    gt("s", [], teff_K=5344.0, dist_pc=3.6)
+    ficha("s", {"teff_K": None, "dist_pc": None, "planets": []})
+    mn.sync_mirror()
+    fm = read_fm(cfg.STARS / "s.md")
+    assert (fm["teff_K"], fm["dist_pc"]) == (5344.0, 3.6)
+
+
+# ── la frontera: lo que NO puede tocar ─────────────────────────────────────
+
+def test_sync_mirror_no_toca_un_valor_que_nea_no_tiene(toy_vault, capsys):
+    """El 13º residuo medido (`hd40307 P_rot_days: 48`, NEA sin `st_rotp`). Ese número salió de
+    literatura: adoptarlo, borrarlo o copiarlo hacia el ground-truth es decidir por el
+    consumidor, que es lo que la regla #0 prohíbe. El migrador lo deja y lo reporta para que lo
+    resuelva una persona (prosa citada, o `disputes[]` si hay desacuerdo real)."""
+    gt("s", [], mass_msun=1.0)
+    ficha("s", {"P_rot_days": 48, "planets": []})
+    mn.sync_mirror()
+    assert read_fm(cfg.STARS / "s.md")["P_rot_days"] == 48
+    assert "P_rot_days" in capsys.readouterr().out
+
+
+def test_sync_mirror_no_pisa_un_valor_distinto(toy_vault, capsys):
+    """Dos valores distintos para el mismo hecho **es una disputa**, no un error de sincronización:
+    pisarlo borraría la posición de la ficha sin dejar rastro. Add-only significa esto."""
+    gt("s", [{"letter": "b", "mass_earth": 8.99, "status": "confirmed"}], mass_msun=1.0)
+    ficha("s", {"planets": [{"letter": "b", "mass_earth": 3.0, "status": "confirmed"}]})
+    mn.sync_mirror()
+    assert read_fm(cfg.STARS / "s.md")["planets"][0]["mass_earth"] == 3.0
+    assert "b" in capsys.readouterr().out
+
+
+def test_sync_mirror_no_inventa_un_planeta_que_la_ficha_no_lista(toy_vault):
+    """Agregar un planeta entero no es sincronizar un campo: qué planetas lista la ficha es una
+    contradicción que el lint reporta aparte y que alguien tiene que mirar (puede ser una señal no
+    confirmada escrita en `planets[]` en vez de `disputes` como `<letra>.existence`)."""
+    gt("s", [{"letter": "b", "mass_earth": 1.0, "status": "confirmed"},
+             {"letter": "c", "mass_earth": 2.0, "status": "confirmed"}], mass_msun=1.0)
+    ficha("s", {"planets": [{"letter": "b", "mass_earth": None, "status": "confirmed"}]})
+    mn.sync_mirror()
+    assert len(read_fm(cfg.STARS / "s.md")["planets"]) == 1
+
+
+def test_sync_mirror_sin_ground_truth_no_hace_nada(toy_vault):
+    """Sin el JSON de NEA no hay autoridad contra la cual espejar: tocar la ficha ahí sería
+    inventar."""
+    p = ficha("s", {"teff_K": None, "planets": []})
+    antes = p.read_bytes()
+    mn.sync_mirror()
+    assert p.read_bytes() == antes
+
+
+# ── invariantes de todo migrador del repo ──────────────────────────────────
+
+def test_sync_mirror_no_toca_la_prosa(toy_vault):
+    """La prosa es síntesis LLM: ningún migrador la toca (mismo contrato que `--migrate-disputes`)."""
+    cuerpo = "# s\n\nprosa **importante** con [[2019abc]] y una tabla.\n\n| a | b |\n|---|---|\n"
+    gt("s", [{"letter": "b", "mass_earth": 8.99, "status": "confirmed"}], mass_msun=1.0)
+    p = ficha("s", {"planets": [{"letter": "b", "mass_earth": None, "status": "confirmed"}]}, cuerpo)
+    mn.sync_mirror()
+    assert p.read_text(encoding="utf-8").endswith(cuerpo)
+
+
+def test_sync_mirror_es_idempotente(toy_vault):
+    """Segunda corrida: cero cambios. Invariante rector de la cadena (`maintain/SKILL.md`)."""
+    gt("s", [{"letter": "b", "mass_earth": 8.99, "status": "confirmed"}], mass_msun=1.0)
+    p = ficha("s", {"planets": [{"letter": "b", "mass_earth": None, "status": "confirmed"}]})
+    mn.sync_mirror()
+    despues = p.read_bytes()
+    mn.sync_mirror()
+    assert p.read_bytes() == despues
+
+
+def test_cli_sync_mirror_no_pide_slug(toy_vault, monkeypatch):
+    """Es un backfill de toda la bóveda, como `--restamp-headers`: sin slug. El cableado del flag
+    sólo existe por línea de comandos — un `dest` mal escrito pasaría la suite entera y fallaría en
+    la primera corrida real (ya pasó con `--migrate-disputes`)."""
+    gt("s", [{"letter": "b", "mass_earth": 8.99, "status": "confirmed"}], mass_msun=1.0)
+    ficha("s", {"planets": [{"letter": "b", "mass_earth": None, "status": "confirmed"}]})
+    assert run_main(monkeypatch, ["--sync-mirror"]) == 0
+    assert read_fm(cfg.STARS / "s.md")["planets"][0]["mass_earth"] == 8.99
