@@ -407,6 +407,51 @@ líneas** de los 5 scripts que tocó. De ahí el helper único `as_map`/`as_list
   `[[bibcode]]` literal de los bloques nuevos **no** contamina `bench_verify` (exige
   `BIBCODE_RE` + fulltext, así que el placeholder no puede sembrarse como par).
 
+## Backlog — ground-truth NEA+SIMBAD con autoridad POR CAMPO (anotado 2026-08-23)
+
+> Pregunta del usuario: *"¿SIMBAD se puede usar como NEA? ¿qué pasaría si hay discrepancia?"*
+
+**Hoy la discrepancia no puede existir, y eso es el problema:** `fetch_ground_truth` consulta SIMBAD
+sólo como **fallback de `spectral_type`** cuando NEA viene nulo (`:163`). Si los dos catálogos
+difieren, gana NEA **por orden de consulta, en silencio** — nadie se entera.
+
+**Salida propuesta: autoridad por CAMPO, no por catálogo.** Planetas (P/K/e/masa) → NEA, que es el
+único que los tiene; `spectral_type` y `dist_pc` → SIMBAD, que es su dominio (el `st_spectype` de
+NEA suele venir copiado de literatura); `teff_K` → NEA. Así cada campo sigue teniendo **una** fuente,
+el espejo #70 queda intacto y no hay nada que decidir en runtime. Para cuando igual difieran: el JSON
+guarda **los dos valores** con cuál es el autoritativo, el frontmatter espeja ése, y el lint reporta
+la discrepancia como **backlog** — el desacuerdo se ve en vez de taparse por orden de consulta.
+
+Costo: el vocabulario de `disputes[].posiciones[].source` tiene un solo valor de catálogo
+(`ground_truth`); habría que abrirlo a `nea`/`simbad` o la disputa no puede decir quién la sostiene.
+
+**No hacer antes de la capa de bóveda poblada:** son esos tests los que van a decir cuántos campos
+cambian en un corpus real. Y ver la entrada de abajo: si el camino es re-ingestar, este cambio deja
+de costar casi nada.
+
+## Criterio — migrar NO es el camino largo; re-ingestar sí (anotado 2026-08-23)
+
+> Del usuario, cerrando la discusión de NEA+SIMBAD: *"lo mejor más adelante va a ser hacer una bóveda
+> nueva antes que andar migrando lo que está; no me preocuparía por la retrocompatibilidad más que
+> para poder testear las cosas"*.
+
+**Decisión de rumbo, no de implementación.** Extiende [sin-capa-de-retrocompatibilidad]: el
+framework ya no lleva lectores tolerantes, y ahora tampoco asume que una bóveda existente deba
+sobrevivir indefinidamente a los cambios de schema. Ante un cambio grande, **re-ingestar en una
+bóveda nueva** le gana a encadenar migradores.
+
+Consecuencias prácticas:
+- Un cambio de schema **deja de costar la migración**, que es lo caro y lo que frena decisiones
+  correctas (ver la entrada de arriba: NEA+SIMBAD era caro *sólo* por eso).
+- Los migradores (`--migrate-disputes`, `--sync-mirror`, `triage --migrate`) siguen valiendo como
+  **herramientas de una sola vez** para la instancia que ya existe, no como contrato permanente.
+- El `vintage="1.11.0"` del generador (`tests/poblada/`) queda justificado por **testear los
+  detectores** de schema viejo, no por soportar bóvedas viejas a perpetuidad. Ésa es la parte de la
+  retrocompatibilidad que sí importa.
+- Lo que se vuelve crítico entonces es que **la ingesta sea reproducible y barata**, porque pasa a
+  ser la vía normal de actualización. Se cruza con el backlog de la bóveda en paralelo: partir del
+  `ads.json` congelado en vez de re-pegarle a ADS.
+
 ## Backlog — los DOS ejes de prueba con bóveda poblada (anotado 2026-08-23)
 
 > Pedido del usuario durante la auditoría del 23-08. Son **dos pruebas distintas**, con sujeto y
