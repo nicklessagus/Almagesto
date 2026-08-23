@@ -6,6 +6,13 @@ vault/config/ads_dev_key
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+.pytest_cache/
+
+# Cobertura: la deja `coverage run` al medir qué líneas ejercita la suite (instrumento de las
+# pasadas de auditoría, ver vault/STATUS.md). Es scratch regenerable, como build/ y outputs/.
+.coverage
+.coverage.*
+htmlcov/
 
 # Intermedios de ingesta y reportes de lint (regenerables): scratch del tooling, viven en
 # la raíz del repo FUERA de vault/ para no contaminar la bóveda de Obsidian.
