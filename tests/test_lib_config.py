@@ -701,3 +701,83 @@ def test_save_busqueda_no_pliega_si_ya_hay_historial(toy_vault):
     cfg.save_busqueda("test_star", {"fecha": "2026-08-24", "query": "b", "n_total": 2})
     bs = cfg.load_busquedas("test_star")
     assert [b["query"] for b in bs] == ["a", "b"]
+
+
+# ── D-49 · la lente: forma, comparación y diff offline ──────────────────────
+#
+# Viven acá y no en `test_query_ads` desde que la comparación se mudó a `lib_config`: su consumidor
+# es el **lint**, que corre offline con `pyyaml` y nada más. Importar `query_ads` para compararla
+# arrastraba `requests` y hacía fallar el lint en CI.
+
+def test_lens_shape_no_revienta_con_require_invalido():
+    """`combination_rule` ABORTA si `require` nombra una faceta inexistente (con razón: filtraría
+    todo a no-core en silencio). Pero `lens_shape` sólo DESCRIBE la regla para compararla — si
+    reventara, el lint perdería la categoría entera por una config que él mismo va a reportar."""
+    forma = cfg.lens_shape({"facets": {"rv": "radial velocity"}, "require": ["no_existe"]})
+    assert forma["require"] == ["no_existe"] and forma["facets"] == {"rv": "radial velocity"}
+
+
+def test_lens_delta_nombra_que_cambio():
+    a = {"facets": {"x": "aa", "y": "bb"}, "require": [], "min_facets": 1, "noise_doctypes": []}
+    b = {"facets": {"x": "aa", "z": "cc"}, "require": ["x"], "min_facets": 2, "noise_doctypes": ["catalog"]}
+    d = cfg.lens_delta(a, b)
+    assert "faceta `y` eliminada" in d and "faceta `z` nueva" in d
+    assert any(s.startswith("require ") for s in d) and "min_facets 1 → 2" in d
+    assert cfg.lens_delta(a, dict(a)) == [], "lentes idénticas: sin delta"
+
+
+def test_lens_delta_ignora_el_orden_de_require():
+    """Reordenar `require` no mueve el corte (todas son obligatorias): reportarlo sería un hallazgo
+    falso que manda a re-correr la cadena de todos los sujetos para nada."""
+    a = {"facets": {}, "require": ["a", "b"], "min_facets": 1, "noise_doctypes": []}
+    b = {**a, "require": ["b", "a"]}
+    assert cfg.lens_delta(a, b) == []
+
+
+def test_lens_textual_changed_separa_la_mitad_evaluable():
+    solo_doctypes = ["noise_doctypes [] → ['catalog']"]
+    assert cfg.lens_textual_changed(solo_doctypes) is False
+    assert cfg.lens_textual_changed(solo_doctypes + ["faceta `x` nueva"]) is True
+
+
+def test_note_lens_text_toma_titulo_abstract_y_keywords():
+    fm = {"title": "Starspot Evolution", "keywords": ["stellar activity", "RV"]}
+    body = "# T\n\n## Abstract\nWe measure the RADIAL velocity.\n\n## Extracción\nno cuenta\n"
+    t = cfg.note_lens_text(fm, body)
+    assert "starspot evolution" in t and "radial velocity" in t and "stellar activity" in t
+    assert "no cuenta" not in t, "sólo la sección Abstract, no el resto del cuerpo"
+
+
+def test_note_lens_text_no_toma_el_marcador_de_abstract_ausente():
+    """`_(no disponible)_` es lo que `write_paper_notes` deja cuando ADS no devolvió abstract: no es
+    texto del paper y no puede matchear una faceta."""
+    assert cfg.note_lens_text({"title": None}, "## Abstract\n_(no disponible)_\n").strip() == ""
+
+
+def test_lens_diff_offline_no_saca_del_core_un_extra_core(toy_vault, monkeypatch):
+    """`extra_core` es override del usuario (igual que `via: manual` en `classify_record`): la regla
+    no lo toca, así que nunca puede aparecer como 'saldría'."""
+    write_yaml(cfg.STARS_YAML, {"Estrella Test": {"slug": "test_star", "ads_object": "Test Star",
+                                                  "extra_core": [{"bibcode": "2020Curado"}]}})
+    cfg.save_registro("test_star", {"slug": "test_star", "busquedas": [
+        {"fecha": "2026-01-01", "bibcodes": ["2020Curado", "2020Comun"], "lente": {}}]})
+    for stem in ("2020Curado", "2020Comun"):
+        (cfg.PAPERS / f"{stem}.md").write_text(
+            f"---\nbibcode: {stem}\ntitle: nada que ver\nstars: [Estrella Test]\n"
+            f"keywords: []\nrelevance: high\ntags: [paper]\n---\n## Abstract\nasteroseismology\n",
+            encoding="utf-8")
+    entran, salen, sin_nota = cfg.lens_diff_offline("test_star")
+    assert salen == ["2020Comun"], f"el curado no sale; {salen}"
+    assert entran == [] and sin_nota == []
+
+
+def test_lens_diff_offline_declara_los_papers_sin_nota(toy_vault):
+    """El techo del chequeo: sin `--all` el no-core no deja nota, así que `entran` sólo puede hablar
+    de lo que alguien escribió. Publicar el faltante evita leer un `entran: 0` como 'no entra nada'."""
+    cfg.save_registro("test_star", {"slug": "test_star", "busquedas": [
+        {"fecha": "2026-01-01", "bibcodes": ["2020ConNota", "2020SinNota"], "lente": {}}]})
+    (cfg.PAPERS / "2020ConNota.md").write_text(
+        "---\nbibcode: 2020ConNota\ntitle: activity\nstars: [Estrella Test]\nkeywords: []\n"
+        "relevance: high\ntags: [paper]\n---\n## Abstract\nstarspot activity\n", encoding="utf-8")
+    entran, salen, sin_nota = cfg.lens_diff_offline("test_star")
+    assert sin_nota == ["2020SinNota"]

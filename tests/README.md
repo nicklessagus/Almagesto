@@ -170,6 +170,33 @@ lista **todo** paper del sujeto con su `[[stem]]`, así que satisfacía sola el 
 pero no sintetizado* — la máquina "citaba" por su cuenta cada paper que el humano no había
 sintetizado, y la categoría no podía disparar nunca (medido: 4 → 0).
 
+## Lo que CI tiene y esta máquina no (2026-08-24)
+
+La suite promete *"sin red ni binarios externos — todo mockeado"*, y **el push de v1.36.0 rompió los
+dos jobs de CI** aunque acá estaba todo verde. Las dos causas son la misma clase de error —**probar
+en un entorno más rico que el de producción**— y valen como advertencia permanente:
+
+1. **Un test dependía de `pdftotext` real.** `test_txt_bajo_otro_slug_se_reusa` (D-18) se olvidó de
+   mockear `shutil.which`, cosa que su test hermano de al lado sí hace. Pasaba en cualquier máquina
+   con poppler instalado y moría en CI, que no lo tiene. Llevaba varias tandas escrito: **nunca
+   había corrido en CI** porque esos commits no se habían pusheado.
+2. **El lint pasó a depender de `requests`.** Su job instala **sólo `pyyaml`** —el propio workflow lo
+   promete: *"Sólo necesita pyyaml + stdlib"*— y al mover la comparación de lentes (D-49) `lint.py`
+   empezó a importar `query_ads`, que importa `requests`. En CI el import fallaba, el fallo caía en
+   *no evaluado* —que cuenta para el exit— y **el lint salía 1 sobre una bóveda sana**: el chequeo
+   que existe para no producir falsos limpios se volvió un falso rojo.
+
+Las dos quedaron con red. La segunda además movió código: la comparación de lentes vive ahora en
+`lib_config` (es config y regex, sin una línea de red) y sólo `lens_used` quedó en `query_ads`.
+
+**Cómo reproducir el entorno de CI acá**, que es lo que hubiera evitado las dos:
+
+```bash
+python -m venv /tmp/cienv && /tmp/cienv/bin/pip install pyyaml requests numpy pytest
+mkdir -p /tmp/binmin && for b in sh bash git env ls cat; do ln -sf "$(command -v $b)" /tmp/binmin/$b; done
+env PATH=/tmp/binmin /tmp/cienv/bin/python -m pytest tests/ -q      # sin pdftotext/tesseract/npx
+```
+
 ## Fuera de alcance (deliberado)
 
 - Respuestas reales de ADS/NEA/Crossref (cambian; lo que se fija acá es el **parseo y la

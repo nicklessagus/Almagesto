@@ -79,17 +79,6 @@ from extract_fulltext import is_legible      # umbral determinista de legibilida
 from fetch_ground_truth import msini_earth   # verificación de masa (m·sini implícita)
 from make_notes import find_header_line      # contrato de la cabecera (mismo que stamp_pdf_link, #48)
 from make_notes import GENERATOR_LINE        # ancla de la cabecera de fichas/concepts (#69)
-# D-49: la lente vigente y su comparación viven en `query_ads` (una sola definición para el que
-# clasifica y el que audita). Import GUARDADO: el módulo lee `objective.yaml` al importarse y
-# **aborta** si no declara facetas — y el contrato del lint es "ante una bóveda rara reporta, no se
-# muere" (D-6). Sin `query_ads`, la categoría se declara no evaluada en vez de callar.
-try:
-    import query_ads as _qa
-except Exception as _qa_err:            # noqa: BLE001 — cualquier fallo de import es "no evaluado"
-    _qa, _qa_reason = None, str(_qa_err)
-else:
-    _qa_reason = None
-
 # @inv INV-02
 LINK_RE = re.compile(r"\[\[([^\]\|#]+)")
 # Frontera dura (regla #0 de CLAUDE.md): la bóveda es SÓLO bibliografía. Detecta material de
@@ -1470,13 +1459,6 @@ def collect(cierre: bool = False) -> LintResult:
     # reporte en vez de mostrar su cero.
     if (obj_err := cfg.objective_error()):
         not_evaluated.append(("clasificación de relevancia (la lente)", obj_err))
-    if _qa is None and not obj_err:
-        # El import de `query_ads` falló por algo que NO es un objective ilegible (ese ya se
-        # reporta arriba con su motivo real): sin él no hay lente vigente contra la cual comparar
-        # la del registro. Es hecho del ENTORNO, así que cuenta para el exit y la categoría normal
-        # se suprime — un "Lente desincronizada (0)" acá sería el cero inventado de D-43.
-        not_evaluated.append(("lente desincronizada (D-49): no se pudo importar `query_ads`",
-                              _qa_reason or "motivo desconocido"))
 
     objective_warn = []
     if not obj_err and cfg.load_objective().get("name") == cfg.DEFAULT_OBJECTIVE_NAME:
@@ -1670,8 +1652,8 @@ def collect(cierre: bool = False) -> LintResult:
         # el diff (N notas × las regex) sólo se corre cuando `lens_delta` encuentra diferencias.
         # Offline a propósito: el insumo son las notas (título + abstract + `keywords`, D-17), que
         # viajan — `reclass_diff` mide lo mismo pero necesita `build/`, que es scratch gitignored.
-        if _qa is not None and not cfg.objective_error():
-            stored = _qa.lens_stored(slug)
+        if not cfg.objective_error():
+            stored = cfg.lens_stored(slug)
             if stored is None:
                 # D-43: no hay con qué comparar → se DICE, no se cuenta como "lente al día". Un
                 # registro sin `lente` es pre-1.10.3 (o una corrida que no la guardó).
@@ -1679,9 +1661,9 @@ def collect(cierre: bool = False) -> LintResult:
                     (slug, "no evaluado: la última búsqueda del registro no guarda `lente`, así "
                            "que no hay contra qué comparar la vigente → re-corré la cadena del "
                            "sujeto para que la estampe"))
-            elif (delta := _qa.lens_delta(stored, _qa.lens_current())):
+            elif (delta := cfg.lens_delta(stored, cfg.lens_current())):
                 detalle = "; ".join(delta)
-                if not _qa.lens_textual_changed(delta):
+                if not cfg.lens_textual_changed(delta):
                     # Sólo cambiaron los doctypes de ruido: es un cambio real y el diff offline NO
                     # lo puede ver (la nota de paper no guarda `doctype`). Se declara en vez de
                     # devolver "0 entran, 0 salen", que se leería como "el cambio no movió nada".
@@ -1690,7 +1672,7 @@ def collect(cierre: bool = False) -> LintResult:
                                f"evaluar: la nota de paper no guarda `doctype` → "
                                f"`python scripts/query_ads.py --dry-run --slug {slug}` con build/ presente"))
                 else:
-                    entran, salen, sin_nota = _qa.lens_diff_offline(slug)
+                    entran, salen, sin_nota = cfg.lens_diff_offline(slug)
                     techo = (f"; {len(sin_nota)} paper(s) del universo sin nota → no evaluables "
                              f"offline" if sin_nota else "")
                     lente_desync.append(
@@ -1764,8 +1746,6 @@ def collect(cierre: bool = False) -> LintResult:
     if cfg.objective_error():
         suprimidas |= {"Objetivo sin instanciar", "Áreas de `concepts/` no declaradas",
                        "Áreas de concepts", "Lente desincronizada"}
-    if _qa is None:
-        suprimidas.add("Lente desincronizada")
 
 
     # ── la tabla: clave, título, severidad, hallazgos. **Una sola declaración** de cada cosa.

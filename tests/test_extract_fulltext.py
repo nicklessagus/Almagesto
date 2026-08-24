@@ -248,6 +248,10 @@ def test_txt_bajo_otro_slug_se_reusa(toy_vault, monkeypatch, capsys):
     def boom(*a, **k):
         raise AssertionError("corrió pdftotext teniendo el .txt bajo otro slug")
     monkeypatch.setattr(ef, "subprocess", SimpleNamespace(run=boom))
+    # `shutil.which` mockeado como en el test hermano de más abajo: sin esto el test depende del
+    # `pdftotext` REAL de la máquina — pasa donde está instalado y muere en CI, que es exactamente
+    # lo que `tests/README.md` promete que la suite no hace ("sin red ni binarios externos").
+    monkeypatch.setattr(ef, "shutil", SimpleNamespace(which=lambda x: "/usr/bin/" + x))
     monkeypatch.setattr(sys, "argv", ["extract_fulltext.py", "test_star"])
     assert ef.main() == 0
     assert (toy_vault.FULLTEXT / "test_star" / "2020aaa...1..1A.txt").exists()

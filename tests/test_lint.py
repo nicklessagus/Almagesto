@@ -2638,3 +2638,50 @@ def test_el_modo_cierre_solo_cambia_el_exit_de_los_pares(toy_vault):
     assert [c.clave for c in sin.categorias] == [c.clave for c in con.categorias]
     solo_con = {c.clave for c in con.bloquean()} - {c.clave for c in sin.bloquean()}
     assert solo_con <= {"stale_pairs"}, solo_con
+
+
+def test_el_lint_no_depende_de_nada_que_ci_no_instale():
+    """El lint es la compuerta de CI y su job instala **sólo `pyyaml`** — su docstring lo promete:
+    *"Sólo necesita pyyaml + stdlib"*. Esa promesa no tenía test, y se rompió: al mover la
+    comparación de lentes (D-49), `lint.py` pasó a importar `query_ads`, que importa `requests`.
+    En CI el import fallaba, el fallo caía en «no evaluado» —que cuenta para el exit— y **el lint
+    salía 1 sobre una bóveda sana**. Un chequeo que existe para no producir falsos limpios se
+    volvió un falso rojo por una dependencia que no necesita.
+
+    Se mira el árbol de imports transitivo de `lint.py` contra lo que el workflow instala."""
+    import ast
+    import sys as _sys
+    raiz = Path(__file__).resolve().parent.parent
+    permitidos = set(_sys.stdlib_module_names) | {"yaml"}
+    # los módulos propios se recorren; lo que no es propio ni permitido, es dependencia externa
+    vistos, pendientes, externas = set(), ["lint"], set()
+    while pendientes:
+        mod = pendientes.pop()
+        if mod in vistos:
+            continue
+        vistos.add(mod)
+        f = raiz / "scripts" / f"{mod}.py"
+        if not f.exists():
+            if mod not in permitidos:
+                externas.add(mod)
+            continue
+        # SÓLO imports de nivel de módulo: los que se pagan al importar. `fetch_ground_truth`
+        # importa `numpy`/`astroquery` **dentro de sus funciones** justamente para que el lint pueda
+        # tomarle `msini_earth` sin arrastrarlos — un import lazy no es una dependencia del lint, y
+        # contarlo haría que este test exigiera desinstalar la razón por la que el diseño funciona.
+        arbol = ast.parse(f.read_text(encoding="utf-8"))
+        cuerpo = list(arbol.body)
+        for node in list(cuerpo):          # un import dentro de `try:`/`if` de nivel módulo cuenta
+            if isinstance(node, (ast.Try, ast.If)):
+                cuerpo += node.body + node.orelse + getattr(node, "finalbody", [])
+                for h in getattr(node, "handlers", []):
+                    cuerpo += h.body
+        for node in cuerpo:
+            if isinstance(node, ast.Import):
+                pendientes += [a.name.split(".")[0] for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                pendientes.append(node.module.split(".")[0])
+    assert externas == set(), (
+        f"`lint.py` arrastra dependencias que el job de CI no instala: {sorted(externas)}. "
+        f"El workflow corre `pip install pyyaml` y nada más — o se agrega al workflow (y se "
+        f"justifica: el lint es OFFLINE), o el import no va.")
