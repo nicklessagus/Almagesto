@@ -635,8 +635,9 @@ construcción. **Toca:** scripts nuevos `search_arxiv.py`, `openalex.py`, `citat
 
 ### Issue 7.3 · D-26 + D-58: la relevancia del tema de método — tres puertas, la 1 propone
 
-- **Funciones:** la entrada del tema en `topics.yaml` gana su **faceta propia** (nombre del campo:
-  ver R-5, la colisión `topics`). `query_ads`/`ingest_topic` para temas de método:
+- **Funciones:** la entrada del tema en `themes.yaml` gana su **faceta propia**, campo `facet:`
+  (decidido 2026-08-24; singular porque es UNA regex propia del tema, y consistente con
+  `relevance.facets` y con el campo `facets:` de la nota de paper). `query_ads`/`ingest_topic` para temas de método:
   core = faceta propia AND (puerta 2 `fundacional en su campo` —citas altas + faceta— OR puerta 3
   —lente astro global—). La **puerta 1** (`cited_by_corpus`) **no clasifica**: alimenta
   `candidates` del triage con `via: citado-por-corpus` y el conteo de quiénes lo citan; aceptar →
@@ -940,7 +941,9 @@ al llegar al issue):
 
 Cada tanda cierra con tests completos verdes (tier 0 + tier 1 si tocó lint/generador; tier 2
 cuando haya instancia nueva), bump de `ALMAGESTO_VERSION` y tag. Propuesta: tandas 0–10 son
-minors consecutivos (1.24.0 … 1.34.0) — cada una agrega mecanismo, ninguna es patch. Release de
+minors consecutivos (1.24.0 … 1.34.0) — ⚠ **corrido a 1.32.0 … 1.35.0 desde el 2026-08-24**: la
+auditoría doble del contrato no fue una tanda pero agregó mecanismo (categoría bloqueante nueva
+del lint, guards de config), así que se llevó **1.31.0**. Las tandas 7–10 son 1.32.0–1.35.0 — cada una agrega mecanismo, ninguna es patch. Release de
 GitHub en cada minor, como está pactado. Los issues intermedios de una tanda no bumpean: el bump
 es el cierre de tanda, con su entrada en STATUS (qué cerró, contra qué invariantes, con qué
 números).

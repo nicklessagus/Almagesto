@@ -36,7 +36,7 @@
 #   · INV-88  descubrimiento fuera de ADS y las tres puertas (Tanda 7 — no empezada).
 
 medido_en: "2026-08-24"
-almagesto_version: "1.30.0"
+almagesto_version: "1.31.0"
 contrato_invariantes: 91
 
 techos:
