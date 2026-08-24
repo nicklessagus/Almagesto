@@ -202,35 +202,59 @@ def collect_marks(root: Path) -> list[Mark]:
     return marcas
 
 
-def _simbolo_de(lineas: list[str], n: int) -> str:
-    """El `def`/`class` **que contiene** la línea `n` (1-indexada). "" si la marca está a nivel de
-    módulo — típicamente sobre una constante.
+def _simbolo_por_ast(fuente: str, n: int) -> str | None:
+    """El `def`/`class` **más interno** que contiene la línea `n`, o `""` si es de módulo.
+    `None` si el archivo no parsea (el llamador cae al heurístico)."""
+    try:
+        arbol = ast.parse(fuente)
+    except (SyntaxError, ValueError):
+        return None
+    mejor, span = "", None
+    for nodo in ast.walk(arbol):
+        if not isinstance(nodo, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        if nodo.lineno <= n <= (nodo.end_lineno or nodo.lineno):
+            ancho = (nodo.end_lineno or nodo.lineno) - nodo.lineno
+            if span is None or ancho < span:
+                mejor, span = nodo.name, ancho
+    return mejor
 
-    Antes esto devolvía el `def` más cercano hacia arriba **sin chequear la contención**, así que
-    una marca sobre una constante se le colgaba a la función que hubiera quedado encima. Medido en
-    el artefacto real: `INV-76` (que marca `AUTORIDAD_CAMPO`) figuraba implementado por
-    `_extra_core_error`, e `INV-77` (`DISPUTE_SOURCES`) por `note_files`. Un mapa que atribuye mal
-    es peor que uno vacío: el vacío se ve, la atribución falsa se lee como verdad.
 
-    La contención se decide por **indentación**, no por AST: el recolector tiene que poder correr
-    sobre un archivo que no parsea (justo el caso en que uno quiere saber qué invariante toca)."""
+def _simbolo_por_indentacion(lineas: list[str], n: int) -> str:
+    """Heurístico de respaldo, para el archivo que NO parsea."""
     marca = lineas[n - 1] if 0 < n <= len(lineas) else ""
     sangria = len(marca) - len(marca.lstrip())
     if sangria == 0:
-        return ""                      # a nivel de módulo: no la contiene ninguna función
+        return ""
     for i in range(n - 2, -1, -1):
         linea = lineas[i]
         if not linea.strip():
             continue
         propia = len(linea) - len(linea.lstrip())
         if propia >= sangria:
-            continue                   # sigue dentro del mismo bloque
+            continue
         m = DEF_RE.match(linea)
-        if m:
-            return m.group(1)
-        return ""                      # bloque de menor sangría que no es def/class: no contiene
+        return m.group(1) if m else ""
     return ""
 
+
+def _simbolo_de(lineas: list[str], n: int) -> str:
+    """El `def`/`class` que contiene la línea `n` (1-indexada). "" si es a nivel de módulo.
+
+    **Se decide por AST**, no por texto, y la diferencia no es de pureza. Con el heurístico de
+    indentación la atribución dependía de **cómo estaba escrita la marca**, no de dónde estaba:
+    se midió que 23 de 77 marcas vivas conservaban su símbolo *sólo* porque el script que las
+    insertó las dejó mal indentadas, y re-indentarlas —un `black`, un reindent— rompía el 30% del
+    mapa **en silencio**: sin marca huérfana, sin cambio de conteo, sin `--check` en rojo, porque el
+    artefacto se regenera con el símbolo perdido. Además el heurístico atribuía a una función de
+    **juguete** dentro de un docstring de ejemplo, y perdía el símbolo en cuatro formas normales de
+    escribir código (marca dentro de un `if`, de un dict multilínea, tras una continuación de línea,
+    o bajo una firma multilínea).
+
+    El heurístico **queda como respaldo** para el archivo que no parsea, que es justo el caso en que
+    uno quiere saber qué invariante toca."""
+    por_ast = _simbolo_por_ast("\n".join(lineas), n)
+    return _simbolo_por_indentacion(lineas, n) if por_ast is None else por_ast
 
 def load_techos(root: Path) -> dict:
     """Techos del ratchet. Ausente = sin techo (0): un ratchet que no está no puede aflojar nada."""

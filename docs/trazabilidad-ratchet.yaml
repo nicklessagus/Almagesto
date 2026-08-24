@@ -24,7 +24,7 @@
 #
 # LOS SIETE QUE QUEDAN NO SON FALTA DE MARCADO: no hay símbolo o no hay test que marcar, y ése es
 # el hallazgo de la pasada. ⚠ "hueco" acá es lenguaje corriente, NO el estado `HUECO` del
-# contrato: en la taxonomía de `contrato.md` §2 sólo INV-86 e INV-88 son HUECO; INV-05 e INV-66
+# contrato: en la taxonomía de `contrato.md` §2 sólo INV-86 sigue en HUECO; INV-05 e INV-66
 # son `garantizado sin medir`, INV-19 es `HUECO (parcial)`, INV-23 es `INCUMPLIDO (parcial)` e
 # INV-73 figura `garantizado y medido`. La autoridad del estado es el contrato, no este archivo.
 #   · INV-05  las plantillas de `make_notes` no tienen test que las audite buscando prosa que
@@ -39,12 +39,15 @@
 #             el aislamiento lo da la fixture `toy_vault`, no una aserción: ningún test se
 #             pondría rojo si `cmd_seed` escribiera en `cfg.VAULT`. Falta ESE test.
 #   · INV-86  `inferencia` sin premisas (issue 8.3, Tanda 8 — no empezada).
-#   · INV-88  descubrimiento fuera de ADS y las tres puertas (Tanda 7 — no empezada).
+#
+# ✅ INV-88 salió de la lista con la Tanda 7: las tres puertas de D-26 están
+#    implementadas y medidas una por una. Queda su capa skill (issue 7.4), que no es
+#    marcable — la conducta de un skill no la ve ningún recolector.
 
 medido_en: "2026-08-24"
 almagesto_version: "1.31.0"
 contrato_invariantes: 91
 
 techos:
-  sin_marca: 7    # medido: 2026-08-24 (pasada retroactiva) — 05, 19, 23, 66, 73, 86, 88.
-  sin_test: 7     # medido: 2026-08-24 — los mismos siete.
+  sin_marca: 6    # medido: 2026-08-24 (Tanda 7) — 05, 19, 23, 66, 73, 86. INV-88 salió.
+  sin_test: 6     # medido: 2026-08-24 — los mismos seis.

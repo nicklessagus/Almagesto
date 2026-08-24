@@ -1389,7 +1389,7 @@ def test_sin_faceta_propia_ninguna_puerta_abre(toy_vault):
 def test_puerta_2_el_fundacional_entra_sin_lente_astro(toy_vault, monkeypatch):
     """El caso Hyvärinen, que es el que motiva D-26: el paper fundacional de ICA **no menciona RV
     ni una vez**, así que la lente global con `require: [rv]` lo mata. Entra por ser fundacional en
-    su campo: faceta propia + muchas citas."""
+    su campo: faceta propia + muchas citas.  @inv INV-88"""
     monkeypatch.setattr(qa, "REQUIRE_FACETS", ["rv"])
     tema = _tema(fundacional_min_citas=1000)
     facets, core, why = qa.classify_theme(
@@ -1496,7 +1496,7 @@ def test_main_aplica_la_regla_del_tema_a_la_query_directa(toy_vault, toy_classif
     """Integración del cableado: un tema con `facet:` re-juzga los registros de la query directa con
     la regla de D-26 y **persiste** el veredicto nuevo en `ads.json`. Sin este test la función
     existía pero nadie comprobaba que la cadena la llamara — el modo de falla que más veces mordió
-    en este repo (una feature implementada y no cableada)."""
+    en este repo (una feature implementada y no cableada).  @inv INV-88"""
     write_yaml(cfg.THEMES_YAML, {"ica": {
         "title": "ICA", "area": "methods", "concept": "ica",
         "query": 'abs:"independent component"',
@@ -1546,7 +1546,7 @@ def test_puerta_1_propone_lo_que_el_corpus_cita_y_no_lo_clasifica(toy_vault, mon
 
     Es la señal que ninguna regex puede expresar: Hyvärinen tiene ~30k citas casi todas de fMRI y
     finanzas, y lo que lo vuelve tuyo es que tu gente lo cita. Y es lo que INV-24 obliga a que sea
-    una propuesta: si clasificara, ser core dejaría de ser función de `(paper, lente)`."""
+    una propuesta: si clasificara, ser core dejaría de ser función de `(paper, lente)`.  @inv INV-88"""
     recs = [
         dict(_rec("Independent component analysis of EEG"), bibcode="A", doi="10.1/a",
              relevant=False, why_excluded="ninguna puerta abre (ni fundacional ni lente astro)"),
@@ -1581,7 +1581,7 @@ def test_puerta_1_sin_indice_no_propone_nada(toy_vault):
 def test_main_puerta_1_deja_el_candidato_en_ads_json(toy_vault, toy_classifier, no_sleep,
                                                      monkeypatch, capsys):
     """Integración: la cadena consulta el índice y **persiste** el candidato con su `via` y quiénes
-    lo citan. Sin este test la puerta existía sin estar cableada."""
+    lo citan. Sin este test la puerta existía sin estar cableada.  @inv INV-88"""
     write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ica",
                                          "query": 'abs:"independent component"',
                                          "facet": "independent component"}})
