@@ -73,6 +73,7 @@ import yaml
 
 import lib_config as cfg
 import lib_blocks as lb
+import make_notes as mn
 from extract_fulltext import is_legible      # umbral determinista de legibilidad (mismo que extract)
 from fetch_ground_truth import msini_earth   # verificación de masa (m·sini implícita)
 from make_notes import find_header_line      # contrato de la cabecera (mismo que stamp_pdf_link, #48)
@@ -539,9 +540,12 @@ def main(argv=()) -> int:
 
     refs_dir = str(cfg.RAW / "refs")
     refs_stems = {basename(f)[:-3] for f in files if f.startswith(refs_dir)}  # docs de diseño, no fichas
+    paper_fms: dict = {}               # {stem: frontmatter} de papers/ — para D-10, sin re-parsear
     for f in files:
         text = open(f, encoding="utf-8").read()
         fm = split_fm(text)
+        if in_dir(f, "papers"):
+            paper_fms[basename(f)[:-3]] = fm
         stem = basename(f)[:-3]
         for motivo in normalize_lists(fm):     # ANTES de cualquier lector (ver normalize_lists)
             fm_broken.append((stem, motivo))
@@ -877,6 +881,45 @@ def main(argv=()) -> int:
             stale_pairs.append(
                 (stem, f"[[{p.bibcode}]] **sin verificar**: hay una afirmación que lo cita y no "
                        f"tiene fila en el bloque (ancla {p.anchor})"))
+
+    # ── lista de papers desactualizada (D-10) ────────────────────────────────────────────────────
+    # La tabla materializada de `## Papers` es un snapshot, y un snapshot que nadie re-estampa
+    # miente igual que el roll-up Dataview que reemplazó (medido: 155 prometidos, 8 discutidos).
+    # Backlog —es "re-estampar", no una violación del vault— pero NOMBRA los stems que faltan o
+    # sobran, no la diferencia de conteos: dos listas del mismo largo pueden no ser los mismos
+    # papers (la lección de #70).
+    papers_table_stale: list = []
+    # UNA sola pasada de parseo de `papers/`, compartida por todas las estrellas: sin esto el lint
+    # saltaba de ~2,0 a 5,9 parseos YAML por nota (medido por `tests/poblada/test_escala.py`, techo
+    # 2,3) — el costo crece con el producto notas × estrellas.
+    # `paper_fms` se llena en el LOOP principal (ver más arriba), que ya parsea cada nota: una
+    # pasada extra acá subía el ratio a ~3,0 (el techo del test de escala es 2,3), y el hotspot
+    # conocido —el doble parseo de split_fm+fm_error— ya se come 2,0.
+    for nombre, meta_s in cfg.load_stars().items():
+        slug_s = meta_s.get("slug") if isinstance(meta_s, dict) else None
+        dest_s = cfg.STARS / f"{slug_s}.md" if slug_s else None
+        if not dest_s or not dest_s.exists():
+            continue
+        try:
+            esperados = {r["stem"] for r in mn.papers_universe(slug_s, "star", paper_fms)}
+        except Exception:
+            continue                      # config rota: ya lo reporta otra categoría
+        texto_s = dest_s.read_text(encoding="utf-8")
+        seccion = texto_s.split("\n" + mn.PAPERS_HEADER, 1)
+        listados = set()
+        if len(seccion) > 1:
+            cuerpo_s = seccion[1].split("\n## ", 1)[0]
+            listados = {m for m in LINK_RE.findall(cuerpo_s)}
+        faltan, sobran = esperados - listados, listados - esperados
+        if faltan or sobran:
+            detalle = []
+            if faltan:
+                detalle.append("faltan " + ", ".join(sorted(faltan)))
+            if sobran:
+                detalle.append("sobran " + ", ".join(sorted(sobran)))
+            papers_table_stale.append(
+                (slug_s, "la lista de papers estampada no refleja el universo: " +
+                         "; ".join(detalle) + f" → `python scripts/make_notes.py {slug_s}`"))
 
     # contradicción ground-truth ↔ ficha (qué planetas + campo por campo) + masa sospechosa
     mass_issues = []
@@ -1304,6 +1347,7 @@ def main(argv=()) -> int:
                          ("Cabecera no estampable: ficha/concepto sin la línea del generador — los "
                           "estampadores de cabecera no-opean en silencio (backlog)", headerless),
                          ("Triage pendiente: candidatos del chaining sin juzgar (backlog)", triage_pending),
+                         ("Lista de papers desactualizada: la tabla estampada no refleja el universo (backlog)", papers_table_stale),
                          ("Cadena incompleta: falta un paso del orden canónico (backlog)", cadena_incompleta),
                          ("Corpus truncado: la query directa trajo menos de lo que ADS reporta (backlog)", truncated_corpora),
                          ("Decisión del registro con forma inválida — load_decisiones la descarta "

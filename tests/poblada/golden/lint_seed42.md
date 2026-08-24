@@ -103,6 +103,11 @@
 
 ## Triage pendiente: candidatos del chaining sin juzgar (backlog) (0)
 
+## Lista de papers desactualizada: la tabla estampada no refleja el universo (backlog) (3)
+- star00 → la lista de papers estampada no refleja el universo: faltan 1996Alm00057A, 1997Alm00009A, 1997Alm00015A, 1997Alm00036A, 2000Alm00039A, 2002Alm00012A, 2002Alm00042A, 2002Alm00051A, 2003Alm00021A, 2006Alm00027A, 2007Alm00045A, 2013Alm00006A, 2015Alm00048A, 2016Alm00030A, 2021Alm00000A, 2021Alm00024A, 2021Alm00054A, 2022Alm00018A, 2023Alm00003A, 2024Alm00033A → `python scripts/make_notes.py star00`
+- star01 → la lista de papers estampada no refleja el universo: faltan 1996Alm00010A, 1998Alm00019A, 2000Alm00043A, 2001Alm00007A, 2002Alm00058A, 2003Alm00031A, 2003Alm00046A, 2006Alm00025A, 2006Alm00028A, 2009Alm00022A, 2012Alm00040A, 2014Alm00037A, 2015Alm00001A, 2016Alm00034A, 2016Alm00052A, 2017Alm00049A, 2019Alm00013A, 2019Alm00055A, 2022Alm00004A, 2022Alm00016A → `python scripts/make_notes.py star01`
+- star02 → la lista de papers estampada no refleja el universo: faltan 2000Alm00026A, 2001Alm00029A, 2002Alm00017A, 2004Alm00014A, 2005Alm00053A, 2006Alm00005A, 2007Alm00020A, 2009Alm00044A, 2012Alm00050A, 2014Alm00002A, 2015Alm00023A, 2015Alm00035A, 2015Alm00038A, 2016Alm00011A, 2017Alm00008A, 2017Alm00032A, 2018Alm00041A, 2019Alm00056A, 2021Alm00059A, 2024Alm00047A → `python scripts/make_notes.py star02`
+
 ## Cadena incompleta: falta un paso del orden canónico (backlog) (0)
 
 ## Corpus truncado: la query directa trajo menos de lo que ADS reporta (backlog) (0)

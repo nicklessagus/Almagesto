@@ -23,7 +23,7 @@ el apéndice máquina "## Excluidos por el filtro" con el ads.json vigente — v
 nota de paper que ya existía re-estampa el link `[📄 PDF]` de la línea de cabecera desde el
 frontmatter `pdf:` — ver stamp_pdf_link (#47: la cabecera es metadata derivada, no contenido
 de escritura única); (d) en una ficha/concept que ya existía re-estampa la línea de puntero
-`> _Búsqueda …_` de la cabecera desde `vault/config/registro/<slug>.yaml` — ver stamp_search_line
+`> _Estado — …_` de la cabecera desde `vault/config/registro/<slug>.yaml` — ver stamp_estado
 (#64). Aparte, `stamp_fulltext` (lo llama extract_fulltext al cerrar) estampa
 `fulltext`/`fulltext_source`/`pdf_source` sobre notas ya existentes. Backfill masivo del link PDF:
 `python scripts/make_notes.py --restamp-pdf-links` (sin slug).
@@ -743,7 +743,6 @@ LLM_DISCLAIMER = {
 > chequeable con `verify-citations`, que es **juicio de LLM, no prueba**. Verificá contra la fuente antes
 > de llevar un dato a un paper/tesis.""",
 }
-SEARCH_LINE_RE = re.compile(r"^> _Búsqueda .*_$\n?", re.M)
 
 
 # Paso de CONTRASTE cross-paper (#72): la sección que va entre leer los papers y escribir la
@@ -862,35 +861,6 @@ def extraction_block(topic: bool) -> str:
     return "## Extracción (LLM)\n" + "\n".join(bullets) + "\n"
 
 
-def search_line(slug: str) -> str:
-    """Puntero de UNA línea al registro de búsqueda versionado (#64), para la cabecera de la ficha
-    o del concept. El registro completo —query efectiva, límites, conteos, versión— vive en
-    `vault/config/registro/<slug>.yaml`; acá va sólo lo que el que abre la nota necesita saber sin
-    abrir nada: CUÁNDO se buscó y sobre QUÉ universo afirma la nota. "" si no hay registro."""
-    # D-28: el registro acumula corridas (`busquedas: []`). La línea resume la ÚLTIMA fecha y el
-    # universo **acumulado** —unión, no suma: dos refrescos solapados no cuentan dos veces lo que
-    # ya estaba—, más cuántas búsquedas hubo. `load_busquedas` ya filtra entradas con forma
-    # inválida (el archivo lo edita gente a mano).
-    bs = cfg.load_busquedas(slug)
-    b = bs[-1] if bs else {}
-    if not b.get("fecha"):
-        return ""
-    universo = cfg.universo_acumulado(slug) or b.get("n_found") or b.get("n_total")
-    partes = [f"> _Búsqueda {b['fecha']}"]
-    if len(bs) > 1:
-        partes.append(f" ({len(bs)} búsquedas)")
-    partes.append(f": {universo} → {b.get('n_core', '?')} core" if universo
-                  else f": {b.get('n_core', '?')} core")
-    if b.get("n_candidates"):
-        partes.append(f" · {b['n_candidates']} sin juzgar")
-    if b.get("n_dropped"):
-        partes.append(f" · {b['n_dropped']} descartados")
-    if b.get("truncated"):
-        partes.append(" · ⚠ truncada")
-    partes.append(f" · registro en `config/registro/{slug}.yaml`._")
-    return "".join(partes) + "\n"
-
-
 H1_RE = re.compile(r"^# .+$", re.M)
 
 
@@ -940,7 +910,7 @@ def stamp_header(dest) -> bool:
     # La rama de fallback TIENE que llevar `GENERATOR_LINE`. Medido corriendo el ensayo de deploy
     # sobre un corpus real: la línea vieja ("Cabecera normalizada por Almagesto; la nota no registra
     # con qué versión se creó") no la llevaba, y `GENERATOR_LINE` no es decorativa — es el **punto de
-    # inserción** que `stamp_search_line` busca (`if i < 0: return False`). O sea que la cabecera
+    # inserción** que `stamp_estado` busca (`if i < 0: return False`). O sea que la cabecera
     # "arreglada" no servía para lo único que la cabecera existe para habilitar: el lint seguía
     # marcando la nota y `--restamp-headers` informaba éxito **en cada corrida** (22 estampadas, 21
     # reportadas, para siempre). Es el no-op silencioso de #69 una capa más abajo.
@@ -971,21 +941,256 @@ def stamp_header(dest) -> bool:
     return True
 
 
-def stamp_search_line(slug: str, dest) -> bool:
-    """Estampa/actualiza el puntero de búsqueda en la cabecera de una nota EXISTENTE (familia
-    stamp_fulltext/stamp_excluded: cirugía a nivel texto, nunca toca la prosa LLM). Va justo antes
-    de la línea `_Generado con Almagesto v…_` del blockquote de cabecera; si esa ancla no está, la
-    cabecera está fuera del contrato y NO se toca nada (mismo criterio que stamp_pdf_link, #48).
-    Idempotente: sin cambios no reescribe. Devuelve True si modificó."""
+# ── D-10/D-11/D-24: la lista de papers, MATERIALIZADA ────────────────────────────────────────────
+#
+# Qué problema cierra. Una ficha promete en su roll-up `## Papers` un universo (medido en la
+# instancia real: 155) y su prosa discute otra cosa (8). Y ese roll-up es un bloque ```dataview```:
+# un agente que abre el `.md` ve el CÓDIGO de la query, no sus resultados, y el plugin ni siquiera
+# está versionado. El contrato dice que la ficha sirve a una audiencia-modelo; una promesa que
+# depende de un plugin no la cumple (D-11). Acá la tabla se ESTAMPA, con el estado de cada paper.
+
+PAPERS_HEADER = "## Papers"
+METODOS_HEADER = "## Métodos aplicados a esta estrella"
+CONCEPT_ROLLUP_HEADER = "## Papers que tocan este tema (auto)"
+
+# Los cuatro estados posibles de un paper del universo de un sujeto. El orden es el del embudo:
+# cada uno es un paso menos recorrido que el anterior.
+ESTADO_SINTETIZADO = "sintetizado"
+ESTADO_EXTRAIDO = "extraído, no sintetizado"
+ESTADO_SIN_EXTRAER = "sin extraer"
+ESTADO_FUERA = "fuera del filtro"
+
+
+def papers_fm_index() -> dict:
+    """`{stem: frontmatter}` de todas las notas de paper — UNA pasada de parseo.
+
+    Existe por una regresión medida: `papers_universe` re-parseaba `papers/` entero por cada
+    sujeto, y con 4 estrellas sobre 900 notas el lint saltó de ~2,0 a **5,9 parseos YAML por nota**
+    (el techo del test de escala es 2,3). Un consumidor que ya tiene el índice lo pasa; el resto
+    paga una sola pasada."""
+    return {f.stem: cfg.split_fm(f.read_text(encoding="utf-8"))
+            for f in sorted(cfg.PAPERS.glob("*.md"))}
+
+
+def _papers_del_sujeto(slug: str, kind: str, fms: dict | None = None) -> list:
+    """(stem, frontmatter) de cada nota de paper que declara este sujeto.
+
+    Se parsea con `cfg.split_fm`, **nunca** con grep: es la lección que `CLAUDE.md` registra medida
+    dos veces — `grep -l 'stars:.*<nombre>'` da 0 hits con la lista en bloque, y el `awk` con ámbito
+    de campo da 0 con la lista en flow style, que es como la deja el retro-linkeo. Las dos formas
+    conviven en el mismo corpus."""
+    if kind == "star":
+        nombre, _ = cfg.star_by_slug(slug)
+        campo = "stars"
+    else:
+        nombre, meta = cfg.topic_by_slug(slug)
+        campo = "topics"
+        nombre = meta.get("concept") or slug
+    return [(stem, fm) for stem, fm in (fms if fms is not None else papers_fm_index()).items()
+            if nombre in (cfg.as_list(fm.get(campo)) or [])]
+
+
+# Secciones ESTAMPADAS por máquina: no son síntesis. Se excluyen al medir "citado en esta ficha"
+# porque se citan a sí mismas — la tabla de `## Papers` lleva un `[[bibcode]]` por fila, así que sin
+# este recorte TODO paper aparece como sintetizado apenas se estampa la tabla. Es el mismo lazo que
+# el bloque `## Verificación de citas` en `lib_blocks`: un artefacto que se mide a sí mismo siempre
+# da el resultado que su propia existencia produce.
+SECCIONES_MAQUINA = (PAPERS_HEADER, METODOS_HEADER, CONCEPT_ROLLUP_HEADER, "## Excluidos por el filtro")
+
+
+def _prosa(text: str) -> str:
+    """El cuerpo SIN las secciones estampadas por máquina."""
+    out, saltando = [], False
+    for linea in text.split("\n"):
+        if linea.startswith("## "):
+            saltando = any(linea.startswith(h) for h in SECCIONES_MAQUINA)
+        if not saltando:
+            out.append(linea)
+    return "\n".join(out)
+
+
+def papers_universe(slug: str, kind: str, fms: dict | None = None) -> list:
+    """El universo de papers del sujeto.  @inv INV-81, por paper: `{stem, year, relevance, origen, via, estado}`.
+
+    `estado` mide **cuán lejos llegó ese paper en el embudo**, que es la pregunta que la ficha no
+    podía responder: `fuera del filtro` (no-core) → `sin extraer` → `extraído, no sintetizado`
+    (`methods` poblado pero su bibcode no aparece citado en ESTA ficha) → `sintetizado`.
+
+    `origen` es `manual` si el paper está en `extra_core` (el juicio del usuario pisa a la lente,
+    #68) y `lente` si no; `via` trae el valor declarado en la config (D-58)."""
+    dest = (cfg.STARS / f"{slug}.md") if kind == "star" else _concept_dest(slug)
+    cuerpo = _prosa(dest.read_text(encoding="utf-8")) if dest and dest.exists() else ""
+    meta = (cfg.star_by_slug(slug)[1] if kind == "star" else cfg.topic_by_slug(slug)[1])
+    via_de = {e["bibcode"]: e["via"] for e in cfg.load_extra_core(meta, entry=slug)}
+    filas = []
+    for stem, fm in _papers_del_sujeto(slug, kind, fms):
+        if (fm.get("relevance") or "").lower() == "low":
+            estado = ESTADO_FUERA
+        elif not (fm.get("methods") or []):
+            estado = ESTADO_SIN_EXTRAER
+        elif f"[[{stem}" in cuerpo:
+            estado = ESTADO_SINTETIZADO
+        else:
+            estado = ESTADO_EXTRAIDO
+        filas.append({"stem": stem, "year": fm.get("year") or "", "relevance": fm.get("relevance") or "",
+                      "origen": "manual" if stem in via_de else "lente",
+                      "via": via_de.get(stem, ""), "estado": estado})
+    return sorted(filas, key=lambda r: r["stem"])
+
+
+def _concept_dest(slug: str):
+    """La nota del concepto de un tema, por su `area`/`concept` de topics.yaml."""
+    try:
+        _, meta = cfg.topic_by_slug(slug)
+    except KeyError:
+        return None
+    return cfg.CONCEPTS / str(meta.get("area") or "") / f"{meta.get('concept') or slug}.md"
+
+
+def papers_table(rows: list) -> str:
+    """La sección `## Papers` estampada: encabezado con los DOS números (universo y sintetizados) y
+    una fila por paper. El encabezado no puede prometer un número que la tabla no sostenga — ése
+    era el defecto medido."""
+    n_sint = sum(1 for r in rows if r["estado"] == ESTADO_SINTETIZADO)
+    out = [f"{PAPERS_HEADER} ({len(rows)} · {n_sint} sintetizados en esta ficha)", ""]
+    if not rows:
+        out += ["_(ninguna nota de paper declara este sujeto todavía.)_", ""]
+        return "\n".join(out)
+    out += ["| Bibcode | Año | Relevancia | Origen | Estado |", "|---|---|---|---|---|"]
+    for r in rows:
+        origen = r["origen"] + (f" ({r['via']})" if r["via"] else "")
+        out.append(f"| [[{r['stem']}]] | {r['year']} | {r['relevance']} | {origen} | {r['estado']} |")
+    out.append("")
+    return "\n".join(out)
+
+
+def concept_rollup_rows(slug: str, fms: dict | None = None) -> list:
+    """Roll-up de un concepto: **unión** de `methods` y `thesis_links`, declarando por cuál entró.
+
+    D-24: en la instancia real esas dos llaves viven en papers distintos, así que quedarse con una
+    sola pierde la mitad del roll-up sin decirlo."""
+    try:
+        _, meta = cfg.topic_by_slug(slug)
+    except KeyError:
+        return []
+    concept = meta.get("concept") or slug
+    filas = []
+    for stem, fm in (fms if fms is not None else papers_fm_index()).items():
+        por_m = concept in (cfg.as_list(fm.get("methods")) or [])
+        por_t = concept in (cfg.as_list(fm.get("thesis_links")) or [])
+        if not (por_m or por_t):
+            continue
+        filas.append({"stem": stem, "year": fm.get("year") or "",
+                      "bearing": fm.get("bearing") or "",
+                      "entro_por": "ambos" if por_m and por_t else ("methods" if por_m else "thesis_links")})
+    return sorted(filas, key=lambda r: r["stem"])
+
+
+def concept_rollup_table(rows: list) -> str:
+    out = [f"{CONCEPT_ROLLUP_HEADER} ({len(rows)})", ""]
+    if not rows:
+        out += ["_(ninguna nota de paper declara este tema todavía.)_", ""]
+        return "\n".join(out)
+    out += ["| Bibcode | Año | Bearing | Entró por |", "|---|---|---|---|"]
+    for r in rows:
+        out.append(f"| [[{r['stem']}]] | {r['year']} | {r['bearing']} | {r['entro_por']} |")
+    out.append("")
+    return "\n".join(out)
+
+
+def _reemplazar_seccion(dest, header: str, nuevo: str) -> bool:
+    """Cirugía anclada: reemplaza la sección que empieza en `header` hasta el próximo `## ` (o EOF).
+
+    Familia `stamp_excluded`/`stamp_fulltext`: nunca toca la prosa LLM de las otras secciones, y es
+    idempotente (sin cambios no reescribe). Si la nota no tiene esa sección, no la inventa —
+    agregarla al final la pondría después del apéndice de excluidos, fuera de su lugar."""
     if not dest.exists():
         return False
-    new = search_line(slug)
     text = dest.read_text(encoding="utf-8")
-    out = SEARCH_LINE_RE.sub("", text, count=1)      # sacar el puntero viejo (si lo había)
+    i = text.find("\n" + header)
+    if i < 0:
+        return False
+    inicio = i + 1
+    nxt = text.find("\n## ", inicio + 1)
+    fin = len(text) if nxt < 0 else nxt + 1
+    out = text[:inicio] + nuevo.rstrip("\n") + "\n" + text[fin:]
+    if out == text:
+        return False
+    cfg.write_text_atomic(dest, out)
+    return True
+
+
+def stamp_papers_table(slug: str, dest, kind: str = "star") -> bool:
+    """Reemplaza el bloque ```dataview``` de `## Papers` por la tabla materializada (D-10/D-11)."""
+    return _reemplazar_seccion(dest, PAPERS_HEADER, papers_table(papers_universe(slug, kind)))
+
+
+def stamp_concept_rollup(slug: str, dest) -> bool:
+    """Ídem para el roll-up de un concepto, con la unión de las dos llaves (D-24)."""
+    return _reemplazar_seccion(dest, CONCEPT_ROLLUP_HEADER,
+                               concept_rollup_table(concept_rollup_rows(slug)))
+
+
+# ── D-12: las TRES fechas de una nota ────────────────────────────────────────────────────────────
+#
+# Una nota tiene tres estados que avanzan por separado y **pueden divergir sin que ninguno mienta**:
+# cuándo se buscó el corpus, cuándo se sintetizó la prosa, cuándo se verificaron las citas. Con una
+# sola fecha, refrescar el corpus hacía parecer re-verificado lo que nadie volvió a chequear.
+ESTADO_LINE_RE = re.compile(r"^> _Estado.*\n", re.M)
+
+
+def estado_line(slug: str, dest) -> str:
+    """La línea de estado de la cabecera.  @inv INV-82: búsqueda · síntesis · verificación. "" si no hay nada."""
+    bs = cfg.load_busquedas(slug)
+    b = bs[-1] if bs else {}
+    partes = []
+    if b.get("fecha"):
+        # Con UNA búsqueda se muestra `n_found` (lo que ADS dice que hay), como siempre. Con varias
+        # se muestra el universo ACUMULADO (unión, D-28): ahí es donde el número viejo mentía, al
+        # publicar el embudo de la última corrida como si fuera todo lo que la ficha vio.
+        universo = (cfg.universo_acumulado(slug) if len(bs) > 1
+                    else (b.get("n_found") or b.get("n_total") or "?"))
+        cuantas = f", {len(bs)} búsquedas" if len(bs) > 1 else ""
+        partes.append(f"búsqueda {b['fecha']} ({universo} → {b.get('n_core', '?')} core{cuantas})")
+        if b.get("n_candidates"):
+            partes.append(f"{b['n_candidates']} sin juzgar")
+        if b.get("truncated"):
+            partes.append("⚠ truncada")
+        if b.get("escotillas"):
+            partes.append(f"escotillas {' '.join(b['escotillas'])}")
+    texto = dest.read_text(encoding="utf-8") if dest.exists() else ""
+    m = re.search(r"^## Verificación de citas \((\d{4}-\d{2}-\d{2})\)", texto, re.M)
+    if m:
+        # La fecha es la de la última PASADA. La vigencia real es **por par** y la dicen las anclas
+        # (D-4): sin la salvedad, esta fecha se lee como "todo verificado a esta fecha", que es
+        # justamente la lectura que el ancla vino a corregir.
+        partes.append(f"verificación {m.group(1)} (vigencia por par: la dicen las anclas)")
+    if not partes:
+        return ""
+    # el puntero al registro es lo que hace auditable la línea: el detalle (query efectiva,
+    # límites, lente, juicios de curación) vive ahí y no se duplica en la nota (#64).
+    partes.append(f"registro en `config/registro/{slug}.yaml`")
+    return "> _Estado — " + " · ".join(partes) + "._\n"
+
+
+def stamp_estado(slug: str, dest) -> bool:
+    """Estampa/actualiza la línea de estado en la cabecera de una nota existente.
+
+    Mismo contrato que el viejo `stamp_search_line` (#64), al que ABSORBE — dos estampadores de
+    cabecera conviviendo son la misma complejidad permanente que un lector tolerante: cirugía
+    anclada en la línea
+    `_Generado con Almagesto v…_`, nunca toca la prosa, y si la cabecera está fuera del contrato no
+    inventa nada. **D-54:** si el contenido nuevo es idéntico al que ya está, no reescribe — un
+    stamper que re-fecha en cada corrida ensucia el diff y hace ilegible qué cambió de verdad."""
+    if not dest.exists():
+        return False
+    new = estado_line(slug, dest)
+    text = dest.read_text(encoding="utf-8")
+    out = ESTADO_LINE_RE.sub("", text, count=1)
     if new:
         i = out.find(GENERATOR_LINE)
         if i < 0:
-            return False                             # cabecera fuera del contrato: no inventamos
+            return False
         out = out[:i] + new + out[i:]
     if out == text:
         return False
@@ -998,9 +1203,10 @@ def write_star_note(slug: str, force: bool) -> None:
     dest = cfg.STARS / f"{slug}.md"
     if dest.exists() and not force:
         # la nota no se pisa; sólo se refresca el apéndice máquina con el ads.json vigente (#35)
-        stamped = stamp_excluded(slug, dest) | stamp_search_line(slug, dest)
+        stamped = (stamp_excluded(slug, dest) | stamp_papers_table(slug, dest, "star")
+                   | stamp_estado(slug, dest))
         cfg.print_seguro(f"  star: {dest.name} ya existe"
-              + (" — apéndice Excluidos / puntero de búsqueda re-estampados" if stamped
+              + (" — apéndice Excluidos / lista de papers / puntero de búsqueda re-estampados" if stamped
                  else " (usa --force para regenerar)"))
         return
     gt_file = cfg.GROUND_TRUTH / f"{slug}.json"
@@ -1072,12 +1278,8 @@ dv.table(["letter","P (d)","K (m/s)","e","M (M⊕)","status"],
 ```
 
 ## Papers
-```dataview
-TABLE year, topics, relevance, citation_count
-FROM "wiki/papers"
-WHERE contains(stars, "{name}")
-SORT citation_count DESC
-```
+_(se estampa determinista: `make_notes.py {slug}` lo regenera. D-11 — ninguna promesa del contrato
+depende de un plugin.)_
 
 ## Métodos aplicados a esta estrella
 ```dataview
@@ -1097,7 +1299,8 @@ SORT method ASC
     # scratch limpiado, árbol armado a mano) moría con un traceback de FileNotFound.
     dest.parent.mkdir(parents=True, exist_ok=True)
     cfg.write_text_atomic(dest, body)
-    stamp_search_line(slug, dest)
+    stamp_papers_table(slug, dest, "star")
+    stamp_estado(slug, dest)
     cfg.print_seguro(f"  star: {dest.name} escrito")
 
 
@@ -1117,9 +1320,10 @@ def write_concept_note(slug: str, force: bool) -> None:
     dest = cfg.CONCEPTS / area / f"{concept}.md"
     if dest.exists() and not force:
         # la síntesis no se pisa; sólo se refresca el apéndice máquina con el ads.json vigente (#35)
-        stamped = stamp_excluded(slug, dest) | stamp_search_line(slug, dest)
+        stamped = (stamp_excluded(slug, dest) | stamp_concept_rollup(slug, dest)
+                   | stamp_estado(slug, dest))
         cfg.print_seguro(f"  concept: {area}/{concept}.md ya existe"
-              + (" — apéndice Excluidos / puntero de búsqueda re-estampados" if stamped
+              + (" — apéndice Excluidos / roll-up / puntero de búsqueda re-estampados" if stamped
                  else " (no se pisa sin --force; los papers enganchan por thesis_links)"))
         return
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -1162,16 +1366,13 @@ _(qué falta para entender/implementar el tema sin abrir papers: pasos o ecuacio
 midió?), contradicciones sin resolver.)_
 
 ## Papers que tocan este tema (auto)
-```dataview
-TABLE bearing, year, file.link
-FROM "wiki/papers"
-WHERE {link_pred}
-SORT year ASC
-```
+_(se estampa determinista: `make_notes.py {slug} --topic` lo regenera. D-11/D-24 — unión de
+`methods` y `thesis_links`, declarando por cuál entró.)_
 """
     body += excluded_table(slug)
     cfg.write_text_atomic(dest, body)
-    stamp_search_line(slug, dest)
+    stamp_concept_rollup(slug, dest)
+    stamp_estado(slug, dest)
     cfg.print_seguro(f"  concept: {area}/{concept}.md escrito (stub)")
 
 

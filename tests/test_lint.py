@@ -1939,3 +1939,17 @@ def test_cadena_completa_no_marca(toy_vault, capsys):
     _, rep = run_lint_reporte(capsys)
     linea = [l for l in rep.splitlines() if l.startswith("## Cadena incompleta")]
     assert linea and linea[0].endswith("(0)")
+
+
+def test_lint_detecta_tabla_de_papers_desactualizada(toy_vault, capsys):
+    """D-10: la tabla materializada es un snapshot, y un snapshot que nadie re-estampa miente igual
+    que el roll-up Dataview que reemplazó. Backlog (es "re-estampar", no una violación), pero
+    nombra el stem que falta — el patrón Censo."""
+    import make_notes as mn
+    mn.write_star_note("test_star", force=True)
+    mk_note(toy_vault.PAPERS, "2020nueA...1..1A",
+            {"tags": ["paper"], "bibcode": "2020nueA...1..1A", "stars": ["Estrella Test"]}, "")
+    link_from_index(toy_vault, "test_star", "2020nueA...1..1A")
+    _, rep = run_lint_reporte(capsys)
+    assert "2020nueA...1..1A" in rep
+    assert "lista de papers" in rep.lower()

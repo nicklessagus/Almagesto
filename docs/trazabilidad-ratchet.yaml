@@ -30,5 +30,5 @@ almagesto_version: "1.26.0"
 contrato_invariantes: 91
 
 techos:
-  sin_marca: 84   # medido: 2026-08-24 — T0: INV-80,87,90 · T1: INV-78,79 · T2: INV-89,91.
-  sin_test: 84    # medido: 2026-08-24 — ídem.
+  sin_marca: 82   # medido: 2026-08-24 — T0: 80,87,90 · T1: 78,79 · T2: 89,91 · T3: 81,82.
+  sin_test: 82    # medido: 2026-08-24 — ídem.
