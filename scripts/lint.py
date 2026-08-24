@@ -72,6 +72,7 @@ from pathlib import Path
 import yaml
 
 import lib_config as cfg
+import lib_blocks as lb
 from extract_fulltext import is_legible      # umbral determinista de legibilidad (mismo que extract)
 from fetch_ground_truth import msini_earth   # verificación de masa (m·sini implícita)
 from make_notes import find_header_line      # contrato de la cabecera (mismo que stamp_pdf_link, #48)
@@ -457,11 +458,22 @@ def main(argv=()) -> int:
     # avisa. Con el parser, `--help` documenta y sale 0, y un flag inexistente sale 2 sin correr nada.
     cfg.stdout_tolerante()   # ANTES de parse_args: el texto del parser lleva acentos y `--help`
                              # sale por SystemExit sin volver acá — si no, muere en consola ascii.
-    argparse.ArgumentParser(
-        description="Chequeo de salud de la bóveda. No toma argumentos: analiza `vault/` entera, "
-                    "imprime el resumen y escribe `outputs/lint-<fecha>.md`.",
+    ap = argparse.ArgumentParser(
+        description="Chequeo de salud de la bóveda: analiza `vault/` entera, imprime el resumen y "
+                    "escribe `outputs/lint-<fecha>.md`.",
         epilog="Exit 1 si alguna categoría BLOQUEANTE tiene hits; los WARN y el backlog no bloquean."
-    ).parse_args(list(argv))
+    )
+    # R-1 (decidida con el usuario, 2026-08-24): el MISMO detector de pares vencidos, dos
+    # severidades según el momento. Sin flag = pasada periódica → backlog (frenar una bóveda con
+    # deuda vieja un martes cualquiera no frena nada útil). Con flag = paso de cierre de una
+    # operación que TOCÓ la nota → bloquea, porque un par sin verificar ahí significa que la
+    # operación no terminó. La distinción vive acá, en un punto testeable, y no en prosa de skill:
+    # un skill que se olvida de tratarlo como gate no deja rastro. D-44 intacto: el commit no se
+    # frena — esto gatea la operación, no el commit.
+    ap.add_argument("--cierre", action="store_true",
+                    help="modo cierre de operación: los pares de verificación vencidos cuentan "
+                         "para el exit (sin el flag son backlog, la pasada periódica)")
+    args = ap.parse_args(list(argv))
     files = note_files()
     # fulltext disponible (un .txt por bibcode, bajo cualquier slug/tema) → precondición de
     # verificabilidad: una cita en query/hipótesis sin su .txt no se puede chequear claim↔fuente.
@@ -472,8 +484,15 @@ def main(argv=()) -> int:
     # umbral determinista que extract_fulltext. Rescate: reemplazar el PDF por uno con capa de texto
     # sana, extraer por OCR, o marcar la fuente `pending` en sources: para derivarla al usuario.
     illegible_txt = []
+    # Hash de fuente (D-20) por bibcode, calculado sobre la MISMA lectura que ya hace `is_legible`
+    # —el 77% de los 5,6 s del lint sobre 908 notas—: cero lecturas extra. El hashing de ~66 MB es
+    # marginal frente al parseo YAML. Si un bibcode vive bajo varios slugs con contenido idéntico,
+    # el hash coincide; si difieren, gana el primero en orden alfabético (determinista).
+    ft_hash: dict[str, str] = {}
     for p in fulltext_files:
-        ok, why = is_legible(open(p, encoding="utf-8", errors="replace").read())
+        contenido = open(p, encoding="utf-8", errors="replace").read()
+        ft_hash.setdefault(basename(p)[:-4], lb.sha10(contenido))
+        ok, why = is_legible(contenido)
         if not ok:
             illegible_txt.append((Path(p).relative_to(cfg.RAW).as_posix(), why))
     # PDFs en disco (un <bibcode>.pdf por slug en vault/raw/pdfs/) → chequear drift `pdf` ↔ archivo.
@@ -493,6 +512,7 @@ def main(argv=()) -> int:
     # repartidos por todo `main()`.
     not_evaluated: list = []
     verif_blocks: list = []            # (archivo, fecha del bloque|None) — notas CON bloque de verify
+    anchor_notes: list = []            # (stem, texto) de esas mismas notas — insumo del ancla (D-4)
     names = {basename(p)[:-3] for p in files}  # stems referenciables por [[..]]
     incoming: dict[str, int] = {n: 0 for n in names}
     kinds: dict[str, list] = {}
@@ -572,6 +592,7 @@ def main(argv=()) -> int:
         # arriba: ampliar una ficha es justo cuando el bloque queda atrás.
         if has_verif and stem not in NON_ORPHAN:
             verif_blocks.append((f, verif_date))
+            anchor_notes.append((stem, text))
         # frontera dura: fuga de implementación (código no bibliográfico) al vault (WARN, no bloquea).
         body_full = text.split("---", 2)[-1] if text.startswith("---") else text
         scan_leaks = stem not in NON_ORPHAN    # log/index/README son historia/navegación, no fichas
@@ -801,6 +822,58 @@ def main(argv=()) -> int:
         elif (c := changed.get(f)) and c > d:
             stale_verif.append((stem, f"la nota se editó el {c} y su último verify es del {d} → "
                                       f"correr `verify-citations` sobre lo agregado"))
+
+    # ── pares de verificación vencidos (D-4 / D-20 / INV-78) ─────────────────────────────────────
+    # El bloque `## Verificación de citas` se lee como "esta nota está verificada". Acá eso se mide
+    # por PAR —qué afirmación exacta se chequeó, contra qué bytes de qué fuente— y no por archivo.
+    # Cinco sub-casos, cada uno con su mensaje:
+    #   (a) par del cuerpo sin fila            → sin verificar     (se agregó una afirmación)
+    #   (b) fila con ancla ≠ recálculo         → vencido por edición
+    #   (c) fila con hash de fuente ≠ el .txt  → vencido por fuente (se re-extrajo el PDF)
+    #   (d) fila sin par en el cuerpo          → fila huérfana     (se borró la afirmación)
+    #   (e) bloque sin columnas de hash        → plantilla vieja   (BLOQUEANTE siempre)
+    # (e) va aparte y bloquea sin `--cierre`: no es un par vencido, es un bloque que nadie puede
+    # evaluar — reportarlo como "0 vencidos" sería el cero inventado que D-43 prohíbe.
+    # @inv INV-78, INV-79
+    stale_pairs: list = []
+    old_verif_template: list = []
+    for stem, texto in sorted(anchor_notes):
+        filas = lb.parse_verif_table(texto)
+        if filas is None:
+            old_verif_template.append(
+                (stem, "el bloque de verificación no tiene las columnas `Ancla` / `Hash fuente` "
+                       "(plantilla vieja) → no se puede evaluar qué par sigue vigente; re-correr "
+                       "`verify-citations` para que lo reescriba con un par por fila"))
+            continue
+        pendientes = lb.pairs_of(texto)
+        for fila in filas:
+            exacto = next((p for p in pendientes
+                           if p.bibcode == fila.bibcode and p.anchor == fila.anchor), None)
+            if exacto is not None:
+                pendientes.remove(exacto)
+                vigente = ft_hash.get(fila.bibcode)
+                if vigente is not None and fila.source_hash != vigente:
+                    stale_pairs.append(
+                        (stem, f"[[{fila.bibcode}]] vencido **por fuente**: el `.txt` cambió desde "
+                               f"la verificación ({fila.source_hash} → {vigente}) — re-verificar"))
+                continue
+            # sin coincidencia exacta: ¿la nota sigue citando esa fuente en algún bloque? Entonces
+            # la afirmación se EDITÓ. Si ya no la cita, la fila quedó huérfana. Se consume el par
+            # para no reportar el mismo evento dos veces (como edición Y como sin-verificar).
+            movido = next((p for p in pendientes if p.bibcode == fila.bibcode), None)
+            if movido is not None:
+                pendientes.remove(movido)
+                stale_pairs.append(
+                    (stem, f"[[{fila.bibcode}]] vencido **por edición**: el bloque que lo cita "
+                           f"cambió desde la verificación ({fila.anchor} → {movido.anchor})"))
+            else:
+                stale_pairs.append(
+                    (stem, f"fila **huérfana**: la tabla verifica [[{fila.bibcode}]] pero el cuerpo "
+                           "ya no lo cita — se borró la afirmación y la fila quedó afirmando de más"))
+        for p in pendientes:
+            stale_pairs.append(
+                (stem, f"[[{p.bibcode}]] **sin verificar**: hay una afirmación que lo cita y no "
+                       f"tiene fila en el bloque (ancla {p.anchor})"))
 
     # contradicción ground-truth ↔ ficha (qué planetas + campo por campo) + masa sospechosa
     mass_issues = []
@@ -1196,6 +1269,8 @@ def main(argv=()) -> int:
                          ("Fulltext ilegible (mojibake/escaneo — existe pero no sirve para grep/verify)", illegible_txt),
                          ("Citas no verificables en query/concepto/hipótesis (sin fulltext)", unverifiable),
                          ("Sin verificar: query/concepto con citas pero sin bloque verify-citations (backlog)", unverified),
+                         ("⛔ Bloque de verificación con plantilla vieja (sin columnas de hash — no evaluable)", old_verif_template),
+                         ("Pares de verificación vencidos" + (" (BLOQUEA: modo --cierre)" if args.cierre else " (backlog: pasada periódica; con `--cierre` bloquea)"), stale_pairs),
                          ("Verificación stale: la nota se editó después de su último verify-citations (backlog)", stale_verif),
                          ("Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog)", coverage),
                          ("Extraído pero no sintetizado: el paper se extrajo y su contenido nunca "
@@ -1225,7 +1300,10 @@ def main(argv=()) -> int:
     # implementación, áreas, PDF↔disco) y backlog (verificabilidad, cobertura, incompletos) no.
     n_block = sum(len(x) for x in (not_evaluated, broken, fm_broken, retracted, orphans,
                                    contradictions, mass_issues, dangling_thesis, dangling_disputes,
-                                   bad_roles, bad_disputes, old_disputes, legacy_triage))
+                                   bad_roles, bad_disputes, old_disputes, legacy_triage,
+                                   old_verif_template))
+    if args.cierre:
+        n_block += len(stale_pairs)   # R-1: en el cierre de una operación, un par vencido frena
     if n_block:
         _print_seguro(f"✗ {n_block} hallazgo(s) en categorías bloqueantes → exit 1")
         return 1

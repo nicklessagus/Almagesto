@@ -1624,7 +1624,7 @@ def _skip_sin_git(ok):
 def test_verificacion_stale_por_edicion_sin_commitear(toy_vault, capsys):
     """El caso que importa: el lint corre ANTES del commit, así que la edición que dejó el bloque
     atrasado todavía no está en `git log` — un archivo sucio se toma como cambiado hoy."""
-    cuerpo = "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-01-01)\nok\n"
+    cuerpo = "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-01-01)\n\n| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente |\n|---|---|---|---|---|---|\n"
     _skip_sin_git(_repo_con_nota(toy_vault, cuerpo, fecha="2020-01-01"))
     rc, out = run_lint(capsys)
     assert rc == 0                                     # backlog, no bloqueante
@@ -1641,7 +1641,7 @@ def test_verificacion_stale_por_edicion_sin_commitear(toy_vault, capsys):
 
 def test_verificacion_stale_por_commit_posterior(toy_vault, capsys):
     """La otra rama: la edición ya está committeada — la fecha sale de `git log -1 --format=%cs`."""
-    cuerpo = "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-01-01)\nok\n"
+    cuerpo = "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-01-01)\n\n| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente |\n|---|---|---|---|---|---|\n"
     _skip_sin_git(_repo_con_nota(toy_vault, cuerpo, fecha="2020-01-01"))
     p = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
     p.write_text(p.read_text(encoding="utf-8") + "\nPárrafo agregado después.\n", encoding="utf-8")
@@ -1654,7 +1654,7 @@ def test_verificacion_stale_por_commit_posterior(toy_vault, capsys):
 
 def test_verificacion_al_dia_no_se_marca(toy_vault, capsys):
     """Bloque fechado DESPUÉS del último cambio del archivo: verificada al día → no se marca."""
-    cuerpo = "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-03-01)\nok\n"
+    cuerpo = "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-03-01)\n\n| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente |\n|---|---|---|---|---|---|\n"
     _skip_sin_git(_repo_con_nota(toy_vault, cuerpo, fecha="2020-01-01"))
     rc, out = run_lint(capsys)
     assert rc == 0
@@ -1664,7 +1664,7 @@ def test_verificacion_al_dia_no_se_marca(toy_vault, capsys):
 def test_bloque_sin_fecha_se_marca(toy_vault, capsys):
     """Sin fecha en el encabezado no hay forma de saber si el bloque sigue vigente (no necesita git)."""
     _nota_verif(toy_vault, "sin-fecha",
-                "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas\nok\n")
+                "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas\n\n| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente |\n|---|---|---|---|---|---|\n")
     rc, out = run_lint(capsys)
     assert rc == 0
     assert "- sin-fecha → bloque de verificación sin fecha en el encabezado" in out
@@ -1681,7 +1681,7 @@ def test_stale_sin_git_no_rompe(toy_vault, capsys, monkeypatch):
     falta y cómo."""
     monkeypatch.setattr(lint, "git_out", lambda *a: None)
     _nota_verif(toy_vault, "nota-verif",
-                "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-01-01)\nok\n")
+                "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-01-01)\n\n| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente |\n|---|---|---|---|---|---|\n")
     rc, out = run_lint(capsys)
     assert rc == 1
     assert "No evaluado" in out
@@ -1773,3 +1773,135 @@ def test_lint_limpio_sigue_en_cero(toy_vault, capsys):
     inventa un bloqueo (si no, la categoría nueva rompería toda bóveda sana)."""
     rc, rep = run_lint_reporte(capsys)
     assert "## ⛔ No evaluado" in rep and rep.split("## ⛔ No evaluado")[1].split("\n")[0].endswith("(0)")
+
+
+# ── issue 1.2 · pares de verificación vencidos (D-4 / D-20 / INV-78) ────────────────────────────
+#
+# El bloque `## Verificación de citas` se lee como "esta nota está verificada". El ancla mide eso
+# por PAR, no por archivo: qué afirmación exacta se chequeó, contra qué bytes de qué fuente.
+
+import lib_blocks as lb   # noqa: E402
+
+
+def _con_ancla(toy_vault, cuerpo, txt="El período es de 34 días.\n", bib="2020citC...1..1C",
+               anchor=None, source=None):
+    """Nota con bloque de verificación bien formado: la fila se calcula del propio cuerpo, así que
+    el escenario nace VERIFICADO y cada test rompe una sola cosa (D-5: la ficha nace 100%)."""
+    (toy_vault.FULLTEXT / "slug").mkdir(parents=True, exist_ok=True)
+    ft = toy_vault.FULLTEXT / "slug" / f"{bib}.txt"
+    ft.write_text(txt, encoding="utf-8")
+    pares = lb.pairs_of(cuerpo)
+    filas = ["| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente |",
+             "|---|---|---|---|---|---|"]
+    for i, par in enumerate(pares, 1):
+        filas.append(f"| {i} | extracto | [[{par.bibcode}]] | soportada | "
+                     f"{anchor or par.anchor} | {source or lb.source_hash(ft)} |")
+    completo = cuerpo + "\n## Verificación de citas (2026-01-01)\n\n" + "\n".join(filas) + "\n"
+    _nota_verif(toy_vault, "nota-verif", completo)
+    return ft
+
+
+CUERPO = "Afirmación con cita [[2020citC...1..1C]] sobre el período.\n"
+TITULO = "Pares de verificación vencidos"
+
+
+def _n_vencidos(rep):
+    """El título lleva sufijo de severidad (cambia con --cierre): se lee el conteo."""
+    linea = [l for l in rep.splitlines() if l.startswith(f"## {TITULO}")]
+    assert linea, "la categoría de pares vencidos no aparece en el reporte"
+    return int(linea[0].rsplit("(", 1)[1].rstrip(")"))
+
+
+def test_nota_verificada_no_marca_nada(toy_vault, capsys):
+    """Control de cordura, y D-5: la ficha nace 100% verificada. Sin este test, todos los de abajo
+    podrían estar pasando por un escenario roto de base.  @inv INV-79"""
+    _con_ancla(toy_vault, CUERPO)
+    _, rep = run_lint_reporte(capsys)
+    assert _n_vencidos(rep) == 0
+
+
+def test_par_nuevo_sin_fila_marca(toy_vault, capsys):
+    """Agregar una frase citada a una nota ya verificada: ese par nunca pasó por el fan-out, pero
+    queda bajo un encabezado que se lee como vigente."""
+    ft = _con_ancla(toy_vault, CUERPO)
+    p = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    p.write_text(p.read_text(encoding="utf-8").replace(
+        CUERPO, CUERPO + "\nAfirmación NUEVA [[2020citC...1..1C]].\n"), encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    assert _n_vencidos(rep) == 1
+    assert "sin verificar" in rep
+
+
+def test_edicion_marca_solo_sus_pares(toy_vault, capsys):
+    """Adversario de la invalidación por SECCIÓN: tres bloques citados, se edita uno."""
+    cuerpo = ("Bloque uno [[2020citC...1..1C]].\n\nBloque dos [[2020citC...1..1C]].\n\n"
+              "Bloque tres [[2020citC...1..1C]].\n")
+    _con_ancla(toy_vault, cuerpo)
+    p = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    p.write_text(p.read_text(encoding="utf-8").replace("Bloque dos", "Bloque DOS editado"),
+                 encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    assert _n_vencidos(rep) == 1
+    assert "por edición" in rep
+
+
+def test_reflow_no_marca_nada(toy_vault, capsys):
+    """Re-wrapear la nota entera no cambia lo que afirma."""
+    cuerpo = ("Una afirmación larga con su cita [[2020citC...1..1C]] que ocupa varias palabras "
+              "y sigue hasta acá.\n")
+    _con_ancla(toy_vault, cuerpo)
+    p = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    p.write_text(p.read_text(encoding="utf-8").replace(
+        "varias palabras y sigue", "varias palabras\ny sigue"), encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    assert _n_vencidos(rep) == 0
+
+
+def test_reemplazo_del_txt_marca_por_fuente(toy_vault, capsys):
+    """La otra mitad de INV-78 (D-20): se re-extrajo el PDF y el `.txt` ya no dice lo mismo. La
+    nota no se tocó, así que ninguna medida basada en fechas de la NOTA lo vería.  @inv INV-78"""
+    ft = _con_ancla(toy_vault, CUERPO)
+    ft.write_text("El período es de 36 días.\n", encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    assert _n_vencidos(rep) == 1
+    assert "por fuente" in rep
+
+
+def test_fila_huerfana_se_marca(toy_vault, capsys):
+    """La afirmación se borró y la fila quedó apuntando a la nada — el bloque afirma haber
+    verificado algo que ya no está."""
+    _con_ancla(toy_vault, CUERPO)
+    p = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    p.write_text(p.read_text(encoding="utf-8").replace(CUERPO, "Prosa sin citas.\n"),
+                 encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    assert _n_vencidos(rep) == 1
+    assert "huérfana" in rep
+
+
+def test_bloque_sin_columnas_de_hash_detectado(toy_vault, capsys):
+    """Plantilla vieja: no hay dónde colgar el ancla. Bloqueante SIEMPRE (no depende de --cierre):
+    no es un par vencido, es un bloque que nadie puede evaluar."""
+    _nota_verif(toy_vault, "nota-verif", CUERPO +
+                "\n## Verificación de citas (2026-01-01)\n\n"
+                "| # | Afirmación | Fuente | Veredicto |\n|---|---|---|---|\n"
+                "| 1 | extracto | [[2020citC...1..1C]] | soportada |\n")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 1
+    assert "plantilla vieja" in rep
+
+
+def test_cierre_bloquea_periodica_reporta(toy_vault, capsys, monkeypatch):
+    """R-1, decidida por el usuario el 2026-08-24: el MISMO detector, dos severidades según el
+    momento. Sin flag es la pasada periódica (backlog, exit 0 — no tiene sentido frenar una bóveda
+    con deuda vieja un martes cualquiera); `--cierre` es el paso de cierre de una operación que
+    tocó la nota, donde un par sin verificar significa que no terminaste."""
+    # el toy_vault no es un repo git y la nota lleva bloque FECHADO → sin esto cae en "no
+    # evaluado" (issue 0.3) y el rc de la pasada periódica no mediría lo que este test mide.
+    monkeypatch.setattr(lint, "git_out", lambda *a: "")
+    ft = _con_ancla(toy_vault, CUERPO)
+    ft.write_text("El período es de 36 días.\n", encoding="utf-8")
+    rc_periodica, rep = run_lint_reporte(capsys)
+    assert rc_periodica == 0
+    assert _n_vencidos(rep) == 1
+    assert lint.main(["--cierre"]) == 1

@@ -8,9 +8,9 @@
 ## Resumen
 
 - Invariantes en el contrato: **91**
-- Con implementación marcada: **3**
-- Con test marcado: **3** (techo `sin_test`: 88, hoy 88)
-- Sin ninguna marca: **88** (techo `sin_marca`: 88)
+- Con implementación marcada: **5**
+- Con test marcado: **5** (techo `sin_test`: 86, hoy 86)
+- Sin ninguna marca: **86** (techo `sin_marca`: 86)
 - Marcas huérfanas: **0**
 
 ## El mapa
@@ -94,8 +94,8 @@
 | **INV-75** | P2 | garantizado sin medir | — | — |
 | **INV-76** | P0 | HUECO (D-1) | — | — |
 | **INV-77** | P1 | HUECO (D-2) | — | — |
-| **INV-78** | P0 | HUECO (D-4, D-20) | — | — |
-| **INV-79** | P0 | HUECO (D-4, D-5) | — | — |
+| **INV-78** | P0 | HUECO (D-4, D-20) | `scripts/lib_blocks.py:3`<br>`scripts/lint.py:837` · `main` | `tests/test_lib_blocks.py:47` · `test_reflow_no_mueve_ancla`<br>`tests/test_lint.py:1862` · `test_reemplazo_del_txt_marca_por_fuente` |
+| **INV-79** | P0 | HUECO (D-4, D-5) | `scripts/lint.py:837` · `main` | `tests/test_lint.py:1817` · `test_nota_verificada_no_marca_nada` |
 | **INV-80** | P0 | HUECO (D-6) | `scripts/lib_config.py:203` · `objective_error`<br>`scripts/query_ads.py:822` · `main` | `tests/test_lib_config.py:399` · `test_objective_error_distingue_los_tres_estados`<br>`tests/test_lint.py:1735` · `test_lint_objective_roto_bloquea`<br>`tests/test_query_ads.py:1301` · `test_query_ads_rehusa_lente_vacia` |
 | **INV-81** | P0 | HUECO (D-10, D-11, D-24) | — | — |
 | **INV-82** | P1 | HUECO (D-12) | — | — |

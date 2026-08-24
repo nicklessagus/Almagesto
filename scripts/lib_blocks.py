@@ -1,4 +1,6 @@
-"""Partición de una nota en bloques citables + los dos hashes del ancla (D-4 / D-20, INV-78).
+"""Partición de una nota en bloques citables + los dos hashes del ancla (D-4 / D-20).
+
+@inv INV-78
 
 QUÉ PROBLEMA RESUELVE. El bloque `## Verificación de citas (AAAA-MM-DD)` de una nota se lee como
 "esta nota está verificada", pero una edición posterior —una frase nueva con su `[[bibcode]]`, un
@@ -67,6 +69,17 @@ class Block:
     first_line: int      # 1-indexada sobre el texto completo de la nota
     text: str
     intro: str | None = None
+
+
+@dataclass(frozen=True)
+class Row:
+    """Una fila del bloque `## Verificación de citas`: un par ya verificado, con sus dos hashes."""
+    n: str
+    claim: str
+    bibcode: str
+    verdict: str
+    anchor: str
+    source_hash: str
 
 
 @dataclass(frozen=True)
@@ -224,4 +237,47 @@ def pairs_of(body: str) -> list[Pair]:
         fuente = b.text if _bibcodes(b.text) else (b.intro or "")
         for bib in _bibcodes(fuente):
             out.append(Pair(bib, b, block_anchor(b.text, b.intro)))
+    return out
+
+
+# ── el bloque de verificación ────────────────────────────────────────────────────────────────────
+
+# Columnas que hacen evaluable al bloque. Sin ellas no hay dónde colgar los hashes: la plantilla
+# vieja colapsaba las soportadas en un párrafo de prosa y dejaba una sola fila (la que falló).
+_COLS_HASH = ("ancla", "hash")
+
+
+def parse_verif_table(text: str) -> list[Row] | None:
+    """Las filas del bloque `## Verificación de citas`, o `None` si el bloque **no se puede
+    evaluar** — porque no existe, o porque es de la plantilla vieja (sin las columnas de hash).
+
+    La distinción importa: un bloque sin columnas de hash NO es "cero pares vencidos". Es un bloque
+    que nadie puede chequear, y leerlo como limpio sería el mismo cero inventado que D-43 prohíbe.
+    El lint lo reporta como *plantilla vieja*, bloqueante. Sin migrador: la bóveda es nueva.
+
+    Un bloque bien formado y **sin filas** devuelve `[]` — eso sí es evaluable, y deja todo par del
+    cuerpo como *sin verificar*.
+    """
+    i = text.find(VERIFY_HEADER)
+    if i < 0:
+        return None
+    seccion = text[i:]
+    corte = seccion.find("\n## ", 1)
+    if corte > 0:
+        seccion = seccion[:corte]
+    filas = [ln.strip() for ln in seccion.split("\n") if ln.strip().startswith("|")]
+    if not filas:
+        return None
+    encabezado = filas[0].lower()
+    if not all(c in encabezado for c in _COLS_HASH):
+        return None                      # plantilla vieja: no hay dónde colgar los hashes
+    out: list[Row] = []
+    for ln in filas[1:]:
+        if _SEP_ROW_RE.match(ln):
+            continue
+        celdas = [c.strip() for c in ln.strip("|").split("|")]
+        if len(celdas) < 6:
+            continue                     # fila malformada: la reporta el lint como par sin cubrir
+        bibs = _bibcodes(celdas[2]) or [celdas[2].strip("[]")]
+        out.append(Row(celdas[0], celdas[1], bibs[0], celdas[3], celdas[4], celdas[5]))
     return out

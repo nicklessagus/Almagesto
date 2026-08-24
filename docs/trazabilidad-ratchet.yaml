@@ -30,5 +30,5 @@ almagesto_version: "1.24.0"
 contrato_invariantes: 91
 
 techos:
-  sin_marca: 88   # medido: 2026-08-24 — issues 0.1/0.3 marcaron INV-87; 0.2, INV-90; 0.3, INV-80.
-  sin_test: 88    # medido: 2026-08-24 — ídem.
+  sin_marca: 86   # medido: 2026-08-24 — Tanda 0: INV-80, INV-87, INV-90. Tanda 1: INV-78, INV-79.
+  sin_test: 86    # medido: 2026-08-24 — ídem.

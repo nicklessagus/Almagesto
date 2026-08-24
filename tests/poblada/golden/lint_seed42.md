@@ -76,6 +76,10 @@
 - query-000 → 1 cita(s) sin bloque de verify-citations → correr el skill
 - query-001 → 1 cita(s) sin bloque de verify-citations → correr el skill
 
+## ⛔ Bloque de verificación con plantilla vieja (sin columnas de hash — no evaluable) (0)
+
+## Pares de verificación vencidos (backlog: pasada periódica; con `--cierre` bloquea) (0)
+
 ## Verificación stale: la nota se editó después de su último verify-citations (backlog) (0)
 
 ## Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog) (7)

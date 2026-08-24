@@ -44,7 +44,7 @@ def test_reflow_no_mueve_ancla():
     a80 = ("El período de rotación es de 34 días [[2019Autor]], medido con el\n"
            "S-index sobre diez temporadas de observación.")
     a100 = ("El período de rotación es de 34 días [[2019Autor]], medido con el S-index sobre diez\n"
-            "temporadas de observación.")
+            "temporadas de observación.")   # @inv INV-78
     assert lb.block_anchor(a80) == lb.block_anchor(a100)
 
 
@@ -216,3 +216,46 @@ def test_parrafo_posterior_reemplaza_al_encabezado_como_ambito():
          "| Campo | Valor |\n|---|---|\n| P_rot | 34 d |\n")
     filas = [p for p in lb.pairs_of(t) if p.block.kind == "fila"]
     assert [p.bibcode for p in filas] == ["2021Caption"]
+
+
+# ── parse_verif_table: la tabla del bloque de verificación (issue 1.2) ───────────────────────────
+
+BLOQUE = """\
+Afirmación con cita [[2019Autor]].
+
+## Verificación de citas (2026-01-01)
+
+| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente |
+|---|---|---|---|---|---|
+| 1 | P_rot de 34 días | [[2019Autor]] | soportada | a3f9c1e2ab | 7b40d8aa11 |
+| 2 | Teff 5344 K | [[2020Otro]] | parcial | bbbbbbbbbb | cccccccccc |
+"""
+
+
+def test_parse_verif_table_lee_las_filas():
+    filas = lb.parse_verif_table(BLOQUE)
+    assert [f.bibcode for f in filas] == ["2019Autor", "2020Otro"]
+    assert filas[0].anchor == "a3f9c1e2ab" and filas[0].source_hash == "7b40d8aa11"
+    assert filas[0].verdict == "soportada"
+
+
+def test_parse_verif_table_plantilla_vieja_devuelve_none():
+    """Detector de plantilla vieja (sin migrador: bóveda nueva). Un bloque sin las columnas de hash
+    no es "cero pares vencidos": es un bloque que no se puede evaluar — y leerlo como limpio sería
+    el mismo cero inventado que D-43 prohíbe."""
+    viejo = BLOQUE.replace("| Ancla | Hash fuente |", "|").replace(
+        "| a3f9c1e2ab | 7b40d8aa11 |", "|").replace("| bbbbbbbbbb | cccccccccc |", "|")
+    assert lb.parse_verif_table(viejo) is None
+
+
+def test_parse_verif_table_sin_bloque_devuelve_none():
+    assert lb.parse_verif_table("Prosa sin bloque [[2019Autor]].\n") is None
+
+
+def test_parse_verif_table_tabla_vacia_es_lista_vacia():
+    """Bloque bien formado y sin filas ≠ bloque no evaluable: devuelve `[]`, y todo par del cuerpo
+    queda *sin verificar*."""
+    vacia = ("## Verificación de citas (2026-01-01)\n\n"
+             "| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente |\n"
+             "|---|---|---|---|---|---|\n")
+    assert lb.parse_verif_table(vacia) == []
