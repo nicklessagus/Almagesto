@@ -21,14 +21,21 @@ LA GRANULARIDAD ES EL BLOQUE, y las otras dos se descartaron midiendo:
 Unidad = el bloque más chico que contiene la cita: **párrafo / fila de tabla / ítem de lista /
 blockquote**.
 
-Medido con ESTE módulo sobre Almagesto-RV (25 notas de entidad, papers excluidos): **1.205 pares**
-— 756 en ítems, 264 en párrafos, 176 en filas, 9 en blockquotes. De esos, **1.070 citan por su
-cuenta y 135 heredan**: la herencia agrega 11%, no es el caso dominante. El derrame máximo de un
-ámbito es de 30 hijos (una tabla de keywords bajo un caption con una sola fuente) — legítimo, y el
-tipo de caso para el que la herencia existe. (El plan de implementación citaba 761/560/141/54/6
-para este corpus; esos números cuentan sólo los `[[bibcode]]` explícitos de otra población de
-notas, no esta partición con herencia. Vale el número medido acá, que es el que produce el código
-que corre.)
+Medido con ESTE módulo sobre Almagesto-RV, población **notas de entidad** (28 archivos:
+`stars/` + `concepts/` + `queries/`; se excluyen `papers/`, y `log.md`/`index.md`, que son bitácora
+y navegación —no afirman, y `log.md` solo aporta 361 pares espurios—): **840 pares** — 395 en
+ítems, 260 en párrafos, 176 en filas, 9 en blockquotes. De esos, **745 citan por su cuenta y 95
+heredan** (11%): la herencia no es el caso dominante. El derrame máximo de un ámbito es de 30 hijos
+(una tabla de keywords bajo un caption con una sola fuente): legítimo, y el caso para el que la
+herencia existe.
+
+⚠ El plan de implementación cita **761 / 560 párrafos / 141 listas / 54 tablas / 6 blockquotes**
+para este mismo corpus. El **total** es compatible (761 citas crudas ↔ 840 pares: la diferencia la
+explican la herencia, +95, y la deduplicación dentro de un bloque). Lo que **no** se reproduce es el
+**reparto por tipo**: ahí las listas dominan (395) y los párrafos quedan segundos (260), al revés de
+lo que dice el plan. La causa más probable es que aquella medición contara una lista entera como un
+bloque (dice "141 en listas (24 bloques)"). Vale el número de acá, que es el que produce el código
+que corre; el del plan queda como referencia histórica.
 
 **SOBRE-DISPARAR ES CORRECTO, SUB-DISPARAR NO.** Un párrafo con 3 citas da 3 pares con la misma
 ancla: tocás una frase y se re-verifican las tres. El error tiene que caer siempre del lado caro

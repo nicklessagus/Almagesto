@@ -393,10 +393,16 @@ sin mover su ancla de ratio.
    —caption, párrafo, encabezado— pero resolver la herencia en una segunda pasada sobre los bloques
    citables lo perdía: un encabezado no es un bloque citable, así que no estaba ahí para
    consultarlo.
-2. **Los números de partición del plan no se reproducen.** Medido con `lib_blocks` sobre
-   Almagesto-RV: **1.205 pares** (756 ítems, 264 párrafos, 176 filas, 9 blockquotes), 1.070 con cita
-   propia y 135 heredados (11%). El plan citaba 761/560/141/54/6, que cuentan sólo `[[bibcode]]`
-   explícitos de otra población de notas.
+2. **El reparto por tipo del plan no se reproduce** (el total sí). Medido con `lib_blocks` sobre
+   las 28 notas de **entidad** de Almagesto-RV —`stars/`+`concepts/`+`queries/`; `log.md` e
+   `index.md` fuera, son bitácora y navegación—: **840 pares** (395 ítems, 260 párrafos, 176 filas,
+   9 blockquotes), 745 con cita propia y 95 heredados (11%). El plan cita 761/560/141/54/6: el
+   **total** es compatible (761 crudas ↔ 840 pares, la diferencia la explican la herencia y la
+   dedup dentro de un bloque), pero el reparto está **invertido** — acá las listas dominan y los
+   párrafos quedan segundos. Causa probable: aquella medición contaba una lista entera como un
+   bloque ("141 en listas (24 bloques)").
+   *(Corrección propia: la primera versión de este número decía 1.205 pares — incluía `log.md`, que
+   aporta 361 pares espurios.)*
 
 Los cinco sub-casos del lint están **auditados por mutación**: cada uno rompe su test y ningún otro.
 Ratchet **88 → 86** (INV-78, INV-79). Tier 0: 721 verdes. Tier 1: 48 (golden 31 → 33 categorías).
