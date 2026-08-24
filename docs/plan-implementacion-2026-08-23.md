@@ -793,6 +793,13 @@ formato) fue a la tanda 8 y la vigilancia de alcance quedó acá.
   por ficha (D-10: N/M), pares vencidos por ancla y por fuente (D-20), triage pendiente, backlog
   del lint, retracciones/correcciones, fuentes pendientes, lente desincronizada (agregado),
   **última pasada de red** (D-46). Estampado idempotente (D-54).
+  **Agregado el 2026-08-24 (pedido del usuario):** también la **salud de la extracción de
+  fulltext** — el resultado de `is_legible` sobre el corpus, con el margen al corte, no sólo el
+  conteo de ilegibles. La medición del issue 0.4 mostró que ese conteo es engañoso: dio 0/672 y el
+  dato útil era el **margen** (×1,05 en el ratio contra ×9,8 y ×3,6 de los otros dos) y la forma
+  del casi-falla (14 archivos con un glifo de figura dominando sus no-ASCII). Un tablero que sólo
+  dijera "0 ilegibles" ocultaría exactamente eso. Va como distribución/percentiles + los N más
+  cerca del corte.
 - **Tests (rojos):** `test_dashboard_refleja_el_censo` — sembrar K anomalías conocidas → los
   conteos exactos (patrón de `test_conteos_exactos`); `test_dashboard_idempotente`;
   `test_dashboard_no_es_huerfano_ni_bibliografia` (excluido del scan de fuga y de huérfanas, como

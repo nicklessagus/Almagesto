@@ -358,6 +358,11 @@ que la **potencia** del detector (¿agarra mojibake real?) no se midió acá —
 sintéticamente `test_is_legible`. La conclusión honesta es "cero falsos positivos observados y un
 casi-falla con forma conocida", no "el umbral está validado".
 
+> 📌 **Pedido del usuario (2026-08-24):** la medición de legibilidad va al **dashboard** (Tanda 10,
+> issue 10.2) — anotado ahí. Con la salvedad que la propia medición dejó: el número a mostrar no es
+> "cuántos ilegibles" (dio 0/672 y no dice nada) sino el **margen al corte** y los archivos más
+> cerca de él.
+
 ### Lo que sigue
 **Tanda 1 — el ancla** (D-4 + D-20 + D-5), el camino crítico: `scripts/lib_blocks.py` (partición en
 bloques, `block_anchor`, `source_hash`, `pairs_of`), el bloque de verificación con las dos columnas
