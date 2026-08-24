@@ -505,11 +505,46 @@ Los tests ponen un `requests`/`subprocess` que **revienta si lo llaman**: pasan 
 
 Ratchet **79 → 78**. Tier 0: 783 verdes. Tier 1: 48 (golden 37 → 38 categorías).
 
+### ✅ Tanda 6 cerrada (2026-08-24) — v1.30.0 · la pasada de red unificada
+
+`scripts/sweep_external.py` + `fetch_ground_truth.nea_diff` + la marca `⛔retractada` del lint.
+
+| Detector | Estado |
+|---|---|
+| retracciones | ✅ real (barrido Crossref de toda la bóveda) |
+| correcciones | ✅ declarado — salen del **mismo** barrido y ahí se estampan; el lint las lista como backlog |
+| versiones | ✅ real (`arxiv:` a ADS por cada nota de eprint → propone `--rename-paper`) |
+| **snapshot web** | ⛔ **NO implementado** — y **levanta** en vez de devolver `[]` |
+| ground-truth | ✅ real (`nea_diff`, campo a campo, planetas **por letra**) |
+
+**Lo más importante de la tanda no es un detector, es cómo se declara el que falta.** `sweep_web`
+todavía no existe. Si devolviera `[]`, la pasada cerraría en verde y el registro de caducidad diría
+`cubrió: web` — otro clon leería que los snapshots se chequearon y sería falso. Levanta
+`NotImplementedError`, se reporta como **NO evaluado**, **no entra en `cubrio`** y el exit es **2**.
+Es D-43 aplicado a la pasada de red, y aplicado al propio trabajo a medio hacer. Lo que falta está
+escrito en el docstring: `fetch_web.refresh` (hashear el snapshot y versionar el viejo).
+
+**Decisiones tuyas, implementadas:**
+- **R-3** — `[[bibcode]] ⛔retractada`, sufijo pegado a la cita. El símbolo es lo que la hace
+  inconfundible con la palabra suelta en prosa ("la señal fue retractada más tarde" **no** es una
+  marca — con test). Sin marca el lint **bloquea** y localiza la afirmación; con marca baja a
+  informativa: **visible, no destruida**, porque puede ser cierta por otra vía.
+- **R-4** — `vault/config/registro/_red.yaml`, versionado.
+
+`nea_diff` **reporta y no aplica**: el JSON queda byte-idéntico y aplicar sigue siendo `--force`.
+Un valor **retirado** cuenta como cambio (la ficha lo seguía mostrando y nadie lo diría), y los
+planetas se comparan **por letra** — dos listas del mismo largo pueden no ser los mismos planetas.
+
+Ratchet **78 → 77**. Tier 0: 796 verdes. Tier 1: 48 (golden 38 → 40 categorías).
+
 ### Lo que sigue
-**Tanda 6 — la pasada de red unificada** (D-41, D-45, D-46, D-47): una sola pasada que cubre los
-cinco eventos que cambian afuera (retracción, corrección, versión nueva, snapshot web,
-ground-truth) y **avisa con el diff antes de aplicar**. Cierra INV-85. Trae **R-3** abierta (la
-sintaxis de la marca en línea de fuente retractada) y **R-4** (dónde vive `ultima_pasada_red`).
+**Tanda 7 — descubrimiento** (D-25, D-26, D-27, D-29, D-30): la relevancia de un tema de método es
+**propia del tema** y entra por tres puertas declaradas. Cierra INV-88. Trae **R-5** abierta (la
+colisión de nombres `topics` — faceta vs tema-sujeto, que D-26 agrava) y **R-9** (fuente primaria
+del índice de citas).
+
+> 📌 **Pendiente declarado, no olvidado:** `sweep_web` / `fetch_web.refresh` (el quinto detector).
+> Hoy la pasada sale **2** por eso, a propósito.
 
 ## 🔜 Cola de pendientes (al 2026-08-23)
 

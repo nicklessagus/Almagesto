@@ -858,12 +858,15 @@ al llegar al issue):
   se detectan y bloquean, con el snippet correcto en el mensaje. Es la regla del repo (sin lectores
   tolerantes), y el costo de UX resultó acotado: `triage.py` ya imprime el snippet para pegar, así
   que sólo se siente al agregar un bibcode 100% a mano.
-- **R-3 · Sintaxis de la marca en línea de fuente retractada (D-47)** y de la marca de inferencia
-  (D-42 fija `(inferencia de [[b]])`; la de retractado no está fijada). Definirlas juntas: son las
-  dos únicas marcas en línea del sistema.
-- **R-4 · Dónde vive `ultima_pasada_red` (D-46).** Propuesta: `vault/config/registro/_red.yaml`
-  (versionado: viaja, y el dashboard lo lee offline). Alternativa: no versionarlo (es un hecho de
-  entorno, como el reporte del lint — pero entonces no viaja entre máquinas).
+- **R-3 · Sintaxis de la marca en línea de fuente retractada (D-47).** ✅ **RESUELTA
+  (2026-08-24): sufijo `⛔retractada` pegado a la cita** — `[[bibcode]] ⛔retractada`. El símbolo
+  hace imposible confundirla con la palabra "retractada" suelta en una oración (el falso positivo
+  que el paréntesis pelado sí tendría). Junto con `(inferencia de [[b]])` de D-42, son las dos
+  únicas marcas en línea del sistema.
+- **R-4 · Dónde vive `ultima_pasada_red` (D-46).** ✅ **RESUELTA (2026-08-24):
+  `vault/config/registro/_red.yaml`, versionado.** La caducidad —cuándo se miró afuera por última
+  vez— es información sobre **la bóveda**, no sobre la máquina que corrió la pasada: sin
+  versionarla, otro clon reporta "nunca se corrió", que es falso.
 - **R-5 · La colisión de nombres `topics` (revisión §7.2, sin resolver) se AGRAVA con D-26**: la
   faceta propia del tema viviría en `topics.yaml`, que ya colisiona con `relevance.topics` y con
   el campo `topics` de las notas. Decidir el renombre (o el nombre del campo nuevo) **antes** del

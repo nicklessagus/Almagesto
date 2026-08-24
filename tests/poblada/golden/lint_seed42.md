@@ -8,6 +8,10 @@
 
 ## ⛔ Papers RETRACTADOS citados (frontera dura: fuente no válida) (0)
 
+## ⛔ Prosa que cita una fuente RETRACTADA sin marcar (0)
+
+## Prosa sostenida por fuente retractada, marcada (visible, no destruida) (0)
+
 ## Notas huérfanas (sin links entrantes) (2)
 - concepto-activity-017
 - concepto-methods-018

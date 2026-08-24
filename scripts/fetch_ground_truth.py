@@ -221,6 +221,56 @@ def fetch_host(host: str, tab=None) -> dict:
 
 
 
+
+# ── D-45 / INV-85: qué cambió afuera desde el snapshot ───────────────────────────────────────────
+
+def nea_diff(slug: str) -> list:
+    """Diff campo a campo entre el snapshot en disco y lo que NEA/SIMBAD dicen HOY.  @inv INV-85
+
+    Devuelve `[(campo, viejo, nuevo)]` y **no escribe nada**. Esa separación es el punto: un
+    snapshot que se actualiza solo cambia valores bajo los pies de la prosa que ya los citó, y el
+    consumidor no tiene forma de enterarse. Aplicar sigue siendo `--force`, explícito.
+
+    Un valor **retirado** (NEA lo tenía y ya no) es un cambio como cualquier otro: la ficha lo
+    sigue mostrando y nadie lo diría. Los planetas se comparan **por letra**, no por posición ni
+    por cardinalidad — dos listas del mismo largo pueden no ser los mismos planetas (la lección de
+    #70, que costó el defecto que cerró ese issue).
+    """
+    out = cfg.GROUND_TRUTH / f"{slug}.json"
+    if not out.exists():
+        return []
+    try:
+        viejo = json.loads(out.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    name, _ = cfg.star_by_slug(slug)
+    tab = fetch_pscomppars(name)
+    host_nuevo = fetch_host(name, tab=tab)
+    planets_nuevos = fetch_planets(tab, host_nuevo.get("mass_msun"))
+
+    cambios = []
+    host_viejo = cfg.as_map(viejo.get("host"))
+    for campo in sorted(set(host_viejo) | set(host_nuevo)):
+        if campo.startswith("_") or campo == "name":
+            continue                      # metadata de procedencia, no valor
+        a, b = host_viejo.get(campo), host_nuevo.get(campo)
+        if a != b:
+            cambios.append((f"host.{campo}", a, b))
+
+    por_letra_viejo = {p.get("letter"): p for p in cfg.as_list(viejo.get("planets"))
+                       if isinstance(p, dict)}
+    por_letra_nuevo = {p.get("letter"): p for p in planets_nuevos}
+    for letra in sorted(set(por_letra_viejo) | set(por_letra_nuevo), key=str):
+        a, b = por_letra_viejo.get(letra), por_letra_nuevo.get(letra)
+        if a is None or b is None:
+            cambios.append((f"planets.{letra}", a, b))     # planeta nuevo o retirado
+            continue
+        for campo in sorted(set(a) | set(b)):
+            if a.get(campo) != b.get(campo):
+                cambios.append((f"planets.{letra}.{campo}", a.get(campo), b.get(campo)))
+    return cambios
+
+
 def _flags_usados(args) -> list:
     """Los flags no-default de esta corrida, para dejarlos en `cadena:` del registro (D-48/D-57).
     Son las **escotillas**: `--force`, `--yes`, `--all` cambian lo que la corrida hizo, y sin

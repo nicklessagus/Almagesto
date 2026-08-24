@@ -2054,3 +2054,44 @@ def test_versions_no_cuenta_como_duplicado(toy_vault, capsys):
     link_from_index(toy_vault, "2021pubY...1..1Y")
     rc, rep = run_lint_reporte(capsys)
     assert rc == 0
+
+
+# ── Tanda 6 · D-47: la prosa que cita un retractado se MARCA, no se borra ───────────────────────
+
+RETRACTADO = {"tags": ["paper"], "bibcode": "2019retR...1..1R", "retracted": True,
+              "retraction": {"type": "retraction", "date": "2021-05-03"}}
+
+
+def test_cita_a_retractado_sin_marca_bloquea(toy_vault, capsys):
+    """Hoy el lint bloquea la NOTA del paper retractado, pero no localiza **qué afirmación** lo
+    cita — que es lo que hay que revisar. La cita sin marcar sigue leyéndose como respaldo válido."""
+    mk_note(toy_vault.PAPERS, "2019retR...1..1R", RETRACTADO, "")
+    mk_note(toy_vault.CONCEPTS / "methods", "c1", {"tags": ["methods"]},
+            "El período es de 34 d [[2019retR...1..1R]].\n")
+    link_from_index(toy_vault, "c1", "2019retR...1..1R")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 1
+    assert "c1" in rep and "⛔retractada" in rep       # el mensaje trae la marca a usar
+
+
+def test_cita_marcada_no_bloquea_y_se_lista(toy_vault, capsys):
+    """Marcada, la afirmación queda **visible y no destruida**: el consumidor ve que el respaldo es
+    una fuente retractada y decide. Baja a informativa."""
+    mk_note(toy_vault.PAPERS, "2019retR...1..1R", RETRACTADO, "")
+    mk_note(toy_vault.CONCEPTS / "methods", "c1", {"tags": ["methods"]},
+            "El período es de 34 d [[2019retR...1..1R]] ⛔retractada, aunque nadie lo re-midió.\n")
+    link_from_index(toy_vault, "c1", "2019retR...1..1R")
+    rc, rep = run_lint_reporte(capsys)
+    linea = [l for l in rep.splitlines() if l.startswith("## Prosa sostenida por fuente retractada")]
+    assert linea and linea[0].endswith("(1)")
+
+
+def test_marca_no_se_confunde_con_prosa(toy_vault, capsys):
+    """Adversario: la palabra "retractada" suelta en una oración NO es la marca. Por eso lleva el
+    símbolo — un `(retractada)` pelado daría falsos positivos con cualquier mención del hecho."""
+    mk_note(toy_vault.PAPERS, "2019retR...1..1R", RETRACTADO, "")
+    mk_note(toy_vault.CONCEPTS / "methods", "c1", {"tags": ["methods"]},
+            "La señal fue retractada más tarde [[2019retR...1..1R]].\n")
+    link_from_index(toy_vault, "c1", "2019retR...1..1R")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 1

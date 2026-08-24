@@ -8,9 +8,9 @@
 ## Resumen
 
 - Invariantes en el contrato: **91**
-- Con implementación marcada: **13**
-- Con test marcado: **13** (techo `sin_test`: 78, hoy 78)
-- Sin ninguna marca: **78** (techo `sin_marca`: 78)
+- Con implementación marcada: **14**
+- Con test marcado: **14** (techo `sin_test`: 77, hoy 77)
+- Sin ninguna marca: **77** (techo `sin_marca`: 77)
 - Marcas huérfanas: **0**
 
 ## El mapa
@@ -93,15 +93,15 @@
 | **INV-74** | P1 | HUECO (parcial) | — | — |
 | **INV-75** | P2 | garantizado sin medir | — | — |
 | **INV-76** | P0 | HUECO (D-1) | `scripts/lib_config.py:599` · `_extra_core_error` | `tests/test_fetch_ground_truth.py:341` · `test_spectral_type_solo_de_simbad` |
-| **INV-77** | P1 | HUECO (D-2) | `scripts/lint.py:235` · `note_files` | `tests/test_lint.py:1999` · `test_disputa_entre_autoridades_es_expresable` |
-| **INV-78** | P0 | HUECO (D-4, D-20) | `scripts/lib_blocks.py:3`<br>`scripts/lint.py:855` · `main` | `tests/test_lib_blocks.py:47` · `test_reflow_no_mueve_ancla`<br>`tests/test_lint.py:1864` · `test_reemplazo_del_txt_marca_por_fuente` |
-| **INV-79** | P0 | HUECO (D-4, D-5) | `scripts/lint.py:855` · `main` | `tests/test_lint.py:1819` · `test_nota_verificada_no_marca_nada` |
+| **INV-77** | P1 | HUECO (D-2) | `scripts/lint.py:239` · `note_files` | `tests/test_lint.py:1999` · `test_disputa_entre_autoridades_es_expresable` |
+| **INV-78** | P0 | HUECO (D-4, D-20) | `scripts/lib_blocks.py:3`<br>`scripts/lint.py:862` · `main` | `tests/test_lib_blocks.py:47` · `test_reflow_no_mueve_ancla`<br>`tests/test_lint.py:1864` · `test_reemplazo_del_txt_marca_por_fuente` |
+| **INV-79** | P0 | HUECO (D-4, D-5) | `scripts/lint.py:862` · `main` | `tests/test_lint.py:1819` · `test_nota_verificada_no_marca_nada` |
 | **INV-80** | P0 | HUECO (D-6) | `scripts/lib_config.py:203` · `objective_error`<br>`scripts/query_ads.py:838` · `main` | `tests/test_lib_config.py:399` · `test_objective_error_distingue_los_tres_estados`<br>`tests/test_lint.py:1737` · `test_lint_objective_roto_bloquea`<br>`tests/test_query_ads.py:1320` · `test_query_ads_rehusa_lente_vacia` |
 | **INV-81** | P0 | HUECO (D-10, D-11, D-24) | `scripts/make_notes.py:1013` · `papers_universe` | `tests/test_make_notes.py:1911` · `test_conteo_del_encabezado_es_el_de_la_tabla` |
 | **INV-82** | P1 | HUECO (D-12) | `scripts/make_notes.py:1325` · `estado_line` | `tests/test_make_notes.py:2000` · `test_refrescar_sin_reverificar_mueve_una_sola_fecha` |
 | **INV-83** | P0 | HUECO (D-13, D-14) | `scripts/lib_config.py:641` · `save_extraccion` | `tests/test_lint.py:1972` · `test_subconjunto_sin_declarar_reporta` |
 | **INV-84** | P0 | HUECO (D-19) | `scripts/make_notes.py:1162` · `rename_paper` | `tests/test_make_notes.py:2121` · `test_ciclo_preprint_publicado` |
-| **INV-85** | P1 | HUECO (D-41, D-45, D-46) | — | — |
+| **INV-85** | P1 | HUECO (D-41, D-45, D-46) | `scripts/fetch_ground_truth.py:228` · `nea_diff`<br>`scripts/sweep_external.py:3` | `tests/test_sweep_external.py:110` · `test_detector_no_implementado_no_aporta_un_cero` |
 | **INV-86** | P0 | HUECO (D-42) | — | — |
 | **INV-87** | P0 | HUECO (D-43) | `scripts/check_retractions.py:326` · `main` | `tests/test_check_retractions.py:525` · `test_errores_sin_retractados_exit_2`<br>`tests/test_lint.py:1747` · `test_lint_sin_git_reporta_no_evaluado` |
 | **INV-88** | P1 | HUECO (D-25, D-26, D-27) | — | — |

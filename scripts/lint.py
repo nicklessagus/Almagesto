@@ -211,6 +211,10 @@ def note_files() -> list:
 
 
 BIBCODE_RE = re.compile(r"^\d{4}[A-Za-z]")   # heurística: target de link que parece bibcode
+# R-3 (decidida con el usuario, 2026-08-24): la marca en línea de una cita a fuente retractada. El
+# símbolo es lo que la hace inconfundible con la palabra suelta en prosa; es la hermana de
+# `(inferencia de [[b]])` (D-42), y son las dos únicas marcas en línea del sistema.
+RETRACTED_MARK = "⛔retractada"
 
 # Centinela para distinguir "el campo no está" de "está y no sirve" (#75): `fm.get(campo)` colapsa
 # `ausente`, `null`, `""` y `false` en `None`, y esas cuatro exigen mensajes distintos.
@@ -517,6 +521,7 @@ def main(argv=()) -> int:
     # reporte en vez de mostrar su cero. Se declara acá arriba porque los pobladores están
     # repartidos por todo `main()`.
     not_evaluated: list = []
+    anchor_bodies: dict = {}           # {archivo: texto} de TODA nota de entidad/query — D-47
     old_registro: list = []            # registros con la clave `busqueda:` (schema pre-D-28)
     cadena_incompleta: list = []       # (slug, "se cortó en <paso>") — D-57
     stars_slugs = {m.get("slug") for m in cfg.load_stars().values() if isinstance(m, dict)}
@@ -552,6 +557,8 @@ def main(argv=()) -> int:
         fm = split_fm(text)
         if in_dir(f, "papers"):
             paper_fms[basename(f)[:-3]] = fm
+        else:
+            anchor_bodies[f] = text
         stem = basename(f)[:-3]
         for motivo in normalize_lists(fm):     # ANTES de cualquier lector (ver normalize_lists)
             fm_broken.append((stem, motivo))
@@ -892,6 +899,29 @@ def main(argv=()) -> int:
             stale_pairs.append(
                 (stem, f"[[{p.bibcode}]] **sin verificar**: hay una afirmación que lo cita y no "
                        f"tiene fila en el bloque (ancla {p.anchor})"))
+
+    # ── D-47: la prosa que cita una fuente RETRACTADA se marca, no se borra ──────────────────────
+    # El lint ya bloquea la NOTA del paper retractado, pero no localiza QUÉ afirmación lo cita —
+    # que es lo que hay que revisar. Borrar la afirmación tampoco sirve: destruye trabajo y puede
+    # ser cierta por otra vía. Se marca en línea (R-3: `[[bib]] ⛔retractada`), y ahí baja a
+    # informativa: visible, no destruida. El símbolo es deliberado — un `(retractada)` pelado daría
+    # falso positivo con cualquier mención del hecho en prosa ("la señal fue retractada más tarde").
+    retracted_stems = {stem for stem, fm_p in paper_fms.items() if fm_p.get("retracted")}
+    prosa_retractada: list = []
+    prosa_retractada_marcada: list = []
+    for f, texto_n in anchor_bodies.items():
+        stem_n = basename(f)[:-3]
+        for stem_r in sorted(retracted_stems):
+            for m in re.finditer(r"\[\[" + re.escape(stem_r) + r"(?:\|[^\]]*)?\]\]([^\n]*)", texto_n):
+                destino = (prosa_retractada_marcada if m.group(1).lstrip().startswith(RETRACTED_MARK)
+                           else prosa_retractada)
+                destino.append(
+                    (stem_n, f"cita [[{stem_r}]] (RETRACTADO) — "
+                             + ("marcada: visible y no destruida; revisá si otra fuente la sostiene"
+                                if destino is prosa_retractada_marcada else
+                                f"marcala con `{RETRACTED_MARK}` pegado a la cita, o bajá la "
+                                f"afirmación a lo que otra fuente sostenga. No la borres: puede ser "
+                                f"cierta por otra vía")))
 
     # ── identidad duplicada (D-19 / INV-84) ──────────────────────────────────────────────────────
     # La identidad de un trabajo es su `doi`/`arxiv_id`, no su bibcode: el preprint y el publicado
@@ -1375,6 +1405,8 @@ def main(argv=()) -> int:
                          ("Wikilinks rotos (página faltante)", broken),
                          ("⛔ Frontmatter no parseable o con forma inválida (la nota evade los chequeos de su tipo)", fm_broken),
                          ("⛔ Papers RETRACTADOS citados (frontera dura: fuente no válida)", retracted),
+                         ("⛔ Prosa que cita una fuente RETRACTADA sin marcar", prosa_retractada),
+                         ("Prosa sostenida por fuente retractada, marcada (visible, no destruida)", prosa_retractada_marcada),
                          ("Notas huérfanas (sin links entrantes)", [(o, "") for o in orphans]),
                          ("Papers con corrección publicada (erratum/corrigendum/EoC) — revisar los "
                           "valores extraídos de ellos (backlog, el paper sigue siendo citable)", corrections),
@@ -1432,7 +1464,8 @@ def main(argv=()) -> int:
     n_block = sum(len(x) for x in (not_evaluated, broken, fm_broken, retracted, orphans,
                                    contradictions, mass_issues, dangling_thesis, dangling_disputes,
                                    bad_roles, bad_disputes, old_disputes, legacy_triage,
-                                   old_verif_template, old_registro, identidad_dup))
+                                   old_verif_template, old_registro, identidad_dup,
+                                   prosa_retractada))
     if args.cierre:
         n_block += len(stale_pairs)   # R-1: en el cierre de una operación, un par vencido frena
     if n_block:

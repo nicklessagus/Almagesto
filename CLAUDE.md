@@ -562,6 +562,29 @@ arbitra, una posición es `{source: ground_truth}` y sigue siendo la verdad—,
 línea citando ambos `[[bibcode]]` para conceptos— que **el usuario aprueba** antes de escribir. Detalle
 en el skill.
 
+### Pasada de red (lo que cambia AFUERA — `scripts/sweep_external.py`)
+Una bóveda afirma cosas sobre el mundo y el mundo cambia después del ingest. **Cinco** cosas
+caducan y ahora se miran en **una sola pasada**: retracciones, correcciones, **versiones**
+(el preprint salió publicado → otro bibcode para el mismo trabajo, D-19), **snapshot web** y
+**ground-truth** (NEA cambia valores entre releases, y el snapshot era un JSON congelado que
+**nada** comparaba — el caso más silencioso). Si están repartidas, se corren cuatro y la quinta
+nunca.
+⛔ **Reporta, no aplica solo**: el diff se muestra y se pregunta antes de tocar nada — un snapshot
+que se actualiza solo cambia valores **bajo los pies de la prosa que ya los citó**. Lo que sí es
+automático es la consecuencia offline: al cambiar un `.txt`, el **ancla de fuente** (D-20) marca
+sola los pares verificados contra él. El renombre preprint→publicado **nunca** es automático
+(reescribe wikilinks de toda la bóveda): se propone el comando.
+La caducidad se registra **versionada** en `vault/config/registro/_red.yaml` — "cuándo se miró
+afuera" es información de la bóveda, no de la máquina. Un detector que **no pudo correr** se
+declara y **no** entra en `cubrio`: el registro no puede afirmar haber mirado lo que no miró.
+
+**Fuente retractada citada en prosa (D-47):** la afirmación **no se borra** —puede ser cierta por
+otra vía y borrarla destruye trabajo—: se **marca en línea** con `[[bibcode]] ⛔retractada`. Sin la
+marca, el lint la localiza y **bloquea**; con la marca baja a informativa (visible, no destruida).
+El símbolo es deliberado: un `(retractada)` pelado daría falso positivo con cualquier mención del
+hecho en prosa. Junto con `(inferencia de [[bibcode]])` son las **dos únicas marcas en línea** del
+sistema.
+
 ### Mantenimiento (cuidar lo ya ingestado — skill `maintain`)
 **No crea entidades** (eso es Ingest); opera sobre estrellas/conceptos que **ya existen**. Sub-modos:
 **refrescar** (papers nuevos → re-sintetizar sólo lo nuevo), **borrar** (nota + PDF/fulltext + reparar

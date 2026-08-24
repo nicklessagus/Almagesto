@@ -173,15 +173,16 @@ def test_reporte_lista_todas_las_categorias(sembrar):
     carriles del ancla: `plantilla vieja`, bloqueante, y `pares vencidos`, cuya severidad depende
     de `--cierre`), desde el 2.1, **34** (el detector del registro pre-D-28) desde el 2.2, **35** (cadena incompleta)
     desde el 3.1/3.3, **37** (lista de papers
-    desactualizada, recorte de lectura sin declarar) y desde el 5.1, **38** (identidad duplicada). Esa categoría es además la ÚNICA
+    desactualizada, recorte de lectura sin declarar) desde el 5.1, **38** (identidad duplicada)
+    y desde el 6.3, **40** (prosa que cita una fuente retractada, con y sin marcar). Esa categoría es además la ÚNICA
     excepción legítima a la regla de arriba — cuando un chequeo no se puede evaluar, su sección se
     suprime en vez de mostrar un `(0)` que se leería como veredicto, y la supresión queda
     **nombrada** ahí. O sea que la sección no desaparece en silencio, que es lo que este test
     protege; el `(0)` inventado y la desaparición muda son el mismo bug visto de los dos lados."""
     _, crudo, _ = _correr_golden(sembrar)
     titulos = [l for l in crudo.splitlines() if l.startswith("## ")]
-    assert len(titulos) == 38, (
-        f"el reporte trae {len(titulos)} categorías, se esperaban 38 — alguna sección dejó de "
+    assert len(titulos) == 40, (
+        f"el reporte trae {len(titulos)} categorías, se esperaban 40 — alguna sección dejó de "
         "imprimirse (o se agregó una nueva sin actualizar este test)")
     no_eval = [t for t in titulos if "No evaluado" in t]
     assert no_eval and no_eval[0].endswith("(0)"), (

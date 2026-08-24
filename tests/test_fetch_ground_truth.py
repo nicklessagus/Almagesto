@@ -371,3 +371,58 @@ def test_discrepancia_entre_autoridades_queda_registrada(monkeypatch, toy_vault)
     host = gt.fetch_host("Test Star", tab=None)
     assert host["spectral_type"] == "K0V"
     assert host["_otras_autoridades"]["spectral_type"] == {"nea": "G8V"}
+
+
+# ── Tanda 6 · D-45: `nea_diff` REPORTA, no aplica ───────────────────────────────────────────────
+
+def _snapshot(toy_vault, host=None, planets=None):
+    (gt_cfg().GROUND_TRUTH / "test_star.json").write_text(json.dumps({
+        "star": "Estrella Test", "slug": "test_star",
+        "host": {"teff_K": 5344.0, "st_rotp_days": 34.5, **(host or {})},
+        "planets": planets if planets is not None else
+        [{"letter": "b", "P_days": 20.0, "K_ms": 1.0, "e": 0.1, "mass_earth": 2.0,
+          "status": "confirmed"}]}), encoding="utf-8")
+
+
+def gt_cfg():
+    import lib_config as cfg
+    return cfg
+
+
+def test_nea_diff_reporta_y_no_aplica(toy_vault, monkeypatch):
+    """El experimento del contrato (INV-85): NEA cambió y el diff se REPORTA; el JSON en disco
+    queda **byte-idéntico**. Aplicar sigue siendo `--force` — un snapshot que se actualiza solo
+    cambia valores bajo los pies de la prosa que ya los citó."""
+    _snapshot(toy_vault)
+    antes = (gt_cfg().GROUND_TRUTH / "test_star.json").read_bytes()
+    _nea(monkeypatch, {"st_teff": 5350.0})          # cambió teff, y P_rot ya no viene
+    _simbad(monkeypatch, None)
+    monkeypatch.setattr(gt, "fetch_planets", lambda tab, m: [])
+    campos = {c for c, _, _ in gt.nea_diff("test_star")}
+    assert "host.teff_K" in campos
+    assert "host.st_rotp_days" in campos            # el valor RETIRADO también es un cambio
+    assert (gt_cfg().GROUND_TRUTH / "test_star.json").read_bytes() == antes
+
+
+def test_nea_diff_sin_cambios_es_vacio(toy_vault, monkeypatch):
+    _snapshot(toy_vault, planets=[])
+    _nea(monkeypatch, {"st_teff": 5344.0, "st_rotp": 34.5})
+    _simbad(monkeypatch, None)
+    monkeypatch.setattr(gt, "fetch_planets", lambda tab, m: [])
+    assert gt.nea_diff("test_star") == []
+
+
+def test_nea_diff_compara_planetas_por_letra(toy_vault, monkeypatch):
+    """Por LETRA, no por posición ni por cardinalidad: dos listas del mismo largo pueden no ser los
+    mismos planetas (la lección de #70)."""
+    _snapshot(toy_vault)
+    _nea(monkeypatch, {"st_teff": 5344.0, "st_rotp": 34.5})
+    _simbad(monkeypatch, None)
+    monkeypatch.setattr(gt, "fetch_planets", lambda tab, m: [
+        {"letter": "b", "P_days": 21.0, "K_ms": 1.0, "e": 0.1, "mass_earth": 2.0,
+         "status": "confirmed"},
+        {"letter": "c", "P_days": 49.0, "K_ms": 1.2, "e": 0.0, "mass_earth": 3.0,
+         "status": "confirmed"}])
+    campos = {c: (v, n) for c, v, n in gt.nea_diff("test_star")}
+    assert campos["planets.b.P_days"] == (20.0, 21.0)
+    assert "planets.c" in campos                     # planeta NUEVO
