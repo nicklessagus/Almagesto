@@ -160,6 +160,7 @@ def test_merge_casos_que_no_debe_tocar(toy_vault):
 
 
 def test_merge_preserva_el_resto_byte_a_byte(toy_vault):
+    # @inv INV-16
     p = toy_vault.PAPERS / "n.md"
     toy_vault.PAPERS.mkdir(parents=True, exist_ok=True)
     original = "---\nbibcode: x\nstars: []\ntags:\n- paper\n---\n# Cuerpo\n\nExtracción LLM valiosa.\n"
@@ -182,7 +183,7 @@ def test_excluded_todo_core(toy_vault):
 
 def test_excluded_top_n_y_escapes(toy_vault):
     """Los records acá NO traen `why_excluded` → cubre además el fallback legacy (#30): un
-    ads.json viejo sigue mostrando la dicotomía histórica sin tópico / doctype."""
+    ads.json viejo sigue mostrando la dicotomía histórica sin tópico / doctype.  @inv INV-71"""
     noncore = [rec(f"2020n....{i:02d}.nA", relevant=False, cites=i) for i in range(12)]
     noncore[11]["title"] = "Título con | pipe y [brackets] adentro que rompe tablas markdown"
     ruido = rec("2020ruid....1R", relevant=False, cites=100, doctype="catalog")
@@ -289,6 +290,7 @@ def test_stamp_excluded_concept_via_publica(toy_vault, capsys):
 # ── write_star_note ──────────────────────────────────────────────────────────
 
 def test_star_note_desde_ground_truth(toy_vault, capsys):
+    # @inv INV-01
     (toy_vault.GROUND_TRUTH / "test_star.json").write_text(json.dumps(GT), encoding="utf-8")
     mn.write_star_note("test_star", force=False)
     fm = read_fm(toy_vault.STARS / "test_star.md")
@@ -315,6 +317,7 @@ def test_star_note_siembra_los_campos_que_llena_el_llm(toy_vault):
 
 
 def test_star_note_sin_ground_truth(toy_vault):
+    # @inv INV-07
     mn.write_star_note("test_star", force=False)
     assert read_fm(toy_vault.STARS / "test_star.md")["planets"] == []
 
@@ -578,7 +581,7 @@ def test_inventario_va_entre_la_sintesis_y_los_huecos(toy_vault):
 
 def test_inventario_no_tiene_columna_de_valor_adoptado(toy_vault):
     """La columna que NO está es el punto del issue: adoptar un valor es decidir por el consumidor
-    (regla #0, flujo unidireccional). El inventario reporta el estado de la literatura."""
+    (regla #0, flujo unidireccional). El inventario reporta el estado de la literatura.  @inv INV-11"""
     mn.write_star_note("test_star", force=False)
     t = (toy_vault.STARS / "test_star.md").read_text(encoding="utf-8")
     cabecera = next(l for l in t.split("\n") if l.startswith("| Eje |"))
@@ -942,7 +945,7 @@ def seed_txt(toy_vault, slug, stem, header=""):
 
 
 def test_fulltext_info_provenance(toy_vault):
-    """La provenance sale de la marca en la primera línea del .txt (verdad de disco)."""
+    """La provenance sale de la marca en la primera línea del .txt (verdad de disco).  @inv INV-26"""
     seed_txt(toy_vault, "test_star", "2020plain..1..1P")
     seed_txt(toy_vault, "test_star", "2020ocrX...1..1O",
              header=f"{cfg.FULLTEXT_OCR_MARK}: citable CON SALVEDAD\n")
@@ -1244,7 +1247,7 @@ def test_stamp_pdf_link_corrige_ruta(toy_vault):
 
 def test_stamp_pdf_link_sin_cabecera_no_adivina(toy_vault):
     """Sin línea de cabecera reconocible ANTES de la primera sección: no toca nada — una línea
-    `· ` con backticks dentro de la extracción LLM no debe confundirse con la cabecera."""
+    `· ` con backticks dentro de la extracción LLM no debe confundirse con la cabecera.  @inv INV-18"""
     rel = _pdf_en_disco(toy_vault, "test_star", "2017oldF...1..1F")
     body = ("# Un título\n\n## Extracción (LLM)\n"
             "· nota del LLM con `backticks` que parece cabecera pero no lo es\n")
@@ -1311,7 +1314,7 @@ def test_cli_restamp_pdf_links_no_pide_slug(toy_vault, monkeypatch, capsys):
 def test_find_header_line_es_contrato_compartido(toy_vault):
     """#48: el lint detecta las notas que stamp_pdf_link saltea usando ESTE helper — si cada uno
     definiera "cabecera" por su lado, el detector dejaría de cubrir al fixer. Acá se fija el
-    contrato: cabecera reconocida ⇔ stamp_pdf_link actúa."""
+    contrato: cabecera reconocida ⇔ stamp_pdf_link actúa.  @inv INV-17"""
     rel = _pdf_en_disco(toy_vault, "test_star", "2015oldD...1..1D")
     ok = _nota_vieja(toy_vault, pdf_rel=rel)                       # cabecera en contrato
     fuera = mk_note(toy_vault.PAPERS, "2012manT...1..1T",
@@ -1418,7 +1421,7 @@ def test_pdf_source_la_marca_gana_sobre_el_registro(toy_vault):
 
 def test_pdf_source_desconocido_no_afirma_publicado(toy_vault):
     """Sin marca y sin registro: None. Asumir 'publisher' sería afirmar de más justo donde el
-    caveat importa (verify podría 'corregir' la nota hacia un preprint sin saberlo)."""
+    caveat importa (verify podría 'corregir' la nota hacia un preprint sin saberlo).  @inv INV-29"""
     _txt("test_star", "2020unk....1..1U", "Sin marcas de nada\n")
     assert mn.pdf_source_info("test_star", "2020unk....1..1U") == (None, None)
     assert mn.pdf_source_info("test_star", "2020sinTxt.1..1S") == (None, None)
@@ -1737,7 +1740,7 @@ def test_sync_mirror_no_toca_un_valor_que_nea_no_tiene(toy_vault, capsys):
 
 def test_sync_mirror_no_pisa_un_valor_distinto(toy_vault, capsys):
     """Dos valores distintos para el mismo hecho **es una disputa**, no un error de sincronización:
-    pisarlo borraría la posición de la ficha sin dejar rastro. Add-only significa esto."""
+    pisarlo borraría la posición de la ficha sin dejar rastro. Add-only significa esto.  @inv INV-08"""
     gt("s", [{"letter": "b", "mass_earth": 8.99, "status": "confirmed"}], mass_msun=1.0)
     ficha("s", {"planets": [{"letter": "b", "mass_earth": 3.0, "status": "confirmed"}]})
     mn.sync_mirror()
@@ -1768,7 +1771,7 @@ def test_sync_mirror_sin_ground_truth_no_hace_nada(toy_vault):
 # ── invariantes de todo migrador del repo ──────────────────────────────────
 
 def test_sync_mirror_no_toca_la_prosa(toy_vault):
-    """La prosa es síntesis LLM: ningún migrador la toca (mismo contrato que `--migrate-disputes`)."""
+    """La prosa es síntesis LLM: ningún migrador la toca (mismo contrato que `--migrate-disputes`).  @inv INV-15"""
     cuerpo = "# s\n\nprosa **importante** con [[2019abc]] y una tabla.\n\n| a | b |\n|---|---|\n"
     gt("s", [{"letter": "b", "mass_earth": 8.99, "status": "confirmed"}], mass_msun=1.0)
     p = ficha("s", {"planets": [{"letter": "b", "mass_earth": None, "status": "confirmed"}]}, cuerpo)
@@ -1853,7 +1856,7 @@ def test_notas_pasan_por_el_helper(toy_vault, monkeypatch):
 def test_corte_publicando_no_deja_la_nota_a_medias(toy_vault, monkeypatch):
     """Inyección de fallo de punta a punta (patrón F4 de la 8ª): el corte llega en la publicación
     de una nota real. La nota previa —extracción LLM, lo menos regenerable de la bóveda— queda
-    byte-idéntica y no queda basura `.tmp` al lado."""
+    byte-idéntica y no queda basura `.tmp` al lado.  @inv INV-21"""
     mn.write_star_note("test_star", force=False)
     dest = toy_vault.STARS / "test_star.md"
     antes = dest.read_bytes()
@@ -1916,7 +1919,7 @@ def test_conteo_del_encabezado_es_el_de_la_tabla(toy_vault):
 
 def test_papers_table_no_depende_del_plugin(toy_vault):
     """D-11: la tabla estampada REEMPLAZA el bloque ```dataview```. Un agente que abre el `.md`
-    tiene que ver los papers, no el código de una query que nunca va a correr."""
+    tiene que ver los papers, no el código de una query que nunca va a correr.  @inv INV-35"""
     _paper("2020aaa...1..1A")
     mn.write_star_note("test_star", force=True)
     dest = cfg.STARS / "test_star.md"

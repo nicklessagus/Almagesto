@@ -57,7 +57,7 @@ def test_sin_ads_json_error_amigable(toy_vault, monkeypatch):
 
 
 def test_drop_persiste_con_motivo_en_config_versionada(toy_vault, monkeypatch, capsys):
-    """#51: el juicio va a vault/config/registro/<slug>.yaml (se commitea), NO a build/ (scratch)."""
+    """#51: el juicio va a vault/config/registro/<slug>.yaml (se commitea), NO a build/ (scratch).  @inv INV-48"""
     write_ads(toy_vault, candidates=[cand("2023PhDT....1P", "Hunting for New Physics")])
     assert run_main(monkeypatch, ["test_star", "--drop", "2023PhDT....1P",
                                   "--reason", "física de partículas, no toca el sujeto"]) == 0
@@ -362,6 +362,7 @@ def test_migrate_consolida_sin_esperar_un_drop(toy_vault, monkeypatch, capsys):
 
 
 def test_migrate_es_idempotente_y_no_pisa_lo_versionado(toy_vault, monkeypatch, capsys):
+    # @inv INV-54
     d = write_ads(toy_vault)
     (d / "triage.json").write_text(json.dumps({"decisiones": {
         "2020a....1A": {"decision": "descartado", "motivo": "viejo"}}}), encoding="utf-8")

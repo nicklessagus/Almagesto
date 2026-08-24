@@ -159,6 +159,8 @@ def main() -> int:
     args = ap.parse_args()
 
     if args.ocr and not ocr_available():
+    #  @inv INV-70
+    #  @inv INV-28
         sys.exit(
             "--ocr pide `tesseract` (+ `pdftoppm`, de poppler), y falta alguno:\n"
             "  Debian/Ubuntu: sudo apt install tesseract-ocr   ·  macOS: brew install tesseract\n"

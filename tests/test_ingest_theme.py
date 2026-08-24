@@ -235,6 +235,7 @@ def test_offads_web_fallo_aborta_con_aviso(toy_vault, fake_run, fake_notes, monk
 
 
 def test_offads_pending_deriva_sin_fallar(toy_vault, fake_run, fake_notes, monkeypatch, capsys):
+    # @inv INV-61
     topic(source="web", sources=[{"key": "1999Paywall", "pending": "paywall", "doi": "10.1/x"}])
     assert run_main(monkeypatch) == 0
     key, kw = fake_notes.webs[0]

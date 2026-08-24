@@ -135,7 +135,7 @@ def test_golden_exit_code(sembrar):
     anomalías sembradas (no_sintetizado, cobertura_citas, cabecera_no_estampable,
     fulltext_ilegible) son backlog, no bloqueante — si alguna se filtrara a una categoría
     bloqueante (o viceversa), este test lo separa del golden de contenido: un exit code que
-    coincide "por casualidad" con un reporte que cambió de forma no debería poder pasar."""
+    coincide "por casualidad" con un reporte que cambió de forma no debería poder pasar.  @inv INV-37"""
     rc, crudo, _ = _correr_golden(sembrar)
     assert rc == 1
     n_block = sum(_conteo(crudo, titulo) for titulo in BLOQUEANTES)
@@ -164,7 +164,7 @@ def test_reporte_lista_todas_las_categorias(sembrar):
     excepción legítima a la regla de arriba — cuando un chequeo no se puede evaluar, su sección se
     suprime en vez de mostrar un `(0)` que se leería como veredicto, y la supresión queda
     **nombrada** ahí. O sea que la sección no desaparece en silencio, que es lo que este test
-    protege; el `(0)` inventado y la desaparición muda son el mismo bug visto de los dos lados."""
+    protege; el `(0)` inventado y la desaparición muda son el mismo bug visto de los dos lados.  @inv INV-41"""
     _, crudo, _ = _correr_golden(sembrar)
     titulos = [l for l in crudo.splitlines() if l.startswith("## ")]
     assert len(titulos) == 41, (

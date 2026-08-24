@@ -79,10 +79,12 @@ from fetch_ground_truth import msini_earth   # verificación de masa (m·sini im
 from make_notes import find_header_line      # contrato de la cabecera (mismo que stamp_pdf_link, #48)
 from make_notes import GENERATOR_LINE        # ancla de la cabecera de fichas/concepts (#69)
 
+# @inv INV-02
 LINK_RE = re.compile(r"\[\[([^\]\|#]+)")
 # Frontera dura (regla #0 de CLAUDE.md): la bóveda es SÓLO bibliografía. Detecta material de
 # implementación/código no bibliográfico que se filtró a una nota. WARN, no bloquea: son heurísticas de
 # alta señal/bajo ruido; se saltan los blockquotes meta (frontera/alcance). Revisar a mano cada hit.
+# @inv INV-04
 IMPL_LEAK_RE = [
     (re.compile(r"\bperilla\b", re.I), "perilla (dial de implementación)"),
     (re.compile(r"\bdial\b", re.I), "dial de implementación"),
@@ -110,6 +112,7 @@ def fm_error(text: str) -> str | None:
     no puede cortar el bloque, o esta función reporta "YAML inválido" —categoría BLOQUEANTE—
     sobre un frontmatter que no tiene nada roto."""
     if not text.startswith("---"):
+    #  @inv INV-40
         return None
     span = cfg.frontmatter_span(text)
     if span is None:
@@ -154,6 +157,7 @@ def git_out(*args: str) -> str | None:
         r = subprocess.run(["git", "-C", str(cfg.ROOT), "-c", "core.quotePath=false", *args],
                            capture_output=True, text=True, encoding="utf-8", timeout=60)
     except (OSError, subprocess.SubprocessError):
+    #  @inv INV-31
         return None
     return r.stdout if r.returncode == 0 else None
 
@@ -255,6 +259,7 @@ def note_disputes(fm: dict) -> list:
     el primer nivel del frontmatter, y esto está anidado."""
     out = []
     for d in (fm.get("disputes") or []):
+    #  @inv INV-12
         if not isinstance(d, dict):
             continue                       # la forma de la lista ya la reportó normalize_lists
         campo = str(d.get("field") or "").strip()
@@ -286,6 +291,7 @@ def normalize_lists(fm: dict) -> list:
     que es la misma política que el resto de los chequeos de forma (#71)."""
     motivos = []
     for campo, de_mapas in LIST_FIELDS.items():
+    #  @inv INV-63
         v = fm.get(campo)
         if v is None or v == "" or v == []:
             continue
@@ -316,6 +322,7 @@ def legacy_disputes(fm: dict) -> tuple[int, list]:
     de forma inválida en vez de inflar (o voltear) el conteo."""
     n, motivos = 0, []
     for pl in (fm.get("planets") or []):
+    #  @inv INV-13
         if not isinstance(pl, dict):
             continue
         d = pl.get("disputes")
@@ -334,6 +341,7 @@ def legacy_disputes(fm: dict) -> tuple[int, list]:
 # de contraste corresponde entre dos papers, y un valor libre no la determina. Un typo deja el campo
 # mudo para esa operación sin que nadie se entere — el mismo modo de falla de `thesis_links` que no
 # matchea ninguna nota, y por eso se trata igual (bloqueante).
+# @inv INV-46
 ROLES = ("fundacional", "aplicacion", "arbitro")
 
 
@@ -409,6 +417,7 @@ def mirror_issues(slug: str, fm: dict, gt: dict) -> list:
     out = []
 
     def check(campo: str, val_ficha, val_gt):
+    #  @inv INV-06, INV-09
         if same_value(val_ficha, val_gt):
             return
         if val_gt is None:

@@ -201,6 +201,8 @@ def crossref_retraction(doi: str, headers: dict) -> tuple[dict | None, list, str
       **sin chequear**: el llamador no puede reportarlo como limpio.
     """
     for wait in (2, 6, None):
+    #  @inv INV-34
+    #  @inv INV-33
         try:
             resp = requests.get(CROSSREF.format(doi=doi), headers=headers, timeout=30)
         except requests.RequestException:

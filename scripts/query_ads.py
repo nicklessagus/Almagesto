@@ -263,6 +263,8 @@ def expand_variants(names: list[str]) -> list[str]:
     variants: list[str] = []
     for n in names:
         for v in name_variants(n):
+    #  @inv INV-55
+    #  @inv INV-24
             if v not in variants:      # dedup: alias ya listado en ambas formas no duplica cláusulas
                 variants.append(v)
     return variants
@@ -366,6 +368,7 @@ def glyph_rescue(names: list[str], rows: int, meta: dict | None = None) -> list[
     out = []
     truncs = []
     for letter, consts in greek_targets(names).items():
+    #  @inv INV-52
         q = " OR ".join(f'title:"{c}" OR abs:"{c}"' for c in sorted(consts))
         pat = glyph_pattern(letter, consts)
         qm: dict = {}
@@ -580,6 +583,7 @@ def _variant_hit(low: str, var: str) -> bool:
     while i != -1:
         fin = i + len(var)
         if not (var[-1:].isdigit() and fin < len(low) and low[fin].isdigit()):
+    #  @inv INV-72
             return True
         i = low.find(var, i + 1)
     return False
@@ -596,6 +600,7 @@ def subject_in_title(title: str | None, names: list[str]) -> bool:
     # objeto. La continuación alfabética sigue valiendo (`tau Cet` ↔ `tau Ceti`), que es como están
     # escritos los alias Bayer.
     if any(_variant_hit(low, v.lower()) for v in expand_variants(names)):
+    #  @inv INV-50
         return True
     return any(glyph_pattern(letter, consts).search(raw)
                for letter, consts in greek_targets(names).items())
@@ -644,6 +649,7 @@ def fetch_bibcodes(bibs: list[str]) -> list[dict]:
     el universo lo fijó el usuario: no hay ruido que filtrar, el `fq` sólo puede sacar de más."""
     out = []
     for i in range(0, len(bibs), CHAIN_CHUNK):
+    #  @inv INV-49
         chunk = bibs[i:i + CHAIN_CHUNK]
         q = " OR ".join(f'bibcode:"{b}"' for b in chunk)
         for r in query_ads(q, rows=len(chunk), quiet_truncate=True, fq=None):
@@ -735,6 +741,7 @@ def reclass_diff(slugs: list[str]) -> int:
     for slug in slugs:
         adsfile = cfg.ROOT / "build" / slug / "ads.json"
         if not adsfile.exists():
+    #  @inv INV-58
             cfg.print_seguro(f"{slug}: sin build/{slug}/ads.json — nada que re-clasificar")
             continue
         recs = json.loads(adsfile.read_text(encoding="utf-8"))["records"]
@@ -860,6 +867,7 @@ def main() -> int:
     # "con qué lente se filtró" quedaba mintiendo. Se chequea acá y no a nivel módulo para que
     # `--help` siga funcionando con la config rota.
     if (err := cfg.objective_error()):
+    #  @inv INV-59
         sys.exit(f"⛔ no se puede clasificar: {err}\n"
                  "   Arreglá la lente antes de consultar ADS — clasificar con una lente vacía "
                  "marcaría el corpus entero con una regla que nadie escribió.")

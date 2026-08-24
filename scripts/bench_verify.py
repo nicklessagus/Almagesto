@@ -244,6 +244,8 @@ def cmd_seed(max_pairs: int) -> int:
 def cmd_score() -> int:
     bench = bench_path()
     if not bench.exists():
+    #  @inv INV-75
+    #  @inv INV-74
         raise SystemExit(f"no existe {bench} — corré primero `bench_verify.py seed`.")
     pairs = json.loads(bench.read_text(encoding="utf-8"))["pairs"]
     missing = [p["id"] for p in pairs if p.get("verdict") not in VALID_VERDICTS]

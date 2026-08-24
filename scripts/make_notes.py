@@ -104,6 +104,9 @@ def pdf_source_info(slug: str | None, stem: str) -> tuple[str | None, str | None
         return None, None
     txt = cfg.FULLTEXT / slug / f"{stem}.txt"
     if txt.exists():
+    #  @inv INV-71
+    #  @inv INV-29
+    #  @inv INV-26
         if _txt_provenance(txt) == "web":
             return "web", None
         head = txt.read_text(encoding="utf-8", errors="replace")[:cfg.ARXIV_STAMP_SCAN_CHARS]
@@ -225,6 +228,7 @@ def find_header_line(text: str) -> tuple[int, int] | None:
     líneas de URL/snapshot de las notas off-ADS no la traen, y una línea `· ` dentro de la
     extracción LLM queda fuera por el corte en la primera sección."""
     if not text.startswith("---\n"):
+    #  @inv INV-17
         return None
     end = text.find("\n---\n", 4)
     if end < 0:
@@ -252,6 +256,7 @@ def stamp_pdf_link(dest) -> bool:
     es null o apunta a un archivo que ya no existe (drift inverso). Nunca la extracción LLM.
     Idempotente. Devuelve True si modificó."""
     if not dest.exists():
+    #  @inv INV-18
         return False
     text = dest.read_text(encoding="utf-8")
     if not text.startswith("---\n"):
@@ -487,6 +492,8 @@ def sync_mirror() -> int:
     for dest in notes:
         text = dest.read_text(encoding="utf-8")
         if not text.startswith("---\n"):
+    #  @inv INV-64
+    #  @inv INV-08
             continue
         end = text.find("\n---\n", 4)
         if end < 0:
@@ -599,6 +606,7 @@ def merge_frontmatter_list(dest, field: str, values: list) -> bool:
     Nunca saca ni pisa nada. Devuelve True si modificó el archivo."""
     text = dest.read_text(encoding="utf-8")
     if not text.startswith("---\n"):
+    #  @inv INV-16
         return False
     end = text.find("\n---\n", 4)
     if end < 0:
@@ -730,6 +738,7 @@ def stamp_excluded(slug: str, dest) -> bool:
     return True
 
 
+# @inv INV-62
 GENERATOR_LINE = "> _Generado con Almagesto v"
 # Aviso de capa LLM de la cabecera. Vive acá y NO inline en los templates de cuerpo porque lo
 # escriben dos caminos —la creación de la nota y el backfill `stamp_header` (#69)— y si divergen, el
@@ -778,6 +787,7 @@ _El hueco accionable que sale de esta tabla es **"régimen no cubierto"** → a 
 """
 
 
+# @inv INV-11
 INVENTARIO = """## Inventario por eje
 _(Paso de **contraste**, antes de escribir la síntesis: una fila por paper para cada eje —parámetro
 o hecho— donde los papers **no coinciden**. Los ejes con acuerdo unánime no entran (misma regla de
@@ -1080,6 +1090,7 @@ def concept_rollup_rows(slug: str, fms: dict | None = None) -> list:
     concept = meta.get("concept") or slug
     filas = []
     for stem, fm in (fms if fms is not None else papers_fm_index()).items():
+    #  @inv INV-35
         por_m = concept in (cfg.as_list(fm.get("methods")) or [])
         por_t = concept in (cfg.as_list(fm.get("thesis_links")) or [])
         if not (por_m or por_t):
@@ -1109,6 +1120,7 @@ def _reemplazar_seccion(dest, header: str, nuevo: str) -> bool:
     idempotente (sin cambios no reescribe). Si la nota no tiene esa sección, no la inventa —
     agregarla al final la pondría después del apéndice de excluidos, fuera de su lugar."""
     if not dest.exists():
+    #  @inv INV-15
         return False
     text = dest.read_text(encoding="utf-8")
     i = text.find("\n" + header)
@@ -1572,6 +1584,7 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, theme: bool = F
         link, seed_links = slug, []
     adsfile = cfg.ROOT / "build" / slug / "ads.json"
     if not adsfile.exists():
+    #  @inv INV-01, INV-07
         cfg.print_seguro(f"  (sin {adsfile}; corré query_ads.py primero)")
         return
     recs = json.loads(adsfile.read_text(encoding="utf-8"))["records"]
@@ -1737,6 +1750,7 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
         # (edición quirúrgica del flag; la extracción LLM no se toca). Ídem el contrato
         # fulltext: si el snapshot/.txt ya está en disco, se estampa en la nota existente.
         if not pending and unpend_note(dest, citekey, slug):
+    #  @inv INV-61
             stamp_fulltext(dest, safe_name(citekey), slug)
             stamp_pdf_link(dest)         # unpend_note pudo linkear `pdf:` → la cabecera lo sigue (#47)
             return False

@@ -102,6 +102,7 @@ def drop(slug: str, bibcodes: list[str], reason: str) -> int:
         # `origen` de un juicio anterior — justo lo que #51 existe para que no se pierda. Mismo
         # aviso que su hermano `drop_source`, para que los dos carriles se comporten igual.
         if (previa := decisiones.get(b)):
+    #  @inv INV-48
             cfg.print_seguro(f"  ⚠ {b} ya tenía decisión ({previa.get('decision', '?')}, "
                   f"{previa.get('origen') or 'chaining'}, {previa.get('fecha', 's/f')}): "
                   f"{previa.get('motivo') or '(sin motivo)'} — la piso con ésta")
@@ -171,6 +172,7 @@ def migrate(slug: str) -> int:
     migrar no escribe."""
     legacy = cfg.legacy_triage_path(slug)
     if not legacy.exists():
+    #  @inv INV-54
         cfg.print_seguro(f"{slug}: no hay {legacy} — nada que migrar "
               f"(el juicio nuevo ya se escribe en {cfg.registro_path(slug)}).")
         return 0

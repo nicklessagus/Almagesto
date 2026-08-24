@@ -55,7 +55,7 @@ def test_classify_sin_match(toy_classifier):
 
 def test_classify_require_faceta_obligatoria(toy_classifier, monkeypatch):
     """`require: [rv]` → un paper que matchea sólo `actividad` deja de ser core; el que matchea
-    `rv` (aunque no `actividad`) sí. La faceta del eje se vuelve AND, no OR."""
+    `rv` (aunque no `actividad`) sí. La faceta del eje se vuelve AND, no OR.  @inv INV-55"""
     monkeypatch.setattr(qa, "REQUIRE_FACETS", ["rv"])
     assert qa.classify({"title": ["starspot activity"], "doctype": "article"}) == (["actividad"], False)
     t, rel = qa.classify({"title": ["radial velocity survey"], "doctype": "article"})
@@ -100,7 +100,7 @@ def test_exclusion_reason_min_facets(toy_classifier, monkeypatch):
 
 
 def test_classify_coherente_con_exclusion_reason(toy_classifier, monkeypatch):
-    """`relevant` de classify ⟺ exclusion_reason None — no hay dos implementaciones de la regla."""
+    """`relevant` de classify ⟺ exclusion_reason None — no hay dos implementaciones de la regla.  @inv INV-24"""
     monkeypatch.setattr(qa, "REQUIRE_FACETS", ["rv"])
     for rec_, why_topics in [({"title": ["starspot activity"], "doctype": "article"}, ["actividad"]),
                              ({"title": ["radial velocity"], "doctype": "article"}, ["rv"]),
@@ -439,6 +439,7 @@ def test_query_ads_retry_429_luego_ok(toy_classifier, ads_token, no_sleep, monke
 
 
 def test_query_ads_5xx_persistente_lanza(toy_classifier, ads_token, no_sleep, monkeypatch):
+    # @inv INV-69
     monkeypatch.setattr(qa, "requests", SimpleNamespace(
         get=fake_get_seq([FakeResp(500)] * 4)))
     with pytest.raises(real_requests.HTTPError):
@@ -559,6 +560,7 @@ def test_chain_candidates_arma_subqueries_ancladas(no_sleep, monkeypatch):
 
 
 def test_fetch_bibcodes_marca_manual(no_sleep, monkeypatch):
+    # @inv INV-60
     monkeypatch.setattr(qa, "query_ads",
                         lambda q, rows=400, quiet_truncate=False, fq=qa.ASTRO_FQ:
                         [rec("2019man....1M", relevant=False)])
@@ -643,7 +645,7 @@ def test_main_no_chain(toy_vault, toy_classifier, no_sleep, monkeypatch):
 def test_main_persiste_truncado(toy_vault, toy_classifier, no_sleep, monkeypatch):
     """Query directa truncada → main persiste `truncated: {num_found, rows, recent}` en ads.json
     (#17 + #79), convirtiendo el aviso de stdout en una marca que el lint surface. La segunda
-    pasada NO levanta la marca: sigue faltando el medio del universo."""
+    pasada NO levanta la marca: sigue faltando el medio del universo.  @inv INV-52"""
     def fake_qa(q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False,
                 sort=qa.CITES_SORT):
         if meta is not None:
@@ -947,7 +949,7 @@ def test_classify_record_lee_el_formato_persistido(toy_classifier):
 
 def test_reclass_diff_reporta_el_delta(toy_vault, toy_classifier, monkeypatch, capsys):
     """#40: con `require: [rv]` declarada, un paper de actividad SALE del core — y el reporte
-    separa el que tiene extracción LLM (la decisión real) de los stubs."""
+    separa el que tiene extracción LLM (la decisión real) de los stubs.  @inv INV-58"""
     from conftest import mk_note
     monkeypatch.setattr(qa, "REQUIRE_FACETS", ["rv"])
     write_ads_json(toy_vault, "test_star", [
@@ -972,7 +974,7 @@ def test_reclass_diff_reporta_el_delta(toy_vault, toy_classifier, monkeypatch, c
 
 
 def test_reclass_diff_no_escribe_nada(toy_vault, toy_classifier):
-    """Dry-run: ni ads.json ni la bóveda se tocan."""
+    """Dry-run: ni ads.json ni la bóveda se tocan.  @inv INV-59"""
     recs = [{"bibcode": "2020a....1A", "title": "activity", "abstract": "", "keyword": [],
              "doctype": "article", "relevant": True, "via": "query"}]
     write_ads_json(toy_vault, "test_star", recs)
@@ -1153,7 +1155,7 @@ def test_subject_in_title_no_matchea_por_prefijo_de_catalogo():
 def test_main_chaining_solo_auto_acepta_sujeto_en_titulo(toy_vault, toy_classifier, no_sleep,
                                                          monkeypatch, capsys):
     """El core del grafo con el sujeto en el título entra; el resto queda como CANDIDATO en
-    ads.json (no se baja) a la espera del juicio."""
+    ads.json (no se baja) a la espera del juicio.  @inv INV-50"""
     monkeypatch.setattr(qa, "query_ads",
                         lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
                         [rec("2020dirA....1A")])
@@ -1169,6 +1171,7 @@ def test_main_chaining_solo_auto_acepta_sujeto_en_titulo(toy_vault, toy_classifi
 
 
 def test_main_triage_no_repropone_descartados(toy_vault, toy_classifier, no_sleep, monkeypatch, capsys):
+    # @inv INV-49
     d = toy_vault.ROOT / "build" / "test_star"
     d.mkdir(parents=True, exist_ok=True)
     cfg.save_decisiones("test_star", {
@@ -1302,7 +1305,7 @@ def test_main_tema_no_aplica_la_compuerta(toy_vault, toy_classifier, no_sleep, m
 def test_main_persiste_el_registro_de_busqueda(toy_vault, toy_classifier, no_sleep, monkeypatch):
     """#64: al cerrar la corrida queda el registro VERSIONADO del sujeto — query efectiva, fecha,
     límite, conteos y versión del clasificador. La query de una estrella la arma build_query y
-    antes se tiraba: no había forma de saber sobre qué universo afirma la ficha."""
+    antes se tiraba: no había forma de saber sobre qué universo afirma la ficha.  @inv INV-51"""
     direct = [rec("2020dirA....1A", cites=5), rec("2020dirB....1B", relevant=False, cites=9)]
 
     def fake_query(q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, fq=None,
@@ -1344,7 +1347,7 @@ def test_query_ads_rehusa_lente_vacia(toy_vault, monkeypatch, capsys):
 
 def test_escotillas_quedan_en_el_registro(toy_vault, toy_classifier, no_sleep, monkeypatch):
     """D-48: lo que no se puede apagar se registra. Dos entradas del registro con los mismos
-    conteos pueden describir corridas distintas si una usó `--yes` y la otra no."""
+    conteos pueden describir corridas distintas si una usó `--yes` y la otra no.  @inv INV-44"""
     monkeypatch.setattr(qa, "query_ads",
                         lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
                         [rec("2020dirA....1A")])

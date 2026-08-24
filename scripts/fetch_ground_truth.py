@@ -57,7 +57,7 @@ def _val(row, key):
 
 
 def msini_earth(K_ms, P_days, e, mstar_msun):
-    """m·sin i [M_⊕] a partir de K, P, e y M* (aprox. m_p << M*). None si falta algo."""
+    """m·sin i [M_⊕] a partir de K, P, e y M* (aprox. m_p << M*). None si falta algo.  @inv INV-10"""
     import math
     if None in (K_ms, P_days, mstar_msun) or K_ms <= 0 or P_days <= 0 or mstar_msun <= 0:
         return None

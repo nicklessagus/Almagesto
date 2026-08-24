@@ -92,7 +92,7 @@ def test_concept_areas_reservadas_se_agregan(toy_vault):
 def test_concept_areas_sin_declarar_apaga_el_chequeo(toy_vault):
     """Sin `concept_areas` declarado el typo-check queda APAGADO (`[]`), no inferido de las carpetas
     que hay en disco: inferirlo convertiría cualquier typo ya cometido en "área declarada", que es
-    lo contrario de lo que el chequeo hace. El lint reporta la lista ausente."""
+    lo contrario de lo que el chequeo hace. El lint reporta la lista ausente.  @inv INV-47"""
     obj = dict(cfg.load_objective())
     obj.pop("concept_areas")
     write_yaml(toy_vault.OBJECTIVE_YAML, obj)
@@ -103,7 +103,7 @@ def test_concept_areas_sin_declarar_apaga_el_chequeo(toy_vault):
 
 def test_version_unica_fuente():
     """ALMAGESTO_VERSION es la ÚNGaussian processes fuente de versión: los UA de los fetchers derivan de la
-    constante, y ningún script hardcodea 'Almagesto/x.y' (el drift que tenían los UA en 0.1)."""
+    constante, y ningún script hardcodea 'Almagesto/x.y' (el drift que tenían los UA en 0.1).  @inv INV-62"""
     import re
 
     import check_retractions
@@ -251,7 +251,7 @@ NOTA_CON_GUIONES = (
 def test_split_fm_no_corta_dentro_de_un_valor():
     """El split por `---` es TEXTUAL y corta a la mitad de un escalar entrecomillado, así que
     `split_fm` devuelve `{}` sobre un frontmatter que **es YAML válido**. Todo lo que cuelga del
-    frontmatter (tipo de nota, retracción, espejo, roles) queda mudo para esa nota."""
+    frontmatter (tipo de nota, retracción, espejo, roles) queda mudo para esa nota.  @inv INV-36"""
     fm = cfg.split_fm(NOTA_CON_GUIONES)
     assert fm.get("bibcode") == "2020aaa...1..1A", f"frontmatter perdido: {fm!r}"
 
@@ -396,7 +396,7 @@ def test_sin_escrituras_directas_a_vault():
 
 def test_objective_error_distingue_los_tres_estados(toy_vault):
     """`load_objective` colapsa "YAML roto" y "objetivo vacío" en el mismo `{}`. `objective_error`
-    los separa para el llamador estricto, sin cambiarle la firma al tolerante.  @inv INV-80"""
+    los separa para el llamador estricto, sin cambiarle la firma al tolerante.  @inv INV-80, INV-56"""
     assert cfg.objective_error() is None                     # el toy_vault trae uno sano
     cfg.OBJECTIVE_YAML.write_text("name: X\nrelevance:\n  topics:\n    rv: activity: starspot\n", encoding="utf-8")
     err = cfg.objective_error()
@@ -434,7 +434,7 @@ def test_segunda_corrida_no_pisa_la_primera(toy_vault):
 
 def test_busqueda_preserva_decisiones(toy_vault):
     """No se rompe la garantía vieja: `decisiones` (el juicio de curación, lo NO regenerable) sigue
-    intacto al appendear una búsqueda."""
+    intacto al appendear una búsqueda.  @inv INV-53"""
     cfg.save_decisiones("test_star", {"2020X": {"decision": "descartado", "motivo": "ruido"}})
     cfg.save_busqueda("test_star", {"fecha": "2026-01-01", "n_total": 1})
     assert cfg.load_decisiones("test_star")["2020X"]["motivo"] == "ruido"
@@ -579,7 +579,7 @@ def test_extra_core_ausente_es_lista_vacia(toy_vault):
 def test_autoridad_por_campo_declarada():
     """La declaración vive en UN lugar y la comparten los tres consumidores (fetch_ground_truth
     escribe, make_notes la publica en la cabecera, lint la vigila). Repetirla es cómo se
-    desincronizan."""
+    desincronizan.  @inv INV-14"""
     assert cfg.AUTORIDAD_CAMPO["spectral_type"] == "simbad"
     assert cfg.AUTORIDAD_CAMPO["teff_K"] == "nea"
     assert cfg.AUTORIDAD_CAMPO["st_rotp_days"] == "nea"   # clave del JSON, no la de la ficha

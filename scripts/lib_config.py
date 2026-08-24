@@ -27,6 +27,7 @@ ALMAGESTO_VERSION = "1.30.0"
 # daría WARN permanente sin forma de apagarlo). El lint AVISA (WARN) mientras `name` siga siendo
 # este string — la instancia no definió su objetivo (skill `setup`) y clasifica "core" con la
 # regex del ejemplo. Mantener en sync con el YAML del template.
+# @inv INV-57
 DEFAULT_OBJECTIVE_NAME = "<definir con el skill setup>"
 
 ROOT = Path(__file__).resolve().parent.parent  # raíz del repo (andamiaje + bóveda)
@@ -112,6 +113,7 @@ def get_ads_token() -> str:
     if tok:
         return tok.strip()
     if ADS_KEY_FILE.exists():
+    #  @inv INV-67
         return ADS_KEY_FILE.read_text().strip()
     raise RuntimeError(
         "No hay token ADS. Poné vault/config/ads_dev_key o exportá ADS_DEV_KEY. "
@@ -313,6 +315,7 @@ def stdout_tolerante() -> None:
     para un CLI, pero sería un efecto colateral inaceptable en una librería que los tests importan
     (rompería la captura de `capsys`)."""
     for stream in (sys.stdout, sys.stderr):
+    #  @inv INV-36
         try:
             stream.reconfigure(errors="replace")     # 3.7+; no-op si ya es UTF-8
         except (AttributeError, ValueError, OSError):
@@ -394,6 +397,7 @@ def citation_rate(rec: dict, now_year: int | None = None) -> float:
     try:
         year = int(rec.get("year") or 0)
     except (TypeError, ValueError):
+    #  @inv INV-47
         year = 0
     now = now_year if now_year is not None else _dt.date.today().year
     edad = max(1, now - year + 1) if 0 < year <= now else 1
@@ -484,6 +488,7 @@ def load_registro(slug: str) -> dict:
     y se sigue. El lint reporta el registro ilegible como hallazgo."""
     f = registro_path(slug)
     if not f.exists():
+    #  @inv INV-25
         return {}
     try:
         data = yaml.safe_load(f.read_text(encoding="utf-8"))
@@ -513,6 +518,7 @@ def save_registro(slug: str, data: dict) -> None:
     REGISTRO.mkdir(parents=True, exist_ok=True)
     f = registro_path(slug)
     if f.exists():
+    #  @inv INV-53
         try:
             existente = yaml.safe_load(f.read_text(encoding="utf-8"))
         except (yaml.YAMLError, OSError) as exc:
@@ -583,6 +589,7 @@ def load_extra_core(meta: dict, *, entry: str = "?") -> list:
     if v is None:
         return []
     if not isinstance(v, list) or any(not isinstance(x, dict) for x in v):
+    #  @inv INV-60
         sueltos = [v] if isinstance(v, str) else [x for x in as_list(v) if isinstance(x, str)]
         sys.exit(_extra_core_error(entry, sueltos,
                                    "`extra_core` ya no acepta un bibcode suelto ni una lista de "
@@ -629,6 +636,7 @@ TOKENS_POR_PAPER = 24_000
 # La declaración vive acá y no en cada script porque la comparten tres consumidores
 # (`fetch_ground_truth` escribe, `make_notes` la publica en la cabecera de la ficha, `lint` la
 # vigila): repetirla es cómo se desincronizan.  @inv INV-76
+# @inv INV-14
 AUTORIDAD_CAMPO = {
     "spectral_type": "simbad",
     "teff_K": "nea",
@@ -820,6 +828,7 @@ def save_paso(slug: str, paso: str, flags=()) -> None:
         "flags": list(flags),
     }
     if any(p == entrada for p in previos):
+    #  @inv INV-51
         return                       # misma corrida, mismo día: sin ruido de diff
     data["cadena"] = previos + [entrada]
     save_registro(slug, data)

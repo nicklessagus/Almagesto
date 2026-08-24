@@ -35,6 +35,7 @@ import make_notes
 
 # Misma heurística de clave que scripts/lint.py (BIBCODE_RE): 4 dígitos + letra. Garantiza que el
 # .txt se llame como el [[citekey]] citado y que el lint lo reconozca como target de bibcode.
+# @inv INV-27
 CITEKEY_RE = re.compile(r"^\d{4}[A-Za-z]")
 
 # Bloques HTML crudos que defuddle a veces deja embebidos y que NO aportan texto citable
@@ -106,6 +107,7 @@ def main() -> int:
             "Alternativa sin Node: traer la página con WebFetch y guardar el snapshot a mano."
         )
     if not CITEKEY_RE.match(args.citekey):
+    #  @inv INV-30
         sys.exit(
             f"citekey inválida: {args.citekey!r}. Debe empezar con AAAA+letra (año+inicial del autor, "
             "p. ej. 2006RasmussenWilliams) para que el lint la reconozca y el .txt matchee el [[citekey]]."

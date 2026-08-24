@@ -51,6 +51,7 @@ def test_snapshot_retrieved(tmp_path):
     ("200Ras", False),
 ])
 def test_citekey_re(key, ok):
+    # @inv INV-27
     assert bool(fw.CITEKEY_RE.match(key)) is ok
 
 
@@ -109,6 +110,7 @@ def test_main_snapshot_vacio(toy_vault, fake_defuddle, monkeypatch):
 
 
 def test_main_idempotente_reusa_fecha_del_snapshot(toy_vault, fake_defuddle, monkeypatch):
+    # @inv INV-30
     d = toy_vault.FULLTEXT / "gp"
     d.mkdir(parents=True, exist_ok=True)
     (d / "2006RasmussenWilliams.txt").write_text(

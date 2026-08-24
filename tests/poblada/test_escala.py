@@ -191,7 +191,7 @@ def test_lint_no_muta_la_boveda(boveda_poblada):
     'arregla de paso' (p. ej. un futuro auto-fix de cabeceras colado adentro del lint en vez de
     vivir en `make_notes.py --restamp-headers`) rompería este hash sin que ningún otro test lo
     note, porque el lint seguiría reportando bien — el contrato que este test vigila no es
-    "encuentra los hallazgos" sino "no toca lo que audita"."""
+    "encuentra los hallazgos" sino "no toca lo que audita".  @inv INV-42"""
     antes = hash_tree(boveda_poblada.VAULT)
     _lint_silencioso()
     despues = hash_tree(boveda_poblada.VAULT)

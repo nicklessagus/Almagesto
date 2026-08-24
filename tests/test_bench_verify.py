@@ -39,6 +39,7 @@ def run(monkeypatch, *argv):
 # ── seed ─────────────────────────────────────────────────────────────────────
 
 def test_seed_extrae_siembra_y_es_determinista(toy_vault, monkeypatch):
+    # @inv INV-74
     seed_fulltext(toy_vault, "2020aaaA...1..1A", "2020bbbB...1..1B")
     seed_notes(toy_vault)
     assert run(monkeypatch, "seed") == 0
@@ -241,6 +242,7 @@ def pair(pid, label, verdict, bib="2020aaaA...1..1A"):
 
 
 def test_score_metricas(toy_vault, monkeypatch, capsys):
+    # @inv INV-75
     write_bench([pair("r000", "real", "soportada"),
                  pair("r001", "real", "no-soportada"),       # real caída → sospechosa
                  pair("s000", "sembrada", "no-soportada"),   # cazada
