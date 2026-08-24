@@ -299,10 +299,69 @@ trabajo aparte y no se hizo** — cada tanda del plan baja el techo con lo que c
 
 Suite tier 0: **667 verdes en 2,4 s** (presupuesto ≤ 2,5 s).
 
+### ✅ Tanda 0 cerrada (2026-08-24) — v1.24.0
+
+| Issue | Qué cerró | INV |
+|---|---|---|
+| **0.1** | `check_retractions`: exit `0`/`1`/`2` desambiguado; `slug_notes` levanta `NothingToCheck` en vez de `sys.exit`; `crossref_retraction` devuelve `estado ∈ {ok, sin-registro, error}`; los dos orquestadores distinguen rc 1 de rc 2 | INV-87 (carril propio) |
+| **0.2** | `cfg.write_text_atomic` / `write_bytes_atomic`: **un solo** writer atómico. Migrados los 5 clones + las 14 escrituras de `make_notes`. Cierra la cola #5 (`.tmp` huérfano) | INV-90 |
+| **0.3** | `objective_error()`; `query_ads` rehúsa la lente ilegible; categoría `⛔ No evaluado` del lint, que cuenta para el exit y **suprime** el `(0)` de la categoría que no se pudo medir | INV-80, INV-87 |
+| **0.4** | medición del umbral de legibilidad sobre los 672 fulltexts reales (abajo) | — |
+
+Ratchet de trazabilidad **91 → 88**. Tier 0: **689 verdes en 2,5 s**. Tier 1: 48 verdes (golden
+regenerado: 30 → 31 categorías).
+
+**Tres cosas que sólo aparecieron al escribir los tests** (las tres, casos adversarios que el plan
+daba por buenos):
+
+1. **El caso adversario de D-6 que proponía el plan no rompe.** `topics: {rv: foo:bar}` **parsea**:
+   en YAML un `:` pegado al carácter siguiente es parte del escalar. El que rompe es `:` **seguido
+   de espacio**. El test habría quedado verde por la razón equivocada.
+2. **El gate de git tiene que ser fino.** La rama "bloque sin fecha" del chequeo stale no necesita
+   git; apagar el chequeo entero era el mismo error en el otro sentido (dejar sin medir algo que sí
+   se podía).
+3. **El test de comportamiento de D-53 cubre 3 de 14 sitios**, medido por mutación — no los 14 que
+   sugiere leerlo. El barrido completo lo da el test estático. Está escrito en su docstring para
+   que nadie lo lea como la garantía entera.
+
+⚠ **Consecuencia asumida de 0.3:** una bóveda legítimamente **sin git**, con bloques de
+verificación fechados, ya no puede dar lint limpio (cae en *no evaluado*). Es el precio de no
+afirmar salud sobre lo que no se miró.
+
+### 📏 Issue 0.4 — el umbral de legibilidad, medido (672 fulltexts reales de Almagesto-RV)
+
+Corrido read-only sobre `Almagesto-RV/vault/raw/fulltext/` (672 `.txt`, 34 de ellos OCR).
+**Resultado: 672/672 legibles, 0 marcados** — ningún falso positivo. Margen al corte, por criterio:
+
+| Criterio | Umbral | Peor archivo | Margen |
+|---|---|---|---|
+| `LEGIBLE_MIN_CHARS` | 200 | 1.955 chars | **×9,8** |
+| `LEGIBLE_MIN_CHARS_PAGE` | 200 | 728 chars/pág | **×3,6** |
+| `LEGIBLE_MIN_RATIO` | 0,85 | 0,8905 | **×1,05** ⚠ |
+
+**El único margen fino es el del ratio, y no es mojibake: son glifos de figura.** El archivo más
+cerca del corte (`tau_ceti/2017MNRAS.470.4794F.txt`, Agatha) es prosa perfectamente legible; su
+ratio 0,8905 lo produce **un solo carácter, `●` (U+25CF), 7.735 de sus 8.341 no-ASCII** — los
+marcadores de sus scatter plots, que `pdftotext` extrae. Sacando ese glifo el ratio es **0,9920**.
+No es un caso aislado: **14 archivos** tienen un único glifo repetido (`●`, `·`, `±`, `∗`)
+explicando más del 50% de sus no-ASCII.
+
+**Número propuesto: no mover ninguno de los tres.** Bajar `LEGIBLE_MIN_RATIO` para dar aire al caso
+del `●` embotaría el detector de mojibake, que es para lo que existe. Lo que el margen fino señala
+no es el umbral sino **la métrica**: contar caracteres no-ASCII trata igual 7.735 repeticiones de
+un glifo de figura que 7.735 caracteres corruptos distintos. El arreglo natural —ignorar un glifo
+dominante repetido, o contar caracteres **distintos**— es un **issue aparte con su test rojo**
+(`test_is_legible` fija los umbrales de hoy), como prevé el plan.
+
+⚠ **Lo que esta medición NO establece:** el corpus no tiene ni un archivo genuinamente ilegible, así
+que la **potencia** del detector (¿agarra mojibake real?) no se midió acá — eso lo cubre
+sintéticamente `test_is_legible`. La conclusión honesta es "cero falsos positivos observados y un
+casi-falla con forma conocida", no "el umbral está validado".
+
 ### Lo que sigue
-**Tanda 0** — issues 0.1 (`check_retractions` exit 0/1/2), 0.2 (helper atómico `write_text_atomic`),
-0.3 ("no evaluado" + lente vacía), 0.4 (medición del umbral de legibilidad sobre los 672 fulltexts
-reales). Cada uno declara su `@inv` y baja el techo del ratchet.
+**Tanda 1 — el ancla** (D-4 + D-20 + D-5), el camino crítico: `scripts/lib_blocks.py` (partición en
+bloques, `block_anchor`, `source_hash`, `pairs_of`), el bloque de verificación con las dos columnas
+de hash, y la categoría "pares vencidos" del lint con **`--cierre`** (R-1, decidida hoy).
 
 ## 🔜 Cola de pendientes (al 2026-08-23)
 
