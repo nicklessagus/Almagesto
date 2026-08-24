@@ -207,7 +207,7 @@ def stamp_fulltext(dest, stem: str, slug: str | None) -> bool:
         if pver:
             changed = upsert("eprint_version", pver, ("pdf_source",)) or changed
     if changed:
-        dest.write_text("---\n" + "\n".join(lines) + text[end:], encoding="utf-8")
+        cfg.write_text_atomic(dest, "---\n" + "\n".join(lines) + text[end:])
     return changed
 
 
@@ -275,7 +275,7 @@ def stamp_pdf_link(dest) -> bool:
     new_line = PDF_LINK_RE.sub("", line) + want
     if new_line == line:
         return False
-    dest.write_text(text[:pos] + new_line + text[line_end:], encoding="utf-8")
+    cfg.write_text_atomic(dest, text[:pos] + new_line + text[line_end:])
     return True
 
 
@@ -415,7 +415,7 @@ def migrate_disputes(dest) -> bool:
             if k == "planets":
                 reordenado["disputes"] = nuevas
         front = reordenado
-    dest.write_text(fm(front) + text[end + 5:], encoding="utf-8")
+    cfg.write_text_atomic(dest, fm(front) + text[end + 5:])
     cfg.print_seguro(f"  {dest.name}: {len(nuevas)} disputa(s) migradas a posiciones explícitas")
     return True
 
@@ -558,7 +558,7 @@ def sync_mirror() -> int:
                     reportar(f"{pl.get('letter')}.{campo}", dest.name, val, val_gt)
 
         if changed:
-            dest.write_text(fm(front) + text[end + 5:], encoding="utf-8")
+            cfg.write_text_atomic(dest, fm(front) + text[end + 5:])
 
     cfg.print_seguro(f"sync-mirror: {rellenados} campo(s) rellenados desde el ground-truth "
           f"({len(notes)} ficha(s) revisadas); {reportados} sin tocar (motivo arriba de cada uno).")
@@ -635,7 +635,7 @@ def merge_frontmatter_list(dest, field: str, values: list) -> bool:
         lines[j:j] = [f"{indent}- {v}" for v in missing]
     else:
         return False   # forma no reconocida (escalar con valor): no tocar
-    dest.write_text("---\n" + "\n".join(lines) + text[end:], encoding="utf-8")
+    cfg.write_text_atomic(dest, "---\n" + "\n".join(lines) + text[end:])
     return True
 
 
@@ -726,7 +726,7 @@ def stamp_excluded(slug: str, dest) -> bool:
         out = text[:start] + new.rstrip("\n") + ("\n" if new else "") + text[end:]
     if out == text:
         return False
-    dest.write_text(out, encoding="utf-8")
+    cfg.write_text_atomic(dest, out)
     return True
 
 
@@ -957,14 +957,14 @@ def stamp_header(dest) -> bool:
             pos = text.find("\n", pos + 1)
         insert_at = pos + 1 if pos >= 0 else len(text)
         out = text[:insert_at] + f">\n{linea_gen}\n" + text[insert_at:]
-        dest.write_text(out, encoding="utf-8")
+        cfg.write_text_atomic(dest, out)
         return True
     m = H1_RE.search(text)
     if not m:
         return False                                  # sin H1 no hay ancla honesta: no inventamos
     bloque = f"\n\n{LLM_DISCLAIMER[kind]}\n>\n{linea_gen}"
     out = text[:m.end()] + bloque + text[m.end():]
-    dest.write_text(out, encoding="utf-8")
+    cfg.write_text_atomic(dest, out)
     return True
 
 
@@ -986,7 +986,7 @@ def stamp_search_line(slug: str, dest) -> bool:
         out = out[:i] + new + out[i:]
     if out == text:
         return False
-    dest.write_text(out, encoding="utf-8")
+    cfg.write_text_atomic(dest, out)
     return True
 
 
@@ -1093,7 +1093,7 @@ SORT method ASC
     # versiona directorios vacíos, así que una bóveda sin `vault/wiki/stars/` (clon con el
     # scratch limpiado, árbol armado a mano) moría con un traceback de FileNotFound.
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(body, encoding="utf-8")
+    cfg.write_text_atomic(dest, body)
     stamp_search_line(slug, dest)
     cfg.print_seguro(f"  star: {dest.name} escrito")
 
@@ -1167,7 +1167,7 @@ SORT year ASC
 ```
 """
     body += excluded_table(slug)
-    dest.write_text(body, encoding="utf-8")
+    cfg.write_text_atomic(dest, body)
     stamp_search_line(slug, dest)
     cfg.print_seguro(f"  concept: {area}/{concept}.md escrito (stub)")
 
@@ -1258,7 +1258,7 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
 {abstract or '_(no disponible)_'}
 
 {extraccion}"""
-        dest.write_text(body, encoding="utf-8")
+        cfg.write_text_atomic(dest, body)
         written += 1
     cfg.print_seguro(f"  papers: {written} escritos, {skipped} ya existían"
           + (f", {merged} retro-linkeados (seeds add-only)" if merged else "")
@@ -1290,7 +1290,7 @@ def unpend_note(dest, citekey: str, slug: str | None) -> bool:
         lines = [f"pdf: {pdf_rel}" if ln.strip() == "pdf: null" else ln for ln in lines]
     body = "\n".join(ln for ln in body.split("\n")
                      if not ln.startswith("> ⏳ **Fuente pendiente"))
-    dest.write_text("---\n" + "\n".join(lines) + body, encoding="utf-8")
+    cfg.write_text_atomic(dest, "---\n" + "\n".join(lines) + body)
     cfg.print_seguro(f"  papers: {dest.name} — fuente obtenida → pending_source removido"
           + (" y `pdf` linkeado" if has_pdf else ""))
     return True
@@ -1407,7 +1407,7 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
 > El frontmatter es máquina-legible como en cualquier nota de paper.
 {pend_line}
 {extraction_block(topic=True)}"""
-    dest.write_text(body, encoding="utf-8")
+    cfg.write_text_atomic(dest, body)
     cfg.print_seguro(f"  papers: {dest.name} escrito (stub off-ADS)")
     return True
 

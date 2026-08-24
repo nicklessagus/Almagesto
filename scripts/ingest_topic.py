@@ -165,7 +165,7 @@ def repoint_source_pdf(key: str, declared: str, dest: Path) -> None:
         cfg.print_seguro(f"  ⚠ {key}: no repunté `pdf:` en topics.yaml (el path declarado matchea "
               f"{n} líneas, esperaba 1) — repuntalo a mano a {rel}")
         return
-    cfg.TOPICS_YAML.write_text(pat.sub(lambda m: m.group(1) + rel, text), encoding="utf-8")
+    cfg.write_text_atomic(cfg.TOPICS_YAML, pat.sub(lambda m: m.group(1) + rel, text))
     cfg.print_seguro(f"  {key}: sources[].pdf repuntado → {rel}")
 
 

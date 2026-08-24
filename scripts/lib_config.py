@@ -347,6 +347,58 @@ def sort_by_citation_rate(recs, now_year: int | None = None) -> list:
 
 # ── registro de ingesta por sujeto (#51/#64) ─────────────────────────────────
 
+# ── escritura atómica: el ÚNICO writer del repo (D-53 / INV-90) ──────────────────────────────────
+
+def write_text_atomic(path: Path, text: str, *, encoding: str = "utf-8") -> None:
+    """Publica `text` en `path` sin dejarlo nunca a medio escribir.  @inv INV-90
+
+    Se escribe primero a un temporal en el **mismo directorio** (mismo filesystem, condición para
+    que el rename sea atómico en POSIX) y se publica con `os.replace`, que sustituye el archivo de
+    una sola vez: o está el viejo entero, o el nuevo entero, nunca la mitad.
+
+    ⚠ Por qué NO alcanza "respaldar el original y restaurar en el `except`": ese patrón sólo cubre
+    el corte que llega como **excepción**. Ante un `SIGKILL` o un corte de energía no corre ningún
+    `except` y el archivo queda truncado igual.
+
+    El `try/finally` limpia el temporal cuando el fallo ocurre **antes** de publicar — el caso que
+    los writers viejos no cubrían: `save_registro` escribía el tmp fuera de todo `try`, así que un
+    disco lleno a mitad de esa escritura dejaba un `.tmp<pid>` huérfano en `vault/config/`. El
+    archivo real nunca se corrompía; era basura de disco, pero basura que se commitea.
+
+    Medido con `ulimit -f` sobre el writer que más escribe: el `write_text` directo dejaba una nota
+    de 16.071 B en 8.192 B, con 198 de 400 ocurrencias de la extracción LLM —lo MENOS regenerable
+    de la bóveda— desaparecidas sin aviso.
+
+    `os.replace` se llama como atributo del módulo `os` para que un test pueda interceptarlo."""
+    _publicar(path, lambda tmp: tmp.write_text(text, encoding=encoding))
+
+
+def write_bytes_atomic(path: Path, data: bytes) -> None:
+    """Gemela binaria de `write_text_atomic` (PDFs).  @inv INV-90
+
+    H-07: un `dest.write_bytes(...)` directo cortado a la mitad deja un PDF TRUNCADO en el destino
+    FINAL (medido: 35 B), y el único chequeo de idempotencia de la cadena es `dest.exists()`: ese
+    PDF roto cuenta como "ya bajado" para siempre, sin forma de reintentarlo salvo borrarlo a mano."""
+    _publicar(path, lambda tmp: tmp.write_bytes(data))
+
+
+def _publicar(path: Path, llenar) -> None:
+    """tmp en el mismo directorio → `llenar(tmp)` → `os.replace`. Limpia el temporal ante cualquier
+    fallo, en las dos mitades (llenando el tmp, y publicando)."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + f".tmp{os.getpid()}")
+    try:
+        llenar(tmp)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
+
+
 def registro_path(slug: str) -> Path:
     return REGISTRO / f"{slug}.yaml"
 
@@ -412,20 +464,8 @@ def save_registro(slug: str, data: dict) -> None:
                 "piso a ciegas: se perderían `busqueda` y las `decisiones` de curación. Arreglalo "
                 "a mano y volvé a correr la operación."
             )
-    tmp = f.with_name(f.name + f".tmp{os.getpid()}")
-    tmp.write_text(
-        yaml.safe_dump(data, sort_keys=False, allow_unicode=True, default_flow_style=False),
-        encoding="utf-8")
-    try:
-        os.replace(tmp, f)
-    except Exception:
-        # publicación fallida: no dejar el temporal como basura silenciosa, pero priorizar
-        # propagar el error real por sobre uno de limpieza.
-        try:
-            tmp.unlink()
-        except OSError:
-            pass
-        raise
+    write_text_atomic(
+        f, yaml.safe_dump(data, sort_keys=False, allow_unicode=True, default_flow_style=False))
 
 
 def load_decisiones(slug: str) -> dict:
@@ -485,4 +525,4 @@ def record_pdf_source(slug: str, stem: str, source: str) -> None:
         except ValueError:
             data = {}
     data[stem] = source
-    f.write_text(json.dumps(data, indent=2, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+    write_text_atomic(f, json.dumps(data, indent=2, ensure_ascii=False, sort_keys=True))

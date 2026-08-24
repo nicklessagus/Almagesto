@@ -38,25 +38,22 @@ def safe_name(bibcode: str) -> str:
 
 
 def write_pdf_atomic(dest, data: bytes) -> bool:
-    """Escritura atómica del PDF final: temporal en el MISMO directorio + `os.replace` (mismo
-    patrón que `lib_config.save_registro` / `fetch_ground_truth.write_ground_truth` /
-    `fetch_pdf.write_pdf_atomic`, que es la implementación gemela para la otra vía de bajada).
-    H-07: antes se hacía `dest.write_bytes(buf)` directo — un corte a mitad de esa escritura
-    (proceso matado, disco lleno) deja un PDF TRUNCADO en el destino FINAL (medido: 35 B), y el
-    único chequeo de idempotencia de la cadena (acá y en `fetch_pdf`) es `dest.exists()`: ese PDF
-    roto se cuenta como "ya bajado" para siempre. Con la escritura atómica un corte nunca deja
-    nada en `dest`."""
-    tmp = dest.with_name(dest.name + f".tmp{os.getpid()}")
+    """Escritura atómica del PDF final, vía `cfg.write_bytes_atomic` (D-53: un solo writer
+    atómico en el repo; esta función y su gemela de la otra vía de bajada eran dos clones del
+    patrón tmp+os.replace).
+
+    H-07: antes se escribía el destino directo — un corte a mitad (proceso matado, disco lleno)
+    deja un PDF TRUNCADO en el destino FINAL (medido: 35 B), y el único chequeo de idempotencia
+    de la cadena es `dest.exists()`: ese PDF roto cuenta como "ya bajado" para siempre, sin forma
+    de reintentarlo salvo borrarlo a mano. Con la escritura atómica un corte NUNCA deja nada en
+    `dest`: o el PDF completo se publica, o `dest` sigue sin existir y la próxima corrida lo
+    reintenta sola. `False` si la publicación falló (queda como "no conseguido" → entra al
+    residuo, igual que si la fuente no hubiera entregado nada)."""
     try:
-        tmp.write_bytes(data)
-        os.replace(tmp, dest)
+        cfg.write_bytes_atomic(dest, data)
         return True
     except OSError as e:
         cfg.print_seguro(f"    ! no se pudo escribir {dest.name} en disco: {e}")
-        try:
-            tmp.unlink()
-        except OSError:
-            pass
         return False
 
 
@@ -155,9 +152,9 @@ def main() -> int:
     residue = no_arxiv + failed
     if residue:
         miss = cfg.ROOT / "build" / args.slug / "missing_pdf.json"
-        miss.write_text(json.dumps(
+        cfg.write_text_atomic(miss, json.dumps(
             [{"bibcode": r["bibcode"], "title": r["title"], "doi": r.get("doi")}
-             for r in residue], indent=2, ensure_ascii=False), encoding="utf-8")
+             for r in residue], indent=2, ensure_ascii=False))
         cfg.print_seguro(f"Sin PDF ({len(no_arxiv)} sin arXiv + {len(failed)} fallidos) → {miss} "
                           "(fetch_pdf los intenta vía el resolver de ADS; el residuo final es el suyo).")
     return 0

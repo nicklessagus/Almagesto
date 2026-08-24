@@ -138,7 +138,7 @@ def main() -> int:
             f"citekey    : {args.citekey}\n"
             "# ---- contenido extraído (defuddle) ----\n\n"
         )
-        out.write_text(header + body, encoding="utf-8")
+        cfg.write_text_atomic(out, header + body)
         cfg.print_seguro(f"{args.citekey}: {len(body)} bytes → {out}  (post-clean: {removed} bloques HTML removidos)")
 
     # Stub de la nota de paper (mismo template que las notas ADS; idempotente). Delega en make_notes.

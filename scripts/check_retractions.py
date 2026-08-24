@@ -52,7 +52,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 import time
@@ -114,43 +113,14 @@ def split_note(text: str) -> tuple[dict | None, str]:
         return None, text
 
 
-def _write_atomic(path, new_text: str) -> None:
-    """Publica `new_text` en `path` sin dejarla nunca a medio escribir (H-01).
-
-    Medido con `ulimit -f`: el `write_text` directo dejaba una nota de 16.071 B en 8.192 B, con 198
-    de 400 ocurrencias de la extracción LLM —lo MENOS regenerable de la bóveda— desaparecidas sin
-    aviso.
-
-    El contenido nuevo se escribe primero a un temporal en el MISMO directorio (mismo filesystem) y
-    recién se publica con `os.replace`, que es un **rename atómico**: o está el archivo viejo entero
-    o el nuevo entero, nunca la mitad. Si el corte pasa mientras se llena el temporal, `path` **no
-    se tocó**.
-
-    ⚠ Por qué NO alcanza el patrón "respaldar el original y restaurar en el `except`": ese sólo
-    cubre el corte que llega como **excepción**. Ante un `SIGKILL` o un corte de energía no corre
-    ningún `except` y la nota queda truncada igual — que es exactamente el escenario que la
-    docstring afirmaba cubrir. Mismo mecanismo que `lib_config.save_registro`, y `os.replace` se
-    llama como atributo del módulo `os` para que un test pueda interceptarlo."""
-    tmp = path.with_name(path.name + f".tmp{os.getpid()}")
-    try:
-        tmp.write_text(new_text, encoding="utf-8")
-        os.replace(tmp, path)
-    except BaseException:
-        try:
-            tmp.unlink()
-        except OSError:
-            pass
-        raise
-
-
 def stamp_fields(path, fm: dict, body: str, fields: dict) -> None:
     """Estampa claves de frontmatter editando el TEXTO (como merge_frontmatter_list de make_notes):
     NO re-serializa el YAML completo → preserva byte a byte comentarios/orden que haya dejado la
     extracción LLM. Si la nota ya traía esas claves (re-chequeo con --force, o una corrección nueva
     sobre un paper ya anotado), las reemplaza —incluidos sus bloques indentados y los ítems `-` de
     una lista—. Fallback (nota sin estructura `---\\n…\\n---\\n`): re-serializa el frontmatter parseado.
-    La publicación en disco es atómica (`_write_atomic`, H-01): un corte a mitad de camino nunca
-    deja la nota truncada."""
+    La publicación en disco es atómica (`cfg.write_text_atomic`, H-01/D-53): un corte a mitad de
+    camino nunca deja la nota truncada."""
     text = path.read_text(encoding="utf-8")
     keys = tuple(f"{k}:" for k in fields)
     end = text.find("\n---\n", 4)
@@ -199,7 +169,7 @@ def stamp_fields(path, fm: dict, body: str, fields: dict) -> None:
         dumped = yaml.safe_dump({**fm, **fields}, sort_keys=False, allow_unicode=True,
                                 default_flow_style=False)
         new_text = f"---\n{dumped}---{body}"
-    _write_atomic(path, new_text)
+    cfg.write_text_atomic(path, new_text)
 
 
 def stamp_retraction(path, fm: dict, body: str, retraction: dict) -> None:

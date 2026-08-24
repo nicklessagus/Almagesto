@@ -30,5 +30,5 @@ almagesto_version: "1.23.1"
 contrato_invariantes: 91
 
 techos:
-  sin_marca: 90   # medido: 2026-08-24 — issue 0.1 marcó INV-87 (check_retractions.main).
-  sin_test: 90    # medido: 2026-08-24 — ídem (test_errores_sin_retractados_exit_2).
+  sin_marca: 89   # medido: 2026-08-24 — issue 0.1 marcó INV-87; issue 0.2, INV-90.
+  sin_test: 89    # medido: 2026-08-24 — ídem.

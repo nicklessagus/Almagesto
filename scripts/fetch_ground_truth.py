@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -69,27 +68,14 @@ def msini_earth(K_ms, P_days, e, mstar_msun):
 
 
 def write_ground_truth(slug: str, payload: dict) -> Path:
-    """Escritura atómica de ground_truth/<slug>.json: temporal en el MISMO directorio (mismo
-    filesystem, para que el rename sea atómico en POSIX) + `os.replace` — mismo patrón que
-    `lib_config.save_registro`. Sin esto, `--force` reescribía el archivo directo con
+    """Escritura atómica de ground_truth/<slug>.json, vía `cfg.write_text_atomic` (D-53: un solo
+    writer atómico en el repo; esta función era uno de los tres clones del patrón). Sin ella, `--force` reescribía el archivo directo con
     `write_text` y un corte a mitad de la escritura (proceso matado, disco lleno) dejaba el JSON
     TRUNCADO: medido, 162 B de snapshot previo → 1.024 B de JSON inválido, contenido viejo
     IRRECUPERABLE. El propio docstring del módulo dice que NEA cambia valores entre releases: el
     snapshot no es regenerable, así que perderlo a mitad de una escritura no es aceptable."""
-    cfg.GROUND_TRUTH.mkdir(parents=True, exist_ok=True)
     out = cfg.GROUND_TRUTH / f"{slug}.json"
-    tmp = out.with_name(out.name + f".tmp{os.getpid()}")
-    tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-    try:
-        os.replace(tmp, out)
-    except Exception:
-        # publicación fallida: no dejar el temporal como basura silenciosa, pero priorizar
-        # propagar el error real (el snapshot previo, si había uno, sobrevive intacto).
-        try:
-            tmp.unlink()
-        except OSError:
-            pass
-        raise
+    cfg.write_text_atomic(out, json.dumps(payload, indent=2, ensure_ascii=False))
     return out
 
 

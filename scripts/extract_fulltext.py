@@ -225,7 +225,7 @@ def main() -> int:
             ok, _why2 = is_legible(ocr_text)
             text = ocr_header(why) + ocr_text        # header source: ocr → citable con salvedad
             why = _why2
-        out.write_text(text, encoding="utf-8")
+        cfg.write_text_atomic(out, text)
         if ok:
             done += 1
             ocred += 1 if via_ocr else 0

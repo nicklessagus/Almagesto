@@ -8,9 +8,9 @@
 ## Resumen
 
 - Invariantes en el contrato: **91**
-- Con implementación marcada: **1**
-- Con test marcado: **1** (techo `sin_test`: 90, hoy 90)
-- Sin ninguna marca: **90** (techo `sin_marca`: 90)
+- Con implementación marcada: **2**
+- Con test marcado: **2** (techo `sin_test`: 89, hoy 89)
+- Sin ninguna marca: **89** (techo `sin_marca`: 89)
 - Marcas huérfanas: **0**
 
 ## El mapa
@@ -103,8 +103,8 @@
 | **INV-84** | P0 | HUECO (D-19) | — | — |
 | **INV-85** | P1 | HUECO (D-41, D-45, D-46) | — | — |
 | **INV-86** | P0 | HUECO (D-42) | — | — |
-| **INV-87** | P0 | HUECO (D-43) | `scripts/check_retractions.py:356` · `main` | `tests/test_check_retractions.py:525` · `test_errores_sin_retractados_exit_2` |
+| **INV-87** | P0 | HUECO (D-43) | `scripts/check_retractions.py:326` · `main` | `tests/test_check_retractions.py:525` · `test_errores_sin_retractados_exit_2` |
 | **INV-88** | P1 | HUECO (D-25, D-26, D-27) | — | — |
 | **INV-89** | P1 | HUECO (D-28) | — | — |
-| **INV-90** | P1 | HUECO (D-53) | — | — |
+| **INV-90** | P1 | HUECO (D-53) | `scripts/lib_config.py:353` · `write_text_atomic`<br>`scripts/lib_config.py:377` · `write_bytes_atomic` | `tests/test_lib_config.py:371` · `test_sin_escrituras_directas_a_vault`<br>`tests/test_make_notes.py:1796` · `test_notas_pasan_por_el_helper` |
 | **INV-91** | P1 | HUECO (D-57) | — | — |

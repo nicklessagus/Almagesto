@@ -292,3 +292,103 @@ def test_save_registro_es_atomico(toy_vault, monkeypatch):
         cfg.save_registro("test_star", {"busqueda": {"fecha": "2026-08-23", "n_core": 99}})
     assert cfg.registro_path("test_star").read_text(encoding="utf-8") == original, (
         "el registro original no sobrevivió a un fallo de escritura → save_registro no es atómico")
+
+
+# ── issue 0.2 · helper atómico único (D-53) ──────────────────────────────────────────────────────
+#
+# Hasta 1.23.1 el repo tenía CINCO writers atómicos —tres clones del patrón tmp+os.replace
+# (`save_registro`, `write_ground_truth`, `check_retractions._write_atomic`) y dos para binarios
+# (`fetch_arxiv`/`fetch_pdf.write_pdf_atomic`)— y el writer que MÁS escribe, `make_notes`, no era
+# atómico en ninguna de sus 15 escrituras a `vault/wiki/`. Cada tanda posterior del plan agrega
+# writers: el helper sube al principio para que no haya un sexto clon.
+
+def _tmps(d):
+    return sorted(p.name for p in d.iterdir() if ".tmp" in p.name)
+
+
+def test_write_text_atomic_publica(tmp_path):
+    dest = tmp_path / "x.md"
+    cfg.write_text_atomic(dest, "hola\n")
+    assert dest.read_text(encoding="utf-8") == "hola\n"
+    assert _tmps(tmp_path) == []
+
+
+def test_fallo_en_replace_no_corrompe(tmp_path, monkeypatch):
+    """El corte llega en la publicación: el archivo original queda **byte-idéntico** y no queda
+    basura `.tmp` en el directorio. La primera mitad ya la daban los writers viejos; la segunda es
+    la cola #5 de STATUS (el temporal huérfano)."""
+    dest = tmp_path / "x.md"
+    dest.write_text("original\n", encoding="utf-8")
+    def boom(*a, **k):
+        raise OSError("disco lleno")
+    monkeypatch.setattr(cfg.os, "replace", boom)
+    with pytest.raises(OSError):
+        cfg.write_text_atomic(dest, "nuevo\n")
+    assert dest.read_text(encoding="utf-8") == "original\n"
+    assert _tmps(tmp_path) == []
+
+
+def test_fallo_escribiendo_el_temporal_no_deja_basura(tmp_path, monkeypatch):
+    """El corte llega ANTES de publicar, mientras se llena el temporal. `save_registro` escribía el
+    tmp fuera de todo `try`, así que ese caso dejaba un `.tmp<pid>` huérfano en `vault/config/`
+    (el archivo real nunca se corrompía — es basura de disco, pero basura versionable)."""
+    dest = tmp_path / "x.md"
+    dest.write_text("original\n", encoding="utf-8")
+    real = cfg.Path.write_text
+    def boom(self, *a, **k):
+        if ".tmp" in self.name:
+            raise OSError("disco lleno")
+        return real(self, *a, **k)
+    monkeypatch.setattr(cfg.Path, "write_text", boom)
+    with pytest.raises(OSError):
+        cfg.write_text_atomic(dest, "nuevo\n")
+    assert dest.read_text(encoding="utf-8") == "original\n"
+    assert _tmps(tmp_path) == []
+
+
+def test_write_bytes_atomic(tmp_path, monkeypatch):
+    dest = tmp_path / "x.pdf"
+    cfg.write_bytes_atomic(dest, b"%PDF-1.4\n")
+    assert dest.read_bytes() == b"%PDF-1.4\n"
+    dest2 = tmp_path / "y.pdf"
+    monkeypatch.setattr(cfg.os, "replace", lambda *a, **k: (_ for _ in ()).throw(OSError("x")))
+    with pytest.raises(OSError):
+        cfg.write_bytes_atomic(dest2, b"data")
+    assert not dest2.exists()
+    assert _tmps(tmp_path) == []
+
+
+def test_write_text_atomic_crea_el_directorio(tmp_path):
+    dest = tmp_path / "sub" / "dir" / "x.md"
+    cfg.write_text_atomic(dest, "hola\n")
+    assert dest.read_text(encoding="utf-8") == "hola\n"
+
+
+def test_sin_escrituras_directas_a_vault():
+    """Criterio de aceptación de D-53, como test y no como `grep` que alguien tiene que acordarse
+    de correr: ningún módulo que escribe en `vault/` puede llamar `write_text`/`write_bytes` sobre
+    su destino. Los módulos cuyo destino es `build/`/`outputs/` (scratch regenerable) quedan fuera
+    a propósito — ahí un archivo torn se recupera re-corriendo el paso.  @inv INV-90"""
+    import re
+    from pathlib import Path
+    import trace_invariants as ti
+    escriben_en_vault = ("make_notes.py", "extract_fulltext.py", "fetch_web.py",
+                         "ingest_topic.py", "fetch_ground_truth.py", "check_retractions.py",
+                         "fetch_arxiv.py", "fetch_pdf.py", "lib_config.py")
+    directo = re.compile(r"(?<!def )\b\w+\.write_(?:text|bytes)\(")
+    ofensores = []
+    for nombre in escriben_en_vault:
+        src = (Path(cfg.ROOT) / "scripts" / nombre).read_text(encoding="utf-8")
+        # los docstrings de estos módulos CITAN el patrón viejo para explicar por qué se fue
+        # (`dest.write_bytes(buf)` directo…): son prosa, no código. Se descartan con el mismo
+        # detector que usa el recolector de trazabilidad para no marcar texto citado.
+        prosa = ti.lineas_declarativas(src)
+        for n, ln in enumerate(src.splitlines(), 1):
+            if n in prosa or not directo.search(ln):
+                continue
+            if "tmp.write_" in ln:
+                continue          # el helper mismo (`_publicar`)
+            ofensores.append(f"{nombre}:{n}: {ln.strip()}")
+    assert ofensores == [], (
+        "escrituras directas (no atómicas) a vault/ — usar cfg.write_text_atomic / "
+        "cfg.write_bytes_atomic:\n  " + "\n  ".join(ofensores))

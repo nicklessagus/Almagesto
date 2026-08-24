@@ -1784,3 +1784,75 @@ def test_cli_sync_mirror_no_pide_slug(toy_vault, monkeypatch):
     ficha("s", {"planets": [{"letter": "b", "mass_earth": None, "status": "confirmed"}]})
     assert run_main(monkeypatch, ["--sync-mirror"]) == 0
     assert read_fm(cfg.STARS / "s.md")["planets"][0]["mass_earth"] == 8.99
+
+
+# ── issue 0.2 · toda escritura a vault/ pasa por el helper atómico (D-53 / INV-90) ───────────────
+
+def test_notas_pasan_por_el_helper(toy_vault, monkeypatch):
+    """`make_notes` es el writer que MÁS escribe de la bóveda y el único que no era atómico: sus
+    14 escrituras a `vault/wiki/` iban por `dest.write_text(...)` directo. El test es de
+    comportamiento y no de `grep`: intercepta `Path.write_text` y exige que **ninguna** escritura
+    bajo `vault/` la use directo — así también cae una escritura futura hecha con `open()` o
+    `shutil`, que un grep de `write_text(` no vería.  @inv INV-90
+
+    ⚠ **Cobertura medida por mutación (2026-08-24): 3 de los 14 sitios de escritura de
+    `make_notes`** (líneas 1170, 1261, 1293). Los otros 11 viven en cirugías que estas corridas no
+    alcanzan —`stamp_excluded` sólo escribe cuando el conjunto de excluidos CAMBIA, los migradores
+    sólo con material vintage sembrado—. El barrido repo-wide de los 14 lo da el test estático
+    `test_lib_config.py::test_sin_escrituras_directas_a_vault` (verificado por mutación: detecta
+    los 14). Los dos son complementarios y ninguno solo alcanza; decirlo acá evita que alguien lea
+    este test como la garantía completa, que es el modo de falla que el repo llama "afirmar de
+    menos"."""
+    real = cfg.Path.write_text
+
+    def guardia(self, *a, **kw):
+        # el helper escribe primero a `<nombre>.tmp<pid>`; cualquier OTRA escritura directa bajo
+        # `vault/` es la que este test existe para prohibir. Comparar conjuntos de RUTAS no
+        # alcanzaba: una ruta escrita directo Y además por el helper en otra llamada pasaba
+        # (auditado por mutación — el grep estático la veía, este test no).
+        if ".tmp" not in self.name and str(self).startswith(str(toy_vault.VAULT)):
+            raise AssertionError(f"escritura directa (no atómica) a {self}")
+        return real(self, *a, **kw)
+
+    # el sembrado del test (fixtures escribiendo `topics.yaml`, `ads.json`) NO es código de
+    # producción: la guardia se instala DESPUÉS.
+    ads_json([rec("2020aaaA...1..1A"), rec("2020nonC....1..1C", relevant=False)])
+    seed_topic()
+    monkeypatch.setattr(cfg.Path, "write_text", guardia)
+
+    # Ejercitar las RAMAS, no una sola: la primera versión de este test corría sólo
+    # `write_star_note` + `--restamp-headers` y una mutación deliberada en `stamp_excluded`
+    # (línea 729) pasaba inadvertida. La cobertura de un test de comportamiento es exactamente
+    # el conjunto de caminos que recorre — el barrido repo-wide lo da el test estático de
+    # `test_lib_config.py::test_sin_escrituras_directas_a_vault`.
+    assert run_main(monkeypatch, ["test_star", "--all"]) == 0      # ficha + papers, notas NUEVAS
+    # 2ª corrida: la ficha ya existe → entran las cirugías sobre nota existente (`stamp_excluded`,
+    # `stamp_search_line`, cabecera), que son la mayoría de los 14 sitios de escritura y que la
+    # primera corrida no toca. Auditado por mutación: sin esta línea, romper `stamp_excluded`
+    # pasaba inadvertido.
+    assert run_main(monkeypatch, ["test_star", "--all"]) == 0
+    assert run_main(monkeypatch, ["gp", "--topic"]) == 0           # concept + papers de tema
+    assert run_main(monkeypatch, ["gp", "--topic"]) == 0
+    assert run_main(monkeypatch, ["--restamp-headers"]) == 0
+    assert run_main(monkeypatch, ["--restamp-pdf-links"]) == 0
+    assert run_main(monkeypatch, ["--migrate-disputes"]) == 0
+    assert run_main(monkeypatch, ["--sync-mirror"]) == 0
+    assert (toy_vault.STARS / "test_star.md").exists(), "el test no escribió nada — no prueba nada"
+
+
+def test_corte_publicando_no_deja_la_nota_a_medias(toy_vault, monkeypatch):
+    """Inyección de fallo de punta a punta (patrón F4 de la 8ª): el corte llega en la publicación
+    de una nota real. La nota previa —extracción LLM, lo menos regenerable de la bóveda— queda
+    byte-idéntica y no queda basura `.tmp` al lado."""
+    mn.write_star_note("test_star", force=False)
+    dest = toy_vault.STARS / "test_star.md"
+    antes = dest.read_bytes()
+
+    def boom(*a, **k):
+        raise OSError("disco lleno")
+
+    monkeypatch.setattr(cfg.os, "replace", boom)
+    with pytest.raises(OSError):
+        mn.write_star_note("test_star", force=True)
+    assert dest.read_bytes() == antes
+    assert [p.name for p in toy_vault.STARS.iterdir() if ".tmp" in p.name] == []
