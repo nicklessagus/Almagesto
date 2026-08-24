@@ -221,7 +221,92 @@ dashboard de Obsidian con el estado de la bóveda.
 Varias decisiones cambian el schema (D-1, D-2, D-17, D-21, D-37), y **cada una suma una migración**.
 Sigue valiendo el criterio: **el deploy a Almagesto-RV se hace cuando cierren los issues, no antes.**
 
-## 📌 Dónde retomar (sesión del 2026-08-23)
+## 📌 DÓNDE RETOMAR (handoff del 2026-08-24 — leer esto primero)
+
+> Escrito para arrancar **con contexto limpio**. Todo lo decidido vive en el repo; nada depende de
+> la memoria de una sesión. Estado del árbol al cerrar: **limpio, todo commiteado, tag `v1.30.0`**,
+> tier 0 y tier 1 en verde, `python scripts/lint.py --cierre` en 0. **Sin push** (decisión vigente).
+
+### Lo hecho: tandas 0 a 6 del plan (v1.24.0 → v1.30.0)
+
+| Tanda | Qué entró | Versión |
+|---|---|---|
+| 0 | exit codes 0/1/2, helper atómico único, categoría *no evaluado*, umbral de legibilidad medido | 1.24.0 |
+| 1 | **el ancla**: hash de bloque + hash de fuente, `lint.py --cierre` | 1.25.0 |
+| 2 | registro acumulativo (`busquedas`, `cadena`), escotillas, `extra_core` duro | 1.26.0 |
+| 3 | tabla de papers materializada, las tres fechas, recorte de lectura declarado | 1.27.0 |
+| 4 | autoridad por campo del ground-truth + la procedencia **en la cabecera de la ficha** | 1.28.0 |
+| 5 | identidad por `doi`/`arxiv_id`, `--rename-paper`, reuso de artefactos entre slugs | 1.29.0 |
+| 6 | la pasada de red unificada (`sweep_external.py`) | 1.30.0 |
+
+Más el **renombre R-5** (`topics` → `facets` / `themes`), que destapó un bug real de la Tanda 3.
+
+### ⛔ EL HUECO GRANDE: la trazabilidad cubre el 15% del contrato
+
+Es lo que hay que atacar **antes** de seguir agregando mecanismo. Tres direcciones, tres estados:
+
+| Dirección | Estado | Medido |
+|---|---|---|
+| **código → invariante** (`@inv`) | parcial | **14 de 91**: exactamente los que se implementaron en esta sesión (INV-76…91). Los otros 77 no tienen marca. |
+| **invariante → código** (`docs/trazabilidad.md`) | funciona, sobre esos 14 | generado por `scripts/trace_invariants.py`; el ratchet está en `techo: 77` |
+| **regla de la doc → invariante** | **no existe** | `CLAUDE.md` nombra 22 funciones/scripts, ad hoc. No hay mapeo regla→INV→función. |
+
+Los 77 sin marca **no son código sin probar**: la mayoría figura como *garantizado y medido* en
+`docs/contrato.md`, pero la relación vive en **prosa** (la columna "cómo se verifica" nombra los
+experimentos de la 8ª auditoría, no símbolos ni tests). El mapa existe y está vacío en un 85%.
+
+### ▶ PRIMER TRABAJO DE LA SESIÓN NUEVA: la pasada retroactiva de marcado
+
+Acotado, verificable y mejor con contexto fresco (implica leer código viejo sin el sesgo de lo
+recién escrito). Receta:
+
+1. `python scripts/trace_invariants.py` → `docs/trazabilidad.md` lista los 77 con `—` en ambas
+   columnas. Trabajar por área de `contrato.md` §3 (A…K), no por número suelto.
+2. Para cada uno, leer su fila en `docs/contrato.md` §3 (columna "cómo se verifica" — ahí está la
+   pista de qué experimento lo sostiene) y encontrar **la función** y **el test**.
+3. Poner `@inv INV-nn` en los dos. ⚠ Sólo cuenta en **comentario o docstring**, y **nunca escribir
+   un id real en un ejemplo de sintaxis** (el recolector se auto-marcaría — pasó, ver
+   `lineas_declarativas`).
+4. Bajar `techo:` en `docs/trazabilidad-ratchet.yaml` con los conteos nuevos y la fecha.
+5. Si un invariante **no tiene** función o test que lo sostenga, **eso es el hallazgo**: anotarlo
+   como hueco en vez de forzar una marca. El valor de la pasada es tanto lo que encuentra como lo
+   que revela que falta.
+
+Criterio de cierre: `trace_invariants.py --check` en 0, sin marcas huérfanas, y el ratchet bajado.
+
+### Después de eso: Tanda 7 (ver "Lo que sigue" más abajo)
+
+### Decisiones abiertas que quedan (§14 del plan)
+
+- **R-7** — los tres de la revisión §7 sin decisión: lista blanca del frontmatter (el `logrhk`
+  medido viviendo sin custodia en la capa auditable), tabla de lookalikes griegos afirmada sin
+  medir, cobertura de sinónimos sin medición. Backlog explícito.
+- **R-9** — fuente del índice de citas (Tanda 7). **Empieza midiendo**, no decidiendo.
+- **R-10** — congelar el formato del bloque de verificación al cerrar la Tanda 1 (ya cerrada: si
+  alguien lo cambia ahora, se re-tocan bench, skills y dashboard).
+- **R-11** — medir en el primer ingest real si la granularidad de bloque marca de más.
+- ✅ Resueltas: R-1, R-2, R-3, R-4, R-5, R-6, R-8.
+
+### Pendientes declarados (no olvidados)
+
+- **`sweep_web` / `fetch_web.refresh`** — el quinto detector de la pasada de red no está
+  implementado. **Levanta** en vez de devolver `[]`, se reporta como *no evaluado* y la pasada sale
+  **2** a propósito. Lo que falta está escrito en su docstring.
+- **Deploy a Almagesto-RV** (1.11.0 → 1.30.x). Cada tanda le agregó schema; se hace cuando cierren
+  los issues, no antes.
+
+### Convenciones vigentes
+
+- **Código nuevo en inglés** (archivos, funciones, docstrings, comentarios). Prosa de docs en
+  español. **Sin retrofit** del código viejo.
+- **Sin push** hasta que el usuario decida si los `docs/` de la revisión van al repo público.
+- Protocolo de fixes: **test → rojo → fix → verde**, y auditar por **mutación** los tests que ya
+  existían. Esta sesión lo usó tres veces y las tres encontraron algo (un test que no veía nada, un
+  caso adversario que no rompía, una regresión de performance).
+
+---
+
+## 📌 Dónde retomar (sesión del 2026-08-23 — histórico)
 
 **Lo hecho hoy, en tres documentos** (los tres commiteados **sin push** — ver la advertencia de abajo):
 
