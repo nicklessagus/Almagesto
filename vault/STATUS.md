@@ -337,6 +337,30 @@ las referencias pre-2000 (65% vs 16%) y OpenAlex las off-ADS (14 papers sólo su
 
 ---
 
+## ✅ Tanda 7 cerrada (2026-08-24) — v1.32.0 · descubrimiento
+
+| Issue | Qué entró |
+|---|---|
+| 7.1 | `search_arxiv.py` y `openalex.py` — backends sin key, normalizados al **mismo schema de registro** que `query_ads` (incluidas `facets`/`relevant`/`why_excluded`, que faltaban) |
+| 7.2 | `citation_index.py` — índice invertido obra→citadores, cobertura **declarada** (84,3% medido sobre 566 core), lookup offline |
+| 7.3 | Las tres puertas de D-26: `facet:` propia del tema, fundacional, lente astro; y la puerta 1 al triage con `via: citado-por-corpus` |
+| 7.4 | Los dos skills: `ingest-theme` gana el paso de acordar la `facet:` y de leer los candidatos de la puerta 1. D-29 y D-30 **ya estaban** implementados |
+
+**INV-88 pasa a garantizado y medido**; el ratchet baja a 6 en las dos dimensiones.
+
+**Lo que esta tanda enseñó**, porque volvió a pasar tres veces: los tests con red falsa validan que
+el cliente funcione, no que el contrato se cumpla. Los bugs reales los encontraron el **smoke test
+contra la API real** (OpenAlex sin reintento), el **corpus real** (el candidato más citado partido
+en dos entre los dos espacios de identificadores) y la **auditoría adversaria** (la asimetría de
+normalización de DOI que hacía que el artefacto declarara cobertura mal atribuida — y cuyo test la
+escondía porque el doble tenía distinto contrato que la función real).
+
+**Lo que queda declarado, no olvidado**: la evaluación **por motor de búsqueda** (arriba), la
+decisión abierta sobre la **puerta 2** (arriba), y que la capa skill de INV-88 **no es marcable** —
+la conducta de un skill no la ve ningún recolector.
+
+---
+
 ## ❓ Decisión abierta — la puerta 2 («fundacional en su campo») no está justificada (2026-08-24)
 
 El usuario preguntó dos veces de dónde salen los umbrales de citas y la segunda fue sobre la puerta

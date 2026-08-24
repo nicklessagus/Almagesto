@@ -45,7 +45,7 @@
 #    marcable — la conducta de un skill no la ve ningún recolector.
 
 medido_en: "2026-08-24"
-almagesto_version: "1.31.0"
+almagesto_version: "1.32.0"
 contrato_invariantes: 91
 
 techos:

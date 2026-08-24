@@ -32,6 +32,7 @@ sintetizado*, #75 — que es también la red del contraste de 3c); para **3b** n
 ```
 Progreso del ingest del tema <tema>:
 - [ ] 1  consulta co-diseñada con el usuario (o `sources:` si es off-ADS)
+- [ ] 1b (tema de MÉTODO) `facet:` propia acordada — y `fundacional_min_citas` si va
 - [ ] 2  cadena mecánica (ingest_theme.py) — sin abortos
 - [ ] 3  extracción LLM de los papers clave del tema
 - [ ] 3b retro-tag por grep de aliases sobre el corpus pre-existente
@@ -64,6 +65,39 @@ Progreso del ingest del tema <tema>:
      nueva real, agregala a esa lista), `concept` (nota destino, existente o
      a stubbear), `query` (la Solr cruda aprobada) y `aliases` opcional. Si el tema ya existía en el
      YAML, ofrecer reusar la query guardada o re-pulirla.
+
+1b. **Tema de MÉTODO: acordar la faceta propia (D-26).** Un tema de método —estadística, ML,
+   signal processing— **no se clasifica con la lente global**, y no por falta de ajuste: con
+   `require: [rv]` la lente mata al paper **fundacional** (Hyvärinen no menciona RV ni una vez), y
+   sin filtro *"independent component analysis"* devuelve miles de papers de fMRI, EEG y finanzas.
+
+   La entrada del tema en `themes.yaml` lleva entonces su propia regex, y la regla pasa a ser
+   `core = facet propia Y (puerta 2 OR puerta 3)`:
+
+   | Puerta | Qué mira | Para qué sirve |
+   |---|---|---|
+   | 2 · fundacional | `citation_count >= fundacional_min_citas` | el paper que funda el método, aunque no toque astro |
+   | 3 · lente astro | `relevance.facets` de `objective.yaml` | la aplicación del método en astro, aunque tenga 3 citas |
+
+   **Proponé la `facet:` en prosa y mostrala antes de buscar**, igual que la query: es la otra
+   mitad de lo que decide el corte. Y **`fundacional_min_citas` se acuerda con el usuario o no se
+   pone**: el número depende del campo (30k citas es normal en ML y muchísimo en astro) y el
+   framework **no tiene default** — sin declararlo la puerta 2 no abre y el motivo queda en
+   `why_excluded`, visible en el apéndice "Excluidos por el filtro". ⚠ Está anotado en
+   `vault/STATUS.md` como **decisión abierta** si la puerta 2 debe existir: usala sólo si el
+   usuario la pide.
+
+   Tras la corrida, la cadena imprime el delta (`regla del tema (D-26): +N core / -M`). **Miralo**:
+   si sacó papers que esperabas, la `facet:` está muy angosta.
+
+1c. **La puerta 1 (`lo cita tu corpus`) llega como CANDIDATOS, no como core.** Si existe
+   `build/citation_index.json`, los papers que la regla del tema dejó afuera pero que **tu corpus
+   cita** aparecen en `candidates` con `via: citado-por-corpus` y la lista de quiénes los citan.
+   Es la señal que ninguna regex puede expresar —Hyvärinen tiene ~30k citas casi todas de fMRI, y
+   lo que lo vuelve *tuyo* es que tu gente lo cita— y por eso **la juzgás vos** con
+   `python scripts/triage.py <slug>`, como cualquier candidato. El índice se construye aparte
+   (`python -c "import sys; sys.path.insert(0,'scripts'); import citation_index; citation_index.build()"`),
+   es caro (red sobre todo el corpus) y vive en `build/`; sin él, la puerta simplemente no aporta.
 
 2. **Cadena mecánica** — un solo comando (desde la raíz del repo):
    ```bash
