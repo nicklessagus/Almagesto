@@ -21,13 +21,13 @@ def write_ads(toy_vault, slug="test_star", candidates=None, n_relevant=3):
 
 def cand(bib, title="un título", cites=0, via="chain:citations", year="2020"):
     return {"bibcode": bib, "title": title, "citation_count": cites, "via": via,
-            "year": year, "topics": ["rv"], "abstract": "resumen"}
+            "year": year, "facets": ["rv"], "abstract": "resumen"}
 
 
 def seed_topic_offads(slug="gp"):
-    """Tema off-ADS declarado en topics.yaml. Hace falta porque `--drop-source` ahora valida que el
+    """Tema off-ADS declarado en themes.yaml. Hace falta porque `--drop-source` ahora valida que el
     sujeto exista: un registro de un slug inexistente no lo lee nadie."""
-    write_yaml(cfg.TOPICS_YAML, {slug: {"concept": slug, "area": "methods", "source": "web",
+    write_yaml(cfg.THEMES_YAML, {slug: {"concept": slug, "area": "methods", "source": "web",
                                         "sources": [{"key": "2006Rasmussen", "url": "https://x"}]}})
 
 
@@ -273,7 +273,7 @@ def test_drop_source_rechaza_un_slug_inexistente(toy_vault, monkeypatch):
 
 
 def test_drop_source_normaliza_las_claves_y_rechaza_la_basura(toy_vault, monkeypatch, capsys):
-    """Una clave vacía queda invisible para el aviso de `ingest_topic` (que filtra `if k`), y una
+    """Una clave vacía queda invisible para el aviso de `ingest_theme` (que filtra `if k`), y una
     con espacios no matchea nunca el item de `sources:`. El motivo en blanco esquivaba el
     "no curar en silencio"."""
     seed_topic_offads()

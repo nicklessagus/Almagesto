@@ -1,4 +1,4 @@
-"""Snapshot determinista de una página web → fulltext citable (modo off-ADS de ingest-topic).
+"""Snapshot determinista de una página web → fulltext citable (modo off-ADS de ingest-theme).
 
 Uso:
     python scripts/fetch_web.py <slug> <citekey> <url> [--concept C] [--title T] [--author A]
@@ -12,8 +12,8 @@ encabezado **URL + fecha de acceso** para que la afirmación sea **citable y ver
 `--no-note`), delegando en `make_notes.write_web_paper_note` (mismo template que las notas ADS).
 
 Es la contraparte web de `extract_fulltext.py` (PDF→txt): mismo destino, misma idea de fuente
-inmutable. Sólo aplica al **modo off-ADS** de `ingest-topic` (tema no-astro / bibliografía fuera de
-ADS); el flujo astro normal baja PDFs por arXiv. Ver `.claude/skills/ingest-topic/SKILL.md`.
+inmutable. Sólo aplica al **modo off-ADS** de `ingest-theme` (tema no-astro / bibliografía fuera de
+ADS); el flujo astro normal baja PDFs por arXiv. Ver `.claude/skills/ingest-theme/SKILL.md`.
 
 `citekey` = clave de cita sintética `AAAA+Autor` (p. ej. `2006RasmussenWilliams`); debe empezar con
 `AAAA`+letra (mismo `BIBCODE_RE` que el lint) y coincidir con el `[[citekey]]` que cites en la nota.

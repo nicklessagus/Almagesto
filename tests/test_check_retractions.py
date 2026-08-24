@@ -427,7 +427,7 @@ def test_main_slug_solo_papers_del_ingest(toy_vault, monkeypatch):
 
 def test_main_slug_offads_sources_y_extra_core(toy_vault, monkeypatch):
     """Tema off-ADS/mixto sin ads.json: los papers salen de sources[].key + extra_core."""
-    write_yaml(cfg.TOPICS_YAML, {"gp": {"title": "GP", "area": "methods", "concept": "gp",
+    write_yaml(cfg.THEMES_YAML, {"gp": {"title": "GP", "area": "methods", "concept": "gp",
                                         "source": "web",
                                         "sources": [{"key": "2006Rasmussen", "doi": "10.1/r"}],
                                         "extra_core": [{"bibcode": "2012PASP..124.1015B", "via": "usuario", "motivo": "test"}]}})
@@ -444,7 +444,7 @@ def test_main_slug_offads_sources_y_extra_core(toy_vault, monkeypatch):
 
 
 def test_slug_notes_extra_core_escalar_no_se_desarma_en_letras(toy_vault):
-    """`check_retractions.py:202` (y sus gemelos `query_ads.py:910`, `ingest_topic.py:263`) —
+    """`check_retractions.py:202` (y sus gemelos `query_ads.py:910`, `ingest_theme.py:263`) —
     `[b for b in (meta.get("extra_core") or []) if b]`.
 
     `extra_core: 2020ApJ...900....1X` sin corchetes es YAML válido y es lo que sale de agregar UN
@@ -453,7 +453,7 @@ def test_slug_notes_extra_core_escalar_no_se_desarma_en_letras(toy_vault):
     letra. Consecuencia en este sitio: la nota real NUNCA se chequea contra Crossref y el paso de
     retracciones de la cadena cierra en verde sin haber mirado nada — falso limpio en la frontera
     dura de la bóveda."""
-    write_yaml(cfg.TOPICS_YAML, {"tema": {"title": "T", "area": "methods", "concept": "c",
+    write_yaml(cfg.THEMES_YAML, {"tema": {"title": "T", "area": "methods", "concept": "c",
                                           "source": "ads", "extra_core": [{"bibcode": "2020ApJ...900....1X", "via": "usuario", "motivo": "test"}]}})
     mk_note(cfg.PAPERS, "2020ApJ...900....1X", {"tags": ["paper"], "bibcode": "2020ApJ...900....1X"})
     notas = cr.slug_notes("tema")
@@ -464,11 +464,11 @@ def test_slug_notes_extra_core_escalar_no_se_desarma_en_letras(toy_vault):
 def test_slug_notes_sources_escalar(toy_vault):
     """`check_retractions.py:201` — `[s.get("key") for s in (meta.get("sources") or []) if s.get("key")]`.
 
-    Mismo `sources:` escalar que en `ingest_topic.ingest_offads` (ver `test_ingest_topic.py`),
+    Mismo `sources:` escalar que en `ingest_theme.ingest_offads` (ver `test_ingest_theme.py`),
     otro consumidor: acá ni siquiera hay un `sys.exit` que esquivar — el `AttributeError` sale
     directo. El contrato del paso es "chequear los papers de ESTE ingest"; lo que hace es matar
     la cadena."""
-    write_yaml(cfg.TOPICS_YAML, {"tema": {"title": "T", "area": "methods", "concept": "c",
+    write_yaml(cfg.THEMES_YAML, {"tema": {"title": "T", "area": "methods", "concept": "c",
                                           "source": "web", "sources": "2006Rasmussen"}})
     mk_note(cfg.PAPERS, "2006Rasmussen", {"tags": ["paper"], "bibcode": "2006Rasmussen"})
     assert [p.stem for p in cr.slug_notes("tema")] == ["2006Rasmussen"]
@@ -476,7 +476,7 @@ def test_slug_notes_sources_escalar(toy_vault):
 
 def test_main_slug_sin_fuentes_es_exit_2(toy_vault, monkeypatch, capsys):
     """Issue 0.1 — el adversario directo del exit 1 sobrecargado: sin `ads.json` ni entrada en
-    `topics.yaml` no hay nada que chequear, y hasta 1.23.1 eso salía **1**, el mismo código que
+    `themes.yaml` no hay nada que chequear, y hasta 1.23.1 eso salía **1**, el mismo código que
     "detectó papers retractados". `ingest_star` traducía cualquier rc≠0 a esa frase: la cadena
     abortaba con un mensaje falso. Ahora rc 2 = no pudo chequear, y `slug_notes` levanta
     `NothingToCheck` en vez de matar el proceso."""

@@ -1146,7 +1146,7 @@ def test_objetivo_propio_sin_warn(toy_vault, capsys):
 def test_objective_yaml_invalido_no_voltea_el_lint(toy_vault, capsys):
     """El skill `setup` hace que el agente escriba REGEX dentro de YAML: un `:` sin comillas es el
     error más probable de toda la config. El lint es la compuerta de CI: reporta, no se muere."""
-    cfg.OBJECTIVE_YAML.write_text("name: x\nrelevance:\n  topics:\n    rv: v: mal\n",
+    cfg.OBJECTIVE_YAML.write_text("name: x\nrelevance:\n  facets:\n    rv: v: mal\n",
                                   encoding="utf-8")
     assert run_lint(capsys)[0] in (0, 1)
 
@@ -1721,7 +1721,7 @@ def test_in_dir_no_confunde_carpeta_hermana_stars_borradores(toy_vault, capsys):
 
 # ── issue 0.3 · "no evaluado": un chequeo que no pudo correr NO aporta un cero (D-43 / INV-87) ──
 
-BAD_OBJECTIVE = "name: Prueba\nrelevance:\n  topics:\n    rv: activity: starspot\n"
+BAD_OBJECTIVE = "name: Prueba\nrelevance:\n  facets:\n    rv: activity: starspot\n"
 # ⚠ el caso adversario tiene que ROMPER de verdad: `rv: foo:bar` —lo que proponía el plan—
 # **parsea**, porque en YAML un `:` pegado al carácter siguiente es parte del escalar. El que
 # rompe es `:` SEGUIDO DE ESPACIO, que es justo lo que produce una regex con una alternación

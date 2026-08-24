@@ -63,7 +63,7 @@ pytestmark = pytest.mark.instancia
 
 RATCHET_FILE = THIS_DIR / "ratchet_instancia.yaml"
 
-_PATH_ATTRS = ("ROOT", "VAULT", "CONFIG", "STARS_YAML", "TOPICS_YAML", "OBJECTIVE_YAML",
+_PATH_ATTRS = ("ROOT", "VAULT", "CONFIG", "STARS_YAML", "THEMES_YAML", "OBJECTIVE_YAML",
               "ADS_KEY_FILE", "REGISTRO", "RAW", "WIKI", "PDFS", "FULLTEXT", "GROUND_TRUTH",
               "STARS", "PAPERS", "CONCEPTS", "QUERIES", "MATRICES", "INDEX", "LOG")
 
@@ -450,7 +450,7 @@ def _build_paths(root: Path) -> SimpleNamespace:
     d = {
         "ROOT": root, "VAULT": vault, "CONFIG": vault / "config",
         "STARS_YAML": vault / "config" / "stars.yaml",
-        "TOPICS_YAML": vault / "config" / "topics.yaml",
+        "THEMES_YAML": vault / "config" / "themes.yaml",
         "OBJECTIVE_YAML": vault / "config" / "objective.yaml",
         "ADS_KEY_FILE": vault / "config" / "ads_dev_key",
         "REGISTRO": vault / "config" / "registro",

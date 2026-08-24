@@ -8,7 +8,7 @@ Uso:
     python scripts/triage.py <slug> --migrate                 # consolidar el triage.json pre-1.9.0
 
 El chaining trae papers conectados por citas al corpus del sujeto. La lente
-(`relevance.topics`) clasifica **tema**, no **pertinencia al sujeto**: anclado a "menciona al
+(`relevance.facets`) clasifica **tema**, no **pertinencia al sujeto**: anclado a "menciona al
 sujeto en el fulltext", el grafo trae cualquier paper del área que tabule la estrella una vez
 (medido: 18% de precisión en los core nuevos del grafo — incluyendo una tesis de física de
 partículas como "core" de AU Mic). Y la pertinencia **no** es sintáctica: ni el título ni la
@@ -36,14 +36,14 @@ Los tres niveles:
   citas, vía, tópicos, link a ADS) para decidir los **dudosos** por lote.
 
 **El otro carril de curación: las fuentes DECLARADAS (`--drop-source`, #81).** En un tema off-ADS
-no hay descubrimiento —la bibliografía se declara una por una en `sources:` de `topics.yaml`—, así
+no hay descubrimiento —la bibliografía se declara una por una en `sources:` de `themes.yaml`—, así
 que ahí `sources:` registra lo aceptado y el rechazo ("miré este libro / esta URL y decidí que no es
 core") no quedaba en ningún lado. Es la misma asimetría de #51 en el otro carril: el juicio de
 rechazo es tan **no regenerable** como el del triage y se perdía igual al cambiar de máquina o al
 volver seis meses después. `--drop-source` lo escribe en las MISMAS `decisiones` del registro
 versionado (no inventa mecanismo), con `origen: fuente-declarada` para distinguir el carril y un
 `fuente:` opcional (url/doi/ruta), que es lo que vuelve resoluble una clave sintética. No necesita
-`build/<slug>/ads.json`: un tema off-ADS puro no lo tiene. Lo consume `ingest_topic`, que **avisa**
+`build/<slug>/ads.json`: un tema off-ADS puro no lo tiene. Lo consume `ingest_theme`, que **avisa**
 si un item de `sources:` lleva una clave ya descartada — el equivalente de "no re-proponer".
 
 Este script NO decide: lista y persiste. El juicio es del agente/usuario.
@@ -127,12 +127,12 @@ def drop_source(slug: str, claves: list[str], reason: str, pointer: str | None) 
     # ads.json), este carril no leía nada, así que un typo en el slug escribía un registro huérfano
     # que nadie lee jamás — el juicio se pierde en silencio, que es lo que #81 existe para impedir.
     try:
-        cfg.topic_by_slug(slug)
+        cfg.theme_by_slug(slug)
     except KeyError:
         try:
             cfg.star_by_slug(slug)
         except KeyError:
-            sys.exit(f"slug desconocido: '{slug}' — no está en topics.yaml ni en stars.yaml. "
+            sys.exit(f"slug desconocido: '{slug}' — no está en themes.yaml ni en stars.yaml. "
                      f"El registro de un sujeto que no existe no lo lee nadie.")
     limpias = list(dict.fromkeys(k.strip() for k in claves if k and k.strip()))
     if not limpias:
@@ -155,7 +155,7 @@ def drop_source(slug: str, claves: list[str], reason: str, pointer: str | None) 
           f"motivo: {reason}")
     if not pointer:
         cfg.print_seguro("  (sin --pointer: la clave queda sin url/doi que la resuelva — conviene pasarlo)")
-    cfg.print_seguro("  (versionado: se commitea y viaja. `ingest_topic` avisa si volvés a declarar esta "
+    cfg.print_seguro("  (versionado: se commitea y viaja. `ingest_theme` avisa si volvés a declarar esta "
           "clave en `sources:`)")
     return 0
 
@@ -262,7 +262,7 @@ def row(c: dict) -> str:
     cites = c.get("citation_count") or 0
     nota = "◆" if has_note(c["bibcode"]) else " "
     title = " ".join((c.get("title") or "").split())[:76]
-    return f"  {cites:>5} {nota} {c['bibcode']}  {title}  «{','.join(cfg.as_list(c.get('topics')))}»"
+    return f"  {cites:>5} {nota} {c['bibcode']}  {title}  «{','.join(cfg.as_list(c.get('facets')))}»"
 
 
 def report(slug: str, cands: list[dict]) -> None:
@@ -284,7 +284,7 @@ def report(slug: str, cands: list[dict]) -> None:
         lines.append(f"| {c.get('citation_count') or 0} | {'◆' if has_note(c['bibcode']) else ''} | "
                      f"{c.get('year') or ''} | "
                      f"[{c['bibcode']}]({ADS_URL}{c['bibcode']}/abstract) | {title} | "
-                     f"{c.get('via') or ''} | {','.join(cfg.as_list(c.get('topics')))} |")
+                     f"{c.get('via') or ''} | {','.join(cfg.as_list(c.get('facets')))} |")
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")
     cfg.print_seguro(f"  → {out}")
 
@@ -337,7 +337,7 @@ def main() -> int:
         # Un tema off-ADS PURO no tiene `ads.json` por diseño: mandarlo a "corré la cadena" (con un
         # comando que además no resuelve su slug) es el consejo imposible que #81 vino a sacar.
         try:
-            _, meta = cfg.topic_by_slug(args.slug)
+            _, meta = cfg.theme_by_slug(args.slug)
         except KeyError:
             meta = None
         if meta is not None and (meta.get("source") or "ads") != "ads":

@@ -16,15 +16,15 @@ import lib_config as cfg
 @pytest.fixture
 def toy_classifier(monkeypatch):
     """Clasificador determinista para los tests (query_ads compila el real al importar). Resetea la
-    regla de combinación a su default (require=[], min_topics=1) para no heredar la del objective.yaml
+    regla de combinación a su default (require=[], min_facets=1) para no heredar la del objective.yaml
     real; los tests de la regla declarativa la sobre-escriben."""
-    monkeypatch.setattr(qa, "TOPIC_PATTERNS", {
+    monkeypatch.setattr(qa, "FACET_PATTERNS", {
         "actividad": re.compile("activity|starspot", re.I),
         "rv": re.compile("radial velocity", re.I),
     })
     monkeypatch.setattr(qa, "NOISE_DOCTYPES", {"catalog", "proposal"})
-    monkeypatch.setattr(qa, "REQUIRE_TOPICS", [])
-    monkeypatch.setattr(qa, "MIN_TOPICS", 1)
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", [])
+    monkeypatch.setattr(qa, "MIN_FACETS", 1)
 
 
 @pytest.fixture
@@ -43,20 +43,20 @@ def test_classify_por_titulo_abstract_keyword(toy_classifier):
 
 
 def test_classify_doctype_ruido_no_es_core(toy_classifier):
-    topics, relevant = qa.classify({"title": ["activity survey"], "doctype": "catalog"})
-    assert topics == ["actividad"] and relevant is False
+    facets, relevant = qa.classify({"title": ["activity survey"], "doctype": "catalog"})
+    assert facets == ["actividad"] and relevant is False
 
 
 def test_classify_sin_match(toy_classifier):
     assert qa.classify({"title": ["asteroseismology"], "doctype": "article"}) == ([], False)
 
 
-# ── regla de combinación declarativa: require / min_topics (#15) ──────────────
+# ── regla de combinación declarativa: require / min_facets (#15) ──────────────
 
 def test_classify_require_faceta_obligatoria(toy_classifier, monkeypatch):
     """`require: [rv]` → un paper que matchea sólo `actividad` deja de ser core; el que matchea
     `rv` (aunque no `actividad`) sí. La faceta del eje se vuelve AND, no OR."""
-    monkeypatch.setattr(qa, "REQUIRE_TOPICS", ["rv"])
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", ["rv"])
     assert qa.classify({"title": ["starspot activity"], "doctype": "article"}) == (["actividad"], False)
     t, rel = qa.classify({"title": ["radial velocity survey"], "doctype": "article"})
     assert t == ["rv"] and rel is True
@@ -65,9 +65,9 @@ def test_classify_require_faceta_obligatoria(toy_classifier, monkeypatch):
     assert rel2 is True
 
 
-def test_classify_min_topics_dos(toy_classifier, monkeypatch):
-    """`min_topics: 2` → una sola faceta no alcanza; hacen falta ≥2 cualesquiera."""
-    monkeypatch.setattr(qa, "MIN_TOPICS", 2)
+def test_classify_min_facets_dos(toy_classifier, monkeypatch):
+    """`min_facets: 2` → una sola faceta no alcanza; hacen falta ≥2 cualesquiera."""
+    monkeypatch.setattr(qa, "MIN_FACETS", 2)
     assert qa.classify({"title": ["radial velocity"], "doctype": "article"}) == (["rv"], False)
     t, rel = qa.classify({"title": ["radial velocity"], "abstract": "starspot activity",
                           "doctype": "article"})
@@ -76,7 +76,7 @@ def test_classify_min_topics_dos(toy_classifier, monkeypatch):
 
 def test_classify_require_y_ruido_componen(toy_classifier, monkeypatch):
     """require se combina con el filtro de doctype ruido (AND de las tres condiciones)."""
-    monkeypatch.setattr(qa, "REQUIRE_TOPICS", ["rv"])
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", ["rv"])
     _, rel = qa.classify({"title": ["radial velocity"], "doctype": "catalog"})
     assert rel is False                                   # matchea require pero es doctype ruido
 
@@ -85,7 +85,7 @@ def test_exclusion_reason_motivos(toy_classifier, monkeypatch):
     """#30: el motivo de exclusión se computa donde se decide (única implementación de la regla).
     Un excluido por `require` con facetas matcheadas y doctype limpio NO se etiqueta por doctype
     (el bug: el apéndice "Excluidos" decía `doctype: article`)."""
-    monkeypatch.setattr(qa, "REQUIRE_TOPICS", ["rv"])
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", ["rv"])
     assert qa.exclusion_reason([], "article") == "sin tópico"              # rótulo histórico
     assert qa.exclusion_reason(["actividad"], "catalog") == "doctype: catalog"   # ídem
     why = qa.exclusion_reason(["actividad"], "article")
@@ -93,32 +93,32 @@ def test_exclusion_reason_motivos(toy_classifier, monkeypatch):
     assert qa.exclusion_reason(["rv"], "article") is None                  # core → sin motivo
 
 
-def test_exclusion_reason_min_topics(toy_classifier, monkeypatch):
-    monkeypatch.setattr(qa, "MIN_TOPICS", 2)
-    assert "min_topics=2" in qa.exclusion_reason(["rv"], "article")
+def test_exclusion_reason_min_facets(toy_classifier, monkeypatch):
+    monkeypatch.setattr(qa, "MIN_FACETS", 2)
+    assert "min_facets=2" in qa.exclusion_reason(["rv"], "article")
     assert qa.exclusion_reason(["rv", "actividad"], "article") is None
 
 
 def test_classify_coherente_con_exclusion_reason(toy_classifier, monkeypatch):
     """`relevant` de classify ⟺ exclusion_reason None — no hay dos implementaciones de la regla."""
-    monkeypatch.setattr(qa, "REQUIRE_TOPICS", ["rv"])
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", ["rv"])
     for rec_, why_topics in [({"title": ["starspot activity"], "doctype": "article"}, ["actividad"]),
                              ({"title": ["radial velocity"], "doctype": "article"}, ["rv"]),
                              ({"title": ["asteroseismology"], "doctype": "article"}, [])]:
-        topics, rel = qa.classify(rec_)
-        assert topics == why_topics
-        assert rel is (qa.exclusion_reason(topics, rec_["doctype"]) is None)
+        facets, rel = qa.classify(rec_)
+        assert facets == why_topics
+        assert rel is (qa.exclusion_reason(facets, rec_["doctype"]) is None)
 
 
 def test_combination_rule_defaults():
-    """Sin declarar nada → (require=[], min_topics=1): el comportamiento histórico (≥1 faceta OR)."""
+    """Sin declarar nada → (require=[], min_facets=1): el comportamiento histórico (≥1 faceta OR)."""
     assert qa.combination_rule({}, {"rv": None, "actividad": None}) == ([], 1)
-    assert qa.combination_rule({"min_topics": 2, "require": ["rv"]},
+    assert qa.combination_rule({"min_facets": 2, "require": ["rv"]},
                                {"rv": None, "actividad": None}) == (["rv"], 2)
 
 
 def test_require_faceta_inexistente_falla():
-    """Guard de config: una faceta en `require` ausente de `topics` filtraría TODO en silencio →
+    """Guard de config: una faceta en `require` ausente de `facets` filtraría TODO en silencio →
     falla ruidoso (mismo camino que corre al importar el módulo)."""
     with pytest.raises(RuntimeError, match="require nombra facetas ausentes"):
         qa.combination_rule({"require": ["no-existe"]}, {"rv": None})
@@ -150,7 +150,7 @@ def test_noise_doctypes_escalar_no_desarma_el_filtro_de_ruido(monkeypatch):
     **core**. Es exactamente el bug que `lib_config:236` ya documenta para `concept_areas`
     ("un `concept_areas: indicators` se desempaquetaba CARÁCTER POR CARÁCTER"), sin arreglar acá.
     """
-    obj = {"relevance": {"topics": {"rv": "radial velocity"}, "noise_doctypes": "erratum"}}
+    obj = {"relevance": {"facets": {"rv": "radial velocity"}, "noise_doctypes": "erratum"}}
     mod = fresh_query_ads(monkeypatch, obj)
     assert mod.NOISE_DOCTYPES == {"erratum"}, (
         f"la lente se desarmó en letras: {sorted(mod.NOISE_DOCTYPES)}")
@@ -162,24 +162,24 @@ def test_relevance_escalar_reporta_en_vez_de_reventar_al_importar(monkeypatch):
     """`query_ads.py:117` — `_REL = (_OBJ.get("relevance") or {})`.
 
     Tres líneas más abajo el módulo YA tiene el error correcto para "objective.yaml sin
-    relevance.topics": un `RuntimeError` que dice qué completar. Con `relevance:` escalar nunca
+    relevance.facets": un `RuntimeError` que dice qué completar. Con `relevance:` escalar nunca
     se llega: el `_REL.get` de la línea 120 revienta antes con un `AttributeError` pelado, y como
     es a nivel de módulo se lleva puesto el import entero.
     """
-    obj = {"relevance": "topics"}
-    with pytest.raises(RuntimeError, match="relevance.topics"):
+    obj = {"relevance": "facets"}
+    with pytest.raises(RuntimeError, match="relevance.facets"):
         fresh_query_ads(monkeypatch, obj)
 
 
 def test_topics_como_lista_reporta_en_vez_de_reventar(monkeypatch):
-    """`query_ads.py:120` — `(_REL.get("topics") or {}).items()`.
+    """`query_ads.py:120` — `(_REL.get("facets") or {}).items()`.
 
-    `topics` es un MAPA faceta→regex. Escribirlo como lista de nombres es el error de forma
+    `facets` es un MAPA faceta→regex. Escribirlo como lista de nombres es el error de forma
     esperable de un humano que copia la lista de facetas de la prosa del skill. Debería caer en
-    el `RuntimeError` documentado ("no define relevance.topics"), no en un `AttributeError`.
+    el `RuntimeError` documentado ("no define relevance.facets"), no en un `AttributeError`.
     """
-    obj = {"relevance": {"topics": ["actividad", "rv"]}}
-    with pytest.raises(RuntimeError, match="relevance.topics"):
+    obj = {"relevance": {"facets": ["actividad", "rv"]}}
+    with pytest.raises(RuntimeError, match="relevance.facets"):
         fresh_query_ads(monkeypatch, obj)
 
 
@@ -189,9 +189,9 @@ def test_require_escalar_no_se_desarma_en_letras(monkeypatch):
     `require: rv` (escalar, la forma natural para UNA faceta obligatoria) se convierte en
     `['r','v']`. El módulo sí aborta —bien—, pero el mensaje le dice al usuario que faltan las
     facetas `['r', 'v']` cuando lo que escribió es `rv`: el diagnóstico apunta al síntoma
-    equivocado y manda a editar `topics`, que está bien.
+    equivocado y manda a editar `facets`, que está bien.
     """
-    obj = {"relevance": {"topics": {"rv": "radial velocity"}, "require": "rv"}}
+    obj = {"relevance": {"facets": {"rv": "radial velocity"}, "require": "rv"}}
     with pytest.raises(RuntimeError) as exc:
         fresh_query_ads(monkeypatch, obj)
     assert "'r'" not in str(exc.value), f"el require se desarmó en letras: {exc.value}"
@@ -416,18 +416,18 @@ def test_query_ads_mapea_campos(toy_classifier, ads_token, no_sleep, monkeypatch
     assert r["doi"] == "10.1/x"
     assert r["bibstem"] == "ApJ"
     assert r["arxiv_id"] == "2101.00001"
-    assert r["topics"] == ["actividad"] and r["relevant"] is True
+    assert r["facets"] == ["actividad"] and r["relevant"] is True
     assert r["why_excluded"] is None          # core → sin motivo (#30)
 
 
 def test_query_ads_persiste_why_excluded(toy_classifier, ads_token, no_sleep, monkeypatch):
     """#30: el registro no-core lleva su motivo REAL en ads.json — acá el caso que el fallback
     viejo etiquetaba mal (facetas matcheadas + doctype limpio, excluido por `require`)."""
-    monkeypatch.setattr(qa, "REQUIRE_TOPICS", ["rv"])
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", ["rv"])
     doc = {"bibcode": "2020ApJ...2..2B", "title": ["Starspot survey"], "doctype": "article"}
     monkeypatch.setattr(qa, "requests", SimpleNamespace(get=fake_get_seq([FakeResp(200, payload([doc]))])))
     r = qa.query_ads("q", rows=10)[0]
-    assert r["relevant"] is False and r["topics"] == ["actividad"]
+    assert r["relevant"] is False and r["facets"] == ["actividad"]
     assert "require" in r["why_excluded"] and "doctype" not in r["why_excluded"]
 
 
@@ -538,7 +538,7 @@ def rec(bib, relevant=True, cites=0, **kw):
     base = {"bibcode": bib, "title": f"t {bib}", "authors": ["A"], "year": "2020",
             "pubdate": None, "abstract": "", "arxiv_id": None, "doi": None,
             "doctype": "article", "bibstem": "ApJ", "citation_count": cites,
-            "keyword": [], "topics": ["actividad"] if relevant else [], "relevant": relevant}
+            "keyword": [], "facets": ["actividad"] if relevant else [], "relevant": relevant}
     base.update(kw)
     return base
 
@@ -837,10 +837,10 @@ def test_main_extra_core_escalar_no_pierde_la_curacion(toy_vault, monkeypatch, c
     write_yaml(cfg.STARS_YAML, {"Estrella Test": {
         "slug": "test_star", "simbad": "s", "ads_object": "Test Star",
         "aliases": [], "extra_core": [{"bibcode": "1988old.....1O", "via": "usuario", "motivo": "test"}]}})
-    monkeypatch.setattr(qa, "TOPIC_PATTERNS", {"rv": re.compile("radial velocity", 2)})
+    monkeypatch.setattr(qa, "FACET_PATTERNS", {"rv": re.compile("radial velocity", 2)})
     monkeypatch.setattr(qa, "NOISE_DOCTYPES", set())
-    monkeypatch.setattr(qa, "REQUIRE_TOPICS", [])
-    monkeypatch.setattr(qa, "MIN_TOPICS", 1)
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", [])
+    monkeypatch.setattr(qa, "MIN_FACETS", 1)
     monkeypatch.setattr(qa, "time", type("T", (), {"sleep": staticmethod(lambda s: None)})())
     monkeypatch.setattr(qa, "query_ads",
                         lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False: [])
@@ -863,10 +863,10 @@ def test_main_aliases_escalar_en_stars_yaml(toy_vault, monkeypatch):
     """
     write_yaml(cfg.STARS_YAML, {"Estrella Test": {
         "slug": "test_star", "simbad": "s", "ads_object": "Test Star", "aliases": "HD 12345"}})
-    monkeypatch.setattr(qa, "TOPIC_PATTERNS", {"rv": re.compile("radial velocity", 2)})
+    monkeypatch.setattr(qa, "FACET_PATTERNS", {"rv": re.compile("radial velocity", 2)})
     monkeypatch.setattr(qa, "NOISE_DOCTYPES", set())
-    monkeypatch.setattr(qa, "REQUIRE_TOPICS", [])
-    monkeypatch.setattr(qa, "MIN_TOPICS", 1)
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", [])
+    monkeypatch.setattr(qa, "MIN_FACETS", 1)
     monkeypatch.setattr(qa, "time", type("T", (), {"sleep": staticmethod(lambda s: None)})())
     monkeypatch.setattr(qa, "query_ads",
                         lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False: [])
@@ -878,25 +878,25 @@ def test_main_aliases_escalar_en_stars_yaml(toy_vault, monkeypatch):
 def test_main_tema_extra_only(toy_vault, toy_classifier, no_sleep, monkeypatch):
     """Tema off-ADS MIXTO: --extra-only trae SÓLO los extra_core (sin query ni chaining), y no
     exige `query` — la vía ADS de un tema cuya bibliografía canónica vive fuera de ADS."""
-    write_yaml(cfg.TOPICS_YAML, {"gp": {"title": "Gaussian processes", "area": "methods",
+    write_yaml(cfg.THEMES_YAML, {"gp": {"title": "Gaussian processes", "area": "methods",
                                         "concept": "gaussian-processes", "source": "web",
                                         "extra_core": [{"bibcode": "2012PASP..124.1015B", "via": "usuario", "motivo": "test"}]}})
     monkeypatch.setattr(qa, "query_ads", lambda *a, **kw: pytest.fail("no debe correr la query"))
     monkeypatch.setattr(qa, "chain_candidates", lambda *a: pytest.fail("no debe encadenar"))
     monkeypatch.setattr(qa, "fetch_bibcodes",
                         lambda bibs: [dict(rec("2012PASP..124.1015B", relevant=True), via="manual")])
-    assert run_main(monkeypatch, ["gp", "--topic", "--extra-only"]) == 0
+    assert run_main(monkeypatch, ["gp", "--theme", "--extra-only"]) == 0
     data = json.loads((toy_vault.ROOT / "build" / "gp" / "ads.json").read_text())
-    assert data["kind"] == "topic" and data["query"] is None
+    assert data["kind"] == "theme" and data["query"] is None
     assert [r["bibcode"] for r in data["records"]] == ["2012PASP..124.1015B"]
     assert data["records"][0]["via"] == "manual"
 
 
 def test_main_extra_only_sin_extra_core_error(toy_vault, toy_classifier, monkeypatch):
-    write_yaml(cfg.TOPICS_YAML, {"gp": {"title": "GP", "area": "methods",
+    write_yaml(cfg.THEMES_YAML, {"gp": {"title": "GP", "area": "methods",
                                         "concept": "gaussian-processes", "source": "web"}})
     with pytest.raises(SystemExit, match="no declara `extra_core`"):
-        run_main(monkeypatch, ["gp", "--topic", "--extra-only"])
+        run_main(monkeypatch, ["gp", "--theme", "--extra-only"])
 
 
 def test_main_extra_only_requiere_topic(toy_vault, toy_classifier, monkeypatch):
@@ -913,10 +913,10 @@ def test_main_estrella_sin_ads_object_error_amigable(toy_vault, toy_classifier, 
 
 def test_main_tema_sin_query_sugiere_offads(toy_vault, toy_classifier, monkeypatch):
     """Guard de config: tema sin `query` (típico: es off-ADS) → mensaje con la pista, no KeyError."""
-    write_yaml(cfg.TOPICS_YAML, {"gp": {"title": "Gaussian processes", "area": "methods", "concept": "gaussian-processes",
+    write_yaml(cfg.THEMES_YAML, {"gp": {"title": "Gaussian processes", "area": "methods", "concept": "gaussian-processes",
                                          "source": "web"}})
-    with pytest.raises(SystemExit, match="no tiene `query`.*ingest_topic"):
-        run_main(monkeypatch, ["gp", "--topic"])
+    with pytest.raises(SystemExit, match="no tiene `query`.*ingest_theme"):
+        run_main(monkeypatch, ["gp", "--theme"])
 
 
 # ── dry-run del delta de re-clasificación (#40) ──────────────────────────────
@@ -949,7 +949,7 @@ def test_reclass_diff_reporta_el_delta(toy_vault, toy_classifier, monkeypatch, c
     """#40: con `require: [rv]` declarada, un paper de actividad SALE del core — y el reporte
     separa el que tiene extracción LLM (la decisión real) de los stubs."""
     from conftest import mk_note
-    monkeypatch.setattr(qa, "REQUIRE_TOPICS", ["rv"])
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", ["rv"])
     write_ads_json(toy_vault, "test_star", [
         {"bibcode": "1991AJ....102.1813F", "title": "rotation and activity", "abstract": "",
          "keyword": [], "doctype": "article", "relevant": True, "via": "query", "citation_count": 40},
@@ -1000,11 +1000,11 @@ def test_probe_contrasta_facetas_eje_candidatas(toy_classifier, capsys):
     """#41: sin regla declarada, el probe muestra qué cortaría cada faceta si fuera obligatoria —
     el contraste que hace medible la decisión de declarar `require` (antes se discutía)."""
     recs = [
-        {"title": "radial velocity and activity", "topics": ["rv", "actividad"],
+        {"title": "radial velocity and activity", "facets": ["rv", "actividad"],
          "doctype": "article", "relevant": True, "citation_count": 5},
-        {"title": "starspot survey", "topics": ["actividad"], "doctype": "article",
+        {"title": "starspot survey", "facets": ["actividad"], "doctype": "article",
          "relevant": True, "citation_count": 3},
-        {"title": "asteroseismology", "topics": [], "doctype": "article",
+        {"title": "asteroseismology", "facets": [], "doctype": "article",
          "relevant": False, "citation_count": 9},
     ]
     qa.print_probe("q", recs)
@@ -1016,20 +1016,20 @@ def test_probe_contrasta_facetas_eje_candidatas(toy_classifier, capsys):
 
 def test_probe_contrasta_regla_declarada_contra_or(toy_classifier, monkeypatch, capsys):
     """Con `require` ya declarada, el contraste es contra el OR puro (qué se está cortando)."""
-    monkeypatch.setattr(qa, "REQUIRE_TOPICS", ["rv"])
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", ["rv"])
     recs = [
-        {"title": "rv", "topics": ["rv"], "doctype": "article", "relevant": True, "citation_count": 1},
-        {"title": "act", "topics": ["actividad"], "doctype": "article", "relevant": False,
+        {"title": "rv", "facets": ["rv"], "doctype": "article", "relevant": True, "citation_count": 1},
+        {"title": "act", "facets": ["actividad"], "doctype": "article", "relevant": False,
          "citation_count": 1},
     ]
     qa.print_probe("q", recs)
     out = capsys.readouterr().out
-    assert "require=['rv'], min_topics=1" in out and "en OR puro serían 2 CORE" in out
+    assert "require=['rv'], min_facets=1" in out and "en OR puro serían 2 CORE" in out
 
 
 def test_count_core_respeta_doctype_ruido(toy_classifier):
-    recs = [{"topics": ["rv"], "doctype": "catalog"}, {"topics": ["rv"], "doctype": "article"},
-            {"topics": [], "doctype": "article"}]
+    recs = [{"facets": ["rv"], "doctype": "catalog"}, {"facets": ["rv"], "doctype": "article"},
+            {"facets": [], "doctype": "article"}]
     assert qa.count_core(recs, [], 1) == 1
     assert qa.count_core(recs, ["actividad"], 1) == 0
     assert qa.count_core(recs, [], 2) == 0
@@ -1123,7 +1123,7 @@ def test_sweep_sin_ads_json_error_amigable(toy_vault, toy_classifier, monkeypatc
 
 def test_sweep_con_topic_error(toy_vault, toy_classifier, monkeypatch, capsys):
     with pytest.raises(SystemExit):                       # ap.error → exit 2
-        run_main(monkeypatch, ["gp", "--topic", "--sweep"])
+        run_main(monkeypatch, ["gp", "--theme", "--sweep"])
     assert "retro-tag 3b" in capsys.readouterr().err
 
 
@@ -1273,14 +1273,14 @@ def test_la_compuerta_no_se_puede_apagar(toy_vault, toy_classifier, no_sleep, mo
 
 def test_main_tema_no_aplica_la_compuerta(toy_vault, toy_classifier, no_sleep, monkeypatch):
     """En un tema la query ES la definición del tema → su core (y el del grafo anclado) entra solo."""
-    write_yaml(cfg.TOPICS_YAML, {"gp": {"title": "GP", "area": "methods", "concept": "gp",
+    write_yaml(cfg.THEMES_YAML, {"gp": {"title": "GP", "area": "methods", "concept": "gp",
                                         "query": 'abs:"gaussian process"'}})
     monkeypatch.setattr(qa, "query_ads",
                         lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
                         [rec("2020dirA....1A")])
     monkeypatch.setattr(qa, "chain_candidates", lambda *a: [
         dict(rec("2020chX....1X", title="cualquier cosa"), via="chain:references")])
-    assert run_main(monkeypatch, ["gp", "--topic"]) == 0
+    assert run_main(monkeypatch, ["gp", "--theme"]) == 0
     data = json.loads((toy_vault.ROOT / "build" / "gp" / "ads.json").read_text())
     assert len(data["records"]) == 2 and data["candidates"] == []
 
@@ -1307,9 +1307,9 @@ def test_main_persiste_el_registro_de_busqueda(toy_vault, toy_classifier, no_sle
     assert b["almagesto_version"] == cfg.ALMAGESTO_VERSION
     # la LENTE queda registrada textual: almagesto_version es la del framework, no la de la regla
     # (cambiar una regex mueve el corte sin mover la versión)
-    assert b["lente"]["topics"] and isinstance(b["lente"]["topics"], dict)
-    assert b["lente"]["require"] == list(qa.REQUIRE_TOPICS)
-    assert b["lente"]["min_topics"] == qa.MIN_TOPICS
+    assert b["lente"]["facets"] and isinstance(b["lente"]["facets"], dict)
+    assert b["lente"]["require"] == list(qa.REQUIRE_FACETS)
+    assert b["lente"]["min_facets"] == qa.MIN_FACETS
     assert cfg.load_registro("test_star")["decisiones"]                # no pisó el juicio del triage
 
 
@@ -1318,7 +1318,7 @@ def test_query_ads_rehusa_lente_vacia(toy_vault, monkeypatch, capsys):
     TODO como no-core (o todo como core, según la regla) con una regla que nadie escribió — y el
     registro guardaría esa lente vacía como si fuera la vigente. `main()` rehúsa operar nombrando
     el archivo y el motivo; `classify` no llega a correr.  @inv INV-80"""
-    cfg.OBJECTIVE_YAML.write_text("name: X\nrelevance:\n  topics:\n    rv: activity: starspot\n", encoding="utf-8")
+    cfg.OBJECTIVE_YAML.write_text("name: X\nrelevance:\n  facets:\n    rv: activity: starspot\n", encoding="utf-8")
     llamadas = []
     monkeypatch.setattr(qa, "classify", lambda *a, **k: llamadas.append(a) or [])
     monkeypatch.setattr(sys, "argv", ["query_ads.py", "test_star"])

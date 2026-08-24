@@ -2,7 +2,7 @@
 
 - Resuelve rutas del repo (sin asumir cwd).
 - Lee el token ADS de vault/config/ads_dev_key o de la variable de entorno ADS_DEV_KEY.
-- Carga vault/config/stars.yaml, vault/config/topics.yaml y vault/config/objective.yaml.
+- Carga vault/config/stars.yaml, vault/config/themes.yaml y vault/config/objective.yaml.
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ ROOT = Path(__file__).resolve().parent.parent  # raíz del repo (andamiaje + bó
 VAULT = ROOT / "vault"                          # la bóveda: contenido (config/wiki/raw); Obsidian abre acá
 CONFIG = VAULT / "config"
 STARS_YAML = CONFIG / "stars.yaml"
-TOPICS_YAML = CONFIG / "topics.yaml"
+THEMES_YAML = CONFIG / "themes.yaml"
 OBJECTIVE_YAML = CONFIG / "objective.yaml"
 ADS_KEY_FILE = CONFIG / "ads_dev_key"
 # Registro de ingesta por sujeto (#51/#64): VERSIONADO (se commitea) porque guarda las dos cosas
@@ -123,7 +123,7 @@ def require_field(meta: dict, key: str, entry: str, yaml_name: str, hint: str = 
     """Campo OBLIGATORIO de una entrada de config: si falta o está vacío, salida amigable
     (qué entrada, qué campo, en qué archivo) en vez de un KeyError crudo con traceback.
     Para los índices duros que los scripts acceden a pelo (`ads_object`/`simbad` en stars,
-    `query` en topics) — un campo olvidado al cargar la entrada a mano es el caso típico."""
+    `query` en themes) — un campo olvidado al cargar la entrada a mano es el caso típico."""
     val = meta.get(key)
     if val in (None, ""):
         raise SystemExit(
@@ -135,7 +135,7 @@ def require_field(meta: dict, key: str, entry: str, yaml_name: str, hint: str = 
 def load_stars() -> dict:
     """dict {nombre_canonico: {slug, simbad, ads_object, aliases, data_local}}. Un YAML vacío
     (instancia recién creada / sólo comentarios) parsea a None → {} para que star_by_slug dé su
-    KeyError amigable y no un AttributeError (mismo guard que load_topics)."""
+    KeyError amigable y no un AttributeError (mismo guard que load_themes)."""
     with open(STARS_YAML, encoding="utf-8") as fh:
         return yaml.safe_load(fh) or {}
 
@@ -148,25 +148,25 @@ def star_by_slug(slug: str) -> tuple[str, dict]:
     raise KeyError(f"slug desconocido: {slug!r}. Definilo en vault/config/stars.yaml")
 
 
-def load_topics() -> dict:
+def load_themes() -> dict:
     """dict {slug: {title, area, concept, query, aliases}} (registro de temas, análogo a stars)."""
-    if not TOPICS_YAML.exists():
+    if not THEMES_YAML.exists():
         return {}
-    with open(TOPICS_YAML, encoding="utf-8") as fh:
+    with open(THEMES_YAML, encoding="utf-8") as fh:
         return yaml.safe_load(fh) or {}
 
 
-def topic_by_slug(slug: str) -> tuple[str, dict]:
+def theme_by_slug(slug: str) -> tuple[str, dict]:
     """Devuelve (slug, meta) del tema. La clave del YAML ES el slug. KeyError si no existe."""
-    topics = load_topics()
-    if slug in topics:
-        return slug, topics[slug]
-    raise KeyError(f"tema desconocido: {slug!r}. Definilo en vault/config/topics.yaml")
+    themes = load_themes()
+    if slug in themes:
+        return slug, themes[slug]
+    raise KeyError(f"tema desconocido: {slug!r}. Definilo en vault/config/themes.yaml")
 
 
 def load_objective() -> dict:
     """El OBJETIVO de la bóveda (vault/config/objective.yaml): name/short/description y el
-    clasificador de relevancia (`relevance.topics`, `relevance.noise_doctypes`). Es
+    clasificador de relevancia (`relevance.facets`, `relevance.noise_doctypes`). Es
     lo que define qué papers son 'core'.
 
     Un YAML inválido degrada a `{}` (no propaga `YAMLError`/`OSError`): el skill `setup` hace que
@@ -209,7 +209,7 @@ def objective_error() -> str | None:
     except yaml.YAMLError as exc:
         motivo = " ".join(str(exc).split())
         return (f"{OBJECTIVE_YAML} no parsea como YAML: {motivo}. El error más probable es un `:` "
-                "sin comillas dentro de una regex de `relevance.topics` — entrecomillá el patrón.")
+                "sin comillas dentro de una regex de `relevance.facets` — entrecomillá el patrón.")
     except OSError as exc:
         return f"{OBJECTIVE_YAML} no se pudo leer: {exc}"
     if data is None:
@@ -469,7 +469,7 @@ def save_registro(slug: str, data: dict) -> None:
     ficha — y `decisiones` — el juicio de curación). `load_registro` degrada un YAML roto a `{}`
     para no tumbar a sus lectores (lint, triage, query_ads); pero si ESE `{}` tolerante después se
     guarda acá, el archivo original se pierde en silencio. Y el framework instruye editar este
-    archivo a mano (`ingest_topic.py` avisa "sacá la entrada de `decisiones`"), así que un YAML
+    archivo a mano (`ingest_theme.py` avisa "sacá la entrada de `decisiones`"), así que un YAML
     roto es un estado alcanzable, no una hipótesis: mejor frenar con un mensaje accionable que
     perder curación que nadie puede reconstruir.
 
@@ -659,7 +659,7 @@ def anular_decision(slug: str, clave: str, *, por: str, carril: str = "chaining"
     `extra_core`, o volviendo a declarar la fuente en `sources:`— la decisión vieja **se quedaba
     ahí contradiciendo lo que se hizo**. El registro decía "descartado por ruido" sobre un paper
     que está ingestado, y el consumidor no tiene forma de saber cuál de las dos afirmaciones vale.
-    `query_ads` sólo lo salteaba y `ingest_topic` sólo avisaba: ninguno tocaba el registro.
+    `query_ads` sólo lo salteaba y `ingest_theme` sólo avisaba: ninguno tocaba el registro.
 
     Anular no es borrar. El motivo viejo queda en `previa`, porque es exactamente el dato **no
     regenerable** que #51 existe para conservar: por qué alguien miró ese paper y dijo que no. La
@@ -765,7 +765,7 @@ def save_paso(slug: str, paso: str, flags=()) -> None:
     """Estampa un paso de la cadena en `cadena:` del registro.  @inv INV-91
 
     **R-6 (decidida con el usuario, 2026-08-24): cada script se estampa a sí mismo** al salir 0.
-    La alternativa —estampar sólo desde `ingest_topic.run()`, un único punto de escritura— dejaba
+    La alternativa —estampar sólo desde `ingest_theme.run()`, un único punto de escritura— dejaba
     invisible el paso corrido a mano, y entonces el lint reportaba "se cortó en `fetch_pdf`" sobre
     un paso que **sí corrió**. Un falso positivo así erosiona la categoría entera: la primera vez
     que alguien la ve mentir, deja de mirarla.

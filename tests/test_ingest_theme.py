@@ -1,10 +1,10 @@
-"""ingest_topic: despacho por `source`, validaciones de sources:, pending, copia de PDFs."""
+"""ingest_theme: despacho por `source`, validaciones de sources:, pending, copia de PDFs."""
 import sys
 from types import SimpleNamespace
 
 import pytest
 
-import ingest_topic as it
+import ingest_theme as it
 import lib_config as cfg
 from conftest import write_yaml
 
@@ -37,11 +37,11 @@ def topic(source=None, sources=None, area="methods", concept="gaussian-processes
         entry["source"] = source
     if sources is not None:
         entry["sources"] = sources
-    write_yaml(cfg.TOPICS_YAML, {"gp": entry})
+    write_yaml(cfg.THEMES_YAML, {"gp": entry})
 
 
 def run_main(monkeypatch, argv=("gp",)):
-    monkeypatch.setattr(sys, "argv", ["ingest_topic.py", *argv])
+    monkeypatch.setattr(sys, "argv", ["ingest_theme.py", *argv])
     return it.main()
 
 
@@ -64,8 +64,8 @@ def test_cadena_ads_en_orden(toy_vault, fake_run, fake_notes, monkeypatch):
     assert [c[0] for c in fake_run.calls] == ["query_ads.py", "fetch_arxiv.py", "fetch_pdf.py",
                                               "make_notes.py", "extract_fulltext.py",
                                               "check_retractions.py"]
-    assert fake_run.calls[0] == ("query_ads.py", "--topic", "gp")
-    assert fake_run.calls[3] == ("make_notes.py", "--topic", "gp")
+    assert fake_run.calls[0] == ("query_ads.py", "--theme", "gp")
+    assert fake_run.calls[3] == ("make_notes.py", "--theme", "gp")
     assert fake_run.calls[-1] == ("check_retractions.py", "--slug", "gp")   # sólo este ingest
 
 
@@ -123,7 +123,7 @@ def test_ads_con_sources_avisa(toy_vault, fake_run, monkeypatch, capsys):
 # ── validaciones off-ADS ─────────────────────────────────────────────────────
 
 def test_offads_sin_concept(toy_vault, fake_run, monkeypatch):
-    write_yaml(cfg.TOPICS_YAML, {"gp": {"title": "Gaussian processes", "area": "methods", "source": "web",
+    write_yaml(cfg.THEMES_YAML, {"gp": {"title": "Gaussian processes", "area": "methods", "source": "web",
                                          "sources": [{"key": "2006Ras", "url": "https://x"}]}})
     with pytest.raises(SystemExit, match="`concept`"):
         run_main(monkeypatch)
@@ -136,15 +136,15 @@ def test_offads_sin_sources(toy_vault, fake_run, monkeypatch):
 
 
 def test_offads_sources_escalar_no_revienta_la_cadena(toy_vault, fake_run, monkeypatch):
-    """`ingest_topic.py:165` — `sources = meta.get("sources") or []`.
+    """`ingest_theme.py:165` — `sources = meta.get("sources") or []`.
 
     Un `sources:` escalar es truthy, así que esquiva el `sys.exit` amable de la línea siguiente
     ("no declara `sources:` … listá ahí su bibliografía") y llega al `for s in sources`, que
     recorre el string: `s.get("key")` sobre un `str` → `AttributeError` pelado a mitad de la
-    cadena de ingest, sin decir qué hay que arreglar en `topics.yaml`."""
+    cadena de ingest, sin decir qué hay que arreglar en `themes.yaml`."""
     meta = {"title": "T", "area": "methods", "concept": "gp", "source": "web",
             "sources": "https://example.org/paper"}
-    write_yaml(cfg.TOPICS_YAML, {"tema": meta})
+    write_yaml(cfg.THEMES_YAML, {"tema": meta})
     with pytest.raises(SystemExit, match="sources"):
         it.ingest_offads("tema", meta, force=False)
 
@@ -198,8 +198,8 @@ def test_offads_mixto_extra_core_corre_subcadena_ads(toy_vault, fake_run, fake_n
     assert [c[0] for c in fake_run.calls] == \
         ["fetch_web.py", "query_ads.py", "fetch_arxiv.py", "fetch_pdf.py",
          "make_notes.py", "extract_fulltext.py", "check_retractions.py"]
-    assert ("query_ads.py", "--topic", "gp", "--extra-only") in fake_run.calls
-    assert ("make_notes.py", "--topic", "gp") in fake_run.calls
+    assert ("query_ads.py", "--theme", "gp", "--extra-only") in fake_run.calls
+    assert ("make_notes.py", "--theme", "gp") in fake_run.calls
 
 
 def test_offads_sin_extra_core_no_corre_ads(toy_vault, fake_run, fake_notes, monkeypatch):

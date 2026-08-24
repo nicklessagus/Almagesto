@@ -36,7 +36,7 @@ Exit code (issue 0.1 — desambiguado; antes el 1 estaba SOBRECARGADO):
     0  corrió y limpio
     1  corrió y detectó papers retractados
     2  **no pudo chequear**: precondición ausente (sin `papers/`, sin notas, sin `ads.json` ni
-       entrada en `topics.yaml` para el `--slug`) o errores que dejaron papers sin consultar y
+       entrada en `themes.yaml` para el `--slug`) o errores que dejaron papers sin consultar y
        ningún retractado.
 
 **Retractados mandan**: con retractados Y errores sale 1, con los errores igual en el reporte.
@@ -267,7 +267,7 @@ def title_says_retracted(title: str) -> bool:
 
 def _listify_curado(v, campo: str):
     """Normaliza un campo de CURACIÓN MANUAL (`extra_core`, `sources`) que el framework instruye
-    editar a mano en YAML. Gemelo de `query_ads.py:_listify_curado`/`ingest_topic.py:_listify_curado`
+    editar a mano en YAML. Gemelo de `query_ads.py:_listify_curado`/`ingest_theme.py:_listify_curado`
     (R5/R7): un `campo: <valor>` sin corchetes es la forma natural de declarar UN solo elemento y
     es YAML válido — a diferencia de `cfg.as_list` (que trataría el escalar como forma inválida y
     lo degradaría a `[]`), acá conviene PRESERVAR la intención. El `or []` viejo no disparaba con
@@ -288,7 +288,7 @@ def _listify_curado(v, campo: str):
 def slug_notes(slug: str) -> list:
     """Notas de paper de UN ingest (modo --slug de la cadena): bibcodes relevantes de
     build/<slug>/ads.json (vía ADS) + `sources[].key` y `extra_core` de la entrada del tema en
-    topics.yaml (off-ADS/mixto declara ahí su bibliografía). Sólo notas que existen en disco
+    themes.yaml (off-ADS/mixto declara ahí su bibliografía). Sólo notas que existen en disco
     (make_notes acaba de crearlas en la cadena); el barrido completo cubre cualquier drift."""
     stems: list[str] = []
     adsfile = cfg.ROOT / "build" / slug / "ads.json"
@@ -297,7 +297,7 @@ def slug_notes(slug: str) -> list:
         stems += [r["bibcode"] for r in data.get("records", [])
                   if r.get("relevant") and r.get("bibcode")]
     try:
-        _, meta = cfg.topic_by_slug(slug)
+        _, meta = cfg.theme_by_slug(slug)
     except KeyError:
         meta = {}
     # `_listify_curado`, no `or []` (R5/R7): `sources`/`extra_core` son campos de curación manual
@@ -309,7 +309,7 @@ def slug_notes(slug: str) -> list:
     if not stems:
         raise NothingToCheck(
             f"--slug {slug}: no hay build/{slug}/ads.json ni entrada con sources/extra_core "
-            "en topics.yaml — nada que chequear (¿corriste la cadena de ingest primero?).")
+            "en themes.yaml — nada que chequear (¿corriste la cadena de ingest primero?).")
     notes, seen = [], set()
     for stem in stems:
         name = stem.replace("/", "_")

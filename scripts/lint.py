@@ -269,7 +269,7 @@ def note_disputes(fm: dict) -> list:
 
 # Campos que el schema declara **lista** (CLAUDE.md). `True` = lista de MAPAS.
 # `role` no está: su contrato admite escalar o lista, y se valida aparte.
-LIST_FIELDS = {"tags": False, "aliases": False, "stars": False, "topics": False, "methods": False,
+LIST_FIELDS = {"tags": False, "aliases": False, "stars": False, "facets": False, "methods": False,
                "thesis_links": False, "activity_indicators_expected": False,
                "planets": True, "disputes": True, "corrections": True}
 
@@ -736,7 +736,7 @@ def main(argv=()) -> int:
                                           f"({c.get('date') or 's/f'}) → {notice}"))
             # fuente pendiente (issue #7): derivada al usuario — precondición, como las citas no
             # verificables: sin la fuente no hay fulltext ni verify. Se estampa en el ingest
-            # (ingest_topic/make_notes --web con `pending`) o a mano en la nota.
+            # (ingest_theme/make_notes --web con `pending`) o a mano en la nota.
             if fm.get("pending_source"):
                 ptr = fm.get("doi") or fm.get("source_url") or "(sin puntero conocido)"
                 pending_srcs.append((stem, f"{fm['pending_source']} — proveer la fuente; puntero: {ptr}"))
@@ -747,7 +747,10 @@ def main(argv=()) -> int:
                 incomplete.append((stem, "paper relevante sin methods (sin extraer)"))
                 # D-13/INV-83: el sujeto de ese paper queda anotado; después del barrido se
                 # contrasta contra lo que el registro DECLARÓ haber leído.
-                for campo in ("stars", "topics"):
+                # `stars` para estrellas y `thesis_links` para temas: la pertenencia de un paper
+                # a un tema NO vive en las facetas (otro eje) — mismo predicado que
+                # `make_notes._papers_del_sujeto`.
+                for campo in ("stars", "thesis_links"):
                     for sujeto in cfg.as_list(fm.get(campo)):
                         sin_extraer_por_sujeto.setdefault(str(sujeto), set()).add(stem)
             # El eslabón SIGUIENTE (#75): el paper que SÍ se extrajo. `methods` poblado significa
@@ -994,7 +997,7 @@ def main(argv=()) -> int:
     # (el ingest no leyó todo y no dijo por qué); con criterio, backlog normal — la cola visible de
     # D-15, que el skill `maintain` consume.
     extraccion_no_declarada: list = []
-    for nombre_s, meta_s in list(cfg.load_stars().items()) + list(cfg.load_topics().items()):
+    for nombre_s, meta_s in list(cfg.load_stars().items()) + list(cfg.load_themes().items()):
         if not isinstance(meta_s, dict):
             continue
         slug_s = meta_s.get("slug")
@@ -1201,7 +1204,7 @@ def main(argv=()) -> int:
              "(o editá el YAML) para definir el objetivo de TU bóveda"))
 
     # áreas de concepts/ no declaradas en concept_areas (objective.yaml) → posible typo / carpeta
-    # fantasma: un `area` mal tipeado en topics.yaml crea carpeta en silencio (ver make_notes). WARN
+    # fantasma: un `area` mal tipeado en themes.yaml crea carpeta en silencio (ver make_notes). WARN
     # blando (un typo y un área nueva legítima se ven igual → no se bloquea, se marca para revisar).
     # Sin `concept_areas` declarado el typo-check está APAGADO (no se infiere de las carpetas que
     # hay en disco: eso convertiría un typo ya cometido en "área declarada"). Se reporta la ausencia

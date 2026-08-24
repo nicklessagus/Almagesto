@@ -46,7 +46,7 @@ from generador import sembrar_corpus   # noqa: E402
 # Mismas claves que tests/conftest.py::toy_vault — un solo "shape" de `paths` para los dos mundos
 # (bóveda de juguete de 1-2 notas y bóveda poblada de cientos): cualquier test/fixture que ya sepa
 # leer `toy_vault.STARS`, `toy_vault.PAPERS`, etc. lee `boveda_poblada.STARS` igual.
-_PATH_ATTRS = ("ROOT", "VAULT", "CONFIG", "STARS_YAML", "TOPICS_YAML", "OBJECTIVE_YAML",
+_PATH_ATTRS = ("ROOT", "VAULT", "CONFIG", "STARS_YAML", "THEMES_YAML", "OBJECTIVE_YAML",
               "ADS_KEY_FILE", "REGISTRO", "RAW", "WIKI", "PDFS", "FULLTEXT", "GROUND_TRUTH",
               "STARS", "PAPERS", "CONCEPTS", "QUERIES", "MATRICES", "INDEX", "LOG")
 
@@ -58,7 +58,7 @@ def _build_paths(root: Path) -> SimpleNamespace:
     paths = {
         "ROOT": root, "VAULT": vault, "CONFIG": vault / "config",
         "STARS_YAML": vault / "config" / "stars.yaml",
-        "TOPICS_YAML": vault / "config" / "topics.yaml",
+        "THEMES_YAML": vault / "config" / "themes.yaml",
         "OBJECTIVE_YAML": vault / "config" / "objective.yaml",
         "ADS_KEY_FILE": vault / "config" / "ads_dev_key",
         "REGISTRO": vault / "config" / "registro",

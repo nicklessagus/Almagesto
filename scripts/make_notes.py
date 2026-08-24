@@ -2,7 +2,7 @@
 
 Uso:
     python scripts/make_notes.py <slug> [--all] [--force]        # estrella
-    python scripts/make_notes.py --topic <slug> [--all] [--force]  # tema (concept + papers)
+    python scripts/make_notes.py --theme <slug> [--all] [--force]  # tema (concept + papers)
     python scripts/make_notes.py --web <clave> --concept <c> [--url … | --pending …] [--slug-hint <s>]
     python scripts/make_notes.py --restamp-pdf-links             # backfill del link PDF, sin slug
     python scripts/make_notes.py --restamp-headers               # backfill de la cabecera, sin slug
@@ -10,7 +10,7 @@ Uso:
     python scripts/make_notes.py --sync-mirror                   # backfill espejo NEA (#70), sin slug
 
 - vault/wiki/stars/<slug>.md            : ficha índice de la estrella (frontmatter + Dataview).
-- vault/wiki/concepts/<area>/<c>.md     : stub del concept durable de un tema (--topic).
+- vault/wiki/concepts/<area>/<c>.md     : stub del concept durable de un tema (--theme).
 - vault/wiki/papers/<bibcode>.md        : una nota por paper relevante (metadata + placeholders LLM).
 
 Idempotente: NO pisa notas existentes (protege la extracción LLM) salvo --force. Las
@@ -50,7 +50,7 @@ EXCLUDED_TOP_N = 10  # cuántos no-core mostrar en la tabla de excluidos (top po
 
 
 def _listify_curado(v, campo: str):
-    """Normaliza un campo de CURACIÓN MANUAL (`aliases`) que `stars.yaml`/`topics.yaml` instruye
+    """Normaliza un campo de CURACIÓN MANUAL (`aliases`) que `stars.yaml`/`themes.yaml` instruye
     editar a mano. Un `campo: <valor>` sin corchetes es la forma natural de declarar UN solo
     elemento y es YAML válido — a diferencia de `cfg.as_list` (que trataría el escalar como forma
     inválida y lo degradaría a `[]`), acá conviene PRESERVAR la intención en vez de perder el
@@ -642,7 +642,7 @@ def merge_frontmatter_list(dest, field: str, values: list) -> bool:
 def excluded_table(slug: str) -> str:
     """Tabla breve (snapshot del ingest) de los papers que el clasificador dejó AFUERA (no-core):
     top por citas, con motivo y link a ADS. Es un puntero "por las dudas" para cazar falsos negativos
-    y afinar relevance.topics — los no-core NO se bajan ni se fichan. Vacío si no hay ads.json/excluidos.
+    y afinar relevance.facets — los no-core NO se bajan ni se fichan. Vacío si no hay ads.json/excluidos.
     Frontera dura OK: son papers reales (bibcode citable) con motivo reproducible, no afirmación suelta.
 
     Se llama desde `write_star_note`/`write_concept_note`: si esto lanza, la cadena muere DESPUÉS de
@@ -679,7 +679,7 @@ def excluded_table(slug: str) -> str:
         title = " ".join(str(r.get("title") or "(sin título)").split())[:70] \
             .replace("|", r"\|").replace("[", r"\[").replace("]", r"\]")
         # motivo REAL persistido por query_ads (`why_excluded`, #30 — cubre también la regla de
-        # combinación require/min_topics). Sin el campo (ads.json pre-#30) NO se reconstruye con la
+        # combinación require/min_facets). Sin el campo (ads.json pre-#30) NO se reconstruye con la
         # dicotomía vieja: etiquetaba con un motivo FALSO (`doctype: article`) a los excluidos por
         # la regla de combinación — y ese texto se ESCRIBE en la bóveda, en el apéndice de la ficha.
         motivo = r.get("why_excluded") or ("(motivo no registrado: `ads.json` anterior a #30 — "
@@ -688,10 +688,10 @@ def excluded_table(slug: str) -> str:
     extra = len(out) - len(rows)
     tail = f"\n\n_(+ {extra} más excluidos por el filtro)_" if extra > 0 else ""
     return ("\n## Excluidos por el filtro (no-core · snapshot del ingest)\n"
-            "> Top por citas de lo que el clasificador dejó afuera (no matchea `relevance.topics`, "
-            "no cumple la regla de combinación `require`/`min_topics`, o doctype ruido). **No se bajan "
+            "> Top por citas de lo que el clasificador dejó afuera (no matchea `relevance.facets`, "
+            "no cumple la regla de combinación `require`/`min_facets`, o doctype ruido). **No se bajan "
             "ni se fichan** — esto es un puntero por las dudas. Si ves un falso negativo, ajustá "
-            "`relevance.topics` (o la regla de combinación) y re-ingestá con `--force`.\n\n"
+            "`relevance.facets` (o la regla de combinación) y re-ingestá con `--force`.\n\n"
             "| Paper | Año | Citas | Motivo |\n|---|---|---|---|\n"
             + "\n".join(rows) + tail + "\n")
 
@@ -813,7 +813,7 @@ _BULLET_ROLE = ("- **Rol del paper:** _(`fundacional` introduce el método/mecan
 
 
 def objective_lens() -> tuple[list, str]:
-    """La LENTE de la bóveda para orientar el stub: (facetas declaradas en `relevance.topics`,
+    """La LENTE de la bóveda para orientar el stub: (facetas declaradas en `relevance.facets`,
     `short` del objetivo). Es lo único que sabe de qué trata ESTA instancia. Degrada a ([], "")
     si no hay objective.yaml (make_notes corrido suelto, fuera de la cadena) **y también si lo hay
     pero está mal formado**: el `try` cubre la lectura Y la forma, porque el stub es el único lector
@@ -823,18 +823,18 @@ def objective_lens() -> tuple[list, str]:
         obj = cfg.load_objective()
         obj = obj if isinstance(obj, dict) else {}
         rel = obj.get("relevance")
-        topics = (rel or {}).get("topics") if isinstance(rel, dict) else None
-        # `isinstance(topics, dict)`, no `list(...)` a secas: con `topics` escrito como string (una
+        facets = (rel or {}).get("facets") if isinstance(rel, dict) else None
+        # `isinstance(facets, dict)`, no `list(...)` a secas: con `facets` escrito como string (una
         # regex sin nombre de faceta) el `list()` lo deshace en CARACTERES y el stub sale pidiendo
         # facetas fabricadas — justo lo que la degradación promete que nunca pasa.
-        facetas = [str(f) for f in topics] if isinstance(topics, dict) else []
+        facetas = [str(f) for f in facets] if isinstance(facets, dict) else []
         short = obj.get("short")
         return facetas, (short.strip() if isinstance(short, str) else "")
     except Exception:
         return [], ""
 
 
-def extraction_block(topic: bool) -> str:
+def extraction_block(theme: bool) -> str:
     """Sección `## Extracción (LLM)` del stub de una nota de paper, ramificada por tipo de sujeto
     (#76). Tema → el eje del concept (aporte, mecanismo/ecuación, régimen). Estrella → el
     ground-truth (que es del schema de `stars/`, no del objetivo) y los ejes de la lente. El rol
@@ -842,7 +842,7 @@ def extraction_block(topic: bool) -> str:
     facetas, short = objective_lens()
     objetivo = (f"«{short}»: qué aporta, qué hueco deja" if short
                 else "relevancia para el objetivo de la bóveda / huecos")
-    if topic:
+    if theme:
         bullets = [
             "- **Aporte al tema:** _(qué agrega al eje del concept: definición, mecanismo/ecuación, "
             "método, signo)_",
@@ -855,7 +855,7 @@ def extraction_block(topic: bool) -> str:
             "- **Ground-truth (planetas / parámetros):** _(P, K, e por planeta; comparar contra "
             "`vault/raw/ground_truth/`)_",
             f"- **Ejes del objetivo{ejes}:** _(qué dice el paper sobre cada eje de la lente; salen "
-            "de `relevance.topics` en `objective.yaml`)_",
+            "de `relevance.facets` en `objective.yaml`)_",
         ]
     bullets += [_BULLET_METHODS, _BULLET_ROLE, f"- **Para el objetivo:** _({objetivo})_"]
     return "## Extracción (LLM)\n" + "\n".join(bullets) + "\n"
@@ -981,13 +981,17 @@ def _papers_del_sujeto(slug: str, kind: str, fms: dict | None = None) -> list:
     conviven en el mismo corpus."""
     if kind == "star":
         nombre, _ = cfg.star_by_slug(slug)
-        campo = "stars"
-    else:
-        nombre, meta = cfg.topic_by_slug(slug)
-        campo = "topics"
-        nombre = meta.get("concept") or slug
+        return [(stem, fm) for stem, fm in (fms if fms is not None else papers_fm_index()).items()
+                if nombre in (cfg.as_list(fm.get("stars")) or [])]
+    # Un TEMA no se declara en `facets` (eso son las facetas de la lente, otro eje): la pertenencia
+    # de un paper a un tema vive en `thesis_links` —lo que siembra el ingest— y en `methods`. Es la
+    # misma unión que `concept_rollup_rows` (D-24), y por eso se delega ahí: dos predicados de
+    # pertenencia distintos para el mismo tema es cómo la tabla y el roll-up terminan discrepando.
+    _, meta = cfg.theme_by_slug(slug)
+    concept = meta.get("concept") or slug
     return [(stem, fm) for stem, fm in (fms if fms is not None else papers_fm_index()).items()
-            if nombre in (cfg.as_list(fm.get(campo)) or [])]
+            if concept in (cfg.as_list(fm.get("thesis_links")) or [])
+            or concept in (cfg.as_list(fm.get("methods")) or [])]
 
 
 # Secciones ESTAMPADAS por máquina: no son síntesis. Se excluyen al medir "citado en esta ficha"
@@ -1020,7 +1024,7 @@ def papers_universe(slug: str, kind: str, fms: dict | None = None) -> list:
     #68) y `lente` si no; `via` trae el valor declarado en la config (D-58)."""
     dest = (cfg.STARS / f"{slug}.md") if kind == "star" else _concept_dest(slug)
     cuerpo = _prosa(dest.read_text(encoding="utf-8")) if dest and dest.exists() else ""
-    meta = (cfg.star_by_slug(slug)[1] if kind == "star" else cfg.topic_by_slug(slug)[1])
+    meta = (cfg.star_by_slug(slug)[1] if kind == "star" else cfg.theme_by_slug(slug)[1])
     via_de = {e["bibcode"]: e["via"] for e in cfg.load_extra_core(meta, entry=slug)}
     filas = []
     for stem, fm in _papers_del_sujeto(slug, kind, fms):
@@ -1039,9 +1043,9 @@ def papers_universe(slug: str, kind: str, fms: dict | None = None) -> list:
 
 
 def _concept_dest(slug: str):
-    """La nota del concepto de un tema, por su `area`/`concept` de topics.yaml."""
+    """La nota del concepto de un tema, por su `area`/`concept` de themes.yaml."""
     try:
-        _, meta = cfg.topic_by_slug(slug)
+        _, meta = cfg.theme_by_slug(slug)
     except KeyError:
         return None
     return cfg.CONCEPTS / str(meta.get("area") or "") / f"{meta.get('concept') or slug}.md"
@@ -1070,7 +1074,7 @@ def concept_rollup_rows(slug: str, fms: dict | None = None) -> list:
     D-24: en la instancia real esas dos llaves viven en papers distintos, así que quedarse con una
     sola pierde la mitad del roll-up sin decirlo."""
     try:
-        _, meta = cfg.topic_by_slug(slug)
+        _, meta = cfg.theme_by_slug(slug)
     except KeyError:
         return []
     concept = meta.get("concept") or slug
@@ -1488,18 +1492,18 @@ SORT method ASC
 
 
 def write_concept_note(slug: str, force: bool) -> None:
-    """Para temas (ingest-topic): stub del concept durable destino. Idempotente: NO pisa la
+    """Para temas (ingest-theme): stub del concept durable destino. Idempotente: NO pisa la
     síntesis LLM de un concept ya existente salvo --force (protege la síntesis)."""
-    _, meta = cfg.topic_by_slug(slug)
-    area = cfg.require_field(meta, "area", slug, "topics.yaml")
-    concept = cfg.require_field(meta, "concept", slug, "topics.yaml")
+    _, meta = cfg.theme_by_slug(slug)
+    area = cfg.require_field(meta, "area", slug, "themes.yaml")
+    concept = cfg.require_field(meta, "concept", slug, "themes.yaml")
     # Las áreas de concepts/ son ABIERTAS: no se prohíbe ninguna (podés investigar cualquier tema).
     # `concept_areas` (objective.yaml) es sólo una REFERENCIA para distinguir un typo de un área nueva
     # legítima → si el área no está declarada, AVISAR (nunca bloquear) para que un typo no pase mudo.
     # El lint la marca después; si era un área nueva real, agregala a concept_areas para silenciar el aviso.
     if (areas_ref := cfg.load_concept_areas()) and area not in areas_ref:
-        cfg.print_seguro(f"  ⚠ área '{area}' (topic '{slug}') no está en concept_areas (objective.yaml). "
-              f"Si es un typo, corregí topics.yaml; si es un área nueva, agregala a la lista. Creo igual.")
+        cfg.print_seguro(f"  ⚠ área '{area}' (theme '{slug}') no está en concept_areas (objective.yaml). "
+              f"Si es un typo, corregí themes.yaml; si es un área nueva, agregala a la lista. Creo igual.")
     dest = cfg.CONCEPTS / area / f"{concept}.md"
     if dest.exists() and not force:
         # la síntesis no se pisa; sólo se refresca el apéndice máquina con el ads.json vigente (#35)
@@ -1514,7 +1518,7 @@ def write_concept_note(slug: str, force: bool) -> None:
     if area == "hypotheses":          # `status` sólo en hipótesis (schema name,status; ver CLAUDE.md)
         front["status"] = "active"
     front.update({
-        "aliases": _listify_curado(meta.get("aliases"), "aliases"),   # sinónimos EN+ES para grep; sembrado del topic, el LLM enriquece
+        "aliases": _listify_curado(meta.get("aliases"), "aliases"),   # sinónimos EN+ES para grep; sembrado del theme, el LLM enriquece
         # Acá la disputa es SIMÉTRICA por definición (#71): no hay valor de frontmatter contra el
         # cual poner un `alt`, así que las posiciones explícitas son la única forma que sirve.
         "disputes": [],
@@ -1549,7 +1553,7 @@ _(qué falta para entender/implementar el tema sin abrir papers: pasos o ecuacio
 midió?), contradicciones sin resolver.)_
 
 ## Papers que tocan este tema (auto)
-_(se estampa determinista: `make_notes.py {slug} --topic` lo regenera. D-11/D-24 — unión de
+_(se estampa determinista: `make_notes.py {slug} --theme` lo regenera. D-11/D-24 — unión de
 `methods` y `thesis_links`, declarando por cuál entró.)_
 """
     body += excluded_table(slug)
@@ -1559,9 +1563,9 @@ _(se estampa determinista: `make_notes.py {slug} --topic` lo regenera. D-11/D-24
     cfg.print_seguro(f"  concept: {area}/{concept}.md escrito (stub)")
 
 
-def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = False) -> None:
-    if topic:
-        _, tmeta = cfg.topic_by_slug(slug)
+def write_paper_notes(slug: str, include_all: bool, force: bool, theme: bool = False) -> None:
+    if theme:
+        _, tmeta = cfg.theme_by_slug(slug)
         name, link, seed_links = None, tmeta["concept"], [tmeta["concept"]]
     else:
         name, _ = cfg.star_by_slug(slug)
@@ -1574,7 +1578,7 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
     if not include_all:
         recs = [r for r in recs if r["relevant"]]
     cfg.PAPERS.mkdir(parents=True, exist_ok=True)
-    extraccion = extraction_block(topic)     # una sola lectura del objetivo para toda la corrida
+    extraccion = extraction_block(theme)     # una sola lectura del objetivo para toda la corrida
     # D-19: identidades ya presentes en el corpus. Crear una segunda nota del MISMO trabajo (el
     # preprint y el publicado tienen bibcodes distintos y el mismo `arxiv_id`) mete doble conteo en
     # todo lo que cuenta papers, y un falso positivo permanente de #75 —la ficha cita una de las
@@ -1600,8 +1604,8 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
             # otra estrella/tema) → no se pisa la extracción LLM, pero SÍ se mergean los seeds de
             # este ingest (tema → thesis_links; estrella → stars) para que la nota aparezca en las
             # tablas Dataview de la entidad nueva. Idempotente: si ya están, no toca nada.
-            seeds = seed_links if topic else ([name] if name else [])
-            if seeds and merge_frontmatter_list(dest, "thesis_links" if topic else "stars", seeds):
+            seeds = seed_links if theme else ([name] if name else [])
+            if seeds and merge_frontmatter_list(dest, "thesis_links" if theme else "stars", seeds):
                 merged += 1
             else:
                 skipped += 1
@@ -1628,7 +1632,7 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
             "doi": r.get("doi"),
             "bibstem": r.get("bibstem"),
             "stars": [name] if name else [],
-            "topics": r.get("topics", []),
+            "facets": r.get("facets", []),
             "methods": [],                 # poblar con extracción LLM
             "thesis_links": list(seed_links),  # tema: pre-sembrado al concept; estrella: vacío
             "bearing": None,               # supports | challenges | method (respecto a thesis_links)
@@ -1706,13 +1710,13 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
                          accessed: str | None = None, pending: str | None = None,
                          force: bool = False) -> bool:
     """Stub de nota de paper para una fuente **off-ADS** (web o PDF sin bibcode ADS) — modo off-ADS de
-    ingest-topic. Análogo a write_paper_notes pero **sin ads.json**: la metadata la provee quien llama
-    (fetch_web.py, ingest_topic.py o el usuario). `bibcode` = clave sintética AAAA+Autor; `arxiv_id`
+    ingest-theme. Análogo a write_paper_notes pero **sin ads.json**: la metadata la provee quien llama
+    (fetch_web.py, ingest_theme.py o el usuario). `bibcode` = clave sintética AAAA+Autor; `arxiv_id`
     null; `n_authors`/`doi` los del item de `sources:` si se declararon (un PDF con DOI sigue siendo
     off-ADS — no tiene bibcode ADS — pero el DOI habilita check_retractions);
     `pdf` normalmente null (el respaldo citable es el snapshot `.txt` de fulltext/) — salvo que el
     PDF off-ADS ya esté copiado en raw/pdfs/<slug>/<citekey>.pdf (fuente local-pdfs, lo hace
-    ingest_topic.py), en cuyo caso se linkea solo (así el chequeo PDF↔disco del lint no marca drift);
+    ingest_theme.py), en cuyo caso se linkea solo (así el chequeo PDF↔disco del lint no marca drift);
     `thesis_links` pre-sembrado al concept. Para fuentes web, `source_url` + `accessed` son la
     provenance bibliográfica (el "Retrieved <fecha>" de una cita web); `accessed` = la fecha del
     snapshot (la pasa fetch_web.py; si es web y no se pasó, se reusa la `retrieved` del snapshot
@@ -1773,7 +1777,7 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
         "accessed": accessed,        # fecha del snapshot — bibliografía web ("Retrieved <fecha>")
         "bibstem": bibstem,
         "stars": [],
-        "topics": [],
+        "facets": [],
         "methods": [],                       # poblar con extracción LLM
         "thesis_links": [concept] if concept else [],   # pre-sembrado al concept
         "bearing": None,                     # supports | challenges | method
@@ -1798,7 +1802,7 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
                  f"\n> ⏳ **Fuente pendiente (`{pending}`):** todavía sin fulltext — el usuario debe "
                  "proveer el PDF/fuente (puntero `doi`/`source_url` en el frontmatter). Al conseguirla, "
                  "re-correr la cadena y completar la extracción.\n")
-    # off-ADS es el modo opt-in de ingest-topic (CLAUDE.md): acá el sujeto es SIEMPRE un tema.
+    # off-ADS es el modo opt-in de ingest-theme (CLAUDE.md): acá el sujeto es SIEMPRE un tema.
     body = f"""{fm(front)}
 # {title or citekey}
 
@@ -1809,7 +1813,7 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
 > `{txt_ptr}` (`source_url` + `accessed` en el frontmatter), verificable por `verify-citations`.
 > El frontmatter es máquina-legible como en cualquier nota de paper.
 {pend_line}
-{extraction_block(topic=True)}"""
+{extraction_block(theme=True)}"""
     cfg.write_text_atomic(dest, body)
     cfg.print_seguro(f"  papers: {dest.name} escrito (stub off-ADS)")
     return True
@@ -1821,7 +1825,7 @@ def _flags_usados(args) -> list:
     Son las **escotillas**: `--force`, `--yes`, `--all` cambian lo que la corrida hizo, y sin
     registrarlas la traza dice "corrió make_notes" sobre dos corridas que no hicieron lo mismo."""
     return sorted(f"--{k.replace('_', '-')}" for k, v in vars(args).items()
-                  if v is True and k not in ("topic",))
+                  if v is True and k not in ("theme",))
 
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
@@ -1853,8 +1857,8 @@ def main() -> int:
                          "los cinco de cada planeta). Add-only: nunca pisa un valor existente ni "
                          "distinto del ground-truth (eso se reporta, no se toca). No requiere slug.")
     ap.add_argument("--force", action="store_true", help="pisar notas existentes")
-    ap.add_argument("--topic", action="store_true",
-                    help="el slug es un TEMA de vault/config/topics.yaml: genera concept en vez de ficha de estrella")
+    ap.add_argument("--theme", action="store_true",
+                    help="el slug es un TEMA de vault/config/themes.yaml: genera concept en vez de ficha de estrella")
     ap.add_argument("--web", action="store_true",
                     help="modo off-ADS: el positional es la CLAVE de cita de una fuente web/PDF sin ADS; crea sólo la nota de paper (stub)")
     ap.add_argument("--url", help="(--web) URL fuente del snapshot")
@@ -1895,11 +1899,11 @@ def main() -> int:
         rename_paper(*args.rename_paper)
         return 0
     cfg.print_seguro(f"Generando notas para {args.slug}")
-    if args.topic:
+    if args.theme:
         write_concept_note(args.slug, args.force)
     else:
         write_star_note(args.slug, args.force)
-    write_paper_notes(args.slug, args.all, args.force, topic=args.topic)
+    write_paper_notes(args.slug, args.all, args.force, theme=args.theme)
     cfg.save_paso(args.slug, "make_notes", flags=_flags_usados(args))
     return 0
 

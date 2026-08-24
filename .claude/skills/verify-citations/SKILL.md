@@ -90,7 +90,7 @@ plenamente respaldadas). Acá cada afirmación se contrasta contra el texto real
 
 ## Cuándo correrlo
 - **Paso de cierre obligatorio de toda operación que escriba prosa con `[[bibcode]]`** (regla de
-  `CLAUDE.md`), **antes de lint/commit**: `ingest-star` (ficha + papers, paso 5b), `ingest-topic`
+  `CLAUDE.md`), **antes de lint/commit**: `ingest-star` (ficha + papers, paso 5b), `ingest-theme`
   (concept + papers, paso 6b), `append-knowledge` (paso 5), `find-contradictions` (paso 5, las
   disputas nuevas), `maintain` (sub-modo A cuando re-sintetiza, y E cuando resuelve una verificación
   stale), y `query-corpus` / `test-hypothesis` cuando archivan.

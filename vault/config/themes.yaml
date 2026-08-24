@@ -1,4 +1,4 @@
-# Registro de TEMAS para ingest-topic (análogo a stars.yaml, pero por tema en vez de por estrella).
+# Registro de TEMAS para ingest-theme (análogo a stars.yaml, pero por tema en vez de por estrella).
 #
 # La clave de cada entrada ES el slug → dir de build/<slug>/ y raw/{pdfs,fulltext}/<slug>/.
 # Campos:
@@ -16,10 +16,10 @@
 #                (config se commitea), a diferencia de editar build/ (scratch, se pisa).
 #                En un tema OFF-ADS también vale (tema MIXTO): los papers del tema que SÍ tienen
 #                bibcode ADS van acá — NO en sources: con el bibcode de key (degrada el stub:
-#                metadata a mano, blockquote off-ADS falso). ingest_topic les corre la sub-cadena ADS.
+#                metadata a mano, blockquote off-ADS falso). ingest_theme les corre la sub-cadena ADS.
 #   source   : de dónde sale la bibliografía (default si falta: ads). Valores:
 #              ads | web | local-pdfs | local-pdfs+web. Todo lo no-ads es el modo off-ADS de
-#              ingest-topic (opt-in, sólo a pedido explícito) y requiere `sources:` y `query: null`.
+#              ingest-theme (opt-in, sólo a pedido explícito) y requiere `sources:` y `query: null`.
 #   sources  : (sólo off-ADS) la bibliografía declarada del tema. Cada item:
 #                - key: 2006RasmussenWilliams       # clave de cita sintética AAAA+Autor (obligatoria)
 #                  url: https://...            # fuente web (snapshot vía fetch_web/defuddle) — o bien
@@ -38,9 +38,9 @@
 #                                              # cuenta como fallo y el lint lo lista. Al conseguir
 #                                              # la fuente: reemplazar por pdf:/url: y re-correr.
 #
-# La cadena mecánica se corre con `python scripts/ingest_topic.py <slug>` (despacha según `source`).
+# La cadena mecánica se corre con `python scripts/ingest_theme.py <slug>` (despacha según `source`).
 #
-# Agregá tus temas acá (o dejá que `ingest-topic` los agregue). Ejemplo comentado:
+# Agregá tus temas acá (o dejá que `ingest-theme` los agregue). Ejemplo comentado:
 #
 # activity-rv:
 #   title: "Actividad estelar ↔ velocidad radial (indicadores, signos, desfasajes)"
@@ -49,7 +49,7 @@
 #   query: '(abs:"radial velocity" OR abs:"radial-velocity") (abs:"planet" OR abs:"exoplanet") (abs:"bisector" OR abs:"FWHM" OR abs:"S-index" OR abs:"activity indicator" OR abs:"chromospheric")'
 #   aliases: ["BIS-RV", "indicadores de actividad"]
 #
-# Ejemplo off-ADS (método no-astro que se quiere usar en la bóveda; ver Modo off-ADS del skill ingest-topic):
+# Ejemplo off-ADS (método no-astro que se quiere usar en la bóveda; ver Modo off-ADS del skill ingest-theme):
 #
 # gaussian-processes:
 #   title: "Procesos gaussianos (regresión: algoritmo y kernels)"

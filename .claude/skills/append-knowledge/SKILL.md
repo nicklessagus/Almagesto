@@ -1,6 +1,6 @@
 ---
 name: append-knowledge
-description: Usar cuando el usuario quiere plegar UNA fuente puntual (paper por bibcode, PDF local, URL) a una entidad YA existente de la wiki — ficha de estrella o concepto — sin re-correr el ingest completo ("agregale este paper a la ficha de tau Ceti", "sumá este PDF al concept de procesos gaussianos", "este bibcode va a GJ 581", "encontré un paper nuevo para el tema X, agregalo"). Plomería mínima + extracción enfocada + síntesis a la nota viva + cierre estándar. NO crea entidades (eso es ingest-star/ingest-topic) ni barre por query lo nuevo (eso es maintain/refrescar).
+description: Usar cuando el usuario quiere plegar UNA fuente puntual (paper por bibcode, PDF local, URL) a una entidad YA existente de la wiki — ficha de estrella o concepto — sin re-correr el ingest completo ("agregale este paper a la ficha de tau Ceti", "sumá este PDF al concept de procesos gaussianos", "este bibcode va a GJ 581", "encontré un paper nuevo para el tema X, agregalo"). Plomería mínima + extracción enfocada + síntesis a la nota viva + cierre estándar. NO crea entidades (eso es ingest-star/ingest-theme) ni barre por query lo nuevo (eso es maintain/refrescar).
 version: 1.5.0
 ---
 
@@ -12,7 +12,7 @@ se hacía a mano (p. ej. ampliar un radio de un concepto con 2 papers — copiar
 extracción, síntesis, verify, lint). Trabajar desde la raíz del repo.
 
 **Fronteras:** la entidad destino **debe existir** (ficha en `vault/wiki/stars/` o concept en
-`vault/wiki/concepts/`) — si no existe, esto es un `ingest-star`/`ingest-topic`. Si el pedido es
+`vault/wiki/concepts/`) — si no existe, esto es un `ingest-star`/`ingest-theme`. Si el pedido es
 "traé lo NUEVO de X" (barrido por query), es `maintain` (sub-modo A, refrescar). Un **dato suelto
 sin fuente citable no entra** (frontera dura, regla #0): pedir la fuente; si es conclusión derivada
 de fuentes ya citadas, entra marcada como tal.
@@ -34,15 +34,15 @@ Progreso del append de <fuente> → <destino>:
 1. **Resolver destino y tipo de fuente.** Confirmar que la nota destino existe y clasificar la
    fuente: (i) **bibcode ADS** (con o sin PDF propio), (ii) **PDF sin bibcode ADS** (off-ADS →
    clave sintética `AAAA+Autor`), (iii) **URL** (off-ADS → snapshot web). El slug es el de la
-   entidad destino (`stars.yaml`/`topics.yaml`).
+   entidad destino (`stars.yaml`/`themes.yaml`).
 
 2. **Plomería mínima** (por tipo; todo idempotente — con el retro-linkeo de `make_notes`, si la
    nota del paper ya existía en el corpus los seeds `stars`/`thesis_links` se mergean add-only
    solos, sin pisar su extracción):
    - **(i) bibcode ADS** → agregarlo a `extra_core:` (lista de mapas `{bibcode, via, fecha, motivo}` — D-58; el `triage` imprime el snippet listo para pegar) en la entrada de la entidad
-     (`vault/config/stars.yaml` o `topics.yaml` — curación **persistente**, sobrevive re-runs) y
+     (`vault/config/stars.yaml` o `themes.yaml` — curación **persistente**, sobrevive re-runs) y
      correr la cadena: estrella → los scripts del paso 2 de `ingest-star`; tema →
-     `python scripts/ingest_topic.py <slug>`. `query_ads` lo trae por bibcode (`via: manual`).
+     `python scripts/ingest_theme.py <slug>`. `query_ads` lo trae por bibcode (`via: manual`).
      ⚠ La cadena re-corre también la query → puede traer **otros** papers nuevos (refresh
      implícito): si aparecen stubs extra, hacé su extracción (maintain A) o anotalos como backlog
      en `vault/STATUS.md` — no los dejes mudos. Dos compuertas que ese refresh puede disparar y
@@ -57,9 +57,9 @@ Progreso del append de <fuente> → <destino>:
      por el usuario): copiarlo a `vault/raw/pdfs/<slug>/<bibcode>.pdf` y correr
      `python scripts/extract_fulltext.py <slug>`.
    - **(ii) PDF off-ADS** a un tema con `source` off-ADS → agregar el item a `sources:` de la
-     entrada del tema (`key` + `pdf` + metadata) y `python scripts/ingest_topic.py <slug>` (sólo
+     entrada del tema (`key` + `pdf` + metadata) y `python scripts/ingest_theme.py <slug>` (sólo
      procesa lo nuevo; deja nota con `pdf` linkeado y fulltext extraído).
-   - **(iii) URL** a un tema off-ADS → ídem con `url` en `sources:` + `ingest_topic.py`.
+   - **(iii) URL** a un tema off-ADS → ídem con `url` en `sources:` + `ingest_theme.py`.
    - **(ii)/(iii) puntual a un tema ADS o a una estrella** (fuente off-ADS aislada, sin cambiar el
      `source` de la entidad) → usar las piezas sueltas: `python scripts/fetch_web.py <slug> <key>
      <url> --concept <concept> …` (URL), o copiar el PDF a `vault/raw/pdfs/<slug>/<key>.pdf` +
@@ -107,4 +107,4 @@ Progreso del append de <fuente> → <destino>:
   identificó. Si durante un append aparecen más papers que valdría traer, proponerlo como refresh —
   no colarlos en silencio.
 - Reglas de notación, schemas de frontmatter, clave sintética `AAAA+Autor` y frontera dura: ver
-  `CLAUDE.md` y el Modo off-ADS de `ingest-topic`.
+  `CLAUDE.md` y el Modo off-ADS de `ingest-theme`.

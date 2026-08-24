@@ -81,7 +81,7 @@ SPECTRAL_TYPES = ("G2V", "K0V", "M3V", "F8V", "K5V", "G8V", "M0V")
 # documenta la confusión de las dos como un error medido DOS VECES. Los de lista-de-MAPAS
 # (`planets`, `disputes`, `corrections`) siempre van en block (así los emite make_notes.fm() de
 # verdad; nunca se vio la forma flow de esos en el corpus real).
-_FLOWABLE_FIELDS = {"tags", "aliases", "stars", "topics", "methods", "thesis_links",
+_FLOWABLE_FIELDS = {"tags", "aliases", "stars", "facets", "methods", "thesis_links",
                     "activity_indicators_expected", "role"}
 
 _WORDS = ("radial velocity activity index chromospheric spot rotation period amplitude signal "
@@ -476,7 +476,7 @@ _(ninguno relevante — corpus sintético)_
             "bibcode": stem, "title": f"Paper sintético {i:05d}",
             "first_author": f"Autor{i:04d}", "n_authors": rng.randint(1, 6),
             "year": year, "arxiv_id": None, "doi": None, "bibstem": "Synt",
-            "stars": [star_names[i % n_stars]], "topics": [], "methods": methods,
+            "stars": [star_names[i % n_stars]], "facets": [], "methods": methods,
             "thesis_links": thesis_links, "bearing": bearing,
             "relevance": relev, "citation_count": rng.randint(0, 200),
             "pdf": None, "fulltext": ft_rel, "fulltext_source": ft_src, "pdf_source": None,
@@ -553,7 +553,7 @@ _(ninguno relevante — corpus sintético)_
         "short": "poblada",
         "description": "Corpus sintético determinista para tests/poblada — no es una bóveda real.",
         "concept_areas": [*AREAS_OPEN, "methods", "hypotheses"],
-        "relevance": {"topics": {"sintetico": "synthetic|sintetico"}, "noise_doctypes": ["catalog"]},
+        "relevance": {"facets": {"sintetico": "synthetic|sintetico"}, "noise_doctypes": ["catalog"]},
     }
     stars_yaml = {star_names[i]: {"slug": star_slugs[i], "simbad": f"TST {i:04d}",
                                   "ads_object": star_names[i], "aliases": [], "data_local": None}
@@ -561,7 +561,7 @@ _(ninguno relevante — corpus sintético)_
     paths.CONFIG.mkdir(parents=True, exist_ok=True)
     write_yaml(paths.OBJECTIVE_YAML, objective)
     write_yaml(paths.STARS_YAML, stars_yaml)
-    write_yaml(paths.TOPICS_YAML, {})
+    write_yaml(paths.THEMES_YAML, {})
     paths.REGISTRO.mkdir(parents=True, exist_ok=True)
     paths.PDFS.mkdir(parents=True, exist_ok=True)
 

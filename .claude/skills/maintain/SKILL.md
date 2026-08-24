@@ -1,13 +1,13 @@
 ---
 name: maintain
-description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.topics ("cambié el objetivo, re-clasificá el corpus"), resolver el backlog del lint (P_rot sin documentar, drift PDF↔disco, cobertura, claims stale), y la pasada periódica de retracciones sobre toda la bóveda ("chequeá retracciones").
+description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.facets ("cambié el objetivo, re-clasificá el corpus"), resolver el backlog del lint (P_rot sin documentar, drift PDF↔disco, cobertura, claims stale), y la pasada periódica de retracciones sobre toda la bóveda ("chequeá retracciones").
 version: 1.17.0
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
 
 Operación de **mantenimiento** del patrón LLM Wiki (las "operaciones de lint" de Karpathy: la wiki es
-viva y hay que cuidarla, no sólo poblarla). **No crea entidades** (para eso `ingest-star`/`ingest-topic`);
+viva y hay que cuidarla, no sólo poblarla). **No crea entidades** (para eso `ingest-star`/`ingest-theme`);
 opera sobre lo que **ya existe**. Elegir el sub-modo según el pedido. Trabajar desde la raíz del repo.
 (Si el pedido es plegar **una fuente puntual ya identificada** —un bibcode, un PDF, una URL— a una
 ficha/concepto, eso es `append-knowledge`, no un refresh: A barre por query lo nuevo.)
@@ -39,7 +39,7 @@ Progreso del refresh de <entidad>:
 1. Re-correr el **orquestador** (idempotente — sólo agrega lo nuevo, no re-baja ni pisa; el orden
    canónico de la cadena vive en el header del orquestador, no lo copies acá):
    ```bash
-   python scripts/ingest_star.py <slug>          # estrella (temas: ingest_topic.py <slug>, despacha por `source`)
+   python scripts/ingest_star.py <slug>          # estrella (temas: ingest_theme.py <slug>, despacha por `source`)
    ```
    Un refresh de un tema **off-ADS** procesa su `sources:` en vez de pegarle a ADS. La cadena
    re-chequea retracciones (papers viejos pueden retractarse) y **no pisa el ground-truth**:
@@ -48,7 +48,7 @@ Progreso del refresh de <entidad>:
    **Ojo con la expansión:** un refresh no sólo agrega lo publicado desde el último ingest — si la
    regla de relevancia quedó laxa, el citation chaining puede multiplicar el pool. La guardia de
    expansión del orquestador frena antes de bajar nada y te manda a revisar
-   `relevance.require`/`min_topics` (`--yes` para continuar a sabiendas).
+   `relevance.require`/`min_facets` (`--yes` para continuar a sabiendas).
 1b. **Triage de los candidatos del chaining** (estrellas): el refresh deja los candidatos nuevos en
    `candidates` de `build/<slug>/ads.json`, **sin bajar** — correr `python scripts/triage.py <slug>` y
    juzgarlos por título+abstract (aceptado → `extra_core` + re-correr; descartado → `--drop` con
@@ -75,7 +75,7 @@ Progreso del refresh de <entidad>:
    escribe en el refresh, la condición se pierde sin dejar rastro. Un régimen que ningún paper cubre
    es un hueco → `## Huecos`.
 3b. **Auto-revisión de autosuficiencia** (igual que el paso 4 de `ingest-star` / 5 de
-   `ingest-topic`, que un refresh también tiene que cumplir): releer la nota **completa** como un
+   `ingest-theme`, que un refresh también tiene que cumplir): releer la nota **completa** como un
    agente externo que no vio los papers. ¿Alcanza sola? ¿Los papers nuevos abrieron **huecos** que
    la sección `## Huecos` no lista (un parámetro que ahora tiene dos valores, un método aplicado sin
    registrar)? Agregar cinco papers sin releer el conjunto es cómo una ficha deja de alcanzar sola
@@ -89,7 +89,7 @@ Progreso del refresh de <entidad>:
    ```
 2. Borrar el/los archivo(s): la nota (`papers/<bib>.md` o `stars/<slug>.md`), su PDF
    (`vault/raw/pdfs/<slug>/…`) y fulltext (`vault/raw/fulltext/<slug>/…`). Si es una estrella/tema entero,
-   también su entrada en `stars.yaml`/`topics.yaml`, su `ground_truth/<slug>.json` y su
+   también su entrada en `stars.yaml`/`themes.yaml`, su `ground_truth/<slug>.json` y su
    `vault/config/registro/<slug>.yaml` (registro de búsqueda + decisiones de triage del sujeto).
 3. **Reparar los colgados:** quitar/re-apuntar cada `[[wikilink]]`, `thesis_links`,
    `disputes[].posiciones[].ref` y
@@ -99,7 +99,7 @@ Progreso del refresh de <entidad>:
    re-escribe el stub de **todo** registro `relevant` sin nota en disco, y los fetchers re-bajan el
    PDF). Las `decisiones` del registro **no** cubren esto: sólo se aplican a candidatos del
    chaining, no al core de la query directa ni a `extra_core`. Según por qué entró:
-   - entró por **`extra_core`** → sacarlo de esa lista en `stars.yaml`/`topics.yaml`;
+   - entró por **`extra_core`** → sacarlo de esa lista en `stars.yaml`/`themes.yaml`;
    - entró por la **query** y la lente lo clasifica core → o ajustás la lente y re-clasificás
      (sub-modo D), o lo dejás con `relevance: low` en vez de borrarlo, o asumís que va a volver.
    Decidilo explícitamente y dejalo en el `log`: "borrado y no durable" es un estado, no un olvido.
@@ -107,7 +107,7 @@ Progreso del refresh de <entidad>:
    (qué se borró y por qué) → commit → preguntar push.
 
 ## C. Renombrar un slug
-1. Renombrar en orden: la clave en `stars.yaml`/`topics.yaml`, los directorios
+1. Renombrar en orden: la clave en `stars.yaml`/`themes.yaml`, los directorios
    `vault/raw/{pdfs,fulltext}/<slug>/`, `ground_truth/<slug>.json`,
    `vault/config/registro/<slug>.yaml` (si no, el juicio de triage queda huérfano y se re-propone
    todo), la nota `stars/<slug>.md` (o el concepto), y **todos** los `[[wikilink]]` al nombre viejo:
@@ -120,7 +120,7 @@ Progreso del refresh de <entidad>:
 
 ## D. Re-clasificar tras cambiar la regla de relevancia
 Cuando editaste `objective.yaml` (vía `setup`) y el corte core/no-core cambió — sea porque tocaste
-`relevance.topics` (las regex) **o** la **regla de combinación** (`relevance.require` / `min_topics`;
+`relevance.facets` (las regex) **o** la **regla de combinación** (`relevance.require` / `min_facets`;
 p. ej. volviste obligatoria la faceta del eje para frenar el ruido del chaining):
 0. **Mirar el delta ANTES de tocar nada** (dry-run, offline — no consulta ADS ni escribe):
    ```bash
@@ -132,13 +132,13 @@ p. ej. volviste obligatoria la faceta del eje para frenar el ruido del chaining)
    (la lista completa: son pocos y son la decisión real) de los **stubs** (sólo el conteo)— y los
    que **entran** sin nota, por vía. Sin esto la decisión es a ciegas: "342 notas salen del core"
    suena catastrófico hasta ver que 338 son stubs del chaining y sólo 4 tenían trabajo encima.
-1. Re-correr `python scripts/query_ads.py <slug>` (temas: `python scripts/query_ads.py <slug> --topic`) para cada
+1. Re-correr `python scripts/query_ads.py <slug>` (temas: `python scripts/query_ads.py <slug> --theme`) para cada
    estrella/tema afectado → re-clasifica con la regla nueva (regenera `build/<slug>/ads.json`).
 2. **Papers que dejaron de ser core:** decidir con el usuario a partir del dry-run del paso 0 —
    dejar la nota marcada (`relevance: low`) o borrarla (sub-modo B). No borrar en silencio.
 3. **Papers que ahora sí son core:** ingestarlos (extracción LLM) como en un refresh (sub-modo A).
 4. **Regenerar el apéndice "Excluidos por el filtro"** de las fichas (cambió el corte): re-correr
-   `python scripts/make_notes.py <slug>` (temas: `--topic <slug>`) **sin `--force`** — re-estampa
+   `python scripts/make_notes.py <slug>` (temas: `--theme <slug>`) **sin `--force`** — re-estampa
    quirúrgicamente sólo el apéndice máquina con el `ads.json` nuevo (motivo real de exclusión
    incluido; la síntesis LLM no se toca). Revisá que refleje la regla nueva.
 5. Cierre: verify (si tocaste prosa) → lint → `log` (qué se re-clasificó) → commit → preguntar push.
@@ -270,6 +270,6 @@ edición de la nota (y, si toca un parámetro planetario, puede ser una `dispute
 fuente. Dejar en el `log` qué se revisó.
 
 ## Notas
-- **No es ingest:** si la entidad no existe todavía, esto no aplica → `ingest-star`/`ingest-topic`.
+- **No es ingest:** si la entidad no existe todavía, esto no aplica → `ingest-star`/`ingest-theme`.
 - **No es query:** una pregunta puntual va por `query-corpus`; acá se **modifica** la bóveda.
 - Schemas de frontmatter, reglas de ruta y disputas: ver `CLAUDE.md`. `git add` **específico** (no `-A`).

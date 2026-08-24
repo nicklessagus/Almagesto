@@ -63,7 +63,7 @@ flowchart LR
 > otras disciplinas** que el trabajo astro usa (análisis de datos, estadística, machine learning,
 > procesos gaussianos, signal processing) cuya bibliografía canónica vive **fuera de ADS** (el eje
 > tema/concepto y la capa de calidad son agnósticos de disciplina, así que la cadena los soporta
-> igual): las fuentes se **declaran** (no se descubren por query) en `topics.yaml` con `source: web
+> igual): las fuentes se **declaran** (no se descubren por query) en `themes.yaml` con `source: web
 > \| local-pdfs` + su lista `sources:` y entran a `vault/raw/` desde snapshots web + PDFs locales,
 > sin ADS/NEA. Sigue rigiendo la **frontera dura**: sólo bibliografía citable, o sea el método
 > **publicado** y no su implementación.
@@ -89,7 +89,7 @@ echo "TU_TOKEN" > vault/config/ads_dev_key  # token ADS (gratis, gitignored)
 > gratis en <https://ui.adsabs.harvard.edu/user/settings/token>.
 
 Después **definí el objetivo pidiéndoselo al agente**: no hace falta escribir YAML ni regex a mano. El
-skill `setup` traduce tu foco (en palabras) a `relevance.topics` (los buckets que deciden qué paper es
+skill `setup` traduce tu foco (en palabras) a `relevance.facets` (los buckets que deciden qué paper es
 *core*), lo **prueba contra ADS** y te muestra el corte para que lo apruebes:
 
 > **Vos:** *"configurá la bóveda: quiero separar actividad estelar de señales planetarias en RV."*
@@ -113,16 +113,16 @@ skill `setup` traduce tu foco (en palabras) a `relevance.topics` (los buckets qu
 > Afina la regex e itera hasta que el corte cierre → te deja `vault/config/objective.yaml` listo.
 
 Con el objetivo definido, sumás estrellas/temas y los ingestás, también pidiéndoselo al agente:
-*"bajá HD 152391"* (`ingest-star`) o *"investigá BSS sobre RV"* (`ingest-topic`).
+*"bajá HD 152391"* (`ingest-star`) o *"investigá BSS sobre RV"* (`ingest-theme`).
 
 ## De un objetivo a una ficha (qué hace un ingest)
 
 Cuando le pedís ingestar una estrella o un tema, el agente:
 
 1. **Busca en ADS** (por estrella: nombre + alias; por tema: keywords) y **clasifica** cada paper con tu
-   `relevance.topics`: por default **core** = matchea ≥1 faceta y no es ruido; el resto queda
+   `relevance.facets`: por default **core** = matchea ≥1 faceta y no es ruido; el resto queda
    **no-core**. Si esa regla deja entrar demasiado, se puede exigir facetas **obligatorias**
-   (`relevance.require`) o un mínimo de facetas (`relevance.min_topics`); las configura el skill
+   (`relevance.require`) o un mínimo de facetas (`relevance.min_facets`); las configura el skill
    `setup` y el preview muestra cuánto cambiaría el corte.
 2. Los **core** se bajan (PDF + fulltext) y el LLM los **lee y destila** en la ficha: métodos, P/K/e,
    indicadores y por qué es relevante, cada dato con su cita `[[bibcode]]` (trazable hasta el PDF).
@@ -143,7 +143,7 @@ que se commitea y viaja con la bóveda:
 - **`busqueda`**: la query efectiva, la fecha, el límite pedido y los conteos (encontrados en ADS →
   traídos → core → sin juzgar → descartados). Es lo que permite saber **sobre qué universo de papers
   afirma una ficha** y con qué **lente** se filtró: el registro guarda también las facetas de
-  `relevance.topics` con sus regex y la regla de combinación vigente, porque cambiar una regex mueve
+  `relevance.facets` con sus regex y la regla de combinación vigente, porque cambiar una regex mueve
   el corte core/no-core sin mover la versión del framework. La cabecera de la ficha lleva una línea
   con el resumen y el puntero al archivo.
 - **`decisiones`**: el juicio de curación, o sea qué descartaste y **por qué**. Cubre los dos
@@ -153,7 +153,7 @@ que se commitea y viaja con la bóveda:
   hacían los aceptados.
 
 Un tema **off-ADS puro** no lleva `busqueda`: no hubo query que registrar, porque sus fuentes ya
-están declaradas una por una en `topics.yaml`. Uno **mixto** (fuentes declaradas + `extra_core:` con
+están declaradas una por una en `themes.yaml`. Uno **mixto** (fuentes declaradas + `extra_core:` con
 bibcodes de ADS) sí lo lleva, con `query: null`: registra lo que entró por la vía ADS.
 
 <p align="center">
@@ -203,15 +203,15 @@ descripción, o el usuario con `/<nombre>`). Encapsulan la cadena mecánica + el
 
 | Skill | Cuándo | Qué hace |
 |---|---|---|
-| `setup` | "configurá la bóveda", "definí el objetivo" | Paso 0: traduce tu foco en palabras a `objective.yaml` (incluida la regex `relevance.topics`) y la **afina contra ADS con un preview** (`query_ads --probe`), para que NO escribas regex a mano. No ingesta. |
+| `setup` | "configurá la bóveda", "definí el objetivo" | Paso 0: traduce tu foco en palabras a `objective.yaml` (incluida la regex `relevance.facets`) y la **afina contra ADS con un preview** (`query_ads --probe`), para que NO escribas regex a mano. No ingesta. |
 | `ingest-star` | "bajá/ingestá/agregá la estrella X" | Corre la cadena mecánica (orquestador `ingest_star.py`) y hace la extracción LLM de los papers clave + síntesis + bookkeeping. Incluye la **compuerta de triage** del citation chaining: el candidato que sólo *menciona* al sujeto no se baja sin juicio (`triage.py`). |
-| `ingest-topic` | "investigá a fondo el tema X" | Como ingest-star pero por TEMA: query ADS por keywords → concept durable en `concepts/`. Soporta temas off-ADS (opt-in) vía `source: web\|local-pdfs` + `sources:` en `topics.yaml`. |
+| `ingest-theme` | "investigá a fondo el tema X" | Como ingest-star pero por TEMA: query ADS por keywords → concept durable en `concepts/`. Soporta temas off-ADS (opt-in) vía `source: web\|local-pdfs` + `sources:` en `themes.yaml`. |
 | `append-knowledge` | "agregale este paper a la ficha X", "sumá este PDF al concept Y" | Pliega **una fuente puntual** (bibcode / PDF / URL) a una ficha/concepto **existente**: plomería mínima + extracción enfocada + síntesis a la nota viva. No crea entidades ni barre por query. |
 | `test-hypothesis` | "hipótesis: …", "evidencia a favor/contra de …" | Testea un supuesto **durable** contra el fulltext y responde con veredicto citado; **a pedido del usuario** lo archiva en `concepts/hypotheses/` y taggea papers (`thesis_links`/`bearing`). |
 | `query-corpus` | búsqueda/pregunta general (no hipótesis) | Responde contra índice + frontmatter + fulltext; archiva en `vault/wiki/queries/` **sólo si el usuario lo pide**. |
 | `verify-citations` | cierre de toda operación con prosa `[[bibcode]]` | Chequea, afirmación por afirmación, que la fuente respalde el claim (1 subagente/par lee el fulltext). |
 | `find-contradictions` | "buscá contradicciones", "¿qué papers discrepan sobre X?" | Barre un eje (estrella/parámetro o concepto) y confirma desacuerdos claim↔claim **entre** papers → propone `disputes` (con una posición por fuente, y un marcador propio cuando quien arbitra es la NASA) para que apruebes. |
-| `maintain` | "actualizá X", "borrá el paper Y", "renombrá el slug", "re-clasificá" | Mantiene entidades **ya ingestadas**: refrescar con papers nuevos, borrar/renombrar limpio, re-clasificar tras cambiar `relevance.topics`, resolver backlog del lint. |
+| `maintain` | "actualizá X", "borrá el paper Y", "renombrá el slug", "re-clasificá" | Mantiene entidades **ya ingestadas**: refrescar con papers nuevos, borrar/renombrar limpio, re-clasificar tras cambiar `relevance.facets`, resolver backlog del lint. |
 
 ## Verify: todo claim tiene fuente
 
@@ -238,7 +238,7 @@ donde cada afirmación arrastra su `[[bibcode]]` y una capa de verificación la 
 | [karpathy-llm-wiki](https://github.com/Astro-Han/karpathy-llm-wiki) y otras implementaciones genéricas del patrón | ingest/query/lint de propósito general | sin plomería de fuentes (ADS/arXiv/NEA), sin ground-truth duro, sin verificación claim↔fuente (la implementación más popular descarta a propósito las citas con nº de línea, que acá son obligatorias) |
 | [Elicit](https://elicit.com) · [SciSpace](https://scispace.com) · [Consensus](https://consensus.app) · [Scite](https://scite.ai) · [Undermind](https://undermind.ai) | asistentes comerciales de literature review (índices de 100–280M papers) | informe efímero en query-time sobre un índice remoto, cerrado y pago; no queda corpus propio ni artefacto curado que componga entre sesiones |
 | [PaperQA2](https://github.com/Future-House/paper-qa) (FutureHouse) | agente open-source de QA científica, SOTA en benchmarks de literatura | responde preguntas sueltas; no mantiene una base curada y versionada, así que el conocimiento no se acumula entre sesiones |
-| [NotebookLM](https://notebooklm.google) · [Khoj](https://github.com/khoj-ai/khoj) · Obsidian+Zotero | RAG / "second brain" sobre tus documentos | RAG sobre lo que ya tenés: sin regla de admisión (qué paper entra y por qué, `relevance.topics`), sin ground-truth, sin verificación afirmación por afirmación |
+| [NotebookLM](https://notebooklm.google) · [Khoj](https://github.com/khoj-ai/khoj) · Obsidian+Zotero | RAG / "second brain" sobre tus documentos | RAG sobre lo que ya tenés: sin regla de admisión (qué paper entra y por qué, `relevance.facets`), sin ground-truth, sin verificación afirmación por afirmación |
 
 Nota sobre la capa de verificación: las herramientas de chequeo de citas (p. ej.
 [CiteCheck](https://arxiv.org/abs/2605.27700)) validan que la referencia **exista** y que su metadata

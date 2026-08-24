@@ -1,5 +1,5 @@
 ---
-name: ingest-topic
+name: ingest-theme
 description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema off-ADS — típicamente un método de otra disciplina (estadística, ML) al servicio del foco astro — desde PDFs locales + web (ver Modo off-ADS).
 version: 1.15.0
 ---
@@ -32,7 +32,7 @@ sintetizado*, #75 — que es también la red del contraste de 3c); para **3b** n
 ```
 Progreso del ingest del tema <tema>:
 - [ ] 1  consulta co-diseñada con el usuario (o `sources:` si es off-ADS)
-- [ ] 2  cadena mecánica (ingest_topic.py) — sin abortos
+- [ ] 2  cadena mecánica (ingest_theme.py) — sin abortos
 - [ ] 3  extracción LLM de los papers clave del tema
 - [ ] 3b retro-tag por grep de aliases sobre el corpus pre-existente
 - [ ] 3c contraste cross-paper (inventario por eje)
@@ -56,9 +56,9 @@ Progreso del ingest del tema <tema>:
      `python scripts/query_ads.py --probe '<query candidata>' --rows 50` y mirar el corte CORE/no-core +
      los títulos top (ordenados por citas). Si trae cientos con ruido o muy pocos, reajustar la
      query y reconfirmar. **No** bajar PDFs hasta que el usuario apruebe la query final. (`--probe`
-     recibe la query cruda, así que corre sin que el tema exista todavía en `topics.yaml` —
-     `--topic <slug>` recién funciona después del paso d.)
-   - **d. Persistir.** Recién entonces escribir/actualizar la entrada en `vault/config/topics.yaml`:
+     recibe la query cruda, así que corre sin que el tema exista todavía en `themes.yaml` —
+     `--theme <slug>` recién funciona después del paso d.)
+   - **d. Persistir.** Recién entonces escribir/actualizar la entrada en `vault/config/themes.yaml`:
      `title`, `area` (abierta: cualquiera; idealmente una de `concept_areas` de `objective.yaml` —
      ej. `indicators|methods|activity|hypotheses` — para que el typo-check la reconozca; si es un área
      nueva real, agregala a esa lista), `concept` (nota destino, existente o
@@ -67,14 +67,14 @@ Progreso del ingest del tema <tema>:
 
 2. **Cadena mecánica** — un solo comando (desde la raíz del repo):
    ```bash
-   python scripts/ingest_topic.py <slug>
+   python scripts/ingest_theme.py <slug>
    ```
    El orquestador despacha según el campo `source` de la entrada del tema (`ads` si falta). En modo
    ADS corre la cadena de estrellas **sin `fetch_ground_truth`** (no hay NEA para un tema) y con
-   `--topic` donde aplica; **el orden canónico vive en el header de `scripts/ingest_topic.py`** —
+   `--theme` donde aplica; **el orden canónico vive en el header de `scripts/ingest_theme.py`** —
    puntero, no copia: no lo repliques acá ni en otros docs. Todo idempotente (si algo falla se
    re-corre, o se corre el script puntual con sus flags finos).
-   `query_ads --topic` escribe el mismo `build/<slug>/ads.json` (con `kind: topic`), así que
+   `query_ads --theme` escribe el mismo `build/<slug>/ads.json` (con `kind: theme`), así que
    `fetch_arxiv`, `fetch_pdf` y `extract_fulltext` corren sin cambios. Hace **citation chaining anclado a la query
    del tema** (references/citations de los core filtrados por la propia query → recall extra sin traer
    los mega-citados genéricos del área). `fetch_arxiv` respeta el rate limit de arXiv
@@ -85,11 +85,11 @@ Progreso del ingest del tema <tema>:
    rescate**, que vive en `## Notas` del skill `ingest-star` (canónica allá, sin copia: Messenger /
    página del instrumento / mirrors académicos / tablas del CDN / derivar al usuario — y **no**
    gastar intentos en `aanda.org`, que está tras DataDome). "Bajar por DOI" solo no alcanza. Curación persistente con
-   `extra_core:` (lista de mapas `{bibcode, via, fecha, motivo}` — D-58; el `triage` imprime el snippet listo para pegar) en la entrada del tema en `topics.yaml` (igual que en estrellas).
+   `extra_core:` (lista de mapas `{bibcode, via, fecha, motivo}` — D-58; el `triage` imprime el snippet listo para pegar) en la entrada del tema en `themes.yaml` (igual que en estrellas).
    **Guardia de expansión (checkpoint humano).** Entre `query_ads` y el primer paso que gasta red
    y disco, el orquestador compara el core del `ads.json` fresco contra las notas ya ingestadas del
    sujeto: si se multiplicó (default ×1.5 y 50 o más nuevos) **frena** con el conteo, cuántos vinieron
-   por el grafo de citas y el puntero a `relevance.require`/`min_topics`. Antes de refrescar un
+   por el grafo de citas y el puntero a `relevance.require`/`min_facets`. Antes de refrescar un
    sujeto viejo, mirá ese número: si el pool explotó, revisá la **regla de combinación** en
    `objective.yaml` (skill `setup`) antes de bajar nada — podar las regex no alcanza si la
    combinación sigue siendo OR. `--yes` continúa a sabiendas.
@@ -198,11 +198,11 @@ diferencia operativa de que las fuentes se **declaran**, no se descubren por que
 
 Qué cambia respecto del flujo ADS de arriba:
 - **Sin ADS:** se saltean `query_ads.py`, `fetch_arxiv.py`, `fetch_pdf.py` y `fetch_ground_truth.py`. En
-  `vault/config/topics.yaml` la entrada lleva `query: null`, el switch **`source: web | local-pdfs |
+  `vault/config/themes.yaml` la entrada lleva `query: null`, el switch **`source: web | local-pdfs |
   local-pdfs+web`** y la bibliografía **declarada** en la lista `sources:` (cada item: `key`
   AAAA+Autor + `url` o `pdf` + `title/author/year/venue/n_authors/doi` opcionales; ver header del YAML); el resto
   del schema igual (`title`, `area`, `concept`, `aliases`). Con eso, **el mismo comando del paso 2**
-  (`python scripts/ingest_topic.py <slug>`) orquesta todo: stub del concept, `fetch_web.py` por cada `url`,
+  (`python scripts/ingest_theme.py <slug>`) orquesta todo: stub del concept, `fetch_web.py` por cada `url`,
   copia de cada `pdf` a `vault/raw/pdfs/<slug>/<key>.pdf` (nota con el campo `pdf` ya linkeado) y
   `extract_fulltext.py`. `--force` re-baja/re-copia **fuentes**, nunca pisa notas. Los bullets de
   abajo documentan las piezas por si hay que correr algo a mano.
@@ -246,9 +246,9 @@ Qué cambia respecto del flujo ADS de arriba:
 - **Tema MIXTO — papers del tema que SÍ tienen bibcode ADS** (un método no-astro casi siempre tiene
   aplicaciones/variantes publicadas en revista astro): van en **`extra_core:` (lista de mapas `{bibcode, via, fecha, motivo}` — D-58; el `triage` imprime el snippet listo para pegar)** de la
   entrada del tema, **no** en `sources:` con el bibcode como `key` (eso degrada el stub: metadata a
-  mano, `citation_count: 0`, blockquote off-ADS factualmente falso). `ingest_topic.py` les corre solo
+  mano, `citation_count: 0`, blockquote off-ADS factualmente falso). `ingest_theme.py` les corre solo
   la **sub-cadena ADS** (`query_ads --extra-only` → `fetch_arxiv` → `fetch_pdf` → `make_notes
-  --topic`): stub con metadata ADS real, PDF por arXiv/resolver y chequeo de retracciones por la vía
+  --theme`): stub con metadata ADS real, PDF por arXiv/resolver y chequeo de retracciones por la vía
   ADS. El tema queda mixto: `sources:` para lo off-ADS + `extra_core:` para lo que está en ADS.
   **Incluye los que ADS indexa fuera de `database:astronomy`** (eprints de `math.ST`, `eess.SP`,
   `stat.ML`…): la búsqueda por bibcode de `extra_core` corre **sin la lente astro** (#68), así que un
@@ -260,7 +260,7 @@ Qué cambia respecto del flujo ADS de arriba:
   **mismo frontmatter** que
   una nota ADS más la provenance web: `bibcode` = clave sintética; `arxiv_id` null; `n_authors`/`doi` los
   del item de `sources:` si se declararon (un PDF con DOI sigue siendo off-ADS; con `doi`,
-  `ingest_topic.py` corre además `check_retractions.py`); `source_url` +
+  `ingest_theme.py` corre además `check_retractions.py`); `source_url` +
   `accessed` (la **fecha del snapshot** — el "Retrieved <fecha>" de una cita web, la toma del `.txt`);
   `bibstem` = venue o dominio; `pdf`: null para un snapshot web (el respaldo es el `.txt`), pero
   **linkeado** si el PDF ya se copió a `vault/raw/pdfs/<slug>/` (fuente `local-pdfs`: verdad de

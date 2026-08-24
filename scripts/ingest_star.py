@@ -12,10 +12,10 @@ vault/config/stars.yaml:
 La **guardia de expansión** (#37) es un checkpoint humano entre la query y el primer paso que
 gasta red y disco: si el core del `ads.json` fresco se multiplicó respecto de las notas ya
 ingestadas del sujeto (default: ×1.5 y 50 o más nuevos), frena con el conteo, cuántos vinieron por
-el grafo de citas y el puntero a `relevance.require`/`min_topics`. `--yes` continúa a sabiendas.
+el grafo de citas y el puntero a `relevance.require`/`min_facets`. `--yes` continúa a sabiendas.
 
 **Este header ES la definición canónica de la cadena de estrellas** (el análogo para temas es
-`ingest_topic.py`). Docs y skills apuntan acá en vez de copiar la lista — una copia por doc es
+`ingest_theme.py`). Docs y skills apuntan acá en vez de copiar la lista — una copia por doc es
 drift asegurado cuando la cadena cambia.
 
 Todo idempotente: re-correr es seguro (nada se re-baja ni se pisa; `fetch_ground_truth` NO
@@ -39,7 +39,7 @@ import argparse
 import sys
 
 import lib_config as cfg
-from ingest_topic import expansion_guard, run
+from ingest_theme import expansion_guard, run
 
 CHAIN = ("query_ads.py", "fetch_arxiv.py", "fetch_pdf.py", "fetch_ground_truth.py",
          "make_notes.py", "extract_fulltext.py")

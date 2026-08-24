@@ -537,6 +537,35 @@ planetas se comparan **por letra** — dos listas del mismo largo pueden no ser 
 
 Ratchet **78 → 77**. Tier 0: 796 verdes. Tier 1: 48 (golden 38 → 40 categorías).
 
+### ✅ R-5 resuelta (2026-08-24) — renombre completo del concepto
+
+La palabra `topics` nombraba **dos** cosas: *faceta de la lente* (`relevance.topics`, y el campo
+`topics:` de las notas de paper) y *tema-sujeto ingestable* (`topics.yaml`, hermano de
+`stars.yaml`). D-26 iba a anidar una dentro de la otra — la faceta propia de cada tema viviendo
+adentro de `topics.yaml`.
+
+| Antes | Ahora |
+|---|---|
+| `relevance.topics` | `relevance.facets` |
+| `topics:` en notas de paper | `facets:` |
+| `topics.yaml` | `themes.yaml` |
+| `ingest_topic.py` · `--topic` · `/ingest-topic` | `ingest_theme.py` · `--theme` · `/ingest-theme` |
+| `load_topics` · `topic_by_slug` | `load_themes` · `theme_by_slug` |
+
+⚠ **El comando que escribís cambió: `/ingest-theme`.**
+
+**El renombre destapó un bug real** que había entrado en la Tanda 3: `papers_universe(slug, "theme")`
+buscaba la pertenencia de un paper a un tema en el campo `topics` —que son **facetas**, otro eje—
+cuando en realidad vive en `thesis_links` (lo que siembra el ingest) y `methods`. La tabla estampada
+de un concepto habría salido **vacía** siempre. Corregido, con el mismo predicado que
+`concept_rollup_rows` (dos predicados distintos para el mismo tema es cómo la tabla y el roll-up
+terminan discrepando). El lint tenía el mismo error en el barrido de D-13.
+
+### 📐 Convención de idioma (a partir del 2026-08-24)
+**Archivos, nombres de funciones, docstrings y comentarios NUEVOS en inglés.** La prosa de
+documentación (`CLAUDE.md`, `STATUS.md`, `docs/`, skills) sigue en **español**. **No hay retrofit**
+del código viejo — pedido explícito del usuario.
+
 ### Lo que sigue
 **Tanda 7 — descubrimiento** (D-25, D-26, D-27, D-29, D-30): la relevancia de un tema de método es
 **propia del tema** y entra por tres puertas declaradas. Cierra INV-88. Trae **R-5** abierta (la

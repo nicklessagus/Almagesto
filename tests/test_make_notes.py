@@ -22,11 +22,11 @@ GT = {"star": "Estrella Test", "slug": "test_star",
       ]}
 
 
-def rec(bib, relevant=True, arxiv=None, cites=0, title="Un título", topics=("actividad",),
+def rec(bib, relevant=True, arxiv=None, cites=0, title="Un título", facets=("actividad",),
         doctype="article"):
     return {"bibcode": bib, "title": title, "authors": ["Ana Pérez", "Bob"], "year": "2020",
             "abstract": "Abstract de prueba", "arxiv_id": arxiv, "doi": "10.1/x", "bibstem": "ApJ",
-            "topics": list(topics) if relevant else [], "relevant": relevant,
+            "facets": list(facets) if relevant else [], "relevant": relevant,
             "citation_count": cites, "doctype": doctype}
 
 
@@ -44,7 +44,7 @@ def ads_json(records, slug="test_star"):
 
 
 def seed_topic(slug="gp", area="methods", concept="gaussian-processes"):
-    write_yaml(cfg.TOPICS_YAML, {slug: {"title": "Gaussian processes", "area": area, "concept": concept,
+    write_yaml(cfg.THEMES_YAML, {slug: {"title": "Gaussian processes", "area": area, "concept": concept,
                                         "aliases": ["análisis de componentes"]}})
 
 
@@ -186,7 +186,7 @@ def test_excluded_top_n_y_escapes(toy_vault):
     noncore = [rec(f"2020n....{i:02d}.nA", relevant=False, cites=i) for i in range(12)]
     noncore[11]["title"] = "Título con | pipe y [brackets] adentro que rompe tablas markdown"
     ruido = rec("2020ruid....1R", relevant=False, cites=100, doctype="catalog")
-    ruido["topics"] = ["actividad"]                   # no-core por doctype, no por tópico
+    ruido["facets"] = ["actividad"]                   # no-core por doctype, no por tópico
     ads_json(noncore + [ruido])
     tabla = mn.excluded_table("test_star")
     assert tabla.count("| [") == mn.EXCLUDED_TOP_N    # top-N filas
@@ -200,10 +200,10 @@ def test_excluded_top_n_y_escapes(toy_vault):
 
 
 def test_excluded_motivo_regla_combinacion(toy_vault):
-    """Regresión #30: un excluido por require/min_topics (facetas matcheadas, doctype limpio)
+    """Regresión #30: un excluido por require/min_facets (facetas matcheadas, doctype limpio)
     muestra su motivo REAL persistido (`why_excluded`) — antes la tabla mentía `doctype: article`."""
     r = rec("2020req....1..1R", relevant=False, cites=5)
-    r["topics"] = ["actividad"]
+    r["facets"] = ["actividad"]
     r["why_excluded"] = "sin faceta obligatoria (rv) — relevance.require"
     ads_json([r])
     tabla = mn.excluded_table("test_star")
@@ -236,7 +236,7 @@ def test_stamp_excluded_refresca_sin_tocar_la_sintesis(toy_vault):
     dest.write_text(text, encoding="utf-8")
     # cambió la regla → re-clasificación regeneró ads.json con otra excluida y otro motivo
     r = rec("2021nueva...1N", relevant=False, cites=9, title="Excluida nueva")
-    r["topics"] = ["actividad"]
+    r["facets"] = ["actividad"]
     r["why_excluded"] = "sin faceta obligatoria (rv) — relevance.require"
     ads_json([r])
     mn.write_star_note("test_star", force=False)          # la vía pública: sin --force
@@ -385,11 +385,11 @@ def test_concept_note_area_no_declarada_avisa_pero_crea(toy_vault, capsys):
 
 
 def test_concept_note_sin_area_o_concept_error_amigable(toy_vault):
-    """Guard de config: entrada de topics.yaml incompleta → mensaje amigable, no KeyError."""
-    write_yaml(cfg.TOPICS_YAML, {"gp": {"title": "Gaussian processes", "concept": "gaussian-processes"}})
+    """Guard de config: entrada de themes.yaml incompleta → mensaje amigable, no KeyError."""
+    write_yaml(cfg.THEMES_YAML, {"gp": {"title": "Gaussian processes", "concept": "gaussian-processes"}})
     with pytest.raises(SystemExit, match="'gp' no tiene `area`"):
         mn.write_concept_note("gp", force=False)
-    write_yaml(cfg.TOPICS_YAML, {"gp": {"title": "Gaussian processes", "area": "methods"}})
+    write_yaml(cfg.THEMES_YAML, {"gp": {"title": "Gaussian processes", "area": "methods"}})
     with pytest.raises(SystemExit, match="'gp' no tiene `concept`"):
         mn.write_concept_note("gp", force=False)
 
@@ -496,19 +496,19 @@ def test_paper_notes_retrolinkea_nota_preexistente(toy_vault):
 def test_paper_notes_topic_siembra_thesis_links(toy_vault):
     seed_topic()
     ads_json([rec("2020gpsA...1..1A")], slug="gp")
-    mn.write_paper_notes("gp", include_all=False, force=False, topic=True)
+    mn.write_paper_notes("gp", include_all=False, force=False, theme=True)
     fm = read_fm(toy_vault.PAPERS / "2020gpsA...1..1A.md")
     assert fm["thesis_links"] == ["gaussian-processes"] and fm["stars"] == []
 
 
 def test_cli_topic_genera_concept_en_vez_de_ficha(toy_vault, monkeypatch):
-    """`--topic` decide, en `main()`, entre `write_concept_note` (tema) y `write_star_note`
-    (estrella) — y además el modo `topic=True` de `write_paper_notes`. Todo eso ya está cubierto
-    llamando a las funciones directo; sin este test nadie ejercita el `if args.topic:` del propio
-    despacho. Con el `dest` roto, `gp` (un slug de `topics.yaml`, no de `stars.yaml`) generaría una
-    ficha de ESTRELLA en `vault/wiki/stars/` en vez del concept que pidió `--topic`."""
+    """`--theme` decide, en `main()`, entre `write_concept_note` (tema) y `write_star_note`
+    (estrella) — y además el modo `theme=True` de `write_paper_notes`. Todo eso ya está cubierto
+    llamando a las funciones directo; sin este test nadie ejercita el `if args.theme:` del propio
+    despacho. Con el `dest` roto, `gp` (un slug de `themes.yaml`, no de `stars.yaml`) generaría una
+    ficha de ESTRELLA en `vault/wiki/stars/` en vez del concept que pidió `--theme`."""
     seed_topic()
-    assert run_main(monkeypatch, ["gp", "--topic"]) == 0
+    assert run_main(monkeypatch, ["gp", "--theme"]) == 0
     assert (toy_vault.CONCEPTS / "methods" / "gaussian-processes.md").exists()
     assert not (toy_vault.STARS / "gp.md").exists()
 
@@ -532,7 +532,7 @@ def test_stub_tema_no_pide_planetas_ni_actividad(toy_vault):
     contradiciendo que el eje tema/concepto es agnóstico de disciplina."""
     seed_topic()
     ads_json([rec("2020gpsA...1..1A")], slug="gp")
-    mn.write_paper_notes("gp", include_all=False, force=False, topic=True)
+    mn.write_paper_notes("gp", include_all=False, force=False, theme=True)
     body = (toy_vault.PAPERS / "2020gpsA...1..1A.md").read_text(encoding="utf-8")
     assert "- **Aporte al tema:**" in body and "- **Régimen de validez:**" in body
     assert "planeta" not in body.lower() and "Ejes del objetivo" not in body
@@ -543,14 +543,14 @@ def test_stub_off_ads_comparte_el_bloque_del_tema(toy_vault):
     propio bullet de tema— y la rama ADS de tema escriben el MISMO bloque, así que no divergen."""
     mn.write_web_paper_note("2020Smith", slug="gp", concept="gaussian-processes", url="https://x")
     body = (toy_vault.PAPERS / "2020Smith.md").read_text(encoding="utf-8")
-    assert mn.extraction_block(topic=True) in body
+    assert mn.extraction_block(theme=True) in body
 
 
 def test_extraction_block_sin_objetivo_degrada_a_generico(toy_vault):
     """make_notes corrido suelto, fuera de la cadena: sin objective.yaml el stub sale genérico
     (nunca inventado) y no rompe la generación."""
     toy_vault.OBJECTIVE_YAML.unlink()
-    block = mn.extraction_block(topic=False)
+    block = mn.extraction_block(theme=False)
     assert "- **Ejes del objetivo:**" in block           # sin facetas: sin paréntesis
     assert "objetivo de la bóveda / huecos" in block     # sin `short`: texto genérico
 
@@ -738,14 +738,14 @@ def test_migrate_disputes_letter_nulo_no_inventa_un_eje(toy_vault):
 
 
 @pytest.mark.parametrize("obj", [{"short": 2026}, {"short": "s", "relevance": "rv"},
-                                 {"short": "s", "relevance": {"topics": "radial velocity"}},
-                                 {"short": "s", "relevance": {"topics": [{"rv": "x"}]}}])
+                                 {"short": "s", "relevance": {"facets": "radial velocity"}},
+                                 {"short": "s", "relevance": {"facets": [{"rv": "x"}]}}])
 def test_objetivo_mal_formado_degrada_sin_romper_ni_inventar(toy_vault, obj):
     """El stub es el ÚNICO lector de `objective.short` (ni query_ads ni el lint lo miran), así que
     un `short: 2026` mataba la generación de notas a mitad de cadena, después de gastar la red. Y
-    `topics` como string se deshacía en caracteres: facetas fabricadas escritas a la bóveda."""
+    `facets` como string se deshacía en caracteres: facetas fabricadas escritas a la bóveda."""
     write_yaml(cfg.OBJECTIVE_YAML, obj)
-    block = mn.extraction_block(topic=False)
+    block = mn.extraction_block(theme=False)
     assert "## Extracción (LLM)" in block
     assert "· " not in block.split("Ejes del objetivo")[1].split(":**")[0]   # sin facetas inventadas
 
@@ -890,7 +890,7 @@ def test_objective_lens_tolera_objetivo_incompleto(toy_vault):
     generación de notas: la lente queda vacía y el stub cae al texto genérico."""
     write_objective(toy_vault, relevance=None)
     assert mn.objective_lens() == ([], "toy")
-    write_objective(toy_vault, relevance={"topics": {}}, short="   ")
+    write_objective(toy_vault, relevance={"facets": {}}, short="   ")
     assert mn.objective_lens() == ([], "")
 
 
@@ -900,13 +900,13 @@ def test_objective_lens_sin_archivo_no_propaga_el_error(toy_vault):
     assert mn.objective_lens() == ([], "")
 
 
-@pytest.mark.parametrize("topic,cabeza", [(True, "Aporte al tema"),
+@pytest.mark.parametrize("theme,cabeza", [(True, "Aporte al tema"),
                                           (False, "Ground-truth (planetas / parámetros)")])
-def test_extraction_block_forma(toy_vault, topic, cabeza):
+def test_extraction_block_forma(toy_vault, theme, cabeza):
     """Contrato de forma que asumen los dos templates de cuerpo (se interpolan como `{bloque}`
     al final del f-string): encabezado propio, bullets con la cola compartida y newline final. La
     cola es compartida a propósito: métodos y rol (#73) son del paper, no del tipo de sujeto."""
-    block = mn.extraction_block(topic)
+    block = mn.extraction_block(theme)
     lineas = block.rstrip("\n").split("\n")
     assert block.startswith("## Extracción (LLM)\n") and block.endswith("\n")
     assert len(lineas) == 6 and all(ln.startswith("- **") for ln in lineas[1:])
@@ -918,15 +918,15 @@ def test_extraction_block_forma(toy_vault, topic, cabeza):
 def test_extraction_block_tema_sin_short_cae_al_generico(toy_vault):
     """La rama que faltaba de la matriz: tema + objetivo sin `short`."""
     write_objective(toy_vault, short=None)
-    block = mn.extraction_block(topic=True)
+    block = mn.extraction_block(theme=True)
     assert "- **Aporte al tema:**" in block
     assert "- **Para el objetivo:** _(relevancia para el objetivo de la bóveda / huecos)_" in block
 
 
 def test_extraction_block_estrella_sin_facetas_pero_con_short(toy_vault):
     """Y la simétrica: sin facetas el bullet va sin paréntesis, pero el `short` sigue citándose."""
-    write_objective(toy_vault, relevance={"topics": {}})
-    block = mn.extraction_block(topic=False)
+    write_objective(toy_vault, relevance={"facets": {}})
+    block = mn.extraction_block(theme=False)
     assert "- **Ejes del objetivo:** _(qué dice el paper" in block
     assert "«toy»" in block
 
@@ -1824,7 +1824,7 @@ def test_notas_pasan_por_el_helper(toy_vault, monkeypatch):
             raise AssertionError(f"escritura directa (no atómica) a {self}")
         return real(self, *a, **kw)
 
-    # el sembrado del test (fixtures escribiendo `topics.yaml`, `ads.json`) NO es código de
+    # el sembrado del test (fixtures escribiendo `themes.yaml`, `ads.json`) NO es código de
     # producción: la guardia se instala DESPUÉS.
     ads_json([rec("2020aaaA...1..1A"), rec("2020nonC....1..1C", relevant=False)])
     seed_topic()
@@ -1841,8 +1841,8 @@ def test_notas_pasan_por_el_helper(toy_vault, monkeypatch):
     # primera corrida no toca. Auditado por mutación: sin esta línea, romper `stamp_excluded`
     # pasaba inadvertido.
     assert run_main(monkeypatch, ["test_star", "--all"]) == 0
-    assert run_main(monkeypatch, ["gp", "--topic"]) == 0           # concept + papers de tema
-    assert run_main(monkeypatch, ["gp", "--topic"]) == 0
+    assert run_main(monkeypatch, ["gp", "--theme"]) == 0           # concept + papers de tema
+    assert run_main(monkeypatch, ["gp", "--theme"]) == 0
     assert run_main(monkeypatch, ["--restamp-headers"]) == 0
     assert run_main(monkeypatch, ["--restamp-pdf-links"]) == 0
     assert run_main(monkeypatch, ["--migrate-disputes"]) == 0

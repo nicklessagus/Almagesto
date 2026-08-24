@@ -50,22 +50,22 @@ def test_star_by_slug_yaml_vacio(toy_vault):
         cfg.star_by_slug("nope")
 
 
-def test_load_topics_sin_archivo(toy_vault):
-    toy_vault.TOPICS_YAML.unlink()
-    assert cfg.load_topics() == {}
+def test_load_themes_sin_archivo(toy_vault):
+    toy_vault.THEMES_YAML.unlink()
+    assert cfg.load_themes() == {}
 
 
-def test_load_topics_vacio(toy_vault):
-    toy_vault.TOPICS_YAML.write_text("")
-    assert cfg.load_topics() == {}
+def test_load_themes_vacio(toy_vault):
+    toy_vault.THEMES_YAML.write_text("")
+    assert cfg.load_themes() == {}
 
 
-def test_topic_by_slug(toy_vault):
-    write_yaml(toy_vault.TOPICS_YAML, {"gp": {"title": "Gaussian processes", "area": "methods", "concept": "gp"}})
-    slug, meta = cfg.topic_by_slug("gp")
+def test_theme_by_slug(toy_vault):
+    write_yaml(toy_vault.THEMES_YAML, {"gp": {"title": "Gaussian processes", "area": "methods", "concept": "gp"}})
+    slug, meta = cfg.theme_by_slug("gp")
     assert slug == "gp" and meta["concept"] == "gp"
-    with pytest.raises(KeyError, match="topics.yaml"):
-        cfg.topic_by_slug("nope")
+    with pytest.raises(KeyError, match="themes.yaml"):
+        cfg.theme_by_slug("nope")
 
 
 # ── objective / concept_areas ────────────────────────────────────────────────
@@ -128,8 +128,8 @@ def test_require_field(toy_vault):
         cfg.require_field(meta, "simbad", "Estrella Test", "stars.yaml")
     with pytest.raises(SystemExit):
         cfg.require_field(meta, "vacio", "Estrella Test", "stars.yaml")   # vacío = faltante
-    with pytest.raises(SystemExit, match="usá ingest_topic"):
-        cfg.require_field(meta, "query", "gp", "topics.yaml", hint="usá ingest_topic.")
+    with pytest.raises(SystemExit, match="usá ingest_theme"):
+        cfg.require_field(meta, "query", "gp", "themes.yaml", hint="usá ingest_theme.")
 
 
 def test_concept_areas_sin_nada(toy_vault):
@@ -264,7 +264,7 @@ REGISTRO_ROTO = 'busqueda:\n  motivo: "sin cerrar\n  fecha: 2026-08-01\n'
 def test_no_se_pisa_un_registro_ilegible(toy_vault):
     """El registro es, por definición del repo, lo que NO es regenerable (#51/#64). Si la lectura
     falló, escribir encima destruye `busqueda` y todos los juicios de curación en silencio — y el
-    framework INSTRUYE editar ese archivo a mano (`ingest_topic.py:197`), así que un YAML roto es
+    framework INSTRUYE editar ese archivo a mano (`ingest_theme.py:197`), así que un YAML roto es
     un estado alcanzable, no una hipótesis."""
     cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
     f = cfg.registro_path("test_star")
@@ -373,7 +373,7 @@ def test_sin_escrituras_directas_a_vault():
     from pathlib import Path
     import trace_invariants as ti
     escriben_en_vault = ("make_notes.py", "extract_fulltext.py", "fetch_web.py",
-                         "ingest_topic.py", "fetch_ground_truth.py", "check_retractions.py",
+                         "ingest_theme.py", "fetch_ground_truth.py", "check_retractions.py",
                          "fetch_arxiv.py", "fetch_pdf.py", "lib_config.py")
     directo = re.compile(r"(?<!def )\b\w+\.write_(?:text|bytes)\(")
     ofensores = []
