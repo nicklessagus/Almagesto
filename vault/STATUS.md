@@ -567,10 +567,19 @@ documentación (`CLAUDE.md`, `STATUS.md`, `docs/`, skills) sigue en **español**
 del código viejo — pedido explícito del usuario.
 
 ### Lo que sigue
-**Tanda 7 — descubrimiento** (D-25, D-26, D-27, D-29, D-30): la relevancia de un tema de método es
-**propia del tema** y entra por tres puertas declaradas. Cierra INV-88. Trae **R-5** abierta (la
-colisión de nombres `topics` — faceta vs tema-sujeto, que D-26 agrava) y **R-9** (fuente primaria
-del índice de citas).
+**Tanda 7 — descubrimiento** (D-25, D-26, D-27, D-29, D-30). Cierra INV-88.
+
+La lente global **no sirve** para un tema de método y encima es dañina: `require: [rv]` mata justo
+al paper fundacional (Hyvärinen no menciona RV ni una vez), y sin filtro *"independent component
+analysis"* trae miles de papers de fMRI, EEG y finanzas. Así que cada tema gana una **faceta
+propia** (`facet:` en su entrada de `themes.yaml`) y core = matchea esa faceta **Y** entra por ≥1 de
+tres puertas, que **son los tres `role`**: lo cita tu corpus (conectado) · fundacional en su campo ·
+pasa la lente astro (aplicación).
+
+**R-5 ya está resuelta** (renombre completo, arriba). Queda **R-9**: la fuente del índice de citas
+para la puerta "lo cita tu corpus". El plan dice **empezar midiendo** OpenAlex contra 20 bibcodes
+reales antes de fijar el diseño — cuotas y cobertura de `referenced_works` para astro vieja no están
+medidas. Ése es el primer paso de la tanda, y no depende de ninguna decisión.
 
 > 📌 **Pendiente declarado, no olvidado:** `sweep_web` / `fetch_web.refresh` (el quinto detector).
 > Hoy la pasada sale **2** por eso, a propósito.
