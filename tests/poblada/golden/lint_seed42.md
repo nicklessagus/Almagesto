@@ -38,6 +38,8 @@
 
 ## ⛔ Registro con `busqueda:` (schema viejo pre-D-28) — el lector ya no lo lee (0)
 
+## ⛔ Nota de paper con `topics:` (schema viejo pre-R-5) — el campo vigente es `facets:` (0)
+
 ## ⛔ Identidad duplicada: dos notas del mismo trabajo (mismo doi/arxiv_id) (0)
 
 ## `role` fuera del vocabulario (fundacional/aplicacion/arbitro) (0)

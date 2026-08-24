@@ -584,3 +584,26 @@ def test_autoridad_por_campo_declarada():
     assert cfg.AUTORIDAD_CAMPO["teff_K"] == "nea"
     assert cfg.AUTORIDAD_CAMPO["st_rotp_days"] == "nea"   # clave del JSON, no la de la ficha
     assert all(v in ("nea", "simbad") for v in cfg.AUTORIDAD_CAMPO.values())
+
+
+# ── Archivos de instancia protegidos del merge (INV-68) ──────────────────────
+
+def test_gitattributes_cubre_los_archivos_de_instancia():
+    """@inv INV-68 — los archivos "propios de la instancia" tienen que estar bajo `merge=ours`, o
+    el próximo `git merge upstream/main` los pisa con la versión del template. Es mecanismo
+    declarativo (`.gitattributes`), así que sin un test que lo lea NADIE lo vigila: fue justo lo que
+    pasó con el renombre R-5 —`topics.yaml` quedó protegido y `themes.yaml`, el archivo real, no—.
+    La lista es la que declara `CLAUDE.md` §Framework vs instancia."""
+    raiz = Path(__file__).resolve().parent.parent
+    ga = (raiz / ".gitattributes").read_text(encoding="utf-8")
+    protegidos = {l.split()[0] for l in ga.splitlines()
+                  if l.strip() and not l.startswith("#") and "merge=ours" in l}
+    esperados = {
+        "vault/config/objective.yaml", "vault/config/stars.yaml", "vault/config/themes.yaml",
+        "vault/STATUS.md", "vault/wiki/index.md", "vault/wiki/log.md",
+        "vault/wiki/matrices/method_star.md",
+    }
+    assert esperados <= protegidos, f"sin merge=ours: {sorted(esperados - protegidos)}"
+    # Y a la inversa: nada protegido que ya no exista (un puntero muerto se lee como cobertura).
+    huerfanos = [r for r in protegidos - esperados if not (raiz / r).exists()]
+    assert huerfanos == [], f"`.gitattributes` protege rutas inexistentes: {huerfanos}"

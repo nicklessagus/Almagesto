@@ -283,7 +283,7 @@ def test_campos_obligatorios_100_por_ciento_por_tipo(instancia_real):
     afuera. Estos son la identidad mínima sin la cual la nota no es ni siquiera direccionable:
 
     - `papers/`: bibcode, title, first_author, n_authors, year, arxiv_id, doi, bibstem, stars,
-      topics, methods, relevance, citation_count, pdf, tags.
+      facets, methods, relevance, citation_count, pdf, tags.
     - `stars/`: name, slug, aliases, simbad_id, spectral_type, teff_K, dist_pc, P_rot_days,
       activity_indicators_expected, planets, data_local, methods_applied, tags.
     - `concepts/` (incluye `hypotheses/`): name, aliases, tags.
@@ -291,8 +291,10 @@ def test_campos_obligatorios_100_por_ciento_por_tipo(instancia_real):
     "Presente" es `campo in frontmatter`, NO "no nulo": `teff_K: null` es el caso NORMAL del
     espejo #70 (NEA sin el valor) y no es lo que este test vigila — eso es un problema de VALOR, no
     de FORMA, y lo vigila el propio lint (contradicciones ground-truth ↔ ficha, en el ratchet)."""
+    # `facets` NO va acá: lo aísla `test_papers_declaran_facets_no_topics` (xfail), porque en una
+    # instancia pre-R-5 el campo se llama `topics` y mezclarlo taparía los otros catorce.
     PAPER_FIELDS = ("bibcode", "title", "first_author", "n_authors", "year", "arxiv_id", "doi",
-                    "bibstem", "stars", "topics", "methods", "relevance", "citation_count", "pdf",
+                    "bibstem", "stars", "methods", "relevance", "citation_count", "pdf",
                     "tags")
     STAR_FIELDS = ("name", "slug", "aliases", "simbad_id", "spectral_type", "teff_K", "dist_pc",
                   "P_rot_days", "activity_indicators_expected", "planets", "data_local",
@@ -318,6 +320,23 @@ def test_campos_obligatorios_100_por_ciento_por_tipo(instancia_real):
 
     assert faltantes == [], f"notas sin un campo obligatorio de su tipo: {faltantes[:30]}" + (
         f" (+{len(faltantes) - 30} más)" if len(faltantes) > 30 else "")
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="R-5 (framework 1.30.0) renombró el campo `topics:` de la nota de paper a `facets:`. La "
+           "instancia de referencia sigue en Almagesto v1.11.0, donde TODAS las notas traen "
+           "`topics` y NINGUNA `facets` (medido: 908/908 y 0/908) — el deploy 1.11.0→1.30.x todavía "
+           "no corrió. strict=True: cuando este test empiece a pasar, el deploy se hizo y hay que "
+           "borrar el xfail. Mientras tanto el lint bloquea el campo viejo (categoría `topics:` "
+           "schema pre-R-5), que es el detector que hace visible la brecha.")
+def test_papers_declaran_facets_no_topics(instancia_real):
+    """@inv INV-64 — el campo de facetas de la nota de paper es `facets`; `topics` es el schema
+    pre-R-5, que el lector ya no mira. Aislado del balde de campos obligatorios a propósito: es una
+    brecha de VERSIÓN de la instancia, no un defecto de forma nota por nota."""
+    sin_facets = [p.name for p in sorted(cfg.PAPERS.glob("*.md"))
+                  if "facets" not in cfg.split_fm(p.read_text(encoding="utf-8"))]
+    assert sin_facets == [], f"notas de paper sin `facets:` (schema pre-R-5): {len(sin_facets)}"
 
 
 # ── el hueco documentado que SÍ falla hoy: se escribe como test del hallazgo, no se esconde ──────

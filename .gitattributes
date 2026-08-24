@@ -8,7 +8,7 @@ vault/raw/pdfs/**/*.pdf filter=lfs diff=lfs merge=lfs -text
 #     git config merge.ours.driver true
 vault/config/objective.yaml merge=ours
 vault/config/stars.yaml     merge=ours
-vault/config/topics.yaml    merge=ours
+vault/config/themes.yaml    merge=ours
 vault/STATUS.md             merge=ours
 vault/wiki/index.md         merge=ours
 vault/wiki/log.md           merge=ours

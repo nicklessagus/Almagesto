@@ -523,6 +523,7 @@ def main(argv=()) -> int:
     not_evaluated: list = []
     anchor_bodies: dict = {}           # {archivo: texto} de TODA nota de entidad/query — D-47
     old_registro: list = []            # registros con la clave `busqueda:` (schema pre-D-28)
+    old_facets: list = []              # notas de paper con `topics:` (schema pre-R-5)
     cadena_incompleta: list = []       # (slug, "se cortó en <paso>") — D-57
     stars_slugs = {m.get("slug") for m in cfg.load_stars().values() if isinstance(m, dict)}
     verif_blocks: list = []            # (archivo, fecha del bloque|None) — notas CON bloque de verify
@@ -683,6 +684,13 @@ def main(argv=()) -> int:
         if in_dir(f, "papers") and "paper" not in tags and not err:   # con YAML roto ya se reportó
             fm_broken.append((stem, "nota en `papers/` sin `tags: [paper]` → evade TODOS los "
                                     "chequeos de su tipo (retracción, PDF, role, citas)"))
+        # R-5: `topics:` era a la vez la faceta de la lente y el tema-sujeto. El renombre lo
+        # partió en `facets:` y `themes.yaml`, y el campo viejo quedó SIN LECTOR: la nota
+        # conserva el dato y el sistema no lo ve. Mismo trato que `busqueda:` pre-D-28 —
+        # detector bloqueante, nunca lector tolerante.
+        if in_dir(f, "papers") and "topics" in fm and not err:
+            old_facets.append((stem, "usa `topics:` (schema pre-R-5) — el campo vigente es "
+                                     "`facets:`; renombrarlo (el lector ya no mira `topics`)"))
         if "star" in tags:
             body = text.split("---", 2)[-1] if text.startswith("---") else text
             # `P_rot_days` nulo NO es de por sí un campo incompleto (#70): el frontmatter es espejo
@@ -1421,6 +1429,7 @@ def main(argv=()) -> int:
                          ("disputes en el schema viejo (planets[].disputes[]) — el lint ya no las lee", old_disputes),
                          ("Juicio de triage en build/<slug>/triage.json (pre-1.9.0) — el lector ya no lo mira", legacy_triage),
                          ("⛔ Registro con `busqueda:` (schema viejo pre-D-28) — el lector ya no lo lee", old_registro),
+                         ("⛔ Nota de paper con `topics:` (schema viejo pre-R-5) — el campo vigente es `facets:`", old_facets),
                          ("⛔ Identidad duplicada: dos notas del mismo trabajo (mismo doi/arxiv_id)", identidad_dup),
                          ("`role` fuera del vocabulario (fundacional/aplicacion/arbitro)", bad_roles),
                          ("⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)", impl_leaks),
@@ -1467,7 +1476,7 @@ def main(argv=()) -> int:
     n_block = sum(len(x) for x in (not_evaluated, broken, fm_broken, retracted, orphans,
                                    contradictions, mass_issues, dangling_thesis, dangling_disputes,
                                    bad_roles, bad_disputes, old_disputes, legacy_triage,
-                                   old_verif_template, old_registro, identidad_dup,
+                                   old_verif_template, old_registro, old_facets, identidad_dup,
                                    prosa_retractada))
     if args.cierre:
         n_block += len(stale_pairs)   # R-1: en el cierre de una operación, un par vencido frena

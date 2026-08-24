@@ -1921,6 +1921,29 @@ def test_registro_schema_viejo_detectado(toy_vault, capsys):
     assert "pre-D-28" in rep or "schema viejo" in rep
 
 
+def test_topics_en_nota_de_paper_es_schema_viejo(toy_vault, capsys):
+    """R-5: `topics:` nombraba a la vez la faceta de la lente y el tema-sujeto; el renombre lo
+    partió en `facets:` (nota de paper) y `themes.yaml`. El campo viejo quedó **sin lector**: una
+    nota que lo trae tiene sus facetas MUDAS y hasta hoy ningún chequeo lo decía. Es el mismo modo
+    de falla que `busqueda:` (pre-D-28) y se trata igual — detector bloqueante, nunca lector
+    tolerante (@inv INV-13)."""
+    mk_note(cfg.PAPERS, "2020Viejo",
+            {"tags": ["paper"], "bibcode": "2020Viejo", "topics": ["rv", "activity"]})
+    link_from_index(toy_vault, "2020Viejo")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 1, "una nota con el campo pre-R-5 tiene que bloquear"
+    assert "2020Viejo" in rep and "topics" in rep and "facets" in rep
+
+
+def test_facets_vigente_no_dispara_el_detector(toy_vault, capsys):
+    """Control de cordura: el campo vigente no puede caer en el detector del viejo."""
+    mk_note(cfg.PAPERS, "2020Nuevo",
+            {"tags": ["paper"], "bibcode": "2020Nuevo", "facets": ["rv"]})
+    link_from_index(toy_vault, "2020Nuevo")
+    rc, rep = run_lint_reporte(capsys)
+    assert "2020Nuevo" not in rep or "pre-R-5" not in rep
+
+
 def test_cadena_cortada_nombra_el_paso(toy_vault, capsys):
     """INV-91: el registro dice qué pasos corrieron; el lint compara contra el orden canónico y
     **nombra el paso donde se cortó**. Sin esto, una cadena abortada a la mitad deja la bóveda con

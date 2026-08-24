@@ -21,9 +21,9 @@ description: >
   "core". Reescribí esto para tu propio tema.
 
 # ─── Clasificador de relevancia ──────────────────────────────────────────────
-# Un paper de ADS es "relevante" (= core) si matchea ≥1 topic (regex sobre
+# Un paper de ADS es "relevante" (= core) si matchea ≥1 faceta (regex sobre
 # título+abstract+keywords, case-insensitive) y su doctype no es ruido.
-# Cada topic: nombre canónico → patrón regex de Python. Esto ES lo que define
+# Cada faceta: nombre canónico → patrón regex de Python. Esto ES lo que define
 # tus papers core: ajustá los patrones a tu objetivo.
 relevance:
   # Comillas SIMPLES y una línea por patrón: YAML deja el string literal (sin
