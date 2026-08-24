@@ -800,6 +800,37 @@ def reclassify_for_theme(recs: list, meta: dict) -> tuple[list, list]:
     return entraron, salieron
 
 
+def gate_cited_by_corpus(recs: list, index: dict | None = None) -> list:
+    """**Puerta 1** de D-26: los registros que la regla del tema NO hizo core pero que **el corpus
+    cita**, propuestos como candidatos del triage.
+
+    ⛔ Propone y **no clasifica** (resolución §4.3 del plan): no toca `relevant` de nadie. Si
+    clasificara, ser core dejaría de ser función de `(paper, lente)` y se rompería INV-24 — y sería
+    encima la clase de regla que nadie puede auditar después, porque depende del estado del corpus
+    en el momento de la corrida.
+
+    Es la señal que ninguna regex puede expresar: Hyvärinen tiene ~30k citas, casi todas de fMRI y
+    finanzas; lo que lo vuelve **tuyo** es que **tu** gente lo cita.
+
+    Se consulta con **todas** las llaves del registro (bibcode, id de OpenAlex): el corpus pudo
+    citarlo por cualquiera de las dos fuentes y preguntar por una sola da un falso negativo.
+    Sin índice construido, no aporta nada — no inventa candidatos ni rompe la cadena.  @inv INV-88"""
+    import citation_index
+    idx = index if index is not None else citation_index.load()
+    if not (idx or {}).get("citas"):
+        return []
+    props = []
+    for r in recs:
+        if r.get("relevant"):
+            continue
+        llaves = [k for k in (r.get("bibcode"),
+                              (r.get("openalex_id") or "").rsplit("/", 1)[-1] or None) if k]
+        citadores = citation_index.cited_by_corpus(llaves, idx)
+        if citadores:
+            props.append({**r, "via": "citado-por-corpus", "citado_por": citadores})
+    return props
+
+
 def classify_record(r: dict) -> tuple[list[str], bool]:
     """`classify` sobre un registro YA persistido en ads.json (title es string, no lista como en
     la respuesta cruda de ADS). Los `via: manual` son core por decisión del usuario (override de
@@ -1205,6 +1236,17 @@ def main() -> int:
                   f"python scripts/triage.py {args.slug}")
         recs += chained
         rel = [r for r in recs if r["relevant"]]
+
+    # Puerta 1 de D-26: lo que la regla del tema dejó afuera pero el corpus CITA se propone al
+    # triage (nunca se vuelve core solo — §4.3). Va después del chaining para juzgar `recs` ya
+    # completo, y sólo en temas: en una estrella la señal la da el chaining anclado al full-text.
+    if head.get("kind") == "theme":
+        ya_prop = {c.get("bibcode") for c in candidatos}
+        p1 = [c for c in gate_cited_by_corpus(recs) if c.get("bibcode") not in ya_prop]
+        if p1:
+            candidatos += p1
+            cfg.print_seguro(f"  puerta 1 (lo cita tu corpus): +{len(p1)} candidatos al triage "
+                             f"— no son core, los juzgás vos: python scripts/triage.py {args.slug}")
 
     recs.sort(key=lambda r: r.get("citation_count") or 0, reverse=True)
     cfg.print_seguro(f"  total: {len(recs)} registros, {len(rel)} relevantes")

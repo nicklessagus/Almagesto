@@ -1538,3 +1538,66 @@ def test_puerta_2_con_pocas_citas_dice_otra_cosa(toy_vault, monkeypatch):
     _, core, why = qa.classify_theme(_rec("Independent component analysis", citas=3),
                                      _tema(fundacional_min_citas=1000))
     assert core is False and "no se pudo evaluar" not in why
+
+
+def test_puerta_1_propone_lo_que_el_corpus_cita_y_no_lo_clasifica(toy_vault, monkeypatch):
+    """Puerta 1 de D-26 (§4.3 del plan): un paper que la query trajo, que la regla del tema **no**
+    hace core, pero que **tu corpus cita**, pasa a CANDIDATO del triage — nunca a core.
+
+    Es la señal que ninguna regex puede expresar: Hyvärinen tiene ~30k citas casi todas de fMRI y
+    finanzas, y lo que lo vuelve tuyo es que tu gente lo cita. Y es lo que INV-24 obliga a que sea
+    una propuesta: si clasificara, ser core dejaría de ser función de `(paper, lente)`."""
+    recs = [
+        dict(_rec("Independent component analysis of EEG"), bibcode="A", doi="10.1/a",
+             relevant=False, why_excluded="ninguna puerta abre (ni fundacional ni lente astro)"),
+        dict(_rec("Otro que nadie cita"), bibcode="B", doi="10.1/b",
+             relevant=False, why_excluded="sin la faceta propia del tema"),
+        dict(_rec("Ya es core"), bibcode="C", relevant=True, why_excluded=None),
+    ]
+    idx = {"citas": {"A": ["2020Mio", "2021Mio"]}}
+    props = qa.gate_cited_by_corpus(recs, index=idx)
+    assert [p["bibcode"] for p in props] == ["A"]
+    assert props[0]["via"] == "citado-por-corpus"
+    assert props[0]["citado_por"] == ["2020Mio", "2021Mio"]
+    assert recs[0]["relevant"] is False, "la puerta 1 PROPONE: no puede volver core a nadie"
+
+
+def test_puerta_1_busca_por_todas_las_llaves_del_paper(toy_vault):
+    """El corpus puede citarlo por bibcode (vía ADS) o por id de OpenAlex (vía OpenAlex): preguntar
+    por una sola llave da un falso negativo. Se prueban todas las que el registro tenga."""
+    recs = [dict(_rec("x"), bibcode="A", doi="10.1/a", openalex_id="https://openalex.org/W9",
+                 relevant=False, why_excluded="x")]
+    props = qa.gate_cited_by_corpus(recs, index={"citas": {"W9": ["2020Mio"]}})
+    assert [p["bibcode"] for p in props] == ["A"]
+
+
+def test_puerta_1_sin_indice_no_propone_nada(toy_vault):
+    """Sin `build/citation_index.json` la puerta simplemente no aporta — no inventa candidatos ni
+    rompe la cadena."""
+    recs = [dict(_rec("x"), bibcode="A", relevant=False, why_excluded="x")]
+    assert qa.gate_cited_by_corpus(recs, index={}) == []
+
+
+def test_main_puerta_1_deja_el_candidato_en_ads_json(toy_vault, toy_classifier, no_sleep,
+                                                     monkeypatch, capsys):
+    """Integración: la cadena consulta el índice y **persiste** el candidato con su `via` y quiénes
+    lo citan. Sin este test la puerta existía sin estar cableada."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ica",
+                                         "query": 'abs:"independent component"',
+                                         "facet": "independent component"}})
+    (toy_vault.ROOT / "build").mkdir(parents=True, exist_ok=True)
+    (toy_vault.ROOT / "build" / "citation_index.json").write_text(
+        json.dumps({"citas": {"2005eegX....1X": ["2020Mio", "2021Mio"]}}), encoding="utf-8")
+    eeg = dict(rec("2005eegX....1X", title="Independent component analysis of EEG"),
+               citation_count=12)
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False: [eeg])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    assert run_main(monkeypatch, ["ica", "--theme"]) == 0
+    data = json.loads((toy_vault.ROOT / "build" / "ica" / "ads.json").read_text())
+    cand = {c["bibcode"]: c for c in data["candidates"]}
+    assert "2005eegX....1X" in cand, "el que cita el corpus tiene que llegar al triage"
+    assert cand["2005eegX....1X"]["via"] == "citado-por-corpus"
+    assert cand["2005eegX....1X"]["citado_por"] == ["2020Mio", "2021Mio"]
+    assert all(not r["relevant"] for r in data["records"]), "la puerta 1 no vuelve core a nadie"
+    assert "puerta 1" in capsys.readouterr().out
