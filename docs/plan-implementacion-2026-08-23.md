@@ -839,10 +839,13 @@ issue**; el lint no puede salirse de los presupuestos declarados sin que eso sea
 Lo que el plan **asume** y el usuario todavía no dijo (nada de esto se resuelve solo: se pregunta
 al llegar al issue):
 
-- **R-1 · Cómo se distinguen los dos momentos de D-4.** El plan propone `lint.py --cierre` (los
-  pares vencidos cuentan para el exit sólo ahí; sin flag, backlog). La decisión D-4 fija las dos
-  severidades pero no el mecanismo. Alternativa: que la distinción viva sólo en los skills (el
-  lint siempre reporta backlog y el skill lo trata como gate). Elegir antes del issue 1.2.
+- **R-1 · Cómo se distinguen los dos momentos de D-4.** ✅ **RESUELTA (2026-08-24): `lint.py
+  --cierre`.** Sin el flag, los pares vencidos reportan como backlog (exit 0 — la pasada
+  periódica); con el flag cuentan para el exit ≠ 0, y los skills de cierre lo invocan así. Se
+  eligió sobre "sólo en los skills" porque deja la severidad en **un** punto testeable en vez de
+  en prosa de skill (un skill que se olvida no deja rastro), y sobre "siempre bloqueante" porque
+  esa opción deja la bóveda en rojo durante un ingest en curso. D-44 intacto: el commit nunca se
+  frena. Vale para el issue 1.2.
 - **R-2 · La forma dura de `extra_core` (D-58).** Exigir lista de mapas rompe el atajo manual
   `extra_core: [bibcode]` que el propio triage receta hoy. ¿Forma dura con detector (regla "sin
   lectores tolerantes") o el escalar como azúcar con `via: usuario` implícito? El plan asume la

@@ -85,6 +85,7 @@ Requiere `pytest` (dev-only, no está en `requirements.txt`; los scripts no lo n
 | `test_check_retractions.py` | parseo Crossref (`updated-by`, fechas), fallback por título, estampado idempotente de `retracted` y `corrections`, exit codes | `requests` falso |
 | `test_ingest_topic.py` | despacho por `source`, validaciones de `sources:`, flujo `pending`, aviso de fuente ya descartada, copia de PDFs, orden de la cadena ads | `run()` y `make_notes.*` grabadores |
 | `test_ingest_star.py` | orden canónico de la cadena de estrellas, aborto al primer fallo, retracción ≠ fallo, hand-off que nombra los pasos salteables | `run()` grabador |
+| `test_trace_invariants.py` | recolector de trazabilidad `@inv`: registro canónico desde `docs/contrato.md` §3, la marca sólo en comentario/docstring (adversarios: mención en prosa, `@inv` dentro de un string literal, auto-marcado del propio recolector), marca huérfana bloqueante, ratchet, contrato ilegible ⇒ rc 2 sin cero inventado | repo de juguete |
 | `test_bench_verify.py` | extracción de pares (excluye blockquotes/fences/bloque de verificación), siembra por rotación (sin falsos-falsos), determinismo byte a byte, puntaje | puro FS |
 
 ### `tests/poblada/` — la capa de corpus (tiers 1 y 2)

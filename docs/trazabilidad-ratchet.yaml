@@ -1,0 +1,34 @@
+# Ratchet de trazabilidad requisito ↔ código.
+#
+# QUÉ ES ESTO. `docs/contrato.md` §3 enuncia 91 invariantes. Hoy **ninguno** lleva la marca `@inv`
+# en el código, así que exigir cobertura 0-sin-marcar sería rojo permanente — y un rojo permanente
+# se deja de mirar, que es el modo de falla que este mecanismo existe para evitar. Los números de
+# abajo son DEUDA MEDIDA, no un objetivo alcanzado, y el sentido de la flecha importa: **el techo
+# sólo puede bajar**.
+#
+#   - conteo por ENCIMA del techo → `trace_invariants.py` sale 1. Alguien agregó invariantes al
+#     contrato sin marcarlos, o borró marcas: hay que mirarlo antes de que se pierda en el ruido.
+#   - conteo por DEBAJO → pasa, y el artefacto pide bajar el techo acá. Un techo viejo que nadie
+#     ajusta deja de ser ratchet y se vuelve un número decorativo.
+#   - el techo NUNCA se sube para poner verde un rojo. Sólo se justifica si el contrato incorporó
+#     invariantes nuevos legítimamente sin marcar todavía — y ese commit tiene que decir por qué.
+#
+# CÓMO SE BAJA. Cada issue del plan (`docs/plan-implementacion-2026-08-23.md`) declara qué
+# invariante cierra; al cerrarlo se pone `@inv INV-nn` en la función que lo implementa y en el test
+# que lo prueba, se corre `python scripts/trace_invariants.py` y se copian acá los conteos nuevos
+# con la fecha.
+#
+# EL BACKLOG QUE ESTOS NÚMEROS ESCONDEN. Buena parte de los 91 ya están en estado "garantizado y
+# medido" en el contrato: tienen implementación y test, sólo que la relación vive en prosa (la
+# columna "cómo se verifica" nombra los experimentos de la 8ª auditoría, no símbolos ni tests). Esa
+# **pasada retroactiva de marcado** es trabajo aparte del plan y todavía no se hizo: hasta que
+# corra, el techo alto NO significa que el sistema no esté probado, significa que el mapa no
+# existe. Ver `vault/STATUS.md`.
+
+medido_en: "2026-08-24"
+almagesto_version: "1.23.1"
+contrato_invariantes: 91
+
+techos:
+  sin_marca: 91   # medido: 2026-08-24 — ninguna marca `@inv` en el código todavía.
+  sin_test: 91    # medido: 2026-08-24 — ídem.

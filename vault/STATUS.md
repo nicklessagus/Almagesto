@@ -256,14 +256,53 @@ relación registrada en un artefacto consultable —matriz en `docs/`, o marcas 
 script recolecte—. Decidir la forma antes de arrancar la Tanda 0, porque si se agrega después hay que
 reconstruirla de memoria, que es exactamente el modo de falla que este repo ya registró tres veces.
 
-### Lo primero de mañana
-1. Resolver los **11 puntos de decisión** (R-1…R-11) del §14 del plan. Los que bloquean antes: el
-   mecanismo de las **dos severidades** de D-4 (Fable propone `lint.py --cierre`, sin decidir), la
-   **colisión de nombres `topics`** —faceta vs tema-sujeto— que D-26 **agrava** y conviene resolver
-   antes del issue de las tres puertas, y **quién estampa `cadena`** cuando un script corre suelto.
-2. Decidir la **forma de la trazabilidad** (arriba).
-3. Decidir el **push**.
-4. Recién ahí, **Tanda 0**.
+### ✅ Decidido el 2026-08-24 (sesión siguiente)
+
+| Punto | Decisión |
+|---|---|
+| **Forma de la trazabilidad** | **marcas en el código + recolector**. Cada función que implementa un invariante lleva la marca `INV-nn` y cada test declara el INV que cubre; `scripts/trace_invariants.py` recolecta y genera `docs/trazabilidad.md`, y **falla** si un INV de `contrato.md` §3.K no tiene implementación NI test. El mapa se regenera, no se edita a mano — el modo de falla de la matriz manual (desincronizarse en silencio) es justo el que este repo ya registró tres veces. |
+| **Push de los tres documentos** | **no pushear todavía**. Los commits siguen locales; se trabaja y se commitea local hasta que el usuario decida si van al repo público, a uno privado, o fuera de git. |
+| **R-1 · las dos severidades de D-4** | **`lint.py --cierre`**. Sin el flag, los pares vencidos reportan como backlog (exit 0 — la pasada periódica); con el flag cuentan para el exit ≠ 0. Los skills de cierre lo invocan con el flag. La distinción vive en **un** punto testeable, no en prosa de skill. D-44 intacto: el commit nunca se frena. |
+
+**Siguen abiertos** R-2…R-11 (§14 del plan); los que bloquean antes son **R-5** (colisión de nombres
+`topics`, antes del issue 7.3) y **R-6** (quién estampa `cadena`, en el issue 2.2).
+
+### ✅ Issue 0.0 — el recolector de trazabilidad (2026-08-24)
+
+`scripts/trace_invariants.py` + `tests/test_trace_invariants.py` (16 tests) +
+`docs/trazabilidad-ratchet.yaml`. Genera `docs/trazabilidad.md`, el mapa consultable que el usuario
+pidió al cerrar la sesión anterior.
+
+**La marca:** `@inv INV-nn` (varios separados por coma) en un **comentario** o **docstring**, en
+`scripts/` (implementación) o `tests/` (prueba). Se asocia al `def`/`class` más cercano hacia
+arriba, así el mapa nombra el símbolo y no sólo el archivo.
+
+**Las tres puertas:** `0` limpio · `1` bloqueante (marca **huérfana** —apunta a un `INV-nn` que el
+contrato no declara, mismo modo de falla que un `thesis_links` sin destino—, techo del ratchet
+superado, o `--check` con el artefacto commiteado viejo) · `2` **no evaluado** (el contrato no se
+pudo leer → no se reporta "0 sin marcar": el cero inventado que D-43 prohíbe).
+
+**Dos bugs reales encontrados en la primera corrida**, los dos de la misma familia —afirmar
+cobertura que nadie escribió— y los dos ahora con test:
+1. Marcas dentro de **string literals** (el código de juguete que los tests escriben a disco) se
+   recolectaban: 7 "pruebas" de INV-01 que no lo tocan. Fix: `lineas_declarativas()` (tokenize para
+   comentarios + AST para docstrings) restringe dónde cuenta una marca.
+2. Los **ejemplos de sintaxis** de la propia doc se auto-marcaban (el recolector se adjudicaba
+   INV-87 e INV-90). Convención: en docs y docstrings la sintaxis se escribe con placeholders
+   `nn`/`mm`, nunca con un id real.
+
+**Ratchet arrancado en 91/91** (`sin_marca` y `sin_test`), medido, sólo puede bajar. ⚠ Ese número
+**no** significa que el sistema no esté probado: buena parte de los 91 ya están *garantizado y
+medido* en el contrato, pero la relación vive en prosa (la columna "cómo se verifica" nombra los
+experimentos de la 8ª auditoría, no símbolos ni tests). **La pasada retroactiva de marcado es
+trabajo aparte y no se hizo** — cada tanda del plan baja el techo con lo que cierra.
+
+Suite tier 0: **667 verdes en 2,4 s** (presupuesto ≤ 2,5 s).
+
+### Lo que sigue
+**Tanda 0** — issues 0.1 (`check_retractions` exit 0/1/2), 0.2 (helper atómico `write_text_atomic`),
+0.3 ("no evaluado" + lente vacía), 0.4 (medición del umbral de legibilidad sobre los 672 fulltexts
+reales). Cada uno declara su `@inv` y baja el techo del ratchet.
 
 ## 🔜 Cola de pendientes (al 2026-08-23)
 
