@@ -36,7 +36,7 @@ MAILTO = "almagesto@example.org"   # se sobreescribe con `--mailto` desde el orq
 PER_PAGE = 200                     # máximo de OpenAlex
 BATCH = 50                         # DOIs por request en el filtro `doi:a|b|c`
 TIMEOUT = 60
-MAX_ATTEMPTS = 5      # OpenAlex 504ea; medido en vivo el 2026-08-24 (ver `_get`)
+MAX_ATTEMPTS = 5      # OpenAlex 504ea a rachas; medido en vivo el 2026-08-24 (ver `_get`)
 BACKOFF_S = 2.0
 SELECT = ("id,doi,title,publication_year,referenced_works,referenced_works_count,"
           "cited_by_count,authorships,primary_location,abstract_inverted_index,type")
@@ -114,8 +114,9 @@ def _get(params: dict) -> dict:
     """GET con reintento ante 5xx/429 y espera creciente.
 
     Medido en vivo el 2026-08-24: OpenAlex devolvió **504 en todos** sus endpoints —incluido el
-    raíz— una hora después de contestar bien. Un índice de citas que muere en el primer hipo no se
-    puede construir. Los **4xx no se reintentan**: son la query mal armada, y repetirla gasta cuota
+    raíz, o sea que no era el peso de la query— durante unos minutos, y volvió solo poco después.
+    No es una caída: son **rachas**, y son el caso normal, no la excepción. Un índice de citas que
+    muere en el primer hipo no se puede construir. Los **4xx no se reintentan**: son la query mal armada, y repetirla gasta cuota
     para el mismo error. Si el servicio no cede, **levanta**: devolver `[]` sería indistinguible de
     "no hay resultados", que es el falso limpio que INV-69/INV-87 prohíben."""
     params = {**params, "mailto": MAILTO, "select": SELECT}
