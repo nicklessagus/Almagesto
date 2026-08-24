@@ -24,9 +24,11 @@ refresca un snapshot existente — refrescar NEA es decisión explícita, no sid
 en el script puntual.
 
 `check_retractions --slug` cierra la cadena chequeando SÓLO los papers de este ingest (el
-barrido Crossref completo de la bóveda es pasada periódica — skill maintain); su exit 1
-significa "detectó papers retractados" (revisar las notas marcadas; el lint lo surface como
-bloqueante), NO un fallo de la cadena.
+barrido Crossref completo de la bóveda es pasada periódica — skill maintain). Sus tres códigos se
+distinguen acá (issue 0.1): **1** = detectó papers retractados (revisar las notas marcadas; el lint
+lo surface como bloqueante), NO un fallo de la cadena; **2** = el chequeo **no pudo correr**
+(precondición ausente o Crossref caído) — también aborta, porque la cadena no certifica lo que no
+miró, pero con el mensaje honesto.
 
 La extracción LLM posterior (leer fulltext, poblar notas, síntesis, matriz) NO es de este
 script: la hace el agente siguiendo el skill ingest-star.
@@ -63,9 +65,17 @@ def main() -> int:
                      "re-corré ingest_star.py (lo ya bajado no se re-baja).")
         if script == "query_ads.py":       # checkpoint ANTES del primer paso que gasta red y disco
             expansion_guard(args.slug, args.yes)
-    if run("check_retractions.py", "--slug", args.slug):
+    retr_rc = run("check_retractions.py", "--slug", args.slug)
+    if retr_rc == 1:
         sys.exit("check_retractions detectó papers retractados — revisá las notas marcadas "
                  "(el lint las surface como bloqueante).")
+    if retr_rc:
+        # rc 2 (issue 0.1) — el chequeo NO corrió: precondición ausente o Crossref caído. Abortar
+        # igual, pero sin la frase falsa: mandar al operador a "revisar las notas marcadas" cuando
+        # no hay ninguna marcada le hace buscar un problema inexistente Y deja el real —la frontera
+        # dura sin verificar— invisible.
+        sys.exit(f"check_retractions no pudo chequear (rc={retr_rc}) — la cadena no certifica lo "
+                 "que no miró. Revisá el motivo que imprimió arriba y re-corré (es idempotente).")
     # El hand-off nombra los pasos SALTEABLES con su número del skill: son los que no dejan rastro
     # si se omiten. El contraste (3b) entró con #72 y es el de más apalancamiento — sin él la
     # síntesis se escribe sobre un solo paper por eje.

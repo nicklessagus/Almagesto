@@ -30,5 +30,5 @@ almagesto_version: "1.23.1"
 contrato_invariantes: 91
 
 techos:
-  sin_marca: 91   # medido: 2026-08-24 — ninguna marca `@inv` en el código todavía.
-  sin_test: 91    # medido: 2026-08-24 — ídem.
+  sin_marca: 90   # medido: 2026-08-24 — issue 0.1 marcó INV-87 (check_retractions.main).
+  sin_test: 90    # medido: 2026-08-24 — ídem (test_errores_sin_retractados_exit_2).

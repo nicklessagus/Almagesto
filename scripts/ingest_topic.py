@@ -84,6 +84,20 @@ def run(script: str, *args: str) -> int:
                           cwd=cfg.ROOT / "scripts").returncode
 
 
+def _cierre_retracciones(slug: str) -> None:
+    """Cierre de cadena: chequeo de retracciones de ESTE ingest, distinguiendo los tres códigos
+    (issue 0.1). `1` = hay retractados (revisar las notas marcadas). `2` = el chequeo **no pudo
+    correr** — aborta igual, porque la cadena no certifica lo que no miró, pero sin la frase falsa
+    "detectó papers retractados", que mandaba al operador a buscar marcas inexistentes."""
+    rc = run("check_retractions.py", "--slug", slug)
+    if rc == 1:
+        sys.exit("check_retractions detectó papers retractados — revisá las notas marcadas "
+                 "(el lint las surface como bloqueante).")
+    if rc:
+        sys.exit(f"check_retractions no pudo chequear (rc={rc}) — la cadena no certifica lo que no "
+                 "miró. Revisá el motivo que imprimió arriba y re-corré (es idempotente).")
+
+
 # ── guardia de expansión (#37) ───────────────────────────────────────────────
 # La cadena es idempotente respecto de NO PISAR, pero no respecto del ALCANCE: un re-run puede
 # convertirse en una expansión masiva sin ningún checkpoint humano (caso real: re-correr au_mic
@@ -170,9 +184,7 @@ def ingest_ads(slug: str, yes: bool = False) -> None:
             expansion_guard(slug, yes)
     # cierre: sólo los papers de ESTE ingest (el barrido completo es pasada periódica — maintain);
     # exit 1 acá significa "detectó papers retractados", no un fallo de la cadena
-    if run("check_retractions.py", "--slug", slug):
-        sys.exit("check_retractions detectó papers retractados — revisá las notas marcadas "
-                 "(el lint las surface como bloqueante).")
+    _cierre_retracciones(slug)
 
 
 def ingest_offads(slug: str, meta: dict, force: bool) -> None:
@@ -326,9 +338,7 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
     # Con extra_core también corre: los papers ADS del tema mixto traen DOI. Sólo los papers de
     # ESTE tema (--slug: sources + extra_core); el barrido completo es pasada periódica (maintain).
     if any(s.get("doi") for s in sources) or extra:
-        if run("check_retractions.py", "--slug", slug):
-            sys.exit("check_retractions detectó papers retractados — revisá las notas marcadas "
-                     "(el lint las surface como bloqueante).")
+        _cierre_retracciones(slug)
 
 
 def main() -> int:

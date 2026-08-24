@@ -65,6 +65,20 @@ def test_retraccion_detectada_no_es_fallo_de_cadena(toy_vault, fake_run, monkeyp
     assert "retractados" in str(exc.value) and "falló" not in str(exc.value)
 
 
+def test_ingest_star_distingue_rc2(toy_vault, fake_run, monkeypatch):
+    """Issue 0.1 — el mensaje deja de mentir. `check_retractions` rc 2 = "no pude chequear"
+    (precondición ausente o Crossref caído), NO "detectó papers retractados": hasta 1.23.1
+    `ingest_star` traducía CUALQUIER rc≠0 a esa frase, así que el operador salía a revisar notas
+    marcadas que no existían mientras la frontera dura quedaba sin verificar. Aborta igual —la
+    cadena no certifica lo que no miró— pero diciendo la verdad."""
+    fake_run.rcs["check_retractions.py"] = 2
+    with pytest.raises(SystemExit) as exc:
+        run_main(monkeypatch)
+    msg = str(exc.value)
+    assert "retractados" not in msg
+    assert "no pudo" in msg or "no pude" in msg
+
+
 # ── guardia de expansión (#37) ───────────────────────────────────────────────
 
 def write_core(toy_vault, slug, n_core, via="chain:citations", start=0):

@@ -8,9 +8,9 @@
 ## Resumen
 
 - Invariantes en el contrato: **91**
-- Con implementación marcada: **0**
-- Con test marcado: **0** (techo `sin_test`: 91, hoy 91)
-- Sin ninguna marca: **91** (techo `sin_marca`: 91)
+- Con implementación marcada: **1**
+- Con test marcado: **1** (techo `sin_test`: 90, hoy 90)
+- Sin ninguna marca: **90** (techo `sin_marca`: 90)
 - Marcas huérfanas: **0**
 
 ## El mapa
@@ -103,7 +103,7 @@
 | **INV-84** | P0 | HUECO (D-19) | — | — |
 | **INV-85** | P1 | HUECO (D-41, D-45, D-46) | — | — |
 | **INV-86** | P0 | HUECO (D-42) | — | — |
-| **INV-87** | P0 | HUECO (D-43) | — | — |
+| **INV-87** | P0 | HUECO (D-43) | `scripts/check_retractions.py:356` · `main` | `tests/test_check_retractions.py:525` · `test_errores_sin_retractados_exit_2` |
 | **INV-88** | P1 | HUECO (D-25, D-26, D-27) | — | — |
 | **INV-89** | P1 | HUECO (D-28) | — | — |
 | **INV-90** | P1 | HUECO (D-53) | — | — |
