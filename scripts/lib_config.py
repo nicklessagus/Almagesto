@@ -20,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.23.1"
+ALMAGESTO_VERSION = "1.30.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -188,6 +188,38 @@ def load_objective() -> dict:
     return data if isinstance(data, dict) else {}
 
 
+def objective_error() -> str | None:
+    """Motivo por el que `objective.yaml` no se puede usar como lente, o `None` si está sano.
+
+    `load_objective` colapsa tres estados en dos: archivo ausente (`RuntimeError`) y **todo lo
+    demás** (YAML roto, YAML válido con forma equivocada, objetivo legítimamente vacío) en el mismo
+    `{}` mudo. Esa fusión es el HUECO-1 / INV-80: el clasificador seguía corriendo con una regla
+    que nadie escribió, el registro guardaba esa lente vacía como si fuera la vigente, y el lint no
+    decía nada.
+
+    Esta función separa los estados **para el llamador estricto** —`query_ads`, que rehúsa operar,
+    y el lint, que lo reporta como *no evaluado*— sin cambiarle la firma a `load_objective`: sus
+    llamadores tolerantes siguen igual, que es lo que hace que el lint no se muera ante una bóveda
+    rara.  @inv INV-80"""
+    if not OBJECTIVE_YAML.exists():
+        return f"{OBJECTIVE_YAML} no existe (es el archivo que define el objetivo de la bóveda)"
+    try:
+        with open(OBJECTIVE_YAML, encoding="utf-8") as fh:
+            data = yaml.safe_load(fh)
+    except yaml.YAMLError as exc:
+        motivo = " ".join(str(exc).split())
+        return (f"{OBJECTIVE_YAML} no parsea como YAML: {motivo}. El error más probable es un `:` "
+                "sin comillas dentro de una regex de `relevance.topics` — entrecomillá el patrón.")
+    except OSError as exc:
+        return f"{OBJECTIVE_YAML} no se pudo leer: {exc}"
+    if data is None:
+        return f"{OBJECTIVE_YAML} está vacío — no hay lente con la que clasificar"
+    if not isinstance(data, dict):
+        return (f"{OBJECTIVE_YAML} parsea, pero no a un mapa (es {type(data).__name__}) — la lente "
+                "tiene que ser un mapa con `name`/`relevance`")
+    return None
+
+
 # Línea delimitadora de frontmatter: `---` SOLA en su propia línea (con espacio final tolerado).
 # `re.MULTILINE` para que `^`/`$` anclen a cada línea, no a los bordes del string entero.
 _FM_DELIM_RE = re.compile(r"^---[ \t]*$", re.MULTILINE)
@@ -347,6 +379,58 @@ def sort_by_citation_rate(recs, now_year: int | None = None) -> list:
 
 # ── registro de ingesta por sujeto (#51/#64) ─────────────────────────────────
 
+# ── escritura atómica: el ÚNICO writer del repo (D-53 / INV-90) ──────────────────────────────────
+
+def write_text_atomic(path: Path, text: str, *, encoding: str = "utf-8") -> None:
+    """Publica `text` en `path` sin dejarlo nunca a medio escribir.  @inv INV-90
+
+    Se escribe primero a un temporal en el **mismo directorio** (mismo filesystem, condición para
+    que el rename sea atómico en POSIX) y se publica con `os.replace`, que sustituye el archivo de
+    una sola vez: o está el viejo entero, o el nuevo entero, nunca la mitad.
+
+    ⚠ Por qué NO alcanza "respaldar el original y restaurar en el `except`": ese patrón sólo cubre
+    el corte que llega como **excepción**. Ante un `SIGKILL` o un corte de energía no corre ningún
+    `except` y el archivo queda truncado igual.
+
+    El `try/finally` limpia el temporal cuando el fallo ocurre **antes** de publicar — el caso que
+    los writers viejos no cubrían: `save_registro` escribía el tmp fuera de todo `try`, así que un
+    disco lleno a mitad de esa escritura dejaba un `.tmp<pid>` huérfano en `vault/config/`. El
+    archivo real nunca se corrompía; era basura de disco, pero basura que se commitea.
+
+    Medido con `ulimit -f` sobre el writer que más escribe: el `write_text` directo dejaba una nota
+    de 16.071 B en 8.192 B, con 198 de 400 ocurrencias de la extracción LLM —lo MENOS regenerable
+    de la bóveda— desaparecidas sin aviso.
+
+    `os.replace` se llama como atributo del módulo `os` para que un test pueda interceptarlo."""
+    _publicar(path, lambda tmp: tmp.write_text(text, encoding=encoding))
+
+
+def write_bytes_atomic(path: Path, data: bytes) -> None:
+    """Gemela binaria de `write_text_atomic` (PDFs).  @inv INV-90
+
+    H-07: un `dest.write_bytes(...)` directo cortado a la mitad deja un PDF TRUNCADO en el destino
+    FINAL (medido: 35 B), y el único chequeo de idempotencia de la cadena es `dest.exists()`: ese
+    PDF roto cuenta como "ya bajado" para siempre, sin forma de reintentarlo salvo borrarlo a mano."""
+    _publicar(path, lambda tmp: tmp.write_bytes(data))
+
+
+def _publicar(path: Path, llenar) -> None:
+    """tmp en el mismo directorio → `llenar(tmp)` → `os.replace`. Limpia el temporal ante cualquier
+    fallo, en las dos mitades (llenando el tmp, y publicando)."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + f".tmp{os.getpid()}")
+    try:
+        llenar(tmp)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
+
+
 def registro_path(slug: str) -> Path:
     return REGISTRO / f"{slug}.yaml"
 
@@ -412,20 +496,8 @@ def save_registro(slug: str, data: dict) -> None:
                 "piso a ciegas: se perderían `busqueda` y las `decisiones` de curación. Arreglalo "
                 "a mano y volvé a correr la operación."
             )
-    tmp = f.with_name(f.name + f".tmp{os.getpid()}")
-    tmp.write_text(
-        yaml.safe_dump(data, sort_keys=False, allow_unicode=True, default_flow_style=False),
-        encoding="utf-8")
-    try:
-        os.replace(tmp, f)
-    except Exception:
-        # publicación fallida: no dejar el temporal como basura silenciosa, pero priorizar
-        # propagar el error real por sobre uno de limpieza.
-        try:
-            tmp.unlink()
-        except OSError:
-            pass
-        raise
+    write_text_atomic(
+        f, yaml.safe_dump(data, sort_keys=False, allow_unicode=True, default_flow_style=False))
 
 
 def load_decisiones(slug: str) -> dict:
@@ -453,6 +525,163 @@ def es_del_carril(d: dict, carril: str) -> bool:
     return (d.get("origen") or "chaining") == carril
 
 
+# Vocabulario CERRADO de `via` en `extra_core` (D-58): de dónde salió la aceptación de ese paper.
+# Cerrado por el mismo motivo que `role` (#73): un typo deja el campo mudo para el único consumidor
+# que existe —la columna Origen de la ficha—, y un campo mudo se lee como "no se sabe".
+EXTRA_CORE_VIA = ("usuario", "triage", "citado-por-corpus")
+
+
+def load_extra_core(meta: dict, *, entry: str = "?") -> list:
+    """`extra_core` en su forma canónica: lista de mapas `{bibcode, via, motivo[, fecha]}`.
+
+    **R-2 (decidida con el usuario, 2026-08-24): forma dura con detector**, no lector tolerante.
+    Hasta 1.26.0 el atajo `extra_core: [2020X]` (y hasta el escalar `extra_core: 2020X`) se aceptaba
+    vía `_listify_curado`. El costo no es de estilo: una aceptación así no dice **quién** la aceptó
+    ni **por qué**, que es exactamente el dato no regenerable que #51 persiste para el carril del
+    **descarte**. Los dos carriles de curación tienen que registrar lo mismo, o el registro cuenta
+    media historia — y era la mitad optimista: lo que se dejó afuera, con motivo; lo que se metió,
+    a ciegas.
+
+    El costo de UX quedó acotado porque `triage.py` imprime el snippet ya estructurado para pegar:
+    sólo se siente al agregar un bibcode 100% a mano, que es cuando más importa saber por qué está.
+
+    Aborta con el snippet correcto en el mensaje ante cualquier forma vieja — un detector que no
+    muestra la salida obliga a leer la doc, y ahí es donde la gente inventa una tercera forma."""
+    v = meta.get("extra_core")
+    if v is None:
+        return []
+    if not isinstance(v, list) or any(not isinstance(x, dict) for x in v):
+        sueltos = [v] if isinstance(v, str) else [x for x in as_list(v) if isinstance(x, str)]
+        sys.exit(_extra_core_error(entry, sueltos,
+                                   "`extra_core` ya no acepta un bibcode suelto ni una lista de "
+                                   "strings (D-58): sin `via` y `motivo` el registro no dice quién "
+                                   "aceptó ese paper ni por qué"))
+    for x in v:
+        faltan = [k for k in ("bibcode", "via", "motivo") if not x.get(k)]
+        if faltan:
+            sys.exit(_extra_core_error(entry, [x.get("bibcode") or "<bibcode>"],
+                                       f"a una entrada de `extra_core` le falta {', '.join(faltan)}"))
+        if x["via"] not in EXTRA_CORE_VIA:
+            sys.exit(_extra_core_error(
+                entry, [x["bibcode"]],
+                f"`via: {x['via']}` no está en el vocabulario ({' | '.join(EXTRA_CORE_VIA)})"))
+    return v
+
+
+def _extra_core_error(entry: str, bibcodes: list, motivo: str) -> str:
+    """El mensaje del detector, con la forma nueva ya escrita para pegar."""
+    ejemplo = "\n".join(
+        f"  - bibcode: {b}\n    via: usuario        # {' | '.join(EXTRA_CORE_VIA)}\n"
+        f"    fecha: AAAA-MM-DD\n    motivo: <por qué este paper es core>"
+        for b in (bibcodes or ["<bibcode>"]))
+    return (f"'{entry}': {motivo}. Forma canónica:\n\nextra_core:\n{ejemplo}\n")
+
+
+# Costo de leer un paper, en tokens de fulltext. Mediana medida sobre el corpus real (T-3): sirve
+# para proyectar el costo del ingest desde el conteo core, que es la otra mitad de la decisión que
+# el probe existe para tomar.
+TOKENS_POR_PAPER = 24_000
+
+
+# ── D-1 / INV-76: autoridad por campo del ground-truth ───────────────────────────────────────────
+#
+# Cada campo del espejo tiene UNA autoridad declarada. Si esa autoridad calla, el campo es `null`
+# **aunque la otra tenga el dato** — porque el contrato promete que el frontmatter es la capa
+# auditable, y un valor cuya procedencia depende de quién contestó primero no lo es: el consumidor
+# no puede distinguirlo de uno con una sola fuente.
+#
+# `spectral_type` ← SIMBAD porque es su dominio (clasificación espectral curada); el resto ← NEA
+# (pscomppars), que es la autoridad del sistema planetario. Hasta 1.27.0 `spectral_type` salía de
+# NEA y SIMBAD sólo rellenaba el hueco, sin registrar cuál ganó.
+#
+# La declaración vive acá y no en cada script porque la comparten tres consumidores
+# (`fetch_ground_truth` escribe, `make_notes` la publica en la cabecera de la ficha, `lint` la
+# vigila): repetirla es cómo se desincronizan.  @inv INV-76
+AUTORIDAD_CAMPO = {
+    "spectral_type": "simbad",
+    "teff_K": "nea",
+    "dist_pc": "nea",
+    "st_rotp_days": "nea",   # clave del JSON; en la ficha es `P_rot_days`
+    "mass_msun": "nea",
+    "Vmag": "nea",
+    "ra_deg": "nea",
+    "dec_deg": "nea",
+}
+
+# Nombre legible de cada autoridad, para la cabecera de la ficha.
+AUTORIDAD_NOMBRE = {"nea": "NASA Exoplanet Archive (pscomppars)", "simbad": "SIMBAD"}
+
+# Cómo se llama cada campo del JSON EN LA FICHA. La cabecera nombra lo que el lector ve en el
+# frontmatter, no la clave interna del ground-truth (`st_rotp_days` no aparece en ninguna ficha).
+CAMPO_EN_FICHA = {"st_rotp_days": "P_rot_days"}
+
+
+def artefacto_en_otro_slug(base: Path, slug: str, stem: str, sufijo: str):
+    """El mismo artefacto (`<stem><sufijo>`) ya bajado bajo OTRO slug, o `None` (D-18).
+
+    Un paper relevante para dos sujetos se bajaba dos veces — medido: 33 copias en la instancia
+    real. El archivo es idéntico (mismo bibcode), y la red es a la vez el recurso caro y el que
+    puede fallar: re-bajarlo no agrega nada y agrega un modo de falla. Se devuelve la ruta para
+    que el llamador copie (no symlink: `raw/` viaja en git-lfs y un enlace roto es peor que una
+    copia).
+
+    Determinista: si hay varias, gana la primera en orden alfabético de slug."""
+    for candidato in sorted(base.glob(f"*/{stem}{sufijo}")):
+        if candidato.parent.name != slug:
+            return candidato
+    return None
+
+
+def load_extraccion(slug: str) -> dict:
+    """Qué declaró el ingest sobre lo que leyó (D-13/D-14): `{subconjunto, criterio, fecha}`."""
+    return as_map(load_registro(slug).get("extraccion"))
+
+
+def save_extraccion(slug: str, *, subconjunto: bool, criterio: str) -> None:
+    """Declara.  @inv INV-83 que este ingest leyó (o no) todos los core, y con qué criterio recortó.
+
+    El contrato dice que el ingest lee **todos** los core; la reconciliación anticipa que el
+    subconjunto va a ser el caso normal (≈6M tokens por estrella si no). Lo que no puede pasar es
+    que el recorte sea **invisible**: la ficha se presenta como snapshot del universo, y un lector
+    no tiene forma de saber que se sintetizó desde 8 de 42 papers. El criterio declarado es la
+    pieza que más se va a leer — por eso es texto libre y obligatorio, no un booleano."""
+    data = load_registro(slug)
+    data.setdefault("slug", slug)
+    data["extraccion"] = {"subconjunto": bool(subconjunto), "criterio": criterio,
+                          "fecha": _dt.date.today().isoformat()}
+    save_registro(slug, data)
+
+
+def anular_decision(slug: str, clave: str, *, por: str, carril: str = "chaining") -> bool:
+    """Anula un descarte que se está revirtiendo, preservando el juicio viejo adentro (D-52).
+
+    El problema que cierra: al re-aceptar un bibcode que estaba descartado —agregándolo a
+    `extra_core`, o volviendo a declarar la fuente en `sources:`— la decisión vieja **se quedaba
+    ahí contradiciendo lo que se hizo**. El registro decía "descartado por ruido" sobre un paper
+    que está ingestado, y el consumidor no tiene forma de saber cuál de las dos afirmaciones vale.
+    `query_ads` sólo lo salteaba y `ingest_topic` sólo avisaba: ninguno tocaba el registro.
+
+    Anular no es borrar. El motivo viejo queda en `previa`, porque es exactamente el dato **no
+    regenerable** que #51 existe para conservar: por qué alguien miró ese paper y dijo que no. La
+    entrada nueva agrega quién la revirtió y cuándo.
+
+    Respeta los dos carriles (#51 chaining, #81 fuente declarada): anular un descarte de fuente
+    declarada no toca el del chaining con la misma clave. Devuelve `True` si anuló algo."""
+    decisiones = load_decisiones(slug)
+    d = decisiones.get(clave)
+    if not d or d.get("decision") != "descartado" or not es_del_carril(d, carril):
+        return False
+    decisiones[clave] = {
+        "decision": "anulada",
+        "fecha": _dt.date.today().isoformat(),
+        "anulada_por": por,
+        "origen": d.get("origen") or "chaining",
+        "previa": dict(d),
+    }
+    save_decisiones(slug, decisiones)
+    return True
+
+
 def save_decisiones(slug: str, decisiones: dict) -> None:
     """Persiste las decisiones preservando `busqueda` (la escribe query_ads, no el triage)."""
     data = load_registro(slug)
@@ -461,12 +690,119 @@ def save_decisiones(slug: str, decisiones: dict) -> None:
     save_registro(slug, data)
 
 
+def load_busquedas(slug: str) -> list:
+    """Las búsquedas del sujeto, en orden cronológico de corrida (D-28).  @inv INV-89
+
+    Lector ESTRICTO: sólo entiende `busquedas: []`. Un registro con la clave vieja `busqueda:`
+    (mapa, una sola corrida) devuelve `[]` — y el lint lo reporta como schema viejo, bloqueante.
+    Sin lector tolerante: dos semánticas conviviendo en el lector es complejidad permanente, y un
+    registro que el lector ignora en silencio deja la ficha afirmando sobre un universo que nadie
+    puede reconstruir."""
+    return [b for b in as_list(load_registro(slug).get("busquedas")) if isinstance(b, dict)]
+
+
+def universo_acumulado(slug: str) -> int:
+    """Cuántos papers distintos vio el sujeto en TODAS sus búsquedas — unión, no suma (INV-89).
+
+    Sumar los `n_total` cuenta dos veces los papers que ya estaban: con dos corridas solapadas de 3
+    papers cada una que comparten 2, la suma dice 6 y la verdad es 4. Cuando una entrada trae
+    `bibcodes` la unión es exacta; si alguna no los trae (registro viejo, o una corrida que no los
+    guardó) esa entrada sólo puede aportar **cardinalidad**, y ahí se toma el MÁXIMO: es la cota
+    inferior honesta del universo. Nunca la suma."""
+    vistos: set = set()
+    tope = 0
+    for b in load_busquedas(slug):
+        bibs = as_list(b.get("bibcodes"))
+        if bibs:
+            vistos.update(bibs)
+        tope = max(tope, int(b.get("n_total") or 0))
+    return max(len(vistos), tope)
+
+
 def save_busqueda(slug: str, busqueda: dict) -> None:
-    """Persiste el registro de búsqueda preservando `decisiones` (las escribe triage.py)."""
+    """APPENDEA una corrida a `busquedas: []`, preservando `decisiones` (las escribe triage.py).
+
+    D-28: antes esto PISABA. Cada corrida borraba la anterior, así que el registro sólo sabía de la
+    última y la cabecera de la ficha publicaba SU embudo como si fuera el universo entero — una
+    ficha refrescada tres veces mostraba el recorte de la tercera corrida y nada de las otras dos.
+
+    La entrada nueva se estampa con `n_nuevos` / `n_ya_estaban` contra el conjunto ya conocido del
+    sujeto (los `bibcodes` de las corridas previas): es lo que distingue "traje 40 papers" de
+    "traje 40 papers de los cuales 38 ya estaban", que es la pregunta real de un refresh."""
     data = load_registro(slug)
     data.setdefault("slug", slug)
-    data["busqueda"] = busqueda
+    previas = [b for b in as_list(data.get("busquedas")) if isinstance(b, dict)]
+    conocidos: set = set()
+    for b in previas:
+        conocidos.update(as_list(b.get("bibcodes")))
+    entrada = dict(busqueda)
+    bibs = as_list(entrada.get("bibcodes"))
+    if bibs:
+        entrada["n_nuevos"] = len([b for b in bibs if b not in conocidos])
+        entrada["n_ya_estaban"] = len([b for b in bibs if b in conocidos])
+    data["busquedas"] = previas + [entrada]
+    data.pop("busqueda", None)          # la clave vieja no sobrevive a una escritura nueva
     save_registro(slug, data)
+
+
+# Orden canónico de la cadena de ESTRELLAS. Fuente de verdad del orden: el header de
+# `ingest_star.py` (y su constante `CHAIN`); acá vive la copia que el lint usa para nombrar el paso
+# donde se cortó, con `check_retractions` al final, que el orquestador corre aparte.
+CADENA_ESTRELLA = ("query_ads", "fetch_arxiv", "fetch_pdf", "fetch_ground_truth",
+                   "make_notes", "extract_fulltext", "check_retractions")
+
+# Variable que el orquestador exporta al lanzar cada paso, para que el propio paso sepa si lo
+# corrió la cadena o una mano. No es un flag porque tiene que atravesar el `subprocess.run`.
+VIA_ENV = "ALMAGESTO_VIA"
+
+
+def load_cadena(slug: str) -> list:
+    """Los pasos que corrieron para este sujeto, en orden (D-57).  @inv INV-91"""
+    return [p for p in as_list(load_registro(slug).get("cadena")) if isinstance(p, dict)]
+
+
+def save_paso(slug: str, paso: str, flags=()) -> None:
+    """Estampa un paso de la cadena en `cadena:` del registro.  @inv INV-91
+
+    **R-6 (decidida con el usuario, 2026-08-24): cada script se estampa a sí mismo** al salir 0.
+    La alternativa —estampar sólo desde `ingest_topic.run()`, un único punto de escritura— dejaba
+    invisible el paso corrido a mano, y entonces el lint reportaba "se cortó en `fetch_pdf`" sobre
+    un paso que **sí corrió**. Un falso positivo así erosiona la categoría entera: la primera vez
+    que alguien la ve mentir, deja de mirarla.
+
+    `via` sale de la variable de entorno que exporta el orquestador (`orquestador`) o vale
+    `suelto`. Es la distinción que hace legible la traza: una cadena entera corrida de una vez se
+    lee distinto de seis pasos sueltos a lo largo de una semana.
+
+    **Idempotente (D-54):** si ya hay una entrada de ese paso con la misma fecha, los mismos flags
+    y la misma vía, no se re-escribe — re-correr un paso el mismo día no debe generar ruido de
+    diff. Lo que cambia sustantivamente (otros flags) sí entra."""
+    data = load_registro(slug)
+    data.setdefault("slug", slug)
+    previos = [p for p in as_list(data.get("cadena")) if isinstance(p, dict)]
+    entrada = {
+        "paso": paso,
+        "fecha": _dt.date.today().isoformat(),
+        "version": ALMAGESTO_VERSION,
+        "via": os.environ.get(VIA_ENV) or "suelto",
+        "flags": list(flags),
+    }
+    if any(p == entrada for p in previos):
+        return                       # misma corrida, mismo día: sin ruido de diff
+    data["cadena"] = previos + [entrada]
+    save_registro(slug, data)
+
+
+def cadena_cortada(slug: str, canonica=CADENA_ESTRELLA) -> str | None:
+    """El primer paso de `canonica` que NO figura en el registro, o `None` si están todos.
+
+    Nombra el paso, no cuenta pasos: "se cortó en `fetch_ground_truth`" es accionable y
+    "faltan 4 pasos" no. Si el registro no tiene `cadena` en absoluto devuelve `None` — eso es
+    "nunca se estampó" (sujeto anterior a D-57), no "se cortó en el primero"."""
+    corridos = {p.get("paso") for p in load_cadena(slug)}
+    if not corridos:
+        return None
+    return next((paso for paso in canonica if paso not in corridos), None)
 
 
 def record_pdf_source(slug: str, stem: str, source: str) -> None:
@@ -485,4 +821,4 @@ def record_pdf_source(slug: str, stem: str, source: str) -> None:
         except ValueError:
             data = {}
     data[stem] = source
-    f.write_text(json.dumps(data, indent=2, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+    write_text_atomic(f, json.dumps(data, indent=2, ensure_ascii=False, sort_keys=True))

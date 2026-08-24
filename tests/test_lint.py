@@ -332,12 +332,14 @@ def test_disputa_sin_field_o_con_posicion_muda(toy_vault, capsys):
     ficha_con_disputas(toy_vault, [
         {"posiciones": [{"ref": "2020disD...1..1D"}, {"source": "ground_truth"}]},
         {"field": "b.e", "posiciones": [{"ref": "2020disD...1..1D"}, {"value": 0.3}]},
-        {"field": "b.P", "posiciones": [{"ref": "2020disD...1..1D"}, {"source": "nea"}]}])
+        {"field": "b.P", "posiciones": [{"ref": "2020disD...1..1D"}, {"source": "wikipedia"}]}])
     rc, out = run_lint(capsys)
     assert rc == 1
     assert "disputa sin `field`" in out
     assert "posición sin `ref` ni `source`" in out
-    assert "`source: nea` fuera del vocabulario" in out
+    # `nea` ENTRÓ al vocabulario con D-2 (la disputa entre autoridades es real desde D-1);
+    # el caso adversario del vocabulario cerrado se mantiene con una fuente inventada.
+    assert "`source: wikipedia` fuera del vocabulario" in out
 
 
 def test_disputa_con_formas_basura_no_crashea_el_lint(toy_vault, capsys):
@@ -1624,7 +1626,7 @@ def _skip_sin_git(ok):
 def test_verificacion_stale_por_edicion_sin_commitear(toy_vault, capsys):
     """El caso que importa: el lint corre ANTES del commit, así que la edición que dejó el bloque
     atrasado todavía no está en `git log` — un archivo sucio se toma como cambiado hoy."""
-    cuerpo = "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-01-01)\nok\n"
+    cuerpo = "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-01-01)\n\n| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente |\n|---|---|---|---|---|---|\n"
     _skip_sin_git(_repo_con_nota(toy_vault, cuerpo, fecha="2020-01-01"))
     rc, out = run_lint(capsys)
     assert rc == 0                                     # backlog, no bloqueante
@@ -1641,7 +1643,7 @@ def test_verificacion_stale_por_edicion_sin_commitear(toy_vault, capsys):
 
 def test_verificacion_stale_por_commit_posterior(toy_vault, capsys):
     """La otra rama: la edición ya está committeada — la fecha sale de `git log -1 --format=%cs`."""
-    cuerpo = "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-01-01)\nok\n"
+    cuerpo = "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-01-01)\n\n| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente |\n|---|---|---|---|---|---|\n"
     _skip_sin_git(_repo_con_nota(toy_vault, cuerpo, fecha="2020-01-01"))
     p = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
     p.write_text(p.read_text(encoding="utf-8") + "\nPárrafo agregado después.\n", encoding="utf-8")
@@ -1654,7 +1656,7 @@ def test_verificacion_stale_por_commit_posterior(toy_vault, capsys):
 
 def test_verificacion_al_dia_no_se_marca(toy_vault, capsys):
     """Bloque fechado DESPUÉS del último cambio del archivo: verificada al día → no se marca."""
-    cuerpo = "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-03-01)\nok\n"
+    cuerpo = "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-03-01)\n\n| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente |\n|---|---|---|---|---|---|\n"
     _skip_sin_git(_repo_con_nota(toy_vault, cuerpo, fecha="2020-01-01"))
     rc, out = run_lint(capsys)
     assert rc == 0
@@ -1664,21 +1666,28 @@ def test_verificacion_al_dia_no_se_marca(toy_vault, capsys):
 def test_bloque_sin_fecha_se_marca(toy_vault, capsys):
     """Sin fecha en el encabezado no hay forma de saber si el bloque sigue vigente (no necesita git)."""
     _nota_verif(toy_vault, "sin-fecha",
-                "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas\nok\n")
+                "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas\n\n| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente |\n|---|---|---|---|---|---|\n")
     rc, out = run_lint(capsys)
     assert rc == 0
     assert "- sin-fecha → bloque de verificación sin fecha en el encabezado" in out
 
 
 def test_stale_sin_git_no_rompe(toy_vault, capsys, monkeypatch):
-    """Fuera de un repo (o sin git en el PATH) el chequeo se omite en silencio: el resto del lint
-    no depende de él."""
+    """Fuera de un repo (o sin git en el PATH) el chequeo no se puede evaluar. El resto del lint
+    sigue corriendo —eso no cambió—, pero **desde el issue 0.3 ya no se omite en silencio**: antes
+    reportaba `stale (0)`, indistinguible de "todo al día". Hoy cae en *no evaluado* y cuenta para
+    el exit (D-43 / INV-87).
+
+    ⚠ Consecuencia asumida: una bóveda legítimamente sin git, con bloques de verificación, no
+    puede dar lint limpio. Es el precio de no mentir sobre lo que no se miró; el mensaje dice qué
+    falta y cómo."""
     monkeypatch.setattr(lint, "git_out", lambda *a: None)
     _nota_verif(toy_vault, "nota-verif",
-                "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-01-01)\nok\n")
+                "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-01-01)\n\n| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente |\n|---|---|---|---|---|---|\n")
     rc, out = run_lint(capsys)
-    assert rc == 0
-    assert SIN_STALE in out
+    assert rc == 1
+    assert "No evaluado" in out
+    assert SIN_STALE not in out    # su categoría se suprime: no muestra un cero que no midió
 
 
 # ── in_dir (portabilidad de separador, #33) ──────────────────────────────────
@@ -1708,3 +1717,381 @@ def test_in_dir_no_confunde_carpeta_hermana_stars_borradores(toy_vault, capsys):
     assert "Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog) (1)" in out
     assert "2020ext....1E → extraído" in out
 
+
+
+# ── issue 0.3 · "no evaluado": un chequeo que no pudo correr NO aporta un cero (D-43 / INV-87) ──
+
+BAD_OBJECTIVE = "name: Prueba\nrelevance:\n  topics:\n    rv: activity: starspot\n"
+# ⚠ el caso adversario tiene que ROMPER de verdad: `rv: foo:bar` —lo que proponía el plan—
+# **parsea**, porque en YAML un `:` pegado al carácter siguiente es parte del escalar. El que
+# rompe es `:` SEGUIDO DE ESPACIO, que es justo lo que produce una regex con una alternación
+# y una descripción. Un test sembrado con el caso equivocado habría quedado verde por la
+# razón equivocada.
+
+
+def test_lint_objective_roto_bloquea(toy_vault, capsys):
+    """El error más probable de toda la config —un `:` sin comillas dentro de una regex, que el
+    skill `setup` hace escribir a mano— dejaba a `load_objective` degradando a `{}` **mudo**
+    (`lib_config.py:185-187`): el clasificador seguía corriendo con una regla que nadie escribió, y
+    el lint no decía nada. Hoy: categoría *no evaluado*, exit ≠ 0, y el motivo en el REPORTE (no en
+    stdout — corolario del protocolo).  @inv INV-80"""
+    cfg.OBJECTIVE_YAML.write_text(BAD_OBJECTIVE, encoding="utf-8")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc != 0
+    assert "No evaluado" in rep
+    assert "objective.yaml" in rep
+
+
+def test_lint_sin_git_reporta_no_evaluado(toy_vault, capsys, monkeypatch):
+    """La otra puerta del mismo cero inventado: sin `git`, `last_change_dates` devuelve `{}` y la
+    verificación stale reportaba **0** en silencio — indistinguible de "todo al día".  @inv INV-87"""
+    mk_note(toy_vault.QUERIES, "q1", {"tags": ["query"]},
+            "Afirmación [[2020aaaA...1..1A]].\n\n## Verificación de citas (2020-01-01)\n")
+    mk_note(toy_vault.PAPERS, "2020aaaA...1..1A", {"tags": ["paper"], "bibcode": "2020aaaA...1..1A"})
+    link_from_index(toy_vault, "q1", "2020aaaA...1..1A")
+    monkeypatch.setattr(lint, "git_out", lambda *a: None)
+    rc, rep = run_lint_reporte(capsys)
+    assert rc != 0
+    assert "No evaluado" in rep
+    assert "git" in rep.lower()
+
+
+def test_no_evaluado_no_contamina_conteos(toy_vault, capsys, monkeypatch):
+    """Adversario del cero inventado: el chequeo que no corrió NO puede aparecer como "(0)" en su
+    categoría normal, porque ese 0 se lee como veredicto. La categoría stale queda fuera del
+    reporte cuando no se pudo evaluar."""
+    mk_note(toy_vault.QUERIES, "q1", {"tags": ["query"]},
+            "Afirmación [[2020aaaA...1..1A]].\n\n## Verificación de citas (2020-01-01)\n")
+    mk_note(toy_vault.PAPERS, "2020aaaA...1..1A", {"tags": ["paper"], "bibcode": "2020aaaA...1..1A"})
+    link_from_index(toy_vault, "q1", "2020aaaA...1..1A")
+    monkeypatch.setattr(lint, "git_out", lambda *a: None)
+    _, rep = run_lint_reporte(capsys)
+    assert "Verificación stale" not in rep, (
+        "la categoría stale sigue reportando su conteo aunque no se haya podido evaluar")
+
+
+def test_lint_limpio_sigue_en_cero(toy_vault, capsys):
+    """Control de cordura: con git y con `objective.yaml` sano, "no evaluado" está vacío y no
+    inventa un bloqueo (si no, la categoría nueva rompería toda bóveda sana)."""
+    rc, rep = run_lint_reporte(capsys)
+    assert "## ⛔ No evaluado" in rep and rep.split("## ⛔ No evaluado")[1].split("\n")[0].endswith("(0)")
+
+
+# ── issue 1.2 · pares de verificación vencidos (D-4 / D-20 / INV-78) ────────────────────────────
+#
+# El bloque `## Verificación de citas` se lee como "esta nota está verificada". El ancla mide eso
+# por PAR, no por archivo: qué afirmación exacta se chequeó, contra qué bytes de qué fuente.
+
+import lib_blocks as lb   # noqa: E402
+
+
+def _con_ancla(toy_vault, cuerpo, txt="El período es de 34 días.\n", bib="2020citC...1..1C",
+               anchor=None, source=None):
+    """Nota con bloque de verificación bien formado: la fila se calcula del propio cuerpo, así que
+    el escenario nace VERIFICADO y cada test rompe una sola cosa (D-5: la ficha nace 100%)."""
+    (toy_vault.FULLTEXT / "slug").mkdir(parents=True, exist_ok=True)
+    ft = toy_vault.FULLTEXT / "slug" / f"{bib}.txt"
+    ft.write_text(txt, encoding="utf-8")
+    pares = lb.pairs_of(cuerpo)
+    filas = ["| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente |",
+             "|---|---|---|---|---|---|"]
+    for i, par in enumerate(pares, 1):
+        filas.append(f"| {i} | extracto | [[{par.bibcode}]] | soportada | "
+                     f"{anchor or par.anchor} | {source or lb.source_hash(ft)} |")
+    completo = cuerpo + "\n## Verificación de citas (2026-01-01)\n\n" + "\n".join(filas) + "\n"
+    _nota_verif(toy_vault, "nota-verif", completo)
+    return ft
+
+
+CUERPO = "Afirmación con cita [[2020citC...1..1C]] sobre el período.\n"
+TITULO = "Pares de verificación vencidos"
+
+
+def _n_vencidos(rep):
+    """El título lleva sufijo de severidad (cambia con --cierre): se lee el conteo."""
+    linea = [l for l in rep.splitlines() if l.startswith(f"## {TITULO}")]
+    assert linea, "la categoría de pares vencidos no aparece en el reporte"
+    return int(linea[0].rsplit("(", 1)[1].rstrip(")"))
+
+
+def test_nota_verificada_no_marca_nada(toy_vault, capsys):
+    """Control de cordura, y D-5: la ficha nace 100% verificada. Sin este test, todos los de abajo
+    podrían estar pasando por un escenario roto de base.  @inv INV-79"""
+    _con_ancla(toy_vault, CUERPO)
+    _, rep = run_lint_reporte(capsys)
+    assert _n_vencidos(rep) == 0
+
+
+def test_par_nuevo_sin_fila_marca(toy_vault, capsys):
+    """Agregar una frase citada a una nota ya verificada: ese par nunca pasó por el fan-out, pero
+    queda bajo un encabezado que se lee como vigente."""
+    ft = _con_ancla(toy_vault, CUERPO)
+    p = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    p.write_text(p.read_text(encoding="utf-8").replace(
+        CUERPO, CUERPO + "\nAfirmación NUEVA [[2020citC...1..1C]].\n"), encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    assert _n_vencidos(rep) == 1
+    assert "sin verificar" in rep
+
+
+def test_edicion_marca_solo_sus_pares(toy_vault, capsys):
+    """Adversario de la invalidación por SECCIÓN: tres bloques citados, se edita uno."""
+    cuerpo = ("Bloque uno [[2020citC...1..1C]].\n\nBloque dos [[2020citC...1..1C]].\n\n"
+              "Bloque tres [[2020citC...1..1C]].\n")
+    _con_ancla(toy_vault, cuerpo)
+    p = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    p.write_text(p.read_text(encoding="utf-8").replace("Bloque dos", "Bloque DOS editado"),
+                 encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    assert _n_vencidos(rep) == 1
+    assert "por edición" in rep
+
+
+def test_reflow_no_marca_nada(toy_vault, capsys):
+    """Re-wrapear la nota entera no cambia lo que afirma."""
+    cuerpo = ("Una afirmación larga con su cita [[2020citC...1..1C]] que ocupa varias palabras "
+              "y sigue hasta acá.\n")
+    _con_ancla(toy_vault, cuerpo)
+    p = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    p.write_text(p.read_text(encoding="utf-8").replace(
+        "varias palabras y sigue", "varias palabras\ny sigue"), encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    assert _n_vencidos(rep) == 0
+
+
+def test_reemplazo_del_txt_marca_por_fuente(toy_vault, capsys):
+    """La otra mitad de INV-78 (D-20): se re-extrajo el PDF y el `.txt` ya no dice lo mismo. La
+    nota no se tocó, así que ninguna medida basada en fechas de la NOTA lo vería.  @inv INV-78"""
+    ft = _con_ancla(toy_vault, CUERPO)
+    ft.write_text("El período es de 36 días.\n", encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    assert _n_vencidos(rep) == 1
+    assert "por fuente" in rep
+
+
+def test_fila_huerfana_se_marca(toy_vault, capsys):
+    """La afirmación se borró y la fila quedó apuntando a la nada — el bloque afirma haber
+    verificado algo que ya no está."""
+    _con_ancla(toy_vault, CUERPO)
+    p = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    p.write_text(p.read_text(encoding="utf-8").replace(CUERPO, "Prosa sin citas.\n"),
+                 encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    assert _n_vencidos(rep) == 1
+    assert "huérfana" in rep
+
+
+def test_bloque_sin_columnas_de_hash_detectado(toy_vault, capsys):
+    """Plantilla vieja: no hay dónde colgar el ancla. Bloqueante SIEMPRE (no depende de --cierre):
+    no es un par vencido, es un bloque que nadie puede evaluar."""
+    _nota_verif(toy_vault, "nota-verif", CUERPO +
+                "\n## Verificación de citas (2026-01-01)\n\n"
+                "| # | Afirmación | Fuente | Veredicto |\n|---|---|---|---|\n"
+                "| 1 | extracto | [[2020citC...1..1C]] | soportada |\n")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 1
+    assert "plantilla vieja" in rep
+
+
+def test_cierre_bloquea_periodica_reporta(toy_vault, capsys, monkeypatch):
+    """R-1, decidida por el usuario el 2026-08-24: el MISMO detector, dos severidades según el
+    momento. Sin flag es la pasada periódica (backlog, exit 0 — no tiene sentido frenar una bóveda
+    con deuda vieja un martes cualquiera); `--cierre` es el paso de cierre de una operación que
+    tocó la nota, donde un par sin verificar significa que no terminaste."""
+    # el toy_vault no es un repo git y la nota lleva bloque FECHADO → sin esto cae en "no
+    # evaluado" (issue 0.3) y el rc de la pasada periódica no mediría lo que este test mide.
+    monkeypatch.setattr(lint, "git_out", lambda *a: "")
+    ft = _con_ancla(toy_vault, CUERPO)
+    ft.write_text("El período es de 36 días.\n", encoding="utf-8")
+    rc_periodica, rep = run_lint_reporte(capsys)
+    assert rc_periodica == 0
+    assert _n_vencidos(rep) == 1
+    assert lint.main(["--cierre"]) == 1
+
+
+def test_registro_schema_viejo_detectado(toy_vault, capsys):
+    """D-28: `busqueda:` (mapa, una sola corrida) es el schema pre-1.26. El lint lo DETECTA y
+    bloquea, sin migrador ni lector tolerante — un registro que el lector nuevo ignora en silencio
+    deja la ficha afirmando sobre un universo que nadie puede reconstruir."""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    (cfg.REGISTRO / "test_star.yaml").write_text(
+        "slug: test_star\nbusqueda:\n  fecha: '2026-01-01'\n  n_total: 3\n", encoding="utf-8")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 1
+    assert "pre-D-28" in rep or "schema viejo" in rep
+
+
+def test_cadena_cortada_nombra_el_paso(toy_vault, capsys):
+    """INV-91: el registro dice qué pasos corrieron; el lint compara contra el orden canónico y
+    **nombra el paso donde se cortó**. Sin esto, una cadena abortada a la mitad deja la bóveda con
+    notas a medio hacer y nada que lo diga."""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    for paso in ("query_ads", "fetch_arxiv", "fetch_pdf"):
+        cfg.save_paso("test_star", paso)
+    _, rep = run_lint_reporte(capsys)
+    assert "fetch_ground_truth" in rep
+    assert "cadena" in rep.lower()
+
+
+def test_cadena_completa_no_marca(toy_vault, capsys):
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    for paso in ("query_ads", "fetch_arxiv", "fetch_pdf", "fetch_ground_truth",
+                 "make_notes", "extract_fulltext", "check_retractions"):
+        cfg.save_paso("test_star", paso)
+    _, rep = run_lint_reporte(capsys)
+    linea = [l for l in rep.splitlines() if l.startswith("## Cadena incompleta")]
+    assert linea and linea[0].endswith("(0)")
+
+
+def test_lint_detecta_tabla_de_papers_desactualizada(toy_vault, capsys):
+    """D-10: la tabla materializada es un snapshot, y un snapshot que nadie re-estampa miente igual
+    que el roll-up Dataview que reemplazó. Backlog (es "re-estampar", no una violación), pero
+    nombra el stem que falta — el patrón Censo."""
+    import make_notes as mn
+    mn.write_star_note("test_star", force=True)
+    mk_note(toy_vault.PAPERS, "2020nueA...1..1A",
+            {"tags": ["paper"], "bibcode": "2020nueA...1..1A", "stars": ["Estrella Test"]}, "")
+    link_from_index(toy_vault, "test_star", "2020nueA...1..1A")
+    _, rep = run_lint_reporte(capsys)
+    assert "2020nueA...1..1A" in rep
+    assert "lista de papers" in rep.lower()
+
+
+def _n_recorte(rep):
+    """El conteo de la categoría. Asertar por SUBSTRING falla acá: el título de la categoría
+    ("Recorte de lectura sin declarar") aparece SIEMPRE, con `(0)` incluido — el reporte imprime
+    todas las secciones a propósito, para que ninguna desaparezca en silencio."""
+    linea = [l for l in rep.splitlines() if l.startswith("## Recorte de lectura")]
+    assert linea, "la categoría no aparece en el reporte"
+    return int(linea[0].rsplit("(", 1)[1].rstrip(")"))
+
+
+def test_subconjunto_sin_declarar_reporta(toy_vault, capsys):
+    """D-13/D-15 · INV-83: el ingest promete leer TODOS los core. Si quedan core sin extraer y el
+    registro no declara por qué, eso tiene MÁS señal que un campo incompleto suelto: la ficha se
+    presenta como snapshot del universo y no lo es.  @inv INV-83"""
+    mk_note(toy_vault.PAPERS, "2020relA...1..1A",
+            {"tags": ["paper"], "bibcode": "2020relA...1..1A", "stars": ["Estrella Test"],
+             "relevance": "high"}, "")
+    link_from_index(toy_vault, "2020relA...1..1A")
+    _, rep = run_lint_reporte(capsys)
+    assert _n_recorte(rep) == 1
+    assert "no declaró" in rep
+
+
+def test_subconjunto_declarado_baja_a_backlog(toy_vault, capsys):
+    """Con el criterio declarado, el pendiente sigue visible (cola de D-15 que `maintain` consume)
+    pero deja de ser el hallazgo con señal: el ingest **dijo** qué leyó y por qué."""
+    mk_note(toy_vault.PAPERS, "2020relA...1..1A",
+            {"tags": ["paper"], "bibcode": "2020relA...1..1A", "stars": ["Estrella Test"],
+             "relevance": "high"}, "")
+    link_from_index(toy_vault, "2020relA...1..1A")
+    cfg.save_extraccion("test_star", subconjunto=True,
+                        criterio="los 20 más citados + los 3 árbitros de la señal b")
+    _, rep = run_lint_reporte(capsys)
+    assert _n_recorte(rep) == 0
+
+
+def test_disputa_entre_autoridades_es_expresable(toy_vault, capsys):
+    """D-2 / INV-77: con `DISPUTE_SOURCES = ("ground_truth",)` las dos posiciones de una disputa
+    nea↔simbad decían lo mismo — el desacuerdo entre autoridades no tenía forma. Desde D-1 es un
+    caso real: las dos pueden traer `spectral_type` distinto, y el que no gana no se tira.
+    @inv INV-77"""
+    mk_note(toy_vault.STARS, "test_star",
+            {"tags": ["star"], "name": "Estrella Test", "slug": "test_star",
+             "disputes": [{"field": "spectral_type",
+                           "posiciones": [{"source": "simbad", "value": "K0V"},
+                                          {"source": "nea", "value": "G8V"}]}]}, "")
+    link_from_index(toy_vault, "test_star")
+    rc, rep = run_lint_reporte(capsys)
+    linea = [l for l in rep.splitlines() if l.startswith("## disputes mal formadas")][0]
+    assert linea.endswith("(0)")
+
+
+def test_source_inventado_sigue_bloqueando(toy_vault, capsys):
+    mk_note(toy_vault.STARS, "test_star",
+            {"tags": ["star"], "name": "Estrella Test", "slug": "test_star",
+             "disputes": [{"field": "spectral_type",
+                           "posiciones": [{"source": "wikipedia", "value": "K0V"},
+                                          {"source": "nea", "value": "G8V"}]}]}, "")
+    link_from_index(toy_vault, "test_star")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 1 and "wikipedia" in rep
+
+
+# ── Tanda 5 · D-19 / INV-84: un trabajo, UNA nota canónica ──────────────────────────────────────
+
+def test_dos_notas_mismo_arxiv_id_bloquean(toy_vault, capsys):
+    """Medido en la instancia real: 2 trabajos con dos notas cada uno (mismo `arxiv_id`, dos
+    bibcodes — el preprint y el publicado). Para todo lo que cuenta papers eso es doble conteo, y
+    para el consumidor son dos fuentes donde hay una."""
+    mk_note(toy_vault.PAPERS, "2020preX...1..1X",
+            {"tags": ["paper"], "bibcode": "2020preX...1..1X", "arxiv_id": "2001.12345"}, "")
+    mk_note(toy_vault.PAPERS, "2021pubY...1..1Y",
+            {"tags": ["paper"], "bibcode": "2021pubY...1..1Y", "arxiv_id": "2001.12345"}, "")
+    link_from_index(toy_vault, "2020preX...1..1X", "2021pubY...1..1Y")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 1
+    assert "2001.12345" in rep and "--rename-paper" in rep
+
+
+def test_identidad_por_doi_tambien(toy_vault, capsys):
+    mk_note(toy_vault.PAPERS, "2020aX....1..1X",
+            {"tags": ["paper"], "bibcode": "2020aX....1..1X", "doi": "10.1/mismo"}, "")
+    mk_note(toy_vault.PAPERS, "2021bY....1..1Y",
+            {"tags": ["paper"], "bibcode": "2021bY....1..1Y", "doi": "10.1/mismo"}, "")
+    link_from_index(toy_vault, "2020aX....1..1X", "2021bY....1..1Y")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 1 and "10.1/mismo" in rep
+
+
+def test_versions_no_cuenta_como_duplicado(toy_vault, capsys):
+    """El alias vive en `versions[]` de la nota canónica: eso NO es un duplicado, es el registro de
+    que el mismo trabajo tuvo otro bibcode."""
+    mk_note(toy_vault.PAPERS, "2021pubY...1..1Y",
+            {"tags": ["paper"], "bibcode": "2021pubY...1..1Y", "arxiv_id": "2001.12345",
+             "versions": [{"bibcode": "2020preX...1..1X", "pdf_source": "eprint"}]}, "")
+    link_from_index(toy_vault, "2021pubY...1..1Y")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 0
+
+
+# ── Tanda 6 · D-47: la prosa que cita un retractado se MARCA, no se borra ───────────────────────
+
+RETRACTADO = {"tags": ["paper"], "bibcode": "2019retR...1..1R", "retracted": True,
+              "retraction": {"type": "retraction", "date": "2021-05-03"}}
+
+
+def test_cita_a_retractado_sin_marca_bloquea(toy_vault, capsys):
+    """Hoy el lint bloquea la NOTA del paper retractado, pero no localiza **qué afirmación** lo
+    cita — que es lo que hay que revisar. La cita sin marcar sigue leyéndose como respaldo válido."""
+    mk_note(toy_vault.PAPERS, "2019retR...1..1R", RETRACTADO, "")
+    mk_note(toy_vault.CONCEPTS / "methods", "c1", {"tags": ["methods"]},
+            "El período es de 34 d [[2019retR...1..1R]].\n")
+    link_from_index(toy_vault, "c1", "2019retR...1..1R")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 1
+    assert "c1" in rep and "⛔retractada" in rep       # el mensaje trae la marca a usar
+
+
+def test_cita_marcada_no_bloquea_y_se_lista(toy_vault, capsys):
+    """Marcada, la afirmación queda **visible y no destruida**: el consumidor ve que el respaldo es
+    una fuente retractada y decide. Baja a informativa."""
+    mk_note(toy_vault.PAPERS, "2019retR...1..1R", RETRACTADO, "")
+    mk_note(toy_vault.CONCEPTS / "methods", "c1", {"tags": ["methods"]},
+            "El período es de 34 d [[2019retR...1..1R]] ⛔retractada, aunque nadie lo re-midió.\n")
+    link_from_index(toy_vault, "c1", "2019retR...1..1R")
+    rc, rep = run_lint_reporte(capsys)
+    linea = [l for l in rep.splitlines() if l.startswith("## Prosa sostenida por fuente retractada")]
+    assert linea and linea[0].endswith("(1)")
+
+
+def test_marca_no_se_confunde_con_prosa(toy_vault, capsys):
+    """Adversario: la palabra "retractada" suelta en una oración NO es la marca. Por eso lleva el
+    símbolo — un `(retractada)` pelado daría falsos positivos con cualquier mención del hecho."""
+    mk_note(toy_vault.PAPERS, "2019retR...1..1R", RETRACTADO, "")
+    mk_note(toy_vault.CONCEPTS / "methods", "c1", {"tags": ["methods"]},
+            "La señal fue retractada más tarde [[2019retR...1..1R]].\n")
+    link_from_index(toy_vault, "c1", "2019retR...1..1R")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 1

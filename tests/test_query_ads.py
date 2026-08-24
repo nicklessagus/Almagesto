@@ -767,7 +767,7 @@ def test_recent_pass_sin_novedad_devuelve_vacio(toy_classifier, no_sleep, monkey
 
 def test_main_extra_core_persistente(toy_vault, toy_classifier, no_sleep, monkeypatch):
     stars = {"Estrella Test": {"slug": "test_star", "simbad": "s", "ads_object": "Test Star",
-                               "aliases": [], "extra_core": ["1988old.....1O"]}}
+                               "aliases": [], "extra_core": [{"bibcode": "1988old.....1O", "via": "usuario", "motivo": "test"}]}}
     write_yaml(cfg.STARS_YAML, stars)
     monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False: [rec("2020dirA....1A")])
     monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
@@ -784,7 +784,7 @@ def test_main_extra_core_rescata_del_corte(toy_vault, toy_classifier, no_sleep, 
     (relevant/why_excluded/via) — antes `extra_core` sólo agregaba los ausentes y declararlo no
     hacía nada. El que ADS no devolvió se sigue trayendo por bibcode."""
     stars = {"Estrella Test": {"slug": "test_star", "simbad": "s", "ads_object": "Test Star",
-                               "aliases": [], "extra_core": ["1991AJ....102.1813F", "1988old.....1O"]}}
+                               "aliases": [], "extra_core": [{"bibcode": "1991AJ....102.1813F", "via": "usuario", "motivo": "test"}, {"bibcode": "1988old.....1O", "via": "usuario", "motivo": "test"}]}}
     write_yaml(cfg.STARS_YAML, stars)
     directo = [rec("2020dirA....1A"),
                dict(rec("1991AJ....102.1813F", relevant=False), why_excluded="sin faceta obligatoria (rv)")]
@@ -802,7 +802,9 @@ def test_main_extra_core_rescata_del_corte(toy_vault, toy_classifier, no_sleep, 
     data = json.loads((toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text())
     bibs = {r["bibcode"]: r for r in data["records"]}
     r = bibs["1991AJ....102.1813F"]
-    assert r["relevant"] is True and r["why_excluded"] is None and r["via"] == "manual"
+    # D-58: el `via` declarado en la config reemplaza al "manual" hardcodeado — la ficha puede
+    # decir si el paper entró por juicio del usuario, por el triage o por el corpus.
+    assert r["relevant"] is True and r["why_excluded"] is None and r["via"] == "usuario"
     assert bibs["2020dirA....1A"]["via"] == "query"     # el resto no se toca
     assert data["n_relevant"] == 3
     assert "1 traídos de ADS · 1 rescatados del corte" in capsys.readouterr().out
@@ -811,7 +813,7 @@ def test_main_extra_core_rescata_del_corte(toy_vault, toy_classifier, no_sleep, 
 def test_main_extra_core_avisa_bibcode_inexistente(toy_vault, toy_classifier, no_sleep, monkeypatch, capsys):
     """Un bibcode declarado que ADS no devuelve (typo) deja de desaparecer en silencio."""
     stars = {"Estrella Test": {"slug": "test_star", "simbad": "s", "ads_object": "Test Star",
-                               "aliases": [], "extra_core": ["2020typo....1X"]}}
+                               "aliases": [], "extra_core": [{"bibcode": "2020typo....1X", "via": "usuario", "motivo": "test"}]}}
     write_yaml(cfg.STARS_YAML, stars)
     monkeypatch.setattr(qa, "query_ads",
                         lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
@@ -834,7 +836,7 @@ def test_main_extra_core_escalar_no_pierde_la_curacion(toy_vault, monkeypatch, c
     """
     write_yaml(cfg.STARS_YAML, {"Estrella Test": {
         "slug": "test_star", "simbad": "s", "ads_object": "Test Star",
-        "aliases": [], "extra_core": "1988old.....1O"}})
+        "aliases": [], "extra_core": [{"bibcode": "1988old.....1O", "via": "usuario", "motivo": "test"}]}})
     monkeypatch.setattr(qa, "TOPIC_PATTERNS", {"rv": re.compile("radial velocity", 2)})
     monkeypatch.setattr(qa, "NOISE_DOCTYPES", set())
     monkeypatch.setattr(qa, "REQUIRE_TOPICS", [])
@@ -878,7 +880,7 @@ def test_main_tema_extra_only(toy_vault, toy_classifier, no_sleep, monkeypatch):
     exige `query` — la vía ADS de un tema cuya bibliografía canónica vive fuera de ADS."""
     write_yaml(cfg.TOPICS_YAML, {"gp": {"title": "Gaussian processes", "area": "methods",
                                         "concept": "gaussian-processes", "source": "web",
-                                        "extra_core": ["2012PASP..124.1015B"]}})
+                                        "extra_core": [{"bibcode": "2012PASP..124.1015B", "via": "usuario", "motivo": "test"}]}})
     monkeypatch.setattr(qa, "query_ads", lambda *a, **kw: pytest.fail("no debe correr la query"))
     monkeypatch.setattr(qa, "chain_candidates", lambda *a: pytest.fail("no debe encadenar"))
     monkeypatch.setattr(qa, "fetch_bibcodes",
@@ -1219,7 +1221,7 @@ def test_main_extra_core_no_vuelve_a_la_cola_de_triage(toy_vault, toy_classifier
     persistencia de la compuerta vale para los DOS lados de la decisión (descartes en triage.json,
     aceptaciones en extra_core) — y el curado además siembra el grafo de citas."""
     stars = {"Estrella Test": {"slug": "test_star", "simbad": "s", "ads_object": "Test Star",
-                               "aliases": [], "extra_core": ["2010ext.....1E"]}}
+                               "aliases": [], "extra_core": [{"bibcode": "2010ext.....1E", "via": "usuario", "motivo": "test"}]}}
     write_yaml(cfg.STARS_YAML, stars)
     monkeypatch.setattr(qa, "query_ads",
                         lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
@@ -1240,16 +1242,33 @@ def test_main_extra_core_no_vuelve_a_la_cola_de_triage(toy_vault, toy_classifier
     assert [c["bibcode"] for c in data["candidates"]] == ["2023PhDT....1P"]   # …y FUERA de la cola
 
 
-def test_main_no_triage_restaura_el_comportamiento_viejo(toy_vault, toy_classifier, no_sleep,
-                                                         monkeypatch):
+def test_no_triage_ya_no_existe(toy_vault, monkeypatch, capsys):
+    """D-48: la compuerta de triage NO se puede apagar por flag. Existía `--no-triage` "para
+    restaurar el comportamiento viejo", y ese comportamiento es justo el que #55 midió con 18% de
+    precisión: con el flag, todo lo que el grafo trae y clasifica core entra directo — incluidos
+    los bibcodes que ya habías descartado con su motivo. El juicio persistido (#51) podía pisarse
+    en silencio con un flag."""
+    monkeypatch.setattr(sys, "argv", ["query_ads.py", "test_star", "--no-triage"])
+    with pytest.raises(SystemExit) as exc:
+        qa.main()
+    assert exc.value.code == 2                      # argparse: flag desconocido
+    assert "no-triage" in capsys.readouterr().err
+
+
+def test_la_compuerta_no_se_puede_apagar(toy_vault, toy_classifier, no_sleep, monkeypatch):
+    """La otra mitad: sin el flag, el gate corre SIEMPRE para una estrella. Grabador sobre
+    `load_triage` — si nadie lo consulta, el descarte persistido no está gateando nada."""
+    consultado = []
+    monkeypatch.setattr(qa, "load_triage", lambda slug: consultado.append(slug) or set())
     monkeypatch.setattr(qa, "query_ads",
                         lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
                         [rec("2020dirA....1A")])
     monkeypatch.setattr(qa, "chain_candidates", lambda *a: [
         dict(rec("2023PhDT....1P", title="Hunting for New Physics"), via="chain:references")])
-    assert run_main(monkeypatch, ["test_star", "--no-triage"]) == 0
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    assert consultado == ["test_star"]
     data = json.loads((toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text())
-    assert len(data["records"]) == 2 and data["candidates"] == []
+    assert data["candidates"], "el candidato del chaining entró directo: la compuerta no corrió"
 
 
 def test_main_tema_no_aplica_la_compuerta(toy_vault, toy_classifier, no_sleep, monkeypatch):
@@ -1281,7 +1300,7 @@ def test_main_persiste_el_registro_de_busqueda(toy_vault, toy_classifier, no_sle
     monkeypatch.setattr(qa, "chain_candidates", lambda bibs, rows, filt: [])
     cfg.save_decisiones("test_star", {"2019old....1..1O": {"decision": "descartado"}})
     assert run_main(monkeypatch, ["test_star"]) == 0
-    b = cfg.load_registro("test_star")["busqueda"]
+    b = cfg.load_busquedas("test_star")[-1]
     assert b["fecha"] and b["query"] and "Test Star" in b["query"]     # la Solr efectiva, no None
     assert b["n_found"] == 1837 and b["n_core"] == 1 and b["truncated"] is True
     assert b["n_dropped"] == 1                                        # lee las decisiones vigentes
@@ -1292,3 +1311,40 @@ def test_main_persiste_el_registro_de_busqueda(toy_vault, toy_classifier, no_sle
     assert b["lente"]["require"] == list(qa.REQUIRE_TOPICS)
     assert b["lente"]["min_topics"] == qa.MIN_TOPICS
     assert cfg.load_registro("test_star")["decisiones"]                # no pisó el juicio del triage
+
+
+def test_query_ads_rehusa_lente_vacia(toy_vault, monkeypatch, capsys):
+    """D-6 / INV-80: con `objective.yaml` ilegible la lente queda vacía y el clasificador marcaría
+    TODO como no-core (o todo como core, según la regla) con una regla que nadie escribió — y el
+    registro guardaría esa lente vacía como si fuera la vigente. `main()` rehúsa operar nombrando
+    el archivo y el motivo; `classify` no llega a correr.  @inv INV-80"""
+    cfg.OBJECTIVE_YAML.write_text("name: X\nrelevance:\n  topics:\n    rv: activity: starspot\n", encoding="utf-8")
+    llamadas = []
+    monkeypatch.setattr(qa, "classify", lambda *a, **k: llamadas.append(a) or [])
+    monkeypatch.setattr(sys, "argv", ["query_ads.py", "test_star"])
+    with pytest.raises(SystemExit) as exc:
+        qa.main()
+    assert "objective.yaml" in str(exc.value)
+    assert llamadas == []
+
+
+def test_escotillas_quedan_en_el_registro(toy_vault, toy_classifier, no_sleep, monkeypatch):
+    """D-48: lo que no se puede apagar se registra. Dos entradas del registro con los mismos
+    conteos pueden describir corridas distintas si una usó `--yes` y la otra no."""
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        [rec("2020dirA....1A")])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    assert run_main(monkeypatch, ["test_star", "--no-chain"]) == 0
+    assert "--no-chain" in cfg.load_busquedas("test_star")[-1]["escotillas"]
+
+
+def test_probe_reporta_el_costo_proyectado(capsys):
+    """T-3: la lente es un PRESUPUESTO, no sólo un filtro. El probe existe para afinar el corte
+    core/no-core, y hasta ahora mostraba cuántos papers entran pero no qué cuesta leerlos — que es
+    la mitad de la decisión (D-13: el ingest promete leer TODOS los core)."""
+    recs = [rec(f"2020a{i:03d}...1A") for i in range(10)]
+    qa.print_probe("title:(x)", recs)
+    out = capsys.readouterr().out
+    assert "tokens" in out.lower()
+    assert "240" in out or "240k" in out.lower()      # 10 core × 24k

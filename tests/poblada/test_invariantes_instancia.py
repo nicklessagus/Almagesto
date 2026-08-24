@@ -12,7 +12,7 @@ sin su ficha. Este archivo mide eso.
 **Dos familias de test, con semántica distinta:**
 - **Invariantes duros** (`test_todo_*`, `test_ningun_*`, `test_bibcode_*`, `test_vocabularios_*`,
   `test_campos_obligatorios_*`): afirman `== 0` / `100%` — cosas que valen sobre CUALQUIER corpus
-  sano, medidas hoy en verde sobre Almagesto-RV. Si alguna se pone roja, es una regresión real, sin
+  sano, medidas hoy en verde sobre una instancia real. Si alguna se pone roja, es una regresión real, sin
   techo que perdonarla.
 - **Ratchet** (`test_ratchet_categorias_no_superan_el_techo`): la instancia HOY no está limpia (16
   hallazgos bloqueantes + backlog grueso — ver `ratchet_instancia.yaml`), y exigir 0 sería rojo
@@ -120,7 +120,7 @@ def reporte(instancia_real):
     return rc, txt
 
 
-# ── invariantes duros: valen hoy en verde sobre Almagesto-RV, sin techo que los perdone ──────────
+# ── invariantes duros: valen hoy en verde sobre una instancia real, sin techo que los perdone ──────────
 
 def test_todo_wikilink_resuelve(reporte):
     """Caza un `[[wikilink]]` que apunta a una nota inexistente (typo de nombre, nota borrada sin

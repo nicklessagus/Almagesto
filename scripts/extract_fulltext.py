@@ -140,6 +140,14 @@ def ocr_pdf(pdf: Path) -> str | None:
         return "\f".join(out)
 
 
+
+def _flags_usados(args) -> list:
+    """Los flags no-default de esta corrida, para dejarlos en `cadena:` del registro (D-48/D-57).
+    Son las **escotillas**: `--force`, `--yes`, `--all` cambian lo que la corrida hizo, y sin
+    registrarlas la traza dice "corrió make_notes" sobre dos corridas que no hicieron lo mismo."""
+    return sorted(f"--{k.replace('_', '-')}" for k, v in vars(args).items()
+                  if v is True and k not in ("topic",))
+
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser()
@@ -183,6 +191,18 @@ def main() -> int:
                 skipped += 1
                 continue
             print(f"  {pdf.name}: .txt existente ilegible → reintento con OCR")
+        # D-18: el mismo bibcode ya extraído bajo otro slug es el MISMO texto — copiarlo evita
+        # re-correr pdftotext/OCR (el paso más caro después de la red). Se reusa sólo si la copia
+        # es LEGIBLE: una copia mojibake no ahorra nada, sólo propaga el problema a otro slug.
+        if not args.force and not out.exists():
+            otro = cfg.artefacto_en_otro_slug(cfg.FULLTEXT, args.slug, pdf.stem, ".txt")
+            if otro is not None:
+                prev = otro.read_text(encoding="utf-8", errors="replace")
+                if is_legible(prev)[0]:
+                    cfg.write_text_atomic(out, prev)
+                    print(f"  ↺ {pdf.stem}: ya extraído bajo `{otro.parent.name}` — copiado (D-18)")
+                    done += 1
+                    continue
         text, why = None, "forzado con --ocr"
         if not args.ocr:
             # -layout preserva columnas/tablas razonablemente; quitarlo si molesta
@@ -225,7 +245,7 @@ def main() -> int:
             ok, _why2 = is_legible(ocr_text)
             text = ocr_header(why) + ocr_text        # header source: ocr → citable con salvedad
             why = _why2
-        out.write_text(text, encoding="utf-8")
+        cfg.write_text_atomic(out, text)
         if ok:
             done += 1
             ocred += 1 if via_ocr else 0
@@ -258,6 +278,8 @@ def main() -> int:
     if stamped:
         print(f"  notas: {stamped} con fulltext:/fulltext_source:/pdf_source: estampados "
               "(contrato máquina)")
+    if not failed:
+        cfg.save_paso(args.slug, "extract_fulltext", flags=_flags_usados(args))
     return 1 if failed else 0
 
 

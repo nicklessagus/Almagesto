@@ -1,6 +1,6 @@
 """Upgrade 1.11.0 → framework actual (§3.4 del plan de la 7ª auditoría de `tests/poblada/`).
 
-**Por qué existe.** El ensayo real de deploy (`Almagesto-RV`, instancia en 1.11.0, corpus real de
+**Por qué existe.** El ensayo real de deploy (una instancia real en 1.11.0, corpus real de
 25 notas / 4 estrellas) midió un ciclo de tres pasos que una bóveda vacía no puede ejercitar: (1) el
 lint del framework nuevo, corrido sobre un corpus del schema viejo, **bloquea** con categorías que
 el lector ya no tolera (`planets[].disputes[]` pre-#71, `build/<slug>/triage.json` pre-#51, el

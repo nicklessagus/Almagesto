@@ -227,11 +227,12 @@ def show_decisions(slug: str, decisiones: dict) -> int:
     # NO afirmar "no hay pendientes": sin `build/` no se miró nada. El registro sí sabe cuántos
     # candidatos dejó la última corrida — y es justo el caso (post-clone) donde el lint los reporta
     # y manda correr este comando: negarlos acá reintroduce el falso limpio que #64 cerró.
-    b = cfg.load_registro(slug).get("busqueda") or {}
-    # #H11: una `busqueda:` editada a mano puede ser un escalar en vez de un mapa;
-    # el lector es tolerante, pero este consumidor no → tratala como ausente.
-    if not isinstance(b, dict):
-        b = {}
+    # D-28: `busquedas` es una lista de corridas; acá interesa la ÚLTIMA (el snapshot vigente del
+    # embudo). El universo acumulado del sujeto lo da `cfg.universo_acumulado`.
+    bs = cfg.load_busquedas(slug)
+    b = bs[-1] if bs else {}
+    # #H11 sigue cubierto por `load_busquedas`, que filtra por `isinstance(dict)` los elementos
+    # de la lista (una entrada editada a mano puede ser un escalar).
     pend = b.get("n_candidates")
     cola = (f"sin build/{slug}/ads.json: no se puede juzgar candidatos hasta re-correr la cadena"
             if not pend else
@@ -358,10 +359,22 @@ def main() -> int:
     if args.report:
         report(args.slug, cands)
     cfg.print_seguro("\n  → juicio (LLM/usuario) por título+abstract: pertinente al SUJETO / ruido / dudoso.\n"
-          "     aceptados  → `extra_core: [<bibcode>, …]` en vault/config/stars.yaml y re-correr la "
-          "cadena (idempotente: sólo baja los nuevos).\n"
+          "     aceptados  → pegar el bloque de abajo en `extra_core:` de vault/config/stars.yaml y "
+          "re-correr la cadena (idempotente: sólo baja los nuevos).\n"
           "     descartados → python scripts/triage.py <slug> --drop <bib> … --reason \"<motivo>\".\n"
           "     dudosos    → al usuario (--report deja la tabla en outputs/).")
+    # D-58/R-2: `extra_core` es lista de MAPAS (con `via` y `motivo`). El snippet se imprime ya
+    # armado porque ahí está el costo de UX de la forma dura: escribir cuatro campos a mano por
+    # cada aceptación. Con el snippet, aceptar sigue siendo copiar y pegar — y el registro gana el
+    # dato que el carril del descarte ya tenía (quién y por qué), que era la asimetría.
+    cfg.print_seguro("\n  extra_core:")
+    for c in sorted(cands, key=lambda c: c.get("citation_count") or 0, reverse=True)[:10]:
+        cfg.print_seguro(f"  - bibcode: {c['bibcode']}\n"
+                         f"    via: triage\n"
+                         f"    fecha: {dt.date.today().isoformat()}\n"
+                         f"    motivo: <por qué es core para este sujeto>")
+    if len(cands) > 10:
+        cfg.print_seguro(f"  # … {len(cands) - 10} candidato(s) más (snippet acotado a los 10 más citados)")
     return 0
 
 

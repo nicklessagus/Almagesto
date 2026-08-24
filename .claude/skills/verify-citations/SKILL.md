@@ -270,11 +270,11 @@ Agregar/refrescar al final de la nota (idempotente — si ya existe, reemplazar)
 ## Verificación de citas (YYYY-MM-DD)
 Chequeo afirmación↔fulltext (skill `verify-citations`). N pares; X soportadas / Y parciales / Z no-soportadas / W contradicen (resueltas).
 
-| Afirmación (resumen) | Ref | Veredicto | Score | Evidencia |
-|---|---|---|---|---|
-| YZ CMi κ ≈ −2.6 | [[2018A&A...609A..12Z]] | soportada | 9 | "gradient of −2.6 Np−1 (±21%)" (L966) |
-| activas −2.4/−2.6 | [[2025A&A...696A..27J]] | no-soportada→corregida | 2 | el paper da −2.65 a −3.70; el −2.6 es de Zechmeister |
-| señal g confirmada | [[2016A&A...585A.134D]] | contradice→disputa | 1 | "is an artifact of... rotation" (L2101) → tagueada en disputes[] |
+| # | Afirmación (extracto) | Fuente | Veredicto | Score | Evidencia | Ancla | Hash fuente |
+|---|---|---|---|---|---|---|---|
+| 1 | YZ CMi κ ≈ −2.6 | [[2018A&A...609A..12Z]] | soportada | 9 | "gradient of −2.6 Np−1 (±21%)" (L966) | 3f9c1e2ab4 | 7b40d8aa11 |
+| 2 | activas −2.4/−2.6 | [[2025A&A...696A..27J]] | no-soportada→corregida | 2 | el paper da −2.65 a −3.70; el −2.6 es de Zechmeister | c17e0a9b22 | 55aa10ffe3 |
+| 3 | señal g confirmada | [[2016A&A...585A.134D]] | contradice→disputa | 1 | "is an artifact of... rotation" (L2101) → tagueada en disputes[] | 90bb4c1de7 | 0ab77e2c41 |
 
 Inferencias declaradas (sin cita, por diseño): <listar>.
 
@@ -285,15 +285,49 @@ cómo se resolvió — en un concepto, fila de `## Régimen de validez`> — o "
 ```
 Convertir fechas relativas a absolutas. Notación `$...$` en archivos `vault/wiki/` (texto plano en chat).
 
-**La fecha del encabezado es portante** (#56): el lint la compara contra la fecha del último cambio
-del archivo (git) y marca **verificación stale** cuando la nota se editó después — el caso de
-ampliarla con `append-knowledge` o refrescarla. Un bloque sin fecha se marca igual: sin ella no hay
-forma de saber si sigue vigente. Al re-verificar, re-fechar. Si la nota acumuló **varios** bloques
-(pasadas sucesivas sobre secciones distintas — pasa en la práctica pese al "reemplazar" de arriba),
-la vigencia la marca la fecha **más reciente**.
+### El ancla: una fila por par, con sus dos hashes (D-4/D-20)
+
+⛔ **Una fila por par, sin excepción.** La tentación es colapsar las soportadas en un párrafo de
+prosa y dejar en la tabla sólo las que fallaron (así estaba una ficha real). **No**: sin fila no hay
+dónde colgar el ancla, y el lint no puede distinguir "verificada" de "nunca se miró".
+
+Las dos columnas nuevas las calcula el **mismo** código que después las chequea, así que no se
+escriben a ojo:
+
+```bash
+# ancla del bloque que contiene la cita, y hash del .txt que leíste
+python -c "import sys;sys.path.insert(0,'scripts');import lib_blocks as lb;\
+[print(p.bibcode, p.anchor) for p in lb.pairs_of(open('vault/wiki/<nota>.md',encoding='utf-8').read())]"
+python -c "import sys;sys.path.insert(0,'scripts');import lib_blocks as lb;\
+print(lb.source_hash('vault/raw/fulltext/<slug>/<bibcode>.txt'))"
+```
+
+- **`Ancla`** — sha256 (10 hex) del bloque markdown normalizado que contiene la afirmación.
+  Reflowear la nota **no** la mueve; cambiar un número **sí**. Una fila/ítem sin `[[bibcode]]`
+  propio hereda el del caption y hashea **los dos** bloques.
+- **`Hash fuente`** — sha256 (10 hex) del `.txt` que leíste. Es lo que detecta que el PDF se
+  re-extrajo y la fuente ya no dice lo mismo, **sin que la nota se haya tocado** — ninguna medida
+  basada en fechas de la nota puede ver eso.
+
+**Cerrá con `python scripts/lint.py --cierre`** (R-1): ahí un par vencido **frena la operación**,
+porque significa que no terminaste. Sin el flag es la pasada periódica y sólo reporta.
+
+**La fecha del encabezado sigue siendo portante**, pero ya **no** es el mecanismo principal (#56):
+las anclas la reemplazan con granularidad de par. Queda como **red** para notas con bloque y sin
+tabla parseable, y porque el lint la usa para el chequeo stale por git. Al re-verificar, re-fechar.
+Si la nota acumuló **varios** bloques (pasadas sucesivas sobre secciones distintas), la vigencia la
+marca la fecha **más reciente**.
+
+### D-5 — la nota nace 100% verificada
+
+Al armar una ficha o un concepto se verifica **todo**, y el bloque sale con una fila por par. El
+estado *"sin verificar"* sólo puede aparecer **después**, por una edición. Eso es lo que hace
+viable el chequeo: el caso normal es que nada cambió y el lint calla, así que cuando habla hay algo
+real. Una nota que nace con pares sin fila arranca con deuda que nadie va a distinguir de la deuda
+legítima.
 
 ### 6. Lint + cierre
-Correr `python scripts/lint.py` (0 en lo bloqueante; la **fuga de implementación** es WARN a revisar a
+Correr `python scripts/lint.py --cierre` (0 en lo bloqueante; la **fuga de implementación** es WARN a revisar a
 mano, y resolvé las **citas no verificables** del corpus que chequeás). Si el usuario pidió archivar/commitear, `git add` de los archivos **específicos**
 y commit descriptivo; **preguntar antes de `push`**. Appendear a `vault/wiki/log.md` (resumen del chequeo:
 cuántas soportadas/corregidas).

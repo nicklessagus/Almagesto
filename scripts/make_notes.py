@@ -23,7 +23,7 @@ el apéndice máquina "## Excluidos por el filtro" con el ads.json vigente — v
 nota de paper que ya existía re-estampa el link `[📄 PDF]` de la línea de cabecera desde el
 frontmatter `pdf:` — ver stamp_pdf_link (#47: la cabecera es metadata derivada, no contenido
 de escritura única); (d) en una ficha/concept que ya existía re-estampa la línea de puntero
-`> _Búsqueda …_` de la cabecera desde `vault/config/registro/<slug>.yaml` — ver stamp_search_line
+`> _Estado — …_` de la cabecera desde `vault/config/registro/<slug>.yaml` — ver stamp_estado
 (#64). Aparte, `stamp_fulltext` (lo llama extract_fulltext al cerrar) estampa
 `fulltext`/`fulltext_source`/`pdf_source` sobre notas ya existentes. Backfill masivo del link PDF:
 `python scripts/make_notes.py --restamp-pdf-links` (sin slug).
@@ -207,7 +207,7 @@ def stamp_fulltext(dest, stem: str, slug: str | None) -> bool:
         if pver:
             changed = upsert("eprint_version", pver, ("pdf_source",)) or changed
     if changed:
-        dest.write_text("---\n" + "\n".join(lines) + text[end:], encoding="utf-8")
+        cfg.write_text_atomic(dest, "---\n" + "\n".join(lines) + text[end:])
     return changed
 
 
@@ -275,7 +275,7 @@ def stamp_pdf_link(dest) -> bool:
     new_line = PDF_LINK_RE.sub("", line) + want
     if new_line == line:
         return False
-    dest.write_text(text[:pos] + new_line + text[line_end:], encoding="utf-8")
+    cfg.write_text_atomic(dest, text[:pos] + new_line + text[line_end:])
     return True
 
 
@@ -415,7 +415,7 @@ def migrate_disputes(dest) -> bool:
             if k == "planets":
                 reordenado["disputes"] = nuevas
         front = reordenado
-    dest.write_text(fm(front) + text[end + 5:], encoding="utf-8")
+    cfg.write_text_atomic(dest, fm(front) + text[end + 5:])
     cfg.print_seguro(f"  {dest.name}: {len(nuevas)} disputa(s) migradas a posiciones explícitas")
     return True
 
@@ -558,7 +558,7 @@ def sync_mirror() -> int:
                     reportar(f"{pl.get('letter')}.{campo}", dest.name, val, val_gt)
 
         if changed:
-            dest.write_text(fm(front) + text[end + 5:], encoding="utf-8")
+            cfg.write_text_atomic(dest, fm(front) + text[end + 5:])
 
     cfg.print_seguro(f"sync-mirror: {rellenados} campo(s) rellenados desde el ground-truth "
           f"({len(notes)} ficha(s) revisadas); {reportados} sin tocar (motivo arriba de cada uno).")
@@ -635,7 +635,7 @@ def merge_frontmatter_list(dest, field: str, values: list) -> bool:
         lines[j:j] = [f"{indent}- {v}" for v in missing]
     else:
         return False   # forma no reconocida (escalar con valor): no tocar
-    dest.write_text("---\n" + "\n".join(lines) + text[end:], encoding="utf-8")
+    cfg.write_text_atomic(dest, "---\n" + "\n".join(lines) + text[end:])
     return True
 
 
@@ -726,7 +726,7 @@ def stamp_excluded(slug: str, dest) -> bool:
         out = text[:start] + new.rstrip("\n") + ("\n" if new else "") + text[end:]
     if out == text:
         return False
-    dest.write_text(out, encoding="utf-8")
+    cfg.write_text_atomic(dest, out)
     return True
 
 
@@ -743,7 +743,6 @@ LLM_DISCLAIMER = {
 > chequeable con `verify-citations`, que es **juicio de LLM, no prueba**. Verificá contra la fuente antes
 > de llevar un dato a un paper/tesis.""",
 }
-SEARCH_LINE_RE = re.compile(r"^> _Búsqueda .*_$\n?", re.M)
 
 
 # Paso de CONTRASTE cross-paper (#72): la sección que va entre leer los papers y escribir la
@@ -862,32 +861,6 @@ def extraction_block(topic: bool) -> str:
     return "## Extracción (LLM)\n" + "\n".join(bullets) + "\n"
 
 
-def search_line(slug: str) -> str:
-    """Puntero de UNA línea al registro de búsqueda versionado (#64), para la cabecera de la ficha
-    o del concept. El registro completo —query efectiva, límites, conteos, versión— vive en
-    `vault/config/registro/<slug>.yaml`; acá va sólo lo que el que abre la nota necesita saber sin
-    abrir nada: CUÁNDO se buscó y sobre QUÉ universo afirma la nota. "" si no hay registro."""
-    # `cfg.load_registro` es tolerante (puede devolver `busqueda` en cualquier forma que haya en el
-    # YAML — el archivo lo edita gente a mano); este consumidor no lo es, así que hay que chequear
-    # `isinstance` ANTES de usarlo. Con `busqueda: 2026-08-22` (escalar, no mapa) `.get("fecha")`
-    # sobre un string revienta con AttributeError — igual que se comporta como si no hubiera registro.
-    b = cfg.load_registro(slug).get("busqueda")
-    if not isinstance(b, dict) or not b.get("fecha"):
-        return ""
-    universo = b.get("n_found") or b.get("n_total")
-    partes = [f"> _Búsqueda {b['fecha']}"]
-    partes.append(f": {universo} → {b.get('n_core', '?')} core" if universo
-                  else f": {b.get('n_core', '?')} core")
-    if b.get("n_candidates"):
-        partes.append(f" · {b['n_candidates']} sin juzgar")
-    if b.get("n_dropped"):
-        partes.append(f" · {b['n_dropped']} descartados")
-    if b.get("truncated"):
-        partes.append(" · ⚠ truncada")
-    partes.append(f" · registro en `config/registro/{slug}.yaml`._")
-    return "".join(partes) + "\n"
-
-
 H1_RE = re.compile(r"^# .+$", re.M)
 
 
@@ -920,7 +893,7 @@ def stamp_header(dest) -> bool:
     El ancla de "ya tiene cabecera" es **sólo** `GENERATOR_LINE` — es lo único que el lint mide
     (`lint.py`, categoría "cabecera no estampable", #69). La versión vieja frenaba también con sólo
     "Capa LLM" en el texto, y eso era el deadlock: una nota con el disclaimer pero sin la línea del
-    generador —22 de 25 en el corpus real de Almagesto-RV, típicamente porque el disclaimer se
+    generador —22 de 25 en el corpus real de una instancia, típicamente porque el disclaimer se
     escribió a mano antes de que `GENERATOR_LINE` existiera— quedaba marcada por el lint para
     siempre, y el comando que el propio mensaje del lint receta no-opeaba en silencio (0 de 25
     estampadas). Acá, si falta sólo la línea, se agrega al pie del blockquote de "Capa LLM" que ya
@@ -937,7 +910,7 @@ def stamp_header(dest) -> bool:
     # La rama de fallback TIENE que llevar `GENERATOR_LINE`. Medido corriendo el ensayo de deploy
     # sobre un corpus real: la línea vieja ("Cabecera normalizada por Almagesto; la nota no registra
     # con qué versión se creó") no la llevaba, y `GENERATOR_LINE` no es decorativa — es el **punto de
-    # inserción** que `stamp_search_line` busca (`if i < 0: return False`). O sea que la cabecera
+    # inserción** que `stamp_estado` busca (`if i < 0: return False`). O sea que la cabecera
     # "arreglada" no servía para lo único que la cabecera existe para habilitar: el lint seguía
     # marcando la nota y `--restamp-headers` informaba éxito **en cada corrida** (22 estampadas, 21
     # reportadas, para siempre). Es el no-op silencioso de #69 una capa más abajo.
@@ -957,36 +930,453 @@ def stamp_header(dest) -> bool:
             pos = text.find("\n", pos + 1)
         insert_at = pos + 1 if pos >= 0 else len(text)
         out = text[:insert_at] + f">\n{linea_gen}\n" + text[insert_at:]
-        dest.write_text(out, encoding="utf-8")
+        cfg.write_text_atomic(dest, out)
         return True
     m = H1_RE.search(text)
     if not m:
         return False                                  # sin H1 no hay ancla honesta: no inventamos
     bloque = f"\n\n{LLM_DISCLAIMER[kind]}\n>\n{linea_gen}"
     out = text[:m.end()] + bloque + text[m.end():]
-    dest.write_text(out, encoding="utf-8")
+    cfg.write_text_atomic(dest, out)
     return True
 
 
-def stamp_search_line(slug: str, dest) -> bool:
-    """Estampa/actualiza el puntero de búsqueda en la cabecera de una nota EXISTENTE (familia
-    stamp_fulltext/stamp_excluded: cirugía a nivel texto, nunca toca la prosa LLM). Va justo antes
-    de la línea `_Generado con Almagesto v…_` del blockquote de cabecera; si esa ancla no está, la
-    cabecera está fuera del contrato y NO se toca nada (mismo criterio que stamp_pdf_link, #48).
-    Idempotente: sin cambios no reescribe. Devuelve True si modificó."""
+# ── D-10/D-11/D-24: la lista de papers, MATERIALIZADA ────────────────────────────────────────────
+#
+# Qué problema cierra. Una ficha promete en su roll-up `## Papers` un universo (medido en la
+# instancia real: 155) y su prosa discute otra cosa (8). Y ese roll-up es un bloque ```dataview```:
+# un agente que abre el `.md` ve el CÓDIGO de la query, no sus resultados, y el plugin ni siquiera
+# está versionado. El contrato dice que la ficha sirve a una audiencia-modelo; una promesa que
+# depende de un plugin no la cumple (D-11). Acá la tabla se ESTAMPA, con el estado de cada paper.
+
+PAPERS_HEADER = "## Papers"
+METODOS_HEADER = "## Métodos aplicados a esta estrella"
+CONCEPT_ROLLUP_HEADER = "## Papers que tocan este tema (auto)"
+
+# Los cuatro estados posibles de un paper del universo de un sujeto. El orden es el del embudo:
+# cada uno es un paso menos recorrido que el anterior.
+ESTADO_SINTETIZADO = "sintetizado"
+ESTADO_EXTRAIDO = "extraído, no sintetizado"
+ESTADO_SIN_EXTRAER = "sin extraer"
+ESTADO_FUERA = "fuera del filtro"
+
+
+def papers_fm_index() -> dict:
+    """`{stem: frontmatter}` de todas las notas de paper — UNA pasada de parseo.
+
+    Existe por una regresión medida: `papers_universe` re-parseaba `papers/` entero por cada
+    sujeto, y con 4 estrellas sobre 900 notas el lint saltó de ~2,0 a **5,9 parseos YAML por nota**
+    (el techo del test de escala es 2,3). Un consumidor que ya tiene el índice lo pasa; el resto
+    paga una sola pasada."""
+    return {f.stem: cfg.split_fm(f.read_text(encoding="utf-8"))
+            for f in sorted(cfg.PAPERS.glob("*.md"))}
+
+
+def _papers_del_sujeto(slug: str, kind: str, fms: dict | None = None) -> list:
+    """(stem, frontmatter) de cada nota de paper que declara este sujeto.
+
+    Se parsea con `cfg.split_fm`, **nunca** con grep: es la lección que `CLAUDE.md` registra medida
+    dos veces — `grep -l 'stars:.*<nombre>'` da 0 hits con la lista en bloque, y el `awk` con ámbito
+    de campo da 0 con la lista en flow style, que es como la deja el retro-linkeo. Las dos formas
+    conviven en el mismo corpus."""
+    if kind == "star":
+        nombre, _ = cfg.star_by_slug(slug)
+        campo = "stars"
+    else:
+        nombre, meta = cfg.topic_by_slug(slug)
+        campo = "topics"
+        nombre = meta.get("concept") or slug
+    return [(stem, fm) for stem, fm in (fms if fms is not None else papers_fm_index()).items()
+            if nombre in (cfg.as_list(fm.get(campo)) or [])]
+
+
+# Secciones ESTAMPADAS por máquina: no son síntesis. Se excluyen al medir "citado en esta ficha"
+# porque se citan a sí mismas — la tabla de `## Papers` lleva un `[[bibcode]]` por fila, así que sin
+# este recorte TODO paper aparece como sintetizado apenas se estampa la tabla. Es el mismo lazo que
+# el bloque `## Verificación de citas` en `lib_blocks`: un artefacto que se mide a sí mismo siempre
+# da el resultado que su propia existencia produce.
+SECCIONES_MAQUINA = (PAPERS_HEADER, METODOS_HEADER, CONCEPT_ROLLUP_HEADER, "## Excluidos por el filtro")
+
+
+def _prosa(text: str) -> str:
+    """El cuerpo SIN las secciones estampadas por máquina."""
+    out, saltando = [], False
+    for linea in text.split("\n"):
+        if linea.startswith("## "):
+            saltando = any(linea.startswith(h) for h in SECCIONES_MAQUINA)
+        if not saltando:
+            out.append(linea)
+    return "\n".join(out)
+
+
+def papers_universe(slug: str, kind: str, fms: dict | None = None) -> list:
+    """El universo de papers del sujeto.  @inv INV-81, por paper: `{stem, year, relevance, origen, via, estado}`.
+
+    `estado` mide **cuán lejos llegó ese paper en el embudo**, que es la pregunta que la ficha no
+    podía responder: `fuera del filtro` (no-core) → `sin extraer` → `extraído, no sintetizado`
+    (`methods` poblado pero su bibcode no aparece citado en ESTA ficha) → `sintetizado`.
+
+    `origen` es `manual` si el paper está en `extra_core` (el juicio del usuario pisa a la lente,
+    #68) y `lente` si no; `via` trae el valor declarado en la config (D-58)."""
+    dest = (cfg.STARS / f"{slug}.md") if kind == "star" else _concept_dest(slug)
+    cuerpo = _prosa(dest.read_text(encoding="utf-8")) if dest and dest.exists() else ""
+    meta = (cfg.star_by_slug(slug)[1] if kind == "star" else cfg.topic_by_slug(slug)[1])
+    via_de = {e["bibcode"]: e["via"] for e in cfg.load_extra_core(meta, entry=slug)}
+    filas = []
+    for stem, fm in _papers_del_sujeto(slug, kind, fms):
+        if (fm.get("relevance") or "").lower() == "low":
+            estado = ESTADO_FUERA
+        elif not (fm.get("methods") or []):
+            estado = ESTADO_SIN_EXTRAER
+        elif f"[[{stem}" in cuerpo:
+            estado = ESTADO_SINTETIZADO
+        else:
+            estado = ESTADO_EXTRAIDO
+        filas.append({"stem": stem, "year": fm.get("year") or "", "relevance": fm.get("relevance") or "",
+                      "origen": "manual" if stem in via_de else "lente",
+                      "via": via_de.get(stem, ""), "estado": estado})
+    return sorted(filas, key=lambda r: r["stem"])
+
+
+def _concept_dest(slug: str):
+    """La nota del concepto de un tema, por su `area`/`concept` de topics.yaml."""
+    try:
+        _, meta = cfg.topic_by_slug(slug)
+    except KeyError:
+        return None
+    return cfg.CONCEPTS / str(meta.get("area") or "") / f"{meta.get('concept') or slug}.md"
+
+
+def papers_table(rows: list) -> str:
+    """La sección `## Papers` estampada: encabezado con los DOS números (universo y sintetizados) y
+    una fila por paper. El encabezado no puede prometer un número que la tabla no sostenga — ése
+    era el defecto medido."""
+    n_sint = sum(1 for r in rows if r["estado"] == ESTADO_SINTETIZADO)
+    out = [f"{PAPERS_HEADER} ({len(rows)} · {n_sint} sintetizados en esta ficha)", ""]
+    if not rows:
+        out += ["_(ninguna nota de paper declara este sujeto todavía.)_", ""]
+        return "\n".join(out)
+    out += ["| Bibcode | Año | Relevancia | Origen | Estado |", "|---|---|---|---|---|"]
+    for r in rows:
+        origen = r["origen"] + (f" ({r['via']})" if r["via"] else "")
+        out.append(f"| [[{r['stem']}]] | {r['year']} | {r['relevance']} | {origen} | {r['estado']} |")
+    out.append("")
+    return "\n".join(out)
+
+
+def concept_rollup_rows(slug: str, fms: dict | None = None) -> list:
+    """Roll-up de un concepto: **unión** de `methods` y `thesis_links`, declarando por cuál entró.
+
+    D-24: en la instancia real esas dos llaves viven en papers distintos, así que quedarse con una
+    sola pierde la mitad del roll-up sin decirlo."""
+    try:
+        _, meta = cfg.topic_by_slug(slug)
+    except KeyError:
+        return []
+    concept = meta.get("concept") or slug
+    filas = []
+    for stem, fm in (fms if fms is not None else papers_fm_index()).items():
+        por_m = concept in (cfg.as_list(fm.get("methods")) or [])
+        por_t = concept in (cfg.as_list(fm.get("thesis_links")) or [])
+        if not (por_m or por_t):
+            continue
+        filas.append({"stem": stem, "year": fm.get("year") or "",
+                      "bearing": fm.get("bearing") or "",
+                      "entro_por": "ambos" if por_m and por_t else ("methods" if por_m else "thesis_links")})
+    return sorted(filas, key=lambda r: r["stem"])
+
+
+def concept_rollup_table(rows: list) -> str:
+    out = [f"{CONCEPT_ROLLUP_HEADER} ({len(rows)})", ""]
+    if not rows:
+        out += ["_(ninguna nota de paper declara este tema todavía.)_", ""]
+        return "\n".join(out)
+    out += ["| Bibcode | Año | Bearing | Entró por |", "|---|---|---|---|"]
+    for r in rows:
+        out.append(f"| [[{r['stem']}]] | {r['year']} | {r['bearing']} | {r['entro_por']} |")
+    out.append("")
+    return "\n".join(out)
+
+
+def _reemplazar_seccion(dest, header: str, nuevo: str) -> bool:
+    """Cirugía anclada: reemplaza la sección que empieza en `header` hasta el próximo `## ` (o EOF).
+
+    Familia `stamp_excluded`/`stamp_fulltext`: nunca toca la prosa LLM de las otras secciones, y es
+    idempotente (sin cambios no reescribe). Si la nota no tiene esa sección, no la inventa —
+    agregarla al final la pondría después del apéndice de excluidos, fuera de su lugar."""
     if not dest.exists():
         return False
-    new = search_line(slug)
     text = dest.read_text(encoding="utf-8")
-    out = SEARCH_LINE_RE.sub("", text, count=1)      # sacar el puntero viejo (si lo había)
+    i = text.find("\n" + header)
+    if i < 0:
+        return False
+    inicio = i + 1
+    nxt = text.find("\n## ", inicio + 1)
+    fin = len(text) if nxt < 0 else nxt + 1
+    out = text[:inicio] + nuevo.rstrip("\n") + "\n" + text[fin:]
+    if out == text:
+        return False
+    cfg.write_text_atomic(dest, out)
+    return True
+
+
+def stamp_papers_table(slug: str, dest, kind: str = "star") -> bool:
+    """Reemplaza el bloque ```dataview``` de `## Papers` por la tabla materializada (D-10/D-11)."""
+    return _reemplazar_seccion(dest, PAPERS_HEADER, papers_table(papers_universe(slug, kind)))
+
+
+def stamp_concept_rollup(slug: str, dest) -> bool:
+    """Ídem para el roll-up de un concepto, con la unión de las dos llaves (D-24)."""
+    return _reemplazar_seccion(dest, CONCEPT_ROLLUP_HEADER,
+                               concept_rollup_table(concept_rollup_rows(slug)))
+
+
+# ── D-19 / INV-84: identidad del paper y renombre preprint → publicado ───────────────────────────
+#
+# La identidad de un trabajo es su `doi`/`arxiv_id`, no su bibcode: el mismo paper tiene un bibcode
+# de preprint y otro de publicado. Medido en la instancia real: 2 trabajos con dos notas cada uno.
+# Para todo lo que cuenta papers eso es doble conteo; para el consumidor son dos fuentes donde hay
+# una; y para #75 ("extraído no sintetizado") es un falso positivo permanente, porque la ficha cita
+# una de las dos.
+
+# Wikilink al stem exacto: `[[stem]]` o `[[stem|alias]]`. Deliberadamente NO matchea el bibcode
+# suelto en prosa — una cita transcripta del paper que lo menciona textualmente no es un link a la
+# nota, y un replace ciego la reescribiría (adversario con test propio).
+def _wikilink_re(stem: str):
+    return re.compile(r"\[\[" + re.escape(stem) + r"(\||\]\])")
+
+
+def identidad(fm: dict) -> tuple | None:
+    """La identidad del trabajo: `("arxiv", id)` o `("doi", id)`, o `None` si no declara ninguna.
+
+    `arxiv_id` primero porque es el que sobrevive al ciclo preprint→publicado (el DOI del preprint
+    y el del publicado suelen ser distintos, el arXiv id no cambia)."""
+    for campo, clave in (("arxiv_id", "arxiv"), ("doi", "doi")):
+        v = fm.get(campo)
+        if v:
+            return (clave, str(v).strip().lower())
+    return None
+
+
+def rename_paper(old_stem: str, new_bibcode: str) -> None:
+    """Renombra una nota de paper y TODO lo que la referencia (D-19).  @inv INV-84
+
+    Mueve la nota y sus artefactos (`raw/pdfs/*/`, `raw/fulltext/*/`), agrega el bibcode viejo a
+    `versions[]` —el alias: lo que el mundo exterior conserva— y **reescribe los wikilinks de toda
+    la bóveda**. Sin esa reescritura el renombre deja links rotos, que es la mitad del trabajo y la
+    que no se nota hasta que el lint la grita.
+
+    Alcance declarado: `vault/`. Lo que vive afuera (un paper que cita el bibcode viejo) se resuelve
+    por el alias en `versions[]`, no por reescritura."""
+    old = cfg.PAPERS / f"{safe_name(old_stem)}.md"
+    if not old.exists():
+        raise SystemExit(f"no existe la nota {old.name} — nada que renombrar")
+    new = cfg.PAPERS / f"{safe_name(new_bibcode)}.md"
+    if new.exists():
+        raise SystemExit(f"{new.name} ya existe — resolvé el duplicado a mano antes de renombrar")
+
+    texto = old.read_text(encoding="utf-8")
+    fm = cfg.split_fm(texto)
+    version = {"bibcode": old_stem, "pdf_source": fm.get("pdf_source"),
+               "eprint_version": fm.get("eprint_version")}
+    versions = [v for v in cfg.as_list(fm.get("versions")) if isinstance(v, dict)] + [version]
+
+    # artefactos: se mueven, no se copian — dejar el `.txt` viejo al lado haría que el hash de
+    # fuente del ancla (D-20) apunte a un archivo que ya nadie referencia.
+    for base in (cfg.PDFS, cfg.FULLTEXT):
+        for viejo in base.glob(f"*/{safe_name(old_stem)}.*"):
+            viejo.rename(viejo.with_name(f"{safe_name(new_bibcode)}{viejo.suffix}"))
+
+    cfg.write_text_atomic(new, texto)
+    old.unlink()
+    _set_campo(new, "bibcode", new_bibcode)
+    _set_lista_de_mapas(new, "versions", versions)
+
+    # reescritura de wikilinks en TODA la bóveda (atómica por nota)
+    patron = _wikilink_re(safe_name(old_stem))
+    tocadas = 0
+    for f in sorted(cfg.WIKI.rglob("*.md")):
+        cuerpo = f.read_text(encoding="utf-8")
+        nuevo_cuerpo = patron.sub(lambda m: f"[[{new_bibcode}{m.group(1)}", cuerpo)
+        if nuevo_cuerpo != cuerpo:
+            cfg.write_text_atomic(f, nuevo_cuerpo)
+            tocadas += 1
+    cfg.print_seguro(f"  {old.name} → {new.name} · {tocadas} nota(s) con wikilinks reescritos · "
+                     f"alias en `versions[]`")
+
+
+def _set_lista_de_mapas(dest, clave: str, valor: list) -> None:
+    """Escribe una lista de mapas en el frontmatter, reemplazando el bloque viejo de esa clave.
+
+    Cirugía a nivel texto (familia `merge_frontmatter_list`): no re-serializa el YAML entero, así
+    que los comentarios y el orden de la extracción LLM sobreviven byte a byte."""
+    text = dest.read_text(encoding="utf-8")
+    span = cfg.frontmatter_span(text)
+    if span is None:
+        return
+    yaml_block, _ = span
+    out, dropping = [], False
+    for ln in yaml_block.split("\n"):
+        if dropping:
+            if ln[:1] in (" ", "\t", "-"):
+                continue
+            dropping = False
+        if ln.startswith(f"{clave}:"):
+            dropping = True
+            continue
+        out.append(ln)
+    bloque = yaml.safe_dump({clave: valor}, sort_keys=False, allow_unicode=True,
+                            default_flow_style=False).rstrip("\n")
+    nuevo = "\n".join([ln for ln in out if ln.strip()] + [bloque]) + "\n"
+    cfg.write_text_atomic(dest, text.replace(yaml_block, nuevo, 1))
+
+
+def _set_campo(dest, clave: str, valor: str) -> None:
+    """Reemplaza un escalar del frontmatter editando el TEXTO (no re-serializa: preserva la
+    extracción LLM byte a byte, misma familia que `merge_frontmatter_list`)."""
+    text = dest.read_text(encoding="utf-8")
+    span = cfg.frontmatter_span(text)
+    if span is None:
+        return
+    yaml_block, _ = span
+    lineas = [f"{clave}: {valor}" if ln.startswith(f"{clave}:") else ln
+              for ln in yaml_block.split("\n")]
+    cfg.write_text_atomic(dest, text.replace(yaml_block, "\n".join(lineas), 1))
+
+
+# ── procedencia del ground-truth, EN la ficha (D-1) ──────────────────────────────────────────────
+#
+# Un lector abre la ficha y ve `teff_K: 5344` en el frontmatter sin nada que diga de dónde salió.
+# La procedencia estaba en la doc del framework, no en el artefacto — y el artefacto es lo que
+# viaja: una ficha copiada, exportada o leída por un agente llega sin la doc al lado. Va ARRIBA,
+# en el blockquote de cabecera donde ya vive el disclaimer de capa-LLM, porque es lo primero que se
+# lee y no se pierde al scrollear.
+GT_LINE_RE = re.compile(r"^> _Ground-truth.*\n", re.M)
+
+
+def ground_truth_line(slug: str) -> str:
+    """La línea de procedencia: qué autoridad respondió cada campo canónico, cuándo, y dónde mirar.
+
+    Se arma desde `_autoridad` del propio JSON (verdad de disco), no desde la tabla declarativa:
+    lo que la ficha publica tiene que ser lo que **efectivamente** contestó, no lo que debería
+    haber contestado. Si el JSON no existe, no se inventa nada."""
+    gt_file = cfg.GROUND_TRUTH / f"{slug}.json"
+    if not gt_file.exists():
+        return ""
+    try:
+        gt = json.loads(gt_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ""
+    host = cfg.as_map(gt.get("host") if isinstance(gt, dict) else None)
+    autoridad = cfg.as_map(host.get("_autoridad"))
+    if not autoridad:
+        return ""
+    def visible(campo: str) -> str:
+        return f"`{cfg.CAMPO_EN_FICHA.get(campo, campo)}`"
+
+    por_fuente: dict = {}
+    for campo, fuente in sorted(autoridad.items()):
+        por_fuente.setdefault(fuente, []).append(visible(campo))
+    if gt.get("planets"):
+        por_fuente.setdefault("nea", []).append("`planets[]`")
+    partes = [f"{', '.join(campos)} ← **{cfg.AUTORIDAD_NOMBRE.get(f, f)}**"
+              for f, campos in sorted(por_fuente.items())]
+    # Los campos canónicos que volvieron VACÍOS se nombran aparte. "La autoridad contestó y no
+    # tiene el dato" y "nadie preguntó" se ven idénticos en el frontmatter (`null` en los dos), y
+    # es justo la distinción que el lector necesita para saber si vale la pena buscarlo.
+    sin_dato = sorted(visible(c) for c in cfg.AUTORIDAD_CAMPO
+                      if c in host and host.get(c) in (None, "") and c not in autoridad)
+    vacios = f" · sin dato: {', '.join(sin_dato)}" if sin_dato else ""
+    cuando = gt.get("consultado")
+    fecha = f", consultado {cuando}" if cuando else ""
+    return ("> _Ground-truth — " + " · ".join(partes) + fecha + vacios +
+            ". Cada campo vale lo que dice **su** autoridad o `null`: si calla, no se rellena con "
+            f"literatura (va al cuerpo, citada). Detalle en `raw/ground_truth/{slug}.json`._\n")
+
+
+def stamp_ground_truth_line(slug: str, dest) -> bool:
+    """Estampa/actualiza la línea de procedencia. Mismo contrato que `stamp_estado`: cirugía
+    anclada en `_Generado con Almagesto…_`, idempotente, nunca inventa cabecera."""
+    if not dest.exists():
+        return False
+    new = ground_truth_line(slug)
+    text = dest.read_text(encoding="utf-8")
+    out = GT_LINE_RE.sub("", text, count=1)
     if new:
         i = out.find(GENERATOR_LINE)
         if i < 0:
-            return False                             # cabecera fuera del contrato: no inventamos
+            return False
         out = out[:i] + new + out[i:]
     if out == text:
         return False
-    dest.write_text(out, encoding="utf-8")
+    cfg.write_text_atomic(dest, out)
+    return True
+
+
+# ── D-12: las TRES fechas de una nota ────────────────────────────────────────────────────────────
+#
+# Una nota tiene tres estados que avanzan por separado y **pueden divergir sin que ninguno mienta**:
+# cuándo se buscó el corpus, cuándo se sintetizó la prosa, cuándo se verificaron las citas. Con una
+# sola fecha, refrescar el corpus hacía parecer re-verificado lo que nadie volvió a chequear.
+ESTADO_LINE_RE = re.compile(r"^> _Estado.*\n", re.M)
+
+
+def estado_line(slug: str, dest) -> str:
+    """La línea de estado de la cabecera.  @inv INV-82: búsqueda · síntesis · verificación. "" si no hay nada."""
+    bs = cfg.load_busquedas(slug)
+    b = bs[-1] if bs else {}
+    partes = []
+    if b.get("fecha"):
+        # Con UNA búsqueda se muestra `n_found` (lo que ADS dice que hay), como siempre. Con varias
+        # se muestra el universo ACUMULADO (unión, D-28): ahí es donde el número viejo mentía, al
+        # publicar el embudo de la última corrida como si fuera todo lo que la ficha vio.
+        universo = (cfg.universo_acumulado(slug) if len(bs) > 1
+                    else (b.get("n_found") or b.get("n_total") or "?"))
+        cuantas = f", {len(bs)} búsquedas" if len(bs) > 1 else ""
+        partes.append(f"búsqueda {b['fecha']} ({universo} → {b.get('n_core', '?')} core{cuantas})")
+        if b.get("n_candidates"):
+            partes.append(f"{b['n_candidates']} sin juzgar")
+        if b.get("truncated"):
+            partes.append("⚠ truncada")
+        if b.get("escotillas"):
+            partes.append(f"escotillas {' '.join(b['escotillas'])}")
+    texto = dest.read_text(encoding="utf-8") if dest.exists() else ""
+    m = re.search(r"^## Verificación de citas \((\d{4}-\d{2}-\d{2})\)", texto, re.M)
+    if m:
+        # La fecha es la de la última PASADA. La vigencia real es **por par** y la dicen las anclas
+        # (D-4): sin la salvedad, esta fecha se lee como "todo verificado a esta fecha", que es
+        # justamente la lectura que el ancla vino a corregir.
+        partes.append(f"verificación {m.group(1)} (vigencia por par: la dicen las anclas)")
+    if not partes:
+        return ""
+    # el puntero al registro es lo que hace auditable la línea: el detalle (query efectiva,
+    # límites, lente, juicios de curación) vive ahí y no se duplica en la nota (#64).
+    partes.append(f"registro en `config/registro/{slug}.yaml`")
+    return "> _Estado — " + " · ".join(partes) + "._\n"
+
+
+def stamp_estado(slug: str, dest) -> bool:
+    """Estampa/actualiza la línea de estado en la cabecera de una nota existente.
+
+    Mismo contrato que el viejo `stamp_search_line` (#64), al que ABSORBE — dos estampadores de
+    cabecera conviviendo son la misma complejidad permanente que un lector tolerante: cirugía
+    anclada en la línea
+    `_Generado con Almagesto v…_`, nunca toca la prosa, y si la cabecera está fuera del contrato no
+    inventa nada. **D-54:** si el contenido nuevo es idéntico al que ya está, no reescribe — un
+    stamper que re-fecha en cada corrida ensucia el diff y hace ilegible qué cambió de verdad."""
+    if not dest.exists():
+        return False
+    new = estado_line(slug, dest)
+    text = dest.read_text(encoding="utf-8")
+    out = ESTADO_LINE_RE.sub("", text, count=1)
+    if new:
+        i = out.find(GENERATOR_LINE)
+        if i < 0:
+            return False
+        out = out[:i] + new + out[i:]
+    if out == text:
+        return False
+    cfg.write_text_atomic(dest, out)
     return True
 
 
@@ -995,9 +1385,10 @@ def write_star_note(slug: str, force: bool) -> None:
     dest = cfg.STARS / f"{slug}.md"
     if dest.exists() and not force:
         # la nota no se pisa; sólo se refresca el apéndice máquina con el ads.json vigente (#35)
-        stamped = stamp_excluded(slug, dest) | stamp_search_line(slug, dest)
+        stamped = (stamp_excluded(slug, dest) | stamp_papers_table(slug, dest, "star")
+                   | stamp_ground_truth_line(slug, dest) | stamp_estado(slug, dest))
         cfg.print_seguro(f"  star: {dest.name} ya existe"
-              + (" — apéndice Excluidos / puntero de búsqueda re-estampados" if stamped
+              + (" — apéndice Excluidos / lista de papers / puntero de búsqueda re-estampados" if stamped
                  else " (usa --force para regenerar)"))
         return
     gt_file = cfg.GROUND_TRUTH / f"{slug}.json"
@@ -1069,12 +1460,8 @@ dv.table(["letter","P (d)","K (m/s)","e","M (M⊕)","status"],
 ```
 
 ## Papers
-```dataview
-TABLE year, topics, relevance, citation_count
-FROM "wiki/papers"
-WHERE contains(stars, "{name}")
-SORT citation_count DESC
-```
+_(se estampa determinista: `make_notes.py {slug}` lo regenera. D-11 — ninguna promesa del contrato
+depende de un plugin.)_
 
 ## Métodos aplicados a esta estrella
 ```dataview
@@ -1093,8 +1480,10 @@ SORT method ASC
     # versiona directorios vacíos, así que una bóveda sin `vault/wiki/stars/` (clon con el
     # scratch limpiado, árbol armado a mano) moría con un traceback de FileNotFound.
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(body, encoding="utf-8")
-    stamp_search_line(slug, dest)
+    cfg.write_text_atomic(dest, body)
+    stamp_papers_table(slug, dest, "star")
+    stamp_ground_truth_line(slug, dest)
+    stamp_estado(slug, dest)
     cfg.print_seguro(f"  star: {dest.name} escrito")
 
 
@@ -1114,9 +1503,10 @@ def write_concept_note(slug: str, force: bool) -> None:
     dest = cfg.CONCEPTS / area / f"{concept}.md"
     if dest.exists() and not force:
         # la síntesis no se pisa; sólo se refresca el apéndice máquina con el ads.json vigente (#35)
-        stamped = stamp_excluded(slug, dest) | stamp_search_line(slug, dest)
+        stamped = (stamp_excluded(slug, dest) | stamp_concept_rollup(slug, dest)
+                   | stamp_estado(slug, dest))
         cfg.print_seguro(f"  concept: {area}/{concept}.md ya existe"
-              + (" — apéndice Excluidos / puntero de búsqueda re-estampados" if stamped
+              + (" — apéndice Excluidos / roll-up / puntero de búsqueda re-estampados" if stamped
                  else " (no se pisa sin --force; los papers enganchan por thesis_links)"))
         return
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -1159,16 +1549,13 @@ _(qué falta para entender/implementar el tema sin abrir papers: pasos o ecuacio
 midió?), contradicciones sin resolver.)_
 
 ## Papers que tocan este tema (auto)
-```dataview
-TABLE bearing, year, file.link
-FROM "wiki/papers"
-WHERE {link_pred}
-SORT year ASC
-```
+_(se estampa determinista: `make_notes.py {slug} --topic` lo regenera. D-11/D-24 — unión de
+`methods` y `thesis_links`, declarando por cuál entró.)_
 """
     body += excluded_table(slug)
-    dest.write_text(body, encoding="utf-8")
-    stamp_search_line(slug, dest)
+    cfg.write_text_atomic(dest, body)
+    stamp_concept_rollup(slug, dest)
+    stamp_estado(slug, dest)
     cfg.print_seguro(f"  concept: {area}/{concept}.md escrito (stub)")
 
 
@@ -1188,10 +1575,26 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
         recs = [r for r in recs if r["relevant"]]
     cfg.PAPERS.mkdir(parents=True, exist_ok=True)
     extraccion = extraction_block(topic)     # una sola lectura del objetivo para toda la corrida
-    written = skipped = merged = restamped = 0
+    # D-19: identidades ya presentes en el corpus. Crear una segunda nota del MISMO trabajo (el
+    # preprint y el publicado tienen bibcodes distintos y el mismo `arxiv_id`) mete doble conteo en
+    # todo lo que cuenta papers, y un falso positivo permanente de #75 —la ficha cita una de las
+    # dos—. Se atajan acá, que es donde nacen.
+    ya_en_corpus = {}
+    for f in cfg.PAPERS.glob("*.md"):
+        if (ident := identidad(cfg.split_fm(f.read_text(encoding="utf-8")))):
+            ya_en_corpus.setdefault(ident, f.stem)
+    written = skipped = merged = restamped = duplicados = 0
     for r in recs:
         bib = r["bibcode"]
         dest = cfg.PAPERS / f"{safe_name(bib)}.md"
+        if not dest.exists() and (ident := identidad(r)) and ident in ya_en_corpus:
+            otro = ya_en_corpus[ident]
+            cfg.print_seguro(
+                f"  ⊘ {bib}: mismo trabajo que {otro} ({ident[0]}: {ident[1]}) — NO se crea una "
+                f"segunda nota. Si {bib} es la versión que corresponde, renombrá: "
+                f"`python scripts/make_notes.py --rename-paper {otro} {bib}`")
+            duplicados += 1
+            continue
         if dest.exists() and not force:
             # Retro-linkeo add-only (issue #4b): el paper ya estaba en el corpus (ingest previo de
             # otra estrella/tema) → no se pisa la extracción LLM, pero SÍ se mergean los seeds de
@@ -1258,7 +1661,7 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
 {abstract or '_(no disponible)_'}
 
 {extraccion}"""
-        dest.write_text(body, encoding="utf-8")
+        cfg.write_text_atomic(dest, body)
         written += 1
     cfg.print_seguro(f"  papers: {written} escritos, {skipped} ya existían"
           + (f", {merged} retro-linkeados (seeds add-only)" if merged else "")
@@ -1290,7 +1693,7 @@ def unpend_note(dest, citekey: str, slug: str | None) -> bool:
         lines = [f"pdf: {pdf_rel}" if ln.strip() == "pdf: null" else ln for ln in lines]
     body = "\n".join(ln for ln in body.split("\n")
                      if not ln.startswith("> ⏳ **Fuente pendiente"))
-    dest.write_text("---\n" + "\n".join(lines) + body, encoding="utf-8")
+    cfg.write_text_atomic(dest, "---\n" + "\n".join(lines) + body)
     cfg.print_seguro(f"  papers: {dest.name} — fuente obtenida → pending_source removido"
           + (" y `pdf` linkeado" if has_pdf else ""))
     return True
@@ -1407,14 +1810,26 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
 > El frontmatter es máquina-legible como en cualquier nota de paper.
 {pend_line}
 {extraction_block(topic=True)}"""
-    dest.write_text(body, encoding="utf-8")
+    cfg.write_text_atomic(dest, body)
     cfg.print_seguro(f"  papers: {dest.name} escrito (stub off-ADS)")
     return True
 
 
+
+def _flags_usados(args) -> list:
+    """Los flags no-default de esta corrida, para dejarlos en `cadena:` del registro (D-48/D-57).
+    Son las **escotillas**: `--force`, `--yes`, `--all` cambian lo que la corrida hizo, y sin
+    registrarlas la traza dice "corrió make_notes" sobre dos corridas que no hicieron lo mismo."""
+    return sorted(f"--{k.replace('_', '-')}" for k, v in vars(args).items()
+                  if v is True and k not in ("topic",))
+
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser()
+    ap.add_argument("--rename-paper", nargs=2, metavar=("VIEJO", "NUEVO"),
+                    help="renombra una nota de paper y sus artefactos, agrega el bibcode viejo a "
+                         "`versions[]` y reescribe los wikilinks de la bóveda (ciclo "
+                         "preprint→publicado, D-19)")
     ap.add_argument("slug", nargs="?",
                     help="slug de estrella/tema; en --web es la CLAVE de cita (AAAA+Autor). "
                          "Opcional sólo con --restamp-pdf-links.")
@@ -1476,12 +1891,16 @@ def main() -> int:
                              accessed=args.accessed, pending=args.pending, force=args.force)
         return 0
 
+    if args.rename_paper:
+        rename_paper(*args.rename_paper)
+        return 0
     cfg.print_seguro(f"Generando notas para {args.slug}")
     if args.topic:
         write_concept_note(args.slug, args.force)
     else:
         write_star_note(args.slug, args.force)
     write_paper_notes(args.slug, args.all, args.force, topic=args.topic)
+    cfg.save_paso(args.slug, "make_notes", flags=_flags_usados(args))
     return 0
 
 

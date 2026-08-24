@@ -1,10 +1,16 @@
 # Lint de la bóveda — <FECHA>
 
+## ⛔ No evaluado: el chequeo no pudo correr (hecho del ENTORNO, no de la bóveda — cuenta para el exit) (0)
+
 ## Wikilinks rotos (página faltante) (0)
 
 ## ⛔ Frontmatter no parseable o con forma inválida (la nota evade los chequeos de su tipo) (0)
 
 ## ⛔ Papers RETRACTADOS citados (frontera dura: fuente no válida) (0)
+
+## ⛔ Prosa que cita una fuente RETRACTADA sin marcar (0)
+
+## Prosa sostenida por fuente retractada, marcada (visible, no destruida) (0)
 
 ## Notas huérfanas (sin links entrantes) (2)
 - concepto-activity-017
@@ -29,6 +35,10 @@
 ## disputes en el schema viejo (planets[].disputes[]) — el lint ya no las lee (0)
 
 ## Juicio de triage en build/<slug>/triage.json (pre-1.9.0) — el lector ya no lo mira (0)
+
+## ⛔ Registro con `busqueda:` (schema viejo pre-D-28) — el lector ya no lo lee (0)
+
+## ⛔ Identidad duplicada: dos notas del mismo trabajo (mismo doi/arxiv_id) (0)
 
 ## `role` fuera del vocabulario (fundacional/aplicacion/arbitro) (0)
 
@@ -74,6 +84,10 @@
 - query-000 → 1 cita(s) sin bloque de verify-citations → correr el skill
 - query-001 → 1 cita(s) sin bloque de verify-citations → correr el skill
 
+## ⛔ Bloque de verificación con plantilla vieja (sin columnas de hash — no evaluable) (0)
+
+## Pares de verificación vencidos (backlog: pasada periódica; con `--cierre` bloquea) (0)
+
 ## Verificación stale: la nota se editó después de su último verify-citations (backlog) (0)
 
 ## Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog) (7)
@@ -94,6 +108,18 @@
 - star02 → sin la línea `_Generado con Almagesto v…_`: los estampadores de cabecera no pueden actuar → `python scripts/make_notes.py --restamp-headers`
 
 ## Triage pendiente: candidatos del chaining sin juzgar (backlog) (0)
+
+## Recorte de lectura sin declarar: hay core sin extraer y el registro no dice por qué (backlog) (3)
+- star00 → 8 paper(s) core sin extraer y el registro **no declaró** el recorte (1997Alm00036A, 2000Alm00039A, 2002Alm00012A…) → o se leen, o se declara el criterio (`extraccion:` en el registro): la ficha se presenta como snapshot del universo y hoy no lo es
+- star01 → 7 paper(s) core sin extraer y el registro **no declaró** el recorte (2002Alm00058A, 2006Alm00028A, 2012Alm00040A…) → o se leen, o se declara el criterio (`extraccion:` en el registro): la ficha se presenta como snapshot del universo y hoy no lo es
+- star02 → 8 paper(s) core sin extraer y el registro **no declaró** el recorte (2000Alm00026A, 2009Alm00044A, 2014Alm00002A…) → o se leen, o se declara el criterio (`extraccion:` en el registro): la ficha se presenta como snapshot del universo y hoy no lo es
+
+## Lista de papers desactualizada: la tabla estampada no refleja el universo (backlog) (3)
+- star00 → la lista de papers estampada no refleja el universo: faltan 1996Alm00057A, 1997Alm00009A, 1997Alm00015A, 1997Alm00036A, 2000Alm00039A, 2002Alm00012A, 2002Alm00042A, 2002Alm00051A, 2003Alm00021A, 2006Alm00027A, 2007Alm00045A, 2013Alm00006A, 2015Alm00048A, 2016Alm00030A, 2021Alm00000A, 2021Alm00024A, 2021Alm00054A, 2022Alm00018A, 2023Alm00003A, 2024Alm00033A → `python scripts/make_notes.py star00`
+- star01 → la lista de papers estampada no refleja el universo: faltan 1996Alm00010A, 1998Alm00019A, 2000Alm00043A, 2001Alm00007A, 2002Alm00058A, 2003Alm00031A, 2003Alm00046A, 2006Alm00025A, 2006Alm00028A, 2009Alm00022A, 2012Alm00040A, 2014Alm00037A, 2015Alm00001A, 2016Alm00034A, 2016Alm00052A, 2017Alm00049A, 2019Alm00013A, 2019Alm00055A, 2022Alm00004A, 2022Alm00016A → `python scripts/make_notes.py star01`
+- star02 → la lista de papers estampada no refleja el universo: faltan 2000Alm00026A, 2001Alm00029A, 2002Alm00017A, 2004Alm00014A, 2005Alm00053A, 2006Alm00005A, 2007Alm00020A, 2009Alm00044A, 2012Alm00050A, 2014Alm00002A, 2015Alm00023A, 2015Alm00035A, 2015Alm00038A, 2016Alm00011A, 2017Alm00008A, 2017Alm00032A, 2018Alm00041A, 2019Alm00056A, 2021Alm00059A, 2024Alm00047A → `python scripts/make_notes.py star02`
+
+## Cadena incompleta: falta un paso del orden canónico (backlog) (0)
 
 ## Corpus truncado: la query directa trajo menos de lo que ADS reporta (backlog) (0)
 

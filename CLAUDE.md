@@ -13,6 +13,13 @@ El usuario cura las fuentes (`vault/raw/`) y hace preguntas.
 > cada instancia es `vault/config/objective.yaml` + el
 > contenido de `vault/wiki/`/`vault/raw/`. Para instanciar una bóveda nueva ver `README.md` (sección *Instanciar*).
 
+> **La cabecera de una ficha/concepto lleva una línea `> _Estado — …_`** con las **tres fechas**
+> que avanzan por separado y pueden divergir sin que ninguna mienta (D-12): **búsqueda** (última
+> corrida + universo acumulado + escotillas), y **verificación** (fecha del bloque, con la salvedad
+> fija *"vigencia por par: la dicen las anclas"* — sin ella, la fecha se lee como "todo verificado
+> a esta fecha", que es justo la lectura que el ancla corrige). Con una sola fecha por nota,
+> refrescar el corpus hacía parecer re-verificado lo que nadie volvió a chequear.
+
 > **Al iniciar sesión, leé `vault/STATUS.md` (estado + próximos pasos) y `vault/wiki/log.md` (historial
 > reciente) para orientarte.** La "memoria" del proyecto es in-repo: este `CLAUDE.md` + `vault/STATUS.md`
 > + `vault/wiki/log.md` + `vault/wiki/index.md`. No depender de la memoria local de Claude (`~/.claude/...`),
@@ -133,7 +140,19 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   `planets[]` lleva `letter, P_days, K_ms, e, mass_earth, status` (de ground-truth NEA; `mass_earth`
   RV-only ≈ $m\sin i$). Los desacuerdos van en `disputes` **a nivel nota** (ver abajo), no dentro de
   `planets[]`.
-  ⛔ **Espejo puro de NEA (#70) — los campos de arriba valen lo que dice el ground-truth o NADA.**
+  ⛔ **Espejo con AUTORIDAD POR CAMPO (#70 + D-1) — cada campo vale lo que dice SU autoridad o NADA.**
+  `spectral_type` ← **SIMBAD**; `teff_K`, `dist_pc`, `P_rot_days` y los cinco campos de cada
+  `planets[]` ← **NEA** (pscomppars). Si **la autoridad declarada** calla, el campo queda `null`
+  **aunque la otra tenga el dato**: un valor cuya procedencia depende de quién contestó primero no
+  es auditable — el consumidor no puede distinguirlo de uno con una sola fuente. El JSON registra
+  en `_autoridad` **quién contestó cada campo**, y en `_otras_autoridades` lo que la otra decía y
+  no se adoptó (D-2: sin eso, el desacuerdo entre autoridades desaparece; se expresa como
+  `disputes` con `source: nea` / `source: simbad`).
+  **La ficha lo publica arriba**, en el blockquote de cabecera: una línea `> _Ground-truth — …_`
+  con qué autoridad respondió cada campo, la fecha del snapshot, **qué campos volvieron vacíos**
+  (distinto de "nadie preguntó", que en el frontmatter se ve igual: `null` en los dos) y el puntero
+  al JSON. Se estampa sola (`make_notes.py <slug>`, idempotente). Está ahí porque el **artefacto es
+  lo que viaja**: una ficha copiada, exportada o leída por un agente llega sin la doc al lado.
   `spectral_type`, `teff_K`, `dist_pc`, `P_rot_days` y los cinco campos de cada `planets[]` los
   copia el script del JSON de `vault/raw/ground_truth/`: si NEA no tiene el valor, el campo queda
   **null** y **no se rellena con literatura**. Los nulls de NEA son el caso **normal**, no la
@@ -168,9 +187,17 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   tabla Dataview `## Papers` de la ficha (que lista todo paper con la estrella en `stars:`). No
   re-narrar en la ficha lo que ya está en la extracción del paper. Esto mantiene la ficha **compacta**
   (rápida de ingestar, sin perder contexto) sin perder trazabilidad.
-  ⚠ **El puntero es resoluble sin Obsidian (#60):** los roll-ups `## Papers` y `## Métodos aplicados`
-  son bloques ```dataview``` — un agente que abre el `.md` ve el **código de la query, no sus
-  resultados**, y el plugin ni siquiera está versionado. Para la audiencia-modelo, que es la que este
+  ⚠ **Los roll-ups se ESTAMPAN, no son Dataview (D-10/D-11).** `## Papers` es una tabla
+  materializada —`Bibcode | Año | Relevancia | Origen | Estado`— cuyo encabezado lleva los **dos**
+  números (universo · sintetizados en esta ficha), porque el defecto medido era prometer 155 arriba
+  de una síntesis de 8. El **estado** dice cuán lejos llegó cada paper en el embudo: `fuera del
+  filtro` → `sin extraer` → `extraído, no sintetizado` → `sintetizado`. La regenera
+  `python scripts/make_notes.py <slug>` (idempotente, cirugía: no toca la prosa) y el lint reporta
+  como backlog la tabla desactualizada, **nombrando los stems**. En un concepto el roll-up es la
+  **unión** de `methods` y `thesis_links`, con la columna *Entró por* (D-24: esas dos llaves viven
+  en papers distintos, y quedarse con una pierde la mitad).
+  El motivo de fondo (#60): un bloque ```dataview``` le muestra a un agente que abre el `.md` el
+  **código de la query, no sus resultados**, y el plugin ni siquiera está versionado. Para la audiencia-modelo, que es la que este
   contrato dice servir, el equivalente determinista **parsea el frontmatter con el mismo parser que
   el tooling** (`lib_config.split_fm`), corriendo desde la raíz del repo:
   ```bash
@@ -211,7 +238,16 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   frontmatter contra el cual poner un `alt`). Sólo taguear discrepancias **materiales** (mayores que
   el error; no diferencias cosméticas dentro de la barra). Reflejar la disputa también en la
   tabla/prosa.
-- **papers/**: `bibcode, title, first_author, n_authors, year, arxiv_id, doi, bibstem, stars[], topics[], methods[],
+- **papers/**: ⛔ **la identidad de un trabajo es su `doi`/`arxiv_id`, no su bibcode (D-19).** El
+  preprint y el publicado son bibcodes distintos del **mismo** paper: dos notas ahí son doble conteo
+  en todo lo que cuenta papers, dos fuentes donde hay una, y un falso positivo permanente de #75
+  (la ficha cita una de las dos). Hay **una sola nota canónica** y los bibcodes viejos viven en
+  `versions[]`; el lint bloquea el duplicado y `make_notes` **rehúsa crear** la segunda nota. El
+  ciclo se resuelve con `python scripts/make_notes.py --rename-paper VIEJO NUEVO`, que mueve la nota
+  y sus artefactos (`raw/pdfs/`, `raw/fulltext/`), agrega el alias y **reescribe los wikilinks de
+  toda la bóveda** — sin eso el renombre deja links rotos, que es la mitad del trabajo. Alcance
+  declarado: `vault/`; lo que vive afuera se resuelve por el alias. Campos:
+  `bibcode, title, first_author, n_authors, year, arxiv_id, doi, bibstem, stars[], topics[], methods[],
   thesis_links[], bearing(supports|challenges|method), role[], relevance, citation_count, pdf, fulltext,
   fulltext_source(pdftotext|ocr|web), pdf_source(eprint|ads|publisher|web)`. El contrato apunta a **ambos artefactos**: `fulltext` es el
   `.txt` **barato** (grep/lectura — el default de todo consumidor) y `pdf` el respaldo caro (abrir
@@ -335,7 +371,10 @@ re-clasificar de `maintain`. No ingesta nada; después se usan `ingest-star`/`in
    mencionan al sujeto pero no hablan de él (medido: 18% de precisión). Sólo entra solo el que lleva
    el **sujeto en el título**; el resto queda como **candidato** en `build/<slug>/ads.json` —**sin
    bajarse**— y lo juzgás vos por título+abstract (`python scripts/triage.py <slug>`): aceptado →
-   `extra_core` en `stars.yaml` + re-correr la cadena; descartado → `triage.py --drop … --reason`
+   `extra_core` en `stars.yaml` —**lista de mapas** `{bibcode, via, fecha, motivo}`, forma dura: el
+   escalar y la lista de strings **bloquean** con el snippet correcto, y `triage.py` lo imprime
+   listo para pegar (D-58). El motivo de la asimetría: el carril del **descarte** ya registraba
+   quién y por qué (#51), y el de la **aceptación** no— + re-correr la cadena; descartado → `triage.py --drop … --reason`
    (persiste: no se re-propone); **dudoso → al usuario**. Detalle en el skill `ingest-star`.
 2. **Vos (LLM)** leés el **fulltext `.txt`** (el default: barato y greppable; el PDF se abre sólo
    para figuras/tablas/ecuaciones o ante duda de símbolos si `fulltext_source: ocr`) y hacés la
@@ -400,8 +439,18 @@ re-clasificar de `maintain`. No ingesta nada; después se usan `ingest-star`/`in
 > rigiendo**: sólo bibliografía citable.
 
 ### Registro de ingesta (`vault/config/registro/<slug>.yaml` — versionado, #51/#64)
-Cada sujeto ingestado deja un registro que **se commitea y viaja**, con dos secciones de dueños
-distintos: **`busqueda`** (la escribe `query_ads` al cerrar cada corrida: `fecha`, `query` efectiva
+Cada sujeto ingestado deja un registro que **se commitea y viaja**, con tres secciones de dueños
+distintos: **`busquedas`** (lista, una entrada por corrida — **acumulativo**, D-28: antes pisaba, y
+la cabecera de la ficha publicaba el embudo de la última corrida como si fuera el universo entero;
+el universo del sujeto es la **unión**, no la suma, y cada entrada distingue `n_nuevos` de
+`n_ya_estaban`), **`cadena`** (qué pasos corrieron, con fecha, versión, `via: orquestador|suelto` y
+las **escotillas** usadas — D-57: **cada script se estampa a sí mismo**, así que un paso corrido a
+mano deja rastro en vez de leerse como un corte; el lint compara contra el orden canónico y
+**nombra el paso** donde se cortó) y **`decisiones`**. Un descarte que se **revierte** (el bibcode
+pasa a `extra_core`, la fuente se vuelve a declarar) no queda contradiciendo lo hecho: se **anula**
+explícito, con el motivo viejo preservado en `previa` (D-52). Y la compuerta de triage **ya no se
+puede apagar por flag** (D-48: `--no-triage` se eliminó — permitía que un candidato ya descartado
+volviera a entrar en silencio). La sección `busquedas` la escribe `query_ads` al cerrar cada corrida: `fecha`, `query` efectiva
 —en una estrella la arma `build_query` y antes se tiraba—, `rows`, `n_found`, `n_total`, `n_core`,
 `n_candidates`, `n_dropped`, `truncated`, `almagesto_version`) y **`decisiones`** (el juicio de
 curación, por clave: `decision`/`motivo`/`fecha`). Las `decisiones` cubren los **dos carriles**:
@@ -463,7 +512,21 @@ distintivo** de la afirmación, la mera cercanía temática no alcanza). `no-sop
 **afirma lo contrario** → no es (sólo) cita rota: es corrección de la nota o **disputa** a taguear
 (`disputes` con posiciones explícitas, #71). Cada falla se **resuelve** (bajar la afirmación
 a lo que dice la fuente, reasignar la cita al bibcode correcto, marcar **`inferencia`**, o taguear la
-disputa) y se deja un bloque `## Verificación de citas` en la nota. El subagente contesta además, **en todos los casos**, si el paper
+disputa) y se deja un bloque `## Verificación de citas` en la nota — **una fila por par**, con dos
+columnas de hash (**el ancla**, D-4/D-20):
+`| # | Afirmación (extracto) | Fuente | Veredicto | Score | Evidencia | Ancla | Hash fuente |`.
+El **ancla** es el sha256 (10 hex) del **bloque markdown normalizado** que contiene la cita
+—párrafo / fila / ítem / blockquote—: reflowear la nota **no** la mueve, cambiar un número **sí**, y
+una fila sin `[[bibcode]]` propio hereda el del caption hasheando **los dos** bloques. El **hash de
+fuente** es el del `.txt` que se leyó, y es lo único que detecta que el PDF se **re-extrajo** y la
+fuente ya no dice lo mismo **sin que la nota se haya tocado**. Los dos los calcula
+`scripts/lib_blocks.py` (`pairs_of`, `source_hash`), el mismo código que después los chequea: no se
+escriben a ojo. ⛔ **Sin fila no hay dónde colgar el ancla** — colapsar las soportadas en un párrafo
+de prosa y dejar en la tabla sólo las que fallaron deja al lint sin poder distinguir "verificada" de
+"nunca se miró".
+**La nota nace 100% verificada (D-5):** al armar una ficha o un concepto se verifica **todo**; el
+estado *"sin verificar"* sólo puede aparecer **después**, por una edición. Eso es lo que hace viable
+el chequeo — el caso normal es que nada cambió y el lint calla, así que cuando habla hay algo real. El subagente contesta además, **en todos los casos**, si el paper
 afirma eso **bajo condiciones** que la nota no dice (#74): la afirmación pelada sí está en la fuente,
 así que el veredicto es `soportada` y la **sobre-generalización pasaba entera** — la nota no afirma
 falso, afirma **de más**. Se reporta como hallazgo aparte y se resuelve agregando la condición (en un
@@ -499,6 +562,29 @@ arbitra, una posición es `{source: ground_truth}` y sigue siendo la verdad—,
 línea citando ambos `[[bibcode]]` para conceptos— que **el usuario aprueba** antes de escribir. Detalle
 en el skill.
 
+### Pasada de red (lo que cambia AFUERA — `scripts/sweep_external.py`)
+Una bóveda afirma cosas sobre el mundo y el mundo cambia después del ingest. **Cinco** cosas
+caducan y ahora se miran en **una sola pasada**: retracciones, correcciones, **versiones**
+(el preprint salió publicado → otro bibcode para el mismo trabajo, D-19), **snapshot web** y
+**ground-truth** (NEA cambia valores entre releases, y el snapshot era un JSON congelado que
+**nada** comparaba — el caso más silencioso). Si están repartidas, se corren cuatro y la quinta
+nunca.
+⛔ **Reporta, no aplica solo**: el diff se muestra y se pregunta antes de tocar nada — un snapshot
+que se actualiza solo cambia valores **bajo los pies de la prosa que ya los citó**. Lo que sí es
+automático es la consecuencia offline: al cambiar un `.txt`, el **ancla de fuente** (D-20) marca
+sola los pares verificados contra él. El renombre preprint→publicado **nunca** es automático
+(reescribe wikilinks de toda la bóveda): se propone el comando.
+La caducidad se registra **versionada** en `vault/config/registro/_red.yaml` — "cuándo se miró
+afuera" es información de la bóveda, no de la máquina. Un detector que **no pudo correr** se
+declara y **no** entra en `cubrio`: el registro no puede afirmar haber mirado lo que no miró.
+
+**Fuente retractada citada en prosa (D-47):** la afirmación **no se borra** —puede ser cierta por
+otra vía y borrarla destruye trabajo—: se **marca en línea** con `[[bibcode]] ⛔retractada`. Sin la
+marca, el lint la localiza y **bloquea**; con la marca baja a informativa (visible, no destruida).
+El símbolo es deliberado: un `(retractada)` pelado daría falso positivo con cualquier mención del
+hecho en prosa. Junto con `(inferencia de [[bibcode]])` son las **dos únicas marcas en línea** del
+sistema.
+
 ### Mantenimiento (cuidar lo ya ingestado — skill `maintain`)
 **No crea entidades** (eso es Ingest); opera sobre estrellas/conceptos que **ya existen**. Sub-modos:
 **refrescar** (papers nuevos → re-sintetizar sólo lo nuevo), **borrar** (nota + PDF/fulltext + reparar
@@ -516,7 +602,13 @@ explícito. Detalle en el skill.
 **Cuándo:** como **paso de cierre de toda operación que escriba en `vault/wiki/`** (ingest,
 append-knowledge, maintain, find-contradictions, query archivada, test de hipótesis), **antes de
 commitear** y **después** del verify (resolver una cita no-soportada cambia la prosa); más una pasada completa periódica. Es barato.
-Correr `python scripts/lint.py`: debe quedar en **0** para wikilinks rotos, **frontmatter no
+Correr `python scripts/lint.py`: la categoría **⛔ No evaluado** (un chequeo que **no pudo correr**
+—`objective.yaml` ilegible, sin `git` para medir la verificación stale—) **cuenta para el exit y su
+categoría normal se suprime del reporte**: un `(0)` que nadie midió se lee como veredicto, y ése es
+el falso limpio que el lint existe para no producir. Es hecho del **entorno**, no de la bóveda. En
+la misma línea, `query_ads` **rehúsa clasificar** con una lente ilegible en vez de degradar a `{}`
+en silencio (clasificar con una regla que nadie escribió marcaría el corpus entero, y el registro
+guardaría esa lente vacía como si fuera la vigente). Además debe quedar en **0** para wikilinks rotos, **frontmatter no
 parseable o con forma inválida** (nota que empieza con `---` pero cuyo YAML no parsea —p. ej. un
 `title:` con `:` sin comillas editado a mano—, o un campo que el schema declara **lista** escrito
 como escalar / con elementos que no son mapas —`planets:`, `thesis_links:`—: en los dos casos la
@@ -589,12 +681,24 @@ puntual, no la síntesis durable de un sujeto— y la nota **no-core** (`relevan
 `--all`) no entra: no se le pide aterrizar en ninguna síntesis. La **cobertura** (concepto/hipótesis
 sin ninguna cita `[[bibcode]]` → afirma sin fuente) es **backlog** que el lint surface para ir citando;
 ídem la **cobertura de verificación** (query/concepto **con** citas pero **sin** bloque
-`## Verificación de citas` → nunca pasó por `verify-citations`: correr el skill) y la **verificación
+`## Verificación de citas` → nunca pasó por `verify-citations`: correr el skill).
+Los **pares de verificación vencidos** (D-4/D-20) son la medida fina de lo mismo, por **par** y no
+por archivo: *sin verificar* (hay una afirmación citada sin fila), *vencido por edición* (el ancla
+ya no coincide), *vencido por fuente* (el `.txt` cambió), *fila huérfana* (la afirmación se borró).
+**Dos severidades, un solo detector (R-1):** sin flag es la **pasada periódica** y reporta como
+backlog; con **`python scripts/lint.py --cierre`** cuentan para el exit — es el paso de cierre de
+toda operación que tocó la nota, donde un par sin verificar significa que **no terminaste**. Los
+skills de cierre lo invocan con el flag; la pasada de higiene de `maintain`, sin él. Aparte y
+**bloqueante siempre**, el **bloque con plantilla vieja** (sin las columnas de hash): no es "cero
+vencidos", es un bloque que nadie puede evaluar. Sigue existiendo la **verificación
 stale** (la nota se editó **después** de la fecha de su bloque —lo que pasa al ampliarla con
 `append-knowledge` o refrescarla— así que las afirmaciones nuevas nunca pasaron por el fan-out pero
 quedan bajo un encabezado que se lee como vigente: es el modo de falla de "afirmar de menos"
 aplicado a la garantía misma; el lint lo mide por `git` contra la fecha del encabezado —por eso el
-bloque **debe** llevar fecha— y degrada a silencio fuera de un repo).
+bloque **debe** llevar fecha—. **Ya no es el mecanismo principal**: las anclas lo reemplazan con
+granularidad de par, y esto queda como **red** para notas con bloque y sin tabla parseable; **fuera de un repo no degrada a silencio**: el chequeo cae en la
+categoría **⛔ No evaluado** y cuenta para el exit, porque un `stale (0)` que nadie midió se lee
+como "todo al día" (D-43). La rama "bloque sin fecha" no necesita git y sigue corriendo siempre).
 La **cabecera no estampable** (#69: una ficha o concepto **sin** la línea
 `> _Generado con Almagesto v…_`, que es el ancla de **todos** los estampadores de cabecera) es
 **backlog**: la nota es válida, pero cualquier cirugía de cabecera —hoy el puntero de búsqueda de

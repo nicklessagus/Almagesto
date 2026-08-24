@@ -39,7 +39,7 @@ Progreso del append de <fuente> → <destino>:
 2. **Plomería mínima** (por tipo; todo idempotente — con el retro-linkeo de `make_notes`, si la
    nota del paper ya existía en el corpus los seeds `stars`/`thesis_links` se mergean add-only
    solos, sin pisar su extracción):
-   - **(i) bibcode ADS** → agregarlo a `extra_core: [<bibcode>, …]` en la entrada de la entidad
+   - **(i) bibcode ADS** → agregarlo a `extra_core:` (lista de mapas `{bibcode, via, fecha, motivo}` — D-58; el `triage` imprime el snippet listo para pegar) en la entrada de la entidad
      (`vault/config/stars.yaml` o `topics.yaml` — curación **persistente**, sobrevive re-runs) y
      correr la cadena: estrella → los scripts del paso 2 de `ingest-star`; tema →
      `python scripts/ingest_topic.py <slug>`. `query_ads` lo trae por bibcode (`via: manual`).
@@ -96,7 +96,7 @@ Progreso del append de <fuente> → <destino>:
    (¿se entiende sin abrir el paper nuevo?) → **`verify-citations`** sobre la prosa tocada y la
    nota de paper nueva —si la nota destino ya traía bloque `## Verificación de citas`, **re-fechar
    el encabezado**: el lint compara esa fecha contra la del último cambio del archivo y marca
-   **verificación stale** si quedó atrás (#56)— → `python scripts/lint.py` en 0 → bookkeeping (`vault/wiki/log.md` SIEMPRE —
+   **verificación stale** si quedó atrás (#56)— → `python scripts/lint.py --cierre` en 0 (R-1: en el cierre de una operación, un par de verificación vencido frena; sin el flag sólo reportaría) → bookkeeping (`vault/wiki/log.md` SIEMPRE —
    entrada `append: <fuente> → <destino>`; `vault/wiki/index.md` y `vault/STATUS.md` sólo si cambió
    algo catalogable/de estado) → `git add` de archivos específicos + commit → **preguntar antes de
    `push`**.

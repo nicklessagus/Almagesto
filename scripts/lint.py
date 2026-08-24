@@ -72,6 +72,8 @@ from pathlib import Path
 import yaml
 
 import lib_config as cfg
+import lib_blocks as lb
+import make_notes as mn
 from extract_fulltext import is_legible      # umbral determinista de legibilidad (mismo que extract)
 from fetch_ground_truth import msini_earth   # verificación de masa (m·sini implícita)
 from make_notes import find_header_line      # contrato de la cabecera (mismo que stamp_pdf_link, #48)
@@ -143,8 +145,11 @@ def verify_block(text: str) -> tuple[bool, str | None]:
 
 def git_out(*args: str) -> str | None:
     """stdout de un `git` corrido en la raíz del repo; None si no hay git, no es repo o falló.
-    El chequeo de verificación stale degrada a silencio fuera de un repo — una bóveda puede vivir
-    sin git y el resto del lint no depende de esto."""
+    Fuera de un repo el chequeo de verificación stale **no se puede evaluar**. Desde el issue 0.3
+    eso NO degrada a silencio (reportaba `stale (0)`, indistinguible de "todo al día"): cae en la
+    categoría *no evaluado*, que cuenta para el exit (D-43 / INV-87). El resto del lint sigue
+    corriendo — una bóveda puede vivir sin git —, pero no puede afirmar que las verificaciones
+    están al día."""
     try:
         r = subprocess.run(["git", "-C", str(cfg.ROOT), "-c", "core.quotePath=false", *args],
                            capture_output=True, text=True, encoding="utf-8", timeout=60)
@@ -206,6 +211,10 @@ def note_files() -> list:
 
 
 BIBCODE_RE = re.compile(r"^\d{4}[A-Za-z]")   # heurística: target de link que parece bibcode
+# R-3 (decidida con el usuario, 2026-08-24): la marca en línea de una cita a fuente retractada. El
+# símbolo es lo que la hace inconfundible con la palabra suelta en prosa; es la hermana de
+# `(inferencia de [[b]])` (D-42), y son las dos únicas marcas en línea del sistema.
+RETRACTED_MARK = "⛔retractada"
 
 # Centinela para distinguir "el campo no está" de "está y no sirve" (#75): `fm.get(campo)` colapsa
 # `ausente`, `null`, `""` y `false` en `None`, y esas cuatro exigen mensajes distintos.
@@ -223,7 +232,12 @@ _SIN_MARCA = object()
 # una compatibilidad que nadie necesita (decisión del usuario, 2026-08-22 — la bóveda que existe se
 # migra con `python scripts/make_notes.py --migrate-disputes`, o se re-ingesta). Lo que sí se hace es
 # **detectarlo y bloquear**: una disputa vieja que el lector ignora en silencio es peor que un error.
-DISPUTE_SOURCES = ("ground_truth",)
+# Vocabulario de `posiciones[].source` en una disputa. D-2 / INV-77: con una sola entrada las dos
+# posiciones de una disputa nea↔simbad decían lo mismo, así que el desacuerdo ENTRE AUTORIDADES no
+# era expresable — y desde D-1 es un caso real: NEA y SIMBAD pueden traer `spectral_type` distinto,
+# y el que no gana no se tira. `ground_truth` se conserva por las disputas paper↔ground-truth.
+# @inv INV-77
+DISPUTE_SOURCES = ("ground_truth", "nea", "simbad")
 
 
 def note_disputes(fm: dict) -> list:
@@ -454,11 +468,22 @@ def main(argv=()) -> int:
     # avisa. Con el parser, `--help` documenta y sale 0, y un flag inexistente sale 2 sin correr nada.
     cfg.stdout_tolerante()   # ANTES de parse_args: el texto del parser lleva acentos y `--help`
                              # sale por SystemExit sin volver acá — si no, muere en consola ascii.
-    argparse.ArgumentParser(
-        description="Chequeo de salud de la bóveda. No toma argumentos: analiza `vault/` entera, "
-                    "imprime el resumen y escribe `outputs/lint-<fecha>.md`.",
+    ap = argparse.ArgumentParser(
+        description="Chequeo de salud de la bóveda: analiza `vault/` entera, imprime el resumen y "
+                    "escribe `outputs/lint-<fecha>.md`.",
         epilog="Exit 1 si alguna categoría BLOQUEANTE tiene hits; los WARN y el backlog no bloquean."
-    ).parse_args(list(argv))
+    )
+    # R-1 (decidida con el usuario, 2026-08-24): el MISMO detector de pares vencidos, dos
+    # severidades según el momento. Sin flag = pasada periódica → backlog (frenar una bóveda con
+    # deuda vieja un martes cualquiera no frena nada útil). Con flag = paso de cierre de una
+    # operación que TOCÓ la nota → bloquea, porque un par sin verificar ahí significa que la
+    # operación no terminó. La distinción vive acá, en un punto testeable, y no en prosa de skill:
+    # un skill que se olvida de tratarlo como gate no deja rastro. D-44 intacto: el commit no se
+    # frena — esto gatea la operación, no el commit.
+    ap.add_argument("--cierre", action="store_true",
+                    help="modo cierre de operación: los pares de verificación vencidos cuentan "
+                         "para el exit (sin el flag son backlog, la pasada periódica)")
+    args = ap.parse_args(list(argv))
     files = note_files()
     # fulltext disponible (un .txt por bibcode, bajo cualquier slug/tema) → precondición de
     # verificabilidad: una cita en query/hipótesis sin su .txt no se puede chequear claim↔fuente.
@@ -469,8 +494,15 @@ def main(argv=()) -> int:
     # umbral determinista que extract_fulltext. Rescate: reemplazar el PDF por uno con capa de texto
     # sana, extraer por OCR, o marcar la fuente `pending` en sources: para derivarla al usuario.
     illegible_txt = []
+    # Hash de fuente (D-20) por bibcode, calculado sobre la MISMA lectura que ya hace `is_legible`
+    # —el 77% de los 5,6 s del lint sobre 908 notas—: cero lecturas extra. El hashing de ~66 MB es
+    # marginal frente al parseo YAML. Si un bibcode vive bajo varios slugs con contenido idéntico,
+    # el hash coincide; si difieren, gana el primero en orden alfabético (determinista).
+    ft_hash: dict[str, str] = {}
     for p in fulltext_files:
-        ok, why = is_legible(open(p, encoding="utf-8", errors="replace").read())
+        contenido = open(p, encoding="utf-8", errors="replace").read()
+        ft_hash.setdefault(basename(p)[:-4], lb.sha10(contenido))
+        ok, why = is_legible(contenido)
         if not ok:
             illegible_txt.append((Path(p).relative_to(cfg.RAW).as_posix(), why))
     # PDFs en disco (un <bibcode>.pdf por slug en vault/raw/pdfs/) → chequear drift `pdf` ↔ archivo.
@@ -481,7 +513,20 @@ def main(argv=()) -> int:
     unverifiable: list = []            # (stem, "cita <bibcode> sin fulltext")
     coverage: list = []                # concept/hipótesis sin citas [[bibcode]] → no chequeable
     unverified: list = []              # query/concept CON citas pero SIN bloque de verify-citations
+    # ── "no evaluado" (D-43 / INV-87) ────────────────────────────────────────────────────────────
+    # Un chequeo que NO PUDO correr no aporta un cero: reporta error. La diferencia no es
+    # cosmética — un "(0)" se lee como veredicto ("miré y no hay"), y ese cero inventado hacía que
+    # el lint afirmara salud sobre lo que nunca miró. Cada poblador agrega (qué chequeo, por qué),
+    # la categoría CUENTA para el exit ≠ 0, y la categoría normal correspondiente se SUPRIME del
+    # reporte en vez de mostrar su cero. Se declara acá arriba porque los pobladores están
+    # repartidos por todo `main()`.
+    not_evaluated: list = []
+    anchor_bodies: dict = {}           # {archivo: texto} de TODA nota de entidad/query — D-47
+    old_registro: list = []            # registros con la clave `busqueda:` (schema pre-D-28)
+    cadena_incompleta: list = []       # (slug, "se cortó en <paso>") — D-57
+    stars_slugs = {m.get("slug") for m in cfg.load_stars().values() if isinstance(m, dict)}
     verif_blocks: list = []            # (archivo, fecha del bloque|None) — notas CON bloque de verify
+    anchor_notes: list = []            # (stem, texto) de esas mismas notas — insumo del ancla (D-4)
     names = {basename(p)[:-3] for p in files}  # stems referenciables por [[..]]
     incoming: dict[str, int] = {n: 0 for n in names}
     kinds: dict[str, list] = {}
@@ -505,9 +550,15 @@ def main(argv=()) -> int:
 
     refs_dir = str(cfg.RAW / "refs")
     refs_stems = {basename(f)[:-3] for f in files if f.startswith(refs_dir)}  # docs de diseño, no fichas
+    paper_fms: dict = {}               # {stem: frontmatter} de papers/ — para D-10, sin re-parsear
+    sin_extraer_por_sujeto: dict = {}  # nombre de sujeto → {stems core sin extraer} (D-13)
     for f in files:
         text = open(f, encoding="utf-8").read()
         fm = split_fm(text)
+        if in_dir(f, "papers"):
+            paper_fms[basename(f)[:-3]] = fm
+        else:
+            anchor_bodies[f] = text
         stem = basename(f)[:-3]
         for motivo in normalize_lists(fm):     # ANTES de cualquier lector (ver normalize_lists)
             fm_broken.append((stem, motivo))
@@ -561,6 +612,7 @@ def main(argv=()) -> int:
         # arriba: ampliar una ficha es justo cuando el bloque queda atrás.
         if has_verif and stem not in NON_ORPHAN:
             verif_blocks.append((f, verif_date))
+            anchor_notes.append((stem, text))
         # frontera dura: fuga de implementación (código no bibliográfico) al vault (WARN, no bloquea).
         body_full = text.split("---", 2)[-1] if text.startswith("---") else text
         scan_leaks = stem not in NON_ORPHAN    # log/index/README son historia/navegación, no fichas
@@ -693,6 +745,11 @@ def main(argv=()) -> int:
             relevancia = str(fm.get("relevance") or "").strip().lower()
             if relevancia == "high" and not fm.get("methods"):
                 incomplete.append((stem, "paper relevante sin methods (sin extraer)"))
+                # D-13/INV-83: el sujeto de ese paper queda anotado; después del barrido se
+                # contrasta contra lo que el registro DECLARÓ haber leído.
+                for campo in ("stars", "topics"):
+                    for sujeto in cfg.as_list(fm.get(campo)):
+                        sin_extraer_por_sujeto.setdefault(str(sujeto), set()).add(stem)
             # El eslabón SIGUIENTE (#75): el paper que SÍ se extrajo. `methods` poblado significa
             # que alguien gastó en él el paso más caro de la cadena; si su contenido nunca llegó a
             # una ficha ni a un concepto, la extracción se perdió. Se recolecta acá y se resuelve
@@ -738,7 +795,7 @@ def main(argv=()) -> int:
                 slug_dir = Path(on_disk).parent.name
                 pdf_issues.append((stem, f"PDF en disco sin linkear → poné `pdf: ../../raw/pdfs/{slug_dir}/{stem}.pdf`"))
             # CUERPO ↔ frontmatter (higiene; WARN, #48): el chequeo de arriba mira frontmatter vs
-            # disco y no ve el cuerpo — en Almagesto-RV el frontmatter estaba sano mientras 351/621
+            # disco y no ve el cuerpo — en una instancia real el frontmatter estaba sano mientras 351/621
             # notas no tenían el link `[📄 PDF]`, y el modo de falla sobrevivió invisible hasta que
             # un humano abrió una nota. La cabecera es metadata DERIVADA: debe llevar el link sii
             # `pdf` apunta a un PDF que existe. Se distingue "sin link" (lo arregla el backfill
@@ -764,7 +821,23 @@ def main(argv=()) -> int:
     # afirma **de menos** sobre lo que chequeó. La comparación es a nivel día (granularidad del
     # bloque): re-verificar y re-fechar el mismo día no se marca.
     stale_verif = []
-    changed = last_change_dates([f for f, _ in verif_blocks])
+    # Sin git no hay con qué comparar la fecha del bloque contra la del último cambio:
+    # `last_change_dates` devolvía `{}` y el chequeo reportaba `stale=0` en silencio —
+    # indistinguible de "todo al día". Es "no evaluado", no "limpio" (D-43 / INV-87).
+    #
+    # El gate es FINO a propósito: la rama "bloque sin fecha" no necesita git (se lee del propio
+    # encabezado) y sigue corriendo siempre. Sólo las notas CON fecha quedan sin evaluar, y son
+    # exactamente esas las que se cuentan en el aviso — un gate grueso apagaba un chequeo que sí
+    # se podía hacer, que es el mismo error en el otro sentido.
+    fechados = [f for f, d in verif_blocks if d is not None]
+    stale_evaluable = not fechados or git_out("rev-parse", "--git-dir") is not None
+    if not stale_evaluable:
+        not_evaluated.append(
+            (f"verificación stale ({len(fechados)} nota(s) con bloque fechado)",
+             "no hay git (o la bóveda no es un repo): sin historial no hay con qué comparar la "
+             "fecha del bloque contra la del último cambio de la nota — el chequeo queda "
+             "desactivado, no en cero")) 
+    changed = last_change_dates(fechados) if stale_evaluable else {}
     for f, d in sorted(verif_blocks):
         stem = basename(f)[:-3]
         if d is None:
@@ -774,6 +847,167 @@ def main(argv=()) -> int:
         elif (c := changed.get(f)) and c > d:
             stale_verif.append((stem, f"la nota se editó el {c} y su último verify es del {d} → "
                                       f"correr `verify-citations` sobre lo agregado"))
+
+    # ── pares de verificación vencidos (D-4 / D-20 / INV-78) ─────────────────────────────────────
+    # El bloque `## Verificación de citas` se lee como "esta nota está verificada". Acá eso se mide
+    # por PAR —qué afirmación exacta se chequeó, contra qué bytes de qué fuente— y no por archivo.
+    # Cinco sub-casos, cada uno con su mensaje:
+    #   (a) par del cuerpo sin fila            → sin verificar     (se agregó una afirmación)
+    #   (b) fila con ancla ≠ recálculo         → vencido por edición
+    #   (c) fila con hash de fuente ≠ el .txt  → vencido por fuente (se re-extrajo el PDF)
+    #   (d) fila sin par en el cuerpo          → fila huérfana     (se borró la afirmación)
+    #   (e) bloque sin columnas de hash        → plantilla vieja   (BLOQUEANTE siempre)
+    # (e) va aparte y bloquea sin `--cierre`: no es un par vencido, es un bloque que nadie puede
+    # evaluar — reportarlo como "0 vencidos" sería el cero inventado que D-43 prohíbe.
+    # @inv INV-78, INV-79
+    stale_pairs: list = []
+    old_verif_template: list = []
+    for stem, texto in sorted(anchor_notes):
+        filas = lb.parse_verif_table(texto)
+        if filas is None:
+            old_verif_template.append(
+                (stem, "el bloque de verificación no tiene las columnas `Ancla` / `Hash fuente` "
+                       "(plantilla vieja) → no se puede evaluar qué par sigue vigente; re-correr "
+                       "`verify-citations` para que lo reescriba con un par por fila"))
+            continue
+        pendientes = lb.pairs_of(texto)
+        for fila in filas:
+            exacto = next((p for p in pendientes
+                           if p.bibcode == fila.bibcode and p.anchor == fila.anchor), None)
+            if exacto is not None:
+                pendientes.remove(exacto)
+                vigente = ft_hash.get(fila.bibcode)
+                if vigente is not None and fila.source_hash != vigente:
+                    stale_pairs.append(
+                        (stem, f"[[{fila.bibcode}]] vencido **por fuente**: el `.txt` cambió desde "
+                               f"la verificación ({fila.source_hash} → {vigente}) — re-verificar"))
+                continue
+            # sin coincidencia exacta: ¿la nota sigue citando esa fuente en algún bloque? Entonces
+            # la afirmación se EDITÓ. Si ya no la cita, la fila quedó huérfana. Se consume el par
+            # para no reportar el mismo evento dos veces (como edición Y como sin-verificar).
+            movido = next((p for p in pendientes if p.bibcode == fila.bibcode), None)
+            if movido is not None:
+                pendientes.remove(movido)
+                stale_pairs.append(
+                    (stem, f"[[{fila.bibcode}]] vencido **por edición**: el bloque que lo cita "
+                           f"cambió desde la verificación ({fila.anchor} → {movido.anchor})"))
+            else:
+                stale_pairs.append(
+                    (stem, f"fila **huérfana**: la tabla verifica [[{fila.bibcode}]] pero el cuerpo "
+                           "ya no lo cita — se borró la afirmación y la fila quedó afirmando de más"))
+        for p in pendientes:
+            stale_pairs.append(
+                (stem, f"[[{p.bibcode}]] **sin verificar**: hay una afirmación que lo cita y no "
+                       f"tiene fila en el bloque (ancla {p.anchor})"))
+
+    # ── D-47: la prosa que cita una fuente RETRACTADA se marca, no se borra ──────────────────────
+    # El lint ya bloquea la NOTA del paper retractado, pero no localiza QUÉ afirmación lo cita —
+    # que es lo que hay que revisar. Borrar la afirmación tampoco sirve: destruye trabajo y puede
+    # ser cierta por otra vía. Se marca en línea (R-3: `[[bib]] ⛔retractada`), y ahí baja a
+    # informativa: visible, no destruida. El símbolo es deliberado — un `(retractada)` pelado daría
+    # falso positivo con cualquier mención del hecho en prosa ("la señal fue retractada más tarde").
+    retracted_stems = {stem for stem, fm_p in paper_fms.items() if fm_p.get("retracted")}
+    prosa_retractada: list = []
+    prosa_retractada_marcada: list = []
+    for f, texto_n in anchor_bodies.items():
+        stem_n = basename(f)[:-3]
+        for stem_r in sorted(retracted_stems):
+            for m in re.finditer(r"\[\[" + re.escape(stem_r) + r"(?:\|[^\]]*)?\]\]([^\n]*)", texto_n):
+                destino = (prosa_retractada_marcada if m.group(1).lstrip().startswith(RETRACTED_MARK)
+                           else prosa_retractada)
+                destino.append(
+                    (stem_n, f"cita [[{stem_r}]] (RETRACTADO) — "
+                             + ("marcada: visible y no destruida; revisá si otra fuente la sostiene"
+                                if destino is prosa_retractada_marcada else
+                                f"marcala con `{RETRACTED_MARK}` pegado a la cita, o bajá la "
+                                f"afirmación a lo que otra fuente sostenga. No la borres: puede ser "
+                                f"cierta por otra vía")))
+
+    # ── identidad duplicada (D-19 / INV-84) ──────────────────────────────────────────────────────
+    # La identidad de un trabajo es su `doi`/`arxiv_id`, no su bibcode: el preprint y el publicado
+    # son bibcodes distintos del MISMO paper. Medido en la instancia real: 2 trabajos con dos notas.
+    # Bloqueante porque el daño es silencioso y se acumula: doble conteo en todo lo que cuenta
+    # papers, dos fuentes donde hay una, y un falso positivo permanente de #75 (la ficha cita una).
+    # Un alias en `versions[]` NO es un duplicado: es el registro de que el trabajo tuvo otro
+    # bibcode, y por eso no entra en la población.
+    identidad_dup: list = []
+    por_identidad: dict = {}
+    alias = {str(v.get("bibcode")) for fm_p in paper_fms.values()
+             for v in cfg.as_list(fm_p.get("versions")) if isinstance(v, dict) and v.get("bibcode")}
+    for stem_p, fm_p in sorted(paper_fms.items()):
+        if stem_p in alias:
+            continue
+        if (ident := mn.identidad(fm_p)):
+            por_identidad.setdefault(ident, []).append(stem_p)
+    for (clave, valor), stems in sorted(por_identidad.items()):
+        if len(stems) > 1:
+            identidad_dup.append(
+                (", ".join(stems), f"comparten {clave} `{valor}` → es el MISMO trabajo con dos "
+                                   f"notas; dejá una canónica: `python scripts/make_notes.py "
+                                   f"--rename-paper {stems[0]} {stems[1]}`"))
+
+    # ── lista de papers desactualizada (D-10) ────────────────────────────────────────────────────
+    # La tabla materializada de `## Papers` es un snapshot, y un snapshot que nadie re-estampa
+    # miente igual que el roll-up Dataview que reemplazó (medido: 155 prometidos, 8 discutidos).
+    # Backlog —es "re-estampar", no una violación del vault— pero NOMBRA los stems que faltan o
+    # sobran, no la diferencia de conteos: dos listas del mismo largo pueden no ser los mismos
+    # papers (la lección de #70).
+    papers_table_stale: list = []
+    # UNA sola pasada de parseo de `papers/`, compartida por todas las estrellas: sin esto el lint
+    # saltaba de ~2,0 a 5,9 parseos YAML por nota (medido por `tests/poblada/test_escala.py`, techo
+    # 2,3) — el costo crece con el producto notas × estrellas.
+    # `paper_fms` se llena en el LOOP principal (ver más arriba), que ya parsea cada nota: una
+    # pasada extra acá subía el ratio a ~3,0 (el techo del test de escala es 2,3), y el hotspot
+    # conocido —el doble parseo de split_fm+fm_error— ya se come 2,0.
+    for nombre, meta_s in cfg.load_stars().items():
+        slug_s = meta_s.get("slug") if isinstance(meta_s, dict) else None
+        dest_s = cfg.STARS / f"{slug_s}.md" if slug_s else None
+        if not dest_s or not dest_s.exists():
+            continue
+        try:
+            esperados = {r["stem"] for r in mn.papers_universe(slug_s, "star", paper_fms)}
+        except Exception:
+            continue                      # config rota: ya lo reporta otra categoría
+        texto_s = dest_s.read_text(encoding="utf-8")
+        seccion = texto_s.split("\n" + mn.PAPERS_HEADER, 1)
+        listados = set()
+        if len(seccion) > 1:
+            cuerpo_s = seccion[1].split("\n## ", 1)[0]
+            listados = {m for m in LINK_RE.findall(cuerpo_s)}
+        faltan, sobran = esperados - listados, listados - esperados
+        if faltan or sobran:
+            detalle = []
+            if faltan:
+                detalle.append("faltan " + ", ".join(sorted(faltan)))
+            if sobran:
+                detalle.append("sobran " + ", ".join(sorted(sobran)))
+            papers_table_stale.append(
+                (slug_s, "la lista de papers estampada no refleja el universo: " +
+                         "; ".join(detalle) + f" → `python scripts/make_notes.py {slug_s}`"))
+
+    # ── el recorte de lectura no declarado (D-13/D-15 · INV-83) ──────────────────────────────────
+    # El contrato dice que el ingest lee TODOS los core. La reconciliación anticipa que el
+    # subconjunto va a ser el caso normal (≈6M tokens por estrella si no), así que el problema no es
+    # recortar: es recortar **en silencio**. Una ficha se presenta como snapshot de su universo, y
+    # un lector no tiene forma de saber que la síntesis salió de 8 de 42 papers.
+    # Dos severidades sobre el mismo hecho: sin `extraccion.criterio` declarado, hallazgo con señal
+    # (el ingest no leyó todo y no dijo por qué); con criterio, backlog normal — la cola visible de
+    # D-15, que el skill `maintain` consume.
+    extraccion_no_declarada: list = []
+    for nombre_s, meta_s in list(cfg.load_stars().items()) + list(cfg.load_topics().items()):
+        if not isinstance(meta_s, dict):
+            continue
+        slug_s = meta_s.get("slug")
+        pendientes = sin_extraer_por_sujeto.get(str(nombre_s), set()) | \
+            sin_extraer_por_sujeto.get(str(meta_s.get("concept") or ""), set())
+        if not slug_s or not pendientes:
+            continue
+        if not cfg.load_extraccion(slug_s).get("criterio"):
+            extraccion_no_declarada.append(
+                (slug_s, f"{len(pendientes)} paper(s) core sin extraer y el registro **no declaró** "
+                         f"el recorte ({', '.join(sorted(pendientes)[:3])}…) → o se leen, o se "
+                         f"declara el criterio (`extraccion:` en el registro): la ficha se presenta "
+                         f"como snapshot del universo y hoy no lo es"))
 
     # contradicción ground-truth ↔ ficha (qué planetas + campo por campo) + masa sospechosa
     mass_issues = []
@@ -950,8 +1184,17 @@ def main(argv=()) -> int:
     # olvido post-instanciación. Se compara contra el placeholder, no contra un nombre de ejemplo
     # plausible (un objetivo real coincidente daría WARN permanente sin forma de apagarlo).
     # (En el repo template este WARN es esperable: la bóveda seed no está instanciada.)
+    # ── "no evaluado" (D-43 / INV-87) ────────────────────────────────────────────────────────────
+    # Un chequeo que NO PUDO correr no aporta un cero: reporta error. La diferencia no es
+    # cosmética — un "(0)" se lee como veredicto ("miré y no hay"), y ese cero inventado hacía que
+    # el lint afirmara salud sobre lo que nunca miró. Cada poblador agrega (qué chequeo, por qué),
+    # la categoría CUENTA para el exit ≠ 0, y la categoría normal correspondiente se SUPRIME del
+    # reporte en vez de mostrar su cero.
+    if (obj_err := cfg.objective_error()):
+        not_evaluated.append(("clasificación de relevancia (la lente)", obj_err))
+
     objective_warn = []
-    if cfg.load_objective().get("name") == cfg.DEFAULT_OBJECTIVE_NAME:
+    if not obj_err and cfg.load_objective().get("name") == cfg.DEFAULT_OBJECTIVE_NAME:
         objective_warn.append(
             ("vault/config/objective.yaml",
              "objective.name sigue siendo el placeholder del template — corré el skill `setup` "
@@ -1105,6 +1348,27 @@ def main(argv=()) -> int:
         # descartado sin el motivo, el mismo bug que #51 cerró. Corre para TODO registro, tenga o
         # no `build/` local: es independiente del fallback de triage-pendiente/corpus-truncado de
         # abajo.
+        # D-28: la clave vieja `busqueda:` (mapa, UNA corrida) es el schema pre-1.26. El lector
+        # nuevo no la entiende y no se le agrega un lector tolerante (regla del repo): se detecta y
+        # bloquea, porque un registro mudo deja la ficha afirmando sobre un universo que nadie puede
+        # reconstruir. Se cierra re-corriendo la cadena (la corrida nueva reescribe `busquedas`).
+        if reg.get("busqueda") is not None:
+            old_registro.append(
+                (slug, "el registro usa la clave `busqueda:` (schema pre-D-28, una sola corrida) — "
+                       "el lector ya no la lee: re-corré la cadena del sujeto para que escriba "
+                       "`busquedas: []` (acumulativo; el embudo dejó de pisarse)"))
+        # D-57 / INV-91: la cadena deja traza estructurada de qué pasos corrieron. Si el registro
+        # tiene `cadena` y le falta un paso del orden canónico, se NOMBRA el paso donde se cortó —
+        # "faltan 4 pasos" no es accionable, "se cortó en `fetch_ground_truth`" sí. Backlog: una
+        # cadena a medias no invalida lo que hay, pero deja la bóveda con notas a medio hacer y
+        # nadie lo diría. Sólo se evalúa para ESTRELLAS: el orden de un tema depende de su `source`
+        # (off-ADS no corre query_ads ni fetch_ground_truth) y compararlo contra el orden astro
+        # inventaría cortes que no existen.
+        if slug in stars_slugs and (corte := cfg.cadena_cortada(slug)):
+            corridos = [p.get("paso") for p in cfg.load_cadena(slug)]
+            cadena_incompleta.append(
+                (slug, f"la cadena se cortó en `{corte}` (corrieron: {', '.join(corridos)}) → "
+                       f"re-corré `python scripts/ingest_star.py {slug}` (es idempotente)"))
         dec = reg.get("decisiones")
         if isinstance(dec, dict):
             for clave, v in dec.items():
@@ -1115,7 +1379,8 @@ def main(argv=()) -> int:
                                f"silencio y el triage vuelve a proponerla sin el motivo"))
         if slug in vistos:
             continue                                  # build/ presente: ya se reportó la verdad viva
-        b = cfg.as_map(reg.get("busqueda"))
+        bs = [x for x in cfg.as_list(reg.get("busquedas")) if isinstance(x, dict)]
+        b = bs[-1] if bs else {}
         fecha = b.get("fecha") or "s/f"
         if b.get("n_candidates"):
             triage_pending.append(
@@ -1130,9 +1395,18 @@ def main(argv=()) -> int:
 
     # reporte
     lines = [f"# Lint de la bóveda — {dt.date.today().isoformat()}", ""]
-    for title, items in [("Wikilinks rotos (página faltante)", broken),
+    # categorías que NO se pudieron evaluar: se omiten del reporte en vez de mostrar un "(0)" que
+    # se leería como veredicto (el adversario que D-43 nombra: el cero inventado).
+    suprimidas = set()
+    if not stale_evaluable:
+        suprimidas.add("Verificación stale")
+    for title, items in [("⛔ No evaluado: el chequeo no pudo correr (hecho del ENTORNO, no de la "
+                          "bóveda — cuenta para el exit)", not_evaluated),
+                         ("Wikilinks rotos (página faltante)", broken),
                          ("⛔ Frontmatter no parseable o con forma inválida (la nota evade los chequeos de su tipo)", fm_broken),
                          ("⛔ Papers RETRACTADOS citados (frontera dura: fuente no válida)", retracted),
+                         ("⛔ Prosa que cita una fuente RETRACTADA sin marcar", prosa_retractada),
+                         ("Prosa sostenida por fuente retractada, marcada (visible, no destruida)", prosa_retractada_marcada),
                          ("Notas huérfanas (sin links entrantes)", [(o, "") for o in orphans]),
                          ("Papers con corrección publicada (erratum/corrigendum/EoC) — revisar los "
                           "valores extraídos de ellos (backlog, el paper sigue siendo citable)", corrections),
@@ -1143,6 +1417,8 @@ def main(argv=()) -> int:
                          ("disputes mal formadas (posiciones explícitas, #71)", bad_disputes),
                          ("disputes en el schema viejo (planets[].disputes[]) — el lint ya no las lee", old_disputes),
                          ("Juicio de triage en build/<slug>/triage.json (pre-1.9.0) — el lector ya no lo mira", legacy_triage),
+                         ("⛔ Registro con `busqueda:` (schema viejo pre-D-28) — el lector ya no lo lee", old_registro),
+                         ("⛔ Identidad duplicada: dos notas del mismo trabajo (mismo doi/arxiv_id)", identidad_dup),
                          ("`role` fuera del vocabulario (fundacional/aplicacion/arbitro)", bad_roles),
                          ("⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)", impl_leaks),
                          ("Objetivo sin instanciar (WARN — objective.yaml sigue en el placeholder del template)", objective_warn),
@@ -1153,6 +1429,8 @@ def main(argv=()) -> int:
                          ("Fulltext ilegible (mojibake/escaneo — existe pero no sirve para grep/verify)", illegible_txt),
                          ("Citas no verificables en query/concepto/hipótesis (sin fulltext)", unverifiable),
                          ("Sin verificar: query/concepto con citas pero sin bloque verify-citations (backlog)", unverified),
+                         ("⛔ Bloque de verificación con plantilla vieja (sin columnas de hash — no evaluable)", old_verif_template),
+                         ("Pares de verificación vencidos" + (" (BLOQUEA: modo --cierre)" if args.cierre else " (backlog: pasada periódica; con `--cierre` bloquea)"), stale_pairs),
                          ("Verificación stale: la nota se editó después de su último verify-citations (backlog)", stale_verif),
                          ("Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog)", coverage),
                          ("Extraído pero no sintetizado: el paper se extrajo y su contenido nunca "
@@ -1160,10 +1438,15 @@ def main(argv=()) -> int:
                          ("Cabecera no estampable: ficha/concepto sin la línea del generador — los "
                           "estampadores de cabecera no-opean en silencio (backlog)", headerless),
                          ("Triage pendiente: candidatos del chaining sin juzgar (backlog)", triage_pending),
+                         ("Recorte de lectura sin declarar: hay core sin extraer y el registro no dice por qué (backlog)", extraccion_no_declarada),
+                         ("Lista de papers desactualizada: la tabla estampada no refleja el universo (backlog)", papers_table_stale),
+                         ("Cadena incompleta: falta un paso del orden canónico (backlog)", cadena_incompleta),
                          ("Corpus truncado: la query directa trajo menos de lo que ADS reporta (backlog)", truncated_corpora),
                          ("Decisión del registro con forma inválida — load_decisiones la descarta "
                           "en silencio, el triage la vuelve a proponer sin el motivo (backlog)", bad_decisions),
                          ("Campos incompletos", incomplete)]:
+        if any(title.startswith(s) for s in suprimidas):
+            continue
         lines.append(f"## {title} ({len(items)})")
         for a, b in items:
             lines.append(f"- {a}" + (f" → {b}" if b else ""))
@@ -1178,9 +1461,13 @@ def main(argv=()) -> int:
     _print_seguro(f"→ {out}")
     # Exit code gateable: las categorías que CLAUDE.md exige "en 0" bloquean; WARN (fuga de
     # implementación, áreas, PDF↔disco) y backlog (verificabilidad, cobertura, incompletos) no.
-    n_block = sum(len(x) for x in (broken, fm_broken, retracted, orphans, contradictions,
-                                   mass_issues, dangling_thesis, dangling_disputes, bad_roles,
-                                   bad_disputes, old_disputes, legacy_triage))
+    n_block = sum(len(x) for x in (not_evaluated, broken, fm_broken, retracted, orphans,
+                                   contradictions, mass_issues, dangling_thesis, dangling_disputes,
+                                   bad_roles, bad_disputes, old_disputes, legacy_triage,
+                                   old_verif_template, old_registro, identidad_dup,
+                                   prosa_retractada))
+    if args.cierre:
+        n_block += len(stale_pairs)   # R-1: en el cierre de una operación, un par vencido frena
     if n_block:
         _print_seguro(f"✗ {n_block} hallazgo(s) en categorías bloqueantes → exit 1")
         return 1

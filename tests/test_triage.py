@@ -127,13 +127,13 @@ def test_el_triage_json_viejo_ya_no_se_lee_solo(toy_vault, monkeypatch):
 
 
 def test_registro_preserva_la_busqueda_al_dropear(toy_vault, monkeypatch):
-    """El registro tiene dos secciones con dueños distintos: `busqueda` la escribe query_ads y
+    """El registro tiene dos secciones con dueños distintos: `busquedas` las escribe query_ads y
     `decisiones` triage.py — ninguno pisa al otro."""
     write_ads(toy_vault, candidates=[cand("2020b....1B")])
     cfg.save_busqueda("test_star", {"fecha": "2026-08-21", "query": "title:(x)", "n_core": 3})
     run_main(monkeypatch, ["test_star", "--drop", "2020b....1B", "--reason", "ruido"])
     reg = yaml.safe_load(cfg.registro_path("test_star").read_text(encoding="utf-8"))
-    assert reg["busqueda"]["n_core"] == 3 and "2020b....1B" in reg["decisiones"]
+    assert reg["busquedas"][-1]["n_core"] == 3 and "2020b....1B" in reg["decisiones"]
 
 
 def test_report_escribe_tabla_en_outputs(toy_vault, monkeypatch):
@@ -216,7 +216,7 @@ def test_drop_source_convive_con_el_triage_sin_pisar(toy_vault, monkeypatch):
     run_main(monkeypatch, ["gp", "--drop", "2020b....1B", "--reason", "ruido"])
     run_main(monkeypatch, ["gp", "--drop-source", "2006Rasmussen", "--reason", "libro general"])
     reg = yaml.safe_load(cfg.registro_path("gp").read_text(encoding="utf-8"))
-    assert reg["busqueda"]["n_core"] == 3
+    assert reg["busquedas"][-1]["n_core"] == 3
     assert set(reg["decisiones"]) == {"2020b....1B", "2006Rasmussen"}
     assert "origen" not in reg["decisiones"]["2020b....1B"]
     assert reg["decisiones"]["2006Rasmussen"]["origen"] == "fuente-declarada"
@@ -340,7 +340,7 @@ def test_show_decisions_con_busqueda_no_mapa_no_crashea(toy_vault, capsys):
     """El lector (`load_registro`) es tolerante y sus dos consumidores no."""
     cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
     cfg.registro_path("test_star").write_text(
-        "busqueda: 2026-08-22\ndecisiones:\n  2020aaa...1..1A:\n    decision: descartado\n",
+        "busquedas: 2026-08-22\ndecisiones:\n  2020aaa...1..1A:\n    decision: descartado\n",
         encoding="utf-8")
     assert triage.show_decisions("test_star", cfg.load_decisiones("test_star")) == 0
 
@@ -408,3 +408,16 @@ def test_migrate_con_decisiones_escalar_en_el_registro(toy_vault, capsys):
         {"decisiones": {"2020a....1A": {"decision": "descartado", "motivo": "ruido"}}}),
         encoding="utf-8")
     assert triage.migrate("test_star") == 0
+
+
+def test_triage_imprime_el_snippet_estructurado(toy_vault, capsys, monkeypatch):
+    """R-2: la forma dura de `extra_core` es aceptable justamente porque el triage imprime el
+    snippet listo para pegar — sin eso, aceptar un paper pasaba de una línea a cuatro campos a
+    mano, y el costo caía todo sobre la operación más frecuente."""
+    write_ads(toy_vault, candidates=[cand("2020cndA...1..1A", "Un candidato", cites=5)])
+    monkeypatch.setattr(sys, "argv", ["triage.py", "test_star"])
+    assert triage.main() == 0
+    out = capsys.readouterr().out
+    assert "extra_core:" in out
+    assert "- bibcode: 2020cndA...1..1A" in out
+    assert "via: triage" in out and "motivo:" in out

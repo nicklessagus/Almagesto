@@ -31,13 +31,27 @@ sin re-consultar, y `lint.py` la surface offline como categoría bloqueante (las
 sigue siendo citable, lo que hay que revisar son las afirmaciones que lo citan). Parte de RED (como los
 `fetch_*`), separada del lint offline: correr periódicamente y al ingestar.
 
-Exit code: 1 si se detectó al menos una retracción (gateable).
+Exit code (issue 0.1 — desambiguado; antes el 1 estaba SOBRECARGADO):
+
+    0  corrió y limpio
+    1  corrió y detectó papers retractados
+    2  **no pudo chequear**: precondición ausente (sin `papers/`, sin notas, sin `ads.json` ni
+       entrada en `topics.yaml` para el `--slug`) o errores que dejaron papers sin consultar y
+       ningún retractado.
+
+**Retractados mandan**: con retractados Y errores sale 1, con los errores igual en el reporte.
+
+Por qué importa: hasta 1.23.1 `slug_notes` hacía `sys.exit(str)` —exit 1— cuando no había nada que
+chequear, y `ingest_star.py` traducía **cualquier** rc≠0 a "detectó papers retractados". La cadena
+abortaba con un mensaje falso, y —peor— un error de red en el único paper del corpus salía **0**:
+"no encontré retractados" sobre un paper que nadie miró, el falso limpio que D-43 prohíbe justo en
+la frontera dura. Con D-45 esta misma pasada va a cubrir cinco eventos: el código se desambigua
+antes de apoyarle una feature encima.
 """
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 import time
@@ -52,6 +66,13 @@ CROSSREF = "https://api.crossref.org/works/{doi}"
 RETRACTING = ("retraction", "partial-retraction", "removal", "withdrawal")
 # correcciones (no retractan, pero conviene saberlo) → se estampan en `corrections`, NO en `retracted`
 SOFT = ("erratum", "corrigendum", "expression-of-concern")
+
+
+class NothingToCheck(RuntimeError):
+    """Precondición ausente: no hay nada que chequear (→ rc 2).
+
+    `slug_notes` es una función de librería y no debe matar el proceso: fijar el código de salida
+    desde adentro es justo lo que producía el 1 sobrecargado. Informa, y `main()` decide."""
 
 
 def _mailto() -> str | None:
@@ -92,43 +113,14 @@ def split_note(text: str) -> tuple[dict | None, str]:
         return None, text
 
 
-def _write_atomic(path, new_text: str) -> None:
-    """Publica `new_text` en `path` sin dejarla nunca a medio escribir (H-01).
-
-    Medido con `ulimit -f`: el `write_text` directo dejaba una nota de 16.071 B en 8.192 B, con 198
-    de 400 ocurrencias de la extracción LLM —lo MENOS regenerable de la bóveda— desaparecidas sin
-    aviso.
-
-    El contenido nuevo se escribe primero a un temporal en el MISMO directorio (mismo filesystem) y
-    recién se publica con `os.replace`, que es un **rename atómico**: o está el archivo viejo entero
-    o el nuevo entero, nunca la mitad. Si el corte pasa mientras se llena el temporal, `path` **no
-    se tocó**.
-
-    ⚠ Por qué NO alcanza el patrón "respaldar el original y restaurar en el `except`": ese sólo
-    cubre el corte que llega como **excepción**. Ante un `SIGKILL` o un corte de energía no corre
-    ningún `except` y la nota queda truncada igual — que es exactamente el escenario que la
-    docstring afirmaba cubrir. Mismo mecanismo que `lib_config.save_registro`, y `os.replace` se
-    llama como atributo del módulo `os` para que un test pueda interceptarlo."""
-    tmp = path.with_name(path.name + f".tmp{os.getpid()}")
-    try:
-        tmp.write_text(new_text, encoding="utf-8")
-        os.replace(tmp, path)
-    except BaseException:
-        try:
-            tmp.unlink()
-        except OSError:
-            pass
-        raise
-
-
 def stamp_fields(path, fm: dict, body: str, fields: dict) -> None:
     """Estampa claves de frontmatter editando el TEXTO (como merge_frontmatter_list de make_notes):
     NO re-serializa el YAML completo → preserva byte a byte comentarios/orden que haya dejado la
     extracción LLM. Si la nota ya traía esas claves (re-chequeo con --force, o una corrección nueva
     sobre un paper ya anotado), las reemplaza —incluidos sus bloques indentados y los ítems `-` de
     una lista—. Fallback (nota sin estructura `---\\n…\\n---\\n`): re-serializa el frontmatter parseado.
-    La publicación en disco es atómica (`_write_atomic`, H-01): un corte a mitad de camino nunca
-    deja la nota truncada."""
+    La publicación en disco es atómica (`cfg.write_text_atomic`, H-01/D-53): un corte a mitad de
+    camino nunca deja la nota truncada."""
     text = path.read_text(encoding="utf-8")
     keys = tuple(f"{k}:" for k in fields)
     end = text.find("\n---\n", 4)
@@ -177,7 +169,7 @@ def stamp_fields(path, fm: dict, body: str, fields: dict) -> None:
         dumped = yaml.safe_dump({**fm, **fields}, sort_keys=False, allow_unicode=True,
                                 default_flow_style=False)
         new_text = f"---\n{dumped}---{body}"
-    _write_atomic(path, new_text)
+    cfg.write_text_atomic(path, new_text)
 
 
 def stamp_retraction(path, fm: dict, body: str, retraction: dict) -> None:
@@ -191,34 +183,45 @@ def stamp_corrections(path, fm: dict, body: str, corrections: list) -> None:
     stamp_fields(path, fm, body, {"corrections": corrections})
 
 
-def crossref_retraction(doi: str, headers: dict) -> tuple[dict | None, list]:
-    """Consulta Crossref por DOI. Devuelve (retraction | None, soft_updates). `retraction` es el
-    primer `updated-by` con tipo retractante; `soft_updates` son las ENTRADAS COMPLETAS
-    (`{type, notice_doi, date, source}`) de errata/corrigenda/EoC, que se estampan en `corrections`
-    (#52 — antes se devolvía sólo el tipo y moría en stdout). Red tolerante: ante
-    error de red o 404 devuelve (None, []) —no se puede afirmar retracción→ no se marca."""
+def crossref_retraction(doi: str, headers: dict) -> tuple[dict | None, list, str]:
+    """Consulta Crossref por DOI → `(retraction | None, soft_updates, estado)`.
+
+    `retraction` es el primer `updated-by` con tipo retractante; `soft_updates` son las ENTRADAS
+    COMPLETAS (`{type, notice_doi, date, source}`) de errata/corrigenda/EoC, que se estampan en
+    `corrections` (#52 — antes se devolvía sólo el tipo y moría en stdout).
+
+    Sigue siendo **red tolerante** (nunca revienta, nunca afirma retracción sin evidencia), pero
+    desde el issue 0.1 dice además **si pudo consultar** — `estado`:
+
+    - `"ok"`      Crossref contestó y se leyó la respuesta.
+    - `"sin-registro"`  404: contestó *"no tengo ese DOI"*. Es una **respuesta**, no un fallo; si
+      contara como error, todo corpus con DOIs no indexados quedaría en rc 2 permanente y el código
+      volvería a no distinguir nada.
+    - `"error"`   no contestó (red caída tras los retries, 5xx, cuerpo no-json). Ese paper quedó
+      **sin chequear**: el llamador no puede reportarlo como limpio.
+    """
     for wait in (2, 6, None):
         try:
             resp = requests.get(CROSSREF.format(doi=doi), headers=headers, timeout=30)
         except requests.RequestException:
             if wait is None:
-                return None, []
+                return None, [], "error"
             time.sleep(wait)
             continue
         if resp.status_code == 404:
-            return None, []
+            return None, [], "sin-registro"
         if resp.status_code == 429 and wait is not None:
             time.sleep(wait)
             continue
         if resp.status_code != 200:
-            return None, []
+            return None, [], "error"
         break
     else:
-        return None, []
+        return None, [], "error"
     try:
         msg = resp.json()["message"]
     except (ValueError, KeyError):
-        return None, []
+        return None, [], "error"
     retraction, soft = None, []
     # H-10: Crossref es una API ajena — `updated-by` "debería" ser una lista de mapas, pero un
     # registro hostil (mapa en vez de lista, o una lista con un elemento que no es mapa) hacía
@@ -238,7 +241,7 @@ def crossref_retraction(doi: str, headers: dict) -> tuple[dict | None, list]:
             retraction = entry
         elif typ in SOFT:
             soft.append(entry)          # #52: la entrada COMPLETA (se persiste en `corrections`)
-    return retraction, soft
+    return retraction, soft, "ok"
 
 
 def _upd_date(upd: dict) -> str | None:
@@ -302,10 +305,11 @@ def slug_notes(slug: str) -> list:
     # además llegue escalar (en vez de `{key: ..., ...}`) se toma como si fuera él mismo la clave.
     stems += [key for s in _listify_curado(meta.get("sources"), "sources")
               for key in [s.get("key") if isinstance(s, dict) else s] if key]
-    stems += [b for b in _listify_curado(meta.get("extra_core"), "extra_core") if b]
+    stems += [e["bibcode"] for e in cfg.load_extra_core(meta, entry=slug)]
     if not stems:
-        sys.exit(f"--slug {slug}: no hay build/{slug}/ads.json ni entrada con sources/extra_core "
-                 "en topics.yaml — nada que chequear (¿corriste la cadena de ingest primero?).")
+        raise NothingToCheck(
+            f"--slug {slug}: no hay build/{slug}/ads.json ni entrada con sources/extra_core "
+            "en topics.yaml — nada que chequear (¿corriste la cadena de ingest primero?).")
     notes, seen = [], set()
     for stem in stems:
         name = stem.replace("/", "_")
@@ -319,6 +323,11 @@ def slug_notes(slug: str) -> list:
 
 
 def main() -> int:
+    """Las tres ramas de salida (ver el contrato en la docstring del módulo).  @inv INV-87
+
+    El invariante que cierra acá: *un chequeo que no puede correr reporta error, nunca contribuye
+    un cero al total*. Antes, "sin nada que chequear" y "Crossref caído" terminaban los dos en un
+    código que la cadena leía como veredicto sobre la frontera dura."""
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser()
     ap.add_argument("--paper", help="chequear un solo bibcode (default: todos los de papers/)")
@@ -330,10 +339,15 @@ def main() -> int:
         ap.error("--paper y --slug son excluyentes (uno puntual vs los de un ingest)")
 
     if not cfg.PAPERS.exists():
-        cfg.print_seguro("No hay vault/wiki/papers/ — nada que chequear.")
-        return 0
+        cfg.print_seguro("⛔ no pudo chequear: no hay vault/wiki/papers/ (rc 2). Un 0 acá se lee "
+                         "como «corrió y está limpio» sobre un corpus que nadie miró.")
+        return 2
     if args.slug:
-        notes = slug_notes(args.slug)
+        try:
+            notes = slug_notes(args.slug)
+        except NothingToCheck as e:
+            cfg.print_seguro(f"⛔ no pudo chequear (rc 2): {e}")
+            return 2
         cfg.print_seguro(f"--slug {args.slug}: {len(notes)} nota(s) del ingest (el barrido completo de la "
               "bóveda es la pasada periódica — correr sin --slug)")
     else:
@@ -345,9 +359,16 @@ def main() -> int:
     corrected: list = []               # (bibcode, tipos) — #52: correcciones no-retractantes
     annotated = 0
     errors: list = []                  # (nombre, motivo) — H-10: un paper raro no tumba el barrido
+    if not notes:
+        cfg.print_seguro("⛔ no pudo chequear (rc 2): no hay ninguna nota de paper que mirar.")
+        return 2
+
     for note in notes:
         if not note.exists():
+            # precondición ausente para ESTE paper (típico: `--paper <bibcode>` mal escrito). No es
+            # un chequeo limpio: es un paper que nadie miró.
             cfg.print_seguro(f"  ! no existe {note.name}")
+            errors.append((note.stem, "la nota no existe"))
             continue
         # H-10: la pasada periódica barre TODA la bóveda — un registro de Crossref legal-pero-de-
         # otra-forma (u otra sorpresa puntual de un paper) no debe abortar el barrido entero; se
@@ -356,8 +377,11 @@ def main() -> int:
         try:
             fm, body = split_note(note.read_text(encoding="utf-8"))
             if fm is None:
+                # el paper existe y es del corpus, pero quedó SIN consultar: cuenta como error, no
+                # como "limpio" (rc 2). El lint lo marca aparte como frontmatter no parseable.
                 cfg.print_seguro(f"  ⚠ {note.name}: sin frontmatter parseable — no chequeable "
                       "(arreglá el YAML; el lint lo marca)")
+                errors.append((note.stem, "sin frontmatter parseable"))
                 continue
             if "paper" not in (fm.get("tags") or []):
                 continue
@@ -365,9 +389,17 @@ def main() -> int:
                 found.append((fm.get("bibcode") or note.stem, "ya marcado"))
                 continue
             doi, title = fm.get("doi"), fm.get("title") or ""
-            retraction, soft = (crossref_retraction(doi, headers) if doi else (None, []))
+            retraction, soft, estado = (crossref_retraction(doi, headers) if doi
+                                        else (None, [], "sin-doi"))
             if doi:
-                checked += 1      # sólo los consultados de verdad (los sin DOI van por prefijo de título)
+                if estado == "error":
+                    # Crossref no contestó: este paper NO se chequeó. Antes esto salía 0 —"no
+                    # encontré retractados"— sobre un paper que nadie miró.
+                    errors.append((fm.get("bibcode") or note.stem, "Crossref no contestó"))
+                    cfg.print_seguro(f"  ✗ {fm.get('bibcode') or note.stem}: Crossref no contestó "
+                                     "— queda SIN chequear")
+                else:
+                    checked += 1  # sólo los consultados de verdad (los sin DOI van por prefijo de título)
                 time.sleep(0.2)   # cortesía con Crossref
             # fallback offline por título para papers sin DOI (o que Crossref no marcó)
             if retraction is None and title_says_retracted(title):
@@ -412,7 +444,13 @@ def main() -> int:
         cfg.print_seguro("Retractados (revisá cada afirmación que los cita — quitá o marcá la fuente):")
         for bib, why in found:
             cfg.print_seguro(f"  - {bib}: {why}")
+        # "retractados mandan": con retractados Y errores sale 1 (lo urgente es la fuente
+        # retractada), y los errores quedan igual en el reporte de arriba.
         return 1
+    if errors:
+        cfg.print_seguro("⛔ no pudo chequear (rc 2): quedaron papers sin consultar y no se detectó "
+                         "ninguna retracción — el resultado NO es «limpio», es «no se miró».")
+        return 2
     return 0
 
 

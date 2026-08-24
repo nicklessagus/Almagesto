@@ -193,7 +193,7 @@ def test_offads_mixto_extra_core_corre_subcadena_ads(toy_vault, fake_run, fake_n
     """Tema off-ADS con extra_core (papers que SÍ tienen bibcode ADS) → sub-cadena ADS + extract
     + retracciones. Antes extra_core se ignoraba en silencio en modo off-ADS."""
     topic(source="web", sources=[{"key": "2006Rasmussen", "url": "https://x"}],
-          extra_core=["2012PASP..124.1015B"])
+          extra_core=[{"bibcode": "2012PASP..124.1015B", "via": "usuario", "motivo": "test"}])
     assert run_main(monkeypatch) == 0
     assert [c[0] for c in fake_run.calls] == \
         ["fetch_web.py", "query_ads.py", "fetch_arxiv.py", "fetch_pdf.py",
@@ -210,7 +210,7 @@ def test_offads_sin_extra_core_no_corre_ads(toy_vault, fake_run, fake_notes, mon
 
 def test_offads_mixto_aborta_si_falla_subcadena(toy_vault, fake_run, fake_notes, monkeypatch):
     topic(source="web", sources=[{"key": "2006Rasmussen", "url": "https://x"}],
-          extra_core=["2012PASP..124.1015B"])
+          extra_core=[{"bibcode": "2012PASP..124.1015B", "via": "usuario", "motivo": "test"}])
     fake_run.rcs["fetch_pdf.py"] = 1
     with pytest.raises(SystemExit, match="fetch_pdf.py falló"):
         run_main(monkeypatch)
@@ -248,14 +248,20 @@ def test_offads_avisa_si_la_fuente_estaba_descartada(toy_vault, fake_run, fake_n
                                                      monkeypatch, capsys):
     """#81: el rechazo registrado tiene que HACER algo, no ser sólo un apunte. Acá la fuente la
     declara el usuario (no hay descubrimiento que filtrar), así que el equivalente de "no
-    re-proponer" es avisar con el motivo — y seguir: quizá cambió de opinión a propósito."""
+    re-proponer" es avisar con el motivo — y seguir: cambió de opinión a propósito.
+
+    D-52 lo completa: volver a declararla ES el cambio de opinión, así que la decisión vieja queda
+    **anulada** en el registro (con el motivo preservado en `previa`) en vez de quedar afirmando
+    "descartada por X" sobre una fuente que está ingestada. Antes el aviso pedía editar el YAML a
+    mano, y nadie lo hacía."""
     cfg.save_decisiones("gp", {"2006Rasmussen": {"decision": "descartado", "fecha": "2026-01-15",
                                                  "motivo": "libro de texto general",
                                                  "origen": "fuente-declarada"}})
     topic(source="web", sources=[{"key": "2006Rasmussen", "url": "https://x"}])
     assert run_main(monkeypatch) == 0
     out = capsys.readouterr().out
-    assert "figura DESCARTADA en el registro (2026-01-15)" in out
+    assert "figuraba DESCARTADA en el registro (2026-01-15)" in out
+    assert cfg.load_decisiones("gp")["2006Rasmussen"]["decision"] == "anulada"
     assert "libro de texto general" in out
     assert ("fetch_web.py", "gp", "2006Rasmussen", "https://x",
             "--concept", "gaussian-processes") in fake_run.calls    # avisa pero NO frena
@@ -273,8 +279,12 @@ def test_offads_avisa_si_la_fuente_se_descarto_por_url(toy_vault, fake_run, fake
     topic(source="web", sources=[{"key": "2006Rasmussen", "url": "https://x"}])
     assert run_main(monkeypatch) == 0
     out = capsys.readouterr().out
-    assert "figura DESCARTADA en el registro (2026-02-01, por url https://x)" in out
+    assert "figuraba DESCARTADA en el registro (2026-02-01, por url https://x)" in out
     assert "blog, no fuente citable" in out
+    # D-52: volver a declarar la fuente ES cambiar de opinión → la decisión queda ANULADA, no
+    # contradiciendo lo hecho; el motivo viejo sobrevive en `previa`.
+    d = cfg.load_decisiones("gp")["https://x"]
+    assert d["decision"] == "anulada" and d["previa"]["motivo"] == "blog, no fuente citable"
 
 
 def test_offads_fuente_no_descartada_no_avisa(toy_vault, fake_run, fake_notes, monkeypatch, capsys):
@@ -363,3 +373,18 @@ def test_offads_retraccion_detectada_aborta(toy_vault, fake_run, fake_notes, mon
     fake_run.rcs["check_retractions.py"] = 1
     with pytest.raises(SystemExit, match="retractados"):
         run_main(monkeypatch)
+
+
+def test_run_exporta_la_via_al_paso(toy_vault, monkeypatch):
+    """R-6: el paso se estampa a sí mismo, pero necesita saber QUIÉN lo lanzó. `run()` lo exporta
+    por entorno —no por flag— para no tocarle el CLI a cada script y para que atraviese el
+    `subprocess.run`."""
+    visto = {}
+
+    def fake_run(cmd, cwd=None, env=None):
+        visto["via"] = (env or {}).get(cfg.VIA_ENV)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(it.subprocess, "run", fake_run)
+    assert it.run("query_ads.py", "test_star") == 0
+    assert visto["via"] == "orquestador"

@@ -38,25 +38,22 @@ def safe_name(bibcode: str) -> str:
 
 
 def write_pdf_atomic(dest, data: bytes) -> bool:
-    """Escritura atómica del PDF final: temporal en el MISMO directorio + `os.replace` (mismo
-    patrón que `lib_config.save_registro` / `fetch_ground_truth.write_ground_truth` /
-    `fetch_pdf.write_pdf_atomic`, que es la implementación gemela para la otra vía de bajada).
-    H-07: antes se hacía `dest.write_bytes(buf)` directo — un corte a mitad de esa escritura
-    (proceso matado, disco lleno) deja un PDF TRUNCADO en el destino FINAL (medido: 35 B), y el
-    único chequeo de idempotencia de la cadena (acá y en `fetch_pdf`) es `dest.exists()`: ese PDF
-    roto se cuenta como "ya bajado" para siempre. Con la escritura atómica un corte nunca deja
-    nada en `dest`."""
-    tmp = dest.with_name(dest.name + f".tmp{os.getpid()}")
+    """Escritura atómica del PDF final, vía `cfg.write_bytes_atomic` (D-53: un solo writer
+    atómico en el repo; esta función y su gemela de la otra vía de bajada eran dos clones del
+    patrón tmp+os.replace).
+
+    H-07: antes se escribía el destino directo — un corte a mitad (proceso matado, disco lleno)
+    deja un PDF TRUNCADO en el destino FINAL (medido: 35 B), y el único chequeo de idempotencia
+    de la cadena es `dest.exists()`: ese PDF roto cuenta como "ya bajado" para siempre, sin forma
+    de reintentarlo salvo borrarlo a mano. Con la escritura atómica un corte NUNCA deja nada en
+    `dest`: o el PDF completo se publica, o `dest` sigue sin existir y la próxima corrida lo
+    reintenta sola. `False` si la publicación falló (queda como "no conseguido" → entra al
+    residuo, igual que si la fuente no hubiera entregado nada)."""
     try:
-        tmp.write_bytes(data)
-        os.replace(tmp, dest)
+        cfg.write_bytes_atomic(dest, data)
         return True
     except OSError as e:
         cfg.print_seguro(f"    ! no se pudo escribir {dest.name} en disco: {e}")
-        try:
-            tmp.unlink()
-        except OSError:
-            pass
         return False
 
 
@@ -99,6 +96,14 @@ def download_pdf(arxiv_id: str, dest) -> bool:
     return write_pdf_atomic(dest, bytes(buf))
 
 
+
+def _flags_usados(args) -> list:
+    """Los flags no-default de esta corrida, para dejarlos en `cadena:` del registro (D-48/D-57).
+    Son las **escotillas**: `--force`, `--yes`, `--all` cambian lo que la corrida hizo, y sin
+    registrarlas la traza dice "corrió make_notes" sobre dos corridas que no hicieron lo mismo."""
+    return sorted(f"--{k.replace('_', '-')}" for k, v in vars(args).items()
+                  if v is True and k not in ("topic",))
+
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser()
@@ -133,9 +138,18 @@ def main() -> int:
                       f"{len(no_arxiv)} sin arXiv (pre-arXiv / no e-print)")
     got, skipped, failed = 0, 0, []
     for i, r in enumerate(todo, 1):
-        dest = destdir / f"{safe_name(r['bibcode'])}.pdf"
+        stem = safe_name(r["bibcode"])
+        dest = destdir / f"{stem}.pdf"
         if dest.exists() and not args.force:
             skipped += 1
+            continue
+        # D-18: el mismo bibcode ya bajado bajo otro slug es el MISMO archivo — copiarlo evita una
+        # bajada idéntica (33 copias medidas en la instancia) y un modo de falla (la red).
+        if not args.force and (otro := cfg.artefacto_en_otro_slug(cfg.PDFS, args.slug, stem, ".pdf")):
+            cfg.write_bytes_atomic(dest, otro.read_bytes())
+            cfg.print_seguro(f"  ↺ {r['bibcode']}: ya estaba bajo `{otro.parent.name}` — copiado "
+                             "sin ir a la red (D-18)")
+            got += 1
             continue
         cfg.print_seguro(f"  [{i}/{len(todo)}] {r['arxiv_id']}  {r['bibcode']}")
         if download_pdf(r["arxiv_id"], dest):
@@ -155,11 +169,12 @@ def main() -> int:
     residue = no_arxiv + failed
     if residue:
         miss = cfg.ROOT / "build" / args.slug / "missing_pdf.json"
-        miss.write_text(json.dumps(
+        cfg.write_text_atomic(miss, json.dumps(
             [{"bibcode": r["bibcode"], "title": r["title"], "doi": r.get("doi")}
-             for r in residue], indent=2, ensure_ascii=False), encoding="utf-8")
+             for r in residue], indent=2, ensure_ascii=False))
         cfg.print_seguro(f"Sin PDF ({len(no_arxiv)} sin arXiv + {len(failed)} fallidos) → {miss} "
                           "(fetch_pdf los intenta vía el resolver de ADS; el residuo final es el suyo).")
+    cfg.save_paso(args.slug, "fetch_arxiv", flags=_flags_usados(args))
     return 0
 
 

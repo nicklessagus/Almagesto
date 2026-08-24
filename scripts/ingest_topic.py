@@ -46,6 +46,7 @@ import argparse
 import json
 import re
 import shutil
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -78,10 +79,29 @@ def _listify_curado(v, campo: str):
 
 
 def run(script: str, *args: str) -> int:
-    """Corre un script de la cadena con el mismo intérprete (rutas absolutas vía lib_config)."""
+    """Corre un script de la cadena con el mismo intérprete (rutas absolutas vía lib_config).
+
+    Exporta `ALMAGESTO_VIA=orquestador` para que el paso —que se estampa a sí mismo en `cadena:`
+    del registro (R-6/D-57)— sepa distinguirse de una corrida suelta. Va por entorno y no por flag
+    porque tiene que atravesar el `subprocess.run` sin tocarle el CLI a cada script."""
     cfg.print_seguro(f"\n→ {script} {' '.join(args)}")
+    env = {**os.environ, cfg.VIA_ENV: "orquestador"}
     return subprocess.run([sys.executable, str(cfg.ROOT / "scripts" / script), *args],
-                          cwd=cfg.ROOT / "scripts").returncode
+                          cwd=cfg.ROOT / "scripts", env=env).returncode
+
+
+def _cierre_retracciones(slug: str) -> None:
+    """Cierre de cadena: chequeo de retracciones de ESTE ingest, distinguiendo los tres códigos
+    (issue 0.1). `1` = hay retractados (revisar las notas marcadas). `2` = el chequeo **no pudo
+    correr** — aborta igual, porque la cadena no certifica lo que no miró, pero sin la frase falsa
+    "detectó papers retractados", que mandaba al operador a buscar marcas inexistentes."""
+    rc = run("check_retractions.py", "--slug", slug)
+    if rc == 1:
+        sys.exit("check_retractions detectó papers retractados — revisá las notas marcadas "
+                 "(el lint las surface como bloqueante).")
+    if rc:
+        sys.exit(f"check_retractions no pudo chequear (rc={rc}) — la cadena no certifica lo que no "
+                 "miró. Revisá el motivo que imprimió arriba y re-corré (es idempotente).")
 
 
 # ── guardia de expansión (#37) ───────────────────────────────────────────────
@@ -151,7 +171,7 @@ def repoint_source_pdf(key: str, declared: str, dest: Path) -> None:
         cfg.print_seguro(f"  ⚠ {key}: no repunté `pdf:` en topics.yaml (el path declarado matchea "
               f"{n} líneas, esperaba 1) — repuntalo a mano a {rel}")
         return
-    cfg.TOPICS_YAML.write_text(pat.sub(lambda m: m.group(1) + rel, text), encoding="utf-8")
+    cfg.write_text_atomic(cfg.TOPICS_YAML, pat.sub(lambda m: m.group(1) + rel, text))
     cfg.print_seguro(f"  {key}: sources[].pdf repuntado → {rel}")
 
 
@@ -170,9 +190,7 @@ def ingest_ads(slug: str, yes: bool = False) -> None:
             expansion_guard(slug, yes)
     # cierre: sólo los papers de ESTE ingest (el barrido completo es pasada periódica — maintain);
     # exit 1 acá significa "detectó papers retractados", no un fallo de la cadena
-    if run("check_retractions.py", "--slug", slug):
-        sys.exit("check_retractions detectó papers retractados — revisá las notas marcadas "
-                 "(el lint las surface como bloqueante).")
+    _cierre_retracciones(slug)
 
 
 def ingest_offads(slug: str, meta: dict, force: bool) -> None:
@@ -214,10 +232,15 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
         # con la mitad que lo consume, y el aviso quedaba mudo justo en ese caso.
         if (dk := next((k for k in (key, s.get("url")) if k and k in descartadas), None)):
             d = descartadas[dk]
-            cfg.print_seguro(f"  ⚠ {key}: figura DESCARTADA en el registro ({d.get('fecha', 's/f')}"
+            # D-52: volver a declarar la fuente ES cambiar de opinión — la decisión se ANULA
+            # (preservando el motivo viejo en `previa`) en vez de quedar contradiciendo lo hecho.
+            # Antes esto sólo avisaba y le pedía al usuario que editara el YAML a mano: el registro
+            # quedaba diciendo "descartada por X" sobre una fuente que está ingestada.
+            cfg.anular_decision(slug, dk, por="sources", carril="fuente-declarada")
+            cfg.print_seguro(f"  ↩ {key}: figuraba DESCARTADA en el registro ({d.get('fecha', 's/f')}"
                   f"{'' if dk == key else f', por url {dk}'}): "
-                  f"{d.get('motivo') or '(sin motivo)'} — se ingesta igual; si cambiaste de "
-                  f"opinión, sacá la entrada de `decisiones` en {cfg.registro_path(slug)}")
+                  f"{d.get('motivo') or '(sin motivo)'} — volver a declararla la revierte: decisión "
+                  f"ANULADA (el motivo viejo queda en `previa`)")
         if s.get("pending"):
             # Fuente no-conseguible declarada: NO se fetchea ni cuenta como fallo — stub con
             # pending_source (url/doi quedan como puntero) y derivación al usuario en el aviso final.
@@ -287,7 +310,7 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
     # sin corchetes (un solo paper con bibcode ADS en un tema mixto) es truthy y no caía en el
     # `or`; la comprensión de abajo recorría el string letra por letra y el bibcode real nunca
     # entraba a la sub-cadena ADS: la curación manual se perdía en silencio.
-    extra = [b for b in _listify_curado(meta.get("extra_core"), "extra_core") if b]
+    extra = [e["bibcode"] for e in cfg.load_extra_core(meta, entry=slug)]
     if extra:
         cfg.print_seguro(f"\nextra_core: {len(extra)} paper(s) con bibcode ADS (tema mixto) → sub-cadena ADS")
         for script, sargs in (("query_ads.py", ["--topic", slug, "--extra-only"]),
@@ -326,9 +349,7 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
     # Con extra_core también corre: los papers ADS del tema mixto traen DOI. Sólo los papers de
     # ESTE tema (--slug: sources + extra_core); el barrido completo es pasada periódica (maintain).
     if any(s.get("doi") for s in sources) or extra:
-        if run("check_retractions.py", "--slug", slug):
-            sys.exit("check_retractions detectó papers retractados — revisá las notas marcadas "
-                     "(el lint las surface como bloqueante).")
+        _cierre_retracciones(slug)
 
 
 def main() -> int:

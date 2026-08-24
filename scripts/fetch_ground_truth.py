@@ -19,8 +19,8 @@ NEA devuelve una best-mass espuria). Ver también el chequeo análogo en lint.py
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -69,27 +69,14 @@ def msini_earth(K_ms, P_days, e, mstar_msun):
 
 
 def write_ground_truth(slug: str, payload: dict) -> Path:
-    """Escritura atómica de ground_truth/<slug>.json: temporal en el MISMO directorio (mismo
-    filesystem, para que el rename sea atómico en POSIX) + `os.replace` — mismo patrón que
-    `lib_config.save_registro`. Sin esto, `--force` reescribía el archivo directo con
+    """Escritura atómica de ground_truth/<slug>.json, vía `cfg.write_text_atomic` (D-53: un solo
+    writer atómico en el repo; esta función era uno de los tres clones del patrón). Sin ella, `--force` reescribía el archivo directo con
     `write_text` y un corte a mitad de la escritura (proceso matado, disco lleno) dejaba el JSON
     TRUNCADO: medido, 162 B de snapshot previo → 1.024 B de JSON inválido, contenido viejo
     IRRECUPERABLE. El propio docstring del módulo dice que NEA cambia valores entre releases: el
     snapshot no es regenerable, así que perderlo a mitad de una escritura no es aceptable."""
-    cfg.GROUND_TRUTH.mkdir(parents=True, exist_ok=True)
     out = cfg.GROUND_TRUTH / f"{slug}.json"
-    tmp = out.with_name(out.name + f".tmp{os.getpid()}")
-    tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-    try:
-        os.replace(tmp, out)
-    except Exception:
-        # publicación fallida: no dejar el temporal como basura silenciosa, pero priorizar
-        # propagar el error real (el snapshot previo, si había uno, sobrevive intacto).
-        try:
-            tmp.unlink()
-        except OSError:
-            pass
-        raise
+    cfg.write_text_atomic(out, json.dumps(payload, indent=2, ensure_ascii=False))
     return out
 
 
@@ -164,15 +151,22 @@ def fetch_host(host: str, tab=None) -> dict:
     lee) y en cambio avisar por stdout en el momento del ingest, que es donde alguien puede
     efectivamente actuar (reintentar, revisar el host, etc.) — sin inventar un nuevo campo
     write-only que reproduciría el mismo problema."""
-    out = {"name": host}
+    # INV-07: la clave va PRESENTE y en `null` cuando la autoridad calla — no se omite. Un campo
+    # ausente y un campo nulo se leen distinto: el primero parece un schema viejo, el segundo dice
+    # "la autoridad no tiene el dato", que es la información real.
+    out = {"name": host, **{campo: None for campo in cfg.AUTORIDAD_CAMPO}}
+    otras: dict = {}          # D-2: valores de la autoridad NO declarada, que no se adoptan
     # NEA host columns (vienen en pscomppars)
     try:
         if tab is None:
             tab = fetch_pscomppars(host)
         if len(tab):
             r = tab[0]
+            # `spectral_type` NO se toma de NEA (D-1: su autoridad declarada es SIMBAD). Si NEA
+            # lo trae, se guarda aparte como discrepancia potencial en vez de tirarse (D-2).
+            if (sp_nea := _val(r, "st_spectype")) not in (None, ""):
+                otras["spectral_type"] = {"nea": sp_nea}
             out.update({
-                "spectral_type": _val(r, "st_spectype"),
                 "teff_K": _val(r, "st_teff"),
                 "mass_msun": _val(r, "st_mass"),
                 "st_rotp_days": _val(r, "st_rotp"),
@@ -205,14 +199,84 @@ def fetch_host(host: str, tab=None) -> dict:
         if res is not None and len(res):
             r = res[0]
             for k in ("sp_type", "SP_TYPE", "sptype"):
-                if k in res.colnames and out.get("spectral_type") in (None, ""):
+                # sin el `out.get(...) in (None, "")` de antes: SIMBAD es la autoridad declarada
+                # para este campo, así que su valor MANDA — no rellena el hueco que NEA dejó.
+                if k in res.colnames:
                     out["spectral_type"] = _val(r, k)
                     break
     except Exception as e:
         cfg.print_seguro(f"  ⚠ SIMBAD no respondió para {host!r}: {e} — spectral_type puede "
                           "quedar null por esto y no por ausencia real del dato.")
+    # D-1: qué autoridad contestó cada campo. Se persiste porque es lo que la ficha publica en su
+    # cabecera y lo que hace AUDITABLE la elección — sin esto, "vino de SIMBAD" es una promesa de
+    # la doc, no un hecho del archivo. Sólo los campos con valor: un `null` no tiene procedencia.
+    out["_autoridad"] = {campo: cfg.AUTORIDAD_CAMPO[campo]
+                         for campo in cfg.AUTORIDAD_CAMPO
+                         if out.get(campo) not in (None, "")}
+    # D-2 / INV-77: lo que la OTRA autoridad decía y no se adoptó. No se tira: sin registrarlo, el
+    # desacuerdo entre autoridades desaparece y la ficha afirma un valor único donde había dos.
+    if otras:
+        out["_otras_autoridades"] = otras
     return out
 
+
+
+
+# ── D-45 / INV-85: qué cambió afuera desde el snapshot ───────────────────────────────────────────
+
+def nea_diff(slug: str) -> list:
+    """Diff campo a campo entre el snapshot en disco y lo que NEA/SIMBAD dicen HOY.  @inv INV-85
+
+    Devuelve `[(campo, viejo, nuevo)]` y **no escribe nada**. Esa separación es el punto: un
+    snapshot que se actualiza solo cambia valores bajo los pies de la prosa que ya los citó, y el
+    consumidor no tiene forma de enterarse. Aplicar sigue siendo `--force`, explícito.
+
+    Un valor **retirado** (NEA lo tenía y ya no) es un cambio como cualquier otro: la ficha lo
+    sigue mostrando y nadie lo diría. Los planetas se comparan **por letra**, no por posición ni
+    por cardinalidad — dos listas del mismo largo pueden no ser los mismos planetas (la lección de
+    #70, que costó el defecto que cerró ese issue).
+    """
+    out = cfg.GROUND_TRUTH / f"{slug}.json"
+    if not out.exists():
+        return []
+    try:
+        viejo = json.loads(out.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    name, _ = cfg.star_by_slug(slug)
+    tab = fetch_pscomppars(name)
+    host_nuevo = fetch_host(name, tab=tab)
+    planets_nuevos = fetch_planets(tab, host_nuevo.get("mass_msun"))
+
+    cambios = []
+    host_viejo = cfg.as_map(viejo.get("host"))
+    for campo in sorted(set(host_viejo) | set(host_nuevo)):
+        if campo.startswith("_") or campo == "name":
+            continue                      # metadata de procedencia, no valor
+        a, b = host_viejo.get(campo), host_nuevo.get(campo)
+        if a != b:
+            cambios.append((f"host.{campo}", a, b))
+
+    por_letra_viejo = {p.get("letter"): p for p in cfg.as_list(viejo.get("planets"))
+                       if isinstance(p, dict)}
+    por_letra_nuevo = {p.get("letter"): p for p in planets_nuevos}
+    for letra in sorted(set(por_letra_viejo) | set(por_letra_nuevo), key=str):
+        a, b = por_letra_viejo.get(letra), por_letra_nuevo.get(letra)
+        if a is None or b is None:
+            cambios.append((f"planets.{letra}", a, b))     # planeta nuevo o retirado
+            continue
+        for campo in sorted(set(a) | set(b)):
+            if a.get(campo) != b.get(campo):
+                cambios.append((f"planets.{letra}.{campo}", a.get(campo), b.get(campo)))
+    return cambios
+
+
+def _flags_usados(args) -> list:
+    """Los flags no-default de esta corrida, para dejarlos en `cadena:` del registro (D-48/D-57).
+    Son las **escotillas**: `--force`, `--yes`, `--all` cambian lo que la corrida hizo, y sin
+    registrarlas la traza dice "corrió make_notes" sobre dos corridas que no hicieron lo mismo."""
+    return sorted(f"--{k.replace('_', '-')}" for k, v in vars(args).items()
+                  if v is True and k not in ("topic",))
 
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
@@ -248,9 +312,13 @@ def main() -> int:
                   f"→ uso pl_bmasse={p['mass_earth']} M⊕ (≈ check {p['msini_check_earth']})")
 
     payload = {"star": name, "slug": args.slug, "host": host_info, "planets": planets,
+               # D-1: la fecha del snapshot es parte de la procedencia que la ficha publica —
+               # "de dónde salió" sin "cuándo" no alcanza: NEA cambia valores entre releases.
+               "consultado": dt.date.today().isoformat(),
                "source": "NASA Exoplanet Archive (pscomppars) + SIMBAD"}
     out = write_ground_truth(args.slug, payload)
     print(f"  → {out}")
+    cfg.save_paso(args.slug, "fetch_ground_truth", flags=_flags_usados(args))
     return 0
 
 

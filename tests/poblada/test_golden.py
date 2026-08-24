@@ -167,11 +167,25 @@ def test_reporte_lista_todas_las_categorias(sembrar):
     el reporte trae 30 secciones `## ...` (no 29 — el conteo que documenta el CLAUDE.md de este
     repo, `lint.py:986-1017`, quedó desactualizado respecto del código actual; este test cuenta
     directo del reporte generado, no de esa cifra). Corre sobre el corpus congelado para no
-    sembrar un corpus aparte."""
+    sembrar un corpus aparte.
+
+    Desde el issue 0.3 son **31** (entró `⛔ No evaluado`) desde el 1.2, **33** (los dos
+    carriles del ancla: `plantilla vieja`, bloqueante, y `pares vencidos`, cuya severidad depende
+    de `--cierre`), desde el 2.1, **34** (el detector del registro pre-D-28) desde el 2.2, **35** (cadena incompleta)
+    desde el 3.1/3.3, **37** (lista de papers
+    desactualizada, recorte de lectura sin declarar) desde el 5.1, **38** (identidad duplicada)
+    y desde el 6.3, **40** (prosa que cita una fuente retractada, con y sin marcar). Esa categoría es además la ÚNICA
+    excepción legítima a la regla de arriba — cuando un chequeo no se puede evaluar, su sección se
+    suprime en vez de mostrar un `(0)` que se leería como veredicto, y la supresión queda
+    **nombrada** ahí. O sea que la sección no desaparece en silencio, que es lo que este test
+    protege; el `(0)` inventado y la desaparición muda son el mismo bug visto de los dos lados."""
     _, crudo, _ = _correr_golden(sembrar)
     titulos = [l for l in crudo.splitlines() if l.startswith("## ")]
-    assert len(titulos) == 30, (
-        f"el reporte trae {len(titulos)} categorías, se esperaban 30 — alguna sección dejó de "
+    assert len(titulos) == 40, (
+        f"el reporte trae {len(titulos)} categorías, se esperaban 40 — alguna sección dejó de "
         "imprimirse (o se agregó una nueva sin actualizar este test)")
+    no_eval = [t for t in titulos if "No evaluado" in t]
+    assert no_eval and no_eval[0].endswith("(0)"), (
+        "sobre el corpus congelado (con git y objective sano) nada debería quedar sin evaluar")
     con_cero = [t for t in titulos if re.search(r"\(0\)\s*$", t)]
     assert con_cero, "ninguna categoría con (0) — el corpus congelado debería tener varias limpias"

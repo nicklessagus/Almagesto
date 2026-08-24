@@ -1,6 +1,6 @@
 # Ratchet de deuda conocida — instancia real (tier `instancia`, gate del deploy).
 #
-# QUÉ ES ESTO. Un corpus real (Almagesto-RV) no está limpio y no lo va a estar pronto: cada número
+# QUÉ ES ESTO. Un corpus real (una instancia privada) no está limpio y no lo va a estar pronto: cada número
 # de abajo es DEUDA MEDIDA, no un objetivo a alcanzar. `test_invariantes_instancia.py::
 # test_ratchet_categorias_no_superan_el_techo` lee este archivo y afirma que el lint, corrido sobre
 # una COPIA read-only de la instancia (fixture `instancia_real`), reporta CADA categoría por debajo
@@ -24,7 +24,7 @@
 # entró a la bóveda antes de tocar este archivo.
 #
 # ORIGEN DE LOS NÚMEROS. Medidos el 2026-08-23 corriendo `python scripts/lint.py` (Almagesto
-# v1.22.1) sobre una copia scratch de `/home/agus/Data/Sincronizando/UNSAM/PhD/Repos/Almagesto-RV`
+# v1.22.1) sobre una copia scratch de una instancia real (privada)
 # (instancia real del usuario, todavía en su propio `Almagesto v1.11.0` — el deploy 1.11.0→1.22.1
 # descrito en el plan de la 7ª auditoría AÚN NO CORRIÓ sobre ella). No son los números que trae el
 # plan de la tarea (esos se citan ahí como "medidos ANTES de los fixes de --sync-mirror/#69" y
@@ -37,7 +37,7 @@
 medido_en: "2026-08-23"
 almagesto_version_framework: "1.22.1"
 almagesto_version_instancia: "1.11.0"
-instancia_referencia: "Almagesto-RV"
+instancia_referencia: "instancia real (privada)"
 
 categorias:
   # ── bloqueantes (cuentan para el exit code 1 del lint; CLAUDE.md las exige "en 0") ────────────

@@ -174,7 +174,7 @@ tabla/prosa), o escribir la línea de desacuerdo en el concepto. Nada de sobrees
 ### 5. Verificar, lint, cierre
 - **verify-citations** sobre las disputas nuevas (cada `note`/`alt` debe estar respaldada por el
   fulltext del `ref` — es prosa con `[[bibcode]]` nueva).
-- `python scripts/lint.py` (0 bloqueante — atención a *ref de una posición sin paper destino* y a
+- `python scripts/lint.py --cierre` (0 bloqueante — atención a *ref de una posición sin paper destino* y a
   *disputes mal formadas*: una disputa con **una sola** posición no es un desacuerdo, es una
   afirmación, y va a la prosa citada; el bibcode
   discrepante tiene que existir como nota).

@@ -361,8 +361,12 @@ def test_concept_note_methods(toy_vault):
     assert fm["name"] == "Gaussian processes" and "status" not in fm
     assert fm["aliases"] == ["análisis de componentes"]
     assert fm["tags"] == ["methods", "thesis"]
-    # ficha-método: la tabla junta también por methods: (retro-link)
-    assert 'contains(methods, "gaussian-processes")' in dest.read_text(encoding="utf-8")
+    # ficha-método: el roll-up junta por `methods` Y por `thesis_links` (retro-link). D-11: ya no
+    # es un bloque ```dataview``` sino una tabla ESTAMPADA — un agente que abre el .md ve los
+    # papers, no el código de una query que nunca va a correr.
+    texto = dest.read_text(encoding="utf-8")
+    assert "## Papers que tocan este tema (auto) (0)" in texto
+    assert "```dataview" not in texto.split("## Papers que tocan", 1)[1]
 
 
 def test_concept_note_hypotheses_lleva_status(toy_vault):
@@ -1321,7 +1325,7 @@ def test_find_header_line_es_contrato_compartido(toy_vault):
 
 # ── puntero al registro de búsqueda en la cabecera (#64) ─────────────────────
 
-def test_search_line_estampa_puntero_sin_tocar_la_prosa(toy_vault):
+def test_estado_line_estampa_puntero_sin_tocar_la_prosa(toy_vault):
     """El registro completo vive en config/registro/<slug>.yaml; la ficha lleva UNA línea con
     fecha, universo→core, pendientes y la ruta. Cirugía: la síntesis LLM queda intacta."""
     mn.write_star_note("test_star", force=False)
@@ -1331,47 +1335,53 @@ def test_search_line_estampa_puntero_sin_tocar_la_prosa(toy_vault):
     cfg.save_busqueda("test_star", {"fecha": "2026-08-21", "query": "title:(x)", "rows": 2000,
                                     "n_found": 1837, "n_core": 198, "n_candidates": 42,
                                     "truncated": False})
-    assert mn.stamp_search_line("test_star", dest) is True
+    assert mn.stamp_estado("test_star", dest) is True
     out = dest.read_text(encoding="utf-8")
-    assert ("> _Búsqueda 2026-08-21: 1837 → 198 core · 42 sin juzgar · registro en "
-            "`config/registro/test_star.yaml`._") in out
-    assert out.index("_Búsqueda") < out.index("_Generado con Almagesto")   # dentro del blockquote
+    assert ("> _Estado — búsqueda 2026-08-21 (1837 → 198 core) · 42 sin juzgar · "
+            "registro en `config/registro/test_star.yaml`._") in out
+    assert out.index("_Estado") < out.index("_Generado con Almagesto")   # dentro del blockquote
     assert "Síntesis LLM que NO se toca." in out
-    assert mn.stamp_search_line("test_star", dest) is False                # idempotente
+    assert mn.stamp_estado("test_star", dest) is False                # idempotente
 
 
-def test_search_line_se_actualiza_y_no_duplica(toy_vault):
-    """Un refresh re-estampa la línea vieja en vez de acumular punteros."""
+def test_estado_line_se_actualiza_y_no_duplica(toy_vault):
+    """Un refresh re-estampa la línea vieja en vez de acumular punteros.
+
+    D-28: con dos corridas la línea muestra la fecha de la ÚLTIMA, cuántas búsquedas hubo, y el
+    universo **acumulado** — 120 y no 220, porque las dos corridas se solapan en 100 papers. Sumar
+    los embudos es justo el bug que D-28 cierra."""
     mn.write_star_note("test_star", force=False)
     dest = cfg.STARS / "test_star.md"
-    cfg.save_busqueda("test_star", {"fecha": "2026-08-01", "n_found": 100, "n_core": 10})
-    mn.stamp_search_line("test_star", dest)
+    cfg.save_busqueda("test_star", {"fecha": "2026-08-01", "n_found": 100, "n_core": 10,
+                                    "n_total": 100})
+    mn.stamp_estado("test_star", dest)
     cfg.save_busqueda("test_star", {"fecha": "2026-08-21", "n_found": 120, "n_core": 14,
-                                    "truncated": True})
-    assert mn.stamp_search_line("test_star", dest) is True
+                                    "n_total": 120, "truncated": True})
+    assert mn.stamp_estado("test_star", dest) is True
     out = dest.read_text(encoding="utf-8")
-    assert out.count("> _Búsqueda") == 1
-    assert "2026-08-21: 120 → 14 core" in out and "⚠ truncada" in out and "2026-08-01" not in out
+    assert out.count("> _Estado") == 1
+    assert "búsqueda 2026-08-21 (120 → 14 core, 2 búsquedas)" in out
+    assert "⚠ truncada" in out and "2026-08-01" not in out
 
 
-def test_search_line_sin_registro_o_sin_ancla_no_toca_nada(toy_vault):
+def test_estado_line_sin_registro_o_sin_ancla_no_toca_nada(toy_vault):
     """Sin registro no hay nada que estampar; y si la cabecera no tiene la línea `_Generado con
     Almagesto…_` está fuera del contrato → no se inventa (mismo criterio que stamp_pdf_link, #48)."""
     mn.write_star_note("test_star", force=False)
     dest = cfg.STARS / "test_star.md"
-    assert mn.stamp_search_line("test_star", dest) is False
+    assert mn.stamp_estado("test_star", dest) is False
     fuera = cfg.STARS / "fuera_de_contrato.md"
     fuera.write_text("---\nname: x\n---\n# x\n\n> cabecera propia\n", encoding="utf-8")
     cfg.save_busqueda("test_star", {"fecha": "2026-08-21", "n_found": 5, "n_core": 1})
-    assert mn.stamp_search_line("test_star", fuera) is False
+    assert mn.stamp_estado("test_star", fuera) is False
     assert "Búsqueda" not in fuera.read_text(encoding="utf-8")
 
 
-def test_search_line_con_busqueda_no_mapa_no_crashea(toy_vault):
+def test_estado_line_con_busqueda_no_mapa_no_crashea(toy_vault):
     """El lector (`load_registro`) es tolerante y sus dos consumidores no."""
     cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
     cfg.registro_path("test_star").write_text("busqueda: 2026-08-22\n", encoding="utf-8")
-    assert isinstance(mn.search_line("test_star"), str)
+    assert isinstance(mn.estado_line("test_star", cfg.STARS / "test_star.md"), str)
 
 
 # ── pdf_source: de qué DOCUMENTO salió el texto (#57) ────────────────────────
@@ -1518,10 +1528,10 @@ def test_stamp_header_destraba_el_puntero_de_busqueda(toy_vault):
     dest.write_text("---\nname: Test Star\ntags:\n- star\ngenerator: Almagesto v1.5.0\n---\n"
                     "# test_star\n\n## Resumen\n\nProsa.\n", encoding="utf-8")
     cfg.save_busqueda("test_star", {"fecha": "2026-08-21", "n_found": 100, "n_core": 10})
-    assert mn.stamp_search_line("test_star", dest) is False        # antes: silencio
+    assert mn.stamp_estado("test_star", dest) is False        # antes: silencio
     assert mn.stamp_header(dest) is True
-    assert mn.stamp_search_line("test_star", dest) is True         # después: aterriza
-    assert "> _Búsqueda 2026-08-21" in dest.read_text(encoding="utf-8")
+    assert mn.stamp_estado("test_star", dest) is True         # después: aterriza
+    assert "> _Estado — búsqueda 2026-08-21" in dest.read_text(encoding="utf-8")
 
 
 def test_restamp_headers_barre_fichas_y_conceptos(toy_vault, capsys):
@@ -1620,18 +1630,18 @@ def test_el_lint_deja_de_reportar_la_nota_tras_el_restamp(toy_vault, capsys):
     assert "(0)" in seccion.split("\n")[0], f"el lint sigue reportando la nota:\n{seccion}"
 
 
-def test_stamp_search_line_puede_actuar_tras_el_restamp(toy_vault):
+def test_stamp_estado_puede_actuar_tras_el_restamp(toy_vault):
     """El punto de todo el ejercicio: `GENERATOR_LINE` es el punto de INSERCIÓN de
     `stamp_search_line`. Si tras el restamp sigue sin poder actuar, la cabecera no se arregló —
     sólo se le escribió texto encima."""
     p = nota_sin_generator()
     mn.restamp_headers()
     cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
-    cfg.save_registro("s", {"busqueda": {"fecha": "2026-08-01", "n_found": 412, "n_core": 37,
-                                         "n_total": 40, "n_candidates": 3, "n_dropped": 0,
-                                         "rows": 2000, "truncated": False,
-                                         "almagesto_version": cfg.ALMAGESTO_VERSION}})
-    assert mn.stamp_search_line("s", p) is True
+    cfg.save_busqueda("s", {"fecha": "2026-08-01", "n_found": 412, "n_core": 37,
+                            "n_total": 40, "n_candidates": 3, "n_dropped": 0,
+                            "rows": 2000, "truncated": False,
+                            "almagesto_version": cfg.ALMAGESTO_VERSION})
+    assert mn.stamp_estado("s", p) is True
 
 
 # ── --sync-mirror: backfill del espejo ficha↔ground-truth (#70) ──────────────
@@ -1784,3 +1794,374 @@ def test_cli_sync_mirror_no_pide_slug(toy_vault, monkeypatch):
     ficha("s", {"planets": [{"letter": "b", "mass_earth": None, "status": "confirmed"}]})
     assert run_main(monkeypatch, ["--sync-mirror"]) == 0
     assert read_fm(cfg.STARS / "s.md")["planets"][0]["mass_earth"] == 8.99
+
+
+# ── issue 0.2 · toda escritura a vault/ pasa por el helper atómico (D-53 / INV-90) ───────────────
+
+def test_notas_pasan_por_el_helper(toy_vault, monkeypatch):
+    """`make_notes` es el writer que MÁS escribe de la bóveda y el único que no era atómico: sus
+    14 escrituras a `vault/wiki/` iban por `dest.write_text(...)` directo. El test es de
+    comportamiento y no de `grep`: intercepta `Path.write_text` y exige que **ninguna** escritura
+    bajo `vault/` la use directo — así también cae una escritura futura hecha con `open()` o
+    `shutil`, que un grep de `write_text(` no vería.  @inv INV-90
+
+    ⚠ **Cobertura medida por mutación (2026-08-24): 3 de los 14 sitios de escritura de
+    `make_notes`** (líneas 1170, 1261, 1293). Los otros 11 viven en cirugías que estas corridas no
+    alcanzan —`stamp_excluded` sólo escribe cuando el conjunto de excluidos CAMBIA, los migradores
+    sólo con material vintage sembrado—. El barrido repo-wide de los 14 lo da el test estático
+    `test_lib_config.py::test_sin_escrituras_directas_a_vault` (verificado por mutación: detecta
+    los 14). Los dos son complementarios y ninguno solo alcanza; decirlo acá evita que alguien lea
+    este test como la garantía completa, que es el modo de falla que el repo llama "afirmar de
+    menos"."""
+    real = cfg.Path.write_text
+
+    def guardia(self, *a, **kw):
+        # el helper escribe primero a `<nombre>.tmp<pid>`; cualquier OTRA escritura directa bajo
+        # `vault/` es la que este test existe para prohibir. Comparar conjuntos de RUTAS no
+        # alcanzaba: una ruta escrita directo Y además por el helper en otra llamada pasaba
+        # (auditado por mutación — el grep estático la veía, este test no).
+        if ".tmp" not in self.name and str(self).startswith(str(toy_vault.VAULT)):
+            raise AssertionError(f"escritura directa (no atómica) a {self}")
+        return real(self, *a, **kw)
+
+    # el sembrado del test (fixtures escribiendo `topics.yaml`, `ads.json`) NO es código de
+    # producción: la guardia se instala DESPUÉS.
+    ads_json([rec("2020aaaA...1..1A"), rec("2020nonC....1..1C", relevant=False)])
+    seed_topic()
+    monkeypatch.setattr(cfg.Path, "write_text", guardia)
+
+    # Ejercitar las RAMAS, no una sola: la primera versión de este test corría sólo
+    # `write_star_note` + `--restamp-headers` y una mutación deliberada en `stamp_excluded`
+    # (línea 729) pasaba inadvertida. La cobertura de un test de comportamiento es exactamente
+    # el conjunto de caminos que recorre — el barrido repo-wide lo da el test estático de
+    # `test_lib_config.py::test_sin_escrituras_directas_a_vault`.
+    assert run_main(monkeypatch, ["test_star", "--all"]) == 0      # ficha + papers, notas NUEVAS
+    # 2ª corrida: la ficha ya existe → entran las cirugías sobre nota existente (`stamp_excluded`,
+    # `stamp_search_line`, cabecera), que son la mayoría de los 14 sitios de escritura y que la
+    # primera corrida no toca. Auditado por mutación: sin esta línea, romper `stamp_excluded`
+    # pasaba inadvertido.
+    assert run_main(monkeypatch, ["test_star", "--all"]) == 0
+    assert run_main(monkeypatch, ["gp", "--topic"]) == 0           # concept + papers de tema
+    assert run_main(monkeypatch, ["gp", "--topic"]) == 0
+    assert run_main(monkeypatch, ["--restamp-headers"]) == 0
+    assert run_main(monkeypatch, ["--restamp-pdf-links"]) == 0
+    assert run_main(monkeypatch, ["--migrate-disputes"]) == 0
+    assert run_main(monkeypatch, ["--sync-mirror"]) == 0
+    assert (toy_vault.STARS / "test_star.md").exists(), "el test no escribió nada — no prueba nada"
+
+
+def test_corte_publicando_no_deja_la_nota_a_medias(toy_vault, monkeypatch):
+    """Inyección de fallo de punta a punta (patrón F4 de la 8ª): el corte llega en la publicación
+    de una nota real. La nota previa —extracción LLM, lo menos regenerable de la bóveda— queda
+    byte-idéntica y no queda basura `.tmp` al lado."""
+    mn.write_star_note("test_star", force=False)
+    dest = toy_vault.STARS / "test_star.md"
+    antes = dest.read_bytes()
+
+    def boom(*a, **k):
+        raise OSError("disco lleno")
+
+    monkeypatch.setattr(cfg.os, "replace", boom)
+    with pytest.raises(OSError):
+        mn.write_star_note("test_star", force=True)
+    assert dest.read_bytes() == antes
+    assert [p.name for p in toy_vault.STARS.iterdir() if ".tmp" in p.name] == []
+
+
+# ── issue 3.1 · D-10/D-11/D-24: la lista de papers se MATERIALIZA, con estado y origen ──────────
+#
+# Medido en la instancia real: la ficha de tau Ceti promete "155 papers" en su roll-up Dataview y
+# discute 8. Peor: el roll-up es un bloque ```dataview``` — un agente que abre el `.md` ve el CÓDIGO
+# de la query, no sus resultados, y el plugin ni siquiera está versionado. El contrato dice que la
+# ficha sirve a una audiencia-modelo; una promesa que depende de un plugin no la cumple (D-11).
+
+def _paper(stem, *, stars=("Estrella Test",), methods=None, relevance="high", year="2020"):
+    mk_note(cfg.PAPERS, stem, {"tags": ["paper"], "bibcode": stem, "year": year,
+                               "stars": list(stars), "relevance": relevance,
+                               **({"methods": methods} if methods else {})}, "")
+
+
+def test_tabla_refleja_los_cuatro_estados(toy_vault):
+    """Patrón Censo: se comparan STEMS, no conteos — dos listas del mismo largo pueden no ser los
+    mismos papers (la lección de #70)."""
+    _paper("2020sinA...1..1A")                                   # sin extraer
+    _paper("2020extB...1..1B", methods=["gp"])                   # extraído, no sintetizado
+    _paper("2020sinC...1..1C", methods=["gp"])                   # extraído y sintetizado
+    _paper("2020lowD...1..1D", relevance="low")                  # fuera del filtro
+    mn.write_star_note("test_star", force=True)
+    dest = cfg.STARS / "test_star.md"
+    dest.write_text(dest.read_text(encoding="utf-8").replace(
+        "## Huecos", "Síntesis que cita [[2020sinC...1..1C]].\n\n## Huecos"), encoding="utf-8")
+    filas = {r["stem"]: r["estado"] for r in mn.papers_universe("test_star", "star")}
+    assert filas == {"2020sinA...1..1A": "sin extraer",
+                     "2020extB...1..1B": "extraído, no sintetizado",
+                     "2020sinC...1..1C": "sintetizado",
+                     "2020lowD...1..1D": "fuera del filtro"}
+
+
+def test_conteo_del_encabezado_es_el_de_la_tabla(toy_vault):
+    """Adversario directo del "155 arriba de un resumen de 8": el encabezado no puede prometer un
+    número que la tabla de abajo no sostiene."""
+    for i, stem in enumerate(["2020aaa...1..1A", "2020bbb...1..1B", "2020ccc...1..1C"]):
+        _paper(stem)
+    mn.write_star_note("test_star", force=True)
+    dest = cfg.STARS / "test_star.md"
+    mn.stamp_papers_table("test_star", dest)
+    texto = dest.read_text(encoding="utf-8")
+    # @inv INV-81
+    encabezado = [l for l in texto.splitlines() if l.startswith("## Papers")][0]
+    filas = [l for l in texto.splitlines() if l.startswith("| [[20")]
+    assert f"({len(filas)} ·" in encabezado
+
+
+def test_papers_table_no_depende_del_plugin(toy_vault):
+    """D-11: la tabla estampada REEMPLAZA el bloque ```dataview```. Un agente que abre el `.md`
+    tiene que ver los papers, no el código de una query que nunca va a correr."""
+    _paper("2020aaa...1..1A")
+    mn.write_star_note("test_star", force=True)
+    dest = cfg.STARS / "test_star.md"
+    mn.stamp_papers_table("test_star", dest)
+    texto = dest.read_text(encoding="utf-8")
+    seccion = texto.split("## Papers", 1)[1].split("\n## ", 1)[0]
+    assert "```dataview" not in seccion
+    assert "2020aaa...1..1A" in seccion
+
+
+def test_origen_manual_gana_al_de_lente(toy_vault):
+    """#68: `extra_core` es override del clasificador — el juicio del usuario pisa a la lente."""
+    _paper("2020aaa...1..1A")
+    write_yaml(cfg.STARS_YAML, {"Estrella Test": {
+        "slug": "test_star", "simbad": "tst Star", "ads_object": "Test Star", "aliases": [],
+        "extra_core": [{"bibcode": "2020aaa...1..1A", "via": "triage", "motivo": "árbitro"}]}})
+    fila = mn.papers_universe("test_star", "star")[0]
+    assert fila["origen"] == "manual" and fila["via"] == "triage"
+
+
+def test_stamp_papers_table_idempotente_byte_a_byte(toy_vault):
+    _paper("2020aaa...1..1A")
+    mn.write_star_note("test_star", force=True)
+    dest = cfg.STARS / "test_star.md"
+    mn.stamp_papers_table("test_star", dest)
+    antes = dest.read_bytes()
+    assert mn.stamp_papers_table("test_star", dest) is False
+    assert dest.read_bytes() == antes
+
+
+def test_stamp_papers_table_no_toca_la_prosa(toy_vault):
+    _paper("2020aaa...1..1A")
+    mn.write_star_note("test_star", force=True)
+    dest = cfg.STARS / "test_star.md"
+    dest.write_text(dest.read_text(encoding="utf-8").replace(
+        "## Huecos", "PROSA LLM QUE NO SE TOCA\n\n## Huecos"), encoding="utf-8")
+    mn.stamp_papers_table("test_star", dest)
+    assert "PROSA LLM QUE NO SE TOCA" in dest.read_text(encoding="utf-8")
+
+
+def test_rollup_de_concepto_es_union_y_declara_llave(toy_vault):
+    """D-24: el roll-up de un concepto une `methods` y `thesis_links` — en la instancia real esas
+    dos llaves viven en papers distintos, así que quedarse con una sola pierde la mitad."""
+    seed_topic()
+    mk_note(cfg.PAPERS, "2020metA...1..1A",
+            {"tags": ["paper"], "bibcode": "2020metA...1..1A", "methods": ["gaussian-processes"]}, "")
+    mk_note(cfg.PAPERS, "2020thlB...1..1B",
+            {"tags": ["paper"], "bibcode": "2020thlB...1..1B",
+             "thesis_links": ["gaussian-processes"]}, "")
+    mk_note(cfg.PAPERS, "2020ambC...1..1C",
+            {"tags": ["paper"], "bibcode": "2020ambC...1..1C", "methods": ["gaussian-processes"],
+             "thesis_links": ["gaussian-processes"]}, "")
+    filas = {r["stem"]: r["entro_por"] for r in mn.concept_rollup_rows("gp")}
+    assert filas == {"2020metA...1..1A": "methods", "2020thlB...1..1B": "thesis_links",
+                     "2020ambC...1..1C": "ambos"}
+
+
+def test_la_tabla_estampada_no_se_cuenta_a_si_misma(toy_vault):
+    """Bug medido al cablear el estampado: la tabla de `## Papers` lleva un `[[bibcode]]` por fila,
+    así que apenas se estampa TODO paper aparecía como "sintetizado". Un artefacto que se mide a sí
+    mismo siempre da el resultado que su propia existencia produce — mismo lazo que el bloque de
+    verificación en `lib_blocks`."""
+    _paper("2020extB...1..1B", methods=["gp"])
+    mn.write_star_note("test_star", force=True)
+    dest = cfg.STARS / "test_star.md"
+    assert "[[2020extB...1..1B]]" in dest.read_text(encoding="utf-8")   # la fila está
+    assert mn.papers_universe("test_star", "star")[0]["estado"] == "extraído, no sintetizado"
+
+
+# ── issue 3.2 · D-12: las TRES fechas de una nota, distinguibles (INV-82) ───────────────────────
+
+def _fechas(dest):
+    linea = [l for l in dest.read_text(encoding="utf-8").splitlines()
+             if l.startswith("> _Estado")][0]
+    return linea
+
+
+def test_refrescar_sin_reverificar_mueve_una_sola_fecha(toy_vault):
+    """El experimento del contrato (INV-82): las tres fechas —búsqueda, síntesis, verificación—
+    pueden divergir **sin que ninguna mienta**. Con una sola fecha por nota, refrescar el corpus
+    hacía parecer re-verificado lo que nadie volvió a chequear.  @inv INV-82"""
+    _paper("2020aaa...1..1A")
+    mn.write_star_note("test_star", force=True)
+    dest = cfg.STARS / "test_star.md"
+    dest.write_text(dest.read_text(encoding="utf-8") +
+                    "\n## Verificación de citas (2026-01-05)\n\n"
+                    "| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente |\n"
+                    "|---|---|---|---|---|---|\n", encoding="utf-8")
+    cfg.save_busqueda("test_star", {"fecha": "2026-01-01", "n_total": 1, "n_core": 1})
+    mn.stamp_estado("test_star", dest)
+    antes = _fechas(dest)
+    assert "2026-01-01" in antes and "2026-01-05" in antes
+
+    cfg.save_busqueda("test_star", {"fecha": "2026-03-01", "n_total": 2, "n_core": 2})
+    mn.stamp_estado("test_star", dest)
+    despues = _fechas(dest)
+    assert "2026-03-01" in despues                       # búsqueda: se movió
+    assert "2026-01-05" in despues                       # verificación: NO se movió
+    assert "2026-01-01" not in despues
+
+
+def test_estado_congelado_si_nada_cambio(toy_vault):
+    """D-54 transversal: un stamper naive re-fecha en cada corrida y ensucia el diff. Si nada
+    sustantivo cambió, la nota queda byte-igual."""
+    _paper("2020aaa...1..1A")
+    mn.write_star_note("test_star", force=True)
+    dest = cfg.STARS / "test_star.md"
+    cfg.save_busqueda("test_star", {"fecha": "2026-01-01", "n_total": 1, "n_core": 1})
+    mn.stamp_estado("test_star", dest)
+    antes = dest.read_bytes()
+    assert mn.stamp_estado("test_star", dest) is False
+    assert dest.read_bytes() == antes
+
+
+def test_estado_declara_la_salvedad_por_par(toy_vault):
+    """La fecha de verificación es de la ÚLTIMA pasada; la vigencia real es por par y la dicen las
+    anclas (D-4). Sin la salvedad, la fecha se lee como "todo verificado a esta fecha"."""
+    mn.write_star_note("test_star", force=True)
+    dest = cfg.STARS / "test_star.md"
+    dest.write_text(dest.read_text(encoding="utf-8") +
+                    "\n## Verificación de citas (2026-01-05)\n", encoding="utf-8")
+    cfg.save_busqueda("test_star", {"fecha": "2026-01-01", "n_total": 1})
+    mn.stamp_estado("test_star", dest)
+    assert "por par" in _fechas(dest)
+
+
+def test_estado_sin_ancla_no_inventa_cabecera(toy_vault):
+    fuera = cfg.STARS / "fuera.md"
+    fuera.write_text("---\nname: x\n---\n# x\n\n> cabecera propia\n", encoding="utf-8")
+    cfg.save_busqueda("test_star", {"fecha": "2026-01-01", "n_total": 1})
+    assert mn.stamp_estado("test_star", fuera) is False
+
+
+# ── Tanda 4 · la ficha dice de dónde salieron sus valores canónicos (pedido del usuario) ─────────
+
+def test_cabecera_declara_la_procedencia_del_ground_truth(toy_vault):
+    """Un lector que abre la ficha ve valores en el frontmatter (`teff_K: 5344`) sin nada que diga
+    de dónde salieron. La procedencia estaba en la doc del framework, no en el artefacto — y el
+    artefacto es lo que viaja. Va ARRIBA, en el blockquote de cabecera, donde ya vive el disclaimer
+    de capa-LLM: es lo primero que se lee y no se pierde al scrollear."""
+    (cfg.GROUND_TRUTH / "test_star.json").write_text(json.dumps({
+        "slug": "test_star", "consultado": "2026-08-24",
+        "host": {"teff_K": 5344.0, "spectral_type": "K0V",
+                 "_autoridad": {"teff_K": "nea", "spectral_type": "simbad"}},
+        "planets": []}), encoding="utf-8")
+    mn.write_star_note("test_star", force=True)
+    linea = [l for l in (cfg.STARS / "test_star.md").read_text(encoding="utf-8").splitlines()
+             if l.startswith("> _Ground-truth")][0]
+    assert "SIMBAD" in linea and "spectral_type" in linea
+    assert "NASA Exoplanet Archive" in linea and "teff_K" in linea
+    assert "2026-08-24" in linea                       # cuándo se consultó
+    assert "null" in linea                             # la regla del espejo (#70)
+    assert "ground_truth/test_star.json" in linea      # dónde está el detalle
+
+
+def test_procedencia_va_antes_del_generador(toy_vault):
+    """Dentro del blockquote de cabecera, no suelta al final del archivo."""
+    (cfg.GROUND_TRUTH / "test_star.json").write_text(json.dumps({
+        "slug": "test_star", "host": {"teff_K": 5344.0, "_autoridad": {"teff_K": "nea"}},
+        "planets": []}), encoding="utf-8")
+    mn.write_star_note("test_star", force=True)
+    out = (cfg.STARS / "test_star.md").read_text(encoding="utf-8")
+    assert out.index("_Ground-truth") < out.index("_Generado con Almagesto")
+
+
+def test_procedencia_sin_ground_truth_no_inventa(toy_vault):
+    mn.write_star_note("test_star", force=True)
+    assert "_Ground-truth" not in (cfg.STARS / "test_star.md").read_text(encoding="utf-8")
+
+
+def test_procedencia_idempotente(toy_vault):
+    (cfg.GROUND_TRUTH / "test_star.json").write_text(json.dumps({
+        "slug": "test_star", "host": {"teff_K": 5344.0, "_autoridad": {"teff_K": "nea"}},
+        "planets": []}), encoding="utf-8")
+    mn.write_star_note("test_star", force=True)
+    dest = cfg.STARS / "test_star.md"
+    antes = dest.read_bytes()
+    assert mn.stamp_ground_truth_line("test_star", dest) is False
+    assert dest.read_bytes() == antes
+
+
+def test_procedencia_distingue_sin_dato_de_no_preguntado(toy_vault):
+    """En el frontmatter, "la autoridad contestó y no tiene el dato" y "nadie preguntó" se ven
+    idénticos: `null` en los dos casos. La cabecera los separa — es lo que dice si vale la pena
+    buscar ese valor en la literatura o no."""
+    (cfg.GROUND_TRUTH / "test_star.json").write_text(json.dumps({
+        "slug": "test_star", "consultado": "2026-08-24",
+        "host": {"teff_K": 5344.0, "st_rotp_days": None, "spectral_type": None,
+                 "_autoridad": {"teff_K": "nea"}},
+        "planets": []}), encoding="utf-8")
+    mn.write_star_note("test_star", force=True)
+    linea = [l for l in (cfg.STARS / "test_star.md").read_text(encoding="utf-8").splitlines()
+             if l.startswith("> _Ground-truth")][0]
+    assert "sin dato: `P_rot_days`, `spectral_type`" in linea
+    assert "`st_rotp_days`" not in linea      # se nombra como lo ve el lector en la ficha
+
+
+# ── Tanda 5 · D-19: renombre preprint → publicado ───────────────────────────────────────────────
+
+def test_ciclo_preprint_publicado(toy_vault):
+    """El experimento del contrato: una nota de preprint citada desde una ficha pasa a ser el
+    publicado, sin dejar wikilinks rotos ni perder el alias.  @inv INV-84"""
+    _paper("2020preX...1..1X")
+    (cfg.FULLTEXT / "test_star").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "test_star" / "2020preX...1..1X.txt").write_text("texto", encoding="utf-8")
+    (cfg.PDFS / "test_star").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "test_star" / "2020preX...1..1X.pdf").write_bytes(b"%PDF-1.4")
+    mn.write_star_note("test_star", force=True)
+    ficha = cfg.STARS / "test_star.md"
+    ficha.write_text(ficha.read_text(encoding="utf-8").replace(
+        "## Huecos", "El período es 34 d [[2020preX...1..1X]].\n\n## Huecos"), encoding="utf-8")
+
+    mn.rename_paper("2020preX...1..1X", "2021pubY...1..1Y")
+
+    assert not (cfg.PAPERS / "2020preX...1..1X.md").exists()
+    nueva = cfg.PAPERS / "2021pubY...1..1Y.md"
+    fm = read_fm(nueva)
+    assert fm["bibcode"] == "2021pubY...1..1Y"
+    assert [v["bibcode"] for v in fm["versions"]] == ["2020preX...1..1X"]
+    assert "[[2021pubY...1..1Y]]" in ficha.read_text(encoding="utf-8")
+    assert (cfg.FULLTEXT / "test_star" / "2021pubY...1..1Y.txt").exists()
+    assert (cfg.PDFS / "test_star" / "2021pubY...1..1Y.pdf").exists()
+
+
+def test_renombre_no_toca_menciones_en_prosa(toy_vault):
+    """Adversario de un replace ciego: un bibcode citado TEXTUALMENTE —dentro de una cita
+    transcripta del paper, p. ej.— no es un link a la nota y no se reescribe."""
+    _paper("2020preX...1..1X")
+    mn.write_star_note("test_star", force=True)
+    ficha = cfg.STARS / "test_star.md"
+    ficha.write_text(ficha.read_text(encoding="utf-8").replace(
+        "## Huecos",
+        'Link [[2020preX...1..1X]] y mención textual "ver 2020preX...1..1X en la tabla 3".\n\n## Huecos'),
+        encoding="utf-8")
+    mn.rename_paper("2020preX...1..1X", "2021pubY...1..1Y")
+    out = ficha.read_text(encoding="utf-8")
+    assert "[[2021pubY...1..1Y]]" in out
+    assert '"ver 2020preX...1..1X en la tabla 3"' in out
+
+
+def test_crear_segunda_nota_mismo_trabajo_rehusa(toy_vault, capsys):
+    """Se evita el duplicado desde el vamos: el conteo doble y el falso positivo de #75 nacen acá."""
+    mk_note(cfg.PAPERS, "2020preX...1..1X",
+            {"tags": ["paper"], "bibcode": "2020preX...1..1X", "arxiv_id": "2001.12345"}, "")
+    ads_json([rec("2021pubY...1..1Y", arxiv="2001.12345")])
+    mn.write_paper_notes("test_star", include_all=False, force=False)
+    assert not (cfg.PAPERS / "2021pubY...1..1Y.md").exists()
+    assert "2001.12345" in capsys.readouterr().out

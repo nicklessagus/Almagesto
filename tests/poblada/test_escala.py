@@ -139,7 +139,7 @@ def test_lint_presupuesto_absoluto(boveda_poblada):
     """Presupuesto absoluto sobre el árbol de SESIÓN (N=900, sin resembrar — reusa `arbol_poblado`
     en vez de sembrar de nuevo, como pide el criterio de la tarea). Medido en esta máquina:
     lint(N=900) ≈ 1.7-1.8 s. El corpus sintético no carga ~80 MB de fulltext real como
-    Almagesto-RV, donde el mismo lint mide 5.6 s (CLAUDE.md) — así que 1.7 s acá es la referencia
+    una instancia real, donde el mismo lint mide 5.6 s (CLAUDE.md) — así que 1.7 s acá es la referencia
     correcta, no 5.6 s. Presupuesto elegido: 10 s (≈5.5-6× de margen sobre lo medido), suficiente
     para un CI más lento sin dejar pasar una regresión grosera de presupuesto (agregar una
     categoría O(n) cara, por ejemplo triplicar el parseo YAML por nota)."""

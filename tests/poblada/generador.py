@@ -9,7 +9,7 @@ vacío toda categoría da `(0)` y el test no distingue "pasa" de "ni miró" — 
 `sembrar_corpus(paths, ...)` puebla un árbol repo/vault (la MISMA forma de `paths` que
 `tests/conftest.py::toy_vault` expone: `paths.STARS`, `paths.PAPERS`, etc. — un `SimpleNamespace`
 o cualquier objeto con esos atributos `Path`) con una distribución MEDIDA sobre el corpus real de
-Almagesto-RV (relevancia 60/2/38 high/medium/low, ~24% de papers extraídos, ~74% con fulltext
+una instancia real (relevancia 60/2/38 high/medium/low, ~24% de papers extraídos, ~74% con fulltext
 legible, ground-truth consistente por construcción, fichas espejo exacto del ground-truth) y
 devuelve un `Censo` — no un conteo suelto: los STEMS exactos de cada anomalía inyectada, para que
 un test pueda afirmar "el lint reporta EXACTAMENTE estos 30 huérfanos" en vez de "≥1".

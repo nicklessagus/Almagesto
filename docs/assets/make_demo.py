@@ -8,7 +8,7 @@ LLM → disputa tagueada → verify-citations → lint. Sin GIF ni binarios de g
 con animaciones SMIL (mismo mecanismo que logo-animated.svg, que GitHub ya reproduce).
 
 Convenciones (conservar):
-  - **Fidelidad**: los hechos astronómicos son los reales de la instancia Almagesto-RV
+  - **Fidelidad**: los hechos astronómicos son los reales de una instancia real
     (HD 40307: 5 planetas b–g, K2.5 V, disputa de existencia de g por Díaz+2016
     [[2016A&A...585A.134D]], 38 no-core listados). Los conteos de plomería (papers bajados)
     son representativos, igual que el probe de ejemplo del README.

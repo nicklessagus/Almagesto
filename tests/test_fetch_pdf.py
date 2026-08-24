@@ -424,3 +424,21 @@ def test_unicode_no_muere_en_consola_ascii(toy_vault, monkeypatch):
     wrapper.flush()
     assert rc == 1
     assert b"query_ads" in buf.getvalue()
+
+
+def test_pdf_bajo_otro_slug_no_va_a_la_red(toy_vault, monkeypatch, capsys):
+    """D-18: el mismo paper relevante para dos sujetos se bajaba dos veces (medido: 33 copias en la
+    instancia). El PDF es idéntico —mismo bibcode— y la red es el recurso caro y el que puede
+    fallar. `requests` revienta si lo llaman: el test pasa **sólo** si reusó."""
+    (toy_vault.PDFS / "otro_slug").mkdir(parents=True, exist_ok=True)
+    (toy_vault.PDFS / "otro_slug" / "2020aaa...1..1A.pdf").write_bytes(b"%PDF-1.4 contenido")
+    ads_json(toy_vault.ROOT, "test_star",
+             [{"bibcode": "2020aaa...1..1A", "relevant": True, "title": "t",
+               "doi": "10.1/a", "arxiv_id": None, "bibstem": "ApJ"}])
+    def boom(*a, **k):
+        raise AssertionError("fue a la red teniendo el PDF en disco bajo otro slug")
+    monkeypatch.setattr(fp, "requests", SimpleNamespace(get=boom, RequestException=Exception))
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    copiado = toy_vault.PDFS / "test_star" / "2020aaa...1..1A.pdf"
+    assert copiado.exists() and copiado.read_bytes() == b"%PDF-1.4 contenido"
+    assert "ya estaba" in capsys.readouterr().out

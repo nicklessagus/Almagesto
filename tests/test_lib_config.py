@@ -292,3 +292,295 @@ def test_save_registro_es_atomico(toy_vault, monkeypatch):
         cfg.save_registro("test_star", {"busqueda": {"fecha": "2026-08-23", "n_core": 99}})
     assert cfg.registro_path("test_star").read_text(encoding="utf-8") == original, (
         "el registro original no sobrevivió a un fallo de escritura → save_registro no es atómico")
+
+
+# ── issue 0.2 · helper atómico único (D-53) ──────────────────────────────────────────────────────
+#
+# Hasta 1.23.1 el repo tenía CINCO writers atómicos —tres clones del patrón tmp+os.replace
+# (`save_registro`, `write_ground_truth`, `check_retractions._write_atomic`) y dos para binarios
+# (`fetch_arxiv`/`fetch_pdf.write_pdf_atomic`)— y el writer que MÁS escribe, `make_notes`, no era
+# atómico en ninguna de sus 15 escrituras a `vault/wiki/`. Cada tanda posterior del plan agrega
+# writers: el helper sube al principio para que no haya un sexto clon.
+
+def _tmps(d):
+    return sorted(p.name for p in d.iterdir() if ".tmp" in p.name)
+
+
+def test_write_text_atomic_publica(tmp_path):
+    dest = tmp_path / "x.md"
+    cfg.write_text_atomic(dest, "hola\n")
+    assert dest.read_text(encoding="utf-8") == "hola\n"
+    assert _tmps(tmp_path) == []
+
+
+def test_fallo_en_replace_no_corrompe(tmp_path, monkeypatch):
+    """El corte llega en la publicación: el archivo original queda **byte-idéntico** y no queda
+    basura `.tmp` en el directorio. La primera mitad ya la daban los writers viejos; la segunda es
+    la cola #5 de STATUS (el temporal huérfano)."""
+    dest = tmp_path / "x.md"
+    dest.write_text("original\n", encoding="utf-8")
+    def boom(*a, **k):
+        raise OSError("disco lleno")
+    monkeypatch.setattr(cfg.os, "replace", boom)
+    with pytest.raises(OSError):
+        cfg.write_text_atomic(dest, "nuevo\n")
+    assert dest.read_text(encoding="utf-8") == "original\n"
+    assert _tmps(tmp_path) == []
+
+
+def test_fallo_escribiendo_el_temporal_no_deja_basura(tmp_path, monkeypatch):
+    """El corte llega ANTES de publicar, mientras se llena el temporal. `save_registro` escribía el
+    tmp fuera de todo `try`, así que ese caso dejaba un `.tmp<pid>` huérfano en `vault/config/`
+    (el archivo real nunca se corrompía — es basura de disco, pero basura versionable)."""
+    dest = tmp_path / "x.md"
+    dest.write_text("original\n", encoding="utf-8")
+    real = cfg.Path.write_text
+    def boom(self, *a, **k):
+        if ".tmp" in self.name:
+            raise OSError("disco lleno")
+        return real(self, *a, **k)
+    monkeypatch.setattr(cfg.Path, "write_text", boom)
+    with pytest.raises(OSError):
+        cfg.write_text_atomic(dest, "nuevo\n")
+    assert dest.read_text(encoding="utf-8") == "original\n"
+    assert _tmps(tmp_path) == []
+
+
+def test_write_bytes_atomic(tmp_path, monkeypatch):
+    dest = tmp_path / "x.pdf"
+    cfg.write_bytes_atomic(dest, b"%PDF-1.4\n")
+    assert dest.read_bytes() == b"%PDF-1.4\n"
+    dest2 = tmp_path / "y.pdf"
+    monkeypatch.setattr(cfg.os, "replace", lambda *a, **k: (_ for _ in ()).throw(OSError("x")))
+    with pytest.raises(OSError):
+        cfg.write_bytes_atomic(dest2, b"data")
+    assert not dest2.exists()
+    assert _tmps(tmp_path) == []
+
+
+def test_write_text_atomic_crea_el_directorio(tmp_path):
+    dest = tmp_path / "sub" / "dir" / "x.md"
+    cfg.write_text_atomic(dest, "hola\n")
+    assert dest.read_text(encoding="utf-8") == "hola\n"
+
+
+def test_sin_escrituras_directas_a_vault():
+    """Criterio de aceptación de D-53, como test y no como `grep` que alguien tiene que acordarse
+    de correr: ningún módulo que escribe en `vault/` puede llamar `write_text`/`write_bytes` sobre
+    su destino. Los módulos cuyo destino es `build/`/`outputs/` (scratch regenerable) quedan fuera
+    a propósito — ahí un archivo torn se recupera re-corriendo el paso.  @inv INV-90"""
+    import re
+    from pathlib import Path
+    import trace_invariants as ti
+    escriben_en_vault = ("make_notes.py", "extract_fulltext.py", "fetch_web.py",
+                         "ingest_topic.py", "fetch_ground_truth.py", "check_retractions.py",
+                         "fetch_arxiv.py", "fetch_pdf.py", "lib_config.py")
+    directo = re.compile(r"(?<!def )\b\w+\.write_(?:text|bytes)\(")
+    ofensores = []
+    for nombre in escriben_en_vault:
+        src = (Path(cfg.ROOT) / "scripts" / nombre).read_text(encoding="utf-8")
+        # los docstrings de estos módulos CITAN el patrón viejo para explicar por qué se fue
+        # (`dest.write_bytes(buf)` directo…): son prosa, no código. Se descartan con el mismo
+        # detector que usa el recolector de trazabilidad para no marcar texto citado.
+        prosa = ti.lineas_declarativas(src)
+        for n, ln in enumerate(src.splitlines(), 1):
+            if n in prosa or not directo.search(ln):
+                continue
+            if "tmp.write_" in ln:
+                continue          # el helper mismo (`_publicar`)
+            ofensores.append(f"{nombre}:{n}: {ln.strip()}")
+    assert ofensores == [], (
+        "escrituras directas (no atómicas) a vault/ — usar cfg.write_text_atomic / "
+        "cfg.write_bytes_atomic:\n  " + "\n  ".join(ofensores))
+
+
+def test_objective_error_distingue_los_tres_estados(toy_vault):
+    """`load_objective` colapsa "YAML roto" y "objetivo vacío" en el mismo `{}`. `objective_error`
+    los separa para el llamador estricto, sin cambiarle la firma al tolerante.  @inv INV-80"""
+    assert cfg.objective_error() is None                     # el toy_vault trae uno sano
+    cfg.OBJECTIVE_YAML.write_text("name: X\nrelevance:\n  topics:\n    rv: activity: starspot\n", encoding="utf-8")
+    err = cfg.objective_error()
+    assert err and "objective.yaml" in err
+    cfg.OBJECTIVE_YAML.write_text("- una lista, no un mapa\n", encoding="utf-8")
+    assert "mapa" in (cfg.objective_error() or "")
+    cfg.OBJECTIVE_YAML.unlink()
+    assert "no existe" in (cfg.objective_error() or "").lower()
+
+
+# ── issue 2.1 · D-28: `busquedas` es una LISTA; el embudo no se suma (INV-89) ────────────────────
+#
+# Hasta 1.25.0 `save_busqueda` PISABA: cada corrida borraba la anterior, así que el registro sólo
+# sabía de la última y la cabecera de la ficha publicaba SU embudo como si fuera el universo entero.
+# Con dos corridas solapadas, sumar los `n_total` cuenta dos veces los papers que ya estaban.
+
+def test_dos_busquedas_con_solapamiento_no_suman(toy_vault):
+    """El experimento del contrato: A trae {1,2,3}, B trae {2,3,4}. El universo acumulado es 4, no
+    6, y la entrada B distingue lo nuevo de lo que ya estaba.  @inv INV-89"""
+    cfg.save_busqueda("test_star", {"fecha": "2026-01-01", "n_total": 3,
+                                    "bibcodes": ["1", "2", "3"]})
+    cfg.save_busqueda("test_star", {"fecha": "2026-02-01", "n_total": 3,
+                                    "bibcodes": ["2", "3", "4"]})
+    bs = cfg.load_busquedas("test_star")
+    assert len(bs) == 2
+    assert bs[1]["n_nuevos"] == 1 and bs[1]["n_ya_estaban"] == 2
+    assert cfg.universo_acumulado("test_star") == 4
+
+
+def test_segunda_corrida_no_pisa_la_primera(toy_vault):
+    cfg.save_busqueda("test_star", {"fecha": "2026-01-01", "query": "A", "n_total": 1})
+    cfg.save_busqueda("test_star", {"fecha": "2026-02-01", "query": "B", "n_total": 1})
+    assert [b["query"] for b in cfg.load_busquedas("test_star")] == ["A", "B"]
+
+
+def test_busqueda_preserva_decisiones(toy_vault):
+    """No se rompe la garantía vieja: `decisiones` (el juicio de curación, lo NO regenerable) sigue
+    intacto al appendear una búsqueda."""
+    cfg.save_decisiones("test_star", {"2020X": {"decision": "descartado", "motivo": "ruido"}})
+    cfg.save_busqueda("test_star", {"fecha": "2026-01-01", "n_total": 1})
+    assert cfg.load_decisiones("test_star")["2020X"]["motivo"] == "ruido"
+
+
+def test_universo_acumulado_sin_bibcodes_cae_al_maximo(toy_vault):
+    """Una entrada vieja sin `bibcodes` no puede aportar identidad, sólo cardinalidad: se toma el
+    MÁXIMO (cota inferior honesta del universo), nunca la suma — sumar es el bug que D-28 cierra."""
+    cfg.save_busqueda("test_star", {"fecha": "2026-01-01", "n_total": 30})
+    cfg.save_busqueda("test_star", {"fecha": "2026-02-01", "n_total": 40})
+    assert cfg.universo_acumulado("test_star") == 40
+
+
+# ── issue 2.2 · D-57: cada paso deja traza estructurada en `cadena:` (INV-91) ───────────────────
+
+def test_save_paso_appendea_con_fecha_version_y_via(toy_vault, monkeypatch):
+    """R-6, decidida por el usuario: **cada script se estampa a sí mismo**. `via` distingue el paso
+    corrido por el orquestador del corrido a mano — con la alternativa (estampar sólo desde
+    `run()`) un paso suelto quedaba invisible y el lint reportaba un corte que no ocurrió.
+    @inv INV-91"""
+    monkeypatch.delenv("ALMAGESTO_VIA", raising=False)
+    cfg.save_paso("test_star", "fetch_pdf", flags=["--force"])
+    monkeypatch.setenv("ALMAGESTO_VIA", "orquestador")
+    cfg.save_paso("test_star", "make_notes")
+    cadena = cfg.load_cadena("test_star")
+    assert [(p["paso"], p["via"]) for p in cadena] == [
+        ("fetch_pdf", "suelto"), ("make_notes", "orquestador")]
+    assert cadena[0]["flags"] == ["--force"]
+    assert cadena[0]["version"] == cfg.ALMAGESTO_VERSION and cadena[0]["fecha"]
+
+
+def test_save_paso_idempotente_el_mismo_dia(toy_vault, monkeypatch):
+    """D-54 aplicado acá: re-correr el mismo paso el mismo día con los mismos flags no agrega
+    ruido de diff — el registro queda byte-idéntico."""
+    monkeypatch.delenv("ALMAGESTO_VIA", raising=False)
+    cfg.save_paso("test_star", "fetch_pdf")
+    antes = cfg.registro_path("test_star").read_bytes()
+    cfg.save_paso("test_star", "fetch_pdf")
+    assert cfg.registro_path("test_star").read_bytes() == antes
+
+
+def test_save_paso_con_flags_distintos_si_registra(toy_vault, monkeypatch):
+    """Lo que cambia sustantivamente sí entra: `--force` no es la misma corrida que sin él."""
+    monkeypatch.delenv("ALMAGESTO_VIA", raising=False)
+    cfg.save_paso("test_star", "fetch_ground_truth")
+    cfg.save_paso("test_star", "fetch_ground_truth", flags=["--force"])
+    assert len(cfg.load_cadena("test_star")) == 2
+
+
+def test_save_paso_preserva_busquedas_y_decisiones(toy_vault, monkeypatch):
+    monkeypatch.delenv("ALMAGESTO_VIA", raising=False)
+    cfg.save_busqueda("test_star", {"fecha": "2026-01-01", "n_total": 1})
+    cfg.save_decisiones("test_star", {"2020X": {"decision": "descartado", "motivo": "ruido"}})
+    cfg.save_paso("test_star", "query_ads")
+    assert cfg.load_busquedas("test_star") and cfg.load_decisiones("test_star")
+
+
+# ── issue 2.4 · D-52: el descarte re-aceptado queda ANULADO, no contradicho ─────────────────────
+
+def test_descartado_luego_declarado_queda_anulado(toy_vault):
+    """Hoy, al re-aceptar un bibcode que estaba descartado, la decisión vieja **se queda ahí
+    contradiciendo lo que se hizo**: el registro dice "descartado por ruido" sobre un paper que
+    está ingestado. Anularla explícito preserva las dos mitades — que se descartó, y que se
+    revirtió."""
+    cfg.save_decisiones("test_star", {"2020X": {"decision": "descartado", "motivo": "ruido",
+                                                "fecha": "2026-01-01"}})
+    assert cfg.anular_decision("test_star", "2020X", por="extra_core") is True
+    d = cfg.load_decisiones("test_star")["2020X"]
+    assert d["decision"] == "anulada" and d["anulada_por"] == "extra_core" and d["fecha"]
+
+
+def test_anulacion_preserva_el_juicio_previo(toy_vault):
+    """El motivo viejo sigue legible: es el dato NO regenerable, y perderlo al revertir es el mismo
+    agujero que #51 cerró para el descarte."""
+    cfg.save_decisiones("test_star", {"2020X": {"decision": "descartado", "motivo": "ruido",
+                                                "fecha": "2026-01-01"}})
+    cfg.anular_decision("test_star", "2020X", por="extra_core")
+    previa = cfg.load_decisiones("test_star")["2020X"]["previa"]
+    assert previa["motivo"] == "ruido" and previa["fecha"] == "2026-01-01"
+
+
+def test_anular_lo_que_no_estaba_descartado_no_hace_nada(toy_vault):
+    assert cfg.anular_decision("test_star", "2099Z", por="extra_core") is False
+
+
+def test_anular_no_cruza_carriles(toy_vault):
+    """Los dos carriles (#51 chaining, #81 fuente declarada) conviven en `decisiones`: anular el
+    descarte de una fuente declarada no puede tocar el del chaining con la misma clave."""
+    cfg.save_decisiones("test_star", {
+        "2020X": {"decision": "descartado", "motivo": "chaining", "origen": "chaining"},
+    })
+    assert cfg.anular_decision("test_star", "2020X", por="sources", carril="fuente-declarada") is False
+    assert cfg.load_decisiones("test_star")["2020X"]["decision"] == "descartado"
+
+
+# ── issue 2.5 · D-58 / R-2: `extra_core` estructurado, con detector ─────────────────────────────
+
+EC_OK = [{"bibcode": "2020X", "via": "triage", "motivo": "reanaliza la señal b"}]
+
+
+def test_load_extra_core_forma_canonica(toy_vault):
+    assert cfg.load_extra_core({"extra_core": EC_OK}, entry="test_star") == EC_OK
+
+
+def test_extra_core_escalar_detectado(toy_vault):
+    """R-2 (decidida por el usuario): forma dura con DETECTOR, no lector tolerante. El atajo
+    `extra_core: 2020X` era YAML válido y `_listify_curado` lo aceptaba; el costo es que el
+    registro no dice ni quién lo aceptó ni por qué — el mismo agujero que #51 cerró para el
+    descarte, en el carril de la aceptación."""
+    with pytest.raises(SystemExit) as exc:
+        cfg.load_extra_core({"extra_core": "2020X"}, entry="test_star")
+    assert "extra_core" in str(exc.value) and "bibcode:" in str(exc.value)
+
+
+def test_extra_core_lista_de_strings_detectada(toy_vault):
+    with pytest.raises(SystemExit) as exc:
+        cfg.load_extra_core({"extra_core": ["2020X", "2021Y"]}, entry="test_star")
+    assert "2020X" in str(exc.value)          # el mensaje trae el snippet ya armado
+
+
+def test_extra_core_sin_via_o_sin_motivo_detectado(toy_vault):
+    for meta in ({"extra_core": [{"bibcode": "2020X", "motivo": "m"}]},
+                 {"extra_core": [{"bibcode": "2020X", "via": "triage"}]},
+                 {"extra_core": [{"via": "triage", "motivo": "m"}]}):
+        with pytest.raises(SystemExit):
+            cfg.load_extra_core(meta, entry="test_star")
+
+
+def test_extra_core_via_fuera_de_vocabulario_detectado(toy_vault):
+    with pytest.raises(SystemExit) as exc:
+        cfg.load_extra_core({"extra_core": [{"bibcode": "2020X", "via": "a-mano", "motivo": "m"}]},
+                            entry="test_star")
+    assert "usuario" in str(exc.value)        # el mensaje lista el vocabulario
+
+
+def test_extra_core_ausente_es_lista_vacia(toy_vault):
+    assert cfg.load_extra_core({}, entry="test_star") == []
+
+
+# ── Tanda 4 · D-1: autoridad por campo del ground-truth (INV-76) ────────────────────────────────
+
+def test_autoridad_por_campo_declarada():
+    """La declaración vive en UN lugar y la comparten los tres consumidores (fetch_ground_truth
+    escribe, make_notes la publica en la cabecera, lint la vigila). Repetirla es cómo se
+    desincronizan."""
+    assert cfg.AUTORIDAD_CAMPO["spectral_type"] == "simbad"
+    assert cfg.AUTORIDAD_CAMPO["teff_K"] == "nea"
+    assert cfg.AUTORIDAD_CAMPO["st_rotp_days"] == "nea"   # clave del JSON, no la de la ficha
+    assert all(v in ("nea", "simbad") for v in cfg.AUTORIDAD_CAMPO.values())

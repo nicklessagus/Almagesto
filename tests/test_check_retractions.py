@@ -195,7 +195,7 @@ def test_title_says_retracted():
 
 def test_crossref_retraction_parsea(monkeypatch):
     patch_net(monkeypatch, [FakeResp(200, RETRACTION_MSG)])
-    ret, soft = cr.crossref_retraction("10.1/x", {})
+    ret, soft, estado = cr.crossref_retraction("10.1/x", {})
     assert ret == {"type": "retraction", "notice_doi": "10.1/notice",
                    "date": "2021-05-03", "source": "publisher"}
     assert soft == []
@@ -206,21 +206,28 @@ def test_crossref_soft_no_retracta(monkeypatch):
     patch_net(monkeypatch, [FakeResp(200, {"message": {"updated-by": [
         {"type": "Corrigendum", "DOI": "10.1/corr",
          "updated": {"date-parts": [[2023, 7, 1]]}, "source": "publisher"}]}})])
-    ret, soft = cr.crossref_retraction("10.1/x", {})
+    ret, soft, estado = cr.crossref_retraction("10.1/x", {})
     assert ret is None
     assert soft == [{"type": "corrigendum", "notice_doi": "10.1/corr",
                      "date": "2023-07-01", "source": "publisher"}]
 
 
 def test_crossref_tolerante_a_errores(monkeypatch):
+    """Sigue siendo tolerante (nunca revienta, nunca AFIRMA retracción sin evidencia), pero desde
+    el issue 0.1 dice además **si pudo consultar**. La distinción no es cosmética: "Crossref
+    contestó y no hay retracción" y "Crossref no contestó" terminaban las dos en un rc 0 que la
+    cadena leía como *chequeado y limpio*.
+
+    Un **404 no es error**: es una respuesta real ("no tengo ese DOI"), y tratarla como fallo
+    inundaría de rc 2 a todo corpus con DOIs que Crossref no indexa."""
     patch_net(monkeypatch, [FakeResp(404)])
-    assert cr.crossref_retraction("10.1/x", {}) == (None, [])
+    assert cr.crossref_retraction("10.1/x", {}) == (None, [], "sin-registro")
     patch_net(monkeypatch, [FakeResp(500)])
-    assert cr.crossref_retraction("10.1/x", {}) == (None, [])
+    assert cr.crossref_retraction("10.1/x", {}) == (None, [], "error")
     patch_net(monkeypatch, [real_requests.ConnectionError("sin red")])
-    assert cr.crossref_retraction("10.1/x", {}) == (None, [])
+    assert cr.crossref_retraction("10.1/x", {}) == (None, [], "error")
     patch_net(monkeypatch, [FakeResp(200, None)])    # 200 con cuerpo no-json
-    assert cr.crossref_retraction("10.1/x", {}) == (None, [])
+    assert cr.crossref_retraction("10.1/x", {}) == (None, [], "error")
 
 
 def test_crossref_retraction_updated_by_como_mapa_no_revienta(monkeypatch):
@@ -240,7 +247,7 @@ def test_crossref_retraction_updated_by_como_mapa_no_revienta(monkeypatch):
     monkeypatch.setattr(cr, "requests",
                         type("R", (), {"get": staticmethod(lambda *a, **k: FakeResp()),
                                        "RequestException": Exception})())
-    assert cr.crossref_retraction("10.1/x", {}) == (None, [])
+    assert cr.crossref_retraction("10.1/x", {}) == (None, [], "ok")
 
 
 # ── main() ───────────────────────────────────────────────────────────────────
@@ -355,15 +362,18 @@ def test_main_retractado_y_corregido_conviven(toy_vault, monkeypatch):
     assert [c["type"] for c in fm["corrections"]] == ["erratum"]
 
 
-def test_main_avisa_nota_no_parseable(toy_vault, monkeypatch, capsys):
-    """Regresión (hallazgo 4): una nota con YAML roto ya no se saltea EN SILENCIO."""
+def test_main_nota_no_parseable_es_no_pudo_chequear(toy_vault, monkeypatch, capsys):
+    """Regresión (hallazgo 4) + issue 0.1: una nota con YAML roto no se saltea en silencio Y el
+    proceso NO cierra en verde. Ese paper quedó SIN chequear contra Crossref, y "no encontré
+    retractados" sobre un paper que nadie miró es el falso limpio que D-43 prohíbe — justo en la
+    frontera dura. rc 2 = no pudo chequear."""
     p = toy_vault.PAPERS / "2020rotoX..1..1X.md"
     toy_vault.PAPERS.mkdir(parents=True, exist_ok=True)
     p.write_text("---\ntitle: RETRACTED: sin comillas\ntags:\n- paper\n---\ncuerpo\n",
                  encoding="utf-8")
     calls = []
     patch_net(monkeypatch, [FakeResp(200, {"message": {}})], calls)
-    assert run_main(monkeypatch) == 0
+    assert run_main(monkeypatch) == 2
     assert "sin frontmatter parseable" in capsys.readouterr().out
     assert calls == []
 
@@ -385,7 +395,8 @@ def test_main_paper_puntual(toy_vault, monkeypatch, capsys):
     patch_net(monkeypatch, [FakeResp(200, {"message": {}})], calls)
     assert run_main(monkeypatch, ["--paper", "2020unoA...1..1A"]) == 0
     assert len(calls) == 1
-    assert run_main(monkeypatch, ["--paper", "2020nadaX..1..1X"]) == 0
+    # issue 0.1: pedir un bibcode que no existe es una PRECONDICIÓN ausente, no un chequeo limpio
+    assert run_main(monkeypatch, ["--paper", "2020nadaX..1..1X"]) == 2
     assert "no existe" in capsys.readouterr().out
 
 
@@ -419,7 +430,7 @@ def test_main_slug_offads_sources_y_extra_core(toy_vault, monkeypatch):
     write_yaml(cfg.TOPICS_YAML, {"gp": {"title": "GP", "area": "methods", "concept": "gp",
                                         "source": "web",
                                         "sources": [{"key": "2006Rasmussen", "doi": "10.1/r"}],
-                                        "extra_core": ["2012PASP..124.1015B"]}})
+                                        "extra_core": [{"bibcode": "2012PASP..124.1015B", "via": "usuario", "motivo": "test"}]}})
     mk_note(toy_vault.PAPERS, "2006Rasmussen",
             {"bibcode": "2006Rasmussen", "title": "t", "doi": "10.1/r", "tags": ["paper"]}, "")
     mk_note(toy_vault.PAPERS, "2012PASP..124.1015B",
@@ -443,7 +454,7 @@ def test_slug_notes_extra_core_escalar_no_se_desarma_en_letras(toy_vault):
     retracciones de la cadena cierra en verde sin haber mirado nada — falso limpio en la frontera
     dura de la bóveda."""
     write_yaml(cfg.TOPICS_YAML, {"tema": {"title": "T", "area": "methods", "concept": "c",
-                                          "source": "ads", "extra_core": "2020ApJ...900....1X"}})
+                                          "source": "ads", "extra_core": [{"bibcode": "2020ApJ...900....1X", "via": "usuario", "motivo": "test"}]}})
     mk_note(cfg.PAPERS, "2020ApJ...900....1X", {"tags": ["paper"], "bibcode": "2020ApJ...900....1X"})
     notas = cr.slug_notes("tema")
     assert [p.stem for p in notas] == ["2020ApJ...900....1X"], (
@@ -463,12 +474,92 @@ def test_slug_notes_sources_escalar(toy_vault):
     assert [p.stem for p in cr.slug_notes("tema")] == ["2006Rasmussen"]
 
 
-def test_main_slug_sin_fuentes_error_amigable(toy_vault, monkeypatch):
-    with pytest.raises(SystemExit, match="nada que chequear"):
-        run_main(monkeypatch, ["--slug", "fantasma"])
+def test_main_slug_sin_fuentes_es_exit_2(toy_vault, monkeypatch, capsys):
+    """Issue 0.1 — el adversario directo del exit 1 sobrecargado: sin `ads.json` ni entrada en
+    `topics.yaml` no hay nada que chequear, y hasta 1.23.1 eso salía **1**, el mismo código que
+    "detectó papers retractados". `ingest_star` traducía cualquier rc≠0 a esa frase: la cadena
+    abortaba con un mensaje falso. Ahora rc 2 = no pudo chequear, y `slug_notes` levanta
+    `NothingToCheck` en vez de matar el proceso."""
+    assert run_main(monkeypatch, ["--slug", "fantasma"]) == 2
+    assert "nada que chequear" in capsys.readouterr().out
+
+
+def test_slug_notes_no_mata_el_proceso(toy_vault):
+    """`slug_notes` es una función de librería: informa con una excepción propia y deja que
+    `main()` decida el código de salida (antes hacía `sys.exit`, que fija el 1 desde adentro)."""
+    with pytest.raises(cr.NothingToCheck, match="nada que chequear"):
+        cr.slug_notes("fantasma")
 
 
 def test_main_slug_y_paper_excluyentes(toy_vault, monkeypatch, capsys):
     with pytest.raises(SystemExit):
         run_main(monkeypatch, ["--slug", "x", "--paper", "y"])
     assert "excluyentes" in capsys.readouterr().err
+
+
+# ── issue 0.1 · el exit code deja de estar sobrecargado (0 limpio / 1 retractados / 2 no pudo) ──
+#
+# Hasta 1.23.1 `main()` devolvía 1 SÓLO con retractados, pero `slug_notes` hacía `sys.exit(str)`
+# —exit 1 también— cuando no había nada que chequear, y `ingest_star.py:66-67` traducía CUALQUIER
+# rc≠0 a "detectó papers retractados". Con D-45 esa misma pasada va a cubrir cinco eventos: el
+# código ambiguo se arregla ANTES de apoyarle una feature encima.
+
+def test_exit_2_sin_papers_dir(toy_vault, monkeypatch, capsys):
+    """Sin `vault/wiki/papers/` no hay chequeo posible. Salía 0 ("nada que chequear"), que la
+    cadena lee como *corrió y está limpio*: un cero que nadie midió."""
+    import shutil
+    if toy_vault.PAPERS.exists():
+        shutil.rmtree(toy_vault.PAPERS)
+    assert run_main(monkeypatch) == 2
+    assert "no pudo chequear" in capsys.readouterr().out.lower()
+
+
+def test_exit_2_papers_dir_vacio(toy_vault, monkeypatch):
+    toy_vault.PAPERS.mkdir(parents=True, exist_ok=True)
+    assert run_main(monkeypatch) == 2
+
+
+def test_errores_sin_retractados_exit_2(toy_vault, monkeypatch, capsys):
+    """El falso limpio que D-43 prohíbe: Crossref revienta en el ÚNICO paper del corpus y el
+    proceso salía **0**. Nadie chequeó nada, y la cadena siguió como si la frontera dura estuviera
+    verificada.  @inv INV-87"""
+    mk_note(toy_vault.PAPERS, "2020netA...1..1A",
+            {"bibcode": "2020netA...1..1A", "title": "t", "doi": "10.1/a", "tags": ["paper"]}, "")
+    patch_net(monkeypatch, [real_requests.ConnectionError("sin red")])
+    assert run_main(monkeypatch) == 2
+    out = capsys.readouterr().out
+    assert "2020netA...1..1A" in out
+
+
+def test_404_no_es_error_sale_0(toy_vault, monkeypatch):
+    """Crossref contestó "no tengo ese DOI": es información, no un fallo de chequeo. Si contara
+    como error, todo corpus con DOIs no indexados quedaría en rc 2 permanente y el código volvería
+    a no distinguir nada."""
+    mk_note(toy_vault.PAPERS, "2020okD....1..1D",
+            {"bibcode": "2020okD....1..1D", "title": "t", "doi": "10.1/d", "tags": ["paper"]}, "")
+    patch_net(monkeypatch, [FakeResp(404)])
+    assert run_main(monkeypatch) == 0
+
+
+def test_retractados_mandan_sobre_errores(toy_vault, monkeypatch):
+    """"Retractados mandan": con retractados Y errores sale 1 (lo urgente es la fuente retractada;
+    los errores van igual en el reporte). Sin esta regla un error de red podría enmascarar una
+    retracción detectada bajo un código que dice "precondición ausente"."""
+    mk_note(toy_vault.PAPERS, "2020retR...1..1R",
+            {"bibcode": "2020retR...1..1R", "title": "t", "doi": "10.1/r", "tags": ["paper"]}, "")
+    mk_note(toy_vault.PAPERS, "2020netA...1..1A",
+            {"bibcode": "2020netA...1..1A", "title": "t", "doi": "10.1/a", "tags": ["paper"]}, "")
+    # orden de glob: ...netA antes que ...retR
+    patch_net(monkeypatch, [real_requests.ConnectionError("sin red"),
+                            FakeResp(200, RETRACTION_MSG)])
+    assert run_main(monkeypatch) == 1
+
+
+def test_exit_1_solo_con_retractados(toy_vault, monkeypatch):
+    """Las dos ramas limpias, explícitas: retractado → 1, sano y chequeado → 0."""
+    mk_note(toy_vault.PAPERS, "2020okA....1..1A",
+            {"bibcode": "2020okA....1..1A", "title": "Sano", "doi": "10.1/ok", "tags": ["paper"]}, "")
+    patch_net(monkeypatch, [FakeResp(200, {"message": {}})])
+    assert run_main(monkeypatch) == 0
+    patch_net(monkeypatch, [FakeResp(200, RETRACTION_MSG)])
+    assert run_main(monkeypatch, ["--force"]) == 1

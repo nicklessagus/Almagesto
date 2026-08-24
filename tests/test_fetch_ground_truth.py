@@ -294,3 +294,135 @@ def test_force_no_destruye_el_snapshot_si_falla_la_escritura(toy_vault, monkeypa
     assert dest.read_text(encoding="utf-8") == previo, (
         "el snapshot previo no sobrevivió a un fallo de escritura → el writer no es atómico")
 
+
+
+# ── D-1 · INV-76: cada campo tiene UNA autoridad; si calla, el campo es null ─────────────────────
+#
+# Hasta 1.27.0 `spectral_type` salía de NEA y SIMBAD sólo rellenaba si NEA callaba — o sea: la
+# autoridad efectiva dependía de quién contestara primero, y el JSON no registraba cuál ganó. Para
+# el consumidor eso es indistinguible de un valor auditable con una sola procedencia.
+
+def _fila(campos: dict):
+    """Fila estilo astropy: `_val` accede por `row[key]` y consulta `row.colnames`."""
+    class Fila(dict):
+        @property
+        def colnames(self):
+            return list(self.keys())
+    return Fila(campos)
+
+
+def _nea(monkeypatch, campos):
+    """`fetch_pscomppars` falso: una fila con los campos pedidos."""
+    monkeypatch.setattr(gt, "fetch_pscomppars", lambda h: [_fila(campos)])
+
+
+def _simbad(monkeypatch, sptype):
+    """SIMBAD falso. `sptype=None` = no contesta (o no tiene el dato)."""
+    class FakeSimbad:
+        def add_votable_fields(self, *a, **k):
+            return None
+
+        def query_object(self, host):
+            if sptype is None:
+                return None
+            # astroquery devuelve una Table: lista de filas CON `.colnames` en el objeto tabla.
+            class Tabla(list):
+                colnames = ["sp_type"]
+            return Tabla([_fila({"sp_type": sptype})])
+
+    mod = types.ModuleType("astroquery.simbad")
+    mod.Simbad = FakeSimbad
+    monkeypatch.setitem(sys.modules, "astroquery.simbad", mod)
+    monkeypatch.setitem(sys.modules, "astroquery", types.ModuleType("astroquery"))
+
+
+def test_spectral_type_solo_de_simbad(monkeypatch, toy_vault):
+    """Los cuatro casos del contrato. NEA trae `st_spectype` y SIMBAD calla → el campo es **null**,
+    aunque NEA tenga el dato: la autoridad declarada para `spectral_type` es SIMBAD.  @inv INV-76"""
+    _nea(monkeypatch, {"st_spectype": "G8V", "st_teff": 5344.0})
+    _simbad(monkeypatch, None)
+    host = gt.fetch_host("Test Star", tab=None)
+    assert host["spectral_type"] is None
+    assert host["teff_K"] == 5344.0
+
+
+def test_spectral_type_de_simbad_gana(monkeypatch, toy_vault):
+    _nea(monkeypatch, {"st_spectype": "G8V"})
+    _simbad(monkeypatch, "K0V")
+    assert gt.fetch_host("Test Star", tab=None)["spectral_type"] == "K0V"
+
+
+def test_autoridad_registrada_en_el_json(monkeypatch, toy_vault):
+    """No alcanza con elegir bien: el JSON registra QUIÉN contestó cada campo, porque es lo que la
+    ficha publica en su cabecera y lo que hace auditable la elección."""
+    _nea(monkeypatch, {"st_spectype": "G8V", "st_teff": 5344.0})
+    _simbad(monkeypatch, "K0V")
+    host = gt.fetch_host("Test Star", tab=None)
+    assert host["_autoridad"]["spectral_type"] == "simbad"
+    assert host["_autoridad"]["teff_K"] == "nea"
+
+
+def test_discrepancia_entre_autoridades_queda_registrada(monkeypatch, toy_vault):
+    """D-2 / INV-77: si NEA **también** tiene `spectral_type` y difiere del de SIMBAD, eso es una
+    discrepancia entre autoridades — el valor sigue siendo el de la autoridad declarada, pero el
+    otro no se tira: sin registrarlo, el desacuerdo desaparece."""
+    _nea(monkeypatch, {"st_spectype": "G8V"})
+    _simbad(monkeypatch, "K0V")
+    host = gt.fetch_host("Test Star", tab=None)
+    assert host["spectral_type"] == "K0V"
+    assert host["_otras_autoridades"]["spectral_type"] == {"nea": "G8V"}
+
+
+# ── Tanda 6 · D-45: `nea_diff` REPORTA, no aplica ───────────────────────────────────────────────
+
+def _snapshot(toy_vault, host=None, planets=None):
+    (gt_cfg().GROUND_TRUTH / "test_star.json").write_text(json.dumps({
+        "star": "Estrella Test", "slug": "test_star",
+        "host": {"teff_K": 5344.0, "st_rotp_days": 34.5, **(host or {})},
+        "planets": planets if planets is not None else
+        [{"letter": "b", "P_days": 20.0, "K_ms": 1.0, "e": 0.1, "mass_earth": 2.0,
+          "status": "confirmed"}]}), encoding="utf-8")
+
+
+def gt_cfg():
+    import lib_config as cfg
+    return cfg
+
+
+def test_nea_diff_reporta_y_no_aplica(toy_vault, monkeypatch):
+    """El experimento del contrato (INV-85): NEA cambió y el diff se REPORTA; el JSON en disco
+    queda **byte-idéntico**. Aplicar sigue siendo `--force` — un snapshot que se actualiza solo
+    cambia valores bajo los pies de la prosa que ya los citó."""
+    _snapshot(toy_vault)
+    antes = (gt_cfg().GROUND_TRUTH / "test_star.json").read_bytes()
+    _nea(monkeypatch, {"st_teff": 5350.0})          # cambió teff, y P_rot ya no viene
+    _simbad(monkeypatch, None)
+    monkeypatch.setattr(gt, "fetch_planets", lambda tab, m: [])
+    campos = {c for c, _, _ in gt.nea_diff("test_star")}
+    assert "host.teff_K" in campos
+    assert "host.st_rotp_days" in campos            # el valor RETIRADO también es un cambio
+    assert (gt_cfg().GROUND_TRUTH / "test_star.json").read_bytes() == antes
+
+
+def test_nea_diff_sin_cambios_es_vacio(toy_vault, monkeypatch):
+    _snapshot(toy_vault, planets=[])
+    _nea(monkeypatch, {"st_teff": 5344.0, "st_rotp": 34.5})
+    _simbad(monkeypatch, None)
+    monkeypatch.setattr(gt, "fetch_planets", lambda tab, m: [])
+    assert gt.nea_diff("test_star") == []
+
+
+def test_nea_diff_compara_planetas_por_letra(toy_vault, monkeypatch):
+    """Por LETRA, no por posición ni por cardinalidad: dos listas del mismo largo pueden no ser los
+    mismos planetas (la lección de #70)."""
+    _snapshot(toy_vault)
+    _nea(monkeypatch, {"st_teff": 5344.0, "st_rotp": 34.5})
+    _simbad(monkeypatch, None)
+    monkeypatch.setattr(gt, "fetch_planets", lambda tab, m: [
+        {"letter": "b", "P_days": 21.0, "K_ms": 1.0, "e": 0.1, "mass_earth": 2.0,
+         "status": "confirmed"},
+        {"letter": "c", "P_days": 49.0, "K_ms": 1.2, "e": 0.0, "mass_earth": 3.0,
+         "status": "confirmed"}])
+    campos = {c: (v, n) for c, v, n in gt.nea_diff("test_star")}
+    assert campos["planets.b.P_days"] == (20.0, 21.0)
+    assert "planets.c" in campos                     # planeta NUEVO
