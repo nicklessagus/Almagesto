@@ -6,7 +6,9 @@ registro** que `query_ads` y `openalex`, para que la lente de `objective.yaml` c
 backends sin adaptadores: en cuanto un backend trae su propio schema, trae también su propio
 clasificador, y la bóveda deja de tener una sola definición de "core".
 
-Rate limit de arXiv: 1 request cada 3 s (mismo que `fetch_arxiv`).
+⚠ **Rate limit**: arXiv pide 1 request cada 3 s. `search()` hace **una** request y **no duerme**;
+el que la llame en bucle tiene que espaciar (`fetch_arxiv` sí lo hace, con `SLEEP_S = 3.0`). Decía
+"mismo que fetch_arxiv" y era falso: este módulo ni importaba `time`.
 """
 from __future__ import annotations
 
@@ -59,7 +61,7 @@ def to_record(entry) -> dict:
     anio = int(published[:4]) if published[:4].isdigit() else None
     doi = _texto(entry.find("arxiv:doi", NS)) or None
     cats = [c.get("term") for c in entry.findall("a:category", NS) if c.get("term")]
-    return {
+    rec = {
         "bibcode": _citekey(anio, autores),
         "title": _texto(entry.find("a:title", NS)),
         "authors": autores,
@@ -78,6 +80,18 @@ def to_record(entry) -> dict:
         "keyword": cats,          # las categorías SON las keywords que la lente puede leer
         "via": "arxiv",
     }
+    # Las tres claves del CLASIFICADOR. Sin ellas el registro no es del mismo schema y los
+    # consumidores o revientan (indexan con corchetes) o dan falsos limpios: `core` vacío en
+    # `ingest_theme`, y toda nota naciendo `relevance: low` en `make_notes` — lo que encima
+    # las excluye de `citation_index.corpus_idents`, o sea de la puerta 1 que estos backends
+    # existen para alimentar. Se clasifica acá con `classify_record`, la ÚNICA lente.
+    import query_ads
+    facets, relevant = query_ads.classify_record(rec)
+    rec["facets"], rec["relevant"] = facets, relevant
+    rec["why_excluded"] = None if relevant else query_ads.exclusion_reason(
+        facets, rec.get("doctype") or "")
+    return rec
+
 
 
 def search(query: str, categories: list | None = None, rows: int = 100) -> list:

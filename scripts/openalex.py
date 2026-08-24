@@ -9,7 +9,8 @@ tapan los agujeros en extremos opuestos del corpus:
     no tiene, mientras ADS resuelve referencias de escaneos con su propio pipeline.
   · en lo **no-astro** gana OpenAlex, y es el caso que el eje tema/concepto existe para servir:
     de los 38 papers off-ADS del corpus (ICA/PCA: Comon, Cardoso, Hyvärinen, Shlens…) **14 sólo
-    los tiene OpenAlex** — ADS no puede tenerlos, no tienen bibcode — contra 3 sólo-ADS.
+    los tiene OpenAlex** (no tienen bibcode, así que ADS sólo los alcanza por DOI o título)
+    contra **3 sólo-ADS**.
 
 Dos consecuencias de esa medición que son contrato de este módulo, no detalle:
 
@@ -24,6 +25,7 @@ Sin API key. `mailto` en la query es la cortesía que pide OpenAlex para el pool
 from __future__ import annotations
 
 import re
+import subprocess
 import time
 import urllib.parse
 
@@ -32,7 +34,19 @@ import requests
 import lib_config as cfg
 
 API = "https://api.openalex.org/works"
-MAILTO = "almagesto@example.org"   # se sobreescribe con `--mailto` desde el orquestador
+def _mailto() -> str:
+    """Email para el 'polite pool' de OpenAlex. Se toma de `git config user.email` —NO se hardcodea:
+    es per-instancia— igual que `check_retractions._mailto`. Antes había una dirección de ejemplo
+    fija con un comentario que prometía un `--mailto` inexistente: toda request salía con un mail
+    falso, que es lo contrario de la cortesía que el pool pide."""
+    try:
+        r = subprocess.run(["git", "config", "user.email"], capture_output=True, text=True, timeout=5)
+        return r.stdout.strip() or ""
+    except Exception:
+        return ""
+
+
+MAILTO = ""                        # se resuelve por llamada; "" = pool público
 PER_PAGE = 200                     # máximo de OpenAlex
 BATCH = 50                         # DOIs por request en el filtro `doi:a|b|c`
 TIMEOUT = 60
@@ -94,7 +108,7 @@ def to_record(work: dict) -> dict:
     sin tocarlo. Un backend que trae su propio schema obliga a un clasificador propio, y ahí la
     lente deja de ser una sola — que es justo lo que `objective.yaml` promete ser."""
     venue = ((work.get("primary_location") or {}).get("source") or {}).get("display_name")
-    return {
+    rec = {
         "bibcode": citekey(work),
         "title": work.get("title") or "",
         "authors": [((a or {}).get("author") or {}).get("display_name")
@@ -113,6 +127,18 @@ def to_record(work: dict) -> dict:
         "via": "openalex",
         "openalex_id": work.get("id"),
     }
+    # Las tres claves del CLASIFICADOR. Sin ellas el registro no es del mismo schema y los
+    # consumidores o revientan (indexan con corchetes) o dan falsos limpios: `core` vacío en
+    # `ingest_theme`, y toda nota naciendo `relevance: low` en `make_notes` — lo que encima
+    # las excluye de `citation_index.corpus_idents`, o sea de la puerta 1 que estos backends
+    # existen para alimentar. Se clasifica acá con `classify_record`, la ÚNICA lente.
+    import query_ads
+    facets, relevant = query_ads.classify_record(rec)
+    rec["facets"], rec["relevant"] = facets, relevant
+    rec["why_excluded"] = None if relevant else query_ads.exclusion_reason(
+        facets, rec.get("doctype") or "")
+    return rec
+
 
 
 def _get(params: dict) -> dict:
@@ -124,7 +150,10 @@ def _get(params: dict) -> dict:
     muere en el primer hipo no se puede construir. Los **4xx no se reintentan**: son la query mal armada, y repetirla gasta cuota
     para el mismo error. Si el servicio no cede, **levanta**: devolver `[]` sería indistinguible de
     "no hay resultados", que es el falso limpio que INV-69/INV-87 prohíben."""
-    params = {**params, "mailto": MAILTO, "select": SELECT}
+    params = {**params, "select": SELECT}
+    correo = MAILTO or _mailto()
+    if correo:
+        params["mailto"] = correo
     url = f"{API}?{urllib.parse.urlencode(params, safe=':|/.')}"
     for intento in range(MAX_ATTEMPTS):
         r = requests.get(url, headers=HEADERS, timeout=TIMEOUT)

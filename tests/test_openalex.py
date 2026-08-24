@@ -188,3 +188,16 @@ def test_las_keywords_de_openalex_llegan_a_la_lente():
 def test_sin_keywords_no_revienta():
     w = work(); w.pop("keywords"); w.pop("topics")
     assert oa.to_record(w)["keyword"] == []
+
+
+def test_el_registro_trae_el_veredicto_del_clasificador():
+    """«Mismo schema que `query_ads`» tiene que incluir las tres claves del **clasificador**:
+    `facets`, `relevant`, `why_excluded`. Sin ellas, medido: los consumidores que indexan con
+    corchetes revientan (`fetch_pdf`, `fetch_arxiv`, `make_notes`) y los que usan `.get()` dan
+    **falsos limpios** — `ingest_theme` ve `core` vacío, y `make_notes` marca toda nota
+    `relevance: low`, lo que además las saca de `citation_index.corpus_idents`, o sea de la puerta
+    1 que estos backends existen para alimentar."""
+    r = oa.to_record(work())
+    for campo in ("facets", "relevant", "why_excluded"):
+        assert campo in r, f"falta {campo}: el registro no es del mismo schema"
+    assert isinstance(r["relevant"], bool) and isinstance(r["facets"], list)

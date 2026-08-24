@@ -47,7 +47,7 @@ para ingestar. En Windows, los comandos de shell corren en Git Bash o WSL.
 | `vault/wiki/matrices/method_star.md` | Matriz método × estrella = huecos + backlog. |
 | `vault/wiki/index.md` | Catálogo de la wiki (se actualiza en cada operación). |
 | `vault/wiki/log.md` | Registro append-only de operaciones. |
-| `vault/config/stars.yaml` · `vault/config/topics.yaml` | Estrellas / temas de la bóveda (nombres canónicos + alias). |
+| `vault/config/stars.yaml` · `vault/config/themes.yaml` | Estrellas / temas de la bóveda (nombres canónicos + alias). |
 | `vault/config/ads_dev_key` | Token NASA ADS — **GITIGNORED** (nunca se commitea). |
 | `vault/config/registro/<slug>.yaml` | **Registro de ingesta por sujeto (se commitea).** `busqueda`: qué se le preguntó a ADS, cuándo, con qué límite y con qué corte. `decisiones`: qué descartaste y por qué, en los dos carriles (candidatos del triage y fuentes declaradas de un tema off-ADS). |
 | `build/` · `outputs/` | **GITIGNORED** — intermedios de ingesta y reportes de lint. |
@@ -60,7 +60,7 @@ para ingestar. En Windows, los comandos de shell corren en Git Bash o WSL.
 División de tareas: **scripts** bajan (determinista, rate-limited); **LLM** procesa (criterio).
 
 **La cadena completa la corren los orquestadores** — `python scripts/ingest_star.py <slug>` (estrellas)
-y `python scripts/ingest_topic.py <slug>` (temas; despacha por el campo `source`, incluido el modo
+y `python scripts/ingest_theme.py <slug>` (temas; despacha por el campo `source`, incluido el modo
 off-ADS) —
 cuyos headers son la **definición canónica del orden** (docs y skills apuntan ahí, no copian la
 lista). Las piezas, para correr sueltas cuando hace falta un flag fino (`--rows`, `--all`,
@@ -97,18 +97,18 @@ python lint.py                      # chequeo de salud → outputs/lint-<fecha>.
 Entre la query y el primer paso que gasta red y disco hay un **checkpoint humano** (la *guardia de
 expansión*): si el core recién clasificado se multiplicó respecto de las notas ya ingestadas del
 sujeto (default: ×1.5 y 50 papers nuevos o más), la cadena **frena** y muestra el conteo, cuántos
-vinieron por el grafo de citas y el puntero a `relevance.require`/`min_topics` por si el corte quedó
+vinieron por el grafo de citas y el puntero a `relevance.require`/`min_facets` por si el corte quedó
 flojo. `--yes` sigue a sabiendas. No es un error: es el punto donde conviene mirar antes de bajar
 cientos de PDFs. **Ojo: sólo aplica a re-ingestas.** En el **primer** ingest de un sujeto no hay
 notas previas con qué comparar, así que la cadena sigue derecho por más grande que sea el corte —
 ahí el control es el `--probe` del skill `setup` (previsualizar la lente antes de bajar nada).
 
-Para TEMAS (en vez de estrellas): definir el tema en `vault/config/topics.yaml` y correr
-`python scripts/ingest_topic.py <slug>`: el orquestador despacha según el campo `source` de la entrada:
+Para TEMAS (en vez de estrellas): definir el tema en `vault/config/themes.yaml` y correr
+`python scripts/ingest_theme.py <slug>`: el orquestador despacha según el campo `source` de la entrada:
 `ads` (default) corre la cadena de arriba con `--topic` y **sin** `fetch_ground_truth` (no hay
 NEA/SIMBAD para un tema); `web` / `local-pdfs` (modo **off-ADS**, opt-in) procesa la bibliografía
 declarada en la lista `sources:` de la entrada — snapshots web citables vía `fetch_web.py` (defuddle)
-y PDFs locales copiados a la bóveda con clave `AAAA+Autor` (ver skill `ingest-topic`). Luego:
+y PDFs locales copiados a la bóveda con clave `AAAA+Autor` (ver skill `ingest-theme`). Luego:
 extracción LLM (leer PDFs/fulltext → poblar `methods`, indicadores, P/K, síntesis), actualizar
 `index.md` y appendear a `log.md`. Ver `CLAUDE.md` para las operaciones en detalle.
 
@@ -122,7 +122,7 @@ bóveda ya poblada.
 
 Tu bóveda es **una sola implementación**: el framework (scripts, skills, `CLAUDE.md`, `vault/.obsidian/`)
 vive en Almagesto; vos le agregás contenido. Tu contenido no corre riesgo al mergear:
-`vault/config/objective.yaml`, `vault/config/stars.yaml`, `vault/config/topics.yaml`, `vault/STATUS.md`,
+`vault/config/objective.yaml`, `vault/config/stars.yaml`, `vault/config/themes.yaml`, `vault/STATUS.md`,
 `vault/wiki/index.md`, `vault/wiki/log.md` y `vault/wiki/matrices/method_star.md` están marcados
 `merge=ours` en `.gitattributes`, así que un merge del framework **nunca** los pisa (registrá el driver una vez por clon: `git config merge.ours.driver true`).
 

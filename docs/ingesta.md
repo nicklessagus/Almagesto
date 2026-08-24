@@ -16,7 +16,7 @@ es visible en el stdout de la corrida:
 n_found  (lo que ADS dice que hay)
   └─ rows=2000, sort citation_count desc   ← el corte por citas: SÓLO si n_found > rows
      + 2ª pasada, sort date desc           ← sólo si truncó: rescata la cola reciente (#79)
-      └─ classify(): core / no-core        ← regex relevance.topics sobre título+abstract+keywords
+      └─ classify(): core / no-core        ← regex relevance.facets sobre título+abstract+keywords
          └─ SÓLO los core se bajan         ← fetch_arxiv.main · make_notes.write_paper_notes
             └─ candidatos del chaining     ← no se bajan hasta que los juzgues (triage)
                └─ los que el PDF falló     ← build/<slug>/missing_pdf.json → sin fulltext
@@ -35,7 +35,7 @@ fulltext**, no sobre todo el universo.
 |---|---|---|---|
 | Query | `build_query` / query cruda | nombre+alias sobre `title:`/`abs:` | no |
 | Corte de `rows` | ADS | `sort: citation_count desc` + 2ª pasada `date desc` | **sí** (sólo al truncar) |
-| Core / no-core | `classify()` | regex `relevance.topics` + doctype + `require`/`min_topics` | no |
+| Core / no-core | `classify()` | regex `relevance.facets` + doctype + `require`/`min_facets` | no |
 | Recall extra | chaining, glifo, `--sweep` | grafo de citas anclado al sujeto; full-text | ranking del sweep: **sí** |
 | Triage | **vos / el LLM** | título+abstract, pertinencia al sujeto | no |
 | Extracción | **el LLM** | "papers clave" — sin definir | no |
@@ -109,8 +109,8 @@ flowchart TD
         S5 --> S6
     end
 
-    subgraph T["ingest-topic · despacha por source"]
-        T1[topics.yaml: area, concept, query o sources]
+    subgraph T["ingest-theme · despacha por source"]
+        T1[themes.yaml: area, concept, query o sources]
         T2{source}
         T3["ads → misma cadena, sin ground-truth"]
         T4["web / local-pdfs → fuentes DECLARADAS<br/>fetch_web (defuddle) o PDF local"]
@@ -129,7 +129,7 @@ flowchart TD
 
 Diferencias que importan:
 
-| | **ingest-star** | **ingest-topic** |
+| | **ingest-star** | **ingest-theme** |
 |---|---|---|
 | Sujeto | una estrella | un tema o método |
 | Fuente | ADS siempre (astro-only) | ADS **o** fuentes declaradas (off-ADS, opt-in) |
@@ -195,7 +195,7 @@ en un caso) · `arbitro` (resuelve una tensión previa). El rol es el que define
 un paper contra otro: fundacional↔aplicación no es contraste sino instanciación, y leerlo como
 desacuerdo fabrica disputas falsas (#73). Los **bullets** de esa
 sección los ramifica el stub por **tipo de sujeto**: para una estrella, el ground-truth (P/K/e por
-planeta) más los **ejes de `relevance.topics`** —o sea la lente de *tu* bóveda, no una lista fija—;
+planeta) más los **ejes de `relevance.facets`** —o sea la lente de *tu* bóveda, no una lista fija—;
 para un tema, *aporte al tema* y *régimen de validez*, sin planetas ni actividad. Las dos ramas de
 tema (ADS y off-ADS) escriben el mismo bloque.
 

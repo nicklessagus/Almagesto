@@ -21,13 +21,20 @@ def paper(stem, doi=None, arxiv=None, relevance="high", **extra):
 
 
 def fetchers(ads_map=None, oa_map=None, oa_sin=None):
-    """Fetchers deterministas que reemplazan la red."""
+    """Fetchers deterministas que reemplazan la red.
+
+    ⚠ El de OpenAlex normaliza la clave con `_bare_doi`, **igual que la función real que
+    reemplaza**. Antes indexaba por el input verbatim, y esa diferencia de contrato entre el doble
+    y el original era exactamente el bug B2: escondía que `build` consultaba con el DOI crudo."""
+    import openalex as _oa_mod
+
     def _ads(bibcodes):
         return {b: list(ads_map.get(b, [])) for b in bibcodes if b in (ads_map or {})}
 
     def _oa(dois):
-        m = {d: list((oa_map or {}).get(d, [])) for d in dois if d in (oa_map or {})}
-        return m, [d for d in dois if d not in m]
+        norm = {_oa_mod._bare_doi(d) for d in dois}
+        m = {k: list(v) for k, v in (oa_map or {}).items() if k in norm}
+        return m, sorted(norm - set(m))
     return _ads, _oa
 
 
@@ -154,3 +161,49 @@ def test_lookup_con_una_sola_llave_sigue_andando(toy_vault, tmp_path):
     ads, oa = fetchers(oa_map={"10.1/a": ["W1"]})
     idx = ci.load(ci.build(tmp_path / "ci.json", fetch_ads=ads, fetch_oa=oa))
     assert ci.cited_by_corpus("W1", idx) == ["2020A"]
+
+
+# ── B2/B3/B4: las llaves tienen que normalizarse igual de los dos lados ───────────────────────
+
+def test_doi_con_prefijo_no_se_reporta_como_ciego(toy_vault, tmp_path):
+    """Bug medido por la auditoría: `refs_of` devuelve el mapa con la clave **normalizada**
+    (`_bare_doi`) y `build` lo consultaba con el `doi` **crudo** del frontmatter. Un paper con
+    `doi: https://doi.org/10.1/a` quedaba en `cobertura.ciegos` — o sea que el artefacto declaraba
+    *"OpenAlex no tenía referencias para éste"* cuando el código había mirado la clave equivocada.
+    Peor que una cobertura faltante: cobertura **mal atribuida**."""
+    paper("2020A", doi="https://doi.org/10.1/A")
+    ads, oa = fetchers(oa_map={"10.1/a": ["W1"]})
+    idx = ci.load(ci.build(tmp_path / "ci.json", fetch_ads=ads, fetch_oa=oa))
+    assert idx["cobertura"]["ciegos"] == []
+    assert ci.cited_by_corpus("W1", idx) == ["2020A"]
+
+
+def test_la_cobertura_declara_lo_que_openalex_no_resolvio(toy_vault, tmp_path):
+    """`refs_of` calcula los no-resueltos «porque sin él un mapa incompleto se lee como completo»
+    y `build` los tiraba (`oa_refs, _oa_sin = ...`). El módulo que exige declarar el techo estaba
+    tirando la mitad del techo: un paper con refs de ADS cuyo DOI OpenAlex no resolvió no es
+    `ciego`, así que su cobertura parcial era invisible."""
+    paper("2020A", doi="10.1/a")
+    ads, oa = fetchers(ads_map={"2020A": ["BIB1"]})      # ADS sí, OpenAlex no lo resuelve
+    idx = ci.load(ci.build(tmp_path / "ci.json", fetch_ads=ads, fetch_oa=oa))
+    assert idx["cobertura"]["ciegos"] == [], "tiene refs de ADS: no es ciego"
+    assert idx["cobertura"]["sin_refs_openalex"] == ["10.1/a"]
+
+
+def test_lookup_acepta_la_url_de_openalex(toy_vault, tmp_path):
+    """`to_record` guarda `openalex_id` como URL completa y el índice guarda el id pelado. Un
+    consumidor que pase las dos llaves del registro —lo que el docstring promete— fallaba el 100%
+    del lado OpenAlex."""
+    paper("2020A", doi="10.1/a")
+    ads, oa = fetchers(oa_map={"10.1/a": ["W9"]})
+    idx = ci.load(ci.build(tmp_path / "ci.json", fetch_ads=ads, fetch_oa=oa))
+    assert ci.cited_by_corpus(["2020Otro", "https://openalex.org/W9"], idx) == ["2020A"]
+
+
+def test_sin_indice_construido_no_dice_que_nadie_cita(toy_vault):
+    """El módulo predica contra el falso limpio y su lookup lo producía: sin índice, `[]` es
+    indistinguible de «nadie lo cita». Ahora levanta, que es lo que INV-87 pide de un chequeo que
+    no puede correr."""
+    with pytest.raises(RuntimeError) as e:
+        ci.cited_by_corpus("2009A&A...496..577Z")
+    assert "citation_index" in str(e.value)

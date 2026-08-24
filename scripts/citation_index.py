@@ -17,8 +17,9 @@ eso; si la cantidad de citas entrantes clasificara, `objective.yaml` dejaría de
 DE DÓNDE SALEN LAS REFERENCIAS. De las **dos** fuentes, porque R-9 midió que ninguna alcanza: sobre
 un corpus astro real ADS cubre el 80% y OpenAlex el 68%, pero en pre-2000 la diferencia es 65% vs
 16% a favor de ADS, y de los papers off-ADS —la bibliografía de método que este eje existe para
-servir— 14 sólo los tiene OpenAlex contra 3 sólo-ADS. La unión llegó al **84,3%** medido, y ese
-techo se **declara**: `cobertura` nombra los papers de los que no se pudo leer una sola referencia.
+servir— 14 sólo los tiene OpenAlex contra 3 sólo-ADS. La unión llegó al **84,3%** medido —477 de los 566 papers **core**; sobre las 908 notas del
+corpus completo, que es el denominador que usa la proyección de R-9, da 83%— y ese techo se
+**declara**: `cobertura` nombra los papers de los que no se pudo leer una sola referencia.
 Un índice que calla su cobertura se lee como completo (INV-87).
 
 DOS ESPACIOS DE IDENTIFICADORES. ADS devuelve bibcodes y OpenAlex ids `W…`, y **se solapan**: medido
@@ -95,16 +96,21 @@ def build(out: Path | None = None, fetch_ads=None, fetch_oa=None) -> Path:
     sin_clave = sorted(p["stem"] for p in papers if not p.get("bibcode"))
     core = [p for p in papers if p.get("bibcode")]
 
+    import openalex
     ads_refs = fetch_ads([p["bibcode"] for p in core]) or {}
     dois = [p["doi"] for p in core if p.get("doi")]
-    oa_refs, _oa_sin = fetch_oa(dois) if dois else ({}, [])
+    # La MISMA normalización con la que `refs_of` indexa. Consultar con el DOI crudo del
+    # frontmatter (`https://doi.org/10.1/a`) devolvía vacío y el paper caía en `ciegos`: el
+    # artefacto declaraba "OpenAlex no tenía referencias" sobre una clave que nunca se buscó —
+    # cobertura MAL ATRIBUIDA, peor que cobertura faltante.
+    oa_refs, oa_sin = fetch_oa(dois) if dois else ({}, [])
 
     citas: dict[str, list] = {}
     con_refs, ciegos = [], []
     for p in core:
         propias = list(ads_refs.get(p["bibcode"]) or [])
         if p.get("doi"):
-            propias += list(oa_refs.get(p["doi"]) or [])
+            propias += list(oa_refs.get(openalex._bare_doi(p["doi"])) or [])
         # `dict.fromkeys` en vez de `set`: dedup CONSERVANDO el orden. Un `set` de strings itera en
         # orden dependiente del hash, y eso volvería el artefacto no determinista entre procesos —
         # el mismo defecto que hubo que arreglar en `lint.orphans`.
@@ -124,6 +130,10 @@ def build(out: Path | None = None, fetch_ads=None, fetch_oa=None) -> Path:
             "con_referencias": len(con_refs),
             "ciegos": sorted(ciegos),
             "sin_clave": sin_clave,
+            # Lo que `refs_of` devuelve como no-resuelto y antes se descartaba: un paper con refs
+            # de ADS cuyo DOI OpenAlex no resolvió NO es ciego, así que su cobertura parcial era
+            # invisible. El módulo que exige declarar el techo tiraba la mitad del techo.
+            "sin_refs_openalex": sorted(oa_sin),
         },
     }
     dest = _out_path(out)
@@ -147,8 +157,19 @@ def cited_by_corpus(idents, index: dict | None = None) -> list:
     preguntar por una sola devuelve un falso negativo. **Offline**: se consume dentro de la cadena
     y no puede depender de que una API esté de buen humor."""
     idx = index if index is not None else load()
+    if not idx:
+        # Sin índice construido, `[]` sería indistinguible de "nadie lo cita" — y ésa es la
+        # respuesta con la que la puerta 1 decide no proponer. Es el cero inventado que este mismo
+        # módulo dice no producir (INV-87): un chequeo que no puede correr se declara.
+        raise RuntimeError(
+            f"no hay índice de citas en {_out_path(None)} — corré `citation_index.build()` antes. "
+            "Devolver una lista vacía diría «nadie lo cita», que no es lo que se sabe.")
     citas = idx.get("citas") or {}
     llaves = [idents] if isinstance(idents, str) else list(idents)
+    # El índice guarda el id de OpenAlex PELADO (`W9`) y `to_record` lo guarda como URL
+    # (`https://openalex.org/W9`): sin normalizar, el lado OpenAlex del lookup falla siempre.
+    llaves = [k.rsplit("/", 1)[-1] if isinstance(k, str) and k.startswith("http") else k
+              for k in llaves if k]
     return sorted({p for k in llaves for p in (citas.get(k) or [])})
 
 
