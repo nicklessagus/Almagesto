@@ -75,11 +75,24 @@ def sweep_retracciones() -> list:
 
 
 def sweep_correcciones() -> list:
-    """Las correcciones salen del MISMO barrido de Crossref que las retracciones (#52), y ahí se
-    estampan. Se declara como detector propio porque su consecuencia es distinta —el paper sigue
-    citable; lo que hay que revisar son los valores que se le extrajeron— pero no vuelve a
-    consultar la red: lo que hay que hacer con ellas lo reporta el lint como backlog."""
-    return []
+    """Papers con corrección publicada (erratum/corrigendum/EoC), leídos del vault (#52).
+
+    Las correcciones las **estampa** el mismo barrido de Crossref que las retracciones, así que acá
+    no se vuelve a la red: se leen del frontmatter. Es un detector propio porque su consecuencia es
+    distinta — el paper **sigue citable**; lo que hay que revisar son los valores que se le
+    extrajeron, porque un corrigendum corrige justo el número que la ficha destiló.
+
+    ⚠ Devolvía `[]` fijo y aun así contaba como cubierto: la pasada decía "cubrió: correcciones" y
+    no listaba ninguna. Es la misma familia del cero inventado que `sweep_web` evita levantando —
+    con la diferencia de que acá el dato SÍ está, sólo que nadie lo leía."""
+    out = []
+    for f in sorted(cfg.PAPERS.glob("*.md")):
+        fm = cfg.split_fm(f.read_text(encoding="utf-8"))
+        correcciones = [c for c in cfg.as_list(fm.get("corrections")) if isinstance(c, dict)]
+        if correcciones:
+            tipos = ", ".join(dict.fromkeys(str(c.get("type")) for c in correcciones))
+            out.append(f"{f.stem}: {tipos} — revisá los valores extraídos de este paper")
+    return out
 
 
 def discover_versions() -> list:
@@ -101,7 +114,12 @@ def discover_versions() -> list:
         ya_alias = {str(v.get("bibcode")) for v in cfg.as_list(fm.get("versions"))
                     if isinstance(v, dict)}
         try:
-            recs = query_ads.query_ads(f'arxiv:"{arxiv}"', rows=10, quiet_truncate=True)
+            # `fq=None`: sin la lente astro (#68). Acá el universo de búsqueda ya lo fija el
+            # arXiv id —se busca UN trabajo concreto, no se descubre nada—, y `database:astronomy`
+            # descartaría justo los casos que este detector existe para encontrar: un método de
+            # otra disciplina (stat.ML, cs.LG) que salió publicado fuera de una revista astro.
+            # Mismo criterio que `fetch_bibcodes`.
+            recs = query_ads.query_ads(f'arxiv:"{arxiv}"', rows=10, quiet_truncate=True, fq=None)
         except Exception as exc:
             cfg.print_seguro(f"  ✗ {f.stem}: no se pudo consultar ADS por arXiv:{arxiv} ({exc})")
             continue

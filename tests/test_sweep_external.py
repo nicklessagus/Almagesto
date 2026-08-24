@@ -122,3 +122,16 @@ def test_sweep_web_declara_que_no_esta(toy_vault):
     """El stub levanta con el motivo, no devuelve vacío."""
     with pytest.raises(NotImplementedError, match="fetch_web.refresh"):
         sw.sweep_web()
+
+
+def test_correcciones_se_leen_del_vault(toy_vault):
+    """Devolvía `[]` fijo y aun así contaba como cubierto: la pasada decía "cubrió: correcciones" y
+    no listaba ninguna. El dato SÍ está —lo estampa el barrido de Crossref—, sólo que nadie lo leía."""
+    from conftest import mk_note
+    mk_note(cfg.PAPERS, "2020corC...1..1C",
+            {"tags": ["paper"], "bibcode": "2020corC...1..1C",
+             "corrections": [{"type": "corrigendum", "date": "2023-07-01"}]}, "")
+    mk_note(cfg.PAPERS, "2020sanS...1..1S", {"tags": ["paper"], "bibcode": "2020sanS...1..1S"}, "")
+    hallazgos = sw.sweep_correcciones()
+    assert len(hallazgos) == 1 and "2020corC...1..1C" in hallazgos[0]
+    assert "corrigendum" in hallazgos[0]

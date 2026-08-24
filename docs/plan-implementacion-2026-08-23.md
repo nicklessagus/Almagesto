@@ -26,6 +26,22 @@ antes del siguiente (protocolo de `vault/STATUS.md`).
 
 ---
 
+> ⚠ **LEER ANTES DE SEGUIR (agregado 2026-08-24).** Este documento está **fechado** y se conserva
+> como está: es el registro de lo que se planificó. Pero las tandas **0 a 6 ya se ejecutaron** y en
+> el camino se resolvió **R-5**, que renombró un concepto. Las tandas 7–10 de abajo usan los nombres
+> **viejos**; traducí al leer:
+>
+> | El plan dice | Hoy se llama |
+> |---|---|
+> | `relevance.topics` · campo `topics:` de las notas | `relevance.facets` · `facets:` |
+> | `topics.yaml` | `themes.yaml` |
+> | `ingest_topic.py` · `--topic` · skill `ingest-topic` | `ingest_theme.py` · `--theme` · `/ingest-theme` |
+> | `load_topics` · `topic_by_slug` | `load_themes` · `theme_by_slug` |
+>
+> El estado real y el próximo paso están en **`vault/STATUS.md`, sección *DÓNDE RETOMAR***, que es
+> la fuente de verdad — no este documento.
+
+
 ## 1. Orden global por dependencias
 
 El esqueleto de la reconciliación §5 era:
