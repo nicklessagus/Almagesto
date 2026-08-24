@@ -188,6 +188,38 @@ def load_objective() -> dict:
     return data if isinstance(data, dict) else {}
 
 
+def yaml_error(path: Path, que: str) -> str | None:
+    """Motivo por el que `path` no se puede usar como registro de sujetos, o `None` si está sano.
+
+    Hermano de `objective_error` para `stars.yaml`/`themes.yaml`. D-6 cerró la puerta de la lente
+    y dejó estas dos abiertas: `load_stars`/`load_themes` **propagan** el `yaml.YAMLError`, así que
+    un `:` sin comillas en un título hace morir a `lint.py` con traceback — que no es "reportar
+    como bloqueante", es llevarse puestos los otros chequeos sin dejar reporte. Un chequeo que no
+    puede correr tiene que decirlo (INV-87), no tumbar al que lo llama.  @inv INV-80"""
+    if not path.exists():
+        return None                      # ausente es legítimo: una bóveda puede no tener temas
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = yaml.safe_load(fh)
+    except yaml.YAMLError as exc:
+        return f"{path} no parsea como YAML: {' '.join(str(exc).split())} ({que})"
+    except OSError as exc:
+        return f"{path} no se pudo leer: {exc}"
+    if data is not None and not isinstance(data, dict):
+        return f"{path} parsea, pero no a un mapa (es {type(data).__name__}) — {que}"
+    return None
+
+
+def stars_error() -> str | None:
+    """@inv INV-80"""
+    return yaml_error(STARS_YAML, "cada clave es una estrella")
+
+
+def themes_error() -> str | None:
+    """@inv INV-80"""
+    return yaml_error(THEMES_YAML, "cada clave es un tema")
+
+
 def objective_error() -> str | None:
     """Motivo por el que `objective.yaml` no se puede usar como lente, o `None` si está sano.
 

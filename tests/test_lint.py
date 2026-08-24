@@ -1921,6 +1921,19 @@ def test_registro_schema_viejo_detectado(toy_vault, capsys):
     assert "pre-D-28" in rep or "schema viejo" in rep
 
 
+def test_stars_yaml_roto_reporta_no_evaluado_en_vez_de_reventar(toy_vault, capsys):
+    """@inv INV-80 — *una config que no parsea rehúsa operar y el lint la REPORTA*. D-6 cerró esa
+    puerta para `objective.yaml`, pero `stars.yaml`/`themes.yaml` quedaron afuera: `load_stars`
+    propaga el `yaml.ScannerError` y `lint.main()` **muere con traceback**, que no es "reportar como
+    bloqueante" — es llevarse puestos los otros cuarenta chequeos y no dejar reporte. Es el mismo
+    falso limpio de INV-87 por otra puerta: el usuario ve un stacktrace y no sabe qué se miró."""
+    cfg.STARS_YAML.write_text("tau Ceti:\n  slug: tau_ceti\n  title: mal: sin comillas\n",
+                              encoding="utf-8")
+    rc, rep = run_lint_reporte(capsys)     # no debe levantar
+    assert rc != 0
+    assert "No evaluado" in rep and "stars.yaml" in rep
+
+
 def test_notas_huerfanas_salen_en_orden_estable(toy_vault, capsys):
     """@inv INV-43 — el reporte tiene que ser **determinista entre corridas**, o dos corridas del
     mismo estado dan diffs distintos y el reporte deja de servir de línea de base. `orphans` salía

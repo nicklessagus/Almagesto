@@ -525,7 +525,13 @@ def main(argv=()) -> int:
     old_registro: list = []            # registros con la clave `busqueda:` (schema pre-D-28)
     old_facets: list = []              # notas de paper con `topics:` (schema pre-R-5)
     cadena_incompleta: list = []       # (slug, "se cortó en <paso>") — D-57
-    stars_slugs = {m.get("slug") for m in cfg.load_stars().values() if isinstance(m, dict)}
+    # `stars.yaml`/`themes.yaml` ilegibles no pueden tumbar el lint: se declaran NO EVALUADO y los
+    # chequeos que dependen de ellos se saltean con población vacía (INV-80/INV-87).
+    subj_err = [e for e in (cfg.stars_error(), cfg.themes_error()) if e]
+    for e in subj_err:
+        not_evaluated.append(("config de sujetos", e))
+    stars_slugs = (set() if cfg.stars_error() else
+                   {m.get("slug") for m in cfg.load_stars().values() if isinstance(m, dict)})
     verif_blocks: list = []            # (archivo, fecha del bloque|None) — notas CON bloque de verify
     anchor_notes: list = []            # (stem, texto) de esas mismas notas — insumo del ancla (D-4)
     names = {basename(p)[:-3] for p in files}  # stems referenciables por [[..]]
@@ -970,7 +976,7 @@ def main(argv=()) -> int:
     # `paper_fms` se llena en el LOOP principal (ver más arriba), que ya parsea cada nota: una
     # pasada extra acá subía el ratio a ~3,0 (el techo del test de escala es 2,3), y el hotspot
     # conocido —el doble parseo de split_fm+fm_error— ya se come 2,0.
-    for nombre, meta_s in cfg.load_stars().items():
+    for nombre, meta_s in ({} if cfg.stars_error() else cfg.load_stars()).items():
         slug_s = meta_s.get("slug") if isinstance(meta_s, dict) else None
         dest_s = cfg.STARS / f"{slug_s}.md" if slug_s else None
         if not dest_s or not dest_s.exists():
@@ -1005,7 +1011,8 @@ def main(argv=()) -> int:
     # (el ingest no leyó todo y no dijo por qué); con criterio, backlog normal — la cola visible de
     # D-15, que el skill `maintain` consume.
     extraccion_no_declarada: list = []
-    for nombre_s, meta_s in list(cfg.load_stars().items()) + list(cfg.load_themes().items()):
+    for nombre_s, meta_s in (list(({} if cfg.stars_error() else cfg.load_stars()).items())
+                             + list(({} if cfg.themes_error() else cfg.load_themes()).items())):
         if not isinstance(meta_s, dict):
             continue
         slug_s = meta_s.get("slug")
