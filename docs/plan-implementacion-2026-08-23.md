@@ -883,10 +883,14 @@ al llegar al issue):
   `vault/config/registro/_red.yaml`, versionado.** La caducidad —cuándo se miró afuera por última
   vez— es información sobre **la bóveda**, no sobre la máquina que corrió la pasada: sin
   versionarla, otro clon reporta "nunca se corrió", que es falso.
-- **R-5 · La colisión de nombres `topics` (revisión §7.2, sin resolver) se AGRAVA con D-26**: la
-  faceta propia del tema viviría en `topics.yaml`, que ya colisiona con `relevance.topics` y con
-  el campo `topics` de las notas. Decidir el renombre (o el nombre del campo nuevo) **antes** del
-  issue 7.3, o la confusión queda fosilizada en un schema más.
+- **R-5 · La colisión de nombres `topics`.** ✅ **RESUELTA (2026-08-24)**: `relevance.facets`,
+  `facets:` en la nota de paper, `themes.yaml`, `/ingest-theme`. ⚠ El renombre se ejecutó **fuera
+  del plan** y no pasó por el cierre que el repo exige a un cambio de schema: dejó cuatro residuos
+  que encontró la auditoría del 2026-08-24 (`.gitattributes` protegiendo un archivo inexistente —
+  el caro, deja `themes.yaml` sin `merge=ours`—, ningún detector para el campo viejo, el comentario
+  de `objective.yaml`, y el gate de tier 2 exigiendo `topics`). **Queda pendiente lo que esta
+  entrada pedía decidir**: el nombre del campo de la **faceta propia del tema** dentro de
+  `themes.yaml`, que el issue 7.3 sigue dejando como "ver R-5". Propuesta: `facet:`.
 - **R-6 · Quién estampa `cadena` cuando un script corre suelto (D-57).** ✅ **RESUELTA
   (2026-08-24): cada script se estampa a sí mismo** al salir 0, con una implementación compartida
   (`cfg.save_paso`) y N call sites. Se descartó estampar sólo desde `run()` porque un paso corrido
@@ -902,10 +906,22 @@ al llegar al issue):
   `extraccion: {subconjunto, criterio, fecha}` en el registro; el formato exacto no está decidido.
   La reconciliación §2.3.2 anticipa que el subconjunto va a ser el caso normal (≈6M tokens por
   estrella si no): el criterio declarado es la pieza que más se va a leer.
-- **R-9 · Fuente primaria del índice de citas (D-27).** OpenAlex por lote (sin key, cubre todo)
-  con ADS de respaldo es la propuesta; cuotas y cobertura real de `referenced_works` para astro
-  vieja no están medidas — el issue 7.2 empieza midiendo sobre 20 bibcodes reales antes de fijar
-  el diseño.
+- **R-9 · Fuente primaria del índice de citas (D-27).** ✅ **RESUELTA (2026-08-24): se consultan
+  LAS DOS, y la pregunta "cuál es primaria" se disuelve.** Medido sobre el corpus real completo
+  (908 notas de Almagesto-RV, read-only) con el mismo protocolo para las dos fuentes: ADS cubre
+  referencias del **80%**, OpenAlex del **68%**, unión **83%**. La propuesta original —OpenAlex
+  primario, ADS de respaldo— **está al revés para astro**: en pre-2000, el riesgo que esta misma
+  entrada nombraba, es **65% vs 16%** (causa estructural: `referenced_works` sale de depósitos
+  Crossref, que la astro vieja no tiene). Pero ninguna es prescindible: de los 38 papers off-ADS
+  del corpus —la población que D-26 existe para servir— **14 sólo los tiene OpenAlex** (Comon,
+  Cardoso, Hyvärinen, Shlens…: ADS no puede tenerlos, no tienen bibcode) y **3 sólo ADS**. Como
+  las dos son gratis, por lote, y el índice vive en `build/` (regenerable), no hay razón de costo
+  para elegir. Consecuencias para el issue 7.2: (a) llave **DOI o bibcode**, nunca matcheo por
+  título sin verificación dura —medido: 2 matches equivocados sobre 18 resoluciones, y una arista
+  falsa en un índice de citas es peor que una faltante—; (b) `citation_index` **declara su
+  cobertura** (techo 83%; 152 papers sin referencias en ninguna fuente, 104 de ellos sin DOI) en
+  vez de presentarse como completo — INV-87 aplicado; (c) **dedup entre fuentes**: el mismo
+  trabajo llega con dos identidades (bibcode y `W…`), y se resuelve con la identidad de D-19.
 - **R-10 · Tandas que pueden invalidarse entre sí.** Las conocidas están resueltas por orden
   (registro antes que cabecera; D-1 antes que `nea_diff`; ancla antes que pasada de red). Quedan
   dos genuinas: (a) el formato del bloque de verificación (1.2) lo consumen bench (8.7), skills

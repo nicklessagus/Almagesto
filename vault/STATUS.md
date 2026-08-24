@@ -221,6 +221,91 @@ dashboard de Obsidian con el estado de la bóveda.
 Varias decisiones cambian el schema (D-1, D-2, D-17, D-21, D-37), y **cada una suma una migración**.
 Sigue valiendo el criterio: **el deploy a Almagesto-RV se hace cuando cierren los issues, no antes.**
 
+## ✅ Auditoría doble del contrato + pasada de marcado (2026-08-24, sesión siguiente)
+
+> Pedido: *"hacé todo, dos veces y de forma independiente"*. Se aplicó el método de `contrato.md`
+> §7 (**dos pasadas ciegas, cruzadas después** — "su valor está en la ceguera") a las cuatro cosas
+> pendientes. Cinco commits, tier 0 en 804, tier 1 en 48, `lint.py --cierre` en 0.
+
+### Lo que el cruce encontró que una sola pasada había dado por bueno
+
+Las dos pasadas acordaron en **13 de 16** filas de §3.K. Las tres discrepancias se adjudicaron
+corriendo el código, y **dos eran defectos vivos**:
+
+- **`cadena_cortada` daba un falso positivo permanente.** `check_retractions` es el último paso de
+  `CADENA_ESTRELLA` y era el único de los siete que no llamaba `save_paso`: tras la cadena
+  **completa**, el lint decía "se cortó en `check_retractions`" para **toda** estrella. El test que
+  existía no lo veía porque estampaba ese paso a mano.
+- **Un `stars.yaml` roto mataba al lint con traceback.** D-6 cerró esa puerta para
+  `objective.yaml` y dejó las otras dos abiertas. No es "reportar como bloqueante": se lleva
+  puestos los otros cuarenta chequeos y no deja reporte.
+
+Y otros tres que salieron del mismo barrido, los tres **tapados por un test que pasaba**:
+
+- **`subject_in_title` matcheaba por prefijo de catálogo** — medido:
+  `subject_in_title("A close encounter with GJ 710", ["GJ 71"]) → True`. Como es la
+  auto-aceptación de nivel 0, metía papers de otra estrella al corpus sin juicio humano.
+- **El reporte del lint no era determinista y el golden lo tapaba**: `orphans` iteraba un `set` de
+  strings, y el golden **ordenaba las líneas antes de comparar**, con un docstring que describía
+  con precisión el no-determinismo que estaba neutralizando.
+- **Un assert que no podía fallar**: `assert path.glob(...)` — un generador es siempre truthy.
+
+### Deuda de R-5 (el renombre se hizo fuera del plan y no pasó por el cierre)
+
+Cuatro residuos; el caro: **`.gitattributes` protegía `vault/config/topics.yaml`**, que ya no
+existe → `themes.yaml` quedó **sin `merge=ours`** y el próximo merge del upstream le pisa el
+registro de temas a la instancia. Nadie lo vio porque INV-68 era mecanismo declarativo **sin un
+solo test**; ahora lo tiene, y vigila las dos direcciones (que estén los siete archivos, y que no
+se proteja una ruta inexistente). Además: detector bloqueante para `topics:` en nota de paper
+(medido en la instancia: **908/908** notas lo traen, **0** traen `facets`), el comentario de
+`objective.yaml`, y el gate de tier 2 que exigía el campo viejo.
+
+### El contrato y el mapa
+
+- **`contrato.md`** pasó de 16 filas de §3.K en `HUECO` a **9 medidos · 5 parciales · 2 HUECO**, y
+  se corrigieron **nueve filas de A–J que declaraban deuda ya saldada** y **dos que afirmaban
+  garantías que no existían** (INV-43, INV-72). Estado nuevo `parcial`, declarado en §2 con su
+  condición: sólo vale si la fila nombra la mitad que falta.
+- **Marcado `@inv`: de 77 sin marca a 7.** 67 tests + 51 símbolos, todos verificados por grep antes
+  de escribir (cero nombres inventados). Ratchet bajado en las dos dimensiones.
+
+### ⛔ Hallazgos que quedan abiertos
+
+1. **Tier 2 está roto desde la Tanda 2 y nadie lo notó.** `lint.main()` sale con `SystemExit` al
+   leer el `stars.yaml` pre-D-58 de la instancia, así que **seis** invariantes duros de
+   `test_invariantes_instancia.py` no corren: el gate del deploy no da señal. Es el modo de falla
+   que `pytest.ini` documenta ("un tier que se saltea sin decirlo"). Se cierra con el deploy.
+2. **Los siete invariantes sin marca son huecos reales**, no falta de marcado. El más grande:
+   **INV-19 — no existe borrado/renombre de ENTIDAD** (sólo `rename_paper`); nadie limpia
+   `registro/<slug>.yaml`, `raw/{pdfs,fulltext}/<slug>/`, la entrada de `stars.yaml`/`themes.yaml`
+   ni `build/<slug>/`. Ver `docs/trazabilidad-ratchet.yaml`, que los lista uno por uno.
+3. **INV-44 quedó parcial**: `ingest_star`/`ingest_theme` no propagan sus propios flags (`--yes`) a
+   `save_paso`, así que la escotilla del orquestador sigue sin traza.
+4. **INV-82 promete tres fechas y hay dos**: no existe fecha de **síntesis**. Implementarla o bajar
+   el enunciado (y `CLAUDE.md`, que dice "las tres" y enumera dos).
+5. **INV-81 parcial**: `## Planetas` y `## Métodos aplicados a esta estrella` siguen siendo
+   Dataview — D-11 se cumplió sólo para `## Papers`.
+
+### R-9 medida (cierra el punto de decisión del plan §14)
+
+Sobre el corpus real (908 notas, read-only), con dos fuentes y el **mismo** protocolo: ADS cubre
+referencias del **80%**, OpenAlex del **68%**, unión **83%**. El plan proponía "OpenAlex primario,
+ADS de respaldo" y **es al revés en astro** (pre-2000: 65% vs 16%). Pero de los 38 papers off-ADS,
+**14 sólo los tiene OpenAlex** y 3 sólo ADS: ninguna fuente es prescindible. **Decisión: se
+consultan las dos** (son gratis y por lote; el índice vive en `build/`, regenerable), la llave es
+DOI o bibcode —**nunca** título sin verificación dura: medidos 2 matches equivocados sobre 18—, y
+`citation_index` **declara su techo** (83%; 152 papers sin referencias en ninguna fuente, 104 sin
+DOI). Queda además el dedup entre fuentes: el mismo trabajo llega con dos identidades, y eso se
+resuelve con la identidad de D-19.
+
+### Lo que sigue
+
+- **Decidir el nombre del campo** de la faceta propia del tema en `themes.yaml` (issue 7.3 lo
+  dejaba como "ver R-5"; R-5 resolvió la colisión pero no bautizó el campo). Propuesta: `facet:`.
+- Después, Tanda 7 con el diseño de índice de citas que sale de la medición de arriba.
+
+---
+
 ## 📌 DÓNDE RETOMAR (handoff del 2026-08-24 — leer esto primero)
 
 > Escrito para arrancar **con contexto limpio**. Todo lo decidido vive en el repo; nada depende de
