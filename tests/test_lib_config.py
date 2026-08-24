@@ -405,3 +405,44 @@ def test_objective_error_distingue_los_tres_estados(toy_vault):
     assert "mapa" in (cfg.objective_error() or "")
     cfg.OBJECTIVE_YAML.unlink()
     assert "no existe" in (cfg.objective_error() or "").lower()
+
+
+# ── issue 2.1 · D-28: `busquedas` es una LISTA; el embudo no se suma (INV-89) ────────────────────
+#
+# Hasta 1.25.0 `save_busqueda` PISABA: cada corrida borraba la anterior, así que el registro sólo
+# sabía de la última y la cabecera de la ficha publicaba SU embudo como si fuera el universo entero.
+# Con dos corridas solapadas, sumar los `n_total` cuenta dos veces los papers que ya estaban.
+
+def test_dos_busquedas_con_solapamiento_no_suman(toy_vault):
+    """El experimento del contrato: A trae {1,2,3}, B trae {2,3,4}. El universo acumulado es 4, no
+    6, y la entrada B distingue lo nuevo de lo que ya estaba.  @inv INV-89"""
+    cfg.save_busqueda("test_star", {"fecha": "2026-01-01", "n_total": 3,
+                                    "bibcodes": ["1", "2", "3"]})
+    cfg.save_busqueda("test_star", {"fecha": "2026-02-01", "n_total": 3,
+                                    "bibcodes": ["2", "3", "4"]})
+    bs = cfg.load_busquedas("test_star")
+    assert len(bs) == 2
+    assert bs[1]["n_nuevos"] == 1 and bs[1]["n_ya_estaban"] == 2
+    assert cfg.universo_acumulado("test_star") == 4
+
+
+def test_segunda_corrida_no_pisa_la_primera(toy_vault):
+    cfg.save_busqueda("test_star", {"fecha": "2026-01-01", "query": "A", "n_total": 1})
+    cfg.save_busqueda("test_star", {"fecha": "2026-02-01", "query": "B", "n_total": 1})
+    assert [b["query"] for b in cfg.load_busquedas("test_star")] == ["A", "B"]
+
+
+def test_busqueda_preserva_decisiones(toy_vault):
+    """No se rompe la garantía vieja: `decisiones` (el juicio de curación, lo NO regenerable) sigue
+    intacto al appendear una búsqueda."""
+    cfg.save_decisiones("test_star", {"2020X": {"decision": "descartado", "motivo": "ruido"}})
+    cfg.save_busqueda("test_star", {"fecha": "2026-01-01", "n_total": 1})
+    assert cfg.load_decisiones("test_star")["2020X"]["motivo"] == "ruido"
+
+
+def test_universo_acumulado_sin_bibcodes_cae_al_maximo(toy_vault):
+    """Una entrada vieja sin `bibcodes` no puede aportar identidad, sólo cardinalidad: se toma el
+    MÁXIMO (cota inferior honesta del universo), nunca la suma — sumar es el bug que D-28 cierra."""
+    cfg.save_busqueda("test_star", {"fecha": "2026-01-01", "n_total": 30})
+    cfg.save_busqueda("test_star", {"fecha": "2026-02-01", "n_total": 40})
+    assert cfg.universo_acumulado("test_star") == 40

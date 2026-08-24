@@ -227,11 +227,12 @@ def show_decisions(slug: str, decisiones: dict) -> int:
     # NO afirmar "no hay pendientes": sin `build/` no se miró nada. El registro sí sabe cuántos
     # candidatos dejó la última corrida — y es justo el caso (post-clone) donde el lint los reporta
     # y manda correr este comando: negarlos acá reintroduce el falso limpio que #64 cerró.
-    b = cfg.load_registro(slug).get("busqueda") or {}
-    # #H11: una `busqueda:` editada a mano puede ser un escalar en vez de un mapa;
-    # el lector es tolerante, pero este consumidor no → tratala como ausente.
-    if not isinstance(b, dict):
-        b = {}
+    # D-28: `busquedas` es una lista de corridas; acá interesa la ÚLTIMA (el snapshot vigente del
+    # embudo). El universo acumulado del sujeto lo da `cfg.universo_acumulado`.
+    bs = cfg.load_busquedas(slug)
+    b = bs[-1] if bs else {}
+    # #H11 sigue cubierto por `load_busquedas`, que filtra por `isinstance(dict)` los elementos
+    # de la lista (una entrada editada a mano puede ser un escalar).
     pend = b.get("n_candidates")
     cola = (f"sin build/{slug}/ads.json: no se puede juzgar candidatos hasta re-correr la cadena"
             if not pend else

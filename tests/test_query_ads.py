@@ -1281,7 +1281,7 @@ def test_main_persiste_el_registro_de_busqueda(toy_vault, toy_classifier, no_sle
     monkeypatch.setattr(qa, "chain_candidates", lambda bibs, rows, filt: [])
     cfg.save_decisiones("test_star", {"2019old....1..1O": {"decision": "descartado"}})
     assert run_main(monkeypatch, ["test_star"]) == 0
-    b = cfg.load_registro("test_star")["busqueda"]
+    b = cfg.load_busquedas("test_star")[-1]
     assert b["fecha"] and b["query"] and "Test Star" in b["query"]     # la Solr efectiva, no None
     assert b["n_found"] == 1837 and b["n_core"] == 1 and b["truncated"] is True
     assert b["n_dropped"] == 1                                        # lee las decisiones vigentes

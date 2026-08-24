@@ -533,11 +533,58 @@ def save_decisiones(slug: str, decisiones: dict) -> None:
     save_registro(slug, data)
 
 
+def load_busquedas(slug: str) -> list:
+    """Las búsquedas del sujeto, en orden cronológico de corrida (D-28).  @inv INV-89
+
+    Lector ESTRICTO: sólo entiende `busquedas: []`. Un registro con la clave vieja `busqueda:`
+    (mapa, una sola corrida) devuelve `[]` — y el lint lo reporta como schema viejo, bloqueante.
+    Sin lector tolerante: dos semánticas conviviendo en el lector es complejidad permanente, y un
+    registro que el lector ignora en silencio deja la ficha afirmando sobre un universo que nadie
+    puede reconstruir."""
+    return [b for b in as_list(load_registro(slug).get("busquedas")) if isinstance(b, dict)]
+
+
+def universo_acumulado(slug: str) -> int:
+    """Cuántos papers distintos vio el sujeto en TODAS sus búsquedas — unión, no suma (INV-89).
+
+    Sumar los `n_total` cuenta dos veces los papers que ya estaban: con dos corridas solapadas de 3
+    papers cada una que comparten 2, la suma dice 6 y la verdad es 4. Cuando una entrada trae
+    `bibcodes` la unión es exacta; si alguna no los trae (registro viejo, o una corrida que no los
+    guardó) esa entrada sólo puede aportar **cardinalidad**, y ahí se toma el MÁXIMO: es la cota
+    inferior honesta del universo. Nunca la suma."""
+    vistos: set = set()
+    tope = 0
+    for b in load_busquedas(slug):
+        bibs = as_list(b.get("bibcodes"))
+        if bibs:
+            vistos.update(bibs)
+        tope = max(tope, int(b.get("n_total") or 0))
+    return max(len(vistos), tope)
+
+
 def save_busqueda(slug: str, busqueda: dict) -> None:
-    """Persiste el registro de búsqueda preservando `decisiones` (las escribe triage.py)."""
+    """APPENDEA una corrida a `busquedas: []`, preservando `decisiones` (las escribe triage.py).
+
+    D-28: antes esto PISABA. Cada corrida borraba la anterior, así que el registro sólo sabía de la
+    última y la cabecera de la ficha publicaba SU embudo como si fuera el universo entero — una
+    ficha refrescada tres veces mostraba el recorte de la tercera corrida y nada de las otras dos.
+
+    La entrada nueva se estampa con `n_nuevos` / `n_ya_estaban` contra el conjunto ya conocido del
+    sujeto (los `bibcodes` de las corridas previas): es lo que distingue "traje 40 papers" de
+    "traje 40 papers de los cuales 38 ya estaban", que es la pregunta real de un refresh."""
     data = load_registro(slug)
     data.setdefault("slug", slug)
-    data["busqueda"] = busqueda
+    previas = [b for b in as_list(data.get("busquedas")) if isinstance(b, dict)]
+    conocidos: set = set()
+    for b in previas:
+        conocidos.update(as_list(b.get("bibcodes")))
+    entrada = dict(busqueda)
+    bibs = as_list(entrada.get("bibcodes"))
+    if bibs:
+        entrada["n_nuevos"] = len([b for b in bibs if b not in conocidos])
+        entrada["n_ya_estaban"] = len([b for b in bibs if b in conocidos])
+    data["busquedas"] = previas + [entrada]
+    data.pop("busqueda", None)          # la clave vieja no sobrevive a una escritura nueva
     save_registro(slug, data)
 
 

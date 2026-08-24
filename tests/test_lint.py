@@ -1905,3 +1905,15 @@ def test_cierre_bloquea_periodica_reporta(toy_vault, capsys, monkeypatch):
     assert rc_periodica == 0
     assert _n_vencidos(rep) == 1
     assert lint.main(["--cierre"]) == 1
+
+
+def test_registro_schema_viejo_detectado(toy_vault, capsys):
+    """D-28: `busqueda:` (mapa, una sola corrida) es el schema pre-1.26. El lint lo DETECTA y
+    bloquea, sin migrador ni lector tolerante — un registro que el lector nuevo ignora en silencio
+    deja la ficha afirmando sobre un universo que nadie puede reconstruir."""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    (cfg.REGISTRO / "test_star.yaml").write_text(
+        "slug: test_star\nbusqueda:\n  fecha: '2026-01-01'\n  n_total: 3\n", encoding="utf-8")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 1
+    assert "pre-D-28" in rep or "schema viejo" in rep

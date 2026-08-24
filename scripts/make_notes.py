@@ -867,15 +867,18 @@ def search_line(slug: str) -> str:
     o del concept. El registro completo —query efectiva, límites, conteos, versión— vive en
     `vault/config/registro/<slug>.yaml`; acá va sólo lo que el que abre la nota necesita saber sin
     abrir nada: CUÁNDO se buscó y sobre QUÉ universo afirma la nota. "" si no hay registro."""
-    # `cfg.load_registro` es tolerante (puede devolver `busqueda` en cualquier forma que haya en el
-    # YAML — el archivo lo edita gente a mano); este consumidor no lo es, así que hay que chequear
-    # `isinstance` ANTES de usarlo. Con `busqueda: 2026-08-22` (escalar, no mapa) `.get("fecha")`
-    # sobre un string revienta con AttributeError — igual que se comporta como si no hubiera registro.
-    b = cfg.load_registro(slug).get("busqueda")
-    if not isinstance(b, dict) or not b.get("fecha"):
+    # D-28: el registro acumula corridas (`busquedas: []`). La línea resume la ÚLTIMA fecha y el
+    # universo **acumulado** —unión, no suma: dos refrescos solapados no cuentan dos veces lo que
+    # ya estaba—, más cuántas búsquedas hubo. `load_busquedas` ya filtra entradas con forma
+    # inválida (el archivo lo edita gente a mano).
+    bs = cfg.load_busquedas(slug)
+    b = bs[-1] if bs else {}
+    if not b.get("fecha"):
         return ""
-    universo = b.get("n_found") or b.get("n_total")
+    universo = cfg.universo_acumulado(slug) or b.get("n_found") or b.get("n_total")
     partes = [f"> _Búsqueda {b['fecha']}"]
+    if len(bs) > 1:
+        partes.append(f" ({len(bs)} búsquedas)")
     partes.append(f": {universo} → {b.get('n_core', '?')} core" if universo
                   else f": {b.get('n_core', '?')} core")
     if b.get("n_candidates"):

@@ -1341,17 +1341,23 @@ def test_search_line_estampa_puntero_sin_tocar_la_prosa(toy_vault):
 
 
 def test_search_line_se_actualiza_y_no_duplica(toy_vault):
-    """Un refresh re-estampa la línea vieja en vez de acumular punteros."""
+    """Un refresh re-estampa la línea vieja en vez de acumular punteros.
+
+    D-28: con dos corridas la línea muestra la fecha de la ÚLTIMA, cuántas búsquedas hubo, y el
+    universo **acumulado** — 120 y no 220, porque las dos corridas se solapan en 100 papers. Sumar
+    los embudos es justo el bug que D-28 cierra."""
     mn.write_star_note("test_star", force=False)
     dest = cfg.STARS / "test_star.md"
-    cfg.save_busqueda("test_star", {"fecha": "2026-08-01", "n_found": 100, "n_core": 10})
+    cfg.save_busqueda("test_star", {"fecha": "2026-08-01", "n_found": 100, "n_core": 10,
+                                    "n_total": 100})
     mn.stamp_search_line("test_star", dest)
     cfg.save_busqueda("test_star", {"fecha": "2026-08-21", "n_found": 120, "n_core": 14,
-                                    "truncated": True})
+                                    "n_total": 120, "truncated": True})
     assert mn.stamp_search_line("test_star", dest) is True
     out = dest.read_text(encoding="utf-8")
     assert out.count("> _Búsqueda") == 1
-    assert "2026-08-21: 120 → 14 core" in out and "⚠ truncada" in out and "2026-08-01" not in out
+    assert "2026-08-21 (2 búsquedas): 120 → 14 core" in out
+    assert "⚠ truncada" in out and "2026-08-01" not in out
 
 
 def test_search_line_sin_registro_o_sin_ancla_no_toca_nada(toy_vault):
@@ -1627,10 +1633,10 @@ def test_stamp_search_line_puede_actuar_tras_el_restamp(toy_vault):
     p = nota_sin_generator()
     mn.restamp_headers()
     cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
-    cfg.save_registro("s", {"busqueda": {"fecha": "2026-08-01", "n_found": 412, "n_core": 37,
-                                         "n_total": 40, "n_candidates": 3, "n_dropped": 0,
-                                         "rows": 2000, "truncated": False,
-                                         "almagesto_version": cfg.ALMAGESTO_VERSION}})
+    cfg.save_busqueda("s", {"fecha": "2026-08-01", "n_found": 412, "n_core": 37,
+                            "n_total": 40, "n_candidates": 3, "n_dropped": 0,
+                            "rows": 2000, "truncated": False,
+                            "almagesto_version": cfg.ALMAGESTO_VERSION})
     assert mn.stamp_search_line("s", p) is True
 
 

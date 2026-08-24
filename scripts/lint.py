@@ -511,6 +511,7 @@ def main(argv=()) -> int:
     # reporte en vez de mostrar su cero. Se declara acá arriba porque los pobladores están
     # repartidos por todo `main()`.
     not_evaluated: list = []
+    old_registro: list = []            # registros con la clave `busqueda:` (schema pre-D-28)
     verif_blocks: list = []            # (archivo, fecha del bloque|None) — notas CON bloque de verify
     anchor_notes: list = []            # (stem, texto) de esas mismas notas — insumo del ancla (D-4)
     names = {basename(p)[:-3] for p in files}  # stems referenciables por [[..]]
@@ -1214,6 +1215,15 @@ def main(argv=()) -> int:
         # descartado sin el motivo, el mismo bug que #51 cerró. Corre para TODO registro, tenga o
         # no `build/` local: es independiente del fallback de triage-pendiente/corpus-truncado de
         # abajo.
+        # D-28: la clave vieja `busqueda:` (mapa, UNA corrida) es el schema pre-1.26. El lector
+        # nuevo no la entiende y no se le agrega un lector tolerante (regla del repo): se detecta y
+        # bloquea, porque un registro mudo deja la ficha afirmando sobre un universo que nadie puede
+        # reconstruir. Se cierra re-corriendo la cadena (la corrida nueva reescribe `busquedas`).
+        if reg.get("busqueda") is not None:
+            old_registro.append(
+                (slug, "el registro usa la clave `busqueda:` (schema pre-D-28, una sola corrida) — "
+                       "el lector ya no la lee: re-corré la cadena del sujeto para que escriba "
+                       "`busquedas: []` (acumulativo; el embudo dejó de pisarse)"))
         dec = reg.get("decisiones")
         if isinstance(dec, dict):
             for clave, v in dec.items():
@@ -1224,7 +1234,8 @@ def main(argv=()) -> int:
                                f"silencio y el triage vuelve a proponerla sin el motivo"))
         if slug in vistos:
             continue                                  # build/ presente: ya se reportó la verdad viva
-        b = cfg.as_map(reg.get("busqueda"))
+        bs = [x for x in cfg.as_list(reg.get("busquedas")) if isinstance(x, dict)]
+        b = bs[-1] if bs else {}
         fecha = b.get("fecha") or "s/f"
         if b.get("n_candidates"):
             triage_pending.append(
@@ -1259,6 +1270,7 @@ def main(argv=()) -> int:
                          ("disputes mal formadas (posiciones explícitas, #71)", bad_disputes),
                          ("disputes en el schema viejo (planets[].disputes[]) — el lint ya no las lee", old_disputes),
                          ("Juicio de triage en build/<slug>/triage.json (pre-1.9.0) — el lector ya no lo mira", legacy_triage),
+                         ("⛔ Registro con `busqueda:` (schema viejo pre-D-28) — el lector ya no lo lee", old_registro),
                          ("`role` fuera del vocabulario (fundacional/aplicacion/arbitro)", bad_roles),
                          ("⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)", impl_leaks),
                          ("Objetivo sin instanciar (WARN — objective.yaml sigue en el placeholder del template)", objective_warn),
@@ -1301,7 +1313,7 @@ def main(argv=()) -> int:
     n_block = sum(len(x) for x in (not_evaluated, broken, fm_broken, retracted, orphans,
                                    contradictions, mass_issues, dangling_thesis, dangling_disputes,
                                    bad_roles, bad_disputes, old_disputes, legacy_triage,
-                                   old_verif_template))
+                                   old_verif_template, old_registro))
     if args.cierre:
         n_block += len(stale_pairs)   # R-1: en el cierre de una operación, un par vencido frena
     if n_block:

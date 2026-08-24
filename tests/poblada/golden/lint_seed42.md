@@ -32,6 +32,8 @@
 
 ## Juicio de triage en build/<slug>/triage.json (pre-1.9.0) — el lector ya no lo mira (0)
 
+## ⛔ Registro con `busqueda:` (schema viejo pre-D-28) — el lector ya no lo lee (0)
+
 ## `role` fuera del vocabulario (fundacional/aplicacion/arbitro) (0)
 
 ## ⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano) (0)

@@ -1100,6 +1100,10 @@ def main() -> int:
         "rows": args.rows,
         "n_found": qmeta.get("num_found"),            # lo que ADS dice que hay (None sin query directa)
         "n_total": len(recs),                         # lo que se trajo (query + extra_core + chaining)
+        # D-28: los bibcodes de ESTA corrida. Es lo que permite que el universo del sujeto sea una
+        # UNIÓN y no una suma (dos refrescos solapados no cuentan dos veces lo que ya estaba), y lo
+        # que deja calcular `n_nuevos`/`n_ya_estaban` de la corrida siguiente.
+        "bibcodes": sorted({r["bibcode"] for r in recs if r.get("bibcode")}),
         "n_core": len(rel),
         "n_candidates": len(candidatos),              # triage pendiente al cerrar esta corrida
         # sólo el carril del chaining: `busqueda` describe la BÚSQUEDA (encontrados → core →
