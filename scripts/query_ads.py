@@ -707,6 +707,63 @@ def sweep_star(slug: str, rows: int) -> int:
 
 # ── dry-run de re-clasificación (#40) ────────────────────────────────────────
 
+def classify_theme(rec: dict, meta: dict) -> tuple[list[str], bool, str | None]:
+    """Relevancia de un paper para un **tema de método** (D-26 / INV-88). Devuelve
+    `(facets_globales, core, motivo)`; `motivo` es `None` sii es core.
+
+    La lente global no sirve acá, y no por falta de ajuste: es **activamente dañina**. Con
+    `require: [rv]` mata al paper fundacional de ICA —Hyvärinen no menciona RV ni una vez—, y sin
+    filtro *"independent component analysis"* devuelve miles de papers de fMRI, EEG y finanzas.
+
+    Por eso el tema trae su **faceta propia** (`facet:` en `themes.yaml`), y la regla es::
+
+        core = faceta propia  Y  (puerta 2  OR  puerta 3)
+
+    - **faceta propia** — precondición, no puerta: sin ella no se mira nada más.
+    - **puerta 2, fundacional en su campo** — muy citado. El umbral **se declara** en el tema
+      (`fundacional_min_citas`); D-26 no fija un número y ponerle un default escondido sería
+      decidir por el usuario. Sin declarar, la puerta no abre **y el motivo lo dice**: misma
+      doctrina que la lente ilegible de INV-80, nunca degradar en silencio.
+    - **puerta 3, lente astro global** — la aplicación del método en astro, aunque tenga 3 citas.
+
+    ⛔ **La puerta 1 (`lo cita tu corpus`) NO está acá**, a propósito: por la resolución §4.3 del
+    plan **propone y no clasifica**, así que alimenta los candidatos del triage
+    (`citation_index.cited_by_corpus`). Si clasificara, ser core dejaría de ser función de
+    `(paper, lente)` y INV-24 se rompería."""
+    facet_raw = (meta or {}).get("facet")
+    if not facet_raw:
+        sys.exit(f"themes.yaml: el tema '{(meta or {}).get('title', '?')}' no declara `facet:` — es "
+                 "la lente propia del tema y sin ella no hay regla que aplicar (D-26). Agregala:\n"
+                 "  facet: 'independent component|blind source separation'")
+    try:
+        propia = re.compile(facet_raw, re.I)
+    except re.error as exc:
+        sys.exit(f"themes.yaml: `facet:` del tema no compila como regex ({exc})")
+
+    texto = " ".join(filter(None, [
+        " ".join(cfg.as_list(rec.get("title")) or [rec.get("title") or ""]),
+        rec.get("abstract") or "",
+        " ".join(cfg.as_list(rec.get("keyword"))),
+    ])).lower()
+    facets_globales, core_global = classify_record(rec)
+
+    if not propia.search(texto):
+        return facets_globales, False, "sin la faceta propia del tema"
+    doctype = rec.get("doctype") or ""
+    if doctype in NOISE_DOCTYPES:
+        return facets_globales, False, f"doctype: {doctype}"
+
+    umbral = (meta or {}).get("fundacional_min_citas")
+    puerta2 = isinstance(umbral, int) and (rec.get("citation_count") or 0) >= umbral
+    puerta3 = core_global
+    if puerta2 or puerta3:
+        return facets_globales, True, None
+    if umbral is None:
+        return facets_globales, False, ("ninguna puerta abre; la 2 (fundacional) está apagada "
+                                        "porque el tema no declara `fundacional_min_citas`")
+    return facets_globales, False, "ninguna puerta abre (ni fundacional ni lente astro)"
+
+
 def classify_record(r: dict) -> tuple[list[str], bool]:
     """`classify` sobre un registro YA persistido en ads.json (title es string, no lista como en
     la respuesta cruda de ADS). Los `via: manual` son core por decisión del usuario (override de

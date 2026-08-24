@@ -1365,3 +1365,82 @@ def test_probe_reporta_el_costo_proyectado(capsys):
     out = capsys.readouterr().out
     assert "tokens" in out.lower()
     assert "240" in out or "240k" in out.lower()      # 10 core × 24k
+
+
+# ── D-26 / INV-88: la relevancia de un tema de método es PROPIA del tema ──────────────────────
+
+def _tema(facet="independent component|blind source separation", **extra):
+    return {"title": "ICA", "area": "methods", "concept": "ica", "facet": facet, **extra}
+
+
+def _rec(title="x", abstract="", citas=0, doctype="article"):
+    return {"title": title, "abstract": abstract, "citation_count": citas,
+            "doctype": doctype, "keyword": []}
+
+
+def test_sin_faceta_propia_ninguna_puerta_abre(toy_vault):
+    """La faceta propia es la precondición, no una puerta: `core = faceta propia Y (≥1 puerta)`.
+    Un paper de fMRI muy citado no entra por ser popular."""
+    tema = _tema(fundacional_min_citas=100)
+    facets, core, why = qa.classify_theme(_rec("fMRI resting state", citas=5000), tema)
+    assert core is False and "faceta propia" in why
+
+
+def test_puerta_2_el_fundacional_entra_sin_lente_astro(toy_vault, monkeypatch):
+    """El caso Hyvärinen, que es el que motiva D-26: el paper fundacional de ICA **no menciona RV
+    ni una vez**, así que la lente global con `require: [rv]` lo mata. Entra por ser fundacional en
+    su campo: faceta propia + muchas citas."""
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", ["rv"])
+    tema = _tema(fundacional_min_citas=1000)
+    facets, core, why = qa.classify_theme(
+        _rec("Independent component analysis: algorithms and applications", citas=30000), tema)
+    assert core is True and why is None
+
+
+def test_puerta_3_la_lente_astro_global(toy_vault, monkeypatch):
+    """Una aplicación astro del método entra por la lente global aunque tenga pocas citas."""
+    monkeypatch.setattr(qa, "FACET_PATTERNS", {"rv": re.compile("radial velocity", re.I)})
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", [])
+    monkeypatch.setattr(qa, "MIN_FACETS", 1)
+    tema = _tema(fundacional_min_citas=1000)
+    _, core, why = qa.classify_theme(
+        _rec("Blind source separation applied to radial velocity data", citas=3), tema)
+    assert core is True and why is None
+
+
+def test_faceta_propia_sola_no_alcanza(toy_vault, monkeypatch):
+    """El otro lado: sin filtro, «independent component analysis» devuelve miles de papers de fMRI,
+    EEG y finanzas. La faceta propia sola los dejaría entrar a todos."""
+    monkeypatch.setattr(qa, "FACET_PATTERNS", {"rv": re.compile("radial velocity", re.I)})
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", [])
+    tema = _tema(fundacional_min_citas=1000)
+    _, core, why = qa.classify_theme(_rec("Independent component analysis of EEG", citas=12), tema)
+    assert core is False and "ninguna puerta" in why
+
+
+def test_la_puerta_2_sin_umbral_declarado_se_apaga_y_se_dice(toy_vault, monkeypatch):
+    """El umbral de «muy citado» NO se inventa: D-26 no fija un número y un default escondido
+    decidiría por el usuario. Sin `fundacional_min_citas` declarado la puerta 2 **no abre**, y el
+    motivo lo dice — no se degrada en silencio (misma doctrina que la lente vacía, INV-80).
+
+    Se aísla la lente global (si no, la faceta `method` de la `objective.yaml` real abre la puerta
+    3 y el test mediría otra cosa)."""
+    monkeypatch.setattr(qa, "FACET_PATTERNS", {"rv": re.compile("radial velocity", re.I)})
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", [])
+    _, core, why = qa.classify_theme(_rec("Independent component analysis", citas=99999), _tema())
+    assert core is False and "fundacional_min_citas" in why
+
+
+def test_doctype_ruido_sigue_afuera(toy_vault):
+    tema = _tema(fundacional_min_citas=10)
+    _, core, why = qa.classify_theme(
+        _rec("Independent component analysis", citas=5000, doctype="catalog"), tema)
+    assert core is False and "doctype" in why
+
+
+def test_tema_sin_facet_declarada_no_clasifica(toy_vault):
+    """Un tema de método sin `facet:` no puede usar esta regla: es la lente del tema, y sin ella
+    no hay nada que aplicar. Rehúsa en vez de caer a la lente global en silencio."""
+    with pytest.raises(SystemExit) as e:
+        qa.classify_theme(_rec("x"), {"title": "T", "area": "methods"})
+    assert "facet" in str(e.value)
