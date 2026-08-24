@@ -19,6 +19,7 @@ NEA devuelve una best-mass espuria). Ver también el chequeo análogo en lint.py
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import sys
 from pathlib import Path
@@ -150,15 +151,22 @@ def fetch_host(host: str, tab=None) -> dict:
     lee) y en cambio avisar por stdout en el momento del ingest, que es donde alguien puede
     efectivamente actuar (reintentar, revisar el host, etc.) — sin inventar un nuevo campo
     write-only que reproduciría el mismo problema."""
-    out = {"name": host}
+    # INV-07: la clave va PRESENTE y en `null` cuando la autoridad calla — no se omite. Un campo
+    # ausente y un campo nulo se leen distinto: el primero parece un schema viejo, el segundo dice
+    # "la autoridad no tiene el dato", que es la información real.
+    out = {"name": host, **{campo: None for campo in cfg.AUTORIDAD_CAMPO}}
+    otras: dict = {}          # D-2: valores de la autoridad NO declarada, que no se adoptan
     # NEA host columns (vienen en pscomppars)
     try:
         if tab is None:
             tab = fetch_pscomppars(host)
         if len(tab):
             r = tab[0]
+            # `spectral_type` NO se toma de NEA (D-1: su autoridad declarada es SIMBAD). Si NEA
+            # lo trae, se guarda aparte como discrepancia potencial en vez de tirarse (D-2).
+            if (sp_nea := _val(r, "st_spectype")) not in (None, ""):
+                otras["spectral_type"] = {"nea": sp_nea}
             out.update({
-                "spectral_type": _val(r, "st_spectype"),
                 "teff_K": _val(r, "st_teff"),
                 "mass_msun": _val(r, "st_mass"),
                 "st_rotp_days": _val(r, "st_rotp"),
@@ -191,12 +199,24 @@ def fetch_host(host: str, tab=None) -> dict:
         if res is not None and len(res):
             r = res[0]
             for k in ("sp_type", "SP_TYPE", "sptype"):
-                if k in res.colnames and out.get("spectral_type") in (None, ""):
+                # sin el `out.get(...) in (None, "")` de antes: SIMBAD es la autoridad declarada
+                # para este campo, así que su valor MANDA — no rellena el hueco que NEA dejó.
+                if k in res.colnames:
                     out["spectral_type"] = _val(r, k)
                     break
     except Exception as e:
         cfg.print_seguro(f"  ⚠ SIMBAD no respondió para {host!r}: {e} — spectral_type puede "
                           "quedar null por esto y no por ausencia real del dato.")
+    # D-1: qué autoridad contestó cada campo. Se persiste porque es lo que la ficha publica en su
+    # cabecera y lo que hace AUDITABLE la elección — sin esto, "vino de SIMBAD" es una promesa de
+    # la doc, no un hecho del archivo. Sólo los campos con valor: un `null` no tiene procedencia.
+    out["_autoridad"] = {campo: cfg.AUTORIDAD_CAMPO[campo]
+                         for campo in cfg.AUTORIDAD_CAMPO
+                         if out.get(campo) not in (None, "")}
+    # D-2 / INV-77: lo que la OTRA autoridad decía y no se adoptó. No se tira: sin registrarlo, el
+    # desacuerdo entre autoridades desaparece y la ficha afirma un valor único donde había dos.
+    if otras:
+        out["_otras_autoridades"] = otras
     return out
 
 
@@ -242,6 +262,9 @@ def main() -> int:
                   f"→ uso pl_bmasse={p['mass_earth']} M⊕ (≈ check {p['msini_check_earth']})")
 
     payload = {"star": name, "slug": args.slug, "host": host_info, "planets": planets,
+               # D-1: la fecha del snapshot es parte de la procedencia que la ficha publica —
+               # "de dónde salió" sin "cuándo" no alcanza: NEA cambia valores entre releases.
+               "consultado": dt.date.today().isoformat(),
                "source": "NASA Exoplanet Archive (pscomppars) + SIMBAD"}
     out = write_ground_truth(args.slug, payload)
     print(f"  → {out}")

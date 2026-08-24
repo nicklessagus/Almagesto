@@ -20,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.27.0"
+ALMAGESTO_VERSION = "1.28.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -581,6 +581,39 @@ def _extra_core_error(entry: str, bibcodes: list, motivo: str) -> str:
 # para proyectar el costo del ingest desde el conteo core, que es la otra mitad de la decisión que
 # el probe existe para tomar.
 TOKENS_POR_PAPER = 24_000
+
+
+# ── D-1 / INV-76: autoridad por campo del ground-truth ───────────────────────────────────────────
+#
+# Cada campo del espejo tiene UNA autoridad declarada. Si esa autoridad calla, el campo es `null`
+# **aunque la otra tenga el dato** — porque el contrato promete que el frontmatter es la capa
+# auditable, y un valor cuya procedencia depende de quién contestó primero no lo es: el consumidor
+# no puede distinguirlo de uno con una sola fuente.
+#
+# `spectral_type` ← SIMBAD porque es su dominio (clasificación espectral curada); el resto ← NEA
+# (pscomppars), que es la autoridad del sistema planetario. Hasta 1.27.0 `spectral_type` salía de
+# NEA y SIMBAD sólo rellenaba el hueco, sin registrar cuál ganó.
+#
+# La declaración vive acá y no en cada script porque la comparten tres consumidores
+# (`fetch_ground_truth` escribe, `make_notes` la publica en la cabecera de la ficha, `lint` la
+# vigila): repetirla es cómo se desincronizan.  @inv INV-76
+AUTORIDAD_CAMPO = {
+    "spectral_type": "simbad",
+    "teff_K": "nea",
+    "dist_pc": "nea",
+    "st_rotp_days": "nea",   # clave del JSON; en la ficha es `P_rot_days`
+    "mass_msun": "nea",
+    "Vmag": "nea",
+    "ra_deg": "nea",
+    "dec_deg": "nea",
+}
+
+# Nombre legible de cada autoridad, para la cabecera de la ficha.
+AUTORIDAD_NOMBRE = {"nea": "NASA Exoplanet Archive (pscomppars)", "simbad": "SIMBAD"}
+
+# Cómo se llama cada campo del JSON EN LA FICHA. La cabecera nombra lo que el lector ve en el
+# frontmatter, no la clave interna del ground-truth (`st_rotp_days` no aparece en ninguna ficha).
+CAMPO_EN_FICHA = {"st_rotp_days": "P_rot_days"}
 
 
 def load_extraccion(slug: str) -> dict:

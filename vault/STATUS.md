@@ -456,10 +456,31 @@ cabecera conviviendo son la misma complejidad permanente que un lector tolerante
 
 Ratchet **82 → 81**. Tier 0: 762 verdes. Tier 1: 48 (golden 35 → 37 categorías).
 
+### ✅ Tanda 4 cerrada (2026-08-24) — v1.28.0 · autoridad por campo + la procedencia EN la ficha
+
+| Qué | INV |
+|---|---|
+| `spectral_type` ← **SIMBAD**, el resto ← **NEA**. Si la autoridad declarada calla, el campo es `null` **aunque la otra tenga el dato** | INV-76 |
+| El JSON registra `_autoridad` (quién contestó cada campo) y `_otras_autoridades` (lo que la otra decía y no se adoptó); `DISPUTE_SOURCES` gana `nea`/`simbad` | INV-77 |
+| **Pedido del usuario:** la ficha declara arriba, en el blockquote de cabecera, de dónde salieron sus valores canónicos | — |
+
+**El defecto que cerró D-1:** hasta 1.27.0 `spectral_type` salía de NEA y SIMBAD sólo rellenaba el
+hueco. La autoridad efectiva dependía de **quién contestara primero**, y el JSON no registraba cuál
+ganó — para el consumidor, indistinguible de un valor con una sola procedencia.
+
+**La línea de cabecera** (`> _Ground-truth — …_`) dice qué autoridad respondió cada campo, la fecha
+del snapshot, **qué campos volvieron vacíos** y el puntero al JSON. Los vacíos se nombran aparte
+porque en el frontmatter "la autoridad contestó y no tiene el dato" y "nadie preguntó" se ven
+idénticos (`null` en los dos), y es justo la distinción que dice si vale la pena buscar ese valor
+en la literatura. Va arriba porque **el artefacto es lo que viaja**: una ficha copiada, exportada o
+leída por un agente llega sin la doc al lado.
+
+Ratchet **81 → 79**. Tier 0: 774 verdes. Tier 1: 48.
+
 ### Lo que sigue
-**Tanda 4 — autoridad por campo del ground-truth** (D-1, D-2): `spectral_type` ← SIMBAD, el resto
-← NEA; si la autoridad declarada calla, el campo es `null` aunque la otra tenga el dato. Cierra
-INV-76 e INV-77. Sin decisiones abiertas.
+**Tanda 5 — identidad y artefactos** (D-19, D-18): la identidad de un paper es `doi`/`arxiv_id`, un
+trabajo tiene **una sola** nota canónica y las demás versiones viven en `versions[]`. Medido en la
+instancia: 2 trabajos con dos notas cada uno. Cierra INV-84.
 
 ## 🔜 Cola de pendientes (al 2026-08-23)
 

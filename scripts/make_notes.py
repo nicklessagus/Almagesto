@@ -1131,6 +1131,75 @@ def stamp_concept_rollup(slug: str, dest) -> bool:
                                concept_rollup_table(concept_rollup_rows(slug)))
 
 
+# ── procedencia del ground-truth, EN la ficha (D-1) ──────────────────────────────────────────────
+#
+# Un lector abre la ficha y ve `teff_K: 5344` en el frontmatter sin nada que diga de dónde salió.
+# La procedencia estaba en la doc del framework, no en el artefacto — y el artefacto es lo que
+# viaja: una ficha copiada, exportada o leída por un agente llega sin la doc al lado. Va ARRIBA,
+# en el blockquote de cabecera donde ya vive el disclaimer de capa-LLM, porque es lo primero que se
+# lee y no se pierde al scrollear.
+GT_LINE_RE = re.compile(r"^> _Ground-truth.*\n", re.M)
+
+
+def ground_truth_line(slug: str) -> str:
+    """La línea de procedencia: qué autoridad respondió cada campo canónico, cuándo, y dónde mirar.
+
+    Se arma desde `_autoridad` del propio JSON (verdad de disco), no desde la tabla declarativa:
+    lo que la ficha publica tiene que ser lo que **efectivamente** contestó, no lo que debería
+    haber contestado. Si el JSON no existe, no se inventa nada."""
+    gt_file = cfg.GROUND_TRUTH / f"{slug}.json"
+    if not gt_file.exists():
+        return ""
+    try:
+        gt = json.loads(gt_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ""
+    host = cfg.as_map(gt.get("host") if isinstance(gt, dict) else None)
+    autoridad = cfg.as_map(host.get("_autoridad"))
+    if not autoridad:
+        return ""
+    def visible(campo: str) -> str:
+        return f"`{cfg.CAMPO_EN_FICHA.get(campo, campo)}`"
+
+    por_fuente: dict = {}
+    for campo, fuente in sorted(autoridad.items()):
+        por_fuente.setdefault(fuente, []).append(visible(campo))
+    if gt.get("planets"):
+        por_fuente.setdefault("nea", []).append("`planets[]`")
+    partes = [f"{', '.join(campos)} ← **{cfg.AUTORIDAD_NOMBRE.get(f, f)}**"
+              for f, campos in sorted(por_fuente.items())]
+    # Los campos canónicos que volvieron VACÍOS se nombran aparte. "La autoridad contestó y no
+    # tiene el dato" y "nadie preguntó" se ven idénticos en el frontmatter (`null` en los dos), y
+    # es justo la distinción que el lector necesita para saber si vale la pena buscarlo.
+    sin_dato = sorted(visible(c) for c in cfg.AUTORIDAD_CAMPO
+                      if c in host and host.get(c) in (None, "") and c not in autoridad)
+    vacios = f" · sin dato: {', '.join(sin_dato)}" if sin_dato else ""
+    cuando = gt.get("consultado")
+    fecha = f", consultado {cuando}" if cuando else ""
+    return ("> _Ground-truth — " + " · ".join(partes) + fecha + vacios +
+            ". Cada campo vale lo que dice **su** autoridad o `null`: si calla, no se rellena con "
+            f"literatura (va al cuerpo, citada). Detalle en `raw/ground_truth/{slug}.json`._\n")
+
+
+def stamp_ground_truth_line(slug: str, dest) -> bool:
+    """Estampa/actualiza la línea de procedencia. Mismo contrato que `stamp_estado`: cirugía
+    anclada en `_Generado con Almagesto…_`, idempotente, nunca inventa cabecera."""
+    if not dest.exists():
+        return False
+    new = ground_truth_line(slug)
+    text = dest.read_text(encoding="utf-8")
+    out = GT_LINE_RE.sub("", text, count=1)
+    if new:
+        i = out.find(GENERATOR_LINE)
+        if i < 0:
+            return False
+        out = out[:i] + new + out[i:]
+    if out == text:
+        return False
+    cfg.write_text_atomic(dest, out)
+    return True
+
+
 # ── D-12: las TRES fechas de una nota ────────────────────────────────────────────────────────────
 #
 # Una nota tiene tres estados que avanzan por separado y **pueden divergir sin que ninguno mienta**:
@@ -1204,7 +1273,7 @@ def write_star_note(slug: str, force: bool) -> None:
     if dest.exists() and not force:
         # la nota no se pisa; sólo se refresca el apéndice máquina con el ads.json vigente (#35)
         stamped = (stamp_excluded(slug, dest) | stamp_papers_table(slug, dest, "star")
-                   | stamp_estado(slug, dest))
+                   | stamp_ground_truth_line(slug, dest) | stamp_estado(slug, dest))
         cfg.print_seguro(f"  star: {dest.name} ya existe"
               + (" — apéndice Excluidos / lista de papers / puntero de búsqueda re-estampados" if stamped
                  else " (usa --force para regenerar)"))
@@ -1300,6 +1369,7 @@ SORT method ASC
     dest.parent.mkdir(parents=True, exist_ok=True)
     cfg.write_text_atomic(dest, body)
     stamp_papers_table(slug, dest, "star")
+    stamp_ground_truth_line(slug, dest)
     stamp_estado(slug, dest)
     cfg.print_seguro(f"  star: {dest.name} escrito")
 

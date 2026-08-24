@@ -572,3 +572,15 @@ def test_extra_core_via_fuera_de_vocabulario_detectado(toy_vault):
 
 def test_extra_core_ausente_es_lista_vacia(toy_vault):
     assert cfg.load_extra_core({}, entry="test_star") == []
+
+
+# ── Tanda 4 · D-1: autoridad por campo del ground-truth (INV-76) ────────────────────────────────
+
+def test_autoridad_por_campo_declarada():
+    """La declaración vive en UN lugar y la comparten los tres consumidores (fetch_ground_truth
+    escribe, make_notes la publica en la cabecera, lint la vigila). Repetirla es cómo se
+    desincronizan."""
+    assert cfg.AUTORIDAD_CAMPO["spectral_type"] == "simbad"
+    assert cfg.AUTORIDAD_CAMPO["teff_K"] == "nea"
+    assert cfg.AUTORIDAD_CAMPO["st_rotp_days"] == "nea"   # clave del JSON, no la de la ficha
+    assert all(v in ("nea", "simbad") for v in cfg.AUTORIDAD_CAMPO.values())

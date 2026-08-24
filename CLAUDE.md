@@ -140,7 +140,19 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   `planets[]` lleva `letter, P_days, K_ms, e, mass_earth, status` (de ground-truth NEA; `mass_earth`
   RV-only ≈ $m\sin i$). Los desacuerdos van en `disputes` **a nivel nota** (ver abajo), no dentro de
   `planets[]`.
-  ⛔ **Espejo puro de NEA (#70) — los campos de arriba valen lo que dice el ground-truth o NADA.**
+  ⛔ **Espejo con AUTORIDAD POR CAMPO (#70 + D-1) — cada campo vale lo que dice SU autoridad o NADA.**
+  `spectral_type` ← **SIMBAD**; `teff_K`, `dist_pc`, `P_rot_days` y los cinco campos de cada
+  `planets[]` ← **NEA** (pscomppars). Si **la autoridad declarada** calla, el campo queda `null`
+  **aunque la otra tenga el dato**: un valor cuya procedencia depende de quién contestó primero no
+  es auditable — el consumidor no puede distinguirlo de uno con una sola fuente. El JSON registra
+  en `_autoridad` **quién contestó cada campo**, y en `_otras_autoridades` lo que la otra decía y
+  no se adoptó (D-2: sin eso, el desacuerdo entre autoridades desaparece; se expresa como
+  `disputes` con `source: nea` / `source: simbad`).
+  **La ficha lo publica arriba**, en el blockquote de cabecera: una línea `> _Ground-truth — …_`
+  con qué autoridad respondió cada campo, la fecha del snapshot, **qué campos volvieron vacíos**
+  (distinto de "nadie preguntó", que en el frontmatter se ve igual: `null` en los dos) y el puntero
+  al JSON. Se estampa sola (`make_notes.py <slug>`, idempotente). Está ahí porque el **artefacto es
+  lo que viaja**: una ficha copiada, exportada o leída por un agente llega sin la doc al lado.
   `spectral_type`, `teff_K`, `dist_pc`, `P_rot_days` y los cinco campos de cada `planets[]` los
   copia el script del JSON de `vault/raw/ground_truth/`: si NEA no tiene el valor, el campo queda
   **null** y **no se rellena con literatura**. Los nulls de NEA son el caso **normal**, no la

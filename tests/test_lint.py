@@ -332,12 +332,14 @@ def test_disputa_sin_field_o_con_posicion_muda(toy_vault, capsys):
     ficha_con_disputas(toy_vault, [
         {"posiciones": [{"ref": "2020disD...1..1D"}, {"source": "ground_truth"}]},
         {"field": "b.e", "posiciones": [{"ref": "2020disD...1..1D"}, {"value": 0.3}]},
-        {"field": "b.P", "posiciones": [{"ref": "2020disD...1..1D"}, {"source": "nea"}]}])
+        {"field": "b.P", "posiciones": [{"ref": "2020disD...1..1D"}, {"source": "wikipedia"}]}])
     rc, out = run_lint(capsys)
     assert rc == 1
     assert "disputa sin `field`" in out
     assert "posición sin `ref` ni `source`" in out
-    assert "`source: nea` fuera del vocabulario" in out
+    # `nea` ENTRÓ al vocabulario con D-2 (la disputa entre autoridades es real desde D-1);
+    # el caso adversario del vocabulario cerrado se mantiene con una fuente inventada.
+    assert "`source: wikipedia` fuera del vocabulario" in out
 
 
 def test_disputa_con_formas_basura_no_crashea_el_lint(toy_vault, capsys):
@@ -1988,3 +1990,30 @@ def test_subconjunto_declarado_baja_a_backlog(toy_vault, capsys):
                         criterio="los 20 más citados + los 3 árbitros de la señal b")
     _, rep = run_lint_reporte(capsys)
     assert _n_recorte(rep) == 0
+
+
+def test_disputa_entre_autoridades_es_expresable(toy_vault, capsys):
+    """D-2 / INV-77: con `DISPUTE_SOURCES = ("ground_truth",)` las dos posiciones de una disputa
+    nea↔simbad decían lo mismo — el desacuerdo entre autoridades no tenía forma. Desde D-1 es un
+    caso real: las dos pueden traer `spectral_type` distinto, y el que no gana no se tira.
+    @inv INV-77"""
+    mk_note(toy_vault.STARS, "test_star",
+            {"tags": ["star"], "name": "Estrella Test", "slug": "test_star",
+             "disputes": [{"field": "spectral_type",
+                           "posiciones": [{"source": "simbad", "value": "K0V"},
+                                          {"source": "nea", "value": "G8V"}]}]}, "")
+    link_from_index(toy_vault, "test_star")
+    rc, rep = run_lint_reporte(capsys)
+    linea = [l for l in rep.splitlines() if l.startswith("## disputes mal formadas")][0]
+    assert linea.endswith("(0)")
+
+
+def test_source_inventado_sigue_bloqueando(toy_vault, capsys):
+    mk_note(toy_vault.STARS, "test_star",
+            {"tags": ["star"], "name": "Estrella Test", "slug": "test_star",
+             "disputes": [{"field": "spectral_type",
+                           "posiciones": [{"source": "wikipedia", "value": "K0V"},
+                                          {"source": "nea", "value": "G8V"}]}]}, "")
+    link_from_index(toy_vault, "test_star")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 1 and "wikipedia" in rep

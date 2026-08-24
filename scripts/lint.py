@@ -228,7 +228,12 @@ _SIN_MARCA = object()
 # una compatibilidad que nadie necesita (decisión del usuario, 2026-08-22 — la bóveda que existe se
 # migra con `python scripts/make_notes.py --migrate-disputes`, o se re-ingesta). Lo que sí se hace es
 # **detectarlo y bloquear**: una disputa vieja que el lector ignora en silencio es peor que un error.
-DISPUTE_SOURCES = ("ground_truth",)
+# Vocabulario de `posiciones[].source` en una disputa. D-2 / INV-77: con una sola entrada las dos
+# posiciones de una disputa nea↔simbad decían lo mismo, así que el desacuerdo ENTRE AUTORIDADES no
+# era expresable — y desde D-1 es un caso real: NEA y SIMBAD pueden traer `spectral_type` distinto,
+# y el que no gana no se tira. `ground_truth` se conserva por las disputas paper↔ground-truth.
+# @inv INV-77
+DISPUTE_SOURCES = ("ground_truth", "nea", "simbad")
 
 
 def note_disputes(fm: dict) -> list:

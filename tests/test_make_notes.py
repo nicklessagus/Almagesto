@@ -2048,3 +2048,67 @@ def test_estado_sin_ancla_no_inventa_cabecera(toy_vault):
     fuera.write_text("---\nname: x\n---\n# x\n\n> cabecera propia\n", encoding="utf-8")
     cfg.save_busqueda("test_star", {"fecha": "2026-01-01", "n_total": 1})
     assert mn.stamp_estado("test_star", fuera) is False
+
+
+# ── Tanda 4 · la ficha dice de dónde salieron sus valores canónicos (pedido del usuario) ─────────
+
+def test_cabecera_declara_la_procedencia_del_ground_truth(toy_vault):
+    """Un lector que abre la ficha ve valores en el frontmatter (`teff_K: 5344`) sin nada que diga
+    de dónde salieron. La procedencia estaba en la doc del framework, no en el artefacto — y el
+    artefacto es lo que viaja. Va ARRIBA, en el blockquote de cabecera, donde ya vive el disclaimer
+    de capa-LLM: es lo primero que se lee y no se pierde al scrollear."""
+    (cfg.GROUND_TRUTH / "test_star.json").write_text(json.dumps({
+        "slug": "test_star", "consultado": "2026-08-24",
+        "host": {"teff_K": 5344.0, "spectral_type": "K0V",
+                 "_autoridad": {"teff_K": "nea", "spectral_type": "simbad"}},
+        "planets": []}), encoding="utf-8")
+    mn.write_star_note("test_star", force=True)
+    linea = [l for l in (cfg.STARS / "test_star.md").read_text(encoding="utf-8").splitlines()
+             if l.startswith("> _Ground-truth")][0]
+    assert "SIMBAD" in linea and "spectral_type" in linea
+    assert "NASA Exoplanet Archive" in linea and "teff_K" in linea
+    assert "2026-08-24" in linea                       # cuándo se consultó
+    assert "null" in linea                             # la regla del espejo (#70)
+    assert "ground_truth/test_star.json" in linea      # dónde está el detalle
+
+
+def test_procedencia_va_antes_del_generador(toy_vault):
+    """Dentro del blockquote de cabecera, no suelta al final del archivo."""
+    (cfg.GROUND_TRUTH / "test_star.json").write_text(json.dumps({
+        "slug": "test_star", "host": {"teff_K": 5344.0, "_autoridad": {"teff_K": "nea"}},
+        "planets": []}), encoding="utf-8")
+    mn.write_star_note("test_star", force=True)
+    out = (cfg.STARS / "test_star.md").read_text(encoding="utf-8")
+    assert out.index("_Ground-truth") < out.index("_Generado con Almagesto")
+
+
+def test_procedencia_sin_ground_truth_no_inventa(toy_vault):
+    mn.write_star_note("test_star", force=True)
+    assert "_Ground-truth" not in (cfg.STARS / "test_star.md").read_text(encoding="utf-8")
+
+
+def test_procedencia_idempotente(toy_vault):
+    (cfg.GROUND_TRUTH / "test_star.json").write_text(json.dumps({
+        "slug": "test_star", "host": {"teff_K": 5344.0, "_autoridad": {"teff_K": "nea"}},
+        "planets": []}), encoding="utf-8")
+    mn.write_star_note("test_star", force=True)
+    dest = cfg.STARS / "test_star.md"
+    antes = dest.read_bytes()
+    assert mn.stamp_ground_truth_line("test_star", dest) is False
+    assert dest.read_bytes() == antes
+
+
+def test_procedencia_distingue_sin_dato_de_no_preguntado(toy_vault):
+    """En el frontmatter, "la autoridad contestó y no tiene el dato" y "nadie preguntó" se ven
+    idénticos: `null` en los dos casos. La cabecera los separa — es lo que dice si vale la pena
+    buscar ese valor en la literatura o no."""
+    (cfg.GROUND_TRUTH / "test_star.json").write_text(json.dumps({
+        "slug": "test_star", "consultado": "2026-08-24",
+        "host": {"teff_K": 5344.0, "st_rotp_days": None, "spectral_type": None,
+                 "_autoridad": {"teff_K": "nea"}},
+        "planets": []}), encoding="utf-8")
+    mn.write_star_note("test_star", force=True)
+    linea = [l for l in (cfg.STARS / "test_star.md").read_text(encoding="utf-8").splitlines()
+             if l.startswith("> _Ground-truth")][0]
+    assert "sin dato: `P_rot_days`, `spectral_type`" in linea
+    assert "`st_rotp_days`" not in linea      # se nombra como lo ve el lector en la ficha
