@@ -1516,3 +1516,25 @@ def test_main_aplica_la_regla_del_tema_a_la_query_directa(toy_vault, toy_classif
     assert por_bib["2020ajenB...1B"]["relevant"] is False
     assert por_bib["2020ajenB...1B"]["why_excluded"] == "sin la faceta propia del tema"
     assert "regla del tema (D-26)" in capsys.readouterr().out
+
+
+def test_puerta_2_con_citas_desconocidas_no_evalua_en_vez_de_excluir(toy_vault, monkeypatch):
+    """`citation_count: None` significa **no sé**, no «pocas». Si la puerta 2 lo tratara como 0,
+    todo paper venido de arXiv quedaría no-fundacional por construcción. Se declara que la puerta
+    no se pudo evaluar, con el motivo — INV-87 aplicado a la clasificación."""
+    monkeypatch.setattr(qa, "FACET_PATTERNS", {"rv": re.compile("radial velocity", re.I)})
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", [])
+    tema = _tema(fundacional_min_citas=1000)
+    rec = _rec("Independent component analysis: algorithms", citas=None)
+    _, core, why = qa.classify_theme(rec, tema)
+    assert core is False
+    assert "no se pudo evaluar" in why and "sin dato de citas" in why
+
+
+def test_puerta_2_con_pocas_citas_dice_otra_cosa(toy_vault, monkeypatch):
+    """El control: 3 citas SÍ es un dato, y el motivo tiene que distinguirse del anterior."""
+    monkeypatch.setattr(qa, "FACET_PATTERNS", {"rv": re.compile("radial velocity", re.I)})
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", [])
+    _, core, why = qa.classify_theme(_rec("Independent component analysis", citas=3),
+                                     _tema(fundacional_min_citas=1000))
+    assert core is False and "no se pudo evaluar" not in why

@@ -754,13 +754,23 @@ def classify_theme(rec: dict, meta: dict) -> tuple[list[str], bool, str | None]:
         return facets_globales, False, f"doctype: {doctype}"
 
     umbral = (meta or {}).get("fundacional_min_citas")
-    puerta2 = isinstance(umbral, int) and (rec.get("citation_count") or 0) >= umbral
+    citas = rec.get("citation_count")
+    # `None` es **no sé**, no «pocas»: arXiv no publica el conteo. Tratarlo como 0 dejaría a todo
+    # paper venido de ese backend fuera de la puerta 2 por construcción, que es el cero inventado
+    # que INV-87 prohíbe — un chequeo que no se puede evaluar se DECLARA, no se resuelve en contra.
+    p2_evaluable = isinstance(umbral, int) and citas is not None
+    puerta2 = p2_evaluable and citas >= umbral
     puerta3 = core_global
     if puerta2 or puerta3:
         return facets_globales, True, None
     if umbral is None:
         return facets_globales, False, ("ninguna puerta abre; la 2 (fundacional) está apagada "
                                         "porque el tema no declara `fundacional_min_citas`")
+    if citas is None:
+        return facets_globales, False, ("la lente astro no lo trae y la puerta 2 (fundacional) "
+                                        "**no se pudo evaluar**: el registro viene sin dato de "
+                                        "citas (arXiv no lo publica) — enriquecer por DOI o "
+                                        "juzgarlo a mano")
     return facets_globales, False, "ninguna puerta abre (ni fundacional ni lente astro)"
 
 

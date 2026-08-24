@@ -41,6 +41,8 @@ def work(oid="W1", doi="10.1/a", title="Independent component analysis", year=19
             "referenced_works": [f"https://openalex.org/{r}" for r in refs],
             "cited_by_count": cited,
             "primary_location": {"source": {"display_name": "Signal Processing"}},
+            "keywords": [{"display_name": "Periodogram"}, {"display_name": "Estimator"}],
+            "topics": [{"display_name": "Astronomical Observations"}],
             "authorships": [{"author": {"display_name": "P. Comon"}}]}
 
 
@@ -171,3 +173,18 @@ def test_4xx_no_reintenta(monkeypatch):
     with pytest.raises(real_requests.HTTPError):
         list(oa.works("x"))
     assert len(calls) == 1, "un 4xx se reintentó y no debería"
+
+
+def test_las_keywords_de_openalex_llegan_a_la_lente():
+    """La lente matchea sobre título + abstract + **keywords**. OpenAlex las tiene (medido: 13
+    `keywords` y 3 `topics` en un paper real) y el cliente no las pedía en el `select`, así que
+    `to_record` devolvía `keyword: []` y la lente buscaba en dos de tres fuentes — perdiendo señal
+    en silencio, que es peor que no tenerla."""
+    assert "keywords" in oa.SELECT and "topics" in oa.SELECT
+    r = oa.to_record(work())
+    assert r["keyword"] == ["Periodogram", "Estimator", "Astronomical Observations"]
+
+
+def test_sin_keywords_no_revienta():
+    w = work(); w.pop("keywords"); w.pop("topics")
+    assert oa.to_record(w)["keyword"] == []

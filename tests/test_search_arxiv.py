@@ -107,3 +107,13 @@ def test_el_registro_pasa_por_classify_record(monkeypatch):
 def test_feed_vacio_no_revienta(monkeypatch):
     fake_get(monkeypatch, text='<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"/>')
     assert sx.search("nada") == []
+
+
+def test_citas_desconocidas_son_None_no_cero(monkeypatch):
+    """arXiv **no publica** el conteo de citas. Poner `0` es afirmar «no lo cita nadie» sobre un
+    dato que nadie miró — el mismo cero inventado que INV-87 prohíbe en el lint y que #70 prohíbe
+    en el frontmatter (si la autoridad calla, el campo va `null`). Y tiene consecuencia real: la
+    puerta 2 de D-26 exige `citation_count >= umbral`, así que con 0 un paper fundacional
+    descubierto por arXiv quedaba excluido **por construcción**."""
+    fake_get(monkeypatch)
+    assert sx.search("x")[0]["citation_count"] is None

@@ -70,7 +70,11 @@ def to_record(entry) -> dict:
         "doi": doi,
         "doctype": "eprint",
         "bibstem": "arXiv",
-        "citation_count": 0,      # arXiv no lo publica; queda en 0, no en None (schema compartido)
+        # arXiv NO publica el conteo de citas. Va `None` = «no lo sé», nunca 0: un 0 afirma
+        # «no lo cita nadie» sobre un dato que nadie miró, y aguas abajo la puerta 2 de D-26
+        # (`citation_count >= umbral`) lo leería como «no es fundacional» — excluyendo por
+        # construcción justo a los papers que esa puerta existe para dejar entrar.
+        "citation_count": None,
         "keyword": cats,          # las categorías SON las keywords que la lente puede leer
         "via": "arxiv",
     }

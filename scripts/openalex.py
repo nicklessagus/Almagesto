@@ -39,7 +39,10 @@ TIMEOUT = 60
 MAX_ATTEMPTS = 5      # OpenAlex 504ea a rachas; medido en vivo el 2026-08-24 (ver `_get`)
 BACKOFF_S = 2.0
 SELECT = ("id,doi,title,publication_year,referenced_works,referenced_works_count,"
-          "cited_by_count,authorships,primary_location,abstract_inverted_index,type")
+          "cited_by_count,authorships,primary_location,abstract_inverted_index,type,"
+          # `keywords`/`topics`: la lente matchea título+abstract+KEYWORDS, y sin pedirlas
+          # `to_record` devolvía `keyword: []` — la lente buscaba en dos de tres fuentes.
+          "keywords,topics")
 HEADERS = {"User-Agent": f"Almagesto/{cfg.ALMAGESTO_VERSION} (academic literature vault)"}
 
 
@@ -104,7 +107,9 @@ def to_record(work: dict) -> dict:
         "doctype": work.get("type"),
         "bibstem": venue,
         "citation_count": work.get("cited_by_count", 0),
-        "keyword": [],
+        "keyword": [n for campo in ("keywords", "topics")
+                    for x in (work.get(campo) or [])
+                    for n in [(x or {}).get("display_name")] if n],
         "via": "openalex",
         "openalex_id": work.get("id"),
     }
