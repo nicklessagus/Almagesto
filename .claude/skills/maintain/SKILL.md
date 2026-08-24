@@ -15,7 +15,7 @@ ficha/concepto, eso es `append-knowledge`, no un refresh: A barre por query lo n
 **Invariante que rige todo:** la cadena de scripts es **idempotente** (no pisa). Refrescar es seguro;
 lo que **nunca** se pisa sin decisión explícita es la **extracción LLM** (`make_notes --force` la
 regenera → sólo con confirmación) y el **ground-truth** (`fetch_ground_truth --force`). Todo cambio
-cierra con **verify-citations** (si tocó prosa con `[[bibcode]]`) + **lint en 0** + `log`, y se
+cierra con **verify-citations** (si tocó prosa con `[[bibcode]]`) + **`lint.py --cierre` en 0** + `log`, y se
 **pregunta antes de `push`**.
 
 ---
@@ -103,7 +103,7 @@ Progreso del refresh de <entidad>:
    - entró por la **query** y la lente lo clasifica core → o ajustás la lente y re-clasificás
      (sub-modo D), o lo dejás con `relevance: low` en vez de borrarlo, o asumís que va a volver.
    Decidilo explícitamente y dejalo en el `log`: "borrado y no durable" es un estado, no un olvido.
-5. Cierre: **lint en 0** (0 wikilinks rotos / thesis_links colgados / disputes.ref sin destino) → `log`
+5. Cierre: **`lint.py --cierre` en 0** (0 wikilinks rotos / thesis_links colgados / disputes.ref sin destino) → `log`
    (qué se borró y por qué) → commit → preguntar push.
 
 ## C. Renombrar un slug
@@ -116,7 +116,7 @@ Progreso del refresh de <entidad>:
    ```
 2. Ajustar `data_local` si cambió y el nombre en la matriz. Los wikilinks internos son por **nombre de
    nota** (sobreviven a mover carpeta pero **no** a renombrar el archivo) → actualizarlos todos.
-3. Cierre: lint en 0 → `log` → commit → preguntar push.
+3. Cierre: `lint.py --cierre` en 0 → `log` → commit → preguntar push.
 
 ## D. Re-clasificar tras cambiar la regla de relevancia
 Cuando editaste `objective.yaml` (vía `setup`) y el corte core/no-core cambió — sea porque tocaste
@@ -145,6 +145,9 @@ p. ej. volviste obligatoria la faceta del eje para frenar el ruido del chaining)
 
 ## E. Resolver el backlog del lint
 Pasada de higiene sobre lo que `lint.py` marca como backlog/WARN (no bloqueante, pero se acumula).
+**Esta pasada corre SIN `--cierre`** — es el otro lado de R-1: acá los pares de verificación
+vencidos son una lista para ir resolviendo, no un gate. Frenar una bóveda con deuda vieja un
+martes cualquiera no frena nada útil; el gate es el cierre de la operación que tocó la nota.
 
 > ⛔ **Los huérfanos NO entran acá: bloquean.** Una nota-concepto sin links entrantes es
 > **inalcanzable** desde la bóveda, y `lint.py` la cuenta en `n_block` (exit 1, igual que un wikilink

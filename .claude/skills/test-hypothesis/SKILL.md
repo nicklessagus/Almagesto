@@ -69,7 +69,7 @@ Los pasos 4–9 corren **sólo si el usuario pide archivar**:
    `inferencia`) y dejar el bloque `## Verificación de citas`. Clave acá: el `bearing`
    (supports/challenges) de cada paper debe reflejar lo que el texto **realmente** dice.
 
-8. **Chequeo de salud**: correr `python scripts/lint.py` antes de commitear. Debe quedar en **0**
+8. **Chequeo de salud**: correr `python scripts/lint.py --cierre` antes de commitear. Debe quedar en **0**
    en las **categorías bloqueantes**: cuáles son lo decide el `exit code` del lint (1 si hay), y la
    lista canónica vive en `CLAUDE.md` — **no la copies acá**, que es cómo se desincronizó antes. La
    **fuga de implementación** y las **citas no verificables** son WARN a revisar a mano (los "campos

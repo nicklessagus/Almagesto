@@ -363,10 +363,48 @@ casi-falla con forma conocida", no "el umbral está validado".
 > "cuántos ilegibles" (dio 0/672 y no dice nada) sino el **margen al corte** y los archivos más
 > cerca de él.
 
+### ✅ Tanda 1 cerrada (2026-08-24) — v1.25.0 · el ancla
+
+El camino crítico del plan: de ella dependen D-31 (refresh dirigido), D-41/D-45 (marcar pares al
+cambiar la fuente), D-12 (la fecha de verificación por par) y D-39.
+
+| Issue | Qué cerró |
+|---|---|
+| **1.1** | `scripts/lib_blocks.py`: `split_blocks`, `normalize_ws`, `block_anchor`, `sha10`/`source_hash`, `pairs_of` |
+| **1.2** | `parse_verif_table` + categoría del lint con los cinco sub-casos y el flag **`--cierre`** |
+| **1.3** | plantilla del skill con las dos columnas, D-5 documentado, `--cierre` cableado en los seis skills de cierre, #56 retirado como mecanismo principal |
+
+**Cómo funciona.** Cada par (afirmación, cita) lleva dos hashes en su fila del bloque de
+verificación: el **ancla** (sha256 del bloque markdown normalizado — reflowear no la mueve, cambiar
+un número sí) y el **hash de fuente** (del `.txt` leído). El lint recalcula los dos y reporta *sin
+verificar* / *vencido por edición* / *vencido por fuente* / *fila huérfana*; aparte y bloqueante
+siempre, el bloque con *plantilla vieja* (sin columnas de hash) — no es "cero vencidos", es un
+bloque que nadie puede evaluar.
+
+**R-1 en el código:** sin flag = pasada periódica (backlog); `--cierre` = la operación no cierra.
+Los skills de cierre lo invocan con el flag; la pasada de higiene de `maintain`, sin él.
+
+**Costo: cero lecturas extra.** El hash de fuente sale de la MISMA lectura que ya hace `is_legible`
+(el 77% del tiempo del lint). Medido: el lint de este repo sigue en 0,06 s y `test_escala.py` pasa
+sin mover su ancla de ratio.
+
+**Dos cosas medidas que corrigen al plan:**
+1. **El encabezado de sección no llegaba a ser ámbito de herencia.** `CLAUDE.md` nombra tres
+   —caption, párrafo, encabezado— pero resolver la herencia en una segunda pasada sobre los bloques
+   citables lo perdía: un encabezado no es un bloque citable, así que no estaba ahí para
+   consultarlo.
+2. **Los números de partición del plan no se reproducen.** Medido con `lib_blocks` sobre
+   Almagesto-RV: **1.205 pares** (756 ítems, 264 párrafos, 176 filas, 9 blockquotes), 1.070 con cita
+   propia y 135 heredados (11%). El plan citaba 761/560/141/54/6, que cuentan sólo `[[bibcode]]`
+   explícitos de otra población de notas.
+
+Los cinco sub-casos del lint están **auditados por mutación**: cada uno rompe su test y ningún otro.
+Ratchet **88 → 86** (INV-78, INV-79). Tier 0: 721 verdes. Tier 1: 48 (golden 31 → 33 categorías).
+
 ### Lo que sigue
-**Tanda 1 — el ancla** (D-4 + D-20 + D-5), el camino crítico: `scripts/lib_blocks.py` (partición en
-bloques, `block_anchor`, `source_hash`, `pairs_of`), el bloque de verificación con las dos columnas
-de hash, y la categoría "pares vencidos" del lint con **`--cierre`** (R-1, decidida hoy).
+**Tanda 2 — registro acumulativo y escotillas** (D-28/D-57/D-58). Antes del issue 2.2 hay que
+resolver **R-6** (quién estampa `cadena` cuando un script corre suelto) y en 2.x aparece **R-2** (la
+forma dura de `extra_core`).
 
 ## 🔜 Cola de pendientes (al 2026-08-23)
 

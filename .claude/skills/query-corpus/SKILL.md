@@ -63,7 +63,7 @@ usar `test-hypothesis`).
    (bajar la afirmación a lo que dice la fuente, reasignar la cita al bibcode correcto, o marcar
    `inferencia`) y dejar el bloque `## Verificación de citas` en la nota.
 
-6. **Chequeo de salud (si se escribió en `vault/wiki/`)**: correr `python scripts/lint.py` antes de
+6. **Chequeo de salud (si se escribió en `vault/wiki/`)**: correr `python scripts/lint.py --cierre` antes de
    commitear. Debe quedar en **0** en las **categorías bloqueantes**: cuáles son lo decide el
    `exit code` del lint (1 si hay), y la lista canónica vive en `CLAUDE.md` — **no la copies acá**,
    que es cómo se desincronizó antes. La **fuga de implementación** y las **citas no verificables**

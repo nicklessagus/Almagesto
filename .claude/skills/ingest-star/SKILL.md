@@ -29,7 +29,7 @@ Progreso del ingest de <estrella>:
 - [ ] 4  auto-revisión de autosuficiencia
 - [ ] 5  bookkeeping (index, log, matriz, STATUS)
 - [ ] 5b verify-citations sobre la ficha + notas nuevas
-- [ ] 6  lint en 0 → commit → preguntar push
+- [ ] 6  `lint.py --cierre` en 0 → commit → preguntar push
 ```
 
 1. **Resolver el slug.** Buscar la estrella en `vault/config/stars.yaml`. Si no está, agregarla con

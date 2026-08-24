@@ -463,7 +463,21 @@ distintivo** de la afirmación, la mera cercanía temática no alcanza). `no-sop
 **afirma lo contrario** → no es (sólo) cita rota: es corrección de la nota o **disputa** a taguear
 (`disputes` con posiciones explícitas, #71). Cada falla se **resuelve** (bajar la afirmación
 a lo que dice la fuente, reasignar la cita al bibcode correcto, marcar **`inferencia`**, o taguear la
-disputa) y se deja un bloque `## Verificación de citas` en la nota. El subagente contesta además, **en todos los casos**, si el paper
+disputa) y se deja un bloque `## Verificación de citas` en la nota — **una fila por par**, con dos
+columnas de hash (**el ancla**, D-4/D-20):
+`| # | Afirmación (extracto) | Fuente | Veredicto | Score | Evidencia | Ancla | Hash fuente |`.
+El **ancla** es el sha256 (10 hex) del **bloque markdown normalizado** que contiene la cita
+—párrafo / fila / ítem / blockquote—: reflowear la nota **no** la mueve, cambiar un número **sí**, y
+una fila sin `[[bibcode]]` propio hereda el del caption hasheando **los dos** bloques. El **hash de
+fuente** es el del `.txt` que se leyó, y es lo único que detecta que el PDF se **re-extrajo** y la
+fuente ya no dice lo mismo **sin que la nota se haya tocado**. Los dos los calcula
+`scripts/lib_blocks.py` (`pairs_of`, `source_hash`), el mismo código que después los chequea: no se
+escriben a ojo. ⛔ **Sin fila no hay dónde colgar el ancla** — colapsar las soportadas en un párrafo
+de prosa y dejar en la tabla sólo las que fallaron deja al lint sin poder distinguir "verificada" de
+"nunca se miró".
+**La nota nace 100% verificada (D-5):** al armar una ficha o un concepto se verifica **todo**; el
+estado *"sin verificar"* sólo puede aparecer **después**, por una edición. Eso es lo que hace viable
+el chequeo — el caso normal es que nada cambió y el lint calla, así que cuando habla hay algo real. El subagente contesta además, **en todos los casos**, si el paper
 afirma eso **bajo condiciones** que la nota no dice (#74): la afirmación pelada sí está en la fuente,
 así que el veredicto es `soportada` y la **sobre-generalización pasaba entera** — la nota no afirma
 falso, afirma **de más**. Se reporta como hallazgo aparte y se resuelve agregando la condición (en un
@@ -595,12 +609,22 @@ puntual, no la síntesis durable de un sujeto— y la nota **no-core** (`relevan
 `--all`) no entra: no se le pide aterrizar en ninguna síntesis. La **cobertura** (concepto/hipótesis
 sin ninguna cita `[[bibcode]]` → afirma sin fuente) es **backlog** que el lint surface para ir citando;
 ídem la **cobertura de verificación** (query/concepto **con** citas pero **sin** bloque
-`## Verificación de citas` → nunca pasó por `verify-citations`: correr el skill) y la **verificación
+`## Verificación de citas` → nunca pasó por `verify-citations`: correr el skill).
+Los **pares de verificación vencidos** (D-4/D-20) son la medida fina de lo mismo, por **par** y no
+por archivo: *sin verificar* (hay una afirmación citada sin fila), *vencido por edición* (el ancla
+ya no coincide), *vencido por fuente* (el `.txt` cambió), *fila huérfana* (la afirmación se borró).
+**Dos severidades, un solo detector (R-1):** sin flag es la **pasada periódica** y reporta como
+backlog; con **`python scripts/lint.py --cierre`** cuentan para el exit — es el paso de cierre de
+toda operación que tocó la nota, donde un par sin verificar significa que **no terminaste**. Los
+skills de cierre lo invocan con el flag; la pasada de higiene de `maintain`, sin él. Aparte y
+**bloqueante siempre**, el **bloque con plantilla vieja** (sin las columnas de hash): no es "cero
+vencidos", es un bloque que nadie puede evaluar. Sigue existiendo la **verificación
 stale** (la nota se editó **después** de la fecha de su bloque —lo que pasa al ampliarla con
 `append-knowledge` o refrescarla— así que las afirmaciones nuevas nunca pasaron por el fan-out pero
 quedan bajo un encabezado que se lee como vigente: es el modo de falla de "afirmar de menos"
 aplicado a la garantía misma; el lint lo mide por `git` contra la fecha del encabezado —por eso el
-bloque **debe** llevar fecha—; **fuera de un repo no degrada a silencio**: el chequeo cae en la
+bloque **debe** llevar fecha—. **Ya no es el mecanismo principal**: las anclas lo reemplazan con
+granularidad de par, y esto queda como **red** para notas con bloque y sin tabla parseable; **fuera de un repo no degrada a silencio**: el chequeo cae en la
 categoría **⛔ No evaluado** y cuenta para el exit, porque un `stale (0)` que nadie midió se lee
 como "todo al día" (D-43). La rama "bloque sin fecha" no necesita git y sigue corriendo siempre).
 La **cabecera no estampable** (#69: una ficha o concepto **sin** la línea

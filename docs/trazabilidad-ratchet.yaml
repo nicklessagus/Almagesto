@@ -26,7 +26,7 @@
 # existe. Ver `vault/STATUS.md`.
 
 medido_en: "2026-08-24"
-almagesto_version: "1.24.0"
+almagesto_version: "1.25.0"
 contrato_invariantes: 91
 
 techos:
