@@ -309,6 +309,34 @@ resuelve con la identidad de D-19.
 
 ---
 
+## 🧪 Pendiente declarado — evaluar cada motor de búsqueda por separado (2026-08-24)
+
+Decisión del usuario: cuando la Tanda 7 esté cerrada, **probar las búsquedas motor por motor, a
+mano y caso por caso**. No es trabajo de suite: es juicio sobre si lo que devuelve cada uno sirve.
+
+**Qué está probado hoy y qué no.** Los tres backends tienen tests con red falsa (parseo,
+paginación, normalización, reintentos) y un smoke test contra la API real. Eso cubre *que el
+cliente funcione*. **No cubre lo único que importa acá: si la query trae los papers correctos.**
+
+Lo que hay que mirar en esa sesión, por motor:
+
+- **arXiv** — `search()` arma `all:<query>` cuando la query no trae prefijo. Nadie evaluó si esa
+  es la sintaxis correcta para un tema real, ni si `cat:` acota como se espera. La corrida de
+  prueba con `"independent component analysis"` + `cat:astro-ph.IM` trajo 3 resultados de los
+  cuales uno era el plan de muestras de OSIRIS-REx: **precisión sin medir**.
+- **OpenAlex** — el filtro es un lenguaje propio (`concepts.id:`, `title.search:`, `doi:`) y
+  todavía no se decidió cuál se usa para descubrir. En la prueba usé un `concepts.id` que resultó
+  ser de química y devolvió papers de azúcares y óxido de grafito.
+- **ADS** — es el único con query Solr ya validada por uso real, pero su interacción con la regla
+  del tema (D-26) no se probó contra un corpus.
+
+**Rarezas por motor ya medidas, para no re-descubrirlas**: arXiv **no publica citas** (va `None`,
+y la puerta 2 lo declara no evaluable); OpenAlex sirve el abstract como **índice invertido**, no da
+bibcodes (se sintetiza `AAAA+Autor`), y **504ea a rachas** (por eso el reintento); ADS cubre mejor
+las referencias pre-2000 (65% vs 16%) y OpenAlex las off-ADS (14 papers sólo suyos contra 3).
+
+---
+
 ## ❓ Decisión abierta — la puerta 2 («fundacional en su campo») no está justificada (2026-08-24)
 
 El usuario preguntó dos veces de dónde salen los umbrales de citas y la segunda fue sobre la puerta
