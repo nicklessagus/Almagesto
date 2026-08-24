@@ -171,8 +171,10 @@ de actividad).
 **La ficha de estrella.** Arriba, el frontmatter: el **contrato máquina-legible** que consume un
 agente o un script (`teff_K`, `P_rot_days`, `planets[]` con P/K/e/m·sini, `methods_applied`; cuando
 dos fuentes discrepan sobre un eje se suma `disputes`, con una posición por fuente). Abajo, fuera de
-cuadro, la prosa destilada de los papers y los roll-ups **estampados** que el ingest materializa
-(`## Papers`; `## Planetas` y `## Métodos aplicados` todavía son Dataview).
+cuadro, la prosa destilada de los papers y los **tres** roll-ups que el ingest materializa
+(`## Papers`, `## Planetas` y `## Métodos aplicados`): son tablas estampadas, no bloques Dataview —
+un agente que abre el `.md` tiene que ver los **resultados**, no el código de una query cuyo plugin
+ni siquiera está versionado.
 La captura es de una instancia de julio: el schema creció desde entonces (ver el backlog de capturas
 en `vault/STATUS.md`).
 

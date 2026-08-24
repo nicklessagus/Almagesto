@@ -470,3 +470,16 @@ def test_triage_file_es_el_registro_versionado(toy_vault):
     assert ruta == cfg.registro_path("test_star")
     assert ruta.parent == cfg.REGISTRO and ruta.suffix == ".yaml"
     assert "build" not in ruta.parts, "el juicio NO puede vivir en scratch (#51)"
+
+
+def test_sintesis_se_declara_y_no_pisa_lo_demas(toy_vault, monkeypatch):
+    """INV-82: la fecha de síntesis **se declara** — no se puede derivar (git fecha el ARCHIVO, y
+    una cirugía de cabecera cuenta igual que reescribir el resumen; fuera de un repo no da nada)."""
+    # @inv INV-82
+    cfg.save_busqueda("test_star", {"fecha": "2026-01-01", "n_total": 3})
+    assert run_main(monkeypatch, ["test_star", "--sintesis", "--n-papers", "12",
+                                  "--reason", "los 12 core"]) == 0
+    reg = cfg.load_registro("test_star")
+    assert reg["sintesis"]["n_papers"] == 12 and reg["sintesis"]["nota"] == "los 12 core"
+    assert reg["sintesis"]["fecha"] and reg["sintesis"]["version"]
+    assert len(reg["busquedas"]) == 1, "declarar la síntesis no toca el historial de búsquedas"

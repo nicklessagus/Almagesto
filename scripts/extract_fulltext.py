@@ -143,12 +143,11 @@ def ocr_pdf(pdf: Path) -> str | None:
 
 
 
-def _flags_usados(args) -> list:
+def _flags_usados(args, ap=None) -> list:
     """Los flags no-default de esta corrida, para dejarlos en `cadena:` del registro (D-48/D-57).
     Son las **escotillas**: `--force`, `--yes`, `--all` cambian lo que la corrida hizo, y sin
     registrarlas la traza dice "corrió make_notes" sobre dos corridas que no hicieron lo mismo."""
-    return sorted(f"--{k.replace('_', '-')}" for k, v in vars(args).items()
-                  if v is True and k not in ("theme",))
+    return cfg.flags_usados(args, ap)
 
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
@@ -196,7 +195,11 @@ def main() -> int:
         # D-18: el mismo bibcode ya extraído bajo otro slug es el MISMO texto — copiarlo evita
         # re-correr pdftotext/OCR (el paso más caro después de la red). Se reusa sólo si la copia
         # es LEGIBLE: una copia mojibake no ahorra nada, sólo propaga el problema a otro slug.
-        if not args.force and not out.exists():
+        # `not args.ocr`: el atajo D-18 copia el `.txt` que otro slug ya extrajo, y ese `.txt` es de
+        # **pdftotext**. Con `--ocr` (que existe justamente para forzar la vía OCR aunque la capa de
+        # texto pase el umbral) el atajo lo dejaba sin correr, sin header `source: ocr` y con
+        # `fulltext_source: pdftotext`: la escotilla no hacía nada y no lo decía.
+        if not args.force and not args.ocr and not out.exists():
             otro = cfg.artefacto_en_otro_slug(cfg.FULLTEXT, args.slug, pdf.stem, ".txt")
             if otro is not None:
                 prev = otro.read_text(encoding="utf-8", errors="replace")
@@ -281,7 +284,7 @@ def main() -> int:
         print(f"  notas: {stamped} con fulltext:/fulltext_source:/pdf_source: estampados "
               "(contrato máquina)")
     if not failed:
-        cfg.save_paso(args.slug, "extract_fulltext", flags=_flags_usados(args))
+        cfg.save_paso(args.slug, "extract_fulltext", flags=_flags_usados(args, ap))
     return 1 if failed else 0
 
 

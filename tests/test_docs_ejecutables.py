@@ -17,8 +17,11 @@ RAIZ = Path(__file__).resolve().parent.parent
 DOCS = RAIZ / "docs"
 SKILLS = RAIZ / ".claude" / "skills"
 
-# Docs FECHADOS: son bitácora de lo que se planificó/decidió ese día, no contrato vigente. Sus
-# referencias muertas son correctas (describen el estado de entonces).
+# Docs FECHADOS: bitácora de lo que se planificó/decidió ese día, no contrato vigente — sus
+# referencias muertas son correctas (describen el estado de entonces). Desde 1.36.0 viven en
+# `docs/internal/`, que **no se versiona**: hablan en lenguaje interno (issues, "tandas", D-N) y un
+# plan es lo que se iba a hacer, no lo que el sistema garantiza. El prefijo se conserva por si
+# alguno vuelve a `docs/`, y porque el barrido de abajo sólo mira `docs/*.md` (no `docs/internal/`).
 HISTORICOS = ("plan-implementacion-", "revision-contrato-", "reconciliacion-")
 
 
@@ -82,6 +85,25 @@ def test_los_archivos_de_config_que_nombra_la_doc_existen():
     assert faltan == [], "config nombrada por la doc que no existe:\n  " + "\n  ".join(faltan)
 
 
+# Flags que la doc nombra y NO son de `scripts/`: son de herramientas de terceros o del tooling
+# meta. Se listan a mano, con su dueño — una lista de excepciones sin dueño se vuelve un colador.
+FLAGS_AJENOS = {
+    "--check",        # `trace_invariants.py --check` … y `tools/mutar.py`
+    "--diff", "--todo", "--ratchet",   # tools/mutar.py
+    "--markdown",     # npx defuddle parse --markdown
+    "--no-verify",    # git commit
+    "--help",         # lo agrega argparse solo, no aparece en ningún `add_argument`
+}
+
+# Flags que la doc nombra **precisamente porque ya no existen**. No van con los ajenos: el motivo es
+# otro y la distinción importa — un flag retirado que se documenta como retirado es correcto, y uno
+# retirado que la doc sigue mandando a usar es un bug. Cada uno con su decisión.
+FLAGS_RETIRADOS = {
+    "--no-triage": "D-48 — se eliminó: permitía que un candidato ya descartado volviera a entrar "
+                   "en silencio. La doc lo nombra para decir que no está.",
+}
+
+
 def _flags_declarados(script: Path) -> set:
     """Los `--flag` que el argparse del script declara. Se leen del TEXTO y no importando el módulo:
     varios scripts de `scripts/` leen `objective.yaml` al importarse y abortan si la bóveda no está
@@ -115,5 +137,128 @@ def test_todo_flag_que_nombra_la_doc_existe():
                 for flag in re.findall(r"(?<![\w-])(--[a-z][\w-]+)", m.group(2)):
                     if flag not in declarados:
                         faltan.append(f"{etiqueta}: scripts/{m.group(1)}.py {flag}")
+        # Y los flags nombrados EN PROSA, sin el script en la misma línea: `--topic` sobrevivió a
+        # R-5 en `docs/operacion.md` porque la frase decía «corre la cadena de arriba con `--topic`»
+        # y el barrido de arriba, anclado en `scripts/x.py`, no lo veía. Un flag inventado en prosa
+        # se copia igual que uno en un bloque de comandos.
+        universo = set().union(*(_flags_declarados(f) for f in sorted((RAIZ / "scripts").glob("*.py"))))
+        for flag in set(re.findall(r"`(--[a-z][\w-]+)`", texto)):
+            if flag not in universo and flag not in FLAGS_AJENOS and flag not in FLAGS_RETIRADOS:
+                faltan.append(f"{etiqueta}: `{flag}` no lo declara NINGÚN script de scripts/")
     assert faltan == [], ("flags nombrados en la doc que el script no declara:\n  "
                           + "\n  ".join(sorted(set(faltan))))
+
+
+ESTADOS_VALIDOS = ("garantizado y medido", "garantizado sin medir", "garantizado",
+                   "parcial", "HUECO", "INCUMPLIDO")
+
+
+def _estados_del_contrato() -> dict:
+    """`{INV-nn: estado}` leído de las tablas de §3 de `contrato.md`."""
+    texto = (DOCS / "contrato.md").read_text(encoding="utf-8")
+    out = {}
+    for m in re.finditer(r"^\| \*\*(INV-\d{2})\*\* \|(.*)$", texto, re.M):
+        cols = [x.strip() for x in m.group(2).split("|")]
+        if len(cols) > 2:
+            out[m.group(1)] = cols[2]
+    return out
+
+
+def test_ningun_estado_inventado_por_fila():
+    """§2 define un vocabulario CERRADO de estados. Tres filas lo evadían con un paréntesis ad-hoc
+    —`garantizado y medido (con brecha nombrada)`, `(mitad determinista)`, `(con deuda)`— y una de
+    ellas admitía en su propio texto que contradecía el «todos los carriles» de su enunciado. Un
+    estado inventado por fila es cómo un documento empieza a mentir sin decir nada falso: la fila
+    se lee como garantizada y el paréntesis, que dice lo contrario, no entra en ningún conteo."""
+    malos = []
+    for inv, estado in _estados_del_contrato().items():
+        limpio = re.sub(r"\s*\([^)]*\)", "", estado).replace("*", "").strip()
+        if limpio not in ESTADOS_VALIDOS:
+            malos.append(f"{inv}: {estado!r}")
+        # el paréntesis puede matizar, pero no puede CONTRADECIR la palabra que lo precede
+        if "garantizado" in limpio and re.search(r"\((?:[^)]*\b(?:brecha|deuda|mitad|parcial)\b[^)]*)\)",
+                                                 estado, re.I):
+            malos.append(f"{inv}: el paréntesis contradice el estado — {estado!r}")
+    assert malos == [], ("estados fuera del vocabulario cerrado de §2:\n  " + "\n  ".join(malos))
+
+
+def test_el_conteo_del_encabezado_es_el_de_las_filas():
+    """El encabezado de §1 publica cuántos invariantes hay en cada estado. Si el número lo escribe
+    una mano y las filas otra, el resumen envejece solo y "un mapa que atribuye mal es peor que uno
+    vacío" — con el agravante de que acá el mapa es el documento que mide a todos los demás."""
+    from collections import Counter
+    c = Counter()
+    for estado in _estados_del_contrato().values():
+        if "HUECO" in estado:
+            c["hueco"] += 1
+        elif "INCUMPLIDO" in estado:
+            c["incumplido"] += 1
+        elif "parcial" in estado.lower():
+            c["parcial"] += 1
+        elif "sin medir" in estado.lower():
+            c["sin_medir"] += 1
+        elif "medido" in estado.lower():
+            c["medido"] += 1
+        else:
+            c["garantizado"] += 1
+    texto = (DOCS / "contrato.md").read_text(encoding="utf-8")
+    m = re.search(r">\s*(\d+) \*garantizados y medidos\* · (\d+) \*garantizados\*[^·]*· (\d+) \*sin\s*\n"
+                  r">\s*medir\* · (\d+) \*parciales\* · (\d+) \*HUECO\* · (\d+) \*INCUMPLIDO\*", texto)
+    assert m, "no se encontró la línea de medición vigente en §1"
+    declarado = tuple(int(x) for x in m.groups())
+    real = (c["medido"], c["garantizado"], c["sin_medir"], c["parcial"], c["hueco"], c["incumplido"])
+    assert declarado == real, (
+        f"el encabezado declara {declarado} y las filas dan {real} "
+        f"(medidos, garantizados, sin medir, parciales, HUECO, INCUMPLIDO)")
+    assert sum(real) == len(_estados_del_contrato()) == 91
+
+
+def test_los_flags_retirados_siguen_retirados():
+    """La lista de excepciones no puede convertirse en un colador: si un flag "retirado" vuelve a
+    existir, la excepción lo estaría tapando — y el motivo por el que se retiró (que `--no-triage`
+    dejaba entrar en silencio un candidato ya descartado) es justamente lo que no debe volver."""
+    universo = set().union(*(_flags_declarados(f)
+                             for f in sorted((RAIZ / "scripts").glob("*.py"))))
+    vivos = [f"{f}: {motivo}" for f, motivo in FLAGS_RETIRADOS.items() if f in universo]
+    assert vivos == [], ("flags declarados retirados que volvieron a existir:\n  "
+                         + "\n  ".join(vivos))
+
+
+def test_la_doc_no_apunta_a_codigo_por_numero_de_linea():
+    """Un puntero `archivo.py:N` **deriva en silencio**: el archivo crece y el número sigue en
+    rango, apuntando a otra cosa. Medido: los siete de `contrato.md` apuntaban todos al renglón
+    equivocado —INV-10 citaba la m·sini y ahí había el vocabulario de `role`, o sea otro
+    invariante—. Un mapa que atribuye mal es peor que uno vacío, y acá el mapa es el documento que
+    mide a todos los demás. Los nombres de símbolo no derivan: se usan ésos."""
+    # `trazabilidad.md` está EXENTO: lo **genera** `trace_invariants.py` en cada corrida, así que sus
+    # punteros se re-derivan del AST y no pueden envejecer — y ahí el número de línea es lo útil
+    # (lleva directo al símbolo marcado). La regla es para la doc escrita a mano.
+    GENERADOS = {"trazabilidad.md"}
+    malos = []
+    for doc in _vivos() + [RAIZ / "CLAUDE.md", RAIZ / "README.md"]:
+        if not doc.exists() or doc.name in GENERADOS:
+            continue
+        for m in re.finditer(r"`(?:scripts/)?(\w+)\.py:(\d+)", doc.read_text(encoding="utf-8")):
+            if (RAIZ / "scripts" / f"{m.group(1)}.py").exists():
+                malos.append(f"{doc.name}: {m.group(0)}` → usá el NOMBRE del símbolo")
+    assert malos == [], ("punteros por número de línea a código de `scripts/`:\n  "
+                         + "\n  ".join(sorted(set(malos))))
+
+
+def test_el_diagrama_de_la_cadena_respeta_el_orden_canonico():
+    """`CLAUDE.md` dice que el orden canónico vive en el header del orquestador —*"puntero, no
+    copia: no replicar la lista de scripts en docs/skills"*— y `docs/ingesta.md` lo replicaba **mal**:
+    ponía `extract_fulltext` antes de `make_notes` y omitía `check_retractions`. No es cosmético:
+    `extract_fulltext` llama a `make_notes.stamp_fulltext`, que devuelve `False` si la nota todavía
+    no existe, así que el diagrama enseñaba un orden en el que ese paso no hace nada."""
+    import lib_config as cfg
+    texto = (DOCS / "ingesta.md").read_text(encoding="utf-8")
+    bloque = texto[texto.index("ingest-star · astro-only"):texto.index("ingest-theme · despacha")]
+    posiciones = {}
+    for paso in cfg.CADENA_ESTRELLA:
+        i = bloque.find(paso)
+        assert i >= 0, f"el diagrama de la cadena no nombra `{paso}`"
+        posiciones[paso] = i
+    orden_doc = [p for p, _ in sorted(posiciones.items(), key=lambda kv: kv[1])]
+    assert orden_doc == list(cfg.CADENA_ESTRELLA), (
+        f"el diagrama ordena {orden_doc} y la cadena canónica es {list(cfg.CADENA_ESTRELLA)}")

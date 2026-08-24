@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 import fetch_ground_truth as gt
+import lib_config as cfg
 
 
 # ── msini_earth (física contra valores conocidos) ────────────────────────────
@@ -427,3 +428,19 @@ def test_nea_diff_compara_planetas_por_letra(toy_vault, monkeypatch):
     campos = {c: (v, n) for c, v, n in gt.nea_diff("test_star")}
     assert campos["planets.b.P_days"] == (20.0, 21.0)
     assert "planets.c" in campos                     # planeta NUEVO
+
+
+def test_el_atajo_idempotente_estampa_el_paso(toy_vault, monkeypatch, capsys):
+    """R-6: *cada script se estampa a sí mismo al salir 0*. Salir 0 por el atajo idempotente **sin**
+    estamparlo dejaba `cadena_cortada` reportando "se cortó en `fetch_ground_truth`" para siempre
+    sobre un paso que corre y decide correctamente no pisar nada — y el único modo de cerrarlo era
+    `--force`, o sea pisar el snapshot: lo que el propio mensaje del script dice no hacer.
+    Es el falso positivo permanente que `check_retractions` ya había tenido.  @inv INV-91"""
+    (cfg.GROUND_TRUTH).mkdir(parents=True, exist_ok=True)
+    (cfg.GROUND_TRUTH / "test_star.json").write_text('{"host": {}, "planets": []}', encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["fetch_ground_truth.py", "test_star"])
+    assert gt.main() == 0
+    assert "ya existe" in capsys.readouterr().out
+    pasos = [p["paso"] for p in cfg.load_cadena("test_star")]
+    assert "fetch_ground_truth" in pasos, "el atajo tiene que dejar traza igual"
+    assert cfg.cadena_cortada("test_star") != "fetch_ground_truth"

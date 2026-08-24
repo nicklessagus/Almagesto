@@ -214,12 +214,11 @@ def download_pdf(url: str, token: str) -> bytes | None:
 
 
 
-def _flags_usados(args) -> list:
+def _flags_usados(args, ap=None) -> list:
     """Los flags no-default de esta corrida, para dejarlos en `cadena:` del registro (D-48/D-57).
     Son las **escotillas**: `--force`, `--yes`, `--all` cambian lo que la corrida hizo, y sin
     registrarlas la traza dice "corrió make_notes" sobre dos corridas que no hicieron lo mismo."""
-    return sorted(f"--{k.replace('_', '-')}" for k, v in vars(args).items()
-                  if v is True and k not in ("theme",))
+    return cfg.flags_usados(args, ap)
 
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
@@ -326,7 +325,7 @@ def main() -> int:
                           "Lo que no salga: pedir el PDF al usuario / marcar `pending`.")
     elif miss.exists():
         miss.unlink()      # el listado de fetch_arxiv quedó cubierto: no dejar un residuo viejo
-    cfg.save_paso(args.slug, "fetch_pdf", flags=_flags_usados(args))
+    cfg.save_paso(args.slug, "fetch_pdf", flags=_flags_usados(args, ap))
     return 0
 
 

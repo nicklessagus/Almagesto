@@ -21,7 +21,10 @@ from __future__ import annotations
 import contextlib
 import io
 import random
+import re
+import sys
 import time
+from pathlib import Path
 
 import pytest
 import yaml
@@ -196,3 +199,119 @@ def test_lint_no_muta_la_boveda(boveda_poblada):
     _lint_silencioso()
     despues = hash_tree(boveda_poblada.VAULT)
     assert antes == despues, "lint.main() modificó vault/ — viola 'No modifica nada' de su docstring"
+
+
+def test_source_hash_comparte_la_lectura_con_is_legible(boveda_poblada, monkeypatch):
+    """Ancla de hotspot (10.3): el hash de fuente (D-20) y `is_legible` leen **cada `.txt` una sola
+    vez, juntos**.
+
+    Por qué es un ancla y no un detalle: `is_legible` sobre el corpus real es el **77% del costo del
+    lint** (5,6 s sobre 908 notas). El hash de fuente necesita exactamente el mismo contenido, así
+    que se calcula sobre esa lectura — cero lecturas extra. Si alguien los separa "para que quede
+    más prolijo", el costo del lint sube un 77% de golpe **y ningún test se pone rojo**: el reporte
+    sale idéntico. Este es el test que se pondría rojo.
+
+    Se cuenta la cantidad de `open()` sobre `.txt` de `raw/fulltext/`, no el tiempo: un umbral de
+    segundos mide la máquina, un conteo de lecturas mide el código."""
+    import builtins
+    from pathlib import Path as _P
+    lecturas = []
+    real_open, real_read_text = builtins.open, _P.read_text
+
+    def _mirar(path):
+        s = str(path)
+        if s.endswith(".txt") and "fulltext" in s:
+            lecturas.append(s)
+
+    def contando(path, *a, **kw):
+        _mirar(path)
+        return real_open(path, *a, **kw)
+
+    def contando_rt(self, *a, **kw):
+        # ⚠ Los DOS caminos. La primera versión de este test contaba sólo `builtins.open` y
+        # **no mordió** la mutación que lo tenía que matar: `lib_blocks.source_hash` lee con
+        # `Path.read_text`, que va por `io.open` y no pasa por el builtin. Un test que mide una
+        # sola de las dos puertas es el mismo defecto que persigue.
+        _mirar(self)
+        return real_read_text(self, *a, **kw)
+
+    monkeypatch.setattr(builtins, "open", contando)
+    monkeypatch.setattr(_P, "read_text", contando_rt)
+    lint.collect()
+    monkeypatch.undo()
+    n_txt = len(list(boveda_poblada.FULLTEXT.glob("*/*.txt")))
+    assert n_txt > 100, "el corpus tiene que tener fulltexts para que este ancla mida algo"
+    repetidas = [p for p in set(lecturas) if lecturas.count(p) > 1]
+    assert repetidas == [], (
+        f"{len(repetidas)} `.txt` leídos más de una vez — `source_hash` dejó de compartir la "
+        f"lectura de `is_legible` y el 77% del costo del lint se duplicó: {repetidas[:3]}")
+    assert len(lecturas) <= n_txt, (
+        f"{len(lecturas)} lecturas para {n_txt} archivos: hay una pasada de más")
+
+
+# ── 10.3 · el presupuesto de la suite, medido ──────────────────────────────────────────────────
+#
+# `tests/README.md` prometía tier 0 ≤ 2,5 s y el número se fue a 7,3 s a lo largo de nueve tandas —
+# una decena de tests por vez, sin que nada fallara nunca: **ninguna corrida se pone roja por
+# lenta**. Es el caso de manual de "una promesa que el sistema dejó de cumplir en silencio", y la
+# respuesta del repo a eso no es bajar la promesa: es medirla.
+#
+# Lo que la medición mostró (2026-08-24, con la medición en la mano, como pide el issue):
+#   · el hotspot NO era `is_legible` —tier 0 no tiene corpus grande—: era **un solo test** que
+#     barría el repo entero con AST para mirar dos archivos (2,6 s de 7,3);
+#   · el resto es piso por test (~4 ms de tmpdir por `toy_vault`) × 1000 tests;
+#   · o sea que el costo POR TEST bajó desde que se escribió el techo (2,5 s / ~400 tests ≈ 6 ms);
+#     lo que creció es la cantidad.
+# Por eso el presupuesto pasa a ser una **tasa** con un techo absoluto encima: la tasa es lo que
+# protege la propiedad real ("una suite que tarda se deja de correr antes de commitear") y el techo
+# impide que la cantidad crezca sin límite amparada en la tasa.
+
+MS_POR_TEST = 8.0        # medido 4,7 ms/test; el margen absorbe una máquina más lenta
+TIER0_TECHO_S = 10.0     # techo absoluto: con ~1000 tests el piso son ~5 s
+
+
+def test_presupuesto_de_tier_0():
+    """Corre el tier 0 como subproceso y mide. Va en tier 1 porque **un tier no puede medirse a sí
+    mismo**: el test que mide sumaría su propio costo al que reporta."""
+    import subprocess
+    repo = Path(__file__).resolve().parent.parent.parent
+    t0 = time.time()
+    r = subprocess.run([sys.executable, "-m", "pytest", "tests/", "-q", "-p", "no:randomly"],
+                       cwd=repo, capture_output=True, text=True)
+    dur = time.time() - t0
+    assert r.returncode == 0, r.stdout[-2000:]
+    m = re.search(r"(\d+) passed", r.stdout)
+    assert m, r.stdout[-500:]
+    n = int(m.group(1))
+    ms = dur * 1000 / n
+    assert ms <= MS_POR_TEST, (
+        f"tier 0: {dur:.1f}s / {n} tests = {ms:.1f} ms/test (techo {MS_POR_TEST}). No es la "
+        f"cantidad de tests: es que cada uno se puso caro. Mirá `--durations` antes de tocar el techo.")
+    assert dur <= TIER0_TECHO_S, (
+        f"tier 0 tarda {dur:.1f}s (techo absoluto {TIER0_TECHO_S}s) con {n} tests a {ms:.1f} "
+        f"ms/test. El costo por test está bien: creció la CANTIDAD. Decidilo explícitamente — "
+        f"subir el techo acá es una decisión, no un trámite.")
+
+
+TIER1_TECHO_S = 120.0    # medido 91 s; subió de 90 con 10.3 y está razonado en tests/README.md
+
+
+def test_presupuesto_de_tier_1(boveda_poblada):
+    """El hermano del de arriba, para el tier caro. **No corre el tier**: sumaría el suyo y sería
+    recursivo. Mide el costo de lo único que escala con el corpus —una pasada de `lint.collect()`
+    sobre las ~900 notas— y lo compara contra la fracción del presupuesto que le toca.
+
+    Por qué así: el tier 1 son ~25 siembras + ~25 pasadas de lint, y si el reloj de pared se pasa,
+    la pregunta útil es **cuál de las dos** se puso cara. Un techo de wall-clock sin esa distinción
+    manda a mirar el archivo equivocado."""
+    import time
+    t0 = time.time()
+    lint.collect()
+    una_pasada = time.time() - t0
+    # ~25 pasadas de lint en el tier; el resto del presupuesto es siembra e I/O.
+    presupuesto_lint = TIER1_TECHO_S * 0.6 / 25
+    assert una_pasada <= presupuesto_lint, (
+        f"una pasada de `lint.collect()` sobre {len(list(boveda_poblada.PAPERS.glob('*.md')))} "
+        f"notas tarda {una_pasada:.2f}s (presupuesto {presupuesto_lint:.2f}s por pasada, "
+        f"≈{TIER1_TECHO_S}s de tier). El hotspot medido es `is_legible` (77%): mirá primero que "
+        f"`source_hash` siga compartiendo su lectura (`test_source_hash_comparte_la_lectura...`).")

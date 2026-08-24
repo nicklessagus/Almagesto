@@ -20,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.34.0"
+ALMAGESTO_VERSION = "1.36.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -81,6 +81,21 @@ def arxiv_stamp(text: str) -> str | None:
     arXiv; None si no está. Sólo mira el principio (la marca va en el margen de la 1ª página)."""
     m = ARXIV_STAMP_RE.search(text[:ARXIV_STAMP_SCAN_CHARS])
     return (m.group(2) or "") if m else None
+
+
+def snapshot_url(path) -> str | None:
+    """`source_url` del header de un snapshot web, o `None`. Gemelo de `snapshot_retrieved`: el
+    header lo escribe `fetch_web` y el parser vive acá, un solo lugar de verdad. Lo necesita el
+    quinto detector de la pasada de red (D-41): para saber si la página cambió hay que saber **qué
+    página era**, y esa URL está en el `.txt`, no en la nota (que puede no existir)."""
+    try:
+        for line in Path(path).read_text(encoding="utf-8", errors="replace").splitlines()[:8]:
+            m = re.match(r"source_url\s*:\s*(\S+)", line)
+            if m:
+                return m.group(1)
+    except OSError:
+        pass
+    return None
 
 
 def snapshot_retrieved(path) -> str | None:
@@ -715,6 +730,30 @@ def save_extraccion(slug: str, *, subconjunto: bool, criterio: str) -> None:
     save_registro(slug, data)
 
 
+def save_sintesis(slug: str, *, n_papers: int | None = None, nota: str = "") -> None:
+    """Declara CUÁNDO se sintetizó el sujeto — la tercera fecha de INV-82.  @inv INV-82
+
+    El contrato promete tres fechas distinguibles (búsqueda, síntesis, verificación) que pueden
+    divergir **sin que ninguna mienta**, y había dos: la de búsqueda la escribe `query_ads` y la de
+    verificación sale del encabezado del bloque de citas, pero **la síntesis no dejaba rastro**. El
+    efecto es el que INV-82 existe para impedir: refrescar el corpus movía la fecha de búsqueda y la
+    ficha se leía como re-sintetizada, cuando la prosa era la de tres meses atrás.
+
+    No se puede derivar: `git` da la fecha del último toque al ARCHIVO (una cirugía de cabecera
+    cuenta igual que reescribir el resumen) y fuera de un repo no da nada. Así que se **declara**,
+    como el recorte de lectura — mismo canal (`triage.py --sintesis`) y mismo criterio: lo que la
+    máquina no puede medir, alguien lo dice y queda versionado."""
+    data = load_registro(slug)
+    data.setdefault("slug", slug)
+    entrada = {"fecha": _dt.date.today().isoformat(), "version": ALMAGESTO_VERSION}
+    if n_papers is not None:
+        entrada["n_papers"] = int(n_papers)
+    if nota:
+        entrada["nota"] = nota
+    data["sintesis"] = entrada
+    save_registro(slug, data)
+
+
 def anular_decision(slug: str, clave: str, *, por: str, carril: str = "chaining") -> bool:
     """Anula un descarte que se está revirtiendo, preservando el juicio viejo adentro (D-52).
 
@@ -804,8 +843,17 @@ def save_busqueda(slug: str, busqueda: dict) -> None:
     if bibs:
         entrada["n_nuevos"] = len([b for b in bibs if b not in conocidos])
         entrada["n_ya_estaban"] = len([b for b in bibs if b in conocidos])
+    # D-28: la clave vieja `busqueda:` (mapa, UNA corrida) es el schema pre-1.26. El lector nuevo
+    # no la entiende y el lint la bloquea — pero **borrarla destruye la única corrida que ese
+    # registro documenta**, y el registro es el único artefacto no regenerable de la bóveda
+    # (INV-53: "escribir un registro nuevo no borra el juicio ya registrado, y la historia es
+    # reconstruible"). Se PLIEGA al frente de la lista, marcada, en vez de perderse: así la
+    # migración no cuesta información y el universo acumulado la puede contar.
+    vieja = data.pop("busqueda", None)
+    if isinstance(vieja, dict) and not previas:
+        vieja = {**vieja, "schema": "pre-D-28 (plegada al migrar; una sola corrida)"}
+        previas = [vieja]
     data["busquedas"] = previas + [entrada]
-    data.pop("busqueda", None)          # la clave vieja no sobrevive a una escritura nueva
     save_registro(slug, data)
 
 
@@ -818,11 +866,47 @@ CADENA_ESTRELLA = ("query_ads", "fetch_arxiv", "fetch_pdf", "fetch_ground_truth"
 # Variable que el orquestador exporta al lanzar cada paso, para que el propio paso sepa si lo
 # corrió la cadena o una mano. No es un flag porque tiene que atravesar el `subprocess.run`.
 VIA_ENV = "ALMAGESTO_VIA"
+# Las escotillas del ORQUESTADOR (INV-44). `save_paso` estampa los flags del PASO, y cada script se
+# estampa a sí mismo — pero el `--yes` que saltea la guardia de expansión es del orquestador, no de
+# ningún paso, así que no llegaba a ninguna entrada: la escotilla que más cambia lo que la cadena
+# hizo era la única sin traza. Viaja por entorno, como `VIA_ENV`, porque tiene que atravesar el
+# `subprocess.run` sin tocarle el CLI a cada script. Se estampan con prefijo `orquestador:` para
+# que no se confundan con los del paso.
+FLAGS_ENV = "ALMAGESTO_FLAGS"
 
 
 def load_cadena(slug: str) -> list:
     """Los pasos que corrieron para este sujeto, en orden (D-57).  @inv INV-91"""
     return [p for p in as_list(load_registro(slug).get("cadena")) if isinstance(p, dict)]
+
+
+def flags_usados(args, ap=None, ignorar=("theme",)) -> list:
+    """Los flags NO-DEFAULT de esta corrida, para `cadena:` del registro (D-48/D-57).  @inv INV-44
+
+    Implementación **única**: vivía copiada en siete scripts (seis idénticas y una con
+    `chr(95)/chr(45)` en vez de los literales), y las siete tenían el mismo agujero — sólo miraban
+    `v is True`, así que **`--limit` no se registraba**, que es justamente el flag que más cambia lo
+    que la corrida hizo: con `--limit 1` sobre cuatro pendientes, tres papers no se intentaron
+    siquiera, y la traza decía "corrió fetch_pdf" igual que una corrida completa. Red #2: si N
+    módulos prometen la misma forma, se prueba **una vez parametrizada**, no con prosa en N
+    docstrings.
+
+    Con `ap` (el `ArgumentParser`) se incluyen además los flags **con valor** que difieren de su
+    default, como `--limit=1` o `--rows=5000`. Sin `ap` no se puede saber qué es default y qué lo
+    pusieron a mano, así que sólo salen los booleanos — degradar a "todos los valores" llenaría la
+    traza de ruido constante y degradar a "ninguno" es el agujero que esto cierra."""
+    out = []
+    for k, v in vars(args).items():
+        if k in ignorar:
+            continue
+        nombre = f"--{k.replace('_', '-')}"
+        if v is True:
+            out.append(nombre)
+        elif ap is not None and v is not None and not isinstance(v, bool):
+            default = ap.get_default(k)
+            if v != default and not isinstance(v, (list, dict)):
+                out.append(f"{nombre}={v}")
+    return sorted(out)
 
 
 def save_paso(slug: str, paso: str, flags=()) -> None:
@@ -849,7 +933,8 @@ def save_paso(slug: str, paso: str, flags=()) -> None:
         "fecha": _dt.date.today().isoformat(),
         "version": ALMAGESTO_VERSION,
         "via": os.environ.get(VIA_ENV) or "suelto",
-        "flags": list(flags),
+        "flags": list(flags) + [f"orquestador:{f}" for f in
+                                (os.environ.get(FLAGS_ENV) or "").split() if f],
     }
     if any(p == entrada for p in previos):
         return                       # misma corrida, mismo día: sin ruido de diff

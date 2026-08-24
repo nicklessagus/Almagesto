@@ -506,6 +506,73 @@ def migrate_disputes(dest) -> bool:
     return True
 
 
+def migrate_all_facets() -> int:
+    """Migrador de un solo uso de R-5: renombra `topics:` → `facets:` en las notas de paper.
+
+    INV-64 pide **dos piezas** por cambio de schema: migración idempotente y detector bloqueante de
+    la forma vieja. R-5 entregó el detector y **no** el migrador: el mensaje del lint mandaba a
+    "renombrarlo" a mano, nota por nota (medido en una instancia real: 908 de 908 notas traían el
+    campo viejo). Un cambio de schema sin migrador convierte a la instancia en trabajo manual, que
+    es exactamente lo que la regla de "sin capa de retrocompatibilidad" asume resuelto.
+
+    Renombre **quirúrgico a nivel línea** (como `merge_frontmatter_list`): no toca la extracción
+    LLM ni el cuerpo. Si la nota ya trae `facets:`, el `topics:` residual se **borra** en vez de
+    pisarlo — el vigente manda.  @inv INV-64"""
+    n = 0
+    for f in sorted(cfg.PAPERS.glob("*.md")):
+        texto = f.read_text(encoding="utf-8")
+        span = cfg.frontmatter_span(texto)
+        if span is None:
+            continue
+        head, resto = span
+        lineas = head.split("\n")
+        if not any(ln.startswith("topics:") for ln in lineas):
+            continue
+        ya_tiene = any(ln.startswith("facets:") for ln in lineas)
+        out, dropping = [], False
+        for ln in lineas:
+            if dropping:
+                if ln[:1] in (" ", "\t", "-"):
+                    if not ya_tiene:
+                        out.append(ln)
+                    continue
+                dropping = False
+            if ln.startswith("topics:"):
+                dropping = True
+                if not ya_tiene:
+                    out.append("facets:" + ln[len("topics:"):])
+                continue
+            out.append(ln)
+        cfg.write_text_atomic(f, "---" + "\n".join(out) + "\n---\n" + resto.lstrip("\n"))
+        n += 1
+    cfg.print_seguro(f"`topics:` → `facets:` en {n} nota(s) de paper (R-5).")
+    return n
+
+
+def migrate_all_registros() -> int:
+    """Migrador de un solo uso de D-28: `busqueda:` (mapa, una corrida) → `busquedas: []`.
+
+    La otra mitad que INV-64 pedía y no existía: el lint bloqueaba el registro viejo y mandaba a
+    "re-correr la cadena", que cuesta una pasada de red entera **y pierde la corrida vieja**. El
+    registro es el único artefacto no regenerable de la bóveda, así que la corrida se **pliega**
+    (marcada como pre-D-28), no se recrea.  @inv INV-64"""
+    n = 0
+    for rf in sorted(cfg.REGISTRO.glob("*.yaml")) if cfg.REGISTRO.exists() else []:
+        slug = rf.stem
+        data = cfg.load_registro(slug)
+        vieja = data.get("busqueda")
+        if not isinstance(vieja, dict):
+            continue
+        previas = [b for b in cfg.as_list(data.get("busquedas")) if isinstance(b, dict)]
+        data.pop("busqueda", None)
+        data["busquedas"] = ([{**vieja, "schema": "pre-D-28 (plegada al migrar; una sola corrida)"}]
+                             if not previas else previas)
+        cfg.save_registro(slug, data)
+        n += 1
+    cfg.print_seguro(f"`busqueda:` → `busquedas: []` en {n} registro(s) (D-28).")
+    return n
+
+
 def migrate_all_bearing() -> int:
     """Migrador de un solo uso de D-21: saca `bearing:` del frontmatter de las notas de paper.
 
@@ -1068,6 +1135,7 @@ def stamp_header(dest) -> bool:
 # depende de un plugin no la cumple (D-11). Acá la tabla se ESTAMPA, con el estado de cada paper.
 
 PAPERS_HEADER = "## Papers"
+PLANETAS_HEADER = "## Planetas (ground-truth NASA Exoplanet Archive)"
 METODOS_HEADER = "## Métodos aplicados a esta estrella"
 CONCEPT_ROLLUP_HEADER = "## Papers que tocan este tema (auto)"
 
@@ -1222,6 +1290,60 @@ def concept_rollup_table(rows: list) -> str:
     return "\n".join(out)
 
 
+def planetas_table(fm: dict) -> str:
+    """`## Planetas` **materializada** (D-11 / INV-81). Era un bloque ```dataviewjs``` — el peor de
+    los tres, porque los cinco campos por planeta son **ground-truth de NEA**, la capa que el
+    contrato promete auditable, y un agente que abría el `.md` veía el CÓDIGO de la query, no los
+    valores. El plugin ni siquiera está versionado.
+
+    Se estampa desde el frontmatter de la propia ficha, que es el espejo de NEA: no re-lee el JSON
+    (dos lectores del mismo hecho pueden divergir; el que compara los dos es el lint)."""
+    planets = [pl for pl in cfg.as_list(fm.get("planets")) if isinstance(pl, dict)]
+    out = [f"{PLANETAS_HEADER} ({len(planets)})", ""]
+    if not planets:
+        out += ["_(NEA no lista planetas confirmados para esta estrella. Una señal discutida no va "
+                "acá: va como `disputes` con `field: <letra>.existence`.)_", ""]
+        return "\n".join(out)
+    out += ["| Letra | P (d) | K (m/s) | e | m·sini (M⊕) | Estado |", "|---|---|---|---|---|---|"]
+    for pl in planets:
+        vals = [pl.get("letter"), pl.get("P_days"), pl.get("K_ms"), pl.get("e"),
+                pl.get("mass_earth"), pl.get("status")]
+        # `null` explícito, no celda vacía: NEA calla seguido en `K_ms` y `e`, y el contrato dice
+        # que ese null es el estado CORRECTO — una celda en blanco se lee como "falta el dato".
+        out.append("| " + " | ".join("null" if v is None else str(v) for v in vals) + " |")
+    out.append("")
+    return "\n".join(out)
+
+
+def metodos_rows(name: str, fms: dict | None = None) -> list:
+    """`[(método, stem, año)]` — los métodos DE los papers de esta estrella (no todo paper de la
+    bóveda que use el método). Es el mismo recorte que documenta `CLAUDE.md` para el equivalente
+    determinista, y se parsea con `split_fm`, **no** con grep: `stars: [tau Cet]` en flow style y
+    en bloque conviven en el mismo corpus, y el matcheo textual confunde `GJ 71` con `GJ 710`."""
+    filas = []
+    for stem, fm in (fms if fms is not None else papers_fm_index()).items():
+        if name not in cfg.as_list(fm.get("stars")):
+            continue
+        for m in cfg.as_list(fm.get("methods")):
+            filas.append((str(m), stem, fm.get("year") or ""))
+    return sorted(filas)
+
+
+def metodos_table(rows: list) -> str:
+    """`## Métodos aplicados a esta estrella` materializada (D-11 / INV-81)."""
+    metodos = sorted({m for m, _, _ in rows})
+    out = [f"{METODOS_HEADER} ({len(metodos)} método(s) · {len(rows)} aplicación(es))", ""]
+    if not rows:
+        out += ["_(ningún paper de esta estrella declara `methods` todavía — o no se extrajo "
+                "ninguno, o la extracción no pobló el campo.)_", ""]
+        return "\n".join(out)
+    out += ["| Método | Paper | Año |", "|---|---|---|"]
+    for m, stem, year in rows:
+        out.append(f"| [[{m}]] | [[{stem}]] | {year} |")
+    out.append("")
+    return "\n".join(out)
+
+
 def _reemplazar_seccion(dest, header: str, nuevo: str) -> bool:
     """Cirugía anclada: reemplaza la sección que empieza en `header` hasta el próximo `## ` (o EOF).
 
@@ -1248,6 +1370,23 @@ def _reemplazar_seccion(dest, header: str, nuevo: str) -> bool:
 def stamp_papers_table(slug: str, dest, kind: str = "star") -> bool:
     """Reemplaza el bloque ```dataview``` de `## Papers` por la tabla materializada (D-10/D-11)."""
     return _reemplazar_seccion(dest, PAPERS_HEADER, papers_table(papers_universe(slug, kind)))
+
+
+def stamp_star_rollups(slug: str, dest) -> bool:
+    """Las otras dos tablas de la ficha de estrella (D-11 / INV-81): `## Planetas` y
+    `## Métodos aplicados a esta estrella`. D-11 se había cumplido **sólo** para `## Papers`, así
+    que la promesa "ninguna promesa del contrato depende de un plugin" valía para un tercio de los
+    roll-ups — y justo el de planetas expone el ground-truth, la capa que el contrato vende como
+    auditable. Devuelve True si tocó algo (cirugía idempotente, no toca la prosa)."""
+    if not dest.exists():
+        return False
+    fm = cfg.split_fm(dest.read_text(encoding="utf-8"))
+    try:
+        name, _ = cfg.star_by_slug(slug)
+    except (KeyError, RuntimeError):
+        name = fm.get("name") or slug
+    tocado = _reemplazar_seccion(dest, PLANETAS_HEADER, planetas_table(fm))
+    return _reemplazar_seccion(dest, METODOS_HEADER, metodos_table(metodos_rows(name))) or tocado
 
 
 def stamp_concept_rollup(slug: str, dest) -> bool:
@@ -1320,9 +1459,16 @@ def rename_paper(old_stem: str, new_bibcode: str) -> None:
     # reescritura de wikilinks en TODA la bóveda (atómica por nota)
     patron = _wikilink_re(safe_name(old_stem))
     tocadas = 0
-    for f in sorted(cfg.WIKI.rglob("*.md")):
+    # `cfg.VAULT`, no `cfg.WIKI`: el alcance DECLARADO es `vault/`, y `STATUS.md` (que vive un nivel
+    # arriba de `wiki/`) cita bibcodes como cualquier nota. Reescribir sólo `wiki/` dejaba links
+    # rotos justo en el archivo que se lee primero al abrir el repo.
+    for f in sorted(cfg.VAULT.rglob("*.md")):
         cuerpo = f.read_text(encoding="utf-8")
-        nuevo_cuerpo = patron.sub(lambda m: f"[[{new_bibcode}{m.group(1)}", cuerpo)
+        # `safe_name(new_bibcode)`, no el bibcode crudo: el archivo se crea con el stem saneado
+        # (`/` → `_`) y todos los wikilinks que el repo genera usan el stem. Escribir el crudo hacía
+        # que cada link reescrito apuntara a una nota inexistente — latente, pero es la única razón
+        # por la que `safe_name` existe.
+        nuevo_cuerpo = patron.sub(lambda m: f"[[{safe_name(new_bibcode)}{m.group(1)}", cuerpo)
         if nuevo_cuerpo != cuerpo:
             cfg.write_text_atomic(f, nuevo_cuerpo)
             tocadas += 1
@@ -1455,7 +1601,12 @@ ESTADO_LINE_RE = re.compile(r"^> _Estado.*\n", re.M)
 
 
 def estado_line(slug: str, dest) -> str:
-    """La línea de estado de la cabecera.  @inv INV-82: búsqueda · verificación. (La de SÍNTESIS todavía no existe — ver la fila parcial del contrato.) "" si no hay nada."""
+    """La línea de estado de la cabecera: **búsqueda · síntesis · verificación** (INV-82). `""` si
+    no hay ninguna.  @inv INV-82
+
+    Las tres avanzan por separado y pueden divergir sin que ninguna mienta: refrescar el corpus
+    mueve la de búsqueda y **no** la de síntesis, que es exactamente lo que hace legible que la
+    prosa sea más vieja que el universo que la ficha declara."""
     bs = cfg.load_busquedas(slug)
     b = bs[-1] if bs else {}
     partes = []
@@ -1473,6 +1624,13 @@ def estado_line(slug: str, dest) -> str:
             partes.append("⚠ truncada")
         if b.get("escotillas"):
             partes.append(f"escotillas {' '.join(b['escotillas'])}")
+    sint = cfg.as_map(cfg.load_registro(slug).get("sintesis"))
+    if sint.get("fecha"):
+        # La declara el agente al cerrar la síntesis (`triage.py --sintesis`): no se puede derivar
+        # —git fecha el ARCHIVO, y una cirugía de cabecera cuenta igual que reescribir el resumen—
+        # y sin ella un refresh dejaba la ficha leyéndose como re-sintetizada.
+        n = sint.get("n_papers")
+        partes.append(f"síntesis {sint['fecha']}" + (f" ({n} papers)" if n else ""))
     texto = dest.read_text(encoding="utf-8") if dest.exists() else ""
     m = re.search(r"^## Verificación de citas \((\d{4}-\d{2}-\d{2})\)", texto, re.M)
     if m:
@@ -1587,24 +1745,14 @@ El valor que NEA no tiene NO se copia al frontmatter: va acá o en el Resumen, c
 o marcado `inferencia` si es lectura propia.)_
 
 ## Planetas (ground-truth NASA Exoplanet Archive)
-```dataviewjs
-const p = dv.current().planets ?? [];
-dv.table(["letter","P (d)","K (m/s)","e","M (M⊕)","status"],
-  p.map(x => [x.letter, x.P_days, x.K_ms, x.e, x.mass_earth, x.status]));
-```
+_(se estampa determinista: `make_notes.py {slug}` lo regenera.)_
 
 ## Papers
 _(se estampa determinista: `make_notes.py {slug}` lo regenera. D-11 — ninguna promesa del contrato
 depende de un plugin.)_
 
 ## Métodos aplicados a esta estrella
-```dataview
-TABLE WITHOUT ID method, file.link, year
-FROM "wiki/papers"
-WHERE contains(stars, "{name}") AND methods
-FLATTEN methods AS method
-SORT method ASC
-```
+_(se estampa determinista: `make_notes.py {slug}` lo regenera.)_
 
 ## Datos crudos
 `{meta.get('data_local')}`
@@ -1616,6 +1764,7 @@ SORT method ASC
     dest.parent.mkdir(parents=True, exist_ok=True)
     cfg.write_text_atomic(dest, body)
     stamp_papers_table(slug, dest, "star")
+    stamp_star_rollups(slug, dest)
     stamp_ground_truth_line(slug, dest)
     stamp_estado(slug, dest)
     cfg.print_seguro(f"  star: {dest.name} escrito")
@@ -1955,12 +2104,11 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
 
 
 
-def _flags_usados(args) -> list:
+def _flags_usados(args, ap=None) -> list:
     """Los flags no-default de esta corrida, para dejarlos en `cadena:` del registro (D-48/D-57).
     Son las **escotillas**: `--force`, `--yes`, `--all` cambian lo que la corrida hizo, y sin
     registrarlas la traza dice "corrió make_notes" sobre dos corridas que no hicieron lo mismo."""
-    return sorted(f"--{k.replace('_', '-')}" for k, v in vars(args).items()
-                  if v is True and k not in ("theme",))
+    return cfg.flags_usados(args, ap)
 
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
@@ -1986,6 +2134,12 @@ def main() -> int:
                          "(aviso de capa LLM + línea del generador) a las que nacieron sin ella. "
                          "La versión sale del `generator` del frontmatter, no se inventa. No toca "
                          "la síntesis LLM; no requiere slug.")
+    ap.add_argument("--migrate-facets", action="store_true", dest="migrate_facets",
+                    help="migración R-5: renombra `topics:` → `facets:` en las notas de paper "
+                         "(quirúrgico, no toca la extracción LLM). No requiere slug.")
+    ap.add_argument("--migrate-registros", action="store_true", dest="migrate_registros",
+                    help="migración D-28: pliega `busqueda:` (mapa) en `busquedas: []` "
+                         "preservando la corrida vieja. No requiere slug.")
     ap.add_argument("--migrate-disputes", action="store_true", dest="migrate_disputes",
                     help="migración #71: pasa `planets[].disputes[]` (polo de verdad hardcodeado) a "
                          "`disputes` a nivel nota con posiciones explícitas. Toca sólo las fichas "
@@ -2029,6 +2183,12 @@ def main() -> int:
         cfg.print_seguro(f"`bearing` retirado de {n} nota(s) de paper (D-21).")
         return 0
 
+    if args.migrate_facets:
+        migrate_all_facets()
+        return 0
+    if args.migrate_registros:
+        migrate_all_registros()
+        return 0
     if args.migrate_disputes:
         return migrate_all_disputes()
     if args.sync_mirror:
@@ -2059,7 +2219,7 @@ def main() -> int:
     else:
         write_star_note(args.slug, args.force)
     write_paper_notes(args.slug, args.all, args.force, theme=args.theme)
-    cfg.save_paso(args.slug, "make_notes", flags=_flags_usados(args))
+    cfg.save_paso(args.slug, "make_notes", flags=_flags_usados(args, ap))
     return 0
 
 

@@ -142,6 +142,13 @@ def test_reintenta_ante_5xx_transitorio(monkeypatch):
     raíz, una hora después de contestar bien. Un índice de citas que se cae en el primer 5xx no se
     puede construir; uno que lo ignora inventa cobertura. La respuesta correcta es reintentar con
     espera y, si no cede, **levantar** (nunca devolver un mapa a medias)."""
+    # ⚠ **Intermitente sin causa demostrada (2026-08-24).** Falló 2 veces sobre ~45 corridas de la
+    # suite completa, las dos **inmediatamente después de editar un archivo del repo** (una con
+    # `tools/mutar.py` copiando el árbol en paralelo). No se reprodujo: 8 corridas aisladas, 25
+    # corridas de la suite entera y 3 forzando `__pycache__` stale, todas verdes. La sospecha —sin
+    # evidencia— es el `subprocess` de `git config user.email` que `_mailto()` corre en cada
+    # request y que bajo carga puede tardar o fallar. Se anota acá y **no se da por cerrado**: un
+    # test intermitente que nadie declara se termina ignorando cuando falla de verdad.
     esperas = []
     monkeypatch.setattr(oa.time, "sleep", lambda s: esperas.append(s))
     fake_get(monkeypatch, [FakeResp(504), FakeResp(504),

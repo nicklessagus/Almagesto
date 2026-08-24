@@ -1,18 +1,25 @@
 """ingest_star: orquestador de la cadena de estrellas (fuente de verdad única del orden)."""
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 import ingest_star as ist
+import ingest_theme as it
+import lib_config as cfg
 
 
 @pytest.fixture
 def fake_run(monkeypatch):
-    state = SimpleNamespace(calls=[], rcs={})
+    """Doble de `ingest_theme.run` con **la firma real** (red #3): desde INV-44 acepta `flags=`
+    —las escotillas del orquestador—, y un doble que no lo hiciera reventaría con `TypeError` en
+    producción mientras la suite queda verde."""
+    state = SimpleNamespace(calls=[], rcs={}, flags=[])
 
-    def run(script, *args):
+    def run(script, *args, flags=()):
         state.calls.append((script, *args))
+        state.flags.append((script, list(flags)))
         return state.rcs.get(script, 0)
     monkeypatch.setattr(ist, "run", run)
     return state
@@ -132,3 +139,29 @@ def test_guardia_no_frena_un_refresh_normal(toy_vault, fake_run, monkeypatch):
 
 def test_guardia_sin_ads_json_no_rompe(toy_vault, fake_run, monkeypatch):
     assert run_main(monkeypatch) == 0
+
+
+def test_la_escotilla_del_orquestador_deja_traza(toy_vault, fake_run, monkeypatch):
+    """INV-44. `--yes` saltea la guardia de expansión —o sea que **cambia lo que la cadena hizo**—
+    pero no es flag de ningún paso: `save_paso` estampa los flags del PASO y cada script se estampa
+    a sí mismo, así que la escotilla con más consecuencias era la única sin traza. Viaja por entorno
+    (tiene que atravesar el `subprocess.run`) y se estampa con prefijo `orquestador:`."""
+    # @inv INV-44
+    monkeypatch.setattr(ist, "expansion_guard", lambda slug, yes: None)
+    run_main(monkeypatch, ("test_star", "--yes"))
+    assert all(f == ["--yes"] for _, f in fake_run.flags), fake_run.flags
+
+    fake_run.flags.clear()
+    run_main(monkeypatch, ("test_star",))
+    assert all(f == [] for _, f in fake_run.flags), "sin escotilla no se declara ninguna"
+
+
+def test_save_paso_estampa_la_escotilla_del_orquestador(toy_vault, monkeypatch):
+    """La otra punta: el paso, al estamparse, recoge del entorno lo que el orquestador declaró."""
+    # @inv INV-44
+    monkeypatch.setenv(cfg.FLAGS_ENV, "--yes")
+    monkeypatch.setenv(cfg.VIA_ENV, "orquestador")
+    cfg.save_paso("test_star", "query_ads", flags=["--rows"])
+    entrada = cfg.load_cadena("test_star")[-1]
+    assert entrada["flags"] == ["--rows", "orquestador:--yes"]
+    assert entrada["via"] == "orquestador"

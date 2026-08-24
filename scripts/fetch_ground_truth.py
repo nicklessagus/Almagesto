@@ -140,7 +140,7 @@ def fetch_planets(tab, mstar_msun=None) -> list[dict]:
 
 def fetch_host(host: str, tab=None) -> dict:
     """Datos del host: primero de NEA (columnas host de pscomppars — pasar la tabla ya
-    consultada; si viene None se consulta acá, tolerante), luego SIMBAD para sp_type/coords.
+    consultada; si viene None se consulta acá, tolerante), luego SIMBAD **sólo** para `spectral_type` (`cfg.AUTORIDAD_CAMPO` se lo asigna a SIMBAD; `ra_deg`/`dec_deg` son de NEA y SIMBAD no los aporta acá — si NEA falla quedan `None`, y ésa es la ausencia que el JSON declara, no un dato perdido).
 
     H-14/H-15: antes, una falla de NEA o de SIMBAD acá se escribía al payload como
     `_nea_host_error`/`_simbad_error` — campos que NINGÚN lector consume (0 consumidores, medido
@@ -271,12 +271,11 @@ def nea_diff(slug: str) -> list:
     return cambios
 
 
-def _flags_usados(args) -> list:
+def _flags_usados(args, ap=None) -> list:
     """Los flags no-default de esta corrida, para dejarlos en `cadena:` del registro (D-48/D-57).
     Son las **escotillas**: `--force`, `--yes`, `--all` cambian lo que la corrida hizo, y sin
     registrarlas la traza dice "corrió make_notes" sobre dos corridas que no hicieron lo mismo."""
-    return sorted(f"--{k.replace('_', '-')}" for k, v in vars(args).items()
-                  if v is True and k not in ("theme",))
+    return cfg.flags_usados(args, ap)
 
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
@@ -289,6 +288,14 @@ def main() -> int:
     out = cfg.GROUND_TRUTH / f"{args.slug}.json"
     if out.exists() and not args.force:
         print(f"Ground-truth {name}: {out} ya existe — no se pisa (refrescar desde NEA: --force)")
+        # El atajo idempotente SÍ estampa el paso (R-6): salir 0 sin estamparlo dejaba
+        # `cadena_cortada` reportando "se cortó en `fetch_ground_truth`" **para siempre** sobre un
+        # paso que corre y decide correctamente no pisar nada. El caso alcanzable es el mixto —
+        # snapshot en disco sin `cadena:` para ese paso (corpus pre-D-57, slug renombrado, o JSON
+        # creado por `sweep_external.aplicar_ground_truth`)— y el único modo de cerrarlo era
+        # `--force`, o sea pisar el snapshot: justo lo que el mensaje de arriba dice no hacer. Es
+        # el mismo falso positivo permanente que `check_retractions` ya tenía y cerró.
+        cfg.save_paso(args.slug, "fetch_ground_truth", flags=_flags_usados(args, ap))
         return 0
     host = cfg.require_field(meta, "simbad", name, "stars.yaml")
     print(f"Ground-truth {name} (host={host!r})")
@@ -318,7 +325,7 @@ def main() -> int:
                "source": "NASA Exoplanet Archive (pscomppars) + SIMBAD"}
     out = write_ground_truth(args.slug, payload)
     print(f"  → {out}")
-    cfg.save_paso(args.slug, "fetch_ground_truth", flags=_flags_usados(args))
+    cfg.save_paso(args.slug, "fetch_ground_truth", flags=_flags_usados(args, ap))
     return 0
 
 

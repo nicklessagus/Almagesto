@@ -78,14 +78,21 @@ def _listify_curado(v, campo: str):
     return []
 
 
-def run(script: str, *args: str) -> int:
+def run(script: str, *args: str, flags=()) -> int:
     """Corre un script de la cadena con el mismo intérprete (rutas absolutas vía lib_config).
 
     Exporta `ALMAGESTO_VIA=orquestador` para que el paso —que se estampa a sí mismo en `cadena:`
     del registro (R-6/D-57)— sepa distinguirse de una corrida suelta. Va por entorno y no por flag
-    porque tiene que atravesar el `subprocess.run` sin tocarle el CLI a cada script."""
+    porque tiene que atravesar el `subprocess.run` sin tocarle el CLI a cada script.
+
+    `flags` son las **escotillas del orquestador** (INV-44): `--yes` saltea la guardia de expansión
+    y por lo tanto cambia lo que la cadena hizo, pero no es flag de ningún paso, así que no llegaba
+    a ninguna entrada de `cadena:` — la escotilla con más consecuencias era la única sin traza. Va
+    por el mismo canal y se estampa con prefijo `orquestador:`."""
     cfg.print_seguro(f"\n→ {script} {' '.join(args)}")
     env = {**os.environ, cfg.VIA_ENV: "orquestador"}
+    if flags:
+        env[cfg.FLAGS_ENV] = " ".join(flags)
     return subprocess.run([sys.executable, str(cfg.ROOT / "scripts" / script), *args],
                           cwd=cfg.ROOT / "scripts", env=env).returncode
 
@@ -177,12 +184,13 @@ def repoint_source_pdf(key: str, declared: str, dest: Path) -> None:
 
 def ingest_ads(slug: str, yes: bool = False) -> None:
     """Cadena astro estándar (paso 2 del skill ingest-theme), abortando al primer fallo."""
+    escotillas = ["--yes"] if yes else []          # INV-44: la escotilla del orquestador deja traza
     for script, args in (("query_ads.py", ["--theme", slug]),
                          ("fetch_arxiv.py", [slug]),
                          ("fetch_pdf.py", [slug]),      # los sin arXiv, vía resolver ADS (esources)
                          ("make_notes.py", ["--theme", slug]),
                          ("extract_fulltext.py", [slug])):
-        rc = run(script, *args)
+        rc = run(script, *args, flags=escotillas)
         if rc:
             sys.exit(f"{script} falló (rc={rc}) — cadena abortada. La cadena es idempotente: "
                      "corregí y re-corré ingest_theme.py (lo ya bajado no se re-baja).")
@@ -325,7 +333,8 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
     if n_pdf or extra:
         # el rc de extract se reporta aparte: un fallo de extracción NO es una "fuente fallida"
         # (contarlo ahí inflaba el conteo del aviso final)
-        extract_rc = run("extract_fulltext.py", slug, *(["--force"] if force else []))
+        extract_rc = run("extract_fulltext.py", slug, *(["--force"] if force else []),
+                         flags=(["--force"] if force else []))
     # Aviso claro al operador (issue #7): qué fuentes faltan y con qué puntero, para que el
     # usuario las provea. Las pendientes NO son fallos (la cadena degrada limpio y sigue).
     if pending_items:

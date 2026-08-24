@@ -675,3 +675,29 @@ def test_el_archivo_del_token_esta_gitignored():
     # @inv INV-67
     ignore = (Path(__file__).resolve().parent.parent / ".gitignore").read_text(encoding="utf-8")
     assert any("ads_dev_key" in ln for ln in ignore.split("\n")), ignore
+
+
+def test_save_busqueda_pliega_la_clave_vieja_en_vez_de_borrarla(toy_vault):
+    """INV-53 — "escribir un registro nuevo no borra el juicio ya registrado, y la historia es
+    reconstruible". `save_busqueda` hacía `data.pop("busqueda")`: la única corrida que un registro
+    pre-D-28 documenta se perdía al migrar, justo en el **único artefacto no regenerable** de la
+    bóveda. Ahora se pliega al frente de la lista, marcada.  @inv INV-53"""
+    cfg.save_registro("test_star", {"slug": "test_star", "busqueda": {
+        "fecha": "2026-01-01", "query": "vieja", "n_total": 40, "n_core": 12}})
+    cfg.save_busqueda("test_star", {"fecha": "2026-08-24", "query": "nueva", "n_total": 50})
+    bs = cfg.load_busquedas("test_star")
+    assert len(bs) == 2 and bs[0]["query"] == "vieja" and bs[1]["query"] == "nueva"
+    assert "pre-D-28" in bs[0]["schema"], "la plegada se declara como tal, no se hace pasar por nueva"
+    assert cfg.load_registro("test_star").get("busqueda") is None, "la clave vieja no sobrevive"
+
+
+def test_save_busqueda_no_pliega_si_ya_hay_historial(toy_vault):
+    """Si el registro ya tiene `busquedas:`, un `busqueda:` residual sería un artefacto de edición
+    a mano, no historia que rescatar: plegarlo inventaría una corrida en medio del historial."""
+    cfg.save_busqueda("test_star", {"fecha": "2026-08-01", "query": "a", "n_total": 1})
+    reg = cfg.load_registro("test_star")
+    reg["busqueda"] = {"fecha": "2020-01-01", "query": "residuo"}
+    cfg.save_registro("test_star", reg)
+    cfg.save_busqueda("test_star", {"fecha": "2026-08-24", "query": "b", "n_total": 2})
+    bs = cfg.load_busquedas("test_star")
+    assert [b["query"] for b in bs] == ["a", "b"]

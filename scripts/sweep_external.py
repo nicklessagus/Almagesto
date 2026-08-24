@@ -20,9 +20,16 @@ cuatro cosas que caducan no las miraba nadie:
 Cinco cosas que caducan y un solo momento para mirarlas — si están repartidas, se corren cuatro y
 la quinta nunca.
 
-⛔ **REPORTA, no aplica solo.** El diff se muestra siempre y se pregunta antes de tocar nada: un
-snapshot que se actualiza solo cambia valores **bajo los pies de la prosa que ya los citó**, y el
-consumidor no tiene forma de enterarse. Lo que sí es automático es la consecuencia offline: al
+⛔ **REPORTA, no aplica solo — con UNA excepción declarada.** El diff se muestra siempre y se
+pregunta antes de tocar nada: un snapshot que se actualiza solo cambia valores **bajo los pies de la
+prosa que ya los citó**, y el consumidor no tiene forma de enterarse.
+
+⚠ **La excepción es `retracciones`**, y hay que decirla acá arriba y no 47 líneas más abajo, porque
+la promesa de cabecera se leía como absoluta: `check_retractions` **escribe** `retracted:` /
+`corrections:` en las notas sin preguntar, y se conserva así a propósito — una fuente retractada
+citada rompe la frontera dura, así que enterarse tarde es peor que el ruido de diff, y lo que estampa
+es una **marca de metadata**, no un valor que la prosa haya citado. Los otros cuatro detectores no
+escriben nada: versiones y web **proponen el comando**, y ground-truth pregunta. Lo que sí es automático es la consecuencia offline: al
 cambiar un `.txt`, el **ancla de fuente** (D-20) marca sola los pares verificados contra él.
 
 El renombre preprint→publicado **nunca** es automático: reescribe wikilinks de toda la bóveda
@@ -147,20 +154,42 @@ def discover_versions() -> list:
     return out, fallidos
 
 
-def sweep_web() -> list:
-    """Snapshots web que ya no dicen lo mismo (D-41).
+def sweep_web() -> tuple[list, list]:
+    """Snapshots web que ya no dicen lo mismo (D-41). `(hallazgos, fallidos)`.
 
-    ⛔ **NO IMPLEMENTADO todavía** — y por eso levanta en vez de devolver `[]`. Un detector que no
-    corrió no puede contribuir un cero: sería exactamente el falso limpio que D-43 prohíbe, acá
-    aplicado a la pasada de red. El orquestador lo reporta como *no evaluado* y **no** lo cuenta en
-    `cubrio`, así que el registro de caducidad no afirma haber mirado lo que no miró.
+    Es el modo de caducidad **más silencioso** de los cinco: una fuente web no tiene ni DOI ni
+    bibcode, nada avisa que cambió, y —a diferencia de un `.txt` re-extraído— el archivo local no se
+    toca, así que **el ancla de fuente (D-20) tampoco se entera**. Las citas verificadas contra ella
+    quedan apuntando a un texto que ya no dice eso.
 
-    Lo que falta: `fetch_web.refresh(citekey)` — re-bajar la URL, hashear el snapshot determinista
-    con `lib_blocks.source_hash`, y si cambió, escribir el nuevo como vigente **conservando el
-    viejo** en disco y en `versions[]` (los pares verificados contra él tienen que quedar
-    trazables; el ancla de fuente los marca sola)."""
-    raise NotImplementedError(
-        "re-snapshot web: falta `fetch_web.refresh` (hashear el snapshot y versionar el viejo)")
+    ⛔ **Reporta, no aplica** (D-45): el diff se muestra y re-snapshotear es decisión del usuario
+    (`fetch_web.py <slug> <citekey> <url> --force`). Escribir el snapshot nuevo cambiaría el texto
+    **bajo los pies de la prosa que ya lo citó**; lo que sí es automático es la consecuencia
+    offline, porque al reescribir el `.txt` el ancla marca sola los pares verificados contra él.
+
+    Un snapshot sin `source_url` en el header, o cuya URL no contesta, es **fallido** — no "no
+    cambió": el registro de caducidad no puede afirmar haber mirado lo que no miró."""
+    import fetch_web
+    out, fallidos = [], []
+    if not cfg.FULLTEXT.exists():
+        return out, fallidos
+    for txt in sorted(cfg.FULLTEXT.glob("*/*.txt")):
+        cabeza = txt.read_text(encoding="utf-8", errors="replace")[:400]
+        if cfg.FULLTEXT_WEB_MARK not in cabeza:
+            continue                       # no es un snapshot web: no hay URL que re-bajar
+        slug, citekey = txt.parent.name, txt.stem
+        try:
+            cambio = fetch_web.refresh(slug, citekey)
+        except Exception as exc:           # noqa: BLE001 — red/URL ajena, por snapshot
+            cfg.print_seguro(f"  ✗ {slug}/{citekey}: no se pudo re-bajar ({exc})")
+            fallidos.append(f"{slug}/{citekey}")
+            continue
+        if cambio:
+            viejo, nuevo = cambio
+            out.append(f"{slug}/{citekey}: el snapshot cambió ({viejo} → {nuevo}) → revisá las "
+                       f"citas que lo usan y re-snapshoteá con `python scripts/fetch_web.py "
+                       f"{slug} {citekey} <url> --force`")
+    return out, fallidos
 
 
 def sweep_ground_truth() -> tuple[list, list]:
@@ -231,10 +260,22 @@ def main(argv=None) -> int:
 
     cubrio, pendientes = [], 0
 
+    def _cubrir(nombre: str, fallidos: list) -> None:
+        """`cubrio` sólo si el detector realmente miró. Un fallo por ítem no tumba la pasada —a
+        propósito— pero tampoco puede desaparecer: si TODOS los ítems fallaron, el detector no
+        cubrió nada; si falló una parte, el registro dice cuántos quedaron sin mirar. Antes esto
+        era un `append` incondicional escrito **antes** de la llamada."""
+        if fallidos:
+            no_evaluados.append((nombre, f"{len(fallidos)} sujeto(s) sin poder mirar: "
+                                         f"{', '.join(fallidos[:5])}"
+                                         + (" …" if len(fallidos) > 5 else "")))
+            cfg.print_seguro(f"  ⛔ {nombre}: {len(fallidos)} sujeto(s) NO evaluado(s)")
+        else:
+            cubrio.append(nombre)
+
     no_evaluados = []
     for nombre, detector in (("retracciones", sweep_retracciones),
-                             ("correcciones", sweep_correcciones),
-                             ("web", sweep_web)):
+                             ("correcciones", sweep_correcciones)):
         try:
             hallazgos = detector()
         except NotImplementedError as exc:
@@ -255,18 +296,16 @@ def main(argv=None) -> int:
     # loguean y se saltean, por diseño: un sujeto raro no debe tumbar la pasada—. Un registro que
     # dice haber mirado lo que no miró es peor que uno vacío: la próxima pasada lo toma como línea
     # de base. Si el detector se lleva puesta la corrida entera, es *no evaluado*, no *cubierto*.
-    def _cubrir(nombre: str, fallidos: list) -> None:
-        """`cubrio` sólo si el detector realmente miró. Un fallo por ítem no tumba la pasada —a
-        propósito— pero tampoco puede desaparecer: si TODOS los ítems fallaron, el detector no
-        cubrió nada; si falló una parte, el registro dice cuántos quedaron sin mirar. Antes esto
-        era un `append` incondicional escrito **antes** de la llamada."""
-        if fallidos:
-            no_evaluados.append((nombre, f"{len(fallidos)} sujeto(s) sin poder mirar: "
-                                         f"{', '.join(fallidos[:5])}"
-                                         + (" …" if len(fallidos) > 5 else "")))
-            cfg.print_seguro(f"  ⛔ {nombre}: {len(fallidos)} sujeto(s) NO evaluado(s)")
-        else:
-            cubrio.append(nombre)
+    try:
+        web, w_fallidos = sweep_web()
+    except Exception as exc:                          # noqa: BLE001 — red ajena
+        no_evaluados.append(("web", str(exc)))
+        cfg.print_seguro(f"  ⛔ web: NO EVALUADO — {exc}")
+    else:
+        _cubrir("web", w_fallidos)
+        for h in web:
+            cfg.print_seguro(f"  · web: {h}")
+        pendientes += len(web)
 
     try:
         versiones, v_fallidos = discover_versions()

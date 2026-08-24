@@ -1,7 +1,7 @@
 ---
 name: maintain
 description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.facets ("cambié el objetivo, re-clasificá el corpus"), resolver el backlog del lint (P_rot sin documentar, drift PDF↔disco, cobertura, claims stale), y la pasada periódica de retracciones sobre toda la bóveda ("chequeá retracciones").
-version: 1.18.0
+version: 1.20.0
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
@@ -87,6 +87,32 @@ Progreso del refresh de <entidad>:
 4. Cierre: verify-citations sobre la prosa cambiada → lint → `log` → commit → preguntar push.
 
 ## B. Borrar un paper / estrella / tema
+
+### B0. Borrar una ENTIDAD entera (estrella o tema) → `entity.py` (INV-19)
+
+Una entidad vive en **siete capas** y el procedimiento a mano de abajo era nueve pasos en orden
+sobre siete lugares distintos — o sea una lista de cosas que se pueden saltear, y las salteadas no
+dejaban rastro (el lint tenía red para `wiki/` y **ninguna** para el registro, `raw/` ni `build/`).
+Hay herramienta:
+
+```bash
+python scripts/entity.py plan   <slug>              # qué toca — no escribe nada
+python scripts/entity.py delete <slug> --yes        # aplica
+python scripts/entity.py rename <viejo> <nuevo> --yes
+```
+
+⛔ **Sin `--yes` es dry-run**, a propósito: la capa 2 (`config/registro/<slug>.yaml`) es el **único
+artefacto no regenerable** de la bóveda. Lo que la herramienta **no** hace sola, y avisa:
+- **no borra los papers compartidos**: a una nota con `stars: [A, B]` le saca A y la deja;
+- **no repara los `[[wikilink]]` rotos** — apuntan a una nota que ya no existe y el lint los da
+  bloqueantes. Repararlos automáticamente sería decidir qué decía esa frase;
+- **no borra la nota que queda sin destino** (D-23): es extracción ya pagada.
+Todo eso sale listado al aplicar, y el cierre es `lint.py --cierre` en 0.
+
+Y el lint tiene la red del otro lado: **capas colgadas** (registro / `raw/pdfs` / `raw/fulltext` /
+`build` de un slug que no está en `stars.yaml`/`themes.yaml`) es backlog propio.
+
+### B1. Borrar un PAPER suelto (o hacerlo a mano)
 1. **Antes de borrar, mapear lo que cuelga** (el lint los detectaría, pero resolvelos vos limpio):
    ```bash
    grep -rn "<bibcode-o-slug>" vault/wiki/                    # wikilinks, thesis_links, disputes[].posiciones[].ref, matriz
@@ -113,6 +139,15 @@ Progreso del refresh de <entidad>:
    (qué se borró y por qué) → commit → preguntar push.
 
 ## C. Renombrar un slug
+
+**Usá `python scripts/entity.py rename <viejo> <nuevo>`** (dry-run sin `--yes`): mueve las siete
+capas, preserva el registro —si queda atrás, el triage re-propone todo lo descartado **sin el
+motivo**, que es el bug que #51 cerró— y **rehúsa** renombrar encima de artefactos existentes, que
+fusionaría dos entidades en silencio. En un **tema** reescribe además `thesis_links` y los
+`[[wikilink]]`; en una **estrella** no hace falta: lo que se referencia es el NOMBRE, que el
+renombre de slug no toca.
+
+El procedimiento manual, por si hay que hacerlo a mano:
 1. Renombrar en orden: la clave en `stars.yaml`/`themes.yaml`, los directorios
    `vault/raw/{pdfs,fulltext}/<slug>/`, `ground_truth/<slug>.json`,
    `vault/config/registro/<slug>.yaml` (si no, el juicio de triage queda huérfano y se re-propone
@@ -177,7 +212,9 @@ martes cualquiera no frena nada útil; el gate es el cierre de la operación que
   **en su lugar** (no una sección nueva), y re-estampar la tabla `## Papers` con
   `python scripts/make_notes.py <slug>` para que el estado de cada paper deje de mentir. Si un paper
   legítimamente no se inlinea, declarar `no_sintetizado: <motivo>` en su nota — con motivo, como
-  todo descarte.
+  todo descarte. Al cerrar, **re-declarar la fecha de síntesis**
+  (`python scripts/triage.py <slug> --sintesis --n-papers <N>` + `make_notes.py <slug>`): si no, la
+  ficha sigue diciendo que se sintetizó cuando se sintetizó la vez pasada.
 - **Triage pendiente** (#55 — candidatos del chaining que nadie juzgó) → `python scripts/triage.py
   <slug>` y decidir cada uno por título+abstract: pertinente → `extra_core` en `stars.yaml` +
   re-correr la cadena; ruido → `--drop … --reason`; dudoso → al usuario. Es el paso con más juicio
@@ -282,7 +319,7 @@ cuatro y la quinta nunca:
 | correcciones | erratum / corrigendum / EoC | ✅ |
 | versiones | el preprint salió publicado → otro bibcode del mismo trabajo (D-19) | ✅ |
 | ground-truth | NEA cambió valores entre releases | ✅ |
-| snapshot web | la URL citada cambió | ⛔ **no implementado**: levanta, se declara *no evaluado* y la pasada sale **2** a propósito |
+| snapshot web | la URL citada cambió | ✅ (1.35.0) — el **más silencioso** de los cinco: una fuente web no tiene DOI ni bibcode, y como el `.txt` local **no** se toca, el ancla de fuente tampoco se entera |
 
 ⛔ **Reporta, no aplica sola**: muestra el diff y pregunta. Un snapshot que se actualiza solo cambia
 valores **bajo los pies de la prosa que ya los citó**. El renombre preprint→publicado **nunca** es

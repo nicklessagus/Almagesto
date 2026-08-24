@@ -11,10 +11,13 @@ obliga a agregarlo acá, y el test dice qué clave falta.
 """
 from __future__ import annotations
 
+import argparse
+import inspect
 import xml.etree.ElementTree as ET
 
 import pytest
 
+import lib_config as cfg
 import openalex as oa
 import query_ads as qa
 import search_arxiv as sx
@@ -66,3 +69,46 @@ def test_el_veredicto_del_clasificador_tiene_el_tipo_correcto(nombre, hacer, toy
     assert isinstance(rec["relevant"], bool), f"{nombre}: relevant={rec['relevant']!r}"
     assert isinstance(rec["facets"], list), f"{nombre}: facets={rec['facets']!r}"
     assert rec["why_excluded"] is None or isinstance(rec["why_excluded"], str)
+
+
+# ── red #2 · `_flags_usados`: una implementación, siete clientes ────────────
+
+FLAGS_CLIENTES = ["fetch_pdf", "extract_fulltext", "fetch_ground_truth", "check_retractions",
+                  "fetch_arxiv", "make_notes", "query_ads"]
+
+
+@pytest.mark.parametrize("modulo", FLAGS_CLIENTES)
+def test_flags_usados_delega_en_la_implementacion_unica(modulo):
+    """Vivía copiada en los siete (seis idénticas y una con `chr(95)/chr(45)`), y las siete tenían
+    **el mismo agujero**: sólo miraban `v is True`. Red #2 — si N módulos prometen la misma forma,
+    se prueba una vez parametrizada, no con prosa en N docstrings."""
+    import importlib
+    m = importlib.import_module(modulo)
+    fuente = inspect.getsource(m._flags_usados)
+    assert "cfg.flags_usados(args, ap)" in fuente, (
+        f"{modulo}._flags_usados reimplementa en vez de delegar:\n{fuente}")
+
+
+def test_flags_usados_registra_el_flag_con_valor():
+    """`--limit` es el flag que MÁS cambia lo que la corrida hizo —con `--limit 1` sobre cuatro
+    pendientes, tres papers no se intentaron siquiera— y no se registraba: la traza decía "corrió
+    fetch_pdf" igual que una corrida completa."""
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--force", action="store_true")
+    ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--rows", type=int, default=2000)
+    assert cfg.flags_usados(ap.parse_args([]), ap) == []
+    assert cfg.flags_usados(ap.parse_args(["--limit", "1"]), ap) == ["--limit=1"]
+    assert cfg.flags_usados(ap.parse_args(["--force", "--rows", "5000"]), ap) == \
+        ["--force", "--rows=5000"]
+    assert cfg.flags_usados(ap.parse_args(["--rows", "2000"]), ap) == [], "el default no es escotilla"
+
+
+def test_flags_usados_sin_parser_solo_booleanos():
+    """Sin el parser no se puede saber qué valor es default y cuál lo pusieron a mano. Degradar a
+    "todos los valores" llenaría la traza de ruido constante; se degrada a los booleanos, que es lo
+    que siempre se supo."""
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--force", action="store_true")
+    ap.add_argument("--rows", type=int, default=2000)
+    assert cfg.flags_usados(ap.parse_args(["--force", "--rows", "9"])) == ["--force"]

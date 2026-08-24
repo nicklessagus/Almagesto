@@ -30,6 +30,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 
+import lib_blocks as lb
 import lib_config as cfg
 import make_notes
 
@@ -72,7 +73,14 @@ def defuddle_version() -> str:
 
 
 def fetch(url: str) -> str:
-    """Corre `npx defuddle parse <url> --markdown` y devuelve el markdown. '' si falla."""
+    """Corre `npx defuddle parse <url> --markdown` y devuelve el markdown.
+
+    `''` cuando defuddle sale con código ≠ 0 (el caso normal de una URL que no rinde). **Propaga**
+    `subprocess.TimeoutExpired` a los 180 s y `FileNotFoundError` si falta `npx`: son fallos del
+    ENTORNO, no de la página, y devolverlos como `''` los haría indistinguibles de "la página no
+    tenía contenido" — que es lo que `main()` reporta como snapshot vacío y `sweep_web` contaría
+    como *no cambió*. El llamador los cuenta como **no evaluado** (`sweep_web` los registra en
+    `fallidos`)."""
     # encoding explícito: sin él, Windows decodifica con la locale (cp1252) y el markdown
     # UTF-8 de defuddle sale mojibake — el snapshot debe ser idéntico en cualquier OS.
     r = subprocess.run(["npx", "--yes", "defuddle", "parse", url, "--markdown"],
@@ -82,6 +90,39 @@ def fetch(url: str) -> str:
         cfg.print_seguro(f"    ! defuddle falló ({r.returncode}): {r.stderr.strip()[:200]}")
         return ""
     return r.stdout
+
+
+def snapshot_body(texto: str) -> str:
+    """El CUERPO del snapshot, sin el header. El header lleva `retrieved` (una fecha que cambia en
+    cada corrida) y la versión del extractor: hashear el archivo entero haría que **toda** re-bajada
+    se viera como "la página cambió". Lo que se compara es el contenido extraído."""
+    marca = "# ---- contenido extraído (defuddle) ----"
+    i = texto.find(marca)
+    return texto[i + len(marca):].strip() if i >= 0 else texto.strip()
+
+
+def refresh(slug: str, citekey: str) -> tuple[str, str] | None:
+    """Re-baja la URL de un snapshot y devuelve `(hash_viejo, hash_nuevo)` **si el cuerpo cambió**;
+    `None` si es igual. **No escribe nada** (D-45: reporta, no aplica solo).
+
+    Es el insumo del quinto detector de la pasada de red (D-41). Una fuente web no tiene ni DOI ni
+    bibcode: nada avisa que cambió, y las citas verificadas contra ella quedan apuntando a un texto
+    que ya no dice eso — con la diferencia de que acá **el archivo local no se toca**, así que el
+    ancla de fuente (D-20) tampoco se entera. Es el modo de caducidad más silencioso de los cinco.
+
+    Levanta `RuntimeError` si el snapshot no declara `source_url` (no se puede re-bajar lo que no se
+    sabe de dónde salió) — el llamador lo cuenta como **no evaluado**, nunca como "no cambió"."""
+    out = cfg.FULLTEXT / slug / f"{citekey}.txt"
+    texto = out.read_text(encoding="utf-8", errors="replace")
+    url = cfg.snapshot_url(out)
+    if not url:
+        raise RuntimeError(f"{slug}/{citekey}.txt no declara `source_url` — no se puede re-bajar")
+    raw = fetch(url)
+    if not raw.strip():
+        raise RuntimeError(f"{url} devolvió vacío")
+    body, _ = clean_markdown(raw)
+    viejo, nuevo = lb.sha10(snapshot_body(texto)), lb.sha10(body.strip())
+    return None if viejo == nuevo else (viejo, nuevo)
 
 
 def main() -> int:

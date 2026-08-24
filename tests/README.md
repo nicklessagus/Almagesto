@@ -19,13 +19,42 @@ justo cuando más sirve.
 
 | Tier | Qué corre | Comando | Presupuesto |
 |---|---|---|---|
-| **0** — siempre (default, CI en cada push) | todo `tests/*.py` | `python -m pytest tests/ -q` | ≤ 2,5 s |
-| **1** — `poblada` (nightly / pre-release) | `tests/poblada/` sobre corpus sintético (~900 notas) | `python -m pytest tests/ -m poblada -q` | ≤ 90 s |
+| **0** — siempre (default, CI en cada push) | todo `tests/*.py` | `python -m pytest tests/ -q` | ≤ 8 ms/test **y** ≤ 10 s |
+| **1** — `poblada` (nightly / pre-release) | `tests/poblada/` sobre corpus sintético (~900 notas) | `python -m pytest tests/ -m poblada -q` | ≤ 120 s |
 | **2** — `instancia` (sólo en la máquina del usuario; gate del deploy) | invariantes sobre una instancia REAL | `ALMAGESTO_INSTANCIA=/ruta/a/la/instancia python -m pytest tests/ -m instancia -q` | ≤ 60 s |
 | todos | los tres | `ALMAGESTO_INSTANCIA=... python -m pytest tests/ -m "" -q` | ≤ 3 min |
 
 `instancia` **sin** la env var **skipea con motivo visible**, nunca pasa en silencio: un tier que se
 saltea sin decirlo es el mismo modo de falla que el "0 que no miró" (ver abajo).
+
+> **El presupuesto de tier 0 es una TASA, no un absoluto — y esa es la corrección de 10.3.** El
+> techo original (≤ 2,5 s) se escribió con ~400 tests y se fue a **7,3 s** a lo largo de nueve
+> tandas, una decena de tests por vez, **sin que nada fallara nunca**: ninguna corrida se pone roja
+> por lenta. Es el caso de manual de *"una promesa que el sistema dejó de cumplir en silencio"*.
+>
+> Lo que la medición mostró (2026-08-24), que es lo que el issue pedía decidir **con la medición en
+> la mano** y no antes:
+> - el hotspot **no** era `is_legible` —tier 0 no tiene corpus grande—: era **un solo test** que
+>   barría el repo entero con AST para mirar dos archivos, **2,6 s de los 7,3**. Acotarlo bajó el
+>   tier a **4,75 s** sin tocar nada más;
+> - el resto es piso por test (~4 ms de tmpdir por `toy_vault`) × ~1000 tests;
+> - o sea que **el costo por test BAJÓ** desde que se escribió el techo (2,5 s / 400 ≈ 6 ms/test
+>   entonces, 4,7 ms/test hoy). Lo que creció es la cantidad.
+>
+> **Tier 1 pasó de ≤ 90 s a ≤ 120 s, y es una decisión, no un trámite.** Medido: 55 s → 91 s en la
+> misma sesión, y el crecimiento es **cobertura real**, no grasa — el generador pasó de sembrar 7
+> anomalías a 16 (nueve siembras parametrizadas nuevas), entraron tres anclas (`source_hash`
+> compartiendo lectura, corpus limpio en las 48 categorías, los números de la doc) y una de ellas
+> es **una corrida entera de tier 0** (5,1 s: es el instrumento que mide el otro presupuesto).
+> Lo que NO puede pasar es que el techo suba solo: lo fija
+> `test_escala.py::test_presupuesto_de_tier_1`, con el mismo criterio que su hermano.
+
+> Por eso el presupuesto es **≤ 8 ms/test y ≤ 10 s absolutos**: la tasa protege la propiedad real
+> —*una suite que tarda se deja de correr antes de commitear*— y el techo absoluto impide que la
+> cantidad crezca sin límite amparada en la tasa. Los dos los mide
+> `tests/poblada/test_escala.py::test_presupuesto_de_tier_0`, que corre el tier 0 como subproceso
+> **desde tier 1**: un tier no puede medirse a sí mismo sin sumar su propio costo al que reporta.
+> Un techo sin test es exactamente cómo éste llegó a 7,3 s.
 
 Requiere `pytest` (dev-only, no está en `requirements.txt`; los scripts no lo necesitan).
 
@@ -115,6 +144,32 @@ seguía contando — dos veces.
 `tests/poblada/conftest.py` los dos como módulo `conftest` y el segundo pisa al primero, rompiendo
 los `from conftest import ...` de la suite vieja. Sólo se ve corriendo la suite **completa**.
 
+## Cuánto del lint vigila el corpus poblado (10.3)
+
+El lint tiene **48 categorías**; el generador sintético sabe sembrar **16 anomalías**, y
+`test_conteos_exactos` puede afirmar *"reporta exactamente estos K, ni uno más"* sólo sobre esas.
+El resto queda cubierto de otra forma —el corpus limpio tiene que dar **cero en las 48** salvo tres
+declaradas (`test_el_corpus_limpio_da_cero_en_TODAS_las_categorias`)—, que detecta el falso positivo
+pero no el falso negativo.
+
+⚠ **Ese desbalance era el hallazgo de 10.3, y era peor**: el generador sembraba **7** de 48, o sea
+que el test más fuerte de la suite vigilaba **un séptimo** del lint. Todo lo agregado después de la
+primera pasada (par vencido, identidad duplicada, `inferencia` pelada, `status` inválido, registro
+viejo, lente desincronizada, alcance de hipótesis, capas colgadas) no tenía corpus grande que lo
+probara. Y había una segunda mitad: el corpus "limpio" **no lo estaba** —cinco hipótesis sin
+alcance, tres fichas con la tabla `## Papers` desactualizada, tres registros sin `extraccion`—
+porque el generador no emitía el schema vigente, y sobre ese ruido de fondo **ninguna anomalía
+sembrada era distinguible**.
+
+Los tres números (48 categorías, 16 anomalías, 3 de ruido declarado) **salen del código, no de acá**:
+los cruza `test_conteos_exactos`, así que agregar una categoría al lint sin sembrarla deja el
+desbalance a la vista en vez de esconderlo.
+
+Emitir el schema vigente destapó además un bug real del lint: la tabla `## Papers` materializada
+lista **todo** paper del sujeto con su `[[stem]]`, así que satisfacía sola el proxy de *extraído
+pero no sintetizado* — la máquina "citaba" por su cuenta cada paper que el humano no había
+sintetizado, y la categoría no podía disparar nunca (medido: 4 → 0).
+
 ## Fuera de alcance (deliberado)
 
 - Respuestas reales de ADS/NEA/Crossref (cambian; lo que se fija acá es el **parseo y la
@@ -138,6 +193,23 @@ juicio de un modelo.
 | 3 | Un **doble** con distinto contrato que la función real | test de paridad al lado del doble |
 | 4 | Funciones que **nadie ejecuta** | `pytest tests/poblada/test_cobertura.py -m poblada` (~11 s) |
 | 5 | La **doc afirmando cosas del código** | `tests/test_docs_ejecutables.py` (tier 0) |
+
+**La red 5 creció el 2026-08-24, porque tenía el mismo agujero que perseguía**: validaba que el
+*script* existiera, no que el *flag* existiera — y `CLAUDE.md` mandaba a correr
+`make_notes.py --restamp-keywords`, un flag que el issue que lo prometió nunca implementó. Hoy son
+**nueve** chequeos (cuatro nuevos):
+
+| Chequea | Qué agujero cerró |
+|---|---|
+| los `tests/x.py::test_y` que nombra la doc existen | referencias a tests borrados |
+| los `scripts/x.py` que invoca un skill existen y compilan | un skill que llama a un script muerto |
+| los `scripts/x.py` que nombra la doc existen | scripts renombrados o borrados |
+| los archivos de config que nombra la doc existen | rutas de `vault/config/` renombradas |
+| los `--flag` que nombra la doc existen — en bloque de comandos **y en prosa** | `--restamp-keywords` inventado; `--topic` sobrevivió a R-5 dentro de una frase |
+| los flags declarados **retirados** siguen retirados | la lista de excepciones convirtiéndose en colador |
+| ningún estado del contrato se inventa por fila | tres filas evadían `parcial` con un paréntesis ad-hoc |
+| los conteos del encabezado son los de las filas | un resumen escrito a mano que envejece solo |
+| la doc no apunta al código **por número de línea** | los siete punteros de `contrato.md` apuntaban al renglón equivocado, uno a otro invariante |
 
 **Cuándo**: 2 y 5 corren solas en tier 0. La 4, al cerrar un issue. **La 1, al escribir cada función
 nueva** — es la única que cuesta (una corrida de suite por función) y la única que distingue "el

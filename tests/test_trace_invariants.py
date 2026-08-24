@@ -134,9 +134,17 @@ def test_marca_en_string_literal_no_cuenta(repo: Path):
 def test_el_recolector_no_se_marca_a_si_mismo():
     """Contra el repo REAL: los ejemplos de sintaxis que el propio `trace_invariants.py` y su test
     muestran en la doc no pueden contar como cobertura (se auto-adjudicaba INV-87 e INV-90)."""
-    marcas = [m for m in ti.collect_marks(ti.ROOT)
-              if m.path.endswith(("trace_invariants.py", "test_trace_invariants.py"))]
-    assert marcas == []
+    # Se arma un árbol con SÓLO los dos archivos, en vez de barrer el repo entero y filtrar: la
+    # pregunta es sobre esos dos, y el barrido completo costaba **2,6 s del presupuesto de tier 0**
+    # (el test más caro de la suite, por lejos) para tirar el 95% de lo que leía.
+    import shutil, tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        raiz = Path(tmp)
+        (raiz / "scripts").mkdir()
+        (raiz / "tests").mkdir()
+        shutil.copy(ti.ROOT / "scripts" / "trace_invariants.py", raiz / "scripts")
+        shutil.copy(ti.ROOT / "tests" / "test_trace_invariants.py", raiz / "tests")
+        assert ti.collect_marks(raiz) == []
 
 
 def test_mencion_en_prosa_no_es_marca(repo: Path):

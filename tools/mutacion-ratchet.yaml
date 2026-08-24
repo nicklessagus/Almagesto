@@ -11,21 +11,27 @@ medido_en: "2026-08-24"
 # El barrido completo son ~200 funciones × una corrida de suite cada una (~20 min) y todavía no
 # corrió. Hasta entonces este techo NO cubre el resto del árbol: `tools/cobertura-ratchet.yaml`
 # (11 s) es la red barata mientras tanto.
-alcance: "scripts/{citation_index,openalex,search_arxiv}.py + el diff de la sesión 2026-08-24"
-techo: 6
+alcance: "el diff completo de la sesión 2026-08-24 — 268 funciones, o sea la mayor parte de
+          `scripts/`; ya no es el recorte de tres módulos de la Tanda 7"
+techo: 7
 
-# Las 6 que sobreviven, y por qué son deuda declarada y no diseño. Las tres primeras son la medición
-# de la Tanda 7; las tres últimas salieron del `--diff` del 2026-08-24 sobre 120 funciones, y las
-# **dos** que eran funciones puras ya no están acá: se les escribió el test que faltaba
-# (`make_notes._concept_dest` y `triage.triage_file` — la primera decide DÓNDE cae la nota de un
-# concepto, la segunda fija que el juicio de curación viva en el registro versionado y no en scratch,
-# que es el punto entero de #51; las dos sobrevivían a que les vaciaran el cuerpo).
-#   citation_index.py::_fetch_ads_default   ← ruta de red real: los tests inyectan dobles siempre
-#   citation_index.py::_fetch_oa_default    ← idem
-#   openalex.py::_mailto                    ← lee `git config user.email`: depende del entorno
-#   check_retractions.py::_mailto           ← idem (gemelo del anterior)
+# Las 7 que sobreviven, medidas el 2026-08-24 sobre **268 funciones**, y **todas** son fronteras con
+# el entorno (subprocess, red, locale): no queda ninguna función pura acá. Las cuatro que sí lo eran
+# salieron de la lista el mismo día en que el gate las encontró, con el test que faltaba —
+# `make_notes._concept_dest` (decide DÓNDE cae la nota de un concepto), `triage.triage_file` (fija
+# que el juicio de curación viva en el registro versionado y no en scratch, que es el punto entero
+# de #51), `ingest_theme._listify_curado` (preserva el `extra_core` escalar en vez de perder la
+# curación) y `ingest_theme.repoint_source_pdf` (repunta el PDF a la copia versionada sin destruir
+# los comentarios del YAML). Las cuatro sobrevivían a que les vaciaran el cuerpo.
+#   check_retractions.py::_mailto           ← lee `git config user.email`: depende del entorno
+#   extract_fulltext.py::tesseract_version  ← `tesseract --version`: subprocess
+#   fetch_web.py::fetch                     ← `npx defuddle`: subprocess contra Node
+#   fetch_web.py::defuddle_version          ← idem
+#   lib_config.py::stdout_tolerante         ← shim de encoding del stdout (locale del OS)
 #   sweep_external.py::_run                 ← lanza un subprocess: los tests graban la fachada
 #   sweep_external.py::aplicar_ground_truth ← idem (`_run` con --force); el test lo anula por diseño
+# (`citation_index._fetch_*` y `openalex._mailto` ya no figuran: no entraron en el diff de esta
+#  corrida. Su deuda sigue declarada en la medición de la Tanda 7.)
 #
 # `openalex.py::_abstract` salió de esta lista el mismo día que entró: el gate la encontró y se le
 # escribió el test que faltaba (el fixture nunca traía `abstract_inverted_index`, y `classify_record`

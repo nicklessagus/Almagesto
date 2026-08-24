@@ -324,19 +324,19 @@ def slug_notes(slug: str) -> list:
     return notes
 
 
-def _estampar(args) -> None:
+def _estampar(args, ap=None) -> None:
     """R-6/D-57: el paso se estampa a sí mismo al salir 0 o 1 (las dos ramas en que **corrió**);
     con rc 2 no, porque el registro no puede afirmar haber mirado lo que no miró.
 
     Es el último paso de `CADENA_ESTRELLA` y era el único de los siete que no se estampaba: la
     cadena completa se reportaba como cortada acá, siempre.  @inv INV-91"""
     if args.slug:
-        cfg.save_paso(args.slug, "check_retractions", flags=_flags_usados(args))
+        cfg.save_paso(args.slug, "check_retractions", flags=_flags_usados(args, ap))
 
 
-def _flags_usados(args) -> list:
+def _flags_usados(args, ap=None) -> list:
     """Los flags no-default de esta corrida, para `cadena:` del registro (D-48/D-57)."""
-    return sorted(f"--{k.replace(chr(95), chr(45))}" for k, v in vars(args).items() if v is True)
+    return cfg.flags_usados(args, ap)
 
 
 def main() -> int:
@@ -480,7 +480,7 @@ def main() -> int:
             cfg.print_seguro(f"  - {bib}: {why}")
         # "retractados mandan": con retractados Y errores sale 1 (lo urgente es la fuente
         # retractada), y los errores quedan igual en el reporte de arriba.
-        _estampar(args)
+        _estampar(args, ap)
         return 1
     if errors:
         cfg.print_seguro("⛔ no pudo chequear (rc 2): quedaron papers sin consultar y no se detectó "
@@ -497,7 +497,7 @@ def main() -> int:
                          f"tienen `doi`, así que no se consultó Crossref ni una vez — el resultado "
                          f"NO es «limpio», es «no se miró». Completá los `doi` que existan.")
         return 2
-    _estampar(args)
+    _estampar(args, ap)
     return 0
 
 

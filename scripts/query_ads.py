@@ -1181,12 +1181,11 @@ def print_probe(q: str, recs: list, noncore_top: int = 25) -> int:
 
 
 
-def _flags_usados(args) -> list:
+def _flags_usados(args, ap=None) -> list:
     """Los flags no-default de esta corrida, para dejarlos en `cadena:` del registro (D-48/D-57).
     Son las **escotillas**: `--force`, `--yes`, `--all` cambian lo que la corrida hizo, y sin
     registrarlas la traza dice "corrió make_notes" sobre dos corridas que no hicieron lo mismo."""
-    return sorted(f"--{k.replace('_', '-')}" for k, v in vars(args).items()
-                  if v is True and k not in ("theme",))
+    return cfg.flags_usados(args, ap)
 
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
@@ -1515,7 +1514,7 @@ def main() -> int:
         # saltea la guardia de expansión, `--extra-only` no consulta ADS), así que sin ellas dos
         # entradas idénticas del registro pueden describir corridas que no hicieron lo mismo. De
         # acá llegan a la cabecera de la ficha vía `search_line`.
-        "escotillas": _flags_usados(args),
+        "escotillas": _flags_usados(args, ap),
         "almagesto_version": cfg.ALMAGESTO_VERSION,
         # La LENTE con la que se clasificó, textual (#64 → auditoría 1.10.3). `almagesto_version`
         # es la versión del framework, NO la de la regla: cambiar una regex de `relevance.facets`
@@ -1524,7 +1523,7 @@ def main() -> int:
         "lente": lens_used(),
     })
     cfg.print_seguro(f"  → {cfg.registro_path(args.slug)} (registro de búsqueda, versionado)")
-    cfg.save_paso(args.slug, "query_ads", flags=_flags_usados(args))
+    cfg.save_paso(args.slug, "query_ads", flags=_flags_usados(args, ap))
     return 0
 
 

@@ -22,7 +22,9 @@ El usuario cura las fuentes (`vault/raw/`) y hace preguntas.
 > refrescar el corpus hacía parecer re-verificado lo que nadie volvió a chequear.
 
 > **Al iniciar sesión, leé `vault/STATUS.md` (estado + próximos pasos) y `vault/wiki/log.md` (historial
-> reciente) para orientarte.** La "memoria" del proyecto es in-repo: este `CLAUDE.md` + `vault/STATUS.md`
+> reciente) para orientarte.** *(Si estás en el repo **template** `Almagesto` —donde esos dos son la
+> **semilla** que una instancia nueva clona, no un estado— el handoff del desarrollo del framework
+> vive en `docs/internal/HANDOFF.md`, que no se versiona.)* La "memoria" del proyecto es in-repo: este `CLAUDE.md` + `vault/STATUS.md`
 > + `vault/wiki/log.md` + `vault/wiki/index.md`. No depender de la memoria local de Claude (`~/.claude/...`),
 > que no viaja entre máquinas. Tras cada operación, actualizá `index.md`, appendeá a `log.md`
 > (entrada `## AAAA-MM-DD — <op>: <título>` + bullets — greppable por fecha) y, si cambió el estado,
@@ -651,10 +653,10 @@ en el skill.
 
 ### Pasada de red (lo que cambia AFUERA — `scripts/sweep_external.py`)
 Una bóveda afirma cosas sobre el mundo y el mundo cambia después del ingest. **Cinco** cosas
-caducan y se miran en **una sola pasada** —hoy **cuatro de las cinco**: `sweep_web` levanta
-`NotImplementedError`, se declara *no evaluado* y la pasada sale **2** a propósito (INV-85
-`parcial`)—: retracciones, correcciones, **versiones**
-(el preprint salió publicado → otro bibcode para el mismo trabajo, D-19), **snapshot web** y
+caducan y se miran en **una sola pasada** —las cinco desde 1.35.0—: retracciones, correcciones, **versiones**
+(el preprint salió publicado → otro bibcode para el mismo trabajo, D-19), **snapshot web** (una
+fuente web no tiene ni DOI ni bibcode: nada avisa que cambió, y como el archivo local **no** se
+toca, el ancla de fuente tampoco se entera — es el modo de caducidad más silencioso de los cinco) y
 **ground-truth** (NEA cambia valores entre releases, y el snapshot era un JSON congelado que
 **nada** comparaba — el caso más silencioso). Si están repartidas, se corren cuatro y la quinta
 nunca.
@@ -676,12 +678,17 @@ sistema.
 
 ### Mantenimiento (cuidar lo ya ingestado — skill `maintain`)
 **No crea entidades** (eso es Ingest); opera sobre estrellas/conceptos que **ya existen**. Sub-modos:
-**refrescar** (papers nuevos → re-sintetizar sólo lo nuevo), **borrar** (nota + PDF/fulltext + reparar
-colgados), **renombrar** slug, **re-clasificar** tras cambiar `relevance.facets`, **resolver el
+**refrescar** (papers nuevos → re-sintetizar sólo lo nuevo), **borrar** y **renombrar** una entidad
+—`python scripts/entity.py delete|rename` (INV-19): las **siete** capas (clave del YAML, registro,
+ground-truth, `raw/pdfs`, `raw/fulltext`, nota, `build/`), dry-run sin `--yes` porque el registro es
+el único artefacto no regenerable. Lo que no hace solo lo **avisa**: no borra el paper compartido, no
+repara los `[[wikilink]]` que quedan rotos ni la nota que queda sin destino. Del otro lado, el lint
+reporta las **capas colgadas** de un slug que ya no existe—, **re-clasificar** tras cambiar
+`relevance.facets`, **resolver el
 backlog del lint** (P_rot sin documentar, drift PDF↔disco, cobertura — los **huérfanos no**: son
-bloqueantes, se arreglan al cierre de la operación que los creó), y la **pasada periódica de
-retracciones** (`check_retractions.py` sin `--slug`, toda la bóveda — la cadena de ingest sólo
-chequea el slug en curso; **esa misma pasada estampa también `corrections`**, con el mismo valor
+bloqueantes, se arreglan al cierre de la operación que los creó), y la **pasada periódica de red**
+(`python scripts/sweep_external.py`, toda la bóveda — la cadena de ingest sólo chequea el slug en
+curso; **esa misma pasada estampa también `corrections`**, con el mismo valor
 que para las retracciones: cazar lo publicado **después** del ingest y cubrir el corpus anterior a
 1.8.0. Lo ingestado desde entonces ya trae sus `corrections` estampadas por la cadena). Invariante: la cadena es
 idempotente (refrescar es seguro); **nunca** se pisa la extracción LLM ni el ground-truth sin `--force`

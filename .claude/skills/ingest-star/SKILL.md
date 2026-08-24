@@ -1,7 +1,7 @@
 ---
 name: ingest-star
 description: Usar cuando el usuario pide bajar/agregar/ingestar una estrella a la bóveda ("bajá GJ 581", "ingest tau ceti", "agregá la estrella X", "traé la bibliografía de AU Mic"). Corre la cadena de ingesta y hace la extracción LLM.
-version: 1.18.0
+version: 1.19.0
 ---
 
 # Ingest: agregar una estrella a la wiki
@@ -27,7 +27,7 @@ Progreso del ingest de <estrella>:
 - [ ] 3b contraste cross-paper (inventario por eje)
 - [ ] 3c síntesis a la ficha (frontmatter propio + prosa + disputes)
 - [ ] 4  auto-revisión de autosuficiencia
-- [ ] 5  bookkeeping (index, log, matriz, STATUS)
+- [ ] 5  bookkeeping (index, log, matriz, STATUS) + `triage.py <slug> --sintesis`
 - [ ] 5b verify-citations sobre la ficha + notas nuevas
 - [ ] 6  `lint.py --cierre` en 0 → commit → preguntar push
 ```
@@ -153,9 +153,14 @@ Progreso del ingest de <estrella>:
    dos números lo describe.
 
    - **Default: se leen todos los core.**
-   - Si no se leen todos, **se avisa al usuario** y el motivo queda **registrado** (`extraccion:` en
-     `vault/config/registro/<slug>.yaml`; el lint lo reporta como *recorte de lectura sin declarar*
-     mientras no esté). El criterio de selección se **declara**, no se aplica implícito.
+   - Si no se leen todos, **se avisa al usuario** y el motivo queda **registrado**:
+     ```bash
+     python scripts/triage.py <slug> --extraccion subconjunto --reason "<el criterio>"
+     python scripts/triage.py <slug> --extraccion todos          # el default del contrato
+     ```
+     El lint lo reporta como *recorte de lectura sin declarar* mientras no esté. El criterio se
+     **declara**, no se aplica implícito — y `--reason` es obligatorio con `subconjunto` por el
+     mismo motivo que en `--drop`: es la pieza que más se va a leer dentro de seis meses.
    - **Sea cual sea la decisión, la tabla `## Papers` de la ficha declara cuál entró y cuál no** — el
      estado nunca es implícito. Se re-estampa con `python scripts/make_notes.py <slug>`.
 
@@ -231,7 +236,14 @@ Progreso del ingest de <estrella>:
 
 5. **Bookkeeping.** Actualizar `vault/wiki/index.md` (agregar la estrella), appendear a `vault/wiki/log.md`,
    tocar `vault/wiki/matrices/method_star.md` (qué métodos se aplicaron en la literatura) y `vault/STATUS.md`
-   si cambió el estado. (El `lint` va **después** del verify del paso 5b: `CLAUDE.md` lo pide
+   si cambió el estado. Y **declarar la fecha de síntesis** —la tercera de la cabecera (INV-82)—:
+   ```bash
+   python scripts/triage.py <slug> --sintesis --n-papers <N>
+   python scripts/make_notes.py <slug>          # la estampa en la ficha (cirugía, no toca la prosa)
+   ```
+   No se puede derivar: `git` fecha el **archivo**, así que una cirugía de cabecera contaría igual
+   que reescribir el resumen. Sin ella, refrescar el corpus mueve la fecha de búsqueda y la ficha se
+   lee como re-sintetizada cuando la prosa es la de tres meses atrás. (El `lint` va **después** del verify del paso 5b: `CLAUDE.md` lo pide
    "antes de lint/commit", porque resolver una cita no-soportada suele cambiar la prosa.)
 
 5b. **Verificar citas.** Correr el skill `verify-citations` sobre la **ficha de la estrella** (y sobre

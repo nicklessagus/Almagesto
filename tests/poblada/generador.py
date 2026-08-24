@@ -46,6 +46,7 @@ SCRIPTS = Path(__file__).resolve().parent.parent.parent / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
+import lib_blocks as lb
 import lib_config as cfg                       # noqa: E402  (constante pura: ALMAGESTO_VERSION)
 from extract_fulltext import is_legible         # noqa: E402  (función pura, sin side effects de ruta)
 from fetch_ground_truth import msini_earth      # noqa: E402  (función pura)
@@ -89,9 +90,26 @@ _WORDS = ("radial velocity activity index chromospheric spot rotation period amp
          "spectral synthetic corpus method indicator regime validity dataset harmonic alias "
          "window function noise jitter cadence baseline instrument").split()
 
+# Las anomalías que el generador sabe sembrar. **Cada una que falta es una categoría del lint que
+# nadie ejercita sobre un corpus grande**: `test_conteos_exactos` sólo puede afirmar "reporta
+# exactamente estos K, ni uno más" sobre lo que está acá. El desbalance era el hallazgo del issue
+# 10.3 — 7 anomalías contra 48 categorías, o sea que el test vigilaba **un séptimo** del lint.
 SOPORTADAS = frozenset({
+    # las siete originales
     "huerfanas", "thesis_colgantes", "disputes_colgantes", "no_sintetizado",
     "cobertura_citas", "cabecera_no_estampable", "fulltext_ilegible",
+    # 10.3 — bloqueantes de schema y de vocabulario, sembradas en el schema NUEVO (el corpus
+    # `vintage="1.11.0"` prueba los detectores de schema viejo por otra vía: la nota entera)
+    "identidad_duplicada",     # dos notas del mismo trabajo (mismo arxiv_id) — D-19
+    "role_invalido",           # `role` fuera de fundacional|aplicacion|arbitro
+    "paper_sin_destino",       # ni stars ni thesis_links ni methods — D-23
+    "topics_viejo",            # `topics:` en vez de `facets:` — R-5
+    "inferencia_pelada",       # la marca sin nombrar premisas — D-42
+    "status_invalido",         # `status` de hipótesis fuera del vocabulario — D-37
+    # 10.3 — las tres de la sesión 1.33–1.35, que nacieron sin corpus que las probara
+    "registro_viejo",          # `busqueda:` (mapa) en vez de `busquedas: []` — D-28
+    "alcance_sin_declarar",    # hipótesis sin el blockquote de alcance — D-34
+    "capas_colgadas",          # registro/raw/build de un slug que no existe — INV-19
 })
 
 
@@ -233,6 +251,19 @@ def sembrar_corpus(paths, n_papers: int = 900, n_stars: int = 4, n_concepts: int
     K_cov = anomalias.get("cobertura_citas", 0)
     K_header = anomalias.get("cabecera_no_estampable", 0)
     K_illeg = anomalias.get("fulltext_ilegible", 0)
+    # 10.3 — las diez nuevas. Se siembran en una PASADA APARTE, con stems reservados propios, en vez
+    # de hilarse por el bucle principal: el corpus de 900 notas está calibrado (relevancia,
+    # extracción, densidad de citas) y meterles una variante a esas notas movería conteos vecinos
+    # sin querer. Notas dedicadas = la anomalía es exactamente lo sembrado, ni una más.
+    K_ident = anomalias.get("identidad_duplicada", 0)
+    K_rol = anomalias.get("role_invalido", 0)
+    K_sindest = anomalias.get("paper_sin_destino", 0)
+    K_topics = anomalias.get("topics_viejo", 0)
+    K_infer = anomalias.get("inferencia_pelada", 0)
+    K_status = anomalias.get("status_invalido", 0)
+    K_regviejo = anomalias.get("registro_viejo", 0)
+    K_alcance = anomalias.get("alcance_sin_declarar", 0)
+    K_colgadas = anomalias.get("capas_colgadas", 0)
 
     K_header_stars = min(K_header, n_stars)
     K_header_concepts = K_header - K_header_stars
@@ -321,6 +352,7 @@ def sembrar_corpus(paths, n_papers: int = 900, n_stars: int = 4, n_concepts: int
     to_cite = sorted(extracted_idx - nosint_idx)     # los que SÍ deben terminar citados en algún lado
 
     home_slugs = [star_slugs[i % n_stars] for i in range(n_papers)]
+    home_of_paper = {paper_stems[i]: home_slugs[i] for i in range(n_papers)}
     legible_target = round(0.74 * n_papers)
     legible_pool = [i for i in range(n_papers) if i not in illeg_idx]
     rng.shuffle(legible_pool)
@@ -372,6 +404,7 @@ def sembrar_corpus(paths, n_papers: int = 900, n_stars: int = 4, n_concepts: int
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps(gt, indent=2, sort_keys=False), encoding="utf-8")
 
+    star_notes: list = []          # slugs con ficha escrita (para estampar `## Papers` al final)
     # ── escritura: estrellas ──────────────────────────────────────────────────────────────────
     for i, slug in enumerate(star_slugs):
         host = star_hosts[slug]
@@ -417,10 +450,15 @@ def sembrar_corpus(paths, n_papers: int = 900, n_stars: int = 4, n_concepts: int
 
 ## Huecos
 _(ninguno relevante — corpus sintético)_
+
+## Papers
+_(se estampa determinista)_
 """
         _write_note(paths.STARS / f"{slug}.md", front, body, flow=(i % 2 == 0))
+        star_notes.append(slug)
 
     # ── escritura: conceptos ──────────────────────────────────────────────────────────────────
+    _sin_alcance: set = set()          # 10.3: se llena si se sembró `alcance_sin_declarar`
     disp_stems = {s for s, _ in disp_concepts}
     header_c_stems = {s for s, _ in header_concepts}
     for k, (stem, area) in enumerate(all_concepts):
@@ -445,13 +483,21 @@ _(ninguno relevante — corpus sintético)_
         citas = concept_citations.get(stem, [])
         citas_txt = ("Ver " + ", ".join(f"[[{c}]]" for c in citas) + "."
                     if citas else "_(sin papers citados)_")
+        # D-34 (10.3): una hipótesis SIN el blockquote de alcance es un hallazgo del lint. El corpus
+        # "limpio" tenía cinco, así que la categoría no se podía contar exacto — se sembraba ruido
+        # de fondo sobre el que ninguna anomalía era distinguible. El alcance va **sin slugs**: con
+        # ellos habría que mantener el conteo declarado sincronizado con el corpus generado, y esa
+        # deriva es justo la otra mitad del hallazgo (el alcance que "quedó corto"), que se prueba
+        # aparte.
+        alcance_txt = ("> Alcance 2026-01-01 · corpus sintético · 1 papers · 1 con hits\n\n"
+                       if area == "hypotheses" and stem not in _sin_alcance else "")
         gen_line = (f"{GENERATOR_LINE}{ALMAGESTO_VERSION}._\n"
                    if (not vintage_old) and stem not in header_c_stems else "")
         body = f"""
 # {front['name']}
 
 > Concepto sintético (bóveda poblada de tests). {gen_line}
-## Síntesis
+{alcance_txt}## Síntesis
 {_lorem(rng, 25)} {citas_txt}
 
 ## Huecos
@@ -569,6 +615,32 @@ _(ninguno relevante — corpus sintético)_
     write_yaml(paths.STARS_YAML, stars_yaml)
     write_yaml(paths.THEMES_YAML, {})
     paths.REGISTRO.mkdir(parents=True, exist_ok=True)
+    # 10.3 — el registro con el schema VIGENTE: `busquedas: []` (acumulativo, D-28), `cadena`
+    # completa (D-57) y `extraccion` declarada (D-13). Sin ellos, el corpus "limpio" reportaba
+    # *recorte de lectura sin declarar* y *cadena incompleta* de fondo: ruido permanente sobre el
+    # que ninguna anomalía sembrada se distingue.
+    if not vintage_old:
+        for i, slug in enumerate(star_slugs):
+            n_core = sum(1 for st in paper_stems if paper_relevance[st] == "high")
+            write_yaml(paths.REGISTRO / f"{slug}.yaml", {
+                "slug": slug,
+                "busquedas": [{
+                    "fecha": "2026-01-01", "query": f"object:{slug}", "rows": 2000,
+                    "n_found": n_papers, "n_total": n_papers, "n_core": n_core,
+                    "n_candidates": 0, "n_dropped": 0, "truncated": False,
+                    "escotillas": [], "almagesto_version": ALMAGESTO_VERSION,
+                    "bibcodes": sorted(paper_stems),
+                    # la lente TEXTUAL del objective sintético: si difiere, el lint reporta
+                    # *lente desincronizada* — otro ruido de fondo que hacía incontable la categoría.
+                    "lente": {"facets": {"sintetico": "synthetic|sintetico"}, "require": [],
+                              "min_facets": 1, "noise_doctypes": ["catalog"]},
+                }],
+                "cadena": [{"paso": paso, "fecha": "2026-01-01", "version": ALMAGESTO_VERSION,
+                            "via": "orquestador", "flags": []}
+                           for paso in cfg.CADENA_ESTRELLA],
+                "extraccion": {"subconjunto": True, "fecha": "2026-01-01",
+                               "criterio": "corpus sintético: se extrae una fracción a propósito"},
+            })
     paths.PDFS.mkdir(parents=True, exist_ok=True)
 
     # ── vintage: resto pre-1.9.0/#51 (triage.json legacy) ─────────────────────────────────────
@@ -576,6 +648,139 @@ _(ninguno relevante — corpus sintético)_
         legacy = paths.ROOT / "build" / star_slugs[0] / "triage.json"
         legacy.parent.mkdir(parents=True, exist_ok=True)
         legacy.write_text(json.dumps({"decisiones": {}}), encoding="utf-8")
+
+    # ── 10.3: las anomalías NUEVAS, en notas dedicadas ────────────────────────────────────────
+    #
+    # Regla de oro de esta pasada: cada nota sembrada dispara **una** categoría y ninguna vecina.
+    # Por eso todas llevan link entrante desde `index.md` (si no, caen además como huérfanas),
+    # `methods: []` (con `methods` poblado y sin cita caerían en *extraído no sintetizado*) y la
+    # cabecera con su línea de generador. El assert de contaminación de `test_conteos_exactos` es
+    # justamente el que verifica que esto se cumplió.
+    extra_idx: list = []
+    anom_extra: dict[str, list] = {}
+
+    def _paper_anom(stem: str, front_extra: dict, cuerpo: str = "") -> None:
+        front = {"bibcode": stem, "title": f"Paper anómalo {stem}", "first_author": "Anom",
+                 "n_authors": 1, "year": 2020, "arxiv_id": None, "doi": None, "bibstem": "Synt",
+                 "stars": [star_names[0]], "facets": [], "methods": [], "thesis_links": [],
+                 "role": [], "relevance": "low", "citation_count": 0, "pdf": None,
+                 "fulltext": None, "fulltext_source": None, "pdf_source": None,
+                 "confidence": "medium", "tags": ["paper"],
+                 "generator": f"Almagesto v{ALMAGESTO_VERSION}"}
+        front.update(front_extra)
+        _write_note(paths.PAPERS / f"{stem}.md", front,
+                    f"# {front['title']}\n\n## Abstract\n{_lorem(rng, 20)}\n{cuerpo}", flow=False)
+        extra_idx.append(stem)
+
+    def _concepto_anom(stem: str, area: str, cuerpo: str, front_extra: dict | None = None) -> None:
+        front = {"name": stem, "aliases": [], "tags": ["concept"], "confidence": "medium",
+                 "generator": f"Almagesto v{ALMAGESTO_VERSION}"}
+        front.update(front_extra or {})
+        _write_note(paths.CONCEPTS / area / f"{stem}.md", front,
+                    f"# {stem}\n\n> _Generado con Almagesto v{ALMAGESTO_VERSION}_\n\n{cuerpo}",
+                    flow=False)
+        extra_idx.append(stem)
+
+    if K_ident:
+        # D-19: dos notas del MISMO trabajo (mismo `arxiv_id`). El lint reporta una fila por grupo.
+        # El censo guarda los STEMS de las notas, no el `arxiv_id`: el lint reporta una fila por
+        # grupo y la nombra por sus notas (que es lo accionable — hay que renombrar una de las dos).
+        stems = []
+        for k in range(K_ident):
+            aid = f"20{k:02d}.90001"
+            for lado in ("pre", "pub"):
+                st = f"2020Dup{k:03d}{lado}"
+                _paper_anom(st, {"arxiv_id": aid})
+                stems.append(st)
+        anom_extra["identidad_duplicada"] = sorted(stems)
+    if K_rol:
+        anom_extra["role_invalido"] = sorted(
+            _paper_anom(f"2020Rol{k:03d}A", {"role": ["fundacionall"]}) or f"2020Rol{k:03d}A"
+            for k in range(K_rol))
+    if K_sindest:
+        anom_extra["paper_sin_destino"] = sorted(
+            _paper_anom(f"2020Sind{k:03d}A", {"stars": [], "thesis_links": [], "methods": []})
+            or f"2020Sind{k:03d}A" for k in range(K_sindest))
+    if K_topics:
+        anom_extra["topics_viejo"] = sorted(
+            _paper_anom(f"2020Top{k:03d}A", {"topics": ["rv"]}) or f"2020Top{k:03d}A"
+            for k in range(K_topics))
+    if K_infer:
+        stems = []
+        for k in range(K_infer):
+            st = f"concepto-inferencia-{k:03d}"
+            _concepto_anom(st, "methods",
+                           f"## Síntesis\nLa señal es armónica [[{paper_stems[0]}]].\n"
+                           "El período doble es el armónico (inferencia).\n")
+            stems.append(st)
+        anom_extra["inferencia_pelada"] = sorted(stems)
+    if K_status or K_alcance:
+        for k in range(K_status):
+            st = f"hipotesis-status-{k:03d}"
+            # alcance SIN slugs: con ellos habría que mantener el conteo sincronizado con el
+            # corpus y esta nota dispararía además `alcance_corto` — contaminación entre categorías.
+            _concepto_anom(st, "hypotheses",
+                           "> Alcance 2026-01-01 · corpus sintético · 1 papers\n\n"
+                           f"## Evidencia\nApoya [[{paper_stems[0]}]].\n",
+                           {"status": "supuesto operativo con caveat conocido"})
+        for k in range(K_alcance):
+            st = f"hipotesis-alcance-{k:03d}"
+            _concepto_anom(st, "hypotheses",
+                           f"## Evidencia\nApoya [[{paper_stems[0]}]].\n", {"status": "abierta"})
+        if K_status:
+            anom_extra["status_invalido"] = sorted(f"hipotesis-status-{k:03d}" for k in range(K_status))
+        if K_alcance:
+            anom_extra["alcance_sin_declarar"] = sorted(
+                f"hipotesis-alcance-{k:03d}" for k in range(K_alcance))
+    if K_regviejo:
+        # D-28: la clave `busqueda:` (mapa, una corrida). Va sobre un slug REAL, si no dispararía
+        # además *capas colgadas*.
+        stems = []
+        for k in range(min(K_regviejo, n_stars)):
+            write_yaml(paths.REGISTRO / f"{star_slugs[k]}.yaml",
+                       {"slug": star_slugs[k],
+                        "busqueda": {"fecha": "2026-01-01", "query": "q", "n_total": 3}})
+            stems.append(star_slugs[k])
+        anom_extra["registro_viejo"] = sorted(stems)
+    if K_colgadas:
+        # INV-19: un registro de un slug que no está en stars.yaml/themes.yaml. Sólo el registro
+        # (una capa = una línea del reporte, que es lo que el conteo exacto necesita).
+        stems = []
+        for k in range(K_colgadas):
+            sl = f"slug-fantasma-{k:03d}"
+            write_yaml(paths.REGISTRO / f"{sl}.yaml", {"slug": sl, "busquedas": []})
+            stems.append(f"registro/{sl}")
+        anom_extra["capas_colgadas"] = sorted(stems)
+
+    if extra_idx:
+        paths.INDEX.write_text(
+            paths.INDEX.read_text(encoding="utf-8")
+            + "\n\n## Anomalías sembradas (10.3)\n"
+            + "\n".join(f"- [[{s}]]" for s in sorted(extra_idx)) + "\n", encoding="utf-8")
+
+    # ── 10.3: la tabla `## Papers` ESTAMPADA (D-10/D-11) ──────────────────────────────────────
+    #
+    # Se estampa con el estampador REAL (`make_notes.stamp_papers_table`), no con una copia: el
+    # corpus tiene que emitir lo que el tooling emite, o el test estaría midiendo el generador
+    # contra sí mismo (red #3). Va al final, cuando todas las notas de paper ya están en disco:
+    # la tabla es un censo de ellas. Sin esto, el corpus "limpio" reportaba *lista de papers
+    # desactualizada* en cada ficha — ruido de fondo permanente.
+    if not vintage_old:
+        import make_notes
+        # El estampador lee la bóveda por las constantes de módulo de `lib_config`, y las fixtures
+        # las re-apuntan DESPUÉS de sembrar. Se apuntan acá, con save/restore manual, para la
+        # duración del estampado: es la única forma de usar el estampador REAL en vez de una copia
+        # —y una copia sería el doble con distinto contrato que la red #3 persigue—.
+        _attrs = [k for k in vars(paths) if hasattr(cfg, k)]
+        _saved = [(k, getattr(cfg, k)) for k in _attrs]
+        try:
+            for k in _attrs:
+                setattr(cfg, k, getattr(paths, k))
+            for slug in star_notes:
+                make_notes.stamp_papers_table(slug, paths.STARS / f"{slug}.md", "star")
+        finally:
+            for k, v in _saved:
+                setattr(cfg, k, v)
 
     # ── censo de anomalías (stems exactos) ────────────────────────────────────────────────────
     anomalias_censo: dict[str, list] = {}
@@ -594,6 +799,7 @@ _(ninguno relevante — corpus sintético)_
             header_star_slugs | {s for s, _ in header_concepts})
     if K_illeg:
         anomalias_censo["fulltext_ilegible"] = sorted(paper_stems[i] for i in illeg_idx)
+    anomalias_censo.update(anom_extra)
 
     return Censo(
         seed=seed, vintage=vintage, n_papers=n_papers, n_stars=n_stars, n_concepts=n_concepts,

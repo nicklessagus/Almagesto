@@ -96,17 +96,25 @@ para letras con lookalikes conocidos, y marca los papers `via: glyph`.
 
 ## 2. Las dos ingestas
 
+> El orden canónico de la cadena vive en el header de `scripts/ingest_star.py` (y en
+> `cfg.CADENA_ESTRELLA`): este diagrama es una **vista**, no la fuente de verdad. ⚠ Hasta el
+> 2026-08-24 la contradecía —ponía `extract_fulltext` **antes** de `make_notes` y omitía
+> `check_retractions`—, y no era cosmético: `extract_fulltext` llama a `make_notes.stamp_fulltext`,
+> que **devuelve `False` si la nota todavía no existe**. El diagrama enseñaba un orden en el que ese
+> paso no hacía nada.
+
 ```mermaid
 flowchart TD
     subgraph S["ingest-star · astro-only"]
         S1[stars.yaml: slug, simbad, ads_object, aliases]
         S2["query_ads --sweep · chaining · rescate por glifo"]
         S3[triage: candidatos del chaining]
-        S4["fetch_arxiv → fetch_pdf → extract_fulltext"]
+        S4["fetch_arxiv → fetch_pdf"]
         S5["fetch_ground_truth · NEA + SIMBAD"]
         S6[make_notes → stars/ + papers/]
-        S1 --> S2 --> S3 --> S4 --> S6
-        S5 --> S6
+        S7["extract_fulltext · PDFs → .txt"]
+        S8[check_retractions --slug]
+        S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8
     end
 
     subgraph T["ingest-theme · despacha por source"]

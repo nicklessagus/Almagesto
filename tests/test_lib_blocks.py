@@ -293,3 +293,21 @@ def test_parse_sigue_leyendo_la_tabla_de_seis_columnas():
         "| 1 | X | [[2020ApJ...900...1A]] | soportada | abc1234567 | def8901234 |\n")
     f = lb.parse_verif_table(bloque)[0]
     assert (f.anchor, f.source_hash) == ("abc1234567", "def8901234")
+
+
+def test_cuerpo_no_confunde_reglas_horizontales_con_frontmatter():
+    """`_cuerpo` no replicaba el guard de posición-0 de `cfg.frontmatter_span`: una nota que arranca
+    con `---algo` (no un delimitador, la línea tiene más contenido) pasaba el `startswith` y tomaba
+    como frontmatter los dos primeros `---` sueltos del cuerpo. El cuerpo quedaba recortado desde el
+    segundo y los pares anteriores **desaparecían del fan-out** — sub-dispara, que es justo el error
+    que el módulo documenta prohibir."""
+    texto = "---nota rara\n\nAfirmación con [[2020A]].\n\n---\n\nmás prosa\n\n---\n\nfinal\n"
+    cuerpo, saltadas = lb._cuerpo(texto)
+    assert cuerpo == texto and saltadas == 0, "sin frontmatter en posición 0 no se recorta nada"
+    assert "[[2020A]]" in cuerpo
+
+
+def test_cuerpo_si_recorta_un_frontmatter_de_verdad():
+    texto = "---\nbibcode: 2020A\n---\n\nAfirmación.\n"
+    cuerpo, saltadas = lb._cuerpo(texto)
+    assert "bibcode" not in cuerpo and "Afirmación." in cuerpo and saltadas == 2

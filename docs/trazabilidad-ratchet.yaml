@@ -12,7 +12,7 @@
 #   - el techo NUNCA se sube para poner verde un rojo. Sólo se justifica si el contrato incorporó
 #     invariantes nuevos legítimamente sin marcar todavía — y ese commit tiene que decir por qué.
 #
-# CÓMO SE BAJA. Cada issue del plan (`docs/plan-implementacion-2026-08-23.md`) declara qué
+# CÓMO SE BAJA. Cada issue de trabajo declara qué
 # invariante cierra; al cerrarlo se pone `@inv INV-nn` en la función que lo implementa y en el test
 # que lo prueba, se corre `python scripts/trace_invariants.py` y se copian acá los conteos nuevos
 # con la fecha.
@@ -51,8 +51,11 @@ almagesto_version: "1.32.0"
 contrato_invariantes: 91
 
 techos:
-  sin_marca: 4    # medido: 2026-08-24 (auditoría @inv) — 05, 19, 23, 66.
-  sin_test: 4     # medido: 2026-08-24 — los mismos cuatro.
+  sin_marca: 3    # medido: 2026-08-24 (tandas 8-9 + auditoría) — 05, 23, 66.
+  sin_test: 3     # medido: 2026-08-24 — los mismos tres.
+  # INV-19 salió de la lista: era el hueco más grande (no existía borrado/renombre de ENTIDAD, sólo
+  # de paper). Lo cierra `scripts/entity.py` con las siete capas + la categoría *Capas colgadas* del
+  # lint; lo miden los 12 tests de `tests/test_entity.py`.
   # INV-73 salió de la lista: era un P0 declarado «garantizado y medido» con CERO marcas, y el
   # aislamiento lo daba la fixture `toy_vault`, no una aserción. Ahora lo mide
   # `tests/test_bench_verify.py::test_el_benchmark_no_toca_el_vault` (hash del árbol de `vault/`

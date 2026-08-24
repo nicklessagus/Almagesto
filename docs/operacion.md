@@ -88,11 +88,43 @@ python extract_fulltext.py <slug>   # PDFs → vault/raw/fulltext/<slug>/*.txt
 python check_retractions.py         # Crossref → marca `retracted` (bloqueante) y `corrections`
                                     #   (erratum/corrigendum/EoC: backlog) (red); la cadena usa --slug <slug>,
                                     #   sin --slug barre TODA la bóveda (pasada periódica, skill maintain)
-python make_notes.py --migrate-disputes  # migración #71: planets[].disputes[] → disputes a nivel
-                                    #   nota con posiciones explícitas (una sola corrida)
-python make_notes.py --restamp-headers  # backfill: cabecera (aviso de capa LLM + generador) a las
-                                    #   fichas/conceptos que nacieron sin ella; no toca la síntesis
+python triage.py <slug> --extraccion todos|subconjunto [--reason "<criterio>"]
+                                    #   D-13: declarar QUÉ se leyó de los core (con `subconjunto`
+                                    #   el criterio es obligatorio: no curar en silencio)
+python triage.py <slug> --sintesis [--n-papers N] [--reason "<nota>"]
+                                    #   INV-82: declarar CUÁNDO se sintetizó — la tercera fecha de
+                                    #   la cabecera. No se puede derivar (git fecha el ARCHIVO)
 python lint.py                      # chequeo de salud → outputs/lint-<fecha>.md (exit 1 si hay bloqueantes)
+                                    #   --cierre: los pares de verificación vencidos BLOQUEAN
+```
+
+**Pasadas globales** (no dependen del sujeto en curso; hermanas entre sí):
+
+```bash
+python scripts/sweep_external.py    # la PASADA DE RED: los cinco eventos que caducan afuera
+                                    #   (retracciones, correcciones, versiones, snapshot web,
+                                    #   ground-truth). Reporta el diff y PREGUNTA antes de aplicar;
+                                    #   la caducidad queda en vault/config/registro/_red.yaml
+python scripts/entity.py plan   <slug>              # las siete capas de una entidad — no escribe
+python scripts/entity.py delete <slug> --yes        # borrar sin dejar nada colgado (INV-19)
+python scripts/entity.py rename <viejo> <nuevo> --yes
+python scripts/citation_index.py    # índice invertido obra→citadores (caro: ADS + OpenAlex)
+```
+
+**Migradores y backfills** (una sola corrida; el framework no lleva capas de retrocompatibilidad,
+así que cada cambio de schema entrega migrador **y** detector bloqueante — INV-64):
+
+```bash
+python scripts/make_notes.py --migrate-disputes   # #71: planets[].disputes[] → disputes a nivel nota
+python scripts/make_notes.py --migrate-bearing    # D-21: `bearing` fuera de la nota de paper
+python scripts/make_notes.py --migrate-facets     # R-5: `topics:` → `facets:`
+python scripts/make_notes.py --migrate-registros  # D-28: `busqueda:` → `busquedas: []` (pliega, no borra)
+python scripts/triage.py <slug> --migrate         # #51: el juicio del build/<slug>/triage.json viejo
+python scripts/make_notes.py --restamp-headers    # cabecera a las notas que nacieron sin ella
+python scripts/make_notes.py --restamp-keywords   # D-17: `keywords:` desde build/*/ads.json
+python scripts/make_notes.py --restamp-pdf-links  # #47: el link [📄 PDF] ↔ frontmatter `pdf`
+python scripts/make_notes.py --sync-mirror        # #70: campos espejo de NEA que quedaron en null
+python scripts/make_notes.py --rename-paper VIEJO NUEVO   # D-19: ciclo preprint → publicado
 ```
 
 Entre la query y el primer paso que gasta red y disco hay un **checkpoint humano** (la *guardia de
@@ -106,7 +138,7 @@ ahí el control es el `--probe` del skill `setup` (previsualizar la lente antes 
 
 Para TEMAS (en vez de estrellas): definir el tema en `vault/config/themes.yaml` y correr
 `python scripts/ingest_theme.py <slug>`: el orquestador despacha según el campo `source` de la entrada:
-`ads` (default) corre la cadena de arriba con `--topic` y **sin** `fetch_ground_truth` (no hay
+`ads` (default) corre la cadena de arriba con `--theme` y **sin** `fetch_ground_truth` (no hay
 NEA/SIMBAD para un tema); `web` / `local-pdfs` (modo **off-ADS**, opt-in) procesa la bibliografía
 declarada en la lista `sources:` de la entrada — snapshots web citables vía `fetch_web.py` (defuddle)
 y PDFs locales copiados a la bóveda con clave `AAAA+Autor` (ver skill `ingest-theme`). Luego:

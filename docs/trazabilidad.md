@@ -8,82 +8,82 @@
 ## Resumen
 
 - Invariantes en el contrato: **91**
-- Con implementación marcada: **69**
-- Con test marcado: **87** (techo `sin_test`: 4, hoy 4)
-- Sin ninguna marca: **4** (techo `sin_marca`: 4)
+- Con implementación marcada: **71**
+- Con test marcado: **88** (techo `sin_test`: 3, hoy 3)
+- Sin ninguna marca: **3** (techo `sin_marca`: 3)
 - Marcas huérfanas: **0**
 
 ## El mapa
 
 | ID | Prio | Estado (contrato) | Implementa | Prueba |
 |---|---|---|---|---|
-| **INV-01** | P0 | garantizado sin medir | `scripts/make_notes.py:1517` · `write_star_note` | `tests/test_make_notes.py:293` · `test_star_note_desde_ground_truth` |
-| **INV-02** | P0 | garantizado y medido | `scripts/lint.py:92` | `tests/test_lint.py:64` · `test_wikilink_roto_bloquea` |
+| **INV-01** | P0 | garantizado sin medir | `scripts/make_notes.py:1675` · `write_star_note` | `tests/test_make_notes.py:293` · `test_star_note_desde_ground_truth` |
+| **INV-02** | P0 | garantizado y medido | `scripts/lint.py:93` | `tests/test_lint.py:64` · `test_wikilink_roto_bloquea` |
 | **INV-03** | P1 | garantizado y medido | — | `tests/test_lint.py:1277` · `test_cita_sin_fulltext_no_verificable` |
-| **INV-04** | P1 | garantizado y medido | `scripts/lib_config.py:374` · `load_downstream`<br>`scripts/lint.py:97`<br>`scripts/lint.py:130` · `downstream_leaks` | `tests/test_lint.py:1108` · `test_fuga_de_implementacion_warn` |
+| **INV-04** | P1 | garantizado y medido | `scripts/lib_config.py:389` · `load_downstream`<br>`scripts/lint.py:98`<br>`scripts/lint.py:131` · `downstream_leaks` | `tests/test_lint.py:1108` · `test_fuga_de_implementacion_warn` |
 | **INV-05** | P2 | garantizado sin medir | — | — |
-| **INV-06** | P0 | garantizado y medido | `scripts/lint.py:536` · `mirror_issues` | `tests/test_lint.py:663` · `test_espejo_valor_que_nea_no_tiene_es_bloqueante` |
-| **INV-07** | P0 | garantizado y medido | `scripts/make_notes.py:1517` · `write_star_note` | `tests/test_make_notes.py:320` · `test_star_note_sin_ground_truth` |
-| **INV-08** | P0 | garantizado y medido | `scripts/make_notes.py:604` · `sync_mirror` | `tests/test_make_notes.py:1746` · `test_sync_mirror_no_pisa_un_valor_distinto` |
-| **INV-09** | P0 | garantizado y medido | `scripts/lint.py:536` · `mirror_issues` | `tests/test_lint.py:723` · `test_espejo_compara_que_planetas_no_cuantos` |
+| **INV-06** | P0 | garantizado y medido | `scripts/lint.py:559` · `mirror_issues` | `tests/test_lint.py:663` · `test_espejo_valor_que_nea_no_tiene_es_bloqueante` |
+| **INV-07** | P0 | garantizado y medido | `scripts/make_notes.py:1675` · `write_star_note` | `tests/test_make_notes.py:320` · `test_star_note_sin_ground_truth` |
+| **INV-08** | P0 | garantizado y medido | `scripts/make_notes.py:671` · `sync_mirror` | `tests/test_make_notes.py:1746` · `test_sync_mirror_no_pisa_un_valor_distinto` |
+| **INV-09** | P0 | garantizado y medido | `scripts/lint.py:559` · `mirror_issues` | `tests/test_lint.py:723` · `test_espejo_compara_que_planetas_no_cuantos` |
 | **INV-10** | P0 | garantizado y medido | `scripts/fetch_ground_truth.py:60` · `msini_earth` | `tests/test_lint.py:1009` · `test_masa_inconsistente` |
-| **INV-11** | P0 | garantizado y medido | `scripts/make_notes.py:898` | `tests/test_make_notes.py:587` · `test_inventario_no_tiene_columna_de_valor_adoptado` |
-| **INV-12** | P0 | garantizado y medido | `scripts/lint.py:358` · `note_disputes` | `tests/test_lint.py:323` · `test_disputa_con_una_sola_posicion_no_es_disputa` |
-| **INV-13** | P0 | garantizado y medido | `scripts/lint.py:421` · `legacy_disputes`<br>`scripts/make_notes.py:518` · `migrate_all_bearing` | `tests/test_lint.py:1073` · `test_schema_viejo_de_disputes_grita_en_vez_de_volverse_mudo`<br>`tests/test_lint.py:1993` · `test_topics_en_nota_de_paper_es_schema_viejo` |
-| **INV-14** | P1 | garantizado sin medir | `scripts/lib_config.py:662` | `tests/test_lib_config.py:588` · `test_autoridad_por_campo_declarada` |
-| **INV-15** | P0 | garantizado y medido | `scripts/make_notes.py:1232` · `_reemplazar_seccion` | `tests/test_make_notes.py:1777` · `test_sync_mirror_no_toca_la_prosa` |
-| **INV-16** | P0 | garantizado y medido | `scripts/make_notes.py:717` · `merge_frontmatter_list` | `tests/test_make_notes.py:163` · `test_merge_preserva_el_resto_byte_a_byte` |
-| **INV-17** | P1 | garantizado y medido (con deuda) | `scripts/make_notes.py:231` · `find_header_line` | `tests/test_make_notes.py:1320` · `test_find_header_line_es_contrato_compartido` |
+| **INV-11** | P0 | garantizado y medido | `scripts/make_notes.py:965` | `tests/test_make_notes.py:587` · `test_inventario_no_tiene_columna_de_valor_adoptado` |
+| **INV-12** | P0 | garantizado y medido | `scripts/lint.py:381` · `note_disputes` | `tests/test_lint.py:323` · `test_disputa_con_una_sola_posicion_no_es_disputa` |
+| **INV-13** | P0 | garantizado y medido | `scripts/lint.py:444` · `legacy_disputes`<br>`scripts/make_notes.py:585` · `migrate_all_bearing` | `tests/test_lint.py:1073` · `test_schema_viejo_de_disputes_grita_en_vez_de_volverse_mudo`<br>`tests/test_lint.py:1996` · `test_topics_en_nota_de_paper_es_schema_viejo` |
+| **INV-14** | P1 | garantizado sin medir | `scripts/lib_config.py:677` | `tests/test_lib_config.py:588` · `test_autoridad_por_campo_declarada` |
+| **INV-15** | P0 | garantizado y medido | `scripts/make_notes.py:1354` · `_reemplazar_seccion` | `tests/test_make_notes.py:1777` · `test_sync_mirror_no_toca_la_prosa` |
+| **INV-16** | P0 | garantizado y medido | `scripts/make_notes.py:784` · `merge_frontmatter_list` | `tests/test_make_notes.py:163` · `test_merge_preserva_el_resto_byte_a_byte` |
+| **INV-17** | P1 | parcial (medido, con la deuda nombrada) | `scripts/make_notes.py:231` · `find_header_line` | `tests/test_make_notes.py:1320` · `test_find_header_line_es_contrato_compartido` |
 | **INV-18** | P0 | garantizado y medido | `scripts/make_notes.py:259` · `stamp_pdf_link` | `tests/test_make_notes.py:1253` · `test_stamp_pdf_link_sin_cabecera_no_adivina` |
-| **INV-19** | P0 | HUECO (parcial) | — | — |
-| **INV-20** | P0 | garantizado sin medir | — | `tests/test_fetch_ground_truth.py:226` · `test_main_no_pisa_sin_force` |
+| **INV-19** | P0 | garantizado y medido (1.35.0) | `scripts/entity.py:76` · `capas`<br>`scripts/entity.py:244` · `delete`<br>`scripts/entity.py:285` · `rename` | `tests/test_entity.py:87` · `test_delete_borra_las_siete_capas`<br>`tests/test_entity.py:144` · `test_rename_mueve_las_capas_y_actualiza_el_slug` |
+| **INV-20** | P0 | garantizado sin medir | — | `tests/test_fetch_ground_truth.py:227` · `test_main_no_pisa_sin_force` |
 | **INV-21** | P0 | garantizado y medido | — | `tests/test_make_notes.py:1862` · `test_corte_publicando_no_deja_la_nota_a_medias` |
 | **INV-22** | P1 | garantizado y medido | — | `tests/poblada/test_upgrade.py:374` · `test_ciclo_completo_cierra_el_lint_y_la_segunda_pasada_es_no_op` |
 | **INV-23** | P1 | INCUMPLIDO (parcial) | — | — |
 | **INV-24** | P1 | garantizado sin medir | `scripts/query_ads.py:226` · `classify` | `tests/test_query_ads.py:103` · `test_classify_coherente_con_exclusion_reason` |
-| **INV-25** | P1 | garantizado sin medir | `scripts/lib_config.py:514` · `load_registro` | `tests/test_lint.py:1360` · `test_registro_versionado_cubre_la_falta_de_build` |
+| **INV-25** | P1 | garantizado sin medir | `scripts/lib_config.py:529` · `load_registro` | `tests/test_lint.py:1360` · `test_registro_versionado_cubre_la_falta_de_build` |
 | **INV-26** | P1 | garantizado sin medir | `scripts/make_notes.py:85` · `_txt_provenance` | `tests/test_make_notes.py:951` · `test_fulltext_info_provenance` |
-| **INV-27** | P1 | HUECO (parcial) | `scripts/fetch_web.py:38` | `tests/test_fetch_web.py:54` · `test_citekey_re` |
+| **INV-27** | P1 | HUECO (parcial) | `scripts/fetch_web.py:39` | `tests/test_fetch_web.py:54` · `test_citekey_re` |
 | **INV-28** | P1 | garantizado y medido | `scripts/extract_fulltext.py:79` · `is_legible` | `tests/test_extract_fulltext.py:49` · `test_legible_umbrales_limite` |
 | **INV-29** | P0 | garantizado y medido | `scripts/make_notes.py:109` · `pdf_source_info` | `tests/test_make_notes.py:1427` · `test_pdf_source_desconocido_no_afirma_publicado` |
-| **INV-30** | P1 | HUECO (parcial) | `scripts/fetch_web.py:51` · `clean_markdown` | `tests/test_fetch_web.py:113` · `test_main_idempotente_reusa_fecha_del_snapshot` |
-| **INV-31** | P0 | garantizado y medido | `scripts/lint.py:189` · `verify_block` | `tests/test_lint.py:1664` · `test_verificacion_stale_por_commit_posterior` |
-| **INV-32** | P0 | garantizado y medido | — | `tests/test_lint.py:1781` · `test_no_evaluado_no_contamina_conteos` |
+| **INV-30** | P1 | HUECO (parcial) | `scripts/fetch_web.py:52` · `clean_markdown` | `tests/test_fetch_web.py:113` · `test_main_idempotente_reusa_fecha_del_snapshot` |
+| **INV-31** | P0 | garantizado y medido | `scripts/lint.py:190` · `verify_block` | `tests/test_lint.py:1667` · `test_verificacion_stale_por_commit_posterior` |
+| **INV-32** | P0 | garantizado y medido | — | `tests/test_lint.py:1784` · `test_no_evaluado_no_contamina_conteos` |
 | **INV-33** | P0 | garantizado y medido | `scripts/check_retractions.py:177` · `stamp_retraction` | `tests/test_lint.py:172` · `test_paper_retractado_bloquea` |
 | **INV-34** | P1 | garantizado y medido | `scripts/check_retractions.py:184` · `stamp_corrections` | `tests/test_lint.py:183` · `test_paper_con_correccion_es_backlog_no_bloquea` |
-| **INV-35** | P0 | garantizado y medido | `scripts/make_notes.py:1201` · `concept_rollup_rows` | `tests/test_make_notes.py:1925` · `test_papers_table_no_depende_del_plugin` |
-| **INV-36** | P0 | garantizado y medido | `scripts/lib_config.py:285` · `split_fm` | `tests/test_lib_config.py:260` · `test_split_fm_no_corta_dentro_de_un_valor` |
+| **INV-35** | P0 | garantizado y medido | `scripts/make_notes.py:1269` · `concept_rollup_rows` | `tests/test_make_notes.py:1925` · `test_papers_table_no_depende_del_plugin` |
+| **INV-36** | P0 | garantizado y medido | `scripts/lib_config.py:300` · `split_fm` | `tests/test_lib_config.py:260` · `test_split_fm_no_corta_dentro_de_un_valor` |
 | **INV-37** | P0 | garantizado y medido | — | `tests/poblada/test_golden.py:138` · `test_golden_exit_code` |
-| **INV-38** | P0 | garantizado y medido | — | `tests/test_lint.py:1766` · `test_lint_sin_git_reporta_no_evaluado` |
+| **INV-38** | P0 | garantizado y medido | — | `tests/test_lint.py:1769` · `test_lint_sin_git_reporta_no_evaluado` |
 | **INV-39** | P0 | garantizado y medido | — | `tests/test_lint.py:1360` · `test_registro_versionado_cubre_la_falta_de_build`<br>`tests/test_lint.py:1375` · `test_build_local_gana_sobre_el_registro` |
-| **INV-40** | P0 | HUECO (parcial) | `scripts/lint.py:162` · `fm_error` | `tests/test_lint.py:108` · `test_paper_sin_tag_paper_evade_los_chequeos_de_su_tipo` |
+| **INV-40** | P0 | HUECO (parcial) | `scripts/lint.py:163` · `fm_error` | `tests/test_lint.py:108` · `test_paper_sin_tag_paper_evade_los_chequeos_de_su_tipo` |
 | **INV-41** | P1 | garantizado y medido | — | `tests/poblada/test_golden.py:167` · `test_reporte_lista_todas_las_categorias` |
-| **INV-42** | P0 | garantizado y medido | — | `tests/poblada/test_escala.py:194` · `test_lint_no_muta_la_boveda` |
-| **INV-43** | P1 | garantizado y medido | — | `tests/test_lint.py:1968` · `test_notas_huerfanas_salen_en_orden_estable` |
-| **INV-44** | P0 | parcial | — | `tests/test_query_ads.py:1351` · `test_escotillas_quedan_en_el_registro` |
+| **INV-42** | P0 | garantizado y medido | — | `tests/poblada/test_escala.py:197` · `test_lint_no_muta_la_boveda` |
+| **INV-43** | P1 | garantizado y medido | — | `tests/test_lint.py:1971` · `test_notas_huerfanas_salen_en_orden_estable` |
+| **INV-44** | P0 | garantizado y medido (1.35.0) | `scripts/lib_config.py:884` · `flags_usados` | `tests/test_ingest_star.py:149` · `test_la_escotilla_del_orquestador_deja_traza`<br>`tests/test_ingest_star.py:161` · `test_save_paso_estampa_la_escotilla_del_orquestador`<br>`tests/test_query_ads.py:1351` · `test_escotillas_quedan_en_el_registro` |
 | **INV-45** | P1 | garantizado y medido | — | `tests/test_lint.py:515` · `test_extraido_sin_llegar_a_ninguna_entidad_es_backlog` |
-| **INV-46** | P1 | garantizado y medido | `scripts/lint.py:440`<br>`scripts/lint.py:441` | `tests/test_lint.py:455` · `test_role_fuera_del_vocabulario_es_bloqueante` |
-| **INV-47** | P1 | garantizado y medido | `scripts/lib_config.py:391` · `load_concept_areas` | `tests/test_lib_config.py:95` · `test_concept_areas_sin_declarar_apaga_el_chequeo` |
+| **INV-46** | P1 | garantizado y medido | `scripts/lint.py:463`<br>`scripts/lint.py:464` | `tests/test_lint.py:455` · `test_role_fuera_del_vocabulario_es_bloqueante` |
+| **INV-47** | P1 | garantizado y medido | `scripts/lib_config.py:406` · `load_concept_areas` | `tests/test_lib_config.py:95` · `test_concept_areas_sin_declarar_apaga_el_chequeo` |
 | **INV-48** | P0 | garantizado y medido | `scripts/triage.py:105` · `drop` | `tests/test_triage.py:60` · `test_drop_persiste_con_motivo_en_config_versionada` |
-| **INV-49** | P0 | garantizado y medido (con brecha nombrada) | `scripts/query_ads.py:597` · `load_triage` | `tests/test_query_ads.py:1175` · `test_main_triage_no_repropone_descartados` |
+| **INV-49** | P0 | parcial (medido, con la brecha nombrada) | `scripts/query_ads.py:597` · `load_triage` | `tests/test_query_ads.py:1175` · `test_main_triage_no_repropone_descartados` |
 | **INV-50** | P0 | garantizado y medido | `scripts/query_ads.py:582` · `subject_in_title` | `tests/test_query_ads.py:1159` · `test_main_chaining_solo_auto_acepta_sujeto_en_titulo` |
-| **INV-51** | P1 | garantizado y medido | `scripts/lib_config.py:795` · `save_busqueda` | `tests/test_query_ads.py:1309` · `test_main_persiste_el_registro_de_busqueda` |
+| **INV-51** | P1 | garantizado y medido | `scripts/lib_config.py:834` · `save_busqueda` | `tests/test_query_ads.py:1309` · `test_main_persiste_el_registro_de_busqueda` |
 | **INV-52** | P0 | garantizado y medido | `scripts/query_ads.py:371` · `glyph_rescue` | `tests/test_query_ads.py:648` · `test_main_persiste_truncado` |
-| **INV-53** | P1 | garantizado y medido | `scripts/lib_config.py:544` · `save_registro` | `tests/test_lib_config.py:443` · `test_busqueda_preserva_decisiones` |
+| **INV-53** | P1 | garantizado y medido | `scripts/lib_config.py:559` · `save_registro` | `tests/test_lib_config.py:443` · `test_busqueda_preserva_decisiones`<br>`tests/test_lib_config.py:684` · `test_save_busqueda_pliega_la_clave_vieja_en_vez_de_borrarla` |
 | **INV-54** | P0 | garantizado y medido | `scripts/triage.py:175` · `migrate` | `tests/test_triage.py:365` · `test_migrate_es_idempotente_y_no_pisa_lo_versionado` |
 | **INV-55** | P1 | garantizado sin medir | `scripts/query_ads.py:174` · `combination_rule` | `tests/test_query_ads.py:58` · `test_classify_require_faceta_obligatoria` |
 | **INV-56** | P0 | garantizado y medido | — | `tests/test_lib_config.py:405` · `test_objective_error_distingue_los_tres_estados` |
 | **INV-57** | P1 | garantizado y medido | `scripts/lib_config.py:30` | `tests/test_lint.py:1134` · `test_objetivo_default_warn` |
-| **INV-58** | P1 | garantizado y medido | `scripts/query_ads.py:1039` · `lens_diff_offline`<br>`scripts/query_ads.py:1075` · `reclass_diff` | `tests/test_lint.py:2345` · `test_lente_igual_calla`<br>`tests/test_lint.py:2356` · `test_lente_cambiada_reporta_diff_por_ficha`<br>`tests/test_query_ads.py:952` · `test_reclass_diff_reporta_el_delta` |
+| **INV-58** | P1 | garantizado y medido | `scripts/query_ads.py:1039` · `lens_diff_offline`<br>`scripts/query_ads.py:1075` · `reclass_diff` | `tests/test_lint.py:2348` · `test_lente_igual_calla`<br>`tests/test_lint.py:2359` · `test_lente_cambiada_reporta_diff_por_ficha`<br>`tests/test_query_ads.py:952` · `test_reclass_diff_reporta_el_delta` |
 | **INV-59** | P0 | garantizado y medido | `scripts/query_ads.py:1159` · `print_probe` | `tests/test_query_ads.py:978` · `test_reclass_diff_no_escribe_nada`<br>`tests/test_query_ads.py:1701` · `test_probe_no_escribe_nada` |
-| **INV-60** | P1 | garantizado y medido | `scripts/lib_config.py:615` · `load_extra_core` | `tests/test_query_ads.py:563` · `test_fetch_bibcodes_marca_manual` |
-| **INV-61** | P1 | garantizado y medido | `scripts/make_notes.py:1874` · `write_web_paper_note` | `tests/test_ingest_theme.py:250` · `test_offads_pending_deriva_sin_fallar` |
-| **INV-62** | P1 | garantizado y medido | `scripts/make_notes.py:849` | `tests/test_lib_config.py:112` · `test_version_unica_fuente`<br>`tests/test_make_notes.py:2298` · `test_la_nota_declara_su_version`<br>`tests/test_make_notes.py:2312` · `test_restamp_headers_no_reetiqueta_la_nota` |
-| **INV-63** | P0 | HUECO (parcial) | `scripts/lint.py:390` · `normalize_lists` | `tests/test_lint.py:149` · `test_campo_de_lista_escrito_como_escalar_se_reporta_una_vez` |
-| **INV-64** | P0 | garantizado y medido | `scripts/make_notes.py:538` · `migrate_all_disputes` | `tests/poblada/test_invariantes_instancia.py:334` · `test_papers_declaran_facets_no_topics`<br>`tests/poblada/test_upgrade.py:129` · `test_vintage_bloquea_con_categorias_de_schema_viejo_y_receta_visible` |
+| **INV-60** | P1 | garantizado y medido | `scripts/lib_config.py:630` · `load_extra_core` | `tests/test_query_ads.py:563` · `test_fetch_bibcodes_marca_manual` |
+| **INV-61** | P1 | garantizado y medido | `scripts/make_notes.py:2023` · `write_web_paper_note` | `tests/test_ingest_theme.py:253` · `test_offads_pending_deriva_sin_fallar` |
+| **INV-62** | P1 | garantizado y medido | `scripts/make_notes.py:916` | `tests/test_lib_config.py:112` · `test_version_unica_fuente`<br>`tests/test_make_notes.py:2298` · `test_la_nota_declara_su_version`<br>`tests/test_make_notes.py:2312` · `test_restamp_headers_no_reetiqueta_la_nota` |
+| **INV-63** | P0 | HUECO (parcial) | `scripts/lint.py:413` · `normalize_lists` | `tests/test_lint.py:149` · `test_campo_de_lista_escrito_como_escalar_se_reporta_una_vez` |
+| **INV-64** | P0 | garantizado y medido (los 5 cambios, 1.35.0) | `scripts/make_notes.py:520` · `migrate_all_facets`<br>`scripts/make_notes.py:558` · `migrate_all_registros`<br>`scripts/make_notes.py:605` · `migrate_all_disputes` | `tests/poblada/test_invariantes_instancia.py:334` · `test_papers_declaran_facets_no_topics`<br>`tests/poblada/test_upgrade.py:129` · `test_vintage_bloquea_con_categorias_de_schema_viejo_y_receta_visible`<br>`tests/test_make_notes.py:2342` · `test_migrate_facets_renombra_y_es_idempotente`<br>`tests/test_make_notes.py:2371` · `test_migrate_registros_pliega_sin_perder_la_corrida` |
 | **INV-65** | P2 | garantizado y medido | — | `tests/test_lint.py:1168` · `test_obsidian_en_raiz_warn` |
 | **INV-66** | P1 | garantizado sin medir | — | — |
-| **INV-67** | P0 | garantizado sin medir | `scripts/lib_config.py:116` · `get_ads_token` | `tests/test_fetch_pdf.py:160` · `test_download_pdf_token_solo_a_ads`<br>`tests/test_lib_config.py:651` · `test_el_token_no_sale_en_ningun_artefacto_ni_en_la_salida`<br>`tests/test_lib_config.py:675` · `test_el_archivo_del_token_esta_gitignored` |
+| **INV-67** | P0 | garantizado sin medir | `scripts/lib_config.py:131` · `get_ads_token` | `tests/test_fetch_pdf.py:160` · `test_download_pdf_token_solo_a_ads`<br>`tests/test_lib_config.py:651` · `test_el_token_no_sale_en_ningun_artefacto_ni_en_la_salida`<br>`tests/test_lib_config.py:675` · `test_el_archivo_del_token_esta_gitignored` |
 | **INV-68** | P2 | garantizado y medido | — | `tests/test_lib_config.py:598` · `test_gitattributes_cubre_los_archivos_de_instancia` |
 | **INV-69** | P0 | parcial | — | `tests/test_query_ads.py:442` · `test_query_ads_5xx_persistente_lanza` |
 | **INV-70** | P1 | garantizado sin medir | `scripts/extract_fulltext.py:94` · `ocr_available` | `tests/test_extract_fulltext.py:210` · `test_flag_ocr_sin_tesseract_aborta` |
@@ -92,19 +92,19 @@
 | **INV-73** | P0 | garantizado y medido | — | `tests/test_bench_verify.py:355` · `test_el_benchmark_no_toca_el_vault` |
 | **INV-74** | P1 | garantizado (1.33.0, D-55) | `scripts/bench_verify.py:225` · `seed_pairs` | `tests/test_bench_verify.py:52` · `test_seed_extrae_siembra_y_es_determinista`<br>`tests/test_bench_verify.py:296` · `test_exam_no_contiene_la_clave` |
 | **INV-75** | P2 | garantizado sin medir | `scripts/bench_verify.py:293` · `cmd_score` | `tests/test_bench_verify.py:259` · `test_score_metricas` |
-| **INV-76** | P0 | garantizado y medido | `scripts/lib_config.py:661` | `tests/test_fetch_ground_truth.py:342` · `test_spectral_type_solo_de_simbad` |
-| **INV-77** | P1 | garantizado y medido | `scripts/lint.py:339` | `tests/test_lint.py:2086` · `test_disputa_entre_autoridades_es_expresable` |
-| **INV-78** | P0 | garantizado y medido | `scripts/lib_blocks.py:3`<br>`scripts/lint.py:1068` · `main` | `tests/test_lib_blocks.py:47` · `test_reflow_no_mueve_ancla`<br>`tests/test_lint.py:1883` · `test_reemplazo_del_txt_marca_por_fuente` |
-| **INV-79** | P0 | garantizado y medido (mitad determinista) | `scripts/lint.py:1068` · `main` | `tests/test_lint.py:1838` · `test_nota_verificada_no_marca_nada` |
-| **INV-80** | P0 | garantizado y medido | `scripts/lib_config.py:200` · `yaml_error`<br>`scripts/lib_config.py:216` · `stars_error`<br>`scripts/lib_config.py:221` · `themes_error`<br>`scripts/lib_config.py:237` · `objective_error`<br>`scripts/query_ads.py:1193` · `main` | `tests/test_lib_config.py:405` · `test_objective_error_distingue_los_tres_estados`<br>`tests/test_lint.py:1756` · `test_lint_objective_roto_bloquea`<br>`tests/test_lint.py:1944` · `test_stars_yaml_roto_reporta_no_evaluado_en_vez_de_reventar`<br>`tests/test_lint.py:1957` · `test_themes_yaml_roto_tambien_reporta_no_evaluado`<br>`tests/test_query_ads.py:1338` · `test_query_ads_rehusa_lente_vacia` |
-| **INV-81** | P0 | parcial | `scripts/make_notes.py:1135` · `papers_universe` | `tests/test_make_notes.py:1917` · `test_conteo_del_encabezado_es_el_de_la_tabla` |
-| **INV-82** | P1 | parcial | `scripts/make_notes.py:1458` · `estado_line` | `tests/test_make_notes.py:2006` · `test_refrescar_sin_reverificar_mueve_una_sola_fecha` |
-| **INV-83** | P0 | parcial | `scripts/lib_config.py:704` · `save_extraccion`<br>`scripts/lint.py:261` · `alcance_declarado`<br>`scripts/lint.py:278` · `corpus_vigente` | `tests/test_lint.py:2059` · `test_subconjunto_sin_declarar_reporta`<br>`tests/test_triage.py:433` · `test_extraccion_todos_declara_el_default` |
-| **INV-84** | P0 | garantizado y medido | `scripts/make_notes.py:1287` · `rename_paper` | `tests/test_make_notes.py:2127` · `test_ciclo_preprint_publicado` |
-| **INV-85** | P1 | parcial (4 de 5 detectores) | `scripts/fetch_ground_truth.py:228` · `nea_diff`<br>`scripts/sweep_external.py:3` | `tests/test_sweep_external.py:114` · `test_detector_no_implementado_no_aporta_un_cero`<br>`tests/test_sweep_external.py:152` · `test_retracciones_rc2_no_es_limpio` |
-| **INV-86** | P0 | garantizado y medido | `scripts/lint.py:498` · `inferencias_sin_premisas` | `tests/test_lint.py:2216` · `test_inferencia_pelada_bloquea` |
-| **INV-87** | P0 | garantizado y medido | `scripts/check_retractions.py:343` · `main` | `tests/test_check_retractions.py:525` · `test_errores_sin_retractados_exit_2`<br>`tests/test_check_retractions.py:602` · `test_corpus_sin_doi_no_sale_limpio`<br>`tests/test_lint.py:1766` · `test_lint_sin_git_reporta_no_evaluado`<br>`tests/test_lint.py:2188` · `test_config_ilegible_suprime_las_categorias_que_dependen_de_ella` |
+| **INV-76** | P0 | garantizado y medido | `scripts/lib_config.py:676` | `tests/test_fetch_ground_truth.py:343` · `test_spectral_type_solo_de_simbad` |
+| **INV-77** | P1 | garantizado y medido | `scripts/lint.py:362` | `tests/test_lint.py:2089` · `test_disputa_entre_autoridades_es_expresable` |
+| **INV-78** | P0 | garantizado y medido | `scripts/lib_blocks.py:3`<br>`scripts/lint.py:1136` · `collect` | `tests/test_lib_blocks.py:47` · `test_reflow_no_mueve_ancla`<br>`tests/test_lint.py:1886` · `test_reemplazo_del_txt_marca_por_fuente` |
+| **INV-79** | P0 | parcial (la mitad determinista, medida) | `scripts/lint.py:1136` · `collect` | `tests/test_lint.py:1841` · `test_nota_verificada_no_marca_nada` |
+| **INV-80** | P0 | garantizado y medido | `scripts/lib_config.py:215` · `yaml_error`<br>`scripts/lib_config.py:231` · `stars_error`<br>`scripts/lib_config.py:236` · `themes_error`<br>`scripts/lib_config.py:252` · `objective_error`<br>`scripts/query_ads.py:1192` · `main` | `tests/test_lib_config.py:405` · `test_objective_error_distingue_los_tres_estados`<br>`tests/test_lint.py:1759` · `test_lint_objective_roto_bloquea`<br>`tests/test_lint.py:1947` · `test_stars_yaml_roto_reporta_no_evaluado_en_vez_de_reventar`<br>`tests/test_lint.py:1960` · `test_themes_yaml_roto_tambien_reporta_no_evaluado`<br>`tests/test_query_ads.py:1338` · `test_query_ads_rehusa_lente_vacia` |
+| **INV-81** | P0 | garantizado y medido (1.35.0) | `scripts/make_notes.py:1203` · `papers_universe` | `tests/test_make_notes.py:1917` · `test_conteo_del_encabezado_es_el_de_la_tabla`<br>`tests/test_make_notes.py:2390` · `test_planetas_se_estampa_no_es_dataview`<br>`tests/test_make_notes.py:2414` · `test_metodos_se_estampa_con_el_recorte_correcto` |
+| **INV-82** | P1 | garantizado y medido (1.35.0) | `scripts/lib_config.py:734` · `save_sintesis`<br>`scripts/make_notes.py:1605` · `estado_line` | `tests/test_make_notes.py:2006` · `test_refrescar_sin_reverificar_mueve_una_sola_fecha`<br>`tests/test_make_notes.py:2446` · `test_la_cabecera_lleva_las_tres_fechas`<br>`tests/test_make_notes.py:2464` · `test_refrescar_no_mueve_la_fecha_de_sintesis`<br>`tests/test_triage.py:478` · `test_sintesis_se_declara_y_no_pisa_lo_demas` |
+| **INV-83** | P0 | parcial (el canal ya está cableado) | `scripts/lib_config.py:719` · `save_extraccion`<br>`scripts/lint.py:262` · `alcance_declarado`<br>`scripts/lint.py:279` · `corpus_vigente` | `tests/test_lint.py:2062` · `test_subconjunto_sin_declarar_reporta`<br>`tests/test_triage.py:433` · `test_extraccion_todos_declara_el_default` |
+| **INV-84** | P0 | garantizado y medido | `scripts/make_notes.py:1426` · `rename_paper` | `tests/test_make_notes.py:2127` · `test_ciclo_preprint_publicado` |
+| **INV-85** | P1 | garantizado (los 5 detectores, 1.35.0) | `scripts/fetch_ground_truth.py:228` · `nea_diff`<br>`scripts/sweep_external.py:3` | `tests/test_sweep_external.py:121` · `test_detector_no_implementado_no_aporta_un_cero`<br>`tests/test_sweep_external.py:145` · `test_sweep_web_detecta_el_cambio_y_no_escribe`<br>`tests/test_sweep_external.py:206` · `test_retracciones_rc2_no_es_limpio` |
+| **INV-86** | P0 | garantizado y medido | `scripts/lint.py:521` · `inferencias_sin_premisas` | `tests/test_lint.py:2219` · `test_inferencia_pelada_bloquea` |
+| **INV-87** | P0 | garantizado y medido | `scripts/check_retractions.py:343` · `main` | `tests/test_check_retractions.py:525` · `test_errores_sin_retractados_exit_2`<br>`tests/test_check_retractions.py:602` · `test_corpus_sin_doi_no_sale_limpio`<br>`tests/test_lint.py:1769` · `test_lint_sin_git_reporta_no_evaluado`<br>`tests/test_lint.py:2191` · `test_config_ilegible_suprime_las_categorias_que_dependen_de_ella` |
 | **INV-88** | P1 | garantizado y medido | `scripts/query_ads.py:796` · `reclassify_for_theme`<br>`scripts/query_ads.py:825` · `gate_cited_by_corpus` | `tests/test_query_ads.py:1393` · `test_puerta_2_el_fundacional_entra_sin_lente_astro`<br>`tests/test_query_ads.py:1500` · `test_main_aplica_la_regla_del_tema_a_la_query_directa`<br>`tests/test_query_ads.py:1550` · `test_puerta_1_propone_lo_que_el_corpus_cita_y_no_lo_clasifica`<br>`tests/test_query_ads.py:1585` · `test_main_puerta_1_deja_el_candidato_en_ads_json` |
-| **INV-89** | P1 | garantizado y medido | `scripts/lib_config.py:757` · `load_busquedas` | `tests/test_lib_config.py:424` · `test_dos_busquedas_con_solapamiento_no_suman` |
-| **INV-90** | P1 | garantizado y medido | `scripts/lib_config.py:444` · `write_text_atomic`<br>`scripts/lib_config.py:468` · `write_bytes_atomic` | `tests/test_lib_config.py:377` · `test_sin_escrituras_directas_a_vault`<br>`tests/test_make_notes.py:1812` · `test_notas_pasan_por_el_helper` |
-| **INV-91** | P1 | garantizado y medido | `scripts/check_retractions.py:332` · `_estampar`<br>`scripts/lib_config.py:824` · `load_cadena`<br>`scripts/lib_config.py:829` · `save_paso` | `tests/test_check_retractions.py:571` · `test_slug_estampa_su_paso_en_la_cadena`<br>`tests/test_lib_config.py:463` · `test_save_paso_appendea_con_fecha_version_y_via` |
+| **INV-89** | P1 | garantizado y medido | `scripts/lib_config.py:796` · `load_busquedas` | `tests/test_lib_config.py:424` · `test_dos_busquedas_con_solapamiento_no_suman` |
+| **INV-90** | P1 | garantizado y medido | `scripts/lib_config.py:459` · `write_text_atomic`<br>`scripts/lib_config.py:483` · `write_bytes_atomic` | `tests/test_lib_config.py:377` · `test_sin_escrituras_directas_a_vault`<br>`tests/test_make_notes.py:1812` · `test_notas_pasan_por_el_helper` |
+| **INV-91** | P1 | garantizado y medido | `scripts/check_retractions.py:332` · `_estampar`<br>`scripts/lib_config.py:879` · `load_cadena`<br>`scripts/lib_config.py:913` · `save_paso` | `tests/test_check_retractions.py:571` · `test_slug_estampa_su_paso_en_la_cadena`<br>`tests/test_fetch_ground_truth.py:438` · `test_el_atajo_idempotente_estampa_el_paso`<br>`tests/test_lib_config.py:463` · `test_save_paso_appendea_con_fecha_version_y_via` |

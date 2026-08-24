@@ -314,6 +314,12 @@ def main() -> int:
                          "el default del contrato; `subconjunto` = se recortó, y entonces --reason "
                          "es el criterio (obligatorio). Queda en `extraccion:` del registro "
                          "versionado; sin esto el lint reporta *recorte de lectura sin declarar*")
+    ap.add_argument("--sintesis", action="store_true",
+                    help="INV-82: declarar que ACÁ se sintetizó el sujeto (la tercera fecha de la "
+                         "cabecera). Opcional `--n-papers N` y `--reason` como nota. Se estampa en "
+                         "la ficha con `make_notes.py <slug>`")
+    ap.add_argument("--n-papers", type=int, dest="n_papers",
+                    help="(--sintesis) sobre cuántos papers se sintetizó")
     ap.add_argument("--migrate", action="store_true",
                     help="consolidar en el registro versionado las decisiones del "
                          "build/<slug>/triage.json viejo (bóvedas pre-1.9.0) y salir")
@@ -327,6 +333,14 @@ def main() -> int:
     # hallazgo no tenía cómo cerrarse. Va acá porque `triage.py` ya es el CLI del juicio de curación
     # (los dos carriles de descarte escriben en el mismo registro); leer 8 de 42 core es una
     # decisión de curación más, y del mismo tipo: la que hay que poder auditar seis meses después.
+    if args.sintesis:
+        cfg.save_sintesis(args.slug, n_papers=args.n_papers, nota=args.reason)
+        cfg.print_seguro(f"{args.slug}: síntesis declarada hoy"
+                         + (f" sobre {args.n_papers} papers" if args.n_papers else "")
+                         + f"\n  → {cfg.registro_path(args.slug)}"
+                         + f"\n  Estampala en la ficha: `python scripts/make_notes.py {args.slug}`")
+        return 0
+
     if args.extraccion:
         subconjunto = args.extraccion == "subconjunto"
         if subconjunto and not args.reason:

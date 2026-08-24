@@ -14,10 +14,13 @@ from conftest import write_yaml
 @pytest.fixture
 def fake_run(monkeypatch):
     """Reemplaza run(): graba (script, *args) y devuelve el rc configurado por script."""
-    state = SimpleNamespace(calls=[], rcs={})
+    state = SimpleNamespace(calls=[], rcs={}, flags=[])
 
-    def run(script, *args):
+    def run(script, *args, flags=()):
+        # firma REAL (red #3): desde INV-44 `run` acepta `flags=` —las escotillas del orquestador—;
+        # un doble sin ese parámetro revienta con `TypeError` en producción y deja la suite verde.
         state.calls.append((script, *args))
+        state.flags.append((script, list(flags)))
         return state.rcs.get(script, 0)
     monkeypatch.setattr(it, "run", run)
     return state
@@ -401,3 +404,55 @@ def test_run_exporta_la_via_al_paso(toy_vault, monkeypatch):
     monkeypatch.setattr(it.subprocess, "run", fake_run)
     assert it.run("query_ads.py", "test_star") == 0
     assert visto["via"] == "orquestador"
+
+
+# ── gate de mutación: dos funciones que sobrevivían a que les vaciaran el cuerpo ──
+
+def test_listify_curado_preserva_el_escalar(toy_vault, capsys):
+    """Un `extra_core: 2020X` sin corchetes es YAML válido y la forma natural de declarar UNO.
+    `cfg.as_list` lo degradaría a `[]` —perdiendo la curación en silencio, el defecto medido en
+    R13— así que acá se PRESERVA la intención y se avisa para corregir la forma en origen."""
+    assert it._listify_curado(["a", "b"], "extra_core") == ["a", "b"]
+    assert it._listify_curado(None, "extra_core") == []
+    assert it._listify_curado([], "extra_core") == []
+    assert it._listify_curado("2020X", "extra_core") == ["2020X"]
+    assert "está escrito como escalar" in capsys.readouterr().out
+
+
+def test_repoint_source_pdf_repunta_a_la_copia_de_la_boveda(toy_vault, capsys):
+    """El path declarado suele ser staging efímero (descargas, scratchpad): al limpiarse deja un
+    puntero muerto en `themes.yaml`. La que vale es la copia versionada."""
+    write_yaml(cfg.THEMES_YAML, {})
+    cfg.THEMES_YAML.write_text(
+        "gp:\n  title: GP     # comentario que un dump YAML destruiría\n"
+        "  sources:\n    - key: 2006R\n      pdf: /tmp/staging/rw.pdf\n", encoding="utf-8")
+    dest = cfg.PDFS / "gp" / "2006R.pdf"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(b"%PDF")
+    it.repoint_source_pdf("2006R", "/tmp/staging/rw.pdf", dest)
+    txt = cfg.THEMES_YAML.read_text(encoding="utf-8")
+    assert "vault/raw/pdfs/gp/2006R.pdf" in txt and "/tmp/staging" not in txt
+    assert "comentario que un dump YAML destruiría" in txt, "reescritura quirúrgica de la línea"
+
+
+def test_repoint_source_pdf_no_adivina_si_matchea_varias(toy_vault, capsys):
+    """Si el path declarado no matchea exactamente UNA línea `pdf:`, se avisa y se deja a mano:
+    repuntar la equivocada es peor que no repuntar."""
+    cfg.THEMES_YAML.write_text(
+        "gp:\n  sources:\n    - pdf: /tmp/x.pdf\n    - pdf: /tmp/x.pdf\n", encoding="utf-8")
+    dest = cfg.PDFS / "gp" / "2006R.pdf"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(b"%PDF")
+    antes = cfg.THEMES_YAML.read_text(encoding="utf-8")
+    it.repoint_source_pdf("2006R", "/tmp/x.pdf", dest)
+    assert "no repunté" in capsys.readouterr().out
+    assert cfg.THEMES_YAML.read_text(encoding="utf-8") == antes
+
+
+def test_repoint_source_pdf_no_hace_nada_sin_copia(toy_vault):
+    """Sin la copia en disco no hay a dónde repuntar: repuntar a un archivo inexistente
+    cambiaría un puntero muerto por otro."""
+    cfg.THEMES_YAML.write_text("gp:\n  sources:\n    - pdf: /tmp/x.pdf\n", encoding="utf-8")
+    antes = cfg.THEMES_YAML.read_text(encoding="utf-8")
+    it.repoint_source_pdf("2006R", "/tmp/x.pdf", cfg.PDFS / "gp" / "no_existe.pdf")
+    assert cfg.THEMES_YAML.read_text(encoding="utf-8") == antes

@@ -58,14 +58,15 @@ def main() -> int:
     except KeyError as e:
         sys.exit(str(e))
     print(f"Ingest de {name} ({args.slug}) — cadena mecánica completa")
+    escotillas = ["--yes"] if args.yes else []      # INV-44: la escotilla del orquestador deja traza
     for script in CHAIN:
-        rc = run(script, args.slug)
+        rc = run(script, args.slug, flags=escotillas)
         if rc:
             sys.exit(f"{script} falló (rc={rc}) — cadena abortada. Es idempotente: corregí y "
                      "re-corré ingest_star.py (lo ya bajado no se re-baja).")
         if script == "query_ads.py":       # checkpoint ANTES del primer paso que gasta red y disco
             expansion_guard(args.slug, args.yes)
-    retr_rc = run("check_retractions.py", "--slug", args.slug)
+    retr_rc = run("check_retractions.py", "--slug", args.slug, flags=escotillas)
     if retr_rc == 1:
         sys.exit("check_retractions detectó papers retractados — revisá las notas marcadas "
                  "(el lint las surface como bloqueante).")

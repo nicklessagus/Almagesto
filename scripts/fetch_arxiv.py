@@ -97,12 +97,11 @@ def download_pdf(arxiv_id: str, dest) -> bool:
 
 
 
-def _flags_usados(args) -> list:
+def _flags_usados(args, ap=None) -> list:
     """Los flags no-default de esta corrida, para dejarlos en `cadena:` del registro (D-48/D-57).
     Son las **escotillas**: `--force`, `--yes`, `--all` cambian lo que la corrida hizo, y sin
     registrarlas la traza dice "corrió make_notes" sobre dos corridas que no hicieron lo mismo."""
-    return sorted(f"--{k.replace('_', '-')}" for k, v in vars(args).items()
-                  if v is True and k not in ("theme",))
+    return cfg.flags_usados(args, ap)
 
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
@@ -174,7 +173,7 @@ def main() -> int:
              for r in residue], indent=2, ensure_ascii=False))
         cfg.print_seguro(f"Sin PDF ({len(no_arxiv)} sin arXiv + {len(failed)} fallidos) → {miss} "
                           "(fetch_pdf los intenta vía el resolver de ADS; el residuo final es el suyo).")
-    cfg.save_paso(args.slug, "fetch_arxiv", flags=_flags_usados(args))
+    cfg.save_paso(args.slug, "fetch_arxiv", flags=_flags_usados(args, ap))
     return 0
 
 

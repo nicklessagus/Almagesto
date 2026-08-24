@@ -1419,9 +1419,12 @@ def test_registro_ilegible_se_reporta(toy_vault, capsys):
 
 def test_lint_usa_el_lector_blindado_del_registro():
     """`lint.py` es el único de seis lectores del registro que reimplementa la lectura cruda, y por
-    eso se saltea el blindaje que la 6ª pasada le puso a `load_registro`."""
+    eso se saltea el blindaje que la 6ª pasada le puso a `load_registro`.
+
+    Mira `collect`, no `main`: desde 10.1 el barrido vive ahí y `main` sólo parsea, renderiza y
+    decide el exit."""
     import inspect
-    assert "load_registro" in inspect.getsource(lint.main), "lint.main no usa cfg.load_registro"
+    assert "load_registro" in inspect.getsource(lint.collect), "lint.collect no usa cfg.load_registro"
 
 
 def test_lint_no_muere_en_una_consola_no_utf8():
@@ -2524,3 +2527,114 @@ def test_alcance_con_slug_inexistente_lo_nombra(toy_vault, capsys):
     rc, rep = run_lint_reporte(capsys)
     sec = _seccion(rep, "Alcance de hipótesis")
     assert "tets_star" in sec and "typo" in sec, sec
+
+
+def test_la_tabla_estampada_de_planetas_no_cuenta_como_prosa(toy_vault, capsys):
+    """Desde que `## Planetas` dejó de ser ```dataviewjs``` y pasó a tabla materializada
+    (D-11/INV-81), sus celdas satisfacen el patrón `|\\s*b\\s*|` del proxy de autosuficiencia: TODO
+    planeta quedaba "discutido en prosa" en una ficha con cero líneas escritas. Es el mismo falso
+    limpio permanente que el bug del `[^*]*`, por otra puerta — y peor, porque lo introduce la
+    propia máquina."""
+    write_gt(toy_vault, [gt_planet(l) for l in "bcd"])
+    import make_notes as mn
+    mn.write_star_note("test_star", force=False)
+    link_from_index(toy_vault, "test_star")
+    rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "Campos incompletos")
+    for l in "bcd":
+        assert f"planeta {l} en frontmatter pero no discutido en prosa" in sec, sec
+
+
+def test_solo_prosa_descuenta_las_secciones_estampadas():
+    body = ("## Resumen\nEsto lo escribió alguien: la señal **b** es real.\n\n"
+            "## Planetas (ground-truth NASA Exoplanet Archive) (1)\n| c |\n\n"
+            "## Huecos\nfalta el P_rot de la **d**.\n")
+    p = lint.solo_prosa(body)
+    assert "señal **b**" in p and "**d**" in p
+    assert "| c |" not in p, "la tabla estampada no es prosa"
+
+
+# ── INV-19 · capas colgadas de una entidad que ya no existe ─────────────────
+
+def test_capas_colgadas_se_reportan(toy_vault, capsys):
+    """La otra mitad de INV-19 ("ni archivo huérfano en `raw/`") no tenía red: había chequeo para
+    `wiki/` y para el ground-truth, y **ninguno** para el registro, `raw/{pdfs,fulltext}/` ni
+    `build/`. Borrar una entidad a mano —que era el único modo— dejaba esos directorios ahí."""
+    cfg.save_busqueda("fantasma", {"fecha": "2026-01-01", "n_total": 1})
+    (cfg.PDFS / "fantasma").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "fantasma").mkdir(parents=True, exist_ok=True)
+    (cfg.ROOT / "build" / "fantasma").mkdir(parents=True, exist_ok=True)
+    rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "Capas colgadas")
+    for capa in ("registro/fantasma", "raw/pdfs/fantasma", "raw/fulltext/fantasma", "build/fantasma"):
+        assert capa in sec, f"falta {capa}: {sec}"
+    assert "ÚNICO artefacto no regenerable" in sec, "el registro es el peor de los cuatro"
+    assert rc == 0, "backlog: no invalida lo que hay"
+
+
+def test_la_entidad_viva_no_se_reporta_colgada(toy_vault, capsys):
+    """El caso normal no puede ser ruido."""
+    cfg.save_busqueda("test_star", {"fecha": "2026-01-01", "n_total": 1})
+    (cfg.FULLTEXT / "test_star").mkdir(parents=True, exist_ok=True)
+    rc, rep = run_lint_reporte(capsys)
+    assert "test_star" not in _seccion(rep, "Capas colgadas")
+
+
+def test_el_registro_de_red_no_es_una_capa_colgada(toy_vault, capsys):
+    """`_red.yaml` es de la bóveda entera (la pasada de red, D-46), no de un sujeto: reportarlo
+    sería un hallazgo permanente que nadie puede cerrar."""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    (cfg.REGISTRO / "_red.yaml").write_text("ultima_pasada: 2026-08-24\n", encoding="utf-8")
+    rc, rep = run_lint_reporte(capsys)
+    assert "_red" not in _seccion(rep, "Capas colgadas")
+
+
+# ── 10.1 · el lint expone su resultado estructurado ─────────────────────────
+
+def test_collect_y_main_coinciden(toy_vault, capsys):
+    """`collect()` es lo que `main()` renderiza: mismo contenido, mismo exit. Es el assert que hace
+    del refactor un cambio de FORMA y no de comportamiento (el otro instrumento es el golden, que
+    compara byte a byte sobre 900 notas)."""
+    mk_note(cfg.CONCEPTS / "methods", "huerfano", {"tags": ["concept"], "name": "huerfano"}, "# h\n")
+    res = lint.collect()
+    rc, rep = run_lint_reporte(capsys)
+    assert lint.render(res) == rep.rstrip("\n") or lint.render(res) == rep
+    assert (rc == 1) == (res.n_block() > 0)
+    assert res.por_clave("orphans") is not None and len(res.por_clave("orphans")) == 1
+
+
+def test_la_severidad_se_declara_una_sola_vez(toy_vault):
+    """El defecto que 10.1 cierra: la severidad vivía **dos veces** —el título decía "(backlog)" o
+    llevaba "⚠ WARN", y la pertenencia a la tupla de `n_block` decidía el exit— sin nada que las
+    atara. Agregar una categoría bloqueante y olvidarla en `n_block` (o al revés) no rompía ningún
+    test. Ahora el exit se deriva de la tabla, así que el título y el exit no pueden divergir."""
+    res = lint.collect()
+    incoherentes = []
+    for c in res.categorias:
+        dice_backlog = "(backlog" in c.titulo
+        dice_warn = "WARN" in c.titulo
+        if c.severidad == lint.SEV_BLOQUEANTE and (dice_backlog or dice_warn):
+            incoherentes.append(f"{c.clave}: bloqueante pero el título dice backlog/WARN")
+        if c.severidad == lint.SEV_WARN and not dice_warn:
+            incoherentes.append(f"{c.clave}: SEV_WARN pero el título no lo dice")
+        if c.severidad == lint.SEV_BACKLOG and dice_warn:
+            incoherentes.append(f"{c.clave}: SEV_BACKLOG con título de WARN")
+    assert incoherentes == [], "\n  ".join(incoherentes)
+
+
+def test_las_claves_de_categoria_son_unicas_y_estables(toy_vault):
+    """`clave` es lo estable; el título es prosa que se reescribe. Un consumidor (el tablero, un
+    test, otro script) matchea por clave — y dos claves iguales lo mandarían a la categoría
+    equivocada en silencio."""
+    claves = [c.clave for c in lint.collect().categorias]
+    assert len(claves) == len(set(claves)), [k for k in claves if claves.count(k) > 1]
+    assert len(claves) == 48, f"el reporte tiene {len(claves)} categorías, se esperaban 48"
+
+
+def test_el_modo_cierre_solo_cambia_el_exit_de_los_pares(toy_vault):
+    """R-1: el MISMO detector, dos severidades según el momento. `SEV_CIERRE` es la única que
+    cambia de lado según el flag; ninguna otra puede depender de él."""
+    sin, con = lint.collect(cierre=False), lint.collect(cierre=True)
+    assert [c.clave for c in sin.categorias] == [c.clave for c in con.categorias]
+    solo_con = {c.clave for c in con.bloquean()} - {c.clave for c in sin.bloquean()}
+    assert solo_con <= {"stale_pairs"}, solo_con

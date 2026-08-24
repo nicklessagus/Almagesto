@@ -132,7 +132,13 @@ def _cuerpo(text: str) -> tuple[str, int]:
     if not text.startswith("---"):
         return text, 0
     delims = list(_FM_DELIM_RE.finditer(text))
-    if len(delims) < 2:
+    # `delims[0].start() != 0` es el guard que `cfg.frontmatter_span` sí tiene y acá faltaba: sin
+    # él, una nota que arranca con `---algo` (no un delimitador: la línea tiene más contenido) pasa
+    # el `startswith` y se toman como frontmatter los DOS primeros `---` sueltos del cuerpo — dos
+    # reglas horizontales, por ejemplo. El cuerpo queda recortado desde la segunda y los pares que
+    # vivían antes desaparecen del fan-out: **sub-dispara**, que es justo el error que el módulo
+    # documenta prohibir.
+    if len(delims) < 2 or delims[0].start() != 0:
         return text, 0
     fin = delims[1].end()
     return text[fin:], text[:fin].count("\n")

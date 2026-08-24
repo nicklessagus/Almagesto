@@ -2333,3 +2333,174 @@ def test_concept_dest_resuelve_area_y_nombre(toy_vault):
     write_yaml(cfg.THEMES_YAML, {"pelado": {"title": "P", "query": "q"}})
     assert mn._concept_dest("pelado") == cfg.CONCEPTS / "" / "pelado.md", \
         "sin `concept` declarado cae al slug (y sin `area`, a la raíz de concepts/)"
+
+
+# ── INV-64 · los dos migradores que faltaban ────────────────────────────────
+
+def test_migrate_facets_renombra_y_es_idempotente(toy_vault):
+    """R-5 entregó el detector bloqueante y **no** el migrador: el lint mandaba a renombrar a mano,
+    nota por nota (medido en una instancia real: 908 de 908 la traían).  @inv INV-64"""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    bloque = cfg.PAPERS / "2020Bloque.md"
+    bloque.write_text("---\nbibcode: 2020Bloque\ntopics:\n  - rv\n  - activity\nmethods: []\n"
+                      "tags: [paper]\n---\n# T\n\n## Extracción\nno se toca\n", encoding="utf-8")
+    inline = cfg.PAPERS / "2020Inline.md"
+    inline.write_text("---\nbibcode: 2020Inline\ntopics: [rv]\nmethods: []\ntags: [paper]\n---\n# T\n",
+                      encoding="utf-8")
+    assert mn.migrate_all_facets() == 2
+    fm = cfg.split_fm(bloque.read_text(encoding="utf-8"))
+    assert fm["facets"] == ["rv", "activity"] and "topics" not in fm
+    assert "no se toca" in bloque.read_text(encoding="utf-8")
+    assert cfg.split_fm(inline.read_text(encoding="utf-8"))["facets"] == ["rv"]
+    assert mn.migrate_all_facets() == 0, "idempotente"
+
+
+def test_migrate_facets_no_pisa_un_facets_existente(toy_vault):
+    """Si la nota ya tiene el campo vigente, el `topics:` residual se **borra**: el vigente manda."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    p = cfg.PAPERS / "2020Dos.md"
+    p.write_text("---\nbibcode: 2020Dos\nfacets: [rv]\ntopics: [viejo]\nmethods: []\n"
+                 "tags: [paper]\n---\n# T\n", encoding="utf-8")
+    mn.migrate_all_facets()
+    fm = cfg.split_fm(p.read_text(encoding="utf-8"))
+    assert fm["facets"] == ["rv"] and "topics" not in fm
+
+
+def test_migrate_registros_pliega_sin_perder_la_corrida(toy_vault):
+    """D-28 tenía detector y no migrador: el lint mandaba a "re-correr la cadena", que cuesta una
+    pasada de red **y pierde la corrida vieja** — en el único artefacto no regenerable.  @inv INV-64"""
+    cfg.save_registro("test_star", {"slug": "test_star",
+                                    "busqueda": {"fecha": "2026-01-01", "query": "q", "n_total": 40},
+                                    "decisiones": {"2020X": {"decision": "descartado",
+                                                             "motivo": "ruido", "fecha": "2026-01-01"}}})
+    assert mn.migrate_all_registros() == 1
+    reg = cfg.load_registro("test_star")
+    assert reg.get("busqueda") is None
+    assert len(reg["busquedas"]) == 1 and reg["busquedas"][0]["n_total"] == 40
+    assert "pre-D-28" in reg["busquedas"][0]["schema"]
+    assert reg["decisiones"]["2020X"]["motivo"] == "ruido", "el juicio de curación no se toca"
+    assert mn.migrate_all_registros() == 0, "idempotente"
+
+
+# ── INV-81 / D-11 · los otros dos roll-ups de la ficha, materializados ──────
+
+def test_planetas_se_estampa_no_es_dataview(toy_vault):
+    """D-11 se había cumplido **sólo** para `## Papers`. `## Planetas` era ```dataviewjs``` — el
+    peor de los tres, porque sus cinco campos son ground-truth de NEA, la capa que el contrato
+    vende como auditable, y un agente que abre el `.md` veía el CÓDIGO de la query.  @inv INV-81"""
+    (toy_vault.GROUND_TRUTH / "test_star.json").write_text(json.dumps(GT), encoding="utf-8")
+    cfg.STARS.mkdir(parents=True, exist_ok=True)
+    mn.write_star_note("test_star", False)
+    txt = (cfg.STARS / "test_star.md").read_text(encoding="utf-8")
+    assert "dataviewjs" not in txt and "dv.table" not in txt
+    assert "| Letra | P (d) | K (m/s) | e | m·sini (M⊕) | Estado |" in txt
+
+
+def test_planetas_muestra_null_explicito(toy_vault):
+    """NEA calla seguido en `K_ms`/`e` y el contrato dice que ese null es el estado CORRECTO. Una
+    celda en blanco se leería como «falta el dato»."""
+    t = mn.planetas_table({"planets": [{"letter": "b", "P_days": 3.1, "K_ms": None, "e": None,
+                                        "mass_earth": 2.0, "status": "confirmed"}]})
+    assert "| b | 3.1 | null | null | 2.0 | confirmed |" in t
+
+
+def test_planetas_sin_planetas_lo_dice(toy_vault):
+    t = mn.planetas_table({"planets": []})
+    assert "(0)" in t and "disputes" in t, "un vacío tiene que explicar dónde va una señal discutida"
+
+
+def test_metodos_se_estampa_con_el_recorte_correcto(toy_vault):
+    """Los métodos DE los papers de la estrella, no todo paper de la bóveda que use el método — el
+    mismo recorte que documenta `CLAUDE.md` para el equivalente determinista.  @inv INV-81"""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / "2020Mio.md").write_text(
+        "---\nbibcode: 2020Mio\nstars: [Estrella Test]\nmethods: [gp, periodograma]\nyear: 2020\n"
+        "tags: [paper]\n---\n# T\n", encoding="utf-8")
+    (cfg.PAPERS / "2020Ajeno.md").write_text(
+        "---\nbibcode: 2020Ajeno\nstars: [Otra]\nmethods: [gp]\nyear: 2020\ntags: [paper]\n---\n# T\n",
+        encoding="utf-8")
+    filas = mn.metodos_rows("Estrella Test")
+    assert [f[1] for f in filas] == ["2020Mio", "2020Mio"], filas
+    t = mn.metodos_table(filas)
+    assert "2 método(s) · 2 aplicación(es)" in t and "[[gp]]" in t and "2020Ajeno" not in t
+
+
+def test_stamp_star_rollups_es_idempotente_y_no_toca_la_prosa(toy_vault):
+    (toy_vault.GROUND_TRUTH / "test_star.json").write_text(json.dumps(GT), encoding="utf-8")
+    cfg.STARS.mkdir(parents=True, exist_ok=True)
+    mn.write_star_note("test_star", False)
+    dest = cfg.STARS / "test_star.md"
+    dest.write_text(dest.read_text(encoding="utf-8").replace(
+        "## Huecos", "## Resumen\n\nSíntesis LLM cara e irrepetible.\n\n## Huecos"), encoding="utf-8")
+    primera = dest.read_text(encoding="utf-8")
+    assert mn.stamp_star_rollups("test_star", dest) is False, "sin cambios no reescribe"
+    assert dest.read_text(encoding="utf-8") == primera
+    assert "Síntesis LLM cara e irrepetible." in primera
+
+
+# ── INV-82 · las TRES fechas ────────────────────────────────────────────────
+
+def test_la_cabecera_lleva_las_tres_fechas(toy_vault):
+    """INV-82 prometía tres (búsqueda, síntesis, verificación) y emitía dos: la de **síntesis** no
+    existía en ningún lado. El efecto es el que el invariante existe para impedir: refrescar el
+    corpus movía la de búsqueda y la ficha se leía como re-sintetizada.  @inv INV-82"""
+    (toy_vault.GROUND_TRUTH / "test_star.json").write_text(json.dumps(GT), encoding="utf-8")
+    cfg.save_busqueda("test_star", {"fecha": "2026-08-01", "n_found": 40, "n_core": 12})
+    cfg.save_sintesis("test_star", n_papers=12)
+    mn.write_star_note("test_star", False)
+    dest = cfg.STARS / "test_star.md"
+    dest.write_text(dest.read_text(encoding="utf-8")
+                    + "\n## Verificación de citas (2026-08-03)\n\n| # |\n", encoding="utf-8")
+    mn.stamp_estado("test_star", dest)
+    linea = [l for l in dest.read_text(encoding="utf-8").split("\n") if l.startswith("> _Estado")][0]
+    assert "búsqueda 2026-08-01" in linea
+    assert "síntesis" in linea and "(12 papers)" in linea
+    assert "verificación 2026-08-03" in linea
+
+
+def test_refrescar_no_mueve_la_fecha_de_sintesis(toy_vault):
+    """Las tres avanzan por separado y pueden divergir **sin que ninguna mienta**: un refresh mueve
+    la de búsqueda y deja la de síntesis donde estaba, que es lo que hace legible que la prosa sea
+    más vieja que el universo declarado.  @inv INV-82"""
+    (toy_vault.GROUND_TRUTH / "test_star.json").write_text(json.dumps(GT), encoding="utf-8")
+    cfg.save_busqueda("test_star", {"fecha": "2026-01-01", "n_found": 40, "n_core": 12})
+    cfg.save_sintesis("test_star", n_papers=12)
+    sint_antes = cfg.load_registro("test_star")["sintesis"]["fecha"]
+    mn.write_star_note("test_star", False)
+    dest = cfg.STARS / "test_star.md"
+    cfg.save_busqueda("test_star", {"fecha": "2026-08-24", "n_found": 60, "n_core": 20})
+    mn.stamp_estado("test_star", dest)
+    linea = [l for l in dest.read_text(encoding="utf-8").split("\n") if l.startswith("> _Estado")][0]
+    assert "búsqueda 2026-08-24" in linea
+    assert f"síntesis {sint_antes}" in linea, "el refresh no puede re-fechar la síntesis"
+
+
+def test_rename_paper_reescribe_todo_vault_no_solo_wiki(toy_vault):
+    """El alcance DECLARADO es `vault/` y se reescribía sólo `vault/wiki/`: un `[[bibcode]]` en
+    `STATUS.md` —que vive un nivel arriba y es el archivo que se lee primero— quedaba roto."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / "2020preX.md").write_text(
+        "---\nbibcode: 2020preX\narxiv_id: 2001.1\nstars: [Estrella Test]\nmethods: []\n"
+        "tags: [paper]\n---\n# T\n", encoding="utf-8")
+    status = cfg.VAULT / "STATUS.md"
+    status.write_text("Pendiente: revisar [[2020preX]].\n", encoding="utf-8")
+    mn.rename_paper("2020preX", "2021pubY")
+    assert "[[2021pubY]]" in status.read_text(encoding="utf-8")
+
+
+def test_rename_paper_usa_el_stem_saneado_en_los_wikilinks(toy_vault):
+    """El archivo se crea con el stem saneado (`/` → `_`) y todos los wikilinks del repo usan el
+    stem. Escribir el bibcode crudo dejaba cada link apuntando a una nota inexistente — latente,
+    pero es la única razón por la que `safe_name` existe."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / "2020preX.md").write_text(
+        "---\nbibcode: 2020preX\narxiv_id: 2001.1\nstars: [Estrella Test]\nmethods: []\n"
+        "tags: [paper]\n---\n# T\n", encoding="utf-8")
+    (cfg.CONCEPTS / "methods").mkdir(parents=True, exist_ok=True)
+    (cfg.CONCEPTS / "methods" / "gp.md").write_text(
+        "---\nname: gp\ntags: [concept]\n---\n# gp\n\nVer [[2020preX]].\n", encoding="utf-8")
+    nuevo = "2021ApJ/999"
+    mn.rename_paper("2020preX", nuevo)
+    stem = mn.safe_name(nuevo)
+    assert (cfg.PAPERS / f"{stem}.md").exists()
+    assert f"[[{stem}]]" in (cfg.CONCEPTS / "methods" / "gp.md").read_text(encoding="utf-8")

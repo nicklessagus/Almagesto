@@ -44,7 +44,7 @@ def detectores(monkeypatch):
     # `sweep_ground_truth` devuelven `(hallazgos, fallidos)` desde el arreglo del cero inventado —
     # un doble que siga devolviendo la lista pelada escondería el bug en la diferencia.
     monkeypatch.setattr(sw, "discover_versions", graba("versiones", ([("2020preX", "2021pubY")], [])))
-    monkeypatch.setattr(sw, "sweep_web", graba("web", ["2006Rasmussen: distinto"]))
+    monkeypatch.setattr(sw, "sweep_web", graba("web", (["2006Rasmussen: distinto"], [])))
     monkeypatch.setattr(sw, "sweep_ground_truth", graba("ground-truth",
                                                         ([("test_star", [("host.teff_K", 5344, 5350)])], [])))
     # el APLICADOR no es un detector: se anula por default para que los tests midan la
@@ -79,13 +79,21 @@ def test_pregunta_antes_de_aplicar(toy_vault, detectores, monkeypatch, capsys):
 
 
 def test_version_nueva_se_propone_no_se_renombra_sola(toy_vault, detectores, monkeypatch, capsys):
-    """El renombre reescribe wikilinks de toda la bóveda (D-19): eso no se hace sin que alguien lo
-    pida. Se PROPONE el comando."""
-    renombrados = []
-    monkeypatch.setattr(sw, "rename_paper", lambda a, b: renombrados.append((a, b)))
+    """El renombre reescribe wikilinks de TODA la bóveda: se propone el comando, no se ejecuta.
+
+    ⚠ El assert que había acá (`renombrados == []` sobre un monkeypatch de `sw.rename_paper`) **no
+    podía fallar**: `sweep_external` no invoca `rename_paper` en ninguna línea —el import es sólo
+    para que los tests lo graben— así que no existía código capaz de appendear. Peor: tampoco cubría
+    la regresión que decía cubrir, porque un renombre por `_run("make_notes.py", …)` no pasa por ese
+    nombre. Se mide sobre el ÁRBOL: ninguna nota se movió, y el comando salió propuesto."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / "2020preX.md").write_text(
+        "---\nbibcode: 2020preX\nmethods: []\ntags: [paper]\n---\n# T\n", encoding="utf-8")
+    antes = sorted(p.name for p in cfg.PAPERS.glob("*.md"))
     run_main(monkeypatch, ["--yes"])
-    assert renombrados == []
-    assert "--rename-paper 2020preX 2021pubY" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert sorted(p.name for p in cfg.PAPERS.glob("*.md")) == antes, "la pasada no renombra nada"
+    assert "--rename-paper 2020preX 2021pubY" in out, "propone el comando"
 
 
 def test_registra_la_fecha_de_pasada(toy_vault, detectores, monkeypatch):
@@ -100,23 +108,23 @@ def test_registra_la_fecha_de_pasada(toy_vault, detectores, monkeypatch):
 
 
 def test_sin_cambios_sale_0(toy_vault, monkeypatch):
-    for nombre in ("sweep_retracciones", "sweep_correcciones", "sweep_web"):
+    for nombre in ("sweep_retracciones", "sweep_correcciones"):
         monkeypatch.setattr(sw, nombre, lambda *a, **k: [])
-    for nombre in ("discover_versions", "sweep_ground_truth"):
+    for nombre in ("discover_versions", "sweep_ground_truth", "sweep_web"):
         monkeypatch.setattr(sw, nombre, lambda *a, **k: ([], []))    # (hallazgos, fallidos)
     assert run_main(monkeypatch) == 0
 
 
 def test_detector_no_implementado_no_aporta_un_cero(toy_vault, monkeypatch, capsys):
-    """D-43 aplicado a la pasada de red. `sweep_web` todavía no existe: si devolviera `[]` la
-    pasada cerraría en verde y el registro de caducidad diría "cubrió: web" — otro clon leería que
-    los snapshots se chequearon y no es cierto. Levanta, se reporta como NO evaluado, no entra en
-    `cubrio`, y el exit es 2.  @inv INV-85"""
+    """D-43 aplicado a la pasada de red: un detector que **no pudo correr** no aporta un cero y no
+    entra en `cubrio` — otro clon leería "cubrió: web" y no sería cierto. Ya no hay stub sin
+    implementar, así que se siembra el caso real: `sweep_web` se lleva puesta la corrida.  @inv INV-85"""
     for nombre in ("discover_versions", "sweep_ground_truth"):
         monkeypatch.setattr(sw, nombre, lambda *a, **k: ([], []))
-    for nombre in ("sweep_retracciones", "sweep_correcciones",
-                   "sweep_ground_truth"):
+    for nombre in ("sweep_retracciones", "sweep_correcciones"):
         monkeypatch.setattr(sw, nombre, lambda *a, **k: [])
+    monkeypatch.setattr(sw, "sweep_web", lambda *a, **k: (_ for _ in ()).throw(
+        NotImplementedError("re-snapshot web: npx ausente")))
     rc = run_main(monkeypatch, ["--yes"])
     assert rc == 2
     out = capsys.readouterr().out
@@ -124,10 +132,56 @@ def test_detector_no_implementado_no_aporta_un_cero(toy_vault, monkeypatch, caps
     assert "web" not in sw.load_ultima_pasada()["cubrio"]
 
 
-def test_sweep_web_declara_que_no_esta(toy_vault):
-    """El stub levanta con el motivo, no devuelve vacío."""
-    with pytest.raises(NotImplementedError, match="fetch_web.refresh"):
-        sw.sweep_web()
+def test_sweep_web_ignora_lo_que_no_es_snapshot_web(toy_vault):
+    """Un `.txt` de `pdftotext` no tiene URL que re-bajar: no es fallido, es que no aplica."""
+    (cfg.FULLTEXT / "tau_ceti").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "tau_ceti" / "2020A.txt").write_text("texto de un PDF", encoding="utf-8")
+    assert sw.sweep_web() == ([], [])
+
+
+def test_sweep_web_detecta_el_cambio_y_no_escribe(toy_vault, monkeypatch):
+    """D-41 — el modo de caducidad **más silencioso** de los cinco: una fuente web no tiene DOI ni
+    bibcode, nada avisa que cambió, y como el archivo local no se toca **el ancla de fuente tampoco
+    se entera**. ⛔ Reporta, no aplica (D-45): el snapshot en disco queda igual.  @inv INV-85"""
+    import fetch_web
+    d = cfg.FULLTEXT / "gp"
+    d.mkdir(parents=True, exist_ok=True)
+    txt = d / "2006Rasmussen.txt"
+    txt.write_text(f"{cfg.FULLTEXT_WEB_MARK} (off-ADS)\nsource_url : https://x.test/gp\n"
+                   "retrieved  : 2026-01-01 (UTC)\n"
+                   "# ---- contenido extraído (defuddle) ----\n\nTexto viejo.\n", encoding="utf-8")
+    antes = txt.read_text(encoding="utf-8")
+    monkeypatch.setattr(fetch_web, "fetch", lambda url: "Texto NUEVO y distinto.")
+    hallazgos, fallidos = sw.sweep_web()
+    assert fallidos == [] and len(hallazgos) == 1
+    assert "el snapshot cambió" in hallazgos[0] and "--force" in hallazgos[0]
+    assert txt.read_text(encoding="utf-8") == antes, "reporta, no aplica"
+
+
+def test_sweep_web_calla_si_la_pagina_no_cambio(toy_vault, monkeypatch):
+    """El header lleva `retrieved` y la versión del extractor —que cambian en cada corrida—, así que
+    se compara el CUERPO: hashear el archivo entero haría que toda re-bajada se viera como cambio."""
+    import fetch_web
+    d = cfg.FULLTEXT / "gp"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "2006Rasmussen.txt").write_text(
+        f"{cfg.FULLTEXT_WEB_MARK} (off-ADS)\nsource_url : https://x.test/gp\n"
+        "retrieved  : 2026-01-01 (UTC)\nextractor  : defuddle 0.1\n"
+        "# ---- contenido extraído (defuddle) ----\n\nTexto igual.\n", encoding="utf-8")
+    monkeypatch.setattr(fetch_web, "fetch", lambda url: "Texto igual.")
+    assert sw.sweep_web() == ([], [])
+
+
+def test_sweep_web_sin_source_url_es_fallido_no_limpio(toy_vault):
+    """No se puede re-bajar lo que no se sabe de dónde salió. Contarlo como "no cambió" sería el
+    cero inventado: el registro afirmaría haber mirado un snapshot que nadie pudo re-pedir."""
+    d = cfg.FULLTEXT / "gp"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "2006Rasmussen.txt").write_text(
+        f"{cfg.FULLTEXT_WEB_MARK} (off-ADS)\nretrieved  : 2026-01-01 (UTC)\n"
+        "# ---- contenido extraído (defuddle) ----\n\nTexto.\n", encoding="utf-8")
+    hallazgos, fallidos = sw.sweep_web()
+    assert hallazgos == [] and fallidos == ["gp/2006Rasmussen"]
 
 
 def test_correcciones_se_leen_del_vault(toy_vault):
@@ -175,9 +229,10 @@ def test_ground_truth_con_nea_caida_no_dice_haber_cubierto(toy_vault, monkeypatc
     cambios, fallidos = sw.sweep_ground_truth()
     assert cambios == [] and fallidos == ["test_star"], "el fallo por ítem tiene que salir declarado"
 
-    for nombre in ("sweep_retracciones", "sweep_correcciones", "sweep_web"):
+    for nombre in ("sweep_retracciones", "sweep_correcciones"):
         monkeypatch.setattr(sw, nombre, lambda *a, **k: [])
-    monkeypatch.setattr(sw, "discover_versions", lambda *a, **k: ([], []))
+    for nombre in ("discover_versions", "sweep_web"):
+        monkeypatch.setattr(sw, nombre, lambda *a, **k: ([], []))
     rc = run_main(monkeypatch)
     out = capsys.readouterr().out
     assert rc == 2, "no evaluado gana sobre limpio"
