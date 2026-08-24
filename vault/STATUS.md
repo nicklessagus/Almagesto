@@ -475,6 +475,16 @@ idénticos (`null` en los dos), y es justo la distinción que dice si vale la pe
 en la literatura. Va arriba porque **el artefacto es lo que viaja**: una ficha copiada, exportada o
 leída por un agente llega sin la doc al lado.
 
+> ⚠ **Aclaración pedida por el usuario (2026-08-24) — dos cosas que se confunden fácil:**
+> **(a) No hay fallback.** `spectral_type` sale de SIMBAD y punto: si SIMBAD calla, el campo queda
+> `null` aunque NEA lo tenga. Pineado con test (`test_spectral_type_solo_de_simbad`). El valor de
+> NEA **nunca** se usa como valor.
+> **(b) Sí hay campo de auditoría.** `_otras_autoridades` guarda lo que la otra autoridad decía,
+> marcado **no autoritativo** — es el tercer bullet de D-1, y existe para que el cuerpo pueda
+> mencionar la discrepancia con respaldo y para que D-2 pueda taguearla como `disputes[]`. No toca
+> el frontmatter de la ficha ni entra en ninguna decisión de valor.
+> Confirmado por el usuario tras revisarlo: **se queda como está**.
+
 Ratchet **81 → 79**. Tier 0: 774 verdes. Tier 1: 48.
 
 ### Lo que sigue
