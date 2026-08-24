@@ -139,6 +139,7 @@ def verify_block(text: str) -> tuple[bool, str | None]:
     hasta 11 — pasadas sucesivas sobre secciones distintas), así que la vigencia la marca la fecha
     **máxima**, no la del primero: quedarse con el primero dejaría la nota stale para siempre por
     más que se re-verifique."""
+    # @inv INV-31
     heads = VERIF_HEAD_RE.findall(text)
     if not heads:
         return False, None
@@ -157,7 +158,6 @@ def git_out(*args: str) -> str | None:
         r = subprocess.run(["git", "-C", str(cfg.ROOT), "-c", "core.quotePath=false", *args],
                            capture_output=True, text=True, encoding="utf-8", timeout=60)
     except (OSError, subprocess.SubprocessError):
-    #  @inv INV-31
         return None
     return r.stdout if r.returncode == 0 else None
 
@@ -413,11 +413,11 @@ def mirror_issues(slug: str, fm: dict, gt: dict) -> list:
     importa porque el arreglo es distinto: **difiere** (la ficha dice otra cosa que NEA → si viene
     de un paper es una `disputes[]`, no una sobreescritura) y **sin respaldo** (NEA no tiene el
     valor y la ficha sí → el número salió de la literatura y va al cuerpo, citado)."""
+    # @inv INV-06, INV-09
     host = gt.get("host") or {}
     out = []
 
     def check(campo: str, val_ficha, val_gt):
-    #  @inv INV-06, INV-09
         if same_value(val_ficha, val_gt):
             return
         if val_gt is None:

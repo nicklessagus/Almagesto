@@ -48,6 +48,7 @@ def clean_markdown(md: str) -> tuple[str, int]:
     """Post-clean determinista: saca bloques de media/embed que defuddle dejó como HTML crudo y
     colapsa líneas en blanco de más. Determinista (regex puro sobre entrada determinista) → el
     snapshot sigue siendo reproducible. Devuelve (markdown_limpio, n_bloques_removidos)."""
+    # @inv INV-30
     removed = 0
     for tag in _NOISE_BLOCKS:
         md, n = re.subn(rf"<{tag}\b[^>]*>.*?</{tag}>", "", md, flags=re.DOTALL | re.IGNORECASE)
@@ -107,7 +108,6 @@ def main() -> int:
             "Alternativa sin Node: traer la página con WebFetch y guardar el snapshot a mano."
         )
     if not CITEKEY_RE.match(args.citekey):
-    #  @inv INV-30
         sys.exit(
             f"citekey inválida: {args.citekey!r}. Debe empezar con AAAA+letra (año+inicial del autor, "
             "p. ej. 2006RasmussenWilliams) para que el lint la reconozca y el .txt matchee el [[citekey]]."

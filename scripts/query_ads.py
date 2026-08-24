@@ -171,6 +171,7 @@ if not FACET_PATTERNS and cfg.objective_error() is None:
 def combination_rule(rel: dict, topic_names) -> tuple[list[str], int]:
     """(require, min_facets) validados desde relevance. `require` debe ⊆ facets: una faceta
     obligatoria inexistente filtraría TODO a no-core en silencio → falla ruidoso."""
+    # @inv INV-55
     raw_require = rel.get("require")
     # A diferencia de `extra_core`/`aliases`/`noise_doctypes`, ACÁ no conviene adivinar un solo
     # elemento: `require: rv` (escalar) truthy no caía en el `or []` y `list("rv")` lo desarmaba
@@ -222,6 +223,7 @@ def classify(rec: dict) -> tuple[list[str], bool]:
     """Devuelve (facets, relevant). Relevante ⟺ `exclusion_reason` no encuentra motivo de
     exclusión (≥ MIN_FACETS facetas, TODAS las de REQUIRE_FACETS y doctype no-ruido; con los
     defaults min_facets=1, require=[] es el histórico ≥1 faceta cualquiera)."""
+    # @inv INV-24
     text = " ".join(filter(None, [
         " ".join(cfg.as_list(rec.get("title"))),
         rec.get("abstract", "") or "",
@@ -263,8 +265,6 @@ def expand_variants(names: list[str]) -> list[str]:
     variants: list[str] = []
     for n in names:
         for v in name_variants(n):
-    #  @inv INV-55
-    #  @inv INV-24
             if v not in variants:      # dedup: alias ya listado en ambas formas no duplica cláusulas
                 variants.append(v)
     return variants
@@ -615,6 +615,7 @@ def load_triage(slug: str) -> set[str]:
 
     **Sólo el carril del chaining** (#81): un rechazo de *fuente declarada* de un tema off-ADS vive
     en las mismas `decisiones` y no tiene nada que ver con los candidatos del grafo de citas."""
+    # @inv INV-49
     return {b for b, d in cfg.load_decisiones(slug).items()
             if d.get("decision") == "descartado" and cfg.es_del_carril(d, "chaining")}
 
@@ -649,7 +650,6 @@ def fetch_bibcodes(bibs: list[str]) -> list[dict]:
     el universo lo fijó el usuario: no hay ruido que filtrar, el `fq` sólo puede sacar de más."""
     out = []
     for i in range(0, len(bibs), CHAIN_CHUNK):
-    #  @inv INV-49
         chunk = bibs[i:i + CHAIN_CHUNK]
         q = " OR ".join(f'bibcode:"{b}"' for b in chunk)
         for r in query_ads(q, rows=len(chunk), quiet_truncate=True, fq=None):
@@ -825,6 +825,7 @@ def print_probe(q: str, recs: list, noncore_top: int = 25) -> int:
     no-core muestra sólo el top `noncore_top` por citas (chequeo de sanidad del corte). Cierra con el
     contraste de la regla de combinación (#41). El barrido 2b de ingest-star, que antes se hacía con
     probes manuales, hoy corre por --sweep (sweep_star)."""
+    # @inv INV-59
     core = sorted((r for r in recs if r["relevant"]), key=lambda r: r.get("citation_count") or 0, reverse=True)
     noncore = sorted((r for r in recs if not r["relevant"]), key=lambda r: r.get("citation_count") or 0, reverse=True)
     cfg.print_seguro(f"Probe (no baja PDFs ni escribe build/). q: {q}")
@@ -867,7 +868,6 @@ def main() -> int:
     # "con qué lente se filtró" quedaba mintiendo. Se chequea acá y no a nivel módulo para que
     # `--help` siga funcionando con la config rota.
     if (err := cfg.objective_error()):
-    #  @inv INV-59
         sys.exit(f"⛔ no se puede clasificar: {err}\n"
                  "   Arreglá la lente antes de consultar ADS — clasificar con una lente vacía "
                  "marcaría el corpus entero con una regla que nadie escribió.")

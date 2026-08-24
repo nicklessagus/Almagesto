@@ -193,6 +193,7 @@ def seed_pairs(real: list[dict], ft: dict[str, str]) -> list[dict]:
     que el otro paper sí respaldaba). Fallback si la nota cita todo el pool: excluir sólo el
     bloque (comportamiento histórico). Pool y protecciones se computan sobre la selección
     (post-cap), igual que siempre — determinista."""
+    # @inv INV-74
     bibs = sorted({p["bibcode"] for p in real})
     if len(bibs) < 2:
         raise SystemExit("hacen falta ≥2 bibcodes distintos con fulltext para sembrar cruces — "
@@ -245,7 +246,6 @@ def cmd_score() -> int:
     bench = bench_path()
     if not bench.exists():
     #  @inv INV-75
-    #  @inv INV-74
         raise SystemExit(f"no existe {bench} — corré primero `bench_verify.py seed`.")
     pairs = json.loads(bench.read_text(encoding="utf-8"))["pairs"]
     missing = [p["id"] for p in pairs if p.get("verdict") not in VALID_VERDICTS]

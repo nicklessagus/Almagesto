@@ -174,12 +174,14 @@ def stamp_fields(path, fm: dict, body: str, fields: dict) -> None:
 
 def stamp_retraction(path, fm: dict, body: str, retraction: dict) -> None:
     """`retracted: true` + `retraction{...}`: la fuente deja de ser válida (bloqueante en el lint)."""
+    # @inv INV-33
     stamp_fields(path, fm, body, {"retracted": True, "retraction": retraction})
 
 
 def stamp_corrections(path, fm: dict, body: str, corrections: list) -> None:
     """`corrections: [...]` (#52): el paper SIGUE siendo citable — lo que hay que revisar son las
     afirmaciones que lo citan (un corrigendum cambia justo el valor extraído). Backlog en el lint."""
+    # @inv INV-34
     stamp_fields(path, fm, body, {"corrections": corrections})
 
 
@@ -201,8 +203,6 @@ def crossref_retraction(doi: str, headers: dict) -> tuple[dict | None, list, str
       **sin chequear**: el llamador no puede reportarlo como limpio.
     """
     for wait in (2, 6, None):
-    #  @inv INV-34
-    #  @inv INV-33
         try:
             resp = requests.get(CROSSREF.format(doi=doi), headers=headers, timeout=30)
         except requests.RequestException:

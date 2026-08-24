@@ -203,11 +203,32 @@ def collect_marks(root: Path) -> list[Mark]:
 
 
 def _simbolo_de(lineas: list[str], n: int) -> str:
-    """El `def`/`class` más cercano hacia arriba desde la línea `n` (1-indexada). "" si no hay."""
-    for i in range(n - 1, -1, -1):
-        m = DEF_RE.match(lineas[i])
+    """El `def`/`class` **que contiene** la línea `n` (1-indexada). "" si la marca está a nivel de
+    módulo — típicamente sobre una constante.
+
+    Antes esto devolvía el `def` más cercano hacia arriba **sin chequear la contención**, así que
+    una marca sobre una constante se le colgaba a la función que hubiera quedado encima. Medido en
+    el artefacto real: `INV-76` (que marca `AUTORIDAD_CAMPO`) figuraba implementado por
+    `_extra_core_error`, e `INV-77` (`DISPUTE_SOURCES`) por `note_files`. Un mapa que atribuye mal
+    es peor que uno vacío: el vacío se ve, la atribución falsa se lee como verdad.
+
+    La contención se decide por **indentación**, no por AST: el recolector tiene que poder correr
+    sobre un archivo que no parsea (justo el caso en que uno quiere saber qué invariante toca)."""
+    marca = lineas[n - 1] if 0 < n <= len(lineas) else ""
+    sangria = len(marca) - len(marca.lstrip())
+    if sangria == 0:
+        return ""                      # a nivel de módulo: no la contiene ninguna función
+    for i in range(n - 2, -1, -1):
+        linea = lineas[i]
+        if not linea.strip():
+            continue
+        propia = len(linea) - len(linea.lstrip())
+        if propia >= sangria:
+            continue                   # sigue dentro del mismo bloque
+        m = DEF_RE.match(linea)
         if m:
             return m.group(1)
+        return ""                      # bloque de menor sangría que no es def/class: no contiene
     return ""
 
 

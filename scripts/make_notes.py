@@ -69,6 +69,7 @@ def _listify_curado(v, campo: str):
 
 def fm(d: dict) -> str:
     """Frontmatter YAML entre --- ---."""
+    # @inv INV-71
     body = yaml.safe_dump(d, sort_keys=False, allow_unicode=True, default_flow_style=False)
     return f"---\n{body}---\n"
 
@@ -81,6 +82,7 @@ def _txt_provenance(path) -> str:
     """Provenance de un .txt por la marca de su primera línea: `ocr` (rescate tesseract —
     citable con salvedad), `web` (snapshot defuddle) o `pdftotext` (extracción determinista,
     sin marca). Un solo lugar de verdad para leer el header."""
+    # @inv INV-26
     with path.open(encoding="utf-8", errors="replace") as fh:
         first = fh.readline()
     return ("ocr" if first.startswith(cfg.FULLTEXT_OCR_MARK)
@@ -104,9 +106,7 @@ def pdf_source_info(slug: str | None, stem: str) -> tuple[str | None, str | None
         return None, None
     txt = cfg.FULLTEXT / slug / f"{stem}.txt"
     if txt.exists():
-    #  @inv INV-71
     #  @inv INV-29
-    #  @inv INV-26
         if _txt_provenance(txt) == "web":
             return "web", None
         head = txt.read_text(encoding="utf-8", errors="replace")[:cfg.ARXIV_STAMP_SCAN_CHARS]
@@ -427,6 +427,7 @@ def migrate_disputes(dest) -> bool:
 
 def migrate_all_disputes() -> int:
     """Backfill #71 sobre toda la bóveda. Ver migrate_disputes para el porqué del alcance."""
+    # @inv INV-64
     notes = sorted(cfg.STARS.glob("*.md")) if cfg.STARS.exists() else []
     changed = sum(1 for n in notes if migrate_disputes(n))
     cfg.print_seguro(f"disputas: {changed} de {len(notes)} ficha(s) migradas al schema con posiciones (#71)")
@@ -492,7 +493,6 @@ def sync_mirror() -> int:
     for dest in notes:
         text = dest.read_text(encoding="utf-8")
         if not text.startswith("---\n"):
-    #  @inv INV-64
     #  @inv INV-08
             continue
         end = text.find("\n---\n", 4)
@@ -1397,6 +1397,7 @@ def stamp_estado(slug: str, dest) -> bool:
 
 
 def write_star_note(slug: str, force: bool) -> None:
+    # @inv INV-01, INV-07
     name, meta = cfg.star_by_slug(slug)
     dest = cfg.STARS / f"{slug}.md"
     if dest.exists() and not force:
@@ -1584,7 +1585,6 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, theme: bool = F
         link, seed_links = slug, []
     adsfile = cfg.ROOT / "build" / slug / "ads.json"
     if not adsfile.exists():
-    #  @inv INV-01, INV-07
         cfg.print_seguro(f"  (sin {adsfile}; corré query_ads.py primero)")
         return
     recs = json.loads(adsfile.read_text(encoding="utf-8"))["records"]

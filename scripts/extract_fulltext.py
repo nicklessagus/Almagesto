@@ -76,6 +76,7 @@ def is_legible(text: str) -> tuple[bool, str]:
     (a) casi sin contenido (escaneo sin capa de texto: pdftotext devuelve sólo espacios/form
     feeds), (b) contenido sólo de marca de agua (densidad por página bajísima) o (c) mojibake
     (fuentes sin ToUnicode: mayoría de chars fuera de ASCII imprimible)."""
+    # @inv INV-28
     content = [c for c in text if not c.isspace()]
     if len(content) < LEGIBLE_MIN_CHARS:
         return False, f"casi sin texto ({len(content)} chars no-espacio) — ¿escaneo sin capa de texto?"
@@ -90,6 +91,7 @@ def is_legible(text: str) -> tuple[bool, str]:
 
 
 def ocr_available() -> bool:
+    # @inv INV-70
     return shutil.which("tesseract") is not None and shutil.which("pdftoppm") is not None
 
 
@@ -159,8 +161,6 @@ def main() -> int:
     args = ap.parse_args()
 
     if args.ocr and not ocr_available():
-    #  @inv INV-70
-    #  @inv INV-28
         sys.exit(
             "--ocr pide `tesseract` (+ `pdftoppm`, de poppler), y falta alguno:\n"
             "  Debian/Ubuntu: sudo apt install tesseract-ocr   ·  macOS: brew install tesseract\n"

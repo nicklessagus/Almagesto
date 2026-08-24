@@ -226,3 +226,28 @@ def test_check_detecta_artefacto_desactualizado(repo: Path):
     rc = ti.main(["--check", "--root", str(repo)])
     assert rc == 1
     assert (repo / "docs" / "trazabilidad.md").read_text(encoding="utf-8") == antes
+
+
+def test_marca_a_nivel_de_modulo_no_se_atribuye_a_la_funcion_anterior(tmp_path):
+    """El artefacto existe para que el mapa NO mienta, así que atribuir mal es su peor defecto.
+
+    `_simbolo_de` caminaba hacia arriba hasta el `def` más cercano **sin chequear si la línea sigue
+    adentro de esa función**: una marca sobre una constante de módulo se le colgaba a la función que
+    quedó arriba. Medido en el artefacto real: `INV-76` (autoridad por campo del ground-truth, que
+    marca `AUTORIDAD_CAMPO`) aparecía implementado por `_extra_core_error`, e `INV-77`
+    (`DISPUTE_SOURCES`) por `note_files`."""
+    src = (tmp_path / "m.py")
+    src.write_text(
+        "def anterior():\n"
+        "    return 1\n"
+        "\n"
+        "# @inv INV-01\n"
+        "CONSTANTE = 3\n"
+        "\n"
+        "def posterior():\n"
+        "    # @inv INV-02\n"
+        "    return 2\n", encoding="utf-8")
+    lineas = src.read_text(encoding="utf-8").split("\n")
+    assert ti._simbolo_de(lineas, 4) != "anterior", (
+        "la marca está FUERA de `anterior`: no puede atribuírsele")
+    assert ti._simbolo_de(lineas, 8) == "posterior", "la marca de adentro sí se atribuye"

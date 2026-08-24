@@ -282,6 +282,7 @@ def frontmatter_span(text: str) -> tuple[str, str] | None:
 def split_fm(text: str) -> dict:
     """Frontmatter YAML de una nota (dict vacío si no hay o no parsea — el lint reporta aparte las
     notas cuyo YAML está roto). Compartido: lo usan el lint y el dry-run de re-clasificación."""
+    # @inv INV-36
     span = frontmatter_span(text)
     if span is None:
         return {}
@@ -315,7 +316,6 @@ def stdout_tolerante() -> None:
     para un CLI, pero sería un efecto colateral inaceptable en una librería que los tests importan
     (rompería la captura de `capsys`)."""
     for stream in (sys.stdout, sys.stderr):
-    #  @inv INV-36
         try:
             stream.reconfigure(errors="replace")     # 3.7+; no-op si ya es UTF-8
         except (AttributeError, ValueError, OSError):
@@ -365,6 +365,7 @@ def load_concept_areas() -> list:
     demás capas de compatibilidad — inferir la lista de lo que hay en disco convierte cualquier typo
     ya cometido en "área declarada", que es lo contrario de lo que el chequeo hace. El lint reporta
     la lista ausente para que se declare."""
+    # @inv INV-47
     declared = load_objective().get("concept_areas") or []
     # `isinstance(list)`: un `concept_areas: indicators` (escalar, el caso natural de una bóveda de
     # un área) se desempaquetaba CARÁCTER POR CARÁCTER y el typo-check se invertía — marcaba como
@@ -397,7 +398,6 @@ def citation_rate(rec: dict, now_year: int | None = None) -> float:
     try:
         year = int(rec.get("year") or 0)
     except (TypeError, ValueError):
-    #  @inv INV-47
         year = 0
     now = now_year if now_year is not None else _dt.date.today().year
     edad = max(1, now - year + 1) if 0 < year <= now else 1
@@ -769,6 +769,7 @@ def save_busqueda(slug: str, busqueda: dict) -> None:
     La entrada nueva se estampa con `n_nuevos` / `n_ya_estaban` contra el conjunto ya conocido del
     sujeto (los `bibcodes` de las corridas previas): es lo que distingue "traje 40 papers" de
     "traje 40 papers de los cuales 38 ya estaban", que es la pregunta real de un refresh."""
+    # @inv INV-51
     data = load_registro(slug)
     data.setdefault("slug", slug)
     previas = [b for b in as_list(data.get("busquedas")) if isinstance(b, dict)]
@@ -828,7 +829,6 @@ def save_paso(slug: str, paso: str, flags=()) -> None:
         "flags": list(flags),
     }
     if any(p == entrada for p in previos):
-    #  @inv INV-51
         return                       # misma corrida, mismo día: sin ruido de diff
     data["cadena"] = previos + [entrada]
     save_registro(slug, data)
