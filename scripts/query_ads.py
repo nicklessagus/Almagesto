@@ -806,6 +806,12 @@ def print_probe(q: str, recs: list, noncore_top: int = 25) -> int:
     noncore = sorted((r for r in recs if not r["relevant"]), key=lambda r: r.get("citation_count") or 0, reverse=True)
     cfg.print_seguro(f"Probe (no baja PDFs ni escribe build/). q: {q}")
     cfg.print_seguro(f"  {len(recs)} papers · {len(core)} CORE · {len(noncore)} no-core")
+    # T-3: la lente es un PRESUPUESTO, no sólo un filtro. El probe existe para afinar el corte, y
+    # el costo de leer lo que entra es la otra mitad de esa decisión (D-13 promete leer TODOS los
+    # core). Proyección gruesa y declarada como tal: n_core × la mediana de tokens por fulltext.
+    proyectado = len(core) * cfg.TOKENS_POR_PAPER
+    cfg.print_seguro(f"  costo proyectado de leer el core: ~{proyectado // 1000}k tokens "
+                     f"({len(core)} × {cfg.TOKENS_POR_PAPER // 1000}k, mediana del corpus)")
     print_combination_contrast(recs)
     cfg.print_seguro("")
     cfg.print_seguro(f"  CORE (todos, por citas)  [tópicos que matchearon]:")

@@ -1953,3 +1953,38 @@ def test_lint_detecta_tabla_de_papers_desactualizada(toy_vault, capsys):
     _, rep = run_lint_reporte(capsys)
     assert "2020nueA...1..1A" in rep
     assert "lista de papers" in rep.lower()
+
+
+def _n_recorte(rep):
+    """El conteo de la categoría. Asertar por SUBSTRING falla acá: el título de la categoría
+    ("Recorte de lectura sin declarar") aparece SIEMPRE, con `(0)` incluido — el reporte imprime
+    todas las secciones a propósito, para que ninguna desaparezca en silencio."""
+    linea = [l for l in rep.splitlines() if l.startswith("## Recorte de lectura")]
+    assert linea, "la categoría no aparece en el reporte"
+    return int(linea[0].rsplit("(", 1)[1].rstrip(")"))
+
+
+def test_subconjunto_sin_declarar_reporta(toy_vault, capsys):
+    """D-13/D-15 · INV-83: el ingest promete leer TODOS los core. Si quedan core sin extraer y el
+    registro no declara por qué, eso tiene MÁS señal que un campo incompleto suelto: la ficha se
+    presenta como snapshot del universo y no lo es.  @inv INV-83"""
+    mk_note(toy_vault.PAPERS, "2020relA...1..1A",
+            {"tags": ["paper"], "bibcode": "2020relA...1..1A", "stars": ["Estrella Test"],
+             "relevance": "high"}, "")
+    link_from_index(toy_vault, "2020relA...1..1A")
+    _, rep = run_lint_reporte(capsys)
+    assert _n_recorte(rep) == 1
+    assert "no declaró" in rep
+
+
+def test_subconjunto_declarado_baja_a_backlog(toy_vault, capsys):
+    """Con el criterio declarado, el pendiente sigue visible (cola de D-15 que `maintain` consume)
+    pero deja de ser el hallazgo con señal: el ingest **dijo** qué leyó y por qué."""
+    mk_note(toy_vault.PAPERS, "2020relA...1..1A",
+            {"tags": ["paper"], "bibcode": "2020relA...1..1A", "stars": ["Estrella Test"],
+             "relevance": "high"}, "")
+    link_from_index(toy_vault, "2020relA...1..1A")
+    cfg.save_extraccion("test_star", subconjunto=True,
+                        criterio="los 20 más citados + los 3 árbitros de la señal b")
+    _, rep = run_lint_reporte(capsys)
+    assert _n_recorte(rep) == 0

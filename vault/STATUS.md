@@ -431,10 +431,35 @@ deja el registro contradiciéndose.
 
 Ratchet **84**. Tier 0: 746 verdes en 2,8 s. Tier 1: 48 verdes (golden 34 → 35 categorías).
 
+### ✅ Tanda 3 cerrada (2026-08-24) — v1.27.0 · materialización y estado de la ficha
+
+| Issue | Qué cerró | INV |
+|---|---|---|
+| **3.1** | `## Papers` **estampada** (universo · sintetizados · estado por paper · origen); roll-up de concepto = unión de `methods`+`thesis_links`; categoría del lint que nombra los stems | INV-81 |
+| **3.2** | `estado_line`/`stamp_estado`: las tres fechas separadas, con la salvedad "vigencia por par" | INV-82 |
+| **3.3** | `extraccion: {subconjunto, criterio, fecha}` en el registro; el lint distingue recorte **declarado** de recorte **en silencio**; el probe reporta el costo proyectado (T-3) | INV-83 |
+
+**Dos cosas medidas al implementar:**
+1. **La tabla se contaba a sí misma.** Cada fila lleva un `[[bibcode]]`, así que apenas se estampa
+   TODO paper pasaba a "sintetizado". Un artefacto que se mide a sí mismo siempre da el resultado
+   que su propia existencia produce — el mismo lazo que el bloque de verificación.
+2. **El tier 1 atrapó una regresión de performance real:** `papers_universe` re-parseaba `papers/`
+   por cada estrella → 5,9 parseos YAML por nota contra el techo de 2,3. El índice se construye
+   ahora en el loop que el lint ya hace. El test de escala hizo exactamente lo que existe para hacer.
+
+**R-8 resuelta por implementación:** el formato es `extraccion: {subconjunto: bool, criterio: str,
+fecha}`. El `criterio` es texto libre y obligatorio — es la pieza que más se va a leer, y un
+booleano no dice nada.
+
+El estampador viejo (`search_line`/`stamp_search_line`, #64) se **borra**: dos estampadores de
+cabecera conviviendo son la misma complejidad permanente que un lector tolerante.
+
+Ratchet **82 → 81**. Tier 0: 762 verdes. Tier 1: 48 (golden 35 → 37 categorías).
+
 ### Lo que sigue
-**Tanda 3 — materialización y estado de la ficha** (D-10, D-11, D-24, D-12): la ficha declara,
-materializado y por paper, su universo (origen, si se extrajo, si se sintetizó) y las tres fechas
-distinguibles. Cierra INV-81 e INV-82.
+**Tanda 4 — autoridad por campo del ground-truth** (D-1, D-2): `spectral_type` ← SIMBAD, el resto
+← NEA; si la autoridad declarada calla, el campo es `null` aunque la otra tenga el dato. Cierra
+INV-76 e INV-77. Sin decisiones abiertas.
 
 ## 🔜 Cola de pendientes (al 2026-08-23)
 

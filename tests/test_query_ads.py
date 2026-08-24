@@ -1337,3 +1337,14 @@ def test_escotillas_quedan_en_el_registro(toy_vault, toy_classifier, no_sleep, m
     monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
     assert run_main(monkeypatch, ["test_star", "--no-chain"]) == 0
     assert "--no-chain" in cfg.load_busquedas("test_star")[-1]["escotillas"]
+
+
+def test_probe_reporta_el_costo_proyectado(capsys):
+    """T-3: la lente es un PRESUPUESTO, no sólo un filtro. El probe existe para afinar el corte
+    core/no-core, y hasta ahora mostraba cuántos papers entran pero no qué cuesta leerlos — que es
+    la mitad de la decisión (D-13: el ingest promete leer TODOS los core)."""
+    recs = [rec(f"2020a{i:03d}...1A") for i in range(10)]
+    qa.print_probe("title:(x)", recs)
+    out = capsys.readouterr().out
+    assert "tokens" in out.lower()
+    assert "240" in out or "240k" in out.lower()      # 10 core × 24k

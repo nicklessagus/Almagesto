@@ -541,6 +541,7 @@ def main(argv=()) -> int:
     refs_dir = str(cfg.RAW / "refs")
     refs_stems = {basename(f)[:-3] for f in files if f.startswith(refs_dir)}  # docs de diseño, no fichas
     paper_fms: dict = {}               # {stem: frontmatter} de papers/ — para D-10, sin re-parsear
+    sin_extraer_por_sujeto: dict = {}  # nombre de sujeto → {stems core sin extraer} (D-13)
     for f in files:
         text = open(f, encoding="utf-8").read()
         fm = split_fm(text)
@@ -732,6 +733,11 @@ def main(argv=()) -> int:
             relevancia = str(fm.get("relevance") or "").strip().lower()
             if relevancia == "high" and not fm.get("methods"):
                 incomplete.append((stem, "paper relevante sin methods (sin extraer)"))
+                # D-13/INV-83: el sujeto de ese paper queda anotado; después del barrido se
+                # contrasta contra lo que el registro DECLARÓ haber leído.
+                for campo in ("stars", "topics"):
+                    for sujeto in cfg.as_list(fm.get(campo)):
+                        sin_extraer_por_sujeto.setdefault(str(sujeto), set()).add(stem)
             # El eslabón SIGUIENTE (#75): el paper que SÍ se extrajo. `methods` poblado significa
             # que alguien gastó en él el paso más caro de la cadena; si su contenido nunca llegó a
             # una ficha ni a un concepto, la extracción se perdió. Se recolecta acá y se resuelve
@@ -920,6 +926,30 @@ def main(argv=()) -> int:
             papers_table_stale.append(
                 (slug_s, "la lista de papers estampada no refleja el universo: " +
                          "; ".join(detalle) + f" → `python scripts/make_notes.py {slug_s}`"))
+
+    # ── el recorte de lectura no declarado (D-13/D-15 · INV-83) ──────────────────────────────────
+    # El contrato dice que el ingest lee TODOS los core. La reconciliación anticipa que el
+    # subconjunto va a ser el caso normal (≈6M tokens por estrella si no), así que el problema no es
+    # recortar: es recortar **en silencio**. Una ficha se presenta como snapshot de su universo, y
+    # un lector no tiene forma de saber que la síntesis salió de 8 de 42 papers.
+    # Dos severidades sobre el mismo hecho: sin `extraccion.criterio` declarado, hallazgo con señal
+    # (el ingest no leyó todo y no dijo por qué); con criterio, backlog normal — la cola visible de
+    # D-15, que el skill `maintain` consume.
+    extraccion_no_declarada: list = []
+    for nombre_s, meta_s in list(cfg.load_stars().items()) + list(cfg.load_topics().items()):
+        if not isinstance(meta_s, dict):
+            continue
+        slug_s = meta_s.get("slug")
+        pendientes = sin_extraer_por_sujeto.get(str(nombre_s), set()) | \
+            sin_extraer_por_sujeto.get(str(meta_s.get("concept") or ""), set())
+        if not slug_s or not pendientes:
+            continue
+        if not cfg.load_extraccion(slug_s).get("criterio"):
+            extraccion_no_declarada.append(
+                (slug_s, f"{len(pendientes)} paper(s) core sin extraer y el registro **no declaró** "
+                         f"el recorte ({', '.join(sorted(pendientes)[:3])}…) → o se leen, o se "
+                         f"declara el criterio (`extraccion:` en el registro): la ficha se presenta "
+                         f"como snapshot del universo y hoy no lo es"))
 
     # contradicción ground-truth ↔ ficha (qué planetas + campo por campo) + masa sospechosa
     mass_issues = []
@@ -1347,6 +1377,7 @@ def main(argv=()) -> int:
                          ("Cabecera no estampable: ficha/concepto sin la línea del generador — los "
                           "estampadores de cabecera no-opean en silencio (backlog)", headerless),
                          ("Triage pendiente: candidatos del chaining sin juzgar (backlog)", triage_pending),
+                         ("Recorte de lectura sin declarar: hay core sin extraer y el registro no dice por qué (backlog)", extraccion_no_declarada),
                          ("Lista de papers desactualizada: la tabla estampada no refleja el universo (backlog)", papers_table_stale),
                          ("Cadena incompleta: falta un paso del orden canónico (backlog)", cadena_incompleta),
                          ("Corpus truncado: la query directa trajo menos de lo que ADS reporta (backlog)", truncated_corpora),

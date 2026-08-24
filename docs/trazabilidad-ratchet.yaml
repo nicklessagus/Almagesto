@@ -26,9 +26,9 @@
 # existe. Ver `vault/STATUS.md`.
 
 medido_en: "2026-08-24"
-almagesto_version: "1.26.0"
+almagesto_version: "1.27.0"
 contrato_invariantes: 91
 
 techos:
-  sin_marca: 82   # medido: 2026-08-24 — T0: 80,87,90 · T1: 78,79 · T2: 89,91 · T3: 81,82.
-  sin_test: 82    # medido: 2026-08-24 — ídem.
+  sin_marca: 81   # medido: 2026-08-24 — T0: 80,87,90 · T1: 78,79 · T2: 89,91 · T3: 81,82,83.
+  sin_test: 81    # medido: 2026-08-24 — ídem.

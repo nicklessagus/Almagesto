@@ -13,6 +13,13 @@ El usuario cura las fuentes (`vault/raw/`) y hace preguntas.
 > cada instancia es `vault/config/objective.yaml` + el
 > contenido de `vault/wiki/`/`vault/raw/`. Para instanciar una bóveda nueva ver `README.md` (sección *Instanciar*).
 
+> **La cabecera de una ficha/concepto lleva una línea `> _Estado — …_`** con las **tres fechas**
+> que avanzan por separado y pueden divergir sin que ninguna mienta (D-12): **búsqueda** (última
+> corrida + universo acumulado + escotillas), y **verificación** (fecha del bloque, con la salvedad
+> fija *"vigencia por par: la dicen las anclas"* — sin ella, la fecha se lee como "todo verificado
+> a esta fecha", que es justo la lectura que el ancla corrige). Con una sola fecha por nota,
+> refrescar el corpus hacía parecer re-verificado lo que nadie volvió a chequear.
+
 > **Al iniciar sesión, leé `vault/STATUS.md` (estado + próximos pasos) y `vault/wiki/log.md` (historial
 > reciente) para orientarte.** La "memoria" del proyecto es in-repo: este `CLAUDE.md` + `vault/STATUS.md`
 > + `vault/wiki/log.md` + `vault/wiki/index.md`. No depender de la memoria local de Claude (`~/.claude/...`),
@@ -168,9 +175,17 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   tabla Dataview `## Papers` de la ficha (que lista todo paper con la estrella en `stars:`). No
   re-narrar en la ficha lo que ya está en la extracción del paper. Esto mantiene la ficha **compacta**
   (rápida de ingestar, sin perder contexto) sin perder trazabilidad.
-  ⚠ **El puntero es resoluble sin Obsidian (#60):** los roll-ups `## Papers` y `## Métodos aplicados`
-  son bloques ```dataview``` — un agente que abre el `.md` ve el **código de la query, no sus
-  resultados**, y el plugin ni siquiera está versionado. Para la audiencia-modelo, que es la que este
+  ⚠ **Los roll-ups se ESTAMPAN, no son Dataview (D-10/D-11).** `## Papers` es una tabla
+  materializada —`Bibcode | Año | Relevancia | Origen | Estado`— cuyo encabezado lleva los **dos**
+  números (universo · sintetizados en esta ficha), porque el defecto medido era prometer 155 arriba
+  de una síntesis de 8. El **estado** dice cuán lejos llegó cada paper en el embudo: `fuera del
+  filtro` → `sin extraer` → `extraído, no sintetizado` → `sintetizado`. La regenera
+  `python scripts/make_notes.py <slug>` (idempotente, cirugía: no toca la prosa) y el lint reporta
+  como backlog la tabla desactualizada, **nombrando los stems**. En un concepto el roll-up es la
+  **unión** de `methods` y `thesis_links`, con la columna *Entró por* (D-24: esas dos llaves viven
+  en papers distintos, y quedarse con una pierde la mitad).
+  El motivo de fondo (#60): un bloque ```dataview``` le muestra a un agente que abre el `.md` el
+  **código de la query, no sus resultados**, y el plugin ni siquiera está versionado. Para la audiencia-modelo, que es la que este
   contrato dice servir, el equivalente determinista **parsea el frontmatter con el mismo parser que
   el tooling** (`lib_config.split_fm`), corriendo desde la raíz del repo:
   ```bash

@@ -20,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.26.0"
+ALMAGESTO_VERSION = "1.27.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -575,6 +575,32 @@ def _extra_core_error(entry: str, bibcodes: list, motivo: str) -> str:
         f"    fecha: AAAA-MM-DD\n    motivo: <por qué este paper es core>"
         for b in (bibcodes or ["<bibcode>"]))
     return (f"'{entry}': {motivo}. Forma canónica:\n\nextra_core:\n{ejemplo}\n")
+
+
+# Costo de leer un paper, en tokens de fulltext. Mediana medida sobre el corpus real (T-3): sirve
+# para proyectar el costo del ingest desde el conteo core, que es la otra mitad de la decisión que
+# el probe existe para tomar.
+TOKENS_POR_PAPER = 24_000
+
+
+def load_extraccion(slug: str) -> dict:
+    """Qué declaró el ingest sobre lo que leyó (D-13/D-14): `{subconjunto, criterio, fecha}`."""
+    return as_map(load_registro(slug).get("extraccion"))
+
+
+def save_extraccion(slug: str, *, subconjunto: bool, criterio: str) -> None:
+    """Declara.  @inv INV-83 que este ingest leyó (o no) todos los core, y con qué criterio recortó.
+
+    El contrato dice que el ingest lee **todos** los core; la reconciliación anticipa que el
+    subconjunto va a ser el caso normal (≈6M tokens por estrella si no). Lo que no puede pasar es
+    que el recorte sea **invisible**: la ficha se presenta como snapshot del universo, y un lector
+    no tiene forma de saber que se sintetizó desde 8 de 42 papers. El criterio declarado es la
+    pieza que más se va a leer — por eso es texto libre y obligatorio, no un booleano."""
+    data = load_registro(slug)
+    data.setdefault("slug", slug)
+    data["extraccion"] = {"subconjunto": bool(subconjunto), "criterio": criterio,
+                          "fecha": _dt.date.today().isoformat()}
+    save_registro(slug, data)
 
 
 def anular_decision(slug: str, clave: str, *, por: str, carril: str = "chaining") -> bool:
