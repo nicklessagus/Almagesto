@@ -1,31 +1,35 @@
 """Índice invertido **obra citada → papers del corpus que la citan**.
 
-PARA QUÉ. Es el insumo de la **puerta 1** de D-26 (INV-88): un trabajo que citan N papers core de
-la bóveda es un **candidato** del triage. ⛔ Nunca core automático — INV-24 dice que ser core es
-función de `(paper, lente)` y sólo de eso; si la cantidad de citas entrantes clasificara, la lente
-dejaría de ser la única regla y `objective.yaml` dejaría de explicar el corpus.
+PARA QUÉ, exactamente. Es el lookup de la **puerta 1** de D-26: cuando la query de un tema de
+método trae candidatos, la puerta pregunta *"¿alguno de mis papers core cita a ESTE?"*. Es un
+**filtro sobre lo que la búsqueda ya devolvió**, no una enumeración de lo que le falta a la bóveda.
 
-DE DÓNDE SALEN LAS REFERENCIAS. De las **dos** fuentes, porque R-9 midió que ninguna es
-prescindible: sobre un corpus astro real ADS cubre el 80% y OpenAlex el 68%, pero en pre-2000 la
-diferencia es 65% vs 16% a favor de ADS, y de los papers off-ADS —la bibliografía de método que el
-eje tema existe para servir— 14 sólo los tiene OpenAlex contra 3 sólo-ADS. La unión llegó al 83%,
-y **ese techo se declara**: `cobertura` nombra los papers de los que no se pudo leer ninguna
-referencia. Un índice que calla su cobertura se lee como completo (INV-87).
+El problema que resuelve, con el ejemplo de D-26: la lente global `require: [rv]` mata al paper
+fundacional de ICA —Hyvärinen no menciona RV ni una vez— pero sin filtro *"independent component
+analysis"* devuelve miles de papers de fMRI, EEG y finanzas. Hyvärinen tiene ~30k citas, casi todas
+ajenas a esta bóveda; **lo que lo hace tuyo es que tu gente lo cita**. Esa señal no la puede
+expresar ninguna regex, y por eso hace falta el grafo.
 
-DOS ESPACIOS DE IDENTIFICADORES, Y HAY QUE FUSIONARLOS — PERO TARDE. ADS devuelve bibcodes y
-OpenAlex ids `W…`: universos distintos que **se solapan mucho**. Medido sobre el corpus real
-(2026-08-24): el candidato más citado salía **partido en dos** —`2009A&A...496..577Z` con 94
-citadores y `W4292309267` con 82 son el mismo paper, Zechmeister & Kürster 2009— y lo mismo Mayor
-& Queloz (85 y 68). Sin fusionar, el triage ve dos candidatos con la mitad del peso cada uno.
+⛔ La puerta 1 **propone, no clasifica** (resolución §4.3 del plan): alimenta los candidatos del
+triage, nunca marca core sola. INV-24 dice que ser core es función de `(paper, lente)` y sólo de
+eso; si la cantidad de citas entrantes clasificara, `objective.yaml` dejaría de explicar el corpus.
 
-La fusión se hace por **DOI** y **sólo sobre los candidatos que pasan el umbral** (`merge_candidates`),
-no sobre el índice entero: el corpus real dio **20.824 obras citadas** contra **214 candidatos con
-≥20 citadores**, así que resolver todo sería una pasada de red dos órdenes de magnitud más cara
-para responder la misma pregunta. Lo que **no** tiene DOI no se fusiona: inventar la equivalencia
-crea una arista falsa, y en R-9 el matcheo laxo (por título) erró 2 de 18.
+DE DÓNDE SALEN LAS REFERENCIAS. De las **dos** fuentes, porque R-9 midió que ninguna alcanza: sobre
+un corpus astro real ADS cubre el 80% y OpenAlex el 68%, pero en pre-2000 la diferencia es 65% vs
+16% a favor de ADS, y de los papers off-ADS —la bibliografía de método que este eje existe para
+servir— 14 sólo los tiene OpenAlex contra 3 sólo-ADS. La unión llegó al **84,3%** medido, y ese
+techo se **declara**: `cobertura` nombra los papers de los que no se pudo leer una sola referencia.
+Un índice que calla su cobertura se lee como completo (INV-87).
 
-Regenerable ⇒ vive en `build/` (regla de oro del registro: `build/` guarda lo que se recupera
-pidiéndolo de nuevo; el registro guarda el juicio, que no).
+DOS ESPACIOS DE IDENTIFICADORES. ADS devuelve bibcodes y OpenAlex ids `W…`, y **se solapan**: medido
+sobre el corpus real, Zechmeister & Kürster 2009 está como `2009A&A...496..577Z` (lo citan 94) y
+como `W4292309267` (82) — el mismo trabajo. Por eso el lookup acepta **varias llaves del mismo
+trabajo** y une los citadores: preguntar por una sola da un falso negativo *"nadie lo cita"* cuando
+el corpus lo cita por la otra vía. No se fusiona el índice entero —serían decenas de miles de
+resoluciones de red— porque la pregunta se hace sobre los pocos candidatos de una query.
+
+Regenerable ⇒ vive en `build/`. El **build** es caro (red sobre todo el corpus) y se corre aparte;
+el **lookup** es offline, que es lo que permite usarlo dentro de la cadena sin pagar la red.
 """
 from __future__ import annotations
 
@@ -115,7 +119,6 @@ def build(out: Path | None = None, fetch_ads=None, fetch_oa=None) -> Path:
     doc = {
         "generator": f"Almagesto v{cfg.ALMAGESTO_VERSION}",
         "citas": {k: sorted(set(v)) for k, v in sorted(citas.items())},
-        "del_corpus": sorted(p["bibcode"] for p in core),
         "cobertura": {
             "n_core": len(core),
             "con_referencias": len(con_refs),
@@ -136,73 +139,16 @@ def load(path: Path | None = None) -> dict:
     return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
 
 
-def cited_by_corpus(ident: str, index: dict | None = None) -> list:
-    """Qué papers core citan a `ident`. **Offline**: lo consume el triage en cada corrida, y no
-    puede depender de que una API esté de buen humor."""
+def cited_by_corpus(idents, index: dict | None = None) -> list:
+    """Qué papers core citan al trabajo identificado por `idents` (una llave o varias del **mismo**
+    trabajo: bibcode, id de OpenAlex, lo que se tenga).
+
+    Se unen los citadores de todas las llaves porque las dos fuentes usan espacios distintos y
+    preguntar por una sola devuelve un falso negativo. **Offline**: se consume dentro de la cadena
+    y no puede depender de que una API esté de buen humor."""
     idx = index if index is not None else load()
-    return list((idx.get("citas") or {}).get(ident) or [])
+    citas = idx.get("citas") or {}
+    llaves = [idents] if isinstance(idents, str) else list(idents)
+    return sorted({p for k in llaves for p in (citas.get(k) or [])})
 
 
-def candidates(min_citers: int = 2, index: dict | None = None) -> list:
-    """Obras citadas por ≥ `min_citers` papers core y que **la bóveda todavía no tiene**.
-
-    Lo segundo importa tanto como lo primero: proponer un paper que ya está ingestado es ruido, y
-    el ruido es lo que hace que una compuerta se empiece a ignorar."""
-    idx = index if index is not None else load()
-    ya = set(idx.get("del_corpus") or [])
-    return [(obra, citadores) for obra, citadores in sorted((idx.get("citas") or {}).items())
-            if len(citadores) >= min_citers and obra not in ya]
-
-
-def _resolver_default(claves: list) -> dict:
-    """`{clave → doi | None}` para claves mezcladas (bibcodes de ADS e ids `W…` de OpenAlex).
-
-    Import perezoso y una pasada por espacio: se llama sólo con los candidatos del umbral."""
-    import requests
-    out: dict[str, str | None] = {k: None for k in claves}
-    ws = [k for k in claves if k.startswith("W") and k[1:].isdigit()]
-    bibs = [k for k in claves if k not in ws]
-    for i in range(0, len(ws), 50):
-        lote = ws[i:i + 50]
-        r = requests.get("https://api.openalex.org/works",
-                         params={"per-page": 50, "select": "id,doi",
-                                 "filter": "openalex_id:" + "|".join(lote)}, timeout=60)
-        r.raise_for_status()
-        for w in r.json().get("results", []):
-            doi = (w.get("doi") or "").replace("https://doi.org/", "").lower() or None
-            out[w["id"].split("/")[-1]] = doi
-    if bibs:
-        token = cfg.get_ads_token()
-        for i in range(0, len(bibs), 40):
-            lote = bibs[i:i + 40]
-            q = "bibcode:(" + " OR ".join(f'"{b}"' for b in lote) + ")"
-            r = requests.get("https://api.adsabs.harvard.edu/v1/search/query",
-                             params={"q": q, "fl": "bibcode,doi", "rows": len(lote) + 5},
-                             headers={"Authorization": f"Bearer {token}"}, timeout=90)
-            r.raise_for_status()
-            for d in r.json()["response"]["docs"]:
-                out[d["bibcode"]] = ((d.get("doi") or [None])[0] or "").lower() or None
-    return out
-
-
-def merge_candidates(cands: list, resolver=None) -> list:
-    """Fusiona por DOI los candidatos que son **el mismo trabajo** visto por las dos fuentes.
-
-    Devuelve `[(clave, citadores_unidos, alias)]`, donde `clave` es el DOI cuando se pudo resolver
-    y el id original cuando no, y `alias` son los ids que se fusionaron — quedan **a la vista**
-    porque el triage tiene que poder ir a buscar la obra en cualquiera de las dos fuentes.
-
-    Los citadores se **unen**, no se suman: el mismo paper del corpus puede aportar la obra por ADS
-    y por OpenAlex a la vez, y sumar lo contaría dos veces."""
-    resolver = resolver or _resolver_default
-    dois = resolver([obra for obra, _ in cands])
-    grupos: dict[str, dict] = {}
-    for obra, citadores in cands:
-        doi = dois.get(obra)
-        clave = doi or obra
-        g = grupos.setdefault(clave, {"citadores": set(), "alias": set()})
-        g["citadores"].update(citadores)
-        if doi:
-            g["alias"].add(obra)
-    return [(clave, sorted(g["citadores"]), sorted(g["alias"]))
-            for clave, g in sorted(grupos.items(), key=lambda kv: (-len(kv[1]["citadores"]), kv[0]))]

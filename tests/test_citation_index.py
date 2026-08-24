@@ -95,27 +95,6 @@ def test_paper_sin_clave_se_cuenta_aparte(toy_vault, tmp_path):
     assert idx["cobertura"]["n_core"] == 1, "el que no tiene clave no cuenta como core medible"
 
 
-# ── la puerta 1: PROPONE, no clasifica ───────────────────────────────────────
-
-def test_candidatos_por_umbral(toy_vault, tmp_path):
-    paper("2020A", doi="10.1/a")
-    paper("2020B", doi="10.1/b")
-    paper("2020C", doi="10.1/c")
-    ads, oa = fetchers(oa_map={"10.1/a": ["W1", "W2"], "10.1/b": ["W1"], "10.1/c": ["W1"]})
-    idx = ci.load(ci.build(tmp_path / "ci.json", fetch_ads=ads, fetch_oa=oa))
-    assert ci.candidates(min_citers=2, index=idx) == [("W1", ["2020A", "2020B", "2020C"])]
-    assert [c[0] for c in ci.candidates(min_citers=1, index=idx)] == ["W1", "W2"]
-
-
-def test_no_propone_lo_que_el_corpus_YA_tiene(toy_vault, tmp_path):
-    """Un paper que ya está en la bóveda no es un candidato: proponerlo es ruido puro."""
-    paper("2020A", doi="10.1/a")
-    paper("2020Ya", doi="10.1/ya")
-    ads, oa = fetchers(ads_map={"2020A": ["2020Ya"]})
-    idx = ci.load(ci.build(tmp_path / "ci.json", fetch_ads=ads, fetch_oa=oa))
-    assert ci.candidates(min_citers=1, index=idx) == []
-
-
 # ── determinismo y offline ───────────────────────────────────────────────────
 
 def test_determinista_byte_a_byte(toy_vault, tmp_path):
@@ -138,7 +117,6 @@ def test_lookup_es_offline(toy_vault, tmp_path, monkeypatch):
     monkeypatch.setattr(requests, "get", lambda *a, **k: pytest.fail("el lookup tocó la red"))
     idx = ci.load(out)
     assert ci.cited_by_corpus("W1", idx) == ["2020A"]
-    assert ci.candidates(1, idx)
 
 
 def test_vive_en_build_no_en_el_vault(toy_vault, tmp_path):
@@ -151,50 +129,28 @@ def test_vive_en_build_no_en_el_vault(toy_vault, tmp_path):
     assert not out.is_relative_to(cfg.VAULT)
 
 
-# ── fusión por DOI, SÓLO sobre los candidatos (los dos espacios de ids se solapan) ────────────
 
-def test_candidatos_se_fusionan_por_doi(toy_vault, tmp_path):
-    """Medido contra datos reales (2026-08-24): el candidato más citado del corpus salía **partido
-    en dos** — `2009A&A...496..577Z` con 94 citadores y `W4292309267` con 82 son el MISMO paper
-    (Zechmeister & Kürster 2009, DOI 10.1051/0004-6361:200811296); ídem Mayor & Queloz con 85 y 68.
-    Sin fusionar, el triage ve dos candidatos con la mitad del peso cada uno.
+# ── la puerta 1: un trabajo tiene varias llaves, y el corpus puede citarlo por cualquiera ─────
 
-    La fusión se hace **sólo sobre los candidatos que pasan el umbral**, no sobre las 20.824 obras
-    citadas: ahí el costo de red sería proporcional a todas las referencias del corpus."""
+def test_lookup_acepta_las_varias_llaves_del_mismo_trabajo(toy_vault, tmp_path):
+    """La puerta 1 pregunta «¿alguien de mi corpus cita a ESTE candidato?». El candidato llega con
+    bibcode Y doi, y el índice tiene dos espacios de identificadores —ADS devuelve bibcodes,
+    OpenAlex ids `W…`— así que preguntar por una sola llave da un **falso negativo**: el corpus lo
+    cita, pero por la otra vía. Medido sobre datos reales: Zechmeister & Kürster 2009 aparecía como
+    `2009A&A...496..577Z` (94 citadores) **y** como `W4292309267` (82), el mismo trabajo."""
     paper("2020A", doi="10.1/a")
     paper("2020B", doi="10.1/b")
-    ads, oa = fetchers(ads_map={"2020A": ["2009BIB"], "2020B": ["2009BIB"]},
-                       oa_map={"10.1/a": ["W99"], "10.1/b": ["W99"]})
+    ads, oa = fetchers(ads_map={"2020A": ["2009BIB"]}, oa_map={"10.1/b": ["W99"]})
     idx = ci.load(ci.build(tmp_path / "ci.json", fetch_ads=ads, fetch_oa=oa))
-    crudos = ci.candidates(2, idx)
-    assert len(crudos) == 2, "sin fusionar son dos entradas distintas"
-
-    dois = {"2009BIB": "10.1051/x", "W99": "10.1051/x"}       # el mismo trabajo
-    fusion = ci.merge_candidates(crudos, resolver=lambda ks: {k: dois.get(k) for k in ks})
-    assert len(fusion) == 1
-    obra, citadores, alias = fusion[0]
-    assert obra == "10.1051/x"
-    assert citadores == ["2020A", "2020B"], "los citadores se UNEN, no se suman con repetidos"
-    assert sorted(alias) == ["2009BIB", "W99"], "los ids originales quedan a la vista"
+    # el candidato es el mismo trabajo, conocido por sus dos llaves
+    assert ci.cited_by_corpus(["2009BIB", "W99"], idx) == ["2020A", "2020B"]
+    assert ci.cited_by_corpus(["2009BIB"], idx) == ["2020A"]
+    assert ci.cited_by_corpus(["no", "tampoco"], idx) == []
 
 
-def test_sin_doi_no_se_fusiona_a_ciegas(toy_vault, tmp_path):
-    """Una obra sin DOI (medido: OpenAlex devuelve works sin DOI ni título) NO se fusiona con nada:
-    inventar la equivalencia crea una arista falsa, que es peor que una faltante."""
+def test_lookup_con_una_sola_llave_sigue_andando(toy_vault, tmp_path):
+    """Compatibilidad de uso, no de schema: pasar un string es el caso común."""
     paper("2020A", doi="10.1/a")
-    paper("2020B", doi="10.1/b")
-    ads, oa = fetchers(ads_map={"2020A": ["SIN_DOI_1"], "2020B": ["SIN_DOI_2"]})
+    ads, oa = fetchers(oa_map={"10.1/a": ["W1"]})
     idx = ci.load(ci.build(tmp_path / "ci.json", fetch_ads=ads, fetch_oa=oa))
-    fusion = ci.merge_candidates(ci.candidates(1, idx), resolver=lambda ks: {k: None for k in ks})
-    assert len(fusion) == 2
-    assert all(a == [] for _, _, a in fusion), "sin DOI no hay alias que declarar"
-
-
-def test_fusion_es_determinista(toy_vault, tmp_path):
-    paper("2020A", doi="10.1/a")
-    paper("2020B", doi="10.1/b")
-    ads, oa = fetchers(ads_map={"2020A": ["B1", "B2"], "2020B": ["B2", "B1"]})
-    idx = ci.load(ci.build(tmp_path / "ci.json", fetch_ads=ads, fetch_oa=oa))
-    r = lambda ks: {k: "10.1/z" for k in ks}
-    assert ci.merge_candidates(ci.candidates(1, idx), resolver=r) == \
-           ci.merge_candidates(ci.candidates(1, idx), resolver=r)
+    assert ci.cited_by_corpus("W1", idx) == ["2020A"]
