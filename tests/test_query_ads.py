@@ -16,15 +16,15 @@ import lib_config as cfg
 @pytest.fixture
 def toy_classifier(monkeypatch):
     """Clasificador determinista para los tests (query_ads compila el real al importar). Resetea la
-    regla de combinación a su default (require=[], min_topics=1) para no heredar la del objective.yaml
+    regla de combinación a su default (require=[], min_facets=1) para no heredar la del objective.yaml
     real; los tests de la regla declarativa la sobre-escriben."""
-    monkeypatch.setattr(qa, "TOPIC_PATTERNS", {
+    monkeypatch.setattr(qa, "FACET_PATTERNS", {
         "actividad": re.compile("activity|starspot", re.I),
         "rv": re.compile("radial velocity", re.I),
     })
     monkeypatch.setattr(qa, "NOISE_DOCTYPES", {"catalog", "proposal"})
-    monkeypatch.setattr(qa, "REQUIRE_TOPICS", [])
-    monkeypatch.setattr(qa, "MIN_TOPICS", 1)
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", [])
+    monkeypatch.setattr(qa, "MIN_FACETS", 1)
 
 
 @pytest.fixture
@@ -43,20 +43,20 @@ def test_classify_por_titulo_abstract_keyword(toy_classifier):
 
 
 def test_classify_doctype_ruido_no_es_core(toy_classifier):
-    topics, relevant = qa.classify({"title": ["activity survey"], "doctype": "catalog"})
-    assert topics == ["actividad"] and relevant is False
+    facets, relevant = qa.classify({"title": ["activity survey"], "doctype": "catalog"})
+    assert facets == ["actividad"] and relevant is False
 
 
 def test_classify_sin_match(toy_classifier):
     assert qa.classify({"title": ["asteroseismology"], "doctype": "article"}) == ([], False)
 
 
-# ── regla de combinación declarativa: require / min_topics (#15) ──────────────
+# ── regla de combinación declarativa: require / min_facets (#15) ──────────────
 
 def test_classify_require_faceta_obligatoria(toy_classifier, monkeypatch):
     """`require: [rv]` → un paper que matchea sólo `actividad` deja de ser core; el que matchea
-    `rv` (aunque no `actividad`) sí. La faceta del eje se vuelve AND, no OR."""
-    monkeypatch.setattr(qa, "REQUIRE_TOPICS", ["rv"])
+    `rv` (aunque no `actividad`) sí. La faceta del eje se vuelve AND, no OR.  @inv INV-55"""
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", ["rv"])
     assert qa.classify({"title": ["starspot activity"], "doctype": "article"}) == (["actividad"], False)
     t, rel = qa.classify({"title": ["radial velocity survey"], "doctype": "article"})
     assert t == ["rv"] and rel is True
@@ -65,9 +65,9 @@ def test_classify_require_faceta_obligatoria(toy_classifier, monkeypatch):
     assert rel2 is True
 
 
-def test_classify_min_topics_dos(toy_classifier, monkeypatch):
-    """`min_topics: 2` → una sola faceta no alcanza; hacen falta ≥2 cualesquiera."""
-    monkeypatch.setattr(qa, "MIN_TOPICS", 2)
+def test_classify_min_facets_dos(toy_classifier, monkeypatch):
+    """`min_facets: 2` → una sola faceta no alcanza; hacen falta ≥2 cualesquiera."""
+    monkeypatch.setattr(qa, "MIN_FACETS", 2)
     assert qa.classify({"title": ["radial velocity"], "doctype": "article"}) == (["rv"], False)
     t, rel = qa.classify({"title": ["radial velocity"], "abstract": "starspot activity",
                           "doctype": "article"})
@@ -76,7 +76,7 @@ def test_classify_min_topics_dos(toy_classifier, monkeypatch):
 
 def test_classify_require_y_ruido_componen(toy_classifier, monkeypatch):
     """require se combina con el filtro de doctype ruido (AND de las tres condiciones)."""
-    monkeypatch.setattr(qa, "REQUIRE_TOPICS", ["rv"])
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", ["rv"])
     _, rel = qa.classify({"title": ["radial velocity"], "doctype": "catalog"})
     assert rel is False                                   # matchea require pero es doctype ruido
 
@@ -85,7 +85,7 @@ def test_exclusion_reason_motivos(toy_classifier, monkeypatch):
     """#30: el motivo de exclusión se computa donde se decide (única implementación de la regla).
     Un excluido por `require` con facetas matcheadas y doctype limpio NO se etiqueta por doctype
     (el bug: el apéndice "Excluidos" decía `doctype: article`)."""
-    monkeypatch.setattr(qa, "REQUIRE_TOPICS", ["rv"])
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", ["rv"])
     assert qa.exclusion_reason([], "article") == "sin tópico"              # rótulo histórico
     assert qa.exclusion_reason(["actividad"], "catalog") == "doctype: catalog"   # ídem
     why = qa.exclusion_reason(["actividad"], "article")
@@ -93,32 +93,32 @@ def test_exclusion_reason_motivos(toy_classifier, monkeypatch):
     assert qa.exclusion_reason(["rv"], "article") is None                  # core → sin motivo
 
 
-def test_exclusion_reason_min_topics(toy_classifier, monkeypatch):
-    monkeypatch.setattr(qa, "MIN_TOPICS", 2)
-    assert "min_topics=2" in qa.exclusion_reason(["rv"], "article")
+def test_exclusion_reason_min_facets(toy_classifier, monkeypatch):
+    monkeypatch.setattr(qa, "MIN_FACETS", 2)
+    assert "min_facets=2" in qa.exclusion_reason(["rv"], "article")
     assert qa.exclusion_reason(["rv", "actividad"], "article") is None
 
 
 def test_classify_coherente_con_exclusion_reason(toy_classifier, monkeypatch):
-    """`relevant` de classify ⟺ exclusion_reason None — no hay dos implementaciones de la regla."""
-    monkeypatch.setattr(qa, "REQUIRE_TOPICS", ["rv"])
+    """`relevant` de classify ⟺ exclusion_reason None — no hay dos implementaciones de la regla.  @inv INV-24"""
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", ["rv"])
     for rec_, why_topics in [({"title": ["starspot activity"], "doctype": "article"}, ["actividad"]),
                              ({"title": ["radial velocity"], "doctype": "article"}, ["rv"]),
                              ({"title": ["asteroseismology"], "doctype": "article"}, [])]:
-        topics, rel = qa.classify(rec_)
-        assert topics == why_topics
-        assert rel is (qa.exclusion_reason(topics, rec_["doctype"]) is None)
+        facets, rel = qa.classify(rec_)
+        assert facets == why_topics
+        assert rel is (qa.exclusion_reason(facets, rec_["doctype"]) is None)
 
 
 def test_combination_rule_defaults():
-    """Sin declarar nada → (require=[], min_topics=1): el comportamiento histórico (≥1 faceta OR)."""
+    """Sin declarar nada → (require=[], min_facets=1): el comportamiento histórico (≥1 faceta OR)."""
     assert qa.combination_rule({}, {"rv": None, "actividad": None}) == ([], 1)
-    assert qa.combination_rule({"min_topics": 2, "require": ["rv"]},
+    assert qa.combination_rule({"min_facets": 2, "require": ["rv"]},
                                {"rv": None, "actividad": None}) == (["rv"], 2)
 
 
 def test_require_faceta_inexistente_falla():
-    """Guard de config: una faceta en `require` ausente de `topics` filtraría TODO en silencio →
+    """Guard de config: una faceta en `require` ausente de `facets` filtraría TODO en silencio →
     falla ruidoso (mismo camino que corre al importar el módulo)."""
     with pytest.raises(RuntimeError, match="require nombra facetas ausentes"):
         qa.combination_rule({"require": ["no-existe"]}, {"rv": None})
@@ -150,7 +150,7 @@ def test_noise_doctypes_escalar_no_desarma_el_filtro_de_ruido(monkeypatch):
     **core**. Es exactamente el bug que `lib_config:236` ya documenta para `concept_areas`
     ("un `concept_areas: indicators` se desempaquetaba CARÁCTER POR CARÁCTER"), sin arreglar acá.
     """
-    obj = {"relevance": {"topics": {"rv": "radial velocity"}, "noise_doctypes": "erratum"}}
+    obj = {"relevance": {"facets": {"rv": "radial velocity"}, "noise_doctypes": "erratum"}}
     mod = fresh_query_ads(monkeypatch, obj)
     assert mod.NOISE_DOCTYPES == {"erratum"}, (
         f"la lente se desarmó en letras: {sorted(mod.NOISE_DOCTYPES)}")
@@ -162,24 +162,24 @@ def test_relevance_escalar_reporta_en_vez_de_reventar_al_importar(monkeypatch):
     """`query_ads.py:117` — `_REL = (_OBJ.get("relevance") or {})`.
 
     Tres líneas más abajo el módulo YA tiene el error correcto para "objective.yaml sin
-    relevance.topics": un `RuntimeError` que dice qué completar. Con `relevance:` escalar nunca
+    relevance.facets": un `RuntimeError` que dice qué completar. Con `relevance:` escalar nunca
     se llega: el `_REL.get` de la línea 120 revienta antes con un `AttributeError` pelado, y como
     es a nivel de módulo se lleva puesto el import entero.
     """
-    obj = {"relevance": "topics"}
-    with pytest.raises(RuntimeError, match="relevance.topics"):
+    obj = {"relevance": "facets"}
+    with pytest.raises(RuntimeError, match="relevance.facets"):
         fresh_query_ads(monkeypatch, obj)
 
 
 def test_topics_como_lista_reporta_en_vez_de_reventar(monkeypatch):
-    """`query_ads.py:120` — `(_REL.get("topics") or {}).items()`.
+    """`query_ads.py:120` — `(_REL.get("facets") or {}).items()`.
 
-    `topics` es un MAPA faceta→regex. Escribirlo como lista de nombres es el error de forma
+    `facets` es un MAPA faceta→regex. Escribirlo como lista de nombres es el error de forma
     esperable de un humano que copia la lista de facetas de la prosa del skill. Debería caer en
-    el `RuntimeError` documentado ("no define relevance.topics"), no en un `AttributeError`.
+    el `RuntimeError` documentado ("no define relevance.facets"), no en un `AttributeError`.
     """
-    obj = {"relevance": {"topics": ["actividad", "rv"]}}
-    with pytest.raises(RuntimeError, match="relevance.topics"):
+    obj = {"relevance": {"facets": ["actividad", "rv"]}}
+    with pytest.raises(RuntimeError, match="relevance.facets"):
         fresh_query_ads(monkeypatch, obj)
 
 
@@ -189,9 +189,9 @@ def test_require_escalar_no_se_desarma_en_letras(monkeypatch):
     `require: rv` (escalar, la forma natural para UNA faceta obligatoria) se convierte en
     `['r','v']`. El módulo sí aborta —bien—, pero el mensaje le dice al usuario que faltan las
     facetas `['r', 'v']` cuando lo que escribió es `rv`: el diagnóstico apunta al síntoma
-    equivocado y manda a editar `topics`, que está bien.
+    equivocado y manda a editar `facets`, que está bien.
     """
-    obj = {"relevance": {"topics": {"rv": "radial velocity"}, "require": "rv"}}
+    obj = {"relevance": {"facets": {"rv": "radial velocity"}, "require": "rv"}}
     with pytest.raises(RuntimeError) as exc:
         fresh_query_ads(monkeypatch, obj)
     assert "'r'" not in str(exc.value), f"el require se desarmó en letras: {exc.value}"
@@ -416,18 +416,18 @@ def test_query_ads_mapea_campos(toy_classifier, ads_token, no_sleep, monkeypatch
     assert r["doi"] == "10.1/x"
     assert r["bibstem"] == "ApJ"
     assert r["arxiv_id"] == "2101.00001"
-    assert r["topics"] == ["actividad"] and r["relevant"] is True
+    assert r["facets"] == ["actividad"] and r["relevant"] is True
     assert r["why_excluded"] is None          # core → sin motivo (#30)
 
 
 def test_query_ads_persiste_why_excluded(toy_classifier, ads_token, no_sleep, monkeypatch):
     """#30: el registro no-core lleva su motivo REAL en ads.json — acá el caso que el fallback
     viejo etiquetaba mal (facetas matcheadas + doctype limpio, excluido por `require`)."""
-    monkeypatch.setattr(qa, "REQUIRE_TOPICS", ["rv"])
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", ["rv"])
     doc = {"bibcode": "2020ApJ...2..2B", "title": ["Starspot survey"], "doctype": "article"}
     monkeypatch.setattr(qa, "requests", SimpleNamespace(get=fake_get_seq([FakeResp(200, payload([doc]))])))
     r = qa.query_ads("q", rows=10)[0]
-    assert r["relevant"] is False and r["topics"] == ["actividad"]
+    assert r["relevant"] is False and r["facets"] == ["actividad"]
     assert "require" in r["why_excluded"] and "doctype" not in r["why_excluded"]
 
 
@@ -439,6 +439,7 @@ def test_query_ads_retry_429_luego_ok(toy_classifier, ads_token, no_sleep, monke
 
 
 def test_query_ads_5xx_persistente_lanza(toy_classifier, ads_token, no_sleep, monkeypatch):
+    # @inv INV-69
     monkeypatch.setattr(qa, "requests", SimpleNamespace(
         get=fake_get_seq([FakeResp(500)] * 4)))
     with pytest.raises(real_requests.HTTPError):
@@ -538,7 +539,7 @@ def rec(bib, relevant=True, cites=0, **kw):
     base = {"bibcode": bib, "title": f"t {bib}", "authors": ["A"], "year": "2020",
             "pubdate": None, "abstract": "", "arxiv_id": None, "doi": None,
             "doctype": "article", "bibstem": "ApJ", "citation_count": cites,
-            "keyword": [], "topics": ["actividad"] if relevant else [], "relevant": relevant}
+            "keyword": [], "facets": ["actividad"] if relevant else [], "relevant": relevant}
     base.update(kw)
     return base
 
@@ -559,6 +560,7 @@ def test_chain_candidates_arma_subqueries_ancladas(no_sleep, monkeypatch):
 
 
 def test_fetch_bibcodes_marca_manual(no_sleep, monkeypatch):
+    # @inv INV-60
     monkeypatch.setattr(qa, "query_ads",
                         lambda q, rows=400, quiet_truncate=False, fq=qa.ASTRO_FQ:
                         [rec("2019man....1M", relevant=False)])
@@ -643,7 +645,7 @@ def test_main_no_chain(toy_vault, toy_classifier, no_sleep, monkeypatch):
 def test_main_persiste_truncado(toy_vault, toy_classifier, no_sleep, monkeypatch):
     """Query directa truncada → main persiste `truncated: {num_found, rows, recent}` en ads.json
     (#17 + #79), convirtiendo el aviso de stdout en una marca que el lint surface. La segunda
-    pasada NO levanta la marca: sigue faltando el medio del universo."""
+    pasada NO levanta la marca: sigue faltando el medio del universo.  @inv INV-52"""
     def fake_qa(q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False,
                 sort=qa.CITES_SORT):
         if meta is not None:
@@ -837,10 +839,10 @@ def test_main_extra_core_escalar_no_pierde_la_curacion(toy_vault, monkeypatch, c
     write_yaml(cfg.STARS_YAML, {"Estrella Test": {
         "slug": "test_star", "simbad": "s", "ads_object": "Test Star",
         "aliases": [], "extra_core": [{"bibcode": "1988old.....1O", "via": "usuario", "motivo": "test"}]}})
-    monkeypatch.setattr(qa, "TOPIC_PATTERNS", {"rv": re.compile("radial velocity", 2)})
+    monkeypatch.setattr(qa, "FACET_PATTERNS", {"rv": re.compile("radial velocity", 2)})
     monkeypatch.setattr(qa, "NOISE_DOCTYPES", set())
-    monkeypatch.setattr(qa, "REQUIRE_TOPICS", [])
-    monkeypatch.setattr(qa, "MIN_TOPICS", 1)
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", [])
+    monkeypatch.setattr(qa, "MIN_FACETS", 1)
     monkeypatch.setattr(qa, "time", type("T", (), {"sleep": staticmethod(lambda s: None)})())
     monkeypatch.setattr(qa, "query_ads",
                         lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False: [])
@@ -863,10 +865,10 @@ def test_main_aliases_escalar_en_stars_yaml(toy_vault, monkeypatch):
     """
     write_yaml(cfg.STARS_YAML, {"Estrella Test": {
         "slug": "test_star", "simbad": "s", "ads_object": "Test Star", "aliases": "HD 12345"}})
-    monkeypatch.setattr(qa, "TOPIC_PATTERNS", {"rv": re.compile("radial velocity", 2)})
+    monkeypatch.setattr(qa, "FACET_PATTERNS", {"rv": re.compile("radial velocity", 2)})
     monkeypatch.setattr(qa, "NOISE_DOCTYPES", set())
-    monkeypatch.setattr(qa, "REQUIRE_TOPICS", [])
-    monkeypatch.setattr(qa, "MIN_TOPICS", 1)
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", [])
+    monkeypatch.setattr(qa, "MIN_FACETS", 1)
     monkeypatch.setattr(qa, "time", type("T", (), {"sleep": staticmethod(lambda s: None)})())
     monkeypatch.setattr(qa, "query_ads",
                         lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False: [])
@@ -878,25 +880,25 @@ def test_main_aliases_escalar_en_stars_yaml(toy_vault, monkeypatch):
 def test_main_tema_extra_only(toy_vault, toy_classifier, no_sleep, monkeypatch):
     """Tema off-ADS MIXTO: --extra-only trae SÓLO los extra_core (sin query ni chaining), y no
     exige `query` — la vía ADS de un tema cuya bibliografía canónica vive fuera de ADS."""
-    write_yaml(cfg.TOPICS_YAML, {"gp": {"title": "Gaussian processes", "area": "methods",
+    write_yaml(cfg.THEMES_YAML, {"gp": {"title": "Gaussian processes", "area": "methods",
                                         "concept": "gaussian-processes", "source": "web",
                                         "extra_core": [{"bibcode": "2012PASP..124.1015B", "via": "usuario", "motivo": "test"}]}})
     monkeypatch.setattr(qa, "query_ads", lambda *a, **kw: pytest.fail("no debe correr la query"))
     monkeypatch.setattr(qa, "chain_candidates", lambda *a: pytest.fail("no debe encadenar"))
     monkeypatch.setattr(qa, "fetch_bibcodes",
                         lambda bibs: [dict(rec("2012PASP..124.1015B", relevant=True), via="manual")])
-    assert run_main(monkeypatch, ["gp", "--topic", "--extra-only"]) == 0
+    assert run_main(monkeypatch, ["gp", "--theme", "--extra-only"]) == 0
     data = json.loads((toy_vault.ROOT / "build" / "gp" / "ads.json").read_text())
-    assert data["kind"] == "topic" and data["query"] is None
+    assert data["kind"] == "theme" and data["query"] is None
     assert [r["bibcode"] for r in data["records"]] == ["2012PASP..124.1015B"]
     assert data["records"][0]["via"] == "manual"
 
 
 def test_main_extra_only_sin_extra_core_error(toy_vault, toy_classifier, monkeypatch):
-    write_yaml(cfg.TOPICS_YAML, {"gp": {"title": "GP", "area": "methods",
+    write_yaml(cfg.THEMES_YAML, {"gp": {"title": "GP", "area": "methods",
                                         "concept": "gaussian-processes", "source": "web"}})
     with pytest.raises(SystemExit, match="no declara `extra_core`"):
-        run_main(monkeypatch, ["gp", "--topic", "--extra-only"])
+        run_main(monkeypatch, ["gp", "--theme", "--extra-only"])
 
 
 def test_main_extra_only_requiere_topic(toy_vault, toy_classifier, monkeypatch):
@@ -913,10 +915,10 @@ def test_main_estrella_sin_ads_object_error_amigable(toy_vault, toy_classifier, 
 
 def test_main_tema_sin_query_sugiere_offads(toy_vault, toy_classifier, monkeypatch):
     """Guard de config: tema sin `query` (típico: es off-ADS) → mensaje con la pista, no KeyError."""
-    write_yaml(cfg.TOPICS_YAML, {"gp": {"title": "Gaussian processes", "area": "methods", "concept": "gaussian-processes",
+    write_yaml(cfg.THEMES_YAML, {"gp": {"title": "Gaussian processes", "area": "methods", "concept": "gaussian-processes",
                                          "source": "web"}})
-    with pytest.raises(SystemExit, match="no tiene `query`.*ingest_topic"):
-        run_main(monkeypatch, ["gp", "--topic"])
+    with pytest.raises(SystemExit, match="no tiene `query`.*ingest_theme"):
+        run_main(monkeypatch, ["gp", "--theme"])
 
 
 # ── dry-run del delta de re-clasificación (#40) ──────────────────────────────
@@ -947,9 +949,9 @@ def test_classify_record_lee_el_formato_persistido(toy_classifier):
 
 def test_reclass_diff_reporta_el_delta(toy_vault, toy_classifier, monkeypatch, capsys):
     """#40: con `require: [rv]` declarada, un paper de actividad SALE del core — y el reporte
-    separa el que tiene extracción LLM (la decisión real) de los stubs."""
+    separa el que tiene extracción LLM (la decisión real) de los stubs.  @inv INV-58"""
     from conftest import mk_note
-    monkeypatch.setattr(qa, "REQUIRE_TOPICS", ["rv"])
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", ["rv"])
     write_ads_json(toy_vault, "test_star", [
         {"bibcode": "1991AJ....102.1813F", "title": "rotation and activity", "abstract": "",
          "keyword": [], "doctype": "article", "relevant": True, "via": "query", "citation_count": 40},
@@ -972,7 +974,7 @@ def test_reclass_diff_reporta_el_delta(toy_vault, toy_classifier, monkeypatch, c
 
 
 def test_reclass_diff_no_escribe_nada(toy_vault, toy_classifier):
-    """Dry-run: ni ads.json ni la bóveda se tocan."""
+    """Dry-run: ni ads.json ni la bóveda se tocan.  @inv INV-59"""
     recs = [{"bibcode": "2020a....1A", "title": "activity", "abstract": "", "keyword": [],
              "doctype": "article", "relevant": True, "via": "query"}]
     write_ads_json(toy_vault, "test_star", recs)
@@ -1000,11 +1002,11 @@ def test_probe_contrasta_facetas_eje_candidatas(toy_classifier, capsys):
     """#41: sin regla declarada, el probe muestra qué cortaría cada faceta si fuera obligatoria —
     el contraste que hace medible la decisión de declarar `require` (antes se discutía)."""
     recs = [
-        {"title": "radial velocity and activity", "topics": ["rv", "actividad"],
+        {"title": "radial velocity and activity", "facets": ["rv", "actividad"],
          "doctype": "article", "relevant": True, "citation_count": 5},
-        {"title": "starspot survey", "topics": ["actividad"], "doctype": "article",
+        {"title": "starspot survey", "facets": ["actividad"], "doctype": "article",
          "relevant": True, "citation_count": 3},
-        {"title": "asteroseismology", "topics": [], "doctype": "article",
+        {"title": "asteroseismology", "facets": [], "doctype": "article",
          "relevant": False, "citation_count": 9},
     ]
     qa.print_probe("q", recs)
@@ -1016,20 +1018,20 @@ def test_probe_contrasta_facetas_eje_candidatas(toy_classifier, capsys):
 
 def test_probe_contrasta_regla_declarada_contra_or(toy_classifier, monkeypatch, capsys):
     """Con `require` ya declarada, el contraste es contra el OR puro (qué se está cortando)."""
-    monkeypatch.setattr(qa, "REQUIRE_TOPICS", ["rv"])
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", ["rv"])
     recs = [
-        {"title": "rv", "topics": ["rv"], "doctype": "article", "relevant": True, "citation_count": 1},
-        {"title": "act", "topics": ["actividad"], "doctype": "article", "relevant": False,
+        {"title": "rv", "facets": ["rv"], "doctype": "article", "relevant": True, "citation_count": 1},
+        {"title": "act", "facets": ["actividad"], "doctype": "article", "relevant": False,
          "citation_count": 1},
     ]
     qa.print_probe("q", recs)
     out = capsys.readouterr().out
-    assert "require=['rv'], min_topics=1" in out and "en OR puro serían 2 CORE" in out
+    assert "require=['rv'], min_facets=1" in out and "en OR puro serían 2 CORE" in out
 
 
 def test_count_core_respeta_doctype_ruido(toy_classifier):
-    recs = [{"topics": ["rv"], "doctype": "catalog"}, {"topics": ["rv"], "doctype": "article"},
-            {"topics": [], "doctype": "article"}]
+    recs = [{"facets": ["rv"], "doctype": "catalog"}, {"facets": ["rv"], "doctype": "article"},
+            {"facets": [], "doctype": "article"}]
     assert qa.count_core(recs, [], 1) == 1
     assert qa.count_core(recs, ["actividad"], 1) == 0
     assert qa.count_core(recs, [], 2) == 0
@@ -1123,7 +1125,7 @@ def test_sweep_sin_ads_json_error_amigable(toy_vault, toy_classifier, monkeypatc
 
 def test_sweep_con_topic_error(toy_vault, toy_classifier, monkeypatch, capsys):
     with pytest.raises(SystemExit):                       # ap.error → exit 2
-        run_main(monkeypatch, ["gp", "--topic", "--sweep"])
+        run_main(monkeypatch, ["gp", "--theme", "--sweep"])
     assert "retro-tag 3b" in capsys.readouterr().err
 
 
@@ -1136,10 +1138,24 @@ def test_subject_in_title_cubre_grafias_y_glifos():
     assert not qa.subject_in_title(None, ["eps Eridani"])
 
 
+def test_subject_in_title_no_matchea_por_prefijo_de_catalogo():
+    """@inv INV-72 — el número de catálogo más largo es OTRO objeto: `GJ 71` (tau Ceti) no puede
+    matchear un título sobre `GJ 710`. Es el mismo modo de falla por containment que `CLAUDE.md`
+    documenta para `grep` sobre el frontmatter, acá adentro de la compuerta de triage: un match
+    espurio **auto-acepta** el paper (nivel 0, sin juicio humano) y lo mete al corpus de otra
+    estrella. La continuación ALFABÉTICA sigue valiendo (`tau Cet` ↔ `tau Ceti`): lo que distingue
+    a un objeto de otro en una designación de catálogo es el dígito."""
+    assert not qa.subject_in_title("A close encounter with GJ 710", ["GJ 71"])
+    assert not qa.subject_in_title("HD 220490 photometry", ["HD 22049"])
+    assert qa.subject_in_title("Planets around GJ 71", ["GJ 71"])          # el sujeto real
+    assert qa.subject_in_title("GJ 71 b confirmed", ["GJ 71"])             # seguido de letra
+    assert qa.subject_in_title("tau Ceti revisited", ["tau Cet"])          # alfabético: sigue OK
+
+
 def test_main_chaining_solo_auto_acepta_sujeto_en_titulo(toy_vault, toy_classifier, no_sleep,
                                                          monkeypatch, capsys):
     """El core del grafo con el sujeto en el título entra; el resto queda como CANDIDATO en
-    ads.json (no se baja) a la espera del juicio."""
+    ads.json (no se baja) a la espera del juicio.  @inv INV-50"""
     monkeypatch.setattr(qa, "query_ads",
                         lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
                         [rec("2020dirA....1A")])
@@ -1155,6 +1171,7 @@ def test_main_chaining_solo_auto_acepta_sujeto_en_titulo(toy_vault, toy_classifi
 
 
 def test_main_triage_no_repropone_descartados(toy_vault, toy_classifier, no_sleep, monkeypatch, capsys):
+    # @inv INV-49
     d = toy_vault.ROOT / "build" / "test_star"
     d.mkdir(parents=True, exist_ok=True)
     cfg.save_decisiones("test_star", {
@@ -1273,14 +1290,14 @@ def test_la_compuerta_no_se_puede_apagar(toy_vault, toy_classifier, no_sleep, mo
 
 def test_main_tema_no_aplica_la_compuerta(toy_vault, toy_classifier, no_sleep, monkeypatch):
     """En un tema la query ES la definición del tema → su core (y el del grafo anclado) entra solo."""
-    write_yaml(cfg.TOPICS_YAML, {"gp": {"title": "GP", "area": "methods", "concept": "gp",
+    write_yaml(cfg.THEMES_YAML, {"gp": {"title": "GP", "area": "methods", "concept": "gp",
                                         "query": 'abs:"gaussian process"'}})
     monkeypatch.setattr(qa, "query_ads",
                         lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
                         [rec("2020dirA....1A")])
     monkeypatch.setattr(qa, "chain_candidates", lambda *a: [
         dict(rec("2020chX....1X", title="cualquier cosa"), via="chain:references")])
-    assert run_main(monkeypatch, ["gp", "--topic"]) == 0
+    assert run_main(monkeypatch, ["gp", "--theme"]) == 0
     data = json.loads((toy_vault.ROOT / "build" / "gp" / "ads.json").read_text())
     assert len(data["records"]) == 2 and data["candidates"] == []
 
@@ -1288,7 +1305,7 @@ def test_main_tema_no_aplica_la_compuerta(toy_vault, toy_classifier, no_sleep, m
 def test_main_persiste_el_registro_de_busqueda(toy_vault, toy_classifier, no_sleep, monkeypatch):
     """#64: al cerrar la corrida queda el registro VERSIONADO del sujeto — query efectiva, fecha,
     límite, conteos y versión del clasificador. La query de una estrella la arma build_query y
-    antes se tiraba: no había forma de saber sobre qué universo afirma la ficha."""
+    antes se tiraba: no había forma de saber sobre qué universo afirma la ficha.  @inv INV-51"""
     direct = [rec("2020dirA....1A", cites=5), rec("2020dirB....1B", relevant=False, cites=9)]
 
     def fake_query(q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, fq=None,
@@ -1307,9 +1324,9 @@ def test_main_persiste_el_registro_de_busqueda(toy_vault, toy_classifier, no_sle
     assert b["almagesto_version"] == cfg.ALMAGESTO_VERSION
     # la LENTE queda registrada textual: almagesto_version es la del framework, no la de la regla
     # (cambiar una regex mueve el corte sin mover la versión)
-    assert b["lente"]["topics"] and isinstance(b["lente"]["topics"], dict)
-    assert b["lente"]["require"] == list(qa.REQUIRE_TOPICS)
-    assert b["lente"]["min_topics"] == qa.MIN_TOPICS
+    assert b["lente"]["facets"] and isinstance(b["lente"]["facets"], dict)
+    assert b["lente"]["require"] == list(qa.REQUIRE_FACETS)
+    assert b["lente"]["min_facets"] == qa.MIN_FACETS
     assert cfg.load_registro("test_star")["decisiones"]                # no pisó el juicio del triage
 
 
@@ -1318,7 +1335,7 @@ def test_query_ads_rehusa_lente_vacia(toy_vault, monkeypatch, capsys):
     TODO como no-core (o todo como core, según la regla) con una regla que nadie escribió — y el
     registro guardaría esa lente vacía como si fuera la vigente. `main()` rehúsa operar nombrando
     el archivo y el motivo; `classify` no llega a correr.  @inv INV-80"""
-    cfg.OBJECTIVE_YAML.write_text("name: X\nrelevance:\n  topics:\n    rv: activity: starspot\n", encoding="utf-8")
+    cfg.OBJECTIVE_YAML.write_text("name: X\nrelevance:\n  facets:\n    rv: activity: starspot\n", encoding="utf-8")
     llamadas = []
     monkeypatch.setattr(qa, "classify", lambda *a, **k: llamadas.append(a) or [])
     monkeypatch.setattr(sys, "argv", ["query_ads.py", "test_star"])
@@ -1330,7 +1347,7 @@ def test_query_ads_rehusa_lente_vacia(toy_vault, monkeypatch, capsys):
 
 def test_escotillas_quedan_en_el_registro(toy_vault, toy_classifier, no_sleep, monkeypatch):
     """D-48: lo que no se puede apagar se registra. Dos entradas del registro con los mismos
-    conteos pueden describir corridas distintas si una usó `--yes` y la otra no."""
+    conteos pueden describir corridas distintas si una usó `--yes` y la otra no.  @inv INV-44"""
     monkeypatch.setattr(qa, "query_ads",
                         lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
                         [rec("2020dirA....1A")])
@@ -1348,3 +1365,239 @@ def test_probe_reporta_el_costo_proyectado(capsys):
     out = capsys.readouterr().out
     assert "tokens" in out.lower()
     assert "240" in out or "240k" in out.lower()      # 10 core × 24k
+
+
+# ── D-26 / INV-88: la relevancia de un tema de método es PROPIA del tema ──────────────────────
+
+def _tema(facet="independent component|blind source separation", **extra):
+    return {"title": "ICA", "area": "methods", "concept": "ica", "facet": facet, **extra}
+
+
+def _rec(title="x", abstract="", citas=0, doctype="article"):
+    return {"title": title, "abstract": abstract, "citation_count": citas,
+            "doctype": doctype, "keyword": []}
+
+
+def test_sin_faceta_propia_ninguna_puerta_abre(toy_vault):
+    """La faceta propia es la precondición, no una puerta: `core = faceta propia Y (≥1 puerta)`.
+    Un paper de fMRI muy citado no entra por ser popular."""
+    tema = _tema(fundacional_min_citas=100)
+    facets, core, why = qa.classify_theme(_rec("fMRI resting state", citas=5000), tema)
+    assert core is False and "faceta propia" in why
+
+
+def test_puerta_2_el_fundacional_entra_sin_lente_astro(toy_vault, monkeypatch):
+    """El caso Hyvärinen, que es el que motiva D-26: el paper fundacional de ICA **no menciona RV
+    ni una vez**, así que la lente global con `require: [rv]` lo mata. Entra por ser fundacional en
+    su campo: faceta propia + muchas citas.  @inv INV-88"""
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", ["rv"])
+    tema = _tema(fundacional_min_citas=1000)
+    facets, core, why = qa.classify_theme(
+        _rec("Independent component analysis: algorithms and applications", citas=30000), tema)
+    assert core is True and why is None
+
+
+def test_puerta_3_la_lente_astro_global(toy_vault, monkeypatch):
+    """Una aplicación astro del método entra por la lente global aunque tenga pocas citas."""
+    monkeypatch.setattr(qa, "FACET_PATTERNS", {"rv": re.compile("radial velocity", re.I)})
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", [])
+    monkeypatch.setattr(qa, "MIN_FACETS", 1)
+    tema = _tema(fundacional_min_citas=1000)
+    _, core, why = qa.classify_theme(
+        _rec("Blind source separation applied to radial velocity data", citas=3), tema)
+    assert core is True and why is None
+
+
+def test_faceta_propia_sola_no_alcanza(toy_vault, monkeypatch):
+    """El otro lado: sin filtro, «independent component analysis» devuelve miles de papers de fMRI,
+    EEG y finanzas. La faceta propia sola los dejaría entrar a todos."""
+    monkeypatch.setattr(qa, "FACET_PATTERNS", {"rv": re.compile("radial velocity", re.I)})
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", [])
+    tema = _tema(fundacional_min_citas=1000)
+    _, core, why = qa.classify_theme(_rec("Independent component analysis of EEG", citas=12), tema)
+    assert core is False and "ninguna puerta" in why
+
+
+def test_la_puerta_2_sin_umbral_declarado_se_apaga_y_se_dice(toy_vault, monkeypatch):
+    """El umbral de «muy citado» NO se inventa: D-26 no fija un número y un default escondido
+    decidiría por el usuario. Sin `fundacional_min_citas` declarado la puerta 2 **no abre**, y el
+    motivo lo dice — no se degrada en silencio (misma doctrina que la lente vacía, INV-80).
+
+    Se aísla la lente global (si no, la faceta `method` de la `objective.yaml` real abre la puerta
+    3 y el test mediría otra cosa)."""
+    monkeypatch.setattr(qa, "FACET_PATTERNS", {"rv": re.compile("radial velocity", re.I)})
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", [])
+    _, core, why = qa.classify_theme(_rec("Independent component analysis", citas=99999), _tema())
+    assert core is False and "fundacional_min_citas" in why
+
+
+def test_doctype_ruido_sigue_afuera(toy_vault):
+    tema = _tema(fundacional_min_citas=10)
+    _, core, why = qa.classify_theme(
+        _rec("Independent component analysis", citas=5000, doctype="catalog"), tema)
+    assert core is False and "doctype" in why
+
+
+def test_tema_sin_facet_declarada_no_clasifica(toy_vault):
+    """Un tema de método sin `facet:` no puede usar esta regla: es la lente del tema, y sin ella
+    no hay nada que aplicar. Rehúsa en vez de caer a la lente global en silencio."""
+    with pytest.raises(SystemExit) as e:
+        qa.classify_theme(_rec("x"), {"title": "T", "area": "methods"})
+    assert "facet" in str(e.value)
+
+
+def test_reclasificar_por_tema_cambia_el_veredicto_y_lo_cuenta(toy_vault, monkeypatch):
+    """El cableado de D-26: los registros llegan clasificados por la lente GLOBAL (`to_records`), y
+    para un tema de método hay que volver a juzgarlos con la regla del tema. La función devuelve
+    cuántos cambió en cada dirección — sin eso, un ingest reclasifica en silencio y nadie puede
+    auditar qué hizo la regla nueva."""
+    monkeypatch.setattr(qa, "FACET_PATTERNS", {"rv": re.compile("radial velocity", re.I)})
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", [])
+    monkeypatch.setattr(qa, "MIN_FACETS", 1)
+    tema = _tema(fundacional_min_citas=1000)
+    recs = [
+        # entra por la puerta 2 aunque la lente global lo excluya (el caso Hyvärinen)
+        dict(_rec("Independent component analysis: algorithms", citas=30000), bibcode="A",
+             relevant=False, why_excluded="sin tópico"),
+        # la lente global lo daba core (menciona RV) pero NO tiene la faceta propia del tema
+        dict(_rec("Radial velocity survey of M dwarfs", citas=10), bibcode="B",
+             relevant=True, why_excluded=None),
+        # ya era core y sigue siéndolo: faceta propia + lente astro
+        dict(_rec("Blind source separation of radial velocity data", citas=5), bibcode="C",
+             relevant=True, why_excluded=None),
+    ]
+    entraron, salieron = qa.reclassify_for_theme(recs, tema)
+    assert (entraron, salieron) == (["A"], ["B"])
+    assert [r["relevant"] for r in recs] == [True, False, True]
+    assert recs[1]["why_excluded"] == "sin la faceta propia del tema"
+
+
+def test_reclasificar_no_toca_los_forzados_a_mano(toy_vault, monkeypatch):
+    """`extra_core` es juicio del usuario y pisa a cualquier clasificador (#68/#39): la regla del
+    tema no puede sacar lo que una persona metió a propósito."""
+    monkeypatch.setattr(qa, "FACET_PATTERNS", {"rv": re.compile("radial velocity", re.I)})
+    tema = _tema(fundacional_min_citas=1000)
+    recs = [dict(_rec("Nada que ver", citas=1), bibcode="M", relevant=True,
+                 why_excluded=None, via="manual")]
+    assert qa.reclassify_for_theme(recs, tema) == ([], [])
+    assert recs[0]["relevant"] is True
+
+
+def test_reclasificar_sin_facet_es_no_op(toy_vault):
+    """Un tema sin `facet:` no usa la regla nueva: la cadena sigue con la lente global, sin
+    rehusar. (Rehusar es lo que hace `classify_theme` si alguien la llama directo.)"""
+    recs = [dict(_rec("x"), bibcode="A", relevant=True, why_excluded=None)]
+    assert qa.reclassify_for_theme(recs, {"title": "T"}) == ([], [])
+    assert recs[0]["relevant"] is True
+
+
+def test_main_aplica_la_regla_del_tema_a_la_query_directa(toy_vault, toy_classifier, no_sleep,
+                                                          monkeypatch, capsys):
+    """Integración del cableado: un tema con `facet:` re-juzga los registros de la query directa con
+    la regla de D-26 y **persiste** el veredicto nuevo en `ads.json`. Sin este test la función
+    existía pero nadie comprobaba que la cadena la llamara — el modo de falla que más veces mordió
+    en este repo (una feature implementada y no cableada).  @inv INV-88"""
+    write_yaml(cfg.THEMES_YAML, {"ica": {
+        "title": "ICA", "area": "methods", "concept": "ica",
+        "query": 'abs:"independent component"',
+        "facet": "independent component",
+        "fundacional_min_citas": 1000}})
+    fundacional = dict(rec("2000fundA...1A", title="Independent component analysis: algorithms"),
+                       citation_count=30000)
+    ajeno = dict(rec("2020ajenB...1B", title="Something else entirely"), citation_count=5)
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        [fundacional, ajeno])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    assert run_main(monkeypatch, ["ica", "--theme"]) == 0
+    data = json.loads((toy_vault.ROOT / "build" / "ica" / "ads.json").read_text())
+    por_bib = {r["bibcode"]: r for r in data["records"]}
+    assert por_bib["2000fundA...1A"]["relevant"] is True, "el fundacional entra por la puerta 2"
+    assert por_bib["2020ajenB...1B"]["relevant"] is False
+    assert por_bib["2020ajenB...1B"]["why_excluded"] == "sin la faceta propia del tema"
+    assert "regla del tema (D-26)" in capsys.readouterr().out
+
+
+def test_puerta_2_con_citas_desconocidas_no_evalua_en_vez_de_excluir(toy_vault, monkeypatch):
+    """`citation_count: None` significa **no sé**, no «pocas». Si la puerta 2 lo tratara como 0,
+    todo paper venido de arXiv quedaría no-fundacional por construcción. Se declara que la puerta
+    no se pudo evaluar, con el motivo — INV-87 aplicado a la clasificación."""
+    monkeypatch.setattr(qa, "FACET_PATTERNS", {"rv": re.compile("radial velocity", re.I)})
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", [])
+    tema = _tema(fundacional_min_citas=1000)
+    rec = _rec("Independent component analysis: algorithms", citas=None)
+    _, core, why = qa.classify_theme(rec, tema)
+    assert core is False
+    assert "no se pudo evaluar" in why and "sin dato de citas" in why
+
+
+def test_puerta_2_con_pocas_citas_dice_otra_cosa(toy_vault, monkeypatch):
+    """El control: 3 citas SÍ es un dato, y el motivo tiene que distinguirse del anterior."""
+    monkeypatch.setattr(qa, "FACET_PATTERNS", {"rv": re.compile("radial velocity", re.I)})
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", [])
+    _, core, why = qa.classify_theme(_rec("Independent component analysis", citas=3),
+                                     _tema(fundacional_min_citas=1000))
+    assert core is False and "no se pudo evaluar" not in why
+
+
+def test_puerta_1_propone_lo_que_el_corpus_cita_y_no_lo_clasifica(toy_vault, monkeypatch):
+    """Puerta 1 de D-26 (§4.3 del plan): un paper que la query trajo, que la regla del tema **no**
+    hace core, pero que **tu corpus cita**, pasa a CANDIDATO del triage — nunca a core.
+
+    Es la señal que ninguna regex puede expresar: Hyvärinen tiene ~30k citas casi todas de fMRI y
+    finanzas, y lo que lo vuelve tuyo es que tu gente lo cita. Y es lo que INV-24 obliga a que sea
+    una propuesta: si clasificara, ser core dejaría de ser función de `(paper, lente)`.  @inv INV-88"""
+    recs = [
+        dict(_rec("Independent component analysis of EEG"), bibcode="A", doi="10.1/a",
+             relevant=False, why_excluded="ninguna puerta abre (ni fundacional ni lente astro)"),
+        dict(_rec("Otro que nadie cita"), bibcode="B", doi="10.1/b",
+             relevant=False, why_excluded="sin la faceta propia del tema"),
+        dict(_rec("Ya es core"), bibcode="C", relevant=True, why_excluded=None),
+    ]
+    idx = {"citas": {"A": ["2020Mio", "2021Mio"]}}
+    props = qa.gate_cited_by_corpus(recs, index=idx)
+    assert [p["bibcode"] for p in props] == ["A"]
+    assert props[0]["via"] == "citado-por-corpus"
+    assert props[0]["citado_por"] == ["2020Mio", "2021Mio"]
+    assert recs[0]["relevant"] is False, "la puerta 1 PROPONE: no puede volver core a nadie"
+
+
+def test_puerta_1_busca_por_todas_las_llaves_del_paper(toy_vault):
+    """El corpus puede citarlo por bibcode (vía ADS) o por id de OpenAlex (vía OpenAlex): preguntar
+    por una sola llave da un falso negativo. Se prueban todas las que el registro tenga."""
+    recs = [dict(_rec("x"), bibcode="A", doi="10.1/a", openalex_id="https://openalex.org/W9",
+                 relevant=False, why_excluded="x")]
+    props = qa.gate_cited_by_corpus(recs, index={"citas": {"W9": ["2020Mio"]}})
+    assert [p["bibcode"] for p in props] == ["A"]
+
+
+def test_puerta_1_sin_indice_no_propone_nada(toy_vault):
+    """Sin `build/citation_index.json` la puerta simplemente no aporta — no inventa candidatos ni
+    rompe la cadena."""
+    recs = [dict(_rec("x"), bibcode="A", relevant=False, why_excluded="x")]
+    assert qa.gate_cited_by_corpus(recs, index={}) == []
+
+
+def test_main_puerta_1_deja_el_candidato_en_ads_json(toy_vault, toy_classifier, no_sleep,
+                                                     monkeypatch, capsys):
+    """Integración: la cadena consulta el índice y **persiste** el candidato con su `via` y quiénes
+    lo citan. Sin este test la puerta existía sin estar cableada.  @inv INV-88"""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ica",
+                                         "query": 'abs:"independent component"',
+                                         "facet": "independent component"}})
+    (toy_vault.ROOT / "build").mkdir(parents=True, exist_ok=True)
+    (toy_vault.ROOT / "build" / "citation_index.json").write_text(
+        json.dumps({"citas": {"2005eegX....1X": ["2020Mio", "2021Mio"]}}), encoding="utf-8")
+    eeg = dict(rec("2005eegX....1X", title="Independent component analysis of EEG"),
+               citation_count=12)
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False: [eeg])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    assert run_main(monkeypatch, ["ica", "--theme"]) == 0
+    data = json.loads((toy_vault.ROOT / "build" / "ica" / "ads.json").read_text())
+    cand = {c["bibcode"]: c for c in data["candidates"]}
+    assert "2005eegX....1X" in cand, "el que cita el corpus tiene que llegar al triage"
+    assert cand["2005eegX....1X"]["via"] == "citado-por-corpus"
+    assert cand["2005eegX....1X"]["citado_por"] == ["2020Mio", "2021Mio"]
+    assert all(not r["relevant"] for r in data["records"]), "la puerta 1 no vuelve core a nadie"
+    assert "puerta 1" in capsys.readouterr().out

@@ -24,7 +24,7 @@ señal) se refleja en la prosa de la ficha/concepto citando **ambas** fuentes. S
 
 ## Cuándo correrlo
 - A pedido: "buscá contradicciones", "qué se contradice sobre X", "revisá disputas del corpus".
-- Recomendado tras un `ingest-star`/`ingest-topic` grande, o al cerrar una estrella con muchos papers.
+- Recomendado tras un `ingest-star`/`ingest-theme` grande, o al cerrar una estrella con muchos papers.
 - **No** es paso de cierre automático (a diferencia de verify-citations): es una auditoría explícita.
 
 ## Entrada

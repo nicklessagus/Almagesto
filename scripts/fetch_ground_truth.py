@@ -57,7 +57,7 @@ def _val(row, key):
 
 
 def msini_earth(K_ms, P_days, e, mstar_msun):
-    """m·sin i [M_⊕] a partir de K, P, e y M* (aprox. m_p << M*). None si falta algo."""
+    """m·sin i [M_⊕] a partir de K, P, e y M* (aprox. m_p << M*). None si falta algo.  @inv INV-10"""
     import math
     if None in (K_ms, P_days, mstar_msun) or K_ms <= 0 or P_days <= 0 or mstar_msun <= 0:
         return None
@@ -276,7 +276,7 @@ def _flags_usados(args) -> list:
     Son las **escotillas**: `--force`, `--yes`, `--all` cambian lo que la corrida hizo, y sin
     registrarlas la traza dice "corrió make_notes" sobre dos corridas que no hicieron lo mismo."""
     return sorted(f"--{k.replace('_', '-')}" for k, v in vars(args).items()
-                  if v is True and k not in ("topic",))
+                  if v is True and k not in ("theme",))
 
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help

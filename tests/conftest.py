@@ -22,7 +22,7 @@ import extract_fulltext           # noqa: E402  (alias FULLTEXT tomado a nivel m
 
 
 # Config mínima de la instancia de juguete. Las regex de relevance NO son las del template:
-# los tests de clasificación parchean query_ads.TOPIC_PATTERNS explícitamente (query_ads
+# los tests de clasificación parchean query_ads.FACET_PATTERNS explícitamente (query_ads
 # compila el clasificador al importar, desde la bóveda real — ver test_query_ads).
 OBJECTIVE = {
     "name": "Bóveda de juguete (tests)",
@@ -30,7 +30,7 @@ OBJECTIVE = {
     "description": "instancia sintética para la suite de tests",
     "concept_areas": ["indicators", "methods", "activity", "hypotheses"],
     "relevance": {
-        "topics": {
+        "facets": {
             "actividad": "activity|starspot",
             "rv": "radial velocity",
         },
@@ -79,7 +79,7 @@ def toy_vault(tmp_path, monkeypatch):
         "VAULT": vault,
         "CONFIG": vault / "config",
         "STARS_YAML": vault / "config" / "stars.yaml",
-        "TOPICS_YAML": vault / "config" / "topics.yaml",
+        "THEMES_YAML": vault / "config" / "themes.yaml",
         "OBJECTIVE_YAML": vault / "config" / "objective.yaml",
         "ADS_KEY_FILE": vault / "config" / "ads_dev_key",
         "REGISTRO": vault / "config" / "registro",
@@ -105,5 +105,5 @@ def toy_vault(tmp_path, monkeypatch):
     (vault / "raw" / "refs").mkdir(parents=True, exist_ok=True)
     write_yaml(paths["OBJECTIVE_YAML"], OBJECTIVE)
     write_yaml(paths["STARS_YAML"], STARS)
-    write_yaml(paths["TOPICS_YAML"], {})
+    write_yaml(paths["THEMES_YAML"], {})
     return SimpleNamespace(**paths)

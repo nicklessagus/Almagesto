@@ -79,10 +79,12 @@ from fetch_ground_truth import msini_earth   # verificación de masa (m·sini im
 from make_notes import find_header_line      # contrato de la cabecera (mismo que stamp_pdf_link, #48)
 from make_notes import GENERATOR_LINE        # ancla de la cabecera de fichas/concepts (#69)
 
+# @inv INV-02
 LINK_RE = re.compile(r"\[\[([^\]\|#]+)")
 # Frontera dura (regla #0 de CLAUDE.md): la bóveda es SÓLO bibliografía. Detecta material de
 # implementación/código no bibliográfico que se filtró a una nota. WARN, no bloquea: son heurísticas de
 # alta señal/bajo ruido; se saltan los blockquotes meta (frontera/alcance). Revisar a mano cada hit.
+# @inv INV-04
 IMPL_LEAK_RE = [
     (re.compile(r"\bperilla\b", re.I), "perilla (dial de implementación)"),
     (re.compile(r"\bdial\b", re.I), "dial de implementación"),
@@ -110,6 +112,7 @@ def fm_error(text: str) -> str | None:
     no puede cortar el bloque, o esta función reporta "YAML inválido" —categoría BLOQUEANTE—
     sobre un frontmatter que no tiene nada roto."""
     if not text.startswith("---"):
+    #  @inv INV-40
         return None
     span = cfg.frontmatter_span(text)
     if span is None:
@@ -136,6 +139,7 @@ def verify_block(text: str) -> tuple[bool, str | None]:
     hasta 11 — pasadas sucesivas sobre secciones distintas), así que la vigencia la marca la fecha
     **máxima**, no la del primero: quedarse con el primero dejaría la nota stale para siempre por
     más que se re-verifique."""
+    # @inv INV-31
     heads = VERIF_HEAD_RE.findall(text)
     if not heads:
         return False, None
@@ -255,6 +259,7 @@ def note_disputes(fm: dict) -> list:
     el primer nivel del frontmatter, y esto está anidado."""
     out = []
     for d in (fm.get("disputes") or []):
+    #  @inv INV-12
         if not isinstance(d, dict):
             continue                       # la forma de la lista ya la reportó normalize_lists
         campo = str(d.get("field") or "").strip()
@@ -269,7 +274,7 @@ def note_disputes(fm: dict) -> list:
 
 # Campos que el schema declara **lista** (CLAUDE.md). `True` = lista de MAPAS.
 # `role` no está: su contrato admite escalar o lista, y se valida aparte.
-LIST_FIELDS = {"tags": False, "aliases": False, "stars": False, "topics": False, "methods": False,
+LIST_FIELDS = {"tags": False, "aliases": False, "stars": False, "facets": False, "methods": False,
                "thesis_links": False, "activity_indicators_expected": False,
                "planets": True, "disputes": True, "corrections": True}
 
@@ -286,6 +291,7 @@ def normalize_lists(fm: dict) -> list:
     que es la misma política que el resto de los chequeos de forma (#71)."""
     motivos = []
     for campo, de_mapas in LIST_FIELDS.items():
+    #  @inv INV-63
         v = fm.get(campo)
         if v is None or v == "" or v == []:
             continue
@@ -316,6 +322,7 @@ def legacy_disputes(fm: dict) -> tuple[int, list]:
     de forma inválida en vez de inflar (o voltear) el conteo."""
     n, motivos = 0, []
     for pl in (fm.get("planets") or []):
+    #  @inv INV-13
         if not isinstance(pl, dict):
             continue
         d = pl.get("disputes")
@@ -334,6 +341,7 @@ def legacy_disputes(fm: dict) -> tuple[int, list]:
 # de contraste corresponde entre dos papers, y un valor libre no la determina. Un typo deja el campo
 # mudo para esa operación sin que nadie se entere — el mismo modo de falla de `thesis_links` que no
 # matchea ninguna nota, y por eso se trata igual (bloqueante).
+# @inv INV-46
 ROLES = ("fundacional", "aplicacion", "arbitro")
 
 
@@ -405,6 +413,7 @@ def mirror_issues(slug: str, fm: dict, gt: dict) -> list:
     importa porque el arreglo es distinto: **difiere** (la ficha dice otra cosa que NEA → si viene
     de un paper es una `disputes[]`, no una sobreescritura) y **sin respaldo** (NEA no tiene el
     valor y la ficha sí → el número salió de la literatura y va al cuerpo, citado)."""
+    # @inv INV-06, INV-09
     host = gt.get("host") or {}
     out = []
 
@@ -523,8 +532,15 @@ def main(argv=()) -> int:
     not_evaluated: list = []
     anchor_bodies: dict = {}           # {archivo: texto} de TODA nota de entidad/query — D-47
     old_registro: list = []            # registros con la clave `busqueda:` (schema pre-D-28)
+    old_facets: list = []              # notas de paper con `topics:` (schema pre-R-5)
     cadena_incompleta: list = []       # (slug, "se cortó en <paso>") — D-57
-    stars_slugs = {m.get("slug") for m in cfg.load_stars().values() if isinstance(m, dict)}
+    # `stars.yaml`/`themes.yaml` ilegibles no pueden tumbar el lint: se declaran NO EVALUADO y los
+    # chequeos que dependen de ellos se saltean con población vacía (INV-80/INV-87).
+    subj_err = [e for e in (cfg.stars_error(), cfg.themes_error()) if e]
+    for e in subj_err:
+        not_evaluated.append(("config de sujetos", e))
+    stars_slugs = (set() if cfg.stars_error() else
+                   {m.get("slug") for m in cfg.load_stars().values() if isinstance(m, dict)})
     verif_blocks: list = []            # (archivo, fecha del bloque|None) — notas CON bloque de verify
     anchor_notes: list = []            # (stem, texto) de esas mismas notas — insumo del ancla (D-4)
     names = {basename(p)[:-3] for p in files}  # stems referenciables por [[..]]
@@ -683,6 +699,13 @@ def main(argv=()) -> int:
         if in_dir(f, "papers") and "paper" not in tags and not err:   # con YAML roto ya se reportó
             fm_broken.append((stem, "nota en `papers/` sin `tags: [paper]` → evade TODOS los "
                                     "chequeos de su tipo (retracción, PDF, role, citas)"))
+        # R-5: `topics:` era a la vez la faceta de la lente y el tema-sujeto. El renombre lo
+        # partió en `facets:` y `themes.yaml`, y el campo viejo quedó SIN LECTOR: la nota
+        # conserva el dato y el sistema no lo ve. Mismo trato que `busqueda:` pre-D-28 —
+        # detector bloqueante, nunca lector tolerante.
+        if in_dir(f, "papers") and "topics" in fm and not err:
+            old_facets.append((stem, "usa `topics:` (schema pre-R-5) — el campo vigente es "
+                                     "`facets:`; renombrarlo (el lector ya no mira `topics`)"))
         if "star" in tags:
             body = text.split("---", 2)[-1] if text.startswith("---") else text
             # `P_rot_days` nulo NO es de por sí un campo incompleto (#70): el frontmatter es espejo
@@ -736,7 +759,7 @@ def main(argv=()) -> int:
                                           f"({c.get('date') or 's/f'}) → {notice}"))
             # fuente pendiente (issue #7): derivada al usuario — precondición, como las citas no
             # verificables: sin la fuente no hay fulltext ni verify. Se estampa en el ingest
-            # (ingest_topic/make_notes --web con `pending`) o a mano en la nota.
+            # (ingest_theme/make_notes --web con `pending`) o a mano en la nota.
             if fm.get("pending_source"):
                 ptr = fm.get("doi") or fm.get("source_url") or "(sin puntero conocido)"
                 pending_srcs.append((stem, f"{fm['pending_source']} — proveer la fuente; puntero: {ptr}"))
@@ -747,7 +770,10 @@ def main(argv=()) -> int:
                 incomplete.append((stem, "paper relevante sin methods (sin extraer)"))
                 # D-13/INV-83: el sujeto de ese paper queda anotado; después del barrido se
                 # contrasta contra lo que el registro DECLARÓ haber leído.
-                for campo in ("stars", "topics"):
+                # `stars` para estrellas y `thesis_links` para temas: la pertenencia de un paper
+                # a un tema NO vive en las facetas (otro eje) — mismo predicado que
+                # `make_notes._papers_del_sujeto`.
+                for campo in ("stars", "thesis_links"):
                     for sujeto in cfg.as_list(fm.get(campo)):
                         sin_extraer_por_sujeto.setdefault(str(sujeto), set()).add(stem)
             # El eslabón SIGUIENTE (#75): el paper que SÍ se extrajo. `methods` poblado significa
@@ -959,7 +985,7 @@ def main(argv=()) -> int:
     # `paper_fms` se llena en el LOOP principal (ver más arriba), que ya parsea cada nota: una
     # pasada extra acá subía el ratio a ~3,0 (el techo del test de escala es 2,3), y el hotspot
     # conocido —el doble parseo de split_fm+fm_error— ya se come 2,0.
-    for nombre, meta_s in cfg.load_stars().items():
+    for nombre, meta_s in ({} if cfg.stars_error() else cfg.load_stars()).items():
         slug_s = meta_s.get("slug") if isinstance(meta_s, dict) else None
         dest_s = cfg.STARS / f"{slug_s}.md" if slug_s else None
         if not dest_s or not dest_s.exists():
@@ -994,7 +1020,8 @@ def main(argv=()) -> int:
     # (el ingest no leyó todo y no dijo por qué); con criterio, backlog normal — la cola visible de
     # D-15, que el skill `maintain` consume.
     extraccion_no_declarada: list = []
-    for nombre_s, meta_s in list(cfg.load_stars().items()) + list(cfg.load_topics().items()):
+    for nombre_s, meta_s in (list(({} if cfg.stars_error() else cfg.load_stars()).items())
+                             + list(({} if cfg.themes_error() else cfg.load_themes()).items())):
         if not isinstance(meta_s, dict):
             continue
         slug_s = meta_s.get("slug")
@@ -1134,7 +1161,10 @@ def main(argv=()) -> int:
         tags = kinds.get(n, [])
         return (not ({"paper", "star", "matrix"} & set(tags))
                 and n not in NON_ORPHAN and n not in refs_stems)
-    orphans = [n for n, c in incoming.items() if c == 0 and is_orphan_candidate(n)]
+    # `sorted`: `incoming` se construye sobre un `set` de strings, cuyo orden depende del hash
+    # que Python randomiza POR PROCESO — sin esto la sección sale en orden distinto en cada
+    # corrida y el reporte deja de ser comparable consigo mismo (INV-43).
+    orphans = sorted(n for n, c in incoming.items() if c == 0 and is_orphan_candidate(n))
 
     # Extraído pero no sintetizado (#75, backlog): el análogo del proxy que ya existe para planetas
     # (cada planeta del frontmatter discutido en prosa). Mide si el paper LLEGÓ, no si la síntesis
@@ -1201,7 +1231,7 @@ def main(argv=()) -> int:
              "(o editá el YAML) para definir el objetivo de TU bóveda"))
 
     # áreas de concepts/ no declaradas en concept_areas (objective.yaml) → posible typo / carpeta
-    # fantasma: un `area` mal tipeado en topics.yaml crea carpeta en silencio (ver make_notes). WARN
+    # fantasma: un `area` mal tipeado en themes.yaml crea carpeta en silencio (ver make_notes). WARN
     # blando (un typo y un área nueva legítima se ven igual → no se bloquea, se marca para revisar).
     # Sin `concept_areas` declarado el typo-check está APAGADO (no se infiere de las carpetas que
     # hay en disco: eso convertiría un typo ya cometido en "área declarada"). Se reporta la ausencia
@@ -1418,6 +1448,7 @@ def main(argv=()) -> int:
                          ("disputes en el schema viejo (planets[].disputes[]) — el lint ya no las lee", old_disputes),
                          ("Juicio de triage en build/<slug>/triage.json (pre-1.9.0) — el lector ya no lo mira", legacy_triage),
                          ("⛔ Registro con `busqueda:` (schema viejo pre-D-28) — el lector ya no lo lee", old_registro),
+                         ("⛔ Nota de paper con `topics:` (schema viejo pre-R-5) — el campo vigente es `facets:`", old_facets),
                          ("⛔ Identidad duplicada: dos notas del mismo trabajo (mismo doi/arxiv_id)", identidad_dup),
                          ("`role` fuera del vocabulario (fundacional/aplicacion/arbitro)", bad_roles),
                          ("⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)", impl_leaks),
@@ -1464,7 +1495,7 @@ def main(argv=()) -> int:
     n_block = sum(len(x) for x in (not_evaluated, broken, fm_broken, retracted, orphans,
                                    contradictions, mass_issues, dangling_thesis, dangling_disputes,
                                    bad_roles, bad_disputes, old_disputes, legacy_triage,
-                                   old_verif_template, old_registro, identidad_dup,
+                                   old_verif_template, old_registro, old_facets, identidad_dup,
                                    prosa_retractada))
     if args.cierre:
         n_block += len(stale_pairs)   # R-1: en el cierre de una operación, un par vencido frena

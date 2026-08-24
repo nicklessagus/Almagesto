@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Usar cuando el usuario quiere definir o reescribir el OBJETIVO de la bóveda — el archivo que orienta qué papers son "core" ("configurá la bóveda", "definí el objetivo", "armá el objective.yaml", "quiero usar Almagesto para el tema X", "ajustá la regla de relevancia", "para qué va a servir esta bóveda"). El agente traduce el foco en lenguaje natural a `objective.yaml` (incluida la regex `relevance.topics`) y la afina contra ADS con un preview, para que el usuario NO escriba regex a mano. NO ingesta nada: después se usan ingest-star / ingest-topic.
+description: Usar cuando el usuario quiere definir o reescribir el OBJETIVO de la bóveda — el archivo que orienta qué papers son "core" ("configurá la bóveda", "definí el objetivo", "armá el objective.yaml", "quiero usar Almagesto para el tema X", "ajustá la regla de relevancia", "para qué va a servir esta bóveda"). El agente traduce el foco en lenguaje natural a `objective.yaml` (incluida la regex `relevance.facets`) y la afina contra ADS con un preview, para que el usuario NO escriba regex a mano. NO ingesta nada: después se usan ingest-star / ingest-theme.
 version: 1.2.0
 ---
 
@@ -8,18 +8,18 @@ version: 1.2.0
 
 Operación de **configuración** del patrón LLM Wiki (ver `CLAUDE.md`). Genera/afina **un solo archivo**:
 `vault/config/objective.yaml` — la **lente** de la bóveda. No baja ni escribe contenido; cuando termina,
-el usuario carga estrellas/temas y corre `ingest-star` / `ingest-topic`. Trabajar desde la raíz del repo.
+el usuario carga estrellas/temas y corre `ingest-star` / `ingest-theme`. Trabajar desde la raíz del repo.
 
-**Por qué existe:** la parte difícil de instanciar es redactar `relevance.topics` (la regex que decide
+**Por qué existe:** la parte difícil de instanciar es redactar `relevance.facets` (la regex que decide
 qué paper es "core") y nombrar las `concept_areas`. Una regex a mano sale mal (trae ruido o pierde
 papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** antes de cerrar.
 
 **Qué controla el objetivo (tenelo claro al redactar):**
-- `relevance.topics` = **clasificador de relevancia**. Un paper es **core** si satisface la **regla de
-  combinación** (por default OR: ≥1 bucket; ver `relevance.require`/`min_topics` en el paso 2 — regex
+- `relevance.facets` = **clasificador de relevancia**. Un paper es **core** si satisface la **regla de
+  combinación** (por default OR: ≥1 bucket; ver `relevance.require`/`min_facets` en el paso 2 — regex
   sobre título+abstract+keywords, case-insensitive) **y** su `doctype` no es ruido. Core →
   se baja el PDF + fulltext + extracción LLM; no-core → solo se cuenta. **No** define la query a ADS
-  (para estrellas la query es por nombre; para temas, la Solr cruda de `topics.yaml`).
+  (para estrellas la query es por nombre; para temas, la Solr cruda de `themes.yaml`).
 - `name`/`short`/`description` = **lente de síntesis** (orientan qué destila el LLM y qué es un "hueco").
 - `concept_areas` = áreas **abiertas** de `concepts/` (solo referencia para el typo-check; ver `CLAUDE.md`).
 
@@ -38,11 +38,11 @@ papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** 
 
    **Separar dos cosas al escuchar el foco (clave para no equivocar el archivo):**
    - **Facetas** = qué hace a un paper relevante (p. ej. "ciclos de actividad", "períodos de rotación",
-     "separación de fuentes") → van a `relevance.topics`. Son **constantes**: la misma lente clasifica
-     los papers de una estrella *y* los de un tema (lo que cambia entre ingest-star e ingest-topic es el
+     "separación de fuentes") → van a `relevance.facets`. Son **constantes**: la misma lente clasifica
+     los papers de una estrella *y* los de un tema (lo que cambia entre ingest-star e ingest-theme es el
      **sujeto/query**, no la lente).
    - **Sujetos** = las estrellas o el tema concretos (p. ej. "HD 152391", "BSS sobre RV") → **NO** van en
-     `relevance.topics`; van en la query (`stars.yaml` / la Solr de `topics.yaml`). Nombres de estrella en
+     `relevance.facets`; van en la query (`stars.yaml` / la Solr de `themes.yaml`). Nombres de estrella en
      la regex = error típico.
    - **Deliverable** = "hacer un paper / una tesis sobre…" → va en `name`/`description` (lente de
      síntesis), no en la regex.
@@ -51,23 +51,23 @@ papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** 
    - `name`: frase corta y específica del objetivo.
    - `short`: etiqueta de 3–6 palabras.
    - `description`: 2–3 líneas (qué reúne y para qué decidir).
-   - `relevance.topics`: **varios buckets nombrados**, cada uno una faceta del tema; regex de Python en
+   - `relevance.facets`: **varios buckets nombrados**, cada uno una faceta del tema; regex de Python en
      **comillas simples**, **una línea por patrón** (YAML literal: `\b` y demás llegan intactos). Cubrir
      **sinónimos en inglés** (ADS es inglés), instrumentos y términos técnicos. Recordar que por default es
      un **OR**: basta que matchee 1 bucket. Partir del ejemplo del template como molde de formato.
-   - `relevance.require` / `relevance.min_topics`: la **regla de combinación** — parte del objetivo, no
+   - `relevance.require` / `relevance.min_facets`: la **regla de combinación** — parte del objetivo, no
      config avanzada. Por default es OR (≥1 faceta): está calibrado para el pool chico de la query directa
      y **se rompe apenas el pool se amplía** por citation chaining, porque una faceta laxa deja de
-     discriminar. Con la faceta-eje del paso 1, proponer `require: [<eje>]` (AND) y/o `min_topics: 2`
-     (≥N cualesquiera). Core = (≥ min_topics facetas) Y (todas las de require) Y (doctype no-ruido).
+     discriminar. Con la faceta-eje del paso 1, proponer `require: [<eje>]` (AND) y/o `min_facets: 2`
+     (≥N cualesquiera). Core = (≥ min_facets facetas) Y (todas las de require) Y (doctype no-ruido).
      La palanca contra el ruido es la **obligatoriedad**, no podar regex — medido en una bóveda de RV:
      podar las regex bajó AU Mic de 928 a 762 core (paliativo); declarar `require: [rv]` la llevó de
      850 a 198. Dejar ambas sin declarar = OR histórico. **Cada faceta de `require` debe existir en
-     `topics`** (si no, el clasificador aborta).
-     **Corolario (decírselo al usuario):** una vez declarada `require` con `min_topics: 1`, afinar las
+     `facets`** (si no, el clasificador aborta).
+     **Corolario (decírselo al usuario):** una vez declarada `require` con `min_facets: 1`, afinar las
      **otras** facetas ya **no cambia el corte** (core ⟺ matchea la eje ∧ doctype limpio) — sólo etiqueta.
      Lo que hay que cuidar es el **recall de la faceta-eje**: listar todos sus sinónimos e instrumentos.
-     Las demás facetas siguen siendo útiles como etiquetas (y para `min_topics ≥ 2`).
+     Las demás facetas siguen siendo útiles como etiquetas (y para `min_facets ≥ 2`).
    - `noise_doctypes`: el default (catalog, proposal, abstract, erratum, bookreview, newsletter,
      pressrelease, circular, software) salvo razón.
    - `concept_areas`: sugerir 3–5 áreas según el foco (`methods`/`hypotheses` reservadas + las que
@@ -77,7 +77,7 @@ papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** 
    buckets con sus términos en lenguaje claro + el YAML propuesto. Explicar el OR + el filtro de ruido.
 
 4. **Preview contra ADS — afinar la regex con papers reales (el corazón del skill).**
-   - Escribir el `objective.yaml` borrador (necesario: `--probe` lee `relevance.topics` de ahí).
+   - Escribir el `objective.yaml` borrador (necesario: `--probe` lee `relevance.facets` de ahí).
    - Armar una **query Solr de prueba amplia** a partir de los términos centrales del foco (p. ej.
      `abs:"radial velocity" OR abs:"stellar activity"`). **Ojo:** la query de prueba **no es** la regex
      — es solo para traer una muestra de papers del área y ver cómo los corta el clasificador.
@@ -88,7 +88,7 @@ papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** 
      (−52%)`); con regla declarada, cuánto se está cortando respecto del OR puro. **Ese contraste es el
      que decide `require`** — mostrárselo al usuario en vez de argumentarlo.
    - **Juzgar:** ¿se cuela ruido (marcó CORE algo que no debería)? ¿se pierde algo
-     bueno (marcó — un paper claramente relevante)? **Editar `relevance.topics`** (sumar/sacar términos o
+     bueno (marcó — un paper claramente relevante)? **Editar `relevance.facets`** (sumar/sacar términos o
      buckets) y **re-correr `--probe`**. Iterar 1–3 veces hasta que el corte cierre.
    - Mostrar el corte final al usuario y **confirmar** antes de dar por cerrado.
    - Si **no hay token ADS** cargado (`vault/config/ads_dev_key` o `ADS_DEV_KEY`): saltar el preview,
@@ -99,18 +99,18 @@ papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** 
    implementación. Solo bibliografía citable.
 
 6. **Off-ADS (biblio fuera de ADS — p. ej. métodos de otra disciplina).** El objetivo igual define `name`/`description`/
-   `concept_areas`. Pero `relevance.topics` y el preview `--probe` dependen de ADS (astro): si el tema
-   es off-ADS, anotarlo y **no** forzar el preview — la ingesta usa PDFs locales + web (ver `ingest-topic`
-   modo off-ADS). `relevance.topics` queda como guía mínima, no como filtro automático.
+   `concept_areas`. Pero `relevance.facets` y el preview `--probe` dependen de ADS (astro): si el tema
+   es off-ADS, anotarlo y **no** forzar el preview — la ingesta usa PDFs locales + web (ver `ingest-theme`
+   modo off-ADS). `relevance.facets` queda como guía mínima, no como filtro automático.
 
 7. **Cierre.** Dejar el `objective.yaml` final. Correr `python scripts/lint.py` (no debería romper nada).
    Actualizar `vault/STATUS.md` (objetivo seteado) y appendear a `vault/wiki/log.md`. **No commitear**
    salvo pedido. Recordar los **próximos pasos**: cargar token ADS si falta, agregar estrellas a
-   `vault/config/stars.yaml` / el tema a `vault/config/topics.yaml`, y correr `ingest-star` /
-   `ingest-topic`.
+   `vault/config/stars.yaml` / el tema a `vault/config/themes.yaml`, y correr `ingest-star` /
+   `ingest-theme`.
 
    ⛔ **Si la bóveda YA tiene contenido, el cierre no termina acá: hay que re-clasificar.** Cambiar
-   `relevance.topics` (o la regla de combinación `require`/`min_topics`) **re-clasifica el corpus
+   `relevance.facets` (o la regla de combinación `require`/`min_facets`) **re-clasifica el corpus
    entero**: papers que dejan de ser core, papers que recién ahora entran, y apéndices "Excluidos por
    el filtro" estampados con el corte viejo. Nada de eso pasa solo — sin este paso el usuario se va
    con el `objective.yaml` nuevo y el corpus clasificado con la regla vieja, **sin ninguna señal**.
@@ -123,7 +123,7 @@ papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** 
 
 - `objective.yaml` es **archivo de instancia** (`merge=ours`): editarlo es seguro, no se pisa al traer
   updates del framework.
-- Este skill **no ingesta**. Es el paso 0; la bibliografía entra después con `ingest-star`/`ingest-topic`.
+- Este skill **no ingesta**. Es el paso 0; la bibliografía entra después con `ingest-star`/`ingest-theme`.
 - Reescribir el objetivo más adelante es válido (afinás la lente): re-correr este skill y
   re-previsualizar — pero sobre una bóveda **poblada** eso arrastra el sub-modo **D de `maintain`**
   (re-clasificar el corpus + re-estampar los apéndices); ver el paso 7.

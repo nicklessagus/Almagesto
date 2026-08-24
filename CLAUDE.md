@@ -2,7 +2,7 @@
 
 Esta es una **LLM wiki** (patrón Karpathy) sobre literatura astronómica, organizada por **estrella**
 y por **concepto**. **El OBJETIVO de la bóveda vive en `vault/config/objective.yaml`** (editable): define de
-qué trata esta wiki y —vía `relevance.topics`— **qué papers son "core"**. Leé ese archivo al iniciar
+qué trata esta wiki y —vía `relevance.facets`— **qué papers son "core"**. Leé ese archivo al iniciar
 para saber sobre qué estás trabajando. Vos (Claude) **sos el dueño de `vault/wiki/`**: la creás y mantenés.
 El usuario cura las fuentes (`vault/raw/`) y hace preguntas.
 
@@ -36,7 +36,7 @@ Almagesto/
 ├── CLAUDE.md  README.md  requirements.txt  scripts/  .claude/skills/   ← andamiaje (framework)
 ├── build/  outputs/                                                    ← scratch del tooling (gitignored)
 └── vault/                                                              ← la bóveda — Obsidian abre ACÁ
-    ├── config/  (objective.yaml, stars.yaml, topics.yaml, ads_dev_key, registro/<slug>.yaml)
+    ├── config/  (objective.yaml, stars.yaml, themes.yaml, ads_dev_key, registro/<slug>.yaml)
     ├── wiki/    (stars, papers, concepts, queries, matrices, index.md, log.md)
     ├── raw/     (pdfs, fulltext, ground_truth, refs)
     ├── STATUS.md
@@ -63,7 +63,7 @@ framework es **una sola implementación**: los cambios se hacen en el repo templ
 o parche), se pushean, y se traen por `git pull` / `git merge upstream/main`. Editarlos en la instancia
 **da conflictos** en el próximo merge. En la instancia sólo se edita **contenido** (`vault/wiki/`, `vault/raw/`) y los
 **archivos de instancia** protegidos por `merge=ours` (`vault/config/objective.yaml`, `vault/config/stars.yaml`,
-`vault/config/topics.yaml`, `vault/STATUS.md`, `vault/wiki/index.md`, `vault/wiki/log.md`,
+`vault/config/themes.yaml`, `vault/STATUS.md`, `vault/wiki/index.md`, `vault/wiki/log.md`,
 `vault/wiki/matrices/method_star.md`). **Si una operación revela una mejora
 de framework** (skill nuevo, fix de script, regla), anotala como backlog en `vault/STATUS.md`/`vault/wiki/log.md` y
 aplicala en el template — no la inlines acá. *(Si estás trabajando en el repo template `Almagesto` mismo,
@@ -247,7 +247,7 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   y sus artefactos (`raw/pdfs/`, `raw/fulltext/`), agrega el alias y **reescribe los wikilinks de
   toda la bóveda** — sin eso el renombre deja links rotos, que es la mitad del trabajo. Alcance
   declarado: `vault/`; lo que vive afuera se resuelve por el alias. Campos:
-  `bibcode, title, first_author, n_authors, year, arxiv_id, doi, bibstem, stars[], topics[], methods[],
+  `bibcode, title, first_author, n_authors, year, arxiv_id, doi, bibstem, stars[], facets[], methods[],
   thesis_links[], bearing(supports|challenges|method), role[], relevance, citation_count, pdf, fulltext,
   fulltext_source(pdftotext|ocr|web), pdf_source(eprint|ads|publisher|web)`. El contrato apunta a **ambos artefactos**: `fulltext` es el
   `.txt` **barato** (grep/lectura — el default de todo consumidor) y `pdf` el respaldo caro (abrir
@@ -348,23 +348,23 @@ terminal no renderiza LaTeX y `$...$` se ve crudo.
 ## Operaciones
 
 ### Setup (definir el objetivo — paso 0, skill `setup`)
-Genera/afina `vault/config/objective.yaml` (la **lente**: `name`/`description` + `relevance.topics`, el
+Genera/afina `vault/config/objective.yaml` (la **lente**: `name`/`description` + `relevance.facets`, el
 clasificador de papers core). El agente traduce el foco del usuario (en palabras) a la regex — el usuario
 **no** escribe regex — y la valida contra papers reales con `python scripts/query_ads.py --probe "<query>"`
-(muestra el corte core/no-core sin bajar nada) iterando hasta que cierre. `relevance.topics` son **facetas**
+(muestra el corte core/no-core sin bajar nada) iterando hasta que cierre. `relevance.facets` son **facetas**
 (constantes; clasifican tanto papers de estrella como de tema), **no** sujetos (las estrellas/temas van en
-la query, `stars.yaml`/`topics.yaml`). La **regla de combinación** de facetas es declarativa (no
+la query, `stars.yaml`/`themes.yaml`). La **regla de combinación** de facetas es declarativa (no
 hardcodeada): por default OR (≥1 faceta cualquiera), pero una instancia puede declarar
-`relevance.require: [<faceta>, …]` (AND: obligatorias) y/o `relevance.min_topics: N` (≥N cualesquiera) —
-`core = (≥min_topics) Y (todas las de require) Y (doctype no-ruido)`. Es la palanca contra el ruido que
+`relevance.require: [<faceta>, …]` (AND: obligatorias) y/o `relevance.min_facets: N` (≥N cualesquiera) —
+`core = (≥min_facets) Y (todas las de require) Y (doctype no-ruido)`. Es la palanca contra el ruido que
 el citation chaining mete al ampliar el pool (podar regex no alcanza si la combinación sigue siendo OR);
 sin declarar nada, comportamiento histórico. Cambiar la regla **re-clasifica** el corpus → sub-modo
-re-clasificar de `maintain`. No ingesta nada; después se usan `ingest-star`/`ingest-topic`.
+re-clasificar de `maintain`. No ingesta nada; después se usan `ingest-star`/`ingest-theme`.
 
 ### Ingest (una fuente → cascada de páginas)
 1. Los **orquestadores** corren la cadena mecánica completa (idempotente, no pisa — con una única
    excepción add-only: el retro-linkeo de abajo): `python scripts/ingest_star.py <slug>` para estrellas,
-   `python scripts/ingest_topic.py <slug>` para temas. **El orden canónico de cada cadena vive en el
+   `python scripts/ingest_theme.py <slug>` para temas. **El orden canónico de cada cadena vive en el
    header de su orquestador** (fuente de verdad única — puntero, no copia: no replicar la lista de
    scripts en docs/skills).
 1b. **Compuerta de triage (estrellas).** El citation chaining amplía el pool con papers del grafo que
@@ -410,23 +410,23 @@ re-clasificar de `maintain`. No ingesta nada; después se usan `ingest-star`/`in
 > (`concepts/methods/`) junta en su tabla Dataview también por `contains(methods, "<concept>")` —
 > los papers ya extraídos con ese método aparecen solos, sin re-taguear; (b) `make_notes` mergea
 > **add-only** los seeds del ingest (`stars` / `thesis_links`) en notas de paper que **ya existían**
-> (nunca pisa la extracción LLM; si ya están, no toca nada); (c) `ingest-topic` incluye un paso de
+> (nunca pisa la extracción LLM; si ya están, no toca nada); (c) `ingest-theme` incluye un paso de
 > **retro-tag por grep**: buscar los `aliases` del tema en el fulltext de **todo** el corpus y
 > taguear (add-only, con juicio de LLM: uso real, no mención al pasar) los papers que la query ADS
 > no devolvió. Así la entidad nueva ve también lo que ya estaba en el corpus.
 
 > **Tema fuera de ADS (opt-in — sólo a pedido explícito).** Por default un tema se baja por **ADS**
 > (ADS/arXiv/NEA — la plomería con **descubrimiento automático**: query → clasificar
-> (`relevance.topics`) → bajar). El foco de Almagesto es **astro**; el **modo off-ADS** existe para
+> (`relevance.facets`) → bajar). El foco de Almagesto es **astro**; el **modo off-ADS** existe para
 > los **métodos de otras disciplinas** que el trabajo astro usa —análisis de datos, estadística,
 > machine learning, procesos gaussianos, signal processing— y cuya bibliografía canónica vive
 > **fuera de ADS** (el eje tema/concepto y la capa de calidad son agnósticos de disciplina, así que
 > la cadena los soporta igual). Diferencia operativa: sin ADS las fuentes se **declaran**, no se
 > descubren por query — por eso es opt-in: si el usuario lo pide **explícitamente**, el skill
-> `ingest-topic` lo soporta (fuente = PDFs locales + web;
+> `ingest-theme` lo soporta (fuente = PDFs locales + web;
 > sin `query_ads`/`fetch_ground_truth`). Formalizado en el tooling: la
-> entrada del tema en `topics.yaml` lleva `source: ads | web | local-pdfs [+web]` y (si es off-ADS) la
-> lista `sources:`; `scripts/ingest_topic.py <slug>` orquesta la cadena según ese campo — también en
+> entrada del tema en `themes.yaml` lleva `source: ads | web | local-pdfs [+web]` y (si es off-ADS) la
+> lista `sources:`; `scripts/ingest_theme.py <slug>` orquesta la cadena según ese campo — también en
 > modo ads. Un tema off-ADS puede ser **mixto**: los papers del tema que **sí** tienen bibcode ADS
 > van en `extra_core:` (no en `sources:`) y el orquestador les corre solo la sub-cadena ADS
 > (metadata real, sin blockquote off-ADS). Una fuente que **no se consigue** (paywall / escaneo / mojibake) se marca
@@ -458,7 +458,7 @@ curación, por clave: `decision`/`motivo`/`fecha`). Las `decisiones` cubren los 
 para la **fuente declarada** de un tema off-ADS (#81 — clave sintética o url, con `origen:
 fuente-declarada` y un `fuente:` que la resuelva; sin `origen` = chaining). El segundo existe porque
 en off-ADS `sources:` registra sólo lo aceptado: es la misma asimetría de #51 en el otro carril, y
-`ingest_topic` **avisa** —no frena— si un item de `sources:` lleva una clave (o una url) ya descartada. Regla de
+`ingest_theme` **avisa** —no frena— si un item de `sources:` lleva una clave (o una url) ya descartada. Regla de
 oro: **`build/` guarda lo regenerable, el registro guarda lo que no lo es.** Un `ads.json` se recupera pidiéndoselo de nuevo a
 ADS; el juicio de por qué descartaste un candidato, no —y hasta 1.8.x vivía en `build/`, gitignored,
 así que en otra máquina el triage lo re-proponía todo sin el motivo (los **aceptados** ya persistían
@@ -477,7 +477,7 @@ es justamente el bug que #51 arregló.
 ### Append (plegar UNA fuente puntual a una entidad existente — skill `append-knowledge`)
 El usuario trae **una fuente concreta** (bibcode ADS, PDF local o URL) para una ficha/concepto que
 **ya existe**: plomería mínima según el tipo (bibcode → `extra_core` + cadena idempotente; off-ADS →
-item en `sources:` + `ingest_topic.py`, o las piezas sueltas `fetch_web`/`make_notes --web`),
+item en `sources:` + `ingest_theme.py`, o las piezas sueltas `fetch_web`/`make_notes --web`),
 extracción enfocada en el eje del destino, síntesis a la nota viva (rige la regla de poda y
 `disputes`) y cierre estándar (autosuficiencia + verify-citations + lint + log). **No crea
 entidades** (eso es Ingest) **ni barre por query lo nuevo** (eso es Mantenimiento/refrescar); un dato
@@ -500,7 +500,7 @@ suelto sin fuente citable no entra (regla #0). Detalle en el skill.
 **Extensión propia de esta wiki** (el lint canónico de Karpathy NO valida que la fuente respalde la
 afirmación — sólo salud estructural; tapa el *grounding gap* / *epistemic drift*). **Cuándo:** paso de
 cierre de **toda operación que escriba prosa con `[[bibcode]]`** — ingest-star (ficha + papers),
-ingest-topic (concept + papers), append-knowledge, find-contradictions (las disputas nuevas),
+ingest-theme (concept + papers), append-knowledge, find-contradictions (las disputas nuevas),
 maintain cuando re-sintetiza, query archivada, test de hipótesis — **antes de lint/commit**.
 **Qué hace:** descompone la nota en pares (afirmación, `[[bibcode]]`) —incluidas las **filas de tabla
 y los ítems de lista**, que **heredan la cita del ámbito que las introduce** (caption / párrafo / encabezado
@@ -588,7 +588,7 @@ sistema.
 ### Mantenimiento (cuidar lo ya ingestado — skill `maintain`)
 **No crea entidades** (eso es Ingest); opera sobre estrellas/conceptos que **ya existen**. Sub-modos:
 **refrescar** (papers nuevos → re-sintetizar sólo lo nuevo), **borrar** (nota + PDF/fulltext + reparar
-colgados), **renombrar** slug, **re-clasificar** tras cambiar `relevance.topics`, **resolver el
+colgados), **renombrar** slug, **re-clasificar** tras cambiar `relevance.facets`, **resolver el
 backlog del lint** (P_rot sin documentar, drift PDF↔disco, cobertura — los **huérfanos no**: son
 bloqueantes, se arreglan al cierre de la operación que los creó), y la **pasada periódica de
 retracciones** (`check_retractions.py` sin `--slug`, toda la bóveda — la cadena de ingest sólo

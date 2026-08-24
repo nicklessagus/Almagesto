@@ -39,6 +39,7 @@ def run(monkeypatch, *argv):
 # ── seed ─────────────────────────────────────────────────────────────────────
 
 def test_seed_extrae_siembra_y_es_determinista(toy_vault, monkeypatch):
+    # @inv INV-74
     seed_fulltext(toy_vault, "2020aaaA...1..1A", "2020bbbB...1..1B")
     seed_notes(toy_vault)
     assert run(monkeypatch, "seed") == 0
@@ -241,6 +242,7 @@ def pair(pid, label, verdict, bib="2020aaaA...1..1A"):
 
 
 def test_score_metricas(toy_vault, monkeypatch, capsys):
+    # @inv INV-75
     write_bench([pair("r000", "real", "soportada"),
                  pair("r001", "real", "no-soportada"),       # real caída → sospechosa
                  pair("s000", "sembrada", "no-soportada"),   # cazada
@@ -250,7 +252,13 @@ def test_score_metricas(toy_vault, monkeypatch, capsys):
     assert "1/2 (50%)" in out                       # recall de sembradas
     assert "Sembradas que PASARON" in out and "s001" in out
     assert "Reales caídas" in out and "r001" in out
-    assert (cfg.ROOT / "outputs").glob("verify-bench-*.md")
+    # `assert path.glob(...)` es SIEMPRE verdadero (un generador es truthy): el assert que
+    # había acá no probaba nada. Hay que materializarlo y además mirar el contenido —
+    # INV-75 pide que la cifra viaje con su condición, no suelta.
+    reportes = sorted((cfg.ROOT / "outputs").glob("verify-bench-*.md"))
+    assert len(reportes) == 1, f"el score tiene que dejar su reporte: {reportes}"
+    cuerpo = reportes[0].read_text(encoding="utf-8")
+    assert "50%" in cuerpo and "4" in cuerpo, "el reporte lleva el recall y el n de la muestra"
 
 
 def test_score_incompleto_rc1(toy_vault, monkeypatch, capsys):

@@ -1,10 +1,9 @@
 # Ratchet de trazabilidad requisito ↔ código.
 #
-# QUÉ ES ESTO. `docs/contrato.md` §3 enuncia 91 invariantes. Hoy **ninguno** lleva la marca `@inv`
-# en el código, así que exigir cobertura 0-sin-marcar sería rojo permanente — y un rojo permanente
-# se deja de mirar, que es el modo de falla que este mecanismo existe para evitar. Los números de
-# abajo son DEUDA MEDIDA, no un objetivo alcanzado, y el sentido de la flecha importa: **el techo
-# sólo puede bajar**.
+# QUÉ ES ESTO. `docs/contrato.md` §3 enuncia 91 invariantes. Los números de abajo son DEUDA MEDIDA
+# —cuántos NO tienen marca `@inv` en el código— y el sentido de la flecha importa: **el techo sólo
+# puede bajar**. Exigir 0 sería rojo permanente, y un rojo permanente se deja de mirar, que es el
+# modo de falla que este mecanismo existe para evitar.
 #
 #   - conteo por ENCIMA del techo → `trace_invariants.py` sale 1. Alguien agregó invariantes al
 #     contrato sin marcarlos, o borró marcas: hay que mirarlo antes de que se pierda en el ruido.
@@ -18,17 +17,37 @@
 # que lo prueba, se corre `python scripts/trace_invariants.py` y se copian acá los conteos nuevos
 # con la fecha.
 #
-# EL BACKLOG QUE ESTOS NÚMEROS ESCONDEN. Buena parte de los 91 ya están en estado "garantizado y
-# medido" en el contrato: tienen implementación y test, sólo que la relación vive en prosa (la
-# columna "cómo se verifica" nombra los experimentos de la 8ª auditoría, no símbolos ni tests). Esa
-# **pasada retroactiva de marcado** es trabajo aparte del plan y todavía no se hizo: hasta que
-# corra, el techo alto NO significa que el sistema no esté probado, significa que el mapa no
-# existe. Ver `vault/STATUS.md`.
+# LA PASADA RETROACTIVA YA CORRIÓ (2026-08-24). El techo bajó de 77 a 7. El mapa se armó con **dos
+# pasadas ciegas e independientes** sobre `contrato.md` §3, cruzadas después: cada marca es un
+# símbolo que las dos nombraron, y los 67 tests + 51 símbolos que se marcaron existían todos (cero
+# nombres inventados, que era el riesgo del método).
+#
+# LOS SIETE QUE QUEDAN NO SON FALTA DE MARCADO: no hay símbolo o no hay test que marcar, y ése es
+# el hallazgo de la pasada. ⚠ "hueco" acá es lenguaje corriente, NO el estado `HUECO` del
+# contrato: en la taxonomía de `contrato.md` §2 sólo INV-86 sigue en HUECO; INV-05 e INV-66
+# son `garantizado sin medir`, INV-19 es `HUECO (parcial)`, INV-23 es `INCUMPLIDO (parcial)` e
+# INV-73 figura `garantizado y medido`. La autoridad del estado es el contrato, no este archivo.
+#   · INV-05  las plantillas de `make_notes` no tienen test que las audite buscando prosa que
+#             describa a un consumidor downstream.
+#   · INV-19  NO EXISTE herramienta de borrado/renombre de ENTIDAD (sólo `rename_paper`, a nivel
+#             paper): nadie limpia `registro/<slug>.yaml`, `raw/{pdfs,fulltext}/<slug>/`, la entrada
+#             en `stars.yaml`/`themes.yaml` ni `build/<slug>/`, y ningún chequeo los ve colgados.
+#   · INV-23  la independencia del orden del PRIMER estampado de `fulltext` (`A,B` ≠ `B,A`) — es el
+#             INC-3 abierto: los tres tests existentes prueban la rama "ya hay valor estampado".
+#   · INV-66  rutas absolutas en artefactos versionados: sin chequeo y sin test.
+#   · INV-73  el contrato lo da `garantizado y medido` por la 8ª F1 #26, pero en la suite actual
+#             el aislamiento lo da la fixture `toy_vault`, no una aserción: ningún test se
+#             pondría rojo si `cmd_seed` escribiera en `cfg.VAULT`. Falta ESE test.
+#   · INV-86  `inferencia` sin premisas (issue 8.3, Tanda 8 — no empezada).
+#
+# ✅ INV-88 salió de la lista con la Tanda 7: las tres puertas de D-26 están
+#    implementadas y medidas una por una. Queda su capa skill (issue 7.4), que no es
+#    marcable — la conducta de un skill no la ve ningún recolector.
 
 medido_en: "2026-08-24"
-almagesto_version: "1.30.0"
+almagesto_version: "1.32.0"
 contrato_invariantes: 91
 
 techos:
-  sin_marca: 77   # medido: 2026-08-24 — T0-T6: 76,77,78,79,80,81,82,83,84,85,87,89,90,91.
-  sin_test: 77    # medido: 2026-08-24 — ídem.
+  sin_marca: 6    # medido: 2026-08-24 (Tanda 7) — 05, 19, 23, 66, 73, 86. INV-88 salió.
+  sin_test: 6     # medido: 2026-08-24 — los mismos seis.

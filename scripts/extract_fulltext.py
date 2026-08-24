@@ -76,6 +76,7 @@ def is_legible(text: str) -> tuple[bool, str]:
     (a) casi sin contenido (escaneo sin capa de texto: pdftotext devuelve sólo espacios/form
     feeds), (b) contenido sólo de marca de agua (densidad por página bajísima) o (c) mojibake
     (fuentes sin ToUnicode: mayoría de chars fuera de ASCII imprimible)."""
+    # @inv INV-28
     content = [c for c in text if not c.isspace()]
     if len(content) < LEGIBLE_MIN_CHARS:
         return False, f"casi sin texto ({len(content)} chars no-espacio) — ¿escaneo sin capa de texto?"
@@ -90,6 +91,7 @@ def is_legible(text: str) -> tuple[bool, str]:
 
 
 def ocr_available() -> bool:
+    # @inv INV-70
     return shutil.which("tesseract") is not None and shutil.which("pdftoppm") is not None
 
 
@@ -146,7 +148,7 @@ def _flags_usados(args) -> list:
     Son las **escotillas**: `--force`, `--yes`, `--all` cambian lo que la corrida hizo, y sin
     registrarlas la traza dice "corrió make_notes" sobre dos corridas que no hicieron lo mismo."""
     return sorted(f"--{k.replace('_', '-')}" for k, v in vars(args).items()
-                  if v is True and k not in ("topic",))
+                  if v is True and k not in ("theme",))
 
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help

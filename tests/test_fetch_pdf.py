@@ -156,6 +156,7 @@ def test_download_pdf_ok_y_magic(monkeypatch):
 
 
 def test_download_pdf_token_solo_a_ads(monkeypatch):
+    # @inv INV-67
     calls = []
     patch_net(monkeypatch, [FakeResp(200, content=b"%PDF")], calls)
     fp.download_pdf("https://articles.adsabs.harvard.edu/pdf/x", "tok-123")

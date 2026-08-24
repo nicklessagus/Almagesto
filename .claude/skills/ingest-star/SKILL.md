@@ -64,7 +64,7 @@ Progreso del ingest de <estrella>:
    **Guardia de expansión (checkpoint humano).** Entre `query_ads` y el primer paso que gasta red
    y disco, el orquestador compara el core del `ads.json` fresco contra las notas ya ingestadas del
    sujeto: si se multiplicó (default ×1.5 y 50 o más nuevos) **frena** con el conteo, cuántos vinieron
-   por el grafo de citas y el puntero a `relevance.require`/`min_topics`. Antes de refrescar un
+   por el grafo de citas y el puntero a `relevance.require`/`min_facets`. Antes de refrescar un
    sujeto viejo, mirá ese número: si el pool explotó, revisá la **regla de combinación** en
    `objective.yaml` (skill `setup`) antes de bajar nada — podar las regex no alcanza si la
    combinación sigue siendo OR. `--yes` continúa a sabiendas.
@@ -136,7 +136,7 @@ Progreso del ingest de <estrella>:
    del contraste — no saltear directo a la prosa):
    - en `vault/wiki/papers/<bibcode>.md`: `methods`, `thesis_links`, `bearing`, `role` (#73: `fundacional` introduce el método/mecanismo · `aplicacion` lo instancia en un caso · `arbitro` reanaliza y resuelve una tensión previa — sale de leer el paper, la regex del clasificador no puede inferirlo, y sin él contrastarlo contra otro no está definido), y la sección
      "Extracción" — sus bullets ya vienen ramificados por tipo de sujeto (#76): ground-truth
-     (P/K/e por planeta), los **ejes de `relevance.topics`** del objetivo de esta bóveda, métodos y
+     (P/K/e por planeta), los **ejes de `relevance.facets`** del objetivo de esta bóveda, métodos y
      aporte al objetivo. Llenar los que el stub trae, no una lista fija de memoria.
    ⚠ **`pdf_source` antes de copiar un número** (#57): con `eprint` el `.txt` es el **preprint**
    (un `v1` pre-referato puede traer otros valores que el publicado que identifica el bibcode), y con
@@ -229,7 +229,7 @@ Progreso del ingest de <estrella>:
   ~½ de las filas** (medido: 12/26 estrellas en Saar & Brandenburg 1999; faltaba hasta HD 81809). Nunca
   afirmar "la estrella no está en ese paper" desde un hit full-text negativo — **corroborar** (papers que
   lo citan y le atribuyen datos) o **abrir el PDF/tabla**. Reportar honesto: es inconcluso, no ausencia.
-- **Cascada de adquisición de PDFs no-arXiv (canónica — `ingest-topic` y `append-knowledge` apuntan
+- **Cascada de adquisición de PDFs no-arXiv (canónica — `ingest-theme` y `append-knowledge` apuntan
   acá; ver también backlog en `vault/STATUS.md`).** Lo que quedó en `build/<slug>/missing_pdf.json`
   **ya falló** en `fetch_pdf.py` (resolver ADS: `EPRINT_PDF` → `ADS_PDF` con token → `PUB_PDF`, con
   fallback `curl`), y "bajar manual por DOI" **no alcanza** (medido en un ingest real: el resolver

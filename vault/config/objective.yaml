@@ -3,13 +3,13 @@
 #
 # Es el único archivo que define "de qué trata" esta bóveda. Controla:
 #   1) el encuadre que lee el agente (name/short/description),
-#   2) qué paper es "core" = `relevance.topics` (el clasificador de relevancia).
+#   2) qué paper es "core" = `relevance.facets` (el clasificador de relevancia).
 #
 # `name` viene como PLACEHOLDER a propósito: el lint avisa (WARN) mientras siga
 # así, y es el target que pisa el skill `setup`. El resto (short/description/
 # relevance) trae el ejemplo canónico (actividad estelar vs RV planetaria) como
 # documentación del formato y default funcional. Para tu tema: reescribí
-# name/short/description y, sobre todo, `relevance.topics`.
+# name/short/description y, sobre todo, `relevance.facets`.
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: "<definir con el skill setup>"
@@ -21,14 +21,14 @@ description: >
   "core". Reescribí esto para tu propio tema.
 
 # ─── Clasificador de relevancia ──────────────────────────────────────────────
-# Un paper de ADS es "relevante" (= core) si matchea ≥1 topic (regex sobre
+# Un paper de ADS es "relevante" (= core) si matchea ≥1 faceta (regex sobre
 # título+abstract+keywords, case-insensitive) y su doctype no es ruido.
-# Cada topic: nombre canónico → patrón regex de Python. Esto ES lo que define
+# Cada faceta: nombre canónico → patrón regex de Python. Esto ES lo que define
 # tus papers core: ajustá los patrones a tu objetivo.
 relevance:
   # Comillas SIMPLES y una línea por patrón: YAML deja el string literal (sin
   # interpretar \b ni plegar saltos en espacios), así la regex llega intacta.
-  topics:
+  facets:
     discovery: 'discover|detection of|planetary system|super-?earth|planets? orbiting|new planet|hot (jupiter|neptune)'
     rv:        'radial[ -]velocit|doppler|HARPS|ESPRESSO|HIRES|spectrograph|CCF'
     activity:  '\bactivit|magnetic|rotation|starspot|chromospher|faculae|granulation|stellar cycle|flare|S-?index|log ?R'
@@ -44,8 +44,8 @@ relevance:
   # pool y esa laxitud deja pasar off-topic (discos de escombros, coronas X…).
   # La palanca NO es podar regex sino declarar qué facetas son OBLIGATORIAS:
   #   require:    [rv]     # AND: estas facetas DEBEN matchear (p. ej. el eje de la bóveda)
-  #   min_topics: 2        # o: al menos N facetas cualesquiera (default 1)
-  # Semántica: core = (≥ min_topics facetas) Y (todas las de require) Y (doctype no-ruido).
+  #   min_facets: 2        # o: al menos N facetas cualesquiera (default 1)
+  # Semántica: core = (≥ min_facets facetas) Y (todas las de require) Y (doctype no-ruido).
   # Dejá ambas sin declarar para el comportamiento histórico (≥1 faceta). Cambiar la
   # regla RE-CLASIFICA el corpus existente → correr el sub-modo re-clasificar de `maintain`.
 

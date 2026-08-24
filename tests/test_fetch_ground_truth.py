@@ -223,6 +223,7 @@ def run_main(monkeypatch, argv):
 
 
 def test_main_no_pisa_sin_force(toy_vault, monkeypatch):
+    # @inv INV-20
     out = toy_vault.GROUND_TRUTH / "test_star.json"
     out.write_text(json.dumps({"star": "vieja"}), encoding="utf-8")
 

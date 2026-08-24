@@ -46,6 +46,7 @@ def test_legible_paper_sano_multipagina():
 
 
 def test_legible_umbrales_limite():
+    # @inv INV-28
     # valores literales a propósito (no ef.LEGIBLE_*): los umbrales son contrato documentado
     # (200 chars / 85% ASCII, compartidos con el lint) — si alguien los cambia, esto debe fallar.
     assert ef.is_legible("a" * 200)[0] is True
@@ -206,6 +207,7 @@ def test_flag_ocr_fuerza_aunque_capa_sana(toy_vault, fake_tools, monkeypatch):
 
 
 def test_flag_ocr_sin_tesseract_aborta(toy_vault, fake_tools, monkeypatch):
+    # @inv INV-70
     seed_pdf(toy_vault)
     with pytest.raises(SystemExit, match="tesseract"):
         run_main(monkeypatch, ["test_star", "--ocr"])

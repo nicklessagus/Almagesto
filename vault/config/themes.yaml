@@ -1,4 +1,4 @@
-# Registro de TEMAS para ingest-topic (análogo a stars.yaml, pero por tema en vez de por estrella).
+# Registro de TEMAS para ingest-theme (análogo a stars.yaml, pero por tema en vez de por estrella).
 #
 # La clave de cada entrada ES el slug → dir de build/<slug>/ y raw/{pdfs,fulltext}/<slug>/.
 # Campos:
@@ -9,6 +9,19 @@
 #              y el lint la marca WARN; si es un área nueva real, agregala a concept_areas.
 #   concept  : nombre de la nota concept durable destino (puede diferir del slug; existente o a stubbear).
 #   query    : query Solr ADS CRUDA (control total; ver scripts/query_ads.py). NO es por nombre de estrella.
+#   facet    : (TEMAS DE MÉTODO) la lente PROPIA del tema — una regex sobre título+abstract+keywords.
+#              Hace falta porque la lente global de objective.yaml no sirve acá, y no por falta de
+#              ajuste: con `require: [rv]` mata al paper FUNDACIONAL del método (Hyvärinen no
+#              menciona RV ni una vez), y sin filtro "independent component analysis" devuelve
+#              miles de papers de fMRI, EEG y finanzas. La regla es:
+#                  core = facet propia  Y  (puerta 2  OR  puerta 3)
+#              · puerta 2 «fundacional en su campo» — citation_count >= fundacional_min_citas
+#              · puerta 3 «lente astro global»      — pasa relevance.facets de objective.yaml
+#              (La puerta 1, «lo cita tu corpus», NO clasifica: PROPONE candidatos al triage.)
+#   fundacional_min_citas : (opcional) umbral de la puerta 2. SIN default a propósito: el número
+#              depende de tu campo —30k citas es normal en ML y muchísimo en astro— y esconderlo en
+#              el código sería decidir por vos. Si no lo declarás, la puerta 2 NO abre y el motivo
+#              lo dice; el tema entra sólo por la lente astro.
 #   aliases  : opcional, sólo para prosa.
 #   extra_core : opcional, lista de bibcodes a forzar como core (curación manual que el clasificador
 #                perdió). Override del clasificador: query_ads trae por bibcode los ausentes y
@@ -16,10 +29,10 @@
 #                (config se commitea), a diferencia de editar build/ (scratch, se pisa).
 #                En un tema OFF-ADS también vale (tema MIXTO): los papers del tema que SÍ tienen
 #                bibcode ADS van acá — NO en sources: con el bibcode de key (degrada el stub:
-#                metadata a mano, blockquote off-ADS falso). ingest_topic les corre la sub-cadena ADS.
+#                metadata a mano, blockquote off-ADS falso). ingest_theme les corre la sub-cadena ADS.
 #   source   : de dónde sale la bibliografía (default si falta: ads). Valores:
 #              ads | web | local-pdfs | local-pdfs+web. Todo lo no-ads es el modo off-ADS de
-#              ingest-topic (opt-in, sólo a pedido explícito) y requiere `sources:` y `query: null`.
+#              ingest-theme (opt-in, sólo a pedido explícito) y requiere `sources:` y `query: null`.
 #   sources  : (sólo off-ADS) la bibliografía declarada del tema. Cada item:
 #                - key: 2006RasmussenWilliams       # clave de cita sintética AAAA+Autor (obligatoria)
 #                  url: https://...            # fuente web (snapshot vía fetch_web/defuddle) — o bien
@@ -38,9 +51,9 @@
 #                                              # cuenta como fallo y el lint lo lista. Al conseguir
 #                                              # la fuente: reemplazar por pdf:/url: y re-correr.
 #
-# La cadena mecánica se corre con `python scripts/ingest_topic.py <slug>` (despacha según `source`).
+# La cadena mecánica se corre con `python scripts/ingest_theme.py <slug>` (despacha según `source`).
 #
-# Agregá tus temas acá (o dejá que `ingest-topic` los agregue). Ejemplo comentado:
+# Agregá tus temas acá (o dejá que `ingest-theme` los agregue). Ejemplo comentado:
 #
 # activity-rv:
 #   title: "Actividad estelar ↔ velocidad radial (indicadores, signos, desfasajes)"
@@ -49,7 +62,7 @@
 #   query: '(abs:"radial velocity" OR abs:"radial-velocity") (abs:"planet" OR abs:"exoplanet") (abs:"bisector" OR abs:"FWHM" OR abs:"S-index" OR abs:"activity indicator" OR abs:"chromospheric")'
 #   aliases: ["BIS-RV", "indicadores de actividad"]
 #
-# Ejemplo off-ADS (método no-astro que se quiere usar en la bóveda; ver Modo off-ADS del skill ingest-topic):
+# Ejemplo off-ADS (método no-astro que se quiere usar en la bóveda; ver Modo off-ADS del skill ingest-theme):
 #
 # gaussian-processes:
 #   title: "Procesos gaussianos (regresión: algoritmo y kernels)"
@@ -58,6 +71,8 @@
 #   query: null
 #   source: local-pdfs+web
 #   aliases: ["GP", "gaussian process regression", "procesos gaussianos"]
+#   facet: 'gaussian process|GP regression|kernel (function|method)'
+#   fundacional_min_citas: 2000
 #   sources:
 #     - key: 2006RasmussenWilliams
 #       pdf: ~/Descargas/rasmussen_williams_2006.pdf

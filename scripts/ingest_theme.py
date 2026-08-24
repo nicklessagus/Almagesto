@@ -1,13 +1,13 @@
-"""Orquestador de la cadena mecánica de ingest-topic: despacha según `source` del tema.
+"""Orquestador de la cadena mecánica de ingest-theme: despacha según `source` del tema.
 
 Uso:
-    python scripts/ingest_topic.py <slug> [--force] [--yes]
+    python scripts/ingest_theme.py <slug> [--force] [--yes]
 
-Lee la entrada del tema en vault/config/topics.yaml y corre la cadena que corresponda a su
-campo `source` (formaliza el modo off-ADS del skill ingest-topic en el tooling):
+Lee la entrada del tema en vault/config/themes.yaml y corre la cadena que corresponda a su
+campo `source` (formaliza el modo off-ADS del skill ingest-theme en el tooling):
 
 - `ads` (default si el campo falta): cadena astro estándar —
-  query_ads --topic → [guardia de expansión] → fetch_arxiv → fetch_pdf → make_notes --topic →
+  query_ads --theme → [guardia de expansión] → fetch_arxiv → fetch_pdf → make_notes --theme →
   extract_fulltext → check_retractions. La **guardia de expansión** (#37) frena entre la query y
   el primer paso que gasta red y disco si el core se multiplicó respecto de lo ya ingestado
   (default ×1.5 y 50 o más nuevos); `--yes` continúa a sabiendas.
@@ -19,13 +19,13 @@ campo `source` (formaliza el modo off-ADS del skill ingest-topic en el tooling):
   extract_fulltext. Tras copiar un PDF, el campo `pdf` del item se **repunta solo** a la
   copia de la bóveda (`vault/raw/pdfs/<slug>/<key>.pdf`, repo-relative): el path declarado
   suele ser staging efímero (scratchpad/descargas) que muere y deja un puntero roto en
-  topics.yaml; la copia versionada es la que vale. Rutas `pdf` relativas se resuelven
+  themes.yaml; la copia versionada es la que vale. Rutas `pdf` relativas se resuelven
   contra la raíz del repo (portable entre máquinas). Sin query_ads / fetch_ground_truth (no aplican fuera de ADS);
   check_retractions SÍ corre cuando algún item declara `doi` (Crossref lo cubre igual).
   **Tema MIXTO:** un tema off-ADS puede además declarar `extra_core: [bibcode, …]` con los
   papers del tema que SÍ están en ADS (un método no-astro casi siempre tiene aplicaciones
   publicadas en revista astro) — para ellos corre la sub-cadena ADS (query_ads --extra-only →
-  fetch_arxiv → fetch_pdf → make_notes --topic): metadata ADS real, sin blockquote off-ADS.
+  fetch_arxiv → fetch_pdf → make_notes --theme): metadata ADS real, sin blockquote off-ADS.
 
 Fallback fuentes no-conseguibles: un item puede llevar `pending: paywall|scan|unextractable`
 en vez de una fuente obtenible — declara que la fuente todavía NO se pudo conseguir (sin copia
@@ -38,7 +38,7 @@ Idempotente como la cadena que envuelve: nada se re-baja ni se copia si ya exist
 fuerza SÓLO la re-bajada/copia de FUENTES (snapshot web, PDF, fulltext) — **nunca pisa notas
 de wiki** (la extracción LLM se protege siempre; para regenerar una nota: make_notes --force
 a mano). La extracción LLM posterior (leer fulltext, poblar notas, sintetizar el concept,
-retro-tag) NO es de este script: la hace el agente siguiendo el skill ingest-topic.
+retro-tag) NO es de este script: la hace el agente siguiendo el skill ingest-theme.
 """
 from __future__ import annotations
 
@@ -61,7 +61,7 @@ OFFADS_KINDS = {"web": ("url",), "local-pdfs": ("pdf",),
 
 
 def _listify_curado(v, campo: str):
-    """Normaliza un campo de CURACIÓN MANUAL (`extra_core`) que `topics.yaml` instruye editar a
+    """Normaliza un campo de CURACIÓN MANUAL (`extra_core`) que `themes.yaml` instruye editar a
     mano. Un `campo: <valor>` sin corchetes es la forma natural de declarar UN solo elemento y es
     YAML válido — a diferencia de `cfg.as_list` (que trataría el escalar como forma inválida y lo
     degradaría a `[]`), acá conviene PRESERVAR la intención: la curación no se pierde por no poner
@@ -139,7 +139,7 @@ def expansion_guard(slug: str, yes: bool) -> None:
     cfg.print_seguro("  Con la regla de combinación en OR (default), el chaining trae todo lo que menciona al "
           "sujeto con ≥1 faceta cualquiera. La palanca es la OBLIGATORIEDAD, no podar regex:\n"
           "    relevance.require: [<faceta-eje>]   # AND: la faceta sin la cual el paper no sirve\n"
-          "    relevance.min_topics: N             # ≥N facetas cualesquiera\n"
+          "    relevance.min_facets: N             # ≥N facetas cualesquiera\n"
           "  en vault/config/objective.yaml (skill setup). Después re-corré query_ads.py para "
           "re-clasificar — todavía no se bajó nada.")
     if not yes:
@@ -152,10 +152,10 @@ def repoint_source_pdf(key: str, declared: str, dest: Path) -> None:
     """Repunta `sources[].pdf` del item a la copia versionada de la bóveda (repo-relative).
 
     El path declarado suele ser staging efímero (scratchpad, carpeta de descargas): al
-    limpiarse deja un puntero muerto en topics.yaml. Tras la copia, la que vale es la de la
+    limpiarse deja un puntero muerto en themes.yaml. Tras la copia, la que vale es la de la
     bóveda → el campo se reescribe a `vault/raw/pdfs/<slug>/<key>.pdf` (repo-relative,
     portable entre máquinas; al leer, las relativas se resuelven contra cfg.ROOT).
-    Reescritura quirúrgica de la línea exacta — topics.yaml vive lleno de comentarios que
+    Reescritura quirúrgica de la línea exacta — themes.yaml vive lleno de comentarios que
     un dump YAML destruiría. Si el path declarado no matchea exactamente UNA línea `pdf:`,
     se avisa y se deja a mano (no adivinar).
     """
@@ -164,28 +164,28 @@ def repoint_source_pdf(key: str, declared: str, dest: Path) -> None:
     rel = dest.relative_to(cfg.ROOT).as_posix()
     if declared == rel:
         return
-    text = cfg.TOPICS_YAML.read_text(encoding="utf-8")
+    text = cfg.THEMES_YAML.read_text(encoding="utf-8")
     pat = re.compile(rf"""^(\s*pdf:\s*)["']?{re.escape(declared)}["']?\s*$""", re.M)
     n = len(pat.findall(text))
     if n != 1:
-        cfg.print_seguro(f"  ⚠ {key}: no repunté `pdf:` en topics.yaml (el path declarado matchea "
+        cfg.print_seguro(f"  ⚠ {key}: no repunté `pdf:` en themes.yaml (el path declarado matchea "
               f"{n} líneas, esperaba 1) — repuntalo a mano a {rel}")
         return
-    cfg.write_text_atomic(cfg.TOPICS_YAML, pat.sub(lambda m: m.group(1) + rel, text))
+    cfg.write_text_atomic(cfg.THEMES_YAML, pat.sub(lambda m: m.group(1) + rel, text))
     cfg.print_seguro(f"  {key}: sources[].pdf repuntado → {rel}")
 
 
 def ingest_ads(slug: str, yes: bool = False) -> None:
-    """Cadena astro estándar (paso 2 del skill ingest-topic), abortando al primer fallo."""
-    for script, args in (("query_ads.py", ["--topic", slug]),
+    """Cadena astro estándar (paso 2 del skill ingest-theme), abortando al primer fallo."""
+    for script, args in (("query_ads.py", ["--theme", slug]),
                          ("fetch_arxiv.py", [slug]),
                          ("fetch_pdf.py", [slug]),      # los sin arXiv, vía resolver ADS (esources)
-                         ("make_notes.py", ["--topic", slug]),
+                         ("make_notes.py", ["--theme", slug]),
                          ("extract_fulltext.py", [slug])):
         rc = run(script, *args)
         if rc:
             sys.exit(f"{script} falló (rc={rc}) — cadena abortada. La cadena es idempotente: "
-                     "corregí y re-corré ingest_topic.py (lo ya bajado no se re-baja).")
+                     "corregí y re-corré ingest_theme.py (lo ya bajado no se re-baja).")
         if script == "query_ads.py":       # checkpoint ANTES del primer paso que gasta red y disco
             expansion_guard(slug, yes)
     # cierre: sólo los papers de ESTE ingest (el barrido completo es pasada periódica — maintain);
@@ -197,7 +197,7 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
     """Modo off-ADS: concept stub + una fuente por item de `sources:` (web o PDF local)."""
     for k in ("area", "concept"):
         if not meta.get(k):
-            sys.exit(f"la entrada '{slug}' no tiene `{k}` en topics.yaml (requerido para el concept).")
+            sys.exit(f"la entrada '{slug}' no tiene `{k}` en themes.yaml (requerido para el concept).")
     # `cfg.as_list`, no `or []`: `sources:` es un archivo de instancia editado a mano y un escalar
     # truthy (una sola fuente sin corchetes) no caía en el `or` — esquivaba el `sys.exit` amable
     # de abajo y moría más adelante con `AttributeError` sin decir qué corregir (R6). Acá SÍ
@@ -206,7 +206,7 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
     sources = cfg.as_list(meta.get("sources"))
     if not sources:
         sys.exit(f"'{slug}' es off-ADS (source: {meta.get('source')}) pero no declara `sources:` en "
-                 "topics.yaml — listá ahí su bibliografía (items con key + url|pdf; ver header del YAML).")
+                 "themes.yaml — listá ahí su bibliografía (items con key + url|pdf; ver header del YAML).")
     allowed = OFFADS_KINDS[meta["source"]]
     concept = meta["concept"]
     # #81: el rechazo de una fuente declarada vive en `decisiones` del registro versionado
@@ -313,14 +313,14 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
     extra = [e["bibcode"] for e in cfg.load_extra_core(meta, entry=slug)]
     if extra:
         cfg.print_seguro(f"\nextra_core: {len(extra)} paper(s) con bibcode ADS (tema mixto) → sub-cadena ADS")
-        for script, sargs in (("query_ads.py", ["--topic", slug, "--extra-only"]),
+        for script, sargs in (("query_ads.py", ["--theme", slug, "--extra-only"]),
                               ("fetch_arxiv.py", [slug]),
                               ("fetch_pdf.py", [slug]),
-                              ("make_notes.py", ["--topic", slug])):
+                              ("make_notes.py", ["--theme", slug])):
             rc = run(script, *sargs)
             if rc:
                 sys.exit(f"{script} falló (rc={rc}) — cadena abortada. La cadena es idempotente: "
-                         "corregí y re-corré ingest_topic.py (lo ya bajado no se re-baja).")
+                         "corregí y re-corré ingest_theme.py (lo ya bajado no se re-baja).")
     extract_rc = 0
     if n_pdf or extra:
         # el rc de extract se reporta aparte: un fallo de extracción NO es una "fuente fallida"
@@ -355,7 +355,7 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser()
-    ap.add_argument("slug", help="tema de vault/config/topics.yaml")
+    ap.add_argument("slug", help="tema de vault/config/themes.yaml")
     ap.add_argument("--force", action="store_true",
                     help="re-bajar/re-copiar FUENTES ya presentes (snapshot/PDF/fulltext); nunca pisa notas")
     ap.add_argument("--yes", action="store_true",
@@ -364,7 +364,7 @@ def main() -> int:
     args = ap.parse_args()
 
     try:
-        _, meta = cfg.topic_by_slug(args.slug)
+        _, meta = cfg.theme_by_slug(args.slug)
     except KeyError as e:
         sys.exit(str(e))
     source = meta.get("source") or "ads"
@@ -381,7 +381,7 @@ def main() -> int:
                  f"(válidos: ads | {' | '.join(OFFADS_KINDS)}).")
     # Mismo criterio que en ingest_star: el hand-off nombra los pasos salteables con su número.
     # El contraste (3c, #72) faltaba, y es el que decide si la síntesis mira un paper o todos.
-    cfg.print_seguro("\nCadena mecánica lista. Siguiente (LLM, skill ingest-topic): extracción por paper (3) → "
+    cfg.print_seguro("\nCadena mecánica lista. Siguiente (LLM, skill ingest-theme): extracción por paper (3) → "
           "retro-tag por aliases (3b) → CONTRASTE cross-paper / inventario por eje (3c) → síntesis "
           "del concept, con régimen de validez (4) → verify-citations (6b) → lint.")
     return 0

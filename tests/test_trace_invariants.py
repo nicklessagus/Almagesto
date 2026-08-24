@@ -226,3 +226,89 @@ def test_check_detecta_artefacto_desactualizado(repo: Path):
     rc = ti.main(["--check", "--root", str(repo)])
     assert rc == 1
     assert (repo / "docs" / "trazabilidad.md").read_text(encoding="utf-8") == antes
+
+
+def test_marca_a_nivel_de_modulo_no_se_atribuye_a_la_funcion_anterior(tmp_path):
+    """El artefacto existe para que el mapa NO mienta, así que atribuir mal es su peor defecto.
+
+    `_simbolo_de` caminaba hacia arriba hasta el `def` más cercano **sin chequear si la línea sigue
+    adentro de esa función**: una marca sobre una constante de módulo se le colgaba a la función que
+    quedó arriba. Medido en el artefacto real: `INV-76` (autoridad por campo del ground-truth, que
+    marca `AUTORIDAD_CAMPO`) aparecía implementado por `_extra_core_error`, e `INV-77`
+    (`DISPUTE_SOURCES`) por `note_files`."""
+    src = (tmp_path / "m.py")
+    src.write_text(
+        "def anterior():\n"
+        "    return 1\n"
+        "\n"
+        "# @inv INV-01\n"
+        "CONSTANTE = 3\n"
+        "\n"
+        "def posterior():\n"
+        "    # @inv INV-02\n"
+        "    return 2\n", encoding="utf-8")
+    lineas = src.read_text(encoding="utf-8").split("\n")
+    assert ti._simbolo_de(lineas, 4) != "anterior", (
+        "la marca está FUERA de `anterior`: no puede atribuírsele")
+    assert ti._simbolo_de(lineas, 8) == "posterior", "la marca de adentro sí se atribuye"
+
+
+# ── el símbolo se decide por AST cuando el archivo parsea ────────────────────
+
+MARCA = "@" + "inv " + "INV-01"   # ver el docstring del módulo: un id real en un
+                                 # ejemplo de sintaxis hace que el recolector se
+                                 # auto-marque. Se arma en runtime a propósito.
+
+
+def _sim(tmp_path, codigo, aguja=None):
+    """`_simbolo_de` sobre la línea que contiene `aguja`."""
+    codigo = codigo.replace("<MARCA>", MARCA)
+    lineas = codigo.split("\n")
+    n = next(i for i, l in enumerate(lineas, 1) if MARCA in l)
+    return ti._simbolo_de(lineas, n)
+
+
+def test_marca_dentro_de_un_docstring_con_codigo_de_ejemplo(tmp_path):
+    """El peor caso: un docstring que muestra código de ejemplo. Decidiendo por indentación, la
+    marca se atribuía a la función **de juguete** que vive dentro del texto — una atribución
+    inventada, que es el defecto que este artefacto existe para no tener."""
+    codigo = ('def real():\n'
+              '    """Ejemplo::\n'
+              '\n'
+              '        def falsa():\n'
+              '            # <MARCA>\n'
+              '            pass\n'
+              '    """\n'
+              '    return 1\n')
+    assert _sim(tmp_path, codigo) == "real"
+
+
+def test_marca_en_bloques_anidados_conserva_la_funcion(tmp_path):
+    """Cuatro formas normales de escribir código donde la indentación no alcanza: la marca queda
+    más adentro que el `def`, y antes degradaba a "" — que el artefacto muestra igual que «a nivel
+    de módulo», así que el lector no puede distinguir «es de módulo» de «se perdió»."""
+    assert _sim(tmp_path, 'def f():\n    if True:\n        # <MARCA>\n        return 1\n') == "f"
+    assert _sim(tmp_path, 'def g():\n    d = {\n        # <MARCA>\n        "a": 1,\n    }\n    return d\n') == "g"
+    assert _sim(tmp_path,
+                'def h(\n    x: int,\n) -> dict:\n    # <MARCA>\n    return {}\n') == "h"
+
+
+def test_la_atribucion_no_depende_de_la_indentacion(tmp_path):
+    """La fragilidad medida por la auditoría: 23 de 77 marcas conservaban su símbolo **sólo**
+    porque estaban mal indentadas. Re-indentarlas —un `black`, un reindent, o alguien acomodándolas
+    a mano— rompía el 30% del mapa en silencio: sin marca huérfana, sin cambio de conteo y sin
+    `--check` en rojo, porque el artefacto se regenera con el símbolo perdido."""
+    base = 'def f():\n    if True:\n{marca}        return 1\n'
+    mal = base.format(marca="    # <MARCA>\n")      # sangría 4 delante de un bloque a 8
+    bien = base.format(marca="        # <MARCA>\n")  # la natural
+    assert _sim(tmp_path, mal) == _sim(tmp_path, bien) == "f"
+
+
+def test_archivo_que_no_parsea_cae_al_heuristico(tmp_path):
+    """El recolector tiene que seguir corriendo sobre un archivo roto — que es justo cuando uno
+    quiere saber qué invariante toca. Sin AST posible, vuelve a decidir por indentación."""
+    roto = 'def f():\n    # <MARCA>\n    return (\n'      # paréntesis sin cerrar
+    import ast as _ast
+    with pytest.raises(SyntaxError):
+        _ast.parse(roto)
+    assert _sim(tmp_path, roto) == "f"

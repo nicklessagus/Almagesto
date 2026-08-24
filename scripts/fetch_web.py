@@ -1,4 +1,4 @@
-"""Snapshot determinista de una página web → fulltext citable (modo off-ADS de ingest-topic).
+"""Snapshot determinista de una página web → fulltext citable (modo off-ADS de ingest-theme).
 
 Uso:
     python scripts/fetch_web.py <slug> <citekey> <url> [--concept C] [--title T] [--author A]
@@ -12,8 +12,8 @@ encabezado **URL + fecha de acceso** para que la afirmación sea **citable y ver
 `--no-note`), delegando en `make_notes.write_web_paper_note` (mismo template que las notas ADS).
 
 Es la contraparte web de `extract_fulltext.py` (PDF→txt): mismo destino, misma idea de fuente
-inmutable. Sólo aplica al **modo off-ADS** de `ingest-topic` (tema no-astro / bibliografía fuera de
-ADS); el flujo astro normal baja PDFs por arXiv. Ver `.claude/skills/ingest-topic/SKILL.md`.
+inmutable. Sólo aplica al **modo off-ADS** de `ingest-theme` (tema no-astro / bibliografía fuera de
+ADS); el flujo astro normal baja PDFs por arXiv. Ver `.claude/skills/ingest-theme/SKILL.md`.
 
 `citekey` = clave de cita sintética `AAAA+Autor` (p. ej. `2006RasmussenWilliams`); debe empezar con
 `AAAA`+letra (mismo `BIBCODE_RE` que el lint) y coincidir con el `[[citekey]]` que cites en la nota.
@@ -35,6 +35,7 @@ import make_notes
 
 # Misma heurística de clave que scripts/lint.py (BIBCODE_RE): 4 dígitos + letra. Garantiza que el
 # .txt se llame como el [[citekey]] citado y que el lint lo reconozca como target de bibcode.
+# @inv INV-27
 CITEKEY_RE = re.compile(r"^\d{4}[A-Za-z]")
 
 # Bloques HTML crudos que defuddle a veces deja embebidos y que NO aportan texto citable
@@ -47,6 +48,7 @@ def clean_markdown(md: str) -> tuple[str, int]:
     """Post-clean determinista: saca bloques de media/embed que defuddle dejó como HTML crudo y
     colapsa líneas en blanco de más. Determinista (regex puro sobre entrada determinista) → el
     snapshot sigue siendo reproducible. Devuelve (markdown_limpio, n_bloques_removidos)."""
+    # @inv INV-30
     removed = 0
     for tag in _NOISE_BLOCKS:
         md, n = re.subn(rf"<{tag}\b[^>]*>.*?</{tag}>", "", md, flags=re.DOTALL | re.IGNORECASE)

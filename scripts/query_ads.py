@@ -2,13 +2,13 @@
 
 Uso:
     python scripts/query_ads.py <slug> [--rows N] [--no-chain] [--no-glyph] [--sweep]
-    python scripts/query_ads.py <slug> --topic            # tema (query cruda de topics.yaml)
+    python scripts/query_ads.py <slug> --theme            # tema (query cruda de themes.yaml)
     python scripts/query_ads.py <slug> --extra-only       # sólo los bibcodes de extra_core (tema mixto)
     python scripts/query_ads.py <slug> --dry-run          # re-clasificar en memoria, sin red ni escritura
     python scripts/query_ads.py --probe "<query>"         # previsualizar el corte core/no-core, sin bajar
 
 Escribe build/<slug>/ads.json con la lista de registros (bibcode, título, autores,
-año, abstract, arxiv_id, doctype, citation_count, topics, relevant, why_excluded —el motivo real
+año, abstract, arxiv_id, doctype, citation_count, facets, relevant, why_excluded —el motivo real
 de exclusión si es no-core; lo consume el apéndice "Excluidos" de make_notes—, via) y, si la query directa
 quedó truncada (numFound > --rows), la marca `truncated: {num_found, rows, recent}` que el lint
 surface como corpus incompleto (si no truncó, `truncated: null`).
@@ -31,13 +31,13 @@ en los modos que no consultan un sujeto (`--probe`) ni en los que no clasifican 
 
 Usa la API REST de ADS directamente (control total de campos y filas). Rate: ~5000/día.
 La query por estrella se arma con `title:`/`abs:` sobre nombre+alias (ver `build_query`; `object:`
-no es campo válido en la API Solr de ADS). Para temas, query Solr cruda de `topics.yaml`.
+no es campo válido en la API Solr de ADS). Para temas, query Solr cruda de `themes.yaml`.
 
 Tras la query directa hace **citation chaining** (snowballing): pide a ADS `references()` y
 `citations()` de los papers core encontrados, **ancladas al sujeto** server-side —para ESTRELLAS el
 `full:"nombre"` OR alias; para TEMAS la propia query del tema— (sin ese ancla el grafo devuelve los
 mega-citados genéricos del área, no papers del sujeto), clasifica los candidatos con el mismo
-`relevance.topics` y agrega los que resulten core (dedup por bibcode; provenance en el campo
+`relevance.facets` y agrega los que resulten core (dedup por bibcode; provenance en el campo
 `via`: `query` | `chain:references` | `chain:citations` | `manual`). Recupera papers que la query por
 título/abstract pierde (p. ej. surveys que tabulan la estrella sin nombrarla en el abstract).
 Sólo entran los core: los no-core encadenados no se agregan (inundarían el apéndice "Excluidos").
@@ -55,7 +55,7 @@ aplica (la query *es* la definición del tema). **No se puede desactivar** (D-48
 `--no-triage` se eliminó porque permitía que un candidato ya descartado —con su motivo,
 persistido en el registro— volviera a entrar en silencio.
 
-**Curación manual persistente:** `extra_core: [bibcode, …]` en la entrada de `stars.yaml`/`topics.yaml`
+**Curación manual persistente:** `extra_core: [bibcode, …]` en la entrada de `stars.yaml`/`themes.yaml`
 lista papers que el clasificador perdió. Es un **override del clasificador** (#39): el que ADS no
 devolvió se trae por bibcode y el que **sí** devolvió pero quedó no-core se **rescata en el lugar**
 (`relevant: true`, `via: manual`) — antes sólo se agregaban los ausentes, así que declarar el caso
@@ -140,22 +140,22 @@ _OBJ = cfg.load_objective()
 # siguiente reventaba con `AttributeError` a nivel de MÓDULO, llevándose puesto el import entero,
 # tres líneas antes de llegar al RuntimeError con instrucciones que ya existe para este caso (R2).
 _REL = cfg.as_map(_OBJ.get("relevance"))
-TOPIC_PATTERNS = {
-    # ídem: `topics` es un MAPA faceta→regex; escribirlo como lista (copiando los nombres de la
+FACET_PATTERNS = {
+    # ídem: `facets` es un MAPA faceta→regex; escribirlo como lista (copiando los nombres de la
     # prosa del skill) revienta `.items()` con `AttributeError` en vez de caer en el RuntimeError
-    # de abajo (R3). `as_map` de una lista da `{}` → TOPIC_PATTERNS queda vacío → cae ahí, prolijo.
+    # de abajo (R3). `as_map` de una lista da `{}` → FACET_PATTERNS queda vacío → cae ahí, prolijo.
     name: re.compile(pat, re.I)
-    for name, pat in cfg.as_map(_REL.get("topics")).items()
+    for name, pat in cfg.as_map(_REL.get("facets")).items()
 }
 NOISE_DOCTYPES = set(_listify_curado(_REL.get("noise_doctypes"), "relevance.noise_doctypes"))
 # `objective_error() is None` = el archivo se leyó bien y GENUINAMENTE no declara facetas. Cuando
-# el YAML está roto, `load_objective` degrada a `{}` y `TOPIC_PATTERNS` queda vacío por la MISMA
-# vía: sin esta condición el import moría acusando "no define relevance.topics" sobre un archivo
+# el YAML está roto, `load_objective` degrada a `{}` y `FACET_PATTERNS` queda vacío por la MISMA
+# vía: sin esta condición el import moría acusando "no define relevance.facets" sobre un archivo
 # que sí las define y sólo no parsea — un mensaje falso que manda a completar lo que ya está
 # escrito. Ese caso lo atiende `main()`, con el motivo real (D-6).
-if not TOPIC_PATTERNS and cfg.objective_error() is None:
+if not FACET_PATTERNS and cfg.objective_error() is None:
     raise RuntimeError(
-        "vault/config/objective.yaml no define relevance.topics (el clasificador de papers core). "
+        "vault/config/objective.yaml no define relevance.facets (el clasificador de papers core). "
         "Completalo antes de consultar ADS."
     )
 
@@ -166,11 +166,12 @@ if not TOPIC_PATTERNS and cfg.objective_error() is None:
 # La palanca es la OBLIGATORIEDAD, no podar regex. Cada instancia declara cuáles de SUS facetas son
 # load-bearing sin tocar el framework:
 #   relevance.require:    [faceta, ...]  → AND: TODAS deben matchear
-#   relevance.min_topics: N              → al menos N facetas cualesquiera (default 1)
-# Sin nada declarado (require=[], min_topics=1) se recupera exactamente el comportamiento de hoy.
+#   relevance.min_facets: N              → al menos N facetas cualesquiera (default 1)
+# Sin nada declarado (require=[], min_facets=1) se recupera exactamente el comportamiento de hoy.
 def combination_rule(rel: dict, topic_names) -> tuple[list[str], int]:
-    """(require, min_topics) validados desde relevance. `require` debe ⊆ topics: una faceta
+    """(require, min_facets) validados desde relevance. `require` debe ⊆ facets: una faceta
     obligatoria inexistente filtraría TODO a no-core en silencio → falla ruidoso."""
+    # @inv INV-55
     raw_require = rel.get("require")
     # A diferencia de `extra_core`/`aliases`/`noise_doctypes`, ACÁ no conviene adivinar un solo
     # elemento: `require: rv` (escalar) truthy no caía en el `or []` y `list("rv")` lo desarmaba
@@ -184,51 +185,52 @@ def combination_rule(rel: dict, topic_names) -> tuple[list[str], int]:
             f"vault/config/objective.yaml: relevance.require debe ser una lista — aunque sea de "
             f"un solo elemento, [{raw_require!r}] — no un escalar suelto: {raw_require!r}."
         )
-    min_topics = rel.get("min_topics") or 1
+    min_facets = rel.get("min_facets") or 1
     unknown = [t for t in require if t not in topic_names]
     if unknown:
         raise RuntimeError(
             f"vault/config/objective.yaml: relevance.require nombra facetas ausentes de "
-            f"relevance.topics: {unknown}. Una faceta obligatoria que no existe filtraría TODO a "
+            f"relevance.facets: {unknown}. Una faceta obligatoria que no existe filtraría TODO a "
             f"no-core en silencio."
         )
-    return require, min_topics
+    return require, min_facets
 
 
-REQUIRE_TOPICS, MIN_TOPICS = combination_rule(_REL, TOPIC_PATTERNS)
+REQUIRE_FACETS, MIN_FACETS = combination_rule(_REL, FACET_PATTERNS)
 
 
-def exclusion_reason(topics: list[str], doctype: str) -> str | None:
+def exclusion_reason(facets: list[str], doctype: str) -> str | None:
     """Motivo por el que un paper queda FUERA del core (None = es core). ÚNICA implementación de
     la regla de relevancia: `classify` deriva su booleano de acá y `query_ads` persiste el motivo
     por registro en ads.json (`why_excluded`), del que lo lee el apéndice "Excluidos por el
     filtro" (make_notes). Sin esto, la dicotomía vieja "sin tópico"/doctype etiquetaba con un
     motivo FALSO (`doctype: article`) a los excluidos por la regla de combinación (#15) —
-    require/min_topics con facetas matcheadas y doctype limpio (#30). Precedencia: sin tópico →
-    doctype ruido → require → min_topics (las dos primeras preservan los rótulos históricos)."""
-    if not topics:
+    require/min_facets con facetas matcheadas y doctype limpio (#30). Precedencia: sin tópico →
+    doctype ruido → require → min_facets (las dos primeras preservan los rótulos históricos)."""
+    if not facets:
         return "sin tópico"
     if doctype in NOISE_DOCTYPES:
         return f"doctype: {doctype}"
-    missing = [t for t in REQUIRE_TOPICS if t not in topics]
+    missing = [t for t in REQUIRE_FACETS if t not in facets]
     if missing:
         return f"sin faceta obligatoria ({', '.join(missing)}) — relevance.require"
-    if len(topics) < MIN_TOPICS:
-        return f"sólo {len(topics)} faceta(s), min_topics={MIN_TOPICS}"
+    if len(facets) < MIN_FACETS:
+        return f"sólo {len(facets)} faceta(s), min_facets={MIN_FACETS}"
     return None
 
 
 def classify(rec: dict) -> tuple[list[str], bool]:
-    """Devuelve (topics, relevant). Relevante ⟺ `exclusion_reason` no encuentra motivo de
-    exclusión (≥ MIN_TOPICS facetas, TODAS las de REQUIRE_TOPICS y doctype no-ruido; con los
-    defaults min_topics=1, require=[] es el histórico ≥1 faceta cualquiera)."""
+    """Devuelve (facets, relevant). Relevante ⟺ `exclusion_reason` no encuentra motivo de
+    exclusión (≥ MIN_FACETS facetas, TODAS las de REQUIRE_FACETS y doctype no-ruido; con los
+    defaults min_facets=1, require=[] es el histórico ≥1 faceta cualquiera)."""
+    # @inv INV-24
     text = " ".join(filter(None, [
         " ".join(cfg.as_list(rec.get("title"))),
         rec.get("abstract", "") or "",
         " ".join(cfg.as_list(rec.get("keyword"))),
     ])).lower()
-    topics = [t for t, pat in TOPIC_PATTERNS.items() if pat.search(text)]
-    return topics, exclusion_reason(topics, rec.get("doctype", "")) is None
+    facets = [t for t, pat in FACET_PATTERNS.items() if pat.search(text)]
+    return facets, exclusion_reason(facets, rec.get("doctype", "")) is None
 
 
 def extract_arxiv(identifiers: list[str]) -> str | None:
@@ -366,6 +368,7 @@ def glyph_rescue(names: list[str], rows: int, meta: dict | None = None) -> list[
     out = []
     truncs = []
     for letter, consts in greek_targets(names).items():
+    #  @inv INV-52
         q = " OR ".join(f'title:"{c}" OR abs:"{c}"' for c in sorted(consts))
         pat = glyph_pattern(letter, consts)
         qm: dict = {}
@@ -412,7 +415,7 @@ def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
               meta: dict | None = None, expect_hits: bool = False,
               fq: str | None = ASTRO_FQ, sort: str = CITES_SORT) -> list[dict]:
     """Corre una query Solr `q` ya armada contra ADS y devuelve registros clasificados.
-    Para estrellas, armar `q` con build_query(names); para temas, usar la query cruda del topic.
+    Para estrellas, armar `q` con build_query(names); para temas, usar la query cruda del theme.
     Reintenta con backoff ante 429/5xx y avisa si el resultado quedó truncado (numFound > rows;
     `quiet_truncate` lo silencia — en el chaining el truncado a top-por-citas es por diseño).
 
@@ -466,7 +469,7 @@ def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
             f"  {q}\n"
             "Si el sujeto existe en ADS es el cero espurio de #27 (intermitente): re-corré, la "
             "cadena es idempotente. Si se repite, revisá el nombre/alias del sujeto en "
-            "vault/config/stars.yaml (`ads_object`, `aliases`) o la `query` en topics.yaml.")
+            "vault/config/stars.yaml (`ads_object`, `aliases`) o la `query` en themes.yaml.")
     truncated = num_found > rows
     if meta is not None:
         meta.update(num_found=num_found, rows=rows, truncated=truncated)
@@ -479,8 +482,8 @@ def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
               f"(top por citas) — subí --rows para cubrir todo{marca}")
     out = []
     for d in docs:
-        topics, relevant = classify(d)
-        why = None if relevant else exclusion_reason(topics, d.get("doctype", ""))
+        facets, relevant = classify(d)
+        why = None if relevant else exclusion_reason(facets, d.get("doctype", ""))
         out.append({
             "bibcode": d.get("bibcode"),
             "title": (d.get("title") or [""])[0],
@@ -494,7 +497,7 @@ def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
             "bibstem": (d.get("bibstem") or [None])[0],
             "citation_count": d.get("citation_count", 0),
             "keyword": d.get("keyword", []),
-            "topics": topics,
+            "facets": facets,
             "relevant": relevant,
             "why_excluded": why,   # motivo real de exclusión (None si core) → apéndice "Excluidos"
         })
@@ -544,7 +547,7 @@ def chain_candidates(core_bibcodes: list[str], rows: int, subject_filter: str) -
     `subject_filter` (obligatorio) ancla cada sub-query al SUJETO server-side — para estrellas, el
     `full:` de nombre+alias (`build_fulltext_filter`). Sin él, el grafo de citas devuelve los
     mega-citados genéricos del área (Gaia, métodos, catálogos): matchean las facetas de
-    `relevance.topics` pero no hablan del sujeto (medido: 31/31 falsos positivos en tau Ceti).
+    `relevance.facets` pero no hablan del sujeto (medido: 31/31 falsos positivos en tau Ceti).
 
     Devuelve TODOS los candidatos clasificados y marcados con `via`; el caller filtra core + dedup.
     Cada sub-query trae el top `rows` por citas (truncado por diseño: ronda de recall, no censo)."""
@@ -574,12 +577,30 @@ def chain_candidates(core_bibcodes: list[str], rows: int, subject_filter: str) -
 # sin bajarse; `scripts/triage.py` lo lista y persiste las decisiones.
 
 
+def _variant_hit(low: str, var: str) -> bool:
+    """`var` aparece en `low` sin que un dígito extienda su número de catálogo (INV-72)."""
+    i = low.find(var)
+    while i != -1:
+        fin = i + len(var)
+        if not (var[-1:].isdigit() and fin < len(low) and low[fin].isdigit()):
+    #  @inv INV-72
+            return True
+        i = low.find(var, i + 1)
+    return False
+
+
 def subject_in_title(title: str | None, names: list[str]) -> bool:
     """¿El sujeto está en el título? Auto-aceptación del nivel 0: cubre las grafías de catálogo
     (HD 22049 ↔ HD22049) y los lookalikes de nombre Bayer (∊ Eridani ≡ eps Eridani, #28)."""
     raw = " ".join((title or "").split())
     low = raw.lower()
-    if any(v.lower() in low for v in expand_variants(names)):
+    # Containment pelado matchea `GJ 71` dentro de `GJ 710`, que es OTRA estrella — y como esto es
+    # la auto-aceptación de nivel 0, el match espurio mete el paper al corpus ajeno sin que nadie
+    # lo juzgue. El corte es el DÍGITO: en una designación de catálogo un número más largo es otro
+    # objeto. La continuación alfabética sigue valiendo (`tau Cet` ↔ `tau Ceti`), que es como están
+    # escritos los alias Bayer.
+    if any(_variant_hit(low, v.lower()) for v in expand_variants(names)):
+    #  @inv INV-50
         return True
     return any(glyph_pattern(letter, consts).search(raw)
                for letter, consts in greek_targets(names).items())
@@ -594,6 +615,7 @@ def load_triage(slug: str) -> set[str]:
 
     **Sólo el carril del chaining** (#81): un rechazo de *fuente declarada* de un tema off-ADS vive
     en las mismas `decisiones` y no tiene nada que ver con los candidatos del grafo de citas."""
+    # @inv INV-49
     return {b for b, d in cfg.load_decisiones(slug).items()
             if d.get("decision") == "descartado" and cfg.es_del_carril(d, "chaining")}
 
@@ -610,7 +632,7 @@ def n_dropped_chaining(slug: str) -> int:
 
 def _probe_row(r: dict) -> str:
     mark = "CORE" if r["relevant"] else "—   "
-    tp = ",".join(r["topics"]) or "(ninguno)"
+    tp = ",".join(r["facets"]) or "(ninguno)"
     cites = r.get("citation_count") or 0              # ADS puede devolver citation_count null
     title = " ".join((r.get("title") or "").split())[:68]
     return f"  [{mark}] {cites:>5}  {title}  «{tp}»"
@@ -685,15 +707,139 @@ def sweep_star(slug: str, rows: int) -> int:
 
 # ── dry-run de re-clasificación (#40) ────────────────────────────────────────
 
+def classify_theme(rec: dict, meta: dict) -> tuple[list[str], bool, str | None]:
+    """Relevancia de un paper para un **tema de método** (D-26 / INV-88). Devuelve
+    `(facets_globales, core, motivo)`; `motivo` es `None` sii es core.
+
+    La lente global no sirve acá, y no por falta de ajuste: es **activamente dañina**. Con
+    `require: [rv]` mata al paper fundacional de ICA —Hyvärinen no menciona RV ni una vez—, y sin
+    filtro *"independent component analysis"* devuelve miles de papers de fMRI, EEG y finanzas.
+
+    Por eso el tema trae su **faceta propia** (`facet:` en `themes.yaml`), y la regla es::
+
+        core = faceta propia  Y  (puerta 2  OR  puerta 3)
+
+    - **faceta propia** — precondición, no puerta: sin ella no se mira nada más.
+    - **puerta 2, fundacional en su campo** — muy citado. El umbral **se declara** en el tema
+      (`fundacional_min_citas`); D-26 no fija un número y ponerle un default escondido sería
+      decidir por el usuario. Sin declarar, la puerta no abre **y el motivo lo dice**: misma
+      doctrina que la lente ilegible de INV-80, nunca degradar en silencio.
+    - **puerta 3, lente astro global** — la aplicación del método en astro, aunque tenga 3 citas.
+
+    ⛔ **La puerta 1 (`lo cita tu corpus`) NO está acá**, a propósito: por la resolución §4.3 del
+    plan **propone y no clasifica**, así que alimenta los candidatos del triage
+    (`citation_index.cited_by_corpus`). Si clasificara, ser core dejaría de ser función de
+    `(paper, lente)` y INV-24 se rompería."""
+    facet_raw = (meta or {}).get("facet")
+    if not facet_raw:
+        sys.exit(f"themes.yaml: el tema '{(meta or {}).get('title', '?')}' no declara `facet:` — es "
+                 "la lente propia del tema y sin ella no hay regla que aplicar (D-26). Agregala:\n"
+                 "  facet: 'independent component|blind source separation'")
+    try:
+        propia = re.compile(facet_raw, re.I)
+    except re.error as exc:
+        sys.exit(f"themes.yaml: `facet:` del tema no compila como regex ({exc})")
+
+    texto = " ".join(filter(None, [
+        " ".join(cfg.as_list(rec.get("title")) or [rec.get("title") or ""]),
+        rec.get("abstract") or "",
+        " ".join(cfg.as_list(rec.get("keyword"))),
+    ])).lower()
+    facets_globales, core_global = classify_record(rec)
+
+    if not propia.search(texto):
+        return facets_globales, False, "sin la faceta propia del tema"
+    doctype = rec.get("doctype") or ""
+    if doctype in NOISE_DOCTYPES:
+        return facets_globales, False, f"doctype: {doctype}"
+
+    umbral = (meta or {}).get("fundacional_min_citas")
+    citas = rec.get("citation_count")
+    # `None` es **no sé**, no «pocas»: arXiv no publica el conteo. Tratarlo como 0 dejaría a todo
+    # paper venido de ese backend fuera de la puerta 2 por construcción, que es el cero inventado
+    # que INV-87 prohíbe — un chequeo que no se puede evaluar se DECLARA, no se resuelve en contra.
+    p2_evaluable = isinstance(umbral, int) and citas is not None
+    puerta2 = p2_evaluable and citas >= umbral
+    puerta3 = core_global
+    if puerta2 or puerta3:
+        return facets_globales, True, None
+    if umbral is None:
+        return facets_globales, False, ("ninguna puerta abre; la 2 (fundacional) está apagada "
+                                        "porque el tema no declara `fundacional_min_citas`")
+    if citas is None:
+        return facets_globales, False, ("la lente astro no lo trae y la puerta 2 (fundacional) "
+                                        "**no se pudo evaluar**: el registro viene sin dato de "
+                                        "citas (arXiv no lo publica) — enriquecer por DOI o "
+                                        "juzgarlo a mano")
+    return facets_globales, False, "ninguna puerta abre (ni fundacional ni lente astro)"
+
+
+def reclassify_for_theme(recs: list, meta: dict) -> tuple[list, list]:
+    """Re-juzga `recs` con la regla del tema (D-26) y devuelve `(entraron, salieron)` por bibcode.
+
+    Los registros llegan clasificados por la lente **global** (`to_records`); para un tema de
+    método esa lente es la equivocada, así que hay que volver a pasarlos. Se devuelven los dos
+    deltas —no un booleano ni un total— porque una regla que reclasifica en silencio es una regla
+    que nadie puede auditar: el ingest los imprime y quedan en el registro de la corrida.
+
+    Dos recortes: un tema **sin `facet:`** es no-op (sigue con la lente global — rehusar es lo que
+    hace `classify_theme` si alguien la llama directo, no esto, que corre dentro de la cadena); y
+    los `via: manual` **no se tocan**, porque `extra_core` es juicio del usuario y pisa a cualquier
+    clasificador (#68/#39).  @inv INV-88"""
+    if not (meta or {}).get("facet"):
+        return [], []
+    entraron, salieron = [], []
+    for r in recs:
+        if r.get("via") == "manual":
+            continue
+        antes = bool(r.get("relevant"))
+        _, ahora, why = classify_theme(r, meta)
+        if ahora != antes:
+            (entraron if ahora else salieron).append(r.get("bibcode"))
+        r["relevant"], r["why_excluded"] = ahora, why
+    return entraron, salieron
+
+
+def gate_cited_by_corpus(recs: list, index: dict | None = None) -> list:
+    """**Puerta 1** de D-26: los registros que la regla del tema NO hizo core pero que **el corpus
+    cita**, propuestos como candidatos del triage.
+
+    ⛔ Propone y **no clasifica** (resolución §4.3 del plan): no toca `relevant` de nadie. Si
+    clasificara, ser core dejaría de ser función de `(paper, lente)` y se rompería INV-24 — y sería
+    encima la clase de regla que nadie puede auditar después, porque depende del estado del corpus
+    en el momento de la corrida.
+
+    Es la señal que ninguna regex puede expresar: Hyvärinen tiene ~30k citas, casi todas de fMRI y
+    finanzas; lo que lo vuelve **tuyo** es que **tu** gente lo cita.
+
+    Se consulta con **todas** las llaves del registro (bibcode, id de OpenAlex): el corpus pudo
+    citarlo por cualquiera de las dos fuentes y preguntar por una sola da un falso negativo.
+    Sin índice construido, no aporta nada — no inventa candidatos ni rompe la cadena.  @inv INV-88"""
+    import citation_index
+    idx = index if index is not None else citation_index.load()
+    if not (idx or {}).get("citas"):
+        return []
+    props = []
+    for r in recs:
+        if r.get("relevant"):
+            continue
+        llaves = [k for k in (r.get("bibcode"),
+                              (r.get("openalex_id") or "").rsplit("/", 1)[-1] or None) if k]
+        citadores = citation_index.cited_by_corpus(llaves, idx)
+        if citadores:
+            props.append({**r, "via": "citado-por-corpus", "citado_por": citadores})
+    return props
+
+
 def classify_record(r: dict) -> tuple[list[str], bool]:
     """`classify` sobre un registro YA persistido en ads.json (title es string, no lista como en
     la respuesta cruda de ADS). Los `via: manual` son core por decisión del usuario (override de
     `extra_core`, #39): la regla no los toca."""
-    topics, relevant = classify({"title": [r.get("title") or ""],
+    facets, relevant = classify({"title": [r.get("title") or ""],
                                  "abstract": r.get("abstract") or "",
                                  "keyword": cfg.as_list(r.get("keyword")),
                                  "doctype": r.get("doctype") or ""})
-    return topics, True if r.get("via") == "manual" else relevant
+    return facets, True if r.get("via") == "manual" else relevant
 
 
 def note_state(bibcode: str) -> str:
@@ -719,6 +865,7 @@ def reclass_diff(slugs: list[str]) -> int:
     for slug in slugs:
         adsfile = cfg.ROOT / "build" / slug / "ads.json"
         if not adsfile.exists():
+    #  @inv INV-58
             cfg.print_seguro(f"{slug}: sin build/{slug}/ads.json — nada que re-clasificar")
             continue
         recs = json.loads(adsfile.read_text(encoding="utf-8"))["records"]
@@ -767,13 +914,13 @@ def built_slugs() -> list[str]:
     return sorted(p.parent.name for p in builds.glob("*/ads.json")) if builds.exists() else []
 
 
-def count_core(recs: list, require: list[str], min_topics: int) -> int:
+def count_core(recs: list, require: list[str], min_facets: int) -> int:
     """Cuántos registros serían core bajo una regla de combinación HIPOTÉTICA (misma precedencia que
-    `exclusion_reason`, sobre los `topics` ya clasificados). Insumo del contraste del `--probe`."""
+    `exclusion_reason`, sobre los `facets` ya clasificados). Insumo del contraste del `--probe`."""
     return sum(1 for r in recs
-               if r["topics"] and r.get("doctype") not in NOISE_DOCTYPES
-               and all(t in r["topics"] for t in require)
-               and len(r["topics"]) >= min_topics)
+               if r["facets"] and r.get("doctype") not in NOISE_DOCTYPES
+               and all(t in r["facets"] for t in require)
+               and len(r["facets"]) >= min_facets)
 
 
 def print_combination_contrast(recs: list) -> None:
@@ -783,13 +930,13 @@ def print_combination_contrast(recs: list) -> None:
     medirse. Si ya hay regla declarada, se contrasta contra el OR puro; si no, se muestra qué pasaría
     con cada faceta como eje."""
     base = count_core(recs, [], 1)      # OR puro: ≥1 faceta cualquiera (el default histórico)
-    if REQUIRE_TOPICS or MIN_TOPICS > 1:
-        regla = (f"require={REQUIRE_TOPICS or '[]'}, min_topics={MIN_TOPICS}")
+    if REQUIRE_FACETS or MIN_FACETS > 1:
+        regla = (f"require={REQUIRE_FACETS or '[]'}, min_facets={MIN_FACETS}")
         cfg.print_seguro(f"  regla de combinación vigente: {regla} · en OR puro serían {base} CORE")
         return
     cfg.print_seguro(f"  regla de combinación vigente: OR (≥1 faceta cualquiera) → {base} CORE.")
     cfg.print_seguro("  Si declararas una faceta-eje obligatoria (relevance.require) el corte sería:")
-    for t in TOPIC_PATTERNS:
+    for t in FACET_PATTERNS:
         n = count_core(recs, [t], 1)
         pct = f"−{100 * (base - n) / base:.0f}%" if base else "—"
         cfg.print_seguro(f"    require: [{t}]{' ' * max(0, 14 - len(t))}→ {n:>5} CORE  ({pct})")
@@ -797,11 +944,12 @@ def print_combination_contrast(recs: list) -> None:
 
 def print_probe(q: str, recs: list, noncore_top: int = 25) -> int:
     """Modo preview del skill `setup`: muestra el corte core/no-core de una query sin bajar nada,
-    para afinar la regla de relevancia (relevance.topics) contra papers reales. Lista **TODO el core**
+    para afinar la regla de relevancia (relevance.facets) contra papers reales. Lista **TODO el core**
     (no un top-N: papers recientes/poco citados caen al fondo del ranking pero pueden ser core); del
     no-core muestra sólo el top `noncore_top` por citas (chequeo de sanidad del corte). Cierra con el
     contraste de la regla de combinación (#41). El barrido 2b de ingest-star, que antes se hacía con
     probes manuales, hoy corre por --sweep (sweep_star)."""
+    # @inv INV-59
     core = sorted((r for r in recs if r["relevant"]), key=lambda r: r.get("citation_count") or 0, reverse=True)
     noncore = sorted((r for r in recs if not r["relevant"]), key=lambda r: r.get("citation_count") or 0, reverse=True)
     cfg.print_seguro(f"Probe (no baja PDFs ni escribe build/). q: {q}")
@@ -821,7 +969,7 @@ def print_probe(q: str, recs: list, noncore_top: int = 25) -> int:
     cfg.print_seguro(f"\n  no-core (top {len(shown)} de {len(noncore)}, chequeo de sanidad):")
     for r in shown:
         cfg.print_seguro(_probe_row(r))
-    cfg.print_seguro("\n  → ajustá relevance.topics en objective.yaml y re-corré --probe hasta que el corte cierre.")
+    cfg.print_seguro("\n  → ajustá relevance.facets en objective.yaml y re-corré --probe hasta que el corte cierre.")
     return 0
 
 
@@ -831,7 +979,7 @@ def _flags_usados(args) -> list:
     Son las **escotillas**: `--force`, `--yes`, `--all` cambian lo que la corrida hizo, y sin
     registrarlas la traza dice "corrió make_notes" sobre dos corridas que no hicieron lo mismo."""
     return sorted(f"--{k.replace('_', '-')}" for k, v in vars(args).items()
-                  if v is True and k not in ("topic",))
+                  if v is True and k not in ("theme",))
 
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
@@ -849,7 +997,7 @@ def main() -> int:
                  "marcaría el corpus entero con una regla que nadie escribió.")
     ap = argparse.ArgumentParser()
     ap.add_argument("slug", nargs="?",
-                    help="slug de estrella (o tema con --topic). Se omite con --probe.")
+                    help="slug de estrella (o tema con --theme). Se omite con --probe.")
     ap.add_argument("--rows", type=int, default=2000,
                     help="tope de registros por query (default 2000 ≈ el máximo de una request ADS; "
                          "cubre la enorme mayoría de sujetos sin truncar). Si igual trunca, queda "
@@ -861,16 +1009,16 @@ def main() -> int:
                          "superset de la constelación y filtra client-side. Sólo corre si el "
                          "sujeto tiene nombre de letra griega; desactivarlo si el superset es "
                          "demasiado grande y preferís curar a mano")
-    ap.add_argument("--topic", action="store_true",
-                    help="el slug es un TEMA de vault/config/topics.yaml (query Solr cruda), no una estrella")
+    ap.add_argument("--theme", action="store_true",
+                    help="el slug es un TEMA de vault/config/themes.yaml (query Solr cruda), no una estrella")
     ap.add_argument("--extra-only", action="store_true",
                     help="traer SÓLO los bibcodes de `extra_core` (sin query ni chaining) — la vía ADS "
                          "de un tema off-ADS MIXTO: su bibliografía canónica vive fuera de ADS (sin "
                          "`query`), pero los papers que SÍ tienen bibcode van en extra_core. "
-                         "La corre ingest_topic.py solo.")
+                         "La corre ingest_theme.py solo.")
     ap.add_argument("--probe", metavar="QUERY",
                     help="PREVIEW (skill setup): corre una query Solr CRUDA y muestra el corte "
-                         "core/no-core con títulos, clasificando con relevance.topics de objective.yaml. "
+                         "core/no-core con títulos, clasificando con relevance.facets de objective.yaml. "
                          "No baja PDFs ni escribe build/ — sólo para afinar la regla de relevancia.")
     ap.add_argument("--dry-run", action="store_true",
                     help="PREVIEW de re-clasificación (sub-modo D de maintain): re-clasifica EN "
@@ -898,34 +1046,34 @@ def main() -> int:
 
     if not args.slug:
         ap.error('falta el slug (o usá --probe "<query>" para previsualizar la regla de relevancia)')
-    if args.extra_only and not args.topic:
-        ap.error("--extra-only es de temas (--topic): una estrella siempre tiene query (ads_object)")
+    if args.extra_only and not args.theme:
+        ap.error("--extra-only es de temas (--theme): una estrella siempre tiene query (ads_object)")
     if args.sweep:
-        if args.topic:
+        if args.theme:
             ap.error("--sweep es de estrellas (surveys que tabulan la estrella sin nombrarla en "
                      "título/abstract); el análogo para temas es el retro-tag 3b del skill "
-                     "ingest-topic (grep de aliases sobre el corpus local)")
+                     "ingest-theme (grep de aliases sobre el corpus local)")
         return sweep_star(args.slug, args.rows)
 
     star_names: list[str] = []      # sólo estrellas: insumo del rescate por glifo (#28)
-    if args.topic:
-        _, meta = cfg.topic_by_slug(args.slug)
+    if args.theme:
+        _, meta = cfg.theme_by_slug(args.slug)
         if args.extra_only:
             # Tema MIXTO (off-ADS + extra_core): sin `query` no hay búsqueda ni chaining — la
             # única fuente ADS es la curación manual de `extra_core` (el bloque de abajo).
             q, chain_filter = None, None
             cfg.print_seguro(f"Consultando ADS (tema, sólo extra_core): {meta.get('title', args.slug)}")
-            head = {"kind": "topic", "slug": args.slug, "title": meta.get("title"),
+            head = {"kind": "theme", "slug": args.slug, "title": meta.get("title"),
                     "concept": meta.get("concept"), "area": meta.get("area"), "query": None}
         else:
-            q = cfg.require_field(meta, "query", args.slug, "topics.yaml",
+            q = cfg.require_field(meta, "query", args.slug, "themes.yaml",
                                   hint="Si es un tema off-ADS (source: web|local-pdfs) no va por "
-                                       "query_ads: corré ingest_topic.py, que despacha por `source`.")
-            # el "sujeto" de un tema es su propia query: anclar el chaining con ella deja on-topic a los
+                                       "query_ads: corré ingest_theme.py, que despacha por `source`.")
+            # el "sujeto" de un tema es su propia query: anclar el chaining con ella deja on-theme a los
             # papers del grafo de citas (sin ancla traería los mega-citados genéricos, como en estrellas).
             chain_filter = f"({q})"
             cfg.print_seguro(f"Consultando ADS (tema): {meta.get('title', args.slug)}\n  q: {q}")
-            head = {"kind": "topic", "slug": args.slug, "title": meta.get("title"),
+            head = {"kind": "theme", "slug": args.slug, "title": meta.get("title"),
                     "concept": meta.get("concept"), "area": meta.get("area"), "query": q}
     else:
         name, meta = cfg.star_by_slug(args.slug)
@@ -938,7 +1086,7 @@ def main() -> int:
         chain_filter = build_fulltext_filter(names)
         cfg.print_seguro(f"Consultando ADS: {name}  (nombres: {', '.join(names)})")
         # `query`: la Solr EFECTIVA, tal cual se manda (#64). En un tema la escribe el usuario en
-        # topics.yaml (versionada); en una estrella la arma build_query y hasta ahora se tiraba →
+        # themes.yaml (versionada); en una estrella la arma build_query y hasta ahora se tiraba →
         # no había forma de reconstruir sobre qué universo afirma la ficha.
         head = {"kind": "star", "star": name, "slug": args.slug, "ads_object": meta["ads_object"],
                 "query": q}
@@ -952,6 +1100,13 @@ def main() -> int:
         recs = query_ads(q, rows=args.rows, meta=qmeta, expect_hits=True)
         for r in recs:
             r["via"] = "query"
+        # D-26: para un tema de método la lente global es la equivocada (mata al fundacional y deja
+        # pasar miles de fMRI). Se re-juzga con la regla del tema y se IMPRIME el delta.
+        if head.get("kind") == "theme":
+            entraron, salieron = reclassify_for_theme(recs, meta)
+            if entraron or salieron:
+                cfg.print_seguro(f"  regla del tema (D-26): +{len(entraron)} core / -{len(salieron)}"
+                                 f" · entran {entraron[:5]} · salen {salieron[:5]}")
         rel = [r for r in recs if r["relevant"]]
         cfg.print_seguro(f"  query directa: {len(recs)} registros, {len(rel)} relevantes")
         # Segunda pasada por fecha (#79): el corte por citas de la primera es ciego a la edad, así
@@ -977,7 +1132,7 @@ def main() -> int:
                 cfg.print_seguro(f"  segunda pasada por fecha: +{len(recientes)} registros que el top por "
                       f"citas dejaba afuera ({sum(1 for r in recientes if r['relevant'])} core)")
 
-    # curación manual persistente: bibcodes en `extra_core` de stars.yaml/topics.yaml que el
+    # curación manual persistente: bibcodes en `extra_core` de stars.yaml/themes.yaml que el
     # clasificador perdió (build/ es scratch y se pisa; esto sobrevive porque vive en config).
     # Corre ANTES del glifo y del chaining (#42): si mergea después, los curados no están en `recs`
     # cuando el chaining arma su dedup y la cola de triage RE-PROPONE papers ya aceptados (medido:
@@ -990,7 +1145,7 @@ def main() -> int:
     extra = [e["bibcode"] for e in entradas]
     via_de = {e["bibcode"]: e["via"] for e in entradas}
     if args.extra_only and not extra:
-        sys.exit(f"--extra-only pero la entrada '{args.slug}' no declara `extra_core` en topics.yaml "
+        sys.exit(f"--extra-only pero la entrada '{args.slug}' no declara `extra_core` en themes.yaml "
                  "— listá ahí los bibcodes ADS del tema mixto.")
     if extra:
         # `extra_core` es un OVERRIDE del clasificador, no un "sumá lo ausente" (#39): el caso más
@@ -1072,7 +1227,7 @@ def main() -> int:
                 ya_descartados += 1        # decisión persistida: no re-proponer
             else:
                 candidatos.append(c)       # nivel 1: al triage (juicio del LLM, sin bajar nada)
-        anchor = "full-text del sujeto" if not args.topic else "la query del tema"
+        anchor = "full-text del sujeto" if not args.theme else "la query del tema"
         cfg.print_seguro(f"  chaining: +{len(chained)} core nuevos vía el grafo de citas de {len(core_bibs)} core "
               f"(anclado a {anchor})")
         if gate:
@@ -1081,6 +1236,17 @@ def main() -> int:
                   f"python scripts/triage.py {args.slug}")
         recs += chained
         rel = [r for r in recs if r["relevant"]]
+
+    # Puerta 1 de D-26: lo que la regla del tema dejó afuera pero el corpus CITA se propone al
+    # triage (nunca se vuelve core solo — §4.3). Va después del chaining para juzgar `recs` ya
+    # completo, y sólo en temas: en una estrella la señal la da el chaining anclado al full-text.
+    if head.get("kind") == "theme":
+        ya_prop = {c.get("bibcode") for c in candidatos}
+        p1 = [c for c in gate_cited_by_corpus(recs) if c.get("bibcode") not in ya_prop]
+        if p1:
+            candidatos += p1
+            cfg.print_seguro(f"  puerta 1 (lo cita tu corpus): +{len(p1)} candidatos al triage "
+                             f"— no son core, los juzgás vos: python scripts/triage.py {args.slug}")
 
     recs.sort(key=lambda r: r.get("citation_count") or 0, reverse=True)
     cfg.print_seguro(f"  total: {len(recs)} registros, {len(rel)} relevantes")
@@ -1145,12 +1311,12 @@ def main() -> int:
         "escotillas": _flags_usados(args),
         "almagesto_version": cfg.ALMAGESTO_VERSION,
         # La LENTE con la que se clasificó, textual (#64 → auditoría 1.10.3). `almagesto_version`
-        # es la versión del framework, NO la de la regla: cambiar una regex de `relevance.topics`
+        # es la versión del framework, NO la de la regla: cambiar una regex de `relevance.facets`
         # mueve el corte core/no-core sin mover la versión. Sin esto el registro dice sobre qué
         # universo se buscó pero no con qué filtro se recortó, que es la otra mitad de "reproducible".
-        "lente": {"topics": dict((_REL.get("topics") or {})),
-                  "require": list(REQUIRE_TOPICS),
-                  "min_topics": MIN_TOPICS,
+        "lente": {"facets": dict((_REL.get("facets") or {})),
+                  "require": list(REQUIRE_FACETS),
+                  "min_facets": MIN_FACETS,
                   "noise_doctypes": sorted(NOISE_DOCTYPES)},
     })
     cfg.print_seguro(f"  → {cfg.registro_path(args.slug)} (registro de búsqueda, versionado)")

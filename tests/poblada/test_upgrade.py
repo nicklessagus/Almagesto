@@ -126,7 +126,7 @@ def test_vintage_bloquea_con_categorias_de_schema_viejo_y_receta_visible(sembrar
     Los conteos NO se hardcodean (el plan pide no fijar números del corpus sintético): salen del
     propio `Censo.star_gt` — un planeta por dispute vieja, un planeta por contradicción de espejo —
     así que valen para cualquier seed/tamaño. Referencia del ensayo real (no el umbral de este
-    test): 16 bloqueantes, de los cuales 13 eran el espejo #70 y 2+1 el resto del schema viejo."""
+    test): 16 bloqueantes, de los cuales 13 eran el espejo #70 y 2+1 el resto del schema viejo.  @inv INV-64"""
     _, censo = sembrar(n_papers=60, n_stars=4, n_concepts=8, seed=100, vintage="1.11.0")
 
     n_planetas = sum(len(gt["planets"]) for gt in censo.star_gt.values())
@@ -370,7 +370,7 @@ def test_ciclo_completo_cierra_el_lint_y_la_segunda_pasada_es_no_op(sembrar):
     schema viejo (conteo > 0) → se corren los 4 migradores en el orden del deploy → el lint da
     EXIT 0 con las 12 categorías bloqueantes en 0 → se corren los 4 DE NUEVO → el árbol de
     `vault/` es BYTE A BYTE idéntico al de la primera pasada (no sólo "el lint sigue en 0": nada se
-    reescribió) y el lint sigue en exit 0."""
+    reescribió) y el lint sigue en exit 0.  @inv INV-22"""
     paths, censo = sembrar(n_papers=70, n_stars=5, n_concepts=8, seed=105, vintage="1.11.0")
 
     rc0, _ = _run_lint_reporte()

@@ -54,7 +54,7 @@ Requiere `pytest` (dev-only, no está en `requirements.txt`; los scripts no lo n
      y la selección de masa NEA (msini vs best-mass, flags).
    - **Espejo ficha ↔ ground-truth** (#70): el frontmatter de `stars/` vale lo que dice NEA o nada;
      un valor rellenado con literatura es indistinguible del auditable si nadie lo compara.
-   - **Validaciones de entrada** que abortan la cadena (`ingest_topic`, citekeys, sources).
+   - **Validaciones de entrada** que abortan la cadena (`ingest_theme`, citekeys, sources).
 6. **Un test de fix se escribe ANTES del fix y se lo ve fallar.** El orden es
    **test → rojo → fix → verde**, verificando el rojo. Un test que nunca estuvo rojo no distingue
    la presencia de la ausencia del fix: no es evidencia. Reemplaza a la mutación post-hoc como
@@ -83,7 +83,7 @@ Requiere `pytest` (dev-only, no está en `requirements.txt`; los scripts no lo n
 | `test_multicolumn_matching.py` | invariantes de la estrategia de matcheo en `.txt` a dos columnas (#44/#46): escalera de acortamiento, canaleta, normalización que empalma columnas | fixtures sintéticos |
 | `test_lint.py` | cada categoría con su caso sembrado + exit codes; espejo ficha↔ground-truth (#70: qué planetas —no cuántos— y campo por campo), extraído pero no sintetizado (#75), vocabulario cerrado de `role` (#73), disputas con posiciones explícitas (#71), detectores de los schemas viejos que el lector ya no mira | bóvedas mínimas por escenario |
 | `test_check_retractions.py` | parseo Crossref (`updated-by`, fechas), fallback por título, estampado idempotente de `retracted` y `corrections`, exit codes | `requests` falso |
-| `test_ingest_topic.py` | despacho por `source`, validaciones de `sources:`, flujo `pending`, aviso de fuente ya descartada, copia de PDFs, orden de la cadena ads | `run()` y `make_notes.*` grabadores |
+| `test_ingest_theme.py` | despacho por `source`, validaciones de `sources:`, flujo `pending`, aviso de fuente ya descartada, copia de PDFs, orden de la cadena ads | `run()` y `make_notes.*` grabadores |
 | `test_ingest_star.py` | orden canónico de la cadena de estrellas, aborto al primer fallo, retracción ≠ fallo, hand-off que nombra los pasos salteables | `run()` grabador |
 | `test_trace_invariants.py` | recolector de trazabilidad `@inv`: registro canónico desde `docs/contrato.md` §3, la marca sólo en comentario/docstring (adversarios: mención en prosa, `@inv` dentro de un string literal, auto-marcado del propio recolector), marca huérfana bloqueante, ratchet, contrato ilegible ⇒ rc 2 sin cero inventado | repo de juguete |
 | `test_bench_verify.py` | extracción de pares (excluye blockquotes/fences/bloque de verificación), siembra por rotación (sin falsos-falsos), determinismo byte a byte, puntaje | puro FS |

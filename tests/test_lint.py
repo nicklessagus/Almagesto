@@ -61,6 +61,7 @@ def test_boveda_vacia_pasa(toy_vault, capsys):
 # ── bloqueantes ──────────────────────────────────────────────────────────────
 
 def test_wikilink_roto_bloquea(toy_vault, capsys):
+    # @inv INV-02
     mk_note(toy_vault.CONCEPTS / "methods", "nota", {"tags": ["methods"]},
             "Cita a [[pagina-inexistente]].\n")
     link_from_index(toy_vault, "nota")
@@ -104,7 +105,7 @@ def test_el_lint_no_reporta_yaml_invalido_sobre_yaml_valido():
 def test_paper_sin_tag_paper_evade_los_chequeos_de_su_tipo(toy_vault, capsys):
     """Sin `tags: [paper]` la nota queda invisible para TODOS los chequeos de su tipo —incluida la
     frontera dura de `retracted`— y ni siquiera sale como huérfana si algo la linkea: se pierde del
-    todo, en silencio. Este chequeo es la única red para ese modo de falla."""
+    todo, en silencio. Este chequeo es la única red para ese modo de falla.  @inv INV-40"""
     mk_note(toy_vault.PAPERS, "2020notg....1N", {"relevance": "high"}, "cuerpo\n")
     rc, out = run_lint_reporte(capsys)
     assert rc == 1
@@ -145,7 +146,7 @@ def test_planets_con_forma_invalida_se_reporta_y_no_voltea_el_lint(toy_vault, ca
 
 def test_campo_de_lista_escrito_como_escalar_se_reporta_una_vez(toy_vault, capsys):
     """`thesis_links: shift` (sin corchetes) se iteraba CARÁCTER POR CARÁCTER: cinco `thesis_links`
-    colgantes inventados, uno por letra. Ahora es un hallazgo de forma, uno solo."""
+    colgantes inventados, uno por letra. Ahora es un hallazgo de forma, uno solo.  @inv INV-63"""
     mk_note(toy_vault.PAPERS, "2020strS...1..1S",
             {"tags": ["paper"], "relevance": "high", "methods": ["x"], "role": ["arbitro"],
              "thesis_links": "shift", "bearing": "supports"}, "")
@@ -168,6 +169,7 @@ def test_huerfanas_solo_conceptos_sueltos(toy_vault, capsys):
 
 
 def test_paper_retractado_bloquea(toy_vault, capsys):
+    # @inv INV-33
     mk_note(toy_vault.PAPERS, "2020retR...1..1R",
             {"tags": ["paper"], "retracted": True,
              "retraction": {"type": "retraction", "date": "2021-05-01"}}, "")
@@ -178,7 +180,7 @@ def test_paper_retractado_bloquea(toy_vault, capsys):
 
 def test_paper_con_correccion_es_backlog_no_bloquea(toy_vault, capsys):
     """#52: erratum/corrigendum/EoC se surface (un corrigendum cambia justo el valor extraído)
-    pero NO bloquea — el paper sigue siendo citable, a diferencia de una retracción."""
+    pero NO bloquea — el paper sigue siendo citable, a diferencia de una retracción.  @inv INV-34"""
     mk_note(toy_vault.PAPERS, "2020corC...1..1C",
             {"tags": ["paper"], "corrections": [
                 {"type": "corrigendum", "notice_doi": "10.1/corr", "date": "2023-07-01"},
@@ -318,7 +320,7 @@ def test_disputa_ref_colgante_en_posicion(toy_vault, capsys):
 
 
 def test_disputa_con_una_sola_posicion_no_es_disputa(toy_vault, capsys):
-    """Con un solo lado no hay desacuerdo: es una afirmación, y va a la prosa citada."""
+    """Con un solo lado no hay desacuerdo: es una afirmación, y va a la prosa citada.  @inv INV-12"""
     mk_note(toy_vault.PAPERS, "2020disD...1..1D", {"tags": ["paper"]}, "")
     ficha_con_disputas(toy_vault, [
         {"field": "P_rot", "posiciones": [{"ref": "2020disD...1..1D", "value": 33}]}])
@@ -450,7 +452,7 @@ def test_posicion_con_ref_y_source_no_esquiva_el_vocabulario(toy_vault, capsys):
 
 def test_role_fuera_del_vocabulario_es_bloqueante(toy_vault, capsys):
     """Mismo trato que un `thesis_links` que no matchea ninguna nota: un typo deja el campo mudo
-    para la operación que existe para consumirlo, sin que nadie se entere."""
+    para la operación que existe para consumirlo, sin que nadie se entere.  @inv INV-46"""
     paper_extraido(toy_vault, role=["fundacinal"], no_sintetizado="tangencial")
     rc, out = run_lint(capsys)
     assert rc == 1
@@ -510,7 +512,7 @@ def paper_extraido(toy_vault, stem="2020ext....1E", **extra):
 def test_extraido_sin_llegar_a_ninguna_entidad_es_backlog(toy_vault, capsys):
     """El paso más caro de la cadena era el único sin red, y su modo de falla es OMISIÓN: nada
     quedaba mal escrito, simplemente el paper nunca llegó a la ficha. `verify-citations` tampoco lo
-    ve — valida cada afirmación contra su fuente, no la cobertura del conjunto."""
+    ve — valida cada afirmación contra su fuente, no la cobertura del conjunto.  @inv INV-45"""
     paper_extraido(toy_vault)
     mk_note(toy_vault.STARS, "test_star", {"tags": ["star"], "P_rot_days": 34.0,
                                            "activity_indicators_expected": ["halpha"]}, "Síntesis.\n")
@@ -658,7 +660,7 @@ def ficha_espejo(toy_vault, front=None, body="**b** (P=365 d)\n"):
 def test_espejo_valor_que_nea_no_tiene_es_bloqueante(toy_vault, capsys):
     """El caso de #70: NEA no trae `st_rotp` (pasa seguido) y alguien completó el campo con el
     valor de un paper. Queda con el MISMO aspecto que un valor auditable de NEA y hasta ahora nada
-    lo detectaba — el único chequeo comparaba el NÚMERO de planetas, nunca los valores."""
+    lo detectaba — el único chequeo comparaba el NÚMERO de planetas, nunca los valores.  @inv INV-06"""
     write_gt(toy_vault, [gt_planet("b")])
     ficha_espejo(toy_vault, {"P_rot_days": 34.0}, "**b** (P=365 d) · P_rot 34 d [[2019A....1A]]\n")
     rc, out = run_lint(capsys)
@@ -718,7 +720,7 @@ def test_espejo_compara_que_planetas_no_cuantos(toy_vault, capsys):
     """El agujero que dejaba el `len()`: la ficha lista **b** y **d**, NEA confirma **b** y **c** —
     mismo largo, planetas distintos, lint en verde. Y no es un caso raro: es exactamente cómo una
     señal no confirmada termina en `planets[]` (donde se lee como ground-truth) en vez de en
-    `disputes` como `d.existence`. Un planeta entero inventado en la capa auditable era invisible."""
+    `disputes` como `d.existence`. Un planeta entero inventado en la capa auditable era invisible.  @inv INV-09"""
     write_gt(toy_vault, [gt_planet("b"), gt_planet("c")])
     ficha_espejo(toy_vault, {"planets": [{"letter": "b", "P_days": 365.25, "K_ms": 0.0895,
                                           "e": 0.0, "mass_earth": 1.0, "status": "confirmed"},
@@ -1003,6 +1005,7 @@ def test_mirror_issues_sin_ground_truth_no_inventa():
 
 
 def test_masa_inconsistente(toy_vault, capsys):
+    # @inv INV-10
     write_gt(toy_vault, [gt_planet("b", mass=300.0),          # 300 M⊕ vs implícita ~1
                          gt_planet("c", flag="best-mass espuria")])
     rc, out = run_lint(capsys)
@@ -1066,7 +1069,7 @@ def test_dispute_ref_con_paper_ok(toy_vault, capsys):
 def test_schema_viejo_de_disputes_grita_en_vez_de_volverse_mudo(toy_vault, capsys):
     """El lint dejó de leer `planets[].disputes[]` a propósito (una sola semántica). Lo que NO puede
     pasar es que esas disputas queden invisibles y la bóveda siga en verde: se reportan como
-    bloqueante, con el comando de migración."""
+    bloqueante, con el comando de migración.  @inv INV-13"""
     mk_note(toy_vault.STARS, "test_star",
             {"tags": ["star"], "P_rot_days": 1.0, "activity_indicators_expected": ["x"],
              "planets": [{"letter": "b", "disputes": [
@@ -1101,6 +1104,7 @@ def test_disputes_string_del_schema_viejo_no_cuenta_una_por_caracter(toy_vault, 
 # ── WARN (no bloquean) ───────────────────────────────────────────────────────
 
 def test_fuga_de_implementacion_warn(toy_vault, capsys):
+    # @inv INV-04
     mk_note(toy_vault.CONCEPTS / "methods", "nota",
             {"tags": ["methods"]},
             "La perilla del contraste se ajusta así.\n"
@@ -1126,7 +1130,7 @@ def test_fuga_numera_lineas_como_grep(toy_vault, capsys):
 
 
 def test_objetivo_default_warn(toy_vault, capsys):
-    """Guard de config: objective.yaml sin instanciar (name = default del template) → WARN."""
+    """Guard de config: objective.yaml sin instanciar (name = default del template) → WARN.  @inv INV-57"""
     import lib_config as cfg
     from conftest import write_yaml
     obj = dict(cfg.load_objective())
@@ -1146,7 +1150,7 @@ def test_objetivo_propio_sin_warn(toy_vault, capsys):
 def test_objective_yaml_invalido_no_voltea_el_lint(toy_vault, capsys):
     """El skill `setup` hace que el agente escriba REGEX dentro de YAML: un `:` sin comillas es el
     error más probable de toda la config. El lint es la compuerta de CI: reporta, no se muere."""
-    cfg.OBJECTIVE_YAML.write_text("name: x\nrelevance:\n  topics:\n    rv: v: mal\n",
+    cfg.OBJECTIVE_YAML.write_text("name: x\nrelevance:\n  facets:\n    rv: v: mal\n",
                                   encoding="utf-8")
     assert run_lint(capsys)[0] in (0, 1)
 
@@ -1160,7 +1164,7 @@ def test_area_no_declarada_warn(toy_vault, capsys):
 
 
 def test_obsidian_en_raiz_warn(toy_vault, capsys):
-    """Guard de operación: .obsidian/ en la raíz del repo (vault abierto ahí por error) → WARN."""
+    """Guard de operación: .obsidian/ en la raíz del repo (vault abierto ahí por error) → WARN.  @inv INV-65"""
     (toy_vault.ROOT / ".obsidian").mkdir()
     rc, out = run_lint(capsys)
     assert rc == 0                                   # WARN, no bloquea
@@ -1269,6 +1273,7 @@ def test_fulltext_ilegible(toy_vault, capsys):
 # ── precondiciones / backlog ─────────────────────────────────────────────────
 
 def test_cita_sin_fulltext_no_verificable(toy_vault, capsys):
+    # @inv INV-03
     mk_note(toy_vault.PAPERS, "2020citC...1..1C", {"tags": ["paper"]}, "")
     mk_note(toy_vault.QUERIES, "mi-query", {"tags": ["query"]},
             "Según [[2020citC...1..1C]] pasa X.\n")
@@ -1343,7 +1348,7 @@ def test_prosa_reconoce_variantes_de_mencion(toy_vault, capsys):
 def test_registro_versionado_cubre_la_falta_de_build(toy_vault, capsys):
     """#51/#64: sin build/ local (post-clone, otra máquina, scratch limpiado) los chequeos de
     triage y truncamiento reportaban 0 SIN MIRAR NADA — un falso limpio. Ahora caen al registro
-    versionado y reportan el snapshot CON su fecha, diciendo que no es el conteo vigente."""
+    versionado y reportan el snapshot CON su fecha, diciendo que no es el conteo vigente.  @inv INV-25"""
     cfg.save_busqueda("au_mic", {"fecha": "2026-08-21", "query": "title:(x)", "rows": 400,
                                  "n_found": 410, "n_core": 198, "n_candidates": 42,
                                  "truncated": True})
@@ -1356,7 +1361,7 @@ def test_registro_versionado_cubre_la_falta_de_build(toy_vault, capsys):
 
 
 def test_build_local_gana_sobre_el_registro(toy_vault, capsys):
-    """Con build/ presente manda la verdad viva: el sujeto no se reporta dos veces."""
+    """Con build/ presente manda la verdad viva: el sujeto no se reporta dos veces.  @inv INV-39"""
     cfg.save_busqueda("au_mic", {"fecha": "2026-08-01", "n_candidates": 99, "truncated": False})
     d = toy_vault.ROOT / "build" / "au_mic"
     d.mkdir(parents=True, exist_ok=True)
@@ -1642,7 +1647,7 @@ def test_verificacion_stale_por_edicion_sin_commitear(toy_vault, capsys):
 
 
 def test_verificacion_stale_por_commit_posterior(toy_vault, capsys):
-    """La otra rama: la edición ya está committeada — la fecha sale de `git log -1 --format=%cs`."""
+    """La otra rama: la edición ya está committeada — la fecha sale de `git log -1 --format=%cs`.  @inv INV-31"""
     cuerpo = "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-01-01)\n\n| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente |\n|---|---|---|---|---|---|\n"
     _skip_sin_git(_repo_con_nota(toy_vault, cuerpo, fecha="2020-01-01"))
     p = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
@@ -1721,7 +1726,7 @@ def test_in_dir_no_confunde_carpeta_hermana_stars_borradores(toy_vault, capsys):
 
 # ── issue 0.3 · "no evaluado": un chequeo que no pudo correr NO aporta un cero (D-43 / INV-87) ──
 
-BAD_OBJECTIVE = "name: Prueba\nrelevance:\n  topics:\n    rv: activity: starspot\n"
+BAD_OBJECTIVE = "name: Prueba\nrelevance:\n  facets:\n    rv: activity: starspot\n"
 # ⚠ el caso adversario tiene que ROMPER de verdad: `rv: foo:bar` —lo que proponía el plan—
 # **parsea**, porque en YAML un `:` pegado al carácter siguiente es parte del escalar. El que
 # rompe es `:` SEGUIDO DE ESPACIO, que es justo lo que produce una regex con una alternación
@@ -1744,7 +1749,7 @@ def test_lint_objective_roto_bloquea(toy_vault, capsys):
 
 def test_lint_sin_git_reporta_no_evaluado(toy_vault, capsys, monkeypatch):
     """La otra puerta del mismo cero inventado: sin `git`, `last_change_dates` devuelve `{}` y la
-    verificación stale reportaba **0** en silencio — indistinguible de "todo al día".  @inv INV-87"""
+    verificación stale reportaba **0** en silencio — indistinguible de "todo al día".  @inv INV-87, INV-38"""
     mk_note(toy_vault.QUERIES, "q1", {"tags": ["query"]},
             "Afirmación [[2020aaaA...1..1A]].\n\n## Verificación de citas (2020-01-01)\n")
     mk_note(toy_vault.PAPERS, "2020aaaA...1..1A", {"tags": ["paper"], "bibcode": "2020aaaA...1..1A"})
@@ -1759,7 +1764,7 @@ def test_lint_sin_git_reporta_no_evaluado(toy_vault, capsys, monkeypatch):
 def test_no_evaluado_no_contamina_conteos(toy_vault, capsys, monkeypatch):
     """Adversario del cero inventado: el chequeo que no corrió NO puede aparecer como "(0)" en su
     categoría normal, porque ese 0 se lee como veredicto. La categoría stale queda fuera del
-    reporte cuando no se pudo evaluar."""
+    reporte cuando no se pudo evaluar.  @inv INV-32"""
     mk_note(toy_vault.QUERIES, "q1", {"tags": ["query"]},
             "Afirmación [[2020aaaA...1..1A]].\n\n## Verificación de citas (2020-01-01)\n")
     mk_note(toy_vault.PAPERS, "2020aaaA...1..1A", {"tags": ["paper"], "bibcode": "2020aaaA...1..1A"})
@@ -1919,6 +1924,74 @@ def test_registro_schema_viejo_detectado(toy_vault, capsys):
     rc, rep = run_lint_reporte(capsys)
     assert rc == 1
     assert "pre-D-28" in rep or "schema viejo" in rep
+
+
+def test_stars_yaml_roto_reporta_no_evaluado_en_vez_de_reventar(toy_vault, capsys):
+    """@inv INV-80 — *una config que no parsea rehúsa operar y el lint la REPORTA*. D-6 cerró esa
+    puerta para `objective.yaml`, pero `stars.yaml`/`themes.yaml` quedaron afuera: `load_stars`
+    propaga el `yaml.ScannerError` y `lint.main()` **muere con traceback**, que no es "reportar como
+    bloqueante" — es llevarse puestos los otros cuarenta chequeos y no dejar reporte. Es el mismo
+    falso limpio de INV-87 por otra puerta: el usuario ve un stacktrace y no sabe qué se miró."""
+    cfg.STARS_YAML.write_text("tau Ceti:\n  slug: tau_ceti\n  title: mal: sin comillas\n",
+                              encoding="utf-8")
+    rc, rep = run_lint_reporte(capsys)     # no debe levantar
+    assert rc != 0
+    assert "No evaluado" in rep and "stars.yaml" in rep
+
+
+def test_themes_yaml_roto_tambien_reporta_no_evaluado(toy_vault, capsys):
+    """@inv INV-80 — el hermano del anterior. La fila del contrato declaraba "la batería se completó
+    con los otros dos YAML" y sólo `stars.yaml` tenía test: el mecanismo cubría los dos
+    (`lint.main` llama a `cfg.themes_error()`), pero la garantía **medida** cubría uno. Declarar de
+    más una batería es el mismo defecto que mide INV-87, aplicado a la doc en vez de al reporte."""
+    cfg.THEMES_YAML.write_text("gp:\n  title: mal: sin comillas\n", encoding="utf-8")
+    rc, rep = run_lint_reporte(capsys)     # no debe levantar
+    assert rc != 0
+    assert "No evaluado" in rep and "themes.yaml" in rep
+
+
+def test_notas_huerfanas_salen_en_orden_estable(toy_vault, capsys):
+    """@inv INV-43 — el reporte tiene que ser **determinista entre corridas**, o dos corridas del
+    mismo estado dan diffs distintos y el reporte deja de servir de línea de base. `orphans` salía
+    de iterar un `dict` construido sobre un `set` de strings, cuyo orden depende del hash que
+    Python randomiza **por proceso**: la sección cambiaba de orden sola. El golden lo tapaba
+    ordenando las líneas antes de comparar —o sea que el único no-determinismo medido estaba
+    justamente neutralizado en el test que debía verlo—; acá se fija la propiedad observable."""
+    for stem in ("zeta", "alfa", "mu", "beta", "omega", "delta", "kappa", "gamma"):
+        mk_note(cfg.CONCEPTS / "methods", stem, {"tags": ["concept"], "name": stem})
+    _, rep = run_lint_reporte(capsys)
+    lineas = []
+    dentro = False
+    for l in rep.splitlines():
+        if l.startswith("## "):
+            dentro = "huérfanas" in l
+        elif dentro and l.startswith("- "):
+            lineas.append(l)
+    assert len(lineas) >= 8, f"el escenario tiene que sembrar huérfanas: {lineas}"
+    assert lineas == sorted(lineas), f"orden inestable en «Notas huérfanas»: {lineas}"
+
+
+def test_topics_en_nota_de_paper_es_schema_viejo(toy_vault, capsys):
+    """R-5: `topics:` nombraba a la vez la faceta de la lente y el tema-sujeto; el renombre lo
+    partió en `facets:` (nota de paper) y `themes.yaml`. El campo viejo quedó **sin lector**: una
+    nota que lo trae tiene sus facetas MUDAS y hasta hoy ningún chequeo lo decía. Es el mismo modo
+    de falla que `busqueda:` (pre-D-28) y se trata igual — detector bloqueante, nunca lector
+    tolerante (@inv INV-13)."""
+    mk_note(cfg.PAPERS, "2020Viejo",
+            {"tags": ["paper"], "bibcode": "2020Viejo", "topics": ["rv", "activity"]})
+    link_from_index(toy_vault, "2020Viejo")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 1, "una nota con el campo pre-R-5 tiene que bloquear"
+    assert "2020Viejo" in rep and "topics" in rep and "facets" in rep
+
+
+def test_facets_vigente_no_dispara_el_detector(toy_vault, capsys):
+    """Control de cordura: el campo vigente no puede caer en el detector del viejo."""
+    mk_note(cfg.PAPERS, "2020Nuevo",
+            {"tags": ["paper"], "bibcode": "2020Nuevo", "facets": ["rv"]})
+    link_from_index(toy_vault, "2020Nuevo")
+    rc, rep = run_lint_reporte(capsys)
+    assert "2020Nuevo" not in rep or "pre-R-5" not in rep
 
 
 def test_cadena_cortada_nombra_el_paso(toy_vault, capsys):

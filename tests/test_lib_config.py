@@ -50,22 +50,22 @@ def test_star_by_slug_yaml_vacio(toy_vault):
         cfg.star_by_slug("nope")
 
 
-def test_load_topics_sin_archivo(toy_vault):
-    toy_vault.TOPICS_YAML.unlink()
-    assert cfg.load_topics() == {}
+def test_load_themes_sin_archivo(toy_vault):
+    toy_vault.THEMES_YAML.unlink()
+    assert cfg.load_themes() == {}
 
 
-def test_load_topics_vacio(toy_vault):
-    toy_vault.TOPICS_YAML.write_text("")
-    assert cfg.load_topics() == {}
+def test_load_themes_vacio(toy_vault):
+    toy_vault.THEMES_YAML.write_text("")
+    assert cfg.load_themes() == {}
 
 
-def test_topic_by_slug(toy_vault):
-    write_yaml(toy_vault.TOPICS_YAML, {"gp": {"title": "Gaussian processes", "area": "methods", "concept": "gp"}})
-    slug, meta = cfg.topic_by_slug("gp")
+def test_theme_by_slug(toy_vault):
+    write_yaml(toy_vault.THEMES_YAML, {"gp": {"title": "Gaussian processes", "area": "methods", "concept": "gp"}})
+    slug, meta = cfg.theme_by_slug("gp")
     assert slug == "gp" and meta["concept"] == "gp"
-    with pytest.raises(KeyError, match="topics.yaml"):
-        cfg.topic_by_slug("nope")
+    with pytest.raises(KeyError, match="themes.yaml"):
+        cfg.theme_by_slug("nope")
 
 
 # ── objective / concept_areas ────────────────────────────────────────────────
@@ -92,7 +92,7 @@ def test_concept_areas_reservadas_se_agregan(toy_vault):
 def test_concept_areas_sin_declarar_apaga_el_chequeo(toy_vault):
     """Sin `concept_areas` declarado el typo-check queda APAGADO (`[]`), no inferido de las carpetas
     que hay en disco: inferirlo convertiría cualquier typo ya cometido en "área declarada", que es
-    lo contrario de lo que el chequeo hace. El lint reporta la lista ausente."""
+    lo contrario de lo que el chequeo hace. El lint reporta la lista ausente.  @inv INV-47"""
     obj = dict(cfg.load_objective())
     obj.pop("concept_areas")
     write_yaml(toy_vault.OBJECTIVE_YAML, obj)
@@ -103,7 +103,7 @@ def test_concept_areas_sin_declarar_apaga_el_chequeo(toy_vault):
 
 def test_version_unica_fuente():
     """ALMAGESTO_VERSION es la ÚNGaussian processes fuente de versión: los UA de los fetchers derivan de la
-    constante, y ningún script hardcodea 'Almagesto/x.y' (el drift que tenían los UA en 0.1)."""
+    constante, y ningún script hardcodea 'Almagesto/x.y' (el drift que tenían los UA en 0.1).  @inv INV-62"""
     import re
 
     import check_retractions
@@ -128,8 +128,8 @@ def test_require_field(toy_vault):
         cfg.require_field(meta, "simbad", "Estrella Test", "stars.yaml")
     with pytest.raises(SystemExit):
         cfg.require_field(meta, "vacio", "Estrella Test", "stars.yaml")   # vacío = faltante
-    with pytest.raises(SystemExit, match="usá ingest_topic"):
-        cfg.require_field(meta, "query", "gp", "topics.yaml", hint="usá ingest_topic.")
+    with pytest.raises(SystemExit, match="usá ingest_theme"):
+        cfg.require_field(meta, "query", "gp", "themes.yaml", hint="usá ingest_theme.")
 
 
 def test_concept_areas_sin_nada(toy_vault):
@@ -251,7 +251,7 @@ NOTA_CON_GUIONES = (
 def test_split_fm_no_corta_dentro_de_un_valor():
     """El split por `---` es TEXTUAL y corta a la mitad de un escalar entrecomillado, así que
     `split_fm` devuelve `{}` sobre un frontmatter que **es YAML válido**. Todo lo que cuelga del
-    frontmatter (tipo de nota, retracción, espejo, roles) queda mudo para esa nota."""
+    frontmatter (tipo de nota, retracción, espejo, roles) queda mudo para esa nota.  @inv INV-36"""
     fm = cfg.split_fm(NOTA_CON_GUIONES)
     assert fm.get("bibcode") == "2020aaa...1..1A", f"frontmatter perdido: {fm!r}"
 
@@ -264,7 +264,7 @@ REGISTRO_ROTO = 'busqueda:\n  motivo: "sin cerrar\n  fecha: 2026-08-01\n'
 def test_no_se_pisa_un_registro_ilegible(toy_vault):
     """El registro es, por definición del repo, lo que NO es regenerable (#51/#64). Si la lectura
     falló, escribir encima destruye `busqueda` y todos los juicios de curación en silencio — y el
-    framework INSTRUYE editar ese archivo a mano (`ingest_topic.py:197`), así que un YAML roto es
+    framework INSTRUYE editar ese archivo a mano (`ingest_theme.py:197`), así que un YAML roto es
     un estado alcanzable, no una hipótesis."""
     cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
     f = cfg.registro_path("test_star")
@@ -373,7 +373,7 @@ def test_sin_escrituras_directas_a_vault():
     from pathlib import Path
     import trace_invariants as ti
     escriben_en_vault = ("make_notes.py", "extract_fulltext.py", "fetch_web.py",
-                         "ingest_topic.py", "fetch_ground_truth.py", "check_retractions.py",
+                         "ingest_theme.py", "fetch_ground_truth.py", "check_retractions.py",
                          "fetch_arxiv.py", "fetch_pdf.py", "lib_config.py")
     directo = re.compile(r"(?<!def )\b\w+\.write_(?:text|bytes)\(")
     ofensores = []
@@ -396,7 +396,7 @@ def test_sin_escrituras_directas_a_vault():
 
 def test_objective_error_distingue_los_tres_estados(toy_vault):
     """`load_objective` colapsa "YAML roto" y "objetivo vacío" en el mismo `{}`. `objective_error`
-    los separa para el llamador estricto, sin cambiarle la firma al tolerante.  @inv INV-80"""
+    los separa para el llamador estricto, sin cambiarle la firma al tolerante.  @inv INV-80, INV-56"""
     assert cfg.objective_error() is None                     # el toy_vault trae uno sano
     cfg.OBJECTIVE_YAML.write_text("name: X\nrelevance:\n  topics:\n    rv: activity: starspot\n", encoding="utf-8")
     err = cfg.objective_error()
@@ -434,7 +434,7 @@ def test_segunda_corrida_no_pisa_la_primera(toy_vault):
 
 def test_busqueda_preserva_decisiones(toy_vault):
     """No se rompe la garantía vieja: `decisiones` (el juicio de curación, lo NO regenerable) sigue
-    intacto al appendear una búsqueda."""
+    intacto al appendear una búsqueda.  @inv INV-53"""
     cfg.save_decisiones("test_star", {"2020X": {"decision": "descartado", "motivo": "ruido"}})
     cfg.save_busqueda("test_star", {"fecha": "2026-01-01", "n_total": 1})
     assert cfg.load_decisiones("test_star")["2020X"]["motivo"] == "ruido"
@@ -579,8 +579,31 @@ def test_extra_core_ausente_es_lista_vacia(toy_vault):
 def test_autoridad_por_campo_declarada():
     """La declaración vive en UN lugar y la comparten los tres consumidores (fetch_ground_truth
     escribe, make_notes la publica en la cabecera, lint la vigila). Repetirla es cómo se
-    desincronizan."""
+    desincronizan.  @inv INV-14"""
     assert cfg.AUTORIDAD_CAMPO["spectral_type"] == "simbad"
     assert cfg.AUTORIDAD_CAMPO["teff_K"] == "nea"
     assert cfg.AUTORIDAD_CAMPO["st_rotp_days"] == "nea"   # clave del JSON, no la de la ficha
     assert all(v in ("nea", "simbad") for v in cfg.AUTORIDAD_CAMPO.values())
+
+
+# ── Archivos de instancia protegidos del merge (INV-68) ──────────────────────
+
+def test_gitattributes_cubre_los_archivos_de_instancia():
+    """@inv INV-68 — los archivos "propios de la instancia" tienen que estar bajo `merge=ours`, o
+    el próximo `git merge upstream/main` los pisa con la versión del template. Es mecanismo
+    declarativo (`.gitattributes`), así que sin un test que lo lea NADIE lo vigila: fue justo lo que
+    pasó con el renombre R-5 —`topics.yaml` quedó protegido y `themes.yaml`, el archivo real, no—.
+    La lista es la que declara `CLAUDE.md` §Framework vs instancia."""
+    raiz = Path(__file__).resolve().parent.parent
+    ga = (raiz / ".gitattributes").read_text(encoding="utf-8")
+    protegidos = {l.split()[0] for l in ga.splitlines()
+                  if l.strip() and not l.startswith("#") and "merge=ours" in l}
+    esperados = {
+        "vault/config/objective.yaml", "vault/config/stars.yaml", "vault/config/themes.yaml",
+        "vault/STATUS.md", "vault/wiki/index.md", "vault/wiki/log.md",
+        "vault/wiki/matrices/method_star.md",
+    }
+    assert esperados <= protegidos, f"sin merge=ours: {sorted(esperados - protegidos)}"
+    # Y a la inversa: nada protegido que ya no exista (un puntero muerto se lee como cobertura).
+    huerfanos = [r for r in protegidos - esperados if not (raiz / r).exists()]
+    assert huerfanos == [], f"`.gitattributes` protege rutas inexistentes: {huerfanos}"
