@@ -1338,7 +1338,7 @@ ESTADO_LINE_RE = re.compile(r"^> _Estado.*\n", re.M)
 
 
 def estado_line(slug: str, dest) -> str:
-    """La línea de estado de la cabecera.  @inv INV-82: búsqueda · síntesis · verificación. "" si no hay nada."""
+    """La línea de estado de la cabecera.  @inv INV-82: búsqueda · verificación. (La de SÍNTESIS todavía no existe — ver la fila parcial del contrato.) "" si no hay nada."""
     bs = cfg.load_busquedas(slug)
     b = bs[-1] if bs else {}
     partes = []

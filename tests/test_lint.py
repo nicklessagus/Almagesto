@@ -1939,6 +1939,17 @@ def test_stars_yaml_roto_reporta_no_evaluado_en_vez_de_reventar(toy_vault, capsy
     assert "No evaluado" in rep and "stars.yaml" in rep
 
 
+def test_themes_yaml_roto_tambien_reporta_no_evaluado(toy_vault, capsys):
+    """@inv INV-80 — el hermano del anterior. La fila del contrato declaraba "la batería se completó
+    con los otros dos YAML" y sólo `stars.yaml` tenía test: el mecanismo cubría los dos
+    (`lint.main` llama a `cfg.themes_error()`), pero la garantía **medida** cubría uno. Declarar de
+    más una batería es el mismo defecto que mide INV-87, aplicado a la doc en vez de al reporte."""
+    cfg.THEMES_YAML.write_text("gp:\n  title: mal: sin comillas\n", encoding="utf-8")
+    rc, rep = run_lint_reporte(capsys)     # no debe levantar
+    assert rc != 0
+    assert "No evaluado" in rep and "themes.yaml" in rep
+
+
 def test_notas_huerfanas_salen_en_orden_estable(toy_vault, capsys):
     """@inv INV-43 — el reporte tiene que ser **determinista entre corridas**, o dos corridas del
     mismo estado dan diffs distintos y el reporte deja de servir de línea de base. `orphans` salía

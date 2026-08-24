@@ -13,10 +13,10 @@ Para *cómo* operar ver `CLAUDE.md`; para el historial ver `vault/wiki/log.md`; 
 ## Próximos pasos
 
 1. Definir el objetivo con el skill `setup` (se lo pedís al agente en palabras; genera/afina
-   `vault/config/objective.yaml` con su `relevance.topics` — editable a mano si preferís).
+   `vault/config/objective.yaml` con su `relevance.facets` — editable a mano si preferís).
 2. Poner el token ADS en `vault/config/ads_dev_key` (o `ADS_DEV_KEY`).
-3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/topics.yaml`) y correr
-   `ingest-star` / `ingest-topic`.
+3. Agregar tu primera estrella a `vault/config/stars.yaml` (o tema a `vault/config/themes.yaml`) y correr
+   `ingest-star` / `ingest-theme`.
 
 ## ✅ Framework 1.23.0 (2026-08-23) — séptima pasada: el código que ninguna auditoría había mirado
 
@@ -262,7 +262,7 @@ se proteja una ruta inexistente). Además: detector bloqueante para `topics:` en
 
 ### El contrato y el mapa
 
-- **`contrato.md`** pasó de 16 filas de §3.K en `HUECO` a **9 medidos · 5 parciales · 2 HUECO**, y
+- **`contrato.md`** pasó de 16 filas de §3.K en `HUECO` a **10 medidos · 4 parciales · 2 HUECO**, y
   se corrigieron **nueve filas de A–J que declaraban deuda ya saldada** y **dos que afirmaban
   garantías que no existían** (INV-43, INV-72). Estado nuevo `parcial`, declarado en §2 con su
   condición: sólo vale si la fila nombra la mitad que falta.
@@ -272,8 +272,9 @@ se proteja una ruta inexistente). Además: detector bloqueante para `topics:` en
 ### ⛔ Hallazgos que quedan abiertos
 
 1. **Tier 2 está roto desde la Tanda 2 y nadie lo notó.** `lint.main()` sale con `SystemExit` al
-   leer el `stars.yaml` pre-D-58 de la instancia, así que **seis** invariantes duros de
-   `test_invariantes_instancia.py` no corren: el gate del deploy no da señal. Es el modo de falla
+   leer el `stars.yaml` pre-D-58 de la instancia, así que caen **siete** tests de `test_invariantes_instancia.py`
+   (5 invariantes duros + el ratchet de categorías + el de idempotencia de migradores): el gate del
+   deploy no da señal. Es el modo de falla
    que `pytest.ini` documenta ("un tier que se saltea sin decirlo"). Se cierra con el deploy.
 2. **Los siete invariantes sin marca son huecos reales**, no falta de marcado. El más grande:
    **INV-19 — no existe borrado/renombre de ENTIDAD** (sólo `rename_paper`); nadie limpia
@@ -300,8 +301,10 @@ resuelve con la identidad de D-19.
 
 ### Lo que sigue
 
-- **Decidir el nombre del campo** de la faceta propia del tema en `themes.yaml` (issue 7.3 lo
-  dejaba como "ver R-5"; R-5 resolvió la colisión pero no bautizó el campo). Propuesta: `facet:`.
+- ✅ **Decidido (2026-08-24)**: el campo de la faceta propia del tema en `themes.yaml` es
+  **`facet:`** — singular, porque es UNA regex propia del tema, y consistente con
+  `relevance.facets` y con el `facets:` de la nota de paper. El issue 7.3 lo tenía diferido como
+  "ver R-5".
 - Después, Tanda 7 con el diseño de índice de citas que sale de la medición de arriba.
 
 ---

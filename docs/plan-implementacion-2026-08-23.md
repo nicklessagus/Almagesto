@@ -637,7 +637,7 @@ construcción. **Toca:** scripts nuevos `search_arxiv.py`, `openalex.py`, `citat
 
 - **Funciones:** la entrada del tema en `themes.yaml` gana su **faceta propia**, campo `facet:`
   (decidido 2026-08-24; singular porque es UNA regex propia del tema, y consistente con
-  `relevance.facets` y con el campo `facets:` de la nota de paper). `query_ads`/`ingest_topic` para temas de método:
+  `relevance.facets` y con el campo `facets:` de la nota de paper). `query_ads`/`ingest_theme` para temas de método:
   core = faceta propia AND (puerta 2 `fundacional en su campo` —citas altas + faceta— OR puerta 3
   —lente astro global—). La **puerta 1** (`cited_by_corpus`) **no clasifica**: alimenta
   `candidates` del triage con `via: citado-por-corpus` y el conteo de quiénes lo citan; aceptar →

@@ -22,7 +22,11 @@
 # símbolo que las dos nombraron, y los 67 tests + 51 símbolos que se marcaron existían todos (cero
 # nombres inventados, que era el riesgo del método).
 #
-# LOS SIETE QUE QUEDAN SON HUECOS REALES, no falta de marcado — eso es el hallazgo de la pasada:
+# LOS SIETE QUE QUEDAN NO SON FALTA DE MARCADO: no hay símbolo o no hay test que marcar, y ése es
+# el hallazgo de la pasada. ⚠ "hueco" acá es lenguaje corriente, NO el estado `HUECO` del
+# contrato: en la taxonomía de `contrato.md` §2 sólo INV-86 e INV-88 son HUECO; INV-05 e INV-66
+# son `garantizado sin medir`, INV-19 es `HUECO (parcial)`, INV-23 es `INCUMPLIDO (parcial)` e
+# INV-73 figura `garantizado y medido`. La autoridad del estado es el contrato, no este archivo.
 #   · INV-05  las plantillas de `make_notes` no tienen test que las audite buscando prosa que
 #             describa a un consumidor downstream.
 #   · INV-19  NO EXISTE herramienta de borrado/renombre de ENTIDAD (sólo `rename_paper`, a nivel
@@ -31,7 +35,9 @@
 #   · INV-23  la independencia del orden del PRIMER estampado de `fulltext` (`A,B` ≠ `B,A`) — es el
 #             INC-3 abierto: los tres tests existentes prueban la rama "ya hay valor estampado".
 #   · INV-66  rutas absolutas en artefactos versionados: sin chequeo y sin test.
-#   · INV-73  que el benchmark no toque `vault/`: hoy lo garantiza la fixture, no una aserción.
+#   · INV-73  el contrato lo da `garantizado y medido` por la 8ª F1 #26, pero en la suite actual
+#             el aislamiento lo da la fixture `toy_vault`, no una aserción: ningún test se
+#             pondría rojo si `cmd_seed` escribiera en `cfg.VAULT`. Falta ESE test.
 #   · INV-86  `inferencia` sin premisas (issue 8.3, Tanda 8 — no empezada).
 #   · INV-88  descubrimiento fuera de ADS y las tres puertas (Tanda 7 — no empezada).
 
