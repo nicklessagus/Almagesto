@@ -153,14 +153,82 @@ construido cruzando dos documentos independientes: lo que el sistema **hace** (m
 `scripts/`, `tests/`, `STATUS.md` ni los informes. De ese cruce salen los **huecos**: garantías que
 deberían existir y que nadie sabía que faltaban.
 
+## ✅ Revisión del contrato con el usuario (2026-08-23) — cierra el punto 1 de la cola
+
+> **Las 22 decisiones de intención de `docs/contrato.md` §6 quedaron resueltas.** La revisión no fue
+> ítem por ítem: se recorrió el sistema **de punta a punta con el usuario** (setup → búsqueda → triage →
+> extracción → contraste → síntesis → verificación → cierre; estrellas, conceptos/métodos, temas
+> off-ADS, hipótesis, contradicciones). De ahí salieron **57 decisiones** — las 22 previstas más **35
+> que el auditor no había visto**, porque sólo aparecen al recorrer el flujo como usuario.
+
+**Dónde quedó todo:** `docs/revision-contrato-2026-08-23.md` (razones, mediciones y clasificación por
+esfuerzo). `docs/contrato.md` §6 marca las 22 con su resolución; los invariantes nuevos entraron como
+**§3.K, INV-76…91**, todos en estado HUECO (decisión tomada, mecanismo por escribir).
+
+### Lo que se midió sobre la instancia real durante la revisión
+Ninguno de estos números existía antes; todos salieron de mirar Almagesto-RV mientras se discutía:
+- **155 papers en el roll-up de `tau_ceti`, 8 citados en la prosa.** De los 147 restantes: 67
+  `relevance: low`, **42 `high` sin extraer**, **38 `high` extraídos y no sintetizados**. La ficha se
+  lee como si sintetizara 155.
+- **2 trabajos con dos notas cada uno** (mismo `arxiv_id`, dos bibcodes: preprint y publicado), sobre 29
+  notas con bibcode arXiv. La dedup por bibcode no ve el par.
+- **30 bibcodes con `.txt` bajo más de un slug**, 33 copias extra en disco (se re-baja el PDF).
+- **Los 18 conceptos usan tres llaves distintas** para el mismo roll-up (`thesis_links` 12,
+  `methods` 4, las dos con `OR` 4). Nadie lo decidió: lo improvisó el LLM al crear cada nota.
+- **376 papers con `thesis_links`, 67 con más de uno** y un `bearing` escalar para todos.
+- **Costo del ingest:** 672 fulltexts, mediana 92 KB ≈ 24k tokens → una estrella de ~198 core sale
+  ≈ **6M tokens de entrada**, lineal. La lente pasa a ser **presupuesto**, no sólo filtro.
+- **Dos fugas de implementación vivas** que el WARN no detecta porque busca perillas, no punteros
+  downstream: *"lo leen los scripts de ICA"* (`tau_ceti`) y *"supuesto de trabajo del pipeline ICA por
+  canal"* (`achromaticity`).
+
+### Las decisiones que más cambian el sistema
+1. **El ancla (D-4/D-20)** — cada par verificado guarda dos hashes: el del bloque markdown que lleva la
+   cita y el del `.txt` leído. Convierte "re-verificar" de todo-o-nada por archivo a **por par**, y con
+   el segundo hash cubre de una sola forma el preprint que se publica, el `v1→v3` y el snapshot web que
+   cambió. **Es la pieza de la que cuelga casi todo lo demás.**
+2. **La ficha declara su universo (D-10/D-13)** — lista materializada, paper por paper, con origen
+   (`lente`/`manual`), si se extrajo y si se sintetizó. El default pasa a ser **leer todos los core**; lo
+   que no se lea, declarado.
+3. **Identidad por `doi`/`arxiv_id` (D-19)** — una nota canónica por trabajo, versiones en `versions[]`,
+   renombre con reescritura de wikilinks.
+4. **Descubrimiento fuera de ADS (D-25/26/27)** — arXiv + OpenAlex como backends, relevancia **propia del
+   tema** con tres puertas, y un **índice de citas local** que habilita la mejor de ellas: *"lo cita tu
+   corpus"*. Sin esto, los métodos de otras disciplinas dependen de que el usuario ya sepa la respuesta.
+5. **`inferencia` nombra sus premisas (D-42)** — cierra el sumidero por donde una afirmación
+   `no-soportada` sobrevivía cambiándole la etiqueta.
+6. **`bearing` sale del paper (D-21)** — la postura frente a una tesis es una **afirmación**, no un
+   puntero: va a la tabla de evidencia de la hipótesis, con cita y verificada.
+7. **La bóveda es read-only desde afuera (D-50)** — ataca el vector de la contaminación downstream, no
+   el síntoma. Hoy no está escrito en ningún lado.
+
+### Tamaño del trabajo (57 decisiones)
+| | | |
+|---|---|---|
+| **A** · ya funciona, sólo documentar | 7 | |
+| **B** · cambio chico (campo, categoría de lint, ajuste de skill) | 24 | el grueso |
+| **C** · feature nueva | 11 | **el camino crítico** |
+
+Dentro de C, dos piezas habilitan al resto: **el ancla (D-4/D-20)** y **el índice de citas (D-27)**. El
+**dashboard** (T-4) muestra el estado que todo lo anterior produce, así que va último.
+
+### Temas anotados para después
+**T-1** cómo se linkea la bóveda consigo misma al crecer · **T-2** frontmatter de papers (cubierto en la
+revisión) · **T-3** el setup tiene que mostrar el **costo** de la lente, no sólo su ruido · **T-4**
+dashboard de Obsidian con el estado de la bóveda.
+
+### Efecto sobre el deploy
+Varias decisiones cambian el schema (D-1, D-2, D-17, D-21, D-37), y **cada una suma una migración**.
+Sigue valiendo el criterio: **el deploy a Almagesto-RV se hace cuando cierren los issues, no antes.**
+
 ## 🔜 Cola de pendientes (al 2026-08-23)
 
 > Explícita para que no dependa de la memoria de una sesión.
 
-1. **Revisar `docs/contrato.md` con el usuario** — sobre todo las **decisiones de intención**, que
-   son suyas y no del agente (¿el lint es gate duro o consejo? ¿`inferencia` debe nombrar sus
-   fuentes o es una escotilla que vacía la regla #0? ¿la frontera dura puede quedar custodiada por un
-   chequeo no bloqueante?).
+1. ~~**Revisar `docs/contrato.md` con el usuario**~~ — ✅ **hecho el 2026-08-23** (ver arriba). Lo que
+   queda de ahí: **implementar las 57 decisiones**, empezando por el ancla (D-4/D-20) y el índice de
+   citas (D-27). Y una **medición** pendiente que no es decisión: el umbral de legibilidad del fulltext
+   (D-51), a sacar corriendo el detector sobre los 672 fulltexts reales.
 2. **Deploy a la instancia real** (Almagesto-RV, 1.11.0 → 1.23.x). Ensayado completo sobre copia:
    16 bloqueantes → 1, y ese 1 (el `P_rot` de literatura de hd40307) ya tiene resolución escrita.
    **Se hace cuando cierren los issues**, no antes: cada cambio de schema le agrega una migración.

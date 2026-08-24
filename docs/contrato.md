@@ -222,6 +222,31 @@ la octava pasada de verificación.
 
 ---
 
+### K. Invariantes de la revisión con el usuario (2026-08-23)
+
+> Nacen de la revisión de §6 hecha **con el usuario** (`docs/revision-contrato-2026-08-23.md`, 57
+> decisiones). Todos entran en estado **HUECO**: son decisiones de diseño tomadas, sin mecanismo
+> todavía. La columna "cómo se verifica" dice **qué habría que escribir** — eso es la cola de trabajo.
+
+| ID | Enunciado falsable | Prio | Estado | Cómo se verifica |
+|---|---|---|---|---|
+| **INV-76** | Cada campo del espejo tiene **una sola** autoridad (`spectral_type` ← SIMBAD, el resto ← NEA). Si esa autoridad calla, el campo es `null` aunque la otra tenga el dato. | P0 | **HUECO** (D-1) | Sembrar los cuatro casos (ambas tienen / sólo NEA / sólo SIMBAD / ninguna) y comprobar el `null` en el tercero y cuarto. Hoy `fetch_ground_truth.py:174,204-211` hace lo contrario y **no registra** cuál autoridad ganó. |
+| **INV-77** | Una discrepancia entre autoridades es expresable: `{source: nea}` / `{source: simbad}`, y el **silencio** de la autoridad declarada es una posición válida (`value: null`). | P1 | **HUECO** (D-2) | `DISPUTE_SOURCES` (`lint.py:226`) tiene hoy **una sola entrada**: las dos posiciones dirían lo mismo. Test: disputa nea↔simbad que pasa, y `source` inventado que bloquea. |
+| **INV-78** | Cada par verificado lleva **dos hashes** —el del bloque markdown que contiene la cita, y el del `.txt` leído— y un par cuyo hash no coincide se reporta como no verificado. | P0 | **HUECO** (D-4, D-20) | **Pieza central**: de ella dependen INV-79, 82, 85. Test: editar un párrafo marca sus pares y **sólo** esos; reflowear no marca nada; cambiar un número sí; reemplazar el `.txt` marca por fuente sin tocar la nota. |
+| **INV-79** | Una nota con citas sin verificar, o con pares cuya ancla no coincide, **no cierra** la operación que la tocó. En la pasada periódica, reporta. | P0 | **HUECO** (D-4, D-5) | Depende de INV-78. Test: ficha recién creada = 100% verificada; una edición posterior deja pares marcados. |
+| **INV-80** | Una config que no parsea **rehúsa** operar: el lint la reporta como bloqueante y el clasificador no corre con lente vacía. | P0 | **HUECO** (D-6) | Cierra HUECO-1. Batería de configs rotas; cada una debe nombrar el campo y salir distinto de 0. |
+| **INV-81** | La ficha declara, **materializado y por paper**, su universo: origen (`lente`/`manual`), si se extrajo y si se sintetizó. Ningún contenido que el contrato promete depende de un plugin. | P0 | **HUECO** (D-10, D-11, D-24) | Medido hoy en `tau_ceti.md`: 155 en el roll-up, **8 citados**. Test: la tabla estampada coincide con el cálculo determinista y el conteo del encabezado con la tabla. |
+| **INV-82** | Las tres fechas de una nota (búsqueda, síntesis, verificación) son distinguibles y pueden divergir sin que ninguna mienta. | P1 | **HUECO** (D-12) | Test: refrescar sin re-verificar mueve una sola fecha. |
+| **INV-83** | El ingest lee **todos** los core; lo que no se lea queda **declarado** con su motivo y visible en la lista de papers. | P0 | **HUECO** (D-13, D-14) | Medido: 42 papers `relevance: high` sin extraer en una ficha que se presenta como snapshot. Test: subconjunto declarado ⇒ la ficha lo dice; sin declarar ⇒ no cierra. |
+| **INV-84** | La identidad de un paper es `doi`/`arxiv_id`. Un trabajo tiene **una sola** nota canónica; las demás versiones viven en `versions[]`. | P0 | **HUECO** (D-19) | Medido: **2 trabajos con dos notas** (mismo `arxiv_id`, dos bibcodes) sobre 29 notas con bibcode arXiv. Test: ciclo preprint→publicado con renombre, alias y reescritura de wikilinks, lint en 0. |
+| **INV-85** | Una sola pasada de red cubre todo lo que cambia afuera (retracción, corrección, versión nueva, snapshot web, ground-truth) y **avisa con el diff antes de aplicar**. | P1 | **HUECO** (D-41, D-45, D-46) | Hoy sólo existe retracciones/correcciones; el ground-truth es un snapshot congelado que **nada** compara. Test: cambiar el JSON de referencia y comprobar que el diff se reporta y no se aplica solo. |
+| **INV-86** | Toda `inferencia` **nombra sus premisas** (≥1 bibcode). Sin premisas no es inferencia: es afirmación sin respaldo y no entra. | P0 | **HUECO** (D-42) | Cierra el sumidero: hoy una afirmación `no-soportada` puede sobrevivir cambiándole la etiqueta. Test: `(inferencia)` pelada bloquea; `(inferencia de [[bib]])` pasa. |
+| **INV-87** | Un chequeo que no puede correr **reporta error**: nunca contribuye un cero al total. | P0 | **HUECO** (D-43) | Sube INV-38 de INCUMPLIDO parcial a exigencia. Test: sin `git` y con config ilegible, categoría *no evaluado* presente y exit ≠ 0. |
+| **INV-88** | La relevancia de un tema de método es **propia del tema** y entra por tres puertas declaradas (lo cita el corpus / fundacional / lente astro). | P1 | **HUECO** (D-25, D-26, D-27) | La lente global mata al fundacional (`require: [rv]` vs Hyvärinen). Test: las tres puertas por separado sobre un corpus fijo. |
+| **INV-89** | Un tema y una estrella acumulan **búsquedas**; el embudo no se suma y cada entrada distingue nuevos de ya existentes. | P1 | **HUECO** (D-28) | Test: dos búsquedas con solapamiento; el conteo de la cabecera no es la suma. |
+| **INV-90** | Toda escritura en `vault/` es **atómica**. | P1 | **HUECO** (D-53) | Hoy 5 writers lo son y el que más escribe (notas) no. Test: inyección de fallo por comando. |
+| **INV-91** | La cadena deja **traza estructurada** de qué pasos corrieron, con fecha y versión. | P1 | **HUECO** (D-57) | Hoy sólo el paso de búsqueda deja rastro. Test: cortar la cadena a la mitad y comprobar que el lint nombra el paso donde se cortó. |
+
 ## 4. Los hallazgos del cruce, ordenados por daño
 
 ### 4.1 INCUMPLIDOS (el sistema no cumple algo que debería)
@@ -502,10 +527,29 @@ antes de aceptar una feature.
 
 ---
 
-## 6. Decisiones de intención pendientes
+## 6. Decisiones de intención — **RESUELTAS** (2026-08-23)
 
-**No las resuelvo: son del usuario.** Las 17 vienen de (B); las cinco últimas las agrega este cruce.
-Cada una es una disyuntiva real donde el propósito documentado admite más de una lectura razonable.
+> **Las 22 quedaron cerradas** en una revisión hecha **con el usuario**, recorriendo el sistema de punta
+> a punta. El detalle —razones, mediciones y las 57 decisiones que salieron del recorrido, incluidas las
+> 35 que el auditor no había previsto— está en **`docs/revision-contrato-2026-08-23.md`**. Los
+> invariantes nuevos entraron como **§3.K (INV-76…91)**, todos en estado HUECO.
+>
+> | # | Resuelta por | # | Resuelta por |
+> |---|---|---|---|
+> | #1 | D-45 | #12 | D-52 |
+> | #2 | D-1, D-2 | #13 | D-19 + D-41 |
+> | #3 | D-50 | #14 | D-42 |
+> | #4 | D-44 | #15 | D-57 |
+> | #5 | D-4 | #16 | D-56 |
+> | #6 | D-54 | #17 | D-48 |
+> | #7 | D-51 (*medición pendiente*, no decisión) | #18 | D-43 |
+> | #8 | D-47 | #19 | D-48 |
+> | #9 | D-45 + D-46 | #20 | D-48 |
+> | #10 | D-49 | #21 | D-53 |
+> | #11 | D-28 | #22 | D-55 |
+
+Las preguntas originales se conservan abajo: son el **enunciado** de cada disyuntiva, y sin ellas la
+resolución no se entiende.
 
 1. **Regresión del ground-truth.** Si NEA **deja de reportar** un valor que antes traía, ¿el espejo lo
    borra a `null` (fidelidad total, pero se pierde un dato que la ficha citaba) o lo conserva marcado
