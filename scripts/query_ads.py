@@ -146,7 +146,12 @@ TOPIC_PATTERNS = {
     for name, pat in cfg.as_map(_REL.get("topics")).items()
 }
 NOISE_DOCTYPES = set(_listify_curado(_REL.get("noise_doctypes"), "relevance.noise_doctypes"))
-if not TOPIC_PATTERNS:
+# `objective_error() is None` = el archivo se leyó bien y GENUINAMENTE no declara facetas. Cuando
+# el YAML está roto, `load_objective` degrada a `{}` y `TOPIC_PATTERNS` queda vacío por la MISMA
+# vía: sin esta condición el import moría acusando "no define relevance.topics" sobre un archivo
+# que sí las define y sólo no parsea — un mensaje falso que manda a completar lo que ya está
+# escrito. Ese caso lo atiende `main()`, con el motivo real (D-6).
+if not TOPIC_PATTERNS and cfg.objective_error() is None:
     raise RuntimeError(
         "vault/config/objective.yaml no define relevance.topics (el clasificador de papers core). "
         "Completalo antes de consultar ADS."
@@ -814,6 +819,18 @@ def print_probe(q: str, recs: list, noncore_top: int = 25) -> int:
 
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
+    # D-6 / INV-80 — la lente vacía REHÚSA operar.  @inv INV-80
+    #
+    # `load_objective` degrada un YAML ilegible a `{}` en silencio (es lo correcto para el lint,
+    # cuyo contrato es reportar y no morirse). Para el CLASIFICADOR esa tolerancia es un agujero:
+    # seguía corriendo con una regla que nadie escribió, marcaba core/no-core con la lente vacía, y
+    # el registro guardaba ESA lente como si fuera la vigente — o sea, el artefacto que documenta
+    # "con qué lente se filtró" quedaba mintiendo. Se chequea acá y no a nivel módulo para que
+    # `--help` siga funcionando con la config rota.
+    if (err := cfg.objective_error()):
+        sys.exit(f"⛔ no se puede clasificar: {err}\n"
+                 "   Arreglá la lente antes de consultar ADS — clasificar con una lente vacía "
+                 "marcaría el corpus entero con una regla que nadie escribió.")
     ap = argparse.ArgumentParser()
     ap.add_argument("slug", nargs="?",
                     help="slug de estrella (o tema con --topic). Se omite con --probe.")

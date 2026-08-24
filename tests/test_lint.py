@@ -1671,14 +1671,21 @@ def test_bloque_sin_fecha_se_marca(toy_vault, capsys):
 
 
 def test_stale_sin_git_no_rompe(toy_vault, capsys, monkeypatch):
-    """Fuera de un repo (o sin git en el PATH) el chequeo se omite en silencio: el resto del lint
-    no depende de él."""
+    """Fuera de un repo (o sin git en el PATH) el chequeo no se puede evaluar. El resto del lint
+    sigue corriendo —eso no cambió—, pero **desde el issue 0.3 ya no se omite en silencio**: antes
+    reportaba `stale (0)`, indistinguible de "todo al día". Hoy cae en *no evaluado* y cuenta para
+    el exit (D-43 / INV-87).
+
+    ⚠ Consecuencia asumida: una bóveda legítimamente sin git, con bloques de verificación, no
+    puede dar lint limpio. Es el precio de no mentir sobre lo que no se miró; el mensaje dice qué
+    falta y cómo."""
     monkeypatch.setattr(lint, "git_out", lambda *a: None)
     _nota_verif(toy_vault, "nota-verif",
                 "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-01-01)\nok\n")
     rc, out = run_lint(capsys)
-    assert rc == 0
-    assert SIN_STALE in out
+    assert rc == 1
+    assert "No evaluado" in out
+    assert SIN_STALE not in out    # su categoría se suprime: no muestra un cero que no midió
 
 
 # ── in_dir (portabilidad de separador, #33) ──────────────────────────────────
@@ -1708,3 +1715,61 @@ def test_in_dir_no_confunde_carpeta_hermana_stars_borradores(toy_vault, capsys):
     assert "Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog) (1)" in out
     assert "2020ext....1E → extraído" in out
 
+
+
+# ── issue 0.3 · "no evaluado": un chequeo que no pudo correr NO aporta un cero (D-43 / INV-87) ──
+
+BAD_OBJECTIVE = "name: Prueba\nrelevance:\n  topics:\n    rv: activity: starspot\n"
+# ⚠ el caso adversario tiene que ROMPER de verdad: `rv: foo:bar` —lo que proponía el plan—
+# **parsea**, porque en YAML un `:` pegado al carácter siguiente es parte del escalar. El que
+# rompe es `:` SEGUIDO DE ESPACIO, que es justo lo que produce una regex con una alternación
+# y una descripción. Un test sembrado con el caso equivocado habría quedado verde por la
+# razón equivocada.
+
+
+def test_lint_objective_roto_bloquea(toy_vault, capsys):
+    """El error más probable de toda la config —un `:` sin comillas dentro de una regex, que el
+    skill `setup` hace escribir a mano— dejaba a `load_objective` degradando a `{}` **mudo**
+    (`lib_config.py:185-187`): el clasificador seguía corriendo con una regla que nadie escribió, y
+    el lint no decía nada. Hoy: categoría *no evaluado*, exit ≠ 0, y el motivo en el REPORTE (no en
+    stdout — corolario del protocolo).  @inv INV-80"""
+    cfg.OBJECTIVE_YAML.write_text(BAD_OBJECTIVE, encoding="utf-8")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc != 0
+    assert "No evaluado" in rep
+    assert "objective.yaml" in rep
+
+
+def test_lint_sin_git_reporta_no_evaluado(toy_vault, capsys, monkeypatch):
+    """La otra puerta del mismo cero inventado: sin `git`, `last_change_dates` devuelve `{}` y la
+    verificación stale reportaba **0** en silencio — indistinguible de "todo al día".  @inv INV-87"""
+    mk_note(toy_vault.QUERIES, "q1", {"tags": ["query"]},
+            "Afirmación [[2020aaaA...1..1A]].\n\n## Verificación de citas (2020-01-01)\n")
+    mk_note(toy_vault.PAPERS, "2020aaaA...1..1A", {"tags": ["paper"], "bibcode": "2020aaaA...1..1A"})
+    link_from_index(toy_vault, "q1", "2020aaaA...1..1A")
+    monkeypatch.setattr(lint, "git_out", lambda *a: None)
+    rc, rep = run_lint_reporte(capsys)
+    assert rc != 0
+    assert "No evaluado" in rep
+    assert "git" in rep.lower()
+
+
+def test_no_evaluado_no_contamina_conteos(toy_vault, capsys, monkeypatch):
+    """Adversario del cero inventado: el chequeo que no corrió NO puede aparecer como "(0)" en su
+    categoría normal, porque ese 0 se lee como veredicto. La categoría stale queda fuera del
+    reporte cuando no se pudo evaluar."""
+    mk_note(toy_vault.QUERIES, "q1", {"tags": ["query"]},
+            "Afirmación [[2020aaaA...1..1A]].\n\n## Verificación de citas (2020-01-01)\n")
+    mk_note(toy_vault.PAPERS, "2020aaaA...1..1A", {"tags": ["paper"], "bibcode": "2020aaaA...1..1A"})
+    link_from_index(toy_vault, "q1", "2020aaaA...1..1A")
+    monkeypatch.setattr(lint, "git_out", lambda *a: None)
+    _, rep = run_lint_reporte(capsys)
+    assert "Verificación stale" not in rep, (
+        "la categoría stale sigue reportando su conteo aunque no se haya podido evaluar")
+
+
+def test_lint_limpio_sigue_en_cero(toy_vault, capsys):
+    """Control de cordura: con git y con `objective.yaml` sano, "no evaluado" está vacío y no
+    inventa un bloqueo (si no, la categoría nueva rompería toda bóveda sana)."""
+    rc, rep = run_lint_reporte(capsys)
+    assert "## ⛔ No evaluado" in rep and rep.split("## ⛔ No evaluado")[1].split("\n")[0].endswith("(0)")

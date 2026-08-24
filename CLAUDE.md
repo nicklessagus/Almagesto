@@ -516,7 +516,13 @@ explícito. Detalle en el skill.
 **Cuándo:** como **paso de cierre de toda operación que escriba en `vault/wiki/`** (ingest,
 append-knowledge, maintain, find-contradictions, query archivada, test de hipótesis), **antes de
 commitear** y **después** del verify (resolver una cita no-soportada cambia la prosa); más una pasada completa periódica. Es barato.
-Correr `python scripts/lint.py`: debe quedar en **0** para wikilinks rotos, **frontmatter no
+Correr `python scripts/lint.py`: la categoría **⛔ No evaluado** (un chequeo que **no pudo correr**
+—`objective.yaml` ilegible, sin `git` para medir la verificación stale—) **cuenta para el exit y su
+categoría normal se suprime del reporte**: un `(0)` que nadie midió se lee como veredicto, y ése es
+el falso limpio que el lint existe para no producir. Es hecho del **entorno**, no de la bóveda. En
+la misma línea, `query_ads` **rehúsa clasificar** con una lente ilegible en vez de degradar a `{}`
+en silencio (clasificar con una regla que nadie escribió marcaría el corpus entero, y el registro
+guardaría esa lente vacía como si fuera la vigente). Además debe quedar en **0** para wikilinks rotos, **frontmatter no
 parseable o con forma inválida** (nota que empieza con `---` pero cuyo YAML no parsea —p. ej. un
 `title:` con `:` sin comillas editado a mano—, o un campo que el schema declara **lista** escrito
 como escalar / con elementos que no son mapas —`planets:`, `thesis_links:`—: en los dos casos la
@@ -594,7 +600,9 @@ stale** (la nota se editó **después** de la fecha de su bloque —lo que pasa 
 `append-knowledge` o refrescarla— así que las afirmaciones nuevas nunca pasaron por el fan-out pero
 quedan bajo un encabezado que se lee como vigente: es el modo de falla de "afirmar de menos"
 aplicado a la garantía misma; el lint lo mide por `git` contra la fecha del encabezado —por eso el
-bloque **debe** llevar fecha— y degrada a silencio fuera de un repo).
+bloque **debe** llevar fecha—; **fuera de un repo no degrada a silencio**: el chequeo cae en la
+categoría **⛔ No evaluado** y cuenta para el exit, porque un `stale (0)` que nadie midió se lee
+como "todo al día" (D-43). La rama "bloque sin fecha" no necesita git y sigue corriendo siempre).
 La **cabecera no estampable** (#69: una ficha o concepto **sin** la línea
 `> _Generado con Almagesto v…_`, que es el ancla de **todos** los estampadores de cabecera) es
 **backlog**: la nota es válida, pero cualquier cirugía de cabecera —hoy el puntero de búsqueda de

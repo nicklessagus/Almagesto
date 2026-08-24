@@ -1292,3 +1292,18 @@ def test_main_persiste_el_registro_de_busqueda(toy_vault, toy_classifier, no_sle
     assert b["lente"]["require"] == list(qa.REQUIRE_TOPICS)
     assert b["lente"]["min_topics"] == qa.MIN_TOPICS
     assert cfg.load_registro("test_star")["decisiones"]                # no pisó el juicio del triage
+
+
+def test_query_ads_rehusa_lente_vacia(toy_vault, monkeypatch, capsys):
+    """D-6 / INV-80: con `objective.yaml` ilegible la lente queda vacía y el clasificador marcaría
+    TODO como no-core (o todo como core, según la regla) con una regla que nadie escribió — y el
+    registro guardaría esa lente vacía como si fuera la vigente. `main()` rehúsa operar nombrando
+    el archivo y el motivo; `classify` no llega a correr.  @inv INV-80"""
+    cfg.OBJECTIVE_YAML.write_text("name: X\nrelevance:\n  topics:\n    rv: activity: starspot\n", encoding="utf-8")
+    llamadas = []
+    monkeypatch.setattr(qa, "classify", lambda *a, **k: llamadas.append(a) or [])
+    monkeypatch.setattr(sys, "argv", ["query_ads.py", "test_star"])
+    with pytest.raises(SystemExit) as exc:
+        qa.main()
+    assert "objective.yaml" in str(exc.value)
+    assert llamadas == []

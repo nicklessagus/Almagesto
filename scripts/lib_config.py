@@ -188,6 +188,38 @@ def load_objective() -> dict:
     return data if isinstance(data, dict) else {}
 
 
+def objective_error() -> str | None:
+    """Motivo por el que `objective.yaml` no se puede usar como lente, o `None` si está sano.
+
+    `load_objective` colapsa tres estados en dos: archivo ausente (`RuntimeError`) y **todo lo
+    demás** (YAML roto, YAML válido con forma equivocada, objetivo legítimamente vacío) en el mismo
+    `{}` mudo. Esa fusión es el HUECO-1 / INV-80: el clasificador seguía corriendo con una regla
+    que nadie escribió, el registro guardaba esa lente vacía como si fuera la vigente, y el lint no
+    decía nada.
+
+    Esta función separa los estados **para el llamador estricto** —`query_ads`, que rehúsa operar,
+    y el lint, que lo reporta como *no evaluado*— sin cambiarle la firma a `load_objective`: sus
+    llamadores tolerantes siguen igual, que es lo que hace que el lint no se muera ante una bóveda
+    rara.  @inv INV-80"""
+    if not OBJECTIVE_YAML.exists():
+        return f"{OBJECTIVE_YAML} no existe (es el archivo que define el objetivo de la bóveda)"
+    try:
+        with open(OBJECTIVE_YAML, encoding="utf-8") as fh:
+            data = yaml.safe_load(fh)
+    except yaml.YAMLError as exc:
+        motivo = " ".join(str(exc).split())
+        return (f"{OBJECTIVE_YAML} no parsea como YAML: {motivo}. El error más probable es un `:` "
+                "sin comillas dentro de una regex de `relevance.topics` — entrecomillá el patrón.")
+    except OSError as exc:
+        return f"{OBJECTIVE_YAML} no se pudo leer: {exc}"
+    if data is None:
+        return f"{OBJECTIVE_YAML} está vacío — no hay lente con la que clasificar"
+    if not isinstance(data, dict):
+        return (f"{OBJECTIVE_YAML} parsea, pero no a un mapa (es {type(data).__name__}) — la lente "
+                "tiene que ser un mapa con `name`/`relevance`")
+    return None
+
+
 # Línea delimitadora de frontmatter: `---` SOLA en su propia línea (con espacio final tolerado).
 # `re.MULTILINE` para que `^`/`$` anclen a cada línea, no a los bordes del string entero.
 _FM_DELIM_RE = re.compile(r"^---[ \t]*$", re.MULTILINE)

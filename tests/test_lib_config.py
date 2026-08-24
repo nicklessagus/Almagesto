@@ -392,3 +392,16 @@ def test_sin_escrituras_directas_a_vault():
     assert ofensores == [], (
         "escrituras directas (no atómicas) a vault/ — usar cfg.write_text_atomic / "
         "cfg.write_bytes_atomic:\n  " + "\n  ".join(ofensores))
+
+
+def test_objective_error_distingue_los_tres_estados(toy_vault):
+    """`load_objective` colapsa "YAML roto" y "objetivo vacío" en el mismo `{}`. `objective_error`
+    los separa para el llamador estricto, sin cambiarle la firma al tolerante.  @inv INV-80"""
+    assert cfg.objective_error() is None                     # el toy_vault trae uno sano
+    cfg.OBJECTIVE_YAML.write_text("name: X\nrelevance:\n  topics:\n    rv: activity: starspot\n", encoding="utf-8")
+    err = cfg.objective_error()
+    assert err and "objective.yaml" in err
+    cfg.OBJECTIVE_YAML.write_text("- una lista, no un mapa\n", encoding="utf-8")
+    assert "mapa" in (cfg.objective_error() or "")
+    cfg.OBJECTIVE_YAML.unlink()
+    assert "no existe" in (cfg.objective_error() or "").lower()

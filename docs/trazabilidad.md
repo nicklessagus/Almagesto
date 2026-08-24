@@ -8,9 +8,9 @@
 ## Resumen
 
 - Invariantes en el contrato: **91**
-- Con implementación marcada: **2**
-- Con test marcado: **2** (techo `sin_test`: 89, hoy 89)
-- Sin ninguna marca: **89** (techo `sin_marca`: 89)
+- Con implementación marcada: **3**
+- Con test marcado: **3** (techo `sin_test`: 88, hoy 88)
+- Sin ninguna marca: **88** (techo `sin_marca`: 88)
 - Marcas huérfanas: **0**
 
 ## El mapa
@@ -96,15 +96,15 @@
 | **INV-77** | P1 | HUECO (D-2) | — | — |
 | **INV-78** | P0 | HUECO (D-4, D-20) | — | — |
 | **INV-79** | P0 | HUECO (D-4, D-5) | — | — |
-| **INV-80** | P0 | HUECO (D-6) | — | — |
+| **INV-80** | P0 | HUECO (D-6) | `scripts/lib_config.py:203` · `objective_error`<br>`scripts/query_ads.py:822` · `main` | `tests/test_lib_config.py:399` · `test_objective_error_distingue_los_tres_estados`<br>`tests/test_lint.py:1735` · `test_lint_objective_roto_bloquea`<br>`tests/test_query_ads.py:1301` · `test_query_ads_rehusa_lente_vacia` |
 | **INV-81** | P0 | HUECO (D-10, D-11, D-24) | — | — |
 | **INV-82** | P1 | HUECO (D-12) | — | — |
 | **INV-83** | P0 | HUECO (D-13, D-14) | — | — |
 | **INV-84** | P0 | HUECO (D-19) | — | — |
 | **INV-85** | P1 | HUECO (D-41, D-45, D-46) | — | — |
 | **INV-86** | P0 | HUECO (D-42) | — | — |
-| **INV-87** | P0 | HUECO (D-43) | `scripts/check_retractions.py:326` · `main` | `tests/test_check_retractions.py:525` · `test_errores_sin_retractados_exit_2` |
+| **INV-87** | P0 | HUECO (D-43) | `scripts/check_retractions.py:326` · `main` | `tests/test_check_retractions.py:525` · `test_errores_sin_retractados_exit_2`<br>`tests/test_lint.py:1745` · `test_lint_sin_git_reporta_no_evaluado` |
 | **INV-88** | P1 | HUECO (D-25, D-26, D-27) | — | — |
 | **INV-89** | P1 | HUECO (D-28) | — | — |
-| **INV-90** | P1 | HUECO (D-53) | `scripts/lib_config.py:353` · `write_text_atomic`<br>`scripts/lib_config.py:377` · `write_bytes_atomic` | `tests/test_lib_config.py:371` · `test_sin_escrituras_directas_a_vault`<br>`tests/test_make_notes.py:1796` · `test_notas_pasan_por_el_helper` |
+| **INV-90** | P1 | HUECO (D-53) | `scripts/lib_config.py:385` · `write_text_atomic`<br>`scripts/lib_config.py:409` · `write_bytes_atomic` | `tests/test_lib_config.py:371` · `test_sin_escrituras_directas_a_vault`<br>`tests/test_make_notes.py:1796` · `test_notas_pasan_por_el_helper` |
 | **INV-91** | P1 | HUECO (D-57) | — | — |

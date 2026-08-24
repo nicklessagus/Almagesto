@@ -143,8 +143,11 @@ def verify_block(text: str) -> tuple[bool, str | None]:
 
 def git_out(*args: str) -> str | None:
     """stdout de un `git` corrido en la raíz del repo; None si no hay git, no es repo o falló.
-    El chequeo de verificación stale degrada a silencio fuera de un repo — una bóveda puede vivir
-    sin git y el resto del lint no depende de esto."""
+    Fuera de un repo el chequeo de verificación stale **no se puede evaluar**. Desde el issue 0.3
+    eso NO degrada a silencio (reportaba `stale (0)`, indistinguible de "todo al día"): cae en la
+    categoría *no evaluado*, que cuenta para el exit (D-43 / INV-87). El resto del lint sigue
+    corriendo — una bóveda puede vivir sin git —, pero no puede afirmar que las verificaciones
+    están al día."""
     try:
         r = subprocess.run(["git", "-C", str(cfg.ROOT), "-c", "core.quotePath=false", *args],
                            capture_output=True, text=True, encoding="utf-8", timeout=60)
@@ -481,6 +484,14 @@ def main(argv=()) -> int:
     unverifiable: list = []            # (stem, "cita <bibcode> sin fulltext")
     coverage: list = []                # concept/hipótesis sin citas [[bibcode]] → no chequeable
     unverified: list = []              # query/concept CON citas pero SIN bloque de verify-citations
+    # ── "no evaluado" (D-43 / INV-87) ────────────────────────────────────────────────────────────
+    # Un chequeo que NO PUDO correr no aporta un cero: reporta error. La diferencia no es
+    # cosmética — un "(0)" se lee como veredicto ("miré y no hay"), y ese cero inventado hacía que
+    # el lint afirmara salud sobre lo que nunca miró. Cada poblador agrega (qué chequeo, por qué),
+    # la categoría CUENTA para el exit ≠ 0, y la categoría normal correspondiente se SUPRIME del
+    # reporte en vez de mostrar su cero. Se declara acá arriba porque los pobladores están
+    # repartidos por todo `main()`.
+    not_evaluated: list = []
     verif_blocks: list = []            # (archivo, fecha del bloque|None) — notas CON bloque de verify
     names = {basename(p)[:-3] for p in files}  # stems referenciables por [[..]]
     incoming: dict[str, int] = {n: 0 for n in names}
@@ -764,7 +775,23 @@ def main(argv=()) -> int:
     # afirma **de menos** sobre lo que chequeó. La comparación es a nivel día (granularidad del
     # bloque): re-verificar y re-fechar el mismo día no se marca.
     stale_verif = []
-    changed = last_change_dates([f for f, _ in verif_blocks])
+    # Sin git no hay con qué comparar la fecha del bloque contra la del último cambio:
+    # `last_change_dates` devolvía `{}` y el chequeo reportaba `stale=0` en silencio —
+    # indistinguible de "todo al día". Es "no evaluado", no "limpio" (D-43 / INV-87).
+    #
+    # El gate es FINO a propósito: la rama "bloque sin fecha" no necesita git (se lee del propio
+    # encabezado) y sigue corriendo siempre. Sólo las notas CON fecha quedan sin evaluar, y son
+    # exactamente esas las que se cuentan en el aviso — un gate grueso apagaba un chequeo que sí
+    # se podía hacer, que es el mismo error en el otro sentido.
+    fechados = [f for f, d in verif_blocks if d is not None]
+    stale_evaluable = not fechados or git_out("rev-parse", "--git-dir") is not None
+    if not stale_evaluable:
+        not_evaluated.append(
+            (f"verificación stale ({len(fechados)} nota(s) con bloque fechado)",
+             "no hay git (o la bóveda no es un repo): sin historial no hay con qué comparar la "
+             "fecha del bloque contra la del último cambio de la nota — el chequeo queda "
+             "desactivado, no en cero")) 
+    changed = last_change_dates(fechados) if stale_evaluable else {}
     for f, d in sorted(verif_blocks):
         stem = basename(f)[:-3]
         if d is None:
@@ -950,8 +977,17 @@ def main(argv=()) -> int:
     # olvido post-instanciación. Se compara contra el placeholder, no contra un nombre de ejemplo
     # plausible (un objetivo real coincidente daría WARN permanente sin forma de apagarlo).
     # (En el repo template este WARN es esperable: la bóveda seed no está instanciada.)
+    # ── "no evaluado" (D-43 / INV-87) ────────────────────────────────────────────────────────────
+    # Un chequeo que NO PUDO correr no aporta un cero: reporta error. La diferencia no es
+    # cosmética — un "(0)" se lee como veredicto ("miré y no hay"), y ese cero inventado hacía que
+    # el lint afirmara salud sobre lo que nunca miró. Cada poblador agrega (qué chequeo, por qué),
+    # la categoría CUENTA para el exit ≠ 0, y la categoría normal correspondiente se SUPRIME del
+    # reporte en vez de mostrar su cero.
+    if (obj_err := cfg.objective_error()):
+        not_evaluated.append(("clasificación de relevancia (la lente)", obj_err))
+
     objective_warn = []
-    if cfg.load_objective().get("name") == cfg.DEFAULT_OBJECTIVE_NAME:
+    if not obj_err and cfg.load_objective().get("name") == cfg.DEFAULT_OBJECTIVE_NAME:
         objective_warn.append(
             ("vault/config/objective.yaml",
              "objective.name sigue siendo el placeholder del template — corré el skill `setup` "
@@ -1130,7 +1166,14 @@ def main(argv=()) -> int:
 
     # reporte
     lines = [f"# Lint de la bóveda — {dt.date.today().isoformat()}", ""]
-    for title, items in [("Wikilinks rotos (página faltante)", broken),
+    # categorías que NO se pudieron evaluar: se omiten del reporte en vez de mostrar un "(0)" que
+    # se leería como veredicto (el adversario que D-43 nombra: el cero inventado).
+    suprimidas = set()
+    if not stale_evaluable:
+        suprimidas.add("Verificación stale")
+    for title, items in [("⛔ No evaluado: el chequeo no pudo correr (hecho del ENTORNO, no de la "
+                          "bóveda — cuenta para el exit)", not_evaluated),
+                         ("Wikilinks rotos (página faltante)", broken),
                          ("⛔ Frontmatter no parseable o con forma inválida (la nota evade los chequeos de su tipo)", fm_broken),
                          ("⛔ Papers RETRACTADOS citados (frontera dura: fuente no válida)", retracted),
                          ("Notas huérfanas (sin links entrantes)", [(o, "") for o in orphans]),
@@ -1164,6 +1207,8 @@ def main(argv=()) -> int:
                          ("Decisión del registro con forma inválida — load_decisiones la descarta "
                           "en silencio, el triage la vuelve a proponer sin el motivo (backlog)", bad_decisions),
                          ("Campos incompletos", incomplete)]:
+        if any(title.startswith(s) for s in suprimidas):
+            continue
         lines.append(f"## {title} ({len(items)})")
         for a, b in items:
             lines.append(f"- {a}" + (f" → {b}" if b else ""))
@@ -1178,9 +1223,9 @@ def main(argv=()) -> int:
     _print_seguro(f"→ {out}")
     # Exit code gateable: las categorías que CLAUDE.md exige "en 0" bloquean; WARN (fuga de
     # implementación, áreas, PDF↔disco) y backlog (verificabilidad, cobertura, incompletos) no.
-    n_block = sum(len(x) for x in (broken, fm_broken, retracted, orphans, contradictions,
-                                   mass_issues, dangling_thesis, dangling_disputes, bad_roles,
-                                   bad_disputes, old_disputes, legacy_triage))
+    n_block = sum(len(x) for x in (not_evaluated, broken, fm_broken, retracted, orphans,
+                                   contradictions, mass_issues, dangling_thesis, dangling_disputes,
+                                   bad_roles, bad_disputes, old_disputes, legacy_triage))
     if n_block:
         _print_seguro(f"✗ {n_block} hallazgo(s) en categorías bloqueantes → exit 1")
         return 1

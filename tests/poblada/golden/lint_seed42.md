@@ -1,5 +1,7 @@
 # Lint de la bóveda — <FECHA>
 
+## ⛔ No evaluado: el chequeo no pudo correr (hecho del ENTORNO, no de la bóveda — cuenta para el exit) (0)
+
 ## Wikilinks rotos (página faltante) (0)
 
 ## ⛔ Frontmatter no parseable o con forma inválida (la nota evade los chequeos de su tipo) (0)
