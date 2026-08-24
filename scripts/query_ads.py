@@ -574,12 +574,28 @@ def chain_candidates(core_bibcodes: list[str], rows: int, subject_filter: str) -
 # sin bajarse; `scripts/triage.py` lo lista y persiste las decisiones.
 
 
+def _variant_hit(low: str, var: str) -> bool:
+    """`var` aparece en `low` sin que un dígito extienda su número de catálogo (INV-72)."""
+    i = low.find(var)
+    while i != -1:
+        fin = i + len(var)
+        if not (var[-1:].isdigit() and fin < len(low) and low[fin].isdigit()):
+            return True
+        i = low.find(var, i + 1)
+    return False
+
+
 def subject_in_title(title: str | None, names: list[str]) -> bool:
     """¿El sujeto está en el título? Auto-aceptación del nivel 0: cubre las grafías de catálogo
     (HD 22049 ↔ HD22049) y los lookalikes de nombre Bayer (∊ Eridani ≡ eps Eridani, #28)."""
     raw = " ".join((title or "").split())
     low = raw.lower()
-    if any(v.lower() in low for v in expand_variants(names)):
+    # Containment pelado matchea `GJ 71` dentro de `GJ 710`, que es OTRA estrella — y como esto es
+    # la auto-aceptación de nivel 0, el match espurio mete el paper al corpus ajeno sin que nadie
+    # lo juzgue. El corte es el DÍGITO: en una designación de catálogo un número más largo es otro
+    # objeto. La continuación alfabética sigue valiendo (`tau Cet` ↔ `tau Ceti`), que es como están
+    # escritos los alias Bayer.
+    if any(_variant_hit(low, v.lower()) for v in expand_variants(names)):
         return True
     return any(glyph_pattern(letter, consts).search(raw)
                for letter, consts in greek_targets(names).items())

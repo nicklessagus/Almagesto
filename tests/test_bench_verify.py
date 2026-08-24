@@ -250,7 +250,13 @@ def test_score_metricas(toy_vault, monkeypatch, capsys):
     assert "1/2 (50%)" in out                       # recall de sembradas
     assert "Sembradas que PASARON" in out and "s001" in out
     assert "Reales caídas" in out and "r001" in out
-    assert (cfg.ROOT / "outputs").glob("verify-bench-*.md")
+    # `assert path.glob(...)` es SIEMPRE verdadero (un generador es truthy): el assert que
+    # había acá no probaba nada. Hay que materializarlo y además mirar el contenido —
+    # INV-75 pide que la cifra viaje con su condición, no suelta.
+    reportes = sorted((cfg.ROOT / "outputs").glob("verify-bench-*.md"))
+    assert len(reportes) == 1, f"el score tiene que dejar su reporte: {reportes}"
+    cuerpo = reportes[0].read_text(encoding="utf-8")
+    assert "50%" in cuerpo and "4" in cuerpo, "el reporte lleva el recall y el n de la muestra"
 
 
 def test_score_incompleto_rc1(toy_vault, monkeypatch, capsys):

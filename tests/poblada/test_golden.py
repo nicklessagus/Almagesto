@@ -10,21 +10,18 @@ Normalización (plan §3.5, requisito (a) — "sacar lo que legítimamente varí
 lint tiene DOS fuentes de variación que NO son comportamiento:
 
   1. **La fecha del encabezado** (`# Lint de la bóveda — {dt.date.today()}`).
-  2. **El orden de las líneas de "Notas huérfanas"** — confirmado empíricamente en esta sesión:
-     se sembró el MISMO corpus una sola vez y se corrió `lint.main()` en 5 subprocesos con
-     `PYTHONHASHSEED` distinto (1, 2, 3, 42, 99); sólo esa sección cambiaba de orden entre
-     corridas (nunca de contenido, y ninguna otra sección se movió). La causa: `orphans` (en
-     `lint.py`) sale de iterar un `dict` construido por comprehension sobre un `set` de strings
-     (`names = {basename(p)[:-3] for p in files}`) — el orden de un `set` de `str` depende del
-     hash, que Python randomiza por proceso salvo que se fije `PYTHONHASHSEED` (mismo peligro que
-     documenta el docstring de `generador.py` sobre no iterar sets de str para decisiones del
-     generador). El resto de las secciones sale de recorrer `files = glob.glob(...)` — sin
-     `sorted()` en `note_files()`, pero estable DENTRO de una corrida porque el árbol no se
-     re-siembra entre la escritura del golden y su lectura.
+  2. ~~El orden de las líneas de "Notas huérfanas"~~ — **ya no**. Era el único orden no
+     determinista medido (se sembró el mismo corpus y se corrió `lint.main()` en 5 subprocesos con
+     `PYTHONHASHSEED` distinto: sólo esa sección cambiaba de orden). La causa estaba en `lint.py`:
+     `orphans` iteraba un `dict` construido sobre un `set` de strings (`names = {basename(p)[:-3]
+     for p in files}`), y el orden de un `set` de `str` depende del hash que Python randomiza por
+     proceso. Se **arregló en la fuente** (`orphans` sale `sorted`) en vez de seguir normalizándolo
+     acá: ordenar las líneas antes de comparar dejaba al golden ciego para el único defecto que
+     había que ver — el test tapaba su propio hallazgo. Hoy el golden compara el orden CRUDO.
 
-Sin normalizar esto, el golden sería flaky por `PYTHONHASHSEED` entre el proceso que lo generó y
-el proceso que lo compara — exactamente el ruido que el plan pide sacar antes de que alguien
-termine ignorando el golden completo.
+El resto de las secciones sale de recorrer `files = glob.glob(...)` — sin `sorted()` en
+`note_files()`, pero estable DENTRO de una corrida porque el árbol no se re-siembra entre la
+escritura del golden y su lectura.
 
 **Regenerar** (requisito (b) del plan — un golden que se edita a mano no se mantiene):
 
@@ -75,25 +72,14 @@ BLOQUEANTES = (
 
 
 def _normalizar(reporte: str) -> str:
-    """Ver docstring del módulo: fecha → `<FECHA>`, y cada sección `## ... (N)` con sus líneas
-    `- ...` ordenadas alfabéticamente (neutraliza el único orden no determinista medido —
-    "Notas huérfanas" — sin afectar a ninguna otra sección, que ya sale estable)."""
-    reporte = _FECHA_RE.sub("<FECHA>", reporte)
-    out: list[str] = []
-    seccion: list[str] = []
+    """Ver docstring del módulo: sólo la fecha → `<FECHA>`.
 
-    def _flush() -> None:
-        out.extend(sorted(seccion))
-        seccion.clear()
-
-    for line in reporte.splitlines():
-        if line.startswith("- "):
-            seccion.append(line)
-            continue
-        _flush()
-        out.append(line)
-    _flush()
-    return "\n".join(out) + "\n"
+    Antes esto además **ordenaba** las líneas de cada sección, para neutralizar el orden inestable
+    de "Notas huérfanas". Eso dejaba al golden ciego justamente para el único no-determinismo
+    medido: el test que tenía que ver el problema lo estaba tapando. La causa se arregló en
+    `lint.py` (`orphans` sale `sorted`), así que el golden ya compara el orden CRUDO y cualquier
+    no-determinismo nuevo lo rompe, que es lo que un golden existe para hacer (INV-43)."""
+    return _FECHA_RE.sub("<FECHA>", reporte)
 
 
 def _correr_golden(sembrar) -> tuple[int, str, str]:

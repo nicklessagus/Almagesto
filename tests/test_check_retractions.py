@@ -563,3 +563,31 @@ def test_exit_1_solo_con_retractados(toy_vault, monkeypatch):
     assert run_main(monkeypatch) == 0
     patch_net(monkeypatch, [FakeResp(200, RETRACTION_MSG)])
     assert run_main(monkeypatch, ["--force"]) == 1
+
+
+# ── R-6: cada script se estampa a sí mismo (INV-91) ──────────────────────────
+
+def test_slug_estampa_su_paso_en_la_cadena(toy_vault, monkeypatch):
+    """@inv INV-91 — `check_retractions` es el ÚLTIMO paso de `CADENA_ESTRELLA` y era el único que
+    no se estampaba: los otros seis sí. Consecuencia medida antes del fix: tras correr la cadena
+    COMPLETA, `cadena_cortada()` devolvía `"check_retractions"` para **toda** estrella — un falso
+    positivo permanente en la categoría del lint, que es la forma más rápida de que una categoría
+    se vuelva ruido y se deje de mirar. El test que existía no lo veía porque estampaba ese paso a
+    mano, algo que ninguna corrida real hace."""
+    mk_note(toy_vault.PAPERS, "2020ok....1..1X",
+            {"bibcode": "2020ok....1..1X", "title": "Sano", "doi": "10.1/ok", "tags": ["paper"]})
+    build = cfg.ROOT / "build" / "test_star"
+    build.mkdir(parents=True, exist_ok=True)
+    (build / "ads.json").write_text(
+        json.dumps({"records": [{"bibcode": "2020ok....1..1X", "relevant": True}]}),
+        encoding="utf-8")
+    patch_net(monkeypatch, [FakeResp(200, {"message": {}})], [])
+    for paso in ("query_ads", "fetch_arxiv", "fetch_pdf", "fetch_ground_truth",
+                 "make_notes", "extract_fulltext"):
+        cfg.save_paso("test_star", paso)
+    assert cfg.cadena_cortada("test_star") == "check_retractions"   # el estado previo al paso
+    assert run_main(monkeypatch, ["--slug", "test_star"]) == 0
+    assert cfg.cadena_cortada("test_star") is None, (
+        "la cadena completa no puede reportarse como cortada")
+    pasos = [p["paso"] for p in cfg.load_cadena("test_star")]
+    assert pasos.count("check_retractions") == 1

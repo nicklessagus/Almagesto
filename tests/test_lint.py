@@ -1921,6 +1921,27 @@ def test_registro_schema_viejo_detectado(toy_vault, capsys):
     assert "pre-D-28" in rep or "schema viejo" in rep
 
 
+def test_notas_huerfanas_salen_en_orden_estable(toy_vault, capsys):
+    """@inv INV-43 — el reporte tiene que ser **determinista entre corridas**, o dos corridas del
+    mismo estado dan diffs distintos y el reporte deja de servir de línea de base. `orphans` salía
+    de iterar un `dict` construido sobre un `set` de strings, cuyo orden depende del hash que
+    Python randomiza **por proceso**: la sección cambiaba de orden sola. El golden lo tapaba
+    ordenando las líneas antes de comparar —o sea que el único no-determinismo medido estaba
+    justamente neutralizado en el test que debía verlo—; acá se fija la propiedad observable."""
+    for stem in ("zeta", "alfa", "mu", "beta", "omega", "delta", "kappa", "gamma"):
+        mk_note(cfg.CONCEPTS / "methods", stem, {"tags": ["concept"], "name": stem})
+    _, rep = run_lint_reporte(capsys)
+    lineas = []
+    dentro = False
+    for l in rep.splitlines():
+        if l.startswith("## "):
+            dentro = "huérfanas" in l
+        elif dentro and l.startswith("- "):
+            lineas.append(l)
+    assert len(lineas) >= 8, f"el escenario tiene que sembrar huérfanas: {lineas}"
+    assert lineas == sorted(lineas), f"orden inestable en «Notas huérfanas»: {lineas}"
+
+
 def test_topics_en_nota_de_paper_es_schema_viejo(toy_vault, capsys):
     """R-5: `topics:` nombraba a la vez la faceta de la lente y el tema-sujeto; el renombre lo
     partió en `facets:` (nota de paper) y `themes.yaml`. El campo viejo quedó **sin lector**: una

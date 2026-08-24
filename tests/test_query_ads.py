@@ -1136,6 +1136,20 @@ def test_subject_in_title_cubre_grafias_y_glifos():
     assert not qa.subject_in_title(None, ["eps Eridani"])
 
 
+def test_subject_in_title_no_matchea_por_prefijo_de_catalogo():
+    """@inv INV-72 — el número de catálogo más largo es OTRO objeto: `GJ 71` (tau Ceti) no puede
+    matchear un título sobre `GJ 710`. Es el mismo modo de falla por containment que `CLAUDE.md`
+    documenta para `grep` sobre el frontmatter, acá adentro de la compuerta de triage: un match
+    espurio **auto-acepta** el paper (nivel 0, sin juicio humano) y lo mete al corpus de otra
+    estrella. La continuación ALFABÉTICA sigue valiendo (`tau Cet` ↔ `tau Ceti`): lo que distingue
+    a un objeto de otro en una designación de catálogo es el dígito."""
+    assert not qa.subject_in_title("A close encounter with GJ 710", ["GJ 71"])
+    assert not qa.subject_in_title("HD 220490 photometry", ["HD 22049"])
+    assert qa.subject_in_title("Planets around GJ 71", ["GJ 71"])          # el sujeto real
+    assert qa.subject_in_title("GJ 71 b confirmed", ["GJ 71"])             # seguido de letra
+    assert qa.subject_in_title("tau Ceti revisited", ["tau Cet"])          # alfabético: sigue OK
+
+
 def test_main_chaining_solo_auto_acepta_sujeto_en_titulo(toy_vault, toy_classifier, no_sleep,
                                                          monkeypatch, capsys):
     """El core del grafo con el sujeto en el título entra; el resto queda como CANDIDATO en

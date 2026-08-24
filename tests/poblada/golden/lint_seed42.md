@@ -61,30 +61,30 @@
 - fulltext/star02/2021Alm00059A.txt → casi sin texto (1 chars no-espacio) — ¿escaneo sin capa de texto?
 
 ## Citas no verificables en query/concepto/hipótesis (sin fulltext) (6)
-- concepto-activity-005 → cita 1997Alm00015A sin fulltext (no chequeable claim↔fuente)
-- concepto-activity-013 → cita 2002Alm00051A sin fulltext (no chequeable claim↔fuente)
-- concepto-indicators-000 → cita 2021Alm00000A sin fulltext (no chequeable claim↔fuente)
-- concepto-indicators-004 → cita 2004Alm00014A sin fulltext (no chequeable claim↔fuente)
-- query-000 → cita 2021Alm00000A sin fulltext (no chequeable claim↔fuente)
 - query-001 → cita 2015Alm00001A sin fulltext (no chequeable claim↔fuente)
+- query-000 → cita 2021Alm00000A sin fulltext (no chequeable claim↔fuente)
+- concepto-activity-013 → cita 2002Alm00051A sin fulltext (no chequeable claim↔fuente)
+- concepto-activity-005 → cita 1997Alm00015A sin fulltext (no chequeable claim↔fuente)
+- concepto-indicators-004 → cita 2004Alm00014A sin fulltext (no chequeable claim↔fuente)
+- concepto-indicators-000 → cita 2021Alm00000A sin fulltext (no chequeable claim↔fuente)
 
 ## Sin verificar: query/concepto con citas pero sin bloque verify-citations (backlog) (16)
-- concepto-activity-001 → 1 cita(s) sin bloque de verify-citations → correr el skill
-- concepto-activity-005 → 1 cita(s) sin bloque de verify-citations → correr el skill
-- concepto-activity-009 → 1 cita(s) sin bloque de verify-citations → correr el skill
-- concepto-activity-013 → 1 cita(s) sin bloque de verify-citations → correr el skill
-- concepto-hypotheses-003 → 1 cita(s) sin bloque de verify-citations → correr el skill
-- concepto-hypotheses-007 → 1 cita(s) sin bloque de verify-citations → correr el skill
-- concepto-hypotheses-011 → 1 cita(s) sin bloque de verify-citations → correr el skill
-- concepto-indicators-000 → 1 cita(s) sin bloque de verify-citations → correr el skill
-- concepto-indicators-004 → 1 cita(s) sin bloque de verify-citations → correr el skill
-- concepto-indicators-008 → 1 cita(s) sin bloque de verify-citations → correr el skill
-- concepto-indicators-012 → 1 cita(s) sin bloque de verify-citations → correr el skill
-- concepto-methods-002 → 1 cita(s) sin bloque de verify-citations → correr el skill
-- concepto-methods-006 → 1 cita(s) sin bloque de verify-citations → correr el skill
-- concepto-methods-010 → 1 cita(s) sin bloque de verify-citations → correr el skill
-- query-000 → 1 cita(s) sin bloque de verify-citations → correr el skill
 - query-001 → 1 cita(s) sin bloque de verify-citations → correr el skill
+- query-000 → 1 cita(s) sin bloque de verify-citations → correr el skill
+- concepto-hypotheses-011 → 1 cita(s) sin bloque de verify-citations → correr el skill
+- concepto-hypotheses-007 → 1 cita(s) sin bloque de verify-citations → correr el skill
+- concepto-hypotheses-003 → 1 cita(s) sin bloque de verify-citations → correr el skill
+- concepto-methods-010 → 1 cita(s) sin bloque de verify-citations → correr el skill
+- concepto-methods-006 → 1 cita(s) sin bloque de verify-citations → correr el skill
+- concepto-methods-002 → 1 cita(s) sin bloque de verify-citations → correr el skill
+- concepto-activity-013 → 1 cita(s) sin bloque de verify-citations → correr el skill
+- concepto-activity-009 → 1 cita(s) sin bloque de verify-citations → correr el skill
+- concepto-activity-005 → 1 cita(s) sin bloque de verify-citations → correr el skill
+- concepto-activity-001 → 1 cita(s) sin bloque de verify-citations → correr el skill
+- concepto-indicators-012 → 1 cita(s) sin bloque de verify-citations → correr el skill
+- concepto-indicators-008 → 1 cita(s) sin bloque de verify-citations → correr el skill
+- concepto-indicators-004 → 1 cita(s) sin bloque de verify-citations → correr el skill
+- concepto-indicators-000 → 1 cita(s) sin bloque de verify-citations → correr el skill
 
 ## ⛔ Bloque de verificación con plantilla vieja (sin columnas de hash — no evaluable) (0)
 
@@ -93,21 +93,21 @@
 ## Verificación stale: la nota se editó después de su último verify-citations (backlog) (0)
 
 ## Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog) (7)
-- concepto-activity-017 → sin citas [[bibcode]] → afirmaciones no chequeables (cobertura)
-- concepto-hypotheses-015 → sin citas [[bibcode]] → afirmaciones no chequeables (cobertura)
 - concepto-hypotheses-019 → sin citas [[bibcode]] → afirmaciones no chequeables (cobertura)
-- concepto-indicators-016 → sin citas [[bibcode]] → afirmaciones no chequeables (cobertura)
-- concepto-indicators-020 → sin citas [[bibcode]] → afirmaciones no chequeables (cobertura)
-- concepto-methods-014 → sin citas [[bibcode]] → afirmaciones no chequeables (cobertura)
+- concepto-hypotheses-015 → sin citas [[bibcode]] → afirmaciones no chequeables (cobertura)
 - concepto-methods-018 → sin citas [[bibcode]] → afirmaciones no chequeables (cobertura)
+- concepto-methods-014 → sin citas [[bibcode]] → afirmaciones no chequeables (cobertura)
+- concepto-activity-017 → sin citas [[bibcode]] → afirmaciones no chequeables (cobertura)
+- concepto-indicators-020 → sin citas [[bibcode]] → afirmaciones no chequeables (cobertura)
+- concepto-indicators-016 → sin citas [[bibcode]] → afirmaciones no chequeables (cobertura)
 
 ## Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog) (2)
 - 1996Alm00057A → extraído (`methods` poblado) pero su bibcode no está citado en ninguna ficha ni concepto → sintetizarlo donde corresponda, o marcar `no_sintetizado: <motivo>` en la nota del paper
 - 2019Alm00056A → extraído (`methods` poblado) pero su bibcode no está citado en ninguna ficha ni concepto → sintetizarlo donde corresponda, o marcar `no_sintetizado: <motivo>` en la nota del paper
 
 ## Cabecera no estampable: ficha/concepto sin la línea del generador — los estampadores de cabecera no-opean en silencio (backlog) (2)
-- star01 → sin la línea `_Generado con Almagesto v…_`: los estampadores de cabecera no pueden actuar → `python scripts/make_notes.py --restamp-headers`
 - star02 → sin la línea `_Generado con Almagesto v…_`: los estampadores de cabecera no pueden actuar → `python scripts/make_notes.py --restamp-headers`
+- star01 → sin la línea `_Generado con Almagesto v…_`: los estampadores de cabecera no pueden actuar → `python scripts/make_notes.py --restamp-headers`
 
 ## Triage pendiente: candidatos del chaining sin juzgar (backlog) (0)
 
@@ -128,36 +128,36 @@
 ## Decisión del registro con forma inválida — load_decisiones la descarta en silencio, el triage la vuelve a proponer sin el motivo (backlog) (0)
 
 ## Campos incompletos (33)
-- 1996Alm00057A → paper extraído sin `role` (fundacional/aplicacion/arbitro) → sin rol, contrastarlo contra otro no está definido
-- 1997Alm00015A → paper extraído sin `role` (fundacional/aplicacion/arbitro) → sin rol, contrastarlo contra otro no está definido
-- 1997Alm00036A → paper relevante sin methods (sin extraer)
-- 2000Alm00026A → paper relevante sin methods (sin extraer)
-- 2000Alm00039A → paper relevante sin methods (sin extraer)
-- 2002Alm00012A → paper relevante sin methods (sin extraer)
-- 2002Alm00017A → paper extraído sin `role` (fundacional/aplicacion/arbitro) → sin rol, contrastarlo contra otro no está definido
+- 2021Alm00059A → paper relevante sin methods (sin extraer)
 - 2002Alm00058A → paper relevante sin methods (sin extraer)
-- 2003Alm00021A → paper relevante sin methods (sin extraer)
+- 1996Alm00057A → paper extraído sin `role` (fundacional/aplicacion/arbitro) → sin rol, contrastarlo contra otro no está definido
+- 2021Alm00054A → paper relevante sin methods (sin extraer)
+- 2016Alm00052A → paper relevante sin methods (sin extraer)
+- 2017Alm00049A → paper relevante sin methods (sin extraer)
 - 2003Alm00046A → paper extraído sin `role` (fundacional/aplicacion/arbitro) → sin rol, contrastarlo contra otro no está definido
-- 2004Alm00014A → paper extraído sin `role` (fundacional/aplicacion/arbitro) → sin rol, contrastarlo contra otro no está definido
-- 2006Alm00027A → paper relevante sin methods (sin extraer)
-- 2006Alm00028A → paper relevante sin methods (sin extraer)
 - 2009Alm00044A → paper relevante sin methods (sin extraer)
+- 2018Alm00041A → paper relevante sin methods (sin extraer)
 - 2012Alm00040A → paper relevante sin methods (sin extraer)
+- 2000Alm00039A → paper relevante sin methods (sin extraer)
+- 2014Alm00037A → paper relevante sin methods (sin extraer)
+- 1997Alm00036A → paper relevante sin methods (sin extraer)
+- 2024Alm00033A → paper extraído sin `role` (fundacional/aplicacion/arbitro) → sin rol, contrastarlo contra otro no está definido
+- 2016Alm00030A → paper relevante sin methods (sin extraer)
+- 2006Alm00028A → paper relevante sin methods (sin extraer)
+- 2006Alm00027A → paper relevante sin methods (sin extraer)
+- 2000Alm00026A → paper relevante sin methods (sin extraer)
+- 2015Alm00023A → paper relevante sin methods (sin extraer)
+- 2003Alm00021A → paper relevante sin methods (sin extraer)
+- 2022Alm00018A → paper extraído sin `role` (fundacional/aplicacion/arbitro) → sin rol, contrastarlo contra otro no está definido
+- 2002Alm00017A → paper extraído sin `role` (fundacional/aplicacion/arbitro) → sin rol, contrastarlo contra otro no está definido
+- 1997Alm00015A → paper extraído sin `role` (fundacional/aplicacion/arbitro) → sin rol, contrastarlo contra otro no está definido
+- 2004Alm00014A → paper extraído sin `role` (fundacional/aplicacion/arbitro) → sin rol, contrastarlo contra otro no está definido
+- 2019Alm00013A → paper extraído sin `role` (fundacional/aplicacion/arbitro) → sin rol, contrastarlo contra otro no está definido
+- 2002Alm00012A → paper relevante sin methods (sin extraer)
+- 2016Alm00011A → paper relevante sin methods (sin extraer)
+- 2017Alm00008A → paper relevante sin methods (sin extraer)
 - 2013Alm00006A → paper relevante sin methods (sin extraer)
 - 2014Alm00002A → paper relevante sin methods (sin extraer)
-- 2014Alm00037A → paper relevante sin methods (sin extraer)
 - 2015Alm00001A → paper relevante sin methods (sin extraer)
-- 2015Alm00023A → paper relevante sin methods (sin extraer)
-- 2016Alm00011A → paper relevante sin methods (sin extraer)
-- 2016Alm00030A → paper relevante sin methods (sin extraer)
-- 2016Alm00052A → paper relevante sin methods (sin extraer)
-- 2017Alm00008A → paper relevante sin methods (sin extraer)
-- 2017Alm00049A → paper relevante sin methods (sin extraer)
-- 2018Alm00041A → paper relevante sin methods (sin extraer)
-- 2019Alm00013A → paper extraído sin `role` (fundacional/aplicacion/arbitro) → sin rol, contrastarlo contra otro no está definido
-- 2021Alm00054A → paper relevante sin methods (sin extraer)
-- 2021Alm00059A → paper relevante sin methods (sin extraer)
-- 2022Alm00018A → paper extraído sin `role` (fundacional/aplicacion/arbitro) → sin rol, contrastarlo contra otro no está definido
-- 2024Alm00033A → paper extraído sin `role` (fundacional/aplicacion/arbitro) → sin rol, contrastarlo contra otro no está definido
-- star01 → sin P_rot: NEA no lo trae y el cuerpo no documenta uno citado → buscarlo en la literatura y dejarlo en la prosa con su `[[bibcode]]` (el frontmatter NO se rellena)
 - star02 → sin P_rot: NEA no lo trae y el cuerpo no documenta uno citado → buscarlo en la literatura y dejarlo en la prosa con su `[[bibcode]]` (el frontmatter NO se rellena)
+- star01 → sin P_rot: NEA no lo trae y el cuerpo no documenta uno citado → buscarlo en la literatura y dejarlo en la prosa con su `[[bibcode]]` (el frontmatter NO se rellena)

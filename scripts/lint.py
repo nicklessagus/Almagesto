@@ -1145,7 +1145,10 @@ def main(argv=()) -> int:
         tags = kinds.get(n, [])
         return (not ({"paper", "star", "matrix"} & set(tags))
                 and n not in NON_ORPHAN and n not in refs_stems)
-    orphans = [n for n, c in incoming.items() if c == 0 and is_orphan_candidate(n)]
+    # `sorted`: `incoming` se construye sobre un `set` de strings, cuyo orden depende del hash
+    # que Python randomiza POR PROCESO — sin esto la sección sale en orden distinto en cada
+    # corrida y el reporte deja de ser comparable consigo mismo (INV-43).
+    orphans = sorted(n for n, c in incoming.items() if c == 0 and is_orphan_candidate(n))
 
     # Extraído pero no sintetizado (#75, backlog): el análogo del proxy que ya existe para planetas
     # (cada planeta del frontmatter discutido en prosa). Mide si el paper LLEGÓ, no si la síntesis
