@@ -233,3 +233,36 @@ def test_ya_ocr_ilegible_no_se_reintenta(toy_vault, fake_tools, monkeypatch):
 
 def test_sin_pdfs(toy_vault, fake_tools, monkeypatch):
     assert run_main(monkeypatch, ["test_star"]) == 1
+
+
+def test_txt_bajo_otro_slug_se_reusa(toy_vault, monkeypatch, capsys):
+    """D-18: extraer es el paso más caro después de la red. El mismo bibcode bajo otro slug ya
+    tiene su `.txt` — es el MISMO texto."""
+    (toy_vault.PDFS / "test_star").mkdir(parents=True, exist_ok=True)
+    (toy_vault.PDFS / "test_star" / "2020aaa...1..1A.pdf").write_bytes(b"%PDF-1.4")
+    (toy_vault.FULLTEXT / "otro").mkdir(parents=True, exist_ok=True)
+    (toy_vault.FULLTEXT / "otro" / "2020aaa...1..1A.txt").write_text("prosa legible " * 60,
+                                                                    encoding="utf-8")
+    def boom(*a, **k):
+        raise AssertionError("corrió pdftotext teniendo el .txt bajo otro slug")
+    monkeypatch.setattr(ef, "subprocess", SimpleNamespace(run=boom))
+    monkeypatch.setattr(sys, "argv", ["extract_fulltext.py", "test_star"])
+    assert ef.main() == 0
+    assert (toy_vault.FULLTEXT / "test_star" / "2020aaa...1..1A.txt").exists()
+    assert "ya extraído bajo" in capsys.readouterr().out
+
+
+def test_txt_ilegible_bajo_otro_slug_no_se_reusa(toy_vault, monkeypatch):
+    """Una copia mojibake no ahorra nada: propaga el problema a otro slug y el lint lo reporta dos
+    veces. Se re-extrae."""
+    (toy_vault.PDFS / "test_star").mkdir(parents=True, exist_ok=True)
+    (toy_vault.PDFS / "test_star" / "2020bbb...1..1B.pdf").write_bytes(b"%PDF-1.4")
+    (toy_vault.FULLTEXT / "otro").mkdir(parents=True, exist_ok=True)
+    (toy_vault.FULLTEXT / "otro" / "2020bbb...1..1B.txt").write_text("ˆÿþ" * 200, encoding="utf-8")
+    llamado = []
+    monkeypatch.setattr(ef, "subprocess", SimpleNamespace(
+        run=lambda *a, **k: llamado.append(1) or SimpleNamespace(returncode=1, stdout="", stderr="")))
+    monkeypatch.setattr(ef, "shutil", SimpleNamespace(which=lambda x: "/usr/bin/" + x))
+    monkeypatch.setattr(sys, "argv", ["extract_fulltext.py", "test_star"])
+    ef.main()
+    assert llamado, "reusó una copia ilegible en vez de re-extraer"

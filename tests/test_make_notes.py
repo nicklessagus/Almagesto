@@ -2112,3 +2112,56 @@ def test_procedencia_distingue_sin_dato_de_no_preguntado(toy_vault):
              if l.startswith("> _Ground-truth")][0]
     assert "sin dato: `P_rot_days`, `spectral_type`" in linea
     assert "`st_rotp_days`" not in linea      # se nombra como lo ve el lector en la ficha
+
+
+# ── Tanda 5 · D-19: renombre preprint → publicado ───────────────────────────────────────────────
+
+def test_ciclo_preprint_publicado(toy_vault):
+    """El experimento del contrato: una nota de preprint citada desde una ficha pasa a ser el
+    publicado, sin dejar wikilinks rotos ni perder el alias.  @inv INV-84"""
+    _paper("2020preX...1..1X")
+    (cfg.FULLTEXT / "test_star").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "test_star" / "2020preX...1..1X.txt").write_text("texto", encoding="utf-8")
+    (cfg.PDFS / "test_star").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "test_star" / "2020preX...1..1X.pdf").write_bytes(b"%PDF-1.4")
+    mn.write_star_note("test_star", force=True)
+    ficha = cfg.STARS / "test_star.md"
+    ficha.write_text(ficha.read_text(encoding="utf-8").replace(
+        "## Huecos", "El período es 34 d [[2020preX...1..1X]].\n\n## Huecos"), encoding="utf-8")
+
+    mn.rename_paper("2020preX...1..1X", "2021pubY...1..1Y")
+
+    assert not (cfg.PAPERS / "2020preX...1..1X.md").exists()
+    nueva = cfg.PAPERS / "2021pubY...1..1Y.md"
+    fm = read_fm(nueva)
+    assert fm["bibcode"] == "2021pubY...1..1Y"
+    assert [v["bibcode"] for v in fm["versions"]] == ["2020preX...1..1X"]
+    assert "[[2021pubY...1..1Y]]" in ficha.read_text(encoding="utf-8")
+    assert (cfg.FULLTEXT / "test_star" / "2021pubY...1..1Y.txt").exists()
+    assert (cfg.PDFS / "test_star" / "2021pubY...1..1Y.pdf").exists()
+
+
+def test_renombre_no_toca_menciones_en_prosa(toy_vault):
+    """Adversario de un replace ciego: un bibcode citado TEXTUALMENTE —dentro de una cita
+    transcripta del paper, p. ej.— no es un link a la nota y no se reescribe."""
+    _paper("2020preX...1..1X")
+    mn.write_star_note("test_star", force=True)
+    ficha = cfg.STARS / "test_star.md"
+    ficha.write_text(ficha.read_text(encoding="utf-8").replace(
+        "## Huecos",
+        'Link [[2020preX...1..1X]] y mención textual "ver 2020preX...1..1X en la tabla 3".\n\n## Huecos'),
+        encoding="utf-8")
+    mn.rename_paper("2020preX...1..1X", "2021pubY...1..1Y")
+    out = ficha.read_text(encoding="utf-8")
+    assert "[[2021pubY...1..1Y]]" in out
+    assert '"ver 2020preX...1..1X en la tabla 3"' in out
+
+
+def test_crear_segunda_nota_mismo_trabajo_rehusa(toy_vault, capsys):
+    """Se evita el duplicado desde el vamos: el conteo doble y el falso positivo de #75 nacen acá."""
+    mk_note(cfg.PAPERS, "2020preX...1..1X",
+            {"tags": ["paper"], "bibcode": "2020preX...1..1X", "arxiv_id": "2001.12345"}, "")
+    ads_json([rec("2021pubY...1..1Y", arxiv="2001.12345")])
+    mn.write_paper_notes("test_star", include_all=False, force=False)
+    assert not (cfg.PAPERS / "2021pubY...1..1Y.md").exists()
+    assert "2001.12345" in capsys.readouterr().out

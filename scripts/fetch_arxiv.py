@@ -138,9 +138,18 @@ def main() -> int:
                       f"{len(no_arxiv)} sin arXiv (pre-arXiv / no e-print)")
     got, skipped, failed = 0, 0, []
     for i, r in enumerate(todo, 1):
-        dest = destdir / f"{safe_name(r['bibcode'])}.pdf"
+        stem = safe_name(r["bibcode"])
+        dest = destdir / f"{stem}.pdf"
         if dest.exists() and not args.force:
             skipped += 1
+            continue
+        # D-18: el mismo bibcode ya bajado bajo otro slug es el MISMO archivo — copiarlo evita una
+        # bajada idéntica (33 copias medidas en la instancia) y un modo de falla (la red).
+        if not args.force and (otro := cfg.artefacto_en_otro_slug(cfg.PDFS, args.slug, stem, ".pdf")):
+            cfg.write_bytes_atomic(dest, otro.read_bytes())
+            cfg.print_seguro(f"  ↺ {r['bibcode']}: ya estaba bajo `{otro.parent.name}` — copiado "
+                             "sin ir a la red (D-18)")
+            got += 1
             continue
         cfg.print_seguro(f"  [{i}/{len(todo)}] {r['arxiv_id']}  {r['bibcode']}")
         if download_pdf(r["arxiv_id"], dest):

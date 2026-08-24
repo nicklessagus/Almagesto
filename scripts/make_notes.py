@@ -1131,6 +1131,119 @@ def stamp_concept_rollup(slug: str, dest) -> bool:
                                concept_rollup_table(concept_rollup_rows(slug)))
 
 
+# ── D-19 / INV-84: identidad del paper y renombre preprint → publicado ───────────────────────────
+#
+# La identidad de un trabajo es su `doi`/`arxiv_id`, no su bibcode: el mismo paper tiene un bibcode
+# de preprint y otro de publicado. Medido en la instancia real: 2 trabajos con dos notas cada uno.
+# Para todo lo que cuenta papers eso es doble conteo; para el consumidor son dos fuentes donde hay
+# una; y para #75 ("extraído no sintetizado") es un falso positivo permanente, porque la ficha cita
+# una de las dos.
+
+# Wikilink al stem exacto: `[[stem]]` o `[[stem|alias]]`. Deliberadamente NO matchea el bibcode
+# suelto en prosa — una cita transcripta del paper que lo menciona textualmente no es un link a la
+# nota, y un replace ciego la reescribiría (adversario con test propio).
+def _wikilink_re(stem: str):
+    return re.compile(r"\[\[" + re.escape(stem) + r"(\||\]\])")
+
+
+def identidad(fm: dict) -> tuple | None:
+    """La identidad del trabajo: `("arxiv", id)` o `("doi", id)`, o `None` si no declara ninguna.
+
+    `arxiv_id` primero porque es el que sobrevive al ciclo preprint→publicado (el DOI del preprint
+    y el del publicado suelen ser distintos, el arXiv id no cambia)."""
+    for campo, clave in (("arxiv_id", "arxiv"), ("doi", "doi")):
+        v = fm.get(campo)
+        if v:
+            return (clave, str(v).strip().lower())
+    return None
+
+
+def rename_paper(old_stem: str, new_bibcode: str) -> None:
+    """Renombra una nota de paper y TODO lo que la referencia (D-19).  @inv INV-84
+
+    Mueve la nota y sus artefactos (`raw/pdfs/*/`, `raw/fulltext/*/`), agrega el bibcode viejo a
+    `versions[]` —el alias: lo que el mundo exterior conserva— y **reescribe los wikilinks de toda
+    la bóveda**. Sin esa reescritura el renombre deja links rotos, que es la mitad del trabajo y la
+    que no se nota hasta que el lint la grita.
+
+    Alcance declarado: `vault/`. Lo que vive afuera (un paper que cita el bibcode viejo) se resuelve
+    por el alias en `versions[]`, no por reescritura."""
+    old = cfg.PAPERS / f"{safe_name(old_stem)}.md"
+    if not old.exists():
+        raise SystemExit(f"no existe la nota {old.name} — nada que renombrar")
+    new = cfg.PAPERS / f"{safe_name(new_bibcode)}.md"
+    if new.exists():
+        raise SystemExit(f"{new.name} ya existe — resolvé el duplicado a mano antes de renombrar")
+
+    texto = old.read_text(encoding="utf-8")
+    fm = cfg.split_fm(texto)
+    version = {"bibcode": old_stem, "pdf_source": fm.get("pdf_source"),
+               "eprint_version": fm.get("eprint_version")}
+    versions = [v for v in cfg.as_list(fm.get("versions")) if isinstance(v, dict)] + [version]
+
+    # artefactos: se mueven, no se copian — dejar el `.txt` viejo al lado haría que el hash de
+    # fuente del ancla (D-20) apunte a un archivo que ya nadie referencia.
+    for base in (cfg.PDFS, cfg.FULLTEXT):
+        for viejo in base.glob(f"*/{safe_name(old_stem)}.*"):
+            viejo.rename(viejo.with_name(f"{safe_name(new_bibcode)}{viejo.suffix}"))
+
+    cfg.write_text_atomic(new, texto)
+    old.unlink()
+    _set_campo(new, "bibcode", new_bibcode)
+    _set_lista_de_mapas(new, "versions", versions)
+
+    # reescritura de wikilinks en TODA la bóveda (atómica por nota)
+    patron = _wikilink_re(safe_name(old_stem))
+    tocadas = 0
+    for f in sorted(cfg.WIKI.rglob("*.md")):
+        cuerpo = f.read_text(encoding="utf-8")
+        nuevo_cuerpo = patron.sub(lambda m: f"[[{new_bibcode}{m.group(1)}", cuerpo)
+        if nuevo_cuerpo != cuerpo:
+            cfg.write_text_atomic(f, nuevo_cuerpo)
+            tocadas += 1
+    cfg.print_seguro(f"  {old.name} → {new.name} · {tocadas} nota(s) con wikilinks reescritos · "
+                     f"alias en `versions[]`")
+
+
+def _set_lista_de_mapas(dest, clave: str, valor: list) -> None:
+    """Escribe una lista de mapas en el frontmatter, reemplazando el bloque viejo de esa clave.
+
+    Cirugía a nivel texto (familia `merge_frontmatter_list`): no re-serializa el YAML entero, así
+    que los comentarios y el orden de la extracción LLM sobreviven byte a byte."""
+    text = dest.read_text(encoding="utf-8")
+    span = cfg.frontmatter_span(text)
+    if span is None:
+        return
+    yaml_block, _ = span
+    out, dropping = [], False
+    for ln in yaml_block.split("\n"):
+        if dropping:
+            if ln[:1] in (" ", "\t", "-"):
+                continue
+            dropping = False
+        if ln.startswith(f"{clave}:"):
+            dropping = True
+            continue
+        out.append(ln)
+    bloque = yaml.safe_dump({clave: valor}, sort_keys=False, allow_unicode=True,
+                            default_flow_style=False).rstrip("\n")
+    nuevo = "\n".join([ln for ln in out if ln.strip()] + [bloque]) + "\n"
+    cfg.write_text_atomic(dest, text.replace(yaml_block, nuevo, 1))
+
+
+def _set_campo(dest, clave: str, valor: str) -> None:
+    """Reemplaza un escalar del frontmatter editando el TEXTO (no re-serializa: preserva la
+    extracción LLM byte a byte, misma familia que `merge_frontmatter_list`)."""
+    text = dest.read_text(encoding="utf-8")
+    span = cfg.frontmatter_span(text)
+    if span is None:
+        return
+    yaml_block, _ = span
+    lineas = [f"{clave}: {valor}" if ln.startswith(f"{clave}:") else ln
+              for ln in yaml_block.split("\n")]
+    cfg.write_text_atomic(dest, text.replace(yaml_block, "\n".join(lineas), 1))
+
+
 # ── procedencia del ground-truth, EN la ficha (D-1) ──────────────────────────────────────────────
 #
 # Un lector abre la ficha y ve `teff_K: 5344` en el frontmatter sin nada que diga de dónde salió.
@@ -1462,10 +1575,26 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, topic: bool = F
         recs = [r for r in recs if r["relevant"]]
     cfg.PAPERS.mkdir(parents=True, exist_ok=True)
     extraccion = extraction_block(topic)     # una sola lectura del objetivo para toda la corrida
-    written = skipped = merged = restamped = 0
+    # D-19: identidades ya presentes en el corpus. Crear una segunda nota del MISMO trabajo (el
+    # preprint y el publicado tienen bibcodes distintos y el mismo `arxiv_id`) mete doble conteo en
+    # todo lo que cuenta papers, y un falso positivo permanente de #75 —la ficha cita una de las
+    # dos—. Se atajan acá, que es donde nacen.
+    ya_en_corpus = {}
+    for f in cfg.PAPERS.glob("*.md"):
+        if (ident := identidad(cfg.split_fm(f.read_text(encoding="utf-8")))):
+            ya_en_corpus.setdefault(ident, f.stem)
+    written = skipped = merged = restamped = duplicados = 0
     for r in recs:
         bib = r["bibcode"]
         dest = cfg.PAPERS / f"{safe_name(bib)}.md"
+        if not dest.exists() and (ident := identidad(r)) and ident in ya_en_corpus:
+            otro = ya_en_corpus[ident]
+            cfg.print_seguro(
+                f"  ⊘ {bib}: mismo trabajo que {otro} ({ident[0]}: {ident[1]}) — NO se crea una "
+                f"segunda nota. Si {bib} es la versión que corresponde, renombrá: "
+                f"`python scripts/make_notes.py --rename-paper {otro} {bib}`")
+            duplicados += 1
+            continue
         if dest.exists() and not force:
             # Retro-linkeo add-only (issue #4b): el paper ya estaba en el corpus (ingest previo de
             # otra estrella/tema) → no se pisa la extracción LLM, pero SÍ se mergean los seeds de
@@ -1697,6 +1826,10 @@ def _flags_usados(args) -> list:
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser()
+    ap.add_argument("--rename-paper", nargs=2, metavar=("VIEJO", "NUEVO"),
+                    help="renombra una nota de paper y sus artefactos, agrega el bibcode viejo a "
+                         "`versions[]` y reescribe los wikilinks de la bóveda (ciclo "
+                         "preprint→publicado, D-19)")
     ap.add_argument("slug", nargs="?",
                     help="slug de estrella/tema; en --web es la CLAVE de cita (AAAA+Autor). "
                          "Opcional sólo con --restamp-pdf-links.")
@@ -1758,6 +1891,9 @@ def main() -> int:
                              accessed=args.accessed, pending=args.pending, force=args.force)
         return 0
 
+    if args.rename_paper:
+        rename_paper(*args.rename_paper)
+        return 0
     cfg.print_seguro(f"Generando notas para {args.slug}")
     if args.topic:
         write_concept_note(args.slug, args.force)

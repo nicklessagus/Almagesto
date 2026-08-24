@@ -893,6 +893,29 @@ def main(argv=()) -> int:
                 (stem, f"[[{p.bibcode}]] **sin verificar**: hay una afirmación que lo cita y no "
                        f"tiene fila en el bloque (ancla {p.anchor})"))
 
+    # ── identidad duplicada (D-19 / INV-84) ──────────────────────────────────────────────────────
+    # La identidad de un trabajo es su `doi`/`arxiv_id`, no su bibcode: el preprint y el publicado
+    # son bibcodes distintos del MISMO paper. Medido en la instancia real: 2 trabajos con dos notas.
+    # Bloqueante porque el daño es silencioso y se acumula: doble conteo en todo lo que cuenta
+    # papers, dos fuentes donde hay una, y un falso positivo permanente de #75 (la ficha cita una).
+    # Un alias en `versions[]` NO es un duplicado: es el registro de que el trabajo tuvo otro
+    # bibcode, y por eso no entra en la población.
+    identidad_dup: list = []
+    por_identidad: dict = {}
+    alias = {str(v.get("bibcode")) for fm_p in paper_fms.values()
+             for v in cfg.as_list(fm_p.get("versions")) if isinstance(v, dict) and v.get("bibcode")}
+    for stem_p, fm_p in sorted(paper_fms.items()):
+        if stem_p in alias:
+            continue
+        if (ident := mn.identidad(fm_p)):
+            por_identidad.setdefault(ident, []).append(stem_p)
+    for (clave, valor), stems in sorted(por_identidad.items()):
+        if len(stems) > 1:
+            identidad_dup.append(
+                (", ".join(stems), f"comparten {clave} `{valor}` → es el MISMO trabajo con dos "
+                                   f"notas; dejá una canónica: `python scripts/make_notes.py "
+                                   f"--rename-paper {stems[0]} {stems[1]}`"))
+
     # ── lista de papers desactualizada (D-10) ────────────────────────────────────────────────────
     # La tabla materializada de `## Papers` es un snapshot, y un snapshot que nadie re-estampa
     # miente igual que el roll-up Dataview que reemplazó (medido: 155 prometidos, 8 discutidos).
@@ -1363,6 +1386,7 @@ def main(argv=()) -> int:
                          ("disputes en el schema viejo (planets[].disputes[]) — el lint ya no las lee", old_disputes),
                          ("Juicio de triage en build/<slug>/triage.json (pre-1.9.0) — el lector ya no lo mira", legacy_triage),
                          ("⛔ Registro con `busqueda:` (schema viejo pre-D-28) — el lector ya no lo lee", old_registro),
+                         ("⛔ Identidad duplicada: dos notas del mismo trabajo (mismo doi/arxiv_id)", identidad_dup),
                          ("`role` fuera del vocabulario (fundacional/aplicacion/arbitro)", bad_roles),
                          ("⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)", impl_leaks),
                          ("Objetivo sin instanciar (WARN — objective.yaml sigue en el placeholder del template)", objective_warn),
@@ -1408,7 +1432,7 @@ def main(argv=()) -> int:
     n_block = sum(len(x) for x in (not_evaluated, broken, fm_broken, retracted, orphans,
                                    contradictions, mass_issues, dangling_thesis, dangling_disputes,
                                    bad_roles, bad_disputes, old_disputes, legacy_triage,
-                                   old_verif_template, old_registro))
+                                   old_verif_template, old_registro, identidad_dup))
     if args.cierre:
         n_block += len(stale_pairs)   # R-1: en el cierre de una operación, un par vencido frena
     if n_block:

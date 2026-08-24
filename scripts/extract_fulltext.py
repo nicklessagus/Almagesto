@@ -191,6 +191,18 @@ def main() -> int:
                 skipped += 1
                 continue
             print(f"  {pdf.name}: .txt existente ilegible → reintento con OCR")
+        # D-18: el mismo bibcode ya extraído bajo otro slug es el MISMO texto — copiarlo evita
+        # re-correr pdftotext/OCR (el paso más caro después de la red). Se reusa sólo si la copia
+        # es LEGIBLE: una copia mojibake no ahorra nada, sólo propaga el problema a otro slug.
+        if not args.force and not out.exists():
+            otro = cfg.artefacto_en_otro_slug(cfg.FULLTEXT, args.slug, pdf.stem, ".txt")
+            if otro is not None:
+                prev = otro.read_text(encoding="utf-8", errors="replace")
+                if is_legible(prev)[0]:
+                    cfg.write_text_atomic(out, prev)
+                    print(f"  ↺ {pdf.stem}: ya extraído bajo `{otro.parent.name}` — copiado (D-18)")
+                    done += 1
+                    continue
         text, why = None, "forzado con --ocr"
         if not args.ocr:
             # -layout preserva columnas/tablas razonablemente; quitarlo si molesta

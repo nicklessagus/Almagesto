@@ -251,6 +251,19 @@ def main() -> int:
     # --force, H-07: la única forma de reemplazar un PDF truncado congelado).
     pendientes = [r for r in recs
                   if args.force or not (destdir / f"{safe_name(r['bibcode'])}.pdf").exists()]
+    # D-18: antes de gastar red, reusar el PDF que YA está bajado bajo otro slug. Es el mismo
+    # bibcode: el archivo es idéntico. Se copia (no symlink: `raw/` viaja en git-lfs y un enlace
+    # roto es peor que una copia).
+    reusados = 0
+    for r in list(pendientes):
+        stem = safe_name(r["bibcode"])
+        otro = cfg.artefacto_en_otro_slug(cfg.PDFS, args.slug, stem, ".pdf")
+        if otro is not None:
+            cfg.write_bytes_atomic(destdir / f"{stem}.pdf", otro.read_bytes())
+            cfg.print_seguro(f"  ↺ {r['bibcode']}: ya estaba bajo `{otro.parent.name}` — copiado "
+                             "sin ir a la red (D-18)")
+            pendientes.remove(r)
+            reusados += 1
     skipped = len(recs) - len(pendientes)
     todo = pendientes[: args.limit] if args.limit else pendientes
     # H-05: con --limit, `todo` es un SUBSET arbitrario de lo pendiente — lo que queda afuera no

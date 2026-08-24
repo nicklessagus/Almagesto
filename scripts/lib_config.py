@@ -20,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.28.0"
+ALMAGESTO_VERSION = "1.29.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -614,6 +614,22 @@ AUTORIDAD_NOMBRE = {"nea": "NASA Exoplanet Archive (pscomppars)", "simbad": "SIM
 # Cómo se llama cada campo del JSON EN LA FICHA. La cabecera nombra lo que el lector ve en el
 # frontmatter, no la clave interna del ground-truth (`st_rotp_days` no aparece en ninguna ficha).
 CAMPO_EN_FICHA = {"st_rotp_days": "P_rot_days"}
+
+
+def artefacto_en_otro_slug(base: Path, slug: str, stem: str, sufijo: str):
+    """El mismo artefacto (`<stem><sufijo>`) ya bajado bajo OTRO slug, o `None` (D-18).
+
+    Un paper relevante para dos sujetos se bajaba dos veces — medido: 33 copias en la instancia
+    real. El archivo es idéntico (mismo bibcode), y la red es a la vez el recurso caro y el que
+    puede fallar: re-bajarlo no agrega nada y agrega un modo de falla. Se devuelve la ruta para
+    que el llamador copie (no symlink: `raw/` viaja en git-lfs y un enlace roto es peor que una
+    copia).
+
+    Determinista: si hay varias, gana la primera en orden alfabético de slug."""
+    for candidato in sorted(base.glob(f"*/{stem}{sufijo}")):
+        if candidato.parent.name != slug:
+            return candidato
+    return None
 
 
 def load_extraccion(slug: str) -> dict:

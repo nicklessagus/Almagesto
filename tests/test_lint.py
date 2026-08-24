@@ -2017,3 +2017,40 @@ def test_source_inventado_sigue_bloqueando(toy_vault, capsys):
     link_from_index(toy_vault, "test_star")
     rc, rep = run_lint_reporte(capsys)
     assert rc == 1 and "wikipedia" in rep
+
+
+# ── Tanda 5 · D-19 / INV-84: un trabajo, UNA nota canónica ──────────────────────────────────────
+
+def test_dos_notas_mismo_arxiv_id_bloquean(toy_vault, capsys):
+    """Medido en la instancia real: 2 trabajos con dos notas cada uno (mismo `arxiv_id`, dos
+    bibcodes — el preprint y el publicado). Para todo lo que cuenta papers eso es doble conteo, y
+    para el consumidor son dos fuentes donde hay una."""
+    mk_note(toy_vault.PAPERS, "2020preX...1..1X",
+            {"tags": ["paper"], "bibcode": "2020preX...1..1X", "arxiv_id": "2001.12345"}, "")
+    mk_note(toy_vault.PAPERS, "2021pubY...1..1Y",
+            {"tags": ["paper"], "bibcode": "2021pubY...1..1Y", "arxiv_id": "2001.12345"}, "")
+    link_from_index(toy_vault, "2020preX...1..1X", "2021pubY...1..1Y")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 1
+    assert "2001.12345" in rep and "--rename-paper" in rep
+
+
+def test_identidad_por_doi_tambien(toy_vault, capsys):
+    mk_note(toy_vault.PAPERS, "2020aX....1..1X",
+            {"tags": ["paper"], "bibcode": "2020aX....1..1X", "doi": "10.1/mismo"}, "")
+    mk_note(toy_vault.PAPERS, "2021bY....1..1Y",
+            {"tags": ["paper"], "bibcode": "2021bY....1..1Y", "doi": "10.1/mismo"}, "")
+    link_from_index(toy_vault, "2020aX....1..1X", "2021bY....1..1Y")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 1 and "10.1/mismo" in rep
+
+
+def test_versions_no_cuenta_como_duplicado(toy_vault, capsys):
+    """El alias vive en `versions[]` de la nota canónica: eso NO es un duplicado, es el registro de
+    que el mismo trabajo tuvo otro bibcode."""
+    mk_note(toy_vault.PAPERS, "2021pubY...1..1Y",
+            {"tags": ["paper"], "bibcode": "2021pubY...1..1Y", "arxiv_id": "2001.12345",
+             "versions": [{"bibcode": "2020preX...1..1X", "pdf_source": "eprint"}]}, "")
+    link_from_index(toy_vault, "2021pubY...1..1Y")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 0

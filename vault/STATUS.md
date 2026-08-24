@@ -487,10 +487,29 @@ leída por un agente llega sin la doc al lado.
 
 Ratchet **81 → 79**. Tier 0: 774 verdes. Tier 1: 48.
 
+### ✅ Tanda 5 cerrada (2026-08-24) — v1.29.0 · identidad y artefactos
+
+| Issue | Qué cerró | INV |
+|---|---|---|
+| **5.1** | identidad por `doi`/`arxiv_id`; `--rename-paper` (nota + artefactos + `versions[]` + reescritura de wikilinks); el lint bloquea el duplicado; `make_notes` rehúsa crear la segunda nota | INV-84 |
+| **5.2** | D-18: el PDF/`.txt` ya bajado bajo **otro slug** se copia en vez de re-bajarse o re-extraerse | — |
+
+**5.1** — medido en la instancia: 2 trabajos con dos notas cada uno. El adversario con test propio
+es el **replace ciego**: un bibcode mencionado **textualmente** (dentro de una cita transcripta del
+paper) no es un link a la nota y no se reescribe; sólo se tocan los `[[wikilink]]`.
+
+**5.2** — 33 copias medidas. Dos recortes deliberados: el `.txt` se reusa **sólo si es legible**
+(una copia mojibake no ahorra nada, propaga el problema a otro slug y el lint lo reporta dos veces),
+y se **copia**, no se enlaza (`raw/` viaja en git-lfs y un symlink roto es peor que una copia).
+Los tests ponen un `requests`/`subprocess` que **revienta si lo llaman**: pasan sólo si reusó.
+
+Ratchet **79 → 78**. Tier 0: 783 verdes. Tier 1: 48 (golden 37 → 38 categorías).
+
 ### Lo que sigue
-**Tanda 5 — identidad y artefactos** (D-19, D-18): la identidad de un paper es `doi`/`arxiv_id`, un
-trabajo tiene **una sola** nota canónica y las demás versiones viven en `versions[]`. Medido en la
-instancia: 2 trabajos con dos notas cada uno. Cierra INV-84.
+**Tanda 6 — la pasada de red unificada** (D-41, D-45, D-46, D-47): una sola pasada que cubre los
+cinco eventos que cambian afuera (retracción, corrección, versión nueva, snapshot web,
+ground-truth) y **avisa con el diff antes de aplicar**. Cierra INV-85. Trae **R-3** abierta (la
+sintaxis de la marca en línea de fuente retractada) y **R-4** (dónde vive `ultima_pasada_red`).
 
 ## 🔜 Cola de pendientes (al 2026-08-23)
 

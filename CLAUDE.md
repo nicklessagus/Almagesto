@@ -238,7 +238,16 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   frontmatter contra el cual poner un `alt`). Sólo taguear discrepancias **materiales** (mayores que
   el error; no diferencias cosméticas dentro de la barra). Reflejar la disputa también en la
   tabla/prosa.
-- **papers/**: `bibcode, title, first_author, n_authors, year, arxiv_id, doi, bibstem, stars[], topics[], methods[],
+- **papers/**: ⛔ **la identidad de un trabajo es su `doi`/`arxiv_id`, no su bibcode (D-19).** El
+  preprint y el publicado son bibcodes distintos del **mismo** paper: dos notas ahí son doble conteo
+  en todo lo que cuenta papers, dos fuentes donde hay una, y un falso positivo permanente de #75
+  (la ficha cita una de las dos). Hay **una sola nota canónica** y los bibcodes viejos viven en
+  `versions[]`; el lint bloquea el duplicado y `make_notes` **rehúsa crear** la segunda nota. El
+  ciclo se resuelve con `python scripts/make_notes.py --rename-paper VIEJO NUEVO`, que mueve la nota
+  y sus artefactos (`raw/pdfs/`, `raw/fulltext/`), agrega el alias y **reescribe los wikilinks de
+  toda la bóveda** — sin eso el renombre deja links rotos, que es la mitad del trabajo. Alcance
+  declarado: `vault/`; lo que vive afuera se resuelve por el alias. Campos:
+  `bibcode, title, first_author, n_authors, year, arxiv_id, doi, bibstem, stars[], topics[], methods[],
   thesis_links[], bearing(supports|challenges|method), role[], relevance, citation_count, pdf, fulltext,
   fulltext_source(pdftotext|ocr|web), pdf_source(eprint|ads|publisher|web)`. El contrato apunta a **ambos artefactos**: `fulltext` es el
   `.txt` **barato** (grep/lectura — el default de todo consumidor) y `pdf` el respaldo caro (abrir
