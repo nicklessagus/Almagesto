@@ -221,6 +221,50 @@ dashboard de Obsidian con el estado de la bóveda.
 Varias decisiones cambian el schema (D-1, D-2, D-17, D-21, D-37), y **cada una suma una migración**.
 Sigue valiendo el criterio: **el deploy a Almagesto-RV se hace cuando cierren los issues, no antes.**
 
+## 📌 Dónde retomar (sesión del 2026-08-23)
+
+**Lo hecho hoy, en tres documentos** (los tres commiteados **sin push** — ver la advertencia de abajo):
+
+| Documento | Qué es |
+|---|---|
+| `docs/revision-contrato-2026-08-23.md` | las **58 decisiones** (D-1…D-58) con razones y mediciones sobre la instancia real |
+| `docs/reconciliacion-2026-08-23.md` | qué del backlog viejo sobrevive, qué invariantes cambian, y las **4 decisiones previas** resueltas |
+| `docs/plan-implementacion-2026-08-23.md` | el **plan en 11 tandas**, con funciones, firmas, tests rojos y el INV que cierra cada issue |
+
+Más `docs/contrato.md` §6 (**RESUELTA**, con el mapeo #→D) y §3.K (**INV-76…91**, todos en HUECO).
+
+**El plan lo escribió Fable** validando el orden contra el código, y **corrigió cuatro cosas** del
+esqueleto propuesto: D-53 (helper atómico) sube al principio porque cada tanda posterior agrega
+writers; el registro (D-28/D-57) va **antes** del bloque de estado D-12 porque `search_line()` lee
+`busqueda` y D-28 le cambia el schema; D-1/D-2 van antes de la pasada de red porque `nea_diff` diffea
+el mismo JSON que D-1 re-organiza; y el índice de citas D-27 no bloquea a nada fuera de su carril.
+
+### ⚠ Sin push — decidir antes si esto va público
+El repo `Almagesto` es **público** (`github.com/nicklessagus/Almagesto`). Los commits de hoy están
+**locales**: `0f0dcef` (revisión) y `c922263` (reconciliación), más el del plan. **No pushear sin que
+el usuario decida** si los tres documentos —que citan números, rutas y decisiones de su instancia
+privada Almagesto-RV— van al repo público, a un repo privado, o quedan fuera de git.
+
+### Requisito nuevo: trazabilidad requisito ↔ código
+Pedido del usuario al cerrar: **va a querer una matriz que ate cada invariante / requisito a la
+función que lo implementa.** Hoy no existe: `docs/contrato.md` nombra archivos y líneas sueltas en la
+columna "cómo se verifica", pero no hay un mapa. Era el paso 3 del análisis previo al plan y se
+saltó; vuelve como **requisito del plan**, no como opcional.
+
+Implica: cada issue del plan declara **qué invariante cierra** (eso el plan ya lo trae) **y** deja la
+relación registrada en un artefacto consultable —matriz en `docs/`, o marcas en el código que un
+script recolecte—. Decidir la forma antes de arrancar la Tanda 0, porque si se agrega después hay que
+reconstruirla de memoria, que es exactamente el modo de falla que este repo ya registró tres veces.
+
+### Lo primero de mañana
+1. Resolver los **11 puntos de decisión** (R-1…R-11) del §14 del plan. Los que bloquean antes: el
+   mecanismo de las **dos severidades** de D-4 (Fable propone `lint.py --cierre`, sin decidir), la
+   **colisión de nombres `topics`** —faceta vs tema-sujeto— que D-26 **agrava** y conviene resolver
+   antes del issue de las tres puertas, y **quién estampa `cadena`** cuando un script corre suelto.
+2. Decidir la **forma de la trazabilidad** (arriba).
+3. Decidir el **push**.
+4. Recién ahí, **Tanda 0**.
+
 ## 🔜 Cola de pendientes (al 2026-08-23)
 
 > Explícita para que no dependa de la memoria de una sesión.
