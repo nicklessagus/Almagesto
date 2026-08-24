@@ -78,6 +78,16 @@ from extract_fulltext import is_legible      # umbral determinista de legibilida
 from fetch_ground_truth import msini_earth   # verificación de masa (m·sini implícita)
 from make_notes import find_header_line      # contrato de la cabecera (mismo que stamp_pdf_link, #48)
 from make_notes import GENERATOR_LINE        # ancla de la cabecera de fichas/concepts (#69)
+# D-49: la lente vigente y su comparación viven en `query_ads` (una sola definición para el que
+# clasifica y el que audita). Import GUARDADO: el módulo lee `objective.yaml` al importarse y
+# **aborta** si no declara facetas — y el contrato del lint es "ante una bóveda rara reporta, no se
+# muere" (D-6). Sin `query_ads`, la categoría se declara no evaluada en vez de callar.
+try:
+    import query_ads as _qa
+except Exception as _qa_err:            # noqa: BLE001 — cualquier fallo de import es "no evaluado"
+    _qa, _qa_reason = None, str(_qa_err)
+else:
+    _qa_reason = None
 
 # @inv INV-02
 LINK_RE = re.compile(r"\[\[([^\]\|#]+)")
@@ -90,7 +100,44 @@ IMPL_LEAK_RE = [
     (re.compile(r"\bdial\b", re.I), "dial de implementación"),
     (re.compile(r"w_\{?j"), "pesos por orden w_j (parámetro de código)"),
     (re.compile(r"=\s*peso\("), "vector de mezcla peso(azul)/peso(rojo)"),
+    # D-50 — la mitad de AUTO-REFERENCIA. Los cuatro de arriba cazan el parámetro de código que se
+    # coló; esta mitad caza el otro modo, más frecuente y más difícil de ver: la nota describiendo
+    # a QUIEN LA CONSUME ("nuestro pipeline usa esto para…"). Rompe el flujo unidireccional de la
+    # regla #0 — la bóveda no se acomoda a quien la lee— y no deja rastro estructural: es prosa
+    # normal, bien escrita, que sólo se nota preguntando "¿esto sale de una fuente citable?".
+    # La frontera fina la fija CLAUDE.md: los campos ESTRUCTURALES del frontmatter (`data_local`,
+    # `methods_applied.ours`) sí pueden apuntar afuera; lo prohibido es el puntero EN PROSA. Por
+    # eso el scan es por línea del cuerpo y el frontmatter no entra.
+    (re.compile(r"\bnuestr[oa]s?\s+(pipeline|c[óo]digo|scripts?|repo|implementaci[óo]n|"
+                r"generador|modelo)\b", re.I), "auto-referencia al consumidor (nuestro …)"),
+    (re.compile(r"\bdownstream\b", re.I), "auto-referencia al consumidor (downstream)"),
+    (re.compile(r"\bpara\s+el\s+repo\b", re.I), "auto-referencia al consumidor (para el repo)"),
+    (re.compile(r"\bsupuesto\s+de\s+trabajo\b", re.I),
+     "supuesto de trabajo (decisión de implementación, no bibliografía)"),
 ]
+# CONTEXTO de consumo: las formas en las que una nota nombra a quien la lee. El nombre propio del
+# repo consumidor NO se matchea pelado a propósito — en esta bóveda `ICA` es además el nombre de un
+# método real (está en `relevance.facets`), así que un `\bICA\b` suelto marcaría cada mención
+# legítima y la categoría se volvería un rojo permanente, que es un rojo que se deja de mirar. Lo
+# que delata la fuga no es el nombre: es el nombre en posición de CONSUMIDOR.
+_CONSUMIDOR_ANTES = r"(?:scripts?|pipeline|c[óo]digo|repo|implementaci[óo]n|generador|m[óo]dulo)\s+de\s+"
+_CONSUMIDOR_DESPUES = r"\s+(?:usa|usan|consume|consumen|necesita|necesitan|espera|esperan|toma|toman|lee|leen)\b"
+
+
+def downstream_leaks(names: list) -> list:
+    """Un patrón por consumidor declarado (`downstream: []`, D-50), en contexto de consumo.
+    Lista vacía si no hay nada declarado: esa mitad del detector queda apagada, sin WARN."""
+    # @inv INV-04
+    out = []
+    for n in names:
+        esc = re.escape(str(n).strip())
+        if not esc:
+            continue
+        out.append((re.compile(rf"{_CONSUMIDOR_ANTES}{esc}\b|\b{esc}{_CONSUMIDOR_DESPUES}", re.I),
+                    f"auto-referencia al consumidor declarado ({n})"))
+    return out
+
+
 # targets que son texto de ejemplo/placeholder, no links reales
 LINK_SKIP = {"..", "...", "link", "links", "wikilinks", "bibcode", "related-concept",
              "attention-mechanism", "rag"}
@@ -194,6 +241,55 @@ def last_change_dates(paths: list[str]) -> dict[str, str]:
         if d:                              # sin commits (archivo nuevo y limpio): sin fecha
             dates[f] = d
     return dates
+
+
+# D-34 — el ALCANCE declarado de una nota de hipótesis. Formato del skill `test-hypothesis`:
+#   > Alcance 2026-08-23 · temas: [ica, crx] + estrellas: [tau_ceti] · 190 papers · 47 con hits
+# Se parsea con tolerancia (el bloque lo escribe un LLM): basta la fecha, los slugs y el conteo. Los
+# slugs son directorios de `raw/fulltext/`, así que el universo declarado se puede volver a contar.
+ALCANCE_RE = re.compile(r"^>\s*Alcance\s+(\d{4}-\d{2}-\d{2})\b", re.M)
+ALCANCE_SLUGS_RE = re.compile(r"(?:temas|estrellas|entidades)\s*:\s*\[([^\]]*)\]", re.I)
+ALCANCE_N_RE = re.compile(r"·\s*(\d+)\s+papers?\b", re.I)
+
+
+def alcance_declarado(text: str) -> dict | None:
+    """`{fecha, slugs, n_papers}` del blockquote de alcance, o `None` si la nota no lo trae.
+
+    `None` ≠ alcance vacío: una hipótesis SIN alcance declarado es el hallazgo de D-34 —un veredicto
+    negativo sin alcance se lee como universal ("no existe evidencia" en vez de "no hay evidencia en
+    estos 190 papers")—, y es distinto de una cuyo alcance quedó corto."""
+    # @inv INV-83
+    m = ALCANCE_RE.search(text)
+    if not m:
+        return None
+    linea_fin = text.find("\n\n", m.start())
+    bloque = text[m.start():linea_fin if linea_fin > 0 else len(text)]
+    slugs = []
+    for grupo in ALCANCE_SLUGS_RE.findall(bloque):
+        slugs += [x.strip() for x in grupo.split(",") if x.strip()]
+    n = ALCANCE_N_RE.search(bloque)
+    return {"fecha": m.group(1), "slugs": slugs,
+            "n_papers": int(n.group(1)) if n else None}
+
+
+def corpus_vigente(slugs: list) -> tuple[int, list]:
+    """(papers con fulltext hoy en esos slugs, slugs cuyo directorio no existe). El universo de una
+    hipótesis son directorios de `raw/fulltext/` porque es exactamente sobre lo que corre el grep."""
+    # @inv INV-83
+    total, faltan = 0, []
+    for sl in slugs:
+        d = cfg.FULLTEXT / sl
+        if not d.is_dir():
+            faltan.append(sl)
+            continue
+        total += len(list(d.glob("*.txt")))
+    return total, faltan
+
+
+def _muestra(xs: list, n: int = 5) -> str:
+    """Los primeros `n` elementos, con `…` si hay más. Un hallazgo tiene que NOMBRAR (los stems del
+    delta), no contar; y una lista de 300 tampoco se lee: se nombra una muestra y se dice que hay más."""
+    return ", ".join(xs[:n]) + (" …" if len(xs) > n else "")
 
 
 def basename(p: str) -> str:
@@ -342,6 +438,10 @@ def legacy_disputes(fm: dict) -> tuple[int, list]:
 # mudo para esa operación sin que nadie se entere — el mismo modo de falla de `thesis_links` que no
 # matchea ninguna nota, y por eso se trata igual (bloqueante).
 # @inv INV-46
+# @inv INV-46
+# D-37. `status` es lo ÚNICO que un consumidor lee para saber en qué quedó una hipótesis; en prosa
+# libre no dice nada (el caso medido en la instancia real: `supuesto operativo con caveat conocido`).
+HYP_STATUS = ("abierta", "sostenida", "disputada", "refutada")
 ROLES = ("fundacional", "aplicacion", "arbitro")
 
 
@@ -373,10 +473,30 @@ MIRROR_PLANET = ("P_days", "K_ms", "e", "mass_earth", "status")
 #     cita, la que venga después (`limite` abajo) — no en la oración entera.
 PROT_MENTION = re.compile(r"(?i)P[\s_${}\\]*(?:(?:rm|mathrm|text)[\s{]*)?rot(?![a-z])"
                           r"|per[ií]odo de rotaci[óo]n|rotation period")
-PROT_CITE = re.compile(r"\[\[[^\]]+\]\]|inferencia")
+# Respaldo válido de un P_rot: un wikilink, o una marca de inferencia **con premisas**. La
+# palabra `inferencia` pelada NO cuenta (D-42/INV-86): aceptarla dejaba declarar un período
+# "documentado" sin una sola fuente, que es el sumidero por donde una afirmación `no-soportada`
+# sobrevive cambiándole la etiqueta.
+PROT_CITE = re.compile(r"\[\[[^\]]+\]\]")
 PROT_NEG = re.compile(r"(?i)no se conoce|no se sabe|sin medir|desconocid|no hay |ausen"
                       r"|falta[ns]? |sin determinar|nunca se|no\s+(?:est[áa]|fue|ha sido)?"
                       r"\s*(?:medid|determinad|conocid|publicad)")
+
+
+# D-42 / INV-86. La marca de inferencia es la que va **entre paréntesis** al cierre de una
+# afirmación —`(inferencia de [[b1]], [[b2]])`—, y es una de las dos únicas marcas en línea del
+# sistema (la otra es `⛔retractada`). Se busca así, y no por la palabra suelta, para no disparar
+# con el sustantivo común: "la inferencia bayesiana permite…" no es una marca.
+INFER_MARK = re.compile(r"\((?:[^()]*\b)?inferencia\b[^()]*\)", re.I)
+
+
+def inferencias_sin_premisas(body: str) -> list[str]:
+    """Marcas `(inferencia …)` que no nombran **ninguna** premisa `[[bibcode]]`.
+
+    Sin premisas no es una inferencia: es una afirmación sin respaldo con otra etiqueta, y encima
+    una que ni el verify ni el lint pueden chequear —el verify necesita un bibcode que leer—. Por
+    eso bloquea: es el mismo criterio de la frontera dura (regla #0), no un backlog.  @inv INV-86"""
+    return [m.group(0) for m in INFER_MARK.finditer(body) if "[[" not in m.group(0)]
 
 
 def prot_documentado(body: str) -> bool:
@@ -533,6 +653,11 @@ def main(argv=()) -> int:
     anchor_bodies: dict = {}           # {archivo: texto} de TODA nota de entidad/query — D-47
     old_registro: list = []            # registros con la clave `busqueda:` (schema pre-D-28)
     old_facets: list = []              # notas de paper con `topics:` (schema pre-R-5)
+    infer_sin_premisas: list = []      # marcas `(inferencia …)` sin ningún [[bibcode]] (D-42)
+    bad_status: list = []              # `status` de hipótesis fuera del vocabulario (D-37)
+    alcance_corto: list = []           # (stem, motivo) — alcance de hipótesis sin declarar o vencido (D-34)
+    old_bearing: list = []             # `bearing` en nota de paper: schema pre-D-21
+    sin_destino: list = []             # paper sin stars/thesis_links/methods (D-23)
     cadena_incompleta: list = []       # (slug, "se cortó en <paso>") — D-57
     # `stars.yaml`/`themes.yaml` ilegibles no pueden tumbar el lint: se declaran NO EVALUADO y los
     # chequeos que dependen de ellos se saltean con población vacía (INV-80/INV-87).
@@ -553,6 +678,9 @@ def main(argv=()) -> int:
     corrections: list = []             # (stem, "<tipo> (<fecha>)") — corrección no-retractante (#52)
     pending_srcs: list = []            # (stem, "<motivo> — puntero") — fuentes derivadas al usuario
     impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
+    # D-50: los genéricos + un patrón por consumidor declarado. Se arma UNA vez por corrida, no por
+    # línea: el scan recorre el cuerpo de toda nota de la bóveda.
+    leak_patterns = IMPL_LEAK_RE + downstream_leaks(cfg.load_downstream())
     pdf_issues: list = []              # (stem, ...) — drift frontmatter `pdf` ↔ PDF en disco
     headerless: list = []              # (stem, motivo) — ficha/concepto sin cabecera estampable (#69)
     thesis_refs: dict[str, list] = {}  # valor de thesis_link -> notas que lo usan
@@ -563,6 +691,7 @@ def main(argv=()) -> int:
     cited_in_entity: set = set()       # bibcodes citados desde una ficha/concepto (#75)
     extracted: list = []               # (stem, marca `no_sintetizado`) de papers YA extraídos (#75)
     bad_decisions: list = []           # (slug, clave) — decisión del registro que no es un mapa
+    lente_desync: list = []            # (slug, delta) — la lente cambió desde la última corrida (D-49)
 
     refs_dir = str(cfg.RAW / "refs")
     refs_stems = {basename(f)[:-3] for f in files if f.startswith(refs_dir)}  # docs de diseño, no fichas
@@ -637,7 +766,7 @@ def main(argv=()) -> int:
         for i, line in enumerate(body_full.split("\n"), 1) if scan_leaks else []:
             if line.lstrip().startswith(">"):
                 continue                       # blockquote meta (frontera/alcance)
-            for rx, label in IMPL_LEAK_RE:
+            for rx, label in leak_patterns:
                 if rx.search(line):
                     impl_leaks.append((stem, f"L{i} [{label}]: {line.strip()[:80]}"))
                     break
@@ -706,6 +835,57 @@ def main(argv=()) -> int:
         if in_dir(f, "papers") and "topics" in fm and not err:
             old_facets.append((stem, "usa `topics:` (schema pre-R-5) — el campo vigente es "
                                      "`facets:`; renombrarlo (el lector ya no mira `topics`)"))
+        if in_dir(f, "papers") and not err:
+            # D-21: la POSTURA de un paper depende de la TESIS, y un paper puede tocar varias.
+            # Dejarla en el paper obligaba a elegir una sola para todas; vive en la tabla de
+            # evidencia de la hipótesis.
+            if fm.get("bearing") is not None:
+                old_bearing.append((stem, "usa `bearing:` (schema pre-D-21) — la postura respecto de "
+                                          "una tesis vive en la tabla de evidencia de la hipótesis, "
+                                          "no en el paper: depende de la tesis, y un paper puede "
+                                          "tocar varias"))
+            # D-23: sin ninguno de los tres, el paper no pertenece a nada — no entra en ningún
+            # roll-up y ninguna síntesis lo alcanza. Que además esté linkeado no lo salva.
+            if not any(fm.get(k) for k in ("stars", "thesis_links", "methods")):
+                sin_destino.append((stem, "sin destino: ni `stars`, ni `thesis_links`, ni `methods` "
+                                          "— no entra en ningún roll-up ni lo alcanza ninguna síntesis"))
+        if in_dir(f, "hypotheses") and not err:
+            st = fm.get("status")
+            if st is not None and st not in HYP_STATUS:
+                bad_status.append((stem, f"`status: {st}` fuera del vocabulario "
+                                         f"({' | '.join(HYP_STATUS)})"))
+            # D-34 — el ALCANCE define qué significa el veredicto. Sin él, "no hay evidencia" se lee
+            # como "no existe evidencia": el mismo *afirmar de más* que la bóveda persigue en todos
+            # lados, pero aplicado a una conclusión. Y con él, el alcance CRECE: sumar un tema (o
+            # refrescar uno) deja el veredicto testeado contra un universo que ya no es el vigente —
+            # misma familia de staleness que los pares de verificación. Backlog: la nota no es
+            # inválida, quedó atrás. Se cierra re-corriendo el test y re-estampando la línea.
+            alc = alcance_declarado(text)
+            if alc is None:
+                alcance_corto.append(
+                    (stem, "sin blockquote `> Alcance <fecha> · …`: un veredicto negativo sin "
+                           "alcance declarado se lee como universal → declararlo (skill "
+                           "`test-hypothesis`, paso 0)"))
+            elif alc["slugs"]:
+                vigente, faltan = corpus_vigente(alc["slugs"])
+                if faltan:
+                    # No se puede contar lo que no existe: se DICE cuál falta en vez de comparar
+                    # contra un universo recortado en silencio (que daría "quedó corto" al revés).
+                    alcance_corto.append(
+                        (stem, f"el alcance nombra slug(s) sin fulltext en disco "
+                               f"({', '.join(faltan)}) → ¿typo, o entidad borrada/renombrada?"))
+                elif alc["n_papers"] is not None and vigente > alc["n_papers"]:
+                    alcance_corto.append(
+                        (stem, f"alcance del {alc['fecha']} declarado sobre {alc['n_papers']} "
+                               f"papers y hoy esos slugs tienen {vigente} (+"
+                               f"{vigente - alc['n_papers']}) → el veredicto se testeó contra un "
+                               f"universo que ya no es el vigente: re-correr el test sobre lo nuevo "
+                               f"y re-estampar la línea de alcance"))
+        cuerpo_nota = text.split("---", 2)[-1] if text.startswith("---") else text
+        for marca in inferencias_sin_premisas(cuerpo_nota):
+            infer_sin_premisas.append(
+                (stem, f"`{marca}` sin premisas — una inferencia nombra al menos un `[[bibcode]]`: "
+                       "`(inferencia de [[bibcode]])`. Sin eso es una afirmación sin respaldo"))
         if "star" in tags:
             body = text.split("---", 2)[-1] if text.startswith("---") else text
             # `P_rot_days` nulo NO es de por sí un campo incompleto (#70): el frontmatter es espejo
@@ -785,8 +965,8 @@ def main(argv=()) -> int:
                 # sin motivo — con `.get(campo)` a secas colapsaban con "no hay marca" y el lint
                 # respondía "poné `no_sintetizado`" sobre una nota que ya lo tenía puesto.
                 extracted.append((stem, fm.get("no_sintetizado", _SIN_MARCA)))
-            if fm.get("thesis_links") and not fm.get("bearing"):
-                incomplete.append((stem, "thesis_links sin bearing"))
+            # (D-21 retiró `bearing` del paper: el campo incompleto "thesis_links sin bearing"
+            #  quedó sin población y se eliminó. La postura vive en la hipótesis.)
             # ROL del paper (#73). `bearing` dice la POSTURA respecto de una tesis; `role` dice qué
             # tipo de aporte es, que es lo que determina la operación de contraste: fundacional ↔
             # aplicación NO es contraste sino instanciación, y leerlo como desacuerdo fabrica
@@ -1222,6 +1402,13 @@ def main(argv=()) -> int:
     # reporte en vez de mostrar su cero.
     if (obj_err := cfg.objective_error()):
         not_evaluated.append(("clasificación de relevancia (la lente)", obj_err))
+    if _qa is None and not obj_err:
+        # El import de `query_ads` falló por algo que NO es un objective ilegible (ese ya se
+        # reporta arriba con su motivo real): sin él no hay lente vigente contra la cual comparar
+        # la del registro. Es hecho del ENTORNO, así que cuenta para el exit y la categoría normal
+        # se suprime — un "Lente desincronizada (0)" acá sería el cero inventado de D-43.
+        not_evaluated.append(("lente desincronizada (D-49): no se pudo importar `query_ads`",
+                              _qa_reason or "motivo desconocido"))
 
     objective_warn = []
     if not obj_err and cfg.load_objective().get("name") == cfg.DEFAULT_OBJECTIVE_NAME:
@@ -1407,6 +1594,41 @@ def main(argv=()) -> int:
                         (slug, f"decisión `{clave}` no es un mapa (es {type(v).__name__}, falta "
                                f"`decision`/`motivo`/`fecha`) → `load_decisiones` la descarta en "
                                f"silencio y el triage vuelve a proponerla sin el motivo"))
+        # D-49 — LENTE DESINCRONIZADA (backlog). `busquedas[].lente` guarda la regla con la que se
+        # clasificó esa corrida; `relevance.facets` se edita después y el corte core/no-core se
+        # mueve **sin mover `almagesto_version`**, así que el corpus queda clasificado con una
+        # regla que ya no es la vigente y nada lo dice. El caso NORMAL es lente-igual y es gratis:
+        # el diff (N notas × las regex) sólo se corre cuando `lens_delta` encuentra diferencias.
+        # Offline a propósito: el insumo son las notas (título + abstract + `keywords`, D-17), que
+        # viajan — `reclass_diff` mide lo mismo pero necesita `build/`, que es scratch gitignored.
+        if _qa is not None and not cfg.objective_error():
+            stored = _qa.lens_stored(slug)
+            if stored is None:
+                # D-43: no hay con qué comparar → se DICE, no se cuenta como "lente al día". Un
+                # registro sin `lente` es pre-1.10.3 (o una corrida que no la guardó).
+                lente_desync.append(
+                    (slug, "no evaluado: la última búsqueda del registro no guarda `lente`, así "
+                           "que no hay contra qué comparar la vigente → re-corré la cadena del "
+                           "sujeto para que la estampe"))
+            elif (delta := _qa.lens_delta(stored, _qa.lens_current())):
+                detalle = "; ".join(delta)
+                if not _qa.lens_textual_changed(delta):
+                    # Sólo cambiaron los doctypes de ruido: es un cambio real y el diff offline NO
+                    # lo puede ver (la nota de paper no guarda `doctype`). Se declara en vez de
+                    # devolver "0 entran, 0 salen", que se leería como "el cambio no movió nada".
+                    lente_desync.append(
+                        (slug, f"la lente cambió ({detalle}) pero el diff offline no lo puede "
+                               f"evaluar: la nota de paper no guarda `doctype` → "
+                               f"`python scripts/query_ads.py --dry-run --slug {slug}` con build/ presente"))
+                else:
+                    entran, salen, sin_nota = _qa.lens_diff_offline(slug)
+                    techo = (f"; {len(sin_nota)} paper(s) del universo sin nota → no evaluables "
+                             f"offline" if sin_nota else "")
+                    lente_desync.append(
+                        (slug, f"la lente cambió desde la última corrida ({detalle}) → "
+                               f"+{len(entran)} entrarían" + (f" ({_muestra(entran)})" if entran else "")
+                               + f" / −{len(salen)} saldrían" + (f" ({_muestra(salen)})" if salen else "")
+                               + techo + "; re-corré la cadena del sujeto para re-clasificar"))
         if slug in vistos:
             continue                                  # build/ presente: ya se reportó la verdad viva
         bs = [x for x in cfg.as_list(reg.get("busquedas")) if isinstance(x, dict)]
@@ -1430,6 +1652,20 @@ def main(argv=()) -> int:
     suprimidas = set()
     if not stale_evaluable:
         suprimidas.add("Verificación stale")
+    # Una categoría que se calcula a partir de una config ILEGIBLE no vale 0: nadie la midió. Antes
+    # sólo se suprimía "Verificación stale", así que con `stars.yaml` roto cinco categorías seguían
+    # imprimiendo su cero — cinco veredictos inventados sobre datos que el lint no pudo leer, que es
+    # exactamente lo que la categoría *No evaluado* existe para no producir (INV-87). Peor con
+    # `objective.yaml`: *Áreas de concepts/* afirmaba "no declara `concept_areas`" sobre un archivo
+    # que sí la declara.
+    if cfg.stars_error() or cfg.themes_error():
+        suprimidas |= {"Triage pendiente", "Recorte de lectura sin declarar",
+                       "Lista de papers desactualizada", "Cadena incompleta", "Corpus truncado"}
+    if cfg.objective_error():
+        suprimidas |= {"Objetivo sin instanciar", "Áreas de `concepts/` no declaradas",
+                       "Áreas de concepts", "Lente desincronizada"}
+    if _qa is None:
+        suprimidas.add("Lente desincronizada")
     for title, items in [("⛔ No evaluado: el chequeo no pudo correr (hecho del ENTORNO, no de la "
                           "bóveda — cuenta para el exit)", not_evaluated),
                          ("Wikilinks rotos (página faltante)", broken),
@@ -1449,6 +1685,10 @@ def main(argv=()) -> int:
                          ("Juicio de triage en build/<slug>/triage.json (pre-1.9.0) — el lector ya no lo mira", legacy_triage),
                          ("⛔ Registro con `busqueda:` (schema viejo pre-D-28) — el lector ya no lo lee", old_registro),
                          ("⛔ Nota de paper con `topics:` (schema viejo pre-R-5) — el campo vigente es `facets:`", old_facets),
+                         ("⛔ `inferencia` sin premisas (D-42): la marca no nombra ningún `[[bibcode]]`", infer_sin_premisas),
+                         ("⛔ `status` de hipótesis fuera del vocabulario cerrado (D-37)", bad_status),
+                         ("⛔ `bearing` en una nota de paper (schema pre-D-21) — la postura vive en la hipótesis", old_bearing),
+                         ("⛔ Nota de paper sin destino (D-23): no pertenece a ninguna entidad", sin_destino),
                          ("⛔ Identidad duplicada: dos notas del mismo trabajo (mismo doi/arxiv_id)", identidad_dup),
                          ("`role` fuera del vocabulario (fundacional/aplicacion/arbitro)", bad_roles),
                          ("⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)", impl_leaks),
@@ -1463,6 +1703,8 @@ def main(argv=()) -> int:
                          ("⛔ Bloque de verificación con plantilla vieja (sin columnas de hash — no evaluable)", old_verif_template),
                          ("Pares de verificación vencidos" + (" (BLOQUEA: modo --cierre)" if args.cierre else " (backlog: pasada periódica; con `--cierre` bloquea)"), stale_pairs),
                          ("Verificación stale: la nota se editó después de su último verify-citations (backlog)", stale_verif),
+                         ("Alcance de hipótesis sin declarar o vencido: el veredicto se lee sobre "
+                          "un universo que ya no es el suyo (backlog)", alcance_corto),
                          ("Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog)", coverage),
                          ("Extraído pero no sintetizado: el paper se extrajo y su contenido nunca "
                           "llegó a una ficha/concepto (backlog)", unsynthesized),
@@ -1473,6 +1715,8 @@ def main(argv=()) -> int:
                          ("Lista de papers desactualizada: la tabla estampada no refleja el universo (backlog)", papers_table_stale),
                          ("Cadena incompleta: falta un paso del orden canónico (backlog)", cadena_incompleta),
                          ("Corpus truncado: la query directa trajo menos de lo que ADS reporta (backlog)", truncated_corpora),
+                         ("Lente desincronizada: el corpus se clasificó con una regla que ya no "
+                          "es la vigente (backlog)", lente_desync),
                          ("Decisión del registro con forma inválida — load_decisiones la descarta "
                           "en silencio, el triage la vuelve a proponer sin el motivo (backlog)", bad_decisions),
                          ("Campos incompletos", incomplete)]:
@@ -1495,7 +1739,8 @@ def main(argv=()) -> int:
     n_block = sum(len(x) for x in (not_evaluated, broken, fm_broken, retracted, orphans,
                                    contradictions, mass_issues, dangling_thesis, dangling_disputes,
                                    bad_roles, bad_disputes, old_disputes, legacy_triage,
-                                   old_verif_template, old_registro, old_facets, identidad_dup,
+                                   old_verif_template, old_registro, old_facets, infer_sin_premisas, bad_status,
+                                   old_bearing, sin_destino, identidad_dup,
                                    prosa_retractada))
     if args.cierre:
         n_block += len(stale_pairs)   # R-1: en el cierre de una operación, un par vencido frena

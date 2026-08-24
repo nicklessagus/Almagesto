@@ -1,10 +1,12 @@
 """ingest_theme: despacho por `source`, validaciones de sources:, pending, copia de PDFs."""
+import inspect
 import sys
 from types import SimpleNamespace
 
 import pytest
 
 import ingest_theme as it
+import make_notes
 import lib_config as cfg
 from conftest import write_yaml
 
@@ -26,8 +28,18 @@ def fake_notes(monkeypatch):
     state = SimpleNamespace(concepts=[], webs=[])
     monkeypatch.setattr(it.make_notes, "write_concept_note",
                         lambda slug, force=None: state.concepts.append((slug, force)))
-    monkeypatch.setattr(it.make_notes, "write_web_paper_note",
-                        lambda key, **kw: state.webs.append((key, kw)) or True)
+    # ⚠ El doble VALIDA LA FIRMA contra la función real (red #3). Un `lambda key, **kw` traga
+    # cualquier kwarg: renombrar uno en `write_web_paper_note` deja la suite entera en verde y
+    # rompe todo ingest off-ADS en producción con `TypeError`. `Signature.bind` es la forma barata
+    # de que el doble tenga el MISMO contrato que el real y no esconda el bug en la diferencia.
+    _firma_web = inspect.signature(make_notes.write_web_paper_note)
+
+    def _web_double(key, **kw):
+        _firma_web.bind(key, **kw)      # TypeError si la firma real ya no acepta estos kwargs
+        state.webs.append((key, kw))
+        return True
+
+    monkeypatch.setattr(it.make_notes, "write_web_paper_note", _web_double)
     return state
 
 

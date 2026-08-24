@@ -591,3 +591,38 @@ def test_slug_estampa_su_paso_en_la_cadena(toy_vault, monkeypatch):
         "la cadena completa no puede reportarse como cortada")
     pasos = [p["paso"] for p in cfg.load_cadena("test_star")]
     assert pasos.count("check_retractions") == 1
+
+
+# ── El tercer estado mudo: papers sin DOI (auditoría P0) ────────────────────
+
+def test_corpus_sin_doi_no_sale_limpio(toy_vault, monkeypatch, capsys):
+    """P0. Un paper sin `doi` no entraba ni en `checked` ni en `errors`: caía en un tercer estado
+    MUDO. Con un corpus enteramente off-ADS —que nace sin DOI por construcción— el barrido salía 0
+    con "0 con error al chequear", y eso se lee como «la bóveda está limpia de retracciones» sobre
+    papers a los que nadie preguntó.  @inv INV-87"""
+    for stem in ("2020Local", "2021Web"):
+        mk_note(toy_vault.PAPERS, stem, {"bibcode": stem, "title": "t", "doi": None,
+                                         "tags": ["paper"]}, "")
+    calls = []
+    patch_net(monkeypatch, [], calls)
+    rc = run_main(monkeypatch)
+    out = capsys.readouterr().out
+    assert rc == 2, "no se miró ≠ limpio"
+    assert calls == [], "sin DOI no hay a quién preguntarle"
+    assert "2 sin DOI" in out and "no se consultó Crossref ni una vez" in out
+    assert "2020Local" in out and "2021Web" in out, "hay que NOMBRAR cuáles quedaron sin mirar"
+
+
+def test_corpus_mixto_reporta_los_sin_doi_pero_no_bloquea(toy_vault, monkeypatch, capsys):
+    """Si al menos uno se consultó, el barrido hizo su trabajo sobre lo que podía: sale 0, pero la
+    población no consultable queda **declarada** (no desaparece)."""
+    mk_note(toy_vault.PAPERS, "2020ConDoi", {"bibcode": "2020ConDoi", "title": "t",
+                                             "doi": "10.1/x", "tags": ["paper"]}, "")
+    mk_note(toy_vault.PAPERS, "2021SinDoi", {"bibcode": "2021SinDoi", "title": "t",
+                                             "doi": None, "tags": ["paper"]}, "")
+    calls = []
+    patch_net(monkeypatch, [FakeResp(200, {"message": {}})], calls)
+    rc = run_main(monkeypatch)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "1 sin DOI" in out and "2021SinDoi" in out

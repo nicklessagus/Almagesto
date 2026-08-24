@@ -1,7 +1,7 @@
 ---
 name: verify-citations
 description: Usar para verificar, afirmación por afirmación, que las citas [[bibcode]] de una nota de la wiki (query, hipótesis, ficha, concepto) realmente están respaldadas por el texto completo de la fuente. Se corre como paso de cierre al armar/editar una query o hipótesis, o cuando el usuario pide "rechequeá las citas / ¿esto lo dice el paper?". Implementa el chequeo claim↔evidencia (pipeline tipo CiteAudit) sobre el corpus cerrado de la bóveda. Veredictos: soportada / parcial / no-soportada (la fuente calla) / contradice (la fuente afirma lo contrario → candidata a disputa, no sólo cita rota); en transcripciones de tablas/listas chequea además la completitud (lo que la nota omite).
-version: 1.7.1
+version: 1.8.0
 ---
 
 # Verify-citations — chequeo claim↔evidencia contra el fulltext
@@ -246,9 +246,10 @@ Cada **parcial / no-soportada / contradice** se resuelve antes de cerrar:
 - **Contradicción** (`contradice`) → decidir cuál de dos casos es. (a) **La nota está mal** →
   corregirla a lo que dice la fuente. (b) **Desacuerdo real entre fuentes** → es una **disputa**:
   si es un parámetro de una ficha, taguearla en `disputes` (posiciones explícitas, #71)
-  (`field`/`ref`/`note`/`alt`; NEA sigue siendo el valor de verdad) y reflejarla en la prosa; si es
-  un claim de concepto/query, citar **ambas** fuentes con el desacuerdo explícito (y ajustar el
-  `bearing` del paper si aplica). Una contradicción detectada es un **hallazgo**, no un fracaso.
+  (schema #71: `field` + `posiciones[]` de `{ref|source, value}` + `note` opcional — ⚠ `alt` y el `ref` a nivel de disputa son pre-#71 y el lint los **bloquea**; si NEA arbitra, una posición es `{source: ground_truth}` y sigue siendo el valor de verdad) y reflejarla en la prosa; si es
+  un claim de concepto/query, citar **ambas** fuentes con el desacuerdo explícito (si toca una
+  hipótesis, la postura se ajusta en **su tabla de evidencia**, D-21 — nunca en la nota del paper).
+  Una contradicción detectada es un **hallazgo**, no un fracaso.
 - **Atribución cruzada** (el hecho está, pero en otro de los papers citados) → reasignar la cita al
   bibcode correcto.
 - **Afirmación estirada** (el paper dice menos/distinto) → **bajar** la afirmación a lo que la fuente
@@ -350,16 +351,19 @@ Su tasa de error se mide con el **modo benchmark** (abajo).
 plantados** (estilo CiteAudit). Correr **a pedido** (no es paso de cierre), con la bóveda ya
 poblada y citada.
 
-1. `python scripts/bench_verify.py seed [--max N]` → arma `build/verify_bench/bench.json`:
-   N pares (afirmación, `[[bibcode]]`) **reales** de queries/concepts + un par **falso por
-   construcción** por cada uno (misma afirmación, bibcode rotado a otro paper del corpus —
-   determinista, y nunca uno que esa afirmación cite de verdad).
+1. `python scripts/bench_verify.py seed [--max N]` → arma **dos** archivos (D-55):
+   `build/verify_bench/exam.json` (el examen: N pares (afirmación, `[[bibcode]]`) **reales** de
+   queries/concepts + un par **falso por construcción** por cada uno —misma afirmación, bibcode
+   rotado a otro paper del corpus, determinista y nunca uno que esa afirmación cite de verdad—,
+   con `id` neutro y **sin etiquetas ni conteos por clase**) y `build/verify_bench/key.json`
+   (la clave). **Vos leés `exam.json` y nada más**: la ceguera dejó de depender de una instrucción
+   y la sostiene la construcción, pero abrir la clave la rompe igual.
 2. **Fan-out A CIEGAS** — mismo protocolo del paso 2 normal, con una regla extra **dura**: cada
-   subagente recibe SOLO (afirmación, ruta al fulltext). **NUNCA mostrarle `bench.json`, las
-   etiquetas real/sembrada, ni decirle que es un benchmark** — sabría qué buscar y el número no
-   mediría nada. El orquestador (vos) sí ve las etiquetas: sos el corrector del examen, no el
-   examinado.
-3. Volcar cada veredicto en el campo `verdict` de su par en el JSON
+   subagente recibe SOLO (afirmación, ruta al fulltext). **Nunca mostrarle `key.json`, el examen
+   entero, ni decirle que es un benchmark** — sabría qué buscar y el número no mediría nada. (El
+   examen entero tampoco: cada sembrada comparte el `claim` con su par real, así que quien lo lee
+   completo deduce que uno de esos dos es falso —no cuál—. Con un par por subagente eso no se ve.)
+3. Volcar cada veredicto en el campo `verdict` de su par en `exam.json`
    (`soportada|parcial|no-soportada|contradice|no verificable por extracción`).
 4. `python scripts/bench_verify.py score` → recall de sembradas + reales caídas →
    `outputs/verify-bench-<fecha>.md`.

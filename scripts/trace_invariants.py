@@ -66,10 +66,14 @@ RATCHET = ROOT / "docs" / "trazabilidad-ratchet.yaml"
 ARBOLES = {"scripts": "impl", "tests": "test"}
 
 # La marca. `@inv` obligatorio: sin él, `INV-nn` es prosa. Uno o varios ids separados por coma.
-MARCA_RE = re.compile(r"@inv\s+(INV-\d{2}(?:\s*,\s*INV-\d{2})*)")
-INV_RE = re.compile(r"INV-\d{2}")
+# `\d{2}` **con frontera** (`(?!\d)`). Sin ella, un `INV-100` se recolecta como **INV-10**: la
+# marca queda atribuida al invariante equivocado y el mapa afirma que INV-10 está cubierto por un
+# test que prueba otra cosa — "un mapa que atribuye mal es peor que uno vacío", y encima en el
+# artefacto cuyo trabajo es no atribuir mal. Hoy hay 91 invariantes: la frontera está a nueve.
+MARCA_RE = re.compile(r"@inv\s+(INV-\d{2}(?!\d)(?:\s*,\s*INV-\d{2}(?!\d))*)")
+INV_RE = re.compile(r"INV-\d{2}(?!\d)")
 # Fila de invariante de las tablas de §3: `| **INV-01** | enunciado | P0 | estado | cómo |`
-FILA_RE = re.compile(r"^\|\s*\*\*(INV-\d{2})\*\*\s*\|(.*)$")
+FILA_RE = re.compile(r"^\|\s*\*\*(INV-\d{2}(?!\d))\*\*\s*\|(.*)$")
 AREA_RE = re.compile(r"^###\s+(.+?)\s*$")
 SEC3_RE = re.compile(r"^##\s+3\.\s")
 SEC_RE = re.compile(r"^##\s+")

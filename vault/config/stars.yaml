@@ -8,9 +8,20 @@
 #   esos caracteres, así que la variante no ayudaría — lo cubre el rescate por glifo de query_ads.
 # `slug`: nombre de archivo/carpeta (sin espacios). `data_local`: puntero a los datos crudos locales
 #   de la estrella (opcional, ruta machine-local; no se commitea).
-# `extra_core`: (opcional) lista de bibcodes que el clasificador perdió y querés forzar como core
-#   (curación manual). Es un OVERRIDE del clasificador: `query_ads` trae por bibcode los que la query
-#   no devolvió y RESCATA en el lugar los que devolvió pero quedaron no-core (`via: manual`).
+# `extra_core`: (opcional) papers que el clasificador perdió y querés forzar como core (curación
+#   manual). ⚠ FORMA DURA (D-58): **lista de mapas**, no de bibcodes sueltos — un bibcode a secas o
+#   una lista de strings ABORTA con el snippet correcto. Sin `via` y `motivo` el registro no dice
+#   quién aceptó ese paper ni por qué, que es justo lo que #51 vino a arreglar.
+#     extra_core:
+#       - bibcode: 2011arXiv1109.2497M
+#         via: usuario          # vocabulario CERRADO: usuario | triage | citado-por-corpus
+#         fecha: 2026-01-01     # opcional
+#         motivo: "árbitro de la señal b, la query no lo trajo"
+#   `triage.py` imprime el snippet ya armado al aceptar un candidato, así que en la práctica esto
+#   se escribe a mano sólo al agregar un bibcode suelto.
+#   Es un OVERRIDE del clasificador: `query_ads` trae por bibcode los que la query no devolvió y
+#   RESCATA en el lugar los que devolvió pero quedaron no-core. (En `ads.json` esos registros
+#   quedan marcados `via: manual` — es OTRO campo, el del registro, no el de esta entrada.)
 #   Vive acá (config, se commitea) → sobrevive al re-run; editar `build/` no, es scratch y se pisa.
 # La otra mitad de esa decisión —los candidatos que DESCARTÁS— no se escribe a mano acá: va con
 #   `python scripts/triage.py <slug> --drop <bibcode> --reason "<motivo>"` y persiste, también

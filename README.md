@@ -140,7 +140,8 @@ partes del sistema son deterministas, cuáles no, y cómo revisar las que no, es
 Cada ingest por ADS deja además un **registro versionado** en `vault/config/registro/<slug>.yaml`,
 que se commitea y viaja con la bóveda:
 
-- **`busqueda`**: la query efectiva, la fecha, el límite pedido y los conteos (encontrados en ADS →
+- **`busquedas`** (lista, una entrada por corrida): la query efectiva, la fecha, el límite pedido
+  y los conteos (encontrados en ADS →
   traídos → core → sin juzgar → descartados). Es lo que permite saber **sobre qué universo de papers
   afirma una ficha** y con qué **lente** se filtró: el registro guarda también las facetas de
   `relevance.facets` con sus regex y la regla de combinación vigente, porque cambiar una regex mueve
@@ -152,7 +153,7 @@ que se commitea y viaja con la bóveda:
   ingest (los `.json` de ADS se vuelven a pedir; tu criterio, no), así que viaja en git como ya lo
   hacían los aceptados.
 
-Un tema **off-ADS puro** no lleva `busqueda`: no hubo query que registrar, porque sus fuentes ya
+Un tema **off-ADS puro** no lleva `busquedas`: no hubo query que registrar, porque sus fuentes ya
 están declaradas una por una en `themes.yaml`. Uno **mixto** (fuentes declaradas + `extra_core:` con
 bibcodes de ADS) sí lo lleva, con `query: null`: registra lo que entró por la vía ADS.
 
@@ -170,7 +171,8 @@ de actividad).
 **La ficha de estrella.** Arriba, el frontmatter: el **contrato máquina-legible** que consume un
 agente o un script (`teff_K`, `P_rot_days`, `planets[]` con P/K/e/m·sini, `methods_applied`; cuando
 dos fuentes discrepan sobre un eje se suma `disputes`, con una posición por fuente). Abajo, fuera de
-cuadro, la prosa destilada de los papers y las tablas Dataview que se llenan solas al ingestar.
+cuadro, la prosa destilada de los papers y los roll-ups **estampados** que el ingest materializa
+(`## Papers`; `## Planetas` y `## Métodos aplicados` todavía son Dataview).
 La captura es de una instancia de julio: el schema creció desde entonces (ver el backlog de capturas
 en `vault/STATUS.md`).
 

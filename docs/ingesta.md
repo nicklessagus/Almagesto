@@ -142,7 +142,7 @@ Diferencias que importan:
 
 El **modo off-ADS** existe para métodos de otras disciplinas (estadística, ML) al servicio del foco
 astro, cuya bibliografía canónica vive fuera de ADS. Su costo: **sin query no hay descubrimiento**,
-las fuentes se declaran una por una — y por eso la sección `busqueda` del registro versionado queda
+las fuentes se declaran una por una — y por eso la sección `busquedas` del registro versionado queda
 vacía (#77).
 
 ## 3. Qué se llena en la ficha de estrella
@@ -174,7 +174,8 @@ flowchart LR
 | cuerpo | `## Resumen` | **LLM** | síntesis de los papers, apoyada en el inventario, con `[[bibcode]]` |
 | cuerpo | `## Huecos` | **LLM** | qué falta para que la ficha alcance sola |
 | cuerpo | `## Planetas` | script (Dataview) | render del frontmatter |
-| cuerpo | `## Papers`, `## Métodos aplicados` | script (Dataview) | roll-up — ⚠ no resuelve sin Obsidian (#60) |
+| cuerpo | `## Papers` | script (tabla **estampada**) | roll-up materializado — se re-estampa con `make_notes.py <slug>` |
+| cuerpo | `## Métodos aplicados`, `## Planetas` | script (Dataview) | ⚠ todavía dependen del plugin (INV-81 parcial) |
 | cuerpo | `## Excluidos por el filtro` | script | snapshot de los no-core, top por citas |
 | cuerpo | `## Verificación de citas` | **LLM** | salida de `verify-citations`, **con fecha** |
 

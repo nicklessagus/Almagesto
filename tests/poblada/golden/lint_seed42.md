@@ -40,6 +40,14 @@
 
 ## ⛔ Nota de paper con `topics:` (schema viejo pre-R-5) — el campo vigente es `facets:` (0)
 
+## ⛔ `inferencia` sin premisas (D-42): la marca no nombra ningún `[[bibcode]]` (0)
+
+## ⛔ `status` de hipótesis fuera del vocabulario cerrado (D-37) (0)
+
+## ⛔ `bearing` en una nota de paper (schema pre-D-21) — la postura vive en la hipótesis (0)
+
+## ⛔ Nota de paper sin destino (D-23): no pertenece a ninguna entidad (0)
+
 ## ⛔ Identidad duplicada: dos notas del mismo trabajo (mismo doi/arxiv_id) (0)
 
 ## `role` fuera del vocabulario (fundacional/aplicacion/arbitro) (0)
@@ -92,6 +100,13 @@
 
 ## Verificación stale: la nota se editó después de su último verify-citations (backlog) (0)
 
+## Alcance de hipótesis sin declarar o vencido: el veredicto se lee sobre un universo que ya no es el suyo (backlog) (5)
+- concepto-hypotheses-019 → sin blockquote `> Alcance <fecha> · …`: un veredicto negativo sin alcance declarado se lee como universal → declararlo (skill `test-hypothesis`, paso 0)
+- concepto-hypotheses-015 → sin blockquote `> Alcance <fecha> · …`: un veredicto negativo sin alcance declarado se lee como universal → declararlo (skill `test-hypothesis`, paso 0)
+- concepto-hypotheses-011 → sin blockquote `> Alcance <fecha> · …`: un veredicto negativo sin alcance declarado se lee como universal → declararlo (skill `test-hypothesis`, paso 0)
+- concepto-hypotheses-007 → sin blockquote `> Alcance <fecha> · …`: un veredicto negativo sin alcance declarado se lee como universal → declararlo (skill `test-hypothesis`, paso 0)
+- concepto-hypotheses-003 → sin blockquote `> Alcance <fecha> · …`: un veredicto negativo sin alcance declarado se lee como universal → declararlo (skill `test-hypothesis`, paso 0)
+
 ## Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog) (7)
 - concepto-hypotheses-019 → sin citas [[bibcode]] → afirmaciones no chequeables (cobertura)
 - concepto-hypotheses-015 → sin citas [[bibcode]] → afirmaciones no chequeables (cobertura)
@@ -124,6 +139,8 @@
 ## Cadena incompleta: falta un paso del orden canónico (backlog) (0)
 
 ## Corpus truncado: la query directa trajo menos de lo que ADS reporta (backlog) (0)
+
+## Lente desincronizada: el corpus se clasificó con una regla que ya no es la vigente (backlog) (0)
 
 ## Decisión del registro con forma inválida — load_decisiones la descarta en silencio, el triage la vuelve a proponer sin el motivo (backlog) (0)
 

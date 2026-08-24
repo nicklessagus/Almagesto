@@ -1,7 +1,7 @@
 ---
 name: ingest-theme
 description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema off-ADS — típicamente un método de otra disciplina (estadística, ML) al servicio del foco astro — desde PDFs locales + web (ver Modo off-ADS).
-version: 1.15.0
+version: 1.16.0
 ---
 
 # Ingest: agregar un TEMA a la wiki
@@ -50,15 +50,22 @@ Progreso del ingest del tema <tema>:
    - **a. Interpretar y proponer.** Convertir la intención en una **query Solr cruda candidata** y
      **mostrársela explicada** (qué término exige como AND, qué grupo va en OR). Señalar el sesgo:
      p. ej. exigir `abs:"bisector"` como AND deja afuera papers de S-index/FWHM puros.
-   - **b. Ofrecer variantes de alcance** (amplia ↔ acotada) y/o **sugerir términos que faltan** según
-     lo que entendiste, en castellano (vos traducís a `abs:"..."`). Usar `AskUserQuestion` si la
-     elección cambia qué se trae.
+   - **b. Proponer la FAMILIA de términos, en prosa (D-29).** Mismo patrón que los alias de una
+     estrella (`ingest-star` paso 1) y las facetas del objetivo (`setup` paso 3): el usuario dice
+     *"separación ciega de fuentes"* y vos proponés la familia completa —fastICA, JADE, Infomax,
+     cocktail party, non-gaussianity, mixing matrix…— **en castellano y sin regex** (vos traducís a
+     `abs:"..."`). Ofrecer además variantes de alcance (amplia ↔ acotada). Usar `AskUserQuestion` si
+     la elección cambia qué se trae. **No buscar hasta que apruebe.**
    - **c. Validar con un conteo barato** antes de bajar nada (y antes de persistir el slug):
      `python scripts/query_ads.py --probe '<query candidata>' --rows 50` y mirar el corte CORE/no-core +
      los títulos top (ordenados por citas). Si trae cientos con ruido o muy pocos, reajustar la
      query y reconfirmar. **No** bajar PDFs hasta que el usuario apruebe la query final. (`--probe`
      recibe la query cruda, así que corre sin que el tema exista todavía en `themes.yaml` —
      `--theme <slug>` recién funciona después del paso d.)
+   - **c2. Sugerir ramas no pedidas.** Con lo que vuelve del `--probe`, si aparece consistentemente
+     una familia vecina que el usuario no nombró, **preguntarla** (*"apareció mucho NMF — ¿entra en
+     este tema o es otro?"*). Es información que sólo existe después de mirar papers reales, y
+     callarla deja el tema recortado por un término que nadie decidió.
    - **d. Persistir.** Recién entonces escribir/actualizar la entrada en `vault/config/themes.yaml`:
      `title`, `area` (abierta: cualquiera; idealmente una de `concept_areas` de `objective.yaml` —
      ej. `indicators|methods|activity|hypotheses` — para que el typo-check la reconozca; si es un área
@@ -130,7 +137,7 @@ Progreso del ingest del tema <tema>:
 
 3. **Extracción LLM (criterio).** Leer los papers **clave del tema** (fundacionales / árbitros /
    metodológicos) desde `vault/raw/fulltext/<slug>/` y poblar cada `vault/wiki/papers/<bibcode>.md`: `methods`,
-   `bearing`, `role` (#73: `fundacional` introduce el método/mecanismo · `aplicacion` lo instancia en un caso · `arbitro` reanaliza y resuelve una tensión previa — sale de leer el paper, la regex del clasificador no puede inferirlo, y sin él contrastarlo contra otro no está definido) —especialmente agudo en temas de método, donde fundamentos y
+   `role` (#73: `fundacional` introduce el método/mecanismo · `aplicacion` lo instancia en un caso · `arbitro` reanaliza y resuelve una tensión previa — sale de leer el paper, la regex del clasificador no puede inferirlo, y sin él contrastarlo contra otro no está definido) —especialmente agudo en temas de método, donde fundamentos y
    aplicaciones astro conviven en el mismo concepto por diseño—, `thesis_links` (ya pre-sembrado al
    concept; agregar otros si toca) y la sección
    "Extracción" enfocada **en el eje del tema** — el stub la trae ya ramificada por tipo de sujeto

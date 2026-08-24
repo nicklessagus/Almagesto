@@ -201,3 +201,17 @@ def test_el_registro_trae_el_veredicto_del_clasificador():
     for campo in ("facets", "relevant", "why_excluded"):
         assert campo in r, f"falta {campo}: el registro no es del mismo schema"
     assert isinstance(r["relevant"], bool) and isinstance(r["facets"], list)
+
+
+def test_el_abstract_invertido_se_rearma_en_orden():
+    """El gate de mutación lo encontró: `_abstract` **no se ejecutaba en ningún test**, porque el
+    fixture `work()` nunca trae `abstract_inverted_index`. No es cosmético — `classify_record` lee
+    `abstract`, así que un abstract vacío cambia el veredicto core/no-core del registro."""
+    w = work()
+    w["abstract_inverted_index"] = {"blind": [0, 4], "source": [1], "separation": [2],
+                                    "of": [3], "signals": [5]}
+    assert oa.to_record(w)["abstract"] == "blind source separation of blind signals"
+
+
+def test_sin_abstract_invertido_devuelve_cadena_vacia():
+    assert oa.to_record(work())["abstract"] == ""

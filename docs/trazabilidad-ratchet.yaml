@@ -17,14 +17,16 @@
 # que lo prueba, se corre `python scripts/trace_invariants.py` y se copian acá los conteos nuevos
 # con la fecha.
 #
-# LA PASADA RETROACTIVA YA CORRIÓ (2026-08-24). El techo bajó de 77 a 7. El mapa se armó con **dos
+# LA PASADA RETROACTIVA YA CORRIÓ (2026-08-24). El techo bajó de 77 a 7, y a **6** al cerrar la
+# Tanda 7 (INV-88). El mapa se armó con **dos
 # pasadas ciegas e independientes** sobre `contrato.md` §3, cruzadas después: cada marca es un
-# símbolo que las dos nombraron, y los 67 tests + 51 símbolos que se marcaron existían todos (cero
-# nombres inventados, que era el riesgo del método).
+# símbolo que las dos nombraron, y todos los tests y símbolos marcados existían (cero nombres
+# inventados, que era el riesgo del método). Los conteos vigentes los emite el propio recolector:
+# NO se copian acá, porque copiarlos es cómo se desincronizaron la primera vez.
 #
-# LOS SIETE QUE QUEDAN NO SON FALTA DE MARCADO: no hay símbolo o no hay test que marcar, y ése es
+# LOS CINCO QUE QUEDAN NO SON FALTA DE MARCADO: no hay símbolo o no hay test que marcar, y ése es
 # el hallazgo de la pasada. ⚠ "hueco" acá es lenguaje corriente, NO el estado `HUECO` del
-# contrato: en la taxonomía de `contrato.md` §2 sólo INV-86 sigue en HUECO; INV-05 e INV-66
+# contrato: en la taxonomía de `contrato.md` §2 sólo INV-86 sigue en HUECO puro; INV-05 e INV-66
 # son `garantizado sin medir`, INV-19 es `HUECO (parcial)`, INV-23 es `INCUMPLIDO (parcial)` e
 # INV-73 figura `garantizado y medido`. La autoridad del estado es el contrato, no este archivo.
 #   · INV-05  las plantillas de `make_notes` no tienen test que las audite buscando prosa que
@@ -38,8 +40,8 @@
 #   · INV-73  el contrato lo da `garantizado y medido` por la 8ª F1 #26, pero en la suite actual
 #             el aislamiento lo da la fixture `toy_vault`, no una aserción: ningún test se
 #             pondría rojo si `cmd_seed` escribiera en `cfg.VAULT`. Falta ESE test.
-#   · INV-86  `inferencia` sin premisas (issue 8.3, Tanda 8 — no empezada).
 #
+# ✅ INV-86 salió con el issue 8.3 (la `inferencia` sin premisas ahora bloquea).
 # ✅ INV-88 salió de la lista con la Tanda 7: las tres puertas de D-26 están
 #    implementadas y medidas una por una. Queda su capa skill (issue 7.4), que no es
 #    marcable — la conducta de un skill no la ve ningún recolector.
@@ -49,5 +51,9 @@ almagesto_version: "1.32.0"
 contrato_invariantes: 91
 
 techos:
-  sin_marca: 6    # medido: 2026-08-24 (Tanda 7) — 05, 19, 23, 66, 73, 86. INV-88 salió.
-  sin_test: 6     # medido: 2026-08-24 — los mismos seis.
+  sin_marca: 4    # medido: 2026-08-24 (auditoría @inv) — 05, 19, 23, 66.
+  sin_test: 4     # medido: 2026-08-24 — los mismos cuatro.
+  # INV-73 salió de la lista: era un P0 declarado «garantizado y medido» con CERO marcas, y el
+  # aislamiento lo daba la fixture `toy_vault`, no una aserción. Ahora lo mide
+  # `tests/test_bench_verify.py::test_el_benchmark_no_toca_el_vault` (hash del árbol de `vault/`
+  # antes y después de `seed`).

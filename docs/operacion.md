@@ -49,7 +49,8 @@ para ingestar. En Windows, los comandos de shell corren en Git Bash o WSL.
 | `vault/wiki/log.md` | Registro append-only de operaciones. |
 | `vault/config/stars.yaml` · `vault/config/themes.yaml` | Estrellas / temas de la bóveda (nombres canónicos + alias). |
 | `vault/config/ads_dev_key` | Token NASA ADS — **GITIGNORED** (nunca se commitea). |
-| `vault/config/registro/<slug>.yaml` | **Registro de ingesta por sujeto (se commitea).** `busqueda`: qué se le preguntó a ADS, cuándo, con qué límite y con qué corte. `decisiones`: qué descartaste y por qué, en los dos carriles (candidatos del triage y fuentes declaradas de un tema off-ADS). |
+| `vault/config/registro/_red.yaml` | **Cuándo se miró afuera por última vez** (retracciones, correcciones, versiones, ground-truth, snapshot web). Lo escribe `python scripts/sweep_external.py`, la pasada de red unificada. |
+| `vault/config/registro/<slug>.yaml` | **Registro de ingesta por sujeto (se commitea).** `busquedas` (lista, **acumulativa**: una entrada por corrida): qué se le preguntó a ADS, cuándo, con qué límite y con qué corte. `cadena`: qué pasos corrieron, con fecha y versión. `decisiones`: qué descartaste y por qué, en los dos carriles (candidatos del triage y fuentes declaradas de un tema off-ADS). |
 | `build/` · `outputs/` | **GITIGNORED** — intermedios de ingesta y reportes de lint. |
 
 ## Pipeline de ingesta (scripts/)
@@ -70,7 +71,7 @@ lista). Las piezas, para correr sueltas cuando hace falta un flag fino (`--rows`
 cd scripts     # ← el único bloque con CWD propio (cómodo para el listado); en los skills y en el
                #   resto de los docs los comandos van desde la RAÍZ del repo: python scripts/<x>.py
 python query_ads.py        <slug>   # ADS → build/<slug>/ads.json + vault/config/registro/<slug>.yaml
-                                    #   (`busqueda`: query efectiva, fecha, límites y conteos — versionado)
+                                    #   (`busquedas`: query efectiva, fecha, límites y conteos — versionado)
                                     #   (metadata + relevancia + citation chaining;
                                     #   --sweep = barrido full-text 2b: core que faltan → candidatos a extra_core)
 python triage.py           <slug>   # juzgar los candidatos del chaining: --report deja la tabla en

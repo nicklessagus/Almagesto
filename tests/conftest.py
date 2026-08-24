@@ -56,6 +56,13 @@ def write_yaml(path: Path, data) -> None:
 
 def mk_note(dirpath: Path, stem: str, fm: dict, body: str = "") -> Path:
     """Nota .md con frontmatter, mismo formato que make_notes.fm()."""
+    # D-23: una nota de paper SIN destino (`stars`/`thesis_links`/`methods`) es un hallazgo
+    # bloqueante — no pertenece a nada y ninguna síntesis la alcanza. En la vida real
+    # `make_notes` siempre siembra uno; acá se le da el default para que las fixtures mínimas
+    # no disparen la categoría. El test que quiere el caso vacío pone las tres claves a mano.
+    if "paper" in (fm.get("tags") or []) and not any(
+            k in fm for k in ("stars", "thesis_links", "methods")):
+        fm = {**fm, "stars": ["Estrella Test"]}
     dirpath.mkdir(parents=True, exist_ok=True)
     head = yaml.safe_dump(fm, sort_keys=False, allow_unicode=True, default_flow_style=False)
     p = dirpath / f"{stem}.md"
@@ -64,9 +71,15 @@ def mk_note(dirpath: Path, stem: str, fm: dict, body: str = "") -> Path:
 
 
 def read_fm(path: Path) -> dict:
-    """Frontmatter parseado de una nota (para asserts)."""
-    parts = path.read_text(encoding="utf-8").split("---")
-    return yaml.safe_load(parts[1]) or {}
+    """Frontmatter parseado de una nota (para asserts) — **con el mismo parser que el tooling**.
+
+    Antes esto hacía `split("---")[1]`, que es justo lo que el docstring de `frontmatter_span`
+    prohíbe: parsea notas que `cfg.split_fm` **no puede leer**. Medido: `--rename-paper` dejaba el
+    frontmatter fusionado (`---bibcode: 2021pubY`) y `split_fm` devolvía `{}`, pero el test que
+    cubre INV-84 pasaba en verde porque este helper lo leía igual. Es el patrón `refs_of`/`_bare_doi`
+    otra vez: un doble con distinto contrato que la función real esconde el bug en la diferencia
+    (red #3). Delegar es la única forma de que un test acá signifique lo que dice."""
+    return cfg.split_fm(path.read_text(encoding="utf-8"))
 
 
 @pytest.fixture

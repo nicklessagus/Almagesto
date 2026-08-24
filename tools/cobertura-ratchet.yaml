@@ -1,0 +1,23 @@
+# Techo de funciones de `scripts/` que la suite NO ejecuta ni una vez.
+#
+# Sólo puede BAJAR. Se mide con `pytest tests/poblada/test_cobertura.py -m poblada` (~11 s).
+# Una función acá no es "mal probada": es **no mirada por nadie**, y su mutación siempre sobrevive
+# —así que esto es el detector barato del mismo defecto que caza `tools/mutar.py`.
+medido_en: "2026-08-24"
+techo: 11
+
+# Las 11 medidas, y por qué. La mayoría son rutas de RED reales: los tests inyectan dobles siempre,
+# así que el código que de verdad habla con las APIs nunca corre. Es deuda declarada, no diseño.
+#   citation_index.py::_fetch_ads_default     ← ADS `fl=reference`, sólo probado a mano
+#   citation_index.py::_fetch_oa_default      ← idem OpenAlex
+#   fetch_web.py::defuddle_version
+#   fetch_web.py::fetch
+#   ingest_theme.py::_listify_curado          ← NO es de red: alcanzable, sin test
+#   make_notes.py::_concept_dest              ← idem
+#   sweep_external.py::_run
+#   sweep_external.py::aplicar_ground_truth
+#   sweep_external.py::discover_versions      ← los cuatro detectores de la pasada de red (Tanda 6)
+#   sweep_external.py::sweep_ground_truth
+#   sweep_external.py::sweep_retracciones
+#
+# Las dos que NO son de red (`_listify_curado`, `_concept_dest`) son las más fáciles de bajar.

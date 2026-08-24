@@ -1,7 +1,7 @@
 ---
 name: find-contradictions
 description: Usar cuando el usuario quiere detectar desacuerdos entre papers del corpus sobre el mismo hecho ("buscá contradicciones en el corpus", "qué papers se contradicen sobre tau Ceti", "revisá disputas de P_rot", "detectá desacuerdos sobre la señal b de GJ 581", "¿hay papers que discrepen sobre X?"). Barre el corpus por eje (estrella/parámetro o concepto), confirma cada desacuerdo contra el fulltext y PROPONE entradas disputes[] / notas de disputa para que el usuario apruebe.
-version: 1.5.0
+version: 1.6.0
 ---
 
 # Find-contradictions — desacuerdos entre papers (claim↔claim)
@@ -22,14 +22,44 @@ desacuerdo paper↔paper sobre algo que NEA no arbitra (P_rot, mecanismo de acti
 señal) se refleja en la prosa de la ficha/concepto citando **ambas** fuentes. Sólo desacuerdos
 **materiales** (mayores que el error reportado; no diferencias cosméticas dentro de la barra).
 
-## Cuándo correrlo
-- A pedido: "buscá contradicciones", "qué se contradice sobre X", "revisá disputas del corpus".
-- Recomendado tras un `ingest-star`/`ingest-theme` grande, o al cerrar una estrella con muchos papers.
-- **No** es paso de cierre automático (a diferencia de verify-citations): es una auditoría explícita.
+## Cuándo correrlo — TRES modos (D-39)
+
+Hermana de `verify-citations` en el eje ortogonal, y con la misma estructura de modos. Aporta algo
+que el contraste del ingest **no** cubre: ése compara el paper nuevo contra **lo que la ficha dice**;
+esto compara **paper contra paper**. Dos papers pueden discrepar sobre un eje que la ficha nunca
+mencionó —porque la poda lo descartó, o porque nadie lo notó—: eso sólo se ve así.
+
+| Modo | Cuándo | Alcance |
+|---|---|---|
+| **cierre de operación** | entraron papers nuevos (ingest, append, refresh) | el paper nuevo contra el corpus ya extraído, **sólo en los ejes que toca** |
+| **auditoría explícita** | a pedido: *"buscá contradicciones en el corpus"* | todos los pares, todos los ejes |
+| **puntual** | *"contradicciones entre estos dos papers, anotalas en tal ficha"* | los papers que el usuario nombra |
+
+Es viable en el cierre porque el **embudo corre sobre las extracciones, no sobre los fulltexts**:
+comparar campos de N notas es instantáneo y sólo los candidatos confirmados gastan un subagente. Sin
+el embudo sería N² lecturas.
+
+**No cambia la compuerta de aprobación:** sigue **proponiendo**, no escribiendo. Lo que cambia es que
+aparece en el cierre en vez de esperar a que alguien se acuerde de auditar. Junto con los pares sin
+verificar y los papers sin sintetizar, el cierre deja **tres cosas a la vista**.
 
 ## Entrada
 El **eje** a barrer: una estrella (`slug`), un concepto, o "todo el corpus". Si no se da, preguntar o
 tomar la última entidad tocada.
+
+⛔ **Toda contradicción declara su entidad DESTINO (D-40).** Análogo de "no hay papers sueltos": una
+contradicción es siempre **sobre algo**, y ese algo es una entidad de la bóveda.
+
+| Sobre qué discrepan | Dónde va |
+|---|---|
+| parámetro o señal de una estrella | `disputes[]` de la ficha + fila en `## Inventario por eje` |
+| algo de un método/indicador, **bajo las mismas condiciones** | `disputes[]` del concepto + fila en `## Inventario por eje` |
+| algo que difiere **porque el régimen es distinto** (veredicto `aparente`) | fila en `## Régimen de validez` del concepto |
+
+En el modo **puntual** el destino es **mandatorio**: si el usuario no lo dice, preguntar. Caso raro
+—los dos papers discrepan sobre algo que no corresponde a ninguna entidad existente—: o es una
+entidad que hay que crear, o está fuera del foco y **no entra** (mismo test de admisión de la regla
+#0). Una disputa suelta no la encuentra nadie.
 
 ## Pasos
 
@@ -43,7 +73,8 @@ Juntar, para el eje elegido, qué afirma **cada** paper sobre **cada** hecho:
   grep -inE "P_?rot|K ?=|=\s*[0-9].*(d|day|m/s)|period|eccentric|activity|rotation" \
        vault/raw/fulltext/<slug>/*.txt
   ```
-- **Concepto:** los papers con `thesis_links: <concept>`. Ejes: signo de una correlación, magnitud de
+- **Concepto:** los papers del concepto = la **unión** `methods ∪ thesis_links` (D-24). ⚠ Juntar
+  sólo por `thesis_links` pierde la mitad del eje: las dos llaves viven en papers distintos. Ejes: signo de una correlación, magnitud de
   un lag/desfasaje, mecanismo propuesto, régimen de validez.
 
 > **Cómo juntar esos papers sin Obsidian.** La tabla `## Papers` de la ficha es un bloque
@@ -108,7 +139,7 @@ los dos** `vault/raw/fulltext/**/<bibcode>.txt` en juego (grounding-first; prohi
 > de-hifenado, y **prohibido normalizar espacios sin partir antes cada línea en la canaleta**
 > (colapsar el hueco de 8+ espacios — sea sobre el archivo entero o por línea, #46 — empalma
 > columnas → falso positivo). Acá el riesgo se **amplifica**: el par exige cita textual de **dos** fulltexts
-> (con ~73% de prevalencia multi-columna por archivo, ~94% de chance de que al menos uno esté
+> (con ~73% de prevalencia multi-columna por archivo, ~93% de chance de que al menos uno esté
 > afectado) y un falso negativo de matcheo en cualquiera de los dos colapsa el veredicto a
 > `no-concluyente` sobre una disputa real.
 
@@ -153,7 +184,8 @@ de concepto) que se agregaría en cada caso, y **pedir aprobación**. Formato de
 - **Concepto (mecanismo/signo/lag):** `disputes` a nivel nota **igual que en una ficha** (#71) —
   acá la disputa es **simétrica por definición**, no hay valor de frontmatter contra el cual poner un
   `alt`, así que las dos posiciones son `{ref: …, value: …}`. Más una línea en la prosa citando
-  **ambos** `[[bibcode]]`, y ajustar el `bearing` del paper discrepante si aplica. Si el concepto
+  **ambos** `[[bibcode]]`. Si el desacuerdo toca una hipótesis, la postura se ajusta en **su tabla de
+  evidencia** (D-21), no en la nota del paper. Si el concepto
   tiene `## Inventario por eje` (#72), el desacuerdo real va **además** como filas de ese eje.
 Los **no-concluyentes** se listan aparte (no se tocan; sirven para no re-flaggearlos).
 
@@ -172,7 +204,8 @@ Sólo lo que el usuario aprobó: taguear `disputes` a nivel nota en la ficha (y 
 tabla/prosa), o escribir la línea de desacuerdo en el concepto. Nada de sobreescribir NEA.
 
 ### 5. Verificar, lint, cierre
-- **verify-citations** sobre las disputas nuevas (cada `note`/`alt` debe estar respaldada por el
+- **verify-citations** sobre las disputas nuevas (cada `note` y cada `value` de una posición debe
+  estar respaldada por el
   fulltext del `ref` — es prosa con `[[bibcode]]` nueva).
 - `python scripts/lint.py --cierre` (0 bloqueante — atención a *ref de una posición sin paper destino* y a
   *disputes mal formadas*: una disputa con **una sola** posición no es un desacuerdo, es una

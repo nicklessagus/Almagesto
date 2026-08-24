@@ -426,7 +426,9 @@ _(ninguno relevante — corpus sintético)_
     for k, (stem, area) in enumerate(all_concepts):
         front = {"name": stem.replace("-", " ").title(), "aliases": []}
         if area == "hypotheses":
-            front["status"] = "active"
+            # D-37: vocabulario cerrado (abierta | sostenida | disputada | refutada). Antes decía
+            # "active", que hoy es una anomalía bloqueante.
+            front["status"] = "abierta"
         front["disputes"] = []
         if stem in disp_stems:
             front["disputes"] = [{
@@ -477,12 +479,16 @@ _(ninguno relevante — corpus sintético)_
             "first_author": f"Autor{i:04d}", "n_authors": rng.randint(1, 6),
             "year": year, "arxiv_id": None, "doi": None, "bibstem": "Synt",
             "stars": [star_names[i % n_stars]], "facets": [], "methods": methods,
-            "thesis_links": thesis_links, "bearing": bearing,
+            "thesis_links": thesis_links,
             "relevance": relev, "citation_count": rng.randint(0, 200),
             "pdf": None, "fulltext": ft_rel, "fulltext_source": ft_src, "pdf_source": None,
             "confidence": "medium", "tags": ["paper"],
         }
-        if not vintage_old:
+        if vintage_old:
+            # El corpus `vintage` existe para probar los DETECTORES de schema viejo, así que
+            # sigue emitiendo `bearing` (pre-D-21) — es la anomalía, no un descuido.
+            front["bearing"] = bearing
+        else:
             front["role"] = roles
             front["generator"] = f"Almagesto v{ALMAGESTO_VERSION}"
         flow = (i % 2 == 1)

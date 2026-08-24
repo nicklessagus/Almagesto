@@ -102,8 +102,14 @@ def test_concept_areas_sin_declarar_apaga_el_chequeo(toy_vault):
 
 
 def test_version_unica_fuente():
-    """ALMAGESTO_VERSION es la ÚNGaussian processes fuente de versión: los UA de los fetchers derivan de la
-    constante, y ningún script hardcodea 'Almagesto/x.y' (el drift que tenían los UA en 0.1).  @inv INV-62"""
+    """ALMAGESTO_VERSION es la ÚNICA fuente de versión: los UA de los fetchers derivan de la
+    constante, y ningún script hardcodea 'Almagesto/x.y' (el drift que tenían los UA en 0.1).
+
+    Mide **la mitad "única fuente de verdad"** de INV-62, no la otra (que cada NOTA declare con qué
+    versión se generó, y que una cirugía posterior no la reetiquete): eso son los User-Agents de los
+    fetchers, que no son notas. La otra mitad la miden
+    `tests/test_make_notes.py::test_la_nota_declara_su_version` y
+    `::test_restamp_headers_no_reetiqueta_la_nota`.  @inv INV-62"""
     import re
 
     import check_retractions
@@ -607,3 +613,65 @@ def test_gitattributes_cubre_los_archivos_de_instancia():
     # Y a la inversa: nada protegido que ya no exista (un puntero muerto se lee como cobertura).
     huerfanos = [r for r in protegidos - esperados if not (raiz / r).exists()]
     assert huerfanos == [], f"`.gitattributes` protege rutas inexistentes: {huerfanos}"
+
+
+# ── D-50 · `downstream: []` (los consumidores declarados) ────────────────────
+
+def test_load_downstream_lista(toy_vault):
+    obj = dict(cfg.load_objective()); obj["downstream"] = ["ICA", "pipeline-rv"]
+    write_yaml(cfg.OBJECTIVE_YAML, obj)
+    assert cfg.load_downstream() == ["ICA", "pipeline-rv"]
+
+
+def test_load_downstream_ausente_o_vacio_apaga(toy_vault):
+    """Vacío/ausente = mitad apagada. `load_concept_areas` reporta su ausencia porque un typo de
+    área es un error; acá NO hay nada que reportar: una bóveda sin consumidor nombrado es el caso
+    normal (el flujo es unidireccional)."""
+    assert cfg.load_downstream() == []
+    obj = dict(cfg.load_objective()); obj["downstream"] = []
+    write_yaml(cfg.OBJECTIVE_YAML, obj)
+    assert cfg.load_downstream() == []
+
+
+def test_load_downstream_escalar_se_toma_como_un_elemento(toy_vault):
+    """`downstream: ICA` sin corchetes es YAML válido y la forma natural de declarar UNO. Tratarlo
+    como forma inválida perdería la curación en silencio (mismo criterio que extra_core/aliases)."""
+    obj = dict(cfg.load_objective()); obj["downstream"] = "ICA"
+    write_yaml(cfg.OBJECTIVE_YAML, obj)
+    assert cfg.load_downstream() == ["ICA"]
+
+
+def test_el_token_no_sale_en_ningun_artefacto_ni_en_la_salida(toy_vault, capsys, monkeypatch):
+    """INV-67 (P0) — la credencial no se escribe en ningún artefacto versionado ni en la salida de
+    ninguna corrida, **mensajes de error incluidos**.
+
+    La marca vivía en `test_download_pdf_token_solo_a_ads`, que mide **egress de red** (a quién se
+    le manda el header) — otra propiedad. La mitad que este invariante enuncia es la **persistencia**
+    y la **salida**, que es donde un token se filtra de verdad: un traceback con la URL firmada, un
+    registro que guarda el header, una nota con el valor pegado.  @inv INV-67"""
+    TOKEN = "TOKENSECRETO123456"
+    cfg.ADS_KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    cfg.ADS_KEY_FILE.write_text(TOKEN + "\n", encoding="utf-8")
+    monkeypatch.delenv("ADS_DEV_KEY", raising=False)
+    assert cfg.get_ads_token() == TOKEN
+
+    cfg.save_busqueda("test_star", {"fecha": "2026-01-01", "query": "q", "n_total": 1})
+    cfg.save_decisiones("test_star", {"2020X": {"decision": "descartado", "motivo": "ruido",
+                                                "fecha": "2026-01-01"}})
+    cfg.save_paso("test_star", "query_ads", flags=["--rows"])
+    cfg.save_extraccion("test_star", subconjunto=False, criterio="todos")
+
+    versionados = [f for f in cfg.VAULT.rglob("*")
+                   if f.is_file() and f.name != cfg.ADS_KEY_FILE.name]
+    for f in versionados:
+        assert TOKEN not in f.read_text(encoding="utf-8", errors="replace"), \
+            f"el token quedó escrito en {f.relative_to(cfg.VAULT)}"
+    assert TOKEN not in capsys.readouterr().out, "el token salió por stdout"
+
+
+def test_el_archivo_del_token_esta_gitignored():
+    """La otra punta: el único archivo que SÍ lo tiene no se commitea. Se lee el `.gitignore` real
+    del repo, no el de la bóveda de juguete — es el que protege la credencial de verdad."""
+    # @inv INV-67
+    ignore = (Path(__file__).resolve().parent.parent / ".gitignore").read_text(encoding="utf-8")
+    assert any("ads_dev_key" in ln for ln in ignore.split("\n")), ignore

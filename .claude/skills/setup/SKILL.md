@@ -1,7 +1,7 @@
 ---
 name: setup
 description: Usar cuando el usuario quiere definir o reescribir el OBJETIVO de la bóveda — el archivo que orienta qué papers son "core" ("configurá la bóveda", "definí el objetivo", "armá el objective.yaml", "quiero usar Almagesto para el tema X", "ajustá la regla de relevancia", "para qué va a servir esta bóveda"). El agente traduce el foco en lenguaje natural a `objective.yaml` (incluida la regex `relevance.facets`) y la afina contra ADS con un preview, para que el usuario NO escriba regex a mano. NO ingesta nada: después se usan ingest-star / ingest-theme.
-version: 1.2.0
+version: 1.3.0
 ---
 
 # Setup: definir el OBJETIVO de la bóveda
@@ -61,8 +61,10 @@ papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** 
      discriminar. Con la faceta-eje del paso 1, proponer `require: [<eje>]` (AND) y/o `min_facets: 2`
      (≥N cualesquiera). Core = (≥ min_facets facetas) Y (todas las de require) Y (doctype no-ruido).
      La palanca contra el ruido es la **obligatoriedad**, no podar regex — medido en una bóveda de RV:
-     podar las regex bajó AU Mic de 928 a 762 core (paliativo); declarar `require: [rv]` la llevó de
-     850 a 198. Dejar ambas sin declarar = OR histórico. **Cada faceta de `require` debe existir en
+     podar las regex bajó AU Mic de 928 a 762 core (paliativo); declarar `require: [rv]` la llevó a
+     **198**. ⚠ Estos números y los del docstring de `query_ads.py` (928→254 para la misma
+     operación) salen de corridas distintas y **no reconcilian**: tomalos como orden de magnitud
+     y re-medí con `--probe` sobre tu propia lente. Dejar ambas sin declarar = OR histórico. **Cada faceta de `require` debe existir en
      `facets`** (si no, el clasificador aborta).
      **Corolario (decírselo al usuario):** una vez declarada `require` con `min_facets: 1`, afinar las
      **otras** facetas ya **no cambia el corte** (core ⟺ matchea la eje ∧ doctype limpio) — sólo etiqueta.
@@ -72,9 +74,23 @@ papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** 
      pressrelease, circular, software) salvo razón.
    - `concept_areas`: sugerir 3–5 áreas según el foco (`methods`/`hypotheses` reservadas + las que
      tengan sentido). Son abiertas: es un punto de partida, no una jaula.
+   - `downstream`: **opcional** (D-50) — los nombres propios de quien va a **consumir** la bóveda (un
+     repo, un pipeline). No cambia la clasificación: es el insumo del detector de fuga de la frontera
+     dura, que marca la prosa que describe al consumidor (*"los scripts de X lo usan para…"*) — el modo
+     de fuga más frecuente y el que no deja rastro estructural. Sólo los nombres se declaran acá; el
+     framework nunca los hardcodea (meterlos sería justo lo que la regla #0 prohíbe). **Vacío o ausente
+     = esa mitad del detector apagada, sin WARN**: una bóveda sin consumidor nombrado es el caso normal.
 
-3. **Mostrar al usuario en prosa** ("con lo que me dijiste, estas son las cosas de la query"): listar los
-   buckets con sus términos en lenguaje claro + el YAML propuesto. Explicar el OR + el filtro de ruido.
+3. **Mostrar al usuario en prosa — NUNCA la regex (D-8).** El usuario no valida un patrón: valida una
+   **lista de términos**. Decir, bucket por bucket, qué palabras van a buscarse —traducidas al inglés
+   (ADS es inglés), con la morfología cubierta a mano (no hay stemmer: `rotation`/`rotational`/`rotating`
+   son tres términos, no uno) y los nombres propios de instrumentos y códigos—. Explicar el OR y el
+   filtro de ruido. **Leer el patrón no valida nada**: lo que valida es el paso 4, contra papers reales.
+
+   ⚠ **Decirle el costo (D-13).** Con "el ingest lee **todos** los core", la lente no es sólo un filtro
+   de ruido: es el **presupuesto del ingest**. Una faceta laxa que deja entrar 900 papers son 900
+   extracciones, no sólo ruido en la ficha. `relevance.require` es, además de la palanca contra el
+   ruido, la perilla del costo — y ése es el marco en el que conviene elegirla.
 
 4. **Preview contra ADS — afinar la regex con papers reales (el corazón del skill).**
    - Escribir el `objective.yaml` borrador (necesario: `--probe` lee `relevance.facets` de ahí).

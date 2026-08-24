@@ -422,3 +422,51 @@ def test_triage_imprime_el_snippet_estructurado(toy_vault, capsys, monkeypatch):
     assert "extra_core:" in out
     assert "- bibcode: 2020cndA...1..1A" in out
     assert "via: triage" in out and "motivo:" in out
+
+
+# ── D-13 / INV-83 · declarar el recorte de lectura ──────────────────────────
+
+def test_extraccion_todos_declara_el_default(toy_vault, monkeypatch, capsys):
+    """El canal que faltaba: `save_extraccion` existía en `lib_config` y **ningún script ni skill la
+    llamaba**, así que el hallazgo del lint *recorte de lectura sin declarar* no tenía cómo
+    cerrarse."""
+    # @inv INV-83
+    assert run_main(monkeypatch, ["test_star", "--extraccion", "todos"]) == 0
+    ext = cfg.load_registro("test_star")["extraccion"]
+    assert ext["subconjunto"] is False and ext["criterio"] and ext["fecha"]
+
+
+def test_extraccion_subconjunto_exige_criterio(toy_vault, monkeypatch):
+    """Recortar sin decir con qué criterio es curar en silencio — el mismo motivo por el que
+    `--drop` exige `--reason`. El criterio es la pieza que más se va a leer, no un booleano."""
+    with pytest.raises(SystemExit):
+        run_main(monkeypatch, ["test_star", "--extraccion", "subconjunto"])
+
+
+def test_extraccion_subconjunto_guarda_el_criterio(toy_vault, monkeypatch):
+    assert run_main(monkeypatch, ["test_star", "--extraccion", "subconjunto",
+                              "--reason", "los 12 más citados + los 3 árbitros"]) == 0
+    ext = cfg.load_registro("test_star")["extraccion"]
+    assert ext["subconjunto"] is True
+    assert ext["criterio"] == "los 12 más citados + los 3 árbitros"
+
+
+def test_extraccion_no_pisa_las_decisiones(toy_vault, monkeypatch):
+    """Mismo registro, dueños distintos: declarar la extracción no puede borrar el juicio de
+    curación (que es el artefacto no regenerable de la bóveda)."""
+    cfg.save_decisiones("test_star", {"2020Ruido": {"decision": "descartado", "motivo": "off-topic",
+                                                    "fecha": "2026-01-01"}})
+    run_main(monkeypatch, ["test_star", "--extraccion", "todos"])
+    reg = cfg.load_registro("test_star")
+    assert reg["decisiones"]["2020Ruido"]["motivo"] == "off-topic" and reg["extraccion"]
+
+
+def test_triage_file_es_el_registro_versionado(toy_vault):
+    """Gate de mutación: `triage_file` sobrevivía a que le vaciaran el cuerpo. Es la función que
+    fija **dónde vive el juicio de curación** — el punto entero de #51 fue moverlo de
+    `build/<slug>/triage.json` (scratch gitignored, donde el motivo se perdía al cambiar de
+    máquina) al registro versionado. Un `return None` acá revierte eso sin ruido."""
+    ruta = triage.triage_file("test_star")
+    assert ruta == cfg.registro_path("test_star")
+    assert ruta.parent == cfg.REGISTRO and ruta.suffix == ".yaml"
+    assert "build" not in ruta.parts, "el juicio NO puede vivir en scratch (#51)"

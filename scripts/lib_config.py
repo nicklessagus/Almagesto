@@ -20,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.32.0"
+ALMAGESTO_VERSION = "1.34.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -353,6 +353,29 @@ def as_list(v) -> list:
 # Áreas de vault/wiki/concepts/ RESERVADAS (siempre válidas): `methods` es universal;
 # `hypotheses` es estructural (schema name/status + roll-up Dataview). Ver CLAUDE.md.
 RESERVED_CONCEPT_AREAS = ("methods", "hypotheses")
+
+
+def load_downstream() -> list:
+    """Nombres propios de los **consumidores** de la bóveda, declarados en `downstream: []` de
+    `objective.yaml`. Insumo del detector de fuga (D-50), NO de la clasificación.
+
+    Existe porque la mitad más frecuente de la fuga de la frontera dura no es un `w_j` suelto: es
+    la **auto-referencia** — la nota explicando para qué le sirve el dato a quien la consume ("los
+    scripts de ICA lo usan para…"). Los marcadores genéricos (`nuestro pipeline`, `downstream`) se
+    detectan sin declarar nada; el nombre propio del repo consumidor no se puede adivinar, y
+    hardcodear uno metería el nombre del consumidor en el framework, que es exactamente lo que la
+    regla #0 prohíbe.
+
+    **Vacío o ausente = esa mitad está APAGADA, sin WARN de ausencia** (a diferencia de
+    `concept_areas`): declarar a quién le sirve la bóveda es opcional por diseño — el flujo es
+    unidireccional y una bóveda sin consumidor nombrado es el caso normal, no una config a medias.
+    Un escalar (`downstream: ICA`) se toma como un solo elemento: perder la curación por no poner
+    corchetes es el defecto que R1/R13/R16 ya midieron."""
+    # @inv INV-04
+    raw = load_objective().get("downstream")
+    if isinstance(raw, list):
+        return [str(x) for x in raw if str(x).strip()]
+    return [str(raw)] if raw and str(raw).strip() else []
 
 
 def load_concept_areas() -> list:

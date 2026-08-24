@@ -122,3 +122,47 @@ los `from conftest import ...` de la suite vieja. Sólo se ve corriendo la suite
 - La calidad de extracción de `pdftotext`/`tesseract`/`defuddle` (binarios de terceros).
 - Los skills (`.claude/skills/`) y todo lo que ejecuta el LLM.
 - Dataview/Obsidian (los bloques generados se chequean como texto, no se ejecutan).
+
+---
+
+## Las cinco redes que corren al escribir código (regla permanente, 2026-08-24)
+
+Salieron de una sesión en la que **los bugs los encontraron agentes leyendo, no la suite**. Cada una
+ataca una clase de defecto que se repitió, y las cinco son deterministas: nada acá depende del
+juicio de un modelo.
+
+| # | Qué caza | Cómo se corre |
+|---|---|---|
+| 1 | Tests que **pasan por construcción** | `python tools/mutar.py --diff` (o `<archivo>`) |
+| 2 | Promesas de **schema compartido** que son sólo prosa | `tests/test_backends_schema.py` (tier 0) |
+| 3 | Un **doble** con distinto contrato que la función real | test de paridad al lado del doble |
+| 4 | Funciones que **nadie ejecuta** | `pytest tests/poblada/test_cobertura.py -m poblada` (~11 s) |
+| 5 | La **doc afirmando cosas del código** | `tests/test_docs_ejecutables.py` (tier 0) |
+
+**Cuándo**: 2 y 5 corren solas en tier 0. La 4, al cerrar un issue. **La 1, al escribir cada función
+nueva** — es la única que cuesta (una corrida de suite por función) y la única que distingue "el
+test pasa" de "el test **podría** fallar".
+
+**Cómo se leen los ratchets** (`tools/mutacion-ratchet.yaml`, `tools/cobertura-ratchet.yaml`): son
+**deuda medida**, no objetivos. El número sólo baja; subirlo hay que justificarlo en el commit. Un
+techo en 0 sería rojo permanente, y un rojo permanente se deja de mirar.
+
+### Lo que estas redes NO reemplazan
+
+El juicio: *¿el código hace lo que su prosa promete?* Eso lo encontró un agente tres veces en un
+día y ningún assert lo habría visto. La forma correcta de institucionalizarlo es que **el agente
+emita tests, no veredictos** — un veredicto de modelo no es reproducible y no sirve de red de
+regresión; un test que él propuso, sí. (Sin decidir todavía; anotado.)
+
+> Las **cinco reglas de método** de las que salen estas redes están en `CLAUDE.md`,
+> sección *Cinco reglas de método*. Acá va sólo la mecánica.
+
+### Dos trampas ya pisadas, para no repetirlas
+
+- **`tools/mutar.py` trabaja sobre una COPIA del repo.** La primera versión mutaba en el lugar y
+  restauraba en un `finally`; un `pkill` a mitad de camino dejó `check_retractions._mailto` con el
+  cuerpo en `return None` en el árbol de trabajo — y la suite siguió en verde, porque esa función
+  es justo una de las que ninguna prueba mata. Un harness que puede corromper lo que audita no
+  sirve por más `finally` que tenga.
+- **Un test verde recién escrito no cuenta hasta que lo viste morir.** Pasó dos veces el mismo día:
+  el test se escribió, pasó a la primera, y sólo la mutación mostró si servía.

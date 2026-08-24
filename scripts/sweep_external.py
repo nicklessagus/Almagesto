@@ -69,8 +69,18 @@ def _run(script: str, *args: str) -> int:
 def sweep_retracciones() -> list:
     """Barrido Crossref de TODA la bóveda (sin `--slug`). Estampa `retracted` donde corresponde —
     es el único de los cinco que ya escribía, y se conserva: una fuente retractada citada rompe la
-    frontera dura, así que enterarse tarde es peor que el ruido de diff."""
+    frontera dura, así que enterarse tarde es peor que el ruido de diff.
+
+    ⚠ `check_retractions` tiene **tres** códigos y acá se leían dos: `0` limpio, `1` encontró algo,
+    **`2` no pudo chequear** (red caída, papers sin identificador). El `if rc == 1` colapsaba el 2
+    contra el 0, así que "no se miró" salía como "limpio" y `cubrio` registraba la pasada como
+    hecha. Es el cero inventado de D-43 en el detector que más caro sale equivocar. Ahora el 2
+    levanta, que es como esta pasada expresa *no evaluado*."""
     rc = _run("check_retractions.py")
+    if rc == 2:
+        raise NotImplementedError(
+            "check_retractions salió 2 (no pudo chequear: red caída, o papers sin DOI/identificador "
+            "con que preguntar) — la bóveda NO quedó barrida; ver su salida para el motivo")
     return ["retracciones/correcciones detectadas — ver las notas marcadas"] if rc == 1 else []
 
 
@@ -103,9 +113,14 @@ def discover_versions() -> list:
     y hay dos identidades para el mismo paper.
 
     **No renombra: propone.** El renombre reescribe wikilinks de toda la bóveda, y eso no se hace
-    sin que alguien lo pida."""
+    sin que alguien lo pida.
+
+    Devuelve `(hallazgos, fallidos)`. Los fallos son **por nota** y no tumban la pasada (un sujeto
+    raro no debe llevarse puesta la corrida), pero **se declaran**: con ADS caído todas las notas
+    fallan, la función devolvía `[]` y el orquestador registraba "cubrió: versiones" sobre un
+    barrido que no miró nada. Tragarse el error y devolver la lista vacía es el cero inventado."""
     import query_ads
-    out = []
+    out, fallidos = [], []
     for f in sorted(cfg.PAPERS.glob("*.md")):
         fm = cfg.split_fm(f.read_text(encoding="utf-8"))
         arxiv = fm.get("arxiv_id")
@@ -120,15 +135,16 @@ def discover_versions() -> list:
             # otra disciplina (stat.ML, cs.LG) que salió publicado fuera de una revista astro.
             # Mismo criterio que `fetch_bibcodes`.
             recs = query_ads.query_ads(f'arxiv:"{arxiv}"', rows=10, quiet_truncate=True, fq=None)
-        except Exception as exc:
+        except Exception as exc:                      # noqa: BLE001 — red ajena, por nota
             cfg.print_seguro(f"  ✗ {f.stem}: no se pudo consultar ADS por arXiv:{arxiv} ({exc})")
+            fallidos.append(f.stem)
             continue
         for r in recs:
             bib = r.get("bibcode")
             if bib and "arXiv" not in bib and bib != f.stem and bib not in ya_alias:
                 out.append((f.stem, bib))
                 break
-    return out
+    return out, fallidos
 
 
 def sweep_web() -> list:
@@ -147,9 +163,14 @@ def sweep_web() -> list:
         "re-snapshot web: falta `fetch_web.refresh` (hashear el snapshot y versionar el viejo)")
 
 
-def sweep_ground_truth() -> list:
-    """`[(slug, [(campo, viejo, nuevo)])]` — qué cambió en NEA/SIMBAD desde cada snapshot."""
-    out = []
+def sweep_ground_truth() -> tuple[list, list]:
+    """`([(slug, [(campo, viejo, nuevo)])], fallidos)` — qué cambió en NEA/SIMBAD desde cada snapshot,
+    y **qué sujetos no se pudieron mirar**.
+
+    Los dos valores hacen falta: con NEA caída todos los sujetos fallan, la lista de cambios queda
+    vacía y sin los fallidos el orquestador registra "cubrió: ground-truth · 0 cosas para revisar"
+    sobre una pasada que no comparó nada — y la próxima toma ese registro como línea de base."""
+    out, fallidos = [], []
     for nombre, meta in cfg.load_stars().items():
         slug = meta.get("slug") if isinstance(meta, dict) else None
         if not slug or not (cfg.GROUND_TRUTH / f"{slug}.json").exists():
@@ -158,10 +179,11 @@ def sweep_ground_truth() -> list:
             cambios = fetch_ground_truth.nea_diff(slug)
         except Exception as exc:                     # red ajena: un sujeto raro no tumba la pasada
             cfg.print_seguro(f"  ✗ {slug}: no se pudo diffear contra NEA ({exc})")
+            fallidos.append(slug)
             continue
         if cambios:
             out.append((slug, cambios))
-    return out
+    return out, fallidos
 
 
 def aplicar_ground_truth(slug: str) -> None:
@@ -227,15 +249,46 @@ def main(argv=None) -> int:
             cfg.print_seguro(f"  · {nombre}: {h}")
         pendientes += len(hallazgos)
 
-    cubrio.append("versiones")
-    for viejo, nuevo in discover_versions():
-        # se PROPONE: el renombre reescribe wikilinks de toda la bóveda (D-19).
-        cfg.print_seguro(f"  · versiones: {viejo} salió publicado como {nuevo} → "
-                         f"`python scripts/make_notes.py --rename-paper {viejo} {nuevo}`")
-        pendientes += 1
+    # ⚠ `cubrio.append` va DESPUÉS de que el detector devuelva, no antes. Estaba antes de la
+    # llamada, así que el registro versionado `_red.yaml` afirmaba "cubrió: versiones,
+    # ground-truth" aunque los dos hubieran fallado en todos sus sujetos —los errores por ítem se
+    # loguean y se saltean, por diseño: un sujeto raro no debe tumbar la pasada—. Un registro que
+    # dice haber mirado lo que no miró es peor que uno vacío: la próxima pasada lo toma como línea
+    # de base. Si el detector se lleva puesta la corrida entera, es *no evaluado*, no *cubierto*.
+    def _cubrir(nombre: str, fallidos: list) -> None:
+        """`cubrio` sólo si el detector realmente miró. Un fallo por ítem no tumba la pasada —a
+        propósito— pero tampoco puede desaparecer: si TODOS los ítems fallaron, el detector no
+        cubrió nada; si falló una parte, el registro dice cuántos quedaron sin mirar. Antes esto
+        era un `append` incondicional escrito **antes** de la llamada."""
+        if fallidos:
+            no_evaluados.append((nombre, f"{len(fallidos)} sujeto(s) sin poder mirar: "
+                                         f"{', '.join(fallidos[:5])}"
+                                         + (" …" if len(fallidos) > 5 else "")))
+            cfg.print_seguro(f"  ⛔ {nombre}: {len(fallidos)} sujeto(s) NO evaluado(s)")
+        else:
+            cubrio.append(nombre)
 
-    cubrio.append("ground-truth")
-    gt_cambios = sweep_ground_truth()
+    try:
+        versiones, v_fallidos = discover_versions()
+    except Exception as exc:                          # noqa: BLE001 — red ajena
+        no_evaluados.append(("versiones", str(exc)))
+        cfg.print_seguro(f"  ⛔ versiones: NO EVALUADO — {exc}")
+    else:
+        _cubrir("versiones", v_fallidos)
+        for viejo, nuevo in versiones:
+            # se PROPONE: el renombre reescribe wikilinks de toda la bóveda (D-19).
+            cfg.print_seguro(f"  · versiones: {viejo} salió publicado como {nuevo} → "
+                             f"`python scripts/make_notes.py --rename-paper {viejo} {nuevo}`")
+            pendientes += 1
+
+    try:
+        gt_cambios, gt_fallidos = sweep_ground_truth()
+    except Exception as exc:                          # noqa: BLE001 — red ajena
+        no_evaluados.append(("ground-truth", str(exc)))
+        cfg.print_seguro(f"  ⛔ ground-truth: NO EVALUADO — {exc}")
+        gt_cambios = []
+    else:
+        _cubrir("ground-truth", gt_fallidos)
     for slug, cambios in gt_cambios:
         cfg.print_seguro(f"  · ground-truth: {slug} cambió en NEA/SIMBAD desde el snapshot:")
         for campo, viejo, nuevo in cambios:

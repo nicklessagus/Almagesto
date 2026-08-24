@@ -23,10 +23,11 @@
 #              el código sería decidir por vos. Si no lo declarás, la puerta 2 NO abre y el motivo
 #              lo dice; el tema entra sólo por la lente astro.
 #   aliases  : opcional, sólo para prosa.
-#   extra_core : opcional, lista de bibcodes a forzar como core (curación manual que el clasificador
-#                perdió). Override del clasificador: query_ads trae por bibcode los ausentes y
-#                rescata los que la query trajo marcados no-core (`via: manual`). Persistente
-#                (config se commitea), a diferencia de editar build/ (scratch, se pisa).
+#   extra_core : opcional. ⚠ FORMA DURA (D-58): lista de MAPAS `{bibcode, via, motivo}`, no de
+#                bibcodes sueltos — la forma vieja aborta. `via` es vocabulario CERRADO:
+#                usuario | triage | citado-por-corpus. Ver el ejemplo en stars.yaml.
+#                Override del clasificador: query_ads trae por bibcode los ausentes y rescata los
+#                que la query trajo marcados no-core. Persistente (config se commitea).
 #                En un tema OFF-ADS también vale (tema MIXTO): los papers del tema que SÍ tienen
 #                bibcode ADS van acá — NO en sources: con el bibcode de key (degrada el stub:
 #                metadata a mano, blockquote off-ADS falso). ingest_theme les corre la sub-cadena ADS.

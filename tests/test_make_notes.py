@@ -423,7 +423,10 @@ def test_paper_notes_estrella(toy_vault):
     assert fm_a["relevance"] == "high" and fm_a["thesis_links"] == []
     # `role` (#73) lo llena la extracción, pero el campo tiene que EXISTIR en el stub: sin él, el
     # bullet del cuerpo pide un rol que no tiene dónde ir y el contraste cross-paper queda mudo.
-    assert fm_a["role"] == [] and fm_a["bearing"] is None
+    assert fm_a["role"] == []
+    # D-21 retiró `bearing` del paper: la postura vive en la tabla de evidencia de la
+    # hipótesis, porque depende de la tesis y un paper puede tocar varias.
+    assert "bearing" not in fm_a
     assert fm_a["pdf"] == "../../raw/pdfs/test_star/2020conA...1..1A.pdf"
     assert fm_a["first_author"] == "Ana Pérez" and fm_a["n_authors"] == 2
     assert read_fm(toy_vault.PAPERS / "1990preB....1..1B.md")["pdf"] is None
@@ -2168,3 +2171,165 @@ def test_crear_segunda_nota_mismo_trabajo_rehusa(toy_vault, capsys):
     mn.write_paper_notes("test_star", include_all=False, force=False)
     assert not (cfg.PAPERS / "2021pubY...1..1Y.md").exists()
     assert "2001.12345" in capsys.readouterr().out
+
+
+# ── Tanda 8 · issue 8.1 (D-17): las keywords de ADS llegan al frontmatter ──────────────────────
+
+def test_keywords_llegan_al_frontmatter(toy_vault):
+    """D-17. ADS ya devuelve `keyword` y `query_ads` lo persiste en `ads.json` — la nota lo tiraba.
+    Sin ellas, el diff de lente **offline** (issue 8.2) no puede re-clasificar desde las notas: la
+    lente matchea sobre título + abstract + **keywords**, y re-clasificar sin la tercera daría un
+    veredicto distinto del que dio el ingest, o sea un diff inventado."""
+    ads_json([dict(rec("2020kwA....1..1A"),
+                   keyword=["stars: activity", "techniques: radial velocities"])])
+    mn.write_paper_notes("test_star", include_all=False, force=False)
+    fm = read_fm(toy_vault.PAPERS / "2020kwA....1..1A.md")
+    assert fm["keywords"] == ["stars: activity", "techniques: radial velocities"]
+
+
+def test_keywords_no_pisa_la_extraccion(toy_vault):
+    """Add-only, como todo lo que `make_notes` mergea sobre una nota que ya existe."""
+    ads_json([dict(rec("2020kwB....1..1B"), keyword=["una"])])
+    mn.write_paper_notes("test_star", include_all=False, force=False)
+    p = toy_vault.PAPERS / "2020kwB....1..1B.md"
+    p.write_text(p.read_text(encoding="utf-8").replace("keywords:\n- una", "keywords:\n- editada"),
+                 encoding="utf-8")
+    mn.write_paper_notes("test_star", include_all=False, force=False)
+    assert read_fm(p)["keywords"] == ["editada"]
+
+
+def test_migrate_bearing_saca_el_campo_y_es_idempotente(toy_vault):
+    """Migrador de un solo uso de D-21. Borrado puro y sin pérdida recuperable: el dato viejo era
+    **un** valor de postura para N tesis, o sea que ya estaba mal por construcción. Quirúrgico: no
+    toca la extracción LLM ni el cuerpo."""
+    mk_note(toy_vault.PAPERS, "2020Bear",
+            {"tags": ["paper"], "bibcode": "2020Bear", "thesis_links": ["hip"],
+             "bearing": "supports", "methods": ["ICA"]},
+            "# 2020Bear\n\nExtracción LLM que no se toca.\n")
+    assert mn.migrate_all_bearing() == 1
+    p = toy_vault.PAPERS / "2020Bear.md"
+    fm = read_fm(p)
+    assert "bearing" not in fm
+    assert fm["thesis_links"] == ["hip"] and fm["methods"] == ["ICA"], "no toca el resto"
+    assert "Extracción LLM que no se toca." in p.read_text(encoding="utf-8")
+    antes = p.read_bytes()
+    assert mn.migrate_all_bearing() == 0, "segunda pasada: nada que hacer"
+    assert p.read_bytes() == antes, "y no reescribe"
+
+
+# ── D-17 · backfill de `keywords` (--restamp-keywords) ──────────────────────
+
+def _ads_json(slug, records):
+    d = cfg.ROOT / "build" / slug
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "ads.json").write_text(json.dumps({"slug": slug, "records": records}), encoding="utf-8")
+
+
+def test_restamp_keywords_estampa_la_nota_que_nacio_sin_ellas(toy_vault):
+    """La nota pre-D-17 no tiene la clave. `merge_frontmatter_list` devuelve False ahí a propósito
+    (no inventa posiciones), así que el backfill INSERTA — anclado en `facets:`, su vecino."""
+    _ads_json("test_star", [{"bibcode": "2020A", "keyword": ["stellar activity", "techniques: RV"]}])
+    (cfg.PAPERS).mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / "2020A.md").write_text(
+        "---\nbibcode: 2020A\ntitle: T\nfacets: [rv]\nmethods: []\ntags: [paper]\n---\n"
+        "# T\n\n## Extracción\nno se toca\n", encoding="utf-8")
+    assert mn.restamp_keywords() == 0
+    txt = (cfg.PAPERS / "2020A.md").read_text(encoding="utf-8")
+    assert cfg.split_fm(txt)["keywords"] == ["stellar activity", "techniques: RV"]
+    assert "no se toca" in txt, "el cuerpo (extracción LLM) queda intacto"
+
+
+def test_restamp_keywords_es_add_only(toy_vault):
+    """Add-only estricto: una nota con `keywords` poblado no se toca, aunque el registro diga otra
+    cosa (mismo criterio que el retro-linkeo: nunca pisar lo que ya está)."""
+    _ads_json("test_star", [{"bibcode": "2020A", "keyword": ["del registro"]}])
+    (cfg.PAPERS).mkdir(parents=True, exist_ok=True)
+    p = cfg.PAPERS / "2020A.md"
+    p.write_text("---\nbibcode: 2020A\nfacets: [rv]\nkeywords: [ya estaba]\ntags: [paper]\n"
+                 "methods: []\n---\n# T\n", encoding="utf-8")
+    antes = p.read_text(encoding="utf-8")
+    mn.restamp_keywords()
+    assert p.read_text(encoding="utf-8") == antes
+
+
+def test_restamp_keywords_sin_build_declara_en_vez_de_contar_cero(toy_vault, capsys):
+    """`build/` es scratch gitignored: sin él no hay de dónde sacarlas. Un "0 estampadas" pelado se
+    leería como "no hacía falta"; hay que decir que no había de dónde (D-43)."""
+    (cfg.PAPERS).mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / "2020A.md").write_text(
+        "---\nbibcode: 2020A\nfacets: [rv]\nmethods: []\ntags: [paper]\n---\n# T\n", encoding="utf-8")
+    mn.restamp_keywords()
+    out = capsys.readouterr().out
+    assert "1 nota(s) sin keywords y sin registro" in out and "no había de dónde" in out
+
+
+def test_restamp_keywords_es_idempotente(toy_vault):
+    _ads_json("test_star", [{"bibcode": "2020A", "keyword": ["k1"]}])
+    (cfg.PAPERS).mkdir(parents=True, exist_ok=True)
+    p = cfg.PAPERS / "2020A.md"
+    p.write_text("---\nbibcode: 2020A\nfacets: [rv]\nmethods: []\ntags: [paper]\n---\n# T\n",
+                 encoding="utf-8")
+    mn.restamp_keywords()
+    primera = p.read_text(encoding="utf-8")
+    mn.restamp_keywords()
+    assert p.read_text(encoding="utf-8") == primera
+
+
+def test_rename_paper_corre_sin_slug(toy_vault, monkeypatch, capsys):
+    """P0 de auditoría: el guard `if not args.slug` corría ANTES del despacho de `--rename-paper`,
+    así que el comando **que la doc publica** (`CLAUDE.md`, el stdout de make_notes, del lint y de
+    sweep_external lo imprimen sin slug) moría con exit 2. Un comando publicado que no corre es peor
+    que uno ausente: el usuario lo copia y el ciclo preprint→publicado queda a medias."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / "2020preX.md").write_text(
+        "---\nbibcode: 2020preX\ntitle: T\narxiv_id: 2001.00001\nstars: [Estrella Test]\n"
+        "methods: []\ntags: [paper]\n---\n# T\n", encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["make_notes.py", "--rename-paper", "2020preX", "2021pubY"])
+    assert mn.main() == 0
+    nueva = cfg.PAPERS / "2021pubY.md"
+    assert nueva.exists() and not (cfg.PAPERS / "2020preX.md").exists()
+    fm = cfg.split_fm(nueva.read_text(encoding="utf-8"))
+    assert fm["bibcode"] == "2021pubY" and "2020preX" in str(fm["versions"])
+
+
+def test_la_nota_declara_su_version(toy_vault):
+    """INV-62, la mitad que faltaba: **cada nota** declara con qué versión se generó. La marca vivía
+    sólo en el test de los User-Agents de los fetchers, que mide la otra mitad ("única fuente de
+    verdad") y no toca ninguna nota.  @inv INV-62"""
+    build = cfg.ROOT / "build" / "test_star"
+    build.mkdir(parents=True, exist_ok=True)
+    (build / "ads.json").write_text(json.dumps({"slug": "test_star", "records": [
+        {"bibcode": "2020A", "relevant": True, "title": "t", "authors": ["A"], "year": 2020,
+         "keyword": [], "facets": ["rv"]}]}), encoding="utf-8")
+    mn.write_paper_notes("test_star", False, False)
+    fm = cfg.split_fm((cfg.PAPERS / "2020A.md").read_text(encoding="utf-8"))
+    assert fm["generator"] == f"Almagesto v{cfg.ALMAGESTO_VERSION}"
+
+
+def test_restamp_headers_no_reetiqueta_la_nota(toy_vault):
+    """La otra cara de INV-62: una **cirugía posterior** no puede reetiquetar la nota con la versión
+    del framework que corre hoy — la nota se generó con otra, y decir lo contrario borra la
+    provenance. `--restamp-headers` lee la versión del `generator` del frontmatter.  @inv INV-62"""
+    cfg.STARS.mkdir(parents=True, exist_ok=True)
+    p = cfg.STARS / "vieja.md"
+    p.write_text("---\nname: Vieja\nslug: vieja\ntags: [star]\ngenerator: Almagesto v1.11.0\n---\n"
+                 "# Vieja\n\nSíntesis LLM cara.\n", encoding="utf-8")
+    mn.restamp_headers()
+    txt = p.read_text(encoding="utf-8")
+    assert "Almagesto v1.11.0" in txt, "la cabecera se estampa con la versión del frontmatter"
+    assert f"Almagesto v{cfg.ALMAGESTO_VERSION}" not in txt.split("# Vieja")[0].replace(
+        "generator: Almagesto v1.11.0", ""), "no se reetiqueta con la versión de hoy"
+    assert "Síntesis LLM cara." in txt
+
+
+def test_concept_dest_resuelve_area_y_nombre(toy_vault):
+    """Gate de mutación: `_concept_dest` sobrevivía a que le vaciaran el cuerpo. Es el que decide
+    **dónde** cae la nota de un concepto —área y nombre salen de `themes.yaml`, no del slug—, así
+    que un `return None` mudo mandaba la nota a otro lado (o a ningún lado) sin que nada fallara."""
+    write_yaml(cfg.THEMES_YAML, {"gp": {"title": "GP", "area": "methods",
+                                        "concept": "procesos-gaussianos", "query": "q"}})
+    assert mn._concept_dest("gp") == cfg.CONCEPTS / "methods" / "procesos-gaussianos.md"
+    assert mn._concept_dest("no_existe") is None, "tema desconocido: None, no una ruta inventada"
+    write_yaml(cfg.THEMES_YAML, {"pelado": {"title": "P", "query": "q"}})
+    assert mn._concept_dest("pelado") == cfg.CONCEPTS / "" / "pelado.md", \
+        "sin `concept` declarado cae al slug (y sin `area`, a la raíz de concepts/)"

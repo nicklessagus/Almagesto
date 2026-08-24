@@ -207,3 +207,35 @@ def test_sin_indice_construido_no_dice_que_nadie_cita(toy_vault):
     with pytest.raises(RuntimeError) as e:
         ci.cited_by_corpus("2009A&A...496..577Z")
     assert "citation_index" in str(e.value)
+
+
+# ── el doble tiene que compartir contrato con la función real ─────────────────────────────────
+
+def test_el_doble_de_refs_of_normaliza_como_la_funcion_real(toy_vault, monkeypatch):
+    """El bug más caro de la Tanda 7 vivió **exactamente** en la diferencia entre el doble y lo
+    real: el doble indexaba por el input verbatim y `refs_of` por `_bare_doi`, así que `build`
+    consultando con el DOI crudo pasaba los tests y fallaba en producción — reportando cobertura
+    **mal atribuida**, que es peor que cobertura faltante.
+
+    Un doble no se escribe a ojo: o deriva de la función real, o hay un test que fija que las dos
+    coinciden en la forma de la clave. Esto es lo segundo."""
+    import openalex as oa
+
+    class _Resp:
+        status_code = 200
+        def raise_for_status(self): pass
+        def json(self):
+            return {"results": [{"id": "https://openalex.org/W1",
+                                 "doi": "https://doi.org/10.1051/0004-6361:200811296",
+                                 "referenced_works": ["https://openalex.org/W9"]}],
+                    "meta": {"next_cursor": None}}
+    monkeypatch.setattr(oa.requests, "get", lambda *a, **k: _Resp())
+
+    entrada = ["https://doi.org/10.1051/0004-6361:200811296", "10.1/NO-EXISTE"]
+    real_refs, real_sin = oa.refs_of(entrada)
+    _, doble = fetchers(oa_map={"10.1051/0004-6361:200811296": ["W9"]})
+    doble_refs, doble_sin = doble(entrada)
+
+    assert set(real_refs) == set(doble_refs), "el doble indexa con otra clave que la función real"
+    assert set(real_sin) == set(doble_sin), "y declara otros no-resueltos"
+    assert list(real_refs) == ["10.1051/0004-6361:200811296"], "la clave es el DOI normalizado"

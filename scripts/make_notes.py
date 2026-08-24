@@ -295,9 +295,90 @@ def restamp_pdf_links() -> int:
     return 0
 
 
+def stamp_keywords(dest, keywords: list) -> bool:
+    """Estampa `keywords:` en una nota de paper que no las tiene. Cirugía sobre el TEXTO, como
+    `merge_frontmatter_list` —preserva byte a byte el resto del frontmatter, incluida la extracción
+    LLM— pero con una diferencia que aquélla no cubre: acá el campo puede estar **ausente** (la nota
+    nació antes de D-17) y `merge_frontmatter_list` devuelve False sin tocar nada, a propósito, para
+    no inventar posiciones. Se inserta después de `facets:`, que es su vecino en el stub.
+
+    **Add-only estricto:** si la nota ya trae `keywords` con contenido, no se toca. Devuelve True si
+    modificó."""
+    text = dest.read_text(encoding="utf-8")
+    if not text.startswith("---\n") or not keywords:
+        return False
+    end = text.find("\n---\n", 4)
+    if end < 0:
+        return False
+    head = text[4:end]
+    try:
+        data = yaml.safe_load(head) or {}
+    except yaml.YAMLError:
+        return False                    # frontmatter roto: lo surface el lint, acá no se toca
+    if data.get("keywords"):
+        return False                    # ya poblado: add-only
+    lines = head.split("\n")
+    linea = "keywords: " + yaml.safe_dump(list(keywords), default_flow_style=True,
+                                          allow_unicode=True).strip()
+    idx = next((i for i, ln in enumerate(lines) if ln.startswith("keywords:")), None)
+    if idx is not None:
+        lines[idx] = linea              # `keywords: []` (o null) de una nota post-D-17 vacía
+    else:
+        ancla = next((i for i, ln in enumerate(lines) if ln.startswith("facets:")), None)
+        if ancla is None:
+            return False                # cabecera fuera del contrato: no adivinar
+        j = ancla + 1
+        while j < len(lines) and lines[j].lstrip().startswith("- "):
+            j += 1                      # `facets:` en bloque: saltar sus ítems
+        lines[j:j] = [linea]
+    cfg.write_text_atomic(dest, "---\n" + "\n".join(lines) + text[end:])
+    return True
+
+
+def restamp_keywords() -> int:
+    """Backfill D-17: estampa `keywords:` en las notas de paper que nacieron sin ellas, leyendo el
+    registro de `build/<slug>/ads.json` (ADS ya las devolvía; la nota las tiraba).
+
+    Hace falta porque la lente matchea **título + abstract + keywords**: sin ellas, re-clasificar
+    desde la nota da un veredicto distinto del que dio el ingest — un diff inventado. Son lo que
+    hace posible el diff de lente **offline** (D-49).
+
+    ⚠ **`build/` es scratch gitignored.** Sin él no hay de dónde sacarlas y esto **no puede
+    inventar un cero**: se dice cuántas notas quedaron sin cubrir y por qué. Recuperarlas ahí es un
+    fetch de metadata por bibcode — sub-modo *refrescar* de `maintain`."""
+    kw: dict = {}
+    for aj in sorted((cfg.ROOT / "build").glob("*/ads.json")) if (cfg.ROOT / "build").exists() else []:
+        try:
+            data = cfg.as_map(json.loads(aj.read_text(encoding="utf-8")))
+        except (ValueError, OSError):
+            continue
+        for r in cfg.as_list(data.get("records")):
+            if isinstance(r, dict) and r.get("bibcode") and cfg.as_list(r.get("keyword")):
+                kw.setdefault(r["bibcode"], cfg.as_list(r["keyword"]))
+    notes = sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []
+    changed = sin_registro = 0
+    for n in notes:
+        fm = cfg.split_fm(n.read_text(encoding="utf-8"))
+        if fm.get("keywords"):
+            continue
+        bib = fm.get("bibcode") or n.stem
+        if bib not in kw:
+            sin_registro += 1
+            continue
+        changed += stamp_keywords(n, kw[bib])
+    cfg.print_seguro(f"keywords: {changed} de {len(notes)} notas estampadas "
+                     f"(desde {len(kw)} registros de build/*/ads.json)")
+    if sin_registro:
+        cfg.print_seguro(
+            f"  ⚠ {sin_registro} nota(s) sin keywords y sin registro en build/ — NO es 0, es "
+            f"'no había de dónde': build/ es scratch gitignored. Recuperarlas es un fetch de "
+            f"metadata por bibcode (sub-modo refrescar de `maintain`), o re-correr la cadena.")
+    return 0
+
+
 def restamp_headers() -> int:
     """Backfill #69: barre TODAS las fichas y conceptos y les estampa la cabecera si les falta.
-    Para el corpus creado antes de que la cabecera existiera (medido en una bóveda real: 21 de 25
+    Para el corpus creado antes de que la cabecera existiera (medido en una bóveda real: 22 de 25
     notas sin el aviso de capa LLM). Regenerar con --force sí escribiría la cabecera, pero PISA la
     síntesis LLM, que es el trabajo caro: por eso esto es cirugía y no regeneración."""
     notes = sorted(cfg.STARS.glob("*.md")) if cfg.STARS.exists() else []
@@ -423,6 +504,33 @@ def migrate_disputes(dest) -> bool:
     cfg.write_text_atomic(dest, fm(front) + text[end + 5:])
     cfg.print_seguro(f"  {dest.name}: {len(nuevas)} disputa(s) migradas a posiciones explícitas")
     return True
+
+
+def migrate_all_bearing() -> int:
+    """Migrador de un solo uso de D-21: saca `bearing:` del frontmatter de las notas de paper.
+
+    La **postura** de un paper respecto de una tesis no es propiedad del paper —depende de la tesis,
+    y un paper puede tocar varias—, así que vive en la tabla de evidencia de la hipótesis. Dejarla
+    en el paper obligaba a elegir una sola postura para todas.
+
+    Es borrado puro y no pierde nada recuperable: el dato viejo era un único valor para N tesis, o
+    sea que ya estaba mal por construcción. Edición **quirúrgica a nivel línea** (como
+    `merge_frontmatter_list`): no toca la extracción LLM ni el cuerpo.  @inv INV-13"""
+    n = 0
+    for f in sorted(cfg.PAPERS.glob("*.md")):
+        texto = f.read_text(encoding="utf-8")
+        if not texto.startswith("---\n"):
+            continue
+        fin = texto.find("\n---\n", 4)
+        if fin < 0:
+            continue
+        head, resto = texto[4:fin], texto[fin:]
+        lineas = [ln for ln in head.split("\n") if not ln.startswith("bearing:")]
+        if len(lineas) == len(head.split("\n")):
+            continue
+        cfg.write_text_atomic(f, "---\n" + "\n".join(lineas) + resto)
+        n += 1
+    return n
 
 
 def migrate_all_disputes() -> int:
@@ -890,7 +998,7 @@ def stamp_header(dest) -> bool:
 
     Por qué hace falta un estampador propio y no alcanza con la familia `stamp_*`: todas ellas
     anclan en `GENERATOR_LINE` y se niegan a actuar si falta (criterio de #48, "no inventamos"),
-    que es exactamente la población a arreglar — medido en una bóveda real: 21 de 25 notas sin el
+    que es exactamente la población a arreglar — medido en una bóveda real: 22 de 25 notas sin el
     aviso, y las mismas 21 sin el ancla. Un backfill anclado ahí sería no-op sobre el 100% de los
     casos. Éste ancla en el `# H1`, que toda nota tiene.
 
@@ -1096,7 +1204,6 @@ def concept_rollup_rows(slug: str, fms: dict | None = None) -> list:
         if not (por_m or por_t):
             continue
         filas.append({"stem": stem, "year": fm.get("year") or "",
-                      "bearing": fm.get("bearing") or "",
                       "entro_por": "ambos" if por_m and por_t else ("methods" if por_m else "thesis_links")})
     return sorted(filas, key=lambda r: r["stem"])
 
@@ -1106,9 +1213,11 @@ def concept_rollup_table(rows: list) -> str:
     if not rows:
         out += ["_(ninguna nota de paper declara este tema todavía.)_", ""]
         return "\n".join(out)
-    out += ["| Bibcode | Año | Bearing | Entró por |", "|---|---|---|---|"]
+    # Sin columna `Bearing`: D-21 la retiró del paper — la postura depende de la TESIS y un
+    # paper puede tocar varias, así que vive en la tabla de evidencia de la hipótesis.
+    out += ["| Bibcode | Año | Entró por |", "|---|---|---|"]
     for r in rows:
-        out.append(f"| [[{r['stem']}]] | {r['year']} | {r['bearing']} | {r['entro_por']} |")
+        out.append(f"| [[{r['stem']}]] | {r['year']} | {r['entro_por']} |")
     out.append("")
     return "\n".join(out)
 
@@ -1231,8 +1340,15 @@ def _set_lista_de_mapas(dest, clave: str, valor: list) -> None:
     if span is None:
         return
     yaml_block, _ = span
-    out, dropping = [], False
-    for ln in yaml_block.split("\n"):
+    # `frontmatter_span` corta JUSTO después del `---` de apertura y JUSTO antes del de cierre, así
+    # que el bloque empieza y termina con "\n" y el split deja una cadena vacía en cada punta. Esas
+    # dos NO son líneas en blanco: son la separación con los delimitadores. El `if ln.strip()` que
+    # había acá las filtraba junto con las de verdad, y el resultado fusionaba el `---` con la
+    # primera clave (`---bibcode: 2021pubY`) → `cfg.split_fm` devolvía `{}` y la nota quedaba
+    # ILEGIBLE para todo el tooling después de un `--rename-paper`. Se reconstruyen a mano.
+    lineas = yaml_block.split("\n")
+    cuerpo, dropping = [], False
+    for ln in lineas[1:-1]:
         if dropping:
             if ln[:1] in (" ", "\t", "-"):
                 continue
@@ -1240,10 +1356,11 @@ def _set_lista_de_mapas(dest, clave: str, valor: list) -> None:
         if ln.startswith(f"{clave}:"):
             dropping = True
             continue
-        out.append(ln)
+        if ln.strip():
+            cuerpo.append(ln)
     bloque = yaml.safe_dump({clave: valor}, sort_keys=False, allow_unicode=True,
                             default_flow_style=False).rstrip("\n")
-    nuevo = "\n".join([ln for ln in out if ln.strip()] + [bloque]) + "\n"
+    nuevo = "\n" + "\n".join(cuerpo + bloque.split("\n")) + "\n"
     cfg.write_text_atomic(dest, text.replace(yaml_block, nuevo, 1))
 
 
@@ -1646,9 +1763,13 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, theme: bool = F
             "bibstem": r.get("bibstem"),
             "stars": [name] if name else [],
             "facets": r.get("facets", []),
+            # D-17. ADS ya las devuelve y `ads.json` ya las persiste; la nota las tiraba. Hacen falta
+            # para el diff de lente OFFLINE (D-49): la lente matchea sobre título + abstract +
+            # KEYWORDS, así que re-clasificar desde una nota sin ellas daría un veredicto distinto
+            # del que dio el ingest — un diff inventado.
+            "keywords": cfg.as_list(r.get("keyword")),
             "methods": [],                 # poblar con extracción LLM
             "thesis_links": list(seed_links),  # tema: pre-sembrado al concept; estrella: vacío
-            "bearing": None,               # supports | challenges | method (respecto a thesis_links)
             # ROL del paper dentro del tema/entidad (#73), poblado por la EXTRACCIÓN:
             # fundacional | aplicacion | arbitro (uno o varios). `bearing` dice la POSTURA respecto
             # de una tesis; `role` dice QUÉ TIPO DE APORTE es, que es lo que define la operación de
@@ -1792,9 +1913,9 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
         "bibstem": bibstem,
         "stars": [],
         "facets": [],
+        "keywords": [],                      # off-ADS: no hay keywords de catálogo que copiar
         "methods": [],                       # poblar con extracción LLM
         "thesis_links": [concept] if concept else [],   # pre-sembrado al concept
-        "bearing": None,                     # supports | challenges | method
         "role": [],                          # fundacional | aplicacion | arbitro (#73) — extracción
         "relevance": "high",
         "citation_count": 0,
@@ -1856,6 +1977,10 @@ def main() -> int:
                     help="backfill #47: barre TODAS las notas de papers y re-estampa el link "
                          "[📄 PDF] de la cabecera desde el frontmatter `pdf` (agrega/corrige/quita). "
                          "No toca la extracción LLM; no requiere slug.")
+    ap.add_argument("--restamp-keywords", action="store_true", dest="restamp_keywords",
+                    help="backfill D-17: estampa `keywords:` en las notas de paper que nacieron "
+                         "sin ellas, desde build/*/ads.json. Add-only (no pisa las que ya están); "
+                         "declara cuántas quedaron sin cubrir por falta de build/. No requiere slug.")
     ap.add_argument("--restamp-headers", action="store_true", dest="restamp_headers",
                     help="backfill #69: barre TODAS las fichas/conceptos y estampa la cabecera "
                          "(aviso de capa LLM + línea del generador) a las que nacieron sin ella. "
@@ -1865,6 +1990,9 @@ def main() -> int:
                     help="migración #71: pasa `planets[].disputes[]` (polo de verdad hardcodeado) a "
                          "`disputes` a nivel nota con posiciones explícitas. Toca sólo las fichas "
                          "que tienen disputas viejas; no toca el cuerpo. No requiere slug.")
+    ap.add_argument("--migrate-bearing", action="store_true", dest="migrate_bearing",
+                    help="migración D-21: saca `bearing:` del frontmatter de las notas de paper (la "
+                         "postura vive en la tabla de evidencia de la hipótesis). No requiere slug.")
     ap.add_argument("--sync-mirror", action="store_true", dest="sync_mirror",
                     help="backfill: rellena en `stars/` los campos espejo de NEA (#70) que están en "
                          "null y el ground-truth sí trae (spectral_type/teff_K/dist_pc/P_rot_days y "
@@ -1892,15 +2020,31 @@ def main() -> int:
 
     if args.restamp_pdf_links:
         return restamp_pdf_links()
+    if args.restamp_keywords:
+        return restamp_keywords()
     if args.restamp_headers:
         return restamp_headers()
+    if args.migrate_bearing:
+        n = migrate_all_bearing()
+        cfg.print_seguro(f"`bearing` retirado de {n} nota(s) de paper (D-21).")
+        return 0
+
     if args.migrate_disputes:
         return migrate_all_disputes()
     if args.sync_mirror:
         return sync_mirror()
+    # `--rename-paper VIEJO NUEVO` ANTES del guard de slug: sus dos bibcodes son el argumento y no
+    # hay slug que dar. El despacho estaba después, así que **el comando que la doc publica**
+    # —`CLAUDE.md`, el stdout de `make_notes`, el del lint y el de `sweep_external` lo imprimen sin
+    # slug— moría con exit 2 antes de llegar a su rama. Un comando publicado que no corre es peor
+    # que uno ausente: el usuario lo copia y el ciclo preprint→publicado queda a medias.
+    if args.rename_paper:
+        rename_paper(*args.rename_paper)
+        return 0
     if not args.slug:
-        ap.error("falta el slug (sólo --restamp-pdf-links, --restamp-headers, --migrate-disputes y "
-                 "--sync-mirror corren sin slug)")
+        ap.error("falta el slug (corren sin slug: --restamp-pdf-links, --restamp-keywords, "
+                 "--restamp-headers, --migrate-disputes, --migrate-bearing, --sync-mirror y "
+                 "--rename-paper)")
 
     if args.web:
         write_web_paper_note(args.slug, url=args.url, slug=args.slug_hint, concept=args.concept,
@@ -1909,9 +2053,6 @@ def main() -> int:
                              accessed=args.accessed, pending=args.pending, force=args.force)
         return 0
 
-    if args.rename_paper:
-        rename_paper(*args.rename_paper)
-        return 0
     cfg.print_seguro(f"Generando notas para {args.slug}")
     if args.theme:
         write_concept_note(args.slug, args.force)

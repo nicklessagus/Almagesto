@@ -312,3 +312,17 @@ def test_archivo_que_no_parsea_cae_al_heuristico(tmp_path):
     with pytest.raises(SyntaxError):
         _ast.parse(roto)
     assert _sim(tmp_path, roto) == "f"
+
+
+def test_inv_de_tres_digitos_no_se_recolecta_como_de_dos():
+    """`INV-\\d{2}` sin frontera recolecta un `INV-100` marcado **como INV-10**: la marca queda atribuida
+    al invariante equivocado y el mapa afirma que INV-10 está cubierto por un test que prueba otra
+    cosa — atribución falsa en el artefacto cuyo trabajo es justamente no atribuir mal. Hoy hay 91
+    invariantes: la frontera está a nueve."""
+    assert ti.INV_RE.findall("INV-100") == []
+    marca = "@" + "inv "          # partido: escribir la marca literal la haría recolectable
+    assert ti.MARCA_RE.findall("# " + marca + "INV-100") == []
+    assert ti.INV_RE.findall("INV-10") == ["INV-10"]
+    assert ti.MARCA_RE.findall("# " + marca + "INV-10, INV-42") == ["INV-10, INV-42"]
+    assert ti.FILA_RE.match("| **INV-100** | x |") is None
+    assert ti.FILA_RE.match("| **INV-10** | x |").group(1) == "INV-10"

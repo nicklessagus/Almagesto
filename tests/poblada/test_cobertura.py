@@ -1,0 +1,60 @@
+"""Ninguna función de `scripts/` puede quedar SIN EJECUTARSE por la suite.
+
+No pide que esté bien probada: pide saber **cuáles no mira nadie**. Medido en esta sesión,
+`citation_index._fetch_ads_default` y `_resolver_default` —las rutas de red de verdad— tenían cero
+ejecuciones, y eso no lo dice ningún test: los dobles se inyectan siempre.
+
+Es el hermano barato del gate de mutación (`tools/mutar.py`): una función nunca ejecutada
+**siempre** sobrevive a la mutación, así que esto la detecta en 15 s en vez de en una corrida por
+función. Ratchet: el número de no-ejecutadas sólo puede bajar.
+"""
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+import yaml
+
+pytestmark = pytest.mark.poblada
+
+RAIZ = Path(__file__).resolve().parent.parent.parent
+RATCHET = RAIZ / "tools" / "cobertura-ratchet.yaml"
+
+
+def _sin_ejecutar(tmp_path) -> list[str]:
+    """Corre la suite tier 0 bajo `coverage` y devuelve `archivo::funcion` sin un solo hit."""
+    datafile = tmp_path / ".coverage"
+    subprocess.run([sys.executable, "-m", "coverage", "run", "--source=scripts",
+                    f"--data-file={datafile}", "-m", "pytest", "tests/", "-q", "--no-header"],
+                   cwd=RAIZ, capture_output=True, text=True, timeout=900)
+    salida = tmp_path / "cov.json"
+    subprocess.run([sys.executable, "-m", "coverage", "json", f"--data-file={datafile}",
+                    "-o", str(salida)], cwd=RAIZ, capture_output=True, timeout=300)
+    datos = json.loads(salida.read_text(encoding="utf-8"))
+    import ast
+    faltan = []
+    for arch, info in sorted(datos.get("files", {}).items()):
+        ejecutadas = set(info.get("executed_lines") or [])
+        fuente = (RAIZ / arch).read_text(encoding="utf-8")
+        for n in ast.walk(ast.parse(fuente)):
+            if not isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            cuerpo = [x for x in range(n.body[0].lineno, (n.end_lineno or 0) + 1)]
+            if not (set(cuerpo) & ejecutadas):
+                faltan.append(f"{Path(arch).name}::{n.name}")
+    return sorted(faltan)
+
+
+def test_ninguna_funcion_queda_sin_ejecutar(tmp_path):
+    faltan = _sin_ejecutar(tmp_path)
+    techo = (yaml.safe_load(RATCHET.read_text(encoding="utf-8")) or {}) if RATCHET.exists() else {}
+    n_techo = techo.get("techo", 0)
+    assert len(faltan) <= n_techo, (
+        f"{len(faltan)} funciones sin ejecutar (techo {n_techo}) — la suite no las mira:\n  "
+        + "\n  ".join(faltan))
+    if len(faltan) < n_techo:
+        pytest.warns  # noqa
+        print(f"✅ bajó a {len(faltan)}: actualizá `techo` en {RATCHET.name}")

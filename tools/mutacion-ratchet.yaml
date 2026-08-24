@@ -1,0 +1,32 @@
+# Techo de funciones de `scripts/` que SOBREVIVEN a la mutación (romperlas no pone rojo a ningún
+# test). Sólo puede BAJAR. Se mide con `python tools/mutar.py --todo --ratchet`.
+#
+# Una función acá no está probada: su test —si existe— pasa por construcción. Es el defecto que
+# esta sesión encontró cuatro veces (un `assert path.glob(...)` siempre truthy, una guarda cuyo
+# test pasaba sin la guarda, un "espera creciente" que `[2.0, 2.0]` satisface, un test de
+# determinismo corriendo las dos pasadas en el mismo proceso).
+medido_en: "2026-08-24"
+
+# ⚠ PARCIAL: medido sobre los tres módulos de la Tanda 7 (21 funciones), no sobre todo `scripts/`.
+# El barrido completo son ~200 funciones × una corrida de suite cada una (~20 min) y todavía no
+# corrió. Hasta entonces este techo NO cubre el resto del árbol: `tools/cobertura-ratchet.yaml`
+# (11 s) es la red barata mientras tanto.
+alcance: "scripts/{citation_index,openalex,search_arxiv}.py + el diff de la sesión 2026-08-24"
+techo: 6
+
+# Las 6 que sobreviven, y por qué son deuda declarada y no diseño. Las tres primeras son la medición
+# de la Tanda 7; las tres últimas salieron del `--diff` del 2026-08-24 sobre 120 funciones, y las
+# **dos** que eran funciones puras ya no están acá: se les escribió el test que faltaba
+# (`make_notes._concept_dest` y `triage.triage_file` — la primera decide DÓNDE cae la nota de un
+# concepto, la segunda fija que el juicio de curación viva en el registro versionado y no en scratch,
+# que es el punto entero de #51; las dos sobrevivían a que les vaciaran el cuerpo).
+#   citation_index.py::_fetch_ads_default   ← ruta de red real: los tests inyectan dobles siempre
+#   citation_index.py::_fetch_oa_default    ← idem
+#   openalex.py::_mailto                    ← lee `git config user.email`: depende del entorno
+#   check_retractions.py::_mailto           ← idem (gemelo del anterior)
+#   sweep_external.py::_run                 ← lanza un subprocess: los tests graban la fachada
+#   sweep_external.py::aplicar_ground_truth ← idem (`_run` con --force); el test lo anula por diseño
+#
+# `openalex.py::_abstract` salió de esta lista el mismo día que entró: el gate la encontró y se le
+# escribió el test que faltaba (el fixture nunca traía `abstract_inverted_index`, y `classify_record`
+# lee `abstract`, así que su ausencia cambiaba el veredicto core/no-core).

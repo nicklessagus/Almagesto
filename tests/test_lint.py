@@ -942,7 +942,8 @@ def test_p_rot_ni_en_nea_ni_citado_sigue_siendo_backlog(toy_vault, capsys):
     ("P_rot = 34 d [[2019A....1A]]", True),
     ("El período de rotación es 34 d [[2019A....1A]]", True),
     ("The rotation period is 34 d [[2019A....1A]]", True),
-    ("$P_{rot}$ ≈ 34 d, inferencia a partir del ciclo", True),      # lectura propia, marcada
+    # D-42/INV-86: la palabra pelada dejó de ser respaldo — sin premisas no es inferencia.
+    ("$P_{rot}$ ≈ 34 d, inferencia a partir del ciclo", False),      # lectura propia, marcada
     # la notación que el propio CLAUDE.md pide en vault/wiki/ ($...$) — sin esto la heurística
     # marcaba "sin P_rot" sobre notas que SÍ lo documentan
     (r"con $P_{\rm rot}$ = 34 d [[2019A....1A]]", True),
@@ -1331,7 +1332,9 @@ def test_campos_incompletos(toy_vault, capsys):
     assert "planeta c en frontmatter pero no discutido en prosa" in out
     assert "planeta b" not in out                     # b sí está discutida
     assert "paper relevante sin methods" in out
-    assert "thesis_links sin bearing" in out
+    # D-21 retiró `bearing` del paper, así que el campo incompleto "thesis_links sin
+    # bearing" quedó sin población y se eliminó con el schema que lo generaba.
+    assert "thesis_links sin bearing" not in out
 
 
 def test_prosa_reconoce_variantes_de_mencion(toy_vault, capsys):
@@ -1348,7 +1351,13 @@ def test_prosa_reconoce_variantes_de_mencion(toy_vault, capsys):
 def test_registro_versionado_cubre_la_falta_de_build(toy_vault, capsys):
     """#51/#64: sin build/ local (post-clone, otra máquina, scratch limpiado) los chequeos de
     triage y truncamiento reportaban 0 SIN MIRAR NADA — un falso limpio. Ahora caen al registro
-    versionado y reportan el snapshot CON su fecha, diciendo que no es el conteo vigente.  @inv INV-25"""
+    versionado y reportan el snapshot CON su fecha, diciendo que no es el conteo vigente.
+
+    Sostiene los DOS invariantes, y por eso lleva las dos marcas: **INV-25** (borrar el scratch y
+    re-correr no pierde nada: el juicio de curación vive en el registro versionado) e **INV-39** (un
+    dato de snapshot se reporta como snapshot, con su fecha y aclarando que no es el conteo
+    vigente) — los asserts de la fecha literal y de la frase son exactamente el segundo.
+    @inv INV-25, INV-39"""
     cfg.save_busqueda("au_mic", {"fecha": "2026-08-21", "query": "title:(x)", "rows": 400,
                                  "n_found": 410, "n_core": 198, "n_candidates": 42,
                                  "truncated": True})
@@ -1361,7 +1370,12 @@ def test_registro_versionado_cubre_la_falta_de_build(toy_vault, capsys):
 
 
 def test_build_local_gana_sobre_el_registro(toy_vault, capsys):
-    """Con build/ presente manda la verdad viva: el sujeto no se reporta dos veces.  @inv INV-39"""
+    """Con build/ presente manda la verdad viva: el sujeto no se reporta dos veces.
+
+    ⚠ **Sin marca a propósito.** Llevaba `@inv INV-39` y mide lo contrario: acá se assertea que el
+    snapshot **no** aparece (`assert "2026-08-01" not in out`), o sea la rama donde INV-39 no se
+    ejercita. La atribución falsa es peor que la ausencia — el mapa decía que un P0 estaba medido
+    por un test que prueba la precedencia, no el reporte. INV-39 lo mide el test de arriba."""
     cfg.save_busqueda("au_mic", {"fecha": "2026-08-01", "n_candidates": 99, "truncated": False})
     d = toy_vault.ROOT / "build" / "au_mic"
     d.mkdir(parents=True, exist_ok=True)
@@ -2168,3 +2182,345 @@ def test_marca_no_se_confunde_con_prosa(toy_vault, capsys):
     link_from_index(toy_vault, "c1", "2019retR...1..1R")
     rc, rep = run_lint_reporte(capsys)
     assert rc == 1
+
+
+def test_config_ilegible_suprime_las_categorias_que_dependen_de_ella(toy_vault, capsys):
+    """@inv INV-87 — «la categoría normal **se suprime** del reporte» estaba implementado sólo para
+    *Verificación stale*. Medido con `stars.yaml` roto: cinco categorías que se calculan a partir
+    de él seguían imprimiendo `(0)` — cinco ceros inventados, exactamente lo que la categoría *No
+    evaluado* existe para no producir. Peor todavía con `objective.yaml` roto: *Áreas de concepts/*
+    afirmaba «no declara `concept_areas`» sobre un archivo que **sí** la declara y que el lint no
+    pudo leer."""
+    cfg.STARS_YAML.write_text("tau Ceti:\n  title: mal: sin comillas\n", encoding="utf-8")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc != 0 and "No evaluado" in rep
+    for cat in ("Triage pendiente", "Recorte de lectura sin declarar",
+                "Lista de papers desactualizada", "Cadena incompleta", "Corpus truncado"):
+        assert cat not in rep, f"«{cat}» imprimió su cero sobre una config que nadie pudo leer"
+
+
+# ── Tanda 8 · issue 8.3 (D-42 / INV-86): la inferencia nombra sus premisas ─────────────────────
+
+def _seccion(rep: str, titulo: str) -> str:
+    """El cuerpo de una sección `## …<titulo>…` del reporte (para no confundirse con otras)."""
+    dentro, out = False, []
+    for l in rep.split("\n"):
+        if l.startswith("## "):
+            dentro = titulo in l
+        elif dentro:
+            out.append(l)
+    return "\n".join(out)
+
+
+def test_inferencia_pelada_bloquea(toy_vault, capsys):
+    """@inv INV-86 — *toda `inferencia` nombra sus premisas (≥1 bibcode); sin premisas no es
+    inferencia: es afirmación sin respaldo y no entra*.
+
+    Cierra el sumidero de `verify-citations`: una afirmación que vuelve `no-soportada` podía
+    sobrevivir **cambiándole la etiqueta** a `(inferencia)`, y ahí ya no la miraba nadie — ni el
+    verify (no tiene bibcode que chequear) ni el lint (`PROT_CITE` aceptaba la palabra pelada como
+    respaldo del P_rot)."""
+    mk_note(cfg.CONCEPTS / "methods", "infer", {"tags": ["concept"], "name": "infer"},
+            "El período es de 34 d (inferencia).\n")
+    link_from_index(toy_vault, "infer")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 1
+    assert "infer" in _seccion(rep, "`inferencia` sin premisas")
+
+
+def test_inferencia_con_premisas_pasa(toy_vault, capsys):
+    mk_note(cfg.PAPERS, "2020Fuente", {"tags": ["paper"], "bibcode": "2020Fuente"})
+    mk_note(cfg.CONCEPTS / "methods", "infer2", {"tags": ["concept"], "name": "infer2"},
+            "El período es de 34 d (inferencia de [[2020Fuente]]).\n")
+    link_from_index(toy_vault, "infer2", "2020Fuente")
+    _, rep = run_lint_reporte(capsys)
+    assert "infer2" not in _seccion(rep, "`inferencia` sin premisas")
+
+
+def test_la_palabra_inferencia_en_prosa_no_es_una_marca(toy_vault, capsys):
+    """El falso positivo obvio: la palabra usada como sustantivo común. La marca es la que va
+    **entre paréntesis** al cierre de una afirmación; «la inferencia bayesiana permite…» no lo es."""
+    mk_note(cfg.CONCEPTS / "methods", "infer3", {"tags": ["concept"], "name": "infer3"},
+            "La inferencia bayesiana permite estimar el período sin asumir una forma.\n")
+    link_from_index(toy_vault, "infer3")
+    _, rep = run_lint_reporte(capsys)
+    assert "infer3" not in _seccion(rep, "`inferencia` sin premisas")
+
+
+def test_prot_documentado_ya_no_acepta_inferencia_pelada(toy_vault, capsys):
+    """Regresión dirigida sobre `PROT_CITE`: aceptaba la palabra suelta como respaldo del P_rot, así
+    que una ficha podía declarar un período «documentado» sin una sola fuente."""
+    assert "inferencia" not in lint.PROT_CITE.pattern or "\\[\\[" in lint.PROT_CITE.pattern
+    assert not lint.prot_documentado("El P_rot es 34 d (inferencia).")
+    assert lint.prot_documentado("El P_rot es 34 d (inferencia de [[2020Fuente]]).")
+    assert lint.prot_documentado("El P_rot es 34 d [[2020Fuente]].")
+
+
+# ── Tanda 8 · issue 8.4 (D-37 + D-21) ─────────────────────────────────────────────────────────
+
+def test_status_de_hipotesis_fuera_del_vocabulario_bloquea(toy_vault, capsys):
+    """D-37. `status` es la única cosa que un consumidor lee para saber en qué quedó una hipótesis.
+    En prosa libre no dice nada: el caso medido en la instancia real era
+    `supuesto operativo con caveat conocido`. Mismo patrón que `role` (#73)."""
+    mk_note(cfg.CONCEPTS / "hypotheses", "hip1",
+            {"tags": ["concept"], "name": "hip1", "status": "supuesto operativo con caveat"})
+    link_from_index(toy_vault, "hip1")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 1 and "hip1" in _seccion(rep, "status")
+
+
+def test_status_del_vocabulario_pasa(toy_vault, capsys):
+    for i, st in enumerate(("abierta", "sostenida", "disputada", "refutada")):
+        mk_note(cfg.CONCEPTS / "hypotheses", f"ok{i}",
+                {"tags": ["concept"], "name": f"ok{i}", "status": st})
+    link_from_index(toy_vault, *[f"ok{i}" for i in range(4)])
+    _, rep = run_lint_reporte(capsys)
+    assert not any(f"ok{i}" in _seccion(rep, "status") for i in range(4))
+
+
+def test_bearing_en_una_nota_de_paper_es_schema_viejo(toy_vault, capsys):
+    """D-21. La **postura** de un paper respecto de una tesis no es propiedad del paper: depende de
+    la tesis, y un paper puede tocar varias. Vive en la tabla de evidencia de la hipótesis. Dejarlo
+    en el paper obligaba a elegir una sola postura para todas."""
+    mk_note(cfg.PAPERS, "2020Bear", {"tags": ["paper"], "bibcode": "2020Bear",
+                                     "thesis_links": ["hip"], "bearing": "supports"})
+    link_from_index(toy_vault, "2020Bear")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 1 and "2020Bear" in _seccion(rep, "bearing")
+
+
+# ── Tanda 8 · issue 8.6 (D-56 + D-23 + D-32) ──────────────────────────────────────────────────
+
+def test_data_local_no_bloquea_ni_toca_disco(toy_vault, capsys, monkeypatch):
+    """D-56. `data_local` apunta a datos de la máquina del usuario: **no** es verificable desde otro
+    clon, así que validar su existencia produciría un hallazgo falso en cada máquina ajena."""
+    write_gt(toy_vault, [])
+    mk_note(cfg.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test", "slug": "test_star",
+                                     "data_local": "/no/existe/en/ningun/lado",
+                                     "planets": [], "activity_indicators_expected": ["S-index"],
+                                     "P_rot_days": None},
+            "P_rot 34 d [[2020X]].\n")
+    link_from_index(toy_vault, "test_star")
+    rc, rep = run_lint_reporte(capsys)
+    assert "data_local" not in _seccion(rep, "⛔"), "no puede bloquear"
+
+
+def test_paper_sin_ningun_destino_bloquea(toy_vault, capsys):
+    """D-23. Un paper sin `stars`, sin `thesis_links` y sin `methods` no pertenece a nada: no
+    aparece en ningún roll-up y no lo alcanza ninguna síntesis. Hoy sólo caería como huérfano, y ni
+    eso si alguien lo linkea — por eso se siembra CON link entrante."""
+    mk_note(cfg.PAPERS, "2020Nada", {"tags": ["paper"], "bibcode": "2020Nada",
+                                     "stars": [], "thesis_links": [], "methods": []})
+    link_from_index(toy_vault, "2020Nada")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 1 and "2020Nada" in _seccion(rep, "sin destino")
+
+
+# ── D-49 · lente desincronizada, por ficha y offline ─────────────────────────
+
+def _registro_con_lente(slug: str, lente, bibcodes=("2020A",)):
+    """Registro versionado con UNA búsqueda. `lente=None` simula el registro pre-1.10.3 (la corrida
+    no la guardó): el caso adversario del cero inventado."""
+    b = {"fecha": "2026-01-01", "query": "q", "rows": 10, "n_total": len(bibcodes),
+         "n_core": len(bibcodes), "n_candidates": 0, "bibcodes": list(bibcodes)}
+    if lente is not None:
+        b["lente"] = lente
+    cfg.save_registro(slug, {"slug": slug, "busquedas": [b]})
+
+
+def _paper_de_la_estrella(stem, *, titulo, abstract, relevance="high", keywords=()):
+    return mk_note(cfg.PAPERS, stem,
+                   {"tags": ["paper"], "bibcode": stem, "title": titulo,
+                    "stars": ["Estrella Test"], "keywords": list(keywords),
+                    "relevance": relevance, "methods": []},
+                   f"# {titulo}\n\n## Abstract\n{abstract}\n")
+
+
+LENTE_VIEJA = {"facets": {"actividad": "activity|starspot", "rv": "radial velocity"},
+               "require": [], "min_facets": 1, "noise_doctypes": ["catalog", "proposal"]}
+
+
+def test_lente_igual_calla(toy_vault, capsys):
+    """El caso NORMAL: la lente del registro es la vigente → ni hallazgo ni costo (el diff no corre).
+    Es lo que hace viable el chequeo: cuando habla, hay algo real.  @inv INV-58"""
+    _registro_con_lente("test_star", LENTE_VIEJA)
+    _paper_de_la_estrella("2020A", titulo="Starspot evolution", abstract="activity")
+    link_from_index(toy_vault, "2020A")
+    rc, rep = run_lint_reporte(capsys)
+    assert "Lente desincronizada" in rep, "la categoría tiene que existir en el reporte"
+    assert _seccion(rep, "Lente desincronizada").strip() == "", "lente igual: sin hallazgos"
+
+
+def test_lente_cambiada_reporta_diff_por_ficha(toy_vault, capsys):
+    """D-49. Se saca la faceta `actividad` de la lente vigente → el paper que sólo matcheaba por
+    ella deja de ser core, y el hallazgo NOMBRA su stem (contar no es accionable).  @inv INV-58"""
+    obj = dict(cfg.load_objective())
+    obj["relevance"] = {"facets": {"rv": "radial velocity"}, "noise_doctypes": ["catalog", "proposal"]}
+    write_yaml(cfg.OBJECTIVE_YAML, obj)
+    _registro_con_lente("test_star", LENTE_VIEJA, bibcodes=("2020A", "2021B"))
+    _paper_de_la_estrella("2020A", titulo="Starspot evolution", abstract="activity everywhere")
+    _paper_de_la_estrella("2021B", titulo="Radial velocity survey", abstract="radial velocity")
+    link_from_index(toy_vault, "2020A", "2021B")
+    rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "Lente desincronizada")
+    assert "faceta `actividad` eliminada" in sec, sec
+    assert "2020A" in sec and "1 saldrían" in sec.replace("−", ""), sec
+    assert "2021B" not in sec, "el que sigue matcheando `rv` no se mueve"
+    assert rc == 0, "es backlog: no bloquea"
+
+
+def test_registro_sin_lente_no_evaluado(toy_vault, capsys):
+    """Adversario del cero inventado (D-43): sin `lente` guardada no hay contra qué comparar. El
+    hallazgo lo DICE; callarlo dejaría la ficha leyéndose como clasificada con la regla vigente."""
+    _registro_con_lente("test_star", None)
+    _paper_de_la_estrella("2020A", titulo="Starspot evolution", abstract="activity")
+    link_from_index(toy_vault, "2020A")
+    rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "Lente desincronizada")
+    assert "no evaluado" in sec and "test_star" in sec, sec
+
+
+def test_solo_cambian_los_doctypes_de_ruido_se_declara_no_evaluable(toy_vault, capsys):
+    """La nota de paper no guarda `doctype`: un cambio que sólo mueve `noise_doctypes` es real y el
+    diff offline no lo puede ver. Se declara — devolver `+0/−0` se leería como 'no movió nada'."""
+    obj = dict(cfg.load_objective())
+    obj["relevance"] = {"facets": {"actividad": "activity|starspot", "rv": "radial velocity"},
+                        "noise_doctypes": ["catalog"]}
+    write_yaml(cfg.OBJECTIVE_YAML, obj)
+    _registro_con_lente("test_star", LENTE_VIEJA)
+    _paper_de_la_estrella("2020A", titulo="Starspot evolution", abstract="activity")
+    link_from_index(toy_vault, "2020A")
+    rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "Lente desincronizada")
+    assert "no lo puede evaluar" in sec and "doctype" in sec, sec
+    assert "entrarían" not in sec, "no puede afirmar un delta que no midió"
+
+
+# ── D-50 · fuga por auto-referencia + `downstream: []` ───────────────────────
+
+def _con_downstream(nombres):
+    obj = dict(cfg.load_objective())
+    obj["downstream"] = nombres
+    write_yaml(cfg.OBJECTIVE_YAML, obj)
+
+
+def _concepto_con_prosa(prosa: str, stem="conc"):
+    return mk_note(cfg.CONCEPTS / "methods", stem,
+                   {"tags": ["concept"], "name": stem, "confidence": "medium"},
+                   f"# {stem}\n\n## Síntesis\n{prosa}\n")
+
+
+def test_autoreferencia_detectada(toy_vault, capsys):
+    """D-50, los dos casos reales medidos: el nombre propio del consumidor en posición de consumo
+    (`downstream: [ICA]`) y el marcador genérico, que no necesita declarar nada."""
+    _con_downstream(["ICA"])
+    _concepto_con_prosa("El valor lo usan los scripts de ICA para fijar el corte.", "conc_nombre")
+    _concepto_con_prosa("Supuesto de trabajo del pipeline: la señal es aditiva.", "conc_generico")
+    link_from_index(toy_vault, "conc_nombre", "conc_generico")
+    rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "Fuga de implementación")
+    assert "conc_nombre" in sec and "ICA" in sec, sec
+    assert "conc_generico" in sec and "supuesto de trabajo" in sec.lower(), sec
+    assert rc == 0, "es WARN: no bloquea"
+
+
+def test_downstream_vacio_apagado(toy_vault, capsys):
+    """Sin `downstream` declarado esa mitad queda apagada y **no** hay WARN de ausencia: declarar a
+    quién le sirve la bóveda es opcional por diseño (a diferencia de `concept_areas`)."""
+    _concepto_con_prosa("El valor lo usan los scripts de ICA para fijar el corte.", "conc_nombre")
+    link_from_index(toy_vault, "conc_nombre")
+    rc, rep = run_lint_reporte(capsys)
+    assert "conc_nombre" not in _seccion(rep, "Fuga de implementación")
+    assert "downstream" not in rep, "la ausencia no se reporta"
+
+
+def test_nombre_declarado_en_uso_legitimo_no_marca(toy_vault, capsys):
+    """El nombre pelado NO alcanza: en esta bóveda `ICA` es además un método real (está en
+    `relevance.facets`). Marcar cada mención volvería la categoría un rojo permanente — y un rojo
+    permanente se deja de mirar. Lo que delata la fuga es el nombre en posición de CONSUMIDOR."""
+    _con_downstream(["ICA"])
+    _concepto_con_prosa("ICA es una separación ciega de fuentes [[2000Hyvarinen]]; aplicando ICA "
+                        "a las CCF se recuperan las componentes.", "conc_metodo")
+    link_from_index(toy_vault, "conc_metodo")
+    rc, rep = run_lint_reporte(capsys)
+    assert "conc_metodo" not in _seccion(rep, "Fuga de implementación")
+
+
+def test_blockquote_sigue_exento(toy_vault, capsys):
+    """Regresión: el blockquote meta (frontera/alcance/disclaimer de capa-LLM) puede NOMBRAR la
+    frontera sin violarla. Si el scan lo mirara, cada cabecera estampada sería un hallazgo."""
+    _con_downstream(["ICA"])
+    _concepto_con_prosa("> Alcance: nada de esto describe los scripts de ICA ni su pipeline.",
+                        "conc_bq")
+    link_from_index(toy_vault, "conc_bq")
+    rc, rep = run_lint_reporte(capsys)
+    assert "conc_bq" not in _seccion(rep, "Fuga de implementación")
+
+
+# ── D-34 · el alcance declarado de una hipótesis, y cómo queda corto ─────────
+
+def _hipotesis(stem, cuerpo, status="abierta"):
+    return mk_note(cfg.CONCEPTS / "hypotheses", stem,
+                   {"tags": ["hypothesis"], "name": stem, "status": status}, cuerpo)
+
+
+def _fulltexts(slug, n):
+    d = cfg.FULLTEXT / slug
+    d.mkdir(parents=True, exist_ok=True)
+    for i in range(n):
+        (d / f"20{i:02d}Paper{i}.txt").write_text("texto", encoding="utf-8")
+
+
+def test_alcance_sin_declarar_marca(toy_vault, capsys):
+    """D-34. Sin alcance escrito, un veredicto negativo se lee como UNIVERSAL: "no existe evidencia"
+    en vez de "no hay evidencia en estos 190 papers". Es *afirmar de más* aplicado a la conclusión."""
+    _hipotesis("hip_pelada", "# hip\n\nEl corpus no dice nada [[2020X]].\n")
+    mk_note(cfg.PAPERS, "2020X", {"tags": ["paper"], "bibcode": "2020X"})
+    (cfg.FULLTEXT / "test_star").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "test_star" / "2020X.txt").write_text(
+        "El corpus no dice nada sobre eso. " * 20, encoding="utf-8")
+    link_from_index(toy_vault, "hip_pelada", "2020X")
+    rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "Alcance de hipótesis")
+    assert "hip_pelada" in sec and "universal" in sec, sec
+    # backlog: la nota no es inválida, le falta una declaración. Se comprueba mirando el reporte,
+    # no sólo el rc — la nota mínima dispara otros backlogs (cabecera, sin verificar) y un rc==0
+    # obligaría a sembrarlos todos, que es tuning de fixture, no la propiedad que interesa.
+    assert not any(l.startswith("## ⛔") and "Alcance" in l for l in rep.split("\n"))
+
+
+def test_alcance_quedo_corto_marca(toy_vault, capsys):
+    """El alcance CRECE: se declaró sobre 2 papers y hoy esos slugs tienen 5. El veredicto se testeó
+    contra un universo que ya no es el vigente — misma familia de staleness que los pares."""
+    _fulltexts("test_star", 5)
+    _hipotesis("hip_corta",
+               "# hip\n\n> Alcance 2026-01-01 · estrellas: [test_star] · 2 papers · 1 con hits\n\n"
+               "Sostiene [[2020X]].\n")
+    link_from_index(toy_vault, "hip_corta")
+    rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "Alcance de hipótesis")
+    assert "hip_corta" in sec and "+3" in sec and "2026-01-01" in sec, sec
+
+
+def test_alcance_al_dia_calla(toy_vault, capsys):
+    """El caso normal no puede ser ruido: si el universo no creció, la hipótesis no aparece."""
+    _fulltexts("test_star", 2)
+    _hipotesis("hip_ok",
+               "# hip\n\n> Alcance 2026-01-01 · estrellas: [test_star] · 2 papers · 1 con hits\n\n"
+               "Sostiene [[2020X]].\n")
+    link_from_index(toy_vault, "hip_ok")
+    rc, rep = run_lint_reporte(capsys)
+    assert "hip_ok" not in _seccion(rep, "Alcance de hipótesis")
+
+
+def test_alcance_con_slug_inexistente_lo_nombra(toy_vault, capsys):
+    """No se puede contar lo que no existe: se DICE cuál falta. Contar sobre un universo recortado
+    en silencio daría "quedó corto" al revés — el alcance se vería sobrado."""
+    _fulltexts("test_star", 5)
+    _hipotesis("hip_typo",
+               "# hip\n\n> Alcance 2026-01-01 · estrellas: [test_star, tets_star] · 2 papers\n\n"
+               "Sostiene [[2020X]].\n")
+    link_from_index(toy_vault, "hip_typo")
+    rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "Alcance de hipótesis")
+    assert "tets_star" in sec and "typo" in sec, sec

@@ -1,7 +1,7 @@
 ---
 name: maintain
 description: Usar para MANTENER entidades ya ingestadas (estrellas y conceptos), no para crear nuevas. Cubre refrescar una estrella/concepto con papers nuevos ("actualizá GJ 581", "traé lo nuevo de tau Ceti"), borrar un paper/estrella/tema ("borrá el paper X", "sacá esta estrella"), renombrar un slug ("renombrá el slug de …"), re-clasificar tras cambiar relevance.facets ("cambié el objetivo, re-clasificá el corpus"), resolver el backlog del lint (P_rot sin documentar, drift PDF↔disco, cobertura, claims stale), y la pasada periódica de retracciones sobre toda la bóveda ("chequeá retracciones").
-version: 1.17.0
+version: 1.18.0
 ---
 
 # Maintain — mantenimiento de estrellas y conceptos ya ingestados
@@ -54,7 +54,11 @@ Progreso del refresh de <entidad>:
    juzgarlos por título+abstract (aceptado → `extra_core` + re-correr; descartado → `--drop` con
    motivo; dudoso → al usuario). Ver paso 2c del skill `ingest-star`.
 2. **Identificar lo nuevo:** `git status` sobre `vault/wiki/papers/` muestra los stubs recién creados. Leer
-   **sólo esos** fulltext y hacer su extracción (methods/bearing/thesis_links/P·K/indicadores).
+   **sólo esos** fulltext y hacer su extracción (methods/`role`/thesis_links/P·K/indicadores).
+   ⚠ **`bearing` NO va en la nota del paper** (D-21): la postura respecto de una tesis depende de la
+   tesis —un paper puede tocar varias— y vive en la **tabla de evidencia de la hipótesis**, con cita
+   textual, donde `verify-citations` la puede chequear. En el paper es un veredicto sin evidencia y
+   el lint lo **bloquea** como schema viejo (migrador: `make_notes.py --migrate-bearing`).
 2b. **Contraste con lo que ya estaba (#72):** el `## Inventario por eje` de la nota es **lo que
    evita re-derivar la síntesis desde cero** — dice qué papers sostienen cada eje en disputa, con qué
    método y qué baseline. Para cada paper nuevo: si toca un eje ya inventariado, **agregar su fila**;
@@ -93,7 +97,9 @@ Progreso del refresh de <entidad>:
    `vault/config/registro/<slug>.yaml` (registro de búsqueda + decisiones de triage del sujeto).
 3. **Reparar los colgados:** quitar/re-apuntar cada `[[wikilink]]`, `thesis_links`,
    `disputes[].posiciones[].ref` y
-   celda de matriz que apuntaba al borrado. (La tabla `## Papers` de las fichas es Dataview → se
+   celda de matriz que apuntaba al borrado. (⚠ La tabla `## Papers` **NO** es Dataview: es una tabla **estampada** (D-10/D-11), así que la
+   fila del paper borrado queda y produce un **wikilink roto** —categoría bloqueante—. Re-estampar
+   con `python scripts/make_notes.py <slug>` en cada ficha afectada. Lo que sí se
    actualiza sola.) Sacar la estrella de la matriz método×estrella.
 4. **Hacer durable el borrado de un paper** (si no, el próximo refresh lo resucita: `make_notes`
    re-escribe el stub de **todo** registro `relevant` sin nota en disco, y los fetchers re-bajan el
@@ -156,6 +162,22 @@ martes cualquiera no frena nada útil; el gate es el cierre de la operación que
 > (la ficha/concepto que la motivó, `index.md`, el hub si es un radio) o borrarla si sobra. Si
 > aparece en una pasada periódica, resolvela en el momento.
 
+- **Core sin extraer / extraído pero no sintetizado (D-15) — el backlog del ingest a medias.**
+  Terminar de ingestar los papers pendientes usa **los mismos pasos 1→4 del ingest**; lo único
+  distinto es la plomería de entrada, y acá **ya no hay ninguna**: la fuente está bajada, con
+  fulltext y stub. Por eso **no hace falta una operación nueva** — es este sub-modo.
+
+  | Qué falta | Dónde se resuelve |
+  |---|---|
+  | la fuente **no está** en la bóveda (hay que bajarla) | skill `append-knowledge` |
+  | la fuente **ya está**; falta extracción + síntesis | **acá** |
+
+  Procedimiento: leer el `.txt` (un subagente por paper, como en `ingest-star`), poblar `methods`/
+  `role`/`thesis_links`, contrastar contra el `## Inventario por eje` de la nota destino, sintetizar
+  **en su lugar** (no una sección nueva), y re-estampar la tabla `## Papers` con
+  `python scripts/make_notes.py <slug>` para que el estado de cada paper deje de mentir. Si un paper
+  legítimamente no se inlinea, declarar `no_sintetizado: <motivo>` en su nota — con motivo, como
+  todo descarte.
 - **Triage pendiente** (#55 — candidatos del chaining que nadie juzgó) → `python scripts/triage.py
   <slug>` y decidir cada uno por título+abstract: pertinente → `extra_core` en `stars.yaml` +
   re-correr la cadena; ruido → `--drop … --reason`; dudoso → al usuario. Es el paso con más juicio
@@ -201,8 +223,8 @@ martes cualquiera no frena nada útil; el gate es el cierre de la operación que
   donde el link no existía). Si el hallazgo dice **"cabecera fuera del contrato"** (#48), el backfill
   **no** la va a tocar: normalizá primero esa línea a la forma canónica (`· … · ADS: \`<bibcode>\``, o
   `· … fuente off-ADS · \`<citekey>\``) y recién ahí re-corré el backfill.
-- **Juicio de triage todavía en `build/`** (bóveda ingestada antes de 1.9.0, migración one-shot: el
-  lint **no** la surface) → consolidarlo en el
+- **Juicio de triage todavía en `build/`** (bóveda ingestada antes de 1.9.0, migración one-shot;
+  el lint **sí** lo surface y **bloquea** —`legacy_triage`, ver el bullet de arriba—) → consolidarlo en el
   registro versionado, **sin esperar al próximo `--drop`**:
   `python scripts/triage.py <slug> --migrate` (idempotente; ante el mismo bibcode gana lo ya
   versionado). Después commitear `vault/config/registro/<slug>.yaml`: recién ahí el juicio viaja.
@@ -234,7 +256,7 @@ martes cualquiera no frena nada útil; el gate es el cierre de la operación que
   (`## Verificación de citas (AAAA-MM-DD)`): sin fecha el chequeo no puede saber si sigue vigente.
 - **Corpus truncado** (y su hermano `truncated_glyph`) → a la query directa le faltó cola. El
   orquestador **no** acepta `--rows`: se corre la pieza suelta y después la cadena —
-  `python scripts/query_ads.py <slug> --rows 5000` y luego `python scripts/ingest_star.py <slug>`. Mientras tanto, la ficha afirma sobre un universo recortado.
+  `python scripts/query_ads.py <slug> --rows 2000  # ⚠ el cliente NO pagina: 2000 es ≈ el máximo de una request ADS, pedir más no trae más` y luego `python scripts/ingest_star.py <slug>`. Mientras tanto, la ficha afirma sobre un universo recortado.
   Leer el `+ N de la segunda pasada por fecha` del mensaje: lo que falta es el **medio** del
   universo, no la cola reciente (#79 — esa la cubre la segunda pasada al truncar). Un corpus viejo
   (ads.json anterior a 1.12.0) no trae el dato y el mensaje no lo afirma: ahí falta también la cola.
@@ -248,7 +270,27 @@ martes cualquiera no frena nada útil; el gate es el cierre de la operación que
 - **Claims stale** → re-verificar contra la fuente los que quedaron dudosos.
 Cierre: lint (idealmente bajando el conteo de backlog) → `log` → commit → preguntar push.
 
-## F. Pasada periódica de retracciones (bóveda completa)
+## F. Pasada periódica de RED (bóveda completa) — `sweep_external.py`
+
+⚠ **El comando es `python scripts/sweep_external.py`**, no `check_retractions.py` solo. Cinco cosas
+caducan después de un ingest y la pasada unificada existe justamente porque, repartidas, se corren
+cuatro y la quinta nunca:
+
+| Detector | Qué caza | Estado |
+|---|---|---|
+| retracciones | fuente retractada (Crossref) | ✅ |
+| correcciones | erratum / corrigendum / EoC | ✅ |
+| versiones | el preprint salió publicado → otro bibcode del mismo trabajo (D-19) | ✅ |
+| ground-truth | NEA cambió valores entre releases | ✅ |
+| snapshot web | la URL citada cambió | ⛔ **no implementado**: levanta, se declara *no evaluado* y la pasada sale **2** a propósito |
+
+⛔ **Reporta, no aplica sola**: muestra el diff y pregunta. Un snapshot que se actualiza solo cambia
+valores **bajo los pies de la prosa que ya los citó**. El renombre preprint→publicado **nunca** es
+automático (reescribe wikilinks de toda la bóveda): se propone el comando.
+
+La caducidad queda **versionada** en `vault/config/registro/_red.yaml` — cuándo se miró afuera es
+información de la bóveda, no de la máquina. Un detector que no pudo correr **no** entra en `cubrio`.
+
 La cadena de ingest chequea retracciones **sólo sobre los papers del slug en curso**
 (`check_retractions.py --slug`); un paper puede retractarse **años después** de ingestado, así que
 el barrido completo es tarea periódica (p. ej. mensual, o al cerrar una tanda de ingests):

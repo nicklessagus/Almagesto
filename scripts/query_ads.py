@@ -480,28 +480,7 @@ def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
                 " (esta query NO deja marca en ads.json: el corte no queda registrado)"
         cfg.print_seguro(f"  ⚠ truncado: ADS reporta {num_found} resultados y sólo se trajeron {rows} "
               f"(top por citas) — subí --rows para cubrir todo{marca}")
-    out = []
-    for d in docs:
-        facets, relevant = classify(d)
-        why = None if relevant else exclusion_reason(facets, d.get("doctype", ""))
-        out.append({
-            "bibcode": d.get("bibcode"),
-            "title": (d.get("title") or [""])[0],
-            "authors": d.get("author", []),
-            "year": d.get("year"),
-            "pubdate": d.get("pubdate"),
-            "abstract": d.get("abstract", ""),
-            "arxiv_id": extract_arxiv(d.get("identifier", [])),
-            "doi": (d.get("doi") or [None])[0],
-            "doctype": d.get("doctype"),
-            "bibstem": (d.get("bibstem") or [None])[0],
-            "citation_count": d.get("citation_count", 0),
-            "keyword": d.get("keyword", []),
-            "facets": facets,
-            "relevant": relevant,
-            "why_excluded": why,   # motivo real de exclusión (None si core) → apéndice "Excluidos"
-        })
-    return out
+    return [to_record(d) for d in docs]
 
 
 def recent_pass(q: str, rows: int, known: set[str]) -> list[dict]:
@@ -707,6 +686,35 @@ def sweep_star(slug: str, rows: int) -> int:
 
 # ── dry-run de re-clasificación (#40) ────────────────────────────────────────
 
+def to_record(d: dict) -> dict:
+    """Un doc crudo de ADS → el **registro canónico** que persiste `ads.json`.
+
+    Esta función **define** el schema que `openalex.to_record` y `search_arxiv.to_record` espejan,
+    y por eso es una función y no un bloque adentro de `query_ads()`: mientras vivió inline no se
+    podía llamar sin red, así que la promesa de "mismo schema" era prosa en tres docstrings — y
+    dos de los tres backends terminaron sin las claves del clasificador. La paridad se prueba
+    parametrizada en `tests/test_backends_schema.py`."""
+    facets, relevant = classify(d)
+    return {
+        "bibcode": d.get("bibcode"),
+        "title": (d.get("title") or [""])[0],
+        "authors": d.get("author", []),
+        "year": d.get("year"),
+        "pubdate": d.get("pubdate"),
+        "abstract": d.get("abstract", ""),
+        "arxiv_id": extract_arxiv(d.get("identifier", [])),
+        "doi": (d.get("doi") or [None])[0],
+        "doctype": d.get("doctype"),
+        "bibstem": (d.get("bibstem") or [None])[0],
+        "citation_count": d.get("citation_count", 0),
+        "keyword": d.get("keyword", []),
+        "facets": facets,
+        "relevant": relevant,
+        # motivo real de exclusión (None si core) → apéndice "Excluidos por el filtro"
+        "why_excluded": None if relevant else exclusion_reason(facets, d.get("doctype", "")),
+    }
+
+
 def classify_theme(rec: dict, meta: dict) -> tuple[list[str], bool, str | None]:
     """Relevancia de un paper para un **tema de método** (D-26 / INV-88). Devuelve
     `(facets_globales, core, motivo)`; `motivo` es `None` sii es core.
@@ -851,6 +859,205 @@ def note_state(bibcode: str) -> str:
         return "sin_nota"
     fm = cfg.split_fm(dest.read_text(encoding="utf-8"))
     return "extraida" if cfg.as_list(fm.get("methods")) else "stub"
+
+
+# ── D-49: la lente desincronizada, por ficha y OFFLINE ────────────────────────────────────────────
+# `busquedas[].lente` guarda la regla con la que se clasificó CADA corrida (#64). Cambiar una regex
+# de `relevance.facets` mueve el corte core/no-core **sin mover `almagesto_version`**: el corpus ya
+# ingestado queda clasificado con una lente que ya no es la vigente, y nada lo dice. `reclass_diff`
+# ya medía ese delta, pero **necesita `build/<slug>/ads.json`** — scratch gitignored: en otra
+# máquina, post-clone o después de limpiar, el chequeo no puede correr justo cuando más falta.
+# De ahí el "offline": el insumo son las NOTAS, que sí viajan (título + abstract + `keywords`, D-17).
+#
+# ⚠ Alcance declarado — este diff evalúa la mitad TEXTUAL de la lente (`facets`/`require`/
+# `min_facets`) y **no** `noise_doctypes`: la nota de paper no guarda `doctype`. No es una omisión
+# que se pueda tapar con un default —"asumir no-ruido" inventaría entradas al core— así que cuando
+# lo único que cambió son los doctypes de ruido el diff se declara **no evaluable** en vez de
+# devolver un cero (D-43). En los demás casos el término del doctype es el MISMO de los dos lados
+# de la comparación y se cancela.
+# Dos lentes con nombres distintos porque son dos hechos distintos, y confundirlos es un mapa que
+# atribuye mal: `lens_used` es la que ESTE proceso compiló y con la que de verdad clasificó (lo que
+# el registro tiene que guardar: si el YAML se editó a mitad de corrida, guardar la de disco haría
+# que el registro atribuyera a la corrida un filtro que no usó); `lens_current` es la VIGENTE en
+# disco, releída, que es contra la que el lint compara. Coinciden salvo edición concurrente, y esa
+# paridad la fija un test — no la prosa (red #3: un doble con distinto contrato que el real esconde
+# el bug en la diferencia).
+def lens_shape(rel: dict) -> dict:
+    """Un `relevance:` → la forma canónica de `busquedas[].lente`. Punto único: si la corrida
+    guardara una forma y el diff leyera otra, toda lente se vería 'cambiada' (o ninguna)."""
+    facets = {name: str(pat) for name, pat in cfg.as_map(rel.get("facets")).items()}
+    try:
+        require, min_facets = combination_rule(rel, facets)
+    except RuntimeError:
+        # `require` nombrando una faceta inexistente aborta la CLASIFICACIÓN (con razón: filtraría
+        # todo a no-core en silencio), pero acá sólo se está describiendo la regla para compararla.
+        # Reventar dejaría al lint sin la categoría entera por una config que él mismo va a reportar.
+        require, min_facets = cfg.as_list(rel.get("require")), (rel.get("min_facets") or 1)
+    return {"facets": facets,
+            "require": list(require),
+            "min_facets": min_facets,
+            "noise_doctypes": sorted(_listify_curado(rel.get("noise_doctypes"),
+                                                     "relevance.noise_doctypes"))}
+
+
+def lens_used() -> dict:
+    """La lente COMPILADA que este proceso usó para clasificar (las constantes de módulo). Es lo
+    que `main()` persiste: el registro dice con qué filtro se recortó ESA corrida."""
+    return {"facets": {name: pat.pattern for name, pat in FACET_PATTERNS.items()},
+            "require": list(REQUIRE_FACETS),
+            "min_facets": MIN_FACETS,
+            "noise_doctypes": sorted(NOISE_DOCTYPES)}
+
+
+def lens_current() -> dict:
+    """La lente VIGENTE en `objective.yaml`, **releída en cada llamada**. El lint corre en un
+    proceso que importó `query_ads` antes de saber qué bóveda va a auditar: comparar contra las
+    constantes del import haría que toda lente se viera igual a sí misma — el chequeo entero
+    devolvería un cero que nadie midió."""
+    return lens_shape(cfg.as_map(cfg.load_objective().get("relevance")))
+
+
+def lens_stored(slug: str) -> dict | None:
+    """La lente de la ÚLTIMA corrida del sujeto, o `None` si esa corrida no la guardó.
+
+    Se mira la última y sólo la última: es la que dejó los `relevance:` que hay hoy en las notas.
+    Heredar la lente de una corrida anterior le atribuiría a esta un filtro que no usó — un mapa
+    que atribuye mal es peor que uno vacío. `None` ≠ `{}`: la ausencia es *no evaluado*, no
+    'lente sin facetas'."""
+    bs = cfg.load_busquedas(slug)
+    lente = bs[-1].get("lente") if bs else None
+    return lente if isinstance(lente, dict) else None
+
+
+def lens_delta(stored: dict, current: dict) -> list[str]:
+    """Qué cambió entre dos lentes, en prosa corta y determinista. Lista vacía = son la misma regla.
+
+    `require` se compara como CONJUNTO (reordenarlo no cambia el corte: todas son obligatorias) y
+    `facets` textualmente por regex (cambiar un patrón sí lo mueve). Devuelve la lista, no un bool,
+    porque el reporte tiene que decir QUÉ cambió: 'la lente cambió' no es accionable."""
+    delta = []
+    fa, fb = cfg.as_map(stored.get("facets")), cfg.as_map(current.get("facets"))
+    for name in sorted(set(fa) | set(fb)):
+        if name not in fb:
+            delta.append(f"faceta `{name}` eliminada")
+        elif name not in fa:
+            delta.append(f"faceta `{name}` nueva")
+        elif fa[name] != fb[name]:
+            delta.append(f"faceta `{name}`: regex cambiada")
+    ra, rb = set(cfg.as_list(stored.get("require"))), set(cfg.as_list(current.get("require")))
+    if ra != rb:
+        delta.append(f"require {sorted(ra) or '[]'} → {sorted(rb) or '[]'}")
+    ma, mb = stored.get("min_facets") or 1, current.get("min_facets") or 1
+    if ma != mb:
+        delta.append(f"min_facets {ma} → {mb}")
+    da, db = set(cfg.as_list(stored.get("noise_doctypes"))), set(cfg.as_list(current.get("noise_doctypes")))
+    if da != db:
+        delta.append(f"noise_doctypes {sorted(da)} → {sorted(db)}")
+    return delta
+
+
+def lens_textual_changed(delta: list[str]) -> bool:
+    """¿El delta toca la mitad que una nota PUEDE evaluar? Un cambio que sólo mueve
+    `noise_doctypes` es real pero invisible offline (la nota no guarda `doctype`)."""
+    return any(not d.startswith("noise_doctypes ") for d in delta)
+
+
+def lens_core_text(lens: dict, text: str) -> bool:
+    """¿`text` es core bajo `lens`, por la mitad TEXTUAL de la regla? Espeja la precedencia de
+    `exclusion_reason` (sin tópico → require → min_facets) salteando el doctype, que no está en la
+    nota. Compila las regex de la lente GUARDADA, que puede tener facetas que ya no existen."""
+    facets = []
+    for name, pat in cfg.as_map(lens.get("facets")).items():
+        try:
+            if re.search(pat, text, re.I):
+                facets.append(name)
+        except (re.error, TypeError):
+            continue          # regex inválida en un registro viejo: no clasifica, no revienta
+    if not facets:
+        return False
+    if any(t not in facets for t in cfg.as_list(lens.get("require"))):
+        return False
+    return len(facets) >= (lens.get("min_facets") or 1)
+
+
+def note_lens_text(fm: dict, body: str) -> str:
+    """El texto que la lente lee, reconstruido desde la NOTA — mismo insumo que `classify`:
+    título + abstract + keywords, en minúsculas. El abstract vive en el cuerpo (`## Abstract`),
+    no en el frontmatter, así que se recorta esa sección; `_(no disponible)_` es el marcador que
+    `write_paper_notes` deja cuando ADS no lo devolvió y no es texto del paper."""
+    m = re.search(r"^##\s+Abstract\s*$(.*?)(?=^##\s|\Z)", body, re.M | re.S)
+    abstract = (m.group(1).strip() if m else "")
+    if abstract == "_(no disponible)_":
+        abstract = ""
+    return " ".join(filter(None, [
+        " ".join(cfg.as_list(fm.get("title")) or ([fm["title"]] if fm.get("title") else [])),
+        abstract,
+        " ".join(str(k) for k in cfg.as_list(fm.get("keywords"))),
+    ])).lower()
+
+
+def notes_of_subject(slug: str) -> list:
+    """Las notas de paper del sujeto, leyendo el frontmatter con el MISMO parser que el tooling
+    (`split_fm`) y no por grep: `stars: [tau Cet]` en flow style y en bloque conviven en el mismo
+    corpus, y el matcheo textual confunde `GJ 71` con `GJ 710`. Estrella → `stars`;
+    tema → `thesis_links` (el concepto que `ingest_theme` siembra)."""
+    try:
+        name, _ = cfg.star_by_slug(slug)
+        campo = "stars"
+    except (KeyError, RuntimeError):
+        try:
+            _, tmeta = cfg.theme_by_slug(slug)
+        except (KeyError, RuntimeError):
+            return []
+        name, campo = tmeta.get("concept"), "thesis_links"
+    if not name:
+        return []
+    out = []
+    for f in sorted(cfg.PAPERS.glob("*.md")):
+        text = f.read_text(encoding="utf-8")
+        fm = cfg.split_fm(text)
+        if name in cfg.as_list(fm.get(campo)):
+            out.append((f.stem, fm, text))
+    return out
+
+
+def lens_diff_offline(slug: str) -> tuple[list[str], list[str], list[str]]:
+    """Delta de re-clasificación **sin `build/`**: `(entran, salen, sin_nota)`.
+
+    - `entran`: notas hoy `relevance: low` que la lente vigente haría core.
+    - `salen`:  notas hoy `relevance: high` que la lente vigente dejaría fuera — menos las de
+      `extra_core`, que son core por decisión del usuario y la regla no las toca (igual que el
+      `via: manual` de `classify_record`).
+    - `sin_nota`: bibcodes del universo acumulado del sujeto (`busquedas[].bibcodes`) que no tienen
+      nota en disco. Es el **techo declarado** del chequeo, no un descarte: sin `--all`, el no-core
+      no deja nota, así que `entran` sólo puede hablar de lo que alguien escribió. Publicarlo evita
+      leer un `entran: 0` como 'no entra nada'.
+
+    Se compara nota contra nota (`relevance` persistido vs lente vigente), no lente vieja contra
+    lente nueva: el `relevance` del frontmatter ES lo que la bóveda afirma hoy, y es lo que el
+    consumidor lee."""
+    # @inv INV-58
+    try:
+        _, meta = cfg.star_by_slug(slug)
+        extra = {str(e.get("bibcode") if isinstance(e, dict) else e)
+                 for e in _listify_curado(meta.get("extra_core"), "extra_core")}
+    except (KeyError, RuntimeError):
+        extra = set()
+    lens = lens_current()
+    entran, salen = [], []
+    con_nota = set()
+    for stem, fm, text in notes_of_subject(slug):
+        con_nota.add((fm.get("bibcode") or stem))
+        core_ahora = lens_core_text(lens, note_lens_text(fm, text))
+        era_core = (fm.get("relevance") == "high")
+        if core_ahora and not era_core:
+            entran.append(stem)
+        elif era_core and not core_ahora and (fm.get("bibcode") or stem) not in extra:
+            salen.append(stem)
+    universo: set = set()
+    for b in cfg.load_busquedas(slug):
+        universo.update(cfg.as_list(b.get("bibcodes")))
+    return sorted(entran), sorted(salen), sorted(universo - con_nota)
 
 
 def reclass_diff(slugs: list[str]) -> int:
@@ -1314,10 +1521,7 @@ def main() -> int:
         # es la versión del framework, NO la de la regla: cambiar una regex de `relevance.facets`
         # mueve el corte core/no-core sin mover la versión. Sin esto el registro dice sobre qué
         # universo se buscó pero no con qué filtro se recortó, que es la otra mitad de "reproducible".
-        "lente": {"facets": dict((_REL.get("facets") or {})),
-                  "require": list(REQUIRE_FACETS),
-                  "min_facets": MIN_FACETS,
-                  "noise_doctypes": sorted(NOISE_DOCTYPES)},
+        "lente": lens_used(),
     })
     cfg.print_seguro(f"  → {cfg.registro_path(args.slug)} (registro de búsqueda, versionado)")
     cfg.save_paso(args.slug, "query_ads", flags=_flags_usados(args))

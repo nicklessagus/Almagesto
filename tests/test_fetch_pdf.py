@@ -9,6 +9,7 @@ import pytest
 import requests as real_requests
 
 import fetch_pdf as fp
+import lib_config as cfg
 
 
 # ── candidatos desde el resolver ─────────────────────────────────────────────
@@ -443,3 +444,49 @@ def test_pdf_bajo_otro_slug_no_va_a_la_red(toy_vault, monkeypatch, capsys):
     copiado = toy_vault.PDFS / "test_star" / "2020aaa...1..1A.pdf"
     assert copiado.exists() and copiado.read_bytes() == b"%PDF-1.4 contenido"
     assert "ya estaba" in capsys.readouterr().out
+
+
+# ── --force es la vía de escape para un PDF truncado (auditoría P0) ─────────
+
+def test_force_no_reusa_la_copia_de_otro_slug(toy_vault, monkeypatch, capsys):
+    """P0. El bucle de reuso D-18 no consultaba `args.force`, a diferencia de su gemelo en
+    `fetch_arxiv`. `--force` es la ÚNICA vía documentada para reemplazar un PDF truncado o
+    congelado, y el reuso lo sobreescribía con la copia de otro slug —sin validar `%PDF`— y lo
+    sacaba de pendientes: la escotilla hacía lo contrario de lo que promete."""
+    (cfg.PDFS / "otro_slug").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "otro_slug" / "2020A.pdf").write_bytes(b"%PDF-1.4 copia de otro slug")
+    (cfg.PDFS / "test_star").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "test_star" / "2020A.pdf").write_bytes(b"%PDF-1.4 TRUNCADO")
+    build = cfg.ROOT / "build" / "test_star"
+    build.mkdir(parents=True, exist_ok=True)
+    (build / "ads.json").write_text(json.dumps({"slug": "test_star", "records": [
+        {"bibcode": "2020A", "relevant": True, "arxiv_id": None, "doi": "10.1/a",
+         "bibstem": "A&A", "title": "t", "year": 2020}]}), encoding="utf-8")
+
+    monkeypatch.setattr(cfg, "get_ads_token", lambda: "tok")
+    monkeypatch.setattr(fp, "esource_records", lambda bib, tok: [])
+    monkeypatch.setattr(fp.time, "sleep", lambda s: None)
+    monkeypatch.setattr(sys, "argv", ["fetch_pdf.py", "test_star", "--force"])
+    fp.main()
+    out = capsys.readouterr().out
+    assert "copiado" not in out, "con --force no se reusa: se re-intenta la bajada"
+    assert "1 sin PDF → resolver de ADS" in out, "el paper tiene que llegar a `todo`"
+    assert (cfg.PDFS / "test_star" / "2020A.pdf").read_bytes() == b"%PDF-1.4 TRUNCADO", \
+        "sin bajada exitosa el archivo viejo queda; lo que no puede es ser pisado por el de otro slug"
+
+
+def test_sin_force_sigue_reusando_entre_slugs(toy_vault, monkeypatch, capsys):
+    """Regresión de D-18: el reuso es la optimización que evita 33 bajadas idénticas."""
+    (cfg.PDFS / "otro_slug").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "otro_slug" / "2020A.pdf").write_bytes(b"%PDF-1.4 copia")
+    build = cfg.ROOT / "build" / "test_star"
+    build.mkdir(parents=True, exist_ok=True)
+    (build / "ads.json").write_text(json.dumps({"slug": "test_star", "records": [
+        {"bibcode": "2020A", "relevant": True, "arxiv_id": None, "doi": "10.1/a",
+         "bibstem": "A&A", "title": "t", "year": 2020}]}), encoding="utf-8")
+    monkeypatch.setattr(cfg, "get_ads_token", lambda: "tok")
+    monkeypatch.setattr(fp, "esource_records", lambda bib, tok: [])
+    monkeypatch.setattr(sys, "argv", ["fetch_pdf.py", "test_star"])
+    fp.main()
+    assert "copiado" in capsys.readouterr().out
+    assert (cfg.PDFS / "test_star" / "2020A.pdf").read_bytes() == b"%PDF-1.4 copia"

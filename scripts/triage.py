@@ -309,6 +309,11 @@ def main() -> int:
     ap.add_argument("--reason", default="",
                     help="motivo del descarte (obligatorio con --drop/--drop-source; queda en el "
                          "registro)")
+    ap.add_argument("--extraccion", choices=("todos", "subconjunto"),
+                    help="D-13/INV-83: declarar QUÉ SE LEYÓ de los core de este sujeto. `todos` = "
+                         "el default del contrato; `subconjunto` = se recortó, y entonces --reason "
+                         "es el criterio (obligatorio). Queda en `extraccion:` del registro "
+                         "versionado; sin esto el lint reporta *recorte de lectura sin declarar*")
     ap.add_argument("--migrate", action="store_true",
                     help="consolidar en el registro versionado las decisiones del "
                          "build/<slug>/triage.json viejo (bóvedas pre-1.9.0) y salir")
@@ -316,6 +321,24 @@ def main() -> int:
 
     if args.migrate:
         return migrate(args.slug)
+
+    # D-13/INV-83 — el canal de DECLARACIÓN del recorte de lectura. Vivía sólo como función de
+    # `lib_config` y **ningún script ni skill la llamaba**: el detector del lint existía y el
+    # hallazgo no tenía cómo cerrarse. Va acá porque `triage.py` ya es el CLI del juicio de curación
+    # (los dos carriles de descarte escriben en el mismo registro); leer 8 de 42 core es una
+    # decisión de curación más, y del mismo tipo: la que hay que poder auditar seis meses después.
+    if args.extraccion:
+        subconjunto = args.extraccion == "subconjunto"
+        if subconjunto and not args.reason:
+            ap.error("--extraccion subconjunto necesita --reason: el CRITERIO del recorte es la "
+                     "pieza que más se va a leer (qué se leyó y por qué), no un booleano")
+        criterio = args.reason or "todos los core del sujeto"
+        cfg.save_extraccion(args.slug, subconjunto=subconjunto, criterio=criterio)
+        cfg.print_seguro(
+            f"{args.slug}: extracción declarada — "
+            f"{'SUBCONJUNTO' if subconjunto else 'todos los core'} · {criterio}\n"
+            f"  → {cfg.registro_path(args.slug)}")
+        return 0
 
     if args.drop and args.drop_source:
         ap.error("--drop y --drop-source son los dos carriles de curación (candidato del chaining "

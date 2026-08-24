@@ -275,16 +275,36 @@ def parse_verif_table(text: str) -> list[Row] | None:
     filas = [ln.strip() for ln in seccion.split("\n") if ln.strip().startswith("|")]
     if not filas:
         return None
-    encabezado = filas[0].lower()
-    if not all(c in encabezado for c in _COLS_HASH):
+    cols = [c.strip().lower() for c in filas[0].strip("|").split("|")]
+    if not all(any(c in col for col in cols) for c in _COLS_HASH):
         return None                      # plantilla vieja: no hay dónde colgar los hashes
+
+    def _idx(*claves, default=None):
+        """Posición de la primera columna cuyo encabezado contiene alguna clave."""
+        for k in claves:
+            for j, col in enumerate(cols):
+                if k in col:
+                    return j
+        return default
+
+    # ⚠ Se lee por NOMBRE de columna, no por posición. La plantilla que publican `CLAUDE.md` y el
+    # skill `verify-citations` tiene OCHO columnas (con `Score` y `Evidencia`) y el parser leía las
+    # posiciones 4 y 5 — o sea, tomaba el Score como ancla y la Evidencia como hash, **en silencio**:
+    # el detector de plantilla vieja no lo agarra porque ese encabezado sí contiene "ancla" y "hash".
+    # Efecto medido: toda nota escrita según la documentación dejaba `lint.py --cierre` en rojo
+    # permanente, y el cierre de una operación es justamente lo que ese flag decide.
+    i_n, i_claim = _idx("#", default=0), _idx("afirmaci", default=1)
+    i_fuente, i_verd = _idx("fuente", default=2), _idx("veredicto", default=3)
+    i_ancla = _idx("ancla", default=4)
+    i_hash = _idx("hash fuente", "hash", default=5)
     out: list[Row] = []
     for ln in filas[1:]:
         if _SEP_ROW_RE.match(ln):
             continue
         celdas = [c.strip() for c in ln.strip("|").split("|")]
-        if len(celdas) < 6:
+        if len(celdas) <= max(i_n, i_claim, i_fuente, i_verd, i_ancla, i_hash):
             continue                     # fila malformada: la reporta el lint como par sin cubrir
-        bibs = _bibcodes(celdas[2]) or [celdas[2].strip("[]")]
-        out.append(Row(celdas[0], celdas[1], bibs[0], celdas[3], celdas[4], celdas[5]))
+        bibs = _bibcodes(celdas[i_fuente]) or [celdas[i_fuente].strip("[]")]
+        out.append(Row(celdas[i_n], celdas[i_claim], bibs[0], celdas[i_verd],
+                       celdas[i_ancla], celdas[i_hash]))
     return out

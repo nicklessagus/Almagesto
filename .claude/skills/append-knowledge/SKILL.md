@@ -1,7 +1,7 @@
 ---
 name: append-knowledge
 description: Usar cuando el usuario quiere plegar UNA fuente puntual (paper por bibcode, PDF local, URL) a una entidad YA existente de la wiki — ficha de estrella o concepto — sin re-correr el ingest completo ("agregale este paper a la ficha de tau Ceti", "sumá este PDF al concept de procesos gaussianos", "este bibcode va a GJ 581", "encontré un paper nuevo para el tema X, agregalo"). Plomería mínima + extracción enfocada + síntesis a la nota viva + cierre estándar. NO crea entidades (eso es ingest-star/ingest-theme) ni barre por query lo nuevo (eso es maintain/refrescar).
-version: 1.5.0
+version: 1.6.0
 ---
 
 # Append — plegar una fuente puntual a una ficha o concepto existente
@@ -47,7 +47,7 @@ Progreso del append de <fuente> → <destino>:
      implícito): si aparecen stubs extra, hacé su extracción (maintain A) o anotalos como backlog
      en `vault/STATUS.md` — no los dejes mudos. Dos compuertas que ese refresh puede disparar y
      conviene esperar: (a) la **guardia de expansión** (#37) **aborta** la cadena si el core se
-     multiplicó (×1.5 y más de 50 nuevos) — mirá el conteo antes de continuar con `--yes`, no lo
+     multiplicó (×1.5 y 50 o más nuevos) — mirá el conteo antes de continuar con `--yes`, no lo
      pases de taquito; (b) el chaining deja **candidatos sin juzgar** en `candidates`, que el lint
      surface como *Triage pendiente* (#55): resolvelos con `python scripts/triage.py <slug>` o dejá
      el conteo en el `log`, para no cerrar el append con juicio pendiente mudo.
@@ -69,11 +69,27 @@ Progreso del append de <fuente> → <destino>:
 
 3. **Extracción LLM enfocada en el eje del destino.** Leer SÓLO el fulltext nuevo
    (`vault/raw/fulltext/<slug>/<clave>.txt`; saltar afiliaciones como en `ingest-star`) y poblar la
-   nota del paper: `methods`, `bearing`, `role` (#73: `fundacional` introduce el método/mecanismo · `aplicacion` lo instancia en un caso · `arbitro` reanaliza y resuelve una tensión previa — sale de leer el paper, la regex del clasificador no puede inferirlo, y sin él contrastarlo contra otro no está definido), `thesis_links`/`stars`, y la sección "Extracción"
+   nota del paper: `methods`, `role` (#73: `fundacional` introduce el método/mecanismo · `aplicacion` lo instancia en un caso · `arbitro` reanaliza y resuelve una tensión previa — sale de leer el paper, la regex del clasificador no puede inferirlo, y sin él contrastarlo contra otro no está definido), `thesis_links`/`stars`, y la sección "Extracción"
    orientada a **lo que aporta a la entidad destino** (una señal RV, un mecanismo, una ecuación del
    método), no un resumen genérico.
 
-4. **Síntesis a la nota viva.** Plegar a la ficha/concept **sólo lo que cambia la lectura**.
+4. **Síntesis a la nota viva — INTEGRAR EN SU LUGAR (D-31).** Plegar a la ficha/concept **sólo lo
+   que cambia la lectura**, reescribiendo **los bloques afectados donde están**. Los dos extremos
+   están descartados:
+   - ⛔ **Sección nueva: no.** `## Resumen` + `## Actualización 2026-09` + `## Actualización 2026-11`
+     deja de ser un snapshot, y una contradicción queda **sentada al lado de lo viejo sin resolver**
+     — justo lo que la ficha existe para evitar.
+   - ⛔ **Re-validar todo: no.** Un paper que habla del `P_rot` no justifica re-verificar las 40
+     citas del inventario de señales.
+
+   **Procedimiento:** extraer → identificar **qué ejes toca** → por cada eje comparar contra lo que
+   la nota ya dice (*coincide* → nada, o fila en el inventario · *agrega* → prosa citada ·
+   *contradice* → fila en `## Inventario por eje` + `disputes[]`) → reescribir esos bloques en su
+   lugar.
+
+   **La contabilidad la hace sola la maquinaria de anclas:** los bloques que tocaste cambian de
+   hash, así que esos pares quedan marcados como vencidos y se re-verifican **sólo ésos**. No hay
+   que decidir "¿todo o nada?" — el hash dice qué se movió.
    ⚠ **Antes de la prosa, mirá el `## Inventario por eje` (#72):** si la fuente nueva reporta un eje
    que ya está inventariado, **agregá su fila** —es lo que evita re-derivar la síntesis desde cero—;
    si aporta un valor que **discrepa** de otro paper sobre un eje que todavía no está, ése es el
@@ -82,7 +98,7 @@ Progreso del append de <fuente> → <destino>:
    desacuerdo (fundacional↔aplicación es instanciación, no contraste).
    - **Ficha de estrella:** rige la **regla de poda** de `CLAUDE.md` (un paper tangencial entra a
      la prosa únicamente si cambia cómo se lee una señal RV). Si discrepa del ground-truth NEA →
-     `disputes` a nivel nota con posiciones explícitas (#71; no sobreescribir) + `bearing: challenges`. Actualizar `## Huecos` y la
+     `disputes` a nivel nota con posiciones explícitas (#71; no sobreescribir). Actualizar `## Huecos` y la
      matriz método×estrella si el paper aplica un método nuevo a la estrella.
    - **Concept:** integrar al eje del tema (mecanismo, rango, paso del método) citando
      `[[clave]]`; actualizar `## Huecos`. Si es un radio de un hub, tocar el radio que corresponda
@@ -91,6 +107,12 @@ Progreso del append de <fuente> → <destino>:
      exactamente cuando se generaliza de más, y ése es el modo de falla que `verify-citations`
      devuelve `soportada` (la afirmación sin condiciones sí está en el paper). Si discrepa de otra
      fuente **sólo por el régimen**, es una fila de esa tabla y **no** una `disputes`.
+
+4b. **Contradicciones en los ejes tocados (D-39).** Antes del cierre, correr `find-contradictions`
+   **acotado a los ejes que la fuente nueva tocó** — no al corpus entero. El paso 4 compara la fuente
+   nueva contra **lo que la nota dice**; esto compara **paper contra paper**, y agarra el caso que
+   aquél no ve: dos papers que discrepan sobre un eje que la nota nunca mencionó (porque la poda lo
+   descartó, o porque nadie lo notó). Es barato: el embudo corre sobre las extracciones.
 
 5. **Cierre estándar** (idéntico a ingest): **auto-revisión de autosuficiencia** de la nota destino
    (¿se entiende sin abrir el paper nuevo?) → **`verify-citations`** sobre la prosa tocada y la

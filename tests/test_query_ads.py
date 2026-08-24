@@ -974,7 +974,8 @@ def test_reclass_diff_reporta_el_delta(toy_vault, toy_classifier, monkeypatch, c
 
 
 def test_reclass_diff_no_escribe_nada(toy_vault, toy_classifier):
-    """Dry-run: ni ads.json ni la bóveda se tocan.  @inv INV-59"""
+    """Dry-run: ni ads.json ni la bóveda se tocan. Es **una** de las dos caras del preview; la otra
+    (`--probe`) la mide `test_probe_no_escribe_nada`.  @inv INV-59"""
     recs = [{"bibcode": "2020a....1A", "title": "activity", "abstract": "", "keyword": [],
              "doctype": "article", "relevant": True, "via": "query"}]
     write_ads_json(toy_vault, "test_star", recs)
@@ -1601,3 +1602,122 @@ def test_main_puerta_1_deja_el_candidato_en_ads_json(toy_vault, toy_classifier, 
     assert cand["2005eegX....1X"]["citado_por"] == ["2020Mio", "2021Mio"]
     assert all(not r["relevant"] for r in data["records"]), "la puerta 1 no vuelve core a nadie"
     assert "puerta 1" in capsys.readouterr().out
+
+
+# ── D-49 · la lente: forma, paridad y diff offline ───────────────────────────
+
+def test_lens_used_y_lens_current_coinciden_sin_edicion():
+    """RED #3 (doble vs real). `lens_used` describe lo COMPILADO al importar y `lens_current` re-lee
+    el YAML: dos caminos al mismo hecho. Si divergen, el lint reporta "lente cambiada" sobre una
+    bóveda intacta (o calla sobre una que cambió). La paridad se FIJA acá, no se promete en prosa.
+
+    Sin `toy_vault` A PROPÓSITO: la condición que interesa es la de producción —un proceso que
+    importó `query_ads` y lee el MISMO `objective.yaml` que compiló—. Con la bóveda de juguete
+    habría que recargar el módulo, y el reload dejaría las constantes apuntando al tmpdir para
+    todos los tests que corren después."""
+    assert qa.lens_used() == qa.lens_current()
+    assert qa.lens_current()["facets"] == cfg.as_map(
+        cfg.as_map(cfg.load_objective().get("relevance")).get("facets"))
+
+
+def test_lens_shape_no_revienta_con_require_invalido():
+    """`combination_rule` ABORTA si `require` nombra una faceta inexistente (con razón: filtraría
+    todo a no-core en silencio). Pero `lens_shape` sólo DESCRIBE la regla para compararla — si
+    reventara, el lint perdería la categoría entera por una config que él mismo va a reportar."""
+    forma = qa.lens_shape({"facets": {"rv": "radial velocity"}, "require": ["no_existe"]})
+    assert forma["require"] == ["no_existe"] and forma["facets"] == {"rv": "radial velocity"}
+
+
+def test_lens_delta_nombra_que_cambio():
+    a = {"facets": {"x": "aa", "y": "bb"}, "require": [], "min_facets": 1, "noise_doctypes": []}
+    b = {"facets": {"x": "aa", "z": "cc"}, "require": ["x"], "min_facets": 2, "noise_doctypes": ["catalog"]}
+    d = qa.lens_delta(a, b)
+    assert "faceta `y` eliminada" in d and "faceta `z` nueva" in d
+    assert any(s.startswith("require ") for s in d) and "min_facets 1 → 2" in d
+    assert qa.lens_delta(a, dict(a)) == [], "lentes idénticas: sin delta"
+
+
+def test_lens_delta_ignora_el_orden_de_require():
+    """Reordenar `require` no mueve el corte (todas son obligatorias): reportarlo sería un hallazgo
+    falso que manda a re-correr la cadena de todos los sujetos para nada."""
+    a = {"facets": {}, "require": ["a", "b"], "min_facets": 1, "noise_doctypes": []}
+    b = {**a, "require": ["b", "a"]}
+    assert qa.lens_delta(a, b) == []
+
+
+def test_lens_textual_changed_separa_la_mitad_evaluable():
+    solo_doctypes = ["noise_doctypes [] → ['catalog']"]
+    assert qa.lens_textual_changed(solo_doctypes) is False
+    assert qa.lens_textual_changed(solo_doctypes + ["faceta `x` nueva"]) is True
+
+
+def test_note_lens_text_toma_titulo_abstract_y_keywords():
+    fm = {"title": "Starspot Evolution", "keywords": ["stellar activity", "RV"]}
+    body = "# T\n\n## Abstract\nWe measure the RADIAL velocity.\n\n## Extracción\nno cuenta\n"
+    t = qa.note_lens_text(fm, body)
+    assert "starspot evolution" in t and "radial velocity" in t and "stellar activity" in t
+    assert "no cuenta" not in t, "sólo la sección Abstract, no el resto del cuerpo"
+
+
+def test_note_lens_text_no_toma_el_marcador_de_abstract_ausente():
+    """`_(no disponible)_` es lo que `write_paper_notes` deja cuando ADS no devolvió abstract: no es
+    texto del paper y no puede matchear una faceta."""
+    assert qa.note_lens_text({"title": None}, "## Abstract\n_(no disponible)_\n").strip() == ""
+
+
+def test_lens_diff_offline_no_saca_del_core_un_extra_core(toy_vault, monkeypatch):
+    """`extra_core` es override del usuario (igual que `via: manual` en `classify_record`): la regla
+    no lo toca, así que nunca puede aparecer como 'saldría'."""
+    write_yaml(cfg.STARS_YAML, {"Estrella Test": {"slug": "test_star", "ads_object": "Test Star",
+                                                  "extra_core": [{"bibcode": "2020Curado"}]}})
+    cfg.save_registro("test_star", {"slug": "test_star", "busquedas": [
+        {"fecha": "2026-01-01", "bibcodes": ["2020Curado", "2020Comun"], "lente": {}}]})
+    for stem in ("2020Curado", "2020Comun"):
+        (cfg.PAPERS / f"{stem}.md").write_text(
+            f"---\nbibcode: {stem}\ntitle: nada que ver\nstars: [Estrella Test]\n"
+            f"keywords: []\nrelevance: high\ntags: [paper]\n---\n## Abstract\nasteroseismology\n",
+            encoding="utf-8")
+    entran, salen, sin_nota = qa.lens_diff_offline("test_star")
+    assert salen == ["2020Comun"], f"el curado no sale; {salen}"
+    assert entran == [] and sin_nota == []
+
+
+def test_lens_diff_offline_declara_los_papers_sin_nota(toy_vault):
+    """El techo del chequeo: sin `--all` el no-core no deja nota, así que `entran` sólo puede hablar
+    de lo que alguien escribió. Publicar el faltante evita leer un `entran: 0` como 'no entra nada'."""
+    cfg.save_registro("test_star", {"slug": "test_star", "busquedas": [
+        {"fecha": "2026-01-01", "bibcodes": ["2020ConNota", "2020SinNota"], "lente": {}}]})
+    (cfg.PAPERS / "2020ConNota.md").write_text(
+        "---\nbibcode: 2020ConNota\ntitle: activity\nstars: [Estrella Test]\nkeywords: []\n"
+        "relevance: high\ntags: [paper]\n---\n## Abstract\nstarspot activity\n", encoding="utf-8")
+    entran, salen, sin_nota = qa.lens_diff_offline("test_star")
+    assert sin_nota == ["2020SinNota"]
+
+
+def test_probe_no_escribe_nada(toy_vault, toy_classifier, capsys):
+    """INV-59, la otra cara: `--probe` muestra el corte **sin bajar un archivo ni tocar config o
+    vault**. El contrato lo daba por "la misma familia (sin hash-test propio)" y la marca vivía sólo
+    en el dry-run, así que la mitad que un usuario corre en el `setup` —la que edita `objective.yaml`
+    entre iteración e iteración— no la medía nadie.  @inv INV-59"""
+    import hashlib
+
+    def hash_arbol(base):
+        h = hashlib.sha256()
+        for f in sorted(base.rglob("*")):
+            if f.is_file():
+                h.update(str(f.relative_to(base)).encode())
+                h.update(f.read_bytes())
+        return h.hexdigest()
+
+    antes = hash_arbol(toy_vault.VAULT)
+    recs = [{"bibcode": "2020a....1A", "title": "starspot activity", "abstract": "",
+             "keyword": [], "doctype": "article", "facets": ["actividad"], "relevant": True,
+             "citation_count": 7, "why_excluded": None},
+            {"bibcode": "2020b....1B", "title": "asteroseismology", "abstract": "",
+             "keyword": [], "doctype": "article", "facets": [], "relevant": False,
+             "citation_count": 3, "why_excluded": "sin tópico"}]
+    assert qa.print_probe("abs:activity", recs) == 0
+    assert hash_arbol(toy_vault.VAULT) == antes, "el probe escribió en vault/"
+    assert not (toy_vault.ROOT / "build").exists(), "el probe no deja scratch"
+    out = capsys.readouterr().out
+    assert "1 CORE · 1 no-core" in out and "starspot activity" in out

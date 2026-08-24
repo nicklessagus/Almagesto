@@ -376,6 +376,12 @@ def main() -> int:
     corrected: list = []               # (bibcode, tipos) — #52: correcciones no-retractantes
     annotated = 0
     errors: list = []                  # (nombre, motivo) — H-10: un paper raro no tumba el barrido
+    # Papers SIN `doi`: no se les puede preguntar a Crossref, así que no entran en `checked` — pero
+    # tampoco son un `error`, porque no falló nada: es una propiedad del paper. Antes caían en un
+    # tercer estado MUDO, y con un corpus enteramente off-ADS (que nace sin DOI por construcción)
+    # el barrido salía 0 con "0 con error al chequear": se leía como «la bóveda está limpia de
+    # retracciones» sobre papers a los que nadie preguntó. Se cuentan y se nombran.
+    sin_doi: list = []
     if not notes:
         cfg.print_seguro("⛔ no pudo chequear (rc 2): no hay ninguna nota de paper que mirar.")
         return 2
@@ -408,6 +414,8 @@ def main() -> int:
             doi, title = fm.get("doi"), fm.get("title") or ""
             retraction, soft, estado = (crossref_retraction(doi, headers) if doi
                                         else (None, [], "sin-doi"))
+            if not doi:
+                sin_doi.append(fm.get("bibcode") or note.stem)
             if doi:
                 if estado == "error":
                     # Crossref no contestó: este paper NO se chequeó. Antes esto salía 0 —"no
@@ -447,7 +455,16 @@ def main() -> int:
 
     cfg.print_seguro(f"\n{checked} chequeados vía Crossref, {marked} recién marcados, "
           f"{len(found)} retractados en total; {len(corrected)} con corrección publicada "
-          f"({annotated} recién anotadas); {len(errors)} con error al chequear.")
+          f"({annotated} recién anotadas); {len(errors)} con error al chequear; "
+          f"{len(sin_doi)} sin DOI (no consultables en Crossref).")
+    if sin_doi:
+        cfg.print_seguro(
+            "Sin DOI — a estos NADIE les preguntó a Crossref; los cubre sólo el prefijo de título "
+            "(`RETRACTED:`), que es una heurística, no el registro:")
+        for bib in sin_doi[:10]:
+            cfg.print_seguro(f"  · {bib}")
+        if len(sin_doi) > 10:
+            cfg.print_seguro(f"  · … y {len(sin_doi) - 10} más")
     if corrected:
         cfg.print_seguro("Correcciones no-retractantes (el paper SIGUE siendo citable; revisá los valores que "
               "le extrajiste — el lint las lista como backlog):")
@@ -468,6 +485,17 @@ def main() -> int:
     if errors:
         cfg.print_seguro("⛔ no pudo chequear (rc 2): quedaron papers sin consultar y no se detectó "
                          "ninguna retracción — el resultado NO es «limpio», es «no se miró».")
+        return 2
+    if sin_doi and not checked:
+        # El barrido no consultó Crossref **ni una vez**: todo lo que hay son papers sin DOI. Salir
+        # 0 acá afirma que la bóveda está limpia de retracciones sobre una población que nadie
+        # miró — el cero inventado que INV-87 prohíbe, en el detector que más caro sale equivocar.
+        # Un corpus enteramente off-ADS cae acá legítimamente: se cierra declarando los DOI que
+        # existan (los hay para casi todo lo publicado) y asumiendo que el resto sólo lo cubre el
+        # prefijo de título.
+        cfg.print_seguro(f"⛔ no pudo chequear (rc 2): los {len(sin_doi)} paper(s) del barrido no "
+                         f"tienen `doi`, así que no se consultó Crossref ni una vez — el resultado "
+                         f"NO es «limpio», es «no se miró». Completá los `doi` que existan.")
         return 2
     _estampar(args)
     return 0

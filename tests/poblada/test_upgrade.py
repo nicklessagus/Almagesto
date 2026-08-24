@@ -356,7 +356,8 @@ def test_sync_mirror_es_add_only_nunca_pisa_ni_inventa(sembrar, capsys):
 # ── 6. el ciclo completo: bloquea → migra → cierra → segunda pasada es un no-op byte a byte ────
 
 def _correr_ciclo(paths, censo) -> None:
-    """Los cuatro migradores/estampadores, en el orden del deploy real (CLAUDE.md, plan §5)."""
+    """Los migradores/estampadores, en el orden del deploy real (CLAUDE.md, plan §5)."""
+    make_notes.migrate_all_bearing()             # D-21: la postura sale del paper
     make_notes.migrate_all_disputes()
     make_notes.restamp_headers()
     make_notes.sync_mirror()
@@ -366,9 +367,9 @@ def _correr_ciclo(paths, censo) -> None:
 def test_ciclo_completo_cierra_el_lint_y_la_segunda_pasada_es_no_op(sembrar):
     """EL test del task: no alcanza con "el migrador corrió sin error" (eso es lo que ya fallaba en
     el propio framework con el deadlock #69 — "22 estampadas" en cada corrida sin que el lint
-    bajara nunca de 22). Acá el criterio es el ciclo completo: bloquea con las 3 categorías del
-    schema viejo (conteo > 0) → se corren los 4 migradores en el orden del deploy → el lint da
-    EXIT 0 con las 12 categorías bloqueantes en 0 → se corren los 4 DE NUEVO → el árbol de
+    bajara nunca de 22). Acá el criterio es el ciclo completo: bloquea con las categorías del
+    schema viejo (conteo > 0) → se corren los migradores en el orden del deploy → el lint da
+    EXIT 0 con las 12 categorías bloqueantes en 0 → se corren DE NUEVO → el árbol de
     `vault/` es BYTE A BYTE idéntico al de la primera pasada (no sólo "el lint sigue en 0": nada se
     reescribió) y el lint sigue en exit 0.  @inv INV-22"""
     paths, censo = sembrar(n_papers=70, n_stars=5, n_concepts=8, seed=105, vintage="1.11.0")
@@ -384,6 +385,7 @@ def test_ciclo_completo_cierra_el_lint_y_la_segunda_pasada_es_no_op(sembrar):
                   "Notas huérfanas", "Contradicciones ground-truth", "masa inconsistente con m",
                   "thesis_links sin página destino", "disputes: ref de una posición",
                   "disputes mal formadas", "disputes en el schema viejo",
+                  "`bearing` en una nota de paper",
                   "Juicio de triage en build", "`role` fuera del vocabulario"):
         n, _ = _categoria(reporte1, titulo)
         assert n == 0, f"{titulo!r} sigue con hallazgos después del ciclo completo"

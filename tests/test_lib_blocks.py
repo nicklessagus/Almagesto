@@ -259,3 +259,37 @@ def test_parse_verif_table_tabla_vacia_es_lista_vacia():
              "| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente |\n"
              "|---|---|---|---|---|---|\n")
     assert lb.parse_verif_table(vacia) == []
+
+
+def test_parse_lee_por_NOMBRE_de_columna_no_por_posicion():
+    """La plantilla que publican `CLAUDE.md` y el skill `verify-citations` tiene **ocho** columnas
+    (con `Score` y `Evidencia`); el parser leía las posiciones 4 y 5, que en esa plantilla son
+    justamente esas dos. Resultado medido: `anchor` salía del Score y `source_hash` de la Evidencia,
+    **en silencio** —el detector de plantilla vieja no lo agarra porque el encabezado sí contiene
+    las palabras «ancla» y «hash»— así que toda nota escrita según la documentación dejaba
+    `lint.py --cierre` en **rojo permanente**, que es el cierre de toda operación que toca una nota.
+
+    Se lee por nombre de columna: la posición deja de importar y agregar una columna no rompe nada.
+    """
+    bloque = (
+        "## Verificación de citas (2026-08-24)\n\n"
+        "| # | Afirmación (extracto) | Fuente | Veredicto | Score | Evidencia | Ancla | Hash fuente |\n"
+        "|---|---|---|---|---|---|---|---|\n"
+        "| 1 | P_rot = 34 d | [[2020ApJ...900...1A]] | soportada | 0.9 | \"34 d\" (L12) | abc1234567 | def8901234 |\n")
+    filas = lb.parse_verif_table(bloque)
+    assert filas is not None and len(filas) == 1
+    f = filas[0]
+    assert f.anchor == "abc1234567", f"leyó {f.anchor!r} — está tomando el Score"
+    assert f.source_hash == "def8901234", f"leyó {f.source_hash!r} — está tomando la Evidencia"
+    assert f.bibcode == "2020ApJ...900...1A" and f.verdict == "soportada"
+
+
+def test_parse_sigue_leyendo_la_tabla_de_seis_columnas():
+    """Control: la forma corta (sin Score/Evidencia) es la que usa el resto de la suite."""
+    bloque = (
+        "## Verificación de citas (2026-08-24)\n\n"
+        "| # | Afirmación | Fuente | Veredicto | Ancla | Hash fuente |\n"
+        "|---|---|---|---|---|---|\n"
+        "| 1 | X | [[2020ApJ...900...1A]] | soportada | abc1234567 | def8901234 |\n")
+    f = lb.parse_verif_table(bloque)[0]
+    assert (f.anchor, f.source_hash) == ("abc1234567", "def8901234")

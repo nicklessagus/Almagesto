@@ -1,5 +1,6 @@
 """bench_verify: extracción de pares, siembra determinista por rotación, puntaje."""
 import json
+import re
 import sys
 
 import pytest
@@ -36,6 +37,15 @@ def run(monkeypatch, *argv):
     return bv.main()
 
 
+def leer_bench():
+    """Examen + clave unidos, como el `bench.json` único de antes de D-55 — para los asserts que
+    hablan de la SIEMBRA (qué se sembró, con qué rotación), que es ortogonal a la partición."""
+    exam = json.loads(bv.exam_path().read_text(encoding="utf-8"))
+    clave = json.loads(bv.key_path().read_text(encoding="utf-8"))
+    pairs = [{**p, "label": clave["key"][p["id"]]} for p in exam["pairs"]]
+    return {**clave, "pairs": pairs}
+
+
 # ── seed ─────────────────────────────────────────────────────────────────────
 
 def test_seed_extrae_siembra_y_es_determinista(toy_vault, monkeypatch):
@@ -43,9 +53,8 @@ def test_seed_extrae_siembra_y_es_determinista(toy_vault, monkeypatch):
     seed_fulltext(toy_vault, "2020aaaA...1..1A", "2020bbbB...1..1B")
     seed_notes(toy_vault)
     assert run(monkeypatch, "seed") == 0
-    bench = cfg.ROOT / "build" / "verify_bench" / "bench.json"
-    first = bench.read_text(encoding="utf-8")
-    data = json.loads(first)
+    first = bv.exam_path().read_text(encoding="utf-8")
+    data = leer_bench()
     real = [p for p in data["pairs"] if p["label"] == "real"]
     sown = [p for p in data["pairs"] if p["label"] == "sembrada"]
     # 4 pares reales: 2 de nota-a + 2 de query-x (una afirmación con dos citas = dos pares);
@@ -67,9 +76,11 @@ def test_seed_extrae_siembra_y_es_determinista(toy_vault, monkeypatch):
         assert s["bibcode"] not in cited_by_line[(s["note"], s["line"])]
         assert s["fulltext"].endswith(f"{s['bibcode']}.txt")
         assert s["verdict"] is None
-    # determinista byte a byte
+    # determinista byte a byte — los DOS archivos (D-55)
+    clave_1 = bv.key_path().read_text(encoding="utf-8")
     run(monkeypatch, "seed")
-    assert bench.read_text(encoding="utf-8") == first
+    assert bv.exam_path().read_text(encoding="utf-8") == first
+    assert bv.key_path().read_text(encoding="utf-8") == clave_1
 
 
 def test_seed_rotacion_nunca_el_original(toy_vault, monkeypatch):
@@ -128,7 +139,7 @@ def test_seed_max_acota(toy_vault, monkeypatch):
     seed_fulltext(toy_vault, "2020aaaA...1..1A", "2020bbbB...1..1B")
     seed_notes(toy_vault)
     run(monkeypatch, "seed", "--max", "2")
-    data = json.loads((cfg.ROOT / "build" / "verify_bench" / "bench.json").read_text())
+    data = leer_bench()
     assert data["n_real"] == 2 and data["n_seeded"] == 2
 
 
@@ -143,8 +154,7 @@ def test_seed_bloques_une_hardwrap_y_protege_rotacion(toy_vault, monkeypatch):
             "Otra afirmación suelta que cita a [[2020cccC...1..1C]] con contenido propio.\n"
             "| fila de tabla con valor 34 d | [[2020cccC...1..1C]] |\n")
     run(monkeypatch, "seed")
-    data = json.loads((cfg.ROOT / "build" / "verify_bench" / "bench.json")
-                      .read_text(encoding="utf-8"))
+    data = leer_bench()
     real = [p for p in data["pairs"] if p["label"] == "real"]
     bloque = [p for p in real if p["bibcode"] in ("2020aaaA...1..1A", "2020bbbB...1..1B")]
     assert len(bloque) == 2
@@ -200,8 +210,7 @@ def test_seed_usa_claim_recortado_por_cita(toy_vault, monkeypatch):
     mk_note(toy_vault.QUERIES, "nota-d", {"tags": ["query"]},   # pool: 3er bibcode para el cruce
             "Una afirmación aparte con su propia cita [[2020cccC...1..1C]].\n")
     run(monkeypatch, "seed")
-    data = json.loads((cfg.ROOT / "build" / "verify_bench" / "bench.json")
-                      .read_text(encoding="utf-8"))
+    data = leer_bench()
     real = {p["bibcode"]: p["claim"] for p in data["pairs"]
             if p["label"] == "real" and p["note"] == "nota-c"}
     assert "pendiente cromática" in real["2020aaaA...1..1A"]
@@ -217,8 +226,7 @@ def test_seed_claims_ciegos_sin_wikilinks(toy_vault, monkeypatch):
     seed_fulltext(toy_vault, "2020aaaA...1..1A", "2020bbbB...1..1B")
     seed_notes(toy_vault)
     run(monkeypatch, "seed")
-    data = json.loads((cfg.ROOT / "build" / "verify_bench" / "bench.json")
-                      .read_text(encoding="utf-8"))
+    data = leer_bench()
     assert data["pairs"], "el toy vault debe producir pares"
     for p in data["pairs"]:
         assert "[[" not in p["claim"] and "]]" not in p["claim"]
@@ -231,9 +239,15 @@ def test_seed_claims_ciegos_sin_wikilinks(toy_vault, monkeypatch):
 # ── score ────────────────────────────────────────────────────────────────────
 
 def write_bench(pairs):
-    bench = cfg.ROOT / "build" / "verify_bench" / "bench.json"
-    bench.parent.mkdir(parents=True, exist_ok=True)
-    bench.write_text(json.dumps({"n_real": 2, "n_seeded": 2, "pairs": pairs}), encoding="utf-8")
+    """Siembra un examen + su clave a mano (D-55: son dos archivos)."""
+    bv.bench_dir().mkdir(parents=True, exist_ok=True)
+    exam = {"n_pairs": len(pairs),
+            "pairs": [{k: v for k, v in p.items() if k != "label"} for p in pairs]}
+    clave = {"n_real": sum(1 for p in pairs if p["label"] == "real"),
+             "n_seeded": sum(1 for p in pairs if p["label"] == "sembrada"),
+             "key": {p["id"]: p["label"] for p in pairs}}
+    bv.exam_path().write_text(json.dumps(exam), encoding="utf-8")
+    bv.key_path().write_text(json.dumps(clave), encoding="utf-8")
 
 
 def pair(pid, label, verdict, bib="2020aaaA...1..1A"):
@@ -270,3 +284,89 @@ def test_score_incompleto_rc1(toy_vault, monkeypatch, capsys):
 def test_score_sin_bench(toy_vault, monkeypatch):
     with pytest.raises(SystemExit, match="seed"):
         run(monkeypatch, "score")
+
+
+# ── D-55 · examen y clave son dos archivos ───────────────────────────────────
+
+def test_exam_no_contiene_la_clave(toy_vault, monkeypatch):
+    """D-55 / INV-74. Ningún campo del examen delata el sembrado: ni `label`, ni el prefijo `r`/`s`
+    del `id`, ni los conteos por clase (`n_seeded: 8` sobre 20 pares ya dice cuántas buscar).
+    Antes de esto la ceguera la sostenía una instrucción del skill —"NUNCA mostrarle bench.json"—:
+    una medición del propio error que depende de que nadie mire el archivo de al lado no mide."""
+    # @inv INV-74
+    seed_fulltext(toy_vault, "2020aaaA...1..1A", "2020bbbB...1..1B")
+    seed_notes(toy_vault)
+    assert run(monkeypatch, "seed") == 0
+    crudo = bv.exam_path().read_text(encoding="utf-8")
+    assert "sembrada" not in crudo and "label" not in crudo
+    assert "n_seeded" not in crudo and "n_real" not in crudo
+    exam = json.loads(crudo)
+    ids = [p["id"] for p in exam["pairs"]]
+    assert len(set(ids)) == len(ids), "los ids tienen que seguir siendo únicos"
+    assert all(re.fullmatch(r"p\d{3}", i) for i in ids), f"ids que codifican la clase: {ids}"
+    assert not bv.legacy_bench_path().exists(), "el archivo único pre-D-55 no puede sobrevivir"
+    # la clave sí tiene todo, y sólo la lee `score`
+    clave = json.loads(bv.key_path().read_text(encoding="utf-8"))
+    assert set(clave["key"]) == set(ids) and "sembrada" in clave["key"].values()
+
+
+def test_score_cruza_examen_y_clave(toy_vault, monkeypatch, capsys):
+    """El veredicto vive en el examen y la etiqueta en la clave: `score` los une por `id`."""
+    write_bench([pair("p000", "real", "soportada"),
+                 pair("p001", "real", "no-soportada"),
+                 pair("p002", "sembrada", "no-soportada"),
+                 pair("p003", "sembrada", "soportada")])
+    assert run(monkeypatch, "score") == 0
+    out = capsys.readouterr().out
+    assert "1/2 (50%)" in out and "p003" in out and "p001" in out
+
+
+def test_score_rechaza_examen_y_clave_de_corridas_distintas(toy_vault, monkeypatch):
+    """Un examen re-sembrado con una clave vieja produciría un recall inventado sobre pares que
+    nadie etiquetó. Se frena nombrando los ids huérfanos, no se puntúa a medias."""
+    write_bench([pair("p000", "real", "soportada")])
+    exam = json.loads(bv.exam_path().read_text(encoding="utf-8"))
+    exam["pairs"].append({**pair("p999", "real", "soportada")})
+    exam["pairs"][-1].pop("label")
+    bv.exam_path().write_text(json.dumps(exam), encoding="utf-8")
+    with pytest.raises(SystemExit, match="p999"):
+        run(monkeypatch, "score")
+
+
+def test_bench_json_viejo_no_se_lee_se_manda_a_resembrar(toy_vault, monkeypatch):
+    """Sin capa de retrocompatibilidad: el archivo único pre-D-55 se DETECTA y se rechaza. Leerlo
+    "por las dudas" repondría exactamente la fuga que la partición cierra."""
+    bv.bench_dir().mkdir(parents=True, exist_ok=True)
+    bv.legacy_bench_path().write_text(
+        json.dumps({"n_real": 1, "n_seeded": 1,
+                    "pairs": [pair("r000", "real", "soportada")]}), encoding="utf-8")
+    with pytest.raises(SystemExit, match="pre-D-55"):
+        run(monkeypatch, "score")
+
+
+def test_el_benchmark_no_toca_el_vault(toy_vault, monkeypatch):
+    """INV-73 (P0) — el material sintético **nunca** llega a `vault/`: las citas falsas no son
+    bibliografía (regla #0), y una sembrada que se filtrara al vault sería una afirmación
+    deliberadamente mal atribuida viviendo entre las verdaderas.
+
+    Estaba declarado *garantizado y medido* en el contrato con **cero marcas** en el mapa, y el
+    ratchet admitía que el aislamiento lo daba la fixture `toy_vault` y no una aserción — o sea que
+    la propiedad la sostenía el andamiaje del test, no el código. Acá se assertea: hash del árbol
+    de `vault/` antes y después de `seed`.  @inv INV-73"""
+    import hashlib
+    seed_fulltext(toy_vault, "2020aaaA...1..1A", "2020bbbB...1..1B")
+    seed_notes(toy_vault)
+
+    def hash_vault():
+        h = hashlib.sha256()
+        for f in sorted(toy_vault.VAULT.rglob("*")):
+            if f.is_file():
+                h.update(str(f.relative_to(toy_vault.VAULT)).encode())
+                h.update(f.read_bytes())
+        return h.hexdigest()
+
+    antes = hash_vault()
+    assert run(monkeypatch, "seed") == 0
+    assert hash_vault() == antes, "el benchmark escribió en vault/ — frontera dura rota"
+    assert bv.exam_path().exists() and bv.key_path().exists(), "y sí escribió en build/"
+    assert bv.bench_dir().resolve().is_relative_to((cfg.ROOT / "build").resolve())

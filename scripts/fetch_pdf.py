@@ -254,8 +254,13 @@ def main() -> int:
     # D-18: antes de gastar red, reusar el PDF que YA está bajado bajo otro slug. Es el mismo
     # bibcode: el archivo es idéntico. Se copia (no symlink: `raw/` viaja en git-lfs y un enlace
     # roto es peor que una copia).
+    # ⚠ `--force` **no** entra acá (gemelo de `fetch_arxiv.py`, que ya lo hacía bien). El reuso
+    # entre slugs es una optimización sobre "el archivo ya existe y es el mismo bibcode"; `--force`
+    # es la única vía de escape documentada para reemplazar un PDF **truncado o congelado**, y con
+    # el reuso adentro lo sobreescribía con la copia de otro slug —sin validar `%PDF`— y lo sacaba
+    # de pendientes: la escotilla hacía exactamente lo contrario de lo que promete.
     reusados = 0
-    for r in list(pendientes):
+    for r in ([] if args.force else list(pendientes)):
         stem = safe_name(r["bibcode"])
         otro = cfg.artefacto_en_otro_slug(cfg.PDFS, args.slug, stem, ".pdf")
         if otro is not None:

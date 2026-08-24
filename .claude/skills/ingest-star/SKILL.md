@@ -1,7 +1,7 @@
 ---
 name: ingest-star
 description: Usar cuando el usuario pide bajar/agregar/ingestar una estrella a la bóveda ("bajá GJ 581", "ingest tau ceti", "agregá la estrella X", "traé la bibliografía de AU Mic"). Corre la cadena de ingesta y hace la extracción LLM.
-version: 1.17.0
+version: 1.18.0
 ---
 
 # Ingest: agregar una estrella a la wiki
@@ -19,11 +19,11 @@ del contraste de **3b**); para **2b** no hay red todavía:
 
 ```
 Progreso del ingest de <estrella>:
-- [ ] 1  slug resuelto en stars.yaml
+- [ ] 1  slug resuelto + alias mostrados al usuario y aprobados ANTES de buscar
 - [ ] 2  cadena mecánica (orquestador) — sin abortos
 - [ ] 2b barrido full-text (--sweep) revisado
 - [ ] 2c triage de candidatos resuelto (aceptado / --drop con motivo / al usuario)
-- [ ] 3  extracción LLM de los papers clave
+- [ ] 3  extracción LLM de TODOS los core (o recorte declarado en el registro)
 - [ ] 3b contraste cross-paper (inventario por eje)
 - [ ] 3c síntesis a la ficha (frontmatter propio + prosa + disputes)
 - [ ] 4  auto-revisión de autosuficiencia
@@ -32,9 +32,23 @@ Progreso del ingest de <estrella>:
 - [ ] 6  `lint.py --cierre` en 0 → commit → preguntar push
 ```
 
-1. **Resolver el slug.** Buscar la estrella en `vault/config/stars.yaml`. Si no está, agregarla con
-   `slug`, `simbad`, `ads_object`, `aliases` y (si aplica) `data_local`. Verificar el nombre en
-   SIMBAD si hay duda.
+1. **Resolver el slug y ACORDAR LOS ALIAS antes de buscar (D-7).** Buscar la estrella en
+   `vault/config/stars.yaml`. Si no está, agregarla con `slug`, `simbad`, `ads_object`, `aliases` y
+   (si aplica) `data_local`.
+
+   ⚠ **El recall de toda la búsqueda cuelga de `aliases`, y un alias que falta es un paper que
+   nunca aparece — en silencio.** Es el mismo modo de falla que el glifo griego, pero **sin
+   rescate**: el glifo tiene su pasada de recuperación, un alias faltante no tiene ninguna. Por eso
+   no se escriben a ojo:
+   - Resolver identificadores en **SIMBAD** (`python scripts/fetch_ground_truth.py <slug>` los trae,
+     o consultá SIMBAD directo si la estrella todavía no está en el YAML).
+   - **Mostrarle al usuario la lista candidata en prosa** —con las variantes de espaciado y de glifo
+     ya expandidas (`GJ 581` / `GJ581` / `Gliese 581` / `HO Lib` / `BD-07 4003`)— y decir cuáles
+     venís a agregar y por qué.
+   - **No correr la query hasta que apruebe.** Recién ahí persistir lo aprobado en `stars.yaml`.
+
+   Es el mismo patrón que `setup` (los términos del objetivo, D-8) e `ingest-theme` (los términos
+   del tema, D-29): el agente **propone**, el usuario **valida**, y lo aprobado queda escrito.
 
 2. **Cadena mecánica** (orquestador — desde la raíz del repo):
    ```bash
@@ -131,10 +145,32 @@ Progreso del ingest de <estrella>:
    snapshot con su fecha (#51/#64), así que la red ya no depende de la máquina — pero el conteo del
    snapshot es el de la última corrida de la cadena, no el vigente.
 
-3. **Extracción LLM (criterio).** Leer los papers **clave** (discovery / actividad / métodos) desde
-   `vault/raw/fulltext/<slug>/` y poblar **las notas de paper** (la ficha se escribe en 3c, después
-   del contraste — no saltear directo a la prosa):
-   - en `vault/wiki/papers/<bibcode>.md`: `methods`, `thesis_links`, `bearing`, `role` (#73: `fundacional` introduce el método/mecanismo · `aplicacion` lo instancia en un caso · `arbitro` reanaliza y resuelve una tensión previa — sale de leer el paper, la regex del clasificador no puede inferirlo, y sin él contrastarlo contra otro no está definido), y la sección
+3. **Extracción LLM — se leen TODOS los core (D-13).** *"Leer los papers clave"* no es un criterio:
+   no dice cuántos, ni en qué orden, ni deja registro de qué se leyó. Es lo que produjo el número
+   medido en una bóveda real: **42 papers `relevance: high` que nadie abrió**, en una ficha que se
+   presenta como el snapshot del conocimiento de la estrella. Si la lente marca 193 como core y la
+   extracción lee 40, "core" deja de ser la unidad de trabajo y el consumidor no sabe cuál de los
+   dos números lo describe.
+
+   - **Default: se leen todos los core.**
+   - Si no se leen todos, **se avisa al usuario** y el motivo queda **registrado** (`extraccion:` en
+     `vault/config/registro/<slug>.yaml`; el lint lo reporta como *recorte de lectura sin declarar*
+     mientras no esté). El criterio de selección se **declara**, no se aplica implícito.
+   - **Sea cual sea la decisión, la tabla `## Papers` de la ficha declara cuál entró y cuál no** — el
+     estado nunca es implícito. Se re-estampa con `python scripts/make_notes.py <slug>`.
+
+   **Escala: un subagente por paper (D-14).** 193 fulltexts no entran en una lectura. Se paga como
+   ya se paga `verify-citations`: **un subagente por paper**, cada uno lee un solo
+   `vault/raw/fulltext/<slug>/<bibcode>.txt` y devuelve la extracción estructurada. Caro pero
+   acotado, y hace el paso **auditable**: cada extracción tiene su corrida. Lanzalos en tandas
+   paralelas; el orquestador (vos) mergea y escribe las notas.
+
+   Poblar **las notas de paper** (la ficha se escribe en 3c, después del contraste — no saltear
+   directo a la prosa):
+   - en `vault/wiki/papers/<bibcode>.md`: `methods`, `thesis_links`, `role` (#73: `fundacional`
+     introduce el método/mecanismo · `aplicacion` lo instancia en un caso · `arbitro` reanaliza y
+     resuelve una tensión previa — sale de leer el paper, la regex del clasificador no puede
+     inferirlo, y sin él contrastarlo contra otro no está definido), y la sección
      "Extracción" — sus bullets ya vienen ramificados por tipo de sujeto (#76): ground-truth
      (P/K/e por planeta), los **ejes de `relevance.facets`** del objetivo de esta bóveda, métodos y
      aporte al objetivo. Llenar los que el stub trae, no una lista fija de memoria.
@@ -174,8 +210,9 @@ Progreso del ingest de <estrella>:
    - **Contrastar contra `vault/raw/ground_truth/<slug>.json`**: si un paper discrepa del archivo
      (p. ej. planeta dudoso), taguearlo en `disputes` **a nivel nota** con posiciones explícitas
      (#71) —`field: b.existence`, una posición `{ref, value}` por el paper y otra
-     `{source: ground_truth, value}` por NEA— y `bearing: challenges` en la nota del paper; ver
-     *Disputas* en `CLAUDE.md`. No celebrar.
+     `{source: ground_truth, value}` por NEA—; ver *Disputas* en `CLAUDE.md`. No celebrar.
+     (⛔ **`bearing` no va en la nota del paper** — D-21: la postura vive en la tabla de evidencia de
+     la hipótesis, y en el paper el lint la bloquea como schema viejo.)
      Si el desacuerdo es **paper↔paper** sobre algo que NEA no arbitra (`P_rot`, la naturaleza de
      una señal), va en la MISMA estructura con dos posiciones `{ref, value}`: eso es lo que antes
      terminaba en prosa suelta.
