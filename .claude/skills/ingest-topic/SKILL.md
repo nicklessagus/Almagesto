@@ -85,7 +85,7 @@ Progreso del ingest del tema <tema>:
    rescate**, que vive en `## Notas` del skill `ingest-star` (canónica allá, sin copia: Messenger /
    página del instrumento / mirrors académicos / tablas del CDN / derivar al usuario — y **no**
    gastar intentos en `aanda.org`, que está tras DataDome). "Bajar por DOI" solo no alcanza. Curación persistente con
-   `extra_core: [<bibcode>, …]` en la entrada del tema en `topics.yaml` (igual que en estrellas).
+   `extra_core:` (lista de mapas `{bibcode, via, fecha, motivo}` — D-58; el `triage` imprime el snippet listo para pegar) en la entrada del tema en `topics.yaml` (igual que en estrellas).
    **Guardia de expansión (checkpoint humano).** Entre `query_ads` y el primer paso que gasta red
    y disco, el orquestador compara el core del `ads.json` fresco contra las notas ya ingestadas del
    sujeto: si se multiplicó (default ×1.5 y 50 o más nuevos) **frena** con el conteo, cuántos vinieron
@@ -244,7 +244,7 @@ Qué cambia respecto del flujo ADS de arriba:
   `2006Tichavsky`, `2025sklearn`). Debe **empezar con `AAAA`+letra** (lo exige `BIBCODE_RE` del lint) y
   coincidir con el nombre del `.txt`.
 - **Tema MIXTO — papers del tema que SÍ tienen bibcode ADS** (un método no-astro casi siempre tiene
-  aplicaciones/variantes publicadas en revista astro): van en **`extra_core: [<bibcode>, …]`** de la
+  aplicaciones/variantes publicadas en revista astro): van en **`extra_core:` (lista de mapas `{bibcode, via, fecha, motivo}` — D-58; el `triage` imprime el snippet listo para pegar)** de la
   entrada del tema, **no** en `sources:` con el bibcode como `key` (eso degrada el stub: metadata a
   mano, `citation_count: 0`, blockquote off-ADS factualmente falso). `ingest_topic.py` les corre solo
   la **sub-cadena ADS** (`query_ads --extra-only` → `fetch_arxiv` → `fetch_pdf` → `make_notes

@@ -414,9 +414,27 @@ Ratchet **88 → 86** (INV-78, INV-79). Tier 0: 721 verdes. Tier 1: 48 (golden 3
 | **R-6** · quién estampa `cadena` | **cada script se estampa a sí mismo** al salir 0 (`cfg.save_paso`, una implementación, N call sites). Estampar sólo desde `run()` dejaba invisible el paso corrido a mano y el lint reportaba "se cortó en `fetch_pdf`" sobre un paso que **sí corrió** — falso positivo que erosiona la categoría. El registro distingue `via: orquestador` de `via: suelto`. |
 | **R-2** · forma de `extra_core` | **forma dura con detector**: sólo lista de mapas `{bibcode, via, fecha, motivo}`; el escalar y la lista de strings bloquean, con el snippet correcto en el mensaje. El costo de UX es acotado porque `triage.py` ya imprime el snippet para pegar. |
 
+### ✅ Tanda 2 cerrada (2026-08-24) — v1.26.0 · registro acumulativo y escotillas
+
+| Issue | Qué cerró | INV |
+|---|---|---|
+| **2.1** | `busquedas: []` acumulativo; el universo es **unión**, no suma; `n_nuevos`/`n_ya_estaban`; detector del schema `busqueda:` | INV-89 |
+| **2.2** | `cadena:` — cada script se estampa a sí mismo (R-6), con fecha/versión/vía/flags; categoría del lint que **nombra el paso** donde se cortó | INV-91 |
+| **2.3** | `--no-triage` **eliminado** (permitía que un descarte persistido volviera a entrar en silencio); las escotillas quedan registradas | — |
+| **2.4** | `anular_decision`: el descarte revertido queda **anulado explícito**, con el motivo viejo en `previa` — cableado en los dos carriles | — |
+| **2.5** | `extra_core` estructurado (R-2, forma dura + detector); `via` declarado reemplaza al `"manual"` hardcodeado; `triage.py` imprime el snippet | — |
+
+**La asimetría que cierra la tanda:** el carril del **descarte** ya registraba quién y por qué
+(#51); el de la **aceptación**, no — un `extra_core: [bibcode]` no dice ni quién lo aceptó ni con
+qué criterio. Ahora los dos lados del juicio de curación registran lo mismo, y una reversión no
+deja el registro contradiciéndose.
+
+Ratchet **84**. Tier 0: 746 verdes en 2,8 s. Tier 1: 48 verdes (golden 34 → 35 categorías).
+
 ### Lo que sigue
-**Tanda 2**, issues 2.2 (`cadena:`), 2.3 (`--no-triage` se elimina), 2.4 (descarte anulado
-explícito) y 2.5 (`extra_core` estructurado). El 2.1 ya cerró.
+**Tanda 3 — materialización y estado de la ficha** (D-10, D-11, D-24, D-12): la ficha declara,
+materializado y por paper, su universo (origen, si se extrajo, si se sintetizó) y las tres fechas
+distinguibles. Cierra INV-81 e INV-82.
 
 ## 🔜 Cola de pendientes (al 2026-08-23)
 

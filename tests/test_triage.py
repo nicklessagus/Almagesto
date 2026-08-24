@@ -408,3 +408,16 @@ def test_migrate_con_decisiones_escalar_en_el_registro(toy_vault, capsys):
         {"decisiones": {"2020a....1A": {"decision": "descartado", "motivo": "ruido"}}}),
         encoding="utf-8")
     assert triage.migrate("test_star") == 0
+
+
+def test_triage_imprime_el_snippet_estructurado(toy_vault, capsys, monkeypatch):
+    """R-2: la forma dura de `extra_core` es aceptable justamente porque el triage imprime el
+    snippet listo para pegar — sin eso, aceptar un paper pasaba de una línea a cuatro campos a
+    mano, y el costo caía todo sobre la operación más frecuente."""
+    write_ads(toy_vault, candidates=[cand("2020cndA...1..1A", "Un candidato", cites=5)])
+    monkeypatch.setattr(sys, "argv", ["triage.py", "test_star"])
+    assert triage.main() == 0
+    out = capsys.readouterr().out
+    assert "extra_core:" in out
+    assert "- bibcode: 2020cndA...1..1A" in out
+    assert "via: triage" in out and "motivo:" in out

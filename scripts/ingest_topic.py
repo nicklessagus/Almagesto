@@ -232,10 +232,15 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
         # con la mitad que lo consume, y el aviso quedaba mudo justo en ese caso.
         if (dk := next((k for k in (key, s.get("url")) if k and k in descartadas), None)):
             d = descartadas[dk]
-            cfg.print_seguro(f"  ⚠ {key}: figura DESCARTADA en el registro ({d.get('fecha', 's/f')}"
+            # D-52: volver a declarar la fuente ES cambiar de opinión — la decisión se ANULA
+            # (preservando el motivo viejo en `previa`) en vez de quedar contradiciendo lo hecho.
+            # Antes esto sólo avisaba y le pedía al usuario que editara el YAML a mano: el registro
+            # quedaba diciendo "descartada por X" sobre una fuente que está ingestada.
+            cfg.anular_decision(slug, dk, por="sources", carril="fuente-declarada")
+            cfg.print_seguro(f"  ↩ {key}: figuraba DESCARTADA en el registro ({d.get('fecha', 's/f')}"
                   f"{'' if dk == key else f', por url {dk}'}): "
-                  f"{d.get('motivo') or '(sin motivo)'} — se ingesta igual; si cambiaste de "
-                  f"opinión, sacá la entrada de `decisiones` en {cfg.registro_path(slug)}")
+                  f"{d.get('motivo') or '(sin motivo)'} — volver a declararla la revierte: decisión "
+                  f"ANULADA (el motivo viejo queda en `previa`)")
         if s.get("pending"):
             # Fuente no-conseguible declarada: NO se fetchea ni cuenta como fallo — stub con
             # pending_source (url/doi quedan como puntero) y derivación al usuario en el aviso final.
@@ -305,7 +310,7 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
     # sin corchetes (un solo paper con bibcode ADS en un tema mixto) es truthy y no caía en el
     # `or`; la comprensión de abajo recorría el string letra por letra y el bibcode real nunca
     # entraba a la sub-cadena ADS: la curación manual se perdía en silencio.
-    extra = [b for b in _listify_curado(meta.get("extra_core"), "extra_core") if b]
+    extra = [e["bibcode"] for e in cfg.load_extra_core(meta, entry=slug)]
     if extra:
         cfg.print_seguro(f"\nextra_core: {len(extra)} paper(s) con bibcode ADS (tema mixto) → sub-cadena ADS")
         for script, sargs in (("query_ads.py", ["--topic", slug, "--extra-only"]),

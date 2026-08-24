@@ -335,7 +335,10 @@ re-clasificar de `maintain`. No ingesta nada; después se usan `ingest-star`/`in
    mencionan al sujeto pero no hablan de él (medido: 18% de precisión). Sólo entra solo el que lleva
    el **sujeto en el título**; el resto queda como **candidato** en `build/<slug>/ads.json` —**sin
    bajarse**— y lo juzgás vos por título+abstract (`python scripts/triage.py <slug>`): aceptado →
-   `extra_core` en `stars.yaml` + re-correr la cadena; descartado → `triage.py --drop … --reason`
+   `extra_core` en `stars.yaml` —**lista de mapas** `{bibcode, via, fecha, motivo}`, forma dura: el
+   escalar y la lista de strings **bloquean** con el snippet correcto, y `triage.py` lo imprime
+   listo para pegar (D-58). El motivo de la asimetría: el carril del **descarte** ya registraba
+   quién y por qué (#51), y el de la **aceptación** no— + re-correr la cadena; descartado → `triage.py --drop … --reason`
    (persiste: no se re-propone); **dudoso → al usuario**. Detalle en el skill `ingest-star`.
 2. **Vos (LLM)** leés el **fulltext `.txt`** (el default: barato y greppable; el PDF se abre sólo
    para figuras/tablas/ecuaciones o ante duda de símbolos si `fulltext_source: ocr`) y hacés la
@@ -400,8 +403,18 @@ re-clasificar de `maintain`. No ingesta nada; después se usan `ingest-star`/`in
 > rigiendo**: sólo bibliografía citable.
 
 ### Registro de ingesta (`vault/config/registro/<slug>.yaml` — versionado, #51/#64)
-Cada sujeto ingestado deja un registro que **se commitea y viaja**, con dos secciones de dueños
-distintos: **`busqueda`** (la escribe `query_ads` al cerrar cada corrida: `fecha`, `query` efectiva
+Cada sujeto ingestado deja un registro que **se commitea y viaja**, con tres secciones de dueños
+distintos: **`busquedas`** (lista, una entrada por corrida — **acumulativo**, D-28: antes pisaba, y
+la cabecera de la ficha publicaba el embudo de la última corrida como si fuera el universo entero;
+el universo del sujeto es la **unión**, no la suma, y cada entrada distingue `n_nuevos` de
+`n_ya_estaban`), **`cadena`** (qué pasos corrieron, con fecha, versión, `via: orquestador|suelto` y
+las **escotillas** usadas — D-57: **cada script se estampa a sí mismo**, así que un paso corrido a
+mano deja rastro en vez de leerse como un corte; el lint compara contra el orden canónico y
+**nombra el paso** donde se cortó) y **`decisiones`**. Un descarte que se **revierte** (el bibcode
+pasa a `extra_core`, la fuente se vuelve a declarar) no queda contradiciendo lo hecho: se **anula**
+explícito, con el motivo viejo preservado en `previa` (D-52). Y la compuerta de triage **ya no se
+puede apagar por flag** (D-48: `--no-triage` se eliminó — permitía que un candidato ya descartado
+volviera a entrar en silencio). La sección `busquedas` la escribe `query_ads` al cerrar cada corrida: `fecha`, `query` efectiva
 —en una estrella la arma `build_query` y antes se tiraba—, `rows`, `n_found`, `n_total`, `n_core`,
 `n_candidates`, `n_dropped`, `truncated`, `almagesto_version`) y **`decisiones`** (el juicio de
 curación, por clave: `decision`/`motivo`/`fecha`). Las `decisiones` cubren los **dos carriles**:

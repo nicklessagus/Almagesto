@@ -305,7 +305,7 @@ def slug_notes(slug: str) -> list:
     # además llegue escalar (en vez de `{key: ..., ...}`) se toma como si fuera él mismo la clave.
     stems += [key for s in _listify_curado(meta.get("sources"), "sources")
               for key in [s.get("key") if isinstance(s, dict) else s] if key]
-    stems += [b for b in _listify_curado(meta.get("extra_core"), "extra_core") if b]
+    stems += [e["bibcode"] for e in cfg.load_extra_core(meta, entry=slug)]
     if not stems:
         raise NothingToCheck(
             f"--slug {slug}: no hay build/{slug}/ads.json ni entrada con sources/extra_core "

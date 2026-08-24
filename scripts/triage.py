@@ -359,10 +359,22 @@ def main() -> int:
     if args.report:
         report(args.slug, cands)
     cfg.print_seguro("\n  → juicio (LLM/usuario) por título+abstract: pertinente al SUJETO / ruido / dudoso.\n"
-          "     aceptados  → `extra_core: [<bibcode>, …]` en vault/config/stars.yaml y re-correr la "
-          "cadena (idempotente: sólo baja los nuevos).\n"
+          "     aceptados  → pegar el bloque de abajo en `extra_core:` de vault/config/stars.yaml y "
+          "re-correr la cadena (idempotente: sólo baja los nuevos).\n"
           "     descartados → python scripts/triage.py <slug> --drop <bib> … --reason \"<motivo>\".\n"
           "     dudosos    → al usuario (--report deja la tabla en outputs/).")
+    # D-58/R-2: `extra_core` es lista de MAPAS (con `via` y `motivo`). El snippet se imprime ya
+    # armado porque ahí está el costo de UX de la forma dura: escribir cuatro campos a mano por
+    # cada aceptación. Con el snippet, aceptar sigue siendo copiar y pegar — y el registro gana el
+    # dato que el carril del descarte ya tenía (quién y por qué), que era la asimetría.
+    cfg.print_seguro("\n  extra_core:")
+    for c in sorted(cands, key=lambda c: c.get("citation_count") or 0, reverse=True)[:10]:
+        cfg.print_seguro(f"  - bibcode: {c['bibcode']}\n"
+                         f"    via: triage\n"
+                         f"    fecha: {dt.date.today().isoformat()}\n"
+                         f"    motivo: <por qué es core para este sujeto>")
+    if len(cands) > 10:
+        cfg.print_seguro(f"  # … {len(cands) - 10} candidato(s) más (snippet acotado a los 10 más citados)")
     return 0
 
 

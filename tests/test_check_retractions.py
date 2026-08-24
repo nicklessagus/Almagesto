@@ -430,7 +430,7 @@ def test_main_slug_offads_sources_y_extra_core(toy_vault, monkeypatch):
     write_yaml(cfg.TOPICS_YAML, {"gp": {"title": "GP", "area": "methods", "concept": "gp",
                                         "source": "web",
                                         "sources": [{"key": "2006Rasmussen", "doi": "10.1/r"}],
-                                        "extra_core": ["2012PASP..124.1015B"]}})
+                                        "extra_core": [{"bibcode": "2012PASP..124.1015B", "via": "usuario", "motivo": "test"}]}})
     mk_note(toy_vault.PAPERS, "2006Rasmussen",
             {"bibcode": "2006Rasmussen", "title": "t", "doi": "10.1/r", "tags": ["paper"]}, "")
     mk_note(toy_vault.PAPERS, "2012PASP..124.1015B",
@@ -454,7 +454,7 @@ def test_slug_notes_extra_core_escalar_no_se_desarma_en_letras(toy_vault):
     retracciones de la cadena cierra en verde sin haber mirado nada — falso limpio en la frontera
     dura de la bóveda."""
     write_yaml(cfg.TOPICS_YAML, {"tema": {"title": "T", "area": "methods", "concept": "c",
-                                          "source": "ads", "extra_core": "2020ApJ...900....1X"}})
+                                          "source": "ads", "extra_core": [{"bibcode": "2020ApJ...900....1X", "via": "usuario", "motivo": "test"}]}})
     mk_note(cfg.PAPERS, "2020ApJ...900....1X", {"tags": ["paper"], "bibcode": "2020ApJ...900....1X"})
     notas = cr.slug_notes("tema")
     assert [p.stem for p in notas] == ["2020ApJ...900....1X"], (

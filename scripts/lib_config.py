@@ -20,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.25.0"
+ALMAGESTO_VERSION = "1.26.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -523,6 +523,88 @@ def es_del_carril(d: dict, carril: str) -> bool:
     candidatos del chaining se comía los rechazos de fuentes declaradas (y al revés), que es
     justamente la distinción que #81 introdujo."""
     return (d.get("origen") or "chaining") == carril
+
+
+# Vocabulario CERRADO de `via` en `extra_core` (D-58): de dónde salió la aceptación de ese paper.
+# Cerrado por el mismo motivo que `role` (#73): un typo deja el campo mudo para el único consumidor
+# que existe —la columna Origen de la ficha—, y un campo mudo se lee como "no se sabe".
+EXTRA_CORE_VIA = ("usuario", "triage", "citado-por-corpus")
+
+
+def load_extra_core(meta: dict, *, entry: str = "?") -> list:
+    """`extra_core` en su forma canónica: lista de mapas `{bibcode, via, motivo[, fecha]}`.
+
+    **R-2 (decidida con el usuario, 2026-08-24): forma dura con detector**, no lector tolerante.
+    Hasta 1.26.0 el atajo `extra_core: [2020X]` (y hasta el escalar `extra_core: 2020X`) se aceptaba
+    vía `_listify_curado`. El costo no es de estilo: una aceptación así no dice **quién** la aceptó
+    ni **por qué**, que es exactamente el dato no regenerable que #51 persiste para el carril del
+    **descarte**. Los dos carriles de curación tienen que registrar lo mismo, o el registro cuenta
+    media historia — y era la mitad optimista: lo que se dejó afuera, con motivo; lo que se metió,
+    a ciegas.
+
+    El costo de UX quedó acotado porque `triage.py` imprime el snippet ya estructurado para pegar:
+    sólo se siente al agregar un bibcode 100% a mano, que es cuando más importa saber por qué está.
+
+    Aborta con el snippet correcto en el mensaje ante cualquier forma vieja — un detector que no
+    muestra la salida obliga a leer la doc, y ahí es donde la gente inventa una tercera forma."""
+    v = meta.get("extra_core")
+    if v is None:
+        return []
+    if not isinstance(v, list) or any(not isinstance(x, dict) for x in v):
+        sueltos = [v] if isinstance(v, str) else [x for x in as_list(v) if isinstance(x, str)]
+        sys.exit(_extra_core_error(entry, sueltos,
+                                   "`extra_core` ya no acepta un bibcode suelto ni una lista de "
+                                   "strings (D-58): sin `via` y `motivo` el registro no dice quién "
+                                   "aceptó ese paper ni por qué"))
+    for x in v:
+        faltan = [k for k in ("bibcode", "via", "motivo") if not x.get(k)]
+        if faltan:
+            sys.exit(_extra_core_error(entry, [x.get("bibcode") or "<bibcode>"],
+                                       f"a una entrada de `extra_core` le falta {', '.join(faltan)}"))
+        if x["via"] not in EXTRA_CORE_VIA:
+            sys.exit(_extra_core_error(
+                entry, [x["bibcode"]],
+                f"`via: {x['via']}` no está en el vocabulario ({' | '.join(EXTRA_CORE_VIA)})"))
+    return v
+
+
+def _extra_core_error(entry: str, bibcodes: list, motivo: str) -> str:
+    """El mensaje del detector, con la forma nueva ya escrita para pegar."""
+    ejemplo = "\n".join(
+        f"  - bibcode: {b}\n    via: usuario        # {' | '.join(EXTRA_CORE_VIA)}\n"
+        f"    fecha: AAAA-MM-DD\n    motivo: <por qué este paper es core>"
+        for b in (bibcodes or ["<bibcode>"]))
+    return (f"'{entry}': {motivo}. Forma canónica:\n\nextra_core:\n{ejemplo}\n")
+
+
+def anular_decision(slug: str, clave: str, *, por: str, carril: str = "chaining") -> bool:
+    """Anula un descarte que se está revirtiendo, preservando el juicio viejo adentro (D-52).
+
+    El problema que cierra: al re-aceptar un bibcode que estaba descartado —agregándolo a
+    `extra_core`, o volviendo a declarar la fuente en `sources:`— la decisión vieja **se quedaba
+    ahí contradiciendo lo que se hizo**. El registro decía "descartado por ruido" sobre un paper
+    que está ingestado, y el consumidor no tiene forma de saber cuál de las dos afirmaciones vale.
+    `query_ads` sólo lo salteaba y `ingest_topic` sólo avisaba: ninguno tocaba el registro.
+
+    Anular no es borrar. El motivo viejo queda en `previa`, porque es exactamente el dato **no
+    regenerable** que #51 existe para conservar: por qué alguien miró ese paper y dijo que no. La
+    entrada nueva agrega quién la revirtió y cuándo.
+
+    Respeta los dos carriles (#51 chaining, #81 fuente declarada): anular un descarte de fuente
+    declarada no toca el del chaining con la misma clave. Devuelve `True` si anuló algo."""
+    decisiones = load_decisiones(slug)
+    d = decisiones.get(clave)
+    if not d or d.get("decision") != "descartado" or not es_del_carril(d, carril):
+        return False
+    decisiones[clave] = {
+        "decision": "anulada",
+        "fecha": _dt.date.today().isoformat(),
+        "anulada_por": por,
+        "origen": d.get("origen") or "chaining",
+        "previa": dict(d),
+    }
+    save_decisiones(slug, decisiones)
+    return True
 
 
 def save_decisiones(slug: str, decisiones: dict) -> None:

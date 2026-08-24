@@ -490,3 +490,85 @@ def test_save_paso_preserva_busquedas_y_decisiones(toy_vault, monkeypatch):
     cfg.save_decisiones("test_star", {"2020X": {"decision": "descartado", "motivo": "ruido"}})
     cfg.save_paso("test_star", "query_ads")
     assert cfg.load_busquedas("test_star") and cfg.load_decisiones("test_star")
+
+
+# ── issue 2.4 · D-52: el descarte re-aceptado queda ANULADO, no contradicho ─────────────────────
+
+def test_descartado_luego_declarado_queda_anulado(toy_vault):
+    """Hoy, al re-aceptar un bibcode que estaba descartado, la decisión vieja **se queda ahí
+    contradiciendo lo que se hizo**: el registro dice "descartado por ruido" sobre un paper que
+    está ingestado. Anularla explícito preserva las dos mitades — que se descartó, y que se
+    revirtió."""
+    cfg.save_decisiones("test_star", {"2020X": {"decision": "descartado", "motivo": "ruido",
+                                                "fecha": "2026-01-01"}})
+    assert cfg.anular_decision("test_star", "2020X", por="extra_core") is True
+    d = cfg.load_decisiones("test_star")["2020X"]
+    assert d["decision"] == "anulada" and d["anulada_por"] == "extra_core" and d["fecha"]
+
+
+def test_anulacion_preserva_el_juicio_previo(toy_vault):
+    """El motivo viejo sigue legible: es el dato NO regenerable, y perderlo al revertir es el mismo
+    agujero que #51 cerró para el descarte."""
+    cfg.save_decisiones("test_star", {"2020X": {"decision": "descartado", "motivo": "ruido",
+                                                "fecha": "2026-01-01"}})
+    cfg.anular_decision("test_star", "2020X", por="extra_core")
+    previa = cfg.load_decisiones("test_star")["2020X"]["previa"]
+    assert previa["motivo"] == "ruido" and previa["fecha"] == "2026-01-01"
+
+
+def test_anular_lo_que_no_estaba_descartado_no_hace_nada(toy_vault):
+    assert cfg.anular_decision("test_star", "2099Z", por="extra_core") is False
+
+
+def test_anular_no_cruza_carriles(toy_vault):
+    """Los dos carriles (#51 chaining, #81 fuente declarada) conviven en `decisiones`: anular el
+    descarte de una fuente declarada no puede tocar el del chaining con la misma clave."""
+    cfg.save_decisiones("test_star", {
+        "2020X": {"decision": "descartado", "motivo": "chaining", "origen": "chaining"},
+    })
+    assert cfg.anular_decision("test_star", "2020X", por="sources", carril="fuente-declarada") is False
+    assert cfg.load_decisiones("test_star")["2020X"]["decision"] == "descartado"
+
+
+# ── issue 2.5 · D-58 / R-2: `extra_core` estructurado, con detector ─────────────────────────────
+
+EC_OK = [{"bibcode": "2020X", "via": "triage", "motivo": "reanaliza la señal b"}]
+
+
+def test_load_extra_core_forma_canonica(toy_vault):
+    assert cfg.load_extra_core({"extra_core": EC_OK}, entry="test_star") == EC_OK
+
+
+def test_extra_core_escalar_detectado(toy_vault):
+    """R-2 (decidida por el usuario): forma dura con DETECTOR, no lector tolerante. El atajo
+    `extra_core: 2020X` era YAML válido y `_listify_curado` lo aceptaba; el costo es que el
+    registro no dice ni quién lo aceptó ni por qué — el mismo agujero que #51 cerró para el
+    descarte, en el carril de la aceptación."""
+    with pytest.raises(SystemExit) as exc:
+        cfg.load_extra_core({"extra_core": "2020X"}, entry="test_star")
+    assert "extra_core" in str(exc.value) and "bibcode:" in str(exc.value)
+
+
+def test_extra_core_lista_de_strings_detectada(toy_vault):
+    with pytest.raises(SystemExit) as exc:
+        cfg.load_extra_core({"extra_core": ["2020X", "2021Y"]}, entry="test_star")
+    assert "2020X" in str(exc.value)          # el mensaje trae el snippet ya armado
+
+
+def test_extra_core_sin_via_o_sin_motivo_detectado(toy_vault):
+    for meta in ({"extra_core": [{"bibcode": "2020X", "motivo": "m"}]},
+                 {"extra_core": [{"bibcode": "2020X", "via": "triage"}]},
+                 {"extra_core": [{"via": "triage", "motivo": "m"}]}):
+        with pytest.raises(SystemExit):
+            cfg.load_extra_core(meta, entry="test_star")
+
+
+def test_extra_core_via_fuera_de_vocabulario_detectado(toy_vault):
+    with pytest.raises(SystemExit) as exc:
+        cfg.load_extra_core({"extra_core": [{"bibcode": "2020X", "via": "a-mano", "motivo": "m"}]},
+                            entry="test_star")
+    assert "usuario" in str(exc.value)        # el mensaje lista el vocabulario
+
+
+def test_extra_core_ausente_es_lista_vacia(toy_vault):
+    assert cfg.load_extra_core({}, entry="test_star") == []

@@ -90,7 +90,7 @@ Progreso del ingest de <estrella>:
    candidatos, ordenada por **citas/año** y no por citas crudas (#79: el barrido existe para
    recuperar casos tipo Garg+2019 / Willamo+2020, core poco citados que caen al fondo del ranking;
    rankearlo por citas repetía el sesgo de edad del mecanismo que le falló). Revisarla y agregar los que correspondan **de forma persistente** con
-   `extra_core: [<bibcode>, …]` en la entrada de la estrella en `vault/config/stars.yaml` (el
+   `extra_core:` (lista de mapas `{bibcode, via, fecha, motivo}` — D-58; el `triage` imprime el snippet listo para pegar) en la entrada de la estrella en `vault/config/stars.yaml` (el
    `query_ads` los trae por bibcode, `via: manual`, y sobreviven al re-run — a diferencia de editar
    `build/`, que es scratch y se pisa); después re-correr la cadena (idempotente). Si el barrido
    devuelve muchos y no bajás todos, **listá cuántos quedan sin bajar** en el `log` — no cures en
@@ -114,7 +114,7 @@ Progreso del ingest de <estrella>:
    extraídos — la decisión sigue siendo por-slug (¿pertinente a ESTE sujeto?), pero se despachan
    rápido (el `stars:` que falte lo cubre el retro-linkeo add-only de `make_notes`).
    Clasificá cada candidato **sólo por título+abstract** (no bajes nada para decidir):
-   - **pertinente** → agregalo a `extra_core: [<bibcode>, …]` en `vault/config/stars.yaml` y re-corré
+   - **pertinente** → pegá el snippet que imprime `triage.py` en `extra_core:` de `vault/config/stars.yaml` y re-corré
      la cadena (idempotente: baja sólo los nuevos; `extra_core` es override del clasificador).
    - **ruido** → `python scripts/triage.py <slug> --drop <bib> … --reason "<motivo>"` (persiste en
      `decisiones` de `vault/config/registro/<slug>.yaml` — **versionado: se commitea y viaja**, como

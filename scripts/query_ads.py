@@ -1,7 +1,7 @@
 """Consulta NASA ADS por estrella → metadata de papers + clasificación de relevancia.
 
 Uso:
-    python scripts/query_ads.py <slug> [--rows N] [--no-chain] [--no-glyph] [--no-triage] [--sweep]
+    python scripts/query_ads.py <slug> [--rows N] [--no-chain] [--no-glyph] [--sweep]
     python scripts/query_ads.py <slug> --topic            # tema (query cruda de topics.yaml)
     python scripts/query_ads.py <slug> --extra-only       # sólo los bibcodes de extra_core (tema mixto)
     python scripts/query_ads.py <slug> --dry-run          # re-clasificar en memoria, sin red ni escritura
@@ -51,7 +51,9 @@ el que lleva **el sujeto en el título** (1 falso positivo en 310) y el resto qu
 (`scripts/triage.py` + paso 2c del skill ingest-star). Las decisiones persisten:
 aceptado → `extra_core`; descartado → `decisiones` de `vault/config/registro/<slug>.yaml` (#51:
 versionado, viaja en git; no se re-propone). En **temas** no
-aplica (la query *es* la definición del tema); se desactiva con `--no-triage`.
+aplica (la query *es* la definición del tema). **No se puede desactivar** (D-48): el flag
+`--no-triage` se eliminó porque permitía que un candidato ya descartado —con su motivo,
+persistido en el registro— volviera a entrar en silencio.
 
 **Curación manual persistente:** `extra_core: [bibcode, …]` en la entrada de `stars.yaml`/`topics.yaml`
 lista papers que el clasificador perdió. Es un **override del clasificador** (#39): el que ADS no
@@ -848,10 +850,6 @@ def main() -> int:
                          "marcado en build/<slug>/ads.json y el lint lo surface")
     ap.add_argument("--no-chain", action="store_true",
                     help="desactivar el citation chaining (references/citations de los papers core)")
-    ap.add_argument("--no-triage", action="store_true",
-                    help="desactivar la compuerta de triage del chaining (#38): todo lo que el grafo "
-                         "traiga y clasifique core entra directo, como antes. Sólo aplica a estrellas "
-                         "(en temas la query ES la definición del tema y su core entra solo)")
     ap.add_argument("--no-glyph", action="store_true",
                     help="desactivar el rescate por glifo de nombres Bayer (ε/ϵ/∊ Eri): trae el "
                          "superset de la constelación y filtra client-side. Sólo corre si el "
@@ -978,11 +976,13 @@ def main() -> int:
     # Corre ANTES del glifo y del chaining (#42): si mergea después, los curados no están en `recs`
     # cuando el chaining arma su dedup y la cola de triage RE-PROPONE papers ya aceptados (medido:
     # 14 de 50 extra_core de ε Eri de vuelta como candidatos). Acá, además, siembran el grafo.
-    # `_listify_curado`, no `or []`: un `extra_core: <bibcode>` sin corchetes (aceptar UN candidato
-    # del triage, el caso más común) es truthy y no caía en el `or` — la comprensión de abajo
-    # recorría el string letra por letra y el bibcode real NUNCA se pedía a ADS: la curación manual
-    # del usuario se evaporaba en silencio (R13, el más grave de la clase).
-    extra = [b for b in _listify_curado(meta.get("extra_core"), "extra_core") if b]
+    # D-58/R-2: forma dura. `load_extra_core` valida y aborta con el snippet correcto ante el
+    # atajo viejo (`extra_core: [bibcode]`), en vez de aceptarlo sin `via` ni `motivo`. Eso además
+    # cierra R13 de raíz: el escalar suelto que `_listify_curado` "rescataba" letra por letra ya no
+    # es una forma válida que haya que adivinar.
+    entradas = cfg.load_extra_core(meta, entry=args.slug)
+    extra = [e["bibcode"] for e in entradas]
+    via_de = {e["bibcode"]: e["via"] for e in entradas}
     if args.extra_only and not extra:
         sys.exit(f"--extra-only pero la entrada '{args.slug}' no declara `extra_core` en topics.yaml "
                  "— listá ahí los bibcodes ADS del tema mixto.")
@@ -996,8 +996,15 @@ def main() -> int:
         for b in extra:
             r = present.get(b)
             if r is not None and not r["relevant"]:
-                r["relevant"], r["why_excluded"], r["via"] = True, None, "manual"
+                # el `via` declarado en la config reemplaza al "manual" hardcodeado: la ficha puede
+                # decir si ese paper entró por juicio del usuario, por el triage o por el corpus.
+                r["relevant"], r["why_excluded"], r["via"] = True, None, via_de.get(b, "manual")
                 rescued.append(b)
+            # D-52: si ese bibcode figuraba DESCARTADO, la aceptación lo revierte — se anula la
+            # decisión preservando el motivo viejo, en vez de dejarla contradiciendo lo hecho.
+            if cfg.anular_decision(args.slug, b, por="extra_core"):
+                cfg.print_seguro(f"  ↩ {b}: figuraba descartado y está en `extra_core` → decisión "
+                                 "ANULADA en el registro (el motivo viejo queda en `previa`)")
         manual = [m for m in fetch_bibcodes([b for b in extra if b not in present])
                   if m.get("bibcode")]
         cfg.print_seguro(f"  extra_core: +{len(manual)} traídos de ADS · {len(rescued)} rescatados del corte "
@@ -1040,7 +1047,12 @@ def main() -> int:
         core_bibs = [r["bibcode"] for r in rel if r.get("bibcode")]
         # La compuerta es de ESTRELLAS: en un tema la query ES la definición del tema, así que su
         # core (y el del grafo anclado a esa query) entra solo.
-        gate = bool(star_names) and not args.no_triage
+        # D-48: NO hay flag para apagarla. Existía `--no-triage` "para restaurar el comportamiento
+        # viejo", y ese comportamiento es el que #55 midió con 18% de precisión — pero lo grave no
+        # es el ruido: con el flag, un bibcode ya descartado (con su motivo, persistido por #51)
+        # volvía a entrar EN SILENCIO. Una escotilla que pisa el juicio curado no es una escotilla,
+        # es una fuga.
+        gate = bool(star_names)
         descartados = load_triage(args.slug) if gate else set()
         chained, ya_descartados = [], 0
         for c in chain_candidates(core_bibs, args.rows, chain_filter):
@@ -1120,6 +1132,11 @@ def main() -> int:
         # que nadie descartó de la query (#81).
         "n_dropped": n_dropped_chaining(args.slug),
         "truncated": bool(truncated),
+        # D-48: las escotillas usadas en ESTA corrida. Cambian lo que la búsqueda hizo (`--yes`
+        # saltea la guardia de expansión, `--extra-only` no consulta ADS), así que sin ellas dos
+        # entradas idénticas del registro pueden describir corridas que no hicieron lo mismo. De
+        # acá llegan a la cabecera de la ficha vía `search_line`.
+        "escotillas": _flags_usados(args),
         "almagesto_version": cfg.ALMAGESTO_VERSION,
         # La LENTE con la que se clasificó, textual (#64 → auditoría 1.10.3). `almagesto_version`
         # es la versión del framework, NO la de la regla: cambiar una regex de `relevance.topics`
