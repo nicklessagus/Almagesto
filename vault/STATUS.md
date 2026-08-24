@@ -306,6 +306,41 @@ resuelve con la identidad de D-19.
 
 ---
 
+## 🔜 Próxima implementación — "¿qué paper importante me falta?" (anotado 2026-08-24)
+
+Es una funcionalidad **aparte de la puerta 1** de D-26, y confundirlas fue el error de hoy. La
+puerta 1 **filtra** los candidatos que una query ya trajo (*"¿alguno de mis core cita a ESTE?"*).
+Esto otro **enumera**: recorre el índice de citas y lista las obras que el corpus cita mucho y la
+bóveda no tiene. Responde una pregunta distinta y útil — *el hueco de la bóveda* — pero es
+descubrimiento, no clasificación.
+
+Se implementó por error dentro del issue 7.2 y se retiró en `1d96d1f`; el código está ahí para
+recuperar (`candidates`, `merge_candidates`, `_resolver_default`).
+
+**Lo ya medido, que no hay que volver a medir** (corpus real: 566 papers core de Almagesto-RV):
+
+- **20.490** obras citadas que la bóveda no tiene. La distribución es una potencia suave, **sin
+  codo**: ≥2 → 7.252 · ≥5 → 2.136 · ≥10 → 729 · ≥20 → 214 · ≥30 → 89.
+- Por eso el umbral **no se puede derivar del corpus**: es presupuesto de curación y hay que
+  **declararlo**, no esconderlo en un default. Y tiene que ser **fracción del corpus, no conteo
+  absoluto**: ≥20 sobre 566 papers es "lo cita el 3,5%", pero en una bóveda nueva de 40 papers
+  ninguna obra llega a 20 y la lista sale vacía — un cero inventado (INV-87).
+- **La lista cruda tiene ~30% de duplicados**: los dos espacios de identificadores se solapan y el
+  mismo trabajo aparece dos veces con los citadores repartidos (Zechmeister & Kürster 2009 salía
+  como `2009A&A...496..577Z` con 94 y `W4292309267` con 82). `merge_candidates` fusiona por DOI y
+  midió **214 → 150**. Fusionar **sólo por encima del umbral**: 214 candidatos contra 20.824 obras
+  son dos órdenes de magnitud de red para la misma respuesta.
+- **Residuo declarado**: de los 150 fusionados, 15 no tienen DOI y no se pueden fusionar con nada
+  (libros, boletines: `2006gpml.book.....R`, `2002Msngr.110....9P`). Pueden seguir duplicados. No
+  se resuelve por título: en R-9 ese matcheo erró 2 de 18, y una arista falsa en un índice de citas
+  es peor que una faltante.
+
+**Dónde va en el flujo**: fuera de la cadena de ingest, como pasada global a pedido (hermana de
+`sweep_external`), porque necesita el corpus entero y no depende del sujeto en curso. Lo que
+aceptes va a `extra_core`, y de ahí lo baja el próximo ingest.
+
+---
+
 ## 📌 DÓNDE RETOMAR (handoff del 2026-08-24 — leer esto primero)
 
 > Escrito para arrancar **con contexto limpio**. Todo lo decidido vive en el repo; nada depende de
