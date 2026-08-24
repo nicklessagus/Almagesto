@@ -1415,6 +1415,14 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
     return True
 
 
+
+def _flags_usados(args) -> list:
+    """Los flags no-default de esta corrida, para dejarlos en `cadena:` del registro (D-48/D-57).
+    Son las **escotillas**: `--force`, `--yes`, `--all` cambian lo que la corrida hizo, y sin
+    registrarlas la traza dice "corrió make_notes" sobre dos corridas que no hicieron lo mismo."""
+    return sorted(f"--{k.replace('_', '-')}" for k, v in vars(args).items()
+                  if v is True and k not in ("topic",))
+
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser()
@@ -1485,6 +1493,7 @@ def main() -> int:
     else:
         write_star_note(args.slug, args.force)
     write_paper_notes(args.slug, args.all, args.force, topic=args.topic)
+    cfg.save_paso(args.slug, "make_notes", flags=_flags_usados(args))
     return 0
 
 

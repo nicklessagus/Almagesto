@@ -8,9 +8,9 @@
 ## Resumen
 
 - Invariantes en el contrato: **91**
-- Con implementación marcada: **6**
-- Con test marcado: **6** (techo `sin_test`: 85, hoy 85)
-- Sin ninguna marca: **85** (techo `sin_marca`: 85)
+- Con implementación marcada: **7**
+- Con test marcado: **7** (techo `sin_test`: 84, hoy 84)
+- Sin ninguna marca: **84** (techo `sin_marca`: 84)
 - Marcas huérfanas: **0**
 
 ## El mapa
@@ -94,9 +94,9 @@
 | **INV-75** | P2 | garantizado sin medir | — | — |
 | **INV-76** | P0 | HUECO (D-1) | — | — |
 | **INV-77** | P1 | HUECO (D-2) | — | — |
-| **INV-78** | P0 | HUECO (D-4, D-20) | `scripts/lib_blocks.py:3`<br>`scripts/lint.py:838` · `main` | `tests/test_lib_blocks.py:47` · `test_reflow_no_mueve_ancla`<br>`tests/test_lint.py:1862` · `test_reemplazo_del_txt_marca_por_fuente` |
-| **INV-79** | P0 | HUECO (D-4, D-5) | `scripts/lint.py:838` · `main` | `tests/test_lint.py:1817` · `test_nota_verificada_no_marca_nada` |
-| **INV-80** | P0 | HUECO (D-6) | `scripts/lib_config.py:203` · `objective_error`<br>`scripts/query_ads.py:822` · `main` | `tests/test_lib_config.py:399` · `test_objective_error_distingue_los_tres_estados`<br>`tests/test_lint.py:1735` · `test_lint_objective_roto_bloquea`<br>`tests/test_query_ads.py:1301` · `test_query_ads_rehusa_lente_vacia` |
+| **INV-78** | P0 | HUECO (D-4, D-20) | `scripts/lib_blocks.py:3`<br>`scripts/lint.py:840` · `main` | `tests/test_lib_blocks.py:47` · `test_reflow_no_mueve_ancla`<br>`tests/test_lint.py:1862` · `test_reemplazo_del_txt_marca_por_fuente` |
+| **INV-79** | P0 | HUECO (D-4, D-5) | `scripts/lint.py:840` · `main` | `tests/test_lint.py:1817` · `test_nota_verificada_no_marca_nada` |
+| **INV-80** | P0 | HUECO (D-6) | `scripts/lib_config.py:203` · `objective_error`<br>`scripts/query_ads.py:830` · `main` | `tests/test_lib_config.py:399` · `test_objective_error_distingue_los_tres_estados`<br>`tests/test_lint.py:1735` · `test_lint_objective_roto_bloquea`<br>`tests/test_query_ads.py:1301` · `test_query_ads_rehusa_lente_vacia` |
 | **INV-81** | P0 | HUECO (D-10, D-11, D-24) | — | — |
 | **INV-82** | P1 | HUECO (D-12) | — | — |
 | **INV-83** | P0 | HUECO (D-13, D-14) | — | — |
@@ -107,4 +107,4 @@
 | **INV-88** | P1 | HUECO (D-25, D-26, D-27) | — | — |
 | **INV-89** | P1 | HUECO (D-28) | `scripts/lib_config.py:537` · `load_busquedas` | `tests/test_lib_config.py:418` · `test_dos_busquedas_con_solapamiento_no_suman` |
 | **INV-90** | P1 | HUECO (D-53) | `scripts/lib_config.py:385` · `write_text_atomic`<br>`scripts/lib_config.py:409` · `write_bytes_atomic` | `tests/test_lib_config.py:371` · `test_sin_escrituras_directas_a_vault`<br>`tests/test_make_notes.py:1802` · `test_notas_pasan_por_el_helper` |
-| **INV-91** | P1 | HUECO (D-57) | — | — |
+| **INV-91** | P1 | HUECO (D-57) | `scripts/lib_config.py:603` · `load_cadena`<br>`scripts/lib_config.py:608` · `save_paso` | `tests/test_lib_config.py:457` · `test_save_paso_appendea_con_fecha_version_y_via` |

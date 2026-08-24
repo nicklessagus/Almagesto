@@ -46,6 +46,7 @@ import argparse
 import json
 import re
 import shutil
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -78,10 +79,15 @@ def _listify_curado(v, campo: str):
 
 
 def run(script: str, *args: str) -> int:
-    """Corre un script de la cadena con el mismo intérprete (rutas absolutas vía lib_config)."""
+    """Corre un script de la cadena con el mismo intérprete (rutas absolutas vía lib_config).
+
+    Exporta `ALMAGESTO_VIA=orquestador` para que el paso —que se estampa a sí mismo en `cadena:`
+    del registro (R-6/D-57)— sepa distinguirse de una corrida suelta. Va por entorno y no por flag
+    porque tiene que atravesar el `subprocess.run` sin tocarle el CLI a cada script."""
     cfg.print_seguro(f"\n→ {script} {' '.join(args)}")
+    env = {**os.environ, cfg.VIA_ENV: "orquestador"}
     return subprocess.run([sys.executable, str(cfg.ROOT / "scripts" / script), *args],
-                          cwd=cfg.ROOT / "scripts").returncode
+                          cwd=cfg.ROOT / "scripts", env=env).returncode
 
 
 def _cierre_retracciones(slug: str) -> None:

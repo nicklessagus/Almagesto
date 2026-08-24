@@ -512,6 +512,8 @@ def main(argv=()) -> int:
     # repartidos por todo `main()`.
     not_evaluated: list = []
     old_registro: list = []            # registros con la clave `busqueda:` (schema pre-D-28)
+    cadena_incompleta: list = []       # (slug, "se cortó en <paso>") — D-57
+    stars_slugs = {m.get("slug") for m in cfg.load_stars().values() if isinstance(m, dict)}
     verif_blocks: list = []            # (archivo, fecha del bloque|None) — notas CON bloque de verify
     anchor_notes: list = []            # (stem, texto) de esas mismas notas — insumo del ancla (D-4)
     names = {basename(p)[:-3] for p in files}  # stems referenciables por [[..]]
@@ -1224,6 +1226,18 @@ def main(argv=()) -> int:
                 (slug, "el registro usa la clave `busqueda:` (schema pre-D-28, una sola corrida) — "
                        "el lector ya no la lee: re-corré la cadena del sujeto para que escriba "
                        "`busquedas: []` (acumulativo; el embudo dejó de pisarse)"))
+        # D-57 / INV-91: la cadena deja traza estructurada de qué pasos corrieron. Si el registro
+        # tiene `cadena` y le falta un paso del orden canónico, se NOMBRA el paso donde se cortó —
+        # "faltan 4 pasos" no es accionable, "se cortó en `fetch_ground_truth`" sí. Backlog: una
+        # cadena a medias no invalida lo que hay, pero deja la bóveda con notas a medio hacer y
+        # nadie lo diría. Sólo se evalúa para ESTRELLAS: el orden de un tema depende de su `source`
+        # (off-ADS no corre query_ads ni fetch_ground_truth) y compararlo contra el orden astro
+        # inventaría cortes que no existen.
+        if slug in stars_slugs and (corte := cfg.cadena_cortada(slug)):
+            corridos = [p.get("paso") for p in cfg.load_cadena(slug)]
+            cadena_incompleta.append(
+                (slug, f"la cadena se cortó en `{corte}` (corrieron: {', '.join(corridos)}) → "
+                       f"re-corré `python scripts/ingest_star.py {slug}` (es idempotente)"))
         dec = reg.get("decisiones")
         if isinstance(dec, dict):
             for clave, v in dec.items():
@@ -1290,6 +1304,7 @@ def main(argv=()) -> int:
                          ("Cabecera no estampable: ficha/concepto sin la línea del generador — los "
                           "estampadores de cabecera no-opean en silencio (backlog)", headerless),
                          ("Triage pendiente: candidatos del chaining sin juzgar (backlog)", triage_pending),
+                         ("Cadena incompleta: falta un paso del orden canónico (backlog)", cadena_incompleta),
                          ("Corpus truncado: la query directa trajo menos de lo que ADS reporta (backlog)", truncated_corpora),
                          ("Decisión del registro con forma inválida — load_decisiones la descarta "
                           "en silencio, el triage la vuelve a proponer sin el motivo (backlog)", bad_decisions),

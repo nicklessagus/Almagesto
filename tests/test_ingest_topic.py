@@ -363,3 +363,18 @@ def test_offads_retraccion_detectada_aborta(toy_vault, fake_run, fake_notes, mon
     fake_run.rcs["check_retractions.py"] = 1
     with pytest.raises(SystemExit, match="retractados"):
         run_main(monkeypatch)
+
+
+def test_run_exporta_la_via_al_paso(toy_vault, monkeypatch):
+    """R-6: el paso se estampa a sí mismo, pero necesita saber QUIÉN lo lanzó. `run()` lo exporta
+    por entorno —no por flag— para no tocarle el CLI a cada script y para que atraviese el
+    `subprocess.run`."""
+    visto = {}
+
+    def fake_run(cmd, cwd=None, env=None):
+        visto["via"] = (env or {}).get(cfg.VIA_ENV)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(it.subprocess, "run", fake_run)
+    assert it.run("query_ads.py", "test_star") == 0
+    assert visto["via"] == "orquestador"

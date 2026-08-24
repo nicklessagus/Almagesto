@@ -200,6 +200,14 @@ def fetch_host(host: str, tab=None) -> dict:
     return out
 
 
+
+def _flags_usados(args) -> list:
+    """Los flags no-default de esta corrida, para dejarlos en `cadena:` del registro (D-48/D-57).
+    Son las **escotillas**: `--force`, `--yes`, `--all` cambian lo que la corrida hizo, y sin
+    registrarlas la traza dice "corrió make_notes" sobre dos corridas que no hicieron lo mismo."""
+    return sorted(f"--{k.replace('_', '-')}" for k, v in vars(args).items()
+                  if v is True and k not in ("topic",))
+
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser()
@@ -237,6 +245,7 @@ def main() -> int:
                "source": "NASA Exoplanet Archive (pscomppars) + SIMBAD"}
     out = write_ground_truth(args.slug, payload)
     print(f"  → {out}")
+    cfg.save_paso(args.slug, "fetch_ground_truth", flags=_flags_usados(args))
     return 0
 
 

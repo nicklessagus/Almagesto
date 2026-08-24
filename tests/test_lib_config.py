@@ -446,3 +446,47 @@ def test_universo_acumulado_sin_bibcodes_cae_al_maximo(toy_vault):
     cfg.save_busqueda("test_star", {"fecha": "2026-01-01", "n_total": 30})
     cfg.save_busqueda("test_star", {"fecha": "2026-02-01", "n_total": 40})
     assert cfg.universo_acumulado("test_star") == 40
+
+
+# ── issue 2.2 · D-57: cada paso deja traza estructurada en `cadena:` (INV-91) ───────────────────
+
+def test_save_paso_appendea_con_fecha_version_y_via(toy_vault, monkeypatch):
+    """R-6, decidida por el usuario: **cada script se estampa a sí mismo**. `via` distingue el paso
+    corrido por el orquestador del corrido a mano — con la alternativa (estampar sólo desde
+    `run()`) un paso suelto quedaba invisible y el lint reportaba un corte que no ocurrió.
+    @inv INV-91"""
+    monkeypatch.delenv("ALMAGESTO_VIA", raising=False)
+    cfg.save_paso("test_star", "fetch_pdf", flags=["--force"])
+    monkeypatch.setenv("ALMAGESTO_VIA", "orquestador")
+    cfg.save_paso("test_star", "make_notes")
+    cadena = cfg.load_cadena("test_star")
+    assert [(p["paso"], p["via"]) for p in cadena] == [
+        ("fetch_pdf", "suelto"), ("make_notes", "orquestador")]
+    assert cadena[0]["flags"] == ["--force"]
+    assert cadena[0]["version"] == cfg.ALMAGESTO_VERSION and cadena[0]["fecha"]
+
+
+def test_save_paso_idempotente_el_mismo_dia(toy_vault, monkeypatch):
+    """D-54 aplicado acá: re-correr el mismo paso el mismo día con los mismos flags no agrega
+    ruido de diff — el registro queda byte-idéntico."""
+    monkeypatch.delenv("ALMAGESTO_VIA", raising=False)
+    cfg.save_paso("test_star", "fetch_pdf")
+    antes = cfg.registro_path("test_star").read_bytes()
+    cfg.save_paso("test_star", "fetch_pdf")
+    assert cfg.registro_path("test_star").read_bytes() == antes
+
+
+def test_save_paso_con_flags_distintos_si_registra(toy_vault, monkeypatch):
+    """Lo que cambia sustantivamente sí entra: `--force` no es la misma corrida que sin él."""
+    monkeypatch.delenv("ALMAGESTO_VIA", raising=False)
+    cfg.save_paso("test_star", "fetch_ground_truth")
+    cfg.save_paso("test_star", "fetch_ground_truth", flags=["--force"])
+    assert len(cfg.load_cadena("test_star")) == 2
+
+
+def test_save_paso_preserva_busquedas_y_decisiones(toy_vault, monkeypatch):
+    monkeypatch.delenv("ALMAGESTO_VIA", raising=False)
+    cfg.save_busqueda("test_star", {"fecha": "2026-01-01", "n_total": 1})
+    cfg.save_decisiones("test_star", {"2020X": {"decision": "descartado", "motivo": "ruido"}})
+    cfg.save_paso("test_star", "query_ads")
+    assert cfg.load_busquedas("test_star") and cfg.load_decisiones("test_star")

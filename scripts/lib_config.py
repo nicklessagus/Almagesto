@@ -588,6 +588,66 @@ def save_busqueda(slug: str, busqueda: dict) -> None:
     save_registro(slug, data)
 
 
+# Orden canónico de la cadena de ESTRELLAS. Fuente de verdad del orden: el header de
+# `ingest_star.py` (y su constante `CHAIN`); acá vive la copia que el lint usa para nombrar el paso
+# donde se cortó, con `check_retractions` al final, que el orquestador corre aparte.
+CADENA_ESTRELLA = ("query_ads", "fetch_arxiv", "fetch_pdf", "fetch_ground_truth",
+                   "make_notes", "extract_fulltext", "check_retractions")
+
+# Variable que el orquestador exporta al lanzar cada paso, para que el propio paso sepa si lo
+# corrió la cadena o una mano. No es un flag porque tiene que atravesar el `subprocess.run`.
+VIA_ENV = "ALMAGESTO_VIA"
+
+
+def load_cadena(slug: str) -> list:
+    """Los pasos que corrieron para este sujeto, en orden (D-57).  @inv INV-91"""
+    return [p for p in as_list(load_registro(slug).get("cadena")) if isinstance(p, dict)]
+
+
+def save_paso(slug: str, paso: str, flags=()) -> None:
+    """Estampa un paso de la cadena en `cadena:` del registro.  @inv INV-91
+
+    **R-6 (decidida con el usuario, 2026-08-24): cada script se estampa a sí mismo** al salir 0.
+    La alternativa —estampar sólo desde `ingest_topic.run()`, un único punto de escritura— dejaba
+    invisible el paso corrido a mano, y entonces el lint reportaba "se cortó en `fetch_pdf`" sobre
+    un paso que **sí corrió**. Un falso positivo así erosiona la categoría entera: la primera vez
+    que alguien la ve mentir, deja de mirarla.
+
+    `via` sale de la variable de entorno que exporta el orquestador (`orquestador`) o vale
+    `suelto`. Es la distinción que hace legible la traza: una cadena entera corrida de una vez se
+    lee distinto de seis pasos sueltos a lo largo de una semana.
+
+    **Idempotente (D-54):** si ya hay una entrada de ese paso con la misma fecha, los mismos flags
+    y la misma vía, no se re-escribe — re-correr un paso el mismo día no debe generar ruido de
+    diff. Lo que cambia sustantivamente (otros flags) sí entra."""
+    data = load_registro(slug)
+    data.setdefault("slug", slug)
+    previos = [p for p in as_list(data.get("cadena")) if isinstance(p, dict)]
+    entrada = {
+        "paso": paso,
+        "fecha": _dt.date.today().isoformat(),
+        "version": ALMAGESTO_VERSION,
+        "via": os.environ.get(VIA_ENV) or "suelto",
+        "flags": list(flags),
+    }
+    if any(p == entrada for p in previos):
+        return                       # misma corrida, mismo día: sin ruido de diff
+    data["cadena"] = previos + [entrada]
+    save_registro(slug, data)
+
+
+def cadena_cortada(slug: str, canonica=CADENA_ESTRELLA) -> str | None:
+    """El primer paso de `canonica` que NO figura en el registro, o `None` si están todos.
+
+    Nombra el paso, no cuenta pasos: "se cortó en `fetch_ground_truth`" es accionable y
+    "faltan 4 pasos" no. Si el registro no tiene `cadena` en absoluto devuelve `None` — eso es
+    "nunca se estampó" (sujeto anterior a D-57), no "se cortó en el primero"."""
+    corridos = {p.get("paso") for p in load_cadena(slug)}
+    if not corridos:
+        return None
+    return next((paso for paso in canonica if paso not in corridos), None)
+
+
 def record_pdf_source(slug: str, stem: str, source: str) -> None:
     """Deja constancia de QUÉ rama entregó el PDF de un paper (#57): `eprint` (arXiv), `ads`
     (escaneo alojado por ADS) o `publisher`. Vive en `build/<slug>/pdf_source.json` —scratch a

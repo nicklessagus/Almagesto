@@ -140,6 +140,14 @@ def ocr_pdf(pdf: Path) -> str | None:
         return "\f".join(out)
 
 
+
+def _flags_usados(args) -> list:
+    """Los flags no-default de esta corrida, para dejarlos en `cadena:` del registro (D-48/D-57).
+    Son las **escotillas**: `--force`, `--yes`, `--all` cambian lo que la corrida hizo, y sin
+    registrarlas la traza dice "corrió make_notes" sobre dos corridas que no hicieron lo mismo."""
+    return sorted(f"--{k.replace('_', '-')}" for k, v in vars(args).items()
+                  if v is True and k not in ("topic",))
+
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser()
@@ -258,6 +266,8 @@ def main() -> int:
     if stamped:
         print(f"  notas: {stamped} con fulltext:/fulltext_source:/pdf_source: estampados "
               "(contrato máquina)")
+    if not failed:
+        cfg.save_paso(args.slug, "extract_fulltext", flags=_flags_usados(args))
     return 1 if failed else 0
 
 

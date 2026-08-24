@@ -103,6 +103,8 @@
 
 ## Triage pendiente: candidatos del chaining sin juzgar (backlog) (0)
 
+## Cadena incompleta: falta un paso del orden canónico (backlog) (0)
+
 ## Corpus truncado: la query directa trajo menos de lo que ADS reporta (backlog) (0)
 
 ## Decisión del registro con forma inválida — load_decisiones la descarta en silencio, el triage la vuelve a proponer sin el motivo (backlog) (0)

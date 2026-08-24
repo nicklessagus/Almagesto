@@ -407,10 +407,16 @@ sin mover su ancla de ratio.
 Los cinco sub-casos del lint están **auditados por mutación**: cada uno rompe su test y ningún otro.
 Ratchet **88 → 86** (INV-78, INV-79). Tier 0: 721 verdes. Tier 1: 48 (golden 31 → 33 categorías).
 
+### ✅ R-6 y R-2 decididas (2026-08-24)
+
+| Punto | Decisión |
+|---|---|
+| **R-6** · quién estampa `cadena` | **cada script se estampa a sí mismo** al salir 0 (`cfg.save_paso`, una implementación, N call sites). Estampar sólo desde `run()` dejaba invisible el paso corrido a mano y el lint reportaba "se cortó en `fetch_pdf`" sobre un paso que **sí corrió** — falso positivo que erosiona la categoría. El registro distingue `via: orquestador` de `via: suelto`. |
+| **R-2** · forma de `extra_core` | **forma dura con detector**: sólo lista de mapas `{bibcode, via, fecha, motivo}`; el escalar y la lista de strings bloquean, con el snippet correcto en el mensaje. El costo de UX es acotado porque `triage.py` ya imprime el snippet para pegar. |
+
 ### Lo que sigue
-**Tanda 2 — registro acumulativo y escotillas** (D-28/D-57/D-58). Antes del issue 2.2 hay que
-resolver **R-6** (quién estampa `cadena` cuando un script corre suelto) y en 2.x aparece **R-2** (la
-forma dura de `extra_core`).
+**Tanda 2**, issues 2.2 (`cadena:`), 2.3 (`--no-triage` se elimina), 2.4 (descarte anulado
+explícito) y 2.5 (`extra_core` estructurado). El 2.1 ya cerró.
 
 ## 🔜 Cola de pendientes (al 2026-08-23)
 

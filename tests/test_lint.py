@@ -1917,3 +1917,25 @@ def test_registro_schema_viejo_detectado(toy_vault, capsys):
     rc, rep = run_lint_reporte(capsys)
     assert rc == 1
     assert "pre-D-28" in rep or "schema viejo" in rep
+
+
+def test_cadena_cortada_nombra_el_paso(toy_vault, capsys):
+    """INV-91: el registro dice qué pasos corrieron; el lint compara contra el orden canónico y
+    **nombra el paso donde se cortó**. Sin esto, una cadena abortada a la mitad deja la bóveda con
+    notas a medio hacer y nada que lo diga."""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    for paso in ("query_ads", "fetch_arxiv", "fetch_pdf"):
+        cfg.save_paso("test_star", paso)
+    _, rep = run_lint_reporte(capsys)
+    assert "fetch_ground_truth" in rep
+    assert "cadena" in rep.lower()
+
+
+def test_cadena_completa_no_marca(toy_vault, capsys):
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    for paso in ("query_ads", "fetch_arxiv", "fetch_pdf", "fetch_ground_truth",
+                 "make_notes", "extract_fulltext", "check_retractions"):
+        cfg.save_paso("test_star", paso)
+    _, rep = run_lint_reporte(capsys)
+    linea = [l for l in rep.splitlines() if l.startswith("## Cadena incompleta")]
+    assert linea and linea[0].endswith("(0)")

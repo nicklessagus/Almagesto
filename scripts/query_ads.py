@@ -817,6 +817,14 @@ def print_probe(q: str, recs: list, noncore_top: int = 25) -> int:
     return 0
 
 
+
+def _flags_usados(args) -> list:
+    """Los flags no-default de esta corrida, para dejarlos en `cadena:` del registro (D-48/D-57).
+    Son las **escotillas**: `--force`, `--yes`, `--all` cambian lo que la corrida hizo, y sin
+    registrarlas la traza dice "corrió make_notes" sobre dos corridas que no hicieron lo mismo."""
+    return sorted(f"--{k.replace('_', '-')}" for k, v in vars(args).items()
+                  if v is True and k not in ("topic",))
+
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     # D-6 / INV-80 — la lente vacía REHÚSA operar.  @inv INV-80
@@ -1123,6 +1131,7 @@ def main() -> int:
                   "noise_doctypes": sorted(NOISE_DOCTYPES)},
     })
     cfg.print_seguro(f"  → {cfg.registro_path(args.slug)} (registro de búsqueda, versionado)")
+    cfg.save_paso(args.slug, "query_ads", flags=_flags_usados(args))
     return 0
 
 

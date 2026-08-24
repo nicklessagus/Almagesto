@@ -853,10 +853,11 @@ al llegar al issue):
   en prosa de skill (un skill que se olvida no deja rastro), y sobre "siempre bloqueante" porque
   esa opción deja la bóveda en rojo durante un ingest en curso. D-44 intacto: el commit nunca se
   frena. Vale para el issue 1.2.
-- **R-2 · La forma dura de `extra_core` (D-58).** Exigir lista de mapas rompe el atajo manual
-  `extra_core: [bibcode]` que el propio triage receta hoy. ¿Forma dura con detector (regla "sin
-  lectores tolerantes") o el escalar como azúcar con `via: usuario` implícito? El plan asume la
-  dura; es config editada a mano y el costo de UX es real.
+- **R-2 · La forma dura de `extra_core` (D-58).** ✅ **RESUELTA (2026-08-24): forma dura con
+  detector.** Sólo lista de mapas `{bibcode, via, fecha, motivo}`; el escalar y la lista de strings
+  se detectan y bloquean, con el snippet correcto en el mensaje. Es la regla del repo (sin lectores
+  tolerantes), y el costo de UX resultó acotado: `triage.py` ya imprime el snippet para pegar, así
+  que sólo se siente al agregar un bibcode 100% a mano.
 - **R-3 · Sintaxis de la marca en línea de fuente retractada (D-47)** y de la marca de inferencia
   (D-42 fija `(inferencia de [[b]])`; la de retractado no está fijada). Definirlas juntas: son las
   dos únicas marcas en línea del sistema.
@@ -867,10 +868,12 @@ al llegar al issue):
   faceta propia del tema viviría en `topics.yaml`, que ya colisiona con `relevance.topics` y con
   el campo `topics` de las notas. Decidir el renombre (o el nombre del campo nuevo) **antes** del
   issue 7.3, o la confusión queda fosilizada en un schema más.
-- **R-6 · Quién estampa `cadena` cuando un script corre suelto (D-57).** El plan estampa desde
-  `run()` (un punto); un paso corrido a mano no deja rastro y el lint lo lee como corte — que es
-  verdad a medias. Alternativa: cada script se estampa a sí mismo al salir 0 (más rastro, N
-  puntos de escritura). Decidir en el issue 2.2.
+- **R-6 · Quién estampa `cadena` cuando un script corre suelto (D-57).** ✅ **RESUELTA
+  (2026-08-24): cada script se estampa a sí mismo** al salir 0, con una implementación compartida
+  (`cfg.save_paso`) y N call sites. Se descartó estampar sólo desde `run()` porque un paso corrido
+  a mano quedaría invisible y el lint reportaría "se cortó en `fetch_pdf`" sobre un paso que **sí
+  corrió** — un falso positivo que erosiona la categoría entera. El registro distingue
+  `via: orquestador` de `via: suelto`.
 - **R-7 · Los tres abiertos de la revisión §7 que este plan NO cubre** (no hay decisión): la
   **lista blanca del frontmatter** (el `logrhk` medido viviendo sin custodia en la capa
   auditable), la **tabla de lookalikes griegos afirmada sin medir**, y la **cobertura de
