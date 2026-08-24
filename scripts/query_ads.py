@@ -764,6 +764,32 @@ def classify_theme(rec: dict, meta: dict) -> tuple[list[str], bool, str | None]:
     return facets_globales, False, "ninguna puerta abre (ni fundacional ni lente astro)"
 
 
+def reclassify_for_theme(recs: list, meta: dict) -> tuple[list, list]:
+    """Re-juzga `recs` con la regla del tema (D-26) y devuelve `(entraron, salieron)` por bibcode.
+
+    Los registros llegan clasificados por la lente **global** (`to_records`); para un tema de
+    método esa lente es la equivocada, así que hay que volver a pasarlos. Se devuelven los dos
+    deltas —no un booleano ni un total— porque una regla que reclasifica en silencio es una regla
+    que nadie puede auditar: el ingest los imprime y quedan en el registro de la corrida.
+
+    Dos recortes: un tema **sin `facet:`** es no-op (sigue con la lente global — rehusar es lo que
+    hace `classify_theme` si alguien la llama directo, no esto, que corre dentro de la cadena); y
+    los `via: manual` **no se tocan**, porque `extra_core` es juicio del usuario y pisa a cualquier
+    clasificador (#68/#39).  @inv INV-88"""
+    if not (meta or {}).get("facet"):
+        return [], []
+    entraron, salieron = [], []
+    for r in recs:
+        if r.get("via") == "manual":
+            continue
+        antes = bool(r.get("relevant"))
+        _, ahora, why = classify_theme(r, meta)
+        if ahora != antes:
+            (entraron if ahora else salieron).append(r.get("bibcode"))
+        r["relevant"], r["why_excluded"] = ahora, why
+    return entraron, salieron
+
+
 def classify_record(r: dict) -> tuple[list[str], bool]:
     """`classify` sobre un registro YA persistido en ads.json (title es string, no lista como en
     la respuesta cruda de ADS). Los `via: manual` son core por decisión del usuario (override de
@@ -1033,6 +1059,13 @@ def main() -> int:
         recs = query_ads(q, rows=args.rows, meta=qmeta, expect_hits=True)
         for r in recs:
             r["via"] = "query"
+        # D-26: para un tema de método la lente global es la equivocada (mata al fundacional y deja
+        # pasar miles de fMRI). Se re-juzga con la regla del tema y se IMPRIME el delta.
+        if head.get("kind") == "theme":
+            entraron, salieron = reclassify_for_theme(recs, meta)
+            if entraron or salieron:
+                cfg.print_seguro(f"  regla del tema (D-26): +{len(entraron)} core / -{len(salieron)}"
+                                 f" · entran {entraron[:5]} · salen {salieron[:5]}")
         rel = [r for r in recs if r["relevant"]]
         cfg.print_seguro(f"  query directa: {len(recs)} registros, {len(rel)} relevantes")
         # Segunda pasada por fecha (#79): el corte por citas de la primera es ciego a la edad, así

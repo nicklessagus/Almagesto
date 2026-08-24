@@ -1444,3 +1444,75 @@ def test_tema_sin_facet_declarada_no_clasifica(toy_vault):
     with pytest.raises(SystemExit) as e:
         qa.classify_theme(_rec("x"), {"title": "T", "area": "methods"})
     assert "facet" in str(e.value)
+
+
+def test_reclasificar_por_tema_cambia_el_veredicto_y_lo_cuenta(toy_vault, monkeypatch):
+    """El cableado de D-26: los registros llegan clasificados por la lente GLOBAL (`to_records`), y
+    para un tema de método hay que volver a juzgarlos con la regla del tema. La función devuelve
+    cuántos cambió en cada dirección — sin eso, un ingest reclasifica en silencio y nadie puede
+    auditar qué hizo la regla nueva."""
+    monkeypatch.setattr(qa, "FACET_PATTERNS", {"rv": re.compile("radial velocity", re.I)})
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", [])
+    monkeypatch.setattr(qa, "MIN_FACETS", 1)
+    tema = _tema(fundacional_min_citas=1000)
+    recs = [
+        # entra por la puerta 2 aunque la lente global lo excluya (el caso Hyvärinen)
+        dict(_rec("Independent component analysis: algorithms", citas=30000), bibcode="A",
+             relevant=False, why_excluded="sin tópico"),
+        # la lente global lo daba core (menciona RV) pero NO tiene la faceta propia del tema
+        dict(_rec("Radial velocity survey of M dwarfs", citas=10), bibcode="B",
+             relevant=True, why_excluded=None),
+        # ya era core y sigue siéndolo: faceta propia + lente astro
+        dict(_rec("Blind source separation of radial velocity data", citas=5), bibcode="C",
+             relevant=True, why_excluded=None),
+    ]
+    entraron, salieron = qa.reclassify_for_theme(recs, tema)
+    assert (entraron, salieron) == (["A"], ["B"])
+    assert [r["relevant"] for r in recs] == [True, False, True]
+    assert recs[1]["why_excluded"] == "sin la faceta propia del tema"
+
+
+def test_reclasificar_no_toca_los_forzados_a_mano(toy_vault, monkeypatch):
+    """`extra_core` es juicio del usuario y pisa a cualquier clasificador (#68/#39): la regla del
+    tema no puede sacar lo que una persona metió a propósito."""
+    monkeypatch.setattr(qa, "FACET_PATTERNS", {"rv": re.compile("radial velocity", re.I)})
+    tema = _tema(fundacional_min_citas=1000)
+    recs = [dict(_rec("Nada que ver", citas=1), bibcode="M", relevant=True,
+                 why_excluded=None, via="manual")]
+    assert qa.reclassify_for_theme(recs, tema) == ([], [])
+    assert recs[0]["relevant"] is True
+
+
+def test_reclasificar_sin_facet_es_no_op(toy_vault):
+    """Un tema sin `facet:` no usa la regla nueva: la cadena sigue con la lente global, sin
+    rehusar. (Rehusar es lo que hace `classify_theme` si alguien la llama directo.)"""
+    recs = [dict(_rec("x"), bibcode="A", relevant=True, why_excluded=None)]
+    assert qa.reclassify_for_theme(recs, {"title": "T"}) == ([], [])
+    assert recs[0]["relevant"] is True
+
+
+def test_main_aplica_la_regla_del_tema_a_la_query_directa(toy_vault, toy_classifier, no_sleep,
+                                                          monkeypatch, capsys):
+    """Integración del cableado: un tema con `facet:` re-juzga los registros de la query directa con
+    la regla de D-26 y **persiste** el veredicto nuevo en `ads.json`. Sin este test la función
+    existía pero nadie comprobaba que la cadena la llamara — el modo de falla que más veces mordió
+    en este repo (una feature implementada y no cableada)."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {
+        "title": "ICA", "area": "methods", "concept": "ica",
+        "query": 'abs:"independent component"',
+        "facet": "independent component",
+        "fundacional_min_citas": 1000}})
+    fundacional = dict(rec("2000fundA...1A", title="Independent component analysis: algorithms"),
+                       citation_count=30000)
+    ajeno = dict(rec("2020ajenB...1B", title="Something else entirely"), citation_count=5)
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        [fundacional, ajeno])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    assert run_main(monkeypatch, ["ica", "--theme"]) == 0
+    data = json.loads((toy_vault.ROOT / "build" / "ica" / "ads.json").read_text())
+    por_bib = {r["bibcode"]: r for r in data["records"]}
+    assert por_bib["2000fundA...1A"]["relevant"] is True, "el fundacional entra por la puerta 2"
+    assert por_bib["2020ajenB...1B"]["relevant"] is False
+    assert por_bib["2020ajenB...1B"]["why_excluded"] == "sin la faceta propia del tema"
+    assert "regla del tema (D-26)" in capsys.readouterr().out

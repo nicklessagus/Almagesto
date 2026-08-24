@@ -309,6 +309,28 @@ resuelve con la identidad de D-19.
 
 ---
 
+## ❓ Decisión abierta — la puerta 2 («fundacional en su campo») no está justificada (2026-08-24)
+
+El usuario preguntó dos veces de dónde salen los umbrales de citas y la segunda fue sobre la puerta
+2 misma: *"no entiendo a qué viene o por qué"*. **No es una duda sobre el número: es sobre si la
+puerta debería existir.**
+
+Viene de D-26, que la define como *"muy citado + matchea la faceta"*, sin fijar valor. Está
+implementada (`query_ads.classify_theme`) con el umbral **declarado por tema**
+(`fundacional_min_citas`) y **apagada si no se declara**, así que hoy no decide nada por su cuenta
+— pero eso resuelve el *cómo*, no el *por qué*.
+
+Lo que hay que decidir antes de que se cablee a un ingest real: si "muy citado" es una señal que
+esta bóveda quiere usar para admitir bibliografía, dado que contradice el espíritu de INV-24
+(core = función de `(paper, lente)`) al meter una propiedad del **mundo** —cuántos lo citan— en una
+regla que hasta ahora era sólo sobre el **texto** del paper. La puerta 1 tiene el mismo ingrediente
+pero no clasifica: propone. La 2 sí clasifica.
+
+Si la respuesta es que no va, se saca y quedan la faceta propia + la lente astro, que es una regla
+más simple y enteramente textual.
+
+---
+
 ## 🔜 Próxima implementación — "¿qué paper importante me falta?" (anotado 2026-08-24)
 
 Es una funcionalidad **aparte de la puerta 1** de D-26, y confundirlas fue el error de hoy. La

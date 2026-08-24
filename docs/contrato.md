@@ -98,7 +98,7 @@ y "lo vimos". Nueve de ellos son P0 según la escala de (B), y ese es el número
    opinable (prosa del modelo, inferencia).
 4. **No dar falso limpio** — cuando no puede garantizar algo, decirlo; jamás callarlo.
 
-**Instrumentos citados.** `tier 0` = `pytest tests/` (834 casos, ~4 s — medido 2026-08-24); `tier 1` = `pytest -m
+**Instrumentos citados.** `tier 0` = `pytest tests/` (845 casos, ~4 s — medido 2026-08-24); `tier 1` = `pytest -m
 poblada` (corpus sintético de 900 notas vía `tests/poblada/generador.py::sembrar_corpus`); `tier 2` =
 `pytest -m instancia` (contra una bóveda real, opt-in por env var); `8ª F1/F4/…` = los harnesses de
 la octava pasada de verificación.
