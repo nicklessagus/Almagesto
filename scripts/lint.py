@@ -1525,6 +1525,33 @@ def collect(cierre: bool = False) -> LintResult:
              "objective.name sigue siendo el placeholder del template — corré el skill `setup` "
              "(o editá el YAML) para definir el objetivo de TU bóveda"))
 
+    # ── LENTE VACÍA: el objetivo parsea, tiene nombre propio, y no clasifica NADA (AUD-56) ────────
+    # Medido en un clon limpio con el `objective.yaml` de una instancia en 1.11.0: `relevance` usa
+    # `topics:` (schema pre-R-5, hoy `facets:`), así que `lens_current()` da `facets: {}` mientras
+    # `require: [rv]` exige una faceta que no existe — ninguna cosa podría ser core. `objective_error`
+    # dice `None` (el YAML está sano), el WARN del placeholder no dispara (el nombre es real), el
+    # detector de `topics:` mira NOTAS DE PAPER y no el objetivo, y el lint cerraba en **exit 0**.
+    # O sea: el falso limpio exacto que esta herramienta existe para no producir, en el archivo del
+    # que depende la definición de "core". Lo agarra `query_ads` recién al correr, pero para entonces
+    # ya migraste la bóveda. Bloqueante: sin lente no hay corpus, y con `require` colgando de una
+    # faceta inexistente el corte no es "todo core" sino "nada core", que se ve igual que "no hay
+    # papers".
+    lente_rota = []
+    if not obj_err:
+        _rel = cfg.as_map(cfg.load_objective().get("relevance"))
+        _lente = cfg.lens_current()
+        if not _lente.get("facets"):
+            _viejo = " (usa `topics:`, el schema pre-R-5 — el campo vigente es `facets:`)" if _rel.get("topics") else ""
+            lente_rota.append(
+                ("vault/config/objective.yaml",
+                 f"`relevance.facets` está vacío{_viejo}: ningún paper puede clasificar como core. "
+                 f"Migrá `topics:` → `facets:` o corré el skill `setup`"))
+        elif (_faltan := [f for f in (_lente.get("require") or []) if f not in _lente["facets"]]):
+            lente_rota.append(
+                ("vault/config/objective.yaml",
+                 f"`relevance.require` exige faceta(s) que no existen en `facets`: {_faltan} — "
+                 f"nada puede ser core, y eso se ve igual que «no hay papers»"))
+
     # áreas de concepts/ no declaradas en concept_areas (objective.yaml) → posible typo / carpeta
     # fantasma: un `area` mal tipeado en themes.yaml crea carpeta en silencio (ver make_notes). WARN
     # blando (un typo y un área nueva legítima se ven igual → no se bloquea, se marca para revisar).
@@ -1835,6 +1862,7 @@ def collect(cierre: bool = False) -> LintResult:
         Categoria('bad_roles', '`role` fuera del vocabulario (fundacional/aplicacion/arbitro)', SEV_BLOQUEANTE, tuple(bad_roles)),
         Categoria('impl_leaks', '⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)', SEV_WARN, tuple(impl_leaks)),
         Categoria('objective_warn', 'Objetivo sin instanciar (WARN — objective.yaml sigue en el placeholder del template)', SEV_WARN, tuple(objective_warn)),
+        Categoria('lente_rota', '⛔ Lente vacía o incoherente: ningún paper puede ser core', SEV_BLOQUEANTE, tuple(lente_rota)),
         Categoria('undeclared_areas', 'Áreas de concepts/ no declaradas en objective.yaml (WARN, posible typo)', SEV_WARN, tuple(undeclared_areas)),
         Categoria('root_obsidian', 'Obsidian en la raíz del repo (WARN — la bóveda se abre en vault/)', SEV_WARN, tuple(root_obsidian)),
         Categoria('pdf_issues', 'PDF ↔ disco / cuerpo (WARN — higiene: frontmatter `pdf` vs PDF bajado vs link de cabecera)', SEV_WARN, tuple(pdf_issues)),

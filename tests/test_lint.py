@@ -2632,7 +2632,7 @@ def test_las_claves_de_categoria_son_unicas_y_estables(toy_vault):
     equivocada en silencio."""
     claves = [c.clave for c in lint.collect().categorias]
     assert len(claves) == len(set(claves)), [k for k in claves if claves.count(k) > 1]
-    assert len(claves) == 50, f"el reporte tiene {len(claves)} categorías, se esperaban 50"
+    assert len(claves) == 51, f"el reporte tiene {len(claves)} categorías, se esperaban 51"
 
 
 def test_el_modo_cierre_solo_cambia_el_exit_de_los_pares(toy_vault):
