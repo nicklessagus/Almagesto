@@ -294,3 +294,52 @@ def test_el_alcance_de_hipotesis_tiene_invariante_propio():
     filas_inv = [l for l in contrato.splitlines() if re.match(r"\|\s*\*\*INV-\d+\*\*", l)]
     cubren = [l for l in filas_inv if "hipótesis" in l.lower() or "hipotesis" in l.lower()]
     assert cubren, "ningún invariante enuncia el alcance de hipótesis (D-34), que el lint ya implementa"
+
+
+# ── La plantilla del bloque de verificación es la que el parser lee ───────────
+
+def _encabezado_plantilla() -> list[str]:
+    """La fila de encabezado de la plantilla que publica el skill `verify-citations`."""
+    txt = (SKILLS / "verify-citations" / "SKILL.md").read_text(encoding="utf-8")
+    for ln in txt.split("\n"):
+        if ln.startswith("| # | Afirmación"):
+            return [c.strip() for c in ln.strip().strip("|").split("|")]
+    raise AssertionError("no se encontró la fila de encabezado de la plantilla en el skill")
+
+
+def test_la_plantilla_no_tiene_columna_de_grado():
+    """`Score` 0–10 salió en 1.42.0: reintroducía el eje de grado que `parcial` había dejado.
+
+    El campo tampoco gradúa —FActScore etiqueta binario, y los que suman un tercer valor usan
+    vocabulario cerrado (`supported`/`inconclusive`/`contradictory`), no una escala—, que es
+    exactamente la forma del vocabulario de acá. El guardia existe porque una columna de grado es
+    fácil de volver a agregar "para dar más información", y su costo no se ve en la fila: se ve
+    cuando dos corridas discrepan y nadie sabe dónde estaba el umbral.
+    """
+    cols = _encabezado_plantilla()
+    assert not any("score" in c.lower() or "puntaje" in c.lower() for c in cols), \
+        f"volvió una columna de grado a la plantilla: {cols}"
+
+
+def test_la_plantilla_y_el_parser_hablan_de_las_mismas_columnas():
+    """Red #5: la plantilla que la doc publica tiene que ser legible por el código que la chequea.
+
+    Hasta 1.38.x no lo era —la doc publicaba ocho columnas y el parser leía posiciones fijas 4 y 5—,
+    y el efecto medido fue `lint.py --cierre` en rojo permanente sobre toda nota escrita según la
+    documentación. Acá se ejercita el camino entero: encabezado de la doc → fila → `parse_verif_table`.
+    """
+    import lib_blocks as lb
+
+    cols = _encabezado_plantilla()
+    fila = {"Afirmación (extracto)": "claim", "Fuente": "[[2009Uno.....1..1M]]",
+            "Veredicto": "soportada", "Evidencia": '"cita" (L1)',
+            "Ancla": "aaaaaaaaaa", "Hash fuente": "bbbbbbbbbb", "Condición": "—"}
+    celdas = ["1"] + [fila[c] for c in cols[1:]]
+    nota = ("---\nname: X\n---\n# X\n\n## Verificación de citas (2026-08-25)\n\n"
+            + "| " + " | ".join(cols) + " |\n"
+            + "|" + "---|" * len(cols) + "\n"
+            + "| " + " | ".join(celdas) + " |\n")
+    filas = lb.parse_verif_table(nota)
+    assert filas is not None and len(filas) == 1
+    assert (filas[0].verdict, filas[0].anchor, filas[0].source_hash) == \
+        ("soportada", "aaaaaaaaaa", "bbbbbbbbbb")

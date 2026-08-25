@@ -166,7 +166,6 @@ Cada uno:
     (no dice nada de eso → error de cita); `contradice` = la fuente **afirma lo contrario** (valor
     incompatible más allá del error, existencia negada, signo opuesto) — también exige cita textual,
     de lo que el paper **sí** dice.
-  - `score`: 0–10 (qué tan literal/completo es el respaldo)
   - `evidencia`: **cita textual** del paper + **nº de línea** (contado como `grep -n` — ver la
     convención fija de arriba; nunca `splitlines()` de Python). **Sin cita textual ⇒ `no-soportada`**
     (regla dura: si no puede pegar la frase, no está respaldado). La cita tiene que tocar el
@@ -221,7 +220,7 @@ Prompt sugerido por agente: *"Leé SOLO `<ruta fulltext>`. ¿El paper respalda e
 Si la afirmación tiene varias cláusulas atribuidas a distintas fuentes, juzgá si el archivo respalda
 **la cláusula que le toca** y decí cuál en la nota — que respalde una cláusula vecina de otra fuente,
 o el encuadre genérico, no cuenta. Respondé veredicto
-(soportada/no-soportada/contradice) + score 0–10 + cita textual con nº de línea (el que da
+(soportada/no-soportada/contradice) + cita textual con nº de línea (el que da
 `grep -n` o la lectura directa del archivo; NO uses `splitlines()` de Python — los form feeds del
 `.txt` corren la numeración) + nota. Para localizar: el `.txt` suele entrelazar dos columnas en la
 misma línea física, así que si la oración completa no aparece con grep NO concluyas que falta —
@@ -243,13 +242,22 @@ lista completa: «…». Decime APARTE del veredicto: ¿la tabla/lista del paper
 ésos? Si sí, listá los que faltan con su nº de línea. Ojo con el layout: la tabla puede estar
 entrelazada con otra en las mismas líneas físicas — contá las filas de LA tabla que corresponde."*
 
-### 3. Umbral y agregación
-- `score ≥ 7` → **soportada**
-- `score < 4` → **no-soportada**
-- **La zona 4–6 la decide la regla del contenido distintivo, no un tercer veredicto:** si la
-  evidencia citada toca lo que hace **específica** a la afirmación → `soportada`, y lo que falte va
-  a `condicion`; si la coincidencia es sólo temática → `no-soportada` (bajar el score, no
-  promediarlo con la cercanía del tema).
+### 3. El corte: contenido distintivo, sin grado
+
+**No hay score.** El veredicto sale de **una** pregunta, y es de sí o no: ¿la evidencia citada toca
+el **contenido distintivo** de la afirmación —el sujeto/valor/mecanismo que la hace específica—?
+→ `soportada`, y lo que falte va a `condicion`. ¿La coincidencia es sólo temática (el fenómeno
+general, un término suelto, la mera cercanía)? → `no-soportada`.
+
+⚠ **La columna `Score` 0–10 se eliminó en 1.42.0, y es la misma lección que `parcial`.** Un grado
+numérico reintroduce por la ventana el eje que 1.39.0 sacó por la puerta: la zona intermedia no se
+puede definir porque es de grado, y el umbral (≥7 / <4) nunca se calibró contra nada. **Es además lo
+que hace el campo**: los verificadores de referencia etiquetan **binario** (FActScore: *supported* /
+*not-supported*) y los que agregan un tercer valor usan un **vocabulario cerrado**, no una escala
+(VeriScore: *supported* / *inconclusive* / *contradictory*) — que es exactamente el nuestro. Ningún
+sistema comparable gradúa el soporte. La corrida del 2026-08-25 ya devolvió la columna en `—`
+porque el fan-out no la había producido: se eliminó en vez de rellenarla con un número que nadie
+midió.
 
 ⚠ **`parcial` se eliminó en 1.39.0.** Fusionaba dos preguntas ortogonales: «¿la fuente respalda
 esto?» (textual, decidible contra el `.txt`) y «¿la afirmación está completa?» (juicio de grado).
@@ -258,8 +266,8 @@ jueces nuevos y ciegos, **60 pares comparados → 95 % de coincidencia**, y **la
 caían exactamente en el borde `soportada`↔`parcial`**, todas hacia el lado estricto; `contradice`
 reprodujo 2/2. El umbral no estaba definido — y no se puede definir, porque es de grado. Todo lo que
 era `parcial` se descompone sin pérdida en `soportada` + `condicion`, o en `no-soportada`.
-- **`contradice`** manda sobre el score (no es un grado de soporte sino evidencia **en contra**, con
-  cita textual de lo contradicho): se resuelve como corrección o disputa (paso 4), no como cita rota.
+- **`contradice`** manda sobre los otros dos (no es un grado de soporte sino evidencia **en contra**,
+  con cita textual de lo contradicho): se resuelve como corrección o disputa (paso 4), no como cita rota.
 
 ### 4. Resolver lo que falla (no dejar pasar)
 Cada **no-soportada / contradice**, y cada `condicion` no vacía, se resuelve antes de cerrar:
@@ -291,12 +299,12 @@ Agregar/refrescar al final de la nota (idempotente — si ya existe, reemplazar)
 ## Verificación de citas (YYYY-MM-DD)
 Chequeo afirmación↔fulltext (skill `verify-citations`). N pares; X soportadas / Z no-soportadas / W contradicen (resueltas) / C con condición declarada.
 
-| # | Afirmación (extracto) | Fuente | Veredicto | Score | Evidencia | Ancla | Hash fuente | Condición |
-|---|---|---|---|---|---|---|---|---|
-| 1 | YZ CMi κ ≈ −2.6 | [[2018A&A...609A..12Z]] | soportada | 9 | "gradient of −2.6 Np−1 (±21%)" (L966) | 3f9c1e2ab4 | 7b40d8aa11 | — |
-| 2 | activas −2.4/−2.6 | [[2025A&A...696A..27J]] | no-soportada→corregida | 2 | el paper da −2.65 a −3.70; el −2.6 es de Zechmeister | c17e0a9b22 | 55aa10ffe3 | — |
-| 3 | señal g confirmada | [[2016A&A...585A.134D]] | contradice→disputa | 1 | "is an artifact of... rotation" (L2101) → tagueada en disputes[] | 90bb4c1de7 | 0ab77e2c41 | — |
-| 4 | P_rot = 36,5 d | [[2017MNRAS.468.4772S]] | soportada | 9 | "36.5 ± 2.3" (L320) | 5c1de790bb | 41c0ab772e | promedio pesado de 4 proxies; el K de 0,50 m/s es de la señal a 35,0 d, no a 36,5 |
+| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |
+|---|---|---|---|---|---|---|---|
+| 1 | YZ CMi κ ≈ −2.6 | [[2018A&A...609A..12Z]] | soportada | "gradient of −2.6 Np−1 (±21%)" (L966) | 3f9c1e2ab4 | 7b40d8aa11 | — |
+| 2 | activas −2.4/−2.6 | [[2025A&A...696A..27J]] | no-soportada→corregida | el paper da −2.65 a −3.70; el −2.6 es de Zechmeister | c17e0a9b22 | 55aa10ffe3 | — |
+| 3 | señal g confirmada | [[2016A&A...585A.134D]] | contradice→disputa | "is an artifact of... rotation" (L2101) → tagueada en disputes[] | 90bb4c1de7 | 0ab77e2c41 | — |
+| 4 | P_rot = 36,5 d | [[2017MNRAS.468.4772S]] | soportada | "36.5 ± 2.3" (L320) | 5c1de790bb | 41c0ab772e | promedio pesado de 4 proxies; el K de 0,50 m/s es de la señal a 35,0 d, no a 36,5 |
 
 Inferencias declaradas (sin cita, por diseño): <listar>.
 

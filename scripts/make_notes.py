@@ -1004,12 +1004,18 @@ sección y decirlo en el `log`.)_
 # la tabla, cantidad parecida confundida, epígrafe que el cuerpo contradice, y la mitad de las citas
 # de segunda mano— son mecánicamente detectables si cada valor viaja con su línea. El dato está
 # delante de los ojos en el momento de leer; escribirlo cuesta nada y convierte "juicio" en "chequeo".
+# La REGLA DE SOMBRA (tiempo verbal + cuantificador, 1.42.0) cubre los otros dos tipos de la
+# taxonomía de sobre-generalización medida por Royal Society Open Science 2025 sobre 4900
+# resúmenes: "cuantificado → genérico" y "pasado → presente". Son verificables contra el .txt,
+# que es el punto — el mismo paper mide que PEDIR exactitud en el prompt DUPLICA el sesgo.
 _BULLET_ANOTACION = (
     "- **Cómo anotar cada valor (#103):** pegá el **nº de línea** del `.txt` (`grep -n`, nunca "
     "`splitlines()`) junto a cada número que copies, y el **régimen** en el que la fuente lo afirma "
     "(muestra, época, corte de datos, modelo). Si la fuente **atribuye el valor a otro trabajo** "
     "(«according to X», «(X et al.)»), marcalo **segunda mano** y citá a X: el número **no es de "
-    "esta fuente**. ⛔ No escribas prosa que compare este paper con otro — comparar es `inferencia` "
+    "esta fuente**. Copiá el **tiempo verbal y el cuantificador tal cual** (si dice «was "
+    "associated», no escribas «is associated»; si dice «el 75 % de la muestra», no escribas «la "
+    "muestra»). ⛔ No escribas prosa que compare este paper con otro — comparar es `inferencia` "
     "y va al `## Inventario por eje` de la ficha, no acá._")
 _BULLET_METHODS = "- **Métodos:** _(llenar `methods:` del frontmatter con `concepts/methods/`)_"
 # El ROL es del paper, no del tipo de sujeto (#73): va en las dos ramas. Sin él, "contrastar dos

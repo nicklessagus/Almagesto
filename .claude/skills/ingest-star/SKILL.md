@@ -178,11 +178,36 @@ Progreso del ingest de <estrella>:
    - **el régimen** en el que la fuente lo afirma: muestra, época, corte de datos, modelo ajustado;
    - si la fuente **atribuye el valor a otro trabajo** (*«according to X»*, *«(X et al.)»*), marcarlo
      **segunda mano** y citar a X — el número **no es de esta fuente**;
+   - **el tiempo verbal y el cuantificador de la fuente, tal cual** (regla de sombra, 1.42.0): si el
+     paper dice *«was associated»*, la nota **no** dice *«is associated»*; si dice *«el 75 % de la
+     muestra»*, la nota **no** dice *«la muestra»*. Y un resultado descriptivo no se convierte en
+     recomendación.
    - ⛔ **nada de prosa comparativa en la nota de paper.** Comparar dos papers es `inferencia` y su
      lugar es el `## Inventario por eje` de la ficha (paso 3b). Escribirla acá es lo que produjo los
      3 casos de «inferencia con voz de cita».
 
    El stub de `## Extracción (LLM)` que genera `make_notes` ya trae esta regla como último bullet.
+
+   ⚠ **Por qué la regla es ESTRUCTURAL y no «prestá atención» (1.42.0).** Los tres últimos bullets no
+   son estilo: son la contramedida a un sesgo medido, y la forma de la contramedida importa.
+   *Generalization bias in LLM summarization of scientific research* (Royal Society Open Science
+   2025) comparó **4900 resúmenes de 10 modelos** contra sus textos originales y encontró una
+   taxonomía de sobre-generalización de tres tipos —**cuantificado → genérico**, **pasado →
+   presente**, **descriptivo → prescriptivo**—: los mismos tres que salen del fan-out de esta
+   bóveda, con la diferencia de que los dos primeros la taxonomía de #103 **no los tenía nombrados**
+   (caían dentro de «régimen omitido»). Dos hallazgos que cambian cómo se escribe este paso:
+
+   - ⛔ **Pedir exactitud en el prompt la EMPEORA.** Los prompts que piden explícitamente evitar
+     imprecisiones **duplicaron** la sobre-generalización frente a un pedido de resumen simple (los
+     autores lo llaman *algorithmic ironic rebound effect*). Por eso acá no hay ningún «sé preciso»,
+     «no inventes» ni «tené cuidado»: **una súplica de exactitud no es una instrucción, es ruido que
+     rebota**. Lo que sí funciona es lo verificable — nº de línea, régimen, tiempo verbal — porque
+     después se puede **chequear** que esté.
+   - **Temperatura 0 baja la sobre-generalización un 76 %** (0 vs 0.7) y es la mitigación más barata
+     que reporta el paper. **No está aplicada, y hay que decir por qué**: los subagentes de esta
+     cadena se lanzan con la herramienta de agentes del harness, que expone modelo y esfuerzo pero
+     **no** temperatura. Es deuda declarada, no olvido: si algún día el harness la expone, es el
+     primer cambio a hacer, y el gate es `bench_verify`.
      El lint lo reporta como *recorte de lectura sin declarar* mientras no esté. El criterio se
      **declara**, no se aplica implícito — y `--reason` es obligatorio con `subconjunto` por el
      mismo motivo que en `--drop`: es la pieza que más se va a leer dentro de seis meses.

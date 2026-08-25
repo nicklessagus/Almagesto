@@ -644,7 +644,11 @@ prosa y no dejar rastro borra justo lo que hay que poder auditar y volver a mira
 a lo que dice la fuente, reasignar la cita al bibcode correcto, marcar **`inferencia`**, o taguear la
 disputa) y se deja un bloque `## Verificación de citas` en la nota — **una fila por par**, con dos
 columnas de hash (**el ancla**, D-4/D-20):
-`| # | Afirmación (extracto) | Fuente | Veredicto | Score | Evidencia | Ancla | Hash fuente | Condición |`.
+`| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |`.
+⚠ **La columna `Score` 0–10 se eliminó en 1.42.0**, por la misma razón que `parcial` en 1.39.0:
+reintroducía un eje de **grado** cuyo umbral nunca se calibró. El campo tampoco gradúa —
+FActScore etiqueta binario y los que suman un tercer valor usan vocabulario cerrado, no una
+escala—, y el vocabulario de acá ya es ese ternario.
 El **ancla** es el sha256 (10 hex) del **bloque markdown normalizado** que contiene la cita
 —párrafo / fila / ítem / blockquote—: reflowear la nota **no** la mueve, cambiar un número **sí**, y
 una fila sin `[[bibcode]]` propio hereda el del caption hasheando **los dos** bloques. El **hash de
