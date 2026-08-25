@@ -181,9 +181,7 @@ flowchart LR
 | cuerpo | `## Inventario por eje` | **LLM** | el paso de **contraste**: qué dice cada paper sobre cada eje en disputa (sin columna "valor adoptado") |
 | cuerpo | `## Resumen` | **LLM** | síntesis de los papers, apoyada en el inventario, con `[[bibcode]]` |
 | cuerpo | `## Huecos` | **LLM** | qué falta para que la ficha alcance sola |
-| cuerpo | `## Planetas` | script (Dataview) | render del frontmatter |
-| cuerpo | `## Papers` | script (tabla **estampada**) | roll-up materializado — se re-estampa con `make_notes.py <slug>` |
-| cuerpo | `## Métodos aplicados`, `## Planetas` | script (Dataview) | ⚠ todavía dependen del plugin (INV-81 parcial) |
+| cuerpo | `## Papers`, `## Planetas`, `## Métodos aplicados` | script (tablas **estampadas**) | los tres roll-ups son materializados desde 1.35.0 (D-10/D-11, INV-81) — se re-estampan con `make_notes.py <slug>` |
 | cuerpo | `## Excluidos por el filtro` | script | snapshot de los no-core, top por citas |
 | cuerpo | `## Verificación de citas` | **LLM** | salida de `verify-citations`, **con fecha** |
 
@@ -197,8 +195,10 @@ paper. El roll-up junta por `thesis_links` (y por `methods` si el área es `meth
 
 En la nota de **paper**: la metadata (bibcode, autores, año, doi, `citation_count`, `pdf`,
 `fulltext`, `fulltext_source`, `pdf_source`) la estampan los scripts por **verdad de disco**; el LLM
-llena `methods`, `thesis_links`, `bearing`, `role` y la sección `## Extracción`. **`bearing` vs
-`role`:** el primero dice la *postura* respecto de una tesis (`supports`/`challenges`/`method`); el
+llena `methods`, `thesis_links`, `role` y la sección `## Extracción`. ⛔ **`bearing` es schema viejo
+y el lint lo BLOQUEA** (D-21; migrador: `make_notes.py --migrate-bearing`): la *postura* respecto de
+una tesis no vive en el paper —depende de la tesis, y un paper puede tocar varias— sino en la tabla
+de evidencia de la hipótesis, donde va con cita y `verify-citations` puede chequearla. **`role`**; el
 segundo, **qué tipo de aporte es** — `fundacional` (introduce el método) · `aplicacion` (lo instancia
 en un caso) · `arbitro` (resuelve una tensión previa). El rol es el que define **cómo se contrasta**
 un paper contra otro: fundacional↔aplicación no es contraste sino instanciación, y leerlo como
@@ -242,8 +242,6 @@ Esta ingesta tiene huecos conocidos y numerados; el detalle de cada uno está en
 |---|---|
 | Qué papers leer (criterio de la extracción) | #62 |
 | Persistir los veredictos `aparente` de find-contradictions | #63 |
-| Las keywords del propio paper se piden, se usan como texto plano y se tiran | #92 |
-| Descubrimiento fuera de ADS (OpenAlex) | #77 |
 | Tema mixto sólo off-ADS-first | #78 |
 | Sesgo de edad en el orden por citas | #79 |
 | Libros: `pending` y unidad de cita | #80 |

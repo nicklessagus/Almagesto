@@ -1286,7 +1286,7 @@ def test_cita_sin_fulltext_no_verificable(toy_vault, capsys):
     d.mkdir(parents=True, exist_ok=True)
     (d / "2020citC...1..1C.txt").write_text("texto legible del paper " * 20, encoding="utf-8")
     rc, out = run_lint(capsys)
-    assert "Citas no verificables en query/concepto/hipótesis (sin fulltext) (0)" in out
+    assert "Citas no verificables en ficha/query/concepto/hipótesis (sin fulltext) (0)" in out
 
 
 def test_con_citas_pero_sin_bloque_verify(toy_vault, capsys):
@@ -1303,7 +1303,7 @@ def test_con_citas_pero_sin_bloque_verify(toy_vault, capsys):
     mk_note(toy_vault.CONCEPTS / "methods", "con-citas", {"tags": ["methods"]},
             "Afirmación citada [[2020citC...1..1C]].\n\n## Verificación de citas\nok\n")
     rc, out = run_lint(capsys)
-    assert "## Sin verificar: query/concepto con citas pero sin bloque verify-citations (backlog) (0)" in out
+    assert "## Sin verificar: nota con citas y sin bloque verify-citations (backlog: pasada periódica; con `--cierre` bloquea) (0)" in out
 
 
 def test_cobertura_concepto_sin_citas(toy_vault, capsys):
@@ -2165,6 +2165,7 @@ def test_cita_a_retractado_sin_marca_bloquea(toy_vault, capsys):
 
 
 def test_cita_marcada_no_bloquea_y_se_lista(toy_vault, capsys):
+    # @inv INV-93
     """Marcada, la afirmación queda **visible y no destruida**: el consumidor ve que el respaldo es
     una fuente retractada y decide. Baja a informativa."""
     mk_note(toy_vault.PAPERS, "2019retR...1..1R", RETRACTADO, "")
@@ -2309,6 +2310,7 @@ def test_data_local_no_bloquea_ni_toca_disco(toy_vault, capsys, monkeypatch):
 
 
 def test_paper_sin_ningun_destino_bloquea(toy_vault, capsys):
+    # @inv INV-94
     """D-23. Un paper sin `stars`, sin `thesis_links` y sin `methods` no pertenece a nada: no
     aparece en ningún roll-up y no lo alcanza ninguna síntesis. Hoy sólo caería como huérfano, y ni
     eso si alguien lo linkea — por eso se siembra CON link entrante."""
@@ -2475,6 +2477,7 @@ def _fulltexts(slug, n):
 
 
 def test_alcance_sin_declarar_marca(toy_vault, capsys):
+    # @inv INV-92
     """D-34. Sin alcance escrito, un veredicto negativo se lee como UNIVERSAL: "no existe evidencia"
     en vez de "no hay evidencia en estos 190 papers". Es *afirmar de más* aplicado a la conclusión."""
     _hipotesis("hip_pelada", "# hip\n\nEl corpus no dice nada [[2020X]].\n")
@@ -2493,6 +2496,7 @@ def test_alcance_sin_declarar_marca(toy_vault, capsys):
 
 
 def test_alcance_quedo_corto_marca(toy_vault, capsys):
+    # @inv INV-92
     """El alcance CRECE: se declaró sobre 2 papers y hoy esos slugs tienen 5. El veredicto se testeó
     contra un universo que ya no es el vigente — misma familia de staleness que los pares."""
     _fulltexts("test_star", 5)
@@ -2628,7 +2632,7 @@ def test_las_claves_de_categoria_son_unicas_y_estables(toy_vault):
     equivocada en silencio."""
     claves = [c.clave for c in lint.collect().categorias]
     assert len(claves) == len(set(claves)), [k for k in claves if claves.count(k) > 1]
-    assert len(claves) == 48, f"el reporte tiene {len(claves)} categorías, se esperaban 48"
+    assert len(claves) == 50, f"el reporte tiene {len(claves)} categorías, se esperaban 50"
 
 
 def test_el_modo_cierre_solo_cambia_el_exit_de_los_pares(toy_vault):
@@ -2685,3 +2689,79 @@ def test_el_lint_no_depende_de_nada_que_ci_no_instale():
         f"`lint.py` arrastra dependencias que el job de CI no instala: {sorted(externas)}. "
         f"El workflow corre `pip install pyyaml` y nada más — o se agrega al workflow (y se "
         f"justifica: el lint es OFFLINE), o el import no va.")
+
+
+def test_ground_truth_cambiado_pide_la_marca_y_con_la_marca_baja(toy_vault, capsys):
+    """AUD-42: la TERCERA marca en línea, `⚠desactualizado`.
+
+    El ancla de fuente (D-20) hashea `raw/fulltext/**/*.txt` y **nunca** el ground-truth, así que un
+    valor que NEA corrige cambia bajo los pies de la prosa que ya lo citó sin que ninguna fila de
+    verificación se entere. `sweep_external.aplicar_ground_truth` deja `_cambios` en el JSON; acá se
+    pide la marca. Mismo criterio que D-47 con las fuentes retractadas: **no se borra la afirmación**
+    —puede seguir siendo correcta— se la hace visible.
+    """
+    (toy_vault.GROUND_TRUTH / "test_star.json").write_text(json.dumps({
+        "star": "Estrella Test", "slug": "test_star", "host": {}, "planets": [],
+        "_cambios": [{"campo": "host.teff_K", "viejo": 5344, "nuevo": 5390, "fecha": "2026-08-24"}],
+    }), encoding="utf-8")
+    mk_note(toy_vault.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test",
+                                           "slug": "test_star"},
+            "La temperatura efectiva es 5344 K.\n")
+    link_from_index(toy_vault, "test_star")
+    _, out = run_lint_reporte(capsys)
+    assert "NEA cambió host.teff_K" in out and "5344" in out and "5390" in out
+    assert "Ground-truth que cambió bajo la prosa, sin marcar" in out
+
+    # con la marca puesta baja a informativa (visible, no destruida)
+    mk_note(toy_vault.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test",
+                                           "slug": "test_star"},
+            "La temperatura efectiva es 5344 K ⚠desactualizado.\n")
+    _, out = run_lint_reporte(capsys)
+    assert "Ground-truth que cambió bajo la prosa, sin marcar (backlog) (0)" in out
+    assert "prosa marcada" in out
+
+
+def test_inferencia_con_wikilink_que_no_es_bibcode_no_es_premisa():
+    """INV-86 dice «≥1 **bibcode**», no «≥1 wikilink».  @inv INV-86
+
+    El filtro era `"[[" not in ...`, así que `(inferencia de [[gp-kernels]])` —un link a una nota de
+    concepto— pasaba limpia: el verify no tiene ahí ningún `.txt` que leer, que es justo lo que la
+    marca promete. Encontrado por la pasada `/auditar` del 2026-08-24 (AUD-01)."""
+    assert lint.inferencias_sin_premisas("Vale X (inferencia de [[2020Foo]]).") == []
+    assert lint.inferencias_sin_premisas("Vale X (inferencia).") == ["(inferencia)"]
+    assert lint.inferencias_sin_premisas("Vale X (inferencia de [[gp-kernels]]).") != [], \
+        "una premisa que no es bibcode no es premisa"
+
+
+def test_cita_sin_fulltext_en_una_ficha_de_estrella_es_precondicion(toy_vault, capsys):
+    """INV-03: «Para cada clave de cita hay fulltext local **o** la nota declara por qué no. No hay
+    tercer estado silencioso.»  @inv INV-03
+
+    `in_verifiable_note` era sólo `queries/` + `concepts/`, así que la cita sin `.txt` en una ficha
+    de estrella —donde el contrato pone el estándar de autosuficiencia y donde más `[[bibcode]]` se
+    acumulan— no producía NINGÚN hallazgo (AUD-03)."""
+    mk_note(toy_vault.PAPERS, "2020citC...1..1C", {"tags": ["paper"]}, "")
+    mk_note(toy_vault.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test",
+                                           "slug": "test_star"},
+            "Según [[2020citC...1..1C]] pasa X.\n")
+    link_from_index(toy_vault, "test_star", "2020citC...1..1C")
+    _, out = run_lint_reporte(capsys)
+    assert "cita 2020citC...1..1C sin fulltext" in out
+
+
+def test_nota_con_citas_y_sin_bloque_de_verificacion_no_cierra(toy_vault, capsys):
+    """INV-79: «Una nota con citas sin verificar … **no cierra** la operación que la tocó.»
+
+    D-5 dice que la nota NACE 100% verificada, así que «citas y ningún bloque» es el estado anómalo.
+    Caía en el backlog `unverified` mientras `stale_pairs` —el detector que sí contaba para el exit
+    de `--cierre`— sólo se poblaba con notas que YA tienen bloque: la nota nunca verificada se
+    escapaba por abajo (AUD-04)."""
+    d = toy_vault.FULLTEXT / "test_star"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "2020citC...1..1C.txt").write_text("texto legible del paper " * 20, encoding="utf-8")
+    mk_note(toy_vault.PAPERS, "2020citC...1..1C", {"tags": ["paper"]}, "")
+    mk_note(toy_vault.CONCEPTS / "methods", "con-citas", {"tags": ["methods"]},
+            "Afirmación citada [[2020citC...1..1C]].\n")
+    link_from_index(toy_vault, "con-citas", "2020citC...1..1C")
+    assert lint.collect(cierre=True).n_block() > 0
+    assert lint.collect(cierre=False).n_block() == 0, "sin --cierre es backlog, no bloqueante"

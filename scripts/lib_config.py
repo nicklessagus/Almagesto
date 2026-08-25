@@ -20,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.36.0"
+ALMAGESTO_VERSION = "1.37.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -200,7 +200,7 @@ def load_objective() -> dict:
     try:
         with open(OBJECTIVE_YAML, encoding="utf-8") as fh:
             data = yaml.safe_load(fh)
-    except (yaml.YAMLError, OSError):
+    except (yaml.YAMLError, UnicodeDecodeError, OSError):
         return {}
     return data if isinstance(data, dict) else {}
 
@@ -488,6 +488,18 @@ def write_bytes_atomic(path: Path, data: bytes) -> None:
     _publicar(path, lambda tmp: tmp.write_bytes(data))
 
 
+def copy_file_atomic(src: Path, dest: Path) -> None:
+    """Copia un archivo AL DESTINO FINAL de forma atómica, preservando mtime (`copy2`).  @inv INV-90
+
+    Misma garantía que `write_bytes_atomic`, para el caso en que el origen es otro archivo y no un
+    buffer en memoria. Existe porque `shutil.copy2(src, dest)` directo tiene **exactamente** el modo
+    de falla que H-07 cerró para `write_bytes`: escribe en el destino final, así que un corte deja un
+    PDF truncado que `if dest.exists()` da por bajado para siempre. El guard estático de
+    `tests/test_lib_config.py` no lo veía porque buscaba `.write_text(`/`.write_bytes(`."""
+    import shutil
+    _publicar(dest, lambda tmp: shutil.copy2(src, tmp))
+
+
 def _publicar(path: Path, llenar) -> None:
     """tmp en el mismo directorio → `llenar(tmp)` → `os.replace`. Limpia el temporal ante cualquier
     fallo, en las dos mitades (llenando el tmp, y publicando)."""
@@ -530,7 +542,7 @@ def load_registro(slug: str) -> dict:
         return {}
     try:
         data = yaml.safe_load(f.read_text(encoding="utf-8"))
-    except (yaml.YAMLError, OSError):
+    except (yaml.YAMLError, UnicodeDecodeError, OSError):
         return {}
     return data if isinstance(data, dict) else {}
 
@@ -895,9 +907,16 @@ def flags_usados(args, ap=None, ignorar=("theme",)) -> list:
     default, como `--limit=1` o `--rows=5000`. Sin `ap` no se puede saber qué es default y qué lo
     pusieron a mano, así que sólo salen los booleanos — degradar a "todos los valores" llenaría la
     traza de ruido constante y degradar a "ninguno" es el agujero que esto cierra."""
+    # Los POSICIONALES no son flags: `--slug=tau-cet` salía en TODA corrida de los seis scripts
+    # cuyo posicional se llama `slug`, que es el ruido constante que este docstring dice evitar
+    # (AUD-44). `ignorar` listaba `theme` a mano — la exclusión era intencional y se perdió para el
+    # resto. Con `ap` se derivan del parser en vez de enumerarlos.
+    posicionales = set()
+    if ap is not None:
+        posicionales = {a.dest for a in ap._actions if not a.option_strings}
     out = []
     for k, v in vars(args).items():
-        if k in ignorar:
+        if k in ignorar or k in posicionales:
             continue
         nombre = f"--{k.replace('_', '-')}"
         if v is True:

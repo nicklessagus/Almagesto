@@ -46,7 +46,8 @@ del rescate por glifo (#28/#43) cortado por citas ANTES del filtro; backlog). Es
 NO dependen de `build/`: si el scratch no está (post-clone, otra máquina), caen al registro
 VERSIONADO del sujeto (`vault/config/registro/<slug>.yaml`, #51/#64) y reportan ese snapshot **con
 su fecha** — antes devolvían 0 sin mirar nada, un "limpio" que no significaba limpio. Y campos clave
-incompletos (P_rot null, papers relevantes sin `methods`, `thesis_links` sin `bearing`).
+incompletos (P_rot sin documentar en la prosa, papers relevantes sin `methods`, paper extraído
+sin `role`).
 No modifica nada: reporta para que el agente/usuario decida.
 
 Exit code: 1 si alguna categoría BLOQUEANTE tiene hits (wikilinks rotos, frontmatter no parseable
@@ -248,7 +249,7 @@ def alcance_declarado(text: str) -> dict | None:
     `None` ≠ alcance vacío: una hipótesis SIN alcance declarado es el hallazgo de D-34 —un veredicto
     negativo sin alcance se lee como universal ("no existe evidencia" en vez de "no hay evidencia en
     estos 190 papers")—, y es distinto de una cuyo alcance quedó corto."""
-    # @inv INV-83
+    # @inv INV-92
     m = ALCANCE_RE.search(text)
     if not m:
         return None
@@ -265,7 +266,7 @@ def alcance_declarado(text: str) -> dict | None:
 def corpus_vigente(slugs: list) -> tuple[int, list]:
     """(papers con fulltext hoy en esos slugs, slugs cuyo directorio no existe). El universo de una
     hipótesis son directorios de `raw/fulltext/` porque es exactamente sobre lo que corre el grep."""
-    # @inv INV-83
+    # @inv INV-92
     total, faltan = 0, []
     for sl in slugs:
         d = cfg.FULLTEXT / sl
@@ -327,6 +328,13 @@ BIBCODE_RE = re.compile(r"^\d{4}[A-Za-z]")   # heurística: target de link que p
 # símbolo es lo que la hace inconfundible con la palabra suelta en prosa; es la hermana de
 # `(inferencia de [[b]])` (D-42), y son las dos únicas marcas en línea del sistema.
 RETRACTED_MARK = "⛔retractada"
+# TERCERA marca en línea del sistema (AUD-42). Las otras dos son `(inferencia de [[b]])` y
+# `[[b]] ⛔retractada`. Ésta dice: *el valor de ground-truth que esta frase usó ya no es el que NEA
+# publica*. Hace falta porque el ancla de fuente (D-20) hashea `raw/fulltext/**/*.txt` y NUNCA
+# `raw/ground_truth/<slug>.json`, así que un valor corregido por NEA cambia **bajo los pies de la
+# prosa que lo citó** sin que ninguna fila de verificación se entere — el modo de caducidad más
+# silencioso de los cinco, dentro del detector que ya se llamaba "el más silencioso".
+GT_STALE_MARK = "⚠desactualizado"
 
 # Centinela para distinguir "el campo no está" de "está y no sirve" (#75): `fm.get(campo)` colapsa
 # `ausente`, `null`, `""` y `false` en `None`, y esas cuatro exigen mensajes distintos.
@@ -507,8 +515,15 @@ def inferencias_sin_premisas(body: str) -> list[str]:
 
     Sin premisas no es una inferencia: es una afirmación sin respaldo con otra etiqueta, y encima
     una que ni el verify ni el lint pueden chequear —el verify necesita un bibcode que leer—. Por
-    eso bloquea: es el mismo criterio de la frontera dura (regla #0), no un backlog.  @inv INV-86"""
-    return [m.group(0) for m in INFER_MARK.finditer(body) if "[[" not in m.group(0)]
+    eso bloquea: es el mismo criterio de la frontera dura (regla #0), no un backlog.
+
+    ⚠ La premisa tiene que ser un **bibcode**, no cualquier `[[wikilink]]`. Hasta 1.36.0 el filtro
+    era `"[[" not in ...`, así que `(inferencia de [[gp-kernels]])` —un link a una nota de
+    concepto— pasaba limpia: el verify no tiene ahí ningún `.txt` que leer, que es justo lo que la
+    marca promete. `BIBCODE_RE` es la misma heurística que usa el barrido de citas.  @inv INV-86"""
+    return [m.group(0) for m in INFER_MARK.finditer(body)
+            if not any(BIBCODE_RE.match(t.split("|")[0].split("#")[0].strip())
+                       for t in re.findall(r"\[\[([^\]]+)\]\]", m.group(0)))]
 
 
 def prot_documentado(body: str) -> bool:
@@ -700,7 +715,7 @@ def collect(cierre: bool = False) -> LintResult:
     bad_status: list = []              # `status` de hipótesis fuera del vocabulario (D-37)
     alcance_corto: list = []           # (stem, motivo) — alcance de hipótesis sin declarar o vencido (D-34)
     old_bearing: list = []             # `bearing` en nota de paper: schema pre-D-21
-    sin_destino: list = []             # paper sin stars/thesis_links/methods (D-23)
+    sin_destino: list = []             # paper sin stars/thesis_links/methods (D-23)  @inv INV-94
     cadena_incompleta: list = []       # (slug, "se cortó en <paso>") — D-57
     # `stars.yaml`/`themes.yaml` ilegibles no pueden tumbar el lint: se declaran NO EVALUADO y los
     # chequeos que dependen de ellos se saltean con población vacía (INV-80/INV-87).
@@ -758,9 +773,14 @@ def collect(cierre: bool = False) -> LintResult:
         # links salientes (las refs de diseño tienen links-ejemplo: no contar sus salientes)
         if f.startswith(refs_dir):
             continue
-        # precondición de verificabilidad: en queries/concepts/hipótesis, toda cita-bibcode necesita
-        # su fulltext para poder correr verify-citations (chequeo claim↔fuente).
-        in_verifiable_note = in_dir(f, "queries") or in_dir(f, "concepts")   # concepts/ incluye hypotheses/
+        # precondición de verificabilidad: toda cita-bibcode de una nota que AFIRMA necesita su
+        # fulltext para poder correr verify-citations (chequeo claim↔fuente).
+        # ⚠ `stars/` entró en 1.36.0. Antes la población era sólo `queries` + `concepts`, así que una
+        # cita sin `.txt` en una ficha de estrella no producía NINGÚN hallazgo — justo el "tercer
+        # estado silencioso" que INV-03 prohíbe, y encima en la nota donde el contrato pone el
+        # estándar de autosuficiencia y donde más `[[bibcode]]` se acumulan.
+        in_verifiable_note = (in_dir(f, "queries") or in_dir(f, "concepts")   # concepts/ incluye hypotheses/
+                              or in_dir(f, "stars"))
         # notas de ENTIDAD (#75): son las que sintetizan un sujeto. Una cita que sólo aparece en una
         # query no es "el paper llegó a la bóveda": la query es una respuesta puntual, no la síntesis.
         in_entity_note = in_dir(f, "stars") or in_dir(f, "concepts")   # #33: no comparar paths
@@ -800,8 +820,14 @@ def collect(cierre: bool = False) -> LintResult:
             coverage.append((stem, "sin citas [[bibcode]] → afirmaciones no chequeables (cobertura)"))
         # cobertura de VERIFICACIÓN (ALCE-adjacent): una nota apuntable con citas pero sin el bloque
         # `## Verificación de citas` nunca pasó por verify-citations → sus claims no fueron chequeados
-        # claim↔fuente. Backlog (no bloquea): correr el skill. Sólo queries/concepts (las fichas de
-        # estrella mezclan valores NEA que no se verifican contra papers).
+        # claim↔fuente.
+        # ⚠ Severidad R-1 desde 1.36.0 (antes: backlog siempre). D-5 dice que la nota **nace 100%
+        # verificada**, así que "tiene citas y ningún bloque" no es deuda vieja: es la operación que
+        # la tocó sin terminar. INV-79 —«una nota con citas sin verificar no cierra»— lo pedía ya, y
+        # el detector que sí contaba para el exit (`stale_pairs`) sólo se puebla con notas que YA
+        # tienen bloque: la nota nunca verificada se escapaba por abajo. Las fichas de estrella
+        # entran: los valores NEA no se verifican contra papers, pero sus disputas y todo lo
+        # atribuido a un `[[bibcode]]`, sí.
         has_verif, verif_date = verify_block(text)
         if in_verifiable_note and nbib > 0 and not has_verif:
             unverified.append((stem, f"{nbib} cita(s) sin bloque de verify-citations → correr el skill"))
@@ -1170,7 +1196,7 @@ def collect(cierre: bool = False) -> LintResult:
     # informativa: visible, no destruida. El símbolo es deliberado — un `(retractada)` pelado daría
     # falso positivo con cualquier mención del hecho en prosa ("la señal fue retractada más tarde").
     retracted_stems = {stem for stem, fm_p in paper_fms.items() if fm_p.get("retracted")}
-    prosa_retractada: list = []
+    prosa_retractada: list = []        # @inv INV-93
     prosa_retractada_marcada: list = []
     for f, texto_n in anchor_bodies.items():
         stem_n = basename(f)[:-3]
@@ -1185,6 +1211,38 @@ def collect(cierre: bool = False) -> LintResult:
                                 f"marcala con `{RETRACTED_MARK}` pegado a la cita, o bajá la "
                                 f"afirmación a lo que otra fuente sostenga. No la borres: puede ser "
                                 f"cierta por otra vía")))
+
+    # ── ground-truth que se movió bajo la prosa (AUD-42) ─────────────────────────────────────────
+    # `_cambios` lo estampa `sweep_external.aplicar_ground_truth` al aplicar un diff de NEA. Mientras
+    # exista, la prosa de esa ficha se escribió contra valores que ya no son los publicados. No
+    # bloquea —la frase puede seguir siendo correcta, y borrarla destruiría trabajo—: se pide la
+    # marca, igual que con una fuente retractada (D-47). Con la marca puesta baja a informativo.
+    gt_cambiado: list = []
+    gt_cambiado_marcado: list = []
+    for gt in sorted(glob.glob(str(cfg.GROUND_TRUTH / "*.json"))):
+        slug_gt = basename(gt)[:-5]
+        try:
+            datos_gt = json.loads(open(gt, encoding="utf-8").read())
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue                      # el JSON ilegible ya tiene su propia categoría bloqueante
+        cambios_gt = datos_gt.get("_cambios") if isinstance(datos_gt, dict) else None
+        if not isinstance(cambios_gt, list) or not cambios_gt:
+            continue
+        nota_gt = cfg.STARS / f"{slug_gt}.md"
+        if not nota_gt.exists():
+            continue                      # ficha faltante: ya la reporta el hermano simétrico
+        marcada = GT_STALE_MARK in nota_gt.read_text(encoding="utf-8")
+        for c in cambios_gt:
+            if not isinstance(c, dict):
+                continue
+            campo = c.get("campo", "?")
+            detalle = f"NEA cambió {campo} ({c.get('viejo')!r} → {c.get('nuevo')!r}) el {c.get('fecha', 's/f')}"
+            (gt_cambiado_marcado if marcada else gt_cambiado).append(
+                (slug_gt, detalle + ("; la prosa está marcada: revisá si ya la actualizaste y sacá "
+                                     "la marca cuando lo hagas"
+                                     if marcada else
+                                     f"; la prosa que lo citaba NO se actualizó sola — actualizala "
+                                     f"o marcala con `{GT_STALE_MARK}`")))
 
     # ── identidad duplicada (D-19 / INV-84) ──────────────────────────────────────────────────────
     # La identidad de un trabajo es su `doi`/`arxiv_id`, no su bibcode: el preprint y el publicado
@@ -1256,7 +1314,7 @@ def collect(cierre: bool = False) -> LintResult:
     # Dos severidades sobre el mismo hecho: sin `extraccion.criterio` declarado, hallazgo con señal
     # (el ingest no leyó todo y no dijo por qué); con criterio, backlog normal — la cola visible de
     # D-15, que el skill `maintain` consume.
-    extraccion_no_declarada: list = []
+    extraccion_no_declarada: list = []      # @inv INV-83
     for nombre_s, meta_s in (list(({} if cfg.stars_error() else cfg.load_stars()).items())
                              + list(({} if cfg.themes_error() else cfg.load_themes()).items())):
         if not isinstance(meta_s, dict):
@@ -1754,6 +1812,8 @@ def collect(cierre: bool = False) -> LintResult:
         Categoria('broken', 'Wikilinks rotos (página faltante)', SEV_BLOQUEANTE, tuple(broken)),
         Categoria('fm_broken', '⛔ Frontmatter no parseable o con forma inválida (la nota evade los chequeos de su tipo)', SEV_BLOQUEANTE, tuple(fm_broken)),
         Categoria('retracted', '⛔ Papers RETRACTADOS citados (frontera dura: fuente no válida)', SEV_BLOQUEANTE, tuple(retracted)),
+        Categoria('gt_cambiado', 'Ground-truth que cambió bajo la prosa, sin marcar (backlog)', SEV_BACKLOG, tuple(gt_cambiado)),
+        Categoria('gt_cambiado_marcado', f'Ground-truth cambiado, prosa marcada con `{GT_STALE_MARK}` (visible, no destruida)', SEV_BACKLOG, tuple(gt_cambiado_marcado)),
         Categoria('prosa_retractada', '⛔ Prosa que cita una fuente RETRACTADA sin marcar', SEV_BLOQUEANTE, tuple(prosa_retractada)),
         Categoria('prosa_retractada_marcada', 'Prosa sostenida por fuente retractada, marcada (visible, no destruida)', SEV_BACKLOG, tuple(prosa_retractada_marcada)),
         Categoria('orphans', 'Notas huérfanas (sin links entrantes)', SEV_BLOQUEANTE, tuple([(o, '') for o in orphans])),
@@ -1780,8 +1840,9 @@ def collect(cierre: bool = False) -> LintResult:
         Categoria('pdf_issues', 'PDF ↔ disco / cuerpo (WARN — higiene: frontmatter `pdf` vs PDF bajado vs link de cabecera)', SEV_WARN, tuple(pdf_issues)),
         Categoria('pending_srcs', '⏳ Fuentes pendientes (pending_source — el usuario debe proveer la fuente)', SEV_BACKLOG, tuple(pending_srcs)),
         Categoria('illegible_txt', 'Fulltext ilegible (mojibake/escaneo — existe pero no sirve para grep/verify)', SEV_BACKLOG, tuple(illegible_txt)),
-        Categoria('unverifiable', 'Citas no verificables en query/concepto/hipótesis (sin fulltext)', SEV_BACKLOG, tuple(unverifiable)),
-        Categoria('unverified', 'Sin verificar: query/concepto con citas pero sin bloque verify-citations (backlog)', SEV_BACKLOG, tuple(unverified)),
+        Categoria('unverifiable', 'Citas no verificables en ficha/query/concepto/hipótesis (sin fulltext)', SEV_BACKLOG, tuple(unverifiable)),
+        Categoria('unverified', 'Sin verificar: nota con citas y sin bloque verify-citations'
+                  + (' (BLOQUEA: modo --cierre)' if cierre else ' (backlog: pasada periódica; con `--cierre` bloquea)'), SEV_CIERRE, tuple(unverified)),
         Categoria('old_verif_template', '⛔ Bloque de verificación con plantilla vieja (sin columnas de hash — no evaluable)', SEV_BLOQUEANTE, tuple(old_verif_template)),
         Categoria('stale_pairs', 'Pares de verificación vencidos' + (' (BLOQUEA: modo --cierre)' if cierre else ' (backlog: pasada periódica; con `--cierre` bloquea)'), SEV_CIERRE, tuple(stale_pairs)),
         Categoria('stale_verif', 'Verificación stale: la nota se editó después de su último verify-citations (backlog)', SEV_BACKLOG, tuple(stale_verif)),

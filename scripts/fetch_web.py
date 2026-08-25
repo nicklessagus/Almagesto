@@ -2,7 +2,8 @@
 
 Uso:
     python scripts/fetch_web.py <slug> <citekey> <url> [--concept C] [--title T] [--author A]
-                        [--year Y] [--n-authors N] [--doi D] [--venue V] [--no-note] [--force]
+                        [--year Y] [--n-authors N] [--doi D] [--venue V] [--no-note]
+                        [--force] [--force-note]
 
 Baja la URL con **defuddle** (extractor de contenido de Obsidian: quita nav/menús/clutter y
 devuelve markdown limpio), le pasa un **post-clean** determinista (saca bloques HTML de media/embed
@@ -10,6 +11,12 @@ que defuddle deja sueltos) y escribe un snapshot en `fulltext/<slug>/<citekey>.t
 encabezado **URL + fecha de acceso** para que la afirmación sea **citable y verificable** por
 `verify-citations`. Además crea el **stub de nota de paper** `wiki/papers/<citekey>.md` (salvo
 `--no-note`), delegando en `make_notes.write_web_paper_note` (mismo template que las notas ADS).
+
+⛔ **`--force` re-baja la FUENTE, no pisa la NOTA.** Hasta 1.36.0 propagaba el flag hasta
+`write_web_paper_note` y `ingest_theme <slug> --force` **destruía la extracción LLM** de cada fuente
+web del tema (medido: `methods` y `role` a `[]`, prosa perdida) — mientras los dos docstrings
+prometían que «la extracción LLM se protege siempre». Para regenerar la nota a propósito está
+`--force-note`, que lo dice en el nombre.
 
 Es la contraparte web de `extract_fulltext.py` (PDF→txt): mismo destino, misma idea de fuente
 inmutable. Sólo aplica al **modo off-ADS** de `ingest-theme` (tema no-astro / bibliografía fuera de
@@ -139,7 +146,10 @@ def main() -> int:
     ap.add_argument("--doi", help="DOI de la fuente, si existe (para la nota; habilita check_retractions)")
     ap.add_argument("--venue", help="venue/bibstem de la nota (default: dominio de la URL)")
     ap.add_argument("--no-note", action="store_true", help="sólo el snapshot; no crear wiki/papers/<citekey>.md")
-    ap.add_argument("--force", action="store_true", help="re-baja/pisa aunque ya existan")
+    ap.add_argument("--force", action="store_true",
+                    help="re-baja el SNAPSHOT aunque ya exista (no toca la nota de wiki)")
+    ap.add_argument("--force-note", action="store_true",
+                    help="además, REGENERA la nota de paper: PISA la extracción LLM")
     args = ap.parse_args()
 
     if shutil.which("npx") is None:
@@ -190,7 +200,7 @@ def main() -> int:
             args.citekey, url=args.url, slug=args.slug, concept=args.concept,
             title=args.title, first_author=args.author, year=args.year,
             n_authors=args.n_authors, doi=args.doi,
-            venue=args.venue, accessed=stamp, force=args.force,
+            venue=args.venue, accessed=stamp, force=args.force_note,
         )
         cfg.print_seguro("  siguiente: completar la extracción LLM en la nota y verificar con verify-citations")
     return 0

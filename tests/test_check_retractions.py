@@ -285,16 +285,24 @@ def test_main_limpio_no_marca(toy_vault, monkeypatch):
     assert "retracted" not in read_fm(toy_vault.PAPERS / "2020okA....1..1A.md")
 
 
-def test_main_fallback_por_titulo_sin_doi(toy_vault, monkeypatch, capsys):
+def test_main_prefijo_de_titulo_avisa_pero_no_marca(toy_vault, monkeypatch, capsys):
+    """AUD-28: el prefijo del título **propone un candidato**, no estampa `retracted`.
+
+    Es una heurística sobre texto, no una detección por identificador (INV-33), y su salida sería un
+    flag BLOQUEANTE del lint sobre un artefacto que viaja: un paper legítimo *sobre* retractaciones
+    —o uno cuyo título arranca con "Withdrawn"— tumbaría la bóveda entera. Ahora se avisa por stdout
+    con "hay que chequearlo a mano" y la nota queda intacta."""
     mk_note(toy_vault.PAPERS, "1990oldR...1..1R",
             {"bibcode": "1990oldR...1..1R", "title": "RETRACTED: Old result",
              "doi": None, "tags": ["paper"]}, "")
     calls = []
     patch_net(monkeypatch, [FakeResp(200, {"message": {}})], calls)
-    assert run_main(monkeypatch) == 1
+    run_main(monkeypatch)
+    salida = capsys.readouterr().out
     fm = read_fm(toy_vault.PAPERS / "1990oldR...1..1R.md")
-    assert fm["retracted"] is True
-    assert "title-prefix" in fm["retraction"]["source"]
+    assert "retracted" not in fm, "una heurística de texto no puede marcar la fuente como no válida"
+    assert "CANDIDATO" in salida and "1990oldR...1..1R" in salida
+    assert "A MANO" in salida.upper()
     assert calls == []                               # sin DOI no consulta Crossref
 
 

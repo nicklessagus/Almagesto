@@ -6,33 +6,44 @@
 # test pasaba sin la guarda, un "espera creciente" que `[2.0, 2.0]` satisface, un test de
 # determinismo corriendo las dos pasadas en el mismo proceso).
 medido_en: "2026-08-24"
+alcance: "TODO `scripts/` — 328 funciones, barrido completo (`--todo`)"
+techo: 8
 
-# ⚠ PARCIAL: medido sobre los tres módulos de la Tanda 7 (21 funciones), no sobre todo `scripts/`.
-# El barrido completo son ~200 funciones × una corrida de suite cada una (~20 min) y todavía no
-# corrió. Hasta entonces este techo NO cubre el resto del árbol: `tools/cobertura-ratchet.yaml`
-# (11 s) es la red barata mientras tanto.
-alcance: "el diff completo de la sesión 2026-08-24 — 268 funciones, o sea la mayor parte de
-          `scripts/`; ya no es el recorte de tres módulos de la Tanda 7"
-techo: 7
-
-# Las 7 que sobreviven, medidas el 2026-08-24 sobre **268 funciones**, y **todas** son fronteras con
-# el entorno (subprocess, red, locale): no queda ninguna función pura acá. Las cuatro que sí lo eran
-# salieron de la lista el mismo día en que el gate las encontró, con el test que faltaba —
-# `make_notes._concept_dest` (decide DÓNDE cae la nota de un concepto), `triage.triage_file` (fija
-# que el juicio de curación viva en el registro versionado y no en scratch, que es el punto entero
-# de #51), `ingest_theme._listify_curado` (preserva el `extra_core` escalar en vez de perder la
-# curación) y `ingest_theme.repoint_source_pdf` (repunta el PDF a la copia versionada sin destruir
-# los comentarios del YAML). Las cuatro sobrevivían a que les vaciaran el cuerpo.
-#   check_retractions.py::_mailto           ← lee `git config user.email`: depende del entorno
+# ⚠ EL TECHO SUBIÓ DE 7 A 10, Y NO ES UNA REGRESIÓN — es la primera medición sobre el árbol
+# ENTERO. El 7 se había medido sobre 268 funciones y el campo `alcance` lo llamaba "la mayor parte
+# de scripts/": faltaban 60, entre ellas `openalex.py` completo. Las tres que "aparecen" nunca
+# estuvieron en la población anterior, así que 7 y 10 no son comparables — son dos mediciones de
+# universos distintos, y la regla es declarar la discrepancia en vez de elegir un número
+# (regla de método #5). La pasada `/auditar` del 2026-08-24 lo encontró así: el gate salía 1 contra
+# un techo que nunca había cubierto lo que decía cubrir (AUD-35), en el mismo archivo donde un
+# párrafo afirmaba que el barrido completo "todavía no corrió" mientras el campo de abajo decía que
+# sí, sobre 268 (AUD-21).
+#
+# ⛔ Esto NO habilita subir el techo para poner verde un rojo. La única justificación admisible es
+# la de acá: la población cambió y se dice cuál era y cuál es. Con el alcance ya fijado en TODO
+# `scripts/`, de ahora en más sólo puede bajar.
+#
+# LAS 8, medidas sobre 328 funciones. **Todas** son fronteras con el entorno (subprocess, red,
+# locale): no queda ninguna función pura acá. Las cuatro que sí lo eran salieron el mismo día en que
+# el gate las encontró, con el test que faltaba — `make_notes._concept_dest`, `triage.triage_file`,
+# `ingest_theme._listify_curado` e `ingest_theme.repoint_source_pdf`.
+#   citation_index.py::_fetch_ads_default   ← ADS `fl=reference`: red
+#   citation_index.py::_fetch_oa_default    ← idem OpenAlex
 #   extract_fulltext.py::tesseract_version  ← `tesseract --version`: subprocess
 #   fetch_web.py::fetch                     ← `npx defuddle`: subprocess contra Node
 #   fetch_web.py::defuddle_version          ← idem
 #   lib_config.py::stdout_tolerante         ← shim de encoding del stdout (locale del OS)
 #   sweep_external.py::_run                 ← lanza un subprocess: los tests graban la fachada
 #   sweep_external.py::aplicar_ground_truth ← idem (`_run` con --force); el test lo anula por diseño
-# (`citation_index._fetch_*` y `openalex._mailto` ya no figuran: no entraron en el diff de esta
-#  corrida. Su deuda sigue declarada en la medición de la Tanda 7.)
 #
-# `openalex.py::_abstract` salió de esta lista el mismo día que entró: el gate la encontró y se le
-# escribió el test que faltaba (el fixture nunca traía `abstract_inverted_index`, y `classify_record`
-# lee `abstract`, así que su ausencia cambiaba el veredicto core/no-core).
+# BAJÓ DE 10 A 8 EN LA MISMA SESIÓN: los dos `_mailto` (Crossref y OpenAlex) eran las únicas de las
+# diez que no necesitan red —leen `git config`— y son gemelas, así que las mata **un solo test
+# parametrizado** (`tests/test_mailto_paridad.py`), que es la red #2 aplicada: si N módulos prometen
+# la misma forma se prueba una vez, no con prosa en N docstrings. El test parametriza además el
+# valor de ausencia, que es la única diferencia real entre las gemelas (`None` para Crossref, `""`
+# para OpenAlex): si alguien las "unifica", el test lo dice.
+#
+# LAS PRÓXIMAS: las 8 que quedan son todas red o subprocess. Bajarlas pide o un doble en la frontera
+# (inyectar el `subprocess.run`, como se hizo con `_mailto`) o un smoke test contra el servicio real
+# —que es la regla de método #1: un cliente de red probado sólo contra la red falseada valida que el
+# CLIENTE funcione, no que el CONTRATO se cumpla.

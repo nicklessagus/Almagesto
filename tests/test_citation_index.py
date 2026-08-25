@@ -239,3 +239,27 @@ def test_el_doble_de_refs_of_normaliza_como_la_funcion_real(toy_vault, monkeypat
     assert set(real_refs) == set(doble_refs), "el doble indexa con otra clave que la función real"
     assert set(real_sin) == set(doble_sin), "y declara otros no-resueltos"
     assert list(real_refs) == ["10.1051/0004-6361:200811296"], "la clave es el DOI normalizado"
+
+
+def test_main_construye_y_reporta_la_cobertura(toy_vault, monkeypatch, capsys):
+    """AUD-05: el CLI existe porque `docs/operacion.md` publica `python scripts/citation_index.py`
+    desde que el módulo nació, y sin `__main__` el comando **corría, no imprimía nada y salía 0**
+    sin construir el índice — el operador creía haberlo construido y `cited_by_corpus` levantaba
+    `RuntimeError` después. El cero inventado que este módulo dice no producir, por la puerta del
+    empaquetado.  @inv INV-87
+    """
+    destino = cfg.ROOT / "build" / "citation_index.json"
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino.write_text(json.dumps({"citas": {"2009A&A": ["2020Foo"]},
+                                   "cobertura": {"con_refs": 3, "total": 4}}), encoding="utf-8")
+    llamado = {}
+
+    def fake_build(out=None, fetch_ads=None, fetch_oa=None):
+        llamado["si"] = True
+        return destino
+
+    monkeypatch.setattr(ci, "build", fake_build)
+    assert ci.main([]) == 0
+    assert llamado.get("si"), "el CLI tiene que construir el índice, no ser un no-op"
+    salida = capsys.readouterr().out
+    assert "citation_index.json" in salida and "3/4" in salida

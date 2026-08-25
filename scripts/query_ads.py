@@ -23,7 +23,7 @@ extra_core/glifo/chaining, así que lo recuperado siembra también el grafo de c
 rescató la pasada.
 
 Escribe TAMBIÉN el registro de búsqueda VERSIONADO del sujeto, `vault/config/registro/<slug>.yaml`
-(clave `busqueda`: fecha, query efectiva, rows, conteos, truncado, versión del framework y la
+(clave `busquedas`, lista — una entrada por corrida, D-28: fecha, query efectiva, rows, conteos, truncado, versión del framework y la
 **lente** con la que se clasificó) — #64: el ads.json es scratch regenerable, pero saber sobre qué
 universo afirma una ficha y con qué filtro se recortó tiene que viajar con la bóveda. No se escribe
 en los modos que no consultan un sujeto (`--probe`) ni en los que no clasifican de nuevo
@@ -646,6 +646,7 @@ def to_record(d: dict) -> dict:
     """Un doc crudo de ADS → el **registro canónico** que persiste `ads.json`.
 
     Esta función **define** el schema que `openalex.to_record` y `search_arxiv.to_record` espejan,
+    @inv INV-96
     y por eso es una función y no un bloque adentro de `query_ads()`: mientras vivió inline no se
     podía llamar sin red, así que la promesa de "mismo schema" era prosa en tres docstrings — y
     dos de los tres backends terminaron sin las claves del clasificador. La paridad se prueba

@@ -251,3 +251,18 @@ def test_versiones_con_ads_caido_no_dice_haber_cubierto(toy_vault, monkeypatch):
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("ADS 500")))
     hallazgos, fallidos = sw.discover_versions()
     assert hallazgos == [] and fallidos == ["2020arXivX"]
+
+
+def test_ground_truth_ilegible_cuenta_como_fallido_no_como_sin_cambios(toy_vault, monkeypatch):
+    """AUD-43: un snapshot ilegible tiene que entrar en `fallidos`, no devolver «sin cambios».
+
+    `nea_diff` atrapaba el JSON roto y devolvía `[]`, así que el slug no entraba en `fallidos` y
+    `_cubrir` estampaba `cubrio: ground-truth` en `_red.yaml` sobre una pasada que **no comparó
+    nada** — el registro falso que el propio docstring de `sweep_ground_truth` dice existir para
+    impedir, y que la corrida siguiente toma como línea de base.  @inv INV-85
+    """
+    cfg.GROUND_TRUTH.mkdir(parents=True, exist_ok=True)
+    (cfg.GROUND_TRUTH / "test_star.json").write_text("{ esto no es json", encoding="utf-8")
+    cambios, fallidos = sw.sweep_ground_truth()
+    assert cambios == []
+    assert "test_star" in fallidos, "el snapshot ilegible no se puede leer como «no cambió nada»"

@@ -262,7 +262,13 @@ def _upd_date(upd: dict) -> str | None:
 
 
 def title_says_retracted(title: str) -> bool:
-    """Fallback offline para papers SIN DOI: prefijo del título que los publishers ponen al retractar."""
+    """Fallback offline para papers SIN DOI: prefijo del título que los publishers ponen al retractar.
+
+    ⚠ Es una HEURÍSTICA sobre texto, no una detección por identificador, y por eso **no estampa
+    `retracted: true`** (AUD-28): un paper legítimo *sobre* retractaciones —o una nota cuyo título
+    arranca con "Withdrawn"— quedaría marcado como fuente no válida, y esa marca es un bloqueante
+    del lint sobre un artefacto que viaja. INV-33 enuncia que *la detección es por identificador*;
+    esto propone un candidato para que lo mire una persona."""
     t = (title or "").strip().lower()
     return t.startswith(("retracted", "retraction:", "retracted article", "withdrawn"))
 
@@ -373,6 +379,7 @@ def main() -> int:
     headers = _ua()
 
     found, checked, marked = [], 0, 0
+    candidatos: list = []          # prefijo de título sin confirmar en Crossref (AUD-28)
     corrected: list = []               # (bibcode, tipos) — #52: correcciones no-retractantes
     annotated = 0
     errors: list = []                  # (nombre, motivo) — H-10: un paper raro no tumba el barrido
@@ -426,10 +433,9 @@ def main() -> int:
                 else:
                     checked += 1  # sólo los consultados de verdad (los sin DOI van por prefijo de título)
                 time.sleep(0.2)   # cortesía con Crossref
-            # fallback offline por título para papers sin DOI (o que Crossref no marcó)
-            if retraction is None and title_says_retracted(title):
-                retraction = {"type": "retraction", "notice_doi": None, "date": None,
-                              "source": "title-prefix (sin DOI en Crossref — verificar a mano)"}
+            # fallback offline por título para papers sin DOI (o que Crossref no marcó). NO marca
+            # retractado: deja un CANDIDATO a verificar a mano (AUD-28) — ver `title_says_retracted`.
+            candidato = retraction is None and title_says_retracted(title)
             bib = fm.get("bibcode") or note.stem
             if soft:
                 # #52: la corrección NO retracta (el paper sigue citable) pero cambia justo el valor
@@ -442,6 +448,10 @@ def main() -> int:
                     cfg.print_seguro(f"  · {bib}: corrección publicada ({types}) — anotada en `corrections`")
                 else:
                     cfg.print_seguro(f"  · {bib}: corrección publicada ({types}) — ya anotada")
+            if candidato:
+                candidatos.append(bib)
+                cfg.print_seguro(f"  ⚠ {bib}: el TÍTULO parece de una retractación, pero Crossref no "
+                                 f"la registra — HAY QUE CHEQUEARLO A MANO (no se marca la nota)")
             if retraction:
                 stamp_retraction(note, fm, body, retraction)
                 marked += 1
@@ -453,6 +463,13 @@ def main() -> int:
             errors.append((note.stem, str(exc)))
             cfg.print_seguro(f"  ✗ {note.stem}: no se pudo chequear ({exc}) — sigo con el resto")
 
+    if candidatos:
+        cfg.print_seguro(
+            f"\n⚠ {len(candidatos)} CANDIDATO(S) por prefijo de título, sin confirmar en Crossref. "
+            "No se marcaron: es una heurística sobre texto y un paper legítimo SOBRE retractaciones "
+            "daría el mismo hit. Verificar a mano y, si corresponde, marcarlo:")
+        for bib in candidatos:
+            cfg.print_seguro(f"  · {bib}")
     cfg.print_seguro(f"\n{checked} chequeados vía Crossref, {marked} recién marcados, "
           f"{len(found)} retractados en total; {len(corrected)} con corrección publicada "
           f"({annotated} recién anotadas); {len(errors)} con error al chequear; "

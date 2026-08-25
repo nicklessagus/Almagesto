@@ -193,3 +193,23 @@ def test_rename_de_tema_reescribe_wikilinks_y_thesis_links(toy_vault):
 def test_entidad_desconocida_no_adivina(toy_vault):
     with pytest.raises(SystemExit, match="entidad desconocida"):
         run(["plan", "no_existe"])
+
+
+def test_quitar_del_frontmatter_preserva_el_cuerpo_byte_a_byte(toy_vault):
+    """El docstring promete «preserva byte a byte el resto, incluida la extracción LLM».
+
+    AUD-38: la reconstrucción era `"---" + "\\n".join(out) + "\\n---\\n" + resto.lstrip("\\n")`, que
+    hacía DOS daños a la vez — metía una línea en blanco **dentro** del frontmatter (el `head` de
+    `frontmatter_span` ya termina en `\\n`) y borraba la línea en blanco de después del `---`. Se
+    declara de la familia de `merge_frontmatter_list`, que sí preserva; la diferencia era el
+    `lstrip`. Corre en `entity.py delete` sobre CADA nota que referenciaba la entidad.  @inv INV-90
+    """
+    nota = toy_vault.PAPERS / "2020ref.md"
+    original = ("---\ntags:\n  - paper\nstars:\n  - Estrella Test\n  - Otra\n---\n\n"
+                "# 2020ref\n\n## Extracción\n\nProsa cara.\n")
+    nota.write_text(original, encoding="utf-8")
+    assert entity._quitar_del_frontmatter(nota, "stars", "Otra") is True
+    nuevo = nota.read_text(encoding="utf-8")
+    esperado = original.replace("  - Otra\n", "")
+    assert nuevo == esperado, f"\n--- esperado ---\n{esperado!r}\n--- obtenido ---\n{nuevo!r}"
+    assert cfg.split_fm(nuevo)["stars"] == ["Estrella Test"]

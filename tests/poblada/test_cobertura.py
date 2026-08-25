@@ -56,5 +56,11 @@ def test_ninguna_funcion_queda_sin_ejecutar(tmp_path):
         f"{len(faltan)} funciones sin ejecutar (techo {n_techo}) — la suite no las mira:\n  "
         + "\n  ".join(faltan))
     if len(faltan) < n_techo:
-        pytest.warns  # noqa
+        # AUD-50: acá había `pytest.warns  # noqa`, una sentencia no-op (referencia el atributo sin
+        # llamarlo, y el noqa callaba al linter). El `print` se lo traga pytest salvo con `-s`, así
+        # que bajar del techo no producía NINGUNA señal visible. Su hermano
+        # `test_invariantes_instancia.py` ya lo hacía bien con `warnings.warn`.
+        import warnings
+        warnings.warn(f"cobertura bajó a {len(faltan)} (techo {n_techo}): "
+                      f"actualizá `techo` en {RATCHET.name}", stacklevel=2)
         print(f"✅ bajó a {len(faltan)}: actualizá `techo` en {RATCHET.name}")

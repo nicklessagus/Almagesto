@@ -156,8 +156,9 @@ Progreso del ingest del tema <tema>:
    caza por grep: buscar los `aliases` del tema sobre el fulltext de **todo** el corpus (los otros
    slugs), p. ej. `grep -rilE --include="*.txt" "gaussian.process|gpr" vault/raw/fulltext/`, y para cada
    hit sin taguear leer el contexto y decidir si el paper **usa/aporta** al tema (no mención al
-   pasar) → agregar add-only `thesis_links` (y `methods` si aplica) a su nota. La tabla Dataview del
-   concept acumula sola; una ficha-método junta además por `methods:` sin re-taguear.
+   pasar) → agregar add-only `thesis_links` (y `methods` si aplica) a su nota. El roll-up del concept es una tabla
+   **estampada**: junta también por `methods:` sin re-taguear, pero **no acumula sola** — al
+   terminar el retro-tag hay que re-correr `python scripts/make_notes.py <slug> --theme`.
    **Alias sueltos y cortos, nunca frases** (#44, convención canónica en `verify-citations`): el
    `.txt` entrelaza dos columnas en la misma línea física (73% del corpus) → un alias multi-palabra
    (`"gaussian process regression"`) puede no matchear aunque el paper lo use. Probar la raíz corta
@@ -181,8 +182,9 @@ Progreso del ingest del tema <tema>:
    promete responder sin abrir un paper. La red de que el contraste ocurrió es #75 (*extraído pero
    no sintetizado*).
 4. **Síntesis del concept durable** (`concepts/<area>/<concept>.md`). Destilar lo aprendido a la
-   página viva: mecanismos, signos, desfasajes, regímenes, huecos. El roll-up Dataview (papers con
-   `thesis_links: <concept>`) acumula solo. **Citar los papers clave por `[[bibcode]]`** en la prosa
+   página viva: mecanismos, signos, desfasajes, regímenes, huecos. El roll-up estampado (papers con `thesis_links:
+   <concept>` **o** `methods: <concept>`) se regenera con `python scripts/make_notes.py <slug> --theme`
+   — no acumula solo. **Citar los papers clave por `[[bibcode]]`** en la prosa
    (además de trazabilidad, da links entrantes → no quedan huérfanos).
    Dos secciones del template que **son de un concepto** y hay que llenar acá, no dejarlas vacías:
    - **`## Régimen de validez` (#74).** El modo de falla dominante de un concepto **no** es "dos

@@ -211,7 +211,8 @@ descripción, o el usuario con `/<nombre>`). Encapsulan la cadena mecánica + el
 | `ingest-star` | "bajá/ingestá/agregá la estrella X" | Corre la cadena mecánica (orquestador `ingest_star.py`) y hace la extracción LLM de los papers clave + síntesis + bookkeeping. Incluye la **compuerta de triage** del citation chaining: el candidato que sólo *menciona* al sujeto no se baja sin juicio (`triage.py`). |
 | `ingest-theme` | "investigá a fondo el tema X" | Como ingest-star pero por TEMA: query ADS por keywords → concept durable en `concepts/`. Soporta temas off-ADS (opt-in) vía `source: web\|local-pdfs` + `sources:` en `themes.yaml`. |
 | `append-knowledge` | "agregale este paper a la ficha X", "sumá este PDF al concept Y" | Pliega **una fuente puntual** (bibcode / PDF / URL) a una ficha/concepto **existente**: plomería mínima + extracción enfocada + síntesis a la nota viva. No crea entidades ni barre por query. |
-| `test-hypothesis` | "hipótesis: …", "evidencia a favor/contra de …" | Testea un supuesto **durable** contra el fulltext y responde con veredicto citado; **a pedido del usuario** lo archiva en `concepts/hypotheses/` y taggea papers (`thesis_links`/`bearing`). |
+| `test-hypothesis` | "hipótesis: …", "evidencia a favor/contra de …" | Testea un supuesto **durable** contra el fulltext y responde con veredicto citado; **a pedido del usuario** lo archiva en `concepts/hypotheses/`, taggea papers con `thesis_links` y declara la postura de
+cada uno en la tabla de evidencia de la hipótesis (D-21). |
 | `query-corpus` | búsqueda/pregunta general (no hipótesis) | Responde contra índice + frontmatter + fulltext; archiva en `vault/wiki/queries/` **sólo si el usuario lo pide**. |
 | `verify-citations` | cierre de toda operación con prosa `[[bibcode]]` | Chequea, afirmación por afirmación, que la fuente respalde el claim (1 subagente/par lee el fulltext). |
 | `find-contradictions` | "buscá contradicciones", "¿qué papers discrepan sobre X?" | Barre un eje (estrella/parámetro o concepto) y confirma desacuerdos claim↔claim **entre** papers → propone `disputes` (con una posición por fuente, y un marcador propio cuando quien arbitra es la NASA) para que apruebes. |
@@ -273,7 +274,8 @@ Todo lo que puede ser determinista lo es, y lo que no, queda marcado como tal en
 | Escribir la síntesis de fichas y conceptos | **El modelo** |
 | Verificar que cada cita respalde su afirmación | **El modelo**, con un subagente independiente por afirmación |
 | Detectar contradicciones entre papers | **El modelo propone, vos aprobás** antes de que se escriba nada |
-| Retracciones y correcciones publicadas | **Determinista**: Crossref por DOI |
+| Lo que caduca **afuera** después del ingest | **Determinista**, una sola pasada (`sweep_external.py`) con **cinco** detectores: retracciones y correcciones (Crossref por DOI), preprint→publicado, snapshot web y ground-truth. **Reporta, no aplica solo** |
+| Borrar o renombrar una entidad sin dejar capas colgadas | **Determinista** (`entity.py`, siete capas, dry-run por defecto) |
 | Salud estructural (lint) y registro de qué se buscó | **Determinista** |
 
 ### Cómo se acota cada parte que hace el modelo, y cómo la chequeás

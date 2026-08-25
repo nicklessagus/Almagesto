@@ -173,3 +173,31 @@ def cited_by_corpus(idents, index: dict | None = None) -> list:
     return sorted({p for k in llaves for p in (citas.get(k) or [])})
 
 
+
+def main(argv=()) -> int:
+    """CLI de la pasada de construcción — cara (red sobre todo el corpus), se corre aparte.
+
+    Existe porque `docs/operacion.md` la publica como `python scripts/citation_index.py` desde que
+    el módulo nació, y sin `__main__` el comando **corría, no imprimía nada y salía 0** sin construir
+    el índice: el operador creía haberlo construido y `cited_by_corpus` levantaba `RuntimeError`
+    después. Es el mismo cero inventado que este módulo dice no producir (INV-87), por la puerta del
+    empaquetado."""
+    import argparse
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--out", default=None, help=f"destino (default: build/{DEFAULT_OUT})")
+    # `list(argv) or None` haría que `main([])` cayera a `sys.argv` — bajo pytest eso parsea los
+    # argumentos DEL TEST RUNNER y aborta. El `__main__` ya pasa `sys.argv[1:]` explícito.
+    args = ap.parse_args(list(argv))
+    destino = build(out=Path(args.out) if args.out else None)
+    idx = load(destino)
+    cobertura = idx.get("cobertura") or {}
+    cfg.print_seguro(f"→ {destino}")
+    if cobertura:
+        cfg.print_seguro(f"cobertura: {cobertura.get('con_refs', '?')}/{cobertura.get('total', '?')} "
+                         f"papers con al menos una referencia leída")
+    return 0
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(main(sys.argv[1:]))

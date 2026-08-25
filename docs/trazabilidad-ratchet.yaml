@@ -17,29 +17,26 @@
 # que lo prueba, se corre `python scripts/trace_invariants.py` y se copian acá los conteos nuevos
 # con la fecha.
 #
-# LA PASADA RETROACTIVA YA CORRIÓ (2026-08-24). El techo bajó de 77 a 7, y a **6** al cerrar la
-# Tanda 7 (INV-88). El mapa se armó con **dos
+# LA PASADA RETROACTIVA YA CORRIÓ (2026-08-24). El techo bajó de 77 a 7 y siguió bajando: **el
+# número vigente es el del campo `techos:` de abajo, no el de este párrafo** — copiarlo acá es cómo
+# se desincronizó (AUD-22: el relato decía 6 mientras el campo decía 3). El mapa se armó con **dos
 # pasadas ciegas e independientes** sobre `contrato.md` §3, cruzadas después: cada marca es un
 # símbolo que las dos nombraron, y todos los tests y símbolos marcados existían (cero nombres
 # inventados, que era el riesgo del método). Los conteos vigentes los emite el propio recolector:
 # NO se copian acá, porque copiarlos es cómo se desincronizaron la primera vez.
 #
-# LOS CINCO QUE QUEDAN NO SON FALTA DE MARCADO: no hay símbolo o no hay test que marcar, y ése es
-# el hallazgo de la pasada. ⚠ "hueco" acá es lenguaje corriente, NO el estado `HUECO` del
-# contrato: en la taxonomía de `contrato.md` §2 sólo INV-86 sigue en HUECO puro; INV-05 e INV-66
-# son `garantizado sin medir`, INV-19 es `HUECO (parcial)`, INV-23 es `INCUMPLIDO (parcial)` e
-# INV-73 figura `garantizado y medido`. La autoridad del estado es el contrato, no este archivo.
+# LOS QUE QUEDAN NO SON FALTA DE MARCADO: no hay símbolo o no hay test que marcar, y ése es el
+# hallazgo de la pasada. La lista viva es la de `techos:`; lo de acá abajo es el porqué de cada uno.
+# ⚠ "hueco" acá es lenguaje corriente, NO el estado `HUECO` del contrato. **La autoridad del estado
+# es el contrato, no este archivo** — por eso este bloque ya no lo repite: AUD-23/24 encontraron que
+# atribuía a `contrato.md` estados que no tenía (decía que INV-19 seguía sin herramienta trece líneas
+# antes de declarar que `entity.py` lo cerraba, y que INV-86 seguía en HUECO trece líneas antes del
+# ✅ que lo daba cerrado).
 #   · INV-05  las plantillas de `make_notes` no tienen test que las audite buscando prosa que
 #             describa a un consumidor downstream.
-#   · INV-19  NO EXISTE herramienta de borrado/renombre de ENTIDAD (sólo `rename_paper`, a nivel
-#             paper): nadie limpia `registro/<slug>.yaml`, `raw/{pdfs,fulltext}/<slug>/`, la entrada
-#             en `stars.yaml`/`themes.yaml` ni `build/<slug>/`, y ningún chequeo los ve colgados.
 #   · INV-23  la independencia del orden del PRIMER estampado de `fulltext` (`A,B` ≠ `B,A`) — es el
 #             INC-3 abierto: los tres tests existentes prueban la rama "ya hay valor estampado".
 #   · INV-66  rutas absolutas en artefactos versionados: sin chequeo y sin test.
-#   · INV-73  el contrato lo da `garantizado y medido` por la 8ª F1 #26, pero en la suite actual
-#             el aislamiento lo da la fixture `toy_vault`, no una aserción: ningún test se
-#             pondría rojo si `cmd_seed` escribiera en `cfg.VAULT`. Falta ESE test.
 #
 # ✅ INV-86 salió con el issue 8.3 (la `inferencia` sin premisas ahora bloquea).
 # ✅ INV-88 salió de la lista con la Tanda 7: las tres puertas de D-26 están
@@ -47,12 +44,21 @@
 #    marcable — la conducta de un skill no la ve ningún recolector.
 
 medido_en: "2026-08-24"
-almagesto_version: "1.32.0"
-contrato_invariantes: 91
+almagesto_version: "1.37.0"
+contrato_invariantes: 96
 
 techos:
-  sin_marca: 3    # medido: 2026-08-24 (tandas 8-9 + auditoría) — 05, 23, 66.
+  sin_marca: 3    # medido: 2026-08-24 (pasada `/auditar` + su fix) — 05, 23 y 95.
   sin_test: 3     # medido: 2026-08-24 — los mismos tres.
+  # ⚠ SUBIÓ DE 2 A 3 Y ESTÁ JUSTIFICADO — es el caso que el encabezado admite: el contrato incorporó
+  # un invariante nuevo que legítimamente no se puede marcar. INV-95 enuncia lo que garantiza el
+  # propio mapa de trazabilidad, y `trace_invariants.py` + su test están EXCLUIDOS del recolector a
+  # propósito (si no, se auto-adjudicaría cobertura: ya pasó con INV-87 e INV-90). O sea que lo
+  # único que esta herramienta no puede medir es a sí misma, y eso ahora está dicho en vez de
+  # escondido. NO es licencia para subir el techo por otros motivos.
+  # INV-66 salió con la pasada de fix: los tests que la auditoría hizo escribir traen sus marcas
+  # (`test_mailto_paridad.py` fija que la dirección de contacto NO se hardcodea en un artefacto
+  # versionado, que es justo lo que INV-66 enuncia sobre rutas y datos per-instancia).
   # INV-19 salió de la lista: era el hueco más grande (no existía borrado/renombre de ENTIDAD, sólo
   # de paper). Lo cierra `scripts/entity.py` con las siete capas + la categoría *Capas colgadas* del
   # lint; lo miden los 12 tests de `tests/test_entity.py`.

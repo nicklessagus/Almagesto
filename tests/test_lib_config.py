@@ -138,11 +138,10 @@ def test_require_field(toy_vault):
         cfg.require_field(meta, "query", "gp", "themes.yaml", hint="usá ingest_theme.")
 
 
-def test_concept_areas_sin_nada(toy_vault):
-    obj = dict(cfg.load_objective())
-    obj.pop("concept_areas")
-    write_yaml(toy_vault.OBJECTIVE_YAML, obj)
-    assert cfg.load_concept_areas() == []
+# AUD-53: acá vivía `test_concept_areas_sin_nada`, mismo camino y mismos datos que
+# `test_concept_areas_sin_declarar_apaga_el_chequeo` (los dos `mkdir` que parecían diferenciarlo
+# eran inertes: `load_concept_areas` lee sólo `objective.yaml`). Borrado — el que queda tiene el
+# docstring con el porqué y la marca `@inv`.
 
 
 # ── orden por citas/año (política única de #79) ──────────────────────────────
@@ -374,14 +373,18 @@ def test_sin_escrituras_directas_a_vault():
     """Criterio de aceptación de D-53, como test y no como `grep` que alguien tiene que acordarse
     de correr: ningún módulo que escribe en `vault/` puede llamar `write_text`/`write_bytes` sobre
     su destino. Los módulos cuyo destino es `build/`/`outputs/` (scratch regenerable) quedan fuera
-    a propósito — ahí un archivo torn se recupera re-corriendo el paso.  @inv INV-90"""
+    a propósito — ahí un archivo torn se recupera re-corriendo el paso.
+
+    ⚠ Cubre también `shutil.copy*`: el guard miraba sólo `write_text`/`write_bytes` y por esa puerta
+    `ingest_theme.repoint_source_pdf` copiaba el PDF de una fuente declarada **directo al destino
+    final** (`shutil.copy2(src, dest)`), con el mismo modo de falla que H-07 cerró.  @inv INV-90"""
     import re
     from pathlib import Path
     import trace_invariants as ti
     escriben_en_vault = ("make_notes.py", "extract_fulltext.py", "fetch_web.py",
                          "ingest_theme.py", "fetch_ground_truth.py", "check_retractions.py",
                          "fetch_arxiv.py", "fetch_pdf.py", "lib_config.py")
-    directo = re.compile(r"(?<!def )\b\w+\.write_(?:text|bytes)\(")
+    directo = re.compile(r"(?<!def )\b\w+\.(?:write_(?:text|bytes)|copy2?|copyfile)\(")
     ofensores = []
     for nombre in escriben_en_vault:
         src = (Path(cfg.ROOT) / "scripts" / nombre).read_text(encoding="utf-8")
@@ -392,12 +395,12 @@ def test_sin_escrituras_directas_a_vault():
         for n, ln in enumerate(src.splitlines(), 1):
             if n in prosa or not directo.search(ln):
                 continue
-            if "tmp.write_" in ln:
-                continue          # el helper mismo (`_publicar`)
+            if "tmp.write_" in ln or ", tmp)" in ln:
+                continue          # el helper mismo (`_publicar`): el destino ES el temporal
             ofensores.append(f"{nombre}:{n}: {ln.strip()}")
     assert ofensores == [], (
         "escrituras directas (no atómicas) a vault/ — usar cfg.write_text_atomic / "
-        "cfg.write_bytes_atomic:\n  " + "\n  ".join(ofensores))
+        "cfg.write_bytes_atomic / cfg.copy_file_atomic:\n  " + "\n  ".join(ofensores))
 
 
 def test_objective_error_distingue_los_tres_estados(toy_vault):
@@ -781,3 +784,60 @@ def test_lens_diff_offline_declara_los_papers_sin_nota(toy_vault):
         "relevance: high\ntags: [paper]\n---\n## Abstract\nstarspot activity\n", encoding="utf-8")
     entran, salen, sin_nota = cfg.lens_diff_offline("test_star")
     assert sin_nota == ["2020SinNota"]
+
+
+def test_load_registro_tolera_un_yaml_en_otra_codificacion(toy_vault):
+    """`load_registro` promete `{}` si el registro «no es legible» y ser **tolerante a la edición a
+    mano, que el framework instruye explícitamente**.
+
+    AUD-41: atrapaba `(yaml.YAMLError, OSError)`, así que un registro guardado en latin-1 —el caso
+    natural: `motivo:` lleva prosa acentuada— propagaba `UnicodeDecodeError` y **tumbaba a los tres
+    lectores que el docstring dice proteger** (lint, triage, query_ads), sobre el único artefacto no
+    regenerable de la bóveda.  @inv INV-51
+    """
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    (cfg.REGISTRO / "test_star.yaml").write_bytes(
+        "decisiones:\n  2020Foo:\n    motivo: revisión metodológica\n".encode("latin-1"))
+    assert cfg.load_registro("test_star") == {}
+    assert cfg.load_decisiones("test_star") == {}
+    assert cfg.load_busquedas("test_star") == []
+
+
+def test_flags_usados_no_reporta_el_posicional_como_flag():
+    """AUD-44: `flags_usados` promete los **flags** no-default y devolvía también el posicional.
+
+    `--slug=<x>` salía en TODA corrida de los seis scripts cuyo posicional se llama `slug`, o sea el
+    «ruido constante» que el docstring dice evitar, en `cadena:` del registro versionado. Que
+    `ignorar` listara `theme` a mano muestra que la exclusión era intencional: se derivan del
+    parser.  @inv INV-44
+    """
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("slug")
+    ap.add_argument("--force", action="store_true")
+    ap.add_argument("--limit", type=int, default=None)
+    assert cfg.flags_usados(ap.parse_args(["tau-cet"]), ap) == []
+    assert cfg.flags_usados(ap.parse_args(["tau-cet", "--force"]), ap) == ["--force"]
+    assert cfg.flags_usados(ap.parse_args(["tau-cet", "--limit", "1"]), ap) == ["--limit=1"]
+
+
+def test_ninguna_copia_directa_al_destino_final_en_vault():
+    """Hermano del guard de `write_text`/`write_bytes`, para el caso «el origen es otro archivo».
+
+    `shutil.copy2(src, dest)` escribe en el destino FINAL: un corte deja un PDF truncado que la
+    cadena da por bajado (`if dest.exists() and not force`) — exactamente el modo de falla que H-07
+    cerró para `write_bytes`, vivo por otra puerta. `ingest_theme.repoint_source_pdf` lo hacía y el
+    guard no lo veía porque buscaba sólo `.write_text(`/`.write_bytes(` (AUD-02).  @inv INV-90"""
+    import re
+    from pathlib import Path
+    ofensores = []
+    for nombre in ("ingest_theme.py", "make_notes.py", "fetch_pdf.py", "fetch_arxiv.py",
+                   "fetch_web.py", "extract_fulltext.py", "fetch_ground_truth.py"):
+        src = (Path(cfg.ROOT) / "scripts" / nombre).read_text(encoding="utf-8")
+        for n, linea in enumerate(src.splitlines(), 1):
+            if re.search(r"shutil\.copy(2|file)?\(", linea) and not linea.lstrip().startswith("#"):
+                if ", tmp)" in linea:
+                    continue                      # el helper mismo: el destino ES el temporal
+                ofensores.append(f"{nombre}:{n}: {linea.strip()}")
+    assert not ofensores, ("copia no atómica dentro de vault/ — usar cfg.copy_file_atomic:\n  "
+                           + "\n  ".join(ofensores))

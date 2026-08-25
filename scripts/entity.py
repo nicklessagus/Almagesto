@@ -163,7 +163,11 @@ def _quitar_del_frontmatter(f: Path, campo: str, valor: str) -> bool:
         out.append(ln)
     if not cambio:
         return False
-    cfg.write_text_atomic(f, "---" + "\n".join(out) + "\n---\n" + resto.lstrip("\n"))
+    # ⚠ Reconstrucción EXACTA: `head` ya viene con su `\n` inicial y final desde
+    # `frontmatter_span`. Agregar `"\n---\n"` metía una línea en blanco DENTRO del
+    # frontmatter y `resto.lstrip("\n")` borraba la de después del `---`: las dos rompían el
+    # "byte a byte" que el docstring promete (AUD-38/39, auditoría 2026-08-24).
+    cfg.write_text_atomic(f, "---" + "\n".join(out) + "---" + resto)
     return True
 
 
@@ -198,7 +202,7 @@ def _renombrar_en_frontmatter(f: Path, campo: str, viejo: str, nuevo: str) -> bo
         out.append(ln)
     if not cambio:
         return False
-    cfg.write_text_atomic(f, "---" + "\n".join(out) + "\n---\n" + resto.lstrip("\n"))
+    cfg.write_text_atomic(f, "---" + "\n".join(out) + "---" + resto)
     return True
 
 

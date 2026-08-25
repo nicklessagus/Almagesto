@@ -543,7 +543,11 @@ def migrate_all_facets() -> int:
                     out.append("facets:" + ln[len("topics:"):])
                 continue
             out.append(ln)
-        cfg.write_text_atomic(f, "---" + "\n".join(out) + "\n---\n" + resto.lstrip("\n"))
+        # ⚠ Reconstrucción EXACTA: `head` ya viene con su `\n` inicial y final desde
+        # `frontmatter_span`. Agregar `"\n---\n"` metía una línea en blanco DENTRO del
+        # frontmatter y `resto.lstrip("\n")` borraba la de después del `---`: las dos rompían el
+        # "byte a byte" que el docstring promete (AUD-38/39, auditoría 2026-08-24).
+        cfg.write_text_atomic(f, "---" + "\n".join(out) + "---" + resto)
         n += 1
     cfg.print_seguro(f"`topics:` → `facets:` en {n} nota(s) de paper (R-5).")
     return n
@@ -838,7 +842,7 @@ def excluded_table(slug: str) -> str:
         return ""
     try:
         data = json.loads(adsfile.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return ""                             # JSON truncado/corrupto: sin snapshot confiable
     records = data.get("records") if isinstance(data, dict) else None
     if not isinstance(records, list):
@@ -1117,7 +1121,15 @@ def stamp_header(dest) -> bool:
         out = text[:insert_at] + f">\n{linea_gen}\n" + text[insert_at:]
         cfg.write_text_atomic(dest, out)
         return True
-    m = H1_RE.search(text)
+    # ⚠ El H1 se busca SÓLO EN EL CUERPO. `H1_RE` corre con `re.M`, así que sobre el texto entero
+    # matchea también un **comentario YAML** del frontmatter (`# P_rot lo puso el usuario a mano`,
+    # que el framework instruye editar a mano) y el bloque se insertaba ADENTRO del frontmatter:
+    # `split_fm` devolvía `{}` y la nota caía en una categoría BLOQUEANTE del lint. Como esto lo
+    # dispara `--restamp-headers` —lo que el lint recomienda para las notas sin cabecera— la
+    # reparación fabricaba el daño que venía a arreglar.
+    partes = cfg.frontmatter_span(text)
+    offset = len(text) - len(partes[1]) if partes else 0
+    m = H1_RE.search(text, offset)
     if not m:
         return False                                  # sin H1 no hay ancla honesta: no inventamos
     bloque = f"\n\n{LLM_DISCLAIMER[kind]}\n>\n{linea_gen}"
@@ -1808,9 +1820,6 @@ def write_concept_note(slug: str, force: bool) -> None:
     # Retro-link de la tabla: una ficha-MÉTODO junta además todo paper ya tagueado con el método
     # en `methods:` (aunque no tenga `thesis_links`) — los papers extraídos antes de crear la ficha
     # aparecen solos, sin re-taguear (issue #4a).
-    link_pred = f'contains(thesis_links, "{concept}")'
-    if area == "methods":
-        link_pred += f' OR contains(methods, "{concept}")'
     body = f"""{fm(front)}
 # {meta.get('title', concept)}
 

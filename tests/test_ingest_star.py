@@ -137,8 +137,10 @@ def test_guardia_no_frena_un_refresh_normal(toy_vault, fake_run, monkeypatch):
     assert run_main(monkeypatch) == 0
 
 
-def test_guardia_sin_ads_json_no_rompe(toy_vault, fake_run, monkeypatch):
-    assert run_main(monkeypatch) == 0
+# AUD-54: acá vivía `test_guardia_sin_ads_json_no_rompe`, subconjunto estricto de
+# `test_cadena_completa_en_orden` — mismas fixtures, mismo setup (tampoco hay `build/<slug>/ads.json`
+# allá), misma llamada, y su único assert ya estaba en el otro. No existía cambio que lo pusiera
+# rojo sin poner rojo antes a aquél, que además asserta la cadena completa en orden. Borrado.
 
 
 def test_la_escotilla_del_orquestador_deja_traza(toy_vault, fake_run, monkeypatch):

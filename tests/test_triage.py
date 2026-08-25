@@ -329,11 +329,20 @@ def test_migrate_con_json_valido_pero_no_objeto(toy_vault, monkeypatch):
         run_main(monkeypatch, ["test_star", "--migrate"])
 
 
-def test_listado_sin_ads_json_ni_decisiones_sigue_avisando(toy_vault, monkeypatch):
-    """Sin juicio registrado el diagnóstico correcto sigue siendo "corré la cadena" — el fallback
-    no puede tapar el caso de la estrella a la que le falta el ingest."""
-    with pytest.raises(SystemExit, match="ads.json"):
-        run_main(monkeypatch, ["test_star"])
+def test_listado_sin_ads_json_cae_al_registro_versionado(toy_vault, monkeypatch, capsys):
+    """CON juicio registrado y sin `ads.json`, el triage **no aborta**: cae al registro versionado
+    y muestra lo ya decidido. Es la contraparte de `test_sin_ads_json_error_amigable`, y el punto
+    de #51 — el juicio de curación sobrevive a que `build/` no exista (otra máquina, o un `clean`).
+
+    AUD-52: el cuerpo era **byte a byte idéntico** a aquél (no registraba ninguna decisión), así
+    que no podía fallar sin que fallara el otro. Al escribirlo de verdad apareció que este camino
+    —el fallback con decisiones presentes— no estaba cubierto por ningún test."""
+    cfg.save_decisiones("test_star", {"2020Ruido": {"decision": "descartado",
+                                                   "motivo": "ruido del chaining",
+                                                   "fecha": "2026-08-24"}})
+    run_main(monkeypatch, ["test_star"])
+    salida = capsys.readouterr().out
+    assert "2020Ruido" in salida and "ruido del chaining" in salida
 
 
 def test_show_decisions_con_busqueda_no_mapa_no_crashea(toy_vault, capsys):

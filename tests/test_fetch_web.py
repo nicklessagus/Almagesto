@@ -27,8 +27,14 @@ def test_clean_saca_media_conserva_prosa():
     assert out.endswith("\n") and not out.endswith("\n\n")
 
 
-def test_clean_es_determinista():
-    assert fw.clean_markdown(MD) == fw.clean_markdown(MD)
+def test_clean_es_idempotente():
+    """AUD-46: antes era `assert clean(MD) == clean(MD)` — una tautología que se cumple para toda
+    implementación determinista (verificado: con el cuerpo reemplazado por `return md, 0` el test
+    seguía pasando). La propiedad que SÍ importa y sí puede fallar es la idempotencia: el snapshot
+    se re-limpia al re-bajar, así que una segunda pasada no puede seguir cambiando el texto."""
+    una, _ = fw.clean_markdown(MD)
+    dos, removidos = fw.clean_markdown(una)
+    assert dos == una and removidos == 0
 
 
 # ── snapshot_retrieved (parser en lib_config, #34) / CITEKEY_RE ──────────────
@@ -139,3 +145,32 @@ def test_unicode_no_muere_en_consola_ascii(toy_vault, monkeypatch):
     rc = fw.main()
     wrapper.flush()
     assert rc == 1
+
+
+def test_force_rebaja_la_fuente_pero_no_pisa_la_extraccion(toy_vault, fake_defuddle, monkeypatch):
+    """`--force` re-baja el SNAPSHOT y **no toca la nota de wiki**.  @inv INV-61
+
+    AUD-36: `ingest_theme` documenta que `--force` fuerza sólo la re-bajada de fuentes y que «la
+    extracción LLM se protege siempre», pero propagaba el flag hasta `write_web_paper_note`, que
+    pisa la nota con un stub. Medido en la auditoría del 2026-08-24 sobre una nota real:
+    `methods: [gaussian-process, marginal-likelihood] → []`, `role: [fundacional] → []`, prosa
+    perdida. Es el artefacto más caro y menos regenerable de la bóveda, y el docstring es
+    justamente lo que hace que alguien corra `--force` con confianza.
+    """
+    assert run_main(monkeypatch, ARGS) == 0
+    note = toy_vault.PAPERS / "2006RasmussenWilliams.md"
+    # el agente completa la extracción LLM sobre el stub
+    texto = note.read_text(encoding="utf-8")
+    texto = texto.replace("methods: []", "methods:\n  - gaussian-process")
+    texto = texto.replace("role: []", "role:\n  - fundacional")
+    note.write_text(texto + "\n## Extracción\n\nProsa cara escrita por el agente.\n", encoding="utf-8")
+
+    fake_defuddle.md = "# Otra cosa\n\nProsa citable nueva.\n"
+    assert run_main(monkeypatch, ARGS + ["--force"]) == 0
+
+    txt = (toy_vault.FULLTEXT / "gp" / "2006RasmussenWilliams.txt").read_text(encoding="utf-8")
+    assert "Prosa citable nueva" in txt, "--force SÍ tiene que re-bajar la fuente"
+    fm = read_fm(note)
+    assert fm["methods"] == ["gaussian-process"], "la extracción LLM no se pisa"
+    assert fm["role"] == ["fundacional"]
+    assert "Prosa cara escrita por el agente." in note.read_text(encoding="utf-8")

@@ -45,7 +45,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import shutil
 import os
 import subprocess
 import sys
@@ -301,7 +300,7 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
                 cfg.print_seguro(f"{key}: la fuente declarada es la copia de la bóveda — nada que copiar")
             else:
                 dest.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(src, dest)
+                cfg.copy_file_atomic(src, dest)
                 cfg.print_seguro(f"{key}: {src.name} → {dest}")
             repoint_source_pdf(key, str(s["pdf"]), dest)
             n_pdf += 1     # sólo cuenta PDFs presentes en disco (un item fallido no dispara extract)

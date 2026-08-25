@@ -241,8 +241,13 @@ def nea_diff(slug: str) -> list:
         return []
     try:
         viejo = json.loads(out.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return []
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        # ⛔ NO `return []`: un snapshot ilegible no es "no cambió nada". Devolverlo así hacía que
+        # el slug no entrara en `fallidos` de `sweep_ground_truth` y que la pasada estampara
+        # `cubrio: ground-truth` sobre una comparación que nunca ocurrió — exactamente el registro
+        # falso que ese docstring dice existir para impedir (AUD-43). El lint ya trata al
+        # ground-truth ilegible como bloqueante: acá se propaga para que el barrido lo cuente.
+        raise ValueError(f"ground-truth de {slug} ilegible: {exc}") from exc
     name, _ = cfg.star_by_slug(slug)
     tab = fetch_pscomppars(name)
     host_nuevo = fetch_host(name, tab=tab)

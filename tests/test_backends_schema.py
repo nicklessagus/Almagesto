@@ -54,6 +54,7 @@ BACKENDS = [
 
 @pytest.mark.parametrize("nombre,hacer", BACKENDS, ids=[b[0] for b in BACKENDS])
 def test_el_registro_tiene_exactamente_las_claves_del_schema(nombre, hacer, toy_vault):
+    # @inv INV-96
     rec = hacer()
     faltan, sobran = CLAVES - set(rec), set(rec) - CLAVES
     assert not faltan, f"{nombre}: faltan {sorted(faltan)}"

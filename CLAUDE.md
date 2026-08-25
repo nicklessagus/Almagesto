@@ -13,9 +13,8 @@ El usuario cura las fuentes (`vault/raw/`) y hace preguntas.
 > cada instancia es `vault/config/objective.yaml` + el
 > contenido de `vault/wiki/`/`vault/raw/`. Para instanciar una bóveda nueva ver `README.md` (sección *Instanciar*).
 
-> **La cabecera de una ficha/concepto lleva una línea `> _Estado — …_`** con **dos fechas**
-> (la de **síntesis** está decidida y **no implementada** todavía — INV-82 figura `parcial` en
-> `docs/contrato.md`) que avanzan por separado y pueden divergir sin que ninguna mienta (D-12): **búsqueda** (última
+> **La cabecera de una ficha/concepto lleva una línea `> _Estado — …_`** con **tres fechas**
+> que avanzan por separado y pueden divergir sin que ninguna mienta (D-12): **búsqueda** (última
 > corrida + universo acumulado + escotillas), y **verificación** (fecha del bloque, con la salvedad
 > fija *"vigencia por par: la dicen las anclas"* — sin ella, la fecha se lee como "todo verificado
 > a esta fecha", que es justo la lectura que el ancla corrige). Con una sola fecha por nota,
@@ -197,12 +196,11 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   positivos en el régimen de período de un planeta dudoso). Todo lo demás (era instrumental,
   metodología RV genérica, dinámica/estabilidad, ausencia de tránsito/compañera, debris,
   astrosismología, habitabilidad) **no se inlinea**: vive en su nota de paper y se consulta por la
-  tabla Dataview `## Papers` de la ficha (que lista todo paper con la estrella en `stars:`). No
+  tabla `## Papers` de la ficha (que lista todo paper con la estrella en `stars:`). No
   re-narrar en la ficha lo que ya está en la extracción del paper. Esto mantiene la ficha **compacta**
   (rápida de ingestar, sin perder contexto) sin perder trazabilidad.
-  ⚠ **`## Papers` se ESTAMPA, no es Dataview (D-10/D-11).** ⚠ **No todos** los roll-ups todavía:
-  `## Planetas` sigue siendo ```dataviewjs``` y `## Métodos aplicados a esta estrella`
-  ```dataview``` (INV-81 `parcial`). `## Papers` es una tabla
+  ⚠ **Los tres roll-ups de la ficha se ESTAMPAN, no son Dataview (D-10/D-11; los tres desde
+  1.35.0 — `## Papers`, `## Planetas` y `## Métodos aplicados a esta estrella`).** `## Papers` es una tabla
   materializada —`Bibcode | Año | Relevancia | Origen | Estado`— cuyo encabezado lleva los **dos**
   números (universo · sintetizados en esta ficha), porque el defecto medido era prometer 155 arriba
   de una síntesis de 8. El **estado** dice cuán lejos llegó cada paper en el embudo: `fuera del
@@ -253,6 +251,14 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   frontmatter contra el cual poner un `alt`). Sólo taguear discrepancias **materiales** (mayores que
   el error; no diferencias cosméticas dentro de la barra). Reflejar la disputa también en la
   tabla/prosa.
+- **papers/**: ⛔ **toda nota de paper pertenece a alguna ENTIDAD (D-23).** Al menos uno de
+  `stars`, `thesis_links` o `methods` tiene que estar poblado. Sin ninguno de los tres el paper no
+  entra en ningún roll-up y no lo alcanza ninguna ficha ni concepto: es extracción ya pagada que se
+  vuelve invisible, y no es lo mismo que una nota **huérfana** —el detector de huérfanos mira los
+  links entrantes, así que basta que algo la linkee para que el hueco quede tapado—. Es
+  **bloqueante** (INV-94), y la salida es poblar el campo que corresponda, no borrar la nota.
+  ⚠ Cuando `entity.py delete` deja un paper sin destino **avisa y no borra**: la decisión de qué
+  hacer con una extracción cara es del usuario, no del script.
 - **papers/**: ⛔ **la identidad de un trabajo es su `doi`/`arxiv_id`, no su bibcode (D-19).** El
   preprint y el publicado son bibcodes distintos del **mismo** paper: dos notas ahí son doble conteo
   en todo lo que cuenta papers, dos fuentes donde hay una, y un falso positivo permanente de #75
@@ -482,8 +488,10 @@ registro** que `query_ads.to_record`, y esa paridad la fija un test
 3. Actualizás `index.md` y appendeás a `log.md`.
 
 > **Retro-linkeo (papers pre-existentes ↔ entidad nueva) — tres capas:** (a) una **ficha-método**
-> (`concepts/methods/`) junta en su tabla Dataview también por `contains(methods, "<concept>")` —
-> los papers ya extraídos con ese método aparecen solos, sin re-taguear; (b) `make_notes` mergea
+> (`concepts/methods/`) junta en su roll-up estampado (`stamp_concept_rollup`) también por
+> `methods`, así que los papers ya extraídos con ese método entran sin re-taguear — pero la tabla
+> **no acumula sola**: hay que re-correr `python scripts/make_notes.py <slug> --theme` (el lint
+> reporta como backlog la tabla desactualizada); (b) `make_notes` mergea
 > **add-only** los seeds del ingest (`stars` / `thesis_links`) en notas de paper que **ya existían**
 > (nunca pisa la extracción LLM; si ya están, no toca nada); (c) `ingest-theme` incluye un paso de
 > **retro-tag por grep**: buscar los `aliases` del tema en el fulltext de **todo** el corpus y
@@ -663,7 +671,8 @@ nunca.
 ⛔ **Reporta, no aplica solo**: el diff se muestra y se pregunta antes de tocar nada — un snapshot
 que se actualiza solo cambia valores **bajo los pies de la prosa que ya los citó**. Lo que sí es
 automático es la consecuencia offline: al cambiar un `.txt`, el **ancla de fuente** (D-20) marca
-sola los pares verificados contra él. El renombre preprint→publicado **nunca** es automático
+sola los pares verificados contra él. El ground-truth **no** lo cubre esa ancla (no es un `.txt`):
+al aplicar, se registra `_cambios` en el JSON y el lint pide la marca `⚠desactualizado` (ver abajo). El renombre preprint→publicado **nunca** es automático
 (reescribe wikilinks de toda la bóveda): se propone el comando.
 La caducidad se registra **versionada** en `vault/config/registro/_red.yaml` — "cuándo se miró
 afuera" es información de la bóveda, no de la máquina. Un detector que **no pudo correr** se
@@ -673,8 +682,20 @@ declara y **no** entra en `cubrio`: el registro no puede afirmar haber mirado lo
 otra vía y borrarla destruye trabajo—: se **marca en línea** con `[[bibcode]] ⛔retractada`. Sin la
 marca, el lint la localiza y **bloquea**; con la marca baja a informativa (visible, no destruida).
 El símbolo es deliberado: un `(retractada)` pelado daría falso positivo con cualquier mención del
-hecho en prosa. Junto con `(inferencia de [[bibcode]])` son las **dos únicas marcas en línea** del
-sistema.
+hecho en prosa.
+
+**Ground-truth que cambió bajo la prosa (AUD-42):** el ancla de fuente (D-20) hashea
+`raw/fulltext/**/*.txt` y **nunca** `raw/ground_truth/<slug>.json`, así que cuando NEA corrige un
+valor entre releases, la frase que ya lo citaba queda igual de verde que antes y **ninguna fila de
+verificación se entera** — es el modo de caducidad más silencioso, dentro del detector que el propio
+módulo llama "el más silencioso de los cinco". Al aplicar un diff, `sweep_external` deja `_cambios`
+en el JSON (qué campo, de qué a qué, cuándo) y el lint **pide la marca**: `⚠desactualizado` pegado
+al valor. Mismo criterio que con una fuente retractada — la afirmación **no se borra** (puede seguir
+siendo correcta), se hace visible; con la marca el hallazgo baja a informativo. Cuando actualizás la
+frase de verdad, sacás la marca.
+
+Éstas son las **tres únicas marcas en línea** del sistema: `(inferencia de [[bibcode]])`,
+`[[bibcode]] ⛔retractada` y `<valor> ⚠desactualizado`.
 
 ### Mantenimiento (cuidar lo ya ingestado — skill `maintain`)
 **No crea entidades** (eso es Ingest); opera sobre estrellas/conceptos que **ya existen**. Sub-modos:
@@ -790,8 +811,13 @@ blockquote `> Alcance …` (y su veredicto negativo se lee como universal), o lo
 nombra tienen hoy más papers de los declarados (el veredicto se testeó contra un universo que ya no
 es el suyo). La **cobertura** (concepto/hipótesis
 sin ninguna cita `[[bibcode]]` → afirma sin fuente) es **backlog** que el lint surface para ir citando;
-ídem la **cobertura de verificación** (query/concepto **con** citas pero **sin** bloque
-`## Verificación de citas` → nunca pasó por `verify-citations`: correr el skill).
+la **cobertura de verificación** (una nota —ficha, query o concepto— **con** citas y **sin**
+bloque `## Verificación de citas` → nunca pasó por `verify-citations`: correr el skill) tiene desde
+1.36.0 las **dos severidades de R-1**, igual que los pares vencidos: backlog en la pasada periódica,
+**bloqueante con `--cierre`**. D-5 dice que la nota **nace 100% verificada**, así que "tiene citas y
+ningún bloque" no es deuda vieja: es la operación que la tocó sin terminar — y el detector que sí
+contaba para el exit (`stale_pairs`) sólo se puebla con notas que **ya** tienen bloque, así que la
+nota nunca verificada se escapaba por abajo (INV-79).
 Los **pares de verificación vencidos** (D-4/D-20) son la medida fina de lo mismo, por **par** y no
 por archivo: *sin verificar* (hay una afirmación citada sin fila), *vencido por edición* (el ancla
 ya no coincide), *vencido por fuente* (el `.txt` cambió), *fila huérfana* (la afirmación se borró).
@@ -841,10 +867,11 @@ misma query ordenada por fecha** (#79) y la marca guarda en `truncated.recent` c
 que lo reciente —lo que el orden por citas esconde por construcción— ya está cubierto; ídem el
 **rescate por glifo incompleto** (`truncated_glyph`, marca hermana: el superset de la constelación
 del rescate #28 se cortó por citas **antes** del filtro client-side, que es donde vive la señal →
-pueden faltar papers con lookalike). Los **campos incompletos** son **backlog** y no bloquean; hoy son ocho:
+pueden faltar papers con lookalike). Los **campos incompletos** son **backlog** y no bloquean; hoy son **siete** (el conteo es el de
+los sitios que pueblan `incomplete` en `lint.py` — no el de la lista histórica):
 `P_rot` sin documentar en la prosa (el frontmatter nulo **no** es hallazgo desde #70),
 `activity_indicators_expected` vacío, planeta del frontmatter no discutido en la prosa, paper core
-sin `methods` (sin extraer), paper extraído sin `role`, ~~`thesis_links` sin `bearing`~~ (retirado por D-21), y **ficha sin
+sin `methods` (sin extraer), paper extraído sin `role`, y **ficha sin
 su `raw/ground_truth/<slug>.json`** (el barrido del espejo #70 lo maneja el JSON, así que una ficha
 sin archivo no la mira **nadie**: se le pueden inventar `teff_K`/`P_rot_days`/planetas enteros con
 el lint en verde — es backlog y no bloqueante porque es "la garantía no corrió acá", no "hay una
@@ -852,8 +879,9 @@ violación"), y su **hermano simétrico**: un `raw/ground_truth/<slug>.json` **s
 `stars/<slug>.md`, que es un renombre a medias o una ficha borrada sin limpiar — el espejo no tiene
 con qué comparar y nadie avisa que ese ground-truth quedó colgado. Revisar
 El **recorte de lectura sin declarar** (core sin extraer y sin `extraccion:` en el registro)
-es **backlog**; ⚠ hoy **ningún script ni skill llama a `save_extraccion`**, así que ese canal
-está sin cablear y el hallazgo no tiene cómo cerrarse (INV-83 `parcial`). Revisar
+es **backlog**; se cierra con `python scripts/triage.py <slug> --extraccion todos|subconjunto`
+(el canal quedó cableado el 2026-08-24: `triage.py` → `cfg.save_extraccion`, y el skill
+`ingest-star` lo nombra en su paso 3). Revisar
 además a mano: claims stale y conceptos referidos sin página. Si faltan datos, abrir queries para
 imputar (web/ADS).
 

@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import json
 import subprocess
 import sys
 
@@ -216,9 +217,36 @@ def sweep_ground_truth() -> tuple[list, list]:
 
 
 def aplicar_ground_truth(slug: str) -> None:
-    """Re-baja el snapshot (`--force`). Al aplicar, un valor retirado va a `null` — decisión del
-    usuario en D-45; la prosa afectada la marca sola el ancla de fuente."""
+    """Re-baja el snapshot (`--force`) y **deja registrado qué se movió**, en `_cambios` del JSON.
+
+    Al aplicar, un valor retirado va a `null` — decisión del usuario en D-45. El registro hace falta
+    porque el ancla de fuente NO cubre esto: hashea `raw/fulltext/**/*.txt`, nunca
+    `raw/ground_truth/<slug>.json`, así que un valor que NEA corrige cambia **bajo los pies de la
+    prosa que ya lo citó** y ninguna fila de verificación se entera (AUD-42). Con `_cambios` el lint
+    puede pedir la tercera marca en línea, `⚠desactualizado`.
+
+    Se calcula ANTES de re-bajar (después, el diff contra sí mismo da vacío) y se persiste DESPUÉS,
+    sobre el payload nuevo."""
+    try:
+        cambios = fetch_ground_truth.nea_diff(slug)
+    except Exception as exc:
+        cfg.print_seguro(f"  ✗ {slug}: no se pudo diffear antes de aplicar ({exc}) — no se aplica")
+        return
     _run("fetch_ground_truth.py", slug, "--force")
+    if not cambios:
+        return
+    out = cfg.GROUND_TRUTH / f"{slug}.json"
+    try:
+        payload = json.loads(out.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        cfg.print_seguro(f"  ✗ {slug}: se aplicó pero no se pudo registrar `_cambios` ({exc})")
+        return
+    payload["_cambios"] = [{"campo": c, "viejo": v, "nuevo": n, "fecha": dt.date.today().isoformat()}
+                           for c, v, n in cambios]
+    fetch_ground_truth.write_ground_truth(slug, payload)
+    cfg.print_seguro(
+        f"  · {slug}: {len(cambios)} valor(es) cambiaron — la prosa que los citaba NO se actualizó "
+        f"sola. Revisala y, si la dejás como está, marcala con `⚠desactualizado`.")
 
 
 # ── la caducidad, versionada (D-46 / R-4) ────────────────────────────────────────────────────────

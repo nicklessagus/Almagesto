@@ -251,10 +251,11 @@ grafo lleno de nodos ajenos a la bóveda (reportes de lint de `outputs/`, README
 `.obsidian/` en la raíz — está gitignored y el lint lo marca WARN: borralo y reabrí `vault/`.
 
 1. Obsidian → **"Open folder as vault"** → elegir la carpeta **`vault/`** del repo.
-2. Instalar/activar el plugin **Dataview** (Settings → Community plugins → Browse → "Dataview" →
-   Install + Enable). Sin él, los roll-ups de las fichas se ven como bloques de código.
-3. En las opciones de Dataview, activar **"Enable JavaScript queries"** (la tabla de planetas de las
-   fichas es `dataviewjs`).
+2. *(Opcional)* Instalar/activar el plugin **Dataview** (Settings → Community plugins → Browse →
+   "Dataview" → Install + Enable). **Los roll-ups de las fichas ya no lo necesitan**: desde 1.35.0
+   `## Papers`, `## Planetas` y `## Métodos aplicados` son tablas **estampadas** (D-10/D-11), para
+   que un agente que abre el `.md` vea los resultados y no el código de una query. El plugin sólo
+   hace falta si vos escribís queries propias en tus notas.
 
 La config compartible del vault se commitea (`vault/.obsidian/app.json`, `appearance.json`, etc.); lo volátil
 por máquina (`workspace.json`, `cache`) y los plugins de comunidad (`vault/.obsidian/plugins/`) están

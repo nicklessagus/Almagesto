@@ -51,9 +51,14 @@ def seed_topic(slug="gp", area="methods", concept="gaussian-processes"):
 # ── helpers básicos ──────────────────────────────────────────────────────────
 
 def test_fm_roundtrip():
+    """AUD-47: parsea con `cfg.split_fm`, **el mismo parser que el tooling**, no con un splitter
+    ad-hoc. Con `out.split("---")[1]` el test no podía cazar la regresión para la que existe: si
+    `fm()` emite la valla de cierre fusionada (`- 2---`), el splitter textual lo lee igual y
+    `split_fm` devuelve `{}`. Es el patrón doble-vs-real que `conftest.read_fm` documenta como ya
+    cometido y corregido (red #3), y éste es el ÚNICO test de `fm()`."""
     out = mn.fm({"a": 1, "b": [1, 2]})
     assert out.startswith("---\n") and out.endswith("---\n")
-    assert yaml.safe_load(out.split("---")[1]) == {"a": 1, "b": [1, 2]}
+    assert cfg.split_fm(out + "\ncuerpo\n") == {"a": 1, "b": [1, 2]}
 
 
 def test_safe_name():
@@ -377,7 +382,11 @@ def test_concept_note_hypotheses_lleva_status(toy_vault):
     mn.write_concept_note("gp", force=False)
     dest = toy_vault.CONCEPTS / "hypotheses" / "gaussian-processes.md"
     assert read_fm(dest)["status"] == "active"
-    assert 'contains(methods,' not in dest.read_text(encoding="utf-8")
+    # AUD-48: antes asserteaba la ausencia de `contains(methods,`, una cadena que ya no se emite a
+    # ninguna nota (D-10/D-11 reemplazó el predicado Dataview por tabla estampada), o sea que era
+    # verde por construcción. Lo que sí distingue a una hipótesis es que NO lleva el roll-up de
+    # ficha-método.
+    assert "```dataview" not in dest.read_text(encoding="utf-8")
 
 
 def test_concept_note_area_no_declarada_avisa_pero_crea(toy_vault, capsys):
@@ -1380,7 +1389,9 @@ def test_estado_line_sin_registro_o_sin_ancla_no_toca_nada(toy_vault):
     fuera.write_text("---\nname: x\n---\n# x\n\n> cabecera propia\n", encoding="utf-8")
     cfg.save_busqueda("test_star", {"fecha": "2026-08-21", "n_found": 5, "n_core": 1})
     assert mn.stamp_estado("test_star", fuera) is False
-    assert "Búsqueda" not in fuera.read_text(encoding="utf-8")
+    # AUD-49: antes buscaba "Búsqueda" con mayúscula, cadena que el estampador NUNCA escribe
+    # (`estado_line` emite "búsqueda" en minúscula): el assert no podía fallar ni estampando de más.
+    assert "_Estado —" not in fuera.read_text(encoding="utf-8")
 
 
 def test_estado_line_con_busqueda_no_mapa_no_crashea(toy_vault):
@@ -2504,3 +2515,44 @@ def test_rename_paper_usa_el_stem_saneado_en_los_wikilinks(toy_vault):
     stem = mn.safe_name(nuevo)
     assert (cfg.PAPERS / f"{stem}.md").exists()
     assert f"[[{stem}]]" in (cfg.CONCEPTS / "methods" / "gp.md").read_text(encoding="utf-8")
+
+
+def test_stamp_header_no_ancla_en_un_comentario_del_frontmatter(toy_vault):
+    """El `# H1` que sirve de ancla es el del CUERPO, no un comentario YAML del frontmatter.
+
+    AUD-37: `H1_RE` corre con `re.M` sobre el texto entero, así que una nota cuyo frontmatter lleva
+    un comentario (`# P_rot lo puso el usuario a mano`) matcheaba ahí y el blockquote se insertaba
+    **dentro** del frontmatter → `split_fm` devuelve `{}`, que es una categoría **bloqueante** del
+    lint. Lo dispara `--restamp-headers`, que es justo lo que el lint recomienda para las notas sin
+    cabecera: la reparación fabricaba el daño.  @inv INV-69
+    """
+    dest = toy_vault.STARS / "test_star.md"
+    dest.write_text(
+        "---\n"
+        "name: Estrella Test\n"
+        "# P_rot lo puso el usuario a mano\n"
+        "slug: test_star\n"
+        "---\n\n"
+        "# Estrella Test\n\nProsa.\n", encoding="utf-8")
+    assert mn.stamp_header(dest) is True
+    texto = dest.read_text(encoding="utf-8")
+    assert cfg.split_fm(texto).get("name") == "Estrella Test", \
+        "el frontmatter tiene que seguir parseando después de estampar"
+    fm_bloque = cfg.frontmatter_span(texto)[0]
+    assert ">" not in fm_bloque, "el blockquote no puede caer dentro del frontmatter"
+
+
+def test_excluded_table_no_lanza_con_un_ads_json_cortado_a_media_letra(toy_vault):
+    """`excluded_table` garantiza que **nunca lanza** y **siempre** devuelve un `str`.
+
+    AUD-40: el docstring nombra el escenario exacto —«un `ads.json` truncado por un Ctrl-C a mitad
+    de `query_ads`»— y explica el costo («si esto lanza, la cadena muere DESPUÉS de gastar la red»),
+    pero atrapaba sólo `(OSError, json.JSONDecodeError)`. Un corte a mitad de un carácter multibyte
+    da `UnicodeDecodeError`, que no es subclase de ninguna de las dos.  @inv INV-61
+    """
+    d = cfg.ROOT / "build" / "test_star"
+    d.mkdir(parents=True, exist_ok=True)
+    # el corte cae A MITAD de la `ñ` (2 bytes en utf-8), que es lo que produce el
+    # UnicodeDecodeError; truncar después de un ASCII sólo da JSONDecodeError, ya cubierto.
+    (d / "ads.json").write_bytes('{"records": [{"title": "añ'.encode("utf-8")[:-1])
+    assert isinstance(mn.excluded_table("test_star"), str)

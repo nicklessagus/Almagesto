@@ -210,7 +210,7 @@ def test_el_conteo_del_encabezado_es_el_de_las_filas():
     assert declarado == real, (
         f"el encabezado declara {declarado} y las filas dan {real} "
         f"(medidos, garantizados, sin medir, parciales, HUECO, INCUMPLIDO)")
-    assert sum(real) == len(_estados_del_contrato()) == 91
+    assert sum(real) == len(_estados_del_contrato()) == 96
 
 
 def test_los_flags_retirados_siguen_retirados():
@@ -262,3 +262,35 @@ def test_el_diagrama_de_la_cadena_respeta_el_orden_canonico():
     orden_doc = [p for p, _ in sorted(posiciones.items(), key=lambda kv: kv[1])]
     assert orden_doc == list(cfg.CADENA_ESTRELLA), (
         f"el diagrama ordena {orden_doc} y la cadena canónica es {list(cfg.CADENA_ESTRELLA)}")
+
+
+def test_todo_script_invocado_en_la_doc_tiene_main():
+    """Un comando que la doc publica como `python scripts/X.py` tiene que ser INVOCABLE.
+
+    `citation_index.py` se documentaba así desde que nació y no tenía `if __name__ == "__main__"`:
+    corría, no imprimía nada y **salía 0** sin construir el índice — el operador creía haberlo
+    construido y `cited_by_corpus` levantaba `RuntimeError` después. El resto de este archivo valida
+    que lo que la doc nombra EXISTA; esto valida que se pueda correr (AUD-05)."""
+    docs = [RAIZ / "README.md", RAIZ / "CLAUDE.md"]
+    docs += sorted((RAIZ / "docs").glob("*.md"))
+    docs += sorted((RAIZ / ".claude" / "skills").glob("*/SKILL.md"))
+    invocados = set()
+    for d in docs:
+        invocados |= set(re.findall(r"python scripts/([a-z_]+)\.py", d.read_text(encoding="utf-8")))
+    sin_main = sorted(n for n in invocados
+                      if "__main__" not in (RAIZ / "scripts" / f"{n}.py").read_text(encoding="utf-8"))
+    assert not sin_main, f"la doc los invoca como script y no tienen __main__: {sin_main}"
+
+
+def test_el_alcance_de_hipotesis_tiene_invariante_propio():
+    """La garantía de D-34 —un veredicto negativo sin alcance declarado se lee como universal— vive
+    en `lint.alcance_declarado`/`corpus_vigente`, que llevaban `@inv INV-83`: otro enunciado (el
+    recorte de lectura del ingest). El mapa atribuía mal y el conteo «con implementación marcada»
+    quedaba inflado — regla de método #4. Se cerró enunciando **INV-92** (AUD-06/AUD-30).
+
+    ⚠ Este test **nació verde** con un assert más laxo, que aceptaba «alcance declarado» y matcheaba
+    INV-58 (sobre el diff de lente). El término que discrimina es «hipótesis»: no lo aflojes."""
+    contrato = (RAIZ / "docs" / "contrato.md").read_text(encoding="utf-8")
+    filas_inv = [l for l in contrato.splitlines() if re.match(r"\|\s*\*\*INV-\d+\*\*", l)]
+    cubren = [l for l in filas_inv if "hipótesis" in l.lower() or "hipotesis" in l.lower()]
+    assert cubren, "ningún invariante enuncia el alcance de hipótesis (D-34), que el lint ya implementa"
