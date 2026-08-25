@@ -1346,8 +1346,26 @@ def metodos_rows(name: str, fms: dict | None = None) -> list:
     return sorted(filas)
 
 
-def metodos_table(rows: list) -> str:
-    """`## Métodos aplicados a esta estrella` materializada (D-11 / INV-81)."""
+def note_names() -> set:
+    """Los stems de TODA nota de `vault/wiki/` — para no estampar un `[[link]]` hacia una página que
+    no existe. Mismo criterio que el detector de wikilinks rotos del lint, que es quien lo cobra."""
+    return {f.stem for f in cfg.WIKI.rglob("*.md")} if cfg.WIKI.exists() else set()
+
+
+def metodos_table(rows: list, names: set | None = None) -> str:
+    """`## Métodos aplicados a esta estrella` materializada (D-11 / INV-81).
+
+    ⚠ El método se estampa como `[[wikilink]]` **sólo si su nota existe**; si no, va como código.
+    Por qué: `methods` lo puebla la EXTRACCIÓN (paso 3 de `ingest-star`) y las notas de
+    `concepts/methods/` las crea `ingest-theme`, que es **otra operación**. Con el link
+    incondicional, seguir `ingest-star` al pie de la letra dejaba el lint en decenas de *wikilinks
+    rotos* —bloqueantes— que no se podían cerrar dentro de la operación que los creó: la máquina
+    fabricaba su propia violación a partir de un campo que ella misma pide llenar (medido en el
+    clean-room del 2026-08-25: 106 sobre dos estrellas). Hasta 1.35.0 no se notaba porque el
+    roll-up era un bloque ```dataview``` y el detector, que lee el texto, no veía esos links.
+    La señal no se pierde: el lint la reporta como **backlog** («`methods` sin página destino»),
+    igual que ya hace con `thesis_links`."""
+    names = note_names() if names is None else names
     metodos = sorted({m for m, _, _ in rows})
     out = [f"{METODOS_HEADER} ({len(metodos)} método(s) · {len(rows)} aplicación(es))", ""]
     if not rows:
@@ -1356,7 +1374,8 @@ def metodos_table(rows: list) -> str:
         return "\n".join(out)
     out += ["| Método | Paper | Año |", "|---|---|---|"]
     for m, stem, year in rows:
-        out.append(f"| [[{m}]] | [[{stem}]] | {year} |")
+        celda = f"[[{m}]]" if m in names else f"`{m}`"
+        out.append(f"| {celda} | [[{stem}]] | {year} |")
     out.append("")
     return "\n".join(out)
 

@@ -2632,7 +2632,7 @@ def test_las_claves_de_categoria_son_unicas_y_estables(toy_vault):
     equivocada en silencio."""
     claves = [c.clave for c in lint.collect().categorias]
     assert len(claves) == len(set(claves)), [k for k in claves if claves.count(k) > 1]
-    assert len(claves) == 51, f"el reporte tiene {len(claves)} categorías, se esperaban 51"
+    assert len(claves) == 52, f"el reporte tiene {len(claves)} categorías, se esperaban 52"
 
 
 def test_el_modo_cierre_solo_cambia_el_exit_de_los_pares(toy_vault):
@@ -2765,3 +2765,63 @@ def test_nota_con_citas_y_sin_bloque_de_verificacion_no_cierra(toy_vault, capsys
     link_from_index(toy_vault, "con-citas", "2020citC...1..1C")
     assert lint.collect(cierre=True).n_block() > 0
     assert lint.collect(cierre=False).n_block() == 0, "sin --cierre es backlog, no bloqueante"
+
+
+def test_los_bibcodes_estampados_no_cuentan_como_citas(toy_vault, capsys):
+    """Un `[[bibcode]]` de la tabla `## Papers` NO es una cita: es metadata que estampó `make_notes`.
+
+    `verify-citations` no puede chequearla —no hay afirmación que contrastar contra la fuente, hay
+    una fila—, así que contarla hacía que una ficha recién creada, con la prosa todavía en
+    plantilla, naciera pidiendo verificación de decenas de pares imposibles, y reportando como "no
+    verificable" cada paper del universo sin fulltext. Medido en el clean-room del 2026-08-25:
+    117 "citas" en la ficha de tau_ceti, **0** de ellas en prosa.
+
+    Es el mismo lazo que `solo_prosa` ya cierra para los otros proxies (INV-81): un artefacto que se
+    mide a sí mismo siempre da el resultado que su propia existencia produce.
+
+    Se fija por los DOS lados: una cita **en prosa** tiene que seguir contando, o el arreglo apagaría
+    el detector entero — que es justo la falla que el detector existe para no producir.
+    """
+    (cfg.STARS / "solo_tabla.md").write_text(
+        "---\nname: Solo Tabla\nslug: solo_tabla\ntags: [star]\n---\n# Solo Tabla\n\n"
+        "## Resumen\n_(plantilla sin escribir)_\n\n"
+        "## Papers (1 · 0 sintetizados en esta ficha)\n\n"
+        "| Bibcode | Año |\n|---|---|\n| [[2020Fantasma....1..1F]] | 2020 |\n",
+        encoding="utf-8")
+    (cfg.STARS / "con_prosa.md").write_text(
+        "---\nname: Con Prosa\nslug: con_prosa\ntags: [star]\n---\n# Con Prosa\n\n"
+        "## Resumen\nEl período es 4.3 d [[2020Fantasma....1..1F]].\n",
+        encoding="utf-8")
+    cats = {c.clave: c for c in lint.collect().categorias}
+    sin_verificar = {stem for stem, _ in cats["unverified"].items}
+    no_verificables = {stem for stem, _ in cats["unverifiable"].items}
+    assert "solo_tabla" not in sin_verificar, \
+        "la ficha cuya única 'cita' está en la tabla estampada no tiene nada que verificar"
+    assert "solo_tabla" not in no_verificables, \
+        "un paper del universo sin fulltext no es una 'cita no verificable' de la ficha"
+    assert "con_prosa" in sin_verificar, \
+        "una cita EN PROSA sin bloque de verificación tiene que seguir saliendo"
+    assert "con_prosa" in no_verificables, \
+        "una cita EN PROSA sin fulltext tiene que seguir saliendo"
+
+
+def test_methods_sin_pagina_destino_es_backlog_no_bloqueante(toy_vault, capsys):
+    """`methods` sin nota destino sale como backlog propio, no como wikilink roto bloqueante.
+
+    La asimetría con `thesis_links` —que sí bloquea— es deliberada y está en el comentario del
+    detector: un `thesis_links` nombra un concepto que `ingest-theme` **crea** en la misma operación
+    que lo siembra; `methods` lo puebla la extracción de `ingest-star`, que no crea conceptos.
+    Bloquear acá le pediría a `ingest-star` cerrar algo que no está en su cadena.
+    """
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / "2020Metodo.md").write_text(
+        "---\nbibcode: 2020Metodo\nstars: [Estrella Test]\nmethods: [gp_qp, sin_nota_alguna]\n"
+        "year: 2020\ntags: [paper]\n---\n# T\n", encoding="utf-8")
+    (cfg.CONCEPTS / "methods").mkdir(parents=True, exist_ok=True)
+    (cfg.CONCEPTS / "methods" / "gp_qp.md").write_text(
+        "---\nname: gp_qp\ntags: [concept]\n---\n# GP QP\n", encoding="utf-8")
+    cats = {c.clave: c for c in lint.collect().categorias}
+    colgados = {m for m, _ in cats["dangling_methods"].items}
+    assert colgados == {"sin_nota_alguna"}, colgados
+    assert cats["dangling_methods"].severidad == lint.SEV_BACKLOG, \
+        "bloquear acá le pide a ingest-star cerrar algo que no está en su cadena"

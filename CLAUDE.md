@@ -229,6 +229,15 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   en el mismo corpus. Además el matcheo textual confunde `GJ 71` con `GJ 710`, y `split_fm` compara
   por elemento. Si descargás contenido a un roll-up, es porque ese fallback lo recupera; si no, el
   contenido va inlineado en la ficha.
+    ⚠ **El roll-up de métodos linkea `[[método]]` sólo si la nota existe; si no, lo estampa como
+  código.** `methods` lo puebla la **extracción** (paso 3 de `ingest-star`) y las notas de
+  `concepts/methods/` las crea **`ingest-theme`**, que es otra operación: con el link incondicional,
+  seguir `ingest-star` al pie de la letra dejaba el lint en decenas de *wikilinks rotos*
+  —bloqueantes— que **no se podían cerrar dentro de la operación que los creó**. La señal no se
+  pierde: el lint la reporta como backlog *«`methods` sin página destino»*, la versión no bloqueante
+  de lo que `thesis_links` sí bloquea (y la asimetría es real: un `thesis_links` nombra un concepto
+  que `ingest-theme` crea en la misma operación que lo siembra).
+
   **Disputas (`disputes`, a NIVEL NOTA, con posiciones explícitas — #71):** cuando dos fuentes
   discrepan sobre el mismo hecho —la **existencia** de una señal o el **valor** de un parámetro— se
   taguea, no se sobreescribe. Cada entrada: `field` (qué se discute: `P_rot` para un campo estelar,
@@ -748,7 +757,8 @@ que el archivo que **es** la autoridad está roto, y callarlo deja la ficha sin 
 el lint afirma que está limpia —el `host` no-mapa, además, silenciaba los cuatro campos estelares y
 encima producía hallazgos fantasma apuntando al síntoma equivocado—, **masa de ground-truth inconsistente con la m·sini implícita**
 (K/P/e/M\* — atrapa best-mass espurias de NEA), **`thesis_links` sin página destino** (tag que no matchea
-ninguna nota → no acumula en el roll-up; typo típico `shift-vs-shape` vs `shift_vs_shape`) y
+ninguna nota → no acumula en el roll-up; typo típico `shift-vs-shape` vs `shift_vs_shape`) —su hermano **`methods` sin página destino** es
+**backlog**, no bloqueante: ver arriba— y
 **`disputes` con la `ref` de una posición sin paper destino** (el bibcode que sostiene esa posición
 no existe como nota → la disputa no es trazable), **`disputes` mal formadas** (#71: sin `field`, con
 menos de dos posiciones —con una sola es una afirmación, no un desacuerdo—, con una posición que no
@@ -812,7 +822,9 @@ blockquote `> Alcance …` (y su veredicto negativo se lee como universal), o lo
 nombra tienen hoy más papers de los declarados (el veredicto se testeó contra un universo que ya no
 es el suyo). La **cobertura** (concepto/hipótesis
 sin ninguna cita `[[bibcode]]` → afirma sin fuente) es **backlog** que el lint surface para ir citando;
-la **cobertura de verificación** (una nota —ficha, query o concepto— **con** citas y **sin**
+la **cobertura de verificación** (una nota —ficha, query o concepto— **con** citas
+**en prosa** —los `[[bibcode]]` de las secciones estampadas **no** son citas: son metadata
+derivada, y `verify-citations` no tiene qué contrastar contra la fuente— y **sin**
 bloque `## Verificación de citas` → nunca pasó por `verify-citations`: correr el skill) tiene desde
 1.36.0 las **dos severidades de R-1**, igual que los pares vencidos: backlog en la pasada periódica,
 **bloqueante con `--cierre`**. D-5 dice que la nota **nace 100% verificada**, así que "tiene citas y

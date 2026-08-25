@@ -5,9 +5,9 @@
 # esta sesión encontró cuatro veces (un `assert path.glob(...)` siempre truthy, una guarda cuyo
 # test pasaba sin la guarda, un "espera creciente" que `[2.0, 2.0]` satisface, un test de
 # determinismo corriendo las dos pasadas en el mismo proceso).
-medido_en: "2026-08-24"
-alcance: "TODO `scripts/` — 328 funciones, barrido completo (`--todo`)"
-techo: 8
+medido_en: "2026-08-25"
+alcance: "TODO `scripts/` — 331 funciones, barrido completo (`--todo`)"
+techo: 4
 
 # ⚠ EL TECHO SUBIÓ DE 7 A 10, Y NO ES UNA REGRESIÓN — es la primera medición sobre el árbol
 # ENTERO. El 7 se había medido sobre 268 funciones y el campo `alcance` lo llamaba "la mayor parte
@@ -23,18 +23,28 @@ techo: 8
 # la de acá: la población cambió y se dice cuál era y cuál es. Con el alcance ya fijado en TODO
 # `scripts/`, de ahora en más sólo puede bajar.
 #
-# LAS 8, medidas sobre 328 funciones. **Todas** son fronteras con el entorno (subprocess, red,
-# locale): no queda ninguna función pura acá. Las cuatro que sí lo eran salieron el mismo día en que
-# el gate las encontró, con el test que faltaba — `make_notes._concept_dest`, `triage.triage_file`,
-# `ingest_theme._listify_curado` e `ingest_theme.repoint_source_pdf`.
+# BAJÓ DE 8 A 4 EL 2026-08-25, y el número coincide con lo previsto por razones distintas — se
+# declara en vez de elegir una versión (regla de método #5). El handoff proyectaba 5 suponiendo que
+# se habían cubierto TRES (`tesseract_version`, `defuddle_version`, `sweep_external._run`). Medido:
+#   · se cubrieron CUATRO — las tres más `sweep_external.aplicar_ground_truth`;
+#   · APARECIÓ UNA NUEVA que nunca estuvo en la lista de 8: `make_notes.py::citas`;
+#   · la población pasó de 328 a 331 funciones.
+# El barrido dio 5 —el número proyectado— pero por una compensación: cuatro cubiertas y una nueva,
+# no tres cubiertas. `citas` es el helper que coerce
+# `citation_count` a int en el apéndice `## Excluidos por el filtro`: **pura**, no frontera con el
+# entorno — así que la afirmación de la versión anterior de este archivo («todas son fronteras con
+# el entorno: no queda ninguna función pura acá») había dejado de ser cierta sin que nada avisara.
+# Se cerró con `tests/test_make_notes.py::test_excluidos_coerce_citation_count_no_numerico`, que se
+# vio MORIR bajo mutación antes de contarlo (regla de método #3) → 4.
+#
+# LAS 4, medidas sobre 331 funciones. Todas son fronteras con el entorno (red, subprocess, locale):
 #   citation_index.py::_fetch_ads_default   ← ADS `fl=reference`: red
 #   citation_index.py::_fetch_oa_default    ← idem OpenAlex
-#   extract_fulltext.py::tesseract_version  ← `tesseract --version`: subprocess
 #   fetch_web.py::fetch                     ← `npx defuddle`: subprocess contra Node
-#   fetch_web.py::defuddle_version          ← idem
 #   lib_config.py::stdout_tolerante         ← shim de encoding del stdout (locale del OS)
-#   sweep_external.py::_run                 ← lanza un subprocess: los tests graban la fachada
-#   sweep_external.py::aplicar_ground_truth ← idem (`_run` con --force); el test lo anula por diseño
+#
+# CUBIERTAS EN LA TANDA 1.38.x (salieron de la lista de 8): `extract_fulltext.tesseract_version`,
+# `fetch_web.defuddle_version`, `sweep_external._run` y `sweep_external.aplicar_ground_truth`.
 #
 # BAJÓ DE 10 A 8 EN LA MISMA SESIÓN: los dos `_mailto` (Crossref y OpenAlex) eran las únicas de las
 # diez que no necesitan red —leen `git config`— y son gemelas, así que las mata **un solo test
@@ -43,7 +53,7 @@ techo: 8
 # valor de ausencia, que es la única diferencia real entre las gemelas (`None` para Crossref, `""`
 # para OpenAlex): si alguien las "unifica", el test lo dice.
 #
-# LAS PRÓXIMAS: las 8 que quedan son todas red o subprocess. Bajarlas pide o un doble en la frontera
+# LAS PRÓXIMAS: las 4 que quedan son todas red o subprocess. Bajarlas pide o un doble en la frontera
 # (inyectar el `subprocess.run`, como se hizo con `_mailto`) o un smoke test contra el servicio real
 # —que es la regla de método #1: un cliente de red probado sólo contra la red falseada valida que el
 # CLIENTE funcione, no que el CONTRATO se cumpla.

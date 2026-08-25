@@ -2433,7 +2433,28 @@ def test_metodos_se_estampa_con_el_recorte_correcto(toy_vault):
     filas = mn.metodos_rows("Estrella Test")
     assert [f[1] for f in filas] == ["2020Mio", "2020Mio"], filas
     t = mn.metodos_table(filas)
-    assert "2 método(s) · 2 aplicación(es)" in t and "[[gp]]" in t and "2020Ajeno" not in t
+    assert "2 método(s) · 2 aplicación(es)" in t and "gp" in t and "2020Ajeno" not in t
+
+
+def test_metodos_solo_linkea_el_que_tiene_nota(toy_vault):
+    """El roll-up estampa `[[link]]` **sii** la nota del método existe; si no, código.
+
+    Sin esto, seguir `ingest-star` al pie de la letra fabricaba wikilinks rotos —bloqueantes— que no
+    se podían cerrar dentro de la operación que los creaba: `methods` lo puebla la extracción
+    (paso 3) y las notas de `concepts/methods/` las crea `ingest-theme`, que es otra operación.
+    Medido en el clean-room del 2026-08-25: 106 sobre dos estrellas. Hasta 1.35.0 no se veía porque
+    el roll-up era un bloque ```dataview``` y el detector, que lee texto, no lo miraba.
+
+    Se fija por los DOS lados: un método CON nota tiene que seguir linkeando (si no, el roll-up
+    dejaría de ser navegable y el arreglo sería peor que el defecto)."""
+    (cfg.CONCEPTS / "methods").mkdir(parents=True, exist_ok=True)
+    FM_GP = "---\nname: gp\n---\n# GP\n"
+    (cfg.CONCEPTS / "methods" / "gp.md").write_text(FM_GP, encoding="utf-8")
+    filas = [("gp", "2020Mio", "2020"), ("sin-nota", "2020Mio", "2020")]
+    t = mn.metodos_table(filas)
+    assert "| [[gp]] |" in t, f"el método CON nota tiene que linkear:\n{t}"
+    assert "| `sin-nota` |" in t and "[[sin-nota]]" not in t, \
+        f"el método SIN nota no puede estamparse como wikilink:\n{t}"
 
 
 def test_stamp_star_rollups_es_idempotente_y_no_toca_la_prosa(toy_vault):
@@ -2595,3 +2616,27 @@ def test_excluidos_usa_la_politica_unica_de_orden_no_las_citas_crudas(toy_vault)
     tabla = mn.excluded_table("test_star")
     assert tabla.index("2025new") < tabla.index("1990old"), (
         "el reciente con 60 citas tiene MÁS tasa que el del '90 con 300 y debe ir primero:\n" + tabla)
+
+
+def test_excluidos_coerce_citation_count_no_numerico(toy_vault):
+    """La celda de citas del apéndice coerce lo que no es número a `0` en vez de crashear.
+
+    El docstring de `excluded_table` promete que un `ads.json` con **tipos torcidos** —
+    `citation_count` string, `bibcode` no-str— es un estado *alcanzable, no hipotético* (un Ctrl-C
+    a mitad de `query_ads`) y que acá se **degrada, nunca se lanza**: la tabla se escribe desde
+    `write_star_note`, o sea DESPUÉS de gastar la red, así que una excepción tira la cadena entera
+    al final. Esa promesa vivía sólo en la prosa: el barrido de mutación del 2026-08-25 encontró
+    que romper el helper `citas` no ponía rojo ningún test (única superviviente PURA de las cinco).
+
+    Se fija el contrato por sus dos lados —el valor real se muestra, el no numérico cae a `0`—
+    porque un helper que devuelve siempre la constante `0` satisface la mitad de arriba solo.
+    """
+    roto = rec("2001bad....1..1B", relevant=False); roto["citation_count"] = "muchísimas"
+    sano = rec("2001ok.....2..2K", relevant=False, cites=42)
+    ads_json([roto, sano])
+    tabla = mn.excluded_table("test_star")
+    fila = {b: next(l for l in tabla.splitlines() if b in l) for b in ("2001bad", "2001ok")}
+    assert "| 0 |" in fila["2001bad"], \
+        f"`citation_count` no numérico tiene que caer a 0, no propagarse:\n{fila['2001bad']}"
+    assert "| 42 |" in fila["2001ok"], \
+        f"el valor real tiene que llegar a la celda:\n{fila['2001ok']}"

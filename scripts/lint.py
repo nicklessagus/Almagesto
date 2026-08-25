@@ -742,6 +742,7 @@ def collect(cierre: bool = False) -> LintResult:
     pdf_issues: list = []              # (stem, ...) — drift frontmatter `pdf` ↔ PDF en disco
     headerless: list = []              # (stem, motivo) — ficha/concepto sin cabecera estampable (#69)
     thesis_refs: dict[str, list] = {}  # valor de thesis_link -> notas que lo usan
+    method_refs: dict[str, list] = {}  # valor de methods -> notas de paper que lo declaran
     dispute_refs: list = []            # (nota, field, ref) de las posiciones de cada disputa (#71)
     bad_disputes: list = []            # (nota, motivo) — disputa mal formada (#71)
     old_disputes: list = []            # (nota, motivo) — disputas en el schema pre-1.19.0 (#71)
@@ -793,8 +794,24 @@ def collect(cierre: bool = False) -> LintResult:
         # corpus sintético al emitir el schema vigente: 4 → 0.
         # Los links SÍ cuentan para `incoming`/`broken`: ahí la pregunta es si la nota es
         # alcanzable y si el destino existe, y una tabla estampada la alcanza igual.
-        prosa_links = set(LINK_RE.findall(solo_prosa(text))) if in_entity_note else set()
-        nbib = 0                              # citas [[bibcode]] en esta nota
+        # ⚠ Las citas se cuentan SÓLO sobre la prosa. Un `[[bibcode]]` de la tabla `## Papers` no es
+        # una cita: es metadata que estampó `make_notes`, y `verify-citations` no puede chequearla
+        # —no hay afirmación que contrastar contra la fuente, hay una fila—. Contándolos, una ficha
+        # recién creada, con la prosa todavía en plantilla, nacía pidiendo verificación de decenas
+        # de pares imposibles (medido en el clean-room del 2026-08-25: 117 "citas" en tau_ceti, 0 de
+        # ellas en prosa) y encima reportando como "no verificable" cada paper del universo sin
+        # fulltext. Es el mismo lazo que ya cierra `solo_prosa` para los otros proxies: un artefacto
+        # que se mide a sí mismo siempre da el resultado que su propia existencia produce.
+        links_prosa = [t.strip() for t in LINK_RE.findall(solo_prosa(text))]
+        prosa_links = set(links_prosa) if in_entity_note else set()
+        nbib = 0                              # citas [[bibcode]] EN PROSA de esta nota
+        for tgt in links_prosa:
+            if "/" in tgt or tgt in LINK_SKIP:
+                continue                       # placeholder/ejemplo, no link real
+            if BIBCODE_RE.match(tgt):
+                nbib += 1
+                if in_verifiable_note and tgt not in fulltext:
+                    unverifiable.append((stem, f"cita {tgt} sin fulltext (no chequeable claim↔fuente)"))
         for tgt in LINK_RE.findall(text):
             tgt = tgt.strip()
             if "/" in tgt or tgt in LINK_SKIP:
@@ -810,10 +827,6 @@ def collect(cierre: bool = False) -> LintResult:
             # "no sintetizado" para siempre AUNQUE la ficha lo citara, sin forma de cerrarlo.
             if in_entity_note and tgt in prosa_links:
                 cited_in_entity.add(tgt)
-            if BIBCODE_RE.match(tgt):
-                nbib += 1
-                if in_verifiable_note and tgt not in fulltext:
-                    unverifiable.append((stem, f"cita {tgt} sin fulltext (no chequeable claim↔fuente)"))
         # cobertura: un concepto/hipótesis que afirma sin ninguna cita [[bibcode]] no es chequeable
         # (todo lo apuntable debe ser citable o marcado `inferencia`; ver Verify en CLAUDE.md). Backlog.
         if in_dir(f, "concepts") and nbib == 0:
@@ -1069,6 +1082,8 @@ def collect(cierre: bool = False) -> LintResult:
                                          "→ sin rol, contrastarlo contra otro no está definido"))
             for tl in fm.get("thesis_links") or []:
                 thesis_refs.setdefault(str(tl), []).append(stem)
+            for mt in fm.get("methods") or []:
+                method_refs.setdefault(str(mt), []).append(stem)
             # PDF ↔ disco (higiene; WARN): el campo `pdf` debe reflejar el PDF real bajado.
             pdf, on_disk = fm.get("pdf"), pdf_on_disk.get(stem)
             if pdf is not None and not isinstance(pdf, str):
@@ -1498,6 +1513,18 @@ def collect(cierre: bool = False) -> LintResult:
              + (" …" if len(refs) > 3 else ""))
         for tl, refs in thesis_refs.items() if tl not in names)
 
+    # `methods` sin página destino: el slug no matchea ninguna nota, así que el roll-up de la ficha
+    # lo estampa como código en vez de `[[link]]` (ver `make_notes.metodos_table`) y el tema no tiene
+    # dónde acumular. Es BACKLOG y no bloqueante, al revés que su hermano `thesis_links`, y la
+    # asimetría es real: un `thesis_links` nombra un concepto que `ingest-theme` **crea** en la misma
+    # operación que lo siembra, mientras que `methods` lo puebla la extracción de `ingest-star`, que
+    # no crea conceptos. Bloquear acá le pediría a `ingest-star` cerrar algo que no está en su
+    # cadena. Se cierra ingiriendo el tema (o corrigiendo el typo).
+    dangling_methods = sorted(
+        (mt, f"usado en {len(refs)} paper(s): {', '.join(sorted(refs)[:3])}"
+             + (" …" if len(refs) > 3 else "") + " → sin nota en `concepts/`: ingerí el tema o corregí el slug")
+        for mt, refs in method_refs.items() if mt not in names)
+
     # `ref` de una posición sin paper destino: el bibcode que sostiene esa posición no existe como
     # nota → la disputa no es trazable (typo en el bibcode o paper sin ingestar).
     dangling_disputes = sorted(
@@ -1848,6 +1875,8 @@ def collect(cierre: bool = False) -> LintResult:
         Categoria('contradictions', 'Contradicciones ground-truth ↔ ficha', SEV_BLOQUEANTE, tuple(contradictions)),
         Categoria('mass_issues', 'Ground-truth: masa inconsistente con m·sini (K,P,e,M*)', SEV_BLOQUEANTE, tuple(mass_issues)),
         Categoria('dangling_thesis', 'thesis_links sin página destino', SEV_BLOQUEANTE, tuple(dangling_thesis)),
+        Categoria('dangling_methods', '`methods` sin página destino: el roll-up no puede linkearlo (backlog)',
+                  SEV_BACKLOG, tuple(dangling_methods)),
         Categoria('dangling_disputes', 'disputes: ref de una posición sin paper destino', SEV_BLOQUEANTE, tuple(dangling_disputes)),
         Categoria('bad_disputes', 'disputes mal formadas (posiciones explícitas, #71)', SEV_BLOQUEANTE, tuple(bad_disputes)),
         Categoria('old_disputes', 'disputes en el schema viejo (planets[].disputes[]) — el lint ya no las lee', SEV_BLOQUEANTE, tuple(old_disputes)),
