@@ -605,15 +605,32 @@ que estampa la máquina** (`lib_config.SECCIONES_ESTAMPADAS`: los tres roll-ups,
 y el propio bloque de verificación), porque una fila de `## Papers` no es una afirmación sino metadata
 derivada y no hay nada que contrastar contra la fuente— y lanza **un subagente
 independiente por par** que lee SÓLO ese `vault/raw/fulltext/**/<bibcode>.txt` (grounding-first, prohibido de
-memoria) y devuelve `soportada|parcial|no-soportada|contradice` + **cita textual + nº de línea del `.txt`**
-(obligatoria; sin cita ⇒ no-soportada — también para `parcial`: la cita debe tocar el **contenido
-distintivo** de la afirmación, la mera cercanía temática no alcanza). `no-soportada` = la fuente **calla**; `contradice` = la fuente
+memoria) y devuelve **dos ejes separados** (D-59): un `veredicto` de RESPALDO —vocabulario cerrado
+`soportada|no-soportada|contradice`— y, aparte, la `condición` bajo la que la fuente lo afirma.
+Más **cita textual + nº de línea del `.txt`** (obligatoria; sin cita ⇒ no-soportada: la cita debe
+tocar el **contenido distintivo** de la afirmación, la mera cercanía temática no alcanza).
+
+⚠ **`parcial` se eliminó en 1.39.0 y no es cosmética.** Ese valor fusionaba dos preguntas
+ortogonales —«¿la fuente respalda esto?», textual y decidible contra el `.txt`, y «¿la afirmación
+está completa?», juicio de grado— y la fusión hacía que la parte dura arrastrara a la blanda.
+Medido el 2026-08-25 sobre una ficha real: **dos corridas independientes del fan-out**, jueces
+nuevos y ciegos, **60 pares comparados → 95 % de coincidencia (57/60)**, y **las tres divergencias
+caían exactamente en el borde `soportada`↔`parcial`**, todas en la misma dirección; `contradice`
+reprodujo 2/2. El umbral nunca estuvo definido, y no se puede definir: es de grado. Lo que era
+`parcial` se descompone **sin pérdida** — o la fuente respalda la afirmación bajo condiciones que la
+nota no dice (→ `soportada` con la `condición` poblada), o la cita no toca el contenido distintivo
+(→ `no-soportada`, como el contrato ya mandaba).
+
+El mismo experimento mostró **por qué la condición tiene que ser columna y no prosa**: pares que las
+dos corridas dieron `soportada` idéntica traían condiciones **distintas** entre corridas. El juez es
+estable en el eje textual y **no exhaustivo** en el de régimen, así que absorber la condición en la
+prosa y no dejar rastro borra justo lo que hay que poder auditar y volver a mirar. `no-soportada` = la fuente **calla**; `contradice` = la fuente
 **afirma lo contrario** → no es (sólo) cita rota: es corrección de la nota o **disputa** a taguear
 (`disputes` con posiciones explícitas, #71). Cada falla se **resuelve** (bajar la afirmación
 a lo que dice la fuente, reasignar la cita al bibcode correcto, marcar **`inferencia`**, o taguear la
 disputa) y se deja un bloque `## Verificación de citas` en la nota — **una fila por par**, con dos
 columnas de hash (**el ancla**, D-4/D-20):
-`| # | Afirmación (extracto) | Fuente | Veredicto | Score | Evidencia | Ancla | Hash fuente |`.
+`| # | Afirmación (extracto) | Fuente | Veredicto | Score | Evidencia | Ancla | Hash fuente | Condición |`.
 El **ancla** es el sha256 (10 hex) del **bloque markdown normalizado** que contiene la cita
 —párrafo / fila / ítem / blockquote—: reflowear la nota **no** la mueve, cambiar un número **sí**, y
 una fila sin `[[bibcode]]` propio hereda el del caption hasheando **los dos** bloques. El **hash de

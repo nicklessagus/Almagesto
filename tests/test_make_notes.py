@@ -2020,7 +2020,7 @@ def test_refrescar_sin_reverificar_mueve_una_sola_fecha(toy_vault):
     dest = cfg.STARS / "test_star.md"
     dest.write_text(dest.read_text(encoding="utf-8") +
                     "\n## Verificación de citas (2026-01-05)\n\n"
-                    "| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente |\n"
+                    "| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente | Condición |\n"
                     "|---|---|---|---|---|---|\n", encoding="utf-8")
     cfg.save_busqueda("test_star", {"fecha": "2026-01-01", "n_total": 1, "n_core": 1})
     mn.stamp_estado("test_star", dest)

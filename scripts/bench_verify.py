@@ -28,7 +28,7 @@ con el bibcode original inline, una sembrada se cazaría por mismatch de strings
 recibido) sin leer el paper — el verificador debe juzgar contenido, no comparar strings.
 
   - sembradas: el verificador debería decir `no-soportada`/`contradice` → **recall** (cuántas cazó).
-  - reales (grupo de control): deberían salir `soportada`/`parcial`; una real "caída" es o un flaky
+  - reales (grupo de control): deberían salir `soportada`; una real "caída" es o un flaky
     del verificador o un error de grounding genuino de la nota — ambos valen revisarse.
 
 Caveat de la siembra por rotación: una sembrada puede tener **soporte casual** (el otro paper dice
@@ -85,7 +85,11 @@ def legacy_bench_path():
     return bench_dir() / "bench.json"
 
 CATCH = ("no-soportada", "contradice")                # veredictos que CAZAN una sembrada
-PASS = ("soportada", "parcial")
+# `parcial` salió del vocabulario en 1.39.0 (ver `lib_blocks.VEREDICTOS`): fusionaba el eje textual
+# con el de grado, y las tres divergencias entre dos corridas independientes del fan-out caían
+# justo en ese borde. Acá el efecto es que el gate se ENDURECE: una sembrada que antes "pasaba"
+# como `parcial` ahora tiene que salir `soportada` para contar como no-cazada.
+PASS = ("soportada",)
 VALID_VERDICTS = CATCH + PASS + ("no verificable por extracción",)
 
 
@@ -160,7 +164,7 @@ def claim_for_bibcode(block: str, bib: str) -> str:
 
     Issue #22: un bloque suele ser multi-cláusula (etiqueta de encuadre sin cita + la cláusula
     atribuida + cláusulas de OTRAS citas). Sembrado entero, el paper rotado respalda con razón
-    alguna de esas otras cláusulas y la sembrada "pasa" como `parcial` sin que nadie se
+    alguna de esas otras cláusulas y la sembrada "pasa" como soportada sin que nadie se
     equivoque. La etiqueta (`**...:**`) se antepone porque sin ella la cláusula pierde el sujeto
     ("la trata como limitante de precisión RV" ← ¿qué?). Fallback al bloque completo si no hay
     corte posible."""

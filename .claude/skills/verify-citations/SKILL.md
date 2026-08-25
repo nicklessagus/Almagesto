@@ -1,7 +1,7 @@
 ---
 name: verify-citations
-description: Usar para verificar, afirmación por afirmación, que las citas [[bibcode]] de una nota de la wiki (query, hipótesis, ficha, concepto) realmente están respaldadas por el texto completo de la fuente. Se corre como paso de cierre al armar/editar una query o hipótesis, o cuando el usuario pide "rechequeá las citas / ¿esto lo dice el paper?". Implementa el chequeo claim↔evidencia (pipeline tipo CiteAudit) sobre el corpus cerrado de la bóveda. Veredictos: soportada / parcial / no-soportada (la fuente calla) / contradice (la fuente afirma lo contrario → candidata a disputa, no sólo cita rota); en transcripciones de tablas/listas chequea además la completitud (lo que la nota omite).
-version: 1.8.0
+description: Usar para verificar, afirmación por afirmación, que las citas [[bibcode]] de una nota de la wiki (query, hipótesis, ficha, concepto) realmente están respaldadas por el texto completo de la fuente. Se corre como paso de cierre al armar/editar una query o hipótesis, o cuando el usuario pide "rechequeá las citas / ¿esto lo dice el paper?". Implementa el chequeo claim↔evidencia (pipeline tipo CiteAudit) sobre el corpus cerrado de la bóveda. Veredictos: soportada / no-soportada (la fuente calla) / contradice (la fuente afirma lo contrario → candidata a disputa, no sólo cita rota), en un EJE SEPARADO de la `condición` bajo la que la fuente lo afirma; en transcripciones de tablas/listas chequea además la completitud (lo que la nota omite).
+version: 1.9.0
 ---
 
 # Verify-citations — chequeo claim↔evidencia contra el fulltext
@@ -151,7 +151,9 @@ Cada uno:
   al leer/grep.
 - Lee **sólo ese archivo** (grounding-first; **prohibido** responder de memoria o de otro paper).
 - Devuelve, para la afirmación dada:
-  - `veredicto`: `soportada` | `parcial` | `no-soportada` | `contradice`. **Distinguir los dos modos
+  - `veredicto`: `soportada` | `no-soportada` | `contradice` — **vocabulario cerrado**, y el eje es
+    **sólo el respaldo textual**: ¿la fuente dice esto? La pregunta «¿está completa la afirmación?»
+    vive en `condicion`, que es una columna aparte. **Distinguir los dos modos
     de falla** (alineado al estándar de 4 categorías tipo CAQA): `no-soportada` = la fuente **calla**
     (no dice nada de eso → error de cita); `contradice` = la fuente **afirma lo contrario** (valor
     incompatible más allá del error, existencia negada, signo opuesto) — también exige cita textual,
@@ -159,13 +161,13 @@ Cada uno:
   - `score`: 0–10 (qué tan literal/completo es el respaldo)
   - `evidencia`: **cita textual** del paper + **nº de línea** (contado como `grep -n` — ver la
     convención fija de arriba; nunca `splitlines()` de Python). **Sin cita textual ⇒ `no-soportada`**
-    (regla dura: si no puede pegar la frase, no está respaldado). **La regla vale también para
-    `parcial`**: exige cita textual que respalde **parte del contenido distintivo** de la
-    afirmación (el sujeto/valor/mecanismo que la hace específica); si lo único que matchea es
-    terreno común del tema (el fenómeno general, un término suelto, la mera cercanía temática)
-    ⇒ `no-soportada`. Ablandar a `parcial` un claim genérico es el modo de falla típico del
-    verificador — es exactamente lo que mide el benchmark.
-  - `nota`: una línea de por qué (sobre todo en `parcial`/`no-soportada`: qué dice el paper en cambio).
+    (regla dura: si no puede pegar la frase, no está respaldado). La cita tiene que tocar el
+    **contenido distintivo** de la afirmación (el sujeto/valor/mecanismo que la hace específica); si
+    lo único que matchea es terreno común del tema (el fenómeno general, un término suelto, la mera
+    cercanía temática) ⇒ `no-soportada`. **Sin punto medio**: ablandar un claim genérico a un
+    veredicto tibio es el modo de falla típico del verificador — es exactamente lo que mide el
+    benchmark, y por eso `parcial` salió del vocabulario en 1.39.0 (ver abajo).
+  - `nota`: una línea de por qué (sobre todo en `no-soportada`: qué dice el paper en cambio).
     Si la afirmación es **multi-cláusula**, decir **qué cláusula** respalda el paper y cuáles no.
   - `condicion` (**siempre; el hallazgo que ninguna capa veía, #74**): ¿el paper afirma esto **bajo
     condiciones** que la nota no dice? (SNR, muestreo, tamaño de muestra, definición del observable,
@@ -184,9 +186,11 @@ Cada uno:
 > cláusulas: una de encuadre sin cita, la atribuida a *esta* fuente, y a veces las de *otras*
 > fuentes citadas al lado. El subagente juzga **la parte que se le atribuye a su paper** — que el
 > archivo respalde una cláusula vecina (de otra fuente, o el encuadre genérico) **no** hace
-> `soportada` ni `parcial` a la afirmación: es exactamente la mezcla "el dato de A atribuido a B"
-> que este chequeo existe para atrapar. Sin esta instrucción el subagente juzga el conjunto y
-> hedgea a `parcial`.
+> `soportada` a la afirmación: es exactamente la mezcla "el dato de A atribuido a B" que este
+> chequeo existe para atrapar. Sin esta instrucción el subagente juzga el conjunto y **hedgea**.
+> Medido el 2026-08-25: de 14 defectos reales encontrados en una ficha, **3 eran justamente eso**
+> —un número leído en A que A atribuye a B— y uno sobrevivió una corrida entera como veredicto tibio
+> antes de que la segunda lo llamara `no-soportada` tras grepear el archivo y no encontrarlo.
 
 > **Transcripciones: chequear también lo que la nota OMITE (#49).** El fan-out valida lo que la nota
 > **afirma**; una tabla transcrita **sin un solo error** pero a la que le faltan filas vuelve
@@ -209,7 +213,7 @@ Prompt sugerido por agente: *"Leé SOLO `<ruta fulltext>`. ¿El paper respalda e
 Si la afirmación tiene varias cláusulas atribuidas a distintas fuentes, juzgá si el archivo respalda
 **la cláusula que le toca** y decí cuál en la nota — que respalde una cláusula vecina de otra fuente,
 o el encuadre genérico, no cuenta. Respondé veredicto
-(soportada/parcial/no-soportada/contradice) + score 0–10 + cita textual con nº de línea (el que da
+(soportada/no-soportada/contradice) + score 0–10 + cita textual con nº de línea (el que da
 `grep -n` o la lectura directa del archivo; NO uses `splitlines()` de Python — los form feeds del
 `.txt` corren la numeración) + nota. Para localizar: el `.txt` suele entrelazar dos columnas en la
 misma línea física, así que si la oración completa no aparece con grep NO concluyas que falta —
@@ -217,8 +221,8 @@ acortá a un fragmento distintivo de 3–6 palabras (y reintentá partiendo por 
 PROHIBIDO normalizar espacios sobre el archivo entero Y también colapsar un hueco de 8+ espacios
 dentro de una línea (ambos empalman columnas y fabrican adyacencias falsas); si normalizás, partí
 antes la línea en ese hueco y tratá cada segmento por separado. Si no
-encontrás respaldo textual, es no-soportada; `parcial` sólo si la cita textual respalda parte del
-contenido distintivo de la afirmación — que el paper hable del mismo tema NO alcanza; si el paper
+encontrás respaldo textual, es no-soportada; y es no-soportada TAMBIÉN si la cita sólo toca terreno
+común del tema — que el paper hable de lo mismo NO alcanza, tiene que tocar el contenido distintivo; si el paper
 afirma lo CONTRARIO, es contradice (pegá la frase que lo contradice). Decime APARTE del veredicto:
 ¿el paper afirma esto bajo CONDICIONES que la afirmación no menciona (SNR, muestreo, tamaño de
 muestra, definición del observable, época, rango)? Si sí, citalas con su nº de línea — la afirmación
@@ -233,16 +237,24 @@ entrelazada con otra en las mismas líneas físicas — contá las filas de LA t
 
 ### 3. Umbral y agregación
 - `score ≥ 7` → **soportada**
-- `4 ≤ score ≤ 6` → **parcial** (revisar: matiz, rango distinto, atribución cruzada)
 - `score < 4` → **no-soportada**
-- **Regla del contenido distintivo:** un score 4–6 sólo vale como `parcial` si la evidencia citada
-  toca lo que hace **específica** a la afirmación; coincidencia sólo temática ⇒ `no-soportada`
-  (bajar el score, no promediarlo con la cercanía del tema).
+- **La zona 4–6 la decide la regla del contenido distintivo, no un tercer veredicto:** si la
+  evidencia citada toca lo que hace **específica** a la afirmación → `soportada`, y lo que falte va
+  a `condicion`; si la coincidencia es sólo temática → `no-soportada` (bajar el score, no
+  promediarlo con la cercanía del tema).
+
+⚠ **`parcial` se eliminó en 1.39.0.** Fusionaba dos preguntas ortogonales: «¿la fuente respalda
+esto?» (textual, decidible contra el `.txt`) y «¿la afirmación está completa?» (juicio de grado).
+Medido el 2026-08-25 sobre una ficha real: **dos corridas independientes de este mismo fan-out**,
+jueces nuevos y ciegos, **60 pares comparados → 95 % de coincidencia**, y **las tres divergencias
+caían exactamente en el borde `soportada`↔`parcial`**, todas hacia el lado estricto; `contradice`
+reprodujo 2/2. El umbral no estaba definido — y no se puede definir, porque es de grado. Todo lo que
+era `parcial` se descompone sin pérdida en `soportada` + `condicion`, o en `no-soportada`.
 - **`contradice`** manda sobre el score (no es un grado de soporte sino evidencia **en contra**, con
   cita textual de lo contradicho): se resuelve como corrección o disputa (paso 4), no como cita rota.
 
 ### 4. Resolver lo que falla (no dejar pasar)
-Cada **parcial / no-soportada / contradice** se resuelve antes de cerrar:
+Cada **no-soportada / contradice**, y cada `condicion` no vacía, se resuelve antes de cerrar:
 - **Contradicción** (`contradice`) → decidir cuál de dos casos es. (a) **La nota está mal** →
   corregirla a lo que dice la fuente. (b) **Desacuerdo real entre fuentes** → es una **disputa**:
   si es un parámetro de una ficha, taguearla en `disputes` (posiciones explícitas, #71)
@@ -269,13 +281,14 @@ Agregar/refrescar al final de la nota (idempotente — si ya existe, reemplazar)
 
 ```markdown
 ## Verificación de citas (YYYY-MM-DD)
-Chequeo afirmación↔fulltext (skill `verify-citations`). N pares; X soportadas / Y parciales / Z no-soportadas / W contradicen (resueltas).
+Chequeo afirmación↔fulltext (skill `verify-citations`). N pares; X soportadas / Z no-soportadas / W contradicen (resueltas) / C con condición declarada.
 
-| # | Afirmación (extracto) | Fuente | Veredicto | Score | Evidencia | Ancla | Hash fuente |
-|---|---|---|---|---|---|---|---|
-| 1 | YZ CMi κ ≈ −2.6 | [[2018A&A...609A..12Z]] | soportada | 9 | "gradient of −2.6 Np−1 (±21%)" (L966) | 3f9c1e2ab4 | 7b40d8aa11 |
-| 2 | activas −2.4/−2.6 | [[2025A&A...696A..27J]] | no-soportada→corregida | 2 | el paper da −2.65 a −3.70; el −2.6 es de Zechmeister | c17e0a9b22 | 55aa10ffe3 |
-| 3 | señal g confirmada | [[2016A&A...585A.134D]] | contradice→disputa | 1 | "is an artifact of... rotation" (L2101) → tagueada en disputes[] | 90bb4c1de7 | 0ab77e2c41 |
+| # | Afirmación (extracto) | Fuente | Veredicto | Score | Evidencia | Ancla | Hash fuente | Condición |
+|---|---|---|---|---|---|---|---|---|
+| 1 | YZ CMi κ ≈ −2.6 | [[2018A&A...609A..12Z]] | soportada | 9 | "gradient of −2.6 Np−1 (±21%)" (L966) | 3f9c1e2ab4 | 7b40d8aa11 | — |
+| 2 | activas −2.4/−2.6 | [[2025A&A...696A..27J]] | no-soportada→corregida | 2 | el paper da −2.65 a −3.70; el −2.6 es de Zechmeister | c17e0a9b22 | 55aa10ffe3 | — |
+| 3 | señal g confirmada | [[2016A&A...585A.134D]] | contradice→disputa | 1 | "is an artifact of... rotation" (L2101) → tagueada en disputes[] | 90bb4c1de7 | 0ab77e2c41 | — |
+| 4 | P_rot = 36,5 d | [[2017MNRAS.468.4772S]] | soportada | 9 | "36.5 ± 2.3" (L320) | 5c1de790bb | 41c0ab772e | promedio pesado de 4 proxies; el K de 0,50 m/s es de la señal a 35,0 d, no a 36,5 |
 
 Inferencias declaradas (sin cita, por diseño): <listar>.
 
@@ -364,7 +377,7 @@ poblada y citada.
    examen entero tampoco: cada sembrada comparte el `claim` con su par real, así que quien lo lee
    completo deduce que uno de esos dos es falso —no cuál—. Con un par por subagente eso no se ve.)
 3. Volcar cada veredicto en el campo `verdict` de su par en `exam.json`
-   (`soportada|parcial|no-soportada|contradice|no verificable por extracción`).
+   (`soportada|no-soportada|contradice|no verificable por extracción`).
 4. `python scripts/bench_verify.py score` → recall de sembradas + reales caídas →
    `outputs/verify-bench-<fecha>.md`.
 5. **Reporte honesto al chat:** el recall; cada sembrada que PASÓ (revisar a mano — puede ser

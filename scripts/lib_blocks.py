@@ -82,13 +82,16 @@ class Block:
 
 @dataclass(frozen=True)
 class Row:
-    """Una fila del bloque `## Verificación de citas`: un par ya verificado, con sus dos hashes."""
+    """Una fila del bloque `## Verificación de citas`: un par ya verificado, con sus dos hashes.
+
+    ⚠ `verdict` y `condition` son EJES DISTINTOS desde 1.39.0 (ver `VERDICTS`)."""
     n: str
     claim: str
     bibcode: str
     verdict: str
     anchor: str
     source_hash: str
+    condition: str = ""
 
 
 @dataclass(frozen=True)
@@ -264,9 +267,28 @@ def pairs_of(body: str) -> list[Pair]:
 
 # ── el bloque de verificación ────────────────────────────────────────────────────────────────────
 
-# Columnas que hacen evaluable al bloque. Sin ellas no hay dónde colgar los hashes: la plantilla
-# vieja colapsaba las soportadas en un párrafo de prosa y dejaba una sola fila (la que falló).
-_COLS_HASH = ("ancla", "hash")
+# Vocabulario CERRADO del veredicto. `parcial` se ELIMINÓ en 1.39.0 y no es un recorte cosmético:
+# ese valor fusionaba dos preguntas ortogonales —«¿la fuente respalda esto?» (textual, decidible
+# contra el `.txt`) y «¿la afirmación está completa?» (juicio de grado)— y la fusión hacía que la
+# parte dura arrastrara a la blanda.
+#
+# Medido el 2026-08-25 sobre la ficha de HD 40307: dos corridas independientes del fan-out, jueces
+# nuevos y ciegos, 60 pares comparados → **95 % de coincidencia (57/60)**, y las TRES divergencias
+# vivían exactamente en el borde `soportada`↔`parcial`, todas en la misma dirección. `contradice`
+# reprodujo 2/2. O sea: el eje textual es estable y el de grado no lo es — y el skill nunca definió
+# ese umbral.
+#
+# Lo que era `parcial` se descompone sin pérdida: o la fuente respalda la afirmación pero bajo
+# condiciones que la nota no dice (→ `soportada` + `condicion` poblada), o la cita NO toca el
+# contenido distintivo de la afirmación (→ `no-soportada`, como ya mandaba el contrato).
+VERDICTS = ("soportada", "no-soportada", "contradice", "no verificable por extracción")
+
+# Columnas que hacen evaluable al bloque. Sin `ancla`/`hash` no hay dónde colgar los hashes (la
+# plantilla pre-D-20 colapsaba las soportadas en prosa y dejaba una sola fila, la que falló). Sin
+# `condición` el bloque es pre-1.39.0: registraba el veredicto y **tiraba** lo que la corrida había
+# encontrado sobre el régimen —el output más valioso del fan-out, y el que las dos corridas del
+# experimento producían distinto aun cuando el veredicto coincidía—.
+_COLS_HASH = ("ancla", "hash", "condici")
 
 
 def parse_verif_table(text: str) -> list[Row] | None:
@@ -312,14 +334,15 @@ def parse_verif_table(text: str) -> list[Row] | None:
     i_fuente, i_verd = _idx("fuente", default=2), _idx("veredicto", default=3)
     i_ancla = _idx("ancla", default=4)
     i_hash = _idx("hash fuente", "hash", default=5)
+    i_cond = _idx("condici", default=6)
     out: list[Row] = []
     for ln in filas[1:]:
         if _SEP_ROW_RE.match(ln):
             continue
         celdas = [c.strip() for c in ln.strip("|").split("|")]
-        if len(celdas) <= max(i_n, i_claim, i_fuente, i_verd, i_ancla, i_hash):
+        if len(celdas) <= max(i_n, i_claim, i_fuente, i_verd, i_ancla, i_hash, i_cond):
             continue                     # fila malformada: la reporta el lint como par sin cubrir
         bibs = _bibcodes(celdas[i_fuente]) or [celdas[i_fuente].strip("[]")]
         out.append(Row(celdas[i_n], celdas[i_claim], bibs[0], celdas[i_verd],
-                       celdas[i_ancla], celdas[i_hash]))
+                       celdas[i_ancla], celdas[i_hash], celdas[i_cond]))
     return out

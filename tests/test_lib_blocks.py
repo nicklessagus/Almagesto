@@ -80,8 +80,8 @@ Parámetros medidos por [[2021Tabla]]:
 
 ## Verificación de citas (2026-01-01)
 
-| # | Afirmación | Fuente | Veredicto | Ancla | Hash fuente |
-|---|---|---|---|---|---|
+| # | Afirmación | Fuente | Veredicto | Ancla | Hash fuente | Condición |
+|---|---|---|---|---|---|---|
 | 1 | P_rot 34 d | [[2019Autor]] | soportada | abc0123456 | def0123456 |
 """
 
@@ -225,10 +225,10 @@ Afirmación con cita [[2019Autor]].
 
 ## Verificación de citas (2026-01-01)
 
-| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente |
-|---|---|---|---|---|---|
-| 1 | P_rot de 34 días | [[2019Autor]] | soportada | a3f9c1e2ab | 7b40d8aa11 |
-| 2 | Teff 5344 K | [[2020Otro]] | parcial | bbbbbbbbbb | cccccccccc |
+| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente | Condición |
+|---|---|---|---|---|---|---|
+| 1 | P_rot de 34 días | [[2019Autor]] | soportada | a3f9c1e2ab | 7b40d8aa11 | — |
+| 2 | Teff 5344 K | [[2020Otro]] | soportada | bbbbbbbbbb | cccccccccc | sólo para la muestra activa |
 """
 
 
@@ -237,15 +237,39 @@ def test_parse_verif_table_lee_las_filas():
     assert [f.bibcode for f in filas] == ["2019Autor", "2020Otro"]
     assert filas[0].anchor == "a3f9c1e2ab" and filas[0].source_hash == "7b40d8aa11"
     assert filas[0].verdict == "soportada"
+    assert filas[0].condition == "—" and filas[1].condition == "sólo para la muestra activa", \
+        "la condición es un EJE propio desde 1.39.0: se lee y se conserva, no se absorbe en el veredicto"
 
 
 def test_parse_verif_table_plantilla_vieja_devuelve_none():
     """Detector de plantilla vieja (sin migrador: bóveda nueva). Un bloque sin las columnas de hash
     no es "cero pares vencidos": es un bloque que no se puede evaluar — y leerlo como limpio sería
     el mismo cero inventado que D-43 prohíbe."""
-    viejo = BLOQUE.replace("| Ancla | Hash fuente |", "|").replace(
+    viejo = BLOQUE.replace("| Ancla | Hash fuente | Condición |", "|").replace(
         "| a3f9c1e2ab | 7b40d8aa11 |", "|").replace("| bbbbbbbbbb | cccccccccc |", "|")
     assert lb.parse_verif_table(viejo) is None
+
+
+def test_bloque_sin_columna_condicion_es_plantilla_vieja():
+    """1.39.0 partió `Veredicto` en dos ejes: respaldo (textual) y condición (régimen). Un bloque
+    sin la columna `Condición` es **pre-1.39.0** y no se puede evaluar — registraba el veredicto y
+    tiraba lo que la corrida había encontrado sobre el régimen.
+
+    Que sea BLOQUEANTE y no una lectura tolerante es la política del repo: schema nuevo = detector,
+    nunca lector permisivo. Y acá hay un motivo extra medido: en el experimento de dos corridas del
+    2026-08-25, pares con veredicto idéntico traían condiciones DISTINTAS — leer un bloque viejo
+    como si estuviera completo afirmaría que no había nada que declarar."""
+    sin_cond = BLOQUE.replace(" | Condición |", " |").replace("|---|---|---|---|---|---|---|",
+                                                              "|---|---|---|---|---|---|")
+    assert lb.parse_verif_table(sin_cond) is None
+
+
+def test_parcial_salio_del_vocabulario():
+    """`parcial` fusionaba el eje textual con el de grado. Medido: 3 divergencias entre dos corridas
+    independientes, las TRES en el borde `soportada`↔`parcial`, ninguna en `contradice`."""
+    assert "parcial" not in lb.VERDICTS
+    assert set(lb.VERDICTS) == {"soportada", "no-soportada", "contradice",
+                                  "no verificable por extracción"}
 
 
 def test_parse_verif_table_sin_bloque_devuelve_none():
@@ -256,8 +280,8 @@ def test_parse_verif_table_tabla_vacia_es_lista_vacia():
     """Bloque bien formado y sin filas ≠ bloque no evaluable: devuelve `[]`, y todo par del cuerpo
     queda *sin verificar*."""
     vacia = ("## Verificación de citas (2026-01-01)\n\n"
-             "| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente |\n"
-             "|---|---|---|---|---|---|\n")
+             "| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente | Condición |\n"
+             "|---|---|---|---|---|---|---|\n")
     assert lb.parse_verif_table(vacia) == []
 
 
@@ -273,9 +297,9 @@ def test_parse_lee_por_NOMBRE_de_columna_no_por_posicion():
     """
     bloque = (
         "## Verificación de citas (2026-08-24)\n\n"
-        "| # | Afirmación (extracto) | Fuente | Veredicto | Score | Evidencia | Ancla | Hash fuente |\n"
-        "|---|---|---|---|---|---|---|---|\n"
-        "| 1 | P_rot = 34 d | [[2020ApJ...900...1A]] | soportada | 0.9 | \"34 d\" (L12) | abc1234567 | def8901234 |\n")
+        "| # | Afirmación (extracto) | Fuente | Veredicto | Score | Evidencia | Ancla | Hash fuente | Condición |\n"
+        "|---|---|---|---|---|---|---|---|---|\n"
+        "| 1 | P_rot = 34 d | [[2020ApJ...900...1A]] | soportada | 0.9 | \"34 d\" (L12) | abc1234567 | def8901234 | — |\n")
     filas = lb.parse_verif_table(bloque)
     assert filas is not None and len(filas) == 1
     f = filas[0]
@@ -288,9 +312,9 @@ def test_parse_sigue_leyendo_la_tabla_de_seis_columnas():
     """Control: la forma corta (sin Score/Evidencia) es la que usa el resto de la suite."""
     bloque = (
         "## Verificación de citas (2026-08-24)\n\n"
-        "| # | Afirmación | Fuente | Veredicto | Ancla | Hash fuente |\n"
-        "|---|---|---|---|---|---|\n"
-        "| 1 | X | [[2020ApJ...900...1A]] | soportada | abc1234567 | def8901234 |\n")
+        "| # | Afirmación | Fuente | Veredicto | Ancla | Hash fuente | Condición |\n"
+        "|---|---|---|---|---|---|---|\n"
+        "| 1 | X | [[2020ApJ...900...1A]] | soportada | abc1234567 | def8901234 | — |\n")
     f = lb.parse_verif_table(bloque)[0]
     assert (f.anchor, f.source_hash) == ("abc1234567", "def8901234")
 

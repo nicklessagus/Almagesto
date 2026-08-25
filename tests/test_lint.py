@@ -1648,7 +1648,7 @@ def _skip_sin_git(ok):
 def test_verificacion_stale_por_edicion_sin_commitear(toy_vault, capsys):
     """El caso que importa: el lint corre ANTES del commit, así que la edición que dejó el bloque
     atrasado todavía no está en `git log` — un archivo sucio se toma como cambiado hoy."""
-    cuerpo = "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-01-01)\n\n| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente |\n|---|---|---|---|---|---|\n"
+    cuerpo = "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-01-01)\n\n| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente | Condición |\n|---|---|---|---|---|---|---|\n"
     _skip_sin_git(_repo_con_nota(toy_vault, cuerpo, fecha="2020-01-01"))
     rc, out = run_lint(capsys)
     assert rc == 0                                     # backlog, no bloqueante
@@ -1665,7 +1665,7 @@ def test_verificacion_stale_por_edicion_sin_commitear(toy_vault, capsys):
 
 def test_verificacion_stale_por_commit_posterior(toy_vault, capsys):
     """La otra rama: la edición ya está committeada — la fecha sale de `git log -1 --format=%cs`.  @inv INV-31"""
-    cuerpo = "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-01-01)\n\n| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente |\n|---|---|---|---|---|---|\n"
+    cuerpo = "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-01-01)\n\n| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente | Condición |\n|---|---|---|---|---|---|---|\n"
     _skip_sin_git(_repo_con_nota(toy_vault, cuerpo, fecha="2020-01-01"))
     p = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
     p.write_text(p.read_text(encoding="utf-8") + "\nPárrafo agregado después.\n", encoding="utf-8")
@@ -1678,7 +1678,7 @@ def test_verificacion_stale_por_commit_posterior(toy_vault, capsys):
 
 def test_verificacion_al_dia_no_se_marca(toy_vault, capsys):
     """Bloque fechado DESPUÉS del último cambio del archivo: verificada al día → no se marca."""
-    cuerpo = "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-03-01)\n\n| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente |\n|---|---|---|---|---|---|\n"
+    cuerpo = "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-03-01)\n\n| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente | Condición |\n|---|---|---|---|---|---|---|\n"
     _skip_sin_git(_repo_con_nota(toy_vault, cuerpo, fecha="2020-01-01"))
     rc, out = run_lint(capsys)
     assert rc == 0
@@ -1688,7 +1688,7 @@ def test_verificacion_al_dia_no_se_marca(toy_vault, capsys):
 def test_bloque_sin_fecha_se_marca(toy_vault, capsys):
     """Sin fecha en el encabezado no hay forma de saber si el bloque sigue vigente (no necesita git)."""
     _nota_verif(toy_vault, "sin-fecha",
-                "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas\n\n| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente |\n|---|---|---|---|---|---|\n")
+                "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas\n\n| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente | Condición |\n|---|---|---|---|---|---|---|\n")
     rc, out = run_lint(capsys)
     assert rc == 0
     assert "- sin-fecha → bloque de verificación sin fecha en el encabezado" in out
@@ -1705,7 +1705,7 @@ def test_stale_sin_git_no_rompe(toy_vault, capsys, monkeypatch):
     falta y cómo."""
     monkeypatch.setattr(lint, "git_out", lambda *a: None)
     _nota_verif(toy_vault, "nota-verif",
-                "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-01-01)\n\n| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente |\n|---|---|---|---|---|---|\n")
+                "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-01-01)\n\n| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente | Condición |\n|---|---|---|---|---|---|---|\n")
     rc, out = run_lint(capsys)
     assert rc == 1
     assert "No evaluado" in out
@@ -1815,11 +1815,11 @@ def _con_ancla(toy_vault, cuerpo, txt="El período es de 34 días.\n", bib="2020
     ft = toy_vault.FULLTEXT / "slug" / f"{bib}.txt"
     ft.write_text(txt, encoding="utf-8")
     pares = lb.pairs_of(cuerpo)
-    filas = ["| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente |",
-             "|---|---|---|---|---|---|"]
+    filas = ["| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente | Condición |",
+             "|---|---|---|---|---|---|---|"]
     for i, par in enumerate(pares, 1):
         filas.append(f"| {i} | extracto | [[{par.bibcode}]] | soportada | "
-                     f"{anchor or par.anchor} | {source or lb.source_hash(ft)} |")
+                     f"{anchor or par.anchor} | {source or lb.source_hash(ft)} | — |")
     completo = cuerpo + "\n## Verificación de citas (2026-01-01)\n\n" + "\n".join(filas) + "\n"
     _nota_verif(toy_vault, "nota-verif", completo)
     return ft
