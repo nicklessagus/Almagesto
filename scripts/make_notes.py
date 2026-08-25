@@ -1202,18 +1202,8 @@ def _papers_del_sujeto(slug: str, kind: str, fms: dict | None = None) -> list:
 # este recorte TODO paper aparece como sintetizado apenas se estampa la tabla. Es el mismo lazo que
 # el bloque `## Verificación de citas` en `lib_blocks`: un artefacto que se mide a sí mismo siempre
 # da el resultado que su propia existencia produce.
-SECCIONES_MAQUINA = (PAPERS_HEADER, METODOS_HEADER, CONCEPT_ROLLUP_HEADER, "## Excluidos por el filtro")
-
-
-def _prosa(text: str) -> str:
-    """El cuerpo SIN las secciones estampadas por máquina."""
-    out, saltando = [], False
-    for linea in text.split("\n"):
-        if linea.startswith("## "):
-            saltando = any(linea.startswith(h) for h in SECCIONES_MAQUINA)
-        if not saltando:
-            out.append(linea)
-    return "\n".join(out)
+SECCIONES_MAQUINA = cfg.SECCIONES_ESTAMPADAS
+_prosa = cfg.solo_prosa
 
 
 def papers_universe(slug: str, kind: str, fms: dict | None = None) -> list:

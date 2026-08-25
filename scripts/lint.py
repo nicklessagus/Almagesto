@@ -282,21 +282,10 @@ def corpus_vigente(slugs: list) -> tuple[int, list]:
 # `## Métodos aplicados` dejaron de ser bloques ```dataview``` y pasaron a tabla (D-11/INV-81), sus
 # celdas satisfacían el patrón `|\s*b\s*|` y **todo planeta quedaba "discutido"** en una ficha con
 # cero líneas escritas: el mismo falso limpio permanente que el bug del `[^*]*`, por otra puerta.
-SECCIONES_ESTAMPADAS = ("## Planetas", "## Papers", "## Métodos aplicados a esta estrella",
-                        "## Papers que tocan este tema (auto)", "## Excluidos por el filtro",
-                        "## Verificación de citas")
-
-
-def solo_prosa(body: str) -> str:
-    """El cuerpo SIN las secciones que estampa la máquina. Lo que queda es lo que alguien escribió,
-    que es sobre lo que los proxies de autosuficiencia tienen sentido."""
-    out, saltando = [], False
-    for ln in body.split("\n"):
-        if ln.startswith("## "):
-            saltando = any(ln.startswith(h) for h in SECCIONES_ESTAMPADAS)
-        if not saltando:
-            out.append(ln)
-    return "\n".join(out)
+# La lista y el recorte viven en `lib_config` (una sola declaración para los tres consumidores);
+# acá quedan los alias por los que este módulo y sus tests ya los nombraban.
+SECCIONES_ESTAMPADAS = cfg.SECCIONES_ESTAMPADAS
+solo_prosa = cfg.solo_prosa
 
 
 def _muestra(xs: list, n: int = 5) -> str:

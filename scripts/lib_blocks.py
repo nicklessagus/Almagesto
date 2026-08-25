@@ -56,6 +56,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+import lib_config as cfg
+
 # Encabezado del bloque de auditoría. Se excluye de la partición: sus filas llevan `[[bibcode]]`
 # pero son el REGISTRO de la verificación, no afirmaciones. Si entraran, el bloque se hashearía a
 # sí mismo y cada re-verificación lo vencería sola — un lazo que nunca converge.
@@ -149,8 +151,15 @@ def split_blocks(body: str) -> list[Block]:
 
     Se excluyen, por no ser afirmaciones: el frontmatter (`thesis_links`, `disputes[].ref` — son
     contrato máquina, no prosa), los code fences (```dataview``` trae wikilinks dentro de la
-    query), el bloque `## Verificación de citas` entero, los separadores `|---|---|` y la fila de
-    **encabezado** de cada tabla. Los dos últimos heredarían la cita del caption y ensuciarían el
+    query), **todas las secciones que estampa la máquina** (`cfg.SECCIONES_ESTAMPADAS`: los tres
+    roll-ups, el apéndice de excluidos y el propio bloque `## Verificación de citas`), los
+    separadores `|---|---|` y la fila de **encabezado** de cada tabla.
+
+    ⚠ Lo de los roll-ups llegó en 1.38.2 y no es cosmético: una fila de `## Papers` **no es una
+    afirmación**, es metadata que estampó `make_notes`, y no hay nada que contrastar contra la
+    fuente. Medido sobre la ficha de HD 40307 recién sintetizada: 178 pares contra **68** reales
+    —110 de metadata—, con nueve bibcodes que no aparecen en ninguna afirmación, cuatro de ellos
+    **sin `.txt`**. El fan-out habría lanzado 110 subagentes a verificar filas de tabla. Los dos últimos heredarían la cita del caption y ensuciarían el
     bloque de verificación con pares permanentes que nadie puede resolver — sobre-disparar es
     correcto cuando hay algo que verificar, no cuando no lo hay.
     """
@@ -195,8 +204,8 @@ def split_blocks(body: str) -> list[Block]:
             continue
         if s.startswith("#"):
             flush()
-            # el bloque de verificación se saltea hasta el próximo encabezado
-            en_verificacion = s.startswith(VERIFY_HEADER)
+            # las secciones estampadas se saltean hasta el próximo encabezado
+            en_verificacion = any(s.startswith(h) for h in cfg.SECCIONES_ESTAMPADAS)
             intro_actual = None if en_verificacion else s.lstrip("# ").strip()
             continue
         if en_verificacion or not s:

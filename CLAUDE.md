@@ -600,7 +600,10 @@ ingest-theme (concept + papers), append-knowledge, find-contradictions (las disp
 maintain cuando re-sintetiza, query archivada, test de hipótesis — **antes de lint/commit**.
 **Qué hace:** descompone la nota en pares (afirmación, `[[bibcode]]`) —incluidas las **filas de tabla
 y los ítems de lista**, que **heredan la cita del ámbito que las introduce** (caption / párrafo / encabezado
-de sección) en vez de caerse del fan-out por no llevar `[[bibcode]]` propio— y lanza **un subagente
+de sección) en vez de caerse del fan-out por no llevar `[[bibcode]]` propio, y **excluidas las secciones
+que estampa la máquina** (`lib_config.SECCIONES_ESTAMPADAS`: los tres roll-ups, el apéndice de excluidos
+y el propio bloque de verificación), porque una fila de `## Papers` no es una afirmación sino metadata
+derivada y no hay nada que contrastar contra la fuente— y lanza **un subagente
 independiente por par** que lee SÓLO ese `vault/raw/fulltext/**/<bibcode>.txt` (grounding-first, prohibido de
 memoria) y devuelve `soportada|parcial|no-soportada|contradice` + **cita textual + nº de línea del `.txt`**
 (obligatoria; sin cita ⇒ no-soportada — también para `parcial`: la cita debe tocar el **contenido

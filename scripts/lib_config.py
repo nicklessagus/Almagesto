@@ -20,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.38.1"
+ALMAGESTO_VERSION = "1.38.2"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -112,6 +112,36 @@ def snapshot_retrieved(path) -> str | None:
     except OSError:
         pass
     return None
+
+# ── secciones ESTAMPADAS por la máquina (D-11 / INV-81) ──────────────────────────────────────────
+# No son prosa: son metadata materializada. Vive acá y no en cada consumidor porque son TRES los
+# módulos que necesitan el mismo recorte —`lint` (proxies y cobertura), `make_notes` (¿está citado
+# en esta ficha?) y `lib_blocks` (el fan-out de verify-citations)— y hasta 1.38.1 cada uno tenía su
+# propia copia, con listas DISTINTAS: la de `make_notes` no incluía `## Planetas` ni
+# `## Verificación de citas`, y `lib_blocks` no tenía ninguna. Es la red #2 aplicada: si N módulos
+# prometen la misma forma, se declara una vez.
+#
+# El modo de falla que cierran: un artefacto que se mide a sí mismo siempre da el resultado que su
+# propia existencia produce. Medido en el clean-room del 2026-08-25 sobre la ficha de HD 40307,
+# `lib_blocks.pairs_of` devolvía **178** pares (afirmación, bibcode) contra **68** reales — 110 de
+# metadata—, y entre ellos nueve bibcodes que NO están en ninguna afirmación: los cuatro sin
+# fulltext y los cinco declarados `no_sintetizado`. Correr `verify-citations` según el skill habría
+# lanzado 110 subagentes a verificar filas de tabla, cuatro de ellos contra un `.txt` inexistente.
+SECCIONES_ESTAMPADAS = ("## Planetas", "## Papers", "## Métodos aplicados a esta estrella",
+                        "## Papers que tocan este tema (auto)", "## Excluidos por el filtro",
+                        "## Verificación de citas")
+
+
+def solo_prosa(body: str) -> str:
+    """El cuerpo SIN las secciones que estampa la máquina — lo que alguien escribió de verdad."""
+    out, saltando = [], False
+    for ln in body.split("\n"):
+        if ln.startswith("## "):
+            saltando = any(ln.startswith(h) for h in SECCIONES_ESTAMPADAS)
+        if not saltando:
+            out.append(ln)
+    return "\n".join(out)
+
 
 STARS = WIKI / "stars"
 PAPERS = WIKI / "papers"
