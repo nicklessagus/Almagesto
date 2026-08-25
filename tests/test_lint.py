@@ -2632,7 +2632,7 @@ def test_las_claves_de_categoria_son_unicas_y_estables(toy_vault):
     equivocada en silencio."""
     claves = [c.clave for c in lint.collect().categorias]
     assert len(claves) == len(set(claves)), [k for k in claves if claves.count(k) > 1]
-    assert len(claves) == 54, f"el reporte tiene {len(claves)} categorías, se esperaban 54"
+    assert len(claves) == 55, f"el reporte tiene {len(claves)} categorías, se esperaban 55"
 
 
 def test_el_modo_cierre_solo_cambia_el_exit_de_los_pares(toy_vault):
@@ -2825,3 +2825,56 @@ def test_methods_sin_pagina_destino_es_backlog_no_bloqueante(toy_vault, capsys):
     assert colgados == {"sin_nota_alguna"}, colgados
     assert cats["dangling_methods"].severidad == lint.SEV_BACKLOG, \
         "bloquear acá le pide a ingest-star cerrar algo que no está en su cadena"
+
+
+def _ficha_con_inventario(toy_vault, filas: str, n_papers: int = 2):
+    """Ficha que cita `n_papers` papers YA extraídos, con el inventario en el estado que se pase."""
+    bibs = [f"2020ext{i}...1..1E" for i in range(n_papers)]
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    for b in bibs:
+        (cfg.PAPERS / f"{b}.md").write_text(
+            f"---\nbibcode: {b}\nstars: [Estrella Test]\nmethods: [gp]\nrole: [aplicacion]\n"
+            f"year: 2020\ntags: [paper]\nno_sintetizado: 'poda'\n---\n# T\n", encoding="utf-8")
+    citas = " ".join(f"[[{b}]]" for b in bibs)
+    mk_note(toy_vault.STARS, "con_inv", {"tags": ["star"]},
+            f"# con_inv\n\n## Resumen\nAlgo {citas}.\n\n## Inventario por eje\n{filas}\n")
+
+
+PLANTILLA = "| Eje | Paper | Dice |\n|---|---|---|\n|  |  |  |"
+LLENO = "| Eje | Paper | Dice |\n|---|---|---|\n| P_rot | [[2020ext0...1..1E]] | 47 d |"
+
+
+def test_inventario_en_plantilla_con_dos_extraidos_es_backlog(toy_vault, capsys):
+    """#101: la red que le faltaba al paso 3b. `CLAUDE.md` lo llama el paso con más apalancamiento y
+    el que más fácil se saltea «porque su producto no se nota si falta», y su única red medía si el
+    paper LLEGÓ (#75), no si el contraste OCURRIÓ."""
+    _ficha_con_inventario(toy_vault, PLANTILLA)
+    cats = {c.clave: c for c in lint.collect().categorias}
+    assert [h[0] for h in cats["contrast_missing"].items] == ["con_inv"]
+    assert cats["contrast_missing"].severidad == lint.SEV_BACKLOG
+
+
+def test_inventario_lleno_no_dispara(toy_vault, capsys):
+    """El lado positivo: una fila real apaga el hallazgo."""
+    _ficha_con_inventario(toy_vault, LLENO)
+    cats = {c.clave: c for c in lint.collect().categorias}
+    assert cats["contrast_missing"].items == ()
+
+
+def test_sin_seccion_es_la_escotilla_declarada_no_un_hallazgo(toy_vault, capsys):
+    """La plantilla dice: «si no hay ningún eje en disputa, borrar la sección y decirlo en el log».
+    Ausencia = declarado; presente-y-vacío = saltado. Sin esa asimetría el detector castigaría
+    justo a quien siguió la instrucción."""
+    _ficha_con_inventario(toy_vault, PLANTILLA)
+    p = toy_vault.STARS / "con_inv.md"
+    p.write_text(p.read_text(encoding="utf-8").split("## Inventario por eje")[0], encoding="utf-8")
+    cats = {c.clave: c for c in lint.collect().categorias}
+    assert cats["contrast_missing"].items == ()
+
+
+def test_con_un_solo_paper_extraido_no_dispara(toy_vault, capsys):
+    """Con un solo paper no hay contra qué contrastar: pedir el inventario sería ruido fijo, y un
+    hallazgo que aparece siempre se deja de mirar."""
+    _ficha_con_inventario(toy_vault, PLANTILLA, n_papers=1)
+    cats = {c.clave: c for c in lint.collect().categorias}
+    assert cats["contrast_missing"].items == ()

@@ -996,6 +996,19 @@ sección y decirlo en el `log`.)_
 # disciplina, así que un tema no puede nacer pidiendo planetas y actividad; y el eje estrella es
 # astro por schema (ground-truth NEA) pero sus ejes de CONTENIDO salen del objetivo de la bóveda,
 # no de un hardcodeo a "actividad".
+# #103 — la REGLA DE ANOTACIÓN, común a las dos ramas. No es cosmética: sale de medir los defectos
+# que el fan-out de verify-citations encontró en una ficha real (2026-08-25, HD 40307: 68 pares, 14
+# defectos, 0 inventados). Los 14 caen en seis mecanismos, y CUATRO de ellos —número de otra fila de
+# la tabla, cantidad parecida confundida, epígrafe que el cuerpo contradice, y la mitad de las citas
+# de segunda mano— son mecánicamente detectables si cada valor viaja con su línea. El dato está
+# delante de los ojos en el momento de leer; escribirlo cuesta nada y convierte "juicio" en "chequeo".
+_BULLET_ANOTACION = (
+    "- **Cómo anotar cada valor (#103):** pegá el **nº de línea** del `.txt` (`grep -n`, nunca "
+    "`splitlines()`) junto a cada número que copies, y el **régimen** en el que la fuente lo afirma "
+    "(muestra, época, corte de datos, modelo). Si la fuente **atribuye el valor a otro trabajo** "
+    "(«according to X», «(X et al.)»), marcalo **segunda mano** y citá a X: el número **no es de "
+    "esta fuente**. ⛔ No escribas prosa que compare este paper con otro — comparar es `inferencia` "
+    "y va al `## Inventario por eje` de la ficha, no acá._")
 _BULLET_METHODS = "- **Métodos:** _(llenar `methods:` del frontmatter con `concepts/methods/`)_"
 # El ROL es del paper, no del tipo de sujeto (#73): va en las dos ramas. Sin él, "contrastar dos
 # papers" no está definido — fundacional↔aplicación NO es contraste sino instanciación, y tratarlo
@@ -1051,7 +1064,8 @@ def extraction_block(theme: bool) -> str:
             f"- **Ejes del objetivo{ejes}:** _(qué dice el paper sobre cada eje de la lente; salen "
             "de `relevance.facets` en `objective.yaml`)_",
         ]
-    bullets += [_BULLET_METHODS, _BULLET_ROLE, f"- **Para el objetivo:** _({objetivo})_"]
+    bullets += [_BULLET_METHODS, _BULLET_ROLE, f"- **Para el objetivo:** _({objetivo})_",
+                _BULLET_ANOTACION]
     return "## Extracción (LLM)\n" + "\n".join(bullets) + "\n"
 
 

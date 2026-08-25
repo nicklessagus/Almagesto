@@ -348,6 +348,30 @@ edición de la nota (y, si toca un parámetro planetario, puede ser una `dispute
 `expression-of-concern` no cambia ningún número: baja la confianza de lo que se apoya sólo en esa
 fuente. Dejar en el `log` qué se revisó.
 
+## G. Pasada periódica de REVALIDACIÓN (a pedido) — modo revalidación de `verify-citations`
+
+Complementa la pasada F. Aquélla mira lo que cambió **afuera** (retracciones, correcciones,
+versiones, snapshot web, ground-truth); ésta mira lo que puede haber estado mal **desde el
+principio** sin que nada cambiara.
+
+**Por qué hace falta.** El ancla de bloque y el hash de fuente detectan que un par **cambió**. Si
+nada cambió, el par no se vuelve a mirar **nunca** — así que un error del verificador queda
+**permanente y silencioso**, que es el modo de falla que esa capa existe para no producir. El
+supuesto implícito («el veredicto es función de la afirmación y la fuente») nunca se midió, y lo
+produce un LLM.
+
+Se pide en prosa —«revalidá una muestra de las citas»— y corre el **modo revalidación** del skill
+`verify-citations`, sobre una muestra (no todo el corpus: el punto es que sea barato y periódico).
+
+Re-corre el fan-out sobre pares **ya verdes**, con verificadores ciegos a la tabla vigente, y
+reporta la **divergencia**. Los pares que cambian de veredicto se resuelven como cualquier hallazgo;
+el bloque **no se reescribe en silencio**.
+
+Medido el 2026-08-25 (HD 40307, 60 pares, dos corridas): **95 % de coincidencia**, con un confound
+declarado en el skill. El dato que más importa: pares con **veredicto idéntico** trajeron
+**condiciones distintas** — el juez es estable en el eje textual y **no exhaustivo** en el de
+régimen.
+
 ## Notas
 - **No es ingest:** si la entidad no existe todavía, esto no aplica → `ingest-star`/`ingest-theme`.
 - **No es query:** una pregunta puntual va por `query-corpus`; acá se **modifica** la bóveda.

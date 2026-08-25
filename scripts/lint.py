@@ -353,6 +353,40 @@ def _diverge_del_upstream(pattern: str) -> bool:
     return bool((diff or "").strip())
 
 
+_SEP_ROW = re.compile(r"^\|[\s\-:|]+\|?$")   # `|---|---|`: estructura, no contenido
+
+INVENTARIO_HEADER = "## Inventario por eje"
+
+
+def inventario_sin_llenar(text: str) -> bool:
+    """La sección `## Inventario por eje` está, pero con la fila vacía de la plantilla (#101).
+
+    Es la red que le faltaba al paso **3b** (contraste cross-paper). `CLAUDE.md` lo llama *«el paso
+    con más apalancamiento de la cadena y el que más fácil se saltea, porque su producto no se nota
+    si falta»*, y su única red era el backlog *extraído pero no sintetizado* (#75) — que mide si el
+    paper **llegó**, no si el contraste **ocurrió**.
+
+    El detector usa la escotilla que la propia plantilla ya define: *«si no hay ningún eje en
+    disputa, borrar la sección y decirlo en el log»*. O sea que **ausencia = declarado** y
+    **presente-y-vacío = saltado**. No hace falta un campo nuevo, ni adivinar qué ejes existían.
+
+    Por qué importa (medido, 2026-08-25): el contraste cazó un `K_d` copiado de la Tabla 2 de
+    Mayor+2009 que la **prosa del mismo paper** contradice, y `verify-citations` **no lo puede ver**
+    —«la Tabla 2 dice 4,55» es literalmente cierto—. La pasada encontró cinco inconsistencias
+    internas de fuentes por esta vía, ninguna visible para el chequeo claim↔fuente."""
+    i = text.find(INVENTARIO_HEADER)
+    if i < 0:
+        return False                      # sección borrada: la escotilla declarada, no un hallazgo
+    seccion = text[i:]
+    corte = seccion.find("\n## ", 1)
+    if corte > 0:
+        seccion = seccion[:corte]
+    filas = [ln.strip() for ln in seccion.split("\n")
+             if ln.strip().startswith("|") and not _SEP_ROW.match(ln.strip())]
+    #  @inv INV-97
+    return not any(c.strip() for f in filas[1:] for c in f.strip("|").split("|"))
+
+
 def basename(p: str) -> str:
     return Path(p).name          # no splitear "/" a mano: glob devuelve separador nativo del OS
 
@@ -1593,6 +1627,27 @@ def collect(cierre: bool = False) -> LintResult:
     # operación que lo siembra, mientras que `methods` lo puebla la extracción de `ingest-star`, que
     # no crea conceptos. Bloquear acá le pediría a `ingest-star` cerrar algo que no está en su
     # cadena. Se cierra ingiriendo el tema (o corrigiendo el typo).
+    # Contraste cross-paper (3b) sin rastro (#101): la sección está con la fila de la plantilla.
+    # Sólo se pide donde el contraste es POSIBLE — hacen falta al menos dos papers extraídos del
+    # sujeto; con uno solo no hay contra qué contrastar y el hallazgo sería ruido fijo.
+    contraste_pendiente: list = []
+    for f in sorted(glob.glob(str(cfg.STARS / "*.md"))) + sorted(glob.glob(str(cfg.CONCEPTS / "*" / "*.md"))):
+        stem = basename(f)[:-3]
+        try:
+            texto = Path(f).read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if not inventario_sin_llenar(texto):
+            continue
+        extraidos = {s for s, _ in extracted}
+        n_extraidos = len({b.strip() for b in LINK_RE.findall(texto)} & extraidos)
+        if n_extraidos >= 2:
+            contraste_pendiente.append(
+                (stem, f"`## Inventario por eje` con la fila vacía de la plantilla y {n_extraidos} "
+                       "paper(s) extraídos citados → el contraste cross-paper (3b) no dejó rastro. "
+                       "Si de verdad no hay ningún eje en disputa, **borrá la sección** y decilo en "
+                       "el `log` (es la escotilla que la plantilla declara)"))
+
     dangling_methods = sorted(
         (mt, f"usado en {len(refs)} paper(s): {', '.join(sorted(refs)[:3])}"
              + (" …" if len(refs) > 3 else "") + " → sin nota en `concepts/`: ingerí el tema o corregí el slug")
@@ -1947,6 +2002,8 @@ def collect(cierre: bool = False) -> LintResult:
         Categoria('corrections', 'Papers con corrección publicada (erratum/corrigendum/EoC) — revisar los valores extraídos de ellos (backlog, el paper sigue siendo citable)', SEV_BACKLOG, tuple(corrections)),
         Categoria('contradictions', 'Contradicciones ground-truth ↔ ficha', SEV_BLOQUEANTE, tuple(contradictions)),
         Categoria('mass_issues', 'Ground-truth: masa inconsistente con m·sini (K,P,e,M*)', SEV_BLOQUEANTE, tuple(mass_issues)),
+        Categoria('contrast_missing', 'Contraste cross-paper (3b) sin rastro: el inventario por eje quedó en la plantilla (backlog)',
+                  SEV_BACKLOG, tuple(contraste_pendiente)),
         Categoria('foreign_alias', '⚠ Alias que SIMBAD no reconoce para esta estrella (WARN — puede meter papers de otro objeto)',
                   SEV_WARN, tuple(alias_ajenos)),
         Categoria('merge_ours', '⛔ `merge=ours` declarado pero sin driver registrado en este clon: la protección no existe',

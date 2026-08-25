@@ -924,10 +924,13 @@ def test_extraction_block_forma(toy_vault, theme, cabeza):
     block = mn.extraction_block(theme)
     lineas = block.rstrip("\n").split("\n")
     assert block.startswith("## Extracción (LLM)\n") and block.endswith("\n")
-    assert len(lineas) == 6 and all(ln.startswith("- **") for ln in lineas[1:])
+    assert len(lineas) == 7 and all(ln.startswith("- **") for ln in lineas[1:])
     assert cabeza in lineas[1]
-    assert lineas[-3] == mn._BULLET_METHODS and lineas[-2] == mn._BULLET_ROLE
-    assert lineas[-1].startswith("- **Para el objetivo:**")
+    assert lineas[-4] == mn._BULLET_METHODS and lineas[-3] == mn._BULLET_ROLE
+    assert lineas[-2].startswith("- **Para el objetivo:**")
+    assert lineas[-1] == mn._BULLET_ANOTACION, \
+        "la regla de anotación (#103) va en las DOS ramas: los seis mecanismos de error que mide " \
+        "no dependen de si el sujeto es una estrella o un tema"
 
 
 def test_extraction_block_tema_sin_short_cae_al_generico(toy_vault):
@@ -2640,3 +2643,18 @@ def test_excluidos_coerce_citation_count_no_numerico(toy_vault):
         f"`citation_count` no numérico tiene que caer a 0, no propagarse:\n{fila['2001bad']}"
     assert "| 42 |" in fila["2001ok"], \
         f"el valor real tiene que llegar a la celda:\n{fila['2001ok']}"
+
+
+def test_la_regla_de_anotacion_nombra_las_tres_cosas_que_previene(toy_vault):
+    """#103: el stub tiene que pedir las tres, no una genérica «sé cuidadoso».
+
+    Cada una cierra un mecanismo de error MEDIDO (2026-08-25, HD 40307, 68 pares): el nº de línea
+    hace mecánicos los de fila equivocada / cantidad confundida / epígrafe contradicho; la marca de
+    segunda mano cierra el de «el dato de A atribuido a B» (3 casos); la prohibición de prosa
+    comparativa cierra el de «inferencia con voz de cita» (3 casos)."""
+    b = mn._BULLET_ANOTACION
+    assert "nº de línea" in b and "grep -n" in b, "sin puntero de línea nada se puede re-chequear"
+    assert "segunda mano" in b, "el mecanismo con más casos medidos"
+    assert "régimen" in b, "los 11 `parcial` eran casi todos régimen faltante"
+    assert "inferencia" in b and "Inventario por eje" in b, \
+        "comparar dos papers no va en la nota de paper: va al inventario, y es inferencia"

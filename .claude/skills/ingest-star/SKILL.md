@@ -158,6 +158,31 @@ Progreso del ingest de <estrella>:
      python scripts/triage.py <slug> --extraccion subconjunto --reason "<el criterio>"
      python scripts/triage.py <slug> --extraccion todos          # el default del contrato
      ```
+
+   ⚠ **Cómo anotar cada valor (#103) — la regla que evita cuatro de los seis mecanismos de error
+   medidos.** El fan-out de `verify-citations` sobre una ficha real (2026-08-25, HD 40307: 68 pares,
+   16 fuentes) devolvió **54 soportada / 11 parcial / 3 contradice / 0 no-soportada**. Cero
+   `no-soportada` significa que **no se inventó nada**; los 14 defectos fueron de otro tipo:
+
+   | Mecanismo | Casos | Ejemplo real |
+   |---|---:|---|
+   | **Cita de segunda mano** — se lee A, que cita a B, y el número se guarda como de B | 3 | «≈12,1 m/s/dex» atribuido a Lovis: está en Díaz **citando** a Lovis, y no aparece en el `.txt` de Lovis |
+   | **Fila/columna equivocada** de una tabla multi-objeto | 2 | `log R'HK = −5,02` es de HD 1461, no de HD 40307 — misma tabla |
+   | **Inferencia con voz de cita** | 3 | «las dos familias de P_rot no se solapan»: ninguna fuente lo dice |
+   | **Cantidades parecidas** confundidas | 3 | error formal (0,77→0,64) vs dispersión (3,53→2,59) |
+   | **Epígrafe que el cuerpo del paper contradice** | 1 | activa/inactiva invertidas: la Fig. 9 de Díaz dice al revés que su §6 |
+   | **Régimen omitido** (los 11 `parcial`) | 11 | la Tabla 4 de Tuomi es la **mitad roja** (490–680 nm), no el espectro completo |
+
+   Por eso, al copiar un valor a la nota de paper:
+   - **el nº de línea del `.txt`** al lado (`grep -n`, nunca `splitlines()` — form feeds);
+   - **el régimen** en el que la fuente lo afirma: muestra, época, corte de datos, modelo ajustado;
+   - si la fuente **atribuye el valor a otro trabajo** (*«according to X»*, *«(X et al.)»*), marcarlo
+     **segunda mano** y citar a X — el número **no es de esta fuente**;
+   - ⛔ **nada de prosa comparativa en la nota de paper.** Comparar dos papers es `inferencia` y su
+     lugar es el `## Inventario por eje` de la ficha (paso 3b). Escribirla acá es lo que produjo los
+     3 casos de «inferencia con voz de cita».
+
+   El stub de `## Extracción (LLM)` que genera `make_notes` ya trae esta regla como último bullet.
      El lint lo reporta como *recorte de lectura sin declarar* mientras no esté. El criterio se
      **declara**, no se aplica implícito — y `--reason` es obligatorio con `subconjunto` por el
      mismo motivo que en `--drop`: es la pieza que más se va a leer dentro de seis meses.

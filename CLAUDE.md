@@ -477,6 +477,15 @@ registro** que `query_ads.to_record`, y esa paridad la fija un test
    Cascada: poblás la extracción **de las notas de paper**
    (`methods`, `thesis_links`, `role`, P/K/indicadores). La ficha se escribe **después**
    del contraste (2b) — no saltar de leer a la prosa.
+   ⚠ **Cómo anotar cada valor (#103).** Medido sobre una ficha real (68 pares, 16 fuentes: 54
+   soportada / 11 parcial / 3 contradice / **0 no-soportada** — o sea, nada inventado), los 14
+   defectos caen en seis mecanismos, y cuatro se vuelven **chequeo mecánico** si cada valor viaja con
+   su línea. Por eso, al copiar un número: **el nº de línea del `.txt`** (`grep -n`), **el régimen**
+   en que la fuente lo afirma (muestra, época, corte de datos, modelo), y —si la fuente lo atribuye a
+   otro trabajo (*«according to X»*)— la marca **segunda mano** con la cita a X, porque el número
+   **no es de esta fuente**. ⛔ **Nada de prosa comparativa en la nota de paper:** comparar dos
+   papers es `inferencia` y va al `## Inventario por eje` (2b). El stub que genera `make_notes` ya
+   trae la regla.
 2b. **Contraste cross-paper (#72)** ⚠ *(el skill `ingest-star` numera este paso como **3b**: su `2b` es el barrido full-text `query_ads --sweep`, que esta cascada no menciona)*. **(cont.) — entre leer los papers y escribir la síntesis.** Es el paso con
    más apalancamiento de la cadena y el que más fácil se saltea, porque su producto no se nota si
    falta. Produce el **`## Inventario por eje`** de la nota: una fila por paper para cada **eje**
@@ -489,8 +498,13 @@ registro** que `query_ads.to_record`, y esa paridad la fija un test
    solo `[[bibcode]]` y se evapora que los otros dos valores existen, con qué método se midieron y
    cuáles de los core ni se miraron — que es exactamente lo que la ficha promete responder sin abrir
    un paper, y lo que hace que un refresh no tenga que re-derivar la síntesis de cero. El `role`
-   (#73) dice qué operación corresponde entre dos filas; la red de que el paso ocurrió es el backlog
-   *extraído pero no sintetizado* (#75).
+   (#73) dice qué operación corresponde entre dos filas.
+   **La red de que el paso ocurrió (#101):** el lint reporta como backlog la ficha/concepto cuyo
+   `## Inventario por eje` quedó con la **fila vacía de la plantilla** teniendo **≥2 papers
+   extraídos citados** — con uno solo no hay contra qué contrastar. Usa la escotilla que la plantilla
+   ya declara: *«si no hay ningún eje en disputa, borrar la sección y decirlo en el log»*, o sea
+   **ausencia = declarado**, **presente-y-vacío = saltado**. Es distinto del backlog *extraído pero
+   no sintetizado* (#75), que mide si el paper **llegó**, no si el contraste **ocurrió**.
 2c. **Síntesis a la nota viva**, apoyada en el inventario de 2b: la ficha de la estrella
    (frontmatter propio —`activity_indicators_expected`, `methods_applied.literature`, `disputes`—,
    prosa y huecos), los conceptos/hipótesis relacionados y la matriz método×estrella. ⛔ Los campos
