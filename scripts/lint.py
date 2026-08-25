@@ -374,7 +374,7 @@ def inventario_sin_llenar(text: str) -> bool:
     Mayor+2009 que la **prosa del mismo paper** contradice, y `verify-citations` **no lo puede ver**
     —«la Tabla 2 dice 4,55» es literalmente cierto—. La pasada encontró cinco inconsistencias
     internas de fuentes por esta vía, ninguna visible para el chequeo claim↔fuente."""
-    i = text.find(INVENTARIO_HEADER)
+    i = cfg.section_start(text, INVENTARIO_HEADER)
     if i < 0:
         return False                      # sección borrada: la escotilla declarada, no un hallazgo
     seccion = text[i:]

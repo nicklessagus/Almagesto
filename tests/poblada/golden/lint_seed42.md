@@ -8,6 +8,10 @@
 
 ## ⛔ Papers RETRACTADOS citados (frontera dura: fuente no válida) (0)
 
+## Ground-truth que cambió bajo la prosa, sin marcar (backlog) (0)
+
+## Ground-truth cambiado, prosa marcada con `⚠desactualizado` (visible, no destruida) (0)
+
 ## ⛔ Prosa que cita una fuente RETRACTADA sin marcar (0)
 
 ## Prosa sostenida por fuente retractada, marcada (visible, no destruida) (0)
@@ -22,9 +26,22 @@
 
 ## Ground-truth: masa inconsistente con m·sini (K,P,e,M*) (0)
 
+## Contraste cross-paper (3b) sin rastro: el inventario por eje quedó en la plantilla (backlog) (0)
+
+## ⚠ Alias que SIMBAD no reconoce para esta estrella (WARN — puede meter papers de otro objeto) (0)
+
+## ⛔ `merge=ours` declarado pero sin driver registrado en este clon: la protección no existe (0)
+
 ## thesis_links sin página destino (2)
 - tema-fantasma-0054 → usado en 1 paper(s): 2021Alm00054A
 - tema-fantasma-0055 → usado en 1 paper(s): 2019Alm00055A
+
+## `methods` sin página destino: el roll-up no puede linkearlo (backlog) (5)
+- metodo-sintetico-1 → usado en 5 paper(s): 1996Alm00010A, 1997Alm00015A, 2007Alm00020A … → sin nota en `concepts/`: ingerí el tema o corregí el slug
+- metodo-sintetico-2 → usado en 3 paper(s): 2002Alm00051A, 2003Alm00046A, 2019Alm00056A → sin nota en `concepts/`: ingerí el tema o corregí el slug
+- metodo-sintetico-3 → usado en 3 paper(s): 1996Alm00057A, 2002Alm00017A, 2009Alm00022A → sin nota en `concepts/`: ingerí el tema o corregí el slug
+- metodo-sintetico-4 → usado en 4 paper(s): 2019Alm00013A, 2022Alm00018A, 2023Alm00003A … → sin nota en `concepts/`: ingerí el tema o corregí el slug
+- metodo-sintetico-5 → usado en 1 paper(s): 2004Alm00014A → sin nota en `concepts/`: ingerí el tema o corregí el slug
 
 ## disputes: ref de una posición sin paper destino (2)
 - concepto-hypotheses-015 → disputa `eje-sintetico`: ref `__nota_inexistente_0015__` sin nota de paper
@@ -56,6 +73,8 @@
 
 ## Objetivo sin instanciar (WARN — objective.yaml sigue en el placeholder del template) (0)
 
+## ⛔ Lente vacía o incoherente: ningún paper puede ser core (0)
+
 ## Áreas de concepts/ no declaradas en objective.yaml (WARN, posible typo) (0)
 
 ## Obsidian en la raíz del repo (WARN — la bóveda se abre en vault/) (0)
@@ -68,7 +87,7 @@
 - fulltext/star01/2002Alm00058A.txt → casi sin texto (1 chars no-espacio) — ¿escaneo sin capa de texto?
 - fulltext/star02/2021Alm00059A.txt → casi sin texto (1 chars no-espacio) — ¿escaneo sin capa de texto?
 
-## Citas no verificables en query/concepto/hipótesis (sin fulltext) (6)
+## Citas no verificables en ficha/query/concepto/hipótesis (sin fulltext) (6)
 - query-001 → cita 2015Alm00001A sin fulltext (no chequeable claim↔fuente)
 - query-000 → cita 2021Alm00000A sin fulltext (no chequeable claim↔fuente)
 - concepto-activity-013 → cita 2002Alm00051A sin fulltext (no chequeable claim↔fuente)
@@ -76,7 +95,7 @@
 - concepto-indicators-004 → cita 2004Alm00014A sin fulltext (no chequeable claim↔fuente)
 - concepto-indicators-000 → cita 2021Alm00000A sin fulltext (no chequeable claim↔fuente)
 
-## Sin verificar: query/concepto con citas pero sin bloque verify-citations (backlog) (16)
+## Sin verificar: nota con citas y sin bloque verify-citations (backlog: pasada periódica; con `--cierre` bloquea) (16)
 - query-001 → 1 cita(s) sin bloque de verify-citations → correr el skill
 - query-000 → 1 cita(s) sin bloque de verify-citations → correr el skill
 - concepto-hypotheses-011 → 1 cita(s) sin bloque de verify-citations → correr el skill

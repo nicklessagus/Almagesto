@@ -6,7 +6,7 @@
 # test pasaba sin la guarda, un "espera creciente" que `[2.0, 2.0]` satisface, un test de
 # determinismo corriendo las dos pasadas en el mismo proceso).
 medido_en: "2026-08-25"
-alcance: "TODO `scripts/` — 331 funciones, barrido completo (`--todo`)"
+alcance: "TODO `scripts/` — 338 funciones, barrido completo (`--todo`)"
 techo: 4
 
 # ⚠ EL TECHO SUBIÓ DE 7 A 10, Y NO ES UNA REGRESIÓN — es la primera medición sobre el árbol
@@ -37,7 +37,13 @@ techo: 4
 # Se cerró con `tests/test_make_notes.py::test_excluidos_coerce_citation_count_no_numerico`, que se
 # vio MORIR bajo mutación antes de contarlo (regla de método #3) → 4.
 #
-# LAS 4, medidas sobre 331 funciones. Todas son fronteras con el entorno (red, subprocess, locale):
+# RE-MEDIDO EL 2026-08-25 (1.41.1) sobre 338 funciones: siguen siendo LAS MISMAS 4, así que el
+# techo no se mueve. La población creció de 331 a 338 —`lib_config.section_start`,
+# `lib_blocks._split_row` y las funciones de `tests/test_section_anchor.py`— y las tres nuevas
+# MUEREN bajo mutación, verificadas antes de contarlas (regla de método #3). Se declara el
+# cambio de población en vez de comparar dos universos distintos (regla de método #5).
+#
+# LAS 4, medidas sobre 338 funciones. Todas son fronteras con el entorno (red, subprocess, locale):
 #   citation_index.py::_fetch_ads_default   ← ADS `fl=reference`: red
 #   citation_index.py::_fetch_oa_default    ← idem OpenAlex
 #   fetch_web.py::fetch                     ← `npx defuddle`: subprocess contra Node

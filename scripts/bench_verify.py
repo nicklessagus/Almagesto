@@ -186,7 +186,7 @@ def extract_pairs(max_pairs: int) -> list[dict]:
     pairs, seen = [], set()
     for f in files:
         text = open(f, encoding="utf-8").read()
-        cut = text.find(VERIFY_HEADER)
+        cut = cfg.section_start(text, VERIFY_HEADER)
         if cut >= 0:
             text = text[:cut]
         stem = Path(f).stem

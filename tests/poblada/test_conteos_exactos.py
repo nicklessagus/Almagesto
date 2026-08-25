@@ -404,12 +404,17 @@ _RUIDO_DELIBERADO = {
                   "como citas nuevas, moviendo `unverifiable`",
     "incomplete": "los campos incompletos son la FORMA del corpus (papers sin extraer, estrellas "
                   "sin P_rot documentado): es lo que hace realista la distribución de relevancia",
+    "dangling_methods": "el generador puebla `methods` en las notas de paper y NO crea la nota de "
+                        "`concepts/methods/` correspondiente — que es exactamente lo que pasa en "
+                        "una bóveda real (`methods` lo puebla la extracción de `ingest-star`, las "
+                        "notas de método las crea `ingest-theme`, que es otra operación). Por eso "
+                        "el detector es backlog y no bloqueante; el corpus lo refleja",
 }
 
 
 def test_el_corpus_limpio_da_cero_en_TODAS_las_categorias(boveda_poblada):
     """La promesa fuerte, y la que 10.3 hace verificable: sobre 900 notas **sin anomalías**, el lint
-    reporta cero en **todas** sus categorías salvo las tres declaradas arriba.
+    reporta cero en **todas** sus categorías salvo las declaradas arriba.
 
     Antes se comprobaban 12 bloqueantes + 4 backlog, así que el resto podía tener ruido de fondo sin
     que nadie lo viera — y lo tenía: *alcance de hipótesis* (5), *recorte de lectura sin declarar*
@@ -421,7 +426,7 @@ def test_el_corpus_limpio_da_cero_en_TODAS_las_categorias(boveda_poblada):
               for c in res.categorias if c.items and c.clave not in _RUIDO_DELIBERADO]
     assert sucias == [], ("el corpus limpio reporta categorías no declaradas:\n  "
                           + "\n  ".join(sucias))
-    # y el ruido declarado tiene que SEGUIR existiendo: si una de las tres se va a cero, o el
+    # y el ruido declarado tiene que SEGUIR existiendo: si una de ellas se va a cero, o el
     # corpus dejó de ejercitar ese caso o la categoría se rompió — las dos cosas hay que mirarlas.
     vacias = [k for k in _RUIDO_DELIBERADO if not (res.por_clave(k) or []) ]
     assert vacias == [], (f"ruido declarado que ya no aparece: {vacias} — o el corpus dejó de "

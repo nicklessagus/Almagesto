@@ -62,6 +62,7 @@ import lib_config as cfg
 # pero son el REGISTRO de la verificación, no afirmaciones. Si entraran, el bloque se hashearía a
 # sí mismo y cada re-verificación lo vencería sola — un lazo que nunca converge.
 VERIFY_HEADER = "## Verificación de citas"
+_CELL_SPLIT_RE = re.compile(r"(?<!\\)\|")   # un `|` que no venga escapado
 
 LINK_RE = re.compile(r"\[\[([^\]\|#]+)")
 BIBCODE_RE = re.compile(r"^\d{4}[A-Za-z]")      # misma heurística que lint/bench_verify/fetch_web
@@ -291,6 +292,18 @@ VERDICTS = ("soportada", "no-soportada", "contradice", "no verificable por extra
 _COLS_HASH = ("ancla", "hash", "condici")
 
 
+def _split_row(line: str) -> list[str]:
+    """Cells of a markdown table row, splitting only on **unescaped** pipes.
+
+    A verbatim quote can carry a `|` of its own (a table row of the paper), and the generator
+    escapes it `\\|` as markdown mandates. Splitting on a bare `|` turns that one cell into two and
+    shifts every column to its right — including the anchor, which is then read from the wrong cell
+    and makes the pair look stale against a source nobody touched.
+    """
+    #  @inv INV-99
+    return [c.replace("\\|", "|").strip() for c in _CELL_SPLIT_RE.split(line.strip().strip("|"))]
+
+
 def parse_verif_table(text: str) -> list[Row] | None:
     """Las filas del bloque `## Verificación de citas`, o `None` si el bloque **no se puede
     evaluar** — porque no existe, o porque es de la plantilla vieja (sin las columnas de hash).
@@ -302,7 +315,7 @@ def parse_verif_table(text: str) -> list[Row] | None:
     Un bloque bien formado y **sin filas** devuelve `[]` — eso sí es evaluable, y deja todo par del
     cuerpo como *sin verificar*.
     """
-    i = text.find(VERIFY_HEADER)
+    i = cfg.section_start(text, VERIFY_HEADER)
     if i < 0:
         return None
     seccion = text[i:]
@@ -339,9 +352,15 @@ def parse_verif_table(text: str) -> list[Row] | None:
     for ln in filas[1:]:
         if _SEP_ROW_RE.match(ln):
             continue
-        celdas = [c.strip() for c in ln.strip("|").split("|")]
+        celdas = _split_row(ln)
         if len(celdas) <= max(i_n, i_claim, i_fuente, i_verd, i_ancla, i_hash, i_cond):
             continue                     # fila malformada: la reporta el lint como par sin cubrir
+        if len(celdas) != len(cols):
+            # Más celdas que el encabezado ⇒ hay un `|` sin escapar en alguna celda y las columnas
+            # de la DERECHA (ancla, hash, condición) están corridas. Indexar por posición leería el
+            # ancla de otra celda y el par volvería "vencido por edición" sin que nadie editara nada
+            # (medido: 18 pares, 2026-08-25). Mejor par sin cubrir que ancla ajena.
+            continue
         bibs = _bibcodes(celdas[i_fuente]) or [celdas[i_fuente].strip("[]")]
         out.append(Row(celdas[i_n], celdas[i_claim], bibs[0], celdas[i_verd],
                        celdas[i_ancla], celdas[i_hash], celdas[i_cond]))

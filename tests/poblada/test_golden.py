@@ -167,8 +167,8 @@ def test_reporte_lista_todas_las_categorias(sembrar):
     protege; el `(0)` inventado y la desaparición muda son el mismo bug visto de los dos lados.  @inv INV-41"""
     _, crudo, _ = _correr_golden(sembrar)
     titulos = [l for l in crudo.splitlines() if l.startswith("## ")]
-    assert len(titulos) == 48, (
-        f"el reporte trae {len(titulos)} categorías, se esperaban 48 — alguna sección dejó de "
+    assert len(titulos) == 55, (
+        f"el reporte trae {len(titulos)} categorías, se esperaban 55 — alguna sección dejó de "
         "imprimirse (o se agregó una nueva sin actualizar este test)")
     no_eval = [t for t in titulos if "No evaluado" in t]
     assert no_eval and no_eval[0].endswith("(0)"), (

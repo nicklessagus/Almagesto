@@ -44,7 +44,7 @@ saltea sin decirlo es el mismo modo de falla que el "0 que no miró" (ver abajo)
 > **Tier 1 pasó de ≤ 90 s a ≤ 120 s, y es una decisión, no un trámite.** Medido: 55 s → 91 s en la
 > misma sesión, y el crecimiento es **cobertura real**, no grasa — el generador pasó de sembrar 7
 > anomalías a 16 (nueve siembras parametrizadas nuevas), entraron tres anclas (`source_hash`
-> compartiendo lectura, corpus limpio en las 48 categorías, los números de la doc) y una de ellas
+> compartiendo lectura, corpus limpio en las 55 categorías, los números de la doc) y una de ellas
 > es **una corrida entera de tier 0** (5,1 s: es el instrumento que mide el otro presupuesto).
 > Lo que NO puede pasar es que el techo suba solo: lo fija
 > `test_escala.py::test_presupuesto_de_tier_1`, con el mismo criterio que su hermano.
@@ -146,7 +146,7 @@ los `from conftest import ...` de la suite vieja. Sólo se ve corriendo la suite
 
 ## Cuánto del lint vigila el corpus poblado (10.3)
 
-El lint tiene **48 categorías**; el generador sintético sabe sembrar **16 anomalías**, y
+El lint tiene **55 categorías**; el generador sintético sabe sembrar **16 anomalías**, y
 `test_conteos_exactos` puede afirmar *"reporta exactamente estos K, ni uno más"* sólo sobre esas.
 El resto queda cubierto de otra forma —el corpus limpio tiene que dar **cero en las 48** salvo tres
 declaradas (`test_el_corpus_limpio_da_cero_en_TODAS_las_categorias`)—, que detecta el falso positivo
@@ -161,7 +161,7 @@ alcance, tres fichas con la tabla `## Papers` desactualizada, tres registros sin
 porque el generador no emitía el schema vigente, y sobre ese ruido de fondo **ninguna anomalía
 sembrada era distinguible**.
 
-Los tres números (48 categorías, 16 anomalías, 3 de ruido declarado) **salen del código, no de acá**:
+Los tres números (55 categorías, 16 anomalías, 4 de ruido declarado) **salen del código, no de acá**:
 los cruza `test_conteos_exactos`, así que agregar una categoría al lint sin sembrarla deja el
 desbalance a la vista en vez de esconderlo.
 

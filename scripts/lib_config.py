@@ -20,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.41.0"
+ALMAGESTO_VERSION = "1.41.1"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -141,6 +141,29 @@ def solo_prosa(body: str) -> str:
         if not saltando:
             out.append(ln)
     return "\n".join(out)
+
+
+def section_start(text: str, header: str) -> int:
+    """Index where the `header` section starts, anchored to a line break, or -1 if absent.
+
+    A bare `str.find(header)` also matches a mention **inside** a line — and pointing the reader at
+    a section from prose is exactly what a well-written note does: ``Valores en `## Inventario por
+    eje` ``. The bare find takes that mention, the caller slices up to the real header, and the
+    section comes back empty.
+
+    Measured (2026-08-25): `lint.inventario_sin_llenar` reported a ficha whose inventory had **36
+    rows** as *"the cross-paper contrast left no trace"* — the #101 detector accusing the very step
+    that did run. A map that misattributes is worse than an empty one.
+
+    Trailing text after the header is allowed on purpose: real headers carry suffixes
+    (`## Papers (25 · 16 sintetizados…)`, `## Verificación de citas (2026-08-25)`). What is NOT
+    allowed is anything before it on the same line — that is the whole point.
+    """
+    #  @inv INV-98
+    if text.startswith(header):
+        return 0
+    i = text.find("\n" + header)
+    return -1 if i < 0 else i + 1
 
 
 STARS = WIKI / "stars"

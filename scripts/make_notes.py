@@ -888,7 +888,7 @@ def excluded_table(slug: str) -> str:
             + "\n".join(rows) + tail + "\n")
 
 
-EXCLUDED_HEADER = "\n## Excluidos por el filtro"
+EXCLUDED_HEADER = "## Excluidos por el filtro"
 
 
 def stamp_excluded(slug: str, dest) -> bool:
@@ -907,7 +907,7 @@ def stamp_excluded(slug: str, dest) -> bool:
         return False                            # sin corrida vigente: ni re-estampa ni quita
     new = excluded_table(slug)                  # "" si la corrida no dejó excluidos
     text = dest.read_text(encoding="utf-8")
-    start = text.find(EXCLUDED_HEADER)
+    start = cfg.section_start(text, EXCLUDED_HEADER)
     if start < 0:
         if not new:
             return False
@@ -915,7 +915,9 @@ def stamp_excluded(slug: str, dest) -> bool:
     else:
         nxt = text.find("\n## ", start + 1)
         end = len(text) if nxt < 0 else nxt
-        out = text[:start] + new.rstrip("\n") + ("\n" if new else "") + text[end:]
+        # `excluded_table` trae su propio "\n" inicial: se le saca UNO al prefijo (no un rstrip,
+        # que se comería también la línea en blanco que separa la sección anterior).
+        out = text[:start][:-1] + new.rstrip("\n") + ("\n" if new else "") + text[end:]
     if out == text:
         return False
     cfg.write_text_atomic(dest, out)
@@ -1394,10 +1396,9 @@ def _reemplazar_seccion(dest, header: str, nuevo: str) -> bool:
     #  @inv INV-15
         return False
     text = dest.read_text(encoding="utf-8")
-    i = text.find("\n" + header)
-    if i < 0:
+    inicio = cfg.section_start(text, header)
+    if inicio < 0:
         return False
-    inicio = i + 1
     nxt = text.find("\n## ", inicio + 1)
     fin = len(text) if nxt < 0 else nxt + 1
     out = text[:inicio] + nuevo.rstrip("\n") + "\n" + text[fin:]

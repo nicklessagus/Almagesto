@@ -307,6 +307,15 @@ cómo se resolvió — en un concepto, fila de `## Régimen de validez`> — o "
 ```
 Convertir fechas relativas a absolutas. Notación `$...$` en archivos `vault/wiki/` (texto plano en chat).
 
+⛔ **La barra vertical dentro de una celda va escapada `\|`** (INV-99). Es el caso normal, no el
+raro: el fan-out junta varias citas textuales con ` | ` de separador, y una cita puede traer la suya
+—una fila de tabla del paper—. Sin escapar, la celda se parte en dos y **todas las columnas a su
+derecha se corren**: el `Ancla` se lee de la celda de al lado y el par vuelve *«vencido por
+edición»* sin que nadie haya editado nada (medido: 18 pares de una ficha, 2026-08-25). Desde 1.41.1
+el parser honra el escape y, si la fila igual no cuadra con el encabezado, **no la indexa por
+posición** — la deja como par sin cubrir, que es el fallo ruidoso en vez del silencioso. Si generás
+el bloque con un script, **sustituir** o escapar; nunca dejar la barra cruda.
+
 ### El ancla: una fila por par, con sus dos hashes (D-4/D-20)
 
 ⛔ **Una fila por par, sin excepción.** La tentación es colapsar las soportadas en un párrafo de
