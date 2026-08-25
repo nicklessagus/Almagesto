@@ -7,9 +7,9 @@
 
 ## Resumen
 
-- Invariantes en el contrato: **99**
-- Con implementación marcada: **78**
-- Con test marcado: **96** (techo `sin_test`: 3, hoy 3)
+- Invariantes en el contrato: **101**
+- Con implementación marcada: **80**
+- Con test marcado: **98** (techo `sin_test`: 3, hoy 3)
 - Sin ninguna marca: **3** (techo `sin_marca`: 3)
 - Marcas huérfanas: **0**
 
@@ -116,3 +116,5 @@
 | **INV-97** | P1 | garantizado y medido | `scripts/lint.py:386` · `inventario_sin_llenar` | `tests/test_section_anchor.py:84` · `test_inventario_lleno_no_se_reporta_como_plantilla` |
 | **INV-98** | P0 | garantizado y medido | `scripts/lib_config.py:162` · `section_start` | `tests/test_section_anchor.py:65` · `test_section_start_saltea_la_mencion_en_prosa` |
 | **INV-99** | P0 | garantizado y medido | `scripts/lib_blocks.py:303` · `_split_row` | `tests/test_section_anchor.py:126` · `test_pipe_escapado_en_una_celda_no_corre_las_columnas` |
+| **INV-100** | P1 | garantizado y medido | `scripts/extraction_prompt.py:57` · `subject_patterns`<br>`scripts/extraction_prompt.py:108` · `build_prompt` | `tests/test_extraction_prompt.py:34` · `test_patrones_incluyen_la_grafia_abreviada`<br>`tests/test_extraction_prompt.py:76` · `test_prompt_ata_el_numero_de_linea_al_entrelazado`<br>`tests/test_extraction_prompt.py:107` · `test_el_prompt_no_suplica_exactitud`<br>`tests/test_extraction_prompt.py:130` · `test_un_tema_no_trunca_a_tres_letras_pero_si_conserva_la_sigla` |
+| **INV-101** | P0 | garantizado y medido | `tools/mutar.py:114` · `archivos_del_diff` | `tests/test_mutar.py:38` · `test_diff_incluye_el_archivo_nuevo_sin_trackear`<br>`tests/test_mutar.py:52` · `test_diff_no_trae_lo_que_esta_fuera_de_scripts_ni_lo_ignorado` |

@@ -157,7 +157,7 @@ def _estados_del_contrato() -> dict:
     """`{INV-nn: estado}` leído de las tablas de §3 de `contrato.md`."""
     texto = (DOCS / "contrato.md").read_text(encoding="utf-8")
     out = {}
-    for m in re.finditer(r"^\| \*\*(INV-\d{2})\*\* \|(.*)$", texto, re.M):
+    for m in re.finditer(r"^\| \*\*(INV-\d{2,3}(?!\d))\*\* \|(.*)$", texto, re.M):
         cols = [x.strip() for x in m.group(2).split("|")]
         if len(cols) > 2:
             out[m.group(1)] = cols[2]
@@ -210,7 +210,7 @@ def test_el_conteo_del_encabezado_es_el_de_las_filas():
     assert declarado == real, (
         f"el encabezado declara {declarado} y las filas dan {real} "
         f"(medidos, garantizados, sin medir, parciales, HUECO, INCUMPLIDO)")
-    assert sum(real) == len(_estados_del_contrato()) == 99
+    assert sum(real) == len(_estados_del_contrato()) == 101
 
 
 def test_los_flags_retirados_siguen_retirados():

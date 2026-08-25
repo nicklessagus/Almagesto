@@ -63,17 +63,22 @@ RATCHET = ROOT / "docs" / "trazabilidad-ratchet.yaml"
 # Dónde se buscan marcas. `scripts/` = implementación, `tests/` = prueba; el árbol se decide por el
 # primer componente de la ruta relativa, no por el nombre del archivo (un helper `scripts/lib_x.py`
 # usado sólo por tests sigue siendo implementación).
-ARBOLES = {"scripts": "impl", "tests": "test"}
+ARBOLES = {"scripts": "impl", "tools": "impl", "tests": "test"}
+#  `tools/` entró el 2026-08-25 con INV-101: el gate de mutación es la red nº 1 y el contrato
+#  depende de él, pero su código vivía fuera del mapa, así que una marca `@inv` ahí era invisible
+#  y el invariante salía como «sin marca» sin que nada explicara por qué.
 
 # La marca. `@inv` obligatorio: sin él, `INV-nn` es prosa. Uno o varios ids separados por coma.
-# `\d{2}` **con frontera** (`(?!\d)`). Sin ella, un `INV-100` se recolecta como **INV-10**: la
+# `\d{2,3}` **con frontera** (`(?!\d)`). Sin la frontera, un `INV-100` se recolecta como **INV-10**: la
 # marca queda atribuida al invariante equivocado y el mapa afirma que INV-10 está cubierto por un
 # test que prueba otra cosa — "un mapa que atribuye mal es peor que uno vacío", y encima en el
-# artefacto cuyo trabajo es no atribuir mal. Hoy hay 91 invariantes: la frontera está a nueve.
-MARCA_RE = re.compile(r"@inv\s+(INV-\d{2}(?!\d)(?:\s*,\s*INV-\d{2}(?!\d))*)")
-INV_RE = re.compile(r"INV-\d{2}(?!\d)")
+# artefacto cuyo trabajo es no atribuir mal. Y sin el `{2,3}` pasa lo simétrico y más silencioso:
+# el tope de dos dígitos hace que la fila 100 **no se recolecte** en absoluto — medido el
+# 2026-08-25, `grep` contaba 100 filas del contrato y el parser devolvía 99.
+MARCA_RE = re.compile(r"@inv\s+(INV-\d{2,3}(?!\d)(?:\s*,\s*INV-\d{2,3}(?!\d))*)")
+INV_RE = re.compile(r"INV-\d{2,3}(?!\d)")
 # Fila de invariante de las tablas de §3: `| **INV-01** | enunciado | P0 | estado | cómo |`
-FILA_RE = re.compile(r"^\|\s*\*\*(INV-\d{2}(?!\d))\*\*\s*\|(.*)$")
+FILA_RE = re.compile(r"^\|\s*\*\*(INV-\d{2,3}(?!\d))\*\*\s*\|(.*)$")
 AREA_RE = re.compile(r"^###\s+(.+?)\s*$")
 SEC3_RE = re.compile(r"^##\s+3\.\s")
 SEC_RE = re.compile(r"^##\s+")

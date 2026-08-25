@@ -103,10 +103,25 @@ def mutar_archivo(archivo: Path, copia_raiz: Path, verbose=True) -> list[str]:
 
 
 def archivos_del_diff() -> list[Path]:
-    r = subprocess.run(["git", "diff", "--name-only", "HEAD"], cwd=RAIZ,
-                       capture_output=True, text=True)
-    return [RAIZ / f for f in r.stdout.split()
-            if f.startswith("scripts/") and f.endswith(".py")]
+    """Lo que cambió vs HEAD, **incluido lo que todavía no está trackeado**.
+
+    `git diff --name-only HEAD` no lista untracked, así que un archivo recién creado en `scripts/`
+    —el caso exacto para el que existe la regla «toda función nueva pasa por el gate antes de cerrar
+    el issue»— quedaba afuera y el gate salía en verde **sin haberlo mirado**. Un chequeo que no
+    puede fallar sobre el código que vino a cubrir es peor que no tenerlo: se lee como cobertura.
+    `--others --exclude-standard` respeta `.gitignore`, así que el scratch no entra.
+    """
+    #  @inv INV-101
+    salida = []
+    for args in (["diff", "--name-only", "HEAD"], ["ls-files", "--others", "--exclude-standard"]):
+        r = subprocess.run(["git", *args], cwd=RAIZ, capture_output=True, text=True)
+        salida += r.stdout.split()
+    vistos, archivos = set(), []
+    for f in salida:                                  # `git add` de un archivo nuevo lo pone en los dos
+        if f.startswith("scripts/") and f.endswith(".py") and f not in vistos:
+            vistos.add(f)
+            archivos.append(RAIZ / f)
+    return archivos
 
 
 def main() -> int:

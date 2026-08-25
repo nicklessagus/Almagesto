@@ -220,6 +220,19 @@ Progreso del ingest de <estrella>:
    acotado, y hace el paso **auditable**: cada extracción tiene su corrida. Lanzalos en tandas
    paralelas; el orquestador (vos) mergea y escribe las notas.
 
+   ⛔ **El prompt de cada subagente se GENERA, no se escribe a mano (INV-100):**
+   ```bash
+   python scripts/extraction_prompt.py <slug> <bibcode>      # --theme si el slug es un tema
+   ```
+   Lo arma desde lo que la bóveda ya sabe: los `aliases` del sujeto → patrones de `grep` **cortos**
+   (#44), la maqueta real del `.txt` → el caveat de dos columnas atado a la regla del nº de línea,
+   la marca de OCR → la salvedad de citabilidad, y una **ruta de salida por bibcode**. El motivo es
+   medido: en el ingest de τ Ceti (79 papers, prompt a mano) **54 extractores redescubrieron por su
+   cuenta** el entrelazado de columnas, **23** la grafía del sujeto y **tres se pisaron el archivo de
+   salida** entre sí. Toda regla que vive acá y no en el prompt se cae **en silencio** en esa
+   frontera — y mientras el prompt sea memoria del agente, el paso **no es reproducible**, así que
+   dos corridas del mismo ingest no comparan nada.
+
    Poblar **las notas de paper** (la ficha se escribe en 3c, después del contraste — no saltear
    directo a la prosa):
    - en `vault/wiki/papers/<bibcode>.md`: `methods`, `thesis_links`, `role` (#73: `fundacional`

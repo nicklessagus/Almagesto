@@ -84,15 +84,15 @@ def test_registro_sale_del_contrato(repo: Path):
     assert reg["INV-90"]["area"].startswith("B.")
 
 
-def test_registro_real_cubre_los_99():
-    """Contra el contrato REAL del repo: el parser tiene que leer los 99 invariantes vivos. Es la
+def test_registro_real_cubre_los_101():
+    """Contra el contrato REAL del repo: el parser tiene que leer los 101 invariantes vivos. Es la
     prueba de que la forma de la tabla que el parser asume es la que el documento tiene.
 
     El número es un **canario deliberado**: agregar una fila al contrato tiene que romper acá, para
     que nadie sume un invariante sin pasar por el ratchet de trazabilidad."""
     reg = ti.parse_contrato(ti.CONTRATO.read_text(encoding="utf-8"))
-    assert len(reg) == 99
-    assert "INV-01" in reg and "INV-99" in reg
+    assert len(reg) == 101
+    assert "INV-01" in reg and "INV-101" in reg
 
 
 # ── 2. la marca ──────────────────────────────────────────────────────────────────────────────────
@@ -326,16 +326,17 @@ def test_archivo_que_no_parsea_cae_al_heuristico(tmp_path):
 
 
 def test_inv_de_tres_digitos_no_se_recolecta_como_de_dos():
-    """`INV-\\d{2}` sin frontera recolecta un `INV-100` marcado **como INV-10**: la marca queda atribuida
-    al invariante equivocado y el mapa afirma que INV-10 está cubierto por un test que prueba otra
-    cosa — atribución falsa en el artefacto cuyo trabajo es justamente no atribuir mal. Hoy hay 91
-    invariantes: la frontera está a nueve."""
-    assert ti.INV_RE.findall("INV-100") == []
+    """La frontera `(?!\\d)` existe para que un `INV-100` no se recolecte **como INV-10**: la marca
+    quedaría atribuida al invariante equivocado y el mapa afirmaría que INV-10 está cubierto por un
+    test que prueba otra cosa — atribución falsa en el artefacto cuyo trabajo es no atribuir mal.
+
+    Lo que este test NO debe pedir es que `INV-100` se ignore: eso era el tope de dos dígitos, que
+    hacía la fila 100 invisible. La cobertura de tres dígitos vive en el test de abajo."""
     marca = "@" + "inv "          # partido: escribir la marca literal la haría recolectable
-    assert ti.MARCA_RE.findall("# " + marca + "INV-100") == []
+    assert ti.INV_RE.findall("INV-1000") == [], "cuatro dígitos siguen fuera del vocabulario"
     assert ti.INV_RE.findall("INV-10") == ["INV-10"]
     assert ti.MARCA_RE.findall("# " + marca + "INV-10, INV-42") == ["INV-10, INV-42"]
-    assert ti.FILA_RE.match("| **INV-100** | x |") is None
+    assert ti.FILA_RE.match("| **INV-1000** | x |") is None
     assert ti.FILA_RE.match("| **INV-10** | x |").group(1) == "INV-10"
 
 
@@ -391,3 +392,22 @@ def test_sin_git_la_subida_no_se_evalua_y_no_se_inventa_un_cero(repo: Path):
     _ratchet(repo, 9)
     assert ti.techos_previos(repo) is None
     assert ti.subidas_de_techo(repo) == []               # el llamador imprime «no evaluada»
+
+
+def test_el_registro_admite_invariantes_de_tres_digitos():
+    """El tope de dos dígitos era invisible: con 99 filas nada avisa, y la fila 100 **no se
+    recolecta** — ni en el contrato ni en las marcas `@inv` del código. La frontera `(?!\\d)` se
+    puso para que `INV-100` no se leyera como `INV-10`; el efecto colateral fue que no se lee.
+    Medido el 2026-08-25 al agregar INV-100: `grep` contaba 100 filas y el parser devolvía 99."""
+    doc = "\n".join([
+        "## 3. Invariantes",
+        "### A. area de prueba",
+        "| **INV-10** | Dos digitos. | P0 | garantizado y medido | `m.f` |",
+        "| **INV-100** | Tres digitos. | P1 | garantizado y medido | `m.g` |",
+    ])
+    reg = ti.parse_contrato(doc)
+    assert "INV-100" in reg, "el parser del contrato se queda en dos dígitos"
+    assert reg["INV-10"]["prio"] == "P0", "y no debe degradar INV-100 a INV-10"
+    assert reg["INV-100"]["prio"] == "P1"
+    assert ti.MARCA_RE.search("#  @inv INV-100").group(1) == "INV-100"
+    assert ti.INV_RE.findall("INV-100 y INV-07") == ["INV-100", "INV-07"]
