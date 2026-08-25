@@ -27,6 +27,44 @@ from pathlib import Path
 import lib_config as cfg
 
 
+def _norm_id(s: str) -> str:
+    """Un identificador de catálogo, comparable: sin espacios internos y en minúsculas.
+
+    SIMBAD escribe `HD  40307` con espaciado variable y `stars.yaml` `HD 40307`; sin normalizar,
+    todo alias legítimo saldría reportado."""
+    return "".join(str(s).split()).lower()
+
+
+def unresolved_aliases(host: str, aliases: list) -> list | None:
+    """Alias declarados que SIMBAD **no** lista como identificadores de `host` (#82).
+
+    Por qué existe. El skill advierte que *«un alias que falta es un paper que nunca aparece — en
+    silencio»* y por eso manda resolverlos en SIMBAD. No dice nada del alias **de más**, que es el
+    modo de falla simétrico: mete papers de OTRO objeto al corpus por la misma puerta. Medido en el
+    clean-room del 2026-08-25 sobre una instancia real — `HR 2102` declarado para HD 40307 es en
+    realidad **36 Dor**, K2III-IV. Impacto de ESE caso: 0 papers contaminados, o sea latente; pero
+    nada lo detectaba.
+
+    Es barato porque los datos ya se bajan: `query_objectids` es una llamada más al mismo servicio
+    que ya se consulta para `spectral_type`.
+
+    Devuelve `None` si SIMBAD no contestó — **distinto de `[]`** («contestó y están todos»): sin esa
+    distinción, una caída de red se leería como "alias verificados"."""
+    try:
+        from astroquery.simbad import Simbad
+        tabla = Simbad().query_objectids(host)
+    except Exception as e:
+        cfg.print_seguro(f"  ⚠ SIMBAD no devolvió los identificadores de {host!r}: {e} — los alias "
+                          "quedan SIN verificar (no es lo mismo que verificados y correctos).")
+        return None
+    if tabla is None or not len(tabla):
+        return None
+    col = tabla.colnames[0]
+    conocidos = {_norm_id(fila[col]) for fila in tabla}
+    conocidos.add(_norm_id(host))
+    return [a for a in cfg.as_list(aliases) if _norm_id(a) not in conocidos]
+
+
 def _val(row, key):
     """Valor escalar limpio (float/int/str), sin unidades, o None si enmascarado/nan."""
     import numpy as np
@@ -323,7 +361,19 @@ def main() -> int:
             print(f"  · {p['letter']}: m·sini de NEA (pl_msinie={p['msini_earth']}) era inconsistente "
                   f"→ uso pl_bmasse={p['mass_earth']} M⊕ (≈ check {p['msini_check_earth']})")
 
+    # #82 — el lado "alias DE MÁS" del recall: uno que resuelve a otro objeto mete papers ajenos.
+    # `None` (SIMBAD no contestó) se persiste distinto de `[]` (contestó y están todos): sin esa
+    # distinción una caída de red se leería como "alias verificados".
+    colgados = unresolved_aliases(host, meta.get("aliases"))
+    if colgados:
+        print(f"  ⚠ alias que SIMBAD NO lista como identificadores de {host!r}: "
+              f"{', '.join(colgados)} — ¿resuelven a OTRO objeto? Un alias de más mete papers "
+              "ajenos al corpus (el lint lo reporta como WARN).")
+
     payload = {"star": name, "slug": args.slug, "host": host_info, "planets": planets,
+               # inglés por la regla de código nuevo; las claves `_autoridad`/`_otras_autoridades`
+               # se dejan como están (sin retrofit).
+               "_unresolved_aliases": colgados,
                # D-1: la fecha del snapshot es parte de la procedencia que la ficha publica —
                # "de dónde salió" sin "cuándo" no alcanza: NEA cambia valores entre releases.
                "consultado": dt.date.today().isoformat(),

@@ -143,8 +143,16 @@ fila de tabla con un valor, cada bullet o frase que asevera un hecho. Para cada 
 - Una afirmación con número/aseveración fáctica y **sin** `[[bibcode]]` ni marca `inferencia` →
   **flag "afirmación sin cita"** (hay que citarla o marcarla inferencia).
 
-### 2. Fan-out: un subagente independiente por par
-Para cada par, lanzar un subagente (tipo `Explore`) **en paralelo** (varios en un mismo mensaje).
+### 2. Fan-out: un subagente independiente por FUENTE
+Agrupar los pares **por bibcode** y lanzar un subagente (tipo `Explore`) por fuente, **en paralelo**
+(varios en un mismo mensaje). Cada uno juzga **todos los pares que citan su fuente**.
+
+> ⚠ **Por fuente, no por par (#100).** Lo que hace fuerte al chequeo es el **aislamiento** —cada
+> verificador ve un solo `.txt`, sin memoria, sin otros papers— y agrupar por fuente lo conserva
+> intacto: el subagente sigue leyendo un único archivo. Lo que se evita es pagar la lectura N veces.
+> Medido el 2026-08-25 sobre una ficha real: **68 pares sobre 16 fuentes → 52 re-lecturas**, con 18
+> subagentes abriendo los mismos 300 KB.
+
 Cada uno:
 - Localiza el fulltext: `vault/raw/fulltext/**/<bibcode>.txt` (el bibcode puede vivir bajo cualquier
   slug/tema — usar glob). **Ojo:** los nombres tienen `&` y puntos → citarlos entre comillas simples

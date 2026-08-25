@@ -103,6 +103,18 @@ def fake_nea(monkeypatch):
     for name in ("astroquery", "astroquery.ipac", "astroquery.ipac.nexsci"):
         monkeypatch.setitem(sys.modules, name, types.ModuleType(name))
     monkeypatch.setitem(sys.modules, "astroquery.ipac.nexsci.nasa_exoplanet_archive", leaf)
+
+    # SIMBAD también: la fixture dobla NEA, pero `fetch_host` y `unresolved_aliases` (#82) importan
+    # `astroquery.simbad` por su cuenta y el stub de `astroquery` no impedía que resolvieran el
+    # módulo REAL — o sea que la suite le pegaba a la red. Se detectó por el `NoResultsWarning` que
+    # apareció al cablear #82. Doble mudo: devuelve "sin resultados", que es el comportamiento que
+    # los tests de esta fixture ya asumían.
+    simbad = types.ModuleType("astroquery.simbad")
+    simbad.Simbad = lambda: types.SimpleNamespace(
+        add_votable_fields=lambda *a, **k: None,
+        query_object=lambda host: None,
+        query_objectids=lambda host: None)
+    monkeypatch.setitem(sys.modules, "astroquery.simbad", simbad)
     return holder
 
 

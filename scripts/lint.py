@@ -294,6 +294,65 @@ def _muestra(xs: list, n: int = 5) -> str:
     return ", ".join(xs[:n]) + (" …" if len(xs) > n else "")
 
 
+def merge_ours_unprotected() -> tuple[list[str], str | None]:
+    """Patrones `merge=ours` de `.gitattributes` que el clon NO está protegiendo, y por qué (#99).
+
+    `merge=ours` sólo hace algo si el clon registró el driver — `git config merge.ours.driver true`,
+    que `.gitattributes` pide "una vez por clon". No lo hace ningún script, ningún hook y ningún
+    paso de la cadena, así que la protección de los archivos de instancia (`objective.yaml`,
+    `stars.yaml`, …) **falla en silencio**: el próximo `git pull` los pisa con la versión del
+    template. Medido el 2026-08-25 sobre tres clones reales: dos de los tres sin el driver.
+
+    Es la misma familia que #93 —un mecanismo de protección cuya precondición nadie chequea— y por
+    eso el resultado se reporta en dos canales distintos: los patrones en riesgo son un hallazgo de
+    la BÓVEDA, y no poder mirarlo (sin git) es un hecho del ENTORNO que va a *no evaluado*: un `(0)`
+    que nadie midió se lee como veredicto.
+
+    ⚠ **Sólo cuenta el archivo que tiene ALGO QUE PERDER**: uno que no difiere de su upstream se
+    re-escribe idéntico y el driver es indiferente. Sin ese recorte el chequeo marcaba los 7
+    patrones en un clon recién hecho —el template, y cualquier corrida de CI— donde no hay riesgo
+    ninguno, y un hallazgo que aparece siempre se deja de mirar. El riesgo aparece justo cuando la
+    instancia **personalizó** su config, que es el caso que #99 vino a cubrir.
+
+    Sin git el chequeo **no aplica** (no hay `pull` posible), igual que sin `.gitattributes`. El
+    segundo valor del retorno queda para un motivo de *no evaluado* futuro; hoy siempre es `None`.
+
+    Devuelve `(patrones_en_riesgo, motivo_de_no_evaluado)`."""
+    ga = cfg.ROOT / ".gitattributes"
+    if not ga.exists():
+        return [], None       # nada declara `merge=ours`: el chequeo NO APLICA, que no es
+                              # "no se pudo evaluar" — esa distinción es justo la de D-43
+    try:
+        lineas = ga.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError as e:
+        return [], f"`.gitattributes` ilegible ({e})"
+    patrones = [ln.split()[0] for ln in lineas
+                if not ln.lstrip().startswith("#") and "merge=ours" in ln and ln.split()]
+    if not patrones:
+        return [], None                       # nada que proteger: el chequeo no aplica
+    if git_out("rev-parse", "--git-dir") is None:
+        return [], None       # `merge=ours` es un mecanismo de git: sin git no hay `pull` que pueda
+                              # pisar nada, así que NO APLICA. Mandarlo a *no evaluado* ponía en
+                              # rojo toda copia sin `.git` — incluida la que usa el gate de mutación,
+                              # que fue donde se detectó. Distinto del caso de la verificación
+                              # stale (D-43), donde sin git queda algo real sin medir.
+    if (git_out("config", "--get", "merge.ours.driver") or "").strip():
+    #  @inv INV-96
+        return [], None                       # protegido: no hay riesgo
+    return [pat for pat in patrones if _diverge_del_upstream(pat)], None
+
+
+def _diverge_del_upstream(pattern: str) -> bool:
+    """¿El archivo tiene cambios propios que un `git pull` podría pisar?
+
+    Dos formas de tenerlos: sin commitear (working tree) o commiteados por encima del upstream.
+    Sin upstream configurado sólo se mira el working tree — es lo único decidible."""
+    if (git_out("status", "--porcelain", "--", pattern) or "").strip():
+        return True
+    diff = git_out("diff", "--name-only", "@{u}...HEAD", "--", pattern)
+    return bool((diff or "").strip())
+
+
 def basename(p: str) -> str:
     return Path(p).name          # no splitear "/" a mano: glob devuelve separador nativo del OS
 
@@ -689,6 +748,31 @@ def collect(cierre: bool = False) -> LintResult:
     unverifiable: list = []            # (stem, "cita <bibcode> sin fulltext")
     coverage: list = []                # concept/hipótesis sin citas [[bibcode]] → no chequeable
     unverified: list = []              # query/concept CON citas pero SIN bloque de verify-citations
+    # Alias que SIMBAD no reconoce (#82): el lado "de más" del recall. `_unresolved_aliases` lo
+    # persiste `fetch_ground_truth`; acá se surface OFFLINE, que es donde se mira. `null` significa
+    # "SIMBAD no contestó" y NO es lo mismo que `[]`: se reporta como sin verificar, no como limpio.
+    alias_ajenos: list = []
+    for gt in sorted(cfg.GROUND_TRUTH.glob("*.json")) if cfg.GROUND_TRUTH.exists() else []:
+        try:
+            data = json.loads(gt.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue                      # el JSON roto ya lo reporta el barrido del espejo (#70)
+        if not isinstance(data, dict) or "_unresolved_aliases" not in data:
+            continue                      # snapshot anterior a #82: nada que decir
+        for alias in cfg.as_list(data.get("_unresolved_aliases")):
+            alias_ajenos.append((gt.stem, f"alias `{alias}` declarado en stars.yaml pero SIMBAD no lo "
+                                          "lista como identificador de esta estrella → puede resolver "
+                                          "a OTRO objeto y meter sus papers al corpus"))
+
+    # merge=ours sin driver registrado (#99): la protección de los archivos de instancia no existe.
+    sin_driver, driver_err = merge_ours_unprotected()
+    if driver_err:
+        not_evaluated.append(("driver de `merge=ours`", driver_err))
+    merge_ours = [(pat, "tiene cambios propios y está declarado `merge=ours`, pero el clon NO "
+                        "registró el driver → el próximo `git pull` los pisa con la versión del "
+                        "template. Arreglo: `git config merge.ours.driver true` (una vez por clon)")
+                  for pat in sin_driver]
+
     # ── "no evaluado" (D-43 / INV-87) ────────────────────────────────────────────────────────────
     # Un chequeo que NO PUDO correr no aporta un cero: reporta error. La diferencia no es
     # cosmética — un "(0)" se lee como veredicto ("miré y no hay"), y ese cero inventado hacía que
@@ -1863,6 +1947,10 @@ def collect(cierre: bool = False) -> LintResult:
         Categoria('corrections', 'Papers con corrección publicada (erratum/corrigendum/EoC) — revisar los valores extraídos de ellos (backlog, el paper sigue siendo citable)', SEV_BACKLOG, tuple(corrections)),
         Categoria('contradictions', 'Contradicciones ground-truth ↔ ficha', SEV_BLOQUEANTE, tuple(contradictions)),
         Categoria('mass_issues', 'Ground-truth: masa inconsistente con m·sini (K,P,e,M*)', SEV_BLOQUEANTE, tuple(mass_issues)),
+        Categoria('foreign_alias', '⚠ Alias que SIMBAD no reconoce para esta estrella (WARN — puede meter papers de otro objeto)',
+                  SEV_WARN, tuple(alias_ajenos)),
+        Categoria('merge_ours', '⛔ `merge=ours` declarado pero sin driver registrado en este clon: la protección no existe',
+                  SEV_BLOQUEANTE, tuple(merge_ours)),
         Categoria('dangling_thesis', 'thesis_links sin página destino', SEV_BLOQUEANTE, tuple(dangling_thesis)),
         Categoria('dangling_methods', '`methods` sin página destino: el roll-up no puede linkearlo (backlog)',
                   SEV_BACKLOG, tuple(dangling_methods)),
