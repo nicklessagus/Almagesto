@@ -80,6 +80,33 @@ def _txt_rel(slug: str, bibcode: str) -> str:
     return f"{(cfg.FULLTEXT / slug / (bibcode + '.txt')).relative_to(cfg.ROOT).as_posix()}"
 
 
+def is_extraction(d) -> bool:
+    """¿Este JSON es una extracción, o es otra cosa que también trae `bibcode`?
+
+    El cosechador del fan-out no puede identificarlo por `bibcode`: la salida de
+    `verify-citations` **también** lo lleva. Medido el 2026-08-25: un cosechador que aceptaba
+    cualquier JSON con ese campo levantó 13 salidas de verify de OTRA estrella y pisó 13 notas ya
+    terminadas — con JSON perfectamente válido, así que el fallo fue silencioso. La identidad es la
+    **forma**: `ejes` (mapa) + `ground_truth` (lista).
+    """
+    #  @inv INV-103
+    return (isinstance(d, dict)
+            and isinstance(d.get("ejes"), dict)
+            and isinstance(d.get("ground_truth"), list)
+            and bool(str(d.get("bibcode") or "").strip()))
+
+
+def _anclado(patron: str) -> str:
+    """Frontera de palabra a la izquierda de un patrón alfabético.
+
+    Sin ella la abreviatura de tres letras engancha dentro de otra palabra — medido: `Cet` matchea
+    «Princeton» en una lista de afiliaciones, y un extractor tuvo que descartar el hit a mano. La
+    frontera va sólo a la izquierda: `Cet` tiene que seguir matcheando `Ceti`.
+    """
+    #  @inv INV-100
+    return rf"\b{patron}" if patron[:1].isalpha() else patron
+
+
 def _layout_note(texto: str) -> str:
     """The #44 caveat, tied to the line-number rule of #103 — only when it actually applies."""
     if measure_layout.analizar(texto)["frac"] < measure_layout.UMBRAL_ARCHIVO:
@@ -107,7 +134,7 @@ def build_prompt(slug: str, bibcode: str, name: str, aliases, texto: str,
     """The prompt for one (paper, subject) pair. `texto` is the `.txt` as it sits on disk."""
     #  @inv INV-100
     pats = subject_patterns(name, aliases, kind)
-    greps = "\n".join(f"  grep -niE '{p}' \"{_txt_rel(slug, bibcode)}\"" for p in pats)
+    greps = "\n".join(f"  grep -niE '{_anclado(p)}' \"{_txt_rel(slug, bibcode)}\"" for p in pats)
     out = f"{out_dir.rstrip('/')}/{bibcode}.json" if out_dir else f"build/{slug}/extraccion/{bibcode}.json"
     alias_str = ", ".join(f"`{a}`" for a in [name, *(aliases or [])])
     return f"""Sos un extractor de UNA sola fuente. Trabajás desde la raíz del repo.

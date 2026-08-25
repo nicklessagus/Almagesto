@@ -1034,10 +1034,13 @@ def test_stamp_fulltext_multi_slug_empate_no_toca(toy_vault):
     seed_txt(toy_vault, "hd40307", stem)                     # pdftotext (contenido igual)
     dest = _note_con_fulltext(toy_vault, stem,
                               f"../../raw/fulltext/tau_ceti/{stem}.txt", "pdftotext")
-    assert mn.stamp_fulltext(dest, stem, "hd40307") is False
+    #  la primera pasada puede agregar `fulltext_layout` (campo nuevo, INV-102); lo que el
+    #  invariante pide es que NO repunte el slug — y la segunda pasada ya no toca nada.
+    mn.stamp_fulltext(dest, stem, "hd40307")
     fm = read_fm(dest)
     assert fm["fulltext"] == f"../../raw/fulltext/tau_ceti/{stem}.txt"
     assert fm["fulltext_source"] == "pdftotext"
+    assert mn.stamp_fulltext(dest, stem, "hd40307") is False
 
 
 def test_stamp_fulltext_multi_slug_prefiere_pdftotext_sobre_ocr(toy_vault):
@@ -1064,10 +1067,13 @@ def test_stamp_fulltext_multi_slug_no_degrada_a_ocr(toy_vault):
              header=f"{cfg.FULLTEXT_OCR_MARK}: citable CON SALVEDAD\n")
     dest = _note_con_fulltext(toy_vault, stem,
                               f"../../raw/fulltext/tau_ceti/{stem}.txt", "pdftotext")
-    assert mn.stamp_fulltext(dest, stem, "hd40307") is False
+    #  la primera pasada puede agregar `fulltext_layout` (campo nuevo, INV-102); lo que el
+    #  invariante pide es que NO repunte el slug — y la segunda pasada ya no toca nada.
+    mn.stamp_fulltext(dest, stem, "hd40307")
     fm = read_fm(dest)
     assert fm["fulltext"] == f"../../raw/fulltext/tau_ceti/{stem}.txt"
     assert fm["fulltext_source"] == "pdftotext"
+    assert mn.stamp_fulltext(dest, stem, "hd40307") is False
 
 
 def test_stamp_fulltext_repara_puntero_colgado(toy_vault):
@@ -2658,3 +2664,31 @@ def test_la_regla_de_anotacion_nombra_las_tres_cosas_que_previene(toy_vault):
     assert "régimen" in b, "los 11 `parcial` eran casi todos régimen faltante"
     assert "inferencia" in b and "Inventario por eje" in b, \
         "comparar dos papers no va en la nota de paper: va al inventario, y es inferencia"
+
+
+_DOS_COLUMNAS = "\n".join(
+    "Texto de la columna izquierda con largo suficiente" + " " * 12 +
+    "y la columna derecha, que es otro parrafo distinto" for _ in range(30))
+
+
+def test_stamp_fulltext_declara_la_maqueta(toy_vault):
+    """INV-102: el `.txt` a dos columnas hace que un nº de línea NO sea un localizador único, y la
+    extracción está llena de nº de línea. Ese hecho vivía sólo en un skill, así que la nota —el
+    artefacto que viaja— no lo llevaba. Se estampa en el frontmatter, no en el `.txt`: tocar el
+    `.txt` movería su hash y volvería *vencido por fuente* cada par ya verificado (D-20)."""
+    # @inv INV-102
+    ads_json([rec("2021twoA...1..1A"), rec("2021oneB...1..1B")])
+    mn.write_paper_notes("test_star", include_all=False, force=False)
+    dos = seed_txt(toy_vault, "test_star", "2021twoA...1..1A")
+    dos.write_text(_DOS_COLUMNAS, encoding="utf-8")
+    una = seed_txt(toy_vault, "test_star", "2021oneB...1..1B")
+
+    for stem in ("2021twoA...1..1A", "2021oneB...1..1B"):
+        assert mn.stamp_fulltext(toy_vault.PAPERS / f"{stem}.md", stem, "test_star") is True
+    assert read_fm(toy_vault.PAPERS / "2021twoA...1..1A.md")["fulltext_layout"] == "two-column"
+    #  se declara también la de una columna: la ausencia del campo significa «no medido», no «una
+    #  columna» — es la distinción de D-43 aplicada acá.
+    assert read_fm(toy_vault.PAPERS / "2021oneB...1..1B.md")["fulltext_layout"] == "single-column"
+    assert mn.stamp_fulltext(toy_vault.PAPERS / "2021twoA...1..1A.md",
+                             "2021twoA...1..1A", "test_star") is False
+    assert una.read_text(encoding="utf-8") == _DOS_COLUMNAS[:0] + una.read_text(encoding="utf-8")

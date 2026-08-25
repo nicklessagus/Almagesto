@@ -145,3 +145,31 @@ def test_el_prompt_nombra_la_ruta_real_del_fulltext():
     assert esperado in p
     assert p.count(esperado) >= 1 + len(ep.subject_patterns("tau Ceti", ALIASES)), \
         "cada patrón de grep tiene que apuntar al mismo .txt que se manda a leer"
+
+
+def test_los_patrones_alfabeticos_van_anclados_a_frontera_de_palabra():
+    """Medido en una corrida real: `Cet` enganchaba dentro de «Princeton» en las afiliaciones y el
+    extractor tuvo que descartar el hit a mano. La frontera va sólo a la izquierda, porque `Cet`
+    tiene que seguir matcheando `Ceti`."""
+    # @inv INV-100
+    import re
+    p = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, UNA_COLUMNA)
+    assert r"'\bCet'" in p
+    assert r"'\b10700'" not in p, "un número no necesita la frontera y ensucia el patrón"
+    rx = re.compile(r"\bCet", re.I)
+    assert not rx.search("Princeton University")
+    assert rx.search("tau Cet") and rx.search("tau Ceti")
+
+
+def test_is_extraction_distingue_la_extraccion_de_otras_salidas_con_bibcode():
+    """INV-103: identificar por `bibcode` es lo que pisó 13 notas terminadas — la salida de
+    `verify-citations` también lo trae, y el JSON era válido, así que nada avisó."""
+    # @inv INV-103
+    extr = {"bibcode": "2017AJ....154..135F", "ejes": {"rv": "x"}, "ground_truth": []}
+    verif = {"bibcode": "2017AJ....154..135F", "resultados": [{"veredicto": "soportada"}]}
+    assert ep.is_extraction(extr) is True
+    assert ep.is_extraction(verif) is False
+    assert ep.is_extraction({"ejes": {}, "ground_truth": []}) is False, "sin bibcode no se puede archivar"
+    assert ep.is_extraction({"bibcode": "x", "ejes": [], "ground_truth": []}) is False
+    assert ep.is_extraction({"bibcode": "x", "ejes": {}, "ground_truth": {}}) is False
+    assert ep.is_extraction(None) is False and ep.is_extraction([]) is False

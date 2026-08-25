@@ -963,9 +963,10 @@ Corolario que las cruza a todas: **una promesa que el sistema dejó de cumplir e
 que una que nunca hizo.** Si al tocar algo se rompe una promesa declarada —un presupuesto de
 tiempo, una cobertura, un 1:1—, eso **se anota**, aunque no se arregle en el momento.
 
-## Al escribir código: las cinco redes (regla permanente)
+## Al escribir código: las seis redes (regla permanente)
 
-Toda función nueva de `scripts/` pasa por esto **antes de cerrar el issue**. Detalle y ratchets en
+Toda función nueva de `scripts/` pasa por esto **antes de cerrar el issue**; la 6 rige
+también para los scripts de una sola operación. Detalle y ratchets en
 `tests/README.md`; el resumen operativo:
 
 1. **Mutación** — `python tools/mutar.py --diff`: romper cada función y exigir que **algún test
@@ -981,9 +982,27 @@ Toda función nueva de `scripts/` pasa por esto **antes de cerrar el issue**. De
    archivo de config que la documentación nombra tiene que existir, y todo
    comando que invoca un skill tiene que compilar.
 
+6. **Corré dos veces y hasheá** — la regla vale para **todo script que escriba en `vault/`**, no
+   sólo para los de `scripts/`: la idempotencia es invariante del framework («la cadena es
+   idempotente: refrescar es seguro»), y un script de una sola operación escribe en la bóveda
+   exactamente igual que uno versionado. El chequeo cuesta una línea:
+   ```bash
+   H=$(find vault -name '*.md' -exec md5sum {} + | sort | md5sum); <el comando>; \
+     [ "$H" = "$(find vault -name '*.md' -exec md5sum {} + | sort | md5sum)" ] && echo IDEMPOTENTE
+   ```
+   Medido el 2026-08-25: un generador de notas de una sola operación pisó, en su **segunda**
+   corrida, la prosa escrita a mano de un paper compartido entre dos estrellas. El bloque propio va
+   entre centinelas (`<!-- almagesto:… -->`) y lo de afuera no se toca — que es lo que
+   `make_notes._reemplazar_seccion` ya hacía y no se usó.
+
 Las 2 y 5 corren solas en tier 0. El motivo de la regla: en la sesión que la produjo, **los bugs
 los encontraron agentes leyendo el código, no la suite** — y cada hallazgo era decidible, o sea que
 podría haber sido un assert.
+
+⚠ **La red que no mira el código nuevo no es una red (INV-101).** El gate de mutación seleccionaba
+con `git diff --name-only HEAD`, que **no lista untracked**, así que un archivo recién creado en
+`scripts/` —el caso exacto que la regla nombra— salía en verde sin haberse mutado. Vale como
+recordatorio general: antes de creer un gate, confirmá **sobre qué corrió**.
 
 ## Token / secretos
 El token ADS va en `vault/config/ads_dev_key` (**gitignored** — nunca se commitea) o en la variable de

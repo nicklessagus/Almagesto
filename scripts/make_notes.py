@@ -45,6 +45,7 @@ from urllib.parse import quote, urlparse
 import yaml
 
 import lib_config as cfg
+import measure_layout
 
 EXCLUDED_TOP_N = 10  # cuántos no-core mostrar en la tabla de excluidos (top por citas)
 
@@ -88,6 +89,25 @@ def _txt_provenance(path) -> str:
     return ("ocr" if first.startswith(cfg.FULLTEXT_OCR_MARK)
             else "web" if first.startswith(cfg.FULLTEXT_WEB_MARK)
             else "pdftotext")
+
+
+def _txt_layout(path) -> str:
+    """Maqueta del `.txt`: `two-column` si las columnas del PDF quedaron entrelazadas en la misma
+    línea física, `single-column` si no.
+
+    Va en el frontmatter y **no** en el `.txt` a propósito: el `.txt` es lo que hashea el ancla de
+    fuente (D-20), así que agregarle un header volvería *vencido por fuente* cada par ya verificado
+    de la bóveda. Y va en la nota porque el artefacto es lo que viaja: la sección de extracción está
+    llena de números de línea, y en un `.txt` entrelazado un número de línea **no es un localizador
+    único**. Ese hecho vivía sólo en un skill (#44).
+
+    Se declara también el caso de una columna: la ausencia del campo significa «no medido», que no
+    es lo mismo que «una columna» (D-43).
+    """
+    # @inv INV-102
+    texto = path.read_text(encoding="utf-8", errors="replace")
+    frac = measure_layout.analizar(texto)["frac"]
+    return "two-column" if frac >= measure_layout.UMBRAL_ARCHIVO else "single-column"
 
 
 def pdf_source_info(slug: str | None, stem: str) -> tuple[str | None, str | None]:
@@ -201,6 +221,10 @@ def stamp_fulltext(dest, stem: str, slug: str | None) -> bool:
 
     changed = upsert("fulltext", rel, ("pdf",))
     changed = upsert("fulltext_source", src, ("fulltext", "pdf")) or changed
+    txt_path = (dest.parent / rel).resolve()
+    if txt_path.exists():
+        changed = upsert("fulltext_layout", _txt_layout(txt_path),
+                         ("fulltext_source", "fulltext", "pdf")) or changed
     # `pdf_source` viaja con los otros dos porque se conoce en el mismo momento (el .txt ya está en
     # disco) y porque así se estampa RETROACTIVAMENTE en cualquier bóveda ya ingestada: re-correr
     # extract_fulltext alcanza, no hay que re-bajar nada.
