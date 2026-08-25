@@ -337,3 +337,57 @@ def test_inv_de_tres_digitos_no_se_recolecta_como_de_dos():
     assert ti.MARCA_RE.findall("# " + marca + "INV-10, INV-42") == ["INV-10, INV-42"]
     assert ti.FILA_RE.match("| **INV-100** | x |") is None
     assert ti.FILA_RE.match("| **INV-10** | x |").group(1) == "INV-10"
+
+
+# ── 5. el techo sólo baja (#96) ───────────────────────────────────────────────────────────────
+
+def _ratchet(repo: Path, sin_marca: int, extra: str = "") -> None:
+    (repo / "docs").mkdir(parents=True, exist_ok=True)
+    (repo / "docs" / "trazabilidad-ratchet.yaml").write_text(
+        f"{extra}techos:\n  sin_marca: {sin_marca}\n  sin_test: {sin_marca}\n", encoding="utf-8")
+
+
+def _git_repo_con_techo(repo: Path, sin_marca: int) -> None:
+    """Repo git real con el ratchet ya commiteado: `subidas_de_techo` compara contra `HEAD`."""
+    import subprocess
+    _ratchet(repo, sin_marca)
+    for cmd in (["git", "init", "-q"], ["git", "add", "-A"],
+                ["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "base"]):
+        subprocess.run(cmd, cwd=repo, check=True, capture_output=True)
+
+
+def test_subir_el_techo_sin_justificar_es_hallazgo(repo: Path):
+    """El techo del ratchet **sólo puede bajar**. Hasta 1.37.0 la regla vivía sólo en el encabezado
+    del YAML y la sostenía la revisión humana: `load_techos` devolvía lo que el archivo dijera, así
+    que nada impedía subirlo en el mismo commit que rompía la cobertura (#96)."""
+    _git_repo_con_techo(repo, 2)
+    _ratchet(repo, 3)                                    # sube sin decir por qué
+    assert ti.subidas_de_techo(repo) == [("sin_marca", 2, 3), ("sin_test", 2, 3)]
+
+
+def test_la_escotilla_exige_la_transicion_concreta_no_un_motivo_generico(repo: Path):
+    """La justificación se ata a `<campo> <antes>→<ahora>`, no es un comentario suelto.
+
+    Una escotilla genérica quedaría en el archivo para siempre y desactivaría el chequeo de ahí en
+    más: la subida SIGUIENTE pasaría gratis amparada por el motivo de la anterior. Atada a la
+    transición, la justificación **caduca sola**."""
+    _git_repo_con_techo(repo, 2)
+    _ratchet(repo, 3, extra="# ratchet-sube: porque sí\n")
+    assert ti.subidas_de_techo(repo), "un motivo genérico no puede justificar cualquier subida"
+
+    _ratchet(repo, 3, extra="# ratchet-sube: sin_marca 2→3 — INV-95 no es marcable\n")
+    assert [c for c, *_ in ti.subidas_de_techo(repo)] == ["sin_test"], \
+        "la justificación vale para el campo y la transición que nombra, y sólo para esa"
+
+
+def test_bajar_el_techo_nunca_es_hallazgo(repo: Path):
+    _git_repo_con_techo(repo, 5)
+    _ratchet(repo, 1)
+    assert ti.subidas_de_techo(repo) == []
+
+
+def test_sin_git_la_subida_no_se_evalua_y_no_se_inventa_un_cero(repo: Path):
+    """D-43: un chequeo que no pudo correr se declara, no devuelve «no subió»."""
+    _ratchet(repo, 9)
+    assert ti.techos_previos(repo) is None
+    assert ti.subidas_de_techo(repo) == []               # el llamador imprime «no evaluada»

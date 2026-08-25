@@ -8,6 +8,7 @@ import requests as real_requests
 
 import query_ads as qa
 import search_arxiv as sx
+import lib_config as cfg
 
 ATOM = """<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
@@ -130,3 +131,26 @@ def test_el_registro_trae_el_veredicto_del_clasificador():
     for campo in ("facets", "relevant", "why_excluded"):
         assert campo in r, f"falta {campo}: el registro no es del mismo schema"
     assert isinstance(r["relevant"], bool) and isinstance(r["facets"], list)
+
+
+def test_main_es_preview_clasifica_con_la_lente_y_no_escribe_nada(toy_vault, monkeypatch, capsys):
+    """El CLI de #95: hace visible lo que el backend trae, sin tocar la bóveda.
+
+    El módulo estaba implementado y testeado pero **sin ninguna forma de invocarlo**, mientras
+    `CLAUDE.md` lo nombra como backend de descubrimiento fuera de ADS: la promesa se leía como
+    capacidad vigente y no había manera de ejercerla. Esto no lo cablea a la cadena —esa decisión
+    sigue abierta— lo hace usable para poder decidirla con datos.  @inv INV-96
+    """
+    recs = [{"bibcode": None, "arxiv_id": "2401.00001", "title": "A radial velocity study",
+             "abstract": "HARPS data", "year": "2024", "doi": None, "citekey": "2024Foo",
+             "keyword": [], "doctype": "eprint", "citation_count": 0},
+            {"bibcode": None, "arxiv_id": "2401.00002", "title": "Something about frogs",
+             "abstract": "amphibians", "year": "2024", "doi": None, "citekey": "2024Bar",
+             "keyword": [], "doctype": "eprint", "citation_count": 0}]
+    monkeypatch.setattr(sx, "search", lambda *a, **k: recs)
+    antes = sorted(p.name for p in cfg.WIKI.rglob("*"))
+    assert sx.main(["radial velocity"]) == 0
+    salida = capsys.readouterr().out
+    assert "2401.00001" in salida and "2401.00002" in salida
+    assert "core" in salida and "Preview" in salida
+    assert sorted(p.name for p in cfg.WIKI.rglob("*")) == antes, "el preview NO puede escribir"

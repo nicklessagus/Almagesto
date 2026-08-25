@@ -272,6 +272,61 @@ def load_techos(root: Path) -> dict:
     return {"sin_marca": int(techos.get("sin_marca", 0)), "sin_test": int(techos.get("sin_test", 0))}
 
 
+def techos_previos(root: Path) -> dict | None:
+    """Los techos del `HEAD` anterior, o `None` si no se pueden leer (sin git, archivo nuevo).
+
+    `None` es *no evaluado*, no *no subió*: fuera de un repo este chequeo no puede correr y decirlo
+    es la diferencia entre «miré y está bien» y «no miré» (D-43)."""
+    import subprocess
+    try:
+        r = subprocess.run(["git", "show", "HEAD:docs/trazabilidad-ratchet.yaml"],
+                           cwd=root, capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode != 0:
+        return None
+    data = yaml.safe_load(r.stdout) or {}
+    techos = data.get("techos") if isinstance(data, dict) else None
+    if not isinstance(techos, dict):
+        return None
+    try:
+        return {"sin_marca": int(techos.get("sin_marca", 0)), "sin_test": int(techos.get("sin_test", 0))}
+    except (TypeError, ValueError):
+        return None
+
+
+def subidas_de_techo(root: Path) -> list:
+    """Qué techo subió respecto del commit anterior, y si la subida está JUSTIFICADA.
+
+    El encabezado del ratchet dice que el techo **sólo puede bajar** y admite una única excepción:
+    que el contrato haya incorporado invariantes que legítimamente todavía no se pueden marcar —
+    «y ese commit tiene que decir por qué». Hasta 1.37.0 eso lo sostenía sólo la revisión humana:
+    `load_techos` devolvía lo que el YAML dijera, así que nada impedía subir el techo en el mismo
+    commit que rompía la cobertura (#96).
+
+    La escotilla es un comentario `# ratchet-sube: <campo> <antes>→<ahora> — <motivo>` en el YAML,
+    con **motivo obligatorio** (mismo criterio que `triage.py --reason`: no se afloja un gate en
+    silencio) y **atado a la transición concreta**. Lo segundo importa tanto como lo primero: una
+    escotilla genérica (`# ratchet-sube: porque sí`) quedaría en el archivo para siempre y
+    desactivaría el chequeo de ahí en más — la subida siguiente pasaría gratis amparada por el
+    motivo de la anterior. Exigiendo `2→3` explícito, la justificación **caduca sola**."""
+    prev = techos_previos(root)
+    if prev is None:
+        return []                                    # no evaluable: lo dice el llamador
+    hoy = load_techos(root)
+    texto = (root / "docs" / "trazabilidad-ratchet.yaml").read_text(encoding="utf-8")
+    subidas = []
+    for k in ("sin_marca", "sin_test"):
+        antes, ahora = prev.get(k, 0), hoy.get(k, 0)
+        if ahora <= antes:
+            continue
+        # `→` o `->`, con o sin espacios; el motivo va después y tiene que existir
+        patron = re.compile(rf"#\s*ratchet-sube:.*\b{re.escape(k)}\b\s*{antes}\s*(?:→|->)\s*{ahora}\s*[—:-]\s*\S")
+        if not patron.search(texto):
+            subidas.append((k, antes, ahora))
+    return subidas
+
+
 # ── artefacto ────────────────────────────────────────────────────────────────────────────────────
 
 def render(registro: dict, marcas: list[Mark], techos: dict) -> str:
@@ -403,6 +458,17 @@ def main(argv=None) -> int:
         rc = 1
     if len(sin_test) > techos["sin_test"]:
         print(f"⛔ sin test {len(sin_test)} > techo {techos['sin_test']}")
+        rc = 1
+    # El techo SÓLO PUEDE BAJAR (#96). Hasta 1.37.0 esa regla vivía sólo en el encabezado del YAML
+    # y la sostenía la revisión humana: nada impedía subirlo en el mismo commit que rompía la
+    # cobertura. La escotilla es `# ratchet-sube: <motivo>` en el YAML, con motivo obligatorio.
+    if techos_previos(root) is None:
+        print("· subida de techo: no evaluada (sin git o sin versión anterior del ratchet)")
+    for campo, antes, ahora in subidas_de_techo(root):
+        print(f"⛔ el techo `{campo}` SUBIÓ de {antes} a {ahora} sin justificar. Un techo sólo baja; "
+              f"si la subida es legítima (el contrato incorporó invariantes que todavía no se "
+              f"pueden marcar), declaralo con un comentario `# ratchet-sube: <motivo>` en "
+              f"docs/trazabilidad-ratchet.yaml")
         rc = 1
     return rc
 

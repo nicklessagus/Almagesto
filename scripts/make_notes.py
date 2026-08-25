@@ -857,7 +857,12 @@ def excluded_table(slug: str) -> str:
         except (TypeError, ValueError):
             return 0                          # `citation_count` no numérico: no ordena, no rompe
 
-    out.sort(key=citas, reverse=True)
+    # Orden por TASA (citas/año), delegando en la política única de `lib_config` (#94): la cuenta
+    # cruda está sesgada por la edad, y este apéndice es el ÚNICO canal dentro de la nota para cazar
+    # falsos negativos de la lente — con orden crudo, "lo que la lente descartó" son sistemáticamente
+    # los papers más viejos y un falso negativo reciente queda abajo del corte. `sweep_star` ya la
+    # usaba; esto era el clon que la contradecía, exactamente lo que ese docstring dice evitar.
+    out = cfg.sort_by_citation_rate(out)
     rows = []
     for r in out[:EXCLUDED_TOP_N]:
         bibcode = str(r.get("bibcode") or "")   # `bibcode` no-str (p. ej. int): coercer, no crashear
@@ -875,7 +880,7 @@ def excluded_table(slug: str) -> str:
     extra = len(out) - len(rows)
     tail = f"\n\n_(+ {extra} más excluidos por el filtro)_" if extra > 0 else ""
     return ("\n## Excluidos por el filtro (no-core · snapshot del ingest)\n"
-            "> Top por citas de lo que el clasificador dejó afuera (no matchea `relevance.facets`, "
+            "> Top por TASA de citas (citas/año, política única de `lib_config`) de lo que el clasificador dejó afuera (no matchea `relevance.facets`, "
             "no cumple la regla de combinación `require`/`min_facets`, o doctype ruido). **No se bajan "
             "ni se fichan** — esto es un puntero por las dudas. Si ves un falso negativo, ajustá "
             "`relevance.facets` (o la regla de combinación) y re-ingestá con `--force`.\n\n"
@@ -2228,6 +2233,20 @@ def main() -> int:
     else:
         write_star_note(args.slug, args.force)
     write_paper_notes(args.slug, args.all, args.force, theme=args.theme)
+    # Re-estampar DESPUÉS de crear las notas de paper: los roll-ups los estampa
+    # `write_star_note`/`write_concept_note`, que corren ANTES, así que en una corrida limpia leían
+    # un universo donde esas notas todavía no existían y la ficha quedaba diciendo «ninguna nota de
+    # paper declara este sujeto todavía» sobre las N que sí. Correr el mismo comando otra vez lo
+    # arreglaba: era puro orden. No era silencioso (el lint lo reportaba como backlog), y ése era el
+    # problema — un hallazgo que aparece en TODA ingesta nueva es ruido fijo, y un chequeo que
+    # siempre habla se deja de mirar. Es cirugía idempotente y barata: no toca la prosa.
+    dest_final = _concept_dest(args.slug) if args.theme else (cfg.STARS / f"{args.slug}.md")
+    if dest_final.exists():
+        stamp_papers_table(args.slug, dest_final, "concept" if args.theme else "star")
+        if args.theme:
+            stamp_concept_rollup(args.slug, dest_final)
+        else:
+            stamp_star_rollups(args.slug, dest_final)
     cfg.save_paso(args.slug, "make_notes", flags=_flags_usados(args, ap))
     return 0
 

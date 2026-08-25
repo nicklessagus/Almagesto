@@ -103,3 +103,42 @@ def search(query: str, categories: list | None = None, rows: int = 100) -> list:
     r = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
     r.raise_for_status()
     return [to_record(e) for e in ET.fromstring(r.text).findall("a:entry", NS)]
+
+
+def main(argv=()) -> int:
+    """CLI de exploración — **preview, no ingesta**: imprime lo que la query trae y cómo lo
+    clasifica la lente de `objective.yaml`, sin escribir nada en la bóveda.
+
+    Por qué existe (#95): el módulo estaba implementado y testeado, y `CLAUDE.md` lo nombra como uno
+    de los backends de descubrimiento fuera de ADS, pero **no tenía ningún llamador ni forma de
+    invocarlo** — la promesa se leía como capacidad vigente y no había manera de ejercerla. Esto no
+    lo cablea a la cadena de ingest (esa es una decisión aparte, con su alcance por definir): lo hace
+    **usable y auditable**, que es lo que faltaba para poder decidir con datos si vale cablearlo.
+
+    Es el gemelo de `query_ads --probe`: mismo trabajo, otro backend."""
+    import argparse
+    import query_ads
+    ap = argparse.ArgumentParser(description="Preview de una query a arXiv (no escribe nada).")
+    ap.add_argument("query", help='query en sintaxis arXiv, p. ej. "independent component analysis"')
+    ap.add_argument("--categories", default=None,
+                    help="categorías arXiv separadas por coma (p. ej. astro-ph.EP,stat.ML)")
+    ap.add_argument("--rows", type=int, default=25)
+    args = ap.parse_args(list(argv))
+    cats = [c.strip() for c in args.categories.split(",")] if args.categories else None
+    recs = search(args.query, categories=cats, rows=args.rows)
+    core = 0
+    for r in recs:
+        facets, relevante = query_ads.classify(r)
+        r["facets"], r["relevant"] = facets, relevante
+        core += bool(relevante)
+        motivo = None if relevante else query_ads.exclusion_reason(facets, r.get("doctype") or "")
+        marca = "core" if relevante else f"—    ({motivo or 'no matchea la lente'})"
+        cfg.print_seguro(f"  [{marca}] {r.get('arxiv_id') or r.get('citekey')}  {(r.get('title') or '')[:70]}")
+    cfg.print_seguro(f"\n{len(recs)} resultados · {core} core con la lente vigente. "
+                     "Preview: no se bajó ni se escribió nada.")
+    return 0
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(main(sys.argv[1:]))

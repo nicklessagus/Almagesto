@@ -437,7 +437,8 @@ candidatos del triage con `via: citado-por-corpus`, nunca marca core. Si clasifi
 dejaría de ser función de `(paper, lente)` y se rompería INV-24. La sostiene
 `scripts/citation_index.py` (índice invertido obra→citadores, lookup **offline**, vive en `build/`),
 que se construye aparte porque es caro. Los backends de descubrimiento fuera de ADS son
-`scripts/search_arxiv.py` y `scripts/openalex.py`; los tres normalizan al **mismo schema de
+`scripts/search_arxiv.py` (⚠ **no cableado a la cadena**: tiene CLI de preview, no ingesta — #95) y
+`scripts/openalex.py` (en producción: lo usa `citation_index`); los tres normalizan al **mismo schema de
 registro** que `query_ads.to_record`, y esa paridad la fija un test
 (`tests/test_backends_schema.py`), no la prosa.
 

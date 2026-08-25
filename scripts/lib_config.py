@@ -20,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.37.0"
+ALMAGESTO_VERSION = "1.38.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -431,8 +431,17 @@ def citation_rate(rec: dict, now_year: int | None = None) -> float:
     la distribución completa y no la tenemos acá.
 
     Un `year` ausente, no numérico o futuro (in-press) vale edad 1: no lo premiamos con una tasa
-    inventada ni lo castigamos mandándolo al fondo."""
-    cites = rec.get("citation_count") or 0
+    inventada ni lo castigamos mandándolo al fondo.
+
+    ⚠ `citation_count` se coerce igual que `year`. Un `ads.json` con tipos torcidos es un estado
+    alcanzable —`make_notes.excluded_table` tiene un test que lo siembra a propósito y promete
+    **nunca lanzar**—, así que la política compartida no puede ser el eslabón que revienta: si acá
+    saltara un `TypeError`, la cadena moriría DESPUÉS de gastar la red, y encima en la función que
+    varios llamadores usan justamente para no duplicar el criterio."""
+    try:
+        cites = float(rec.get("citation_count") or 0)
+    except (TypeError, ValueError):
+        cites = 0.0
     try:
         year = int(rec.get("year") or 0)
     except (TypeError, ValueError):
@@ -446,9 +455,14 @@ def sort_by_citation_rate(recs, now_year: int | None = None) -> list:
     """Lista ordenada por citas/año descendente, DETERMINISTA: ante empate de tasa desempata la
     cuenta cruda y después el bibcode, para que dos corridas sobre el mismo `ads.json` impriman lo
     mismo (los listados se comparan a ojo entre corridas)."""
-    return sorted(recs, key=lambda r: (-citation_rate(r, now_year),
-                                       -(r.get("citation_count") or 0),
-                                       r.get("bibcode") or ""))
+    def _cuenta(r) -> float:
+        try:                                  # mismo motivo que en `citation_rate`: el desempate
+            return float(r.get("citation_count") or 0)   # no puede ser el que revienta la cadena
+        except (TypeError, ValueError):
+            return 0.0
+
+    return sorted(recs, key=lambda r: (-citation_rate(r, now_year), -_cuenta(r),
+                                       str(r.get("bibcode") or "")))
 
 
 # ── registro de ingesta por sujeto (#51/#64) ─────────────────────────────────

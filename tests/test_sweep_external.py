@@ -12,6 +12,7 @@ Qué protege este archivo:
 """
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -24,6 +25,7 @@ if str(SCRIPTS) not in sys.path:
 
 import lib_config as cfg          # noqa: E402
 import sweep_external as sw       # noqa: E402
+import fetch_ground_truth        # noqa: E402
 
 
 @pytest.fixture
@@ -266,3 +268,40 @@ def test_ground_truth_ilegible_cuenta_como_fallido_no_como_sin_cambios(toy_vault
     cambios, fallidos = sw.sweep_ground_truth()
     assert cambios == []
     assert "test_star" in fallidos, "el snapshot ilegible no se puede leer como «no cambió nada»"
+
+
+def test_aplicar_ground_truth_registra_que_cambio_para_que_el_lint_pida_la_marca(toy_vault, monkeypatch):
+    """`_cambios` es lo que hace detectable la caducidad del ground-truth (AUD-42).
+
+    El ancla de fuente hashea `raw/fulltext/**/*.txt` y **nunca** el JSON de NEA, así que un valor
+    corregido cambia bajo los pies de la prosa que ya lo citó y ninguna fila de verificación se
+    entera. El diff se calcula ANTES de re-bajar (después daría vacío, comparándose consigo mismo)
+    y se persiste DESPUÉS, sobre el payload nuevo.  @inv INV-85
+    """
+    cfg.GROUND_TRUTH.mkdir(parents=True, exist_ok=True)
+    gt = cfg.GROUND_TRUTH / "test_star.json"
+    gt.write_text(json.dumps({"star": "Estrella Test", "slug": "test_star",
+                              "host": {"teff_K": 5344}, "planets": []}), encoding="utf-8")
+    monkeypatch.setattr(fetch_ground_truth, "nea_diff",
+                        lambda slug: [("host.teff_K", 5344, 5390)])
+    monkeypatch.setattr(sw, "_run", lambda *a, **k: 0)     # el re-fetch real no corre acá
+
+    sw.aplicar_ground_truth("test_star")
+
+    cambios = json.loads(gt.read_text(encoding="utf-8"))["_cambios"]
+    assert len(cambios) == 1
+    assert cambios[0]["campo"] == "host.teff_K"
+    assert (cambios[0]["viejo"], cambios[0]["nuevo"]) == (5344, 5390)
+    assert cambios[0]["fecha"]
+
+
+def test_aplicar_ground_truth_sin_cambios_no_ensucia_el_json(toy_vault, monkeypatch):
+    """Sin diff no se estampa `_cambios`: si no, el lint pediría la marca en cada pasada de red y
+    el hallazgo se volvería ruido fijo."""
+    cfg.GROUND_TRUTH.mkdir(parents=True, exist_ok=True)
+    gt = cfg.GROUND_TRUTH / "test_star.json"
+    gt.write_text(json.dumps({"slug": "test_star", "host": {}, "planets": []}), encoding="utf-8")
+    monkeypatch.setattr(fetch_ground_truth, "nea_diff", lambda slug: [])
+    monkeypatch.setattr(sw, "_run", lambda *a, **k: 0)
+    sw.aplicar_ground_truth("test_star")
+    assert "_cambios" not in json.loads(gt.read_text(encoding="utf-8"))

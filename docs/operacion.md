@@ -109,6 +109,11 @@ python scripts/entity.py plan   <slug>              # las siete capas de una ent
 python scripts/entity.py delete <slug> --yes        # borrar sin dejar nada colgado (INV-19)
 python scripts/entity.py rename <viejo> <nuevo> --yes
 python scripts/citation_index.py    # índice invertido obra→citadores (caro: ADS + OpenAlex)
+python scripts/search_arxiv.py "independent component analysis" --categories stat.ML --rows 25
+                                    # preview de un backend no-ADS: qué trae y qué clasifica como
+                                    # core con TU lente. No baja ni escribe nada. ⚠ `search_arxiv`
+                                    # NO está cableado a la cadena de ingest (issue #95): esto es
+                                    # exploración para decidir si vale cablearlo.
 ```
 
 **Migradores y backfills** (una sola corrida; el framework no lleva capas de retrocompatibilidad,

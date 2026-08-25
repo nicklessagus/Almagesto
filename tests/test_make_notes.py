@@ -2556,3 +2556,42 @@ def test_excluded_table_no_lanza_con_un_ads_json_cortado_a_media_letra(toy_vault
     # UnicodeDecodeError; truncar después de un ASCII sólo da JSONDecodeError, ya cubierto.
     (d / "ads.json").write_bytes('{"records": [{"title": "añ'.encode("utf-8")[:-1])
     assert isinstance(mn.excluded_table("test_star"), str)
+
+
+def test_una_corrida_limpia_deja_el_rollup_al_dia(toy_vault, monkeypatch):
+    """Los roll-ups reflejan las notas que la MISMA corrida acaba de crear.  @inv INV-81
+
+    `main` hacía `write_star_note` (que estampa) y DESPUÉS `write_paper_notes`, así que toda
+    ingesta limpia terminaba con la ficha diciendo «ninguna nota de paper declara este sujeto
+    todavía» sobre las N que sí lo declaraban — medido en un clean-room con 53 core. Correr el
+    mismo comando otra vez lo arreglaba: era puro orden dentro de la corrida.
+
+    No era silencioso (el lint lo reporta como backlog), y ése es el problema: un hallazgo que
+    aparece en TODA ingesta nueva es ruido fijo, y un chequeo que siempre habla se deja de mirar.
+    """
+    ads_json([rec("2020AAA...1..1A"), rec("2021BBB...2..2B")])
+    monkeypatch.setattr(sys, "argv", ["make_notes.py", "test_star"])
+    assert mn.main() == 0
+    ficha = (toy_vault.STARS / "test_star.md").read_text(encoding="utf-8")
+    assert "## Papers (2 ·" in ficha, \
+        f"el roll-up no vio las notas que la misma corrida creó:\n{ficha[ficha.find('## Papers'):][:200]}"
+
+
+def test_excluidos_usa_la_politica_unica_de_orden_no_las_citas_crudas(toy_vault):
+    """El apéndice ordena por **tasa** (citas/año), no por cuenta cruda.  @inv INV-24
+
+    `lib_config` declara la política en un solo lugar y dice por qué: *«la cuenta cruda está
+    sesgada por la EDAD … si se cambia una las otras quedan viejas sin que nadie lo note»*.
+    `sweep_star` la usa; este apéndice hacía su propio `sort(key=citas)`.
+
+    Importa porque `## Excluidos por el filtro` es el ÚNICO canal dentro de la nota para cazar
+    falsos negativos de la lente: con orden por citas crudas, lo que el consumidor ve como «lo que
+    la lente descartó» son sistemáticamente los papers más viejos, y un falso negativo reciente
+    queda abajo del corte (AUD-34 / #94).
+    """
+    viejo = rec("1990old....1..1O", relevant=False, cites=300); viejo["year"] = "1990"
+    nuevo = rec("2025new....2..2N", relevant=False, cites=60);  nuevo["year"] = "2025"
+    ads_json([viejo, nuevo])
+    tabla = mn.excluded_table("test_star")
+    assert tabla.index("2025new") < tabla.index("1990old"), (
+        "el reciente con 60 citas tiene MÁS tasa que el del '90 con 300 y debe ir primero:\n" + tabla)
