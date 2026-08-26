@@ -8,6 +8,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import discover as d  # noqa: E402
 
 
+# Doble ÚNICO de una respuesta HTTP: trae `status_code` además de `json()`, como el objeto real
+# (regla de método #3). Los dobles locales que sólo tenían `json()` divergían del real, y el chequeo
+# de status que `_json` agregó murió en esa diferencia — no en el código.
+class _Resp:
+    def __init__(self, payload, status=200):
+        self._p, self.status_code = payload, status
+
+    def json(self):
+        if self._p is None:
+            raise ValueError("no json")
+        return self._p
+
+
 # ── identidad / dedup (contrato 2: la llave es el DOI, NUNCA el título) ──────
 def test_ident_prefiere_doi_y_normaliza():
     assert d.ident({"doi": "https://doi.org/10.1/AB"}) == "doi:10.1/ab"
@@ -107,6 +120,7 @@ def test_anchored_records_hace_el_join_y_ordena_por_consenso(monkeypatch):
 # ── descubrimiento PROPONE, no clasifica (contrato 1 / INV-24) ───────────────
 def test_seed_estampa_procedencia_y_no_decide_core(monkeypatch):
     class R:
+        status_code = 200
         @staticmethod
         def json():
             return {"results": [{"id": "https://openalex.org/W1", "title": "T",
@@ -119,6 +133,7 @@ def test_seed_estampa_procedencia_y_no_decide_core(monkeypatch):
 
 def test_seed_filtra_por_citas_minimas(monkeypatch):
     class R:
+        status_code = 200
         @staticmethod
         def json():
             return {"results": [{"id": "W1", "title": "a", "cited_by_count": 10},
@@ -129,6 +144,7 @@ def test_seed_filtra_por_citas_minimas(monkeypatch):
 
 def test_topics_devuelve_id_pelado(monkeypatch):
     class R:
+        status_code = 200
         @staticmethod
         def json():
             return {"results": [{"id": "https://openalex.org/T11447",
@@ -148,6 +164,7 @@ def test_resolve_pdf_sin_doi_no_consulta_nada(monkeypatch):
 
 def test_resolve_pdf_prefiere_openalex(monkeypatch):
     class R:
+        status_code = 200
         @staticmethod
         def json():
             return {"best_oa_location": {"pdf_url": "http://x/a.pdf"}}
@@ -162,6 +179,7 @@ def test_resolve_pdf_cae_a_unpaywall(monkeypatch):
         llamadas.append(url)
 
         class R:
+            status_code = 200
             @staticmethod
             def json():
                 if d.UNPAYWALL in url:
@@ -175,6 +193,7 @@ def test_resolve_pdf_cae_a_unpaywall(monkeypatch):
 
 def test_resolve_pdf_declara_el_fallo_sin_inventar(monkeypatch):
     class R:
+        status_code = 200
         @staticmethod
         def json():
             return {}
@@ -187,6 +206,7 @@ def test_resolve_pdf_no_se_cae_si_un_backend_revienta(monkeypatch):
     def fake(url, **k):
         if d.UNPAYWALL in url:
             class R:
+                status_code = 200
                 @staticmethod
                 def json():
                     return {"best_oa_location": {"url_for_pdf": "http://u/b.pdf"}}
@@ -204,6 +224,7 @@ def test_hydrate_lotea_de_a_50_y_normaliza_ids(monkeypatch):
         vistos.append(url)
 
         class R:
+            status_code = 200
             @staticmethod
             def json():
                 return {"results": [{"id": "https://openalex.org/W1", "title": "t",
@@ -219,6 +240,7 @@ def test_hydrate_lotea_de_a_50_y_normaliza_ids(monkeypatch):
 
 def test_hydrate_corta_en_rows(monkeypatch):
     class R:
+        status_code = 200
         @staticmethod
         def json():
             return {"results": [{"id": f"https://openalex.org/W{i}", "title": "t"}
@@ -426,6 +448,7 @@ def test_seed_terms_una_slice_por_termino_y_dedup(monkeypatch):
         urls.append(url)
 
         class R:
+            status_code = 200
             @staticmethod
             def json():
                 return {"results": [{"id": "https://openalex.org/W1", "title": "t",
@@ -446,6 +469,7 @@ def test_seed_terms_declara_el_termino_que_falla_y_sigue(monkeypatch, capsys):
             raise RuntimeError("500")
 
         class R:
+            status_code = 200
             @staticmethod
             def json():
                 return {"results": [{"id": "W1", "title": "t"}]}
@@ -482,6 +506,7 @@ def test_seed_terms_avisa_si_el_slice_tiene_mas_de_lo_que_trajo(monkeypatch, cap
     un «límite estructural» que era falso: los papers estaban en los puestos 28/44/110/121 de un
     slice de 579. Un tope que esconde su efecto produce conclusiones, no sólo resultados faltantes."""
     class R:
+        status_code = 200
         @staticmethod
         def json():
             return {"meta": {"count": 579},
@@ -495,6 +520,7 @@ def test_seed_terms_avisa_si_el_slice_tiene_mas_de_lo_que_trajo(monkeypatch, cap
 
 def test_seed_terms_calla_si_trajo_todo_el_slice(monkeypatch, capsys):
     class R:
+        status_code = 200
         @staticmethod
         def json():
             return {"meta": {"count": 3}, "results": [{"id": f"W{i}"} for i in range(3)]}
@@ -508,3 +534,42 @@ def test_seed_terms_default_no_es_un_tope_chico():
     """El default es una MEDICIÓN: con 15 la recuperación daba 7/18; con el slice completo, 13/18."""
     import inspect
     assert inspect.signature(d.seed_terms).parameters["rows_por_termino"].default >= 200
+
+
+# ── el cero silencioso de OpenAlex: 429 con payload de error (#110) ──────────
+def test_json_levanta_ante_payload_de_error(monkeypatch):
+    """Medido en vivo: con el presupuesto diario agotado OpenAlex responde 429 con
+    {error, message, …} y SIN `results`. Leer sólo `results` daba 0 y la cobertura imprimía
+    «openalex 0 registros» como si el backend hubiera mirado — «se acabó la cuota» y «el tema no
+    existe en OpenAlex» son conclusiones opuestas (INV-87)."""
+    monkeypatch.setattr(d.requests, "get", lambda *a, **k: _Resp(
+        {"error": "Rate limit exceeded", "message": "Insufficient budget"}, 429))
+    with pytest.raises(RuntimeError, match="Rate limit"):
+        d._json("http://x")
+
+
+def test_json_levanta_ante_status_de_error_sin_payload(monkeypatch):
+    monkeypatch.setattr(d.requests, "get", lambda *a, **k: _Resp({"results": []}, 503))
+    with pytest.raises(RuntimeError, match="503"):
+        d._json("http://x")
+
+
+def test_json_levanta_ante_respuesta_no_json(monkeypatch):
+    monkeypatch.setattr(d.requests, "get", lambda *a, **k: _Resp(None, 502))
+    with pytest.raises(RuntimeError, match="no-JSON"):
+        d._json("http://x")
+
+
+def test_json_devuelve_el_payload_bueno(monkeypatch):
+    monkeypatch.setattr(d.requests, "get", lambda *a, **k: _Resp({"results": [1]}, 200))
+    assert d._json("http://x") == {"results": [1]}
+
+
+def test_cascade_reporta_el_429_como_FALLO_no_como_cero(monkeypatch):
+    """La consecuencia que importa: la cobertura dice FALLÓ, no «0 registros»."""
+    monkeypatch.setattr(d.requests, "get", lambda *a, **k: _Resp(
+        {"error": "Rate limit exceeded", "message": "budget"}, 429))
+    out = d.cascade(topic_id="T11447")
+    err = dict((b, e) for b, _n, e in out["cobertura"])["openalex"]
+    assert err and not err.startswith("NO CORRIÓ")
+    assert "Rate limit" in err

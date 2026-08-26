@@ -56,6 +56,30 @@ TIMEOUT = 90
 TOPICS_API = "https://api.openalex.org/topics"
 
 
+def _json(url: str) -> dict:
+    """GET a OpenAlex que **levanta** ante un payload de error, en vez de devolver `{}`.
+
+    Existe porque este módulo llamaba `requests.get(...).json()` directo, salteando el helper ya
+    endurecido de `openalex._get` — un camino paralelo con otro contrato, y el bug vivió justo en la
+    diferencia (regla de método #3). Medido en vivo: con el presupuesto diario agotado OpenAlex
+    responde **HTTP 429** con un JSON `{error, message, retryAfter, …}` y **sin** `results`; leer
+    sólo `results` daba 0, y la cobertura imprimía «openalex 0 registros» como si el backend hubiera
+    mirado y no tuviera nada. Ése es el cero silencioso que INV-87 prohíbe: acá el 0 tiene que ser
+    un FALLO declarado, porque «se acabó la cuota» y «el tema no existe en OpenAlex» son
+    conclusiones opuestas."""
+    r = requests.get(url, timeout=TIMEOUT)
+    try:
+        d = r.json()
+    except ValueError as exc:
+        raise RuntimeError(f"OpenAlex HTTP {r.status_code}: respuesta no-JSON") from exc
+    if isinstance(d, dict) and d.get("error"):
+        raise RuntimeError(f"OpenAlex HTTP {r.status_code}: {d.get('error')} — "
+                           f"{str(d.get('message'))[:120]}")
+    if r.status_code >= 400:
+        raise RuntimeError(f"OpenAlex HTTP {r.status_code}")
+    return d
+
+
 # ── identity / dedup ─────────────────────────────────────────────────────────
 def ident(rec: dict) -> str | None:
     """Cross-backend identity of a record: DOI first, then arXiv id. Never the title (contract 2).
@@ -109,7 +133,7 @@ def topics(query: str, rows: int = 5) -> list[dict]:
     """OpenAlex topic taxonomy search → `[{id, name, works_count}, …]`, best match first."""
     url = f"{TOPICS_API}?" + urllib.parse.urlencode(
         {"search": query, "per-page": rows, "mailto": oa._mailto()})
-    d = requests.get(url, timeout=TIMEOUT).json()
+    d = _json(url)
     return [{"id": (r.get("id") or "").rsplit("/", 1)[-1],
              "name": r.get("display_name"),
              "works_count": r.get("works_count")}
@@ -146,7 +170,7 @@ def seed_terms(topic_id: str, terms: list, rows_por_termino: int = 200) -> list[
             {"filter": f, "sort": "cited_by_count:desc",
              "per-page": min(rows_por_termino, 200), "mailto": oa._mailto()})
         try:
-            d = requests.get(url, timeout=TIMEOUT).json()
+            d = _json(url)
         except Exception as e:                                  # noqa: BLE001 — declarado
             cfg.print_seguro(f"  ⚠ seed_terms: «{term}» falló ({e}) — 0 de ese término")
             continue
@@ -179,7 +203,7 @@ def seed(topic_id: str, rows: int = 25, min_citas: int | None = None) -> list[di
     url = oa.API + "?" + urllib.parse.urlencode(
         {"filter": f"topics.id:{topic_id}", "sort": "cited_by_count:desc",
          "per-page": min(rows, 200), "mailto": oa._mailto()})
-    d = requests.get(url, timeout=TIMEOUT).json()
+    d = _json(url)
     recs = [oa.to_record(w) for w in d.get("results", [])]
     for r in recs:                      # provenance stamped at the source, so the preview cannot lie
         r["found_in"] = ["openalex"]
@@ -249,7 +273,7 @@ def hydrate(openalex_ids: list, rows: int = 50) -> list[dict]:
         url = oa.API + "?" + urllib.parse.urlencode(
             {"filter": "openalex_id:" + "|".join(lote), "per-page": 50, "mailto": oa._mailto()})
         try:
-            d = requests.get(url, timeout=TIMEOUT).json()
+            d = _json(url)
         except Exception as e:                                  # noqa: BLE001 — declared, not swallowed
             cfg.print_seguro(f"  ⚠ hydrate: lote {i // 50 + 1} falló ({e}) — {len(lote)} sin resolver")
             continue
@@ -382,8 +406,8 @@ def resolve_pdf(doi: str | None, title: str | None = None) -> tuple[str | None, 
         return None, "sin DOI — no hay por dónde empezar (dejar `pending`, o declarar `url:`)"
     # 1. OpenAlex: ya lo tenemos consultado en la cascada, y trae la ubicación OA si existe
     try:
-        d = requests.get(oa.API + "/doi:" + urllib.parse.quote(doi) + "?" +
-                         urllib.parse.urlencode({"mailto": oa._mailto()}), timeout=TIMEOUT).json()
+        d = _json(oa.API + "/doi:" + urllib.parse.quote(doi) + "?" +
+                  urllib.parse.urlencode({"mailto": oa._mailto()}))
         url = ((d.get("best_oa_location") or {}).get("pdf_url"))
         if url:
             return url, "OpenAlex best_oa_location"
@@ -392,7 +416,7 @@ def resolve_pdf(doi: str | None, title: str | None = None) -> tuple[str | None, 
     # 2. Unpaywall: mismo universo de depósitos, distinta resolución de OA locations
     try:
         d = requests.get(UNPAYWALL + urllib.parse.quote(doi) + "?" +
-                         urllib.parse.urlencode({"email": oa._mailto()}), timeout=TIMEOUT).json()
+                         urllib.parse.urlencode({"email": oa._mailto()}), timeout=TIMEOUT).json()  # Unpaywall: otro servicio
         url = ((d.get("best_oa_location") or {}).get("url_for_pdf"))
         if url:
             return url, "Unpaywall"
