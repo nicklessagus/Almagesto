@@ -76,6 +76,7 @@ import yaml
 import lib_config as cfg
 import lib_blocks as lb
 import make_notes as mn
+import entity                                # alcance por slug de `--cierre` (#121)
 from extract_fulltext import is_legible      # umbral determinista de legibilidad (mismo que extract)
 from fetch_ground_truth import msini_earth   # verificación de masa (m·sini implícita)
 from make_notes import find_header_line      # contrato de la cabecera (mismo que stamp_pdf_link, #48)
@@ -734,27 +735,57 @@ class Categoria:
 @dataclass(frozen=True)
 class LintResult:
     """Lo que el lint **encontró**, sin renderizar. `render()` lo convierte en el reporte y
-    `main()` decide el exit; un consumidor (el tablero, un test, otro script) lo lee directo."""
+    `main()` decide el exit; un consumidor (el tablero, un test, otro script) lo lee directo.
+
+    `alcance` es #121: los stems de nota del sujeto que la operación tocó. **Acota SÓLO la
+    severidad `cierre`**, que es la que el flag promueve — un `bloqueante` sigue contando venga de
+    donde venga, porque si no `--cierre <slug>` sería un gate MÁS DÉBIL que un `lint` pelado, que es
+    lo contrario de para qué existe."""
     categorias: tuple
     cierre: bool = False
+    slug: str | None = None
+    alcance: frozenset = frozenset()
 
     def por_clave(self, clave: str) -> Categoria | None:
         return next((c for c in self.categorias if c.clave == clave), None)
 
+    def en_alcance(self, c: Categoria) -> tuple:
+        """Los ítems de `c` que cuentan para el exit. Sin `slug`, todos.  @inv INV-105"""
+        if self.slug is None or c.severidad != SEV_CIERRE:
+            return c.items
+        return tuple(it for it in c.items if it[0] in self.alcance)
+
     def bloquean(self) -> tuple:
         """Las categorías que cuentan para el exit ≠ 0, con la severidad como única fuente."""
         sevs = {SEV_BLOQUEANTE} | ({SEV_CIERRE} if self.cierre else set())
-        return tuple(c for c in self.categorias if c.severidad in sevs and c.items)
+        return tuple(c for c in self.categorias
+                     if c.severidad in sevs and self.en_alcance(c))
 
     def n_block(self) -> int:
-        return sum(len(c) for c in self.bloquean())
+        return sum(len(self.en_alcance(c)) for c in self.bloquean())
 
 
-def collect(cierre: bool = False) -> LintResult:
+def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     """Barre la bóveda entera y devuelve lo que encontró, **sin renderizar nada**.
 
     `cierre` es R-1: el MISMO detector de pares vencidos con dos severidades según el
-    momento. Va acá y no en `render` porque cambia el exit, no el texto."""
+    momento. Va acá y no en `render` porque cambia el exit, no el texto.
+
+    `slug` es #121: acota el EXIT a las notas de ese sujeto (el barrido sigue siendo de la bóveda
+    entera — la deuda ajena se reporta igual, sólo que no frena una operación que no la causó).
+    `ValueError` si el slug no existe: acotar a una entidad inexistente daría 0 hallazgos en
+    alcance, o sea un verde inventado, que es el falso limpio que este lint existe para no
+    producir."""
+    # ⚠ `slug` se REBINDEA más abajo (el barrido lo usa como variable de loop en cuatro lugares),
+    # así que el alcance se captura ACÁ. Sin esta línea el resultado se etiquetaba con el último
+    # slug que tocó el barrido — un alcance inventado, y encima plausible.
+    alcance_slug, alcance = slug, frozenset()
+    if slug is not None:
+        stems = entity.notas_del_slug(slug)
+        if stems is None:
+            raise ValueError(f"entidad desconocida: {slug!r} — no está en stars.yaml ni en "
+                             f"themes.yaml, así que `--cierre {slug}` no acota nada")
+        alcance = frozenset(stems)
     files = note_files()
     # fulltext disponible (un .txt por bibcode, bajo cualquier slug/tema) → precondición de
     # verificabilidad: una cita en query/hipótesis sin su .txt no se puede chequear claim↔fuente.
@@ -1452,10 +1483,20 @@ def collect(cierre: bool = False) -> LintResult:
     # son el mismo trabajo — eso no es heurística, es certeza. Hace falta porque la metadata a veces
     # no los liga en absoluto: medido, el registro publicado traía `arxiv_id: null` y el del preprint
     # el DOI DataCite, así que NINGÚN campo coincidía y el detector callaba sobre un duplicado real.
+    # ⚠ Sólo sobre `.txt` **legibles**. Dos extracciones FALLIDAS (escaneo sin capa de texto,
+    # mojibake, `.txt` casi vacío) tienen los mismos bytes y no son el mismo trabajo: son dos
+    # fracasos idénticos. Sin este recorte, la señal de bytes convierte a cada par de extracciones
+    # rotas en un hallazgo BLOQUEANTE que manda a fusionar dos papers ajenos — o sea a destruir una
+    # nota. Medido sobre el corpus sintético: dos `.txt` ilegibles sembrados a propósito daban un
+    # tercer duplicado que nadie sembró. El umbral no es nuevo: es el mismo `is_legible` con el que
+    # el lint ya reporta esos `.txt` en su propia categoría, y que dice justamente «esto no sirve
+    # para grep ni para verify» — un texto que no sirve para leerlo tampoco identifica a nadie.
+    # @inv INV-106
     ya_reportados = {st for fila in identidad_dup for st in fila[0].split(", ")}
+    ft_ilegible = {basename(p_ft)[:-4] for p_ft, _ in illegible_txt}
     por_texto: dict = {}
     for stem_p in sorted(paper_fms):
-        if stem_p in alias or stem_p in ya_reportados:
+        if stem_p in alias or stem_p in ya_reportados or stem_p in ft_ilegible:
             continue
         if (h := ft_hash.get(stem_p)):
             por_texto.setdefault(h, []).append(stem_p)
@@ -2211,19 +2252,33 @@ def collect(cierre: bool = False) -> LintResult:
     for i, c in enumerate(categorias):
         if any(c.titulo.startswith(s) for s in suprimidas):
             categorias[i] = replace(c, suprimida=True)
-    return LintResult(tuple(categorias), cierre=cierre)
+    return LintResult(tuple(categorias), cierre=cierre, slug=alcance_slug, alcance=alcance)
 
 
 def render(res: LintResult) -> str:
     """El reporte markdown. Separado de `collect` para que el golden mida **comportamiento** y no
-    formato, y para que un consumidor no tenga que parsear texto para saber qué encontró el lint."""
+    formato, y para que un consumidor no tenga que parsear texto para saber qué encontró el lint.
+
+    Con `--cierre <slug>` (#121) el reporte NO se recorta: la deuda ajena se sigue listando entera
+    y sólo se marca cuál cuenta para el exit. Acotar el reporte haría invisible lo de al lado, que
+    es el modo de falla obvio de la idea."""
     lines = [f"# Lint de la bóveda — {dt.date.today().isoformat()}", ""]
+    if res.slug is not None:
+        lines += [f"> **Alcance del exit: `{res.slug}`** ({len(res.alcance)} nota(s): su "
+                  f"ficha/concepto y sus papers). El barrido es de la bóveda entera y todo lo de "
+                  f"abajo se reporta igual; lo ajeno al sujeto está marcado y **no frena** esta "
+                  f"operación. Los bloqueantes cuentan siempre, vengan de donde vengan.", ""]
     for c in res.categorias:
         if c.suprimida:
             continue
-        lines.append(f"## {c.titulo} ({len(c)})")
-        for a, b in c.items:
-            lines.append(f"- {a}" + (f" → {b}" if b else ""))
+        en_alcance = res.en_alcance(c)
+        acotada = res.slug is not None and c.severidad == SEV_CIERRE
+        cuenta = f"{len(c)}" + (f"; {len(en_alcance)} de `{res.slug}`" if acotada else "")
+        lines.append(f"## {c.titulo} ({cuenta})")
+        for it in c.items:
+            a, b = it
+            ajeno = " — ⟨ajeno a `%s`: se reporta, no frena⟩" % res.slug if acotada and it not in en_alcance else ""
+            lines.append(f"- {a}" + (f" → {b}" if b else "") + ajeno)
         lines.append("")
     return "\n".join(lines)
 
@@ -2251,11 +2306,24 @@ def main(argv=()) -> int:
     # operación no terminó. La distinción vive acá, en un punto testeable, y no en prosa de skill:
     # un skill que se olvida de tratarlo como gate no deja rastro. D-44 intacto: el commit no se
     # frena — esto gatea la operación, no el commit.
-    ap.add_argument("--cierre", action="store_true",
+    # #121: el flag toma un SLUG opcional. Sin él, alcance global (una pasada de cierre
+    # deliberada sobre toda la bóveda). Con él, sólo los hallazgos de cierre de ESE sujeto cuentan
+    # para el exit — el razonamiento de R-1 («un par sin verificar significa que no terminaste»)
+    # es sobre lo que la operación TOCÓ, y aplicado a la bóveda entera hacía que una deuda vieja en
+    # otro sujeto dejara el gate en rojo permanente. Medido al cerrar un tema: el único bloqueante
+    # era de otra estrella, y hubo que auditar las categorías a ojo, una por una, para verlo. Un
+    # gate que se audita a mano dejó de ser un gate.
+    ap.add_argument("--cierre", nargs="?", const="", default=None, metavar="SLUG",
                     help="modo cierre de operación: los pares de verificación vencidos cuentan "
-                         "para el exit (sin el flag son backlog, la pasada periódica)")
+                         "para el exit (sin el flag son backlog, la pasada periódica). Con un SLUG, "
+                         "sólo cuentan los de ese sujeto; la deuda ajena se reporta igual pero no "
+                         "frena una operación que no la causó")
     args = ap.parse_args(list(argv))
-    res = collect(cierre=args.cierre)
+    try:
+        res = collect(cierre=args.cierre is not None, slug=args.cierre or None)
+    except ValueError as e:
+        _print_seguro(f"✗ {e}")
+        return 2
     report = render(res)
 
     outdir = cfg.ROOT / "outputs"
@@ -2268,8 +2336,14 @@ def main(argv=()) -> int:
     # había que acordarse de actualizar: agregar una categoría bloqueante y olvidarla en
     # `n_block` no rompía ningún test.
     if (n := res.n_block()):
-        _print_seguro(f"✗ {n} hallazgo(s) en categorías bloqueantes → exit 1")
+        # ⚠ Con alcance, el mensaje dice «frenan el cierre de X», NO «hallazgos de X»: entre ellos
+        # puede haber un bloqueante global (una fuente retractada, un hecho del entorno) que frena
+        # igual y **no** es del sujeto. Atribuirlo a X sería un mapa que atribuye mal.
+        que = f" frenan el cierre de `{res.slug}`" if res.slug else " en categorías bloqueantes"
+        _print_seguro(f"✗ {n} hallazgo(s){que} → exit 1")
         return 1
+    if res.slug:
+        _print_seguro(f"✓ nada frena el cierre de `{res.slug}` — la deuda ajena queda listada arriba")
     return 0
 
 

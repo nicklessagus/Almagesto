@@ -67,6 +67,8 @@
 
 ## ⛔ Identidad duplicada: dos notas del mismo trabajo (mismo doi/arxiv_id) (0)
 
+## ⛔ `sources:` sin procedencia (#111): no consta quién declaró la fuente ni por qué (0)
+
 ## `role` fuera del vocabulario (fundacional/aplicacion/arbitro) (0)
 
 ## ⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano) (0)
@@ -82,6 +84,10 @@
 ## PDF ↔ disco / cuerpo (WARN — higiene: frontmatter `pdf` vs PDF bajado vs link de cabecera) (0)
 
 ## ⏳ Fuentes pendientes (pending_source — el usuario debe proveer la fuente) (0)
+
+## 📐 Fuentes cuyo `.txt` perdió las ECUACIONES (citar fórmulas por página del PDF) (0)
+
+## 📓 Operación sin entrada en `log.md` (la cadena corrió y la bitácora no lo dice) (0)
 
 ## Fulltext ilegible (mojibake/escaneo — existe pero no sirve para grep/verify) (2)
 - fulltext/star01/2002Alm00058A.txt → casi sin texto (1 chars no-espacio) — ¿escaneo sin capa de texto?

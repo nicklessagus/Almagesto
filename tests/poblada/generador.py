@@ -596,8 +596,16 @@ _(ninguno relevante — corpus sintético)_
     idx_lines += ["", "## Matrices", f"- [[{matrix_stem}]]", ""]
     paths.INDEX.parent.mkdir(parents=True, exist_ok=True)
     paths.INDEX.write_text("\n".join(idx_lines), encoding="utf-8")
-    paths.LOG.write_text("# Log\n\n## sembrado — corpus sintético\n- generado por sembrar_corpus\n",
-                         encoding="utf-8")
+    # El log lleva una entrada POR SLUG con la fecha de la cadena que se siembra abajo (#118): el
+    # detector compara `cadena` del registro contra las entradas `## <fecha> — …` que nombran al
+    # slug, así que sin esto el corpus "limpio" reporta una operación sin bitácora por cada estrella
+    # — el mismo ruido de fondo que el bloque del registro ya evita para `busquedas`/`extraccion`.
+    _log = ["# Log", "", "## sembrado — corpus sintético", "- generado por sembrar_corpus", ""]
+    if not vintage_old:
+        for _slug in star_slugs:
+            _log += [f"## 2026-01-01 — ingest: {_slug}",
+                     f"- cadena completa sembrada para `{_slug}`", ""]
+    paths.LOG.write_text("\n".join(_log), encoding="utf-8")
 
     # ── escritura: config ─────────────────────────────────────────────────────────────────────
     objective = {

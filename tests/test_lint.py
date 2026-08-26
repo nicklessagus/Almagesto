@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 import lib_config as cfg
+import entity
 import lint
 from conftest import mk_note, write_yaml
 
@@ -3024,3 +3025,115 @@ def test_log_con_su_entrada_no_se_reporta(toy_vault, capsys):
     linea = [l for l in rep.splitlines() if l.startswith("## 📓 Operación sin entrada")]
     assert linea, rep
     assert int(linea[0].rsplit("(", 1)[1].rstrip(")")) == 0, linea[0]
+
+
+# ── #121 · `--cierre <slug>`: el gate de cierre se acota al sujeto que la operación tocó ─────────
+# El razonamiento de R-1 —«un par sin verificar significa que NO TERMINASTE»— es correcto y estaba
+# aplicado al alcance equivocado: la bóveda entera. Medido al cerrar un tema real, el único
+# bloqueante era la deuda de OTRA estrella (147 citas sin bloque), así que el gate arrancaba en rojo
+# y seguía en rojo sin importar lo que la operación hiciera. Un gate que hay que auditar a mano,
+# categoría por categoría, para saber si el rojo es tuyo, dejó de ser un gate.
+
+def _dos_sujetos(toy_vault):
+    """Dos sujetos con deuda de cierre INDEPENDIENTE: una estrella y un tema.
+
+    La estrella `test_star` y el tema `gp` tienen cada uno una nota con citas y sin bloque de
+    `verify-citations` (la categoría `unverified`, severidad de cierre)."""
+    write_yaml(cfg.THEMES_YAML, {"gp": {"title": "Procesos gaussianos", "area": "methods",
+                                        "concept": "procesos-gaussianos"}})
+    for slug, bib in (("test_star", "2020ajeC...1..1A"), ("gp", "2021propC...1..1B")):
+        d = toy_vault.FULLTEXT / slug
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"{bib}.txt").write_text("texto legible del paper " * 20, encoding="utf-8")
+    mk_note(toy_vault.PAPERS, "2020ajeC...1..1A", {"tags": ["paper"], "stars": ["Estrella Test"]}, "")
+    mk_note(toy_vault.PAPERS, "2021propC...1..1B", {"tags": ["paper"], "methods": ["gp"]}, "")
+    mk_note(toy_vault.STARS, "test_star", {"tags": ["star"], "slug": "test_star"},
+            "Afirmación de la estrella [[2020ajeC...1..1A]].\n")
+    mk_note(toy_vault.CONCEPTS / "methods", "procesos-gaussianos", {"tags": ["methods"]},
+            "Afirmación del tema [[2021propC...1..1B]].\n")
+    link_from_index(toy_vault, "test_star", "procesos-gaussianos",
+                    "2020ajeC...1..1A", "2021propC...1..1B")
+
+
+def test_el_cierre_acotado_no_cuenta_la_deuda_del_otro_sujeto(toy_vault):
+    """El caso medido: cerrar un tema no se frena por lo que le falta a una estrella ajena.
+
+    Y el simétrico, que es lo que impide que el flag sea una escotilla: la deuda PROPIA del sujeto
+    sigue contando. Acotar el alcance no es apagar el gate.  @inv INV-105"""
+    _dos_sujetos(toy_vault)
+    def deuda(res):
+        return {a for a, _ in res.en_alcance(res.por_clave("unverified"))}
+
+    assert deuda(lint.collect(cierre=True)) == {"test_star", "procesos-gaussianos"}, \
+        "sin alcance, las dos deudas frenan"
+    assert deuda(lint.collect(cierre=True, slug="gp")) == {"procesos-gaussianos"}, "sólo la propia"
+    assert deuda(lint.collect(cierre=True, slug="test_star")) == {"test_star"}, "y el simétrico"
+    # la categoría se sigue reportando ENTERA: lo que cambia es qué cuenta para el exit
+    assert len(lint.collect(cierre=True, slug="gp").por_clave("unverified")) == 2
+
+
+def test_el_alcance_no_debilita_a_los_bloqueantes(toy_vault):
+    """⛔ El alcance acota SÓLO la severidad de cierre. Un bloqueante ajeno sigue frenando.
+
+    Si no, `--cierre <slug>` sería un gate MÁS DÉBIL que un `lint` pelado —que hoy sale 1 con
+    cualquier bloqueante, venga de donde venga— y el paso de cierre de una operación pasaría a
+    garantizar menos que la pasada de higiene. Es la inversión exacta de para qué existe el flag.
+
+    @inv INV-105"""
+    _dos_sujetos(toy_vault)
+    mk_note(toy_vault.CONCEPTS / "methods", "otro-tema", {"tags": ["methods"]},
+            "Link a una página que no existe: [[pagina-fantasma]].\n")
+    link_from_index(toy_vault, "test_star", "procesos-gaussianos", "otro-tema",
+                    "2020ajeC...1..1A", "2021propC...1..1B")
+    gp = lint.collect(cierre=True, slug="gp")
+    rotos = gp.por_clave("broken")
+    assert len(rotos) == 1 and gp.en_alcance(rotos) == rotos.items, \
+        "un bloqueante NO se acota por slug"
+    assert "broken" in {c.clave for c in gp.bloquean()}, "el wikilink roto ajeno frena igual"
+
+
+def test_el_alcance_junta_las_tres_poblaciones(toy_vault):
+    """El alcance de un tema son su nota Y sus papers, por las tres vías que existen.
+
+    (a) la nota se llama por `concept`, que NO es el slug; (b) el paper cuyo `.txt` vive bajo el
+    slug; (c) el paper RETRO-LINKEADO, cuyo artefacto vive bajo otro slug y que sólo se alcanza por
+    el frontmatter — y por `methods`, no sólo por `thesis_links` (D-24: las dos llaves viven en
+    papers distintos y quedarse con una pierde la mitad)."""
+    _dos_sujetos(toy_vault)
+    mk_note(toy_vault.PAPERS, "2019retroC...1..1C",
+            {"tags": ["paper"], "stars": ["Estrella Test"], "thesis_links": ["gp"]}, "")
+    alcance = entity.notas_del_slug("gp")
+    assert "procesos-gaussianos" in alcance, "(a) la nota del tema se llama por `concept`"
+    assert "2021propC...1..1B" in alcance, "(b) el paper con artefacto bajo el slug"
+    assert "2019retroC...1..1C" in alcance, "(c) el retro-linkeado, sólo visible por frontmatter"
+    assert "2020ajeC...1..1A" not in alcance, "el paper del otro sujeto no entra"
+
+
+def test_un_slug_inexistente_no_da_un_verde_inventado(toy_vault, capsys):
+    """Acotar a una entidad que no existe daría 0 hallazgos EN ALCANCE, o sea exit 0 sobre una
+    bóveda con deuda: el falso limpio que este lint existe para no producir. Se rehúsa.  @inv INV-105"""
+    _dos_sujetos(toy_vault)
+    with pytest.raises(ValueError, match="entidad desconocida"):
+        lint.collect(cierre=True, slug="no-existe")
+    assert lint.main(["--cierre", "no-existe"]) == 2
+
+
+def test_el_resultado_se_etiqueta_con_el_slug_pedido(toy_vault):
+    """El alcance se captura ANTES del barrido: `collect` rebindea `slug` como variable de loop en
+    cuatro lugares, así que leerlo al final etiquetaba el resultado con el último slug que tocó el
+    barrido — un alcance inventado, y encima plausible. Medido: `collect(slug=None)` volvía
+    diciendo `slug='tau_ceti'`."""
+    _dos_sujetos(toy_vault)
+    write_gt(toy_vault, [gt_planet()])          # puebla los loops que usan `slug` adentro de collect
+    assert lint.collect(cierre=True).slug is None
+    assert lint.collect(cierre=True, slug="gp").slug == "gp"
+
+
+def test_el_reporte_acotado_no_esconde_la_deuda_ajena(toy_vault):
+    """El modo de falla obvio de la idea: que acotar el exit acote también el REPORTE, y la deuda
+    de al lado se vuelva invisible. El ítem ajeno se sigue listando, marcado."""
+    _dos_sujetos(toy_vault)
+    txt = lint.render(lint.collect(cierre=True, slug="gp"))
+    assert "test_star" in txt, "la deuda ajena se sigue listando entera"
+    assert "ajeno a `gp`" in txt, "y marcada como que no frena"
+    assert "Alcance del exit: `gp`" in txt

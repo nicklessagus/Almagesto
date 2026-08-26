@@ -373,7 +373,11 @@ def test_anomalia_nueva_exacta_y_sin_contaminar(sembrar, categoria, k):
 def test_todas_las_anomalias_juntas_no_se_pisan(sembrar):
     """Las diecinueve a la vez sobre el mismo corpus: cada una sigue dando su K exacto. Es el caso
     que las pruebas de a una no cubren — dos anomalías que comparten stems reservados, o una que
-    consume las notas que otra necesitaba, sólo se ven acá."""
+    consume las notas que otra necesitaba, sólo se ven acá.
+
+    Es además la red de INV-106: los dos `.txt` ilegibles sembrados a propósito tienen los MISMOS
+    bytes, así que una señal de identidad que no los excluya inventa un duplicado que nadie sembró
+    — y como la categoría es bloqueante, manda a fusionar dos papers ajenos.  @inv INV-106"""
     todas = {"huerfanas": 5, "thesis_colgantes": 3, "disputes_colgantes": 2, "no_sintetizado": 3,
              "cobertura_citas": 2, "cabecera_no_estampable": 2, "fulltext_ilegible": 2,
              **dict(_NUEVAS)}

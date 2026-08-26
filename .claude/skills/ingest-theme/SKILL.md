@@ -42,7 +42,7 @@ Progreso del ingest del tema <tema>:
 - [ ] 5  auto-revisión de autosuficiencia
 - [ ] 6  bookkeeping (index, log, STATUS)
 - [ ] 6b verify-citations sobre el concept + notas nuevas
-- [ ] 7  `lint.py --cierre` en 0 → commit → preguntar push
+- [ ] 7  `lint.py --cierre <slug>` en 0 → commit → preguntar push
 ```
 
 1. **Co-diseñar la consulta con el usuario (NO traducir en silencio).** El usuario da el tema en
@@ -237,7 +237,8 @@ Progreso del ingest del tema <tema>:
    nº de línea del `.txt`; sin respaldo ⇒ no-soportada). Resolver cada no-soportada/parcial (bajar a lo
    que dice la fuente, reasignar la cita, o marcar `inferencia`) y dejar el bloque `## Verificación de citas`.
 
-7. **Cierre (commit + push).** Tras la verificación (`python scripts/lint.py --cierre` en 0), `git add` de los archivos
+7. **Cierre (commit + push).** Tras la verificación (`python scripts/lint.py --cierre <slug>` en 0 — #121: el
+   alcance del exit es **este** sujeto; la deuda de otro se lista pero no frena esta operación), `git add` de los archivos
    **específicos** que tocó la operación (no `-A`) y commitear con mensaje
    descriptivo. Después **preguntar al usuario si hace `push`** — no pushear sin confirmación.
 

@@ -15,7 +15,7 @@ ficha/concepto, eso es `append-knowledge`, no un refresh: A barre por query lo n
 **Invariante que rige todo:** la cadena de scripts es **idempotente** (no pisa). Refrescar es seguro;
 lo que **nunca** se pisa sin decisión explícita es la **extracción LLM** (`make_notes --force` la
 regenera → sólo con confirmación) y el **ground-truth** (`fetch_ground_truth --force`). Todo cambio
-cierra con **verify-citations** (si tocó prosa con `[[bibcode]]`) + **`lint.py --cierre` en 0** + `log`, y se
+cierra con **verify-citations** (si tocó prosa con `[[bibcode]]`) + **`lint.py --cierre <slug>` en 0** + `log`, y se
 **pregunta antes de `push`**.
 
 ---
@@ -107,7 +107,7 @@ artefacto no regenerable** de la bóveda. Lo que la herramienta **no** hace sola
 - **no repara los `[[wikilink]]` rotos** — apuntan a una nota que ya no existe y el lint los da
   bloqueantes. Repararlos automáticamente sería decidir qué decía esa frase;
 - **no borra la nota que queda sin destino** (D-23): es extracción ya pagada.
-Todo eso sale listado al aplicar, y el cierre es `lint.py --cierre` en 0.
+Todo eso sale listado al aplicar, y el cierre es `lint.py --cierre <slug>` en 0.
 
 Y el lint tiene la red del otro lado: **capas colgadas** (registro / `raw/pdfs` / `raw/fulltext` /
 `build` de un slug que no está en `stars.yaml`/`themes.yaml`) es backlog propio.
@@ -135,7 +135,7 @@ Y el lint tiene la red del otro lado: **capas colgadas** (registro / `raw/pdfs` 
    - entró por la **query** y la lente lo clasifica core → o ajustás la lente y re-clasificás
      (sub-modo D), o lo dejás con `relevance: low` en vez de borrarlo, o asumís que va a volver.
    Decidilo explícitamente y dejalo en el `log`: "borrado y no durable" es un estado, no un olvido.
-5. Cierre: **`lint.py --cierre` en 0** (0 wikilinks rotos / thesis_links colgados / disputes.ref sin destino) → `log`
+5. Cierre: **`lint.py --cierre <slug>` en 0** (0 wikilinks rotos / thesis_links colgados / disputes.ref sin destino) → `log`
    (qué se borró y por qué) → commit → preguntar push.
 
 ## C. Renombrar un slug
@@ -157,7 +157,7 @@ El procedimiento manual, por si hay que hacerlo a mano:
    ```
 2. Ajustar `data_local` si cambió y el nombre en la matriz. Los wikilinks internos son por **nombre de
    nota** (sobreviven a mover carpeta pero **no** a renombrar el archivo) → actualizarlos todos.
-3. Cierre: `lint.py --cierre` en 0 → `log` → commit → preguntar push.
+3. Cierre: `lint.py --cierre <slug>` en 0 (con el slug **nuevo**) → `log` → commit → preguntar push.
 
 ## D. Re-clasificar tras cambiar la regla de relevancia
 Cuando editaste `objective.yaml` (vía `setup`) y el corte core/no-core cambió — sea porque tocaste

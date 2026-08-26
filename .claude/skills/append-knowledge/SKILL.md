@@ -118,7 +118,7 @@ Progreso del append de <fuente> → <destino>:
    (¿se entiende sin abrir el paper nuevo?) → **`verify-citations`** sobre la prosa tocada y la
    nota de paper nueva —si la nota destino ya traía bloque `## Verificación de citas`, **re-fechar
    el encabezado**: el lint compara esa fecha contra la del último cambio del archivo y marca
-   **verificación stale** si quedó atrás (#56)— → `python scripts/lint.py --cierre` en 0 (R-1: en el cierre de una operación, un par de verificación vencido frena; sin el flag sólo reportaría) → bookkeeping (`vault/wiki/log.md` SIEMPRE —
+   **verificación stale** si quedó atrás (#56)— → `python scripts/lint.py --cierre <slug>` en 0 (R-1: en el cierre de una operación, un par de verificación vencido frena; sin el flag sólo reportaría. #121: con el slug de la entidad destino, la deuda de otro sujeto se reporta pero no frena) → bookkeeping (`vault/wiki/log.md` SIEMPRE —
    entrada `append: <fuente> → <destino>`; `vault/wiki/index.md` y `vault/STATUS.md` sólo si cambió
    algo catalogable/de estado) → `git add` de archivos específicos + commit → **preguntar antes de
    `push`**.

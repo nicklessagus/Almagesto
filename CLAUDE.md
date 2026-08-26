@@ -1105,7 +1105,23 @@ ya no coincide), *vencido por fuente* (el `.txt` cambió), *fila huérfana* (la 
 **Dos severidades, un solo detector (R-1):** sin flag es la **pasada periódica** y reporta como
 backlog; con **`python scripts/lint.py --cierre`** cuentan para el exit — es el paso de cierre de
 toda operación que tocó la nota, donde un par sin verificar significa que **no terminaste**. Los
-skills de cierre lo invocan con el flag; la pasada de higiene de `maintain`, sin él. Aparte y
+skills de cierre lo invocan con el flag; la pasada de higiene de `maintain`, sin él.
+⛔ **Y el flag toma el SUJETO: `python scripts/lint.py --cierre <slug>` (#121).** El razonamiento de
+R-1 es sobre lo que **esa operación tocó**, y aplicado a la bóveda entera no se podía cumplir: una
+deuda vieja en **otro** sujeto —147 citas sin bloque en una estrella que este ingest no miró— dejaba
+el gate en rojo antes de empezar y en rojo al terminar. Medido al cerrar un tema real: hubo que
+revisar las categorías **a ojo, una por una**, para confirmar que lo del slug nuevo estaba en cero y
+que el único bloqueante era ajeno — un gate que se audita a mano dejó de ser un gate. Con el slug,
+el **alcance** son las notas del sujeto: su ficha/concepto y sus papers, por las tres vías (la nota
+se llama por `concept`, que no es el slug; los papers con artefacto bajo `raw/*/<slug>/`; y los
+**retro-linkeados**, que sólo se ven por `stars`/`thesis_links`/`methods` en el frontmatter).
+⚠ Dos recortes deliberados, cada uno contra un modo de falla: **el reporte NO se acota** (la deuda
+ajena se lista entera, marcada *«no frena»* — si se escondiera, acotar el exit la volvería
+invisible), y **el alcance acota SÓLO la severidad de cierre**: un bloqueante sigue contando venga
+de donde venga, porque si no `--cierre <slug>` sería un gate **más débil** que un `lint` pelado. Un
+slug inexistente **no** da un verde: se rehúsa (exit 2), porque acotar a una entidad que no existe
+daría cero hallazgos en alcance sobre una bóveda con deuda. Sin argumento, el comportamiento
+histórico (pasada de cierre global, deliberada). Aparte y
 **bloqueante siempre**, el **bloque con plantilla vieja** (sin las columnas de hash): no es "cero
 vencidos", es un bloque que nadie puede evaluar. Sigue existiendo la **verificación
 stale** (la nota se editó **después** de la fecha de su bloque —lo que pasa al ampliarla con

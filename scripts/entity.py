@@ -46,19 +46,31 @@ import yaml
 import lib_config as cfg
 
 
-def resolver(slug: str) -> tuple[str, str, dict]:
-    """`(tipo, clave_yaml, meta)` — `tipo` es `star` o `theme`. Lanza SystemExit si no existe.
+def buscar(slug: str) -> tuple[str, str, dict] | None:
+    """`(tipo, clave_yaml, meta)` o `None` si el slug no existe. `tipo` es `star` o `theme`.
 
     La clave del YAML **no** es el slug en los dos casos: en `stars.yaml` la clave es el nombre
     canónico (`tau Cet`) y el slug es un campo; en `themes.yaml` la clave ES el slug. Confundirlos
-    es la forma más fácil de dejar la entrada del YAML colgada."""
+    es la forma más fácil de dejar la entrada del YAML colgada.
+
+    Existe aparte de `resolver` porque hay **dos** llamadores con contratos distintos: el CLI de
+    este script muere con un mensaje, y el lint (#121) tiene que poder quejarse con su propio exit
+    sin que un `sys.exit` ajeno lo saque del medio."""
     for nombre, meta in cfg.load_stars().items():
         if isinstance(meta, dict) and meta.get("slug") == slug:
             return "star", nombre, meta
     themes = cfg.load_themes()
     if slug in themes:
         return "theme", slug, cfg.as_map(themes[slug])
-    sys.exit(f"entidad desconocida: {slug!r} — no está en stars.yaml ni en themes.yaml")
+    return None
+
+
+def resolver(slug: str) -> tuple[str, str, dict]:
+    """`buscar` con la queja del CLI: SystemExit si la entidad no existe."""
+    hit = buscar(slug)
+    if hit is None:
+        sys.exit(f"entidad desconocida: {slug!r} — no está en stars.yaml ni en themes.yaml")
+    return hit
 
 
 def nota_de(tipo: str, slug: str, meta: dict) -> Path:
@@ -104,6 +116,42 @@ def referencias(nombre: str, tipo: str) -> tuple[list, list]:
         if f"[[{nombre}]]" in texto or f"[[{nombre}|" in texto:
             wikis.append(f)
     return papers, wikis
+
+
+def notas_del_slug(slug: str) -> set[str] | None:
+    """Los **stems de nota** que pertenecen a una entidad: su ficha/concepto y sus papers.
+    `None` si el slug no existe.
+
+    Es el alcance de `lint --cierre <slug>` (#121). Tres poblaciones, **unión**, porque ninguna
+    sola cubre lo que una operación toca:
+      (a) la nota de la entidad (`nota_de`: para un tema NO se llama como el slug);
+      (b) los papers cuyo ARTEFACTO vive bajo el slug (`raw/fulltext/<slug>/`, `raw/pdfs/<slug>/`)
+          — la población que bajó este ingest, y la única que existe antes de que se escriba
+          ninguna nota;
+      (c) los papers que REFERENCIAN a la entidad en su frontmatter — así entra el **retro-linkeo**
+          (un paper ya extraído por otro sujeto que este tema también usa: su `.txt` vive bajo el
+          slug ajeno, así que (b) no lo ve).
+
+    En un tema se miran `thesis_links` **y** `methods` (D-24: las dos llaves viven en papers
+    distintos y quedarse con una pierde la mitad), y se aceptan tanto el slug como el `concept`,
+    que pueden diferir.
+
+    @inv INV-105"""
+    hit = buscar(slug)
+    if hit is None:
+        return None
+    tipo, nombre, meta = hit
+    stems = {nota_de(tipo, slug, meta).stem}
+    for carpeta, suf in ((cfg.FULLTEXT / slug, ".txt"), (cfg.PDFS / slug, ".pdf")):
+        if carpeta.is_dir():
+            stems |= {p.name[:-len(suf)] for p in carpeta.glob("*" + suf)}
+    campos = ("stars",) if tipo == "star" else ("thesis_links", "methods")
+    claves = {nombre, slug, str(meta.get("concept") or slug)}
+    for f in sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []:
+        fm = cfg.split_fm(f.read_text(encoding="utf-8"))
+        if any(claves & set(cfg.as_list(fm.get(campo))) for campo in campos):
+            stems.add(f.stem)
+    return stems
 
 
 def _yaml_sin(path: Path, clave: str) -> None:

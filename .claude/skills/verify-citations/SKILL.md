@@ -375,8 +375,10 @@ print(lb.bytes_hash('vault/raw/pdfs/<slug>/<bibcode>.pdf'))"
   mientras la fuente real no se movió, y **no vería** que el PDF sí cambió. El lint compara contra
   el archivo que corresponde y su mensaje nombra cuál.
 
-**Cerrá con `python scripts/lint.py --cierre`** (R-1): ahí un par vencido **frena la operación**,
-porque significa que no terminaste. Sin el flag es la pasada periódica y sólo reporta.
+**Cerrá con `python scripts/lint.py --cierre <slug>`** (R-1): ahí un par vencido **frena la operación**,
+porque significa que no terminaste. Sin el flag es la pasada periódica y sólo reporta; sin el
+**slug** (#121) cuenta la bóveda entera, así que la deuda de otro sujeto frena un cierre que no la
+causó — pasale el sujeto que tocaste.
 
 **La fecha del encabezado sigue siendo portante**, pero ya **no** es el mecanismo principal (#56):
 las anclas la reemplazan con granularidad de par. Queda como **red** para notas con bloque y sin

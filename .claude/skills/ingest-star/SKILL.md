@@ -29,7 +29,7 @@ Progreso del ingest de <estrella>:
 - [ ] 4  auto-revisión de autosuficiencia
 - [ ] 5  bookkeeping (index, log, matriz, STATUS) + `triage.py <slug> --sintesis`
 - [ ] 5b verify-citations sobre la ficha + notas nuevas
-- [ ] 6  `lint.py --cierre` en 0 → commit → preguntar push
+- [ ] 6  `lint.py --cierre <slug>` en 0 → commit → preguntar push
 ```
 
 1. **Resolver el slug y ACORDAR LOS ALIAS antes de buscar (D-7).** Buscar la estrella en
