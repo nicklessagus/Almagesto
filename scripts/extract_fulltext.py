@@ -8,8 +8,11 @@ vault/raw/pdfs/<slug>/<bibcode>.pdf  →  vault/raw/fulltext/<slug>/<bibcode>.tx
 Al cerrar estampa en las notas de paper (cirugía de make_notes.stamp_fulltext, nunca sobre la
 extracción LLM): `fulltext`, `fulltext_source` (pdftotext|ocr|web) y `pdf_source` (#57: de qué
 DOCUMENTO salió el texto — eprint|ads|publisher|web — leyendo la marca que arXiv estampa en el
-propio .txt). Por eso re-correrlo es el **backfill** de `pdf_source` en un corpus ya bajado: no
-re-baja ningún PDF, sólo re-lee lo que ya está en disco.
+propio .txt). Por eso re-correrlo es el **backfill** de un corpus ya bajado —no re-baja ningún
+PDF, sólo re-lee lo que ya está en disco—: de `pdf_source`, y también de la marca de **garble**
+(#104), que hasta ahora sólo corría sobre texto recién extraído, así que un .txt escrito antes de
+que ese chequeo existiera se quedaba `pdftotext` para siempre (el camino de skip lo re-leía sólo
+para preguntarle si era ILEGIBLE, y un escaneo del editor es perfectamente legible).
 
 El .txt se commitea (es liviano, greppable y permite `git grep` sobre todo el corpus, además
 de re-preguntar al corpus cuando cambia el pipeline sin re-parsear el PDF). Requiere `pdftotext`
@@ -146,6 +149,26 @@ def scanned_header(why: str) -> str:
     )
 
 
+def backfill_scanned_mark(prev: str) -> str | None:
+    """Reason to stamp the OCR caveat on an ALREADY EXTRACTED .txt, or None if there is none.
+
+    `is_garbled` only ever ran on freshly extracted text, so a .txt written before that check
+    existed keeps `fulltext_source: pdftotext` forever: the skip path below re-reads it only to
+    ask whether it is ILLEGIBLE, and an editor-OCR scan is perfectly legible. Measured on a real
+    vault: 3 of the 42 .txt of one theme, and one of them was a paper whose equations the note
+    had transcribed with an OCR-induced subscript error nobody caught.
+
+    No re-extraction: for an editor-OCR scan the PDF's own text layer is already the best text
+    available (see `scanned_header`), so this is a header stamp — and it stays idempotent,
+    because a .txt that already carries the mark is not garble-scored again.
+    """
+    # @inv INV-28
+    if prev.startswith(OCR_MARK) or not is_legible(prev)[0]:
+        return None
+    garbled, why = is_garbled(prev)
+    return why if garbled else None
+
+
 def ocr_available() -> bool:
     # @inv INV-70
     return shutil.which("tesseract") is not None and shutil.which("pdftoppm") is not None
@@ -237,7 +260,7 @@ def main() -> int:
     outdir.mkdir(parents=True, exist_ok=True)
 
     pdfs = sorted(srcdir.glob("*.pdf"))
-    done = ocred = skipped = failed = illegible = 0
+    done = ocred = skipped = failed = illegible = backfilled = 0
     for pdf in pdfs:
         out = outdir / (pdf.stem + ".txt")
         if out.exists() and not args.force:
@@ -245,6 +268,12 @@ def main() -> int:
             # (instalarlo + re-correr alcanza). Un .txt ya-OCR que sigue ilegible no se reintenta.
             prev = out.read_text(encoding="utf-8", errors="replace")
             if not (ocr_available() and not prev.startswith(OCR_MARK) and not is_legible(prev)[0]):
+                gwhy = backfill_scanned_mark(prev)
+                if gwhy is not None:
+                    cfg.write_text_atomic(out, scanned_header(gwhy) + prev)
+                    print(f"  {pdf.name}: {gwhy} → marcado `source: ocr` (backfill)")
+                    backfilled += 1
+                    continue
                 skipped += 1
                 continue
             print(f"  {pdf.name}: .txt existente ilegible → reintento con OCR")
@@ -330,6 +359,7 @@ def main() -> int:
 
     print(f"{args.slug}: {done} extraídos" + (f" ({ocred} por OCR)" if ocred else "")
           + f", {skipped} ya estaban, {failed} fallaron"
+          + (f", {backfilled} marcados `source: ocr` (backfill)" if backfilled else "")
           + (f", {illegible} ilegibles (⚠ ver arriba)" if illegible else "")
           + f" → {outdir}")
 

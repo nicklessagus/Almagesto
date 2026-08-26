@@ -336,3 +336,39 @@ def test_scanned_header_arranca_con_la_marca_que_lee_make_notes():
 
 def test_scanned_header_dice_que_el_ocr_no_es_de_tesseract():
     assert "editor" in ef.scanned_header("x")
+
+
+# ── backfill: el .txt YA EXTRAÍDO cuya capa de texto era OCR del editor ───────
+# `is_garbled` sólo corría sobre texto recién extraído, así que un .txt escrito antes de que
+# ese chequeo existiera se queda con `fulltext_source: pdftotext` para siempre: el camino de
+# skip lo re-lee sólo para preguntarle si es ILEGIBLE, y un escaneo del editor es perfectamente
+# legible. Medido sobre una bóveda real: 3 de los 42 .txt de un tema.
+DANIO = " Coni~nunicatedby Ul~rz~ersity Corllp~rtafiorl wr~ttenas Ho~unrdHqhes " * 6
+
+
+def test_backfill_no_toca_un_txt_limpio():
+    assert ef.backfill_scanned_mark(LIMPIO) is None
+
+
+def test_backfill_marca_el_txt_garbleado_ya_extraido():
+    why = ef.backfill_scanned_mark(LIMPIO + DANIO)
+    assert why is not None
+    assert "OCR del editor" in why
+
+
+def test_backfill_es_idempotente_sobre_un_txt_ya_marcado():
+    """La segunda corrida no puede volver a estampar: el .txt ya arranca con la marca, y
+    apilar headers rompería la idempotencia que el framework declara como invariante."""
+    ya = ef.scanned_header("motivo previo") + LIMPIO + DANIO
+    assert ef.backfill_scanned_mark(ya) is None
+
+
+def test_backfill_no_pisa_el_carril_del_ILEGIBLE():
+    """Un .txt ilegible es del otro camino (reintento por OCR con tesseract): si el backfill lo
+    marcara `source: ocr` sin re-extraerlo, congelaría un mojibake como si fuera citable."""
+    assert ef.backfill_scanned_mark("\x0c \x0c " * 50) is None
+
+
+def test_backfill_estampa_el_header_que_make_notes_lee():
+    why = ef.backfill_scanned_mark(LIMPIO + DANIO)
+    assert ef.scanned_header(why).startswith(ef.OCR_MARK)

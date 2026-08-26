@@ -299,7 +299,14 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   (snapshot), o `null` = **desconocido** (que **no** es "publicado"). Manda la verdad de disco: la
   marca que arXiv estampa en cada página, visible en el `.txt` — por eso se detecta
   retroactivamente en un corpus ya bajado (re-correr `extract_fulltext`, sin re-bajar nada); si no
-  hay marca, vale la rama que registró el fetcher. Importa porque `verify-citations` promete que la
+  hay marca, vale la rama que registró el fetcher. Esa misma re-corrida es el **backfill de la
+  marca de garble**: el chequeo que estampa `fulltext_source: ocr` sobre un PDF **que ya venía
+  OCReado por el editor** sólo corría al extraer, así que un `.txt` escrito antes se quedaba
+  `pdftotext` para siempre — el camino de skip lo re-leía sólo para preguntarle si era **ilegible**,
+  y un escaneo del editor es perfectamente legible. Medido: 2 de 42 `.txt` de un tema real, uno de
+  ellos un paper cuya ecuación la nota había transcrito con un subíndice equivocado por el OCR. No
+  re-extrae: para ese caso la capa del PDF ya es el mejor texto que hay, así que es un estampado de
+  header (idempotente). Importa porque `verify-citations` promete que la
   cita textual son "las palabras reales del paper": con `eprint`, una discrepancia numérica contra
   un valor publicado es candidata a **diferencia de versión** y NO se "corrige" la nota hacia el
   preprint (ver el caveat del skill). **`role` (#73) — qué TIPO de aporte es el paper**, distinto de la **postura** respecto de una tesis (que desde D-21 **no vive en el paper**: vive en
