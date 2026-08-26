@@ -2824,3 +2824,99 @@ def test_el_drop_core_se_ve_en_la_tabla_de_papers(toy_vault, monkeypatch):
     # el descarte de un CANDIDATO del chaining nunca fue core: no se marca como excluido a mano
     assert filas["2020chaining"]["estado"] == mn.ESTADO_SIN_EXTRAER
     assert filas["2020normal"]["estado"] == mn.ESTADO_SIN_EXTRAER
+
+
+# ── #117 · el migrador deduce el archivo del HASH, no del frontmatter ────────────────────────────
+
+def _nota_con_fila(toy_vault, bib="2020citC...1..1C", hash_fila="", symbols_lost=False):
+    """Una nota con un bloque de verificación de UNA fila, más el `.txt` y el PDF de esa fuente."""
+    import lib_blocks as lb
+    (toy_vault.FULLTEXT / "slug").mkdir(parents=True, exist_ok=True)
+    ft = toy_vault.FULLTEXT / "slug" / f"{bib}.txt"
+    ft.write_text("El período es de 34 días.\n", encoding="utf-8")
+    (toy_vault.PDFS / "slug").mkdir(parents=True, exist_ok=True)
+    pdf = toy_vault.PDFS / "slug" / f"{bib}.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n escaneo del editor \xff\n")
+    fm = {"tags": ["paper"], "stars": ["Estrella Test"]}
+    if symbols_lost:
+        fm["symbols_lost"] = True
+    mk_note(toy_vault.PAPERS, bib, fm, "")
+    cuerpo = f"Afirmación con cita [[{bib}]].\n"
+    par = lb.pairs_of(cuerpo)[0]
+    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    nota.parent.mkdir(parents=True, exist_ok=True)
+    nota.write_text(
+        "---\ntags: [methods]\n---\n" + cuerpo +
+        "\n## Verificación de citas (2026-01-01)\n\n"
+        "| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente | Condición |\n"
+        "|---|---|---|---|---|---|---|\n"
+        f"| 1 | extracto | [[{bib}]] | soportada | {par.anchor} | {hash_fila} | — |\n",
+        encoding="utf-8")
+    return nota, ft, pdf
+
+
+def test_migrar_verif_deduce_el_archivo_del_hash_no_del_frontmatter(toy_vault, capsys):
+    """El punto de #117: la fila la escribió el verificador, que a veces leyó el PDF de una fuente
+    **no** marcada `symbols_lost` (el OCR del editor destruyó los símbolos). Aplicar la regla del
+    frontmatter acá escribiría `txt:` sobre una fila anclada al PDF — una declaración falsa, en
+    justo las filas que motivaron el issue. Se identifica el archivo por su huella.
+
+    @inv INV-107"""
+    import lib_blocks as lb
+    nota, ft, pdf = _nota_con_fila(toy_vault, hash_fila="")
+    # la fila guarda el hash del PDF, y la nota de paper NO está marcada symbols_lost
+    nota.write_text(nota.read_text(encoding="utf-8").replace("|  | — |",
+                                                             f"| {lb.bytes_hash(pdf)} | — |"),
+                    encoding="utf-8")
+    assert mn.migrate_verif_archivo(nota) == 1
+    assert f"| pdf:{lb.bytes_hash(pdf)} |" in nota.read_text(encoding="utf-8")
+
+    nota2, ft2, _ = _nota_con_fila(toy_vault, bib="2021txtC...1..1D",
+                                   hash_fila=lb.source_hash(
+                                       toy_vault.FULLTEXT / "slug" / "2021txtC...1..1D.txt")
+                                   if (toy_vault.FULLTEXT / "slug" / "2021txtC...1..1D.txt").exists()
+                                   else "")
+    nota2.write_text(nota2.read_text(encoding="utf-8").replace(
+        "|  | — |", f"| {lb.source_hash(ft2)} | — |"), encoding="utf-8")
+    assert mn.migrate_verif_archivo(nota2) == 1
+    assert f"| txt:{lb.source_hash(ft2)} |" in nota2.read_text(encoding="utf-8")
+
+
+def test_migrar_verif_es_idempotente(toy_vault):
+    """Segunda corrida: cero cambios. Una celda ya prefijada se saltea.  @inv INV-107"""
+    import lib_blocks as lb
+    nota, ft, _ = _nota_con_fila(toy_vault)
+    nota.write_text(nota.read_text(encoding="utf-8").replace(
+        "|  | — |", f"| {lb.source_hash(ft)} | — |"), encoding="utf-8")
+    assert mn.migrate_verif_archivo(nota) == 1
+    antes = nota.read_text(encoding="utf-8")
+    assert mn.migrate_verif_archivo(nota) == 0
+    assert nota.read_text(encoding="utf-8") == antes
+
+
+def test_migrar_verif_avisa_cuando_no_coincide_ningun_archivo(toy_vault, capsys):
+    """Sin coincidencia el par ya está vencido: se declara lo que dice el frontmatter y **se avisa**
+    de que hay que re-verificar. Lo que no se hace es callarse y escribir una declaración que se lee
+    como verificada.  @inv INV-107"""
+    nota, _, _ = _nota_con_fila(toy_vault, hash_fila="", symbols_lost=True)
+    nota.write_text(nota.read_text(encoding="utf-8").replace("|  | — |", "| deadbeef99 | — |"),
+                    encoding="utf-8")
+    assert mn.migrate_verif_archivo(nota) == 1
+    assert "| pdf:deadbeef99 |" in nota.read_text(encoding="utf-8"), "cae a la regla del frontmatter"
+    assert "re-verificar el par" in capsys.readouterr().out
+
+
+def test_migrar_verif_backfill_recorre_la_boveda(toy_vault, capsys):
+    """El backfill sobre toda la bóveda: toca sólo notas CON bloque de verificación y nombra cada
+    una. Una bóveda sin bloques no se reescribe.  @inv INV-107"""
+    import lib_blocks as lb
+    assert mn.migrate_all_verif_archivo() == 0
+    assert "0 fila(s)" in capsys.readouterr().out, "sin bloques no hay nada que migrar"
+
+    nota, ft, _ = _nota_con_fila(toy_vault)
+    nota.write_text(nota.read_text(encoding="utf-8").replace(
+        "|  | — |", f"| {lb.source_hash(ft)} | — |"), encoding="utf-8")
+    assert mn.migrate_all_verif_archivo() == 0            # exit code, no cantidad
+    salida = capsys.readouterr().out
+    assert "nota-verif.md: 1 fila(s)" in salida and "1 fila(s) declaran su archivo" in salida
+    assert f"txt:{lb.source_hash(ft)}" in nota.read_text(encoding="utf-8")

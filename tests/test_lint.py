@@ -1809,18 +1809,23 @@ import lib_blocks as lb   # noqa: E402
 
 
 def _con_ancla(toy_vault, cuerpo, txt="El período es de 34 días.\n", bib="2020citC...1..1C",
-               anchor=None, source=None):
+               anchor=None, source=None, kind="txt"):
     """Nota con bloque de verificación bien formado: la fila se calcula del propio cuerpo, así que
-    el escenario nace VERIFICADO y cada test rompe una sola cosa (D-5: la ficha nace 100%)."""
+    el escenario nace VERIFICADO y cada test rompe una sola cosa (D-5: la ficha nace 100%).
+
+    `kind` es el prefijo `txt:`/`pdf:` de #117 — con qué archivo dice la fila haberse verificado.
+    `kind=None` produce la plantilla ANTERIOR a 1.54.0 (celda sin prefijo), que es el caso que el
+    detector nuevo tiene que agarrar."""
     (toy_vault.FULLTEXT / "slug").mkdir(parents=True, exist_ok=True)
     ft = toy_vault.FULLTEXT / "slug" / f"{bib}.txt"
     ft.write_text(txt, encoding="utf-8")
     pares = lb.pairs_of(cuerpo)
     filas = ["| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente | Condición |",
              "|---|---|---|---|---|---|---|"]
+    pref = f"{kind}:" if kind else ""
     for i, par in enumerate(pares, 1):
         filas.append(f"| {i} | extracto | [[{par.bibcode}]] | soportada | "
-                     f"{anchor or par.anchor} | {source or lb.source_hash(ft)} | — |")
+                     f"{anchor or par.anchor} | {pref}{source or lb.source_hash(ft)} | — |")
     completo = cuerpo + "\n## Verificación de citas (2026-01-01)\n\n" + "\n".join(filas) + "\n"
     _nota_verif(toy_vault, "nota-verif", completo)
     return ft
@@ -1909,13 +1914,16 @@ def test_symbols_lost_vigila_el_PDF_y_no_el_txt(toy_vault, capsys):
     """#113/B-2: la evidencia de estos pares es «p. 628», no una línea del `.txt`.
 
     Re-extraer el `.txt` NO debe marcarlos vencidos —su fuente real no se movió—, y es justo el
-    escenario que el propio framework provoca (`--force`, upgrade a OCR, backfill de marcas)."""
+    escenario que el propio framework provoca (`--force`, upgrade a OCR, backfill de marcas).
+
+    ⚠ Desde #117 lo que ancla la fila al PDF es la **fila** (`pdf:`), no el `symbols_lost` de la
+    nota del paper: el frontmatter no sabe qué leyó el verificador."""
     ft = _con_ancla(toy_vault, CUERPO)
     pdf = _fuente_sin_ecuaciones(toy_vault)
     # la fila tiene que nacer anclada al PDF, que es de donde salió la cita
     nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
     nota.write_text(nota.read_text(encoding="utf-8").replace(
-        lb.source_hash(ft), lb.bytes_hash(pdf)), encoding="utf-8")
+        f"txt:{lb.source_hash(ft)}", f"pdf:{lb.bytes_hash(pdf)}"), encoding="utf-8")
     _, rep = run_lint_reporte(capsys)
     assert _n_vencidos(rep) == 0, "nace verificada contra el PDF"
 
@@ -1930,7 +1938,7 @@ def test_symbols_lost_marca_cuando_cambia_el_PDF(toy_vault, capsys):
     pdf = _fuente_sin_ecuaciones(toy_vault)
     nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
     nota.write_text(nota.read_text(encoding="utf-8").replace(
-        lb.source_hash(ft), lb.bytes_hash(pdf)), encoding="utf-8")
+        f"txt:{lb.source_hash(ft)}", f"pdf:{lb.bytes_hash(pdf)}"), encoding="utf-8")
     pdf.write_bytes(b"%PDF-1.4\n un escaneo distinto \xfe\n")
     _, rep = run_lint_reporte(capsys)
     assert _n_vencidos(rep) == 1
@@ -2678,7 +2686,7 @@ def test_las_claves_de_categoria_son_unicas_y_estables(toy_vault):
     equivocada en silencio."""
     claves = [c.clave for c in lint.collect().categorias]
     assert len(claves) == len(set(claves)), [k for k in claves if claves.count(k) > 1]
-    assert len(claves) == 58, f"el reporte tiene {len(claves)} categorías, se esperaban 58"
+    assert len(claves) == 59, f"el reporte tiene {len(claves)} categorías, se esperaban 59"
 
 
 def test_el_modo_cierre_solo_cambia_el_exit_de_los_pares(toy_vault):
@@ -3137,3 +3145,59 @@ def test_el_reporte_acotado_no_esconde_la_deuda_ajena(toy_vault):
     assert "test_star" in txt, "la deuda ajena se sigue listando entera"
     assert "ajeno a `gp`" in txt, "y marcada como que no frena"
     assert "Alcance del exit: `gp`" in txt
+
+
+# ── #117 · la FILA declara contra qué archivo se verificó; el lint no lo infiere ─────────────────
+
+def test_ocr_verificado_contra_el_PDF_no_vence_al_re_extraer_el_txt(toy_vault, capsys):
+    """El caso medido, y el que la regla de #113 no cubría.
+
+    Una fuente `fulltext_source: ocr` **también** se verifica a veces contra el PDF —el OCR del
+    editor destruye los símbolos— y eso pasó con 3 de las 5 fuentes marcadas de un tema real. La
+    regla vieja miraba `symbols_lost` en el frontmatter, así que para estas hasheaba el `.txt`:
+    **17 pares volvieron «vencidos por fuente»** sin que nadie tocara nada. Acá la fuente NO está
+    marcada `symbols_lost` y la fila dice `pdf:`; re-extraer el `.txt` no la mueve.
+
+    @inv INV-107"""
+    ft = _con_ancla(toy_vault, CUERPO)
+    (toy_vault.PDFS / "slug").mkdir(parents=True, exist_ok=True)
+    pdf = toy_vault.PDFS / "slug" / "2020citC...1..1C.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n el escaneo del editor \xff\n")
+    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    nota.write_text(nota.read_text(encoding="utf-8").replace(
+        f"txt:{lb.source_hash(ft)}", f"pdf:{lb.bytes_hash(pdf)}"), encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    assert _n_vencidos(rep) == 0, "nace verificada contra el PDF que declara"
+
+    ft.write_text("otro texto re-extraido\n", encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    assert _n_vencidos(rep) == 0, "el `.txt` no es su fuente: re-extraerlo no la vence"
+
+    pdf.write_bytes(b"%PDF-1.4\n otro escaneo \xfe\n")
+    _, rep = run_lint_reporte(capsys)
+    assert _n_vencidos(rep) == 1, "y el archivo que SÍ declaró, sí la vence"
+
+
+def test_fila_sin_declarar_archivo_no_se_adivina(toy_vault, capsys):
+    """Una celda `Hash fuente` sin prefijo es la plantilla anterior a 1.54.0: **no consta** contra
+    qué archivo se verificó. Inferirlo del frontmatter es exactamente lo que fabricaba pares
+    vencidos, así que se declara no evaluable y se migra — no se adivina ni se da por limpio
+    (D-43).  @inv INV-107"""
+    _con_ancla(toy_vault, CUERPO, kind=None)
+    rc, rep = run_lint_reporte(capsys)
+    assert "no declara contra qué archivo" in rep
+    assert "--migrate-verif-archivo" in rep, "el hallazgo trae su comando de migración"
+    assert _n_vencidos(rep) == 0, "no se cuenta DOS veces: o es sin declarar, o es vencido"
+    assert rc == 1, "bloqueante: un bloque que nadie puede evaluar no es un bloque limpio"
+
+
+def test_fila_que_declara_un_archivo_ausente_no_da_limpio(toy_vault, capsys):
+    """Dice haberse verificado contra el PDF y el PDF no está: el hash no se puede comparar. Es
+    «no evaluado», que no es «al día».  @inv INV-107"""
+    ft = _con_ancla(toy_vault, CUERPO)
+    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    nota.write_text(nota.read_text(encoding="utf-8").replace(
+        f"txt:{lb.source_hash(ft)}", "pdf:aaaaaaaaaa"), encoding="utf-8")
+    rc, rep = run_lint_reporte(capsys)
+    assert "ese archivo no está en la bóveda" in rep
+    assert rc == 1

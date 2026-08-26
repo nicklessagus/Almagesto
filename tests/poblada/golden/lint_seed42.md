@@ -121,6 +121,8 @@
 
 ## ⛔ Bloque de verificación con plantilla vieja (sin columnas de hash — no evaluable) (0)
 
+## ⛔ Fila de verificación que no declara contra qué archivo se verificó (#117): el hash no se puede comparar (0)
+
 ## Pares de verificación vencidos (backlog: pasada periódica; con `--cierre` bloquea) (0)
 
 ## Verificación stale: la nota se editó después de su último verify-citations (backlog) (0)

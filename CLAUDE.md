@@ -853,11 +853,22 @@ prosa y no dejar rastro borra justo lo que hay que poder auditar y volver a mira
 a lo que dice la fuente, reasignar la cita al bibcode correcto, marcar **`inferencia`**, o taguear la
 disputa) y se deja un bloque `## Verificación de citas` en la nota — **una fila por par**, con dos
 columnas de hash (**el ancla**, D-4/D-20):
-`| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |`.
+`| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |`
+(la celda `Hash fuente` va prefijada `txt:` / `pdf:` — ver abajo).
 ⚠ **La columna `Score` 0–10 se eliminó en 1.42.0**, por la misma razón que `parcial` en 1.39.0:
 reintroducía un eje de **grado** cuyo umbral nunca se calibró. El campo tampoco gradúa —
 FActScore etiqueta binario y los que suman un tercer valor usan vocabulario cerrado, no una
 escala—, y el vocabulario de acá ya es ese ternario.
+⛔ **La celda `Hash fuente` declara CONTRA QUÉ ARCHIVO se verificó ese par: `txt:<sha10>` o
+`pdf:<sha10>` (#117).** Hasta 1.53.0 lo inferían el lint y el generador desde el frontmatter
+—`symbols_lost` ⇒ PDF, si no el `.txt`—, y esa regla es **más angosta que la práctica**: una fuente
+`fulltext_source: ocr` también se verifica contra el PDF cuando el escaneo del editor destruyó los
+símbolos, y eso pasó con **3 de las 5** fuentes marcadas de un tema real → el lint hasheaba el
+archivo equivocado y devolvía **17 pares «vencidos por fuente»** sobre fuentes que nadie tocó. La
+decisión la toma **el verificador, par por par**, así que la declara la **fila**; el frontmatter no
+puede saberlo. Una celda sin prefijo es *no consta* —que no es `txt`— y el lint la **bloquea** en
+vez de adivinar: se migra con `python scripts/make_notes.py --migrate-verif-archivo`, que deduce el
+archivo del **hash que la fila ya guardaba** (identificarlo por su huella, no re-inferirlo).
 El **ancla** es el sha256 (10 hex) del **bloque markdown normalizado** que contiene la cita
 —párrafo / fila / ítem / blockquote—: reflowear la nota **no** la mueve, cambiar un número **sí**, y
 una fila sin `[[bibcode]]` propio hereda el del caption hasheando **los dos** bloques. El **hash de

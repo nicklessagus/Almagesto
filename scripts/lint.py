@@ -1317,15 +1317,23 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # (e) va aparte y bloquea sin `--cierre`: no es un par vencido, es un bloque que nadie puede
     # evaluar — reportarlo como "0 vencidos" sería el cero inventado que D-43 prohíbe.
     # @inv INV-78, INV-79
-    # #113/B-2: el archivo que vigila cada fuente. Por defecto su `.txt`; para las fuentes cuyo
-    # `.txt` perdió el cuerpo de las ecuaciones, el **PDF** — que es de donde sale la evidencia de
-    # esos pares («p. 628»). Sin esto la fila se marcaría vencida al re-extraer un `.txt` que no es
-    # su fuente, y no se enteraría si cambia el PDF que sí lo es.
-    evidencia_hash = dict(ft_hash)
-    for _bib in symbols_lost_bibs:
-        _pdf = pdf_on_disk.get(_bib)
-        if _pdf:
-            evidencia_hash[_bib] = lb.bytes_hash(Path(_pdf))
+    # #117: el archivo que vigila cada fila lo declara LA FILA (`txt:` / `pdf:` en `Hash fuente`),
+    # no el frontmatter. La regla inferida de #113/B-2 —`symbols_lost` ⇒ PDF, si no el `.txt`— es
+    # más angosta que la práctica: una fuente `ocr` también se verifica contra el PDF cuando el
+    # escaneo del editor destruyó los símbolos, y ahí el lint hasheaba el archivo equivocado (17
+    # pares «vencidos por fuente» sobre fuentes que nadie tocó). El hash del PDF se calcula **a
+    # demanda**: hashear todos los PDFs de la bóveda por si acaso costaría más que el resto del lint
+    # junto.
+    _pdf_hash_cache: dict = {}
+
+    def evidencia_hash_de(bib: str, kind: str) -> str | None:
+        """Hash VIGENTE del archivo que la fila dice haber leído. `None` si ese archivo no está."""
+        if kind == "pdf":
+            if bib not in _pdf_hash_cache:
+                _p = pdf_on_disk.get(bib)
+                _pdf_hash_cache[bib] = lb.bytes_hash(Path(_p)) if _p else None
+            return _pdf_hash_cache[bib]
+        return ft_hash.get(bib)
 
     # ── #118 · la bitácora no tiene red ──────────────────────────────────────────────────────────
     # Lo que escribe un SCRIPT se registra solo (`cadena` del registro versionado: qué corrió y
@@ -1359,6 +1367,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
 
     stale_pairs: list = []
     old_verif_template: list = []
+    verif_sin_archivo: list = []       # (stem, motivo) — #117: la fila no dice qué archivo leyó
     for stem, texto in sorted(anchor_notes):
         filas = lb.parse_verif_table(texto)
         if filas is None:
@@ -1377,9 +1386,23 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 # pares es una PÁGINA del PDF y el archivo a vigilar es el PDF. Hashear el `.txt`
                 # ahí se dispara en falso al re-extraerlo (la fuente real no se movió) y no vigila
                 # el archivo del que sale la cita.
-                vigente = evidencia_hash.get(fila.bibcode)
-                if vigente is not None and fila.source_hash != vigente:
-                    que = "el PDF" if fila.bibcode in symbols_lost_bibs else "el `.txt`"
+                if fila.source_kind is None:
+                    # #117: sin declaración no hay contra qué comparar. Inferirlo del frontmatter es
+                    # justamente lo que fabricaba pares vencidos, así que acá se declara NO
+                    # EVALUABLE y se migra — no se adivina.
+                    verif_sin_archivo.append(
+                        (stem, f"la fila de [[{fila.bibcode}]] no declara contra qué archivo se "
+                               f"verificó (`Hash fuente` sin prefijo `txt:`/`pdf:`) → "
+                               f"`python scripts/make_notes.py --migrate-verif-archivo`"))
+                    continue
+                vigente = evidencia_hash_de(fila.bibcode, fila.source_kind)
+                que = "el PDF" if fila.source_kind == "pdf" else "el `.txt`"
+                if vigente is None:
+                    verif_sin_archivo.append(
+                        (stem, f"la fila de [[{fila.bibcode}]] dice haberse verificado contra "
+                               f"{que} y ese archivo no está en la bóveda → no se puede evaluar "
+                               f"si la fuente cambió"))
+                elif fila.source_hash != vigente:
                     stale_pairs.append(
                         (stem, f"[[{fila.bibcode}]] vencido **por fuente**: {que} cambió desde "
                                f"la verificación ({fila.source_hash} → {vigente}) — re-verificar"))
@@ -2233,6 +2256,9 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('unverified', 'Sin verificar: nota con citas y sin bloque verify-citations'
                   + (' (BLOQUEA: modo --cierre)' if cierre else ' (backlog: pasada periódica; con `--cierre` bloquea)'), SEV_CIERRE, tuple(unverified)),
         Categoria('old_verif_template', '⛔ Bloque de verificación con plantilla vieja (sin columnas de hash — no evaluable)', SEV_BLOQUEANTE, tuple(old_verif_template)),
+        Categoria('verif_sin_archivo', '⛔ Fila de verificación que no declara contra qué archivo se '
+                  'verificó (#117): el hash no se puede comparar', SEV_BLOQUEANTE,
+                  tuple(verif_sin_archivo)),
         Categoria('stale_pairs', 'Pares de verificación vencidos' + (' (BLOQUEA: modo --cierre)' if cierre else ' (backlog: pasada periódica; con `--cierre` bloquea)'), SEV_CIERRE, tuple(stale_pairs)),
         Categoria('stale_verif', 'Verificación stale: la nota se editó después de su último verify-citations (backlog)', SEV_BACKLOG, tuple(stale_verif)),
         Categoria('artefactos_colgados', 'Capas colgadas: registro/raw/build de una entidad que ya no existe (INV-19, backlog)', SEV_BACKLOG, tuple(artefactos_colgados)),

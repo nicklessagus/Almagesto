@@ -319,10 +319,10 @@ Chequeo afirmación↔fulltext (skill `verify-citations`). N pares; X soportadas
 
 | # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |
 |---|---|---|---|---|---|---|---|
-| 1 | YZ CMi κ ≈ −2.6 | [[2018A&A...609A..12Z]] | soportada | "gradient of −2.6 Np−1 (±21%)" (L966) | 3f9c1e2ab4 | 7b40d8aa11 | — |
-| 2 | activas −2.4/−2.6 | [[2025A&A...696A..27J]] | no-soportada→corregida | el paper da −2.65 a −3.70; el −2.6 es de Zechmeister | c17e0a9b22 | 55aa10ffe3 | — |
-| 3 | señal g confirmada | [[2016A&A...585A.134D]] | contradice→disputa | "is an artifact of... rotation" (L2101) → tagueada en disputes[] | 90bb4c1de7 | 0ab77e2c41 | — |
-| 4 | P_rot = 36,5 d | [[2017MNRAS.468.4772S]] | soportada | "36.5 ± 2.3" (L320) | 5c1de790bb | 41c0ab772e | promedio pesado de 4 proxies; el K de 0,50 m/s es de la señal a 35,0 d, no a 36,5 |
+| 1 | YZ CMi κ ≈ −2.6 | [[2018A&A...609A..12Z]] | soportada | "gradient of −2.6 Np−1 (±21%)" (L966) | 3f9c1e2ab4 | txt:7b40d8aa11 | — |
+| 2 | activas −2.4/−2.6 | [[2025A&A...696A..27J]] | no-soportada→corregida | el paper da −2.65 a −3.70; el −2.6 es de Zechmeister | c17e0a9b22 | txt:55aa10ffe3 | — |
+| 3 | señal g confirmada | [[2016A&A...585A.134D]] | contradice→disputa | "is an artifact of... rotation" (L2101) → tagueada en disputes[] | 90bb4c1de7 | txt:0ab77e2c41 | — |
+| 4 | P_rot = 36,5 d | [[2017MNRAS.468.4772S]] | soportada | "36.5 ± 2.3" (L320) | 5c1de790bb | txt:41c0ab772e | promedio pesado de 4 proxies; el K de 0,50 m/s es de la señal a 35,0 d, no a 36,5 |
 
 Inferencias declaradas (sin cita, por diseño): <listar>.
 
@@ -367,13 +367,21 @@ print(lb.bytes_hash('vault/raw/pdfs/<slug>/<bibcode>.pdf'))"
 - **`Ancla`** — sha256 (10 hex) del bloque markdown normalizado que contiene la afirmación.
   Reflowear la nota **no** la mueve; cambiar un número **sí**. Una fila/ítem sin `[[bibcode]]`
   propio hereda el del caption y hashea **los dos** bloques.
-- **`Hash fuente`** — sha256 (10 hex) del archivo que leíste. Es lo que detecta que la fuente ya
-  no dice lo mismo **sin que la nota se haya tocado** — ninguna medida basada en fechas de la nota
-  puede ver eso. Normalmente es el `.txt`; en una fuente marcada **`symbols_lost`** es el **PDF**,
-  porque de ahí salió la cita: anclarla al `.txt` la marcaría vencida cada vez que ese `.txt` se
-  re-extrae —cosa que el propio framework provoca (`--force`, upgrade a OCR, backfill de marcas)—
-  mientras la fuente real no se movió, y **no vería** que el PDF sí cambió. El lint compara contra
-  el archivo que corresponde y su mensaje nombra cuál.
+- **`Hash fuente`** — `txt:<sha10>` o `pdf:<sha10>`: **qué archivo leíste** y su hash. Es lo que
+  detecta que la fuente ya no dice lo mismo **sin que la nota se haya tocado** — ninguna medida
+  basada en fechas de la nota puede ver eso.
+  ⛔ **El prefijo es obligatorio y lo decidís vos, par por par (#117).** Antes el lint lo inferían
+  del frontmatter (`symbols_lost` ⇒ PDF, si no el `.txt`), y esa regla es **más angosta que la
+  práctica**: una fuente `fulltext_source: ocr` también se verifica contra el PDF cuando el escaneo
+  del editor destruyó los símbolos — es lo que se hizo con **3 de las 5** fuentes marcadas de un
+  tema real, y ahí el lint hasheaba el archivo equivocado y devolvía **17 pares «vencidos por
+  fuente»** sobre fuentes que nadie tocó. El frontmatter no sabe qué abriste; la fila sí.
+  Que el prefijo case con el localizador de `Evidencia`: `pdf:` va con `p. 628`, `txt:` con `L320`.
+  Anclar al `.txt` una cita que salió del PDF la marca vencida cada vez que ese `.txt` se re-extrae
+  —cosa que el propio framework provoca (`--force`, upgrade a OCR, backfill de marcas)— mientras la
+  fuente real no se movió, y **no ve** que el PDF sí cambió. Una celda **sin** prefijo es la
+  plantilla vieja: el lint la bloquea y se migra con
+  `python scripts/make_notes.py --migrate-verif-archivo`.
 
 **Cerrá con `python scripts/lint.py --cierre <slug>`** (R-1): ahí un par vencido **frena la operación**,
 porque significa que no terminaste. Sin el flag es la pasada periódica y sólo reporta; sin el

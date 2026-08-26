@@ -93,6 +93,10 @@ class Row:
     anchor: str
     source_hash: str
     condition: str = ""
+    # #117: contra QUÉ archivo se verificó este par — `txt` o `pdf`. `None` = la fila no lo declara
+    # (plantilla anterior a 1.54.0), que **no** es lo mismo que `txt`: es «no consta», y el lint lo
+    # trata como no evaluable en vez de asumir. Ver `split_source_ref`.
+    source_kind: str | None = None
 
 
 @dataclass(frozen=True)
@@ -124,6 +128,28 @@ def sha10(text: str | bytes) -> str:
 def source_hash(path: Path) -> str:
     """Hash del `.txt` de fuente. Cuando el texto ya está en memoria, usar `sha10` directo."""
     return sha10(Path(path).read_text(encoding="utf-8", errors="replace"))
+
+
+SOURCE_KINDS = ("txt", "pdf")
+
+
+def split_source_ref(cell: str) -> tuple[str | None, str]:
+    """`(kind, hash)` de una celda `Hash fuente`: `txt:ab12cd34ef` → `("txt", "ab12cd34ef")`.
+
+    #117 — **la fila declara contra qué archivo se verificó, en vez de que el lint lo infiera del
+    frontmatter.** La regla inferida (`symbols_lost` ⇒ PDF, si no el `.txt`) es más angosta que la
+    práctica: una fuente `fulltext_source: ocr` **también** se verifica contra el PDF cuando el OCR
+    del editor destruyó los símbolos — es lo que se hizo con 3 de las 5 fuentes marcadas de un tema
+    real, y ahí el lint hasheaba el archivo equivocado y devolvía **17 pares «vencidos por fuente»**
+    sobre fuentes que nadie tocó. La decisión la toma el verificador **par por par**; el frontmatter
+    no la sabe. Una celda sin prefijo devuelve `(None, hash)`: *no consta*, distinto de `txt`.
+
+    @inv INV-107"""
+    cell = (cell or "").strip()
+    kind, _, resto = cell.partition(":")
+    if resto and kind.strip().lower() in SOURCE_KINDS:
+        return kind.strip().lower(), resto.strip()
+    return None, cell
 
 
 def bytes_hash(path: Path) -> str:
@@ -376,6 +402,7 @@ def parse_verif_table(text: str) -> list[Row] | None:
             # (medido: 18 pares, 2026-08-25). Mejor par sin cubrir que ancla ajena.
             continue
         bibs = _bibcodes(celdas[i_fuente]) or [celdas[i_fuente].strip("[]")]
+        kind, h = split_source_ref(celdas[i_hash])
         out.append(Row(celdas[i_n], celdas[i_claim], bibs[0], celdas[i_verd],
-                       celdas[i_ancla], celdas[i_hash], celdas[i_cond]))
+                       celdas[i_ancla], h, celdas[i_cond], kind))
     return out

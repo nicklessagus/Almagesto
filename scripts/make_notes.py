@@ -45,6 +45,7 @@ from urllib.parse import quote, urlparse
 import yaml
 
 import lib_config as cfg
+import lib_blocks as lb              # bloque de verificación (#117)
 import measure_layout
 
 EXCLUDED_TOP_N = 10  # cuántos no-core mostrar en la tabla de excluidos (top por citas)
@@ -438,6 +439,78 @@ def restamp_headers() -> int:
 # NEA sostiene es el `status` del planeta.
 LEGACY_FIELD_TO_GT = {"P": "P_days", "K": "K_ms", "e": "e", "msini": "mass_earth",
                       "existence": "status"}
+
+
+def migrate_verif_archivo(dest) -> int:
+    """Migración #117 de UNA nota: prefija cada celda `Hash fuente` con el archivo que se leyó
+    (`txt:` / `pdf:`). Devuelve cuántas filas cambió.
+
+    ⛔ **No infiere del frontmatter: deduce del HASH.** La regla de #113 (`symbols_lost` ⇒ PDF, si
+    no el `.txt`) es más angosta que la práctica —una fuente `ocr` también se verifica contra el PDF
+    cuando el escaneo del editor destruyó los símbolos— y aplicarla acá escribiría una declaración
+    **falsa** justo en las filas que motivaron el issue. En cambio se calculan los dos hashes y se
+    declara el que **coincide** con lo que la fila ya guardaba: eso no es heurística, es identificar
+    el archivo por su huella.
+
+    Si no coincide ninguno, el par está vencido igual (hay que re-verificarlo) y ahí sí se cae a la
+    regla del frontmatter, avisando: la fila declara algo que el próximo `verify-citations` va a
+    reescribir. Cirugía a nivel celda: no toca la prosa. Idempotente — una celda ya prefijada se
+    saltea.
+
+    @inv INV-107"""
+    if not dest.exists():
+        return 0
+    text = dest.read_text(encoding="utf-8")
+    filas = lb.parse_verif_table(text)
+    if not filas:
+        return 0
+    fm = cfg.split_fm(text)
+    cambios, lineas = 0, text.split("\n")
+    for fila in filas:
+        if fila.source_kind is not None:
+            continue                                  # ya migrada
+        if not fila.source_hash:
+            cfg.print_seguro(f"  ⚠ {dest.name}: la fila de {fila.bibcode} no tiene hash de fuente — "
+                             f"no hay archivo que identificar; re-verificar el par")
+            continue
+        bib = fila.bibcode
+        h_txt = next((lb.source_hash(f) for f in cfg.FULLTEXT.glob(f"**/{safe_name(bib)}.txt")), None)
+        h_pdf = next((lb.bytes_hash(f) for f in cfg.PDFS.glob(f"**/{safe_name(bib)}.pdf")), None)
+        if fila.source_hash and fila.source_hash == h_pdf:
+            kind = "pdf"
+        elif fila.source_hash and fila.source_hash == h_txt:
+            kind = "txt"
+        else:
+            # ninguno coincide ⇒ el par ya está vencido. Se declara lo que dice el frontmatter de
+            # SU nota de paper y se avisa: no es una verificación, es un puntero para re-verificar.
+            nota_paper = cfg.PAPERS / f"{safe_name(bib)}.md"
+            fm_p = (cfg.split_fm(nota_paper.read_text(encoding="utf-8"))
+                    if nota_paper.exists() else {})
+            kind = "pdf" if fm_p.get("symbols_lost") else "txt"
+            cfg.print_seguro(f"  ⚠ {dest.name}: la fila de {bib} no coincide con ningún archivo en "
+                             f"disco — se declara `{kind}:` por el frontmatter y hay que "
+                             f"re-verificar el par")
+        viejo = f"| {fila.source_hash} |"
+        for i, ln in enumerate(lineas):
+            if ln.lstrip().startswith("|") and viejo in ln and fila.anchor in ln:
+                lineas[i] = ln.replace(viejo, f"| {kind}:{fila.source_hash} |", 1)
+                cambios += 1
+                break
+    if cambios:
+        cfg.write_text_atomic(dest, "\n".join(lineas))
+    return cambios
+
+
+def migrate_all_verif_archivo() -> int:
+    """Backfill #117 sobre toda la bóveda. Toca sólo notas con bloque de verificación."""
+    total = tocadas = 0
+    for nota in sorted(cfg.WIKI.rglob("*.md")):
+        n = migrate_verif_archivo(nota)
+        if n:
+            total, tocadas = total + n, tocadas + 1
+            cfg.print_seguro(f"  → {nota.relative_to(cfg.WIKI)}: {n} fila(s)")
+    cfg.print_seguro(f"#117: {total} fila(s) declaran su archivo en {tocadas} nota(s).")
+    return 0
 
 
 def migrate_disputes(dest) -> bool:
@@ -2329,6 +2402,10 @@ def main() -> int:
                     help="migración #71: pasa `planets[].disputes[]` (polo de verdad hardcodeado) a "
                          "`disputes` a nivel nota con posiciones explícitas. Toca sólo las fichas "
                          "que tienen disputas viejas; no toca el cuerpo. No requiere slug.")
+    ap.add_argument("--migrate-verif-archivo", action="store_true", dest="migrate_verif_archivo",
+                    help="migración #117: prefija cada `Hash fuente` del bloque de verificación con "
+                         "el archivo que se leyó (`txt:`/`pdf:`), deducido del hash que la fila ya "
+                         "guardaba. No requiere slug.")
     ap.add_argument("--migrate-bearing", action="store_true", dest="migrate_bearing",
                     help="migración D-21: saca `bearing:` del frontmatter de las notas de paper (la "
                          "postura vive en la tabla de evidencia de la hipótesis). No requiere slug.")
@@ -2368,6 +2445,8 @@ def main() -> int:
         cfg.print_seguro(f"`bearing` retirado de {n} nota(s) de paper (D-21).")
         return 0
 
+    if args.migrate_verif_archivo:
+        return migrate_all_verif_archivo()
     if args.migrate_facets:
         migrate_all_facets()
         return 0
