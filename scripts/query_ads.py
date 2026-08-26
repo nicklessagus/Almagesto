@@ -829,13 +829,31 @@ def note_state(bibcode: str) -> str:
 # red, y dejarla acá obligaba al lint a importar `requests` para compararla — lo que lo hacía
 # **fallar en CI**, donde ese paquete no se instala. Un chequeo que existe para no producir falsos
 # limpios no puede volverse él mismo un falso rojo por una dependencia que no necesita.
-def lens_used() -> dict:
+def lens_used(meta: dict | None = None) -> dict:
     """La lente COMPILADA que este proceso usó para clasificar (las constantes de módulo). Es lo
-    que `main()` persiste: el registro dice con qué filtro se recortó ESA corrida."""
-    return {"facets": {name: pat.pattern for name, pat in FACET_PATTERNS.items()},
-            "require": list(REQUIRE_FACETS),
-            "min_facets": MIN_FACETS,
-            "noise_doctypes": sorted(NOISE_DOCTYPES)}
+    que `main()` persiste: el registro dice con qué filtro se recortó ESA corrida.
+
+    Con `meta` (la entrada del tema) suma **la regla del tema** —`facet` y el umbral de la puerta
+    2—, y eso no es decorativo (#106). La puerta 2 admite un paper por `citation_count`, o sea por
+    metadata que **cambia sola con el tiempo**: la función es estable y su entrada deriva, así que
+    el veredicto puede moverse sin que nadie edite nada. El framework ya trata así a las otras
+    cinco cosas que cambian afuera (retracciones, correcciones, versiones, snapshot web,
+    ground-truth) y la respuesta nunca fue congelar: es **detectar, reportar, no aplicar solo**. Sin
+    guardar el umbral no hay contra qué comparar, y la puerta quedaba siendo la única dependencia
+    del mundo **sin vigilancia**."""
+    lente = {"facets": {name: pat.pattern for name, pat in FACET_PATTERNS.items()},
+             "require": list(REQUIRE_FACETS),
+             "min_facets": MIN_FACETS,
+             "noise_doctypes": sorted(NOISE_DOCTYPES)}
+    if meta:
+        # `"umbral" in` y no `or None`: un umbral declarado en 0 es una decisión (la puerta abre
+        # para todos) y no puede leerse igual que "no lo declaró" (la puerta no abre). Es la misma
+        # distinción que D-26 protege al no ponerle default.
+        regla = {"facet": meta.get("facet")}
+        if "fundacional_min_citas" in meta:
+            regla["umbral"] = meta.get("fundacional_min_citas")
+        lente["regla_tema"] = regla
+    return lente
 
 
 
@@ -1041,8 +1059,10 @@ def main() -> int:
         return sweep_star(args.slug, args.rows)
 
     star_names: list[str] = []      # sólo estrellas: insumo del rescate por glifo (#28)
+    tema_meta = None                # se persiste en la `lente` del registro (regla del tema, #106)
     if args.theme:
         _, meta = cfg.theme_by_slug(args.slug)
+        tema_meta = meta
         if args.extra_only:
             # Tema MIXTO (off-ADS + extra_core): sin `query` no hay búsqueda ni chaining — la
             # única fuente ADS es la curación manual de `extra_core` (el bloque de abajo).
@@ -1299,7 +1319,7 @@ def main() -> int:
         # es la versión del framework, NO la de la regla: cambiar una regex de `relevance.facets`
         # mueve el corte core/no-core sin mover la versión. Sin esto el registro dice sobre qué
         # universo se buscó pero no con qué filtro se recortó, que es la otra mitad de "reproducible".
-        "lente": lens_used(),
+        "lente": lens_used(tema_meta),
     })
     cfg.print_seguro(f"  → {cfg.registro_path(args.slug)} (registro de búsqueda, versionado)")
     cfg.save_paso(args.slug, "query_ads", flags=_flags_usados(args, ap))

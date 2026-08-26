@@ -42,6 +42,7 @@ CLI (preview only — writes nothing, downloads nothing):
 from __future__ import annotations
 
 import argparse
+import pathlib
 import sys
 import time
 import urllib.parse
@@ -205,6 +206,85 @@ def hydrate(openalex_ids: list, rows: int = 50) -> list[dict]:
     return out[:rows]
 
 
+# ── the cascade proper: ADS → arXiv → OpenAlex, deduped, coverage declared ───
+def cascade(*, ads_query: str | None = None, arxiv_terms: list | None = None,
+            topic_id: str | None = None, rows: int = 100,
+            min_citas: int | None = None) -> dict:
+    """Run every discovery backend and merge → `{records, undedupable, cobertura}`.
+
+    Each backend gets its query **in its own language**, which is why this takes three arguments
+    instead of one: `ads_query` is raw Solr (`abs:"…" OR …`), arXiv wants its own field syntax and
+    is given the theme's plain term family, and OpenAlex is filtered by topic id rather than by
+    text at all (see `seed` for the measurement that forced that). Handing one string to all three
+    would silently mean something different in each.
+
+    `cobertura` is a list of `(backend, n, error|None)` and is the point of contract 3: a backend
+    that timed out contributes zero records, and zero records is indistinguishable from "this
+    backend knows nothing about your theme" unless the failure is stated. Callers must print it.
+
+    Returns candidates. It does NOT classify — see the module docstring, contract 1."""
+    batches: list[tuple[str, list]] = []
+    cobertura: list[tuple[str, int, str | None]] = []
+
+    if not ads_query:
+        # Contrato 3 llevado hasta el final: un backend que NO CORRIÓ tiene que decirlo. Saltearlo
+        # en silencio deja una cascada de tres que corrió una sola, y el resultado se lee como
+        # «los tres miraron y esto es todo lo que hay» — el falso limpio que INV-87 prohíbe.
+        cobertura.append(("ads", 0, "NO CORRIÓ: sin `query:` en themes.yaml — el tema no declara búsqueda ADS"))
+    if ads_query:
+        try:
+            import query_ads
+            recs = query_ads.query_ads(ads_query, rows=rows)
+            batches.append(("ads", recs))
+            cobertura.append(("ads", len(recs), None))
+        except Exception as e:                                  # noqa: BLE001 — declarado
+            cobertura.append(("ads", 0, str(e)[:120]))
+
+    if not arxiv_terms:
+        # Contrato 3 llevado hasta el final: un backend que NO CORRIÓ tiene que decirlo. Saltearlo
+        # en silencio deja una cascada de tres que corrió una sola, y el resultado se lee como
+        # «los tres miraron y esto es todo lo que hay» — el falso limpio que INV-87 prohíbe.
+        cobertura.append(("arxiv", 0, "NO CORRIÓ: sin `aliases:` en themes.yaml — no hay términos que buscar"))
+    if arxiv_terms:
+        try:
+            import search_arxiv
+            q = " OR ".join(f'all:"{t}"' for t in arxiv_terms)
+            recs = search_arxiv.search(q, rows=min(rows, 100))
+            batches.append(("arxiv", recs))
+            cobertura.append(("arxiv", len(recs), None))
+        except Exception as e:                                  # noqa: BLE001
+            cobertura.append(("arxiv", 0, str(e)[:120]))
+
+    if not topic_id:
+        # Contrato 3 llevado hasta el final: un backend que NO CORRIÓ tiene que decirlo. Saltearlo
+        # en silencio deja una cascada de tres que corrió una sola, y el resultado se lee como
+        # «los tres miraron y esto es todo lo que hay» — el falso limpio que INV-87 prohíbe.
+        cobertura.append(("openalex", 0, "NO CORRIÓ: sin `topic:` en themes.yaml y no se pudo inferir — declaralo (`discover.py --topics \"<tema en inglés>\"`)"))
+    if topic_id:
+        try:
+            recs = seed(topic_id, rows=min(rows, 200), min_citas=min_citas)
+            batches.append(("openalex", recs))
+            cobertura.append(("openalex", len(recs), None))
+        except Exception as e:                                  # noqa: BLE001
+            cobertura.append(("openalex", 0, str(e)[:120]))
+
+    merged, undedupable = dedup(batches)
+    return {"records": merged, "undedupable": undedupable, "cobertura": cobertura}
+
+
+def print_cobertura(cobertura: list) -> None:
+    """Print what each backend contributed, failures included. Never silent: a backend that fell
+    over looks exactly like one that had nothing, and only one of those is a reason to stop."""
+    for backend, n, err in cobertura:
+        if err and err.startswith("NO CORRIÓ"):
+            cfg.print_seguro(f"  — {backend:<9} {err}")
+        elif err:
+            cfg.print_seguro(f"  ⚠ {backend:<9} FALLÓ ({err}) — 0 registros, y eso NO significa "
+                             "que no tenga nada del tema")
+        else:
+            cfg.print_seguro(f"  {backend:<9} {n:>4} registros")
+
+
 # ── file resolution: finding a work is not the same as getting it ────────────
 UNPAYWALL = "https://api.unpaywall.org/v2/"
 
@@ -252,8 +332,80 @@ def resolve_pdf(doi: str | None, title: str | None = None) -> tuple[str | None, 
 def _row(r: dict) -> str:
     t = " ".join((r.get("title") or "").split())[:60]
     cit = f'  citado x{r["citadores"]:<3}' if r.get("citadores") is not None else ""
-    return (f'  {(r.get("citation_count") or 0):>6}  {r.get("year") or "----"}{cit}  '
+    # `?`, NO 0, cuando el backend no publica el conteo (arXiv). Es la advertencia que
+    # `search_arxiv.to_record` deja escrita: un 0 afirma «no lo cita nadie» sobre un dato que nadie
+    # miró, y acá el operador lee la columna para decidir qué mandar a triage — un fundacional con
+    # «0» al lado se descarta de un vistazo.
+    n = r.get("citation_count")
+    cites = "     ?" if n is None else f"{n:>6}"
+    return (f'  {cites}  {r.get("year") or "----"}{cit}  '
             f'{",".join(r.get("found_in") or ["?"]):<12}  {t}')
+
+
+def _theme_anchor(slug: str) -> list:
+    """DOIs of the theme's papers already in the vault — the anchor for `anchored_records`.
+
+    Reads the notes with `lib_config.split_fm`, the same parser the rest of the tooling uses, and
+    never `grep` over the frontmatter: `thesis_links` is written in block style by `make_notes` and
+    in flow style by the retro-linker, and a textual match misses one of the two. That failure is
+    recorded twice in CLAUDE.md; this is the third place it would have happened."""
+    import glob
+    fuera = []
+    for f in sorted(glob.glob(str(cfg.PAPERS / "*.md"))):
+        fm = cfg.split_fm(pathlib.Path(f).read_text(encoding="utf-8"))
+        if slug in (fm.get("thesis_links") or []) and fm.get("doi"):
+            fuera.append({"doi": fm["doi"], "title": fm.get("title")})
+    return fuera
+
+
+def _preview_theme(slug: str, rows: int = 25, min_citadores: int = 2) -> int:
+    """Full cascade for one theme, preview only: writes nothing, downloads nothing."""
+    tema = cfg.as_map(cfg.load_themes().get(slug))
+    if not tema:
+        cfg.print_seguro(f"'{slug}' no está en themes.yaml")
+        return 2
+    topic_id = tema.get("topic")
+    if not topic_id:
+        # sin `topic:` declarado, se propone el mejor match y se DICE que se eligió solo. Se busca
+        # por el TÍTULO del tema, no por el primer alias: los alias son siglas (`ICA`, `BSS`, `GP`)
+        # y la taxonomía de OpenAlex se busca por frase — medido, `topics("ICA")` no devuelve nada
+        # y el tema se quedaba sin la mitad OpenAlex en silencio.
+        cands = topics(str(tema.get("title") or (cfg.as_list(tema.get("aliases")) or [slug])[0]),
+                       rows=1)
+        if cands:
+            topic_id = cands[0]["id"]
+            cfg.print_seguro(f"  (sin `topic:` en themes.yaml — usando {topic_id} "
+                             f"«{cands[0]['name']}», elegido por alias; declaralo si sirve)")
+    out = cascade(ads_query=tema.get("query"),
+                  arxiv_terms=cfg.as_list(tema.get("aliases"))[:6] or None,
+                  topic_id=topic_id, rows=rows,
+                  min_citas=tema.get("fundacional_min_citas"))
+    cfg.print_seguro(f"\nCascada para `{slug}` (preview — no baja nada, no clasifica):")
+    print_cobertura(out["cobertura"])
+    cfg.print_seguro(f"  → {len(out['records'])} tras dedup por DOI"
+                     + (f" · {len(out['undedupable'])} sin identificador (NO mergeados)"
+                        if out["undedupable"] else ""))
+    solo_oa = only_from(out["records"], "openalex")
+    if solo_oa:
+        cfg.print_seguro(f"  · {len(solo_oa)} los tiene SÓLO OpenAlex → no-astro, van a triage")
+    for r in sorted(out["records"], key=lambda r: -(r.get("citation_count") or 0))[:rows]:
+        cfg.print_seguro(_row(r))
+
+    ancla = _theme_anchor(slug)
+    if ancla:
+        cfg.print_seguro(f"\nAnclaje: {len(ancla)} papers del tema con DOI en la bóveda "
+                         f"→ qué citan ≥{min_citadores} de ellos")
+        anclados, no_res = anchored_records(ancla, min_citadores=min_citadores, rows=rows)
+        if no_res:
+            cfg.print_seguro(f"  ⚠ {len(no_res)} DOIs sin referencias resueltas "
+                             "(OpenAlex las saca de depósitos Crossref; el astro pre-2000 no los tiene)")
+        for r in anclados[:rows]:
+            cfg.print_seguro(_row(r))
+    else:
+        cfg.print_seguro("\n  (sin anclaje: el tema todavía no tiene papers con DOI en la bóveda — "
+                         "corré primero la mitad ADS y volvé)")
+    cfg.print_seguro("\n  → todo esto son CANDIDATOS: pasan por triage, no entran como core.")
+    return 0
 
 
 def main(argv=()) -> int:
@@ -263,6 +415,11 @@ def main(argv=()) -> int:
     ap.add_argument("--seed", metavar="TOPIC_ID", help="top works de ese topic, por citas")
     ap.add_argument("--rows", type=int, default=25)
     ap.add_argument("--resolve", metavar="DOI", help="buscar una copia libre del PDF de ese DOI")
+    ap.add_argument("--theme", metavar="SLUG",
+                    help="cascada completa para un tema de themes.yaml (ADS + arXiv + OpenAlex, "
+                         "más el anclaje si el tema ya bajó papers con DOI)")
+    ap.add_argument("--min-citadores", type=int, default=2,
+                    help="anclaje: mínimo de papers TUYOS que tienen que citar un trabajo (default 2)")
     args = ap.parse_args(list(argv) or None)
 
     if args.topics:
@@ -271,6 +428,8 @@ def main(argv=()) -> int:
         cfg.print_seguro("\n  → el filtro por topic es lo que hace usable el ranking por citas: "
                          "sin él, ordenar por citas trae los papers más citados del mundo, no del tema.")
         return 0
+    if args.theme:
+        return _preview_theme(args.theme, rows=args.rows, min_citadores=args.min_citadores)
     if args.resolve:
         url, why = resolve_pdf(args.resolve)
         cfg.print_seguro(f"  {url or '(sin copia libre)'}\n  motivo: {why}")

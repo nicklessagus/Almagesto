@@ -2878,3 +2878,11 @@ def test_con_un_solo_paper_extraido_no_dispara(toy_vault, capsys):
     _ficha_con_inventario(toy_vault, PLANTILLA, n_papers=1)
     cats = {c.clave: c for c in lint.collect().categorias}
     assert cats["contrast_missing"].items == ()
+
+
+def test_lente_no_evaluable_nombra_el_motivo_correcto(tmp_path, monkeypatch, capsys):
+    """#106: el mensaje decía SIEMPRE «la nota no guarda `doctype`». Sobre un cambio de umbral eso
+    es la explicación de otro caso — el reporte atribuye mal, que es peor que no decir nada."""
+    import lib_config as c
+    assert c.lens_textual_changed(["fundacional_min_citas 2000 → 30"]) is False
+    assert c.lens_textual_changed(["noise_doctypes ['a'] → ['b']"]) is False

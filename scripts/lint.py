@@ -1901,15 +1901,25 @@ def collect(cierre: bool = False) -> LintResult:
                     (slug, "no evaluado: la última búsqueda del registro no guarda `lente`, así "
                            "que no hay contra qué comparar la vigente → re-corré la cadena del "
                            "sujeto para que la estampe"))
-            elif (delta := cfg.lens_delta(stored, cfg.lens_current())):
+            elif (delta := cfg.lens_delta(stored, cfg.lens_current(slug))):
                 detalle = "; ".join(delta)
                 if not cfg.lens_textual_changed(delta):
-                    # Sólo cambiaron los doctypes de ruido: es un cambio real y el diff offline NO
-                    # lo puede ver (la nota de paper no guarda `doctype`). Se declara en vez de
-                    # devolver "0 entran, 0 salen", que se leería como "el cambio no movió nada".
+                    # El cambio es real y el diff offline NO lo puede ver re-clasificando texto. El
+                    # motivo se NOMBRA, no se asume: hasta #106 el mensaje decía siempre "la nota no
+                    # guarda `doctype`", que sobre un cambio de umbral es una explicación de otro
+                    # caso — atribuir mal es peor que no decir nada (regla de método #4). Se declara
+                    # en vez de devolver "0 entran, 0 salen", que se leería como "no movió nada".
+                    if all(d.startswith("fundacional_min_citas ") for d in delta):
+                        porque = ("es la puerta 2, no un cambio textual — el diff por umbral se "
+                                  "reporta en la línea de abajo")
+                    elif all(d.startswith("noise_doctypes ") for d in delta):
+                        porque = "la nota de paper no guarda `doctype`"
+                    else:
+                        porque = ("mezcla cambios no evaluables offline (`doctype` no vive en la "
+                                  "nota; el umbral es la puerta 2)")
                     lente_desync.append(
                         (slug, f"la lente cambió ({detalle}) pero el diff offline no lo puede "
-                               f"evaluar: la nota de paper no guarda `doctype` → "
+                               f"evaluar: {porque} → "
                                f"`python scripts/query_ads.py --dry-run --slug {slug}` con build/ presente"))
                 else:
                     entran, salen, sin_nota = cfg.lens_diff_offline(slug)
@@ -1920,6 +1930,20 @@ def collect(cierre: bool = False) -> LintResult:
                                f"+{len(entran)} entrarían" + (f" ({_muestra(entran)})" if entran else "")
                                + f" / −{len(salen)} saldrían" + (f" ({_muestra(salen)})" if salen else "")
                                + techo + "; re-corré la cadena del sujeto para re-clasificar"))
+        # Puerta 2 (#106): va FUERA del `if delta`, porque el umbral puede haberse editado sin que
+        # la lente TEXTUAL cambie — son dos ejes distintos del mismo corte, y colgarlo del delta
+        # textual lo dejaba mudo justo en el caso que existe para ver.
+        p2_entran, p2_salen, p2_sin = cfg.puerta2_cruces(slug)
+        if p2_entran or p2_salen or p2_sin:
+            techo2 = (f"; {p2_sin} nota(s) sin `citation_count` → no evaluables" if p2_sin else "")
+            lente_desync.append(
+                (slug, f"el umbral de la puerta 2 (`fundacional_min_citas`) cambió desde la última "
+                       f"corrida → +{len(p2_entran)} entrarían"
+                       + (f" ({_muestra([b for b, _n in p2_entran])})" if p2_entran else "")
+                       + f" / −{len(p2_salen)} saldrían"
+                       + (f" ({_muestra([b for b, _n in p2_salen])})" if p2_salen else "")
+                       + techo2 + "; el conteo que se movió SOLO lo ve "
+                                  "`python scripts/sweep_external.py`"))
         if slug in vistos:
             continue                                  # build/ presente: ya se reportó la verdad viva
         bs = [x for x in cfg.as_list(reg.get("busquedas")) if isinstance(x, dict)]

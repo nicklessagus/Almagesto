@@ -248,10 +248,15 @@ papers sobre gotas de ácido sulfúrico (es otro Hyvärinen) — pero OpenAlex l
 DOI y conteo de citas. La lista declarada a mano es el **último** recurso, no el primero:
 
 ```bash
-python scripts/discover.py --topics "<tema en inglés>"      # subtema de OpenAlex (id T…)
-python scripts/discover.py --seed T11447 --rows 25          # canon por citas DENTRO del subtema
+python scripts/discover.py --topics "<tema en inglés>"      # subtema de OpenAlex (id T…) → `topic:`
+python scripts/discover.py --theme <slug>                   # ADS + arXiv + OpenAlex + anclaje
 python scripts/discover.py --resolve 10.1016/…              # ¿hay copia libre de ese DOI?
 ```
+
+**Leé la cobertura que imprime**, no sólo la lista: distingue *corrió con N*, *FALLÓ* (0 por caída,
+que **no** es "no tiene nada del tema") y *NO CORRIÓ* con el motivo. Y declará `topic:` en la
+entrada del tema: sin él, la mitad OpenAlex se infiere del `title` y con títulos en castellano no
+matchea la taxonomía inglesa.
 
 ⚠ **El orden importa y está medido:** `search` + orden por citas sobre OpenAlex devuelve 143.450
 works cuyo top 30 es AlphaFold y guías de cardiología (**2 de 30** en tema). Filtrando por

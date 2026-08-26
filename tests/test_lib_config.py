@@ -841,3 +841,159 @@ def test_ninguna_copia_directa_al_destino_final_en_vault():
                 ofensores.append(f"{nombre}:{n}: {linea.strip()}")
     assert not ofensores, ("copia no atómica dentro de vault/ — usar cfg.copy_file_atomic:\n  "
                            + "\n  ".join(ofensores))
+
+
+# ── puerta 2: la única metadata que cambia sola y admite core (#106, INV-104) ──
+def _tema(tmp_path, monkeypatch, umbral_yaml, umbral_registro, notas):
+    """Arma un tema con su registro y sus notas. `umbral_*` acepta el centinela "sin" = no declarado."""
+    meta = {"title": "T", "facet": "x"}
+    if umbral_yaml != "sin":
+        meta["fundacional_min_citas"] = umbral_yaml
+    monkeypatch.setattr(cfg, "theme_by_slug", lambda s: ("T", meta))
+    regla = {"facet": "x"}
+    if umbral_registro != "sin":
+        regla["umbral"] = umbral_registro
+    monkeypatch.setattr(cfg, "load_busquedas",
+                        lambda s: [{"fecha": "2026-01-01", "lente": {"regla_tema": regla}}])
+    monkeypatch.setattr(cfg, "notes_of_subject",
+                        lambda s: [(b, {"bibcode": b, "citation_count": n}, "") for b, n in notas])
+
+
+def test_puerta2_umbral_igual_no_reporta_nada(tmp_path, monkeypatch):
+    """@inv INV-104 — El caso normal, y tiene que ser gratis: sin cambio de umbral no se mira ninguna nota."""
+    _tema(tmp_path, monkeypatch, 2000, 2000, [("A", 5000)])
+    assert cfg.puerta2_cruces("ica") == ([], [], 0)
+
+
+def test_puerta2_bajar_el_umbral_hace_entrar(tmp_path, monkeypatch):
+    _tema(tmp_path, monkeypatch, 1000, 3000, [("A", 2000), ("B", 500)])
+    entran, salen, sin = cfg.puerta2_cruces("ica")
+    assert entran == [("A", 2000)] and salen == [] and sin == 0
+
+
+def test_puerta2_subir_el_umbral_hace_salir(tmp_path, monkeypatch):
+    _tema(tmp_path, monkeypatch, 5000, 1000, [("A", 2000)])
+    _entran, salen, _sin = cfg.puerta2_cruces("ica")
+    assert salen == [("A", 2000)]
+
+
+def test_puerta2_umbral_no_declarado_es_puerta_CERRADA_no_cero(tmp_path, monkeypatch):
+    """D-26: sin declarar, la puerta NO abre. Tratarlo como umbral 0 la abriría para todos —
+    exactamente al revés."""
+    _tema(tmp_path, monkeypatch, "sin", 2000, [("A", 5000)])
+    assert cfg.puerta2_cruces("ica") == ([], [], 0)
+
+
+def test_puerta2_umbral_cero_declarado_NO_es_lo_mismo_que_sin_declarar(tmp_path, monkeypatch):
+    """Declarar `fundacional_min_citas: 0` es una decisión (la puerta abre para todos) y tiene que
+    poder distinguirse de no declararlo. Con truthiness los dos se leían igual."""
+    _tema(tmp_path, monkeypatch, 0, 2000, [("A", 5)])
+    entran, _salen, _sin = cfg.puerta2_cruces("ica")
+    assert entran == [("A", 5)]
+
+
+def test_puerta2_declara_las_notas_sin_conteo(tmp_path, monkeypatch):
+    """Un `entran: 0` sobre notas que nadie pudo evaluar se lee como «no cambia nada» (INV-87)."""
+    _tema(tmp_path, monkeypatch, 100, 200, [("A", None), ("B", "muchas")])
+    entran, salen, sin = cfg.puerta2_cruces("ica")
+    assert (entran, salen) == ([], []) and sin == 2
+
+
+def test_puerta2_sin_umbral_previo_en_el_registro_no_inventa_salidas(tmp_path, monkeypatch):
+    """Registro viejo (pre-#106) sin `regla_tema`: lo que cruza hacia arriba se reporta, pero nada
+    puede 'salir' de un umbral que nunca se guardó."""
+    _tema(tmp_path, monkeypatch, 1000, "sin", [("A", 2000), ("B", 5)])
+    entran, salen, _sin = cfg.puerta2_cruces("ica")
+    assert entran == [("A", 2000)] and salen == []
+
+
+def test_puerta2_slug_que_no_es_tema_no_rompe(monkeypatch):
+    def boom(s):
+        raise KeyError(s)
+    monkeypatch.setattr(cfg, "theme_by_slug", boom)
+    assert cfg.puerta2_cruces("tau_ceti") == ([], [], 0)
+
+
+def test_lens_delta_reporta_el_umbral_y_la_faceta_del_tema():
+    d = cfg.lens_delta({"regla_tema": {"facet": "a", "umbral": 2000}},
+                       {"regla_tema": {"facet": "b", "umbral": 500}})
+    assert any("`facet` del tema" in x for x in d)
+    assert any("fundacional_min_citas 2000 → 500" in x for x in d)
+
+
+def test_lens_delta_distingue_sin_declarar_de_cero():
+    d = cfg.lens_delta({"regla_tema": {"facet": "a"}},
+                       {"regla_tema": {"facet": "a", "umbral": 0}})
+    assert any("sin declarar (puerta 2 cerrada) → 0" in x for x in d)
+
+
+def test_lens_delta_sin_regla_de_tema_no_inventa_cambios():
+    """Una estrella no tiene regla de tema: su ausencia en las dos lentes no es un cambio."""
+    assert cfg.lens_delta({"facets": {}}, {"facets": {}}) == []
+
+
+def test_lens_current_de_un_tema_incluye_su_regla(monkeypatch):
+    """#106: sin esto la comparación es peras contra manzanas — el registro del tema SÍ guarda
+    `regla_tema`, así que `lens_delta` veía «estaba y ya no» y reportaba un cambio inventado sobre
+    un tema que no cambió nada. Encontrado corriendo el lint contra una bóveda real; los unitarios
+    no lo vieron porque cubrían «ninguno de los dos lados la trae», no «sólo uno»."""
+    monkeypatch.setattr(cfg, "theme_by_slug",
+                        lambda s: ("T", {"facet": "x", "fundacional_min_citas": 2000}))
+    monkeypatch.setattr(cfg, "load_objective", lambda: {"relevance": {"facets": {}}})
+    assert cfg.lens_current("ica")["regla_tema"] == {"facet": "x", "umbral": 2000}
+    assert cfg.lens_delta(cfg.lens_current("ica"), cfg.lens_current("ica")) == []
+
+
+def test_lens_current_de_una_estrella_no_inventa_regla_de_tema(monkeypatch):
+    def boom(s):
+        raise KeyError(s)
+    monkeypatch.setattr(cfg, "theme_by_slug", boom)
+    monkeypatch.setattr(cfg, "load_objective", lambda: {"relevance": {"facets": {}}})
+    assert "regla_tema" not in cfg.lens_current("tau_ceti")
+
+
+def test_lens_delta_no_reporta_cambio_cuando_solo_falta_modelar_la_regla(monkeypatch):
+    """El bug exacto: stored la trae, current no la modela ⇒ NO es un cambio del usuario."""
+    monkeypatch.setattr(cfg, "theme_by_slug",
+                        lambda s: ("T", {"facet": "x", "fundacional_min_citas": 2000}))
+    monkeypatch.setattr(cfg, "load_objective", lambda: {"relevance": {"facets": {}}})
+    stored = dict(cfg.lens_current("ica"))
+    assert cfg.lens_delta(stored, cfg.lens_current("ica")) == []
+
+
+def test_el_umbral_solo_NO_es_un_cambio_textual():
+    """#106: `lens_diff_offline` re-clasifica con la lente GLOBAL, así que sobre un tema de método
+    devolvía «saldrían los 17 del tema» —cierto de la lente global, y sin ninguna relación con el
+    umbral que se movió—. Atribuir mal es peor que no decir nada (regla de método #4)."""
+    assert cfg.lens_textual_changed(["fundacional_min_citas 2000 → 30"]) is False
+    assert cfg.lens_textual_changed(["noise_doctypes ['a'] → ['b']"]) is False
+    # pero si además cambió algo textual, sí hay que evaluarlo
+    assert cfg.lens_textual_changed(["fundacional_min_citas 2000 → 30",
+                                     "faceta `rv`: regex cambiada"]) is True
+    assert cfg.lens_textual_changed(["`facet` del tema: regex cambiada"]) is True
+
+
+# ── stdout_tolerante: hueco pre-existente que el gate de mutación destapó ────
+def test_stdout_tolerante_reconfigura_los_dos_streams(monkeypatch):
+    """La consola no-UTF8 mataba el `--help` de los 11 CLIs con exit 1 — un exit code que miente.
+    `print_seguro` no lo tapaba porque argparse escribe directo a `sys.stdout`."""
+    vistos = []
+
+    class Fake:
+        def reconfigure(self, **kw):
+            vistos.append(kw)
+    monkeypatch.setattr(cfg.sys, "stdout", Fake())
+    monkeypatch.setattr(cfg.sys, "stderr", Fake())
+    cfg.stdout_tolerante()
+    assert vistos == [{"errors": "replace"}, {"errors": "replace"}]
+
+
+@pytest.mark.parametrize("exc", [AttributeError, ValueError, OSError])
+def test_stdout_tolerante_no_se_cae_con_un_stream_no_reconfigurable(monkeypatch, exc):
+    """Bajo pytest los streams están reemplazados: si esto lanzara, tumbaría cada `main()`."""
+    class Roto:
+        def reconfigure(self, **kw):
+            raise exc("no se puede")
+    monkeypatch.setattr(cfg.sys, "stdout", Roto())
+    monkeypatch.setattr(cfg.sys, "stderr", Roto())
+    cfg.stdout_tolerante()          # no lanza

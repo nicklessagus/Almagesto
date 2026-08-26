@@ -1687,7 +1687,15 @@ def estado_line(slug: str, dest) -> str:
         # publicar el embudo de la última corrida como si fuera todo lo que la ficha vio.
         universo = (cfg.universo_acumulado(slug) if len(bs) > 1
                     else (b.get("n_found") or b.get("n_total") or "?"))
-        cuantas = f", {len(bs)} búsquedas" if len(bs) > 1 else ""
+        # `acumulado`, NO `len(bs)` (#105). El conteo de CORRIDAS es bitácora, no contenido: crece
+        # en cada re-run aunque no entre un solo paper nuevo, así que la nota cambiaba sin que
+        # cambiara nada de lo que afirma — y el chequeo de idempotencia de la regla 6 ("corré dos
+        # veces y hasheá vault/") daba falsa alarma para TODA estrella y TODO tema. Medido: dos
+        # corridas idénticas de `ingest_theme.py ica` diferían sólo en esta línea (y en el
+        # registro, que es la bitácora y sí debe crecer, D-28). Lo que el lector necesita saber es
+        # que el universo es la UNIÓN de varias búsquedas y no el embudo de la última — eso lo dice
+        # la palabra; cuántas veces se miró y cuándo lo dice el registro, que la línea ya linkea.
+        cuantas = ", acumulado" if len(bs) > 1 else ""
         partes.append(f"búsqueda {b['fecha']} ({universo} → {b.get('n_core', '?')} core{cuantas})")
         if b.get("n_candidates"):
             partes.append(f"{b['n_candidates']} sin juzgar")
@@ -2135,7 +2143,13 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
         "thesis_links": [concept] if concept else [],   # pre-sembrado al concept
         "role": [],                          # fundacional | aplicacion | arbitro (#73) — extracción
         "relevance": "high",
-        "citation_count": 0,
+        # `null`, NO 0 (#106). Off-ADS no hay catálogo que dé el conteo, así que el valor honesto es
+        # «no lo sé». Un 0 afirma «no lo cita nadie» sobre un dato que nadie miró — medido: la nota
+        # de Comon 1994 decía 0 y el trabajo tiene 8266 citas. No es cosmético: la **puerta 2** de
+        # D-26 admite core por este número y su detector (INV-104) lo compara contra el umbral, así
+        # que un 0 inventado se lee como «no llega, y lo verificamos». Es la misma doctrina que
+        # `search_arxiv.to_record`, que ya pone None por esto mismo.
+        "citation_count": None,
         "pdf": pdf_rel,                      # off-ADS: null salvo PDF local ya copiado a raw/pdfs/<slug>/
         "fulltext": txt_rel,                 # el artefacto BARATO del contrato: leer/grep esto, no el PDF
         "fulltext_source": txt_src,          # pdftotext | ocr (citable con salvedad) | web

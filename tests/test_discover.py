@@ -279,3 +279,140 @@ def test_main_resolve_devuelve_0_con_url(monkeypatch, capsys):
 def test_main_sin_modo_es_error():
     with pytest.raises(SystemExit):
         d.main([])
+
+
+# ── la cascada: corre los tres y DECLARA lo que no corrió (contrato 3) ───────
+def test_cascade_declara_los_backends_que_no_corrieron():
+    """Saltear un backend en silencio deja una cascada de tres que corrió una, y el resultado se
+    lee como «los tres miraron y esto es todo lo que hay» — el falso limpio de INV-87."""
+    out = d.cascade()
+    assert out["records"] == []
+    motivos = {b: err for b, _n, err in out["cobertura"]}
+    assert set(motivos) == {"ads", "arxiv", "openalex"}
+    assert all(m.startswith("NO CORRIÓ") for m in motivos.values())
+    assert "query:" in motivos["ads"] and "topic:" in motivos["openalex"]
+
+
+def test_cascade_mergea_los_tres_por_doi(monkeypatch):
+    import query_ads, search_arxiv
+    monkeypatch.setattr(query_ads, "query_ads",
+                        lambda q, rows=100: [{"doi": "10.1/a", "title": "A", "citation_count": 5}])
+    monkeypatch.setattr(search_arxiv, "search",
+                        lambda q, rows=100: [{"doi": "10.1/A", "title": "A", "citation_count": None},
+                                             {"doi": "10.1/b", "title": "B"}])
+    monkeypatch.setattr(d, "seed", lambda t, rows=200, min_citas=None: [
+        {"doi": "10.1/c", "title": "C", "citation_count": 99}])
+    out = d.cascade(ads_query="q", arxiv_terms=["t"], topic_id="T1")
+    porid = {r["doi"].lower(): r for r in out["records"]}
+    assert set(porid) == {"10.1/a", "10.1/b", "10.1/c"}
+    assert porid["10.1/a"]["found_in"] == ["ads", "arxiv"]     # el mismo trabajo, dos backends
+    assert d.only_from(out["records"], "openalex")[0]["doi"] == "10.1/c"
+
+
+def test_cascade_no_se_cae_si_un_backend_revienta(monkeypatch):
+    import query_ads
+    def boom(q, rows=100):
+        raise RuntimeError("ADS 503")
+    monkeypatch.setattr(query_ads, "query_ads", boom)
+    monkeypatch.setattr(d, "seed", lambda t, rows=200, min_citas=None: [{"doi": "10.1/c"}])
+    out = d.cascade(ads_query="q", topic_id="T1")
+    err = dict((b, e) for b, _n, e in out["cobertura"])["ads"]
+    assert "ADS 503" in err and not err.startswith("NO CORRIÓ")   # falló ≠ no corrió
+    assert len(out["records"]) == 1                                # el resto igual sirve
+
+
+def test_print_cobertura_distingue_fallo_de_no_corrio(capsys):
+    d.print_cobertura([("ads", 3, None), ("arxiv", 0, "NO CORRIÓ: sin aliases"),
+                       ("openalex", 0, "timeout")])
+    out = capsys.readouterr().out
+    assert "ads" in out and "3" in out
+    assert "NO CORRIÓ" in out
+    assert "FALLÓ" in out and "NO significa" in out     # 0 por caída ≠ 0 por no tener nada
+
+
+# ── el conteo de citas que NADIE miró no es cero ─────────────────────────────
+def test_row_muestra_interrogante_cuando_no_hay_conteo():
+    """arXiv no publica citas y `to_record` pone None a propósito. Un `0` en la columna que el
+    operador usa para decidir qué mandar a triage descarta un fundacional de un vistazo."""
+    assert "?" in d._row({"citation_count": None, "year": 1994, "title": "t"})
+    assert "0" not in d._row({"citation_count": None, "year": 1994, "title": "t"}).split("1994")[0]
+
+
+def test_row_muestra_cero_real_cuando_el_conteo_ES_cero():
+    assert "0" in d._row({"citation_count": 0, "year": 2026, "title": "t"})
+
+
+# ── el ancla se lee con el parser del tooling, NUNCA con grep ───────────────
+def test_theme_anchor_lee_las_dos_formas_de_thesis_links(tmp_path, monkeypatch):
+    """`thesis_links` viene en bloque (lo escribe make_notes) y en flow (lo deja el retro-linkeo).
+    Un match textual pierde una de las dos — está registrado dos veces en CLAUDE.md."""
+    papers = tmp_path / "papers"
+    papers.mkdir()
+    (papers / "bloque.md").write_text(
+        "---\ntitle: A\ndoi: 10.1/a\nthesis_links:\n- ica\n---\ncuerpo\n", encoding="utf-8")
+    (papers / "flow.md").write_text(
+        "---\ntitle: B\ndoi: 10.1/b\nthesis_links: [ica]\n---\ncuerpo\n", encoding="utf-8")
+    (papers / "otro.md").write_text(
+        "---\ntitle: C\ndoi: 10.1/c\nthesis_links: [gp]\n---\ncuerpo\n", encoding="utf-8")
+    (papers / "sin_doi.md").write_text(
+        "---\ntitle: D\nthesis_links: [ica]\n---\ncuerpo\n", encoding="utf-8")
+    monkeypatch.setattr(d.cfg, "PAPERS", papers)
+    dois = sorted(r["doi"] for r in d._theme_anchor("ica"))
+    assert dois == ["10.1/a", "10.1/b"]        # las dos formas; sin el de otro tema ni el sin DOI
+
+
+def test_theme_anchor_no_confunde_slugs_que_se_prefijan(tmp_path, monkeypatch):
+    papers = tmp_path / "papers"
+    papers.mkdir()
+    (papers / "x.md").write_text(
+        "---\ndoi: 10.1/x\nthesis_links: [ica-noise]\n---\n", encoding="utf-8")
+    monkeypatch.setattr(d.cfg, "PAPERS", papers)
+    assert d._theme_anchor("ica") == []        # compara por ELEMENTO, no por substring
+
+
+# ── preview de un tema ──────────────────────────────────────────────────────
+def test_preview_theme_slug_desconocido(monkeypatch, capsys):
+    monkeypatch.setattr(d.cfg, "load_themes", lambda: {})
+    assert d._preview_theme("noexiste") == 2
+    assert "no está en themes.yaml" in capsys.readouterr().out
+
+
+def test_preview_theme_corre_la_cascada_y_el_anclaje(monkeypatch, capsys):
+    monkeypatch.setattr(d.cfg, "load_themes", lambda: {
+        "ica": {"title": "ICA", "query": "q", "aliases": ["ICA"], "topic": "T11447"}})
+    monkeypatch.setattr(d, "cascade", lambda **k: {
+        "records": [{"doi": "10.1/a", "title": "A", "citation_count": 9, "found_in": ["openalex"]}],
+        "undedupable": [{"title": "sin id"}],
+        "cobertura": [("ads", 1, None)]})
+    monkeypatch.setattr(d, "_theme_anchor", lambda s: [{"doi": "10.1/z"}])
+    monkeypatch.setattr(d, "anchored_records", lambda a, min_citadores=2, rows=25: (
+        [{"title": "canon", "citation_count": 8266, "citadores": 8, "found_in": ["anclado"]}],
+        ["10.1/no-resuelto"]))
+    assert d._preview_theme("ica") == 0
+    out = capsys.readouterr().out
+    assert "SÓLO OpenAlex" in out                  # la procedencia enruta al triage
+    assert "sin identificador (NO mergeados)" in out
+    assert "sin referencias resueltas" in out      # cobertura del anclaje, declarada
+    assert "CANDIDATOS" in out                     # propone, no clasifica
+
+
+def test_preview_theme_sin_ancla_lo_dice(monkeypatch, capsys):
+    monkeypatch.setattr(d.cfg, "load_themes", lambda: {"ica": {"title": "ICA", "topic": "T1"}})
+    monkeypatch.setattr(d, "cascade", lambda **k: {"records": [], "undedupable": [],
+                                                   "cobertura": []})
+    monkeypatch.setattr(d, "_theme_anchor", lambda s: [])
+    assert d._preview_theme("ica") == 0
+    assert "sin anclaje" in capsys.readouterr().out
+
+
+def test_preview_theme_infiere_el_topic_y_avisa_que_lo_eligio_solo(monkeypatch, capsys):
+    monkeypatch.setattr(d.cfg, "load_themes", lambda: {
+        "ica": {"title": "blind source separation", "aliases": ["ICA"]}})
+    monkeypatch.setattr(d, "topics", lambda q, rows=1: [{"id": "T11447", "name": "BSS"}])
+    visto = {}
+    monkeypatch.setattr(d, "cascade", lambda **k: visto.update(k) or {
+        "records": [], "undedupable": [], "cobertura": []})
+    monkeypatch.setattr(d, "_theme_anchor", lambda s: [])
+    d._preview_theme("ica")
+    assert visto["topic_id"] == "T11447"
+    assert "elegido por alias" in capsys.readouterr().out   # nunca en silencio

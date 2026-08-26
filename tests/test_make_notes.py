@@ -1384,7 +1384,7 @@ def test_estado_line_se_actualiza_y_no_duplica(toy_vault):
     assert mn.stamp_estado("test_star", dest) is True
     out = dest.read_text(encoding="utf-8")
     assert out.count("> _Estado") == 1
-    assert "búsqueda 2026-08-21 (120 → 14 core, 2 búsquedas)" in out
+    assert "búsqueda 2026-08-21 (120 → 14 core, acumulado)" in out   # #105: no el nº de corridas
     assert "⚠ truncada" in out and "2026-08-01" not in out
 
 
@@ -2692,3 +2692,38 @@ def test_stamp_fulltext_declara_la_maqueta(toy_vault):
     assert mn.stamp_fulltext(toy_vault.PAPERS / "2021twoA...1..1A.md",
                              "2021twoA...1..1A", "test_star") is False
     assert una.read_text(encoding="utf-8") == _DOS_COLUMNAS[:0] + una.read_text(encoding="utf-8")
+
+
+# ── la línea de estado no puede moverse si no cambió lo que la nota afirma (#105) ──
+def test_estado_line_estable_entre_corridas_identicas(tmp_path, monkeypatch):
+    """Regla 6 vs D-28: `busquedas` crece en cada corrida (es bitácora y debe crecer), pero la
+    cabecera NO puede publicar ese contador — hacía que dos corridas idénticas dieran notas
+    distintas y el chequeo de idempotencia diera falsa alarma para toda estrella y todo tema."""
+    una = [{"fecha": "2026-08-26", "n_core": 11, "n_total": 11, "bibcodes": ["A", "B"]}]
+    dos = una + [{"fecha": "2026-08-26", "n_core": 11, "n_total": 11, "bibcodes": ["A", "B"]}]
+    tres = dos + [{"fecha": "2026-08-26", "n_core": 11, "n_total": 11, "bibcodes": ["A", "B"]}]
+    monkeypatch.setattr(cfg, "universo_acumulado", lambda slug: 2)
+    monkeypatch.setattr(cfg, "load_registro", lambda slug: {})
+    dest = tmp_path / "x.md"
+
+    def linea(bs):
+        monkeypatch.setattr(cfg, "load_busquedas", lambda slug: bs)
+        return mn.estado_line("ica", dest)
+
+    assert linea(dos) == linea(tres)          # mirar otra vez no cambia lo que la nota afirma
+    assert "búsquedas" not in linea(tres)     # el contador de corridas es bitácora, no contenido
+    assert "acumulado" in linea(tres)         # pero el lector igual sabe que es una UNIÓN
+    assert "acumulado" not in linea(una)      # con una sola búsqueda no hay nada que acumular
+
+
+def test_nota_offads_nace_sin_conteo_de_citas_no_con_cero(tmp_path, monkeypatch):
+    """#106: off-ADS no hay catálogo que dé el conteo, así que el valor honesto es `null`. Un 0
+    afirma «no lo cita nadie» sobre un dato que nadie miró —medido: la nota de Comon 1994 decía 0 y
+    el trabajo tiene 8266 citas— y la puerta 2 de D-26 admite core por ese número."""
+    monkeypatch.setattr(cfg, "PAPERS", tmp_path)
+    monkeypatch.setattr(cfg, "FULLTEXT", tmp_path / "ft")
+    monkeypatch.setattr(cfg, "PDFS", tmp_path / "pdfs")
+    mn.write_web_paper_note("1994Comon", slug="ica", concept="ica", title="ICA, a new concept?",
+                            first_author="Comon", year=1994)
+    fm = cfg.split_fm((tmp_path / "1994Comon.md").read_text(encoding="utf-8"))
+    assert fm["citation_count"] is None, "0 sería «nadie lo cita»; la verdad es «no lo sé»"

@@ -30,7 +30,7 @@ import fetch_ground_truth        # noqa: E402
 
 @pytest.fixture
 def detectores(monkeypatch):
-    """Los cinco detectores, grabados. Cada uno devuelve un hallazgo para que la pasada tenga algo
+    """Los SEIS detectores, grabados. Cada uno devuelve un hallazgo para que la pasada tenga algo
     que reportar."""
     llamados = []
 
@@ -49,6 +49,9 @@ def detectores(monkeypatch):
     monkeypatch.setattr(sw, "sweep_web", graba("web", (["2006Rasmussen: distinto"], [])))
     monkeypatch.setattr(sw, "sweep_ground_truth", graba("ground-truth",
                                                         ([("test_star", [("host.teff_K", 5344, 5350)])], [])))
+    # #106 — el sexto: `citation_count` es la única metadata que cambia SOLA y admite core (puerta 2).
+    monkeypatch.setattr(sw, "sweep_citas", graba("citas-puerta2",
+                                                ([("ica", [("2004Himberg", 1200, 1295)])], [])))
     # el APLICADOR no es un detector: se anula por default para que los tests midan la
     # orquestación y no lancen subprocesos contra el árbol de juguete.
     monkeypatch.setattr(sw, "aplicar_ground_truth", lambda slug: None)
@@ -60,11 +63,13 @@ def run_main(monkeypatch, argv=()):
     return sw.main()
 
 
-def test_pasada_cubre_los_cinco_eventos(toy_vault, detectores, monkeypatch, capsys):
-    """INV-85: los CINCO, en una pasada. Que falte uno es el modo de falla que esto cierra — el
-    ground-truth era un snapshot congelado que nada comparaba."""
+def test_pasada_cubre_los_seis_eventos(toy_vault, detectores, monkeypatch, capsys):
+    """INV-85: los SEIS, en una pasada. Que falte uno es el modo de falla que esto cierra — el
+    ground-truth era un snapshot congelado que nada comparaba, y el conteo de citas de la puerta 2
+    (#106) era la última metadata que cambia sola y admite core sin que nada lo dijera."""
     run_main(monkeypatch, ["--yes"])
-    assert sorted(detectores) == ["correcciones", "ground-truth", "retracciones", "versiones", "web"]
+    assert sorted(detectores) == ["citas-puerta2", "correcciones", "ground-truth", "retracciones",
+                                  "versiones", "web"]
 
 
 def test_pregunta_antes_de_aplicar(toy_vault, detectores, monkeypatch, capsys):
@@ -104,8 +109,8 @@ def test_registra_la_fecha_de_pasada(toy_vault, detectores, monkeypatch):
     run_main(monkeypatch, ["--yes"])
     reg = sw.load_ultima_pasada()
     assert reg["fecha"]
-    assert sorted(reg["cubrio"]) == ["correcciones", "ground-truth", "retracciones", "versiones",
-                                     "web"]
+    assert sorted(reg["cubrio"]) == ["citas-puerta2", "correcciones", "ground-truth",
+                                     "retracciones", "versiones", "web"]
     assert (cfg.REGISTRO / "_red.yaml").exists()
 
 
@@ -305,3 +310,56 @@ def test_aplicar_ground_truth_sin_cambios_no_ensucia_el_json(toy_vault, monkeypa
     monkeypatch.setattr(sw, "_run", lambda *a, **k: 0)
     sw.aplicar_ground_truth("test_star")
     assert "_cambios" not in json.loads(gt.read_text(encoding="utf-8"))
+
+
+# ── sweep_citas: el sexto detector (#106, INV-104) ──────────────────────────
+def _tema_citas(monkeypatch, umbral, notas, frescos, revienta=False):
+    import query_ads
+    monkeypatch.setattr(cfg, "load_themes", lambda: {
+        "ica": ({"title": "T", "fundacional_min_citas": umbral} if umbral is not None
+                else {"title": "T"})})
+    monkeypatch.setattr(cfg, "notes_of_subject",
+                        lambda s: [(b, {"bibcode": b, "citation_count": n}, "") for b, n in notas])
+
+    def fake(bibs):
+        if revienta:
+            raise RuntimeError("ADS 503")
+        return [{"bibcode": b, "citation_count": n} for b, n in frescos.items()]
+    monkeypatch.setattr(query_ads, "fetch_bibcodes", fake)
+
+
+def test_sweep_citas_detecta_el_cruce_hacia_arriba(monkeypatch):
+    """@inv INV-104"""
+    _tema_citas(monkeypatch, 1000, [("2004A..1", 900)], {"2004A..1": 1100})
+    out, fallidos = sw.sweep_citas()
+    assert out == [("ica", [("2004A..1", 900, 1100)])] and fallidos == []
+
+
+def test_sweep_citas_detecta_el_cruce_hacia_abajo(monkeypatch):
+    """NEA-style: pasa si el umbral se movió entre corridas y el conteo quedó por debajo."""
+    _tema_citas(monkeypatch, 1000, [("2004A..1", 1100)], {"2004A..1": 900})
+    out, _f = sw.sweep_citas()
+    assert out[0][1] == [("2004A..1", 1100, 900)]
+
+
+def test_sweep_citas_calla_si_nadie_cruzo(monkeypatch):
+    _tema_citas(monkeypatch, 1000, [("2004A..1", 1100)], {"2004A..1": 1300})
+    assert sw.sweep_citas() == ([], [])
+
+
+def test_sweep_citas_ignora_el_tema_sin_umbral_declarado(monkeypatch):
+    """Puerta cerrada por no declarada (D-26): no hay umbral que cruzar, no hay nada que vigilar."""
+    _tema_citas(monkeypatch, None, [("2004A..1", 5)], {"2004A..1": 999999})
+    assert sw.sweep_citas() == ([], [])
+
+
+def test_sweep_citas_no_afirma_un_cruce_si_falta_un_lado(monkeypatch):
+    _tema_citas(monkeypatch, 1000, [("2004A..1", None)], {"2004A..1": 5000})
+    assert sw.sweep_citas() == ([], [])
+
+
+def test_sweep_citas_con_ads_caido_es_fallido_no_limpio(monkeypatch):
+    """Mismo contrato que sweep_ground_truth: sin los fallidos, el registro afirma haber mirado."""
+    _tema_citas(monkeypatch, 1000, [("2004A..1", 900)], {}, revienta=True)
+    out, fallidos = sw.sweep_citas()
+    assert out == [] and fallidos == ["ica"]

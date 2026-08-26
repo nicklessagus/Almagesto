@@ -319,7 +319,8 @@ cuatro y la quinta nunca:
 | correcciones | erratum / corrigendum / EoC | ✅ |
 | versiones | el preprint salió publicado → otro bibcode del mismo trabajo (D-19) | ✅ |
 | ground-truth | NEA cambió valores entre releases | ✅ |
-| snapshot web | la URL citada cambió | ✅ (1.35.0) — el **más silencioso** de los cinco: una fuente web no tiene DOI ni bibcode, y como el `.txt` local **no** se toca, el ancla de fuente tampoco se entera |
+| snapshot web | la URL citada cambió | ✅ (1.35.0) — el **más silencioso**: una fuente web no tiene DOI ni bibcode, y como el `.txt` local **no** se toca, el ancla de fuente tampoco se entera |
+| citas-puerta2 | un paper cruzó el `fundacional_min_citas` del tema → sería core (o dejaría de serlo) sin que nadie editara nada | ✅ (1.46.0) — la única metadata que **cambia sola** y admite core. Su gemelo **offline** lo reporta el lint (`puerta2_cruces`): ése ve *«editaste el umbral»*, éste ve *«el mundo se movió»* |
 
 ⛔ **Reporta, no aplica sola**: muestra el diff y pregunta. Un snapshot que se actualiza solo cambia
 valores **bajo los pies de la prosa que ya los citó**. El renombre preprint→publicado **nunca** es

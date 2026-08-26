@@ -20,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.45.0"
+ALMAGESTO_VERSION = "1.46.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1095,12 +1095,76 @@ def lens_shape(rel: dict) -> dict:
             "noise_doctypes": sorted(listify_curado(rel.get("noise_doctypes"), "relevance.noise_doctypes"))}
 
 
-def lens_current() -> dict:
+def puerta2_cruces(slug: str) -> tuple[list, list, int]:
+    """Quiénes cruzarían el umbral de la puerta 2 si se re-clasificara hoy: `(entran, salen, sin_dato)`.
+
+    POR QUÉ EXISTE (#106). La puerta 2 admite un paper por `citation_count`, que es metadata del
+    paper —así que INV-24 se sostiene: el veredicto sigue siendo función de `(metadata, lente)` y el
+    conteo vive en el frontmatter, o sea que es re-derivable offline—. Lo que la distingue es que
+    esa metadata **cambia sola**: la función es estable y su entrada deriva. Era la única
+    dependencia del mundo del framework sin detector; las otras cinco (retracciones, correcciones,
+    versiones, snapshot web, ground-truth) tienen el suyo en `sweep_external`, y en ninguna la
+    respuesta fue congelar el dato: detectar, reportar, no aplicar solo.
+
+    **Alcance declarado, y es la mitad del problema:** esto compara el umbral VIGENTE de
+    `themes.yaml` contra el conteo que la nota tiene guardado, así que ve *"editaste el umbral"* y
+    **no** *"el mundo se movió"*. Lo segundo necesita red y vive en `sweep_external.sweep_citas`.
+    Devolver `sin_dato` (notas sin `citation_count`) es parte del contrato: un `entran: 0` sobre
+    notas que nadie pudo evaluar se lee como "no cambia nada"."""
+    # @inv INV-104
+    try:
+        _, meta = theme_by_slug(slug)
+    except (KeyError, RuntimeError):
+        return [], [], 0
+    if "fundacional_min_citas" not in as_map(meta):
+        return [], [], 0            # puerta cerrada por no declarada: no hay umbral que cruzar
+    umbral = as_map(meta).get("fundacional_min_citas")
+    if not isinstance(umbral, (int, float)):
+        return [], [], 0
+    guardado = None
+    for b in load_busquedas(slug):
+        regla = as_map(as_map(b.get("lente")).get("regla_tema"))
+        if "umbral" in regla:
+            guardado = regla.get("umbral")
+    if guardado == umbral:
+        return [], [], 0            # el caso normal, y es gratis
+    entran, salen, sin_dato = [], [], 0
+    for stem, fm, _text in notes_of_subject(slug):
+        n = fm.get("citation_count")
+        if not isinstance(n, (int, float)):
+            sin_dato += 1
+            continue
+        era = isinstance(guardado, (int, float)) and n >= guardado
+        ahora = n >= umbral
+        if ahora and not era:
+            entran.append((stem, n))
+        elif era and not ahora:
+            salen.append((stem, n))
+    return sorted(entran), sorted(salen), sin_dato
+
+
+def lens_current(slug: str | None = None) -> dict:
     """La lente VIGENTE en `objective.yaml`, **releída en cada llamada**. El lint corre en un
     proceso que importó `query_ads` antes de saber qué bóveda va a auditar: comparar contra las
     constantes del import haría que toda lente se viera igual a sí misma — el chequeo entero
-    devolvería un cero que nadie midió."""
-    return lens_shape(as_map(load_objective().get("relevance")))
+    devolvería un cero que nadie midió.
+
+    Con `slug` de un TEMA suma su `regla_tema` (#106), y hace falta para que la comparación sea
+    entre iguales: el registro de un tema **sí** la guarda, así que sin esto `lens_delta` veía
+    "estaba y ya no" y reportaba `facet` cambiada y `fundacional_min_citas → sin declarar` sobre un
+    tema que las declara las dos. Medido en una bóveda real, y **los tests unitarios no lo vieron**
+    porque cubrían "ninguno de los dos lados la trae", no "sólo uno"."""
+    lente = lens_shape(as_map(load_objective().get("relevance")))
+    if slug:
+        try:
+            _, tmeta = theme_by_slug(slug)
+        except (KeyError, RuntimeError):
+            return lente                      # una estrella no tiene regla de tema: no es un cambio
+        regla = {"facet": as_map(tmeta).get("facet")}
+        if "fundacional_min_citas" in as_map(tmeta):
+            regla["umbral"] = as_map(tmeta).get("fundacional_min_citas")
+        lente["regla_tema"] = regla
+    return lente
 
 
 def lens_stored(slug: str) -> dict | None:
@@ -1139,13 +1203,40 @@ def lens_delta(stored: dict, current: dict) -> list[str]:
     da, db = set(as_list(stored.get("noise_doctypes"))), set(as_list(current.get("noise_doctypes")))
     if da != db:
         delta.append(f"noise_doctypes {sorted(da)} → {sorted(db)}")
+    # Regla del tema (#106): la faceta propia y el umbral de la puerta 2 mueven el corte igual que
+    # una faceta global, y hasta ahora no se comparaban — un tema podía quedar clasificado con un
+    # umbral que ya nadie usa sin que nada lo dijera. Se comparan sólo si ALGUNA de las dos lentes
+    # la trae: un sujeto que es estrella no tiene regla de tema y su ausencia no es un cambio.
+    ta, tb = as_map(stored.get("regla_tema")), as_map(current.get("regla_tema"))
+    if ta or tb:
+        if ta.get("facet") != tb.get("facet"):
+            delta.append("`facet` del tema: regex cambiada")
+        # `in`, no truthiness: pasar de "sin declarar" (la puerta NO abre) a `0` (abre para todos)
+        # es el cambio más grande que este campo admite, y con `or None` los dos se leían igual.
+        ua, ub = ("umbral" in ta, ta.get("umbral")), ("umbral" in tb, tb.get("umbral"))
+        if ua != ub:
+            def _fmt(par):
+                return str(par[1]) if par[0] else "sin declarar (puerta 2 cerrada)"
+            delta.append(f"fundacional_min_citas {_fmt(ua)} → {_fmt(ub)}")
     return delta
 
 
+# Prefijos de delta que el diff offline NO puede evaluar re-clasificando notas:
+#   · `noise_doctypes` — la nota de paper no guarda `doctype`.
+#   · `fundacional_min_citas` — es la puerta 2, y NO es un cambio textual: `lens_diff_offline`
+#     re-clasifica con la lente GLOBAL, así que sobre un tema de método devolvía "saldrían los 17
+#     papers del tema" —que es cierto de la lente global y no tiene NADA que ver con el umbral que
+#     se movió—. Su diff propio es `puerta2_cruces`, que el lint reporta aparte.
+_DELTA_NO_TEXTUAL = ("noise_doctypes ", "fundacional_min_citas ")
+
+
 def lens_textual_changed(delta: list[str]) -> bool:
-    """¿El delta toca la mitad que una nota PUEDE evaluar? Un cambio que sólo mueve
-    `noise_doctypes` es real pero invisible offline (la nota no guarda `doctype`)."""
-    return any(not d.startswith("noise_doctypes ") for d in delta)
+    """¿El delta toca la mitad que una nota PUEDE evaluar re-clasificando su texto?
+
+    Los cambios que no la tocan tienen que quedar afuera o el reporte **atribuye mal**: dice
+    "saldrían N" sobre una comparación que no es la que cambió, y un mapa que atribuye mal es peor
+    que uno vacío (regla de método #4)."""
+    return any(not d.startswith(_DELTA_NO_TEXTUAL) for d in delta)
 
 
 def lens_core_text(lens: dict, text: str) -> bool:

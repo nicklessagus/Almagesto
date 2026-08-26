@@ -458,6 +458,21 @@ ocho trabajos canónicos de ICA/BSS están en **ADS 0/8, arXiv 0/8, OpenAlex 8/8
 en ADS devuelve dos papers sobre gotas de ácido sulfúrico: es otro Hyvärinen). `discover.py` corre
 la cascada y **propone**; nunca clasifica.
 
+- **La cascada** (`cascade`, CLI `discover.py --theme <slug>`) corre **los tres** y mergea. Cada
+  backend recibe la query **en su propio idioma**, y por eso toma tres argumentos y no uno: ADS el
+  Solr crudo de `query:`, arXiv la familia de términos de `aliases:` (su sintaxis no es la de ADS),
+  OpenAlex el `topic:` (que no filtra por texto en absoluto). Un solo string querría decir tres
+  cosas distintas. ⛔ **Declará `topic:` en `themes.yaml`**: sin él `discover` lo infiere del
+  `title`, y si tu bóveda escribe los títulos en castellano la taxonomía inglesa de OpenAlex no
+  matchea — no falla en silencio (lo dice en la cobertura), pero perdés el backend que más aporta
+  fuera de astro. Con esto **#95 queda cerrado**: `search_arxiv` está cableado.
+- **La cobertura distingue tres estados, no dos** (`print_cobertura`): corrió con N registros,
+  **FALLÓ** (0 por caída — que no significa que el backend no tenga nada), y **NO CORRIÓ** con el
+  motivo (`query:` sin declarar, `topic:` sin declarar). Saltear un backend en silencio deja una
+  cascada de tres que corrió una, y el resultado se lee como "los tres miraron y esto es todo lo
+  que hay". Ídem el conteo de citas: arXiv no lo publica, así que la columna muestra **`?`, no
+  `0`** — un `0` afirma "no lo cita nadie" sobre un dato que nadie miró, y es la columna con la que
+  se decide qué mandar a triage.
 - **Dedup por DOI, nunca por título** (`ident`/`dedup`): lo fija la medición de `openalex.py` —el
   matcheo por título resolvió 18 de 25 casos y **2 apuntaban a otro trabajo**—. Lo que no tiene DOI
   ni arXiv id se devuelve **aparte, como no-deduplicable**; no se adivina. Cada registro acumula
@@ -745,14 +760,15 @@ línea citando ambos `[[bibcode]]` para conceptos— que **el usuario aprueba** 
 en el skill.
 
 ### Pasada de red (lo que cambia AFUERA — `scripts/sweep_external.py`)
-Una bóveda afirma cosas sobre el mundo y el mundo cambia después del ingest. **Cinco** cosas
-caducan y se miran en **una sola pasada** —las cinco desde 1.35.0—: retracciones, correcciones, **versiones**
+Una bóveda afirma cosas sobre el mundo y el mundo cambia después del ingest. **Seis** cosas
+caducan y se miran en **una sola pasada** —cinco desde 1.35.0, la sexta desde 1.46.0—: retracciones,
+correcciones, **versiones**
 (el preprint salió publicado → otro bibcode para el mismo trabajo, D-19), **snapshot web** (una
 fuente web no tiene ni DOI ni bibcode: nada avisa que cambió, y como el archivo local **no** se
-toca, el ancla de fuente tampoco se entera — es el modo de caducidad más silencioso de los cinco) y
+toca, el ancla de fuente tampoco se entera — es el modo de caducidad más silencioso),
 **ground-truth** (NEA cambia valores entre releases, y el snapshot era un JSON congelado que
-**nada** comparaba — el caso más silencioso). Si están repartidas, se corren cuatro y la quinta
-nunca.
+**nada** comparaba) y el **conteo de citas de la puerta 2** (#106, ver abajo). Si están repartidas,
+se corren cinco y la sexta nunca.
 ⛔ **Reporta, no aplica solo**: el diff se muestra y se pregunta antes de tocar nada — un snapshot
 que se actualiza solo cambia valores **bajo los pies de la prosa que ya los citó**. Lo que sí es
 automático es la consecuencia offline: al cambiar un `.txt`, el **ancla de fuente** (D-20) marca
@@ -778,6 +794,22 @@ en el JSON (qué campo, de qué a qué, cuándo) y el lint **pide la marca**: `�
 al valor. Mismo criterio que con una fuente retractada — la afirmación **no se borra** (puede seguir
 siendo correcta), se hace visible; con la marca el hallazgo baja a informativo. Cuando actualizás la
 frase de verdad, sacás la marca.
+
+**El conteo de citas que mueve la puerta 2 (#106 / INV-104).** La puerta 2 de D-26 admite un paper
+como core por `citation_count`. Ese número **es** metadata del paper —vive en el frontmatter, así
+que INV-24 se sostiene y el veredicto sigue siendo re-derivable offline—, pero es la única metadata
+que **cambia sola**: la función es estable y su entrada deriva, de modo que un paper puede volverse
+core sin que nadie edite ni el paper ni la regla. Era la única dependencia del mundo sin detector.
+⛔ La regla bien enunciada **no** es *"core no puede cambiar"* —sería falsa: un paper que juntó 5000
+citas desde que lo miraste **debería** volverse core— sino **"todo cambio de veredicto es visible y
+fechado"**, que es la misma doctrina de las otras cinco caducidades. Se vigila por los dos lados,
+cada uno con su alcance declarado: **`lib_config.puerta2_cruces`** (offline, lo reporta el lint)
+compara el umbral vigente de `themes.yaml` contra el que el registro guardó en `lente.regla_tema`
+—ve *"editaste el umbral"*— y **`sweep_external.sweep_citas`** re-consulta los conteos —ve *"el
+mundo se movió"*—. Ninguno aplica nada. El umbral se persiste con `query_ads.lens_used(meta)`, y se
+compara con `in` y no por truthiness: un `fundacional_min_citas: 0` (la puerta abre para todos) es
+una decisión y no puede leerse igual que no declararlo (la puerta **no** abre), que es la misma
+distinción que D-26 protege al no ponerle default.
 
 Éstas son las **tres únicas marcas en línea** del sistema: `(inferencia de [[bibcode]])`,
 `[[bibcode]] ⛔retractada` y `<valor> ⚠desactualizado`.
@@ -1027,6 +1059,15 @@ también para los scripts de una sola operación. Detalle y ratchets en
    H=$(find vault -name '*.md' -exec md5sum {} + | sort | md5sum); <el comando>; \
      [ "$H" = "$(find vault -name '*.md' -exec md5sum {} + | sort | md5sum)" ] && echo IDEMPOTENTE
    ```
+   ⚠ **La idempotencia es sobre CONTENIDO, no sobre la bitácora (#105).** El chequeo hashea
+   `vault/**/*.md` y **no** `vault/config/registro/`, y eso es deliberado: D-28 hace que
+   `busquedas` **crezca** en cada corrida —una entrada por vez que miraste, con `n_nuevos` vs
+   `n_ya_estaban`—, igual que `_red.yaml` registra cuándo se miró afuera. Un registro que no
+   creciera perdería justamente la información que D-28 vino a guardar. Las dos reglas conviven
+   porque miden cosas distintas: **la nota no puede cambiar si no cambió lo que afirma; el registro
+   tiene que crecer aunque no cambie nada.** Si alguna vez el chequeo da rojo por una línea
+   estampada, el defecto está en la línea —estaba publicando bitácora como si fuera contenido, que
+   es lo que pasaba con el contador de búsquedas— y no en la regla.
    Medido el 2026-08-25: un generador de notas de una sola operación pisó, en su **segunda**
    corrida, la prosa escrita a mano de un paper compartido entre dos estrellas. El bloque propio va
    entre centinelas (`<!-- almagesto:… -->`) y lo de afuera no se toca — que es lo que

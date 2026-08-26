@@ -22,7 +22,14 @@
 #              depende de tu campo —30k citas es normal en ML y muchísimo en astro— y esconderlo en
 #              el código sería decidir por vos. Si no lo declarás, la puerta 2 NO abre y el motivo
 #              lo dice; el tema entra sólo por la lente astro.
-#   aliases  : opcional, sólo para prosa.
+#   aliases  : opcional. Sirven para prosa, para el retro-tag por grep… y son los términos que
+#              `discover.py` le manda a arXiv (cada backend recibe la query en SU idioma).
+#   topic    : (opcional) id de subtema de OpenAlex (`T…`) para la cascada de `discover.py`.
+#              Sacalo con `python scripts/discover.py --topics "<tema en inglés>"`. ⚠ DECLARALO:
+#              sin él, `discover` intenta inferirlo del `title`, y si tu bóveda escribe los títulos
+#              en castellano la taxonomía de OpenAlex (inglesa) no matchea y esa mitad de la
+#              cascada no corre. No falla en silencio —lo dice en la cobertura— pero perdés el
+#              backend que más aporta en temas no-astro.
 #   extra_core : opcional. ⚠ FORMA DURA (D-58): lista de MAPAS `{bibcode, via, motivo}`, no de
 #                bibcodes sueltos — la forma vieja aborta. `via` es vocabulario CERRADO:
 #                usuario | triage | citado-por-corpus. Ver el ejemplo en stars.yaml.

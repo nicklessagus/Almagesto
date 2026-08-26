@@ -216,6 +216,50 @@ def sweep_ground_truth() -> tuple[list, list]:
     return out, fallidos
 
 
+def sweep_citas() -> tuple[list, list]:
+    """`([(slug, [(bibcode, viejo, nuevo)])], fallidos)` — papers de un tema de método que **cruzaron
+    el umbral de la puerta 2** desde que se los clasificó.
+
+    LA SEXTA COSA QUE CAMBIA AFUERA (#106), y la última que no tenía detector. La puerta 2 de D-26
+    admite un paper por `citation_count`; ese número es metadata del paper (así que INV-24 se
+    sostiene y el veredicto sigue siendo re-derivable offline) pero **cambia solo con el tiempo**. La
+    función es estable y su entrada deriva: un paper puede volverse core sin que nadie edite ni el
+    paper ni la regla, y nada lo decía. Las otras cinco caducidades ya se miran acá y la respuesta
+    nunca fue congelar el dato — es detectar, reportar y **no aplicar solo**.
+
+    Su gemelo offline es `lib_config.puerta2_cruces`, que ve *"editaste el umbral"*; esto ve *"el
+    mundo se movió"*, y por eso necesita red y vive acá. Devuelve los fallidos por la misma razón
+    que `sweep_ground_truth`: con ADS caída todos los temas fallan, la lista de cruces queda vacía y
+    sin los fallidos el registro afirmaría haber mirado lo que no miró.  @inv INV-104"""
+    out, fallidos = [], []
+    for slug, meta in cfg.load_themes().items():
+        meta = cfg.as_map(meta)
+        umbral = meta.get("fundacional_min_citas")
+        if not isinstance(umbral, (int, float)):
+            continue                     # puerta cerrada por no declarada: nada que vigilar
+        try:
+            import query_ads
+            notas = {(fm.get("bibcode") or stem): fm
+                     for stem, fm, _t in cfg.notes_of_subject(slug)}
+            bibs = [b for b in notas if not str(b)[:1].isdigit() or "." in str(b)]
+            frescos = {r["bibcode"]: r.get("citation_count")
+                       for r in query_ads.fetch_bibcodes(bibs)} if bibs else {}
+        except Exception as exc:         # noqa: BLE001 — red ajena: un tema raro no tumba la pasada
+            cfg.print_seguro(f"  ✗ {slug}: no se pudo re-consultar el conteo de citas ({exc})")
+            fallidos.append(slug)
+            continue
+        cruces = []
+        for bib, fm in notas.items():
+            viejo, nuevo = fm.get("citation_count"), frescos.get(bib)
+            if not isinstance(viejo, (int, float)) or not isinstance(nuevo, (int, float)):
+                continue                 # sin uno de los dos no hay cruce que afirmar
+            if (viejo >= umbral) != (nuevo >= umbral):
+                cruces.append((bib, viejo, nuevo))
+        if cruces:
+            out.append((slug, sorted(cruces)))
+    return out, fallidos
+
+
 def aplicar_ground_truth(slug: str) -> None:
     """Re-baja el snapshot (`--force`) y **deja registrado qué se movió**, en `_cambios` del JSON.
 
@@ -280,8 +324,9 @@ def save_ultima_pasada(cubrio: list) -> None:
 def main(argv=None) -> int:
     cfg.stdout_tolerante()
     ap = argparse.ArgumentParser(
-        description="Pasada de red unificada: retracciones, correcciones, versiones, snapshots web "
-                    "y ground-truth. Reporta el diff y pregunta antes de aplicar.")
+        description="Pasada de red unificada: retracciones, correcciones, versiones, snapshots web, "
+                    "ground-truth y cruces del umbral de la puerta 2. Reporta el diff y pregunta "
+                    "antes de aplicar.")
     ap.add_argument("--yes", action="store_true",
                     help="no interactivo: aplica lo aplicable sin preguntar (queda registrado)")
     args = ap.parse_args(argv if argv is not None else sys.argv[1:])
@@ -361,6 +406,22 @@ def main(argv=None) -> int:
         for campo, viejo, nuevo in cambios:
             cfg.print_seguro(f"      {campo}: {viejo!r} → {nuevo!r}")
         pendientes += len(cambios)
+
+    try:
+        cit_cruces, cit_fallidos = sweep_citas()
+    except Exception as exc:                          # noqa: BLE001 — red ajena
+        no_evaluados.append(("citas-puerta2", str(exc)))
+        cfg.print_seguro(f"  ⛔ citas-puerta2: NO EVALUADO — {exc}")
+        cit_cruces = []
+    else:
+        _cubrir("citas-puerta2", cit_fallidos)
+    for slug, cruces in cit_cruces:
+        cfg.print_seguro(f"  · citas-puerta2: {slug} — papers que cruzaron el umbral de la puerta 2:")
+        for bib, viejo, nuevo in cruces:
+            cfg.print_seguro(f"      {bib}: {viejo} → {nuevo} citas")
+        cfg.print_seguro("      → el veredicto core cambiaría sin que nadie editara el paper ni la "
+                         "regla. Re-corré la cadena del tema para aplicarlo (no se aplica solo).")
+        pendientes += len(cruces)
 
     save_ultima_pasada(cubrio)
 
