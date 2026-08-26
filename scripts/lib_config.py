@@ -20,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.49.1"
+ALMAGESTO_VERSION = "1.50.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -63,6 +63,9 @@ GROUND_TRUTH = RAW / "ground_truth"
 # `fulltext_source` en la nota (ocr|web; sin marca = pdftotext). Un solo lugar de verdad:
 # si cambia el header, cambia acá.
 FULLTEXT_OCR_MARK = "# Almagesto — fulltext por OCR"
+# Primera línea de un .txt cuyas ECUACIONES se perdieron en la extracción (#113). Hermana de
+# FULLTEXT_OCR_MARK: `make_notes` la lee para estampar `symbols_lost` en la nota del paper.
+FULLTEXT_SYMBOLS_MARK = "# Almagesto — simbolos NO extraidos"
 FULLTEXT_WEB_MARK = "# Almagesto — snapshot web"
 
 # Marca que arXiv estampa en el margen de CADA página del PDF que sirve

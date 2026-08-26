@@ -299,8 +299,25 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   (snapshot), o `null` = **desconocido** (que **no** es "publicado"). Manda la verdad de disco: la
   marca que arXiv estampa en cada página, visible en el `.txt` — por eso se detecta
   retroactivamente en un corpus ya bajado (re-correr `extract_fulltext`, sin re-bajar nada); si no
-  hay marca, vale la rama que registró el fetcher. Esa misma re-corrida es el **backfill de la
-  marca de garble**: el chequeo que estampa `fulltext_source: ocr` sobre un PDF **que ya venía
+  hay marca, vale la rama que registró el fetcher.
+  **`symbols_lost` (#113) — el `.txt` está limpio y las ECUACIONES no están.** Tercer eje,
+  **independiente** de los otros dos: `is_legible` mide *extraíble*, la marca de garble mide
+  *correcto*, y éste mide **completo**. El modo de falla es silencioso en el peor lugar —
+  `pdftotext` deja el marcador `(3)` y vacía su cuerpo, así que el `.txt` **parece** tener la
+  fórmula—, y los dos casos medidos dan garble **0.00**: sin este eje no los ve nadie. Rompe dos
+  promesas a la vez: el estándar **implementation-ready** de `concepts/methods/` (la ecuación es
+  justamente lo que la nota promete que no hace falta ir a buscar) y la de `verify-citations` («las
+  palabras reales del paper»), que leyendo ese mismo `.txt` devolvería **`no-soportada` sobre una
+  afirmación correcta**. Cuando el campo está en `true`: la extracción se hace **del PDF** (`Read`
+  lo rasteriza, así que el modelo *ve* la fórmula — es cuestión de **modalidad, no de modelo**:
+  medido, un modelo chico leyendo el PDF recupera lo mismo que uno grande) y las citas de fórmulas
+  van **por página del PDF**, no por línea del `.txt`. Calibrado sobre 813 `.txt` de dos bóvedas:
+  de los 343 con ≥4 marcadores, p95 = 0.33 y después un salto al grupo de rotos (0.98–1.00); el
+  umbral (60 %) cae en ese hueco y marca 13. ⚠ Con menos de 4 marcadores devuelve **no evaluado**,
+  no `ok` — son **275 de 813 (34 %)**, así que un `False` ahí sería un falso limpio a gran escala
+  (D-43). El lint lo lista como **backlog, nunca bloqueante**: no es un defecto de la bóveda sino
+  una propiedad de la fuente que el consumidor tiene que ver.
+  Esa misma re-corrida es el **backfill de la marca de garble**: el chequeo que estampa `fulltext_source: ocr` sobre un PDF **que ya venía
   OCReado por el editor** sólo corría al extraer, así que un `.txt` escrito antes se quedaba
   `pdftotext` para siempre — el camino de skip lo re-leía sólo para preguntarle si era **ilegible**,
   y un escaneo del editor es perfectamente legible. Medido: 2 de 42 `.txt` de un tema real, uno de

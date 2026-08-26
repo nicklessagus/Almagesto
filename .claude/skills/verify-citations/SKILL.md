@@ -65,6 +65,16 @@ plenamente respaldadas). Acá cada afirmación se contrasta contra el texto real
 > pineados en `tests/test_multicolumn_matching.py`; la prevalencia en una bóveda concreta la mide
 > `scripts/measure_layout.py`.
 >
+> ⚠ **`symbols_lost: true` — las ECUACIONES no están en el `.txt` (#113).** Si la nota del paper
+> trae ese campo (o el `.txt` abre con `# Almagesto — simbolos NO extraidos`), `pdftotext` dejó el
+> marcador `(3)` y **vació su cuerpo**: el archivo parece tener la fórmula y no la tiene. Para esos
+> pares, **la evidencia se cita por PÁGINA del PDF**, no por nº de línea, y se lee
+> `vault/raw/pdfs/<slug>/<bibcode>.pdf` con el parámetro `pages` (que **rasteriza** la página, así
+> que el verificador *ve* la fórmula). ⛔ **No declares `no-soportada` una ecuación que no aparece
+> en el `.txt` de una fuente marcada así** — es el falso negativo que empuja a debilitar una
+> afirmación correcta, y es exactamente el caso que este campo existe para señalar. La **prosa** de
+> esas fuentes sí es citable por línea, como siempre.
+>
 > **Excepción OCR — citable con salvedad:** si la nota del paper trae `fulltext_source: ocr` (el
 > contrato del frontmatter lo espeja — no hace falta abrir el `.txt` para saberlo) o el `.txt` abre
 > con el header `# Almagesto — fulltext por OCR` (`source: ocr`), vino de tesseract (PDF escaneado

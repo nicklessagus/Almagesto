@@ -2727,3 +2727,22 @@ def test_nota_offads_nace_sin_conteo_de_citas_no_con_cero(tmp_path, monkeypatch)
                             first_author="Comon", year=1994)
     fm = cfg.split_fm((tmp_path / "1994Comon.md").read_text(encoding="utf-8"))
     assert fm["citation_count"] is None, "0 sería «nadie lo cita»; la verdad es «no lo sé»"
+
+
+def test_txt_symbols_lost_lee_la_marca_de_113(tmp_path):
+    """#113: eje INDEPENDIENTE de `fulltext_source` — aquél dice CÓMO se extrajo el texto, éste que
+    las fórmulas no están en el archivo aunque la extracción haya sido normal."""
+    import lib_config as cfg
+    con = tmp_path / "con.txt"
+    con.write_text(cfg.FULLTEXT_SYMBOLS_MARK + ": las ECUACIONES no estan\ncuerpo\n", encoding="utf-8")
+    sin = tmp_path / "sin.txt"
+    sin.write_text("un fulltext normal, con sus ecuaciones\n", encoding="utf-8")
+    assert mn._txt_symbols_lost(con) is True
+    assert mn._txt_symbols_lost(sin) is False
+
+
+def test_txt_symbols_lost_no_confunde_la_marca_de_ocr(tmp_path):
+    import lib_config as cfg
+    ocr = tmp_path / "ocr.txt"
+    ocr.write_text(cfg.FULLTEXT_OCR_MARK + ": citable CON SALVEDAD\ncuerpo\n", encoding="utf-8")
+    assert mn._txt_symbols_lost(ocr) is False

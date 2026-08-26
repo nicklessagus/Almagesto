@@ -844,6 +844,7 @@ def collect(cierre: bool = False) -> LintResult:
     retracted: list = []               # (stem, "<tipo> <fecha>") — papers marcados retracted (check_retractions)
     corrections: list = []             # (stem, "<tipo> (<fecha>)") — corrección no-retractante (#52)
     pending_srcs: list = []            # (stem, "<motivo> — puntero") — fuentes derivadas al usuario
+    symbols_lost_notes: list = []      # (stem, motivo) — #113: el .txt no tiene las ecuaciones
     impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
     # D-50: los genéricos + un patrón por consumidor declarado. Se arma UNA vez por corrida, no por
     # línea: el scan recorre el cuerpo de toda nota de la bóveda.
@@ -1146,6 +1147,14 @@ def collect(cierre: bool = False) -> LintResult:
             # fuente pendiente (issue #7): derivada al usuario — precondición, como las citas no
             # verificables: sin la fuente no hay fulltext ni verify. Se estampa en el ingest
             # (ingest_theme/make_notes --web con `pending`) o a mano en la nota.
+            if fm.get("symbols_lost"):
+                # #113: no es un defecto de la bóveda sino una PROPIEDAD de la fuente que el
+                # consumidor tiene que ver — `verify-citations` sobre estos papers cita PÁGINA del
+                # PDF, no línea del .txt, y una ecuación ausente del .txt no es una cita rota.
+                # Backlog, nunca bloqueante: el paper sigue siendo perfectamente citable.
+                symbols_lost_notes.append(
+                    (stem, "el `.txt` perdió el cuerpo de sus ecuaciones — para citar una fórmula "
+                           "de este paper hay que abrir el PDF (la prosa sí es citable)"))
             if fm.get("pending_source"):
                 ptr = fm.get("doi") or fm.get("source_url") or "(sin puntero conocido)"
                 pending_srcs.append((stem, f"{fm['pending_source']} — proveer la fuente; puntero: {ptr}"))
@@ -2110,6 +2119,7 @@ def collect(cierre: bool = False) -> LintResult:
         Categoria('root_obsidian', 'Obsidian en la raíz del repo (WARN — la bóveda se abre en vault/)', SEV_WARN, tuple(root_obsidian)),
         Categoria('pdf_issues', 'PDF ↔ disco / cuerpo (WARN — higiene: frontmatter `pdf` vs PDF bajado vs link de cabecera)', SEV_WARN, tuple(pdf_issues)),
         Categoria('pending_srcs', '⏳ Fuentes pendientes (pending_source — el usuario debe proveer la fuente)', SEV_BACKLOG, tuple(pending_srcs)),
+        Categoria('symbols_lost', '📐 Fuentes cuyo `.txt` perdió las ECUACIONES (citar fórmulas por página del PDF)', SEV_BACKLOG, tuple(symbols_lost_notes)),
         Categoria('illegible_txt', 'Fulltext ilegible (mojibake/escaneo — existe pero no sirve para grep/verify)', SEV_BACKLOG, tuple(illegible_txt)),
         Categoria('unverifiable', 'Citas no verificables en ficha/query/concepto/hipótesis (sin fulltext)', SEV_BACKLOG, tuple(unverifiable)),
         Categoria('unverified', 'Sin verificar: nota con citas y sin bloque verify-citations'

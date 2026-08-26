@@ -91,6 +91,18 @@ def _txt_provenance(path) -> str:
             else "pdftotext")
 
 
+def _txt_symbols_lost(path) -> bool:
+    """¿El `.txt` avisa que perdió el cuerpo de sus ecuaciones? (#113)
+
+    Eje INDEPENDIENTE de `fulltext_source`: aquél dice CÓMO se extrajo el texto, éste dice que las
+    fórmulas no están en el archivo aunque la extracción haya sido normal. Un solo lugar de verdad
+    para leer el header, igual que `_txt_provenance`.
+    """
+    # @inv INV-26
+    with path.open(encoding="utf-8", errors="replace") as fh:
+        return fh.readline().startswith(cfg.FULLTEXT_SYMBOLS_MARK)
+
+
 def _txt_layout(path) -> str:
     """Maqueta del `.txt`: `two-column` si las columnas del PDF quedaron entrelazadas en la misma
     línea física, `single-column` si no.
@@ -221,6 +233,11 @@ def stamp_fulltext(dest, stem: str, slug: str | None) -> bool:
 
     changed = upsert("fulltext", rel, ("pdf",))
     changed = upsert("fulltext_source", src, ("fulltext", "pdf")) or changed
+    # #113: sólo se estampa cuando es verdad. Ausente = "no lo perdió, o nadie lo midió" — que es
+    # lo mismo para el consumidor: el `.txt` sirve para citar símbolos hasta que algo diga que no.
+    _txt_abs = (dest.parent / rel).resolve()
+    if _txt_abs.exists() and _txt_symbols_lost(_txt_abs):
+        changed = upsert("symbols_lost", "true", ("fulltext_source", "fulltext")) or changed
     txt_path = (dest.parent / rel).resolve()
     if txt_path.exists():
         changed = upsert("fulltext_layout", _txt_layout(txt_path),

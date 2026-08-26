@@ -62,6 +62,7 @@ FULLTEXT = cfg.FULLTEXT
 
 OCR_DPI = 300                                   # rasterizado pdftoppm (probado: rescate ~99% ASCII)
 OCR_MARK = cfg.FULLTEXT_OCR_MARK                # primera línea de un .txt OCR (verify/make_notes la leen)
+SYMBOLS_MARK = cfg.FULLTEXT_SYMBOLS_MARK        # ídem para el .txt sin cuerpo de ecuaciones (#113)
 
 # Umbrales de legibilidad (issue #7): deterministas y laxos a propósito — un paper sano da
 # ~99% ASCII imprimible (los acentos/símbolos raros no llegan a 15%); el mojibake cae a ~0%.
@@ -149,6 +150,87 @@ def scanned_header(why: str) -> str:
     )
 
 
+# Umbral de SIMBOLOS PERDIDOS (#113): el .txt es ASCII limpio y `is_legible`/`is_garbled` lo dan
+# por bueno, pero las ECUACIONES se perdieron — sobrevive el marcador "(3)" y desaparecen las
+# variables. Modo de falla medido en papers matematicos: `pdftotext` deja el numero de ecuacion y
+# vacia su cuerpo, asi que el .txt PARECE tener la formula. Importa porque rompe el estandar
+# implementation-ready de concepts/methods y porque `verify-citations`, que lee el mismo .txt, no
+# puede hallar una ecuacion que no esta: devolveria `no-soportada` sobre una afirmacion correcta.
+# Calibrado sobre 813 .txt de dos bovedas reales: de los 295 con >=4 marcadores, p50=0.00, p75=0.14,
+# p90=0.20, p95=0.33, y despues un salto al grupo de rotos (0.98-1.00). El umbral cae en ese hueco.
+# Un solo glifo matematico a la izquierda alcanza: exigir dos marcaba EXACTAMENTE los mismos 13
+# archivos pero descartaba 3633 marcadores en vez de 1381 (una ecuacion corta como `s = Wx  (6)`
+# tiene un unico `=`), asi que bajaba la poblacion evaluable de 343 a 276 sin cambiar un veredicto.
+SYMBOLS_LOST_MIN_EQ = 4      # menos que esto no es medicion, es ruido -> se declara NO EVALUADO
+SYMBOLS_LOST_MAX_FRAC = 0.60 # marca 13 de 295 (4.4%) en el corpus de calibracion
+
+# La senal esta a la IZQUIERDA del marcador, en la linea fisica. Tres formas que hay que separar:
+#   `kurt(v) = E{v4} - 3(E{v2})2 .        (2.1)`  -> cuerpo presente : ecuacion VIVA
+#   `                                      (1)  `  -> nada a la izq  : ecuacion PERDIDA
+#   `(1) Parameters for the ICA estimation`        -> item de lista, no ecuacion
+#   `... as shown in (5), the estimator ...`       -> referencia en prosa, no ecuacion
+# NO se parte por la canaleta de 8+ espacios (la convencion de measure_layout): en un paper de UNA
+# columna el numero de ecuacion va alineado a la derecha, separado del cuerpo por exactamente esa
+# tira, y partir ahi hace que las fuentes MAS limpias parezcan las mas rotas (medido: el .txt mas
+# limpio del corpus daba 87% perdidas con esa variante).
+_MATH_GLYPHS = set("=+-*/^_<>{}") | set("\u2212\u2211\u222b\u2202\u2207\u2264\u2265\u2248\u2260\u00b1\u00b7\u00d7\u2208")
+_EQ_MARKER = re.compile(r"\(\s*\d{1,2}(?:\.\d{1,2})?\s*\)")
+_EQ_LIST_ITEM = re.compile(r"^\(\s*\d{1,2}(?:\.\d{1,2})?\s*\)\s+[A-Z(]")
+
+
+def symbols_lost_score(text: str) -> tuple[int, int]:
+    """(ecuaciones con cuerpo, ecuaciones vacias) — determinista. Ver los umbrales de arriba."""
+    alive = lost = 0
+    for line in text.split("\n"):
+        if _EQ_LIST_ITEM.match(line.strip()):
+            continue                                   # enumeracion en prosa, no ecuacion
+        for m in _EQ_MARKER.finditer(line):
+            if line[m.end():].strip():
+                continue                               # el marcador no cierra la linea: es una cita
+            left = line[: m.start()]
+            if not left.strip():
+                lost += 1
+            elif any(c in _MATH_GLYPHS for c in left):
+                alive += 1
+            # prosa sin matematica a la izquierda: una referencia "(3)", no una ecuacion
+    return alive, lost
+
+
+def symbols_lost(text: str) -> tuple[bool | None, str]:
+    """(si, motivo) — ¿el .txt perdio el cuerpo de sus ecuaciones?
+
+    Devuelve **None** cuando no hay marcadores suficientes para medir: ese caso es *no evaluado*,
+    no *esta bien* (D-43). Un `False` ahi seria un cero que nadie midio, leido como veredicto — el
+    mismo falso limpio que el lint existe para no producir. Medido: 275 de 813 .txt del corpus de
+    calibracion caen en este caso (34%), asi que no es un borde raro.
+    """
+    # @inv INV-28
+    alive, lost = symbols_lost_score(text)
+    total = alive + lost
+    if total < SYMBOLS_LOST_MIN_EQ:
+        return None, (f"{total} marcador(es) de ecuacion: por debajo de {SYMBOLS_LOST_MIN_EQ}, "
+                      "no alcanza para medir")
+    frac = lost / total
+    if frac < SYMBOLS_LOST_MAX_FRAC:
+        return False, ""
+    return True, (f"{lost} de {total} ecuaciones ({frac:.0%}) quedaron con el marcador y SIN cuerpo "
+                  f"(>={SYMBOLS_LOST_MAX_FRAC:.0%}) — pdftotext perdio los simbolos; para citar una "
+                  "formula de este paper hay que abrir el PDF")
+
+
+def symbols_header(why: str) -> str:
+    """Aviso al tope del .txt: los simbolos no estan aca. Lo lee `make_notes` para estampar
+    `symbols_lost: true` en la nota, y de ahi lo consume el extractor (que abre el PDF) y
+    `verify-citations` (que cita PAGINA, no linea, para las formulas de esta fuente)."""
+    return (
+        f"{SYMBOLS_MARK}: las ECUACIONES no estan en este archivo\n"
+        f"# motivo    : {why}\n"
+        "# implica   : grepear este .txt por una formula de este paper NO la va a encontrar.\n"
+        "#             La prosa si es citable y los nº de linea valen para ella.\n"
+        "# ---- contenido (capa de texto del PDF) ----\n\n"
+    )
+
+
 def backfill_scanned_mark(prev: str) -> str | None:
     """Reason to stamp the OCR caveat on an ALREADY EXTRACTED .txt, or None if there is none.
 
@@ -163,10 +245,25 @@ def backfill_scanned_mark(prev: str) -> str | None:
     because a .txt that already carries the mark is not garble-scored again.
     """
     # @inv INV-28
-    if prev.startswith(OCR_MARK) or not is_legible(prev)[0]:
+    if prev.startswith(OCR_MARK) or prev.startswith(SYMBOLS_MARK) or not is_legible(prev)[0]:
         return None
     garbled, why = is_garbled(prev)
     return why if garbled else None
+
+
+def backfill_symbols_mark(prev: str) -> str | None:
+    """Gemelo de `backfill_scanned_mark` para el eje de #113: motivo si hay que estampar, None si no.
+
+    Mismo problema y misma forma: el chequeo sólo corría sobre texto recién extraído, así que un
+    `.txt` escrito antes se queda mudo para siempre. Idempotente por la marca; no pisa el carril
+    del garble (un `.txt` que ya avisa que es OCR ya le dice al lector que abra el PDF ante una
+    duda de símbolos, y apilar los dos headers sería ruido).
+    """
+    # @inv INV-28
+    if prev.startswith(OCR_MARK) or prev.startswith(SYMBOLS_MARK) or not is_legible(prev)[0]:
+        return None
+    perdidos, why = symbols_lost(prev)
+    return why if perdidos else None
 
 
 def ocr_available() -> bool:
@@ -260,7 +357,7 @@ def main() -> int:
     outdir.mkdir(parents=True, exist_ok=True)
 
     pdfs = sorted(srcdir.glob("*.pdf"))
-    done = ocred = skipped = failed = illegible = backfilled = 0
+    done = ocred = skipped = failed = illegible = backfilled = bf_symbols = 0
     for pdf in pdfs:
         out = outdir / (pdf.stem + ".txt")
         if out.exists() and not args.force:
@@ -273,6 +370,12 @@ def main() -> int:
                     cfg.write_text_atomic(out, scanned_header(gwhy) + prev)
                     print(f"  {pdf.name}: {gwhy} → marcado `source: ocr` (backfill)")
                     backfilled += 1
+                    continue
+                swhy = backfill_symbols_mark(prev)
+                if swhy is not None:
+                    cfg.write_text_atomic(out, symbols_header(swhy) + prev)
+                    print(f"  {pdf.name}: {swhy} (backfill)")
+                    bf_symbols += 1
                     continue
                 skipped += 1
                 continue
@@ -306,6 +409,13 @@ def main() -> int:
                     if garbled:
                         print(f"  {pdf.name}: {gwhy} → marcado `source: ocr`")
                         text = scanned_header(gwhy) + text
+                    else:
+                        # #113: eje INDEPENDIENTE del garble — los dos casos medidos (1999Hyvarinen,
+                        # 1999HyvarinenNoisy) dan garble 0.00 y 100% de ecuaciones vacías.
+                        perdidos, swhy = symbols_lost(text)
+                        if perdidos:
+                            print(f"  {pdf.name}: {swhy}")
+                            text = symbols_header(swhy) + text
                 if not ok and ocr_available():
                     print(f"  {pdf.name}: capa de texto ilegible ({why}) → fallback OCR")
                     text = None                      # cae al OCR de abajo
@@ -360,6 +470,7 @@ def main() -> int:
     print(f"{args.slug}: {done} extraídos" + (f" ({ocred} por OCR)" if ocred else "")
           + f", {skipped} ya estaban, {failed} fallaron"
           + (f", {backfilled} marcados `source: ocr` (backfill)" if backfilled else "")
+          + (f", {bf_symbols} marcados sin ecuaciones (backfill)" if bf_symbols else "")
           + (f", {illegible} ilegibles (⚠ ver arriba)" if illegible else "")
           + f" → {outdir}")
 
