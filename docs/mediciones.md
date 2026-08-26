@@ -109,3 +109,37 @@ Más dos que salieron de correr contra el corpus real y no contra dobles (regla 
 `Cet` matcheaba «Prin**cet**on» (verificado: la frontera saca el falso positivo y conserva los dos
 hits buenos), y `tools/` estaba fuera del mapa de trazabilidad, así que una marca `@inv` en el propio
 gate de mutación era invisible.
+
+## 2026-08-25 · ¿Se puede cribar barato antes de extraer? — 2 modelos × 2 reglas
+
+**Idea probada.** La extracción cuesta ~110k tokens por paper y 27 de 79 (τ Ceti) terminaron en
+`no_sintetizado`. ¿Un agente barato, con sólo título, abstract y las líneas donde aparece el sujeto,
+puede decidir cuáles no vale la pena leer entero?
+
+**Etiqueta.** `no_sintetizado` en la nota del paper, escrita al cerrar cada ficha. Población: 96
+papers extraídos (τ Ceti + HD 40307); 94 en el subconjunto común a las tres celdas.
+
+| celda | caza tangenciales | **tira buenos** | acuerdo |
+|---|---:|---:|---:|
+| Haiku · «¿de qué trata el paper?» | 19/30 | 14/64 (21 %) | 73 % |
+| Sonnet · «¿de qué trata el paper?» | 24/30 | **28/64 (43 %)** | 63 % |
+| Haiku · «¿le atribuye algún valor medido?» | 12/30 | **1/64 (1 %)** | 79 % |
+
+**Veredicto: no se adopta.** La versión segura (1 % de error caro) sólo caza 12 de 30 tangenciales,
+o sea manda 81 de 94 al extractor igual, y los que ahorra son los papers más cortos — el ahorro real
+es menor que el 14 % de conteo. No paga el riesgo de un paso que puede descartar una fuente **en
+silencio**.
+
+**El hallazgo que sí vale, y es transferible.** La regla pesa más que el modelo, y **el modelo más
+capaz amplificó el error de la instrucción**: Sonnet aplicó la regla mala con más rigor que Haiku
+—cazó más tangenciales— y por eso mismo descartó el doble de papers útiles (43 % contra 21 %). La
+regla decía «si el sujeto es banco de prueba de un instrumento, es al pasar», y la premisa era falsa:
+Coffinet 2019 usa τ Ceti para calibrar HARPS **y en el camino le mide diez señales**. Ser banco de
+prueba y aportar dato propio no son excluyentes.
+
+**Consecuencia operativa:** cuando un fan-out falla, la primera pregunta es si la regla está bien
+planteada, no si el modelo alcanza. Subir de modelo con la pregunta equivocada empeora el resultado.
+
+*Cobertura declarada:* tres agentes murieron por límite de gasto (Sonnet lote 00, regla B lotes 08 y
+09) y no se relanzaron; los conteos salen del subconjunto común de 94, así que la comparación entre
+celdas es pareja.
