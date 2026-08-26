@@ -1013,7 +1013,14 @@ sin `methods` (sin extraer), paper extraído sin `role`, y **ficha sin
 su `raw/ground_truth/<slug>.json`** (el barrido del espejo #70 lo maneja el JSON, así que una ficha
 sin archivo no la mira **nadie**: se le pueden inventar `teff_K`/`P_rot_days`/planetas enteros con
 el lint en verde — es backlog y no bloqueante porque es "la garantía no corrió acá", no "hay una
-violación"), y su **hermano simétrico**: un `raw/ground_truth/<slug>.json` **sin** su
+violación"), un **`raw/fulltext/<slug>/<clave>.txt` sin su nota en `papers/`** (#108: extracción ya
+pagada —descarga, PDF, `pdftotext`— que **no alcanza ningún roll-up ni ninguna síntesis**, porque
+ni siquiera hay nota. Es la misma familia que INV-94 un escalón más abajo: allá la nota existe y no
+la alcanza nadie, acá no hay nota. El mecanismo es alcanzable sin salirse de lo documentado:
+**angostar la `query` de un tema** saca esos registros de `build/<slug>/ads.json`, `make_notes` deja
+de escribirles nota y el PDF y el `.txt` quedan en disco — medido en una bóveda real, 10 de 30 `.txt`
+de un tema. Se cierra re-corriendo `make_notes.py --theme <slug>` o borrando el artefacto colgado),
+y su **hermano simétrico**: un `raw/ground_truth/<slug>.json` **sin** su
 `stars/<slug>.md`, que es un renombre a medias o una ficha borrada sin limpiar — el espejo no tiene
 con qué comparar y nadie avisa que ese ground-truth quedó colgado. Revisar
 El **recorte de lectura sin declarar** (core sin extraer y sin `extraccion:` en el registro)

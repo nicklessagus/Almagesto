@@ -2886,3 +2886,29 @@ def test_lente_no_evaluable_nombra_el_motivo_correcto(tmp_path, monkeypatch, cap
     import lib_config as c
     assert c.lens_textual_changed(["fundacional_min_citas 2000 → 30"]) is False
     assert c.lens_textual_changed(["noise_doctypes ['a'] → ['b']"]) is False
+
+
+# ── fulltext sin nota: extracción pagada que no alcanza ninguna síntesis (#108) ──
+def test_fulltext_sin_nota_es_backlog(toy_vault, capsys):
+    """Medido: al angostar la `query` de un tema, sus registros salen de `ads.json`, `make_notes`
+    deja de escribirles nota y el `.txt` queda en disco — 10 de 30 en una bóveda real. Nadie lo
+    miraba: es el hermano simétrico de la «cita no verificable» (bibcode citado SIN .txt)."""
+    d = cfg.FULLTEXT / "ica"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "2012ApJ...747...12W.txt").write_text("texto", encoding="utf-8")
+    lint.main([])
+    out = capsys.readouterr().out
+    assert "2012ApJ...747...12W.txt" in out
+    assert "sin su nota" in out
+    assert "make_notes.py --theme ica" in out          # el arreglo, nombrado
+
+
+def test_fulltext_con_nota_no_es_hallazgo(toy_vault, capsys):
+    d = cfg.FULLTEXT / "ica"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "2012ApJ...747...12W.txt").write_text("texto", encoding="utf-8")
+    (cfg.PAPERS / "2012ApJ...747...12W.md").write_text(
+        "---\nbibcode: 2012ApJ...747...12W\ntags: [paper]\nthesis_links: [ica]\n---\n# T\n",
+        encoding="utf-8")
+    lint.main([])
+    assert "sin su nota" not in capsys.readouterr().out

@@ -1992,6 +1992,28 @@ def collect(cierre: bool = False) -> LintResult:
                                             f"`python scripts/entity.py plan {slug_}` no lo va a "
                                             f"encontrar: borralo a mano, o recreá la entidad"))
 
+    # Fulltext SIN nota de paper (#108). Hermano simétrico de la «cita no verificable» (bibcode
+    # citado sin `.txt`) y del `ground_truth` sin ficha: acá el `.txt` **existe** y la nota no, así
+    # que es extracción ya pagada —descarga, PDF, pdftotext— que **no la alcanza ningún roll-up ni
+    # ninguna síntesis**, y ningún detector la miraba. Medido en una bóveda real: 10 de 30 `.txt`
+    # de un tema quedaron así. El mecanismo es alcanzable sin salirse de lo documentado: al
+    # **angostar la `query` de un tema**, sus registros salen de `build/<slug>/ads.json`,
+    # `make_notes` deja de escribirles nota, y el PDF y el `.txt` quedan en disco. Es la misma
+    # familia que INV-94 (paper sin entidad) un escalón más abajo: allá la nota existe y no la
+    # alcanza nadie; acá ni siquiera hay nota. Backlog: el artefacto es válido, lo que falta es la
+    # nota — o borrarlo si el sujeto ya no lo quiere.
+    for _dir in sorted(cfg.FULLTEXT.glob("*")) if cfg.FULLTEXT.exists() else []:
+        if not _dir.is_dir():
+            continue
+        for _txt in sorted(_dir.glob("*.txt")):
+            if not (cfg.PAPERS / f"{_txt.stem.replace('/', '_')}.md").exists():
+                incomplete.append(
+                    (_txt.stem, f"`raw/fulltext/{_dir.name}/{_txt.stem}.txt` sin su nota en "
+                                f"`papers/` → extracción ya pagada que no alcanza ninguna síntesis "
+                                f"(típico: se angostó la `query` del tema y el registro salió de "
+                                f"`ads.json`). Re-corré `make_notes.py --theme {_dir.name}` o "
+                                f"borrá el artefacto colgado"))
+
     # categorías que NO se pudieron evaluar: se omiten del reporte en vez de mostrar un "(0)" que
     # se leería como veredicto (el adversario que D-43 nombra: el cero inventado).
     suprimidas = set()
