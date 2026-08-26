@@ -52,6 +52,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import urllib.parse
 import json
 import sys
 
@@ -291,6 +292,78 @@ def report(slug: str, cands: list[dict]) -> None:
     cfg.print_seguro(f"  → {out}")
 
 
+VIA_FUENTE = ("usuario", "descubrimiento", "reporte")   # vocabulario CERRADO (gemelo de extra_core)
+
+
+def accept_source(slug: str, idents: list, via: str, motivo: str) -> int:
+    """Candidato off-ADS aceptado → **entrada de `sources:` lista para pegar**, con metadata real,
+    procedencia y archivo resuelto. Es la salida que al carril off-ADS le faltaba (#111).
+
+    POR QUÉ EXISTE, medido. El carril del bibcode ADS está **completo**: aceptás un candidato, va a
+    `extra_core`, re-corrés la cadena y **se baja solo**. El de off-ADS se cortaba en el hallazgo:
+    el descubrimiento proponía el paper y después había que escribir a mano una entrada de
+    `sources:` con un archivo conseguido por tu cuenta. Medido sobre una bóveda real: el
+    descubrimiento anclado **encontró** a Comon 1994 (citado por 8 de los 19 papers astro del tema)
+    y al libro de Hyvärinen-Karhunen-Oja (citado por 6), y ninguno de los dos entró — no por fallo
+    de búsqueda, sino porque nadie hizo el trabajo manual. Los 40 papers que la bóveda anterior
+    tenía y la nueva no **entraron los 40 a mano**.
+
+    Y de paso cierra la otra mitad de la asimetría de #51: una entrada de `sources:` no decía
+    **quién la declaró ni por qué** —el `extra_core` sí lo dice desde D-58, y el descarte de una
+    fuente desde #81—, así que la aceptación off-ADS era el único de los cuatro cuadrantes sin
+    registro de curación. Por eso `via` y `motivo` son obligatorios acá.
+
+    No escribe `themes.yaml`: imprime el bloque, igual que el snippet de `extra_core`. La config es
+    curada y versionada, y un script que la edita solo convierte una decisión en un efecto
+    colateral."""
+    if via not in VIA_FUENTE:
+        sys.exit(f"`--via {via}` no está en el vocabulario cerrado: {' | '.join(VIA_FUENTE)}")
+    if not motivo:
+        sys.exit("aceptar una fuente sin `--reason` deja el registro sin decir POR QUÉ entró — es "
+                 "la asimetría que #51 cerró del lado del descarte. Poné el motivo.")
+    import discover
+    import openalex as oa
+    hoy = dt.date.today().isoformat()
+    cfg.print_seguro(f"\n  sources:      # pegar en la entrada `{slug}` de vault/config/themes.yaml")
+    fallidos = []
+    for ident in idents:
+        try:
+            w = discover._json(oa.API + "/doi:" + urllib.parse.quote(ident) + "?" +
+                               urllib.parse.urlencode({"mailto": oa._mailto()}))
+        except Exception as exc:                    # noqa: BLE001 — declarado, no tragado
+            fallidos.append((ident, str(exc)[:90]))
+            continue
+        key = oa.citekey(w) or ident
+        doi = oa._bare_doi(w.get("doi"))
+        url, _por = discover.resolve_pdf(doi)
+        venue = ((w.get("primary_location") or {}).get("source") or {}).get("display_name")
+        autor = (((w.get("authorships") or [{}])[0].get("author") or {}).get("display_name") or "")
+        cfg.print_seguro(f"    - key: {key}")
+        # `url:` si hay copia libre; si no, `pending: paywall` — el carril que ya existe para
+        # derivar al usuario sin frenar la cadena. Nunca se inventa un archivo.
+        cfg.print_seguro(f"      url: {url}" if url else "      pending: paywall")
+        cfg.print_seguro(f"      title: {(w.get('title') or '').replace(chr(10), ' ')!r}")
+        if autor:
+            cfg.print_seguro(f"      author: {autor.split()[-1]}")
+        if w.get("publication_year"):
+            cfg.print_seguro(f"      year: {w['publication_year']}")
+        if venue:
+            cfg.print_seguro(f"      venue: {venue!r}")
+        if doi:
+            cfg.print_seguro(f"      doi: {doi}")
+        if w.get("authorships"):
+            cfg.print_seguro(f"      n_authors: {len(w['authorships'])}")
+        cfg.print_seguro(f"      via: {via}")
+        cfg.print_seguro(f"      fecha: {hoy}")
+        cfg.print_seguro(f"      motivo: {motivo!r}")
+    for ident, why in fallidos:
+        cfg.print_seguro(f"  ⚠ {ident}: no se pudo resolver la metadata ({why}) — NO se inventa "
+                         "una entrada a medias; re-intentá o declarala a mano")
+    cfg.print_seguro("\n  → después: `python scripts/ingest_theme.py " + slug +
+                     "` (idempotente: sólo baja lo nuevo).")
+    return 1 if fallidos else 0
+
+
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser()
@@ -320,11 +393,21 @@ def main() -> int:
                          "la ficha con `make_notes.py <slug>`")
     ap.add_argument("--n-papers", type=int, dest="n_papers",
                     help="(--sintesis) sobre cuántos papers se sintetizó")
+    ap.add_argument("--accept-source", nargs="+", metavar="DOI", dest="accept_source",
+                    help="candidato OFF-ADS aceptado → arma la entrada de `sources:` (metadata "
+                         "real + archivo resuelto + procedencia) lista para pegar. Es la salida "
+                         "que al carril off-ADS le faltaba: sin esto, el descubrimiento proponía "
+                         "el paper y el trabajo de bajarlo quedaba a mano. Exige --reason y --via.")
+    ap.add_argument("--via", default="usuario", choices=VIA_FUENTE,
+                    help="quién acepta la fuente (vocabulario CERRADO, gemelo del `via` de "
+                         "extra_core): usuario | descubrimiento | reporte")
     ap.add_argument("--migrate", action="store_true",
                     help="consolidar en el registro versionado las decisiones del "
                          "build/<slug>/triage.json viejo (bóvedas pre-1.9.0) y salir")
     args = ap.parse_args()
 
+    if args.accept_source:
+        return accept_source(args.slug, args.accept_source, args.via, args.reason)
     if args.migrate:
         return migrate(args.slug)
 

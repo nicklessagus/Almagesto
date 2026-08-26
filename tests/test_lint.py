@@ -2632,7 +2632,7 @@ def test_las_claves_de_categoria_son_unicas_y_estables(toy_vault):
     equivocada en silencio."""
     claves = [c.clave for c in lint.collect().categorias]
     assert len(claves) == len(set(claves)), [k for k in claves if claves.count(k) > 1]
-    assert len(claves) == 55, f"el reporte tiene {len(claves)} categorías, se esperaban 55"
+    assert len(claves) == 56, f"el reporte tiene {len(claves)} categorías, se esperaban 56"
 
 
 def test_el_modo_cierre_solo_cambia_el_exit_de_los_pares(toy_vault):
@@ -2912,3 +2912,38 @@ def test_fulltext_con_nota_no_es_hallazgo(toy_vault, capsys):
         encoding="utf-8")
     lint.main([])
     assert "sin su nota" not in capsys.readouterr().out
+
+
+# ── `sources:` sin procedencia: el último cuadrante de curación sin registro (#111) ──
+def test_source_sin_via_ni_motivo_bloquea(toy_vault, capsys):
+    """Los otros tres cuadrantes ya registran quién y por qué (extra_core D-58, drop #51,
+    drop-source #81). En off-ADS **todo** entra por decisión de alguien, así que sin el campo la
+    pregunta «¿lo pediste vos, lo propuso el descubrimiento, o salió de un reporte?» no tiene
+    respuesta — medido: los 40 papers que la bóveda anterior tenía entraron los 40 a mano y no hay
+    forma de saber cuáles pidió el usuario."""
+    (cfg.CONFIG / "themes.yaml").write_text(
+        "ica:\n  title: T\n  area: methods\n  concept: ica\n  source: local-pdfs\n"
+        "  sources:\n    - key: 1994Comon\n      pdf: x.pdf\n", encoding="utf-8")
+    rc = lint.main([])
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "ica/1994Comon" in out and "sin `via`" in out
+    assert "--accept-source" in out                    # el arreglo, nombrado
+
+
+def test_source_con_via_fuera_del_vocabulario_bloquea(toy_vault, capsys):
+    (cfg.CONFIG / "themes.yaml").write_text(
+        "ica:\n  title: T\n  area: methods\n  concept: ica\n  source: local-pdfs\n"
+        "  sources:\n    - key: 1994Comon\n      pdf: x.pdf\n      via: inventado\n"
+        "      motivo: porque si\n", encoding="utf-8")
+    assert lint.main([]) == 1
+    assert "fuera del vocabulario cerrado" in capsys.readouterr().out
+
+
+def test_source_completa_no_bloquea(toy_vault, capsys):
+    (cfg.CONFIG / "themes.yaml").write_text(
+        "ica:\n  title: T\n  area: methods\n  concept: ica\n  source: local-pdfs\n"
+        "  sources:\n    - key: 1994Comon\n      pdf: x.pdf\n      via: usuario\n"
+        "      motivo: canon del metodo\n", encoding="utf-8")
+    lint.main([])
+    assert "sin `via`" not in capsys.readouterr().out

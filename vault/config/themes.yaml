@@ -57,6 +57,20 @@
 #                  n_authors/doi               # opcionales: nº de autores; DOI si existe (un PDF con
 #                                              # DOI sigue siendo off-ADS — sin bibcode ADS — y el DOI
 #                                              # habilita el chequeo de retracciones vía Crossref)
+#                  via: usuario               # OBLIGATORIO (#111). Vocabulario CERRADO:
+#                                              #   usuario        — lo pediste vos
+#                                              #   descubrimiento — lo propuso la cascada (discover)
+#                                              #   reporte        — vino de un documento externo
+#                                              # Era el ÚNICO de los cuatro cuadrantes de curación
+#                                              # sin registro: `extra_core` dice quién y por qué
+#                                              # (D-58), el descarte de un candidato (#51) y el de
+#                                              # una fuente (#81) también. Y es el que MÁS lo
+#                                              # necesita: en off-ADS no hay query que descubra, así
+#                                              # que TODO entra por decisión de alguien. El lint lo
+#                                              # bloquea; el snippet lo arma
+#                                              # `triage.py <slug> --accept-source <doi>`.
+#                  fecha: 2026-08-26           # cuándo se aceptó
+#                  motivo: "..."               # OBLIGATORIO: por qué entra esta fuente
 #                  pending: paywall            # la fuente NO se pudo conseguir todavía (paywall |
 #                                              # scan | unextractable): en vez de url/pdf obtenible,
 #                                              # el item queda DERIVADO al usuario — se stubbea la

@@ -653,6 +653,34 @@ que son complejidad permanente en el lector— y se consolida con
 versionado). Mientras exista, el **lint lo reporta como bloqueante**: que un juicio viejo quede mudo
 es justamente el bug que #51 arregló.
 
+### Los cuatro cuadrantes de la curación — quién decidió y por qué (#111)
+
+Toda decisión de curación deja registro **versionado**, en los cuatro casos, y desde #111 no queda
+ninguno mudo:
+
+| | Aceptar | Descartar |
+|---|---|---|
+| **con bibcode ADS** | `extra_core: {bibcode, via, fecha, motivo}` (D-58) | `triage --drop … --reason` → `decisiones` (#51) |
+| **fuente off-ADS** | `sources: {…, via, fecha, motivo}` (#111) | `triage --drop-source … --reason` (#81) |
+
+El cuadrante que faltaba —la fuente off-ADS **aceptada**— es justamente el que más lo necesita: ahí
+**no hay query que descubra**, así que **todo** entra por decisión de alguien, y sin el campo la
+pregunta *«¿qué entró porque lo pidió el usuario, qué lo propuso el descubrimiento y qué salió de un
+reporte externo?»* no tiene respuesta. Medido sobre una bóveda real: los 40 papers que tenía y una
+bóveda nueva no, **entraron los 40 a mano**, y su config no permite saber cuáles pidió el usuario.
+
+`via` es **vocabulario cerrado**: `usuario` (lo pidió) · `descubrimiento` (lo propuso la cascada de
+`discover`) · `reporte` (vino de un documento externo). El lint **bloquea** la entrada sin `via` o
+sin `motivo`, y el `via` fuera del vocabulario — un campo opcional no se llena.
+
+⛔ **El carril off-ADS tiene salida hacia la ingesta** (#111): `python scripts/triage.py <slug>
+--accept-source <doi> --via <via> --reason "<motivo>"` arma la entrada completa —metadata real de
+OpenAlex, archivo resuelto por `resolve_pdf` o `pending: paywall`, y la procedencia— **lista para
+pegar**. Sin esto el descubrimiento se cortaba en el hallazgo: proponía el paper y bajarlo quedaba
+como trabajo manual, que es exactamente por qué una bóveda con búsqueda peor puede tener más papers
+que una con búsqueda mejor. No escribe `themes.yaml`: la config es curada y versionada, y un script
+que la edita solo convierte una decisión en un efecto colateral.
+
 ### Append (plegar UNA fuente puntual a una entidad existente — skill `append-knowledge`)
 El usuario trae **una fuente concreta** (bibcode ADS, PDF local o URL) para una ficha/concepto que
 **ya existe**: plomería mínima según el tipo (bibcode → `extra_core` + cadena idempotente; off-ADS →

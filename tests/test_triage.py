@@ -492,3 +492,65 @@ def test_sintesis_se_declara_y_no_pisa_lo_demas(toy_vault, monkeypatch):
     assert reg["sintesis"]["n_papers"] == 12 and reg["sintesis"]["nota"] == "los 12 core"
     assert reg["sintesis"]["fecha"] and reg["sintesis"]["version"]
     assert len(reg["busquedas"]) == 1, "declarar la síntesis no toca el historial de búsquedas"
+
+
+# ── el carril off-ADS: candidato aceptado → entrada de `sources:` (#111) ─────
+def _work(doi="10.1016/0165-1684(94)90029-9"):
+    return {"id": "https://openalex.org/W1", "doi": f"https://doi.org/{doi}",
+            "title": "Independent component analysis, A new concept?",
+            "publication_year": 1994,
+            "authorships": [{"author": {"display_name": "Pierre Comon"}}],
+            "primary_location": {"source": {"display_name": "Signal Processing"}}}
+
+
+def test_accept_source_arma_la_entrada_completa(monkeypatch, capsys):
+    """El carril del bibcode ADS estaba completo (extra_core → cadena → se baja solo) y el de
+    off-ADS se cortaba en el hallazgo. Medido: el anclaje ENCONTRÓ a Comon 1994 y al libro HKO y
+    ninguno entró, porque nadie hizo el trabajo manual."""
+    import discover
+    monkeypatch.setattr(discover, "_json", lambda url: _work())
+    monkeypatch.setattr(discover, "resolve_pdf", lambda doi, title=None: ("http://x/a.pdf", "OA"))
+    rc = triage.accept_source("ica", ["10.1016/0165-1684(94)90029-9"], "usuario", "canon del método")
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "sources:" in out and "url: http://x/a.pdf" in out
+    assert "year: 1994" in out and "Signal Processing" in out
+    assert "author: Comon" in out
+    assert "via: usuario" in out and "canon del método" in out    # la asimetría de #51, cerrada
+    assert "ingest_theme.py ica" in out                            # el paso siguiente, nombrado
+
+
+def test_accept_source_sin_copia_libre_deja_pending(monkeypatch, capsys):
+    """Nunca se inventa un archivo: si no hay copia libre, queda en el carril `pending` que ya
+    existe para derivar al usuario sin frenar la cadena."""
+    import discover
+    monkeypatch.setattr(discover, "_json", lambda url: _work())
+    monkeypatch.setattr(discover, "resolve_pdf", lambda doi, title=None: (None, "sin copia"))
+    triage.accept_source("ica", ["10.1/x"], "usuario", "motivo")
+    out = capsys.readouterr().out
+    assert "pending: paywall" in out and "url:" not in out
+
+
+def test_accept_source_exige_motivo(monkeypatch):
+    with pytest.raises(SystemExit, match="POR QUÉ"):
+        triage.accept_source("ica", ["10.1/x"], "usuario", "")
+
+
+def test_accept_source_via_fuera_del_vocabulario_aborta(monkeypatch):
+    with pytest.raises(SystemExit, match="vocabulario cerrado"):
+        triage.accept_source("ica", ["10.1/x"], "inventado", "motivo")
+
+
+def test_accept_source_declara_el_que_no_pudo_resolver_y_no_inventa(monkeypatch, capsys):
+    """Contrato de cobertura: una entrada a medias es peor que ninguna — la clave y el `pending`
+    quedarían apuntando a un trabajo que nadie identificó."""
+    import discover
+    def boom(url):
+        raise RuntimeError("OpenAlex HTTP 429: Rate limit exceeded")
+    monkeypatch.setattr(discover, "_json", boom)
+    rc = triage.accept_source("ica", ["10.1/x"], "usuario", "motivo")
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "no se pudo resolver la metadata" in out and "429" in out
+    assert "NO se inventa" in out
+    assert "- key:" not in out

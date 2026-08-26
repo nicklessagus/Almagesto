@@ -706,6 +706,8 @@ _print_seguro = cfg.print_seguro
 # artefacto que mide a la bóveda. Acá la severidad se declara **una vez**, en la tabla, y el exit se
 # deriva de ella.
 
+VIA_FUENTE_OK = {"usuario", "descubrimiento", "reporte"}   # procedencia de una fuente off-ADS (#111)
+
 SEV_BLOQUEANTE = "bloqueante"      # viola el contrato: exit 1 siempre
 SEV_CIERRE = "cierre"              # bloquea SÓLO con `--cierre` (R-1: pares vencidos)
 SEV_WARN = "warn"                  # heurística de alta señal: se revisa a mano, no frena
@@ -858,6 +860,7 @@ def collect(cierre: bool = False) -> LintResult:
     extracted: list = []               # (stem, marca `no_sintetizado`) de papers YA extraídos (#75)
     bad_decisions: list = []           # (slug, clave) — decisión del registro que no es un mapa
     lente_desync: list = []            # (slug, delta) — la lente cambió desde la última corrida (D-49)
+    bad_sources: list = []             # `sources:` sin via/motivo o con via inválida (#111)
     artefactos_colgados: list = []     # (capa, motivo) — capa de una entidad que ya no existe (INV-19)
 
     refs_dir = str(cfg.RAW / "refs")
@@ -2014,6 +2017,36 @@ def collect(cierre: bool = False) -> LintResult:
                                 f"`ads.json`). Re-corré `make_notes.py --theme {_dir.name}` o "
                                 f"borrá el artefacto colgado"))
 
+    # `sources:` sin procedencia (#111). Era el ÚNICO de los cuatro cuadrantes de curación sin
+    # registro: `extra_core` dice quién y por qué desde D-58, el descarte de un candidato desde #51
+    # y el de una fuente declarada desde #81 — pero una fuente off-ADS ACEPTADA no decía nada. Y es
+    # el cuadrante que más lo necesita: en off-ADS **todo** entra por decisión de alguien (no hay
+    # query que descubra), así que sin el campo la pregunta «¿qué entró porque lo pediste vos, qué
+    # lo propuso el descubrimiento y qué salió de un reporte externo?» no tiene respuesta. Medido
+    # sobre una bóveda real: los 40 papers que tenía y la nueva no entraron los 40 a mano, y no hay
+    # forma de saber cuáles pidió el usuario. BLOQUEANTE, como la forma dura de `extra_core`: un
+    # campo opcional no se llena. El snippet lo arma `triage.py --accept-source`.
+    # `themes_error()` primero: con el YAML roto, `load_themes` levanta y tumbaría el lint entero —
+    # el chequeo no puede volverse él mismo un falso rojo (misma doctrina que INV-80).
+    for _slug, _meta in ({} if cfg.themes_error() else (cfg.load_themes() or {})).items():
+        for _it in cfg.as_list(cfg.as_map(_meta).get("sources")):
+            if not isinstance(_it, dict):
+                continue
+            _falta = [k for k in ("via", "motivo") if not _it.get(k)]
+            if _falta:
+                bad_sources.append(
+                    (f"{_slug}/{_it.get('key') or '?'}",
+                     f"entrada de `sources:` sin {' ni '.join('`%s`' % k for k in _falta)} → no "
+                     f"consta quién la declaró ni por qué (en off-ADS TODO entra por decisión de "
+                     f"alguien). Armá la entrada con `python scripts/triage.py {_slug} "
+                     f"--accept-source <doi> --via usuario --reason \"<motivo>\"`"))
+            elif _it.get("via") not in VIA_FUENTE_OK:
+                bad_sources.append(
+                    (f"{_slug}/{_it.get('key') or '?'}",
+                     f"`via: {_it.get('via')}` fuera del vocabulario cerrado "
+                     f"({' | '.join(sorted(VIA_FUENTE_OK))}) — un typo deja el campo mudo para la "
+                     f"única pregunta que existe para consumirlo"))
+
     # categorías que NO se pudieron evaluar: se omiten del reporte en vez de mostrar un "(0)" que
     # se leería como veredicto (el adversario que D-43 nombra: el cero inventado).
     suprimidas = set()
@@ -2068,6 +2101,7 @@ def collect(cierre: bool = False) -> LintResult:
         Categoria('old_bearing', '⛔ `bearing` en una nota de paper (schema pre-D-21) — la postura vive en la hipótesis', SEV_BLOQUEANTE, tuple(old_bearing)),
         Categoria('sin_destino', '⛔ Nota de paper sin destino (D-23): no pertenece a ninguna entidad', SEV_BLOQUEANTE, tuple(sin_destino)),
         Categoria('identidad_dup', '⛔ Identidad duplicada: dos notas del mismo trabajo (mismo doi/arxiv_id)', SEV_BLOQUEANTE, tuple(identidad_dup)),
+        Categoria('bad_sources', '⛔ `sources:` sin procedencia (#111): no consta quién declaró la fuente ni por qué', SEV_BLOQUEANTE, tuple(bad_sources)),
         Categoria('bad_roles', '`role` fuera del vocabulario (fundacional/aplicacion/arbitro)', SEV_BLOQUEANTE, tuple(bad_roles)),
         Categoria('impl_leaks', '⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)', SEV_WARN, tuple(impl_leaks)),
         Categoria('objective_warn', 'Objetivo sin instanciar (WARN — objective.yaml sigue en el placeholder del template)', SEV_WARN, tuple(objective_warn)),
