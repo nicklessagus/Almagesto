@@ -210,25 +210,26 @@ que es el recorte que la prueba n.º 4 pedía.
 
 | celda | valores | c/línea | c/régimen | c/2.ª mano |
 |---|---:|---:|---:|---:|
-| Haiku · canónico | 10 | 100 % | 100 % | 30 % |
-| Haiku · sin reglas | 10 | 100 % | 100 % | 10 % |
-| Sonnet · canónico | 22 | 100 % | 100 % | 36 % |
-| Sonnet · sin reglas | 19 | 100 % | 95 % | 42 % |
+| Haiku · canónico | 15 | 100 % | 100 % | 20 % |
+| Haiku · sin reglas | 15 | 100 % | 100 % | 7 % |
+| Sonnet · canónico | 49 | 100 % | 100 % | 49 % |
+| Sonnet · sin reglas | 46 | 100 % | 98 % | 54 % |
 
 **Veredicto: nulo — no se toca `extraction_prompt.py`.** Sacar los cuatro bullets no cambió línea ni
-régimen (100 % en las cuatro celdas), **porque el schema ya nombra esos campos y eso alcanza**. La
-única diferencia es segunda mano (Haiku 30 % → 10 %), pero son 3 valores contra 1 sobre 10 y **Sonnet
-fue en la dirección contraria** (36 % → 42 %): es ruido, no señal.
+régimen (100 % en las cuatro celdas, salvo un 98 % en una), **porque el schema ya nombra esos campos y
+eso alcanza**. La única diferencia es segunda mano (Haiku 20 % → 7 %), pero **Sonnet fue en la
+dirección contraria** (49 % → 54 %): es ruido, no señal. El caso más nítido es el paper más denso
+(Jofré, 4947 líneas): Sonnet sacó **27 valores con las reglas y 27 sin ellas** — idéntico.
 
 **La consecuencia es de método:** para una anotación que el schema puede nombrar como campo, más prosa
 en el prompt no agrega nada. La palanca es la misma que ya funciona para línea y régimen — **hacer el
 campo obligatorio y chequearlo**, o sea un detector, no una instrucción. Coincide con lo ya medido
 (RSOS 2025): pedir precisión en el prompt no mejora, y a veces empeora.
 
-*Cobertura declarada:* subconjunto **común a las cuatro celdas = 4 papers**; la celda Sonnet-canónico
-de Jofré no cerró antes de terminar la sesión, así que ese paper queda fuera del agregado (con él,
-Sonnet-sin-reglas sube a 46 valores, pero compararlo contra 22 sería atribución falsa). Una sola
-corrida por celda.
+*Cobertura declarada:* grilla **completa**, 5 papers × 4 celdas, una sola corrida por celda. La columna
+Opus de esa tabla existe sólo para Jofré (el brazo de control se corrió sobre otros 6 papers, y Jofré es
+el único solapado): ahí Opus sacó 31, Sonnet 27 (**87 %**) y Haiku 5 (**16 %**). No comparar el total de
+49 de Sonnet contra ese 31 — son poblaciones distintas.
 
 ## Próximas pruebas (anotadas, no corridas)
 
