@@ -292,6 +292,64 @@ def report(slug: str, cands: list[dict]) -> None:
     cfg.print_seguro(f"  → {out}")
 
 
+def _tema_meta(slug: str) -> dict:
+    """La entrada del tema, o `{}` si el slug es una estrella (o no existe). Sólo para resolver el
+    nombre del `concept`, que es lo que `thesis_links` guarda — no el slug."""
+    try:
+        _, m = cfg.theme_by_slug(slug)
+        return m
+    except (KeyError, RuntimeError):
+        return {}
+
+
+def drop_core(slug: str, bibcodes: list, motivo: str) -> int:
+    """Saca un paper que la lente dice CORE de ESTE sujeto, y borra sus artefactos (#112).
+
+    Es el simétrico que a `extra_core` le faltaba. Hasta ahora `--drop` sólo evitaba re-proponer un
+    candidato del chaining: sobre un core no tenía efecto, así que un descarte con motivo quedaba
+    escrito y **no se aplicaba** — medido en `ica`, 7 papers off-topic seguían siendo core corrida
+    tras corrida. Una decisión que el clasificador ignora en silencio es peor que no tomarla.
+
+    Borra el PDF y el `.txt` a propósito: si quedan, el detector de #108 los reporta como
+    «extracción pagada sin nota» para siempre, y el `.txt` sigue apareciendo en los greps del
+    corpus. La decisión queda igual —versionada, con motivo, en `decisiones`— así que borrar el
+    artefacto no borra el juicio, y re-correr la cadena no los vuelve a bajar."""
+    if not motivo:
+        sys.exit("sacar un paper del sujeto sin `--reason` deja el registro sin decir POR QUÉ — y "
+                 "acá el motivo es lo único que distingue una curación de un borrado a ciegas.")
+    hoy = dt.date.today().isoformat()
+    data = cfg.load_registro(slug)
+    dec = data.setdefault("decisiones", {}) if isinstance(data.get("decisiones"), dict) or         "decisiones" not in data else data["decisiones"]
+    borrados = 0
+    for b in bibcodes:
+        dec[b] = {"decision": "descartado", "origen": "sujeto", "motivo": motivo, "fecha": hoy}
+        for ruta in (cfg.PDFS / slug / f"{b}.pdf", cfg.FULLTEXT / slug / f"{b}.txt"):
+            if ruta.exists():
+                ruta.unlink()
+                borrados += 1
+        nota = cfg.PAPERS / f"{b.replace('/', '_')}.md"
+        if nota.exists():
+            fm = cfg.split_fm(nota.read_text(encoding="utf-8"))
+            otros = [x for x in cfg.as_list(fm.get("stars")) + cfg.as_list(fm.get("thesis_links"))
+                     if x != slug and x != (cfg.as_map(_tema_meta(slug)).get("concept") or slug)]
+            extraida = bool(cfg.as_list(fm.get("methods")))
+            if otros or extraida:
+                # No se borra: o pertenece a otro sujeto (la exclusión es del PAR paper-sujeto), o
+                # ya tiene extracción encima —trabajo pagado— y eso no se destruye en silencio.
+                por = ("pertenece también a " + ", ".join(map(str, otros[:3]))) if otros else                     "ya tiene extracción LLM (`methods` poblado): trabajo pagado"
+                cfg.print_seguro(f"  ⚠ {b}: su nota `papers/` NO se borra — {por}. Revisala a mano.")
+            else:
+                nota.unlink()
+                borrados += 1
+    data["decisiones"] = dec
+    cfg.save_registro(slug, data)
+    cfg.print_seguro(f"  {len(bibcodes)} paper(s) excluido(s) de `{slug}` (carril `sujeto`) · "
+                     f"{borrados} artefacto(s) borrado(s) · motivo: {motivo}")
+    cfg.print_seguro(f"  → {cfg.registro_path(slug)} (versionado: la decisión viaja). Re-corré la "
+                     "cadena: no vuelven a entrar ni a bajarse.")
+    return 0
+
+
 VIA_FUENTE = ("usuario", "descubrimiento", "reporte")   # vocabulario CERRADO (gemelo de extra_core)
 
 
@@ -393,6 +451,10 @@ def main() -> int:
                          "la ficha con `make_notes.py <slug>`")
     ap.add_argument("--n-papers", type=int, dest="n_papers",
                     help="(--sintesis) sobre cuántos papers se sintetizó")
+    ap.add_argument("--drop-core", nargs="+", metavar="BIBCODE", dest="drop_core",
+                    help="sacar de ESTE sujeto papers que la lente dice core, y borrar sus "
+                         "artefactos (#112). Es el simétrico de `extra_core`. Exige --reason. La "
+                         "exclusión es del par paper-sujeto: el mismo paper puede ser core de otro.")
     ap.add_argument("--accept-source", nargs="+", metavar="DOI", dest="accept_source",
                     help="candidato OFF-ADS aceptado → arma la entrada de `sources:` (metadata "
                          "real + archivo resuelto + procedencia) lista para pegar. Es la salida "
@@ -406,6 +468,8 @@ def main() -> int:
                          "build/<slug>/triage.json viejo (bóvedas pre-1.9.0) y salir")
     args = ap.parse_args()
 
+    if args.drop_core:
+        return drop_core(args.slug, args.drop_core, args.reason)
     if args.accept_source:
         return accept_source(args.slug, args.accept_source, args.via, args.reason)
     if args.migrate:

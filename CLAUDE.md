@@ -660,8 +660,31 @@ ninguno mudo:
 
 | | Aceptar | Descartar |
 |---|---|---|
-| **con bibcode ADS** | `extra_core: {bibcode, via, fecha, motivo}` (D-58) | `triage --drop … --reason` → `decisiones` (#51) |
+| **con bibcode ADS** | `extra_core: {bibcode, via, fecha, motivo}` (D-58) | candidato del chaining: `triage --drop … --reason` (#51) · **core del sujeto: `triage --drop-core … --reason` (#112)** |
 | **fuente off-ADS** | `sources: {…, via, fecha, motivo}` (#111) | `triage --drop-source … --reason` (#81) |
+
+⛔ **`extra_core` fuerza la ENTRADA; `--drop-core` es su simétrico y faltaba (#112).** Un paper que
+la lente dice core **no se podía sacar**: `--drop` se consultaba sólo para no re-proponer candidatos
+del chaining, así que sobre un core la decisión quedaba escrita y **no se aplicaba** — medido en un
+tema real, 7 papers off-topic descartados con motivo seguían siendo core corrida tras corrida. Una
+decisión de curación que el clasificador ignora en silencio es peor que no tomarla: queda escrita, se
+lee como aplicada, y no lo está. Tres propiedades del carril, y cada una cierra un modo de falla:
+- **El carril es `sujeto`, no global.** La exclusión es del par `(paper, sujeto)`: lo que se saca de
+  un tema de método por polisemia —"componentes independientes" de un tensor— puede ser legítimamente
+  core de otro. Un descarte global decidiría por bóvedas que no son ésta.
+- **El paper excluido queda VISIBLE**, con `via: manual-drop` y el motivo en `why_excluded`. Si
+  desapareciera del registro, dentro de tres meses se leería como *«la búsqueda nunca lo encontró»*.
+- **Los artefactos se borran** (PDF y `.txt`): si quedan, el detector de #108 los reporta como
+  extracción pagada sin nota **para siempre**, y el `.txt` sigue saliendo en los greps del corpus. La
+  decisión queda igual —versionada, con motivo— así que borrar el artefacto no borra el juicio. La
+  **nota** no se borra sola: puede pertenecer a otro sujeto, así que se avisa.
+- **El diff de re-clasificación lo respeta** (`lens_diff_offline`, `reclass_diff`): sin eso, cada
+  cambio de lente vuelve a proponer lo que el usuario ya sacó, y la categoría se vuelve ruido que se
+  deja de mirar.
+
+INV-24 sigue en pie por la misma razón que con `extra_core`: core es `f(paper, lente)` **módulo
+curación declarada**, y la curación es auditable —motivo obligatorio, fechada, versionada, viaja—.
+Lo que no sería auditable es que el veredicto cambiara sin que nadie firme.
 
 El cuadrante que faltaba —la fuente off-ADS **aceptada**— es justamente el que más lo necesita: ahí
 **no hay query que descubra**, así que **todo** entra por decisión de alguien, y sin el campo la

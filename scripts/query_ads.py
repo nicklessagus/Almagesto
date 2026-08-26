@@ -555,6 +555,46 @@ def load_triage(slug: str) -> set[str]:
             if d.get("decision") == "descartado" and cfg.es_del_carril(d, "chaining")}
 
 
+def excluidos_del_sujeto(slug: str) -> dict:
+    """Papers que el usuario declaró **fuera de ESTE sujeto**: `{bibcode: motivo}` (#112).
+
+    POR QUÉ EXISTE. `extra_core` fuerza la ENTRADA de un paper que la lente dejó afuera, y no había
+    simétrico: un paper que la lente dice core no se podía sacar. `triage --drop` registraba la
+    decisión pero se consultaba **sólo** para no re-proponer candidatos del chaining, así que sobre
+    un core no tenía efecto — medido en el tema `ica`: 7 papers off-topic descartados con motivo
+    seguían siendo core corrida tras corrida. Una decisión de curación que el clasificador ignora en
+    silencio es peor que no tomarla: queda escrita, se lee como aplicada, y no lo está.
+
+    El carril es **`sujeto`**, no global, y eso es deliberado: la exclusión es del par
+    `(paper, sujeto)`. Los papers que se sacan de `ica` son de geofísica o de Marte y entraron por
+    polisemia —"componentes independientes" de un tensor— pero podrían ser legítimamente core de
+    otro tema. Un descarte global decidiría por bóvedas que no son ésta.
+
+    INV-24 sigue en pie por la misma razón que con `extra_core`: core es `f(paper, lente)` **módulo
+    curación declarada**, y la curación es auditable —motivo obligatorio, fechada, versionada, y el
+    registro viaja—. Lo que NO sería auditable es que el veredicto cambiara sin que nadie firme."""
+    return {b: (d.get("motivo") or "(sin motivo)")
+            for b, d in cfg.load_decisiones(slug).items()
+            if d.get("decision") == "descartado" and cfg.es_del_carril(d, "sujeto")}
+
+
+def aplicar_excluidos(recs: list, slug: str) -> list:
+    """Marca como no-core los `recs` que el usuario excluyó de este sujeto. Devuelve los excluidos.
+
+    ⛔ **No los borra de `recs`**: los deja con `relevant: False`, `via: manual-drop` y el motivo en
+    `why_excluded`. Que sigan visibles es el punto — si desaparecieran, dentro de tres meses el
+    registro se leería como «la búsqueda nunca los encontró», que es falso y borra el juicio."""
+    fuera = excluidos_del_sujeto(slug)
+    tocados = []
+    for r in recs:
+        if r.get("bibcode") in fuera and r.get("relevant"):
+            r["relevant"] = False
+            r["via"] = "manual-drop"
+            r["why_excluded"] = f"excluido del sujeto por decisión: {fuera[r['bibcode']]}"
+            tocados.append(r["bibcode"])
+    return tocados
+
+
 def n_dropped_chaining(slug: str) -> int:
     """Cuántas decisiones del carril chaining son DESCARTES — no toda decisión del carril, que
     también incluye `aceptado` (candidatos que pasaron a `extra_core`). Este número lo persiste
@@ -873,6 +913,7 @@ def reclass_diff(slugs: list[str]) -> int:
             cfg.print_seguro(f"{slug}: sin build/{slug}/ads.json — nada que re-clasificar")
             continue
         recs = json.loads(adsfile.read_text(encoding="utf-8"))["records"]
+        aplicar_excluidos(recs, slug)      # #112: lo ya excluido no se re-propone en cada re-clasif.
         before = [r for r in recs if r.get("relevant")]
         after, salen, entran = [], [], []
         for r in recs:
@@ -1112,6 +1153,12 @@ def main() -> int:
             if entraron or salieron:
                 cfg.print_seguro(f"  regla del tema (D-26): +{len(entraron)} core / -{len(salieron)}"
                                  f" · entran {entraron[:5]} · salen {salieron[:5]}")
+        # #112: la exclusión declarada se aplica DESPUÉS de la regla del tema y ANTES de contar —
+        # si se aplicara antes, la re-clasificación del tema la volvería a marcar core.
+        _fuera = aplicar_excluidos(recs, args.slug)
+        if _fuera:
+            cfg.print_seguro(f"  excluidos por decisión del sujeto (#112): {len(_fuera)} "
+                             f"· {_fuera[:5]}")
         rel = [r for r in recs if r["relevant"]]
         cfg.print_seguro(f"  query directa: {len(recs)} registros, {len(rel)} relevantes")
         # Segunda pasada por fecha (#79): el corte por citas de la primera es ciego a la edad, así

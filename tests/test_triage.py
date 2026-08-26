@@ -554,3 +554,61 @@ def test_accept_source_declara_el_que_no_pudo_resolver_y_no_inventa(monkeypatch,
     assert "no se pudo resolver la metadata" in out and "429" in out
     assert "NO se inventa" in out
     assert "- key:" not in out
+
+
+# ── el simétrico de extra_core: sacar un core del sujeto (#112) ──────────────
+def test_drop_core_registra_con_carril_sujeto_y_borra_artefactos(toy_vault, capsys):
+    """`extra_core` fuerza la ENTRADA y no había simétrico: un core no se podía sacar. `--drop`
+    sólo evitaba re-proponer candidatos del chaining, así que sobre un core la decisión quedaba
+    escrita y NO se aplicaba — medido en `ica`: 7 papers off-topic seguían siendo core corrida tras
+    corrida. Una decisión que el clasificador ignora en silencio es peor que no tomarla."""
+    (cfg.PDFS / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "ica" / "2009Icar..201..504M.pdf").write_bytes(b"%PDF")
+    (cfg.FULLTEXT / "ica" / "2009Icar..201..504M.txt").write_text("x", encoding="utf-8")
+    rc = triage.drop_core("ica", ["2009Icar..201..504M"], "off-topic por polisemia")
+    assert rc == 0
+    d = cfg.load_decisiones("ica")["2009Icar..201..504M"]
+    assert d["decision"] == "descartado" and d["origen"] == "sujeto"
+    assert d["motivo"] == "off-topic por polisemia" and d["fecha"]
+    # los artefactos se borran: si quedan, #108 los reporta como huérfanos para siempre
+    assert not (cfg.PDFS / "ica" / "2009Icar..201..504M.pdf").exists()
+    assert not (cfg.FULLTEXT / "ica" / "2009Icar..201..504M.txt").exists()
+    assert "2 artefacto(s) borrado(s)" in capsys.readouterr().out
+
+
+def test_drop_core_exige_motivo():
+    with pytest.raises(SystemExit, match="POR QUÉ"):
+        triage.drop_core("ica", ["2009Icar..201..504M"], "")
+
+
+def test_drop_core_no_borra_la_nota_de_otro_sujeto(toy_vault, capsys):
+    """La exclusión es del par paper-sujeto: si la nota pertenece a otro, no se toca."""
+    (cfg.PAPERS / "2009Icar..201..504M.md").write_text(
+        "---\nbibcode: 2009Icar..201..504M\ntags: [paper]\nstars: [tau Ceti]\n---\n# T\n",
+        encoding="utf-8")
+    triage.drop_core("ica", ["2009Icar..201..504M"], "off-topic")
+    out = capsys.readouterr().out
+    assert "NO se borra" in out and "tau Ceti" in out
+    assert (cfg.PAPERS / "2009Icar..201..504M.md").exists()
+
+
+def test_drop_core_no_borra_la_nota_ya_extraida(toy_vault, capsys):
+    """Trabajo pagado: una nota con `methods` poblado no se destruye en silencio, aunque el paper
+    salga del sujeto."""
+    (cfg.PAPERS / "2009Icar..201..504M.md").write_text(
+        "---\nbibcode: 2009Icar..201..504M\ntags: [paper]\nmethods: [pca]\n---\n# T\n",
+        encoding="utf-8")
+    triage.drop_core("ica", ["2009Icar..201..504M"], "off-topic")
+    assert "trabajo pagado" in capsys.readouterr().out
+    assert (cfg.PAPERS / "2009Icar..201..504M.md").exists()
+
+
+def test_drop_core_borra_el_stub_que_solo_era_de_este_sujeto(toy_vault, capsys):
+    """Sin extracción y sin otro dueño es un stub del sujeto que se está limpiando: si queda, el
+    lint lo reporta como paper sin destino o como nota huérfana."""
+    (cfg.PAPERS / "2009Icar..201..504M.md").write_text(
+        "---\nbibcode: 2009Icar..201..504M\ntags: [paper]\nmethods: []\n---\n# T\n",
+        encoding="utf-8")
+    triage.drop_core("ica", ["2009Icar..201..504M"], "off-topic")
+    assert not (cfg.PAPERS / "2009Icar..201..504M.md").exists()

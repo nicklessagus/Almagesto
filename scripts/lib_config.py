@@ -20,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.48.0"
+ALMAGESTO_VERSION = "1.49.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1320,11 +1320,18 @@ def lens_diff_offline(slug: str) -> tuple[list[str], list[str], list[str]]:
                  for e in listify_curado(meta.get("extra_core"), "extra_core")}
     except (KeyError, RuntimeError):
         extra = set()
-    lens = lens_current()
+    lens = lens_current(slug)
+    # #112: un paper EXCLUIDO del sujeto por decisión no puede volver a proponerse como "entra" en
+    # cada cambio de lente — la decisión ya se tomó, con motivo y fecha. Sin esto, el diff repite
+    # para siempre lo que el usuario ya sacó, y la categoría se vuelve ruido que se deja de mirar.
+    excluidos = {b for b, d in load_decisiones(slug).items()
+                 if d.get("decision") == "descartado" and es_del_carril(d, "sujeto")}
     entran, salen = [], []
     con_nota = set()
     for stem, fm, text in notes_of_subject(slug):
         con_nota.add((fm.get("bibcode") or stem))
+        if (fm.get("bibcode") or stem) in excluidos:
+            continue
         core_ahora = lens_core_text(lens, note_lens_text(fm, text))
         era_core = (fm.get("relevance") == "high")
         if core_ahora and not era_core:

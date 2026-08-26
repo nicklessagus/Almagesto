@@ -1647,3 +1647,36 @@ def test_probe_no_escribe_nada(toy_vault, toy_classifier, capsys):
     assert not (toy_vault.ROOT / "build").exists(), "el probe no deja scratch"
     out = capsys.readouterr().out
     assert "1 CORE · 1 no-core" in out and "starspot activity" in out
+
+
+# ── la exclusión declarada es VINCULANTE al clasificar (#112) ────────────────
+def test_aplicar_excluidos_marca_no_core_y_deja_el_motivo(monkeypatch):
+    monkeypatch.setattr(qa.cfg, "load_decisiones", lambda slug: {
+        "2009Icar..201..504M": {"decision": "descartado", "origen": "sujeto",
+                                "motivo": "off-topic por polisemia"}})
+    recs = [{"bibcode": "2009Icar..201..504M", "relevant": True, "via": "query"},
+            {"bibcode": "2012ApJ...747...12W", "relevant": True, "via": "query"}]
+    tocados = qa.aplicar_excluidos(recs, "ica")
+    assert tocados == ["2009Icar..201..504M"]
+    # NO se borra del set: sigue visible, o el registro se leería como «la búsqueda nunca lo trajo»
+    assert len(recs) == 2
+    assert recs[0]["relevant"] is False and recs[0]["via"] == "manual-drop"
+    assert "off-topic por polisemia" in recs[0]["why_excluded"]
+    assert recs[1]["relevant"] is True
+
+
+def test_aplicar_excluidos_ignora_el_carril_del_chaining(monkeypatch):
+    """Un candidato del chaining descartado NO es lo mismo que un core excluido del sujeto: el
+    filtro por carril es lo que hace que `origen` no sea decorativo (#81)."""
+    monkeypatch.setattr(qa.cfg, "load_decisiones", lambda slug: {
+        "2009Icar..201..504M": {"decision": "descartado", "motivo": "ruido del grafo"}})
+    recs = [{"bibcode": "2009Icar..201..504M", "relevant": True}]
+    assert qa.aplicar_excluidos(recs, "ica") == []
+    assert recs[0]["relevant"] is True
+
+
+def test_excluidos_del_sujeto_solo_descartes(monkeypatch):
+    monkeypatch.setattr(qa.cfg, "load_decisiones", lambda slug: {
+        "A": {"decision": "descartado", "origen": "sujeto", "motivo": "m"},
+        "B": {"decision": "aceptado", "origen": "sujeto", "motivo": "m"}})
+    assert set(qa.excluidos_del_sujeto("ica")) == {"A"}
