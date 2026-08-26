@@ -416,3 +416,62 @@ def test_preview_theme_infiere_el_topic_y_avisa_que_lo_eligio_solo(monkeypatch, 
     d._preview_theme("ica")
     assert visto["topic_id"] == "T11447"
     assert "elegido por alias" in capsys.readouterr().out   # nunca en silencio
+
+
+# ── seed_terms: el segundo eje, opt-in por medición (#107) ───────────────────
+def test_seed_terms_una_slice_por_termino_y_dedup(monkeypatch):
+    urls = []
+
+    def fake(url, **k):
+        urls.append(url)
+
+        class R:
+            @staticmethod
+            def json():
+                return {"results": [{"id": "https://openalex.org/W1", "title": "t",
+                                     "cited_by_count": 3}]}
+        return R()
+    monkeypatch.setattr(d.requests, "get", fake)
+    monkeypatch.setattr(d.time, "sleep", lambda s: None)
+    out = d.seed_terms("T11447", ["noisy ICA", "quasi-whitening"])
+    assert len(urls) == 2                      # una request por término
+    assert len(out) == 1                       # el mismo work no se duplica entre slices
+    assert out[0]["found_in"] == ["openalex"]
+    assert "topics.id" in urls[0] and "title_and_abstract.search" in urls[0]
+
+
+def test_seed_terms_declara_el_termino_que_falla_y_sigue(monkeypatch, capsys):
+    def fake(url, **k):
+        if "malo" in url:
+            raise RuntimeError("500")
+
+        class R:
+            @staticmethod
+            def json():
+                return {"results": [{"id": "W1", "title": "t"}]}
+        return R()
+    monkeypatch.setattr(d.requests, "get", fake)
+    monkeypatch.setattr(d.time, "sleep", lambda s: None)
+    out = d.seed_terms("T1", ["malo", "bueno"])
+    assert len(out) == 1
+    assert "«malo» falló" in capsys.readouterr().out
+
+
+def test_cascade_no_usa_term_slices_por_default(monkeypatch):
+    """#107: medido, sumaban 217 candidatos y recuperaban 1 de 18. Off por default no es una
+    preferencia — es el resultado. Si alguien lo cablea sin querer, este test lo frena."""
+    llamado = []
+    monkeypatch.setattr(d, "seed", lambda t, rows=200, min_citas=None: [{"doi": "10.1/a"}])
+    monkeypatch.setattr(d, "seed_terms", lambda t, terms, **k: llamado.append(terms) or [])
+    d.cascade(topic_id="T1", arxiv_terms=["noisy ICA"])
+    assert llamado == [], "arxiv_terms NO debe disparar slices de OpenAlex"
+
+
+def test_cascade_usa_term_slices_si_se_piden(monkeypatch):
+    llamado = []
+    monkeypatch.setattr(d, "seed", lambda t, rows=200, min_citas=None: [])
+    monkeypatch.setattr(d, "seed_terms",
+                        lambda t, terms, **k: llamado.append(terms) or [{"doi": "10.1/b"}])
+    out = d.cascade(topic_id="T1", term_slices=["quasi-whitening"])
+    assert llamado == [["quasi-whitening"]]
+    assert len(out["records"]) == 1

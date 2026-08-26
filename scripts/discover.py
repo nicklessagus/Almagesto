@@ -116,6 +116,43 @@ def topics(query: str, rows: int = 5) -> list[dict]:
             for r in d.get("results", [])]
 
 
+def seed_terms(topic_id: str, terms: list, rows_por_termino: int = 15) -> list[dict]:
+    """Text search **inside** the topic, one slice per term → records.
+
+    WHY THE CITATION-RANKED SEED IS NOT ENOUGH, measured (#107). `seed` sorts a topic's works by
+    citations, and the specialist mid-tail of a topic is unreachable that way **by construction**:
+    T11447 holds 169,977 works, so the top-200 floor sits in the thousands of citations, while the
+    noisy-ICA literature the old vault had curated by hand — Cardoso 2002, Davies 2004, Cichocki
+    1998, Voss 2013, Pfister 2019, Pan 2022 — sits at **11 to 72 citations**. All six ARE in
+    OpenAlex and all six carry the CORRECT topic: nothing was missing, the ranking buried them.
+
+    A term slice is a different retrieval axis over the same backend, and it collapses the haystack:
+    `quasi-whitening` inside T11447 returns **15** works, not 169,977. The terms come from the
+    theme's `aliases`, which is why those are worth writing carefully."""
+    out: list[dict] = []
+    vistos: set = set()
+    for term in terms:
+        f = f"topics.id:{topic_id},title_and_abstract.search:{term}"
+        url = oa.API + "?" + urllib.parse.urlencode(
+            {"filter": f, "sort": "cited_by_count:desc",
+             "per-page": min(rows_por_termino, 200), "mailto": oa._mailto()})
+        try:
+            d = requests.get(url, timeout=TIMEOUT).json()
+        except Exception as e:                                  # noqa: BLE001 — declarado
+            cfg.print_seguro(f"  ⚠ seed_terms: «{term}» falló ({e}) — 0 de ese término")
+            continue
+        for w in d.get("results", []):
+            wid = _oa_id(w.get("id"))
+            if wid in vistos:
+                continue
+            vistos.add(wid)
+            r = oa.to_record(w)
+            r["found_in"] = ["openalex"]
+            out.append(r)
+        time.sleep(0.2)
+    return out
+
+
 def seed(topic_id: str, rows: int = 25, min_citas: int | None = None) -> list[dict]:
     """Top works of one OpenAlex topic by citation count, normalised to the shared record schema.
 
@@ -209,7 +246,7 @@ def hydrate(openalex_ids: list, rows: int = 50) -> list[dict]:
 # ── the cascade proper: ADS → arXiv → OpenAlex, deduped, coverage declared ───
 def cascade(*, ads_query: str | None = None, arxiv_terms: list | None = None,
             topic_id: str | None = None, rows: int = 100,
-            min_citas: int | None = None) -> dict:
+            min_citas: int | None = None, term_slices: list | None = None) -> dict:
     """Run every discovery backend and merge → `{records, undedupable, cobertura}`.
 
     Each backend gets its query **in its own language**, which is why this takes three arguments
@@ -221,6 +258,19 @@ def cascade(*, ads_query: str | None = None, arxiv_terms: list | None = None,
     `cobertura` is a list of `(backend, n, error|None)` and is the point of contract 3: a backend
     that timed out contributes zero records, and zero records is indistinguishable from "this
     backend knows nothing about your theme" unless the failure is stated. Callers must print it.
+
+    `term_slices` (opt-in) adds one OpenAlex text-search slice per term inside the topic. It is off
+    by default because it was measured, not assumed: on the real corpus it added 217 candidates and
+    recovered 1 of the 18 hand-curated papers. Use it for a narrow term, where it does pay.
+
+    ⚠ **Declared limit of automated discovery** (#107, measured): the specialist mid-tail of a
+    method topic is unreachable by any citation-ranked axis. Cardoso 2002, Davies 2004, Cichocki
+    1998, Voss 2013, Pfister 2019 and Pan 2022 all sit at **11-72 citations** inside a topic of
+    169,977 works, and the axes that do contain them ("who cites the canon" ∩ topic) return
+    **3,467-5,270** candidates — worse than useless, because the triage cost exceeds the benefit.
+    That population is what months of hand curation are good at. This is a boundary to state, not
+    a gap to close: what the framework can do is make each hand-curated entry record why it entered
+    (`extra_core` with `via`/`motivo`, or `sources`), and that it already does.
 
     Returns candidates. It does NOT classify — see the module docstring, contract 1."""
     batches: list[tuple[str, list]] = []
@@ -263,6 +313,15 @@ def cascade(*, ads_query: str | None = None, arxiv_terms: list | None = None,
     if topic_id:
         try:
             recs = seed(topic_id, rows=min(rows, 200), min_citas=min_citas)
+            # ⛔ `seed_terms` NO se cablea acá, y la razón es una MEDICIÓN, no una preferencia
+            # (#107): sobre el corpus real sumó **217 candidatos y recuperó 1** de los 18 papers
+            # curados a mano. Es un canje malo —217 juicios de triage por una recuperación— y el
+            # motivo es estructural: dentro de cada término OpenAlex **sigue ordenando por citas**,
+            # así que el piso del corte queda arriba de las 11-72 citas donde vive esa literatura.
+            # Queda como herramienta a pedido, que es donde sí rinde: para un término angosto
+            # (`quasi-whitening` → 15 works en todo el topic) el corte llega al especialista.
+            if term_slices:
+                recs += seed_terms(topic_id, term_slices)
             batches.append(("openalex", recs))
             cobertura.append(("openalex", len(recs), None))
         except Exception as e:                                  # noqa: BLE001

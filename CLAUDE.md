@@ -492,6 +492,18 @@ la cascada y **propone**; nunca clasifica.
   lo citan 7 de los 19—. Es además lo único que alcanza lo que ninguna keyword del tema alcanza: los
   papers de **PCA con ruido** (el paso de blanqueo) que la bóveda vieja tenía y el barrido por
   keyword nunca vio.
+- ⚠ **Límite declarado del descubrimiento automático (#107, medido).** La **cola especialista** de
+  un tema de método **no la alcanza ningún eje por ranking**, y esto es medición y no impresión:
+  Cardoso 2002, Davies 2004, Cichocki 1998, Voss 2013, Pfister 2019 y Pan 2022 están en OpenAlex,
+  **con el topic correcto**, entre **11 y 72 citas** dentro de un topic de 169.977 works — o sea
+  por debajo de cualquier corte por citas—, y los ejes que sí los contienen (*quién cita al canon*
+  ∩ topic) devuelven **3.467-5.270** candidatos: peor que inútil, porque el triage cuesta más que
+  el beneficio. `seed_terms` (slice de texto por término dentro del topic) es el mejor intento y
+  quedó **opt-in**: sumó 217 candidatos y recuperó **1** de 18. Lo que el pipeline sí automatiza es
+  el **canon** (8/8 por anclaje) y la **mitad astro** (por query). Esa cola es lo que meses de
+  curación a mano hacen bien, y lo que el framework puede aportar ahí no es encontrarla sino que
+  cada entrada registre **por qué** entró (`extra_core` con `via`/`motivo`, o `sources`) — eso ya
+  lo hace. **Es una frontera para declarar, no un hueco para cerrar.**
 - **Encontrar ≠ conseguir** (`resolve_pdf`): OpenAlex identificó 8/8 y devolvió
   `best_oa_location.pdf_url = None` **8/8**. La cascada del archivo (OpenAlex → Unpaywall) **propone
   una URL y para**: no reescribe un `pending:` que declaró el usuario ni edita `sources:` —cambiar
