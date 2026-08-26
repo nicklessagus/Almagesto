@@ -4,7 +4,7 @@
 # Una función acá no es "mal probada": es **no mirada por nadie**, y su mutación siempre sobrevive
 # —así que esto es el detector barato del mismo defecto que caza `tools/mutar.py`.
 medido_en: "2026-08-24"
-techo: 6
+techo: 4
 
 # Las 6 medidas, y por qué. **Todas** son rutas de RED o subprocess: los tests inyectan dobles
 # siempre, así que el código que de verdad habla con las APIs nunca corre. Es deuda declarada.
@@ -21,3 +21,8 @@ techo: 6
 # (`_listify_curado`, `_concept_dest`)—. Un techo que nadie ajusta deja de ser ratchet y se vuelve
 # un número decorativo (AUD-07). Ya no quedan funciones puras acá: las cuatro que lo eran salieron
 # con el test que faltaba.
+
+# 2026-08-26 (#104): 6 → 4. `extraction_prompt.py::main` y `fetch_web.py::fetch` siguen
+# adentro; los dos que salieron fueron cubiertos con test, no amnistiados. `discover.py`
+# entró con sus tres funciones nuevas ya cubiertas (`_row`, `hydrate`, `main`): la red las
+# marcó al crearlas y se cerraron en la misma tanda.

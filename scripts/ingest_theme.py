@@ -22,10 +22,16 @@ campo `source` (formaliza el modo off-ADS del skill ingest-theme en el tooling):
   themes.yaml; la copia versionada es la que vale. Rutas `pdf` relativas se resuelven
   contra la raíz del repo (portable entre máquinas). Sin query_ads / fetch_ground_truth (no aplican fuera de ADS);
   check_retractions SÍ corre cuando algún item declara `doi` (Crossref lo cubre igual).
-  **Tema MIXTO:** un tema off-ADS puede además declarar `extra_core: [bibcode, …]` con los
-  papers del tema que SÍ están en ADS (un método no-astro casi siempre tiene aplicaciones
-  publicadas en revista astro) — para ellos corre la sub-cadena ADS (query_ads --extra-only →
-  fetch_arxiv → fetch_pdf → make_notes --theme): metadata ADS real, sin blockquote off-ADS.
+  **Tema MIXTO:** un tema off-ADS puede además traer papers del tema que SÍ están en ADS (un
+  método no-astro casi siempre tiene aplicaciones publicadas en revista astro), por dos vías que
+  se excluyen entre sí, la primera con prioridad:
+    · `query:` poblada (#104) → **descubrimiento ADS completo** (query_ads --theme → fetch_arxiv →
+      fetch_pdf → make_notes --theme), con la misma lente, las mismas puertas de D-26 y la misma
+      compuerta de triage que un tema `source: ads`. Sin esto, off-ADS le quitaba el descubrimiento
+      automático a la mitad del tema que ADS sí indexa, y la única salida era enumerar bibcodes.
+    · sólo `extra_core:` (lista de mapas, D-58) → sub-cadena acotada (query_ads --extra-only → …).
+  En los dos casos: metadata ADS real, sin blockquote off-ADS. `extra_core` sigue siendo el
+  override del clasificador y vale con o sin `query:`.
 
 Fallback fuentes no-conseguibles: un item puede llevar `pending: paywall|scan|unextractable`
 en vez de una fuente obtenible — declara que la fuente todavía NO se pudo conseguir (sin copia
@@ -51,6 +57,7 @@ import sys
 from pathlib import Path
 
 import lib_config as cfg
+import discover
 import make_notes
 from fetch_web import CITEKEY_RE
 
@@ -318,7 +325,23 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
     # `or`; la comprensión de abajo recorría el string letra por letra y el bibcode real nunca
     # entraba a la sub-cadena ADS: la curación manual se perdía en silencio.
     extra = [e["bibcode"] for e in cfg.load_extra_core(meta, entry=slug)]
-    if extra:
+    # #104 — un tema MIXTO puede además declarar `query:`. Sin ella la mitad astro entra SÓLO por
+    # los bibcodes que el operador enumeró a mano (`--extra-only`), o sea el modo off-ADS le quitaba
+    # el descubrimiento automático a la mitad del tema que ADS sí indexa. Medido en el ingest de
+    # ICA: la enumeración manual trajo 11 papers y dejó afuera familias enteras que la query
+    # encuentra sola. Con `query:` poblada corre la búsqueda completa (misma lente, mismas puertas
+    # de D-26, misma compuerta de triage) y `extra_core` sigue siendo el override de siempre.
+    if meta.get("query"):
+        cfg.print_seguro(f"\nquery declarada en un tema off-ADS (tema mixto, #104) → descubrimiento ADS completo")
+        for script, sargs in (("query_ads.py", ["--theme", slug]),
+                              ("fetch_arxiv.py", [slug]),
+                              ("fetch_pdf.py", [slug]),
+                              ("make_notes.py", ["--theme", slug])):
+            rc = run(script, *sargs)
+            if rc:
+                sys.exit(f"{script} falló (rc={rc}) — cadena abortada. La cadena es idempotente: "
+                         "corregí y re-corré ingest_theme.py (lo ya bajado no se re-baja).")
+    elif extra:
         cfg.print_seguro(f"\nextra_core: {len(extra)} paper(s) con bibcode ADS (tema mixto) → sub-cadena ADS")
         for script, sargs in (("query_ads.py", ["--theme", slug, "--extra-only"]),
                               ("fetch_arxiv.py", [slug]),
@@ -340,6 +363,16 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
         cfg.print_seguro("\n⏳ Fuentes PENDIENTES (derivadas al usuario — no frenan la cadena):")
         for key, why, ptr in pending_items:
             cfg.print_seguro(f"  - {key} [{why}] → {ptr}")
+            # #104 — encontrar no es conseguir: `pending` decía QUÉ falta y nunca DÓNDE buscarlo,
+            # así que el operador salía a googlear a mano lo que dos APIs contestan. Propone una
+            # URL; NO toca `sources:` (pisar una fuente declarada con una que adivinó un script es
+            # cómo una cita termina apuntando a un documento que nadie abrió).
+            doi = ptr if str(ptr).startswith("10.") else None
+            if doi:
+                url, _why = discover.resolve_pdf(doi)
+                if url:
+                    cfg.print_seguro(f"      ↳ copia libre candidata: {url}")
+                    cfg.print_seguro("        (revisala y, si sirve, poné `url:`/`pdf:` en el item)")
         cfg.print_seguro("  Cuando esté la fuente: reemplazá `pending` por `pdf:`/`url:` en sources: y re-corré.")
     if failed_items:
         cfg.print_seguro("\n! Fuentes que FALLARON (¿transitorio? → re-corré; si la fuente no se puede "

@@ -31,6 +31,7 @@ sintetizado*, #75 — que es también la red del contraste de 3c); para **3b** n
 
 ```
 Progreso del ingest del tema <tema>:
+- [ ] 0b (tema off-ADS) barrido de los TRES backends antes de declarar fuentes a mano (`discover.py`)
 - [ ] 1  consulta co-diseñada con el usuario (o `sources:` si es off-ADS)
 - [ ] 1b (tema de MÉTODO) `facet:` propia acordada — y `fundacional_min_citas` si va
 - [ ] 2  cadena mecánica (ingest_theme.py) — sin abortos
@@ -239,8 +240,40 @@ diferencia operativa de que las fuentes se **declaran**, no se descubren por que
 **sólo si el usuario lo pide explícitamente** (porque exige esa curación manual de fuentes).
 **`ingest-star` no cambia: sigue siendo astro-only.**
 
+### 0b. ANTES de declarar nada a mano: barré los tres backends (#104)
+
+⛔ **No le digas al usuario "no tengo los fundacionales" habiendo mirado un solo buscador.** Fue un
+defecto medido: ADS devuelve **0 de 8** del canon de ICA/BSS y `author:"Hyvarinen, A"` trae dos
+papers sobre gotas de ácido sulfúrico (es otro Hyvärinen) — pero OpenAlex los tiene **8 de 8**, con
+DOI y conteo de citas. La lista declarada a mano es el **último** recurso, no el primero:
+
+```bash
+python scripts/discover.py --topics "<tema en inglés>"      # subtema de OpenAlex (id T…)
+python scripts/discover.py --seed T11447 --rows 25          # canon por citas DENTRO del subtema
+python scripts/discover.py --resolve 10.1016/…              # ¿hay copia libre de ese DOI?
+```
+
+⚠ **El orden importa y está medido:** `search` + orden por citas sobre OpenAlex devuelve 143.450
+works cuyo top 30 es AlphaFold y guías de cardiología (**2 de 30** en tema). Filtrando por
+`topics.id` **primero**, el canon entra al top 25. Rankear sin filtro estructural amplifica.
+
+**Y lo que más rinde: anclar en la mitad astro del propio tema.** Una vez que la cadena bajó los
+papers ADS del tema, sus **listas de referencias** traen el canon rankeado por cuántos de ellos lo
+citan (`discover.anchored_records`). Medido sobre 19 papers astro de ICA: devolvió los **ocho**
+canónicos sin declarar nada, y ordena mejor que las citas globales. Es además lo único que alcanza
+lo que ninguna keyword del tema alcanza — en ICA, la familia de **PCA con ruido** (el blanqueo), que
+un barrido por "independent component analysis" nunca ve.
+
+⛔ Todo esto **propone**; no clasifica. Lo no-astro va al **triage** como candidato (INV-24: core
+sigue siendo función de `(paper, lente)`), y `--resolve` propone una URL sin tocar `sources:`.
+
 Qué cambia respecto del flujo ADS de arriba:
-- **Sin ADS:** se saltean `query_ads.py`, `fetch_arxiv.py`, `fetch_pdf.py` y `fetch_ground_truth.py`. En
+- **La mitad astro puede seguir descubriéndose:** si el tema es **mixto**, poblá `query:` **además**
+  de `sources:` y el orquestador corre el descubrimiento ADS **completo** para esa mitad (misma
+  lente, mismas puertas, misma compuerta de triage). Sin `query:`, la mitad astro entra sólo por los
+  bibcodes que enumeres en `extra_core:` — medido en ICA: 11 papers a mano contra familias enteras
+  que la query encuentra sola.
+- **Sin ADS (si `query:` queda en null):** se saltean `query_ads.py`, `fetch_arxiv.py`, `fetch_pdf.py` y `fetch_ground_truth.py`. En
   `vault/config/themes.yaml` la entrada lleva `query: null`, el switch **`source: web | local-pdfs |
   local-pdfs+web`** y la bibliografía **declarada** en la lista `sources:` (cada item: `key`
   AAAA+Autor + `url` o `pdf` + `title/author/year/venue/n_authors/doi` opcionales; ver header del YAML); el resto

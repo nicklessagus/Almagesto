@@ -569,8 +569,11 @@ def _probe_row(r: dict) -> str:
     mark = "CORE" if r["relevant"] else "—   "
     tp = ",".join(r["facets"]) or "(ninguno)"
     cites = r.get("citation_count") or 0              # ADS puede devolver citation_count null
-    title = " ".join((r.get("title") or "").split())[:68]
-    return f"  [{mark}] {cites:>5}  {title}  «{tp}»"
+    title = " ".join((r.get("title") or "").split())[:52]
+    # El bibcode va en la fila (#104): en un tema MIXTO el operador lee este preview y tiene que
+    # copiar bibcodes a `extra_core:`; sin la columna hay que re-llamar a query_ads() a mano.
+    bib = r.get("bibcode") or "-"
+    return f"  [{mark}] {cites:>5}  {bib:<19}  {title}  «{tp}»"
 
 
 def fetch_bibcodes(bibs: list[str]) -> list[dict]:

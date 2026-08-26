@@ -451,6 +451,38 @@ que se construye aparte porque es caro. Los backends de descubrimiento fuera de 
 registro** que `query_ads.to_record`, y esa paridad la fija un test
 (`tests/test_backends_schema.py`), no la prosa.
 
+### Descubrimiento multi-backend y anclado (`scripts/discover.py`, #104)
+
+**Un tema de método no se descubre con un solo buscador, y esto es medición, no preferencia.** Los
+ocho trabajos canónicos de ICA/BSS están en **ADS 0/8, arXiv 0/8, OpenAlex 8/8** (`author:"Hyvarinen, A"`
+en ADS devuelve dos papers sobre gotas de ácido sulfúrico: es otro Hyvärinen). `discover.py` corre
+la cascada y **propone**; nunca clasifica.
+
+- **Dedup por DOI, nunca por título** (`ident`/`dedup`): lo fija la medición de `openalex.py` —el
+  matcheo por título resolvió 18 de 25 casos y **2 apuntaban a otro trabajo**—. Lo que no tiene DOI
+  ni arXiv id se devuelve **aparte, como no-deduplicable**; no se adivina. Cada registro acumula
+  `found_in` con todos los backends que lo trajeron: la procedencia **enruta** (qué puerta se
+  pregunta), la lente **decide**.
+- **Rankear sin filtro estructural amplifica, no filtra** (`topics` antes de `seed`): OpenAlex
+  `search:"independent component analysis blind source separation"` ordenado por citas devuelve
+  143.450 works cuyo top 30 es AlphaFold, guías de cardiología y carcinoma hepatocelular —**2 de
+  30** en tema—. Con `filter=topics.id:` primero, el canon entra al top 25. ⚠ El filtro es más laxo
+  que su nombre: T11447 declara 55.210 works y devuelve 169.977 (matchea temas secundarios).
+- **Descubrimiento ANCLADO** (`anchored_records`) — el de más apalancamiento: las **referencias de
+  la mitad astro del propio tema**, rankeadas por cuántos de esos papers las citan. Es la puerta 1
+  aplicada a un tema **nuevo**, donde el `citation_index` todavía no existe porque se construye
+  desde el corpus ya ingestado. Medido sobre 19 papers astro de ICA: devolvió los **ocho** del
+  canon sin declarar nada a mano (Hyvärinen&Oja 2000 citado por 9, Comon 1994 por 8, Jutten&Hérault
+  por 6), y el consenso ordena mejor que las citas globales —*"Cocktail Parties"* tiene 67 citas y
+  lo citan 7 de los 19—. Es además lo único que alcanza lo que ninguna keyword del tema alcanza: los
+  papers de **PCA con ruido** (el paso de blanqueo) que la bóveda vieja tenía y el barrido por
+  keyword nunca vio.
+- **Encontrar ≠ conseguir** (`resolve_pdf`): OpenAlex identificó 8/8 y devolvió
+  `best_oa_location.pdf_url = None` **8/8**. La cascada del archivo (OpenAlex → Unpaywall) **propone
+  una URL y para**: no reescribe un `pending:` que declaró el usuario ni edita `sources:` —cambiar
+  en silencio una fuente declarada por una que adivinó un script es cómo una cita termina apuntando
+  a un documento que nadie abrió—.
+
 
 ### Ingest (una fuente → cascada de páginas)
 1. Los **orquestadores** corren la cadena mecánica completa (idempotente, no pisa — con una única
@@ -534,9 +566,14 @@ registro** que `query_ads.to_record`, y esa paridad la fija un test
 > sin `query_ads`/`fetch_ground_truth`). Formalizado en el tooling: la
 > entrada del tema en `themes.yaml` lleva `source: ads | web | local-pdfs [+web]` y (si es off-ADS) la
 > lista `sources:`; `scripts/ingest_theme.py <slug>` orquesta la cadena según ese campo — también en
-> modo ads. Un tema off-ADS puede ser **mixto**: los papers del tema que **sí** tienen bibcode ADS
-> van en `extra_core:` (no en `sources:`) y el orquestador les corre solo la sub-cadena ADS
-> (metadata real, sin blockquote off-ADS). Una fuente que **no se consigue** (paywall / escaneo / mojibake) se marca
+> modo ads. Un tema off-ADS puede ser **mixto**, y su mitad astro entra por una de dos vías (la
+> primera con prioridad): **`query:` poblada** → descubrimiento ADS **completo** (misma lente,
+> mismas puertas de D-26, misma compuerta de triage), o **sólo `extra_core:`** → sub-cadena acotada
+> a esos bibcodes. Los papers con bibcode ADS van siempre en `extra_core:`, nunca en `sources:`
+> (metadata real, sin blockquote off-ADS). ⚠ Hasta #104 `query:` se ignoraba en off-ADS: el modo le
+> quitaba el descubrimiento automático a la mitad del tema que ADS **sí** indexa, y la única salida
+> era enumerar bibcodes a mano — medido en el ingest de ICA, la enumeración manual trajo 11 papers
+> y dejó familias enteras afuera. Una fuente que **no se consigue** (paywall / escaneo / mojibake) se marca
 > `pending: paywall|scan|unextractable` en su item de `sources:` → stub con `pending_source` (url/doi
 > como puntero), **derivada al usuario** sin frenar la cadena; el lint la lista como precondición.
 > **`ingest-star` no cambia: es astro-only.** Papers sin bibcode ADS → **clave de cita sintética `AAAA+Autor`** (debe empezar con

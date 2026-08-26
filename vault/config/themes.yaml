@@ -33,7 +33,12 @@
 #                metadata a mano, blockquote off-ADS falso). ingest_theme les corre la sub-cadena ADS.
 #   source   : de dónde sale la bibliografía (default si falta: ads). Valores:
 #              ads | web | local-pdfs | local-pdfs+web. Todo lo no-ads es el modo off-ADS de
-#              ingest-theme (opt-in, sólo a pedido explícito) y requiere `sources:` y `query: null`.
+#              ingest-theme (opt-in, sólo a pedido explícito) y requiere `sources:`.
+#              ⚠ En off-ADS, `query:` es OPCIONAL y NO es sólo decorativa (#104): si la poblás, el
+#              orquestador corre el descubrimiento ADS COMPLETO para la mitad astro del tema (misma
+#              lente, mismas puertas de D-26, misma compuerta de triage) en vez de limitarse a los
+#              bibcodes de `extra_core`. Es lo que convierte un tema mixto de "enumerado a mano" en
+#              "descubierto"; dejala en null si de verdad no querés que busque.
 #   sources  : (sólo off-ADS) la bibliografía declarada del tema. Cada item:
 #                - key: 2006RasmussenWilliams       # clave de cita sintética AAAA+Autor (obligatoria)
 #                  url: https://...            # fuente web (snapshot vía fetch_web/defuddle) — o bien

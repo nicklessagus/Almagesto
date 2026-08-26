@@ -45,6 +45,7 @@ instalar/arreglar OCR, o marcar la fuente `pending` en `sources:`.
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 import subprocess
 import sys
@@ -88,6 +89,61 @@ def is_legible(text: str) -> tuple[bool, str]:
     if ratio < LEGIBLE_MIN_RATIO:
         return False, f"mojibake: {ratio:.0%} de chars legibles (<{LEGIBLE_MIN_RATIO:.0%}) — ¿fuentes sin ToUnicode?"
     return True, ""
+
+
+# Umbral de GARBLE (#104): la capa de texto existe y es ASCII limpio, pero es OCR del EDITOR
+# (un escaneo con su propia capa de texto). `is_legible` no lo ve: mide *extraible*, no *correcto*.
+# Importa porque `verify-citations` promete "las palabras reales del paper", y una cita de
+# `Coni~nunicatedby` no lo es. Medido sobre 787 .txt de dos bovedas reales: 749 dan exactamente 0,
+# p99 = 0.19, y los dos unicos escaneos conocidos dan 5.55 (Bell&Sejnowski 1995) y 2.13
+# (Comon 1994); el no-escaneo mas alto da 0.61. El umbral es la media geometrica de ese hueco.
+GARBLE_MAX_PER_KWORD = 1.2
+# Tilde DENTRO de un token palabra-como y largo. El corte en 8 chars sin digitos es lo que separa
+# `Coni~nunicatedby` (dano) de `e~ql` / `e~a2(t~t0)` (matematica mal extraida, falso positivo real
+# medido en 1999ApJ...510..986K).
+_GARBLE_TOK = re.compile(r"[A-Za-z~]{8,}")
+# Runs de letras aisladas: `m a x i m u m`, `n p u t`. SOLO minusculas y con >=3 letras distintas:
+# en mayusculas son titulos con tracking tipografico (`D U C T I O N`, estilo MNRAS) y con una sola
+# letra son relleno de tabla (`o o o o o`, `T T T T T`) — los tres, falsos positivos medidos.
+_GARBLE_RUN = re.compile(r"\b(?:[a-z] ){3,}[a-z]\b")
+
+
+def garble_score(text: str) -> tuple[float, int, int]:
+    """(hits por 1000 palabras, n_tokens_con_tilde, n_runs) — densidad de dano tipico de OCR.
+    Determinista. Ver GARBLE_MAX_PER_KWORD para la calibracion."""
+    palabras = max(len(text.split()), 1)
+    tok = [m for m in _GARBLE_TOK.findall(text) if "~" in m]
+    run = [m for m in _GARBLE_RUN.findall(text) if len(set(m.replace(" ", ""))) >= 3]
+    return (len(tok) + len(run)) * 1000.0 / palabras, len(tok), len(run)
+
+
+def is_garbled(text: str) -> tuple[bool, str]:
+    """(si, motivo) — la capa de texto del PDF es OCR del editor, no texto nativo.
+    Complementa `is_legible`: aquel decide si el .txt SIRVE; este, si sus palabras son las del
+    paper. No frena nada — hace que la salvedad OCR viaje."""
+    # @inv INV-28
+    score, tok, run = garble_score(text)
+    if score < GARBLE_MAX_PER_KWORD:
+        return False, ""
+    return True, (f"{score:.1f} marcas de OCR por 1000 palabras "
+                  f"(>={GARBLE_MAX_PER_KWORD}; {tok} palabras con tilde interna, "
+                  f"{run} runs de letras sueltas) — la capa de texto parece OCR del editor")
+
+
+def scanned_header(why: str) -> str:
+    """Header del .txt cuya CAPA DE TEXTO ya era OCR (escaneo del editor). Arranca con la misma
+    marca que `ocr_header` a proposito: `make_notes` la lee para estampar `fulltext_source: ocr`,
+    y la salvedad de citabilidad es exactamente la misma. Lo que cambia es de donde salio el OCR
+    — el editor, no tesseract — asi que no se re-OCRea: el texto del PDF ya es el mejor que hay
+    (para forzar el rescate con tesseract esta `--ocr`)."""
+    return (
+        f"{OCR_MARK}: citable CON SALVEDAD\n"
+        "# source    : ocr (capa de texto del PDF; OCR del editor, no tesseract)\n"
+        f"# motivo    : {why}\n"
+        "# salvedad  : el OCR puede errar simbolos/ligaduras/notacion matematica; la cita\n"
+        "#             textual vale para prosa (ver verify-citations).\n"
+        "# ---- contenido (capa de texto del PDF) ----\n\n"
+    )
 
 
 def ocr_available() -> bool:
@@ -216,6 +272,11 @@ def main() -> int:
             if r.returncode == 0 and r.stdout:
                 text = r.stdout
                 ok, why = is_legible(text)
+                if ok and not text.startswith(OCR_MARK):
+                    garbled, gwhy = is_garbled(text)
+                    if garbled:
+                        print(f"  {pdf.name}: {gwhy} → marcado `source: ocr`")
+                        text = scanned_header(gwhy) + text
                 if not ok and ocr_available():
                     print(f"  {pdf.name}: capa de texto ilegible ({why}) → fallback OCR")
                     text = None                      # cae al OCR de abajo

@@ -272,3 +272,67 @@ def test_txt_ilegible_bajo_otro_slug_no_se_reusa(toy_vault, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["extract_fulltext.py", "test_star"])
     ef.main()
     assert llamado, "reusó una copia ilegible en vez de re-extraer"
+
+
+# ── garble: la capa de texto existe pero es OCR del editor (#104) ────────────
+# `is_legible` mide *extraíble*; esto mide *correcto*. Calibrado sobre 787 .txt de dos bóvedas
+# reales: 749 dan exactamente 0, p99 = 0.19, y los dos únicos escaneos conocidos dan 5.55
+# (Bell&Sejnowski 1995) y 2.13 (Comon 1994); el no-escaneo más alto da 0.61.
+LIMPIO = ("El metodo estima las componentes independientes maximizando la no-gaussianidad "
+          "de las proyecciones. " * 40)
+
+
+def test_texto_limpio_no_es_garble():
+    assert ef.is_garbled(LIMPIO)[0] is False
+    assert ef.garble_score(LIMPIO)[0] == 0
+
+
+def test_ocr_del_editor_se_detecta():
+    dano = LIMPIO + " Coni~nunicatedby Ul~rz~ersity Corllp~rtafiorl wr~ttenas Ho~unrdHqhes " * 6
+    garbled, why = ef.is_garbled(dano)
+    assert garbled is True
+    assert "OCR del editor" in why
+
+
+def test_matematica_mal_extraida_no_es_garble():
+    """Falso positivo real medido en 1999ApJ...510..986K: `e~ql`, `e~a2(t~t0)` son exponentes,
+    no daño. Por eso el token tiene que ser largo y sin dígitos."""
+    mate = LIMPIO + " e~ql e~a2(t~t0) )A(l)e~ql )e~ql/4nd2 " * 20
+    assert ef.is_garbled(mate)[0] is False
+
+
+def test_titulo_con_tracking_tipografico_no_es_garble():
+    """`D U C T I O N`, `S O L A R` son títulos espaciados (estilo MNRAS), no OCR roto."""
+    titulos = LIMPIO + " I N T R O D U C T I O N S O L A R T W I N S A M P L E " * 20
+    assert ef.is_garbled(titulos)[0] is False
+
+
+def test_relleno_de_tabla_no_es_garble():
+    """`o o o o o` / `T T T T T` son relleno: una sola letra repetida, no palabras partidas."""
+    relleno = LIMPIO + " o o o o o o o o T T T T T T " * 20
+    assert ef.is_garbled(relleno)[0] is False
+
+
+def test_runs_en_minuscula_con_letras_distintas_si_son_garble():
+    roto = LIMPIO + " m a x i m u m n p u t q h e s " * 12
+    assert ef.is_garbled(roto)[0] is True
+
+
+def test_garble_es_una_densidad_no_un_conteo():
+    """Un documento largo con unas pocas marcas no es un escaneo; el mismo número en uno corto sí."""
+    pocas = " Coni~nunicatedby Ul~rz~ersity "
+    assert ef.is_garbled(LIMPIO * 30 + pocas)[0] is False
+    assert ef.is_garbled("palabra " * 20 + pocas * 6)[0] is True
+
+
+def test_scanned_header_arranca_con_la_marca_que_lee_make_notes():
+    """El header tiene que disparar `fulltext_source: ocr` río abajo: es lo que hace viajar la
+    salvedad. Si la marca cambia, la salvedad se pierde en silencio."""
+    h = ef.scanned_header("motivo de prueba")
+    assert h.startswith(ef.OCR_MARK)
+    assert "motivo de prueba" in h
+    assert "SALVEDAD" in h.upper()
+
+
+def test_scanned_header_dice_que_el_ocr_no_es_de_tesseract():
+    assert "editor" in ef.scanned_header("x")
