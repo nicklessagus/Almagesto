@@ -255,14 +255,37 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
                   f"{'' if dk == key else f', por url {dk}'}): "
                   f"{d.get('motivo') or '(sin motivo)'} — volver a declararla la revierte: decisión "
                   f"ANULADA (el motivo viejo queda en `previa`)")
+        # #80: unidad de cita y alcance — se validan para TODA fuente, conseguida o pendiente.
+        _unidad = str(s.get("unidad_cita") or "linea").strip()
+        if _unidad not in cfg.UNIDAD_CITA_OK:
+            sys.exit(f"{key}: `unidad_cita: {_unidad}` fuera del vocabulario "
+                     f"({' | '.join(cfg.UNIDAD_CITA_OK)}). Un typo deja al verificador sin saber "
+                     f"cómo citar esta fuente.")
+        _alcance = str(s.get("alcance") or "").strip()
+        if _unidad != "linea" and not _alcance:
+            sys.exit(f"{key}: `unidad_cita: {_unidad}` sin `alcance`. Si la unidad no es la línea es "
+                     f"un documento largo, y casi nunca entra entero: declará qué parte entró "
+                     f"(p. ej. `alcance: caps. 6 y 15`). Sin eso, el chequeo de completitud de "
+                     f"verify-citations no puede distinguir un recorte deliberado de una omisión.")
         if s.get("pending"):
+            _pend = str(s["pending"]).strip()
+            if _pend not in cfg.PENDING_OK:
+                sys.exit(f"{key}: `pending: {_pend}` fuera del vocabulario "
+                         f"({' | '.join(cfg.PENDING_OK)}). Un valor que nadie valida deja al "
+                         f"consumidor leyendo algo que no significa nada.")
+            if not str(s.get("pending_motivo") or "").strip():
+                sys.exit(f"{key}: `pending: {_pend}` sin `pending_motivo`. En seis meses la "
+                         f"categoría sola no dice si la fuente se pidió, se descartó o se olvidó — "
+                         f"escribí qué pasa con esta fuente y quién la consigue.")
             # Fuente no-conseguible declarada: NO se fetchea ni cuenta como fallo — stub con
             # pending_source (url/doi quedan como puntero) y derivación al usuario en el aviso final.
             make_notes.write_web_paper_note(key, url=s.get("url"), slug=slug, concept=concept,
                                             title=s.get("title"), first_author=s.get("author"),
                                             year=s.get("year"), n_authors=s.get("n_authors"),
                                             doi=s.get("doi"), venue=s.get("venue"),
-                                            pending=str(s["pending"]))
+                                            pending=_pend,
+                                            pending_motivo=str(s["pending_motivo"]).strip(),
+                                            unidad_cita=_unidad, alcance=_alcance or None)
             pending_items.append((key, str(s["pending"]),
                                   s.get("doi") or s.get("url") or "(sin puntero conocido)"))
             continue
@@ -315,7 +338,8 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
             make_notes.write_web_paper_note(key, slug=slug, concept=concept,
                                             title=s.get("title"), first_author=s.get("author"),
                                             year=s.get("year"), n_authors=s.get("n_authors"),
-                                            doi=s.get("doi"), venue=s.get("venue"))
+                                            doi=s.get("doi"), venue=s.get("venue"),
+                                            unidad_cita=_unidad, alcance=_alcance or None)
     # Tema MIXTO: un método no-astro casi siempre tiene alguna aplicación/variante publicada en
     # revista astro — papers con bibcode ADS real. Van en `extra_core:` (no en `sources:`, que
     # degradaría el stub: clave sintética, citation_count 0, blockquote off-ADS falso) y para

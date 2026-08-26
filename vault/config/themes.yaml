@@ -71,12 +71,32 @@
 #                                              # `triage.py <slug> --accept-source <doi>`.
 #                  fecha: 2026-08-26           # cuándo se aceptó
 #                  motivo: "..."               # OBLIGATORIO: por qué entra esta fuente
-#                  pending: paywall            # la fuente NO se pudo conseguir todavía (paywall |
-#                                              # scan | unextractable): en vez de url/pdf obtenible,
-#                                              # el item queda DERIVADO al usuario — se stubbea la
-#                                              # nota con pending_source (url/doi como puntero), no
-#                                              # cuenta como fallo y el lint lo lista. Al conseguir
-#                                              # la fuente: reemplazar por pdf:/url: y re-correr.
+#                  pending: paywall            # la fuente NO está en disco todavía. Vocabulario
+#                                              # CERRADO: paywall | scan | unextractable |
+#                                              # adquisicion. Los tres primeros son un FALLO; el
+#                                              # cuarto no —un libro que vas a conseguir no falló,
+#                                              # tiene otra latencia— y antes entraba forzado como
+#                                              # paywall, perdiendo el motivo real (#80). El item
+#                                              # queda DERIVADO al usuario: stub con pending_source
+#                                              # (url/doi como puntero), no cuenta como fallo y el
+#                                              # lint lo lista. Al conseguir la fuente: reemplazar
+#                                              # por pdf:/url: y re-correr.
+#                  pending_motivo: "..."       # OBLIGATORIO con `pending`. En seis meses la
+#                                              # categoría sola no dice si alguien la está
+#                                              # consiguiendo o si nadie la miró nunca.
+#                  unidad_cita: pagina         # (#80) cómo se apunta ADENTRO de esta fuente:
+#                                              # linea (default, no hace falta declararlo) | pagina
+#                                              # | seccion. Para un LIBRO o un handbook: el fan-out
+#                                              # de verify-citations asume un .txt que se lee
+#                                              # ENTERO (700 páginas lo revientan) y «línea 18443»
+#                                              # no es una referencia que alguien pueda seguir.
+#                                              # Es OTRO eje que el txt:/pdf: de la fila de
+#                                              # verificación, que dice qué ARCHIVO se leyó.
+#                  alcance: "caps. 6 y 15"     # OBLIGATORIO si unidad_cita no es `linea`: qué parte
+#                                              # de la fuente entró. Un libro casi nunca entra
+#                                              # entero, y sin esto el chequeo de completitud no
+#                                              # puede distinguir un recorte deliberado de una
+#                                              # omisión.
 #
 # La cadena mecánica se corre con `python scripts/ingest_theme.py <slug>` (despacha según `source`).
 #

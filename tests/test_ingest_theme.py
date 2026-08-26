@@ -251,7 +251,8 @@ def test_offads_web_fallo_aborta_con_aviso(toy_vault, fake_run, fake_notes, monk
 
 def test_offads_pending_deriva_sin_fallar(toy_vault, fake_run, fake_notes, monkeypatch, capsys):
     # @inv INV-61
-    topic(source="web", sources=[{"key": "1999Paywall", "pending": "paywall", "doi": "10.1/x"}])
+    topic(source="web", sources=[{"key": "1999Paywall", "pending": "paywall", "doi": "10.1/x",
+                                  "pending_motivo": "IEEE detrás de paywall institucional"}])
     assert run_main(monkeypatch) == 0
     key, kw = fake_notes.webs[0]
     assert key == "1999Paywall" and kw["pending"] == "paywall"
@@ -456,3 +457,78 @@ def test_repoint_source_pdf_no_hace_nada_sin_copia(toy_vault):
     antes = cfg.THEMES_YAML.read_text(encoding="utf-8")
     it.repoint_source_pdf("2006R", "/tmp/x.pdf", cfg.PDFS / "gp" / "no_existe.pdf")
     assert cfg.THEMES_YAML.read_text(encoding="utf-8") == antes
+
+
+# ── #80 · un libro no es un fallo de extracción, y `pending` no lo sabía decir ───────────────────
+
+def test_pending_fuera_del_vocabulario_aborta(toy_vault, fake_run, fake_notes, monkeypatch):
+    """`pending` se escribía **verbatim** en la nota, sin vocabulario ni validación: un typo
+    (`paywal`) entraba mudo y el lint lo listaba como precondición legítima.
+
+    Es la familia de `role` y de `via`: un campo con vocabulario cerrado que nadie valida deja al
+    consumidor leyendo un valor que no significa nada."""
+    topic(source="web", sources=[{"key": "1999Typo", "pending": "paywal", "doi": "10.1/x"}])
+    with pytest.raises(SystemExit, match="pending"):
+        run_main(monkeypatch)
+
+
+def test_pending_adquisicion_no_es_un_fallo_y_lleva_motivo(toy_vault, fake_run, fake_notes,
+                                                           monkeypatch, capsys):
+    """#80: los tres valores viejos (`paywall`/`scan`/`unextractable`) describen **por qué falló la
+    extracción**. Un libro que el usuario va a conseguir no es un fallo: es una adquisición con otra
+    latencia, y entraba forzado como `paywall`, perdiendo el motivo real.
+
+    Se agrega `adquisicion` y el **motivo libre obligatorio** — mismo argumento que el `--reason`
+    del triage: lo que sirve en seis meses es el motivo, no la categoría."""
+    topic(source="web", sources=[{"key": "2001HyvarinenBook", "pending": "adquisicion",
+                                  "pending_motivo": "libro; el usuario lo consigue en la biblioteca",
+                                  "doi": "10.1002/0471221317"}])
+    assert run_main(monkeypatch) == 0
+    key, kw = fake_notes.webs[0]
+    assert key == "2001HyvarinenBook" and kw["pending"] == "adquisicion"
+    assert "biblioteca" in kw["pending_motivo"]
+
+
+def test_pending_sin_motivo_aborta(toy_vault, fake_run, fake_notes, monkeypatch):
+    """Sin motivo, `pending` vuelve a ser una categoría pelada: en seis meses nadie sabe si la
+    fuente se pidió, se descartó o se olvidó. Es la asimetría que #51 cerró del otro lado."""
+    topic(source="web", sources=[{"key": "2001Libro", "pending": "adquisicion", "doi": "10.1/x"}])
+    with pytest.raises(SystemExit, match="motivo"):
+        run_main(monkeypatch)
+
+
+def test_libro_declara_unidad_de_cita_y_alcance(toy_vault, fake_run, fake_notes, monkeypatch):
+    """#80 (2 y 3): un libro rompe dos supuestos del contrato de `verify-citations`.
+
+    (2) El fan-out asume un `.txt` que un subagente lee **entero** y del que devuelve cita textual +
+    nº de línea. Un libro de 700 páginas revienta ese fan-out, y «línea 18443» no es una referencia
+    utilizable: la unidad tiene que ser **página o sección**.
+    (3) Casi nunca querés el libro entero, querés dos capítulos — y eso choca con el chequeo de
+    **completitud**, que no tiene cómo saber que el recorte fue deliberado. Sin declararlo, un
+    recorte intencional se lee como omisión."""
+    topic(source="local-pdfs", sources=[
+        {"key": "2001HyvarinenBook", "pdf": "/tmp/x.pdf", "unidad_cita": "pagina",
+         "alcance": "caps. 6 (fastICA) y 15 (noisy ICA)", "title": "Independent Component Analysis",
+         "author": "Hyvarinen", "year": 2001, "via": "usuario", "motivo": "canon del método"}])
+    monkeypatch.setattr(it.Path, "exists", lambda self: True)
+    run_main(monkeypatch)
+    kw = fake_notes.webs[0][1]
+    assert kw["unidad_cita"] == "pagina"
+    assert "caps. 6" in kw["alcance"]
+
+
+def test_unidad_de_cita_fuera_del_vocabulario_aborta(toy_vault, fake_run, fake_notes, monkeypatch):
+    """Vocabulario CERRADO, como `role` y `via`: un typo deja al verificador sin saber cómo citar."""
+    topic(source="web", sources=[{"key": "2001Libro", "url": "https://x",
+                                  "unidad_cita": "paginas"}])
+    with pytest.raises(SystemExit, match="unidad_cita"):
+        run_main(monkeypatch)
+
+
+def test_unidad_no_linea_sin_alcance_aborta(toy_vault, fake_run, fake_notes, monkeypatch):
+    """Si la unidad no es la línea, es un documento largo: declarar qué parte entró es obligatorio,
+    porque el chequeo de completitud no puede distinguir recorte de omisión."""
+    topic(source="web", sources=[{"key": "2001Libro", "url": "https://x",
+                                  "unidad_cita": "seccion"}])
+    with pytest.raises(SystemExit, match="alcance"):
+        run_main(monkeypatch)

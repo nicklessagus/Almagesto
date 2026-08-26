@@ -3201,3 +3201,54 @@ def test_fila_que_declara_un_archivo_ausente_no_da_limpio(toy_vault, capsys):
     rc, rep = run_lint_reporte(capsys)
     assert "ese archivo no está en la bóveda" in rep
     assert rc == 1
+
+
+def test_pending_sin_motivo_se_reporta_pero_no_bloquea(toy_vault, capsys):
+    """#80: la categoría sola no dice si alguien está consiguiendo la fuente o si nadie la miró
+    nunca. El motivo no se puede **inventar** —a diferencia del archivo de #117, que se deduce del
+    hash—, así que esto es backlog: nombra la nota para que alguien lo escriba.  @inv INV-108"""
+    mk_note(toy_vault.PAPERS, "2001Libro",
+            {"tags": ["paper"], "thesis_links": ["ica"], "pending_source": "adquisicion",
+             "doi": "10.1/x"}, "")
+    mk_note(toy_vault.CONCEPTS / "methods", "ica", {"tags": ["methods"]}, "Tema.\n")
+    link_from_index(toy_vault, "ica", "2001Libro")
+    rc, rep = run_lint_reporte(capsys)
+    assert "sin `pending_motivo`" in rep
+    assert rc == 0, "backlog: una fuente sin conseguir no invalida ninguna afirmación"
+
+
+def test_pending_fuera_del_vocabulario_se_nombra(toy_vault, capsys):
+    """Un `pending` que nadie valida deja al consumidor leyendo un valor que no significa nada —
+    la familia de `role` y de `via`. En la config aborta; acá, sobre una nota ya escrita, se
+    nombra.  @inv INV-108"""
+    mk_note(toy_vault.PAPERS, "2001Typo",
+            {"tags": ["paper"], "thesis_links": ["ica"], "pending_source": "paywal",
+             "pending_motivo": "x", "doi": "10.1/x"}, "")
+    mk_note(toy_vault.CONCEPTS / "methods", "ica", {"tags": ["methods"]}, "Tema.\n")
+    link_from_index(toy_vault, "ica", "2001Typo")
+    _, rep = run_lint_reporte(capsys)
+    assert "fuera del vocabulario" in rep
+
+
+def test_documento_largo_sin_alcance_se_reporta(toy_vault, capsys):
+    """#80: si la unidad de cita no es la línea, la fuente es un documento largo y casi nunca entró
+    entera. Sin `alcance`, el chequeo de completitud de `verify-citations` no puede distinguir un
+    recorte deliberado de una omisión.  @inv INV-109"""
+    mk_note(toy_vault.PAPERS, "2001Libro",
+            {"tags": ["paper"], "thesis_links": ["ica"], "unidad_cita": "pagina"}, "")
+    mk_note(toy_vault.CONCEPTS / "methods", "ica", {"tags": ["methods"]}, "Tema.\n")
+    link_from_index(toy_vault, "ica", "2001Libro")
+    rc, rep = run_lint_reporte(capsys)
+    assert "sin `alcance`" in rep and rc == 0, "backlog: no invalida lo que la nota afirma"
+
+
+def test_unidad_de_cita_invalida_bloquea(toy_vault, capsys):
+    """Vocabulario cerrado, misma severidad que `role`: un typo deja el campo mudo para la única
+    operación que existe para consumirlo.  @inv INV-109"""
+    mk_note(toy_vault.PAPERS, "2001Libro",
+            {"tags": ["paper"], "thesis_links": ["ica"], "unidad_cita": "paginas",
+             "alcance": "cap. 6"}, "")
+    mk_note(toy_vault.CONCEPTS / "methods", "ica", {"tags": ["methods"]}, "Tema.\n")
+    link_from_index(toy_vault, "ica", "2001Libro")
+    rc, rep = run_lint_reporte(capsys)
+    assert "fuera del vocabulario" in rep and rc == 1

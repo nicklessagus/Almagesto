@@ -2243,6 +2243,8 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
                          first_author: str | None = None, year=None, n_authors=None,
                          doi: str | None = None, venue: str | None = None,
                          accessed: str | None = None, pending: str | None = None,
+                         pending_motivo: str | None = None,
+                         unidad_cita: str | None = None, alcance: str | None = None,
                          force: bool = False) -> bool:
     """Stub de nota de paper para una fuente **off-ADS** (web o PDF sin bibcode ADS) — modo off-ADS de
     ingest-theme. Análogo a write_paper_notes pero **sin ads.json**: la metadata la provee quien llama
@@ -2333,6 +2335,14 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
         **({"eprint_version": pdf_ver} if pdf_ver else {}),
         # fuente aún no obtenida (paywall|scan|unextractable) → derivada al usuario; sólo si aplica
         **({"pending_source": pending} if pending else {}),
+        # #80: el motivo libre viaja al lado de la categoría. Sin él, `pending_source: paywall` en
+        # una nota no dice si alguien la está consiguiendo o si nadie la miró nunca.
+        **({"pending_motivo": pending_motivo} if pending and pending_motivo else {}),
+        # #80: cómo se apunta dentro de esta fuente y qué parte de ella entró. `linea` es el default
+        # y no se estampa: el campo existe para el caso raro —un libro, un handbook— donde citar por
+        # línea no sirve y la fuente NO entra entera.
+        **({"unidad_cita": unidad_cita} if unidad_cita and unidad_cita != "linea" else {}),
+        **({"alcance": alcance} if alcance else {}),
         "confidence": "medium",
         "tags": ["paper", "web" if url else "local-pdf"],   # tipo de fuente off-ADS (findability)
         "generator": f"Almagesto v{cfg.ALMAGESTO_VERSION}",   # provenance

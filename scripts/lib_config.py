@@ -20,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.54.0"
+ALMAGESTO_VERSION = "1.55.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -46,6 +46,23 @@ ADS_KEY_FILE = CONFIG / "ads_dev_key"
 # que esta cadena hace), que antes no se escribía en ningún lado: la query de una estrella se armaba
 # en memoria y se tiraba. Simetría que faltaba: los candidatos ACEPTADOS ya persistían en config
 # (`extra_core`), los rechazados no.
+# #80 · por qué una fuente declarada todavía NO está en disco. Vocabulario CERRADO y validado:
+# se escribía verbatim en la nota, así que un typo entraba mudo y el lint lo listaba como
+# precondición legítima — la familia de `role` y de `via`.
+# Los tres primeros describen un FALLO de adquisición o de extracción; `adquisicion` describe algo
+# distinto y que antes entraba forzado como `paywall`: un libro que el usuario va a conseguir no
+# falló, tiene otra latencia. Todos llevan MOTIVO libre obligatorio — mismo argumento que el
+# `--reason` del triage: lo que sirve en seis meses es el motivo, no la categoría.
+PENDING_OK = ("paywall", "scan", "unextractable", "adquisicion")
+
+# #80 · CÓMO se apunta dentro de una fuente. Vocabulario CERRADO; default `linea`.
+# Todo el contrato de `verify-citations` asume un `.txt` que un subagente lee ENTERO y del que
+# devuelve cita textual + nº de línea. Un libro de 700 páginas revienta ese fan-out, y «línea 18443»
+# no es una referencia utilizable: la unidad tiene que ser página o sección. Es un eje distinto del
+# `txt:`/`pdf:` de #117 —aquél dice QUÉ ARCHIVO se leyó, éste CÓMO se apunta adentro— y hacen falta
+# los dos: el `.txt` de un libro tampoco se cita por línea.
+UNIDAD_CITA_OK = ("linea", "pagina", "seccion")
+
 REGISTRO = CONFIG / "registro"
 
 # raw/ = fuentes inmutables (el LLM lee, no modifica) | wiki/ = el LLM escribe y mantiene

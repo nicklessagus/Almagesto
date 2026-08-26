@@ -373,6 +373,23 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   En notas **off-ADS** el schema suma `source_url` (URL de la fuente web; null si es PDF local),
   `accessed` (fecha del snapshot — es la cita "Retrieved <fecha>") y, si la fuente no se pudo
   conseguir, `pending_source: paywall|scan|unextractable` (el lint la lista como precondición).
+⛔ **`pending` es vocabulario CERRADO y lleva `pending_motivo` obligatorio (#80).** Los tres valores
+históricos describen **por qué falló** la adquisición o la extracción; **`adquisicion`** es el
+cuarto y describe otra cosa: un libro que el usuario va a conseguir **no falló**, tiene otra
+latencia — entraba forzado como `paywall` y se perdía el motivo real. El motivo es libre y
+obligatorio por el mismo argumento que el `--reason` del triage: en seis meses lo que sirve es el
+motivo, no la categoría (¿alguien la está consiguiendo, o nadie la miró nunca?). El valor se
+escribía **verbatim** en la nota, así que un typo entraba mudo: hoy la cadena aborta y el lint lo
+nombra.
+⛔ **Una fuente LARGA declara cómo se la cita y qué parte entró (#80):** `unidad_cita:
+linea|pagina|seccion` (default `linea`, no se estampa) y **`alcance`** (qué capítulos/secciones
+entraron), obligatorio cuando la unidad no es la línea. Un libro rompe dos supuestos del contrato de
+`verify-citations`: el fan-out asume un `.txt` que un subagente lee **entero** —700 páginas lo
+revientan— y «línea 18443» no es una referencia utilizable. Y casi nunca entra el libro entero, lo
+que choca con el chequeo de **completitud**, que sin `alcance` no puede distinguir un recorte
+deliberado de una omisión. Es un eje **distinto** del `txt:`/`pdf:` de #117: aquél dice qué
+**archivo** se leyó, éste **cómo se apunta adentro** — el `.txt` de un libro tampoco se cita por
+línea.
   Del mismo origen y opcional, `corrections: [{type,notice_doi,date,source}]` (#52): la corrección
   **no retractante** (`erratum` / `corrigendum` / `expression-of-concern`). **No** invalida el paper
   —sigue siendo citable, por eso el lint la lista como **backlog** y no bloquea— pero es la señal

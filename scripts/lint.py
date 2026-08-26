@@ -1189,9 +1189,33 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 symbols_lost_notes.append(
                     (stem, "el `.txt` perdió el cuerpo de sus ecuaciones — para citar una fórmula "
                            "de este paper hay que abrir el PDF (la prosa sí es citable)"))
+            # #80: la unidad de cita de una fuente larga y el recorte que entró. Vocabulario
+            # cerrado (bloquea, como `role`); el `alcance` faltante es backlog porque no se puede
+            # inventar — pero sin él un recorte deliberado se lee como omisión.
+            if (_u := str(fm.get("unidad_cita") or "").strip()):
+                if _u not in cfg.UNIDAD_CITA_OK:
+                    bad_roles.append((stem, f"`unidad_cita: {_u}` fuera del vocabulario "
+                                            f"({' | '.join(cfg.UNIDAD_CITA_OK)}) — el verificador "
+                                            f"no sabe cómo citar esta fuente"))
+                elif _u != "linea" and not str(fm.get("alcance") or "").strip():
+                    incomplete.append((stem, f"`unidad_cita: {_u}` (documento largo) sin `alcance`: "
+                                             f"no consta qué parte entró, así que un recorte "
+                                             f"deliberado se lee como omisión"))
             if fm.get("pending_source"):
                 ptr = fm.get("doi") or fm.get("source_url") or "(sin puntero conocido)"
-                pending_srcs.append((stem, f"{fm['pending_source']} — proveer la fuente; puntero: {ptr}"))
+                _p = str(fm["pending_source"])
+                # #80: la categoría sola no dice si alguien está consiguiendo la fuente o si nadie
+                # la miró nunca, y `adquisicion` (un libro en camino) no es un fallo como los otros
+                # tres. El motivo no se puede inventar, así que esto es backlog y no bloqueante:
+                # nombra la nota para que alguien lo escriba.
+                _falta = ("" if str(fm.get("pending_motivo") or "").strip() else
+                          " — ⚠ sin `pending_motivo`: escribí qué pasa con esta fuente y quién la consigue")
+                if _p not in cfg.PENDING_OK:
+                    _falta = (f" — ⚠ `{_p}` fuera del vocabulario "
+                              f"({' | '.join(cfg.PENDING_OK)})") + _falta
+                pending_srcs.append(
+                    (stem, f"{_p}{' · ' + str(fm['pending_motivo']) if fm.get('pending_motivo') else ''}"
+                           f" — proveer la fuente; puntero: {ptr}{_falta}"))
             # el tooling escribe siempre `high`/`low`; el `.lower()` cubre la edición a mano,
             # donde un `Low` entraba a la población que el recorte quería dejar afuera.
             relevancia = str(fm.get("relevance") or "").strip().lower()

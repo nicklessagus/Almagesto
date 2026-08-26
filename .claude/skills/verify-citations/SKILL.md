@@ -364,6 +364,22 @@ python -c "import sys;sys.path.insert(0,'scripts');import lib_blocks as lb;\
 print(lb.bytes_hash('vault/raw/pdfs/<slug>/<bibcode>.pdf'))"
 ```
 
+### Documentos largos: un libro no se verifica como un paper (#80)
+
+Cuando la nota de la fuente declara **`unidad_cita: pagina`** o **`seccion`** —un libro, un
+handbook—, tres cosas cambian y las tres son del contrato, no del gusto:
+
+1. **No mandes a leer el `.txt` entero.** El fan-out asume un documento que un subagente lee
+   completo; 700 páginas lo revientan. El subagente recibe **el capítulo o el rango de páginas** de
+   la afirmación, no el archivo.
+2. **La evidencia se cita por `p. N` o `§ N.M`, nunca por línea.** «Línea 18443» no es una
+   referencia que alguien pueda seguir, y el `.txt` de un libro tampoco se cita por línea (es un eje
+   distinto del `txt:`/`pdf:` de #117, que dice qué **archivo** se leyó).
+3. **La completitud se pregunta contra el `alcance` declarado, no contra el documento.** La nota
+   declara qué parte entró (`alcance: caps. 6 y 15`); lo que está fuera de esa parte **no** es una
+   omisión. Sin `alcance` no hay forma de distinguir el recorte deliberado del olvido, y por eso el
+   lint lo reporta.
+
 - **`Ancla`** — sha256 (10 hex) del bloque markdown normalizado que contiene la afirmación.
   Reflowear la nota **no** la mueve; cambiar un número **sí**. Una fila/ítem sin `[[bibcode]]`
   propio hereda el del caption y hashea **los dos** bloques.
