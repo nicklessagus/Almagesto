@@ -492,18 +492,24 @@ la cascada y **propone**; nunca clasifica.
   lo citan 7 de los 19—. Es además lo único que alcanza lo que ninguna keyword del tema alcanza: los
   papers de **PCA con ruido** (el paso de blanqueo) que la bóveda vieja tenía y el barrido por
   keyword nunca vio.
-- ⚠ **Límite declarado del descubrimiento automático (#107, medido).** La **cola especialista** de
-  un tema de método **no la alcanza ningún eje por ranking**, y esto es medición y no impresión:
-  Cardoso 2002, Davies 2004, Cichocki 1998, Voss 2013, Pfister 2019 y Pan 2022 están en OpenAlex,
-  **con el topic correcto**, entre **11 y 72 citas** dentro de un topic de 169.977 works — o sea
-  por debajo de cualquier corte por citas—, y los ejes que sí los contienen (*quién cita al canon*
-  ∩ topic) devuelven **3.467-5.270** candidatos: peor que inútil, porque el triage cuesta más que
-  el beneficio. `seed_terms` (slice de texto por término dentro del topic) es el mejor intento y
-  quedó **opt-in**: sumó 217 candidatos y recuperó **1** de 18. Lo que el pipeline sí automatiza es
-  el **canon** (8/8 por anclaje) y la **mitad astro** (por query). Esa cola es lo que meses de
-  curación a mano hacen bien, y lo que el framework puede aportar ahí no es encontrarla sino que
-  cada entrada registre **por qué** entró (`extra_core` con `via`/`motivo`, o `sources`) — eso ya
-  lo hace. **Es una frontera para declarar, no un hueco para cerrar.**
+- **La cola especialista SÍ se alcanza, con el eje correcto — y el costo es triage (#107, medido).**
+  Los papers de noisy-ICA que una bóveda real había curado a mano viven entre **11 y 72 citas**
+  dentro de un topic de 169.977 works, así que **ningún corte por citas sobre el topic entero** los
+  toca. El eje que sí los alcanza es `seed_terms`: **slice de texto por término dentro del topic**,
+  que colapsa el pajar —*noisy ICA* ∩ T11447 da **579** works, no 169.977— y ahí caen en los
+  puestos 28, 44, 110 y 121, o sea perfectamente al alcance. Medido sobre el corpus real: la
+  recuperación pasa de **7/18 a 13/18** al activarlo, y el universo de candidatos de **776 a 2521**.
+  Ése es el canje —cobertura contra costo de triage— y se decide por tema, por eso el eje es
+  **opt-in** (`cascade(..., term_slices=[…])`), no porque no sirva.
+  ⚠ **Y es una lección de método, no un detalle:** la primera medición dijo *"217 candidatos, 1
+  recuperación, límite estructural"* — y era **artefacto de un tope de 15 filas por término que
+  había puesto el propio agente**. Sacar una conclusión estructural de la salida de un truncamiento
+  silencioso es el modo de falla que la regla *«no silent caps»* existe para evitar. Hoy
+  `seed_terms` **avisa por término** cuántos tiene el slice contra cuántos trajo.
+  Lo que queda fuera del alcance automático es chico y de una forma sola: **capítulos y actas**
+  (ICANN, handbooks) y papers cuyo título/abstract no usa ninguno de los términos del tema. Ahí sí
+  manda la curación a mano, y el aporte del framework es que cada entrada registre **por qué**
+  entró (`extra_core` con `via`/`motivo`, o `sources`).
 - **Encontrar ≠ conseguir** (`resolve_pdf`): OpenAlex identificó 8/8 y devolvió
   `best_oa_location.pdf_url = None` **8/8**. La cascada del archivo (OpenAlex → Unpaywall) **propone
   una URL y para**: no reescribe un `pending:` que declaró el usuario ni edita `sources:` —cambiar

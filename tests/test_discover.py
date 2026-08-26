@@ -475,3 +475,36 @@ def test_cascade_usa_term_slices_si_se_piden(monkeypatch):
     out = d.cascade(topic_id="T1", term_slices=["quasi-whitening"])
     assert llamado == [["quasi-whitening"]]
     assert len(out["records"]) == 1
+
+
+def test_seed_terms_avisa_si_el_slice_tiene_mas_de_lo_que_trajo(monkeypatch, capsys):
+    """No silent caps (#107). El tope de 15 filas por término no avisaba, y de su salida se dedujo
+    un «límite estructural» que era falso: los papers estaban en los puestos 28/44/110/121 de un
+    slice de 579. Un tope que esconde su efecto produce conclusiones, no sólo resultados faltantes."""
+    class R:
+        @staticmethod
+        def json():
+            return {"meta": {"count": 579},
+                    "results": [{"id": f"W{i}", "title": "t"} for i in range(15)]}
+    monkeypatch.setattr(d.requests, "get", lambda *a, **k: R())
+    monkeypatch.setattr(d.time, "sleep", lambda s: None)
+    d.seed_terms("T11447", ["noisy ICA"], rows_por_termino=15)
+    out = capsys.readouterr().out
+    assert "579" in out and "15" in out and "rows_por_termino" in out
+
+
+def test_seed_terms_calla_si_trajo_todo_el_slice(monkeypatch, capsys):
+    class R:
+        @staticmethod
+        def json():
+            return {"meta": {"count": 3}, "results": [{"id": f"W{i}"} for i in range(3)]}
+    monkeypatch.setattr(d.requests, "get", lambda *a, **k: R())
+    monkeypatch.setattr(d.time, "sleep", lambda s: None)
+    d.seed_terms("T1", ["quasi-whitening"])
+    assert "⚠" not in capsys.readouterr().out
+
+
+def test_seed_terms_default_no_es_un_tope_chico():
+    """El default es una MEDICIÓN: con 15 la recuperación daba 7/18; con el slice completo, 13/18."""
+    import inspect
+    assert inspect.signature(d.seed_terms).parameters["rows_por_termino"].default >= 200

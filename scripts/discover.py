@@ -116,7 +116,7 @@ def topics(query: str, rows: int = 5) -> list[dict]:
             for r in d.get("results", [])]
 
 
-def seed_terms(topic_id: str, terms: list, rows_por_termino: int = 15) -> list[dict]:
+def seed_terms(topic_id: str, terms: list, rows_por_termino: int = 200) -> list[dict]:
     """Text search **inside** the topic, one slice per term → records.
 
     WHY THE CITATION-RANKED SEED IS NOT ENOUGH, measured (#107). `seed` sorts a topic's works by
@@ -128,7 +128,16 @@ def seed_terms(topic_id: str, terms: list, rows_por_termino: int = 15) -> list[d
 
     A term slice is a different retrieval axis over the same backend, and it collapses the haystack:
     `quasi-whitening` inside T11447 returns **15** works, not 169,977. The terms come from the
-    theme's `aliases`, which is why those are worth writing carefully."""
+    theme's `aliases`, which is why those are worth writing carefully.
+
+    ⚠ **`rows_por_termino` defaults high on purpose, and the default is a measurement.** With the
+    first default (15) this function looked useless — 217 candidates for 1 recovery — and that
+    number was an artifact of the cap, not of the backend: four of the six papers it was meant to
+    reach sit at ranks **28, 44, 110 and 121** of a slice holding only **579 works**. Capping at 15
+    and then concluding the tail was unreachable was drawing a structural conclusion from a silent
+    truncation. The slice is bounded (hundreds, not the topic's 169,977), so paging it is
+    affordable; what is not affordable is a cap that hides its own effect — hence the warning
+    printed per term when the slice holds more than was taken."""
     out: list[dict] = []
     vistos: set = set()
     for term in terms:
@@ -141,7 +150,10 @@ def seed_terms(topic_id: str, terms: list, rows_por_termino: int = 15) -> list[d
         except Exception as e:                                  # noqa: BLE001 — declarado
             cfg.print_seguro(f"  ⚠ seed_terms: «{term}» falló ({e}) — 0 de ese término")
             continue
+        hay = ((d.get("meta") or {}).get("count") or 0)
+        traidos = 0
         for w in d.get("results", []):
+            traidos += 1
             wid = _oa_id(w.get("id"))
             if wid in vistos:
                 continue
@@ -149,6 +161,11 @@ def seed_terms(topic_id: str, terms: list, rows_por_termino: int = 15) -> list[d
             r = oa.to_record(w)
             r["found_in"] = ["openalex"]
             out.append(r)
+        # No silent caps: si el slice tiene más de lo que se trajo, se DICE. Es la regla que el
+        # framework ya aplica al `truncated` de ADS, y su ausencia acá produjo una conclusión falsa.
+        if hay > traidos:
+            cfg.print_seguro(f"  ⚠ «{term}»: el slice tiene {hay} y se trajeron {traidos} "
+                             f"(top por citas) — subí `rows_por_termino` para cubrir el resto")
         time.sleep(0.2)
     return out
 
@@ -313,13 +330,11 @@ def cascade(*, ads_query: str | None = None, arxiv_terms: list | None = None,
     if topic_id:
         try:
             recs = seed(topic_id, rows=min(rows, 200), min_citas=min_citas)
-            # ⛔ `seed_terms` NO se cablea acá, y la razón es una MEDICIÓN, no una preferencia
-            # (#107): sobre el corpus real sumó **217 candidatos y recuperó 1** de los 18 papers
-            # curados a mano. Es un canje malo —217 juicios de triage por una recuperación— y el
-            # motivo es estructural: dentro de cada término OpenAlex **sigue ordenando por citas**,
-            # así que el piso del corte queda arriba de las 11-72 citas donde vive esa literatura.
-            # Queda como herramienta a pedido, que es donde sí rinde: para un término angosto
-            # (`quasi-whitening` → 15 works en todo el topic) el corte llega al especialista.
+            # `seed_terms` es opt-in por su COSTO, no por falta de rendimiento (#107). Medido
+            # sobre el corpus real: activarlo lleva la recuperación de **7/18 a 13/18** y el
+            # universo de candidatos de **776 a 2521**. Es cobertura contra costo de triage, y esa
+            # decisión es por tema. (La primera medición decía "217 candidatos, 1 recuperación" y
+            # era artefacto de un tope de 15 filas por término — ver el docstring de `seed_terms`.)
             if term_slices:
                 recs += seed_terms(topic_id, term_slices)
             batches.append(("openalex", recs))
