@@ -846,6 +846,7 @@ def collect(cierre: bool = False) -> LintResult:
     pending_srcs: list = []            # (stem, "<motivo> — puntero") — fuentes derivadas al usuario
     symbols_lost_notes: list = []      # (stem, motivo) — #113: el .txt no tiene las ecuaciones
     symbols_lost_bibs: set = set()     # bibcodes cuya evidencia se cita por PÁGINA del PDF
+    log_sin_entrada: list = []         # (slug, motivo) — #118: la cadena corrió y el log no lo dice
     impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
     # D-50: los genéricos + un patrón por consumidor declarado. Se arma UNA vez por corrida, no por
     # línea: el scan recorre el cuerpo de toda nota de la bóveda.
@@ -1295,6 +1296,36 @@ def collect(cierre: bool = False) -> LintResult:
         if _pdf:
             evidencia_hash[_bib] = lb.bytes_hash(Path(_pdf))
 
+    # ── #118 · la bitácora no tiene red ──────────────────────────────────────────────────────────
+    # Lo que escribe un SCRIPT se registra solo (`cadena` del registro versionado: qué corrió y
+    # cuándo); lo que escribe el LLM depende de que se acuerde. `CLAUDE.md` manda appendear a
+    # `log.md` tras cada operación y es el único paso salteable SIN red — #55, #56, #69 y #75 ya la
+    # tienen. Medido sobre un tema real: 22 pasos de cadena registrados, 0 entradas en el log.
+    # Los dos lados de la comparación ya viajan dentro de la bóveda, así que es offline y sin
+    # dependencias. BACKLOG, nunca bloqueante: una bitácora incompleta no invalida ninguna
+    # afirmación —a diferencia de una cita rota—, y frenar el cierre por esto vuelve trámite al lint.
+    try:
+        log_txt = cfg.LOG.read_text(encoding="utf-8") if cfg.LOG.exists() else ""
+    except OSError:
+        log_txt = ""
+    for _reg in sorted(cfg.REGISTRO.glob("*.yaml")) if cfg.REGISTRO.exists() else []:
+        _slug = _reg.stem
+        if _slug.startswith("_"):
+            continue                      # `_red.yaml` no es un sujeto
+        try:
+            _d = cfg.load_registro(_slug) or {}
+        except Exception:
+            continue                      # registro ilegible: lo reporta su propio detector
+        _fechas = {str(p.get("fecha")) for p in cfg.as_list(_d.get("cadena"))
+                   if isinstance(p, dict) and p.get("fecha")}
+        _sin = sorted(f for f in _fechas
+                      if f and not any(f in ln and _slug in ln for ln in log_txt.splitlines()
+                                       if ln.startswith("## ")))
+        if _sin:
+            log_sin_entrada.append(
+                (_slug, f"la cadena corrió el {', '.join(_sin)} y `log.md` no tiene una entrada "
+                        f"`## <fecha> — …` que nombre a `{_slug}` → appendear lo que se hizo"))
+
     stale_pairs: list = []
     old_verif_template: list = []
     for stem, texto in sorted(anchor_notes):
@@ -1417,6 +1448,24 @@ def collect(cierre: bool = False) -> LintResult:
                 (", ".join(stems), f"comparten {clave} `{valor}` → es el MISMO trabajo con dos "
                                    f"notas; dejá una canónica: `python scripts/make_notes.py "
                                    f"--rename-paper {stems[0]} {stems[1]}`"))
+    # #114 · segunda señal, y la que caza el caso REAL: dos notas cuyo `.txt` tiene los MISMOS BYTES
+    # son el mismo trabajo — eso no es heurística, es certeza. Hace falta porque la metadata a veces
+    # no los liga en absoluto: medido, el registro publicado traía `arxiv_id: null` y el del preprint
+    # el DOI DataCite, así que NINGÚN campo coincidía y el detector callaba sobre un duplicado real.
+    ya_reportados = {st for fila in identidad_dup for st in fila[0].split(", ")}
+    por_texto: dict = {}
+    for stem_p in sorted(paper_fms):
+        if stem_p in alias or stem_p in ya_reportados:
+            continue
+        if (h := ft_hash.get(stem_p)):
+            por_texto.setdefault(h, []).append(stem_p)
+    for h, stems in sorted(por_texto.items()):
+        if len(stems) > 1:
+            identidad_dup.append(
+                (", ".join(stems), f"su fulltext tiene los MISMOS bytes (`{h}`) → es el mismo "
+                                   f"trabajo con dos notas, aunque su metadata no lo diga; "
+                                   f"consolidá: `python scripts/make_notes.py --rename-paper "
+                                   f"{stems[0]} {stems[1]}`"))
 
     # ── lista de papers desactualizada (D-10) ────────────────────────────────────────────────────
     # La tabla materializada de `## Papers` es un snapshot, y un snapshot que nadie re-estampa
@@ -2137,6 +2186,7 @@ def collect(cierre: bool = False) -> LintResult:
         Categoria('pdf_issues', 'PDF ↔ disco / cuerpo (WARN — higiene: frontmatter `pdf` vs PDF bajado vs link de cabecera)', SEV_WARN, tuple(pdf_issues)),
         Categoria('pending_srcs', '⏳ Fuentes pendientes (pending_source — el usuario debe proveer la fuente)', SEV_BACKLOG, tuple(pending_srcs)),
         Categoria('symbols_lost', '📐 Fuentes cuyo `.txt` perdió las ECUACIONES (citar fórmulas por página del PDF)', SEV_BACKLOG, tuple(symbols_lost_notes)),
+        Categoria('log_sin_entrada', '📓 Operación sin entrada en `log.md` (la cadena corrió y la bitácora no lo dice)', SEV_BACKLOG, tuple(log_sin_entrada)),
         Categoria('illegible_txt', 'Fulltext ilegible (mojibake/escaneo — existe pero no sirve para grep/verify)', SEV_BACKLOG, tuple(illegible_txt)),
         Categoria('unverifiable', 'Citas no verificables en ficha/query/concepto/hipótesis (sin fulltext)', SEV_BACKLOG, tuple(unverifiable)),
         Categoria('unverified', 'Sin verificar: nota con citas y sin bloque verify-citations'

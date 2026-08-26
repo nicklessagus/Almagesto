@@ -1225,6 +1225,11 @@ ESTADO_SINTETIZADO = "sintetizado"
 ESTADO_EXTRAIDO = "extraído, no sintetizado"
 ESTADO_SIN_EXTRAER = "sin extraer"
 ESTADO_FUERA = "fuera del filtro"
+# #116: el paper que el USUARIO sacó del sujeto con `--drop-core`. Distinto de `fuera del filtro`
+# (que lo decidió la lente) y sobre todo de `sin extraer` (que se lee como «todavía no llegamos»,
+# el estado OPUESTO al real). #112 promete que el excluido «queda VISIBLE» y esa visibilidad vivía
+# sólo en `build/` y el registro — no en la ficha, que es el artefacto que viaja.
+ESTADO_DROPEADO = "excluido a mano"
 
 
 def papers_fm_index() -> dict:
@@ -1282,9 +1287,17 @@ def papers_universe(slug: str, kind: str, fms: dict | None = None) -> list:
     cuerpo = _prosa(dest.read_text(encoding="utf-8")) if dest and dest.exists() else ""
     meta = (cfg.star_by_slug(slug)[1] if kind == "star" else cfg.theme_by_slug(slug)[1])
     via_de = {e["bibcode"]: e["via"] for e in cfg.load_extra_core(meta, entry=slug)}
+    # #116: los `--drop-core` viven en el registro VERSIONADO, que es lo que viaja con la bóveda —
+    # no en `build/`, que es scratch. Sin esto la ficha los publica como `sin extraer`.
+    # `origen: sujeto` es lo que escribe `--drop-core`; `fuente-declarada` es `--drop-source` y la
+    # ausencia de `origen` es el descarte de un candidato del chaining (`--drop`), que NO era core.
+    dropeados = {k for k, v in (cfg.load_decisiones(slug) or {}).items()
+                 if isinstance(v, dict) and str(v.get("origen", "")) == "sujeto"}
     filas = []
     for stem, fm in _papers_del_sujeto(slug, kind, fms):
-        if (fm.get("relevance") or "").lower() == "low":
+        if stem in dropeados:
+            estado = ESTADO_DROPEADO
+        elif (fm.get("relevance") or "").lower() == "low":
             estado = ESTADO_FUERA
         elif not (fm.get("methods") or []):
             estado = ESTADO_SIN_EXTRAER
@@ -1293,7 +1306,7 @@ def papers_universe(slug: str, kind: str, fms: dict | None = None) -> list:
         else:
             estado = ESTADO_EXTRAIDO
         filas.append({"stem": stem, "year": fm.get("year") or "", "relevance": fm.get("relevance") or "",
-                      "origen": "manual" if stem in via_de else "lente",
+                      "origen": "manual-drop" if stem in dropeados else ("manual" if stem in via_de else "lente"),
                       "via": via_de.get(stem, ""), "estado": estado})
     return sorted(filas, key=lambda r: r["stem"])
 
@@ -1498,16 +1511,103 @@ def _wikilink_re(stem: str):
     return re.compile(r"\[\[" + re.escape(stem) + r"(\||\]\])")
 
 
+# #114: el DOI que DataCite le asigna a un eprint de arXiv. `10.48550/arXiv.2605.28635`
+# y `arxiv_id: 2605.28635` son el mismo trabajo, y compararlos como strings distintos deja ciego
+# al detector de duplicados en la forma MÁS común del caso que D-19 existe para cazar.
+_DOI_ARXIV_RE = re.compile(r"^10\.48550/arxiv\.(.+)$")
+
+
 def identidad(fm: dict) -> tuple | None:
     """La identidad del trabajo: `("arxiv", id)` o `("doi", id)`, o `None` si no declara ninguna.
 
     `arxiv_id` primero porque es el que sobrevive al ciclo preprint→publicado (el DOI del preprint
-    y el del publicado suelen ser distintos, el arXiv id no cambia)."""
+    y el del publicado suelen ser distintos, el arXiv id no cambia).
+
+    #114: un DOI DataCite `10.48550/arXiv.<id>` **es** un arXiv id disfrazado — es el que ADS le pone
+    al registro del preprint. Sin normalizarlo, el preprint queda con identidad `("doi", "10.48550/…")`
+    y no matchea al publicado aunque éste declare el mismo `arxiv_id`.
+    """
     for campo, clave in (("arxiv_id", "arxiv"), ("doi", "doi")):
         v = fm.get(campo)
-        if v:
-            return (clave, str(v).strip().lower())
+        if not v:
+            continue
+        v = str(v).strip().lower()
+        if clave == "doi" and (m := _DOI_ARXIV_RE.match(v)):
+            return ("arxiv", m.group(1))          # DOI DataCite → la identidad real es el arXiv id
+        return (clave, v)
     return None
+
+
+def _reescribir_wikilinks(old_stem: str, new_bibcode: str) -> int:
+    """Reescribe `[[old_stem]]` → `[[new_bibcode]]` en TODA la bóveda. Devuelve notas tocadas.
+
+    Extraído de `rename_paper` para que la consolidación de duplicados (#115) use el MISMO código:
+    dos caminos que reescriben links con reglas distintas es exactamente donde vive un bug (regla
+    de método #2).
+
+    `cfg.VAULT`, no `cfg.WIKI`: el alcance DECLARADO es `vault/`, y `STATUS.md` (que vive un nivel
+    arriba de `wiki/`) cita bibcodes como cualquier nota. Y `safe_name(new_bibcode)`, no el bibcode
+    crudo: el archivo se crea con el stem saneado y todos los wikilinks que el repo genera usan el
+    stem — escribir el crudo hacía que cada link reescrito apuntara a una nota inexistente.
+    """
+    patron = _wikilink_re(safe_name(old_stem))
+    tocadas = 0
+    for f in sorted(cfg.VAULT.rglob("*.md")):
+        cuerpo = f.read_text(encoding="utf-8")
+        nuevo_cuerpo = patron.sub(lambda m: f"[[{safe_name(new_bibcode)}{m.group(1)}", cuerpo)
+        if nuevo_cuerpo != cuerpo:
+            cfg.write_text_atomic(f, nuevo_cuerpo)
+            tocadas += 1
+    return tocadas
+
+
+def _consolidar_duplicado(old, new, old_stem: str, new_bibcode: str) -> None:
+    """Fusiona dos notas del MISMO trabajo hacia la canónica (#115). `new` sobrevive.
+
+    `rename_paper` cubría sólo *«existe el preprint y todavía no el publicado»*. Cuando existen las
+    dos —que es literalmente el duplicado que D-19 nombra— abortaba con «resolvé a mano», así que la
+    doc prometía un remedio que no corría. Consolidar es: el bibcode viejo pasa a `versions[]` de la
+    canónica, se conserva el MEJOR artefacto de cada tipo, se borra la nota vieja y se reescriben los
+    wikilinks de toda la bóveda.
+
+    ⛔ Rehúsa si la nota vieja tiene extracción LLM y la canónica no: descartar el paso más caro de
+    la cadena en silencio es justo lo que el framework evita en todos lados (cf. `entity.py delete`,
+    que avisa y no borra el paper compartido). La salida es renombrar al revés, o mover la prosa a
+    mano y volver a correr.
+    """
+    fm_old = cfg.split_fm(old.read_text(encoding="utf-8")) or {}
+    fm_new = cfg.split_fm(new.read_text(encoding="utf-8")) or {}
+    if fm_old.get("methods") and not fm_new.get("methods"):
+        raise SystemExit(
+            f"⛔ {old.name} tiene extracción LLM (`methods` poblado) y {new.name} no: consolidar "
+            f"hacia {new.name} la perdería.\n"
+            f"   Salidas: renombrar al revés (`--rename-paper {new_bibcode} {old_stem}`), o mover "
+            f"la prosa a mano y volver a correr.")
+
+    versions = [v for v in cfg.as_list(fm_new.get("versions")) if isinstance(v, dict)]
+    if not any(str(v.get("bibcode")) == old_stem for v in versions):
+        versions.append({"bibcode": old_stem, "pdf_source": fm_old.get("pdf_source"),
+                         "eprint_version": fm_old.get("eprint_version")})
+
+    # Artefactos: se queda el de MEJOR calidad, y el otro se borra. Dejar los dos haría que #108 los
+    # reporte para siempre como extracción pagada sin nota, y que el `.txt` huérfano siga saliendo
+    # en los greps del corpus.
+    movidos, borrados = [], []
+    for base in (cfg.PDFS, cfg.FULLTEXT):
+        for art_old in sorted(base.glob(f"*/{safe_name(old_stem)}.*")):
+            destino = art_old.with_name(f"{safe_name(new_bibcode)}{art_old.suffix}")
+            if destino.exists():
+                art_old.unlink(); borrados.append(art_old.name)
+            else:
+                art_old.rename(destino); movidos.append(destino.name)
+
+    old.unlink()
+    _set_lista_de_mapas(new, "versions", versions)
+    n = _reescribir_wikilinks(old_stem, new_bibcode)
+    cfg.print_seguro(
+        f"  ✓ consolidado: {old.name} → {new.name} (canónica). `versions[]` += {old_stem}; "
+        f"{len(movidos)} artefacto(s) movido(s), {len(borrados)} duplicado(s) borrado(s); "
+        f"{n} wikilink(s) reescrito(s).")
 
 
 def rename_paper(old_stem: str, new_bibcode: str) -> None:
@@ -1525,7 +1625,8 @@ def rename_paper(old_stem: str, new_bibcode: str) -> None:
         raise SystemExit(f"no existe la nota {old.name} — nada que renombrar")
     new = cfg.PAPERS / f"{safe_name(new_bibcode)}.md"
     if new.exists():
-        raise SystemExit(f"{new.name} ya existe — resolvé el duplicado a mano antes de renombrar")
+        _consolidar_duplicado(old, new, old_stem, new_bibcode)
+        return
 
     texto = old.read_text(encoding="utf-8")
     fm = cfg.split_fm(texto)
@@ -1544,22 +1645,7 @@ def rename_paper(old_stem: str, new_bibcode: str) -> None:
     _set_campo(new, "bibcode", new_bibcode)
     _set_lista_de_mapas(new, "versions", versions)
 
-    # reescritura de wikilinks en TODA la bóveda (atómica por nota)
-    patron = _wikilink_re(safe_name(old_stem))
-    tocadas = 0
-    # `cfg.VAULT`, no `cfg.WIKI`: el alcance DECLARADO es `vault/`, y `STATUS.md` (que vive un nivel
-    # arriba de `wiki/`) cita bibcodes como cualquier nota. Reescribir sólo `wiki/` dejaba links
-    # rotos justo en el archivo que se lee primero al abrir el repo.
-    for f in sorted(cfg.VAULT.rglob("*.md")):
-        cuerpo = f.read_text(encoding="utf-8")
-        # `safe_name(new_bibcode)`, no el bibcode crudo: el archivo se crea con el stem saneado
-        # (`/` → `_`) y todos los wikilinks que el repo genera usan el stem. Escribir el crudo hacía
-        # que cada link reescrito apuntara a una nota inexistente — latente, pero es la única razón
-        # por la que `safe_name` existe.
-        nuevo_cuerpo = patron.sub(lambda m: f"[[{safe_name(new_bibcode)}{m.group(1)}", cuerpo)
-        if nuevo_cuerpo != cuerpo:
-            cfg.write_text_atomic(f, nuevo_cuerpo)
-            tocadas += 1
+    tocadas = _reescribir_wikilinks(old_stem, new_bibcode)
     cfg.print_seguro(f"  {old.name} → {new.name} · {tocadas} nota(s) con wikilinks reescritos · "
                      f"alias en `versions[]`")
 

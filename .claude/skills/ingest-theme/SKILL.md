@@ -182,7 +182,20 @@ Progreso del ingest del tema <tema>:
    `[[bibcode]]` y se evapora que los otros dos existen — que es exactamente lo que el concept
    promete responder sin abrir un paper. La red de que el contraste ocurrió es #75 (*extraído pero
    no sintetizado*).
-4. **Síntesis del concept durable** (`concepts/<area>/<concept>.md`). Destilar lo aprendido a la
+4. > ⚠ **Un ítem de linaje = un BULLET propio, no una oración con seis citas.** Cuando enumeres
+> quién hizo qué —«PCA vía SVD [[A]], [[B]]; Wapiti [[C]], [[D]]; YARARA [[E]]»— dale a cada fuente
+> su propio bullet. Medido sobre cuatro rondas de verificación de un concepto real: **los 7
+> `no-soportada`/`contradice` fueron TODOS de atribución**, ninguno de invención, y todos vivían en
+> párrafos así — el párrafo pone cláusulas de fuentes distintas en **adyacencia sintáctica**, y la
+> adyacencia se lee como pertenencia. Las transcripciones de ecuaciones, en cambio, salieron
+> perfectas (18/18, 12/12, 6/6). Además abarata las correcciones: el radio de daño de un arreglo
+> —cuántos pares de verificación invalida— bajó de **5,0 a 1,8**.
+>
+> ⚠ **Pero no es gratis y por eso no es regla dura:** el ancla compartida del párrafo también era
+> una **red** —obligaba a re-mirar el vecindario donde justamente vivían esos errores— y
+> granularizar la apaga. Si el tema es chico, el párrafo sigue siendo defendible.
+
+**Síntesis del concept durable** (`concepts/<area>/<concept>.md`). Destilar lo aprendido a la
    página viva: mecanismos, signos, desfasajes, regímenes, huecos. El roll-up estampado (papers con `thesis_links:
    <concept>` **o** `methods: <concept>`) se regenera con `python scripts/make_notes.py <slug> --theme`
    — no acumula solo. **Citar los papers clave por `[[bibcode]]`** en la prosa

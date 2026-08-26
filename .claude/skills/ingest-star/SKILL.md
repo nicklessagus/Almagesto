@@ -265,7 +265,20 @@ Progreso del ingest de <estrella>:
    sin abrir un paper. La red de que el contraste ocurrió es #75 (*extraído pero no sintetizado*):
    un paper que pagó la extracción y no aparece en la nota sale como backlog.
 
-3c. **Síntesis a la ficha** (`vault/wiki/stars/<slug>.md`), apoyada en el inventario de 3b.
+3c. > ⚠ **Un ítem de linaje = un BULLET propio, no una oración con seis citas.** Cuando enumeres
+> quién hizo qué —«PCA vía SVD [[A]], [[B]]; Wapiti [[C]], [[D]]; YARARA [[E]]»— dale a cada fuente
+> su propio bullet. Medido sobre cuatro rondas de verificación de un concepto real: **los 7
+> `no-soportada`/`contradice` fueron TODOS de atribución**, ninguno de invención, y todos vivían en
+> párrafos así — el párrafo pone cláusulas de fuentes distintas en **adyacencia sintáctica**, y la
+> adyacencia se lee como pertenencia. Las transcripciones de ecuaciones, en cambio, salieron
+> perfectas (18/18, 12/12, 6/6). Además abarata las correcciones: el radio de daño de un arreglo
+> —cuántos pares de verificación invalida— bajó de **5,0 a 1,8**.
+>
+> ⚠ **Pero no es gratis y por eso no es regla dura:** el ancla compartida del párrafo también era
+> una **red** —obligaba a re-mirar el vecindario donde justamente vivían esos errores— y
+> granularizar la apaga. Si el tema es chico, el párrafo sigue siendo defendible.
+
+**Síntesis a la ficha** (`vault/wiki/stars/<slug>.md`), apoyada en el inventario de 3b.
    Completar el frontmatter que es **tuyo** (`activity_indicators_expected`,
    `methods_applied.literature`, `disputes` —a nivel nota, #71—) y escribir la prosa: qué se sabe, qué
    indicador debería trazar actividad para ese tipo espectral, huecos.

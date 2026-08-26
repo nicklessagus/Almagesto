@@ -2677,7 +2677,7 @@ def test_las_claves_de_categoria_son_unicas_y_estables(toy_vault):
     equivocada en silencio."""
     claves = [c.clave for c in lint.collect().categorias]
     assert len(claves) == len(set(claves)), [k for k in claves if claves.count(k) > 1]
-    assert len(claves) == 57, f"el reporte tiene {len(claves)} categorías, se esperaban 57"
+    assert len(claves) == 58, f"el reporte tiene {len(claves)} categorías, se esperaban 58"
 
 
 def test_el_modo_cierre_solo_cambia_el_exit_de_los_pares(toy_vault):
@@ -2992,3 +2992,35 @@ def test_source_completa_no_bloquea(toy_vault, capsys):
         "      motivo: canon del metodo\n", encoding="utf-8")
     lint.main([])
     assert "sin `via`" not in capsys.readouterr().out
+
+
+def test_log_sin_entrada_se_reporta(toy_vault, capsys):
+    """#118: lo que escribe un SCRIPT se registra solo (`cadena` del registro); lo que escribe el
+    LLM depende de que se acuerde. Es el único paso salteable sin red. Medido sobre un tema real:
+    22 pasos de cadena registrados, 0 entradas en el log."""
+    import yaml
+    reg = toy_vault.VAULT / "config" / "registro"
+    reg.mkdir(parents=True, exist_ok=True)
+    (reg / "elslug.yaml").write_text(
+        yaml.safe_dump({"slug": "elslug", "cadena": [{"paso": "query_ads", "fecha": "2026-03-01"}]}),
+        encoding="utf-8")
+    toy_vault.LOG.write_text("# log\n\n## 2026-01-01 — otra cosa\n", encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    linea = [l for l in rep.splitlines() if l.startswith("## 📓 Operación sin entrada")]
+    assert linea, rep
+    assert int(linea[0].rsplit("(", 1)[1].rstrip(")")) == 1, linea[0]
+
+
+def test_log_con_su_entrada_no_se_reporta(toy_vault, capsys):
+    """El caso normal tiene que ser silencioso, o la categoría se vuelve ruido que nadie mira."""
+    import yaml
+    reg = toy_vault.VAULT / "config" / "registro"
+    reg.mkdir(parents=True, exist_ok=True)
+    (reg / "elslug.yaml").write_text(
+        yaml.safe_dump({"slug": "elslug", "cadena": [{"paso": "query_ads", "fecha": "2026-03-01"}]}),
+        encoding="utf-8")
+    toy_vault.LOG.write_text("# log\n\n## 2026-03-01 — ingest-theme: elslug\n", encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    linea = [l for l in rep.splitlines() if l.startswith("## 📓 Operación sin entrada")]
+    assert linea, rep
+    assert int(linea[0].rsplit("(", 1)[1].rstrip(")")) == 0, linea[0]

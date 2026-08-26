@@ -2746,3 +2746,81 @@ def test_txt_symbols_lost_no_confunde_la_marca_de_ocr(tmp_path):
     ocr = tmp_path / "ocr.txt"
     ocr.write_text(cfg.FULLTEXT_OCR_MARK + ": citable CON SALVEDAD\ncuerpo\n", encoding="utf-8")
     assert mn._txt_symbols_lost(ocr) is False
+
+
+# ── #114: el DOI DataCite de arXiv ES un arXiv id ────────────────────────────────────────────────
+
+def test_identidad_normaliza_el_doi_datacite_de_arxiv():
+    """El registro del preprint trae `doi: 10.48550/arXiv.<id>`; el publicado, el mismo id en
+    `arxiv_id`. Compararlos como strings distintos dejaba ciego al detector de duplicados."""
+    preprint = mn.identidad({"doi": "10.48550/arXiv.2605.28635"})
+    publicado = mn.identidad({"arxiv_id": "2605.28635", "doi": "10.1093/rasti/rzag038"})
+    assert preprint == publicado == ("arxiv", "2605.28635")
+
+
+def test_identidad_no_toca_un_doi_normal():
+    assert mn.identidad({"doi": "10.1093/rasti/rzag038"}) == ("doi", "10.1093/rasti/rzag038")
+
+
+# ── #115: consolidar cuando existen LAS DOS notas ────────────────────────────────────────────────
+
+def _nota_paper(toy_vault, stem, extra=""):
+    p = toy_vault.PAPERS / f"{stem}.md"
+    p.write_text(f"---\nbibcode: {stem}\nmethods: []\n{extra}---\n\n# {stem}\n", encoding="utf-8")
+    return p
+
+
+def test_consolidar_fusiona_hacia_la_canonica(toy_vault):
+    """`rename_paper` cubría sólo «existe el preprint y todavía no el publicado». Con las dos notas
+    —que es literalmente el duplicado de D-19— abortaba, así que la doc prometía un remedio que no
+    corría."""
+    _nota_paper(toy_vault, "2026arXivVIEJO")
+    _nota_paper(toy_vault, "2026RASTINUEVO")
+    cita = toy_vault.CONCEPTS / "methods" / "c.md"
+    cita.parent.mkdir(parents=True, exist_ok=True)
+    cita.write_text("---\nname: c\n---\n\nAfirmación [[2026arXivVIEJO]].\n", encoding="utf-8")
+
+    mn.rename_paper("2026arXivVIEJO", "2026RASTINUEVO")
+
+    assert not (toy_vault.PAPERS / "2026arXivVIEJO.md").exists(), "la vieja se borra"
+    canon = toy_vault.PAPERS / "2026RASTINUEVO.md"
+    fm = cfg.split_fm(canon.read_text(encoding="utf-8"))
+    assert [v["bibcode"] for v in fm["versions"]] == ["2026arXivVIEJO"], "el alias queda en versions[]"
+    assert "[[2026RASTINUEVO]]" in cita.read_text(encoding="utf-8"), "los wikilinks se reescriben"
+
+
+def test_consolidar_REHUSA_si_la_vieja_tiene_extraccion_y_la_nueva_no(toy_vault):
+    """Descartar el paso más caro de la cadena en silencio es lo que el framework evita en todos
+    lados (cf. `entity.py delete`, que avisa y no borra el paper compartido)."""
+    _nota_paper(toy_vault, "2026arXivVIEJO", extra="")
+    p = toy_vault.PAPERS / "2026arXivVIEJO.md"
+    p.write_text(p.read_text(encoding="utf-8").replace("methods: []", "methods:\n- ica"), encoding="utf-8")
+    _nota_paper(toy_vault, "2026RASTINUEVO")
+
+    with pytest.raises(SystemExit) as e:
+        mn.rename_paper("2026arXivVIEJO", "2026RASTINUEVO")
+    assert "extracción LLM" in str(e.value)
+    assert (toy_vault.PAPERS / "2026arXivVIEJO.md").exists(), "no se borró nada"
+
+
+def test_el_drop_core_se_ve_en_la_tabla_de_papers(toy_vault, monkeypatch):
+    """#116: #112 promete que el excluido «queda VISIBLE», y esa visibilidad vivía sólo en `build/`
+    y el registro. En la ficha aparecía como `sin extraer` — que se lee como «la lente lo dice core,
+    todavía no llegamos»: el estado OPUESTO al real."""
+    monkeypatch.setattr(mn.cfg, "load_decisiones", lambda slug: {
+        "2020dropeado": {"decision": "descartado", "origen": "sujeto", "motivo": "polisemia"},
+        "2020chaining": {"decision": "descartado", "motivo": "ruido del grafo"},   # sin `origen`
+    })
+    monkeypatch.setattr(mn, "_papers_del_sujeto", lambda *a, **k: [
+        ("2020dropeado", {"relevance": "high", "methods": []}),
+        ("2020chaining", {"relevance": "high", "methods": []}),
+        ("2020normal",   {"relevance": "high", "methods": []}),
+    ])
+    monkeypatch.setattr(mn.cfg, "theme_by_slug", lambda s: (s, {"area": "methods", "concept": s}))
+    monkeypatch.setattr(mn.cfg, "load_extra_core", lambda *a, **k: [])
+    filas = {f["stem"]: f for f in mn.papers_universe("t", "theme")}
+    assert filas["2020dropeado"]["estado"] == mn.ESTADO_DROPEADO
+    assert filas["2020dropeado"]["origen"] == "manual-drop"
+    # el descarte de un CANDIDATO del chaining nunca fue core: no se marca como excluido a mano
+    assert filas["2020chaining"]["estado"] == mn.ESTADO_SIN_EXTRAER
+    assert filas["2020normal"]["estado"] == mn.ESTADO_SIN_EXTRAER

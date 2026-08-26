@@ -280,6 +280,14 @@ era `parcial` se descompone sin pérdida en `soportada` + `condicion`, o en `no-
   con cita textual de lo contradicho): se resuelve como corrección o disputa (paso 4), no como cita rota.
 
 ### 4. Resolver lo que falla (no dejar pasar)
+
+⛔ **Un hallazgo dice DÓNDE mirar, no QUÉ escribir.** La corrección se redacta **volviendo a la
+fuente**, no copiando el encuadre del reporte del verificador. Medido: en una sola sesión, dos
+correcciones hechas desde el reporte **introdujeron un error nuevo** — un resultado atribuido a
+`N=2` cuando el paper lo reporta para `N=10`, y «este pipeline corrige actividad con regresión
+multilineal» cuando el paper dice que **no corrige actividad en absoluto**. El verificador acierta
+al señalar el problema y su nota es un resumen, no la redacción final.
+
 Cada **no-soportada / contradice**, y cada `condicion` no vacía, se resuelve antes de cerrar:
 - **Contradicción** (`contradice`) → decidir cuál de dos casos es. (a) **La nota está mal** →
   corregirla a lo que dice la fuente. (b) **Desacuerdo real entre fuentes** → es una **disputa**:
