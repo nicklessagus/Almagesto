@@ -251,6 +251,10 @@ def test_offads_web_fallo_aborta_con_aviso(toy_vault, fake_run, fake_notes, monk
 
 def test_offads_pending_deriva_sin_fallar(toy_vault, fake_run, fake_notes, monkeypatch, capsys):
     # @inv INV-61
+    # #123: con `paywall` la propuesta de copia libre SÍ tiene sentido (describe un fallo, y
+    # encontrar no es conseguir), así que acá se mockea el resolver en vez de saltearlo — la suite
+    # no sale a la red ni siquiera para el camino que en producción sí la usa.
+    monkeypatch.setattr(it.discover, "resolve_pdf", lambda doi: (None, "sin copia libre (doble)"))
     topic(source="web", sources=[{"key": "1999Paywall", "pending": "paywall", "doi": "10.1/x",
                                   "pending_motivo": "IEEE detrás de paywall institucional"}])
     assert run_main(monkeypatch) == 0
@@ -532,3 +536,20 @@ def test_unidad_no_linea_sin_alcance_aborta(toy_vault, fake_run, fake_notes, mon
                                   "unidad_cita": "seccion"}])
     with pytest.raises(SystemExit, match="alcance"):
         run_main(monkeypatch)
+
+
+def test_adquisicion_no_sale_a_la_red_a_buscar_lo_que_ya_conseguis_vos(toy_vault, fake_run,
+                                                                      fake_notes, monkeypatch,
+                                                                      capsys, sin_red):
+    """#123: con `pending: adquisicion` la fuente no *falta* — el usuario declaró que la está
+    consiguiendo él (un libro, una copia física). Consultar OpenAlex y Unpaywall en cada corrida de
+    la cadena es latencia por algo ya resuelto, y la propuesta no puede servir para nada porque no
+    hay copia libre que buscar.
+
+    La red la vigila la fixture global `sin_red`, que registra el intento **aunque alguien se trague
+    la excepción** — que es lo que pasaba: `resolve_pdf` degrada limpio ante un backend caído, así
+    que la violación no se veía.  @inv INV-114"""
+    topic(source="web", sources=[{"key": "2001Libro", "pending": "adquisicion", "doi": "10.1/x",
+                                  "pending_motivo": "lo saco de la biblioteca"}])
+    assert run_main(monkeypatch) == 0
+    assert sin_red == [], "no se consulta ninguna API por una adquisición humana"

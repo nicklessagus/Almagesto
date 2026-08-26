@@ -710,6 +710,15 @@ def to_record(d: dict) -> dict:
         "keyword": d.get("keyword", []),
         "facets": facets,
         "relevant": relevant,
+        # #86: este paper se juzgó SIN abstract, o sea con título + keywords y nada más — una
+        # fracción de la información con la que se juzga a los demás. ADS no tiene abstract para
+        # buena parte de los escaneos viejos, así que el efecto es un sesgo sistemático contra lo
+        # pre-digital; y como los no-core no se bajan, nunca vuelve a mirarse. Es el espejo exacto
+        # de #79, que sesga contra lo reciente.
+        # ⚠ Es INFORMACIÓN, no una regla: NO mueve el corte core/no-core. Si lo moviera, ser core
+        # dejaría de ser función de `(paper, lente)` y se rompería INV-24.
+        # @inv INV-110
+        "sin_abstract": not (d.get("abstract") or "").strip(),
         # motivo real de exclusión (None si core) → apéndice "Excluidos por el filtro"
         "why_excluded": None if relevant else exclusion_reason(facets, d.get("doctype", "")),
     }
@@ -1349,6 +1358,10 @@ def main() -> int:
         # que deja calcular `n_nuevos`/`n_ya_estaban` de la corrida siguiente.
         "bibcodes": sorted({r["bibcode"] for r in recs if r.get("bibcode")}),
         "n_core": len(rel),
+        # #86: cuántos de los que se clasificaron NO tenían abstract, o sea se juzgaron con título +
+        # keywords y nada más. No cambia el corte (INV-24): hace **medible** el sesgo contra lo
+        # pre-digital, que hasta ahora era invisible en los tres lugares donde se podía ver.
+        "n_sin_abstract": sum(1 for r in recs if r.get("sin_abstract")),
         "n_candidates": len(candidatos),              # triage pendiente al cerrar esta corrida
         # sólo el carril del chaining: `busqueda` describe la BÚSQUEDA (encontrados → core →
         # sin juzgar → descartados) y una fuente declarada de un tema off-ADS no participó de

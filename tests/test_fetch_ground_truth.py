@@ -262,6 +262,12 @@ def test_main_force_refresca(toy_vault, monkeypatch):
     monkeypatch.setattr(gt, "fetch_pscomppars", lambda h: [])
     monkeypatch.setattr(gt, "fetch_host", lambda h, tab=None: {"name": h, "mass_msun": 1.0})
     monkeypatch.setattr(gt, "fetch_planets", lambda tab, m: [])
+    # #123: quedaba viva una consulta REAL a SIMBAD (`query_objectids`, para verificar los alias).
+    # El try/except de producción la degrada limpio, así que la suite no se enteraba: salía a la red
+    # en cada corrida y pasaba igual.
+    import astroquery.simbad as _sim
+    monkeypatch.setattr(_sim, "Simbad", lambda *a, **k: (_ for _ in ()).throw(
+        RuntimeError("SIMBAD mockeado: la suite es offline")))
     assert run_main(monkeypatch, ["test_star", "--force"]) == 0
     data = json.loads(out.read_text())
     assert data["star"] == "Estrella Test" and data["slug"] == "test_star"

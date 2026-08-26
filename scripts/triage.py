@@ -69,6 +69,40 @@ def load_ads(slug: str) -> dict:
     return json.loads(f.read_text(encoding="utf-8"))
 
 
+def prioridad(slug: str) -> int:
+    """#87 · la cola de EXTRACCIÓN, ordenada por cuánto del objetivo toca cada core.
+
+    `classify()` ya calcula **qué facetas** del objetivo matcheó cada paper y lo persiste (en el
+    registro y en el frontmatter de la nota), y aguas abajo eso se usaba **sólo para mostrar**: un
+    paper que toca 4 facetas y uno que toca la mínima para pasar el corte eran indistinguibles para
+    todo lo que viene después — incluido el paso más caro de la cadena.
+
+    Por qué esta señal y no las citas: citas/año mide **atención de la comunidad**; el número de
+    facetas mide **pertinencia a lo que ESTA bóveda quiere saber**, que es la pregunta que la
+    priorización tiene que responder. Sale gratis (ya está computada) y es la única que no hereda el
+    sesgo de edad de #79 — por eso las citas quedan como desempate, no como criterio.
+
+    ⛔ NO es un filtro y no toca la lente: `relevant` no se recalcula acá. Es un ORDEN sobre los core
+    que ya son core, para que el recorte de lectura (D-13) se declare sobre un criterio y no sobre
+    lo que apareció primero.
+
+    @inv INV-111"""
+    recs = [r for r in load_ads(slug).get("records", []) if r.get("relevant")]
+    if not recs:
+        cfg.print_seguro(f"{slug}: ningún core en build/{slug}/ads.json")
+        return 0
+    recs.sort(key=lambda r: (-len(cfg.as_list(r.get("facets"))), -(r.get("citation_count") or 0),
+                             r.get("bibcode") or ""))
+    cfg.print_seguro(f"\n{slug}: {len(recs)} core por PERTINENCIA (facetas del objetivo, "
+                     f"citas como desempate)\n")
+    for r in recs:
+        f = cfg.as_list(r.get("facets"))
+        cfg.print_seguro(f"  {len(f)} ✦  {row(r).strip()}")
+    cfg.print_seguro("\n  Al recortar la lectura, declaralo: "
+                     f"`python scripts/triage.py {slug} --extraccion subconjunto --reason \"...\"`")
+    return 0
+
+
 def triage_file(slug: str):
     """Dónde vive el juicio: el registro VERSIONADO del sujeto (#51). Antes era
     `build/<slug>/triage.json` —scratch gitignored—, así que en otra máquina (o tras limpiar
@@ -265,7 +299,11 @@ def row(c: dict) -> str:
     cites = c.get("citation_count") or 0
     nota = "◆" if has_note(c["bibcode"]) else " "
     title = " ".join((c.get("title") or "").split())[:76]
-    return f"  {cites:>5} {nota} {c['bibcode']}  {title}  «{','.join(cfg.as_list(c.get('facets')))}»"
+    # #86: el candidato sin abstract se juzgó con menos información que los demás — y acá se está
+    # decidiendo justamente si entra. Sin la marca, el veredicto se lee igual de firme que el resto.
+    sin_abs = " ⚠sin-abstract" if c.get("sin_abstract") else ""
+    return (f"  {cites:>5} {nota} {c['bibcode']}  {title}  "
+            f"«{','.join(cfg.as_list(c.get('facets')))}»{sin_abs}")
 
 
 def report(slug: str, cands: list[dict]) -> None:
@@ -463,6 +501,10 @@ def main() -> int:
     ap.add_argument("--via", default="usuario", choices=VIA_FUENTE,
                     help="quién acepta la fuente (vocabulario CERRADO, gemelo del `via` de "
                          "extra_core): usuario | descubrimiento | reporte")
+    ap.add_argument("--prioridad", action="store_true",
+                    help="#87: lista los CORE ordenados por cuántas facetas del objetivo tocan "
+                         "(citas como desempate). Es la cola de extracción: no filtra ni toca la "
+                         "lente, ordena lo que ya es core.")
     ap.add_argument("--migrate", action="store_true",
                     help="consolidar en el registro versionado las decisiones del "
                          "build/<slug>/triage.json viejo (bóvedas pre-1.9.0) y salir")
@@ -472,6 +514,8 @@ def main() -> int:
         return drop_core(args.slug, args.drop_core, args.reason)
     if args.accept_source:
         return accept_source(args.slug, args.accept_source, args.via, args.reason)
+    if args.prioridad:
+        return prioridad(args.slug)
     if args.migrate:
         return migrate(args.slug)
 

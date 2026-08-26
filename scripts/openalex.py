@@ -135,6 +135,9 @@ def to_record(work: dict) -> dict:
     import query_ads
     facets, relevant = query_ads.classify_record(rec)
     rec["facets"], rec["relevant"] = facets, relevant
+    # #86: se juzgó sin abstract (título + keywords y nada más). Mismo schema que
+    # `query_ads.to_record`, que es quien lo define — la paridad la fija un test.
+    rec["sin_abstract"] = not (rec.get("abstract") or "").strip()
     rec["why_excluded"] = None if relevant else query_ads.exclusion_reason(
         facets, rec.get("doctype") or "")
     return rec

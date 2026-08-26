@@ -391,8 +391,14 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
             # así que el operador salía a googlear a mano lo que dos APIs contestan. Propone una
             # URL; NO toca `sources:` (pisar una fuente declarada con una que adivinó un script es
             # cómo una cita termina apuntando a un documento que nadie abrió).
+            # ⛔ #123: NO para `adquisicion`. Ahí la fuente no "falta": el usuario declaró que la
+            # está consiguiendo él (un libro, una copia física), así que consultar dos APIs en cada
+            # corrida de la cadena es latencia por algo que ya se resolvió — y la propuesta no puede
+            # servir para nada, porque no hay copia libre que buscar. Para los otros tres valores sí
+            # tiene sentido: describen un fallo, y encontrar no es conseguir.
+            # @inv INV-114
             doi = ptr if str(ptr).startswith("10.") else None
-            if doi:
+            if doi and why != "adquisicion":
                 url, _why = discover.resolve_pdf(doi)
                 if url:
                     cfg.print_seguro(f"      ↳ copia libre candidata: {url}")

@@ -60,7 +60,14 @@ Requiere `pytest` (dev-only, no está en `requirements.txt`; los scripts no lo n
 
 ## Principios de diseño
 
-1. **Sin red, sin binarios externos.** Todo lo que toca afuera se mockea: ADS/arXiv/Crossref/NEA
+1. **Sin red, sin binarios externos — y ahora es un ASSERT, no una convención.** La fixture autouse
+   `sin_red` (en `conftest.py`) intercepta toda petición HTTP, la **registra** y falla el test al
+   cerrarlo. Las dos mitades hacen falta: levantar la excepción sola no alcanza, porque el código de
+   producción degrada limpio ante un backend caído —conducta correcta allá— y se traga la guardia.
+   Esto vivía en prosa desde siempre y nadie la sostenía: medido con `cProfile` (#123), **cuatro
+   tests hacían peticiones reales** (OpenAlex, Unpaywall, arXiv, SIMBAD) y pasaban en verde. Cerrar
+   ese agujero bajó el tier 0 de **9,5 s a 6,7 s**.
+   Todo lo que toca afuera se mockea: ADS/arXiv/Crossref/NEA
    (`requests` / `astroquery`), y los subprocesos (`pdftotext`, `tesseract`, `defuddle`). Cada
    módulo recibe un namespace falso (`SimpleNamespace(run=...)`) en lugar del módulo real, así el
    parche no se filtra a otras libs. `time.sleep` se anula (los retries corren instantáneos).
@@ -147,7 +154,7 @@ los `from conftest import ...` de la suite vieja. Sólo se ve corriendo la suite
 
 ## Cuánto del lint vigila el corpus poblado (10.3)
 
-El lint tiene **59 categorías**; el generador sintético sabe sembrar **16 anomalías**, y
+El lint tiene **60 categorías**; el generador sintético sabe sembrar **16 anomalías**, y
 `test_conteos_exactos` puede afirmar *"reporta exactamente estos K, ni uno más"* sólo sobre esas.
 El resto queda cubierto de otra forma —el corpus limpio tiene que dar **cero en las 48** salvo tres
 declaradas (`test_el_corpus_limpio_da_cero_en_TODAS_las_categorias`)—, que detecta el falso positivo
@@ -162,7 +169,7 @@ alcance, tres fichas con la tabla `## Papers` desactualizada, tres registros sin
 porque el generador no emitía el schema vigente, y sobre ese ruido de fondo **ninguna anomalía
 sembrada era distinguible**.
 
-Los tres números (59 categorías, 16 anomalías, 4 de ruido declarado) **salen del código, no de acá**:
+Los tres números (60 categorías, 16 anomalías, 4 de ruido declarado) **salen del código, no de acá**:
 los cruza `test_conteos_exactos`, así que agregar una categoría al lint sin sembrarla deja el
 desbalance a la vista en vez de esconderlo.
 

@@ -487,6 +487,10 @@ def test_cascade_no_usa_term_slices_por_default(monkeypatch):
     llamado = []
     monkeypatch.setattr(d, "seed", lambda t, rows=200, min_citas=None: [{"doi": "10.1/a"}])
     monkeypatch.setattr(d, "seed_terms", lambda t, terms, **k: llamado.append(terms) or [])
+    # #123: `arxiv_terms` dispara el backend de arXiv, que hacía una petición HTTP REAL desde la
+    # suite. El test no mide eso —mide qué backends se llaman—, así que el doble es lo correcto.
+    import search_arxiv
+    monkeypatch.setattr(search_arxiv, "search", lambda q, rows=100: [])
     d.cascade(topic_id="T1", arxiv_terms=["noisy ICA"])
     assert llamado == [], "arxiv_terms NO debe disparar slices de OpenAlex"
 

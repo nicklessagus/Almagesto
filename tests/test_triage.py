@@ -612,3 +612,60 @@ def test_drop_core_borra_el_stub_que_solo_era_de_este_sujeto(toy_vault, capsys):
         encoding="utf-8")
     triage.drop_core("ica", ["2009Icar..201..504M"], "off-topic")
     assert not (cfg.PAPERS / "2009Icar..201..504M.md").exists()
+
+
+def test_el_candidato_sin_abstract_se_marca_en_el_listado(toy_vault, capsys, monkeypatch):
+    """#86: acá se está decidiendo si el paper entra, y uno sin abstract se juzgó con título +
+    keywords y nada más. Sin la marca, su veredicto se lee igual de firme que el de los demás.
+
+    @inv INV-110"""
+    linea = triage.row({"bibcode": "1968Old...1..1A", "title": "Photoelectric observations",
+                       "citation_count": 3, "facets": ["rv"], "sin_abstract": True})
+    assert "⚠sin-abstract" in linea
+    assert "⚠sin-abstract" not in triage.row(
+        {"bibcode": "2020New...1..1A", "title": "T", "citation_count": 3, "facets": ["rv"]})
+
+
+def test_prioridad_ordena_los_core_por_cuanto_del_objetivo_tocan(toy_vault, capsys, monkeypatch):
+    """#87: `classify()` calcula cuántas facetas del objetivo toca cada paper, lo persiste — y nadie
+    prioriza con eso. Un paper que toca 4 facetas y uno que toca la mínima para pasar el corte son
+    indistinguibles para el paso más caro de la cadena, que es la extracción.
+
+    Citas/año mide **atención de la comunidad**; el número de facetas mide **pertinencia a lo que
+    esta bóveda quiere saber**, que es la pregunta que la priorización tiene que responder. Y sale
+    gratis: ya está computada. Es además la única señal que no hereda el sesgo de edad de #79.
+
+    @inv INV-111"""
+    build = cfg.ROOT / "build" / "gp"
+    build.mkdir(parents=True, exist_ok=True)
+    (build / "ads.json").write_text(json.dumps({"records": [
+        {"bibcode": "2020Cuatro..1..1A", "title": "cuatro", "relevant": True,
+         "facets": ["rv", "actividad", "method", "gp"], "citation_count": 1},
+        {"bibcode": "2020Una.....1..1A", "title": "una", "relevant": True,
+         "facets": ["rv"], "citation_count": 900},
+        {"bibcode": "2020Dos.....1..1A", "title": "dos", "relevant": True,
+         "facets": ["rv", "gp"], "citation_count": 10},
+        {"bibcode": "2020NoCore..1..1A", "title": "fuera", "relevant": False,
+         "facets": [], "citation_count": 5000},
+    ]}), encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["triage.py", "gp", "--prioridad"])
+    triage.main()
+    out = capsys.readouterr().out
+    orden = [l for l in out.splitlines() if "2020" in l]
+    assert [l.split()[-2] if False else l for l in orden]  # legibilidad
+    assert orden[0].count("2020Cuatro") == 1, "primero el que más facetas toca"
+    assert "2020Una" in orden[2] or "2020Una" in orden[-1], "las citas no mandan acá"
+    assert not any("NoCore" in l for l in orden), "sólo los core: es la cola de EXTRACCIÓN"
+
+
+def test_tema_meta_resuelve_el_concept_y_tolera_una_estrella(toy_vault):
+    """`thesis_links` guarda el **`concept`**, no el slug, así que resolver la entrada del tema es
+    lo que hace que el retro-linkeo apunte a la nota que existe. Y sobre una estrella (o un slug que
+    no existe) devuelve `{}` en vez de explotar: los dos carriles del triage comparten este camino.
+
+    Sobrevivía a la mutación: romperla no ponía rojo ningún test."""
+    write_yaml(cfg.THEMES_YAML, {"gp": {"title": "GP", "area": "methods",
+                                        "concept": "procesos-gaussianos"}})
+    assert triage._tema_meta("gp").get("concept") == "procesos-gaussianos"
+    assert triage._tema_meta("test_star") == {}, "una estrella no es un tema: {} , no una excepción"
+    assert triage._tema_meta("no-existe") == {}

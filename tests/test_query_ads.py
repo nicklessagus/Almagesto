@@ -1680,3 +1680,30 @@ def test_excluidos_del_sujeto_solo_descartes(monkeypatch):
         "A": {"decision": "descartado", "origen": "sujeto", "motivo": "m"},
         "B": {"decision": "aceptado", "origen": "sujeto", "motivo": "m"}})
     assert set(qa.excluidos_del_sujeto("ica")) == {"A"}
+
+
+# ── #86 · un registro SIN abstract se juzga con menos información, y nada lo marca ───────────────
+
+def test_registro_sin_abstract_queda_marcado(toy_classifier):
+    """ADS no tiene abstract para buena parte de los escaneos viejos. Para esos papers la lente
+    opera sobre **título + keywords** y nada más — una fracción de la información con la que juzga
+    a los demás— y el veredicto sale igual de liso que cualquier otro.
+
+    El efecto es un sesgo sistemático contra lo pre-digital, y como los no-core **no se bajan**,
+    nunca vuelve a mirarse. Es el espejo exacto de #79, que sesga contra lo reciente.
+
+    @inv INV-110"""
+    r = qa.to_record({"bibcode": "1968Old...1..1A", "title": ["Photoelectric observations"],
+                      "doctype": "article"})
+    assert r["sin_abstract"] is True, "el registro declara que se juzgó sin abstract"
+
+    r2 = qa.to_record({"bibcode": "2020New...1..1A", "title": ["Starspot evolution"],
+                       "abstract": "we measure activity", "doctype": "article"})
+    assert r2["sin_abstract"] is False
+
+
+def test_sin_abstract_no_cambia_el_veredicto(toy_classifier):
+    """La marca es **información**, no una regla nueva: no mueve el corte core/no-core. Cambiarlo
+    haría que ser core dejara de ser función de `(paper, lente)` — INV-24."""
+    d = {"bibcode": "1968Old...1..1A", "title": ["Starspot evolution"], "doctype": "article"}
+    assert qa.to_record(d)["relevant"] is True

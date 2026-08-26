@@ -1220,7 +1220,22 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             # donde un `Low` entraba a la población que el recorte quería dejar afuera.
             relevancia = str(fm.get("relevance") or "").strip().lower()
             if relevancia == "high" and not fm.get("methods"):
-                incomplete.append((stem, "paper relevante sin methods (sin extraer)"))
+                # #90: dos situaciones OPUESTAS salían con el mismo mensaje — «bajado y nadie lo
+                # leyó» (trabajo del agente) y «nunca se pudo bajar» (trabajo del usuario: conseguir
+                # la fuente). Son colas distintas con dueños distintos, así que mezclarlas hace
+                # imposible priorizar o derivar. El residuo del resolver vivía en
+                # `build/<slug>/missing_pdf.json`, gitignored, y la nota quedaba muda.
+                # La verdad de disco alcanza y no hay que estampar nada: sin `.txt` y sin PDF, la
+                # fuente no está. Un `pending_source` declarado ya se reporta arriba, así que no se
+                # cuenta dos veces.
+                # @inv INV-112
+                if stem in fulltext or stem in pdf_on_disk or fm.get("pending_source"):
+                    incomplete.append((stem, "paper relevante sin methods (sin extraer)"))
+                else:
+                    incomplete.append(
+                        (stem, "paper relevante **sin fuente en disco** (ni `.txt` ni PDF): no es "
+                               "que falte leerlo, es que nunca se consiguió → conseguir el PDF, o "
+                               "declararlo con `pending`/`pending_motivo` para derivarlo"))
                 # D-13/INV-83: el sujeto de ese paper queda anotado; después del barrido se
                 # contrasta contra lo que el registro DECLARÓ haber leído.
                 # `stars` para estrellas y `thesis_links` para temas: la pertenencia de un paper
@@ -1392,6 +1407,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     stale_pairs: list = []
     old_verif_template: list = []
     verif_sin_archivo: list = []       # (stem, motivo) — #117: la fila no dice qué archivo leyó
+    verif_localizador: list = []       # (stem, motivo) — #122: el localizador contradice al prefijo
     for stem, texto in sorted(anchor_notes):
         filas = lb.parse_verif_table(texto)
         if filas is None:
@@ -1419,6 +1435,17 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                                f"verificó (`Hash fuente` sin prefijo `txt:`/`pdf:`) → "
                                f"`python scripts/make_notes.py --migrate-verif-archivo`"))
                     continue
+                # #122: el localizador de `Evidencia` y el prefijo dicen lo mismo desde ángulos
+                # distintos. Si discrepan, el hash vigila un archivo del que la cita no salió —
+                # se dispara en falso al re-extraer el `.txt` y no ve que el PDF cambió.
+                _locs = lb.locator_kinds(fila.evidence)
+                if _locs and _locs != {fila.source_kind} and len(_locs) == 1:
+                    _l = next(iter(_locs))
+                    verif_localizador.append(
+                        (stem, f"[[{fila.bibcode}]]: la evidencia cita "
+                               f"{'una PÁGINA' if _l == 'pdf' else 'una LÍNEA'} y la fila vigila "
+                               f"{'el `.txt`' if fila.source_kind == 'txt' else 'el PDF'} → "
+                               f"re-anclar a `{_l}:` o re-verificar el par"))
                 vigente = evidencia_hash_de(fila.bibcode, fila.source_kind)
                 que = "el PDF" if fila.source_kind == "pdf" else "el `.txt`"
                 if vigente is None:
@@ -2283,6 +2310,9 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('verif_sin_archivo', '⛔ Fila de verificación que no declara contra qué archivo se '
                   'verificó (#117): el hash no se puede comparar', SEV_BLOQUEANTE,
                   tuple(verif_sin_archivo)),
+        Categoria('verif_localizador', 'Localizador que contradice al archivo vigilado: la evidencia '
+                  'cita una página y la fila vigila el `.txt` (o al revés) (backlog)',
+                  SEV_BACKLOG, tuple(verif_localizador)),
         Categoria('stale_pairs', 'Pares de verificación vencidos' + (' (BLOQUEA: modo --cierre)' if cierre else ' (backlog: pasada periódica; con `--cierre` bloquea)'), SEV_CIERRE, tuple(stale_pairs)),
         Categoria('stale_verif', 'Verificación stale: la nota se editó después de su último verify-citations (backlog)', SEV_BACKLOG, tuple(stale_verif)),
         Categoria('artefactos_colgados', 'Capas colgadas: registro/raw/build de una entidad que ya no existe (INV-19, backlog)', SEV_BACKLOG, tuple(artefactos_colgados)),

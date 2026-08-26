@@ -82,6 +82,42 @@ def read_fm(path: Path) -> dict:
     return cfg.split_fm(path.read_text(encoding="utf-8"))
 
 
+# ── #123 · la promesa «sin red» pasa a ser un assert ─────────────────────────────────────────────
+# `tests/README.md` promete que todo lo que toca afuera se mockea. Vivía en prosa y en un docstring,
+# así que nadie la sostenía: medido con cProfile, un test de `ingest_theme` hacía DOS peticiones HTTP
+# reales (OpenAlex y Unpaywall, 1,5 s de los ~9,5 s del tier 0) y pasaba en verde porque las dos
+# fallaban con 404. Una suite que depende de la conexión no es determinista, y en CI pega contra
+# servicios de terceros.
+# Es autouse y global: la red no se "olvida de mockear" en un test nuevo, explota.
+class RedProhibida(RuntimeError):
+    pass
+
+
+@pytest.fixture(autouse=True)
+def sin_red(monkeypatch):
+    """Cualquier petición HTTP real desde un test explota **y queda registrada**.
+
+    ⚠ Las dos mitades hacen falta. Levantar la excepción sola no alcanza: el código de producción
+    está lleno de `except` que degradan limpio ante un backend caído —que es la conducta correcta
+    en producción— así que se traga la guardia y el test sigue en verde. Medido: con sólo la
+    excepción, el test que motivó #123 pasaba igual, nada más que rápido. El registro se chequea al
+    CERRAR el test, así que la violación sale a la luz la atrape quien la atrape."""
+    import requests
+    intentos: list = []
+
+    def _prohibido(self, method, url, *a, **k):
+        intentos.append(f"{method} {url}")
+        raise RedProhibida(
+            f"un test intentó salir a la red ({url!r}). La suite es determinista y offline "
+            f"(tests/README.md, principio 1): mockeá `requests` en ese camino — el `fake_run` "
+            f"sólo cubre los SUBPROCESOS, no las llamadas HTTP.")
+
+    monkeypatch.setattr(requests.sessions.Session, "request", _prohibido)
+    yield intentos
+    assert not intentos, ("este test salió a la red (y alguien se tragó la excepción):\n  "
+                          + "\n  ".join(intentos))
+
+
 @pytest.fixture
 def toy_vault(tmp_path, monkeypatch):
     """Árbol repo+vault temporal con config mínima; re-apunta lib_config entero."""

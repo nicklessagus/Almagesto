@@ -2169,6 +2169,10 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, theme: bool = F
             # KEYWORDS, así que re-clasificar desde una nota sin ellas daría un veredicto distinto
             # del que dio el ingest — un diff inventado.
             "keywords": cfg.as_list(r.get("keyword")),
+            # #86: este paper se clasificó SIN abstract (título + keywords y nada más). Va a la nota
+            # por el mismo motivo que las keywords (D-17): si muere en `build/`, que es gitignored,
+            # el diff de lente offline no puede saber con cuánta información se lo juzgó.
+            **({"sin_abstract": True} if r.get("sin_abstract") else {}),
             "methods": [],                 # poblar con extracción LLM
             "thesis_links": list(seed_links),  # tema: pre-sembrado al concept; estrella: vacío
             # ROL del paper dentro del tema/entidad (#73), poblado por la EXTRACCIÓN:

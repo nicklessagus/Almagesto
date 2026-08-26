@@ -26,6 +26,7 @@ import search_arxiv as sx
 CLAVES = {
     "bibcode", "title", "authors", "year", "pubdate", "abstract", "arxiv_id", "doi",
     "doctype", "bibstem", "citation_count", "keyword", "facets", "relevant", "why_excluded",
+    "sin_abstract",
 }
 
 _ATOM = """<feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">

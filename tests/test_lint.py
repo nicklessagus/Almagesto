@@ -490,11 +490,20 @@ def test_paper_extraido_sin_role_es_backlog(toy_vault, capsys):
     assert "paper extraído sin `role`" in out
 
 
+def _bajado(toy_vault, stem, slug="slug"):
+    """Deja el `.txt` del paper en disco: «bajado y nadie lo leyó», que desde #90 es una cola
+    distinta de «nunca se consiguió»."""
+    d = toy_vault.FULLTEXT / slug
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"{stem}.txt").write_text("texto legible del paper " * 20, encoding="utf-8")
+
+
 def test_paper_sin_extraer_no_se_le_pide_role(toy_vault, capsys):
     """El rol sale de leer el paper: pedírselo a uno que nadie extrajo sería el mismo hallazgo que
     "paper relevante sin methods", dos veces."""
     mk_note(toy_vault.PAPERS, "2020raw....1R",
             {"tags": ["paper"], "relevance": "high", "methods": [], "thesis_links": []}, "")
+    _bajado(toy_vault, "2020raw....1R")
     rc, out = run_lint(capsys)
     assert "paper relevante sin methods" in out
     assert "sin `role`" not in out
@@ -595,6 +604,7 @@ def test_paper_sin_extraer_no_entra_en_esta_categoria(toy_vault, capsys):
     relevante sin methods"): reportarlo en las dos sería el mismo hallazgo dos veces."""
     mk_note(toy_vault.PAPERS, "2020raw....1R",
             {"tags": ["paper"], "relevance": "high", "methods": [], "thesis_links": []}, "")
+    _bajado(toy_vault, "2020raw....1R")
     rc, out = run_lint(capsys)
     assert "paper relevante sin methods" in out
     assert "Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog) (0)" in out
@@ -1324,6 +1334,7 @@ def test_campos_incompletos(toy_vault, capsys):
     mk_note(toy_vault.PAPERS, "2020papA...1..1A",
             {"tags": ["paper"], "relevance": "high", "methods": [],
              "thesis_links": ["algo"], "bearing": None}, "")
+    _bajado(toy_vault, "2020papA...1..1A")
     mk_note(toy_vault.CONCEPTS / "methods", "algo", {"tags": ["methods"]}, "destino [[test_star]]\n")
     link_from_index(toy_vault, "algo")
     rc, out = run_lint(capsys)
@@ -2686,7 +2697,7 @@ def test_las_claves_de_categoria_son_unicas_y_estables(toy_vault):
     equivocada en silencio."""
     claves = [c.clave for c in lint.collect().categorias]
     assert len(claves) == len(set(claves)), [k for k in claves if claves.count(k) > 1]
-    assert len(claves) == 59, f"el reporte tiene {len(claves)} categorías, se esperaban 59"
+    assert len(claves) == 60, f"el reporte tiene {len(claves)} categorías, se esperaban 60"
 
 
 def test_el_modo_cierre_solo_cambia_el_exit_de_los_pares(toy_vault):
@@ -3252,3 +3263,59 @@ def test_unidad_de_cita_invalida_bloquea(toy_vault, capsys):
     link_from_index(toy_vault, "ica", "2001Libro")
     rc, rep = run_lint_reporte(capsys)
     assert "fuera del vocabulario" in rep and rc == 1
+
+
+def test_core_sin_pdf_no_se_confunde_con_sin_leer(toy_vault, capsys):
+    """#90: el lint reportaba **dos situaciones opuestas con el mismo mensaje**.
+
+    | situación | qué hay que hacer | dueño |
+    |---|---|---|
+    | bajado, con fulltext, nadie lo leyó | leerlo | el agente |
+    | nunca se pudo bajar | conseguir la fuente | el usuario |
+
+    Las dos salían como *«paper relevante sin `methods` (sin extraer)»*, así que el backlog mezclaba
+    trabajo del agente con fuentes que faltan: dos colas con dueños distintos, imposibles de
+    priorizar o derivar.  @inv INV-112"""
+    # bajado y sin leer: sigue siendo "falta extraerlo"
+    d = toy_vault.FULLTEXT / "slug"; d.mkdir(parents=True, exist_ok=True)
+    (d / "2020Leido..1..1A.txt").write_text("texto legible " * 40, encoding="utf-8")
+    mk_note(toy_vault.PAPERS, "2020Leido..1..1A",
+            {"tags": ["paper"], "stars": ["Estrella Test"], "relevance": "high"}, "")
+    # nunca se consiguió: sin fulltext y sin PDF
+    mk_note(toy_vault.PAPERS, "2020Falta..1..1A",
+            {"tags": ["paper"], "stars": ["Estrella Test"], "relevance": "high"}, "")
+    mk_note(toy_vault.STARS, "test_star", {"tags": ["star"], "slug": "test_star"}, "Ficha.\n")
+    link_from_index(toy_vault, "test_star", "2020Leido..1..1A", "2020Falta..1..1A")
+    _, rep = run_lint_reporte(capsys)
+    sin_fuente = [l for l in rep.splitlines() if "2020Falta" in l]
+    sin_leer = [l for l in rep.splitlines() if "2020Leido" in l]
+    assert any("sin fuente" in l for l in sin_fuente), \
+        "el que nunca se bajó se reporta como fuente faltante (cola del usuario)"
+    assert not any("sin fuente" in l for l in sin_leer), \
+        "el que está en disco y nadie leyó sigue siendo trabajo del agente"
+
+
+def test_localizador_que_contradice_al_archivo_vigilado(toy_vault, capsys):
+    """#122: `Evidencia` y `Hash fuente` dicen lo mismo desde ángulos distintos, y nada los cruzaba.
+
+    Una fila puede citar `p. 628` y vigilar el `.txt`: el hash cuida un archivo del que esa cita no
+    salió, se dispara en falso al re-extraerlo y no ve que el PDF cambió. Es el modo de falla de
+    #117 sobrevivido a #117 — medido, 11 de 114 filas de un concepto real.
+
+    Backlog y no bloqueante: el par puede estar perfectamente verificado; lo que hay que hacer es
+    re-anclarlo.  @inv INV-113"""
+    ft = _con_ancla(toy_vault, CUERPO)
+    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    t = nota.read_text(encoding="utf-8")
+    t = t.replace("| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente | Condición |",
+                  "| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |")
+    t = t.replace("|---|---|---|---|---|---|---|", "|---|---|---|---|---|---|---|---|")
+    t = t.replace("| soportada | ", '| soportada | "la cita" (p. 628) | ')
+    nota.write_text(t, encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    assert "cita una PÁGINA y la fila vigila el `.txt`" in rep
+    cat = lint.collect().por_clave("verif_localizador")
+    assert cat.severidad == lint.SEV_BACKLOG and len(cat) == 1, \
+        "backlog: el par puede estar bien verificado, lo que hay que hacer es re-anclarlo"
+    assert lint.collect().por_clave("stale_pairs").items == (), \
+        "y NO se cuenta además como vencido: es un hallazgo propio"

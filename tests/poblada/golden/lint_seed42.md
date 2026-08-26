@@ -123,6 +123,8 @@
 
 ## ⛔ Fila de verificación que no declara contra qué archivo se verificó (#117): el hash no se puede comparar (0)
 
+## Localizador que contradice al archivo vigilado: la evidencia cita una página y la fila vigila el `.txt` (o al revés) (backlog) (0)
+
 ## Pares de verificación vencidos (backlog: pasada periódica; con `--cierre` bloquea) (0)
 
 ## Verificación stale: la nota se editó después de su último verify-citations (backlog) (0)
@@ -166,15 +168,15 @@
 - 2021Alm00059A → paper relevante sin methods (sin extraer)
 - 2002Alm00058A → paper relevante sin methods (sin extraer)
 - 1996Alm00057A → paper extraído sin `role` (fundacional/aplicacion/arbitro) → sin rol, contrastarlo contra otro no está definido
-- 2021Alm00054A → paper relevante sin methods (sin extraer)
+- 2021Alm00054A → paper relevante **sin fuente en disco** (ni `.txt` ni PDF): no es que falte leerlo, es que nunca se consiguió → conseguir el PDF, o declararlo con `pending`/`pending_motivo` para derivarlo
 - 2016Alm00052A → paper relevante sin methods (sin extraer)
-- 2017Alm00049A → paper relevante sin methods (sin extraer)
+- 2017Alm00049A → paper relevante **sin fuente en disco** (ni `.txt` ni PDF): no es que falte leerlo, es que nunca se consiguió → conseguir el PDF, o declararlo con `pending`/`pending_motivo` para derivarlo
 - 2003Alm00046A → paper extraído sin `role` (fundacional/aplicacion/arbitro) → sin rol, contrastarlo contra otro no está definido
 - 2009Alm00044A → paper relevante sin methods (sin extraer)
 - 2018Alm00041A → paper relevante sin methods (sin extraer)
-- 2012Alm00040A → paper relevante sin methods (sin extraer)
+- 2012Alm00040A → paper relevante **sin fuente en disco** (ni `.txt` ni PDF): no es que falte leerlo, es que nunca se consiguió → conseguir el PDF, o declararlo con `pending`/`pending_motivo` para derivarlo
 - 2000Alm00039A → paper relevante sin methods (sin extraer)
-- 2014Alm00037A → paper relevante sin methods (sin extraer)
+- 2014Alm00037A → paper relevante **sin fuente en disco** (ni `.txt` ni PDF): no es que falte leerlo, es que nunca se consiguió → conseguir el PDF, o declararlo con `pending`/`pending_motivo` para derivarlo
 - 1997Alm00036A → paper relevante sin methods (sin extraer)
 - 2024Alm00033A → paper extraído sin `role` (fundacional/aplicacion/arbitro) → sin rol, contrastarlo contra otro no está definido
 - 2016Alm00030A → paper relevante sin methods (sin extraer)
@@ -182,7 +184,7 @@
 - 2006Alm00027A → paper relevante sin methods (sin extraer)
 - 2000Alm00026A → paper relevante sin methods (sin extraer)
 - 2015Alm00023A → paper relevante sin methods (sin extraer)
-- 2003Alm00021A → paper relevante sin methods (sin extraer)
+- 2003Alm00021A → paper relevante **sin fuente en disco** (ni `.txt` ni PDF): no es que falte leerlo, es que nunca se consiguió → conseguir el PDF, o declararlo con `pending`/`pending_motivo` para derivarlo
 - 2022Alm00018A → paper extraído sin `role` (fundacional/aplicacion/arbitro) → sin rol, contrastarlo contra otro no está definido
 - 2002Alm00017A → paper extraído sin `role` (fundacional/aplicacion/arbitro) → sin rol, contrastarlo contra otro no está definido
 - 1997Alm00015A → paper extraído sin `role` (fundacional/aplicacion/arbitro) → sin rol, contrastarlo contra otro no está definido
@@ -193,6 +195,6 @@
 - 2017Alm00008A → paper relevante sin methods (sin extraer)
 - 2013Alm00006A → paper relevante sin methods (sin extraer)
 - 2014Alm00002A → paper relevante sin methods (sin extraer)
-- 2015Alm00001A → paper relevante sin methods (sin extraer)
+- 2015Alm00001A → paper relevante **sin fuente en disco** (ni `.txt` ni PDF): no es que falte leerlo, es que nunca se consiguió → conseguir el PDF, o declararlo con `pending`/`pending_motivo` para derivarlo
 - star02 → sin P_rot: NEA no lo trae y el cuerpo no documenta uno citado → buscarlo en la literatura y dejarlo en la prosa con su `[[bibcode]]` (el frontmatter NO se rellena)
 - star01 → sin P_rot: NEA no lo trae y el cuerpo no documenta uno citado → buscarlo en la literatura y dejarlo en la prosa con su `[[bibcode]]` (el frontmatter NO se rellena)

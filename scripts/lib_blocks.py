@@ -97,6 +97,9 @@ class Row:
     # (plantilla anterior a 1.54.0), que **no** es lo mismo que `txt`: es «no consta», y el lint lo
     # trata como no evaluable en vez de asumir. Ver `split_source_ref`.
     source_kind: str | None = None
+    # #122: el texto de `Evidencia`. Lleva el LOCALIZADOR (`(L320)` / `(p. 628)`), que dice desde
+    # otro ángulo lo mismo que `source_kind` — y los dos pueden discrepar.
+    evidence: str = ""
 
 
 @dataclass(frozen=True)
@@ -150,6 +153,30 @@ def split_source_ref(cell: str) -> tuple[str | None, str]:
     if resto and kind.strip().lower() in SOURCE_KINDS:
         return kind.strip().lower(), resto.strip()
     return None, cell
+
+
+_LOC_PAGINA = re.compile(r"\bp{1,2}\.\s*\d+", re.I)     # `p. 628`, `pp. 12-14`
+_LOC_LINEA = re.compile(r"\bL\s?\d+\b")                  # `L320`, `L 320`
+
+
+def locator_kinds(evidencia: str) -> set:
+    """Qué tipo de localizador usa la celda `Evidencia`: `{"pdf"}`, `{"txt"}`, los dos, o vacío.
+
+    #122 — `Evidencia` y `Hash fuente` dicen lo mismo desde ángulos distintos: uno cita `p. 628` o
+    `L320`, el otro declara `pdf:` o `txt:`. Nada los cruzaba, así que una fila podía citar una
+    PÁGINA y vigilar el `.txt`: el hash cuida un archivo del que esa cita no salió. Es el modo de
+    falla de #117 sobrevivido a #117 — medido, **11 de 114** filas de un concepto real.
+
+    ⚠ El falso positivo obvio: una cita textual puede contener `p. 12` como parte de la prosa del
+    paper. Por eso esto **no** decide nada solo — el lint lo reporta como backlog para mirar, no
+    como veredicto."""
+    # @inv INV-113
+    out = set()
+    if _LOC_PAGINA.search(evidencia or ""):
+        out.add("pdf")
+    if _LOC_LINEA.search(evidencia or ""):
+        out.add("txt")
+    return out
 
 
 def bytes_hash(path: Path) -> str:
@@ -388,6 +415,7 @@ def parse_verif_table(text: str) -> list[Row] | None:
     i_ancla = _idx("ancla", default=4)
     i_hash = _idx("hash fuente", "hash", default=5)
     i_cond = _idx("condici", default=6)
+    i_evid = _idx("evidencia")            # opcional: la plantilla de 7 columnas no la trae
     out: list[Row] = []
     for ln in filas[1:]:
         if _SEP_ROW_RE.match(ln):
@@ -403,6 +431,7 @@ def parse_verif_table(text: str) -> list[Row] | None:
             continue
         bibs = _bibcodes(celdas[i_fuente]) or [celdas[i_fuente].strip("[]")]
         kind, h = split_source_ref(celdas[i_hash])
+        evid = celdas[i_evid] if i_evid is not None and i_evid < len(celdas) else ""
         out.append(Row(celdas[i_n], celdas[i_claim], bibs[0], celdas[i_verd],
-                       celdas[i_ancla], h, celdas[i_cond], kind))
+                       celdas[i_ancla], h, celdas[i_cond], kind, evid))
     return out
