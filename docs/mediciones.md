@@ -143,3 +143,35 @@ planteada, no si el modelo alcanza. Subir de modelo con la pregunta equivocada e
 *Cobertura declarada:* tres agentes murieron por límite de gasto (Sonnet lote 00, regla B lotes 08 y
 09) y no se relanzaron; los conteos salen del subconjunto común de 94, así que la comparación entre
 celdas es pareja.
+
+## Próximas pruebas (anotadas, no corridas)
+
+Salen de lo medido arriba y están ordenadas por lo que cuestan.
+
+1. **Haiku decidiendo la PROFUNDIDAD, no la exclusión.** El cribado como filtro no paga, pero la
+   variante sí puede: que el modelo barato **extraiga** los papers tangenciales en vez de decidir si
+   se leen. Así no se pierde ninguno —todo paper termina con nota— y el ahorro cae sobre el ~30 % del
+   corpus que es tangencial, no sobre el 14 % que el cribador logra separar; y el riesgo queda
+   acotado por construcción, porque si Haiku extrae de menos en un paper tangencial es que había poco
+   que extraer. **Barato de probar:** los 27 tangenciales de τ Ceti ya están extraídos con Opus, así
+   que basta correr Haiku sobre esos mismos y comparar qué se pierde.
+2. **`verify-citations` acotado sobre τ Ceti.** La ficha tiene 145 pares en 52 fuentes; las 6 fuentes
+   que sostienen las disputas y el inventario concentran 61 pares — ~1/8 del fan-out completo. Es lo
+   único que le falta a τ Ceti para cerrar (`lint --cierre` está en 1 sólo por eso).
+3. **Haiku en el fan-out de `verify-citations`.** Éste **sí** tiene gate: `bench_verify seed` +
+   `score` siembra citas falsas deterministas y mide el recall contra el 80 % medido con el modelo
+   actual. Es el único experimento de modelo de esta lista que es decidible.
+4. **El A/B de prompts sobre papers CON contenido.** El de hoy cayó en papers instrumentales con 4 y
+   14 valores chequeables contra 52; hay que repetirlo sobre los que tienen 15-25 valores.
+5. **Auditoría adversaria del diff de esta sesión.** Toca dos redes del propio framework (el gate de
+   mutación y el mapa de trazabilidad), o sea código que después juzga a todo lo demás.
+
+### Deuda declarada, no resuelta
+
+- **`tools/mutar.py` nunca se muta a sí mismo**: `archivos_del_diff` filtra por `scripts/`. El código
+  que decide qué se muta es el único que no se muta.
+- **La población del ratchet de mutación son 338 medidas + 5 contadas sin barrer**: el `--todo` no se
+  re-corrió.
+- **La corrida de τ Ceti no prueba el framework** sino la paráfrasis que el agente hizo de él. Desde
+  INV-100 el paso 3 es reproducible; antes no lo era, así que no hay línea de base con la que
+  comparar.
