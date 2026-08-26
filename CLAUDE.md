@@ -542,6 +542,46 @@ la cascada y **propone**; nunca clasifica.
 
 
 ### Ingest (una fuente → cascada de páginas)
+
+**El camino del texto, de punta a punta.** Es el mapa canónico de cómo un PDF se vuelve una cita
+verificable, y dónde se decide qué archivo lee cada capa:
+
+```
+1. fetch_pdf          →  raw/pdfs/<slug>/<bib>.pdf        (inmutable)
+
+2. extract_fulltext   →  pdftotext, y TRES chequeos deterministas sobre el texto:
+                           is_legible   ¿sirve?     no → OCR con tesseract
+                           is_garbled   ¿correcto?  sí → header «source: ocr»
+                           symbols_lost ¿completo?  sí → header «simbolos NO extraidos»
+                         escribe raw/fulltext/<slug>/<bib>.txt CON el header adelante.
+                         Una sola vez. Después nadie lo toca.
+
+3. make_notes         →  lee la 1ª línea del .txt y estampa en la nota del paper:
+                           fulltext_source: pdftotext | ocr | web
+                           symbols_lost: true         (sólo si es cierto)
+
+4. extractor (LLM)    →  lee el FRONTMATTER, no el .txt, para saber qué hacer:
+                           ocr o symbols_lost  →  abre el PDF y cita PÁGINA
+                           si no                →  lee el .txt y cita LÍNEA
+
+5. verify-citations   →  un subagente por fuente, misma regla del paso 4.
+                         Cada par verificado deja una fila con DOS hashes.
+```
+
+**Los tres chequeos del paso 2 son ejes independientes** y hacen falta los tres: `is_legible` mide
+**extraíble**, `is_garbled` mide **correcto**, `symbols_lost` mide **completo**. Los dos casos que
+motivaron el tercero dan garble **0.00** y pasan `is_legible` sin ruido.
+
+**Los DOS hashes del paso 5 responden preguntas distintas** — el **ancla** hashea el bloque de la
+**ficha** (se dispara si editás la nota) y el **hash de fuente** hashea el archivo que se **leyó**
+(se dispara si cambia la fuente sin que nadie toque la nota). El segundo apunta al `.txt`, o al
+**PDF** cuando la fuente está marcada `symbols_lost` — que es de donde salió la cita.
+
+⚠ **El `.txt` se reescribe en TRES casos y nada más**: `--force`, upgrade automático a OCR cuando
+aparece `tesseract`, y el backfill de las marcas. Por eso el hash de fuente es una alarma **rara**:
+cuando suena, hay algo. Y por eso una fila anclada al PDF **no** se vence cuando su `.txt` se
+re-extrae — su fuente real no se movió.
+
 1. Los **orquestadores** corren la cadena mecánica completa (idempotente, no pisa — con una única
    excepción add-only: el retro-linkeo de abajo): `python scripts/ingest_star.py <slug>` para estrellas,
    `python scripts/ingest_theme.py <slug>` para temas. **El orden canónico de cada cadena vive en el
@@ -797,10 +837,14 @@ escala—, y el vocabulario de acá ya es ese ternario.
 El **ancla** es el sha256 (10 hex) del **bloque markdown normalizado** que contiene la cita
 —párrafo / fila / ítem / blockquote—: reflowear la nota **no** la mueve, cambiar un número **sí**, y
 una fila sin `[[bibcode]]` propio hereda el del caption hasheando **los dos** bloques. El **hash de
-fuente** es el del `.txt` que se leyó, y es lo único que detecta que el PDF se **re-extrajo** y la
-fuente ya no dice lo mismo **sin que la nota se haya tocado**. Los dos los calcula
-`scripts/lib_blocks.py` (`pairs_of`, `source_hash`), el mismo código que después los chequea: no se
-escriben a ojo. ⛔ **Sin fila no hay dónde colgar el ancla** — colapsar las soportadas en un párrafo
+fuente** es el del archivo que se **leyó**, y es lo único que detecta que la fuente ya no dice lo
+mismo **sin que la nota se haya tocado**: normalmente el `.txt`, y el **PDF** cuando la fuente está
+marcada `symbols_lost` (#113) —porque de ahí salió la cita—. Anclar esas filas al `.txt` las marcaría
+vencidas cada vez que se re-extrae, cosa que el propio framework provoca (`--force`, upgrade a OCR,
+backfill de marcas), mientras la fuente real no se movió; y no vería que el PDF **sí** cambió. Los
+calcula `scripts/lib_blocks.py` (`pairs_of`, `source_hash` para el `.txt`, `bytes_hash` para el PDF —
+un PDF no es texto, y decodificarlo con `errors=replace` hace **colisionar** dos escaneos distintos),
+el mismo código que después los chequea: no se escriben a ojo. ⛔ **Sin fila no hay dónde colgar el ancla** — colapsar las soportadas en un párrafo
 de prosa y dejar en la tabla sólo las que fallaron deja al lint sin poder distinguir "verificada" de
 "nunca se miró".
 **La nota nace 100% verificada (D-5):** al armar una ficha o un concepto se verifica **todo**; el

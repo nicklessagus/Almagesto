@@ -845,6 +845,7 @@ def collect(cierre: bool = False) -> LintResult:
     corrections: list = []             # (stem, "<tipo> (<fecha>)") — corrección no-retractante (#52)
     pending_srcs: list = []            # (stem, "<motivo> — puntero") — fuentes derivadas al usuario
     symbols_lost_notes: list = []      # (stem, motivo) — #113: el .txt no tiene las ecuaciones
+    symbols_lost_bibs: set = set()     # bibcodes cuya evidencia se cita por PÁGINA del PDF
     impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
     # D-50: los genéricos + un patrón por consumidor declarado. Se arma UNA vez por corrida, no por
     # línea: el scan recorre el cuerpo de toda nota de la bóveda.
@@ -1152,6 +1153,7 @@ def collect(cierre: bool = False) -> LintResult:
                 # consumidor tiene que ver — `verify-citations` sobre estos papers cita PÁGINA del
                 # PDF, no línea del .txt, y una ecuación ausente del .txt no es una cita rota.
                 # Backlog, nunca bloqueante: el paper sigue siendo perfectamente citable.
+                symbols_lost_bibs.add(stem)
                 symbols_lost_notes.append(
                     (stem, "el `.txt` perdió el cuerpo de sus ecuaciones — para citar una fórmula "
                            "de este paper hay que abrir el PDF (la prosa sí es citable)"))
@@ -1283,6 +1285,16 @@ def collect(cierre: bool = False) -> LintResult:
     # (e) va aparte y bloquea sin `--cierre`: no es un par vencido, es un bloque que nadie puede
     # evaluar — reportarlo como "0 vencidos" sería el cero inventado que D-43 prohíbe.
     # @inv INV-78, INV-79
+    # #113/B-2: el archivo que vigila cada fuente. Por defecto su `.txt`; para las fuentes cuyo
+    # `.txt` perdió el cuerpo de las ecuaciones, el **PDF** — que es de donde sale la evidencia de
+    # esos pares («p. 628»). Sin esto la fila se marcaría vencida al re-extraer un `.txt` que no es
+    # su fuente, y no se enteraría si cambia el PDF que sí lo es.
+    evidencia_hash = dict(ft_hash)
+    for _bib in symbols_lost_bibs:
+        _pdf = pdf_on_disk.get(_bib)
+        if _pdf:
+            evidencia_hash[_bib] = lb.bytes_hash(Path(_pdf))
+
     stale_pairs: list = []
     old_verif_template: list = []
     for stem, texto in sorted(anchor_notes):
@@ -1299,10 +1311,15 @@ def collect(cierre: bool = False) -> LintResult:
                            if p.bibcode == fila.bibcode and p.anchor == fila.anchor), None)
             if exacto is not None:
                 pendientes.remove(exacto)
-                vigente = ft_hash.get(fila.bibcode)
+                # #113/B-2: si la fuente perdió el cuerpo de sus ecuaciones, la evidencia de sus
+                # pares es una PÁGINA del PDF y el archivo a vigilar es el PDF. Hashear el `.txt`
+                # ahí se dispara en falso al re-extraerlo (la fuente real no se movió) y no vigila
+                # el archivo del que sale la cita.
+                vigente = evidencia_hash.get(fila.bibcode)
                 if vigente is not None and fila.source_hash != vigente:
+                    que = "el PDF" if fila.bibcode in symbols_lost_bibs else "el `.txt`"
                     stale_pairs.append(
-                        (stem, f"[[{fila.bibcode}]] vencido **por fuente**: el `.txt` cambió desde "
+                        (stem, f"[[{fila.bibcode}]] vencido **por fuente**: {que} cambió desde "
                                f"la verificación ({fila.source_hash} → {vigente}) — re-verificar"))
                 continue
             # sin coincidencia exacta: ¿la nota sigue citando esa fuente en algún bloque? Entonces

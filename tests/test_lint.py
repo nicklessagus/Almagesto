@@ -1891,6 +1891,51 @@ def test_reemplazo_del_txt_marca_por_fuente(toy_vault, capsys):
     assert "por fuente" in rep
 
 
+def _fuente_sin_ecuaciones(toy_vault, bib="2020citC...1..1C"):
+    """Marca la fuente como #113 (símbolos perdidos) y le pone un PDF: su evidencia pasa a ser una
+    PÁGINA del PDF, así que el archivo a vigilar deja de ser el `.txt`."""
+    import lib_config as cfg
+    nota = toy_vault.PAPERS / f"{bib}.md"
+    t = nota.read_text(encoding="utf-8")
+    nota.write_text(t.replace("---\n", "---\nsymbols_lost: true\n", 1), encoding="utf-8")
+    (toy_vault.PDFS / "slug").mkdir(parents=True, exist_ok=True)
+    pdf = toy_vault.PDFS / "slug" / f"{bib}.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n contenido binario original \xff\n")
+    return pdf
+
+
+def test_symbols_lost_vigila_el_PDF_y_no_el_txt(toy_vault, capsys):
+    """#113/B-2: la evidencia de estos pares es «p. 628», no una línea del `.txt`.
+
+    Re-extraer el `.txt` NO debe marcarlos vencidos —su fuente real no se movió—, y es justo el
+    escenario que el propio framework provoca (`--force`, upgrade a OCR, backfill de marcas)."""
+    ft = _con_ancla(toy_vault, CUERPO)
+    pdf = _fuente_sin_ecuaciones(toy_vault)
+    # la fila tiene que nacer anclada al PDF, que es de donde salió la cita
+    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    nota.write_text(nota.read_text(encoding="utf-8").replace(
+        lb.source_hash(ft), lb.bytes_hash(pdf)), encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    assert _n_vencidos(rep) == 0, "nace verificada contra el PDF"
+
+    ft.write_text("otro texto re-extraido, el .txt cambio\n", encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    assert _n_vencidos(rep) == 0, "re-extraer el `.txt` no mueve la fuente real de estos pares"
+
+
+def test_symbols_lost_marca_cuando_cambia_el_PDF(toy_vault, capsys):
+    """La otra mitad: si cambia el archivo del que SÍ sale la cita, el par vence."""
+    ft = _con_ancla(toy_vault, CUERPO)
+    pdf = _fuente_sin_ecuaciones(toy_vault)
+    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    nota.write_text(nota.read_text(encoding="utf-8").replace(
+        lb.source_hash(ft), lb.bytes_hash(pdf)), encoding="utf-8")
+    pdf.write_bytes(b"%PDF-1.4\n un escaneo distinto \xfe\n")
+    _, rep = run_lint_reporte(capsys)
+    assert _n_vencidos(rep) == 1
+    assert "el PDF cambió" in rep, "el mensaje nombra el PDF, no el `.txt`"
+
+
 def test_fila_huerfana_se_marca(toy_vault, capsys):
     """La afirmación se borró y la fila quedó apuntando a la nada — el bloque afirma haber
     verificado algo que ya no está."""

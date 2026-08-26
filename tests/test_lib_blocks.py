@@ -335,3 +335,31 @@ def test_cuerpo_si_recorta_un_frontmatter_de_verdad():
     texto = "---\nbibcode: 2020A\n---\n\nAfirmación.\n"
     cuerpo, saltadas = lb._cuerpo(texto)
     assert "bibcode" not in cuerpo and "Afirmación." in cuerpo and saltadas == 2
+
+
+# ── bytes_hash: la evidencia que sale de un PDF (#113/B-2) ───────────────────────────────────────
+
+def test_bytes_hash_de_un_pdf_es_estable_y_sensible(tmp_path):
+    """Un PDF no es texto. Cuando el `.txt` de una fuente perdió el cuerpo de sus ecuaciones, la
+    evidencia de esos pares es una PÁGINA del PDF, así que el archivo a vigilar es el PDF."""
+    p = tmp_path / "paper.pdf"
+    p.write_bytes(b"%PDF-1.4\n\x00\x01\x02 binario que no es utf-8: \xff\xfe\n")
+    h = lb.bytes_hash(p)
+    assert len(h) == 10 and h == lb.bytes_hash(p)
+    p.write_bytes(b"%PDF-1.4\n\x00\x01\x03 otro contenido\n")
+    assert lb.bytes_hash(p) != h
+
+
+def test_bytes_hash_no_se_cae_con_bytes_no_utf8(tmp_path):
+    """`source_hash` decodifica con errors=replace, así que dos PDFs distintos podrían colisionar
+    tras la sustitución. `bytes_hash` mira los bytes crudos."""
+    a, b = tmp_path / "a.pdf", tmp_path / "b.pdf"
+    a.write_bytes(b"\xff\xfe")
+    b.write_bytes(b"\xff\xfd")
+    assert lb.bytes_hash(a) != lb.bytes_hash(b)
+
+
+def test_sha10_acepta_bytes_y_texto_en_el_mismo_espacio():
+    """Un solo espacio de hashes para los dos tipos de evidencia: una fila no puede confundir el
+    hash de un `.txt` con el de un PDF."""
+    assert lb.sha10("hola") == lb.sha10(b"hola")

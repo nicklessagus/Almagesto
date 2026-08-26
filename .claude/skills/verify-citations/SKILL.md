@@ -349,14 +349,23 @@ python -c "import sys;sys.path.insert(0,'scripts');import lib_blocks as lb;\
 [print(p.bibcode, p.anchor) for p in lb.pairs_of(open('vault/wiki/<nota>.md',encoding='utf-8').read())]"
 python -c "import sys;sys.path.insert(0,'scripts');import lib_blocks as lb;\
 print(lb.source_hash('vault/raw/fulltext/<slug>/<bibcode>.txt'))"
+# …salvo que la fuente esté marcada `symbols_lost` (#113): ahí la evidencia salió del PDF, así que
+# el hash es el del PDF — `bytes_hash`, no `source_hash` (un PDF no es texto, y decodificarlo con
+# errors=replace hace colisionar dos escaneos distintos).
+python -c "import sys;sys.path.insert(0,'scripts');import lib_blocks as lb;\
+print(lb.bytes_hash('vault/raw/pdfs/<slug>/<bibcode>.pdf'))"
 ```
 
 - **`Ancla`** — sha256 (10 hex) del bloque markdown normalizado que contiene la afirmación.
   Reflowear la nota **no** la mueve; cambiar un número **sí**. Una fila/ítem sin `[[bibcode]]`
   propio hereda el del caption y hashea **los dos** bloques.
-- **`Hash fuente`** — sha256 (10 hex) del `.txt` que leíste. Es lo que detecta que el PDF se
-  re-extrajo y la fuente ya no dice lo mismo, **sin que la nota se haya tocado** — ninguna medida
-  basada en fechas de la nota puede ver eso.
+- **`Hash fuente`** — sha256 (10 hex) del archivo que leíste. Es lo que detecta que la fuente ya
+  no dice lo mismo **sin que la nota se haya tocado** — ninguna medida basada en fechas de la nota
+  puede ver eso. Normalmente es el `.txt`; en una fuente marcada **`symbols_lost`** es el **PDF**,
+  porque de ahí salió la cita: anclarla al `.txt` la marcaría vencida cada vez que ese `.txt` se
+  re-extrae —cosa que el propio framework provoca (`--force`, upgrade a OCR, backfill de marcas)—
+  mientras la fuente real no se movió, y **no vería** que el PDF sí cambió. El lint compara contra
+  el archivo que corresponde y su mensaje nombra cuál.
 
 **Cerrá con `python scripts/lint.py --cierre`** (R-1): ahí un par vencido **frena la operación**,
 porque significa que no terminaste. Sin el flag es la pasada periódica y sólo reporta.

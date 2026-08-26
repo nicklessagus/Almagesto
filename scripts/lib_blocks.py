@@ -111,16 +111,30 @@ def normalize_ws(text: str) -> str:
     return _WS_RE.sub(" ", text).strip()
 
 
-def sha10(text: str) -> str:
+def sha10(text: str | bytes) -> str:
     """sha256 truncado a 10 hex. Puerta pública para que el llamador pase texto **ya leído**: el
     lint lee cada `.txt` para `is_legible` (77% de sus 5,6 s sobre 908 notas) y esa misma lectura
-    alimenta el hash de fuente. Sin esto, agregar el hash duplicaría la parte más cara del lint."""
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:10]
+    alimenta el hash de fuente. Sin esto, agregar el hash duplicaría la parte más cara del lint.
+
+    Acepta `bytes` para el caso del PDF (#113/B-2): el mismo espacio de hashes para los dos tipos de
+    evidencia, así una fila no puede confundir un hash de `.txt` con uno de PDF."""
+    return hashlib.sha256(text if isinstance(text, bytes) else text.encode("utf-8")).hexdigest()[:10]
 
 
 def source_hash(path: Path) -> str:
     """Hash del `.txt` de fuente. Cuando el texto ya está en memoria, usar `sha10` directo."""
     return sha10(Path(path).read_text(encoding="utf-8", errors="replace"))
+
+
+def bytes_hash(path: Path) -> str:
+    """Hash del archivo como BYTES. Para el PDF, que no es texto.
+
+    #113/B-2: cuando el `.txt` de una fuente perdio el cuerpo de sus ecuaciones, la evidencia de esos
+    pares es una PAGINA del PDF, no una linea del `.txt`. Hashear el `.txt` ahi hace dos cosas malas
+    y ninguna buena: se dispara en falso si el `.txt` se re-extrae (la fuente real no se movio) y no
+    vigila el archivo del que sale la cita.
+    """
+    return sha10(Path(path).read_bytes())
 
 
 def block_anchor(text: str, intro: str | None = None) -> str:
