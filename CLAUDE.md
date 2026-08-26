@@ -94,6 +94,30 @@ código**, dejá la cita de la fuente en un comentario junto al valor o decisió
 la usás para un **informe o paper**, citá la fuente correspondiente. Nunca propagar un número o una
 afirmación de la bóveda sin arrastrar su respaldo bibliográfico — ese es el punto de que esto exista.
 
+⛔ **Y antes de usar una afirmación, VALIDALA CONTRA LA FUENTE. No sintetices desde la ficha sola.**
+Al sacar un valor, una ecuación o un mecanismo de una nota para llevarlo a código, a un informe o a
+otra síntesis: abrí el `.txt` de su `[[bibcode]]` (`vault/raw/fulltext/**/<bibcode>.txt`) y confirmá
+que la fuente dice eso, **antes** de propagarlo. Es un chequeo por par, no una re-lectura del paper:
+grepeá la afirmación, mirá la línea, seguí.
+
+**Por qué, y no es paranoia — está medido.** La prosa de una ficha es **capa LLM** (lo dice su propia
+cabecera) y `verify-citations` es **juicio de LLM, no prueba**. En una sola operación de esta bóveda,
+sobre un concepto ya extraído y sintetizado, el fan-out encontró **13 defectos**: cuatro
+`no-soportada`, tres `contradice` y varias sobre-generalizaciones. **Siete eran de atribución** — el
+dato de un paper adjudicado a otro: Newton al paper de 1997 en vez del de 1999, una detección de
+agua al método en vez de a quien la reportó, «PCA vía SVD» a un paper que nunca dice SVD. Ninguno de
+esos errores es visible desde la ficha: se ven **sólo** abriendo la fuente.
+
+**Cómo, según lo que diga la nota del paper:**
+- por defecto → `.txt`, y citás **línea**;
+- `fulltext_source: ocr` → citable con salvedad; ante duda de **símbolos**, abrí el PDF;
+- `symbols_lost: true` (#113) → las ecuaciones **no están** en el `.txt`; abrí el PDF y citá
+  **página**. Grepear el `.txt` por esa fórmula no la va a encontrar, y su ausencia **no** significa
+  que la ficha esté mal.
+
+Si al validar encontrás una discrepancia, **no la arregles en silencio de tu lado**: es un hallazgo
+de la bóveda. Reportalo para que se corrija acá, o el próximo consumidor tropieza con lo mismo.
+
 **Test de admisión (aplicá a TODA línea de `vault/wiki/` — fichas, conceptos, queries, hipótesis, matrices,
 log):** *¿esto sale de una fuente (`vault/raw/`) y lo puedo respaldar con un `[[bibcode]]`, o es una
 conclusión derivada de fuentes citadas?* Si la respuesta es **no → no entra al vault.** Sin excepciones
