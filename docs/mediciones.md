@@ -144,34 +144,133 @@ planteada, no si el modelo alcanza. Subir de modelo con la pregunta equivocada e
 09) y no se relanzaron; los conteos salen del subconjunto común de 94, así que la comparación entre
 celdas es pareja.
 
+## 2026-08-25 (b) · Modelo chico como EXTRACTOR — 27 papers tangenciales de tau Ceti
+
+**Idea probada.** La prueba pendiente n.º 1 de este mismo documento: que el modelo barato **extraiga**
+los papers tangenciales en vez de decidir si se leen. Se corrió Haiku con el prompt canónico
+(`extraction_prompt.py`, o sea reproducible) sobre los 27 papers con `no_sintetizado` de tau Ceti, y un
+juez Sonnet por paper comparó contra la extracción Opus ya existente, arbitrando cada valor contra el
+`.txt`.
+
+| | Haiku vs Opus, 27 papers |
+|---|---|
+| Cobertura de valores | **108 / 344 = 31 %** |
+| Suficiencia por paper | 2 suficiente · 15 parcial · **10 insuficiente** |
+| Pérdidas juzgadas materiales | **85** |
+| Valores que Haiku trajo y Opus no | 5 reales · **6 falsos** |
+| Errores de anotación | 64 (9 línea, 9 segunda mano, 4 columna cruzada, 4 valor erróneo) |
+
+**Veredicto: no se adopta, y la premisa que lo justificaba era falsa.** La prueba se anotó diciendo que
+«el riesgo queda acotado por construcción, porque si extrae de menos en un paper tangencial es que
+había poco que extraer». No: extrajo el 31 % y 85 de las pérdidas son materiales. **«Tangencial a la
+estrella» no es «pobre»** — casi todos estos papers son `fundacional` de un método, y ahí vive su
+aporte. Haiku conserva el dato trivial sobre la estrella y tira el método entero (`role: []`,
+`methods: []`, ecuaciones, umbrales, régimen de validez).
+
+**Y fabrica.** Seis valores falsos verificados contra la fuente: atribuyó a tau Ceti una propiedad de
+HD 166620, inventó un jitter de 2,3 m/s multiplicando por un factor que el paper **divide**, inventó
+barras de error que la tabla no trae, y llamó «α enhancement» a la microturbulencia. Para una bóveda
+bibliográfica eso es peor que perder: un valor falso **con línea citada** pasa el lint.
+
+*A favor, y medido:* en 5 casos Haiku fue **mejor** que Opus (decimales de una figura que Opus
+redondeó, un rango de S/N que Opus leyó mal). El modelo chico no es ciego: es incompleto y a veces
+inventivo.
+
+### Lo que sí paga: Sonnet como extractor
+
+Mismo prompt canónico, mismos papers, brazo de control Opus corrido en paralelo para separar el efecto
+del modelo del efecto del prompt (el baseline viejo de tau Ceti es anterior a INV-100, o sea una
+paráfrasis).
+
+| | valores | 2.ª mano marcada | tokens | ×precio | **costo rel.** | wall-clock |
+|---|---:|---:|---:|---:|---:|---:|
+| Haiku | 18 (**33 %**) | 9 / 16 | 55 % | ÷5 | **11 %** | 19 % |
+| **Sonnet** | 42 (**78 %**) | **16 / 16** | 88 % | ÷2,5 | **35 %** | 76 % |
+| Opus (ref.) | 54 | 16 | 100 % | — | 100 % | 100 % |
+
+Subconjunto común de 5 papers. Sonnet recupera **16 de 16** atribuciones de segunda mano, el mismo
+número que Opus — la anotación que más caro sale perder, porque distingue «este paper lo midió» de
+«lo copió de otro». En el paper más denso del lote (Jofré 2015, 4947 líneas) Sonnet sacó **27 valores
+contra los 31 de Opus**; Haiku, 5, dos de ellos con columnas cruzadas.
+
+**Los tokens no bajan** (88 % de los de Opus): el `.txt` a leer es el mismo. El ahorro es precio
+unitario, no menos trabajo. En **tiempo** el ahorro es chico (76 %): si el cuello es la espera, la
+palanca es paralelizar (#104), no cambiar de modelo.
+
+*Cobertura declarada:* n = 5 papers, una sola corrida por celda, todos de una misma estrella. Alcanza
+para decidir probar, no para publicar el número.
+
+## 2026-08-25 (c) · A/B de prompts: las reglas de anotación de #103 no mueven la aguja
+
+**Idea probada.** La prueba pendiente n.º 4: el prompt canónico contra el mismo **sin los cuatro
+bullets de #103** (n.º de línea, régimen, tiempo verbal literal, segunda mano). El schema JSON queda
+**idéntico** en las dos ramas, así que mide exactamente lo que #103 agregó sobre lo que el schema ya
+nombra. 2 modelos × 2 prompts × 5 papers, esta vez sobre los papers **con contenido** (14-31 valores),
+que es el recorte que la prueba n.º 4 pedía.
+
+| celda | valores | c/línea | c/régimen | c/2.ª mano |
+|---|---:|---:|---:|---:|
+| Haiku · canónico | 10 | 100 % | 100 % | 30 % |
+| Haiku · sin reglas | 10 | 100 % | 100 % | 10 % |
+| Sonnet · canónico | 22 | 100 % | 100 % | 36 % |
+| Sonnet · sin reglas | 19 | 100 % | 95 % | 42 % |
+
+**Veredicto: nulo — no se toca `extraction_prompt.py`.** Sacar los cuatro bullets no cambió línea ni
+régimen (100 % en las cuatro celdas), **porque el schema ya nombra esos campos y eso alcanza**. La
+única diferencia es segunda mano (Haiku 30 % → 10 %), pero son 3 valores contra 1 sobre 10 y **Sonnet
+fue en la dirección contraria** (36 % → 42 %): es ruido, no señal.
+
+**La consecuencia es de método:** para una anotación que el schema puede nombrar como campo, más prosa
+en el prompt no agrega nada. La palanca es la misma que ya funciona para línea y régimen — **hacer el
+campo obligatorio y chequearlo**, o sea un detector, no una instrucción. Coincide con lo ya medido
+(RSOS 2025): pedir precisión en el prompt no mejora, y a veces empeora.
+
+*Cobertura declarada:* subconjunto **común a las cuatro celdas = 4 papers**; la celda Sonnet-canónico
+de Jofré no cerró antes de terminar la sesión, así que ese paper queda fuera del agregado (con él,
+Sonnet-sin-reglas sube a 46 valores, pero compararlo contra 22 sería atribución falsa). Una sola
+corrida por celda.
+
 ## Próximas pruebas (anotadas, no corridas)
 
-Salen de lo medido arriba y están ordenadas por lo que cuestan.
+Salen de lo medido arriba y están ordenadas por lo que cuestan. Las pruebas 1 y 4 de la lista anterior
+**ya se corrieron** el 2026-08-25 (ver los bloques (b) y (c)); las dos dieron negativo, y lo que salió
+a favor —Sonnet como extractor— quedó medido pero con n = 5.
 
-1. **Haiku decidiendo la PROFUNDIDAD, no la exclusión.** El cribado como filtro no paga, pero la
-   variante sí puede: que el modelo barato **extraiga** los papers tangenciales en vez de decidir si
-   se leen. Así no se pierde ninguno —todo paper termina con nota— y el ahorro cae sobre el ~30 % del
-   corpus que es tangencial, no sobre el 14 % que el cribador logra separar; y el riesgo queda
-   acotado por construcción, porque si Haiku extrae de menos en un paper tangencial es que había poco
-   que extraer. **Barato de probar:** los 27 tangenciales de τ Ceti ya están extraídos con Opus, así
-   que basta correr Haiku sobre esos mismos y comparar qué se pierde.
-2. **`verify-citations` acotado sobre τ Ceti.** La ficha tiene 145 pares en 52 fuentes; las 6 fuentes
+1. **`verify-citations` acotado sobre τ Ceti.** La ficha tiene 145 pares en 52 fuentes; las 6 fuentes
    que sostienen las disputas y el inventario concentran 61 pares — ~1/8 del fan-out completo. Es lo
    único que le falta a τ Ceti para cerrar (`lint --cierre` está en 1 sólo por eso).
-3. **Haiku en el fan-out de `verify-citations`.** Éste **sí** tiene gate: `bench_verify seed` +
+2. **Haiku en el fan-out de `verify-citations`.** Éste **sí** tiene gate: `bench_verify seed` +
    `score` siembra citas falsas deterministas y mide el recall contra el 80 % medido con el modelo
-   actual. Es el único experimento de modelo de esta lista que es decidible.
-4. **El A/B de prompts sobre papers CON contenido.** El de hoy cayó en papers instrumentales con 4 y
-   14 valores chequeables contra 52; hay que repetirlo sobre los que tienen 15-25 valores.
+   actual. Es el único experimento de modelo de esta lista que es decidible sin juez.
+3. **Confirmar Sonnet como extractor sin pagar otro barrido.** El bloque (b) mide n = 5 sobre una sola
+   estrella. El gate barato **no** es repetir el experimento: es correr el **próximo ingest real** con
+   Sonnet en el paso 3 y comparar su salida de `lint` y de `verify-citations` contra los números ya
+   pagados de HD 40307 (72 pares / 16 fuentes → 70 soportada, 2 no-soportada, 0 contradice). Si el
+   perfil de fallas no se mueve, el cambio se sostiene; si aparecen no-soportadas nuevas, se revierte.
+   Costo incremental: cero — ese ingest hay que correrlo igual.
+4. **Dos pasadas sobre el paper denso.** Idea del usuario, sin medir: si el modo de falla de Sonnet es
+   cobertura y no invención (que es lo que mostró el bloque (b): 0 valores falsos en los papers donde
+   hubo juez), entonces en un `.txt` grande dos corridas de Sonnet podrían cubrir más que una de Opus
+   y seguir costando menos (2 × 35 % = 70 %). **No probado**, y con un supuesto fuerte: que las dos
+   corridas se pierdan cosas **distintas**. Si se pierden las mismas, la segunda pasada no compra nada.
 5. **Auditoría adversaria del diff de esta sesión.** Toca dos redes del propio framework (el gate de
    mutación y el mapa de trazabilidad), o sea código que después juzga a todo lo demás.
 
 ### Deuda declarada, no resuelta
 
+- ⛔ **Falso negativo del `grep` que genera `extraction_prompt.py`.** El patrón `\bCet` **no matchea
+  `tauCet` pegado**, que es como los PDFs escriben el nombre en las filas de tabla — no hay borde de
+  palabra entre `tau` y `Cet`. Medido en Jofré 2015: las 21 filas de τ Cet de las Tablas A.1-A.10 y
+  B.1-B.10 son invisibles a los siete patrones que el contrato manda correr, y ahí vive **todo** el
+  contenido cuantitativo del paper. Lo detectaron por su cuenta dos extractores (Opus y Sonnet)
+  re-corriendo el grep sin `\b`. Es un defecto de `_anclado()` y aplica a cualquier estrella cuyo
+  nombre se pegue al prefijo en una tabla. La frontera existe por INV-100 (sin ella `Cet` matchea
+  «Princeton»), así que el arreglo no es sacarla: es emitir **las dos** variantes, anclada y pegada.
 - **`tools/mutar.py` nunca se muta a sí mismo**: `archivos_del_diff` filtra por `scripts/`. El código
   que decide qué se muta es el único que no se muta.
 - **La población del ratchet de mutación son 338 medidas + 5 contadas sin barrer**: el `--todo` no se
   re-corrió.
 - **La corrida de τ Ceti no prueba el framework** sino la paráfrasis que el agente hizo de él. Desde
   INV-100 el paso 3 es reproducible; antes no lo era, así que no hay línea de base con la que
-  comparar.
+  comparar. Los bloques (b) y (c) del 2026-08-25 **sí** usan el prompt canónico en las dos ramas, así
+  que esa deuda queda saldada para esas dos mediciones y sigue abierta para el baseline Opus original.
