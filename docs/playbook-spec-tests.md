@@ -66,10 +66,23 @@ defecto que ese ítem venía a cerrar.
    prohibición es el corazón del método: si el implementador puede aflojar el test que le molesta,
    volvimos al principio.
 
-5. **Verificación (árbitro).** No alcanza con la suite verde: hay que verificar que los tests **no
-   se aflojaron** — contar tests y aserciones antes/después, buscar `assert True`, `skip`, `xfail`
-   nuevos, aserciones reemplazadas por otras más débiles, y confirmar que cada `xfail` removido
-   corresponde a un test que hoy pasa de verdad.
+5. **Verificación (árbitro).** Dos cosas, y ninguna es «la suite está verde».
+
+   ⛔ **(a) El árbitro audita la cobertura ÉL MISMO, sin confiar en el reporte del agente.** Recorre
+   la spec **y el addendum**, requisito por requisito, contra los tests que hay. Que el agente de
+   tests audite su propia cobertura (paso 2) es necesario y **no suficiente**: el sesgo es el mismo
+   que el método ataca en todo lo demás —quien escribió los tests no es quien mejor ve lo que le
+   falta— y el hueco puede aparecer **después**, cuando el implementador agrega algo que la spec
+   pedía y nadie testeó.
+   **Medido acá (2026-08-26):** el agente de **implementación** reportó por escrito que el ítem 5b
+   se había implementado «sin test que lo cubra», y el árbitro **no actuó**. Quedó un skill cuyo
+   paso entero se podía borrar con la suite en verde. El reporte existía; faltó el paso del árbitro.
+   De ahí la regla operativa: leer el informe del implementador **buscando lo que reporta y nadie
+   acciona**.
+
+   **(b) Verificar que los tests no se aflojaron** — contar tests y aserciones antes/después, buscar
+   `assert True`, `skip`, `xfail` nuevos, aserciones reemplazadas por otras más débiles, y confirmar
+   que cada `xfail` removido corresponde a un test que hoy pasa de verdad.
 
 ## La regla que se adopta SIEMPRE, incluso fuera de un lote
 
