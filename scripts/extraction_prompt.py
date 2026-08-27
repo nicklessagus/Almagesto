@@ -175,10 +175,19 @@ def _symbols_note(slug: str, bibcode: str, texto: str) -> str:
     estado = ("el `.txt` vació el cuerpo de sus ecuaciones" if medido
               else f"no se pudo medir — {motivo}" if medido is None
               else "sin ecuaciones vaciadas, lo que NO prueba que los símbolos sobrevivieron")
-    regla = ("- ⛔ **El `.txt` no es fuente confiable para una ECUACIÓN.** Antes de transcribir "
-             f"cualquier fórmula, confirmala contra `{_pdf_rel(slug, bibcode)}` — `Read` lo "
-             "rasteriza, así que **ves** la ecuación. Vale siempre: el `.txt` puede haberla "
-             "vaciado, haberla dejado con el cuerpo **cambiado**, o no haberse podido medir.\n"
+    regla = ("- ⛔ **El `.txt` no es fuente confiable para una ECUACIÓN.** Toda fórmula **que "
+             "sostenga algo** —la del método, la del contraste, la condición de identificabilidad, "
+             "cualquiera que alguien vaya a codificar— se levanta del PDF, no del `.txt`: abrí "
+             f"`{_pdf_rel(slug, bibcode)}` (`Read` lo rasteriza, así que **ves** la ecuación) y "
+             "**anotá la página** junto a la fórmula. Una constante auxiliar citada al pasar no "
+             "necesita el viaje.\n"
+             "  El motivo es que el `.txt` puede haberla vaciado, haberla dejado con el cuerpo "
+             "**cambiado**, o no haberse podido medir — y **dos de los cuatro casos medidos se "
+             "veían perfectos**: `si = 1` por `si = ±1` y «model (8)» por «model (3)». Una "
+             "borradura no se ve.\n"
+             "  La página que anotes es lo que hace que la síntesis no tenga que repetir el "
+             "chequeo: si la fórmula llega al concepto sin página, alguien la va a tener que "
+             "volver a abrir.\n"
              f"  (Detector: {estado}.)\n")
     if not medido:
         return regla

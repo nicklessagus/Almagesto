@@ -235,6 +235,16 @@ Progreso del ingest del tema <tema>:
    <concept>` **o** `methods: <concept>`) se regenera con `python scripts/make_notes.py <slug> --theme`
    — no acumula solo. **Citar los papers clave por `[[bibcode]]`** en la prosa
    (además de trazabilidad, da links entrantes → no quedan huérfanos).
+   ⛔ **Una ECUACIÓN que va a la nota se levanta del PDF, no del `.txt`, y viaja con su página.**
+   El `.txt` puede haber vaciado la fórmula, haberla dejado con el cuerpo **cambiado** o no haberse
+   podido medir — y **dos de los cuatro casos medidos se veían perfectos**: `si = 1` donde el paper
+   dice `si = ±1` (el supuesto binario **es** el ±1) y «model (8)» donde dice «model (3)». Una
+   borradura no se ve, así que la regla no puede ser *«si se ve bien, copiala»*. Sí se acota por
+   **carga**: la ecuación del método, la del contraste o la condición de identificabilidad van al
+   PDF; una constante auxiliar citada al pasar, no.
+   Si la vista del paper ya trae la fórmula **con su página**, el chequeo está hecho y se copia con
+   esa procedencia. Si llega **sin** página, nadie la verificó: abrí el PDF acá.
+
    Dos secciones del template que **son de un concepto** y hay que llenar acá, no dejarlas vacías:
    - **`## Régimen de validez` (#74).** El modo de falla dominante de un concepto **no** es "dos
      números no coinciden" sino **generalizar de más**: el paper afirma X bajo condiciones C (SNR,

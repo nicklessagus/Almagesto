@@ -258,6 +258,16 @@ Progreso del ingest de <estrella>:
    sin abrir un paper. La red de que el contraste ocurrió es #75 (*extraído pero no sintetizado*):
    un paper que pagó la extracción y no aparece en la nota sale como backlog.
 
+   ⛔ **Una ECUACIÓN que va a la nota se levanta del PDF, no del `.txt`, y viaja con su página.**
+   El `.txt` puede haber vaciado la fórmula, haberla dejado con el cuerpo **cambiado** o no haberse
+   podido medir — y **dos de los cuatro casos medidos se veían perfectos**: `si = 1` donde el paper
+   dice `si = ±1` (el supuesto binario **es** el ±1) y «model (8)» donde dice «model (3)». Una
+   borradura no se ve, así que la regla no puede ser *«si se ve bien, copiala»*. Sí se acota por
+   **carga**: la ecuación del método, la del contraste o la condición de identificabilidad van al
+   PDF; una constante auxiliar citada al pasar, no.
+   Si la vista del paper ya trae la fórmula **con su página**, el chequeo está hecho y se copia con
+   esa procedencia. Si llega **sin** página, nadie la verificó: abrí el PDF acá.
+
 3c. > ⚠ **Un ítem de linaje = un BULLET propio, no una oración con seis citas.** Cuando enumeres
 > quién hizo qué —«PCA vía SVD [[A]], [[B]]; Wapiti [[C]], [[D]]; YARARA [[E]]»— dale a cada fuente
 > su propio bullet. Medido sobre cuatro rondas de verificación de un concepto real: **los 7
