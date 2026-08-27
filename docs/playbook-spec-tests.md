@@ -84,6 +84,23 @@ defecto que ese ítem venía a cerrar.
    `assert True`, `skip`, `xfail` nuevos, aserciones reemplazadas por otras más débiles, y confirmar
    que cada `xfail` removido corresponde a un test que hoy pasa de verdad.
 
+## Por qué la cobertura se audita DOS veces
+
+Las dos auditorías —la del agente de tests (paso 2) y la del árbitro (paso 5)— son **redes
+independientes**, no una redundante de la otra, y hay evidencia de que cada una atrapa cosas
+distintas:
+
+- **La del agente** ve lo que le falta a **su propia tanda de tests** frente a la spec, mientras
+  todavía tiene el detalle fresco. En un lote medido con este método aparecieron así **tres**
+  requisitos sin cubrir.
+- **La del árbitro** ve lo que aparece **después**: lo que el implementador agregó y nadie testeó, y
+  lo que el propio addendum sumó sin ítem numerado. En otro lote aparecieron así **dos** que la
+  auditoría del agente no podía haber visto, porque todavía no existían.
+
+⛔ **Y ninguna de las dos se sustituye por «contar tests» ni por «la suite está verde»**: los cinco
+huecos convivían con una suite entera en verde y con más tests que requisitos. Un requisito sin test
+no se manifiesta como rojo — se manifiesta como **nada**.
+
 ## La regla que se adopta SIEMPRE, incluso fuera de un lote
 
 ⛔ **El test tiene que fallar por la AUSENCIA DEL COMPORTAMIENTO, no por el andamiaje.**
