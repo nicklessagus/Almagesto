@@ -3268,9 +3268,12 @@ def test_migrate_vistas_marca_los_ambiguos_en_vez_de_elegir(toy_vault, capsys):
     assert "ambiguo" in capsys.readouterr().out.lower()
 
 
-def test_migrate_vistas_sin_fulltext_no_inventa(toy_vault, capsys):
-    """Sin `fulltext:` no hay de dónde derivar el sujeto. Se nombra la nota y no se toca."""
-    dest = _nota_schema_viejo(toy_vault, fulltext=None)
+def test_migrate_vistas_sin_fulltext_y_sin_reclamos_no_inventa(toy_vault, capsys):
+    """Sin `fulltext:` **y sin ningún reclamo** no hay absolutamente nada de donde derivar el
+    sujeto: se nombra la nota y no se toca. (Con un reclamo único sí se deriva — ver el test del
+    fallback más abajo; el que no se puede resolver es éste.)"""
+    dest = _nota_schema_viejo(toy_vault, fulltext=None,
+                              extra={"stars": [], "thesis_links": [], "methods": []})
     mn.migrate_all_vistas()
     assert "vistas" not in read_fm(dest)
     assert "2015old....1..1O" in capsys.readouterr().out
@@ -3292,3 +3295,39 @@ def test_migrate_vistas_no_toca_una_nota_ya_migrada(toy_vault, capsys):
     antes = dest.read_text(encoding="utf-8")
     mn.migrate_all_vistas()
     assert dest.read_text(encoding="utf-8") == antes
+
+
+def test_migrate_vistas_cae_al_reclamo_UNICO_cuando_no_hay_fulltext(toy_vault, capsys):
+    """Medido al migrar una bóveda real (Almagesto-Prueba, 2026-08-27): de las 54 notas que el
+    migrador no pudo tocar, **45 tenían un reclamo único**. Son papers cuyo texto nunca se
+    consiguió —no hay `fulltext:` de donde derivar— pero cuya nota la creó el ingest de UN sujeto,
+    y eso está escrito en `stars`/`thesis_links`. Con un solo sujeto reclamante no hay nada que
+    elegir: derivar de ahí no es adivinar. Sin este fallback, esas 45 quedaban bloqueadas para
+    siempre por un hueco del migrador, no por un defecto de la bóveda.
+
+    @inv INV-134"""
+    dest = _nota_schema_viejo(toy_vault, fulltext=None)      # stars: [Estrella Test], único
+    mn.migrate_all_vistas()
+    assert read_fm(dest)["vistas"] == [{"sujeto": "Estrella Test", "tipo": "star", "txt": None,
+                                        "fecha": None, "lente": None}]
+    assert "## Vista — Estrella Test" in dest.read_text(encoding="utf-8")
+
+
+def test_migrate_vistas_por_reclamo_unico_distingue_estrella_de_tema(toy_vault, capsys):
+    """El `tipo` sale del CAMPO en el que está el reclamo: `stars` → star, `thesis_links` → theme.
+    Es vocabulario cerrado y el lint lo valida, así que no se puede poner uno por defecto."""
+    dest = _nota_schema_viejo(toy_vault, stem="2016tem....1..1T", fulltext=None,
+                              extra={"stars": [], "thesis_links": ["gaussian-processes"]})
+    mn.migrate_all_vistas()
+    assert read_fm(dest)["vistas"][0]["tipo"] == "theme"
+    assert read_fm(dest)["vistas"][0]["sujeto"] == "gaussian-processes"
+
+
+def test_migrate_vistas_con_dos_reclamos_y_sin_fulltext_es_ambiguo(toy_vault, capsys):
+    """Contra-caso: con dos sujetos reclamantes vuelve a no haber de dónde derivar — se marca, no
+    se elige. Es la misma regla que con el `.txt` bajo varios slugs."""
+    dest = _nota_schema_viejo(toy_vault, fulltext=None,
+                              extra={"thesis_links": ["gaussian-processes"]})
+    mn.migrate_all_vistas()
+    assert "vistas" not in read_fm(dest)
+    assert "ambiguo" in capsys.readouterr().out.lower()

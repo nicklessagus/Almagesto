@@ -759,7 +759,28 @@ def migrate_vistas(dest) -> str:
         return ""
     ruta = str(fm.get("fulltext") or "").strip()
     if not ruta:
-        return "sin `fulltext:`: no hay de dónde derivar desde qué sujeto se leyó"
+        # Sin `fulltext:` no hay archivo del que derivar — pero la nota la creó el ingest de ALGÚN
+        # sujeto, y eso está escrito en `stars`/`thesis_links`. Con un solo reclamante no hay nada
+        # que elegir: derivar de ahí no es adivinar. Medido al migrar una bóveda real: de 54 notas
+        # intocables, 45 tenían reclamo único — sin este fallback quedaban bloqueadas para siempre
+        # por un hueco del migrador, no por un defecto de la bóveda. El `tipo` sale del CAMPO
+        # (vocabulario cerrado que el lint valida), y `txt` queda null: no se leyó de ningún lado.
+        reclamos = [(str(x).strip(), tipo)
+                    for campo, tipo in (("stars", "star"), ("thesis_links", "theme"))
+                    for x in cfg.as_list(fm.get(campo)) if str(x).strip()]
+        if len(reclamos) != 1:
+            return (f"sin `fulltext:` y con {len(reclamos)} reclamos: no hay de dónde derivar desde "
+                    f"qué sujeto se leyó (ambiguo)" if reclamos else
+                    "sin `fulltext:` y sin ningún reclamo: no hay de dónde derivar desde qué sujeto "
+                    "se leyó")
+        sujeto, tipo = reclamos[0]
+        import harvest_views as hv
+        hv.upsert_view(dest, {"sujeto": sujeto, "tipo": tipo, "txt": None,
+                              "fecha": None, "lente": None})
+        text = dest.read_text(encoding="utf-8")
+        ini = cfg.section_start(text, "## Extracción (LLM)")
+        cfg.write_text_atomic(dest, text[:ini] + f"## Vista — {sujeto}" + text[text.find("\n", ini):])
+        return ""
     slug = Path(ruta).parent.name
     stem = Path(ruta).stem
     otros = sorted({p.parent.name for p in cfg.FULLTEXT.glob(f"*/{stem}.txt")})
