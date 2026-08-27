@@ -137,7 +137,16 @@ python scripts/discover.py --resolve 10.1016/…           # ¿hay copia libre d
 python scripts/extraction_prompt.py <slug> <bibcode> [--theme] [--out-dir DIR]
                                     # arma el prompt del paso 3 (extracción) para UN par
                                     # (paper, sujeto). Es INV-100: las reglas del skill viajan
-                                    # generadas, no escritas de memoria en cada fan-out
+                                    # generadas, no escritas de memoria en cada fan-out.
+                                    # Pide UNA VISTA (#188), no «la extracción del paper»
+python scripts/harvest_views.py <slug> [--theme] [--force]
+                                    # COSECHA el fan-out: build/<slug>/extraccion/*.json → las
+                                    # notas. Estampa la vista (fecha · txt · lente), mergea
+                                    # methods/thesis_links/role add-only y escribe la sección
+                                    # mientras siga siendo la plantilla del stub. Es el único
+                                    # llamador de `is_extraction` (INV-103): un JSON de verify
+                                    # también trae `bibcode` y también es válido — cosechar a
+                                    # mano pisó 13 notas terminadas en silencio
 ```
 
 **Los cuatro cuadrantes de la curación** — aceptar/descartar × ADS/off-ADS, y ninguno queda mudo:
@@ -201,6 +210,7 @@ python scripts/make_notes.py --restamp-keywords   # D-17: `keywords:` desde buil
 python scripts/make_notes.py --restamp-pdf-links  # #47: el link [📄 PDF] ↔ frontmatter `pdf`
 python scripts/make_notes.py --sync-mirror        # #70: campos espejo de NEA que quedaron en null
 python scripts/make_notes.py --migrate-verif-archivo # #117: prefija cada `Hash fuente` con `txt:`/`pdf:`
+python scripts/make_notes.py --migrate-vistas     # #188: `## Extracción (LLM)` sin scope → una VISTA
 python scripts/make_notes.py --rename-paper VIEJO NUEVO   # D-19: ciclo preprint → publicado
 ```
 
