@@ -130,7 +130,7 @@ flowchart TD
         T2 -->|off-ADS| T5 --> T6
     end
 
-    S6 --> L["EXTRACCIÓN LLM<br/>leer fulltext → poblar papers/ → sintetizar la nota viva"]
+    S6 --> L["EXTRACCIÓN LLM · una VISTA por sujeto (#188)<br/>leer fulltext → harvest_views → poblar papers/ → sintetizar la nota viva"]
     T6 --> L
     L --> V["verify-citations → lint → log → commit"]
 ```
@@ -207,12 +207,18 @@ paper. El roll-up junta por `thesis_links` (y por `methods` si el área es `meth
 
 En la nota de **paper**: la metadata (bibcode, autores, año, doi, `citation_count`, `pdf`,
 `fulltext`, `fulltext_source`, `pdf_source`) la estampan los scripts por **verdad de disco**; el LLM
-llena `methods`, `thesis_links`, `role` y la sección `## Extracción`. ⛔ **`bearing` es schema viejo
+llena `methods`, `thesis_links`, `role` y —desde #188— **una VISTA por sujeto**: la entrada en
+`vistas[]` (`sujeto`/`tipo`, más `fecha`/`txt`/`lente` que estampa `harvest_views.py`) y su
+sección `## Vista — <sujeto>`. La sección única `## Extracción (LLM)` es **schema viejo y el lint
+la bloquea**: sin el scope, el silencio de la nota
+sobre un eje no se distingue de «se miró y no hay nada». El migrador era de **un solo uso**, ya se
+usó y se borró (regla de schema nuevo: migrador de un uso + detector bloqueante, y el detector
+queda); la salida escrita para una nota vieja es declarar la vista a mano. ⛔ **`bearing` es schema viejo
 y el lint lo BLOQUEA** (D-21; migrador: `make_notes.py --migrate-bearing`): la *postura* respecto de
 una tesis no vive en el paper —depende de la tesis, y un paper puede tocar varias— sino en la tabla
-de evidencia de la hipótesis, donde va con cita y `verify-citations` puede chequearla. **`role`**; el
-segundo, **qué tipo de aporte es** — `fundacional` (introduce el método) · `aplicacion` (lo instancia
-en un caso) · `arbitro` (resuelve una tensión previa). El rol es el que define **cómo se contrasta**
+de evidencia de la hipótesis, donde va con cita y `verify-citations` puede chequearla. Lo que **sí**
+vive en el paper es **`role`**: **qué tipo de aporte es** — `fundacional` (introduce el método) ·
+`aplicacion` (lo instancia en un caso) · `arbitro` (resuelve una tensión previa). El rol es el que define **cómo se contrasta**
 un paper contra otro: fundacional↔aplicación no es contraste sino instanciación, y leerlo como
 desacuerdo fabrica disputas falsas (#73). Los **bullets** de esa
 sección los ramifica el stub por **tipo de sujeto**: para una estrella, el ground-truth (P/K/e por

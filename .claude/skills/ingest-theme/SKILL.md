@@ -27,7 +27,9 @@ del repo.
 **Copiá este checklist al chat al arrancar y andá tildándolo** — el retro-tag (3b), el contraste
 (3c) y la verificación (6b) se saltean sin dejar rastro. El lint tiene red para **6b** (*sin
 verificar* / *verificación stale*, #56) y para lo que la síntesis dejó afuera (*extraído pero no
-sintetizado*, #75 — que es también la red del contraste de 3c); para **3b** no hay red:
+sintetizado*, #75 — que es también la red del contraste de 3c) y para lo que **3b** deja
+reclamado y sin leer (*reclamado sin vista*, #188 — backlog, se cierra con la vista o con
+`no_vista` + motivo):
 
 ```
 Progreso del ingest del tema <tema>:
@@ -35,7 +37,7 @@ Progreso del ingest del tema <tema>:
 - [ ] 1  consulta co-diseñada con el usuario (o `sources:` si es off-ADS)
 - [ ] 1b (tema de MÉTODO) `facet:` propia acordada — y `fundacional_min_citas` si va
 - [ ] 2  cadena mecánica (ingest_theme.py) — sin abortos
-- [ ] 3  extracción LLM de los papers clave del tema
+- [ ] 3  extracción LLM (una VISTA por paper) de TODOS los core (o recorte declarado en el registro) + `harvest_views.py --theme`
 - [ ] 3b retro-tag por grep de aliases sobre el corpus pre-existente
 - [ ] 3c contraste cross-paper (inventario por eje)
 - [ ] 4  síntesis del concept durable (+ régimen de validez / disputes)
@@ -267,7 +269,7 @@ Progreso del ingest del tema <tema>:
 6b. **Verificar citas.** Correr el skill `verify-citations` sobre el **concept** (y las notas de paper
    nuevas). El concept es dual-audiencia e implementation-ready: cada afirmación con `[[bibcode]]`
    —definiciones, ecuaciones, rangos, signos— debe estar respaldada por el fulltext (cita textual +
-   nº de línea del `.txt`; sin respaldo ⇒ no-soportada). Resolver cada no-soportada/parcial (bajar a lo
+   nº de línea del `.txt`; sin respaldo ⇒ no-soportada). Resolver cada no-soportada/contradice (bajar a lo
    que dice la fuente, reasignar la cita, o marcar `inferencia`) y dejar el bloque `## Verificación de citas`.
 
 7. **Cierre (commit + push).** Tras la verificación (`python scripts/lint.py --cierre <slug>` en 0 — #121: el

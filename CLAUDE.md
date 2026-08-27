@@ -1369,9 +1369,10 @@ de cumplir en silencio es peor que una que nunca hizo* (corolario de las cinco r
 la regla tiene casa y red, o no es una regla.
 
 La red es `tests/test_idioma_codigo.py` con ratchet en `tools/idioma-ratchet.yaml`: cuenta los
-símbolos en castellano de `scripts/` + `tools/` (hoy **46** sobre el árbol entero) y **sólo puede
+símbolos en castellano de `scripts/` + `tools/` (hoy **45** sobre el árbol entero — el número lo da
+`simbolos_en_castellano()`, no esta prosa) y **sólo puede
 bajar**; además, un nombre que no esté en la lista `conocidos` pone el test en rojo **aunque el
-total no suba**, que es lo que impide que la deuda rote. Los 46 son deuda declarada, no un rojo —
+total no suba**, que es lo que impide que la deuda rote. Los 45 son deuda declarada, no un rojo —
 exigir cero sería rojo permanente, y un rojo permanente se deja de mirar. Renombrarlos rompería
 marcas `@inv` y los punteros de `docs/trazabilidad.md` sin arreglar nada.
 
@@ -1431,7 +1432,7 @@ también para los scripts de una sola operación. Detalle y ratchets en
 
 7. **Idioma** — `pytest tests/test_idioma_codigo.py`: un símbolo **nuevo** con nombre en castellano
    pone el test en rojo, aunque el total no suba. Ver *Convención de idioma del código* arriba: la
-   regla existía desde el 2026-08-24 y **nadie la vigilaba**, con 46 símbolos de resultado.
+   regla existía desde el 2026-08-24 y **nadie la vigilaba**, con 46 símbolos de resultado (hoy 45).
 
 Las 2, 5 y 7 corren solas en tier 0. El motivo de la regla: en la sesión que la produjo, **los bugs
 los encontraron agentes leyendo el código, no la suite** — y cada hallazgo era decidible, o sea que

@@ -9,7 +9,8 @@
 # ⚠ POR QUÉ EXISTE ESTE ARCHIVO. Hasta el issue #156 la convención no vivía en ningún documento
 # versionado (sólo en la bitácora interna, gitignored) y no la vigilaba nadie. Medido en la pasada
 # `/auditar` del 2026-08-27: de 237 funciones nuevas desde que se decidió, 30 tienen nombre en
-# castellano — y sobre el ÁRBOL ENTERO son 46, y `discover.py` —creado dos días antes de la medición— nació con 6 docstrings en
+# castellano — y sobre el ÁRBOL ENTERO eran 46 al medir (el conteo VIGENTE lo da el test, hoy 45 =
+# el techo de abajo), y `discover.py` —creado dos días antes de la medición— nació con 6 docstrings en
 # castellano de 17. Una promesa que el sistema dejó de cumplir en silencio es peor que una que nunca
 # hizo, y la salida no es un barrido de renombres (rompería wikilinks y marcas `@inv` por nada) sino
 # un ratchet: la deuda queda declarada y sólo puede achicarse.

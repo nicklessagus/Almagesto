@@ -39,7 +39,11 @@ saltea sin decirlo es el mismo modo de falla que el "0 que no miró" (ver abajo)
 >   tier a **4,75 s** sin tocar nada más;
 > - el resto es piso por test (~4 ms de tmpdir por `toy_vault`) × ~1000 tests;
 > - o sea que **el costo por test BAJÓ** desde que se escribió el techo (2,5 s / 400 ≈ 6 ms/test
->   entonces, 4,7 ms/test hoy). Lo que creció es la cantidad.
+>   entonces, 4,7 ms/test en esa medición). Lo que creció es la cantidad.
+>
+> **Re-medido el 2026-08-27**: 1438 tests en ~7,9 s → **5,5 ms/test**. La tasa sigue bajo el techo
+> (≤ 8 ms/test) y el que se está agotando es el **absoluto**: quedan ~2 s de los 10. La cantidad
+> volvió a crecer (~1000 → 1438) y el costo por test subió respecto de 2026-08-24.
 >
 > **Tier 1 pasó de ≤ 90 s a ≤ 120 s, y es una decisión, no un trámite.** Medido: 55 s → 91 s en la
 > misma sesión, y el crecimiento es **cobertura real**, no grasa — el generador pasó de sembrar 7
@@ -135,7 +139,7 @@ Requiere `pytest` (dev-only, no está en `requirements.txt`; los scripts no lo n
 | `test_fetch_ground_truth.py` | `msini_earth` (física), `_val`, selección de masa y flags en `fetch_planets`, idempotencia de `main()` | `astroquery` falso vía `sys.modules` |
 | `test_extract_fulltext.py` | `is_legible` (umbrales), flujo pdftotext→OCR (fallback, upgrade automático, ya-OCR no reintenta), degradación limpia | `subprocess`/`shutil` falsos |
 | `test_fetch_web.py` | `clean_markdown` (determinista), `snapshot_date_of`, header del snapshot, reuso de fecha, `CITEKEY_RE` | `defuddle` mockeado |
-| `test_make_notes.py` | stubs (star/concept/paper/web), migración de `disputes` a posiciones explícitas (#71: materializa el polo implícito, degrada sin destruir), `extraction_block` ramificado por tipo de sujeto (unitario + matriz de ramas), retro-linkeo add-only, `unpend_note`, `excluded_table` (escapes), puntero de búsqueda en la cabecera, `pdf_source` (eprint vs publicado), idempotencia | puro FS |
+| `test_make_notes.py` | stubs (star/concept/paper/web), migración de `disputes` a posiciones explícitas (#71: materializa el polo implícito, degrada sin destruir), `vista_block` ramificado por tipo de sujeto (#188 lo renombró desde `extraction_block`: la sección es `## Vista — <sujeto>`; unitario + matriz de ramas), retro-linkeo add-only, `unpend_note`, `excluded_table` (escapes), puntero de búsqueda en la cabecera, `pdf_source` (eprint vs publicado), idempotencia | puro FS |
 | `test_triage.py` | carga y persistencia de decisiones en el registro versionado (sin mergear el `triage.json` viejo), `--drop` y `--drop-source` (motivo obligatorio, carriles que no se pisan), listado sin `ads.json`, `--migrate` del `triage.json` legacy, contrato con `query_ads.load_triage` | puro FS |
 | `test_extraction_prompt.py` | INV-100: el prompt del fan-out de extracción se **genera**, no se escribe a mano. Patrones de búsqueda por tipo de sujeto (abreviatura astronómica vs sigla de tema), caveat de dos columnas y salvedad de OCR **sólo cuando aplican**, ruta de salida por bibcode, y que el prompt **no suplique exactitud** (RSOS 2025: pedirla la duplica) | fixtures sintéticos |
 | `test_multicolumn_matching.py` | invariantes de la estrategia de matcheo en `.txt` a dos columnas (#44/#46): escalera de acortamiento, canaleta, normalización que empalma columnas | fixtures sintéticos |
@@ -144,6 +148,7 @@ Requiere `pytest` (dev-only, no está en `requirements.txt`; los scripts no lo n
 | `test_ingest_theme.py` | despacho por `source`, validaciones de `sources:`, flujo `pending`, aviso de fuente ya descartada, copia de PDFs, orden de la cadena ads | `run()` y `make_notes.*` grabadores |
 | `test_ingest_star.py` | orden canónico de la cadena de estrellas, aborto al primer fallo, retracción ≠ fallo, hand-off que nombra los pasos salteables | `run()` grabador |
 | `test_trace_invariants.py` | recolector de trazabilidad `@inv`: registro canónico desde `docs/contrato.md` §3, la marca sólo en comentario/docstring (adversarios: mención en prosa, `@inv` dentro de un string literal, auto-marcado del propio recolector), marca huérfana bloqueante, ratchet, contrato ilegible ⇒ rc 2 sin cero inventado | repo de juguete |
+| `test_harvest_views.py` | el cosechador del fan-out (#188/#191): `is_extraction` como primera compuerta (INV-103), estampado de la vista con `fecha`/`txt`/`lente`, merge add-only de `methods`/`thesis_links`/`role`, la sección sólo mientras sea la plantilla del stub | puro FS |
 | `test_bench_verify.py` | extracción de pares (excluye blockquotes/fences/bloque de verificación), siembra por rotación (sin falsos-falsos), determinismo byte a byte, puntaje | puro FS |
 
 ### `tests/poblada/` — la capa de corpus (tiers 1 y 2)
@@ -271,7 +276,7 @@ nota no puede cambiar si no cambió lo que afirma; el registro tiene que crecer 
 **La red 5 creció el 2026-08-24, porque tenía el mismo agujero que perseguía**: validaba que el
 *script* existiera, no que el *flag* existiera — y `CLAUDE.md` mandaba a correr
 `make_notes.py --restamp-keywords`, un flag que el issue que lo prometió nunca implementó. Hoy son
-**nueve** chequeos (cuatro nuevos):
+**catorce** chequeos (`grep -c '^def test_' tests/test_docs_ejecutables.py`):
 
 | Chequea | Qué agujero cerró |
 |---|---|
@@ -284,11 +289,18 @@ nota no puede cambiar si no cambió lo que afirma; el registro tiene que crecer 
 | ningún estado del contrato se inventa por fila | tres filas evadían `parcial` con un paréntesis ad-hoc |
 | los conteos del encabezado son los de las filas | un resumen escrito a mano que envejece solo |
 | la doc no apunta al código **por número de línea** | los siete punteros de `contrato.md` apuntaban al renglón equivocado, uno a otro invariante |
+| el diagrama de la cadena de `docs/ingesta.md` respeta el orden canónico | el diagrama ponía `extract_fulltext` antes de `make_notes` y omitía `check_retractions` |
+| todo script que la doc invoca como comando tiene `main()` | `citation_index.py` corría, no imprimía nada y salía 0 sin construir el índice |
+| el alcance de hipótesis (D-34) tiene invariante propio, no el prestado | el mapa atribuía mal e inflaba «con implementación marcada» |
+| la plantilla del bloque de verificación no tiene columna de **grado** | `Score` 0–10 reintroducía el eje que `parcial` había dejado |
+| la plantilla que publica la doc la parsea el mismo código que la chequea | ocho columnas en la doc, posiciones fijas 4 y 5 en el parser → `--cierre` en rojo permanente |
 
-**Cuándo**: 2, 5 y 7 corren solas en tier 0. **La 1 (mutación) NO se corre salvo pedido
-explícito** (decidido 2026-08-27: ~1 h el barrido completo; ver la cadencia en `CLAUDE.md`). La 4, al cerrar un issue. **La 1, al escribir cada función
-nueva** — es la única que cuesta (una corrida de suite por función) y la única que distingue "el
-test pasa" de "el test **podría** fallar".
+**Cuándo**: 2, 5 y 7 corren solas en tier 0. La 4, al cerrar un issue. **La 1 (mutación) NO se
+corre salvo pedido explícito** (decidido 2026-08-27: ~1 h el barrido completo; ver la cadencia
+en `CLAUDE.md`) — es la única que cuesta (una corrida de suite por función) y la única que
+distingue "el test pasa" de "el test **podría** fallar", y por eso su suspensión está fechada y
+declarada en vez de ser un olvido. ⚠ Hasta esta corrección la misma frase decía las dos cosas:
+«NO se corre salvo pedido» y «al escribir cada función nueva».
 
 **Cómo se leen los ratchets** (`tools/mutacion-ratchet.yaml`, `tools/cobertura-ratchet.yaml`): son
 **deuda medida**, no objetivos. El número sólo baja; subirlo hay que justificarlo en el commit. Un

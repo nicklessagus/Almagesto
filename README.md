@@ -103,23 +103,25 @@ skill `setup` traduce tu foco (en palabras) a `relevance.facets` (los buckets qu
 > (`query_ads.py --probe`, no baja nada):
 > ```
 >   50 papers · 41 CORE · 9 no-core
->   costo proyectado de leer el core: ~24k tokens (41 × 6k, mediana del corpus)
+>   costo proyectado de leer el core: ~984k tokens (41 × 24k, mediana del corpus)
 >   regla de combinación vigente: OR (≥1 faceta cualquiera) → 41 CORE.
 >   Si declararas una faceta-eje obligatoria (relevance.require) el corte sería:
 >     require: [rv]            →    41 CORE  (−0%)
 >     require: [activity]      →     9 CORE  (−78%)
 >
->   ¿FALTA UNA FACETA? Términos que se repiten entre los no-core y que ninguna faceta cubre:
+>   ¿FALTA UNA FACETA? Términos que se repiten entre los no-core y que ninguna faceta matchea:
 >       4×  bisector span
 >       3×  line profile
->     → si alguno es pertinente a tu foco, es una FACETA nueva (cambia la lente, no la query)
+>     → si alguno es pertinente a tu foco, es una FACETA nueva (cambia la estructura de la
+>       lente y el efecto de `min_facets`), no un sinónimo que le falta a una faceta que ya
+>       existe. Son ediciones distintas.
 >
 >   CORE (todos, por citas)  [tópicos que matchearon]:
->   [CORE]   812  2019A&A...624A..49B    Stellar activity and radial-velocity jitt...  «rv,activity»
->   [CORE]   333  2015MNRAS.452.2269R    Gaussian-process modelling to disentangle...  «rv,activity,method»
+>   [CORE]   812  2019A&A...624A..49B  Stellar activity and radial-velocity jitter  «rv,activity»
+>   [CORE]   333  2015MNRAS.452.2269R  Gaussian-process modelling to disentangle st  «rv,activity,method»
 >
 >   no-core (top 9 de 9, chequeo de sanidad):
->   [—   ]   210  2021AJ....161..183W    A catalogue of nearby M dwarfs  «(ninguno)»
+>   [—   ]   210  2021AJ....161..183W  A catalogue of nearby M dwarfs  «(ninguno)»
 > ```
 > Afina la regex e itera hasta que el corte cierre → te deja `vault/config/objective.yaml` listo.
 
@@ -185,7 +187,8 @@ de actividad).
 agente o un script (`teff_K`, `P_rot_days`, `planets[]` con P/K/e/m·sini, `methods_applied`; cuando
 dos fuentes discrepan sobre un eje se suma `disputes`, con una posición por fuente). Abajo, fuera de
 cuadro, la prosa destilada de los papers y los **tres** roll-ups que el ingest materializa
-(`## Papers`, `## Planetas` y `## Métodos aplicados`): son tablas estampadas, no bloques Dataview —
+(`## Papers`, `## Planetas (ground-truth NASA Exoplanet Archive)` y
+`## Métodos aplicados a esta estrella`): son tablas estampadas, no bloques Dataview —
 un agente que abre el `.md` tiene que ver los **resultados**, no el código de una query cuyo plugin
 ni siquiera está versionado.
 La captura es de una instancia de julio: el schema creció desde entonces (ver el backlog de capturas

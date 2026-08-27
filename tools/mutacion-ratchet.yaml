@@ -9,7 +9,8 @@ medido_en: "2026-08-27"
 alcance: "TODO `scripts/` — 416 funciones, barrido completo (`--todo --ratchet`, 1.68.0, pasada /auditar del 2026-08-27 + su tanda de fix)"
 techo: 3
 
-# ⚠ EL TECHO SUBIÓ DE 7 A 10, Y NO ES UNA REGRESIÓN — es la primera medición sobre el árbol
+# ⚠ NOTA HISTÓRICA (2026-08-24, cuando `techo` valía 10 — hoy vale 3, ver arriba).
+# EL TECHO SUBIÓ DE 7 A 10, Y NO ES UNA REGRESIÓN — es la primera medición sobre el árbol
 # ENTERO. El 7 se había medido sobre 268 funciones y el campo `alcance` lo llamaba "la mayor parte
 # de scripts/": faltaban 60, entre ellas `openalex.py` completo. Las tres que "aparecen" nunca
 # estuvieron en la población anterior, así que 7 y 10 no son comparables — son dos mediciones de

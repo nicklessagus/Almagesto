@@ -173,7 +173,7 @@ Los pasos 4–9 corren **sólo si el usuario pide archivar**:
 7. **Verificar citas**: correr el skill `verify-citations` sobre la nota de hipótesis (y, si tocaste
    prosa con citas en otra ficha/concepto, sobre eso también). Chequea afirmación por
    afirmación contra el fulltext (cita textual + nº de línea del `.txt` obligatorios; sin respaldo
-   textual ⇒ no-soportada). Resolver cada no-soportada/parcial (bajar, reasignar cita, o marcar
+   textual ⇒ no-soportada). Resolver cada no-soportada/contradice (bajar, reasignar cita, o marcar
    `inferencia`) y dejar el bloque `## Verificación de citas`. **Las filas de la tabla de evidencia
    son pares como cualquier otro** y entran al fan-out: la postura de cada paper tiene que reflejar
    lo que el texto **realmente** dice, y ahí es donde se comprueba. El veredicto global no entra —

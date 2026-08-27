@@ -269,8 +269,13 @@ a favor —Sonnet como extractor— quedó medido pero con n = 5.
   «Princeton»), así que el arreglo no es sacarla: es emitir **las dos** variantes, anclada y pegada.
 - **`tools/mutar.py` nunca se muta a sí mismo**: `archivos_del_diff` filtra por `scripts/`. El código
   que decide qué se muta es el único que no se muta.
-- **La población del ratchet de mutación son 338 medidas + 5 contadas sin barrer**: el `--todo` no se
-  re-corrió.
+- ~~**La población del ratchet de mutación son 338 medidas + 5 contadas sin barrer**: el `--todo` no
+  se re-corrió.~~ **Saldada**: `tools/mutacion-ratchet.yaml` declara hoy `medido_en: 2026-08-27`,
+  alcance *«TODO `scripts/` — 416 funciones, barrido completo (`--todo --ratchet`)»* y `techo: 3`.
+  ⚠ Lo que **no** se puede re-medir es si 338+5 y 416 son el mismo universo contado distinto o dos
+  universos: son mediciones de árboles distintos y la regla es declarar la discrepancia (método #5).
+  ⚠ Y desde el 2026-08-27 el gate **no corre solo** (ver la cadencia en `CLAUDE.md`), así que el
+  ratchet envejece por decisión declarada, no por olvido.
 - **La corrida de τ Ceti no prueba el framework** sino la paráfrasis que el agente hizo de él. Desde
   INV-100 el paso 3 es reproducible; antes no lo era, así que no hay línea de base con la que
   comparar. Los bloques (b) y (c) del 2026-08-25 **sí** usan el prompt canónico en las dos ramas, así

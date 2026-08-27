@@ -15,7 +15,8 @@ procesa. Trabajar desde la raíz del repo.
 fáciles de saltear y **ninguno deja rastro si se omite**. El lint tiene red para **2c** (*triage
 pendiente*, #55), para **5b** (*sin verificar* / *verificación stale*, #56) y para lo que la
 síntesis del paso **3c** dejó afuera (*extraído pero no sintetizado*, #75 — que es también la red
-del contraste de **3b**); para **2b** no hay red todavía:
+del contraste de **3b**) y para **2b** (*barrido full-text sin rastro*, #88 — el registro del
+sujeto no tiene `barridos`):
 
 ```
 Progreso del ingest de <estrella>:
@@ -137,7 +138,7 @@ Progreso del ingest de <estrella>:
    No curar en silencio: lo descartado queda con motivo, y lo que quede sin decidir se anota en el `log`.
    **El lint tiene red (#55):** lo que quede en `candidates` sale como backlog *Triage pendiente* —
    antes el aviso vivía sólo en este stdout y el ingest podía cerrarse "en 0" con cientos sin
-   juzgar. Sin `build/` local, el lint cae al `busqueda` del registro versionado y reporta el
+   juzgar. Sin `build/` local, el lint cae a `busquedas` del registro versionado y reporta el
    snapshot con su fecha (#51/#64), así que la red ya no depende de la máquina — pero el conteo del
    snapshot es el de la última corrida de la cadena, no el vigente.
 
@@ -320,7 +321,7 @@ Progreso del ingest de <estrella>:
    debe estar respaldada por el fulltext (cita textual + nº de línea del `.txt`; sin respaldo ⇒
    no-soportada). Prioridad: las afirmaciones que **cambian cómo se lee una señal RV** y las
    `disputes` (cada `posiciones[].value` y el `note` vs el paper que la sostiene; la posición
-   `{source: ground_truth}` no se verifica contra papers). Resolver cada no-soportada/parcial (corregir el valor,
+   `{source: ground_truth}` no se verifica contra papers). Resolver cada no-soportada/contradice (corregir el valor,
    reasignar la cita, o marcar `inferencia`) y dejar el bloque `## Verificación de citas`.
 
 6. **Cierre (commit + push).** Tras la verificación (lint en 0), `git add` de los archivos

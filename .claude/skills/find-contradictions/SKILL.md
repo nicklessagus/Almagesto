@@ -77,16 +77,18 @@ Juntar, para el eje elegido, qué afirma **cada** paper sobre **cada** hecho:
   sólo por `thesis_links` pierde la mitad del eje: las dos llaves viven en papers distintos. Ejes: signo de una correlación, magnitud de
   un lag/desfasaje, mecanismo propuesto, régimen de validez.
 
-> **Cómo juntar esos papers sin Obsidian.** La tabla `## Papers` de la ficha es un bloque
-> ```dataview```: un agente que abre el `.md` ve el **código de la query, no sus resultados**. El
-> equivalente determinista (canónico en `CLAUDE.md`) **parsea el frontmatter con el parser del
-> tooling** — `grep`/`awk` fallan acá porque las listas conviven en dos formas (bloque al crear la
+> **Cómo juntar esos papers sin Obsidian.** La tabla `## Papers` de la ficha es **estampada**
+> desde 1.35.0 (D-10/D-11, `make_notes.stamp_papers_table`) y refleja el universo de la última
+> corrida de `make_notes.py <slug>`, así que puede estar vieja (el lint lo reporta como backlog).
+> Para recalcularla ahora, el equivalente determinista (canónico en `CLAUDE.md`) **parsea el
+> frontmatter con el parser del tooling** — `grep`/`awk` fallan acá porque las listas conviven en dos formas (bloque al crear la
 > nota, flow style `stars: [x]` tras el retro-linkeo add-only) y además confunden `GJ 71` con
 > `GJ 710`:
 > ```bash
 > python -c "import sys,glob;sys.path.insert(0,'scripts');import lib_config as c;[print(f) for f in sorted(glob.glob('vault/wiki/papers/*.md')) if '<nombre>' in (c.split_fm(open(f,encoding='utf-8').read()).get('stars') or [])]"
 > ```
-> (para un concepto, misma línea con `thesis_links` en vez de `stars`).
+> (para un concepto, la población es la **unión** `methods ∪ thesis_links` (D-24): la misma línea
+> dos veces, una por llave, y se unen los resultados — quedarse con una sola pierde la mitad).
 >
 > ⚠ **Mirá el estado de cada fuente ACÁ, en el andamiaje** (no en el fan-out: el subagente del paso 2
 > tiene prohibido leer otra cosa que los dos `.txt`, y esto vive en el frontmatter de la nota):

@@ -55,6 +55,11 @@ Progreso del refresh de <entidad>:
    motivo; dudoso → al usuario). Ver paso 2c del skill `ingest-star`.
 2. **Identificar lo nuevo:** `git status` sobre `vault/wiki/papers/` muestra los stubs recién creados. Leer
    **sólo esos** fulltext y hacer su extracción (methods/`role`/thesis_links/P·K/indicadores).
+   ⛔ **Es UNA VISTA del sujeto que se está refrescando (#188)**, no «la extracción del paper»:
+   la nota declara `vistas: [{sujeto, tipo, fecha, txt, lente}]` y lleva su `## Vista — <sujeto>`.
+   Armá el prompt con `python scripts/extraction_prompt.py <slug> <bibcode> [--theme]` y cosechá
+   con `python scripts/harvest_views.py <slug> [--theme]`, que estampa `fecha`/`txt`/`lente` y
+   mergea add-only. La incoherencia `vistas[]` ↔ cuerpo es **bloqueante** en el lint.
    ⚠ **`bearing` NO va en la nota del paper** (D-21): la postura respecto de una tesis depende de la
    tesis —un paper puede tocar varias— y vive en la **tabla de evidencia de la hipótesis**, con cita
    textual, donde `verify-citations` la puede chequear. En el paper es un veredicto sin evidencia y
@@ -207,8 +212,9 @@ martes cualquiera no frena nada útil; el gate es el cierre de la operación que
   | la fuente **no está** en la bóveda (hay que bajarla) | skill `append-knowledge` |
   | la fuente **ya está**; falta extracción + síntesis | **acá** |
 
-  Procedimiento: leer el `.txt` (un subagente por paper, como en `ingest-star`), poblar `methods`/
-  `role`/`thesis_links`, contrastar contra el `## Inventario por eje` de la nota destino, sintetizar
+  Procedimiento: leer el `.txt` (un subagente por paper, como en `ingest-star` — el prompt lo arma
+  `extraction_prompt.py` y la cosecha la hace `harvest_views.py`), poblar `methods`/`role`/
+  `thesis_links` y **la vista del sujeto** (`vistas[]` + `## Vista — <sujeto>`, #188), contrastar contra el `## Inventario por eje` de la nota destino, sintetizar
   **en su lugar** (no una sección nueva), y re-estampar la tabla `## Papers` con
   `python scripts/make_notes.py <slug>` para que el estado de cada paper deje de mentir. Si un paper
   legítimamente no se inlinea, declarar `no_sintetizado: <motivo>` en su nota — con motivo, como
@@ -248,7 +254,7 @@ martes cualquiera no frena nada útil; el gate es el cierre de la operación que
   **una sola** posición no es un desacuerdo (va a la prosa citada), y una `ref` colgante es un typo
   de bibcode o un paper sin ingestar.
 - **Extraído pero no sintetizado** (#75) → el paper pagó el paso más caro y su contenido nunca llegó
-  a una ficha ni a un concepto. Releer su `## Extracción` y decidir: si aporta algo al sujeto,
+  a una ficha ni a un concepto. Releer su `## Vista — <sujeto>` (schema #188; en una nota sin migrar, su `## Extracción (LLM)`) y decidir: si aporta algo al sujeto,
   **sintetizarlo** en la nota viva (rige la regla de poda) y cerrar con `verify-citations`; si
   legítimamente no se inlinea —tangencial, o aporta sólo vía roll-up—, declararlo en la nota del
   paper con `no_sintetizado: <motivo>`. La marca **sin motivo** vuelve a reportarse: mismo criterio

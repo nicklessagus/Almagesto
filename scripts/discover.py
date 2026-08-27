@@ -304,16 +304,22 @@ def cascade(*, ads_query: str | None = None, arxiv_terms: list | None = None,
     backend knows nothing about your theme" unless the failure is stated. Callers must print it.
 
     `term_slices` (opt-in) adds one OpenAlex text-search slice per term inside the topic. It is off
-    by default because it was measured, not assumed: on the real corpus it added 217 candidates and
-    recovered 1 of the 18 hand-curated papers. Use it for a narrow term, where it does pay.
+    by default because of its TRIAGE COST, not because it underperforms (#107): measured on the
+    real corpus it takes recall from **7/18 to 13/18** and the candidate universe from **776 to
+    2521**. That trade is decided per theme. ⚠ The first measurement said *"217 candidates, 1
+    recovery"* and is **retracted**: it was an artifact of a 15-row-per-term cap — see the
+    `rows_por_termino` note in `seed_terms`.
 
     ⚠ **Declared limit of automated discovery** (#107, measured): the specialist mid-tail of a
     method topic is unreachable by any citation-ranked axis. Cardoso 2002, Davies 2004, Cichocki
     1998, Voss 2013, Pfister 2019 and Pan 2022 all sit at **11-72 citations** inside a topic of
     169,977 works, and the axes that do contain them ("who cites the canon" ∩ topic) return
     **3,467-5,270** candidates — worse than useless, because the triage cost exceeds the benefit.
-    That population is what months of hand curation are good at. This is a boundary to state, not
-    a gap to close: what the framework can do is make each hand-curated entry record why it entered
+    The axis that DOES reach that mid-tail is `term_slices` (text slice inside the topic), at the
+    cost stated above. What stays outside automated discovery is narrower and of one shape:
+    chapters and proceedings, and papers whose title/abstract uses none of the theme's terms. That
+    population is what months of hand curation are good at. This is a boundary to state, not a gap
+    to close: what the framework can do is make each hand-curated entry record why it entered
     (`extra_core` with `via`/`motivo`, or `sources`), and that it already does.
 
     Returns candidates. It does NOT classify — see the module docstring, contract 1."""

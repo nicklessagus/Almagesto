@@ -12,6 +12,12 @@ El fan-out de `verify-citations` sobre una ficha real (2026-08-25, HD 40307: 68 
 devolvió **54 soportada / 11 parcial / 3 contradice / 0 no-soportada**. Cero `no-soportada` significa
 que **no se inventó nada**; los 14 defectos fueron de otro tipo:
 
+⚠ **`parcial` ya no es un veredicto** (se eliminó en 1.39.0 — `lib_blocks.VERDICTS` es
+`soportada | no-soportada | contradice | no verificable por extracción`). Los números de acá son la
+medición **tal como se hizo el 2026-08-25** y se conservan por eso; hoy lo que era `parcial` se
+descompone en `soportada` **con la `condición` poblada** (la columna nueva) o en `no-soportada`
+cuando la cita no toca el contenido distintivo. Ver `verify-citations/reference/historia-veredictos.md`.
+
 | Mecanismo | Casos | Ejemplo real |
 |---|---:|---|
 | **Cita de segunda mano** — se lee A, que cita a B, y el número se guarda como de B | 3 | «≈12,1 m/s/dex» atribuido a Lovis: está en Díaz **citando** a Lovis, y no aparece en el `.txt` de Lovis |

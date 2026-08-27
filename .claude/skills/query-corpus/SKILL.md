@@ -59,7 +59,7 @@ usar `test-hypothesis`).
 
 5. **Verificar citas (si se archivó en `vault/wiki/`)**: correr el skill `verify-citations` sobre la nota
    archivada — chequea afirmación por afirmación contra el fulltext (cita textual + nº de línea del
-   `.txt` obligatorios; sin respaldo textual ⇒ no-soportada). Resolver cada no-soportada/parcial
+   `.txt` obligatorios; sin respaldo textual ⇒ no-soportada). Resolver cada no-soportada/contradice
    (bajar la afirmación a lo que dice la fuente, reasignar la cita al bibcode correcto, o marcar
    `inferencia`) y dejar el bloque `## Verificación de citas` en la nota.
 

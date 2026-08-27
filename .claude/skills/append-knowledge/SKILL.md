@@ -26,7 +26,7 @@ salteables, y ampliar una nota ya verificada deja su bloque stale si no se re-co
 Progreso del append de <fuente> → <destino>:
 - [ ] 1 destino confirmado + tipo de fuente clasificado
 - [ ] 2 plomería mínima (extra_core / sources: / piezas sueltas) — fulltext extraído
-- [ ] 3 extracción LLM enfocada en el eje del destino
+- [ ] 3 extracción LLM enfocada en el eje del destino (= la VISTA del destino, #188)
 - [ ] 4 síntesis a la nota viva (regla de poda; disputes con posiciones / régimen si es concepto)
 - [ ] 5 cierre: autosuficiencia → verify-citations (re-fechar el bloque) → lint 0 → log → commit
 ```
@@ -69,8 +69,9 @@ Progreso del append de <fuente> → <destino>:
 
 3. **Extracción LLM enfocada en el eje del destino.** Leer SÓLO el fulltext nuevo
    (`vault/raw/fulltext/<slug>/<clave>.txt`; saltar afiliaciones como en `ingest-star`) y poblar la
-   nota del paper: `methods`, `role` (#73: `fundacional` introduce el método/mecanismo · `aplicacion` lo instancia en un caso · `arbitro` reanaliza y resuelve una tensión previa — sale de leer el paper, la regex del clasificador no puede inferirlo, y sin él contrastarlo contra otro no está definido), `thesis_links`/`stars`, y la sección "Extracción"
-   orientada a **lo que aporta a la entidad destino** (una señal RV, un mecanismo, una ecuación del
+   nota del paper: `methods`, `role` (#73: `fundacional` introduce el método/mecanismo · `aplicacion` lo instancia en un caso · `arbitro` reanaliza y resuelve una tensión previa — sale de leer el paper, la regex del clasificador no puede inferirlo, y sin él contrastarlo contra otro no está definido), `thesis_links`/`stars`, y **la vista del destino** (#188): la entrada en `vistas[]`
+   (`{sujeto, tipo, fecha, txt, lente}` — el `sujeto` es la entidad destino) y su sección
+   `## Vista — <sujeto>`, orientada a **lo que aporta a la entidad destino** (una señal RV, un mecanismo, una ecuación del
    método), no un resumen genérico.
 
 4. **Síntesis a la nota viva — INTEGRAR EN SU LUGAR (D-31).** Plegar a la ficha/concept **sólo lo

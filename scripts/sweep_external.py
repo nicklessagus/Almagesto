@@ -16,9 +16,12 @@ cuatro cosas que caducan no las miraba nadie:
   4. **snapshot web**   — la URL de una fuente off-ADS ya no dice lo mismo.
   5. **ground-truth**   — NEA cambia valores entre releases, y el snapshot es un JSON congelado que
      **nada** comparaba: el caso más silencioso de los cinco.
+  6. **citas-puerta2**  — el `citation_count` que la puerta 2 de D-26 usa para admitir un paper como
+     core es la única metadata que cambia sola: un paper puede volverse core sin que nadie edite
+     el paper ni la regla (#106). Entró después que los cinco de arriba.
 
-Cinco cosas que caducan y un solo momento para mirarlas — si están repartidas, se corren cuatro y
-la quinta nunca.
+Seis cosas que caducan y un solo momento para mirarlas — si están repartidas, se corren cinco y
+la sexta nunca.
 
 ⛔ **REPORTA, no aplica solo — con UNA excepción declarada.** El diff se muestra siempre y se
 pregunta antes de tocar nada: un snapshot que se actualiza solo cambia valores **bajo los pies de la
@@ -28,8 +31,9 @@ prosa que ya los citó**, y el consumidor no tiene forma de enterarse.
 la promesa de cabecera se leía como absoluta: `check_retractions` **escribe** `retracted:` /
 `corrections:` en las notas sin preguntar, y se conserva así a propósito — una fuente retractada
 citada rompe la frontera dura, así que enterarse tarde es peor que el ruido de diff, y lo que estampa
-es una **marca de metadata**, no un valor que la prosa haya citado. Los otros cuatro detectores no
-escriben nada: versiones y web **proponen el comando**, y ground-truth pregunta. Lo que sí es automático es la consecuencia offline: al
+es una **marca de metadata**, no un valor que la prosa haya citado. Los otros cinco detectores no
+escriben nada: versiones y web **proponen el comando**, ground-truth pregunta, y citas-puerta2
+sólo reporta el cruce (aplicarlo es re-correr la cadena del tema). Lo que sí es automático es la consecuencia offline: al
 cambiar un `.txt`, el **ancla de fuente** (D-20) marca sola los pares verificados contra él.
 
 El renombre preprint→publicado **nunca** es automático: reescribe wikilinks de toda la bóveda

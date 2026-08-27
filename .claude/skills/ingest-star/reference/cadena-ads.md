@@ -102,8 +102,11 @@ extra_core:
   - {bibcode: 2019A&A...624A..49G, via: usuario, fecha: 2026-08-26, motivo: "árbitro de la señal b"}
 ```
 
-Forma **dura** (D-58): es una **lista de mapas** con `via` (vocabulario cerrado: `usuario` ·
-`descubrimiento` · `reporte`), `fecha` y `motivo`. El escalar y la lista de strings **bloquean**, y
+Forma **dura** (D-58): es una **lista de mapas** con `via` (vocabulario cerrado de `extra_core`,
+`cfg.EXTRA_CORE_VIA`: `usuario` · `triage` · `citado-por-corpus`), `fecha` y `motivo`. ⛔ **No
+confundir con el `via` de una fuente off-ADS** (`sources:`, #111 — `usuario` · `descubrimiento` ·
+`reporte`, `triage.VIA_FUENTE`): son dos carriles distintos y `load_extra_core` **aborta** si le
+llega un valor del otro. El escalar y la lista de strings **bloquean**, y
 `python scripts/triage.py <slug>` imprime el snippet listo para pegar.
 
 Por qué acá y no en `build/`: `build/` es scratch gitignored y se pisa en el próximo run. La entrada
