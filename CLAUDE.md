@@ -297,6 +297,46 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   **bloqueante** (INV-94), y la salida es poblar el campo que corresponda, no borrar la nota.
   ⚠ Cuando `entity.py delete` deja un paper sin destino **avisa y no borra**: la decisión de qué
   hacer con una extracción cara es del usuario, no del script.
+- **papers/**: ⛔ **la extracción es una lectura CON LENTE, y la nota declara cuál se hizo:
+  `vistas[]` (#188).** El prompt del fan-out nunca pregunta *«¿qué dice este paper?»* sino *«¿qué
+  dice **sobre {sujeto}**?»*, con los `grep` armados desde los alias de ese sujeto y los bullets
+  ramificados por su tipo (#76) — pero la nota es **una por bibcode**. Con una sola sección sin
+  scope, **el silencio de la nota sobre un eje es indistinguible de «se miró y no hay nada»**: el
+  mismo falso limpio que D-34 persigue en las hipótesis (*«no hay evidencia» no es «no existe
+  evidencia»*) y que la cobertura de `discover` resuelve distinguiendo *corrió con N* de *NO
+  CORRIÓ*. Medido en una bóveda real: **141 de 908** notas las reclaman 2+ sujetos y **ninguna**
+  tiene una segunda extracción — y `ingest-theme` lo produce **por diseño** en su paso 3b, porque
+  el retro-tag corre después de la extracción.
+  Cada entrada: `sujeto` (el mismo nombre que usan `stars[]`/`thesis_links[]` — es lo que hace
+  comparables reclamo y lectura), `tipo` (vocabulario **cerrado** `star | theme`, **declarado** y
+  no derivado, para que el lint cace el typo), y tres campos que dicen **cuándo** y **contra qué**
+  se leyó: `fecha`, `txt` (de qué copia del `.txt` salió — el ancla de fuente cuando el mismo
+  bibcode vive bajo varios slugs) y `lente` (las facetas vigentes al leer, que es el diff de lente
+  de D-49 **a nivel de lectura**). **Forma dura como `extra_core`** (D-58): el escalar y la lista
+  de strings **bloquean**; `vistas: [eps Eridani]` sería la misma conflación con otro nombre.
+  ⛔ **La `fecha` es lo que dice que la lectura OCURRIÓ.** El stub nace con la vista de su sujeto y
+  **sin** fecha (la ausencia es *no consta*): así la nota es coherente desde el minuto cero —no
+  nace en rojo a mitad de cadena, la lección del `methods`→wikilink— y el lint reporta la **vista
+  sin fecha** como backlog. La estampa el **cosechador** (`python scripts/harvest_views.py <slug>
+  [--theme]`), que además mergea `methods`/`thesis_links`/`role` add-only, escribe la sección
+  mientras siga siendo la plantilla del stub —prosa redactada no se pisa sin `--force`: puede tener
+  anclas de verificación colgando del texto exacto— y **trae el `.txt` al slug del sujeto** (D-18),
+  sin lo cual la vista de un paper retro-tagueado no es ejecutable.
+  ⛔ **La escribe SÓLO la lectura, nunca el retro-link.** Es lo que mantiene a
+  `stars`/`thesis_links`/`methods` como **reclamos** —`make_notes` los mergea add-only **sin leer
+  nada**— y a `vistas[]` como **lecturas**. Un reclamo sin vista es backlog *(«lo reclama X y nadie
+  lo leyó desde ahí»)*, y se cierra de dos maneras: haciendo la vista, o **declarándola**
+  `no_vista: [{sujeto, motivo}]` cuando ese sujeto sólo aporta al roll-up. **Motivo obligatorio y
+  por sujeto** (mismo criterio que `no_sintetizado` y que el `--reason` del triage): un paper que
+  tres sujetos reclaman se saltea por motivos distintos en cada uno, y una escotilla sin sujeto los
+  eximiría a los tres. Qué cuenta como reclamo: `stars` y `thesis_links` siempre; `methods` **sólo
+  si ese nombre es un tema declarado** —lo puebla la extracción, así que es producto de la lectura
+  («este paper usa un periodograma») y no un sujeto que la pidió; contarlo entero pediría una vista
+  por método nombrado y el backlog nacería con centenares.
+  La sección del cuerpo es `## Vista — <sujeto>` y **no** es sección estampada: es exactamente lo
+  que `verify-citations` tiene que contrastar contra el `.txt`. El lint **bloquea** la incoherencia
+  en los dos sentidos (vista declarada sin su sección; sección sin declarar) y el **schema viejo**
+  (`## Extracción (LLM)` sin `vistas[]`), que es una extracción que no dice desde dónde se leyó.
 - **papers/**: ⛔ **la identidad de un trabajo es su `doi`/`arxiv_id`, no su bibcode (D-19).** El
   preprint y el publicado son bibcodes distintos del **mismo** paper: dos notas ahí son doble conteo
   en todo lo que cuenta papers, dos fuentes donde hay una, y un falso positivo permanente de #75
@@ -639,8 +679,14 @@ verificable, y dónde se decide qué archivo lee cada capa:
 4. extractor (LLM)    →  lee el FRONTMATTER, no el .txt, para saber qué hacer:
                            ocr o symbols_lost  →  abre el PDF y cita PÁGINA
                            si no                →  lee el .txt y cita LÍNEA
+                         Devuelve UNA VISTA (#188): «qué dice sobre {sujeto}», no
+                         «qué dice el paper» — con `vista{sujeto,tipo,txt}` en el JSON.
 
-5. verify-citations   →  un subagente por fuente, misma regla del paso 4.
+5. harvest_views      →  la única compuerta que corre `is_extraction` (INV-103):
+                         un JSON de verify también trae `bibcode` y también es válido.
+                         Estampa la vista (fecha · txt · lente) y la sección de la nota.
+
+6. verify-citations   →  un subagente por fuente, misma regla del paso 4.
                          Cada par verificado deja una fila con DOS hashes.
 ```
 
@@ -648,7 +694,7 @@ verificable, y dónde se decide qué archivo lee cada capa:
 **extraíble**, `is_garbled` mide **correcto**, `symbols_lost` mide **completo**. Los dos casos que
 motivaron el tercero dan garble **0.00** y pasan `is_legible` sin ruido.
 
-**Los DOS hashes del paso 5 responden preguntas distintas** — el **ancla** hashea el bloque de la
+**Los DOS hashes del paso 6 responden preguntas distintas** — el **ancla** hashea el bloque de la
 **ficha** (se dispara si editás la nota) y el **hash de fuente** hashea el archivo que se **leyó**
 (se dispara si cambia la fuente sin que nadie toque la nota). El segundo apunta al `.txt`, o al
 **PDF** cuando la fuente está marcada `symbols_lost` — que es de donde salió la cita.
@@ -1106,7 +1152,11 @@ dice quién la sostiene, o con un `source` fuera del vocabulario), **`disputes` 
 (el campo pre-R-5 que quedó sin lector — el vigente es `facets:`), **registro con
 `busqueda:`** (mapa, schema pre-D-28: hoy es `busquedas:`, lista) y
 **`role` fuera del vocabulario** (`fundacional|aplicacion|arbitro`: un typo deja el rol mudo para el
-contraste cross-paper, mismo modo de falla que un `thesis_links` sin destino) y el **juicio de triage
+contraste cross-paper, mismo modo de falla que un `thesis_links` sin destino), **la extracción que no
+dice desde qué sujeto se leyó** (#188: `## Extracción (LLM)` sin `vistas[]` — schema viejo) y la
+**incoherencia `vistas[]` ↔ cuerpo** en los dos sentidos (vista declarada sin su `## Vista — <sujeto>`,
+que afirma una lectura que no está; y sección sin declarar, que no dice de qué `.txt` ni con qué lente
+salió) y el **juicio de triage
 en `build/<slug>/triage.json`** (el lugar pre-1.9.0 que el lector ya no mira: mientras exista, el
 triage vuelve a proponer lo ya descartado **sin el motivo** → `triage.py <slug> --migrate`). La
 **fuga de implementación** (regla #0 / frontera dura) es **WARN no bloqueante** — heurística de alta
@@ -1135,7 +1185,7 @@ es la **marca de agua** del bibcode repetida por página (lo agarra la densidad 
 pero no sirve para grep ni verify; rescate: PDF sano, OCR, o marcar `pending`). Las **correcciones
 publicadas** (`corrections`, #52 — erratum/corrigendum/EoC del mismo barrido de Crossref) son
 **backlog, no bloquean**: el paper sigue siendo citable; lo que hay que revisar son los valores que
-se le extrajeron (un corrigendum cambia justamente ese número). El **extraído pero no sintetizado** (#75: un paper con `methods` poblado —o sea que ya pagó el paso
+se le extrajeron (un corrigendum cambia justamente ese número). El **reclamo sin vista** (#188: un sujeto que reclama el paper y desde el cual nadie lo leyó) es **backlog** —la vista del sujeto que sólo aporta al roll-up es opcional, el silencio no—, y baja a **informativo** cuando está declarado con `no_vista` y su motivo; su hermana, la **vista sin `fecha`** (declarada por el stub y nunca leída), también. Sin esas dos, sembrar la vista al crear el stub apagaría el hallazgo del sujeto que la sembró y el silencio volvería a leerse como «se miró y no hay nada». El **extraído pero no sintetizado** (#75: un paper con `methods` poblado —o sea que ya pagó el paso
 más caro de la cadena— cuyo bibcode **no aparece citado en ninguna ficha ni concepto**) es
 **backlog**: la extracción nunca llegó a la síntesis. Es el análogo del proxy que ya existe para
 planetas (cada planeta del frontmatter discutido en prosa) y mide si el paper **llegó**, no si la

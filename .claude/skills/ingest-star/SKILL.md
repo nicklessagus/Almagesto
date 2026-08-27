@@ -23,7 +23,7 @@ Progreso del ingest de <estrella>:
 - [ ] 2  cadena mecánica (orquestador) — sin abortos
 - [ ] 2b barrido full-text (--sweep) revisado
 - [ ] 2c triage de candidatos resuelto (aceptado / --drop con motivo / al usuario)
-- [ ] 3  extracción LLM de TODOS los core (o recorte declarado en el registro)
+- [ ] 3  extracción LLM (una VISTA por sujeto) de TODOS los core (o recorte declarado en el registro) + `harvest_views.py`
 - [ ] 3b contraste cross-paper (inventario por eje)
 - [ ] 3c síntesis a la ficha (frontmatter propio + prosa + disputes)
 - [ ] 4  auto-revisión de autosuficiencia
@@ -204,15 +204,36 @@ Progreso del ingest de <estrella>:
    frontera — y mientras el prompt sea memoria del agente, el paso **no es reproducible**, así que
    dos corridas del mismo ingest no comparan nada.
 
+   ⛔ **Lo que produce cada subagente es UNA VISTA, no «la extracción del paper» (#188).** El
+   prompt pregunta *«¿qué dice sobre {sujeto}?»*, con los `grep` armados desde **sus** alias: el
+   mismo paper leído desde otro sujeto da otra vista. Por eso la sección de la nota es
+   `## Vista — <sujeto>` y el JSON trae `vista{sujeto,tipo,txt}`. Sin el scope, el silencio de la
+   nota sobre un eje es indistinguible de *«se miró y no hay nada»* — medido: 141 de 908 notas de
+   una bóveda real las reclaman 2+ sujetos y **ninguna** tiene una segunda extracción.
+
+   **Cosechá con el script, no a mano:**
+   ```bash
+   python scripts/harvest_views.py <slug>                    # --theme si el slug es un tema
+   ```
+   Estampa la vista con `fecha`/`txt`/`lente`, mergea `methods`/`thesis_links`/`role` **add-only**
+   y escribe la sección **mientras siga siendo la plantilla del stub** (prosa ya redactada no se
+   pisa sin `--force`). Y es la única compuerta que corre `is_extraction` (INV-103): un JSON de
+   `verify-citations` también trae `bibcode` y también es válido — cosechar a mano pisó 13 notas
+   terminadas **en silencio**.
+
    Poblar **las notas de paper** (la ficha se escribe en 3c, después del contraste — no saltear
    directo a la prosa):
    - en `vault/wiki/papers/<bibcode>.md`: `methods`, `thesis_links`, `role` (#73: `fundacional`
      introduce el método/mecanismo · `aplicacion` lo instancia en un caso · `arbitro` reanaliza y
      resuelve una tensión previa — sale de leer el paper, la regex del clasificador no puede
      inferirlo, y sin él contrastarlo contra otro no está definido), y la sección
-     "Extracción" — sus bullets ya vienen ramificados por tipo de sujeto (#76): ground-truth
-     (P/K/e por planeta), los **ejes de `relevance.facets`** del objetivo de esta bóveda, métodos y
-     aporte al objetivo. Llenar los que el stub trae, no una lista fija de memoria.
+     `## Vista — <sujeto>` — sus bullets ya vienen ramificados por tipo de sujeto (#76):
+     ground-truth (P/K/e por planeta), los **ejes de `relevance.facets`** del objetivo de esta
+     bóveda, métodos y aporte al objetivo. Llenar los que el stub trae, no una lista fija de memoria.
+   - un paper que este sujeto **reclama** (`stars`/`thesis_links`) y que legítimamente no vas a leer
+     desde acá —aporta sólo al roll-up— se **declara**: `no_vista: [{sujeto, motivo}]`. El lint lo
+     baja de backlog a informativo. Mismo criterio que `no_sintetizado` y que el `--reason` del
+     triage: no curar en silencio.
    ⚠ **`pdf_source` antes de copiar un número** (#57): con `eprint` el `.txt` es el **preprint**
    (un `v1` pre-referato puede traer otros valores que el publicado que identifica el bibcode), y con
    `null` no se sabe —que **no** es "publicado"—. Un valor que choca con el ground-truth o con el

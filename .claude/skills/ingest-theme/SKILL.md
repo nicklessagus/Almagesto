@@ -164,9 +164,14 @@ Progreso del ingest del tema <tema>:
    `role` (#73: `fundacional` introduce el método/mecanismo · `aplicacion` lo instancia en un caso · `arbitro` reanaliza y resuelve una tensión previa — sale de leer el paper, la regex del clasificador no puede inferirlo, y sin él contrastarlo contra otro no está definido) —especialmente agudo en temas de método, donde fundamentos y
    aplicaciones astro conviven en el mismo concepto por diseño—, `thesis_links` (ya pre-sembrado al
    concept; agregar otros si toca) y la sección
-   "Extracción" enfocada **en el eje del tema** — el stub la trae ya ramificada por tipo de sujeto
-   (#76): *aporte al tema* (definición, mecanismo/ecuación, método, signo) y *régimen de validez*,
-   no planetas ni actividad de una estrella concreta.
+   `## Vista — <concept>` enfocada **en el eje del tema** — el stub la trae ya ramificada por tipo
+   de sujeto (#76): *aporte al tema* (definición, mecanismo/ecuación, método, signo) y *régimen de
+   validez*, no planetas ni actividad de una estrella concreta.
+   ⛔ **Es UNA VISTA, no «la extracción del paper» (#188)**: el mismo paper leído desde una estrella
+   da otra. El sujeto de la vista es el **`concept`** (lo que el paper declara en `thesis_links`),
+   no el slug del tema. Cosechá con `python scripts/harvest_views.py <slug> --theme`, que estampa
+   `fecha`/`txt`/`lente`, mergea add-only y corre `is_extraction` (INV-103) — cosechar a mano pisó
+   13 notas terminadas con salidas de `verify-citations`, que también traen `bibcode`.
    ⚠ **`pdf_source` antes de copiar un número** (#57): con `eprint` el `.txt` es el **preprint**
    (un `v1` pre-referato puede traer otros valores que el publicado que identifica el bibcode), y con
    `null` no se sabe —que **no** es "publicado"—. Un valor que choca con el ground-truth o con el
@@ -183,6 +188,11 @@ Progreso del ingest del tema <tema>:
    pasar) → agregar add-only `thesis_links` (y `methods` si aplica) a su nota. El roll-up del concept es una tabla
    **estampada**: junta también por `methods:` sin re-taguear, pero **no acumula sola** — al
    terminar el retro-tag hay que re-correr `python scripts/make_notes.py <slug> --theme`.
+   ⛔ **El retro-tag NO escribe vistas, y es a propósito (#188).** Tagear es declarar un
+   **reclamo**: nadie leyó ese paper desde este tema todavía. El lint lo reporta como *reclamado sin
+   vista* (backlog) — hacé la vista (`extraction_prompt.py <slug> <bibcode> --theme` + cosecha) o
+   declarala con `no_vista: [{sujeto, motivo}]` si el paper sólo aporta al roll-up. Es justo la
+   población medida: **141 de 908** notas retro-linkeadas sin una segunda lectura.
    **Alias sueltos y cortos, nunca frases** (#44, convención canónica en `verify-citations`): el
    `.txt` entrelaza dos columnas en la misma línea física (73% del corpus) → un alias multi-palabra
    (`"gaussian process regression"`) puede no matchear aunque el paper lo use. Probar la raíz corta

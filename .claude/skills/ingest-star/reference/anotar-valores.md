@@ -62,5 +62,5 @@ Al copiar un valor a la nota de paper:
   es el `## Inventario por eje` de la ficha (paso 3b). Escribirla acá es lo que produjo los 3 casos
   de «inferencia con voz de cita».
 
-El stub de `## Extracción (LLM)` que genera `make_notes` ya trae esta regla como último bullet: no
+El stub de `## Vista — <sujeto>` que genera `make_notes` ya trae esta regla como último bullet: no
 depende de que el extractor se acuerde de abrir este archivo.
