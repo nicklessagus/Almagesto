@@ -29,9 +29,16 @@ Los tres niveles:
   motivo. Ese archivo viejo **ya no se lee** (sin capas de compatibilidad: son complejidad permanente
   en el lector): se consolida con `--migrate`, y mientras exista el **lint lo reporta como
   bloqueante** — que quede mudo sería justamente el bug que #51 arregló.
-  Los candidatos que **ya tienen nota** en la bóveda (entraron por OTRO slug —
-  papers de método curados a otra estrella) se marcan `◆` (#42): ya están bajados y extraídos, la
-  decisión sigue siendo por-slug pero se despachan rápido — no se filtran, se etiquetan.
+  Los candidatos que **ya tienen nota** en la bóveda (entraron por OTRO slug — papers de método
+  curados a otra estrella) se marcan (#42): no se filtran, se etiquetan, porque la decisión sigue
+  siendo por-slug. La marca distingue **tres** estados y no dos (#189): `◆` hay vista fechada de
+  ESTE sujeto (ya se leyó desde acá), `◇` hay nota pero ninguna vista de este sujeto (se leyó desde
+  otro eje: el PDF y el `.txt` ya están, la LECTURA no está hecha), y sin marca es un candidato
+  nuevo. Que la nota exista significa que alguien la **creó**, no que alguien la haya **leído** desde
+  este ángulo: `make_notes` mergea los seeds add-only sin leer nada, y medido en una bóveda real 141
+  de 908 notas las reclaman 2+ sujetos sin una sola segunda extracción. El `◆` viejo le decía al
+  operador «ya está leído, despachalo rápido» sobre papers que nadie leyó desde ese eje — una
+  premisa falsa orientando una decisión de curación humana.
 - **2 — informe al usuario:** `--report` deja la tabla en `outputs/triage-<slug>.md` (título, año,
   citas, vía, tópicos, link a ADS) para decidir los **dudosos** por lote.
 
@@ -95,10 +102,14 @@ def prioridad(slug: str) -> int:
                              r.get("bibcode") or ""))
     cfg.print_seguro(f"\n{slug}: {len(recs)} core por PERTINENCIA (facetas del objetivo, "
                      f"citas como desempate)\n")
+    # La cuarta superficie del marcador (#189): ésta es la cola de LECTURA, así que «leído desde
+    # este sujeto» (`◆`) vs «tiene nota, leído desde otro eje» (`◇`) es exactamente lo que hay que
+    # ver acá para decidir el recorte.
+    subject = subject_name(slug)
     for r in recs:
         f = cfg.as_list(r.get("facets"))
         pu = cfg.as_list(r.get("puertas"))
-        cfg.print_seguro(f"  {len(f)} ✦  {row(r).strip()}"
+        cfg.print_seguro(f"  {len(f)} ✦  {row(r, subject).strip()}"
                          + (f"  · {'+'.join(pu)}" if pu else ""))
     # #126: en un tema de MÉTODO la pregunta útil no es paper por paper sino por POLÍTICA. La puerta
     # que admitió a cada uno ya está en el registro, así que el corte se propone una vez —y se
@@ -301,18 +312,59 @@ def show_decisions(slug: str, decisiones: dict) -> int:
     return 0
 
 
-def has_note(bibcode: str) -> bool:
-    """¿El candidato ya tiene nota en `vault/wiki/papers/`? Pasa cuando entró por OTRO slug (paper
-    de método curado a otra estrella): ya está bajado y extraído, así que proponerlo sin marcar es
-    trabajo repetido (#42). La decisión sigue siendo legítimamente por-slug (¿pertinente a ESTE
-    sujeto?) — se etiqueta `◆`, no se filtra; el `stars:` que falte lo cubre el retro-linkeo
-    add-only de make_notes."""
-    return (cfg.PAPERS / f"{bibcode.replace('/', '_')}.md").exists()
+# Los tres estados del candidato frente a la bóveda (#189), con su marca en el listado. `◆` y `◇`
+# se leen distinto de un vistazo y ocupan una sola columna, así que la tabla del reporte no cambia
+# de forma.
+READ_HERE, OTHER_AXIS, NO_NOTE = "leido", "otro-eje", "nuevo"
+MARKS = {READ_HERE: "◆", OTHER_AXIS: "◇", NO_NOTE: " "}
 
 
-def row(c: dict) -> str:
+def subject_name(slug: str) -> str:
+    """El nombre con el que los papers reclaman este sujeto — el que va en `stars[]`/
+    `thesis_links[]` y, desde #188, en `vistas[].sujeto`.
+
+    En un tema es el `concept` (NO el slug: son cosas distintas y el slug no aparece en ninguna
+    nota); en una estrella, el nombre canónico de `stars.yaml`. Un slug que no resuelve devuelve el
+    slug: el triage sólo está listando candidatos y no es el lugar donde eso se aborta."""
+    meta = cfg.as_map(_tema_meta(slug))
+    if meta:
+        return str(meta.get("concept") or slug)
+    try:
+        return cfg.star_by_slug(slug)[0]
+    except (KeyError, RuntimeError):
+        return slug
+
+
+def note_state(bibcode: str, subject: str) -> str:
+    """¿En qué estado está este candidato respecto de la bóveda? (#189)
+
+    `has_note` —lo que había hasta acá— sólo preguntaba si el archivo existe, y con eso el listado
+    le afirmaba al operador que el paper «ya está bajado y **extraído**». Es falso: la nota existe
+    porque alguien la **creó**, y el retro-linkeo de `make_notes` mergea `stars`/`thesis_links`
+    add-only **sin leer nada**. La extracción es una lectura CON LENTE (#188) y quien la hizo la
+    declara en `vistas[]`.
+
+    La vista tiene que estar **fechada**: el stub nace con la vista de su sujeto y sin `fecha`
+    justamente porque la lectura todavía no ocurrió (el lint la reporta como «declarada y sin
+    hacer»). Tomarla como lectura sería el mismo defecto con otro nombre.
+
+    Una `vistas[]` mal formada no cae acá: la reporta el lint. Acá se degrada a `OTHER_AXIS` —hay
+    nota y la lectura no consta—, que es lo único que se puede afirmar, y el listado sigue."""
+    nota = cfg.PAPERS / f"{bibcode.replace('/', '_')}.md"
+    if not nota.exists():
+        return NO_NOTE
+    fm = cfg.split_fm(nota.read_text(encoding="utf-8"))
+    try:
+        vistas = cfg.load_vistas(fm, entry=bibcode)
+    except cfg.VistasError:
+        return OTHER_AXIS
+    leida = any(v["sujeto"] == subject and str(v.get("fecha") or "").strip() for v in vistas)
+    return READ_HERE if leida else OTHER_AXIS
+
+
+def row(c: dict, subject: str) -> str:
     cites = c.get("citation_count") or 0
-    nota = "◆" if has_note(c["bibcode"]) else " "
+    nota = MARKS[note_state(c["bibcode"], subject)]
     title = " ".join((c.get("title") or "").split())[:76]
     # #86: el candidato sin abstract se juzgó con menos información que los demás — y acá se está
     # decidiendo justamente si entra. Sin la marca, el veredicto se lee igual de firme que el resto.
@@ -325,19 +377,22 @@ def report(slug: str, cands: list[dict]) -> None:
     """Tabla markdown en outputs/ (nivel 2): para decidir por lote y/o mostrarle al usuario."""
     out = cfg.ROOT / "outputs" / f"triage-{slug}.md"
     out.parent.mkdir(parents=True, exist_ok=True)
+    subject = subject_name(slug)
     lines = [f"# Triage de candidatos del chaining — {slug}",
              "",
              f"{len(cands)} candidatos pendientes (no bajados). Criterio: ¿el paper es **pertinente "
              "al sujeto** o sólo lo menciona? Aceptados → `extra_core` en `vault/config/stars.yaml`; "
              "descartados → `python scripts/triage.py " + slug + " --drop <bib> --reason \"<motivo>\"`. "
-             "`◆` = ya tiene nota en la bóveda (entró por otro slug): bajado y extraído, se "
-             "despacha rápido.",
+             f"`◆` = ya **leído** desde **{subject}** (hay vista fechada, #188). "
+             "`◇` = tiene nota pero se leyó desde otro eje: **hay que leerlo** — lo que ya está "
+             "hecho es la descarga (**no hay que bajarlo**), no la lectura.",
              "",
-             "| citas | ◆ | año | bibcode | título | vía | tópicos |",
+             "| citas | ◆/◇ | año | bibcode | título | vía | tópicos |",
              "|---:|:-:|---:|---|---|---|---|"]
     for c in cands:
         title = " ".join((c.get("title") or "").split()).replace("|", "\\|")
-        lines.append(f"| {c.get('citation_count') or 0} | {'◆' if has_note(c['bibcode']) else ''} | "
+        lines.append(f"| {c.get('citation_count') or 0} | "
+                     f"{MARKS[note_state(c['bibcode'], subject)].strip()} | "
                      f"{c.get('year') or ''} | "
                      f"[{c['bibcode']}]({ADS_URL}{c['bibcode']}/abstract) | {title} | "
                      f"{c.get('via') or ''} | {','.join(cfg.as_list(c.get('facets')))} |")
@@ -624,9 +679,15 @@ def main() -> int:
                      f"--reason \"<motivo>\"`.")
     data = load_ads(args.slug)
     cands = cfg.as_list(data.get("candidates"))
-    con_nota = sum(1 for c in cands if has_note(c["bibcode"]))
+    # #189: DOS números, no uno. El viejo sumaba los dos estados «tiene nota» y los anunciaba como
+    # leídos; el del medio es el que hay que leer, y es el mayoritario (141 de 908 notas de una
+    # bóveda real son de 2+ sujetos y ninguna tiene una segunda extracción).
+    subject = subject_name(args.slug)
+    estados = [note_state(c["bibcode"], subject) for c in cands]
     cfg.print_seguro(f"Triage de {args.slug}: {len(cands)} candidatos pendientes "
-          f"(◆ {con_nota} ya con nota en la bóveda, vía otro slug) · "
+          f"(◆ {estados.count(READ_HERE)} con lectura hecha desde {subject} · "
+          f"◇ {estados.count(OTHER_AXIS)} con nota y sin lectura desde este sujeto: hay que "
+          f"leerlo, bajado ya está) · "
           f"{len(decisiones)} decisiones persistidas · {data.get('n_relevant', 0)} core actuales")
     if not cands:
         cfg.print_seguro("  → nada pendiente. (Los candidatos aparecen tras un query_ads con chaining.)")
@@ -640,7 +701,7 @@ def main() -> int:
     # @inv INV-120
     ordenados = cfg.sort_by_citation_rate(cands)
     for c in ordenados:
-        cfg.print_seguro(row(c))
+        cfg.print_seguro(row(c, subject))
     if args.report:
         report(args.slug, cands)
     cfg.print_seguro("\n  → juicio (LLM/usuario) por título+abstract: pertinente al SUJETO / ruido / dudoso.\n"

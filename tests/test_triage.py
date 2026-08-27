@@ -145,18 +145,21 @@ def test_report_escribe_tabla_en_outputs(toy_vault, monkeypatch):
 
 
 def test_marca_candidatos_que_ya_tienen_nota(toy_vault, monkeypatch, capsys):
-    """#42: un candidato que YA tiene nota en la bóveda (entró por otro slug) se etiqueta ◆ —
-    bajado y extraído, se despacha rápido. No se filtra: la decisión sigue siendo por-slug."""
+    """#42: un candidato que YA tiene nota en la bóveda (entró por otro slug) se etiqueta — no se
+    filtra: la decisión sigue siendo por-slug. #189: la marca dice `◇` (hay nota, la lectura desde
+    este sujeto no consta), no `◆`, y el ahorro que se anuncia es el que de verdad existe: el PDF y
+    el `.txt` ya están bajados."""
     from conftest import mk_note, write_yaml
     mk_note(cfg.PAPERS, "2020a....1A", {"tags": ["paper"], "bibcode": "2020a....1A"})
     write_ads(toy_vault, candidates=[cand("2020a....1A", "con nota", cites=9),
                                      cand("2020b....1B", "sin nota", cites=1)])
     assert run_main(monkeypatch, ["test_star", "--report"]) == 0
     out = capsys.readouterr().out
-    assert "◆ 1 ya con nota en la bóveda" in out
-    assert "◆ 2020a....1A" in out and "◆ 2020b....1B" not in out
+    assert "◇ 1" in out
+    assert "◇ 2020a....1A" in out and "◇ 2020b....1B" not in out
     md = (cfg.ROOT / "outputs" / "triage-test_star.md").read_text(encoding="utf-8")
-    assert "| 9 | ◆ |" in md and "| 1 |  |" in md      # columna ◆ sólo para el que tiene nota
+    assert "| 9 | ◇ |" in md and "| 1 |  |" in md      # la columna sólo para el que tiene nota
+    assert "no hay que bajarlo" in md, "el ahorro real de #42 sigue anunciándose"
 
 
 def test_query_ads_lee_los_descartes_persistidos(toy_vault):
@@ -623,10 +626,12 @@ def test_el_candidato_sin_abstract_se_marca_en_el_listado(toy_vault, capsys, mon
 
     @inv INV-110"""
     linea = triage.row({"bibcode": "1968Old...1..1A", "title": "Photoelectric observations",
-                       "citation_count": 3, "facets": ["rv"], "sin_abstract": True})
+                       "citation_count": 3, "facets": ["rv"], "sin_abstract": True},
+                       "Estrella Test")
     assert "⚠sin-abstract" in linea
     assert "⚠sin-abstract" not in triage.row(
-        {"bibcode": "2020New...1..1A", "title": "T", "citation_count": 3, "facets": ["rv"]})
+        {"bibcode": "2020New...1..1A", "title": "T", "citation_count": 3, "facets": ["rv"]},
+        "Estrella Test")
 
 
 def test_prioridad_ordena_los_core_por_cuanto_del_objetivo_tocan(toy_vault, capsys, monkeypatch):
@@ -769,3 +774,127 @@ def test_drop_core_no_avisa_de_wikilinks_cuando_no_borro_la_nota(toy_vault, caps
     out = capsys.readouterr().out
     assert (cfg.PAPERS / "2009Icar..201..504M.md").exists()
     assert "ROTO" not in out
+
+
+# ── #189 · el marcador de nota distingue TRES estados, no dos ────────────────────────────────────
+
+def _nota_con_vistas(stem, vistas, *, stars=("Otra Estrella",)):
+    """Nota de paper con `vistas[]` puesto a mano (o sin el campo, si `vistas is None`)."""
+    from conftest import mk_note
+    fm = {"tags": ["paper"], "bibcode": stem, "stars": list(stars)}
+    if vistas is not None:
+        fm["vistas"] = vistas
+    return mk_note(cfg.PAPERS, stem, fm)
+
+
+def test_la_nota_leida_desde_otro_eje_no_se_marca_como_leida(toy_vault, monkeypatch, capsys):
+    """#189: que la nota EXISTA significa que alguien la creó, no que alguien la haya leído desde
+    ESTE sujeto — `make_notes` mergea los seeds add-only sin leer nada. El `◆` afirmaba «bajado y
+    extraído» sobre 141 de 908 notas que ningún segundo eje leyó nunca."""
+    _nota_con_vistas("2020a....1A",
+                     [{"sujeto": "Otra Estrella", "tipo": "star", "fecha": "2026-08-01"}])
+    write_ads(toy_vault, candidates=[cand("2020a....1A", "leído desde otro eje", cites=9)])
+    assert run_main(monkeypatch, ["test_star", "--report"]) == 0
+    out = capsys.readouterr().out
+    assert "◇ 2020a....1A" in out and "◆ 2020a....1A" not in out
+    assert "hay que leerlo" in out, "el estado del medio tiene que decir qué falta hacer"
+    md = (cfg.ROOT / "outputs" / "triage-test_star.md").read_text(encoding="utf-8")
+    assert "| 9 | ◇ |" in md
+    assert "hay que leerlo" in md, "la leyenda de la tabla afirmaba «bajado y extraído»"
+
+
+def test_la_vista_fechada_de_este_sujeto_si_afirma_la_lectura(toy_vault, monkeypatch, capsys):
+    """El primer estado: hay vista de ESTE sujeto, con fecha → sí se leyó desde acá."""
+    _nota_con_vistas("2020a....1A",
+                     [{"sujeto": "Otra Estrella", "tipo": "star", "fecha": "2026-08-01"},
+                      {"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-08-02"}])
+    write_ads(toy_vault, candidates=[cand("2020a....1A", "leído desde acá", cites=9)])
+    assert run_main(monkeypatch, ["test_star", "--report"]) == 0
+    out = capsys.readouterr().out
+    assert "◆ 2020a....1A" in out and "◇ 2020a....1A" not in out
+    md = (cfg.ROOT / "outputs" / "triage-test_star.md").read_text(encoding="utf-8")
+    assert "| 9 | ◆ |" in md
+
+
+def test_la_vista_sin_fecha_no_afirma_la_lectura(toy_vault, monkeypatch, capsys):
+    """Contra-caso: el stub NACE con la vista de su sujeto y SIN `fecha` (`make_notes`), y el lint
+    la reporta como «declarada y sin hacer». Tomarla como lectura reintroduciría el mismo defecto
+    bajo otro nombre."""
+    _nota_con_vistas("2020a....1A", [{"sujeto": "Estrella Test", "tipo": "star"}])
+    write_ads(toy_vault, candidates=[cand("2020a....1A", "vista declarada, sin leer", cites=9)])
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    out = capsys.readouterr().out
+    assert "◇ 2020a....1A" in out and "◆ 2020a....1A" not in out
+
+
+def test_el_candidato_sin_nota_no_lleva_ninguna_marca(toy_vault, monkeypatch, capsys):
+    """Contra-caso del otro lado: sin nota es un candidato nuevo — ni `◆` ni `◇`."""
+    write_ads(toy_vault, candidates=[cand("2020b....1B", "candidato nuevo", cites=1)])
+    assert run_main(monkeypatch, ["test_star", "--report"]) == 0
+    out = capsys.readouterr().out
+    assert "◆ 2020b....1B" not in out and "◇ 2020b....1B" not in out
+    md = (cfg.ROOT / "outputs" / "triage-test_star.md").read_text(encoding="utf-8")
+    assert "| 1 |  |" in md
+
+
+def test_el_encabezado_cuenta_los_tres_estados_por_separado(toy_vault, monkeypatch, capsys):
+    """El contador de `main` colapsaba los dos primeros en «ya con nota, vía otro slug»."""
+    _nota_con_vistas("2020a....1A",
+                     [{"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-08-02"}])
+    _nota_con_vistas("2020b....1B",
+                     [{"sujeto": "Otra Estrella", "tipo": "star", "fecha": "2026-08-01"}])
+    write_ads(toy_vault, candidates=[cand("2020a....1A", "leído", cites=9),
+                                     cand("2020b....1B", "otro eje", cites=5),
+                                     cand("2020c....1C", "nuevo", cites=1)])
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    out = capsys.readouterr().out
+    assert "3 candidatos pendientes" in out
+    assert "◆ 1" in out and "◇ 1" in out
+    assert "ya con nota en la bóveda, vía otro slug" not in out, \
+        "esa era la afirmación falsa: nota ≠ lectura"
+
+
+def test_en_un_tema_la_vista_es_del_concept_no_del_slug(toy_vault, monkeypatch, capsys):
+    """El sujeto que los papers usan en `thesis_links[]`/`vistas[]` es el `concept`, no el slug —
+    el mismo predicado que `_tema_meta` resuelve para el retro-linkeo."""
+    from conftest import write_yaml
+    write_yaml(cfg.THEMES_YAML, {"gp": {"title": "GP", "area": "methods",
+                                        "concept": "procesos-gaussianos"}})
+    _nota_con_vistas("2020a....1A",
+                     [{"sujeto": "procesos-gaussianos", "tipo": "theme", "fecha": "2026-08-01"}],
+                     stars=())
+    _nota_con_vistas("2020b....1B", [{"sujeto": "gp", "tipo": "theme", "fecha": "2026-08-01"}],
+                     stars=())
+    write_ads(toy_vault, slug="gp", candidates=[cand("2020a....1A", "leído desde el concept"),
+                                                cand("2020b....1B", "vista con el slug")])
+    assert run_main(monkeypatch, ["gp"]) == 0
+    out = capsys.readouterr().out
+    assert "◆ 2020a....1A" in out
+    assert "◇ 2020b....1B" in out, "el slug no es el sujeto: no puede leerse como lectura hecha"
+
+
+def test_las_vistas_mal_formadas_no_tumban_el_triage_ni_afirman_lectura(toy_vault, monkeypatch,
+                                                                       capsys):
+    """`load_vistas` levanta `VistasError` sobre una forma inválida. Acá el triage no puede afirmar
+    la lectura (la reporta el lint), pero tampoco puede caerse: sólo está listando candidatos."""
+    _nota_con_vistas("2020a....1A", "Estrella Test")
+    write_ads(toy_vault, candidates=[cand("2020a....1A", "vistas rotas", cites=9)])
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    assert "◇ 2020a....1A" in capsys.readouterr().out
+
+
+def test_note_state_y_subject_name_son_la_pieza_unica(toy_vault):
+    """Las tres superficies (`row`, `report`, el contador de `main`) preguntan lo MISMO, así que la
+    pregunta vive en una sola función: tres copias es la garantía de que una envejezca."""
+    from conftest import write_yaml
+    _nota_con_vistas("2020a....1A",
+                     [{"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-08-02"}])
+    assert triage.note_state("2020a....1A", "Estrella Test") == triage.READ_HERE
+    assert triage.note_state("2020a....1A", "Otro Sujeto") == triage.OTHER_AXIS
+    assert triage.note_state("2020z....9Z", "Estrella Test") == triage.NO_NOTE
+    assert triage.subject_name("test_star") == "Estrella Test"
+    write_yaml(cfg.THEMES_YAML, {"gp": {"title": "GP", "area": "methods",
+                                        "concept": "procesos-gaussianos"}})
+    assert triage.subject_name("gp") == "procesos-gaussianos"
+    assert triage.subject_name("no-existe") == "no-existe", \
+        "sin sujeto resoluble no se explota: se lista igual, con el slug como nombre"
