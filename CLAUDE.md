@@ -500,6 +500,17 @@ regla pasa a ser `core = facet propia Y (puerta 2 OR puerta 3)`:
 | **2 · fundacional en su campo** | `citation_count >= fundacional_min_citas` | `query_ads.classify_theme` |
 | **3 · lente astro global** | pasa `relevance.facets` de `objective.yaml` | ídem |
 
+⛔ **Y queda registrado POR CUÁL puerta entró cada paper (#126): `puertas: [fundacional|astro]` en
+el registro.** Antes las dos se calculaban por separado y, al entrar el paper, se devolvía sólo
+`core=True`: el `why_excluded` explicaba el **no** y nada explicaba el **sí**. Es la única metadata
+que distingue **sin leer el paper** un fundamento de su campo (muy citado, puede no mencionar astro
+ni una vez) de una aplicación astro (tres citas, pero es lo que la bóveda busca) — y `role` no sirve
+para eso, porque lo puebla la **extracción**, o sea después de leer, y esta decisión se toma antes.
+Con la puerta registrada, `triage.py <slug> --prioridad` agrupa los core por política —*«12 sólo
+fundacionales, 20 sólo astro, 5 por las dos»*— y el recorte de lectura se decide **una vez** y se
+declara con `--extraccion subconjunto --reason`, en vez de reconstruirse a ojo cada corrida. Lista
+vacía = no es core; el campo existe siempre, así que «no consta» y «ninguna puerta» no se confunden.
+
 ⚠ **`fundacional_min_citas` no tiene default**: el número depende del campo (30k citas es normal en
 ML y muchísimo en astro) y esconderlo sería decidir por el usuario. Sin declararlo la puerta 2 **no
 abre** y el motivo queda en `why_excluded`. *(Anotado en `vault/STATUS.md` como **decisión abierta**

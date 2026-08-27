@@ -1378,6 +1378,7 @@ def papers_universe(slug: str, kind: str, fms: dict | None = None) -> list:
             estado = ESTADO_SINTETIZADO
         else:
             estado = ESTADO_EXTRAIDO
+        # @inv INV-115
         # #125: el TÍTULO. Sin él, la fila es un bibcode pelado y para saber si un paper `sin
         # extraer` te sirve hay que abrir la nota, una por una (25 en un caso real). Es la puerta de
         # entrada a los papers que están en el corpus buscable y todavía no en la síntesis.

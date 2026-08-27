@@ -97,7 +97,22 @@ def prioridad(slug: str) -> int:
                      f"citas como desempate)\n")
     for r in recs:
         f = cfg.as_list(r.get("facets"))
-        cfg.print_seguro(f"  {len(f)} ✦  {row(r).strip()}")
+        pu = cfg.as_list(r.get("puertas"))
+        cfg.print_seguro(f"  {len(f)} ✦  {row(r).strip()}"
+                         + (f"  · {'+'.join(pu)}" if pu else ""))
+    # #126: en un tema de MÉTODO la pregunta útil no es paper por paper sino por POLÍTICA. La puerta
+    # que admitió a cada uno ya está en el registro, así que el corte se propone una vez —y se
+    # declara con `--extraccion subconjunto --reason`— en vez de reconstruirse a ojo cada corrida.
+    grupos: dict = {}
+    for r in recs:
+        grupos.setdefault("+".join(cfg.as_list(r.get("puertas"))) or "(sin puerta registrada)",
+                          []).append(r)
+    if any(k != "(sin puerta registrada)" for k in grupos):
+        cfg.print_seguro("\n  Por POLÍTICA (D-26: qué puerta lo admitió):")
+        for k in sorted(grupos):
+            cfg.print_seguro(f"    · {k}: {len(grupos[k])}")
+        cfg.print_seguro("    Elegí una política —sólo fundacionales, fundacionales + astro, todo— "
+                         "y declarala:")
     cfg.print_seguro("\n  Al recortar la lectura, declaralo: "
                      f"`python scripts/triage.py {slug} --extraccion subconjunto --reason \"...\"`")
     return 0

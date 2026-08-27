@@ -1707,3 +1707,46 @@ def test_sin_abstract_no_cambia_el_veredicto(toy_classifier):
     haría que ser core dejara de ser función de `(paper, lente)` — INV-24."""
     d = {"bibcode": "1968Old...1..1A", "title": ["Starspot evolution"], "doctype": "article"}
     assert qa.to_record(d)["relevant"] is True
+
+
+# ── #126 · por qué puerta entró cada paper de un tema de método ──────────────────────────────────
+
+def test_la_puerta_que_admitio_al_paper_queda_registrada(toy_classifier):
+    """`classify_theme` computa las dos puertas por separado y, cuando el paper entra, devolvía
+    `(facets, True, None)`: **se perdía cuál abrió**. El `motivo` sólo existía para el NO.
+
+    Es la única metadata que distingue, **sin leer el paper**, un fundamento de su campo de una
+    aplicación astro — y está disponible ANTES de la extracción, que es cuando hay que decidir qué
+    se lee. (`role` no sirve: lo puebla la extracción, o sea después.)
+
+    @inv INV-116"""
+    meta = {"facet": "independent component", "fundacional_min_citas": 2000}
+    # registros YA persistidos: `title` es string (así los deja `to_record`)
+    fund = {"title": "Independent component analysis: algorithms", "citation_count": 9000,
+            "doctype": "article"}
+    astro = {"title": "Independent component analysis of stellar activity",
+             "abstract": "radial velocity", "citation_count": 3, "doctype": "article"}
+    assert qa.classify_theme(fund, meta)[1] is True
+    assert qa.puertas_abiertas(fund, meta) == ("fundacional",)
+    assert qa.puertas_abiertas(astro, meta) == ("astro",)
+    ambas = {"title": "Independent component analysis of stellar activity",
+             "abstract": "radial velocity", "citation_count": 9000, "doctype": "article"}
+    assert qa.puertas_abiertas(ambas, meta) == ("fundacional", "astro")
+    fuera = {"title": "something else", "citation_count": 5, "doctype": "article"}
+    assert qa.puertas_abiertas(fuera, meta) == ()
+
+
+def test_la_puerta_viaja_en_el_registro_del_paper(toy_classifier):
+    """Guardarla en `to_record` es lo que permite curar por POLÍTICA («sólo fundacionales»,
+    «fundacionales + astro») en vez de paper por paper, y auditar después por qué un paper es core.
+
+    @inv INV-116"""
+    meta = {"facet": "independent component", "fundacional_min_citas": 2000}
+    recs = [qa.to_record({"bibcode": "2000Hyv", "title": ["Independent component analysis"],
+                          "citation_count": 9000, "doctype": "article"}),
+            qa.to_record({"bibcode": "2020Fuera", "title": ["asteroseismology of red giants"],
+                          "citation_count": 5, "doctype": "article"})]
+    qa.reclassify_for_theme(recs, meta)
+    assert recs[0]["puertas"] == ["fundacional"]
+    assert recs[1]["puertas"] == [], "no es core: lista vacía, no ausencia del campo"
+    assert "puertas" in recs[1], "el campo existe siempre — «no consta» y «ninguna» no se confunden"

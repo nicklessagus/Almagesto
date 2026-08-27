@@ -669,3 +669,30 @@ def test_tema_meta_resuelve_el_concept_y_tolera_una_estrella(toy_vault):
     assert triage._tema_meta("gp").get("concept") == "procesos-gaussianos"
     assert triage._tema_meta("test_star") == {}, "una estrella no es un tema: {} , no una excepción"
     assert triage._tema_meta("no-existe") == {}
+
+
+def test_prioridad_agrupa_por_puerta_en_un_tema(toy_vault, capsys, monkeypatch):
+    """#126: en un tema de método, la pregunta útil no es paper por paper sino **por política**:
+    «¿querés sólo los fundacionales de su campo, o también las aplicaciones astro?».
+
+    La puerta que admitió a cada uno ya está en el registro (`puertas`), así que el listado puede
+    agruparse y proponerse una vez, en vez de reconstruirse a ojo cada corrida.  @inv INV-116"""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ica",
+                                         "facet": "independent component",
+                                         "fundacional_min_citas": 2000}})
+    build = cfg.ROOT / "build" / "ica"
+    build.mkdir(parents=True, exist_ok=True)
+    (build / "ads.json").write_text(json.dumps({"records": [
+        {"bibcode": "2000Hyv", "title": "ICA: algorithms", "relevant": True,
+         "facets": ["method"], "citation_count": 9000, "puertas": ["fundacional"]},
+        {"bibcode": "2019Astro", "title": "ICA en actividad estelar", "relevant": True,
+         "facets": ["rv", "actividad"], "citation_count": 3, "puertas": ["astro"]},
+        {"bibcode": "2021Ambas", "title": "ICA para RV, muy citado", "relevant": True,
+         "facets": ["rv"], "citation_count": 5000, "puertas": ["fundacional", "astro"]},
+    ]}), encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["triage.py", "ica", "--prioridad"])
+    triage.main()
+    out = capsys.readouterr().out
+    assert "fundacional" in out and "astro" in out
+    assert "1 sólo fundacional" in out or "fundacional (1)" in out or "· fundacional" in out
+    assert "política" in out.lower(), "propone elegir por política, no paper por paper"

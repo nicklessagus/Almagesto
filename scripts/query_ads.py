@@ -724,6 +724,33 @@ def to_record(d: dict) -> dict:
     }
 
 
+def _facet_propia(meta: dict):
+    """La lente propia del tema, compilada. Muere con mensaje si falta o no compila.
+
+    Extraída porque la usan DOS caminos (`classify_theme` y `puertas_abiertas`) y la regla tiene que
+    ser una sola: dos copias de la misma regla es exactamente donde vive el bug (regla de método
+    nº 2)."""
+    facet_raw = (meta or {}).get("facet")
+    if not facet_raw:
+        sys.exit(f"themes.yaml: el tema '{(meta or {}).get('title', '?')}' no declara `facet:` — es "
+                 "la lente propia del tema y sin ella no hay regla que aplicar (D-26). Agregala:\n"
+                 "  facet: 'independent component|blind source separation'")
+    try:
+        return re.compile(facet_raw, re.I)
+    except re.error as exc:
+        sys.exit(f"themes.yaml: `facet:` del tema no compila como regex ({exc})")
+
+
+def _texto_clasificable(rec: dict) -> str:
+    """Título + abstract + keywords, en minúsculas — el texto sobre el que matchea toda lente.
+    Tolera `title` como string o como lista (los backends no coinciden)."""
+    return " ".join(filter(None, [
+        " ".join(cfg.as_list(rec.get("title")) or [rec.get("title") or ""]),
+        rec.get("abstract") or "",
+        " ".join(cfg.as_list(rec.get("keyword"))),
+    ])).lower()
+
+
 def classify_theme(rec: dict, meta: dict) -> tuple[list[str], bool, str | None]:
     """Relevancia de un paper para un **tema de método** (D-26 / INV-88). Devuelve
     `(facets_globales, core, motivo)`; `motivo` es `None` sii es core.
@@ -747,21 +774,8 @@ def classify_theme(rec: dict, meta: dict) -> tuple[list[str], bool, str | None]:
     plan **propone y no clasifica**, así que alimenta los candidatos del triage
     (`citation_index.cited_by_corpus`). Si clasificara, ser core dejaría de ser función de
     `(paper, lente)` y INV-24 se rompería."""
-    facet_raw = (meta or {}).get("facet")
-    if not facet_raw:
-        sys.exit(f"themes.yaml: el tema '{(meta or {}).get('title', '?')}' no declara `facet:` — es "
-                 "la lente propia del tema y sin ella no hay regla que aplicar (D-26). Agregala:\n"
-                 "  facet: 'independent component|blind source separation'")
-    try:
-        propia = re.compile(facet_raw, re.I)
-    except re.error as exc:
-        sys.exit(f"themes.yaml: `facet:` del tema no compila como regex ({exc})")
-
-    texto = " ".join(filter(None, [
-        " ".join(cfg.as_list(rec.get("title")) or [rec.get("title") or ""]),
-        rec.get("abstract") or "",
-        " ".join(cfg.as_list(rec.get("keyword"))),
-    ])).lower()
+    propia = _facet_propia(meta)
+    texto = _texto_clasificable(rec)
     facets_globales, core_global = classify_record(rec)
 
     if not propia.search(texto):
@@ -780,6 +794,7 @@ def classify_theme(rec: dict, meta: dict) -> tuple[list[str], bool, str | None]:
     puerta3 = core_global
     if puerta2 or puerta3:
         return facets_globales, True, None
+    # (la puerta que abrió se recupera con `puertas_abiertas`, que comparte esta misma regla)
     if umbral is None:
         return facets_globales, False, ("ninguna puerta abre; la 2 (fundacional) está apagada "
                                         "porque el tema no declara `fundacional_min_citas`")
@@ -789,6 +804,40 @@ def classify_theme(rec: dict, meta: dict) -> tuple[list[str], bool, str | None]:
                                         "citas (arXiv no lo publica) — enriquecer por DOI o "
                                         "juzgarlo a mano")
     return facets_globales, False, "ninguna puerta abre (ni fundacional ni lente astro)"
+
+
+# #126 · vocabulario CERRADO de las puertas de D-26, en el orden en que se evalúan.
+PUERTAS = ("fundacional", "astro")
+
+
+def puertas_abiertas(rec: dict, meta: dict) -> tuple:
+    """Qué puerta(s) de D-26 admiten a este paper: `("fundacional",)`, `("astro",)`, las dos, o `()`.
+
+    `classify_theme` calculaba las dos por separado y, cuando el paper entraba, devolvía
+    `(facets, True, None)`: **se perdía cuál abrió**. El `motivo` sólo existía para el NO, así que
+    la bóveda podía decir por qué un paper quedó afuera y no por qué está adentro.
+
+    Es la única metadata que distingue **sin leer el paper** un fundamento de su campo (muy citado,
+    puede no mencionar astro ni una vez) de una aplicación astro (tres citas, pero es lo que esta
+    bóveda busca). ⚠ `role` no sirve para esto: lo puebla la EXTRACCIÓN, o sea después de leer, y
+    esta decisión se toma antes — es la que dice qué se lee.
+
+    Habilita curar por **política** («sólo fundacionales», «fundacionales + astro») en vez de paper
+    por paper, y auditar después por qué un paper es core.
+
+    @inv INV-116"""
+    propia = _facet_propia(meta)
+    texto = _texto_clasificable(rec)
+    if not propia.search(texto) or (rec.get("doctype") or "") in NOISE_DOCTYPES:
+        return ()
+    umbral = (meta or {}).get("fundacional_min_citas")
+    citas = rec.get("citation_count")
+    out = []
+    if isinstance(umbral, int) and citas is not None and citas >= umbral:
+        out.append("fundacional")
+    if classify_record(rec)[1]:
+        out.append("astro")
+    return tuple(out)
 
 
 def reclassify_for_theme(recs: list, meta: dict) -> tuple[list, list]:
@@ -814,6 +863,10 @@ def reclassify_for_theme(recs: list, meta: dict) -> tuple[list, list]:
         if ahora != antes:
             (entraron if ahora else salieron).append(r.get("bibcode"))
         r["relevant"], r["why_excluded"] = ahora, why
+        # #126: por qué está ADENTRO. `why_excluded` sólo explicaba el NO, así que la bóveda podía
+        # decir por qué un paper quedó afuera y no por qué es core. Lista vacía = no es core; el
+        # campo existe siempre, así que "no consta" y "ninguna puerta" no se confunden.
+        r["puertas"] = list(puertas_abiertas(r, meta)) if ahora else []
     return entraron, salieron
 
 
