@@ -35,7 +35,8 @@ hepatocellular carcinoma — **2 of 30** on topic. Filtering by `topics.id` firs
 the top 25 (Bell&Sejnowski #19, Hyvärinen&Oja #20, Comon #22, the HKO book #25). Ranking without a
 structural filter amplifies; it does not filter. Hence `topics()` before `seed()`.
 
-CLI (preview only — writes nothing, downloads nothing):
+CLI (proposes only: downloads nothing and writes no note; it DOES append the
+discovery run to the versioned registry — see `_preview_theme`):
     python scripts/discover.py --topics "blind source separation"
     python scripts/discover.py --theme ica
 """
@@ -459,7 +460,11 @@ def _theme_anchor(slug: str) -> list:
 
 
 def _preview_theme(slug: str, rows: int = 25, min_citadores: int = 2) -> int:
-    """Full cascade for one theme, preview only: writes nothing, downloads nothing."""
+    """Full cascade for one theme, proposes only: downloads no file and writes nothing to `vault/wiki/`. It DOES
+    append this run to `descubrimientos:` of the versioned registry (INV-121), which is
+    deliberate — a discovery pass that leaves no trace is lost as soon as the terminal
+    scrolls, the failure mode #55/#88 closed for triage and sweep. The docstring said
+    otherwise until #133, contradicting INV-59 on paper."""
     tema = cfg.as_map(cfg.load_themes().get(slug))
     if not tema:
         cfg.print_seguro(f"'{slug}' no está en themes.yaml")

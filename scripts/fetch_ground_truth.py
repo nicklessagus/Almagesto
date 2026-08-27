@@ -247,6 +247,7 @@ def fetch_host(host: str, tab=None) -> dict:
                 "dec_deg": _val(r, "dec"),
             })
     except Exception as e:
+        out.setdefault(AUTORIDAD_CAIDA, []).append("nea")
         cfg.print_seguro(f"  ⚠ NEA (columnas de host) no respondió para {host!r}: {e} — los "
                           "campos de host quedan sin completar (no es lo mismo que NEA sin el "
                           "dato: revisar a mano si hace falta).")
@@ -276,6 +277,7 @@ def fetch_host(host: str, tab=None) -> dict:
                     out["spectral_type"] = _val(r, k)
                     break
     except Exception as e:
+        out.setdefault(AUTORIDAD_CAIDA, []).append("simbad")
         cfg.print_seguro(f"  ⚠ SIMBAD no respondió para {host!r}: {e} — spectral_type puede "
                           "quedar null por esto y no por ausencia real del dato.")
     # D-1: qué autoridad contestó cada campo. Se persiste porque es lo que la ficha publica en su
@@ -294,6 +296,18 @@ def fetch_host(host: str, tab=None) -> dict:
 
 
 # ── D-45 / INV-85: qué cambió afuera desde el snapshot ───────────────────────────────────────────
+
+# #171 · qué autoridad NO contestó en esta corrida. Es un marcador **efímero**: lo lee `nea_diff`
+# para levantar en vez de reportar el corte como un cambio real, y `host_persistible` lo saca antes
+# de escribir. No es un campo del schema — H-14/H-15 ya decidió que al ground-truth no se le
+# escriben campos sin lector, y ése sigue siendo el criterio.
+AUTORIDAD_CAIDA = "_autoridad_caida"
+
+
+def host_persistible(host: dict) -> dict:
+    """El dict de host sin los marcadores efímeros (#171). Lo que se escribe al JSON."""
+    return {k: v for k, v in host.items() if k != AUTORIDAD_CAIDA}
+
 
 def nea_diff(slug: str) -> list:
     """Diff campo a campo entre el snapshot en disco y lo que NEA/SIMBAD dicen HOY.  @inv INV-85
@@ -322,6 +336,15 @@ def nea_diff(slug: str) -> list:
     name, _ = cfg.star_by_slug(slug)
     tab = fetch_pscomppars(name)
     host_nuevo = fetch_host(name, tab=tab)
+    if (caidas := host_nuevo.get(AUTORIDAD_CAIDA)):
+        # ⛔ #171: sin esto, una caída de SIMBAD devolvía `spectral_type=None` y el diff reportaba
+        # `'G8V' → None` como si NEA/SIMBAD hubieran RETIRADO el valor. El slug no entraba en
+        # `fallidos`, la pasada estampaba `cubrio: ground-truth` sobre una comparación que no se
+        # hizo, y con `--yes` además aplicaba el cambio inventado. Mismo trato que el snapshot
+        # ilegible (AUD-43): se propaga para que el barrido lo cuente como NO evaluado.
+        raise ValueError(f"{', '.join(str(c).upper() for c in caidas)} no respondió para {slug}: "
+                         f"no se puede diffear contra una autoridad que no contestó")
+    host_nuevo = host_persistible(host_nuevo)
     planets_nuevos = fetch_planets(tab, host_nuevo.get("mass_msun"))
 
     cambios = []
@@ -383,7 +406,7 @@ def main() -> int:
     except Exception as e:
         sys.exit(f"NEA (pscomppars) no respondió para {host!r}: {e} — reintentá; "
                  "fetch_ground_truth no pisa un snapshot existente.")
-    host_info = fetch_host(host, tab)
+    host_info = host_persistible(fetch_host(host, tab))
     planets = fetch_planets(tab, host_info.get("mass_msun"))
     print(f"  planetas confirmados: {len(planets)}  | sp_type: {host_info.get('spectral_type')}"
           f"  | M*: {host_info.get('mass_msun')}")

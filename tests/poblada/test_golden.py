@@ -167,9 +167,15 @@ def test_reporte_lista_todas_las_categorias(sembrar):
     protege; el `(0)` inventado y la desaparición muda son el mismo bug visto de los dos lados.  @inv INV-41"""
     _, crudo, _ = _correr_golden(sembrar)
     titulos = [l for l in crudo.splitlines() if l.startswith("## ")]
-    assert len(titulos) == 63, (
-        f"el reporte trae {len(titulos)} categorías, se esperaban 63 — alguna sección dejó de "
-        "imprimirse (o se agregó una nueva sin actualizar este test)")
+    # #145: el número NO se escribe acá. Este test protege que el reporte imprima **todas** las
+    # categorías que `lint.collect()` declara —una sección que desaparece en silencio es el mismo
+    # bug que un `(0)` inventado, visto del otro lado—; el literal a mano ya caducó y sólo movía el
+    # problema de lugar. Se deriva de la fuente única (la tabla de `collect`).
+    import lint as _lint
+    esperadas = len([c for c in _lint.collect().categorias if not c.suprimida])
+    assert len(titulos) == esperadas, (
+        f"el reporte trae {len(titulos)} categorías y `lint.collect()` declara {esperadas} — "
+        "alguna sección dejó de imprimirse")
     no_eval = [t for t in titulos if "No evaluado" in t]
     assert no_eval and no_eval[0].endswith("(0)"), (
         "sobre el corpus congelado (con git y objective sano) nada debería quedar sin evaluar")

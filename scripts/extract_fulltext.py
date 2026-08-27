@@ -329,7 +329,12 @@ def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser()
     ap.add_argument("slug")
-    ap.add_argument("--force", action="store_true")
+    ap.add_argument("--force", action="store_true",
+                    help="RE-EXTRAE el `.txt` aunque ya exista. ⚠ Es uno de los tres únicos "
+                         "casos en que el `.txt` se reescribe, y reescribirlo VENCE las anclas "
+                         "de fuente de `verify-citations` (D-20): los pares verificados contra "
+                         "ese archivo quedan marcados. Usar sólo cuando el texto en disco está "
+                         "mal, no para 'refrescar'.")
     ap.add_argument("--ocr", action="store_true",
                     help="extraer por OCR (tesseract) en vez de pdftotext; sin este flag el OCR "
                          "corre solo como fallback cuando la capa de texto no es legible")

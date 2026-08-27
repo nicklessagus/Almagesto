@@ -49,7 +49,7 @@ para ingestar. En Windows, los comandos de shell corren en Git Bash o WSL.
 | `vault/wiki/log.md` | Registro append-only de operaciones. |
 | `vault/config/stars.yaml` · `vault/config/themes.yaml` | Estrellas / temas de la bóveda (nombres canónicos + alias). |
 | `vault/config/ads_dev_key` | Token NASA ADS — **GITIGNORED** (nunca se commitea). |
-| `vault/config/registro/_red.yaml` | **Cuándo se miró afuera por última vez** (retracciones, correcciones, versiones, ground-truth, snapshot web). Lo escribe `python scripts/sweep_external.py`, la pasada de red unificada. |
+| `vault/config/registro/_red.yaml` | **Cuándo se miró afuera por última vez** (retracciones, correcciones, versiones, ground-truth, snapshot web, citas-puerta2) **y qué NO se pudo mirar** (`no_evaluados`, #172). Lo escribe `python scripts/sweep_external.py`, la pasada de red unificada. |
 | `vault/config/registro/<slug>.yaml` | **Registro de ingesta por sujeto (se commitea).** `busquedas` (lista, **acumulativa**: una entrada por corrida): qué se le preguntó a ADS, cuándo, con qué límite y con qué corte. `cadena`: qué pasos corrieron, con fecha y versión. `decisiones`: qué descartaste y por qué, en los dos carriles (candidatos del triage y fuentes declaradas de un tema off-ADS). |
 | `build/` · `outputs/` | **GITIGNORED** — intermedios de ingesta y reportes de lint. |
 
@@ -94,27 +94,98 @@ python triage.py <slug> --extraccion todos|subconjunto [--reason "<criterio>"]
 python triage.py <slug> --sintesis [--n-papers N] [--reason "<nota>"]
                                     #   INV-82: declarar CUÁNDO se sintetizó — la tercera fecha de
                                     #   la cabecera. No se puede derivar (git fecha el ARCHIVO)
+python triage.py <slug> --prioridad # la cola de EXTRACCIÓN: ordena los core por cuántas facetas
+                                    #   del objetivo tocan (#87) y los agrupa por POLÍTICA — por cuál
+                                    #   puerta de D-26 entró cada uno (#126). Con eso el recorte de
+                                    #   lectura se decide UNA vez y se declara con --extraccion
 python lint.py                      # chequeo de salud → outputs/lint-<fecha>.md (exit 1 si hay bloqueantes)
-                                    #   --cierre: los pares de verificación vencidos BLOQUEAN
+                                    #   --cierre [SLUG]: los pares de verificación vencidos BLOQUEAN.
+                                    #   ⛔ Con SLUG (#121) el alcance del EXIT son las notas de ese
+                                    #   sujeto: sin él, la deuda vieja de OTRA entidad deja el gate en
+                                    #   rojo antes de empezar y hay que auditarlo a ojo. El reporte NO
+                                    #   se acota (la deuda ajena se lista, marcada «no frena»), y un
+                                    #   bloqueante cuenta venga de donde venga
 ```
 
 **Pasadas globales** (no dependen del sujeto en curso; hermanas entre sí):
 
 ```bash
-python scripts/sweep_external.py    # la PASADA DE RED: los cinco eventos que caducan afuera
+python scripts/sweep_external.py    # la PASADA DE RED: los seis eventos que caducan afuera
                                     #   (retracciones, correcciones, versiones, snapshot web,
-                                    #   ground-truth). Reporta el diff y PREGUNTA antes de aplicar;
-                                    #   la caducidad queda en vault/config/registro/_red.yaml
+                                    #   ground-truth y cruces del umbral de la puerta 2 — #106).
+                                    #   Reporta el diff y PREGUNTA antes de aplicar; la caducidad
+                                    #   queda en vault/config/registro/_red.yaml, junto con lo que
+                                    #   NO se pudo mirar (`no_evaluados`, #172)
 python scripts/entity.py plan   <slug>              # las siete capas de una entidad — no escribe
 python scripts/entity.py delete <slug> --yes        # borrar sin dejar nada colgado (INV-19)
 python scripts/entity.py rename <viejo> <nuevo> --yes
 python scripts/citation_index.py    # índice invertido obra→citadores (caro: ADS + OpenAlex)
 python scripts/search_arxiv.py "independent component analysis" --categories stat.ML --rows 25
                                     # preview de un backend no-ADS: qué trae y qué clasifica como
-                                    # core con TU lente. No baja ni escribe nada. ⚠ `search_arxiv`
-                                    # NO está cableado a la cadena de ingest (issue #95): esto es
-                                    # exploración para decidir si vale cablearlo.
+                                    # core con TU lente. No baja ni escribe nada. ⚠ El orquestador
+                                    # `ingest_theme.py` NO corre este backend solo (#95/#144): lo
+                                    # alcanza `discover.cascade`, que es el paso 0b del skill
+
+python scripts/discover.py --theme <slug>     # DESCUBRIMIENTO multi-backend (#104): ADS + arXiv +
+                                    #   OpenAlex + anclaje por las referencias de la mitad astro del
+                                    #   propio tema. Cada backend recibe la query en SU idioma
+                                    #   (`query:` Solr, `aliases:` para arXiv, `topic:` para
+                                    #   OpenAlex), y la cobertura distingue TRES estados: corrió con
+                                    #   N, FALLÓ, o NO CORRIÓ y por qué. PROPONE; no clasifica
+python scripts/discover.py --topics "<tema en inglés>"   # el id T… de OpenAlex → `topic:` en themes.yaml
+python scripts/discover.py --resolve 10.1016/…           # ¿hay copia libre de ese DOI? (OpenAlex → Unpaywall)
+python scripts/extraction_prompt.py <slug> <bibcode> [--theme] [--out-dir DIR]
+                                    # arma el prompt del paso 3 (extracción) para UN par
+                                    # (paper, sujeto). Es INV-100: las reglas del skill viajan
+                                    # generadas, no escritas de memoria en cada fan-out
 ```
+
+**Los cuatro cuadrantes de la curación** — aceptar/descartar × ADS/off-ADS, y ninguno queda mudo:
+
+```bash
+# ADS · descartar un CANDIDATO del citation chaining (#51)
+python scripts/triage.py <slug> --drop <bib> … --reason "<motivo>"
+# ADS · descartar un CORE del sujeto (#112) — el simétrico de extra_core, que fuerza la ENTRADA.
+#   El carril es (paper, sujeto), no global; el paper queda VISIBLE con via: manual-drop; y los
+#   artefactos (PDF y .txt) se borran, porque si quedan #108 los reporta para siempre.
+python scripts/triage.py <slug> --drop-core <bib> … --reason "<motivo>"
+# off-ADS · descartar una FUENTE declarada (#81)
+python scripts/triage.py <slug> --drop-source <clave|url> --reason "<motivo>"
+# off-ADS · ACEPTAR una fuente (#111): arma la entrada de `sources:` lista para pegar, con metadata
+#   real de OpenAlex y el archivo resuelto (o `pending: paywall`). NO escribe themes.yaml.
+python scripts/triage.py <slug> --accept-source <doi> --via usuario|descubrimiento|reporte \
+                                --reason "<motivo>"
+```
+⚠ Los dos `via` son vocabularios cerrados **distintos** (#162): `extra_core` (carril ADS) usa
+`usuario | triage | citado-por-corpus`; `sources:` (carril off-ADS) usa
+`usuario | descubrimiento | reporte`. Comparten sólo `usuario`.
+
+**Escotillas DESTRUCTIVAS** — las que pisan trabajo ya pagado. Ninguna se corre "para refrescar":
+
+```bash
+python scripts/fetch_web.py <url> --force-note   # ⛔ REGENERA la nota de paper: PISA la extracción
+                                    #   LLM, que es el paso más caro de la cadena. Sin este flag,
+                                    #   `--force` re-baja el snapshot y NO toca la nota
+python scripts/extract_fulltext.py <slug> --force  # ⛔ RE-EXTRAE el .txt. Es uno de los TRES casos
+                                    #   en que el .txt se reescribe, y eso VENCE las anclas de
+                                    #   fuente (D-20): los pares verificados contra él quedan
+                                    #   marcados. Usar cuando el texto está mal, no por rutina
+python scripts/make_notes.py <slug> --force       # ⛔ re-escribe ficha y notas: pisa la síntesis LLM.
+                                    #   Las cirugías idempotentes (--restamp-*) hacen lo que casi
+                                    #   siempre se quiere, sin pisar prosa
+python scripts/triage.py <slug> --drop-core <bib> --reason "…"  # ⛔ borra PDF y .txt del par
+                                    #   (paper, sujeto). La decisión queda versionada; el artefacto no
+```
+
+⚠ **#166 · flags que existían sólo en su propio `--help`.** El barrido de la auditoría 2026-08-27
+encontró **18** banderas de `argparse` que ningún documento del repo nombraba — la peor,
+`fetch_web --force-note`, cuya propia ayuda dice *"PISA la extracción LLM"*. Un flag destructivo sin
+mención fuera de su `--help` no tiene dónde declararse como escotilla, que es justamente lo que este
+bloque arregla. Las otras quedan cubiertas por los bloques de arriba (`--prioridad`, `--drop-core`,
+`--accept-source`, `--migrate-verif-archivo`, los tres de `discover.py`, `extraction_prompt --out-dir`,
+`extract_fulltext --ocr`, `trace_invariants --check`) o son de conveniencia
+(`--max`, `--paper`, `--out`, `--limit`, `--accessed`, `--json`, `--por-slug`, `--listar`,
+`--no-chain`, `--root`): la lista completa está en el issue.
 
 **Migradores y backfills** (una sola corrida; el framework no lleva capas de retrocompatibilidad,
 así que cada cambio de schema entrega migrador **y** detector bloqueante — INV-64):
@@ -129,6 +200,7 @@ python scripts/make_notes.py --restamp-headers    # cabecera a las notas que nac
 python scripts/make_notes.py --restamp-keywords   # D-17: `keywords:` desde build/*/ads.json
 python scripts/make_notes.py --restamp-pdf-links  # #47: el link [📄 PDF] ↔ frontmatter `pdf`
 python scripts/make_notes.py --sync-mirror        # #70: campos espejo de NEA que quedaron en null
+python scripts/make_notes.py --migrate-verif-archivo # #117: prefija cada `Hash fuente` con `txt:`/`pdf:`
 python scripts/make_notes.py --rename-paper VIEJO NUEVO   # D-19: ciclo preprint → publicado
 ```
 

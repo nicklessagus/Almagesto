@@ -210,7 +210,14 @@ def test_el_conteo_del_encabezado_es_el_de_las_filas():
     assert declarado == real, (
         f"el encabezado declara {declarado} y las filas dan {real} "
         f"(medidos, garantizados, sin medir, parciales, HUECO, INCUMPLIDO)")
-    assert sum(real) == len(_estados_del_contrato()) == 126
+    # #149: el TOTAL se deriva, no se escribe. El literal ya caducó una vez —el encabezado
+    # decía «sobre los 104» con 126 filas— y fijarlo a mano acá sólo movía el problema de
+    # lugar. Lo que este assert protege es que el desglose CUBRA todas las filas: si una
+    # queda fuera de las seis categorías, la suma no da y el resumen estaría mintiendo por
+    # omisión en vez de por número.
+    assert sum(real) == len(_estados_del_contrato()), (
+        f"el desglose suma {sum(real)} y el contrato tiene {len(_estados_del_contrato())} "
+        "filas: hay estados que ninguna categoría del resumen cubre")
 
 
 def test_los_flags_retirados_siguen_retirados():

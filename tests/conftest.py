@@ -136,7 +136,14 @@ def sin_tocar_la_boveda_real(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def sin_red(monkeypatch):
-    """Cualquier petición HTTP real desde un test explota **y queda registrada**.
+    """Cualquier petición HTTP real desde un test explota **y queda registrada**.  @inv INV-114
+
+    ⚠ La marca vive ACÁ desde #136. INV-114 dice *"la suite no sale a la red, y eso es un assert"*, y
+    sus dos únicos punteros apuntaban a código y test de **producción** (`ingest_theme.ingest_offads`
+    evitando `resolve_pdf` para `pending: adquisicion`, que el contrato mismo describe como *efecto
+    colateral*). O sea: un P0 contaba como *con implementación marcada* y *con test marcado*, y quien
+    siguiera el puntero para auditar «¿qué impide que la suite salga a la red?» llegaba a un
+    `if why != "adquisicion"`. El assert es esta fixture.
 
     ⚠ Las dos mitades hacen falta. Levantar la excepción sola no alcanza: el código de producción
     está lleno de `except` que degradan limpio ante un backend caído —que es la conducta correcta

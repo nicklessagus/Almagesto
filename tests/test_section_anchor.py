@@ -136,10 +136,21 @@ def test_pipe_escapado_en_una_celda_no_corre_las_columnas():
 
 
 def test_fila_con_mas_celdas_que_el_encabezado_no_se_lee_corrida():
-    """Un `|` SIN escapar es una fila malformada: mejor par sin cubrir que ancla de otra columna.
+    """Un `|` SIN escapar corre las columnas de la DERECHA: mejor par sin cubrir que ancla ajena.
 
     El fallo silencioso es el caro — el lint la contaba como verificada contra un ancla ajena.
+
+    ⚠ **Actualizado por #128.** Hasta 1.67.1 esto devolvía `[]`: la fila se descartaba ENTERA, y con
+    ella el `Veredicto` — así que un `no-soportada` con una barra en la evidencia dejaba de disparar
+    el bloqueante de INV-117 y quedaba invisible. Lo que no se puede indexar por posición son las
+    columnas corridas, **no la fila**: hoy se recupera lo decidible por contenido (veredicto contra
+    su vocabulario, bibcode por su `[[…]]`) y las posicionales vuelven **vacías**, que es lo que
+    manda el par a «sin verificar» en vez de darlo por chequeado.
     """
     fila = ('| 1 | claim | [[2009Uno.....1..1M]] | soportada | — | "a | b" (L1) | aaaaaaaaaa | bbbbbbbbbb | — |')
     filas = lb.parse_verif_table(_nota(fila))
-    assert filas == [], "una fila con más celdas que el encabezado no se puede indexar por posición"
+    assert len(filas) == 1, "la fila no desaparece (#128)"
+    assert filas[0].anchor == "" and filas[0].source_hash == "" and filas[0].source_kind is None, \
+        "las columnas corridas no se adivinan: vuelven vacías"
+    assert filas[0].verdict == "soportada" and filas[0].bibcode == "2009Uno.....1..1M", \
+        "lo decidible por contenido sí se recupera"

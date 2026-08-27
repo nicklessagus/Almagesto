@@ -121,13 +121,23 @@
 #   facet: 'gaussian process|GP regression|kernel (function|method)'
 #   fundacional_min_citas: 2000
 #   sources:
+#     # ⛔ `via` y `motivo` son OBLIGATORIOS (#111) y el lint los BLOQUEA si faltan. Hasta #181 este
+#     # ejemplo —la única forma escrita de cómo se declara una fuente off-ADS, o sea la que un agente
+#     # copia— los omitía, así que enseñaba la forma que el detector rechaza. Es el mismo problema
+#     # que D-58 cerró para `extra_core` imprimiendo el snippet canónico.
+#     # `via` cerrado: usuario (lo pidió) · descubrimiento (lo propuso la cascada) · reporte (vino de
+#     # un documento externo). NO es el `via` de `extra_core`, que es el carril ADS.
 #     - key: 2006RasmussenWilliams
 #       pdf: ~/Descargas/rasmussen_williams_2006.pdf
 #       title: "Gaussian Processes for Machine Learning"
 #       author: Rasmussen
 #       year: 2006
+#       via: usuario
+#       motivo: el libro de referencia del tema; lo pidió el usuario para la nota de método
 #     - key: 2025sklearn
 #       url: https://scikit-learn.org/stable/modules/gaussian_process.html
 #       title: "scikit-learn User Guide: Gaussian Processes"
 #       venue: scikit-learn.org
 #       year: 2025
+#       via: usuario
+#       motivo: documenta la parametrización de kernels que la nota necesita citar

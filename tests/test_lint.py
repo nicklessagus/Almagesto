@@ -468,7 +468,11 @@ def test_role_valido_escalar_o_lista(toy_vault, capsys, rol):
     paper_extraido(toy_vault, stem="2020lis....1L", role=[rol], no_sintetizado="tangencial")
     rc, out = run_lint(capsys)
     assert rc == 0
-    assert "`role` fuera del vocabulario (fundacional/aplicacion/arbitro) (0)" in out
+    # #129: la categoría dejó de ser sólo de `role` — es el bucket de TODO campo con
+    # vocabulario cerrado (`role` · `unidad_cita` · `pending_source`), que es lo que
+    # INV-46 enuncia. Se assertea la clave y el conteo, no el título.
+    assert "`role` fuera del vocabulario" in out
+    assert lint.collect().por_clave("bad_roles").items == ()
 
 
 def test_role_multiple_valida_cada_elemento(toy_vault, capsys):
@@ -2697,7 +2701,11 @@ def test_las_claves_de_categoria_son_unicas_y_estables(toy_vault):
     equivocada en silencio."""
     claves = [c.clave for c in lint.collect().categorias]
     assert len(claves) == len(set(claves)), [k for k in claves if claves.count(k) > 1]
-    assert len(claves) == 63, f"el reporte tiene {len(claves)} categorías, se esperaban 63"
+    # #145: el conteo NO se escribe acá. El número literal ya caducó tres veces (INV-41 publicaba 48
+    # con 63 en el código) y un test que lo fija a mano sólo mueve el problema de lugar. Lo que este
+    # test protege es la unicidad; que el número publicado en la doc salga del código lo ata
+    # `tests/poblada/test_conteos_exactos.py::test_los_numeros_que_la_doc_publica_salen_del_codigo`.
+    assert len(claves) >= 60, "el reporte perdió categorías: alguien borró un detector"
 
 
 def test_el_modo_cierre_solo_cambia_el_exit_de_los_pares(toy_vault):
@@ -3017,7 +3025,10 @@ def test_source_completa_no_bloquea(toy_vault, capsys):
 def test_log_sin_entrada_se_reporta(toy_vault, capsys):
     """#118: lo que escribe un SCRIPT se registra solo (`cadena` del registro); lo que escribe el
     LLM depende de que se acuerde. Es el único paso salteable sin red. Medido sobre un tema real:
-    22 pasos de cadena registrados, 0 entradas en el log."""
+    22 pasos de cadena registrados, 0 entradas en el log.
+
+    INV-131: es el paso salteable que escribe el LLM, y hasta #159 el contrato no nombraba
+    esta población (INV-91 cubre la traza estructurada del registro, que es otra).  @inv INV-131"""
     import yaml
     reg = toy_vault.VAULT / "config" / "registro"
     reg.mkdir(parents=True, exist_ok=True)
@@ -3390,3 +3401,97 @@ def test_alias_que_simbad_conoce_y_la_boveda_no(toy_vault, capsys):
     assert "HIP 99999" in rep and "GJ 71" in rep, "los que SIMBAD conoce y stars.yaml no"
     assert "HD 12345" not in rep.split("SIMBAD conoce")[-1].split("##")[0], \
         "el que ya está declarado no se propone"
+
+
+def test_la_marca_de_ground_truth_se_evalua_POR_CAMPO(toy_vault, capsys):
+    """Issue #131 — el chequeo era `GT_STALE_MARK in nota_gt.read_text(...)`, o sea **a nivel
+    archivo**: una sola marca en cualquier parte de la ficha silenciaba **todos** los `_cambios` de
+    esa estrella.
+
+    `CLAUDE.md` dice `⚠desactualizado` **pegado al valor**, y su gemelo `⛔retractada` sí se evalúa
+    por ocurrencia. Marcar un campo apagando la alarma de los otros es un falso limpio sobre prosa
+    que sigue citando un número que NEA retiró — exactamente lo que la marca existe para no
+    permitir.  @inv INV-128"""
+    (toy_vault.GROUND_TRUTH / "test_star.json").write_text(json.dumps({
+        "star": "Estrella Test", "slug": "test_star", "host": {}, "planets": [],
+        "_cambios": [{"campo": "host.teff_K", "viejo": 5344, "nuevo": 5390, "fecha": "2026-08-24"},
+                     {"campo": "planets.b.P_days", "viejo": 3.1, "nuevo": 9.9, "fecha": "2026-08-24"}],
+    }), encoding="utf-8")
+    mk_note(toy_vault.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test",
+                                           "slug": "test_star"},
+            "La temperatura efectiva es 5344 K ⚠desactualizado.\n\n"
+            "El período de b es 3.1 d.\n")
+    link_from_index(toy_vault, "test_star")
+    r = lint.collect()
+    sin_marcar = [d for _, d in r.por_clave("gt_cambiado").items]
+    marcados = [d for _, d in r.por_clave("gt_cambiado_marcado").items]
+    assert any("planets.b.P_days" in d for d in sin_marcar), \
+        "el campo cuya prosa NO lleva la marca sigue pidiéndola"
+    assert any("host.teff_K" in d for d in marcados), "y el que sí la lleva baja a informativo"
+    assert not any("host.teff_K" in d for d in sin_marcar)
+    assert not any("planets.b.P_days" in d for d in marcados)
+
+
+def test_un_pending_source_fuera_de_vocabulario_BLOQUEA(toy_vault, capsys):
+    """Issue #129 — INV-46 dice *"Todo campo con vocabulario cerrado se valida contra él y un valor
+    fuera de vocabulario **bloquea**"*, y para `pending_source` el typo caía en `pending_srcs`, que
+    es **backlog**: no contaba para el exit.
+
+    El argumento de INV-108 (*"el motivo no se puede inventar"*) justifica el backlog del
+    `pending_motivo` faltante — no el del typo de vocabulario, que es el mismo modo de falla que
+    `role` y `unidad_cita` sí bloquean: un valor mudo para la operación que lo consume.
+
+    @inv INV-46, INV-129"""
+    mk_note(toy_vault.PAPERS, "2020Test.....1....1X",
+            {"tags": ["paper"], "bibcode": "2020Test.....1....1X", "stars": ["Estrella Test"],
+             "pending_source": "banana", "pending_motivo": "el usuario lo está consiguiendo"},
+            "# x\n")
+    r = lint.collect()
+    bad = r.por_clave("bad_roles")
+    assert bad.severidad == lint.SEV_BLOQUEANTE
+    assert any("banana" in d for _, d in bad.items), "el typo de vocabulario bloquea"
+    assert "bad_roles" in [c.clave for c in r.bloquean()], "cuenta para el exit"
+
+
+def test_un_pending_motivo_faltante_sigue_siendo_backlog(toy_vault, capsys):
+    """La otra mitad de #129: sólo se movió el **typo de vocabulario**. La falta de motivo se
+    queda en backlog — el motivo no se puede inventar y el hallazgo existe para que alguien lo
+    escriba, no para frenar la operación (INV-108)."""
+    mk_note(toy_vault.PAPERS, "2020Test.....1....1X",
+            {"tags": ["paper"], "bibcode": "2020Test.....1....1X", "stars": ["Estrella Test"],
+             "pending_source": "paywall"},
+            "# x\n")
+    r = lint.collect()
+    assert r.por_clave("bad_roles").items == (), "un valor válido no bloquea"
+    assert any("pending_motivo" in d for _, d in r.por_clave("pending_srcs").items)
+    assert r.por_clave("pending_srcs").severidad == lint.SEV_BACKLOG
+
+
+def test_una_hipotesis_sostenida_con_filas_desafia_se_marca(toy_vault, capsys):
+    """Issue #177 — `CLAUDE.md:429` y el skill `test-hypothesis` prometen: *"se **deriva de la tabla
+    de evidencia**, y si hay filas `desafía` con `status: sostenida` el lint lo marca"*. Ningún
+    código leía la tabla ni la palabra `desafía`: el único chequeo de `status` era pertenencia al
+    vocabulario.
+
+    Es el único chequeo que hace que `status` sea **derivado** y no un campo que el agente elige. El
+    consumidor lo lee para decidir si se apoya en la hipótesis, así que la contradicción
+    tabla↔status pasando muda es una afirmación sin respaldo con forma de dato."""
+    mk_note(toy_vault.CONCEPTS / "hypotheses", "h1",
+            {"tags": ["hypotheses"], "name": "H1", "status": "sostenida"},
+            "## Evidencia\n\n| Paper | Postura | Qué dice | L | Régimen |\n|---|---|---|---|---|\n"
+            "| [[2019A]] | apoya | \"x\" | 1 | — |\n"
+            "| [[2020B]] | desafía | \"y\" | 2 | — |\n")
+    cat = lint.collect().por_clave("status_vs_evidencia")
+    assert len(cat) == 1 and "desafía" in cat.items[0][1]
+    assert "h1" in cat.items[0][0]
+
+
+def test_una_hipotesis_disputada_con_filas_desafia_no_se_marca(toy_vault, capsys):
+    """La otra mitad de #177: `disputada` es JUSTAMENTE el status que corresponde cuando hay filas
+    de los dos lados. Marcarla también volvería el detector ruido fijo sobre el uso correcto."""
+    mk_note(toy_vault.CONCEPTS / "hypotheses", "h1",
+            {"tags": ["hypotheses"], "name": "H1", "status": "disputada"},
+            "## Evidencia\n\n| Paper | Postura | Qué dice | L | Régimen |\n|---|---|---|---|---|\n"
+            "| [[2019A]] | apoya | \"x\" | 1 | — |\n"
+            "| [[2020B]] | desafía | \"y\" | 2 | — |\n")
+    assert lint.collect().por_clave("status_vs_evidencia").items == ()

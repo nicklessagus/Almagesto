@@ -129,6 +129,35 @@ def _ocr_note(texto: str) -> str:
     )
 
 
+def _symbols_note(slug: str, bibcode: str, texto: str) -> str:
+    """El aviso de #113: el `.txt` está limpio y las ECUACIONES no están.
+
+    Tercer eje, independiente de los otros dos: `is_legible` mide *extraíble*, la marca de garble
+    mide *correcto*, ésta mide **completo**. El modo de falla es silencioso en el peor lugar —
+    `pdftotext` deja el marcador `(3)` y vacía su cuerpo, así que el `.txt` **parece** tener la
+    fórmula—, y por eso la regla tiene que viajar EN el prompt: sin ella el extractor cita una línea
+    que no contiene la ecuación, y `verify-citations` leyendo ese mismo `.txt` devolvería
+    `no-soportada` sobre una afirmación correcta.
+
+    Hasta #153 la regla vivía sólo en `CLAUDE.md` — el modo de falla que INV-100 cerró para las
+    demás: el prompt se genera, y la regla no llegaba al subagente."""
+    if not texto.startswith(cfg.FULLTEXT_SYMBOLS_MARK):
+        return ""
+    return (
+        "- ⛔ **Las ECUACIONES no están en este `.txt`** (#113: `pdftotext` dejó el marcador `(3)`\n"
+        "  y vació su cuerpo, así que el archivo **parece** tenerlas). Para cualquier fórmula,\n"
+        f"  abrí `{_pdf_rel(slug, bibcode)}` — `Read` lo rasteriza, así que **ves** la ecuación —\n"
+        "  y citá **página del PDF**, no línea del `.txt`. Grepear el `.txt` por la fórmula no la\n"
+        "  va a encontrar, y su ausencia **no** significa que no esté en el paper.\n"
+        "- La prosa sí está y se cita normal, por línea. Es un eje independiente del OCR.\n"
+    )
+
+
+def _pdf_rel(slug: str, bibcode: str) -> str:
+    """Ruta repo-root-relative del PDF del par, que es de donde salen las fórmulas con #113."""
+    return f"vault/raw/pdfs/{slug}/{bibcode}.pdf"
+
+
 def build_prompt(slug: str, bibcode: str, name: str, aliases, texto: str,
                  out_dir: str = "", kind: str = "star") -> str:
     """The prompt for one (paper, subject) pair. `texto` is the `.txt` as it sits on disk."""
@@ -153,7 +182,7 @@ Corré estos patrones —cortos a propósito— antes de decidir nada:
 - **Mirá las TABLAS, no sólo el texto.** En papers viejos las tablas son **imágenes**: el dato del
   sujeto vive ahí y es invisible a cualquier búsqueda de texto.
 - Si es tabla multi-objeto, **verificá la fila correcta** y decí cómo la verificaste.
-{_layout_note(texto)}{_ocr_note(texto)}
+{_layout_note(texto)}{_ocr_note(texto)}{_symbols_note(slug, bibcode, texto)}
 ## Cómo anotar cada valor
 - El **nº de línea** del `.txt` (de `grep -n`, nunca de `splitlines()`: hay form feeds).
 - El **régimen** en que la fuente lo afirma: muestra, época, corte de datos, instrumento, modelo.

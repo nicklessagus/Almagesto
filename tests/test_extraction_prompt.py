@@ -15,6 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import extraction_prompt as ep
+import lib_config as cfg
 
 ALIASES = ["HD 10700", "GJ 71", "HIP 8102"]
 DOS_COLUMNAS = "\n".join(
@@ -173,3 +174,26 @@ def test_is_extraction_distingue_la_extraccion_de_otras_salidas_con_bibcode():
     assert ep.is_extraction({"bibcode": "x", "ejes": [], "ground_truth": []}) is False
     assert ep.is_extraction({"bibcode": "x", "ejes": {}, "ground_truth": {}}) is False
     assert ep.is_extraction(None) is False and ep.is_extraction([]) is False
+
+
+def test_el_prompt_manda_al_PDF_cuando_las_ECUACIONES_no_estan_en_el_txt():
+    """Issue #153 — `CLAUDE.md` (#113) dice que con `symbols_lost: true` la extracción se hace **del
+    PDF** y las citas de fórmulas van **por página**, no por línea del `.txt`. El generador del
+    prompt no tenía ninguna rama para esa marca: la regla vivía en la doc y no llegaba al subagente,
+    que es exactamente el modo de falla que INV-100 cerró para las demás.
+
+    El modo de falla es silencioso en el peor lugar: `pdftotext` deja el marcador `(3)` y vacía su
+    cuerpo, así que el `.txt` **parece** tener la fórmula. Un extractor que no sabe esto cita una
+    línea que no contiene la ecuación.  @inv INV-100"""
+    texto = f"{cfg.FULLTEXT_SYMBOLS_MARK} simbolos NO extraidos\nLa ecuacion (3) define el kernel.\n"
+    p = ep.build_prompt("gp", "2006Rasmussen", "GP", [], texto, kind="theme")
+    assert "PDF" in p and "página" in p, "la cita de fórmulas va por página del PDF"
+    assert "symbols_lost" in p or "ecuacion" in p.lower() or "ecuación" in p.lower()
+
+
+def test_sin_la_marca_el_prompt_no_habla_de_paginas():
+    """La otra mitad de #153: la rama es condicional. Un aviso fijo sobre páginas en todo prompt
+    contradiría la regla por defecto —citar **línea** del `.txt`— y sería ruido en el 96 % de los
+    casos (medido: 13 de 343 `.txt` evaluables llevan la marca)."""
+    p = ep.build_prompt("gp", "2006Rasmussen", "GP", [], "Texto limpio, sin marca.\n", kind="theme")
+    assert "por página del PDF" not in p

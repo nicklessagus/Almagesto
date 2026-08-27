@@ -213,3 +213,26 @@ def test_quitar_del_frontmatter_preserva_el_cuerpo_byte_a_byte(toy_vault):
     esperado = original.replace("  - Otra\n", "")
     assert nuevo == esperado, f"\n--- esperado ---\n{esperado!r}\n--- obtenido ---\n{nuevo!r}"
     assert cfg.split_fm(nuevo)["stars"] == ["Estrella Test"]
+
+
+def test_rename_de_tema_no_toca_el_nombre_de_la_nota(toy_vault, capsys):
+    """Issue #169 — la capa `nota` se renombraba por SUBSTRING ciego (`p.name.replace(viejo, nuevo,
+    1)`), y el guard `if p.name == destino.name: continue` sólo cubría el caso en que el slug no
+    aparece en el nombre. Si el `concept` CONTIENE al slug —`ica` → `ica-bss`, la forma normal— la
+    nota se movía y `themes.yaml` seguía apuntando al nombre viejo: la entidad quedaba **sin nota
+    alcanzable** y los `[[wikilink]]` rotos, mientras el script imprimía que había renombrado y
+    cerraba con *"cerrá con `lint --cierre` (tiene que dar 0)"*.
+
+    La nota de un TEMA se llama por `concept`, que es un campo aparte: renombrar el slug no la
+    toca. Es lo que INV-19 exige — *"que no quede ninguna referencia colgada en ninguna capa"*."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ica-bss"}})
+    cfg.save_busqueda("ica", {"fecha": "2026-01-01", "n_total": 1})
+    nota = cfg.CONCEPTS / "methods" / "ica-bss.md"
+    nota.parent.mkdir(parents=True, exist_ok=True)
+    nota.write_text("---\nname: ICA\ntags: [methods]\n---\n\n# ICA\n", encoding="utf-8")
+    assert run(["rename", "ica", "componentes-independientes", "--yes"]) == 0
+    assert nota.exists(), "la nota del tema NO se renombra: se llama por `concept`, no por slug"
+    assert not (cfg.CONCEPTS / "methods" / "componentes-independientes-bss.md").exists()
+    _, meta = cfg.theme_by_slug("componentes-independientes")
+    assert entity.nota_de("theme", "componentes-independientes", meta) == nota, \
+        "y la config sigue resolviendo a la nota que existe"

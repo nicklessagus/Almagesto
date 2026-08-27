@@ -450,6 +450,18 @@ def test_los_numeros_que_la_doc_publica_salen_del_codigo(boveda_poblada):
     assert f"**{n_cat} categorías**" in readme, f"el lint tiene {n_cat} categorías y el README dice otra cosa"
     assert f"**{n_anom} anomalías**" in readme, f"el generador siembra {n_anom} y el README dice otra cosa"
     assert f"({n_cat} categorías, {n_anom} anomalías, {len(_RUIDO_DELIBERADO)} de ruido declarado)" in readme
+    # #145: `docs/contrato.md` (INV-41) afirmaba estar atado a ESTE test y no lo estaba — publicaba
+    # «48 categorías, 22 bloqueantes, 23 con --cierre» con 64/27/29 en el código. Una fila que dice
+    # salir del código y no sale es peor que una sin número: se lee como verificada.
+    n_bloq = sum(1 for c in lint.collect().categorias if c.severidad == lint.SEV_BLOQUEANTE)
+    n_cierre = sum(1 for c in lint.collect().categorias if c.severidad == lint.SEV_CIERRE)
+    contrato = (Path(__file__).resolve().parents[2] / "docs" / "contrato.md").read_text(encoding="utf-8")
+    assert f"({n_cat} categorías, {n_bloq} bloqueantes, {n_bloq + n_cierre} con `--cierre`)" in contrato, (
+        f"INV-41 publica un conteo que ya no es el del código: hoy son {n_cat} categorías, "
+        f"{n_bloq} bloqueantes y {n_bloq + n_cierre} con `--cierre`")
+    # el denominador del desbalance (`**cero en las N**`, con la negrita abarcando la frase).
+    assert f"cero en las {n_cat}**" in readme, (
+        f"`tests/README.md` publica el denominador viejo: hoy el lint tiene {n_cat} categorías")
     assert set(_CATEGORIAS_SOPORTADAS) == set(SOPORTADAS), (
         "el mapeo categoría→título y las anomalías del generador se desincronizaron: "
         f"de más {set(_CATEGORIAS_SOPORTADAS) - set(SOPORTADAS)}, "

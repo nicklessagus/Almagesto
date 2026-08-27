@@ -45,7 +45,7 @@ Por qué importa: hasta 1.23.1 `slug_notes` hacía `sys.exit(str)` —exit 1— 
 chequear, y `ingest_star.py` traducía **cualquier** rc≠0 a "detectó papers retractados". La cadena
 abortaba con un mensaje falso, y —peor— un error de red en el único paper del corpus salía **0**:
 "no encontré retractados" sobre un paper que nadie miró, el falso limpio que D-43 prohíbe justo en
-la frontera dura. Con D-45 esta misma pasada va a cubrir cinco eventos: el código se desambigua
+la frontera dura. Con D-45 esta misma pasada cubre SEIS eventos (el sexto, #106, desde 1.46.0): el código se desambigua
 antes de apoyarle una feature encima.
 """
 from __future__ import annotations

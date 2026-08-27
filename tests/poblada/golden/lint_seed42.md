@@ -63,6 +63,8 @@
 
 ## ⛔ `status` de hipótesis fuera del vocabulario cerrado (D-37) (0)
 
+## `status: sostenida` contra su propia tabla de evidencia (D-37, #177) (0)
+
 ## ⛔ `bearing` en una nota de paper (schema pre-D-21) — la postura vive en la hipótesis (0)
 
 ## ⛔ Nota de paper sin destino (D-23): no pertenece a ninguna entidad (0)
@@ -71,7 +73,7 @@
 
 ## ⛔ `sources:` sin procedencia (#111): no consta quién declaró la fuente ni por qué (0)
 
-## `role` fuera del vocabulario (fundacional/aplicacion/arbitro) (0)
+## ⛔ `role` fuera del vocabulario — y todo campo con vocabulario CERRADO (`unidad_cita`, `pending_source`) (0)
 
 ## ⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano) (0)
 

@@ -344,10 +344,18 @@ def rename(viejo: str, nuevo: str, yes: bool) -> int:
     if cfg.registro_path(nuevo).exists() or (cfg.FULLTEXT / nuevo).exists():
         sys.exit(f"ya hay artefactos bajo el slug {nuevo!r} — renombrar encima fusionaría dos "
                  f"entidades en silencio. Elegí otro slug o borrá la que sobra primero.")
-    for _, p in capas(viejo, tipo, meta):
+    for capa, p in capas(viejo, tipo, meta):
+        if capa == "nota" and tipo != "star":
+            # ⛔ #169. La nota de un TEMA se llama por `concept`, un campo APARTE del slug: renombrar
+            # el slug no la toca. Acá había un `p.name.replace(viejo, nuevo, 1)` con un guard
+            # `if p.name == destino.name: continue`, que sólo cubre el caso en que el slug NO aparece
+            # en el nombre. Con `ica` → nota `ica-bss.md` —la forma normal— la nota se movía y
+            # `themes.yaml` seguía apuntando a `ica-bss`: la entidad quedaba SIN NOTA ALCANZABLE y
+            # los `[[wikilink]]` rotos, mientras el script imprimía que había renombrado.
+            continue
         destino = p.parent / p.name.replace(viejo, nuevo, 1)
         if p.name == destino.name:
-            continue                       # la nota de un TEMA se llama por `concept`, no por slug
+            continue                       # nada que mover en esta capa
         p.rename(destino)
         cfg.print_seguro(f"  → {p.name} → {destino.name}")
     if tipo == "star":

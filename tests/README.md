@@ -175,9 +175,9 @@ los `from conftest import ...` de la suite vieja. Sólo se ve corriendo la suite
 
 ## Cuánto del lint vigila el corpus poblado (10.3)
 
-El lint tiene **63 categorías**; el generador sintético sabe sembrar **16 anomalías**, y
+El lint tiene **64 categorías**; el generador sintético sabe sembrar **16 anomalías**, y
 `test_conteos_exactos` puede afirmar *"reporta exactamente estos K, ni uno más"* sólo sobre esas.
-El resto queda cubierto de otra forma —el corpus limpio tiene que dar **cero en las 48** salvo tres
+El resto queda cubierto de otra forma —el corpus limpio tiene que dar **cero en las 64** salvo cuatro
 declaradas (`test_el_corpus_limpio_da_cero_en_TODAS_las_categorias`)—, que detecta el falso positivo
 pero no el falso negativo.
 
@@ -190,7 +190,7 @@ alcance, tres fichas con la tabla `## Papers` desactualizada, tres registros sin
 porque el generador no emitía el schema vigente, y sobre ese ruido de fondo **ninguna anomalía
 sembrada era distinguible**.
 
-Los tres números (63 categorías, 16 anomalías, 4 de ruido declarado) **salen del código, no de acá**:
+Los tres números (64 categorías, 16 anomalías, 4 de ruido declarado) **salen del código, no de acá**:
 los cruza `test_conteos_exactos`, así que agregar una categoría al lint sin sembrarla deja el
 desbalance a la vista en vez de esconderlo.
 
@@ -236,10 +236,10 @@ env PATH=/tmp/binmin /tmp/cienv/bin/python -m pytest tests/ -q      # sin pdftot
 
 ---
 
-## Las cinco redes que corren al escribir código (regla permanente, 2026-08-24)
+## Las siete redes que corren al escribir código (regla permanente, 2026-08-24)
 
 Salieron de una sesión en la que **los bugs los encontraron agentes leyendo, no la suite**. Cada una
-ataca una clase de defecto que se repitió, y las cinco son deterministas: nada acá depende del
+ataca una clase de defecto que se repitió, y las siete son deterministas: nada acá depende del
 juicio de un modelo.
 
 | # | Qué caza | Cómo se corre |
@@ -249,6 +249,24 @@ juicio de un modelo.
 | 3 | Un **doble** con distinto contrato que la función real | test de paridad al lado del doble |
 | 4 | Funciones que **nadie ejecuta** | `pytest tests/poblada/test_cobertura.py -m poblada` (~11 s) |
 | 5 | La **doc afirmando cosas del código** | `tests/test_docs_ejecutables.py` (tier 0) |
+| 6 | Un script que **pisa lo que ya escribió** | correr dos veces y hashear `vault/**/*.md` (ver abajo) |
+| 7 | Un símbolo **nuevo con nombre en castellano** | `tests/test_idioma_codigo.py` (tier 0) |
+
+⚠ **La 6 faltaba acá y estaba en `CLAUDE.md`** (#148). El doc normativo titula *"las **seis** redes"*
+y delega el detalle en este archivo, que publicaba cinco — así que la regla de idempotencia se caía
+exactamente en la frontera entre los dos. Vale para **todo script que escriba en `vault/`**, no sólo
+para los de `scripts/`: la idempotencia es invariante del framework («la cadena es idempotente:
+refrescar es seguro») y un script de una sola operación escribe en la bóveda igual que uno
+versionado. El chequeo cuesta una línea:
+
+```bash
+H=$(find vault -name '*.md' -exec md5sum {} + | sort | md5sum); <el comando>; \
+  [ "$H" = "$(find vault -name '*.md' -exec md5sum {} + | sort | md5sum)" ] && echo IDEMPOTENTE
+```
+
+Es sobre **contenido**, no sobre la bitácora: hashea `vault/**/*.md` y **no** el registro, que por
+D-28 tiene que CRECER en cada corrida. Las dos reglas conviven porque miden cosas distintas — la
+nota no puede cambiar si no cambió lo que afirma; el registro tiene que crecer aunque no cambie nada.
 
 **La red 5 creció el 2026-08-24, porque tenía el mismo agujero que perseguía**: validaba que el
 *script* existiera, no que el *flag* existiera — y `CLAUDE.md` mandaba a correr
@@ -267,7 +285,7 @@ juicio de un modelo.
 | los conteos del encabezado son los de las filas | un resumen escrito a mano que envejece solo |
 | la doc no apunta al código **por número de línea** | los siete punteros de `contrato.md` apuntaban al renglón equivocado, uno a otro invariante |
 
-**Cuándo**: 2 y 5 corren solas en tier 0. La 4, al cerrar un issue. **La 1, al escribir cada función
+**Cuándo**: 2, 5 y 7 corren solas en tier 0. La 4, al cerrar un issue. **La 1, al escribir cada función
 nueva** — es la única que cuesta (una corrida de suite por función) y la única que distingue "el
 test pasa" de "el test **podría** fallar".
 

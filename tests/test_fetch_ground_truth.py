@@ -506,3 +506,55 @@ def test_sin_respuesta_de_simbad_es_None_y_no_lista_vacia(toy_vault, monkeypatch
     import astroquery.simbad as _sim
     monkeypatch.setattr(_sim, "Simbad", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("caído")))
     assert gt.simbad_identifiers("tau Cet") is None
+
+
+# ── #171 · una autoridad que no contestó no es "el valor cambió" ─────────────────────────────────
+
+def test_una_caida_de_simbad_no_se_lee_como_un_cambio_de_ground_truth(monkeypatch, toy_vault):
+    """Issue #171 — una caída de SIMBAD se tragaba en `fetch_host` y devolvía `spectral_type=None`,
+    así que `nea_diff` **no levantaba**: el slug no entraba en `fallidos`, `sweep_ground_truth`
+    estampaba `cubrio: ground-truth` sobre una comparación que no se hizo, y el corte se reportaba
+    como un cambio real `'G8V' → None`. Con `--yes` eso además **aplicaba** el diff y persistía
+    `_cambios`.
+
+    Es el falso limpio invertido, y con el agravante de que **fabrica** un cambio. El docstring de
+    `sweep_ground_truth` ya decía que sin los `fallidos` *"el orquestador registra 'cubrió:
+    ground-truth' sobre una pasada que no comparó nada"*: para SIMBAD seguía pasando.  @inv INV-85"""
+    cfg.GROUND_TRUTH.mkdir(parents=True, exist_ok=True)
+    (cfg.GROUND_TRUTH / "test_star.json").write_text(json.dumps({
+        "star": "Estrella Test", "slug": "test_star",
+        "host": {"spectral_type": "G8V"}, "planets": []}), encoding="utf-8")
+    monkeypatch.setattr(gt, "fetch_pscomppars", lambda h: [])
+    monkeypatch.setattr(gt, "fetch_planets", lambda tab, m=None: [])
+
+    class BoomSimbad:
+        def add_votable_fields(self, *a, **k):
+            raise RuntimeError("sin red")
+        def query_object(self, host):
+            raise RuntimeError("SIMBAD no respondió")
+    mod = types.ModuleType("astroquery.simbad")
+    mod.Simbad = BoomSimbad
+    monkeypatch.setitem(sys.modules, "astroquery.simbad", mod)
+    monkeypatch.setitem(sys.modules, "astroquery", types.ModuleType("astroquery"))
+
+    with pytest.raises(ValueError, match="SIMBAD"):
+        gt.nea_diff("test_star")
+
+
+def test_el_marcador_de_autoridad_caida_no_se_persiste_en_el_json(monkeypatch, capsys):
+    """La otra mitad de #171: el marcador es para que `nea_diff` levante, no un campo nuevo del
+    schema. La decisión de H-14/H-15 sigue en pie —no se escriben campos sin lector al
+    ground-truth— y el aviso por stdout tampoco se pierde."""
+    class BoomSimbad:
+        def add_votable_fields(self, *a, **k):
+            raise RuntimeError("sin red")
+        def query_object(self, host):
+            raise RuntimeError("SIMBAD no respondió")
+    mod = types.ModuleType("astroquery.simbad")
+    mod.Simbad = BoomSimbad
+    monkeypatch.setitem(sys.modules, "astroquery.simbad", mod)
+    monkeypatch.setitem(sys.modules, "astroquery", types.ModuleType("astroquery"))
+    out = gt.fetch_host("Test Star", tab=[])
+    assert out.get(gt.AUTORIDAD_CAIDA) == ["simbad"], "el marcador existe para que nea_diff lo lea"
+    assert "SIMBAD" in capsys.readouterr().out
+    assert gt.AUTORIDAD_CAIDA not in gt.host_persistible(out), "y no entra al JSON"

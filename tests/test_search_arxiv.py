@@ -154,3 +154,24 @@ def test_main_es_preview_clasifica_con_la_lente_y_no_escribe_nada(toy_vault, mon
     assert "2401.00001" in salida and "2401.00002" in salida
     assert "core" in salida and "Preview" in salida
     assert sorted(p.name for p in cfg.WIKI.rglob("*")) == antes, "el preview NO puede escribir"
+
+
+def test_el_preview_no_re_clasifica_con_la_funcion_equivocada(monkeypatch, capsys):
+    """Issue #173 — `to_record` afirma *"Se clasifica acá con `classify_record`, la ÚNICA lente"*, y
+    `main` volvía a clasificar con `query_ads.classify(r)` sobre un registro donde `title` YA es un
+    string. `classify` hace `" ".join(cfg.as_list(rec.get("title")))` y `as_list("…") == []`, así que
+    **el título se descartaba** — y encima pisaba `r["facets"]`/`r["relevant"]`.
+
+    Rompe la promesa de una sola definición de core que el módulo declara como su razón de existir, y
+    en la dirección peor: un tema de método cuyo fundacional se reconoce **por el título** (el caso
+    ICA/Hyvärinen de D-26) salía *sin tópico* en el único preview que el framework ofrece para
+    decidir si vale cablear este backend."""
+    rec = {"title": "Independent Component Analysis of stellar spectra", "abstract": "",
+           "keyword": [], "doctype": "eprint", "bibcode": "1999Autor", "arxiv_id": "1234.5678",
+           "year": 1999, "citation_count": None}
+    monkeypatch.setattr(sx, "search", lambda *a, **k: [dict(rec)])
+    monkeypatch.setattr(qa, "classify_record", lambda r: (["method"], True))
+    assert sx.main(["independent component analysis"]) == 0
+    out = capsys.readouterr().out
+    assert "1 core" in out, "el veredicto del preview es el de `classify_record`, no otro"
+    assert "sin tópico" not in out

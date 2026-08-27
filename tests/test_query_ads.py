@@ -1863,3 +1863,50 @@ def test_no_propone_lo_que_una_faceta_ya_cubre(toy_classifier):
     recs = [{"bibcode": f"2020d{i}", "relevant": False, "facets": ["rv"],
              "keyword": ["radial velocity"]} for i in range(5)]
     assert qa.propose_facets(recs, min_n=3) == []
+
+
+def test_puertas_existe_SIEMPRE_en_el_registro(toy_vault):
+    """Issue #179 — `CLAUDE.md:520` (#126) promete: *"Lista vacía = no es core; **el campo existe
+    siempre**, así que «no consta» y «ninguna puerta» no se confunden"*. `to_record` —que el propio
+    módulo declara el schema canónico— no lo definía, y `reclassify_for_theme` es no-op para un tema
+    sin `facet:` y hace `continue` sobre los `via: manual`.
+
+    La distinción se caía justo donde importa: los `extra_core` de un tema de método **son core** y
+    quedaban bajo *"(sin puerta registrada)"* en `triage --prioridad`, indistinguibles de «nadie
+    miró». Y es la única metadata que separa, sin leer el paper, un fundamento de su campo de una
+    aplicación astro."""
+    rec = qa.to_record({"bibcode": "2020X", "title": ["T"], "abstract": "", "doctype": "article"})
+    assert "puertas" in rec, "el campo existe siempre (#126)"
+    assert rec["puertas"] == [], "vacío = no entró por ninguna puerta, distinto de «no consta»"
+
+
+def test_un_extra_core_de_tema_declara_por_que_puerta_entro(toy_vault):
+    """La otra mitad de #179: un `via: manual` es core **por decisión del usuario**, y eso también
+    es una procedencia. `reclassify_for_theme` lo salteaba con `continue`, así que el paper que el
+    usuario metió a mano quedaba sin `puertas` — el caso más frecuente en un tema de método."""
+    meta = {"title": "ICA", "facet": "independent component", "fundacional_min_citas": 1000}
+    recs = [{"bibcode": "2020M", "title": "Independent component analysis", "abstract": "",
+             "via": "manual", "relevant": True, "citation_count": 5, "keyword": []}]
+    qa.reclassify_for_theme(recs, meta)
+    assert "puertas" in recs[0], "el campo existe también para el aceptado a mano"
+    assert recs[0]["puertas"] == ["manual"], "y dice que entró porque alguien lo pidió"
+
+
+def test_el_sweep_dicta_un_snippet_que_el_framework_ACEPTA(toy_vault, capsys, monkeypatch):
+    """Issue #161 — el texto que `--sweep` imprimía al terminar mandaba a escribir
+    `extra_core: [<bibcode>, …]` con `via: manual`, y **las dos mitades abortan**: D-58 rechaza el
+    escalar y la lista de strings, y `manual` no está en `EXTRA_CORE_VIA`.
+
+    El usuario copia lo que el script le dicta y la siguiente corrida de la cadena muere.
+    `triage.py` ya imprimía el snippet canónico: la asimetría era sólo de este carril. Acá se fija
+    que lo impreso **parsea con el loader real**, no que contenga tal o cual frase."""
+    import yaml
+    recs = [{"bibcode": "2020ApJ...900....1X", "title": "T", "year": 2020, "citation_count": 5,
+             "abstract": "", "facets": [], "relevant": False}]
+    monkeypatch.setattr(qa, "sweep_records", lambda *a, **k: recs, raising=False)
+    texto = qa.extra_core_snippet(recs)
+    bloque = yaml.safe_load(texto)
+    assert isinstance(bloque, dict) and isinstance(bloque["extra_core"], list)
+    entradas = qa.cfg.load_extra_core(bloque, entry="sweep")
+    assert entradas and entradas[0]["bibcode"] == "2020ApJ...900....1X"
+    assert entradas[0]["via"] in qa.cfg.EXTRA_CORE_VIA

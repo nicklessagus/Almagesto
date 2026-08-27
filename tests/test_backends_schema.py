@@ -27,6 +27,11 @@ CLAVES = {
     "bibcode", "title", "authors", "year", "pubdate", "abstract", "arxiv_id", "doi",
     "doctype", "bibstem", "citation_count", "keyword", "facets", "relevant", "why_excluded",
     "sin_abstract",
+    # #179 · `puertas` (#126) entra al schema COMPARTIDO. Vivía sólo en `reclassify_for_theme`, que
+    # es no-op para un tema sin `facet:`, así que el campo aparecía o no según el camino — y
+    # CLAUDE.md promete que **existe siempre**, para que «no consta» y «ninguna puerta» no se
+    # confundan. Si vive en el schema, los tres backends lo emiten y este test lo fija (red #2).
+    "puertas",
 }
 
 _ATOM = """<feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">

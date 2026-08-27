@@ -309,9 +309,9 @@ Cierre: lint (idealmente bajando el conteo de backlog) → `log` → commit → 
 
 ## F. Pasada periódica de RED (bóveda completa) — `sweep_external.py`
 
-⚠ **El comando es `python scripts/sweep_external.py`**, no `check_retractions.py` solo. Cinco cosas
-caducan después de un ingest y la pasada unificada existe justamente porque, repartidas, se corren
-cuatro y la quinta nunca:
+⚠ **El comando es `python scripts/sweep_external.py`**, no `check_retractions.py` solo. **Seis** cosas
+caducan después de un ingest —cinco desde 1.35.0, la sexta desde 1.46.0— y la pasada unificada
+existe justamente porque, repartidas, se corren cinco y la sexta nunca:
 
 | Detector | Qué caza | Estado |
 |---|---|---|

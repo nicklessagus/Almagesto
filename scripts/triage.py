@@ -341,7 +341,7 @@ def report(slug: str, cands: list[dict]) -> None:
                      f"{c.get('year') or ''} | "
                      f"[{c['bibcode']}]({ADS_URL}{c['bibcode']}/abstract) | {title} | "
                      f"{c.get('via') or ''} | {','.join(cfg.as_list(c.get('facets')))} |")
-    out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    out.write_text("\n".join(lines) + "\n", encoding="utf-8")  # noqa: vault-write — destino `outputs/`, scratch regenerable (#137)
     cfg.print_seguro(f"  → {out}")
 
 
@@ -355,6 +355,18 @@ def _tema_meta(slug: str) -> dict:
         return {}
 
 
+def _notes_citing(bibcode: str) -> list:
+    """Notas de `wiki/` con un `[[bibcode]]` a este paper (#132).
+
+    Mismo matcheo que `entity.referencias`: el wikilink pelado y el que lleva alias (`[[b|texto]]`).
+    Se usa para AVISAR, nunca para reescribir."""
+    stem = bibcode.replace("/", "_")
+    return [f for f in sorted(cfg.WIKI.rglob("*.md"))
+            if f.name != f"{stem}.md"
+            and (f"[[{stem}]]" in (txt := f.read_text(encoding="utf-8")) or f"[[{stem}|" in txt)]
+
+
+#  @inv INV-127
 def drop_core(slug: str, bibcodes: list, motivo: str) -> int:
     """Saca un paper que la lente dice CORE de ESTE sujeto, y borra sus artefactos (#112).
 
@@ -373,7 +385,7 @@ def drop_core(slug: str, bibcodes: list, motivo: str) -> int:
     hoy = dt.date.today().isoformat()
     data = cfg.load_registro(slug)
     dec = data.setdefault("decisiones", {}) if isinstance(data.get("decisiones"), dict) or         "decisiones" not in data else data["decisiones"]
-    borrados = 0
+    borrados, colgados = 0, []
     for b in bibcodes:
         dec[b] = {"decision": "descartado", "origen": "sujeto", "motivo": motivo, "fecha": hoy}
         for ruta in (cfg.PDFS / slug / f"{b}.pdf", cfg.FULLTEXT / slug / f"{b}.txt"):
@@ -392,18 +404,35 @@ def drop_core(slug: str, bibcodes: list, motivo: str) -> int:
                 por = ("pertenece también a " + ", ".join(map(str, otros[:3]))) if otros else                     "ya tiene extracción LLM (`methods` poblado): trabajo pagado"
                 cfg.print_seguro(f"  ⚠ {b}: su nota `papers/` NO se borra — {por}. Revisala a mano.")
             else:
+                # #132: la nota se borra, así que todo `[[bibcode]]` que la citaba queda ROTO
+                # (INV-02, P0, bloqueante en el próximo lint). No se reparan solos —eso sería
+                # decidir por el usuario qué decía esa frase—: se los deja rotos y VISIBLES, con el
+                # puntero de dónde están. Mismo criterio y misma redacción que `entity.py delete`,
+                # cuya garantía (INV-19) es que tras borrar no quede referencia colgada sin avisar.
+                colgados.extend(_notes_citing(b))
                 nota.unlink()
                 borrados += 1
     data["decisiones"] = dec
     cfg.save_registro(slug, data)
     cfg.print_seguro(f"  {len(bibcodes)} paper(s) excluido(s) de `{slug}` (carril `sujeto`) · "
                      f"{borrados} artefacto(s) borrado(s) · motivo: {motivo}")
+    if colgados:
+        cfg.print_seguro(f"⚠ {len(colgados)} nota(s) citan un paper que se borró: el `[[wikilink]]` "
+                         f"quedó ROTO (bloqueante en el lint). Repará o quitá cada uno —")
+        for f in colgados[:10]:
+            cfg.print_seguro(f"    · {f.relative_to(cfg.WIKI)}")
     cfg.print_seguro(f"  → {cfg.registro_path(slug)} (versionado: la decisión viaja). Re-corré la "
                      "cadena: no vuelven a entrar ni a bajarse.")
     return 0
 
 
-VIA_FUENTE = ("usuario", "descubrimiento", "reporte")   # vocabulario CERRADO (gemelo de extra_core)
+# Vocabulario CERRADO del carril OFF-ADS (#111): quién declaró una fuente de `sources:`.
+# ⛔ NO es el mismo que `cfg.EXTRA_CORE_VIA` (`usuario | triage | citado-por-corpus`), que es el del
+# carril ADS. Comparten un solo valor —`usuario`— y el `help=` los llamaba «gemelos», con lo cual
+# inducía a escribir en `extra_core` un `via` que el loader rechaza, y al revés (#162). Son dos
+# cuadrantes distintos de la tabla de curación de CLAUDE.md, y por buena razón: en off-ADS no hay
+# query que descubra, así que TODO entra por decisión de alguien y el eje es quién.
+VIA_FUENTE = ("usuario", "descubrimiento", "reporte")
 
 
 def accept_source(slug: str, idents: list, via: str, motivo: str) -> int:
@@ -514,12 +543,15 @@ def main() -> int:
                          "que al carril off-ADS le faltaba: sin esto, el descubrimiento proponía "
                          "el paper y el trabajo de bajarlo quedaba a mano. Exige --reason y --via.")
     ap.add_argument("--via", default="usuario", choices=VIA_FUENTE,
-                    help="quién acepta la fuente (vocabulario CERRADO, gemelo del `via` de "
-                         "extra_core): usuario | descubrimiento | reporte")
+                    help="quién acepta la fuente OFF-ADS (vocabulario CERRADO): usuario | "
+                         "descubrimiento | reporte. ⚠ NO es el de `extra_core` (carril ADS), que "
+                         "es usuario | triage | citado-por-corpus")
     ap.add_argument("--prioridad", action="store_true",
-                    help="#87: lista los CORE ordenados por cuántas facetas del objetivo tocan "
-                         "(citas como desempate). Es la cola de extracción: no filtra ni toca la "
-                         "lente, ordena lo que ya es core.")
+                    help="la cola de extracción: no filtra ni toca la lente, ordena lo que ya es "
+                         "core. Dos vistas — #87: por cuántas facetas del objetivo toca cada uno "
+                         "(citas como desempate); #126: agrupado por POLÍTICA, o sea por cuál puerta "
+                         "de D-26 entró (fundacional / astro / las dos), que es con lo que se decide "
+                         "el recorte de lectura UNA vez y se declara con --extraccion.")
     ap.add_argument("--migrate", action="store_true",
                     help="consolidar en el registro versionado las decisiones del "
                          "build/<slug>/triage.json viejo (bóvedas pre-1.9.0) y salir")
@@ -620,12 +652,10 @@ def main() -> int:
     # armado porque ahí está el costo de UX de la forma dura: escribir cuatro campos a mano por
     # cada aceptación. Con el snippet, aceptar sigue siendo copiar y pegar — y el registro gana el
     # dato que el carril del descarte ya tenía (quién y por qué), que era la asimetría.
-    cfg.print_seguro("\n  extra_core:")
-    for c in ordenados[:10]:
-        cfg.print_seguro(f"  - bibcode: {c['bibcode']}\n"
-                         f"    via: triage\n"
-                         f"    fecha: {dt.date.today().isoformat()}\n"
-                         f"    motivo: <por qué es core para este sujeto>")
+    # #161: el snippet lo arma `cfg.extra_core_snippet`, la MISMA pieza que usa `query_ads --sweep`.
+    # Estaba duplicado inline en los dos carriles y el otro había divergido a una forma que el
+    # framework bloquea — dos implementaciones de la misma promesa es la garantía de que una envejece.
+    cfg.print_seguro("\n" + cfg.extra_core_snippet(ordenados, via="triage").rstrip("\n"))
     if len(cands) > 10:
         cfg.print_seguro(f"  # … {len(cands) - 10} candidato(s) más (snippet acotado a los 10 más citados)")
     return 0

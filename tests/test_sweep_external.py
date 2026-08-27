@@ -363,3 +363,83 @@ def test_sweep_citas_con_ads_caido_es_fallido_no_limpio(monkeypatch):
     _tema_citas(monkeypatch, 1000, [("2004A..1", 900)], {}, revienta=True)
     out, fallidos = sw.sweep_citas()
     assert out == [] and fallidos == ["ica"]
+
+
+def test_una_segunda_pasada_no_borra_la_caducidad_pendiente(toy_vault, monkeypatch):
+    """Issue #130 — `payload["_cambios"] = [...]` **asignaba**: la segunda aplicación de un diff de
+    NEA perdía los cambios de la primera, y el lint dejaba de pedir la marca por ellos. La marca
+    pendiente de un campo desaparecía **sin que nadie la hubiera resuelto**, con la prosa todavía
+    citando el valor viejo.
+
+    Es lo contrario de D-28/`busquedas` y de `save_barrido`/`save_descubrimiento`, que acumulan por
+    diseño: el registro guarda lo que no es regenerable, y una caducidad pendiente no lo es."""
+    cfg.GROUND_TRUTH.mkdir(parents=True, exist_ok=True)
+    gt = cfg.GROUND_TRUTH / "test_star.json"
+    gt.write_text(json.dumps({"slug": "test_star", "host": {"teff_K": 5344}, "planets": []}),
+                  encoding="utf-8")
+    monkeypatch.setattr(sw, "_run", lambda *a, **k: 0)
+
+    monkeypatch.setattr(fetch_ground_truth, "nea_diff", lambda s: [("host.teff_K", 5344, 5390)])
+    sw.aplicar_ground_truth("test_star")
+    monkeypatch.setattr(fetch_ground_truth, "nea_diff", lambda s: [("planets.b.P_days", 3.1, 9.9)])
+    sw.aplicar_ground_truth("test_star")
+
+    campos = [c["campo"] for c in json.loads(gt.read_text(encoding="utf-8"))["_cambios"]]
+    assert set(campos) == {"host.teff_K", "planets.b.P_days"}, \
+        "la caducidad de la primera pasada sigue pendiente: nadie la resolvió"
+
+
+def test_un_campo_que_vuelve_a_cambiar_conserva_el_valor_QUE_LA_PROSA_CITA(toy_vault, monkeypatch):
+    """La otra mitad de #130: acumular no puede volverse duplicar. Si el mismo campo cambia dos
+    veces antes de que alguien toque la prosa, lo pendiente es UNA cosa —la prosa cita `viejo` y NEA
+    hoy dice `nuevo`—, así que la entrada se actualiza en vez de agregarse. Y el `viejo` que se
+    conserva es el **original**: es el que está escrito en la nota."""
+    cfg.GROUND_TRUTH.mkdir(parents=True, exist_ok=True)
+    gt = cfg.GROUND_TRUTH / "test_star.json"
+    gt.write_text(json.dumps({"slug": "test_star", "host": {"teff_K": 5344}, "planets": []}),
+                  encoding="utf-8")
+    monkeypatch.setattr(sw, "_run", lambda *a, **k: 0)
+    monkeypatch.setattr(fetch_ground_truth, "nea_diff", lambda s: [("host.teff_K", 5344, 5390)])
+    sw.aplicar_ground_truth("test_star")
+    monkeypatch.setattr(fetch_ground_truth, "nea_diff", lambda s: [("host.teff_K", 5390, 5401)])
+    sw.aplicar_ground_truth("test_star")
+
+    cambios = json.loads(gt.read_text(encoding="utf-8"))["_cambios"]
+    assert len(cambios) == 1, "un campo, una caducidad pendiente"
+    assert (cambios[0]["viejo"], cambios[0]["nuevo"]) == (5344, 5401), \
+        "el `viejo` es el que la prosa cita, no el intermedio que nadie escribió nunca"
+
+
+def test_el_registro_declara_lo_que_NO_se_pudo_mirar(toy_vault, monkeypatch, capsys):
+    """Issue #172 — el docstring de `_cubrir` dice *"si falló una parte, **el registro** dice cuántos
+    quedaron sin mirar"*, y `save_ultima_pasada(cubrio)` persistía sólo `fecha`/`cubrio`/`version`.
+    En el archivo versionado, un detector que **falló parcialmente** quedaba byte-idéntico a uno que
+    **nunca corrió**.
+
+    El propio módulo justifica versionar la caducidad porque *"sin versionarla, otro clon reporta
+    'nunca se corrió', que es falso"*. Acá el fallo parcial se perdía al revés: quedaba sólo en
+    stdout — el mismo argumento con el que #55 y #88 mudaron el triage y el barrido al registro."""
+    for nombre in ("sweep_retracciones", "sweep_correcciones"):
+        monkeypatch.setattr(sw, nombre, lambda: [])
+    monkeypatch.setattr(sw, "discover_versions", lambda: ([], []))
+    monkeypatch.setattr(sw, "sweep_web", lambda: ([], ["tema/a", "tema/b", "tema/c"]))
+    monkeypatch.setattr(sw, "sweep_ground_truth", lambda: ([], []))
+    monkeypatch.setattr(sw, "sweep_citas", lambda: ([], []))
+
+    assert sw.main([]) == 2, "un detector que no pudo correr cuenta para el exit"
+    reg = sw.load_ultima_pasada()
+    assert "web" not in reg["cubrio"], "no se afirma haber mirado lo que no se miró"
+    assert "web" in str(reg.get("no_evaluados")), "y se DECLARA cuál quedó sin mirar"
+    assert "3" in str(reg.get("no_evaluados")), "con cuántos sujetos"
+
+
+def test_una_pasada_limpia_no_declara_no_evaluados(toy_vault, monkeypatch):
+    """La otra mitad de #172: el campo sólo aparece cuando hay algo que declarar. Un
+    `no_evaluados: []` fijo en cada pasada sería ruido en el único artefacto no regenerable."""
+    for nombre in ("sweep_retracciones", "sweep_correcciones"):
+        monkeypatch.setattr(sw, nombre, lambda: [])
+    monkeypatch.setattr(sw, "discover_versions", lambda: ([], []))
+    for nombre in ("sweep_web", "sweep_ground_truth", "sweep_citas"):
+        monkeypatch.setattr(sw, nombre, lambda: ([], []))
+    sw.main([])
+    assert "no_evaluados" not in sw.load_ultima_pasada()

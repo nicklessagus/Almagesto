@@ -78,6 +78,17 @@ papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** 
      **otras** facetas ya **no cambia el corte** (core ⟺ matchea la eje ∧ doctype limpio) — sólo etiqueta.
      Lo que hay que cuidar es el **recall de la faceta-eje**: listar todos sus sinónimos e instrumentos.
      Las demás facetas siguen siendo útiles como etiquetas (y para `min_facets ≥ 2`).
+   - `relevance.search_fq`: ⛔ **la lente del BUSCADOR** (#85, #152 — faltaba en este skill). Es el
+     `fq` de Solr que acota el universo **server-side, antes de traer nada**: la mitad **más
+     restrictiva** del filtro, más que `relevance.facets`, que actúa después sobre lo ya traído.
+     Tres estados, y los tres son decisiones distintas:
+       · **sin declarar** → `database:astronomy` (el default histórico);
+       · **con valor** → ése;
+       · **`search_fq: null`** → no acota, todo ADS **a propósito**.
+     Un `null` declarado NO se lee igual que no declarar nada, y por eso se escribe.
+     **Cuándo cambiarlo:** si la bóveda va a traer **métodos de otras disciplinas** (estadística, ML,
+     signal processing) cuya bibliografía canónica ADS no clasifica como astronomía, el default los
+     mata antes de que `facets` los vea. Preguntárselo al usuario en el paso 1, no asumirlo.
    - `noise_doctypes`: el default (catalog, proposal, abstract, erratum, bookreview, newsletter,
      pressrelease, circular, software) salvo razón.
    - `concept_areas`: sugerir 3–5 áreas según el foco (`methods`/`hypotheses` reservadas + las que

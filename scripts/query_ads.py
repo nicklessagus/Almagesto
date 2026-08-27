@@ -55,7 +55,8 @@ aplica (la query *es* la definición del tema). **No se puede desactivar** (D-48
 `--no-triage` se eliminó porque permitía que un candidato ya descartado —con su motivo,
 persistido en el registro— volviera a entrar en silencio.
 
-**Curación manual persistente:** `extra_core: [bibcode, …]` en la entrada de `stars.yaml`/`themes.yaml`
+**Curación manual persistente:** `extra_core:` —lista de MAPAS `{bibcode, via, fecha, motivo}`
+(D-58; el escalar y la lista de strings bloquean)— en la entrada de `stars.yaml`/`themes.yaml`
 lista papers que el clasificador perdió. Es un **override del clasificador** (#39): el que ADS no
 devolvió se trae por bibcode y el que **sí** devolvió pero quedó no-core se **rescata en el lugar**
 (`relevant: true`, `via: manual`) — antes sólo se agregaban los ausentes, así que declarar el caso
@@ -67,7 +68,7 @@ compuerta vale para los dos lados de la decisión) — y además siembra el graf
 
 **`--sweep` (barrido full-text, paso 2b de ingest-star):** corre `full:` sobre nombre+aliases con
 TODAS las variantes de espaciado y lista SÓLO los core que `build/<slug>/ads.json` no tiene — los
-candidatos a `extra_core`. Preview como `--probe` (no baja nada ni escribe build/). Ver sweep_star.
+candidatos a `extra_core`. No baja nada ni escribe build/, pero **appendea a `barridos:`** del registro versionado (#88): a diferencia de `--probe`, deja rastro. Ver sweep_star.
 
 **`--dry-run` (delta de re-clasificación, #40):** re-clasifica **en memoria** los `ads.json` ya
 bajados con la regla vigente de `objective.yaml` y reporta el delta —core antes/después, los que
@@ -680,8 +681,12 @@ def sweep_star(slug: str, rows: int) -> int:
     que quedan FUERA del grafo: corre `full:` sobre nombre+aliases con TODAS las variantes de
     espaciado (expand_variants — sin olvidos de grafía) y lista SÓLO los core que
     build/<slug>/ads.json no tiene, la lista corta de candidatos a `extra_core` en stars.yaml.
-    Preview como --probe: no baja PDFs, no encadena, no escribe build/. El criterio de qué agregar
-    sigue siendo del operador; acá sólo lo mecánico."""
+    No baja PDFs, no encadena y no escribe build/ — pero **NO es un preview puro como `--probe`**:
+    appendea la corrida a `barridos:` del registro versionado (#88), que es el único artefacto no
+    regenerable de la bóveda. Eso es deliberado (un barrido que no deja rastro se pierde al
+    scrollear, el mismo modo de falla que #55 cerró para el triage) y hasta #163 la doc decía lo
+    contrario en tres lugares. El criterio de qué agregar sigue siendo del operador; acá sólo lo
+    mecánico."""
     name, meta = cfg.star_by_slug(slug)
     adsfile = cfg.ROOT / "build" / slug / "ads.json"
     if not adsfile.exists():
@@ -706,10 +711,14 @@ def sweep_star(slug: str, rows: int) -> int:
     for r in news:
         cfg.print_seguro(_probe_row(r))
     if news:
-        cfg.print_seguro("\n  → revisá cuáles corresponden y agregalos a `extra_core: [<bibcode>, …]` en la "
-              "entrada de la estrella en vault/config/stars.yaml (persistente, via: manual); después "
-              "re-corré la cadena (idempotente). Los que decidas NO bajar, listalos en el log — no "
-              "curar en silencio.")
+        # #161: acá se dictaba `extra_core: [<bibcode>, …]` con `via: manual` — las dos mitades las
+        # BLOQUEA el propio framework (D-58 rechaza la lista de strings; `manual` no está en
+        # `EXTRA_CORE_VIA`). El snippet canónico lo arma `cfg.extra_core_snippet`, la misma pieza que
+        # usa `triage.py`: una sola implementación, así que no puede volver a divergir.
+        cfg.print_seguro("\n  → revisá cuáles corresponden y pegá el bloque de abajo en `extra_core:` "
+              "de la entrada de la estrella en vault/config/stars.yaml; después re-corré la cadena "
+              "(idempotente). Los que decidas NO bajar, listalos en el log — no curar en silencio.\n")
+        cfg.print_seguro(cfg.extra_core_snippet(news))
     else:
         cfg.print_seguro("  → el corpus ya cubre el barrido full-text. (Ojo: en papers pre-digitales un 0 acá "
               "NO prueba ausencia — el OCR del escaneo pierde filas de tabla; ver skill ingest-star.)")
@@ -728,6 +737,9 @@ def sweep_star(slug: str, rows: int) -> int:
 
 
 # ── dry-run de re-clasificación (#40) ────────────────────────────────────────
+
+extra_core_snippet = cfg.extra_core_snippet   # #161: re-export, una sola implementación
+
 
 def to_record(d: dict) -> dict:
     """Un doc crudo de ADS → el **registro canónico** que persiste `ads.json`.
@@ -754,6 +766,12 @@ def to_record(d: dict) -> dict:
         "keyword": d.get("keyword", []),
         "facets": facets,
         "relevant": relevant,
+        # #126/#179: POR CUÁL PUERTA entró. `to_record` es el schema canónico del registro y no lo
+        # definía, así que el campo aparecía sólo si `reclassify_for_theme` corría — y ésa es no-op
+        # para un tema sin `facet:`. CLAUDE.md promete que **existe siempre**, justamente para que
+        # «no consta» y «ninguna puerta» no se confundan. La lente global no tiene puertas: un core
+        # de estrella entra por la lente y punto, así que acá es `[]` salvo que el tema lo re-marque.
+        "puertas": [],
         # #86: este paper se juzgó SIN abstract, o sea con título + keywords y nada más — una
         # fracción de la información con la que se juzga a los demás. ADS no tiene abstract para
         # buena parte de los escaneos viejos, así que el efecto es un sesgo sistemático contra lo
@@ -901,6 +919,13 @@ def reclassify_for_theme(recs: list, meta: dict) -> tuple[list, list]:
     entraron, salieron = [], []
     for r in recs:
         if r.get("via") == "manual":
+            # #179: es core **por decisión del usuario** (override de `extra_core`, #39) y la regla
+            # no lo toca — pero eso TAMBIÉN es una procedencia. Saltearlo entero lo dejaba sin
+            # `puertas`, o sea indistinguible de «nadie miró», y en un tema de método el aceptado a
+            # mano es el caso frecuente.
+            r.setdefault("puertas", [])
+            if "manual" not in r["puertas"]:
+                r["puertas"].append("manual")
             continue
         antes = bool(r.get("relevant"))
         _, ahora, why = classify_theme(r, meta)
@@ -1221,7 +1246,7 @@ def main() -> int:
                     help="barrido full-text del paso 2b de ingest-star: corre full: sobre "
                          "nombre+aliases (todas las grafías, sin probes a mano) y lista SÓLO los "
                          "core que build/<slug>/ads.json no tiene — candidatos a extra_core en "
-                         "stars.yaml. Preview: no baja nada ni escribe build/. Sólo estrellas.")
+                         "stars.yaml. No baja PDFs ni escribe build/, pero SÍ appendea la corrida a `barridos:` del registro versionado (#88) — no es un preview puro como --probe. Sólo estrellas.")
     args = ap.parse_args()
 
     if args.probe:

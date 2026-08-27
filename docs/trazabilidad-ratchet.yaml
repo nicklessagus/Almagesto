@@ -1,6 +1,9 @@
 # Ratchet de trazabilidad requisito ↔ código.
 #
-# QUÉ ES ESTO. `docs/contrato.md` §3 enuncia 91 invariantes. Los números de abajo son DEUDA MEDIDA
+# QUÉ ES ESTO. `docs/contrato.md` §3 enuncia los invariantes; **cuántos son lo dice el recolector**,
+# no este archivo (issue #139: acá convivían un 91 en prosa y un 96 en campo mientras el conteo real
+# era 126 — tres cifras para un hecho que `python scripts/trace_invariants.py` imprime). Los números
+# de abajo son DEUDA MEDIDA
 # —cuántos NO tienen marca `@inv` en el código— y el sentido de la flecha importa: **el techo sólo
 # puede bajar**. Exigir 0 sería rojo permanente, y un rojo permanente se deja de mirar, que es el
 # modo de falla que este mecanismo existe para evitar.
@@ -43,13 +46,32 @@
 #    implementadas y medidas una por una. Queda su capa skill (issue 7.4), que no es
 #    marcable — la conducta de un skill no la ve ningún recolector.
 
-medido_en: "2026-08-24"
-almagesto_version: "1.38.0"
-contrato_invariantes: 96
+medido_en: "2026-08-27"
+almagesto_version: "1.68.0"
+# `contrato_invariantes` se eliminó (#139): nadie lo leía (`grep -rn contrato_invariantes scripts/
+# tools/` → 0 hits fuera de este yaml) y era una copia que sólo podía envejecer. El total vigente lo
+# emite el recolector, por el mismo argumento que ya rige para los techos.
 
 techos:
-  sin_marca: 3    # medido: 2026-08-24 (pasada `/auditar` + su fix) — 05, 23 y 95.
-  sin_test: 3     # medido: 2026-08-24 — los mismos tres.
+  sin_marca: 6    # medido: 2026-08-27 (pasada `/auditar`) — 05, 23, 95, 130, 132 y 133.
+  sin_test: 6     # medido: 2026-08-27 — los mismos seis.
+  # ratchet-sube: sin_marca 3→6 — el contrato incorporó INV-130, 132 y 133 (issues #159/#160), los
+  #   tres enunciando lo que FALTA: no hay símbolo que marcar todavía.
+  # ratchet-sube: sin_test 3→6 — los mismos tres, por el mismo motivo: no hay test que marcar sobre
+  #   una garantía que el contrato declara `parcial`/`HUECO`.
+  # ⚠ SUBIÓ DE 3 A 6 Y ESTÁ JUSTIFICADO — es el único caso que el encabezado admite: el contrato
+  # incorporó invariantes nuevos que legítimamente **no se pueden marcar todavía**. Los tres que
+  # entraron (INV-130, 132, 133) salieron de la pasada `/auditar` del 2026-08-27 (issues #159 y
+  # #160) y los tres enuncian lo que **FALTA**, no lo que hay:
+  #   · INV-130 `parcial` — el límite de la cascada no-ADS no se persiste (`seed_terms` sólo avisa
+  #     por stdout). La mitad ADS sí está medida, pero vive en INV-52.
+  #   · INV-132 `parcial` — `discover.seed_terms` no es alcanzable desde el CLI. Marcar la función
+  #     sería adjudicarle cobertura a un eje que nadie puede ejercer.
+  #   · INV-133 `HUECO` — el mapa no distingue «no hay implementación» de «hay y no está marcada».
+  #     No hay símbolo que marcar: lo que falta es decidir cómo se declara la diferencia.
+  # Los otros cuatro que SÍ entraron con esta tanda (INV-127, 128, 129, 131) llevan sus marcas en
+  # implementación y test, así que no movieron el techo. ⛔ Esto NO habilita subir el techo por
+  # ningún otro motivo: cuando alguno de los tres se cierre, baja.
   # ⚠ SUBIÓ DE 2 A 3 Y ESTÁ JUSTIFICADO — es el caso que el encabezado admite: el contrato incorporó
   # un invariante nuevo que legítimamente no se puede marcar. INV-95 enuncia lo que garantiza el
   # propio mapa de trazabilidad, y `trace_invariants.py` + su test están EXCLUIDOS del recolector a

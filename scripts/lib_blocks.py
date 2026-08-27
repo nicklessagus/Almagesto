@@ -359,13 +359,40 @@ VERDICTS = ("soportada", "no-soportada", "contradice", "no verificable por extra
 VERDICTS_SIN_RESOLVER = ("no-soportada", "contradice")
 
 
+# Lo que separa el veredicto de su resolución anotada en la misma celda. `→` es lo que la plantilla
+# del skill usa; `->` y el paréntesis son cómo se escribe a mano. El espaciado NO es parte del
+# separador: `startswith(mal + " ")` daba por SIN RESOLVER a `no-soportada → corregida` (#168).
+_RESOLUCION_SEP = re.compile(r"\s*(?:→|->|—|--|:|\()\s*")
+
+# Énfasis markdown y puntuación final: no cambian NADA de lo que la fila dice, pero con la
+# comparación literal cualquiera de los tres apagaba el bloqueante de INV-117 (#168).
+_ADORNO = "*`_~ .,;)"
+
+
+def _bare_verdict(verdict: str) -> str:
+    """El veredicto de la celda, sin formato markdown y sin la resolución anotada.
+
+    Se usa para decidir SI la celda registra una falla; que además esté resuelta lo decide
+    `resueltos` mirando el otro lado del separador."""
+    return _RESOLUCION_SEP.split((verdict or "").strip().lower(), maxsplit=1)[0].strip(_ADORNO).strip()
+
+
 def resueltos(verdict: str) -> bool:
     """`False` si esta fila deja una afirmación sin respaldo. Tolera la anotación de la resolución
     en la misma celda —`no-soportada→corregida`, que es como la plantilla del skill muestra el caso
-    resuelto—: lo que bloquea es el veredicto **pelado**."""
+    resuelto, con o sin espacios alrededor de la flecha—: lo que bloquea es el veredicto **pelado**.
+
+    Dos correcciones de #168, una por dirección. El veredicto se compara **normalizado**, así que el
+    énfasis markdown no es una resolución (`**no-soportada**` seguía siendo una afirmación sin
+    respaldo y pasaba limpia). Y la resolución se detecta por el **separador**, no por
+    `startswith(mal + " ")`, así que el espaciado de la flecha no inventa un veredicto nuevo
+    (`no-soportada → corregida`, que es como se escribe a mano, bloqueaba estando resuelta)."""
     # @inv INV-117
     v = (verdict or "").strip().lower()
-    return not any(v == mal or v.startswith(mal + " ") for mal in VERDICTS_SIN_RESOLVER)
+    partes = _RESOLUCION_SEP.split(v, maxsplit=1)
+    if len(partes) > 1 and partes[1].strip(_ADORNO).strip():
+        return True                     # hay resolución anotada: la celda dice qué se hizo
+    return partes[0].strip(_ADORNO).strip() not in VERDICTS_SIN_RESOLVER
 
 # Columnas que hacen evaluable al bloque. Sin `ancla`/`hash` no hay dónde colgar los hashes (la
 # plantilla pre-D-20 colapsaba las soportadas en prosa y dejaba una sola fila, la que falló). Sin
@@ -439,11 +466,25 @@ def parse_verif_table(text: str) -> list[Row] | None:
         celdas = _split_row(ln)
         if len(celdas) <= max(i_n, i_claim, i_fuente, i_verd, i_ancla, i_hash, i_cond):
             continue                     # fila malformada: la reporta el lint como par sin cubrir
-        if len(celdas) != len(cols):
+        corrida = len(celdas) != len(cols)
+        if corrida:
             # Más celdas que el encabezado ⇒ hay un `|` sin escapar en alguna celda y las columnas
             # de la DERECHA (ancla, hash, condición) están corridas. Indexar por posición leería el
             # ancla de otra celda y el par volvería "vencido por edición" sin que nadie editara nada
-            # (medido: 18 pares, 2026-08-25). Mejor par sin cubrir que ancla ajena.
+            # (medido: 18 pares, 2026-08-25).
+            #
+            # ⚠ Hasta #128 esto era un `continue` y la fila se perdía ENTERA — con ella el
+            # `Veredicto`, así que un `no-soportada` dejaba de disparar el bloqueante de INV-117 y
+            # quedaba invisible. El skill `verify-citations` dice que la barra sin escapar «es el
+            # caso normal, no el raro». Descartar la fila es peor que leerla a medias: lo que no se
+            # puede leer son las columnas corridas, no la fila.
+            #
+            # Se recupera lo decidible POR CONTENIDO —el veredicto contra su vocabulario cerrado y
+            # el bibcode por su `[[…]]`— y se declaran **vacías** las posicionales. No se adivina:
+            # sin ancla el par cae en «sin verificar», que es lo que corresponde.
+            verd = next((c for c in celdas if _bare_verdict(c) in VERDICTS), "")
+            bibs = next((b for c in celdas for b in [_bibcodes(c)] if b), [""])
+            out.append(Row(celdas[i_n], celdas[i_claim], bibs[0], verd, "", "", "", None, ""))
             continue
         bibs = _bibcodes(celdas[i_fuente]) or [celdas[i_fuente].strip("[]")]
         kind, h = split_source_ref(celdas[i_hash])

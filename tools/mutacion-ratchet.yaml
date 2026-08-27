@@ -5,9 +5,9 @@
 # esta sesión encontró cuatro veces (un `assert path.glob(...)` siempre truthy, una guarda cuyo
 # test pasaba sin la guarda, un "espera creciente" que `[2.0, 2.0]` satisface, un test de
 # determinismo corriendo las dos pasadas en el mismo proceso).
-medido_en: "2026-08-25"
-alcance: "TODO `scripts/` — 338 funciones en el último barrido completo (`--todo`, 1.41.1); hoy hay 5 más sin barrer (ver nota al pie)"
-techo: 4
+medido_en: "2026-08-27"
+alcance: "TODO `scripts/` — 406 funciones, barrido completo (`--todo --ratchet`, 1.68.0, pasada /auditar del 2026-08-27)"
+techo: 3
 
 # ⚠ EL TECHO SUBIÓ DE 7 A 10, Y NO ES UNA REGRESIÓN — es la primera medición sobre el árbol
 # ENTERO. El 7 se había medido sobre 268 funciones y el campo `alcance` lo llamaba "la mayor parte
@@ -75,3 +75,25 @@ techo: 4
 # INV-101, que vive justamente ahí. No es una regresión (el alcance siempre dijo `scripts/`), pero
 # ahora que `tools/` entró al mapa de trazabilidad la asimetría queda a la vista: el código que
 # decide qué se muta es el único que no se muta.
+
+# 2026-08-27 · pasada `/auditar` (issues #141 y #167). Dos cosas, y conviene no mezclarlas:
+#
+# (a) EL ALCANCE ESTABA MAL DECLARADO. El campo decía «338 funciones … hoy hay 5 más sin barrer»
+#     (= 343) y el propio contador del gate cuenta **406**: 63 funciones no barridas y no
+#     declaradas. Es el análogo exacto de AUD-35, que este mismo archivo documenta arriba — un
+#     techo que se lee como medido sobre `scripts/` entero y estaba medido sobre el 84 % de él.
+#     Se declara la discrepancia (regla de método #5) y el alcance queda fijado en la población
+#     COMPLETA, que es la única forma de que de acá en más sólo pueda bajar.
+#
+# (b) EL TECHO BAJÓ DE 4 A 3, y esto NO es lo mismo que (a): el barrido completo sobre las 406
+#     midió **3 sobrevivientes**, o sea por debajo del techo vigente. `extraction_prompt.py::main`
+#     salió de la lista. Un techo por encima de lo medido deja de ser ratchet y se vuelve
+#     decorativo, así que se baja.
+#
+#     Los 3 que quedan son todos RED (`citation_index._fetch_ads_default`,
+#     `citation_index._fetch_oa_default`, `fetch_web.fetch`): bajarlos pide un doble en la frontera
+#     o un smoke test contra el servicio real (regla de método #1), no un test más de los que ya hay.
+#
+# ⚠ `extraction_prompt.py::main` sigue en `tools/cobertura-ratchet.yaml` (sin ejecutar) y salió de
+#    acá (su mutación muere). No es contradicción: son ejes distintos —«nadie la corre» vs «romperla
+#    no pone rojo a nadie»— y una función puede correr de refilón y aun así ser mutable sin ruido.

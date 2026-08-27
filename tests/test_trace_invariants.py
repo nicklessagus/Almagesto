@@ -84,14 +84,14 @@ def test_registro_sale_del_contrato(repo: Path):
     assert reg["INV-90"]["area"].startswith("B.")
 
 
-def test_registro_real_cubre_los_126():
-    """Contra el contrato REAL del repo: el parser tiene que leer los 126 invariantes vivos. Es la
+def test_registro_real_cubre_los_133():
+    """Contra el contrato REAL del repo: el parser tiene que leer los 133 invariantes vivos. Es la
     prueba de que la forma de la tabla que el parser asume es la que el documento tiene.
 
     El número es un **canario deliberado**: agregar una fila al contrato tiene que romper acá, para
     que nadie sume un invariante sin pasar por el ratchet de trazabilidad."""
     reg = ti.parse_contrato(ti.CONTRATO.read_text(encoding="utf-8"))
-    assert len(reg) == 126
+    assert len(reg) == 133
     assert "INV-01" in reg and "INV-126" in reg
 
 
@@ -411,3 +411,33 @@ def test_el_registro_admite_invariantes_de_tres_digitos():
     assert reg["INV-100"]["prio"] == "P1"
     assert ti.MARCA_RE.search("#  @inv INV-100").group(1) == "INV-100"
     assert ti.INV_RE.findall("INV-100 y INV-07") == ["INV-100", "INV-07"]
+
+
+@pytest.mark.poblada
+def test_el_mapa_commiteado_esta_al_dia_en_el_repo_REAL():
+    """Issue #138 — el gate que faltaba. `docs/trazabilidad.md` es un artefacto GENERADO, y en
+    `69b49d5` el commiteado estaba desactualizado: dos marcas de INV-125 agregadas en `e8aa5b9`
+    no figuraban, así que el mapa **sub-reportaba** su propia cobertura.
+
+    Nadie lo detectaba: `--check` existía y no lo corría ni CI ni la suite, y
+    `tests/test_docs_ejecutables.py` **exime** a este archivo de su chequeo de punteros con la
+    premisa *"se re-derivan del AST y no pueden envejecer"* — premisa que sólo vale si alguien
+    regenera. INV-95 enuncia *"el mapa dice la verdad sobre su propia cobertura"*: esto lo mide.
+
+    Es el mismo argumento que `test_docs_ejecutables`: barato, corre en tier 0, y falla exactamente
+    cuando alguien agrega o mueve una marca sin regenerar. Se arregla con
+    `python scripts/trace_invariants.py`.
+
+    ⚠ **Tier 1, no tier 0.** `collect_marks` parsea el AST de todo `scripts/` + `tests/` y cuesta
+    ~4,9 s (in-process; por subprocess es lo mismo más el arranque del intérprete). Meterlo en tier 0
+    llevaba la suite de 7 s a 11,8 s y **rompía el presupuesto declarado** (≤ 8 ms/test **y** ≤ 10 s,
+    `tests/README.md`) — una promesa que el repo mide con su propio test. El gate de cada push vive
+    en CI (`.github/workflows/ci.yml`), que corre el `--check` real; acá queda la red de tier 1.
+
+    Compara in-process con las mismas piezas que usa `--check`, así que la paridad es por
+    construcción y no por un doble."""
+    esperado = ti.render(ti.load_registro(ti.ROOT), ti.collect_marks(ti.ROOT), ti.load_techos(ti.ROOT))
+    vigente = (ti.ROOT / "docs" / "trazabilidad.md").read_text(encoding="utf-8")
+    assert vigente == esperado, (
+        "`docs/trazabilidad.md` está desactualizado respecto de las marcas del árbol — "
+        "regeneralo con `python scripts/trace_invariants.py`.")

@@ -63,7 +63,7 @@ from make_notes import rename_paper       # noqa: F401  (lo usan los tests como 
 RED_FILE = "_red.yaml"
 
 
-# ── los cinco detectores ─────────────────────────────────────────────────────────────────────────
+# ── los seis detectores (#106 sumó `sweep_citas`) ─────────────────────────────────────────────────────────────────────────
 #
 # Cada uno vive en SU script (el que ya sabe hablar con esa fuente) y acá sólo se orquestan. Estas
 # funciones son la fachada: los tests las graban, y mover un detector de script no cambia el
@@ -113,7 +113,7 @@ def sweep_correcciones() -> list:
     return out
 
 
-def discover_versions() -> list:
+def discover_versions() -> tuple[list, list]:
     """`[(bibcode_viejo, bibcode_nuevo)]` — preprints que ya salieron publicados (D-19).
 
     Por cada nota con `arxiv_id` cuyo bibcode es de eprint (`…arXiv…`), se le pregunta a ADS qué
@@ -285,12 +285,36 @@ def aplicar_ground_truth(slug: str) -> None:
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         cfg.print_seguro(f"  ✗ {slug}: se aplicó pero no se pudo registrar `_cambios` ({exc})")
         return
-    payload["_cambios"] = [{"campo": c, "viejo": v, "nuevo": n, "fecha": dt.date.today().isoformat()}
-                           for c, v, n in cambios]
+    payload["_cambios"] = _merge_changes(payload.get("_cambios"), cambios)
     fetch_ground_truth.write_ground_truth(slug, payload)
     cfg.print_seguro(
         f"  · {slug}: {len(cambios)} valor(es) cambiaron — la prosa que los citaba NO se actualizó "
         f"sola. Revisala y, si la dejás como está, marcala con `⚠desactualizado`.")
+
+
+def _merge_changes(previos, cambios) -> list:
+    """Acumula la caducidad PENDIENTE de ground-truth, por campo (#130).
+
+    Acá había una asignación (`payload["_cambios"] = [...]`), así que la segunda pasada borraba lo
+    de la primera: la marca `⚠desactualizado` que el lint pedía por un campo desaparecía **sin que
+    nadie la hubiera resuelto**, con la prosa todavía citando el valor viejo. Es lo contrario de
+    D-28/`busquedas` y de `save_barrido`, que acumulan porque el registro guarda justamente lo que
+    no es regenerable.
+
+    Acumular no es duplicar: un campo tiene UNA caducidad pendiente —la prosa dice `viejo`, NEA hoy
+    dice `nuevo`—, así que si vuelve a cambiar se actualiza. El `viejo` que se conserva es el
+    **original**: es el que está escrito en la nota. El intermedio no lo escribió nadie nunca.
+    """
+    hoy = dt.date.today().isoformat()
+    out = [dict(c) for c in (previos or []) if isinstance(c, dict)]
+    por_campo = {c.get("campo"): c for c in out}
+    for campo, v, n in cambios:
+        if campo in por_campo:
+            por_campo[campo].update(nuevo=n, fecha=hoy)     # `viejo` NO se toca: es lo que la nota cita
+        else:
+            fila = {"campo": campo, "viejo": v, "nuevo": n, "fecha": hoy}
+            out.append(fila); por_campo[campo] = fila
+    return out
 
 
 # ── la caducidad, versionada (D-46 / R-4) ────────────────────────────────────────────────────────
@@ -310,13 +334,25 @@ def load_ultima_pasada() -> dict:
     return cfg.as_map(cfg.as_map(data).get("ultima_pasada_red"))
 
 
-def save_ultima_pasada(cubrio: list) -> None:
+def save_ultima_pasada(cubrio: list, no_evaluados: list | None = None) -> None:
+    """Persiste qué se miró afuera y **qué no se pudo mirar** (#172).
+
+    Acá se guardaba sólo `cubrio`, así que en el archivo versionado un detector que falló
+    parcialmente quedaba **byte-idéntico** a uno que nunca corrió: el aviso vivía sólo en stdout, que
+    es el mismo modo de falla con el que #55 y #88 mudaron el triage y el barrido al registro. El
+    propio módulo justifica versionar la caducidad porque *"sin versionarla, otro clon reporta
+    'nunca se corrió', que es falso"* — y no declarar el fallo parcial es la otra mitad de eso.
+
+    `no_evaluados` sólo aparece cuando hay algo que declarar: un `[]` fijo en cada pasada sería ruido
+    en el único artefacto de la bóveda que no es regenerable."""
     cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    pasada = {"fecha": dt.date.today().isoformat(),
+              "cubrio": sorted(cubrio),
+              "version": cfg.ALMAGESTO_VERSION}
+    if no_evaluados:
+        pasada["no_evaluados"] = [{"detector": n, "motivo": m} for n, m in no_evaluados]
     cfg.write_text_atomic(_red_path(), yaml.safe_dump(
-        {"ultima_pasada_red": {"fecha": dt.date.today().isoformat(),
-                               "cubrio": sorted(cubrio),
-                               "version": cfg.ALMAGESTO_VERSION}},
-        sort_keys=False, allow_unicode=True))
+        {"ultima_pasada_red": pasada}, sort_keys=False, allow_unicode=True))
 
 
 # ── orquestador ──────────────────────────────────────────────────────────────────────────────────
@@ -423,7 +459,7 @@ def main(argv=None) -> int:
                          "regla. Re-corré la cadena del tema para aplicarlo (no se aplica solo).")
         pendientes += len(cruces)
 
-    save_ultima_pasada(cubrio)
+    save_ultima_pasada(cubrio, no_evaluados)
 
     if gt_cambios:
         # El diff YA se mostró. Aplicar es lo que se pregunta — no lo que se hace y después se avisa.

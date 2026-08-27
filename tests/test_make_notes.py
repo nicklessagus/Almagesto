@@ -378,10 +378,13 @@ def test_concept_note_methods(toy_vault):
 
 
 def test_concept_note_hypotheses_lleva_status(toy_vault):
+    """⚠ **Actualizado por #175.** Esto fijaba `status == "active"`, que **no está** en el
+    vocabulario cerrado de D-37: el test acreditaba el valor que hacía nacer bloqueante a toda
+    hipótesis nueva. Hoy fija que el `status` sale del vocabulario y que es el inicial."""
     seed_topic(area="hypotheses")
     mn.write_concept_note("gp", force=False)
     dest = toy_vault.CONCEPTS / "hypotheses" / "gaussian-processes.md"
-    assert read_fm(dest)["status"] == "active"
+    assert read_fm(dest)["status"] == cfg.HYP_STATUS_INICIAL == "abierta"
     # AUD-48: antes asserteaba la ausencia de `contains(methods,`, una cadena que ya no se emite a
     # ninguna nota (D-10/D-11 reemplazó el predicado Dataview por tabla estampada), o sea que era
     # verde por construcción. Lo que sí distingue a una hipótesis es que NO lleva el roll-up de
@@ -1166,9 +1169,13 @@ def test_cli_web_pending_estampa_pending_source(toy_vault, monkeypatch):
     """`--pending` es la escotilla que declara una fuente off-ADS todavía no conseguida
     (paywall/scan/unextractable, #81). Con el `dest` roto `args.pending` es siempre `None` pase lo
     que pase en la línea de comandos: la nota sale SIN `pending_source`, que es justo lo que el
-    lint lista como precondición — el usuario nunca se entera de que hay que proveer la fuente."""
+    lint lista como precondición — el usuario nunca se entera de que hay que proveer la fuente.
+
+    ⚠ **Actualizado por #164**: `--pending` ahora exige `--reason`. El motivo es obligatorio desde
+    #80 y este CLI lo tiraba, así que escribía una nota fuera de schema."""
     assert run_main(monkeypatch, ["1999Paywall", "--web", "--slug-hint", "gp",
-                                  "--url", "https://pay.wall/x", "--pending", "paywall"]) == 0
+                                  "--url", "https://pay.wall/x", "--pending", "paywall",
+                                  "--reason", "detrás del paywall del editor"]) == 0
     fm = read_fm(toy_vault.PAPERS / "1999Paywall.md")
     assert fm["pending_source"] == "paywall"
     assert fm["accessed"] is None       # pending suprime el default "hoy UTC": sin snapshot todavía
@@ -2943,3 +2950,171 @@ def test_la_tabla_de_papers_lleva_el_titulo(toy_vault):
     assert "Blind separation of telluric lines" in tabla
 
 
+
+
+# ── #176 · el roll-up de concepto sobrevive al estampado de `## Papers` ──────────────────────────
+
+def test_el_rollup_de_concepto_no_se_lo_come_la_tabla_de_papers(toy_vault, monkeypatch):
+    """Issue #176 — `PAPERS_HEADER = "## Papers"` es **prefijo** de
+    `CONCEPT_ROLLUP_HEADER = "## Papers que tocan este tema (auto)"`, y `section_start` admite texto
+    colgando del encabezado (a propósito: los reales llevan sufijos como `(25 · 16 sintetizados)`).
+
+    Resultado: en `main()`, `stamp_papers_table` corría ANTES y reemplazaba la sección del roll-up
+    con la tabla de estrella; `stamp_concept_rollup` ya no encontraba su ancla y devolvía `False`
+    **para siempre**. `concept_rollup_table`/`concept_rollup_rows` eran código muerto en la cadena
+    real, y con ellos se perdía la columna *Entró por* — que es justo lo que D-24 dice que no se
+    puede perder, porque `methods` y `thesis_links` viven en papers distintos."""
+    seed_topic()
+    # dos papers, uno por cada llave: es el caso que D-24 nombra (viven en papers distintos).
+    (cfg.PAPERS / "2019Metodo.md").write_text(
+        mn.fm({"bibcode": "2019Metodo", "year": 2019, "methods": ["gaussian-processes"]}) + "\n# x\n",
+        encoding="utf-8")
+    (cfg.PAPERS / "2020Tesis.md").write_text(
+        mn.fm({"bibcode": "2020Tesis", "year": 2020, "thesis_links": ["gaussian-processes"]}) + "\n# x\n",
+        encoding="utf-8")
+    assert run_main(monkeypatch, ["gp", "--theme"]) == 0
+    texto = mn._concept_dest("gp").read_text(encoding="utf-8")
+    assert mn.CONCEPT_ROLLUP_HEADER in texto, "el roll-up de concepto sigue en la nota"
+    assert "| Bibcode | Año | Entró por |" in texto, "y con la columna que D-24 exige"
+    assert "| [[2019Metodo]] | 2019 | methods |" in texto
+    assert "| [[2020Tesis]] | 2020 | thesis_links |" in texto, \
+        "la UNIÓN de las dos llaves: quedarse con una pierde la mitad (D-24)"
+    assert "| Bibcode | Título | Año | Relevancia | Origen | Estado |" not in texto, \
+        "la tabla de ESTRELLA no reemplaza al roll-up del tema"
+
+
+def test_section_start_no_confunde_un_encabezado_con_su_prefijo():
+    """La causa raíz de #176, aislada. Un sufijo real es un paréntesis o nada; `que tocan este
+    tema` es **otro encabezado**. Sin esta distinción, cualquier par de secciones donde una es
+    prefijo de la otra se pisa en silencio.  @inv INV-98"""
+    texto = "# T\n\n## Papers que tocan este tema (auto)\n\nfila\n"
+    assert cfg.section_start(texto, mn.CONCEPT_ROLLUP_HEADER) > 0, "su propio encabezado sí"
+    assert cfg.section_start(texto, "## Papers") < 0, "el prefijo no"
+    # y los sufijos legítimos siguen andando
+    assert cfg.section_start("# T\n\n## Papers (25 · 16 sintetizados)\n", "## Papers") > 0
+    assert cfg.section_start("# T\n\n## Papers\n", "## Papers") > 0
+
+
+# ── #175 / #178 · el stub de una hipótesis nace válido y con sus tres secciones ──────────────────
+
+def test_una_hipotesis_nueva_no_nace_bloqueante(toy_vault):
+    """Issue #175 — `write_concept_note` escribía `status: active`, que **no está** en el
+    vocabulario cerrado de D-37, así que toda hipótesis recién creada nacía con un hallazgo
+    bloqueante del lint. La máquina fabricaba su propia violación a partir de un campo que ella
+    misma escribe.
+
+    El valor correcto para una hipótesis recién planteada es `abierta`, y sale de la MISMA
+    constante que el lint valida: si alguien toca el vocabulario, esto no puede quedar atrás."""
+    import lint
+    seed_topic(area="hypotheses")
+    mn.write_concept_note("gp", force=False)
+    dest = toy_vault.CONCEPTS / "hypotheses" / "gaussian-processes.md"
+    st = read_fm(dest)["status"]
+    assert st in cfg.HYP_STATUS, f"`status: {st}` fuera del vocabulario cerrado (D-37)"
+    assert st == "abierta", "una hipótesis recién planteada no está sostenida ni refutada"
+    assert lint.collect().por_clave("bad_status").items == (), "y el lint no la marca"
+
+
+def test_el_stub_de_hipotesis_trae_sus_tres_secciones_propias(toy_vault):
+    """Issue #178 — `CLAUDE.md` declara que una nota de `concepts/hypotheses/` lleva **tres cosas
+    propias** que ninguna otra nota tiene: el blockquote `> Alcance …` (D-34), la tabla de evidencia
+    `Paper | Postura | …` (D-21) y el veredicto marcado `inferencia` (D-36). El stub era el template
+    genérico de concepto y no scaffoldeaba ninguna, así que la nota **nacía con backlog** — contra
+    D-5 (*la nota nace 100 % verificada*) y contra la doctrina de que cuando el lint habla hay algo
+    real."""
+    seed_topic(area="hypotheses")
+    mn.write_concept_note("gp", force=False)
+    texto = (toy_vault.CONCEPTS / "hypotheses" / "gaussian-processes.md").read_text(encoding="utf-8")
+    assert "> Alcance" in texto, "D-34: sin el alcance, un veredicto negativo se lee como universal"
+    assert "| Paper | Postura | Qué dice" in texto, "D-21: la postura vive acá, no en el paper"
+    assert "inferencia" in texto, "D-36: agregar N filas en un veredicto es juicio del agente"
+
+
+def test_una_ficha_de_metodo_no_lleva_las_secciones_de_hipotesis(toy_vault):
+    """La otra mitad de #178: el scaffolding nuevo es SÓLO de `hypotheses`. Si se filtrara a
+    `methods`/`indicators`, cada concepto nacería con una tabla de evidencia vacía que nadie va a
+    llenar — ruido fijo, que es el modo de falla que el propio detector existe para no producir."""
+    seed_topic(area="methods")
+    mn.write_concept_note("gp", force=False)
+    texto = (toy_vault.CONCEPTS / "methods" / "gaussian-processes.md").read_text(encoding="utf-8")
+    assert "> Alcance" not in texto and "| Paper | Postura" not in texto
+
+
+def test_consolidar_conserva_el_artefacto_de_MEJOR_calidad(toy_vault):
+    """Issue #170 — el docstring promete *"se conserva el MEJOR artefacto de cada tipo"* y el
+    comentario *"se queda el de MEJOR calidad, y el otro se borra"*, pero el código no comparaba
+    calidad en ningún lado: `if destino.exists(): art_old.unlink()` conservaba **siempre** el del
+    bibcode canónico.
+
+    El borrado es irreversible sobre `raw/`, que el contrato declara *código fuente inmutable*, y
+    degrada la fuente que después leen `verify-citations` y todo `grep` del corpus. El comparador ya
+    existía en este mismo archivo (`stamp_fulltext`, `_FULLTEXT_QUALITY`): no se usaba acá."""
+    _nota_paper(toy_vault, "2026arXivVIEJO")
+    _nota_paper(toy_vault, "2026RASTINUEVO")
+    d = cfg.FULLTEXT / "tema"
+    d.mkdir(parents=True, exist_ok=True)
+    bueno = d / "2026arXivVIEJO.txt"
+    bueno.write_text("Texto limpio de pdftotext, con la ecuacion entera.\n" * 20, encoding="utf-8")
+    malo = d / "2026RASTINUEVO.txt"
+    malo.write_text(f"{cfg.FULLTEXT_OCR_MARK} citable CON SALVEDAD\nmoj1b4ke\n", encoding="utf-8")
+
+    mn.rename_paper("2026arXivVIEJO", "2026RASTINUEVO")
+
+    sup = (d / "2026RASTINUEVO.txt").read_text(encoding="utf-8")
+    assert mn._txt_provenance(d / "2026RASTINUEVO.txt") == "pdftotext", \
+        "sobrevive el `.txt` de MEJOR calidad, no el que ya se llamaba como el canónico"
+    assert "ecuacion entera" in sup
+    assert not bueno.exists(), "y no quedan dos (el huérfano dispararía #108 para siempre)"
+
+
+def test_consolidar_no_pisa_el_artefacto_bueno_del_canonico(toy_vault):
+    """La otra mitad de #170: cuando el de MEJOR calidad es el del canónico, no se toca. Si el
+    criterio se invirtiera, el fix sería tan destructivo como el bug."""
+    _nota_paper(toy_vault, "2026arXivVIEJO")
+    _nota_paper(toy_vault, "2026RASTINUEVO")
+    d = cfg.FULLTEXT / "tema"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "2026arXivVIEJO.txt").write_text(f"{cfg.FULLTEXT_OCR_MARK} salvedad\nmoj1b4ke\n",
+                                          encoding="utf-8")
+    (d / "2026RASTINUEVO.txt").write_text("Texto limpio de pdftotext.\n" * 20, encoding="utf-8")
+    mn.rename_paper("2026arXivVIEJO", "2026RASTINUEVO")
+    assert mn._txt_provenance(d / "2026RASTINUEVO.txt") == "pdftotext"
+    assert "pdftotext" in (d / "2026RASTINUEVO.txt").read_text(encoding="utf-8")
+
+
+# ── #154 / #164 · el CLI `--pending` contra el schema completo de #80 ────────────────────────────
+
+def test_el_cli_pending_acepta_los_cuatro_valores_del_vocabulario(toy_vault, monkeypatch):
+    """Issue #154 — `CLAUDE.md` declara `pending` como vocabulario CERRADO de **cuatro** valores
+    (*"`adquisicion` es el cuarto"*, #80) y `cfg.PENDING_OK` los tiene, pero el `choices` de este
+    CLI listaba tres a mano: `argparse` rechazaba justo el que #80 agregó.
+
+    Los `choices` salen de `cfg.PENDING_OK`, no de una copia: la asimetría era silenciosa porque el
+    otro camino —`themes.yaml` vía `ingest_theme`— sí valida contra la constante."""
+    for valor in cfg.PENDING_OK:
+        assert run_main(monkeypatch, ["2006RasmussenWilliams", "--web", "--pending", valor,
+                                      "--reason", "el usuario lo está consiguiendo",
+                                      "--force"]) == 0, f"`--pending {valor}` es válido"
+        fm = read_fm(toy_vault.PAPERS / "2006RasmussenWilliams.md")
+        assert fm["pending_source"] == valor
+
+
+def test_el_cli_pending_exige_el_motivo(toy_vault, monkeypatch, capsys):
+    """Issue #164 — el camino CLI no podía producir `pending_motivo`: la llamada no lo pasaba y no
+    había bandera. `CLAUDE.md` (#80) lo declara **obligatorio** y ningún chequeo del lint cazaba la
+    nota que este CLI escribía fuera de schema.
+
+    Es el mismo argumento del `--reason` del triage: en seis meses lo que sirve es el motivo (¿hay
+    alguien consiguiéndola, o nadie la miró nunca?), no la categoría."""
+    with pytest.raises(SystemExit):
+        run_main(monkeypatch, ["2006RasmussenWilliams", "--web", "--pending", "paywall"])
+    assert "motivo" in capsys.readouterr().err.lower()
+
+
+def test_el_cli_pending_estampa_el_motivo_en_la_nota(toy_vault, monkeypatch):
+    """El motivo declarado tiene que llegar al frontmatter: si se pide y se tira, el flag es teatro."""
+    assert run_main(monkeypatch, ["2006RasmussenWilliams", "--web", "--pending", "adquisicion",
+                                  "--reason", "lo trae el usuario de la biblioteca"]) == 0
+    fm = read_fm(toy_vault.PAPERS / "2006RasmussenWilliams.md")
+    assert fm["pending_source"] == "adquisicion"
+    assert fm["pending_motivo"] == "lo trae el usuario de la biblioteca"

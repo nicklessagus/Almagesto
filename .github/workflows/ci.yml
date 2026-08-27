@@ -41,3 +41,11 @@ jobs:
         run: pip install pyyaml requests numpy pytest
       - name: Tests de scripts/
         run: python -m pytest tests/ -q
+
+      # `docs/trazabilidad.md` es un artefacto GENERADO por `trace_invariants.py`, y hasta #138 nada
+      # verificaba que el commiteado fuera el vigente: en 69b49d5 le faltaban dos marcas, o sea que
+      # el mapa sub-reportaba su propia cobertura (INV-95 dice que "dice la verdad" sobre ella).
+      # Va acá y no en tier 0 porque parsear el AST de scripts/ + tests/ cuesta ~5 s y el
+      # presupuesto de tier 0 es ≤ 10 s. Se arregla con `python scripts/trace_invariants.py`.
+      - name: El mapa requisito↔código está al día
+        run: python scripts/trace_invariants.py --check

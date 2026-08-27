@@ -1,5 +1,7 @@
 """lib_config: token ADS, loaders de config, áreas de concepts (declarado vs tolerante)."""
 from pathlib import Path
+import re
+
 import pytest
 
 import lib_config as cfg
@@ -369,6 +371,29 @@ def test_write_text_atomic_crea_el_directorio(tmp_path):
     assert dest.read_text(encoding="utf-8") == "hola\n"
 
 
+# #137 · marcador para eximir UNA línea del guard de atomicidad: su destino no está en `vault/`
+# (típicamente un reporte en `outputs/`, scratch regenerable). Es explícito a propósito — una
+# exención tiene que ser una decisión visible en la línea, no un nombre ausente de una lista.
+VAULT_WRITE_EXENTA = "# noqa: vault-write"
+
+# Rutas de la bóveda: si un módulo nombra alguna, escribe (o puede escribir) adentro.
+_VAULT_CONST = re.compile(
+    r"\bcfg\.(VAULT|WIKI|RAW|CONFIG|STARS|PAPERS|CONCEPTS|QUERIES|MATRICES|PDFS|FULLTEXT"
+    r"|GROUND_TRUTH|REGISTRO|STARS_YAML|THEMES_YAML|OBJECTIVE_YAML|registro_path)\b")
+
+
+def modules_writing_to_vault() -> tuple:
+    """Los módulos de `scripts/` en alcance del guard de INV-90, DERIVADOS del árbol (#137).
+
+    El criterio es «nombra una ruta de `vault/`», no una lista curada: lo que importa es que un
+    módulo nuevo entre **solo**, porque el modo de falla medido fue justamente uno que nadie agregó.
+    `lib_config` entra por definición (define las rutas)."""
+    from pathlib import Path
+    return tuple(sorted(
+        p.name for p in Path(cfg.ROOT, "scripts").glob("*.py")
+        if p.name == "lib_config.py" or _VAULT_CONST.search(p.read_text(encoding="utf-8"))))
+
+
 def test_sin_escrituras_directas_a_vault():
     """Criterio de aceptación de D-53, como test y no como `grep` que alguien tiene que acordarse
     de correr: ningún módulo que escribe en `vault/` puede llamar `write_text`/`write_bytes` sobre
@@ -381,9 +406,12 @@ def test_sin_escrituras_directas_a_vault():
     import re
     from pathlib import Path
     import trace_invariants as ti
-    escriben_en_vault = ("make_notes.py", "extract_fulltext.py", "fetch_web.py",
-                         "ingest_theme.py", "fetch_ground_truth.py", "check_retractions.py",
-                         "fetch_arxiv.py", "fetch_pdf.py", "lib_config.py")
+    # #137: la población se DERIVA. Acá había una allowlist de 9 nombres escrita a mano que no
+    # incluía `entity.py` —un writer real de la bóveda—, así que mutar su escritura a una no atómica
+    # dejaba el guard en verde. Un gate que mide una lista no mide la garantía (regla de método #2),
+    # y nadie mantenía la lista sincronizada: la misma falla ya había ocurrido por el otro lado
+    # (AUD-02, `shutil.copy*`). Ahora un módulo nuevo que toque `vault/` entra solo.
+    escriben_en_vault = modules_writing_to_vault()
     directo = re.compile(r"(?<!def )\b\w+\.(?:write_(?:text|bytes)|copy2?|copyfile)\(")
     ofensores = []
     for nombre in escriben_en_vault:
@@ -397,6 +425,8 @@ def test_sin_escrituras_directas_a_vault():
                 continue
             if "tmp.write_" in ln or ", tmp)" in ln:
                 continue          # el helper mismo (`_publicar`): el destino ES el temporal
+            if VAULT_WRITE_EXENTA in ln:
+                continue          # destino declarado FUERA de vault/ (ver la constante)
             ofensores.append(f"{nombre}:{n}: {ln.strip()}")
     assert ofensores == [], (
         "escrituras directas (no atómicas) a vault/ — usar cfg.write_text_atomic / "
@@ -1186,3 +1216,18 @@ def test_re_juzgar_un_par_appendea_y_gana_el_ultimo(toy_vault):
     assert len(crudo) == 2, "el historial guarda los dos juicios"
     idx = cfg.load_no_disputas("test_star")
     assert len(idx) == 1 and "distinta definición" in list(idx.values())[0]["motivo"], "gana el último"
+
+
+def test_la_poblacion_del_guard_de_atomicidad_se_DERIVA_no_se_lista():
+    """Issue #137 — la red de INV-90 corría sobre una allowlist **escrita a mano** de 9 módulos que
+    no incluía `entity.py`, que sí escribe en `vault/` (`stars.yaml`, `themes.yaml`, frontmatter de
+    notas). Medido: mutar `entity.py:161` a `path.write_text(...)` dejaba el guard en VERDE.
+
+    El gate medía una lista, no la garantía enunciada — el patrón de la regla de método #2. Y nadie
+    mantenía la lista sincronizada, así que la misma falla ya había ocurrido una vez por el otro lado
+    (AUD-02, `shutil.copy2`). La población se deriva: **todo módulo de `scripts/` que nombre una ruta
+    de `vault/`**, así que un módulo nuevo entra solo.  @inv INV-90"""
+    pob = modules_writing_to_vault()
+    assert "entity.py" in pob, "el módulo que motivó #137 entra solo"
+    assert len(pob) >= 15, "la población es derivada, no una lista corta escrita a mano"
+    assert "openalex.py" not in pob, "y no arrastra a los que no tocan la bóveda"

@@ -337,10 +337,22 @@ def merge_ours_unprotected() -> tuple[list[str], str | None]:
                               # rojo toda copia sin `.git` — incluida la que usa el gate de mutación,
                               # que fue donde se detectó. Distinto del caso de la verificación
                               # stale (D-43), donde sin git queda algo real sin medir.
+    #  @inv INV-68
     if (git_out("config", "--get", "merge.ours.driver") or "").strip():
-    #  @inv INV-96
         return [], None                       # protegido: no hay riesgo
     return [pat for pat in patrones if _diverge_del_upstream(pat)], None
+
+
+#  @inv INV-128
+def _field_is_marked(lineas_marcadas: list[str], campo: str, viejo) -> bool:
+    """¿Alguna línea con `⚠desactualizado` está marcando ESTE campo? (#131)
+
+    La marca va pegada al valor, así que la línea que la lleva tiene que nombrar el valor viejo —que
+    es lo que la prosa cita— o el campo. Se acepta el nombre corto (`teff_K` de `host.teff_K`)
+    porque la prosa no escribe la ruta del JSON."""
+    corto = str(campo).rsplit(".", 1)[-1]
+    val = "" if viejo is None else str(viejo)
+    return any(corto in ln or (val and val in ln) for ln in lineas_marcadas)
 
 
 def _diverge_del_upstream(pattern: str) -> bool:
@@ -357,6 +369,24 @@ def _diverge_del_upstream(pattern: str) -> bool:
 _SEP_ROW = re.compile(r"^\|[\s\-:|]+\|?$")   # `|---|---|`: estructura, no contenido
 
 INVENTARIO_HEADER = "## Inventario por eje"
+
+
+def challenging_rows(text: str) -> int:
+    """Cuántas filas de la tabla de evidencia (D-21) declaran postura `desafía` (#177).
+
+    Se lee la COLUMNA, no el texto suelto: la palabra aparece en la prosa explicativa de la propia
+    plantilla, así que un `in text` daría un falso positivo en toda hipótesis recién generada."""
+    n = 0
+    for ln in text.splitlines():
+        ln = ln.strip()
+        if not ln.startswith("|") or ln.startswith("|--"):
+            continue
+        celdas = [c.strip().strip("*`_ ").lower() for c in ln.strip("|").split("|")]
+        # la postura es una celda ENTERA, no una mención: la fila de plantilla lista las tres
+        # opciones separadas por `\|` escapado y no cuenta.
+        if any(c == "desafía" or c == "desafia" for c in celdas):
+            n += 1
+    return n
 
 
 def inventario_sin_llenar(text: str) -> bool:
@@ -541,16 +571,15 @@ def legacy_disputes(fm: dict) -> tuple[int, list]:
     return n, motivos
 
 
-# Vocabulario CERRADO de `role` (#73). Es chico y cerrado a propósito: el rol define QUÉ OPERACIÓN
-# de contraste corresponde entre dos papers, y un valor libre no la determina. Un typo deja el campo
-# mudo para esa operación sin que nadie se entere — el mismo modo de falla de `thesis_links` que no
-# matchea ninguna nota, y por eso se trata igual (bloqueante).
-# @inv INV-46
-# @inv INV-46
-# D-37. `status` es lo ÚNICO que un consumidor lee para saber en qué quedó una hipótesis; en prosa
-# libre no dice nada (el caso medido en la instancia real: `supuesto operativo con caveat conocido`).
-HYP_STATUS = ("abierta", "sostenida", "disputada", "refutada")
-ROLES = ("fundacional", "aplicacion", "arbitro")
+# Los dos vocabularios cerrados que este lint valida como bloqueantes. Se LEEN de `lib_config`, no se
+# re-declaran: hasta #175 `HYP_STATUS` vivía sólo acá y el generador de notas escribía `active`, o
+# sea que la máquina producía su propia violación. Un typo en cualquiera de los dos deja el campo
+# mudo para la operación que lo consume —el contraste cross-paper en `role`, la decisión de apoyarse
+# en la hipótesis en `status`—, el mismo modo de falla de un `thesis_links` sin destino.
+#  @inv INV-46
+HYP_STATUS = cfg.HYP_STATUS
+#  @inv INV-46
+ROLES = cfg.ROLES
 
 
 # ── espejo puro de NEA (#70) ─────────────────────────────────────────────────
@@ -880,6 +909,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     old_facets: list = []              # notas de paper con `topics:` (schema pre-R-5)
     infer_sin_premisas: list = []      # marcas `(inferencia …)` sin ningún [[bibcode]] (D-42)
     bad_status: list = []              # `status` de hipótesis fuera del vocabulario (D-37)
+    status_vs_evidencia: list = []     # `sostenida` con filas `desafía` (D-37 / #177)
     alcance_corto: list = []           # (stem, motivo) — alcance de hipótesis sin declarar o vencido (D-34)
     old_bearing: list = []             # `bearing` en nota de paper: schema pre-D-21
     sin_destino: list = []             # paper sin stars/thesis_links/methods (D-23)  @inv INV-94
@@ -1119,6 +1149,16 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             if st is not None and st not in HYP_STATUS:
                 bad_status.append((stem, f"`status: {st}` fuera del vocabulario "
                                          f"({' | '.join(HYP_STATUS)})"))
+            # D-37 · #177: `status` se DERIVA de la tabla de evidencia. `CLAUDE.md` promete que una
+            # `sostenida` con filas `desafía` se marca, y no lo hacía nadie: el único chequeo era la
+            # pertenencia al vocabulario, así que la contradicción tabla↔status pasaba muda. Es lo
+            # único que impide que `status` sea un campo que el agente elige — y el consumidor lo lee
+            # justamente para decidir si se apoya en la hipótesis.
+            if (n_desafia := challenging_rows(text)) and st == "sostenida":
+                status_vs_evidencia.append(
+                    (stem, f"`status: sostenida` con {n_desafia} fila(s) `desafía` en la tabla de "
+                           f"evidencia: el status se DERIVA de la tabla (D-37). Si la evidencia está "
+                           f"repartida, el status es `disputada`"))
             # D-34 — el ALCANCE define qué significa el veredicto. Sin él, "no hay evidencia" se lee
             # como "no existe evidencia": el mismo *afirmar de más* que la bóveda persigue en todos
             # lados, pero aplicado a una conclusión. Y con él, el alcance CRECE: sumar un tema (o
@@ -1239,8 +1279,14 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 _falta = ("" if str(fm.get("pending_motivo") or "").strip() else
                           " — ⚠ sin `pending_motivo`: escribí qué pasa con esta fuente y quién la consigue")
                 if _p not in cfg.PENDING_OK:
-                    _falta = (f" — ⚠ `{_p}` fuera del vocabulario "
-                              f"({' | '.join(cfg.PENDING_OK)})") + _falta
+                    # #129: el TYPO de vocabulario es bloqueante, como en `role` y `unidad_cita`.
+                    # Estaba acá, en backlog, y con eso INV-46 —*"un valor fuera de vocabulario
+                    # bloquea"*, universal y `garantizado y medido`— era falso para uno de los
+                    # cuatro vocabularios cerrados del schema. El argumento de INV-108 (*"el motivo
+                    # no se puede inventar"*) justifica el backlog del `pending_motivo` FALTANTE,
+                    # que sigue abajo; no el de un valor que nadie declaró.
+                    bad_roles.append((stem, f"`pending_source: {_p}` fuera del vocabulario "
+                                            f"({' | '.join(cfg.PENDING_OK)})"))
                 pending_srcs.append(
                     (stem, f"{_p}{' · ' + str(fm['pending_motivo']) if fm.get('pending_motivo') else ''}"
                            f" — proveer la fuente; puntero: {ptr}{_falta}"))
@@ -1437,6 +1483,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                       if f and not any(f in ln and _slug in ln for ln in log_txt.splitlines()
                                        if ln.startswith("## ")))
         if _sin:
+            #  @inv INV-131
             log_sin_entrada.append(
                 (_slug, f"la cadena corrió el {', '.join(_sin)} y `log.md` no tiene una entrada "
                         f"`## <fecha> — …` que nombre a `{_slug}` → appendear lo que se hizo"))
@@ -1565,11 +1612,17 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         nota_gt = cfg.STARS / f"{slug_gt}.md"
         if not nota_gt.exists():
             continue                      # ficha faltante: ya la reporta el hermano simétrico
-        marcada = GT_STALE_MARK in nota_gt.read_text(encoding="utf-8")
+        # ⛔ #131: acá había `GT_STALE_MARK in nota_gt.read_text(...)`, o sea a nivel ARCHIVO — una
+        # sola marca en cualquier parte de la ficha silenciaba TODOS los `_cambios` de la estrella.
+        # `CLAUDE.md` dice la marca **pegada al valor**, y su gemelo `⛔retractada` sí se evalúa por
+        # ocurrencia. Se decide por campo, sobre las líneas que llevan la marca.
+        marcadas = [ln for ln in nota_gt.read_text(encoding="utf-8").splitlines()
+                    if GT_STALE_MARK in ln]
         for c in cambios_gt:
             if not isinstance(c, dict):
                 continue
             campo = c.get("campo", "?")
+            marcada = _field_is_marked(marcadas, campo, c.get("viejo"))
             detalle = f"NEA cambió {campo} ({c.get('viejo')!r} → {c.get('nuevo')!r}) el {c.get('fecha', 's/f')}"
             (gt_cambiado_marcado if marcada else gt_cambiado).append(
                 (slug_gt, detalle + ("; la prosa está marcada: revisá si ya la actualizaste y sacá "
@@ -2338,11 +2391,12 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('old_facets', '⛔ Nota de paper con `topics:` (schema viejo pre-R-5) — el campo vigente es `facets:`', SEV_BLOQUEANTE, tuple(old_facets)),
         Categoria('infer_sin_premisas', '⛔ `inferencia` sin premisas (D-42): la marca no nombra ningún `[[bibcode]]`', SEV_BLOQUEANTE, tuple(infer_sin_premisas)),
         Categoria('bad_status', '⛔ `status` de hipótesis fuera del vocabulario cerrado (D-37)', SEV_BLOQUEANTE, tuple(bad_status)),
+        Categoria('status_vs_evidencia', '`status: sostenida` contra su propia tabla de evidencia (D-37, #177)', SEV_BACKLOG, tuple(status_vs_evidencia)),
         Categoria('old_bearing', '⛔ `bearing` en una nota de paper (schema pre-D-21) — la postura vive en la hipótesis', SEV_BLOQUEANTE, tuple(old_bearing)),
         Categoria('sin_destino', '⛔ Nota de paper sin destino (D-23): no pertenece a ninguna entidad', SEV_BLOQUEANTE, tuple(sin_destino)),
         Categoria('identidad_dup', '⛔ Identidad duplicada: dos notas del mismo trabajo (mismo doi/arxiv_id)', SEV_BLOQUEANTE, tuple(identidad_dup)),
         Categoria('bad_sources', '⛔ `sources:` sin procedencia (#111): no consta quién declaró la fuente ni por qué', SEV_BLOQUEANTE, tuple(bad_sources)),
-        Categoria('bad_roles', '`role` fuera del vocabulario (fundacional/aplicacion/arbitro)', SEV_BLOQUEANTE, tuple(bad_roles)),
+        Categoria('bad_roles', '⛔ `role` fuera del vocabulario — y todo campo con vocabulario CERRADO (`unidad_cita`, `pending_source`)', SEV_BLOQUEANTE, tuple(bad_roles)),
         Categoria('impl_leaks', '⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)', SEV_WARN, tuple(impl_leaks)),
         Categoria('objective_warn', 'Objetivo sin instanciar (WARN — objective.yaml sigue en el placeholder del template)', SEV_WARN, tuple(objective_warn)),
         Categoria('lente_rota', '⛔ Lente vacía o incoherente: ningún paper puede ser core', SEV_BLOQUEANTE, tuple(lente_rota)),
@@ -2465,7 +2519,7 @@ def main(argv=()) -> int:
     outdir = cfg.ROOT / "outputs"
     outdir.mkdir(exist_ok=True)
     out = outdir / f"lint-{dt.date.today().isoformat()}.md"
-    out.write_text(report, encoding="utf-8")
+    out.write_text(report, encoding="utf-8")  # noqa: vault-write — destino `outputs/`, scratch regenerable (#137)
     _print_seguro(report)
     _print_seguro(f"→ {out}")
     # El exit sale de la SEVERIDAD declarada en la tabla, no de una tupla paralela que

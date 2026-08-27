@@ -1070,6 +1070,36 @@ LLM_DISCLAIMER = {
 # perdida no la ve ninguna capa. Es el "afirmar de menos" de las tablas truncadas, en versión
 # conceptual. La unidad de síntesis de un concepto no es (campo, valor, fuente) sino
 # **(afirmación, condiciones bajo las que vale, fuente, rol)**.
+# #178 · las TRES cosas propias de una hipótesis (CLAUDE.md), que ninguna otra nota lleva. Sin
+# scaffoldearlas la nota NACÍA con backlog (`Alcance de hipótesis sin declarar`), contra D-5 —la
+# nota nace 100 % verificada— y contra la doctrina de que cuando el lint habla hay algo real.
+HIPOTESIS_SECCIONES = """## Alcance
+
+> Alcance <AAAA-MM-DD> · temas: [...] + estrellas: [...] · N papers · M con hits
+_(D-34: define qué SIGNIFICA el veredicto. "No hay evidencia" no es "no existe evidencia": es "no
+hay evidencia en estos temas, con estos N papers, a esta fecha". Los slugs son directorios de
+`raw/fulltext/`, así que el universo se puede re-contar — y el lint marca la hipótesis si quedó
+corta.)_
+
+## Evidencia
+
+_(D-21: una fila por paper. La POSTURA vive acá, no en la nota del paper: depende de la tesis, y un
+paper puede tocar varias. Suelta en el paper sería un veredicto sin evidencia que `verify-citations`
+no puede chequear; acá hay cita, así que es verificable.)_
+
+| Paper | Postura | Qué dice (cita textual) | L | Régimen |
+|---|---|---|---|---|
+| [[bibcode]] | apoya \\| desafía \\| método | "…" | 123 | … |
+
+## Veredicto
+
+_(D-36: agregar N filas en una conclusión es juicio del agente, no algo que una fuente diga → va
+marcado `inferencia` NOMBRANDO sus premisas: `(inferencia de [[b1]], [[b2]])`. Sin al menos un
+bibcode la marca es una afirmación sin respaldo disfrazada de marca, y el lint la bloquea. El
+`status` del frontmatter se DERIVA de la tabla de arriba.)_
+
+"""
+
 REGIMEN = """## Régimen de validez
 _(Una fila por afirmación **condicionada**: bajo qué condiciones vale y de dónde sale. Es el destino
 de los desacuerdos que `find-contradictions` juzga **`aparente`** —"distinto régimen, distinta
@@ -1645,6 +1675,15 @@ def _reescribir_wikilinks(old_stem: str, new_bibcode: str) -> int:
     return tocadas
 
 
+def _better_txt(candidato, actual) -> bool:
+    """¿El `.txt` `candidato` es de calidad ESTRICTAMENTE mayor que `actual`? (#170)
+
+    Misma escala que `stamp_fulltext` (`_FULLTEXT_QUALITY`: `pdftotext`/`web` > `ocr`) y misma regla
+    de empate — gana el que ya está, así que consolidar dos veces no alterna."""
+    return _FULLTEXT_QUALITY.get(_txt_provenance(candidato), 0) > \
+        _FULLTEXT_QUALITY.get(_txt_provenance(actual), 0)
+
+
 def _consolidar_duplicado(old, new, old_stem: str, new_bibcode: str) -> None:
     """Fusiona dos notas del MISMO trabajo hacia la canónica (#115). `new` sobrevive.
 
@@ -1676,14 +1715,25 @@ def _consolidar_duplicado(old, new, old_stem: str, new_bibcode: str) -> None:
     # Artefactos: se queda el de MEJOR calidad, y el otro se borra. Dejar los dos haría que #108 los
     # reporte para siempre como extracción pagada sin nota, y que el `.txt` huérfano siga saliendo
     # en los greps del corpus.
+    #
+    # ⛔ #170: acá el `if destino.exists(): art_old.unlink()` conservaba SIEMPRE el del bibcode
+    # canónico, sin mirar calidad — o sea que consolidar podía borrar un `.txt` limpio de
+    # `pdftotext` y dejar un escaneo OCR mojibake. El borrado es irreversible sobre `raw/`, que el
+    # contrato declara *código fuente inmutable*, y degrada la fuente que después leen
+    # `verify-citations` y todo `grep` del corpus. El comparador ya existía en este archivo
+    # (`_FULLTEXT_QUALITY`, usado por `stamp_fulltext`): sólo faltaba usarlo. Un PDF no lleva
+    # header de provenance, así que ahí no hay nada que comparar y se mantiene el criterio viejo.
     movidos, borrados = [], []
     for base in (cfg.PDFS, cfg.FULLTEXT):
         for art_old in sorted(base.glob(f"*/{safe_name(old_stem)}.*")):
             destino = art_old.with_name(f"{safe_name(new_bibcode)}{art_old.suffix}")
-            if destino.exists():
-                art_old.unlink(); borrados.append(art_old.name)
-            else:
+            if not destino.exists():
                 art_old.rename(destino); movidos.append(destino.name)
+            elif base is cfg.FULLTEXT and _better_txt(art_old, destino):
+                destino.unlink(); art_old.rename(destino)
+                borrados.append(destino.name)
+            else:
+                art_old.unlink(); borrados.append(art_old.name)
 
     old.unlink()
     _set_lista_de_mapas(new, "versions", versions)
@@ -2061,7 +2111,10 @@ def write_concept_note(slug: str, force: bool) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     front = {"name": meta.get("title", concept)}
     if area == "hypotheses":          # `status` sólo en hipótesis (schema name,status; ver CLAUDE.md)
-        front["status"] = "active"
+        # #175: acá decía `"active"`, que no está en el vocabulario cerrado de D-37 — así que toda
+        # hipótesis nueva nacía con un bloqueante del lint que la propia máquina se fabricaba. Sale
+        # de `lib_config`, la misma constante que el lint valida.
+        front["status"] = cfg.HYP_STATUS_INICIAL
     front.update({
         "aliases": _listify_curado(meta.get("aliases"), "aliases"),   # sinónimos EN+ES para grep; sembrado del theme, el LLM enriquece
         # Acá la disputa es SIMÉTRICA por definición (#71): no hay valor de frontmatter contra el
@@ -2074,6 +2127,7 @@ def write_concept_note(slug: str, force: bool) -> None:
     # Retro-link de la tabla: una ficha-MÉTODO junta además todo paper ya tagueado con el método
     # en `methods:` (aunque no tenga `thesis_links`) — los papers extraídos antes de crear la ficha
     # aparecen solos, sin re-taguear (issue #4a).
+    propias = HIPOTESIS_SECCIONES if area == "hypotheses" else ""
     body = f"""{fm(front)}
 # {meta.get('title', concept)}
 
@@ -2088,8 +2142,7 @@ def write_concept_note(slug: str, force: bool) -> None:
 _(qué se sabe del tema: mecanismos, signos, desfasajes, regímenes)._
 
 {INVENTARIO}
-{REGIMEN}
-## Huecos
+{REGIMEN}{propias}## Huecos
 _(qué falta para entender/implementar el tema sin abrir papers: pasos o ecuaciones faltantes,
 **regímenes no cubiertos** (los que la tabla de arriba deja fuera: ¿en qué condiciones nadie lo
 midió?), contradicciones sin resolver.)_
@@ -2455,8 +2508,19 @@ def main() -> int:
     ap.add_argument("--venue", help="(--web) venue/bibstem (default: dominio de --url)")
     ap.add_argument("--accessed", help="(--web) fecha del snapshot AAAA-MM-DD (default: la "
                                        "`retrieved` del .txt en disco; si no hay, hoy UTC)")
-    ap.add_argument("--pending", choices=["paywall", "scan", "unextractable"],
-                    help="(--web) fuente aún no conseguible: estampa pending_source y deriva al usuario")
+    # #154: los `choices` salen de `cfg.PENDING_OK`, no de una copia a mano. La lista literal se
+    # quedó en tres cuando #80 agregó `adquisicion` (un libro que el usuario va a conseguir NO
+    # falló: tiene otra latencia), así que el único CLI que estampa `pending_source` no podía emitir
+    # el valor que el vocabulario declara. La asimetría era silenciosa porque el otro camino
+    # (`themes.yaml` vía `ingest_theme`) sí valida contra la constante.
+    ap.add_argument("--pending", choices=list(cfg.PENDING_OK),
+                    help="(--web) fuente aún no conseguible: estampa pending_source y deriva al "
+                         "usuario. Exige --reason (el motivo es obligatorio, #80)")
+    # #164: el camino CLI no podía producir `pending_motivo` —ni bandera ni paso en la llamada—, así
+    # que escribía una nota FUERA del schema de #80 y ningún chequeo del lint la cazaba. Mismo
+    # argumento que el `--reason` del triage: en seis meses sirve el motivo, no la categoría.
+    ap.add_argument("--reason", dest="pending_motivo",
+                    help="(--web --pending) POR QUÉ está pendiente y quién la consigue (obligatorio)")
     args = ap.parse_args()
 
     if args.restamp_pdf_links:
@@ -2496,10 +2560,14 @@ def main() -> int:
                  "--rename-paper)")
 
     if args.web:
+        if args.pending and not str(args.pending_motivo or "").strip():
+            ap.error("--pending exige --reason: sin el motivo la nota queda fuera del schema de #80 "
+                     "y nadie sabe si alguien está consiguiendo la fuente o si nadie la miró nunca")
         write_web_paper_note(args.slug, url=args.url, slug=args.slug_hint, concept=args.concept,
                              title=args.title, first_author=args.author, year=args.year,
                              n_authors=args.n_authors, doi=args.doi, venue=args.venue,
-                             accessed=args.accessed, pending=args.pending, force=args.force)
+                             accessed=args.accessed, pending=args.pending,
+                             pending_motivo=args.pending_motivo, force=args.force)
         return 0
 
     cfg.print_seguro(f"Generando notas para {args.slug}")
@@ -2517,10 +2585,15 @@ def main() -> int:
     # siempre habla se deja de mirar. Es cirugía idempotente y barata: no toca la prosa.
     dest_final = _concept_dest(args.slug) if args.theme else (cfg.STARS / f"{args.slug}.md")
     if dest_final.exists():
-        stamp_papers_table(args.slug, dest_final, "concept" if args.theme else "star")
         if args.theme:
+            # #176: en un concepto el roll-up ES `stamp_concept_rollup` —la unión de `methods` y
+            # `thesis_links` con la columna *Entró por* (D-24)—, no la tabla de estrella. Llamar a
+            # `stamp_papers_table` acá no sólo era de más: su ancla `## Papers` es prefijo de la del
+            # roll-up, así que se comía la sección y dejaba a `stamp_concept_rollup` sin dónde
+            # escribir. La causa raíz la cerró `section_start`; esto saca la llamada que sobraba.
             stamp_concept_rollup(args.slug, dest_final)
         else:
+            stamp_papers_table(args.slug, dest_final, "star")
             stamp_star_rollups(args.slug, dest_final)
     cfg.save_paso(args.slug, "make_notes", flags=_flags_usados(args, ap))
     return 0

@@ -63,9 +63,13 @@ flowchart LR
 > otras disciplinas** que el trabajo astro usa (análisis de datos, estadística, machine learning,
 > procesos gaussianos, signal processing) cuya bibliografía canónica vive **fuera de ADS** (el eje
 > tema/concepto y la capa de calidad son agnósticos de disciplina, así que la cadena los soporta
-> igual): las fuentes se **declaran** (no se descubren por query) en `themes.yaml` con `source: web
-> \| local-pdfs` + su lista `sources:` y entran a `vault/raw/` desde snapshots web + PDFs locales,
-> sin ADS/NEA. Sigue rigiendo la **frontera dura**: sólo bibliografía citable, o sea el método
+> igual): se declaran en `themes.yaml` con `source: web \| local-pdfs` + su lista `sources:` y entran
+> a `vault/raw/` desde snapshots web + PDFs locales. Lo que **no** hace falta es enumerarlas a ciegas:
+> `scripts/discover.py` (#104) barre **ADS + arXiv + OpenAlex** y suma el *descubrimiento anclado* —
+> las referencias de la mitad astro del propio tema, rankeadas por cuántos de esos papers las citan—;
+> **propone**, no clasifica. Medido: los ocho trabajos canónicos de ICA/BSS están en ADS 0/8, arXiv
+> 0/8 y OpenAlex 8/8, así que un solo buscador no alcanza. Y un tema mixto con `query:` poblada corre
+> además el descubrimiento ADS completo. Sigue rigiendo la **frontera dura**: sólo bibliografía citable, o sea el método
 > **publicado** y no su implementación.
 
 ## Instanciar (crear tu bóveda)
@@ -99,17 +103,23 @@ skill `setup` traduce tu foco (en palabras) a `relevance.facets` (los buckets qu
 > (`query_ads.py --probe`, no baja nada):
 > ```
 >   50 papers · 41 CORE · 9 no-core
+>   costo proyectado de leer el core: ~24k tokens (41 × 6k, mediana del corpus)
 >   regla de combinación vigente: OR (≥1 faceta cualquiera) → 41 CORE.
 >   Si declararas una faceta-eje obligatoria (relevance.require) el corte sería:
 >     require: [rv]            →    41 CORE  (−0%)
 >     require: [activity]      →     9 CORE  (−78%)
 >
+>   ¿FALTA UNA FACETA? Términos que se repiten entre los no-core y que ninguna faceta cubre:
+>       4×  bisector span
+>       3×  line profile
+>     → si alguno es pertinente a tu foco, es una FACETA nueva (cambia la lente, no la query)
+>
 >   CORE (todos, por citas)  [tópicos que matchearon]:
->   [CORE]   812  Stellar activity and radial-velocity jitter in...  «rv,activity»
->   [CORE]   333  Gaussian-process modelling to disentangle planets...  «rv,activity,method»
+>   [CORE]   812  2019A&A...624A..49B    Stellar activity and radial-velocity jitt...  «rv,activity»
+>   [CORE]   333  2015MNRAS.452.2269R    Gaussian-process modelling to disentangle...  «rv,activity,method»
 >
 >   no-core (top 9 de 9, chequeo de sanidad):
->   [—   ]   210  A catalogue of nearby M dwarfs  «(ninguno)»
+>   [—   ]   210  2021AJ....161..183W    A catalogue of nearby M dwarfs  «(ninguno)»
 > ```
 > Afina la regex e itera hasta que el corte cierre → te deja `vault/config/objective.yaml` listo.
 
@@ -155,8 +165,10 @@ que se commitea y viaja con la bóveda:
   hacían los aceptados.
 
 Un tema **off-ADS puro** no lleva `busquedas`: no hubo query que registrar, porque sus fuentes ya
-están declaradas una por una en `themes.yaml`. Uno **mixto** (fuentes declaradas + `extra_core:` con
-bibcodes de ADS) sí lo lleva, con `query: null`: registra lo que entró por la vía ADS.
+están declaradas una por una en `themes.yaml`. Uno **mixto** sí lo lleva, y desde #104 de dos formas:
+con `query:` poblada corre el **descubrimiento ADS completo** —misma lente, mismas puertas, misma
+compuerta de triage— y registra esa corrida; sólo con `extra_core:` y `query: null`, registra lo que
+entró por esos bibcodes.
 
 <p align="center">
   <img src="docs/assets/demo-animated.svg" width="740"
@@ -275,7 +287,7 @@ Todo lo que puede ser determinista lo es, y lo que no, queda marcado como tal en
 | Escribir la síntesis de fichas y conceptos | **El modelo** |
 | Verificar que cada cita respalde su afirmación | **El modelo**, con un subagente independiente por afirmación |
 | Detectar contradicciones entre papers | **El modelo propone, vos aprobás** antes de que se escriba nada |
-| Lo que caduca **afuera** después del ingest | **Determinista**, una sola pasada (`sweep_external.py`) con **cinco** detectores: retracciones y correcciones (Crossref por DOI), preprint→publicado, snapshot web y ground-truth. **Reporta, no aplica solo** |
+| Lo que caduca **afuera** después del ingest | **Determinista**, una sola pasada (`sweep_external.py`) con **seis** detectores: retracciones y correcciones (Crossref por DOI), preprint→publicado, snapshot web, ground-truth y cruces del umbral de la puerta 2 (#106). **Reporta, no aplica solo** |
 | Borrar o renombrar una entidad sin dejar capas colgadas | **Determinista** (`entity.py`, siete capas, dry-run por defecto) |
 | Salud estructural (lint) y registro de qué se buscó | **Determinista** |
 

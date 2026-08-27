@@ -88,6 +88,9 @@ def to_record(entry) -> dict:
     import query_ads
     facets, relevant = query_ads.classify_record(rec)
     rec["facets"], rec["relevant"] = facets, relevant
+    # #126/#179: el schema declara `puertas` SIEMPRE (lista vacía = ninguna), así que «no
+    # consta» y «ninguna puerta» no se confunden. Lo fija `tests/test_backends_schema.py`.
+    rec["puertas"] = []
     # #86: se juzgó sin abstract (título + keywords y nada más). Mismo schema que
     # `query_ads.to_record`, que es quien lo define — la paridad la fija un test.
     rec["sin_abstract"] = not (rec.get("abstract") or "").strip()
@@ -131,7 +134,15 @@ def main(argv=()) -> int:
     recs = search(args.query, categories=cats, rows=args.rows)
     core = 0
     for r in recs:
-        facets, relevante = query_ads.classify(r)
+        # ⛔ #173: acá había `query_ads.classify(r)`, y `r` es un registro YA normalizado por
+        # `to_record`, donde `title` es un **string**. `classify` hace
+        # `" ".join(cfg.as_list(rec.get("title")))` y `as_list("…") == []`, así que el título se
+        # DESCARTABA: el preview contradecía el veredicto que `to_record` acababa de calcular, y
+        # justo para el caso que D-26 documenta (un fundacional que se reconoce por el título,
+        # Hyvärinen/ICA). La función para un registro persistido es `classify_record` — la misma que
+        # usa `to_record`, que es lo que hace que core sea función de `(paper, lente)` y no del
+        # backend (INV-24 / INV-96).
+        facets, relevante = query_ads.classify_record(r)
         r["facets"], r["relevant"] = facets, relevante
         core += bool(relevante)
         motivo = None if relevante else query_ads.exclusion_reason(facets, r.get("doctype") or "")

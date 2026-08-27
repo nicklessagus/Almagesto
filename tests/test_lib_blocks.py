@@ -363,3 +363,73 @@ def test_sha10_acepta_bytes_y_texto_en_el_mismo_espacio():
     """Un solo espacio de hashes para los dos tipos de evidencia: una fila no puede confundir el
     hash de un `.txt` con el de un PDF."""
     assert lb.sha10("hola") == lb.sha10(b"hola")
+
+
+def test_un_veredicto_con_enfasis_markdown_sigue_bloqueando():
+    """Issue #168 — `resueltos` comparaba el string LITERAL (`v == mal or v.startswith(mal + " ")`)
+    mientras su docstring prometía un criterio semántico (*"lo que bloquea es el veredicto
+    pelado"*). Poner el veredicto en **negrita** —cosa que un autor hace sin pensarlo en una tabla
+    markdown— lo daba por resuelto, y con eso reabría el agujero exacto que INV-117 existe para
+    cerrar: una fila `no-soportada` sentada bajo un encabezado que se lee como garantía.
+
+    El énfasis no es una resolución: no dice qué se hizo con la falla.  @inv INV-117"""
+    for celda in ("**no-soportada**", "*no-soportada*", "`contradice`", "__contradice__",
+                  "no-soportada.", "**contradice**"):
+        assert not lb.resueltos(celda), f"{celda!r} sigue sin resolver: sólo cambia el formato"
+
+
+def test_la_resolucion_anotada_no_bloquea_lleve_o_no_espacios():
+    """Issue #168, el otro lado del mismo bug: `startswith(mal + " ")` daba por SIN RESOLVER a
+    `no-soportada → corregida` —la flecha con espacios, que es como se escribe a mano— mientras
+    aceptaba la versión pegada. El criterio es *"¿hay una resolución anotada en la celda?"*, y eso
+    no depende del espaciado.  @inv INV-117"""
+    for celda in ("no-soportada→corregida", "no-soportada → corregida", "no-soportada->corregida",
+                  "contradice → disputa tagueada", "no-soportada (corregida)"):
+        assert lb.resueltos(celda), f"{celda!r} declara qué se hizo con la falla"
+
+
+def test_el_veredicto_pelado_bloquea():
+    """La otra mitad del contrato de #168: normalizar no puede volverse permisivo. Un veredicto
+    solo, sin resolución anotada, sigue bloqueando.  @inv INV-117"""
+    assert not lb.resueltos("no-soportada")
+    assert not lb.resueltos("contradice")
+    assert not lb.resueltos("  NO-SOPORTADA  ")
+    assert lb.resueltos("soportada"), "el caso normal no dispara nada"
+    assert lb.resueltos("no verificable por extracción"), "propiedad de la fuente, no defecto"
+
+
+# ── #128 · una fila con `|` sin escapar no puede desaparecer ─────────────────────────────────────
+
+_BLOQUE_PIPE = """\
+Afirmación con cita [[2019Autor]].
+
+## Verificación de citas (2026-01-01)
+
+| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |
+|---|---|---|---|---|---|---|---|
+| 1 | P_rot de 34 días | [[2019Autor]] | no-soportada | cita: a | b (L12) | a3f9c1e2ab | txt:7b40d8aa11 | — |
+"""
+
+
+def test_una_fila_con_pipe_sin_escapar_no_pierde_el_veredicto():
+    """Issue #128 — la fila se descartaba ENTERA (`continue`), así que un veredicto `no-soportada`
+    dejaba de disparar el bloqueante de INV-117 y quedaba invisible en la pasada periódica.
+
+    El skill `verify-citations` dice que la barra sin escapar *"es el caso normal, no el raro"* (18
+    pares medidos en una ficha real). Descartar la fila es peor que leerla a medias: el veredicto
+    vive a la IZQUIERDA del corrimiento y es perfectamente recuperable.  @inv INV-117"""
+    filas = lb.parse_verif_table(_BLOQUE_PIPE)
+    assert filas is not None and len(filas) == 1, "la fila no desaparece"
+    assert filas[0].verdict == "no-soportada", "el veredicto se recupera"
+    assert not lb.resueltos(filas[0].verdict), "y sigue exigiendo acción"
+    assert filas[0].bibcode == "2019Autor"
+
+
+def test_una_fila_corrida_no_reporta_un_ancla_ajena():
+    """La otra mitad de #128, y la razón por la que el `continue` existía: con un `|` de más, las
+    columnas de la DERECHA (ancla, hash, condición) están corridas, e indexarlas por posición leería
+    el ancla de otra celda — el par volvería *vencido por edición* sin que nadie editara nada
+    (medido: 18 pares, 2026-08-25). No se adivina: se declaran vacías.  @inv INV-99"""
+    fila = lb.parse_verif_table(_BLOQUE_PIPE)[0]
+    assert fila.anchor == "", "sin ancla, no un ancla ajena"
+    assert fila.source_hash == "" and fila.source_kind is None

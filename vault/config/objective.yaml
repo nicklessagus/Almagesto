@@ -78,7 +78,7 @@ relevance:
 # un `area` fuera de la lista sólo dispara un AVISO (make_notes avisa pero crea igual; el lint
 # lo marca WARN), nunca bloquea. Si tu área nueva es legítima, agregala acá para silenciar el aviso.
 #   · `methods` y `hypotheses` están RESERVADAS (siempre válidas): methods es universal;
-#     hypotheses es estructural (schema name/status + roll-up Dataview).
+#     hypotheses es estructural (schema name/status + roll-up ESTAMPADO).
 #   · El resto es libre — editá la lista según el foco de TU bóveda.
 #   · Si BORRÁS esta clave, el typo-check queda APAGADO (el lint lo avisa). No se infiere de las
 #     carpetas que ya existen: eso convertiría un typo ya cometido en "área declarada".

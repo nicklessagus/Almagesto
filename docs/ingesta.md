@@ -142,16 +142,28 @@ Diferencias que importan:
 | Sujeto | una estrella | un tema o método |
 | Fuente | ADS siempre (astro-only) | ADS **o** fuentes declaradas (off-ADS, opt-in) |
 | Ground-truth | **sí** — NEA + SIMBAD | **no existe** |
-| Descubrimiento | query + chaining + glifo + sweep | query + chaining (ads) · **ninguno** (off-ADS) |
+| Descubrimiento | query + chaining + glifo + sweep | query + chaining (`source: ads`) · con `query:` poblada, **descubrimiento ADS completo** aunque el tema sea off-ADS (#104); + la cascada de tres backends de `discover.py` (paso 0b del skill) |
 | Clave de cita | bibcode ADS | bibcode, o sintética `AAAA+Autor` |
 | Destino | `wiki/stars/<slug>.md` | `wiki/concepts/<area>/<concept>.md` |
 | Retro-linkeo | seeds `stars` add-only | seeds `thesis_links` + retro-tag por grep de aliases |
 | Matriz método×estrella | se toca | **no** se toca |
 
 El **modo off-ADS** existe para métodos de otras disciplinas (estadística, ML) al servicio del foco
-astro, cuya bibliografía canónica vive fuera de ADS. Su costo: **sin query no hay descubrimiento**,
-las fuentes se declaran una por una — y por eso la sección `busquedas` del registro versionado queda
-vacía (#77).
+astro, cuya bibliografía canónica vive fuera de ADS.
+
+⚠ **Actualizado el 2026-08-27 (issue #143).** Acá decía *"sin query no hay descubrimiento … y por eso
+`busquedas` queda vacía"*, y desde #104 eso es falso — justo para la feature más grande del rango:
+
+- Un tema off-ADS **mixto** con `query:` poblada corre el **descubrimiento ADS completo** (misma
+  lente, mismas puertas de D-26, misma compuerta de triage) y **sí** escribe `busquedas`. Sólo con
+  `extra_core:` y sin `query:` la sub-cadena queda acotada a esos bibcodes.
+- Y para la mitad que ADS no indexa está `discover.py` (#104): la cascada **ADS + arXiv + OpenAlex**
+  más el **descubrimiento anclado** (las referencias de la mitad astro del propio tema, rankeadas por
+  cuántos de esos papers las citan). Es el paso 0b del skill `ingest-theme`, y **propone**: no
+  clasifica.
+
+Lo que sí sigue siendo cierto es el costo real del modo: **una fuente que ningún backend encuentra se
+declara a mano**, con su `via` y su `motivo` (#111), porque ahí no hay query que la descubra.
 
 ## 3. Qué se llena en la ficha de estrella
 
@@ -238,25 +250,34 @@ tema (ADS y off-ADS) escriben el mismo bloque.
 
 Esta ingesta tiene huecos conocidos y numerados; el detalle de cada uno está en su issue.
 
-| Tema | Issues |
-|---|---|
-| Qué papers leer (criterio de la extracción) | #62 |
-| Persistir los veredictos `aparente` de find-contradictions | #63 |
-| Tema mixto sólo off-ADS-first | #78 |
-| Sesgo de edad en el orden por citas | #79 |
-| Libros: `pending` y unidad de cita | #80 |
+⚠ **Revisado el 2026-08-27 (issue #142).** Esta sección listaba **catorce** issues ya cerrados
+—#63, #78, #79, #80, #82, #83, #85, #86, #87, #88, #89, #90, #91, #92— mientras el encabezado de
+este documento promete describir *"el estado **vigente**"*. Un doc que se anuncia como vigente y
+lista deuda saldada manda a re-implementar lo hecho: era el drift v1.36→1.67 concentrado en un solo
+archivo. Cada cierre se verificó contra el código, no contra el issue.
 
-Y los del recorrido paso a paso del embudo, por escalón:
+| Tema | Issue | Estado |
+|---|---|---|
+| Qué papers leer (criterio de la extracción) cuando el core es enorme | #62 | **abierto** — hay escotilla, no criterio: `triage.py <slug> --prioridad` ordena la cola (por facetas del objetivo, #87, y agrupada por puerta de D-26, #126) y `--extraccion todos\|subconjunto --reason` **declara** el recorte. Lo que falta es el criterio en sí |
 
-| Escalón | Issues |
+**Cerrados desde la última revisión** (con dónde vive cada uno, para que no se re-propongan):
+
+| Issue | Cerrado en |
 |---|---|
-| 1 · resolver el sujeto | #82 (aliases desde SIMBAD, con checkpoint), #83 (`setup` no propone facetas) |
-| 2 · `query_ads` | #85 (`fq` de la lente astro hardcodeado), #79 |
-| 3 · `classify()` | #86 (registro sin abstract), #87 (facetas matcheadas sin usar; sacar `relevance`), #92 (las keywords del paper se apelmazan como texto y no llegan a la nota) |
-| 4-5 · recall extra | #88 (el `--sweep` no deja rastro), #79 |
-| 6 · triage | #89 (el aceptado sin motivo ni origen), #79 |
-| 7 · PDFs y fulltext | #90 (core sin PDF no se marca en su nota), #80 |
-| 13-14 · verify → lint | #91 (veredictos sin resolver bajo un encabezado que certifica) |
+| #63 · persistir los veredictos `aparente` de find-contradictions | `lib_config.load_no_disputas` / `save_no_disputa` (INV-125) |
+| #78 · tema mixto sólo off-ADS-first | `ingest_theme.main` — `if meta.get("query")` (INV-123) |
+| #79 · sesgo de edad en el orden por citas | `query_ads.RECENT_SORT`, la segunda pasada por fecha al truncar |
+| #80 · libros: `pending` y unidad de cita | `cfg.PENDING_OK` (4 valores) · `cfg.UNIDAD_CITA_OK` |
+| #82 · aliases desde SIMBAD, con checkpoint | `fetch_ground_truth` → `_simbad_aliases` + categoría del lint |
+| #83 · `setup` no propone facetas | `query_ads.propose_facets` (INV-124) |
+| #85 · el `fq` de la lente astro hardcodeado | `query_ads.search_fq()` |
+| #86 · registro sin abstract | `query_ads` marca y cuenta `sin_abstract` |
+| #87 · facetas matcheadas sin usar | `triage.py --prioridad` |
+| #88 · el `--sweep` no deja rastro | `cfg.save_barrido` → `barridos: []` (acumulativo) |
+| #89 · el aceptado sin motivo ni origen | `extra_core` como lista de mapas `{bibcode, via, fecha, motivo}` (D-58) |
+| #90 · core sin PDF no se marca en su nota | lint: *paper relevante sin fuente en disco* |
+| #91 · veredictos sin resolver bajo un encabezado que certifica | lint: `verif_sin_resolver` (bloqueante, INV-117) |
+| #92 · las keywords no llegan a la nota | `make_notes.stamp_keywords` (D-17) |
 
 **Dos patrones transversales**, que valen más que los issues sueltos: (a) #86/#88/#89/#90 escriben
 los cuatro al registro versionado → **una tanda de schema, no cuatro migraciones**; (b) #79 acumula

@@ -1,0 +1,79 @@
+# Techo de símbolos de `scripts/` + `tools/` con nombre en CASTELLANO.
+#
+# Sólo puede BAJAR. Se mide con `pytest tests/test_idioma_codigo.py`.
+#
+# QUÉ ES ESTO. La convención del repo (2026-08-24, `CLAUDE.md`) es: archivos, nombres de funciones,
+# docstrings y comentarios **nuevos** en inglés; la prosa de la doc sigue en castellano. **Sin
+# retrofit** — lo ya escrito no se renombra.
+#
+# ⚠ POR QUÉ EXISTE ESTE ARCHIVO. Hasta el issue #156 la convención no vivía en ningún documento
+# versionado (sólo en la bitácora interna, gitignored) y no la vigilaba nadie. Medido en la pasada
+# `/auditar` del 2026-08-27: de 237 funciones nuevas desde que se decidió, 30 tienen nombre en
+# castellano — y sobre el ÁRBOL ENTERO son 46, y `discover.py` —creado dos días antes de la medición— nació con 6 docstrings en
+# castellano de 17. Una promesa que el sistema dejó de cumplir en silencio es peor que una que nunca
+# hizo, y la salida no es un barrido de renombres (rompería wikilinks y marcas `@inv` por nada) sino
+# un ratchet: la deuda queda declarada y sólo puede achicarse.
+#
+#   - conteo por ENCIMA del techo → el test falla. Alguien escribió un símbolo nuevo en castellano.
+#   - conteo por DEBAJO → pasa, y avisa que hay que bajar el techo acá. Un techo que nadie ajusta
+#     deja de ser ratchet y se vuelve decorativo (la lección de AUD-07).
+#   - el techo NUNCA se sube. Si un símbolo nuevo lo necesita, el símbolo está mal nombrado.
+medido_en: "2026-08-27"
+techo: 46   # ocurrencias `archivo::símbolo`; `conocidos` son 43 NOMBRES
+            # (tres viven en más de un archivo: `_listify_curado` en tres,
+            #  y por eso los dos números no coinciden).
+
+# ⚠ EL TECHO CUENTA EL ÁRBOL ENTERO, no sólo lo nuevo. El detector es estático (AST) y no puede
+# saber cuándo se agregó un símbolo, así que la distinción «nuevo vs heredado» la sostiene la lista
+# `conocidos` de abajo: un nombre que no esté ahí pone el test en rojo aunque el total no suba. Los
+# dos números de la medición del 2026-08-27 son **30 sobre las funciones creadas desde la
+# convención** y **46 sobre todo `scripts/` + `tools/`**; el segundo es el que gatea.
+#
+# Las seis funciones que la propia pasada de fix del 2026-08-27 escribió NO están acá: nacieron en
+# castellano y se renombraron al inglés en el acto (`_field_is_marked`, `_better_txt`,
+# `_merge_changes`, `_notes_citing`, `challenging_rows`, `_bare_verdict`). Escribir la regla y
+# estrenarla incumpliéndola habría sido el mismo defecto un nivel más arriba.
+conocidos:
+  - _listify_curado             # check_retractions.py
+  - _campo_de                   # entity.py
+  - _quitar_del_frontmatter     # entity.py
+  - _reescribir_wikilinks       # entity.py
+  - _yaml_sin                   # entity.py
+  - buscar                      # entity.py
+  - nota_de                     # entity.py
+  - notas_del_slug              # entity.py
+  - resolver                    # entity.py
+  - _anclado                    # extraction_prompt.py
+  - resueltos                   # lib_blocks.py
+  - _cuenta                     # lib_config.py
+  - _par_de                     # lib_config.py
+  - es_del_carril               # lib_config.py
+  - listify_curado              # lib_config.py
+  - save_barrido                # lib_config.py
+  - save_descubrimiento         # lib_config.py
+  - _diverge_del_upstream       # lint.py
+  - alcance_declarado           # lint.py
+  - en_alcance                  # lint.py
+  - evidencia_hash_de           # lint.py
+  - inferencias_sin_premisas    # lint.py
+  - inventario_sin_llenar       # lint.py
+  - por_clave                   # lint.py
+  - _consolidar_duplicado       # make_notes.py
+  - _papers_del_sujeto          # make_notes.py
+  - _set_campo                  # make_notes.py
+  - _set_lista_de_mapas         # make_notes.py
+  - migrate_all_verif_archivo   # make_notes.py
+  - migrate_verif_archivo       # make_notes.py
+  - _copia_del_repo             # mutar.py
+  - archivos_del_diff           # mutar.py
+  - mutar_archivo               # mutar.py
+  - aplicar_excluidos           # query_ads.py
+  - excluidos_del_sujeto        # query_ads.py
+  - puertas_abiertas            # query_ads.py
+  - aplicar_ground_truth        # sweep_external.py
+  - _simbolo_de                 # trace_invariants.py
+  - _simbolo_por_ast            # trace_invariants.py
+  - _simbolo_por_indentacion    # trace_invariants.py
+  - lineas_declarativas         # trace_invariants.py
+  - subidas_de_techo            # trace_invariants.py
+  - prioridad                   # triage.py

@@ -561,7 +561,10 @@ def test_drop_core_registra_con_carril_sujeto_y_borra_artefactos(toy_vault, caps
     """`extra_core` fuerza la ENTRADA y no había simétrico: un core no se podía sacar. `--drop`
     sólo evitaba re-proponer candidatos del chaining, así que sobre un core la decisión quedaba
     escrita y NO se aplicaba — medido en `ica`: 7 papers off-topic seguían siendo core corrida tras
-    corrida. Una decisión que el clasificador ignora en silencio es peor que no tomarla."""
+    corrida. Una decisión que el clasificador ignora en silencio es peor que no tomarla.
+
+    INV-127: borrar en `raw/` acá es la excepción DECLARADA a INV-20 — el juicio no se borra
+    (queda versionado con motivo) y el paper sigue visible con `via: manual-drop`.  @inv INV-127"""
     (cfg.PDFS / "ica").mkdir(parents=True, exist_ok=True)
     (cfg.FULLTEXT / "ica").mkdir(parents=True, exist_ok=True)
     (cfg.PDFS / "ica" / "2009Icar..201..504M.pdf").write_bytes(b"%PDF")
@@ -721,3 +724,48 @@ def test_el_listado_del_triage_ordena_por_tasa_no_por_citas_crudas(toy_vault, ca
     assert pos_nuevo >= 0 and pos_viejo >= 0
     assert pos_nuevo < pos_viejo, ("60 citas en 1 año es más tasa que 300 en 30: el orden crudo "
                                    "esconde al reciente, que es el que menos tiempo tuvo")
+
+
+def test_drop_core_avisa_de_los_wikilinks_que_deja_rotos(toy_vault, capsys):
+    """Issue #132 — `drop_core` borra la nota de un paper **citado en prosa por una ficha viva** y
+    no avisaba: `grep -c '\\[\\[' scripts/triage.py` → 0. El próximo `lint` bloquea por *wikilinks
+    rotos* (INV-02, P0) y la operación que lo causó no dejaba ningún puntero.
+
+    Su hermano `entity.py delete` (`scripts/entity.py:320-323`, cubierto por INV-19) ya lo hace, y
+    con el criterio correcto: **no** se reparan solos —eso sería decidir por el usuario qué decía
+    esa frase— se los deja rotos y **visibles**."""
+    (cfg.FULLTEXT / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "ica" / "2009Icar..201..504M.txt").write_text("x", encoding="utf-8")
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / "2009Icar..201..504M.md").write_text(
+        "---\nbibcode: 2009Icar..201..504M\nthesis_links: [ica]\nmethods: []\ntags: [paper]\n---\n# x\n",
+        encoding="utf-8")
+    ficha = cfg.STARS / "tau_ceti.md"
+    ficha.parent.mkdir(parents=True, exist_ok=True)
+    ficha.write_text("---\nname: tau Cet\nslug: tau_ceti\ntags: [star]\n---\n\n"
+                     "El bisector es plano [[2009Icar..201..504M]].\n", encoding="utf-8")
+
+    assert triage.drop_core("ica", ["2009Icar..201..504M"], "off-topic") == 0
+    out = capsys.readouterr().out
+    assert not (cfg.PAPERS / "2009Icar..201..504M.md").exists(), "la nota sí se borra"
+    assert "ROTO" in out and "tau_ceti.md" in out, \
+        "y la operación que los rompió deja el puntero de qué hay que reparar"
+
+
+def test_drop_core_no_avisa_de_wikilinks_cuando_no_borro_la_nota(toy_vault, capsys):
+    """La otra mitad de #132: si la nota **no** se borra —pertenece a otro sujeto o tiene extracción
+    encima— no hay wikilink roto, y un aviso ahí sería ruido fijo sobre una operación correcta."""
+    (cfg.FULLTEXT / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "ica" / "2009Icar..201..504M.txt").write_text("x", encoding="utf-8")
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / "2009Icar..201..504M.md").write_text(
+        "---\nbibcode: 2009Icar..201..504M\nthesis_links: [ica, otro]\nmethods: []\ntags: [paper]\n---\n# x\n",
+        encoding="utf-8")
+    ficha = cfg.STARS / "tau_ceti.md"
+    ficha.parent.mkdir(parents=True, exist_ok=True)
+    ficha.write_text("---\nname: tau Cet\nslug: tau_ceti\ntags: [star]\n---\n\n"
+                     "Cita [[2009Icar..201..504M]].\n", encoding="utf-8")
+    assert triage.drop_core("ica", ["2009Icar..201..504M"], "off-topic") == 0
+    out = capsys.readouterr().out
+    assert (cfg.PAPERS / "2009Icar..201..504M.md").exists()
+    assert "ROTO" not in out

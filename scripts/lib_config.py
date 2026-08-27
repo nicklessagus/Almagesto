@@ -20,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.67.1"
+ALMAGESTO_VERSION = "1.68.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -62,6 +62,20 @@ PENDING_OK = ("paywall", "scan", "unextractable", "adquisicion")
 # `txt:`/`pdf:` de #117 —aquél dice QUÉ ARCHIVO se leyó, éste CÓMO se apunta adentro— y hacen falta
 # los dos: el `.txt` de un libro tampoco se cita por línea.
 UNIDAD_CITA_OK = ("linea", "pagina", "seccion")
+
+# D-37 · en qué quedó una hipótesis. Vocabulario CERRADO: `status` es lo ÚNICO que un consumidor lee
+# para decidir si se apoya en ella, y en prosa libre no dice nada (el caso medido en la instancia
+# real: `supuesto operativo con caveat conocido`).
+#
+# ⚠ Vive acá, no en `lint.py`, desde #175: el GENERADOR (`make_notes.write_concept_note`) escribía
+# `active` mientras el VALIDADOR tenía la lista, así que toda hipótesis nueva nacía con un
+# bloqueante que la máquina se fabricaba sola. Con una sola declaración eso no se puede repetir.
+HYP_STATUS = ("abierta", "sostenida", "disputada", "refutada")
+HYP_STATUS_INICIAL = HYP_STATUS[0]      # una hipótesis recién planteada no está sostenida ni refutada
+
+# #73 · qué TIPO de aporte es el paper. Chico y cerrado a propósito: el rol define QUÉ OPERACIÓN de
+# contraste corresponde entre dos papers, y un valor libre no la determina.
+ROLES = ("fundacional", "aplicacion", "arbitro")
 
 REGISTRO = CONFIG / "registro"
 
@@ -178,12 +192,29 @@ def section_start(text: str, header: str) -> int:
     Trailing text after the header is allowed on purpose: real headers carry suffixes
     (`## Papers (25 · 16 sintetizados…)`, `## Verificación de citas (2026-08-25)`). What is NOT
     allowed is anything before it on the same line — that is the whole point.
+
+    A suffix is punctuation, never more words (#176). `## Papers` is a **prefix** of
+    `## Papers que tocan este tema (auto)`, so the loose match had `stamp_papers_table` overwrite
+    the concept roll-up and `stamp_concept_rollup` return `False` forever — silently, and taking
+    D-24's *Entró por* column with it. Any two sections where one names a prefix of the other hit
+    the same trap, so the rule lives here and not at the call site.
     """
     #  @inv INV-98
-    if text.startswith(header):
-        return 0
-    i = text.find("\n" + header)
-    return -1 if i < 0 else i + 1
+    for i in ([0] if text.startswith(header) else []) + _header_hits(text, header):
+        resto = text[i + len(header):].split("\n", 1)[0].strip()
+        if not resto or not resto[0].isalnum():
+            return i
+    return -1
+
+
+def _header_hits(text: str, header: str) -> list[int]:
+    """Every line-anchored occurrence of `header`, in order. Plural because the first one may be a
+    longer heading that only *starts* with it (#176) and the real section comes later."""
+    out, j = [], text.find("\n" + header)
+    while j >= 0:
+        out.append(j + 1)
+        j = text.find("\n" + header, j + 1)
+    return out
 
 
 STARS = WIKI / "stars"
@@ -439,7 +470,10 @@ def as_list(v) -> list:
 
 
 # Áreas de vault/wiki/concepts/ RESERVADAS (siempre válidas): `methods` es universal;
-# `hypotheses` es estructural (schema name/status + roll-up Dataview). Ver CLAUDE.md.
+# `hypotheses` es estructural (schema name/status + roll-up ESTAMPADO). Desde D-10/D-11
+# ningún roll-up es Dataview: `make_notes` los materializa, porque un bloque ```dataview```
+# le muestra a un agente que abre el `.md` el código de la query, no sus resultados (#180).
+# Ver CLAUDE.md.
 RESERVED_CONCEPT_AREAS = ("methods", "hypotheses")
 
 
@@ -704,6 +738,28 @@ def es_del_carril(d: dict, carril: str) -> bool:
 # Cerrado por el mismo motivo que `role` (#73): un typo deja el campo mudo para el único consumidor
 # que existe —la columna Origen de la ficha—, y un campo mudo se lee como "no se sabe".
 EXTRA_CORE_VIA = ("usuario", "triage", "citado-por-corpus")
+
+
+def extra_core_snippet(recs, via: str = "usuario", motivo: str = "<por qué es core para este sujeto>",
+                       tope: int = 10) -> str:
+    """El bloque `extra_core:` listo para pegar, en la forma DURA de D-58 (#161).
+
+    Una sola implementación para los dos carriles que lo imprimen. `query_ads --sweep` dictaba
+    `extra_core: [<bibcode>, …]` con `via: manual`, y las dos mitades **abortan**: D-58 rechaza el
+    escalar y la lista de strings, y `manual` no está en `EXTRA_CORE_VIA`. Un script que le dicta al
+    usuario una forma que el propio framework bloquea es peor que no decir nada: el usuario copia,
+    pega, y la corrida siguiente muere.
+
+    El `via` sale de `EXTRA_CORE_VIA` y se valida acá, así que un typo revienta al generar el
+    snippet y no seis pasos después, al cargar la config."""
+    if via not in EXTRA_CORE_VIA:
+        raise ValueError(f"`via: {via}` no está en el vocabulario ({' | '.join(EXTRA_CORE_VIA)})")
+    hoy = _dt.date.today().isoformat()
+    out = ["extra_core:"]
+    for r in list(recs)[:tope]:
+        out.append(f"  - bibcode: {r['bibcode']}\n    via: {via}\n    fecha: {hoy}\n"
+                   f"    motivo: {motivo}")
+    return "\n".join(out) + "\n"
 
 
 def load_extra_core(meta: dict, *, entry: str = "?") -> list:

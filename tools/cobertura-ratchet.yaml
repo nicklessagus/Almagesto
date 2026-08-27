@@ -3,17 +3,16 @@
 # Sólo puede BAJAR. Se mide con `pytest tests/poblada/test_cobertura.py -m poblada` (~11 s).
 # Una función acá no es "mal probada": es **no mirada por nadie**, y su mutación siempre sobrevive
 # —así que esto es el detector barato del mismo defecto que caza `tools/mutar.py`.
-medido_en: "2026-08-24"
+medido_en: "2026-08-27"
 techo: 4
 
-# Las 6 medidas, y por qué. **Todas** son rutas de RED o subprocess: los tests inyectan dobles
-# siempre, así que el código que de verdad habla con las APIs nunca corre. Es deuda declarada.
+# Las 4 medidas (2026-08-27), y por qué. **Todas** son rutas de RED o subprocess: los tests
+# inyectan dobles siempre, así que el código que de verdad habla con las APIs nunca corre. Es deuda
+# declarada.
 #   citation_index.py::_fetch_ads_default     ← ADS `fl=reference`, sólo probado a mano
 #   citation_index.py::_fetch_oa_default      ← idem OpenAlex
-#   fetch_web.py::defuddle_version            ← `npx defuddle`: subprocess contra Node
-#   fetch_web.py::fetch                       ← idem
-#   sweep_external.py::_run                   ← lanza un subprocess
-#   sweep_external.py::aplicar_ground_truth   ← idem (`_run` con --force)
+#   extraction_prompt.py::main                ← CLI que arma el prompt del fan-out
+#   fetch_web.py::fetch                       ← `npx defuddle`: subprocess contra Node
 #
 # HISTORIAL. El techo fue 11 hasta la pasada `/auditar` del 2026-08-24, que lo encontró vencido:
 # se medían 6 contra un techo de 11 y la lista enumeraba once nombres de los cuales cinco ya
@@ -26,3 +25,10 @@ techo: 4
 # adentro; los dos que salieron fueron cubiertos con test, no amnistiados. `discover.py`
 # entró con sus tres funciones nuevas ya cubiertas (`_row`, `hydrate`, `main`): la red las
 # marcó al crearlas y se cerraron en la misma tanda.
+
+# 2026-08-27 (issue #140): la lista de arriba decía "Las 6 medidas" y enumeraba seis nombres, de los
+# cuales TRES ya estaban cubiertos (`fetch_web.defuddle_version`, `sweep_external._run`,
+# `sweep_external.aplicar_ground_truth`) y OMITÍA a `extraction_prompt.py::main`, que sí está sin
+# ejecutar. El techo (4) era correcto: lo que mentía era la lista. Es AUD-07 un nivel más abajo —
+# un techo bien ajustado con una lista decorativa se lee igual de mal que un techo decorativo.
+# Medición de hoy: 4 sin ejecutar, exactamente las cuatro de arriba (en el techo, no por debajo).

@@ -347,7 +347,7 @@ def cmd_score() -> int:
     outdir = cfg.ROOT / "outputs"
     outdir.mkdir(exist_ok=True)
     out = outdir / f"verify-bench-{dt.date.today().isoformat()}.md"
-    out.write_text(report + "\n", encoding="utf-8")
+    out.write_text(report + "\n", encoding="utf-8")  # noqa: vault-write — destino `outputs/`, scratch regenerable (#137)
     print(report)
     print(f"\n→ {out}")
     return 0

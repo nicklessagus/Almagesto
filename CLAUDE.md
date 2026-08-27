@@ -15,10 +15,15 @@ El usuario cura las fuentes (`vault/raw/`) y hace preguntas.
 
 > **La cabecera de una ficha/concepto lleva una línea `> _Estado — …_`** con **tres fechas**
 > que avanzan por separado y pueden divergir sin que ninguna mienta (D-12): **búsqueda** (última
-> corrida + universo acumulado + escotillas), y **verificación** (fecha del bloque, con la salvedad
-> fija *"vigencia por par: la dicen las anclas"* — sin ella, la fecha se lee como "todo verificado
-> a esta fecha", que es justo la lectura que el ancla corrige). Con una sola fecha por nota,
-> refrescar el corpus hacía parecer re-verificado lo que nadie volvió a chequear.
+> corrida + universo acumulado + escotillas), **síntesis** (cuándo se destiló el sujeto a la prosa —
+> se **declara**, `cfg.save_sintesis` / `triage.py --sintesis`, porque no se puede derivar: `git`
+> fecha el ARCHIVO, así que una cirugía de cabecera contaría igual que reescribir el resumen) y
+> **verificación** (fecha del bloque, con la salvedad fija *"vigencia por par: la dicen las anclas"*
+> — sin ella, la fecha se lee como "todo verificado a esta fecha", que es justo la lectura que el
+> ancla corrige). Con una sola fecha por nota, refrescar el corpus hacía parecer re-verificado lo
+> que nadie volvió a chequear —y re-sintetizado lo que nadie volvió a escribir (INV-82; hasta #150
+> este párrafo prometía tres y enumeraba dos, así que la de síntesis no la estampaba nadie que
+> siguiera sólo este documento).
 
 > **Al iniciar sesión, leé `vault/STATUS.md` (estado + próximos pasos) y `vault/wiki/log.md` (historial
 > reciente) para orientarte.** *(Si estás en el repo **template** `Almagesto` —donde esos dos son la
@@ -339,7 +344,12 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   de los 343 con ≥4 marcadores, p95 = 0.33 y después un salto al grupo de rotos (0.98–1.00); el
   umbral (60 %) cae en ese hueco y marca 13. ⚠ Con menos de 4 marcadores devuelve **no evaluado**,
   no `ok` — son **275 de 813 (34 %)**, así que un `False` ahí sería un falso limpio a gran escala
-  (D-43). El lint lo lista como **backlog, nunca bloqueante**: no es un defecto de la bóveda sino
+  (D-43). ⚠ **Los denominadores publicados NO reconcilian, y se declara la discrepancia en vez de
+  elegir uno** (regla de método #5, #155): acá dice *13 de 343* y `extract_fulltext.py` dice *«marca
+  13 de 295 (4.4 %)»*; y 343 (≥4 marcadores) + 275 (<4) = 618, no 813. Lo que **no** depende de cuál
+  denominador sea el bueno son los dos números que el código usa —umbral 0.60 y mínimo 4
+  marcadores—; lo que no se puede afirmar con esto es la tasa de marcado. Re-medir con un corpus a
+  mano. El lint lo lista como **backlog, nunca bloqueante**: no es un defecto de la bóveda sino
   una propiedad de la fuente que el consumidor tiene que ver.
   Esa misma re-corrida es el **backfill de la marca de garble**: el chequeo que estampa `fulltext_source: ocr` sobre un PDF **que ya venía
   OCReado por el editor** sólo corría al extraer, así que un `.txt` escrito antes se quedaba
@@ -530,7 +540,10 @@ candidatos del triage con `via: citado-por-corpus`, nunca marca core. Si clasifi
 dejaría de ser función de `(paper, lente)` y se rompería INV-24. La sostiene
 `scripts/citation_index.py` (índice invertido obra→citadores, lookup **offline**, vive en `build/`),
 que se construye aparte porque es caro. Los backends de descubrimiento fuera de ADS son
-`scripts/search_arxiv.py` (⚠ **no cableado a la cadena**: tiene CLI de preview, no ingesta — #95) y
+`scripts/search_arxiv.py` (⚠ **el orquestador `ingest_theme.py` no lo corre solo**: lo alcanza
+`discover.cascade`, que es un paso manual del skill —`discover.py --theme <slug>`—, más su CLI de
+preview propia. #144: acá decía *«no cableado»* y 19 líneas abajo *«#95 queda cerrado: está
+cableado»*; las dos frases usaban «cableado» en sentidos distintos y ninguna lo decía) y
 `scripts/openalex.py` (en producción: lo usa `citation_index`); los tres normalizan al **mismo schema de
 registro** que `query_ads.to_record`, y esa paridad la fija un test
 (`tests/test_backends_schema.py`), no la prosa.
@@ -549,7 +562,10 @@ la cascada y **propone**; nunca clasifica.
   cosas distintas. ⛔ **Declará `topic:` en `themes.yaml`**: sin él `discover` lo infiere del
   `title`, y si tu bóveda escribe los títulos en castellano la taxonomía inglesa de OpenAlex no
   matchea — no falla en silencio (lo dice en la cobertura), pero perdés el backend que más aporta
-  fuera de astro. Con esto **#95 queda cerrado**: `search_arxiv` está cableado.
+  fuera de astro. Con esto **#95 queda cerrado en el sentido que faltaba**: `search_arxiv` tiene
+  llamador de producción (`discover.cascade`) y se ejerce desde `discover.py --theme`. Lo que sigue
+  sin pasar —decisión abierta, no defecto— es que `ingest_theme.py` corra la cascada por su cuenta:
+  hoy es un paso que el skill prescribe a mano (0b).
 - **La cobertura distingue tres estados, no dos** (`print_cobertura`): corrió con N registros,
   **FALLÓ** (0 por caída — que no significa que el backend no tenga nada), y **NO CORRIÓ** con el
   motivo (`query:` sin declarar, `topic:` sin declarar). Saltear un backend en silencio deja una
@@ -1234,11 +1250,14 @@ misma query ordenada por fecha** (#79) y la marca guarda en `truncated.recent` c
 que lo reciente —lo que el orden por citas esconde por construcción— ya está cubierto; ídem el
 **rescate por glifo incompleto** (`truncated_glyph`, marca hermana: el superset de la constelación
 del rescate #28 se cortó por citas **antes** del filtro client-side, que es donde vive la señal →
-pueden faltar papers con lookalike). Los **campos incompletos** son **backlog** y no bloquean; hoy son **siete** (el conteo es el de
-los sitios que pueblan `incomplete` en `lint.py` — no el de la lista histórica):
+pueden faltar papers con lookalike). Los **campos incompletos** son **backlog** y no bloquean; hoy son **diez** (el conteo es el de
+los sitios que pueblan `incomplete` en `lint.py` — no el de la lista histórica; ⚠ decía *siete* y
+enumeraba ocho mientras el código tenía diez: tres valores para un hecho que decide un `grep`, #147):
 `P_rot` sin documentar en la prosa (el frontmatter nulo **no** es hallazgo desde #70),
 `activity_indicators_expected` vacío, planeta del frontmatter no discutido en la prosa, paper core
-sin `methods` (sin extraer), paper extraído sin `role`, y **ficha sin
+sin `methods` (sin extraer), paper extraído sin `role`, **`unidad_cita` de documento largo sin
+`alcance`** (#80: sin él un recorte deliberado se lee como omisión), **paper relevante sin fuente en
+disco** (ni `.txt` ni PDF, #90: es core y no hay qué leer), y **ficha sin
 su `raw/ground_truth/<slug>.json`** (el barrido del espejo #70 lo maneja el JSON, así que una ficha
 sin archivo no la mira **nadie**: se le pueden inventar `teff_K`/`P_rot_days`/planetas enteros con
 el lint en verde — es backlog y no bloqueante porque es "la garantía no corrió acá", no "hay una
@@ -1286,7 +1305,27 @@ Corolario que las cruza a todas: **una promesa que el sistema dejó de cumplir e
 que una que nunca hizo.** Si al tocar algo se rompe una promesa declarada —un presupuesto de
 tiempo, una cobertura, un 1:1—, eso **se anota**, aunque no se arregle en el momento.
 
-## Al escribir código: las seis redes (regla permanente)
+## Convención de idioma del código (desde 2026-08-24)
+
+**Archivos, nombres de funciones, docstrings y comentarios NUEVOS en inglés.** La prosa de la
+documentación (`CLAUDE.md`, `README.md`, `docs/`, los `SKILL.md`) y la de la bóveda siguen en
+castellano. **Sin retrofit**: lo que ya está escrito no se renombra — la regla es sobre lo nuevo.
+
+⚠ **Hasta #156 esta convención no vivía en ningún documento versionado** (sólo en la bitácora
+interna, que está gitignored) **y no la vigilaba ningún gate**. El resultado, medido: de 237
+funciones nuevas desde el 2026-08-24, **30** tienen nombre en castellano, y `scripts/discover.py`
+—creado el 2026-08-26— nació con 6 docstrings en castellano de 17. *Una promesa que el sistema dejó
+de cumplir en silencio es peor que una que nunca hizo* (corolario de las cinco reglas de método): o
+la regla tiene casa y red, o no es una regla.
+
+La red es `tests/test_idioma_codigo.py` con ratchet en `tools/idioma-ratchet.yaml`: cuenta los
+símbolos en castellano de `scripts/` + `tools/` (hoy **46** sobre el árbol entero) y **sólo puede
+bajar**; además, un nombre que no esté en la lista `conocidos` pone el test en rojo **aunque el
+total no suba**, que es lo que impide que la deuda rote. Los 46 son deuda declarada, no un rojo —
+exigir cero sería rojo permanente, y un rojo permanente se deja de mirar. Renombrarlos rompería
+marcas `@inv` y los punteros de `docs/trazabilidad.md` sin arreglar nada.
+
+## Al escribir código: las siete redes (regla permanente)
 
 Toda función nueva de `scripts/` pasa por esto **antes de cerrar el issue**; la 6 rige
 también para los scripts de una sola operación. Detalle y ratchets en
@@ -1333,7 +1372,11 @@ también para los scripts de una sola operación. Detalle y ratchets en
    entre centinelas (`<!-- almagesto:… -->`) y lo de afuera no se toca — que es lo que
    `make_notes._reemplazar_seccion` ya hacía y no se usó.
 
-Las 2 y 5 corren solas en tier 0. El motivo de la regla: en la sesión que la produjo, **los bugs
+7. **Idioma** — `pytest tests/test_idioma_codigo.py`: un símbolo **nuevo** con nombre en castellano
+   pone el test en rojo, aunque el total no suba. Ver *Convención de idioma del código* arriba: la
+   regla existía desde el 2026-08-24 y **nadie la vigilaba**, con 46 símbolos de resultado.
+
+Las 2, 5 y 7 corren solas en tier 0. El motivo de la regla: en la sesión que la produjo, **los bugs
 los encontraron agentes leyendo el código, no la suite** — y cada hallazgo era decidible, o sea que
 podría haber sido un assert.
 
