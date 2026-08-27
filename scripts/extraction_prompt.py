@@ -147,64 +147,47 @@ def _ocr_note(texto: str) -> str:
 
 
 def _symbols_note(slug: str, bibcode: str, texto: str) -> str:
-    """El aviso de #113: el `.txt` está limpio y las ECUACIONES no están.
+    """UNA sola regla para las ecuaciones: el `.txt` no es fuente confiable, se confirma en el PDF.
 
-    Tercer eje, independiente de los otros dos: `is_legible` mide *extraíble*, la marca de garble
-    mide *correcto*, ésta mide **completo**. El modo de falla es silencioso en el peor lugar —
-    `pdftotext` deja el marcador `(3)` y vacía su cuerpo, así que el `.txt` **parece** tener la
-    fórmula—, y por eso la regla tiene que viajar EN el prompt: sin ella el extractor cita una línea
-    que no contiene la ecuación, y `verify-citations` leyendo ese mismo `.txt` devolvería
-    `no-soportada` sobre una afirmación correcta.
+    Los tres estados del detector (#113, #192, #194) terminan todos en la misma instrucción, así que
+    tener tres redacciones distintas era decir lo mismo tres veces y dejar que el extractor tratara
+    dos de ellas como si fueran un permiso:
 
-    Hasta #153 la regla vivía sólo en `CLAUDE.md` — el modo de falla que INV-100 cerró para las
-    demás: el prompt se genera, y la regla no llegaba al subagente.
+    · `True`  — `pdftotext` dejó el marcador `(3)` y vació el cuerpo: la fórmula **no está**.
+    · `None`  — no hay marcadores suficientes para medir (41 % de un corpus real), y en un `.txt`
+                de OCR es el caso normal, porque el OCR se lleva el marcador junto con el cuerpo.
+    · `False` — **no es una garantía**: la sustitución de caracteres deja la fórmula con cuerpo y
+                cambiada, y ningún chequeo la ve. Medido contra el PDF: `tanh⁻¹` por `tan⁻¹`,
+                `si = 1` por `si = ±1`, «model (8)» por «(3)», `f(y)"y` por `f_i(y)=y³`.
 
-    Y hasta #192 el prompt callaba el estado **no evaluado**, que es INV-38 en otro consumidor.
+    Lo único que el estado cambia es el **alcance**: con `True` se muda toda la lectura de fórmulas
+    al PDF y se cita por PÁGINA; en los otros dos la cita sigue siendo por línea y el PDF es el
+    chequeo antes de transcribir. El estado medido viaja igual, entre paréntesis, para que se sepa
+    qué se sabía.
 
     @inv INV-38"""
-    if not texto.startswith(cfg.FULLTEXT_SYMBOLS_MARK):
-        # El TERCER ESTADO (#192). El detector devuelve `None` cuando no hay marcadores suficientes
-        # para medir —41 % de un corpus real— y hasta acá el prompt callaba, así que «el `.txt`
-        # conserva sus ecuaciones» y «nadie pudo medirlo» llegaban IGUALES. Es el falso limpio que
-        # el framework persigue en todos lados, en el eje que decide si una fórmula se cita del
-        # `.txt` o del PDF. Y el detector es además ciego al modo de falla del OCR: cuenta
-        # ecuaciones que conservan el marcador y perdieron el cuerpo (lo que hace `pdftotext`),
-        # mientras que el OCR se lleva el marcador también — por eso los dos casos medidos que
-        # perdieron TODAS sus fórmulas caen justo acá.
-        # ⚠ El aviso es BLANDO a propósito: «no consta» no es «no están», y aplicarle a los no
-        # evaluados la instrucción dura de citar por página convertiría una duda en certeza falsa.
-        medido, motivo = extract_fulltext.symbols_lost(texto)
-        if medido is not None:
-            # #194 · el TERCER modo de falla, y el peor: la ecuación está, tiene cuerpo y **dice
-            # otra cosa** (sustitución de caracteres). El detector la evalúa y devuelve `False`,
-            # que hasta acá viajaba como SILENCIO. Con el cuerpo vacío `verify-citations` devuelve
-            # `no-soportada` y alguien mira; con el cuerpo cambiado devuelve `soportada`: una nota
-            # falsa y verde. Cuatro casos con consecuencia semántica verificados contra el PDF
-            # (`tanh⁻¹` por `tan⁻¹`, `si = 1` por `si = ±1`, «model (8)» por «(3)», `f(y)"y` por
-            # `f_i(y)=y³`).
-            # ⚠ El aviso es todo lo que se puede hacer hoy: la firma de sustitución SE MIDIÓ y no
-            # discrimina —caza 1 de 5 confirmados y mete falsos positivos, porque las sustituciones
-            # también son por letras y por borradura, no sólo por puntuación—, así que no hay
-            # detector que poner y publicar el `False` como garantía es lo que hay que dejar de hacer.
-            return ("- El detector no encontró ecuaciones vaciadas, pero eso **no prueba** que los "
-                    "símbolos hayan sobrevivido: la **sustitución** de caracteres deja la fórmula "
-                    "con cuerpo y **cambiada**, y ningún chequeo la ve. Ante duda de un símbolo, "
-                    f"abrí `{_pdf_rel(slug, bibcode)}`.\n")
-        return (
-            f"- ⚠ **No se pudo medir si este `.txt` conserva sus ecuaciones** ({motivo}).\n"
-            f"  No es «las conserva»: es que nadie lo sabe. Antes de transcribir una fórmula,\n"
-            f"  confirmala contra `{_pdf_rel(slug, bibcode)}` y decí en `salvedades` qué encontraste.\n"
-            + ("  El `.txt` es OCR, que es el caso de más riesgo: el OCR se lleva el marcador de\n"
-               "  ecuación junto con el cuerpo, así que el detector no puede verlo.\n"
-               if texto.startswith(cfg.FULLTEXT_OCR_MARK) else ""))
-    return (
-        "- ⛔ **Las ECUACIONES no están en este `.txt`** (#113: `pdftotext` dejó el marcador `(3)`\n"
-        "  y vació su cuerpo, así que el archivo **parece** tenerlas). Para cualquier fórmula,\n"
-        f"  abrí `{_pdf_rel(slug, bibcode)}` — `Read` lo rasteriza, así que **ves** la ecuación —\n"
-        "  y citá **página del PDF**, no línea del `.txt`. Grepear el `.txt` por la fórmula no la\n"
-        "  va a encontrar, y su ausencia **no** significa que no esté en el paper.\n"
-        "- La prosa sí está y se cita normal, por línea. Es un eje independiente del OCR.\n"
-    )
+    # La MARCA del header manda sobre el detector corrido en vivo: la estampó `extract_fulltext`
+    # al escribir el `.txt` (#113) y es verdad de disco. Re-medir acá y creerle al resultado nuevo
+    # sería dejar que el prompt contradiga al archivo.
+    medido, motivo = extract_fulltext.symbols_lost(texto)
+    if texto.startswith(cfg.FULLTEXT_SYMBOLS_MARK):
+        medido, motivo = True, "marca del header"
+    estado = ("el `.txt` vació el cuerpo de sus ecuaciones" if medido
+              else f"no se pudo medir — {motivo}" if medido is None
+              else "sin ecuaciones vaciadas, lo que NO prueba que los símbolos sobrevivieron")
+    regla = ("- ⛔ **El `.txt` no es fuente confiable para una ECUACIÓN.** Antes de transcribir "
+             f"cualquier fórmula, confirmala contra `{_pdf_rel(slug, bibcode)}` — `Read` lo "
+             "rasteriza, así que **ves** la ecuación. Vale siempre: el `.txt` puede haberla "
+             "vaciado, haberla dejado con el cuerpo **cambiado**, o no haberse podido medir.\n"
+             f"  (Detector: {estado}.)\n")
+    if not medido:
+        return regla
+    return regla + (
+        "- ⛔ Acá el detector la confirma: **las ecuaciones NO están en este `.txt`** (#113), así "
+        "que la lectura de fórmulas se hace **del PDF** y se cita **página del PDF**, no línea del "
+        "`.txt`. Grepear el `.txt` por la fórmula no la va a encontrar, y su ausencia **no** "
+        "significa que no esté en el paper.\n"
+        "- La prosa sí está y se cita normal, por línea. Es un eje independiente del OCR.\n")
 
 
 def _pdf_rel(slug: str, bibcode: str) -> str:

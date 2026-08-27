@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import re
 import sys
+
+import pytest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
@@ -264,27 +266,40 @@ def test_sin_sujeto_explicito_la_vista_usa_el_nombre():
 SIN_ECUACIONES = "Una prosa cualquiera sin marcadores de ecuacion.\n" * 40
 
 
-def test_el_prompt_declara_que_no_pudo_medir_los_simbolos():
-    """#192: sin marcadores suficientes el detector devuelve `None` = no evaluado. El prompt tiene
-    que DECIRLO: callar hace que «completo» y «no medido» lleguen iguales."""
-    p = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, SIN_ECUACIONES)
-    assert "no se pudo medir" in p.lower()
-    assert "confirm" in p.lower() and "PDF" in p
+CON_ECUACIONES = "\n".join(f"  x_{i} = A s_{i} + n_{i}     ({i})" for i in range(1, 9))
 
 
-def test_el_aviso_de_no_evaluado_no_manda_a_citar_por_pagina():
-    """Contra-caso: «no consta» NO es «las ecuaciones no están». La instrucción dura de citar por
-    página del PDF es sólo para la marca confirmada — aplicarla a los 41% no evaluados convertiría
-    una duda en una certeza falsa, y encarecería cada extracción del corpus."""
-    p = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, SIN_ECUACIONES)
-    assert "Las ECUACIONES no están" not in p
+@pytest.mark.parametrize("texto,estado", [
+    (SIN_ECUACIONES, "no se pudo medir"),                       # None — 41 % de un corpus real
+    (CON_ECUACIONES, "NO prueba"),                              # False — 45 de 67, el bucket ciego
+    (cfg.FULLTEXT_SYMBOLS_MARK + "\n" + CON_ECUACIONES, "vació"),   # True
+])
+def test_una_sola_regla_para_las_ecuaciones_en_los_tres_estados(texto, estado):
+    """#192 + #194, resueltos con **una** regla en vez de tres redacciones.
+
+    Los tres estados del detector terminan en la misma instrucción —confirmá la fórmula contra el
+    PDF—, así que tres mensajes distintos decían lo mismo tres veces y dejaban que el extractor
+    leyera dos de ellos como un permiso. Lo único que el estado cambia es el ALCANCE (con la marca
+    confirmada, toda la lectura de fórmulas se muda al PDF y se cita por página); el estado medido
+    viaja igual, para que se sepa qué se sabía.
+
+    @inv INV-38"""
+    p = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, texto)
+    assert "no es fuente confiable para una ECUACIÓN" in p
+    assert "vault/raw/pdfs/tau_ceti/2017AJ....154..135F.pdf" in p, "decir QUÉ PDF abrir"
+    assert estado in p, "el estado medido viaja, aunque la instrucción sea la misma"
 
 
-def test_con_la_marca_puesta_el_aviso_sigue_siendo_el_duro():
-    """Contra-caso del otro lado: la marca confirmada no se degrada a la advertencia blanda."""
-    p = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES,
-                        cfg.FULLTEXT_SYMBOLS_MARK + "\n" + UNA_COLUMNA)
-    assert "Las ECUACIONES no están" in p and "página del PDF" in p
+def test_solo_la_marca_confirmada_muda_la_cita_a_la_pagina():
+    """Contra-caso del alcance: `None` y `False` NO mandan a citar por página. La cita por defecto
+    sigue siendo la línea del `.txt`, y convertir una duda en esa certeza encarecería cada
+    extracción del corpus (el 86 % de los `.txt` medidos no lleva la marca)."""
+    for texto in (SIN_ECUACIONES, CON_ECUACIONES):
+        p = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, texto)
+        assert "página del PDF" not in p
+    marcado = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES,
+                              cfg.FULLTEXT_SYMBOLS_MARK + "\n" + CON_ECUACIONES)
+    assert "página del PDF" in marcado and "NO están en este `.txt`" in marcado
 
 
 def test_el_prompt_declara_la_maqueta_medida_en_las_dos_direcciones():
@@ -299,27 +314,3 @@ def test_el_prompt_declara_la_maqueta_medida_en_las_dos_direcciones():
         assert "fracción medida" in p, "el prompt publica el NÚMERO, no sólo el veredicto"
         assert "decilo en `salvedades`" in p
     assert "UNA columna" in una and "DOS COLUMNAS" in dos
-
-
-def test_un_False_del_detector_no_se_publica_como_garantia():
-    """#194 · el TERCER modo de falla: la ecuación está, tiene cuerpo y **dice otra cosa**
-    (sustitución de caracteres). El detector la evalúa y devuelve `False`, y hasta acá eso viajaba
-    como silencio — que el extractor lee como «el `.txt` está bien».
-
-    Es el peor de los tres modos: con el cuerpo vacío `verify-citations` devuelve `no-soportada` y
-    alguien mira; con el cuerpo **cambiado** devuelve `soportada`, o sea una nota **falsa y verde**.
-    Cuatro casos con consecuencia semántica verificados contra el PDF: `tanh⁻¹` por `tan⁻¹`,
-    `si = 1` por `si = ±1`, «model (8)» por «model (3)», `f(y)"y` por `f_i(y)=y³`.
-
-    ⚠ El aviso es lo único que se puede hacer hoy: la firma de sustitución **se midió y no
-    discrimina** (caza 1 de 5 confirmados y mete falsos positivos), así que no hay detector que
-    poner — y publicar un `False` como garantía es justamente lo que hay que dejar de hacer.
-
-    @inv INV-38"""
-    # el `.txt` tiene ecuaciones CON cuerpo, así que el detector las evalúa y devuelve False:
-    # es el bucket donde este modo de falla es invisible (45 de 67 en el corpus medido).
-    con_ecuaciones = "\n".join(f"  x_{i} = A s_{i} + n_{i}     ({i})" for i in range(1, 9))
-    p = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, con_ecuaciones)
-    assert "no prueba" in p and "sustitu" in p.lower()
-    # y no se degrada al aviso duro: las ecuaciones acá SÍ están
-    assert "Las ECUACIONES no están" not in p
