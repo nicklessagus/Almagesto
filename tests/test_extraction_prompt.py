@@ -202,3 +202,42 @@ def test_sin_la_marca_el_prompt_no_habla_de_paginas():
     casos (medido: 13 de 343 `.txt` evaluables llevan la marca)."""
     p = ep.build_prompt("gp", "2006Rasmussen", "GP", [], "Texto limpio, sin marca.\n", kind="theme")
     assert "por página del PDF" not in p
+
+
+# ── #188 paso 4 · el prompt pide LA VISTA de un sujeto, y el JSON la trae ───────────────────────
+
+def test_el_prompt_pide_la_vista_del_sujeto():
+    """La extracción SIEMPRE fue una lectura con lente —el prompt pregunta «¿qué dice sobre
+    {name}?» y arma los grep con SUS alias—; lo que faltaba era que el producto lo dijera. El
+    prompt nombra la sección destino y el objeto `vista` del JSON, o el subagente devuelve algo
+    que el cosechador no puede estampar.
+
+    @inv INV-134"""
+    p = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, UNA_COLUMNA)
+    assert "## Vista — tau Ceti" in p
+    assert '"vista"' in p and '"sujeto":"tau Ceti"' in p and '"tipo":"star"' in p
+    assert '"txt":"tau_ceti"' in p, "de QUÉ copia del .txt se leyó (el ancla de fuente, D-18)"
+
+
+def test_la_vista_de_un_tema_declara_tipo_theme():
+    p = ep.build_prompt("gp", "2020X", "gaussian processes", [], UNA_COLUMNA, kind="theme",
+                        sujeto="gaussian-processes")
+    assert "## Vista — gaussian-processes" in p
+    assert '"tipo":"theme"' in p and '"sujeto":"gaussian-processes"' in p
+
+
+def test_el_sujeto_de_la_vista_puede_diferir_del_nombre_del_prompt():
+    """En un tema `theme_by_slug` devuelve el SLUG, y el nombre con el que el paper lo declara en
+    `thesis_links` es el `concept`. Si la vista se escribiera con el slug, `reclamo_sin_vista` la
+    reportaría para siempre: dos nombres para el mismo sujeto, que es la conflación de siempre con
+    otra cara.
+
+    @inv INV-134"""
+    p = ep.build_prompt("gp", "2020X", "gp", [], UNA_COLUMNA, kind="theme",
+                        sujeto="gaussian-processes")
+    assert '"sujeto":"gaussian-processes"' in p and '"sujeto":"gp"' not in p
+
+
+def test_sin_sujeto_explicito_la_vista_usa_el_nombre():
+    p = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, UNA_COLUMNA)
+    assert '"sujeto":"tau Ceti"' in p

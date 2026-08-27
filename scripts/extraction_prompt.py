@@ -159,10 +159,19 @@ def _pdf_rel(slug: str, bibcode: str) -> str:
 
 
 def build_prompt(slug: str, bibcode: str, name: str, aliases, texto: str,
-                 out_dir: str = "", kind: str = "star") -> str:
-    """The prompt for one (paper, subject) pair. `texto` is the `.txt` as it sits on disk."""
+                 out_dir: str = "", kind: str = "star", sujeto: str | None = None) -> str:
+    """The prompt for one (paper, subject) pair. `texto` is the `.txt` as it sits on disk.
+
+    `sujeto` (#188) is the name the VIEW is filed under — the same string the paper uses in
+    `stars[]` / `thesis_links[]`, which is what makes claim and reading comparable. It defaults to
+    `name` and only differs for a theme, where `theme_by_slug` hands back the slug while the paper
+    declares the `concept`; writing the slug there would make `reclamo_sin_vista` fire forever.
+
+    @inv INV-134"""
     #  @inv INV-100
     pats = subject_patterns(name, aliases, kind)
+    sujeto = sujeto or name
+    tipo = "theme" if kind == "theme" else "star"
     greps = "\n".join(f"  grep -niE '{_anclado(p)}' \"{_txt_rel(slug, bibcode)}\"" for p in pats)
     out = f"{out_dir.rstrip('/')}/{bibcode}.json" if out_dir else f"build/{slug}/extraccion/{bibcode}.json"
     alias_str = ", ".join(f"`{a}`" for a in [name, *(aliases or [])])
@@ -170,6 +179,10 @@ def build_prompt(slug: str, bibcode: str, name: str, aliases, texto: str,
 
 Leé COMPLETO `{_txt_rel(slug, bibcode)}` y extraé lo que esa fuente dice sobre
 **{name}** (alias: {alias_str}).
+
+Esto es **una VISTA**, no «la extracción del paper» (#188): el mismo paper leído desde otro sujeto
+da otra vista, y por eso el producto lleva de quién es. Va a la sección `## Vista — {sujeto}` de
+`vault/wiki/papers/{bibcode}.md`. Lo que la fuente diga sobre **otros** sujetos no entra acá.
 
 ## Búsqueda
 Corré estos patrones —cortos a propósito— antes de decidir nada:
@@ -199,13 +212,16 @@ Corré estos patrones —cortos a propósito— antes de decidir nada:
 ## Salida
 Escribí el resultado en `{out}` y devolvé el mismo JSON en **un solo bloque** ```json:
 
-{{"bibcode":"{bibcode}","role":["fundacional"|"aplicacion"|"arbitro"],"methods":[],"thesis_links":[],
+{{"bibcode":"{bibcode}","vista":{{"sujeto":"{sujeto}","tipo":"{tipo}","txt":"{slug}"}},
+ "role":["fundacional"|"aplicacion"|"arbitro"],"methods":[],"thesis_links":[],
  "ground_truth":[{{"que":"","valor":"","linea":"","regimen":"","segunda_mano":null}}],
  "ejes":{{"discovery":"","rv":"","activity":"","planet":"","method":""}},
  "aporte":"","hueco":"","salvedades":[]}}
 
 ⛔ Sin comas finales: tiene que parsear con `json.loads`. El nombre del archivo lleva el bibcode
 porque varios extractores corren en paralelo y un nombre genérico se pisa **en silencio**.
+`vista` va tal cual: dice de quién es esta lectura y de qué copia del `.txt` salió. La `fecha` y la
+`lente` no las escribís vos — las estampa el cosechador, que las sabe con certeza.
 """
 
 
@@ -227,8 +243,11 @@ def main() -> int:
         cfg.print_seguro(f"⛔ no existe {path} — corré `extract_fulltext.py {args.slug}` primero")
         return 1
     texto = p.read_text(encoding="utf-8", errors="replace")
+    # #188 · el sujeto de la VISTA es el nombre con el que el paper declara la entidad: para un
+    # tema es el `concept` (lo que va en `thesis_links`), no el slug que devuelve `theme_by_slug`.
+    sujeto = (meta.get("concept") or args.slug) if args.theme else name
     cfg.print_seguro(build_prompt(args.slug, args.bibcode, name, cfg.as_list(meta.get("aliases")),
-                                  texto, args.out_dir, "theme" if args.theme else "star"))
+                                  texto, args.out_dir, "theme" if args.theme else "star", sujeto))
     return 0
 
 
