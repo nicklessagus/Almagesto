@@ -878,6 +878,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     symbols_lost_notes: list = []      # (stem, motivo) — #113: el .txt no tiene las ecuaciones
     symbols_lost_bibs: set = set()     # bibcodes cuya evidencia se cita por PÁGINA del PDF
     log_sin_entrada: list = []         # (slug, motivo) — #118: la cadena corrió y el log no lo dice
+    sweep_pendiente: list = []         # (slug, motivo) — #88: el barrido 2b no consta en el registro
     impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
     # D-50: los genéricos + un patrón por consumidor declarado. Se arma UNA vez por corrida, no por
     # línea: el scan recorre el cuerpo de toda nota de la bóveda.
@@ -1394,6 +1395,15 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             _d = cfg.load_registro(_slug) or {}
         except Exception:
             continue                      # registro ilegible: lo reporta su propio detector
+        # #88: ¿se tendió la segunda red? El barrido full-text es el ÚNICO camino para el punto
+        # ciego de la query directa —surveys que TABULAN la estrella sin nombrarla en el abstract y
+        # que además no están en el grafo de citas— y hasta ahora era un preview de stdout: no se
+        # podía saber si se había corrido. Backlog: no invalida nada de lo que la ficha afirma.
+        if _slug in stars_slugs and not cfg.as_list(_d.get("barridos")):
+            sweep_pendiente.append(
+                (_slug, "el barrido full-text (2b) no consta en el registro: es el único camino "
+                        "para los surveys que TABULAN la estrella sin nombrarla en el abstract → "
+                        f"`python scripts/query_ads.py {_slug} --sweep`"))
         _fechas = {str(p.get("fecha")) for p in cfg.as_list(_d.get("cadena"))
                    if isinstance(p, dict) and p.get("fecha")}
         _sin = sorted(f for f in _fechas
@@ -2333,6 +2343,9 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('coverage', 'Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog)', SEV_BACKLOG, tuple(coverage)),
         Categoria('unsynthesized', 'Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog)', SEV_BACKLOG, tuple(unsynthesized)),
         Categoria('headerless', 'Cabecera no estampable: ficha/concepto sin la línea del generador — los estampadores de cabecera no-opean en silencio (backlog)', SEV_BACKLOG, tuple(headerless)),
+        Categoria('sweep_pendiente', 'Barrido full-text (2b) sin rastro: no consta que la segunda red '
+                  'para el punto ciego de la query se haya tendido (backlog)',
+                  SEV_BACKLOG, tuple(sweep_pendiente)),
         Categoria('triage_pending', 'Triage pendiente: candidatos del chaining sin juzgar (backlog)', SEV_BACKLOG, tuple(triage_pending)),
         Categoria('extraccion_no_declarada', 'Recorte de lectura sin declarar: hay core sin extraer y el registro no dice por qué (backlog)', SEV_BACKLOG, tuple(extraccion_no_declarada)),
         Categoria('papers_table_stale', 'Lista de papers desactualizada: la tabla estampada no refleja el universo (backlog)', SEV_BACKLOG, tuple(papers_table_stale)),

@@ -680,6 +680,17 @@ def sweep_star(slug: str, rows: int) -> int:
     else:
         cfg.print_seguro("  → el corpus ya cubre el barrido full-text. (Ojo: en papers pre-digitales un 0 acá "
               "NO prueba ausencia — el OCR del escaneo pierde filas de tabla; ver skill ingest-star.)")
+    # #88: el rastro versionado. Antes esto era stdout y nada más.
+    cfg.save_barrido(slug, {
+        "fecha": dt.date.today().isoformat(),
+        "query": q,
+        "rows": rows,
+        "n_hits": len(hits),               # papers con la estrella en el CUERPO
+        "n_nuevos": len(news),             # core que ads.json no tenía
+        "bibcodes": [r.get("bibcode") for r in news if r.get("bibcode")],
+        "almagesto_version": cfg.ALMAGESTO_VERSION,
+    })
+    cfg.print_seguro(f"  → registrado en {cfg.registro_path(slug)}")
     return 0
 
 

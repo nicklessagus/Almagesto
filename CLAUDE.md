@@ -1203,6 +1203,13 @@ juicios de curación en silencio. Su hermana, la **decisión con forma inválida
 `decisiones` que no es un mapa — `2006Rasmussen: descartado` a secas), es **backlog** propio:
 `load_decisiones` la descarta y sin el aviso el triage vuelve a proponer lo ya descartado **sin el
 motivo**, que es exactamente el bug que #51 cerró.
+El **barrido full-text sin rastro** (#88: el registro del sujeto no tiene `barridos`) es **backlog**:
+`--sweep` era un preview de stdout y, cuando la terminal scrollea, no quedaba nada — el mismo modo de
+falla que #55 cerró para el triage. Pesa porque el barrido es **el único camino** para el punto ciego
+de la query directa: los surveys de muestra grande que **tabulan** la estrella sin nombrarla en el
+abstract y que tampoco están en el grafo de citas. Hoy `query_ads.py <slug> --sweep` appendea a
+`barridos: []` (acumulativo como `busquedas`) **también cuando no encontró nada** — un barrido vacío
+dice que la red se tendió y volvió sin nada, que no es lo mismo que no haberlo corrido.
 El **corpus truncado** (un `build/<slug>/ads.json` con `truncated` seteado → la query directa trajo
 menos papers de los que ADS reporta) es **backlog** — `query_ads` persiste la marca (default
 `--rows 2000`, ≈ el máximo de una request; re-ingestar con `--rows` mayor para cubrir el resto). Lo

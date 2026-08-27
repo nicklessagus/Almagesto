@@ -1750,3 +1750,46 @@ def test_la_puerta_viaja_en_el_registro_del_paper(toy_classifier):
     assert recs[0]["puertas"] == ["fundacional"]
     assert recs[1]["puertas"] == [], "no es core: lista vacía, no ausencia del campo"
     assert "puertas" in recs[1], "el campo existe siempre — «no consta» y «ninguna» no se confunden"
+
+
+# ── #88 · el barrido full-text deja rastro versionado ────────────────────────────────────────────
+
+def test_el_sweep_queda_en_el_registro(toy_vault, monkeypatch, capsys):
+    """#88: `--sweep` era un **preview puro de stdout**. Cuando la terminal scrollea no queda nada.
+
+    Es el mismo modo de falla que #55 arregló para el triage —el aviso vivía sólo en la corrida, y
+    un ingest podía cerrarse «en 0» con el juicio pendiente invisible—, y acá pesa más: el barrido
+    es **el único camino** para el punto ciego de la query directa (los surveys que TABULAN la
+    estrella sin nombrarla en el abstract y que no están en el grafo de citas). Sin registro no se
+    sabe si esa segunda red se tendió, ni cuándo, ni qué encontró.
+
+    @inv INV-118"""
+    build = cfg.ROOT / "build" / "test_star"
+    build.mkdir(parents=True, exist_ok=True)
+    (build / "ads.json").write_text(json.dumps({"records": [{"bibcode": "2020ya....1..1A"}]}),
+                                    encoding="utf-8")
+    monkeypatch.setattr(qa, "query_ads", lambda *a, **k: [
+        {"bibcode": "2019new...1..1A", "title": "survey que tabula", "doctype": "article",
+         "abstract": "we measure radial velocity", "citation_count": 7, "year": "2019",
+         "relevant": True, "facets": ["rv"]}])
+    qa.sweep_star("test_star", rows=50)
+    reg = cfg.load_registro("test_star") or {}
+    barridos = cfg.as_list(reg.get("barridos"))
+    assert len(barridos) == 1, "una entrada por corrida, acumulativa como `busquedas` (D-28)"
+    b = barridos[0]
+    assert b["n_nuevos"] == 1 and "2019new...1..1A" in b["bibcodes"]
+    assert b["fecha"] and b["almagesto_version"], "fechado y con la versión que lo corrió"
+
+
+def test_el_sweep_sin_hallazgos_tambien_deja_rastro(toy_vault, monkeypatch, capsys):
+    """Un barrido que no encontró nada **es** información: dice que la red se tendió y volvió vacía.
+    Si sólo se registraran los hallazgos, «no se corrió» y «se corrió y no había» se leerían igual —
+    la distinción que D-43 protege en todo el framework.  @inv INV-118"""
+    build = cfg.ROOT / "build" / "test_star"
+    build.mkdir(parents=True, exist_ok=True)
+    (build / "ads.json").write_text(json.dumps({"records": [{"bibcode": "2020ya....1..1A"}]}),
+                                    encoding="utf-8")
+    monkeypatch.setattr(qa, "query_ads", lambda *a, **k: [])
+    qa.sweep_star("test_star", rows=50)
+    b = cfg.as_list((cfg.load_registro("test_star") or {}).get("barridos"))
+    assert len(b) == 1 and b[0]["n_nuevos"] == 0 and b[0]["bibcodes"] == []

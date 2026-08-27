@@ -2697,7 +2697,7 @@ def test_las_claves_de_categoria_son_unicas_y_estables(toy_vault):
     equivocada en silencio."""
     claves = [c.clave for c in lint.collect().categorias]
     assert len(claves) == len(set(claves)), [k for k in claves if claves.count(k) > 1]
-    assert len(claves) == 61, f"el reporte tiene {len(claves)} categorías, se esperaban 61"
+    assert len(claves) == 62, f"el reporte tiene {len(claves)} categorías, se esperaban 62"
 
 
 def test_el_modo_cierre_solo_cambia_el_exit_de_los_pares(toy_vault):
@@ -3353,3 +3353,20 @@ def test_contradice_tambien_cuenta_y_soportada_no(toy_vault, capsys):
     nota.write_text(nota.read_text(encoding="utf-8").replace("| soportada |", "| contradice |"),
                     encoding="utf-8")
     assert len(lint.collect().por_clave("verif_sin_resolver")) == 1
+
+
+def test_el_barrido_sin_rastro_se_reporta(toy_vault, capsys):
+    """#88: el barrido full-text es el **único** camino para el punto ciego de la query directa —los
+    surveys que TABULAN la estrella sin nombrarla en el abstract y que tampoco están en el grafo de
+    citas—. Mientras fue un preview de stdout, no se podía saber si se había tendido esa red.
+
+    Backlog: no invalida nada de lo que la ficha afirma; dice que falta un chequeo.  @inv INV-118"""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    (cfg.REGISTRO / "test_star.yaml").write_text("slug: test_star\nbusquedas: []\n", encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    assert "barrido full-text (2b) no consta" in rep
+    (cfg.REGISTRO / "test_star.yaml").write_text(
+        "slug: test_star\nbusquedas: []\nbarridos:\n- fecha: '2026-01-01'\n  n_nuevos: 0\n",
+        encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    assert "barrido full-text (2b) no consta" not in rep, "un barrido vacío TAMBIÉN cuenta"

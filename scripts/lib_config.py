@@ -20,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.59.0"
+ALMAGESTO_VERSION = "1.60.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -918,6 +918,26 @@ def universo_acumulado(slug: str) -> int:
             vistos.update(bibs)
         tope = max(tope, int(b.get("n_total") or 0))
     return max(len(vistos), tope)
+
+
+def save_barrido(slug: str, barrido: dict) -> None:
+    """APPENDEA una corrida del barrido full-text a `barridos: []` (#88).
+
+    `--sweep` era un **preview puro de stdout**: cuando la terminal scrollea no queda nada. Es el
+    mismo modo de falla que #55 cerró para el triage —el aviso vivía sólo en la corrida— y acá pesa
+    más, porque el barrido es **el único camino** para el punto ciego de la query directa: los
+    surveys de muestra grande que TABULAN la estrella sin nombrarla en el abstract y que además no
+    están en el grafo de citas. Sin registro no se sabe si esa segunda red se tendió.
+
+    ⚠ Se registra **también cuando no encontró nada**: un barrido vacío dice que la red se tendió y
+    volvió sin nada, que no es lo mismo que no haberlo corrido — la distinción de D-43. Acumulativo
+    como `busquedas` (D-28), y no toca `decisiones`.
+
+    @inv INV-118"""
+    data = load_registro(slug)
+    data.setdefault("slug", slug)
+    data["barridos"] = [b for b in as_list(data.get("barridos")) if isinstance(b, dict)] + [barrido]
+    save_registro(slug, data)
 
 
 def save_busqueda(slug: str, busqueda: dict) -> None:
