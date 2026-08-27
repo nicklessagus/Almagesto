@@ -26,6 +26,7 @@ import re
 import sys
 from pathlib import Path
 
+import extract_fulltext
 import lib_config as cfg
 import measure_layout
 
@@ -108,14 +109,30 @@ def _anclado(patron: str) -> str:
 
 
 def _layout_note(texto: str) -> str:
-    """The #44 caveat, tied to the line-number rule of #103 — only when it actually applies."""
-    if measure_layout.analizar(texto)["frac"] < measure_layout.UMBRAL_ARCHIVO:
-        return ""
+    """The #44 caveat, tied to the line-number rule of #103 — and the MEASUREMENT behind it (#193).
+
+    The warning used to fire only above the threshold and say nothing below, so a misclassification
+    was indistinguishable from a correct call. Measured on a real vault: two errors in OPPOSITE
+    directions, both hugging the threshold (0.276 filed as single-column while being two-column;
+    0.379 filed as two-column while being single), and 12 of 167 files sit in that grey band.
+
+    So the prompt now publishes the number and its threshold in both directions and asks the reader
+    to say so when it does not match what they see. No new threshold is invented: moving a cut that
+    fails in both directions would only trade one error for the other.
+
+    @inv INV-38"""
+    frac = measure_layout.analizar(texto)["frac"]
+    medida = (f"  (fracción medida de líneas con canaleta: **{frac:.2f}**, umbral "
+              f"{measure_layout.UMBRAL_ARCHIVO:.2f}; si no coincide con lo que ves al leer, "
+              f"decilo en `salvedades`.)\n")
+    if frac < measure_layout.UMBRAL_ARCHIVO:
+        return ("- Este `.txt` se midió como de **UNA columna**, así que el nº de línea es un\n"
+                "  localizador válido.\n" + medida)
     return (
         "- ⚠ **Este `.txt` viene a DOS COLUMNAS entrelazadas**: cada línea física concatena un\n"
         "  fragmento de la columna izquierda y otro de la derecha, que son párrafos distintos. El nº\n"
         "  de línea sirve para `grep`, pero **no es un localizador único**: al citar, decí de qué\n"
-        "  columna sale el fragmento, y no leas la línea entera como una sola frase.\n"
+        "  columna sale el fragmento, y no leas la línea entera como una sola frase.\n" + medida
     )
 
 
@@ -140,9 +157,32 @@ def _symbols_note(slug: str, bibcode: str, texto: str) -> str:
     `no-soportada` sobre una afirmación correcta.
 
     Hasta #153 la regla vivía sólo en `CLAUDE.md` — el modo de falla que INV-100 cerró para las
-    demás: el prompt se genera, y la regla no llegaba al subagente."""
+    demás: el prompt se genera, y la regla no llegaba al subagente.
+
+    Y hasta #192 el prompt callaba el estado **no evaluado**, que es INV-38 en otro consumidor.
+
+    @inv INV-38"""
     if not texto.startswith(cfg.FULLTEXT_SYMBOLS_MARK):
-        return ""
+        # El TERCER ESTADO (#192). El detector devuelve `None` cuando no hay marcadores suficientes
+        # para medir —41 % de un corpus real— y hasta acá el prompt callaba, así que «el `.txt`
+        # conserva sus ecuaciones» y «nadie pudo medirlo» llegaban IGUALES. Es el falso limpio que
+        # el framework persigue en todos lados, en el eje que decide si una fórmula se cita del
+        # `.txt` o del PDF. Y el detector es además ciego al modo de falla del OCR: cuenta
+        # ecuaciones que conservan el marcador y perdieron el cuerpo (lo que hace `pdftotext`),
+        # mientras que el OCR se lleva el marcador también — por eso los dos casos medidos que
+        # perdieron TODAS sus fórmulas caen justo acá.
+        # ⚠ El aviso es BLANDO a propósito: «no consta» no es «no están», y aplicarle a los no
+        # evaluados la instrucción dura de citar por página convertiría una duda en certeza falsa.
+        medido, motivo = extract_fulltext.symbols_lost(texto)
+        if medido is not None:
+            return ""
+        return (
+            f"- ⚠ **No se pudo medir si este `.txt` conserva sus ecuaciones** ({motivo}).\n"
+            f"  No es «las conserva»: es que nadie lo sabe. Antes de transcribir una fórmula,\n"
+            f"  confirmala contra `{_pdf_rel(slug, bibcode)}` y decí en `salvedades` qué encontraste.\n"
+            + ("  El `.txt` es OCR, que es el caso de más riesgo: el OCR se lleva el marcador de\n"
+               "  ecuación junto con el cuerpo, así que el detector no puede verlo.\n"
+               if texto.startswith(cfg.FULLTEXT_OCR_MARK) else ""))
     return (
         "- ⛔ **Las ECUACIONES no están en este `.txt`** (#113: `pdftotext` dejó el marcador `(3)`\n"
         "  y vació su cuerpo, así que el archivo **parece** tenerlas). Para cualquier fórmula,\n"

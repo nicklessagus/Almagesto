@@ -77,8 +77,13 @@ def test_prompt_ata_el_numero_de_linea_al_entrelazado():
     # @inv INV-100
     dos = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, DOS_COLUMNAS)
     una = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, UNA_COLUMNA)
-    assert "columna" in dos.lower()
-    assert "columna" not in una.lower(), "no inventar el caveat cuando la maqueta es de una columna"
+    assert "DOS COLUMNAS entrelazadas" in dos
+    # #193 cambió el contrato de la rama de una columna: antes callaba, ahora DECLARA la medición
+    # (una clasificación equivocada era indistinguible de una correcta). Lo que sigue sin poder
+    # aparecer es el CAVEAT: declarar la medida no es inventar el entrelazado.
+    assert "DOS COLUMNAS entrelazadas" not in una
+    assert "no es un localizador único" not in una
+    assert "UNA columna" in una and "fracción medida" in una
 
 
 def test_prompt_declara_la_salvedad_ocr_solo_si_corresponde():
@@ -241,3 +246,56 @@ def test_el_sujeto_de_la_vista_puede_diferir_del_nombre_del_prompt():
 def test_sin_sujeto_explicito_la_vista_usa_el_nombre():
     p = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, UNA_COLUMNA)
     assert '"sujeto":"tau Ceti"' in p
+
+
+# ── #192 / #193 · el prompt declara el TERCER ESTADO ────────────────────────────────────────────
+#
+# Los dos detectores que alimentan el prompt tienen un estado «no se pudo medir» y el prompt lo
+# callaba, así que al extractor le llegaban IGUALES «el `.txt` está completo» y «nadie pudo medirlo».
+# Es el falso limpio que el framework persigue en todos lados —la cobertura de `discover` distingue
+# *corrió con N* / *FALLÓ* / *NO CORRIÓ*; el lint tiene la categoría `⛔ No evaluado`— y acá estaba
+# justo en el eje que decide si una fórmula se cita del `.txt` o del PDF.
+#
+# Medido sobre 167 `.txt` de una bóveda real: **69 (41 %)** vuelven no-evaluados de `symbols_lost`,
+# y **12 (7 %)** caen en la banda gris del umbral de maqueta. Dos casos verificados a mano perdieron
+# TODAS sus ecuaciones sin que nada lo dijera (`1995BellSejnowski`, `2004Himberg`), y de ahí salió
+# una nota que afirmaba `tanh⁻¹` donde el PDF dice `tan⁻¹`.
+
+SIN_ECUACIONES = "Una prosa cualquiera sin marcadores de ecuacion.\n" * 40
+
+
+def test_el_prompt_declara_que_no_pudo_medir_los_simbolos():
+    """#192: sin marcadores suficientes el detector devuelve `None` = no evaluado. El prompt tiene
+    que DECIRLO: callar hace que «completo» y «no medido» lleguen iguales."""
+    p = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, SIN_ECUACIONES)
+    assert "no se pudo medir" in p.lower()
+    assert "confirm" in p.lower() and "PDF" in p
+
+
+def test_el_aviso_de_no_evaluado_no_manda_a_citar_por_pagina():
+    """Contra-caso: «no consta» NO es «las ecuaciones no están». La instrucción dura de citar por
+    página del PDF es sólo para la marca confirmada — aplicarla a los 41% no evaluados convertiría
+    una duda en una certeza falsa, y encarecería cada extracción del corpus."""
+    p = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, SIN_ECUACIONES)
+    assert "Las ECUACIONES no están" not in p
+
+
+def test_con_la_marca_puesta_el_aviso_sigue_siendo_el_duro():
+    """Contra-caso del otro lado: la marca confirmada no se degrada a la advertencia blanda."""
+    p = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES,
+                        cfg.FULLTEXT_SYMBOLS_MARK + "\n" + UNA_COLUMNA)
+    assert "Las ECUACIONES no están" in p and "página del PDF" in p
+
+
+def test_el_prompt_declara_la_maqueta_medida_en_las_dos_direcciones():
+    """#193: el aviso de dos columnas salía sólo por encima del umbral y por debajo no salía nada,
+    así que una clasificación equivocada era indistinguible de una correcta. Medido: dos errores en
+    direcciones OPUESTAS, los dos pegados al umbral (0.276 clasificado una-columna siendo de dos;
+    0.379 clasificado dos siendo de una). El prompt publica la fracción medida y su umbral, y pide
+    que el lector avise si no coincide con lo que ve — sin inventar un umbral nuevo."""
+    una = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, UNA_COLUMNA)
+    dos = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, DOS_COLUMNAS)
+    for p in (una, dos):
+        assert "fracción medida" in p, "el prompt publica el NÚMERO, no sólo el veredicto"
+        assert "decilo en `salvedades`" in p
+    assert "UNA columna" in una and "DOS COLUMNAS" in dos
