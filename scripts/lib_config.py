@@ -20,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.66.0"
+ALMAGESTO_VERSION = "1.67.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -953,6 +953,120 @@ def save_descubrimiento(slug: str, entrada: dict) -> None:
     data.setdefault("slug", slug)
     data["descubrimientos"] = [d for d in as_list(data.get("descubrimientos"))
                                if isinstance(d, dict)] + [entrada]
+    save_registro(slug, data)
+
+
+# ── El carril del `aparente` de `find-contradictions` (#63) ──────────────────────────────────────
+#
+# El fan-out de `find-contradictions` gasta un subagente por par y devuelve tres veredictos. `real`
+# tiene carril —se convierte en `disputes[]` de la nota, que el consumidor lee y el lint vigila—;
+# `aparente` y `no-concluyente` NO tenían ninguno: el skill los reportaba al chat y ahí morían. La
+# consecuencia es doble y las dos son caras: cada auditoría vuelve a pagar el mismo par para
+# reconstruir la misma conclusión, y el motivo por el que aquel desacuerdo no era desacuerdo
+# —distinto régimen, distinta definición, distinta época— no lo tiene nadie. Es el mismo agujero
+# que #51 cerró para el triage (el juicio de descarte vivía en `build/`, gitignored) y #81 para las
+# fuentes declaradas: de los cuadrantes de la curación, éste era el que faltaba del lado de la
+# REVISIÓN. Por eso vive en el registro versionado, que es el artefacto que viaja.
+
+# Vocabulario CERRADO, por el mismo motivo que `role` (#73) y `status` (D-37): el único consumidor
+# de este campo es el filtro del barrido, y un valor fuera de la lista lo deja mudo. `real` NO está
+# acá a propósito — ver `save_no_disputa`.
+VEREDICTOS_NO_DISPUTA = ("aparente", "no-concluyente")
+
+
+def par_key(bib_a: str, bib_b: str, eje: str) -> str:
+    """Clave SIMÉTRICA del par juzgado: `par_key(A, B, eje) == par_key(B, A, eje)`.
+
+    El barrido no controla en qué orden le tocan A y B —salen del `glob` de notas—, así que una
+    clave orientada haría que el mismo par juzgado al revés no matchee: la persistencia quedaría
+    decorativa, que es peor que no tenerla (parece que hay red y no la hay).
+
+    Y **distingue el eje**: los mismos dos papers pueden coincidir en `P_rot` y discrepar en `K`.
+    Una clave sólo por bibcodes silenciaría el segundo desacuerdo con el juicio del primero — un
+    falso «ya lo miramos» sobre algo que nadie miró, que es el falso limpio de D-43."""
+    a, b = sorted((str(bib_a), str(bib_b)))
+    return f"{a}::{b}::{eje}"
+
+
+def _par_de(entrada: dict) -> str:
+    """La clave de una entrada de `no_disputas`, recalculada desde `bibcodes` + `eje` si hace falta.
+
+    Se re-deriva en vez de confiar en el campo `par` guardado porque el registro es un archivo que
+    el framework instruye editar a mano: un `par` escrito a ojo con los bibcodes al revés dejaría
+    la entrada fuera del índice sin que nadie se entere. Si la entrada no trae dos bibcodes, se cae
+    al `par` textual, que es lo único que hay."""
+    bibs = [b for b in as_list(entrada.get("bibcodes")) if b]
+    if len(bibs) == 2:
+        return par_key(bibs[0], bibs[1], entrada.get("eje") or "")
+    return str(entrada.get("par") or "")
+
+
+def load_no_disputas(slug: str) -> dict:
+    """Los pares ya juzgados como NO-disputa, indexados por `par_key` — `{}` si nunca se auditó.
+
+    Devuelve un **índice**, no la lista: el consumidor es el filtro del barrido, que pregunta
+    «¿este par ya se juzgó?» una vez por par, dentro de un bucle que ya es O(N²) sobre el corpus.
+
+    Ante el mismo par juzgado dos veces gana **el último** (A6): el registro es historial
+    acumulativo —un par puede volver a juzgarse cuando cambió la evidencia— y el juicio viejo no se
+    borra, queda en la lista para que la historia sea reconstruible."""
+    idx: dict = {}
+    for entrada in as_list(load_registro(slug).get("no_disputas")):
+        if not isinstance(entrada, dict):
+            continue
+        clave = _par_de(entrada)
+        if clave:
+            idx[clave] = entrada
+    return idx
+
+
+def save_no_disputa(slug: str, entrada: dict) -> None:
+    """APPENDEA un par juzgado NO-disputa a `no_disputas: []`. Acumulativo, atómico, sin pisar nada.
+
+    Dos abortos, y ninguno es formalismo:
+
+    · **`motivo` vacío aborta.** Mismo criterio que el `--reason` obligatorio del triage
+      (#51/#111): en seis meses lo que sirve es el motivo, no la categoría. Un `aparente` pelado
+      tira la única información no regenerable —por qué el desacuerdo no era desacuerdo— y encima
+      **bloquea el par para siempre**: el barrido lo saltea y ya nadie revisa el juicio. Peor que no
+      persistirlo, que al menos se vuelve a mirar.
+    · **`real` aborta.** Su carril es `disputes[]` de la nota, que es otro artefacto y otro dueño
+      (contenido de la bóveda que el usuario aprobó, contra bitácora de la revisión). Dejarlo entrar
+      acá lo **entierra**: el barrido siguiente lo saltea por «ya juzgado» y la disputa real nunca
+      llega a la bóveda.
+
+    Se valida ANTES de tocar el registro: un abort que igual escribe deja el archivo con la entrada
+    que acaba de rechazar. La `fecha` la estampa esta función si el llamador no la trae (A3), como
+    `save_sintesis` y `save_extraccion`; si la trae, se respeta.
+
+    No toca `decisiones`, `busquedas`, `barridos` ni `descubrimientos`: el registro tiene dueños
+    distintos por sección y es el único artefacto no regenerable de la bóveda (INV-53).
+
+    @inv INV-125"""
+    if not isinstance(entrada, dict):
+        raise RuntimeError("una entrada de `no_disputas` tiene que ser un mapa")
+    veredicto = (entrada.get("veredicto") or "").strip()
+    if veredicto not in VEREDICTOS_NO_DISPUTA:
+        raise RuntimeError(
+            f"veredicto {veredicto!r} fuera del vocabulario de `no_disputas` "
+            f"({' | '.join(VEREDICTOS_NO_DISPUTA)}). Un `real` NO va acá: se taguea como "
+            "`disputes[]` en la nota, que es el carril que el consumidor lee y el lint vigila.")
+    motivo = (entrada.get("motivo") or "").strip()
+    if not motivo:
+        raise RuntimeError(
+            "una entrada de `no_disputas` sin `motivo` no se persiste: bloquearía el par en el "
+            "barrido sin dejar por qué (mismo criterio que el `--reason` del triage).")
+
+    nueva = dict(entrada)
+    nueva["veredicto"] = veredicto
+    nueva["motivo"] = motivo
+    nueva["par"] = _par_de(nueva) or nueva.get("par")
+    nueva.setdefault("fecha", _dt.date.today().isoformat())
+
+    data = load_registro(slug)
+    data.setdefault("slug", slug)
+    data["no_disputas"] = [d for d in as_list(data.get("no_disputas"))
+                           if isinstance(d, dict)] + [nueva]
     save_registro(slug, data)
 
 

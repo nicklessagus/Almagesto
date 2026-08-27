@@ -93,6 +93,47 @@ class RedProhibida(RuntimeError):
     pass
 
 
+class BovedaRealTocada(RuntimeError):
+    pass
+
+
+# La bóveda REAL del repo, resuelta al importar — antes de que `toy_vault` re-apunte nada.
+_VAULT_REAL = Path(__file__).resolve().parent.parent / "vault"
+
+
+@pytest.fixture(autouse=True)
+def sin_tocar_la_boveda_real(monkeypatch):
+    """Ningún test puede escribir dentro de `vault/` del repo real.
+
+    Hermana de `sin_red` y por el mismo motivo: el principio 2 de `tests/README.md` promete que
+    «ningún test lee ni escribe la bóveda real», vivía en prosa y **nadie lo sostenía**. Medido el
+    2026-08-26: al cablear #77, un test preexistente de `discover` que no usa `toy_vault` empezó a
+    crear `vault/config/registro/ica.yaml` en cada corrida de la suite. En el repo template eso se
+    ve; en una **instancia** appendearía una entrada falsa al **único artefacto no regenerable** de
+    la bóveda (INV-53), y sin que nada avise.
+
+    Es barato porque el repo tiene **un solo writer** (D-53/INV-90): basta interceptar ahí. Lo que
+    `toy_vault` re-apunta cae en `tmp_path` y no toca esta guarda.
+
+    @inv INV-126"""
+    real = cfg.write_text_atomic
+    real_b = cfg.write_bytes_atomic
+
+    def _guard(fn):
+        def _w(path, *a, **k):
+            p = Path(path).resolve()
+            if p == _VAULT_REAL or _VAULT_REAL in p.parents:
+                raise BovedaRealTocada(
+                    f"un test intentó ESCRIBIR en la bóveda real ({p}). Los tests corren sobre la "
+                    f"fixture `toy_vault`, que re-apunta todas las rutas de `lib_config` a un árbol "
+                    f"temporal — si tu test no la usa, agregala.")
+            return fn(path, *a, **k)
+        return _w
+
+    monkeypatch.setattr(cfg, "write_text_atomic", _guard(real))
+    monkeypatch.setattr(cfg, "write_bytes_atomic", _guard(real_b))
+
+
 @pytest.fixture(autouse=True)
 def sin_red(monkeypatch):
     """Cualquier petición HTTP real desde un test explota **y queda registrada**.

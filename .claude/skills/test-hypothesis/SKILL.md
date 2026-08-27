@@ -1,7 +1,7 @@
 ---
 name: test-hypothesis
 description: Usar cuando el usuario plantea una hipótesis/supuesto y pide evidencia a favor o en contra en el corpus de la bóveda ("hipótesis: ...", "buscá evidencia que apoye o rechace que ...", "¿el corpus sostiene que ...?", "guardá como hipótesis que ..."). Testea contra el texto completo y responde con veredicto citado; archiva la hipótesis y taggea papers SÓLO si el usuario lo pide.
-version: 1.5.0
+version: 1.6.0
 ---
 
 # Test de hipótesis contra el corpus
@@ -86,10 +86,36 @@ padre-hijo de un hub/radio.
 > `.txt` es el **preprint** y el valor puede no ser el de la versión publicada; con `null` no se
 > sabe. Decilo al reportar ("según el eprint de X") en vez de presentarlo como el valor publicado.
 
-3. **Reportar en el chat**: veredicto (sostiene / falla / parcial) con la evidencia citada
-   `[[bibcode]]` y la búsqueda usada. **No archivar por default** (regla de `CLAUDE.md`: persistir
-   una hipótesis es decisión explícita del usuario). Si el supuesto parece durable, **ofrecer**
-   archivarlo. Sin pedido ("guardá como hipótesis…", "archivala"), la operación termina acá.
+3. **Reportar en el chat**: veredicto (sostiene / falla / parcial / sin evidencia) con la evidencia
+   citada `[[bibcode]]`, la búsqueda usada y el **sesgo de construcción** (abajo). **No archivar por
+   default** (regla de `CLAUDE.md`: persistir una hipótesis es decisión explícita del usuario). Si el
+   supuesto parece durable, **ofrecer** archivarlo. Sin pedido ("guardá como hipótesis…",
+   "archivala"), la operación termina acá.
+
+   **Los CUATRO veredictos, y por qué el cuarto tuvo que existir (#61).** El corpus que **calla** no
+   es el corpus que **contradice**. Con tres veredictos, una hipótesis sobre la que ninguna fuente
+   dice nada caía forzosamente en `falla`, que se lee como refutación: un **hueco de cobertura**
+   —que se cierra ingestando— quedaba reportado como una **afirmación sobre el mundo**. Es la misma
+   distinción que `verify-citations` hace entre `no-soportada` (la fuente calla) y `contradice` (la
+   fuente afirma lo contrario), y acá pesa igual o más, porque el veredicto sale al chat como
+   conclusión y de ahí se decide qué ingestar o qué escribir.
+
+   | Veredicto | Cuándo se emite | Qué NO significa |
+   |---|---|---|
+   | `sostiene` | hay filas `apoya` con cita y ninguna `desafía` material | — |
+   | `falla` | el corpus **afirma lo contrario**: hay filas `desafía` con cita textual | — |
+   | `parcial` | evidencia en los dos sentidos, o vale sólo en un régimen | — |
+   | `sin evidencia` | el corpus **calla**: la escalera se agotó y no hay ni una fila con cita | no significa que la hipótesis sea falsa, ni que no exista evidencia afuera |
+
+   ⛔ **`sin evidencia` sólo se emite tras AGOTAR la escalera de matcheo** del bloque de arriba
+   (fragmento distintivo de 3–6 palabras, reintento partiendo por el guión de corte, prohibido
+   normalizar espacios sin partir antes la canaleta) y, con papers pre-digitales en el alcance, tras
+   corroborar el 0 por otra vía. Lo que **no** agotó la escalera es una **búsqueda no concluyente**,
+   que no es lo mismo y hay que reportarla con ese nombre: `sin evidencia` afirma algo sobre el
+   corpus (lo miré entero y calla), mientras que una búsqueda no concluyente no afirma nada sobre el
+   corpus — sólo que la búsqueda no alcanzó. Sin esa condición, `sin evidencia` se vuelve el nombre
+   bonito de un falso negativo de `grep`: **fabrica una ausencia** que sale al chat como conclusión y
+   no deja ningún rastro de que fue un artefacto de matcheo.
 
 Los pasos 4–9 corren **sólo si el usuario pide archivar**:
 
@@ -170,6 +196,22 @@ Los pasos 4–9 corren **sólo si el usuario pide archivar**:
    Después **preguntar al usuario si hace `push`** — no pushear sin confirmación.
 
 ## Reporte
-Veredicto explícito (sostiene / falla / parcial) y **en qué régimen** (tipo espectral, rango de
-período, etc.). Declarar agregados (mean/median) según `CLAUDE.md`. No sobreestimar: un mecanismo
-físico alternativo que rompa la hipótesis es un hallazgo, no un fracaso.
+Veredicto explícito (sostiene / falla / parcial / sin evidencia) y **en qué régimen** (tipo
+espectral, rango de período, etc.). Declarar agregados (mean/median) según `CLAUDE.md`. No
+sobreestimar: un mecanismo físico alternativo que rompa la hipótesis es un hallazgo, no un fracaso.
+
+**Declarar el SESGO DE CONSTRUCCIÓN del corpus (#61).** El blockquote de alcance (paso 0) declara el
+universo **contado** —qué slugs, cuántos papers, a qué fecha—; esto declara el universo **sesgado**,
+que es la otra mitad y sin la cual un veredicto negativo se sigue leyendo de más. El corpus de la
+bóveda **no es una muestra del mundo**: lo filtró dos veces alguien con un criterio escrito.
+
+- **La lente del objetivo** (`relevance.facets` de `vault/config/objective.yaml`) decidió qué es
+  core; lo no-core **nunca se bajó**, así que no tiene fulltext y ningún `grep` lo puede alcanzar
+  (queda sólo su metadata en `## Excluidos por el filtro`).
+- **El triage** (`vault/config/registro/<slug>.yaml`, sección `decisiones`) descartó a mano
+  candidatos del citation chaining, cada uno con su motivo.
+
+Una línea al pie del reporte, por ejemplo: *"evidencia **dentro del corpus**, que está filtrado por
+la lente del objetivo (`relevance.facets`) y por el triage — un `sin evidencia` es sobre este
+corpus, no sobre la literatura"*. Y si la hipótesis es justo sobre algo que la lente excluye, eso es
+el hallazgo: **cambiar el alcance** (hacer core y bajar) es la acción, no re-grepear.

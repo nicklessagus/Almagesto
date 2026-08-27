@@ -1,7 +1,7 @@
 ---
 name: ingest-star
 description: Usar cuando el usuario pide bajar/agregar/ingestar una estrella a la bóveda ("bajá GJ 581", "ingest tau ceti", "agregá la estrella X", "traé la bibliografía de AU Mic"). Corre la cadena de ingesta y hace la extracción LLM.
-version: 1.19.0
+version: 1.20.0
 ---
 
 # Ingest: agregar una estrella a la wiki
@@ -58,37 +58,33 @@ Progreso del ingest de <estrella>:
    fulltext → retracciones), abortando al primer fallo. **El orden canónico vive en el header de
    `scripts/ingest_star.py`** — puntero, no copia: no lo repliques acá ni en otros docs. Para un
    flag fino (`--rows`, `--all`, `--force` de un paso) corré el script puntual.
-   `fetch_arxiv` respeta el rate limit de arXiv (1 req/3 s) → puede tardar; correr en background si
-   son muchos PDFs. Los papers sin arXiv —y los con arXiv cuya bajada falló— los intenta
-   `fetch_pdf` (escaneo ADS con token → PDF del publisher, con fallback `curl`); lo que ni así
-   sale queda en `build/<slug>/missing_pdf.json` (residuo completo del ingest, verdad de disco) —
-   cada entrada trae su `bibstem` y un `hint` con la rama por donde seguir: la **cascada manual de
-   rescate** está en `## Notas` de este skill (Messenger / página del instrumento / mirrors / tablas
-   del CDN / derivar al usuario), y "bajar manual por DOI" **no alcanza**.
-   La cadena es idempotente (no pisa): en un re-ingest, `fetch_ground_truth` **no** refresca un
-   ground-truth existente salvo `--force` (refrescar desde NEA es decisión explícita, no side-effect).
-   `check_retractions` consulta **Crossref** por DOI y, si un paper fue **retractado**, estampa
-   `retracted: true` en su nota (el lint lo vuelve bloqueante) → revisá cada afirmación que lo cita.
-   En la cadena corre con `--slug` (sólo los papers de **este** ingest); el barrido completo de la
-   bóveda es la pasada periódica del skill `maintain`.
-   `query_ads` hace además **citation chaining**: pide a ADS references/citations de los core,
-   **ancladas al sujeto** con `full:` sobre nombre+alias — trae surveys/catálogos conectados por el
-   grafo de citas aunque no nombren la estrella en el abstract (quedan marcados `via: chain:*` en
-   `ads.json`; se desactiva con `--no-chain`).
-   **Guardia de expansión (checkpoint humano).** Entre `query_ads` y el primer paso que gasta red
-   y disco, el orquestador compara el core del `ads.json` fresco contra las notas ya ingestadas del
-   sujeto: si se multiplicó (default ×1.5 y 50 o más nuevos) **frena** con el conteo, cuántos vinieron
-   por el grafo de citas y el puntero a `relevance.require`/`min_facets`. Antes de refrescar un
-   sujeto viejo, mirá ese número: si el pool explotó, revisá la **regla de combinación** en
-   `objective.yaml` (skill `setup`) antes de bajar nada — podar las regex no alcanza si la
-   combinación sigue siendo OR. `--yes` continúa a sabiendas.
-   Si el nombre es **Bayer** (letra griega + constelación) corre antes el **rescate por glifo**
-   (`via: glyph`, se desactiva con `--no-glyph`): ADS unifica `epsilon`/`eps`/`ε` pero **descarta**
-   los lookalikes `ϵ` (U+03F5) y `∊` (U+220A, el glifo de ApJ/AJ/MNRAS), así que esos papers quedan
-   indexados sólo por la constelación e **invisibles** a la query canónica (medido en ε Eri: 121
-   core perdidos, incluido el descubrimiento). No hace falta listar las grafías en `aliases`: el
-   carácter se descarta, no falta la variante — el rescate trae el superset de la constelación y
-   filtra client-side por el glifo.
+
+   ⛔ **La mecánica de la cadena se describe en UN solo lugar (#67):**
+   `.claude/skills/ingest-star/reference/cadena-ads.md`, que `ingest-theme` apunta también. Ahí
+   están la **guardia de expansión** (el checkpoint humano que frena si el pool se multiplicó), el
+   citation chaining, el rate limit de `fetch_arxiv`, la cascada de `fetch_pdf` y su residuo
+   `build/<slug>/missing_pdf.json`, los tres chequeos de `extract_fulltext`, `check_retractions` y
+   `extra_core` como **curación persistente y versionada**. Leelo la primera vez y ante cualquier
+   aborto; lo que sigue acá es sólo lo que es **de una estrella**.
+   Si el residuo quedó con entradas, la cascada manual de rescate está en
+   `reference/rescate-pdfs.md` — y **"bajar manual por DOI" no alcanza**.
+
+   **`fetch_ground_truth` (SIMBAD + NEA) — sólo en estrellas.** Trae `spectral_type` de SIMBAD y
+   `teff_K`/`dist_pc`/`P_rot_days` + los planetas de NEA (pscomppars) a
+   `vault/raw/ground_truth/<slug>.json`, con `_autoridad` por campo. En un re-ingest **no** lo
+   refresca salvo `--force`: refrescar desde NEA es decisión explícita, no side-effect.
+
+   **Rescate por glifo — sólo en nombres Bayer.** Si el nombre es letra griega + constelación corre
+   antes el rescate (`via: glyph`, se desactiva con `--no-glyph`): ADS unifica `epsilon`/`eps`/`ε`
+   pero **descarta** los lookalikes `ϵ` (U+03F5) y `∊` (U+220A, el glifo de ApJ/AJ/MNRAS), así que
+   esos papers quedan indexados sólo por la constelación e **invisibles** a la query canónica
+   (medido en ε Eri: 121 core perdidos, incluido el descubrimiento). No hace falta listar las
+   grafías en `aliases`: el carácter se descarta, no falta la variante — el rescate trae el superset
+   de la constelación y filtra client-side por el glifo.
+
+   **El chaining va anclado AL SUJETO** (`full:` sobre nombre+alias), que es lo que lo distingue del
+   de un tema: trae surveys y catálogos conectados por el grafo aunque no nombren la estrella en el
+   abstract. Lo que trae **no es automáticamente pertinente** → compuerta de triage, paso 2c.
 
 2b. **Barrido full-text (NO perder surveys de muestra grande).** La query directa de `query_ads.py`
    busca en **título+abstract** → punto ciego sistemático: los **surveys de muestra grande**
@@ -153,64 +149,39 @@ Progreso del ingest de <estrella>:
    dos números lo describe.
 
    - **Default: se leen todos los core.**
+   - **En qué ORDEN se leen** — si son muchos, el orden decide qué queda afuera, así que no lo decide
+     el `glob`:
+     ```bash
+     python scripts/triage.py <slug> --prioridad
+     ```
+     Lista los core ordenados por **cuántas facetas del objetivo toca cada uno** (citas como
+     desempate). El criterio es deliberado: citas/año mide atención de la comunidad, facetas mide
+     **pertinencia a lo que esta bóveda quiere saber**, que es la pregunta que la priorización tiene
+     que responder — y sale gratis, porque `classify()` ya la computó. ⛔ **No es un filtro y no toca
+     la lente**: es un orden sobre los que **ya** son core.
    - Si no se leen todos, **se avisa al usuario** y el motivo queda **registrado**:
      ```bash
      python scripts/triage.py <slug> --extraccion subconjunto --reason "<el criterio>"
      python scripts/triage.py <slug> --extraccion todos          # el default del contrato
      ```
+     El `--reason` es obligatorio por el mismo motivo que en `--drop`: dentro de seis meses lo que
+     sirve es el criterio (*"los 12 de más facetas"*, *"sólo los que arbitran la señal b"*), no el
+     rótulo `subconjunto`. Sin la declaración, el lint lo reporta como *recorte de lectura sin
+     declarar* — la red existe y este comando es el que la cierra.
 
-   ⚠ **Cómo anotar cada valor (#103) — la regla que evita cuatro de los seis mecanismos de error
-   medidos.** El fan-out de `verify-citations` sobre una ficha real (2026-08-25, HD 40307: 68 pares,
-   16 fuentes) devolvió **54 soportada / 11 parcial / 3 contradice / 0 no-soportada**. Cero
-   `no-soportada` significa que **no se inventó nada**; los 14 defectos fueron de otro tipo:
+   ⚠ **Cómo anotar cada valor (#103).** Al copiar un número a la nota de paper: **el nº de línea
+   del `.txt`** (`grep -n`, nunca `splitlines()` — form feeds), **el régimen** en que la fuente lo
+   afirma (muestra, época, corte de datos, modelo), la marca **segunda mano** con su cita si la
+   fuente se lo atribuye a otro trabajo, y **el tiempo verbal y el cuantificador de la fuente, tal
+   cual** (*«was associated»* no se vuelve *«is associated»*; *«el 75 % de la muestra»* no se vuelve
+   *«la muestra»*). ⛔ **Nada de prosa comparativa en la nota de paper:** comparar dos papers es
+   `inferencia` y va al `## Inventario por eje` (paso 3b).
 
-   | Mecanismo | Casos | Ejemplo real |
-   |---|---:|---|
-   | **Cita de segunda mano** — se lee A, que cita a B, y el número se guarda como de B | 3 | «≈12,1 m/s/dex» atribuido a Lovis: está en Díaz **citando** a Lovis, y no aparece en el `.txt` de Lovis |
-   | **Fila/columna equivocada** de una tabla multi-objeto | 2 | `log R'HK = −5,02` es de HD 1461, no de HD 40307 — misma tabla |
-   | **Inferencia con voz de cita** | 3 | «las dos familias de P_rot no se solapan»: ninguna fuente lo dice |
-   | **Cantidades parecidas** confundidas | 3 | error formal (0,77→0,64) vs dispersión (3,53→2,59) |
-   | **Epígrafe que el cuerpo del paper contradice** | 1 | activa/inactiva invertidas: la Fig. 9 de Díaz dice al revés que su §6 |
-   | **Régimen omitido** (los 11 `parcial`) | 11 | la Tabla 4 de Tuomi es la **mitad roja** (490–680 nm), no el espectro completo |
+   Los seis mecanismos de error que esa regla ataca —medidos sobre una ficha real: 68 pares, 14
+   defectos, **cero inventados**— y por qué la contramedida es estructural y no un «prestá atención»
+   (incluido el hallazgo de que **pedir exactitud en el prompt la empeora**) están en
+   `reference/anotar-valores.md`.
 
-   Por eso, al copiar un valor a la nota de paper:
-   - **el nº de línea del `.txt`** al lado (`grep -n`, nunca `splitlines()` — form feeds);
-   - **el régimen** en el que la fuente lo afirma: muestra, época, corte de datos, modelo ajustado;
-   - si la fuente **atribuye el valor a otro trabajo** (*«according to X»*, *«(X et al.)»*), marcarlo
-     **segunda mano** y citar a X — el número **no es de esta fuente**;
-   - **el tiempo verbal y el cuantificador de la fuente, tal cual** (regla de sombra, 1.42.0): si el
-     paper dice *«was associated»*, la nota **no** dice *«is associated»*; si dice *«el 75 % de la
-     muestra»*, la nota **no** dice *«la muestra»*. Y un resultado descriptivo no se convierte en
-     recomendación.
-   - ⛔ **nada de prosa comparativa en la nota de paper.** Comparar dos papers es `inferencia` y su
-     lugar es el `## Inventario por eje` de la ficha (paso 3b). Escribirla acá es lo que produjo los
-     3 casos de «inferencia con voz de cita».
-
-   El stub de `## Extracción (LLM)` que genera `make_notes` ya trae esta regla como último bullet.
-
-   ⚠ **Por qué la regla es ESTRUCTURAL y no «prestá atención» (1.42.0).** Los tres últimos bullets no
-   son estilo: son la contramedida a un sesgo medido, y la forma de la contramedida importa.
-   *Generalization bias in LLM summarization of scientific research* (Royal Society Open Science
-   2025) comparó **4900 resúmenes de 10 modelos** contra sus textos originales y encontró una
-   taxonomía de sobre-generalización de tres tipos —**cuantificado → genérico**, **pasado →
-   presente**, **descriptivo → prescriptivo**—: los mismos tres que salen del fan-out de esta
-   bóveda, con la diferencia de que los dos primeros la taxonomía de #103 **no los tenía nombrados**
-   (caían dentro de «régimen omitido»). Dos hallazgos que cambian cómo se escribe este paso:
-
-   - ⛔ **Pedir exactitud en el prompt la EMPEORA.** Los prompts que piden explícitamente evitar
-     imprecisiones **duplicaron** la sobre-generalización frente a un pedido de resumen simple (los
-     autores lo llaman *algorithmic ironic rebound effect*). Por eso acá no hay ningún «sé preciso»,
-     «no inventes» ni «tené cuidado»: **una súplica de exactitud no es una instrucción, es ruido que
-     rebota**. Lo que sí funciona es lo verificable — nº de línea, régimen, tiempo verbal — porque
-     después se puede **chequear** que esté.
-   - **Temperatura 0 baja la sobre-generalización un 76 %** (0 vs 0.7) y es la mitigación más barata
-     que reporta el paper. **No está aplicada, y hay que decir por qué**: los subagentes de esta
-     cadena se lanzan con la herramienta de agentes del harness, que expone modelo y esfuerzo pero
-     **no** temperatura. Es deuda declarada, no olvido: si algún día el harness la expone, es el
-     primer cambio a hacer, y el gate es `bench_verify`.
-     El lint lo reporta como *recorte de lectura sin declarar* mientras no esté. El criterio se
-     **declara**, no se aplica implícito — y `--reason` es obligatorio con `subconjunto` por el
-     mismo motivo que en `--drop`: es la pieza que más se va a leer dentro de seis meses.
    - **Sea cual sea la decisión, la tabla `## Papers` de la ficha declara cuál entró y cuál no** — el
      estado nunca es implícito. Se re-estampa con `python scripts/make_notes.py <slug>`.
 
@@ -346,50 +317,11 @@ Progreso del ingest de <estrella>:
   (#44, convención canónica en `verify-citations`): el `.txt` entrelaza las dos columnas en la misma
   línea física (73% del corpus), así que un patrón largo da falso negativo — y acá el falso negativo
   se lee como "el paper no reporta ese parámetro", que es exactamente lo que la extracción decide.
-- **Mirá las TABLAS, no sólo el texto.** En papers viejos las tablas suelen ser **imágenes** (en el
-  escaneo de ADS y a veces hasta en el HTML del publisher). El dato de la estrella (P_cyc, P_rot, rama…)
-  vive ahí → **invisible a cualquier búsqueda de texto**. Para confirmar si una estrella está en un paper
-  y para extraer sus valores, **abrí la tabla** (imagen o PDF), no te fíes del grep.
-- **Un `full:"HD X" → 0` NO prueba ausencia** en papers pre-digitales: el **OCR del escaneo de ADS pierde
-  ~½ de las filas** (medido: 12/26 estrellas en Saar & Brandenburg 1999; faltaba hasta HD 81809). Nunca
-  afirmar "la estrella no está en ese paper" desde un hit full-text negativo — **corroborar** (papers que
-  lo citan y le atribuyen datos) o **abrir el PDF/tabla**. Reportar honesto: es inconcluso, no ausencia.
-- **Cascada de adquisición de PDFs no-arXiv (canónica — `ingest-theme` y `append-knowledge` apuntan
-  acá; ver también backlog en `vault/STATUS.md`).** Lo que quedó en `build/<slug>/missing_pdf.json`
-  **ya falló** en `fetch_pdf.py` (resolver ADS: `EPRINT_PDF` → `ADS_PDF` con token → `PUB_PDF`, con
-  fallback `curl`), y "bajar manual por DOI" **no alcanza** (medido en un ingest real: el resolver
-  falló en **5 de 17** — pre-arXiv de 2000–2015: SPIE, The Messenger, A&A viejo; **4 de 5 se
-  recuperaron** por estas ramas). `fetch_pdf` imprime el **bibstem** de cada fallo con la rama
-  sugerida y la deja en el `hint` de cada entrada del residuo. En orden de rendimiento:
-  1. **Archivo de The Messenger** (`Msngr`) — **todo el Messenger es abierto**:
-     `eso.org/sci/publications/messenger/archive/no.<N>-<mes><aa>/messenger-no<N>-<pp>-<pp>.pdf`.
-  2. **Página de papers del instrumento** (`SPIE` y proceedings en general) — p. ej.
-     `eso.org/sci/facilities/lasilla/instruments/<inst>/science/papers/<vol>-<pp>.pdf`: tiene **en
-     abierto** SPIE que de otro modo son paywall.
-  3. **Mirrors académicos** por búsqueda web (páginas personales, repositorios institucionales).
-  4. **Imágenes de tabla del CDN del publisher** (p. ej. IOP
-     `content.cld.iop.org/journals/.../tbN.gif`) — **funcionan aunque el PDF esté tras paywall** y
-     suelen tener el dato que se busca; ídem el HTML legacy del publisher (frameset `…/fulltext/`).
-  5. **Pedir el PDF al usuario** (tiene acceso institucional; anduvo con Frick 2004 y Saar 1999) —
-     mientras tanto, estampá `pending_source: paywall` en el frontmatter de la nota del paper (el
-     lint la lista como precondición hasta que la fuente llegue).
-  Guardá el artefacto citable (PDF o imagen de tabla) en `vault/raw/`.
-  ⛔ **No gastar intentos en `aanda.org`:** está detrás de **DataDome** — cualquier `curl` (con UA de
-  navegador, con `Referer`, siguiendo redirects) recibe un challenge JS (`Please enable JS…`,
-  `ct.captcha-delivery.com`). Para un **A&A pre-arXiv** que el resolver no entrega no hay preprint y
-  Semantic Scholar lo da `openAccessPdf: CLOSED` → **derivar al usuario de una** (se resuelve en una
-  vuelta con acceso institucional).
-- **OCR: lo maneja solo `extract_fulltext.py`.** Chequea si el PDF trae **capa de texto** legible
-  (umbral determinista: chars no-espacio, **densidad por página** y fracción de ASCII imprimible) y,
-  si no (escaneos-imagen puros, p. ej. Baliunas 1995, o fuentes sin
-  ToUnicode), **cae solo a OCR** cuando hay `tesseract` instalado — el `.txt` queda con header
-  `source: ocr`, **citable con salvedad** (ver docs/operacion.md); sin tesseract AVISA y el lint lo lista. Ojo
-  con quirks de PostScript viejo en la extracción (p. ej. el signo `-` y `>` pueden salir ambos como
-  `[`): los datos están, sólo hay que desambiguar por contexto.
-  - ⚠ **Síntoma "escaneo con marca de agua"**: un `.txt` de unos **cientos de bytes** con el
-    **bibcode repetido** una vez por página **no es un fallo de descarga** — el `ADS_PDF` bajó bien,
-    pero es un escaneo **sin capa de texto** cuya única capa es la marca de agua de ADS. Lo agarra la
-    **densidad por página** del umbral (#50; antes pasaba como "extraído" porque el poco texto que
-    hay *es* legible) → dispara el OCR como cualquier escaneo. Si te topás con un `.txt` viejo así,
-    re-extraé con `python scripts/extract_fulltext.py <slug> --ocr --force`. Caso medido:
-    Baranne+1996, 378 bytes → 77 KB por OCR (`fulltext_source: ocr`).
+- **Mirá las TABLAS, no sólo el texto**, y recordá que **un `full:"HD X" → 0` NO prueba ausencia**
+  en papers pre-digitales: en los dos casos el dato puede estar en una imagen que ninguna búsqueda
+  de texto ve. Las mediciones y qué hacer en cada caso están en `reference/rescate-pdfs.md`.
+- **PDFs que la cadena no pudo bajar, y OCR:** todo lo que quedó en `build/<slug>/missing_pdf.json`
+  se resuelve por la **cascada manual** —Messenger / página del instrumento / mirrors / tablas del
+  CDN / derivar al usuario, y ⛔ **nunca** gastar intentos en `aanda.org` (DataDome)—, canónica en
+  `reference/rescate-pdfs.md` (`ingest-theme` y `append-knowledge` apuntan al mismo archivo). Ahí
+  también está el OCR de `extract_fulltext` y el síntoma del "escaneo con marca de agua".

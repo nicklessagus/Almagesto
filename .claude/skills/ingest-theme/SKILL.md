@@ -1,7 +1,7 @@
 ---
 name: ingest-theme
 description: Usar cuando el usuario pide investigar/ingestar un TEMA en profundidad a la bóveda, como si fuera una estrella pero por tópico ("traé todo sobre actividad y RV", "investigá a fondo el bisector vs actividad", "ingestá el tema de los GP en RV", "armá un concept con la bibliografía de indicadores de actividad"). Dispara una búsqueda ADS por keywords y hace la extracción LLM hacia un concept durable. Soporta además, sólo a pedido explícito, un tema off-ADS — típicamente un método de otra disciplina (estadística, ML) al servicio del foco astro — desde PDFs locales + web (ver Modo off-ADS).
-version: 1.16.0
+version: 1.17.0
 ---
 
 # Ingest: agregar un TEMA a la wiki
@@ -116,28 +116,51 @@ Progreso del ingest del tema <tema>:
    `--theme` donde aplica; **el orden canónico vive en el header de `scripts/ingest_theme.py`** —
    puntero, no copia: no lo repliques acá ni en otros docs. Todo idempotente (si algo falla se
    re-corre, o se corre el script puntual con sus flags finos).
-   `query_ads --theme` escribe el mismo `build/<slug>/ads.json` (con `kind: theme`), así que
-   `fetch_arxiv`, `fetch_pdf` y `extract_fulltext` corren sin cambios. Hace **citation chaining anclado a la query
-   del tema** (references/citations de los core filtrados por la propia query → recall extra sin traer
-   los mega-citados genéricos del área). `fetch_arxiv` respeta el rate limit de arXiv
-   (1 req/3 s) → correr en background si son muchos PDFs. Los papers sin arXiv (A&A viejos) —y
-   los con arXiv cuya bajada falló— los intenta `fetch_pdf` (escaneo ADS con token → publisher,
-   fallback `curl`); lo que ni así sale queda en `build/<slug>/missing_pdf.json` (residuo
-   completo del ingest), con el `bibstem` y un `hint` por entrada → seguir la **cascada manual de
-   rescate**, que vive en `## Notas` del skill `ingest-star` (canónica allá, sin copia: Messenger /
-   página del instrumento / mirrors académicos / tablas del CDN / derivar al usuario — y **no**
-   gastar intentos en `aanda.org`, que está tras DataDome). "Bajar por DOI" solo no alcanza. Curación persistente con
-   `extra_core:` (lista de mapas `{bibcode, via, fecha, motivo}` — D-58; el `triage` imprime el snippet listo para pegar) en la entrada del tema en `themes.yaml` (igual que en estrellas).
-   **Guardia de expansión (checkpoint humano).** Entre `query_ads` y el primer paso que gasta red
-   y disco, el orquestador compara el core del `ads.json` fresco contra las notas ya ingestadas del
-   sujeto: si se multiplicó (default ×1.5 y 50 o más nuevos) **frena** con el conteo, cuántos vinieron
-   por el grafo de citas y el puntero a `relevance.require`/`min_facets`. Antes de refrescar un
-   sujeto viejo, mirá ese número: si el pool explotó, revisá la **regla de combinación** en
-   `objective.yaml` (skill `setup`) antes de bajar nada — podar las regex no alcanza si la
-   combinación sigue siendo OR. `--yes` continúa a sabiendas.
 
-3. **Extracción LLM (criterio).** Leer los papers **clave del tema** (fundacionales / árbitros /
-   metodológicos) desde `vault/raw/fulltext/<slug>/` y poblar cada `vault/wiki/papers/<bibcode>.md`: `methods`,
+   ⛔ **La mecánica de la cadena se describe en UN solo lugar (#67):**
+   `.claude/skills/ingest-star/reference/cadena-ads.md` — el mismo archivo que apunta `ingest-star`,
+   porque es **la misma cadena**: la **guardia de expansión**, el citation chaining, el rate limit de
+   `fetch_arxiv`, la cascada de `fetch_pdf` con su fallback, el residuo `build/<slug>/missing_pdf.json`
+   (y su rescate manual, en `.claude/skills/ingest-star/reference/rescate-pdfs.md` — "bajar por DOI"
+   solo **no** alcanza), los tres chequeos de `extract_fulltext`, `check_retractions` y `extra_core`
+   como curación persistente. Antes había una copia acá y otra en `ingest-star`: dos lugares donde
+   corregirla y uno donde olvidarse.
+
+   Lo que es **del tema** y no está allá: `query_ads --theme` escribe el mismo
+   `build/<slug>/ads.json` (con `kind: theme`), así que `fetch_arxiv`, `fetch_pdf` y
+   `extract_fulltext` corren sin cambios; y el **citation chaining va anclado a la query del tema**
+   (references/citations de los core filtrados por la propia query → recall extra sin traer los
+   mega-citados genéricos del área), no al sujeto como en una estrella. El `extra_core:` del tema va
+   en su entrada de `vault/config/themes.yaml`, con la misma forma dura (`{bibcode, via, fecha,
+   motivo}`, D-58) que en estrellas.
+
+3. **Extracción LLM — se leen TODOS los core, y el recorte se DECLARA (D-13).** *"Leer los papers
+   clave del tema"* no es un criterio: no dice cuántos, ni en qué orden, ni deja registro de qué se
+   leyó. Un tema tiene el mismo problema que una estrella —la lente marca N core y la extracción lee
+   unos cuantos— y encima **la misma red ya construida**, así que rige igual acá:
+
+   - **Default: se leen todos los core.**
+   - **En qué ORDEN se leen** — si son muchos, el orden decide qué queda afuera, así que no lo decide
+     el `glob`:
+     ```bash
+     python scripts/triage.py <slug> --prioridad
+     ```
+     Lista los core ordenados por **cuántas facetas del objetivo toca cada uno** (citas como
+     desempate). Acá el orden importa más que en una estrella: en un tema de método conviven
+     fundamentos y aplicaciones astro por diseño, y el `citation_count` solo ordena por campo (30k
+     citas es normal en ML y muchísimo en astro), no por pertinencia a esta bóveda. ⛔ No filtra ni
+     toca la lente: ordena lo que **ya** es core.
+   - Si no se leen todos, **se avisa al usuario** y el motivo queda **registrado**:
+     ```bash
+     python scripts/triage.py <slug> --extraccion subconjunto --reason "<el criterio>"
+     python scripts/triage.py <slug> --extraccion todos          # el default del contrato
+     ```
+     El `--reason` es obligatorio por el mismo motivo que en `--drop`: en seis meses lo que sirve es
+     el criterio, no el rótulo `subconjunto`. Sin la declaración, el lint lo reporta como *recorte de
+     lectura sin declarar*.
+
+   Con eso resuelto, la lectura —y si el recorte es inevitable, los que primero entran son los
+   **fundacionales / árbitros / metodológicos**—: desde `vault/raw/fulltext/<slug>/`, poblando cada `vault/wiki/papers/<bibcode>.md`: `methods`,
    `role` (#73: `fundacional` introduce el método/mecanismo · `aplicacion` lo instancia en un caso · `arbitro` reanaliza y resuelve una tensión previa — sale de leer el paper, la regex del clasificador no puede inferirlo, y sin él contrastarlo contra otro no está definido) —especialmente agudo en temas de método, donde fundamentos y
    aplicaciones astro conviven en el mismo concepto por diseño—, `thesis_links` (ya pre-sembrado al
    concept; agregar otros si toca) y la sección

@@ -1,7 +1,7 @@
 ---
 name: verify-citations
 description: Usar para verificar, afirmación por afirmación, que las citas [[bibcode]] de una nota de la wiki (query, hipótesis, ficha, concepto) realmente están respaldadas por el texto completo de la fuente. Se corre como paso de cierre al armar/editar una query o hipótesis, o cuando el usuario pide "rechequeá las citas / ¿esto lo dice el paper?". Implementa el chequeo claim↔evidencia (pipeline tipo CiteAudit) sobre el corpus cerrado de la bóveda. Veredictos: soportada / no-soportada (la fuente calla) / contradice (la fuente afirma lo contrario → candidata a disputa, no sólo cita rota), en un EJE SEPARADO de la `condición` bajo la que la fuente lo afirma; en transcripciones de tablas/listas chequea además la completitud (lo que la nota omite).
-version: 1.9.0
+version: 1.10.0
 ---
 
 # Verify-citations — chequeo claim↔evidencia contra el fulltext
@@ -12,91 +12,24 @@ Tapa el *grounding gap* / *epistemic drift*: el LLM puede escribir una cita corr
 afirmación que el paper **no dice** (estudios: 50–90% de citas en texto largo de LLM no están
 plenamente respaldadas). Acá cada afirmación se contrasta contra el texto real de su fuente.
 
-> **Ventaja del corpus cerrado:** corpus **cerrado** — hay un `.txt` por bibcode en `vault/raw/fulltext/`. Se
-> saltea el *retrieval* (la parte que mete errores en los verificadores generales): ya sabemos qué
-> archivo leer. El chequeo es directo passage-matching.
->
-> **El fulltext es una extracción DETERMINISTA** de la capa de texto del PDF (`pdftotext -layout`,
-> sin LLM). Por eso la **cita textual que encuentra el verificador son las palabras reales del
-> paper** y el nº de línea es un localizador greppable estable. **Caveats:** `pdftotext` puede
-> desordenar doble-columna, ecuaciones, tablas, ligaduras y guionado; y un PDF **escaneado sin capa de
-> texto** da `.txt` vacío/basura. Por eso: si una afirmación **no** aparece textual en el `.txt` —
-> **tras agotar la estrategia de matcheo de abajo (#44)** — antes
-> de declararla `no-soportada` considerar que puede ser un **artefacto de extracción** (ecuación/tabla)
-> → en ese caso abrir el **PDF** (`vault/raw/pdfs/<slug>/<bibcode>.pdf`) para esa afirmación puntual, o
-> marcarla **`no verificable por extracción`** (distinto de `no-soportada`).
->
-> **Cómo se cuentan las líneas (convención fija, #29):** el nº de línea de la evidencia se obtiene
-> con **`grep -n`** o leyendo el archivo directamente (Read) — **no** con `splitlines()` de Python:
-> los `.txt` de `pdftotext` traen un **form feed** (`\x0c`) por página que Python cuenta como salto
-> de línea extra → la numeración se corre **+1 por página** y el error CRECE a lo largo del archivo
-> (medido: 532/535 `.txt` del corpus con form feeds; en un paper de 12 páginas la última cita queda
-> ~10 líneas afuera — suficiente para que una revisión posterior no encuentre la frase y la marque
-> como rota). Si hace falta Python, `split("\n")` numera igual que `grep -n`.
-> Relacionado: en papers a **dos columnas** `pdftotext -layout` entrelaza ambas columnas en la misma
-> línea física — un rango de líneas **no** es un rango de lectura contigua (una oración puede
-> arrancar en la columna izquierda de L229 y seguir en la derecha de L204). Los números de línea
-> son **punteros greppables**, no extractos para leer de corrido.
->
-> **Cómo buscar en el `.txt` (estrategia de matcheo, #44).** El entrelazado de arriba obliga a
-> buscar distinto: `grep` es orientado a líneas, y en un `.txt` multi-columna (medido: 472/644 del
-> corpus, 73%) una oración cruza el salto de línea física — buscarla entera da **falso negativo**
-> aunque el texto esté y sea legible (medido: 9/24 pares ~38% no encontrados con la oración
-> completa; 24/24 localizados con fragmentos cortos).
-> 1. **Escalera de acortamiento:** empezar por la oración completa y, si no aparece, acortar a un
->    **fragmento distintivo contenido en una sola línea física** (típicamente 3–6 palabras; el largo
->    útil depende del ancho de columna del PDF, por eso se **acorta hasta encontrar** en vez de fijar
->    un largo — así un paper a una columna sigue matcheando la frase entera sin perder precisión).
-> 2. **De-hifenado:** si el fragmento corto tampoco aparece, el corte de línea puede partir una
->    palabra con guión (`mag-` / `nitude`): reintentar partiendo el patrón por el guión, o buscar
->    un fragmento que lo esquive.
-> 3. Sólo **agotados 1 y 2** corresponde considerar artefacto de extracción (ecuación/tabla/escaneo)
->    → abrir el PDF o marcar `no verificable por extracción`.
->
-> ⛔ **Prohibido normalizar espacios sobre el archivo entero** (`re.sub(r"\s+", " ", texto)` o
-> equivalente): en una línea física a dos columnas eso **empalma el final de la columna 1 con el
-> principio de la columna 2**, fabricando adyacencias que el paper no tiene — puede hacer pasar como
-> `soportada` una afirmación **inventada** (falso positivo: el modo peligroso, peor que el falso
-> negativo de arriba). Y normalizar **por línea** tampoco alcanza (#46): colapsar la **canaleta** de
-> la misma línea física fabrica la misma adyacencia col.1→col.2, sólo que dentro de la línea. La
-> forma segura, si hace falta normalizar: **partir antes cada línea física en la canaleta** (un run
-> de 8+ espacios es separador de columnas, no espacio — el umbral vive en
-> `measure_layout.CANALETA_MIN`) y normalizar **por segmento de columna**. Los invariantes están
-> pineados en `tests/test_multicolumn_matching.py`; la prevalencia en una bóveda concreta la mide
-> `scripts/measure_layout.py`.
->
-> ⚠ **`symbols_lost: true` — las ECUACIONES no están en el `.txt` (#113).** Si la nota del paper
-> trae ese campo (o el `.txt` abre con `# Almagesto — simbolos NO extraidos`), `pdftotext` dejó el
-> marcador `(3)` y **vació su cuerpo**: el archivo parece tener la fórmula y no la tiene. Para esos
-> pares, **la evidencia se cita por PÁGINA del PDF**, no por nº de línea, y se lee
-> `vault/raw/pdfs/<slug>/<bibcode>.pdf` con el parámetro `pages` (que **rasteriza** la página, así
-> que el verificador *ve* la fórmula). ⛔ **No declares `no-soportada` una ecuación que no aparece
-> en el `.txt` de una fuente marcada así** — es el falso negativo que empuja a debilitar una
-> afirmación correcta, y es exactamente el caso que este campo existe para señalar. La **prosa** de
-> esas fuentes sí es citable por línea, como siempre.
->
-> **Excepción OCR — citable con salvedad:** si la nota del paper trae `fulltext_source: ocr` (el
-> contrato del frontmatter lo espeja — no hace falta abrir el `.txt` para saberlo) o el `.txt` abre
-> con el header `# Almagesto — fulltext por OCR` (`source: ocr`), vino de tesseract (PDF escaneado
-> o con fuentes sin ToUnicode que
-> `pdftotext` no pudo leer; lo estampa `extract_fulltext.py`). Sigue siendo determinista y citable,
-> pero el OCR puede errar **símbolos, ligaduras y notación matemática**: la verificación vale para
-> **prosa**; ante una discrepancia puntual de símbolos/números en una ecuación, abrir el **PDF** para
-> esa afirmación en vez de declararla `no-soportada`/`contradice`.
->
-> ⚠ **Excepción preprint — el `.txt` puede ser OTRA VERSIÓN del paper (#57).** Si la nota trae
-> `pdf_source: eprint` (y, cuando se conoce, `eprint_version: v1`), el texto salió de **arXiv**, no
-> de la versión publicada que identifica el `[[bibcode]]`. Un **v1 pre-referato** puede traer
-> valores, secciones y hasta conclusiones distintas. El daño va en la dirección **menos obvia**:
-> ante una discrepancia entre la nota (valor **publicado** — típicamente de NEA o del abstract de
-> ADS) y el `.txt` (eprint), el protocolo de acá manda "bajar la afirmación a lo que dice la
-> fuente" → **se corrompería el valor publicado con el del preprint, y quedaría registrado como un
-> hallazgo del chequeo**. Regla: con `pdf_source: eprint`, una discrepancia **numérica** contra un
-> valor publicado es candidata a **diferencia de versión**, no a cita rota → abrir el PDF publicado
-> para esa afirmación, o marcarla como diferencia de versión; **no** "corregir" la nota hacia el
-> eprint. Con `pdf_source: null` (desconocido: ni marca de arXiv ni registro del fetcher) aplicá el
-> mismo cuidado ante una discrepancia numérica — desconocido **no** es "publicado". La prosa y los
-> mecanismos se verifican igual.
+> **Ventaja del corpus cerrado:** hay un `.txt` por bibcode en `vault/raw/fulltext/`, así que se
+> saltea el *retrieval* —la parte que mete errores en los verificadores generales—: ya sabemos qué
+> archivo leer. El chequeo es passage-matching directo, y el `.txt` es una extracción **determinista**
+> (`pdftotext -layout`, sin LLM), así que **la cita textual son las palabras reales del paper**.
+
+⛔ **Las reglas duras de lectura del `.txt`, en una línea cada una.** El **por qué** de cada una, con
+su medición, está en `reference/convenciones-fulltext.md` — leelo la primera vez y cuando una regla
+parezca arbitraria o un par no cierre:
+
+| Regla | En una línea |
+|---|---|
+| **nº de línea** (#29) | con `grep -n` o leyendo el archivo; **nunca** `splitlines()` de Python (los form feeds corren la numeración +1 por página). `split("\n")` numera igual que `grep -n`. |
+| **patrones cortos** (#44) | escalera de acortamiento: oración completa → fragmento distintivo de 3–6 palabras contenido en **una línea física** → reintento partiendo por el guión de corte. Un `.txt` a dos columnas entrelaza ambas en la misma línea. |
+| ⛔ **no normalizar espacios** (#46) | ni sobre el archivo entero ni por línea: empalma el final de la columna 1 con el principio de la columna 2 y **fabrica adyacencias** (falso positivo). Si hace falta, partí antes cada línea en la canaleta (run de 8+ espacios, `measure_layout.CANALETA_MIN`) y normalizá por segmento. |
+| **`symbols_lost: true`** (#113) | las ecuaciones **no están** en el `.txt`: citar por **página del PDF**, no por línea. ⛔ No declares `no-soportada` una ecuación ausente de una fuente marcada así. |
+| **`fulltext_source: ocr`** | citable **con salvedad**: el OCR puede errar símbolos y notación. Ante discrepancia de símbolos, abrir el PDF en vez de declarar `no-soportada`/`contradice`. |
+| **`pdf_source: eprint`** (#57) | el `.txt` es el **preprint**: una discrepancia numérica contra un valor publicado es candidata a **diferencia de versión**, no a cita rota. ⛔ Nunca "corregir" la nota hacia el eprint. `null` = desconocido, que **no** es "publicado". |
+| **agotar antes de concluir** | sólo agotadas la escalera y el de-hifenado corresponde considerar artefacto de extracción → abrir el PDF o marcar `no verificable por extracción` (distinto de `no-soportada`). |
 
 ## Cuándo correrlo
 - **Paso de cierre obligatorio de toda operación que escriba prosa con `[[bibcode]]`** (regla de
@@ -259,23 +192,15 @@ el **contenido distintivo** de la afirmación —el sujeto/valor/mecanismo que l
 → `soportada`, y lo que falte va a `condicion`. ¿La coincidencia es sólo temática (el fenómeno
 general, un término suelto, la mera cercanía)? → `no-soportada`.
 
-⚠ **La columna `Score` 0–10 se eliminó en 1.42.0, y es la misma lección que `parcial`.** Un grado
-numérico reintroduce por la ventana el eje que 1.39.0 sacó por la puerta: la zona intermedia no se
-puede definir porque es de grado, y el umbral (≥7 / <4) nunca se calibró contra nada. **Es además lo
-que hace el campo**: los verificadores de referencia etiquetan **binario** (FActScore: *supported* /
-*not-supported*) y los que agregan un tercer valor usan un **vocabulario cerrado**, no una escala
-(VeriScore: *supported* / *inconclusive* / *contradictory*) — que es exactamente el nuestro. Ningún
-sistema comparable gradúa el soporte. La corrida del 2026-08-25 ya devolvió la columna en `—`
-porque el fan-out no la había producido: se eliminó en vez de rellenarla con un número que nadie
-midió.
+⚠ **No agregues un grado, y no es cuestión de gusto.** `parcial` se eliminó en 1.39.0 y la columna
+`Score` 0–10 en 1.42.0, las dos por la misma razón: fusionaban el eje **textual** (¿la fuente dice
+esto?, decidible contra el `.txt`) con uno de **grado** cuyo umbral nunca se calibró. Medido: dos
+corridas ciegas del mismo fan-out coincidieron en **57 de 60 pares**, y **las tres divergencias
+caían exactamente en el borde `soportada`↔`parcial`**. Lo que parece un grado o es una **condición**
+(columna aparte) o es una cita que no toca el contenido distintivo (`no-soportada`). La arqueología
+completa, con la medición y los sistemas de referencia que etiquetan binario, está en
+`reference/historia-veredictos.md`.
 
-⚠ **`parcial` se eliminó en 1.39.0.** Fusionaba dos preguntas ortogonales: «¿la fuente respalda
-esto?» (textual, decidible contra el `.txt`) y «¿la afirmación está completa?» (juicio de grado).
-Medido el 2026-08-25 sobre una ficha real: **dos corridas independientes de este mismo fan-out**,
-jueces nuevos y ciegos, **60 pares comparados → 95 % de coincidencia**, y **las tres divergencias
-caían exactamente en el borde `soportada`↔`parcial`**, todas hacia el lado estricto; `contradice`
-reprodujo 2/2. El umbral no estaba definido — y no se puede definir, porque es de grado. Todo lo que
-era `parcial` se descompone sin pérdida en `soportada` + `condicion`, o en `no-soportada`.
 - **`contradice`** manda sobre los otros dos (no es un grado de soporte sino evidencia **en contra**,
   con cita textual de lo contradicho): se resuelve como corrección o disputa (paso 4), no como cita rota.
 
@@ -438,73 +363,19 @@ cita textual obligatoria) pero **no una prueba**. Reduce drásticamente la mala 
 Su tasa de error frente a errores **plantados** se mide con el **modo benchmark** (abajo); su
 **reproducibilidad sobre contenido real**, con el **modo revalidación**.
 
-## Modo revalidación (a pedido) — volver a preguntar sobre lo que ya está verde
+## Los dos modos a pedido (revalidación y benchmark)
 
-**Qué problema cierra.** El ancla de bloque y el hash de fuente (D-4/D-20) detectan que un par
-**cambió**. Pero implican un supuesto que nunca se midió: que el veredicto es una **función** de
-(afirmación, fuente) — si ninguno cambió, el resultado tampoco cambiaría. Lo produce un LLM. Hoy un
-par verificado **no se vuelve a mirar nunca** mientras la nota y el `.txt` estén quietos, así que un
-error del juez es **permanente y silencioso**: exactamente el modo de falla que toda la capa de
-anclas existe para no producir.
+Ninguno es paso de cierre: se corren **a pedido**, y por eso viven en
+`reference/modos-a-pedido.md` en vez de acá.
 
-**Qué hace.** Re-corre el fan-out sobre pares **ya verdes** —sin que nada haya cambiado— con
-verificadores nuevos y **ciegos a los veredictos anteriores**, y compara.
+- **Revalidación** — re-corre el fan-out sobre pares **ya verdes**, con jueces nuevos y ciegos, y
+  compara. Cierra el supuesto que las anclas (D-4/D-20) dan por hecho y nunca se midió: que el
+  veredicto es una **función** de (afirmación, fuente). Sin esto, un error del juez es **permanente y
+  silencioso**.
+- **Benchmark** — `python scripts/bench_verify.py seed` siembra citas **falsas deterministas** entre
+  pares reales, el verificador las juzga a ciegas y `score` reporta el **recall**. Le pone un número
+  al "juicio de LLM". **Regla #0: nada del benchmark entra a `vault/`** (vive en `build/`/`outputs/`;
+  las citas falsas no son bibliografía).
 
-```
-1. Elegir la muestra: todos los pares de una nota, o N al azar del corpus (el usuario dice
-   cuántos; no hay CLI — este skill es un modo de trabajo, como el benchmark de abajo).
-2. Lanzar el fan-out normal (paso 2), un subagente por FUENTE, SIN pasarle la tabla vigente.
-3. Comparar contra el bloque: por par, ¿mismo veredicto? ¿misma condición?
-4. Reportar la DIVERGENCIA. No reescribir el bloque en silencio: los pares que cambian de veredicto
-   se resuelven como cualquier hallazgo (paso 4).
-```
-
-**Cómo leer el resultado.** Medido el 2026-08-25 sobre HD 40307, dos corridas, 60 pares comparados:
-**95 % de coincidencia (57/60)**, y las 3 divergencias caían todas en el borde `soportada`↔`parcial`
-—valor que por eso se eliminó en 1.39.0—. `contradice` reprodujo 2/2.
-
-⚠ **Confound de esa medición, declarado:** los prompts de la segunda corrida llevaban pistas
-(«ojo con las citas de segunda mano, con las filas de otra estrella, con las frases que la fuente
-desactiva después») que la primera no tenía. Así que ese 95 % **no es** una medición limpia de
-varianza del juez. Para medirla hace falta correr con el prompt **idéntico**.
-
-**Y el hallazgo que no depende del confound:** pares con **veredicto idéntico** trajeron
-**condiciones distintas** entre corridas. El juez es estable en el eje textual y **no exhaustivo**
-en el de régimen — así que «verde» garantiza menos de lo que parece, y ésa es la razón principal
-para tener este modo.
-
-**Distinto del benchmark de abajo:** aquél siembra citas **falsas deterministas** y mide detección
-de un error **plantado y conocido**; esto mide si dos jueces independientes coinciden sobre
-**contenido real**. Son preguntas distintas y ninguno sustituye al otro.
-
-**Cuándo:** a pedido, o en la pasada periódica de `maintain` sobre una muestra. **No** es paso de
-cierre: en el cierre nada cambió desde que se verificó, que es justo el caso que este modo explora.
-
-## Modo benchmark (auto-test del verificador — a pedido)
-¿Cuánto confiar en ese "juicio de LLM"? Este modo le pone un número: **recall sobre errores
-plantados** (estilo CiteAudit). Correr **a pedido** (no es paso de cierre), con la bóveda ya
-poblada y citada.
-
-1. `python scripts/bench_verify.py seed [--max N]` → arma **dos** archivos (D-55):
-   `build/verify_bench/exam.json` (el examen: N pares (afirmación, `[[bibcode]]`) **reales** de
-   queries/concepts + un par **falso por construcción** por cada uno —misma afirmación, bibcode
-   rotado a otro paper del corpus, determinista y nunca uno que esa afirmación cite de verdad—,
-   con `id` neutro y **sin etiquetas ni conteos por clase**) y `build/verify_bench/key.json`
-   (la clave). **Vos leés `exam.json` y nada más**: la ceguera dejó de depender de una instrucción
-   y la sostiene la construcción, pero abrir la clave la rompe igual.
-2. **Fan-out A CIEGAS** — mismo protocolo del paso 2 normal, con una regla extra **dura**: cada
-   subagente recibe SOLO (afirmación, ruta al fulltext). **Nunca mostrarle `key.json`, el examen
-   entero, ni decirle que es un benchmark** — sabría qué buscar y el número no mediría nada. (El
-   examen entero tampoco: cada sembrada comparte el `claim` con su par real, así que quien lo lee
-   completo deduce que uno de esos dos es falso —no cuál—. Con un par por subagente eso no se ve.)
-3. Volcar cada veredicto en el campo `verdict` de su par en `exam.json`
-   (`soportada|no-soportada|contradice|no verificable por extracción`).
-4. `python scripts/bench_verify.py score` → recall de sembradas + reales caídas →
-   `outputs/verify-bench-<fecha>.md`.
-5. **Reporte honesto al chat:** el recall; cada sembrada que PASÓ (revisar a mano — puede ser
-   **soporte casual**: el otro paper de verdad dice lo mismo — antes de culpar al verificador); y
-   cada real caída (flaky del verificador **o** error de grounding genuino de la nota: si es lo
-   segundo, corregir la nota por el flujo normal de arriba).
-
-**Regla #0:** nada del benchmark entra a `vault/` — pares sembrados y reportes viven en
-`build/`/`outputs/` (scratch gitignored). Las citas falsas no son bibliografía.
+Los dos miden cosas distintas —reproducibilidad sobre contenido real vs detección de un error
+plantado— y ninguno sustituye al otro.

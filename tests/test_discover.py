@@ -401,7 +401,11 @@ def test_preview_theme_slug_desconocido(monkeypatch, capsys):
     assert "no está en themes.yaml" in capsys.readouterr().out
 
 
-def test_preview_theme_corre_la_cascada_y_el_anclaje(monkeypatch, capsys):
+# ⚠ Los tres tests de `_preview_theme` llevan `toy_vault` desde que #77 le agregó
+# `cfg.save_descubrimiento`: sin la fixture, escribían `vault/config/registro/ica.yaml` en la bóveda
+# REAL del repo, en cada corrida de la suite. La guarda `sin_tocar_la_boveda_real` (conftest) es la
+# red; esto es el arreglo.
+def test_preview_theme_corre_la_cascada_y_el_anclaje(toy_vault, monkeypatch, capsys):
     monkeypatch.setattr(d.cfg, "load_themes", lambda: {
         "ica": {"title": "ICA", "query": "q", "aliases": ["ICA"], "topic": "T11447"}})
     monkeypatch.setattr(d, "cascade", lambda **k: {
@@ -420,7 +424,7 @@ def test_preview_theme_corre_la_cascada_y_el_anclaje(monkeypatch, capsys):
     assert "CANDIDATOS" in out                     # propone, no clasifica
 
 
-def test_preview_theme_sin_ancla_lo_dice(monkeypatch, capsys):
+def test_preview_theme_sin_ancla_lo_dice(toy_vault, monkeypatch, capsys):
     monkeypatch.setattr(d.cfg, "load_themes", lambda: {"ica": {"title": "ICA", "topic": "T1"}})
     monkeypatch.setattr(d, "cascade", lambda **k: {"records": [], "undedupable": [],
                                                    "cobertura": []})
@@ -429,7 +433,7 @@ def test_preview_theme_sin_ancla_lo_dice(monkeypatch, capsys):
     assert "sin anclaje" in capsys.readouterr().out
 
 
-def test_preview_theme_infiere_el_topic_y_avisa_que_lo_eligio_solo(monkeypatch, capsys):
+def test_preview_theme_infiere_el_topic_y_avisa_que_lo_eligio_solo(toy_vault, monkeypatch, capsys):
     monkeypatch.setattr(d.cfg, "load_themes", lambda: {
         "ica": {"title": "blind source separation", "aliases": ["ICA"]}})
     monkeypatch.setattr(d, "topics", lambda q, rows=1: [{"id": "T11447", "name": "BSS"}])

@@ -1,7 +1,7 @@
 ---
 name: find-contradictions
 description: Usar cuando el usuario quiere detectar desacuerdos entre papers del corpus sobre el mismo hecho ("buscá contradicciones en el corpus", "qué papers se contradicen sobre tau Ceti", "revisá disputas de P_rot", "detectá desacuerdos sobre la señal b de GJ 581", "¿hay papers que discrepen sobre X?"). Barre el corpus por eje (estrella/parámetro o concepto), confirma cada desacuerdo contra el fulltext y PROPONE entradas disputes[] / notas de disputa para que el usuario apruebe.
-version: 1.6.0
+version: 1.7.0
 ---
 
 # Find-contradictions — desacuerdos entre papers (claim↔claim)
@@ -113,6 +113,36 @@ Juntar, para el eje elegido, qué afirma **cada** paper sobre **cada** hecho:
 Armar una tabla mental `(hecho, papel A dice …, papel B dice …, NEA dice …)`. Los que coinciden se
 descartan; los que difieren pasan al fan-out.
 
+#### 1b. Excluir los pares YA JUZGADOS — el barrido no re-litiga (#63)
+
+Antes de armar la lista de candidatos, sacar los pares sobre los que **ya hay un juicio escrito**.
+Son dos carriles y hay que mirar los dos:
+
+- los persistidos como `aparente` / `no-concluyente` en el registro versionado del sujeto
+  (`vault/config/registro/<slug>.yaml`, sección `no_disputas:`) — se leen con **`load_no_disputas`**;
+- los ya tagueados en las `disputes[]` de la ficha o del concepto (ésos son los `real`, que ya
+  tienen su carril y su entrada aprobada).
+
+```bash
+# los pares ya juzgados como NO-disputa, indexados por la clave simétrica del par
+python -c "import sys;sys.path.insert(0,'scripts');import lib_config as c;[print(k,'→',v['veredicto'],'·',v['motivo']) for k,v in c.load_no_disputas('<slug>').items()]"
+```
+
+La clave se arma con `c.par_key(bib_a, bib_b, eje)` y es **simétrica**: el par juzgado en cualquier
+orden da la misma clave, y **cambia con el eje** (los mismos dos papers pueden coincidir en `P_rot`
+y discrepar en `K`, así que juzgar uno no saltea el otro).
+
+**Por qué:** cada par cuesta un subagente, y sin esto cada auditoría vuelve a pagar el mismo par
+para reconstruir la misma conclusión — y el motivo por el que aquel desacuerdo no era desacuerdo no
+lo tiene nadie, porque hasta #63 el `aparente` se reportaba al chat y ahí moría. Es el mismo agujero
+que #51 cerró para el triage (el juicio de descarte vivía en `build/`, gitignored). **Contar cuántos
+pares se saltearon por esta vía**: va al reporte de cierre.
+
+⚠ Un par juzgado se saltea, **no** se borra ni se re-abre solo. Si cambió la evidencia (entró un
+paper árbitro, se re-extrajo un `.txt`, apareció un corrigendum) el par se vuelve a juzgar a mano y
+`save_no_disputa` **appendea** el juicio nuevo sin borrar el viejo: el registro es historial, y
+`load_no_disputas` devuelve el último.
+
 ### 2. Fan-out: confirmar cada desacuerdo candidato (un subagente por par)
 Para cada par en tensión, lanzar un subagente (tipo `Explore`) **en paralelo**. Cada uno lee **sólo
 los dos** `vault/raw/fulltext/**/<bibcode>.txt` en juego (grounding-first; prohibido de memoria) y devuelve:
@@ -199,9 +229,31 @@ con la condición que el subagente identificó y el `role` (#73) de cada paper �
 condición que **nadie midió**, eso es un *régimen no cubierto* → `## Huecos`. Descartarlos es
 perder justamente lo que el barrido encontró.
 
-### 4. Aplicar lo aprobado
+### 4. Aplicar lo aprobado — y PERSISTIR los que no son disputa (#63)
 Sólo lo que el usuario aprobó: taguear `disputes` a nivel nota en la ficha (y reflejar la disputa en la
 tabla/prosa), o escribir la línea de desacuerdo en el concepto. Nada de sobreescribir NEA.
+
+Y el otro carril, que antes se perdía: cada par que volvió **`aparente`** o **`no-concluyente`** se
+escribe en `no_disputas:` del registro versionado, con su **motivo** —la condición que los separa,
+o por qué el texto no alcanzó—:
+
+```bash
+python -c "import sys;sys.path.insert(0,'scripts');import lib_config as c;c.save_no_disputa('<slug>', {'bibcodes':['<A>','<B>'],'eje':'P_rot','veredicto':'aparente','motivo':'<la condición que los separa, con su cita>'})"
+```
+
+Reglas del carril, que el propio `save_no_disputa` hace cumplir:
+- **`motivo` obligatorio** (aborta si está vacío): mismo criterio que el `--reason` del triage — en
+  seis meses lo que sirve es el motivo, no la categoría. Y un par persistido sin motivo queda
+  bloqueado en el barrido sin que nadie pueda revisar el juicio, que es peor que no persistirlo.
+- **Un `real` NO va acá** (aborta): su carril es `disputes[]`, que es contenido aprobado de la
+  bóveda. Enterrarlo en `no_disputas` haría que el barrido siguiente lo saltee por «ya juzgado» y la
+  disputa real nunca llegue a la nota.
+- Persistir un par **no toca nada más**: no borra, no reabre y no modifica las `disputes[]` ya
+  tagueadas. Los dos carriles conviven — `disputes` es contenido de la bóveda que el usuario aprobó,
+  `no_disputas` es bitácora de la revisión.
+
+⚠ En un **concepto**, persistir el `aparente` **no reemplaza** su fila de `## Régimen de validez`
+(#74): ahí el aparente es el hallazgo y va a la nota. El registro sólo evita re-juzgar el par.
 
 ### 5. Verificar, lint, cierre
 - **verify-citations** sobre las disputas nuevas (cada `note` y cada `value` de una posición debe
@@ -215,8 +267,10 @@ tabla/prosa), o escribir la línea de desacuerdo en el concepto. Nada de sobrees
   archivos **específicos**; **preguntar antes de `push`**.
 
 ## Reporte (al chat)
-Cuántos pares en tensión se evaluaron, cuántos **reales** vs aparentes, y cada disputa propuesta con su
-resolución. Honesto: un "aparente" bien resuelto (mismo valor, distinto régimen) es tan valioso como
+Cuántos pares en tensión se evaluaron, **cuántos se saltearon por estar ya juzgados** (los de
+`load_no_disputas` y los ya tagueados en `disputes`), cuántos **reales** vs aparentes, y cada disputa
+propuesta con su resolución. El salteado se reporta porque si no, un barrido que no gastó ningún
+subagente se lee igual que uno que no encontró nada — la distinción de D-43 aplicada a esta pasada. Honesto: un "aparente" bien resuelto (mismo valor, distinto régimen) es tan valioso como
 una disputa real — evita tagueos espurios. En un **concepto**, además, cada aparente que sobrevive
 es una **fila de régimen** propuesta (#74): reportar cuántas, porque ahí el aparente no es un
 descarte sino el producto.

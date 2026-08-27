@@ -71,7 +71,12 @@ Requiere `pytest` (dev-only, no está en `requirements.txt`; los scripts no lo n
    (`requests` / `astroquery`), y los subprocesos (`pdftotext`, `tesseract`, `defuddle`). Cada
    módulo recibe un namespace falso (`SimpleNamespace(run=...)`) en lugar del módulo real, así el
    parche no se filtra a otras libs. `time.sleep` se anula (los retries corren instantáneos).
-2. **Bóveda de juguete aislada.** `lib_config` resuelve rutas por constantes de módulo derivadas
+2. **Bóveda de juguete aislada — y también es un ASSERT.** La fixture autouse
+   `sin_tocar_la_boveda_real` intercepta el **único writer** del repo (D-53) y explota si un test
+   escribe bajo el `vault/` real. Hermana de `sin_red`, y por el mismo motivo: esta promesa vivía en
+   prosa y **nadie la sostenía** — medido el 2026-08-26, tres tests de `discover` creaban
+   `vault/config/registro/ica.yaml` en cada corrida. En una instancia eso appendearía una entrada
+   falsa al único artefacto no regenerable de la bóveda. `lib_config` resuelve rutas por constantes de módulo derivadas
    de `__file__`; la fixture `toy_vault` (en `conftest.py`) re-apunta **todas** esas constantes a
    un árbol temporal (`tmp_path`), incluidos los alias que otros módulos toman al importar
    (`extract_fulltext.FULLTEXT`). Ningún test lee ni escribe la bóveda real.

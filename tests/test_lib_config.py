@@ -997,3 +997,156 @@ def test_stdout_tolerante_no_se_cae_con_un_stream_no_reconfigurable(monkeypatch,
     monkeypatch.setattr(cfg.sys, "stdout", Roto())
     monkeypatch.setattr(cfg.sys, "stderr", Roto())
     cfg.stdout_tolerante()          # no lanza
+
+
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# Ítem 5 (#63) · `find-contradictions` no re-litiga: los `aparente` se PERSISTEN
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+#
+# El fan-out de `find-contradictions` gasta un subagente por par y devuelve tres veredictos. El
+# `real` tiene carril: se convierte en `disputes`, queda en la nota y el barrido siguiente lo ve.
+# El `aparente` —«distinto régimen, distinta definición, distinta época»— **no tiene ninguno**: el
+# skill lo reporta al chat y ahí muere. Consecuencia: cada auditoría vuelve a pagar el mismo par
+# para volver a concluir lo mismo, y el motivo por el que la vez pasada no era disputa no lo tiene
+# nadie. Es el mismo agujero que #51 cerró para el triage (el juicio de descarte vivía en `build/`,
+# gitignored) y que #81 cerró para las fuentes declaradas: los cuatro cuadrantes de la curación
+# dejan registro versionado, y éste es el que faltaba del lado de la revisión.
+#
+# Los tres símbolos son nuevos, así que estos tests mueren hoy con `AttributeError` — incluidos los
+# contra-casos, que acá no se pueden separar de la API que los define.
+
+def _no_disputa(bib_a="2018Autor", bib_b="2021Autor", eje="P_rot",
+                veredicto="aparente", motivo="distinta época de observación",
+                fecha="2026-08-26") -> dict:
+    """Una entrada de `no_disputas` con la forma que fija la spec.
+
+    La clave la calcula `par_key`, no el test: si el helper la armara a mano (`f"{a}|{b}|{eje}"`)
+    sería un doble con distinto contrato que la función real, y el bug viviría exactamente en esa
+    diferencia — la red #3 de `CLAUDE.md`, medida en `refs_of`/`_bare_doi`."""
+    return {"par": cfg.par_key(bib_a, bib_b, eje), "bibcodes": [bib_a, bib_b], "eje": eje,
+            "veredicto": veredicto, "motivo": motivo, "fecha": fecha}
+
+
+def test_par_key_es_simetrica_y_distingue_el_eje():
+    """La clave del par tiene que ser **simétrica**: el barrido no controla en qué orden le tocan A
+    y B —depende de cómo salieron del `glob` de notas—, así que una clave orientada haría que el
+    mismo par juzgado al revés no matchee y el fan-out se pague dos veces. Eso convierte a la
+    persistencia en decorativa, que es peor que no tenerla: parece que hay red y no la hay.
+
+    Y tiene que **distinguir el eje**: los mismos dos papers pueden estar de acuerdo en `P_rot` y no
+    en `K`. Una clave por par de bibcodes silenciaría el segundo desacuerdo con el juicio del
+    primero — un falso «ya lo miramos» sobre algo que nadie miró, que es justo el falso limpio que
+    D-43 persigue.  @inv INV-125"""
+    assert cfg.par_key("2018Autor", "2021Autor", "P_rot") == \
+           cfg.par_key("2021Autor", "2018Autor", "P_rot")
+    assert cfg.par_key("2018Autor", "2021Autor", "P_rot") != \
+           cfg.par_key("2018Autor", "2021Autor", "K")
+
+
+def test_save_no_disputa_appendea_y_se_consulta_por_la_clave_del_par(toy_vault):
+    """Acumulativo como `busquedas` (D-28) y `barridos` (#88): cada par juzgado suma una entrada, no
+    pisa la anterior. Y `load_no_disputas` devuelve un **índice por clave** —no una lista— porque el
+    consumidor es el filtro del barrido, que pregunta *«¿este par ya se juzgó?»* una vez por par:
+    con una lista eso es O(N) dentro de un bucle O(N²) sobre los pares del corpus."""
+    cfg.save_no_disputa("test_star", _no_disputa("2018Autor", "2021Autor", "P_rot"))
+    cfg.save_no_disputa("test_star", _no_disputa("2018Autor", "2021Autor", "K",
+                                                 motivo="distinta definición de K"))
+    idx = cfg.load_no_disputas("test_star")
+    assert set(idx) == {cfg.par_key("2018Autor", "2021Autor", "P_rot"),
+                        cfg.par_key("2018Autor", "2021Autor", "K")}
+    guardada = idx[cfg.par_key("2021Autor", "2018Autor", "P_rot")]   # simétrica: se consulta al revés
+    assert guardada["motivo"] == "distinta época de observación"
+    assert guardada["veredicto"] == "aparente"
+    assert sorted(guardada["bibcodes"]) == ["2018Autor", "2021Autor"]
+
+
+def test_load_no_disputas_sin_registro_es_vacio(toy_vault):
+    """Un sujeto que nunca se auditó devuelve `{}` y no revienta: el filtro del barrido corre sobre
+    cualquier slug, y la primera auditoría de una entidad es el caso normal, no el borde."""
+    assert cfg.load_no_disputas("test_star") == {}
+
+
+def test_no_disputa_sin_motivo_aborta(toy_vault):
+    """Mismo criterio que el `--reason` obligatorio del triage (#51/#111): **en seis meses lo que
+    sirve es el motivo, no la categoría**. Un `aparente` sin motivo persiste el veredicto y tira la
+    única información que no es regenerable —por qué el desacuerdo no era desacuerdo—, y encima
+    bloquea el par para siempre: el barrido lo saltea y ya nadie puede revisar el juicio.
+
+    Peor que no persistirlo, que al menos se vuelve a mirar.  @inv INV-125"""
+    with pytest.raises((ValueError, RuntimeError)):
+        cfg.save_no_disputa("test_star", _no_disputa(motivo=""))
+    assert cfg.load_no_disputas("test_star") == {}, "abortó pero igual escribió"
+
+
+def test_un_veredicto_real_no_entra_al_carril_de_no_disputas(toy_vault):
+    """`real` tiene otro carril: se convierte en `disputes` de la nota, que es el artefacto que el
+    consumidor lee y que el lint vigila. Dejarlo entrar acá lo **entierra**: el barrido siguiente lo
+    saltea por «ya juzgado» y la disputa real nunca llega a la bóveda.
+
+    El vocabulario de `veredicto` es cerrado (`aparente` | `no-concluyente`) por el mismo motivo que
+    `role` (#73) y `status` (D-37): un valor fuera de la lista deja el campo mudo para su único
+    consumidor, y un campo mudo se lee como «no se sabe».  @inv INV-125"""
+    with pytest.raises((ValueError, RuntimeError)):
+        cfg.save_no_disputa("test_star", _no_disputa(veredicto="real",
+                                                     motivo="valores incompatibles"))
+    assert cfg.load_no_disputas("test_star") == {}
+
+
+def test_no_disputa_no_toca_los_otros_carriles_del_registro(toy_vault, monkeypatch):
+    """El registro versionado es el **único artefacto no regenerable** de la bóveda (INV-53) y tiene
+    dueños distintos por sección: `busquedas` la escribe `query_ads`, `decisiones` el `triage`,
+    `barridos` el `--sweep`, `descubrimientos` la cascada. Un `save_` que lea-modifique-escriba mal
+    borra el trabajo de otro dueño en silencio — el modo de falla exacto que `save_registro` frena
+    cuando el YAML no parsea, acá por la puerta de al lado."""
+    monkeypatch.delenv("ALMAGESTO_VIA", raising=False)
+    cfg.save_busqueda("test_star", {"fecha": "2026-01-01", "query": "q", "n_total": 1,
+                                    "bibcodes": ["2018Autor"]})
+    cfg.save_decisiones("test_star", {"2020X": {"decision": "descartado", "motivo": "ruido"}})
+    cfg.save_barrido("test_star", {"fecha": "2026-01-02", "n_hits": 0})
+    cfg.save_descubrimiento("test_star", {"fecha": "2026-01-03", "cobertura": {}})
+
+    cfg.save_no_disputa("test_star", _no_disputa())
+
+    assert [b["query"] for b in cfg.load_busquedas("test_star")] == ["q"]
+    assert cfg.load_decisiones("test_star")["2020X"]["motivo"] == "ruido"
+    reg = cfg.load_registro("test_star")
+    assert len(reg["barridos"]) == 1 and len(reg["descubrimientos"]) == 1
+    assert len(cfg.load_no_disputas("test_star")) == 1
+
+
+def test_persistir_un_par_no_toca_las_disputes_de_la_nota(toy_vault):
+    """Persistir un `aparente` **sólo evita re-juzgarlo**: no borra nada, no reabre nada y no toca
+    las `disputes[]` que ya están tagueadas en la ficha. Los dos carriles conviven —el barrido
+    excluye los pares ya juzgados *y* los ya tagueados— y son de dueños distintos: `disputes` es
+    contenido de la bóveda que el usuario aprobó, `no_disputas` es bitácora de la revisión.
+
+    El assert es sobre los **bytes** de la nota: cualquier reescritura, aunque preserve el YAML,
+    es un efecto colateral sobre prosa que alguien verificó (y movería el ancla de D-4)."""
+    from conftest import mk_note
+    nota = mk_note(toy_vault.STARS, "test_star",
+                   {"name": "Estrella Test", "slug": "test_star", "tags": ["star"],
+                    "disputes": [{"field": "P_rot",
+                                  "posiciones": [{"ref": "2018Autor", "value": 33},
+                                                 {"ref": "2021Autor", "value": 11.5}]}]},
+                   "# Estrella Test\n\nprosa.\n")
+    antes = nota.read_bytes()
+    cfg.save_no_disputa("test_star", _no_disputa())
+    assert nota.read_bytes() == antes
+
+
+def test_la_guarda_de_boveda_real_frena_una_escritura(tmp_path, monkeypatch):
+    """La red de INV-126, probada contra sí misma: escribir bajo el `vault/` del repo REAL explota.
+
+    Sin un test propio, la guarda es una fixture que nadie sabe si funciona — el mismo defecto que
+    venía a cubrir. Se prueba con una ruta **construida**, no escribiendo de verdad: si la guarda
+    fallara, este test crearía basura en la bóveda, que es justo lo prohibido.
+
+    @inv INV-126"""
+    from pathlib import Path
+    from conftest import BovedaRealTocada, _VAULT_REAL
+    with pytest.raises(BovedaRealTocada, match="ESCRIBIR en la bóveda real"):
+        cfg.write_text_atomic(_VAULT_REAL / "config" / "no-deberia-existir.yaml", "x")
+    # y una ruta de fuera de la bóveda sigue funcionando
+    destino = tmp_path / "libre.txt"
+    cfg.write_text_atomic(destino, "ok")
+    assert destino.read_text(encoding="utf-8") == "ok"
