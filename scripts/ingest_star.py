@@ -81,7 +81,8 @@ def main() -> int:
     # si se omiten. El contraste (3b) entró con #72 y es el de más apalancamiento — sin él la
     # síntesis se escribe sobre un solo paper por eje.
     print("\nCadena mecánica lista. Siguiente (LLM, skill ingest-star): barrido full-text (2b) → "
-          "TRIAGE de los candidatos del chaining (2c) → extracción por paper (3) → CONTRASTE "
+          "TRIAGE de los candidatos del chaining (2c) → una VISTA por paper (3, #188) + "
+          f"`python scripts/harvest_views.py {args.slug}` → CONTRASTE "
           "cross-paper / inventario por eje (3b) → síntesis a la ficha (3c) → verify-citations "
           "(5b) → lint.")
     return 0

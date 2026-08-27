@@ -468,9 +468,11 @@ def main() -> int:
                  f"(válidos: ads | {' | '.join(OFFADS_KINDS)}).")
     # Mismo criterio que en ingest_star: el hand-off nombra los pasos salteables con su número.
     # El contraste (3c, #72) faltaba, y es el que decide si la síntesis mira un paper o todos.
-    cfg.print_seguro("\nCadena mecánica lista. Siguiente (LLM, skill ingest-theme): extracción por paper (3) → "
-          "retro-tag por aliases (3b) → CONTRASTE cross-paper / inventario por eje (3c) → síntesis "
-          "del concept, con régimen de validez (4) → verify-citations (6b) → lint.")
+    cfg.print_seguro("\nCadena mecánica lista. Siguiente (LLM, skill ingest-theme): una VISTA por paper "
+          f"(3, #188) + `python scripts/harvest_views.py {args.slug} --theme` → "
+          "retro-tag por aliases (3b) —deja RECLAMOS, no lecturas— → CONTRASTE cross-paper / "
+          "inventario por eje (3c) → síntesis del concept, con régimen de validez (4) → "
+          "verify-citations (6b) → lint.")
     return 0
 
 
