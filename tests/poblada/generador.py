@@ -646,6 +646,13 @@ _(ninguno relevante — corpus sintético)_
                 "cadena": [{"paso": paso, "fecha": "2026-01-01", "version": ALMAGESTO_VERSION,
                             "via": "orquestador", "flags": []}
                            for paso in cfg.CADENA_ESTRELLA],
+                # #88: el barrido full-text (2b) también se siembra. Sin esto el corpus "limpio"
+                # reporta «la segunda red no consta» por cada estrella — el mismo ruido de fondo que
+                # este bloque ya evita para `busquedas`, `cadena` y `extraccion`. Vacío es válido y
+                # es el punto: un barrido que no encontró nada SÍ se registra.
+                "barridos": [{"fecha": "2026-01-01", "query": f"full:{slug}", "rows": 2000,
+                              "n_hits": 0, "n_nuevos": 0, "bibcodes": [],
+                              "almagesto_version": ALMAGESTO_VERSION}],
                 "extraccion": {"subconjunto": True, "fecha": "2026-01-01",
                                "criterio": "corpus sintético: se extrae una fracción a propósito"},
             })
