@@ -40,6 +40,7 @@ import json
 import re
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 from urllib.parse import quote, urlparse
 
 import yaml
@@ -719,6 +720,83 @@ def migrate_all_disputes() -> int:
     else:
         cfg.print_seguro("  → nada que migrar. (El lint NO lee el schema viejo: si queda alguno, lo reporta "
               "como bloqueante en vez de ignorarlo en silencio.)")
+    return 0
+
+
+def _subject_of_slug(slug: str) -> tuple[str, str] | None:
+    """`(sujeto, tipo)` del slug, o `None` si no está declarado en ningún YAML.
+
+    El sujeto es el nombre con el que un paper declara la entidad: el `concept` para un tema (no su
+    slug) y el nombre para una estrella. Es lo que hace comparables reclamo y lectura."""
+    try:
+        _, meta = cfg.theme_by_slug(slug)
+        return (str(meta.get("concept") or slug), "theme")
+    except (KeyError, RuntimeError):
+        pass
+    try:
+        return (cfg.star_by_slug(slug)[0], "star")
+    except (KeyError, RuntimeError):
+        return None
+
+
+def migrate_vistas(dest) -> str:
+    """Migración #188 de UNA nota de paper: `## Extracción (LLM)` sin scope → una VISTA declarada.
+
+    **No adivina.** `fulltext:` ya trae el slug del que se leyó, así que `sujeto`, `tipo` y `txt`
+    salen del archivo; `fecha` y `lente` quedan `null` = *no consta* — de una lectura vieja
+    genuinamente no se sabe ni cuándo fue ni con qué lente, y un valor inventado ahí sería peor que
+    el hueco (el lint la reporta como *vista sin fecha*, que es la verdad).
+
+    Los ambiguos —el mismo `.txt` bajo varios slugs, 30 en la instancia real— se **marcan y se
+    saltean**: elegir uno escribiría una lectura que quizá nunca ocurrió desde ese sujeto.
+
+    Devuelve el motivo del salteo (`""` si migró).  @inv INV-134"""
+    text = dest.read_text(encoding="utf-8")
+    fm = cfg.split_fm(text)
+    if cfg.as_list(fm.get("vistas")):
+        return ""                       # ya migrada: su vista puede tener fecha y lente REALES
+    if cfg.section_start(text, "## Extracción (LLM)") < 0:
+        return ""
+    ruta = str(fm.get("fulltext") or "").strip()
+    if not ruta:
+        return "sin `fulltext:`: no hay de dónde derivar desde qué sujeto se leyó"
+    slug = Path(ruta).parent.name
+    stem = Path(ruta).stem
+    otros = sorted({p.parent.name for p in cfg.FULLTEXT.glob(f"*/{stem}.txt")})
+    if len(otros) > 1:
+        return f"ambiguo: el `.txt` vive bajo {len(otros)} slugs ({', '.join(otros)})"
+    sujeto_tipo = _subject_of_slug(slug)
+    if sujeto_tipo is None:
+        return f"el slug `{slug}` de `fulltext:` no está declarado en stars.yaml ni themes.yaml"
+    sujeto, tipo = sujeto_tipo
+    vista = {"sujeto": sujeto, "tipo": tipo, "txt": slug, "fecha": None, "lente": None}
+    import harvest_views as hv
+    hv.upsert_view(dest, vista)
+    text = dest.read_text(encoding="utf-8")
+    ini = cfg.section_start(text, "## Extracción (LLM)")
+    fin = text.find("\n", ini)
+    cfg.write_text_atomic(dest, text[:ini] + f"## Vista — {sujeto}" + text[fin:])
+    return ""
+
+
+def migrate_all_vistas() -> int:
+    """Backfill #188 sobre las notas de paper de la bóveda.
+
+    El migrador es **opcional y de baja prioridad** (decisión del usuario, 2026-08-27: la escotilla
+    declarada es bóveda nueva desde cero) — pero el **detector no**: la regla del repo es migrador
+    de un solo uso *más* detector bloqueante, porque una nota con el schema viejo queda muda y se
+    lee como si tuviera vistas."""
+    notes = sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []
+    migradas, salteadas = 0, []
+    for n in notes:
+        motivo = migrate_vistas(n)
+        if motivo:
+            salteadas.append((n.stem, motivo))
+        else:
+            migradas += 1 if cfg.as_list(cfg.split_fm(n.read_text(encoding="utf-8")).get("vistas")) else 0
+    cfg.print_seguro(f"vistas: {migradas} nota(s) de paper migradas al schema de #188")
+    for stem, motivo in salteadas:
+        cfg.print_seguro(f"  ⚠ {stem}: {motivo} → resolvelo a mano (el lint lo bloquea hasta entonces)")
     return 0
 
 
@@ -2486,6 +2564,11 @@ def main() -> int:
                     help="migración #71: pasa `planets[].disputes[]` (polo de verdad hardcodeado) a "
                          "`disputes` a nivel nota con posiciones explícitas. Toca sólo las fichas "
                          "que tienen disputas viejas; no toca el cuerpo. No requiere slug.")
+    ap.add_argument("--migrate-vistas", action="store_true", dest="migrate_vistas",
+                    help="migración #188: la nota con una sola `## Extracción (LLM)` pasa a declarar "
+                         "su VISTA. Deriva sujeto/tipo/txt del `fulltext:` que ya trae el slug; "
+                         "`fecha` y `lente` quedan null (no consta). Los ambiguos se marcan, no se "
+                         "eligen. No requiere slug.")
     ap.add_argument("--migrate-verif-archivo", action="store_true", dest="migrate_verif_archivo",
                     help="migración #117: prefija cada `Hash fuente` del bloque de verificación con "
                          "el archivo que se leyó (`txt:`/`pdf:`), deducido del hash que la fila ya "
@@ -2550,6 +2633,8 @@ def main() -> int:
         return 0
     if args.migrate_disputes:
         return migrate_all_disputes()
+    if args.migrate_vistas:
+        return migrate_all_vistas()
     if args.sync_mirror:
         return sync_mirror()
     # `--rename-paper VIEJO NUEVO` ANTES del guard de slug: sus dos bibcodes son el argumento y no
@@ -2562,7 +2647,8 @@ def main() -> int:
         return 0
     if not args.slug:
         ap.error("falta el slug (corren sin slug: --restamp-pdf-links, --restamp-keywords, "
-                 "--restamp-headers, --migrate-disputes, --migrate-bearing, --sync-mirror y "
+                 "--restamp-headers, --migrate-disputes, --migrate-vistas, --migrate-bearing, "
+                 "--sync-mirror y "
                  "--rename-paper)")
 
     if args.web:

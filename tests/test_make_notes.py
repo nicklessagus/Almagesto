@@ -3219,3 +3219,76 @@ def test_el_retro_linkeo_NO_escribe_vistas(toy_vault):
     fm = read_fm(p)
     assert fm["vistas"] == antes, "el retro-link no declara una lectura que nadie hizo"
     assert "Estrella Test" in fm["stars"], "pero sí mergea el RECLAMO"
+
+
+# ── #188 paso 8 · el migrador de las notas del schema viejo ─────────────────────────────────────
+
+def _nota_schema_viejo(toy_vault, stem="2015old....1..1O", *, fulltext="test_star", extra=None):
+    """Nota de paper anterior a #188: una sola `## Extracción (LLM)`, sin `vistas[]`."""
+    fm = {"bibcode": stem, "tags": ["paper"], "relevance": "high", "stars": ["Estrella Test"],
+          "methods": ["periodograma"],
+          "fulltext": (f"../../raw/fulltext/{fulltext}/{stem}.txt" if fulltext else None)}
+    fm.update(extra or {})
+    return mk_note(toy_vault.PAPERS, stem, fm,
+                   "# T\n\n## Abstract\nx\n\n## Extracción (LLM)\n- **Métodos:** periodograma\n")
+
+
+def test_migrate_vistas_deriva_el_sujeto_del_archivo_que_se_leyo(toy_vault, capsys):
+    """El migrador **no adivina**: `fulltext:` ya trae el slug del que se leyó, así que `sujeto`,
+    `tipo` y `txt` salen del archivo. `fecha` y `lente` quedan `null` = **no consta** — de una
+    lectura vieja genuinamente no se sabe ni cuándo fue ni con qué lente, y un valor inventado ahí
+    sería peor que el hueco.
+
+    @inv INV-134"""
+    dest = _nota_schema_viejo(toy_vault)
+    assert mn.migrate_all_vistas() == 0
+    fm = read_fm(dest)
+    assert fm["vistas"] == [{"sujeto": "Estrella Test", "tipo": "star", "txt": "test_star",
+                             "fecha": None, "lente": None}]
+    assert "## Vista — Estrella Test" in dest.read_text(encoding="utf-8")
+    assert "## Extracción (LLM)" not in dest.read_text(encoding="utf-8")
+
+
+def test_migrate_vistas_conserva_la_prosa_de_la_extraccion(toy_vault, capsys):
+    """Es un renombre de encabezado, no una reescritura: lo que el LLM extrajo se queda."""
+    dest = _nota_schema_viejo(toy_vault)
+    mn.migrate_all_vistas()
+    assert "- **Métodos:** periodograma" in dest.read_text(encoding="utf-8")
+
+
+def test_migrate_vistas_marca_los_ambiguos_en_vez_de_elegir(toy_vault, capsys):
+    """El `.txt` bajo varios slugs (30 en la instancia real) no tiene un sujeto derivable: se
+    **marca y se saltea**. Elegir uno escribiría una lectura que quizá nunca ocurrió desde ahí."""
+    for d in ("test_star", "otro_slug"):
+        (toy_vault.FULLTEXT / d).mkdir(parents=True, exist_ok=True)
+        (toy_vault.FULLTEXT / d / "2015old....1..1O.txt").write_text("x", encoding="utf-8")
+    dest = _nota_schema_viejo(toy_vault)
+    mn.migrate_all_vistas()
+    assert "vistas" not in read_fm(dest)
+    assert "ambiguo" in capsys.readouterr().out.lower()
+
+
+def test_migrate_vistas_sin_fulltext_no_inventa(toy_vault, capsys):
+    """Sin `fulltext:` no hay de dónde derivar el sujeto. Se nombra la nota y no se toca."""
+    dest = _nota_schema_viejo(toy_vault, fulltext=None)
+    mn.migrate_all_vistas()
+    assert "vistas" not in read_fm(dest)
+    assert "2015old....1..1O" in capsys.readouterr().out
+
+
+def test_migrate_vistas_es_idempotente(toy_vault, capsys):
+    dest = _nota_schema_viejo(toy_vault)
+    mn.migrate_all_vistas()
+    primero = dest.read_text(encoding="utf-8")
+    mn.migrate_all_vistas()
+    assert dest.read_text(encoding="utf-8") == primero
+
+
+def test_migrate_vistas_no_toca_una_nota_ya_migrada(toy_vault, capsys):
+    """Contra-caso: una nota que YA tiene `vistas[]` no se re-deriva desde `fulltext:` — su vista
+    puede tener fecha y lente reales, y derivarlas de nuevo las borraría."""
+    dest = _nota_schema_viejo(toy_vault, extra={
+        "vistas": [{"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-08-01"}]})
+    antes = dest.read_text(encoding="utf-8")
+    mn.migrate_all_vistas()
+    assert dest.read_text(encoding="utf-8") == antes
