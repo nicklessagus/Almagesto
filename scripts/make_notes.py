@@ -1378,7 +1378,11 @@ def papers_universe(slug: str, kind: str, fms: dict | None = None) -> list:
             estado = ESTADO_SINTETIZADO
         else:
             estado = ESTADO_EXTRAIDO
-        filas.append({"stem": stem, "year": fm.get("year") or "", "relevance": fm.get("relevance") or "",
+        # #125: el TÍTULO. Sin él, la fila es un bibcode pelado y para saber si un paper `sin
+        # extraer` te sirve hay que abrir la nota, una por una (25 en un caso real). Es la puerta de
+        # entrada a los papers que están en el corpus buscable y todavía no en la síntesis.
+        filas.append({"stem": stem, "title": " ".join(str(fm.get("title") or "").split()),
+                      "year": fm.get("year") or "", "relevance": fm.get("relevance") or "",
                       "origen": "manual-drop" if stem in dropeados else ("manual" if stem in via_de else "lente"),
                       "via": via_de.get(stem, ""), "estado": estado})
     return sorted(filas, key=lambda r: r["stem"])
@@ -1402,10 +1406,16 @@ def papers_table(rows: list) -> str:
     if not rows:
         out += ["_(ninguna nota de paper declara este sujeto todavía.)_", ""]
         return "\n".join(out)
-    out += ["| Bibcode | Año | Relevancia | Origen | Estado |", "|---|---|---|---|---|"]
+    out += ["| Bibcode | Título | Año | Relevancia | Origen | Estado |",
+            "|---|---|---|---|---|---|"]
     for r in rows:
         origen = r["origen"] + (f" ({r['via']})" if r["via"] else "")
-        out.append(f"| [[{r['stem']}]] | {r['year']} | {r['relevance']} | {origen} | {r['estado']} |")
+        # el título se trunca y se escapa DESPUÉS: un `|` en el título parte la fila y corre todas
+        # las columnas de la derecha, que es el mismo defecto que INV-99 arregló en el bloque de
+        # verificación.
+        titulo = (r.get("title") or "")[:80].replace("|", "\\|")
+        out.append(f"| [[{r['stem']}]] | {titulo} | {r['year']} | {r['relevance']} | {origen} "
+                   f"| {r['estado']} |")
     out.append("")
     return "\n".join(out)
 

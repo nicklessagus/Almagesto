@@ -2920,3 +2920,26 @@ def test_migrar_verif_backfill_recorre_la_boveda(toy_vault, capsys):
     salida = capsys.readouterr().out
     assert "nota-verif.md: 1 fila(s)" in salida and "1 fila(s) declaran su archivo" in salida
     assert f"txt:{lb.source_hash(ft)}" in nota.read_text(encoding="utf-8")
+
+
+# ── #125 · la puerta de entrada al paper que no se sintetizó ─────────────────────────────────────
+
+def test_la_tabla_de_papers_lleva_el_titulo(toy_vault):
+    """Un paper `sin extraer` no es basura: su `.txt` participa de todo `grep` del corpus. Lo que
+    falta es la **puerta de entrada** — hoy la fila es `| [[1973Ap&SS..24..407B]] | 1973 | high |
+    lente | sin extraer |` y el bibcode no dice nada, así que para saber si ese paper te sirve hay
+    que abrir la nota una por una (25 en un caso real).
+
+    El título ya está en el frontmatter: es una columna más en un roll-up que ya se estampa.
+
+    @inv INV-115"""
+    mk_note(toy_vault.PAPERS, "2020tit....1..1A",
+            {"tags": ["paper"], "stars": ["Estrella Test"], "year": 2020, "relevance": "high",
+             "title": "Blind separation of telluric lines"}, "")
+    filas = mn.papers_universe("test_star", "star")
+    assert filas and filas[0].get("title") == "Blind separation of telluric lines"
+    tabla = mn.papers_table(filas)
+    assert "| Título |" in tabla or "| Titulo |" in tabla
+    assert "Blind separation of telluric lines" in tabla
+
+
