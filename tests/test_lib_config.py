@@ -1150,3 +1150,39 @@ def test_la_guarda_de_boveda_real_frena_una_escritura(tmp_path, monkeypatch):
     destino = tmp_path / "libre.txt"
     cfg.write_text_atomic(destino, "ok")
     assert destino.read_text(encoding="utf-8") == "ok"
+
+
+def test_save_no_disputa_estampa_la_fecha_si_no_viene(toy_vault):
+    """A3 del addendum: `save_no_disputa` estampa `fecha` cuando el llamador no la trae, y respeta la
+    suya cuando sí. Es un registro de **juicio**, y el precedente de esa familia (`save_sintesis`,
+    `save_extraccion`) la estampa solo — sin fecha, un juicio archivado no se puede pesar después.
+
+    ⚠ Este test existe porque el requisito estaba en el addendum y **ningún test lo verificaba**: un
+    requisito que nadie chequea es un deseo, no un contrato.  @inv INV-125"""
+    import datetime as _dt
+    cfg.save_no_disputa("test_star", {"bibcodes": ["2020A", "2021B"], "eje": "P_rot",
+                                      "veredicto": "aparente", "motivo": "distinta época"})
+    idx = cfg.load_no_disputas("test_star")
+    assert list(idx.values())[0]["fecha"] == _dt.date.today().isoformat()
+
+    cfg.save_no_disputa("test_star", {"bibcodes": ["2020C", "2021D"], "eje": "K",
+                                      "veredicto": "aparente", "motivo": "otro régimen",
+                                      "fecha": "2020-01-01"})
+    prop = cfg.load_no_disputas("test_star")[cfg.par_key("2020C", "2021D", "K")]
+    assert prop["fecha"] == "2020-01-01", "la del llamador no se pisa"
+
+
+def test_re_juzgar_un_par_appendea_y_gana_el_ultimo(toy_vault):
+    """A6 del addendum: un par puede volver a juzgarse cuando cambió la evidencia. Se **appendea**
+    —el registro es historial, y borrar el juicio viejo perdería por qué se pensó distinto— y la
+    consulta devuelve **el último**.
+
+    ⚠ Otro requisito del addendum que no tenía test.  @inv INV-125"""
+    for motivo in ("distinta época", "revisado: distinta definición del observable"):
+        cfg.save_no_disputa("test_star", {"bibcodes": ["2020A", "2021B"], "eje": "P_rot",
+                                          "veredicto": "aparente", "motivo": motivo,
+                                          "fecha": "2026-01-01"})
+    crudo = cfg.as_list((cfg.load_registro("test_star") or {}).get("no_disputas"))
+    assert len(crudo) == 2, "el historial guarda los dos juicios"
+    idx = cfg.load_no_disputas("test_star")
+    assert len(idx) == 1 and "distinta definición" in list(idx.values())[0]["motivo"], "gana el último"

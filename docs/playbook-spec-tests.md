@@ -44,6 +44,20 @@ empieza a escribir lo que al otro le resulta cómodo implementar, que es lo que 
    cubra se anota como **pregunta abierta**, no se inventa. Los tests de comportamiento nuevo nacen
    con `@pytest.mark.xfail(strict=True)`; los contra-casos nacen sin marca y **pasan desde ya**.
 
+⛔ **Y el agente de tests audita su propia COBERTURA contra la spec.** No alcanza con «escribí N
+tests»: hay que recorrer la spec **requisito por requisito** y decir cuál test verifica cada uno, y
+cuáles quedaron sin verificar. **Un requisito que ningún test chequea es un deseo, no un contrato.**
+
+El modo de falla es exactamente el que este método viene a evitar, un piso más arriba: nadie escribe
+un test complaciente, simplemente **falta**, y el conteo de tests da la sensación de cobertura. Vale
+igual para el **addendum**, que es donde más fácil pasa —son respuestas sueltas, no ítems numerados—.
+
+**Medido en el lote de skills de este repo (2026-08-26):** de 26 tests, la spec quedó con **tres
+huecos**: A3 (la fecha estampada), A6 (re-juzgar el mismo par) y el **ítem 5b entero**, que el agente
+de implementación reportó como «sin test que lo cubra» y el árbitro no actuó. El carril de
+persistencia estaba perfecto y **nada verificaba que el skill lo consultara**, que es justo el
+defecto que ese ítem venía a cerrar.
+
 3. **Addendum (árbitro).** Contestar las preguntas abiertas **antes** de lanzar la implementación.
    No es opcional: sin él los dos agentes divergen.
 
@@ -111,6 +125,9 @@ traiga la superficie de fixtures y firmas, para que no *necesite* leer.
 - [ ] La spec tiene contra-casos explícitos, no sólo el camino feliz.
 - [ ] Al agente de tests se le prohíbe explícitamente tocar el código.
 - [ ] Al agente de tests se le pide anotar preguntas abiertas en vez de inventar.
+- [ ] El agente de tests **audita su cobertura contra la spec, requisito por requisito**, y reporta
+      los que quedaron sin verificar (incluidos los del addendum).
+- [ ] El árbitro **cierra esos huecos** antes de dar el lote por terminado, o declara por qué no.
 - [ ] Se verifica que cada test falle por la ausencia del comportamiento y no por el andamiaje.
 - [ ] Las preguntas abiertas se contestan **antes** de lanzar implementación.
 - [ ] Al implementador se le prohíbe modificar tests, y se le dice qué hacer en cambio (escalar y

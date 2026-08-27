@@ -111,7 +111,10 @@ Requiere `pytest` (dev-only, no está en `requirements.txt`; los scripts no lo n
    runner sostenga la disciplina en vez de la memoria de quien lo escribe.
    Para **lotes** de ≥3 ítems que tocan el mismo código, el ciclo se hace con roles separados
    (spec → tests → implementación, agentes distintos): ver `docs/playbook-spec-tests.md`. Un lote
-   hecho así **no necesita el gate de mutación en su tanda**. El protocolo completo —incluidos el porqué medido, la trampa del `.pyc` al mutar y la
+   hecho así **no necesita el gate de mutación en su tanda**.
+   ⛔ Y el agente de tests **audita su cobertura contra la spec, requisito por requisito**: un
+   requisito que ningún test verifica es un deseo, no un contrato. Medido en el primer lote: 26
+   tests y **tres requisitos sin cubrir**, uno de ellos reportado por el implementador y no actuado. El protocolo completo —incluidos el porqué medido, la trampa del `.pyc` al mutar y la
    forma de repartir una tanda grande— está en `vault/STATUS.md`, *Protocolo de fixes*.
    ⚠ Corolario que ya mordió dos veces: **los asserts de contenido del lint van contra el archivo
    de reporte, no contra stdout** — la última línea de stdout es la ruta del reporte, que vive bajo

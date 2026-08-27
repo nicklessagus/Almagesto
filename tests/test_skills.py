@@ -366,3 +366,36 @@ def test_ningun_skill_inventa_flags_de_triage():
                     inventados.append(f"{skill}: {flag}")
     assert inventados == [], ("flags que `scripts/triage.py` no declara:\n  "
                               + "\n  ".join(sorted(set(inventados))))
+
+
+# ── Ítem 5b del addendum: el skill que CONSUME `no_disputas` ─────────────────────────────────────
+# ⚠ Estos tres tests existen porque el ítem 5b se implementó **sin test que lo cubriera** — el
+# agente de implementación lo reportó y el árbitro no actuó. Un requisito de la spec que ningún
+# test verifica es un deseo, no un contrato: el carril de persistencia puede quedar perfecto y el
+# skill no consultarlo nunca, que es exactamente el defecto que #63 vino a cerrar.
+
+def _find_contradictions() -> str:
+    return (RAIZ / ".claude" / "skills" / "find-contradictions" / "SKILL.md").read_text(
+        encoding="utf-8")
+
+
+def test_el_skill_de_contradicciones_consulta_los_pares_ya_juzgados():
+    """#63: el fan-out es caro —un subagente por par, leyendo DOS fulltext—. Si el skill no nombra
+    `load_no_disputas`, cada auditoría del mismo eje vuelve a gastar en los mismos pares."""
+    assert "load_no_disputas" in _find_contradictions()
+
+
+def test_el_skill_excluye_las_disputas_ya_tagueadas():
+    """La otra mitad de la exclusión: un desacuerdo que **ya** está en `disputes` está juzgado y
+    resuelto, y volver a proponerlo es re-litigar lo aprobado."""
+    t = _find_contradictions()
+    assert "disputes" in t and any(
+        v in t for v in ("excluye", "excluir", "excluyendo", "sin re-juzgar", "ya juzgados"))
+
+
+def test_el_cierre_reporta_cuantos_pares_se_saltearon():
+    """Un ahorro invisible no se puede auditar: si el barrido saltea 40 pares y no lo dice, no hay
+    forma de distinguir «ya estaban juzgados» de «el barrido no los encontró» — la misma distinción
+    que D-43 protege en todo el framework."""
+    t = _find_contradictions()
+    assert "saltear" in t or "salteados" in t or "saltearon" in t
