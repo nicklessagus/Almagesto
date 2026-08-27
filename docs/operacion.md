@@ -41,7 +41,7 @@ para ingestar. En Windows, los comandos de shell corren en Git Bash o WSL.
 | `vault/raw/ground_truth/<slug>.json` | Hechos auditables (NASA Exoplanet Archive + SIMBAD). |
 | `vault/raw/refs/` | Fuentes de diseño del patrón (gist Karpathy, guía de implementación). |
 | `vault/wiki/stars/<slug>.md` | Ficha por estrella (entidad). **Frontmatter = fuente de verdad** (`spectral_type`, `P_rot_days`, planetas, indicadores esperados, métodos). Lo que sale de NEA/SIMBAD es **espejo puro**: si el ground-truth no tiene el valor, el campo queda null y el dato de literatura va al cuerpo, citado. |
-| `vault/wiki/papers/<bibcode>.md` | Una nota por paper (metadata ADS + abstract + extracción LLM). |
+| `vault/wiki/papers/<bibcode>.md` | Una nota por paper (metadata ADS + abstract + **una VISTA por sujeto**: `vistas[]` en el frontmatter + `## Vista — <sujeto>` en el cuerpo, #188). |
 | `vault/wiki/concepts/<área>/` | Notas transversales. Áreas **abiertas** (cualquiera); `concept_areas` (objective.yaml) es referencia para el typo-check, no restricción — `methods`/`hypotheses` reservadas. |
 | `vault/wiki/queries/` | Preguntas contestadas contra el corpus. |
 | `vault/wiki/matrices/method_star.md` | Matriz método × estrella = huecos + backlog. |
@@ -120,6 +120,12 @@ python scripts/entity.py plan   <slug>              # las siete capas de una ent
 python scripts/entity.py delete <slug> --yes        # borrar sin dejar nada colgado (INV-19)
 python scripts/entity.py rename <viejo> <nuevo> --yes
 python scripts/citation_index.py    # índice invertido obra→citadores (caro: ADS + OpenAlex)
+python scripts/trace_invariants.py [--check]        # regenera docs/trazabilidad.md desde las marcas
+                                    #   `@inv` del código; `--check` sale 1 si quedó desactualizado
+python scripts/measure_layout.py [--json] [--por-slug] [--listar]
+                                    # diagnóstico: cuánto del corpus de `.txt` es multi-columna
+                                    #   (#44/#45 — condiciona cómo se BUSCA una cita). No toca nada,
+                                    #   exit 0 siempre
 python scripts/search_arxiv.py "independent component analysis" --categories stat.ML --rows 25
                                     # preview de un backend no-ADS: qué trae y qué clasifica como
                                     # core con TU lente. No baja ni escribe nada. ⚠ El orquestador
@@ -134,6 +140,12 @@ python scripts/discover.py --theme <slug>     # DESCUBRIMIENTO multi-backend (#1
                                     #   N, FALLÓ, o NO CORRIÓ y por qué. PROPONE; no clasifica
 python scripts/discover.py --topics "<tema en inglés>"   # el id T… de OpenAlex → `topic:` en themes.yaml
 python scripts/discover.py --resolve 10.1016/…           # ¿hay copia libre de ese DOI? (OpenAlex → Unpaywall)
+```
+
+**Paso 3 de la cadena — la extracción, por par (paper, sujeto)** (⚠ éstos **sí** dependen del sujeto:
+toman su `<slug>`, y por eso no son pasadas globales):
+
+```bash
 python scripts/extraction_prompt.py <slug> <bibcode> [--theme] [--out-dir DIR]
                                     # arma el prompt del paso 3 (extracción) para UN par
                                     # (paper, sujeto). Es INV-100: las reglas del skill viajan
@@ -191,10 +203,15 @@ encontró **18** banderas de `argparse` que ningún documento del repo nombraba 
 `fetch_web --force-note`, cuya propia ayuda dice *"PISA la extracción LLM"*. Un flag destructivo sin
 mención fuera de su `--help` no tiene dónde declararse como escotilla, que es justamente lo que este
 bloque arregla. Las otras quedan cubiertas por los bloques de arriba (`--prioridad`, `--drop-core`,
-`--accept-source`, `--migrate-verif-archivo`, los tres de `discover.py`, `extraction_prompt --out-dir`,
-`extract_fulltext --ocr`, `trace_invariants --check`) o son de conveniencia
-(`--max`, `--paper`, `--out`, `--limit`, `--accessed`, `--json`, `--por-slug`, `--listar`,
-`--no-chain`, `--root`): la lista completa está en el issue.
+`--accept-source`, `--migrate-verif-archivo`, `--theme`/`--topics`/`--resolve` de `discover.py`,
+`extraction_prompt --out-dir`, `extract_fulltext --ocr`, `trace_invariants --check`) o son de
+conveniencia (`--max`, `--paper`, `--out`, `--limit`, `--accessed`, `--json`, `--por-slug`,
+`--listar`, `--no-chain`, `--root`): la lista completa está en el issue.
+⚠ **Y la promesa todavía no se cumple del todo (re-medido el 2026-08-27):** siguen sin nombrarse en
+ningún documento `discover.py --seed <topic_id>` (el ranking por citas dentro de un topic de
+OpenAlex), `discover.py --min-citadores N` (el corte del descubrimiento anclado) y
+`make_notes.py --web … --pending {paywall|scan|unextractable|adquisicion} --reason "<motivo>"`
+(la fuente no conseguida, #80). `discover.py` declara **seis** banderas, no tres.
 
 **Migradores y backfills** (una sola corrida; el framework no lleva capas de retrocompatibilidad,
 así que cada cambio de schema entrega migrador **y** detector bloqueante — INV-64):
@@ -210,7 +227,6 @@ python scripts/make_notes.py --restamp-keywords   # D-17: `keywords:` desde buil
 python scripts/make_notes.py --restamp-pdf-links  # #47: el link [📄 PDF] ↔ frontmatter `pdf`
 python scripts/make_notes.py --sync-mirror        # #70: campos espejo de NEA que quedaron en null
 python scripts/make_notes.py --migrate-verif-archivo # #117: prefija cada `Hash fuente` con `txt:`/`pdf:`
-python scripts/make_notes.py --migrate-vistas     # #188: `## Extracción (LLM)` sin scope → una VISTA
 python scripts/make_notes.py --rename-paper VIEJO NUEVO   # D-19: ciclo preprint → publicado
 ```
 
@@ -229,8 +245,9 @@ Para TEMAS (en vez de estrellas): definir el tema en `vault/config/themes.yaml` 
 NEA/SIMBAD para un tema); `web` / `local-pdfs` (modo **off-ADS**, opt-in) procesa la bibliografía
 declarada en la lista `sources:` de la entrada — snapshots web citables vía `fetch_web.py` (defuddle)
 y PDFs locales copiados a la bóveda con clave `AAAA+Autor` (ver skill `ingest-theme`). Luego:
-extracción LLM (leer PDFs/fulltext → poblar `methods`, indicadores, P/K, síntesis), actualizar
-`index.md` y appendear a `log.md`. Ver `CLAUDE.md` para las operaciones en detalle.
+extracción LLM —**una VISTA por sujeto** (#188): leer PDFs/fulltext → poblar `methods`/`role`/
+`thesis_links`, indicadores, P/K → cosechar con `python scripts/harvest_views.py <slug> [--theme]`
+→ síntesis—, actualizar `index.md` y appendear a `log.md`. Ver `CLAUDE.md` para las operaciones en detalle.
 
 Los scripts tienen su **suite de tests** en `tests/` (pytest; sin red ni binarios externos —
 todo mockeado; corre en CI junto al lint). Diseño y alcance en `tests/README.md`; correr con
