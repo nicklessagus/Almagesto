@@ -881,6 +881,41 @@ def load_vistas(meta: dict, *, entry: str = "?") -> list:
     return out
 
 
+def load_no_vista(meta: dict, *, entry: str = "?") -> list:
+    """`no_vista` in canonical form: a list of maps `{sujeto, motivo}`.
+
+    The escape hatch for a subject that claims the paper and was never read from: the view of a
+    subject that only feeds a roll-up is OPTIONAL — what it cannot be is SILENT. Same rule and same
+    argument as `no_sintetizado` (#75) and the triage's `--reason`: no curating in silence.
+
+    Per subject, not the bare `no_vista: <motivo>` of the issue: a paper three subjects claim gets
+    skipped for a different reason in each, and a hatch without a subject would exempt all three.
+    `motivo` is required — a hatch that turns the finding off and leaves nothing in its place is
+    exactly what `--reason` exists to prevent."""
+    v = meta.get("no_vista")
+    if v is None:
+        return []
+    if not isinstance(v, list) or any(not isinstance(x, dict) for x in v):
+        raise VistasError(_no_vista_error(
+            entry, "`no_vista` no acepta un motivo suelto ni una lista de strings: sin `sujeto` la "
+                   "escotilla no dice de QUÉ reclamo se declara, y en un paper compartido eximiría "
+                   "a todos"))
+    out = []
+    for x in v:
+        sujeto, motivo = str(x.get("sujeto") or "").strip(), str(x.get("motivo") or "").strip()
+        faltan = [k for k, val in (("sujeto", sujeto), ("motivo", motivo)) if not val]
+        if faltan:
+            raise VistasError(_no_vista_error(
+                entry, f"a una entrada de `no_vista` le falta {', '.join(faltan)}"))
+        out.append(dict(x, sujeto=sujeto, motivo=motivo))
+    return out
+
+
+def _no_vista_error(entry: str, motivo: str) -> str:
+    return (f"'{entry}': {motivo}. Forma canónica:\n\nno_vista:\n  - sujeto: <el mismo nombre "
+            f"que usan stars[]/thesis_links[]>\n    motivo: <por qué este reclamo no se leyó>\n")
+
+
 def _vistas_error(entry: str, sujetos: list, motivo: str) -> str:
     """The detector's message, with the canonical form already written out to paste."""
     ejemplo = "\n".join(

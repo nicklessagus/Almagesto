@@ -371,6 +371,24 @@ _SEP_ROW = re.compile(r"^\|[\s\-:|]+\|?$")   # `|---|---|`: estructura, no conte
 INVENTARIO_HEADER = "## Inventario por eje"
 
 
+# #188 · las dos marcas del cuerpo de una nota de paper. `## Extracción (LLM)` es el schema VIEJO
+# (una sola sección, sin scope) y `## Vista — <sujeto>` el nuevo (una por lente). El guion se acepta
+# en sus tres formas: la escribe `make_notes` con el largo, pero una nota editada a mano con `-`
+# tendría la vista hecha y el detector la reportaría como ausente — un falso positivo sobre trabajo
+# real, que es la peor moneda de un gate bloqueante.
+EXTRACCION_VIEJA_RE = re.compile(r"^##\s+Extracci[oó]n\s*\(LLM\)\s*$", re.M)
+VISTA_RE = re.compile(r"^##\s+Vista\s*[—–-]\s*(.+?)\s*$", re.M)
+
+
+def vistas_en_cuerpo(text: str) -> set:
+    """Los sujetos que tienen su sección `## Vista — <sujeto>` en el cuerpo de la nota.
+
+    La sección NO va a `SECCIONES_ESTAMPADAS`: es exactamente lo que `verify-citations` tiene que
+    contrastar contra el `.txt` — la extracción es el paso más caro de la cadena y hoy es el menos
+    chequeado (6 de 908 notas de paper con bloque de verificación)."""
+    return {m.group(1).strip() for m in VISTA_RE.finditer(text)}
+
+
 def challenging_rows(text: str) -> int:
     """Cuántas filas de la tabla de evidencia (D-21) declaran postura `desafía` (#177).
 
@@ -954,7 +972,21 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     lente_desync: list = []            # (slug, delta) — la lente cambió desde la última corrida (D-49)
     bad_sources: list = []             # `sources:` sin via/motivo o con via inválida (#111)
     artefactos_colgados: list = []     # (capa, motivo) — capa de una entidad que ya no existe (INV-19)
+    # #188 · `vistas[]`: la extracción es una lectura CON LENTE y la nota tiene que decir cuál.
+    vistas_schema_viejo: list = []     # (stem, motivo) — `## Extracción (LLM)` sin `vistas[]`
+    vistas_vs_cuerpo: list = []        # (stem, motivo) — vista sin sección, o sección sin vista
+    reclamo_sin_vista: list = []       # (stem, sujeto) — lo reclama y nadie lo leyó desde ahí
+    reclamo_sin_vista_declarado: list = []   # ídem, con la escotilla `no_vista` y su motivo
 
+    # Los temas DECLARADOS (su `concept`, que es el nombre con el que un paper los nombra en
+    # `thesis_links`/`methods`). Una lectura del YAML por corrida, no por nota.
+    # `themes_error()` primero, el idioma del resto del archivo: con el YAML roto, `load_themes`
+    # LEVANTA y se llevaba puesto al lint entero — justo el "⛔ No evaluado" que INV-80 exige que se
+    # reporte en vez de morirse. El caso ya está declarado arriba (`subj_err`), así que acá alcanza
+    # con no contar reclamos por `methods`.
+    conceptos_de_temas = {str(m.get("concept") or slug_t)
+                          for slug_t, m in ({} if cfg.themes_error() else cfg.load_themes()).items()
+                          if isinstance(m, dict)}
     refs_dir = str(cfg.RAW / "refs")
     refs_stems = {basename(f)[:-3] for f in files if f.startswith(refs_dir)}  # docs de diseño, no fichas
     paper_fms: dict = {}               # {stem: frontmatter} de papers/ — para D-10, sin re-parsear
@@ -1334,6 +1366,62 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             # aplicación NO es contraste sino instanciación, y leerlo como desacuerdo fabrica
             # disputas falsas. Se puebla en la extracción (la regex del clasificador no puede
             # inferirlo) — por eso el aviso cuelga de `methods`, la marca de "ya se extrajo".
+            # #188 · qué LECTURA se hizo. `stars`/`thesis_links`/`methods` son RECLAMOS (el
+            # retro-link los mergea add-only sin leer nada); `vistas[]` son lecturas. Sin la
+            # distinción, el silencio de la nota sobre un eje es indistinguible de «se miró y no
+            # hay nada» — el mismo falso limpio que D-34 persigue en las hipótesis.
+            try:
+                vistas = cfg.load_vistas(fm, entry=stem)
+                no_vista = {v["sujeto"]: v["motivo"] for v in cfg.load_no_vista(fm, entry=stem)}
+            except cfg.VistasError as e:
+                # Se REPORTA, no tumba el barrido: es la razón de que el loader levante en vez de
+                # salir. Cae en `fm_broken` porque es literalmente eso — un campo con forma
+                # inválida hace que la nota evada los chequeos de su tipo (los cuatro de abajo).
+                fm_broken.append((stem, str(e).replace("\n", " ")))
+                vistas, no_vista = [], {}
+            else:
+                secciones = vistas_en_cuerpo(text)
+                declaradas = {v["sujeto"] for v in vistas}
+                #  @inv INV-134
+                if not vistas and EXTRACCION_VIEJA_RE.search(text):
+                    vistas_schema_viejo.append(
+                        (stem, "`## Extracción (LLM)` sin `vistas[]`: no consta desde qué sujeto se "
+                               "leyó este paper, así que su silencio sobre un eje no se distingue "
+                               "de «se miró y no hay nada» → declarar la vista (schema #188)"))
+                for falta in sorted(declaradas - secciones):
+                    vistas_vs_cuerpo.append(
+                        (stem, f"`vistas[]` declara la lectura de **{falta}** y el cuerpo no tiene "
+                               f"su `## Vista — {falta}`: afirma una lectura que no está"))
+                for falta in sorted(secciones - declaradas):
+                    vistas_vs_cuerpo.append(
+                        (stem, f"`## Vista — {falta}` sin entrada en `vistas[]`: no consta de qué "
+                               f"`.txt` salió ni con qué lente se leyó"))
+                # Reclamado y no leído. Sólo si la nota YA tiene alguna vista: a una del schema
+                # viejo la reporta la categoría de arriba, y pedirle además una vista por sujeto
+                # duplicaría el hallazgo en cada nota del corpus — así nace un backlog de 900 que
+                # nadie mira.
+                if vistas:
+                    # Qué cuenta como RECLAMO, y por qué `methods` no entra entero: `stars` y
+                    # `thesis_links` los siembra el ingest —son «este sujeto pidió que se leyera
+                    # este paper»—, mientras que `methods` lo puebla la EXTRACCIÓN, o sea que es un
+                    # producto de la lectura («este paper usa un periodograma») y no un sujeto que
+                    # la pidió. Contarlo entero le exigiría una vista propia a cada método
+                    # nombrado, y así nace un backlog de centenares que nadie mira. Cuenta sólo
+                    # cuando ese nombre ES un tema declarado, que es cuando su roll-up alcanza al
+                    # paper — el mismo predicado de pertenencia que `_papers_del_sujeto` (D-24).
+                    reclamos = {str(x).strip()
+                                for campo in ("stars", "thesis_links")
+                                for x in cfg.as_list(fm.get(campo)) if str(x).strip()}
+                    reclamos |= {str(x).strip() for x in cfg.as_list(fm.get("methods"))
+                                 if str(x).strip() in conceptos_de_temas}
+                    for sujeto in sorted(reclamos - declaradas):
+                        if sujeto in no_vista:
+                            reclamo_sin_vista_declarado.append(
+                                (stem, f"**{sujeto}** — {no_vista[sujeto]}"))
+                        else:
+                            reclamo_sin_vista.append(
+                                (stem, f"lo reclama **{sujeto}** y nadie lo leyó desde ahí → hacer "
+                                       f"la vista, o declararla con `no_vista` y su motivo"))
             rol = fm.get("role")
             roles = rol if isinstance(rol, list) else ([rol] if rol else [])
             for r in roles:
@@ -2431,6 +2519,10 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                   'para el punto ciego de la query se haya tendido (backlog)',
                   SEV_BACKLOG, tuple(sweep_pendiente)),
         Categoria('triage_pending', 'Triage pendiente: candidatos del chaining sin juzgar (backlog)', SEV_BACKLOG, tuple(triage_pending)),
+        Categoria('vistas_schema_viejo', '⛔ Extracción sin declarar la LENTE: `## Extracción (LLM)` sin `vistas[]` (schema viejo, #188)', SEV_BLOQUEANTE, tuple(vistas_schema_viejo)),
+        Categoria('vistas_vs_cuerpo', '⛔ `vistas[]` ↔ cuerpo: vista declarada sin su sección, o sección sin declarar', SEV_BLOQUEANTE, tuple(vistas_vs_cuerpo)),
+        Categoria('reclamo_sin_vista', 'Reclamado por un sujeto y nunca leído desde ahí (backlog: la vista es opcional, el silencio no)', SEV_BACKLOG, tuple(reclamo_sin_vista)),
+        Categoria('reclamo_sin_vista_declarado', 'Reclamo sin vista DECLARADO con `no_vista` + motivo (visible, no es deuda)', SEV_BACKLOG, tuple(reclamo_sin_vista_declarado)),
         Categoria('extraccion_no_declarada', 'Recorte de lectura sin declarar: hay core sin extraer y el registro no dice por qué (backlog)', SEV_BACKLOG, tuple(extraccion_no_declarada)),
         Categoria('papers_table_stale', 'Lista de papers desactualizada: la tabla estampada no refleja el universo (backlog)', SEV_BACKLOG, tuple(papers_table_stale)),
         Categoria('cadena_incompleta', 'Cadena incompleta: falta un paso del orden canónico (backlog)', SEV_BACKLOG, tuple(cadena_incompleta)),

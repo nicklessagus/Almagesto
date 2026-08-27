@@ -515,12 +515,12 @@ def test_paper_sin_extraer_no_se_le_pide_role(toy_vault, capsys):
 
 # ── #75: extraído pero no sintetizado ────────────────────────────────────────
 
-def paper_extraido(toy_vault, stem="2020ext....1E", **extra):
+def paper_extraido(toy_vault, stem="2020ext....1E", *, body="", **extra):
     """Nota de paper que YA pasó por la extracción cara (`methods` poblado)."""
     fm = {"tags": ["paper"], "relevance": "high", "methods": ["periodograma"],
           "thesis_links": [], "bearing": None}
     fm.update(extra)
-    return mk_note(toy_vault.PAPERS, stem, fm, "")
+    return mk_note(toy_vault.PAPERS, stem, fm, body)
 
 
 def test_extraido_sin_llegar_a_ninguna_entidad_es_backlog(toy_vault, capsys):
@@ -3495,3 +3495,145 @@ def test_una_hipotesis_disputada_con_filas_desafia_no_se_marca(toy_vault, capsys
             "| [[2019A]] | apoya | \"x\" | 1 | — |\n"
             "| [[2020B]] | desafía | \"y\" | 2 | — |\n")
     assert lint.collect().por_clave("status_vs_evidencia").items == ()
+
+
+# ── #188 paso 2 · el detector de `vistas[]` ─────────────────────────────────────────────────────
+#
+# La extracción es una lectura CON LENTE y hasta ahora la nota no declaraba cuál se hizo. Los
+# detectores separan tres estados que antes eran uno solo (silencio):
+#   · schema viejo  → `## Extracción (LLM)` sin `vistas[]`: no consta con qué lente se leyó
+#   · declarado y ausente → vista sin sección / sección sin vista
+#   · reclamado y no leído → backlog, o informativo si `no_vista` lo declara con motivo
+
+def paper_con_vista(toy_vault, stem="2020vis....1V", *, vistas=None, body=None, **extra):
+    """Nota de paper en el schema NUEVO: `vistas[]` + su sección `## Vista — <sujeto>`."""
+    vistas = [{"sujeto": "Estrella Test", "tipo": "star"}] if vistas is None else vistas
+    fm = {"tags": ["paper"], "relevance": "high", "methods": ["periodograma"],
+          "stars": ["Estrella Test"], "role": ["aplicacion"], "no_sintetizado": "tangencial",
+          "vistas": vistas}
+    fm.update(extra)
+    if body is None:
+        body = "".join(f"## Vista — {v['sujeto']}\n\nLo que dice sobre el sujeto.\n\n"
+                       for v in vistas if isinstance(v, dict))
+    return mk_note(toy_vault.PAPERS, stem, fm, body)
+
+
+def test_schema_viejo_sin_vistas_es_bloqueante(toy_vault, capsys):
+    """Regla del repo: schema nuevo = migrador de un solo uso **+ detector bloqueante**, nunca
+    lector tolerante. Sin el detector, una nota con una sola `## Extracción (LLM)` queda muda y se
+    lee como si tuviera la vista hecha — que es el falso limpio que #188 existe para cerrar.
+
+    @inv INV-134"""
+    paper_extraido(toy_vault, no_sintetizado="tangencial", role=["aplicacion"],
+                   body="## Extracción (LLM)\n\n- **Planetas** — —\n")
+    r = lint.collect()
+    cat = r.por_clave("vistas_schema_viejo")
+    assert len(cat) == 1 and "2020ext....1E" == cat.items[0][0]
+    assert "vistas_schema_viejo" in [c.clave for c in r.bloquean()], "cuenta para el exit"
+    assert run_lint(capsys)[0] == 1
+
+
+def test_una_nota_sin_extraccion_y_sin_vistas_no_dispara_nada(toy_vault, capsys):
+    """Contra-caso: el stub recién creado (todavía sin leer) no es schema viejo. El detector se
+    dispara por la SECCIÓN, no por la ausencia del campo — si no, toda nota nueva nacería en rojo."""
+    mk_note(toy_vault.PAPERS, "2020stb....1S",
+            {"tags": ["paper"], "relevance": "low", "stars": ["Estrella Test"]}, "")
+    r = lint.collect()
+    assert r.por_clave("vistas_schema_viejo").items == ()
+    assert r.por_clave("vistas_vs_cuerpo").items == ()
+
+
+def test_vista_declarada_sin_su_seccion_es_bloqueante(toy_vault, capsys):
+    """Declarar una lectura que no está es peor que no declararla: el frontmatter afirma que el
+    paper se leyó desde ese sujeto y no hay prosa que `verify-citations` pueda contrastar.
+
+    @inv INV-134"""
+    paper_con_vista(toy_vault, body="Prosa suelta, sin la sección de la vista.\n")
+    r = lint.collect()
+    cat = r.por_clave("vistas_vs_cuerpo")
+    assert len(cat) == 1 and "Estrella Test" in cat.items[0][1]
+    assert "vistas_vs_cuerpo" in [c.clave for c in r.bloquean()]
+
+
+def test_seccion_de_vista_sin_declarar_es_bloqueante(toy_vault, capsys):
+    """El otro lado: hay prosa de una lectura que el frontmatter no declara, así que no consta ni
+    de qué `.txt` salió ni con qué lente — la misma conflación, al revés."""
+    paper_con_vista(toy_vault, body="## Vista — Estrella Test\n\nx\n\n## Vista — s_index\n\ny\n")
+    cat = lint.collect().por_clave("vistas_vs_cuerpo")
+    assert len(cat) == 1 and "s_index" in cat.items[0][1]
+
+
+def test_vista_y_seccion_coherentes_no_disparan(toy_vault, capsys):
+    """Contra-caso del par de arriba: el caso bueno tiene que quedar en cero, o el detector es
+    ruido fijo y se apaga."""
+    paper_con_vista(toy_vault)
+    assert lint.collect().por_clave("vistas_vs_cuerpo").items == ()
+
+
+def test_reclamo_sin_vista_es_backlog_y_nombra_al_sujeto(toy_vault, capsys):
+    """El caso medido: 141 de 908 notas reclamadas por 2+ sujetos y NI UNA con segunda vista. Es
+    backlog —la vista del sujeto que sólo aporta al roll-up es opcional— pero **nombrada**: hoy eso
+    salía como "extraído pero no sintetizado", que atribuye el hueco al lugar equivocado.
+
+    @inv INV-134"""
+    paper_con_vista(toy_vault, thesis_links=["s_index"])
+    r = lint.collect()
+    cat = r.por_clave("reclamo_sin_vista")
+    assert len(cat) == 1 and "s_index" in cat.items[0][1]
+    # la severidad, no el rc: el rc de este escenario lo mueve el `thesis_links` sin página
+    # destino (bloqueante, otra categoría) y assertarlo acá mediría el fixture, no el detector.
+    assert "reclamo_sin_vista" not in [c.clave for c in r.bloquean()], "backlog: no bloquea"
+
+
+def test_reclamo_declarado_con_no_vista_es_informativo(toy_vault, capsys):
+    """La escotilla con motivo obligatorio, misma familia que `no_sintetizado` y que la prosa
+    retractada MARCADA: el hallazgo baja a informativo y el motivo queda a la vista."""
+    paper_con_vista(toy_vault, thesis_links=["s_index"],
+                    no_vista=[{"sujeto": "s_index", "motivo": "sólo aporta al roll-up"}])
+    r = lint.collect()
+    assert r.por_clave("reclamo_sin_vista").items == ()
+    cat = r.por_clave("reclamo_sin_vista_declarado")
+    assert len(cat) == 1 and "sólo aporta al roll-up" in cat.items[0][1]
+    assert "reclamo_sin_vista_declarado" not in [c.clave for c in r.bloquean()]
+
+
+def test_reclamo_sin_vista_no_se_le_pide_a_una_nota_del_schema_viejo(toy_vault, capsys):
+    """Contra-caso: una nota sin ninguna vista ya está reportada por `vistas_schema_viejo` (o no se
+    leyó nunca). Pedirle además una vista por sujeto duplicaría el hallazgo en cada nota vieja del
+    corpus, que es cómo un backlog nace con 900 ítems y se deja de mirar."""
+    paper_extraido(toy_vault, thesis_links=["s_index"], role=["aplicacion"],
+                   no_sintetizado="tangencial", body="## Extracción (LLM)\n\n- x\n")
+    assert lint.collect().por_clave("reclamo_sin_vista").items == ()
+
+
+def test_vistas_con_forma_invalida_se_reporta_y_no_tumba_el_lint(toy_vault, capsys):
+    """`load_vistas` levanta `VistasError`, no `SystemExit`, justamente para esto: el lint recorre
+    todas las notas y una rota se REPORTA. Cae en `fm_broken`, que es lo que la categoría dice —
+    una nota cuyo frontmatter no se puede leer evade los chequeos de su tipo."""
+    paper_con_vista(toy_vault, vistas="Estrella Test", body="")
+    r = lint.collect()
+    cat = r.por_clave("fm_broken")
+    assert len(cat) == 1 and "vistas" in cat.items[0][1]
+    assert run_lint(capsys)[0] == 1
+
+
+def test_no_vista_con_forma_invalida_tambien_se_reporta(toy_vault, capsys):
+    paper_con_vista(toy_vault, thesis_links=["s_index"], no_vista="sólo roll-up")
+    cat = lint.collect().por_clave("fm_broken")
+    assert len(cat) == 1 and "no_vista" in cat.items[0][1]
+
+
+def test_methods_no_es_un_reclamo_salvo_que_sea_un_tema_declarado(toy_vault, capsys):
+    """`stars` y `thesis_links` los SIEMBRA el ingest (*este sujeto pidió que se leyera este
+    paper*); `methods` lo puebla la EXTRACCIÓN, así que es un producto de la lectura (*este paper
+    usa un periodograma*), no un sujeto que la pidió. Contarlo entero le exigiría vista propia a
+    cada método nombrado — un backlog de centenares el primer día."""
+    paper_con_vista(toy_vault, methods=["periodograma"])
+    assert lint.collect().por_clave("reclamo_sin_vista").items == ()
+
+    # …pero sí cuenta cuando ese nombre ES un tema declarado: ahí su roll-up alcanza al paper
+    # (mismo predicado de pertenencia que `_papers_del_sujeto`, D-24).
+    write_yaml(toy_vault.THEMES_YAML, {"periodograma": {"title": "Periodograma",
+                                                        "concept": "periodograma"}})
+    cat = lint.collect().por_clave("reclamo_sin_vista")
+    assert len(cat) == 1 and "periodograma" in cat.items[0][1]

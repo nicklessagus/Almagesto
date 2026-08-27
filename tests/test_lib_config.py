@@ -1251,6 +1251,7 @@ V_OK = [{"sujeto": "eps Eridani", "tipo": "star", "fecha": "2026-08-27",
 
 
 def test_load_vistas_forma_canonica(toy_vault):
+    """@inv INV-134"""
     assert cfg.load_vistas({"vistas": V_OK}, entry="2000ApJ...544L.145H") == V_OK
 
 
@@ -1329,3 +1330,44 @@ def test_vista_tipos_declarado_una_sola_vez(toy_vault):
     generador y validador. Dos declaraciones es cómo el generador escribe lo que el validador
     bloquea."""
     assert cfg.VISTA_TIPOS == ("star", "theme")
+
+
+# ── #188 paso 2 · `no_vista`: la escotilla del reclamo que nadie leyó ───────────────────────────
+#
+# Un paper reclamado por tres sujetos y leído desde uno no es de por sí un defecto: la vista de un
+# sujeto que sólo aporta al roll-up es OPCIONAL. Lo que no puede pasar es que sea SILENCIOSA —
+# mismo criterio y mismo argumento que `no_sintetizado` (#75) y que el `--reason` del triage: no
+# curar en silencio. Por sujeto, porque un paper compartido se saltea por motivos distintos en cada
+# uno; el escalar del issue no puede expresar eso.
+
+def test_load_no_vista_forma_canonica(toy_vault):
+    nv = [{"sujeto": "s_index", "motivo": "sólo aporta al roll-up de métodos"}]
+    assert cfg.load_no_vista({"no_vista": nv}, entry="X") == nv
+
+
+def test_no_vista_ausente_es_lista_vacia(toy_vault):
+    assert cfg.load_no_vista({}, entry="X") == []
+    assert cfg.load_no_vista({"no_vista": None}, entry="X") == []
+
+
+def test_no_vista_escalar_detectado(toy_vault):
+    """El `no_vista: <motivo>` suelto que el issue escribe no dice DE QUÉ SUJETO se declara: en un
+    paper que tres sujetos reclaman, la escotilla sin sujeto exime a los tres."""
+    with pytest.raises(cfg.VistasError) as exc:
+        cfg.load_no_vista({"no_vista": "sólo aporta al roll-up"}, entry="X")
+    assert "sujeto:" in str(exc.value) and "motivo:" in str(exc.value)
+
+
+def test_no_vista_sin_motivo_detectado(toy_vault):
+    """Motivo obligatorio: sin él la escotilla apaga el hallazgo y no deja nada en su lugar, que es
+    exactamente lo que `--reason` existe para impedir."""
+    with pytest.raises(cfg.VistasError):
+        cfg.load_no_vista({"no_vista": [{"sujeto": "s_index"}]}, entry="X")
+    with pytest.raises(cfg.VistasError):
+        cfg.load_no_vista({"no_vista": [{"motivo": "m"}]}, entry="X")
+
+
+def test_no_vista_normaliza_y_no_muta(toy_vault):
+    meta = {"no_vista": [{"sujeto": " s_index ", "motivo": " roll-up "}]}
+    assert cfg.load_no_vista(meta, entry="X") == [{"sujeto": "s_index", "motivo": "roll-up"}]
+    assert meta["no_vista"][0]["sujeto"] == " s_index "
