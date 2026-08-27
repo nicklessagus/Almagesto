@@ -599,7 +599,15 @@ def main() -> int:
     if not cands:
         cfg.print_seguro("  → nada pendiente. (Los candidatos aparecen tras un query_ads con chaining.)")
         return 0
-    for c in sorted(cands, key=lambda c: c.get("citation_count") or 0, reverse=True):
+    # #79 (cuarta fuga de ranking): por TASA de citas, no por cuenta cruda. La cuenta está sesgada
+    # por la edad —un paper viejo tuvo más tiempo de acumularlas— y acá se decide qué ENTRA al
+    # corpus: con orden crudo, un candidato reciente y pertinente queda sistemáticamente abajo del
+    # corte visual. Política ÚNICA de `lib_config`, la misma que ordena el barrido (#88) y el
+    # apéndice de excluidos: tres `sort(key=…)` inline en archivos distintos era la garantía de que
+    # cambiar uno dejara los otros viejos sin que nadie lo notara.
+    # @inv INV-120
+    ordenados = cfg.sort_by_citation_rate(cands)
+    for c in ordenados:
         cfg.print_seguro(row(c))
     if args.report:
         report(args.slug, cands)
@@ -613,7 +621,7 @@ def main() -> int:
     # cada aceptación. Con el snippet, aceptar sigue siendo copiar y pegar — y el registro gana el
     # dato que el carril del descarte ya tenía (quién y por qué), que era la asimetría.
     cfg.print_seguro("\n  extra_core:")
-    for c in sorted(cands, key=lambda c: c.get("citation_count") or 0, reverse=True)[:10]:
+    for c in ordenados[:10]:
         cfg.print_seguro(f"  - bibcode: {c['bibcode']}\n"
                          f"    via: triage\n"
                          f"    fecha: {dt.date.today().isoformat()}\n"

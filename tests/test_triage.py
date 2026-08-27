@@ -696,3 +696,28 @@ def test_prioridad_agrupa_por_puerta_en_un_tema(toy_vault, capsys, monkeypatch):
     assert "fundacional" in out and "astro" in out
     assert "1 sólo fundacional" in out or "fundacional (1)" in out or "· fundacional" in out
     assert "política" in out.lower(), "propone elegir por política, no paper por paper"
+
+
+def test_el_listado_del_triage_ordena_por_tasa_no_por_citas_crudas(toy_vault, capsys, monkeypatch):
+    """#79, la cuarta fuga de ranking — la última que quedaba con orden crudo.
+
+    La cuenta de citas está sesgada por la **edad**: un paper viejo tuvo más tiempo de acumularlas.
+    En el triage eso importa especialmente porque acá se decide **qué entra al corpus**, y un
+    candidato reciente y pertinente queda sistemáticamente abajo del corte visual.
+
+    Se usa la política ÚNICA de `lib_config.sort_by_citation_rate`, que ya ordena el barrido y el
+    apéndice de excluidos: tres `sort(key=…)` inline en archivos distintos era garantía de que
+    cambiar uno dejara los otros viejos sin que nadie lo notara.  @inv INV-120"""
+    build = cfg.ROOT / "build" / "test_star"
+    build.mkdir(parents=True, exist_ok=True)
+    (build / "ads.json").write_text(json.dumps({"records": [], "candidates": [
+        {"bibcode": "1995Viejo..1..1A", "title": "viejo", "citation_count": 300, "year": 1995},
+        {"bibcode": "2025Nuevo..1..1A", "title": "nuevo", "citation_count": 60, "year": 2025},
+    ]}), encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["triage.py", "test_star"])
+    triage.main()
+    out = capsys.readouterr().out
+    pos_nuevo, pos_viejo = out.find("2025Nuevo"), out.find("1995Viejo")
+    assert pos_nuevo >= 0 and pos_viejo >= 0
+    assert pos_nuevo < pos_viejo, ("60 citas en 1 año es más tasa que 300 en 30: el orden crudo "
+                                   "esconde al reciente, que es el que menos tiempo tuvo")

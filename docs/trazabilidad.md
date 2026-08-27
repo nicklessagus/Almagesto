@@ -7,9 +7,9 @@
 
 ## Resumen
 
-- Invariantes en el contrato: **119**
-- Con implementación marcada: **96**
-- Con test marcado: **116** (techo `sin_test`: 3, hoy 3)
+- Invariantes en el contrato: **120**
+- Con implementación marcada: **97**
+- Con test marcado: **117** (techo `sin_test`: 3, hoy 3)
 - Sin ninguna marca: **3** (techo `sin_marca`: 3)
 - Marcas huérfanas: **0**
 
@@ -79,6 +79,7 @@
 | **INV-117** | P0 | garantizado y medido | `scripts/lib_blocks.py:366` · `resueltos` | `tests/test_lint.py:3333` · `test_veredicto_sin_resolver_en_el_bloque_bloquea`<br>`tests/test_lint.py:3349` · `test_contradice_tambien_cuenta_y_soportada_no` |
 | **INV-118** | P1 | garantizado y medido | `scripts/lib_config.py:936` · `save_barrido` | `tests/test_lint.py:3363` · `test_el_barrido_sin_rastro_se_reporta`<br>`tests/test_query_ads.py:1766` · `test_el_sweep_queda_en_el_registro`<br>`tests/test_query_ads.py:1787` · `test_el_sweep_sin_hallazgos_tambien_deja_rastro` |
 | **INV-119** | P1 | garantizado y medido | `scripts/query_ads.py:137` · `search_fq` | `tests/test_query_ads.py:1809` · `test_el_fq_del_buscador_sale_del_objetivo`<br>`tests/test_query_ads.py:1818` · `test_sin_declarar_el_fq_sigue_siendo_astro`<br>`tests/test_query_ads.py:1826` · `test_fq_nulo_explicito_no_acota_nada` |
+| **INV-120** | P2 | garantizado y medido | `scripts/triage.py:608` · `main` | `tests/test_triage.py:710` · `test_el_listado_del_triage_ordena_por_tasa_no_por_citas_crudas` |
 | **INV-48** | P0 | garantizado y medido | `scripts/triage.py:155` · `drop` | `tests/test_triage.py:60` · `test_drop_persiste_con_motivo_en_config_versionada` |
 | **INV-49** | P0 | parcial (medido, con la brecha nombrada) | `scripts/query_ads.py:586` · `load_triage` | `tests/test_query_ads.py:1175` · `test_main_triage_no_repropone_descartados` |
 | **INV-50** | P0 | garantizado y medido | `scripts/query_ads.py:571` · `subject_in_title` | `tests/test_query_ads.py:1159` · `test_main_chaining_solo_auto_acepta_sujeto_en_titulo` |
