@@ -853,7 +853,7 @@ def test_main_extra_core_escalar_no_pierde_la_curacion(toy_vault, monkeypatch, c
     assert pedidos == ["1988old.....1O"], f"se le pidió a ADS: {pedidos}"
 
 
-def test_main_aliases_escalar_en_stars_yaml(toy_vault, monkeypatch):
+def test_main_aliases_escalar_en_stars_yaml(toy_vault, monkeypatch, capsys):
     """`query_ads.py:860` (y su gemelo 613, `make_notes.py:984/1093`) —
     `[cfg.require_field(...)] + meta.get("aliases", [])`.
 
@@ -874,7 +874,21 @@ def test_main_aliases_escalar_en_stars_yaml(toy_vault, monkeypatch):
                         lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False: [])
     monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
     monkeypatch.setattr(qa, "fetch_bibcodes", lambda bibs: [])
-    run_main(monkeypatch, ["test_star"])      # no debe reventar con TypeError: el alias mal escrito se reporta
+    # ⚠ **#182.** Esto asserteaba SÓLO «no revienta con TypeError», y el comentario afirmaba además
+    # que «el alias mal escrito se reporta» sin medirlo. Con eso, cambiar `_listify_curado` por
+    # `cfg.as_list` —que TIRA el escalar en vez de preservarlo— dejaba la suite ENTERA verde: el
+    # alias se perdía en silencio, y un alias que falta es un paper que nunca aparece, degradando
+    # los tres mecanismos de recall a la vez (#82). Se mide lo que la función promete.
+    queries: list = []
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        queries.append(q) or [])
+    run_main(monkeypatch, ["test_star"])
+    assert queries and "HD 12345" in queries[0], (
+        "el alias escalar tiene que LLEGAR a la query, no perderse: `listify_curado` lo preserva "
+        f"(`as_list` lo tiraría). Query efectiva: {queries[0] if queries else None!r}")
+    assert "escrito como escalar" in capsys.readouterr().out, \
+        "y se reporta, para que la forma se corrija en origen"
 
 
 def test_main_tema_extra_only(toy_vault, toy_classifier, no_sleep, monkeypatch):

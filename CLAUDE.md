@@ -1334,7 +1334,14 @@ también para los scripts de una sola operación. Detalle y ratchets en
 1. **Mutación** — `python tools/mutar.py --diff`: romper cada función y exigir que **algún test
    muera**. Es lo único que distingue "el test pasa" de "el test **podría** fallar". Trabaja sobre
    una copia del repo, nunca sobre el árbol real.
-   ⚠ **Cadencia (decidida con el usuario, 2026-08-26):** un **lote** hecho con roles separados
+   ⛔ **Cadencia (decidida con el usuario, 2026-08-27): NO se corre salvo pedido EXPLÍCITO.**
+   Motivo: el barrido completo tarda **~1 h** (416 funciones × la suite entera, secuencial), y con
+   `-x` el orden alfabético de pytest hace que mutar `triage.py` pague casi toda la suite antes de
+   llegar al test que lo mata. El costo dominante es buscar el test asesino en el lugar equivocado.
+   Está anotado como issue: dos etapas (primero `tests/test_<módulo>.py`, y sólo los sobrevivientes
+   pagan la suite completa) lo bajaría a ~12 min sin perder exactitud. **Hasta entonces, el gate no
+   corre solo** — ni al cerrar un issue, ni al cerrar una tanda.
+   ⚠ **Cadencia anterior (2026-08-26), que la de arriba suspende:** un **lote** hecho con roles separados
    —spec → tests → implementación, agentes distintos, `docs/playbook-spec-tests.md`— **no necesita
    este gate en su tanda**: ahí el defecto se previene en vez de detectarse, que es lo que la
    mutación audita. Queda obligatorio para los lotes que **no** usaron separación de roles, para

@@ -147,6 +147,16 @@ def to_record(work: dict) -> dict:
 
 
 
+# #186 · el backoff duerme por ESTE nombre, no por `time.sleep` directo. Es una indirección de una
+# línea con un motivo medido: el test del retry parcheaba `oa.time.sleep`, y `oa.time is time` es
+# **True** —`import time` no crea un alias, referencia el módulo global—, así que el acumulador
+# contaba CUALQUIER `sleep` del proceso. Capturó un `0.001` ajeno en una corrida de la suite
+# completa (`assert 3 == 2 where [0.001, 2.0, 4.0]`) y ésa era la «intermitencia sin causa
+# demostrada» que el propio test declaraba. Con el indirecto, el doble queda acotado al sujeto bajo
+# prueba, que es lo que la red #3 pide de cualquier doble.
+_sleep = time.sleep
+
+
 def _get(params: dict) -> dict:
     """GET con reintento ante 5xx/429 y espera creciente.
 
@@ -168,7 +178,7 @@ def _get(params: dict) -> dict:
             return r.json()
         if intento == MAX_ATTEMPTS - 1:
             r.raise_for_status()
-        time.sleep(BACKOFF_S * (intento + 1))
+        _sleep(BACKOFF_S * (intento + 1))
     raise RuntimeError("inalcanzable")   # pragma: no cover
 
 

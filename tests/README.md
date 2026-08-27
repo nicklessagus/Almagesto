@@ -285,7 +285,8 @@ nota no puede cambiar si no cambió lo que afirma; el registro tiene que crecer 
 | los conteos del encabezado son los de las filas | un resumen escrito a mano que envejece solo |
 | la doc no apunta al código **por número de línea** | los siete punteros de `contrato.md` apuntaban al renglón equivocado, uno a otro invariante |
 
-**Cuándo**: 2, 5 y 7 corren solas en tier 0. La 4, al cerrar un issue. **La 1, al escribir cada función
+**Cuándo**: 2, 5 y 7 corren solas en tier 0. **La 1 (mutación) NO se corre salvo pedido
+explícito** (decidido 2026-08-27: ~1 h el barrido completo; ver la cadencia en `CLAUDE.md`). La 4, al cerrar un issue. **La 1, al escribir cada función
 nueva** — es la única que cuesta (una corrida de suite por función) y la única que distingue "el
 test pasa" de "el test **podría** fallar".
 

@@ -6,7 +6,7 @@
 # test pasaba sin la guarda, un "espera creciente" que `[2.0, 2.0]` satisface, un test de
 # determinismo corriendo las dos pasadas en el mismo proceso).
 medido_en: "2026-08-27"
-alcance: "TODO `scripts/` — 406 funciones, barrido completo (`--todo --ratchet`, 1.68.0, pasada /auditar del 2026-08-27)"
+alcance: "TODO `scripts/` — 416 funciones, barrido completo (`--todo --ratchet`, 1.68.0, pasada /auditar del 2026-08-27 + su tanda de fix)"
 techo: 3
 
 # ⚠ EL TECHO SUBIÓ DE 7 A 10, Y NO ES UNA REGRESIÓN — es la primera medición sobre el árbol
@@ -97,3 +97,12 @@ techo: 3
 # ⚠ `extraction_prompt.py::main` sigue en `tools/cobertura-ratchet.yaml` (sin ejecutar) y salió de
 #    acá (su mutación muere). No es contradicción: son ejes distintos —«nadie la corre» vs «romperla
 #    no pone rojo a nadie»— y una función puede correr de refilón y aun así ser mutable sin ruido.
+
+# 2026-08-27, segunda corrida completa (tras la tanda de fix de los issues #182-#186). La población
+# subió de 406 a **416** funciones —las que la propia tanda agregó— y el barrido devolvió **4**
+# sobrevivientes contra un techo de 3. El cuarto era `extraction_prompt.py::_pdf_rel`, una función
+# escrita ESE MISMO DÍA (#153) cuyo test miraba `"PDF" in prompt` y `"página" in prompt`: dos
+# palabras que están en la prosa fija del aviso, así que un `return None` las satisfacía igual. El
+# gate hizo exactamente su trabajo —cazó código nuevo del día, que es el caso para el que existe
+# (INV-101)— y el test se apretó a exigir la RUTA del PDF. Corrida dirigida posterior sobre ese
+# módulo: **9 funciones, 0 sobrevivientes**. El techo se queda en 3.

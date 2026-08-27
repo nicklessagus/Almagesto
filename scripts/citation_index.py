@@ -111,9 +111,14 @@ def build(out: Path | None = None, fetch_ads=None, fetch_oa=None) -> Path:
         propias = list(ads_refs.get(p["bibcode"]) or [])
         if p.get("doi"):
             propias += list(oa_refs.get(openalex._bare_doi(p["doi"])) or [])
-        # `dict.fromkeys` en vez de `set`: dedup CONSERVANDO el orden. Un `set` de strings itera en
-        # orden dependiente del hash, y eso volvería el artefacto no determinista entre procesos —
-        # el mismo defecto que hubo que arreglar en `lint.orphans`.
+        # `dict.fromkeys` en vez de `set`: dedup CONSERVANDO el orden. Es defensa en profundidad,
+        # no la garantía: el artefacto lo protege el `sorted(set(v))` de `citas` doce líneas abajo,
+        # así que cambiar esto por `set` hoy **no** cambia el JSON (medido en #185, mutación
+        # sobreviviente). Se mantiene porque `propias` se puede empezar a usar en otro lado, y ahí
+        # el orden sí saldría — el mismo defecto que hubo que arreglar en `lint.orphans`.
+        # ⚠ Lo que SÍ es observable es el `sorted(...)` de `sin_clave` doce líneas arriba: esa línea
+        # va al JSON tal cual, y `tests/test_citation_index.py::test_determinista_ENTRE_PROCESOS`
+        # la mata.
         propias = list(dict.fromkeys(propias))
         if not propias:
             ciegos.append(p["stem"])

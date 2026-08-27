@@ -202,7 +202,16 @@ def test_quitar_del_frontmatter_preserva_el_cuerpo_byte_a_byte(toy_vault):
     hacía DOS daños a la vez — metía una línea en blanco **dentro** del frontmatter (el `head` de
     `frontmatter_span` ya termina en `\\n`) y borraba la línea en blanco de después del `---`. Se
     declara de la familia de `merge_frontmatter_list`, que sí preserva; la diferencia era el
-    `lstrip`. Corre en `entity.py delete` sobre CADA nota que referenciaba la entidad.  @inv INV-90
+    `lstrip`. Corre en `entity.py delete` sobre CADA nota que referenciaba la entidad.
+
+    ⚠ **La marca era `@inv INV-90` y estaba MAL ATRIBUIDA (#183).** Este test mide **preservación
+    byte a byte del cuerpo** —una cirugía que toca sólo la región derivada y no destruye la prosa,
+    que es INV-15— y **no** mide atomicidad: reproducido por mutación, cambiar
+    `cfg.write_text_atomic` por `f.write_text` en `entity.py:218` lo deja en VERDE, con la suite
+    entera en verde. Que figurara como una de las pruebas que «garantizan y miden» INV-90 le
+    adjudicaba al mapa una cobertura que no existía — la regla de método #4. Quien mide INV-90 sobre
+    este módulo es `test_lib_config.py::test_sin_escrituras_directas_a_vault`, cuya población se
+    derivó en #137 justamente para que `entity.py` entre.  @inv INV-15
     """
     nota = toy_vault.PAPERS / "2020ref.md"
     original = ("---\ntags:\n  - paper\nstars:\n  - Estrella Test\n  - Otra\n---\n\n"

@@ -142,31 +142,37 @@ def test_reintenta_ante_5xx_transitorio(monkeypatch):
     raíz, una hora después de contestar bien. Un índice de citas que se cae en el primer 5xx no se
     puede construir; uno que lo ignora inventa cobertura. La respuesta correcta es reintentar con
     espera y, si no cede, **levantar** (nunca devolver un mapa a medias)."""
-    # ⚠ **Intermitente sin causa demostrada (2026-08-24).** Falló 2 veces sobre ~45 corridas de la
-    # suite completa, las dos **inmediatamente después de editar un archivo del repo** (una con
-    # `tools/mutar.py` copiando el árbol en paralelo). No se reprodujo: 8 corridas aisladas, 25
-    # corridas de la suite entera y 3 forzando `__pycache__` stale, todas verdes. La sospecha —sin
-    # evidencia— es el `subprocess` de `git config user.email` que `_mailto()` corre en cada
-    # request y que bajo carga puede tardar o fallar. Se anota acá y **no se da por cerrado**: un
-    # test intermitente que nadie declara se termina ignorando cuando falla de verdad.
+    # ✅ **La intermitencia tenía causa, y era este test (#186).** Se declaraba «sin causa
+    # demostrada» y se sospechaba del `subprocess` de `git config` de `_mailto()`. El mecanismo real:
+    # esto parcheaba `oa.time.sleep`, y `oa.time is time` es **True** —`import time` referencia el
+    # módulo global, no crea un alias—, así que `esperas` acumulaba **cualquier** `sleep` del
+    # proceso. El valor espurio quedó capturado en una corrida de la suite completa:
+    # `assert (3 == 2) where 3 = len([0.001, 2.0, 4.0])`, con el `0.001` ajeno en primera posición.
+    # Hoy el módulo duerme por `oa._sleep` y el doble queda acotado al sujeto bajo prueba (red #3).
     esperas = []
-    monkeypatch.setattr(oa.time, "sleep", lambda s: esperas.append(s))
+    monkeypatch.setattr(oa, "_sleep", esperas.append)
     fake_get(monkeypatch, [FakeResp(504), FakeResp(504),
                            FakeResp(200, {"results": [work()], "meta": {"next_cursor": None}})])
     assert len(list(oa.works("x"))) == 1
-    assert len(esperas) == 2 and esperas == sorted(esperas), "la espera tiene que crecer"
+    assert len(esperas) == 2, f"dos reintentos, dos esperas: {esperas}"
+    # ⚠ `== sorted(esperas)` NO medía «crece»: `[2.0, 2.0]` lo satisface, y es exactamente el
+    # ejemplo que `tools/mutacion-ratchet.yaml` da de un test que pasa por construcción. Verificado
+    # al arreglar #186: mutar `BACKOFF_S * (intento + 1)` a `BACKOFF_S` (espera constante) dejaba
+    # este test en VERDE. Se exige crecimiento ESTRICTO, que es lo que un backoff promete.
+    assert all(b > a for a, b in zip(esperas, esperas[1:])), \
+        f"el backoff tiene que CRECER, no repetirse: {esperas}"
 
 
 def test_5xx_persistente_levanta(monkeypatch):
     """No degrada a lista vacía: una lista vacía es indistinguible de «no hay resultados»."""
-    monkeypatch.setattr(oa.time, "sleep", lambda s: None)
+    monkeypatch.setattr(oa, "_sleep", lambda s: None)
     fake_get(monkeypatch, [FakeResp(504)] * oa.MAX_ATTEMPTS)
     with pytest.raises(real_requests.HTTPError):
         list(oa.works("x"))
 
 
 def test_429_tambien_reintenta(monkeypatch):
-    monkeypatch.setattr(oa.time, "sleep", lambda s: None)
+    monkeypatch.setattr(oa, "_sleep", lambda s: None)
     fake_get(monkeypatch, [FakeResp(429),
                            FakeResp(200, {"results": [], "meta": {"next_cursor": None}})])
     assert list(oa.works("x")) == []
@@ -175,7 +181,7 @@ def test_429_tambien_reintenta(monkeypatch):
 def test_4xx_no_reintenta(monkeypatch):
     """Un 400 es una query mal armada: reintentarla es gastar cuota para el mismo error."""
     calls = []
-    monkeypatch.setattr(oa.time, "sleep", lambda s: None)
+    monkeypatch.setattr(oa, "_sleep", lambda s: None)
     fake_get(monkeypatch, [FakeResp(400)] * 3, calls)
     with pytest.raises(real_requests.HTTPError):
         list(oa.works("x"))

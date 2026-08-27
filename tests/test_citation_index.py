@@ -9,6 +9,9 @@ import json
 
 import pytest
 
+import sys
+from pathlib import Path
+
 import citation_index as ci
 import lib_config as cfg
 from conftest import mk_note
@@ -104,14 +107,82 @@ def test_paper_sin_clave_se_cuenta_aparte(toy_vault, tmp_path):
 
 # ── determinismo y offline ───────────────────────────────────────────────────
 
-def test_determinista_byte_a_byte(toy_vault, tmp_path):
-    paper("2020A", doi="10.1/a")
-    paper("2020B", doi="10.1/b")
-    ads, oa = fetchers(ads_map={"2020B": ["X2", "X1"]}, oa_map={"10.1/a": ["W2", "W1"]})
-    a = (tmp_path / "1.json"); b = (tmp_path / "2.json")
-    ci.build(a, fetch_ads=ads, fetch_oa=oa)
-    ci.build(b, fetch_ads=ads, fetch_oa=oa)
-    assert a.read_bytes() == b.read_bytes()
+_DRIVER = """
+import json, sys
+sys.path.insert(0, {scripts!r})
+import citation_index as ci
+# Varias refs por paper y varios papers por obra: con UNA sola de cada cosa, un `set` de un
+# elemento itera igual siempre y la mutación no se distingue del original.
+ads = {{"2020B": ["Xa", "Xb", "Xc", "Xd", "Xe", "Xf"],
+       "2020C": ["Xc", "Xf", "Xa", "Yb", "Yc"],
+       "2020D": ["Xb", "Yb", "Xd", "Yd", "Ya"]}}
+oa = {{"10.1/a": ["Xa", "Yc", "Xe", "Wa", "Wb"], "10.1/e": ["Wb", "Xf", "Wc", "Ya"]}}
+import openalex
+
+
+def _oa(dois):
+    # ⚠ MISMO contrato que el doble de `fetchers()` y que la función real: normaliza con
+    # `_bare_doi` y devuelve `(mapa, sin_resolver)` — red #3, un doble que difiere esconde el bug
+    # en la diferencia (fue exactamente B2 en este archivo).
+    norm = {{openalex._bare_doi(d) for d in dois}}
+    m = {{k: list(v) for k, v in oa.items() if k in norm}}
+    return m, sorted(norm - set(m))
+
+
+ci.build({out!r},
+         fetch_ads=lambda bibs: {{b: list(ads[b]) for b in bibs if b in ads}},
+         fetch_oa=_oa)
+"""
+
+
+def test_determinista_ENTRE_PROCESOS(toy_vault, tmp_path):
+    """Issue #185 — esto corría las dos `ci.build` **en el mismo proceso**, o sea con el mismo
+    `PYTHONHASHSEED`, y por construcción no podía ver el no-determinismo que decía medir.
+
+    Reproducido: `citation_index.py:96` `sorted(p["stem"] …)` → `list({{p["stem"] …}})` dejaba tier 0
+    (1335) y tier 1 (64) en verde, mientras
+    `PYTHONHASHSEED=1..4 python -c "print(list({{'2020Zed','2019Alfa',…}}))"` da cuatro órdenes
+    distintos. Es literalmente el modo de falla que documenta `tools/mutar.py:5-7` —*«un test de
+    determinismo que corría las dos pasadas en el mismo proceso»*— y el comentario de
+    `citation_index.py:115` nombra el riesgo (*«volvería el artefacto no determinista entre
+    procesos»*) mientras su guardia quedaba sin red.
+
+    El repo REAL de `scripts/` se **copia** al árbol de juguete en vez de linkearlo: `cfg.ROOT` sale
+    de `Path(__file__).resolve().parent.parent` y `resolve()` sigue symlinks, así que un link
+    devolvería la bóveda de verdad.
+
+    ⚠ **Alcance declarado.** Mata la mutación de `sin_clave` (`sorted(...)` → `list({{...}})`), que
+    va al JSON tal cual. **No** mata la de `propias` (`dict.fromkeys` → `set`) y eso es correcto:
+    `citas` se emite con `sorted(set(v))`, así que ese orden no es observable en el artefacto. Un
+    test que la matara estaría midiendo una propiedad interna, no el determinismo del archivo."""
+    import os
+    import shutil
+    import subprocess
+    for stem, doi in (("2020A", "10.1/a"), ("2020B", "10.1/b"), ("2020C", "10.1/c"),
+                      ("2020D", "10.1/d"), ("2020E", "10.1/e")):
+        paper(stem, doi=doi)
+    # papers SIN clave: es la población del `sorted(...)` de `sin_clave`, el otro camino donde un
+    # `set` sin ordenar se coló históricamente. Sin ellos, esa línea no se ejercita.
+    for stem in ("2020Zed", "2019Alfa", "2021Beta", "2018Gama", "1999Delta", "2005Epsi"):
+        paper(stem, doi=None)
+        (cfg.PAPERS / f"{stem}.md").write_text(
+            (cfg.PAPERS / f"{stem}.md").read_text(encoding="utf-8").replace(
+                f"bibcode: {stem}", "bibcode: null"), encoding="utf-8")
+    scripts = cfg.ROOT / "scripts"
+    shutil.copytree(Path(ci.__file__).parent, scripts,
+                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    salidas = []
+    for i, seed in enumerate(("1", "2")):
+        out = tmp_path / f"{i}.json"
+        env = {**os.environ, "PYTHONHASHSEED": seed}
+        r = subprocess.run([sys.executable, "-c",
+                            _DRIVER.format(scripts=str(scripts), out=str(out))],
+                           capture_output=True, text=True, env=env, timeout=120)
+        assert r.returncode == 0, r.stdout + r.stderr
+        salidas.append(out.read_bytes())
+    assert salidas[0] == salidas[1], (
+        "el índice no es byte-idéntico entre procesos con distinto PYTHONHASHSEED — hay un "
+        "`set`/`dict` sin ordenar en el camino")
 
 
 def test_lookup_es_offline(toy_vault, tmp_path, monkeypatch):

@@ -187,8 +187,13 @@ def test_el_prompt_manda_al_PDF_cuando_las_ECUACIONES_no_estan_en_el_txt():
     línea que no contiene la ecuación.  @inv INV-100"""
     texto = f"{cfg.FULLTEXT_SYMBOLS_MARK} simbolos NO extraidos\nLa ecuacion (3) define el kernel.\n"
     p = ep.build_prompt("gp", "2006Rasmussen", "GP", [], texto, kind="theme")
-    assert "PDF" in p and "página" in p, "la cita de fórmulas va por página del PDF"
-    assert "symbols_lost" in p or "ecuacion" in p.lower() or "ecuación" in p.lower()
+    assert "página del PDF" in p, "la cita de fórmulas va por página del PDF"
+    # ⚠ La RUTA del PDF, no sólo la palabra. El gate de mutación cazó que `_pdf_rel` sobrevivía:
+    # los asserts miraban `"PDF" in p` y `"página" in p`, que un `return None` satisface igual
+    # porque esas palabras están en la prosa fija del aviso. Un extractor que recibe el aviso sin
+    # la ruta no sabe QUÉ archivo abrir — que es todo lo que el aviso tiene que darle.
+    assert "vault/raw/pdfs/gp/2006Rasmussen.pdf" in p, \
+        "el aviso tiene que decir QUÉ PDF abrir, no sólo que lo abra"
 
 
 def test_sin_la_marca_el_prompt_no_habla_de_paginas():

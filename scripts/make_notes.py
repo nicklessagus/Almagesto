@@ -51,22 +51,11 @@ import measure_layout
 EXCLUDED_TOP_N = 10  # cuántos no-core mostrar en la tabla de excluidos (top por citas)
 
 
-def _listify_curado(v, campo: str):
-    """Normaliza un campo de CURACIÓN MANUAL (`aliases`) que `stars.yaml`/`themes.yaml` instruye
-    editar a mano. Un `campo: <valor>` sin corchetes es la forma natural de declarar UN solo
-    elemento y es YAML válido — a diferencia de `cfg.as_list` (que trataría el escalar como forma
-    inválida y lo degradaría a `[]`), acá conviene PRESERVAR la intención en vez de perder el
-    alias en silencio en el frontmatter que se escribe (gemelo, otro destino, del mismo defecto
-    medido en `query_ads.py` — R16, Anexo A). Reporta igual, para que la forma se corrija en origen."""
-    if isinstance(v, list):
-        return v
-    if v:
-        cfg.print_seguro(
-            f"  ⚠ `{campo}` está escrito como escalar ({v!r}) en vez de lista — se toma como un "
-            f"solo elemento; para declarar más de uno usá `{campo}: [{v!r}, ...]`."
-        )
-        return [v]
-    return []
+# #182 · era una COPIA de `cfg.listify_curado` —mismo cuerpo, mismo docstring reescrito—. Dos
+# implementaciones de la misma promesa es la garantía de que una envejece (red #3: un doble con
+# distinto contrato que la función real esconde el bug en la diferencia). Se re-exporta el nombre
+# porque lo usan tres call sites de este módulo.
+_listify_curado = cfg.listify_curado
 
 
 def fm(d: dict) -> str:

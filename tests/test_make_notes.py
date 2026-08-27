@@ -2585,7 +2585,16 @@ def test_excluded_table_no_lanza_con_un_ads_json_cortado_a_media_letra(toy_vault
     AUD-40: el docstring nombra el escenario exacto —«un `ads.json` truncado por un Ctrl-C a mitad
     de `query_ads`»— y explica el costo («si esto lanza, la cadena muere DESPUÉS de gastar la red»),
     pero atrapaba sólo `(OSError, json.JSONDecodeError)`. Un corte a mitad de un carácter multibyte
-    da `UnicodeDecodeError`, que no es subclase de ninguna de las dos.  @inv INV-61
+    da `UnicodeDecodeError`, que no es subclase de ninguna de las dos.
+
+    ⚠ **La marca era `@inv INV-61` y estaba MAL ATRIBUIDA (#184).** INV-61 enuncia *«una fuente
+    declarada que no se consigue queda pendiente con su puntero … y se surface como precondición»*:
+    acá no hay fuente declarada, ni `pending`, ni puntero, ni precondición — hay un `ads.json`
+    truncado y un `isinstance(..., str)`. La fila de INV-61 lo listaba como una de sus tres pruebas,
+    o sea que el conteo «invariantes con test» se inflaba con una marca de conveniencia (misma
+    familia que AUD-06/AUD-30, que INV-95(a) reconoce). Lo que este test mide de verdad es INV-18:
+    una cirugía sobre un ancla ilegible **se reporta** —acá, devolviendo `""`— y nunca tumba la
+    cadena después de haber gastado la red.  @inv INV-18
     """
     d = cfg.ROOT / "build" / "test_star"
     d.mkdir(parents=True, exist_ok=True)
@@ -3118,3 +3127,31 @@ def test_el_cli_pending_estampa_el_motivo_en_la_nota(toy_vault, monkeypatch):
     fm = read_fm(toy_vault.PAPERS / "2006RasmussenWilliams.md")
     assert fm["pending_source"] == "adquisicion"
     assert fm["pending_motivo"] == "lo trae el usuario de la biblioteca"
+
+
+def test_un_alias_escalar_sobrevive_al_frontmatter_de_la_ficha(toy_vault):
+    """Issue #182 — el tercer call site de `listify_curado`: el `aliases` que se ESCRIBE en la nota.
+
+    Ningún test lo cubría, así que cambiar la función por `cfg.as_list` —que tira el escalar en vez
+    de preservarlo— dejaba la suite entera verde. El docstring de la función dice que existe *"en
+    vez de perder el alias en silencio en el frontmatter que se escribe"*, y perderlo en silencio
+    era exactamente lo que nadie veía.
+
+    Escribir UN alias sin corchetes es la forma natural de la primera edición de `themes.yaml`, que
+    es un archivo de instancia editado a mano por definición."""
+    write_yaml(cfg.THEMES_YAML, {"gp": {"title": "Gaussian processes", "area": "methods",
+                                        "concept": "gaussian-processes", "aliases": "GP"}})
+    mn.write_concept_note("gp", force=False)
+    fm = read_fm(toy_vault.CONCEPTS / "methods" / "gaussian-processes.md")
+    assert fm["aliases"] == ["GP"], \
+        "el alias escalar se PRESERVA como lista de un elemento, no se tira"
+
+
+def test_un_alias_escalar_sobrevive_en_la_ficha_de_estrella(toy_vault):
+    """El mismo call site del otro lado (`write_star_note`). Son dos destinos distintos y la
+    auditoría midió que ninguno estaba cubierto (#182)."""
+    write_yaml(cfg.STARS_YAML, {"Estrella Test": {"slug": "test_star", "simbad": "s",
+                                                  "ads_object": "Test Star", "aliases": "HD 12345"}})
+    mn.write_star_note("test_star", force=False)
+    fm = read_fm(toy_vault.STARS / "test_star.md")
+    assert fm["aliases"] == ["HD 12345"]
