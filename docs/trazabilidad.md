@@ -7,9 +7,9 @@
 
 ## Resumen
 
-- Invariantes en el contrato: **122**
-- Con implementación marcada: **99**
-- Con test marcado: **119** (techo `sin_test`: 3, hoy 3)
+- Invariantes en el contrato: **123**
+- Con implementación marcada: **100**
+- Con test marcado: **120** (techo `sin_test`: 3, hoy 3)
 - Sin ninguna marca: **3** (techo `sin_marca`: 3)
 - Marcas huérfanas: **0**
 
@@ -73,7 +73,7 @@
 | **INV-111** | P2 | garantizado y medido | `scripts/triage.py:89` · `prioridad` | `tests/test_triage.py:638` · `test_prioridad_ordena_los_core_por_cuanto_del_objetivo_tocan` |
 | **INV-112** | P1 | garantizado y medido | `scripts/lint.py:1259` · `collect` | `tests/test_lint.py:3278` · `test_core_sin_pdf_no_se_confunde_con_sin_leer` |
 | **INV-113** | P1 | garantizado y medido | `scripts/lib_blocks.py:173` · `locator_kinds` | `tests/test_lint.py:3306` · `test_localizador_que_contradice_al_archivo_vigilado` |
-| **INV-114** | P0 | garantizado y medido | `scripts/ingest_theme.py:399` · `ingest_offads` | `tests/test_ingest_theme.py:551` · `test_adquisicion_no_sale_a_la_red_a_buscar_lo_que_ya_conseguis_vos` |
+| **INV-114** | P0 | garantizado y medido | `scripts/ingest_theme.py:399` · `ingest_offads` | `tests/test_ingest_theme.py:553` · `test_adquisicion_no_sale_a_la_red_a_buscar_lo_que_ya_conseguis_vos` |
 | **INV-115** | P2 | garantizado y medido | `scripts/make_notes.py:1381` · `papers_universe` | `tests/test_make_notes.py:2935` · `test_la_tabla_de_papers_lleva_el_titulo` |
 | **INV-116** | P1 | garantizado y medido | `scripts/query_ads.py:872` · `puertas_abiertas` | `tests/test_query_ads.py:1722` · `test_la_puerta_que_admitio_al_paper_queda_registrada`<br>`tests/test_query_ads.py:1743` · `test_la_puerta_viaja_en_el_registro_del_paper`<br>`tests/test_triage.py:679` · `test_prioridad_agrupa_por_puerta_en_un_tema` |
 | **INV-117** | P0 | garantizado y medido | `scripts/lib_blocks.py:366` · `resueltos` | `tests/test_lint.py:3333` · `test_veredicto_sin_resolver_en_el_bloque_bloquea`<br>`tests/test_lint.py:3349` · `test_contradice_tambien_cuenta_y_soportada_no` |
@@ -82,6 +82,7 @@
 | **INV-120** | P2 | garantizado y medido | `scripts/triage.py:608` · `main` | `tests/test_triage.py:710` · `test_el_listado_del_triage_ordena_por_tasa_no_por_citas_crudas` |
 | **INV-121** | P1 | garantizado y medido | `scripts/lib_config.py:951` · `save_descubrimiento` | `tests/test_discover.py:596` · `test_la_cascada_registra_su_corrida` |
 | **INV-122** | P1 | garantizado y medido | `scripts/fetch_ground_truth.py:57` · `simbad_identifiers` | `tests/test_fetch_ground_truth.py:498` · `test_los_identificadores_de_simbad_quedan_en_el_ground_truth`<br>`tests/test_fetch_ground_truth.py:505` · `test_sin_respuesta_de_simbad_es_None_y_no_lista_vacia`<br>`tests/test_lint.py:3383` · `test_alias_que_simbad_conoce_y_la_boveda_no` |
+| **INV-123** | P1 | garantizado y medido | `scripts/ingest_theme.py:452` · `main` | `tests/test_ingest_theme.py:573` · `test_source_ads_con_sources_declaradas_aborta_diciendo_qué_poner` |
 | **INV-48** | P0 | garantizado y medido | `scripts/triage.py:155` · `drop` | `tests/test_triage.py:60` · `test_drop_persiste_con_motivo_en_config_versionada` |
 | **INV-49** | P0 | parcial (medido, con la brecha nombrada) | `scripts/query_ads.py:586` · `load_triage` | `tests/test_query_ads.py:1175` · `test_main_triage_no_repropone_descartados` |
 | **INV-50** | P0 | garantizado y medido | `scripts/query_ads.py:571` · `subject_in_title` | `tests/test_query_ads.py:1159` · `test_main_chaining_solo_auto_acepta_sujeto_en_titulo` |
@@ -95,7 +96,7 @@
 | **INV-58** | P1 | garantizado y medido | `scripts/lib_config.py:1372` · `lens_diff_offline`<br>`scripts/query_ads.py:1018` · `reclass_diff` | `tests/test_lint.py:2415` · `test_lente_igual_calla`<br>`tests/test_lint.py:2426` · `test_lente_cambiada_reporta_diff_por_ficha`<br>`tests/test_query_ads.py:952` · `test_reclass_diff_reporta_el_delta` |
 | **INV-59** | P0 | garantizado y medido | `scripts/query_ads.py:1103` · `print_probe` | `tests/test_query_ads.py:978` · `test_reclass_diff_no_escribe_nada`<br>`tests/test_query_ads.py:1627` · `test_probe_no_escribe_nada` |
 | **INV-60** | P1 | garantizado y medido | `scripts/lib_config.py:729` · `load_extra_core` | `tests/test_query_ads.py:563` · `test_fetch_bibcodes_marca_manual` |
-| **INV-61** | P1 | garantizado y medido | `scripts/make_notes.py:2292` · `write_web_paper_note` | `tests/test_fetch_web.py:151` · `test_force_rebaja_la_fuente_pero_no_pisa_la_extraccion`<br>`tests/test_ingest_theme.py:253` · `test_offads_pending_deriva_sin_fallar`<br>`tests/test_make_notes.py:2581` · `test_excluded_table_no_lanza_con_un_ads_json_cortado_a_media_letra` |
+| **INV-61** | P1 | garantizado y medido | `scripts/make_notes.py:2292` · `write_web_paper_note` | `tests/test_fetch_web.py:151` · `test_force_rebaja_la_fuente_pero_no_pisa_la_extraccion`<br>`tests/test_ingest_theme.py:255` · `test_offads_pending_deriva_sin_fallar`<br>`tests/test_make_notes.py:2581` · `test_excluded_table_no_lanza_con_un_ads_json_cortado_a_media_letra` |
 | **INV-62** | P1 | garantizado y medido | `scripts/make_notes.py:1041` | `tests/test_lib_config.py:112` · `test_version_unica_fuente`<br>`tests/test_make_notes.py:2318` · `test_la_nota_declara_su_version`<br>`tests/test_make_notes.py:2332` · `test_restamp_headers_no_reetiqueta_la_nota` |
 | **INV-63** | P0 | HUECO (parcial) | `scripts/lint.py:498` · `normalize_lists` | `tests/test_lint.py:150` · `test_campo_de_lista_escrito_como_escalar_se_reporta_una_vez` |
 | **INV-64** | P0 | garantizado y medido (los 5 cambios, 1.35.0) | `scripts/make_notes.py:634` · `migrate_all_facets`<br>`scripts/make_notes.py:676` · `migrate_all_registros`<br>`scripts/make_notes.py:723` · `migrate_all_disputes` | `tests/poblada/test_invariantes_instancia.py:334` · `test_papers_declaran_facets_no_topics`<br>`tests/poblada/test_upgrade.py:129` · `test_vintage_bloquea_con_categorias_de_schema_viejo_y_receta_visible`<br>`tests/test_make_notes.py:2362` · `test_migrate_facets_renombra_y_es_idempotente`<br>`tests/test_make_notes.py:2391` · `test_migrate_registros_pliega_sin_perder_la_corrida` |

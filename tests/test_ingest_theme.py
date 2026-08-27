@@ -129,10 +129,12 @@ def test_ads_retraccion_detectada_no_es_fallo(toy_vault, fake_run, fake_notes, m
     assert "retractados" in str(exc.value) and "falló" not in str(exc.value)
 
 
-def test_ads_con_sources_avisa(toy_vault, fake_run, monkeypatch, capsys):
+def test_ads_con_sources_aborta(toy_vault, fake_run, monkeypatch, capsys):
+    """⚠ Contrato cambiado en #78: antes AVISABA y seguía —descartando bibliografía declarada—, hoy
+    aborta nombrando el `source:` que sí la procesa. Un aviso que no frena se pierde en el scroll."""
     topic(sources=[{"key": "2006Rasmussen", "url": "https://x"}])
-    run_main(monkeypatch)
-    assert "se ignora en modo ADS" in capsys.readouterr().out
+    with pytest.raises(SystemExit, match="sources"):
+        run_main(monkeypatch)
 
 
 # ── validaciones off-ADS ─────────────────────────────────────────────────────
@@ -553,3 +555,32 @@ def test_adquisicion_no_sale_a_la_red_a_buscar_lo_que_ya_conseguis_vos(toy_vault
                                   "pending_motivo": "lo saco de la biblioteca"}])
     assert run_main(monkeypatch) == 0
     assert sin_red == [], "no se consulta ninguna API por una adquisición humana"
+
+
+# ── #78 · el tema MIXTO en la dirección ADS-first ────────────────────────────────────────────────
+
+def test_source_ads_con_sources_declaradas_aborta_diciendo_qué_poner(toy_vault, fake_run,
+                                                                     fake_notes, monkeypatch):
+    """#78: `source: ads` **ignoraba** `sources:` con un warning y seguía. Eso descarta bibliografía
+    que el usuario declaró — el fundamento canónico de un método casi nunca está en ADS, y es
+    justamente lo que la lista existe para traer.
+
+    Desde #104 la capacidad existe en la otra dirección (`source: web|local-pdfs*` + `query:` corre
+    el descubrimiento ADS **completo**), así que lo que falta no es una feature: es que el modo
+    equivocado deje de **tragarse la lista en silencio** y diga qué escribir. Un aviso que no frena
+    se pierde en el scroll y la cadena cierra «bien» con la mitad de la bibliografía afuera.
+
+    @inv INV-123"""
+    topic(source="ads", query='abs:"independent component"',
+          sources=[{"key": "1994Comon", "pdf": "/tmp/x.pdf", "via": "usuario", "motivo": "canon"}])
+    with pytest.raises(SystemExit) as e:
+        run_main(monkeypatch)
+    msg = str(e.value)
+    assert "sources" in msg and "local-pdfs" in msg, "nombra el `source:` que sí las procesa"
+    assert "query" in msg, "y aclara que la mitad ADS se sigue descubriendo igual (#104)"
+
+
+def test_source_ads_sin_sources_sigue_andando(toy_vault, fake_run, fake_notes, monkeypatch):
+    """Contra-caso: el modo ADS puro no se toca. El aborto es sólo para la config contradictoria."""
+    topic(source="ads", query='abs:"independent component"')
+    assert run_main(monkeypatch) == 0

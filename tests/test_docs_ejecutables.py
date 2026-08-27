@@ -210,7 +210,7 @@ def test_el_conteo_del_encabezado_es_el_de_las_filas():
     assert declarado == real, (
         f"el encabezado declara {declarado} y las filas dan {real} "
         f"(medidos, garantizados, sin medir, parciales, HUECO, INCUMPLIDO)")
-    assert sum(real) == len(_estados_del_contrato()) == 122
+    assert sum(real) == len(_estados_del_contrato()) == 123
 
 
 def test_los_flags_retirados_siguen_retirados():

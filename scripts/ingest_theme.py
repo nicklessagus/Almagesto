@@ -441,7 +441,23 @@ def main() -> int:
     source = meta.get("source") or "ads"
     if source == "ads":
         if meta.get("sources"):
-            cfg.print_seguro("  ⚠ la entrada tiene `sources:` pero source: ads — la lista se ignora en modo ADS.")
+            # #78: antes esto AVISABA y seguía, o sea descartaba bibliografía declarada por el
+            # usuario — y el fundamento canónico de un método casi nunca está en ADS, que es
+            # justamente lo que `sources:` existe para traer. Un aviso que no frena se pierde en el
+            # scroll y la cadena cierra «bien» con la mitad de la bibliografía afuera.
+            # La capacidad ya existe en la otra dirección desde #104: un tema off-ADS con `query:`
+            # poblada corre el descubrimiento ADS COMPLETO (misma lente, mismas puertas de D-26,
+            # misma compuerta de triage). Así que acá no falta una feature: falta dejar de tragarse
+            # la lista y decir qué escribir.
+            # @inv INV-123
+            sys.exit(
+                f"'{args.slug}': la entrada declara `source: ads` y además `sources:` "
+                f"({len(cfg.as_list(meta.get('sources')))} fuente(s)) — en modo ADS esa lista NO se "
+                f"procesa, así que se estaría perdiendo bibliografía que declaraste.\n"
+                f"  Para un tema MIXTO (fundamentos declarados + aplicaciones astro descubiertas), "
+                f"poné `source: local-pdfs+web` (o `web` / `local-pdfs` según de dónde salgan tus "
+                f"fuentes) y dejá la `query:` como está: la mitad ADS se sigue descubriendo igual, "
+                f"con la misma lente y la misma compuerta de triage (#104).")
         if args.force:
             cfg.print_seguro("  ⚠ --force no aplica al modo ads (corré el script puntual con --force si hace falta).")
         ingest_ads(args.slug, args.yes)
