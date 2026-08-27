@@ -95,7 +95,18 @@ Requiere `pytest` (dev-only, no está en `requirements.txt`; los scripts no lo n
    **test → rojo → fix → verde**, verificando el rojo. Un test que nunca estuvo rojo no distingue
    la presencia de la ausencia del fix: no es evidencia. Reemplaza a la mutación post-hoc como
    camino por defecto (la mutación queda para auditar tests **que ya existen**, donde no hay un
-   "antes"). El protocolo completo —incluidos el porqué medido, la trampa del `.pyc` al mutar y la
+   "antes").
+   ⛔ **Y el rojo tiene que ser por la AUSENCIA DEL COMPORTAMIENTO, no por el andamiaje.** Un
+   `ImportError` porque el símbolo todavía no existe sirve; una falla **en la aserción** sirve; una
+   falla armando el escenario —mock con la firma equivocada, fixture incompleta— **no especifica
+   nada** y encima va a seguir fallando después de implementado, haciendo perder horas persiguiendo
+   un fantasma que era el mock. Medido acá el 2026-08-26: dos tests de la misma tanda fallaron con
+   `TypeError: list indices must be integers` y `KeyError: 'facets'` — se vio rojo y no significaba
+   nada. Un test de comportamiento nuevo nace con `@pytest.mark.xfail(strict=True)`, para que el
+   runner sostenga la disciplina en vez de la memoria de quien lo escribe.
+   Para **lotes** de ≥3 ítems que tocan el mismo código, el ciclo se hace con roles separados
+   (spec → tests → implementación, agentes distintos): ver `docs/playbook-spec-tests.md`. Un lote
+   hecho así **no necesita el gate de mutación en su tanda**. El protocolo completo —incluidos el porqué medido, la trampa del `.pyc` al mutar y la
    forma de repartir una tanda grande— está en `vault/STATUS.md`, *Protocolo de fixes*.
    ⚠ Corolario que ya mordió dos veces: **los asserts de contenido del lint van contra el archivo
    de reporte, no contra stdout** — la última línea de stdout es la ruta del reporte, que vive bajo

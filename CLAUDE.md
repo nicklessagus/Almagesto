@@ -1287,6 +1287,12 @@ también para los scripts de una sola operación. Detalle y ratchets en
 1. **Mutación** — `python tools/mutar.py --diff`: romper cada función y exigir que **algún test
    muera**. Es lo único que distingue "el test pasa" de "el test **podría** fallar". Trabaja sobre
    una copia del repo, nunca sobre el árbol real.
+   ⚠ **Cadencia (decidida con el usuario, 2026-08-26):** un **lote** hecho con roles separados
+   —spec → tests → implementación, agentes distintos, `docs/playbook-spec-tests.md`— **no necesita
+   este gate en su tanda**: ahí el defecto se previene en vez de detectarse, que es lo que la
+   mutación audita. Queda obligatorio para los lotes que **no** usaron separación de roles, para
+   toda función nueva escrita sin spec, y como pasada periódica completa (`--todo --ratchet`). El
+   canje es real: la mutación tardó ~40 min sobre un diff que tocaba `make_notes.py`.
 2. **Schema compartido** — si N módulos prometen la misma forma, se prueba **una vez parametrizada**
    (`tests/test_backends_schema.py`), no con prosa en N docstrings.
 3. **Doble vs real** — un doble de test no se escribe a ojo: o deriva de la función real, o hay un
