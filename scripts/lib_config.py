@@ -809,6 +809,88 @@ def _extra_core_error(entry: str, bibcodes: list, motivo: str) -> str:
     return (f"'{entry}': {motivo}. Forma canónica:\n\nextra_core:\n{ejemplo}\n")
 
 
+# ── #188 · `vistas[]`: extraction is a reading WITH A LENS ───────────────────────────────────────
+#
+# The extraction prompt never asks "what does this paper say?" but "what does it say ABOUT {name}?",
+# with the greps built from that subject's aliases and the bullets branched by subject type (#76).
+# The note, though, is ONE per bibcode with a single `## Extracción (LLM)` and no scope — so a note
+# that says nothing about an axis is indistinguishable from "somebody looked and there is nothing".
+# That is the same false clean D-34 chases in hypotheses (*"no evidence" is not "no evidence
+# exists"*) and the one `discover`'s coverage report solves by telling "ran with N" from "DID NOT
+# RUN". Measured in a real vault: 141 of 908 notes are claimed by 2+ subjects and NOT ONE has a
+# second extraction section.
+#
+# `vistas[]` are READINGS; `stars` / `thesis_links` / `methods` stay CLAIMS (`make_notes` merges
+# those add-only without reading anything). Only the extraction writes a view — never the retro-link.
+VISTA_TIPOS = ("star", "theme")
+
+
+class VistasError(RuntimeError):
+    """Raised by `load_vistas` on a malformed `vistas[]`.
+
+    NOT a `SystemExit`, unlike `load_extra_core`'s abort, and the difference is the caller: that one
+    lives in config and is read by a CLI script, so dying is the whole point. `vistas[]` lives in a
+    note's frontmatter and its main reader is the LINT, which walks every note — one broken note has
+    to be REPORTED, not take the run down with it. `SystemExit` does not inherit from `Exception`,
+    so an `except Exception` around the walk would not even catch it."""
+
+
+def load_vistas(meta: dict, *, entry: str = "?") -> list:
+    """`vistas` in canonical form: a list of maps `{sujeto, tipo[, fecha, txt, lente]}`.
+
+    Hard form with a detector, same rule and same reason as `extra_core` (D-58, R-2): `vistas:
+    [eps Eridani]` would be the very claim↔reading conflation this field exists to end, only under a
+    new name. `sujeto` and `tipo` are required — without both, the entry does not say from which
+    lens the paper was read; `fecha`, `txt` and `lente` are optional and are NOT filled in, because
+    absence means "not stated" and an invented `None` would read like a `null` the migrator declared
+    on purpose.
+
+    `tipo` is declared, not derived (user's call, 2026-08-27): it duplicates what
+    `stars.yaml`/`themes.yaml` already know, and that is accepted so the lint can catch the typo —
+    the same trade every other closed vocabulary of this schema makes.
+
+    Returns fresh dicts (`sujeto`/`tipo` stripped, `lente` listified); never mutates `meta`."""
+    v = meta.get("vistas")
+    if v is None:
+        return []
+    if not isinstance(v, list) or any(not isinstance(x, dict) for x in v):
+        sueltos = [v] if isinstance(v, str) else [x for x in as_list(v) if isinstance(x, str)]
+        raise VistasError(_vistas_error(
+            entry, sueltos,
+            "`vistas` no acepta un sujeto suelto ni una lista de strings: sin `tipo` la entrada no "
+            "dice desde qué lente se leyó el paper, que es todo lo que este campo declara"))
+    out = []
+    for x in v:
+        sujeto, tipo = str(x.get("sujeto") or "").strip(), str(x.get("tipo") or "").strip()
+        faltan = [k for k, val in (("sujeto", sujeto), ("tipo", tipo)) if not val]
+        if faltan:
+            raise VistasError(_vistas_error(entry, [sujeto or "<sujeto>"],
+                                            f"a una entrada de `vistas` le falta {', '.join(faltan)}"))
+        if tipo not in VISTA_TIPOS:
+            raise VistasError(_vistas_error(
+                entry, [sujeto],
+                f"`tipo: {tipo}` no está en el vocabulario ({' | '.join(VISTA_TIPOS)})"))
+        nueva = dict(x, sujeto=sujeto, tipo=tipo)
+        if "lente" in nueva:
+            # NOT `as_list`: that one drops a scalar to `[]`, and a `lente: rv` written by hand
+            # would vanish in silence — the informational field would then read as "no lens
+            # recorded", which is the failure this whole issue is about.
+            lente = nueva["lente"]
+            nueva["lente"] = lente if isinstance(lente, list) else ([] if lente in (None, "") else [lente])
+        out.append(nueva)
+    return out
+
+
+def _vistas_error(entry: str, sujetos: list, motivo: str) -> str:
+    """The detector's message, with the canonical form already written out to paste."""
+    ejemplo = "\n".join(
+        f"  - sujeto: {s}\n    tipo: {VISTA_TIPOS[0]}          # {' | '.join(VISTA_TIPOS)}\n"
+        f"    fecha: AAAA-MM-DD\n    txt: <slug del .txt que se leyó>\n"
+        f"    lente: [<facetas vigentes al leer>]"
+        for s in (sujetos or ["<sujeto>"]))
+    return (f"'{entry}': {motivo}. Forma canónica:\n\nvistas:\n{ejemplo}\n")
+
+
 # Costo de leer un paper, en tokens de fulltext. Mediana medida sobre el corpus real (T-3): sirve
 # para proyectar el costo del ingest desde el conteo core, que es la otra mitad de la decisión que
 # el probe existe para tomar.

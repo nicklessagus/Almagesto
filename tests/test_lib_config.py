@@ -1231,3 +1231,101 @@ def test_la_poblacion_del_guard_de_atomicidad_se_DERIVA_no_se_lista():
     assert "entity.py" in pob, "el módulo que motivó #137 entra solo"
     assert len(pob) >= 15, "la población es derivada, no una lista corta escrita a mano"
     assert "openalex.py" not in pob, "y no arrastra a los que no tocan la bóveda"
+
+
+# ── #188 paso 1 · `vistas[]`: la extracción es una lectura CON LENTE ────────────────────────────
+#
+# La nota de paper es UNA por bibcode y la extracción es una proyección del paper sobre un sujeto
+# (el prompt pregunta «¿qué dice este paper SOBRE {name}?», con los grep armados desde los alias de
+# ese sujeto). Sin declarar qué lectura se hizo, el silencio de la nota sobre un eje es
+# indistinguible de «se miró y no hay nada» — el falso limpio que D-34 persigue en las hipótesis.
+#
+# Forma dura como `extra_core` (D-58) y por el mismo motivo: `vistas: [eps Eridani]` sería la misma
+# conflación reclamo↔lectura con otro nombre. La diferencia con `load_extra_core` es DÓNDE vive el
+# dato: `extra_core` está en config y lo lee un script de CLI (aborta); `vistas[]` está en el
+# frontmatter de una nota y lo lee el LINT, que tiene que poder REPORTAR la nota rota sin morirse
+# en la primera — por eso levanta `VistasError`, no `SystemExit`.
+
+V_OK = [{"sujeto": "eps Eridani", "tipo": "star", "fecha": "2026-08-27",
+         "txt": "eps_eridani", "lente": ["discovery", "rv"]}]
+
+
+def test_load_vistas_forma_canonica(toy_vault):
+    assert cfg.load_vistas({"vistas": V_OK}, entry="2000ApJ...544L.145H") == V_OK
+
+
+def test_vistas_ausente_o_vacia_es_lista_vacia(toy_vault):
+    assert cfg.load_vistas({}, entry="X") == []
+    assert cfg.load_vistas({"vistas": None}, entry="X") == []
+    assert cfg.load_vistas({"vistas": []}, entry="X") == []
+
+
+def test_vistas_escalar_detectado(toy_vault):
+    """El escalar y la lista de strings BLOQUEAN: sin `sujeto`+`tipo` la entrada no dice desde qué
+    lente se leyó, que es todo lo que `vistas[]` viene a declarar."""
+    with pytest.raises(cfg.VistasError) as exc:
+        cfg.load_vistas({"vistas": "eps Eridani"}, entry="2000ApJ...544L.145H")
+    assert "vistas" in str(exc.value) and "sujeto:" in str(exc.value)
+
+
+def test_vistas_lista_de_strings_detectada(toy_vault):
+    with pytest.raises(cfg.VistasError) as exc:
+        cfg.load_vistas({"vistas": ["eps Eridani", "s_index"]}, entry="X")
+    assert "eps Eridani" in str(exc.value)     # el mensaje trae el snippet ya armado
+
+
+def test_vistas_entrada_no_mapa_detectada(toy_vault):
+    with pytest.raises(cfg.VistasError):
+        cfg.load_vistas({"vistas": [{"sujeto": "eps Eridani", "tipo": "star"}, "s_index"]},
+                        entry="X")
+
+
+def test_vistas_sin_sujeto_o_sin_tipo_detectada(toy_vault):
+    for v in ([{"tipo": "star"}],
+              [{"sujeto": "eps Eridani"}],
+              [{"sujeto": "  ", "tipo": "star"}],
+              [{"sujeto": "eps Eridani", "tipo": ""}]):
+        with pytest.raises(cfg.VistasError):
+            cfg.load_vistas({"vistas": v}, entry="X")
+
+
+def test_vistas_tipo_fuera_de_vocabulario_detectado(toy_vault):
+    """`tipo` se DECLARA (decisión del usuario, 2026-08-27): es duplicación respecto de
+    stars.yaml/themes.yaml y se acepta a cambio de que el lint cace el typo."""
+    with pytest.raises(cfg.VistasError) as exc:
+        cfg.load_vistas({"vistas": [{"sujeto": "s_index", "tipo": "tema"}]}, entry="X")
+    assert "tema" in str(exc.value) and "theme" in str(exc.value)
+
+
+def test_vistas_error_no_es_system_exit(toy_vault):
+    """Contra-caso: el lint recorre TODAS las notas, así que una rota tiene que reportarse, no
+    tumbar la corrida. `SystemExit` no hereda de `Exception`: si `VistasError` fuera un exit, el
+    `except Exception` de un llamador no lo agarraría y una sola nota mataría el barrido."""
+    assert issubclass(cfg.VistasError, Exception)
+    assert not issubclass(cfg.VistasError, SystemExit)
+
+
+def test_vistas_campos_opcionales_no_se_inventan(toy_vault):
+    """`fecha`, `txt` y `lente` son opcionales y el loader NO los rellena: la ausencia es «no
+    consta» y un `None` inventado se leería igual que un `null` declarado por el migrador."""
+    out = cfg.load_vistas({"vistas": [{"sujeto": "eps Eridani", "tipo": "star"}]}, entry="X")
+    assert out == [{"sujeto": "eps Eridani", "tipo": "star"}]
+
+
+def test_vistas_normaliza_sujeto_tipo_y_lente(toy_vault):
+    out = cfg.load_vistas({"vistas": [{"sujeto": " eps Eridani ", "tipo": " star ",
+                                       "lente": "rv"}]}, entry="X")
+    assert out == [{"sujeto": "eps Eridani", "tipo": "star", "lente": ["rv"]}]
+
+
+def test_vistas_no_muta_el_meta_original(toy_vault):
+    meta = {"vistas": [{"sujeto": " eps Eridani ", "tipo": "star"}]}
+    cfg.load_vistas(meta, entry="X")
+    assert meta["vistas"][0]["sujeto"] == " eps Eridani "
+
+
+def test_vista_tipos_declarado_una_sola_vez(toy_vault):
+    """Mismo criterio que HYP_STATUS tras #175: el vocabulario vive en `lib_config` y lo comparten
+    generador y validador. Dos declaraciones es cómo el generador escribe lo que el validador
+    bloquea."""
+    assert cfg.VISTA_TIPOS == ("star", "theme")
