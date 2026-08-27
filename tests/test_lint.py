@@ -2697,7 +2697,7 @@ def test_las_claves_de_categoria_son_unicas_y_estables(toy_vault):
     equivocada en silencio."""
     claves = [c.clave for c in lint.collect().categorias]
     assert len(claves) == len(set(claves)), [k for k in claves if claves.count(k) > 1]
-    assert len(claves) == 60, f"el reporte tiene {len(claves)} categorías, se esperaban 60"
+    assert len(claves) == 61, f"el reporte tiene {len(claves)} categorías, se esperaban 61"
 
 
 def test_el_modo_cierre_solo_cambia_el_exit_de_los_pares(toy_vault):
@@ -3319,3 +3319,37 @@ def test_localizador_que_contradice_al_archivo_vigilado(toy_vault, capsys):
         "backlog: el par puede estar bien verificado, lo que hay que hacer es re-anclarlo"
     assert lint.collect().por_clave("stale_pairs").items == (), \
         "y NO se cuenta además como vencido: es un hallazgo propio"
+
+
+def test_veredicto_sin_resolver_en_el_bloque_bloquea(toy_vault, capsys):
+    """#91: el lint leía el bloque `## Verificación de citas` **sólo por su encabezado** —¿existe?
+    ¿está fresco?— y nunca su contenido. La columna `Veredicto` no la miraba nadie.
+
+    Entonces esto pasaba limpio: una fila `no-soportada` sentada bajo un encabezado que se lee como
+    garantía. Eso es **una afirmación que la bóveda hace y que su propia fuente no respalda** — el
+    contrato dice que cada falla se RESUELVE (bajar la afirmación, reasignar la cita, marcar
+    `inferencia`, o taguear la disputa), no que se registre y se deje.
+
+    Bloqueante: es la frontera dura, igual que una fuente retractada citada.  @inv INV-117"""
+    _con_ancla(toy_vault, CUERPO)
+    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    nota.write_text(nota.read_text(encoding="utf-8").replace("| soportada |", "| no-soportada |"),
+                    encoding="utf-8")
+    rc, rep = run_lint_reporte(capsys)
+    assert "SIN RESOLVER" in rep, "la categoría se nombra"
+    assert "afirma algo que su propia fuente no respalda" in rep, "y el hallazgo dice qué hacer"
+    assert rc == 1
+    cat = lint.collect().por_clave("verif_sin_resolver")
+    assert cat.severidad == lint.SEV_BLOQUEANTE and len(cat) == 1
+
+
+def test_contradice_tambien_cuenta_y_soportada_no(toy_vault, capsys):
+    """`contradice` es el otro veredicto que exige acción (corrección o disputa tagueada). Y el
+    caso normal —todo `soportada`— no dispara nada: si lo hiciera, el detector sería ruido y se
+    dejaría de mirar.  @inv INV-117"""
+    _con_ancla(toy_vault, CUERPO)
+    assert lint.collect().por_clave("verif_sin_resolver").items == ()
+    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    nota.write_text(nota.read_text(encoding="utf-8").replace("| soportada |", "| contradice |"),
+                    encoding="utf-8")
+    assert len(lint.collect().por_clave("verif_sin_resolver")) == 1

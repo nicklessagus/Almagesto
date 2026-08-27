@@ -123,6 +123,8 @@
 
 ## ⛔ Fila de verificación que no declara contra qué archivo se verificó (#117): el hash no se puede comparar (0)
 
+## ⛔ Veredicto de verificación SIN RESOLVER (`no-soportada` / `contradice`): la nota afirma algo que su fuente no respalda (0)
+
 ## Localizador que contradice al archivo vigilado: la evidencia cita una página y la fila vigila el `.txt` (o al revés) (backlog) (0)
 
 ## Pares de verificación vencidos (backlog: pasada periódica; con `--cierre` bloquea) (0)

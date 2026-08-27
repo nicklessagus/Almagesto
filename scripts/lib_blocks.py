@@ -350,6 +350,22 @@ def pairs_of(body: str) -> list[Pair]:
 # condiciones que la nota no dice (→ `soportada` + `condicion` poblada), o la cita NO toca el
 # contenido distintivo de la afirmación (→ `no-soportada`, como ya mandaba el contrato).
 VERDICTS = ("soportada", "no-soportada", "contradice", "no verificable por extracción")
+# #91 · los que EXIGEN acción antes de cerrar. `no-soportada` = la fuente calla; `contradice` = la
+# fuente afirma lo contrario. Los dos son, tal cual quedan escritos, una afirmación que la bóveda
+# hace y su propia fuente no respalda: el contrato manda RESOLVERLOS (bajar la afirmación a lo que
+# dice la fuente, reasignar la cita al bibcode correcto, marcar `inferencia`, o taguear la disputa),
+# no registrarlos y seguir. `no verificable por extracción` NO entra: es una propiedad de la fuente
+# (ecuación, tabla, escaneo), no un defecto de la nota.
+VERDICTS_SIN_RESOLVER = ("no-soportada", "contradice")
+
+
+def resueltos(verdict: str) -> bool:
+    """`False` si esta fila deja una afirmación sin respaldo. Tolera la anotación de la resolución
+    en la misma celda —`no-soportada→corregida`, que es como la plantilla del skill muestra el caso
+    resuelto—: lo que bloquea es el veredicto **pelado**."""
+    # @inv INV-117
+    v = (verdict or "").strip().lower()
+    return not any(v == mal or v.startswith(mal + " ") for mal in VERDICTS_SIN_RESOLVER)
 
 # Columnas que hacen evaluable al bloque. Sin `ancla`/`hash` no hay dónde colgar los hashes (la
 # plantilla pre-D-20 colapsaba las soportadas en prosa y dejaba una sola fila, la que falló). Sin

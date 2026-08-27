@@ -1408,6 +1408,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     old_verif_template: list = []
     verif_sin_archivo: list = []       # (stem, motivo) — #117: la fila no dice qué archivo leyó
     verif_localizador: list = []       # (stem, motivo) — #122: el localizador contradice al prefijo
+    verif_sin_resolver: list = []      # (stem, motivo) — #91: veredicto que exige acción y no la tuvo
     for stem, texto in sorted(anchor_notes):
         filas = lb.parse_verif_table(texto)
         if filas is None:
@@ -1418,6 +1419,15 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             continue
         pendientes = lb.pairs_of(texto)
         for fila in filas:
+            # #91: el lint miraba el bloque SÓLO por su encabezado (¿existe? ¿está fresco?) y nunca
+            # su contenido, así que una fila `no-soportada` pasaba limpia — sentada bajo un
+            # encabezado que se lee como garantía. El contrato manda RESOLVER cada falla, no
+            # registrarla: es la frontera dura, igual que citar una fuente retractada.
+            if not lb.resueltos(fila.verdict):
+                verif_sin_resolver.append(
+                    (stem, f"[[{fila.bibcode}]] quedó `{fila.verdict}` en el bloque: la nota afirma "
+                           f"algo que su propia fuente no respalda → bajala a lo que dice la fuente, "
+                           f"reasigná la cita, marcala `inferencia`, o tagueá la disputa"))
             exacto = next((p for p in pendientes
                            if p.bibcode == fila.bibcode and p.anchor == fila.anchor), None)
             if exacto is not None:
@@ -2310,6 +2320,9 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('verif_sin_archivo', '⛔ Fila de verificación que no declara contra qué archivo se '
                   'verificó (#117): el hash no se puede comparar', SEV_BLOQUEANTE,
                   tuple(verif_sin_archivo)),
+        Categoria('verif_sin_resolver', '⛔ Veredicto de verificación SIN RESOLVER (`no-soportada` / '
+                  '`contradice`): la nota afirma algo que su fuente no respalda', SEV_BLOQUEANTE,
+                  tuple(verif_sin_resolver)),
         Categoria('verif_localizador', 'Localizador que contradice al archivo vigilado: la evidencia '
                   'cita una página y la fila vigila el `.txt` (o al revés) (backlog)',
                   SEV_BACKLOG, tuple(verif_localizador)),

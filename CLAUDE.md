@@ -907,7 +907,15 @@ vencidas cada vez que se re-extrae, cosa que el propio framework provoca (`--for
 backfill de marcas), mientras la fuente real no se movió; y no vería que el PDF **sí** cambió. Los
 calcula `scripts/lib_blocks.py` (`pairs_of`, `source_hash` para el `.txt`, `bytes_hash` para el PDF —
 un PDF no es texto, y decodificarlo con `errors=replace` hace **colisionar** dos escaneos distintos),
-el mismo código que después los chequea: no se escriben a ojo. ⛔ **Sin fila no hay dónde colgar el ancla** — colapsar las soportadas en un párrafo
+el mismo código que después los chequea: no se escriben a ojo. ⛔ **Y un veredicto que exige acción NO puede quedar registrado y sin resolver (#91).** El lint leía
+el bloque **sólo por su encabezado** —¿existe? ¿está fresco?— y nunca su contenido: la columna
+`Veredicto` no la miraba nadie, así que una fila `no-soportada` pasaba limpia, **sentada bajo un
+encabezado que se lee como garantía**. Eso es una afirmación que la bóveda hace y que su propia
+fuente no respalda, o sea justo lo que la frontera dura prohíbe: hoy **bloquea**, con el mismo trato
+que citar una fuente retractada. No cuentan `no verificable por extracción` (es propiedad de la
+fuente, no defecto de la nota) ni la resolución anotada en la misma celda (`no-soportada→corregida`):
+lo que bloquea es el veredicto **pelado**.
+⛔ **Sin fila no hay dónde colgar el ancla** — colapsar las soportadas en un párrafo
 de prosa y dejar en la tabla sólo las que fallaron deja al lint sin poder distinguir "verificada" de
 "nunca se miró".
 **La nota nace 100% verificada (D-5):** al armar una ficha o un concepto se verifica **todo**; el
