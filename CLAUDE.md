@@ -1211,6 +1211,14 @@ juicios de curación en silencio. Su hermana, la **decisión con forma inválida
 `decisiones` que no es un mapa — `2006Rasmussen: descartado` a secas), es **backlog** propio:
 `load_decisiones` la descarta y sin el aviso el triage vuelve a proponer lo ya descartado **sin el
 motivo**, que es exactamente el bug que #51 cerró.
+Los **alias que SIMBAD conoce y `stars.yaml` no declara** (#82) son **backlog**: un alias que falta
+es un paper que nunca aparece **en silencio**, y degrada los **tres** mecanismos de recall a la vez
+—query directa, barrido `--sweep` y rescate por glifo—. Se persisten en `_simbad_aliases` del
+ground-truth con la misma llamada que ya se hace, así que la propuesta sale de **una fuente** y no de
+la memoria del LLM. ⛔ Persistir **no es adoptar**: SIMBAD devuelve identificadores inútiles para
+buscar texto (`Gaia DR3 …`, `2MASS J…`) junto a los que sirven (`HD`, `HIP`, `GJ`), así que cuáles
+entran es curación y se versiona. Su hermano de siempre, el alias **de más** (declarado y que resuelve
+a otro objeto), sigue siendo WARN.
 El **barrido full-text sin rastro** (#88: el registro del sujeto no tiene `barridos`) es **backlog**:
 `--sweep` era un preview de stdout y, cuando la terminal scrollea, no quedaba nada — el mismo modo de
 falla que #55 cerró para el triage. Pesa porque el barrido es **el único camino** para el punto ciego

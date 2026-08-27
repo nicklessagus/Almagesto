@@ -35,6 +35,39 @@ def _norm_id(s: str) -> str:
     return "".join(str(s).split()).lower()
 
 
+def simbad_identifiers(host: str) -> list | None:
+    """Todos los identificadores que SIMBAD conoce para `host`, en su orden. `None` si no contestó.
+
+    #82, el lado **de menos** — el simétrico de `unresolved_aliases`. El skill advierte que *«un
+    alias que falta es un paper que nunca aparece, en silencio»* y por eso manda resolverlos en
+    SIMBAD; en la práctica los completa el LLM **de memoria**, sin fuente y sin rastro, y son la
+    entrada de **tres** mecanismos de recall: la query directa, el barrido `--sweep` y el rescate
+    por glifo. Un alias que falta los degrada a los tres a la vez.
+
+    La llamada ya se hace (`query_objectids`, la misma de `unresolved_aliases`), así que persistir
+    la lista es gratis y convierte «lo que el LLM se acordó» en «lo que SIMBAD dice», auditable y
+    fechado con el snapshot.
+
+    ⛔ Persistir NO es adoptar. Cuáles entran a `stars.yaml` es **curación humana**: SIMBAD devuelve
+    identificadores que no sirven para buscar texto (Gaia DR3, 2MASS J…) junto a los que sí (HD,
+    HIP, GJ). Acá queda la propuesta, determinista y con su fuente; la elección se versiona.
+
+    `None` ≠ `[]`: sin esa distinción una caída de red se lee como «no hay más identificadores».
+
+    @inv INV-122"""
+    try:
+        from astroquery.simbad import Simbad
+        tabla = Simbad().query_objectids(host)
+    except Exception as e:
+        cfg.print_seguro(f"  ⚠ SIMBAD no devolvió los identificadores de {host!r}: {e} — la lista "
+                         "de alias queda SIN completar (no es lo mismo que completa).")
+        return None
+    if tabla is None or not len(tabla):
+        return None
+    col = tabla.colnames[0]
+    return [str(fila[col]) for fila in tabla]
+
+
 def unresolved_aliases(host: str, aliases: list) -> list | None:
     """Alias declarados que SIMBAD **no** lista como identificadores de `host` (#82).
 
@@ -374,6 +407,10 @@ def main() -> int:
                # inglés por la regla de código nuevo; las claves `_autoridad`/`_otras_autoridades`
                # se dejan como están (sin retrofit).
                "_unresolved_aliases": colgados,
+               # #82, lado de MENOS: lo que SIMBAD conoce, para que la propuesta de alias salga de
+               # una fuente y no de la memoria del LLM. Persistir no es adoptar: el lint lo reporta
+               # y la elección se versiona en `stars.yaml`.
+               "_simbad_aliases": simbad_identifiers(host) or [],
                # D-1: la fecha del snapshot es parte de la procedencia que la ficha publica —
                # "de dónde salió" sin "cuándo" no alcanza: NEA cambia valores entre releases.
                "consultado": dt.date.today().isoformat(),

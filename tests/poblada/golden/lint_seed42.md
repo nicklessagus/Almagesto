@@ -28,6 +28,8 @@
 
 ## Contraste cross-paper (3b) sin rastro: el inventario por eje quedó en la plantilla (backlog) (0)
 
+## Identificadores que SIMBAD conoce y `stars.yaml` no declara: un alias que falta es un paper que nunca aparece, en silencio (backlog — la elección es curación) (0)
+
 ## ⚠ Alias que SIMBAD no reconoce para esta estrella (WARN — puede meter papers de otro objeto) (0)
 
 ## ⛔ `merge=ours` declarado pero sin driver registrado en este clon: la protección no existe (0)

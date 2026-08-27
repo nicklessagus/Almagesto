@@ -462,3 +462,47 @@ def test_el_atajo_idempotente_estampa_el_paso(toy_vault, monkeypatch, capsys):
     pasos = [p["paso"] for p in cfg.load_cadena("test_star")]
     assert "fetch_ground_truth" in pasos, "el atajo tiene que dejar traza igual"
     assert cfg.cadena_cortada("test_star") != "fetch_ground_truth"
+
+
+# ── #82 · el lado «de MENOS»: los identificadores que SIMBAD conoce y la bóveda no ───────────────
+
+def _simbad_con(ids, monkeypatch):
+    """SIMBAD que devuelve una tabla de identificadores, con la forma real (una columna, N filas)."""
+    import sys, types
+    simbad = types.ModuleType("astroquery.simbad")
+    tabla = [{"ID": x} for x in ids]
+
+    class _T(list):
+        colnames = ["ID"]
+
+    simbad.Simbad = lambda: types.SimpleNamespace(
+        add_votable_fields=lambda *a, **k: None,
+        query_object=lambda host: None,
+        query_objectids=lambda host: _T(tabla))
+    monkeypatch.setitem(sys.modules, "astroquery.simbad", simbad)
+
+
+def test_los_identificadores_de_simbad_quedan_en_el_ground_truth(toy_vault, monkeypatch):
+    """#82: `unresolved_aliases` ya cubría el alias **de más** (declarado y ajeno). Falta el de
+    **menos**, que es el que el skill llama *«un alias que falta es un paper que nunca aparece — en
+    silencio»*: los aliases se escriben a mano y en la práctica los completa el LLM de memoria, sin
+    fuente y sin rastro, siendo la entrada de tres mecanismos de recall (query directa, `--sweep` y
+    rescate por glifo).
+
+    La misma llamada que ya se hace (`query_objectids`) devuelve la lista completa. Persistirla es
+    gratis y convierte «lo que el LLM se acordó» en «lo que SIMBAD dice», auditable y fechado.
+
+    ⛔ Persistir NO es adoptar: cuáles entran a `stars.yaml` es curación humana (el paso 4 del
+    issue). Acá sólo queda la propuesta, determinista y con su fuente.
+
+    @inv INV-122"""
+    _simbad_con(["HD 10700", "HIP 8102", "GJ 71", "* tau Cet"], monkeypatch)
+    assert gt.simbad_identifiers("tau Cet") == ["HD 10700", "HIP 8102", "GJ 71", "* tau Cet"]
+
+
+def test_sin_respuesta_de_simbad_es_None_y_no_lista_vacia(toy_vault, monkeypatch):
+    """`None` = SIMBAD no contestó; `[]` = contestó y no hay nada. Sin esa distinción una caída de
+    red se lee como «no hay más identificadores», que es el cero inventado de D-43.  @inv INV-122"""
+    import astroquery.simbad as _sim
+    monkeypatch.setattr(_sim, "Simbad", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("caído")))
+    assert gt.simbad_identifiers("tau Cet") is None

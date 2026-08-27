@@ -406,6 +406,11 @@ def note_files() -> list:
     return files
 
 
+def _norm_alias(x: str) -> str:
+    """Alias comparable: sin espacios ni mayúsculas, sin el `*` de SIMBAD. `GJ 71` == `gj71`."""
+    return re.sub(r"[^a-z0-9]", "", str(x).lower())
+
+
 BIBCODE_RE = re.compile(r"^\d{4}[A-Za-z]")   # heurística: target de link que parece bibcode
 # R-3 (decidida con el usuario, 2026-08-24): la marca en línea de una cita a fuente retractada. El
 # símbolo es lo que la hace inconfundible con la palabra suelta en prosa; es la hermana de
@@ -819,6 +824,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # persiste `fetch_ground_truth`; acá se surface OFFLINE, que es donde se mira. `null` significa
     # "SIMBAD no contestó" y NO es lo mismo que `[]`: se reporta como sin verificar, no como limpio.
     alias_ajenos: list = []
+    alias_faltantes: list = []         # (slug, motivo) — #82: SIMBAD los conoce y la bóveda no
     for gt in sorted(cfg.GROUND_TRUTH.glob("*.json")) if cfg.GROUND_TRUTH.exists() else []:
         try:
             data = json.loads(gt.read_text(encoding="utf-8"))
@@ -826,6 +832,27 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             continue                      # el JSON roto ya lo reporta el barrido del espejo (#70)
         if not isinstance(data, dict) or "_unresolved_aliases" not in data:
             continue                      # snapshot anterior a #82: nada que decir
+        # #82, lado de MENOS: identificadores que SIMBAD lista y `stars.yaml` no declara. Cada uno
+        # que falta degrada los TRES mecanismos de recall a la vez —query directa, `--sweep` y
+        # rescate por glifo— y el modo de falla es silencioso: un paper que nunca aparece. Es
+        # PROPUESTA, no adopción: SIMBAD devuelve identificadores que no sirven para buscar texto
+        # (Gaia DR3, 2MASS J…) junto a los que sí, así que cuáles entran es curación humana.
+        _decl = set()
+        if not cfg.stars_error():
+            for _n, _m in cfg.load_stars().items():
+                if isinstance(_m, dict) and _m.get("slug") == gt.stem:
+                    _decl = {_norm_alias(x) for x in
+                             [_n, _m.get("simbad"), _m.get("ads_object"), *cfg.as_list(_m.get("aliases"))]
+                             if x}
+        _faltan = [a for a in cfg.as_list(data.get("_simbad_aliases"))
+                   if _norm_alias(a) not in _decl]
+        if _faltan:
+            alias_faltantes.append(
+                (gt.stem, f"SIMBAD conoce {len(_faltan)} identificador(es) que `stars.yaml` no "
+                          f"declara: {', '.join(_faltan[:8])}"
+                          + (" …" if len(_faltan) > 8 else "")
+                          + " → elegí los que sirvan para buscar (los `Gaia DR3`/`2MASS J` no) y "
+                            "agregalos a `aliases:`"))
         for alias in cfg.as_list(data.get("_unresolved_aliases")):
             alias_ajenos.append((gt.stem, f"alias `{alias}` declarado en stars.yaml pero SIMBAD no lo "
                                           "lista como identificador de esta estrella → puede resolver "
@@ -2293,6 +2320,9 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('mass_issues', 'Ground-truth: masa inconsistente con m·sini (K,P,e,M*)', SEV_BLOQUEANTE, tuple(mass_issues)),
         Categoria('contrast_missing', 'Contraste cross-paper (3b) sin rastro: el inventario por eje quedó en la plantilla (backlog)',
                   SEV_BACKLOG, tuple(contraste_pendiente)),
+        Categoria('alias_faltante', 'Identificadores que SIMBAD conoce y `stars.yaml` no declara: '
+                  'un alias que falta es un paper que nunca aparece, en silencio (backlog — la '
+                  'elección es curación)', SEV_BACKLOG, tuple(alias_faltantes)),
         Categoria('foreign_alias', '⚠ Alias que SIMBAD no reconoce para esta estrella (WARN — puede meter papers de otro objeto)',
                   SEV_WARN, tuple(alias_ajenos)),
         Categoria('merge_ours', '⛔ `merge=ours` declarado pero sin driver registrado en este clon: la protección no existe',

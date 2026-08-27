@@ -2697,7 +2697,7 @@ def test_las_claves_de_categoria_son_unicas_y_estables(toy_vault):
     equivocada en silencio."""
     claves = [c.clave for c in lint.collect().categorias]
     assert len(claves) == len(set(claves)), [k for k in claves if claves.count(k) > 1]
-    assert len(claves) == 62, f"el reporte tiene {len(claves)} categorías, se esperaban 62"
+    assert len(claves) == 63, f"el reporte tiene {len(claves)} categorías, se esperaban 63"
 
 
 def test_el_modo_cierre_solo_cambia_el_exit_de_los_pares(toy_vault):
@@ -3370,3 +3370,23 @@ def test_el_barrido_sin_rastro_se_reporta(toy_vault, capsys):
         encoding="utf-8")
     _, rep = run_lint_reporte(capsys)
     assert "barrido full-text (2b) no consta" not in rep, "un barrido vacío TAMBIÉN cuenta"
+
+
+def test_alias_que_simbad_conoce_y_la_boveda_no(toy_vault, capsys):
+    """#82, el lado de MENOS: SIMBAD lista identificadores que `stars.yaml` no declara. Cada uno que
+    falta degrada los **tres** mecanismos de recall a la vez —query directa, `--sweep` y rescate por
+    glifo— y el modo de falla es silencioso: un paper que nunca aparece.
+
+    Backlog y **propuesta**, no adopción: SIMBAD devuelve identificadores que no sirven para buscar
+    texto (Gaia DR3, 2MASS J…) junto a los que sí, así que cuáles entran es curación humana.
+
+    @inv INV-122"""
+    (toy_vault.GROUND_TRUTH).mkdir(parents=True, exist_ok=True)
+    (toy_vault.GROUND_TRUTH / "test_star.json").write_text(json.dumps({
+        "star": "Estrella Test", "slug": "test_star", "host": {}, "planets": [],
+        "_unresolved_aliases": [],
+        "_simbad_aliases": ["HD 12345", "HIP 99999", "GJ 71"]}), encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    assert "HIP 99999" in rep and "GJ 71" in rep, "los que SIMBAD conoce y stars.yaml no"
+    assert "HD 12345" not in rep.split("SIMBAD conoce")[-1].split("##")[0], \
+        "el que ya está declarado no se propone"
