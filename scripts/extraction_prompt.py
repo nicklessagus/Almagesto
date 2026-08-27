@@ -175,7 +175,21 @@ def _symbols_note(slug: str, bibcode: str, texto: str) -> str:
         # evaluados la instrucción dura de citar por página convertiría una duda en certeza falsa.
         medido, motivo = extract_fulltext.symbols_lost(texto)
         if medido is not None:
-            return ""
+            # #194 · el TERCER modo de falla, y el peor: la ecuación está, tiene cuerpo y **dice
+            # otra cosa** (sustitución de caracteres). El detector la evalúa y devuelve `False`,
+            # que hasta acá viajaba como SILENCIO. Con el cuerpo vacío `verify-citations` devuelve
+            # `no-soportada` y alguien mira; con el cuerpo cambiado devuelve `soportada`: una nota
+            # falsa y verde. Cuatro casos con consecuencia semántica verificados contra el PDF
+            # (`tanh⁻¹` por `tan⁻¹`, `si = 1` por `si = ±1`, «model (8)» por «(3)», `f(y)"y` por
+            # `f_i(y)=y³`).
+            # ⚠ El aviso es todo lo que se puede hacer hoy: la firma de sustitución SE MIDIÓ y no
+            # discrimina —caza 1 de 5 confirmados y mete falsos positivos, porque las sustituciones
+            # también son por letras y por borradura, no sólo por puntuación—, así que no hay
+            # detector que poner y publicar el `False` como garantía es lo que hay que dejar de hacer.
+            return ("- El detector no encontró ecuaciones vaciadas, pero eso **no prueba** que los "
+                    "símbolos hayan sobrevivido: la **sustitución** de caracteres deja la fórmula "
+                    "con cuerpo y **cambiada**, y ningún chequeo la ve. Ante duda de un símbolo, "
+                    f"abrí `{_pdf_rel(slug, bibcode)}`.\n")
         return (
             f"- ⚠ **No se pudo medir si este `.txt` conserva sus ecuaciones** ({motivo}).\n"
             f"  No es «las conserva»: es que nadie lo sabe. Antes de transcribir una fórmula,\n"

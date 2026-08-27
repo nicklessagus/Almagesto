@@ -299,3 +299,27 @@ def test_el_prompt_declara_la_maqueta_medida_en_las_dos_direcciones():
         assert "fracción medida" in p, "el prompt publica el NÚMERO, no sólo el veredicto"
         assert "decilo en `salvedades`" in p
     assert "UNA columna" in una and "DOS COLUMNAS" in dos
+
+
+def test_un_False_del_detector_no_se_publica_como_garantia():
+    """#194 · el TERCER modo de falla: la ecuación está, tiene cuerpo y **dice otra cosa**
+    (sustitución de caracteres). El detector la evalúa y devuelve `False`, y hasta acá eso viajaba
+    como silencio — que el extractor lee como «el `.txt` está bien».
+
+    Es el peor de los tres modos: con el cuerpo vacío `verify-citations` devuelve `no-soportada` y
+    alguien mira; con el cuerpo **cambiado** devuelve `soportada`, o sea una nota **falsa y verde**.
+    Cuatro casos con consecuencia semántica verificados contra el PDF: `tanh⁻¹` por `tan⁻¹`,
+    `si = 1` por `si = ±1`, «model (8)» por «model (3)», `f(y)"y` por `f_i(y)=y³`.
+
+    ⚠ El aviso es lo único que se puede hacer hoy: la firma de sustitución **se midió y no
+    discrimina** (caza 1 de 5 confirmados y mete falsos positivos), así que no hay detector que
+    poner — y publicar un `False` como garantía es justamente lo que hay que dejar de hacer.
+
+    @inv INV-38"""
+    # el `.txt` tiene ecuaciones CON cuerpo, así que el detector las evalúa y devuelve False:
+    # es el bucket donde este modo de falla es invisible (45 de 67 en el corpus medido).
+    con_ecuaciones = "\n".join(f"  x_{i} = A s_{i} + n_{i}     ({i})" for i in range(1, 9))
+    p = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, con_ecuaciones)
+    assert "no prueba" in p and "sustitu" in p.lower()
+    # y no se degrada al aviso duro: las ecuaciones acá SÍ están
+    assert "Las ECUACIONES no están" not in p
