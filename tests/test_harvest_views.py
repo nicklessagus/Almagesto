@@ -157,3 +157,28 @@ def test_la_cosecha_se_estampa_en_la_cadena(toy_vault, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["harvest_views.py", "test_star"])
     assert hv.main() == 0
     assert any(p["paso"] == "harvest_views" for p in cfg.load_cadena("test_star"))
+
+
+def test_upsert_view_no_se_come_el_cierre_del_frontmatter(toy_vault):
+    """Regresión medida: `upsert_view` reconstruía la nota con `text[end + 1:]`, y ese `+1` se
+    comía el `\\n` que separa la última clave del `---` de cierre. Resultado: `generator: v1.69.0---`
+    en la misma línea, el YAML deja de parsear y **la nota entera desaparece de todos los chequeos
+    por tipo** — que es justo el modo de falla que la categoría `fm_broken` del lint existe para
+    reportar.
+
+    Medido al cosechar un tema real: **24 de 202 notas** quedaron ilegibles, y encima en silencio,
+    porque el cosechador informó «65 cosechadas».
+
+    @inv INV-134"""
+    # ⚠ El fixture por defecto tiene `vistas` como ÚLTIMA clave y por ahí el bug NO aparece: al
+    # reemplazar el bloque final se append`ea uno que ya termina en `\n`. Se reproduce sólo cuando
+    # hay claves DESPUÉS —que es el caso real, `write_web_paper_note` pone `confidence`, `tags` y
+    # `generator` detrás—, porque ahí la última línea del frontmatter es la que pierde su salto.
+    dest = sembrar(toy_vault, fm_extra={"confidence": "medium", "generator": "Almagesto v1.69.0"})
+    hv.harvest("test_star")
+    texto = dest.read_text(encoding="utf-8")
+    assert "v1.69.0---" not in texto, "la última clave y el `---` no pueden quedar pegados"
+    assert "\n---\n" in texto[4:], "el frontmatter tiene que seguir cerrando en su propia línea"
+    fm = read_fm(dest)
+    assert fm.get("bibcode") == BIB, "y tiene que seguir parseando entero, no sólo cerrar"
+    assert fm["vistas"][0]["fecha"], "…con la vista estampada"

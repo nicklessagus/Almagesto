@@ -144,7 +144,12 @@ def upsert_view(dest: Path, vista: dict) -> bool:
     nuevo_head = "".join(out)
     if "vistas:" not in head:
         nuevo_head = nuevo_head.rstrip("\n") + "\n" + bloque
-    cfg.write_text_atomic(dest, "---\n" + nuevo_head + text[end + 1:])
+    # `head` no incluye el `\n` que separa la última clave del `---` de cierre (queda en `end`), así
+    # que se normaliza acá: se saca el salto sobrante del bloque reconstruido y se reusa `text[end:]`,
+    # que ya lo trae. Cortar en `end + 1` se lo comía, y una nota con `generator: v1.69.0---` deja de
+    # parsear ENTERA — o sea que desaparece de todos los chequeos por tipo, en silencio. Medido: 24
+    # de 202 notas de una bóveda real, con el cosechador informando «65 cosechadas».
+    cfg.write_text_atomic(dest, "---\n" + nuevo_head.rstrip("\n") + text[end:])
     return True
 
 
