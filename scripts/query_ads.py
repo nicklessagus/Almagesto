@@ -111,7 +111,35 @@ FIELDS = ("bibcode,title,author,year,pubdate,abstract,identifier,doctype,"
 # Lente astro del BUSCADOR (fq de Solr): acota el universo de toda query de DESCUBRIMIENTO.
 # No se aplica cuando el universo ya lo fijó el usuario con una lista de bibcodes — ver
 # `fetch_bibcodes` y el parámetro `fq` de `query_ads` (#68).
-ASTRO_FQ = "database:astronomy"
+ASTRO_FQ = "database:astronomy"          # default histórico; la instancia puede declarar otro
+
+
+_FQ_DEFAULT = object()      # centinela: `fq=None` explícito (no acotar) ≠ no pasar `fq`
+
+
+def search_fq() -> str | None:
+    """La lente del BUSCADOR (`fq` de Solr), desde `objective.yaml` (`relevance.search_fq`).
+
+    #85 — era constante de módulo, y es la mitad **más restrictiva** del filtro: acota el universo
+    **server-side, antes de traer nada**, mientras que `relevance.facets` decide qué es core dentro
+    de lo ya traído. Que justo esa mitad no saliera del objetivo era incoherente con el resto de la
+    lente (`facets`, `require`, `min_facets`, `noise_doctypes`, `concept_areas` sí se leen de ahí) y
+    bloqueaba el caso que el framework declara soportar: los **métodos de otras disciplinas**
+    —estadística, ML, signal processing— cuya bibliografía canónica no está en
+    `database:astronomy`.
+
+    Tres estados, no dos (D-43): sin declarar → `database:astronomy` (el default correcto para el
+    foco de este framework, y lo que hacía antes); declarado con valor → ése; declarado **`null`** →
+    `None`, o sea buscar en todo ADS **a propósito**. Un `null` declarado es una decisión y no puede
+    leerse igual que no haber declarado nada — misma distinción que D-26 protege con
+    `fundacional_min_citas`.
+
+    @inv INV-119"""
+    rel = cfg.as_map(cfg.load_objective().get("relevance"))
+    if "search_fq" not in rel:
+        return ASTRO_FQ
+    v = rel.get("search_fq")
+    return str(v) if v else None
 
 
 # Normalización de campos de CURACIÓN MANUAL: vive en `lib_config` desde que el diff de lente
@@ -369,7 +397,7 @@ RECENT_SORT = "date desc"              # la segunda pasada de #79: la cola recie
 
 def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
               meta: dict | None = None, expect_hits: bool = False,
-              fq: str | None = ASTRO_FQ, sort: str = CITES_SORT) -> list[dict]:
+              fq: str | None = _FQ_DEFAULT, sort: str = CITES_SORT) -> list[dict]:
     """Corre una query Solr `q` ya armada contra ADS y devuelve registros clasificados.
     Para estrellas, armar `q` con build_query(names); para temas, usar la query cruda del theme.
     Reintenta con backoff ante 429/5xx y avisa si el resultado quedó truncado (numFound > rows;
@@ -390,7 +418,8 @@ def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
     segunda pasada de `recent_pass` pide `RECENT_SORT` para recuperar la cola que ese orden esconde
     (#79). Es server-side: no hay forma de arreglarlo re-ordenando lo que ya volvió.
 
-    `fq` es la **lente astro** (`ASTRO_FQ`) y es el default correcto para toda query de
+    `fq` sale por default de `relevance.search_fq` del objetivo (#85; sin declarar, `ASTRO_FQ`) y es
+    el default correcto para toda query de
     **descubrimiento** (directa, chaining, glifo, sweep, probe): ahí filtrar lo no-astro es el
     punto. `fq=None` la apaga, y es lo que corresponde cuando el universo de búsqueda ya lo fijó el
     usuario —una lista explícita de bibcodes— porque entonces el filtro no puede sacar ruido, sólo
@@ -398,6 +427,10 @@ def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
     token = cfg.get_ads_token()
     headers = {"Authorization": f"Bearer {token}"}
     params = {"q": q, "fl": FIELDS, "rows": rows, "sort": sort}
+    # #85: el centinela distingue «no pasaron `fq`» (usar la lente declarada en el objetivo) de
+    # «pasaron `None` a propósito» (no acotar: el universo ya lo fijó el usuario con bibcodes).
+    if fq is _FQ_DEFAULT:
+        fq = search_fq()
     if fq:
         params["fq"] = fq
     for wait in (*RETRY_WAITS_S, None):

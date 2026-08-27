@@ -1793,3 +1793,37 @@ def test_el_sweep_sin_hallazgos_tambien_deja_rastro(toy_vault, monkeypatch, caps
     qa.sweep_star("test_star", rows=50)
     b = cfg.as_list((cfg.load_registro("test_star") or {}).get("barridos"))
     assert len(b) == 1 and b[0]["n_nuevos"] == 0 and b[0]["bibcodes"] == []
+
+
+# ── #85 · la lente del BUSCADOR sale del objetivo, no del código ─────────────────────────────────
+
+def test_el_fq_del_buscador_sale_del_objetivo(toy_vault):
+    """#85: `ASTRO_FQ = "database:astronomy"` era constante de módulo. Es el `fq` de Solr de toda
+    query de descubrimiento y **acota el universo antes de traer nada**, server-side — o sea que
+    recorta más fuerte que `relevance.facets`, que actúa después y sí es configurable.
+
+    Que la mitad más restrictiva del filtro no salga de `objective.yaml` es incoherente con todo el
+    resto de la lente, y bloquea el caso que el framework declara soportar: los **métodos de otras
+    disciplinas** (estadística, ML) cuya bibliografía canónica no está en `database:astronomy`.
+
+    @inv INV-119"""
+    write_yaml(cfg.OBJECTIVE_YAML, {"name": "x", "relevance": {"facets": {"rv": "radial"},
+                                                               "search_fq": "database:physics"}})
+    assert qa.search_fq() == "database:physics"
+
+
+def test_sin_declarar_el_fq_sigue_siendo_astro(toy_vault):
+    """Compatibilidad de comportamiento, no de schema: una bóveda que no declara nada sigue
+    buscando en astronomía, que es el default correcto para el foco de este framework. Lo que
+    cambia es que ahora **se puede** declarar otra cosa.  @inv INV-119"""
+    write_yaml(cfg.OBJECTIVE_YAML, {"name": "x", "relevance": {"facets": {"rv": "radial"}}})
+    assert qa.search_fq() == "database:astronomy"
+
+
+def test_fq_nulo_explicito_no_acota_nada(toy_vault):
+    """`search_fq: null` declarado es una DECISIÓN —buscar en todo ADS— y no puede leerse igual que
+    no declararlo (que deja el default astro). Misma distinción que D-26 protege con
+    `fundacional_min_citas`.  @inv INV-119"""
+    write_yaml(cfg.OBJECTIVE_YAML, {"name": "x",
+                                    "relevance": {"facets": {"rv": "radial"}, "search_fq": None}})
+    assert qa.search_fq() is None

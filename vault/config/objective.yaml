@@ -26,6 +26,16 @@ description: >
 # Cada faceta: nombre canónico → patrón regex de Python. Esto ES lo que define
 # tus papers core: ajustá los patrones a tu objetivo.
 relevance:
+  # (#85) La lente del BUSCADOR: el `fq` de Solr que acota el universo de toda query de
+  # descubrimiento, SERVER-SIDE y antes de traer nada. Es la mitad más restrictiva del filtro —
+  # `facets` (abajo) decide qué es core dentro de lo que ya llegó.
+  #   sin declarar   → database:astronomy   (el default del framework: el foco es astro)
+  #   con valor      → ése                  (p. ej. database:physics, o un fq compuesto)
+  #   search_fq: null → NO acota             (todo ADS, a propósito)
+  # Un `null` declarado es una DECISIÓN y no se lee igual que no declarar nada. Tocalo si tu bóveda
+  # necesita bibliografía que ADS no clasifica como astronomía — típicamente los métodos de otras
+  # disciplinas (estadística, ML, signal processing) al servicio del foco astro.
+  search_fq: database:astronomy
   # Comillas SIMPLES y una línea por patrón: YAML deja el string literal (sin
   # interpretar \b ni plegar saltos en espacios), así la regex llega intacta.
   facets:

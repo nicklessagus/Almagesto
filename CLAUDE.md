@@ -476,7 +476,15 @@ terminal no renderiza LaTeX y `$...$` se ve crudo.
 Genera/afina `vault/config/objective.yaml` (la **lente**: `name`/`description` + `relevance.facets`, el
 clasificador de papers core). El agente traduce el foco del usuario (en palabras) a la regex — el usuario
 **no** escribe regex — y la valida contra papers reales con `python scripts/query_ads.py --probe "<query>"`
-(muestra el corte core/no-core sin bajar nada) iterando hasta que cierre. `relevance.facets` son **facetas**
+(muestra el corte core/no-core sin bajar nada) iterando hasta que cierre. ⛔ **La lente del BUSCADOR también sale del objetivo (#85): `relevance.search_fq`.** Es el `fq` de
+Solr que acota el universo **server-side, antes de traer nada** — o sea la mitad **más restrictiva**
+del filtro, más que `relevance.facets`, que actúa después sobre lo ya traído. Estaba hardcodeada en
+`query_ads` como `database:astronomy`, lo que era incoherente con el resto de la lente (todo lo demás
+sale del objetivo) y bloqueaba el caso que este framework declara soportar: los **métodos de otras
+disciplinas** cuya bibliografía canónica ADS no clasifica como astronomía. Tres estados: sin declarar
+→ `database:astronomy`; con valor → ése; **`search_fq: null`** → no acota (todo ADS, a propósito). Un
+`null` declarado es una decisión y no se lee igual que no declarar nada.
+`relevance.facets` son **facetas**
 (constantes; clasifican los papers de estrella, y los de tema **salvo que el tema declare su
 lente propia** — ver *Relevancia de un tema de método*), **no** sujetos (las estrellas/temas van en
 la query, `stars.yaml`/`themes.yaml`). La **regla de combinación** de facetas es declarativa (no
