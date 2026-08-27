@@ -1,4 +1,0 @@
-- Esto estaba en las referencias https://iopscience.iop.org/article/10.3847/1538-4365/ad7c43 lo estábamos usando?
-- Hay que migrar las cosas a que sea agnóstico del scaffold
-- Pasar todo a inglés
-

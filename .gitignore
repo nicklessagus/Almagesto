@@ -50,3 +50,6 @@ scripts/hooks/pre-push
 # y, sobre todo, un plan es lo que se iba a hacer, no lo que el sistema garantiza. Lo que el repo
 # público promete vive en `docs/contrato.md` y su mapa `docs/trazabilidad.md`, que sí se commitean.
 docs/internal/
+
+# Notas sueltas del usuario: scratch, no doc del framework (se coló en e147daf)
+docs/mejoras.txt
