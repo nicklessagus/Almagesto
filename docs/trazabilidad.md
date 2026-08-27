@@ -7,9 +7,9 @@
 
 ## Resumen
 
-- Invariantes en el contrato: **123**
-- Con implementación marcada: **100**
-- Con test marcado: **120** (techo `sin_test`: 3, hoy 3)
+- Invariantes en el contrato: **124**
+- Con implementación marcada: **101**
+- Con test marcado: **121** (techo `sin_test`: 3, hoy 3)
 - Sin ninguna marca: **3** (techo `sin_marca`: 3)
 - Marcas huérfanas: **0**
 
@@ -83,6 +83,7 @@
 | **INV-121** | P1 | garantizado y medido | `scripts/lib_config.py:951` · `save_descubrimiento` | `tests/test_discover.py:596` · `test_la_cascada_registra_su_corrida` |
 | **INV-122** | P1 | garantizado y medido | `scripts/fetch_ground_truth.py:57` · `simbad_identifiers` | `tests/test_fetch_ground_truth.py:498` · `test_los_identificadores_de_simbad_quedan_en_el_ground_truth`<br>`tests/test_fetch_ground_truth.py:505` · `test_sin_respuesta_de_simbad_es_None_y_no_lista_vacia`<br>`tests/test_lint.py:3383` · `test_alias_que_simbad_conoce_y_la_boveda_no` |
 | **INV-123** | P1 | garantizado y medido | `scripts/ingest_theme.py:452` · `main` | `tests/test_ingest_theme.py:573` · `test_source_ads_con_sources_declaradas_aborta_diciendo_qué_poner` |
+| **INV-124** | P2 | garantizado y medido | `scripts/query_ads.py:1112` · `propose_facets` | `tests/test_query_ads.py:1845` · `test_el_probe_propone_facetas_desde_los_no_core`<br>`tests/test_query_ads.py:1862` · `test_no_propone_lo_que_una_faceta_ya_cubre` |
 | **INV-48** | P0 | garantizado y medido | `scripts/triage.py:155` · `drop` | `tests/test_triage.py:60` · `test_drop_persiste_con_motivo_en_config_versionada` |
 | **INV-49** | P0 | parcial (medido, con la brecha nombrada) | `scripts/query_ads.py:586` · `load_triage` | `tests/test_query_ads.py:1175` · `test_main_triage_no_repropone_descartados` |
 | **INV-50** | P0 | garantizado y medido | `scripts/query_ads.py:571` · `subject_in_title` | `tests/test_query_ads.py:1159` · `test_main_chaining_solo_auto_acepta_sujeto_en_titulo` |
@@ -94,7 +95,7 @@
 | **INV-56** | P0 | garantizado y medido | — | `tests/test_lib_config.py:408` · `test_objective_error_distingue_los_tres_estados` |
 | **INV-57** | P1 | garantizado y medido | `scripts/lib_config.py:30` | `tests/test_lint.py:1145` · `test_objetivo_default_warn` |
 | **INV-58** | P1 | garantizado y medido | `scripts/lib_config.py:1372` · `lens_diff_offline`<br>`scripts/query_ads.py:1018` · `reclass_diff` | `tests/test_lint.py:2415` · `test_lente_igual_calla`<br>`tests/test_lint.py:2426` · `test_lente_cambiada_reporta_diff_por_ficha`<br>`tests/test_query_ads.py:952` · `test_reclass_diff_reporta_el_delta` |
-| **INV-59** | P0 | garantizado y medido | `scripts/query_ads.py:1103` · `print_probe` | `tests/test_query_ads.py:978` · `test_reclass_diff_no_escribe_nada`<br>`tests/test_query_ads.py:1627` · `test_probe_no_escribe_nada` |
+| **INV-59** | P0 | garantizado y medido | `scripts/query_ads.py:1134` · `print_probe` | `tests/test_query_ads.py:978` · `test_reclass_diff_no_escribe_nada`<br>`tests/test_query_ads.py:1627` · `test_probe_no_escribe_nada` |
 | **INV-60** | P1 | garantizado y medido | `scripts/lib_config.py:729` · `load_extra_core` | `tests/test_query_ads.py:563` · `test_fetch_bibcodes_marca_manual` |
 | **INV-61** | P1 | garantizado y medido | `scripts/make_notes.py:2292` · `write_web_paper_note` | `tests/test_fetch_web.py:151` · `test_force_rebaja_la_fuente_pero_no_pisa_la_extraccion`<br>`tests/test_ingest_theme.py:255` · `test_offads_pending_deriva_sin_fallar`<br>`tests/test_make_notes.py:2581` · `test_excluded_table_no_lanza_con_un_ads_json_cortado_a_media_letra` |
 | **INV-62** | P1 | garantizado y medido | `scripts/make_notes.py:1041` | `tests/test_lib_config.py:112` · `test_version_unica_fuente`<br>`tests/test_make_notes.py:2318` · `test_la_nota_declara_su_version`<br>`tests/test_make_notes.py:2332` · `test_restamp_headers_no_reetiqueta_la_nota` |
@@ -115,7 +116,7 @@
 | **INV-77** | P1 | garantizado y medido | `scripts/lint.py:447` | `tests/test_lint.py:2154` · `test_disputa_entre_autoridades_es_expresable` |
 | **INV-78** | P0 | garantizado y medido | `scripts/lib_blocks.py:3`<br>`scripts/lint.py:1386` · `collect` | `tests/test_lib_blocks.py:47` · `test_reflow_no_mueve_ancla`<br>`tests/test_lint.py:1903` · `test_reemplazo_del_txt_marca_por_fuente` |
 | **INV-79** | P0 | parcial (la mitad determinista, medida) | `scripts/lint.py:1386` · `collect` | `tests/test_lint.py:1858` · `test_nota_verificada_no_marca_nada` |
-| **INV-80** | P0 | garantizado y medido | `scripts/lib_config.py:288` · `yaml_error`<br>`scripts/lib_config.py:304` · `stars_error`<br>`scripts/lib_config.py:309` · `themes_error`<br>`scripts/lib_config.py:325` · `objective_error`<br>`scripts/query_ads.py:1136` · `main` | `tests/test_lib_config.py:408` · `test_objective_error_distingue_los_tres_estados`<br>`tests/test_lint.py:1771` · `test_lint_objective_roto_bloquea`<br>`tests/test_lint.py:2012` · `test_stars_yaml_roto_reporta_no_evaluado_en_vez_de_reventar`<br>`tests/test_lint.py:2025` · `test_themes_yaml_roto_tambien_reporta_no_evaluado`<br>`tests/test_query_ads.py:1338` · `test_query_ads_rehusa_lente_vacia` |
+| **INV-80** | P0 | garantizado y medido | `scripts/lib_config.py:288` · `yaml_error`<br>`scripts/lib_config.py:304` · `stars_error`<br>`scripts/lib_config.py:309` · `themes_error`<br>`scripts/lib_config.py:325` · `objective_error`<br>`scripts/query_ads.py:1176` · `main` | `tests/test_lib_config.py:408` · `test_objective_error_distingue_los_tres_estados`<br>`tests/test_lint.py:1771` · `test_lint_objective_roto_bloquea`<br>`tests/test_lint.py:2012` · `test_stars_yaml_roto_reporta_no_evaluado_en_vez_de_reventar`<br>`tests/test_lint.py:2025` · `test_themes_yaml_roto_tambien_reporta_no_evaluado`<br>`tests/test_query_ads.py:1338` · `test_query_ads_rehusa_lente_vacia` |
 | **INV-81** | P0 | garantizado y medido (1.35.0) | `scripts/make_notes.py:1351` · `papers_universe` | `tests/test_make_notes.py:1937` · `test_conteo_del_encabezado_es_el_de_la_tabla`<br>`tests/test_make_notes.py:2410` · `test_planetas_se_estampa_no_es_dataview`<br>`tests/test_make_notes.py:2434` · `test_metodos_se_estampa_con_el_recorte_correcto`<br>`tests/test_make_notes.py:2592` · `test_una_corrida_limpia_deja_el_rollup_al_dia` |
 | **INV-82** | P1 | garantizado y medido (1.35.0) | `scripts/lib_config.py:833` · `save_sintesis`<br>`scripts/make_notes.py:1863` · `estado_line` | `tests/test_make_notes.py:2026` · `test_refrescar_sin_reverificar_mueve_una_sola_fecha`<br>`tests/test_make_notes.py:2487` · `test_la_cabecera_lleva_las_tres_fechas`<br>`tests/test_make_notes.py:2505` · `test_refrescar_no_mueve_la_fecha_de_sintesis`<br>`tests/test_triage.py:487` · `test_sintesis_se_declara_y_no_pisa_lo_demas` |
 | **INV-83** | P0 | parcial (el canal ya está cableado) | `scripts/lib_config.py:818` · `save_extraccion`<br>`scripts/lint.py:1679` · `collect` | `tests/test_docs_ejecutables.py:287` · `test_el_alcance_de_hipotesis_tiene_invariante_propio`<br>`tests/test_lint.py:2127` · `test_subconjunto_sin_declarar_reporta`<br>`tests/test_triage.py:442` · `test_extraccion_todos_declara_el_default` |

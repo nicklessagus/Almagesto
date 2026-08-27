@@ -36,6 +36,14 @@ papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** 
      es la palanca real contra el ruido. Si el usuario no identifica ninguna, se queda en OR.
    No avanzar sin un foco claro.
 
+   ⛔ **Y después de escuchar, PROPONER (#83).** Ofrecer **2–4 facetas adyacentes que el usuario no
+   nombró**, cada una con una línea de por qué, para que las acepte o descarte. El usuario sigue
+   decidiendo; lo que cambia es que la lente deja de quedar limitada a lo que recordó en una
+   conversación corta. La asimetría está al revés de donde debería: el usuario conoce su foco, pero
+   **el agente es el que tiene el corpus delante**. Y el costo de que falte una faceta no es
+   simétrico — lo que la lente descarta **no se baja**, así que un falso negativo no deja rastro y
+   sólo se recupera re-clasificando el corpus entero (sub-modo de `maintain`).
+
    **Separar dos cosas al escuchar el foco (clave para no equivocar el archivo):**
    - **Facetas** = qué hace a un paper relevante (p. ej. "ciclos de actividad", "períodos de rotación",
      "separación de fuentes") → van a `relevance.facets`. Son **constantes**: la misma lente clasifica
@@ -106,6 +114,14 @@ papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** 
    - **Juzgar:** ¿se cuela ruido (marcó CORE algo que no debería)? ¿se pierde algo
      bueno (marcó — un paper claramente relevante)? **Editar `relevance.facets`** (sumar/sacar términos o
      buckets) y **re-correr `--probe`**. Iterar 1–3 veces hasta que el corte cierre.
+   - ⛔ **Y mirar el bloque «¿FALTA UNA FACETA?»** que el probe imprime (#83): los términos que se
+     repiten entre los **no-core** y que ninguna faceta matchea. No son términos inventados — son
+     las `keywords` que ADS devuelve, el único vocabulario de la bóveda que no sale de una regex
+     nuestra ni de la memoria de un LLM. Si varios papers pertinentes caen afuera **por la misma
+     razón**, eso es una **faceta faltante**, no términos faltantes.
+   - ⚠ **Son dos ediciones distintas y el skill no las trataba así.** Una **faceta nueva** cambia la
+     *estructura* de la lente, y con ella el efecto de `require` y `min_facets`; un **sinónimo**
+     sólo mueve el recall de una faceta que ya existe. Decir cuál de las dos se está proponiendo.
    - Mostrar el corte final al usuario y **confirmar** antes de dar por cerrado.
    - Si **no hay token ADS** cargado (`vault/config/ads_dev_key` o `ADS_DEV_KEY`): saltar el preview,
      dejar el borrador y avisar que la regla se afina sola en el primer `ingest` (que ya previsualiza).

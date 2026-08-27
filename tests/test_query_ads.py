@@ -1827,3 +1827,39 @@ def test_fq_nulo_explicito_no_acota_nada(toy_vault):
     write_yaml(cfg.OBJECTIVE_YAML, {"name": "x",
                                     "relevance": {"facets": {"rv": "radial"}, "search_fq": None}})
     assert qa.search_fq() is None
+
+
+# ── #83 · minar el `--probe`: qué faceta le falta a la lente ─────────────────────────────────────
+
+def test_el_probe_propone_facetas_desde_los_no_core(toy_classifier):
+    """#83: el skill `setup` sólo **pregunta** y traduce lo que el usuario supo nombrar. El agente,
+    en cambio, tiene el corpus delante — y no lo mira.
+
+    La señal existe y es determinista: entre los **no-core**, los términos que se repiten y que
+    **ninguna faceta matchea**. Y no son términos inventados: son las `keywords` que el propio ADS
+    devuelve (D-17), el único vocabulario de la bóveda que no sale de una regex nuestra ni de la
+    memoria de un LLM.
+
+    ⛔ Es una PROPUESTA, no una edición: cuáles entran a `relevance.facets` lo decide el usuario.
+
+    @inv INV-124"""
+    recs = [
+        {"bibcode": f"2020a{i}", "relevant": False, "facets": [],
+         "keyword": ["asteroseismology", "stellar oscillations"]} for i in range(4)
+    ] + [
+        {"bibcode": "2020b1", "relevant": False, "facets": [], "keyword": ["debris disk"]},
+        {"bibcode": "2020c1", "relevant": True, "facets": ["rv"], "keyword": ["radial velocity"]},
+    ]
+    prop = qa.propose_facets(recs, min_n=3)
+    assert prop and prop[0][0] == "asteroseismology" and prop[0][1] == 4
+    assert all(t != "debris disk" for t, _ in prop), "1 sola aparición no es un agrupamiento"
+    assert all("radial velocity" != t for t, _ in prop), "lo que ya es core no se propone"
+
+
+def test_no_propone_lo_que_una_faceta_ya_cubre(toy_classifier):
+    """Contra-caso: un término frecuente entre los no-core que **sí** matchea una faceta existente
+    no es una faceta faltante — es un paper que quedó afuera por otra razón (doctype, `require`,
+    `min_facets`). Proponerlo mandaría a agregar lo que ya está.  @inv INV-124"""
+    recs = [{"bibcode": f"2020d{i}", "relevant": False, "facets": ["rv"],
+             "keyword": ["radial velocity"]} for i in range(5)]
+    assert qa.propose_facets(recs, min_n=3) == []

@@ -1093,6 +1093,37 @@ def print_combination_contrast(recs: list) -> None:
         cfg.print_seguro(f"    require: [{t}]{' ' * max(0, 14 - len(t))}→ {n:>5} CORE  ({pct})")
 
 
+def propose_facets(recs: list, min_n: int = 3) -> list:
+    """Términos frecuentes entre los **no-core** que ninguna faceta matchea → candidatos a faceta.
+
+    #83 — el skill `setup` sólo **pregunta** y traduce lo que el usuario supo nombrar en una
+    conversación corta. El agente, en cambio, tiene el corpus delante y no lo mira. La asimetría de
+    información está al revés de donde debería.
+
+    La señal es determinista y ya está en los datos: las `keywords` que el propio ADS devuelve
+    (D-17) — el único vocabulario de la bóveda que no sale de una regex nuestra ni de la memoria de
+    un LLM. Si varios papers caen afuera compartiendo un término que **ninguna faceta cubre**, eso es
+    una **faceta faltante**, no un sinónimo faltante: los dos arreglos son distintos porque una
+    faceta nueva cambia la ESTRUCTURA de la lente (y con ella el efecto de `min_facets`/`require`),
+    mientras que un sinónimo sólo mueve el recall de una faceta que ya existe.
+
+    ⛔ Propone, no edita. Cuáles entran a `relevance.facets` lo decide el usuario.
+
+    @inv INV-124"""
+    from collections import Counter
+    cuenta: Counter = Counter()
+    for r in recs:
+        if r.get("relevant"):
+            continue                      # lo que ya es core no dice nada de lo que falta
+        for kw in cfg.as_list(r.get("keyword")):
+            t = " ".join(str(kw).split()).lower()
+            # si alguna faceta ya lo matchea, el paper cayó por OTRA razón (doctype, require,
+            # min_facets): proponerlo mandaría a agregar lo que ya está.
+            if t and not any(pat.search(t) for pat in FACET_PATTERNS.values()):
+                cuenta[t] += 1
+    return [(t, n) for t, n in cuenta.most_common() if n >= min_n]
+
+
 def print_probe(q: str, recs: list, noncore_top: int = 25) -> int:
     """Modo preview del skill `setup`: muestra el corte core/no-core de una query sin bajar nada,
     para afinar la regla de relevancia (relevance.facets) contra papers reales. Lista **TODO el core**
@@ -1112,6 +1143,15 @@ def print_probe(q: str, recs: list, noncore_top: int = 25) -> int:
     cfg.print_seguro(f"  costo proyectado de leer el core: ~{proyectado // 1000}k tokens "
                      f"({len(core)} × {cfg.TOKENS_POR_PAPER // 1000}k, mediana del corpus)")
     print_combination_contrast(recs)
+    # #83: qué faceta le FALTA a la lente, minado de los no-core. Propuesta, no edición.
+    if (prop := propose_facets(recs)):
+        cfg.print_seguro("\n  ¿FALTA UNA FACETA? Términos que se repiten entre los no-core y que "
+                         "ninguna faceta matchea:")
+        for t, n_ in prop[:8]:
+            cfg.print_seguro(f"    {n_:>4}×  {t}")
+        cfg.print_seguro("    → si alguno es pertinente a tu foco, es una FACETA nueva (cambia la "
+                         "estructura de la lente y el efecto de `min_facets`), no un sinónimo que "
+                         "le falta a una faceta que ya existe. Son ediciones distintas.")
     cfg.print_seguro("")
     cfg.print_seguro(f"  CORE (todos, por citas)  [tópicos que matchearon]:")
     for r in core:
