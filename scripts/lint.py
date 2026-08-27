@@ -27,7 +27,12 @@ paper: la fuente no se pudo obtener —paywall/escaneo/mojibake— y está deriv
 precondición como las citas no verificables), **fulltext ilegible** (un `.txt` de `vault/raw/fulltext/`
 que no pasa el umbral determinista de legibilidad de `extract_fulltext.is_legible` → mojibake,
 escaneo cuya única capa de texto es la marca de agua del bibcode (#50) o
-escaneo sin capa de texto: existe pero no sirve para grep ni verify), **citas no verificables** (bibcode
+escaneo sin capa de texto: existe pero no sirve para grep ni verify), **mismo bibcode con `.txt`
+distinto entre slugs** (#190: D-18 copia el artefacto a cada slug que lo reclama y `raw/` es
+inmutable, así que dos copias con bytes distintos son una re-extracción que corrió bajo un slug y
+no bajo el otro; el ancla de fuente (D-20) hashea UNA sola copia, así que los pares verificados
+contra las demás se comparan contra un archivo que nunca leyeron; bloqueante — se compara, NO se
+sincroniza), **citas no verificables** (bibcode
 citado en query/concepto/hipótesis sin su `.txt` en `vault/raw/fulltext/` → no se puede chequear claim↔fuente
 con el skill `verify-citations`), **cobertura** (concepto/hipótesis sin ninguna cita `[[bibcode]]` →
 afirmaciones no chequeables; backlog), **cobertura de verificación** (query/concepto CON citas pero
@@ -817,6 +822,39 @@ class LintResult:
         return sum(len(self.en_alcance(c)) for c in self.bloquean())
 
 
+def diverged_copies(copies: dict) -> list:
+    """Bibcodes whose `.txt` copies do NOT agree byte for byte across slugs (#190).
+
+    `copies` maps bibcode -> content hash -> the `raw/`-relative paths carrying that hash, and is
+    built by `collect` inside the loop that already reads every fulltext file, so this check costs
+    no extra I/O — the point of the issue. One hash per bibcode (the normal state: D-18 copies the
+    artefact, `raw/` is immutable) yields nothing.
+
+    Two hashes mean somebody re-extracted under one slug and not under the other: `extract_fulltext`
+    rewrites the `.txt` in three cases (`--force`, the automatic OCR upgrade, the mark backfill) and
+    none of them propagates to the other copies. It is reported, never repaired here: copying the
+    "good" one over the others would hide the fact that half a corpus was re-extracted.
+
+    @inv INV-135"""
+    out = []
+    for bib in sorted(copies):
+        by_hash = copies[bib]
+        if len(by_hash) < 2:
+            continue
+        detail = " · ".join(f"`{h}` ← {', '.join(paths)}"
+                            for h, paths in sorted(by_hash.items()))
+        out.append((bib, f"{len(by_hash)} versiones distintas del mismo `.txt` entre slugs: "
+                         f"{detail}. `raw/` es inmutable, así que esto no es deriva: alguien "
+                         f"re-extrajo bajo un slug y no bajo el otro (`--force`, upgrade a OCR o "
+                         f"backfill de marcas — ninguno propaga a las otras copias). El ancla de "
+                         f"fuente (D-20) hashea UNA sola copia, así que los pares verificados "
+                         f"contra las demás se comparan contra un archivo que nunca leyeron. "
+                         f"Decidí cuál es la buena y re-extraé la otra "
+                         f"(`python scripts/extract_fulltext.py <slug> --force`); NO copies a "
+                         f"ciegas, taparía que alguien re-extrajo medio corpus"))
+    return out
+
+
 def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     """Barre la bóveda entera y devuelve lo que encontró, **sin renderizar nada**.
 
@@ -853,12 +891,21 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # marginal frente al parseo YAML. Si un bibcode vive bajo varios slugs con contenido idéntico,
     # el hash coincide; si difieren, gana el primero en orden alfabético (determinista).
     ft_hash: dict[str, str] = {}
+    # #190: el `setdefault` de arriba se queda con UNA copia y descarta el resto — determinista,
+    # y con `vistas[]` (#188) insuficiente: la vista de un sujeto se escribe leyendo el `.txt` de
+    # SU slug y el ancla la compararía contra el de otro. Se acumulan las copias por bibcode
+    # (mismo bucle, misma lectura: cero I/O extra) y `diverged_copies` las compara después.
+    ft_copies: dict[str, dict[str, list]] = {}
     for p in fulltext_files:
         contenido = open(p, encoding="utf-8", errors="replace").read()
-        ft_hash.setdefault(basename(p)[:-4], lb.sha10(contenido))
+        _bib, _h = basename(p)[:-4], lb.sha10(contenido)
+        ft_hash.setdefault(_bib, _h)
+        ft_copies.setdefault(_bib, {}).setdefault(_h, []).append(
+            Path(p).relative_to(cfg.RAW).as_posix())
         ok, why = is_legible(contenido)
         if not ok:
             illegible_txt.append((Path(p).relative_to(cfg.RAW).as_posix(), why))
+    divergent_txt = diverged_copies(ft_copies)
     # PDFs en disco (un <bibcode>.pdf por slug en vault/raw/pdfs/) → chequear drift `pdf` ↔ archivo.
     # stem = safe_name(bibcode), igual que el nombre de la nota del paper.
     pdf_on_disk = {}
@@ -2506,6 +2553,9 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('symbols_lost', '📐 Fuentes cuyo `.txt` perdió las ECUACIONES (citar fórmulas por página del PDF)', SEV_BACKLOG, tuple(symbols_lost_notes)),
         Categoria('log_sin_entrada', '📓 Operación sin entrada en `log.md` (la cadena corrió y la bitácora no lo dice)', SEV_BACKLOG, tuple(log_sin_entrada)),
         Categoria('illegible_txt', 'Fulltext ilegible (mojibake/escaneo — existe pero no sirve para grep/verify)', SEV_BACKLOG, tuple(illegible_txt)),
+        Categoria('divergent_txt', '⛔ Mismo bibcode con `.txt` DISTINTO entre slugs: las copias de '
+                  'D-18 divergieron y el ancla de fuente (D-20) vigila una sola', SEV_BLOQUEANTE,
+                  tuple(divergent_txt)),
         Categoria('unverifiable', 'Citas no verificables en ficha/query/concepto/hipótesis (sin fulltext)', SEV_BACKLOG, tuple(unverifiable)),
         Categoria('unverified', 'Sin verificar: nota con citas y sin bloque verify-citations'
                   + (' (BLOQUEA: modo --cierre)' if cierre else ' (backlog: pasada periódica; con `--cierre` bloquea)'), SEV_CIERRE, tuple(unverified)),

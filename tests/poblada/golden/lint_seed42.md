@@ -97,6 +97,8 @@
 - fulltext/star01/2002Alm00058A.txt → casi sin texto (1 chars no-espacio) — ¿escaneo sin capa de texto?
 - fulltext/star02/2021Alm00059A.txt → casi sin texto (1 chars no-espacio) — ¿escaneo sin capa de texto?
 
+## ⛔ Mismo bibcode con `.txt` DISTINTO entre slugs: las copias de D-18 divergieron y el ancla de fuente (D-20) vigila una sola (0)
+
 ## Citas no verificables en ficha/query/concepto/hipótesis (sin fulltext) (6)
 - query-001 → cita 2015Alm00001A sin fulltext (no chequeable claim↔fuente)
 - query-000 → cita 2021Alm00000A sin fulltext (no chequeable claim↔fuente)
@@ -159,6 +161,16 @@
 ## Barrido full-text (2b) sin rastro: no consta que la segunda red para el punto ciego de la query se haya tendido (backlog) (0)
 
 ## Triage pendiente: candidatos del chaining sin juzgar (backlog) (0)
+
+## ⛔ Extracción sin declarar la LENTE: `## Extracción (LLM)` sin `vistas[]` (schema viejo, #188) (0)
+
+## ⛔ `vistas[]` ↔ cuerpo: vista declarada sin su sección, o sección sin declarar (0)
+
+## Reclamado por un sujeto y nunca leído desde ahí (backlog: la vista es opcional, el silencio no) (0)
+
+## Vista declarada y sin `fecha`: el stub la sembró y nadie leyó desde ahí (backlog) (0)
+
+## Reclamo sin vista DECLARADO con `no_vista` + motivo (visible, no es deuda) (0)
 
 ## Recorte de lectura sin declarar: hay core sin extraer y el registro no dice por qué (backlog) (0)
 

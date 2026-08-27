@@ -1286,6 +1286,137 @@ def test_fulltext_ilegible(toy_vault, capsys):
     assert "2020okC....1..1C" not in out.split("Fulltext ilegible")[1].split("##")[0]
 
 
+# ── copias del mismo .txt entre slugs (#190) ─────────────────────────────────
+#
+# D-18 copia el `.txt` de un bibcode a cada slug que lo reclama, y `raw/` es inmutable, así que las
+# copias no derivan solas (medido en una bóveda real: 672 `.txt` para 639 bibcodes → 30 duplicados,
+# los 30 idénticos). Pero `extract_fulltext` reescribe el `.txt` en tres casos —`--force`, upgrade a
+# OCR, backfill de marcas— y **ninguno propaga a las otras copias**: la divergencia no es deriva,
+# es alguien que re-extrajo bajo un slug y no bajo el otro. El lint hasheaba UNA copia
+# (`setdefault` → la primera alfabética) y descartaba el resto, así que un par verificado contra la
+# otra se comparaba contra un archivo que nunca leyó — justo el falso limpio que D-20 existe para
+# no producir.
+
+FT_DIV = "2020divX...1..1X"
+
+
+def _sembrar_copias(toy_vault, **por_slug):
+    """Escribe `<slug>/<FT_DIV>.txt` con el contenido dado, uno por slug."""
+    for slug, contenido in por_slug.items():
+        d = toy_vault.FULLTEXT / slug
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"{FT_DIV}.txt").write_text(contenido, encoding="utf-8")
+
+
+def test_mismo_bibcode_con_txt_distinto_entre_slugs_es_hallazgo(toy_vault, capsys):
+    """El caso que #190 nombra: dos copias del MISMO bibcode con bytes distintos.
+
+    @inv INV-135"""
+    _sembrar_copias(toy_vault,
+                    aaa_star="texto legible de la copia vieja " * 20,
+                    zzz_tema="texto legible de la copia RE-EXTRAIDA " * 20)
+    rc, out = run_lint_reporte(capsys)
+    cat = lint.collect().por_clave("divergent_txt")
+    assert cat is not None, "el lint no tiene categoría para las copias divergentes"
+    assert [it[0] for it in cat.items] == [FT_DIV]
+    assert "2 versiones distintas" in cat.items[0][1]
+    # nombra TODAS las copias, no sólo la que gana el `setdefault` (si sólo nombrara una, el
+    # operador no sabría contra qué comparar).
+    assert "fulltext/aaa_star/2020divX...1..1X.txt" in out
+    assert "fulltext/zzz_tema/2020divX...1..1X.txt" in out
+    assert rc == 1, "la divergencia deja el ancla de fuente sin poder evaluarse: bloquea"
+
+
+def test_dos_copias_identicas_no_son_hallazgo(toy_vault, capsys):
+    """Contra-caso: el estado NORMAL de la bóveda (D-18 copia, nadie re-extrae) no puede hablar.
+
+    @inv INV-135"""
+    igual = "texto legible identico en los dos slugs " * 20
+    _sembrar_copias(toy_vault, aaa_star=igual, zzz_tema=igual)
+    rc, out = run_lint_reporte(capsys)
+    cat = lint.collect().por_clave("divergent_txt")
+    assert cat is not None, "el lint no tiene categoría para las copias divergentes"
+    assert [it[0] for it in cat.items] == []
+    assert rc == 0
+
+
+def test_bibcodes_distintos_con_texto_distinto_no_son_hallazgo(toy_vault, capsys):
+    """Contra-caso 2: la categoría compara copias del MISMO bibcode, no `.txt` entre sí."""
+    d = toy_vault.FULLTEXT / "test_star"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "2020aaaA...1..1A.txt").write_text("texto legible del paper A " * 20, encoding="utf-8")
+    (d / "2020bbbB...1..1B.txt").write_text("texto legible del paper B " * 20, encoding="utf-8")
+    rc, out = run_lint_reporte(capsys)
+    cat = lint.collect().por_clave("divergent_txt")
+    assert cat is not None, "el lint no tiene categoría para las copias divergentes"
+    assert [it[0] for it in cat.items] == []
+    assert rc == 0
+
+
+def test_la_divergencia_nombra_las_tres_copias_y_sus_hashes(toy_vault, capsys):
+    """Con tres slugs y dos contenidos, el hallazgo agrupa por hash: el operador tiene que poder
+    ver cuál es la copia sola y cuáles las dos que coinciden, para decidir cuál re-extraer."""
+    import lib_blocks as lb
+    viejo, nuevo = "texto legible viejo " * 20, "texto legible NUEVO " * 20
+    _sembrar_copias(toy_vault, aaa_star=viejo, mmm_tema=viejo, zzz_tema=nuevo)
+    lint.main()
+    capsys.readouterr()
+    cat = lint.collect().por_clave("divergent_txt")
+    assert cat is not None, "el lint no tiene categoría para las copias divergentes"
+    assert len(cat.items) == 1
+    msg = cat.items[0][1]
+    assert "2 versiones distintas" in msg
+    assert lb.sha10(viejo) in msg and lb.sha10(nuevo) in msg
+    for slug in ("aaa_star", "mmm_tema", "zzz_tema"):
+        assert f"fulltext/{slug}/{FT_DIV}.txt" in msg
+
+
+def test_el_chequeo_de_divergencia_no_agrega_ni_una_lectura(toy_vault, monkeypatch):
+    """Requisito explícito de #190: el lint YA lee esos archivos (77 % de su tiempo) y descartaba
+    los duplicados con `setdefault`. Acumular y comparar no puede costar una lectura más — si la
+    costara, el chequeo dejaría de ser gratis justamente en el archivo más caro del barrido.
+
+    @inv INV-135"""
+    _sembrar_copias(toy_vault,
+                    aaa_star="texto legible de la copia vieja " * 20,
+                    zzz_tema="texto legible de la copia RE-EXTRAIDA " * 20)
+    d = toy_vault.FULLTEXT / "test_star"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "2020okC....1..1C.txt").write_text("texto legible suelto " * 20, encoding="utf-8")
+
+    import builtins
+    real_open = builtins.open
+    leidos = []
+
+    def contar(file, *a, **kw):
+        try:
+            ruta = Path(file).as_posix()
+        except TypeError:
+            ruta = ""
+        if "/fulltext/" in ruta and ruta.endswith(".txt"):
+            leidos.append(ruta)
+        return real_open(file, *a, **kw)
+
+    monkeypatch.setattr(builtins, "open", contar)
+    lint.collect()
+    monkeypatch.undo()
+    assert len(leidos) == 3, f"el barrido leyó {len(leidos)} veces 3 archivos: {leidos}"
+    assert len(set(leidos)) == 3
+
+
+def test_la_divergencia_es_bloqueante_y_no_depende_del_flag_cierre(toy_vault):
+    """La severidad, declarada una sola vez (10.1). Bloqueante ⇒ cuenta para el exit venga de donde
+    venga, igual que `verif_sin_archivo`: no es deuda, es una garantía que no se puede evaluar."""
+    _sembrar_copias(toy_vault,
+                    aaa_star="texto legible de la copia vieja " * 20,
+                    zzz_tema="texto legible de la copia RE-EXTRAIDA " * 20)
+    cat = lint.collect().por_clave("divergent_txt")
+    assert cat is not None, "el lint no tiene categoría para las copias divergentes"
+    assert cat.severidad == lint.SEV_BLOQUEANTE
+    assert "divergent_txt" in {c.clave for c in lint.collect().bloquean()}
+    assert "divergent_txt" in {c.clave for c in lint.collect(cierre=True).bloquean()}
+
+
 # ── precondiciones / backlog ─────────────────────────────────────────────────
 
 def test_cita_sin_fulltext_no_verificable(toy_vault, capsys):
