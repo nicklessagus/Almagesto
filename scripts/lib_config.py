@@ -20,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.62.0"
+ALMAGESTO_VERSION = "1.63.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -937,6 +937,22 @@ def save_barrido(slug: str, barrido: dict) -> None:
     data = load_registro(slug)
     data.setdefault("slug", slug)
     data["barridos"] = [b for b in as_list(data.get("barridos")) if isinstance(b, dict)] + [barrido]
+    save_registro(slug, data)
+
+
+def save_descubrimiento(slug: str, entrada: dict) -> None:
+    """APPENDEA una corrida de la cascada multi-backend a `descubrimientos: []` (#77).
+
+    Un tema off-ADS no tenía cómo responder «sobre qué universo afirma esta nota y con qué se
+    buscó»: la cascada imprimía y no escribía. Lo que se guarda incluye la **cobertura por
+    backend** con sus tres estados —corrió con N, FALLÓ, NO CORRIÓ y por qué—, no un total: un
+    backend caído y uno que corrió sin traer nada se leen igual en una suma.
+
+    Acumulativo, y no toca `decisiones` ni `busquedas`.  @inv INV-121"""
+    data = load_registro(slug)
+    data.setdefault("slug", slug)
+    data["descubrimientos"] = [d for d in as_list(data.get("descubrimientos"))
+                               if isinstance(d, dict)] + [entrada]
     save_registro(slug, data)
 
 

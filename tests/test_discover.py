@@ -6,6 +6,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import discover as d  # noqa: E402
+import lib_config as cfg  # noqa: E402
+from conftest import write_yaml  # noqa: E402
 
 
 # Doble ÚNICO de una respuesta HTTP: trae `status_code` además de `json()`, como el objeto real
@@ -577,3 +579,33 @@ def test_cascade_reporta_el_429_como_FALLO_no_como_cero(monkeypatch):
     err = dict((b, e) for b, _n, e in out["cobertura"])["openalex"]
     assert err and not err.startswith("NO CORRIÓ")
     assert "Rate limit" in err
+
+
+# ── #77 · el descubrimiento off-ADS deja registro ────────────────────────────────────────────────
+
+def test_la_cascada_registra_su_corrida(toy_vault, monkeypatch, capsys):
+    """#77: la cascada corre tres backends y su resultado moría en stdout. Un tema off-ADS no podía
+    responder «sobre qué universo afirma esta nota, y con qué se buscó» — que es justo lo que #64 /
+    D-28 garantizan para un tema ADS con `busquedas`.
+
+    Y lo que hay que registrar no son sólo los hallazgos: la **cobertura por backend**, con sus tres
+    estados (corrió con N · FALLÓ · NO CORRIÓ y por qué). Un backend que no corrió y uno que corrió
+    y no trajo nada se leen igual en un total, y esa distinción es la que hace que «los tres miraron
+    y esto es todo lo que hay» sea o no una afirmación honesta.
+
+    @inv INV-121"""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ica",
+                                         "source": "web", "query": 'abs:"independent component"',
+                                         "aliases": ["ICA"], "topic": "T11447"}})
+    monkeypatch.setattr(d, "cascade", lambda **k: {
+        "records": [{"doi": "10.1/a", "bibcode": "2000Hyv", "title": "T", "found_in": ["openalex"]}],
+        "undedupable": [],
+        "cobertura": [("ads", 3, None), ("arxiv", 0, "timeout"), ("openalex", 1, None)]})
+    d._preview_theme("ica", rows=10, min_citadores=2)
+    reg = cfg.load_registro("ica") or {}
+    ds = cfg.as_list(reg.get("descubrimientos"))
+    assert len(ds) == 1
+    assert ds[0]["n_records"] == 1 and ds[0]["fecha"]
+    cob = ds[0]["cobertura"]
+    assert cob["ads"] == {"n": 3, "error": None}
+    assert cob["arxiv"] == {"n": 0, "error": "timeout"}, "un backend caído NO es «no hay nada»"

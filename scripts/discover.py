@@ -49,6 +49,8 @@ import urllib.parse
 
 import requests
 
+import datetime as dt
+
 import lib_config as cfg
 import openalex as oa
 
@@ -480,6 +482,21 @@ def _preview_theme(slug: str, rows: int = 25, min_citadores: int = 2) -> int:
                   min_citas=tema.get("fundacional_min_citas"))
     cfg.print_seguro(f"\nCascada para `{slug}` (preview — no baja nada, no clasifica):")
     print_cobertura(out["cobertura"])
+    # #77: el rastro versionado. La cascada corría tres backends y su resultado moría en stdout, así
+    # que un tema off-ADS no podía responder «sobre qué universo afirma esta nota, y con qué se
+    # buscó» — lo que D-28 sí garantiza para un tema ADS. Se guarda la COBERTURA por backend con sus
+    # tres estados, no un total: un backend caído (0 por timeout) y uno que corrió y no trajo nada
+    # se leen igual en una suma, y esa distinción es la que hace honesta la frase «los tres miraron».
+    cfg.save_descubrimiento(slug, {
+        "fecha": dt.date.today().isoformat(),
+        "rows": rows,
+        "topic": topic_id,
+        "n_records": len(out["records"]),
+        "n_undedupable": len(out["undedupable"]),
+        "cobertura": {b: {"n": n_, "error": err} for b, n_, err in out["cobertura"]},
+        "almagesto_version": cfg.ALMAGESTO_VERSION,
+    })
+    cfg.print_seguro(f"  → registrado en {cfg.registro_path(slug)}")
     cfg.print_seguro(f"  → {len(out['records'])} tras dedup por DOI"
                      + (f" · {len(out['undedupable'])} sin identificador (NO mergeados)"
                         if out["undedupable"] else ""))
