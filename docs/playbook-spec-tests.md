@@ -127,7 +127,11 @@ traiga la superficie de fixtures y firmas, para que no *necesite* leer.
 - [ ] Al agente de tests se le pide anotar preguntas abiertas en vez de inventar.
 - [ ] El agente de tests **audita su cobertura contra la spec, requisito por requisito**, y reporta
       los que quedaron sin verificar (incluidos los del addendum).
+- [ ] El árbitro **audita la cobertura por su cuenta**, spec y addendum en mano, sin confiar en
+      el reporte del agente — incluido lo que el implementador haya agregado.
 - [ ] El árbitro **cierra esos huecos** antes de dar el lote por terminado, o declara por qué no.
+- [ ] Se leyó el informe del implementador **buscando lo que reporta y nadie acciona** (ahí
+      vivió el hueco medido).
 - [ ] Se verifica que cada test falle por la ausencia del comportamiento y no por el andamiaje.
 - [ ] Las preguntas abiertas se contestan **antes** de lanzar implementación.
 - [ ] Al implementador se le prohíbe modificar tests, y se le dice qué hacer en cambio (escalar y
