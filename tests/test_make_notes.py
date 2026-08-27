@@ -561,14 +561,14 @@ def test_stub_off_ads_comparte_el_bloque_del_tema(toy_vault):
     propio bullet de tema— y la rama ADS de tema escriben el MISMO bloque, así que no divergen."""
     mn.write_web_paper_note("2020Smith", slug="gp", concept="gaussian-processes", url="https://x")
     body = (toy_vault.PAPERS / "2020Smith.md").read_text(encoding="utf-8")
-    assert mn.extraction_block(theme=True) in body
+    assert mn.vista_block("gaussian-processes", theme=True) in body
 
 
-def test_extraction_block_sin_objetivo_degrada_a_generico(toy_vault):
+def test_vista_block_sin_objetivo_degrada_a_generico(toy_vault):
     """make_notes corrido suelto, fuera de la cadena: sin objective.yaml el stub sale genérico
     (nunca inventado) y no rompe la generación."""
     toy_vault.OBJECTIVE_YAML.unlink()
-    block = mn.extraction_block(theme=False)
+    block = mn.vista_block("Estrella Test", theme=False)
     assert "- **Ejes del objetivo:**" in block           # sin facetas: sin paréntesis
     assert "objetivo de la bóveda / huecos" in block     # sin `short`: texto genérico
 
@@ -763,8 +763,8 @@ def test_objetivo_mal_formado_degrada_sin_romper_ni_inventar(toy_vault, obj):
     un `short: 2026` mataba la generación de notas a mitad de cadena, después de gastar la red. Y
     `facets` como string se deshacía en caracteres: facetas fabricadas escritas a la bóveda."""
     write_yaml(cfg.OBJECTIVE_YAML, obj)
-    block = mn.extraction_block(theme=False)
-    assert "## Extracción (LLM)" in block
+    block = mn.vista_block("Estrella Test", theme=False)
+    assert "## Vista — Estrella Test" in block
     assert "· " not in block.split("Ejes del objetivo")[1].split(":**")[0]   # sin facetas inventadas
 
 
@@ -889,7 +889,7 @@ def test_regimen_es_la_unidad_del_issue_y_cierra_en_huecos(toy_vault):
     assert "regímenes no cubiertos" in t.split("## Huecos")[-1]
 
 
-# ── #76 (unitario): objective_lens + la matriz de ramas de extraction_block ──────────────────
+# ── #76 (unitario): objective_lens + la matriz de ramas de vista_block ───────────────────────
 
 def write_objective(toy_vault, **cambios):
     """objective.yaml de juguete con los campos pisados (o borrados con None)."""
@@ -920,13 +920,13 @@ def test_objective_lens_sin_archivo_no_propaga_el_error(toy_vault):
 
 @pytest.mark.parametrize("theme,cabeza", [(True, "Aporte al tema"),
                                           (False, "Ground-truth (planetas / parámetros)")])
-def test_extraction_block_forma(toy_vault, theme, cabeza):
+def test_vista_block_forma(toy_vault, theme, cabeza):
     """Contrato de forma que asumen los dos templates de cuerpo (se interpolan como `{bloque}`
     al final del f-string): encabezado propio, bullets con la cola compartida y newline final. La
     cola es compartida a propósito: métodos y rol (#73) son del paper, no del tipo de sujeto."""
-    block = mn.extraction_block(theme)
+    block = mn.vista_block("Sujeto", theme)
     lineas = block.rstrip("\n").split("\n")
-    assert block.startswith("## Extracción (LLM)\n") and block.endswith("\n")
+    assert block.startswith("## Vista — Sujeto\n") and block.endswith("\n")
     assert len(lineas) == 7 and all(ln.startswith("- **") for ln in lineas[1:])
     assert cabeza in lineas[1]
     assert lineas[-4] == mn._BULLET_METHODS and lineas[-3] == mn._BULLET_ROLE
@@ -936,18 +936,18 @@ def test_extraction_block_forma(toy_vault, theme, cabeza):
         "no dependen de si el sujeto es una estrella o un tema"
 
 
-def test_extraction_block_tema_sin_short_cae_al_generico(toy_vault):
+def test_vista_block_tema_sin_short_cae_al_generico(toy_vault):
     """La rama que faltaba de la matriz: tema + objetivo sin `short`."""
     write_objective(toy_vault, short=None)
-    block = mn.extraction_block(theme=True)
+    block = mn.vista_block("gp", theme=True)
     assert "- **Aporte al tema:**" in block
     assert "- **Para el objetivo:** _(relevancia para el objetivo de la bóveda / huecos)_" in block
 
 
-def test_extraction_block_estrella_sin_facetas_pero_con_short(toy_vault):
+def test_vista_block_estrella_sin_facetas_pero_con_short(toy_vault):
     """Y la simétrica: sin facetas el bullet va sin paréntesis, pero el `short` sigue citándose."""
     write_objective(toy_vault, relevance={"facets": {}})
-    block = mn.extraction_block(theme=False)
+    block = mn.vista_block("Estrella Test", theme=False)
     assert "- **Ejes del objetivo:** _(qué dice el paper" in block
     assert "«toy»" in block
 
@@ -3155,3 +3155,67 @@ def test_un_alias_escalar_sobrevive_en_la_ficha_de_estrella(toy_vault):
     mn.write_star_note("test_star", force=False)
     fm = read_fm(toy_vault.STARS / "test_star.md")
     assert fm["aliases"] == ["HD 12345"]
+
+
+# ── #188 paso 3 · el stub nace con su VISTA, no con una extracción sin scope ────────────────────
+
+def test_vista_block_lleva_el_sujeto_en_el_encabezado(toy_vault):
+    """El encabezado ES el scope: `## Vista — <sujeto>`. Sin él la sección vuelve a ser una sola
+    por bibcode y el silencio sobre un eje se lee como «se miró y no hay nada» (#188).
+
+    @inv INV-134"""
+    block = mn.vista_block("eps Eridani", theme=False)
+    assert block.startswith("## Vista — eps Eridani\n") and block.endswith("\n")
+    assert "Ground-truth (planetas / parámetros)" in block
+    assert mn.vista_block("s_index", theme=True).startswith("## Vista — s_index\n")
+
+
+def test_stub_de_estrella_declara_su_vista_y_su_seccion(toy_vault):
+    """El stub queda COHERENTE por construcción: la vista declarada y su sección, que es lo que el
+    detector de #188 exige. Sin `fecha`: la lectura todavía no ocurrió — «no consta», que es
+    justamente lo que el campo opcional significa.
+
+    @inv INV-134"""
+    ads_json([rec("2020ext....1E")])
+    mn.write_paper_notes("test_star", include_all=False, force=False)
+    p = toy_vault.PAPERS / "2020ext....1E.md"
+    fm = read_fm(p)
+    assert fm["vistas"] == [{"sujeto": "Estrella Test", "tipo": "star"}]
+    assert "## Vista — Estrella Test" in p.read_text(encoding="utf-8")
+
+
+def test_stub_de_tema_declara_la_vista_del_concept(toy_vault):
+    seed_topic()
+    ads_json([rec("2020gpsA...1..1A")], slug="gp")
+    mn.write_paper_notes("gp", include_all=False, force=False, theme=True)
+    p = toy_vault.PAPERS / "2020gpsA...1..1A.md"
+    assert read_fm(p)["vistas"] == [{"sujeto": "gaussian-processes", "tipo": "theme"}]
+    assert "## Vista — gaussian-processes" in p.read_text(encoding="utf-8")
+
+
+def test_stub_off_ads_tambien_declara_su_vista(toy_vault):
+    mn.write_web_paper_note("2020Smith", slug="gp", concept="gaussian-processes", url="https://x")
+    p = toy_vault.PAPERS / "2020Smith.md"
+    assert read_fm(p)["vistas"] == [{"sujeto": "gaussian-processes", "tipo": "theme"}]
+    assert "## Vista — gaussian-processes" in p.read_text(encoding="utf-8")
+
+
+def test_el_retro_linkeo_NO_escribe_vistas(toy_vault):
+    """Regla 2 del diseño (#188): las vistas las escribe la LECTURA, nunca el retro-link. Es lo que
+    mantiene a `stars`/`thesis_links` como RECLAMOS —`make_notes` los mergea add-only sin leer
+    nada— y a `vistas[]` como lecturas. Si el retro-link las tocara, volvemos al problema que el
+    campo vino a resolver: el caso medido son 141 notas retro-linkeadas sin segunda lectura.
+
+    @inv INV-134"""
+    seed_topic()
+    ads_json([rec("2020gpsA...1..1A")], slug="gp")
+    mn.write_paper_notes("gp", include_all=False, force=False, theme=True)
+    p = toy_vault.PAPERS / "2020gpsA...1..1A.md"
+    antes = read_fm(p)["vistas"]
+
+    # el MISMO paper llega ahora por el ingest de una estrella: seed add-only, sin leer nada
+    ads_json([rec("2020gpsA...1..1A")])
+    mn.write_paper_notes("test_star", include_all=False, force=False)
+    fm = read_fm(p)
+    assert fm["vistas"] == antes, "el retro-link no declara una lectura que nadie hizo"
+    assert "Estrella Test" in fm["stars"], "pero sí mergea el RECLAMO"

@@ -977,6 +977,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     vistas_vs_cuerpo: list = []        # (stem, motivo) — vista sin sección, o sección sin vista
     reclamo_sin_vista: list = []       # (stem, sujeto) — lo reclama y nadie lo leyó desde ahí
     reclamo_sin_vista_declarado: list = []   # ídem, con la escotilla `no_vista` y su motivo
+    vista_sin_fecha: list = []         # (stem, sujeto) — vista declarada y sin fecha: sin leer
 
     # Los temas DECLARADOS (su `concept`, que es el nombre con el que un paper los nombra en
     # `thesis_links`/`methods`). Una lectura del YAML por corrida, no por nota.
@@ -1388,6 +1389,16 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                         (stem, "`## Extracción (LLM)` sin `vistas[]`: no consta desde qué sujeto se "
                                "leyó este paper, así que su silencio sobre un eje no se distingue "
                                "de «se miró y no hay nada» → declarar la vista (schema #188)"))
+                # Declarada y sin hacer. El stub nace con la vista de su sujeto y SIN `fecha`
+                # (la ausencia es «no consta», paso 1): la fecha es lo que dice que la lectura
+                # ocurrió. Sin este renglón, declarar la vista al crear el stub apagaría
+                # `reclamo_sin_vista` para el sujeto que la sembró y el silencio volvería a leerse
+                # como «se miró y no hay nada» — el defecto que #188 cierra, por otra puerta.
+                for v in vistas:
+                    if not str(v.get("fecha") or "").strip():
+                        vista_sin_fecha.append(
+                            (stem, f"la vista de **{v['sujeto']}** está declarada y sin `fecha`: no "
+                                   f"consta que se haya leído desde ahí"))
                 for falta in sorted(declaradas - secciones):
                     vistas_vs_cuerpo.append(
                         (stem, f"`vistas[]` declara la lectura de **{falta}** y el cuerpo no tiene "
@@ -2522,6 +2533,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('vistas_schema_viejo', '⛔ Extracción sin declarar la LENTE: `## Extracción (LLM)` sin `vistas[]` (schema viejo, #188)', SEV_BLOQUEANTE, tuple(vistas_schema_viejo)),
         Categoria('vistas_vs_cuerpo', '⛔ `vistas[]` ↔ cuerpo: vista declarada sin su sección, o sección sin declarar', SEV_BLOQUEANTE, tuple(vistas_vs_cuerpo)),
         Categoria('reclamo_sin_vista', 'Reclamado por un sujeto y nunca leído desde ahí (backlog: la vista es opcional, el silencio no)', SEV_BACKLOG, tuple(reclamo_sin_vista)),
+        Categoria('vista_sin_fecha', 'Vista declarada y sin `fecha`: el stub la sembró y nadie leyó desde ahí (backlog)', SEV_BACKLOG, tuple(vista_sin_fecha)),
         Categoria('reclamo_sin_vista_declarado', 'Reclamo sin vista DECLARADO con `no_vista` + motivo (visible, no es deuda)', SEV_BACKLOG, tuple(reclamo_sin_vista_declarado)),
         Categoria('extraccion_no_declarada', 'Recorte de lectura sin declarar: hay core sin extraer y el registro no dice por qué (backlog)', SEV_BACKLOG, tuple(extraccion_no_declarada)),
         Categoria('papers_table_stale', 'Lista de papers desactualizada: la tabla estampada no refleja el universo (backlog)', SEV_BACKLOG, tuple(papers_table_stale)),

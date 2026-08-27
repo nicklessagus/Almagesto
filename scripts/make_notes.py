@@ -1124,7 +1124,7 @@ sección y decirlo en el `log`.)_
 """
 
 
-# Bullets de `## Extracción (LLM)` del stub de nota de paper. Viven acá y NO inline en los dos
+# Bullets de la sección `## Vista — <sujeto>` del stub de nota de paper. Viven acá y NO inline en los dos
 # templates de cuerpo —la rama ADS (write_paper_notes) y la off-ADS (write_web_paper_note)— por el
 # mismo motivo que LLM_DISCLAIMER: los escriben varios caminos y divergirían. Ramifican por TIPO DE
 # SUJETO (#76), como ya ramificaban los seeds del frontmatter: el eje tema/concepto es agnóstico de
@@ -1182,11 +1182,16 @@ def objective_lens() -> tuple[list, str]:
         return [], ""
 
 
-def extraction_block(theme: bool) -> str:
-    """Sección `## Extracción (LLM)` del stub de una nota de paper, ramificada por tipo de sujeto
+def vista_block(sujeto: str, theme: bool) -> str:
+    """Sección `## Vista — <sujeto>` del stub de una nota de paper, ramificada por tipo de sujeto
     (#76). Tema → el eje del concept (aporte, mecanismo/ecuación, régimen). Estrella → el
     ground-truth (que es del schema de `stars/`, no del objetivo) y los ejes de la lente. El rol
-    del paper (fundacional/aplicación/árbitro) es #73, que define el campo antes que el bullet."""
+    del paper (fundacional/aplicación/árbitro) es #73, que define el campo antes que el bullet.
+
+    El SUJETO va en el encabezado (#188): hasta 1.68.0 esto era `## Extracción (LLM)`, una sola
+    sección por bibcode, y la extracción es una proyección del paper sobre un sujeto —el prompt
+    pregunta *«¿qué dice sobre {name}?»*, con los grep armados desde SUS alias—. Sin el scope, el
+    silencio de la nota sobre un eje no se distingue de «se miró y no hay nada»."""
     facetas, short = objective_lens()
     objetivo = (f"«{short}»: qué aporta, qué hueco deja" if short
                 else "relevancia para el objetivo de la bóveda / huecos")
@@ -1207,7 +1212,7 @@ def extraction_block(theme: bool) -> str:
         ]
     bullets += [_BULLET_METHODS, _BULLET_ROLE, f"- **Para el objetivo:** _({objetivo})_",
                 _BULLET_ANOTACION]
-    return "## Extracción (LLM)\n" + "\n".join(bullets) + "\n"
+    return f"## Vista — {sujeto}\n" + "\n".join(bullets) + "\n"
 
 
 H1_RE = re.compile(r"^# .+$", re.M)
@@ -2162,7 +2167,10 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, theme: bool = F
     if not include_all:
         recs = [r for r in recs if r["relevant"]]
     cfg.PAPERS.mkdir(parents=True, exist_ok=True)
-    extraccion = extraction_block(theme)     # una sola lectura del objetivo para toda la corrida
+    # El SUJETO de esta corrida (#188): el mismo nombre con el que el paper lo declara en
+    # `stars`/`thesis_links`, que es lo que hace comparables reclamo y lectura.
+    sujeto = link if theme else name
+    extraccion = vista_block(sujeto, theme)  # una sola lectura del objetivo para toda la corrida
     # D-19: identidades ya presentes en el corpus. Crear una segunda nota del MISMO trabajo (el
     # preprint y el publicado tienen bibcodes distintos y el mismo `arxiv_id`) mete doble conteo en
     # todo lo que cuenta papers, y un falso positivo permanente de #75 —la ficha cita una de las
@@ -2233,6 +2241,13 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, theme: bool = F
             # de una tesis; `role` dice QUÉ TIPO DE APORTE es, que es lo que define la operación de
             # contraste. El clasificador no puede darlo: la regex clasifica tema, no rol.
             "role": [],
+            # #188 · la vista de ESTE sujeto, declarada al crear el stub. Sin `fecha`: la lectura
+            # todavía no ocurrió, y la ausencia es «no consta» (paso 1). La estampa la extracción
+            # cuando lee (con `txt` y `lente`), y el lint reporta como backlog la vista sin fecha.
+            # ⛔ El RETRO-LINK no pasa por acá y no debe: `stars`/`thesis_links` se mergean
+            # add-only **sin leer nada**, así que siguen siendo RECLAMOS. Si el retro-link
+            # declarara vistas, volvemos al problema que el campo vino a cerrar.
+            "vistas": [{"sujeto": sujeto, "tipo": "theme" if theme else "star"}],
             "relevance": "high" if r.get("relevant") else "low",
             "citation_count": r.get("citation_count", 0),
             "pdf": pdf_rel,
@@ -2400,6 +2415,8 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
         # línea no sirve y la fuente NO entra entera.
         **({"unidad_cita": unidad_cita} if unidad_cita and unidad_cita != "linea" else {}),
         **({"alcance": alcance} if alcance else {}),
+        # #188 · off-ADS el sujeto es SIEMPRE un tema (es el modo opt-in de ingest-theme).
+        "vistas": [{"sujeto": concept or citekey, "tipo": "theme"}],
         "confidence": "medium",
         "tags": ["paper", "web" if url else "local-pdf"],   # tipo de fuente off-ADS (findability)
         "generator": f"Almagesto v{cfg.ALMAGESTO_VERSION}",   # provenance
@@ -2422,7 +2439,7 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
 > `{txt_ptr}` (`source_url` + `accessed` en el frontmatter), verificable por `verify-citations`.
 > El frontmatter es máquina-legible como en cualquier nota de paper.
 {pend_line}
-{extraction_block(theme=True)}"""
+{vista_block(concept or citekey, theme=True)}"""
     cfg.write_text_atomic(dest, body)
     cfg.print_seguro(f"  papers: {dest.name} escrito (stub off-ADS)")
     return True

@@ -3637,3 +3637,24 @@ def test_methods_no_es_un_reclamo_salvo_que_sea_un_tema_declarado(toy_vault, cap
                                                         "concept": "periodograma"}})
     cat = lint.collect().por_clave("reclamo_sin_vista")
     assert len(cat) == 1 and "periodograma" in cat.items[0][1]
+
+
+def test_vista_declarada_sin_fecha_es_backlog(toy_vault, capsys):
+    """El stub nace con la vista de su sujeto y SIN `fecha` (#188 paso 3), y la fecha es lo que
+    dice que la lectura ocurrió. Sin este detector, sembrar la vista al crear el stub apagaría
+    `reclamo_sin_vista` para ese sujeto y el silencio volvería a leerse como «se miró y no hay
+    nada» — el defecto de #188, entrando por la otra puerta.
+
+    @inv INV-134"""
+    paper_con_vista(toy_vault)                     # vista sin `fecha`
+    r = lint.collect()
+    cat = r.por_clave("vista_sin_fecha")
+    assert len(cat) == 1 and "Estrella Test" in cat.items[0][1]
+    assert "vista_sin_fecha" not in [c.clave for c in r.bloquean()]
+
+
+def test_vista_con_fecha_no_dispara(toy_vault, capsys):
+    """Contra-caso: la lectura hecha y fechada queda en cero, o el detector es ruido fijo."""
+    paper_con_vista(toy_vault, vistas=[{"sujeto": "Estrella Test", "tipo": "star",
+                                        "fecha": "2026-08-27", "txt": "test_star"}])
+    assert lint.collect().por_clave("vista_sin_fecha").items == ()
