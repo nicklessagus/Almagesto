@@ -178,6 +178,17 @@ Esto es **una VISTA**, no «la extracción del paper» (#188): el mismo paper le
 da otra vista, y por eso el producto lleva de quién es. Va a la sección `## Vista — {sujeto}` de
 `vault/wiki/papers/{bibcode}.md`. Lo que la fuente diga sobre **otros** sujetos no entra acá.
 
+## Cómo leerlo: empezá por las CONCLUSIONES
+Antes de recorrer el paper, leé **abstract y conclusiones**. De ahí sale la lista de **ejes** que el
+trabajo dice aportar, y con esa lista vas al cuerpo — es más rápido que leer linealmente y no te
+perdés lo que el paper considera su resultado.
+
+⛔ **Tratalas como hipótesis a confirmar, no como resumen confiable.** Está medido (RSOS 2025, 4900
+resúmenes / 10 modelos): el resumen afirma **más fuerte** que el cuerpo — genérico donde el cuerpo
+acota, presente donde el cuerpo usa pasado, prescriptivo donde el cuerpo describe. Por cada eje,
+chequeá en el cuerpo si se sostiene y **con qué condiciones**. Si el cuerpo dice menos que las
+conclusiones, eso va en `salvedades`: es un hallazgo sobre la FUENTE, no un error tuyo.
+
 ## Búsqueda — para UBICAR, no para citar
 Estos patrones sobre el `.txt` te dicen **en qué parte del paper** mirar; el dato lo leés del PDF:
 
@@ -208,12 +219,24 @@ Escribí el resultado en `{out}` y devolvé el mismo JSON en **un solo bloque** 
  "role":["fundacional"|"aplicacion"|"arbitro"],"methods":[],"thesis_links":[],
  "ground_truth":[{{"que":"","valor":"","linea":"","regimen":"","segunda_mano":null}}],
  "ejes":{{"discovery":"","rv":"","activity":"","planet":"","method":""}},
- "aporte":"","hueco":"","salvedades":[]}}
+ "aporte":"","hueco":"","salvedades":[],
+ "abstract_es":"","conclusiones":"","conclusiones_es":""}}
 
 ⛔ Sin comas finales: tiene que parsear con `json.loads`. El nombre del archivo lleva el bibcode
 porque varios extractores corren en paralelo y un nombre genérico se pisa **en silencio**.
 `vista` va tal cual: dice de quién es esta lectura y de qué copia del `.txt` salió. La `fecha` y la
 `lente` no las escribís vos — las estampa el cosechador, que las sabe con certeza.
+⛔ **Las tres ayudas de lectura** (#124). `abstract_es` es la traducción al castellano del
+`## Abstract` que la nota ya trae verbatim —la traducción va **al lado**, el original no se pisa—;
+`conclusiones` es la transcripción de las conclusiones del paper y `conclusiones_es` su traducción.
+Son lo que el paper afirma **sin lente**, así que sirven para leerlo "en chico" sin abrir el PDF y
+para que otro sujeto lo lea después sin re-abrirlo. ⚠ Si el `.txt`/PDF es un **documento largo**
+(`unidad_cita: pagina` en el frontmatter: un libro, un handbook) **dejá `conclusiones` vacío** — no
+tiene esa sección y transcribir algo que no existe fabrica contenido. Vacío = no consta; el
+cosechador no crea la sección.
+⛔ Y la regla de uso: **son ayuda de lectura, nunca fuente de la que citar.** Si citás, citás del
+original con su página.
+
 ⛔ **`fuente` dice DE QUÉ construiste la vista.** `pdf` es el caso normal. Poné **`abstract`** si el
 PDF no está y sólo pudiste leer el `## Abstract` de la nota: la vista igual vale, pero una lectura
 de ocho líneas no puede quedar indistinguible de haber leído el paper —y el abstract es justo donde

@@ -163,7 +163,14 @@ def snapshot_retrieved(path) -> str | None:
 # lanzado 110 subagentes a verificar filas de tabla, cuatro de ellos contra un `.txt` inexistente.
 SECCIONES_ESTAMPADAS = ("## Planetas", "## Papers", "## Métodos aplicados a esta estrella",
                         "## Papers que tocan este tema (auto)", "## Excluidos por el filtro",
-                        "## Verificación de citas")
+                        "## Verificación de citas",
+                        # #124 · las ayudas de lectura de una nota de paper. `## Abstract` y
+                        # `## Conclusiones` son copia/transcripción de la fuente y sus `(es)` son la
+                        # traducción: ninguna es una afirmación de la bóveda, así que el fan-out no
+                        # tiene qué contrastar. ⛔ La regla que las acompaña: **son ayuda de lectura,
+                        # nunca fuente de la que citar** — si citás, citás del original con su
+                        # página. El prefijo cubre los `(es)`.
+                        "## Abstract", "## Conclusiones")
 
 
 def solo_prosa(body: str) -> str:

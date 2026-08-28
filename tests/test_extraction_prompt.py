@@ -254,3 +254,24 @@ def test_el_localizador_no_se_llama_solo_numero_de_linea():
     assert "localizador" in seccion.lower(), "la sección de anotado sigue pidiendo sólo la línea"
     assert "Fig. N, p. M" in seccion, "sin el formato, una lectura de gráfico vuelve como línea"
     assert "página" in seccion, "una tabla-imagen no tiene dónde poner su página"
+
+
+def test_el_prompt_manda_empezar_por_las_conclusiones_como_HIPOTESIS():
+    """#124 — leer por las conclusiones es más rápido y es exactamente donde vive el «afirmar de
+    más» (generalization bias, RSOS 2025). Por eso el prompt no puede pedir sólo «leelas primero»:
+    tiene que decir que se **chequean contra el cuerpo**, o el paso importa el overclaim del paper
+    a la nota."""
+    p = ep.build_prompt("ica", "1994Comon", "ICA", [], "Texto limpio.\n", kind="theme")
+    plano = " ".join(p.split())
+    assert "conclusiones" in plano.lower()
+    assert "hipótesis a confirmar" in plano, "sin esto son un resumen confiable, que es lo que no son"
+    assert "más fuerte" in plano, "el motivo medido tiene que viajar"
+
+
+def test_el_prompt_pide_las_tres_ayudas_de_lectura():
+    p = ep.build_prompt("ica", "1994Comon", "ICA", [], "Texto limpio.\n", kind="theme")
+    for campo in ("abstract_es", "conclusiones", "conclusiones_es"):
+        assert f'"{campo}"' in p, f"el JSON de salida no pide {campo}"
+    plano = " ".join(p.split())
+    assert "nunca fuente de la que citar" in plano
+    assert "unidad_cita: pagina" in plano, "el caso del libro tiene que estar declarado"

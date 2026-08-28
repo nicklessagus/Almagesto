@@ -267,3 +267,74 @@ def test_pdf_on_disk_mira_el_ARCHIVO_no_el_frontmatter(toy_vault):
     assert not hv.pdf_on_disk(BIB)
     _con_pdf(toy_vault)
     assert hv.pdf_on_disk(BIB)
+
+
+# ── #124 · las ayudas de lectura: traducción y conclusiones ─────────────────────────────────────
+
+
+def test_estampa_traduccion_y_conclusiones(toy_vault):
+    """La **vista** es lenteada (qué aporta a ESE sujeto); las conclusiones son lo que el paper
+    afirma **sin lente**, y por eso no son redundantes: son lo que hace barata una segunda vista
+    cuando otro sujeto reclama el mismo paper (#188: 141 de 908 notas lo son)."""
+    _con_pdf(toy_vault)
+    dest = sembrar(toy_vault, extraccion(
+        abstract_es="Medimos el período de rotación.",
+        conclusiones="We measure P_rot = 34 d.",
+        conclusiones_es="Medimos P_rot = 34 d."))
+    hv.harvest("test_star")
+    texto = dest.read_text(encoding="utf-8")
+    assert "## Abstract (es)\nMedimos el período de rotación." in texto
+    assert "## Conclusiones\nWe measure P_rot = 34 d." in texto
+    assert "## Conclusiones (es)\nMedimos P_rot = 34 d." in texto
+
+
+def test_las_ayudas_de_lectura_van_ANTES_de_la_vista(toy_vault):
+    """Orden de lectura: el resumen del paper arriba, la vista después. Al final quedaría detrás del
+    bloque de verificación, que es donde nadie lo lee."""
+    _con_pdf(toy_vault)
+    dest = sembrar(toy_vault, extraccion(conclusiones="C."))
+    hv.harvest("test_star")
+    texto = dest.read_text(encoding="utf-8")
+    assert texto.index("## Conclusiones") < texto.index("## Vista — Estrella Test")
+
+
+def test_un_documento_largo_no_recibe_conclusiones(toy_vault):
+    """Una fuente `unidad_cita: pagina` —un libro, un handbook— no tiene «conclusiones» como
+    sección, y transcribir algo que no existe fabricaría contenido. Exclusión estructural, no un
+    umbral de largo (que sería un corte sin calibrar)."""
+    _con_pdf(toy_vault)
+    dest = sembrar(toy_vault, extraccion(conclusiones="No debería entrar.",
+                                         abstract_es="Esto sí."),
+                   fm_extra={"unidad_cita": "pagina", "alcance": "caps. 6 y 15"})
+    hv.harvest("test_star")
+    texto = dest.read_text(encoding="utf-8")
+    assert "## Conclusiones" not in texto
+    assert "## Abstract (es)\nEsto sí." in texto, "la traducción del abstract sí, que es corta"
+
+
+def test_las_ayudas_de_lectura_son_idempotentes(toy_vault):
+    """Regla del framework: corré dos veces y el contenido no cambia."""
+    _con_pdf(toy_vault)
+    dest = sembrar(toy_vault, extraccion(conclusiones="C.", abstract_es="A."))
+    hv.harvest("test_star")
+    antes = dest.read_text(encoding="utf-8")
+    hv.harvest("test_star")
+    assert dest.read_text(encoding="utf-8") == antes
+
+
+def test_sin_traduccion_no_se_crea_una_seccion_vacia(toy_vault):
+    """Ausente = no consta. Un `## Conclusiones` en blanco se leería como «el paper no concluye
+    nada», que no es lo mismo que «nadie las transcribió»."""
+    _con_pdf(toy_vault)
+    dest = sembrar(toy_vault)
+    hv.harvest("test_star")
+    texto = dest.read_text(encoding="utf-8")
+    assert "## Abstract (es)" not in texto and "## Conclusiones" not in texto
+
+
+def test_las_ayudas_de_lectura_estan_exentas_del_fan_out(toy_vault):
+    """⛔ Son ayuda de lectura, nunca fuente de la que citar: `verify-citations` no las mira, porque
+    una traducción no es una afirmación de la bóveda. La red está aguas abajo — lo que de acá llegue
+    a una ficha sí se verifica contra el PDF."""
+    for h in ("## Abstract", "## Abstract (es)", "## Conclusiones", "## Conclusiones (es)"):
+        assert any(h.startswith(e) for e in cfg.SECCIONES_ESTAMPADAS), h

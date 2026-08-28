@@ -431,6 +431,27 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   afirma **de más** (*generalization bias*): una vista construida desde ahí se declara
   `fuente: abstract` (#207).
 
+  ⛔ **Y la nota lleva tres AYUDAS DE LECTURA (#124): `## Abstract (es)`, `## Conclusiones` y
+  `## Conclusiones (es)`.** La **vista** es lenteada —dice qué aporta el paper *a ese sujeto*—; las
+  conclusiones son lo que el paper afirma **sin lente**, así que no son redundantes: son lo que hace
+  barata una **segunda vista** cuando otro sujeto reclama el mismo paper, y eso no es raro (#188:
+  **141 de 908** notas las reclaman 2+ sujetos y ninguna tiene una segunda extracción). Desde #205
+  pesa más, porque abrir el PDF es lo caro y esto evita re-abrirlo.
+  Las estampa el cosechador desde el JSON de extracción, van **antes** de la vista, y **la
+  traducción va al lado del original, nunca en su lugar** — el verbatim es la capa auditable.
+  ⚠ **Documento largo (`unidad_cita: pagina`): sin conclusiones.** Un libro no tiene esa sección y
+  transcribir algo que no existe fabrica contenido. Es una exclusión **estructural**, no un umbral
+  de largo.
+  ⚠ **Cómo se leen las conclusiones, y por qué es un método y no sólo un artefacto:** el extractor
+  empieza por ahí, saca los **ejes** que el trabajo dice aportar, y los **chequea contra el cuerpo**
+  — porque es justo donde vive el *afirmar de más*. Si el cuerpo dice menos, eso es un hallazgo
+  sobre la **fuente** y va a `salvedades`.
+  ⛔ Las cuatro secciones están en `SECCIONES_ESTAMPADAS`, así que `verify-citations` **no las
+  mira**: una traducción no es una afirmación de la bóveda y no hay qué contrastar. La red está
+  aguas abajo —lo que de acá llegue a una **ficha** sí se verifica contra el PDF—, y de ahí la regla
+  de uso: **son ayuda de lectura, nunca fuente de la que citar.** Si citás, citás del original con
+  su página.
+
   En notas **off-ADS** el schema suma `source_url` (URL de la fuente web; null si es PDF local),
   `accessed` (fecha del snapshot — es la cita "Retrieved <fecha>") y, si la fuente no se pudo
   conseguir, `pending_source: paywall|scan|unextractable` (el lint la lista como precondición).

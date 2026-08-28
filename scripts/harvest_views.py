@@ -107,6 +107,69 @@ def section_span(text: str, header: str) -> tuple[int, int] | None:
     return inicio, (len(text) if nxt < 0 else nxt + 1)
 
 
+def stamp_reading_aids(dest: Path, data: dict) -> bool:
+    """`## Abstract (es)`, `## Conclusiones` y `## Conclusiones (es)` — las ayudas de lectura (#124).
+
+    POR QUÉ. La **vista** es lenteada: dice qué aporta el paper *a ese sujeto*. Las conclusiones son
+    lo que el paper afirma **sin lente**, y por eso no son redundantes — son lo que hace barata una
+    **segunda vista** cuando otro sujeto reclama el mismo paper, que no es un caso raro: medido
+    (#188), **141 de 908** notas las reclaman 2+ sujetos y ninguna tiene una segunda extracción.
+    Y desde #205 pesa más, porque abrir el PDF es lo caro: tener las afirmaciones del paper en la
+    nota evita re-abrirlo.
+
+    ⛔ **Son ayuda de lectura, nunca fuente de la que citar.** Van en `SECCIONES_ESTAMPADAS`, así que
+    `verify-citations` no las mira — una traducción no es una afirmación de la bóveda y no hay qué
+    contrastar contra la fuente. La red está aguas abajo: lo que de acá llegue a una **ficha** sí se
+    verifica contra el PDF, así que un error propagado desde una mala traducción se caza ahí. Si
+    citás, citás del original con su página.
+
+    ⚠ **El original no se pisa.** El `## Abstract` verbatim es la capa auditable del cuerpo (copia
+    de catálogo) y `classify_offline` lo lee para el diff de lente offline (D-49); la traducción va
+    **al lado**, en su propia sección.
+
+    ⚠ **Documento largo: sin conclusiones.** Una fuente `unidad_cita: pagina` —un libro, un
+    handbook— no tiene "conclusiones" como sección, y transcribir algo que no existe fabricaría una
+    sección con contenido inventado. Es una exclusión estructural, no un umbral de largo (que sería
+    un corte sin calibrar, y de eso este repo ya se quemó tres veces).
+
+    Idempotente y quirúrgico: cada sección se reemplaza sola y sin tocar el resto."""
+    fm = cfg.split_fm(dest.read_text(encoding="utf-8"))
+    largo = str(fm.get("unidad_cita") or "").strip() not in ("", "linea")
+    piezas = [("## Abstract (es)", data.get("abstract_es"))]
+    if not largo:
+        piezas += [("## Conclusiones", data.get("conclusiones")),
+                   ("## Conclusiones (es)", data.get("conclusiones_es"))]
+    toco = False
+    for header, texto in piezas:
+        # Ausente = no consta: no se crea una sección vacía. Un `## Conclusiones` en blanco se
+        # leería como «el paper no concluye nada», que no es lo mismo que «nadie las transcribió».
+        if not (limpio := str(texto or "").strip()):
+            continue
+        if upsert_section(dest, header, f"{header}\n{limpio}\n"):
+            toco = True
+    return toco
+
+
+def upsert_section(dest: Path, header: str, cuerpo: str) -> bool:
+    """Reemplaza la sección `header` si existe; si no, la agrega **antes de la primera `## Vista`**.
+
+    El orden importa para leer: las ayudas de lectura van arriba de la vista, no al final después
+    del bloque de verificación. Si no hay vista todavía, va al final."""
+    text = dest.read_text(encoding="utf-8")
+    span = section_span(text, header)
+    if span is not None:
+        ini, fin = span
+        nuevo = text[:ini] + cuerpo.rstrip("\n") + "\n\n" + text[fin:]
+    else:
+        corte = text.find("\n## Vista — ")
+        punto = len(text) if corte < 0 else corte + 1
+        nuevo = text[:punto].rstrip("\n") + "\n\n" + cuerpo.rstrip("\n") + "\n\n" + text[punto:]
+    if nuevo == text:
+        return False
+    cfg.write_text_atomic(dest, nuevo)
+    return True
+
+
 def write_view_section(dest: Path, sujeto: str, cuerpo: str, *, theme: bool,
                        force: bool = False) -> bool:
     """Escribe la sección de la vista. Devuelve True si tocó el archivo.
@@ -263,6 +326,8 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
             if valores and mn.merge_frontmatter_list(dest, campo, valores):
                 toco = True
         if write_view_section(dest, sujeto, render_view(sujeto, data), theme=theme, force=force):
+            toco = True
+        if stamp_reading_aids(dest, data):
             toco = True
         if bring_fulltext(slug, mn.safe_name(bib)):
             n["txt_traidos"] += 1
