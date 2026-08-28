@@ -69,6 +69,19 @@ fila de tabla con un valor, cada bullet o frase que asevera un hecho. Para cada 
 > filas de la **tabla de inventario** marcadas NEA siguen bajo la excepción de ground-truth de abajo.
 
 **Excepciones (no se verifican, pero se chequea la marca):**
+- ⛔ **Las secciones que ESTAMPA la máquina** (AUD-205). Son metadata **derivada**, no afirmaciones
+  de la bóveda: no hay nada que contrastar contra la fuente, y su `[[bibcode]]` no es una cita.
+  Verificarlas infla el fan-out con pares que siempre vuelven `soportada` (una fila de `## Papers`
+  dice que el paper existe) y, peor, ata **anclas** a bloques que el próximo `make_notes` reescribe
+  — la fila queda «vencida por edición» sin que nadie haya afirmado nada nuevo. La lista canónica es
+  `lib_config.SECCIONES_ESTAMPADAS`, y el código ya las excluye; esto lo dice acá, que es donde
+  alguien arma el fan-out a mano. Son: los tres **roll-ups** (`## Papers`, `## Planetas`,
+  `## Métodos aplicados a esta estrella`, y el de concepto), las **ayudas de lectura** de #124
+  (`## Abstract`, `## Conclusiones` y sus dos `## Traducción …` — una traducción no es una
+  afirmación de la bóveda), el apéndice `## Excluidos por el filtro` y el propio bloque
+  `## Verificación de citas`.
+  ⚠ La `## Vista — <sujeto>` **NO** está en la lista, a propósito: es exactamente lo que hay que
+  contrastar contra la fuente.
 - **Valores de ground-truth (NEA) en fichas de estrella** → los parámetros planetarios (P/K/e/m·sin i,
   status, nº de planetas) del **frontmatter** y de la **tabla de inventario** vienen de **NEA**
   (`vault/raw/ground_truth/<slug>.json`), **no** de un paper. **NO se verifican contra el fulltext** — de su

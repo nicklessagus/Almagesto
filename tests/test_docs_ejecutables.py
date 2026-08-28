@@ -387,3 +387,30 @@ def test_la_plantilla_y_el_parser_hablan_de_las_mismas_columnas():
     assert filas is not None and len(filas) == 1
     assert (filas[0].verdict, filas[0].anchor, filas[0].source_hash) == \
         ("soportada", "aaaaaaaaaa", "bbbbbbbbbb")
+
+
+def test_ningun_help_nombra_un_valor_RETIRADO_del_vocabulario():
+    """AUD-210 — el `--help` de `triage` listaba `reporte`, retirado en #206 y ausente de sus
+    propios `choices`: el texto contradecía a su parser.
+
+    Un help que nombra un valor que el parser rechaza manda al operador a un comando que no corre —
+    y es el mismo modo de falla que `docs/operacion.md` tuvo con `via: reporte` (AUD-122), una capa
+    más adentro. La red es que los vocabularios se interpolen desde el código, no se transcriban."""
+    import contextlib
+    import importlib
+    import io
+    import sys
+
+    import lint
+
+    retirados = set(lint.VIA_FUENTE_RETIRADO)
+    for modulo in ("triage", "make_notes", "query_ads", "ingest_theme", "fetch_web"):
+        m = importlib.import_module(modulo)
+        buf = io.StringIO()
+        with contextlib.suppress(SystemExit), contextlib.redirect_stdout(buf):
+            sys.argv = [f"{modulo}.py", "--help"]
+            m.main()
+        texto = buf.getvalue()
+        for valor in retirados:
+            assert f"| {valor}" not in texto and f"{valor} |" not in texto, \
+                f"{modulo} --help nombra `{valor}`, que es vocabulario retirado"

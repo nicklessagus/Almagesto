@@ -596,7 +596,11 @@ def accept_source(slug: str, idents: list, via: str, motivo: str) -> int:
 
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description="La compuerta de curación: juzga los candidatos del citation chaining y "
+                    "persiste la decisión en el registro VERSIONADO (viaja en git). Sin flags, "
+                    "lista lo pendiente. Todo lo que decide algo exige --reason: no se cura en "
+                    "silencio.")
     ap.add_argument("slug", help="estrella (o tema) con build/<slug>/ads.json; con --drop-source "
                                  "(fuente declarada off-ADS) no hace falta el ads.json")
     ap.add_argument("--report", action="store_true",
@@ -610,8 +614,10 @@ def main() -> int:
                     help="(--drop-source) url/doi/ruta de la fuente rechazada — lo que vuelve "
                          "resoluble una clave sintética meses después")
     ap.add_argument("--reason", default="",
-                    help="motivo del descarte (obligatorio con --drop/--drop-source; queda en el "
-                         "registro)")
+                    # AUD-210: el help nombraba dos de las CINCO operaciones que lo exigen.
+                    help="el motivo, y queda en el registro versionado. OBLIGATORIO con --drop, "
+                         "--drop-source, --drop-core, --accept-source y --extraccion subconjunto "
+                         "(ahí es el criterio del recorte). Con --sintesis es opcional, como nota")
     ap.add_argument("--extraccion", choices=("todos", "subconjunto"),
                     help="D-13/INV-83: declarar QUÉ SE LEYÓ de los core de este sujeto. `todos` = "
                          "el default del contrato; `subconjunto` = se recortó, y entonces --reason "
@@ -636,9 +642,11 @@ def main() -> int:
                          "que al carril off-ADS le faltaba: sin esto, el descubrimiento proponía "
                          "el paper y el trabajo de bajarlo quedaba a mano. Exige --reason y --via.")
     ap.add_argument("--via", default="usuario", choices=VIA_FUENTE,
-                    help="quién acepta la fuente OFF-ADS (vocabulario CERRADO): usuario | "
-                         "descubrimiento | reporte. ⚠ NO es el de `extra_core` (carril ADS), que "
-                         "es usuario | triage | citado-por-corpus")
+                    # AUD-210: nombraba `reporte`, RETIRADO en #206 y ausente de `choices` —
+                    # el help contradecía a su propio parser. Los dos vocabularios salen del código.
+                    help=f"quién acepta la fuente OFF-ADS (vocabulario CERRADO): "
+                         f"{' | '.join(VIA_FUENTE)}. ⚠ NO es el de `extra_core` (carril ADS), que "
+                         f"es {' | '.join(cfg.EXTRA_CORE_VIA)}")
     ap.add_argument("--prioridad", action="store_true",
                     help="la cola de extracción: no filtra ni toca la lente, ordena lo que ya es "
                          "core. Dos vistas — #87: por cuántas facetas del objetivo toca cada uno "

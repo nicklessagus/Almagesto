@@ -47,7 +47,9 @@ CHAIN = ("query_ads.py", "fetch_arxiv.py", "fetch_pdf.py", "fetch_ground_truth.p
 
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description="Orquesta la cadena de ingesta de una ESTRELLA (astro-only). El ORDEN CANÓNICO vive en el header de este archivo, que es su fuente de verdad. Idempotente: re-correrlo es seguro.",
+        epilog="Exit != 0 aborta la cadena: corregí y volvé a correr (es idempotente).")
     ap.add_argument("slug", help="estrella de vault/config/stars.yaml (por slug)")
     ap.add_argument("--yes", action="store_true",
                     help="continuar a sabiendas si la guardia de expansión frena la cadena (el pool "

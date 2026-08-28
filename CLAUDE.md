@@ -927,7 +927,10 @@ el universo del sujeto es la **unión**, no la suma, y cada entrada distingue `n
 `n_ya_estaban`), **`cadena`** (qué pasos corrieron, con fecha, versión, `via: orquestador|suelto` y
 las **escotillas** usadas — D-57: **cada script se estampa a sí mismo**, así que un paso corrido a
 mano deja rastro en vez de leerse como un corte; el lint compara contra el orden canónico y
-**nombra el paso** donde se cortó) y **`decisiones`**. Un descarte que se **revierte** (el bibcode
+**nombra el paso** donde se cortó — ⚠ **sólo para ESTRELLAS** (AUD-209): el orden de un tema depende
+de su `source`, y un tema off-ADS no corre `query_ads` ni `fetch_ground_truth`, así que compararlo
+contra el orden astro inventaría cortes que no existen. El `cadena` de un tema **se escribe igual**
+—la traza vale— pero nadie la contrasta contra un orden canónico, porque no hay uno solo) y **`decisiones`**. Un descarte que se **revierte** (el bibcode
 pasa a `extra_core`, la fuente se vuelve a declarar) no queda contradiciendo lo hecho: se **anula**
 explícito, con el motivo viejo preservado en `previa` (D-52). Y la compuerta de triage **ya no se
 puede apagar por flag** (D-48: `--no-triage` se eliminó — permitía que un candidato ya descartado
@@ -1190,8 +1193,14 @@ toca, el ancla de fuente tampoco se entera — es el modo de caducidad más sile
 **ground-truth** (NEA cambia valores entre releases, y el snapshot era un JSON congelado que
 **nada** comparaba) y el **conteo de citas de la puerta 2** (#106, ver abajo). Si están repartidas,
 se corren cinco y la sexta nunca.
-⛔ **Reporta, no aplica solo**: el diff se muestra y se pregunta antes de tocar nada — un snapshot
-que se actualiza solo cambia valores **bajo los pies de la prosa que ya los citó**. Lo que sí es
+⛔ **Reporta, no aplica solo — con UNA excepción nombrada** (AUD-206): el diff se muestra y se
+pregunta antes de tocar nada, porque un snapshot que se actualiza solo cambia valores **bajo los
+pies de la prosa que ya los citó**. La excepción es **`retracciones`**: `check_retractions` estampa
+`retracted:` / `corrections:` en las notas **sin preguntar**, a propósito — una fuente retractada
+citada rompe la frontera dura, así que enterarse tarde es peor que el ruido de diff, y lo que
+escribe es una **marca de metadata**, no un valor que la prosa haya citado. Los otros cinco no
+escriben: versiones y web proponen el comando, ground-truth pregunta, y citas-puerta2 sólo reporta
+el cruce. Lo que sí es
 automático es la consecuencia offline: al cambiar un `.txt`, el **ancla de fuente** (D-20) marca
 sola los pares verificados contra él. El ground-truth **no** lo cubre esa ancla (no es un `.txt`):
 al aplicar, se registra `_cambios` en el JSON y el lint pide la marca `⚠desactualizado` (ver abajo). El renombre preprint→publicado **nunca** es automático
@@ -1328,7 +1337,7 @@ es la **marca de agua** del bibcode repetida por página (lo agarra la densidad 
 pero no sirve para grep ni verify; rescate: PDF sano, OCR, o marcar `pending`). Las **correcciones
 publicadas** (`corrections`, #52 — erratum/corrigendum/EoC del mismo barrido de Crossref) son
 **backlog, no bloquean**: el paper sigue siendo citable; lo que hay que revisar son los valores que
-se le extrajeron (un corrigendum cambia justamente ese número). El **reclamo sin vista** (#188: un sujeto que reclama el paper y desde el cual nadie lo leyó) es **backlog** —la vista del sujeto que sólo aporta al roll-up es opcional, el silencio no—, y baja a **informativo** cuando está declarado con `no_vista` y su motivo; su hermana, la **vista sin `fecha`** (declarada por el stub y nunca leída), también. Sin esas dos, sembrar la vista al crear el stub apagaría el hallazgo del sujeto que la sembró y el silencio volvería a leerse como «se miró y no hay nada». El **extraído pero no sintetizado** (#75: un paper con `methods` poblado —o sea que ya pagó el paso
+se le extrajeron (un corrigendum cambia justamente ese número). El **reclamo sin vista** (#188: un sujeto que reclama el paper y desde el cual nadie lo leyó) es **backlog** —la vista del sujeto que sólo aporta al roll-up es opcional, el silencio no—, y **el declarado con `no_vista` + motivo pasa a su PROPIA categoría** (*«Reclamo sin vista DECLARADO … (visible, no es deuda)»*), separada de la deuda real; su hermana, la **vista sin `fecha`** (declarada por el stub y nunca leída), es backlog propio. ⚠ Acá decía que el declarado «baja a **informativo**» y esa severidad **no existe**: el lint tiene bloqueante, WARN y backlog (AUD-207). Lo que lo distingue no es el nivel, es que se reporta **aparte**, así que la deuda que hay que trabajar no queda mezclada con la que alguien ya resolvió declarándola. Sin esas dos, sembrar la vista al crear el stub apagaría el hallazgo del sujeto que la sembró y el silencio volvería a leerse como «se miró y no hay nada». El **extraído pero no sintetizado** (#75: un paper con `methods` poblado —o sea que ya pagó el paso
 más caro de la cadena— cuyo bibcode **no aparece citado en ninguna ficha ni concepto**) es
 **backlog**: la extracción nunca llegó a la síntesis. Es el análogo del proxy que ya existe para
 planetas (cada planeta del frontmatter discutido en prosa) y mide si el paper **llegó**, no si la

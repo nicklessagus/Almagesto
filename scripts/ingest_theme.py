@@ -434,7 +434,9 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
 
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description="Orquesta la cadena de ingesta de un TEMA según su `source` (ads | web | local-pdfs [+web]). El ORDEN CANÓNICO de la cadena vive en el header de este archivo, que es su fuente de verdad. Idempotente: re-correrlo no re-baja lo que ya está ni pisa notas.",
+        epilog="Exit != 0 aborta la cadena: corregí y volvé a correr (es idempotente).")
     ap.add_argument("slug", help="tema de vault/config/themes.yaml")
     ap.add_argument("--force", action="store_true",
                     help="re-bajar/re-copiar FUENTES ya presentes (snapshot/PDF/fulltext); nunca pisa notas")

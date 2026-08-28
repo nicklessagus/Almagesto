@@ -1218,6 +1218,37 @@ def test_main_chaining_solo_auto_acepta_sujeto_en_titulo(toy_vault, toy_classifi
     assert "1 candidatos pendientes de juicio" in capsys.readouterr().out
 
 
+def test_la_politica_de_auto_aceptacion_se_declara(toy_vault, toy_classifier, no_sleep,
+                                                   monkeypatch, capsys):
+    """AUD-196 / INV-55 — la política de auto-aceptación se DECLARA, no se hardcodea.
+
+    No es una regla de relevancia (eso ya lo decidió la lente: estos candidatos son todos
+    `relevant`), es la **compuerta de curación** que dice cuáles del grafo entran sin juicio humano.
+    Cableada, era la única decisión de admisión que una instancia no podía tocar — y su precisión
+    depende del corpus: `titulo` mide 18 % en una bóveda de estrellas y no significa nada en un tema
+    de método."""
+    obj = cfg.load_objective()
+    obj["relevance"]["chain_autoaccept"] = "never"
+    write_yaml(cfg.OBJECTIVE_YAML, obj)
+    monkeypatch.setattr(qa, "_OBJ", obj)
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        [rec("2020dirA....1A")])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [
+        dict(rec("2020tit....1T", title="Activity of Test Star"), via="chain:citations")])
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    data = json.loads((toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text())
+    # con `never`, ni siquiera el que trae el sujeto en el título entra solo
+    assert [c["bibcode"] for c in data["candidates"]] == ["2020tit....1T"]
+    assert "2020tit....1T" not in {r["bibcode"] for r in data["records"]}
+
+    obj["relevance"]["chain_autoaccept"] = "por-el-titulo"      # typo
+    write_yaml(cfg.OBJECTIVE_YAML, obj)
+    monkeypatch.setattr(qa, "_OBJ", obj)
+    with pytest.raises(SystemExit, match="chain_autoaccept"):
+        run_main(monkeypatch, ["test_star"])
+
+
 def test_main_triage_no_repropone_descartados(toy_vault, toy_classifier, no_sleep, monkeypatch, capsys):
     # @inv INV-49
     d = toy_vault.ROOT / "build" / "test_star"

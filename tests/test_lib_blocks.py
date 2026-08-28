@@ -288,9 +288,14 @@ def test_parse_verif_table_tabla_vacia_es_lista_vacia():
 
 
 def test_parse_lee_por_NOMBRE_de_columna_no_por_posicion():
-    """La plantilla que publican `CLAUDE.md` y el skill `verify-citations` tiene **ocho** columnas
-    (con `Score` y `Evidencia`); el parser leía las posiciones 4 y 5, que en esa plantilla son
-    justamente esas dos. Resultado medido: `anchor` salía del Score y `source_hash` de la Evidencia,
+    """La plantilla vieja tenía **ocho** columnas (con `Score` y `Evidencia`); el parser leía las
+    posiciones 4 y 5, que en esa plantilla son justamente esas dos.
+
+    ⚠ AUD-214 — `Score` **se eliminó en 1.42.0** (reintroducía un eje de grado cuyo umbral nunca se
+    calibró) y la plantilla vigente no la tiene. La fixture la conserva **a propósito y dicho acá**:
+    lo que este test fija no es esa columna sino la propiedad —se lee por NOMBRE— y una columna que
+    el parser no conoce es el caso adversario que la prueba. Escrita sin la aclaración, la fixture
+    se leía como si `Score` siguiera viva. Resultado medido: `anchor` salía del Score y `source_hash` de la Evidencia,
     **en silencio** —el detector de plantilla vieja no lo agarra porque el encabezado sí contiene
     las palabras «ancla» y «hash»— así que toda nota escrita según la documentación dejaba
     `lint.py --cierre` en **rojo permanente**, que es el cierre de toda operación que toca una nota.
@@ -311,7 +316,7 @@ def test_parse_lee_por_NOMBRE_de_columna_no_por_posicion():
 
 
 def test_parse_sigue_leyendo_la_tabla_de_seis_columnas():
-    """Control: la forma corta (sin Score/Evidencia) es la que usa el resto de la suite."""
+    """Control: la forma corta es la PLANTILLA VIGENTE (`Score` salió en 1.42.0)."""
     bloque = (
         "## Verificación de citas (2026-08-24)\n\n"
         "| # | Afirmación | Fuente | Veredicto | Ancla | Hash fuente | Condición |\n"
@@ -490,3 +495,24 @@ def test_el_vocabulario_valido_se_comporta_igual_que_antes(v, resuelto):
     """La otra mitad: apretar no puede cambiar el veredicto de lo que sí está en el vocabulario."""
     assert lb.verdict_valido(v) is True
     assert lb.resueltos(v) is resuelto
+
+
+def test_parse_corta_en_la_seccion_SIGUIENTE():
+    """AUD-215 — la rama `if corte > 0` (el bloque de verificación seguido de otra sección) no la
+    tocaba ningún test.
+
+    Sin ella el parser se comería todo lo que viene después: una tabla de `## Inventario por eje`
+    empieza con `|` igual que una fila de verificación, así que sus filas entrarían como pares
+    verificados — pares que nadie verificó, con anclas leídas de columnas ajenas."""
+    bloque = (
+        "## Verificación de citas (2026-08-24)\n\n"
+        "| # | Afirmación | Fuente | Veredicto | Ancla | Hash fuente | Condición |\n"
+        "|---|---|---|---|---|---|---|\n"
+        "| 1 | X | [[2020ApJ...900...1A]] | soportada | abc1234567 | pdf:def8901234 | — |\n\n"
+        "## Inventario por eje\n\n"
+        "| Eje | Paper | Dice | Método |\n"
+        "|---|---|---|---|\n"
+        "| P_rot | [[2019otroB...1..1B]] | 34 d | periodograma |\n")
+    filas = lb.parse_verif_table(bloque)
+    assert filas is not None and len(filas) == 1, [f.bibcode for f in (filas or [])]
+    assert filas[0].bibcode == "2020ApJ...900...1A"

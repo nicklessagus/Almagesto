@@ -51,9 +51,9 @@ El período es 4,3 d [[2009Tres....3..3M]]. El chequeo vive en `## Verificación
 
 ## Verificación de citas (2026-08-25)
 
-| # | Afirmación (extracto) | Fuente | Veredicto | Score | Evidencia | Ancla | Hash fuente | Condición |
-|---|---|---|---|---|---|---|---|---|
-| 1 | El período es 4,3 d | [[2009Tres....3..3M]] | soportada | — | "P = 4.3114 d" (L12) | aaaaaaaaaa | bbbbbbbbbb | — |
+| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |
+|---|---|---|---|---|---|---|---|
+| 1 | El período es 4,3 d | [[2009Tres....3..3M]] | soportada | "P = 4.3114 d" (L12) | aaaaaaaaaa | bbbbbbbbbb | — |
 """
 
 
@@ -114,8 +114,8 @@ def test_bloque_de_verificacion_se_parsea_pese_a_la_mencion_en_prosa():
 # parser partía por `|` pelado: las columnas se corren y el **ancla** se lee de la celda equivocada.
 # Medido (2026-08-25): 18 pares reportados «vencidos por edición» sin que nada se hubiera editado.
 
-CAB = ("| # | Afirmación (extracto) | Fuente | Veredicto | Score | Evidencia | Ancla | Hash fuente | Condición |\n"
-       "|---|---|---|---|---|---|---|---|---|\n")
+CAB = ("| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |\n"
+       "|---|---|---|---|---|---|---|---|\n")
 
 
 def _nota(fila: str) -> str:
@@ -124,7 +124,7 @@ def _nota(fila: str) -> str:
 
 def test_pipe_escapado_en_una_celda_no_corre_las_columnas():
     # @inv INV-99
-    fila = (r'| 1 | K_b = 1,97 m/s | [[2009Uno.....1..1M]] | soportada | — | '
+    fila = (r'| 1 | K_b = 1,97 m/s | [[2009Uno.....1..1M]] | soportada | '
             r'"K [m s−1] 1.97 ± 0.11 \| Nmeas 135" (L397) | aaaaaaaaaa | bbbbbbbbbb | '
             r'3 circulares \| 128 de 135 medidas |')
     filas = lb.parse_verif_table(_nota(fila))

@@ -581,6 +581,13 @@ def _variant_hit(low: str, var: str) -> bool:
     return False
 
 
+# AUD-196 / INV-55 — vocabulario CERRADO de `relevance.chain_autoaccept`: qué candidato del grafo
+# de citas entra al corpus SIN juicio humano. `titulo` es el default histórico (el sujeto aparece en
+# el título); `never` manda todo a triage, que es lo razonable en un tema de método, donde «el
+# sujeto en el título» no significa nada.
+CHAIN_AUTOACCEPT = ("titulo", "never")
+
+
 def subject_in_title(title: str | None, names: list[str]) -> bool:
     """¿El sujeto está en el título? Auto-aceptación del nivel 0: cubre las grafías de catálogo
     (HD 22049 ↔ HD22049) y los lookalikes de nombre Bayer (∊ Eridani ≡ eps Eridani, #28)."""
@@ -912,7 +919,12 @@ def classify_theme(rec: dict, meta: dict) -> tuple[list[str], bool, str | None]:
 
 
 # #126 · vocabulario CERRADO de las puertas de D-26, en el orden en que se evalúan.
-PUERTAS = ("fundacional", "astro")
+# AUD-208 — son TRES, no dos. `manual` no es una puerta de D-26 (no la decide una regla sobre el
+# paper) pero es una **procedencia** que el código escribe y que el consumidor lee en el mismo campo:
+# «entró porque el usuario lo puso en `extra_core`». Dejarla fuera del vocabulario hacía que la doc
+# prometiera un cerrado de dos sobre un campo que en la práctica tiene tres valores — y un cerrado
+# que el propio código viola no sirve para cazar el typo, que es para lo único que existe.
+PUERTAS = ("fundacional", "astro", "manual")
 
 
 def puertas_abiertas(rec: dict, meta: dict) -> tuple:
@@ -1482,7 +1494,19 @@ def main() -> int:
         # es el ruido: con el flag, un bibcode ya descartado (con su motivo, persistido por #51)
         # volvía a entrar EN SILENCIO. Una escotilla que pisa el juicio curado no es una escotilla,
         # es una fuga.
-        gate = bool(star_names)
+        # AUD-196 / INV-55 — la política de auto-aceptación se DECLARA, no se hardcodea. No es una
+        # regla de relevancia (eso ya lo decidió la lente: estos candidatos son todos `relevant`),
+        # es la **compuerta de curación** que dice cuáles del grafo entran sin juicio humano. Que
+        # viviera cableada la volvía la única decisión de admisión que una instancia no podía tocar,
+        # y su precisión depende del corpus: `titulo` mide 18 % en una bóveda de estrellas y no
+        # tiene sentido en un tema de método. Dos valores, y `never` es una decisión legítima —
+        # mandar TODO a triage— no un apagado.
+        politica = str(cfg.as_map(_OBJ.get("relevance")).get("chain_autoaccept") or "titulo").strip()
+        if politica not in CHAIN_AUTOACCEPT:
+            sys.exit(f"⛔ vault/config/objective.yaml: relevance.chain_autoaccept = {politica!r} "
+                     f"fuera del vocabulario cerrado ({' | '.join(sorted(CHAIN_AUTOACCEPT))}). Un "
+                     f"typo dejaría entrando al corpus, sin juicio, lo que la política no admite.")
+        gate = bool(star_names) or politica == "never"
         descartados = load_triage(args.slug) if gate else set()
         chained, ya_descartados = [], 0
         for c in chain_candidates(core_bibs, args.rows, chain_filter):
@@ -1490,7 +1514,7 @@ def main() -> int:
             if not (c["relevant"] and b and b not in seen):  # sólo core nuevos (dedup vs query y ops)
                 continue
             seen.add(b)
-            if not gate or subject_in_title(c.get("title"), star_names):
+            if not gate or (politica == "titulo" and subject_in_title(c.get("title"), star_names)):
                 chained.append(c)          # nivel 0: entra solo (sujeto en el título)
             elif b in descartados:
                 ya_descartados += 1        # decisión persistida: no re-proponer
