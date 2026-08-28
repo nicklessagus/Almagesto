@@ -464,12 +464,17 @@ def parse_verif_table(text: str) -> list[Row] | None:
         if _SEP_ROW_RE.match(ln):
             continue
         celdas = _split_row(ln)
-        if len(celdas) <= max(i_n, i_claim, i_fuente, i_verd, i_ancla, i_hash, i_cond):
-            continue                     # fila malformada: la reporta el lint como par sin cubrir
+        # ⚠ Una fila con MENOS celdas que el encabezado —típico: la `Condición` vacía omitida— caía
+        # acá con un `continue` y se perdía ENTERA, y con ella el `Veredicto`: un `no-soportada`
+        # dejaba de disparar el bloqueante de INV-117 y quedaba registrado bajo un encabezado que
+        # se lee como garantía. Es **el mismo defecto que #128 arregló para la dirección opuesta**
+        # (más celdas ⇒ se recupera por contenido) y con el mismo argumento escrito abajo:
+        # descartar la fila es peor que leerla a medias. Medido el 2026-08-28.
         corrida = len(celdas) != len(cols)
         if corrida:
-            # Más celdas que el encabezado ⇒ hay un `|` sin escapar en alguna celda y las columnas
-            # de la DERECHA (ancla, hash, condición) están corridas. Indexar por posición leería el
+            # Celdas de MÁS ⇒ hay un `|` sin escapar y las columnas de la DERECHA (ancla, hash,
+            # condición) están corridas. Celdas de MENOS ⇒ falta alguna de la derecha. En los dos
+            # casos lo que no se puede leer son las posicionales, no la fila. Indexar por posición leería el
             # ancla de otra celda y el par volvería "vencido por edición" sin que nadie editara nada
             # (medido: 18 pares, 2026-08-25).
             #

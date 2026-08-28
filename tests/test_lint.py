@@ -3948,3 +3948,31 @@ def test_una_nota_no_mapa_no_tumba_el_lint(toy_vault, capsys):
     rc, out = run_lint(capsys)
     assert rc == 1
     assert "2020noexiste" in out, "el lint murió antes de reportar el wikilink roto"
+
+
+@pytest.mark.parametrize("texto", [
+    "Usamos GP (la inferencia bayesiana es cara) para el ajuste.",
+    "El costo es alto (la inferencia exacta cuesta O(N^3)).",
+])
+def test_la_palabra_inferencia_en_prosa_no_es_una_marca(texto):
+    """Falso positivo **bloqueante** en una bóveda cuyo dominio incluye inferencia bayesiana y
+    procesos gaussianos. El comentario del propio código decía *«"la inferencia bayesiana permite…"
+    no es una marca»* — y lo era en cuanto iba entre paréntesis.  @inv INV-86"""
+    assert lint.inferencias_sin_premisas(texto) == []
+
+
+def test_un_parentesis_anidado_ya_no_esconde_la_marca():
+    """El otro lado del mismo regex: `[^()]*` no cruza un paréntesis interno, así que el mismo texto
+    disparaba o no según un anidado. Ahora se admite un nivel."""
+    assert lint.inferencias_sin_premisas("X (inferencia (mi lectura)).") == \
+        ["(inferencia (mi lectura))"]
+
+
+def test_la_marca_PELADA_se_sigue_cazando():
+    """El abuso central de INV-86 —una afirmación sin respaldo disfrazada de marca— usa la forma
+    pelada, así que apretar el regex no puede pedir el `de`."""
+    assert lint.inferencias_sin_premisas("El período es de 34 d (inferencia).") == ["(inferencia)"]
+
+
+def test_la_marca_con_premisas_sigue_pasando():
+    assert lint.inferencias_sin_premisas("El armónico (inferencia de [[2020a]], [[2020b]]).") == []

@@ -653,7 +653,21 @@ PROT_NEG = re.compile(r"(?i)no se conoce|no se sabe|sin medir|desconocid|no hay 
 # afirmación —`(inferencia de [[b1]], [[b2]])`—, y es una de las dos únicas marcas en línea del
 # sistema (la otra es `⛔retractada`). Se busca así, y no por la palabra suelta, para no disparar
 # con el sustantivo común: "la inferencia bayesiana permite…" no es una marca.
-INFER_MARK = re.compile(r"\((?:[^()]*\b)?inferencia\b[^()]*\)", re.I)
+#
+# ⛔ Ancla al **PRINCIPIO del paréntesis**, no en la palabra suelta en cualquier posición. La marca
+# abre con `inferencia`; la prosa del dominio la lleva precedida de artículo («la inferencia…»).
+# La forma vieja tenía los dos errores a la vez, medidos el 2026-08-28 en una bóveda cuyo dominio
+# **incluye** inferencia bayesiana y procesos gaussianos:
+#   · falso POSITIVO bloqueante — `"Usamos GP (la inferencia bayesiana es cara) para el ajuste."`
+#     y `"(inferencia de hiperparámetros por MCMC)"` se reportaban como marca pelada;
+#   · falso NEGATIVO — `"X (inferencia (mi lectura))."` no matcheaba, porque `[^()]*` no cruza un
+#     paréntesis interno: el mismo texto disparaba o no según un paréntesis anidado.
+# ⚠ La `(inferencia)` **pelada** tiene que seguir cazándose: es el abuso central que INV-86 persigue
+# —una afirmación sin respaldo disfrazada de marca—, así que el `de` NO puede ser obligatorio.
+# Y se admite **un nivel de anidado** (`(inferencia (mi lectura))`), que `[^()]*` no cruzaba.
+# `(inferencia de hiperparámetros…)` queda como falso positivo aceptado: es prosa que abre igual que
+# la marca, y ahí el aviso es barato de resolver.
+INFER_MARK = re.compile(r"\(\s*inferencia\b(?:[^()]|\([^()]*\))*\)", re.I)
 
 
 def inferencias_sin_premisas(body: str) -> list[str]:

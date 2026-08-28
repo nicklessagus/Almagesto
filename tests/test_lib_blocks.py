@@ -22,6 +22,8 @@ SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
+import pytest
+
 import lib_blocks as lb     # noqa: E402
 
 
@@ -433,3 +435,25 @@ def test_una_fila_corrida_no_reporta_un_ancla_ajena():
     fila = lb.parse_verif_table(_BLOQUE_PIPE)[0]
     assert fila.anchor == "", "sin ancla, no un ancla ajena"
     assert fila.source_hash == "" and fila.source_kind is None
+
+
+@pytest.mark.parametrize("fila, verd", [
+    ('| 1 | x | [[2020a]] | no-soportada | "y" (p. 3) | aaaa | pdf:bbbb |', "no-soportada"),
+    ('| 1 | x | [[2020a]] | contradice |', "contradice"),
+])
+def test_una_fila_con_MENOS_celdas_no_pierde_su_veredicto(fila, verd):
+    """Una fila corta —típico: la `Condición` vacía omitida— se descartaba ENTERA con un `continue`,
+    y con ella el `Veredicto`: un `no-soportada` dejaba de disparar el bloqueante de INV-117 y
+    quedaba registrado bajo un encabezado que se lee como garantía.
+
+    Es **el mismo defecto que #128 arregló para la dirección opuesta** (celdas de más ⇒ se recupera
+    por contenido), con el mismo argumento: descartar la fila es peor que leerla a medias.
+    @inv INV-117"""
+    enc = ("| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | "
+           "Condición |")
+    t = (f"# X\n\n## Verificación de citas (2026-01-01)\n\n{enc}\n"
+         f"|---|---|---|---|---|---|---|---|\n{fila}\n")
+    filas = lb.parse_verif_table(t)
+    assert len(filas) == 1 and filas[0].verdict == verd
+    assert filas[0].bibcode == "2020a"
+    assert filas[0].anchor == "", "sin ancla el par cae en «sin verificar», que es lo correcto"
