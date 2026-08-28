@@ -3579,3 +3579,30 @@ def test_migrate_vistas_convierte_el_schema_viejo(toy_vault, capsys):
     assert "## Extracción (LLM)" in varias.read_text(encoding="utf-8")
     # y es idempotente
     assert mn.migrate_all_vistas()[0] == 0
+
+
+def test_force_no_pisa_la_nota_de_OTRO_sujeto(toy_vault, capsys):
+    """AUD-197 — `--force` significa «pisá la nota de ESTE sujeto», no «pisá cualquier nota».
+
+    Un paper compartido lleva la vista y la extracción de OTRO sujeto (#188: medido, 141 de 908
+    notas las reclaman 2+), y reescribirla desde el stub las borra: trabajo caro, ajeno a la
+    operación en curso y que nadie pidió tocar."""
+    bib = "2020shrA...1..1A"
+    ads = cfg.ROOT / "build" / "test_star"
+    ads.mkdir(parents=True, exist_ok=True)
+    (ads / "ads.json").write_text(json.dumps({"records": [
+        {"bibcode": bib, "title": "T", "relevant": True, "authors": ["A"], "year": "2020"}]}),
+        encoding="utf-8")
+    compartida = mk_note(cfg.PAPERS, bib,
+                         {"bibcode": bib, "tags": ["paper"],
+                          "stars": ["Estrella Test", "Otra Estrella"],
+                          "vistas": [{"sujeto": "Otra Estrella", "tipo": "star",
+                                      "fecha": "2026-08-01"}]},
+                         "## Vista — Otra Estrella\n\nExtracción cara del otro sujeto.\n")
+    antes = compartida.read_text(encoding="utf-8")
+
+    mn.write_paper_notes("test_star", False, True)
+
+    assert compartida.read_text(encoding="utf-8") == antes
+    salida = capsys.readouterr().out
+    assert "`--force` NO lo pisa" in salida and "Otra Estrella" in salida

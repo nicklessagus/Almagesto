@@ -1619,3 +1619,19 @@ def test_no_disputas_con_forma_invalida_se_DICE(toy_vault, capsys):
     idx = cfg.load_no_disputas("s")
     assert list(idx) == [cfg.par_key("2019A", "2020B", "K")]
     assert "2 entrada(s) de `no_disputas`" in capsys.readouterr().err
+
+
+def test_save_registro_no_pisa_un_registro_en_otra_codificacion(toy_vault):
+    """AUD-192 / INV-25 — `UnicodeDecodeError` faltaba en la guarda, y es el caso NATURAL: `motivo:`
+    lleva prosa acentuada, así que un registro en latin-1 es alcanzable (`load_registro` ya lo
+    lista desde AUD-41).
+
+    Sin él la excepción subía sin traducir, y esta guarda existe justamente para NO pisar a ciegas
+    lo único no regenerable de la bóveda. `UnicodeDecodeError` es subclase de `ValueError`, no de
+    `OSError`, así que el `except` viejo no la agarraba."""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    original = "decisiones:\n  2020Foo:\n    motivo: revisión metodológica\n".encode("latin-1")
+    cfg.registro_path("test_star").write_bytes(original)
+    with pytest.raises(RuntimeError, match="no lo piso a ciegas"):
+        cfg.save_registro("test_star", {"slug": "test_star"})
+    assert cfg.registro_path("test_star").read_bytes() == original

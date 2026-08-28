@@ -1074,9 +1074,14 @@ def save_registro(slug: str, data: dict) -> None:
     #  @inv INV-53
         try:
             existente = yaml.safe_load(f.read_text(encoding="utf-8"))
-        except (yaml.YAMLError, OSError) as exc:
+        # AUD-192 / INV-25 — `UnicodeDecodeError` faltaba, y es el caso NATURAL: `motivo:` lleva
+        # prosa acentuada, así que un registro guardado en latin-1 es alcanzable (`load_registro` ya
+        # lo lista desde AUD-41). Sin él la guarda no se disparaba: la excepción subía sin traducir
+        # y, peor, este `if` existe justamente para NO pisar a ciegas lo único no regenerable de la
+        # bóveda. `UnicodeDecodeError` es subclase de `ValueError`, no de `OSError`.
+        except (yaml.YAMLError, OSError, UnicodeDecodeError) as exc:
             raise RuntimeError(
-                f"{f} existe pero no se pudo leer (YAML roto) — no lo piso a ciegas: se "
+                f"{f} existe pero no se pudo leer ({type(exc).__name__}) — no lo piso a ciegas: se "
                 "perderían `busqueda` y las `decisiones` de curación que tiene adentro, y no son "
                 "regenerables. Arreglalo a mano (es un archivo que el framework instruye editar "
                 "directamente) y volvé a correr la operación."

@@ -758,6 +758,25 @@ def prot_documentado(body: str) -> bool:
     return False
 
 
+# AUD-198 — los dos umbrales que deciden categorías BLOQUEANTES viven acá, con nombre y motivo, en
+# vez de como literales sueltos adentro de un `if`. No cambian de valor: lo que cambia es que ahora
+# se pueden citar, testear y discutir. Un número mágico dentro de una guarda es una decisión que
+# nadie firmó — el mismo argumento por el que `fundacional_min_citas` se declara en la config.
+ESPEJO_TOL_REL = 1e-6
+"""Tolerancia RELATIVA del espejo #70. Los números viajan por YAML y por JSON: `34.0` y `34` son el
+mismo valor, y `0.1 + 0.2 != 0.3` en binario. No es una tolerancia física —no admite «casi igual»—
+sino de representación: cualquier discrepancia real es órdenes de magnitud mayor."""
+
+MASA_FACTOR_SOSPECHA = 3.0
+"""Cuántas veces puede diferir `mass_earth` de la m·sini implícita (K/P/e/M*) antes de reportarlo.
+
+El factor NO es una barra de error: la m·sini implícita se deriva de cuatro valores que NEA publica
+por separado y que pueden venir de análisis distintos, así que un factor 2 entre ellas es ruido de
+procedencia y no un error. El 3 es el corte donde deja de ser explicable así — típicamente una
+best-mass espuria (una masa verdadera de un ajuste dinámico mezclada con la K de otro). Es
+deliberadamente flojo: el detector existe para cazar el disparate, no para auditar la astrofísica."""
+
+
 def same_value(a, b) -> bool:
     """¿El valor de la ficha es el del ground-truth? Los números viajan por YAML y JSON, así que se
     comparan con tolerancia relativa (un 34.0 vs 34 no es una discrepancia); el resto, textual."""
@@ -765,7 +784,7 @@ def same_value(a, b) -> bool:
         return a is None and b is None
     if (isinstance(a, (int, float)) and isinstance(b, (int, float))
             and not isinstance(a, bool) and not isinstance(b, bool)):
-        return abs(a - b) <= 1e-6 * max(1.0, abs(b))
+        return abs(a - b) <= ESPEJO_TOL_REL * max(1.0, abs(b))
     return str(a).strip() == str(b).strip()
 
 
@@ -2192,7 +2211,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             # NO es un fallback de compatibilidad: es el chequeo INDEPENDIENTE del lint sobre todo
             # planeta que el fetch no marcó (que son casi todos). `mass_flag` es la marca del fetch;
             # esto la re-deriva offline, que es el trabajo del lint.
-            if chk and m and not (1 / 3 < m / chk < 3):
+            if chk and m and not (1 / MASA_FACTOR_SOSPECHA < m / chk < MASA_FACTOR_SOSPECHA):
                 mass_issues.append((slug, f"{p.get('letter')}: mass_earth={m:.3g} M⊕ "
                                           f"≠ m·sini implícita {chk:.3g} M⊕"))
         sf = cfg.STARS / f"{slug}.md"

@@ -27,6 +27,12 @@ justo cuando más sirve.
 `instancia` **sin** la env var **skipea con motivo visible**, nunca pasa en silencio: un tier que se
 saltea sin decirlo es el mismo modo de falla que el "0 que no miró" (ver abajo).
 
+**Agregá `-n auto` para correr en paralelo** (`pytest-xdist`, en `requirements.txt`). Medido el
+2026-08-28 sobre 8 núcleos: tier 0 **20 s → 10 s**, tier 1 **126 s → 46 s**. ⚠ Los tests que
+comparan **stdout** o dependen del orden no son seguros bajo xdist; hoy la suite entera pasa en
+paralelo, y si alguno empieza a fallar sólo con `-n`, el defecto es del test (estado compartido), no
+del paralelismo.
+
 > **Los presupuestos de tiempo se BORRARON el 2026-08-28 (#201), no se recalibraron.** Los números
 > de la tabla son referencia, no gate. El techo original de tier 0 (≤ 2,5 s) se fue a 7,3 s a lo largo
 > de nueve tandas sin que nada fallara nunca, y la respuesta de entonces fue medirlo con

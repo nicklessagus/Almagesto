@@ -157,7 +157,17 @@ def stamp_reading_aids(dest: Path, data: dict) -> bool:
     _ini = cfg.section_start(texto_nota, "## Abstract")
     _vacio = _ini >= 0 and PLACEHOLDER_ABSTRACT in texto_nota[_ini:_ini + 200]
     if _ini < 0 or _vacio:
-        piezas.append(("## Abstract", data.get("abstract")))
+        # ⛔ AUD-203 / INV-110 — el abstract que llega por acá lo **transcribió el modelo del PDF**,
+        # no es la copia de catálogo, y el contrato hace descansar en esa distinción que
+        # `## Abstract` sea la capa **auditable** del cuerpo. Sin decirlo, las dos se leen igual y
+        # el lector no tiene cómo saber cuál está mirando. Y el frontmatter sigue declarando
+        # `sin_abstract: true` —que es historia y NO se toca: describe con qué se **clasificó** el
+        # paper (título + keywords y nada más), no qué tiene la nota hoy—, así que sin esta línea la
+        # nota se contradice a sí misma a la vista.
+        if (_abs := str(data.get("abstract") or "").strip()):
+            _abs = (f"_(transcrito del PDF por la extracción — el catálogo no lo devolvió; la nota "
+                    f"sigue declarando `sin_abstract` porque así se **clasificó**.)_\n\n{_abs}")
+        piezas.append(("## Abstract", _abs))
     piezas.append(("## Traducción del abstract", data.get("abstract_es")))
     if not largo:
         piezas += [("## Conclusiones", data.get("conclusiones")),

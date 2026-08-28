@@ -361,7 +361,7 @@ def test_el_abstract_verbatim_se_estampa_SOLO_si_la_nota_no_lo_tiene(toy_vault):
     _con_pdf(toy_vault)
     dest = sembrar(toy_vault, extraccion(abstract="Transcrito del PDF."))
     hv.harvest("test_star")
-    assert "## Abstract\nTranscrito del PDF." in dest.read_text(encoding="utf-8")
+    assert "Transcrito del PDF." in dest.read_text(encoding="utf-8")
 
 
 def test_no_pisa_el_abstract_del_catalogo(toy_vault):
@@ -384,7 +384,7 @@ def test_el_abstract_se_rellena_tambien_sobre_el_placeholder(toy_vault):
                    body="## Abstract\n_(no disponible)_\n\n" + mn.vista_block("Estrella Test", theme=False))
     hv.harvest("test_star")
     texto = dest.read_text(encoding="utf-8")
-    assert "## Abstract\nDel PDF." in texto
+    assert "Del PDF." in texto
     assert "_(no disponible)_" not in texto
 
 
@@ -404,7 +404,7 @@ def test_la_traduccion_no_es_prefijo_del_original(toy_vault):
         encoding="utf-8")
     hv.harvest("test_star")                       # ahora sí el verbatim
     texto = dest.read_text(encoding="utf-8")
-    assert "## Abstract\nThe verbatim abstract." in texto, "el verbatim quedó tapado por su traducción"
+    assert "The verbatim abstract." in texto, "el verbatim quedó tapado por su traducción"
     assert cfg.section_start(texto, "## Abstract") != cfg.section_start(texto, "## Traducción del abstract")
 
 
@@ -437,3 +437,21 @@ def test_prosa_redactada_no_se_pisa_pero_se_dice(toy_vault, capsys):
     salida = capsys.readouterr().out
     assert "ya tiene prosa redactada" in salida and "--force" in salida
     assert "prosa ya redactada a mano" in dest.read_text(encoding="utf-8")
+
+
+def test_el_abstract_transcrito_dice_que_lo_transcribio_el_modelo(toy_vault):
+    """AUD-203 / INV-110 — el abstract que llega por acá lo **transcribió el modelo del PDF**, no es
+    la copia de catálogo, y el contrato hace descansar en esa distinción que `## Abstract` sea la
+    capa **auditable** del cuerpo.
+
+    Sin decirlo las dos se leen igual. Y el frontmatter sigue declarando `sin_abstract: true` —que
+    es historia y no se toca: describe con qué se **clasificó** el paper— así que la nota se
+    contradecía a sí misma a la vista."""
+    dest = sembrar(toy_vault, extraccion(abstract="Texto del abstract, transcrito."),
+                   fm_extra={"sin_abstract": True},
+                   body="## Abstract\n_(no disponible)_\n\n" + mn.vista_block("Estrella Test", False))
+    hv.harvest("test_star")
+    texto = dest.read_text(encoding="utf-8")
+    assert "Texto del abstract, transcrito." in texto
+    assert "transcrito del PDF por la extracción" in texto
+    assert read_fm(dest)["sin_abstract"] is True, "el flag es historia de la CLASIFICACIÓN"

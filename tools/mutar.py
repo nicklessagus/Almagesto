@@ -179,9 +179,15 @@ def archivos_del_diff() -> list[Path]:
         salida += r.stdout.split()
     vistos, archivos = set(), []
     for f in salida:                                  # `git add` de un archivo nuevo lo pone en los dos
-        if f.startswith("scripts/") and f.endswith(".py") and f not in vistos:
-            vistos.add(f)
-            archivos.append(RAIZ / f)
+        if not (f.startswith("scripts/") and f.endswith(".py")) or f in vistos:
+            continue
+        vistos.add(f)
+        # AUD-191 / INV-101 — `git diff --name-only` lista también lo **borrado**, y sobre un
+        # archivo que no está en disco `funciones()` revienta con `FileNotFoundError`: el gate no
+        # sale en rojo por un hallazgo, se cae. Un módulo eliminado no tiene funciones que mutar,
+        # así que no es un hallazgo: se saltea.
+        if (ruta := RAIZ / f).is_file():
+            archivos.append(ruta)
     return archivos
 
 

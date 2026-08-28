@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -316,3 +317,19 @@ def test_ratchet_sin_techo_declarado_no_sale_verde(repo_con_tests: Path, monkeyp
     monkeypatch.setattr(mutar, "_copia_del_repo", lambda d: repo_con_tests)
     assert _args_main(monkeypatch, ["scripts/viejo.py", "--ratchet"]) == 2
     assert "no declara `techo`" in capsys.readouterr().out
+
+
+def test_el_diff_no_lista_lo_borrado(repo_con_tests: Path, monkeypatch):
+    """AUD-191 / INV-101 — `git diff --name-only` lista también lo **borrado**, y sobre un archivo
+    que no está en disco `funciones()` revienta con `FileNotFoundError`.
+
+    O sea: el gate no sale en rojo por un hallazgo, se **cae** — sobre el caso más normal de un
+    refactor (mover o eliminar un módulo). Un módulo eliminado no tiene funciones que mutar."""
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    monkeypatch.setattr(mutar.subprocess, "run",
+                        lambda *a, **k: SimpleNamespace(
+                            returncode=0, stdout="scripts/viejo.py\nscripts/borrado.py\n", stderr=""))
+    archivos = mutar.archivos_del_diff()
+    assert [f.name for f in archivos] == ["viejo.py"], "un archivo borrado no tiene qué mutar"
+    for f in archivos:
+        mutar.funciones(f)                # no revienta

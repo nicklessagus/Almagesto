@@ -2441,6 +2441,26 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, theme: bool = F
                 f"`python scripts/make_notes.py --rename-paper {otro} {bib}`")
             duplicados += 1
             continue
+        # AUD-197 — `--force` significa «pisá la nota de ESTE sujeto», no «pisá cualquier nota».
+        # Un paper compartido lleva la vista y la extracción de OTRO sujeto (#188: medido, 141 de
+        # 908 notas las reclaman 2+), y reescribirla desde el stub las borra: trabajo caro, ajeno a
+        # la operación en curso y que nadie pidió tocar. Se saltea y se dice cómo seguir.
+        if dest.exists() and force:
+            _fm_prev = cfg.split_fm(dest.read_text(encoding="utf-8"))
+            _ajenos = sorted(
+                {str(v_.get("sujeto")) for v_ in cfg.as_list(_fm_prev.get("vistas"))
+                 if isinstance(v_, dict) and str(v_.get("sujeto") or "").strip() != sujeto}
+                | ({str(x) for x in cfg.as_list(_fm_prev.get("thesis_links" if theme else "stars"))}
+                   - {sujeto}))
+            if _ajenos:
+                cfg.print_seguro(
+                    f"  ⊘ {bib}: `--force` NO lo pisa — la nota también es de "
+                    f"{', '.join('«%s»' % a for a in _ajenos[:3])}"
+                    + (" …" if len(_ajenos) > 3 else "")
+                    + ", y reescribirla desde el stub borraría su vista y su extracción. Editala a "
+                      "mano, o corré `--force` desde el sujeto que la escribió.")
+                skipped += 1
+                continue
         if dest.exists() and not force:
             # Retro-linkeo add-only (issue #4b): el paper ya estaba en el corpus (ingest previo de
             # otra estrella/tema) → no se pisa la extracción LLM, pero SÍ se mergean los seeds de

@@ -198,7 +198,12 @@ def is_retired(meta: dict) -> bool:
     la limpieza que el contrato manda hacer (§2: *«si un invariante se retira, su fila queda con
     estado `retirado` y el motivo»*). La fila **no** se borra, para que el ID no se recicle.
     """
-    return "retirado" in (meta.get("estado") or "").lower()
+    # AUD-150 — como PALABRA, no como substring de texto libre. El `estado` es una celda que la
+    # gente escribe a mano («garantizado y medido», «HUECO (D-53)»), así que un `in` contra prosa
+    # convierte cualquier mención del retiro en un retiro: el invariante sale del ratchet y del mapa
+    # sin que nadie lo haya retirado, que es exactamente la atribución falsa que este artefacto
+    # existe para no cometer.
+    return bool(re.match(r"^\W*retirad[oa]s?\b", (meta.get("estado") or "").strip(), re.I))
 
 
 def collect_marks(root: Path) -> list[Mark]:
@@ -351,9 +356,17 @@ def render(registro: dict, marcas: list[Mark], techos: dict) -> str:
         "",
         "## Resumen",
         "",
-        f"- Invariantes en el contrato: **{len(registro)}**",
-        f"- Con implementación marcada: **{len(registro) - len([i for i in registro if not any(m.kind == 'impl' for m in por_inv.get(i, []))])}**",
-        f"- Con test marcado: **{len(registro) - len(sin_test)}** (techo `sin_test`: {techos['sin_test']}, hoy {len(sin_test)})",
+        # AUD-150 / INV-95 — los tres conteos hablan de la MISMA población: los invariantes VIVOS.
+        # Antes el numerador salía de `len(registro)` (todas las filas) y el sustraendo de `vivos`,
+        # así que los retirados —que no tienen marca a propósito— se contaban como «con test
+        # marcado». Un mapa que atribuye mal es peor que uno vacío, y éste es el artefacto cuyo
+        # trabajo es no atribuir mal.
+        f"- Invariantes en el contrato: **{len(registro)}** ({len(vivos)} vivos, "
+        f"{len(registro) - len(vivos)} retirados — los conteos de abajo son sobre los vivos)",
+        f"- Con implementación marcada: **{len(vivos) - len(sin_marca)}** de {len(vivos)} "
+        f"(techo `sin_marca`: {techos['sin_marca']}, hoy {len(sin_marca)})",
+        f"- Con test marcado: **{len(vivos) - len(sin_test)}** de {len(vivos)} "
+        f"(techo `sin_test`: {techos['sin_test']}, hoy {len(sin_test)})",
         f"- Sin ninguna marca: **{len(sin_marca)}** (techo `sin_marca`: {techos['sin_marca']})",
         f"- Marcas huérfanas: **{len(huerfanas)}**",
         "",

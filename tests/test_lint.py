@@ -3338,6 +3338,26 @@ def test_log_con_su_entrada_no_se_reporta(toy_vault, capsys):
     assert int(linea[0].rsplit("(", 1)[1].rstrip(")")) == 0, linea[0]
 
 
+def test_los_dos_umbrales_bloqueantes_estan_nombrados(toy_vault, capsys):
+    """AUD-198 — los dos números que deciden categorías BLOQUEANTES eran literales sueltos adentro
+    de un `if`. No cambian de valor: lo que cambia es que ahora se pueden citar, testear y
+    discutir. Un número mágico dentro de una guarda es una decisión que nadie firmó."""
+    assert lint.ESPEJO_TOL_REL == 1e-6 and lint.MASA_FACTOR_SOSPECHA == 3.0
+    assert lint.same_value(34.0, 34) and not lint.same_value(34.0, 35)
+
+    # y el factor de masa es el que decide: 2× no reporta, 4× sí
+    cfg.GROUND_TRUTH.mkdir(parents=True, exist_ok=True)
+    base = {"slug": "test_star", "host": {"mass_msun": 1.0},
+            "planets": [{"letter": "b", "P_days": 20.0, "K_ms": 2.5, "e": 0.0,
+                         "status": "confirmed"}]}
+    implicita = lint.msini_earth(2.5, 20.0, 0.0, 1.0)
+    for factor, esperado in ((2.0, False), (4.0, True)):
+        base["planets"][0]["mass_earth"] = implicita * factor
+        (cfg.GROUND_TRUTH / "test_star.json").write_text(json.dumps(base), encoding="utf-8")
+        _rc, rep = run_lint_reporte(capsys)
+        assert ("m·sini implícita" in _seccion(rep, "masa inconsistente")) is esperado, factor
+
+
 def test_barrido_truncado_se_reporta(toy_vault, capsys):
     """AUD-181 / INV-118 — un barrido TRUNCADO se leía igual que uno completo: «la red se tendió y
     esto es todo lo que hay», sobre una cola que nadie miró.

@@ -467,3 +467,30 @@ def test_el_contrato_real_tiene_al_menos_un_retirado_y_esta_excluido():
     marcas = {m.inv for m in ti.collect_marks(ti.ROOT)}
     for inv in retirados:
         assert inv not in marcas, f"{inv} está retirado y todavía tiene una marca `@inv` en el árbol"
+
+
+def test_is_retired_no_matchea_una_MENCION_del_retiro():
+    """AUD-150 / INV-95 — el `estado` es una celda que la gente escribe a mano, así que un `in`
+    contra texto libre convierte cualquier mención del retiro en un retiro.
+
+    El invariante sale entonces del ratchet y del mapa **sin que nadie lo haya retirado**: la
+    atribución falsa que este artefacto existe para no cometer."""
+    assert ti.is_retired({"estado": "retirado (#205)"})
+    assert ti.is_retired({"estado": "**RETIRADA** en 1.71.0"})
+    assert not ti.is_retired({"estado": "garantizado y medido (el mecanismo se retiró en #205)"})
+    assert not ti.is_retired({"estado": "parcial"})
+    assert not ti.is_retired({})
+
+
+def test_el_mapa_no_mezcla_poblaciones(repo: Path):
+    """AUD-150 — «Con test marcado» salía de `len(registro)` (todas las filas) menos un sustraendo
+    calculado sobre los VIVOS, así que los retirados —que no tienen marca a propósito— se contaban
+    como marcados. Los tres conteos hablan ahora de la misma población."""
+    registro = {"INV-01": {"estado": "garantizado y medido", "area": "A", "enunciado": "x",
+                           "prio": "P0"},
+                "INV-02": {"estado": "retirado (#205)", "area": "A", "enunciado": "y",
+                           "prio": "P0"}}
+    salida = ti.render(registro, [], {"sin_marca": 9, "sin_test": 9})
+    assert "**2** (1 vivos, 1 retirados" in salida
+    assert "Con test marcado: **0** de 1" in salida
+    assert "Con implementación marcada: **0** de 1" in salida
