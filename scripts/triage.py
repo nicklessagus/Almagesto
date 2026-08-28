@@ -596,8 +596,11 @@ def main() -> int:
                     help="(--sintesis) sobre cuántos papers se sintetizó")
     ap.add_argument("--drop-core", nargs="+", metavar="BIBCODE", dest="drop_core",
                     help="sacar de ESTE sujeto papers que la lente dice core, y borrar sus "
-                         "artefactos (#112). Es el simétrico de `extra_core`. Exige --reason. La "
-                         "exclusión es del par paper-sujeto: el mismo paper puede ser core de otro.")
+                         "artefactos: PDF, .txt y —si el paper no pertenece a otro sujeto y no "
+                         "tiene extracción— TAMBIÉN SU NOTA, dejando rotos los wikilinks que la "
+                         "citaban (se listan) (#112/#132). Es el simétrico de `extra_core`. Exige "
+                         "--reason. La exclusión es del par paper-sujeto: el mismo paper puede ser "
+                         "core de otro.")
     ap.add_argument("--accept-source", nargs="+", metavar="DOI", dest="accept_source",
                     help="candidato OFF-ADS aceptado → arma la entrada de `sources:` (metadata "
                          "real + archivo resuelto + procedencia) lista para pegar. Es la salida "

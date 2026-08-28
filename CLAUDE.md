@@ -974,7 +974,14 @@ lee como aplicada, y no lo está. Tres propiedades del carril, y cada una cierra
 - **Los artefactos se borran** (PDF y `.txt`): si quedan, el detector de #108 los reporta como
   extracción pagada sin nota **para siempre**, y el `.txt` sigue saliendo en los greps del corpus. La
   decisión queda igual —versionada, con motivo— así que borrar el artefacto no borra el juicio. La
-  **nota** no se borra sola: puede pertenecer a otro sujeto, así que se avisa.
+  **nota** se borra **sólo si el paper no pertenece a otro sujeto Y no tiene extracción** — o sea,
+  si nadie más la alcanza y nadie pagó por ella. En cualquiera de los otros dos casos NO se borra y
+  se avisa por qué (la exclusión es del par paper-sujeto, y la extracción es trabajo pagado que no
+  se destruye en silencio). Cuando sí se borra, los `[[wikilink]]` que la citaban quedan **rotos y
+  visibles**, con el puntero de dónde están: no se reparan solos, porque eso sería decidir por el
+  usuario qué decía esa frase (#132, mismo criterio que `entity.py delete`).
+  ⚠ Hasta 1.73.0 esta línea decía sólo *«la nota no se borra sola»*, que describe **una** de las dos
+  ramas: la doc callaba un borrado irreversible.
 - **El diff de re-clasificación lo respeta** (`lens_diff_offline`, `reclass_diff`): sin eso, cada
   cambio de lente vuelve a proponer lo que el usuario ya sacó, y la categoría se vuelve ruido que se
   deja de mirar.

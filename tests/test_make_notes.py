@@ -3255,3 +3255,19 @@ def test_migrar_txt_fields_es_idempotente_y_no_reescribe_lo_limpio(toy_vault):
     assert (toy_vault.PAPERS / "2020ccc...1..1C.md").read_text(encoding="utf-8") == antes
 
 
+
+
+def test_unpend_saca_tambien_el_motivo_pendiente(toy_vault):
+    """`pending_motivo` viaja con `pending_source` (#80). Al llegar la fuente salía sólo el primero,
+    y la nota quedaba con el motivo de un estado que ya no existe —«nadie la está consiguiendo»—
+    sobre una fuente que YA está en disco."""
+    (toy_vault.FULLTEXT / "gp").mkdir(parents=True, exist_ok=True)
+    (toy_vault.FULLTEXT / "gp" / "2006Rasm.txt").write_text("texto", encoding="utf-8")
+    mk_note(toy_vault.PAPERS, "2006Rasm",
+            {"tags": ["paper"], "pdf": None, "pending_source": "paywall",
+             "pending_motivo": "lo está consiguiendo el usuario"}, "cuerpo\n")
+    dest = toy_vault.PAPERS / "2006Rasm.md"
+    assert mn.unpend_note(dest, "2006Rasm", "gp")
+    texto = dest.read_text(encoding="utf-8")
+    assert "pending_source" not in texto
+    assert "pending_motivo" not in texto, "quedó el motivo de un estado que ya no existe"

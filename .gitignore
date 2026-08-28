@@ -1,9 +1,8 @@
-# Token ADS: NUNCA commitearlo. Ponelo en vault/config/ads_dev_key
-# Email de contacto para el polite pool (OpenAlex/Crossref/Unpaywall) — opt-in, dato personal.
-vault/config/mailto (gitignored) o en la
+# Token ADS: NUNCA commitearlo. Ponelo en vault/config/ads_dev_key (gitignored) o en la
 # variable de entorno ADS_DEV_KEY. Token gratis: https://ui.adsabs.harvard.edu/user/settings/token
 vault/config/ads_dev_key
-# Email de contacto para el polite pool (OpenAlex/Crossref/Unpaywall) — opt-in, dato personal.
+# Email de contacto para el polite pool (OpenAlex/Crossref/Unpaywall): OPT-IN, dato personal del
+# operador. Se declara acá o en ALMAGESTO_MAILTO; sin declararlo no sale ninguna dirección.
 vault/config/mailto
 
 # Cachés Python

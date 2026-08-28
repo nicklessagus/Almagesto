@@ -2316,7 +2316,11 @@ def unpend_note(dest, citekey: str, slug: str | None) -> bool:
     if not (has_pdf or has_txt):
         return False                     # la fuente sigue faltando: el flag se queda
     head, body = text[4:end], text[end:]
-    lines = [ln for ln in head.split("\n") if not ln.startswith("pending_source:")]
+    # `pending_motivo` viaja con `pending_source` (#80) y sale con él: dejarlo suelto deja la nota
+    # con el motivo de un estado que ya no existe —«nadie la está consiguiendo»— sobre una fuente
+    # que YA llegó. Hallazgo de la pasada `/auditar` del 2026-08-28.
+    lines = [ln for ln in head.split("\n")
+             if not ln.startswith(("pending_source:", "pending_motivo:"))]
     if has_pdf:
         pdf_rel = f"../../raw/pdfs/{slug}/{safe_name(citekey)}.pdf"
         lines = [f"pdf: {pdf_rel}" if ln.strip() == "pdf: null" else ln for ln in lines]
