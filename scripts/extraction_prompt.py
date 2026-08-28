@@ -28,7 +28,6 @@ from pathlib import Path
 
 import extract_fulltext
 import lib_config as cfg
-import measure_layout
 
 #  Catalogue prefixes never stand on their own as a search pattern.
 CATALOGUE_PREFIXES = {
@@ -108,144 +107,33 @@ def _anclado(patron: str) -> str:
     return rf"\b{patron}" if patron[:1].isalpha() else patron
 
 
-def _layout_note(texto: str) -> str:
-    """The #44 caveat, tied to the line-number rule of #103 — and the MEASUREMENT behind it (#193).
-
-    The warning used to fire only above the threshold and say nothing below, so a misclassification
-    was indistinguishable from a correct call. Measured on a real vault: two errors in OPPOSITE
-    directions, both hugging the threshold (0.276 filed as single-column while being two-column;
-    0.379 filed as two-column while being single), and 12 of 167 files sit in that grey band.
-
-    So the prompt now publishes the number and its threshold in both directions and asks the reader
-    to say so when it does not match what they see. No new threshold is invented: moving a cut that
-    fails in both directions would only trade one error for the other.
-
-    @inv INV-38"""
-    frac = measure_layout.analizar(texto)["frac"]
-    medida = (f"  (fracción medida de líneas con canaleta: **{frac:.2f}**, umbral "
-              f"{measure_layout.UMBRAL_ARCHIVO:.2f}; si no coincide con lo que ves al leer, "
-              f"decilo en `salvedades`.)\n")
-    if frac < measure_layout.UMBRAL_ARCHIVO:
-        return ("- Este `.txt` se midió como de **UNA columna**, así que el nº de línea es un\n"
-                "  localizador válido.\n" + medida)
-    return (
-        "- ⚠ **Este `.txt` viene a DOS COLUMNAS entrelazadas**: cada línea física concatena un\n"
-        "  fragmento de la columna izquierda y otro de la derecha, que son párrafos distintos. El nº\n"
-        "  de línea sirve para `grep`, pero **no es un localizador único**: al citar, decí de qué\n"
-        "  columna sale el fragmento, y no leas la línea entera como una sola frase.\n" + medida
-    )
-
-
-def _ocr_note(texto: str) -> str:
-    if not texto.startswith(cfg.FULLTEXT_OCR_MARK):
-        return ""
-    return (
-        "- ⚠ **Este `.txt` es OCR** (la capa de texto del PDF era ilegible): citable **con salvedad**.\n"
-        "  El OCR puede errar símbolos, ligaduras y notación matemática; la cita textual vale para\n"
-        "  prosa. Ante duda de un símbolo o de un número, abrí el PDF.\n"
-    )
-
-
-def _symbols_note(slug: str, bibcode: str, texto: str) -> str:
-    """UNA sola regla para las ecuaciones: el `.txt` no es fuente confiable, se confirma en el PDF.
-
-    Los tres estados del detector (#113, #192, #194) terminan todos en la misma instrucción, así que
-    tener tres redacciones distintas era decir lo mismo tres veces y dejar que el extractor tratara
-    dos de ellas como si fueran un permiso:
-
-    · `True`  — `pdftotext` dejó el marcador `(3)` y vació el cuerpo: la fórmula **no está**.
-    · `None`  — no hay marcadores suficientes para medir (41 % de un corpus real), y en un `.txt`
-                de OCR es el caso normal, porque el OCR se lleva el marcador junto con el cuerpo.
-    · `False` — **no es una garantía**: la sustitución de caracteres deja la fórmula con cuerpo y
-                cambiada, y ningún chequeo la ve. Medido contra el PDF: `tanh⁻¹` por `tan⁻¹`,
-                `si = 1` por `si = ±1`, «model (8)» por «(3)», `f(y)"y` por `f_i(y)=y³`.
-
-    Lo único que el estado cambia es el **alcance**: con `True` se muda toda la lectura de fórmulas
-    al PDF y se cita por PÁGINA; en los otros dos la cita sigue siendo por línea y el PDF es el
-    chequeo antes de transcribir. El estado medido viaja igual, entre paréntesis, para que se sepa
-    qué se sabía.
-
-    @inv INV-38"""
-    # La MARCA del header manda sobre el detector corrido en vivo: la estampó `extract_fulltext`
-    # al escribir el `.txt` (#113) y es verdad de disco. Re-medir acá y creerle al resultado nuevo
-    # sería dejar que el prompt contradiga al archivo.
-    medido, motivo = extract_fulltext.symbols_lost(texto)
-    if texto.startswith(cfg.FULLTEXT_SYMBOLS_MARK):
-        medido, motivo = True, "marca del header"
-    estado = ("el `.txt` vació el cuerpo de sus ecuaciones" if medido
-              else f"no se pudo medir — {motivo}" if medido is None
-              else "sin ecuaciones vaciadas, lo que NO prueba que los símbolos sobrevivieron")
-    regla = ("- ⛔ **El `.txt` no es fuente confiable para una ECUACIÓN.** Toda fórmula **que "
-             "sostenga algo** —la del método, la del contraste, la condición de identificabilidad, "
-             "cualquiera que alguien vaya a codificar— se levanta del PDF, no del `.txt`: abrí "
-             f"`{_pdf_rel(slug, bibcode)}` (`Read` lo rasteriza, así que **ves** la ecuación) y "
-             "**anotá la página** junto a la fórmula. Una constante auxiliar citada al pasar no "
-             "necesita el viaje.\n"
-             "  El motivo es que el `.txt` puede haberla vaciado, haberla dejado con el cuerpo "
-             "**cambiado**, o no haberse podido medir — y **dos de los cuatro casos medidos se "
-             "veían perfectos**: `si = 1` por `si = ±1` y «model (8)» por «model (3)». Una "
-             "borradura no se ve.\n"
-             "  La página que anotes es lo que hace que la síntesis no tenga que repetir el "
-             "chequeo: si la fórmula llega al concepto sin página, alguien la va a tener que "
-             "volver a abrir.\n"
-             f"  (Detector: {estado}.)\n")
-    if not medido:
-        return regla
-    return regla + (
-        "- ⛔ Acá el detector la confirma: **las ecuaciones NO están en este `.txt`** (#113), así "
-        "que la lectura de fórmulas se hace **del PDF** y se cita **página del PDF**, no línea del "
-        "`.txt`. Grepear el `.txt` por la fórmula no la va a encontrar, y su ausencia **no** "
-        "significa que no esté en el paper.\n"
-        "- La prosa sí está y se cita normal, por línea. Es un eje independiente del OCR.\n")
-
-
 def _media_note(slug: str, bibcode: str) -> str:
-    """Tablas y figuras: el dato que NO está en el `.txt` porque es una imagen (#195).
+    """Tablas y figuras, leyendo el PDF (#195 → #205).
 
-    Medido sobre las 65 vistas del tema `ica` (2026-08-27): **29 (45 %)** declaran datos que viven
-    sólo en figuras o tablas-imagen, 9 confirman tablas extraídas como texto y 2 reportan filas
-    partidas por el entrelazado de columnas. Casi la mitad del corpus tiene información que ninguna
-    búsqueda sobre el `.txt` puede encontrar.
+    Con el `.txt` como fuente, la mitad de esta regla era «levantalo del PDF». Leyendo el PDF eso
+    es redundante y queda lo que sigue siendo **criterio de lectura**:
 
-    La asimetría que esto corrige: para las ECUACIONES el prompt ya tenía una regla dura —si la
-    fórmula sostiene algo, se levanta del PDF y viaja con su página—, para las tablas una
-    instrucción blanda («mirá las tablas») y para las figuras **nada**. No hay razón para la
-    diferencia: un valor de tabla-imagen que sostiene una afirmación corre el mismo riesgo que una
-    fórmula. Los extractores lo resolvían **bien pero por su cuenta** —uno re-renderizó a 400-500
-    dpi, otro reconstruyó filas partidas verificando por conteo de columnas—, que es exactamente lo
-    que INV-100 dice que no puede depender del criterio de cada subagente.
+    · **la fila correcta** — en una tabla multi-objeto la fila equivocada es el modo de falla, y
+      el extractor tiene que decir cómo la verificó;
+    · **el permiso de leer una figura**, que no depende de qué archivo se abra sino de cómo se
+      declara: es la doctrina de `inferencia` —la bóveda puede sostener algo que ninguna fuente
+      escribe **siempre que declare de dónde salió**—. Sin la declaración, una estimación visual
+      entra como si fuera un valor publicado.
 
-    Los tres casos NO son el mismo, y por eso son tres bullets y no uno:
-
-    · **tabla como texto** — sale bien; el riesgo es el entrelazado, que parte las filas;
-    · **tabla-imagen** — el `.txt` no la tiene y el grep vacío **no prueba ausencia**;
-    · **figura** — el número existe **sólo como curva**, así que no hay cita textual posible.
-
-    El permiso de leer una figura (decisión del usuario, 2026-08-27) es la misma doctrina de
-    `inferencia`: la bóveda puede sostener algo que ninguna fuente escribe **siempre que declare de
-    dónde salió**. La diferencia con inventar es esa declaración — por eso la lectura viaja con la
-    figura, su página, el `≈` explícito y la marca de que es lectura de gráfico. Y sigue siendo un
-    **permiso, no una obligación**: forzar un número de una curva ilegible es peor que el hueco.
+    Medido (#195): 29 de 65 vistas de un tema real (45 %) declaran datos que viven sólo en figuras
+    o tablas-imagen, y varias veces la figura **es** el resultado.
 
     @inv INV-100"""
-    pdf = _pdf_rel(slug, bibcode)
     return (
-        "- ⛔ **El `.txt` no es fuente confiable para una TABLA, con la misma regla que una "
-        "ecuación.** En papers viejos las tablas son **imágenes**: el dato del sujeto vive ahí y es "
-        "invisible a cualquier búsqueda de texto, así que un `grep` vacío **no prueba ausencia**. "
-        f"Todo valor de tabla **que sostenga algo** se levanta del PDF (`{pdf}`, que `Read` "
-        "rasteriza) y **anotá la página**.\n"
-        "  Si la tabla **sí** estaba en el `.txt`, se cita por línea como siempre — pero decí "
-        "**cómo verificaste la fila**: el entrelazado de dos columnas parte las filas, y en una "
-        "tabla multi-objeto la fila equivocada es el modo de falla. Conteo de columnas, cierre "
-        "contra el total, lo que hayas usado.\n"
-        "- 📈 **Una FIGURA se puede leer, declarada como tal.** Cuando el número existe **sólo como "
-        "curva** no hay cita textual posible, y hasta ahora eso se tiraba: varias veces la figura "
-        "**es** el resultado. Podés estimarlo visualmente sobre el PDF, y entonces el valor viaja "
-        "con las tres cosas que lo distinguen de inventarlo: la **figura y su página** (`Fig. 3, "
-        "p. 7`) en el localizador, el carácter **aproximado explícito** (`≈`, o el rango) en el "
-        "valor, y la palabra **lectura de gráfico** en el régimen. No es un valor publicado y no "
-        "puede entrar como si lo fuera.\n"
+        "- **Tablas:** transcribí la fila y **decí cómo la verificaste**. En una tabla "
+        "multi-objeto la fila equivocada es el modo de falla — conteo de columnas, cierre contra "
+        "el total, lo que hayas usado.\n"
+        "- 📈 **Una FIGURA se puede leer, declarada como tal.** Cuando el número existe **sólo "
+        "como curva** no hay cita textual posible, y eso no lo vuelve inservible: podés estimarlo "
+        "visualmente, y entonces viaja con las tres cosas que lo distinguen de inventarlo — la "
+        "**figura y su página** (`Fig. 3, p. 7`) en el localizador, el **`≈` explícito** (o el "
+        "rango) en el valor, y la palabra **lectura de gráfico** en el régimen. No es un valor "
+        "publicado y no puede entrar como si lo fuera.\n"
         "  ⛔ Es un **permiso, no una obligación**: si la figura no permite leer el valor con "
         "confianza, sigue siendo un **hueco declarado**. Forzar un número de una curva ilegible es "
         "peor que el hueco.\n")
@@ -275,27 +163,33 @@ def build_prompt(slug: str, bibcode: str, name: str, aliases, texto: str,
     alias_str = ", ".join(f"`{a}`" for a in [name, *(aliases or [])])
     return f"""Sos un extractor de UNA sola fuente. Trabajás desde la raíz del repo.
 
-Leé COMPLETO `{_txt_rel(slug, bibcode)}` y extraé lo que esa fuente dice sobre
-**{name}** (alias: {alias_str}).
+⛔ **Leé el PDF: `{_pdf_rel(slug, bibcode)}`.** `Read` lo rasteriza, así que **ves** la página —
+ecuaciones, tablas y figuras incluidas. Extraé lo que esa fuente dice sobre **{name}**
+(alias: {alias_str}), y **citá por PÁGINA del PDF**.
+
+⛔ **El `.txt` NO es fuente.** `{_txt_rel(slug, bibcode)}` lo produce `pdftotext` y es el **índice
+de búsqueda** del corpus, no material de lectura: sirve para *ubicar* dónde se menciona el sujeto,
+nunca para transcribir ni para citar. Medido el 2026-08-28 sobre dos papers, uno de ellos con los
+tres chequeos de calidad **en verde**: el `.txt` había perdido el radical `√` (sale como una `r`
+suelta), la prima de `p′` (como `p0`), superíndices de transpuesta, y un subíndice que hacía leer
+una autocovarianza como una inversa. Nada de eso se ve desde el `.txt`.
 
 Esto es **una VISTA**, no «la extracción del paper» (#188): el mismo paper leído desde otro sujeto
 da otra vista, y por eso el producto lleva de quién es. Va a la sección `## Vista — {sujeto}` de
 `vault/wiki/papers/{bibcode}.md`. Lo que la fuente diga sobre **otros** sujetos no entra acá.
 
-## Búsqueda
-Corré estos patrones —cortos a propósito— antes de decidir nada:
+## Búsqueda — para UBICAR, no para citar
+Estos patrones sobre el `.txt` te dicen **en qué parte del paper** mirar; el dato lo leés del PDF:
 
 {greps}
 
 - Si la fuente **no dice nada** del sujeto, eso es un resultado válido y legítimo: decilo.
-- Un `grep` vacío **no prueba ausencia** en papers pre-digitales ni en escaneos: el OCR de ADS
-  pierde filas de tabla. Corroborá abriendo la tabla o el PDF antes de afirmar que no está.
-{_media_note(slug, bibcode)}{_layout_note(texto)}{_ocr_note(texto)}{_symbols_note(slug, bibcode, texto)}
+- Un `grep` vacío **no prueba ausencia**: el `.txt` no tiene lo que vive en tablas-imagen, figuras
+  ni fórmulas. Confirmalo en el PDF antes de afirmar que no está.
+{_media_note(slug, bibcode)}
 ## Cómo anotar cada valor
-- El **localizador**, que depende de dónde vive el dato (va en el campo `linea` del JSON):
-  el **nº de línea** del `.txt` si salió del texto (de `grep -n`, nunca de `splitlines()`: hay
-  form feeds); la **página** del PDF si lo levantaste de una tabla-imagen o de una ecuación; y
-  `Fig. N, p. M` si es lectura de gráfico.
+- El **localizador** (va en el campo `linea` del JSON): la **página** del PDF (`p. 7`). Si es
+  lectura de gráfico, `Fig. N, p. M`.
 - El **régimen** en que la fuente lo afirma: muestra, época, corte de datos, instrumento, modelo.
 - El **tiempo verbal y el cuantificador de la fuente, tal cual**. Si dice «was associated», no
   escribas «is associated»; si dice «el 75 % de la muestra», no escribas «la muestra». Un

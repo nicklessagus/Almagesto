@@ -73,55 +73,11 @@ def test_prompt_declara_ruta_de_salida_por_bibcode():
     assert "2017AJ....154..135F.json" in p
 
 
-def test_prompt_ata_el_numero_de_linea_al_entrelazado():
-    """La regla #103 pide el nº de línea; #44 dice que en un .txt entrelazado ese número NO es
-    un localizador único. Las dos reglas se escribieron por separado y nadie las cruzó."""
-    # @inv INV-100
-    dos = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, DOS_COLUMNAS)
-    una = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, UNA_COLUMNA)
-    assert "DOS COLUMNAS entrelazadas" in dos
-    # #193 cambió el contrato de la rama de una columna: antes callaba, ahora DECLARA la medición
-    # (una clasificación equivocada era indistinguible de una correcta). Lo que sigue sin poder
-    # aparecer es el CAVEAT: declarar la medida no es inventar el entrelazado.
-    assert "DOS COLUMNAS entrelazadas" not in una
-    assert "no es un localizador único" not in una
-    assert "UNA columna" in una and "fracción medida" in una
-
-
-def test_prompt_declara_la_salvedad_ocr_solo_si_corresponde():
-    """El prompt base ya nombra al OCR por otro motivo (el escaneo de ADS pierde filas de tabla),
-    así que el chequeo mira la salvedad de citabilidad, no la palabra suelta."""
-    MARCA = "citable **con salvedad**"
-    ocr = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES,
-                          ep.cfg.FULLTEXT_OCR_MARK + ": citable CON SALVEDAD\n" + UNA_COLUMNA)
-    assert MARCA in ocr
-    assert MARCA not in ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti",
-                                        ALIASES, UNA_COLUMNA)
-
-
-def test_prompt_lleva_los_patrones_generados():
-    p = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, UNA_COLUMNA)
-    for pat in ("Cet", "10700"):
-        assert pat in p
-
-
-SUPLICAS = [r"s[eé] preciso", r"no inventes", r"ten[eé] cuidado", r"con mucho cuidado",
-            r"be (precise|accurate|careful)", r"do not (make up|hallucinate)"]
-
-
-def test_el_prompt_no_suplica_exactitud():
-    """RSOS 2025 (4900 resúmenes / 10 modelos): pedir exactitud DUPLICA la sobre-generalización
-    («algorithmic ironic rebound»). El skill ya lo declara; acá queda ejecutable."""
-    # @inv INV-100
-    p = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, DOS_COLUMNAS).lower()
-    for s in SUPLICAS:
-        assert not re.search(s, p), f"el prompt suplica exactitud: {s!r}"
-
-
 def test_prompt_pide_lo_verificable_de_103():
-    """Lo que sí funciona es lo chequeable: nº de línea, régimen, segunda mano, tiempo verbal."""
+    """Lo que sí funciona es lo chequeable: localizador, régimen, segunda mano, tiempo verbal.
+    Desde #205 el localizador es la **página** del PDF, no el nº de línea del `.txt`."""
     p = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, UNA_COLUMNA).lower()
-    for exigido in ("línea", "régimen", "segunda mano", "tiempo verbal", "cuantificador"):
+    for exigido in ("página", "régimen", "segunda mano", "tiempo verbal", "cuantificador"):
         assert exigido in p, f"el prompt no exige {exigido!r}"
 
 
@@ -183,32 +139,32 @@ def test_is_extraction_distingue_la_extraccion_de_otras_salidas_con_bibcode():
     assert ep.is_extraction(None) is False and ep.is_extraction([]) is False
 
 
-def test_el_prompt_manda_al_PDF_cuando_las_ECUACIONES_no_estan_en_el_txt():
-    """Issue #153 — `CLAUDE.md` (#113) dice que con `symbols_lost: true` la extracción se hace **del
-    PDF** y las citas de fórmulas van **por página**, no por línea del `.txt`. El generador del
-    prompt no tenía ninguna rama para esa marca: la regla vivía en la doc y no llegaba al subagente,
-    que es exactamente el modo de falla que INV-100 cerró para las demás.
+def test_el_prompt_manda_al_PDF_SIEMPRE_y_dice_cual():
+    """#205 — la fuente de lectura es el PDF, incondicionalmente.
 
-    El modo de falla es silencioso en el peor lugar: `pdftotext` deja el marcador `(3)` y vacía su
-    cuerpo, así que el `.txt` **parece** tener la fórmula. Un extractor que no sabe esto cita una
-    línea que no contiene la ecuación.  @inv INV-100"""
-    texto = f"{cfg.FULLTEXT_SYMBOLS_MARK} simbolos NO extraidos\nLa ecuacion (3) define el kernel.\n"
-    p = ep.build_prompt("gp", "2006Rasmussen", "GP", [], texto, kind="theme")
-    assert "página del PDF" in p, "la cita de fórmulas va por página del PDF"
-    # ⚠ La RUTA del PDF, no sólo la palabra. El gate de mutación cazó que `_pdf_rel` sobrevivía:
-    # los asserts miraban `"PDF" in p` y `"página" in p`, que un `return None` satisface igual
-    # porque esas palabras están en la prosa fija del aviso. Un extractor que recibe el aviso sin
-    # la ruta no sabe QUÉ archivo abrir — que es todo lo que el aviso tiene que darle.
-    assert "vault/raw/pdfs/gp/2006Rasmussen.pdf" in p, \
-        "el aviso tiene que decir QUÉ PDF abrir, no sólo que lo abra"
+    Hasta acá el prompt mandaba al PDF sólo con `symbols_lost: true` (#153), y esa rama condicional
+    dependía de un detector que no discrimina: medido el 2026-08-28, un paper con los TRES chequeos
+    en verde había perdido igual el radical `√`, la prima de `p′` y superíndices de transpuesta.
+    La rama se elimina y el PDF pasa a ser la fuente.
+
+    La RUTA, no sólo la palabra «PDF»: el gate de mutación ya cazó una vez que `_pdf_rel` sobrevivía
+    porque los asserts miraban palabras de la prosa fija.  @inv INV-100"""
+    for texto in ("Texto limpio, sin marca.\n",
+                  f"{cfg.FULLTEXT_SYMBOLS_MARK} simbolos NO extraidos\nLa ecuacion (3).\n"):
+        p = ep.build_prompt("gp", "2006Rasmussen", "GP", [], texto, kind="theme")
+        assert "vault/raw/pdfs/gp/2006Rasmussen.pdf" in p, "no dice QUÉ PDF abrir"
+        assert "PÁGINA del PDF" in p, "la cita va por página"
 
 
-def test_sin_la_marca_el_prompt_no_habla_de_paginas():
-    """La otra mitad de #153: la rama es condicional. Un aviso fijo sobre páginas en todo prompt
-    contradiría la regla por defecto —citar **línea** del `.txt`— y sería ruido en el 96 % de los
-    casos (medido: 13 de 343 `.txt` evaluables llevan la marca)."""
-    p = ep.build_prompt("gp", "2006Rasmussen", "GP", [], "Texto limpio, sin marca.\n", kind="theme")
-    assert "por página del PDF" not in p
+def test_el_prompt_declara_que_el_txt_NO_es_fuente():
+    """La otra mitad de #205: el `.txt` sigue en el prompt —sirve para UBICAR dónde mirar— y por eso
+    hay que decir explícitamente que no se cita de ahí. Sin esa frase, un extractor que ve la ruta
+    del `.txt` y los patrones de `grep` razonablemente concluye que puede transcribir de ahí."""
+    p = ep.build_prompt("gp", "2006Rasmussen", "GP", [], "Texto limpio.\n", kind="theme")
+    plano = " ".join(p.split())          # el prompt viene reflowado: la frase cruza saltos de línea
+    assert "El `.txt` NO es fuente" in plano
+    assert "vault/raw/fulltext/gp/2006Rasmussen.txt" in p, "el .txt sigue nombrado, para ubicar"
+    assert "índice de búsqueda" in plano
 
 
 # ── #188 paso 4 · el prompt pide LA VISTA de un sujeto, y el JSON la trae ───────────────────────
@@ -250,92 +206,16 @@ def test_sin_sujeto_explicito_la_vista_usa_el_nombre():
     assert '"sujeto":"tau Ceti"' in p
 
 
-# ── #192 / #193 · el prompt declara el TERCER ESTADO ────────────────────────────────────────────
-#
-# Los dos detectores que alimentan el prompt tienen un estado «no se pudo medir» y el prompt lo
-# callaba, así que al extractor le llegaban IGUALES «el `.txt` está completo» y «nadie pudo medirlo».
-# Es el falso limpio que el framework persigue en todos lados —la cobertura de `discover` distingue
-# *corrió con N* / *FALLÓ* / *NO CORRIÓ*; el lint tiene la categoría `⛔ No evaluado`— y acá estaba
-# justo en el eje que decide si una fórmula se cita del `.txt` o del PDF.
-#
-# Medido sobre 167 `.txt` de una bóveda real: **69 (41 %)** vuelven no-evaluados de `symbols_lost`,
-# y **12 (7 %)** caen en la banda gris del umbral de maqueta. Dos casos verificados a mano perdieron
-# TODAS sus ecuaciones sin que nada lo dijera (`1995BellSejnowski`, `2004Himberg`), y de ahí salió
-# una nota que afirmaba `tanh⁻¹` donde el PDF dice `tan⁻¹`.
-
-SIN_ECUACIONES = "Una prosa cualquiera sin marcadores de ecuacion.\n" * 40
-
-
-CON_ECUACIONES = "\n".join(f"  x_{i} = A s_{i} + n_{i}     ({i})" for i in range(1, 9))
-
-
-@pytest.mark.parametrize("texto,estado", [
-    (SIN_ECUACIONES, "no se pudo medir"),                       # None — 41 % de un corpus real
-    (CON_ECUACIONES, "NO prueba"),                              # False — 45 de 67, el bucket ciego
-    (cfg.FULLTEXT_SYMBOLS_MARK + "\n" + CON_ECUACIONES, "vació"),   # True
-])
-def test_una_sola_regla_para_las_ecuaciones_en_los_tres_estados(texto, estado):
-    """#192 + #194, resueltos con **una** regla en vez de tres redacciones.
-
-    Los tres estados del detector terminan en la misma instrucción —confirmá la fórmula contra el
-    PDF—, así que tres mensajes distintos decían lo mismo tres veces y dejaban que el extractor
-    leyera dos de ellos como un permiso. Lo único que el estado cambia es el ALCANCE (con la marca
-    confirmada, toda la lectura de fórmulas se muda al PDF y se cita por página); el estado medido
-    viaja igual, para que se sepa qué se sabía.
-
-    @inv INV-38"""
-    p = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, texto)
-    assert "no es fuente confiable para una ECUACIÓN" in p
-    assert "vault/raw/pdfs/tau_ceti/2017AJ....154..135F.pdf" in p, "decir QUÉ PDF abrir"
-    assert estado in p, "el estado medido viaja, aunque la instrucción sea la misma"
-
-
-def test_solo_la_marca_confirmada_muda_la_cita_a_la_pagina():
-    """Contra-caso del alcance: `None` y `False` NO mandan a citar por página. La cita por defecto
-    sigue siendo la línea del `.txt`, y convertir una duda en esa certeza encarecería cada
-    extracción del corpus (el 86 % de los `.txt` medidos no lleva la marca)."""
-    for texto in (SIN_ECUACIONES, CON_ECUACIONES):
-        p = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, texto)
-        assert "página del PDF" not in p
-    marcado = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES,
-                              cfg.FULLTEXT_SYMBOLS_MARK + "\n" + CON_ECUACIONES)
-    assert "página del PDF" in marcado and "NO están en este `.txt`" in marcado
-
-
-def test_el_prompt_declara_la_maqueta_medida_en_las_dos_direcciones():
-    """#193: el aviso de dos columnas salía sólo por encima del umbral y por debajo no salía nada,
-    así que una clasificación equivocada era indistinguible de una correcta. Medido: dos errores en
-    direcciones OPUESTAS, los dos pegados al umbral (0.276 clasificado una-columna siendo de dos;
-    0.379 clasificado dos siendo de una). El prompt publica la fracción medida y su umbral, y pide
-    que el lector avise si no coincide con lo que ve — sin inventar un umbral nuevo."""
-    una = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, UNA_COLUMNA)
-    dos = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, DOS_COLUMNAS)
-    for p in (una, dos):
-        assert "fracción medida" in p, "el prompt publica el NÚMERO, no sólo el veredicto"
-        assert "decilo en `salvedades`" in p
-    assert "UNA columna" in una and "DOS COLUMNAS" in dos
-
-
 # ── #195 · el dato que vive en una imagen: 45 % del corpus, y la regla dura sólo cubría ecuaciones ──
 
 
-def test_la_regla_de_la_tabla_es_dura_y_nombra_el_PDF():
-    """La asimetría que #195 corrige: para las ECUACIONES había regla dura —se levanta del PDF y
-    viaja con su página—, para las tablas una instrucción blanda («mirá las tablas») y para las
-    figuras nada. Un valor de tabla-imagen que sostiene una afirmación corre el mismo riesgo, y son
-    el 45 % de las vistas de un tema real.
-
-    Como en #153: la RUTA, no sólo la palabra «PDF». Un extractor que recibe el aviso sin saber qué
-    archivo abrir no recibió nada.  @inv INV-100"""
-    # Sobre `_media_note`, NO sobre el prompt entero: la ruta del PDF también la emite la regla de
-    # ecuaciones, así que un assert contra `p` pasa aunque la regla de tabla se quede sin ruta.
-    # (Cazado con `mutar.py --dirigida`: la primera versión de este test sobrevivía a la mutación.)
+def test_de_la_regla_de_tabla_sobrevive_la_fila_verificada():
+    """#195 → #205. Leyendo el PDF, «levantá el valor del PDF» es redundante y se cae. Lo que NO se
+    cae es el criterio de lectura: en una tabla multi-objeto **la fila equivocada es el modo de
+    falla**, y eso no lo arregla cambiar de archivo."""
     nota = ep._media_note("ica", "1994Comon")
-    assert "TABLA" in nota
-    assert "vault/raw/pdfs/ica/1994Comon.pdf" in nota, "la regla de tabla tiene que decir QUÉ PDF"
-    assert "cómo verificaste la fila" in nota, (
-        "falta la mitad de la regla: en una tabla multi-objeto la fila equivocada es el modo de "
-        "falla, y el entrelazado de columnas parte las filas")
+    assert "cómo la verificaste" in nota
+    assert "multi-objeto" in nota
     assert nota in ep.build_prompt("ica", "1994Comon", "ICA", [], "Texto limpio.\n", kind="theme"), \
         "la regla existe pero no llega al subagente"
 
