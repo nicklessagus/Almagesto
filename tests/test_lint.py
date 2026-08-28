@@ -4014,3 +4014,24 @@ def test_un_wikilink_sin_cerrar_no_se_traga_el_siguiente():
 def test_las_formas_validas_de_wikilink_siguen_matcheando(texto, esperado):
     """La otra mitad: exigir el cierre no puede romper alias ni anclas de encabezado."""
     assert lint.LINK_RE.findall(texto) == esperado
+
+
+def test_un_BOM_no_esconde_un_frontmatter_roto(toy_vault, capsys):
+    """La otra mitad en el detector: con BOM, `fm_error` ni miraba la nota.  @inv INV-40"""
+    (toy_vault.CONCEPTS / "methods").mkdir(parents=True, exist_ok=True)
+    (toy_vault.CONCEPTS / "methods" / "bom.md").write_text(
+        "﻿---\nname: [X\n---\nProsa.\n", encoding="utf-8")
+    rc, out = run_lint(capsys)
+    assert rc == 1 and "YAML inválido" in out
+
+
+def test_simbad_null_es_NO_EVALUADO_y_no_cero_alias_faltantes(toy_vault, capsys):
+    """`_simbad_aliases: null` (SIMBAD no contestó) ≠ `[]` (contestó y no hay más). `as_list` los
+    aplanaba a los dos, y «cero faltantes» se leía como «está todo declarado» sobre una consulta que
+    nunca volvió — el falso limpio de D-43 en el chequeo que INV-122 sostiene."""
+    (cfg.GROUND_TRUTH).mkdir(parents=True, exist_ok=True)
+    (cfg.GROUND_TRUTH / "test_star.json").write_text(
+        '{"slug": "test_star", "host": {}, "planets": [], "_simbad_aliases": null, '
+        '"_unresolved_aliases": []}', encoding="utf-8")
+    _, out = run_lint(capsys)
+    assert "NO EVALUADO" in out and "SIMBAD no contestó" in out

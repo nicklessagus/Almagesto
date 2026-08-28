@@ -160,7 +160,9 @@ def fm_error(text: str) -> str | None:
     H-11): un `---` dentro de un escalar entrecomillado (`title: "... --- ..."`) es YAML válido y
     no puede cortar el bloque, o esta función reporta "YAML inválido" —categoría BLOQUEANTE—
     sobre un frontmatter que no tiene nada roto."""
-    if not text.startswith("---"):
+    #  El BOM no puede volver invisible el frontmatter: sin este `lstrip`, una nota con U+FEFF
+    #  evadía todos los chequeos de su tipo y `fm_error` ni la miraba (#36/#40, 2026-08-28).
+    if not text.lstrip(cfg.BOM).startswith("---"):
     #  @inv INV-40
         return None
     span = cfg.frontmatter_span(text)
@@ -985,7 +987,17 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                     _decl = {_norm_alias(x) for x in
                              [_n, _m.get("simbad"), _m.get("ads_object"), *cfg.as_list(_m.get("aliases"))]
                              if x}
-        _faltan = [a for a in cfg.as_list(data.get("_simbad_aliases"))
+        # ⛔ `None` (SIMBAD no contestó) ≠ `[]` (contestó y no hay más). `as_list` los aplana a los
+        # dos en `[]`, y ahí «cero alias faltantes» se lee como «está todo declarado» sobre una
+        # consulta que nunca volvió — el falso limpio de D-43 en el chequeo que INV-122 sostiene.
+        _crudo = data.get("_simbad_aliases", "__ausente__")
+        if _crudo is None:
+            alias_faltantes.append(
+                (gt.stem, "⛔ NO EVALUADO: `_simbad_aliases` es `null` — SIMBAD no contestó cuando "
+                          "se bajó este ground-truth, así que no consta qué identificadores conoce. "
+                          "Re-corré `fetch_ground_truth.py` para saberlo (no es «están todos "
+                          "declarados»)"))
+        _faltan = [a for a in cfg.as_list(_crudo if _crudo != "__ausente__" else None)
                    if _norm_alias(a) not in _decl]
         if _faltan:
             alias_faltantes.append(

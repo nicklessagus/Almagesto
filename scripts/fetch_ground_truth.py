@@ -433,7 +433,12 @@ def main() -> int:
                # #82, lado de MENOS: lo que SIMBAD conoce, para que la propuesta de alias salga de
                # una fuente y no de la memoria del LLM. Persistir no es adoptar: el lint lo reporta
                # y la elección se versiona en `stars.yaml`.
-               "_simbad_aliases": simbad_identifiers(host) or [],
+               # ⛔ SIN `or []`: mataba la distinción que INV-122 enuncia y que la propia
+               # `simbad_identifiers` honra — `None` (SIMBAD no contestó) ≠ `[]` (contestó y no hay
+               # más identificadores). El `@inv` estaba sobre código que SÍ cumple y la garantía se
+               # rompía un renglón después: una caída de red se persistía como «está todo
+               # declarado». Medido el 2026-08-28.
+               "_simbad_aliases": simbad_identifiers(host),
                # D-1: la fecha del snapshot es parte de la procedencia que la ficha publica —
                # "de dónde salió" sin "cuándo" no alcanza: NEA cambia valores entre releases.
                "consultado": dt.date.today().isoformat(),

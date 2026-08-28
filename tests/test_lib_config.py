@@ -1393,3 +1393,13 @@ def test_split_fm_honra_su_firma_con_yaml_valido_no_mapa(bloque, tipo):
     archivo y sin escribir ningún output** — con un wikilink roto sembrado que nunca se reportó.
     `isinstance`, no `or {}`: un escalar truthy no cae en el `or`.  @inv INV-36"""
     assert cfg.split_fm(f"---\n{bloque}\n---\ncuerpo\n") == {}
+
+
+@pytest.mark.parametrize("prefijo", ["", "﻿"])
+def test_un_BOM_no_vuelve_invisible_el_frontmatter(prefijo):
+    """U+FEFF al principio —lo escribe cualquier editor de Windows sin avisar— rompía el ancla
+    `matches[0].start() != 0`: `frontmatter_span` devolvía `None`, `split_fm` `{}`, y `lint.fm_error`
+    tampoco lo veía (chequea `startswith("---")`). La nota evadía **todos** los chequeos de su tipo
+    —incluido `retracted`— sin una línea de reporte.  @inv INV-36"""
+    fm = cfg.split_fm(f"{prefijo}---\nname: X\nretracted: true\n---\ncuerpo\n")
+    assert fm == {"name": "X", "retracted": True}

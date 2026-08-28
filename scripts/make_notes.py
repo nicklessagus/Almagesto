@@ -2039,7 +2039,24 @@ def write_star_note(slug: str, force: bool) -> None:
         return
     gt_file = cfg.GROUND_TRUTH / f"{slug}.json"
     gt = json.loads(gt_file.read_text(encoding="utf-8")) if gt_file.exists() else {"host": {}, "planets": []}
-    host = gt.get("host", {})
+    # ⛔ Las cuatro formas malformadas que el LINT sí contempla (`host` null o no-mapa, `planets`
+    # null o con elementos que no son mapas) reventaban acá con `AttributeError`/`TypeError`:
+    # `sync_mirror` las blindó en este mismo archivo y `write_star_note` quedó afuera. Es el patrón
+    # que la auditoría del 2026-08-28 encontró seis veces —el arreglo aplicado a un sitio y no a su
+    # gemelo—. Cobarde y RUIDOSO, mismo criterio que `sync_mirror`: se avisa cuál es la forma mala
+    # y se sigue con lo que se puede, en vez de tumbar la escritura de la ficha entera.
+    gt = cfg.as_map(gt)
+    raw_host = gt.get("host")
+    if raw_host is not None and not isinstance(raw_host, dict):
+        cfg.print_seguro(f"  ⚠ {slug}: `host` del ground-truth no es un mapa ({raw_host!r}) — la "
+                         f"ficha se escribe con los campos estelares vacíos")
+    host = cfg.as_map(raw_host)
+    raw_planets = gt.get("planets")
+    if raw_planets is not None and (not isinstance(raw_planets, list)
+                                    or not all(isinstance(pl, dict) for pl in raw_planets if pl)):
+        cfg.print_seguro(f"  ⚠ {slug}: `planets` del ground-truth no es una lista de mapas — la "
+                         f"ficha se escribe SIN planetas; arreglá el JSON y re-corré")
+        raw_planets = []
     # Espejo puro de NEA (#70): un null acá es un null de NEA (pl_rvamp/pl_orbeccen faltan seguido,
     # el caso es normal, no excepcional) y NO se rellena con el valor de un paper — ése va al cuerpo
     # con su `[[bibcode]]`, o a `disputes[]` si discrepa. Lo vigila el lint.
@@ -2047,7 +2064,7 @@ def write_star_note(slug: str, force: bool) -> None:
                 "K_ms": p.get("K_ms"), "e": p.get("e"),
                 "mass_earth": p.get("mass_earth"),   # masa NEA (M⊕); RV-only ≈ m·sini. Lint valida consistencia.
                 "status": p.get("status")}
-               for p in gt.get("planets", [])]
+               for p in (raw_planets or []) if isinstance(p, dict)]
 
     front = {
         "name": name,

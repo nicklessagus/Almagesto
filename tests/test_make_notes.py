@@ -3327,3 +3327,28 @@ def test_la_cirugia_de_cabecera_sigue_reemplazando_su_propia_linea(toy_vault):
     texto = dest.read_text(encoding="utf-8")
     assert "1999-01-01" not in texto, "no reemplazó la línea vieja de la cabecera"
     assert "2026-08-28" in texto
+
+
+@pytest.mark.parametrize("gt, esperado", [
+    # `null` es legítimo: NEA calla seguido, y `as_map`/`as_list` lo absorben sin ruido.
+    ({"host": None, "planets": []}, None),
+    ({"host": {}, "planets": None}, None),
+    # una FORMA que no es la declarada sí se avisa: el JSON está mal y hay que arreglarlo.
+    ({"host": "x", "planets": []}, "no es un mapa"),
+    ({"host": {}, "planets": ["b"]}, "no es una lista de mapas"),
+])
+def test_write_star_note_no_revienta_con_ground_truth_malformado(toy_vault, capsys, gt, esperado):
+    """Las cuatro formas que el LINT sí contempla (`lint.py:1955-1976`) y que `sync_mirror` ya había
+    blindado **en este mismo archivo** hacían reventar a `write_star_note` con `AttributeError` /
+    `TypeError`. Es el patrón que la auditoría del 2026-08-28 encontró seis veces: el arreglo
+    aplicado a un sitio y no a su gemelo.
+
+    Cobarde y **ruidoso**, mismo criterio que `sync_mirror`: se avisa cuál es la forma mala y se
+    escribe lo que se puede, en vez de tumbar la ficha entera.  @inv INV-01"""
+    cfg.STARS_YAML.write_text("Estrella Test:\n  slug: test_star\n", encoding="utf-8")
+    (cfg.GROUND_TRUTH).mkdir(parents=True, exist_ok=True)
+    (cfg.GROUND_TRUTH / "test_star.json").write_text(json.dumps(gt), encoding="utf-8")
+    mn.write_star_note("test_star", force=True)
+    assert (toy_vault.STARS / "test_star.md").exists(), "no escribió la ficha"
+    if esperado:
+        assert esperado in capsys.readouterr().out, "escribió en silencio: la forma mala no se avisó"

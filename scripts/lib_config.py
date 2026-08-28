@@ -463,6 +463,12 @@ def objective_error() -> str | None:
 # Línea delimitadora de frontmatter: `---` SOLA en su propia línea (con espacio final tolerado).
 # `re.MULTILINE` para que `^`/`$` anclen a cada línea, no a los bordes del string entero.
 _FM_DELIM_RE = re.compile(r"^---[ \t]*$", re.MULTILINE)
+#  U+FEFF al principio del archivo. Un editor de Windows lo escribe sin avisar y **rompe el ancla**:
+#  `matches[0].start() != 0`, así que `frontmatter_span` devolvía `None`, `split_fm` `{}` y
+#  `lint.fm_error` tampoco lo veía (chequea `text.startswith("---")`). La nota evadía **todos** los
+#  chequeos de su tipo —incluido `retracted`— sin una línea de reporte. Medido el 2026-08-28.
+#  Se saca al leer, no en cada consumidor: todos abren con `utf-8`, no con `utf-8-sig`.
+BOM = "\ufeff"
 
 
 def frontmatter_span(text: str) -> tuple[str, str] | None:
@@ -478,6 +484,7 @@ def frontmatter_span(text: str) -> tuple[str, str] | None:
     (debe estar en la posición 0 del texto) y la segunda, o `None` si no hay esa apertura en la
     posición 0 o no hay una segunda línea delimitadora (frontmatter sin cerrar) — en ambos casos
     el llamador decide qué reportar (nota sin frontmatter vs. frontmatter roto)."""
+    text = text.lstrip(BOM)
     matches = list(_FM_DELIM_RE.finditer(text))
     if len(matches) < 2 or matches[0].start() != 0:
         return None

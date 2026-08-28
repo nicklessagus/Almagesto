@@ -561,3 +561,17 @@ def test_el_marcador_de_autoridad_caida_no_se_persiste_en_el_json(monkeypatch, c
     assert out.get(gt.AUTORIDAD_CAIDA) == ["simbad"], "el marcador existe para que nea_diff lo lea"
     assert "SIMBAD" in capsys.readouterr().out
     assert gt.AUTORIDAD_CAIDA not in gt.host_persistible(out), "y no entra al JSON"
+
+
+def test_el_payload_preserva_el_None_de_simbad(monkeypatch):
+    """INV-122: `None` (SIMBAD no contestó) ≠ `[]` (contestó y no hay más). La función lo honraba y
+    el **llamador** lo destruía con un `or []`, un renglón después de la marca `@inv` — así que una
+    caída de red se persistía como «está todo declarado» y el lint no podía distinguirlas.
+
+    Es el patrón que la auditoría del 2026-08-28 encontró seis veces: el defecto no está en la
+    función marcada, está en el llamador."""
+    import pathlib
+    fuente = pathlib.Path(gt.__file__).read_text(encoding="utf-8")
+    i = fuente.index('"_simbad_aliases"')
+    linea = fuente[i:fuente.index("\n", i)]
+    assert "or []" not in linea, f"el llamador colapsa el None de INV-122: {linea.strip()}"
