@@ -1689,6 +1689,35 @@ def test_aplicar_excluidos_ignora_el_carril_del_chaining(monkeypatch):
     assert recs[0]["relevant"] is True
 
 
+def test_la_exclusion_se_aplica_DESPUES_de_todos_los_caminos_de_entrada(monkeypatch):
+    """#112 al nivel de la corrida, no de la función. `aplicar_excluidos` corría **una sola vez**,
+    justo después de la query directa — o sea ANTES de que sumen registros la 2ª pasada por fecha
+    (#79), `extra_core`, el rescate por glifo (#28) y el chaining. Por esos cuatro caminos un paper
+    sacado con `--drop-core` volvía con `relevant: True`, y `relevant` es lo que consumen
+    `fetch_pdf` y `make_notes`: se bajaba y se le hacía nota.
+
+    Es textualmente lo que #112 declara cerrado: *«una decisión que el clasificador ignora en
+    silencio es peor que no tomarla»*. Este test fija la SEGUNDA pasada, que es la que decide."""
+    import pathlib
+    fuente = pathlib.Path(qa.__file__).read_text(encoding="utf-8")
+    cuerpo = fuente[fuente.index("def main("):]
+    llamadas = cuerpo.count("aplicar_excluidos(recs, args.slug)")
+    assert llamadas >= 2, ("`aplicar_excluidos` corre una sola vez y los cuatro caminos que suman "
+                           "registros después la esquivan")
+    # y la última corre DESPUÉS del chaining, que es el último que agrega
+    assert cuerpo.rindex("aplicar_excluidos(recs, args.slug)") > cuerpo.rindex("recs += chained")
+
+
+def test_la_segunda_pasada_no_pisa_extra_core(monkeypatch):
+    """La otra mitad: correr de nuevo tiene que ser SEGURO. Quien está en `extra_core` ya tuvo su
+    decisión **anulada** en el registro (D-52), así que `excluidos_del_sujeto` no lo devuelve — y
+    una segunda pasada no puede volver a sacarlo."""
+    monkeypatch.setattr(qa.cfg, "load_decisiones", lambda slug: {})   # anulada por extra_core
+    recs = [{"bibcode": "1994Comon", "relevant": True, "via": "extra_core"}]
+    assert qa.aplicar_excluidos(recs, "ica") == []
+    assert recs[0]["relevant"] is True
+
+
 def test_excluidos_del_sujeto_solo_descartes(monkeypatch):
     monkeypatch.setattr(qa.cfg, "load_decisiones", lambda slug: {
         "A": {"decision": "descartado", "origen": "sujeto", "motivo": "m"},

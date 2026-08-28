@@ -1471,6 +1471,22 @@ def main() -> int:
             cfg.print_seguro(f"  puerta 1 (lo cita tu corpus): +{len(p1)} candidatos al triage "
                              f"— no son core, los juzgás vos: python scripts/triage.py {args.slug}")
 
+    # ⛔ SEGUNDA pasada de la exclusión declarada, y es la que decide (#112). La primera corre justo
+    # después de la query directa, o sea ANTES de que sumen registros la 2ª pasada por fecha (#79),
+    # `extra_core`, el rescate por glifo (#28) y el chaining: por esos cuatro caminos un paper
+    # sacado con `--drop-core` volvía a entrar con `relevant: True`, y `relevant` es lo que
+    # consumen `fetch_pdf` y `make_notes` — se bajaba y se le hacía nota. Medido el 2026-08-28.
+    # Es textualmente lo que #112 declara cerrado: *«una decisión que el clasificador ignora en
+    # silencio es peor que no tomarla»*.
+    # ⚠ Correr de nuevo es SEGURO y no pisa a `extra_core`: quien está ahí ya tuvo su decisión
+    # **anulada** en el registro (D-52, arriba), así que `excluidos_del_sujeto` —que se re-lee acá—
+    # ya no lo devuelve. Y es idempotente sobre los que la primera pasada ya marcó.
+    _fuera2 = aplicar_excluidos(recs, args.slug)
+    if _fuera2:
+        cfg.print_seguro(f"  excluidos por decisión del sujeto, 2ª pasada (#112): {len(_fuera2)} "
+                         f"que habían vuelto a entrar · {_fuera2[:5]}")
+    rel = [r for r in recs if r["relevant"]]
+
     recs.sort(key=lambda r: r.get("citation_count") or 0, reverse=True)
     cfg.print_seguro(f"  total: {len(recs)} registros, {len(rel)} relevantes")
 
