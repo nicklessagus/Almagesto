@@ -514,15 +514,6 @@ línea.
   HeteroPCA*) no lo trae una query de «independent component»; *PCA* queda **dentro** del hub
   —es el baseline contra el que se mide ICA— pero *PCA heterocedástico* se fue al radio. O sea que
   «PCA» está partido **por régimen**, que es el mismo eje que separa radio de hub.
-  ⚠ **Un tema puede crecer más allá de su lente, y eso NO es un problema** (decidido con el usuario,
-  2026-08-28). Se ve solo: `extra_core` acumula los papers que hubo que forzar porque la lente no los
-  agarraba, cada uno con su motivo y su fecha. No hay nada que hacer al respecto — **ni ensanchar la
-  lente, ni partir el tema, ni un detector, ni un conteo**. No produce afirmaciones falsas: lo único
-  que se degrada es cuán bien la lente describe su propio corpus, y eso ya queda registrado. Creció
-  y creció, listo.
-  *(Se evaluó y se descartó un criterio mecánico de partición —solapamiento de bibcodes entre dos
-  temas, computable desde `busquedas[].bibcodes`— porque contesta una pregunta que nadie hace:
-  cuando se agrega un tema nuevo con lente propia, la decisión de verlo separado ya está tomada.)*
 - **concepts/hypotheses/**: `name`, `status` (**vocabulario CERRADO**, D-37 —
   `abierta | sostenida | disputada | refutada`—: el lint bloquea lo que no esté en la lista, porque
   un consumidor lee ese campo para decidir si se apoya en la hipótesis y la prosa libre lo deja
