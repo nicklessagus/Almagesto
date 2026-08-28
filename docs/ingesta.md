@@ -62,7 +62,7 @@ tabla es texto, es parte del texto indexado. **La búsqueda la hace ADS, no noso
 | | Dónde vive | Para qué | Cuándo |
 |---|---|---|---|
 | Índice `full:` de ADS | servidor de ADS | **descubrir** qué papers mencionan al sujeto | **antes** de bajar nada |
-| `raw/fulltext/<slug>/*.txt` | tu disco | **leer y grepear** — extracción, `verify-citations`, retro-tag | **después** de bajar el PDF |
+| `raw/fulltext/<slug>/*.txt` | tu disco | **grepear** — es el *índice de búsqueda* del corpus (retro-tag, `query-corpus`, alcance de hipótesis) y ubica dónde mirar en el PDF. Desde #205 la extracción y `verify-citations` leen el **PDF**, no esto | **después** de bajar el PDF |
 
 Corolario práctico: el corpus local sólo tiene los core bajados, así que **un `grep` local nunca va a
 encontrar un paper que ADS no trajo**. Para eso está el `--sweep`, que le pregunta al índice grande.

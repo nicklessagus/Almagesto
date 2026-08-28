@@ -7,7 +7,7 @@
 > hace es concluir nada desde acá: si el índice no la encuentra, se abre el PDF.
 
 **Referencia de `verify-citations`.** El `SKILL.md` deja las **reglas duras en una línea** (contar
-con `grep -n`, patrones cortos, prohibido normalizar espacios, `symbols_lost` ⇒ página del PDF, OCR y
+con `grep -n`, patrones cortos, prohibido normalizar espacios, OCR y
 `eprint` con su salvedad). Acá está **por qué** cada una existe y qué se midió — que es lo que hay
 que leer la primera vez, cuando una regla parece arbitraria, o cuando un par no cierra y hay que
 decidir si es artefacto de extracción o cita rota.
@@ -68,15 +68,15 @@ de 8+ espacios es separador de columnas, no espacio — el umbral vive en
 pineados en `tests/test_multicolumn_matching.py`; la prevalencia en una bóveda concreta la mide
 `scripts/measure_layout.py`.
 
-⚠ **`symbols_lost: true` — las ECUACIONES no están en el `.txt` (#113).** Si la nota del paper
-trae ese campo (o el `.txt` abre con `# Almagesto — simbolos NO extraidos`), `pdftotext` dejó el
-marcador `(3)` y **vació su cuerpo**: el archivo parece tener la fórmula y no la tiene. Para esos
-pares, **la evidencia se cita por PÁGINA del PDF**, no por nº de línea, y se lee
-`vault/raw/pdfs/<slug>/<bibcode>.pdf` con el parámetro `pages` (que **rasteriza** la página, así
-que el verificador *ve* la fórmula). ⛔ **No declares `no-soportada` una ecuación que no aparece
-en el `.txt` de una fuente marcada así** — es el falso negativo que empuja a debilitar una
-afirmación correcta, y es exactamente el caso que este campo existe para señalar. La **prosa** de
-esas fuentes sí es citable por línea, como siempre.
+⚠ **Lo que el `.txt` pierde sin avisar — por eso no se cita de él (#205).** `pdftotext` deja el
+marcador `(3)` y **vacía su cuerpo**, o peor: lo deja con el cuerpo **cambiado** por sustitución de
+fuente. También pierde tablas-imagen y todo lo que vive en una figura. Medido el 2026-08-28 sobre un
+paper de 2005 con capa de texto tipográfica y todos los detectores en verde: el radical `√` salía
+como una `r` suelta, `p′` como `p0`, y un subíndice hacía leer una autocovarianza como una inversa.
+Por eso los detectores que avisaban de esto (`symbols_lost`, `fulltext_layout`) se **retiraron**: no
+discriminaban, y hoy la fuente es siempre el PDF. ⛔ **Nunca declares `no-soportada` porque una
+fórmula, una fila de tabla o un valor no aparezcan en el `.txt`** — el índice no los tiene y su
+ausencia no dice nada sobre el paper.
 
 **Excepción OCR — citable con salvedad:** si la nota del paper trae `fulltext_source: ocr` (el
 contrato del frontmatter lo espeja — no hace falta abrir el `.txt` para saberlo) o el `.txt` abre

@@ -162,7 +162,7 @@ Progreso del ingest del tema <tema>:
      lectura sin declarar*.
 
    Con eso resuelto, la lectura —y si el recorte es inevitable, los que primero entran son los
-   **fundacionales / árbitros / metodológicos**—: desde `vault/raw/fulltext/<slug>/`, poblando cada `vault/wiki/papers/<bibcode>.md`: `methods`,
+   **fundacionales / árbitros / metodológicos**—: desde `vault/raw/pdfs/<slug>/` (#205: se lee el PDF; el `.txt` de `vault/raw/fulltext/<slug>/` es el índice para ubicar), poblando cada `vault/wiki/papers/<bibcode>.md`: `methods`,
    `role` (#73: `fundacional` introduce el método/mecanismo · `aplicacion` lo instancia en un caso · `arbitro` reanaliza y resuelve una tensión previa — sale de leer el paper, la regex del clasificador no puede inferirlo, y sin él contrastarlo contra otro no está definido) —especialmente agudo en temas de método, donde fundamentos y
    aplicaciones astro conviven en el mismo concepto por diseño—, `thesis_links` (ya pre-sembrado al
    concept; agregar otros si toca) y la sección
@@ -279,7 +279,7 @@ Progreso del ingest del tema <tema>:
 6b. **Verificar citas.** Correr el skill `verify-citations` sobre el **concept** (y las notas de paper
    nuevas). El concept es dual-audiencia e implementation-ready: cada afirmación con `[[bibcode]]`
    —definiciones, ecuaciones, rangos, signos— debe estar respaldada por el fulltext (cita textual +
-   nº de línea del `.txt`; sin respaldo ⇒ no-soportada). Resolver cada no-soportada/contradice (bajar a lo
+   página del PDF; sin respaldo ⇒ no-soportada). Resolver cada no-soportada/contradice (bajar a lo
    que dice la fuente, reasignar la cita, o marcar `inferencia`) y dejar el bloque `## Verificación de citas`.
 
 7. **Cierre (commit + push).** Tras la verificación (`python scripts/lint.py --cierre <slug>` en 0 — #121: el
@@ -418,6 +418,6 @@ Qué cambia respecto del flujo ADS de arriba:
 - Distinción concept vs query: el concept es el resultado **durable** del tema (acumula solo). Una
   *query* archivada (`queries/`) es un snapshot complementario — opcional, sólo si vale re-preguntarla.
 - **Lectura del fulltext (saltar afiliaciones):** los `.txt` arrancan con autores/afiliaciones que no
-  aportan. Saltar al contenido con, p. ej., `awk 'tolower($0)~/abstract/{f=1} f' vault/raw/fulltext/<slug>/<bib>.txt | head -60`
+  aportan. Ubicar el contenido en el índice con, p. ej., `awk 'tolower($0)~/abstract/{f=1} f' vault/raw/fulltext/<slug>/<bib>.txt | head -60`
   y `grep -inE "bisector|BIS|FWHM|S-?index|chromatic|correlat|lag" ...` para los números clave. No
   tocar el `.txt` en disco (se usa para grep); el salto es sólo en la lectura.

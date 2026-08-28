@@ -170,8 +170,8 @@ Progreso del ingest de <estrella>:
      rótulo `subconjunto`. Sin la declaración, el lint lo reporta como *recorte de lectura sin
      declarar* — la red existe y este comando es el que la cierra.
 
-   ⚠ **Cómo anotar cada valor (#103).** Al copiar un número a la nota de paper: **el nº de línea
-   del `.txt`** (`grep -n`, nunca `splitlines()` — form feeds), **el régimen** en que la fuente lo
+   ⚠ **Cómo anotar cada valor (#103).** Al copiar un número a la nota de paper: **la página del
+   PDF** (#205: la fuente es el PDF), **el régimen** en que la fuente lo
    afirma (muestra, época, corte de datos, modelo), la marca **segunda mano** con su cita si la
    fuente se lo atribuye a otro trabajo, y **el tiempo verbal y el cuantificador de la fuente, tal
    cual** (*«was associated»* no se vuelve *«is associated»*; *«el 75 % de la muestra»* no se vuelve
@@ -186,9 +186,9 @@ Progreso del ingest de <estrella>:
    - **Sea cual sea la decisión, la tabla `## Papers` de la ficha declara cuál entró y cuál no** — el
      estado nunca es implícito. Se re-estampa con `python scripts/make_notes.py <slug>`.
 
-   **Escala: un subagente por paper (D-14).** 193 fulltexts no entran en una lectura. Se paga como
+   **Escala: un subagente por paper (D-14).** 193 papers no entran en una lectura. Se paga como
    ya se paga `verify-citations`: **un subagente por paper**, cada uno lee un solo
-   `vault/raw/fulltext/<slug>/<bibcode>.txt` y devuelve la extracción estructurada. Caro pero
+   `vault/raw/pdfs/<slug>/<bibcode>.pdf` y devuelve la extracción estructurada. Caro pero
    acotado, y hace el paso **auditable**: cada extracción tiene su corrida. Lanzalos en tandas
    paralelas; el orquestador (vos) mergea y escribe las notas.
 
@@ -197,8 +197,8 @@ Progreso del ingest de <estrella>:
    python scripts/extraction_prompt.py <slug> <bibcode>      # --theme si el slug es un tema
    ```
    Lo arma desde lo que la bóveda ya sabe: los `aliases` del sujeto → patrones de `grep` **cortos**
-   (#44), la maqueta real del `.txt` → el caveat de dos columnas atado a la regla del nº de línea,
-   la marca de OCR → la salvedad de citabilidad, y una **ruta de salida por bibcode**. El motivo es
+   (#44) para **ubicar** en el `.txt` en qué parte del PDF mirar, las rutas del PDF y del `.txt`, y
+   una **ruta de salida por bibcode**. El motivo es
    medido: en el ingest de τ Ceti (79 papers, prompt a mano) **54 extractores redescubrieron por su
    cuenta** el entrelazado de columnas, **23** la grafía del sujeto y **tres se pisaron el archivo de
    salida** entre sí. Toda regla que vive acá y no en el prompt se cae **en silencio** en esa
@@ -258,15 +258,13 @@ Progreso del ingest de <estrella>:
    sin abrir un paper. La red de que el contraste ocurrió es #75 (*extraído pero no sintetizado*):
    un paper que pagó la extracción y no aparece en la nota sale como backlog.
 
-   ⛔ **Una ECUACIÓN que va a la nota se levanta del PDF, no del `.txt`, y viaja con su página.**
-   El `.txt` puede haber vaciado la fórmula, haberla dejado con el cuerpo **cambiado** o no haberse
-   podido medir — y **dos de los cuatro casos medidos se veían perfectos**: `si = 1` donde el paper
-   dice `si = ±1` (el supuesto binario **es** el ±1) y «model (8)» donde dice «model (3)». Una
-   borradura no se ve, así que la regla no puede ser *«si se ve bien, copiala»*. Sí se acota por
-   **carga**: la ecuación del método, la del contraste o la condición de identificabilidad van al
-   PDF; una constante auxiliar citada al pasar, no.
-   Si la vista del paper ya trae la fórmula **con su página**, el chequeo está hecho y se copia con
-   esa procedencia. Si llega **sin** página, nadie la verificó: abrí el PDF acá.
+   ⛔ **Todo valor que va a la nota viaja con su página del PDF (#205).** Desde que la extracción
+   lee el PDF esto es lo normal, no una excepción para ecuaciones. Si la vista del paper ya trae el
+   dato **con su página**, se copia con esa procedencia; si llega **sin** página —una vista vieja,
+   escrita cuando se leía el `.txt`— nadie lo verificó contra la fuente: abrí el PDF acá. Vale
+   especialmente para fórmulas y valores de tabla, que son los que el `.txt` pierde o **cambia** sin
+   dejar marca: medido, `si = 1` donde el paper dice `si = ±1` (el supuesto binario **es** el ±1) y
+   «model (8)» donde dice «model (3)».
 
 3c. > ⚠ **Un ítem de linaje = un BULLET propio, no una oración con seis citas.** Cuando enumeres
 > quién hizo qué —«PCA vía SVD [[A]], [[B]]; Wapiti [[C]], [[D]]; YARARA [[E]]»— dale a cada fuente
@@ -328,7 +326,7 @@ Progreso del ingest de <estrella>:
 5b. **Verificar citas.** Correr el skill `verify-citations` sobre la **ficha de la estrella** (y sobre
    las notas de paper nuevas con extracción). La ficha es el artefacto **más reusado** (se arma un
    informe desde ahí), así que su prosa con `[[bibcode]]` —parámetros estelares, señales RV, disputas—
-   debe estar respaldada por el fulltext (cita textual + nº de línea del `.txt`; sin respaldo ⇒
+   debe estar respaldada por la fuente (cita textual + página del PDF; sin respaldo ⇒
    no-soportada). Prioridad: las afirmaciones que **cambian cómo se lee una señal RV** y las
    `disputes` (cada `posiciones[].value` y el `note` vs el paper que la sostiene; la posición
    `{source: ground_truth}` no se verifica contra papers). Resolver cada no-soportada/contradice (corregir el valor,
@@ -341,8 +339,9 @@ Progreso del ingest de <estrella>:
 ## Notas
 - Reglas de notación/reporte y schemas de frontmatter: ver `CLAUDE.md`.
 - No copiar FITS a la bóveda: la ficha apunta a los datos vía `data_local`.
-- **Lectura del fulltext (saltar afiliaciones):** los `.txt` arrancan con autores/afiliaciones que no
-  aportan a la extracción. NO leer las primeras páginas enteras: saltar al contenido con, p. ej.,
+- **Ubicar con el índice (saltar afiliaciones):** el `.txt` es el índice para saber **en qué parte
+  del PDF** mirar; los papers arrancan con autores/afiliaciones que no aportan. Para ubicar rápido,
+  p. ej.,
   `awk 'tolower($0)~/abstract/{f=1} f' vault/raw/fulltext/<slug>/<bib>.txt | head -60` para el abstract, y
   `grep -inE "P_?rot|K ?=|mass|chromatic|GP|activity indicator" ...` para los números clave. No tocar
   el `.txt` en disco (se usa para grep); el salto es sólo en la lectura. **Patrones cortos, siempre**

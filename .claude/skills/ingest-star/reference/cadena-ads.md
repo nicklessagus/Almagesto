@@ -66,18 +66,20 @@ canónica ahí para los dos).
 
 ## `extract_fulltext` — los tres chequeos, y el OCR
 
-Escribe `vault/raw/fulltext/<slug>/<bibcode>.txt` y corre **tres chequeos deterministas e
-independientes** sobre el texto, que miden cosas distintas y hacen falta los tres:
+Escribe `vault/raw/fulltext/<slug>/<bibcode>.txt`, que desde #205 es el **índice de búsqueda del
+corpus** y no material de lectura: la extracción y la verificación leen el **PDF**. Por eso quedan
+**dos** chequeos, y los dos miden si el índice sirve para `grep`:
 
 | Chequeo | Pregunta | Qué pasa si falla |
 |---|---|---|
-| `is_legible` | ¿sirve? (chars no-espacio, densidad por página, ASCII imprimible) | cae a **OCR** con `tesseract` |
+| `is_legible` | ¿sirve? (chars no-espacio, densidad por página, ASCII imprimible) | cae a **OCR** con `tesseract` — sin él, un escaneo sin capa de texto queda **invisible** a toda búsqueda del corpus |
 | `is_garbled` | ¿es correcto? | estampa el header `source: ocr` |
-| `symbols_lost` | ¿está completo? | estampa `simbolos NO extraidos` (#113) |
 
-Sin `tesseract` instalado **avisa** y el lint lo lista; no falla en silencio. El `.txt` se reescribe
-en **tres casos y nada más** (`--force`, upgrade automático a OCR, backfill de las marcas), y por eso
-el hash de fuente de `verify-citations` es una alarma rara: cuando suena, hay algo.
+⚠ `symbols_lost` (#113/#194) y `fulltext_layout` (#193) **se retiraron**: decidían si el extractor
+leía el `.txt` o el PDF, y esa decisión ya no se toma. Ni siquiera discriminaban — medido, un paper
+con los tres chequeos en verde había perdido igual el radical `√` y superíndices de transpuesta.
+
+Sin `tesseract` instalado **avisa** y el lint lo lista; no falla en silencio.
 
 Detalle de los casos raros de extracción (escaneo con marca de agua, quirks de PostScript viejo) en
 `reference/rescate-pdfs.md`.

@@ -67,8 +67,9 @@ Progreso del append de <fuente> → <destino>:
      [--concept <concept>] --title … --author … --year …` (PDF). Para una **estrella** no hay seed
      automático: completar `stars: [<nombre>]` en el frontmatter de la nota durante la extracción.
 
-3. **Extracción LLM enfocada en el eje del destino.** Leer SÓLO el fulltext nuevo
-   (`vault/raw/fulltext/<slug>/<clave>.txt`; saltar afiliaciones como en `ingest-star`) y poblar la
+3. **Extracción LLM enfocada en el eje del destino.** Leer SÓLO la fuente nueva — **el PDF**
+   (`vault/raw/pdfs/<slug>/<clave>.pdf`, #205), ubicando con `grep -n` sobre su `.txt` en qué parte
+   mirar y citando **página** — y poblar la
    nota del paper: `methods`, `role` (#73: `fundacional` introduce el método/mecanismo · `aplicacion` lo instancia en un caso · `arbitro` reanaliza y resuelve una tensión previa — sale de leer el paper, la regex del clasificador no puede inferirlo, y sin él contrastarlo contra otro no está definido), `thesis_links`/`stars`, y **la vista del destino** (#188): la entrada en `vistas[]`
    (`{sujeto, tipo, fecha, txt, lente}` — el `sujeto` es la entidad destino) y su sección
    `## Vista — <sujeto>`, orientada a **lo que aporta a la entidad destino** (una señal RV, un mecanismo, una ecuación del
