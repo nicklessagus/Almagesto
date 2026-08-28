@@ -251,3 +251,34 @@ def test_dirigida_rechaza_una_funcion_inexistente(repo_con_tests: Path, monkeypa
     monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
     assert mutar._directed(_args(["scripts/viejo.py"], solo="noexiste")) == 2
     assert "no existen en viejo.py" in capsys.readouterr().out
+
+
+# ── la copia de trabajo tiene que arrancar VERDE (auditoría 2026-08-28) ─────────────────────────
+
+
+@pytest.mark.poblada
+def test_la_copia_del_repo_arranca_con_baseline_verde():
+    """⛔ Si la suite está roja **dentro de la copia**, `mutar` se niega a correr entero: la red #1
+    queda inoperable y ningún test lo nota.
+
+    Medido el 2026-08-28: `_copia_del_repo` excluye `.git` —a propósito, no hace falta y pesa— y un
+    test agregado ese día corría `git ls-files` con `check=True`, así que reventaba en la copia. El
+    gate salía con «la suite ya está roja sin mutar» sobre un árbol real perfectamente verde.
+
+    Ninguno de los 17 tests de este archivo podía verlo: **todos doblan `_suite_verde`** y ninguno
+    ejerce `_copia_del_repo` contra el árbol real (uno hasta asserta que no se llame). Es la forma
+    exacta de INV-101 —*la red que no mira el código nuevo no es una red*— aplicada a la red #1.
+
+    Va en tier 1: copia el repo y corre la suite entera (~20 s), demasiado para el tier de cada
+    commit.  @inv INV-101"""
+    import shutil
+    import tempfile
+    tmp = Path(tempfile.mkdtemp(prefix="almagesto-baseline-"))
+    try:
+        copia = mutar._copia_del_repo(tmp / "repo")
+        assert mutar._suite_verde(copia), (
+            "la suite está ROJA dentro de la copia de trabajo: `tools/mutar.py` se niega a correr "
+            "y la red #1 queda inoperable. Suele ser un test que necesita algo que la copia no "
+            "lleva (`.git`, `build/`, `vault/` con contenido).")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)

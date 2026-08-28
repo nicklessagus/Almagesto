@@ -1837,6 +1837,45 @@ def _set_campo(dest, clave: str, valor: str) -> None:
 # viaja: una ficha copiada, exportada o leída por un agente llega sin la doc al lado. Va ARRIBA,
 # en el blockquote de cabecera donde ya vive el disclaimer de capa-LLM, porque es lo primero que se
 # lee y no se pierde al scrollear.
+def _header_block(text: str) -> tuple[int, int] | None:
+    """`(inicio, fin)` del blockquote de cabecera — el que contiene `_Generado con Almagesto…_`.
+
+    Las cirugías de cabecera (`stamp_estado`, `stamp_ground_truth_line`) borraban su línea vieja con
+    un `sub(count=1)` sobre el **texto entero**, así que se llevaban puesta la primera línea del
+    CUERPO que empezara igual. Medido el 2026-08-28: una nota con
+    `> _Estado del arte: la señal de 13.9 d sigue disputada_ [[2020smith]].` en `## Síntesis` perdía
+    esa línea —prosa con cita— en una corrida **normal**, sin `--force` y sin aviso. Es la negación
+    literal de INV-15: *«destruir prosa exige una acción explícita distinta de la corrida normal»*.
+
+    El ancla ya existía y se usaba para **insertar**; lo que faltaba era usarla para **borrar**. El
+    bloque son las líneas contiguas que empiezan con `>` alrededor del ancla.
+    """
+    #  @inv INV-15
+    i = text.find(GENERATOR_LINE)
+    if i < 0:
+        return None
+    lineas = text.split("\n")
+    n = text[:i].count("\n")                       # índice de la línea del ancla
+    ini = n
+    while ini > 0 and lineas[ini - 1].startswith(">"):
+        ini -= 1
+    fin = n
+    while fin + 1 < len(lineas) and lineas[fin + 1].startswith(">"):
+        fin += 1
+    return (sum(len(x) + 1 for x in lineas[:ini]),
+            sum(len(x) + 1 for x in lineas[:fin + 1]))
+
+
+def _sub_en_cabecera(text: str, patron) -> str:
+    """Borra la línea vieja de una cirugía de cabecera **sólo dentro del bloque de cabecera**."""
+    #  @inv INV-15
+    span = _header_block(text)
+    if span is None:
+        return text
+    ini, fin = span
+    return text[:ini] + patron.sub("", text[ini:fin], count=1) + text[fin:]
+
+
 GT_LINE_RE = re.compile(r"^> _Ground-truth.*\n", re.M)
 
 
@@ -1887,7 +1926,7 @@ def stamp_ground_truth_line(slug: str, dest) -> bool:
         return False
     new = ground_truth_line(slug)
     text = dest.read_text(encoding="utf-8")
-    out = GT_LINE_RE.sub("", text, count=1)
+    out = _sub_en_cabecera(text, GT_LINE_RE)
     if new:
         i = out.find(GENERATOR_LINE)
         if i < 0:
@@ -1974,7 +2013,7 @@ def stamp_estado(slug: str, dest) -> bool:
         return False
     new = estado_line(slug, dest)
     text = dest.read_text(encoding="utf-8")
-    out = ESTADO_LINE_RE.sub("", text, count=1)
+    out = _sub_en_cabecera(text, ESTADO_LINE_RE)
     if new:
         i = out.find(GENERATOR_LINE)
         if i < 0:

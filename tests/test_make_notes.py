@@ -3271,3 +3271,59 @@ def test_unpend_saca_tambien_el_motivo_pendiente(toy_vault):
     texto = dest.read_text(encoding="utf-8")
     assert "pending_source" not in texto
     assert "pending_motivo" not in texto, "quedó el motivo de un estado que ya no existe"
+
+
+# ── las cirugías de cabecera no tocan el cuerpo (auditoría 2026-08-28) ──────────────────────────
+
+
+def _nota_con_estado_en_la_prosa(toy_vault, slug="gp"):
+    """Un concepto con cabecera estampable Y una línea de prosa que empieza como la de estado."""
+    dest = toy_vault.CONCEPTS / "methods" / f"{slug}.md"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(
+        "---\nname: GP\ntags: [methods]\n---\n"
+        f"# GP\n\n{mn.GENERATOR_LINE}1.0.0._\n\n"
+        "## Síntesis\n\n"
+        "> _Estado del arte: la señal de 13.9 d sigue disputada_ [[2020smith]].\n\n"
+        "Prosa normal.\n", encoding="utf-8")
+    return dest
+
+
+def test_stamp_estado_no_se_come_prosa_del_cuerpo(toy_vault):
+    """INV-15: *«destruir prosa exige una acción explícita distinta de la corrida normal»*. El
+    `sub(count=1)` corría sobre el TEXTO ENTERO, así que la primera línea del cuerpo que empezara
+    con `> _Estado` desaparecía en una corrida normal — sin `--force` y sin aviso. Y «Estado del
+    arte» es la frase castellana estándar en un concepto."""
+    dest = _nota_con_estado_en_la_prosa(toy_vault)
+    mn.stamp_estado("gp", dest)
+    texto = dest.read_text(encoding="utf-8")
+    assert "> _Estado del arte: la señal de 13.9 d sigue disputada_ [[2020smith]]." in texto
+
+
+def test_stamp_ground_truth_line_tampoco(toy_vault):
+    """El gemelo, con el mismo defecto y el mismo arreglo."""
+    dest = toy_vault.STARS / "test_star.md"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(
+        "---\nname: Estrella Test\nslug: test_star\ntags: [star]\n---\n"
+        f"# Estrella Test\n\n{mn.GENERATOR_LINE}1.0.0._\n\n"
+        "## Síntesis\n\n> _Ground-truth de este survey no cubre la banda K_ [[2020a]].\n",
+        encoding="utf-8")
+    mn.stamp_ground_truth_line("test_star", dest)
+    assert "> _Ground-truth de este survey no cubre la banda K_ [[2020a]]." in dest.read_text(encoding="utf-8")
+
+
+def test_la_cirugia_de_cabecera_sigue_reemplazando_su_propia_linea(toy_vault):
+    """La otra mitad: acotar el borrado no puede volverlo un no-op. Con la línea vieja DENTRO del
+    bloque de cabecera, se reemplaza."""
+    dest = toy_vault.CONCEPTS / "methods" / "gp2.md"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(
+        "---\nname: GP2\ntags: [methods]\n---\n"
+        "# GP2\n\n> _Estado — búsqueda 1999-01-01 (viejo)_\n"
+        f"{mn.GENERATOR_LINE}1.0.0._\n\n## Síntesis\n\nProsa.\n", encoding="utf-8")
+    cfg.save_busqueda("gp2", {"fecha": "2026-08-28", "query": "q", "n_total": 5, "n_core": 2})
+    mn.stamp_estado("gp2", dest)
+    texto = dest.read_text(encoding="utf-8")
+    assert "1999-01-01" not in texto, "no reemplazó la línea vieja de la cabecera"
+    assert "2026-08-28" in texto
