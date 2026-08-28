@@ -275,3 +275,33 @@ def test_el_prompt_pide_las_tres_ayudas_de_lectura():
     plano = " ".join(p.split())
     assert "nunca fuente de la que citar" in plano
     assert "unidad_cita: pagina" in plano, "el caso del libro tiene que estar declarado"
+
+
+# ── nombres que devolvían CERO patrones (auditoría 2026-08-28) ──────────────────────────────────
+
+
+@pytest.mark.parametrize("nombre", ["AU Mic", "55 Cnc", "eps Eri", "K2-18", "TRAPPIST-1"])
+def test_los_nombres_cortos_ya_no_dan_cero_patrones(nombre):
+    """Medido: los cinco daban `[]`, y `AU Mic` es el ejemplo del propio skill `ingest-star`. Tres
+    huecos que se tapaban entre sí: `MIN_ALPHA=4` generaba la abreviatura DESDE el token largo
+    (`Ceti`→`Cet`) y rechazaba el nombre **ya abreviado** —la grafía que la función existe para
+    perseguir—; una designación con dígitos (`K2-18`) no es `isalpha()`; y nada devolvía el nombre
+    entero cuando ningún token calificaba solo.  @inv INV-100"""
+    pats = ep.subject_patterns(nombre)
+    assert pats, f"{nombre!r} no genera ningún patrón: el grep no corre y se lee como «no lo reporta»"
+
+
+def test_un_tema_no_baja_el_umbral_de_los_tokens_cortos():
+    """La otra mitad: en un tema los tokens son palabras comunes y truncar a tres letras sólo hace
+    ruido. El umbral bajo es **sólo** para estrellas."""
+    assert "pro" not in ep.subject_patterns("procesos gaussianos", kind="theme")
+    assert ep.subject_patterns("procesos gaussianos", kind="theme") == ["gaussianos", "procesos"]
+
+
+def test_sin_patrones_el_prompt_lo_DECLARA_en_vez_de_salir_vacio():
+    """El daño real no era la lista vacía: era que el prompt salía con el bloque de búsqueda en
+    blanco **bajo un encabezado que promete patrones**, y el extractor concluía «no dice nada del
+    sujeto» sin haber buscado.  @inv INV-100"""
+    p = ep.build_prompt("x", "2020A", "", [], "texto\n")
+    assert "NINGÚN patrón se pudo generar" in p
+    assert "NO es «el paper no lo reporta»" in p

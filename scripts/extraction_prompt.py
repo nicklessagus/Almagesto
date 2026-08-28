@@ -38,6 +38,12 @@ CATALOGUE_PREFIXES = {
 #  length (`Ceti` → `Cet`, `Eridani` → `Eri`, `epsilon` → `eps`).
 MIN_ALPHA = 4
 ABBREV = 3
+#  A whole name this short is itself a usable pattern (`AU Mic`, `55 Cnc`, `K2-18`). Without this,
+#  a name made only of short tokens produced ZERO patterns — see the docstring.
+MAX_NAME = 14
+#  A designation mixing letters and digits is unambiguous on its own: `K2-18`, `TRAPPIST-1`,
+#  `WASP-12b`, `HAT-P-11`. `isalpha()` rejects them, which is why they used to fall through.
+DESIGNATION = re.compile(r"[A-Za-z]{1,10}[-\d][\w.+-]*$")
 #  An all-caps token of this length is an acronym worth searching on its own (`ICA`, `PCA`, `SVD`).
 ACRONYM = range(3, 7)
 
@@ -53,11 +59,28 @@ def subject_patterns(name: str, aliases=(), kind: str = "star") -> list[str]:
     astronomical names actually use in print (`Ceti` → `Cet`, `epsilon` → `eps`, and the whole
     constellation-genitive convention). For a *theme* the tokens are ordinary words, so the same
     truncation only yields noise (`procesos` → `pro`); there the useful short form is the acronym.
+
+    ⛔ **Devolvía `[]` para una familia entera de nombres reales** — medido el 2026-08-28:
+    `AU Mic`, `55 Cnc`, `eps Eri`, `K2-18` y `TRAPPIST-1`, todos `[]`. `AU Mic` es el ejemplo del
+    propio skill `ingest-star`. Tres huecos que se tapaban entre sí:
+
+    · `MIN_ALPHA = 4` generaba la abreviatura **desde** el token largo (`Ceti` → `Cet`) y **rechazaba
+      el nombre ya abreviado**, que es justamente la grafía que esta función existe para perseguir;
+    · una designación con dígitos (`K2-18`, `TRAPPIST-1`) no es `isalpha()` y caía por el costado;
+    · y nada devolvía el **nombre entero** cuando ningún token calificaba solo.
+
+    El daño es el que el párrafo de arriba nombra: el prompt salía con el bloque de búsqueda
+    **vacío** bajo un encabezado que promete patrones, y un `grep` que no corre se lee como «el
+    paper no reporta este parámetro».
     """
     #  @inv INV-100
     pats: set[str] = set()
     for raw in [name, *(aliases or [])]:
-        tokens = [t for t in re.split(r"[\s_]+", str(raw or "").strip()) if t]
+        limpio = str(raw or "").strip()
+        tokens = [t for t in re.split(r"[\s_]+", limpio) if t]
+        #  El nombre entero, cuando es corto: es la grafía literal y ningún token la reconstruye.
+        if 0 < len(limpio) <= MAX_NAME and len(tokens) > 1:
+            pats.add(limpio.replace(" ", " ?"))     # el espacio es opcional en medio corpus
         for i, tok in enumerate(tokens):
             if tok.upper() in CATALOGUE_PREFIXES:
                 nxt = tokens[i + 1] if i + 1 < len(tokens) else ""
@@ -68,9 +91,11 @@ def subject_patterns(name: str, aliases=(), kind: str = "star") -> list[str]:
                 pats.add(tok)                       # a long catalogue number is unambiguous alone
             elif tok.isalpha() and tok.isupper() and len(tok) in ACRONYM:
                 pats.add(tok)                       # acronym: `ICA`, `PCA`, `SVD`
-            elif tok.isalpha() and len(tok) >= MIN_ALPHA:
+            elif kind == "star" and DESIGNATION.fullmatch(tok) and any(c.isdigit() for c in tok):
+                pats.add(tok)                       # `K2-18`, `TRAPPIST-1`, `WASP-12b`
+            elif tok.isalpha() and len(tok) >= (ABBREV if kind == "star" else MIN_ALPHA):
                 pats.add(tok)
-                if kind == "star":
+                if kind == "star" and len(tok) > ABBREV:
                     pats.add(tok[:ABBREV])          # the abbreviated spelling astro papers use
     return sorted(pats)
 
@@ -156,9 +181,19 @@ def build_prompt(slug: str, bibcode: str, name: str, aliases, texto: str,
     @inv INV-134"""
     #  @inv INV-100
     pats = subject_patterns(name, aliases, kind)
+    #  ⛔ Sin patrones el prompt salía con el bloque de búsqueda VACÍO bajo un encabezado que
+    #  promete patrones, y el extractor concluía «no dice nada del sujeto» sin haber buscado — un
+    #  falso limpio en el peor lugar. Si vuelve a pasar (un nombre que ninguna regla cubre), se
+    #  **declara** en el prompt en vez de callar. Medido el 2026-08-28: `AU Mic`, `55 Cnc`,
+    #  `eps Eri`, `K2-18` y `TRAPPIST-1` daban `[]`.
+    if not pats:
+        greps = ("  ⛔ NINGÚN patrón se pudo generar para este sujeto: buscalo A MANO en el PDF y "
+                 "**decilo en `salvedades`**.\n"
+                 "  ⚠ Un `grep` que no corrió NO es «el paper no lo reporta».")
+    else:
+        greps = "\n".join(f"  grep -niE '{_anclado(p)}' \"{_txt_rel(slug, bibcode)}\"" for p in pats)
     sujeto = sujeto or name
     tipo = "theme" if kind == "theme" else "star"
-    greps = "\n".join(f"  grep -niE '{_anclado(p)}' \"{_txt_rel(slug, bibcode)}\"" for p in pats)
     out = f"{out_dir.rstrip('/')}/{bibcode}.json" if out_dir else f"build/{slug}/extraccion/{bibcode}.json"
     alias_str = ", ".join(f"`{a}`" for a in [name, *(aliases or [])])
     return f"""Sos un extractor de UNA sola fuente. Trabajás desde la raíz del repo.
