@@ -3336,6 +3336,85 @@ def test_log_con_su_entrada_no_se_reporta(toy_vault, capsys):
     assert int(linea[0].rsplit("(", 1)[1].rstrip(")")) == 0, linea[0]
 
 
+def test_sources_con_forma_invalida_no_da_cero(toy_vault, capsys):
+    """AUD-179 / INV-129 — `as_list` devuelve `[]` para un escalar Y para un mapa, así que un
+    `sources:` con forma inválida daba **cero hallazgos**: el bucle no entraba y el tema salía
+    limpio.
+
+    Es el mismo modo de falla que `normalize_lists` cierra en el frontmatter, acá en la config — y
+    en el cuadrante donde TODO entra por decisión de alguien."""
+    write_yaml(cfg.THEMES_YAML, {
+        "escalar": {"concept": "gp", "area": "methods", "source": "web", "sources": "2006R"},
+        "mapa": {"concept": "ica", "area": "methods", "source": "web",
+                 "sources": {"key": "2006R"}},
+        "item_raro": {"concept": "crx", "area": "methods", "source": "web",
+                      "sources": ["2006R"]},
+    })
+    _rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "sources")
+    assert "no es una lista (es str)" in sec and "no es una lista (es dict)" in sec, sec
+    assert "que no es un mapa" in sec, sec
+
+
+def test_cita_sin_txt_en_una_nota_de_PAPER_se_reporta(toy_vault, capsys):
+    """AUD-176 / INV-3 — `papers/` faltaba en la población, y la prosa de una nota de paper cita
+    otros bibcodes: la atribución de **segunda mano** (#103) es exactamente eso.
+
+    Sin el `.txt` de la fuente citada esa afirmación no es chequeable, y no producía NINGÚN
+    hallazgo — el tercer estado silencioso que INV-3 prohíbe, en la nota donde vive la extracción."""
+    mk_note(toy_vault.PAPERS, "2020citA...1..1A",
+            {"tags": ["paper"], "bibcode": "2020citA...1..1A"},
+            "## Vista — Estrella Test\n\nSegunda mano: el valor es de [[1997fueB...1..1B]].\n")
+    mk_note(toy_vault.PAPERS, "1997fueB...1..1B", {"tags": ["paper"], "bibcode": "1997fueB...1..1B"})
+    link_from_index(toy_vault, "2020citA...1..1A", "1997fueB...1..1B")
+    _rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "Citas no verificables")
+    assert "1997fueB...1..1B" in sec, sec
+
+
+def test_vistas_en_cuerpo_no_inventa_incoherencias(toy_vault, capsys):
+    """AUD-178 / INV-134 — dos recortes que faltaban, y los dos daban hallazgos BLOQUEANTES sobre
+    una nota bien leída: el peor tipo de falso positivo, porque obliga a «arreglar» trabajo correcto.
+
+    (a) Un encabezado dentro de un ```code fence``` es un EJEMPLO (la doc del repo está llena), y
+    (b) el sufijo `(2026-08-27)` es la forma que el framework documenta para el encabezado de la
+    vista, así que sin recortarlo `X (2026-08-27)` no matchea `X` y la nota dispara LAS DOS
+    incoherencias a la vez."""
+    cuerpo = ("## Vista — Estrella Test (2026-08-27)\n\nprosa de la vista.\n\n"
+              "Un ejemplo de la doc:\n\n```\n## Vista — Ejemplo\n```\n")
+    mk_note(toy_vault.PAPERS, "2020visA...1..1A",
+            {"tags": ["paper"], "bibcode": "2020visA...1..1A", "relevance": "high",
+             "stars": ["Estrella Test"],
+             "vistas": [{"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-08-27",
+                         "txt": "test_star", "fuente": "pdf"}]}, cuerpo)
+    link_from_index(toy_vault, "2020visA...1..1A")
+    _rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "vistas[]")
+    assert "2020visA" not in sec, sec
+
+
+def test_log_con_el_NOMBRE_del_sujeto_tampoco_se_reporta(toy_vault, capsys):
+    """AUD-177 / INV-131 — se exigía el SLUG en el encabezado y la convención documentada usa el
+    título de la operación, que es el **nombre**: «## 2026-03-01 — ingest: Estrella Test».
+
+    El detector reportaba entonces backlog permanente sobre bitácora correcta, y un falso positivo
+    así erosiona la categoría entera: la primera vez que alguien la ve mentir, deja de mirarla."""
+    import yaml
+    reg = toy_vault.VAULT / "config" / "registro"
+    reg.mkdir(parents=True, exist_ok=True)
+    (reg / "test_star.yaml").write_text(
+        yaml.safe_dump({"slug": "test_star",
+                        "cadena": [{"paso": "query_ads", "fecha": "2026-03-01"}]}),
+        encoding="utf-8")
+    for entrada in ("## 2026-03-01 — ingest-star: Estrella Test",   # el nombre canónico
+                    "## 2026-03-01 — ingest-star: HD 12345",        # un alias declarado
+                    "## 2026-03-01 — ingest-star: test_star"):      # el slug (lo que ya andaba)
+        toy_vault.LOG.write_text(f"# log\n\n{entrada}\n", encoding="utf-8")
+        _, rep = run_lint_reporte(capsys)
+        linea = [l for l in rep.splitlines() if l.startswith("## 📓 Operación sin entrada")]
+        assert int(linea[0].rsplit("(", 1)[1].rstrip(")")) == 0, (entrada, linea[0])
+
+
 # ── #121 · `--cierre <slug>`: el gate de cierre se acota al sujeto que la operación tocó ─────────
 # El razonamiento de R-1 —«un par sin verificar significa que NO TERMINASTE»— es correcto y estaba
 # aplicado al alcance equivocado: la bóveda entera. Medido al cerrar un tema real, el único

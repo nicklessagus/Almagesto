@@ -7,6 +7,7 @@ Uso:
     python scripts/make_notes.py --restamp-pdf-links             # backfill del link PDF, sin slug
     python scripts/make_notes.py --restamp-headers               # backfill de la cabecera, sin slug
     python scripts/make_notes.py --migrate-disputes              # migración #71 de disputes, sin slug
+    python scripts/make_notes.py --migrate-vistas                # migración #188 de vistas, sin slug
     python scripts/make_notes.py --sync-mirror                   # backfill espejo NEA (#70), sin slug
 
 - vault/wiki/stars/<slug>.md            : ficha índice de la estrella (frontmatter + Dataview).
@@ -688,6 +689,56 @@ def migrate_all_txt_fields() -> int:
         cfg.write_text_atomic(f, texto[:ini] + "\n".join(lineas) + resto)
         n += 1
     return n
+
+
+EXTRACCION_VIEJA_RE = re.compile(r"^##\s+Extracci[oó]n\s*\(LLM\)\s*$", re.M)
+
+
+def migrate_all_vistas() -> tuple[int, list]:
+    """One-shot migrator for #188: `## Extracción (LLM)` → `vistas[]` + `## Vista — <sujeto>`.
+
+    ⛔ AUD-175 / INV-64 — #188 shipped a **blocking detector with no migrator**, which is half of
+    the contract this repo set itself: «a new schema means a one-shot migrator plus a blocking
+    detector, never a tolerant reader». Without it every note older than 1.68.0 stays red with no
+    way out but hand-editing them one by one (measured in a real vault: 908 paper notes).
+
+    What can be migrated and what cannot. The view's **subject** comes from the note's own claim
+    (`stars` / `thesis_links`): with exactly **one** it is unambiguous. With two or more it is NOT
+    guessed — picking one would assert a reading nobody performed from there — and the note comes
+    back in the ambiguous list along with its candidates.
+
+    `fecha` is NOT stamped: the old extraction did happen, but **when** and **through which lens**
+    is not on record, and absent means exactly «not on record» (#188). The lint then reports it as
+    *vista sin fecha*, which is backlog and is the truth. `fuente` (#207) is not invented either.
+
+    Returns `(migrated, ambiguous)`."""
+    migradas, ambiguas = 0, []
+    for f in sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []:
+        text = f.read_text(encoding="utf-8")
+        if not EXTRACCION_VIEJA_RE.search(text):
+            continue
+        fm = cfg.split_fm(text)
+        if cfg.as_list(fm.get("vistas")):
+            continue                      # ya migrada (o escrita con el schema nuevo)
+        estrellas = [str(x) for x in cfg.as_list(fm.get("stars")) if str(x).strip()]
+        temas = [str(x) for x in cfg.as_list(fm.get("thesis_links")) if str(x).strip()]
+        reclamos = [(n, "star") for n in estrellas] + [(n, "theme") for n in temas]
+        if len(reclamos) != 1:
+            ambiguas.append((f.stem, [n for n, _ in reclamos]))
+            continue
+        sujeto, tipo = reclamos[0]
+        lim = cfg.fm_bounds(text)
+        if lim is None:
+            ambiguas.append((f.stem, []))
+            continue
+        ini, end = lim
+        bloque = yaml.safe_dump({"vistas": [{"sujeto": sujeto, "tipo": tipo}]},
+                                sort_keys=False, allow_unicode=True, default_flow_style=False)
+        head = text[ini:end].rstrip("\n") + "\n" + bloque.rstrip("\n")
+        cuerpo = EXTRACCION_VIEJA_RE.sub(f"## Vista — {sujeto}", text[end:])
+        cfg.write_text_atomic(f, text[:ini] + head + cuerpo)
+        migradas += 1
+    return migradas, ambiguas
 
 
 def migrate_all_bearing() -> int:
@@ -2690,6 +2741,11 @@ def main() -> int:
                     help="migración #205: saca `symbols_lost:` y `fulltext_layout:` del frontmatter "
                          "de las notas de paper (la fuente de lectura es el PDF, así que ya no "
                          "deciden nada). No requiere slug.")
+    ap.add_argument("--migrate-vistas", action="store_true", dest="migrate_vistas",
+                    help="migración #188: `## Extracción (LLM)` → `vistas[]` + `## Vista — "
+                         "<sujeto>`. El sujeto sale del reclamo de la nota cuando es UNO solo; con "
+                         "varios se lista para declararlo a mano (elegir uno afirmaría una lectura "
+                         "que nadie hizo). No estampa `fecha`: ausente es «no consta». Sin slug.")
     ap.add_argument("--sync-mirror", action="store_true", dest="sync_mirror",
                     help="backfill: rellena en `stars/` los campos espejo de NEA (#70) que están en "
                          "null y el ground-truth sí trae (spectral_type/teff_K/dist_pc/P_rot_days y "
@@ -2741,6 +2797,20 @@ def main() -> int:
         cfg.print_seguro(f"`symbols_lost`/`fulltext_layout` retirados de {n} nota(s) (#205).")
         return 0
 
+    if args.migrate_vistas:
+        n, ambiguas = migrate_all_vistas()
+        cfg.print_seguro(f"{n} nota(s) migradas a `vistas[]` + `## Vista — <sujeto>` (#188).")
+        if ambiguas:
+            cfg.print_seguro(
+                f"  ⚠ {len(ambiguas)} nota(s) NO se pudieron migrar solas: el sujeto de la vista "
+                f"no es inequívoco (elegir uno afirmaría una lectura que nadie hizo desde ahí). "
+                f"Declarala a mano en cada una:")
+            for stem, cands in ambiguas[:20]:
+                cfg.print_seguro(f"      {stem}: {', '.join(cands) or '(sin reclamos)'}")
+            if len(ambiguas) > 20:
+                cfg.print_seguro(f"      … y {len(ambiguas) - 20} más")
+        return 0
+
     if args.migrate_verif_archivo:
         return migrate_all_verif_archivo()
     if args.migrate_facets:
@@ -2763,8 +2833,8 @@ def main() -> int:
         return 0
     if not args.slug:
         ap.error("falta el slug (corren sin slug: --restamp-pdf-links, --restamp-keywords, "
-                 "--restamp-headers, --migrate-disputes, --migrate-bearing, --migrate-txt-fields, --sync-mirror y "
-                 "--rename-paper)")
+                 "--restamp-headers, --migrate-disputes, --migrate-bearing, --migrate-txt-fields, "
+                 "--migrate-vistas, --sync-mirror y --rename-paper)")
 
     if args.web:
         if args.pending and not str(args.pending_motivo or "").strip():

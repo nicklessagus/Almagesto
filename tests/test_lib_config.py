@@ -1595,3 +1595,27 @@ def test_la_corrida_migrada_cuenta_para_n_nuevos(toy_vault):
     bs = cfg.load_busquedas("s")
     assert len(bs) == 2 and bs[0].get("schema", "").startswith("pre-D-28")
     assert bs[-1]["n_nuevos"] == 1 and bs[-1]["n_ya_estaban"] == 2
+
+
+def test_par_key_no_colisiona_por_el_separador(toy_vault):
+    """AUD-180 / INV-125 — el `eje` es texto libre, así que un `::` adentro corría el separador y
+    dos pares distintos colapsaban en la misma clave: el falso «ya lo miramos» que el propio
+    docstring de `par_key` dice evitar, por la puerta del formato en vez de por la del eje."""
+    assert cfg.par_key("A", "B", "x::y") != cfg.par_key("A", "B::x", "y")
+    assert cfg.par_key("A", "B", "eje") == cfg.par_key("B", "A", "eje")   # sigue siendo simétrica
+    assert cfg.par_key("A", "B", "P_rot") != cfg.par_key("A", "B", "K")   # y sigue distinguiendo el eje
+
+
+def test_no_disputas_con_forma_invalida_se_DICE(toy_vault, capsys):
+    """AUD-180 — era un `continue` mudo. El registro se edita a mano, así que una entrada rota es
+    alcanzable, y descartarla en silencio deja el par fuera del índice: el barrido lo vuelve a
+    proponer **sin el motivo** por el que alguien ya lo había juzgado no-disputa."""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    cfg.save_registro("s", {"slug": "s", "no_disputas": [
+        "2019A vs 2020B",                                   # no es un mapa
+        {"motivo": "distinto régimen"},                     # sin bibcodes ni par
+        {"bibcodes": ["2019A", "2020B"], "eje": "K", "motivo": "ok"},
+    ]})
+    idx = cfg.load_no_disputas("s")
+    assert list(idx) == [cfg.par_key("2019A", "2020B", "K")]
+    assert "2 entrada(s) de `no_disputas`" in capsys.readouterr().err

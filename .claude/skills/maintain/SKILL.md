@@ -60,6 +60,10 @@ Progreso del refresh de <entidad>:
    Armá el prompt con `python scripts/extraction_prompt.py <slug> <bibcode> [--theme]` y cosechá
    con `python scripts/harvest_views.py <slug> [--theme]`, que estampa `fecha`/`txt`/`lente` y
    mergea add-only. La incoherencia `vistas[]` ↔ cuerpo es **bloqueante** en el lint.
+   ⚠ Una nota del **schema viejo** (`## Extracción (LLM)` sin `vistas[]`) se migra con
+   `python scripts/make_notes.py --migrate-vistas`: deriva el sujeto del reclamo de la nota cuando
+   es UNO solo y **lista** las que reclaman varios, porque elegir uno afirmaría una lectura que
+   nadie hizo desde ahí. No estampa `fecha` — la extracción vieja ocurrió, pero cuándo no consta.
    ⚠ **`bearing` NO va en la nota del paper** (D-21): la postura respecto de una tesis depende de la
    tesis —un paper puede tocar varias— y vive en la **tabla de evidencia de la hipótesis**, con cita
    textual, donde `verify-citations` la puede chequear. En el paper es un veredicto sin evidencia y

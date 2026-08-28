@@ -424,8 +424,27 @@ def vistas_en_cuerpo(text: str) -> set:
 
     La sección NO va a `SECCIONES_ESTAMPADAS`: es exactamente lo que `verify-citations` tiene que
     contrastar contra el `.txt` — la extracción es el paso más caro de la cadena y hoy es el menos
-    chequeado (6 de 908 notas de paper con bloque de verificación)."""
-    return {m.group(1).strip() for m in VISTA_RE.finditer(text)}
+    chequeado (6 de 908 notas de paper con bloque de verificación).
+
+    ⛔ AUD-178 / INV-134 — dos recortes que faltaban, y los dos producían **hallazgos bloqueantes
+    sobre una nota bien leída**, que es el peor tipo de falso positivo (obliga a "arreglar" trabajo
+    correcto). (a) Un encabezado dentro de un ```code fence``` es un EJEMPLO, no una sección: la
+    doc del repo está llena de bloques así, y `section_start` ya lo descuenta desde #198. (b) El
+    sujeto se recorta en el sufijo que arranca con puntuación —`## Vista — X (2026-08-27)`, la
+    forma que el propio framework documenta— porque si no `X (2026-08-27)` no matchea `X` y la nota
+    dispara LAS DOS incoherencias a la vez: «vista declarada sin su sección» y «sección sin
+    declarar»."""
+    dentro = cfg._offsets_en_fence(text)
+    out = set()
+    for m in VISTA_RE.finditer(text):
+        if m.start() in dentro:
+            continue
+        sujeto = m.group(1).strip()
+        # mismo criterio que `section_start`: el sufijo que arranca con puntuación no es del nombre
+        if (corte := re.search(r"\s+[^\w\s]", sujeto)):
+            sujeto = sujeto[:corte.start()].strip()
+        out.add(sujeto)
+    return out
 
 
 def challenging_rows(text: str) -> int:
@@ -1141,8 +1160,12 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         # cita sin `.txt` en una ficha de estrella no producía NINGÚN hallazgo — justo el "tercer
         # estado silencioso" que INV-03 prohíbe, y encima en la nota donde el contrato pone el
         # estándar de autosuficiencia y donde más `[[bibcode]]` se acumulan.
+        # AUD-176 — `papers/` faltaba, y la prosa de una nota de paper cita otros bibcodes: la
+        # atribución de **segunda mano** (#103) es exactamente eso, «este paper reporta un valor que
+        # es de X». Sin `.txt` de X esa cita no es chequeable, y no producía NINGÚN hallazgo — el
+        # mismo tercer estado silencioso que INV-03 prohíbe, en la nota donde vive la extracción.
         in_verifiable_note = (in_dir(f, "queries") or in_dir(f, "concepts")   # concepts/ incluye hypotheses/
-                              or in_dir(f, "stars"))
+                              or in_dir(f, "stars") or in_dir(f, "papers"))
         # notas de ENTIDAD (#75): son las que sintetizan un sujeto. Una cita que sólo aparece en una
         # query no es "el paper llegó a la bóveda": la query es una respuesta puntual, no la síntesis.
         in_entity_note = in_dir(f, "stars") or in_dir(f, "concepts")   # #33: no comparar paths
@@ -1530,7 +1553,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                     vistas_schema_viejo.append(
                         (stem, "`## Extracción (LLM)` sin `vistas[]`: no consta desde qué sujeto se "
                                "leyó este paper, así que su silencio sobre un eje no se distingue "
-                               "de «se miró y no hay nada» → declarar la vista (schema #188)"))
+                               "de «se miró y no hay nada» → `python scripts/make_notes.py "
+                               "--migrate-vistas` (AUD-175)"))
                 # Declarada y sin hacer. El stub nace con la vista de su sujeto y SIN `fecha`
                 # (la ausencia es «no consta», paso 1): la fecha es lo que dice que la lectura
                 # ocurrió. Sin este renglón, declarar la vista al crear el stub apagaría
@@ -1736,9 +1760,26 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                         f"`python scripts/query_ads.py {_slug} --sweep`"))
         _fechas = {str(p.get("fecha")) for p in cfg.as_list(_d.get("cadena"))
                    if isinstance(p, dict) and p.get("fecha")}
+        # AUD-177 / INV-131 — se exigía el SLUG en el encabezado y la convención documentada usa el
+        # título de la operación, que es el **nombre** («## 2026-08-28 — ingest: tau Ceti», no
+        # `tau_ceti`). El detector reportaba entonces backlog permanente sobre bitácora correcta —
+        # un falso positivo así erosiona la categoría entera: la primera vez que alguien la ve
+        # mentir, deja de mirarla. Se acepta cualquiera de los nombres con los que el sujeto se
+        # nombra: slug, nombre canónico, `concept` y alias.
+        _nombres = {_slug, _slug.replace("_", " ")}
+        _meta_s = cfg.as_map(({} if cfg.stars_error() else cfg.load_stars()).get(
+            next((n for n, m in ({} if cfg.stars_error() else cfg.load_stars()).items()
+                  if isinstance(m, dict) and m.get("slug") == _slug), None)))
+        _meta_t = cfg.as_map(({} if cfg.themes_error() else cfg.load_themes()).get(_slug))
+        for _n, _m in ((None, _meta_s), (None, _meta_t)):
+            _nombres |= {str(x) for x in cfg.as_list(_m.get("aliases")) if str(x).strip()}
+            if _m.get("concept"):
+                _nombres.add(str(_m["concept"]))
+        _nombres |= {n for n, m in ({} if cfg.stars_error() else cfg.load_stars()).items()
+                     if isinstance(m, dict) and m.get("slug") == _slug}
         _sin = sorted(f for f in _fechas
-                      if f and not any(f in ln and _slug in ln for ln in log_txt.splitlines()
-                                       if ln.startswith("## ")))
+                      if f and not any(f in ln and any(x in ln for x in _nombres)
+                                       for ln in log_txt.splitlines() if ln.startswith("## ")))
         if _sin:
             #  @inv INV-131
             log_sin_entrada.append(
@@ -2647,8 +2688,24 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # `themes_error()` primero: con el YAML roto, `load_themes` levanta y tumbaría el lint entero —
     # el chequeo no puede volverse él mismo un falso rojo (misma doctrina que INV-80).
     for _slug, _meta in ({} if cfg.themes_error() else (cfg.load_themes() or {})).items():
-        for _it in cfg.as_list(cfg.as_map(_meta).get("sources")):
+        # AUD-179 / INV-129 — `as_list` devuelve `[]` para un escalar Y para un mapa, así que un
+        # `sources:` con forma inválida daba **cero hallazgos**: el bucle no entraba y el tema salía
+        # limpio. Es el mismo modo de falla que `normalize_lists` cierra para el frontmatter (un
+        # campo que el schema declara lista y llega escalar evade los chequeos por elemento), acá en
+        # la config — y encima en el cuadrante donde TODO entra por decisión de alguien.
+        _src = cfg.as_map(_meta).get("sources")
+        if _src not in (None, [], "") and not isinstance(_src, list):
+            bad_sources.append(
+                (_slug, f"`sources:` no es una lista (es {type(_src).__name__}) → ninguna de sus "
+                        f"entradas se chequea: tiene que ser una lista de mapas "
+                        f"`- {{key, url|pdf, via, motivo}}`"))
+            continue
+        for _it in cfg.as_list(_src):
             if not isinstance(_it, dict):
+                bad_sources.append(
+                    (_slug, f"entrada de `sources:` que no es un mapa ({_it!r}) → evade los "
+                            f"chequeos de procedencia; escribila como `- {{key: …, url: …, "
+                            f"via: …, motivo: …}}`"))
                 continue
             _falta = [k for k in ("via", "motivo") if not _it.get(k)]
             if _falta:

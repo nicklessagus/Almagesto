@@ -3527,3 +3527,33 @@ def test_write_star_note_no_revienta_con_ground_truth_malformado(toy_vault, caps
     assert (toy_vault.STARS / "test_star.md").exists(), "no escribió la ficha"
     if esperado:
         assert esperado in capsys.readouterr().out, "escribió en silencio: la forma mala no se avisó"
+
+
+# ── AUD-175 / INV-64: el migrador que #188 no entregó ────────────────────────
+
+def test_migrate_vistas_convierte_el_schema_viejo(toy_vault, capsys):
+    """AUD-175 / INV-64 — #188 entregó un **detector bloqueante sin migrador**, que es la mitad del
+    contrato del repo: «schema nuevo = migrador de un solo uso + detector bloqueante, nunca lector
+    tolerante». Sin él, toda nota anterior a 1.68.0 queda en rojo con la única salida de editarla a
+    mano (medido en una bóveda real: 908 notas de paper)."""
+    una = mk_note(cfg.PAPERS, "2020unoA...1..1A",
+                  {"bibcode": "2020unoA...1..1A", "tags": ["paper"], "stars": ["Estrella Test"]},
+                  "## Extracción (LLM)\n\nProsa cara.\n")
+    varias = mk_note(cfg.PAPERS, "2020dosB...1..1B",
+                     {"bibcode": "2020dosB...1..1B", "tags": ["paper"],
+                      "stars": ["Estrella Test"], "thesis_links": ["gp"]},
+                     "## Extracción (LLM)\n\nProsa cara.\n")
+    n, ambiguas = mn.migrate_all_vistas()
+
+    assert n == 1 and [a[0] for a in ambiguas] == ["2020dosB...1..1B"]
+    fm = read_fm(una)
+    assert fm["vistas"] == [{"sujeto": "Estrella Test", "tipo": "star"}]
+    assert "fecha" not in fm["vistas"][0], "la extracción vieja ocurrió, pero CUÁNDO no consta"
+    texto = una.read_text(encoding="utf-8")
+    assert "## Vista — Estrella Test" in texto and "## Extracción (LLM)" not in texto
+    assert "Prosa cara." in texto                       # la extracción no se toca
+
+    # la ambigua queda intacta: elegir un sujeto afirmaría una lectura que nadie hizo desde ahí
+    assert "## Extracción (LLM)" in varias.read_text(encoding="utf-8")
+    # y es idempotente
+    assert mn.migrate_all_vistas()[0] == 0

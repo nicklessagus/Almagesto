@@ -1587,9 +1587,19 @@ def par_key(bib_a: str, bib_b: str, eje: str) -> str:
 
     Y **distingue el eje**: los mismos dos papers pueden coincidir en `P_rot` y discrepar en `K`.
     Una clave sólo por bibcodes silenciaría el segundo desacuerdo con el juicio del primero — un
-    falso «ya lo miramos» sobre algo que nadie miró, que es el falso limpio de D-43."""
+    falso «ya lo miramos» sobre algo que nadie miró, que es el falso limpio de D-43.
+
+    ⚠ AUD-180 / INV-125 — las tres partes se **escapan** antes de unirlas. El `eje` es texto libre
+    (`b.K`, `existencia de la señal c`), así que un `::` adentro corría el separador y hacía que dos
+    pares distintos colapsaran en la misma clave: exactamente el falso «ya lo miramos» que el
+    docstring de arriba dice evitar, por la puerta del formato en vez de por la del eje."""
     a, b = sorted((str(bib_a), str(bib_b)))
-    return f"{a}::{b}::{eje}"
+    return "::".join(_par_esc(x) for x in (a, b, str(eje)))
+
+
+def _par_esc(x: str) -> str:
+    """`x` with no raw `:` or `%`, so that the `::` of `par_key` is a real separator."""
+    return x.replace("%", "%25").replace(":", "%3A")
 
 
 def _par_de(entrada: dict) -> str:
@@ -1615,12 +1625,21 @@ def load_no_disputas(slug: str) -> dict:
     acumulativo —un par puede volver a juzgarse cuando cambió la evidencia— y el juicio viejo no se
     borra, queda en la lista para que la historia sea reconstruible."""
     idx: dict = {}
+    malas = 0
     for entrada in as_list(load_registro(slug).get("no_disputas")):
-        if not isinstance(entrada, dict):
+        if not isinstance(entrada, dict) or not (clave := _par_de(entrada)):
+            # AUD-180 / INV-125 — esto era un `continue` MUDO. El registro se edita a mano, así que
+            # una entrada rota (o sin `bibcodes` ni `par`) es alcanzable, y descartarla en silencio
+            # deja el par fuera del índice: el barrido lo vuelve a proponer **sin el motivo** por el
+            # que alguien ya lo había juzgado no-disputa. Es el bug de #51 en el otro registro.
+            malas += 1
             continue
-        clave = _par_de(entrada)
-        if clave:
-            idx[clave] = entrada
+        idx[clave] = entrada
+    if malas:
+        print_seguro(f"  ⚠ {malas} entrada(s) de `no_disputas` de `{slug}` con forma inválida (sin "
+                     f"`bibcodes`/`par`, o no son un mapa) → no entran al índice y esos pares se "
+                     f"van a re-proponer sin su motivo; arreglá {registro_path(slug)}",
+                     file=sys.stderr)
     return idx
 
 

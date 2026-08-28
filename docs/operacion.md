@@ -227,6 +227,8 @@ python scripts/make_notes.py --restamp-keywords   # D-17: `keywords:` desde buil
 python scripts/make_notes.py --restamp-pdf-links  # #47: el link [📄 PDF] ↔ frontmatter `pdf`
 python scripts/make_notes.py --sync-mirror        # #70: campos espejo de NEA que quedaron en null
 python scripts/make_notes.py --migrate-verif-archivo # #117: prefija cada `Hash fuente` con `txt:`/`pdf:`
+python scripts/make_notes.py --migrate-txt-fields # #205: saca `symbols_lost:`/`fulltext_layout:`
+python scripts/make_notes.py --migrate-vistas     # #188: `## Extracción (LLM)` → `vistas[]` + `## Vista — <sujeto>`
 python scripts/make_notes.py --rename-paper VIEJO NUEVO   # D-19: ciclo preprint → publicado
 ```
 
