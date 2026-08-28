@@ -451,6 +451,12 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   empieza por ahí, saca los **ejes** que el trabajo dice aportar, y los **chequea contra el cuerpo**
   — porque es justo donde vive el *afirmar de más*. Si el cuerpo dice menos, eso es un hallazgo
   sobre la **fuente** y va a `salvedades`.
+  ⚠ **Las traducciones no se llaman `## Abstract (es)`**: ese nombre volvía a `## Abstract` un
+  **prefijo** del suyo, y `section_start` tolera a propósito un sufijo que arranca con puntuación
+  (lo necesita para `## Vista — X (2026-08-27)`). Medido el 2026-08-28: con sólo la traducción en la
+  nota, el guard del verbatim la daba por el original y **no lo estampaba nunca**. Es la trampa de
+  prefijo de #176 en el vocabulario propio del framework — se saca renombrando, no aflojando el
+  cortador.
   ⛔ Las cuatro secciones están en `SECCIONES_ESTAMPADAS`, así que `verify-citations` **no las
   mira**: una traducción no es una afirmación de la bóveda y no hay qué contrastar. La red está
   aguas abajo —lo que de acá llegue a una **ficha** sí se verifica contra el PDF—, y de ahí la regla

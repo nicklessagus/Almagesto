@@ -283,9 +283,9 @@ def test_estampa_traduccion_y_conclusiones(toy_vault):
         conclusiones_es="Medimos P_rot = 34 d."))
     hv.harvest("test_star")
     texto = dest.read_text(encoding="utf-8")
-    assert "## Abstract (es)\nMedimos el período de rotación." in texto
+    assert "## Traducción del abstract\nMedimos el período de rotación." in texto
     assert "## Conclusiones\nWe measure P_rot = 34 d." in texto
-    assert "## Conclusiones (es)\nMedimos P_rot = 34 d." in texto
+    assert "## Traducción de las conclusiones\nMedimos P_rot = 34 d." in texto
 
 
 def test_las_ayudas_de_lectura_van_ANTES_de_la_vista(toy_vault):
@@ -309,7 +309,7 @@ def test_un_documento_largo_no_recibe_conclusiones(toy_vault):
     hv.harvest("test_star")
     texto = dest.read_text(encoding="utf-8")
     assert "## Conclusiones" not in texto
-    assert "## Abstract (es)\nEsto sí." in texto, "la traducción del abstract sí, que es corta"
+    assert "## Traducción del abstract\nEsto sí." in texto, "la traducción del abstract sí, que es corta"
 
 
 def test_las_ayudas_de_lectura_son_idempotentes(toy_vault):
@@ -329,14 +329,15 @@ def test_sin_traduccion_no_se_crea_una_seccion_vacia(toy_vault):
     dest = sembrar(toy_vault)
     hv.harvest("test_star")
     texto = dest.read_text(encoding="utf-8")
-    assert "## Abstract (es)" not in texto and "## Conclusiones" not in texto
+    assert "## Traducción" not in texto and "## Conclusiones" not in texto
 
 
 def test_las_ayudas_de_lectura_estan_exentas_del_fan_out(toy_vault):
     """⛔ Son ayuda de lectura, nunca fuente de la que citar: `verify-citations` no las mira, porque
     una traducción no es una afirmación de la bóveda. La red está aguas abajo — lo que de acá llegue
     a una ficha sí se verifica contra el PDF."""
-    for h in ("## Abstract", "## Abstract (es)", "## Conclusiones", "## Conclusiones (es)"):
+    for h in ("## Abstract", "## Traducción del abstract", "## Conclusiones",
+              "## Traducción de las conclusiones"):
         assert any(h.startswith(e) for e in cfg.SECCIONES_ESTAMPADAS), h
 
 
@@ -374,3 +375,23 @@ def test_el_abstract_se_rellena_tambien_sobre_el_placeholder(toy_vault):
     texto = dest.read_text(encoding="utf-8")
     assert "## Abstract\nDel PDF." in texto
     assert "_(no disponible)_" not in texto
+
+
+def test_la_traduccion_no_es_prefijo_del_original(toy_vault):
+    """#176 instanciado en el vocabulario propio: `## Abstract (es)` hacía de `## Abstract` un
+    prefijo del suyo, y `section_start` tolera un sufijo que arranca con puntuación (lo necesita
+    para `## Vista — X (2026-08-27)`). Con sólo la traducción presente, el guard del verbatim la
+    daba por el original y **no lo estampaba nunca** — dejando el insumo del diff de lente offline
+    sin abstract para siempre."""
+    _con_pdf(toy_vault)
+    dest = sembrar(toy_vault, extraccion(abstract_es="Resumen traducido."))
+    hv.harvest("test_star")                       # sólo la traducción
+    assert "## Traducción del abstract" in dest.read_text(encoding="utf-8")
+
+    (cfg.ROOT / "build" / "test_star" / "extraccion" / f"{BIB}.json").write_text(
+        json.dumps(extraccion(abstract="The verbatim abstract.", abstract_es="Resumen traducido.")),
+        encoding="utf-8")
+    hv.harvest("test_star")                       # ahora sí el verbatim
+    texto = dest.read_text(encoding="utf-8")
+    assert "## Abstract\nThe verbatim abstract." in texto, "el verbatim quedó tapado por su traducción"
+    assert cfg.section_start(texto, "## Abstract") != cfg.section_start(texto, "## Traducción del abstract")

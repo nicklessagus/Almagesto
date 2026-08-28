@@ -111,7 +111,15 @@ def section_span(text: str, header: str) -> tuple[int, int] | None:
 
 
 def stamp_reading_aids(dest: Path, data: dict) -> bool:
-    """`## Abstract (es)`, `## Conclusiones` y `## Conclusiones (es)` — las ayudas de lectura (#124).
+    """`## Traducción del abstract`, `## Conclusiones` y su traducción — las ayudas de lectura (#124).
+
+    ⚠ **Las traducciones NO se llaman `## Abstract (es)`.** Ese nombre hacía de `## Abstract` un
+    **prefijo** del suyo, y `section_start` tolera a propósito un sufijo que arranca con puntuación
+    —lo necesita para `## Vista — tau Ceti (2026-08-27)`—. Medido el 2026-08-28: con sólo la
+    traducción en la nota, el guard del verbatim la daba por el original y **no lo estampaba nunca**,
+    dejando a `note_lens_text` (el insumo del diff de lente offline, D-49) sin abstract para siempre.
+    Es la trampa de prefijo de #176 instanciada en el vocabulario propio del framework: se saca
+    renombrando, no aflojando el cortador.
 
     POR QUÉ. La **vista** es lenteada: dice qué aporta el paper *a ese sujeto*. Las conclusiones son
     lo que el paper afirma **sin lente**, y por eso no son redundantes — son lo que hace barata una
@@ -150,10 +158,10 @@ def stamp_reading_aids(dest: Path, data: dict) -> bool:
     _vacio = _ini >= 0 and PLACEHOLDER_ABSTRACT in texto_nota[_ini:_ini + 200]
     if _ini < 0 or _vacio:
         piezas.append(("## Abstract", data.get("abstract")))
-    piezas.append(("## Abstract (es)", data.get("abstract_es")))
+    piezas.append(("## Traducción del abstract", data.get("abstract_es")))
     if not largo:
         piezas += [("## Conclusiones", data.get("conclusiones")),
-                   ("## Conclusiones (es)", data.get("conclusiones_es"))]
+                   ("## Traducción de las conclusiones", data.get("conclusiones_es"))]
     toco = False
     for header, texto in piezas:
         # Ausente = no consta: no se crea una sección vacía. Un `## Conclusiones` en blanco se
