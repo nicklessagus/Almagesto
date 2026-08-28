@@ -49,6 +49,11 @@ if str(SCRIPTS) not in sys.path:
 import lib_blocks as lb
 import lib_config as cfg                       # noqa: E402  (constante pura: ALMAGESTO_VERSION)
 from extract_fulltext import is_legible         # noqa: E402  (función pura, sin side effects de ruta)
+
+# AUD-171: el alcance de una hipótesis tiene que nombrar SLUGS y un `· N papers` para poder
+# re-contarse; sin eso el lint lo reporta (antes apagaba el chequeo en silencio). El generador lo
+# escribe como placeholder y lo sella al final, cuando los `.txt` ya están en disco.
+ALCANCE_PLACEHOLDER = "> Alcance 2026-01-01 · ALCANCE-A-SELLAR"
 from fetch_ground_truth import msini_earth      # noqa: E402  (función pura)
 
 # NO `from conftest import write_yaml`: tanto `tests/conftest.py` como `tests/poblada/conftest.py`
@@ -214,6 +219,24 @@ def _make_star_gt(rng: random.Random, slug: str, n_planets: int) -> tuple[dict, 
     planets = [_make_planet(rng, chr(ord("b") + k), mstar) for k in range(n_planets)]
     gt = {"slug": slug, "host": host, "planets": planets}
     return gt, host
+
+
+def _sellar_alcances(paths, star_slugs) -> None:
+    """Completa el `> Alcance …` de cada hipótesis con el slug y el conteo REALES.
+
+    Se hace al final a propósito: el conteo sale de `raw/fulltext/<slug>/*.txt`, que recién existe
+    después de escribir los papers. Declarar un número a ojo dispararía `alcance_corto` sobre un
+    corpus limpio — contaminación entre categorías, que es lo que este generador existe para evitar."""
+    slug = next(iter(sorted(star_slugs)), None)
+    if slug is None:
+        return
+    d = paths.FULLTEXT / slug
+    n = len(list(d.glob("*.txt"))) if d.is_dir() else 0
+    linea = f"> Alcance 2026-01-01 · estrellas: [{slug}] · {n} papers · 1 con hits"
+    for f in sorted((paths.CONCEPTS / "hypotheses").glob("*.md")):
+        texto = f.read_text(encoding="utf-8")
+        if ALCANCE_PLACEHOLDER in texto:
+            f.write_text(texto.replace(ALCANCE_PLACEHOLDER, linea), encoding="utf-8")
 
 
 def sembrar_corpus(paths, n_papers: int = 900, n_stars: int = 4, n_concepts: int = 20,
@@ -485,11 +508,11 @@ _(se estampa determinista)_
                     if citas else "_(sin papers citados)_")
         # D-34 (10.3): una hipótesis SIN el blockquote de alcance es un hallazgo del lint. El corpus
         # "limpio" tenía cinco, así que la categoría no se podía contar exacto — se sembraba ruido
-        # de fondo sobre el que ninguna anomalía era distinguible. El alcance va **sin slugs**: con
-        # ellos habría que mantener el conteo declarado sincronizado con el corpus generado, y esa
-        # deriva es justo la otra mitad del hallazgo (el alcance que "quedó corto"), que se prueba
-        # aparte.
-        alcance_txt = ("> Alcance 2026-01-01 · corpus sintético · 1 papers · 1 con hits\n\n"
+        # de fondo sobre el que ninguna anomalía era distinguible.
+        # ⚠ AUD-171: el alcance SIN slugs (o sin `· N papers`) también es hallazgo desde 1.74.0 —
+        # apagaba el chequeo en silencio—, así que acá va un PLACEHOLDER que `_sellar_alcances`
+        # completa al final, cuando los `.txt` ya están en disco y el conteo real se puede medir.
+        alcance_txt = (ALCANCE_PLACEHOLDER + "\n\n"
                        if area == "hypotheses" and stem not in _sin_alcance else "")
         gen_line = (f"{GENERATOR_LINE}{ALMAGESTO_VERSION}._\n"
                    if (not vintage_old) and stem not in header_c_stems else "")
@@ -732,10 +755,10 @@ _(ninguno relevante — corpus sintético)_
     if K_status or K_alcance:
         for k in range(K_status):
             st = f"hipotesis-status-{k:03d}"
-            # alcance SIN slugs: con ellos habría que mantener el conteo sincronizado con el
-            # corpus y esta nota dispararía además `alcance_corto` — contaminación entre categorías.
+            # mismo placeholder que arriba: lo sella `_sellar_alcances` con el slug y el
+            # conteo REALES, para que esta nota no dispare además `alcance_corto`.
             _concepto_anom(st, "hypotheses",
-                           "> Alcance 2026-01-01 · corpus sintético · 1 papers\n\n"
+                           ALCANCE_PLACEHOLDER + "\n\n"
                            f"## Evidencia\nApoya [[{paper_stems[0]}]].\n",
                            {"status": "supuesto operativo con caveat conocido"})
         for k in range(K_alcance):
@@ -815,6 +838,8 @@ _(ninguno relevante — corpus sintético)_
     if K_illeg:
         anomalias_censo["fulltext_ilegible"] = sorted(paper_stems[i] for i in illeg_idx)
     anomalias_censo.update(anom_extra)
+
+    _sellar_alcances(paths, star_slugs)
 
     return Censo(
         seed=seed, vintage=vintage, n_papers=n_papers, n_stars=n_stars, n_concepts=n_concepts,

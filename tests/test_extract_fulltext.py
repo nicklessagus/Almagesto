@@ -383,3 +383,39 @@ VACIAS = "\n".join(" " * 40 + f"({i})" for i in range(1, 6))
 VIVAS = "\n".join(f"J(w) = E[(w^T x)^{i}] - 3       ({i}.1)" for i in range(1, 6))
 
 
+
+
+def test_ocr_deja_un_form_feed_POR_pagina(monkeypatch, tmp_path):
+    """AUD-165 / INV-28 — el `"\\f".join(...)` dejaba N−1 form feeds y `pdftotext` emite N.
+
+    Con dos páginas el conteo daba **una**, así que la puerta anti-marca-de-agua de `is_legible`
+    (`pages >= 2`) se desactivaba justo en la población que el OCR existe para rescatar: un escaneo
+    cuya única capa de texto es la marca del bibcode repetida por página volvía «legible»."""
+    from types import SimpleNamespace
+
+    marca = ("2020ApJ...1..1A " * 10) + "\n"          # ~150 chars no-espacio por página
+    paginas = [marca, marca]
+    llamadas = {"n": 0}
+
+    def fake_run(cmd, **k):
+        if cmd[0] == "pdftoppm":
+            for i in range(len(paginas)):
+                (tmp_path / f"p-{i}.png").write_bytes(b"x")
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        out = paginas[llamadas["n"]]
+        llamadas["n"] += 1
+        return SimpleNamespace(returncode=0, stdout=out, stderr="")
+
+    class _TD:
+        def __enter__(self):
+            return str(tmp_path)
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(ef.tempfile, "TemporaryDirectory", _TD)
+    monkeypatch.setattr(ef.subprocess, "run", fake_run)
+    texto = ef.ocr_pdf(tmp_path / "x.pdf")
+    assert texto.count("\f") == 2, "un form feed por página, como pdftotext"
+    ok, motivo = ef.is_legible(texto)
+    assert not ok and "marca de agua" in motivo

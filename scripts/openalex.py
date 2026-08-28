@@ -113,7 +113,9 @@ def to_record(work: dict) -> dict:
         "doi": _bare_doi(work.get("doi")),
         "doctype": work.get("type"),
         "bibstem": venue,
-        "citation_count": work.get("cited_by_count", 0),
+        # AUD-166 / INV-69: ausente = «no consta», nunca 0 (mismo contrato que `search_arxiv` y,
+        # desde 1.74.0, que `query_ads.to_record`).
+        "citation_count": work.get("cited_by_count"),
         "keyword": [n for campo in ("keywords", "topics")
                     for x in (work.get(campo) or [])
                     for n in [(x or {}).get("display_name")] if n],

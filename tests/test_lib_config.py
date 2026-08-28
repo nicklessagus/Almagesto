@@ -1540,3 +1540,58 @@ def test_no_se_propaga_un_PDF_truncado_entre_slugs(toy_vault, capsys):
     txt = cfg.FULLTEXT / "otro" / f"{stem}.txt"
     txt.write_text("prosa", encoding="utf-8")
     assert cfg.artefacto_en_otro_slug(cfg.FULLTEXT, "test_star", stem, ".txt") == txt
+
+
+def test_la_marca_de_arxiv_se_busca_por_PAGINA_no_por_tope_de_chars():
+    """AUD-164 / INV-29 — la marca va en el margen y `pdftotext` la emite donde caiga dentro de la
+    página; una primera página a dos columnas pasa holgadamente los 4000 caracteres.
+
+    Con el corte fijo, un **preprint** quedaba clasificado `publisher`, que es justo la distinción
+    que #57 existe para hacer: con `eprint` una discrepancia numérica es candidata a diferencia de
+    versión y no a error de la ficha. El alcance sigue acotado a dos páginas, y eso también importa:
+    leer el paper entero traería los `arXiv:` de la BIBLIOGRAFÍA, que son de otros trabajos."""
+    relleno = "x" * 6000
+    assert cfg.arxiv_stamp(relleno + " arXiv:2101.00001v2 " + "y" * 100) == "v2"
+    # dos páginas alcanzan; la tercera (donde suele empezar la bibliografía) ya no cuenta
+    assert cfg.arxiv_stamp("p1\f" + relleno + "\fp3 arXiv:2101.00001v2") is None
+    # y el piso de 4000 sigue cubriendo el `.txt` sin saltos de página
+    assert cfg.arxiv_stamp("arXiv:2101.00001") == ""
+    assert cfg.arxiv_stamp("un paper cualquiera sin marca") is None
+
+
+def test_reattach_yaml_comments_devuelve_la_curacion_a_su_lugar():
+    """AUD-169 / INV-139 — `yaml.safe_dump` tira TODOS los comentarios, y el framework instruye
+    editar estos archivos a mano: esos comentarios son curación que nadie puede reconstruir.
+
+    Se restauran las dos formas que la gente escribe —el bloque de arriba, re-anclado a su clave, y
+    el comentario al final de la línea— y lo que no se pudo re-anclar vuelve como huérfano, nunca en
+    silencio: ése es el punto."""
+    original = ("# curado a mano el 2026-08-01\n"
+                "bibcode: 2020X\n"
+                "teff_K: 5344  # SIMBAD, no NEA\n"
+                "# el P_rot lo puso el usuario\n"
+                "P_rot_days: 34\n")
+    nuevo = "otra: 1\nbibcode: 2020X\nteff_K: 5344\n"        # `P_rot_days` ya no está
+    head, huerfanos = cfg.reattach_yaml_comments(original, nuevo)
+    assert "# curado a mano el 2026-08-01\nbibcode: 2020X" in head
+    assert "teff_K: 5344  # SIMBAD, no NEA" in head
+    assert huerfanos == ["# el P_rot lo puso el usuario"], "lo no re-anclable se NOMBRA"
+    # un `#` dentro de un escalar entrecomillado es contenido, no comentario
+    h2, _ = cfg.reattach_yaml_comments('title: "un # adentro"\n', 'title: "un # adentro"\n')
+    assert h2.strip() == 'title: "un # adentro"'
+
+
+def test_la_corrida_migrada_cuenta_para_n_nuevos(toy_vault):
+    """AUD-172 / INV-89 — el plegado del schema viejo iba DESPUÉS de computar `conocidos`.
+
+    Así, los bibcodes de la corrida migrada no contaban como conocidos y la primera corrida
+    post-migración reportaba como `n_nuevos` todo lo que ya estaba: justo el número que D-28
+    introdujo para distinguir «traje 40» de «traje 40 y 38 ya estaban», mintiendo en la única
+    corrida donde importa."""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    cfg.save_registro("s", {"slug": "s", "busqueda": {"fecha": "2026-01-01",
+                                                      "bibcodes": ["2019A", "2019B"]}})
+    cfg.save_busqueda("s", {"fecha": "2026-08-28", "bibcodes": ["2019A", "2019B", "2020C"]})
+    bs = cfg.load_busquedas("s")
+    assert len(bs) == 2 and bs[0].get("schema", "").startswith("pre-D-28")
+    assert bs[-1]["n_nuevos"] == 1 and bs[-1]["n_ya_estaban"] == 2

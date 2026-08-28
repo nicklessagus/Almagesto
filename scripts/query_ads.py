@@ -547,11 +547,21 @@ def chain_candidates(core_bibcodes: list[str], rows: int, subject_filter: str) -
 
 
 def _variant_hit(low: str, var: str) -> bool:
-    """`var` aparece en `low` sin que un dígito extienda su número de catálogo (INV-72)."""
+    """`var` occurs in `low` without anything extending its catalogue number (INV-72).
+
+    ⚠ AUD-174 — the cut looked **only** at an adjacent digit, and the **decimal** suffix is a real
+    Gliese convention: `GJ 84.1` (and `GJ 1002.1`) are stars DISTINCT from `GJ 84`. Since this is
+    level-0 auto-acceptance — the paper enters the corpus with nobody judging it — a spurious match
+    files another star's bibliography under this one. It also cuts on the left: an alias that is a
+    bare number (`122064`) must not match the tail of another (`HD 3122064`)."""
     i = low.find(var)
     while i != -1:
         fin = i + len(var)
-        if not (var[-1:].isdigit() and fin < len(low) and low[fin].isdigit()):
+        cola = low[fin:fin + 2]
+        extendido = var[-1:].isdigit() and (cola[:1].isdigit()
+                                            or (cola[:1] == "." and cola[1:2].isdigit()))
+        precedido = var[:1].isdigit() and i > 0 and low[i - 1].isdigit()
+        if not extendido and not precedido:
     #  @inv INV-72
             return True
         i = low.find(var, i + 1)
@@ -762,7 +772,13 @@ def to_record(d: dict) -> dict:
         "doi": (d.get("doi") or [None])[0],
         "doctype": d.get("doctype"),
         "bibstem": (d.get("bibstem") or [None])[0],
-        "citation_count": d.get("citation_count", 0),
+        # AUD-166 / INV-69 — la clave AUSENTE es «ADS no lo devolvió», no «cero citas», y hasta
+        # 1.73.0 se persistía `0`: un 0 afirma «no lo cita nadie» sobre un dato que nadie miró, y
+        # aguas abajo la puerta 2 de D-26 (`citation_count >= umbral`) lo lee como «no es
+        # fundacional» — excluyendo por construcción justo a los papers que esa puerta existe para
+        # dejar entrar. `search_arxiv` escribe la regla contraria **y su motivo** desde que nació;
+        # eran dos backends del mismo schema con contratos opuestos (red #2).
+        "citation_count": d.get("citation_count"),
         "keyword": d.get("keyword", []),
         "facets": facets,
         "relevant": relevant,

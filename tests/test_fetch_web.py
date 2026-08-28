@@ -120,7 +120,8 @@ def test_main_idempotente_reusa_fecha_del_snapshot(toy_vault, fake_defuddle, mon
     d = toy_vault.FULLTEXT / "gp"
     d.mkdir(parents=True, exist_ok=True)
     (d / "2006RasmussenWilliams.txt").write_text(
-        "# header\nsource_url : x\nretrieved  : 2020-05-05 (UTC)\ncontenido viejo\n", encoding="utf-8")
+        "# header\nsource_url : https://example.org/gp\nretrieved  : 2020-05-05 (UTC)\n"
+        "contenido viejo\n", encoding="utf-8")
     assert run_main(monkeypatch, ARGS) == 0
     assert fake_defuddle.fetched == []               # no re-baja
     fm = read_fm(toy_vault.PAPERS / "2006RasmussenWilliams.md")
@@ -174,3 +175,36 @@ def test_force_rebaja_la_fuente_pero_no_pisa_la_extraccion(toy_vault, fake_defud
     assert fm["methods"] == ["gaussian-process"], "la extracción LLM no se pisa"
     assert fm["role"] == ["fundacional"]
     assert "Prosa cara escrita por el agente." in note.read_text(encoding="utf-8")
+
+
+def test_colision_de_citekey_no_mezcla_dos_fuentes(toy_vault, fake_defuddle, monkeypatch):
+    """AUD-170 — el `.txt` en disco es el snapshot de OTRA url y la nota se escribía con la
+    metadata de la nueva: la cita apunta a una página y el archivo que `verify-citations` lee es
+    otro.
+
+    La citekey es sintética (`AAAA+Autor`) y la colisión es normal —dos trabajos del mismo autor y
+    año—, así que no es hipotética."""
+    d = toy_vault.FULLTEXT / "gp"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "2006RasmussenWilliams.txt").write_text(
+        "# header\nsource_url : https://otra.org/distinta\nretrieved  : 2020-05-05 (UTC)\ncuerpo\n",
+        encoding="utf-8")
+    with pytest.raises(SystemExit, match="colisión de citekey"):
+        run_main(monkeypatch, ARGS)
+    assert not (toy_vault.PAPERS / "2006RasmussenWilliams.md").exists()
+
+
+def test_force_re_estampa_el_accessed_de_la_nota(toy_vault, fake_defuddle, monkeypatch):
+    """AUD-170 — con `--force` el snapshot es nuevo y la nota conservaba el `accessed` viejo (sólo
+    se reescribe con `--force-note`): publicaba un "Retrieved <fecha>" que no es el del `.txt` de
+    al lado, que es el archivo que `verify-citations` lee."""
+    assert run_main(monkeypatch, ARGS) == 0
+    nota = toy_vault.PAPERS / "2006RasmussenWilliams.md"
+    texto = nota.read_text(encoding="utf-8")
+    nota.write_text(texto.replace(f"accessed: {read_fm(nota)['accessed']}", "accessed: 2020-05-05"),
+                    encoding="utf-8")
+    assert run_main(monkeypatch, [*ARGS, "--force"]) == 0
+    fm = read_fm(nota)
+    assert fm["accessed"] != "2020-05-05"
+    assert str(fm["accessed"]) == fw.cfg.snapshot_retrieved(
+        toy_vault.FULLTEXT / "gp" / "2006RasmussenWilliams.txt")

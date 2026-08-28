@@ -198,8 +198,9 @@ def ocr_header(why: str) -> str:
 
 
 def ocr_pdf(pdf: Path) -> str | None:
-    """PDF → texto por OCR: `pdftoppm -r 300 -png` por página + `tesseract` a stdout, unidas con
-    form feed (como pdftotext). Determinista para una misma versión de tesseract. None si falla."""
+    """PDF → texto por OCR: `pdftoppm -r 300 -png` por página + `tesseract` a stdout, con un form
+    feed DESPUÉS de cada página (la misma forma que emite `pdftotext`, de la que depende el conteo
+    de páginas de `is_legible`). Determinista para una misma versión de tesseract. None si falla."""
     with tempfile.TemporaryDirectory() as td:
         r = subprocess.run(["pdftoppm", "-r", str(OCR_DPI), "-png", str(pdf), str(Path(td) / "p")],
                            capture_output=True, text=True, encoding="utf-8", errors="replace")
@@ -218,7 +219,11 @@ def ocr_pdf(pdf: Path) -> str | None:
                 print(f"    ! tesseract falló en {pg.name}: {r.stderr.strip()[:120]}")
                 return None
             out.append(r.stdout)
-        return "\f".join(out)
+        # AUD-165 / INV-28 — un form feed DESPUÉS de cada página, como emite `pdftotext`. El `join`
+        # dejaba N−1, así que un OCR de 2 páginas contaba **una** y la puerta anti-marca-de-agua
+        # (`pages >= 2`) se desactivaba justo en la población que el OCR existe para rescatar: un
+        # escaneo cuya única capa es la marca del bibcode repetida por página volvía «legible».
+        return "".join(pg_txt + "\f" for pg_txt in out)
 
 
 

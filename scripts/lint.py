@@ -564,9 +564,17 @@ def note_disputes(fm: dict) -> list:
 
 # Campos que el schema declara **lista** (CLAUDE.md). `True` = lista de MAPAS.
 # `role` no está: su contrato admite escalar o lista, y se valida aparte.
+# ⚠ AUD-167 / INV-63 — era un subconjunto A MANO y se le habían quedado afuera campos que el
+# schema declara lista igual: `keywords` (D-17: es lo que hace posible el diff de lente offline),
+# `versions` (D-19: los bibcodes viejos del mismo trabajo) y `no_vista`/`vistas`/`sources`. Un campo
+# que no está acá no se normaliza **ni se reporta**, así que un escalar ahí evade en silencio los
+# chequeos por elemento de su tipo — que es exactamente el defecto que esta función existe para
+# cerrar, con la lista de campos como único punto de fuga.
 LIST_FIELDS = {"tags": False, "aliases": False, "stars": False, "facets": False, "methods": False,
                "thesis_links": False, "activity_indicators_expected": False,
-               "planets": True, "disputes": True, "corrections": True}
+               "keywords": False,
+               "planets": True, "disputes": True, "corrections": True,
+               "versions": True, "vistas": True, "no_vista": True}
 
 
 def normalize_lists(fm: dict) -> list:
@@ -1322,7 +1330,22 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                     (stem, "sin blockquote `> Alcance <fecha> · …`: un veredicto negativo sin "
                            "alcance declarado se lee como universal → declararlo (skill "
                            "`test-hypothesis`, paso 0)"))
-            elif alc["slugs"]:
+            elif not alc["slugs"]:
+                # AUD-171 / INV-92 — un blockquote SIN slugs apagaba el chequeo entero en silencio:
+                # la nota tiene la línea, así que pasa el primer caso, y el `elif` no entra. El
+                # veredicto sigue leyéndose como universal y encima ahora parece declarado.
+                alcance_corto.append(
+                    (stem, f"el alcance del {alc['fecha']} no nombra ningún slug "
+                           f"(`temas: [...]` / `estrellas: [...]`) → no se puede re-contar el "
+                           f"universo, así que el veredicto no se puede pesar: declaralos"))
+            elif alc["n_papers"] is None:
+                # AUD-171, la otra puerta: con slugs pero sin `· N papers` no hay contra qué
+                # comparar el conteo de hoy, y el detector de «quedó corto» queda mudo.
+                vigente, faltan = corpus_vigente(alc["slugs"])
+                alcance_corto.append(
+                    (stem, f"el alcance del {alc['fecha']} no declara `· N papers` → no hay contra "
+                           f"qué comparar (hoy esos slugs tienen {vigente}); completá la línea"))
+            else:
                 vigente, faltan = corpus_vigente(alc["slugs"])
                 if faltan:
                     # No se puede contar lo que no existe: se DICE cuál falta en vez de comparar
@@ -1330,7 +1353,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                     alcance_corto.append(
                         (stem, f"el alcance nombra slug(s) sin fulltext en disco "
                                f"({', '.join(faltan)}) → ¿typo, o entidad borrada/renombrada?"))
-                elif alc["n_papers"] is not None and vigente > alc["n_papers"]:
+                elif vigente > alc["n_papers"]:
                     alcance_corto.append(
                         (stem, f"alcance del {alc['fecha']} declarado sobre {alc['n_papers']} "
                                f"papers y hoy esos slugs tienen {vigente} (+"

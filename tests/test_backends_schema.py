@@ -78,6 +78,24 @@ def test_el_veredicto_del_clasificador_tiene_el_tipo_correcto(nombre, hacer, toy
     assert rec["why_excluded"] is None or isinstance(rec["why_excluded"], str)
 
 
+@pytest.mark.parametrize("nombre,hacer,ausente", [
+    ("query_ads", lambda: qa.to_record({"bibcode": "2020X....1..1X", "title": ["T"],
+                                        "year": "2020", "doctype": "article"}), None),
+    ("openalex", lambda: oa.to_record({k: v for k, v in _OA_WORK.items()
+                                       if k != "cited_by_count"}), None),
+    ("search_arxiv", lambda: sx.to_record(ET.fromstring(_ATOM).findall("a:entry", sx.NS)[0]), None),
+], ids=["query_ads", "openalex", "search_arxiv"])
+def test_citation_count_ausente_es_None_no_cero(nombre, hacer, ausente, toy_vault):
+    """AUD-166 / INV-69 — la clave AUSENTE es «no consta», nunca «cero citas».
+
+    Un `0` afirma «no lo cita nadie» sobre un dato que nadie miró, y aguas abajo la puerta 2 de
+    D-26 (`citation_count >= umbral`) lo lee como «no es fundacional»: excluye por construcción
+    justo a los papers que esa puerta existe para dejar entrar. `search_arxiv` escribía la regla
+    correcta —y su motivo— desde que nació, y los otros dos la contraria: dos backends del mismo
+    schema con contratos opuestos es exactamente lo que la red #2 existe para cazar."""
+    assert hacer()["citation_count"] is ausente
+
+
 # ── red #2 · `_flags_usados`: una implementación, siete clientes ────────────
 
 FLAGS_CLIENTES = ["fetch_pdf", "extract_fulltext", "fetch_ground_truth", "check_retractions",

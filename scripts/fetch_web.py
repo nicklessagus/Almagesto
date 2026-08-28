@@ -169,6 +169,17 @@ def main() -> int:
     out = outdir / f"{args.citekey}.txt"
     # fecha del snapshot (UTC): la comparte el .txt y la nota. Si el .txt ya existe, se reusa la suya.
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    # AUD-170 — COLISIÓN de citekey: el `.txt` que ya está en disco es el snapshot de OTRA url.
+    # Sin esto, la nota se escribía con la metadata de la url nueva y el `.txt` seguía siendo el de
+    # la vieja: la cita apunta a una página y el archivo que `verify-citations` lee es otro. La
+    # citekey es sintética (`AAAA+Autor`) y la colisión es normal —dos trabajos del mismo autor y
+    # año—, así que no es hipotética.
+    if out.exists() and (previa := cfg.snapshot_url(out)) and previa != args.url:
+        sys.exit(f"⛔ colisión de citekey: `{out}` ya es el snapshot de\n"
+                 f"     {previa}\n   y estás pidiendo\n     {args.url}\n"
+                 f"   Son dos fuentes distintas con la misma clave. Elegí otra citekey (la "
+                 f"convención admite un sufijo: `{args.citekey}b`), o borrá el snapshot viejo si "
+                 f"de verdad querés reemplazarlo.")
     if out.exists() and not args.force:
         # la nota coincide con el .txt: si el snapshot es viejo, vale su fecha original, no hoy
         # (parser en lib_config — un solo lugar de verdad del header; lo comparte make_notes)
@@ -202,6 +213,12 @@ def main() -> int:
             n_authors=args.n_authors, doi=args.doi,
             venue=args.venue, accessed=stamp, force=args.force_note,
         )
+        # AUD-170 — con `--force` el snapshot es NUEVO y la nota conserva el `accessed` viejo (sólo
+        # se reescribe con `--force-note`): la nota publicaría un "Retrieved <fecha>" que no es el
+        # del `.txt` de al lado, que es el archivo que `verify-citations` lee. Cirugía sobre la
+        # línea, no re-escritura: la extracción LLM no se toca.
+        if args.force and make_notes.stamp_accessed(cfg.PAPERS / f"{args.citekey}.md", stamp):
+            cfg.print_seguro(f"  · `accessed` de la nota re-estampado a {stamp} (snapshot nuevo)")
         cfg.print_seguro("  siguiente: completar la extracción LLM en la nota y verificar con verify-citations")
     return 0
 

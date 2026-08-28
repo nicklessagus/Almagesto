@@ -2448,6 +2448,24 @@ def test_identidad_por_doi_tambien(toy_vault, capsys):
     assert rc == 1 and "10.1/mismo" in rep
 
 
+def test_LIST_FIELDS_cubre_los_campos_lista_del_schema(toy_vault, capsys):
+    """AUD-167 / INV-63 — era un subconjunto A MANO, y un campo que no está no se normaliza **ni se
+    reporta**: un escalar ahí evade en silencio los chequeos por elemento de su tipo.
+
+    O sea el defecto que esta función existe para cerrar, con la lista de campos como único punto de
+    fuga. Faltaban `keywords` (D-17, el insumo del diff de lente offline), `versions` (D-19),
+    `vistas` y `no_vista` (#188)."""
+    for campo in ("keywords", "versions", "vistas", "no_vista"):
+        assert campo in lint.LIST_FIELDS, campo
+    mk_note(toy_vault.PAPERS, "2020escA...1..1A",
+            {"tags": ["paper"], "bibcode": "2020escA...1..1A", "keywords": "una-sola",
+             "versions": "2019viejo"}, "")
+    link_from_index(toy_vault, "2020escA...1..1A")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc != 0
+    assert "`keywords` no es una lista" in rep and "`versions` no es una lista" in rep
+
+
 def test_versions_no_cuenta_como_duplicado(toy_vault, capsys):
     """El alias vive en `versions[]` de la nota canónica: eso NO es un duplicado, es el registro de
     que el mismo trabajo tuvo otro bibcode."""
@@ -2820,6 +2838,23 @@ def test_alcance_quedo_corto_marca(toy_vault, capsys):
     rc, rep = run_lint_reporte(capsys)
     sec = _seccion(rep, "Alcance de hipótesis")
     assert "hip_corta" in sec and "+3" in sec and "2026-01-01" in sec, sec
+
+
+def test_alcance_declarado_pero_no_evaluable_se_reporta(toy_vault, capsys):
+    """AUD-171 / INV-92 — dos formas de «declarar» el alcance lo APAGABAN sin reportar nada.
+
+    Un blockquote sin slugs pasa el primer caso (la línea existe) y no entra al `elif`: el veredicto
+    sigue leyéndose como universal y encima ahora parece declarado. Y uno con slugs pero sin
+    `· N papers` deja mudo al detector de «quedó corto», que es lo único que mide si el universo
+    creció."""
+    _fulltexts("test_star", 5)
+    _hipotesis("hip_sin_slugs", "# hip\n\n> Alcance 2026-01-01 · 2 papers · 1 con hits\n\nX.\n")
+    _hipotesis("hip_sin_n", "# hip\n\n> Alcance 2026-01-01 · estrellas: [test_star]\n\nX.\n")
+    link_from_index(toy_vault, "hip_sin_slugs", "hip_sin_n")
+    _rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "Alcance de hipótesis")
+    assert "hip_sin_slugs" in sec and "no nombra ningún slug" in sec, sec
+    assert "hip_sin_n" in sec and "no declara `· N papers`" in sec, sec
 
 
 def test_alcance_al_dia_calla(toy_vault, capsys):

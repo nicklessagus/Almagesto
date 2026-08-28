@@ -100,8 +100,9 @@ def pdf_source_info(slug: str | None, stem: str) -> tuple[str | None, str | None
     #  @inv INV-29
         if _txt_provenance(txt) == "web":
             return "web", None
-        head = txt.read_text(encoding="utf-8", errors="replace")[:cfg.ARXIV_STAMP_SCAN_CHARS]
-        ver = cfg.arxiv_stamp(head)
+        # AUD-164: el alcance lo decide `arxiv_stamp` (por PÁGINA, no por un tope de caracteres);
+        # recortar acá antes de llamarla volvía a imponer el corte que el fix sacó.
+        ver = cfg.arxiv_stamp(txt.read_text(encoding="utf-8", errors="replace"))
         if ver is not None:
             return "eprint", (ver or None)
     reg = cfg.ROOT / "build" / slug / "pdf_source.json"
@@ -280,6 +281,34 @@ def restamp_pdf_links() -> int:
     changed = sum(1 for p in notes if stamp_pdf_link(p))
     cfg.print_seguro(f"papers: {changed} de {len(notes)} re-estampados (link [📄 PDF] ↔ frontmatter `pdf`)")
     return 0
+
+
+def stamp_accessed(dest, accessed: str) -> bool:
+    """Re-stamp `accessed:` on an existing web note. True when it changed the file.
+
+    ⛔ AUD-170 — `fetch_web --force` re-downloads the snapshot with today's date and the note keeps
+    the old one, because the note is only rewritten with `--force-note`. `accessed` **is** the
+    citation's "Retrieved <fecha>", so the note ended up publishing a retrieval date that does not
+    match the `.txt` sitting next to it — and that `.txt` is the artifact `verify-citations` reads.
+    Machine metadata like `pdf`/`fulltext`, so it is surgery on its own line: the LLM extraction and
+    every other field are preserved byte for byte."""
+    if not dest.exists():
+        return False
+    text = dest.read_text(encoding="utf-8")
+    lim = cfg.fm_bounds(text)
+    if lim is None:
+        return False
+    ini, end = lim
+    lines = text[ini:end].split("\n")
+    idx = next((i for i, ln in enumerate(lines) if ln.startswith("accessed:")), None)
+    if idx is None:
+        return False                     # sin el campo no se inventa la posición (mismo criterio)
+    nueva = f"accessed: {accessed}"
+    if lines[idx] == nueva:
+        return False
+    lines[idx] = nueva
+    cfg.write_text_atomic(dest, text[:ini] + "\n".join(lines) + text[end:])
+    return True
 
 
 def stamp_keywords(dest, keywords: list) -> bool:
@@ -554,7 +583,9 @@ def migrate_disputes(dest) -> bool:
             if k == "planets":
                 reordenado["disputes"] = nuevas
         front = reordenado
-    cfg.write_text_atomic(dest, fm(front) + text[end + 5:])
+    cfg.write_text_atomic(dest, text[:ini]
+                          + _fm_preservando_comentarios(fm(front), text[ini:end], dest)
+                          + text[end:])
     cfg.print_seguro(f"  {dest.name}: {len(nuevas)} disputa(s) migradas a posiciones explícitas")
     return True
 
@@ -824,7 +855,9 @@ def sync_mirror() -> int:
                     reportar(f"{pl.get('letter')}.{campo}", dest.name, val, val_gt)
 
         if changed:
-            cfg.write_text_atomic(dest, fm(front) + text[end + 5:])
+            cfg.write_text_atomic(dest, text[:ini]
+                                  + _fm_preservando_comentarios(fm(front), text[ini:end], dest)
+                                  + text[end:])
 
     cfg.print_seguro(f"sync-mirror: {rellenados} campo(s) rellenados desde el ground-truth "
           f"({len(notes)} ficha(s) revisadas); {reportados} sin tocar (motivo arriba de cada uno).")
@@ -930,6 +963,27 @@ def merge_frontmatter_list(dest, field: str, values: list) -> bool:
         return _no("forma no reconocida (escalar con valor) — no se toca")
     cfg.write_text_atomic(dest, text[:ini] + "\n".join(lines) + text[end:])
     return True
+
+
+def _fm_preservando_comentarios(nuevo_bloque: str, head_viejo: str, dest) -> str:
+    """The re-serialised YAML block (no delimiters) carrying the old head's comments.
+
+    AUD-169 / INV-139 — `sync_mirror` and `migrate_disputes` re-serialise the whole frontmatter with
+    `yaml.safe_dump`, which drops every comment. The framework tells people to hand-edit these
+    files, so those comments are curation: a stamper that erases them destroys work nobody can
+    reconstruct, and reports success while doing it. Whatever cannot be re-anchored is **named**
+    instead of disappearing."""
+    cuerpo = nuevo_bloque[4:-4] if nuevo_bloque.startswith("---\n") else nuevo_bloque
+    if "#" not in head_viejo:
+        return cuerpo.strip("\n")                    # el caso normal, y es gratis
+    merged, huerfanos = cfg.reattach_yaml_comments(head_viejo, cuerpo)
+    if huerfanos:
+        cfg.print_seguro(f"  ⚠ {dest.name}: {len(huerfanos)} comentario(s) del frontmatter no se "
+                         f"pudieron re-anclar (su clave ya no está) → van al final; revisalos:")
+        for c in huerfanos:
+            cfg.print_seguro(f"      {c}")
+        merged = merged.rstrip("\n") + "\n" + "\n".join(huerfanos)
+    return merged.strip("\n")
 
 
 def excluded_table(slug: str) -> str:
@@ -1659,7 +1713,16 @@ def stamp_concept_rollup(slug: str, dest) -> bool:
 # suelto en prosa — una cita transcripta del paper que lo menciona textualmente no es un link a la
 # nota, y un replace ciego la reescribiría (adversario con test propio).
 def _wikilink_re(stem: str):
-    return re.compile(r"\[\[" + re.escape(stem) + r"(\||\]\])")
+    """`[[stem]]`, `[[stem|alias]]`, `[[stem#section]]` and `[[stem^block]]`, without matching a
+    stem that merely prefixes it.
+
+    ⚠ AUD-168 / INV-84 — the two Obsidian ANCHOR forms (`#` and `^`) were missing, and those are
+    exactly what a long note uses to point at one section or one block of a paper. A rename left
+    them pointing at the old bibcode — broken, and **listed by nobody**: the lint's broken-wikilink
+    detector does read them (its `LINK_RE` cuts at `#`), so they showed up as a finding right after
+    the rename, over a link the renamer was supposed to have fixed. The captured group is re-emitted
+    verbatim, so the anchor survives untouched."""
+    return re.compile(r"\[\[" + re.escape(stem) + r"(\||\]\]|#|\^)")
 
 
 # #114: el DOI que DataCite le asigna a un eprint de arXiv. `10.48550/arXiv.2605.28635`
@@ -2008,8 +2071,17 @@ def estado_line(slug: str, dest) -> str:
         # registro, que es la bitácora y sí debe crecer, D-28). Lo que el lector necesita saber es
         # que el universo es la UNIÓN de varias búsquedas y no el embudo de la última — eso lo dice
         # la palabra; cuántas veces se miró y cuándo lo dice el registro, que la línea ya linkea.
-        cuantas = ", acumulado" if len(bs) > 1 else ""
-        partes.append(f"búsqueda {b['fecha']} ({universo} → {b.get('n_core', '?')} core{cuantas})")
+        # AUD-173 / INV-81 — los dos números tienen ALCANCES distintos cuando hay varias corridas:
+        # el universo es la UNIÓN (D-28) y `n_core` es el de la ÚLTIMA. Publicarlos como `A → B`
+        # los presenta como el embudo de una misma población, así que la ficha decía «1200 → 8
+        # core» donde el 8 es de la última corrida sobre 40. Cada número lleva su alcance escrito.
+        if len(bs) > 1:
+            # ⚠ Sin `len(bs)`: el conteo de CORRIDAS es bitácora y crece en cada re-run aunque no
+            # entre un paper nuevo — rompería la idempotencia de la regla 6 (#105).
+            partes.append(f"búsqueda {b['fecha']} ({universo} acumulados; "
+                          f"{b.get('n_core', '?')} core en esta corrida)")
+        else:
+            partes.append(f"búsqueda {b['fecha']} ({universo} → {b.get('n_core', '?')} core)")
         if b.get("n_candidates"):
             partes.append(f"{b['n_candidates']} sin juzgar")
         if b.get("truncated"):

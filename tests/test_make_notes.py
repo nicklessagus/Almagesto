@@ -707,6 +707,27 @@ def test_migrate_disputes_materializa_el_polo_implicito(toy_vault, capsys):
     assert claves.index("disputes") == claves.index("planets") + 1
 
 
+def test_migrate_disputes_no_borra_los_comentarios_del_frontmatter(toy_vault, capsys):
+    """AUD-169 / INV-139 — la re-serialización con `yaml.safe_dump` tiraba TODOS los comentarios.
+
+    El framework instruye editar el frontmatter a mano («el `P_rot` lo puso el usuario»), así que
+    esos comentarios son curación: un estampador que los borra destruye trabajo que nadie puede
+    reconstruir, y encima informa éxito."""
+    dest = ficha_vieja(toy_vault, [
+        {"letter": "b", "P_days": 20.0, "K_ms": 0.9, "e": 0.1, "mass_earth": 2.0,
+         "status": "confirmed",
+         "disputes": [{"field": "K", "ref": "2020disD...1..1D", "alt": 1.4}]}])
+    texto = dest.read_text(encoding="utf-8")
+    dest.write_text(texto.replace("P_rot_days: 34.0",
+                                  "# lo puso el usuario a mano (Baliunas 1996)\nP_rot_days: 34.0  # sin NEA"),
+                    encoding="utf-8")
+    assert mn.migrate_disputes(dest) is True
+    salida = dest.read_text(encoding="utf-8")
+    assert "# lo puso el usuario a mano (Baliunas 1996)" in salida
+    assert "P_rot_days: 34.0  # sin NEA" in salida
+    assert read_fm(dest)["P_rot_days"] == 34.0           # y sigue parseando
+
+
 def test_migrate_disputes_existence_usa_el_status_de_nea(toy_vault):
     """`existence` no tiene valor numérico: lo que NEA sostiene es el `status` del planeta."""
     dest = ficha_vieja(toy_vault, [
@@ -1462,7 +1483,9 @@ def test_estado_line_se_actualiza_y_no_duplica(toy_vault):
     assert mn.stamp_estado("test_star", dest) is True
     out = dest.read_text(encoding="utf-8")
     assert out.count("> _Estado") == 1
-    assert "búsqueda 2026-08-21 (120 → 14 core, acumulado)" in out   # #105: no el nº de corridas
+    # AUD-173: los dos números tienen ALCANCES distintos (el universo es la unión de D-28; el core
+    # es el de ESTA corrida) y cada uno lo lleva escrito. Sigue sin ir el nº de corridas (#105).
+    assert "búsqueda 2026-08-21 (120 acumulados; 14 core en esta corrida)" in out
     assert "⚠ truncada" in out and "2026-08-01" not in out
 
 
@@ -2318,6 +2341,28 @@ def test_renombre_no_toca_menciones_en_prosa(toy_vault):
     out = ficha.read_text(encoding="utf-8")
     assert "[[2021pubY...1..1Y]]" in out
     assert '"ver 2020preX...1..1X en la tabla 3"' in out
+
+
+def test_renombre_reescribe_los_wikilinks_CON_ANCLA(toy_vault):
+    """AUD-168 / INV-84 — faltaban las dos formas de ancla de Obsidian (`#` y `^`).
+
+    Son justo lo que una nota larga usa para apuntar a una sección o a un bloque concreto de un
+    paper. El renombre las dejaba apuntando al bibcode viejo, o sea rotas — y el detector de
+    wikilinks rotos del lint sí las lee, así que aparecían como hallazgo **después** del renombre,
+    sobre un link que el renombrador tenía que haber arreglado. El ancla sobrevive intacta."""
+    _paper("2020preX...1..1X")
+    mn.write_star_note("test_star", force=True)
+    ficha = cfg.STARS / "test_star.md"
+    ficha.write_text(ficha.read_text(encoding="utf-8").replace(
+        "## Huecos",
+        "Ver [[2020preX...1..1X#Vista — Estrella Test]] y [[2020preX...1..1X^tabla3]], "
+        "y [[2020preX...1..1X|el preprint]].\n\n## Huecos"), encoding="utf-8")
+    mn.rename_paper("2020preX...1..1X", "2021pubY...1..1Y")
+    out = ficha.read_text(encoding="utf-8")
+    assert "[[2021pubY...1..1Y#Vista — Estrella Test]]" in out
+    assert "[[2021pubY...1..1Y^tabla3]]" in out
+    assert "[[2021pubY...1..1Y|el preprint]]" in out
+    assert "2020preX" not in out
 
 
 def test_crear_segunda_nota_mismo_trabajo_rehusa(toy_vault, capsys):

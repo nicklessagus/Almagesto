@@ -1192,6 +1192,12 @@ def test_subject_in_title_no_matchea_por_prefijo_de_catalogo():
     assert qa.subject_in_title("Planets around GJ 71", ["GJ 71"])          # el sujeto real
     assert qa.subject_in_title("GJ 71 b confirmed", ["GJ 71"])             # seguido de letra
     assert qa.subject_in_title("tau Ceti revisited", ["tau Cet"])          # alfabético: sigue OK
+    # AUD-174: el sufijo DECIMAL es convención real del catálogo Gliese — `GJ 84.1` es otra estrella
+    assert not qa.subject_in_title("Rotation of GJ 84.1", ["GJ 84"])
+    assert not qa.subject_in_title("GJ 1002.1 in the survey", ["GJ 1002"])
+    assert qa.subject_in_title("GJ 84. A new planet", ["GJ 84"])           # punto de oración, no sufijo
+    # y por la izquierda: un alias que es puro número no matchea la cola de otro
+    assert not qa.subject_in_title("HD 3122064 revisited", ["122064"])
 
 
 def test_main_chaining_solo_auto_acepta_sujeto_en_titulo(toy_vault, toy_classifier, no_sleep,

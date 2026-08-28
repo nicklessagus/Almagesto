@@ -108,13 +108,30 @@ FULLTEXT_WEB_MARK = "# Almagesto — snapshot web"
 # reales del paper" y un v1 pre-referato puede decir otra cosa que el publicado.
 ARXIV_STAMP_RE = re.compile(r"arXiv:\s*(\d{4}\.\d{4,5}|[a-z-]+(?:\.[A-Z]{2})?/\d{7})(v\d+)?",
                             re.I)
-ARXIV_STAMP_SCAN_CHARS = 4000     # la marca está en la 1ª página; no hace falta leer el paper entero
+ARXIV_STAMP_SCAN_CHARS = 4000     # piso: la marca está en el margen, y `pdftotext` la ubica donde
+ARXIV_STAMP_SCAN_PAGES = 2        # quiera dentro de la página — ver `arxiv_stamp`
 
 
 def arxiv_stamp(text: str) -> str | None:
-    """Versión del eprint ("v3", o "" si la marca no la trae) si el texto arranca con la marca de
-    arXiv; None si no está. Sólo mira el principio (la marca va en el margen de la 1ª página)."""
-    m = ARXIV_STAMP_RE.search(text[:ARXIV_STAMP_SCAN_CHARS])
+    """The eprint version ("v3", or "" when the stamp carries none) if `text` shows the arXiv stamp
+    in its first pages; None otherwise.
+
+    ⚠ AUD-164 / INV-29 — the scope is defined by **page**, not by a fixed character budget. The
+    stamp sits in the side margin and `pdftotext` emits it wherever it falls inside that page's
+    flow: a two-column paper's first page comfortably exceeds 4000 characters, and there the fixed
+    cut left a **preprint** classified as `publisher` — which is exactly the distinction #57 exists
+    to draw, because with `eprint` a numeric discrepancy is a candidate version difference rather
+    than an error in the note.
+
+    The scope is still bounded, on purpose: the stamp appears on **every** page, so two are plenty,
+    and reading the whole paper would pick up the `arXiv:` ids of the bibliography — which belong
+    to OTHER works and would turn any paper into an eprint. The 4000-character floor covers a
+    `.txt` with no page breaks (a single-page OCR, a web snapshot)."""
+    paginas = text.split("\f")[:ARXIV_STAMP_SCAN_PAGES]
+    alcance = "\f".join(paginas)
+    if len(alcance) < ARXIV_STAMP_SCAN_CHARS:
+        alcance = text[:ARXIV_STAMP_SCAN_CHARS]
+    m = ARXIV_STAMP_RE.search(alcance)
     return (m.group(2) or "") if m else None
 
 
@@ -682,6 +699,84 @@ def gate2_threshold(meta) -> tuple[int | None, str | None]:
         return None, f"`fundacional_min_citas: {v}` tiene decimales — un conteo de citas es entero"
     return None, (f"`fundacional_min_citas: {v!r}` no es un número (es {type(v).__name__}) — si lo "
                   f"escribiste entre comillas en `themes.yaml`, sacáselas")
+
+
+_YAML_KEY_RE = re.compile(r"^(\s*)([A-Za-z_][\w.-]*):")
+
+
+def reattach_yaml_comments(original: str, nuevo: str) -> tuple[str, list[str]]:
+    """Put back into `nuevo` the YAML comments that `original` carried. `(head, huérfanos)`.
+
+    ⛔ AUD-169 / INV-139 — `sync_mirror` and `migrate_disputes` re-serialize the whole frontmatter
+    with `yaml.safe_dump`, which **silently drops every comment**. The framework explicitly tells
+    people to hand-edit these files («el `P_rot` lo puso el usuario a mano», «sacá la entrada de
+    `decisiones`»), so those comments are curation: a stamper that erases them destroys work nobody
+    can reconstruct, and does it while reporting success.
+
+    Two shapes are restored, which are the two people write: the **standalone block** above a key
+    (re-anchored to that key, so it survives a reordering) and the **trailing comment** on a key's
+    own line. Anything whose anchor key no longer exists comes back in `huérfanos` for the caller to
+    report — never dropped in silence, which is the whole point.
+
+    Deliberately naive about nesting: it anchors by `(indent, key)` on the first match. A frontmatter
+    with the same key at the same indentation twice (two planets with a commented `K_ms`) puts the
+    comment on the first one. Better a comment slightly out of place than a comment deleted."""
+    bloque: list[str] = []
+    pendientes: list[tuple[str, str, list[str]]] = []     # (indent, key, comment lines)
+    trailing: dict[tuple[str, str], str] = {}
+    for ln in original.split("\n"):
+        desnudo = ln.strip()
+        if desnudo.startswith("#"):
+            bloque.append(ln)
+            continue
+        m = _YAML_KEY_RE.match(ln)
+        if m:
+            if bloque:
+                pendientes.append((m.group(1), m.group(2), bloque))
+                bloque = []
+            resto = ln[m.end():]
+            if (i := _trailing_comment_at(resto)) is not None:
+                trailing[(m.group(1), m.group(2))] = resto[i:]
+        elif desnudo:
+            bloque = []                                   # el bloque colgaba de algo que no es clave
+    huerfanos = list(bloque)                              # comentarios al final, sin clave abajo
+    lineas = nuevo.split("\n")
+    for indent, clave, comentario in pendientes:
+        idx = next((i for i, ln in enumerate(lineas)
+                    if (m := _YAML_KEY_RE.match(ln)) and (m.group(1), m.group(2)) == (indent, clave)),
+                   None)
+        if idx is None:
+            huerfanos.extend(comentario)
+            continue
+        lineas[idx:idx] = comentario
+    for (indent, clave), comentario in trailing.items():
+        for i, ln in enumerate(lineas):
+            m = _YAML_KEY_RE.match(ln)
+            if m and (m.group(1), m.group(2)) == (indent, clave) and \
+                    _trailing_comment_at(ln[m.end():]) is None:
+                lineas[i] = ln.rstrip() + comentario
+                break
+        else:
+            huerfanos.append(f"{clave}:{comentario}")
+    return "\n".join(lineas), huerfanos
+
+
+def _trailing_comment_at(resto: str) -> int | None:
+    """Offset of the ` #` that opens a trailing comment in `resto`, or None. Quote-aware: a `#`
+    inside a quoted scalar (`title: "a # b"`) is content, not a comment."""
+    comilla = ""
+    for i, c in enumerate(resto):
+        if comilla:
+            if c == comilla:
+                comilla = ""
+        elif c in "\"'":
+            comilla = c
+        elif c == "#" and (i == 0 or resto[i - 1] in " \t"):
+            j = i
+            while j > 0 and resto[j - 1] in " \t":   # el espaciado antes del `#` es parte del
+                j -= 1                                # comentario: sin él queda pegado al valor
+            return j
+    return None
 
 
 def print_seguro(texto: str, file=None) -> None:
@@ -1593,6 +1688,20 @@ def save_busqueda(slug: str, busqueda: dict) -> None:
     data = load_registro(slug)
     data.setdefault("slug", slug)
     previas = [b for b in as_list(data.get("busquedas")) if isinstance(b, dict)]
+    # D-28: la clave vieja `busqueda:` (mapa, UNA corrida) es el schema pre-1.26. El lector nuevo
+    # no la entiende y el lint la bloquea — pero **borrarla destruye la única corrida que ese
+    # registro documenta**, y el registro es el único artefacto no regenerable de la bóveda
+    # (INV-53: "escribir un registro nuevo no borra el juicio ya registrado, y la historia es
+    # reconstruible"). Se PLIEGA al frente de la lista, marcada, en vez de perderse: así la
+    # migración no cuesta información y el universo acumulado la puede contar.
+    # ⚠ AUD-172 / INV-89 — el plegado va ANTES de computar `conocidos`. Al revés, los bibcodes de la
+    # corrida migrada no contaban como conocidos y la primera corrida post-migración reportaba como
+    # `n_nuevos` todo lo que ya estaba: justo el número que D-28 introdujo para distinguir «traje
+    # 40» de «traje 40 y 38 ya estaban», mintiendo en la única corrida donde importa.
+    vieja = data.pop("busqueda", None)
+    if isinstance(vieja, dict) and not previas:
+        vieja = {**vieja, "schema": "pre-D-28 (plegada al migrar; una sola corrida)"}
+        previas = [vieja]
     conocidos: set = set()
     for b in previas:
         conocidos.update(as_list(b.get("bibcodes")))
@@ -1601,16 +1710,6 @@ def save_busqueda(slug: str, busqueda: dict) -> None:
     if bibs:
         entrada["n_nuevos"] = len([b for b in bibs if b not in conocidos])
         entrada["n_ya_estaban"] = len([b for b in bibs if b in conocidos])
-    # D-28: la clave vieja `busqueda:` (mapa, UNA corrida) es el schema pre-1.26. El lector nuevo
-    # no la entiende y el lint la bloquea — pero **borrarla destruye la única corrida que ese
-    # registro documenta**, y el registro es el único artefacto no regenerable de la bóveda
-    # (INV-53: "escribir un registro nuevo no borra el juicio ya registrado, y la historia es
-    # reconstruible"). Se PLIEGA al frente de la lista, marcada, en vez de perderse: así la
-    # migración no cuesta información y el universo acumulado la puede contar.
-    vieja = data.pop("busqueda", None)
-    if isinstance(vieja, dict) and not previas:
-        vieja = {**vieja, "schema": "pre-D-28 (plegada al migrar; una sola corrida)"}
-        previas = [vieja]
     data["busquedas"] = previas + [entrada]
     save_registro(slug, data)
 
