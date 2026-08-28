@@ -554,6 +554,13 @@ def accept_source(slug: str, idents: list, via: str, motivo: str) -> int:
             cfg.print_seguro(f"      doi: {doi}")
         if w.get("authorships"):
             cfg.print_seguro(f"      n_authors: {len(w['authorships'])}")
+        # #124/#207 · el abstract ya se pagó y hasta 1.72.0 se tiraba: OpenAlex lo sirve como índice
+        # invertido (`openalex._abstract` lo rearma) y el snippet no lo emitía, así que la nota
+        # nacía con `_(no disponible)_`. Con #205 el PDF es la única fuente de lectura, así que en
+        # un `pending: paywall` el abstract es TODO lo que la nota tiene — y puede alcanzar.
+        # Plegado a una línea: el YAML de un tema se edita a mano.
+        if (abs_ := " ".join((oa._abstract(w) or "").split())):
+            cfg.print_seguro(f"      abstract: {abs_!r}")
         cfg.print_seguro(f"      via: {via}")
         cfg.print_seguro(f"      fecha: {hoy}")
         cfg.print_seguro(f"      motivo: {motivo!r}")

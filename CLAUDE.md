@@ -419,6 +419,18 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   como *extraído pero no sintetizado*. Opcional
   `retracted: true` + `retraction{type,notice_doi,date,source}` — lo estampa `scripts/check_retractions.py`
   (Crossref) cuando el paper fue **retractado**; el lint lo surface como bloqueante (fuente no válida).
+  ⛔ **`## Abstract` va en TODA nota de paper, verbatim (#124).** Es la capa **auditable** del
+  cuerpo —copia de catálogo, no síntesis— y `classify_offline` la lee para re-clasificar sin
+  `build/` (D-49). Los tres backends la devuelven: ADS en `abstract`, arXiv en el `summary`,
+  OpenAlex como índice invertido que `openalex._abstract` rearma. Hasta 1.72.0 el carril off-ADS la
+  **tiraba** —`triage --accept-source` no la emitía y `write_web_paper_note` no tenía dónde
+  recibirla—, así que toda nota off-ADS nacía con `_(no disponible)_` habiendo tenido el texto.
+  Pesa más desde #205: con el PDF como única fuente de lectura, en un `pending_source` el abstract
+  es **todo** lo que la nota tiene, y puede alcanzar (medido: el de `2020BAAA...61B..27U` niega la
+  existencia del planeta g de HD 40307 y da un período nuevo para f). ⚠ Y es justo donde la fuente
+  afirma **de más** (*generalization bias*): una vista construida desde ahí se declara
+  `fuente: abstract` (#207).
+
   En notas **off-ADS** el schema suma `source_url` (URL de la fuente web; null si es PDF local),
   `accessed` (fecha del snapshot — es la cita "Retrieved <fecha>") y, si la fuente no se pudo
   conseguir, `pending_source: paywall|scan|unextractable` (el lint la lista como precondición).

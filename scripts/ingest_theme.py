@@ -285,7 +285,8 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
                                             doi=s.get("doi"), venue=s.get("venue"),
                                             pending=_pend,
                                             pending_motivo=str(s["pending_motivo"]).strip(),
-                                            unidad_cita=_unidad, alcance=_alcance or None)
+                                            unidad_cita=_unidad, alcance=_alcance or None,
+                                            abstract=s.get("abstract"))
             pending_items.append((key, str(s["pending"]),
                                   s.get("doi") or s.get("url") or "(sin puntero conocido)"))
             continue
@@ -339,7 +340,8 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
                                             title=s.get("title"), first_author=s.get("author"),
                                             year=s.get("year"), n_authors=s.get("n_authors"),
                                             doi=s.get("doi"), venue=s.get("venue"),
-                                            unidad_cita=_unidad, alcance=_alcance or None)
+                                            unidad_cita=_unidad, alcance=_alcance or None,
+                                            abstract=s.get("abstract"))
     # Tema MIXTO: un método no-astro casi siempre tiene alguna aplicación/variante publicada en
     # revista astro — papers con bibcode ADS real. Van en `extra_core:` (no en `sources:`, que
     # degradaría el stub: clave sintética, citation_count 0, blockquote off-ADS falso) y para
