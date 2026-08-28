@@ -81,3 +81,22 @@ conocidos:
 
 # 2026-08-27 (issue #182): 46 → 45. `make_notes._listify_curado` era una COPIA de
 # `cfg.listify_curado` y se eliminó (red #3). No se amnistió nada: el símbolo dejó de existir.
+
+# ── Las otras DOS MITADES de la convención (2026-08-28, pasada `/auditar` — AUD-193/194) ─────────
+#
+# `CLAUDE.md` dice **«archivos, nombres de funciones, docstrings y comentarios NUEVOS en inglés»**
+# y este ratchet miraba **sólo los nombres**: dos tercios de la regla no los vigilaba nadie. Es el
+# corolario del propio repo —*una promesa que el sistema dejó de cumplir en silencio es peor que una
+# que nunca hizo*— aplicado a la regla que ya había nacido así una vez (#156).
+#
+# Los dos techos nacen en lo medido hoy y **sólo pueden bajar**, igual que el de nombres. Ninguno es
+# un rojo: son deuda **anterior** a la convención (2026-08-24) y la regla dice *sin retrofit*. Lo que
+# impiden es que CREZCA, que es el único daño que sigue ocurriendo.
+#
+# ⚠ `docstrings_castellano` es **heurística declarada, no prueba**: marca un docstring con ≥3
+# palabras funcionales del castellano. Puede dar falsos positivos con prosa inglesa que cite
+# términos del dominio. El techo los absorbe — lo que este ratchet mide es el **delta**, no el
+# valor absoluto.
+
+docstrings_castellano: 308   # medido: 2026-08-28 — 308 de 407 docstrings (76 %)
+sin_docstring: 69            # medido: 2026-08-28 — 69 de 476 funciones/clases (14 %)

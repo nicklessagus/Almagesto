@@ -15,6 +15,7 @@ sólo baja impide que la deuda **crezca**, que es el único daño que sigue ocur
 from __future__ import annotations
 
 import ast
+import re
 import sys
 from pathlib import Path
 
@@ -47,6 +48,55 @@ NEUTRALES = {"merge", "diff", "repo", "upstream", "vault", "verdict", "frontmatt
 def _es_castellano(nombre: str) -> bool:
     segs = [s for s in nombre.strip("_").lower().split("_") if s]
     return any(s in SEGMENTOS_ES and s not in NEUTRALES for s in segs)
+
+
+# Marcadores de castellano en PROSA (docstrings y comentarios). Palabras funcionales que el inglés
+# no tiene: se exigen **tres** para no marcar un docstring inglés que cite un término del dominio.
+# ⚠ Es heurística declarada, no prueba — el techo la absorbe: lo que este ratchet mide es el DELTA.
+PROSA_ES = re.compile(
+    r"\b(que|para|con|los|las|una|del|por|como|cuando|pero|porque|desde|entre|sobre|esto|esta|"
+    r"hace|dice|sin|más|así|cada|todo|toda|ningún|ninguna|acá|allá|arriba|abajo)\b", re.I)
+MIN_MARCADORES = 3
+
+
+def docstrings_en_castellano() -> list[str]:
+    """`archivo.py::nombre` de cada `def`/`class` de `scripts/` + `tools/` con docstring en
+    castellano.
+
+    La convención de `CLAUDE.md` dice **«archivos, nombres de funciones, docstrings y comentarios
+    NUEVOS en inglés»** y hasta el 2026-08-28 el ratchet miraba **sólo los nombres**: dos tercios de
+    la regla no los vigilaba nadie. Medido ese día: **299 de 407** docstrings en castellano (73 %).
+
+    Ese 73 % es deuda **anterior** a la convención y la regla dice *sin retrofit*, así que el techo
+    nace ahí. Lo que este ratchet impide es que **crezca**, que es el único daño que sigue
+    ocurriendo — mismo argumento que el de nombres."""
+    out = []
+    for arbol in ("scripts", "tools"):
+        for p in sorted((RAIZ / arbol).glob("*.py")):
+            arbol_ast = ast.parse(p.read_text(encoding="utf-8"))
+            for n in ast.walk(arbol_ast):
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    d = ast.get_docstring(n)
+                    if d and len(PROSA_ES.findall(d)) >= MIN_MARCADORES:
+                        out.append(f"{p.name}::{n.name}")
+    return sorted(out)
+
+
+def sin_docstring() -> list[str]:
+    """`archivo.py::nombre` de cada `def`/`class` de `scripts/` + `tools/` **sin docstring**.
+
+    Este repo escribe docstrings largos y razonados: son un contrato de facto, y el frente C de la
+    pasada `/auditar` audita justamente que se cumplan. Una función sin docstring queda fuera de esa
+    auditoría por construcción. Medido el 2026-08-28: **69 de 476** (14 %)."""
+    out = []
+    for arbol in ("scripts", "tools"):
+        for p in sorted((RAIZ / arbol).glob("*.py")):
+            arbol_ast = ast.parse(p.read_text(encoding="utf-8"))
+            for n in ast.walk(arbol_ast):
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    if not ast.get_docstring(n):
+                        out.append(f"{p.name}::{n.name}")
+    return sorted(out)
 
 
 def simbolos_en_castellano() -> list[str]:
@@ -89,3 +139,40 @@ def test_no_crecen_los_simbolos_en_castellano():
         import warnings
         warnings.warn(f"idioma bajó a {len(hallados)} (techo {techo}): actualizá `techo` en "
                       f"{RATCHET.name}", stacklevel=2)
+
+
+# ── las otras dos mitades de la convención (AUD-193/194) ────────────────────────────────────────
+
+
+def _techo(campo: str) -> int:
+    return int((yaml.safe_load(RATCHET.read_text(encoding="utf-8")) or {})[campo])
+
+
+def test_no_crecen_los_docstrings_en_castellano():
+    """La convención nombra **«docstrings y comentarios»** y hasta hoy sólo se vigilaban los nombres.
+
+    El techo es deuda anterior al 2026-08-24 y la regla dice *sin retrofit*: lo que este ratchet
+    impide es que crezca. ⚠ Es heurística declarada —≥3 palabras funcionales del castellano—, así
+    que puede tener falsos positivos; lo que mide es el **delta**."""
+    hoy = docstrings_en_castellano()
+    techo = _techo("docstrings_castellano")
+    assert len(hoy) <= techo, (
+        f"{len(hoy)} docstrings en castellano > techo {techo}: la convención dice que los NUEVOS van "
+        f"en inglés. Si el crecimiento es legítimo (renombre, refactor), bajá el techo y decilo en "
+        f"el commit.\n  " + "\n  ".join(hoy[-8:]))
+    if len(hoy) < techo:
+        print(f"✅ bajó a {len(hoy)} — actualizá `docstrings_castellano` en {RATCHET.name}")
+
+
+def test_ninguna_funcion_nueva_sin_docstring():
+    """Este repo escribe docstrings largos y razonados: son un contrato de facto, y el frente C de
+    `/auditar` audita justamente que se cumplan. Una función sin docstring queda **fuera de esa
+    auditoría por construcción**."""
+    hoy = sin_docstring()
+    techo = _techo("sin_docstring")
+    assert len(hoy) <= techo, (
+        f"{len(hoy)} funciones/clases sin docstring > techo {techo}: en este repo el docstring es "
+        f"el contrato de la función, y sin él nadie puede auditar que se cumpla.\n  "
+        + "\n  ".join(hoy[-8:]))
+    if len(hoy) < techo:
+        print(f"✅ bajó a {len(hoy)} — actualizá `sin_docstring` en {RATCHET.name}")

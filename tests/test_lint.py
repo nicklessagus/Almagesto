@@ -3904,6 +3904,7 @@ def test_vista_sin_fuente_es_backlog(toy_vault, capsys):
 def test_vista_solo_abstract_pide_el_PDF_y_no_es_un_error(toy_vault, capsys):
     """La vista es legítima y está declarada; el hallazgo pide **conseguir el PDF**. Mismo carril
     que `pending_source`, visto desde la lectura en vez de desde la adquisición."""
+    #  @inv INV-138
     mk_note(toy_vault.PAPERS, "2020abs...1..1A",
             {"tags": ["paper"], "stars": ["Estrella Test"],
              "vistas": [{"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-08-28",

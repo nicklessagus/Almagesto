@@ -735,6 +735,13 @@ verificable:
                          Cada par verificado deja una fila con DOS hashes.
 ```
 
+⚠ **Una excepción nombrada: la fuente WEB.** Un snapshot de `fetch_web` (`source_url` poblado,
+`pdf: null`) no tiene PDF **por diseño**, y el argumento de #205 no le aplica: ahí el `.txt` no es
+una copia degradada de un original, **es la captura** — determinista (defuddle, URL + fecha) y es lo
+que la cita referencia con `accessed`. Se lee, se cita por **línea** y su fila lleva `txt:<sha10>`.
+Sin esto, el carril web quedaba sin forma de cerrar su verificación: el skill mandaba buscar un PDF
+inexistente y la fila caía en `verif_sin_archivo`, bloqueante.
+
 ⛔ **La fuente es el PDF; el `.txt` es el ÍNDICE (#205).** Hasta 1.71.0 el extractor leía el `.txt`
 y **escalaba al PDF sólo si un detector se lo decía** (`symbols_lost`, `fulltext_layout`,
 `fulltext_source: ocr`). Esa rama se eliminó porque los detectores no discriminan. **Medido el
@@ -1538,10 +1545,25 @@ funciones nuevas desde el 2026-08-24, **30** tienen nombre en castellano, y `scr
 de cumplir en silencio es peor que una que nunca hizo* (corolario de las seis reglas de método): o
 la regla tiene casa y red, o no es una regla.
 
-La red es `tests/test_idioma_codigo.py` con ratchet en `tools/idioma-ratchet.yaml`: cuenta los
-símbolos en castellano de `scripts/` + `tools/` (hoy **45** sobre el árbol entero — el número lo da
-`simbolos_en_castellano()`, no esta prosa) y **sólo puede
-bajar**; además, un nombre que no esté en la lista `conocidos` pone el test en rojo **aunque el
+La red es `tests/test_idioma_codigo.py` con ratchet en `tools/idioma-ratchet.yaml`, y desde el
+2026-08-28 vigila **las tres mitades de la regla**, no sólo los nombres — que era el estado anterior,
+o sea la misma promesa incumplida en silencio que #156 vino a cerrar, un nivel más abajo:
+
+| ratchet | qué cuenta | techo hoy |
+|---|---|---|
+| `simbolos` | nombres de `def`/`class` en castellano | **45** de ~476 |
+| `docstrings_castellano` | docstrings en castellano (heurística: ≥3 palabras funcionales) | **308** de 407 (76 %) |
+| `sin_docstring` | funciones/clases **sin** docstring | **69** de 476 (14 %) |
+
+Los tres **sólo pueden bajar** y ninguno es un rojo: son deuda **anterior** a la convención y la
+regla dice *sin retrofit*. Lo que impiden es que **crezca**. ⚠ El de docstrings es **heurística
+declarada, no prueba**: puede marcar prosa inglesa que cite términos del dominio, así que lo que
+mide es el **delta**, no el valor absoluto. El tercero existe porque en este repo el docstring **es
+el contrato de la función** —el frente C de `/auditar` audita justamente que se cumpla—, y una
+función sin él queda fuera de esa auditoría por construcción.
+
+Los números los dan `simbolos_en_castellano()`, `docstrings_en_castellano()` y `sin_docstring()`, no
+esta prosa; además, un nombre que no esté en la lista `conocidos` pone el test en rojo **aunque el
 total no suba**, que es lo que impide que la deuda rote. Los 45 son deuda declarada, no un rojo —
 exigir cero sería rojo permanente, y un rojo permanente se deja de mirar. Renombrarlos rompería
 marcas `@inv` y los punteros de `docs/trazabilidad.md` sin arreglar nada.

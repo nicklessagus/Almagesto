@@ -236,6 +236,7 @@ def _con_pdf(toy_vault, bib=BIB):
 def test_la_vista_estampa_la_fuente_declarada(toy_vault):
     """#207 — `fuente` dice si la vista salió del paper o de ocho líneas de abstract. Sin el campo
     las dos se leen igual, que es el falso limpio de D-34 aplicado a la lectura."""
+    #  @inv INV-138
     _con_pdf(toy_vault)
     dest = sembrar(toy_vault, extraccion(vista={"sujeto": "Estrella Test", "tipo": "star",
                                                 "txt": "test_star", "fuente": "pdf"}))

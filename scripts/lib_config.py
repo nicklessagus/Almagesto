@@ -986,6 +986,7 @@ def load_vistas(meta: dict, *, entry: str = "?") -> list:
         # `fuente` es OPCIONAL (ausente = no consta) pero, si está, cerrada: un typo la dejaría muda
         # justo para la pregunta que existe para contestar —¿esta vista salió del paper o de ocho
         # líneas de abstract?—, que es la distinción que #207 vino a hacer visible.
+        #  @inv INV-138
         if (fuente := str(x.get("fuente") or "").strip()) and fuente not in VISTA_FUENTES:
             raise VistasError(_vistas_error(
                 entry, [sujeto],

@@ -53,8 +53,16 @@ almagesto_version: "1.68.0"
 # emite el recolector, por el mismo argumento que ya rige para los techos.
 
 techos:
-  sin_marca: 6    # medido: 2026-08-27 (pasada `/auditar`) — 05, 23, 95, 130, 132 y 133.
-  sin_test: 6     # medido: 2026-08-27 — los mismos seis.
+  sin_marca: 7    # medido: 2026-08-28 (pasada `/auditar`) — 05, 23, 95, 130, 132, 133 y 139.
+  sin_test: 7     # medido: 2026-08-28 — los mismos siete.
+  # ratchet-sube: sin_marca 6→7 — el contrato incorporó INV-139, que enuncia lo que FALTA y nace
+  #   `INCUMPLIDO`: no hay símbolo que marcar porque los seis sitios que debería cubrir siguen
+  #   abiertos (AUD-131/146/149/200/201/202). Marcar alguno sería adjudicarle cobertura a una
+  #   garantía que el propio contrato declara incumplida.
+  # ratchet-sube: sin_test 6→7 — el mismo, por el mismo motivo.
+  # ⚠ INV-138 entró en la misma tanda y **NO movió el techo**: tiene sus marcas en implementación
+  # (`lib_config.load_vistas`, `harvest_views.harvest`) y en cuatro tests. La diferencia entre los
+  # dos es exactamente lo que este mecanismo mide.
   # ratchet-sube: sin_marca 3→6 — el contrato incorporó INV-130, 132 y 133 (issues #159/#160), los
   #   tres enunciando lo que FALTA: no hay símbolo que marcar todavía.
   # ratchet-sube: sin_test 3→6 — los mismos tres, por el mismo motivo: no hay test que marcar sobre

@@ -328,6 +328,7 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
         # estamparla dejaría una vista de ocho líneas de abstract leyéndose como lectura del paper.
         # Fuera del vocabulario o incoherente ⇒ se rechaza el JSON entero, no se corrige a mano:
         # adivinar cuál de las dos mitades miente es exactamente lo que este campo evita.
+        #  @inv INV-138
         fuente = str(vista.get("fuente") or "").strip()
         if fuente and fuente not in cfg.VISTA_FUENTES:
             n["rechazadas"] += 1

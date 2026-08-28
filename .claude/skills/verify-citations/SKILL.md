@@ -31,6 +31,7 @@ inversa. Verificar contra eso devuelve **`no-soportada` sobre afirmaciones corre
 | **localizar antes de leer** | `grep -n` sobre el `.txt` te dice **en qué zona** está la afirmación; después abrís esa parte del PDF. En un paper corto podés leerlo entero y saltear el paso. ⚠ Grepear un `.txt` tiene sus mañas —entrelazado de columnas, guiones de corte, espacios que no se normalizan— y están en `reference/convenciones-fulltext.md`. |
 | **`pdf_source: eprint`** (#57) | el PDF es el **preprint**: una discrepancia numérica contra un valor publicado es candidata a **diferencia de versión**, no a cita rota. ⛔ Nunca "corregir" la nota hacia el eprint. `null` = desconocido, que **no** es "publicado". |
 | **documento largo** (#80) | un libro no se rasteriza entero. Ahí el `.txt` como índice es **imprescindible**: grepeás, sacás la página, abrís **esas** páginas del PDF. La unidad de cita la declara `unidad_cita` y el recorte, `alcance`. |
+| **fuente WEB** (#205 / AUD-204) | ⛔ **excepción nombrada: acá el `.txt` SÍ es la fuente.** Una nota con `source_url` poblado (`pdf: null`, snapshot de `fetch_web`) no tiene PDF **por diseño**, y el argumento de #205 no le aplica: ahí el `.txt` no es una copia degradada de un original, **es la captura**. Es determinista (defuddle, URL + fecha) y es lo que la cita referencia con `accessed`. Se cita por **línea** y la fila lleva **`txt:<sha10>`**. |
 | **agotar antes de concluir** | si la afirmación no aparece donde el índice la ubica, ampliá la ventana de páginas antes de concluir. `no verificable por extracción` queda para el PDF que es un escaneo ilegible incluso a ojo — distinto de `no-soportada`. |
 
 ## Cuándo correrlo
@@ -101,6 +102,8 @@ Agrupar los pares **por bibcode** y lanzar un subagente (tipo `Explore`) por fue
 Cada uno:
 - Localiza el **PDF**: `vault/raw/pdfs/**/<bibcode>.pdf` (el bibcode puede vivir bajo cualquier
   slug/tema — usar glob), y su `.txt` hermano en `vault/raw/fulltext/**/` como índice para grepear.
+  ⚠ **Si la nota tiene `source_url` y `pdf: null`, es una fuente WEB**: no hay PDF que buscar y el
+  `.txt` es la fuente (ver la tabla de arriba).
   **Ojo:** los nombres tienen `&` y puntos → citarlos entre comillas simples al leer/grep.
 - Lee **sólo esa fuente** (grounding-first; **prohibido** responder de memoria o de otro paper).
 - Devuelve, para la afirmación dada:
@@ -379,11 +382,14 @@ handbook—, tres cosas cambian y las tres son del contrato, no del gusto:
 - **`Hash fuente`** — `pdf:<sha10>`, **el archivo que leíste** y su hash. Es lo que detecta que la
   fuente ya no dice lo mismo **sin que la nota se haya tocado** — ninguna medida basada en fechas de
   la nota puede ver eso.
-  ⛔ **El prefijo es obligatorio (#117) y desde #205 es `pdf:`**, porque la fuente es el PDF. El
-  prefijo tiene que casar con el localizador de `Evidencia`: `pdf:` va con `p. 628`.
-  `txt:` queda sólo en **filas viejas**, verificadas cuando el `.txt` era la fuente; siguen siendo
-  válidas y su ancla sigue vigilando el archivo del que salió esa cita. No se migran en masa: se
-  re-verifican cuando el ancla las venza.
+  ⛔ **El prefijo es obligatorio (#117) y desde #205 es `pdf:`** para todo paper, porque la fuente es
+  el PDF. El prefijo tiene que casar con el localizador de `Evidencia`: `pdf:` va con `p. 628`.
+  `txt:` queda para **dos** casos y ninguno es un aflojamiento:
+  · una **fuente web**, donde el `.txt` ES la captura y no hay PDF (ver la tabla de arriba) — va con
+    `L320`, como siempre;
+  · **filas viejas**, verificadas cuando el `.txt` era la fuente de todo: siguen siendo válidas y su
+    ancla sigue vigilando el archivo del que salió esa cita. No se migran en masa — se re-verifican
+    cuando el ancla las venza.
   ⚠ **El caso de #200 ya no se produce en filas nuevas.** Era el choque entre citar por página
   (#80) y haber leído del `.txt`, que se resolvía escribiendo los dos localizadores
   (`(p. 271 / `.txt` L13931)`). Leyendo el PDF los dos coinciden. Las filas viejas que lo
