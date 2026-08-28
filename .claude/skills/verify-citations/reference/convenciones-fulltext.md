@@ -1,5 +1,11 @@
 # Cómo se lee y se cita el `.txt` — las convenciones, con su medición
 
+> ⚠ **Alcance desde #205: esto rige para GREPEAR el `.txt`, que es el índice — no para citar.**
+> La fuente es el PDF y la cita va por página. Estas reglas siguen valiendo enteras para el paso de
+> *localizar*: un `.txt` a dos columnas sigue entrelazando las dos en la misma línea física, así que
+> una oración completa puede no aparecer con `grep` aunque el paper la diga. Lo que ya **no** se
+> hace es concluir nada desde acá: si el índice no la encuentra, se abre el PDF.
+
 **Referencia de `verify-citations`.** El `SKILL.md` deja las **reglas duras en una línea** (contar
 con `grep -n`, patrones cortos, prohibido normalizar espacios, `symbols_lost` ⇒ página del PDF, OCR y
 `eprint` con su salvedad). Acá está **por qué** cada una existe y qué se midió — que es lo que hay

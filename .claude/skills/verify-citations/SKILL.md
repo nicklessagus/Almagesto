@@ -12,24 +12,26 @@ Tapa el *grounding gap* / *epistemic drift*: el LLM puede escribir una cita corr
 afirmación que el paper **no dice** (estudios: 50–90% de citas en texto largo de LLM no están
 plenamente respaldadas). Acá cada afirmación se contrasta contra el texto real de su fuente.
 
-> **Ventaja del corpus cerrado:** hay un `.txt` por bibcode en `vault/raw/fulltext/`, así que se
-> saltea el *retrieval* —la parte que mete errores en los verificadores generales—: ya sabemos qué
-> archivo leer. El chequeo es passage-matching directo, y el `.txt` es una extracción **determinista**
-> (`pdftotext -layout`, sin LLM), así que **la cita textual son las palabras reales del paper**.
+> **Ventaja del corpus cerrado:** hay un PDF por bibcode en `vault/raw/pdfs/`, así que se saltea el
+> *retrieval* —la parte que mete errores en los verificadores generales—: ya sabemos qué archivo
+> leer. El chequeo es passage-matching directo contra el documento real.
 
-⛔ **Las reglas duras de lectura del `.txt`, en una línea cada una.** El **por qué** de cada una, con
-su medición, está en `reference/convenciones-fulltext.md` — leelo la primera vez y cuando una regla
-parezca arbitraria o un par no cierre:
+⛔ **La fuente es el PDF (#205).** `Read` lo rasteriza, así que **ves** la página: prosa,
+ecuaciones, tablas y figuras. **Citá por PÁGINA** y hasheá el PDF (`pdf:<sha10>`).
+
+⛔ **El `.txt` NO es fuente: es el ÍNDICE.** `vault/raw/fulltext/**/<bibcode>.txt` lo produce
+`pdftotext` y sirve para **ubicar** con `grep -n` en qué parte del paper mirar — nunca para citar ni
+para transcribir. Medido el 2026-08-28 sobre dos papers, uno con los **tres chequeos de calidad en
+verde**: el `.txt` había perdido igual el radical `√` (sale como una `r` suelta), la prima de `p′`
+(como `p0`), superíndices de transpuesta, y un subíndice que hace leer una autocovarianza como una
+inversa. Verificar contra eso devuelve **`no-soportada` sobre afirmaciones correctas**.
 
 | Regla | En una línea |
 |---|---|
-| **nº de línea** (#29) | con `grep -n` o leyendo el archivo; **nunca** `splitlines()` de Python (los form feeds corren la numeración +1 por página). `split("\n")` numera igual que `grep -n`. |
-| **patrones cortos** (#44) | escalera de acortamiento: oración completa → fragmento distintivo de 3–6 palabras contenido en **una línea física** → reintento partiendo por el guión de corte. Un `.txt` a dos columnas entrelaza ambas en la misma línea. |
-| ⛔ **no normalizar espacios** (#46) | ni sobre el archivo entero ni por línea: empalma el final de la columna 1 con el principio de la columna 2 y **fabrica adyacencias** (falso positivo). Si hace falta, partí antes cada línea en la canaleta (run de 8+ espacios, `measure_layout.CANALETA_MIN`) y normalizá por segmento. |
-| **`symbols_lost: true`** (#113) | las ecuaciones **no están** en el `.txt`: citar por **página del PDF**, no por línea. ⛔ No declares `no-soportada` una ecuación ausente de una fuente marcada así. |
-| **`fulltext_source: ocr`** | citable **con salvedad**: el OCR puede errar símbolos y notación. Ante discrepancia de símbolos, abrir el PDF en vez de declarar `no-soportada`/`contradice`. |
-| **`pdf_source: eprint`** (#57) | el `.txt` es el **preprint**: una discrepancia numérica contra un valor publicado es candidata a **diferencia de versión**, no a cita rota. ⛔ Nunca "corregir" la nota hacia el eprint. `null` = desconocido, que **no** es "publicado". |
-| **agotar antes de concluir** | sólo agotadas la escalera y el de-hifenado corresponde considerar artefacto de extracción → abrir el PDF o marcar `no verificable por extracción` (distinto de `no-soportada`). |
+| **localizar antes de leer** | `grep -n` sobre el `.txt` te dice **en qué zona** está la afirmación; después abrís esa parte del PDF. En un paper corto podés leerlo entero y saltear el paso. ⚠ Grepear un `.txt` tiene sus mañas —entrelazado de columnas, guiones de corte, espacios que no se normalizan— y están en `reference/convenciones-fulltext.md`. |
+| **`pdf_source: eprint`** (#57) | el PDF es el **preprint**: una discrepancia numérica contra un valor publicado es candidata a **diferencia de versión**, no a cita rota. ⛔ Nunca "corregir" la nota hacia el eprint. `null` = desconocido, que **no** es "publicado". |
+| **documento largo** (#80) | un libro no se rasteriza entero. Ahí el `.txt` como índice es **imprescindible**: grepeás, sacás la página, abrís **esas** páginas del PDF. La unidad de cita la declara `unidad_cita` y el recorte, `alcance`. |
+| **agotar antes de concluir** | si la afirmación no aparece donde el índice la ubica, ampliá la ventana de páginas antes de concluir. `no verificable por extracción` queda para el PDF que es un escaneo ilegible incluso a ojo — distinto de `no-soportada`. |
 
 ## Cuándo correrlo
 - **Paso de cierre obligatorio de toda operación que escriba prosa con `[[bibcode]]`** (regla de
@@ -91,16 +93,16 @@ Agrupar los pares **por bibcode** y lanzar un subagente (tipo `Explore`) por fue
 (varios en un mismo mensaje). Cada uno juzga **todos los pares que citan su fuente**.
 
 > ⚠ **Por fuente, no por par (#100).** Lo que hace fuerte al chequeo es el **aislamiento** —cada
-> verificador ve un solo `.txt`, sin memoria, sin otros papers— y agrupar por fuente lo conserva
-> intacto: el subagente sigue leyendo un único archivo. Lo que se evita es pagar la lectura N veces.
-> Medido el 2026-08-25 sobre una ficha real: **68 pares sobre 16 fuentes → 52 re-lecturas**, con 18
-> subagentes abriendo los mismos 300 KB.
+> verificador ve una sola fuente, sin memoria, sin otros papers— y agrupar por fuente lo conserva
+> intacto: el subagente sigue leyendo un único documento. Lo que se evita es pagar la lectura N
+> veces. Medido el 2026-08-25 sobre una ficha real: **68 pares sobre 16 fuentes → 52 re-lecturas**,
+> con 18 subagentes abriendo los mismos 300 KB.
 
 Cada uno:
-- Localiza el fulltext: `vault/raw/fulltext/**/<bibcode>.txt` (el bibcode puede vivir bajo cualquier
-  slug/tema — usar glob). **Ojo:** los nombres tienen `&` y puntos → citarlos entre comillas simples
-  al leer/grep.
-- Lee **sólo ese archivo** (grounding-first; **prohibido** responder de memoria o de otro paper).
+- Localiza el **PDF**: `vault/raw/pdfs/**/<bibcode>.pdf` (el bibcode puede vivir bajo cualquier
+  slug/tema — usar glob), y su `.txt` hermano en `vault/raw/fulltext/**/` como índice para grepear.
+  **Ojo:** los nombres tienen `&` y puntos → citarlos entre comillas simples al leer/grep.
+- Lee **sólo esa fuente** (grounding-first; **prohibido** responder de memoria o de otro paper).
 - Devuelve, para la afirmación dada:
   - `veredicto`: `soportada` | `no-soportada` | `contradice` — **vocabulario cerrado**, y el eje es
     **sólo el respaldo textual**: ¿la fuente dice esto? La pregunta «¿está completa la afirmación?»
@@ -109,8 +111,7 @@ Cada uno:
     (no dice nada de eso → error de cita); `contradice` = la fuente **afirma lo contrario** (valor
     incompatible más allá del error, existencia negada, signo opuesto) — también exige cita textual,
     de lo que el paper **sí** dice.
-  - `evidencia`: **cita textual** del paper + **nº de línea** (contado como `grep -n` — ver la
-    convención fija de arriba; nunca `splitlines()` de Python). **Sin cita textual ⇒ `no-soportada`**
+  - `evidencia`: **cita textual** del paper + **nº de página del PDF**. **Sin cita textual ⇒ `no-soportada`**
     (regla dura: si no puede pegar la frase, no está respaldado). La cita tiene que tocar el
     **contenido distintivo** de la afirmación (el sujeto/valor/mecanismo que la hace específica); si
     lo único que matchea es terreno común del tema (el fenómeno general, un término suelto, la mera
@@ -145,8 +146,7 @@ Cada uno:
 > **Transcripciones: chequear también lo que la nota OMITE (#49).** El fan-out valida lo que la nota
 > **afirma**; una tabla transcrita **sin un solo error** pero a la que le faltan filas vuelve
 > **100% soportada** — cada par verificado era verdadero (medido: 14 registros transcritos, los 14
-> correctos pese a un `.txt` que entrelaza tres columnas… sobre una tabla de **21 filas** en el
-> paper). Es un modo de falla **distinto** del *grounding gap*: la nota no afirma nada falso,
+> correctos… sobre una tabla de **21 filas** en el paper). Es un modo de falla **distinto** del *grounding gap*: la nota no afirma nada falso,
 > **afirma de menos**, y una tabla truncada se lee como completa. Por eso, cuando el par sale de una
 > **transcripción** (tabla o lista de la fuente), el subagente recibe además la pregunta de
 > **completitud** (arriba) y el faltante se reporta como **hallazgo propio**, distinto del veredicto
@@ -159,24 +159,20 @@ Cada uno:
 > que reportan este eje y no están en la tabla?"** — un inventario sin errores pero **incompleto**
 > vuelve 100% soportado y se lee como el estado de la literatura.
 
-Prompt sugerido por agente: *"Leé SOLO `<ruta fulltext>`. ¿El paper respalda esta afirmación: «…»?
-Si la afirmación tiene varias cláusulas atribuidas a distintas fuentes, juzgá si el archivo respalda
-**la cláusula que le toca** y decí cuál en la nota — que respalde una cláusula vecina de otra fuente,
-o el encuadre genérico, no cuenta. Respondé veredicto
-(soportada/no-soportada/contradice) + cita textual con nº de línea (el que da
-`grep -n` o la lectura directa del archivo; NO uses `splitlines()` de Python — los form feeds del
-`.txt` corren la numeración) + nota. Para localizar: el `.txt` suele entrelazar dos columnas en la
-misma línea física, así que si la oración completa no aparece con grep NO concluyas que falta —
-acortá a un fragmento distintivo de 3–6 palabras (y reintentá partiendo por guión de corte);
-PROHIBIDO normalizar espacios sobre el archivo entero Y también colapsar un hueco de 8+ espacios
-dentro de una línea (ambos empalman columnas y fabrican adyacencias falsas); si normalizás, partí
-antes la línea en ese hueco y tratá cada segmento por separado. Si no
+Prompt sugerido por agente: *"Leé SOLO el PDF `<ruta pdf>` (Read lo rasteriza: **ves** la página,
+con sus ecuaciones, tablas y figuras). Si el paper es largo, ubicá primero la zona con
+`grep -n '<fragmento>' <ruta .txt>` y abrí esas páginas — el `.txt` es índice, NO fuente: no cites
+de ahí. ¿El paper respalda esta afirmación: «…»?
+Si la afirmación tiene varias cláusulas atribuidas a distintas fuentes, juzgá si el documento
+respalda **la cláusula que le toca** y decí cuál en la nota — que respalde una cláusula vecina de
+otra fuente, o el encuadre genérico, no cuenta. Respondé veredicto
+(soportada/no-soportada/contradice) + cita textual con **nº de página del PDF** + nota. Si no
 encontrás respaldo textual, es no-soportada; y es no-soportada TAMBIÉN si la cita sólo toca terreno
-común del tema — que el paper hable de lo mismo NO alcanza, tiene que tocar el contenido distintivo; si el paper
-afirma lo CONTRARIO, es contradice (pegá la frase que lo contradice). Decime APARTE del veredicto:
-¿el paper afirma esto bajo CONDICIONES que la afirmación no menciona (SNR, muestreo, tamaño de
-muestra, definición del observable, época, rango)? Si sí, citalas con su nº de línea — la afirmación
-puede estar bien y aun así estar sobre-generalizada. No uses memoria ni otros
+común del tema — que el paper hable de lo mismo NO alcanza, tiene que tocar el contenido
+distintivo; si el paper afirma lo CONTRARIO, es contradice (pegá la frase que lo contradice).
+Decime APARTE del veredicto: ¿el paper afirma esto bajo CONDICIONES que la afirmación no menciona
+(SNR, muestreo, tamaño de muestra, definición del observable, época, rango)? Si sí, citalas con su
+página — la afirmación puede estar bien y aun así estar sobre-generalizada. No uses memoria ni otros
 papers."*
 
 ⛔ **La pregunta de completitud es la del contrato, y se ensancha sin que nada avise (#198).**
@@ -201,8 +197,8 @@ propiedades de la que la nota transcribía una y después invocaba «las cuatro�
 **Addendum para transcripciones** (agregar al prompt cuando el par sale de una tabla o lista de la
 fuente): *"Esta afirmación es una fila/ítem de una transcripción. La nota transcribe de este paper la
 lista completa: «…». Decime APARTE del veredicto: ¿la tabla/lista del paper tiene MÁS filas/ítems que
-ésos? Si sí, listá los que faltan con su nº de línea. Ojo con el layout: la tabla puede estar
-entrelazada con otra en las mismas líneas físicas — contá las filas de LA tabla que corresponde."*
+ésos? Si sí, listá los que faltan con su página. Estás mirando la tabla en el PDF, así que contá sus
+filas ahí — y si hay más de una tabla en la página, decí de cuál estás contando."*
 
 ### 2b. Barrera: el trabajo derivado se arma cuando el fan-out CERRÓ
 
@@ -340,14 +336,11 @@ Las dos columnas nuevas las calcula el **mismo** código que después las cheque
 escriben a ojo:
 
 ```bash
-# ancla del bloque que contiene la cita, y hash del .txt que leíste
+# ancla del bloque que contiene la cita
 python -c "import sys;sys.path.insert(0,'scripts');import lib_blocks as lb;\
 [print(p.bibcode, p.anchor) for p in lb.pairs_of(open('vault/wiki/<nota>.md',encoding='utf-8').read())]"
-python -c "import sys;sys.path.insert(0,'scripts');import lib_blocks as lb;\
-print(lb.source_hash('vault/raw/fulltext/<slug>/<bibcode>.txt'))"
-# …salvo que la fuente esté marcada `symbols_lost` (#113): ahí la evidencia salió del PDF, así que
-# el hash es el del PDF — `bytes_hash`, no `source_hash` (un PDF no es texto, y decodificarlo con
-# errors=replace hace colisionar dos escaneos distintos).
+# hash de la fuente: el PDF, que es lo que leíste (#205). `bytes_hash`, no `source_hash` — un PDF
+# no es texto, y decodificarlo con errors=replace hace COLISIONAR dos escaneos distintos.
 python -c "import sys;sys.path.insert(0,'scripts');import lib_blocks as lb;\
 print(lb.bytes_hash('vault/raw/pdfs/<slug>/<bibcode>.pdf'))"
 ```
@@ -357,12 +350,11 @@ print(lb.bytes_hash('vault/raw/pdfs/<slug>/<bibcode>.pdf'))"
 Cuando la nota de la fuente declara **`unidad_cita: pagina`** o **`seccion`** —un libro, un
 handbook—, tres cosas cambian y las tres son del contrato, no del gusto:
 
-1. **No mandes a leer el `.txt` entero.** El fan-out asume un documento que un subagente lee
-   completo; 700 páginas lo revientan. El subagente recibe **el capítulo o el rango de páginas** de
-   la afirmación, no el archivo.
+1. **No mandes a leer el documento entero** — ni el PDF ni el `.txt`. 700 páginas revientan al
+   subagente en las dos modalidades. Acá el `.txt` como **índice** es imprescindible: grepeás la
+   afirmación, sacás la página, y el subagente recibe **ese rango de páginas del PDF**.
 2. **La evidencia se cita por `p. N` o `§ N.M`, nunca por línea.** «Línea 18443» no es una
-   referencia que alguien pueda seguir, y el `.txt` de un libro tampoco se cita por línea (es un eje
-   distinto del `txt:`/`pdf:` de #117, que dice qué **archivo** se leyó).
+   referencia que alguien pueda seguir.
 3. **La completitud se pregunta contra el `alcance` declarado, no contra el documento.** La nota
    declara qué parte entró (`alcance: caps. 6 y 15`); lo que está fuera de esa parte **no** es una
    omisión. Sin `alcance` no hay forma de distinguir el recorte deliberado del olvido, y por eso el
@@ -371,26 +363,18 @@ handbook—, tres cosas cambian y las tres son del contrato, no del gusto:
 - **`Ancla`** — sha256 (10 hex) del bloque markdown normalizado que contiene la afirmación.
   Reflowear la nota **no** la mueve; cambiar un número **sí**. Una fila/ítem sin `[[bibcode]]`
   propio hereda el del caption y hashea **los dos** bloques.
-- **`Hash fuente`** — `txt:<sha10>` o `pdf:<sha10>`: **qué archivo leíste** y su hash. Es lo que
-  detecta que la fuente ya no dice lo mismo **sin que la nota se haya tocado** — ninguna medida
-  basada en fechas de la nota puede ver eso.
-  ⛔ **El prefijo es obligatorio y lo decidís vos, par por par (#117).** Antes el lint lo inferían
-  del frontmatter (`symbols_lost` ⇒ PDF, si no el `.txt`), y esa regla es **más angosta que la
-  práctica**: una fuente `fulltext_source: ocr` también se verifica contra el PDF cuando el escaneo
-  del editor destruyó los símbolos — es lo que se hizo con **3 de las 5** fuentes marcadas de un
-  tema real, y ahí el lint hasheaba el archivo equivocado y devolvía **17 pares «vencidos por
-  fuente»** sobre fuentes que nadie tocó. El frontmatter no sabe qué abriste; la fila sí.
-  Que el prefijo case con el localizador de `Evidencia`: `pdf:` va con `p. 628`, `txt:` con `L320`.
-  ⛔ **Documento largo leído del `.txt`: van los DOS localizadores (#200).** Una fuente
-  `unidad_cita: pagina` se cita por **página** (#80: *«línea 18443» no es una referencia
-  utilizable*) pero se lee del `.txt`, que es lo barato y lo que el contrato manda por defecto. Las
-  dos reglas son correctas y chocan: la fila queda con `txt:` y una evidencia que dice `p. 271`. Las
-  dos salidas obvias **empeoran** la fila — poner `pdf:` **miente** sobre qué archivo se abrió y hace
-  que el ancla vigile un archivo que nadie leyó; citar por línea rompe #80. La salida es escribir
-  **los dos**: `«…» (p. 271 / \u0060.txt\u0060 L13931)`. Deja las dos verdades escritas —la
-  referencia utilizable para un humano y el ancla del archivo que se hasheó— y el detector queda en
-  0 sin ablandarse. Medido: **6 de 8** filas marcadas de un concepto real eran este caso, todas
-  correctas.
+- **`Hash fuente`** — `pdf:<sha10>`, **el archivo que leíste** y su hash. Es lo que detecta que la
+  fuente ya no dice lo mismo **sin que la nota se haya tocado** — ninguna medida basada en fechas de
+  la nota puede ver eso.
+  ⛔ **El prefijo es obligatorio (#117) y desde #205 es `pdf:`**, porque la fuente es el PDF. El
+  prefijo tiene que casar con el localizador de `Evidencia`: `pdf:` va con `p. 628`.
+  `txt:` queda sólo en **filas viejas**, verificadas cuando el `.txt` era la fuente; siguen siendo
+  válidas y su ancla sigue vigilando el archivo del que salió esa cita. No se migran en masa: se
+  re-verifican cuando el ancla las venza.
+  ⚠ **El caso de #200 ya no se produce en filas nuevas.** Era el choque entre citar por página
+  (#80) y haber leído del `.txt`, que se resolvía escribiendo los dos localizadores
+  (`(p. 271 / `.txt` L13931)`). Leyendo el PDF los dos coinciden. Las filas viejas que lo
+  llevan **siguen siendo correctas** y no se tocan.
   Anclar al `.txt` una cita que salió del PDF la marca vencida cada vez que ese `.txt` se re-extrae
   —cosa que el propio framework provoca (`--force`, upgrade a OCR, backfill de marcas)— mientras la
   fuente real no se movió, y **no ve** que el PDF sí cambió. Una celda **sin** prefijo es la
