@@ -1419,7 +1419,8 @@ la sección siguiente son su mecanización.
 5. **Cuando dos mediciones no reconcilian y no se puede re-medir, se DECLARA la discrepancia** en
    vez de elegir un número. Elegir en silencio es cómo un documento empieza a mentir.
 
-6. **Fan-out para LEER, aplicador serial para ESCRIBIR, barrera antes de CONSUMIR.** El
+6. **Fan-out para LEER, aplicador serial para ESCRIBIR, barrera antes de CONSUMIR — y lo escrito
+   se RE-VERIFICA.** El
    aislamiento de un fan-out es lo que hace fuerte a un chequeo —57 verificadores que ven un solo
    `.txt`, sin memoria y sin los otros papers— y no se toca; lo que no escala es el lado de
    **escritura**. Medido en una sola corrida de 75 correcciones: dos correctores que redactan el
@@ -1429,6 +1430,12 @@ la sección siguiente son su mecanización.
    afirmó que dos cifras reconciliaban por tamaño de bin y el corrector, al abrir la fuente, encontró
    que **las dos** lo traían—. La regla no es «paralelizar menos»: es **un solo escritor, y una
    barrera antes de que algo consuma resultados**.
+   ⛔ **La cuarta cláusula (#203): corregir es escribir, así que el ciclo no cierra en *corregir*
+   sino en *corregir → re-verificar lo tocado*.** En la misma corrida, un corrector que **abrió la
+   fuente** escribió igual `166 → 0` donde la Tabla I dice `166 → 17` — o sea, la corrección
+   **introdujo una afirmación falsa nueva** en una nota recién verificada. Lo cazó el **ancla**, que
+   se venció al reescribir el bloque, y por lo tanto **de rebote**: si la edición no hubiera movido
+   el ancla, se quedaba. Un aplicador no valida lo que aplica; sólo lo pone donde va.
 
 Corolario que las cruza a todas: **una promesa que el sistema dejó de cumplir en silencio es peor
 que una que nunca hizo.** Si al tocar algo se rompe una promesa declarada —un presupuesto de

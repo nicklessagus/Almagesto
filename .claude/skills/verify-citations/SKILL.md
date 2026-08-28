@@ -268,9 +268,22 @@ aplicador la pone. Los dos modos de falla están medidos sobre una corrida de 75
 sin fusionar— no se escribe **ninguno**. Un reemplazo que adivina es peor que uno que falla, y una
 nota a medio corregir es indistinguible de una corregida.
 
-⚠ **Después de aplicar, las anclas cambian y hay que regenerar el bloque** — y si la corrección
-agregó `[[bibcode]]` nuevos, esos pares **son pares nuevos** y hay que verificarlos también (medido:
-dos, al resolver una contradicción interna de la nota).
+⛔ **Corregir es ESCRIBIR, y lo escrito se verifica: la operación cierra en corregir → RE-VERIFICAR
+lo tocado (#203).** No cierra en *corregir*. Después de aplicar, los pares que tocaste están **sin
+verificar** —el ancla cambió— y las citas que la corrección haya agregado son **pares nuevos**. Hay
+que regenerar el bloque y **volver a lanzar el fan-out sobre ese subconjunto**.
+
+La disciplina de arriba —volver a la fuente, no copiar el reporte— baja mucho la tasa de error y
+**no la lleva a cero**. Medido sobre una corrida de 75 correcciones: un corrector que **abrió el
+PDF** escribió igual que un test llevaba las fallas de **166 → 0**, cuando la Tabla I dice
+**166 → 17** para ese caso (d=5, N=200) y el texto lo aclara. O sea, la corrección **introdujo una
+afirmación falsa nueva** en una nota que acababa de pasar por 262 pares de verificación.
+
+⚠ **Lo cazó el ancla, no la disciplina — y de rebote.** `lint --cierre` marcó 7 pares *vencidos por
+edición* y 11 *sin verificar*, y eso forzó una segunda ronda (18 pares) que devolvió `contradice`
+sobre esa fila. El mecanismo funcionó, pero sólo porque alguien miró los pares vencidos y entendió
+por qué: si la edición no hubiera movido el ancla, la afirmación falsa se quedaba. Por eso la
+segunda pasada se **manda** acá en vez de aparecer como un hallazgo a interpretar.
 
 Cada **no-soportada / contradice**, y cada `condicion` no vacía, se resuelve antes de cerrar:
 - **Contradicción** (`contradice`) → decidir cuál de dos casos es. (a) **La nota está mal** →
@@ -401,6 +414,11 @@ real. Una nota que nace con pares sin fila arranca con deuda que nadie va a dist
 legítima.
 
 ### 6. Lint + cierre
+⛔ **Antes del lint: si el paso 4 corrigió algo, la segunda ronda ya tiene que haber corrido**
+(#203). `lint --cierre` es la **red**, no el disparador: los *vencidos por edición* y *sin
+verificar* que reporta son exactamente los pares que la corrección dejó sin respaldo. Llegar acá con
+esos números en rojo significa que la operación no terminó.
+
 Correr `python scripts/lint.py --cierre` (0 en lo bloqueante; la **fuga de implementación** es WARN a revisar a
 mano, y resolvé las **citas no verificables** del corpus que chequeás). Si el usuario pidió archivar/commitear, `git add` de los archivos **específicos**
 y commit descriptivo; **preguntar antes de `push`**. Appendear a `vault/wiki/log.md` (resumen del chequeo:
