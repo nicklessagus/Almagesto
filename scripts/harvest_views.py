@@ -133,9 +133,19 @@ def stamp_reading_aids(dest: Path, data: dict) -> bool:
     un corte sin calibrar, y de eso este repo ya se quemó tres veces).
 
     Idempotente y quirúrgico: cada sección se reemplaza sola y sin tocar el resto."""
-    fm = cfg.split_fm(dest.read_text(encoding="utf-8"))
+    texto_nota = dest.read_text(encoding="utf-8")
+    fm = cfg.split_fm(texto_nota)
     largo = str(fm.get("unidad_cita") or "").strip() not in ("", "linea")
-    piezas = [("## Abstract (es)", data.get("abstract_es"))]
+    piezas = []
+    # `## Abstract` verbatim SÓLO si la nota no lo tiene. El del catálogo es copia de máquina —la
+    # capa auditable del cuerpo— y no se pisa con una transcripción del modelo. Pero una nota
+    # off-ADS creada antes de #124 no tiene la sección **en absoluto** (medido: 32 de 201 en una
+    # bóveda real, 31 de ellas con el PDF en disco), y sin este renglón no la recibiría nunca:
+    # `write_web_paper_note` sólo la escribe al CREAR. El extractor ya está leyendo el PDF, así que
+    # el texto está a mano y no hace falta ninguna red.
+    if cfg.section_start(texto_nota, "## Abstract") < 0:
+        piezas.append(("## Abstract", data.get("abstract")))
+    piezas.append(("## Abstract (es)", data.get("abstract_es")))
     if not largo:
         piezas += [("## Conclusiones", data.get("conclusiones")),
                    ("## Conclusiones (es)", data.get("conclusiones_es"))]

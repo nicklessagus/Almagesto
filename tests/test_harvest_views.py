@@ -338,3 +338,25 @@ def test_las_ayudas_de_lectura_estan_exentas_del_fan_out(toy_vault):
     a una ficha sí se verifica contra el PDF."""
     for h in ("## Abstract", "## Abstract (es)", "## Conclusiones", "## Conclusiones (es)"):
         assert any(h.startswith(e) for e in cfg.SECCIONES_ESTAMPADAS), h
+
+
+def test_el_abstract_verbatim_se_estampa_SOLO_si_la_nota_no_lo_tiene(toy_vault):
+    """El `## Abstract` del catálogo es copia de máquina —la capa auditable del cuerpo— y no se pisa
+    con una transcripción del modelo. Pero una nota off-ADS creada antes de #124 **no tiene la
+    sección en absoluto** (medido: 32 de 201 en una bóveda real) y sin esto no la recibiría nunca:
+    `write_web_paper_note` sólo la escribe al crear. El extractor ya abrió el PDF, así que el texto
+    está a mano y no hace falta red."""
+    _con_pdf(toy_vault)
+    dest = sembrar(toy_vault, extraccion(abstract="Transcrito del PDF."))
+    hv.harvest("test_star")
+    assert "## Abstract\nTranscrito del PDF." in dest.read_text(encoding="utf-8")
+
+
+def test_no_pisa_el_abstract_del_catalogo(toy_vault):
+    _con_pdf(toy_vault)
+    dest = sembrar(toy_vault, extraccion(abstract="Transcripción del modelo."),
+                   body="## Abstract\nVerbatim de ADS.\n\n" + mn.vista_block("Estrella Test", theme=False))
+    hv.harvest("test_star")
+    texto = dest.read_text(encoding="utf-8")
+    assert "Verbatim de ADS." in texto
+    assert "Transcripción del modelo." not in texto, "pisó la capa auditable"

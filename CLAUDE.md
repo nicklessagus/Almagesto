@@ -439,6 +439,11 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   pesa más, porque abrir el PDF es lo caro y esto evita re-abrirlo.
   Las estampa el cosechador desde el JSON de extracción, van **antes** de la vista, y **la
   traducción va al lado del original, nunca en su lugar** — el verbatim es la capa auditable.
+  ⚠ El `## Abstract` **verbatim** lo escribe el cosechador **sólo si la nota no lo tiene**: el del
+  catálogo es copia de máquina y no se pisa con una transcripción del modelo. Existe porque una
+  nota off-ADS creada antes de #124 no tiene la sección en absoluto (medido: **32 de 201** en una
+  bóveda real, **31 con el PDF en disco**) y `write_web_paper_note` sólo la escribe al **crear** —
+  así el hueco se cierra en la próxima extracción, sin red y sin re-ingestar nada.
   ⚠ **Documento largo (`unidad_cita: pagina`): sin conclusiones.** Un libro no tiene esa sección y
   transcribir algo que no existe fabrica contenido. Es una exclusión **estructural**, no un umbral
   de largo.

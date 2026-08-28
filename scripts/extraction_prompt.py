@@ -220,14 +220,17 @@ Escribí el resultado en `{out}` y devolvé el mismo JSON en **un solo bloque** 
  "ground_truth":[{{"que":"","valor":"","linea":"","regimen":"","segunda_mano":null}}],
  "ejes":{{"discovery":"","rv":"","activity":"","planet":"","method":""}},
  "aporte":"","hueco":"","salvedades":[],
- "abstract_es":"","conclusiones":"","conclusiones_es":""}}
+ "abstract":"","abstract_es":"","conclusiones":"","conclusiones_es":""}}
 
 ⛔ Sin comas finales: tiene que parsear con `json.loads`. El nombre del archivo lleva el bibcode
 porque varios extractores corren en paralelo y un nombre genérico se pisa **en silencio**.
 `vista` va tal cual: dice de quién es esta lectura y de qué copia del `.txt` salió. La `fecha` y la
 `lente` no las escribís vos — las estampa el cosechador, que las sabe con certeza.
-⛔ **Las tres ayudas de lectura** (#124). `abstract_es` es la traducción al castellano del
-`## Abstract` que la nota ya trae verbatim —la traducción va **al lado**, el original no se pisa—;
+⛔ **Las ayudas de lectura** (#124). `abstract_es` es la traducción al castellano del `## Abstract`
+—la traducción va **al lado**, el original no se pisa—. `abstract`: dejalo **vacío** si la nota ya
+trae la sección (viene del catálogo y es la capa auditable); llenalo, transcrito del PDF, **sólo si
+la nota no la tiene** — pasa en fuentes off-ADS viejas, y el texto lo tenés a mano porque ya
+abriste el PDF;
 `conclusiones` es la transcripción de las conclusiones del paper y `conclusiones_es` su traducción.
 Son lo que el paper afirma **sin lente**, así que sirven para leerlo "en chico" sin abrir el PDF y
 para que otro sujeto lo lea después sin re-abrirlo. ⚠ Si el `.txt`/PDF es un **documento largo**
