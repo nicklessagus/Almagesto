@@ -64,7 +64,12 @@ import lib_config as cfg
 VERIFY_HEADER = "## Verificación de citas"
 _CELL_SPLIT_RE = re.compile(r"(?<!\\)\|")   # un `|` que no venga escapado
 
-LINK_RE = re.compile(r"\[\[([^\]\|#]+)")
+# ⛔ Exige que después del target venga un delimitador (`]`, `|` o `#`) y **corta en el salto de
+# línea**. Sin eso, un `[[` sin cerrar se tragaba el link SIGUIENTE: medido el 2026-08-28,
+# `"[[ y sigo.\nEl radio vive en [[gp-kernels]]"` devolvía UN solo target multilínea, así que un
+# wikilink real dejaba de contar como entrante y su destino se reportaba **huérfano** — categoría
+# BLOQUEANTE — con un mensaje que nombraba un target inservible.
+LINK_RE = re.compile(r"\[\[([^\]\|#\n]+)(?=[\]\|#])")
 BIBCODE_RE = re.compile(r"^\d{4}[A-Za-z]")      # misma heurística que lint/bench_verify/fetch_web
 _WS_RE = re.compile(r"\s+")
 _BULLET_RE = re.compile(r"^(?:[-*+]|\d+\.)\s+")

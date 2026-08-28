@@ -457,3 +457,13 @@ def test_una_fila_con_MENOS_celdas_no_pierde_su_veredicto(fila, verd):
     assert len(filas) == 1 and filas[0].verdict == verd
     assert filas[0].bibcode == "2020a"
     assert filas[0].anchor == "", "sin ancla el par cae en «sin verificar», que es lo correcto"
+
+
+def test_link_re_es_el_mismo_en_lint_y_en_lib_blocks():
+    """Red #2: dos módulos que prometen la misma forma se prueban UNA vez. Los dos `LINK_RE` son
+    gemelos —el mismo patrón, copiado— y el defecto del `[[` sin cerrar vivía en los dos. Si alguien
+    aprieta uno y no el otro, esto lo dice."""
+    import lint
+    assert lint.LINK_RE.pattern == lb.LINK_RE.pattern
+    t = "Mal [[ y sigo.\nEl radio vive en [[gp-kernels]]."
+    assert lint.LINK_RE.findall(t) == lb.LINK_RE.findall(t) == ["gp-kernels"]

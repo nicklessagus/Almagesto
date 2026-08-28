@@ -3976,3 +3976,41 @@ def test_la_marca_PELADA_se_sigue_cazando():
 
 def test_la_marca_con_premisas_sigue_pasando():
     assert lint.inferencias_sin_premisas("El armónico (inferencia de [[2020a]], [[2020b]]).") == []
+
+
+@pytest.mark.parametrize("prosa, campo, viejo, marcado", [
+    # falsos limpios medidos el 2026-08-28: `in` pelado sobre la línea entera
+    (["XYZ 34 ⚠desactualizado."], "b.e", 0.1, False),               # «desactualizado» contiene una `e`
+    (["Teff = 5344 K ⚠desactualizado"], "b.mass_earth", 4, False),  # el `4` dentro de `5344`
+    (["$P=20.0$ d ⚠desactualizado y $K=1.0$ m/s"], "b.K_ms", 1.0, False),  # K no está marcado
+    # y lo que SÍ tiene que seguir contando
+    (["Teff = 5344 K ⚠desactualizado"], "host.teff_K", 5344, True),
+    (["La excentricidad e = 0.1 ⚠desactualizado"], "b.e", 0.1, True),
+    (["$P=20.0$ d ⚠desactualizado y $K=1.0$ m/s"], "b.P_days", 20.0, True),
+])
+def test_la_marca_desactualizado_se_evalua_por_ocurrencia(prosa, campo, viejo, marcado):
+    """INV-128 dice explícitamente *«se evalúa por ocurrencia»* y el código usaba `in` sobre la
+    línea entera. Dos formas de falso limpio: el **nombre corto** de `<letra>.e` es `"e"`, y la
+    palabra «desactualizado» la contiene —así que una marca cualquiera silenciaba toda excentricidad
+    que NEA hubiera cambiado—; y el **valor** matcheaba como substring (`4` dentro de `5344`).
+
+    Tercero: la marca vale para lo que la **precede** (*«va pegada al valor»*), no para toda la
+    línea.  @inv INV-128"""
+    assert lint._field_is_marked(prosa, campo, viejo) is marcado
+
+
+def test_un_wikilink_sin_cerrar_no_se_traga_el_siguiente():
+    """`LINK_RE` no exigía el cierre y su clase incluía `\\n`, así que un `[[` mal escrito se comía
+    el link siguiente: el destino real dejaba de contar como entrante y se reportaba **huérfano**
+    —categoría bloqueante— con un target multilínea inservible en el mensaje.  @inv INV-02"""
+    t = "Escribo mal un link [[ y sigo.\nEl radio vive en [[gp-kernels]]."
+    assert lint.LINK_RE.findall(t) == ["gp-kernels"]
+
+
+@pytest.mark.parametrize("texto, esperado", [
+    ("[[bibcode]]", ["bibcode"]), ("[[bib|alias]]", ["bib"]), ("[[bib#heading]]", ["bib"]),
+    ("texto [[a]] y [[b]] juntos", ["a", "b"]),
+])
+def test_las_formas_validas_de_wikilink_siguen_matcheando(texto, esperado):
+    """La otra mitad: exigir el cierre no puede romper alias ni anclas de encabezado."""
+    assert lint.LINK_RE.findall(texto) == esperado

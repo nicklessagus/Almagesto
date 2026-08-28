@@ -87,7 +87,12 @@ from fetch_ground_truth import msini_earth   # verificación de masa (m·sini im
 from make_notes import find_header_line      # contrato de la cabecera (mismo que stamp_pdf_link, #48)
 from make_notes import GENERATOR_LINE        # ancla de la cabecera de fichas/concepts (#69)
 # @inv INV-02
-LINK_RE = re.compile(r"\[\[([^\]\|#]+)")
+# ⛔ Exige que después del target venga un delimitador (`]`, `|` o `#`) y **corta en el salto de
+# línea**. Sin eso, un `[[` sin cerrar se tragaba el link SIGUIENTE: medido el 2026-08-28,
+# `"[[ y sigo.\nEl radio vive en [[gp-kernels]]"` devolvía UN solo target multilínea, así que un
+# wikilink real dejaba de contar como entrante y su destino se reportaba **huérfano** — categoría
+# BLOQUEANTE — con un mensaje que nombraba un target inservible.
+LINK_RE = re.compile(r"\[\[([^\]\|#\n]+)(?=[\]\|#])")
 # Frontera dura (regla #0 de CLAUDE.md): la bóveda es SÓLO bibliografía. Detecta material de
 # implementación/código no bibliográfico que se filtró a una nota. WARN, no bloquea: son heurísticas de
 # alta señal/bajo ruido; se saltan los blockquotes meta (frontera/alcance). Revisar a mano cada hit.
@@ -355,15 +360,37 @@ def merge_ours_unprotected() -> tuple[list[str], str | None]:
 
 
 #  @inv INV-128
+GT_STALE_MARK = "⚠desactualizado"
+
+
 def _field_is_marked(lineas_marcadas: list[str], campo: str, viejo) -> bool:
     """¿Alguna línea con `⚠desactualizado` está marcando ESTE campo? (#131)
 
     La marca va pegada al valor, así que la línea que la lleva tiene que nombrar el valor viejo —que
     es lo que la prosa cita— o el campo. Se acepta el nombre corto (`teff_K` de `host.teff_K`)
-    porque la prosa no escribe la ruta del JSON."""
+    porque la prosa no escribe la ruta del JSON.
+
+    ⛔ **Por OCURRENCIA, no por substring.** El `in` pelado hacía que cualquier línea marcada tapara
+    cualquier campo: el nombre corto de `<letra>.e` es `"e"`, y **"desactualizado" contiene una `e`**
+    — así que una sola marca en cualquier lado silenciaba toda excentricidad que NEA hubiera
+    cambiado. Ídem el valor: `mass_earth = 4` quedaba "marcado" por una línea que dice `Teff = 5344`.
+    Los tres casos están medidos (2026-08-28) y son falsos limpios sobre prosa que sigue citando un
+    valor retirado — justo lo que INV-128 existe para que **no** pase, y su enunciado ya decía «se
+    evalúa por ocurrencia»."""
     corto = str(campo).rsplit(".", 1)[-1]
     val = "" if viejo is None else str(viejo)
-    return any(corto in ln or (val and val in ln) for ln in lineas_marcadas)
+    #  El valor va con lookaround de palabra-o-punto: `4` no puede matchear dentro de `5344` ni de
+    #  `1.04`, y un valor con signo (`-5`) tampoco rompe un `\b`.
+    pat_campo = re.compile(rf"\b{re.escape(corto)}\b")
+    pat_val = re.compile(rf"(?<![\w.]){re.escape(val)}(?![\w.])") if val else None
+    #  La marca vale para lo que la PRECEDE —«va pegada al valor», dice la regla—, no para la línea
+    #  entera: en `$P=20.0$ d ⚠desactualizado y $K=1.0$ m/s` sólo P está marcado. Cada segmento
+    #  anterior a una ocurrencia de la marca es un ámbito; lo que va después de la última, no.
+    for ln in lineas_marcadas:
+        for seg in ln.split(GT_STALE_MARK)[:-1]:
+            if pat_campo.search(seg) or (pat_val and pat_val.search(seg)):
+                return True
+    return False
 
 
 def _diverge_del_upstream(pattern: str) -> bool:
@@ -481,7 +508,6 @@ RETRACTED_MARK = "⛔retractada"
 # `raw/ground_truth/<slug>.json`, así que un valor corregido por NEA cambia **bajo los pies de la
 # prosa que lo citó** sin que ninguna fila de verificación se entere — el modo de caducidad más
 # silencioso de los cinco, dentro del detector que ya se llamaba "el más silencioso".
-GT_STALE_MARK = "⚠desactualizado"
 
 # Centinela para distinguir "el campo no está" de "está y no sirve" (#75): `fm.get(campo)` colapsa
 # `ausente`, `null`, `""` y `false` en `None`, y esas cuatro exigen mensajes distintos.
