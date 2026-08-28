@@ -467,3 +467,26 @@ def test_link_re_es_el_mismo_en_lint_y_en_lib_blocks():
     assert lint.LINK_RE.pattern == lb.LINK_RE.pattern
     t = "Mal [[ y sigo.\nEl radio vive en [[gp-kernels]]."
     assert lint.LINK_RE.findall(t) == lb.LINK_RE.findall(t) == ["gp-kernels"]
+
+
+@pytest.mark.parametrize("v", ["contradise", "", "no soportada", "NO-SOPORTADA "])
+def test_un_veredicto_fuera_del_vocabulario_NO_cuenta_como_resuelto(v):
+    """Medido el 2026-08-28: `resueltos('contradise')`, `resueltos('')` y `resueltos('no soportada')`
+    devolvían **True**, o sea que el bloqueante que INV-117 sostiene **se apagaba con una letra** —
+    y la fila quedaba registrada bajo un encabezado que se lee como garantía.
+
+    Una celda que no se puede leer no certifica nada.  @inv INV-117"""
+    if v.strip().lower().rstrip() == "no-soportada":
+        return                       # ése sí es válido: sólo mide el vocabulario, no el espaciado
+    assert lb.resueltos(v) is False
+    assert lb.verdict_valido(v) is False
+
+
+@pytest.mark.parametrize("v, resuelto", [
+    ("soportada", True), ("no-soportada", False), ("contradice", False),
+    ("no-soportada→corregida", True), ("no verificable por extracción", True),
+])
+def test_el_vocabulario_valido_se_comporta_igual_que_antes(v, resuelto):
+    """La otra mitad: apretar no puede cambiar el veredicto de lo que sí está en el vocabulario."""
+    assert lb.verdict_valido(v) is True
+    assert lb.resueltos(v) is resuelto

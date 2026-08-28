@@ -1730,7 +1730,16 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             # su contenido, así que una fila `no-soportada` pasaba limpia — sentada bajo un
             # encabezado que se lee como garantía. El contrato manda RESOLVER cada falla, no
             # registrarla: es la frontera dura, igual que citar una fuente retractada.
-            if not lb.resueltos(fila.verdict):
+            if not lb.verdict_valido(fila.verdict):
+                # Typo o celda vacía: se arregla distinto que un `no-soportada` sin resolver, así
+                # que el mensaje no puede ser el mismo. Y hasta 2026-08-28 esto pasaba **limpio**:
+                # `resueltos('contradise')` devolvía True y apagaba el bloqueante de INV-117.
+                verif_sin_resolver.append(
+                    (stem, f"[[{fila.bibcode}]] tiene `{fila.verdict or '(vacío)'}` en la columna "
+                           f"`Veredicto`, que no está en el vocabulario cerrado "
+                           f"({' | '.join(lb.VERDICTS)}): la celda no se puede leer, así que no "
+                           f"certifica nada — corregí el veredicto"))
+            elif not lb.resueltos(fila.verdict):
                 verif_sin_resolver.append(
                     (stem, f"[[{fila.bibcode}]] quedó `{fila.verdict}` en el bloque: la nota afirma "
                            f"algo que su propia fuente no respalda → bajala a lo que dice la fuente, "

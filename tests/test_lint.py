@@ -4035,3 +4035,24 @@ def test_simbad_null_es_NO_EVALUADO_y_no_cero_alias_faltantes(toy_vault, capsys)
         '"_unresolved_aliases": []}', encoding="utf-8")
     _, out = run_lint(capsys)
     assert "NO EVALUADO" in out and "SIMBAD no contestó" in out
+
+
+def test_un_typo_en_el_veredicto_se_reporta_como_typo_y_bloquea(toy_vault, capsys):
+    """Se arreglan distinto: un typo se corrige en la celda, un `no-soportada` se resuelve volviendo
+    a la fuente. Mandar el mensaje equivocado manda a hacer el trabajo equivocado. Y hasta el
+    2026-08-28 esto pasaba **limpio**.  @inv INV-117"""
+    (toy_vault.CONCEPTS / "methods").mkdir(parents=True, exist_ok=True)
+    par = "Afirmación con cita [[2020tip...1..1T]]."
+    import lib_blocks as lb
+    ancla = lb.pairs_of(par + "\n")[0].anchor
+    (toy_vault.CONCEPTS / "methods" / "typo.md").write_text(
+        "---\ntags: [methods]\nname: typo\n---\n" + par + "\n\n"
+        "## Verificación de citas (2026-08-28)\n\n"
+        "| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |\n"
+        "|---|---|---|---|---|---|---|---|\n"
+        f"| 1 | x | [[2020tip...1..1T]] | contradise | \"y\" (p. 1) | {ancla} | pdf:aaaaaaaaaa | — |\n",
+        encoding="utf-8")
+    mk_note(toy_vault.PAPERS, "2020tip...1..1T", {"tags": ["paper"], "stars": []}, "")
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert "no está en el vocabulario cerrado" in out and "contradise" in out

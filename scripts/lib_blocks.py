@@ -397,7 +397,26 @@ def resueltos(verdict: str) -> bool:
     partes = _RESOLUCION_SEP.split(v, maxsplit=1)
     if len(partes) > 1 and partes[1].strip(_ADORNO).strip():
         return True                     # hay resolución anotada: la celda dice qué se hizo
-    return partes[0].strip(_ADORNO).strip() not in VERDICTS_SIN_RESOLVER
+    pelado = partes[0].strip(_ADORNO).strip()
+    # ⛔ Un veredicto FUERA del vocabulario cerrado no puede contar como resuelto. Medido el
+    # 2026-08-28: `'contradise'`, `''` y `'no soportada'` (con espacio) devolvían `True`, o sea que
+    # el bloqueante que INV-117 sostiene **se apagaba con una letra** — y la fila quedaba bajo un
+    # encabezado que se lee como garantía. Una celda que no se puede leer no certifica nada; el
+    # lint la reporta aparte con el motivo correcto (typo, no «sin resolver»).
+    if pelado not in VERDICTS:
+        return False
+    return pelado not in VERDICTS_SIN_RESOLVER
+
+
+def verdict_valido(verdict: str) -> bool:
+    """¿El veredicto pelado está en el vocabulario cerrado? Distingue el TYPO del «sin resolver».
+
+    Se arreglan distinto: un typo se corrige en la celda, un `no-soportada` se resuelve volviendo a
+    la fuente. Mandar el mensaje equivocado manda a hacer el trabajo equivocado."""
+    # @inv INV-117
+    v = (verdict or "").strip().lower()
+    pelado = _RESOLUCION_SEP.split(v, maxsplit=1)[0].strip(_ADORNO).strip()
+    return pelado in VERDICTS
 
 # Columnas que hacen evaluable al bloque. Sin `ancla`/`hash` no hay dónde colgar los hashes (la
 # plantilla pre-D-20 colapsaba las soportadas en prosa y dejaba una sola fila, la que falló). Sin
