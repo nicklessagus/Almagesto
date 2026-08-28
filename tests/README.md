@@ -310,6 +310,27 @@ escribir cada función nueva».
 > el test asesino y el arranque del alfabeto. ⚠ El `~1 h → ~12 min` que estimaba el issue sobre
 > `--todo` **sigue sin medir**: no se extrapola desde dos módulos.
 
+> **La mutación DIRIGIDA es otra operación, y la prohibición no la cubre (#204, 2026-08-28).** El
+> barrido no se corre salvo pedido explícito; la dirigida **sí**, y es un paso al escribir una
+> función con guardas: rompé cada guarda que el módulo promete y corré su archivo de tests.
+>
+> ```bash
+> python tools/mutar.py --dirigida scripts/apply_fixes.py            # todas las funciones
+> python tools/mutar.py --dirigida scripts/apply_fixes.py --solo find_block
+> ```
+>
+> Muta **un** módulo, corre **sólo `tests/test_<módulo>.py`** y **no escala**: ~0,44 s por mutación
+> (medido, copia del repo incluida: 17 mutaciones de `triage.py` en 7,4 s). En la tanda #196/#197,
+> hecha a mano, tres mutaciones sobre las tres guardas de `apply_fixes.py` dejaron **dos tests
+> falsos** al descubierto.
+>
+> ⚠ **No es el gate y no toca el ratchet.** Como no escala, puede marcar SOBREVIVE algo que otro
+> archivo de tests sí mata: **sobre-reporta sobrevivientes y nunca da falso limpio** — la dirección
+> segura. Y **rehúsa** en vez de degradar a la corrida cara cuando el módulo no tiene archivo de
+> tests 1:1 o no tiene ninguna función mutable: cero mutaciones **no** es "murieron todas" (el bug
+> estaba en la primera versión de este modo — `ingest_star.py` es todo `main`, que está exento, y
+> cerraba con un ✅ sin haber medido nada).
+
 **Cómo se leen los ratchets** (`tools/mutacion-ratchet.yaml`, `tools/cobertura-ratchet.yaml`): son
 **deuda medida**, no objetivos. El número sólo baja; subirlo hay que justificarlo en el commit. Un
 techo en 0 sería rojo permanente, y un rojo permanente se deja de mirar.

@@ -1405,8 +1405,21 @@ también para los scripts de una sola operación. Detalle y ratchets en
 1. **Mutación** — `python tools/mutar.py --diff`: romper cada función y exigir que **algún test
    muera**. Es lo único que distingue "el test pasa" de "el test **podría** fallar". Trabaja sobre
    una copia del repo, nunca sobre el árbol real.
-   ⛔ **Cadencia (decidida con el usuario, 2026-08-27): NO se corre salvo pedido EXPLÍCITO.**
-   Motivo: el barrido completo tardaba **~1 h** (416 funciones × la suite entera, secuencial), y con
+   ⛔ **Cadencia (decidida con el usuario, 2026-08-27): el BARRIDO no se corre salvo pedido
+   EXPLÍCITO. La mutación DIRIGIDA sí, y es un paso al escribir una función con guardas (#204).**
+   Son dos operaciones con el mismo nombre y otro costo, y hasta el 2026-08-28 la prohibición no
+   las distinguía. La dirigida —`python tools/mutar.py --dirigida scripts/<módulo>.py
+   [--solo f,g]`— muta **un** módulo y corre **sólo su archivo de tests**, sin escalar: **~0,44 s
+   por mutación** (medido el 2026-08-28, copia del repo incluida: 17 mutaciones de `triage.py` en
+   7,4 s; 4 de `apply_fixes.py` en 1,8 s) contra los ~8 s por mutante que costaba el barrido de una
+   etapa sobre un módulo del final del alfabeto. En la tanda #196/#197 pagó de inmediato: tres mutaciones sobre las tres
+   guardas de `apply_fixes.py` dejaron **dos tests falsos** al descubierto.
+   ⚠ Como no escala, puede marcar SOBREVIVE algo que otro archivo de tests sí mata:
+   **sobre-reporta sobrevivientes y nunca da falso limpio**, que es la dirección segura. No toca el
+   ratchet y no reemplaza al barrido. Y **rehúsa** —no degrada a la corrida cara— si el módulo no
+   tiene `tests/test_<módulo>.py` o no tiene ninguna función mutable: cero mutaciones no es
+   «murieron todas» (D-43; el bug estaba en la primera versión de este modo, con `ingest_star.py`).
+   Motivo de la prohibición del barrido: tardaba **~1 h** (416 funciones × la suite entera, secuencial), y con
    `-x` el orden alfabético de pytest hace que mutar `triage.py` pague casi toda la suite antes de
    llegar al test que lo mata. El costo dominante es buscar el test asesino en el lugar equivocado.
    **El gate no corre solo** — ni al cerrar un issue, ni al cerrar una tanda.

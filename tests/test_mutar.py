@@ -173,3 +173,81 @@ def test_two_stage_false_conserva_el_barrido_de_una_etapa(repo_con_tests: Path, 
 
     assert vivos == ["f"]
     assert blancos == ["tests/"]
+
+
+# ── #204 · mutación DIRIGIDA: el bucle de escritura, que no es el gate ──────────────────────────
+
+
+def _args(archivos, solo=""):
+    from types import SimpleNamespace
+    return SimpleNamespace(archivos=archivos, solo=solo)
+
+
+def test_dirigida_no_escala_a_la_suite(repo_con_tests: Path, monkeypatch, tmp_path):
+    """Lo que la hace barata: el sobreviviente de la etapa 1 NO paga la suite. El canje es que
+    sobre-reporta sobrevivientes (otro archivo podría matarlo) — falla hacia el lado seguro, nunca
+    da falso limpio."""
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    blancos = _grabando(monkeypatch, [True])
+    copia = tmp_path / "copia"; (copia / "scripts").mkdir(parents=True)
+    (copia / "scripts" / "viejo.py").write_text("x", encoding="utf-8")
+
+    vivos = mutar.mutar_archivo(repo_con_tests / "scripts" / "viejo.py", copia, verbose=False,
+                                escalate=False)
+
+    assert vivos == ["f"]
+    assert blancos == ["tests/test_viejo.py"], "escaló: dejó de ser el modo barato"
+
+
+def test_dirigida_only_acota_las_funciones(repo_con_tests: Path, monkeypatch, tmp_path):
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    (repo_con_tests / "scripts" / "viejo.py").write_text(
+        "def f():\n    return 1\n\n\ndef g():\n    return 2\n", encoding="utf-8")
+    blancos = _grabando(monkeypatch, [True])
+    copia = tmp_path / "copia"; (copia / "scripts").mkdir(parents=True)
+    (copia / "scripts" / "viejo.py").write_text("x", encoding="utf-8")
+
+    vivos = mutar.mutar_archivo(repo_con_tests / "scripts" / "viejo.py", copia, verbose=False,
+                                escalate=False, only={"g"})
+
+    assert vivos == ["g"]
+    assert len(blancos) == 1, "mutó funciones que no se le pidieron"
+
+
+def test_dirigida_rehusa_sin_test_1_a_1(repo_con_tests: Path, monkeypatch, capsys):
+    """Se rehúsa en vez de degradar a la suite completa: el modo se pide **por barato**, y devolver
+    en silencio la corrida cara es la clase de promesa incumplida que este repo persigue."""
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    (repo_con_tests / "scripts" / "huerfano.py").write_text("def z():\n    return 1\n",
+                                                            encoding="utf-8")
+    monkeypatch.setattr(mutar, "_copia_del_repo",
+                        lambda d: pytest.fail("degradó a la corrida cara sin avisar"))
+
+    assert mutar._directed(_args(["scripts/huerfano.py"])) == 2
+    assert "no hay tests/test_huerfano.py" in capsys.readouterr().out
+
+
+def test_dirigida_sin_funciones_mutables_no_es_un_verde(repo_con_tests: Path, monkeypatch, capsys):
+    """Cero mutaciones NO es "murieron todas" (D-43). Medido sobre el repo real: `ingest_star.py`
+    es todo `main`, que está en EXENTAS, así que el modo corría cero mutantes y cerraba con un ✅
+    que nadie había medido — un cero inventado leído como veredicto."""
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    (repo_con_tests / "scripts" / "vacio.py").write_text("def main():\n    return 1\n",
+                                                          encoding="utf-8")
+    (repo_con_tests / "tests" / "test_vacio.py").write_text("def test_y(): assert True\n",
+                                                             encoding="utf-8")
+
+    assert mutar._directed(_args(["scripts/vacio.py"])) == 2, "cerró en verde sin medir nada"
+    assert "NO es un verde" in capsys.readouterr().out
+
+
+def test_dirigida_toma_un_solo_modulo(repo_con_tests: Path, monkeypatch):
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    assert mutar._directed(_args(["scripts/viejo.py", "scripts/otro.py"])) == 2
+
+
+def test_dirigida_rechaza_una_funcion_inexistente(repo_con_tests: Path, monkeypatch, capsys):
+    """Un `--solo` con un typo mutaría cero funciones y cerraría en verde: mismo falso limpio."""
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    assert mutar._directed(_args(["scripts/viejo.py"], solo="noexiste")) == 2
+    assert "no existen en viejo.py" in capsys.readouterr().out

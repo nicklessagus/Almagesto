@@ -96,7 +96,8 @@ def test_file_for(module: Path) -> Path | None:
     return candidato if candidato.exists() else None
 
 
-def mutar_archivo(archivo: Path, copia_raiz: Path, verbose=True, two_stage: bool = True) -> list[str]:
+def mutar_archivo(archivo: Path, copia_raiz: Path, verbose=True, two_stage: bool = True,
+                  escalate: bool = True, only: set[str] | None = None) -> list[str]:
     """Funciones que **sobreviven** (ningún test se puso rojo al romperlas).
 
     `archivo` es del árbol REAL (para leerlo); se muta su gemelo dentro de `copia_raiz`.
@@ -126,13 +127,18 @@ def mutar_archivo(archivo: Path, copia_raiz: Path, verbose=True, two_stage: bool
     etapa 1 igual paga la suite entera, así que no se pierde ninguna muerte cruzada. La única
     divergencia posible con el barrido de una etapa va en la dirección **optimista** —un test que
     pasa dentro de la suite y falla corriendo solo marcaría muerto un mutante que el barrido viejo
-    daba vivo—, y eso sería un defecto de aislamiento del test, que conviene ver."""
+    daba vivo—, y eso sería un defecto de aislamiento del test, que conviene ver.
+
+    `escalate=False` corta después de la etapa 1 y `only` acota a un subconjunto de funciones: es la
+    **mutación dirigida** de `--dirigida` (#204), que no es el gate sino el bucle de escritura."""
     original = archivo.read_text(encoding="utf-8")
     gemelo = copia_raiz / archivo.relative_to(RAIZ)
     propio = test_file_for(archivo) if two_stage else None
     subset = Path("tests") / propio.name if propio else None
     sobreviven = []
     for nombre, ini, fin in funciones(archivo):
+        if only is not None and nombre not in only:
+            continue
         lineas = original.split("\n")
         sangria = len(lineas[ini - 1]) - len(lineas[ini - 1].lstrip())
         gemelo.write_text("\n".join(lineas[:ini - 1] + [" " * sangria + "return None"] + lineas[fin:]),
@@ -144,7 +150,7 @@ def mutar_archivo(archivo: Path, copia_raiz: Path, verbose=True, two_stage: bool
             if vivo and subset:
                 etapa = " (sobrevivió a su propio test; se pagó la suite)"
             # Etapa 2: sólo los sobrevivientes pagan la suite completa.
-            if vivo:
+            if vivo and escalate:
                 vivo = _suite_verde(copia_raiz)
         except subprocess.TimeoutExpired:
             vivo = True
@@ -179,13 +185,78 @@ def archivos_del_diff() -> list[Path]:
     return archivos
 
 
+def _directed(args) -> int:
+    """Mutación DIRIGIDA (#204): un módulo, sólo su archivo de tests, sin escalar a la suite.
+
+    NO es el gate y no toca el ratchet. Es el bucle de escritura: cuando escribís una función con
+    guardas, rompés cada guarda y mirás si su propio test se pone rojo. Medido: ~10 s por mutación
+    contra los ~8 s POR MUTANTE que costaba el barrido de una etapa sobre un módulo del final del
+    alfabeto.
+
+    Dirección del error, que es lo que lo hace usable: como no escala, puede marcar **SOBREVIVE**
+    algo que otro archivo de tests sí mata — sobre-reporta sobrevivientes, nunca da falso limpio.
+    "Murieron todas" acá sí implica que el barrido las daría muertas.
+
+    Sin `tests/test_<módulo>.py` **se rehúsa** en vez de degradar a la suite completa: el modo se
+    pide por barato, y devolver en silencio la corrida cara es exactamente la clase de promesa
+    incumplida que este repo persigue.
+    """
+    if len(args.archivos) != 1:
+        print("⛔ --dirigida toma UN módulo: python tools/mutar.py --dirigida scripts/foo.py")
+        return 2
+    a = args.archivos[0]
+    blanco = Path(a) if Path(a).is_absolute() else RAIZ / a
+    propio = test_file_for(blanco)
+    if propio is None:
+        print(f"⛔ no hay tests/test_{blanco.stem}.py: sin etapa barata no hay modo dirigido.\n"
+              f"   Corré el barrido completo sobre el módulo: python tools/mutar.py {a}")
+        return 2
+    only = {s.strip() for s in args.solo.split(",") if s.strip()} or None
+    nombres = {n for n, _, _ in funciones(blanco)}
+    if only and (faltan := only - nombres):
+        print(f"⛔ no existen en {blanco.name}: {sorted(faltan)}")
+        return 2
+    # ⛔ Cero mutaciones NO es "murieron todas" (D-43 aplicado a esta herramienta). `ingest_star.py`
+    # es todo `main` —que está en EXENTAS— así que el modo corría cero mutantes y cerraba con un ✅
+    # que nadie había medido. Un cero inventado se lee como veredicto.
+    a_mutar = nombres & only if only else nombres
+    if not a_mutar:
+        print(f"⛔ {blanco.name} no tiene ninguna función mutable (¿todo `main`/`__init__`, que "
+              f"están exentas?): no hay nada que medir, y eso NO es un verde.")
+        return 2
+
+    tmp = Path(tempfile.mkdtemp(prefix="almagesto-dirigida-"))
+    try:
+        copia = _copia_del_repo(tmp / "repo")
+        print(f"copia de trabajo: {copia}  (el árbol real NO se toca)")
+        print(f"· {blanco.name} contra tests/{propio.name}")
+        sobreviven = mutar_archivo(blanco, copia, escalate=False, only=only)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    if sobreviven:
+        print(f"\n{len(sobreviven)} sin test propio que las mate: {', '.join(sobreviven)}")
+        print("   (dirigida no escala: puede que otro archivo de tests sí las mate — "
+              "confirmalo con `python tools/mutar.py " + a + "`)")
+        return 1
+    print("\nmurieron todas en su propio test ✅")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("archivos", nargs="*", help="archivos de scripts/ a mutar")
     ap.add_argument("--diff", action="store_true", help="los que cambiaron vs HEAD")
     ap.add_argument("--todo", action="store_true", help="todo scripts/")
     ap.add_argument("--ratchet", action="store_true", help="comparar contra el techo y salir 1 si sube")
+    ap.add_argument("--dirigida", action="store_true",
+                    help="modo barato: muta UN módulo y corre SÓLO su archivo de tests (no es el gate)")
+    ap.add_argument("--solo", default="",
+                    help="con --dirigida: nombres de función separados por coma (default: todas)")
     args = ap.parse_args()
+
+    if args.dirigida:
+        return _directed(args)
 
     if args.todo:
         objetivo = sorted((RAIZ / "scripts").glob("*.py"))
