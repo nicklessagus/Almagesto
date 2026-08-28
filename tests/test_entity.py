@@ -245,3 +245,55 @@ def test_rename_de_tema_no_toca_el_nombre_de_la_nota(toy_vault, capsys):
     _, meta = cfg.theme_by_slug("componentes-independientes")
     assert entity.nota_de("theme", "componentes-independientes", meta) == nota, \
         "y la config sigue resolviendo a la nota que existe"
+
+
+# ── la guarda anti-fusión mira LAS SIETE capas, no dos (auditoría 2026-08-28) ────────────────────
+
+
+def _stars_yaml(*entradas):
+    cfg.STARS_YAML.write_text(
+        "".join(f"{n}:\n  slug: {s}\n" for n, s in entradas), encoding="utf-8")
+
+
+def test_rename_no_pisa_el_ground_truth_ni_la_ficha_del_destino(toy_vault, capsys):
+    """La guarda miraba `registro` y `fulltext` — 2 de 7. Con el destino teniendo sólo
+    ground-truth y ficha, `Path.rename` los **pisaba** (POSIX sobreescribe) y el script salía con
+    0 y mensaje de éxito. El daño es invisible después: el espejo #70 compara la ficha nueva
+    contra el JSON nuevo y da consistente.  @inv INV-19"""
+    poblar("gj_71", "GJ 71")
+    # el destino existe con DOS capas que la guarda vieja no miraba
+    (cfg.GROUND_TRUTH / "gj_710.json").write_text(
+        json.dumps({"slug": "gj_710", "host": {"teff_K": 4200}, "planets": [{"letter": "b"}]}),
+        encoding="utf-8")
+    (cfg.STARS / "gj_710.md").write_text("---\nname: GJ 710\nslug: gj_710\ntags: [star]\n---\n"
+                                         "# GJ 710\n\nFICHA B — síntesis cara del LLM.\n",
+                                         encoding="utf-8")
+    _stars_yaml(("GJ 71", "gj_71"), ("GJ 710", "gj_710"))
+
+    with pytest.raises(SystemExit):
+        run(["rename", "gj_71", "gj_710", "--yes"])
+
+    gt = json.loads((cfg.GROUND_TRUTH / "gj_710.json").read_text(encoding="utf-8"))
+    assert gt["host"] == {"teff_K": 4200}, "pisó el ground-truth del destino"
+    assert "FICHA B" in (cfg.STARS / "gj_710.md").read_text(encoding="utf-8"), "pisó la ficha destino"
+
+
+def test_la_guarda_nombra_las_capas_ocupadas(toy_vault, capsys):
+    """Un mensaje que sólo dice «ya hay artefactos» manda a buscar a ciegas cuál."""
+    poblar("gj_71", "GJ 71")
+    (cfg.GROUND_TRUTH / "gj_710.json").write_text("{}", encoding="utf-8")
+    (cfg.PDFS / "gj_710").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "gj_710" / "x.pdf").write_bytes(b"%PDF")
+    _stars_yaml(("GJ 71", "gj_71"))
+    with pytest.raises(SystemExit) as e:
+        run(["rename", "gj_71", "gj_710", "--yes"])
+    assert "ground_truth" in str(e.value) and "pdfs" in str(e.value)
+
+
+def test_rename_a_un_slug_libre_sigue_funcionando(toy_vault):
+    """La otra mitad: la guarda no puede volverse un bloqueo permanente."""
+    poblar("gj_71", "GJ 71")
+    _stars_yaml(("GJ 71", "gj_71"))
+    assert run(["rename", "gj_71", "gj_9999", "--yes"]) == 0
+    assert (cfg.GROUND_TRUTH / "gj_9999.json").exists()
+    assert not (cfg.GROUND_TRUTH / "gj_71.json").exists()

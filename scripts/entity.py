@@ -341,9 +341,20 @@ def rename(viejo: str, nuevo: str, yes: bool) -> int:
         cfg.print_seguro(f"\n⛔ dry-run: no se renombró nada. Repetí con `--yes` para aplicar "
                          f"({viejo} → {nuevo}).")
         return 0
-    if cfg.registro_path(nuevo).exists() or (cfg.FULLTEXT / nuevo).exists():
-        sys.exit(f"ya hay artefactos bajo el slug {nuevo!r} — renombrar encima fusionaría dos "
-                 f"entidades en silencio. Elegí otro slug o borrá la que sobra primero.")
+    # ⛔ La guarda mira LAS SIETE CAPAS, con la misma lista que usan las tres operaciones. Miraba
+    # dos (`registro` y `fulltext`), así que renombrar sobre un slug con ground-truth y ficha los
+    # **pisaba**: `Path.rename` sobreescribe en POSIX, y el script salía con 0 y mensaje de éxito.
+    # Reproducido en la pasada `/auditar` del 2026-08-28: la síntesis cara del LLM de la ficha
+    # destino desapareció, `stars.yaml` quedó con dos entradas con el mismo slug, y el daño es
+    # **invisible después** — el espejo #70 compara la ficha nueva contra el JSON nuevo y da
+    # consistente. Es exactamente lo que el mensaje de abajo dice que no puede pasar.
+    # La capa `nota` de un TEMA se excluye porque el rename no la toca (#169: se llama por
+    # `concept`, no por slug), así que su existencia no es una colisión.
+    ocupadas = [k for k, _ in capas(nuevo, tipo, meta) if not (k == "nota" and tipo != "star")]
+    if ocupadas:
+        sys.exit(f"ya hay artefactos bajo el slug {nuevo!r} ({', '.join(ocupadas)}) — renombrar "
+                 f"encima fusionaría dos entidades en silencio y PISARÍA esas capas. Elegí otro "
+                 f"slug o borrá la que sobra primero (`entity.py delete {nuevo}`).")
     for capa, p in capas(viejo, tipo, meta):
         if capa == "nota" and tipo != "star":
             # ⛔ #169. La nota de un TEMA se llama por `concept`, un campo APARTE del slug: renombrar
