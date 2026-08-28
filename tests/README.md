@@ -352,5 +352,11 @@ regresión; un test que él propuso, sí. (Sin decidir todavía; anotado.)
   cuerpo en `return None` en el árbol de trabajo — y la suite siguió en verde, porque esa función
   es justo una de las que ninguna prueba mata. Un harness que puede corromper lo que audita no
   sirve por más `finally` que tenga.
-- **Un test verde recién escrito no cuenta hasta que lo viste morir.** Pasó dos veces el mismo día:
-  el test se escribió, pasó a la primera, y sólo la mutación mostró si servía.
+- **Un test verde recién escrito no cuenta hasta que lo viste morir — por la RAZÓN que prueba.**
+  Pasó dos veces el mismo día: el test se escribió, pasó a la primera, y sólo la mutación mostró si
+  servía. Y la mitad que faltaba enunciar (#202): **ver el rojo no alcanza, hay que leer el mensaje
+  del fallo**. Medido en la tanda #196/#197 — un test murió porque su setup no creaba ninguna nota
+  de paper (universo vacío), no por el defecto, y arreglado el setup **pasaba sin el fix**; y dos de
+  los tres tests de `apply_fixes.py` sobrevivieron a mutar la guarda que decían proteger, porque el
+  flujo caía en otra guarda que también abortaba la escritura. La pregunta es *¿murió por la línea
+  que estoy probando?* y se contesta con `python tools/mutar.py --dirigida scripts/<módulo>.py`.

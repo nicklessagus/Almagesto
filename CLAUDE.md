@@ -1351,9 +1351,25 @@ la sección siguiente son su mecanización.
    Medido: el doble de `refs_of` indexaba por el input verbatim y el real por `_bare_doi`; el
    consumidor buscaba con la clave cruda, pasaba los tests y en producción reportaba **cobertura
    mal atribuida**. Un doble o deriva de la función real, o tiene un test de paridad.
-3. **Un test verde recién escrito no cuenta hasta que lo viste morir.** Pasó dos veces en un día:
-   el test se escribió, pasó a la primera, y sólo la mutación mostró si servía. Por eso el gate de
-   mutación es la red #1 y no un extra.
+3. **Un test verde recién escrito no cuenta hasta que lo viste morir — POR LA RAZÓN QUE PRUEBA.**
+   La primera mitad es necesaria y **no alcanza** (#202): un test puede fallar por algo que no tiene
+   nada que ver con lo que prueba, y ese fallo se lee igual de tranquilizador que el bueno. La
+   pregunta no es *«¿falló?»* sino ***«¿murió por la línea que estoy probando?»***, y se contesta
+   mirando **el mensaje del fallo**, no el rojo.
+   Medido dos veces en la misma tanda (2026-08-27, #196/#197), una por cada mitad del modo de falla:
+   - **murió por el motivo equivocado**: el test de #196 fallaba porque el setup no había creado
+     ninguna nota de paper —universo vacío—, no por el defecto. Arreglado el setup, **pasaba sin el
+     fix**: nunca había probado nada.
+   - **verde y atravesable**: dos de los tres tests de `apply_fixes.py` sobrevivieron a mutar la
+     guarda que decían proteger. El de colisión afirmaba `collisions no vacío` + `applied == 0` +
+     archivo intacto — pero sin la guarda el flujo cae igual en «un `viejo` no resuelve», que
+     **también** aborta la escritura. Lo que distingue a la guarda es que detecta **antes de
+     intentar**: faltaba `not r.failed`. El de todo-o-nada usaba un caso con **un solo** fix
+     fallando, donde no hay nada aplicado que perder.
+   La forma barata de contestar la pregunta es la **mutación dirigida** (#204, ~0,44 s por
+   mutación): romper cada guarda que el módulo promete y correr su archivo de tests —
+   `python tools/mutar.py --dirigida scripts/<módulo>.py`. Un test que sobrevive a eso no prueba lo
+   que dice su nombre. Por eso el gate de mutación es la red #1 y no un extra.
 4. **Un mapa que atribuye mal es peor que uno vacío**: el vacío se ve, la atribución falsa se lee
    como verdad. Vale para `docs/trazabilidad.md`, para las filas de `docs/contrato.md` y para
    cualquier tabla que este repo estampe.
