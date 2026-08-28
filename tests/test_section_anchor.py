@@ -154,3 +154,45 @@ def test_fila_con_mas_celdas_que_el_encabezado_no_se_lee_corrida():
         "las columnas corridas no se adivinan: vuelven vacías"
     assert filas[0].verdict == "soportada" and filas[0].bibcode == "2009Uno.....1..1M", \
         "lo decidible por contenido sí se recupera"
+
+
+# ── la trampa de prefijo y los code fences (auditoría 2026-08-28) ───────────────────────────────
+
+
+@pytest.mark.parametrize("header", ["## Papers relevantes para el método",
+                                    "## Conclusiones del autor",
+                                    "## Abstract de la tesis"])
+def test_solo_prosa_no_se_come_una_seccion_propia_con_prefijo_estampado(header):
+    """`solo_prosa` era una **copia con la regla vieja** de `section_start`: un `startswith` pelado,
+    así que una sección PROPIA cuyo nombre empieza como una estampada se saltaba entera. El daño es
+    doble y silencioso: apaga el gate R-1 (`unverified` mira si hay citas **en prosa**) y encima
+    reporta algo FALSO — *«concepto sin citas»* sobre una nota que sí las tiene. Es la trampa de
+    #176, arreglada dentro de `section_start` y no acá.  @inv INV-98"""
+    cuerpo = f"{header}\nProsa con [[2020a]].\n"
+    assert "[[2020a]]" in cfg.solo_prosa(cuerpo)
+
+
+@pytest.mark.parametrize("header", ["## Papers", "## Papers (25 · 16 sintetizados)",
+                                    "## Verificación de citas (2026-08-25)"])
+def test_solo_prosa_sigue_salteando_las_estampadas_de_verdad(header):
+    """La otra mitad: apretar la regla no puede dejar entrar la metadata derivada, que es lo que
+    `solo_prosa` existe para sacar. Un sufijo de puntuación sigue siendo la misma sección."""
+    assert "[[2020a]]" not in cfg.solo_prosa(f"{header}\nFila con [[2020a]].\n")
+
+
+def test_section_start_no_matchea_un_encabezado_dentro_de_un_code_fence():
+    """Medido: una nota con el bloque de verificación **ilustrado en un fence** y el real más abajo
+    hacía que `parse_verif_table` leyera el del ejemplo — una sola fila, con su `no-soportada` de
+    muestra (bloqueante), mientras todos los pares reales caían a «sin verificar». Asimetría dentro
+    del mismo módulo: `split_blocks` excluye los fences a propósito.  @inv INV-98"""
+    t = ("# X\n\nProsa.\n\n```markdown\n## Verificación de citas (2020-01-01)\n```\n\n"
+         "## Verificación de citas (2026-08-28)\n\nreal\n")
+    i = cfg.section_start(t, "## Verificación de citas")
+    assert i > t.index("```markdown"), "cortó por el encabezado del ejemplo"
+    assert t[i:].startswith("## Verificación de citas (2026-08-28)")
+
+
+def test_un_encabezado_fuera_de_todo_fence_sigue_matcheando():
+    """La otra mitad: saltear fences no puede volver ciego al cortador."""
+    t = "# X\n\n## Síntesis\n\nprosa\n"
+    assert cfg.section_start(t, "## Síntesis") == t.index("## Síntesis")

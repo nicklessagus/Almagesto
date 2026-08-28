@@ -181,15 +181,62 @@ SECCIONES_ESTAMPADAS = ("## Planetas", "## Papers", "## Métodos aplicados a est
                         "## Abstract", "## Conclusiones", "## Traducción")
 
 
+def _es_estampada(linea: str) -> bool:
+    """¿Este encabezado es de una sección que estampa la máquina?
+
+    ⛔ **Misma regla de sufijo que `section_start`, no un `startswith` pelado.** Ésta era una copia
+    con la regla vieja: `## Papers` es prefijo de `## Papers relevantes para el método`, así que una
+    sección PROPIA con ese nombre se saltaba entera. Medido el 2026-08-28: la nota perdía toda su
+    prosa, lo que (a) apagaba en silencio el gate R-1 —`unverified` mira si hay citas en prosa— y
+    (b) además reportaba algo **falso**: *«concepto sin citas `[[bibcode]]`»* sobre una nota que sí
+    las tiene. Es la trampa de #176, que se arregló dentro de `section_start` y no llegó acá.
+
+    Un sufijo es puntuación, nunca más palabras: `## Papers (25 · 16 sintetizados)` sí,
+    `## Papers relevantes…` no.
+    """
+    #  @inv INV-98
+    for h in SECCIONES_ESTAMPADAS:
+        if linea.startswith(h):
+            resto = linea[len(h):].strip()
+            if not resto or not resto[0].isalnum():
+                return True
+    return False
+
+
 def solo_prosa(body: str) -> str:
     """El cuerpo SIN las secciones que estampa la máquina — lo que alguien escribió de verdad."""
     out, saltando = [], False
     for ln in body.split("\n"):
         if ln.startswith("## "):
-            saltando = any(ln.startswith(h) for h in SECCIONES_ESTAMPADAS)
+            saltando = _es_estampada(ln)
         if not saltando:
             out.append(ln)
     return "\n".join(out)
+
+
+def _offsets_en_fence(text: str) -> set:
+    """Offsets de comienzo de línea que caen DENTRO de un ```code fence```.
+
+    ⛔ `section_start` matcheaba un encabezado de ejemplo dentro de un fence. Medido el 2026-08-28:
+    una nota con el bloque de verificación ilustrado en un fence y el bloque **real** más abajo hacía
+    que `parse_verif_table` leyera **el del ejemplo** — devolvía una sola fila, la del fence, con su
+    `no-soportada` de muestra (bloqueante) mientras **todos los pares reales caían a «sin
+    verificar»**.
+
+    Es una asimetría dentro del mismo framework: `lib_blocks.split_blocks` excluye los fences **a
+    propósito** y este cortador no. La doc del repo está llena de bloques de ejemplo en fences, así
+    que la población existe.
+    """
+    #  @inv INV-98
+    dentro, fenced, off = set(), False, 0
+    for ln in text.split("\n"):
+        if ln.lstrip().startswith("```"):
+            fenced = not fenced
+            dentro.add(off)
+        elif fenced:
+            dentro.add(off)
+        off += len(ln) + 1
+    return dentro
 
 
 def section_start(text: str, header: str) -> int:
@@ -215,7 +262,10 @@ def section_start(text: str, header: str) -> int:
     the same trap, so the rule lives here and not at the call site.
     """
     #  @inv INV-98
+    dentro = _offsets_en_fence(text)
     for i in ([0] if text.startswith(header) else []) + _header_hits(text, header):
+        if i in dentro:
+            continue        # el encabezado vive dentro de un ```code fence```: es un EJEMPLO
         resto = text[i + len(header):].split("\n", 1)[0].strip()
         if not resto or not resto[0].isalnum():
             return i
