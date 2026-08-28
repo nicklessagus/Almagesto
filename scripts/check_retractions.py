@@ -383,6 +383,12 @@ def main() -> int:
     # el barrido salía 0 con "0 con error al chequear": se leía como «la bóveda está limpia de
     # retracciones» sobre papers a los que nadie preguntó. Se cuentan y se nombran.
     sin_doi: list = []
+    # AUD-201 / INV-139 — notas descartadas por NO llevar el tag `paper`. La población se define
+    # acá adentro, y la exclusión no se contaba: con un corpus donde el tag falta (o está mal
+    # escrito) el barrido recorría N archivos, consultaba CERO y salía `rc 0` = «corrió y está
+    # limpio». Es el mismo cero inventado que las dos ramas de abajo ya cubren, por la puerta que
+    # faltaba: la de la selección.
+    sin_tag: list = []
     if not notes:
         cfg.print_seguro("⛔ no pudo chequear (rc 2): no hay ninguna nota de paper que mirar.")
         return 2
@@ -408,6 +414,7 @@ def main() -> int:
                 errors.append((note.stem, "sin frontmatter parseable"))
                 continue
             if "paper" not in (fm.get("tags") or []):
+                sin_tag.append(note.stem)              # AUD-201: la exclusión se cuenta
                 continue
             if fm.get("retracted") and not args.force:
                 found.append((fm.get("bibcode") or note.stem, "ya marcado"))
@@ -467,7 +474,8 @@ def main() -> int:
     cfg.print_seguro(f"\n{checked} chequeados vía Crossref, {marked} recién marcados, "
           f"{len(found)} retractados en total; {len(corrected)} con corrección publicada "
           f"({annotated} recién anotadas); {len(errors)} con error al chequear; "
-          f"{len(sin_doi)} sin DOI (no consultables en Crossref).")
+          f"{len(sin_doi)} sin DOI (no consultables en Crossref)"
+          + (f"; {len(sin_tag)} fuera de la población (sin el tag `paper`)" if sin_tag else "") + ".")
     if sin_doi:
         cfg.print_seguro(
             "Sin DOI — a estos NADIE les preguntó a Crossref; los cubre sólo el prefijo de título "
@@ -497,6 +505,15 @@ def main() -> int:
         cfg.print_seguro("⛔ no pudo chequear (rc 2): quedaron papers sin consultar y no se detectó "
                          "ninguna retracción — el resultado NO es «limpio», es «no se miró».")
         return 2
+    if sin_tag and not checked and not sin_doi:
+        # AUD-201: se recorrieron notas y NINGUNA entró a la población. Sin esto el barrido salía 0
+        # —«corrió y está limpio»— sobre papers a los que nadie preguntó, y el motivo (el tag) ni
+        # siquiera aparecía en el reporte.
+        cfg.print_seguro(f"⛔ no pudo chequear (rc 2): las {len(sin_tag)} nota(s) miradas no llevan "
+                         f"el tag `paper`, así que la población quedó VACÍA y no se consultó "
+                         f"Crossref ni una vez — el resultado NO es «limpio», es «no se miró». "
+                         f"Revisá los `tags:` (p. ej. {', '.join(sin_tag[:3])}).")
+        return 2
     if sin_doi and not checked:
         # El barrido no consultó Crossref **ni una vez**: todo lo que hay son papers sin DOI. Salir
         # 0 acá afirma que la bóveda está limpia de retracciones sobre una población que nadie
@@ -513,4 +530,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    cfg.cli_exit(main)

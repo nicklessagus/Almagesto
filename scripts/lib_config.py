@@ -543,7 +543,7 @@ def stdout_tolerante() -> None:
             pass                                     # stream reemplazado por un test o no reconfigurable
 
 
-def print_seguro(texto: str) -> None:
+def print_seguro(texto: str, file=None) -> None:
     """`print` tolerante a consolas no-UTF8. Compartido (nace en `lint.py` como `_print_seguro`,
     6ª pasada de auditoría; se midió después que otros 10 scripts mueren por el mismo motivo —
     quedan acá para que los usen).
@@ -555,11 +555,12 @@ def print_seguro(texto: str) -> None:
     (que se escribe aparte, siempre en UTF-8) haya quedado perfecto. El exit code es la salida
     real de una compuerta de CI; el texto lindo en pantalla es el lujo. Si el stream no puede con
     los caracteres, se degrada el texto en vez de dejar morir la corrida."""
+    stream = file if file is not None else sys.stdout
     try:
-        print(texto)
+        print(texto, file=stream)
     except UnicodeEncodeError:
-        enc = getattr(sys.stdout, "encoding", None) or "ascii"
-        print(texto.encode(enc, errors="replace").decode(enc))
+        enc = getattr(stream, "encoding", None) or "ascii"
+        print(texto.encode(enc, errors="replace").decode(enc), file=stream)
 
 
 def as_list(v) -> list:
@@ -770,6 +771,49 @@ def load_registro(slug: str) -> dict:
     return data if isinstance(data, dict) else {}
 
 
+class UnreadableRegistro(RuntimeError):
+    """The subject's registro exists on disk but cannot be parsed into a mapping.
+
+    Raised by `load_decisiones` so that no curation consumer can silently fall back to «no
+    decisions at all». See its docstring for why the tolerant `{}` of `load_registro` is a hole on
+    this particular path.  @inv INV-139"""
+
+
+def cli_exit(main_fn) -> None:
+    """Run a script's `main()` and turn the framework's declared refusals into a clean exit.
+
+    Single wrapper instead of one `try/except` per script: the audit's most expensive pattern is
+    «the fix was applied to one site and not to its twin», and a refusal that reaches the terminal
+    as a traceback reads like a crash of the tool rather than like the guard it is.  @inv INV-139"""
+    try:
+        sys.exit(main_fn())
+    except UnreadableRegistro as exc:
+        sys.exit(f"⛔ {exc}")
+
+
+def registro_error(slug: str) -> str | None:
+    """Reason why `<slug>.yaml` cannot be used as this subject's registro, or `None` if healthy.
+
+    Sibling of `objective_error` / `yaml_error`, and it exists for the same reason (INV-80): the
+    tolerant loader collapses three states into one `{}` — file absent (legitimate: a subject may
+    never have been ingested), broken YAML, and valid YAML with the wrong shape — and the strict
+    callers need to tell them apart. An absent file is **not** an error.  @inv INV-139"""
+    f = registro_path(slug)
+    try:
+        data = yaml.safe_load(f.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None                      # ausente es legítimo: el sujeto puede no estar ingestado
+    except (yaml.YAMLError, UnicodeDecodeError) as exc:
+        return (f"{f} no parsea como YAML: {' '.join(str(exc).split())} — es el archivo que guarda "
+                f"la curación del sujeto (`decisiones`) y el universo de sus búsquedas")
+    except OSError as exc:
+        return f"{f} no se pudo leer: {exc}"
+    if data is not None and not isinstance(data, dict):
+        return (f"{f} parsea, pero no a un mapa (es {type(data).__name__}) — el registro es un "
+                f"mapa con `decisiones`/`busquedas`/`cadena`")
+    return None
+
+
 def save_registro(slug: str, data: dict) -> None:
     """Escribe el registro. Punto único por el que pasan `save_decisiones` y `save_busqueda` — las
     dos garantías de abajo cubren a los dos.
@@ -818,7 +862,21 @@ def load_decisiones(slug: str) -> dict:
     Se sacó: una capa de compatibilidad en el lector es complejidad permanente, y el juicio viejo
     tiene un camino explícito —`python scripts/triage.py <slug> --migrate`—. Lo que NO puede pasar
     es que ese archivo quede **mudo** y el triage vuelva a proponer lo ya descartado sin decir nada:
-    el lint lo detecta y bloquea."""
+    el lint lo detecta y bloquea.
+
+    ⛔ **REHÚSA operar sobre un registro ilegible** (AUD-131 / INV-139). `load_registro` degrada un
+    YAML roto a `{}` a propósito —el framework instruye editar el archivo a mano, y sus lectores
+    tolerantes (el lint) tienen que reportar en vez de morirse—, pero en ESTE camino ese `{}`
+    significa *«no hay ninguna decisión»*, que es exactamente lo contrario de lo que el archivo
+    dice: los `--drop` dejan de aplicarse, los `--drop-core` vuelven a ser core, `fetch_pdf` los
+    baja de nuevo y el triage los re-propone **sin el motivo**. O sea el bug que #51 cerró, más el
+    que #112 cerró, disparados por un `:` sin comillas y sin que nada lo diga. Es la misma doctrina
+    que la lente ilegible de INV-80: una config que no parsea rehúsa operar, no degrada en
+    silencio.  @inv INV-139"""
+    if (err := registro_error(slug)):
+        raise UnreadableRegistro(
+            f"{err}\n   ⛔ No se puede aplicar la curación de `{slug}`: un registro ilegible se "
+            f"leería como «no hay ninguna decisión» y los papers descartados volverían a entrar.")
     d = load_registro(slug).get("decisiones") or {}
     if not isinstance(d, dict):
         return {}
@@ -1841,15 +1899,24 @@ def save_paso(slug: str, paso: str, flags=()) -> None:
     save_registro(slug, data)
 
 
-def cadena_cortada(slug: str, canonica=CADENA_ESTRELLA) -> str | None:
-    """El primer paso de `canonica` que NO figura en el registro, o `None` si están todos.
+CADENA_SIN_TRAZA = "«el registro no tiene `cadena`»"
 
-    Nombra el paso, no cuenta pasos: "se cortó en `fetch_ground_truth`" es accionable y
-    "faltan 4 pasos" no. Si el registro no tiene `cadena` en absoluto devuelve `None` — eso es
-    "nunca se estampó" (sujeto anterior a D-57), no "se cortó en el primero"."""
+
+def cadena_cortada(slug: str, canonica=CADENA_ESTRELLA) -> str | None:
+    """First step of `canonica` missing from the registro, or `None` when they all ran.
+
+    It names the step rather than counting them: "it stopped at `fetch_ground_truth`" is
+    actionable, "4 steps missing" is not.
+
+    ⛔ **Three states, three values** (AUD-149 / INV-139). A registro with no `cadena` at all — a
+    subject older than D-57, or a chain that never stamped anything — used to return `None`, the
+    very value that means *«every step ran»*: the degraded case read as the good one and the
+    subject left the check through the green door. It now returns `CADENA_SIN_TRAZA`, which the
+    lint reports as *no consta* — the D-43 doctrine that keeps «measured, and it is zero» apart
+    from «could not measure»."""
     corridos = {p.get("paso") for p in load_cadena(slug)}
     if not corridos:
-        return None
+        return CADENA_SIN_TRAZA
     return next((paso for paso in canonica if paso not in corridos), None)
 
 

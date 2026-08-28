@@ -311,4 +311,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     cfg.stdout_tolerante()
-    sys.exit(main())
+    cfg.cli_exit(main)

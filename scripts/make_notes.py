@@ -867,39 +867,66 @@ def parse_int(value, field: str) -> int | None:
         return None
 
 
+def _yaml_block_item(v: str) -> str:
+    """`v` written as a BLOCK-context scalar, so that PyYAML reads back the very same string.
+
+    AUD-145: the merge edits the frontmatter as TEXT, so a value carrying YAML punctuation —a
+    `: ` (which turns the item into a mapping), a leading `#`, a quote— was re-read as something
+    else. `v not in current` then stayed true and the value was appended **on every run, without
+    a ceiling**. Round-tripping through the dumper is what makes «add-only» actually idempotent.
+
+    ⚠ Block context only: a comma is legal inside a plain block scalar and NOT inside a flow one,
+    so the `field: [a, b]` branch dumps the whole list instead of quoting item by item.  @inv INV-139"""
+    return yaml.safe_dump(v, default_flow_style=False, allow_unicode=True).strip().removesuffix("...").strip()
+
+
 def merge_frontmatter_list(dest, field: str, values: list) -> bool:
     """Retro-linkeo add-only: agrega a la lista `field` del frontmatter de `dest` los `values`
     que falten. Edita el TEXTO en el lugar (no re-serializa el YAML) para preservar byte a byte
     el resto del frontmatter — orden, comentarios y todo lo que haya tocado la extracción LLM.
-    Nunca saca ni pisa nada. Devuelve True si modificó el archivo."""
+    Nunca saca ni pisa nada. Devuelve True si modificó el archivo.
+
+    ⛔ **Una NEGATIVA se dice** (AUD-146 / INV-139). Seis de los siete `return False` no son «ya
+    estaban»: son *no pude* —sin frontmatter, frontmatter sin cerrar, YAML roto, el campo no es
+    lista, el campo no está, forma no reconocida—. El llamador cuenta el `False` como `skipped`,
+    o sea «ya estaba linkeado», así que la entidad nueva **nunca entraba al roll-up** y nada lo
+    decía. Los seis avisan por stderr nombrando archivo, campo y motivo; el único mudo es el
+    legítimo (`not missing`), que es el caso normal e idempotente."""
+    def _no(motivo: str) -> bool:
+        """Say the refusal out loud and return False, so the caller's `skipped` is not a lie."""
+        cfg.print_seguro(f"  ⚠ no pude linkear `{field}` en {dest.name}: {motivo}", file=sys.stderr)
+        return False
+
     text = dest.read_text(encoding="utf-8")
     if not text.startswith("---\n"):
     #  @inv INV-16
-        return False
+        return _no("la nota no arranca con frontmatter")
     end = text.find("\n---\n", 4)
     if end < 0:
-        return False
+        return _no("el frontmatter no cierra con `---`")
     head = text[4:end]
     try:
         data = yaml.safe_load(head) or {}
-    except yaml.YAMLError:
-        return False
+    except yaml.YAMLError as exc:
+        return _no(f"el frontmatter no parsea ({' '.join(str(exc).split())[:80]})")
     current = data.get(field) or []
     if not isinstance(current, list):
-        return False
+        return _no(f"`{field}` no es una lista (es {type(current).__name__})")
     missing = [v for v in values if v not in current]
     if not missing:
-        return False
+        return False                       # el ÚNICO mudo: no había nada que agregar (idempotente)
     lines = head.split("\n")
     idx = next((i for i, ln in enumerate(lines) if ln.startswith(f"{field}:")), None)
     if idx is None:
-        return False   # campo ausente: no inventar posición (el stub siempre lo trae)
+        # campo ausente: no inventar posición (el stub siempre lo trae)
+        return _no(f"`{field}` no está en el frontmatter — no se inventa la posición")
     rest = lines[idx][len(field) + 1:].strip()
     if rest.startswith("[") and rest.endswith("]"):
-        # lista inline: `field: []` o `field: [a, b]`
-        inner = rest[1:-1].strip()
-        items = ([x.strip() for x in inner.split(",")] if inner else []) + missing
-        lines[idx] = f"{field}: [{', '.join(items)}]"
+        # Lista inline (`field: []` / `field: [a, b]`): se re-emite ENTERA con el dumper, no se
+        # concatena texto. Partir por `,` rompía cualquier item que llevara una coma —propia o de
+        # un valor nuevo— y en contexto flow la coma no se puede dejar sin comillas (AUD-145).
+        lines[idx] = f"{field}: " + yaml.safe_dump(
+            list(current) + list(missing), default_flow_style=True, allow_unicode=True).strip()
     elif rest == "" or rest.startswith("#") or data.get(field) is None:
         # lista en bloque (o campo null): insertar tras el último "- item" existente
         j = idx + 1
@@ -908,9 +935,9 @@ def merge_frontmatter_list(dest, field: str, values: list) -> bool:
         indent = lines[j - 1][:len(lines[j - 1]) - len(lines[j - 1].lstrip())] if j > idx + 1 else ""
         if rest and not rest.startswith("#"):
             lines[idx] = f"{field}:"                # normaliza un `field: null` explícito
-        lines[j:j] = [f"{indent}- {v}" for v in missing]
+        lines[j:j] = [f"{indent}- {_yaml_block_item(str(v))}" for v in missing]
     else:
-        return False   # forma no reconocida (escalar con valor): no tocar
+        return _no("forma no reconocida (escalar con valor) — no se toca")
     cfg.write_text_atomic(dest, "---\n" + "\n".join(lines) + text[end:])
     return True
 
@@ -992,8 +1019,22 @@ def stamp_excluded(slug: str, dest) -> bool:
     ingest). Idempotente: sin cambios no reescribe. Devuelve True si modificó."""
     if not dest.exists():
         return False
-    if not (cfg.ROOT / "build" / slug / "ads.json").exists():
+    adsfile = cfg.ROOT / "build" / slug / "ads.json"
+    if not adsfile.exists():
         return False                            # sin corrida vigente: ni re-estampa ni quita
+    # AUD-202 / INV-139 — `excluded_table` DEGRADA a "" ante un `ads.json` corrupto (promete no
+    # lanzar), y acá "" significa «la corrida vigente no excluye a nadie» → se QUITABA el apéndice.
+    # O sea: un JSON cortado a mitad borraba contenido ya publicado de la bóveda. Las dos cosas
+    # están bien por separado; lo que faltaba era distinguirlas antes de decidir el borrado.
+    try:
+        json.loads(adsfile.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        cfg.print_seguro(
+            f"  ⚠ {dest.name}: `build/{slug}/ads.json` no se puede leer "
+            f"({type(exc).__name__}) → NO se re-estampa «Excluidos por el filtro» (dejarlo vacío "
+            f"borraría el snapshot del ingest); re-corré `python scripts/query_ads.py {slug}`",
+            file=sys.stderr)
+        return False
     new = excluded_table(slug)                  # "" si la corrida no dejó excluidos
     text = dest.read_text(encoding="utf-8")
     start = cfg.section_start(text, EXCLUDED_HEADER)
@@ -2692,4 +2733,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    cfg.cli_exit(main)

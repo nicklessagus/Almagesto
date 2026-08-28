@@ -1030,6 +1030,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     not_evaluated: list = []
     anchor_bodies: dict = {}           # {archivo: texto} de TODA nota de entidad/query — D-47
     old_registro: list = []            # registros con la clave `busqueda:` (schema pre-D-28)
+    registro_ilegible: list = []       # registro que no parsea → la curación queda sin aplicar (AUD-131)
     old_facets: list = []              # notas de paper con `topics:` (schema pre-R-5)
     infer_sin_premisas: list = []      # marcas `(inferencia …)` sin ningún [[bibcode]] (D-42)
     bad_status: list = []              # `status` de hipótesis fuera del vocabulario (D-37)
@@ -2366,22 +2367,24 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # diciendo que falta el scratch: mejor un dato fechado que un cero inventado.
     for rf in sorted(glob.glob(str(cfg.REGISTRO / "*.yaml"))):
         slug = Path(rf).stem
-        raw = Path(rf).read_text(encoding="utf-8")
         # Lector BLINDADO (#h05): antes esto reimplementaba `yaml.safe_load` a mano acá mismo —
         # el único de seis lectores del registro que lo hacía— y por eso se saltaba el blindaje
         # que `cfg.load_registro` ya tiene (YAML roto / forma inválida → `{}`, no una excepción).
         reg = cfg.load_registro(slug)
-        if not reg and raw.strip():
-            # `load_registro` es TOLERANTE a propósito (el framework instruye editar el registro a
-            # mano): un YAML roto o con forma inválida vuelve `{}` en vez de tumbar a sus lectores.
-            # Pero saltearlo MUDO acá es el "cero inventado" que #64 cerró, por otra puerta: un
-            # registro con 3 candidatos sin juzgar volvía "Triage pendiente (0)" y exit 0. Se
-            # reporta como backlog —"la garantía no corrió acá", no una violación del vault— para
-            # que quede a la vista sin bloquear (misma distinción que #55/#56).
-            triage_pending.append(
-                (slug, f"`vault/config/registro/{slug}.yaml` no se pudo leer (YAML roto o con "
-                       f"forma inválida) → no se puede saber si hay triage pendiente / corpus "
-                       f"truncado para este sujeto; arreglalo a mano y volvé a correr el lint"))
+        if (err_reg := cfg.registro_error(slug)):
+            # AUD-131 — esto era BACKLOG, con un mensaje que describía el daño chico ("no se puede
+            # saber si hay triage pendiente"). El daño real es otro y es el peor de la bóveda: el
+            # registro es el ÚNICO artefacto no regenerable, y mientras no parsee la curación entera
+            # queda **revertida en silencio** — los `--drop` dejan de aplicarse, los `--drop-core`
+            # vuelven a ser core, `fetch_pdf` los baja de nuevo y el triage los re-propone SIN el
+            # motivo. O sea el bug de #51 más el de #112, disparados por un `:` sin comillas. Es la
+            # misma familia que el `triage.json` viejo, que ya bloquea: un juicio que queda mudo.
+            # `load_decisiones` además rehúsa operar (INV-139), así que la cadena no puede correr
+            # con la curación apagada; acá se reporta para que el lint no muera y lo nombre.
+            registro_ilegible.append(
+                (slug, f"{err_reg} → mientras no parsee, TODA la curación de `{slug}` queda sin "
+                       f"aplicar (los descartes vuelven a ser core y el triage los re-propone sin "
+                       f"su motivo); arreglá el YAML a mano y volvé a correr el lint"))
             continue
         # Decisión que no es un mapa (#h12): `2006Rasmussen: descartado`, sin `motivo`/`fecha`/
         # `decision`. `load_decisiones` la filtra en silencio (documentado en su docstring, que
@@ -2407,10 +2410,18 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         # (off-ADS no corre query_ads ni fetch_ground_truth) y compararlo contra el orden astro
         # inventaría cortes que no existen.
         if slug in stars_slugs and (corte := cfg.cadena_cortada(slug)):
-            corridos = [p.get("paso") for p in cfg.load_cadena(slug)]
-            cadena_incompleta.append(
-                (slug, f"la cadena se cortó en `{corte}` (corrieron: {', '.join(corridos)}) → "
-                       f"re-corré `python scripts/ingest_star.py {slug}` (es idempotente)"))
+            if corte == cfg.CADENA_SIN_TRAZA:
+                # AUD-149: esto devolvía `None` —el valor de "corrió entera"—, así que el sujeto sin
+                # traza salía del chequeo por la puerta del verde. No consta ≠ está completa.
+                cadena_incompleta.append(
+                    (slug, "no consta: el registro no tiene `cadena` (sujeto anterior a D-57, o "
+                           "ninguna corrida estampó su paso) → no se puede saber dónde se cortó; "
+                           f"re-corré `python scripts/ingest_star.py {slug}` (es idempotente)"))
+            else:
+                corridos = [p.get("paso") for p in cfg.load_cadena(slug)]
+                cadena_incompleta.append(
+                    (slug, f"la cadena se cortó en `{corte}` (corrieron: {', '.join(corridos)}) → "
+                           f"re-corré `python scripts/ingest_star.py {slug}` (es idempotente)"))
         dec = reg.get("decisiones")
         if isinstance(dec, dict):
             for clave, v in dec.items():
@@ -2637,6 +2648,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('old_disputes', 'disputes en el schema viejo (planets[].disputes[]) — el lint ya no las lee', SEV_BLOQUEANTE, tuple(old_disputes)),
         Categoria('legacy_triage', 'Juicio de triage en build/<slug>/triage.json (pre-1.9.0) — el lector ya no lo mira', SEV_BLOQUEANTE, tuple(legacy_triage)),
         Categoria('old_registro', '⛔ Registro con `busqueda:` (schema viejo pre-D-28) — el lector ya no lo lee', SEV_BLOQUEANTE, tuple(old_registro)),
+        Categoria('registro_ilegible', '⛔ Registro del sujeto ilegible — la curación (`decisiones`) queda SIN APLICAR: los descartes vuelven a ser core', SEV_BLOQUEANTE, tuple(registro_ilegible)),
         Categoria('old_facets', '⛔ Nota de paper con `topics:` (schema viejo pre-R-5) — el campo vigente es `facets:`', SEV_BLOQUEANTE, tuple(old_facets)),
         Categoria('infer_sin_premisas', '⛔ `inferencia` sin premisas (D-42): la marca no nombra ningún `[[bibcode]]`', SEV_BLOQUEANTE, tuple(infer_sin_premisas)),
         Categoria('bad_status', '⛔ `status` de hipótesis fuera del vocabulario cerrado (D-37)', SEV_BLOQUEANTE, tuple(bad_status)),

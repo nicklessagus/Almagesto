@@ -1911,6 +1911,21 @@ def test_lint_objective_roto_bloquea(toy_vault, capsys):
     assert "objective.yaml" in rep
 
 
+def test_lint_registro_ilegible_bloquea_y_nombra_la_curacion(toy_vault, capsys):
+    """AUD-131 — un registro que no parsea deja TODA la curación sin aplicar, y eso bloquea.
+
+    Antes caía en `triage_pending` (backlog) con un mensaje que describía el daño chico: «no se
+    puede saber si hay triage pendiente». El daño real es que los `--drop` dejan de aplicarse y los
+    descartados vuelven a ser core — el bug de #51 más el de #112. Misma familia que el
+    `triage.json` viejo, que ya bloqueaba: un juicio de curación que queda mudo.  @inv INV-139"""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    cfg.registro_path("gj581").write_text("decisiones: [\n", encoding="utf-8")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc != 0
+    assert "curación" in rep and "gj581" in rep
+    assert "Registro del sujeto ilegible" in rep
+
+
 def test_lint_sin_git_reporta_no_evaluado(toy_vault, capsys, monkeypatch):
     """La otra puerta del mismo cero inventado: sin `git`, `last_change_dates` devuelve `{}` y la
     verificación stale reportaba **0** en silencio — indistinguible de "todo al día".  @inv INV-87, INV-38"""
@@ -2209,6 +2224,19 @@ def test_facets_vigente_no_dispara_el_detector(toy_vault, capsys):
     link_from_index(toy_vault, "2020Nuevo")
     rc, rep = run_lint_reporte(capsys)
     assert "2020Nuevo" not in rep or "pre-R-5" not in rep
+
+
+def test_cadena_sin_traza_es_no_consta_y_no_verde(toy_vault, capsys):
+    """AUD-149 / INV-139 — un registro SIN `cadena` devolvía `None`, el valor de «corrió entera».
+
+    O sea: el sujeto que nunca estampó un paso salía del chequeo por la puerta del verde, que es
+    exactamente el cero inventado que D-43 prohíbe. Son tres estados —completa, cortada en X, sin
+    traza— y necesitan tres valores."""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    cfg.registro_path("test_star").write_text("slug: test_star\nbusquedas: []\n", encoding="utf-8")
+    assert cfg.cadena_cortada("test_star") == cfg.CADENA_SIN_TRAZA
+    _rc, rep = run_lint_reporte(capsys)
+    assert "no consta" in rep and "no tiene `cadena`" in rep
 
 
 def test_cadena_cortada_nombra_el_paso(toy_vault, capsys):

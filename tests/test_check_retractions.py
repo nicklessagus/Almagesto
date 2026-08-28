@@ -387,11 +387,26 @@ def test_main_nota_no_parseable_es_no_pudo_chequear(toy_vault, monkeypatch, caps
 
 
 def test_main_saltea_notas_no_paper(toy_vault, monkeypatch):
+    """La nota sin el tag `paper` no se consulta — pero eso NO puede cerrar en verde solo.
+
+    AUD-201 / INV-139: la población se define por tag y la exclusión no se contaba, así que un
+    corpus donde el tag falta (o está mal escrito) recorría N archivos, consultaba CERO y salía
+    `rc 0` = «corrió y está limpio». Es el cero inventado que las otras dos ramas ya cubrían, por
+    la puerta que faltaba: la de la selección."""
     mk_note(toy_vault.PAPERS, "no-paper", {"doi": "10.1/x", "tags": ["query"]}, "")
     calls = []
     patch_net(monkeypatch, [FakeResp(200, {"message": {}})], calls)
-    assert run_main(monkeypatch) == 0
+    assert run_main(monkeypatch) == 2          # población vacía ≠ bóveda limpia
     assert calls == []
+
+    # con UN paper de verdad la población no está vacía: se consulta, cierra 0 y el no-paper sigue
+    # sin consultarse (que es lo que este test siempre quiso fijar).
+    mk_note(toy_vault.PAPERS, "2020unoA...1..1A",
+            {"bibcode": "2020unoA...1..1A", "title": "t", "doi": "10.1/a", "tags": ["paper"]}, "")
+    calls.clear()
+    patch_net(monkeypatch, [FakeResp(200, {"message": {}})], calls)
+    assert run_main(monkeypatch) == 0
+    assert len(calls) == 1
 
 
 def test_main_paper_puntual(toy_vault, monkeypatch, capsys):

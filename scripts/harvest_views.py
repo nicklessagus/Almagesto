@@ -208,6 +208,12 @@ def write_view_section(dest: Path, sujeto: str, cuerpo: str, *, theme: bool,
         ini, fin = span
         actual = text[ini:fin]
         if not force and _norm(actual) != _norm(mn.vista_block(sujeto, theme)):
+            # AUD-200: esto se contaba como «sin cambios». Es una NEGATIVA —la sección ya tiene
+            # prosa redactada, cuyas anclas cuelgan del texto exacto— y el operador tiene que
+            # saber que la vista nueva NO quedó escrita; si no, la cosecha se lee como completa.
+            cfg.print_seguro(
+                f"  ⚠ {dest.name}: `## Vista — {sujeto}` ya tiene prosa redactada → NO se pisa "
+                f"(usá --force si la querés reemplazar; sus anclas de verificación se vencen)")
             return False
         nuevo = text[:ini] + cuerpo.rstrip("\n") + "\n" + text[fin:]
     if nuevo == text:
@@ -216,23 +222,37 @@ def write_view_section(dest: Path, sujeto: str, cuerpo: str, *, theme: bool,
     return True
 
 
+class ViewUpsertError(RuntimeError):
+    """The view could not be declared in `vistas[]` — the note's frontmatter is unusable.
+
+    Distinct from «nothing to change», which is the normal idempotent case.  @inv INV-139"""
+
+
 def upsert_view(dest: Path, vista: dict) -> bool:
     """Mergea `vista` en `vistas[]` del frontmatter, por `sujeto`. Devuelve True si modificó.
 
     Reescribe **sólo el bloque `vistas:`**, dejando el resto del frontmatter byte a byte — mismo
-    criterio que `merge_frontmatter_list`: ahí abajo hay campos que tocó la extracción LLM."""
+    criterio que `merge_frontmatter_list`: ahí abajo hay campos que tocó la extracción LLM.
+
+    ⛔ **Un `False` significa una sola cosa: no había nada que cambiar** (AUD-200 / INV-139). Los
+    tres estados de *no pude* —sin frontmatter, frontmatter sin cerrar, YAML roto— levantan
+    `ViewUpsertError`, porque el llamador los contaba como «sin cambios» y **escribía igual la
+    sección del cuerpo**: la nota quedaba con `## Vista — X` y sin la entrada en `vistas[]`, que es
+    justo la incoherencia que el lint bloquea. Declarar la lectura y escribirla son una operación,
+    no dos."""
     import yaml
     text = dest.read_text(encoding="utf-8")
     if not text.startswith("---\n"):
-        return False
+        raise ViewUpsertError("la nota no arranca con frontmatter")
     end = text.find("\n---\n", 4)
     if end < 0:
-        return False
+        raise ViewUpsertError("el frontmatter no cierra con `---`")
     head = text[4:end]
     try:
         data = yaml.safe_load(head) or {}
-    except yaml.YAMLError:
-        return False
+    except yaml.YAMLError as exc:
+        raise ViewUpsertError(
+            f"el frontmatter no parsea ({' '.join(str(exc).split())[:80]})") from exc
     previas = [v for v in cfg.as_list(data.get("vistas")) if isinstance(v, dict)]
     nuevas, visto = [], False
     for v in previas:
@@ -344,7 +364,16 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
                    "txt": str(vista.get("txt") or slug), "lente": list(lente)}
         if fuente:
             entrada["fuente"] = fuente
-        toco = upsert_view(dest, entrada)
+        try:
+            toco = upsert_view(dest, entrada)
+        except ViewUpsertError as exc:
+            # AUD-200 / INV-139 — si la vista no se puede DECLARAR, la sección del cuerpo tampoco
+            # se escribe: una `## Vista — X` sin su entrada en `vistas[]` es la incoherencia que el
+            # lint bloquea, y dejarla sería cambiar un fallo visible por uno que hay que descubrir.
+            n["rechazadas"] += 1
+            cfg.print_seguro(f"  ⛔ {archivo.name}: no se pudo declarar la vista de «{sujeto}» "
+                             f"({exc}) → la nota queda sin tocar")
+            continue
         for campo in ("methods", "thesis_links", "role"):
             valores = [str(x).strip() for x in cfg.as_list(data.get(campo)) if str(x).strip()]
             if valores and mn.merge_frontmatter_list(dest, campo, valores):
@@ -378,4 +407,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     cfg.stdout_tolerante()
-    sys.exit(main())
+    cfg.cli_exit(main)

@@ -406,3 +406,34 @@ def test_la_traduccion_no_es_prefijo_del_original(toy_vault):
     texto = dest.read_text(encoding="utf-8")
     assert "## Abstract\nThe verbatim abstract." in texto, "el verbatim quedó tapado por su traducción"
     assert cfg.section_start(texto, "## Abstract") != cfg.section_start(texto, "## Traducción del abstract")
+
+
+def test_frontmatter_roto_no_deja_una_vista_a_medias(toy_vault, capsys):
+    """AUD-200 / INV-139 — si la vista no se puede DECLARAR, la sección del cuerpo tampoco se escribe.
+
+    `upsert_view` devolvía `False` pelado para tres estados de *no pude* (sin frontmatter, sin
+    cerrar, YAML roto) y el llamador los contaba como «sin cambios»… pero seguía adelante y
+    escribía `## Vista — X`. Resultado: la nota queda con la sección y sin la entrada en `vistas[]`,
+    que es exactamente la incoherencia que el lint bloquea — un fallo visible cambiado por uno que
+    hay que descubrir."""
+    dest = sembrar(toy_vault)
+    dest.write_text("---\nbibcode: " + BIB + "\ntags: [paper\n---\ncuerpo\n", encoding="utf-8")
+    antes = dest.read_text(encoding="utf-8")
+
+    r = hv.harvest("test_star")
+
+    assert r["rechazadas"] == 1 and r["cosechadas"] == 0
+    assert dest.read_text(encoding="utf-8") == antes        # nada a medias
+    assert "no se pudo declarar la vista" in capsys.readouterr().out
+
+
+def test_prosa_redactada_no_se_pisa_pero_se_dice(toy_vault, capsys):
+    """AUD-200 — la negativa de `write_view_section` se contaba como «sin cambios».
+
+    Que no se pise prosa verificada es correcto (sus anclas cuelgan del texto exacto); lo que no
+    puede pasar es que la cosecha se lea como completa cuando la vista nueva NO quedó escrita."""
+    dest = sembrar(toy_vault, body="## Vista — Estrella Test\n\nprosa ya redactada a mano.\n")
+    hv.harvest("test_star")
+    salida = capsys.readouterr().out
+    assert "ya tiene prosa redactada" in salida and "--force" in salida
+    assert "prosa ya redactada a mano" in dest.read_text(encoding="utf-8")

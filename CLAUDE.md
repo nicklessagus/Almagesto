@@ -1410,9 +1410,17 @@ pierde al scrollear: un ingest podía cerrarse con lint en 0 y cientos de pendie
 se resuelve con `python scripts/triage.py <slug>` (pertinente → `extra_core`; ruido → `--drop …
 --reason`). Sin `build/` local **no** da un cero inventado: cae a `busquedas` del registro versionado
 y reporta el snapshot con su fecha (no el conteo vigente — si dropeaste sin re-correr la cadena
-quedó viejo). Y si ese registro **no se puede leer** (YAML roto o con forma inválida) se reporta
-**ahí mismo**, nombrando el archivo: saltearlo en silencio devolvía un `(0)` sobre un registro que
-declaraba candidatos sin juzgar — el mismo cero inventado que #64 cerró, por otra puerta. El
+quedó viejo).
+⛔ **Y un registro que NO se puede leer (YAML roto o forma inválida) BLOQUEA, porque revierte la
+curación entera** (AUD-131 / INV-139). `load_registro` degrada a `{}` a propósito —el framework
+instruye editar el archivo a mano y el lint tiene que reportar, no morirse—, pero en el camino de
+la **curación** ese `{}` significa *«no hay ninguna decisión»*, que es lo contrario de lo que el
+archivo dice: los `--drop` dejan de aplicarse, los `--drop-core` vuelven a ser core, `fetch_pdf`
+los baja de nuevo y el triage los re-propone **sin el motivo**. O sea el bug de #51 más el de #112,
+disparados por un `:` sin comillas. Por eso `load_decisiones` **rehúsa operar** —misma doctrina que
+la lente ilegible de INV-80: una config que no parsea no degrada en silencio— y el lint lo reporta
+como bloqueante, nombrando el daño real. Hasta 1.73.0 era **backlog**, con un mensaje que describía
+el daño chico («no se puede saber si hay triage pendiente»). El
 registro es además el **único** artefacto de la bóveda que no es regenerable, así que la lectura
 tolerante que evita tumbar al lint **no** habilita pisarlo: `save_registro` es atómico (tmp+rename)
 y **rehúsa escribir** sobre un registro existente que no parsea, en vez de perder `busquedas` y los

@@ -57,6 +57,8 @@
 
 ## ⛔ Registro con `busqueda:` (schema viejo pre-D-28) — el lector ya no lo lee (0)
 
+## ⛔ Registro del sujeto ilegible — la curación (`decisiones`) queda SIN APLICAR: los descartes vuelven a ser core (0)
+
 ## ⛔ Nota de paper con `topics:` (schema viejo pre-R-5) — el campo vigente es `facets:` (0)
 
 ## ⛔ `inferencia` sin premisas (D-42): la marca no nombra ningún `[[bibcode]]` (0)

@@ -164,6 +164,57 @@ def test_merge_casos_que_no_debe_tocar(toy_vault):
     assert mn.merge_frontmatter_list(sin_fm, "stars", ["A"]) is False
 
 
+def test_merge_valor_con_puntuacion_yaml_es_idempotente(toy_vault):
+    """AUD-145 — un valor con `: ` se re-agregaba en CADA corrida, sin techo.
+
+    La cirugía escribe texto; sin quotear, `- Kepler: notas` se relee como un **mapa**, así que
+    `v not in current` sigue siendo verdadero para siempre y la lista crece sin límite. La
+    idempotencia es invariante del framework («refrescar es seguro»), no un detalle.  @inv INV-139"""
+    p = toy_vault.PAPERS / "n.md"
+    toy_vault.PAPERS.mkdir(parents=True, exist_ok=True)
+    p.write_text("---\nbibcode: x\nthesis_links:\n- a\n---\nbody\n", encoding="utf-8")
+    raro = "shift: vs shape"
+    assert mn.merge_frontmatter_list(p, "thesis_links", [raro]) is True
+    assert read_fm(p)["thesis_links"] == ["a", raro]
+    # segunda corrida: NO vuelve a agregarlo (es lo que fallaba)
+    assert mn.merge_frontmatter_list(p, "thesis_links", [raro]) is False
+    assert read_fm(p)["thesis_links"] == ["a", raro]
+    # ídem en flow style, donde además la coma partía el valor
+    q = toy_vault.PAPERS / "m.md"
+    q.write_text("---\nstars: [Otra]\n---\nbody\n", encoding="utf-8")
+    coma = "GJ 581, b"
+    assert mn.merge_frontmatter_list(q, "stars", [coma]) is True
+    assert read_fm(q)["stars"] == ["Otra", coma]
+    assert mn.merge_frontmatter_list(q, "stars", [coma]) is False
+
+
+def test_merge_una_negativa_se_dice(toy_vault, capsys):
+    """AUD-146 / INV-139 — seis de los siete `False` son «no pude», y el llamador los contaba como
+    «ya estaba linkeado» (`skipped`): la entidad nueva nunca entraba al roll-up y nada lo decía.
+
+    El único mudo tiene que seguir siendo el legítimo (`not missing`), que es el caso normal e
+    idempotente: si también avisara, el aviso sería ruido en cada corrida y se dejaría de mirar."""
+    toy_vault.PAPERS.mkdir(parents=True, exist_ok=True)
+    casos = {
+        "sin_fm.md": "sin frontmatter",
+        "sin_cierre.md": "---\nstars: []\n",
+        "roto.md": "---\nstars: [\n---\nbody\n",
+        "escalar.md": "---\nstars: una-cadena\n---\nbody\n",
+        "sin_campo.md": "---\nbibcode: x\n---\nbody\n",
+    }
+    for nombre, texto in casos.items():
+        (toy_vault.PAPERS / nombre).write_text(texto, encoding="utf-8")
+        capsys.readouterr()
+        assert mn.merge_frontmatter_list(toy_vault.PAPERS / nombre, "stars", ["A"]) is False
+        err = capsys.readouterr().err
+        assert "no pude linkear" in err and nombre in err, nombre
+
+    ya = mk_note(toy_vault.PAPERS, "ya", {"stars": ["A"]}, "body\n")
+    capsys.readouterr()
+    assert mn.merge_frontmatter_list(ya, "stars", ["A"]) is False
+    assert capsys.readouterr().err == ""              # el caso normal NO habla
+
+
 def test_merge_preserva_el_resto_byte_a_byte(toy_vault):
     # @inv INV-16
     p = toy_vault.PAPERS / "n.md"
@@ -215,6 +266,26 @@ def test_excluded_motivo_regla_combinacion(toy_vault):
     tabla = mn.excluded_table("test_star")
     assert "sin faceta obligatoria (rv)" in tabla
     assert "doctype: article" not in tabla
+
+
+def test_ads_json_corrupto_no_borra_el_apendice_de_excluidos(toy_vault):
+    """AUD-202 / INV-139 — un `ads.json` cortado a mitad BORRABA contenido ya publicado.
+
+    `excluded_table` promete no lanzar y degrada a `""`; en `stamp_excluded` ese `""` significa
+    «la corrida vigente no excluye a nadie» → se quitaba el apéndice. Las dos piezas están bien
+    por separado: lo que faltaba era distinguir «no hay excluidos» de «no pude leer» ANTES de
+    decidir un borrado."""
+    nota = toy_vault.STARS / "test_star.md"
+    toy_vault.STARS.mkdir(parents=True, exist_ok=True)
+    apendice = ("---\ntags: [star]\n---\n# Test Star\n\nprosa\n\n"
+                "## Excluidos por el filtro\n\n| Bibcode | Motivo |\n|---|---|\n| 2019X | ruido |\n")
+    nota.write_text(apendice, encoding="utf-8")
+    build = cfg.ROOT / "build" / "test_star"
+    build.mkdir(parents=True, exist_ok=True)
+    (build / "ads.json").write_text('{"records": [{"bibcode": "2019X", "rele', encoding="utf-8")
+
+    assert mn.stamp_excluded("test_star", nota) is False
+    assert nota.read_text(encoding="utf-8") == apendice        # no se tocó nada
 
 
 def test_excluded_table_no_voltea_la_generacion_de_notas(toy_vault):

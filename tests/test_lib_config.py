@@ -226,12 +226,56 @@ def test_concept_areas_escalar_no_se_deshace_en_caracteres(toy_vault):
 
 def test_registro_ilegible_no_tumba_a_sus_lectores(toy_vault):
     """El framework INSTRUYE editar el registro a mano ("sacá la entrada de `decisiones`"), así que
-    un YAML roto o que no parsea a mapa tiene que degradar, no reventar al lint/triage/query_ads."""
+    un YAML roto o que no parsea a mapa tiene que degradar, no reventar al lint/triage/query_ads.
+
+    ⚠ La tolerancia es de `load_registro`, NO de `load_decisiones` (AUD-131): ahí el `{}` significa
+    «no hay ninguna decisión», que es lo contrario de lo que el archivo dice — la curación quedaba
+    revertida en silencio. Ver `test_load_decisiones_rehusa_sobre_registro_ilegible`."""
     cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
     cfg.registro_path("x").write_text("- esto es una lista\n", encoding="utf-8")
-    assert cfg.load_registro("x") == {} and cfg.load_decisiones("x") == {}
+    assert cfg.load_registro("x") == {}
     cfg.registro_path("y").write_text("decisiones:\n  2019A: descartado\n", encoding="utf-8")
     assert cfg.load_decisiones("y") == {}          # la entrada escalar se descarta, no rompe
+
+
+def test_load_decisiones_rehusa_sobre_registro_ilegible(toy_vault):
+    """AUD-131 — el registro ilegible NO puede leerse como «no hay ninguna decisión».
+
+    `load_registro` degrada a `{}` a propósito (el lint tiene que reportar, no morirse). En el
+    camino de la CURACIÓN ese mismo `{}` revierte todo: los `--drop` dejan de aplicarse, los
+    `--drop-core` vuelven a ser core y el triage los re-propone SIN el motivo — el bug de #51 más
+    el de #112, disparados por un `:` sin comillas y sin que nada lo diga.  @inv INV-139"""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    cfg.registro_path("roto").write_text("decisiones: [\n", encoding="utf-8")
+    with pytest.raises(cfg.UnreadableRegistro) as exc:
+        cfg.load_decisiones("roto")
+    assert "curación" in str(exc.value)
+    # el registro AUSENTE sigue siendo legítimo: no hay curación que revertir
+    assert cfg.load_decisiones("nunca_ingestado") == {}
+    assert cfg.registro_error("nunca_ingestado") is None
+    # y la forma inválida (parsea, pero no a mapa) cuenta igual que el YAML roto
+    cfg.registro_path("lista").write_text("- uno\n", encoding="utf-8")
+    with pytest.raises(cfg.UnreadableRegistro):
+        cfg.load_decisiones("lista")
+
+
+def test_cli_exit_traduce_la_negativa_en_una_salida_limpia(toy_vault):
+    """La negativa de INV-139 tiene que llegar a la terminal como GUARDA, no como traceback.
+
+    Un `UnreadableRegistro` sin traducir se lee como que la herramienta se rompió, y el operador
+    busca el bug en el script en vez de en su YAML. Se centraliza en un solo wrapper por el patrón
+    más caro de la auditoría: el arreglo aplicado a un sitio y no a su gemelo.  @inv INV-139"""
+    def revienta():
+        raise cfg.UnreadableRegistro("registro roto de prueba")
+
+    with pytest.raises(SystemExit) as exc:
+        cfg.cli_exit(revienta)
+    assert "⛔" in str(exc.value) and "registro roto de prueba" in str(exc.value)
+
+    # y el camino normal sigue siendo `sys.exit(main())`: el código de salida pasa tal cual
+    with pytest.raises(SystemExit) as ok:
+        cfg.cli_exit(lambda: 0)
+    assert ok.value.code == 0
 
 
 def test_es_del_carril_distingue_los_dos_juicios():
@@ -488,6 +532,22 @@ def test_universo_acumulado_sin_bibcodes_cae_al_maximo(toy_vault):
 
 
 # ── issue 2.2 · D-57: cada paso deja traza estructurada en `cadena:` (INV-91) ───────────────────
+
+
+def test_cadena_cortada_distingue_los_tres_estados(toy_vault):
+    """AUD-149 / INV-139 — sin `cadena` devolvía `None`, que es el valor de «corrieron todos».
+
+    Los tres estados son distintos y accionables por separado: completa (nada que hacer), cortada
+    en X (re-correr desde ahí), sin traza (no se puede saber). Colapsar el tercero en el primero
+    saca al sujeto del chequeo por la puerta del verde."""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    cfg.registro_path("s").write_text("slug: s\n", encoding="utf-8")
+    assert cfg.cadena_cortada("s") == cfg.CADENA_SIN_TRAZA        # sin traza ≠ completa
+    canonica = ("uno", "dos")
+    cfg.save_paso("s", "uno")
+    assert cfg.cadena_cortada("s", canonica) == "dos"             # cortada: nombra el paso
+    cfg.save_paso("s", "dos")
+    assert cfg.cadena_cortada("s", canonica) is None              # completa
 
 def test_save_paso_appendea_con_fecha_version_y_via(toy_vault, monkeypatch):
     """R-6, decidida por el usuario: **cada script se estampa a sí mismo**. `via` distingue el paso
@@ -829,8 +889,11 @@ def test_load_registro_tolera_un_yaml_en_otra_codificacion(toy_vault):
     (cfg.REGISTRO / "test_star.yaml").write_bytes(
         "decisiones:\n  2020Foo:\n    motivo: revisión metodológica\n".encode("latin-1"))
     assert cfg.load_registro("test_star") == {}
-    assert cfg.load_decisiones("test_star") == {}
     assert cfg.load_busquedas("test_star") == []
+    # AUD-131: en el camino de la curación la tolerancia se invierte — ver
+    # `test_load_decisiones_rehusa_sobre_registro_ilegible`.
+    with pytest.raises(cfg.UnreadableRegistro):
+        cfg.load_decisiones("test_star")
 
 
 def test_flags_usados_no_reporta_el_posicional_como_flag():

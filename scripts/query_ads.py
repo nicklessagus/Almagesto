@@ -1566,6 +1566,6 @@ def main() -> int:
 
 if __name__ == "__main__":
     try:
-        sys.exit(main())
+        cfg.cli_exit(main)
     except EmptyResultError as exc:   # #27: exit ≠ 0 → el orquestador aborta la cadena
         sys.exit(str(exc))
