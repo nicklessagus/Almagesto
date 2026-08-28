@@ -325,8 +325,14 @@ escribir cada función nueva».
 > Medido el 2026-08-28, mismos sobrevivientes (`[]`) en las dos ramas: `triage.py` (17 funciones,
 > casi al final del alfabeto) **143,6 s → 8,0 s**; `apply_fixes.py` (5 funciones, la primera)
 > 4,5 s → 1,7 s. Los dos extremos confirman el diagnóstico: la ganancia **es** la distancia entre
-> el test asesino y el arranque del alfabeto. ⚠ El `~1 h → ~12 min` que estimaba el issue sobre
-> `--todo` **sigue sin medir**: no se extrapola desde dos módulos.
+> el test asesino y el arranque del alfabeto.
+>
+> ✅ **`--todo` medido el 2026-08-28 (v1.75.0): 11,3 min (681 s) sobre 464 funciones = 1,47 s por
+> mutante.** El `~1 h` que motivó la prohibición es de antes de la partición y no es comparable. Con
+> ese número el barrido pasa a ser **recomendado al cerrar una tanda**, no sólo a pedido — esa
+> corrida encontró tres sobrevivientes que la revisión no había visto, dos de ellos tests escritos
+> ese mismo día que pasaban por construcción. ⚠ Correlo con el **árbol quieto**: copia el repo al
+> arrancar, así que si seguís editando su resultado describe un árbol que ya no existe (#199).
 
 > **La mutación DIRIGIDA es otra operación, y la prohibición no la cubre (#204, 2026-08-28).** El
 > barrido no se corre salvo pedido explícito; la dirigida **sí**, y es un paso al escribir una

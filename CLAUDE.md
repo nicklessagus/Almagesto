@@ -1631,14 +1631,22 @@ también para los scripts de una sola operación. Detalle y ratchets en
    que el conjunto de sobrevivientes **no cambia**; sin archivo 1:1 la etapa se saltea (no se
    aproxima). Medido, con los mismos sobrevivientes en las dos ramas: `triage.py` (17 funciones)
    **143,6 s → 8,0 s**; `apply_fixes.py` (5, la primera del alfabeto) 4,5 s → 1,7 s — la ganancia
-   **es** la distancia al arranque del alfabeto. ⚠ El `~1 h → ~12 min` sobre `--todo` sigue **sin
-   medir**: no se extrapola desde dos módulos, así que la cadencia de arriba **no cambia** todavía.
+   **es** la distancia al arranque del alfabeto.
+   ✅ **Y el `--todo` YA SE MIDIÓ (2026-08-28, v1.75.0): 11,3 min sobre 464 funciones** — 1,47 s por
+   mutante, con las dos etapas. El `~1 h` que motivó la prohibición es de antes de la partición y no
+   es comparable. **Con ese número la prohibición pierde su motivo**: once minutos en background, con
+   el árbol quieto, es un costo razonable al cerrar una tanda grande — y esa corrida encontró **tres**
+   sobrevivientes que la revisión no había visto, dos de ellos tests escritos ese mismo día que
+   pasaban por construcción. La cadencia queda: **a pedido, y recomendado al cerrar una tanda**.
+   ⚠ Con el árbol QUIETO: el barrido copia el repo al arrancar, así que si seguís editando su
+   resultado describe un árbol que ya no existe (#199).
    ⚠ **Cadencia anterior (2026-08-26), que la de arriba suspende:** un **lote** hecho con roles separados
    —spec → tests → implementación, agentes distintos, `docs/playbook-spec-tests.md`— **no necesita
    este gate en su tanda**: ahí el defecto se previene en vez de detectarse, que es lo que la
    mutación audita. Queda obligatorio para los lotes que **no** usaron separación de roles, para
    toda función nueva escrita sin spec, y como pasada periódica completa (`--todo --ratchet`). El
-   canje es real: la mutación tardó ~40 min sobre un diff que tocaba `make_notes.py`.
+   canje es real: la mutación tardó ~40 min sobre un diff que tocaba `make_notes.py` — cifra
+   también anterior a #187.
 2. **Schema compartido** — si N módulos prometen la misma forma, se prueba **una vez parametrizada**
    (`tests/test_backends_schema.py`), no con prosa en N docstrings.
 3. **Doble vs real** — un doble de test no se escribe a ojo: o deriva de la función real, o hay un

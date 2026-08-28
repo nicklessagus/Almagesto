@@ -5,9 +5,24 @@
 # esta sesión encontró cuatro veces (un `assert path.glob(...)` siempre truthy, una guarda cuyo
 # test pasaba sin la guarda, un "espera creciente" que `[2.0, 2.0]` satisface, un test de
 # determinismo corriendo las dos pasadas en el mismo proceso).
-medido_en: "2026-08-27"
-alcance: "TODO `scripts/` — 416 funciones, barrido completo (`--todo --ratchet`, 1.68.0, pasada /auditar del 2026-08-27 + su tanda de fix)"
+medido_en: "2026-08-28"
+alcance: "TODO `scripts/` — 464 funciones, barrido completo (`--todo --ratchet`, 1.75.0)"
 techo: 3
+
+# RE-MEDIDO EL 2026-08-28 (1.75.0) sobre 464 funciones: **siguen siendo LAS MISMAS 3**, así que el
+# techo no se mueve. La población creció de 338 a 464 —dos sesiones de auditoría, seis huecos de
+# contrato cerrados y la octava red— y se declara el cambio en vez de comparar dos universos
+# distintos (regla de método #5).
+#
+# ⚠ La primera corrida de esa sesión dio **6**, y las tres de más son el argumento entero de esta
+# red: `trace_invariants.techos_previos` (su test cubría sólo la rama `None`, que un `return None`
+# satisface por construcción) y DOS funciones escritas ese mismo día —`bench_verify._origen`, sin
+# test, y `make_notes.stamp_accessed`, con un test que **pasaba solo**: la fixture sustituía con un
+# f-string que no matcheaba, así que no cambiaba el archivo y la aserción se cumplía sola—. Ninguna
+# la vio la revisión; las tres las cazó la mutación. Cubiertas, el barrido vuelve a 3.
+#
+# COSTO MEDIDO: **11,3 min** (681 s) para 464 funciones = **1,47 s por mutante**, con las dos etapas
+# de #187. El número viejo del handoff (~1 h) es de antes de esa partición y no es comparable.
 
 # ⚠ NOTA HISTÓRICA (2026-08-24, cuando `techo` valía 10 — hoy vale 3, ver arriba).
 # EL TECHO SUBIÓ DE 7 A 10, Y NO ES UNA REGRESIÓN — es la primera medición sobre el árbol
