@@ -182,3 +182,21 @@ def test_upsert_view_no_se_come_el_cierre_del_frontmatter(toy_vault):
     fm = read_fm(dest)
     assert fm.get("bibcode") == BIB, "y tiene que seguir parseando entero, no sólo cerrar"
     assert fm["vistas"][0]["fecha"], "…con la vista estampada"
+
+
+def test_render_view_no_fabrica_wikilinks_con_notacion_de_matriz(toy_vault):
+    """Regresión medida: una extracción que trae una matriz —`C_U = [[r11, r12],[r12, r22]]`— se
+    escribía tal cual, y markdown lee `[[...]]` como **wikilink**. Resultado: 14 wikilinks rotos
+    (bloqueantes) fabricados por el cosechador sobre notas que nadie escribió a mano.
+
+    El `[[bibcode]]` legítimo —una atribución de segunda mano dentro de la vista— tiene que
+    sobrevivir: lo que se neutraliza es lo que NO parece un bibcode.
+
+    @inv INV-134"""
+    d = extraccion(aporte="Con C_U = [[r11, r12],[r12, r22]] la covarianza queda diagonal; "
+                          "el método es de [[1994Comon]].")
+    dest = sembrar(toy_vault, d)
+    hv.harvest("test_star")
+    cuerpo = dest.read_text(encoding="utf-8")
+    assert "[[r11" not in cuerpo, "una matriz no puede quedar como wikilink"
+    assert "[[1994Comon]]" in cuerpo, "…y la cita de segunda mano SÍ se conserva"

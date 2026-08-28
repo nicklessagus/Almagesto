@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import re
 import json
 import sys
 from pathlib import Path
@@ -35,15 +36,31 @@ import lib_config as cfg
 import make_notes as mn
 
 
+# Un `[[…]]` en markdown es un WIKILINK. Una extracción trae matrices escritas igual
+# —`C_U = [[r11, r12],[r12, r22]]`— y escribirlas tal cual **fabrica wikilinks rotos**, que son
+# bloqueantes: medido, 14 de una sola cosecha, sobre notas que nadie escribió a mano. Se neutraliza
+# lo que NO parece un bibcode; la cita de segunda mano dentro de la vista sobrevive intacta.
+# Misma heurística de target que usa el lint (`^\d{4}[A-Za-z]`), para que las dos puntas coincidan.
+# Se mira la APERTURA, no el par completo: una matriz anidada —`[[r11, r12],[r12, r22]]`— no tiene
+# un `]]` que cierre el primer `[[`, así que un patrón de par no la ve. Un `[[` sobrevive sólo si lo
+# que sigue arranca como bibcode.
+_APERTURA = re.compile(r"\[\[(?!\d{4}[A-Za-z][^\]\n]*\]\])")
+
+
+def _safe_links(texto: str) -> str:
+    """Deja el `[[bibcode]]` y desarma el `[[` que en realidad era notación."""
+    return _APERTURA.sub("[", texto)
+
+
 def render_view(sujeto: str, data: dict) -> str:
     """The `## Vista — <sujeto>` section built from one extraction JSON.
 
     Deterministic on purpose: the same JSON has to render byte-identical, or the idempotence rule
     of the framework (`corré dos veces y hasheá`) cannot hold for this step."""
     out = [f"## Vista — {sujeto}", ""]
-    if (aporte := str(data.get("aporte") or "").strip()):
+    if (aporte := _safe_links(str(data.get("aporte") or "").strip())):
         out += [f"**Aporte:** {aporte}", ""]
-    ejes = {k: str(v).strip() for k, v in (cfg.as_map(data.get("ejes")) or {}).items()
+    ejes = {k: _safe_links(str(v).strip()) for k, v in (cfg.as_map(data.get("ejes")) or {}).items()
             if str(v).strip()}
     if ejes:
         out += ["**Ejes:**", ""] + [f"- **{k}:** {v}" for k, v in ejes.items()] + [""]
@@ -51,13 +68,13 @@ def render_view(sujeto: str, data: dict) -> str:
     if filas:
         out += ["| Qué | Valor | Línea | Régimen | Segunda mano |", "|---|---|---|---|---|"]
         for f in filas:
-            celdas = [str(f.get(k) or "—").strip() or "—"
+            celdas = [_safe_links(str(f.get(k) or "—").strip()) or "—"
                       for k in ("que", "valor", "linea", "regimen", "segunda_mano")]
             out.append("| " + " | ".join(celdas) + " |")
         out.append("")
-    if (hueco := str(data.get("hueco") or "").strip()):
+    if (hueco := _safe_links(str(data.get("hueco") or "").strip())):
         out += [f"**Hueco:** {hueco}", ""]
-    salv = [str(x).strip() for x in cfg.as_list(data.get("salvedades")) if str(x).strip()]
+    salv = [_safe_links(str(x).strip()) for x in cfg.as_list(data.get("salvedades")) if str(x).strip()]
     if salv:
         out += ["**Salvedades:**", ""] + [f"- {s}" for s in salv] + [""]
     return "\n".join(out).rstrip("\n") + "\n"
