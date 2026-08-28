@@ -146,7 +146,13 @@ def notas_del_slug(slug: str) -> set[str] | None:
         if carpeta.is_dir():
             stems |= {p.name[:-len(suf)] for p in carpeta.glob("*" + suf)}
     campos = ("stars",) if tipo == "star" else ("thesis_links", "methods")
+    # AUD-156 / INV-105 — sin los `aliases` el alcance perdía papers REALES: `make_notes` mergea en
+    # `stars[]` el nombre con el que la entidad se nombró en ese ingest, y una bóveda usa los alias
+    # todo el tiempo (`HD 10700` por `tau Ceti`). Un paper tagueado así quedaba fuera del gate de
+    # cierre de su propio sujeto —o sea que `lint --cierre tau_ceti` daba verde sobre deuda suya— y
+    # fuera del barrido de capas de `entity delete`.
     claves = {nombre, slug, str(meta.get("concept") or slug)}
+    claves |= {str(a) for a in cfg.as_list(meta.get("aliases")) if str(a).strip()}
     for f in sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []:
         fm = cfg.split_fm(f.read_text(encoding="utf-8"))
         if any(claves & set(cfg.as_list(fm.get(campo))) for campo in campos):

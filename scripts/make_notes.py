@@ -155,12 +155,11 @@ def stamp_fulltext(dest, stem: str, slug: str | None) -> bool:
     if rel is None or not dest.exists():
         return False
     text = dest.read_text(encoding="utf-8")
-    if not text.startswith("---\n"):
+    lim = cfg.fm_bounds(text)             # AUD-147: el MISMO localizador que `split_fm`
+    if lim is None:
         return False
-    end = text.find("\n---\n", 4)
-    if end < 0:
-        return False
-    lines = text[4:end].split("\n")
+    ini, end = lim
+    lines = text[ini:end].split("\n")
 
     # Si ya hay un `fulltext:` válido (apunta a un .txt que existe), decidir quién gana ANTES de
     # estampar: sólo un candidato de calidad estrictamente mayor pisa al ya estampado. En empate
@@ -201,7 +200,7 @@ def stamp_fulltext(dest, stem: str, slug: str | None) -> bool:
         if pver:
             changed = upsert("eprint_version", pver, ("pdf_source",)) or changed
     if changed:
-        cfg.write_text_atomic(dest, "---\n" + "\n".join(lines) + text[end:])
+        cfg.write_text_atomic(dest, text[:ini] + "\n".join(lines) + text[end:])
     return changed
 
 
@@ -218,13 +217,12 @@ def find_header_line(text: str) -> tuple[int, int] | None:
     y trae la clave entre backticks (`ADS: \\`bibcode\\`` / `fuente off-ADS · \\`citekey\\``). Las
     líneas de URL/snapshot de las notas off-ADS no la traen, y una línea `· ` dentro de la
     extracción LLM queda fuera por el corte en la primera sección."""
-    if not text.startswith("---\n"):
+    lim = cfg.fm_bounds(text)             # AUD-147
     #  @inv INV-17
+    if lim is None:
         return None
-    end = text.find("\n---\n", 4)
-    if end < 0:
-        return None
-    pos = end + len("\n---\n")
+    end = lim[1]
+    pos = text.find("\n", end + 1) + 1    # arranca DESPUÉS de la línea del `---` de cierre
     first_sec = text.find("\n## ", pos)
     limit = len(text) if first_sec < 0 else first_sec
     while pos < limit:
@@ -250,13 +248,11 @@ def stamp_pdf_link(dest) -> bool:
     #  @inv INV-18
         return False
     text = dest.read_text(encoding="utf-8")
-    if not text.startswith("---\n"):
-        return False
-    end = text.find("\n---\n", 4)
-    if end < 0:
+    lim = cfg.fm_bounds(text)             # AUD-147
+    if lim is None:
         return False
     try:
-        data = yaml.safe_load(text[4:end]) or {}
+        data = yaml.safe_load(text[lim[0]:lim[1]]) or {}
     except yaml.YAMLError:
         return False                    # frontmatter roto: lo surface el lint, acá no se toca
     pdf_rel = data.get("pdf")
@@ -296,12 +292,11 @@ def stamp_keywords(dest, keywords: list) -> bool:
     **Add-only estricto:** si la nota ya trae `keywords` con contenido, no se toca. Devuelve True si
     modificó."""
     text = dest.read_text(encoding="utf-8")
-    if not text.startswith("---\n") or not keywords:
+    lim = cfg.fm_bounds(text)             # AUD-147
+    if lim is None or not keywords:
         return False
-    end = text.find("\n---\n", 4)
-    if end < 0:
-        return False
-    head = text[4:end]
+    ini, end = lim
+    head = text[ini:end]
     try:
         data = yaml.safe_load(head) or {}
     except yaml.YAMLError:
@@ -322,7 +317,7 @@ def stamp_keywords(dest, keywords: list) -> bool:
         while j < len(lines) and lines[j].lstrip().startswith("- "):
             j += 1                      # `facets:` en bloque: saltar sus ítems
         lines[j:j] = [linea]
-    cfg.write_text_atomic(dest, "---\n" + "\n".join(lines) + text[end:])
+    cfg.write_text_atomic(dest, text[:ini] + "\n".join(lines) + text[end:])
     return True
 
 
@@ -475,13 +470,12 @@ def migrate_disputes(dest) -> bool:
     if not dest.exists():
         return False
     text = dest.read_text(encoding="utf-8")
-    if not text.startswith("---\n"):
+    lim = cfg.fm_bounds(text)             # AUD-147
+    if lim is None:
         return False
-    end = text.find("\n---\n", 4)
-    if end < 0:
-        return False
+    ini, end = lim
     try:
-        front = yaml.safe_load(text[4:end]) or {}
+        front = yaml.safe_load(text[ini:end]) or {}
     except yaml.YAMLError:
         cfg.print_seguro(f"  ⚠ {dest.name}: frontmatter no parseable — migralo a mano")
         return False
@@ -651,17 +645,16 @@ def migrate_all_txt_fields() -> int:
     n = 0
     for f in sorted(cfg.PAPERS.glob("*.md")):
         texto = f.read_text(encoding="utf-8")
-        if not texto.startswith("---\n"):
+        lim = cfg.fm_bounds(texto)        # AUD-147
+        if lim is None:
             continue
-        fin = texto.find("\n---\n", 4)
-        if fin < 0:
-            continue
-        head, resto = texto[4:fin], texto[fin:]
+        ini, fin = lim
+        head, resto = texto[ini:fin], texto[fin:]
         lineas = [ln for ln in head.split("\n")
                   if not ln.startswith(("symbols_lost:", "fulltext_layout:"))]
         if len(lineas) == len(head.split("\n")):
             continue
-        cfg.write_text_atomic(f, "---\n" + "\n".join(lineas) + resto)
+        cfg.write_text_atomic(f, texto[:ini] + "\n".join(lineas) + resto)
         n += 1
     return n
 
@@ -679,16 +672,15 @@ def migrate_all_bearing() -> int:
     n = 0
     for f in sorted(cfg.PAPERS.glob("*.md")):
         texto = f.read_text(encoding="utf-8")
-        if not texto.startswith("---\n"):
+        lim = cfg.fm_bounds(texto)        # AUD-147
+        if lim is None:
             continue
-        fin = texto.find("\n---\n", 4)
-        if fin < 0:
-            continue
-        head, resto = texto[4:fin], texto[fin:]
+        ini, fin = lim
+        head, resto = texto[ini:fin], texto[fin:]
         lineas = [ln for ln in head.split("\n") if not ln.startswith("bearing:")]
         if len(lineas) == len(head.split("\n")):
             continue
-        cfg.write_text_atomic(f, "---\n" + "\n".join(lineas) + resto)
+        cfg.write_text_atomic(f, texto[:ini] + "\n".join(lineas) + resto)
         n += 1
     return n
 
@@ -760,14 +752,13 @@ def sync_mirror() -> int:
     rellenados = reportados = 0
     for dest in notes:
         text = dest.read_text(encoding="utf-8")
-        if not text.startswith("---\n"):
+        lim = cfg.fm_bounds(text)         # AUD-147
     #  @inv INV-08
+        if lim is None:
             continue
-        end = text.find("\n---\n", 4)
-        if end < 0:
-            continue
+        ini, end = lim
         try:
-            front = yaml.safe_load(text[4:end]) or {}
+            front = yaml.safe_load(text[ini:end]) or {}
         except yaml.YAMLError:
             cfg.print_seguro(f"  ⚠ {dest.name}: frontmatter no parseable — sincronizalo a mano")
             continue
@@ -898,13 +889,12 @@ def merge_frontmatter_list(dest, field: str, values: list) -> bool:
         return False
 
     text = dest.read_text(encoding="utf-8")
-    if not text.startswith("---\n"):
+    lim = cfg.fm_bounds(text)             # AUD-147
     #  @inv INV-16
-        return _no("la nota no arranca con frontmatter")
-    end = text.find("\n---\n", 4)
-    if end < 0:
-        return _no("el frontmatter no cierra con `---`")
-    head = text[4:end]
+    if lim is None:
+        return _no("la nota no tiene frontmatter delimitado por dos líneas `---`")
+    ini, end = lim
+    head = text[ini:end]
     try:
         data = yaml.safe_load(head) or {}
     except yaml.YAMLError as exc:
@@ -938,7 +928,7 @@ def merge_frontmatter_list(dest, field: str, values: list) -> bool:
         lines[j:j] = [f"{indent}- {_yaml_block_item(str(v))}" for v in missing]
     else:
         return _no("forma no reconocida (escalar con valor) — no se toca")
-    cfg.write_text_atomic(dest, "---\n" + "\n".join(lines) + text[end:])
+    cfg.write_text_atomic(dest, text[:ini] + "\n".join(lines) + text[end:])
     return True
 
 
@@ -2414,16 +2404,17 @@ def unpend_note(dest, citekey: str, slug: str | None) -> bool:
     if not slug:
         return False
     text = dest.read_text(encoding="utf-8")
-    if not text.startswith("---\n"):
+    lim = cfg.fm_bounds(text)             # AUD-147
+    if lim is None:
         return False
-    end = text.find("\n---\n", 4)
-    if end < 0 or "\npending_source:" not in text[:end]:
+    ini, end = lim
+    if "\npending_source:" not in text[:end]:
         return False
     has_pdf = (cfg.PDFS / slug / f"{safe_name(citekey)}.pdf").exists()
     has_txt = (cfg.FULLTEXT / slug / f"{citekey}.txt").exists()
     if not (has_pdf or has_txt):
         return False                     # la fuente sigue faltando: el flag se queda
-    head, body = text[4:end], text[end:]
+    head, body = text[ini:end], text[end:]
     # `pending_motivo` viaja con `pending_source` (#80) y sale con él: dejarlo suelto deja la nota
     # con el motivo de un estado que ya no existe —«nadie la está consiguiendo»— sobre una fuente
     # que YA llegó. Hallazgo de la pasada `/auditar` del 2026-08-28.
@@ -2434,7 +2425,7 @@ def unpend_note(dest, citekey: str, slug: str | None) -> bool:
         lines = [f"pdf: {pdf_rel}" if ln.strip() == "pdf: null" else ln for ln in lines]
     body = "\n".join(ln for ln in body.split("\n")
                      if not ln.startswith("> ⏳ **Fuente pendiente"))
-    cfg.write_text_atomic(dest, "---\n" + "\n".join(lines) + body)
+    cfg.write_text_atomic(dest, text[:ini] + "\n".join(lines) + body)
     cfg.print_seguro(f"  papers: {dest.name} — fuente obtenida → pending_source removido"
           + (" y `pdf` linkeado" if has_pdf else ""))
     return True

@@ -21,7 +21,7 @@ if str(SCRIPTS) not in sys.path:
 
 import entity                      # noqa: E402
 import lib_config as cfg           # noqa: E402
-from conftest import write_yaml    # noqa: E402
+from conftest import mk_note, write_yaml    # noqa: E402
 
 
 def poblar(slug="test_star", nombre="Estrella Test"):
@@ -297,3 +297,17 @@ def test_rename_a_un_slug_libre_sigue_funcionando(toy_vault):
     assert run(["rename", "gj_71", "gj_9999", "--yes"]) == 0
     assert (cfg.GROUND_TRUTH / "gj_9999.json").exists()
     assert not (cfg.GROUND_TRUTH / "gj_71.json").exists()
+
+
+def test_el_alcance_del_slug_incluye_los_ALIASES(toy_vault):
+    """AUD-156 / INV-105 — sin los `aliases` el alcance perdía papers reales.
+
+    `make_notes` mergea en `stars[]` el nombre con el que la entidad se nombró en ESE ingest, y una
+    bóveda usa los alias todo el tiempo (`HD 10700` por `tau Ceti`). Un paper tagueado así quedaba
+    fuera del gate de cierre de su propio sujeto —`lint --cierre <slug>` daba verde sobre deuda
+    suya— y fuera del barrido de capas de `entity delete`."""
+    bib = "2020aliasA...1..1A"
+    mk_note(cfg.PAPERS, bib, {"bibcode": bib, "tags": ["paper"], "stars": ["HD 12345"]}, "")
+    mk_note(cfg.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test"}, "prosa\n")
+    stems = entity.notas_del_slug("test_star")
+    assert bib in stems, "el paper tagueado con el ALIAS quedó fuera del alcance del sujeto"

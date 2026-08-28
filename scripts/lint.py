@@ -1100,7 +1100,18 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     paper_fms: dict = {}               # {stem: frontmatter} de papers/ — para D-10, sin re-parsear
     sin_extraer_por_sujeto: dict = {}  # nombre de sujeto → {stems core sin extraer} (D-13)
     for f in files:
-        text = open(f, encoding="utf-8").read()
+        try:
+            text = open(f, encoding="utf-8").read()
+        except (UnicodeDecodeError, OSError) as exc:
+            # AUD-153 — un `.md` que no decodifica tumbaba `collect()` entero, y `main` salía 2
+            # **sin nombrar el archivo y sin escribir el reporte**: el operador queda con un
+            # traceback y sin saber cuál de mil notas es. Una nota ilegible es un hallazgo de la
+            # bóveda —evade TODOS los chequeos por tipo, igual que un frontmatter no parseable— y
+            # se reporta como tal, con su ruta, mientras el resto del lint sigue corriendo.
+            fm_broken.append((basename(f)[:-3],
+                              f"el archivo no se pudo leer como UTF-8 ({exc.__class__.__name__}) → "
+                              f"evade TODOS los chequeos de su tipo; `{f}`"))
+            continue
         fm = split_fm(text)
         if in_dir(f, "papers"):
             paper_fms[basename(f)[:-3]] = fm
@@ -1822,6 +1833,16 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     prosa_retractada_marcada: list = []
     for f, texto_n in anchor_bodies.items():
         stem_n = basename(f)[:-3]
+        # AUD-154 — esto escaneaba el TEXTO CRUDO, o sea también las secciones que estampa la
+        # máquina y `log.md`. Las dos hacen el bloqueante **irresoluble**: la marca `⛔retractada`
+        # puesta en una fila de `## Papers` la borra el próximo `make_notes` (es metadata derivada,
+        # se regenera), y `log.md` es la bitácora append-only —marcar una entrada histórica sería
+        # reescribir lo que pasó—. La cita que hay que revisar es la de la PROSA, que es donde la
+        # bóveda afirma algo apoyándose en esa fuente.
+        if stem_n in ("log", "index"):
+            continue
+        partes_n = cfg.frontmatter_span(texto_n)
+        texto_n = cfg.solo_prosa(partes_n[1] if partes_n else texto_n)
         for stem_r in sorted(retracted_stems):
             for m in re.finditer(r"\[\[" + re.escape(stem_r) + r"(?:\|[^\]]*)?\]\]([^\n]*)", texto_n):
                 destino = (prosa_retractada_marcada if m.group(1).lstrip().startswith(RETRACTED_MARK)
@@ -1980,12 +2001,24 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             sin_extraer_por_sujeto.get(str(meta_s.get("concept") or ""), set())
         if not slug_s or not pendientes:
             continue
-        if not cfg.load_extraccion(slug_s).get("criterio"):
+        decl = cfg.load_extraccion(slug_s)
+        if not decl.get("criterio"):
             extraccion_no_declarada.append(
                 (slug_s, f"{len(pendientes)} paper(s) core sin extraer y el registro **no declaró** "
                          f"el recorte ({', '.join(sorted(pendientes)[:3])}…) → o se leen, o se "
                          f"declara el criterio (`extraccion:` en el registro): la ficha se presenta "
                          f"como snapshot del universo y hoy no lo es"))
+        elif not decl.get("subconjunto"):
+            # AUD-157 — `--extraccion todos` silenciaba el detector **aunque quedara core sin
+            # extraer**: la declaración dice «se leyeron todos» y el corpus dice que no. Una
+            # declaración que no se cumple es peor que no declarar nada, porque apaga el chequeo
+            # que la habría desmentido. `subconjunto: true` sí silencia, que es su función.
+            extraccion_no_declarada.append(
+                (slug_s, f"el registro declara `extraccion: todos los core` ({decl.get('fecha')}) y "
+                         f"quedan {len(pendientes)} sin extraer "
+                         f"({', '.join(sorted(pendientes)[:3])}…) → o se leen, o se re-declara con "
+                         f"`python scripts/triage.py {slug_s} --extraccion subconjunto --reason "
+                         f"\"<motivo>\"`"))
 
     # contradicción ground-truth ↔ ficha (qué planetas + campo por campo) + masa sospechosa
     mass_issues = []
@@ -2061,6 +2094,19 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 continue
             chk = msini_earth(p.get("K_ms"), p.get("P_days"), p.get("e"), mstar)
             m = p.get("mass_earth")
+            # AUD-155 / INV-10 — sin `host.mass_msun` (o sin `K_ms`/`P_days`) `msini_earth` devuelve
+            # `None` y el chequeo **no corre**, sin que nada lo diga: la ficha se lee como vigilada
+            # cuando nadie la miró. Es el cero inventado de D-43 dentro del detector de masas
+            # espurias. No bloquea —el dato falta en NEA, no es un error de la bóveda— pero se
+            # declara, con el campo que falta nombrado.
+            if chk is None and m:
+                faltan = [c for c, v in (("host.mass_msun", mstar), ("K_ms", p.get("K_ms")),
+                                         ("P_days", p.get("P_days"))) if v is None]
+                if faltan:
+                    incomplete.append(
+                        (slug, f"{p.get('letter')}: la m·sini implícita **no se pudo calcular** "
+                               f"(falta {', '.join(faltan)} en el ground-truth) → `mass_earth` "
+                               f"queda sin vigilancia; NO es que el chequeo haya dado limpio"))
             # NO es un fallback de compatibilidad: es el chequeo INDEPENDIENTE del lint sobre todo
             # planeta que el fetch no marcó (que son casi todos). `mass_flag` es la marca del fetch;
             # esto la re-deriva offline, que es el trabajo del lint.
@@ -2503,6 +2549,14 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 (slug, f"corpus truncado según el registro del {fecha} (ADS reporta "
                        f"{b.get('n_found')} y se pidieron {b.get('rows')}) → re-ingestá con --rows "
                        f"mayor para cubrir la cola"))
+        # AUD-148: la marca hermana también cae al registro sin `build/`. Antes vivía SÓLO en
+        # scratch gitignored, así que post-clone el rescate por glifo incompleto desaparecía y la
+        # bóveda se leía como si hubiera visto todo el superset de la constelación.
+        if b.get("truncated_glyph"):
+            truncated_corpora.append(
+                (slug, f"rescate por glifo incompleto en {b['truncated_glyph']} letra(s) según el "
+                       f"registro del {fecha} (sin build/{slug}/ local: es el snapshot de esa "
+                       f"corrida) → re-ingestá con --rows mayor; pueden faltar papers con lookalike"))
 
     # INV-19 — capas COLGADAS de una entidad que ya no existe. La otra mitad del invariante ("ni
     # archivo huérfano en `raw/`") no tenía red: había chequeo para `wiki/` (wikilinks rotos,

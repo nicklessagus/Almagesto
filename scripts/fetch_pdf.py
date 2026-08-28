@@ -129,17 +129,32 @@ def is_ads_host(url: str) -> bool:
 def esource_records(bibcode: str, token: str) -> list[dict]:
     """Registros esource del resolver para un bibcode; [] si no hay o falla (tolerante — un
     resolver caído no aborta el barrido). Con UNA sola fuente el resolver devuelve `link`
-    directo en vez de `links.records`; se normaliza a la misma forma."""
+    directo en vez de `links.records`; se normaliza a la misma forma.
+
+    ⚠ AUD-162 — el `[]` fusiona dos estados que piden cosas distintas: *«el resolver contestó y
+    este paper no tiene PDF»* (rescate manual, que es lo que el `hint` de `missing_pdf.json`
+    propone) y *«el resolver no contestó»* (re-correr la cadena más tarde; **no** hay nada que
+    rescatar a mano). El llamador los trataba igual y el residuo salía diciendo «sin fuentes PDF en
+    el resolver» sobre un paper al que nadie le preguntó. Se mantiene el `[]` —tolerar la caída es
+    correcto y cambiar la firma movería a todos los llamadores— y la diferencia se **dice**."""
     try:
         resp = requests.get(RESOLVER.format(bibcode=bibcode),
                             headers={"Authorization": f"Bearer {token}", **UA}, timeout=60)
-    except requests.RequestException:
+    except requests.RequestException as exc:
+        cfg.print_seguro(f"      ⚠ el resolver de ADS no contestó por {bibcode} ({exc.__class__.__name__}) "
+                         f"— NO es «este paper no tiene PDF»: nadie preguntó. Re-corré la cadena.",
+                         file=sys.stderr)
         return []
     if resp.status_code != 200:
+        cfg.print_seguro(f"      ⚠ el resolver de ADS devolvió HTTP {resp.status_code} por {bibcode} "
+                         f"— NO es «este paper no tiene PDF»: nadie preguntó. Re-corré la cadena.",
+                         file=sys.stderr)
         return []
     try:
         data = resp.json()
     except ValueError:
+        cfg.print_seguro(f"      ⚠ el resolver de ADS contestó algo que no es JSON por {bibcode} "
+                         f"— NO es «este paper no tiene PDF».", file=sys.stderr)
         return []
     # La respuesta viene de la RED: su forma no está garantizada. Un `links` que no es mapa —o un
     # `records` que no es lista— llegaba tal cual al `.get`/iteración y volteaba el resolver con

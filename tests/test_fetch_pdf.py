@@ -102,13 +102,26 @@ def test_esource_records_forma_link_unico(monkeypatch):
     assert recs == [{"url": "https://x/p.pdf", "link_type": "ESOURCE|PUB_PDF"}]
 
 
-def test_esource_records_tolerante(monkeypatch):
-    patch_net(monkeypatch, [FakeResp(404)])
+def test_esource_records_tolerante(monkeypatch, capsys):
+    """Tolerar la caída es correcto; fusionarla con «no hay PDF» no (AUD-162).
+
+    Son dos estados que piden cosas distintas: *el resolver contestó y este paper no tiene PDF*
+    manda a rescate manual (que es lo que el `hint` de `missing_pdf.json` propone), y *el resolver
+    no contestó* manda a re-correr la cadena — no hay nada que rescatar a mano. El `[]` se mantiene
+    (cambiar la firma movería a todos los llamadores) y la diferencia se DICE."""
+    for respuesta in ([FakeResp(404)], [real_requests.ConnectionError("sin red")],
+                      [FakeResp(200, None)]):
+        capsys.readouterr()
+        patch_net(monkeypatch, respuesta)
+        assert fp.esource_records("x", "tok") == []
+        err = capsys.readouterr().err
+        assert "nadie preguntó" in err or "no es JSON" in err
+
+    # el resolver que SÍ contestó y no tiene fuentes no dice nada: ése es el caso normal
+    capsys.readouterr()
+    patch_net(monkeypatch, [FakeResp(200, {"links": {"records": []}})])
     assert fp.esource_records("x", "tok") == []
-    patch_net(monkeypatch, [real_requests.ConnectionError("sin red")])
-    assert fp.esource_records("x", "tok") == []
-    patch_net(monkeypatch, [FakeResp(200, None)])
-    assert fp.esource_records("x", "tok") == []
+    assert capsys.readouterr().err == ""
 
 
 def test_esource_manda_token_al_resolver(monkeypatch):

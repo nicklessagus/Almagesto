@@ -149,7 +149,21 @@ def save_decisions(slug: str, decisiones: dict) -> None:
 
 
 def drop(slug: str, bibcodes: list[str], reason: str) -> int:
-    """Persiste el descarte de candidatos (no se re-proponen en el próximo refresh)."""
+    """Persist the rejection of chaining candidates so they are not proposed again on the next run.
+
+    ⚠ AUD-151 — normalises exactly like its twin `drop_source`, which already did. Without it a
+    bibcode with surrounding whitespace — the normal shape when pasted from a terminal — was
+    persisted **verbatim**: the stored key matched nothing, the real candidate stayed in the queue,
+    and `n_dropped` counted the ineffective drop, so the note's header published «N descartados»
+    over one that was not. A `--reason "   "` passed too, leaving the judgement without the motive
+    #51 exists to preserve. The fix applied to one site and not to its twin, once again."""
+    limpios = list(dict.fromkeys(b.strip() for b in bibcodes if b and b.strip()))
+    if not limpios:
+        sys.exit("--drop necesita al menos un bibcode no vacío.")
+    reason = reason.strip()
+    if not reason:
+        sys.exit("--drop necesita un --reason con contenido (no espacios).")
+    bibcodes = limpios
     pendientes = {c["bibcode"] for c in cfg.as_list(load_ads(slug).get("candidates"))}
     desconocidos = [b for b in bibcodes if b not in pendientes]
     if desconocidos:
@@ -254,6 +268,21 @@ def migrate(slug: str) -> int:
               f"a `decisiones` y volvé a correr `--migrate`.")
         return 1
     viejas = data["decisiones"] or {}
+    # AUD-152 — un `decisiones` que no es un mapa (o con entradas que no lo son) reventaba con
+    # `AttributeError`/`TypeError` a mitad de la migración, y como el lint bloquea por EXISTENCIA
+    # del archivo el usuario quedaba con un bloqueante **sin salida**: el único comando que el
+    # propio mensaje receta no podía correr nunca. Se reporta con la forma real y no se borra nada.
+    if not isinstance(viejas, dict):
+        cfg.print_seguro(f"{slug}: `decisiones` de {legacy} no es un mapa (es "
+                         f"{type(viejas).__name__}) — no se migró nada y NO lo borro. Arreglalo a "
+                         f"mano (tiene que ser `{{bibcode: {{decision, motivo, fecha}}}}`) y volvé "
+                         f"a correr `--migrate`.")
+        return 1
+    if (malas := sorted(b for b, d in viejas.items() if not isinstance(d, dict))):
+        cfg.print_seguro(f"  ⚠ {len(malas)} entrada(s) de {legacy} no son un mapa y NO se migran "
+                         f"({', '.join(malas[:3])}…): `load_decisiones` las descartaría igual, así "
+                         f"que migrarlas guardaría un juicio que nadie lee.")
+        viejas = {b: d for b, d in viejas.items() if isinstance(d, dict)}
     # `cfg.load_decisiones`, no un `.get(...) or {}` propio: el registro es el ÚNICO artefacto no
     # regenerable de la bóveda y el framework instruye editarlo a mano — una `decisiones:` escalar
     # (edición a mano rota) es YAML válido. `cfg.load_decisiones` ya trae el `isinstance` que hace

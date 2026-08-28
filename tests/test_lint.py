@@ -2226,6 +2226,75 @@ def test_facets_vigente_no_dispara_el_detector(toy_vault, capsys):
     assert "2020Nuevo" not in rep or "pre-R-5" not in rep
 
 
+def test_masa_sin_mass_msun_dice_que_NO_se_pudo_evaluar(toy_vault, capsys):
+    """AUD-155 / INV-10 — sin `host.mass_msun` el chequeo de masa no corre y nada lo decía.
+
+    La ficha se leía como vigilada cuando nadie la miró: el cero inventado de D-43, dentro del
+    detector de masas espurias de NEA. No bloquea (el dato falta en NEA, no es un error de la
+    bóveda) pero se declara, nombrando el campo que falta."""
+    cfg.GROUND_TRUTH.mkdir(parents=True, exist_ok=True)
+    (cfg.GROUND_TRUTH / "test_star.json").write_text(json.dumps({
+        "slug": "test_star", "host": {"teff_K": None},
+        "planets": [{"letter": "b", "P_days": 20.0, "K_ms": 2.5, "e": 0.0, "mass_earth": 5.0,
+                     "status": "confirmed"}]}), encoding="utf-8")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "no se pudo calcular" in rep and "host.mass_msun" in rep
+
+
+def test_retractada_en_seccion_estampada_no_es_un_bloqueante_irresoluble(toy_vault, capsys):
+    """AUD-154 / INV-93 — el detector escaneaba el TEXTO CRUDO, secciones estampadas y `log.md`
+    incluidas, y las dos hacen el bloqueante **irresoluble**.
+
+    La marca `⛔retractada` puesta en una fila de `## Papers` la borra el próximo `make_notes` (es
+    metadata derivada, se regenera), y marcar una entrada de `log.md` sería reescribir la bitácora.
+    La cita que hay que revisar es la de la PROSA: ahí la bóveda afirma algo apoyada en esa fuente."""
+    bib = "2019retA...1..1A"
+    mk_note(toy_vault.PAPERS, bib, {"bibcode": bib, "tags": ["paper"], "retracted": True,
+                                    "retraction": {"type": "retraction"}}, "")
+    mk_note(toy_vault.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test"},
+            f"## Papers\n\n| Bibcode |\n|---|\n| [[{bib}]] |\n")
+    cfg.LOG.parent.mkdir(parents=True, exist_ok=True)
+    cfg.LOG.write_text(f"## 2026-01-01 — ingest\n\n- se ingestó [[{bib}]]\n", encoding="utf-8")
+    _rc, rep = run_lint_reporte(capsys)
+    assert f"cita [[{bib}]] (RETRACTADO)" not in rep, \
+        "un roll-up estampado y el log no son afirmaciones de la bóveda"
+
+    # y en PROSA sí bloquea, que es lo que el invariante existe para cazar
+    mk_note(toy_vault.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test"},
+            f"## Resumen\n\nEl período es de 34 d [[{bib}]].\n")
+    rc2, rep2 = run_lint_reporte(capsys)
+    assert rc2 != 0 and f"cita [[{bib}]] (RETRACTADO)" in rep2
+
+
+def test_una_nota_que_no_decodifica_no_tumba_el_lint(toy_vault, capsys):
+    """AUD-153 — un `.md` en otra codificación tumbaba `collect()` entero y `main` salía 2 **sin
+    nombrar el archivo y sin escribir el reporte**.
+
+    El operador quedaba con un traceback y sin saber cuál de mil notas es. Una nota ilegible es un
+    hallazgo de la bóveda —evade TODOS los chequeos por tipo, igual que un frontmatter no
+    parseable— y el resto del lint tiene que seguir corriendo."""
+    toy_vault.PAPERS.mkdir(parents=True, exist_ok=True)
+    (toy_vault.PAPERS / "2020latin.md").write_bytes(
+        "---\nbibcode: 2020latin\ntags: [paper]\ntitle: revisión metodológica\n---\ncuerpo\n"
+        .encode("latin-1"))
+    rc, rep = run_lint_reporte(capsys)
+    assert rc != 0
+    assert "2020latin" in rep and "UTF-8" in rep
+    assert "Frontmatter" in rep or "frontmatter" in rep
+
+
+def test_rescate_por_glifo_incompleto_sobrevive_al_clone(toy_vault, capsys):
+    """AUD-148 — `truncated_glyph` vivía SÓLO en `build/`, que es scratch gitignored.
+
+    Post-clone la marca desaparecía y la bóveda se leía como si hubiera visto todo el superset de
+    la constelación. Es el mismo argumento de #64 para `truncated`: lo que dice sobre qué universo
+    afirma la ficha tiene que VIAJAR."""
+    cfg.save_busqueda("test_star", {"fecha": "2026-08-28", "n_found": 900, "rows": 200,
+                                    "truncated": False, "truncated_glyph": 2})
+    _rc, rep = run_lint_reporte(capsys)
+    assert "rescate por glifo incompleto en 2 letra" in rep
+
+
 def test_cadena_sin_traza_es_no_consta_y_no_verde(toy_vault, capsys):
     """AUD-149 / INV-139 — un registro SIN `cadena` devolvía `None`, el valor de «corrió entera».
 
@@ -2308,6 +2377,22 @@ def test_subconjunto_declarado_baja_a_backlog(toy_vault, capsys):
                         criterio="los 20 más citados + los 3 árbitros de la señal b")
     _, rep = run_lint_reporte(capsys)
     assert _n_recorte(rep) == 0
+
+
+def test_declarar_TODOS_con_core_sin_extraer_no_silencia(toy_vault, capsys):
+    """AUD-157 — `--extraccion todos` apagaba el detector **aunque quedara core sin extraer**.
+
+    La declaración dice «se leyeron todos» y el corpus dice que no: una declaración incumplida es
+    peor que ninguna, porque apaga justo el chequeo que la habría desmentido. `subconjunto: true`
+    sí silencia — ésa es su función."""
+    mk_note(toy_vault.PAPERS, "2020relA...1..1A",
+            {"tags": ["paper"], "bibcode": "2020relA...1..1A", "stars": ["Estrella Test"],
+             "relevance": "high"}, "")
+    link_from_index(toy_vault, "2020relA...1..1A")
+    cfg.save_extraccion("test_star", subconjunto=False, criterio="todos los core del sujeto")
+    _, rep = run_lint_reporte(capsys)
+    assert _n_recorte(rep) == 1
+    assert "declara `extraccion: todos los core`" in rep
 
 
 def test_disputa_entre_autoridades_es_expresable(toy_vault, capsys):

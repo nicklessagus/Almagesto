@@ -471,6 +471,27 @@ _FM_DELIM_RE = re.compile(r"^---[ \t]*$", re.MULTILINE)
 BOM = "\ufeff"
 
 
+def fm_bounds(text: str) -> tuple[int, int] | None:
+    """`(ini, fin)` — the offsets of the YAML block inside `text`, for a surgery that rebuilds the
+    note as `text[:ini] + nuevo_head + text[fin:]`.
+
+    ⛔ AUD-147 — eleven surgeries in `make_notes` located the frontmatter with
+    `startswith("---\n")` + `find("\n---\n", 4)` while `frontmatter_span` (the parser everything
+    else uses) matches the delimiter as a **line**: `^---[ \t]*$`. So a note whose closing `---`
+    carries a trailing space parses perfectly for `split_fm` and every one of those eleven
+    surgeries turns into a **silent no-op** — the stamper reports «nothing to do» over a note it
+    could not read. A leading BOM does the same to the opening one (AUD-116, one layer down): here
+    `text[:ini]` carries it through instead of dropping it on rebuild.
+
+    Same delimiter rule as `frontmatter_span`, and that is the point: one locator, not two."""
+    off = len(text) - len(text.lstrip(BOM))
+    cuerpo = text[off:]
+    matches = list(_FM_DELIM_RE.finditer(cuerpo))
+    if len(matches) < 2 or matches[0].start() != 0:
+        return None
+    return off + matches[0].end() + 1, off + matches[1].start() - 1
+
+
 def frontmatter_span(text: str) -> tuple[str, str] | None:
     """Ubica el frontmatter por DELIMITADOR DE LÍNEA, no por búsqueda textual de la subcadena
     `---` (H-11). Un `text.split("---")`/`text.split("---", 2)` corta también dentro de un
@@ -1274,10 +1295,26 @@ def artefacto_en_otro_slug(base: Path, slug: str, stem: str, sufijo: str):
     que el llamador copie (no symlink: `raw/` viaja en git-lfs y un enlace roto es peor que una
     copia).
 
-    Determinista: si hay varias, gana la primera en orden alfabético de slug."""
+    Determinista: si hay varias, gana la primera en orden alfabético de slug.
+
+    ⛔ AUD-161 — un PDF se valida por su **magic `%PDF`** antes de proponerlo. Los dos fetchers
+    copiaban lo que hubiera bajo el otro slug sin mirarlo, así que un archivo truncado por un corte
+    —el caso exacto que `--force` existe para reparar— se **propagaba** al slug nuevo y encima
+    salía de `pendientes`: el paper quedaba "bajado" con un PDF que no se puede abrir, y la verdad
+    de disco (que es la regla del framework acá) pasaba a mentir en dos lugares en vez de uno."""
     for candidato in sorted(base.glob(f"*/{stem}{sufijo}")):
-        if candidato.parent.name != slug:
-            return candidato
+        if candidato.parent.name == slug:
+            continue
+        if sufijo == ".pdf":
+            try:
+                if not candidato.open("rb").read(5).startswith(b"%PDF"):
+                    print_seguro(f"  ⚠ {candidato} no empieza con `%PDF` (¿truncado?) — NO lo copio "
+                                 f"a `{slug}`: propagar un PDF roto lo deja 'bajado' y sin abrir",
+                                 file=sys.stderr)
+                    continue
+            except OSError:
+                continue
+        return candidato
     return None
 
 

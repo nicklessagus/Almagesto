@@ -162,30 +162,28 @@ def expansion_guard(slug: str, yes: bool) -> None:
 
 
 def repoint_source_pdf(key: str, declared: str, dest: Path) -> None:
-    """Repunta `sources[].pdf` del item a la copia versionada de la bóveda (repo-relative).
+    """PROPONE repuntar `sources[].pdf` a la copia versionada de la bóveda (repo-relative).
 
-    El path declarado suele ser staging efímero (scratchpad, carpeta de descargas): al
-    limpiarse deja un puntero muerto en themes.yaml. Tras la copia, la que vale es la de la
-    bóveda → el campo se reescribe a `vault/raw/pdfs/<slug>/<key>.pdf` (repo-relative,
-    portable entre máquinas; al leer, las relativas se resuelven contra cfg.ROOT).
-    Reescritura quirúrgica de la línea exacta — themes.yaml vive lleno de comentarios que
-    un dump YAML destruiría. Si el path declarado no matchea exactamente UNA línea `pdf:`,
-    se avisa y se deja a mano (no adivinar).
-    """
+    El path declarado suele ser staging efímero (scratchpad, carpeta de descargas): al limpiarse
+    deja un puntero muerto en `themes.yaml`. Tras la copia, la que vale es la de la bóveda.
+
+    ⛔ AUD-160 — hasta 1.73.0 esto **reescribía `themes.yaml` solo**, contra la doctrina que el
+    propio framework escribe dos veces: `triage.accept_source` («no escribe `themes.yaml`: la config
+    es curada y versionada, y un script que la edita solo convierte una decisión en un efecto
+    colateral») y `discover.resolve_pdf` en `CLAUDE.md` («propone una URL y para: no edita
+    `sources:` — cambiar en silencio una fuente declarada por una que adivinó un script es cómo una
+    cita termina apuntando a un documento que nadie abrió»). Tres sitios, la misma regla, y éste era
+    el que no la cumplía. Hoy imprime la línea exacta y para."""
     if not dest.exists():
         return
     rel = dest.relative_to(cfg.ROOT).as_posix()
     if declared == rel:
         return
-    text = cfg.THEMES_YAML.read_text(encoding="utf-8")
-    pat = re.compile(rf"""^(\s*pdf:\s*)["']?{re.escape(declared)}["']?\s*$""", re.M)
-    n = len(pat.findall(text))
-    if n != 1:
-        cfg.print_seguro(f"  ⚠ {key}: no repunté `pdf:` en themes.yaml (el path declarado matchea "
-              f"{n} líneas, esperaba 1) — repuntalo a mano a {rel}")
-        return
-    cfg.write_text_atomic(cfg.THEMES_YAML, pat.sub(lambda m: m.group(1) + rel, text))
-    cfg.print_seguro(f"  {key}: sources[].pdf repuntado → {rel}")
+    cfg.print_seguro(
+        f"  · {key}: el PDF quedó versionado en `{rel}` y `sources[].pdf` sigue apuntando a "
+        f"`{declared}` (staging efímero: cuando se limpie, queda un puntero muerto). Repuntalo a "
+        f"mano en `vault/config/themes.yaml`:\n"
+        f"        pdf: {rel}")
 
 
 def ingest_ads(slug: str, yes: bool = False) -> None:
@@ -421,6 +419,17 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
     # ESTE tema (--slug: sources + extra_core); el barrido completo es pasada periódica (maintain).
     if any(s.get("doi") for s in sources) or extra:
         _cierre_retracciones(slug)
+    else:
+        # AUD-159 — esto se salteaba **en silencio**, y el silencio se lee como «corrió y está
+        # limpio». La cadena cierra igual (sin DOI ni bibcode no hay a quién preguntarle a
+        # Crossref: es una propiedad de las fuentes, no un fallo), pero un paso de la cadena que no
+        # corrió tiene que decirlo — misma doctrina que D-43 y que el `rc 2` de `check_retractions`
+        # cuando su población queda vacía.
+        cfg.print_seguro(
+            f"  ⚠ chequeo de retracciones NO EVALUADO para `{slug}`: ninguna fuente declara "
+            f"`doi` ni hay `extra_core`, así que no hay clave que consultarle a Crossref. La "
+            f"frontera dura queda sin vigilancia acá — completá los `doi` que existan, o "
+            f"cubrilo con la pasada periódica (`python scripts/check_retractions.py`).")
 
 
 def main() -> int:

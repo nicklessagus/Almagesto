@@ -910,3 +910,41 @@ def test_reporte_ya_no_es_un_via_valido(monkeypatch):
     assert triage.VIA_FUENTE == ("usuario", "descubrimiento")
 
 
+
+
+def test_migrate_con_decisiones_no_mapa_no_deja_el_bloqueante_sin_salida(toy_vault, monkeypatch, capsys):
+    """AUD-152 — un `decisiones` que no es un mapa reventaba con `AttributeError` a mitad, y como el
+    lint bloquea por EXISTENCIA del archivo el usuario quedaba con un bloqueante **sin salida**: el
+    único comando que el propio mensaje receta no podía correr nunca."""
+    legacy = cfg.legacy_triage_path("test_star")
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    legacy.write_text(json.dumps({"decisiones": ["2019A....1A"]}), encoding="utf-8")
+    assert run_main(monkeypatch, ["test_star", "--migrate"]) == 1
+    assert legacy.exists(), "no se borra lo que no se pudo migrar"
+    assert "no es un mapa" in capsys.readouterr().out
+
+    # y una ENTRADA que no es mapa no se migra (el lector la descartaría igual), pero sí el resto
+    legacy.write_text(json.dumps({"decisiones": {"2019A....1A": "descartado",
+                                                 "2020B....1B": {"decision": "descartado",
+                                                                 "motivo": "ruido"}}}),
+                      encoding="utf-8")
+    assert run_main(monkeypatch, ["test_star", "--migrate"]) == 0
+    assert "2019A....1A" not in cfg.load_decisiones("test_star")
+    assert cfg.load_decisiones("test_star")["2020B....1B"]["motivo"] == "ruido"
+
+
+def test_drop_normaliza_como_su_gemelo_drop_source(toy_vault, monkeypatch, capsys):
+    """AUD-151 — `drop_source` normalizaba clave y motivo y `drop` no.
+
+    Un bibcode con espacios (lo normal al pegar de una terminal) se persistía verbatim: la clave
+    guardada no matcheaba ninguna, el candidato real seguía en la cola y `n_dropped` contaba el
+    descarte inefectivo, así que la cabecera publicaba «N descartados» sobre uno que no lo estaba.
+    Y un `--reason "   "` pasaba, dejando el juicio sin el motivo que #51 existe para conservar."""
+    write_ads(toy_vault, candidates=[cand("2019A....1A")])
+    assert run_main(monkeypatch, ["test_star", "--drop", "  2019A....1A  ",
+                                  "--reason", "  ruido  "]) == 0
+    d = cfg.load_decisiones("test_star")
+    assert list(d) == ["2019A....1A"] and d["2019A....1A"]["motivo"] == "ruido"
+
+    with pytest.raises(SystemExit, match="--reason con contenido"):
+        run_main(monkeypatch, ["test_star", "--drop", "2020B....1B", "--reason", "   "])

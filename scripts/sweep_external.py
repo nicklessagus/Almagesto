@@ -238,14 +238,25 @@ def sweep_citas() -> tuple[list, list]:
     out, fallidos = [], []
     for slug, meta in cfg.load_themes().items():
         meta = cfg.as_map(meta)
-        umbral = meta.get("fundacional_min_citas")
-        if not isinstance(umbral, (int, float)):
+        # AUD-142: la forma del umbral la decide la MISMA función que el clasificador.
+        umbral, _mal = cfg.gate2_threshold(meta)
+        if umbral is None:
             continue                     # puerta cerrada por no declarada: nada que vigilar
         try:
             import query_ads
             notas = {(fm.get("bibcode") or stem): fm
                      for stem, fm, _t in cfg.notes_of_subject(slug)}
             bibs = [b for b in notas if not str(b)[:1].isdigit() or "." in str(b)]
+            # AUD-158 — las claves sintéticas off-ADS (`2006Rasmussen`) NO son consultables en ADS y
+            # se salteaban **mudas**: la pasada las contaba como miradas y el registro afirmaba
+            # haber vigilado su conteo de citas. Es el cero inventado de D-43 dentro del detector
+            # que existe para ver que el mundo se movió. No son un fallo (es una propiedad de la
+            # clave, no una caída de red), así que van aparte de `fallidos` y se nombran.
+            if (sin_clave := sorted(set(notas) - set(bibs))):
+                cfg.print_seguro(
+                    f"  · {slug}: {len(sin_clave)} nota(s) con clave sintética off-ADS — a esas "
+                    f"NADIE les re-consultó el conteo, así que la puerta 2 queda sin vigilancia "
+                    f"para ellas ({', '.join(str(b) for b in sin_clave[:3])}…)")
             frescos = {r["bibcode"]: r.get("citation_count")
                        for r in query_ads.fetch_bibcodes(bibs)} if bibs else {}
         except Exception as exc:         # noqa: BLE001 — red ajena: un tema raro no tumba la pasada

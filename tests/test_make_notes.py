@@ -1605,6 +1605,27 @@ def test_estado_line_publica_la_verificacion_MAS_RECIENTE(toy_vault):
     assert "2026-01-05" not in linea
 
 
+def test_las_cirugias_usan_EL_MISMO_localizador_que_el_parser(toy_vault):
+    """AUD-147 — once cirugías ubicaban el frontmatter con `startswith("---\\n")` +
+    `find("\\n---\\n", 4)` mientras `split_fm` matchea el delimitador como LÍNEA (`^---[ \\t]*$`).
+
+    Una nota con un espacio al final del `---` de cierre —o con un BOM adelante— parsea perfecto
+    para todo el resto del tooling y convertía a las once en un **no-op silencioso**: el estampador
+    informa «nada que hacer» sobre una nota que no supo leer. Un solo localizador, no dos."""
+    for nombre, texto in (("espacio", "---\ntags: [paper]\nstars: []\n--- \ncuerpo\n"),
+                          ("bom", "\ufeff---\ntags: [paper]\nstars: []\n---\ncuerpo\n")):
+        p = toy_vault.PAPERS / f"{nombre}.md"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(texto, encoding="utf-8")
+        assert cfg.split_fm(p.read_text(encoding="utf-8")).get("tags") == ["paper"], nombre
+        assert mn.merge_frontmatter_list(p, "stars", ["Estrella Test"]) is True, nombre
+        salida = p.read_text(encoding="utf-8")
+        assert read_fm(p)["stars"] == ["Estrella Test"], nombre
+        assert salida.endswith("cuerpo\n") and "--- \n" in salida or nombre == "bom"
+    # el BOM sobrevive a la cirugía: reconstruir con un `"---\n"` literal lo tiraba
+    assert (toy_vault.PAPERS / "bom.md").read_text(encoding="utf-8").startswith("\ufeff")
+
+
 def test_stamp_header_no_escribe_dentro_del_frontmatter(toy_vault):
     """AUD-135 / INV-139 — la rama «Capa LLM» buscaba en el TEXTO ENTERO, frontmatter incluido.
 

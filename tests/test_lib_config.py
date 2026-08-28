@@ -1517,3 +1517,26 @@ def test_una_faceta_que_no_compila_se_DICE(capsys):
     lente = {"facets": {"rota": "(sin cerrar", "ok": "radial velocity"}, "min_facets": 1}
     assert cfg.lens_core_text(lente, "radial velocity study") is True
     assert "no compila" in capsys.readouterr().err
+
+
+def test_no_se_propaga_un_PDF_truncado_entre_slugs(toy_vault, capsys):
+    """AUD-161 — el reuso D-18 copiaba lo que hubiera bajo el otro slug **sin mirarlo**.
+
+    Un PDF truncado por un corte —el caso exacto que `--force` existe para reparar— se propagaba al
+    slug nuevo y encima lo sacaba de `pendientes`: el paper quedaba «bajado» con un archivo que no
+    se puede abrir, y la verdad de disco, que es la regla del framework acá, pasaba a mentir en dos
+    lugares en vez de uno."""
+    stem = "2020aaaA...1..1A"
+    (cfg.PDFS / "otro").mkdir(parents=True, exist_ok=True)
+    roto = cfg.PDFS / "otro" / f"{stem}.pdf"
+    roto.write_bytes(b"<html>404 not found")
+    assert cfg.artefacto_en_otro_slug(cfg.PDFS, "test_star", stem, ".pdf") is None
+    assert "no empieza con `%PDF`" in capsys.readouterr().err
+
+    roto.write_bytes(b"%PDF-1.4\n...")
+    assert cfg.artefacto_en_otro_slug(cfg.PDFS, "test_star", stem, ".pdf") == roto
+    # el `.txt` NO se valida por magic: es texto, y su legibilidad la mide `is_legible`
+    (cfg.FULLTEXT / "otro").mkdir(parents=True, exist_ok=True)
+    txt = cfg.FULLTEXT / "otro" / f"{stem}.txt"
+    txt.write_text("prosa", encoding="utf-8")
+    assert cfg.artefacto_en_otro_slug(cfg.FULLTEXT, "test_star", stem, ".txt") == txt

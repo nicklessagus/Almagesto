@@ -1557,6 +1557,12 @@ def main() -> int:
         # que nadie descartó de la query (#81).
         "n_dropped": n_dropped_chaining(args.slug),
         "truncated": bool(truncated),
+        # AUD-148 — la marca HERMANA vivía SÓLO en `build/`, que es scratch gitignored: post-clone
+        # el rescate por glifo incompleto desaparecía y la bóveda se leía como si hubiera visto
+        # todo el superset de la constelación. Es el mismo argumento de #64 para `truncated`: lo
+        # que dice sobre qué universo afirma la ficha tiene que VIAJAR. Se guarda cuántas letras
+        # quedaron cortadas, no el detalle (eso sigue en `ads.json`, que es regenerable).
+        "truncated_glyph": len(gmeta.get("truncated_glyph") or []) or None,
         # D-48: las escotillas usadas en ESTA corrida. Cambian lo que la búsqueda hizo (`--yes`
         # saltea la guardia de expansión, `--extra-only` no consulta ADS), así que sin ellas dos
         # entradas idénticas del registro pueden describir corridas que no hicieron lo mismo. De

@@ -443,3 +443,18 @@ def test_una_pasada_limpia_no_declara_no_evaluados(toy_vault, monkeypatch):
         monkeypatch.setattr(sw, nombre, lambda: ([], []))
     sw.main([])
     assert "no_evaluados" not in sw.load_ultima_pasada()
+
+
+def test_sweep_citas_dice_las_claves_off_ADS_que_nadie_consulto(monkeypatch, capsys):
+    """AUD-158 — las claves sintéticas off-ADS no son consultables en ADS y se salteaban **mudas**.
+
+    La pasada las contaba como miradas y el registro afirmaba haber vigilado su conteo de citas: el
+    cero inventado de D-43, dentro del detector que existe justamente para ver que el mundo se
+    movió. No son un fallo (es una propiedad de la clave, no una caída de red), así que se nombran
+    aparte de `fallidos`."""
+    _tema_citas(monkeypatch, 1000, [("2006Rasmussen", 900), ("2004A..1", 900)],
+                {"2004A..1": 1100})
+    out, fallidos = sw.sweep_citas()
+    assert fallidos == [], "una clave no consultable no es una caída de red"
+    salida = capsys.readouterr().out
+    assert "clave sintética off-ADS" in salida and "2006Rasmussen" in salida

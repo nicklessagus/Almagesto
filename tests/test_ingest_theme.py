@@ -426,34 +426,24 @@ def test_listify_curado_preserva_el_escalar(toy_vault, capsys):
     assert "está escrito como escalar" in capsys.readouterr().out
 
 
-def test_repoint_source_pdf_repunta_a_la_copia_de_la_boveda(toy_vault, capsys):
-    """El path declarado suele ser staging efímero (descargas, scratchpad): al limpiarse deja un
-    puntero muerto en `themes.yaml`. La que vale es la copia versionada."""
-    write_yaml(cfg.THEMES_YAML, {})
+def test_repoint_source_pdf_PROPONE_y_no_edita_themes_yaml(toy_vault, capsys):
+    """AUD-160 — esto reescribía `themes.yaml` **solo**, contra la doctrina que el framework escribe
+    en otros dos lados: `triage.accept_source` («la config es curada y versionada, y un script que
+    la edita solo convierte una decisión en un efecto colateral») y `discover.resolve_pdf` en
+    `CLAUDE.md` («propone una URL y para: no edita `sources:`»).
+
+    Tres sitios, la misma regla, y éste era el que no la cumplía. Hoy imprime la línea exacta."""
     cfg.THEMES_YAML.write_text(
-        "gp:\n  title: GP     # comentario que un dump YAML destruiría\n"
+        "gp:\n  # comentario que un dump YAML destruiría\n"
         "  sources:\n    - key: 2006R\n      pdf: /tmp/staging/rw.pdf\n", encoding="utf-8")
+    antes = cfg.THEMES_YAML.read_text(encoding="utf-8")
     dest = cfg.PDFS / "gp" / "2006R.pdf"
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(b"%PDF")
     it.repoint_source_pdf("2006R", "/tmp/staging/rw.pdf", dest)
-    txt = cfg.THEMES_YAML.read_text(encoding="utf-8")
-    assert "vault/raw/pdfs/gp/2006R.pdf" in txt and "/tmp/staging" not in txt
-    assert "comentario que un dump YAML destruiría" in txt, "reescritura quirúrgica de la línea"
-
-
-def test_repoint_source_pdf_no_adivina_si_matchea_varias(toy_vault, capsys):
-    """Si el path declarado no matchea exactamente UNA línea `pdf:`, se avisa y se deja a mano:
-    repuntar la equivocada es peor que no repuntar."""
-    cfg.THEMES_YAML.write_text(
-        "gp:\n  sources:\n    - pdf: /tmp/x.pdf\n    - pdf: /tmp/x.pdf\n", encoding="utf-8")
-    dest = cfg.PDFS / "gp" / "2006R.pdf"
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_bytes(b"%PDF")
-    antes = cfg.THEMES_YAML.read_text(encoding="utf-8")
-    it.repoint_source_pdf("2006R", "/tmp/x.pdf", dest)
-    assert "no repunté" in capsys.readouterr().out
-    assert cfg.THEMES_YAML.read_text(encoding="utf-8") == antes
+    salida = capsys.readouterr().out
+    assert "pdf: vault/raw/pdfs/gp/2006R.pdf" in salida and "a mano" in salida
+    assert cfg.THEMES_YAML.read_text(encoding="utf-8") == antes, "la config curada no se edita sola"
 
 
 def test_repoint_source_pdf_no_hace_nada_sin_copia(toy_vault):
@@ -584,3 +574,17 @@ def test_source_ads_sin_sources_sigue_andando(toy_vault, fake_run, fake_notes, m
     """Contra-caso: el modo ADS puro no se toca. El aborto es sólo para la config contradictoria."""
     topic(source="ads", query='abs:"independent component"')
     assert run_main(monkeypatch) == 0
+
+
+def test_sin_doi_ni_extra_core_el_chequeo_de_retracciones_lo_DICE(toy_vault, fake_run, fake_notes,
+                                                                  monkeypatch, capsys):
+    """AUD-159 — el paso se salteaba **en silencio**, y el silencio se lee como «corrió y limpio».
+
+    La cadena cierra igual (sin DOI ni bibcode no hay a quién preguntarle a Crossref: es una
+    propiedad de las fuentes, no un fallo), pero un paso que no corrió tiene que decirlo — misma
+    doctrina que D-43 y que el `rc 2` de `check_retractions` con población vacía."""
+    topic(source="web", sources=[{"key": "2006Rasmussen", "url": "https://x",
+                                  "via": "usuario", "fecha": "2026-08-28", "motivo": "canon"}])
+    run_main(monkeypatch)
+    salida = capsys.readouterr().out
+    assert "retracciones NO EVALUADO" in salida and "ninguna fuente declara `doi`" in salida
