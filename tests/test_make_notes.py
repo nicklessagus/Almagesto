@@ -325,6 +325,7 @@ def test_stamp_excluded_refresca_sin_tocar_la_sintesis(toy_vault):
 
 
 def test_stamp_excluded_agrega_y_quita(toy_vault):
+    # @inv INV-15
     """El apéndice se agrega si la nota no lo tenía (no había ads.json al crearla) y se QUITA
     si ya no hay excluidos; sin cambios, no reescribe (idempotente)."""
     mn.write_star_note("test_star", force=False)          # sin ads.json → sin apéndice
@@ -366,6 +367,7 @@ def test_stamp_excluded_concept_via_publica(toy_vault, capsys):
 # ── write_star_note ──────────────────────────────────────────────────────────
 
 def test_star_note_desde_ground_truth(toy_vault, capsys):
+    # @inv INV-71
     # @inv INV-01
     (toy_vault.GROUND_TRUTH / "test_star.json").write_text(json.dumps(GT), encoding="utf-8")
     mn.write_star_note("test_star", force=False)
@@ -1471,6 +1473,7 @@ def test_find_header_line_es_contrato_compartido(toy_vault):
 # ── puntero al registro de búsqueda en la cabecera (#64) ─────────────────────
 
 def test_estado_line_estampa_puntero_sin_tocar_la_prosa(toy_vault):
+    # @inv INV-15
     """El registro completo vive en config/registro/<slug>.yaml; la ficha lleva UNA línea con
     fecha, universo→core, pendientes y la ruta. Cirugía: la síntesis LLM queda intacta."""
     mn.write_star_note("test_star", force=False)
@@ -2166,6 +2169,7 @@ def test_stamp_papers_table_no_toca_la_prosa(toy_vault):
 
 
 def test_rollup_de_concepto_es_union_y_declara_llave(toy_vault):
+    # @inv INV-35
     """D-24: el roll-up de un concepto une `methods` y `thesis_links` — en la instancia real esas
     dos llaves viven en papers distintos, así que quedarse con una sola pierde la mitad."""
     seed_topic()
@@ -2423,6 +2427,7 @@ def test_keywords_no_pisa_la_extraccion(toy_vault):
 
 
 def test_migrate_bearing_saca_el_campo_y_es_idempotente(toy_vault):
+    # @inv INV-13
     """Migrador de un solo uso de D-21. Borrado puro y sin pérdida recuperable: el dato viejo era
     **un** valor de postura para N tesis, o sea que ya estaba mal por construcción. Quirúrgico: no
     toca la extracción LLM ni el cuerpo."""
@@ -3377,6 +3382,7 @@ def test_el_retro_linkeo_NO_escribe_vistas(toy_vault):
 # ── #196: el estampador que no encuentra su ancla no puede volver en silencio ────────────────────
 
 def test_theme_restampa_la_tabla_papers_estilo_ficha(toy_vault):
+    # @inv INV-15
     """#196: una nota de concepto puede llevar el encabezado estilo ficha `## Papers`.
 
     `--theme` sólo llamaba a `stamp_concept_rollup`, que ancla en `## Papers que tocan este tema
@@ -3426,6 +3432,7 @@ def test_missing_anchors_separa_al_dia_de_sin_ancla(toy_vault):
 
 
 def test_migrar_txt_fields_saca_los_dos_campos_y_no_toca_nada_mas(toy_vault):
+    # @inv INV-26
     """Los dos campos existían para UNA decisión —¿el extractor lee el `.txt` o el PDF?— y esa
     decisión ya no se toma. Un campo sin lector se lee como un gate vivo, y éstos además **mienten**
     (medido: un paper con `symbols_lost: False` había perdido igual el radical `√`).

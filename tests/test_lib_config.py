@@ -398,6 +398,7 @@ def test_fallo_escribiendo_el_temporal_no_deja_basura(tmp_path, monkeypatch):
 
 
 def test_write_bytes_atomic(tmp_path, monkeypatch):
+    # @inv INV-90
     dest = tmp_path / "x.pdf"
     cfg.write_bytes_atomic(dest, b"%PDF-1.4\n")
     assert dest.read_bytes() == b"%PDF-1.4\n"
@@ -635,6 +636,7 @@ EC_OK = [{"bibcode": "2020X", "via": "triage", "motivo": "reanaliza la señal b"
 
 
 def test_load_extra_core_forma_canonica(toy_vault):
+    # @inv INV-60
     assert cfg.load_extra_core({"extra_core": EC_OK}, entry="test_star") == EC_OK
 
 

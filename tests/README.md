@@ -243,8 +243,19 @@ env PATH=/tmp/binmin /tmp/cienv/bin/python -m pytest tests/ -q      # sin pdftot
 ## Las siete redes que corren al escribir código (regla permanente, 2026-08-24)
 
 Salieron de una sesión en la que **los bugs los encontraron agentes leyendo, no la suite**. Cada una
-ataca una clase de defecto que se repitió, y las siete son deterministas: nada acá depende del
+ataca una clase de defecto que se repitió, y las ocho son deterministas: nada acá depende del
 juicio de un modelo.
+
+⚠ **La 8 se agregó el 2026-08-28 (AUD-212).** El mapa de `docs/trazabilidad.md` mide *que alguien
+puso la marca*, no que la marca esté sobre código que el test cubre — que es la primera de las dos
+lecciones de método de la pasada `/auditar`. El gate vacía cada implementación marcada `@inv` y
+corre **sólo el test marcado**: si pasa, esa fila afirma una cobertura que no existe. Primera
+corrida sobre 143 filas: **20 atribuciones falsas**, todas cerradas moviendo la marca al test que sí
+cubre el símbolo (ninguna se cerró borrando una fila). Sobre-reporta y nunca da falso limpio, por
+dos motivos que conviene saber: corre **un** test, así que un símbolo que otro test sí cubre aparece
+igual; y muta a `return None`, así que un predicado cuya rama FALSE es la que el test ejercita
+sobrevive por coincidencia (`ocr_available` fue el caso medido) — la salida ahí es marcar un test
+que ejerza la rama verdadera, no aflojar el gate.
 
 | # | Qué caza | Cómo se corre |
 |---|---|---|
@@ -255,6 +266,7 @@ juicio de un modelo.
 | 5 | La **doc afirmando cosas del código** | `tests/test_docs_ejecutables.py` (tier 0) |
 | 6 | Un script que **pisa lo que ya escribió** | correr dos veces y hashear `vault/**/*.md` (ver abajo) |
 | 7 | Un símbolo **nuevo con nombre en castellano** | `tests/test_idioma_codigo.py` (tier 0) |
+| 8 | Una fila del mapa que **atribuye cobertura que no existe** | `python tools/mutar.py --trazabilidad` (~20 min) |
 
 ⚠ **La 6 faltaba acá y estaba en `CLAUDE.md`** (#148). El doc normativo titulaba *"las **seis** redes"* (hoy son siete)
 y delega el detalle en este archivo, que publicaba cinco — así que la regla de idempotencia se caía

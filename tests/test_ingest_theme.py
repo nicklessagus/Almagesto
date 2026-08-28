@@ -334,6 +334,7 @@ def test_offads_descarte_del_chaining_no_avisa_como_fuente_declarada(toy_vault, 
 
 
 def test_offads_pdf_copia_y_extrae(toy_vault, fake_run, fake_notes, monkeypatch, tmp_path):
+    # @inv INV-90
     src = tmp_path / "externo.pdf"
     src.write_bytes(b"%PDF-contenido")
     topic(source="local-pdfs", sources=[{"key": "2006Rasmussen", "pdf": str(src)}])

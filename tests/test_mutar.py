@@ -333,3 +333,42 @@ def test_el_diff_no_lista_lo_borrado(repo_con_tests: Path, monkeypatch):
     assert [f.name for f in archivos] == ["viejo.py"], "un archivo borrado no tiene qué mutar"
     for f in archivos:
         mutar.funciones(f)                # no revienta
+
+
+# ── AUD-212 · la atribución del mapa de trazabilidad ─────────────────────────
+
+def test_los_pares_de_trazabilidad_salen_de_las_DOS_marcas(monkeypatch):
+    """AUD-212 — sólo se audita el invariante que tiene marca en los dos árboles: sin marca de test
+    no hay atribución que auditar, y sin marca de implementación no hay qué mutar.
+
+    Y se auditan TODAS las implementaciones marcadas, no la primera: lo que la fila afirma es que
+    **esos** símbolos la cumplen, así que cada uno tiene que estar cubierto por alguno de **esos**
+    tests. Auditar sólo la primera dejaba pasar la marca puesta de más — fue el primer resultado
+    real del gate (11 filas → 20 al mirar todos los símbolos)."""
+    from dataclasses import dataclass
+
+    @dataclass(frozen=True)
+    class M:
+        inv: str
+        kind: str
+        path: str
+        line: int
+        symbol: str
+
+    import trace_invariants as ti
+    monkeypatch.setattr(ti, "load_registro", lambda root: {
+        "INV-01": {"estado": "garantizado y medido"},
+        "INV-02": {"estado": "garantizado y medido"},
+        "INV-03": {"estado": "retirado (#205)"},
+    })
+    monkeypatch.setattr(ti, "collect_marks", lambda root: [
+        M("INV-01", "impl", "scripts/a.py", 1, "f"),
+        M("INV-01", "impl", "scripts/a.py", 9, "g"),      # segunda impl: también se audita
+        M("INV-01", "test", "tests/test_a.py", 2, "test_x"),
+        M("INV-02", "impl", "scripts/b.py", 1, "h"),      # sin marca de test → fuera
+        M("INV-03", "impl", "scripts/c.py", 1, "i"),      # retirado → fuera
+        M("INV-03", "test", "tests/test_c.py", 1, "test_z"),
+    ])
+    pares = mutar._traceability_pairs()
+    assert [(inv, sym) for inv, _f, sym, _t in pares] == [("INV-01", "f"), ("INV-01", "g")]
+    assert pares[0][3] == ["tests/test_a.py::test_x"]

@@ -249,6 +249,102 @@ def _directed(args) -> int:
     return 0
 
 
+def _traceability_pairs() -> list[tuple[str, Path, str, list[str]]]:
+    """`(inv, impl file, impl symbol, [marked tests])` for every invariant marked in BOTH trees.
+
+    Only those: with no test mark there is no attribution to audit. Pytest nodeids are built from
+    the symbol that holds the mark (`tests/x.py::test_y`), so a module-level mark cannot be run on
+    its own and is dropped."""
+    sys.path.insert(0, str(RAIZ / "scripts"))
+    import trace_invariants as ti
+    registro = ti.load_registro(RAIZ)
+    por_inv: dict = {}
+    for m in ti.collect_marks(RAIZ):
+        por_inv.setdefault(m.inv, []).append(m)
+    out = []
+    for inv, marcas in sorted(por_inv.items()):
+        if inv not in registro or ti.is_retired(registro[inv]):
+            continue
+        impls = [m for m in marcas if m.kind == "impl" and m.symbol
+                 and m.path.startswith("scripts/")]
+        tests = sorted({f"{m.path}::{m.symbol}" for m in marcas if m.kind == "test" and m.symbol})
+        if not tests:
+            continue
+        # TODAS las implementaciones marcadas, no la primera: lo que la fila afirma es que **esos**
+        # símbolos la cumplen y **esos** tests la prueban, así que cada símbolo tiene que estar
+        # cubierto por alguno. Auditar sólo el primero dejaba pasar la marca puesta de más.
+        for m in impls:
+            out.append((inv, RAIZ / m.path, m.symbol, tests))
+    return out
+
+
+def _trazabilidad(args) -> int:
+    """AUD-212 — audit the map's ATTRIBUTION: does the marked test prove the marked symbol?
+
+    `docs/trazabilidad.md` measures **that somebody put the mark**, not that the mark sits on code
+    the test covers — the first of the two method lessons of the `/auditar` pass («the defect is
+    almost never in the marked function: it is in the caller or in the copy»). Without this, a row
+    can claim coverage that does not exist, and *a map that misattributes is worse than an empty
+    one* — in the very artifact whose job is not to misattribute.
+
+    The experiment is the minimum that decides: empty the marked implementation and run **only the
+    marked test**. If it still passes, that test does not prove that symbol.
+
+    ⚠ **Over-reports, never gives a false clean**, like `--dirigida`, and for two reasons worth
+    naming. One test is run, so a symbol another test does cover shows up anyway — but what the row
+    claims is that pairing, not the suite. And the mutation writes `return None`, so a predicate
+    whose FALSE branch is the one under test survives by coincidence (`ocr_available` is the measured
+    case): the answer there is to mark a test that exercises the true branch, not to loosen the gate."""
+    pares = _traceability_pairs()
+    if not pares:
+        print("⛔ no evaluado: ningún invariante tiene marca de implementación Y de test")
+        return 2
+    solo = {x.strip() for x in args.solo.split(",") if x.strip()}
+    if solo:
+        pares = [p for p in pares if p[0] in solo]
+        if not pares:
+            print(f"⛔ no existen (o no tienen las dos marcas): {', '.join(sorted(solo))}")
+            return 2
+    tmp = Path(tempfile.mkdtemp(prefix="almagesto-traza-"))
+    falsas = []
+    try:
+        copia = _copia_del_repo(tmp / "repo")
+        print(f"copia de trabajo: {copia}  (el árbol real NO se toca)")
+        for inv, archivo, simbolo, tests in pares:
+            gemelo = copia / archivo.relative_to(RAIZ)
+            original = gemelo.read_text(encoding="utf-8")
+            fn = next((f for f in funciones(gemelo) if f[0] == simbolo), None)
+            if fn is None:
+                print(f"  ·          {inv}: `{simbolo}` no es una función mutable "
+                      f"(clase/constante/EXENTA) — no evaluado")
+                continue
+            _, ini, fin = fn
+            lineas = original.split("\n")
+            sangria = len(lineas[ini - 1]) - len(lineas[ini - 1].lstrip())
+            gemelo.write_text("\n".join(lineas[:ini - 1] + [" " * sangria + "return None"]
+                                        + lineas[fin:]), encoding="utf-8")
+            try:
+                vivo = all(_suite_verde(copia, Path(t)) for t in tests)
+            except subprocess.TimeoutExpired:
+                vivo = True
+            finally:
+                gemelo.write_text(original, encoding="utf-8")
+            print(f"  {'ATRIBUCIÓN FALSA' if vivo else 'ok              '}  {inv}: "
+                  f"{archivo.name}::{simbolo} ← {', '.join(t.split('::')[-1] for t in tests)}")
+            if vivo:
+                falsas.append(f"{inv} ({archivo.name}::{simbolo})")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    print(f"\n{len(pares)} fila(s) auditadas · {len(falsas)} con atribución FALSA")
+    for f in falsas:
+        print(f"  - {f}")
+    if falsas:
+        print("\n  → el test marcado pasa con la implementación marcada VACÍA: o la marca está en "
+              "el símbolo equivocado, o ese test prueba otra cosa. Mover la marca o marcar el test "
+              "que sí lo cubre — no borrar la fila.")
+    return 1 if falsas else 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("archivos", nargs="*", help="archivos de scripts/ a mutar")
@@ -258,9 +354,16 @@ def main() -> int:
     ap.add_argument("--dirigida", action="store_true",
                     help="modo barato: muta UN módulo y corre SÓLO su archivo de tests (no es el gate)")
     ap.add_argument("--solo", default="",
-                    help="con --dirigida: nombres de función separados por coma (default: todas)")
+                    help="con --dirigida: nombres de función separados por coma; con "
+                         "--trazabilidad: ids de invariante (default: todos)")
+    ap.add_argument("--trazabilidad", action="store_true",
+                    help="AUD-212: audita la ATRIBUCIÓN del mapa — vacía la implementación marcada "
+                         "`@inv` y corre SÓLO el test marcado. Si pasa, esa fila afirma una "
+                         "cobertura que no existe.")
     args = ap.parse_args()
 
+    if args.trazabilidad:
+        return _trazabilidad(args)
     if args.dirigida:
         return _directed(args)
 

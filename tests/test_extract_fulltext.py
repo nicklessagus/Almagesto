@@ -214,6 +214,7 @@ def test_flag_ocr_sin_tesseract_aborta(toy_vault, fake_tools, monkeypatch):
 
 
 def test_upgrade_automatico_txt_viejo_ilegible(toy_vault, fake_tools, monkeypatch):
+    # @inv INV-70
     """Aparece tesseract → un .txt viejo mojibake se re-extrae solo por OCR."""
     out = seed_pdf(toy_vault)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -288,6 +289,7 @@ def test_texto_limpio_no_es_garble():
 
 
 def test_ocr_del_editor_se_detecta():
+    # @inv INV-28
     dano = LIMPIO + " Coni~nunicatedby Ul~rz~ersity Corllp~rtafiorl wr~ttenas Ho~unrdHqhes " * 6
     garbled, why = ef.is_garbled(dano)
     assert garbled is True
@@ -351,6 +353,7 @@ def test_backfill_no_toca_un_txt_limpio():
 
 
 def test_backfill_marca_el_txt_garbleado_ya_extraido():
+    # @inv INV-28
     why = ef.backfill_scanned_mark(LIMPIO + DANIO)
     assert why is not None
     assert "OCR del editor" in why

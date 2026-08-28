@@ -210,6 +210,7 @@ def test_sin_sujeto_explicito_la_vista_usa_el_nombre():
 
 
 def test_de_la_regla_de_tabla_sobrevive_la_fila_verificada():
+    # @inv INV-100
     """#195 → #205. Leyendo el PDF, «levantá el valor del PDF» es redundante y se cae. Lo que NO se
     cae es el criterio de lectura: en una tabla multi-objeto **la fila equivocada es el modo de
     falla**, y eso no lo arregla cambiar de archivo."""

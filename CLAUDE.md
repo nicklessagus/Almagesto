@@ -1585,7 +1585,7 @@ total no suba**, que es lo que impide que la deuda rote. Los 45 son deuda declar
 exigir cero sería rojo permanente, y un rojo permanente se deja de mirar. Renombrarlos rompería
 marcas `@inv` y los punteros de `docs/trazabilidad.md` sin arreglar nada.
 
-## Al escribir código: las siete redes (regla permanente)
+## Al escribir código: las ocho redes (regla permanente)
 
 Toda función nueva de `scripts/` pasa por esto **antes de cerrar el issue**; la 6 rige
 también para los scripts de una sola operación. Detalle y ratchets en
@@ -1661,7 +1661,19 @@ también para los scripts de una sola operación. Detalle y ratchets en
    pone el test en rojo, aunque el total no suba. Ver *Convención de idioma del código* arriba: la
    regla existía desde el 2026-08-24 y **nadie la vigilaba**, con 46 símbolos de resultado (hoy 45).
 
-Las 2, 5 y 7 corren solas en tier 0. El motivo de la regla: en la sesión que la produjo, **los bugs
+8. **Atribución del mapa** — `python tools/mutar.py --trazabilidad` (AUD-212, ~20 min): vacía cada
+   implementación marcada `@inv` y corre **sólo el test marcado**. Si pasa, esa fila de
+   `docs/trazabilidad.md` afirma una cobertura que **no existe** — el mapa mide *que alguien puso la
+   marca*, no que la marca esté sobre código que el test cubre, que es la primera de las dos
+   lecciones de método de la pasada `/auditar`. *Un mapa que atribuye mal es peor que uno vacío*, y
+   éste es el artefacto cuyo trabajo es no atribuir mal. Primera corrida sobre 143 filas: **20
+   atribuciones falsas**, todas cerradas moviendo la marca al test que sí cubre el símbolo. ⚠
+   Sobre-reporta y nunca da falso limpio: corre **un** test (un símbolo que otro test cubre aparece
+   igual) y muta a `return None` (un predicado cuya rama FALSE es la que el test ejercita sobrevive
+   por coincidencia — `ocr_available` fue el caso medido; la salida es marcar un test que ejerza la
+   rama verdadera, no aflojar el gate).
+
+Las 2, 5 y 7 corren solas en tier 0; la 1 y la 8 son a pedido (cuestan minutos). El motivo de la regla: en la sesión que la produjo, **los bugs
 los encontraron agentes leyendo el código, no la suite** — y cada hallazgo era decidible, o sea que
 podría haber sido un assert.
 

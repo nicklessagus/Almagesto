@@ -175,6 +175,7 @@ def test_solo_prosa_no_se_come_una_seccion_propia_con_prefijo_estampado(header):
 @pytest.mark.parametrize("header", ["## Papers", "## Papers (25 · 16 sintetizados)",
                                     "## Verificación de citas (2026-08-25)"])
 def test_solo_prosa_sigue_salteando_las_estampadas_de_verdad(header):
+    # @inv INV-98
     """La otra mitad: apretar la regla no puede dejar entrar la metadata derivada, que es lo que
     `solo_prosa` existe para sacar. Un sufijo de puntuación sigue siendo la misma sección."""
     assert "[[2020a]]" not in cfg.solo_prosa(f"{header}\nFila con [[2020a]].\n")

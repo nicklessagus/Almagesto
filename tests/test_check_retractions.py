@@ -55,6 +55,7 @@ RET = {"type": "retraction", "notice_doi": "10.1/n", "date": "2021-05-03", "sour
 
 
 def test_stamp_retraction_preserva_comentarios_y_cuerpo(tmp_path):
+    # @inv INV-33
     """Regresión (hallazgo 3): el estampado es quirúrgico — no re-serializa el YAML,
     los comentarios/orden de la extracción LLM sobreviven."""
     body = "\ncuerpo\n\n---\nregla horizontal\n"
@@ -312,6 +313,7 @@ CORRIGENDUM_MSG = {"message": {"updated-by": [
 
 
 def test_main_corrección_se_estampa_sin_retractar(toy_vault, monkeypatch, capsys):
+    # @inv INV-34
     """#52: erratum/corrigendum/EoC NO marcan `retracted` (el paper sigue citable) pero SÍ se
     persisten en `corrections` — antes se imprimían a stdout y se perdían. Exit 0: no bloquea."""
     body = "# Paper\n\nExtracción LLM.\n"

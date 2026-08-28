@@ -18,6 +18,7 @@ MD = ("# Título\n\nProsa citable con referencias.\n\n"
 # ── clean_markdown ───────────────────────────────────────────────────────────
 
 def test_clean_saca_media_conserva_prosa():
+    # @inv INV-30
     out, removed = fw.clean_markdown(MD)
     assert "<video" not in out and "<iframe" not in out and "<source" not in out
     assert "SÍ se conserva" in out                   # figure no se toca

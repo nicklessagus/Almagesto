@@ -38,6 +38,7 @@ def clon(tmp_path, monkeypatch):
 
 
 def test_sin_driver_y_con_cambios_propios_se_reporta(clon):
+    # @inv INV-68
     """El caso que #99 cubre: la instancia personalizó su config y un `git pull` la pisaría."""
     (clon / "vault" / "config" / "objective.yaml").write_text("name: MI TEMA\n", encoding="utf-8")
     riesgo, err = lint.merge_ours_unprotected()

@@ -285,6 +285,7 @@ def test_glyph_pattern_es_letra_especifica():
 
 
 def test_glyph_rescue_filtra_client_side(toy_classifier, ads_token, no_sleep, monkeypatch):
+    # @inv INV-52
     """Trae el superset de la constelación y se queda SÓLO con los que llevan el glifo; los
     devuelve clasificados y marcados via: glyph."""
     docs = [
