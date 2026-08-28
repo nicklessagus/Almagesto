@@ -1577,6 +1577,25 @@ def _reemplazar_seccion(dest, header: str, nuevo: str) -> bool:
     return True
 
 
+def missing_anchors(dest, headers) -> list:
+    """The headers a stamper could NOT find in the note (#196).
+
+    `_reemplazar_seccion` returns `False` for two different things: the section was already up to
+    date (an idempotent no-op, fine) and the section **is not there** (the surgery has nothing to
+    anchor on, a defect). Conflating them is what kept the bug mute: `--theme` skipped the rich
+    `## Papers` table on notes carrying the ficha-style header and said nothing, so a stale table
+    published `66 · 41` over a real universe of `90 · 57`. Same failure mode as #69 — a promise the
+    system quietly stopped keeping.
+
+    Callers use this to NAME the sections they could not stamp instead of returning a bare `False`.
+    """
+    #  @inv INV-136
+    if not dest.exists():
+        return list(headers)
+    text = dest.read_text(encoding="utf-8")
+    return [h for h in headers if cfg.section_start(text, h) < 0]
+
+
 def stamp_papers_table(slug: str, dest, kind: str = "star") -> bool:
     """Reemplaza el bloque ```dataview``` de `## Papers` por la tabla materializada (D-10/D-11)."""
     return _reemplazar_seccion(dest, PAPERS_HEADER, papers_table(papers_universe(slug, kind)))
@@ -2097,11 +2116,24 @@ def write_concept_note(slug: str, force: bool) -> None:
     dest = cfg.CONCEPTS / area / f"{concept}.md"
     if dest.exists() and not force:
         # la síntesis no se pisa; sólo se refresca el apéndice máquina con el ads.json vigente (#35)
-        stamped = (stamp_excluded(slug, dest) | stamp_concept_rollup(slug, dest)
-                   | stamp_estado(slug, dest))
+        # #196: `stamp_papers_table` va TAMBIÉN. Una nota de concepto puede llevar el encabezado
+        # estilo ficha (`## Papers`) en vez del roll-up de tema, y `stamp_concept_rollup` ancla sólo
+        # en el suyo: sobre esa nota la tabla quedaba congelada y la cirugía devolvía `False` sin
+        # decir nada. Los dos estampadores conviven porque cada uno ancla en su propio encabezado y
+        # el que no matchea es un no-op.
+        stamped = (stamp_excluded(slug, dest) | stamp_papers_table(slug, dest, kind="theme")
+                   | stamp_concept_rollup(slug, dest) | stamp_estado(slug, dest))
         cfg.print_seguro(f"  concept: {area}/{concept}.md ya existe"
-              + (" — apéndice Excluidos / roll-up / puntero de búsqueda re-estampados" if stamped
-                 else " (no se pisa sin --force; los papers enganchan por thesis_links)"))
+              + (" — apéndice Excluidos / tabla de papers / roll-up / puntero de búsqueda re-estampados"
+                 if stamped else " (no se pisa sin --force; los papers enganchan por thesis_links)"))
+        # El roll-up de papers tiene que existir bajo ALGUNO de los dos encabezados. Si no está
+        # ninguno, la nota se queda sin esa cirugía para siempre y hasta #196 no lo decía nadie
+        # (`stamp_excluded` agrega su sección si falta, y la cabecera ya la vigila el lint por #69,
+        # así que ésas no hacen falta acá).
+        if missing_anchors(dest, [PAPERS_HEADER, CONCEPT_ROLLUP_HEADER]) == [PAPERS_HEADER,
+                                                                            CONCEPT_ROLLUP_HEADER]:
+            cfg.print_seguro(f"  ⚠ la nota no tiene `{PAPERS_HEADER}` ni `{CONCEPT_ROLLUP_HEADER}`: "
+                             "el roll-up de papers no se puede estampar (agregá uno de los dos)")
         return
     dest.parent.mkdir(parents=True, exist_ok=True)
     front = {"name": meta.get("title", concept)}

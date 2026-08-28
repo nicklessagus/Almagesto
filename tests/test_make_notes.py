@@ -3219,3 +3219,51 @@ def test_el_retro_linkeo_NO_escribe_vistas(toy_vault):
     fm = read_fm(p)
     assert fm["vistas"] == antes, "el retro-link no declara una lectura que nadie hizo"
     assert "Estrella Test" in fm["stars"], "pero sí mergea el RECLAMO"
+
+
+# ── #196: el estampador que no encuentra su ancla no puede volver en silencio ────────────────────
+
+def test_theme_restampa_la_tabla_papers_estilo_ficha(toy_vault):
+    """#196: una nota de concepto puede llevar el encabezado estilo ficha `## Papers`.
+
+    `--theme` sólo llamaba a `stamp_concept_rollup`, que ancla en `## Papers que tocan este tema
+    (auto)`: sobre esa nota `_reemplazar_seccion` no encontraba la sección, devolvía `False` y nadie
+    se enteraba. Medido en una bóveda real: la tabla publicaba `66 · 41` sobre un universo de `90 ·
+    57` y `make_notes.py <slug> --theme` no la tocaba.
+
+    El test mide **staleness**, que es el defecto: se crea la nota, se agrega un paper DESPUÉS y se
+    exige que la re-corrida lo traiga. Afirmar que el primer paper está no distingue nada — la tabla
+    del stub ya lo tenía, y con esa aserción el test pasaba sin el fix (visto morir mal una vez).
+    """
+    #  @inv INV-136
+    seed_topic()
+    ads_json([rec("2020gpsA...1..1A")], slug="gp")
+    mn.write_paper_notes("gp", include_all=False, force=False, theme=True)
+    mn.write_concept_note("gp", force=False)
+    dest = toy_vault.CONCEPTS / "methods" / "gaussian-processes.md"
+    # la nota pasa a llevar el encabezado estilo FICHA, que es el caso que el bug no cubría
+    dest.write_text(dest.read_text(encoding="utf-8")
+                    .replace(mn.CONCEPT_ROLLUP_HEADER, mn.PAPERS_HEADER), encoding="utf-8")
+
+    nuevo = rec("2021gpsB...2..2B") | {"doi": "10.1/otro"}   # identidad propia: D-19 rechaza el clon
+    ads_json([rec("2020gpsA...1..1A"), nuevo], slug="gp")
+    mn.write_paper_notes("gp", include_all=False, force=False, theme=True)
+    mn.write_concept_note("gp", force=False)
+
+    assert "2021gpsB...2..2B" in dest.read_text(encoding="utf-8"), \
+        "la tabla `## Papers` quedó congelada: el paper nuevo no entró"
+
+
+def test_missing_anchors_separa_al_dia_de_sin_ancla(toy_vault):
+    """#196, la causa raíz: `_reemplazar_seccion` devuelve `False` en DOS casos distintos.
+
+    «la sección ya estaba al día» (no-op idempotente, correcto) y «la sección no existe» (la cirugía
+    no tiene dónde anclar, defecto). Mezclarlos es lo que dejó el bug mudo, y es el mismo modo de
+    falla que #69. `missing_anchors` separa el segundo.
+    """
+    #  @inv INV-136
+    dest = toy_vault.CONCEPTS / "methods" / "x.md"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text("# X\n\n## Papers\n\ntabla\n", encoding="utf-8")
+    assert mn.missing_anchors(dest, ["## Papers"]) == []
+    assert mn.missing_anchors(dest, ["## Papers", "## No Existe"]) == ["## No Existe"]
