@@ -200,3 +200,16 @@ def test_render_view_no_fabrica_wikilinks_con_notacion_de_matriz(toy_vault):
     cuerpo = dest.read_text(encoding="utf-8")
     assert "[[r11" not in cuerpo, "una matriz no puede quedar como wikilink"
     assert "[[1994Comon]]" in cuerpo, "…y la cita de segunda mano SÍ se conserva"
+
+
+def test_la_columna_del_localizador_no_se_llama_linea(toy_vault):
+    """#195 — la columna ya no lleva sólo un nº de línea del `.txt`: un valor levantado de una
+    tabla-imagen se cita por PÁGINA y una lectura de gráfico por `Fig. N, p. M`. Llamarla «Línea»
+    es la misma mentira de encabezado que #200 corrige en el bloque de verificación: el lector no
+    puede distinguir un localizador honesto de una línea inventada."""
+    md = hv.render_view("ICA", {"ground_truth": [
+        {"que": "SNR del test", "valor": "≈ 12 dB", "linea": "Fig. 3, p. 7",
+         "regimen": "lectura de gráfico"}]})
+    assert "| Qué | Valor | Localizador | Régimen | Segunda mano |" in md
+    assert "Línea" not in md
+    assert "Fig. 3, p. 7" in md, "el localizador de figura tiene que llegar a la tabla"

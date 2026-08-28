@@ -66,7 +66,12 @@ def render_view(sujeto: str, data: dict) -> str:
         out += ["**Ejes:**", ""] + [f"- **{k}:** {v}" for k, v in ejes.items()] + [""]
     filas = [f for f in cfg.as_list(data.get("ground_truth")) if isinstance(f, dict)]
     if filas:
-        out += ["| Qué | Valor | Línea | Régimen | Segunda mano |", "|---|---|---|---|---|"]
+        # «Localizador», no «Línea» (#195): la columna ya no lleva sólo un nº de línea del `.txt`.
+        # Un valor levantado de una tabla-imagen se cita por PÁGINA del PDF y una lectura de
+        # gráfico por `Fig. N, p. M` — llamar «Línea» a eso es la misma mentira de encabezado que
+        # #200 corrige en el bloque de verificación. La CLAVE del JSON sigue siendo `linea`: el
+        # artefacto vive en `build/` y renombrarla dejaría mudas las extracciones en vuelo.
+        out += ["| Qué | Valor | Localizador | Régimen | Segunda mano |", "|---|---|---|---|---|"]
         for f in filas:
             celdas = [_safe_links(str(f.get(k) or "—").strip()) or "—"
                       for k in ("que", "valor", "linea", "regimen", "segunda_mano")]

@@ -314,3 +314,63 @@ def test_el_prompt_declara_la_maqueta_medida_en_las_dos_direcciones():
         assert "fracción medida" in p, "el prompt publica el NÚMERO, no sólo el veredicto"
         assert "decilo en `salvedades`" in p
     assert "UNA columna" in una and "DOS COLUMNAS" in dos
+
+
+# ── #195 · el dato que vive en una imagen: 45 % del corpus, y la regla dura sólo cubría ecuaciones ──
+
+
+def test_la_regla_de_la_tabla_es_dura_y_nombra_el_PDF():
+    """La asimetría que #195 corrige: para las ECUACIONES había regla dura —se levanta del PDF y
+    viaja con su página—, para las tablas una instrucción blanda («mirá las tablas») y para las
+    figuras nada. Un valor de tabla-imagen que sostiene una afirmación corre el mismo riesgo, y son
+    el 45 % de las vistas de un tema real.
+
+    Como en #153: la RUTA, no sólo la palabra «PDF». Un extractor que recibe el aviso sin saber qué
+    archivo abrir no recibió nada.  @inv INV-100"""
+    # Sobre `_media_note`, NO sobre el prompt entero: la ruta del PDF también la emite la regla de
+    # ecuaciones, así que un assert contra `p` pasa aunque la regla de tabla se quede sin ruta.
+    # (Cazado con `mutar.py --dirigida`: la primera versión de este test sobrevivía a la mutación.)
+    nota = ep._media_note("ica", "1994Comon")
+    assert "TABLA" in nota
+    assert "vault/raw/pdfs/ica/1994Comon.pdf" in nota, "la regla de tabla tiene que decir QUÉ PDF"
+    assert "cómo verificaste la fila" in nota, (
+        "falta la mitad de la regla: en una tabla multi-objeto la fila equivocada es el modo de "
+        "falla, y el entrelazado de columnas parte las filas")
+    assert nota in ep.build_prompt("ica", "1994Comon", "ICA", [], "Texto limpio.\n", kind="theme"), \
+        "la regla existe pero no llega al subagente"
+
+
+def test_la_lectura_de_figura_esta_permitida_y_declarada():
+    """Permiso, no obligación, y con las tres declaraciones que la distinguen de inventar el
+    número: figura + página, el `≈` explícito, y la palabra «lectura de gráfico». Es la doctrina de
+    `inferencia` — la bóveda puede sostener algo que ninguna fuente escribe **siempre que declare de
+    dónde salió**."""
+    p = ep.build_prompt("ica", "2019Pfister", "ICA", [], "Texto limpio.\n", kind="theme")
+    assert "lectura de gráfico" in p
+    assert "Fig. 3, p. 7" in p, "sin el formato del localizador la marca queda a criterio de cada agente"
+    assert "≈" in p, "un valor leído de una curva sin el aproximado se lee como publicado"
+    assert "hueco declarado" in p, (
+        "falta la escotilla: si la curva no permite leer el valor con confianza, forzarlo es peor "
+        "que el hueco")
+
+
+def test_la_regla_de_medios_no_depende_de_la_marca_de_simbolos():
+    """A diferencia de la de ecuaciones (#113), ésta va SIEMPRE: `symbols_lost` mide si `pdftotext`
+    vació las fórmulas y no dice nada sobre si las tablas del paper son imágenes."""
+    limpio = ep.build_prompt("ica", "1994Comon", "ICA", [], "Texto limpio.\n", kind="theme")
+    marcado = ep.build_prompt("ica", "1994Comon", "ICA", [],
+                              f"{cfg.FULLTEXT_SYMBOLS_MARK} simbolos NO extraidos\nx\n", kind="theme")
+    for p in (limpio, marcado):
+        assert "lectura de gráfico" in p
+
+
+def test_el_localizador_no_se_llama_solo_numero_de_linea():
+    """Si el prompt sigue pidiendo «el nº de línea» a secas, una página o una figura no tienen dónde
+    ir y vuelven como línea inventada."""
+    # Contra la SECCIÓN, no contra el prompt entero: la palabra «localizador» también aparece en la
+    # regla de figuras, así que el assert global pasaba con la instrucción vieja intacta.
+    p = ep.build_prompt("ica", "1994Comon", "ICA", [], "Texto limpio.\n", kind="theme")
+    seccion = p.split("## Cómo anotar cada valor")[1].split("## Salida")[0]
+    assert "localizador" in seccion.lower(), "la sección de anotado sigue pidiendo sólo la línea"
+    assert "Fig. N, p. M" in seccion, "sin el formato, una lectura de gráfico vuelve como línea"
+    assert "página" in seccion, "una tabla-imagen no tiene dónde poner su página"

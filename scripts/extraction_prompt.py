@@ -199,6 +199,58 @@ def _symbols_note(slug: str, bibcode: str, texto: str) -> str:
         "- La prosa sí está y se cita normal, por línea. Es un eje independiente del OCR.\n")
 
 
+def _media_note(slug: str, bibcode: str) -> str:
+    """Tablas y figuras: el dato que NO está en el `.txt` porque es una imagen (#195).
+
+    Medido sobre las 65 vistas del tema `ica` (2026-08-27): **29 (45 %)** declaran datos que viven
+    sólo en figuras o tablas-imagen, 9 confirman tablas extraídas como texto y 2 reportan filas
+    partidas por el entrelazado de columnas. Casi la mitad del corpus tiene información que ninguna
+    búsqueda sobre el `.txt` puede encontrar.
+
+    La asimetría que esto corrige: para las ECUACIONES el prompt ya tenía una regla dura —si la
+    fórmula sostiene algo, se levanta del PDF y viaja con su página—, para las tablas una
+    instrucción blanda («mirá las tablas») y para las figuras **nada**. No hay razón para la
+    diferencia: un valor de tabla-imagen que sostiene una afirmación corre el mismo riesgo que una
+    fórmula. Los extractores lo resolvían **bien pero por su cuenta** —uno re-renderizó a 400-500
+    dpi, otro reconstruyó filas partidas verificando por conteo de columnas—, que es exactamente lo
+    que INV-100 dice que no puede depender del criterio de cada subagente.
+
+    Los tres casos NO son el mismo, y por eso son tres bullets y no uno:
+
+    · **tabla como texto** — sale bien; el riesgo es el entrelazado, que parte las filas;
+    · **tabla-imagen** — el `.txt` no la tiene y el grep vacío **no prueba ausencia**;
+    · **figura** — el número existe **sólo como curva**, así que no hay cita textual posible.
+
+    El permiso de leer una figura (decisión del usuario, 2026-08-27) es la misma doctrina de
+    `inferencia`: la bóveda puede sostener algo que ninguna fuente escribe **siempre que declare de
+    dónde salió**. La diferencia con inventar es esa declaración — por eso la lectura viaja con la
+    figura, su página, el `≈` explícito y la marca de que es lectura de gráfico. Y sigue siendo un
+    **permiso, no una obligación**: forzar un número de una curva ilegible es peor que el hueco.
+
+    @inv INV-100"""
+    pdf = _pdf_rel(slug, bibcode)
+    return (
+        "- ⛔ **El `.txt` no es fuente confiable para una TABLA, con la misma regla que una "
+        "ecuación.** En papers viejos las tablas son **imágenes**: el dato del sujeto vive ahí y es "
+        "invisible a cualquier búsqueda de texto, así que un `grep` vacío **no prueba ausencia**. "
+        f"Todo valor de tabla **que sostenga algo** se levanta del PDF (`{pdf}`, que `Read` "
+        "rasteriza) y **anotá la página**.\n"
+        "  Si la tabla **sí** estaba en el `.txt`, se cita por línea como siempre — pero decí "
+        "**cómo verificaste la fila**: el entrelazado de dos columnas parte las filas, y en una "
+        "tabla multi-objeto la fila equivocada es el modo de falla. Conteo de columnas, cierre "
+        "contra el total, lo que hayas usado.\n"
+        "- 📈 **Una FIGURA se puede leer, declarada como tal.** Cuando el número existe **sólo como "
+        "curva** no hay cita textual posible, y hasta ahora eso se tiraba: varias veces la figura "
+        "**es** el resultado. Podés estimarlo visualmente sobre el PDF, y entonces el valor viaja "
+        "con las tres cosas que lo distinguen de inventarlo: la **figura y su página** (`Fig. 3, "
+        "p. 7`) en el localizador, el carácter **aproximado explícito** (`≈`, o el rango) en el "
+        "valor, y la palabra **lectura de gráfico** en el régimen. No es un valor publicado y no "
+        "puede entrar como si lo fuera.\n"
+        "  ⛔ Es un **permiso, no una obligación**: si la figura no permite leer el valor con "
+        "confianza, sigue siendo un **hueco declarado**. Forzar un número de una curva ilegible es "
+        "peor que el hueco.\n")
+
+
 def _pdf_rel(slug: str, bibcode: str) -> str:
     """Ruta repo-root-relative del PDF del par, que es de donde salen las fórmulas con #113."""
     return f"vault/raw/pdfs/{slug}/{bibcode}.pdf"
@@ -238,12 +290,12 @@ Corré estos patrones —cortos a propósito— antes de decidir nada:
 - Si la fuente **no dice nada** del sujeto, eso es un resultado válido y legítimo: decilo.
 - Un `grep` vacío **no prueba ausencia** en papers pre-digitales ni en escaneos: el OCR de ADS
   pierde filas de tabla. Corroborá abriendo la tabla o el PDF antes de afirmar que no está.
-- **Mirá las TABLAS, no sólo el texto.** En papers viejos las tablas son **imágenes**: el dato del
-  sujeto vive ahí y es invisible a cualquier búsqueda de texto.
-- Si es tabla multi-objeto, **verificá la fila correcta** y decí cómo la verificaste.
-{_layout_note(texto)}{_ocr_note(texto)}{_symbols_note(slug, bibcode, texto)}
+{_media_note(slug, bibcode)}{_layout_note(texto)}{_ocr_note(texto)}{_symbols_note(slug, bibcode, texto)}
 ## Cómo anotar cada valor
-- El **nº de línea** del `.txt` (de `grep -n`, nunca de `splitlines()`: hay form feeds).
+- El **localizador**, que depende de dónde vive el dato (va en el campo `linea` del JSON):
+  el **nº de línea** del `.txt` si salió del texto (de `grep -n`, nunca de `splitlines()`: hay
+  form feeds); la **página** del PDF si lo levantaste de una tabla-imagen o de una ecuación; y
+  `Fig. N, p. M` si es lectura de gráfico.
 - El **régimen** en que la fuente lo afirma: muestra, época, corte de datos, instrumento, modelo.
 - El **tiempo verbal y el cuantificador de la fuente, tal cual**. Si dice «was associated», no
   escribas «is associated»; si dice «el 75 % de la muestra», no escribas «la muestra». Un

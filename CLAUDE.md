@@ -694,6 +694,32 @@ verificable, y dónde se decide qué archivo lee cada capa:
 **extraíble**, `is_garbled` mide **correcto**, `symbols_lost` mide **completo**. Los dos casos que
 motivaron el tercero dan garble **0.00** y pasan `is_legible` sin ruido.
 
+⛔ **Y los tres miden el TEXTO, así que ninguno ve el dato que vive en una IMAGEN (#195).** Medido
+sobre las 65 vistas de un tema real: **29 (45 %)** declaran datos que existen sólo en figuras o
+tablas-imagen — casi la mitad del corpus tiene información que ninguna búsqueda sobre el `.txt`
+puede encontrar. La regla dura cubría sólo las **ecuaciones**; para las tablas había una
+instrucción blanda y para las figuras **nada**, y no hay razón para la diferencia: un valor de
+tabla-imagen que sostiene una afirmación corre exactamente el mismo riesgo que una fórmula. Desde
+1.71.0 el prompt (`extraction_prompt._media_note`) las trata a las tres, y son **tres casos
+distintos**:
+
+- **tabla extraída como texto** → se cita por línea como siempre, pero se declara **cómo se
+  verificó la fila**: el entrelazado de columnas la parte, y en una tabla multi-objeto la fila
+  equivocada es el modo de falla.
+- **tabla-imagen** → el `.txt` no la tiene y el grep vacío **no prueba ausencia**. Misma regla que
+  una ecuación: si el dato sostiene algo, se abre el PDF y se cita **página**.
+- **figura** → el número existe **sólo como curva**, así que no hay cita textual posible. Se
+  **permite leerla** (decisión del usuario, 2026-08-27) y el valor viaja con las tres cosas que lo
+  distinguen de inventarlo: la **figura y su página** (`Fig. 3, p. 7`), el **`≈` explícito** y la
+  palabra **lectura de gráfico** en el régimen. Es la doctrina de `inferencia` —la bóveda puede
+  sostener algo que ninguna fuente escribe **siempre que declare de dónde salió**— y es un
+  **permiso, no una obligación**: si la curva no permite leer el valor con confianza, sigue siendo
+  un **hueco declarado**, porque forzar un número de una curva ilegible es peor que el hueco.
+
+Por eso la columna de la vista se llama **`Localizador`** y no `Línea`: lleva `L1234`, `p. 271` o
+`Fig. 3, p. 7` según de dónde salga el dato. (La **clave** del JSON de extracción sigue siendo
+`linea`: ese artefacto vive en `build/`, que es scratch regenerable.)
+
 **Los DOS hashes del paso 6 responden preguntas distintas** — el **ancla** hashea el bloque de la
 **ficha** (se dispara si editás la nota) y el **hash de fuente** hashea el archivo que se **leyó**
 (se dispara si cambia la fuente sin que nadie toque la nota). El segundo apunta al `.txt`, o al
