@@ -18,8 +18,9 @@ sobrevive a un Ctrl-C, a un timeout ni a que dos corridas se pisen.
 
 CÓMO. Reemplaza el cuerpo de cada función por `return None` (una función que no hace nada es la
 mutación más brutal posible: si NINGÚN test se pone rojo, esa función no está probada) y corre la
-suite tier 0. Es caro —una corrida por función— así que NO va en la suite: se corre al cerrar un
-issue, sobre los archivos que ese issue tocó.
+suite tier 0 en **dos etapas** (#187): primero `tests/test_<módulo>.py`, y sólo los sobrevivientes
+pagan la suite completa. Sigue siendo caro —una corrida por función— así que NO va en la suite: se
+corre al cerrar un issue, sobre los archivos que ese issue tocó.
 
     python tools/mutar.py scripts/openalex.py            # un archivo
     python tools/mutar.py --diff                          # lo que cambió vs HEAD
@@ -72,32 +73,86 @@ def _copia_del_repo(destino: Path) -> Path:
     return destino
 
 
-def _suite_verde(cwd: Path) -> bool:
-    r = subprocess.run([sys.executable, "-m", "pytest", "tests/", "-q", "-x", "--no-header"],
+def _suite_verde(cwd: Path, subset: Path | None = None) -> bool:
+    blanco = str(subset) if subset else "tests/"
+    r = subprocess.run([sys.executable, "-m", "pytest", blanco, "-q", "-x", "--no-header"],
                        cwd=cwd, capture_output=True, text=True, timeout=600)
     return r.returncode == 0
 
 
-def mutar_archivo(archivo: Path, copia_raiz: Path, verbose=True) -> list[str]:
+def test_file_for(module: Path) -> Path | None:
+    """`scripts/foo.py` -> `tests/test_foo.py`, or None when there is no 1:1 file.
+
+    Stage 1 of the two-stage sweep needs a file that is *part of the suite stage 2 would run*; that
+    is what makes the split safe (a death there is a death). A wider guess -- every test file that
+    imports the module -- would buy little and cost the property.
+
+    `lib_config` is killed by tests all over the repo and `poblada/` is another tier: for those the
+    stage is skipped, not approximated.
+    """
+    if module.parent.name != "scripts":
+        return None
+    candidato = RAIZ / "tests" / f"test_{module.stem}.py"
+    return candidato if candidato.exists() else None
+
+
+def mutar_archivo(archivo: Path, copia_raiz: Path, verbose=True, two_stage: bool = True) -> list[str]:
     """Funciones que **sobreviven** (ningún test se puso rojo al romperlas).
 
-    `archivo` es del árbol REAL (para leerlo); se muta su gemelo dentro de `copia_raiz`."""
+    `archivo` es del árbol REAL (para leerlo); se muta su gemelo dentro de `copia_raiz`.
+
+    ⏱ **DOS ETAPAS (#187).** El costo dominante del barrido no era correr la suite: era **buscar el
+    test asesino en el lugar equivocado**. `_suite_verde` ya usa `-x`, así que un mutante que muere
+    corta en el primer fallo — pero pytest recorre los archivos en orden alfabético, así que mutar
+    algo de `triage.py` paga casi toda la suite antes de llegar a `tests/test_triage.py`, que es
+    justo el test que lo va a matar. Por eso:
+
+      1. correr **sólo `tests/test_<módulo>.py`** — si muere ahí, listo;
+      2. sólo los **sobrevivientes** pagan la suite completa, para descartar una muerte cruzada
+         desde otro archivo.
+
+    **Medido el 2026-08-28**, con el mismo conjunto de sobrevivientes (`[]`) en las dos ramas:
+
+    | módulo | posición alfabética | 1 etapa | 2 etapas | |
+    |---|---|---|---|---|
+    | `triage.py` (17 fn) | casi al final | **143,6 s** | **8,0 s** | 18× |
+    | `apply_fixes.py` (5 fn) | primero | 4,5 s | 1,7 s | 2,6× |
+
+    Los dos extremos confirman el diagnóstico: la ganancia **es** la distancia entre el test asesino
+    y el arranque del alfabeto. ⚠ No se extrapola a `--todo` desde dos módulos — el issue estimaba
+    ~1 h → ~12 min y eso sigue **sin medir**.
+
+    ⚠ **Qué se conserva y qué no.** El conjunto de sobrevivientes es el mismo: quien sobrevive a la
+    etapa 1 igual paga la suite entera, así que no se pierde ninguna muerte cruzada. La única
+    divergencia posible con el barrido de una etapa va en la dirección **optimista** —un test que
+    pasa dentro de la suite y falla corriendo solo marcaría muerto un mutante que el barrido viejo
+    daba vivo—, y eso sería un defecto de aislamiento del test, que conviene ver."""
     original = archivo.read_text(encoding="utf-8")
     gemelo = copia_raiz / archivo.relative_to(RAIZ)
+    propio = test_file_for(archivo) if two_stage else None
+    subset = Path("tests") / propio.name if propio else None
     sobreviven = []
     for nombre, ini, fin in funciones(archivo):
         lineas = original.split("\n")
         sangria = len(lineas[ini - 1]) - len(lineas[ini - 1].lstrip())
         gemelo.write_text("\n".join(lineas[:ini - 1] + [" " * sangria + "return None"] + lineas[fin:]),
                           encoding="utf-8")
+        etapa = ""
         try:
-            vivo = _suite_verde(copia_raiz)
+            # Etapa 1: el archivo de tests del propio módulo. Una muerte acá es una muerte.
+            vivo = _suite_verde(copia_raiz, subset) if subset else True
+            if vivo and subset:
+                etapa = " (sobrevivió a su propio test; se pagó la suite)"
+            # Etapa 2: sólo los sobrevivientes pagan la suite completa.
+            if vivo:
+                vivo = _suite_verde(copia_raiz)
         except subprocess.TimeoutExpired:
             vivo = True
         if vivo:
             sobreviven.append(nombre)
         if verbose:
-            print(f"  {'SOBREVIVE' if vivo else 'muere    '}  {archivo.name}::{nombre}", flush=True)
+            print(f"  {'SOBREVIVE' if vivo else 'muere    '}  {archivo.name}::{nombre}{etapa}",
+                  flush=True)
     gemelo.write_text(original, encoding="utf-8")   # deja la copia sana para el archivo siguiente
     return sobreviven
 

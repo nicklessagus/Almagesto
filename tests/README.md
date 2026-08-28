@@ -288,12 +288,27 @@ nota no puede cambiar si no cambió lo que afirma; el registro tiene que crecer 
 | la plantilla del bloque de verificación no tiene columna de **grado** | `Score` 0–10 reintroducía el eje que `parcial` había dejado |
 | la plantilla que publica la doc la parsea el mismo código que la chequea | ocho columnas en la doc, posiciones fijas 4 y 5 en el parser → `--cierre` en rojo permanente |
 
-**Cuándo**: 2, 5 y 7 corren solas en tier 0. La 4, al cerrar un issue. **La 1 (mutación) NO se
-corre salvo pedido explícito** (decidido 2026-08-27: ~1 h el barrido completo; ver la cadencia
-en `CLAUDE.md`) — es la única que cuesta (una corrida de suite por función) y la única que
-distingue "el test pasa" de "el test **podría** fallar", y por eso su suspensión está fechada y
-declarada en vez de ser un olvido. ⚠ Hasta esta corrección la misma frase decía las dos cosas:
-«NO se corre salvo pedido» y «al escribir cada función nueva».
+**Cuándo**: 2, 5 y 7 corren solas en tier 0. La 4, al cerrar un issue. **La 1 (barrido de
+mutación) NO se corre salvo pedido explícito** (decidido 2026-08-27; ver la cadencia en
+`CLAUDE.md`) — es la única que cuesta y la única que distingue "el test pasa" de "el test
+**podría** fallar", y por eso su suspensión está fechada y declarada en vez de ser un olvido.
+⚠ Hasta esa corrección la misma frase decía las dos cosas: «NO se corre salvo pedido» y «al
+escribir cada función nueva».
+
+> **El barrido corre en DOS ETAPAS desde #187** (2026-08-28). El costo dominante no era correr la
+> suite: era **buscar el test asesino en el lugar equivocado**. `_suite_verde` ya usaba `-x`, así
+> que un mutante que muere corta en el primer fallo — pero pytest recorre los archivos en orden
+> alfabético, y mutar algo de `triage.py` pagaba casi toda la suite antes de llegar a
+> `tests/test_triage.py`, que es justo el test que lo mata. Ahora: (1) se corre sólo
+> `tests/test_<módulo>.py`; (2) **sólo los sobrevivientes** pagan la suite completa. Una muerte en
+> la etapa 1 es una muerte, así que **el conjunto de sobrevivientes no cambia**; sin archivo 1:1 la
+> etapa se saltea (no se aproxima).
+>
+> Medido el 2026-08-28, mismos sobrevivientes (`[]`) en las dos ramas: `triage.py` (17 funciones,
+> casi al final del alfabeto) **143,6 s → 8,0 s**; `apply_fixes.py` (5 funciones, la primera)
+> 4,5 s → 1,7 s. Los dos extremos confirman el diagnóstico: la ganancia **es** la distancia entre
+> el test asesino y el arranque del alfabeto. ⚠ El `~1 h → ~12 min` que estimaba el issue sobre
+> `--todo` **sigue sin medir**: no se extrapola desde dos módulos.
 
 **Cómo se leen los ratchets** (`tools/mutacion-ratchet.yaml`, `tools/cobertura-ratchet.yaml`): son
 **deuda medida**, no objetivos. El número sólo baja; subirlo hay que justificarlo en el commit. Un
