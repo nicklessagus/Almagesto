@@ -387,6 +387,18 @@ def test_bajar_el_techo_nunca_es_hallazgo(repo: Path):
     assert ti.subidas_de_techo(repo) == []
 
 
+def test_techos_previos_lee_el_ratchet_de_HEAD(repo: Path):
+    """El test de al lado sólo cubría la rama `None`, que un `return None` satisface por
+    construcción: sobrevivía a la mutación y nadie probaba la rama que hace el trabajo.
+
+    Es la mitad positiva —leer el techo COMMITEADO— y es de la que depende el guard de #96: sin
+    ella, «el techo sólo puede bajar» no tiene contra qué comparar."""
+    _git_repo_con_techo(repo, 2)
+    assert ti.techos_previos(repo) == {"sin_marca": 2, "sin_test": 2}
+    _ratchet(repo, 7)                                    # el del árbol NO es el de HEAD
+    assert ti.techos_previos(repo) == {"sin_marca": 2, "sin_test": 2}
+
+
 def test_sin_git_la_subida_no_se_evalua_y_no_se_inventa_un_cero(repo: Path):
     """D-43: un chequeo que no pudo correr se declara, no devuelve «no subió»."""
     _ratchet(repo, 9)

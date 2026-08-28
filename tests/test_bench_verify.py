@@ -412,3 +412,16 @@ def test_la_poblacion_del_benchmark_incluye_las_fichas(toy_vault):
             f"## Resumen\n\nEl período de rotación es de 34 días según [[{bib}]].\n")
     pares = bv.extract_pairs(20)
     assert any(p["note"] == "test_star" for p in pares), "las fichas quedaron fuera de la población"
+
+
+def test_origen_arma_el_localizador_desde_la_CLAVE(toy_vault):
+    """AUD-187 dejó `note`/`line` fuera del examen (revelaban la etiqueta) y los mandó a `key.json`;
+    `_origen` es lo que el reporte usa para volver a nombrar la caída.
+
+    Sin test, romperlo dejaba el reporte de sembradas-que-pasaron señalando `?:L?` sobre pares que
+    sí se pueden ubicar — el reporte sigue saliendo, así que el fallo es mudo."""
+    origen = {"p000": {"note": "tau_ceti", "line": 412}}
+    assert bv._origen(origen, {"id": "p000"}) == "tau_ceti:L412"
+    # sin entrada NO se inventa una: `?` dice que no consta, que es distinto de una nota llamada así
+    assert bv._origen(origen, {"id": "p999"}) == "?:L?"
+    assert bv._origen({}, {"id": "p000"}) == "?:L?"

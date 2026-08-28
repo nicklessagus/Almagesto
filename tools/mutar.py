@@ -148,7 +148,13 @@ def mutar_archivo(archivo: Path, copia_raiz: Path, verbose=True, two_stage: bool
             # Etapa 1: el archivo de tests del propio módulo. Una muerte acá es una muerte.
             vivo = _suite_verde(copia_raiz, subset) if subset else True
             if vivo and subset:
-                etapa = " (sobrevivió a su propio test; se pagó la suite)"
+                # ⚠ El texto dice lo que PASÓ, no lo que la etapa 2 haría: con `escalate=False`
+                # (modo `--dirigida`) la suite NO se paga, y anunciarlo igual es afirmar un trabajo
+                # que no se hizo — sobre el sobreviviente, que es justo donde el operador decide si
+                # creerle. Medido: `stamp_accessed` salía «se pagó la suite» y su test vive en otro
+                # archivo, así que nadie lo había corrido.
+                etapa = (" (sobrevivió a su propio test; se pagó la suite)" if escalate
+                         else " (sobrevivió a su propio test; la suite NO se corrió — `--dirigida`)")
             # Etapa 2: sólo los sobrevivientes pagan la suite completa.
             if vivo and escalate:
                 vivo = _suite_verde(copia_raiz)

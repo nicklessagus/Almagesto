@@ -3644,3 +3644,28 @@ def test_force_no_pisa_la_nota_de_OTRO_sujeto(toy_vault, capsys):
     assert compartida.read_text(encoding="utf-8") == antes
     salida = capsys.readouterr().out
     assert "`--force` NO lo pisa" in salida and "Otra Estrella" in salida
+
+
+def test_stamp_accessed_es_cirugia_de_una_linea(toy_vault):
+    """INV-30 / AUD-170 — `accessed` ES el "Retrieved <fecha>" de la cita, así que tiene que quedar
+    igual al del snapshot de al lado, que es el archivo que `verify-citations` lee.
+
+    Metadata de máquina como `pdf`/`fulltext`: se reescribe SU línea y nada más — la extracción LLM
+    y el resto del frontmatter quedan byte a byte. Y el campo ausente NO se inventa: sin `accessed:`
+    no hay posición que adivinar (mismo criterio que `merge_frontmatter_list`)."""
+    dest = mk_note(cfg.PAPERS, "2006Rasmussen",
+                   {"bibcode": "2006Rasmussen", "tags": ["paper", "web"],
+                    "source_url": "https://x", "accessed": "2020-05-05",
+                    "methods": ["gp"]},
+                   "## Vista — GP\n\nExtracción cara.\n")
+    antes = dest.read_text(encoding="utf-8")
+
+    assert mn.stamp_accessed(dest, "2026-08-28") is True
+    texto = dest.read_text(encoding="utf-8")
+    assert str(read_fm(dest)["accessed"]) == "2026-08-28"   # YAML lo relee como `date`
+    assert read_fm(dest)["methods"] == ["gp"] and "Extracción cara." in texto
+    assert len(texto.split("\n")) == len(antes.split("\n")), "cambió más de una línea"
+    assert mn.stamp_accessed(dest, "2026-08-28") is False, "idempotente"
+
+    sin_campo = mk_note(cfg.PAPERS, "2007Otro", {"bibcode": "2007Otro", "tags": ["paper"]}, "x\n")
+    assert mn.stamp_accessed(sin_campo, "2026-08-28") is False, "no se inventa la posición"

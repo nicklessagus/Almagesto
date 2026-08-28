@@ -1,5 +1,6 @@
 """fetch_web: post-clean determinista, header del snapshot, reuso de fecha, citekeys."""
 import io
+import re
 import sys
 from types import SimpleNamespace
 
@@ -202,8 +203,13 @@ def test_force_re_estampa_el_accessed_de_la_nota(toy_vault, fake_defuddle, monke
     assert run_main(monkeypatch, ARGS) == 0
     nota = toy_vault.PAPERS / "2006RasmussenWilliams.md"
     texto = nota.read_text(encoding="utf-8")
-    nota.write_text(texto.replace(f"accessed: {read_fm(nota)['accessed']}", "accessed: 2020-05-05"),
-                    encoding="utf-8")
+    # ⚠ por LÍNEA, no por `f"accessed: {read_fm(...)}"`: el frontmatter puede escribir la fecha
+    # entrecomillada o como fecha YAML, así que el f-string no matcheaba y la fixture no cambiaba
+    # nada — el test pasaba sin probar nada (visto morir mal una vez; regla de método #3).
+    reemplazado = re.sub(r"(?m)^accessed:.*$", "accessed: '2020-05-05'", texto)
+    assert reemplazado != texto, "la fixture no cambió nada: el test no probaría nada"
+    nota.write_text(reemplazado, encoding="utf-8")
+    assert str(read_fm(nota)["accessed"]) == "2020-05-05"
     assert run_main(monkeypatch, [*ARGS, "--force"]) == 0
     fm = read_fm(nota)
     assert fm["accessed"] != "2020-05-05"
