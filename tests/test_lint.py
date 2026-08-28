@@ -3924,3 +3924,27 @@ def test_vista_desde_el_pdf_no_dispara_ninguno_de_los_dos(toy_vault, capsys):
     # contra el STEM, no contra la frase: el encabezado de cada categoría la contiene aunque el
     # conteo sea (0), así que un assert sobre el texto pasaría con la categoría poblada.
     assert "2020pdf...1..1P" not in out
+
+
+@pytest.mark.parametrize("bloque, tipo", [("- a\n- b", "list"), ("una frase", "str"), ("42", "int")])
+def test_frontmatter_valido_pero_no_mapa_grita(toy_vault, capsys, bloque, tipo):
+    """La otra mitad: `split_fm` devuelve `{}` para honrar su firma, así que sin este detector la
+    nota **evade en silencio** todos los chequeos de su tipo — el modo de falla que `fm_error`
+    existe para cerrar. Bloqueante, y nombrando el tipo real.  @inv INV-40"""
+    (toy_vault.CONCEPTS / "methods").mkdir(parents=True, exist_ok=True)
+    (toy_vault.CONCEPTS / "methods" / "raro.md").write_text(
+        f"---\n{bloque}\n---\nCita a [[2020noexiste]].\n", encoding="utf-8")
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert "NO es un mapa" in out and tipo in out
+
+
+def test_una_nota_no_mapa_no_tumba_el_lint(toy_vault, capsys):
+    """Lo que el hallazgo midió: el lint **moría** en vez de reportar, así que ni siquiera escribía
+    el output — la compuerta de CI se caía en lugar de dar su veredicto."""
+    (toy_vault.CONCEPTS / "methods").mkdir(parents=True, exist_ok=True)
+    (toy_vault.CONCEPTS / "methods" / "raro.md").write_text(
+        "---\n- a\n- b\n---\nCita rota a [[2020noexiste]].\n", encoding="utf-8")
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert "2020noexiste" in out, "el lint murió antes de reportar el wikilink roto"

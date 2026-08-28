@@ -444,9 +444,17 @@ def split_fm(text: str) -> dict:
         return {}
     yaml_block, _body = span
     try:
-        return yaml.safe_load(yaml_block) or {}
+        fm = yaml.safe_load(yaml_block)
     except Exception:
         return {}
+    # ⛔ La firma dice `-> dict` y el docstring promete «dict vacío si no hay o no parsea». Un YAML
+    # **válido pero no-mapa** —`---\n- a\n- b\n---`, `---\nuna frase suelta\n---`, `---\n42\n---`—
+    # devolvía la lista/str/int tal cual y reventaba a los 22 llamadores: medido el 2026-08-28, una
+    # sola nota así tumbaba `lint.main()` entero con `AttributeError` en `normalize_lists`, sin
+    # reporte, sin nombre de archivo y sin escribir ningún output. `isinstance`, no `or {}`: un
+    # escalar truthy no cae en el `or` (el mismo argumento que `as_map` documenta al lado).
+    # La otra mitad —que la nota GRITE en vez de evadir— la pone `lint.fm_error`.
+    return fm if isinstance(fm, dict) else {}
 
 
 def as_map(v) -> dict:

@@ -163,10 +163,16 @@ def fm_error(text: str) -> str | None:
         return "frontmatter sin cierre `---`"
     yaml_block, _body = span
     try:
-        yaml.safe_load(yaml_block)
+        fm = yaml.safe_load(yaml_block)
     except Exception as e:
         first = (str(e).splitlines() or [e.__class__.__name__])[0]
         return f"YAML inválido: {first[:80]}"
+    # YAML **válido pero no-mapa**: `split_fm` lo devuelve como `{}` (honra su firma), así que sin
+    # este renglón la nota evade en silencio todos los chequeos de su tipo — que es exactamente el
+    # modo de falla que esta función existe para cerrar. Medido el 2026-08-28.
+    if fm is not None and not isinstance(fm, dict):
+        return (f"el frontmatter parsea pero NO es un mapa (es {type(fm).__name__}): sin pares "
+                f"`clave: valor` la nota evade todos los chequeos de su tipo")
     return None
 
 

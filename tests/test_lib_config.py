@@ -1381,3 +1381,15 @@ def test_fuente_de_una_vista_es_vocabulario_cerrado():
     assert cfg.load_vistas({"vistas": [{"sujeto": "tau Cet", "tipo": "star"}]})[0].get("fuente") is None
     with pytest.raises(cfg.VistasError, match="fuente"):
         cfg.load_vistas({"vistas": [{"sujeto": "tau Cet", "tipo": "star", "fuente": "pdftotext"}]})
+
+
+@pytest.mark.parametrize("bloque, tipo", [
+    ("- a\n- b", "list"), ("una frase suelta", "str"), ("42", "int"), ("2026-01-01", "date"),
+])
+def test_split_fm_honra_su_firma_con_yaml_valido_no_mapa(bloque, tipo):
+    """`split_fm` firma `-> dict` y promete «dict vacío si no hay o no parsea», pero un YAML
+    **válido y no-mapa** volvía tal cual y reventaba a los 22 llamadores. Medido el 2026-08-28: una
+    sola nota así tumbaba `lint.main()` entero con `AttributeError`, **sin reporte, sin nombre de
+    archivo y sin escribir ningún output** — con un wikilink roto sembrado que nunca se reportó.
+    `isinstance`, no `or {}`: un escalar truthy no cae en el `or`.  @inv INV-36"""
+    assert cfg.split_fm(f"---\n{bloque}\n---\ncuerpo\n") == {}
