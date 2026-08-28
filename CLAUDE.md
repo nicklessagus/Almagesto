@@ -314,6 +314,18 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   bibcode vive bajo varios slugs) y `lente` (las facetas vigentes al leer, que es el diff de lente
   de D-49 **a nivel de lectura**). **Forma dura como `extra_core`** (D-58): el escalar y la lista
   de strings **bloquean**; `vistas: [eps Eridani]` sería la misma conflación con otro nombre.
+  ⛔ **Y `fuente` dice DE QUÉ se construyó (#207): `pdf` | `abstract`.** Un paper sin PDF **no es
+  inextraíble**: ADS (y OpenAlex, y arXiv) devuelven el abstract, y ése puede traer lo que la ficha
+  necesita — medido en `2020BAAA...61B..27U`, cuyo abstract niega la existencia del planeta g de
+  HD 40307 y da un período nuevo para f, con la vista en blanco porque no hay PDF. Lo que no puede
+  pasar es que una lectura de ocho líneas quede **indistinguible** de haber leído el paper: es el
+  falso limpio de D-34 aplicado a la lectura, y encima el abstract es justo donde la fuente afirma
+  **de más** (*generalization bias*). Lo **declara el extractor** —es el único que sabe qué abrió—
+  y el **cosechador lo cruza contra el disco**: `fuente: pdf` sin PDF rechaza la extracción entera,
+  porque adivinar cuál de las dos mitades miente es lo que el campo existe para evitar. Ausente =
+  *no consta* (como `fecha`), y el lint lo reporta como backlog; `fuente: abstract` también, pero
+  ahí el pedido es **conseguir el PDF** — el mismo carril que `pending_source`, visto desde la
+  lectura en vez de desde la adquisición.
   ⛔ **La `fecha` es lo que dice que la lectura OCURRIÓ.** El stub nace con la vista de su sujeto y
   **sin** fecha (la ausencia es *no consta*): así la nota es coherente desde el minuto cero —no
   nace en rojo a mitad de cadena, la lección del `methods`→wikilink— y el lint reporta la **vista

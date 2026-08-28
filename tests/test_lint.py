@@ -3887,3 +3887,40 @@ def test_via_typo_sigue_diciendo_fuera_del_vocabulario(toy_vault, capsys):
     assert lint.main([]) == 1
     out = capsys.readouterr().out
     assert "fuera del vocabulario cerrado" in out and "RETIRADO" not in out
+
+
+def test_vista_sin_fuente_es_backlog(toy_vault, capsys):
+    """#207 — sin el campo, una vista escrita desde ocho líneas de abstract es indistinguible de
+    una escrita leyendo el paper. Backlog y no bloqueante: ausente es *no consta*, y el dato no se
+    inventa, se pide."""
+    mk_note(toy_vault.PAPERS, "2020vfu...1..1V",
+            {"tags": ["paper"], "stars": ["Estrella Test"],
+             "vistas": [{"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-08-28"}]},
+            "## Vista — Estrella Test\n\ntexto\n")
+    _, out = run_lint(capsys)
+    assert "2020vfu...1..1V" in out and "no dice de qué se construyó" in out
+
+
+def test_vista_solo_abstract_pide_el_PDF_y_no_es_un_error(toy_vault, capsys):
+    """La vista es legítima y está declarada; el hallazgo pide **conseguir el PDF**. Mismo carril
+    que `pending_source`, visto desde la lectura en vez de desde la adquisición."""
+    mk_note(toy_vault.PAPERS, "2020abs...1..1A",
+            {"tags": ["paper"], "stars": ["Estrella Test"],
+             "vistas": [{"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-08-28",
+                         "fuente": "abstract"}]},
+            "## Vista — Estrella Test\n\ntexto\n")
+    _, out = run_lint(capsys)
+    assert "SÓLO del abstract: conseguir el PDF" in out
+    assert "no dice de qué se construyó" not in out
+
+
+def test_vista_desde_el_pdf_no_dispara_ninguno_de_los_dos(toy_vault, capsys):
+    mk_note(toy_vault.PAPERS, "2020pdf...1..1P",
+            {"tags": ["paper"], "stars": ["Estrella Test"],
+             "vistas": [{"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-08-28",
+                         "fuente": "pdf"}]},
+            "## Vista — Estrella Test\n\ntexto\n")
+    _, out = run_lint(capsys)
+    # contra el STEM, no contra la frase: el encabezado de cada categoría la contiene aunque el
+    # conteo sea (0), así que un assert sobre el texto pasaría con la categoría poblada.
+    assert "2020pdf...1..1P" not in out

@@ -1371,3 +1371,13 @@ def test_no_vista_normaliza_y_no_muta(toy_vault):
     meta = {"no_vista": [{"sujeto": " s_index ", "motivo": " roll-up "}]}
     assert cfg.load_no_vista(meta, entry="X") == [{"sujeto": "s_index", "motivo": "roll-up"}]
     assert meta["no_vista"][0]["sujeto"] == " s_index "
+
+
+def test_fuente_de_una_vista_es_vocabulario_cerrado():
+    """#207 — opcional (ausente = no consta, como `fecha`) pero cerrada cuando está: un typo la
+    dejaría muda justo para la pregunta que existe para contestar."""
+    ok = cfg.load_vistas({"vistas": [{"sujeto": "tau Cet", "tipo": "star", "fuente": "abstract"}]})
+    assert ok[0]["fuente"] == "abstract"
+    assert cfg.load_vistas({"vistas": [{"sujeto": "tau Cet", "tipo": "star"}]})[0].get("fuente") is None
+    with pytest.raises(cfg.VistasError, match="fuente"):
+        cfg.load_vistas({"vistas": [{"sujeto": "tau Cet", "tipo": "star", "fuente": "pdftotext"}]})

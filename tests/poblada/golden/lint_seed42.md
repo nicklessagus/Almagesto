@@ -170,6 +170,10 @@
 
 ## Vista declarada y sin `fecha`: el stub la sembró y nadie leyó desde ahí (backlog) (0)
 
+## Vista sin `fuente`: no consta si salió del PDF o sólo del abstract (backlog) (0)
+
+## 📄 Vista construida SÓLO del abstract — falta el PDF (backlog) (0)
+
 ## Reclamo sin vista DECLARADO con `no_vista` + motivo (visible, no es deuda) (0)
 
 ## Recorte de lectura sin declarar: hay core sin extraer y el registro no dice por qué (backlog) (0)

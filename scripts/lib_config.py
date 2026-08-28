@@ -823,6 +823,11 @@ def _extra_core_error(entry: str, bibcodes: list, motivo: str) -> str:
 # `vistas[]` are READINGS; `stars` / `thesis_links` / `methods` stay CLAIMS (`make_notes` merges
 # those add-only without reading anything). Only the extraction writes a view — never the retro-link.
 VISTA_TIPOS = ("star", "theme")
+# De QUÉ documento se construyó la vista (#207). Vocabulario cerrado: leyendo el PDF (el caso normal
+# desde #205) o sólo el abstract, que es lo único que queda cuando el PDF no se pudo conseguir.
+# Ausente = **no consta**, igual que `fecha`: no se rellena, porque un `pdf` inventado sería peor
+# que el silencio. Una vista `abstract` es legítima y declarada; lo que el lint pide es el PDF.
+VISTA_FUENTES = ("pdf", "abstract")
 
 
 class VistasError(RuntimeError):
@@ -849,6 +854,12 @@ def load_vistas(meta: dict, *, entry: str = "?") -> list:
     `stars.yaml`/`themes.yaml` already know, and that is accepted so the lint can catch the typo —
     the same trade every other closed vocabulary of this schema makes.
 
+    `fuente` (#207) says WHAT the view was built from: the PDF, or only the abstract when no PDF
+    could be obtained. Optional like `fecha` — absent means *not stated* — but closed when present.
+    Without it a view written from eight lines of abstract is indistinguishable from one written
+    reading the paper, which is D-34's false clean applied to reading; and the abstract is precisely
+    where the source overclaims (generalization bias), so it has to be visible.
+
     Returns fresh dicts (`sujeto`/`tipo` stripped, `lente` listified); never mutates `meta`."""
     v = meta.get("vistas")
     if v is None:
@@ -870,6 +881,13 @@ def load_vistas(meta: dict, *, entry: str = "?") -> list:
             raise VistasError(_vistas_error(
                 entry, [sujeto],
                 f"`tipo: {tipo}` no está en el vocabulario ({' | '.join(VISTA_TIPOS)})"))
+        # `fuente` es OPCIONAL (ausente = no consta) pero, si está, cerrada: un typo la dejaría muda
+        # justo para la pregunta que existe para contestar —¿esta vista salió del paper o de ocho
+        # líneas de abstract?—, que es la distinción que #207 vino a hacer visible.
+        if (fuente := str(x.get("fuente") or "").strip()) and fuente not in VISTA_FUENTES:
+            raise VistasError(_vistas_error(
+                entry, [sujeto],
+                f"`fuente: {fuente}` no está en el vocabulario ({' | '.join(VISTA_FUENTES)})"))
         nueva = dict(x, sujeto=sujeto, tipo=tipo)
         if "lente" in nueva:
             # NOT `as_list`: that one drops a scalar to `[]`, and a `lente: rv` written by hand

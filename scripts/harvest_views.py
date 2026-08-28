@@ -52,6 +52,15 @@ def _safe_links(texto: str) -> str:
     return _APERTURA.sub("[", texto)
 
 
+def pdf_on_disk(bibcode: str) -> bool:
+    """¿Hay un PDF de este bibcode bajo cualquier slug? Verdad de disco, no frontmatter.
+
+    El cruce de #207 tiene que mirar el archivo: el campo `pdf` de la nota puede estar en drift (es
+    justo lo que el WARN `pdf_issues` del lint reporta), y usarlo acá haría que un drift se leyera
+    como «la vista miente»."""
+    return any(cfg.PDFS.glob(f"**/{mn.safe_name(bibcode)}.pdf"))
+
+
 def render_view(sujeto: str, data: dict) -> str:
     """The `## Vista — <sujeto>` section built from one extraction JSON.
 
@@ -228,8 +237,26 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
             n["sin_nota"] += 1
             cfg.print_seguro(f"  ⚠ {bib}: no hay nota en papers/ — corré `make_notes.py {slug}`")
             continue
+        # #207 · de QUÉ se construyó la vista. Lo DECLARA el extractor (es el único que sabe qué
+        # abrió) y acá se CRUZA contra el disco: `fuente: pdf` sin PDF es una contradicción, y
+        # estamparla dejaría una vista de ocho líneas de abstract leyéndose como lectura del paper.
+        # Fuera del vocabulario o incoherente ⇒ se rechaza el JSON entero, no se corrige a mano:
+        # adivinar cuál de las dos mitades miente es exactamente lo que este campo evita.
+        fuente = str(vista.get("fuente") or "").strip()
+        if fuente and fuente not in cfg.VISTA_FUENTES:
+            n["rechazadas"] += 1
+            cfg.print_seguro(f"  ⛔ {archivo.name}: `fuente: {fuente}` fuera del vocabulario "
+                             f"({' | '.join(cfg.VISTA_FUENTES)})")
+            continue
+        if fuente == "pdf" and not pdf_on_disk(bib):
+            n["rechazadas"] += 1
+            cfg.print_seguro(f"  ⛔ {archivo.name}: declara `fuente: pdf` y no hay PDF en "
+                             f"`raw/pdfs/**/{bib}.pdf` — la vista diría que se leyó el paper")
+            continue
         entrada = {"sujeto": sujeto, "tipo": tipo, "fecha": hoy,
                    "txt": str(vista.get("txt") or slug), "lente": list(lente)}
+        if fuente:
+            entrada["fuente"] = fuente
         toco = upsert_view(dest, entrada)
         for campo in ("methods", "thesis_links", "role"):
             valores = [str(x).strip() for x in cfg.as_list(data.get(campo)) if str(x).strip()]

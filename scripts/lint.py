@@ -1025,6 +1025,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     reclamo_sin_vista: list = []       # (stem, sujeto) — lo reclama y nadie lo leyó desde ahí
     reclamo_sin_vista_declarado: list = []   # ídem, con la escotilla `no_vista` y su motivo
     vista_sin_fecha: list = []         # (stem, sujeto) — vista declarada y sin fecha: sin leer
+    vista_sin_fuente: list = []        # (stem, sujeto) — #207: no consta de qué se construyó
+    vista_solo_abstract: list = []     # (stem, sujeto) — #207: se leyó el abstract, falta el PDF
 
     # Los temas DECLARADOS (su `concept`, que es el nombre con el que un paper los nombra en
     # `thesis_links`/`methods`). Una lectura del YAML por corrida, no por nota.
@@ -1447,6 +1449,22 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                         vista_sin_fecha.append(
                             (stem, f"la vista de **{v['sujeto']}** está declarada y sin `fecha`: no "
                                    f"consta que se haya leído desde ahí"))
+                    # #207 · de QUÉ se construyó. Sin el campo, una vista escrita desde ocho líneas
+                    # de abstract es indistinguible de una escrita leyendo el paper — el falso
+                    # limpio de D-34 aplicado a la lectura. Ausente = no consta, así que backlog:
+                    # el dato no se inventa, se pide.
+                    elif not (_f := str(v.get("fuente") or "").strip()):
+                        vista_sin_fuente.append(
+                            (stem, f"la vista de **{v['sujeto']}** no dice de qué se construyó "
+                                   f"(`fuente: pdf|abstract`): una lectura del abstract se lee "
+                                   f"igual que una del paper"))
+                    elif _f == "abstract":
+                        # NO es un error: la vista es legítima y está declarada. El hallazgo pide
+                        # el PDF — mismo carril que `pending_source`, visto desde la lectura.
+                        vista_solo_abstract.append(
+                            (stem, f"la vista de **{v['sujeto']}** se construyó SÓLO del abstract: "
+                                   f"conseguir el PDF para leer el paper (y ojo, el abstract es "
+                                   f"donde la fuente afirma de más)"))
                 for falta in sorted(declaradas - secciones):
                     vistas_vs_cuerpo.append(
                         (stem, f"`vistas[]` declara la lectura de **{falta}** y el cuerpo no tiene "
@@ -2602,6 +2620,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('vistas_vs_cuerpo', '⛔ `vistas[]` ↔ cuerpo: vista declarada sin su sección, o sección sin declarar', SEV_BLOQUEANTE, tuple(vistas_vs_cuerpo)),
         Categoria('reclamo_sin_vista', 'Reclamado por un sujeto y nunca leído desde ahí (backlog: la vista es opcional, el silencio no)', SEV_BACKLOG, tuple(reclamo_sin_vista)),
         Categoria('vista_sin_fecha', 'Vista declarada y sin `fecha`: el stub la sembró y nadie leyó desde ahí (backlog)', SEV_BACKLOG, tuple(vista_sin_fecha)),
+        Categoria('vista_sin_fuente', 'Vista sin `fuente`: no consta si salió del PDF o sólo del abstract (backlog)', SEV_BACKLOG, tuple(vista_sin_fuente)),
+        Categoria('vista_solo_abstract', '📄 Vista construida SÓLO del abstract — falta el PDF (backlog)', SEV_BACKLOG, tuple(vista_solo_abstract)),
         Categoria('reclamo_sin_vista_declarado', 'Reclamo sin vista DECLARADO con `no_vista` + motivo (visible, no es deuda)', SEV_BACKLOG, tuple(reclamo_sin_vista_declarado)),
         Categoria('extraccion_no_declarada', 'Recorte de lectura sin declarar: hay core sin extraer y el registro no dice por qué (backlog)', SEV_BACKLOG, tuple(extraccion_no_declarada)),
         Categoria('papers_table_stale', 'Lista de papers desactualizada: la tabla estampada no refleja el universo (backlog)', SEV_BACKLOG, tuple(papers_table_stale)),

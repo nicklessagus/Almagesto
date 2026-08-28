@@ -204,7 +204,7 @@ Estos patrones sobre el `.txt` te dicen **en qué parte del paper** mirar; el da
 ## Salida
 Escribí el resultado en `{out}` y devolvé el mismo JSON en **un solo bloque** ```json:
 
-{{"bibcode":"{bibcode}","vista":{{"sujeto":"{sujeto}","tipo":"{tipo}","txt":"{slug}"}},
+{{"bibcode":"{bibcode}","vista":{{"sujeto":"{sujeto}","tipo":"{tipo}","txt":"{slug}","fuente":"pdf"}},
  "role":["fundacional"|"aplicacion"|"arbitro"],"methods":[],"thesis_links":[],
  "ground_truth":[{{"que":"","valor":"","linea":"","regimen":"","segunda_mano":null}}],
  "ejes":{{"discovery":"","rv":"","activity":"","planet":"","method":""}},
@@ -214,6 +214,11 @@ Escribí el resultado en `{out}` y devolvé el mismo JSON en **un solo bloque** 
 porque varios extractores corren en paralelo y un nombre genérico se pisa **en silencio**.
 `vista` va tal cual: dice de quién es esta lectura y de qué copia del `.txt` salió. La `fecha` y la
 `lente` no las escribís vos — las estampa el cosechador, que las sabe con certeza.
+⛔ **`fuente` dice DE QUÉ construiste la vista.** `pdf` es el caso normal. Poné **`abstract`** si el
+PDF no está y sólo pudiste leer el `## Abstract` de la nota: la vista igual vale, pero una lectura
+de ocho líneas no puede quedar indistinguible de haber leído el paper —y el abstract es justo donde
+la fuente afirma **de más**—. El cosechador lo cruza contra el disco: declarar `pdf` sin PDF
+**rechaza** la extracción entera.
 """
 
 

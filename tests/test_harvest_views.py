@@ -213,3 +213,57 @@ def test_la_columna_del_localizador_no_se_llama_linea(toy_vault):
     assert "| Qué | Valor | Localizador | Régimen | Segunda mano |" in md
     assert "Línea" not in md
     assert "Fig. 3, p. 7" in md, "el localizador de figura tiene que llegar a la tabla"
+
+
+# ── #207 · la vista declara DE QUÉ se construyó ─────────────────────────────────────────────────
+
+
+def _con_pdf(toy_vault, bib=BIB):
+    (toy_vault.PDFS / "test_star").mkdir(parents=True, exist_ok=True)
+    (toy_vault.PDFS / "test_star" / f"{bib}.pdf").write_bytes(b"%PDF-1.4\n")
+
+
+def test_la_vista_estampa_la_fuente_declarada(toy_vault):
+    """#207 — `fuente` dice si la vista salió del paper o de ocho líneas de abstract. Sin el campo
+    las dos se leen igual, que es el falso limpio de D-34 aplicado a la lectura."""
+    _con_pdf(toy_vault)
+    dest = sembrar(toy_vault, extraccion(vista={"sujeto": "Estrella Test", "tipo": "star",
+                                                "txt": "test_star", "fuente": "pdf"}))
+    hv.harvest("test_star")
+    assert read_fm(dest)["vistas"][0]["fuente"] == "pdf"
+
+
+def test_declarar_pdf_sin_PDF_en_disco_rechaza_la_extraccion(toy_vault):
+    """El cruce contra el disco: `fuente: pdf` sin PDF diría que se leyó el paper. Se rechaza el
+    JSON entero en vez de corregirlo — adivinar cuál de las dos mitades miente es exactamente lo
+    que este campo existe para evitar."""
+    dest = sembrar(toy_vault, extraccion(vista={"sujeto": "Estrella Test", "tipo": "star",
+                                                "txt": "test_star", "fuente": "pdf"}))
+    n = hv.harvest("test_star")
+    assert n["rechazadas"] == 1
+    assert "fuente" not in (read_fm(dest)["vistas"][0] or {}), "estampó una lectura que no ocurrió"
+
+
+def test_una_vista_solo_abstract_se_estampa_aunque_no_haya_PDF(toy_vault):
+    """El caso que motiva el issue: sin PDF la vista igual vale —el abstract de ADS puede traer una
+    existencia negada y un período— con tal de que **diga** de dónde salió."""
+    dest = sembrar(toy_vault, extraccion(vista={"sujeto": "Estrella Test", "tipo": "star",
+                                                "txt": "test_star", "fuente": "abstract"}))
+    hv.harvest("test_star")
+    assert read_fm(dest)["vistas"][0]["fuente"] == "abstract"
+
+
+def test_fuente_fuera_del_vocabulario_rechaza(toy_vault):
+    _con_pdf(toy_vault)
+    sembrar(toy_vault, extraccion(vista={"sujeto": "Estrella Test", "tipo": "star",
+                                         "txt": "test_star", "fuente": "pdftotext"}))
+    assert hv.harvest("test_star")["rechazadas"] == 1
+
+
+def test_pdf_on_disk_mira_el_ARCHIVO_no_el_frontmatter(toy_vault):
+    """El cruce tiene que mirar disco: el campo `pdf` de la nota puede estar en drift —es lo que el
+    WARN `pdf_issues` del lint reporta— y usarlo acá haría que un drift se leyera como «la vista
+    miente»."""
+    assert not hv.pdf_on_disk(BIB)
+    _con_pdf(toy_vault)
+    assert hv.pdf_on_disk(BIB)
