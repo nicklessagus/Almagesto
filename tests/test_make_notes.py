@@ -3255,18 +3255,3 @@ def test_migrar_txt_fields_es_idempotente_y_no_reescribe_lo_limpio(toy_vault):
     assert (toy_vault.PAPERS / "2020ccc...1..1C.md").read_text(encoding="utf-8") == antes
 
 
-def test_el_stub_off_ADS_escribe_el_abstract_que_le_pasan(toy_vault):
-    """#124 — hasta 1.72.0 `write_web_paper_note` no tenía dónde recibirlo, así que TODA nota
-    off-ADS nacía con `_(no disponible)_` aunque OpenAlex/arXiv lo hubieran devuelto. Con #205 el
-    PDF es la única fuente de lectura: sin PDF, el abstract es todo lo que la nota tiene."""
-    mn.write_web_paper_note("2006RasmussenW", slug="gp", concept="gp", title="GPML",
-                            abstract="Gaussian processes for machine learning.")
-    texto = (toy_vault.PAPERS / "2006RasmussenW.md").read_text(encoding="utf-8")
-    assert "## Abstract\nGaussian processes for machine learning." in texto
-
-
-def test_el_stub_off_ADS_sin_abstract_lo_declara_no_disponible(toy_vault):
-    """`_(no disponible)_` y no una sección ausente: el hueco tiene que verse. Es el mismo criterio
-    que la nota ADS, y `classify_offline` (D-49) lee esa sección para re-clasificar."""
-    mn.write_web_paper_note("2006RasmussenX", slug="gp", concept="gp", title="GPML")
-    assert "## Abstract\n_(no disponible)_" in (toy_vault.PAPERS / "2006RasmussenX.md").read_text(encoding="utf-8")

@@ -910,28 +910,3 @@ def test_reporte_ya_no_es_un_via_valido(monkeypatch):
     assert triage.VIA_FUENTE == ("usuario", "descubrimiento")
 
 
-def test_accept_source_arrastra_el_abstract(monkeypatch, capsys):
-    """#124 — el abstract ya se pagó: OpenAlex lo sirve como índice invertido y `openalex._abstract`
-    lo rearma, pero el snippet no lo emitía y la nota nacía con `_(no disponible)_`. Con #205 el PDF
-    es la única fuente de lectura, así que en un `pending: paywall` el abstract es **todo** lo que la
-    nota tiene — y puede alcanzar (medido: el de `2020BAAA...61B..27U` niega la existencia de un
-    planeta y da un período)."""
-    import discover
-    w = _work()
-    w["abstract_inverted_index"] = {"Blind": [0], "source": [1], "separation": [2]}
-    monkeypatch.setattr(discover, "_json", lambda url: w)
-    monkeypatch.setattr(discover, "resolve_pdf", lambda doi, title=None: (None, "sin copia"))
-    triage.accept_source("ica", ["10.1/x"], "usuario", "canon")
-    out = capsys.readouterr().out
-    assert "abstract: 'Blind source separation'" in out
-    assert "pending: paywall" in out, "el caso donde el abstract es lo único que queda"
-
-
-def test_accept_source_sin_abstract_no_emite_el_campo(monkeypatch, capsys):
-    """Ausente ≠ vacío: una clave `abstract: ''` en el YAML se leería como «el paper no tiene
-    resumen», que es distinto de «el catálogo no lo dio»."""
-    import discover
-    monkeypatch.setattr(discover, "_json", lambda url: _work())
-    monkeypatch.setattr(discover, "resolve_pdf", lambda doi, title=None: (None, "x"))
-    triage.accept_source("ica", ["10.1/x"], "usuario", "canon")
-    assert "abstract:" not in capsys.readouterr().out

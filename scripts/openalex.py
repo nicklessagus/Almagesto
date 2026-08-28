@@ -35,15 +35,8 @@ import lib_config as cfg
 
 API = "https://api.openalex.org/works"
 def _mailto() -> str:
-    """Email para el 'polite pool' de OpenAlex. Se toma de `git config user.email` —NO se hardcodea:
-    es per-instancia— igual que `check_retractions._mailto`. Antes había una dirección de ejemplo
-    fija con un comentario que prometía un `--mailto` inexistente: toda request salía con un mail
-    falso, que es lo contrario de la cortesía que el pool pide."""
-    try:
-        r = subprocess.run(["git", "config", "user.email"], capture_output=True, text=True, timeout=5)
-        return r.stdout.strip() or ""
-    except Exception:
-        return ""
+    """Contact email for OpenAlex's polite pool — opt-in, see `lib_config.get_mailto`."""
+    return cfg.get_mailto()
 
 
 MAILTO = ""                        # se resuelve por llamada; "" = pool público

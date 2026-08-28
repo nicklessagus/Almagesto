@@ -360,3 +360,17 @@ def test_no_pisa_el_abstract_del_catalogo(toy_vault):
     texto = dest.read_text(encoding="utf-8")
     assert "Verbatim de ADS." in texto
     assert "Transcripción del modelo." not in texto, "pisó la capa auditable"
+
+
+def test_el_abstract_se_rellena_tambien_sobre_el_placeholder(toy_vault):
+    """El abstract tiene DOS fuentes: **ADS** o **el PDF** (decidido con el usuario, 2026-08-28).
+    Cuando ADS no lo devuelve, `make_notes` deja `_(no disponible)_` — y si el guard sólo mirara la
+    ausencia de la sección, ese placeholder sería **permanente**: vería el `## Abstract`, lo daría
+    por lleno y no lo tocaría nunca."""
+    _con_pdf(toy_vault)
+    dest = sembrar(toy_vault, extraccion(abstract="Del PDF."),
+                   body="## Abstract\n_(no disponible)_\n\n" + mn.vista_block("Estrella Test", theme=False))
+    hv.harvest("test_star")
+    texto = dest.read_text(encoding="utf-8")
+    assert "## Abstract\nDel PDF." in texto
+    assert "_(no disponible)_" not in texto

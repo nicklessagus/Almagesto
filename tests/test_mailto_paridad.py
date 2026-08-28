@@ -1,12 +1,19 @@
 """Los dos `_mailto` (Crossref y OpenAlex) son gemelos: se prueban UNA VEZ, parametrizado.
 
 Red #2 del CLAUDE.md: *si N módulos prometen la misma forma, se prueba una vez parametrizada, no con
-prosa en N docstrings*. Los dos leen `git config user.email` para el "polite pool" de su API, los dos
-prometen no hardcodear la dirección (es per-instancia) y los dos degradan al pool público si no hay.
+prosa en N docstrings*. Los dos leen el mismo lector opt-in (`lib_config.get_mailto`) para el "polite
+pool" de su API, los dos prometen no hardcodear la dirección (es per-instancia) y los dos degradan al
+pool público si no hay.
+
+⛔ **Desde 2026-08-28 el mailto NO sale de `git config user.email`.** Esa dirección es dato personal
+del operador, entregado a git para autoría — no para egress a tres servicios de terceros en cada
+corrida, sin opt-in y sin forma de apagarlo. Medido en vivo ese día: doce llamadas lo llevaron,
+embebido en la URL y por lo tanto en cualquier mensaje de `raise_for_status` y en cualquier log de
+proxy. Ahora se declara una vez, en un archivo gitignored, exactamente como el token de ADS.
 
 Salieron de la pasada `/auditar` del 2026-08-24: eran 2 de las 10 funciones que sobrevivían al gate
-de mutación, y las únicas de esas 10 que no necesitan red —leen un subprocess local— o sea las más
-baratas de bajar del techo (AUD-35).
+de mutación, y las únicas de esas 10 que no necesitan red, o sea las más baratas de bajar del techo
+(AUD-35).
 
 ⚠ La única diferencia entre los dos es el **valor de ausencia**, y es deliberada: Crossref devuelve
 `None` (el llamador arma el User-Agent con o sin mailto) y OpenAlex `""` (va como query param). Por
@@ -33,30 +40,41 @@ GEMELOS = [
 
 
 @pytest.mark.parametrize("mod, vacio", GEMELOS)
-def test_mailto_toma_el_email_de_git_config(mod, vacio, monkeypatch):
-    """  @inv INV-66"""
-    class R:
-        stdout = "  alguien@example.org \n"
-    monkeypatch.setattr(mod.subprocess, "run", lambda *a, **k: R())
-    assert mod._mailto() == "alguien@example.org", "se usa el email de git config, sin espacios"
+def test_mailto_sale_del_opt_in_declarado(mod, vacio, monkeypatch, toy_vault):
+    """  @inv INV-67"""
+    monkeypatch.setenv("ALMAGESTO_MAILTO", "  alguien@example.org \n")
+    assert mod._mailto() == "alguien@example.org", "se usa el opt-in declarado, sin espacios"
+    monkeypatch.delenv("ALMAGESTO_MAILTO")
+    toy_vault.MAILTO_FILE.parent.mkdir(parents=True, exist_ok=True)
+    toy_vault.MAILTO_FILE.write_text("otro@example.org\n", encoding="utf-8")
+    assert mod._mailto() == "otro@example.org", "el archivo de config es la otra mitad del opt-in"
 
 
 @pytest.mark.parametrize("mod, vacio", GEMELOS)
-def test_mailto_sin_email_configurado_cae_al_pool_publico(mod, vacio, monkeypatch):
-    class R:
-        stdout = "\n"
-    monkeypatch.setattr(mod.subprocess, "run", lambda *a, **k: R())
+def test_sin_opt_in_cae_al_pool_publico(mod, vacio, monkeypatch, toy_vault):
+    """Sin declaración explícita **no sale ninguna dirección**. Las tres APIs funcionan igual; el
+    mailto sólo compra un tier de rate-limit más rápido."""
+    monkeypatch.delenv("ALMAGESTO_MAILTO", raising=False)
     assert mod._mailto() == vacio
 
 
 @pytest.mark.parametrize("mod, vacio", GEMELOS)
-def test_mailto_no_propaga_el_fallo_de_git(mod, vacio, monkeypatch):
-    """Sin `git` en el PATH (o con el repo roto) la consulta a la API sigue: el mailto es cortesía,
-    no un requisito. Que esto lance mataría una pasada entera por un detalle de entorno."""
-    def explota(*a, **k):
-        raise FileNotFoundError("git")
-    monkeypatch.setattr(mod.subprocess, "run", explota)
-    assert mod._mailto() == vacio
+def test_el_email_de_git_NO_se_usa(mod, vacio, monkeypatch, toy_vault):
+    """La regresión que este cambio cierra: aunque `git config user.email` esté configurado —el caso
+    normal en cualquier repo— **no** viaja a OpenAlex, Crossref ni Unpaywall."""
+    monkeypatch.delenv("ALMAGESTO_MAILTO", raising=False)
+    llamadas = []
+
+    class R:
+        stdout = "personal@midominio.org\n"
+
+    def espia(*a, **k):
+        llamadas.append(a)
+        return R()
+
+    monkeypatch.setattr(mod.subprocess, "run", espia)
+    assert mod._mailto() == vacio, "el email de git se filtró al polite pool"
+    assert llamadas == [], "ni siquiera se le pregunta a git por el email"
 
 
 @pytest.mark.parametrize("mod, vacio", GEMELOS)

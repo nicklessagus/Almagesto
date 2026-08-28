@@ -37,6 +37,7 @@ STARS_YAML = CONFIG / "stars.yaml"
 THEMES_YAML = CONFIG / "themes.yaml"
 OBJECTIVE_YAML = CONFIG / "objective.yaml"
 ADS_KEY_FILE = CONFIG / "ads_dev_key"
+MAILTO_FILE = CONFIG / "mailto"
 # Registro de ingesta por sujeto (#51/#64): VERSIONADO (se commitea) porque guarda las dos cosas
 # que `build/` no puede guardar. (a) `decisiones`: el juicio del triage —qué candidato del chaining
 # se descartó y POR QUÉ—, que no es regenerable (un ads.json sí: se le vuelve a pedir a ADS; tu
@@ -231,6 +232,28 @@ QUERIES = WIKI / "queries"
 MATRICES = WIKI / "matrices"
 INDEX = WIKI / "index.md"
 LOG = WIKI / "log.md"
+
+
+def get_mailto() -> str:
+    """Contact email for the polite pools of OpenAlex, Crossref and Unpaywall — **opt-in**.
+
+    Reads `ALMAGESTO_MAILTO` or `vault/config/mailto`, and returns `""` when neither is set. The
+    three services work without it; the address only buys a faster rate-limit tier.
+
+    ⛔ It is NOT taken from `git config user.email` any more. That address is the operator's personal
+    data, offered to git for authorship — not for egress to three third parties on every run, with
+    no opt-in and no way to turn it off. Measured on 2026-08-28: twelve live calls carried it,
+    embedded in the URL and therefore in any `raise_for_status` message and any proxy log. Sending
+    a personal identifier is a decision that belongs to whoever owns the address, so it is declared
+    once, in a gitignored file, exactly like the ADS token.
+    """
+    #  @inv INV-67
+    v = os.environ.get("ALMAGESTO_MAILTO")
+    if v and v.strip():
+        return v.strip()
+    if MAILTO_FILE.exists():
+        return MAILTO_FILE.read_text(encoding="utf-8").strip()
+    return ""
 
 
 def get_ads_token() -> str:

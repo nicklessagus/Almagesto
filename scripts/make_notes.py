@@ -2335,7 +2335,7 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
                          accessed: str | None = None, pending: str | None = None,
                          pending_motivo: str | None = None,
                          unidad_cita: str | None = None, alcance: str | None = None,
-                         abstract: str | None = None, force: bool = False) -> bool:
+                         force: bool = False) -> bool:
     """Stub de nota de paper para una fuente **off-ADS** (web o PDF sin bibcode ADS) — modo off-ADS de
     ingest-theme. Análogo a write_paper_notes pero **sin ads.json**: la metadata la provee quien llama
     (fetch_web.py, ingest_theme.py o el usuario). `bibcode` = clave sintética AAAA+Autor; `arxiv_id`
@@ -2354,13 +2354,6 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
     `paywall` (sin copia libre), `scan` (escaneo sin capa de texto) o `unextractable` (mojibake) —
     y queda DERIVADA al usuario: se estampa `pending_source` en el frontmatter (el lint lo lista
     como precondición) y `url`/`doi` quedan como puntero conocido, sin snapshot (`accessed` null).
-
-    `abstract` (#124): el resumen que el catálogo devolvió. OpenAlex lo sirve como índice invertido
-    y arXiv en el `summary`, así que en el carril off-ADS **existe** — y hasta 1.72.0 se tiraba: la
-    nota nacía con `_(no disponible)_` habiendo tenido el texto en la mano. Importa más desde #205,
-    porque el PDF es la única fuente de lectura: sin PDF, el abstract es **todo** lo que la nota
-    tiene, y puede alcanzar (medido: el de `2020BAAA...61B..27U` niega la existencia de un planeta
-    y da un período). Va **verbatim**, que es lo que lo hace la capa auditable de la nota.
 
     Idempotente: NO pisa una nota existente salvo force. Devuelve True si escribió. Mismo template
     que las notas ADS."""
@@ -2464,9 +2457,6 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
 > `{txt_ptr}` (`source_url` + `accessed` en el frontmatter), verificable por `verify-citations`.
 > El frontmatter es máquina-legible como en cualquier nota de paper.
 {pend_line}
-## Abstract
-{(abstract or '').strip() or '_(no disponible)_'}
-
 {vista_block(concept or citekey, theme=True)}"""
     cfg.write_text_atomic(dest, body)
     cfg.print_seguro(f"  papers: {dest.name} escrito (stub off-ADS)")

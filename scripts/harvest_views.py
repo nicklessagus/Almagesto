@@ -52,6 +52,9 @@ def _safe_links(texto: str) -> str:
     return _APERTURA.sub("[", texto)
 
 
+PLACEHOLDER_ABSTRACT = "_(no disponible)_"
+
+
 def pdf_on_disk(bibcode: str) -> bool:
     """¿Hay un PDF de este bibcode bajo cualquier slug? Verdad de disco, no frontmatter.
 
@@ -137,13 +140,15 @@ def stamp_reading_aids(dest: Path, data: dict) -> bool:
     fm = cfg.split_fm(texto_nota)
     largo = str(fm.get("unidad_cita") or "").strip() not in ("", "linea")
     piezas = []
-    # `## Abstract` verbatim SÓLO si la nota no lo tiene. El del catálogo es copia de máquina —la
-    # capa auditable del cuerpo— y no se pisa con una transcripción del modelo. Pero una nota
-    # off-ADS creada antes de #124 no tiene la sección **en absoluto** (medido: 32 de 201 en una
-    # bóveda real, 31 de ellas con el PDF en disco), y sin este renglón no la recibiría nunca:
-    # `write_web_paper_note` sólo la escribe al CREAR. El extractor ya está leyendo el PDF, así que
-    # el texto está a mano y no hace falta ninguna red.
-    if cfg.section_start(texto_nota, "## Abstract") < 0:
+    # `## Abstract` verbatim: el abstract tiene DOS fuentes y nada más (decidido con el usuario,
+    # 2026-08-28) — **ADS**, que lo estampa `make_notes` como copia de máquina, o **el PDF**, vía el
+    # extractor. No se pisa un abstract de catálogo con una transcripción del modelo.
+    # Se rellena en dos casos: la sección **falta** (nota off-ADS, que no tiene catálogo del que
+    # copiar) o está con el **placeholder** `_(no disponible)_` (ADS no lo devolvió). Sin el segundo
+    # caso el placeholder sería permanente, porque el guard vería la sección y no la tocaría nunca.
+    _ini = cfg.section_start(texto_nota, "## Abstract")
+    _vacio = _ini >= 0 and PLACEHOLDER_ABSTRACT in texto_nota[_ini:_ini + 200]
+    if _ini < 0 or _vacio:
         piezas.append(("## Abstract", data.get("abstract")))
     piezas.append(("## Abstract (es)", data.get("abstract_es")))
     if not largo:

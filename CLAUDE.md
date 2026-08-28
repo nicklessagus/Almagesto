@@ -1618,7 +1618,15 @@ recordatorio general: antes de creer un gate, confirmá **sobre qué corrió**.
 
 ## Token / secretos
 El token ADS va en `vault/config/ads_dev_key` (**gitignored** — nunca se commitea) o en la variable de
-entorno `ADS_DEV_KEY`. Token gratis en <https://ui.adsabs.harvard.edu/user/settings/token>.
+entorno `ADS_DEV_KEY`.
+⛔ **El `mailto` del polite pool es OPT-IN y no sale de `git config user.email`.** OpenAlex, Crossref
+y Unpaywall dan un tier de rate-limit más rápido a quien declara un email de contacto. Se declara en
+`vault/config/mailto` (gitignored) o en `ALMAGESTO_MAILTO`; **sin declararlo no sale ninguna
+dirección** y las tres APIs funcionan igual, sólo que en el pool público. Hasta 1.73.0 se tomaba el
+email de git —dato personal entregado para autoría, no para egress a tres terceros en cada corrida,
+sin opt-in y sin forma de apagarlo—: medido en vivo el 2026-08-28, doce llamadas lo llevaron
+embebido en la URL, y por lo tanto en cualquier mensaje de `raise_for_status` y en cualquier log de
+proxy intermedio. Token gratis en <https://ui.adsabs.harvard.edu/user/settings/token>.
 `build/` y `outputs/` gitignored. PDFs por git-lfs (`vault/raw/pdfs/**/*.pdf`). El resto de
 `vault/config/` **sí se commitea**, incluido `registro/<slug>.yaml` (es el punto: el juicio de
 curación y el registro de búsqueda tienen que viajar).

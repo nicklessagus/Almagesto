@@ -76,14 +76,8 @@ class NothingToCheck(RuntimeError):
 
 
 def _mailto() -> str | None:
-    """Email para el 'polite pool' de Crossref (mejor servicio). Se toma de git config —NO se
-    hardcodea en el template (es per-instancia)—; si no hay, se consulta sin mailto (pool público)."""
-    try:
-        r = subprocess.run(["git", "config", "user.email"], capture_output=True, text=True, timeout=5)
-        email = r.stdout.strip()
-        return email or None
-    except Exception:
-        return None
+    """Contact email for Crossref's polite pool — opt-in, see `lib_config.get_mailto`."""
+    return cfg.get_mailto() or None
 
 
 def _ua() -> dict:
