@@ -505,6 +505,20 @@ línea.
   en el radio [[...]]") y el radio abre con su "Para qué" apuntando de vuelta al hub. Un radio es una
   nota de concepto normal (mismo frontmatter y estándar de autosuficiencia); "hub/radio" es sólo la
   metáfora organizativa (rueda: centro y rayos).
+  ⛔ **El ALCANCE de un tema es su `query` + su `facet`** (#127). *«Cuando no cabe en una nota»* es
+  editorial y no se puede chequear; lo que de hecho decide la partición es que cada tema necesite
+  **su propia query y su propia faceta**, o sea que **la terminología no se solape** — si se solapa,
+  la misma query trae las dos cosas y no hay nada que partir. Un radio es entonces un **tema propio**
+  (slug, query, faceta, registro y corpus propios) cuya nota apunta de vuelta al hub.
+  Medido en `ica`: *noisy ICA* es radio porque su vocabulario (*gaussian moments, quasi-whitening,
+  HeteroPCA*) no lo trae una query de «independent component»; *PCA* queda **dentro** del hub
+  —es el baseline contra el que se mide ICA— pero *PCA heterocedástico* se fue al radio. O sea que
+  «PCA» está partido **por régimen**, que es el mismo eje que separa radio de hub.
+  ⚠ **Queda abierto** si conviene un criterio **mecánico** encima: el solapamiento de bibcodes entre
+  hub y radio es computable offline desde `busquedas[].bibcodes` del registro (D-28) y contesta
+  *«¿partí un tema, o re-consulté el mismo con otro nombre?»*. Sería **alarma, no regla** —reporta,
+  nunca decide, como `find-contradictions` y el diff de lente—: solapamiento alto dice que no se
+  partió nada, ~0 que la partición fue real, y el medio es editorial y ningún número lo resuelve.
 - **concepts/hypotheses/**: `name`, `status` (**vocabulario CERRADO**, D-37 —
   `abierta | sostenida | disputada | refutada`—: el lint bloquea lo que no esté en la lista, porque
   un consumidor lee ese campo para decidir si se apoya en la hipótesis y la prosa libre lo deja
