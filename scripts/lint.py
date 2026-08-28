@@ -183,8 +183,8 @@ def fm_error(text: str) -> str | None:
     return None
 
 
-VERIF_HEAD_RE = re.compile(r"^##\s+Verificaci[oó]n de citas\b(.*)$", re.M)
-DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+# AUD-136: la regla de la fecha de verificación vive UNA sola vez, en `lib_config`.
+VERIF_HEAD_RE = cfg.VERIF_HEAD_RE
 
 
 def verify_block(text: str) -> tuple[bool, str | None]:
@@ -197,11 +197,10 @@ def verify_block(text: str) -> tuple[bool, str | None]:
     **máxima**, no la del primero: quedarse con el primero dejaría la nota stale para siempre por
     más que se re-verifique."""
     # @inv INV-31
-    heads = VERIF_HEAD_RE.findall(text)
-    if not heads:
-        return False, None
-    dates = [m.group(0) for m in (DATE_RE.search(h) for h in heads) if m]
-    return True, max(dates) if dates else None
+    # AUD-136: la regla vive UNA sola vez, en `lib_config` — `make_notes.estado_line` la
+    # reimplementaba tomando el PRIMER bloque, así que la cabecera de la nota y el veredicto del
+    # lint sobre esa misma nota podían nombrar fechas distintas.
+    return cfg.verification_date(text)
 
 
 def git_out(*args: str) -> str | None:

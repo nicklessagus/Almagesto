@@ -84,15 +84,15 @@ def test_registro_sale_del_contrato(repo: Path):
     assert reg["INV-90"]["area"].startswith("B.")
 
 
-def test_registro_real_cubre_los_139():
-    """Contra el contrato REAL del repo: el parser tiene que leer los 139 invariantes vivos. Es la
+def test_registro_real_cubre_los_141():
+    """Contra el contrato REAL del repo: el parser tiene que leer los 141 invariantes vivos. Es la
     prueba de que la forma de la tabla que el parser asume es la que el documento tiene.
 
     El número es un **canario deliberado**: agregar una fila al contrato tiene que romper acá, para
     que nadie sume un invariante sin pasar por el ratchet de trazabilidad."""
     reg = ti.parse_contrato(ti.CONTRATO.read_text(encoding="utf-8"))
-    assert len(reg) == 139
-    assert "INV-01" in reg and "INV-139" in reg
+    assert len(reg) == 141
+    assert "INV-01" in reg and "INV-141" in reg
 
 
 # ── 2. la marca ──────────────────────────────────────────────────────────────────────────────────

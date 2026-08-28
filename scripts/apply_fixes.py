@@ -35,6 +35,9 @@ import textwrap
 from dataclasses import dataclass, field
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import lib_config as cfg  # noqa: E402
+
 MERGED = "_fusionados"
 """Bibcode reserved for hand-merged fixes: they win, and the originals they replace are skipped."""
 
@@ -56,6 +59,25 @@ class Result:
 
 def normalise(s: str) -> str:
     return re.sub(r"\s+", " ", str(s)).strip()
+
+
+QUOTE_RE = re.compile(r"^(\s*(?:>\s?)+)")
+
+
+def quote_prefix(line: str) -> str:
+    """The blockquote marker(s) a line opens with (`"> "`, `"> > "`), or `""`.
+
+    AUD-141 — `lib_blocks.split_blocks` hands the corrector the block **without** its markers, so
+    the `viejo` it sends back has none either, while the file lines still carry them. Matching the
+    raw lines meant a blockquote could never be located: the fix always landed in `failed`, and
+    since `failed` aborts the whole run, ONE quoted claim blocked all seventy-five corrections."""
+    m = QUOTE_RE.match(line)
+    return m.group(1) if m else ""
+
+
+def _bare(line: str) -> str:
+    """The line's text without its blockquote markers — what the corrector actually saw."""
+    return line[len(quote_prefix(line)):]
 
 
 def load_fixes(fix_dir: Path) -> tuple[list, list]:
@@ -84,7 +106,7 @@ def find_block(lines: list, old: str) -> tuple | None:
             continue
         acc = []
         for j in range(i, min(i + LOOKAHEAD, len(lines))):
-            s = lines[j].strip()
+            s = _bare(lines[j]).strip()        # AUD-141: sin los `>` del blockquote
             if not s:
                 break
             acc.append(s)
@@ -97,13 +119,24 @@ def find_block(lines: list, old: str) -> tuple | None:
 
 
 def rewrap(new: str, first_line: str) -> list:
-    """Re-wrap keeping the block's indentation: a list item's continuations stay indented."""
-    indent = re.match(r"\s*", first_line).group(0)
-    stripped = first_line.lstrip()
+    """Re-wrap keeping the block's indentation: a list item's continuations stay indented.
+
+    ⛔ AUD-141 — **a table row is never wrapped.** Wrapping one at column 100 splits it across
+    several lines and the table stops being a table: the `## Verificación de citas` block, whose
+    rows carry the anchors, would be destroyed by the very step that exists to keep it honest. A
+    row applies as ONE line, however long. Blockquotes keep their `>` markers, which the matcher
+    strips to compare and this puts back."""
+    quote = quote_prefix(first_line)
+    bare = _bare(first_line)
+    indent = re.match(r"\s*", bare).group(0)
+    stripped = bare.lstrip()
+    if stripped.startswith("|"):
+        return [quote + indent + normalise(new)]        # una fila de tabla es UNA línea
     bullet = bool(re.match(r"([-*+]|\d+\.)\s", stripped))
     cont = indent + ("  " if bullet else "")
-    return textwrap.wrap(normalise(new), width=WIDTH, initial_indent=indent,
-                         subsequent_indent=cont, break_long_words=False, break_on_hyphens=False)
+    envuelto = textwrap.wrap(normalise(new), width=WIDTH - len(quote), initial_indent=indent,
+                             subsequent_indent=cont, break_long_words=False, break_on_hyphens=False)
+    return [quote + ln for ln in envuelto] if quote else envuelto
 
 
 def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
@@ -154,7 +187,11 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
         res.applied = 0
         return res
     if write:
-        note.write_text("\n".join(lines), encoding="utf-8")
+        # AUD-140 — `note.write_text` escribía en `vault/` sin pasar por el único writer del repo:
+        # sin tmp+rename un corte deja la nota a medias (INV-90, medido con `ulimit -f`: 16.071 B
+        # → 8.192 B sobre una nota con extracción LLM), y la fixture `sin_tocar_la_boveda_real`
+        # —que intercepta a `lib_config`— no lo veía pasar.
+        cfg.write_text_atomic(note, "\n".join(lines))
     return res
 
 

@@ -282,3 +282,37 @@ def test_la_copia_del_repo_arranca_con_baseline_verde():
             "lleva (`.git`, `build/`, `vault/` con contenido).")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+# ── el ratchet PEDIDO que no puede correr (AUD-138) ──────────────────────────
+
+def _args_main(monkeypatch, argv):
+    monkeypatch.setattr(sys, "argv", ["mutar.py", *argv])
+    return mutar.main()
+
+
+def test_ratchet_sin_archivo_no_sale_verde(repo_con_tests: Path, monkeypatch, capsys):
+    """AUD-138 / D-43 — `if args.ratchet and RATCHET.exists()` salteaba el bloque entero y `main`
+    devolvía **0 con sobrevivientes**: pedir el gate y no tenerlo se leía igual que pasarlo.
+
+    Es el cero inventado que el lint reporta como *no evaluado*, en la herramienta cuyo trabajo es
+    auditar a los tests."""
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    monkeypatch.setattr(mutar, "RATCHET", repo_con_tests / "no-existe.yaml")
+    monkeypatch.setattr(mutar, "mutar_archivo", lambda *a, **k: ["viejo.py::f"])
+    monkeypatch.setattr(mutar, "_copia_del_repo", lambda d: repo_con_tests)
+    assert _args_main(monkeypatch, ["scripts/viejo.py", "--ratchet"]) == 2
+    assert "no evaluado" in capsys.readouterr().out
+
+
+def test_ratchet_sin_techo_declarado_no_sale_verde(repo_con_tests: Path, monkeypatch, capsys):
+    """Un `techo` ausente caía al default `0`: cualquier sobreviviente pasaba a rojo, y un YAML
+    vacío se leía como un techo deliberado. No declarar no es declarar cero."""
+    ratchet = repo_con_tests / "ratchet.yaml"
+    ratchet.write_text("medido_en: '2026-01-01'\n", encoding="utf-8")
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    monkeypatch.setattr(mutar, "RATCHET", ratchet)
+    monkeypatch.setattr(mutar, "mutar_archivo", lambda *a, **k: [])
+    monkeypatch.setattr(mutar, "_copia_del_repo", lambda d: repo_con_tests)
+    assert _args_main(monkeypatch, ["scripts/viejo.py", "--ratchet"]) == 2
+    assert "no declara `techo`" in capsys.readouterr().out

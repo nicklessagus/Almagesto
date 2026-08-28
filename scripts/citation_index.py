@@ -198,8 +198,15 @@ def main(argv=()) -> int:
     cobertura = idx.get("cobertura") or {}
     cfg.print_seguro(f"→ {destino}")
     if cobertura:
-        cfg.print_seguro(f"cobertura: {cobertura.get('con_refs', '?')}/{cobertura.get('total', '?')} "
-                         f"papers con al menos una referencia leída")
+        # AUD-132 — leía `con_refs`/`total`, claves que `build` NUNCA escribe (`con_referencias`
+        # y `n_core`), así que la cobertura salía SIEMPRE `?/?`. El módulo que existe para declarar
+        # su techo era el único que no lo publicaba. Se lee del mismo lugar que se escribe.
+        cfg.print_seguro(
+            f"cobertura: {cobertura.get('con_referencias', '?')}/{cobertura.get('n_core', '?')} "
+            f"papers con al menos una referencia leída"
+            + (f"; {len(cobertura.get('ciegos') or [])} sin ninguna" if cobertura.get("ciegos") else "")
+            + (f"; {len(cobertura.get('sin_clave') or [])} sin clave consultable"
+               if cobertura.get("sin_clave") else ""))
     return 0
 
 

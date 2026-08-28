@@ -5,7 +5,7 @@ import re
 import pytest
 
 import lib_config as cfg
-from conftest import write_yaml
+from conftest import mk_note, write_yaml
 
 
 # ── token ADS ────────────────────────────────────────────────────────────────
@@ -1467,3 +1467,53 @@ def test_un_BOM_no_vuelve_invisible_el_frontmatter(prefijo):
     —incluido `retracted`— sin una línea de reporte.  @inv INV-36"""
     fm = cfg.split_fm(f"{prefijo}---\nname: X\nretracted: true\n---\ncuerpo\n")
     assert fm == {"name": "X", "retracted": True}
+
+
+# ── AUD-142/144/163: la lente, con la misma regla en todos lados ─────────────
+
+def test_gate2_threshold_es_una_sola_regla():
+    """AUD-142 — tres llamadores implementaban esto con tres contratos: `classify_theme` y
+    `puertas_abiertas` con `isinstance(int)`, `puerta2_cruces` con `(int, float)`.
+
+    Un `30000.0` —o el mucho más probable `"30000"` entre comillas en un YAML editado a mano—
+    cerraba la puerta 2 para el clasificador y la dejaba abierta para el detector de drift, y el
+    motivo que el clasificador publicaba decía «el tema no declara `fundacional_min_citas`», que es
+    FALSO: lo declara. Un motivo equivocado es peor que ninguno — manda a agregar lo que ya está.
+    @inv INV-141"""
+    assert cfg.gate2_threshold({}) == (None, None)                  # ausente: legítimo (D-26)
+    assert cfg.gate2_threshold({"fundacional_min_citas": 30000}) == (30000, None)
+    assert cfg.gate2_threshold({"fundacional_min_citas": 30000.0}) == (30000, None)
+    assert cfg.gate2_threshold({"fundacional_min_citas": 0}) == (0, None)   # umbral 0 es una decisión
+    for malo in ("30000", 30.5, [30], {"a": 1}):
+        umbral, motivo = cfg.gate2_threshold({"fundacional_min_citas": malo})
+        assert umbral is None and motivo, malo
+    # un bool ES un int en Python: `fundacional_min_citas: yes` valdría umbral 1
+    assert cfg.gate2_threshold({"fundacional_min_citas": True}) == (None, cfg.gate2_threshold(
+        {"fundacional_min_citas": True})[1])
+    assert "booleano" in cfg.gate2_threshold({"fundacional_min_citas": True})[1]
+
+
+def test_lens_diff_offline_respeta_el_extra_core_de_un_TEMA(toy_vault, monkeypatch):
+    """AUD-144 — sólo miraba `star_by_slug`, así que en un tema el `extra_core` no se excluía y el
+    diff proponía «saldría» para siempre lo que el usuario ya metió a mano.
+
+    Y los temas son justo donde `extra_core` se usa más: en off-ADS y en la mitad ADS de un tema
+    mixto es la vía normal de entrada. Una categoría que repite lo ya resuelto se deja de mirar."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"slug": "ica", "concept": "ICA",
+                                         "extra_core": [{"bibcode": "1994Comon", "via": "usuario",
+                                                         "fecha": "2026-08-28", "motivo": "canon"}]}})
+    mk_note(cfg.PAPERS, "1994Comon", {"bibcode": "1994Comon", "tags": ["paper"],
+                                      "relevance": "high", "thesis_links": ["ICA"],
+                                      "title": "nada que la lente matchee"}, "cuerpo\n")
+    entran, salen, _sin = cfg.lens_diff_offline("ica")
+    assert salen == [], "el `extra_core` de un tema es core por decisión del usuario"
+
+
+def test_una_faceta_que_no_compila_se_DICE(capsys):
+    """AUD-163 — era un `continue` mudo, y «no compila» se contaba igual que «no matchea»: el diff
+    devolvía un veredicto sobre una faceta que nadie evaluó. No revienta (la lente GUARDADA puede
+    traer facetas viejas y el chequeo no puede volverse un falso rojo), pero lo dice."""
+    cfg._FACETAS_ROTAS.clear()
+    lente = {"facets": {"rota": "(sin cerrar", "ok": "radial velocity"}, "min_facets": 1}
+    assert cfg.lens_core_text(lente, "radial velocity study") is True
+    assert "no compila" in capsys.readouterr().err

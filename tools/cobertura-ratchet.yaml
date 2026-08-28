@@ -3,15 +3,16 @@
 # Sólo puede BAJAR. Se mide con `pytest tests/poblada/test_cobertura.py -m poblada` (~11 s).
 # Una función acá no es "mal probada": es **no mirada por nadie**, y su mutación siempre sobrevive
 # —así que esto es el detector barato del mismo defecto que caza `tools/mutar.py`.
-medido_en: "2026-08-27"
-techo: 4
+medido_en: "2026-08-28"
+techo: 3
 
-# Las 4 medidas (2026-08-27), y por qué. **Todas** son rutas de RED o subprocess: los tests
+# Las 3 medidas (2026-08-28), y por qué. **Todas** son rutas de RED o subprocess: los tests
 # inyectan dobles siempre, así que el código que de verdad habla con las APIs nunca corre. Es deuda
 # declarada.
 #   citation_index.py::_fetch_ads_default     ← ADS `fl=reference`, sólo probado a mano
 #   citation_index.py::_fetch_oa_default      ← idem OpenAlex
-#   extraction_prompt.py::main                ← CLI que arma el prompt del fan-out
+#   (`extraction_prompt.py::main` salió el 2026-08-28: AUD-133 le puso test — su precondición
+#    validaba el `.txt` y abortaba mientras el prompt manda leer el PDF.)
 #   fetch_web.py::fetch                       ← `npx defuddle`: subprocess contra Node
 #
 # HISTORIAL. El techo fue 11 hasta la pasada `/auditar` del 2026-08-24, que lo encontró vencido:

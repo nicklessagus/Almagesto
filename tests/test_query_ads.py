@@ -124,6 +124,33 @@ def test_require_faceta_inexistente_falla():
         qa.combination_rule({"require": ["no-existe"]}, {"rv": None})
 
 
+def test_min_facets_invalido_falla_ruidoso():
+    """AUD-143 — `min_facets` no se validaba, y es la otra mitad EXACTA del argumento que ya
+    justificaba el chequeo de `require`.
+
+    `min_facets: 99` sobre dos facetas deja TODO el corpus no-core **en silencio**; un `0` o un
+    string hacen lo simétrico (core a todo, o se leen como el default por el `or 1`). Los tres son
+    decisiones que alguien escribió en el YAML, no ausencias.  @inv INV-141"""
+    facets = {"rv": None, "actividad": None}
+    with pytest.raises(RuntimeError, match="sólo hay 2 faceta"):
+        qa.combination_rule({"min_facets": 99}, facets)
+    with pytest.raises(RuntimeError, match="entero ≥ 1"):
+        qa.combination_rule({"min_facets": 0}, facets)
+    with pytest.raises(RuntimeError, match="entero ≥ 1"):
+        qa.combination_rule({"min_facets": "2"}, facets)
+    assert qa.combination_rule({}, facets) == ([], 1)          # ausente sigue siendo el default
+
+
+def test_una_faceta_vacia_o_rota_falla_ruidoso():
+    """AUD-143 — `re.search("", texto)` matchea SIEMPRE: un `rv:` sin valor en el YAML hace core al
+    corpus entero. Y una regex que no compila no matchea nunca, que se lee como «este paper no
+    habla del tema» sobre un paper que nadie clasificó (AUD-163)."""
+    with pytest.raises(RuntimeError, match="regex vacía"):
+        qa.combination_rule({"facets": {"rv": "", "actividad": "x"}}, {"rv": None, "actividad": None})
+    with pytest.raises(RuntimeError, match="no compilan"):
+        qa.combination_rule({"facets": {"rv": "(sin cerrar"}}, {"rv": None})
+
+
 # ── objective.yaml compilado a nivel de módulo: formas raras editadas a mano ──
 
 def fresh_query_ads(monkeypatch, objective: dict):

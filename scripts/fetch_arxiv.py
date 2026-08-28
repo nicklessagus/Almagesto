@@ -24,6 +24,7 @@ import time
 
 import requests
 
+import fetch_pdf
 import lib_config as cfg
 
 ARXIV_PDF = "https://export.arxiv.org/pdf/{arxiv_id}"
@@ -103,6 +104,14 @@ def _flags_usados(args, ap=None) -> list:
     registrarlas la traza dice "corrió make_notes" sobre dos corridas que no hicieron lo mismo."""
     return cfg.flags_usados(args, ap)
 
+def drop_filter(recs: list, slug: str) -> tuple[list, list]:
+    """Same guard as `fetch_pdf.drop_filter`, and it delegates so the two cannot drift (AUD-137).
+
+    The audit's second most expensive pattern is «the fix was applied to one site and not to its
+    twin»; these two fetchers are literally twins."""
+    return fetch_pdf.drop_filter(recs, slug)
+
+
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser()
@@ -123,6 +132,11 @@ def main() -> int:
     recs = data["records"]
     if not args.all:
         recs = [r for r in recs if r["relevant"]]
+    recs, dropeados = drop_filter(recs, args.slug)          # AUD-137: ni con `--all`
+    if dropeados:
+        cfg.print_seguro(f"  · {len(dropeados)} excluido(s) por decisión de curación vigente "
+                         f"(`triage --drop`/`--drop-core`): {', '.join(r['bibcode'] for r in dropeados[:5])}"
+                         + (" …" if len(dropeados) > 5 else ""))
 
     destdir = cfg.PDFS / args.slug
     destdir.mkdir(parents=True, exist_ok=True)

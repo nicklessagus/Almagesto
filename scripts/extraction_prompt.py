@@ -169,9 +169,14 @@ def _pdf_rel(slug: str, bibcode: str) -> str:
     return f"vault/raw/pdfs/{slug}/{bibcode}.pdf"
 
 
-def build_prompt(slug: str, bibcode: str, name: str, aliases, texto: str,
+def build_prompt(slug: str, bibcode: str, name: str, aliases, texto: str = "",
                  out_dir: str = "", kind: str = "star", sujeto: str | None = None) -> str:
-    """The prompt for one (paper, subject) pair. `texto` is the `.txt` as it sits on disk.
+    """The prompt for one (paper, subject) pair.
+
+    ⚠ `texto` is DEAD since #205 and kept only so the positional call sites do not have to move:
+    it used to feed the layout detector that decided `.txt` vs PDF, and that decision no longer
+    exists — the source is the PDF. Nothing in the prompt reads it, so `main` no longer loads the
+    whole fulltext to hand it over (AUD-133).
 
     `sujeto` (#188) is the name the VIEW is filed under — the same string the paper uses in
     `stars[]` / `thesis_links[]`, which is what makes claim and reading comparable. It defaults to
@@ -295,17 +300,35 @@ def main() -> int:
         name, meta = cfg.theme_by_slug(args.slug)
     else:
         name, meta = cfg.star_by_slug(args.slug)
-    path = _txt_rel(args.slug, args.bibcode)
-    p = cfg.ROOT / path
-    if not p.exists():
-        cfg.print_seguro(f"⛔ no existe {path} — corré `extract_fulltext.py {args.slug}` primero")
+    # AUD-133 — la precondición miraba el `.txt` y abortaba, mientras el prompt que emite dice
+    # «⛔ Leé el PDF». Era una regresión de #205: se validaba el artefacto viejo y **nunca** el que
+    # se lee. Hoy manda el PDF, y la ausencia del `.txt` es una degradación DECLARADA (los `grep`
+    # del prompt no van a correr) en vez de un corte.
+    txt_rel, pdf_rel = _txt_rel(args.slug, args.bibcode), _pdf_rel(args.slug, args.bibcode)
+    hay_pdf = (cfg.ROOT / pdf_rel).exists()
+    hay_txt = (cfg.ROOT / txt_rel).exists()
+    nota = cfg.PAPERS / f"{args.bibcode.replace('/', '_')}.md"
+    if not hay_pdf and not nota.exists():
+        cfg.print_seguro(f"⛔ no hay ni PDF (`{pdf_rel}`) ni nota (`{nota.name}`) — no hay nada que "
+                         f"leer; corré `fetch_pdf.py {args.slug}` y `make_notes.py {args.slug}`")
         return 1
-    texto = p.read_text(encoding="utf-8", errors="replace")
+    if not hay_pdf:
+        # #207: sin PDF la vista se construye del `## Abstract` y se DECLARA `fuente: abstract`.
+        # No es un corte —una lectura de ocho líneas puede traer lo que la ficha necesita— pero
+        # tampoco puede quedar indistinguible de haber leído el paper.
+        cfg.print_seguro(f"⚠ no existe {pdf_rel} — la vista sólo puede salir del `## Abstract` de "
+                         f"la nota: declarala `fuente: abstract` (#207). Para leer el paper, "
+                         f"conseguí el PDF (`fetch_pdf.py {args.slug}`).", file=sys.stderr)
+    if not hay_txt:
+        cfg.print_seguro(f"⚠ no existe {txt_rel} — los `grep` del prompt NO van a correr (el `.txt` "
+                         f"es el índice de búsqueda, no la fuente); un grep que no corrió no es "
+                         f"«el paper no lo dice» → `extract_fulltext.py {args.slug}`",
+                         file=sys.stderr)
     # #188 · el sujeto de la VISTA es el nombre con el que el paper declara la entidad: para un
     # tema es el `concept` (lo que va en `thesis_links`), no el slug que devuelve `theme_by_slug`.
     sujeto = (meta.get("concept") or args.slug) if args.theme else name
     cfg.print_seguro(build_prompt(args.slug, args.bibcode, name, cfg.as_list(meta.get("aliases")),
-                                  texto, args.out_dir, "theme" if args.theme else "star", sujeto))
+                                  "", args.out_dir, "theme" if args.theme else "star", sujeto))
     return 0
 
 

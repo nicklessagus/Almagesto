@@ -183,3 +183,59 @@ def test_cli_devuelve_1_cuando_un_viejo_no_resuelve(tmp_path, capsys):
     fix = _fixes(tmp_path, ("A", [{"n": 1, "viejo": "no está", "nuevo": "x"}]))
     assert af.main([str(nota), str(fix), "--write"]) == 1
     assert "NO se escribió nada" in capsys.readouterr().out
+
+
+# ── AUD-141: los dos bloques que el aplicador rompía o no encontraba ─────────
+
+def test_una_fila_de_tabla_no_se_envuelve(tmp_path):
+    """AUD-141 — envolver una fila a 100 columnas la parte en varias líneas y la tabla deja de ser
+    una tabla.
+
+    Importa especialmente en `## Verificación de citas`, cuyas filas llevan **las anclas**: el paso
+    que existe para mantener honesta esa tabla la habría destruido. Una fila aplica como UNA línea,
+    por larga que sea."""
+    fila = ("| 3 | Una afirmación vieja | [[2020A]] | soportada | «cita» | abc1234567 | "
+            "pdf:def4567890 | bajo SNR alto |")
+    nota = _note(tmp_path, f"# t\n\n| # | Afirmación |\n|---|---|\n{fila}\n")
+    nueva = fila.replace("Una afirmación vieja", "Una afirmación corregida y bastante más larga "
+                                                 "que la anterior, para pasar de 100 columnas")
+    # el `viejo` llega NORMALIZADO (así lo entrega `lib_blocks`), no idéntico byte a byte
+    d = _fixes(tmp_path, ("2020A", [{"n": 3, "viejo": " ".join(fila.split()) + "  ", "nuevo": nueva}]))
+    res = af.apply(nota, d, write=True)
+    assert res.failed == [] and res.applied == 1
+    filas = [l for l in nota.read_text(encoding="utf-8").split("\n") if l.startswith("| 3 |")]
+    assert len(filas) == 1, "la fila se partió: la tabla quedó rota"
+    assert "corregida" in filas[0] and filas[0].endswith("|")
+
+
+def test_un_blockquote_se_localiza_y_conserva_sus_marcas(tmp_path):
+    """AUD-141 — `lib_blocks` le entrega al corrector el bloque SIN los `>`, así que el `viejo` que
+    devuelve tampoco los tiene y el matcher, que comparaba las líneas crudas, no lo encontraba
+    nunca. Como un solo `failed` aborta la corrida entera, UNA cita en blockquote bloqueaba las
+    setenta y cinco correcciones."""
+    nota = _note(tmp_path, "# t\n\n> El disco interno muestra un exceso\n> en 24 micrones [[2020A]].\n")
+    d = _fixes(tmp_path, ("2020A", [{"n": 1,
+                                     "viejo": "El disco interno muestra un exceso en 24 micrones [[2020A]].",
+                                     "nuevo": "El disco interno muestra un exceso en 70 micrones [[2020A]]."}]))
+    res = af.apply(nota, d, write=True)
+    assert res.failed == [] and res.applied == 1
+    texto = nota.read_text(encoding="utf-8")
+    assert "70 micrones" in texto
+    assert all(l.startswith(">") for l in texto.split("\n")
+               if l.strip() and not l.startswith("#")), "se perdieron las marcas del blockquote"
+
+
+def test_la_escritura_pasa_por_el_writer_atomico(tmp_path, monkeypatch):
+    """AUD-140 / INV-90 — `note.write_text` escribía en `vault/` esquivando el único writer del
+    repo: sin tmp+rename un corte deja la nota a medias, y la fixture `sin_tocar_la_boveda_real`
+    —que intercepta a `lib_config`— no lo veía pasar."""
+    nota = _note(tmp_path, "# t\n\nviejo [[2020A]].\n")
+    d = _fixes(tmp_path, ("2020A", [{"n": 1, "viejo": "viejo [[2020A]].",
+                                     "nuevo": "nuevo [[2020A]]."}]))
+    visto = []
+    real = af.cfg.write_text_atomic
+    monkeypatch.setattr(af.cfg, "write_text_atomic",
+                        lambda p, t, **k: visto.append(p) or real(p, t, **k))
+    af.apply(nota, d, write=True)
+    assert visto == [nota], "la escritura no pasó por `lib_config.write_text_atomic`"
+    assert "nuevo" in nota.read_text(encoding="utf-8")

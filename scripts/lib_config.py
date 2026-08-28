@@ -543,6 +543,126 @@ def stdout_tolerante() -> None:
             pass                                     # stream reemplazado por un test o no reconfigurable
 
 
+VERIF_HEAD_RE = re.compile(r"^##\s+Verificaci[oó]n de citas\b(.*)$", re.M)
+_VERIF_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def verification_date(text: str) -> tuple[bool, str | None]:
+    """(does the note carry a `## Verificación de citas` block?, date of the most recent one).
+
+    The date lives in the heading by the skill's convention (`## Verificación de citas
+    (AAAA-MM-DD)`): it is the only thing that says whether what was verified is still current or
+    fell behind a later edit. A note can accumulate **several** blocks — up to 11 measured in a
+    real vault, successive passes over different sections — so currency is the **maximum** date,
+    not the first one: keeping the first leaves the note stale forever no matter how often it is
+    re-verified.
+
+    ⛔ AUD-136 — this rule had two implementations that disagreed: the lint took the maximum and
+    `make_notes.estado_line` took the FIRST, so the header a note publishes and the verdict the
+    lint computes about that same note could name different dates. One rule, one function.
+    @inv INV-31"""
+    heads = VERIF_HEAD_RE.findall(text)
+    if not heads:
+        return False, None
+    dates = [m.group(0) for m in (_VERIF_DATE_RE.search(h) for h in heads) if m]
+    return True, max(dates) if dates else None
+
+
+def ratchet_raises(rel_path: str, fields, root: Path | None = None) -> list | None:
+    """Which ceilings of `rel_path` went UP since HEAD without a declared escape hatch.
+
+    Returns a list of `(field, before, now)`, `[]` when nothing rose (or every rise is justified),
+    and **`None` when the check could not run** — no git, file not in HEAD, unreadable YAML. `None`
+    is *not evaluated*, never *did not rise*: saying so is the difference between «I looked and it
+    is fine» and «I did not look» (D-43).
+
+    ⛔ AUD-139 — this guard existed only for `docs/trazabilidad-ratchet.yaml`, hardcoded inside
+    `trace_invariants`. The repo has four ratchets and all four carry the same written promise
+    («the ceiling only goes down»); on three of them that promise was held up by human review
+    alone, so nothing stopped raising the ceiling in the very commit that broke the coverage — the
+    exact hole #96 closed for the fourth one.
+
+    The escape hatch is a `# ratchet-sube: <field> <before>→<now> — <reason>` comment in the YAML,
+    with a **mandatory reason** (same criterion as `triage.py --reason`: a gate is never loosened
+    in silence) and **bound to the concrete transition**. The second half matters as much as the
+    first: a generic hatch would sit in the file forever and disable the check from then on, with
+    the next rise riding for free on the previous one's reason. Requiring an explicit `2→3` makes
+    the justification **expire by itself**.  @inv INV-140"""
+    import subprocess
+    base = root or ROOT
+    path = base / rel_path
+    try:
+        r = subprocess.run(["git", "show", f"HEAD:{rel_path}"],
+                           cwd=base, capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode != 0:
+        return None
+    try:
+        antes_doc = yaml.safe_load(r.stdout) or {}
+        ahora_doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        texto = path.read_text(encoding="utf-8")
+    except (yaml.YAMLError, OSError, UnicodeDecodeError):
+        return None
+    if not isinstance(antes_doc, dict) or not isinstance(ahora_doc, dict):
+        return None
+    subidas = []
+    for campo in fields:
+        antes, ahora = _ratchet_value(antes_doc, campo), _ratchet_value(ahora_doc, campo)
+        if antes is None or ahora is None or ahora <= antes:
+            continue
+        patron = re.compile(
+            rf"#\s*ratchet-sube:.*\b{re.escape(campo)}\b\s*{antes}\s*(?:→|->)\s*{ahora}\s*[—:-]\s*\S")
+        if not patron.search(texto):
+            subidas.append((campo, antes, ahora))
+    return subidas
+
+
+def _ratchet_value(doc: dict, campo: str) -> int | None:
+    """The ceiling named `campo`, at top level or under `techos:`; None when absent or not a number."""
+    v = doc.get(campo)
+    if v is None and isinstance(doc.get("techos"), dict):
+        v = doc["techos"].get(campo)
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def gate2_threshold(meta) -> tuple[int | None, str | None]:
+    """The theme's `fundacional_min_citas` as `(threshold, why it is unusable)`.
+
+    ⛔ AUD-142 — three call sites implemented this rule with three different contracts:
+    `classify_theme` and `puertas_abiertas` took `isinstance(umbral, int)` while `puerta2_cruces`
+    took `(int, float)`. So a `fundacional_min_citas: 30000.0` — or the far likelier
+    `"30000"`, a quoted number in hand-edited YAML — closed gate 2 for the classifier and left it
+    open for the drift detector, and the classifier's motive then said *«el tema no declara
+    `fundacional_min_citas`»*, which is **false**: it declares it. A wrong reason is worse than no
+    reason (the audit's rule of method #4), and here it sends the operator to add a key that is
+    already there.
+
+    Absent is legitimate and returns `(None, None)`: D-26 deliberately gives the threshold no
+    default —30k citations is normal in ML and enormous in astro— so the gate stays shut and the
+    `why_excluded` says so. Anything present but unusable returns the reason, which the caller
+    publishes instead of inventing one. A `bool` is rejected on purpose: in Python it *is* an
+    `int`, so `fundacional_min_citas: yes` would silently become a threshold of 1.  @inv INV-141"""
+    v = as_map(meta).get("fundacional_min_citas") if isinstance(meta, dict) else None
+    if v is None:
+        return None, None
+    if isinstance(v, bool):
+        return None, ("`fundacional_min_citas: {}` es un booleano, no un número de citas — en YAML "
+                      "`yes`/`no`/`true` parsean como bool y en Python un bool ES un int, así que "
+                      "sin este chequeo el umbral valdría 1".format(v))
+    if isinstance(v, int):
+        return v, None
+    if isinstance(v, float):
+        if v.is_integer():
+            return int(v), None
+        return None, f"`fundacional_min_citas: {v}` tiene decimales — un conteo de citas es entero"
+    return None, (f"`fundacional_min_citas: {v!r}` no es un número (es {type(v).__name__}) — si lo "
+                  f"escribiste entre comillas en `themes.yaml`, sacáselas")
+
+
 def print_seguro(texto: str, file=None) -> None:
     """`print` tolerante a consolas no-UTF8. Compartido (nace en `lint.py` como `_print_seguro`,
     6ª pasada de auditoría; se midió después que otros 10 scripts mueren por el mismo motivo —
@@ -1543,13 +1663,54 @@ def combination_rule(rel: dict, topic_names) -> tuple[list[str], int]:
             f"vault/config/objective.yaml: relevance.require debe ser una lista — aunque sea de "
             f"un solo elemento, [{raw_require!r}] — no un escalar suelto: {raw_require!r}."
         )
-    min_facets = rel.get("min_facets") or 1
     unknown = [t for t in require if t not in topic_names]
     if unknown:
         raise RuntimeError(
             f"vault/config/objective.yaml: relevance.require nombra facetas ausentes de "
             f"relevance.facets: {unknown}. Una faceta obligatoria que no existe filtraría TODO a "
             f"no-core en silencio."
+        )
+    # AUD-143 — `min_facets` no se validaba y es la otra mitad exacta del mismo argumento que
+    # justifica el chequeo de `require`: un `min_facets: 99` sobre tres facetas deja TODO el corpus
+    # no-core **en silencio**, y un `min_facets: 0` (o un string) hace core a todo. Falla ruidoso,
+    # igual que arriba. `or 1` tapaba el 0 y el string: los dos son decisiones que alguien escribió.
+    raw_min = rel.get("min_facets")
+    if raw_min is None:
+        min_facets = 1
+    elif isinstance(raw_min, bool) or not isinstance(raw_min, int) or raw_min < 1:
+        raise RuntimeError(
+            f"vault/config/objective.yaml: relevance.min_facets tiene que ser un entero ≥ 1 y es "
+            f"{raw_min!r}. Un valor menor a 1 haría core a todo el corpus y uno inválido se leería "
+            f"como el default."
+        )
+    else:
+        min_facets = raw_min
+    if topic_names and min_facets > len(topic_names):
+        raise RuntimeError(
+            f"vault/config/objective.yaml: relevance.min_facets = {min_facets} y sólo hay "
+            f"{len(topic_names)} faceta(s) declarada(s) — ningún paper puede alcanzar ese mínimo, "
+            f"así que TODO el corpus quedaría no-core en silencio."
+        )
+    # Y la faceta VACÍA es el simétrico: `re.search("", texto)` matchea siempre, así que una regex
+    # en blanco (un `rv:` sin valor en el YAML) hace core al corpus entero, también en silencio.
+    vacias = sorted(n for n, pat in as_map(rel.get("facets")).items()
+                    if not str(pat if pat is not None else "").strip())
+    if vacias:
+        raise RuntimeError(
+            f"vault/config/objective.yaml: relevance.facets con regex vacía: {vacias}. Una regex "
+            f"en blanco matchea SIEMPRE — haría core a todo el corpus."
+        )
+    rotas = []
+    for nombre, pat in as_map(rel.get("facets")).items():
+        try:
+            re.compile(str(pat))
+        except re.error as exc:
+            rotas.append(f"{nombre} ({exc})")
+    if rotas:
+        raise RuntimeError(
+            f"vault/config/objective.yaml: relevance.facets que no compilan: {'; '.join(rotas)}. "
+            f"Una faceta que no compila no matchea nunca, o sea que se lee como «este paper no "
+            f"habla del tema» sobre un paper que nadie clasificó."
         )
     return require, min_facets
 
@@ -1638,11 +1799,12 @@ def puerta2_cruces(slug: str) -> tuple[list, list, int]:
         _, meta = theme_by_slug(slug)
     except (KeyError, RuntimeError):
         return [], [], 0
-    if "fundacional_min_citas" not in as_map(meta):
-        return [], [], 0            # puerta cerrada por no declarada: no hay umbral que cruzar
-    umbral = as_map(meta).get("fundacional_min_citas")
-    if not isinstance(umbral, (int, float)):
-        return [], [], 0
+    # AUD-142: la forma del umbral la decide `gate2_threshold`, la misma que usa el clasificador.
+    # Acá se aceptaba `(int, float)` y allá sólo `int`, así que un `30000.0` dejaba la puerta
+    # abierta para este detector y cerrada para el que decide qué es core.
+    umbral, _mal = gate2_threshold(meta)
+    if umbral is None:
+        return [], [], 0            # no declarada, o declarada con forma inválida (lo dice el lint)
     guardado = None
     for b in load_busquedas(slug):
         regla = as_map(as_map(b.get("lente")).get("regla_tema"))
@@ -1684,7 +1846,7 @@ def lens_current(slug: str | None = None) -> dict:
             return lente                      # una estrella no tiene regla de tema: no es un cambio
         regla = {"facet": as_map(tmeta).get("facet")}
         if "fundacional_min_citas" in as_map(tmeta):
-            regla["umbral"] = as_map(tmeta).get("fundacional_min_citas")
+            regla["umbral"] = gate2_threshold(tmeta)[0]
         lente["regla_tema"] = regla
     return lente
 
@@ -1761,6 +1923,9 @@ def lens_textual_changed(delta: list[str]) -> bool:
     return any(not d.startswith(_DELTA_NO_TEXTUAL) for d in delta)
 
 
+_FACETAS_ROTAS: set = set()   # AUD-163: para avisar una sola vez por patrón
+
+
 def lens_core_text(lens: dict, text: str) -> bool:
     """¿`text` es core bajo `lens`, por la mitad TEXTUAL de la regla? Espeja la precedencia de
     `exclusion_reason` (sin tópico → require → min_facets) salteando el doctype, que no está en la
@@ -1770,8 +1935,17 @@ def lens_core_text(lens: dict, text: str) -> bool:
         try:
             if re.search(pat, text, re.I):
                 facets.append(name)
-        except (re.error, TypeError):
-            continue          # regex inválida en un registro viejo: no clasifica, no revienta
+        except (re.error, TypeError) as exc:
+            # AUD-163 — esto era un `continue` mudo, y «no compila» se contaba igual que «no
+            # matchea»: el diff de lente devolvía un veredicto sobre una faceta que nadie evaluó.
+            # No revienta (la lente GUARDADA puede traer facetas viejas y este chequeo no puede
+            # volverse él mismo un falso rojo), pero lo dice — una sola vez por patrón.
+            if (name, str(pat)) not in _FACETAS_ROTAS:
+                _FACETAS_ROTAS.add((name, str(pat)))
+                print_seguro(f"  ⚠ faceta `{name}` de la lente guardada no compila ({exc}) — no "
+                             f"clasifica: se cuenta como «no matchea», que NO es lo mismo",
+                             file=sys.stderr)
+            continue
     if not facets:
         return False
     if any(t not in facets for t in as_list(lens.get("require"))):
@@ -1836,12 +2010,19 @@ def lens_diff_offline(slug: str) -> tuple[list[str], list[str], list[str]]:
     lente nueva: el `relevance` del frontmatter ES lo que la bóveda afirma hoy, y es lo que el
     consumidor lee."""
     # @inv INV-58
-    try:
-        _, meta = star_by_slug(slug)
-        extra = {str(e.get("bibcode") if isinstance(e, dict) else e)
-                 for e in listify_curado(meta.get("extra_core"), "extra_core")}
-    except (KeyError, RuntimeError):
-        extra = set()
+    # AUD-144 — sólo miraba `star_by_slug`, así que en un TEMA el `extra_core` no se excluía y el
+    # diff volvía a proponer «saldrían» para siempre lo que el usuario ya decidió meter a mano. Y
+    # los temas son justo donde `extra_core` se usa más: en el modo off-ADS y en la mitad ADS de un
+    # tema mixto es la vía normal de entrada. Una categoría que repite lo ya resuelto se vuelve
+    # ruido y se deja de mirar — el mismo argumento por el que #112 la respeta.
+    extra: set = set()
+    for lookup in (star_by_slug, theme_by_slug):
+        try:
+            _, meta = lookup(slug)
+        except (KeyError, RuntimeError):
+            continue
+        extra |= {str(e.get("bibcode") if isinstance(e, dict) else e)
+                  for e in listify_curado(as_map(meta).get("extra_core"), "extra_core")}
     lens = lens_current(slug)
     # #112: un paper EXCLUIDO del sujeto por decisión no puede volver a proponerse como "entra" en
     # cada cambio de lente — la decisión ya se tomó, con motivo y fecha. Sin esto, el diff repite

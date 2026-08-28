@@ -449,20 +449,33 @@ def _row(r: dict) -> str:
             f'{",".join(r.get("found_in") or ["?"]):<12}  {t}')
 
 
-def _theme_anchor(slug: str) -> list:
-    """DOIs of the theme's papers already in the vault — the anchor for `anchored_records`.
+def _theme_anchor(slug: str, concept: str | None = None) -> tuple[list, int]:
+    """DOIs of the theme's papers already in the vault, plus how many of its papers were found.
 
     Reads the notes with `lib_config.split_fm`, the same parser the rest of the tooling uses, and
     never `grep` over the frontmatter: `thesis_links` is written in block style by `make_notes` and
     in flow style by the retro-linker, and a textual match misses one of the two. That failure is
-    recorded twice in CLAUDE.md; this is the third place it would have happened."""
+    recorded twice in CLAUDE.md; this is the third place it would have happened.
+
+    ⛔ AUD-134 — it matched the **slug** against `thesis_links`, which holds the theme's `concept`
+    NAME. The anchor was therefore always empty and the CLI printed «sin anclaje: el tema todavía
+    no tiene papers con DOI en la bóveda», an affirmative sentence about a lookup that never
+    matched: the highest-leverage half of `discover` was off and said so as if it were a fact. It
+    is the same slug-vs-concept confusion #188 fixed for the view's `sujeto`.
+
+    The second return value is what makes the CLI able to tell «the theme has no papers here» from
+    «it has papers and none carries a DOI» — two different next steps."""
     import glob
-    fuera = []
+    nombres = {n for n in (concept, slug) if n}
+    fuera, del_tema = [], 0
     for f in sorted(glob.glob(str(cfg.PAPERS / "*.md"))):
         fm = cfg.split_fm(pathlib.Path(f).read_text(encoding="utf-8"))
-        if slug in (fm.get("thesis_links") or []) and fm.get("doi"):
+        if not nombres & set(fm.get("thesis_links") or []):
+            continue
+        del_tema += 1
+        if fm.get("doi"):
             fuera.append({"doi": fm["doi"], "title": fm.get("title")})
-    return fuera
+    return fuera, del_tema
 
 
 def _preview_theme(slug: str, rows: int = 25, min_citadores: int = 2) -> int:
@@ -517,7 +530,7 @@ def _preview_theme(slug: str, rows: int = 25, min_citadores: int = 2) -> int:
     for r in sorted(out["records"], key=lambda r: -(r.get("citation_count") or 0))[:rows]:
         cfg.print_seguro(_row(r))
 
-    ancla = _theme_anchor(slug)
+    ancla, del_tema = _theme_anchor(slug, tema.get("concept"))
     if ancla:
         cfg.print_seguro(f"\nAnclaje: {len(ancla)} papers del tema con DOI en la bóveda "
                          f"→ qué citan ≥{min_citadores} de ellos")
@@ -527,8 +540,12 @@ def _preview_theme(slug: str, rows: int = 25, min_citadores: int = 2) -> int:
                              "(OpenAlex las saca de depósitos Crossref; el astro pre-2000 no los tiene)")
         for r in anclados[:rows]:
             cfg.print_seguro(_row(r))
+    elif del_tema:
+        cfg.print_seguro(f"\n  (sin anclaje: el tema tiene {del_tema} paper(s) en la bóveda y "
+                         f"NINGUNO trae `doi` — el anclaje sale de las referencias, que OpenAlex "
+                         f"indexa por DOI; completá los `doi` que existan)")
     else:
-        cfg.print_seguro("\n  (sin anclaje: el tema todavía no tiene papers con DOI en la bóveda — "
+        cfg.print_seguro("\n  (sin anclaje: el tema todavía no tiene papers en la bóveda — "
                          "corré primero la mitad ADS y volvé)")
     cfg.print_seguro("\n  → todo esto son CANDIDATOS: pasan por triage, no entran como core.")
     return 0

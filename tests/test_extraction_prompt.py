@@ -305,3 +305,40 @@ def test_sin_patrones_el_prompt_lo_DECLARA_en_vez_de_salir_vacio():
     p = ep.build_prompt("x", "2020A", "", [], "texto\n")
     assert "NINGÚN patrón se pudo generar" in p
     assert "NO es «el paper no lo reporta»" in p
+
+
+# ── la precondición de `main` (AUD-133) ──────────────────────────────────────
+
+def _run_main(monkeypatch, argv):
+    monkeypatch.setattr(sys, "argv", ["extraction_prompt.py", *argv])
+    return ep.main()
+
+
+def test_la_precondicion_mira_el_PDF_no_el_txt(toy_vault, monkeypatch, capsys):
+    """AUD-133 — regresión de #205: validaba el `.txt` y abortaba, mientras el prompt que emite
+    dice «⛔ Leé el PDF». O sea que chequeaba el artefacto viejo y **nunca** el que se lee.
+
+    Hoy el `.txt` es el índice de búsqueda: su ausencia degrada los `grep` del prompt y se
+    **declara**, no corta. Lo que sí importa es el PDF."""
+    from conftest import mk_note
+    bib = "2020aaaA...1..1A"
+    mk_note(toy_vault.PAPERS, bib, {"bibcode": bib, "tags": ["paper"]}, "")
+    pdf = cfg.ROOT / "vault" / "raw" / "pdfs" / "test_star" / f"{bib}.pdf"
+    pdf.parent.mkdir(parents=True, exist_ok=True)
+    pdf.write_bytes(b"%PDF-1.4\n")
+
+    # con PDF y SIN `.txt`: el prompt sale igual, y la degradación se dice
+    assert _run_main(monkeypatch, ["test_star", bib]) == 0
+    cap = capsys.readouterr()
+    assert "Leé el PDF" in cap.out, "el prompt tiene que salir"
+    assert "los `grep` del prompt NO van a correr" in cap.err
+
+    # sin PDF pero con nota: no corta — la vista sale del abstract y se declara (#207)
+    pdf.unlink()
+    assert _run_main(monkeypatch, ["test_star", bib]) == 0
+    assert "fuente: abstract" in capsys.readouterr().err
+
+    # sin PDF y sin nota: no hay NADA que leer
+    (toy_vault.PAPERS / f"{bib}.md").unlink()
+    assert _run_main(monkeypatch, ["test_star", bib]) == 1
+    assert "no hay nada que" in capsys.readouterr().out

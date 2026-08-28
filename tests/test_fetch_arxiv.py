@@ -9,6 +9,7 @@ import pytest
 import requests as real_requests
 
 import fetch_arxiv as fa
+import lib_config as cfg
 
 
 class StreamResp:
@@ -251,3 +252,20 @@ def test_unicode_no_muere_en_consola_ascii(toy_vault, monkeypatch):
     wrapper.flush()
     assert rc == 1
     assert b"query_ads" in buf.getvalue()
+
+
+def test_all_no_resucita_un_descarte_vigente(toy_vault, monkeypatch, capsys):
+    """AUD-137, el gemelo de `test_fetch_pdf.py`: los dos fetchers comparten la guarda.
+
+    Se ejerce ACÁ y no sólo allá porque el patrón más caro de la auditoría es el arreglo aplicado a
+    un sitio y no a su gemelo — y estos dos son gemelos literales."""
+    ads_json(toy_vault.ROOT, "test_star", RECORDS)
+    cfg.save_decisiones("test_star", {
+        "2020withA...1A": {"decision": "descartado", "motivo": "off-topic",
+                             "fecha": "2026-08-28"}})
+    pedidos = []
+    monkeypatch.setattr(fa, "download_pdf", lambda aid, dest: pedidos.append(aid) or True)
+    run_main(monkeypatch, ["test_star", "--all"])
+    assert "2101.00001" not in pedidos, "se re-pidió a arXiv un descarte vigente"
+    assert "2101.00002" in pedidos, "el resto de `--all` sigue entrando"
+    assert "excluido(s) por decisión de curación" in capsys.readouterr().out

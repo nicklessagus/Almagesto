@@ -1588,6 +1588,44 @@ def test_stamp_header_backfillea_la_nota_que_nacio_sin_cabecera(toy_vault):
     assert mn.stamp_header(dest) is False                          # idempotente
 
 
+def test_estado_line_publica_la_verificacion_MAS_RECIENTE(toy_vault):
+    """AUD-136 — la cabecera tomaba el PRIMER bloque y el lint toma el MÁXIMO.
+
+    Una nota acumula varios bloques (pasadas sucesivas sobre secciones distintas; medido: hasta 11
+    en una bóveda real), así que la cabecera publicaba una fecha vieja sobre una nota que el lint
+    daba por re-verificada. Dos implementaciones de la misma regla, contradictorias: hoy es una.
+    @inv INV-141"""
+    dest = cfg.STARS / "test_star.md"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text("---\ntags: [star]\n---\n# Test\n\n"
+                    "## Verificación de citas (2026-01-05)\n\n"
+                    "## Verificación de citas (2026-07-30)\n", encoding="utf-8")
+    linea = mn.estado_line("test_star", dest)
+    assert "verificación 2026-07-30" in linea
+    assert "2026-01-05" not in linea
+
+
+def test_stamp_header_no_escribe_dentro_del_frontmatter(toy_vault):
+    """AUD-135 / INV-139 — la rama «Capa LLM» buscaba en el TEXTO ENTERO, frontmatter incluido.
+
+    El framework instruye editar el frontmatter a mano, así que un comentario de curación o un
+    `motivo:` que mencione esas dos palabras es un estado alcanzable — y ahí el blockquote se
+    insertaba ADENTRO del YAML: `split_fm` devolvía `{}` y la nota caía en una categoría
+    bloqueante. Lo dispara `--restamp-headers`, o sea el comando que el propio lint receta: la
+    reparación fabricaba el daño que venía a arreglar. Es la gemela de la rama del H1, que ya
+    estaba arreglada, con el motivo escrito al lado."""
+    dest = cfg.STARS / "hd40307.md"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text("---\nname: HD 40307\ntags:\n- star\ngenerator: Almagesto v1.2.0\n"
+                    "# ojo: la prosa de abajo es Capa LLM sin revisar\n---\n"
+                    "# hd40307\n\n## Resumen\n\nProsa.\n", encoding="utf-8")
+    assert mn.stamp_header(dest) is True
+    texto = dest.read_text(encoding="utf-8")
+    assert cfg.split_fm(texto).get("name") == "HD 40307", "el frontmatter dejó de parsear"
+    assert texto.index("# hd40307") < texto.index("Capa LLM — revisar")
+    assert mn.stamp_header(dest) is False                          # idempotente
+
+
 def test_stamp_header_usa_la_variante_de_estrella(toy_vault):
     dest = cfg.STARS / "hd40307.md"
     dest.write_text("---\nname: HD 40307\ntags:\n- star\ngenerator: Almagesto v1.2.0\n---\n"

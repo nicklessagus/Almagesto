@@ -220,6 +220,26 @@ def _flags_usados(args, ap=None) -> list:
     registrarlas la traza dice "corrió make_notes" sobre dos corridas que no hicieron lo mismo."""
     return cfg.flags_usados(args, ap)
 
+def drop_filter(recs: list, slug: str) -> tuple[list, list]:
+    """Split `recs` into (fetchable, actively dropped by the user for this subject).
+
+    ⛔ AUD-137 — `--all` means «include the non-relevant ones», and a paper the user removed with
+    `triage --drop-core` is left in the record precisely so it stays VISIBLE (`via: manual-drop`,
+    with its motive). Neither fetcher consulted `load_decisiones`, so the escape hatch re-downloaded
+    exactly what #112 deletes from disk on purpose: a curation decision that a script quietly
+    undoes is worse than not having taken it.
+
+    Both carriles are honoured: the chaining drop and the per-subject one. A decision that was
+    `anulada` (D-52) is not a drop any more, and `load_decisiones` only returns what the registro
+    says — an unreadable registro raises rather than reviving everything (INV-139)."""
+    fuera = {b for b, d in cfg.load_decisiones(slug).items() if d.get("decision") == "descartado"}
+    if not fuera:
+        return recs, []
+    dentro = [r for r in recs if r.get("bibcode") not in fuera]
+    dropeados = [r for r in recs if r.get("bibcode") in fuera]
+    return dentro, dropeados
+
+
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser()
@@ -240,6 +260,11 @@ def main() -> int:
     recs = data["records"]
     if not args.all:
         recs = [r for r in recs if r["relevant"]]
+    recs, dropeados = drop_filter(recs, args.slug)          # AUD-137: ni con `--all`
+    if dropeados:
+        cfg.print_seguro(f"  · {len(dropeados)} excluido(s) por decisión de curación vigente "
+                         f"(`triage --drop`/`--drop-core`): {', '.join(r['bibcode'] for r in dropeados[:5])}"
+                         + (" …" if len(dropeados) > 5 else ""))
 
     destdir = cfg.PDFS / args.slug
     destdir.mkdir(parents=True, exist_ok=True)

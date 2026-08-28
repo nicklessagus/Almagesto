@@ -319,18 +319,28 @@ def test_main_construye_y_reporta_la_cobertura(toy_vault, monkeypatch, capsys):
     `RuntimeError` después. El cero inventado que este módulo dice no producir, por la puerta del
     empaquetado.  @inv INV-87
     """
+    # ⚠ AUD-132 / red #3 — la cobertura la escribe `build`, así que acá se corre `build` DE VERDAD
+    # (con fetchers falsos, que es la frontera de red). El doble anterior fabricaba
+    # `{"con_refs": 3, "total": 4}` —claves que `build` no escribe nunca— y por eso el test pasaba
+    # en verde mientras el CLI imprimía `?/?` en producción: el bug vivía exactamente en la
+    # diferencia entre el doble y la función real.
     destino = cfg.ROOT / "build" / "citation_index.json"
-    destino.parent.mkdir(parents=True, exist_ok=True)
-    destino.write_text(json.dumps({"citas": {"2009A&A": ["2020Foo"]},
-                                   "cobertura": {"con_refs": 3, "total": 4}}), encoding="utf-8")
+    paper("2020Con", doi="10.1/con")
+    paper("2020Ciego", doi="10.1/ciego")
+    ads, oa = fetchers(ads_map={"2020Con": ["1994Comon..X"]})
     llamado = {}
+    real_build = ci.build
 
-    def fake_build(out=None, fetch_ads=None, fetch_oa=None):
+    def build_espiado(out=None, fetch_ads=None, fetch_oa=None):
         llamado["si"] = True
-        return destino
+        return real_build(out, fetch_ads=ads, fetch_oa=oa)
 
-    monkeypatch.setattr(ci, "build", fake_build)
+    monkeypatch.setattr(ci, "build", build_espiado)
     assert ci.main([]) == 0
     assert llamado.get("si"), "el CLI tiene que construir el índice, no ser un no-op"
+    escrito = json.loads(destino.read_text(encoding="utf-8"))["cobertura"]
     salida = capsys.readouterr().out
-    assert "citation_index.json" in salida and "3/4" in salida
+    assert "citation_index.json" in salida
+    assert f"{escrito['con_referencias']}/{escrito['n_core']}" in salida, salida
+    assert "1/2" in salida, "un core con refs de dos, y el ciego declarado"
+    assert "1 sin ninguna" in salida

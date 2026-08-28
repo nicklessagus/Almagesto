@@ -289,9 +289,27 @@ def main() -> int:
     print(f"\nfunciones mutadas: {total} · sobreviven (sin test que las mate): {len(sobreviven)}")
     for s in sobreviven:
         print(f"  - {s}")
-    if args.ratchet and RATCHET.exists():
+    if args.ratchet and not RATCHET.exists():
+        # AUD-138 / D-43 — el gate PEDIDO que no puede correr no sale verde. Sin el archivo, el
+        # `and RATCHET.exists()` saltaba el bloque entero y `main` devolvía 0 **con
+        # sobrevivientes**: pedir el ratchet y no tenerlo se leía igual que pasarlo. Es el mismo
+        # cero inventado que el lint reporta como *no evaluado*, en la herramienta que audita a
+        # los tests.
+        print(f"\n⛔ no evaluado: se pidió `--ratchet` y no existe {RATCHET} — no hay techo contra "
+              f"el que comparar los {len(sobreviven)} sobreviviente(s)")
+        return 2
+    if args.ratchet:
         import yaml
-        techo = (yaml.safe_load(RATCHET.read_text(encoding="utf-8")) or {}).get("techo", 0)
+        try:
+            datos = yaml.safe_load(RATCHET.read_text(encoding="utf-8")) or {}
+        except (yaml.YAMLError, OSError, UnicodeDecodeError) as exc:
+            print(f"\n⛔ no evaluado: {RATCHET} no se pudo leer ({exc})")
+            return 2
+        if "techo" not in datos:
+            print(f"\n⛔ no evaluado: {RATCHET} no declara `techo` — un default 0 convertiría "
+                  f"cualquier sobreviviente en rojo y un default alto lo taparía")
+            return 2
+        techo = datos["techo"]
         print(f"\ntecho del ratchet: {techo}")
         if len(sobreviven) > techo:
             print("⛔ subió: hay funciones nuevas sin test que las mate")

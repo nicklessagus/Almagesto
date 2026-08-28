@@ -846,17 +846,24 @@ def classify_theme(rec: dict, meta: dict) -> tuple[list[str], bool, str | None]:
     if doctype in NOISE_DOCTYPES:
         return facets_globales, False, f"doctype: {doctype}"
 
-    umbral = (meta or {}).get("fundacional_min_citas")
+    # AUD-142: la forma del umbral la decide UNA función, compartida con `puertas_abiertas` y con
+    # `lib_config.puerta2_cruces` — los tres la implementaban distinto, así que un `30000.0` (o el
+    # más probable `"30000"` entre comillas) cerraba la puerta para el clasificador y la dejaba
+    # abierta para el detector de drift, con un motivo que además MENTÍA («el tema no lo declara»).
+    umbral, mal_formado = cfg.gate2_threshold(meta)
     citas = rec.get("citation_count")
     # `None` es **no sé**, no «pocas»: arXiv no publica el conteo. Tratarlo como 0 dejaría a todo
     # paper venido de ese backend fuera de la puerta 2 por construcción, que es el cero inventado
     # que INV-87 prohíbe — un chequeo que no se puede evaluar se DECLARA, no se resuelve en contra.
-    p2_evaluable = isinstance(umbral, int) and citas is not None
+    p2_evaluable = umbral is not None and citas is not None
     puerta2 = p2_evaluable and citas >= umbral
     puerta3 = core_global
     if puerta2 or puerta3:
         return facets_globales, True, None
     # (la puerta que abrió se recupera con `puertas_abiertas`, que comparte esta misma regla)
+    if mal_formado:
+        return facets_globales, False, ("ninguna puerta abre; la 2 (fundacional) NO se pudo "
+                                        f"evaluar: {mal_formado}")
     if umbral is None:
         return facets_globales, False, ("ninguna puerta abre; la 2 (fundacional) está apagada "
                                         "porque el tema no declara `fundacional_min_citas`")
@@ -892,10 +899,10 @@ def puertas_abiertas(rec: dict, meta: dict) -> tuple:
     texto = _texto_clasificable(rec)
     if not propia.search(texto) or (rec.get("doctype") or "") in NOISE_DOCTYPES:
         return ()
-    umbral = (meta or {}).get("fundacional_min_citas")
+    umbral, _mal = cfg.gate2_threshold(meta)     # AUD-142: la misma regla que `classify_theme`
     citas = rec.get("citation_count")
     out = []
-    if isinstance(umbral, int) and citas is not None and citas >= umbral:
+    if umbral is not None and citas is not None and citas >= umbral:
         out.append("fundacional")
     if classify_record(rec)[1]:
         out.append("astro")
@@ -1022,7 +1029,10 @@ def lens_used(meta: dict | None = None) -> dict:
         # distinción que D-26 protege al no ponerle default.
         regla = {"facet": meta.get("facet")}
         if "fundacional_min_citas" in meta:
-            regla["umbral"] = meta.get("fundacional_min_citas")
+            # AUD-142: se persiste el umbral NORMALIZADO, el mismo que el clasificador usó — si no,
+            # el registro guarda `"30000"` y `puerta2_cruces` compara un string contra un int y
+            # reporta un cruce inventado en cada corrida.
+            regla["umbral"] = cfg.gate2_threshold(meta)[0]
         lente["regla_tema"] = regla
     return lente
 

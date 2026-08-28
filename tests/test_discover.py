@@ -381,8 +381,27 @@ def test_theme_anchor_lee_las_dos_formas_de_thesis_links(tmp_path, monkeypatch):
     (papers / "sin_doi.md").write_text(
         "---\ntitle: D\nthesis_links: [ica]\n---\ncuerpo\n", encoding="utf-8")
     monkeypatch.setattr(d.cfg, "PAPERS", papers)
-    dois = sorted(r["doi"] for r in d._theme_anchor("ica"))
-    assert dois == ["10.1/a", "10.1/b"]        # las dos formas; sin el de otro tema ni el sin DOI
+    ancla, del_tema = d._theme_anchor("ica")
+    assert sorted(r["doi"] for r in ancla) == ["10.1/a", "10.1/b"]
+    assert del_tema == 3, "el sin-DOI cuenta como paper del tema, aunque no ancle"
+
+
+def test_theme_anchor_matchea_el_CONCEPT_no_solo_el_slug(tmp_path, monkeypatch):
+    """AUD-134 — `thesis_links` guarda el **nombre del concepto**, no el slug del tema.
+
+    Comparando contra el slug el ancla salía SIEMPRE vacía, y el CLI imprimía «el tema todavía no
+    tiene papers con DOI en la bóveda»: una frase afirmativa sobre una búsqueda que nunca matcheó,
+    con el eje de más apalancamiento de `discover` apagado. Es la misma confusión slug↔concept que
+    #188 arregló para el `sujeto` de la vista."""
+    papers = tmp_path / "papers"
+    papers.mkdir()
+    (papers / "a.md").write_text(
+        "---\ndoi: 10.1/a\nthesis_links:\n- análisis de componentes independientes\n---\n",
+        encoding="utf-8")
+    monkeypatch.setattr(d.cfg, "PAPERS", papers)
+    assert d._theme_anchor("ica") == ([], 0)                      # el slug NO está en la nota
+    ancla, n = d._theme_anchor("ica", "análisis de componentes independientes")
+    assert [r["doi"] for r in ancla] == ["10.1/a"] and n == 1
 
 
 def test_theme_anchor_no_confunde_slugs_que_se_prefijan(tmp_path, monkeypatch):
@@ -391,7 +410,7 @@ def test_theme_anchor_no_confunde_slugs_que_se_prefijan(tmp_path, monkeypatch):
     (papers / "x.md").write_text(
         "---\ndoi: 10.1/x\nthesis_links: [ica-noise]\n---\n", encoding="utf-8")
     monkeypatch.setattr(d.cfg, "PAPERS", papers)
-    assert d._theme_anchor("ica") == []        # compara por ELEMENTO, no por substring
+    assert d._theme_anchor("ica") == ([], 0)   # compara por ELEMENTO, no por substring
 
 
 # ── preview de un tema ──────────────────────────────────────────────────────
@@ -412,7 +431,7 @@ def test_preview_theme_corre_la_cascada_y_el_anclaje(toy_vault, monkeypatch, cap
         "records": [{"doi": "10.1/a", "title": "A", "citation_count": 9, "found_in": ["openalex"]}],
         "undedupable": [{"title": "sin id"}],
         "cobertura": [("ads", 1, None)]})
-    monkeypatch.setattr(d, "_theme_anchor", lambda s: [{"doi": "10.1/z"}])
+    monkeypatch.setattr(d, "_theme_anchor", lambda s, c=None: ([{"doi": "10.1/z"}], 1))
     monkeypatch.setattr(d, "anchored_records", lambda a, min_citadores=2, rows=25: (
         [{"title": "canon", "citation_count": 8266, "citadores": 8, "found_in": ["anclado"]}],
         ["10.1/no-resuelto"]))
@@ -428,7 +447,7 @@ def test_preview_theme_sin_ancla_lo_dice(toy_vault, monkeypatch, capsys):
     monkeypatch.setattr(d.cfg, "load_themes", lambda: {"ica": {"title": "ICA", "topic": "T1"}})
     monkeypatch.setattr(d, "cascade", lambda **k: {"records": [], "undedupable": [],
                                                    "cobertura": []})
-    monkeypatch.setattr(d, "_theme_anchor", lambda s: [])
+    monkeypatch.setattr(d, "_theme_anchor", lambda s, c=None: ([], 0))
     assert d._preview_theme("ica") == 0
     assert "sin anclaje" in capsys.readouterr().out
 
@@ -440,7 +459,7 @@ def test_preview_theme_infiere_el_topic_y_avisa_que_lo_eligio_solo(toy_vault, mo
     visto = {}
     monkeypatch.setattr(d, "cascade", lambda **k: visto.update(k) or {
         "records": [], "undedupable": [], "cobertura": []})
-    monkeypatch.setattr(d, "_theme_anchor", lambda s: [])
+    monkeypatch.setattr(d, "_theme_anchor", lambda s, c=None: ([], 0))
     d._preview_theme("ica")
     assert visto["topic_id"] == "T11447"
     assert "elegido por alias" in capsys.readouterr().out   # nunca en silencio
@@ -613,3 +632,15 @@ def test_la_cascada_registra_su_corrida(toy_vault, monkeypatch, capsys):
     cob = ds[0]["cobertura"]
     assert cob["ads"] == {"n": 3, "error": None}
     assert cob["arxiv"] == {"n": 0, "error": "timeout"}, "un backend caído NO es «no hay nada»"
+
+
+def test_preview_theme_distingue_sin_papers_de_sin_doi(toy_vault, monkeypatch, capsys):
+    """AUD-134 — los dos «sin anclaje» piden cosas distintas: correr la mitad ADS, o completar
+    los `doi`. Un solo mensaje mandaba a re-ingestar un tema que ya estaba ingestado."""
+    monkeypatch.setattr(d.cfg, "load_themes", lambda: {"ica": {"title": "ICA", "topic": "T1"}})
+    monkeypatch.setattr(d, "cascade", lambda **k: {"records": [], "undedupable": [],
+                                                   "cobertura": []})
+    monkeypatch.setattr(d, "_theme_anchor", lambda s, c=None: ([], 4))
+    assert d._preview_theme("ica") == 0
+    out = capsys.readouterr().out
+    assert "4 paper(s) en la bóveda y NINGUNO trae `doi`" in out

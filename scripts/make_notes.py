@@ -1301,7 +1301,16 @@ def stamp_header(dest) -> bool:
                  if isinstance(gen, str) and gen.startswith("Almagesto v")
                  else f"{GENERATOR_LINE}desconocida — la nota no registra con qué versión se creó "
                       "(cabecera normalizada)._")
-    idx = text.find("Capa LLM")
+    # ⚠ AUD-135 — las DOS ramas buscan sólo en el CUERPO. La del H1 ya lo hacía (un comentario
+    # YAML `# Título` matcheaba `H1_RE`, que corre con `re.M`); la de «Capa LLM» seguía barriendo
+    # el texto entero, así que un frontmatter que mencionara esas dos palabras —un comentario de
+    # curación, un `motivo:`— metía el blockquote ADENTRO del frontmatter: `split_fm` devolvía `{}`
+    # y la nota caía en una categoría BLOQUEANTE. Lo dispara `--restamp-headers`, o sea el comando
+    # que el lint receta: la reparación fabricaba el daño que venía a arreglar. Es el arreglo
+    # aplicado a un sitio y no a su gemelo, con el motivo escrito al lado.
+    partes = cfg.frontmatter_span(text)
+    offset = len(text) - len(partes[1]) if partes else 0
+    idx = text.find("Capa LLM", offset)
     if idx >= 0:
         # Tiene disclaimer pero no la línea: no re-estampar el bloque entero (duplicaría el aviso),
         # sólo agregar `linea_gen` al final del párrafo blockquote que ya existe — la primera línea
@@ -1319,8 +1328,6 @@ def stamp_header(dest) -> bool:
     # `split_fm` devolvía `{}` y la nota caía en una categoría BLOQUEANTE del lint. Como esto lo
     # dispara `--restamp-headers` —lo que el lint recomienda para las notas sin cabecera— la
     # reparación fabricaba el daño que venía a arreglar.
-    partes = cfg.frontmatter_span(text)
-    offset = len(text) - len(partes[1]) if partes else 0
     m = H1_RE.search(text, offset)
     if not m:
         return False                                  # sin H1 no hay ancla honesta: no inventamos
@@ -2027,12 +2034,16 @@ def estado_line(slug: str, dest) -> str:
         n = sint.get("n_papers")
         partes.append(f"síntesis {sint['fecha']}" + (f" ({n} papers)" if n else ""))
     texto = dest.read_text(encoding="utf-8") if dest.exists() else ""
-    m = re.search(r"^## Verificación de citas \((\d{4}-\d{2}-\d{2})\)", texto, re.M)
-    if m:
+    # AUD-136 — acá se buscaba el PRIMER encabezado con un regex propio, y el lint toma el MÁXIMO
+    # (una nota acumula varios bloques: pasadas sucesivas sobre secciones distintas). Dos
+    # implementaciones de la misma regla, contradictorias: la cabecera publicaba una fecha vieja
+    # sobre una nota que el lint daba por re-verificada. Una sola función, en `lib_config`.
+    _hay, fecha_verif = cfg.verification_date(texto)
+    if fecha_verif:
         # La fecha es la de la última PASADA. La vigencia real es **por par** y la dicen las anclas
         # (D-4): sin la salvedad, esta fecha se lee como "todo verificado a esta fecha", que es
         # justamente la lectura que el ancla vino a corregir.
-        partes.append(f"verificación {m.group(1)} (vigencia por par: la dicen las anclas)")
+        partes.append(f"verificación {fecha_verif} (vigencia por par: la dicen las anclas)")
     if not partes:
         return ""
     # el puntero al registro es lo que hace auditable la línea: el detalle (query efectiva,
