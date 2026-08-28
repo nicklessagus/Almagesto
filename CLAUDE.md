@@ -1460,7 +1460,21 @@ misma query ordenada por fecha** (#79) y la marca guarda en `truncated.recent` c
 que lo reciente —lo que el orden por citas esconde por construcción— ya está cubierto; ídem el
 **rescate por glifo incompleto** (`truncated_glyph`, marca hermana: el superset de la constelación
 del rescate #28 se cortó por citas **antes** del filtro client-side, que es donde vive la señal →
-pueden faltar papers con lookalike). Los **campos incompletos** son **backlog** y no bloquean; hoy son **diez** (el conteo es el de
+pueden faltar papers con lookalike).
+⛔ **La nota que no trae los campos del schema de SU TIPO** (INV-63) es **backlog**. Hasta 1.74.0 el
+schema vivía en la prosa de este documento y se chequeaba campo por campo, ad-hoc, así que no había
+forma de preguntar *«¿esta nota cumple el schema de su tipo?»*; hoy lo declara `lib_config.SCHEMA_NOTA`
+con la lista que **escriben los writers** de `make_notes` —no una copia de esta prosa—, así que
+*«toda nota generada lo cumple»* es verdadero por construcción y lo que el detector encuentra son
+notas anteriores al campo. ⚠ Se exige la **clave**, no el valor: un `null` es el caso normal y a
+propósito (el espejo #70 deja en `null` lo que la autoridad no trae, y rellenarlo con literatura está
+prohibido), así que exigir valor sería lo contrario de lo que este contrato manda.
+⛔ **Y cada categoría del reporte declara SU POBLACIÓN** (INV-40), en una línea bajo el encabezado:
+`> sobre 412 notas de vault/wiki/`. Un `(0)` no distingue *«miré 412 notas y no hay nada»* de *«no
+miré ninguna»*, así que la promesa de que el chequeo cubre todo lo que dice cubrir no era verificable
+desde la salida. Lo que no se puede declarar honestamente dice `⚠ población no declarada` —un
+denominador equivocado es peor que ninguno— y son exactamente dos, nombradas y con techo.
+Los **campos incompletos** son **backlog** y no bloquean; hoy son **diez** (el conteo es el de
 los sitios que pueblan `incomplete` en `lint.py` — no el de la lista histórica; ⚠ decía *siete* y
 enumeraba ocho mientras el código tenía diez: tres valores para un hecho que decide un `grep`, #147):
 `P_rot` sin documentar en la prosa (el frontmatter nulo **no** es hallazgo desde #70),
