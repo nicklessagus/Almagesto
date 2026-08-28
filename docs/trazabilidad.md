@@ -7,9 +7,9 @@
 
 ## Resumen
 
-- Invariantes en el contrato: **136**
-- Con implementación marcada: **110**
-- Con test marcado: **130** (techo `sin_test`: 6, hoy 6)
+- Invariantes en el contrato: **137**
+- Con implementación marcada: **111**
+- Con test marcado: **131** (techo `sin_test`: 6, hoy 6)
 - Sin ninguna marca: **6** (techo `sin_marca`: 6)
 - Marcas huérfanas: **0**
 
@@ -96,6 +96,7 @@
 | **INV-134** | P1 | garantizado (sin corpus migrado que lo mida) | `scripts/extraction_prompt.py:216` · `build_prompt`<br>`scripts/lint.py:1433` · `collect` | `tests/test_extraction_prompt.py:222` · `test_el_prompt_pide_la_vista_del_sujeto`<br>`tests/test_extraction_prompt.py:242` · `test_el_sujeto_de_la_vista_puede_diferir_del_nombre_del_prompt`<br>`tests/test_harvest_views.py:63` · `test_cosecha_estampa_la_vista_con_fecha_txt_y_lente`<br>`tests/test_harvest_views.py:172` · `test_upsert_view_no_se_come_el_cierre_del_frontmatter`<br>`tests/test_harvest_views.py:195` · `test_render_view_no_fabrica_wikilinks_con_notacion_de_matriz`<br>`tests/test_lib_config.py:1254` · `test_load_vistas_forma_canonica`<br>`tests/test_lint.py:3657` · `test_schema_viejo_sin_vistas_es_bloqueante`<br>`tests/test_lint.py:3681` · `test_vista_declarada_sin_su_seccion_es_bloqueante`<br>`tests/test_lint.py:3709` · `test_reclamo_sin_vista_es_backlog_y_nombra_al_sujeto`<br>`tests/test_lint.py:3779` · `test_vista_declarada_sin_fecha_es_backlog`<br>`tests/test_make_notes.py:3166` · `test_vista_block_lleva_el_sujeto_en_el_encabezado`<br>`tests/test_make_notes.py:3178` · `test_stub_de_estrella_declara_su_vista_y_su_seccion`<br>`tests/test_make_notes.py:3209` · `test_el_retro_linkeo_NO_escribe_vistas` |
 | **INV-135** | P1 | garantizado (cero en una bóveda sana, que es la señal de que está bien puesto) | `scripts/lint.py:838` · `diverged_copies` | `tests/test_lint.py:1314` · `test_mismo_bibcode_con_txt_distinto_entre_slugs_es_hallazgo`<br>`tests/test_lint.py:1333` · `test_dos_copias_identicas_no_son_hallazgo`<br>`tests/test_lint.py:1379` · `test_el_chequeo_de_divergencia_no_agrega_ni_una_lectura` |
 | **INV-136** | P1 | garantizado y medido | `scripts/make_notes.py:1592` · `missing_anchors` | `tests/test_make_notes.py:3238` · `test_theme_restampa_la_tabla_papers_estilo_ficha`<br>`tests/test_make_notes.py:3264` · `test_missing_anchors_separa_al_dia_de_sin_ancla` |
+| **INV-137** | P1 | garantizado y medido | `scripts/apply_fixes.py:111` · `apply` | `tests/test_apply_fixes.py:35` · `test_fila_de_tabla_se_reemplaza_exacta`<br>`tests/test_apply_fixes.py:45` · `test_bloque_multilinea_se_localiza_por_su_forma_normalizada`<br>`tests/test_apply_fixes.py:57` · `test_dos_fixes_sobre_el_mismo_bloque_NO_se_aplican`<br>`tests/test_apply_fixes.py:77` · `test_la_fusion_explicita_gana_y_saltea_los_originales`<br>`tests/test_apply_fixes.py:91` · `test_un_viejo_que_no_aparece_no_escribe_nada`<br>`tests/test_apply_fixes.py:103` · `test_si_UN_fix_falla_no_se_escribe_NINGUNO`<br>`tests/test_apply_fixes.py:115` · `test_un_viejo_ambiguo_no_se_aplica`<br>`tests/test_apply_fixes.py:123` · `test_dry_run_no_toca_el_archivo`<br>`tests/test_apply_fixes.py:133` · `test_el_item_reescrito_conserva_su_sangria`<br>`tests/test_apply_fixes.py:145` · `test_los_rechazados_del_corrector_se_reportan` |
 | **INV-48** | P0 | garantizado y medido | `scripts/triage.py:166` · `drop` | `tests/test_triage.py:60` · `test_drop_persiste_con_motivo_en_config_versionada` |
 | **INV-49** | P0 | parcial (medido, con la brecha nombrada) | `scripts/query_ads.py:587` · `load_triage` | `tests/test_query_ads.py:1189` · `test_main_triage_no_repropone_descartados` |
 | **INV-50** | P0 | garantizado y medido | `scripts/query_ads.py:572` · `subject_in_title` | `tests/test_query_ads.py:1173` · `test_main_chaining_solo_auto_acepta_sujeto_en_titulo` |

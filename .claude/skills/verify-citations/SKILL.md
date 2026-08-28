@@ -1,7 +1,7 @@
 ---
 name: verify-citations
 description: Usar para verificar, afirmación por afirmación, que las citas [[bibcode]] de una nota de la wiki (query, hipótesis, ficha, concepto) realmente están respaldadas por el texto completo de la fuente. Se corre como paso de cierre al armar/editar una query o hipótesis, o cuando el usuario pide "rechequeá las citas / ¿esto lo dice el paper?". Implementa el chequeo claim↔evidencia (pipeline tipo CiteAudit) sobre el corpus cerrado de la bóveda. Veredictos: soportada / no-soportada (la fuente calla) / contradice (la fuente afirma lo contrario → candidata a disputa, no sólo cita rota), en un EJE SEPARADO de la `condición` bajo la que la fuente lo afirma; en transcripciones de tablas/listas chequea además la completitud (lo que la nota omite).
-version: 1.10.0
+version: 1.11.0
 ---
 
 # Verify-citations — chequeo claim↔evidencia contra el fulltext
@@ -212,6 +212,33 @@ correcciones hechas desde el reporte **introdujeron un error nuevo** — un resu
 `N=2` cuando el paper lo reporta para `N=10`, y «este pipeline corrige actividad con regresión
 multilineal» cuando el paper dice que **no corrige actividad en absoluto**. El verificador acierta
 al señalar el problema y su nota es un resumen, no la redacción final.
+
+⛔ **A escala, las correcciones NO se aplican a mano ni con un `replace` ingenuo: usá
+`python scripts/apply_fixes.py <nota.md> <dir-de-fixes> [--write]`** (#197). El fan-out es para
+**leer**; la escritura es de **un solo aplicador serial**. Cada corrector devuelve su corrección
+como JSON —`{bibcode, fixes:[{n, viejo, nuevo, por_que, confirmado_en}], rechazados:[…]}`— y el
+aplicador la pone. Los dos modos de falla están medidos sobre una corrida de 75 correcciones:
+
+- **Colisión.** Un ítem de `## Huecos` que cita varias fuentes le toca a **cada** corrector de esas
+  fuentes, así que llegan dos o tres fixes con el **mismo `viejo`** (medido: 5 sobre 2 ítems).
+  Aplicados en cadena, el segundo se ancla sobre lo que dejó el primero y el ítem queda con un
+  fragmento del anterior colgando — prosa corrupta **bajo un encabezado que se lee como verificado**.
+  El aplicador la detecta **antes de tocar nada** y no escribe: la fusión se hace a mano y se declara
+  en un JSON con `"bibcode": "_fusionados"`, que gana y saltea los originales. Fusionar dos
+  correcciones es **juicio, no mecánica**, y por eso ningún script la hace solo.
+- **Bloque multilínea.** El `viejo` que redacta el corrector sale del texto **normalizado** de
+  `lib_blocks` (líneas unidas con un espacio) y en el archivo el bloque vive envuelto: un `replace`
+  da **0 ocurrencias** (medido: 14 de 75 — todos los ítems y párrafos; las filas de tabla, de una
+  línea, aplican bien). El aplicador lo localiza por su forma normalizada y lo reescribe re-envuelto,
+  conservando la sangría.
+
+**Todo o nada**: si un solo `viejo` no resuelve —no aparece, aparece dos veces, o hay una colisión
+sin fusionar— no se escribe **ninguno**. Un reemplazo que adivina es peor que uno que falla, y una
+nota a medio corregir es indistinguible de una corregida.
+
+⚠ **Después de aplicar, las anclas cambian y hay que regenerar el bloque** — y si la corrección
+agregó `[[bibcode]]` nuevos, esos pares **son pares nuevos** y hay que verificarlos también (medido:
+dos, al resolver una contradicción interna de la nota).
 
 Cada **no-soportada / contradice**, y cada `condicion` no vacía, se resuelve antes de cerrar:
 - **Contradicción** (`contradice`) → decidir cuál de dos casos es. (a) **La nota está mal** →
