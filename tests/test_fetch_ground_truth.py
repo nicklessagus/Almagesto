@@ -306,9 +306,12 @@ def test_force_no_destruye_el_snapshot_si_falla_la_escritura(toy_vault, monkeypa
 
     import os
     monkeypatch.setattr(os, "replace", lambda *a, **k: (_ for _ in ()).throw(OSError("corte")))
+    # `getattr` + `skip` convertía un test de PÉRDIDA DE DATOS en un salto silencioso ante
+    # cualquier renombre de la función (y `-q` ni lo muestra). Si el writer no está, es un fallo.
     escribir = getattr(gt, "write_ground_truth", None)
-    if escribir is None:
-        pytest.skip("fetch_ground_truth no expone un writer aislado todavía — parte del fix")
+    assert escribir is not None, ("`fetch_ground_truth.write_ground_truth` no existe: o se renombró "
+                                  "—y este test hay que re-apuntarlo— o la escritura atómica del "
+                                  "snapshot dejó de tener writer propio")
     with pytest.raises(OSError):
         escribir("s", {"slug": "s", "host": {}, "planets": []})
     assert dest.read_text(encoding="utf-8") == previo, (

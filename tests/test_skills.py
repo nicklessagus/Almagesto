@@ -339,10 +339,9 @@ def test_el_paso_3_declara_el_recorte_con_su_criterio(skill, patron):
     El lint ya lo reporta como *recorte de lectura sin declarar*, así que la red existe y lo que
     falta es que el skill nombre el comando que la cierra.
 
-    ⚠ Este par **no está en el mismo estado en los dos skills**: `ingest-star` ya nombra
-    `--extraccion subconjunto --reason` (D-13), así que su caso es contra-caso y pasa desde hoy;
-    `ingest-theme` no lo nombra en absoluto —su paso 3 dice sólo «leer los papers clave del tema»—
-    y por eso sólo ese caso nace `xfail`."""
+    ⚠ Nació con un caso `xfail` (`ingest-theme` no nombraba el comando) y **hoy los dos pasan**: el
+    skill se completó y la marca se retiró. El docstring seguía prometiendo un `xfail` que no existe
+    —hallazgo del frente F, 2026-08-28—, que es el mismo drift que este archivo persigue."""
     seccion = _seccion_paso(_skill(skill), patron)
     faltan = [t for t in ("--extraccion", "subconjunto", "--reason") if t not in seccion]
     assert faltan == [], f"el paso 3 de `{skill}` no declara el recorte; falta: {faltan}"

@@ -93,8 +93,18 @@ def test_un_json_que_NO_es_extraccion_se_rechaza(toy_vault):
     trae `bibcode` y es JSON válido. Aceptarla pisa notas terminadas **en silencio** — medido:
     13 notas. El rechazo se cuenta y se nombra.
 
+    ⚠ El JSON sembrado trae **`vista` válida y PDF en disco**, a propósito: sin eso lo rechazaba la
+    guarda *siguiente* y el test no distinguía cuál actuó. Medido el 2026-08-28 (frente F de la
+    pasada `/auditar`): con `is_extraction` neutralizada, el archivo entero seguía en verde.
+    Ahora el único motivo posible de rechazo es INV-103, que es lo que este test acredita.
+
     @inv INV-103"""
-    dest = sembrar(toy_vault, {"bibcode": BIB, "resultados": [{"veredicto": "soportada"}]})
+    (toy_vault.PDFS / "test_star").mkdir(parents=True, exist_ok=True)
+    (toy_vault.PDFS / "test_star" / f"{BIB}.pdf").write_bytes(b"%PDF-1.4\n")
+    dest = sembrar(toy_vault, {
+        "bibcode": BIB,
+        "vista": {"sujeto": "Estrella Test", "tipo": "star", "txt": "test_star", "fuente": "pdf"},
+        "resultados": [{"veredicto": "soportada", "ancla": "ab12cd34ef"}]})   # salida de verify
     antes = dest.read_text(encoding="utf-8")
     r = hv.harvest("test_star")
     assert r["rechazadas"] == 1 and r["cosechadas"] == 0

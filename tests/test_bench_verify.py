@@ -272,7 +272,10 @@ def test_score_metricas(toy_vault, monkeypatch, capsys):
     reportes = sorted((cfg.ROOT / "outputs").glob("verify-bench-*.md"))
     assert len(reportes) == 1, f"el score tiene que dejar su reporte: {reportes}"
     cuerpo = reportes[0].read_text(encoding="utf-8")
-    assert "50%" in cuerpo and "4" in cuerpo, "el reporte lleva el recall y el n de la muestra"
+    # `"4"` a secas lo satisfacía cualquier 4 del reporte, **incluida la fecha del encabezado**:
+    # rompiendo el conteo, el test fallaba hoy y pasaba con la fecha congelada en 2026-08-24
+    # (frente F, 2026-08-28). El n de la muestra va con su unidad.
+    assert "50%" in cuerpo and "4 pares" in cuerpo, "el reporte lleva el recall y el n de la muestra"
 
 
 def test_score_incompleto_rc1(toy_vault, monkeypatch, capsys):
