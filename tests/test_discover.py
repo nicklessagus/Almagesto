@@ -644,3 +644,53 @@ def test_preview_theme_distingue_sin_papers_de_sin_doi(toy_vault, monkeypatch, c
     assert d._preview_theme("ica") == 0
     out = capsys.readouterr().out
     assert "4 paper(s) en la bóveda y NINGUNO trae `doi`" in out
+
+
+def test_seed_dice_cuando_el_topic_tiene_mucho_mas(monkeypatch, capsys):
+    """AUD-183 / INV-130 — «no silent caps». `meta.count` dice cuántos hay y se descartaba: el
+    llamador recibía `rows` registros sin nada que dijera que el topic tiene 169.977, y la lista se
+    leía como el universo.
+
+    Es la misma regla que `seed_terms` aplica doce líneas más arriba en el mismo archivo — el
+    arreglo puesto en un sitio y no en su gemelo — y la que ya rige para el `truncated` de ADS."""
+    class R:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {"meta": {"count": 169977},
+                    "results": [{"id": "W1", "title": "T", "cited_by_count": 10}]}
+    monkeypatch.setattr(d.requests, "get", lambda *a, **k: R())
+    d.seed("T11447", rows=25)
+    salida = capsys.readouterr().out
+    assert "169977" in salida and "SEMILLA" in salida
+
+
+def test_preview_declara_lo_que_corta_y_ordena_por_citas_por_ano(toy_vault, monkeypatch, capsys):
+    """AUD-184/185 / INV-120-121 — tres recortes mudos en el mismo preview.
+
+    (a) El listado se ordenaba por **cuenta cruda** y este repo tiene una política única
+    (`sort_by_citation_rate`, citas/AÑO) porque la cruda repite el sesgo de edad contra lo reciente
+    (#79), que es lo que un descubrimiento existe para traer. (b) El corte a `--rows` era mudo: la
+    lista se leía como todo lo que la cascada encontró. (c) arXiv se buscaba con un `aliases[:6]`
+    silencioso, así que los alias 7+ no existían para nadie."""
+    monkeypatch.setattr(d.cfg, "load_themes", lambda: {
+        "ica": {"title": "ICA", "query": "q", "topic": "T1",
+                "aliases": [f"a{i}" for i in range(9)]}})
+    recs = [{"doi": f"10.1/{i}", "title": f"T{i}", "citation_count": 100, "year": 1990,
+             "found_in": ["openalex"]} for i in range(4)]
+    recs.append({"doi": "10.1/nuevo", "title": "reciente", "citation_count": 90, "year": 2026,
+                 "found_in": ["openalex"]})
+    monkeypatch.setattr(d, "cascade", lambda **k: {"records": recs, "undedupable": [],
+                                                   "cobertura": []})
+    monkeypatch.setattr(d, "_theme_anchor", lambda s, c=None: ([], 0))
+    assert d._preview_theme("ica", rows=2) == 0
+    out = capsys.readouterr().out
+    assert "y 3 más" in out and "citas/AÑO" in out
+    assert "quedan fuera: a6, a7, a8" in out
+    # el reciente (90 citas en 1 año) rankea por encima de los viejos (100 en 37)
+    assert out.index("reciente") < out.index("T0")
+    # y el registro guarda CON QUÉ se buscó
+    consulta = cfg.load_registro("ica")["descubrimientos"][-1]["consulta"]
+    assert consulta["ads"] == "q" and consulta["topic"] == "T1"
+    assert consulta["arxiv"] == [f"a{i}" for i in range(6)]

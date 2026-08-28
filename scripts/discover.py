@@ -210,6 +210,15 @@ def seed(topic_id: str, rows: int = 25, min_citas: int | None = None) -> list[di
     recs = [oa.to_record(w) for w in d.get("results", [])]
     for r in recs:                      # provenance stamped at the source, so the preview cannot lie
         r["found_in"] = ["openalex"]
+    # AUD-183 / INV-130 — «no silent caps». `meta.count` dice cuántos hay y se descartaba: el
+    # llamador recibía `rows` registros sin nada que dijera que el topic tiene 169.977, y la lista
+    # se leía como el universo. Es la misma regla que `seed_terms` aplica doce líneas más arriba —
+    # el arreglo aplicado a un sitio y no a su gemelo, con el motivo escrito al lado — y la que ya
+    # rige para el `truncated` de ADS.
+    hay = (d.get("meta") or {}).get("count")
+    if isinstance(hay, int) and hay > len(recs):
+        cfg.print_seguro(f"  ⚠ el topic {topic_id} tiene {hay} works y se trajeron {len(recs)} "
+                         f"(top por citas) — esto es una SEMILLA para triage, no el universo")
     if min_citas is not None:
         recs = [r for r in recs if (r.get("citation_count") or 0) >= min_citas]
     return recs
@@ -478,6 +487,9 @@ def _theme_anchor(slug: str, concept: str | None = None) -> tuple[list, int]:
     return fuera, del_tema
 
 
+MAX_ARXIV_TERMS = 6
+
+
 def _preview_theme(slug: str, rows: int = 25, min_citadores: int = 2) -> int:
     """Full cascade for one theme, proposes only: downloads no file and writes nothing to `vault/wiki/`. It DOES
     append this run to `descubrimientos:` of the versioned registry (INV-121), which is
@@ -500,10 +512,19 @@ def _preview_theme(slug: str, rows: int = 25, min_citadores: int = 2) -> int:
             topic_id = cands[0]["id"]
             cfg.print_seguro(f"  (sin `topic:` en themes.yaml — usando {topic_id} "
                              f"«{cands[0]['name']}», elegido por alias; declaralo si sirve)")
+    # AUD-184 / INV-121 — el recorte de alias era un `[:6]` MUDO: los backends reciben la query en
+    # su propio idioma y el de arXiv sale de acá, así que un tema con 9 alias buscaba con 6 y los
+    # otros 3 no existían para nadie. Se dice cuáles se usaron y cuáles quedaron afuera.
+    _alias = [str(a) for a in cfg.as_list(tema.get("aliases")) if str(a).strip()]
+    arxiv_terms = _alias[:MAX_ARXIV_TERMS] or None
+    if len(_alias) > MAX_ARXIV_TERMS:
+        cfg.print_seguro(f"  ⚠ arXiv se busca con los primeros {MAX_ARXIV_TERMS} alias "
+                         f"({', '.join(arxiv_terms)}); quedan fuera: "
+                         f"{', '.join(_alias[MAX_ARXIV_TERMS:])}")
     out = cascade(ads_query=tema.get("query"),
-                  arxiv_terms=cfg.as_list(tema.get("aliases"))[:6] or None,
+                  arxiv_terms=arxiv_terms,
                   topic_id=topic_id, rows=rows,
-                  min_citas=tema.get("fundacional_min_citas"))
+                  min_citas=cfg.gate2_threshold(tema)[0])
     cfg.print_seguro(f"\nCascada para `{slug}` (preview — no baja nada, no clasifica):")
     print_cobertura(out["cobertura"])
     # #77: el rastro versionado. La cascada corría tres backends y su resultado moría en stdout, así
@@ -518,6 +539,11 @@ def _preview_theme(slug: str, rows: int = 25, min_citadores: int = 2) -> int:
         "n_records": len(out["records"]),
         "n_undedupable": len(out["undedupable"]),
         "cobertura": {b: {"n": n_, "error": err} for b, n_, err in out["cobertura"]},
+        # AUD-184 / INV-121 — el registro no guardaba CON QUÉ se buscó, así que la pregunta que
+        # justifica su existencia («sobre qué universo afirma esta nota, y con qué se buscó») sólo
+        # tenía media respuesta: la cobertura decía quién contestó y nada decía qué se preguntó. Los
+        # tres backends reciben la query en su propio idioma, así que van los tres.
+        "consulta": {"ads": tema.get("query"), "arxiv": arxiv_terms, "topic": topic_id},
         "almagesto_version": cfg.ALMAGESTO_VERSION,
     })
     cfg.print_seguro(f"  → registrado en {cfg.registro_path(slug)}")
@@ -527,8 +553,17 @@ def _preview_theme(slug: str, rows: int = 25, min_citadores: int = 2) -> int:
     solo_oa = only_from(out["records"], "openalex")
     if solo_oa:
         cfg.print_seguro(f"  · {len(solo_oa)} los tiene SÓLO OpenAlex → no-astro, van a triage")
-    for r in sorted(out["records"], key=lambda r: -(r.get("citation_count") or 0))[:rows]:
+    # AUD-185 / INV-120 — dos cosas mal en una línea. (a) El orden era por **cuenta cruda**, y este
+    # repo tiene una política única para eso —`sort_by_citation_rate`, citas/AÑO— justamente porque
+    # la cuenta cruda repite el sesgo de edad (#79) contra lo reciente, que es lo que un
+    # descubrimiento existe para traer. (b) El corte a `rows` era **mudo**: la lista se leía como
+    # todo lo que la cascada encontró.
+    _rank = cfg.sort_by_citation_rate(out["records"])
+    for r in _rank[:rows]:
         cfg.print_seguro(_row(r))
+    if len(_rank) > rows:
+        cfg.print_seguro(f"  … y {len(_rank) - rows} más (listado cortado en --rows {rows}; el "
+                         f"orden es por citas/AÑO, no por cuenta cruda)")
 
     ancla, del_tema = _theme_anchor(slug, tema.get("concept"))
     if ancla:
@@ -540,6 +575,8 @@ def _preview_theme(slug: str, rows: int = 25, min_citadores: int = 2) -> int:
                              "(OpenAlex las saca de depósitos Crossref; el astro pre-2000 no los tiene)")
         for r in anclados[:rows]:
             cfg.print_seguro(_row(r))
+        if len(anclados) > rows:
+            cfg.print_seguro(f"  … y {len(anclados) - rows} más (listado cortado en --rows {rows})")
     elif del_tema:
         cfg.print_seguro(f"\n  (sin anclaje: el tema tiene {del_tema} paper(s) en la bóveda y "
                          f"NINGUNO trae `doi` — el anclaje sale de las referencias, que OpenAlex "
@@ -580,7 +617,7 @@ def main(argv=()) -> int:
     if args.seed:
         recs = seed(args.seed, rows=args.rows)
         cfg.print_seguro(f"  {len(recs)} works (preview — NO clasifica: son candidatos a triage)\n")
-        for r in recs:
+        for r in cfg.sort_by_citation_rate(recs):   # AUD-185: citas/AÑO, la política única (#79)
             cfg.print_seguro(_row(r))
         return 0
     ap.error("falta --topics o --seed")

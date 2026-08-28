@@ -140,7 +140,20 @@ def search_fq() -> str | None:
     if "search_fq" not in rel:
         return ASTRO_FQ
     v = rel.get("search_fq")
-    return str(v) if v else None
+    if v is None or v == "":
+        return None                       # `null` declarado: no acotar, a propósito (#85)
+    # AUD-182 / INV-119 — `str(v)` sobre una lista manda el **`repr` de Python** a Solr
+    # (`['a', 'b']`), que no es una query: ADS devuelve otra cosa (o nada) y el corpus queda
+    # filtrado por un `fq` que nadie escribió, con el registro guardando ese repr como la lente
+    # vigente. La forma se valida como el resto de la config: falla ruidoso.
+    if not isinstance(v, str):
+        raise RuntimeError(
+            f"vault/config/objective.yaml: relevance.search_fq tiene que ser un string con el `fq` "
+            f"de Solr y es {type(v).__name__} ({v!r}). Si querés varias condiciones, escribilas en "
+            f"un solo string (`database:astronomy AND property:refereed`); una lista se manda como "
+            f"su repr de Python y filtra el corpus con una regla que nadie escribió."
+        )
+    return v
 
 
 # Normalización de campos de CURACIÓN MANUAL: vive en `lib_config` desde que el diff de lente
@@ -710,7 +723,8 @@ def sweep_star(slug: str, rows: int) -> int:
         _listify_curado(meta.get("aliases"), "aliases")
     q = build_fulltext_filter(names)
     cfg.print_seguro(f"Barrido full-text (2b) de {name} — q: {q}")
-    hits = query_ads(q, rows=rows)
+    bmeta: dict = {}
+    hits = query_ads(q, rows=rows, meta=bmeta)
     # Orden por citas/AÑO (#79 punto 1, política única en lib_config): este barrido existe para
     # rescatar "core poco citados que caen al fondo del ranking", así que rankearlo por citas crudas
     # lo hacía repetir el sesgo del mecanismo que le falló.
@@ -740,6 +754,12 @@ def sweep_star(slug: str, rows: int) -> int:
         "n_hits": len(hits),               # papers con la estrella en el CUERPO
         "n_nuevos": len(news),             # core que ads.json no tenía
         "bibcodes": [r.get("bibcode") for r in news if r.get("bibcode")],
+        # AUD-181 / INV-118 — el barrido es la SEGUNDA red (el punto ciego de la query directa:
+        # surveys que tabulan la estrella sin nombrarla en el abstract), y no guardaba si se cortó.
+        # Un barrido truncado se leía igual que uno completo: «la red se tendió y esto es todo lo
+        # que hay», sobre una cola que nadie miró. Misma marca que `busquedas[].truncated`.
+        "truncated": bool(bmeta.get("truncated")),
+        "n_found": bmeta.get("num_found"),
         "almagesto_version": cfg.ALMAGESTO_VERSION,
     })
     cfg.print_seguro(f"  → registrado en {cfg.registro_path(slug)}")

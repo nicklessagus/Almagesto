@@ -1235,11 +1235,19 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             verif_blocks.append((f, verif_date))
             anchor_notes.append((stem, text))
         # frontera dura: fuga de implementación (código no bibliográfico) al vault (WARN, no bloquea).
-        body_full = text.split("---", 2)[-1] if text.startswith("---") else text
+        # AUD-190 / INV-4 — el número de línea se contaba desde el CUERPO y el hallazgo se publica
+        # como `L{i}`, que por convención de este repo es la de `grep -n` sobre el ARCHIVO (skill
+        # verify-citations, #29). En una ficha de estrella el frontmatter tiene decenas de líneas,
+        # así que el puntero mandaba al operador a otra parte de la nota — un mapa que atribuye mal.
+        # Y el cortador es `frontmatter_span`, no `split("---", 2)`: éste corta dentro de un escalar
+        # entrecomillado que lleve `---` (H-11), y ahí el offset quedaba peor todavía.
+        _partes = cfg.frontmatter_span(text)
+        body_full = _partes[1] if _partes else text
+        _offset = len(text[:len(text) - len(body_full)].split("\n")) - 1 if _partes else 0
         scan_leaks = stem not in NON_ORPHAN    # log/index/README son historia/navegación, no fichas
         # split("\n"), no splitlines(): un form feed colado no debe correr la numeración (la
         # convención de conteo es la de `grep -n` — ver skill verify-citations, #29)
-        for i, line in enumerate(body_full.split("\n"), 1) if scan_leaks else []:
+        for i, line in enumerate(body_full.split("\n"), 1 + _offset) if scan_leaks else []:
             if line.lstrip().startswith(">"):
                 continue                       # blockquote meta (frontera/alcance)
             for rx, label in leak_patterns:
@@ -1753,11 +1761,21 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         # ciego de la query directa —surveys que TABULAN la estrella sin nombrarla en el abstract y
         # que además no están en el grafo de citas— y hasta ahora era un preview de stdout: no se
         # podía saber si se había corrido. Backlog: no invalida nada de lo que la ficha afirma.
-        if _slug in stars_slugs and not cfg.as_list(_d.get("barridos")):
+        _barridos = [b for b in cfg.as_list(_d.get("barridos")) if isinstance(b, dict)]
+        if _slug in stars_slugs and not _barridos:
             sweep_pendiente.append(
                 (_slug, "el barrido full-text (2b) no consta en el registro: es el único camino "
                         "para los surveys que TABULAN la estrella sin nombrarla en el abstract → "
                         f"`python scripts/query_ads.py {_slug} --sweep`"))
+        # AUD-181 / INV-118 — un barrido TRUNCADO se leía igual que uno completo: «la red se tendió
+        # y esto es todo lo que hay», sobre una cola que nadie miró. Es la segunda red del sujeto,
+        # así que su cola importa tanto como la de la query directa.
+        elif _barridos and _barridos[-1].get("truncated"):
+            sweep_pendiente.append(
+                (_slug, f"el barrido full-text del {_barridos[-1].get('fecha') or 's/f'} quedó "
+                        f"TRUNCADO (ADS reporta {_barridos[-1].get('n_found')} y se pidieron "
+                        f"{_barridos[-1].get('rows')}) → "
+                        f"la cola no se miró; re-corré con `--rows` mayor"))
         _fechas = {str(p.get("fecha")) for p in cfg.as_list(_d.get("cadena"))
                    if isinstance(p, dict) and p.get("fecha")}
         # AUD-177 / INV-131 — se exigía el SLUG en el encabezado y la convención documentada usa el
@@ -2824,8 +2842,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('coverage', 'Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog)', SEV_BACKLOG, tuple(coverage)),
         Categoria('unsynthesized', 'Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog)', SEV_BACKLOG, tuple(unsynthesized)),
         Categoria('headerless', 'Cabecera no estampable: ficha/concepto sin la línea del generador — los estampadores de cabecera no-opean en silencio (backlog)', SEV_BACKLOG, tuple(headerless)),
-        Categoria('sweep_pendiente', 'Barrido full-text (2b) sin rastro: no consta que la segunda red '
-                  'para el punto ciego de la query se haya tendido (backlog)',
+        Categoria('sweep_pendiente', 'Barrido full-text (2b) sin rastro o truncado: no consta que la '
+                  'segunda red para el punto ciego de la query se haya tendido entera (backlog)',
                   SEV_BACKLOG, tuple(sweep_pendiente)),
         Categoria('triage_pending', 'Triage pendiente: candidatos del chaining sin juzgar (backlog)', SEV_BACKLOG, tuple(triage_pending)),
         Categoria('vistas_schema_viejo', '⛔ Extracción sin declarar la LENTE: `## Extracción (LLM)` sin `vistas[]` (schema viejo, #188)', SEV_BLOQUEANTE, tuple(vistas_schema_viejo)),

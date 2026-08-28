@@ -454,9 +454,13 @@ Ninguno es paso de cierre: se corren **a pedido**, y por eso viven en
   veredicto es una **función** de (afirmación, fuente). Sin esto, un error del juez es **permanente y
   silencioso**.
 - **Benchmark** — `python scripts/bench_verify.py seed` siembra citas **falsas deterministas** entre
-  pares reales, el verificador las juzga a ciegas y `score` reporta el **recall**. Le pone un número
-  al "juicio de LLM". **Regla #0: nada del benchmark entra a `vault/`** (vive en `build/`/`outputs/`;
-  las citas falsas no son bibliografía).
+  pares reales, el verificador las juzga a ciegas y
+  `python scripts/bench_verify.py score --modelo <id>` reporta el **recall**. Le pone un número al
+  "juicio de LLM". ⛔ **Pasá `--modelo`** (INV-75): el número se reporta **atado a su condición**
+  —corpus, modelo, fecha, muestra—, nunca como cifra absoluta del framework, y el script no puede
+  saber qué modelo juzgó. Sin el flag el reporte dice «no declarado», que es la verdad pero no sirve
+  para comparar dos corridas. **Regla #0: nada del benchmark entra a `vault/`** (vive en
+  `build/`/`outputs/`; las citas falsas no son bibliografía).
 
 Los dos miden cosas distintas —reproducibilidad sobre contenido real vs detección de un error
 plantado— y ninguno sustituye al otro.

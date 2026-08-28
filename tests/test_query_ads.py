@@ -1986,3 +1986,21 @@ def test_el_sweep_dicta_un_snippet_que_el_framework_ACEPTA(toy_vault, capsys, mo
     entradas = qa.cfg.load_extra_core(bloque, entry="sweep")
     assert entradas and entradas[0]["bibcode"] == "2020ApJ...900....1X"
     assert entradas[0]["via"] in qa.cfg.EXTRA_CORE_VIA
+
+
+def test_search_fq_con_forma_invalida_falla_ruidoso(toy_vault, monkeypatch):
+    """AUD-182 / INV-119 — `str(v)` sobre una lista manda el **repr de Python** a Solr
+    (`['a', 'b']`), que no es una query.
+
+    ADS devuelve otra cosa (o nada) y el corpus queda filtrado por un `fq` que nadie escribió, con
+    el registro guardando ese repr como la lente vigente. La forma se valida como el resto de la
+    config: falla ruidoso."""
+    monkeypatch.setattr(qa.cfg, "load_objective",
+                        lambda: {"relevance": {"search_fq": ["database:astronomy", "x"]}})
+    with pytest.raises(RuntimeError, match="search_fq tiene que ser un string"):
+        qa.search_fq()
+    monkeypatch.setattr(qa.cfg, "load_objective",
+                        lambda: {"relevance": {"search_fq": "database:astronomy"}})
+    assert qa.search_fq() == "database:astronomy"
+    monkeypatch.setattr(qa.cfg, "load_objective", lambda: {"relevance": {"search_fq": None}})
+    assert qa.search_fq() is None            # `null` declarado: no acotar, a propósito (#85)

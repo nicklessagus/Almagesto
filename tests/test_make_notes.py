@@ -1138,6 +1138,28 @@ def test_stamp_fulltext_multi_slug_empate_no_toca(toy_vault):
     assert mn.stamp_fulltext(dest, stem, "hd40307") is False
 
 
+def test_stamp_fulltext_multi_slug_no_alterna_el_pdf_source(toy_vault):
+    """AUD-186 / INV-23 — la regla de estabilidad cubría `fulltext`/`fulltext_source` y NO al
+    tercero.
+
+    Un paper compartido por dos slugs quedaba con el `.txt` de uno y la procedencia del PDF del
+    otro, **alternando en cada corrida**: el frontmatter dejaba de ser idempotente y el consumidor
+    leía `pdf_source: eprint` sobre el `.txt` de un slug cuyo PDF es el publicado."""
+    stem = "2009ApJ...700.1732K"
+    seed_txt(toy_vault, "tau_ceti", stem)
+    seed_txt(toy_vault, "hd40307", stem)
+    cfg.record_pdf_source("tau_ceti", stem, "eprint")
+    cfg.record_pdf_source("hd40307", stem, "publisher")
+    dest = _note_con_fulltext(toy_vault, stem,
+                              f"../../raw/fulltext/tau_ceti/{stem}.txt", "pdftotext")
+    mn.stamp_fulltext(dest, stem, "tau_ceti")
+    assert read_fm(dest)["pdf_source"] == "eprint"
+    # correr la cadena del OTRO slug no repunta el `.txt` (empate) → tampoco la procedencia
+    mn.stamp_fulltext(dest, stem, "hd40307")
+    assert read_fm(dest)["pdf_source"] == "eprint", "alternó con el slug que corrió último"
+    assert mn.stamp_fulltext(dest, stem, "hd40307") is False
+
+
 def test_stamp_fulltext_multi_slug_prefiere_pdftotext_sobre_ocr(toy_vault):
     """La nota apunta a una copia OCR; llega un slug con extracción pdftotext limpia → gana la
     mejor calidad (converge a la fuente más citable, no al último que corrió)."""

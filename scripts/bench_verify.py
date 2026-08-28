@@ -181,8 +181,13 @@ def extract_pairs(max_pairs: int) -> list[dict]:
     """Pares (afirmación, bibcode-con-fulltext) reales de las notas verificables, deterministas
     (orden por nota y bloque; cap en max_pairs)."""
     ft = fulltext_map()
+    # AUD-188 / INV-75 — `stars/` faltaba, y es donde el contrato pone el estándar de
+    # autosuficiencia y donde más `[[bibcode]]` se acumulan: el benchmark medía el verificador sobre
+    # una población que excluía justo el tipo de nota que más verifica. El número salía atado a una
+    # condición que el reporte no declaraba. Es la misma población que `in_verifiable_note` del lint.
     files = sorted(glob.glob(str(cfg.QUERIES / "**" / "*.md"), recursive=True)
-                   + glob.glob(str(cfg.CONCEPTS / "**" / "*.md"), recursive=True))
+                   + glob.glob(str(cfg.CONCEPTS / "**" / "*.md"), recursive=True)
+                   + glob.glob(str(cfg.STARS / "**" / "*.md"), recursive=True))
     pairs, seen = [], set()
     for f in files:
         text = open(f, encoding="utf-8").read()
@@ -270,14 +275,19 @@ def cmd_seed(max_pairs: int) -> int:
     bench_dir().mkdir(parents=True, exist_ok=True)
     # EXAMEN: sólo lo que hace falta para juzgar. Ni `label`, ni `_seed`, ni `n_real`/`n_seeded`
     # (dos conteos por clase también son clave: con 20 pares y "n_seeded: 8" el que mira ya sabe
-    # cuántas buscar). `note`/`line` se quedan porque son la trazabilidad que el humano necesita
-    # para revisar una caída, y no dicen de qué lado está el par.
+    # cuántas buscar).
+    # ⛔ AUD-187 / INV-74 — `note`/`line` TAMPOCO. El docstring decía que «no dicen de qué lado está
+    # el par», y sí lo dicen: un par sembrado es la afirmación de una nota con el bibcode ROTADO, así
+    # que abrir esa nota en esa línea muestra a quién cita de verdad y la etiqueta queda a la vista.
+    # La ceguera de D-55 es por construcción, no por instrucción, y esto era la puerta que quedaba
+    # abierta. La trazabilidad para revisar una caída no se pierde: viaja en `key.json`, que se abre
+    # DESPUÉS de juzgar (es literalmente la clave) y que `score` cruza por `id`.
     exam = {"n_pairs": len(pairs),
             "pairs": [{"id": p["id"], "claim": p["claim"], "bibcode": p["bibcode"],
-                       "fulltext": p["fulltext"], "note": p["note"], "line": p["line"],
-                       "verdict": None} for p in pairs]}
+                       "fulltext": p["fulltext"], "verdict": None} for p in pairs]}
     clave = {"n_real": len(real), "n_seeded": len(seeded),
-             "key": {p["id"]: p["label"] for p in pairs}}
+             "key": {p["id"]: p["label"] for p in pairs},
+             "origen": {p["id"]: {"note": p["note"], "line": p["line"]} for p in pairs}}
     cfg.write_text_atomic(exam_path(), json.dumps(exam, indent=2, ensure_ascii=False))
     cfg.write_text_atomic(key_path(), json.dumps(clave, indent=2, ensure_ascii=False))
     # Un `bench.json` de una corrida pre-D-55 quedaría al lado del examen nuevo, con las etiquetas
@@ -291,7 +301,13 @@ def cmd_seed(max_pairs: int) -> int:
     return 0
 
 
-def cmd_score() -> int:
+def _origen(origen: dict, p: dict) -> str:
+    """`nota:Lnn` of the pair, from the KEY (AUD-187 moved it out of the exam), or `?` if absent."""
+    o = origen.get(p["id"]) or {}
+    return f"{o.get('note', '?')}:L{o.get('line', '?')}"
+
+
+def cmd_score(modelo: str = "") -> int:
     exam, key = exam_path(), key_path()
     if not exam.exists():
     #  @inv INV-75
@@ -306,7 +322,9 @@ def cmd_score() -> int:
         raise SystemExit(f"no existe {key} — el examen no se puede puntuar sin su clave; "
                          f"re-sembrá con `bench_verify.py seed`.")
     pairs = json.loads(exam.read_text(encoding="utf-8"))["pairs"]
-    etiquetas = json.loads(key.read_text(encoding="utf-8"))["key"]
+    _clave = json.loads(key.read_text(encoding="utf-8"))
+    etiquetas = _clave["key"]
+    origen = _clave.get("origen") or {}       # AUD-187: `note`/`line` viven acá, no en el examen
     huerfanos = [p["id"] for p in pairs if p["id"] not in etiquetas]
     if huerfanos:
         raise SystemExit(f"{len(huerfanos)} par(es) del examen no están en la clave "
@@ -324,21 +342,30 @@ def cmd_score() -> int:
     caught = [p for p in sown if p["verdict"] in CATCH]
     slipped = [p for p in sown if p["verdict"] in PASS]
     suspect = [p for p in real if p["verdict"] in CATCH]
+    # AUD-188 / INV-75 — el número se reporta ATADO A SU CONDICIÓN, nunca como cifra absoluta del
+    # framework. La fecha y el tamaño de muestra ya estaban; el **modelo** —que es la variable que
+    # más lo mueve— no, y el corpus tampoco se nombraba. El modelo lo DECLARA quien corrió el
+    # fan-out (el script no puede saberlo), y si no lo declara se dice «no declarado»: un número sin
+    # su condición no se puede comparar con otro.
     lines = [f"# Benchmark del verificador de citas — {dt.date.today().isoformat()}", "",
+             f"**Condición de esta medición** — corpus: `{cfg.VAULT}` "
+             f"(notas de `stars/`, `concepts/` y `queries/`) · modelo: "
+             + (f"`{modelo}`" if modelo else "**no declarado** (`score --modelo <id>`)")
+             + f" · fecha: {dt.date.today().isoformat()} · muestra: {len(pairs)} pares.", "",
              f"{len(pairs)} pares ({len(real)} reales de control + {len(sown)} sembrados falsos).", "",
              f"## Sembradas cazadas (recall): {len(caught)}/{len(sown)}"
              f" ({len(caught) / len(sown):.0%})" if sown else "## Sin sembradas", ""]
     if slipped:
         lines += ["**Sembradas que PASARON** (¿soporte casual del otro paper, o miss del "
                   "verificador? revisar a mano antes de culpar al verificador):"]
-        lines += [f"- {p['id']} {p['note']}:L{p['line']} → [[{p['bibcode']}]] dio {p['verdict']}"
+        lines += [f"- {p['id']} {_origen(origen, p)} → [[{p['bibcode']}]] dio {p['verdict']}"
                   for p in slipped]
         lines += [""]
     lines += [f"## Reales consistentes: {len(real) - len(suspect)}/{len(real)}", ""]
     if suspect:
         lines += ["**Reales caídas** (flaky del verificador O error de grounding real de la nota "
                   "— ambos valen revisarse):"]
-        lines += [f"- {p['id']} {p['note']}:L{p['line']} → [[{p['bibcode']}]] dio {p['verdict']}"
+        lines += [f"- {p['id']} {_origen(origen, p)} → [[{p['bibcode']}]] dio {p['verdict']}"
                   for p in suspect]
         lines += [""]
     lines += ["> Juicio de LLM, no prueba: el recall calibra cuánto confiar en verify-citations.",
@@ -360,9 +387,13 @@ def main() -> int:
     p_seed = sub.add_parser("seed", help="armar el benchmark (pares reales + sembrados)")
     p_seed.add_argument("--max", type=int, default=DEFAULT_MAX,
                         help=f"máximo de pares reales (default {DEFAULT_MAX}; acota el costo LLM)")
-    sub.add_parser("score", help="puntuar los veredictos del bench.json")
+    p_score = sub.add_parser("score", help="puntuar los veredictos del examen")
+    p_score.add_argument("--modelo", default="",
+                         help="qué modelo juzgó los pares (INV-75: el resultado se reporta atado a "
+                              "su condición — corpus, modelo, fecha, muestra —, nunca como cifra "
+                              "absoluta del framework). Sin él, el reporte dice «no declarado».")
     args = ap.parse_args()
-    return cmd_seed(args.max) if args.cmd == "seed" else cmd_score()
+    return cmd_seed(args.max) if args.cmd == "seed" else cmd_score(args.modelo)
 
 
 if __name__ == "__main__":

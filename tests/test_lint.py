@@ -1139,10 +1139,12 @@ def test_fuga_numera_lineas_como_grep(toy_vault, capsys):
             "línea uno\ncon un form feed \x0c en el medio\nla perilla en la línea 3\n")
     link_from_index(toy_vault, "nota")
     rc, out = run_lint(capsys)
-    # numeración relativa al cuerpo post-frontmatter: L1 vacía (el \n tras el `---`), L2 "línea
-    # uno", L3 la del form feed, L4 la perilla. Con splitlines() el \x0c partiría L3 en dos y la
-    # perilla se correría a L5.
-    assert "L4 [perilla" in out
+    # AUD-190: la numeración es la del ARCHIVO, no la del cuerpo — es lo que `L{i}` promete por
+    # convención (`grep -n`), y en una ficha de estrella el frontmatter tiene decenas de líneas, así
+    # que contar desde el cuerpo mandaba al operador a otra parte de la nota. Acá el frontmatter
+    # ocupa 4 líneas (`---`, `tags:`, `- methods`, `---`), así que la perilla es la 7.
+    # Con splitlines() el \x0c partiría la 6 en dos y la perilla se correría a la 8.
+    assert "L7 [perilla" in out
 
 
 def test_objetivo_default_warn(toy_vault, capsys):
@@ -3334,6 +3336,20 @@ def test_log_con_su_entrada_no_se_reporta(toy_vault, capsys):
     linea = [l for l in rep.splitlines() if l.startswith("## 📓 Operación sin entrada")]
     assert linea, rep
     assert int(linea[0].rsplit("(", 1)[1].rstrip(")")) == 0, linea[0]
+
+
+def test_barrido_truncado_se_reporta(toy_vault, capsys):
+    """AUD-181 / INV-118 — un barrido TRUNCADO se leía igual que uno completo: «la red se tendió y
+    esto es todo lo que hay», sobre una cola que nadie miró.
+
+    Es la SEGUNDA red del sujeto —el punto ciego de la query directa: surveys que tabulan la
+    estrella sin nombrarla en el abstract—, así que su cola importa tanto como la de la primera."""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    cfg.save_barrido("test_star", {"fecha": "2026-08-28", "rows": 200, "n_found": 1800,
+                                   "truncated": True, "n_hits": 200})
+    _rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "Barrido full-text")
+    assert "TRUNCADO" in sec and "1800" in sec, sec
 
 
 def test_sources_con_forma_invalida_no_da_cero(toy_vault, capsys):

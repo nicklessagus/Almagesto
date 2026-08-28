@@ -168,12 +168,19 @@ def stamp_fulltext(dest, stem: str, slug: str | None) -> bool:
     # (misma calidad, incluido otro slug con el mismo contenido) el existente se queda → idempotente.
     cur_rel = next((ln.split(":", 1)[1].strip().strip("'\"")
                     for ln in lines if ln.startswith("fulltext:")), None)
+    slug_ganador = slug
     if cur_rel and cur_rel not in ("null", "~") and cur_rel != rel:
         cur_path = (dest.parent / cur_rel).resolve()
         if cur_path.exists():
             cur_src = _txt_provenance(cur_path)
             if _FULLTEXT_QUALITY.get(src, 0) <= _FULLTEXT_QUALITY.get(cur_src, 0):
                 rel, src = cur_rel, cur_src   # el existente gana → estampá SU provenance
+                # AUD-186 / INV-23 — y su `pdf_source` TAMBIÉN. La regla de estabilidad cubría
+                # `fulltext`/`fulltext_source` y no al tercero, así que un paper compartido por dos
+                # slugs quedaba con el `.txt` de uno y la procedencia del PDF del otro, **alternando
+                # en cada corrida**: el frontmatter dejaba de ser idempotente y el consumidor leía
+                # `pdf_source: eprint` sobre el `.txt` de un slug cuyo PDF era el publicado.
+                slug_ganador = cur_path.parent.name
 
     def upsert(field: str, value: str, anchors: tuple[str, ...]) -> bool:
         want = f"{field}: {value}"
@@ -196,7 +203,7 @@ def stamp_fulltext(dest, stem: str, slug: str | None) -> bool:
     # `pdf_source` viaja con los otros dos porque se conoce en el mismo momento (el .txt ya está en
     # disco) y porque así se estampa RETROACTIVAMENTE en cualquier bóveda ya ingestada: re-correr
     # extract_fulltext alcanza, no hay que re-bajar nada.
-    psrc, pver = pdf_source_info(slug, stem)
+    psrc, pver = pdf_source_info(slug_ganador, stem)
     if psrc:
         changed = upsert("pdf_source", psrc, ("fulltext_source", "fulltext", "pdf")) or changed
         if pver:
@@ -2290,8 +2297,12 @@ depende de un plugin.)_
 ## Métodos aplicados a esta estrella
 _(se estampa determinista: `make_notes.py {slug}` lo regenera.)_
 
-## Datos crudos
-`{meta.get('data_local')}`
+<!-- AUD-189 / INV-5: `data_local` NO se copia al cuerpo. La regla afinada de la frontera dura
+     (CLAUDE.md) permite el puntero downstream como CAMPO ESTRUCTURAL del frontmatter —es parte del
+     contrato máquina-legible— y lo prohíbe en PROSA, que es donde describe al consumidor. La
+     sección `## Datos crudos` hacía exactamente eso: duplicaba texto libre del usuario, con rutas
+     de otra máquina, en la capa que el contrato declara síntesis. El dato sigue en el frontmatter,
+     que es su lugar. -->
 """
     body += excluded_table(slug)
     # como los otros dos writers (concept y papers): la carpeta puede no existir — git no

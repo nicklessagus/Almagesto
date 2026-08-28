@@ -160,7 +160,7 @@
 - star02 → sin la línea `_Generado con Almagesto v…_`: los estampadores de cabecera no pueden actuar → `python scripts/make_notes.py --restamp-headers`
 - star01 → sin la línea `_Generado con Almagesto v…_`: los estampadores de cabecera no pueden actuar → `python scripts/make_notes.py --restamp-headers`
 
-## Barrido full-text (2b) sin rastro: no consta que la segunda red para el punto ciego de la query se haya tendido (backlog) (0)
+## Barrido full-text (2b) sin rastro o truncado: no consta que la segunda red para el punto ciego de la query se haya tendido entera (backlog) (0)
 
 ## Triage pendiente: candidatos del chaining sin juzgar (backlog) (0)
 

@@ -42,7 +42,10 @@ def leer_bench():
     hablan de la SIEMBRA (qué se sembró, con qué rotación), que es ortogonal a la partición."""
     exam = json.loads(bv.exam_path().read_text(encoding="utf-8"))
     clave = json.loads(bv.key_path().read_text(encoding="utf-8"))
-    pairs = [{**p, "label": clave["key"][p["id"]]} for p in exam["pairs"]]
+    # AUD-187: `note`/`line` salieron del examen (revelaban la etiqueta) y viven en `origen` de la
+    # clave. El helper los vuelve a juntar para que los tests de SIEMBRA sigan mirando el par entero.
+    pairs = [{**p, "label": clave["key"][p["id"]], **clave.get("origen", {}).get(p["id"], {})}
+             for p in exam["pairs"]]
     return {**clave, "pairs": pairs}
 
 
@@ -303,6 +306,10 @@ def test_exam_no_contiene_la_clave(toy_vault, monkeypatch):
     crudo = bv.exam_path().read_text(encoding="utf-8")
     assert "sembrada" not in crudo and "label" not in crudo
     assert "n_seeded" not in crudo and "n_real" not in crudo
+    # AUD-187 / INV-74 — `note`/`line` tampoco. Un par sembrado es la afirmación de una nota con el
+    # bibcode ROTADO: abrir esa nota en esa línea muestra a quién cita de verdad y la etiqueta queda
+    # a la vista. La ceguera de D-55 es por construcción, no por instrucción.
+    assert '"note"' not in crudo and '"line"' not in crudo
     exam = json.loads(crudo)
     ids = [p["id"] for p in exam["pairs"]]
     assert len(set(ids)) == len(ids), "los ids tienen que seguir siendo únicos"
@@ -373,3 +380,35 @@ def test_el_benchmark_no_toca_el_vault(toy_vault, monkeypatch):
     assert hash_vault() == antes, "el benchmark escribió en vault/ — frontera dura rota"
     assert bv.exam_path().exists() and bv.key_path().exists(), "y sí escribió en build/"
     assert bv.bench_dir().resolve().is_relative_to((cfg.ROOT / "build").resolve())
+
+
+def test_el_reporte_declara_su_condicion(toy_vault, monkeypatch, capsys):
+    """AUD-188 / INV-75 — el número se reporta ATADO A SU CONDICIÓN, nunca como cifra absoluta del
+    framework.
+
+    La fecha y el tamaño de muestra ya estaban; el **modelo** —la variable que más lo mueve— no, y
+    el corpus tampoco se nombraba. El modelo lo declara quien corrió el fan-out (el script no puede
+    saberlo) y, sin declararlo, el reporte dice «no declarado»: un número sin su condición no se
+    puede comparar con otro."""
+    write_bench([pair("p000", "real", "soportada"), pair("p001", "sembrada", "no-soportada")])
+    run(monkeypatch, "score")
+    out = capsys.readouterr().out
+    assert "Condición de esta medición" in out
+    assert "modelo: **no declarado**" in out
+
+    run(monkeypatch, "score", "--modelo", "claude-opus-5")
+    out = capsys.readouterr().out
+    assert "modelo: `claude-opus-5`" in out and "muestra: 2 pares" in out
+
+
+def test_la_poblacion_del_benchmark_incluye_las_fichas(toy_vault):
+    """AUD-188 — `stars/` faltaba, y es donde el contrato pone el estándar de autosuficiencia y
+    donde más `[[bibcode]]` se acumulan: el benchmark medía al verificador sobre una población que
+    excluía justo el tipo de nota que más verifica."""
+    bib = "2020aaaA...1..1A"
+    (cfg.FULLTEXT / "test_star").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "test_star" / f"{bib}.txt").write_text("texto del paper", encoding="utf-8")
+    mk_note(cfg.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test"},
+            f"## Resumen\n\nEl período de rotación es de 34 días según [[{bib}]].\n")
+    pares = bv.extract_pairs(20)
+    assert any(p["note"] == "test_star" for p in pares), "las fichas quedaron fuera de la población"
