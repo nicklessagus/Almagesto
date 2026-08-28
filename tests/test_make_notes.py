@@ -2687,29 +2687,6 @@ _DOS_COLUMNAS = "\n".join(
     "y la columna derecha, que es otro parrafo distinto" for _ in range(30))
 
 
-def test_stamp_fulltext_declara_la_maqueta(toy_vault):
-    """INV-102: el `.txt` a dos columnas hace que un nº de línea NO sea un localizador único, y la
-    extracción está llena de nº de línea. Ese hecho vivía sólo en un skill, así que la nota —el
-    artefacto que viaja— no lo llevaba. Se estampa en el frontmatter, no en el `.txt`: tocar el
-    `.txt` movería su hash y volvería *vencido por fuente* cada par ya verificado (D-20)."""
-    # @inv INV-102
-    ads_json([rec("2021twoA...1..1A"), rec("2021oneB...1..1B")])
-    mn.write_paper_notes("test_star", include_all=False, force=False)
-    dos = seed_txt(toy_vault, "test_star", "2021twoA...1..1A")
-    dos.write_text(_DOS_COLUMNAS, encoding="utf-8")
-    una = seed_txt(toy_vault, "test_star", "2021oneB...1..1B")
-
-    for stem in ("2021twoA...1..1A", "2021oneB...1..1B"):
-        assert mn.stamp_fulltext(toy_vault.PAPERS / f"{stem}.md", stem, "test_star") is True
-    assert read_fm(toy_vault.PAPERS / "2021twoA...1..1A.md")["fulltext_layout"] == "two-column"
-    #  se declara también la de una columna: la ausencia del campo significa «no medido», no «una
-    #  columna» — es la distinción de D-43 aplicada acá.
-    assert read_fm(toy_vault.PAPERS / "2021oneB...1..1B.md")["fulltext_layout"] == "single-column"
-    assert mn.stamp_fulltext(toy_vault.PAPERS / "2021twoA...1..1A.md",
-                             "2021twoA...1..1A", "test_star") is False
-    assert una.read_text(encoding="utf-8") == _DOS_COLUMNAS[:0] + una.read_text(encoding="utf-8")
-
-
 # ── la línea de estado no puede moverse si no cambió lo que la nota afirma (#105) ──
 def test_estado_line_estable_entre_corridas_identicas(tmp_path, monkeypatch):
     """Regla 6 vs D-28: `busquedas` crece en cada corrida (es bitácora y debe crecer), pero la
@@ -2743,25 +2720,6 @@ def test_nota_offads_nace_sin_conteo_de_citas_no_con_cero(tmp_path, monkeypatch)
                             first_author="Comon", year=1994)
     fm = cfg.split_fm((tmp_path / "1994Comon.md").read_text(encoding="utf-8"))
     assert fm["citation_count"] is None, "0 sería «nadie lo cita»; la verdad es «no lo sé»"
-
-
-def test_txt_symbols_lost_lee_la_marca_de_113(tmp_path):
-    """#113: eje INDEPENDIENTE de `fulltext_source` — aquél dice CÓMO se extrajo el texto, éste que
-    las fórmulas no están en el archivo aunque la extracción haya sido normal."""
-    import lib_config as cfg
-    con = tmp_path / "con.txt"
-    con.write_text(cfg.FULLTEXT_SYMBOLS_MARK + ": las ECUACIONES no estan\ncuerpo\n", encoding="utf-8")
-    sin = tmp_path / "sin.txt"
-    sin.write_text("un fulltext normal, con sus ecuaciones\n", encoding="utf-8")
-    assert mn._txt_symbols_lost(con) is True
-    assert mn._txt_symbols_lost(sin) is False
-
-
-def test_txt_symbols_lost_no_confunde_la_marca_de_ocr(tmp_path):
-    import lib_config as cfg
-    ocr = tmp_path / "ocr.txt"
-    ocr.write_text(cfg.FULLTEXT_OCR_MARK + ": citable CON SALVEDAD\ncuerpo\n", encoding="utf-8")
-    assert mn._txt_symbols_lost(ocr) is False
 
 
 # ── #114: el DOI DataCite de arXiv ES un arXiv id ────────────────────────────────────────────────
@@ -2844,7 +2802,7 @@ def test_el_drop_core_se_ve_en_la_tabla_de_papers(toy_vault, monkeypatch):
 
 # ── #117 · el migrador deduce el archivo del HASH, no del frontmatter ────────────────────────────
 
-def _nota_con_fila(toy_vault, bib="2020citC...1..1C", hash_fila="", symbols_lost=False):
+def _nota_con_fila(toy_vault, bib="2020citC...1..1C", hash_fila=""):
     """Una nota con un bloque de verificación de UNA fila, más el `.txt` y el PDF de esa fuente."""
     import lib_blocks as lb
     (toy_vault.FULLTEXT / "slug").mkdir(parents=True, exist_ok=True)
@@ -2853,10 +2811,7 @@ def _nota_con_fila(toy_vault, bib="2020citC...1..1C", hash_fila="", symbols_lost
     (toy_vault.PDFS / "slug").mkdir(parents=True, exist_ok=True)
     pdf = toy_vault.PDFS / "slug" / f"{bib}.pdf"
     pdf.write_bytes(b"%PDF-1.4\n escaneo del editor \xff\n")
-    fm = {"tags": ["paper"], "stars": ["Estrella Test"]}
-    if symbols_lost:
-        fm["symbols_lost"] = True
-    mk_note(toy_vault.PAPERS, bib, fm, "")
+    mk_note(toy_vault.PAPERS, bib, {"tags": ["paper"], "stars": ["Estrella Test"]}, "")
     cuerpo = f"Afirmación con cita [[{bib}]].\n"
     par = lb.pairs_of(cuerpo)[0]
     nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
@@ -2872,15 +2827,15 @@ def _nota_con_fila(toy_vault, bib="2020citC...1..1C", hash_fila="", symbols_lost
 
 
 def test_migrar_verif_deduce_el_archivo_del_hash_no_del_frontmatter(toy_vault, capsys):
-    """El punto de #117: la fila la escribió el verificador, que a veces leyó el PDF de una fuente
-    **no** marcada `symbols_lost` (el OCR del editor destruyó los símbolos). Aplicar la regla del
-    frontmatter acá escribiría `txt:` sobre una fila anclada al PDF — una declaración falsa, en
-    justo las filas que motivaron el issue. Se identifica el archivo por su huella.
+    """El punto de #117: la fila la escribió el verificador, que a veces leyó el PDF aunque el
+    frontmatter no dijera nada. Inferir de un campo escribiría `txt:` sobre una fila anclada al
+    PDF — una declaración falsa, en justo las filas que motivaron el issue. Se identifica el
+    archivo por su huella.
 
     @inv INV-107"""
     import lib_blocks as lb
     nota, ft, pdf = _nota_con_fila(toy_vault, hash_fila="")
-    # la fila guarda el hash del PDF, y la nota de paper NO está marcada symbols_lost
+    # la fila guarda el hash del PDF
     nota.write_text(nota.read_text(encoding="utf-8").replace("|  | — |",
                                                              f"| {lb.bytes_hash(pdf)} | — |"),
                     encoding="utf-8")
@@ -2911,14 +2866,15 @@ def test_migrar_verif_es_idempotente(toy_vault):
 
 
 def test_migrar_verif_avisa_cuando_no_coincide_ningun_archivo(toy_vault, capsys):
-    """Sin coincidencia el par ya está vencido: se declara lo que dice el frontmatter y **se avisa**
-    de que hay que re-verificar. Lo que no se hace es callarse y escribir una declaración que se lee
-    como verificada.  @inv INV-107"""
-    nota, _, _ = _nota_con_fila(toy_vault, hash_fila="", symbols_lost=True)
+    """Sin coincidencia el par ya está vencido: se declara `txt:` —el default de cuando esas filas
+    se escribieron, antes de que #205 moviera la lectura al PDF— y **se avisa** de que hay que
+    re-verificar. Lo que no se hace es callarse y escribir una declaración que se lee como
+    verificada.  @inv INV-107"""
+    nota, _, _ = _nota_con_fila(toy_vault, hash_fila="")
     nota.write_text(nota.read_text(encoding="utf-8").replace("|  | — |", "| deadbeef99 | — |"),
                     encoding="utf-8")
     assert mn.migrate_verif_archivo(nota) == 1
-    assert "| pdf:deadbeef99 |" in nota.read_text(encoding="utf-8"), "cae a la regla del frontmatter"
+    assert "| txt:deadbeef99 |" in nota.read_text(encoding="utf-8")
     assert "re-verificar el par" in capsys.readouterr().out
 
 
@@ -3267,3 +3223,33 @@ def test_missing_anchors_separa_al_dia_de_sin_ancla(toy_vault):
     dest.write_text("# X\n\n## Papers\n\ntabla\n", encoding="utf-8")
     assert mn.missing_anchors(dest, ["## Papers"]) == []
     assert mn.missing_anchors(dest, ["## Papers", "## No Existe"]) == ["## No Existe"]
+
+
+# ── #205 · migrador de `symbols_lost` / `fulltext_layout` ───────────────────────────────────────
+
+
+def test_migrar_txt_fields_saca_los_dos_campos_y_no_toca_nada_mas(toy_vault):
+    """Los dos campos existían para UNA decisión —¿el extractor lee el `.txt` o el PDF?— y esa
+    decisión ya no se toma. Un campo sin lector se lee como un gate vivo, y éstos además **mienten**
+    (medido: un paper con `symbols_lost: False` había perdido igual el radical `√`).
+
+    Cirugía a nivel línea: el resto del frontmatter y el cuerpo quedan intactos."""
+    mk_note(toy_vault.PAPERS, "2020aaa...1..1A",
+            {"tags": ["paper"], "symbols_lost": True, "fulltext_layout": "two-column",
+             "relevance": "high"}, "Prosa que no se toca.\n")
+    assert mn.migrate_all_txt_fields() == 1
+    texto = (toy_vault.PAPERS / "2020aaa...1..1A.md").read_text(encoding="utf-8")
+    assert "symbols_lost" not in texto and "fulltext_layout" not in texto
+    assert "relevance: high" in texto, "se llevó puesto otro campo"
+    assert "Prosa que no se toca." in texto, "tocó el cuerpo"
+
+
+def test_migrar_txt_fields_es_idempotente_y_no_reescribe_lo_limpio(toy_vault):
+    """Segunda corrida = 0 notas tocadas. Sin esto el migrador reescribiría toda la bóveda en cada
+    pasada y rompería la regla «corré dos veces y hasheá»."""
+    mk_note(toy_vault.PAPERS, "2020bbb...1..1B", {"tags": ["paper"], "fulltext_layout": "single-column"}, "")
+    mk_note(toy_vault.PAPERS, "2020ccc...1..1C", {"tags": ["paper"], "relevance": "low"}, "")
+    assert mn.migrate_all_txt_fields() == 1, "sólo la nota con el campo viejo"
+    antes = (toy_vault.PAPERS / "2020ccc...1..1C.md").read_text(encoding="utf-8")
+    assert mn.migrate_all_txt_fields() == 0
+    assert (toy_vault.PAPERS / "2020ccc...1..1C.md").read_text(encoding="utf-8") == antes

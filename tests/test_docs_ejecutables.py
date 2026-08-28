@@ -150,7 +150,7 @@ def test_todo_flag_que_nombra_la_doc_existe():
 
 
 ESTADOS_VALIDOS = ("garantizado y medido", "garantizado sin medir", "garantizado",
-                   "parcial", "HUECO", "INCUMPLIDO")
+                   "parcial", "HUECO", "INCUMPLIDO", "retirado")
 
 
 def _estados_del_contrato() -> dict:
@@ -189,7 +189,9 @@ def test_el_conteo_del_encabezado_es_el_de_las_filas():
     from collections import Counter
     c = Counter()
     for estado in _estados_del_contrato().values():
-        if "HUECO" in estado:
+        if "retirado" in estado.lower():
+            c["retirado"] += 1
+        elif "HUECO" in estado:
             c["hueco"] += 1
         elif "INCUMPLIDO" in estado:
             c["incumplido"] += 1
@@ -203,13 +205,15 @@ def test_el_conteo_del_encabezado_es_el_de_las_filas():
             c["garantizado"] += 1
     texto = (DOCS / "contrato.md").read_text(encoding="utf-8")
     m = re.search(r">\s*(\d+) \*garantizados y medidos\* · (\d+) \*garantizados\*[^·]*· (\d+) \*sin\s*\n"
-                  r">\s*medir\* · (\d+) \*parciales\* · (\d+) \*HUECO\* · (\d+) \*INCUMPLIDO\*", texto)
+                  r">\s*medir\* · (\d+) \*parciales\* · (\d+) \*HUECO\* · (\d+) \*INCUMPLIDO\* · "
+                  r"(\d+) \*retirados\*", texto)
     assert m, "no se encontró la línea de medición vigente en §1"
     declarado = tuple(int(x) for x in m.groups())
-    real = (c["medido"], c["garantizado"], c["sin_medir"], c["parcial"], c["hueco"], c["incumplido"])
+    real = (c["medido"], c["garantizado"], c["sin_medir"], c["parcial"], c["hueco"], c["incumplido"],
+            c["retirado"])
     assert declarado == real, (
         f"el encabezado declara {declarado} y las filas dan {real} "
-        f"(medidos, garantizados, sin medir, parciales, HUECO, INCUMPLIDO)")
+        f"(medidos, garantizados, sin medir, parciales, HUECO, INCUMPLIDO, retirados)")
     # #149: el TOTAL se deriva, no se escribe. El literal ya caducó una vez —el encabezado
     # decía «sobre los 104» con 126 filas— y fijarlo a mano acá sólo movía el problema de
     # lugar. Lo que este assert protege es que el desglose CUBRA todas las filas: si una

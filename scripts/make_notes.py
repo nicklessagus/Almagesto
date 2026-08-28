@@ -47,7 +47,6 @@ import yaml
 
 import lib_config as cfg
 import lib_blocks as lb              # bloque de verificación (#117)
-import measure_layout
 
 EXCLUDED_TOP_N = 10  # cuántos no-core mostrar en la tabla de excluidos (top por citas)
 
@@ -80,37 +79,6 @@ def _txt_provenance(path) -> str:
     return ("ocr" if first.startswith(cfg.FULLTEXT_OCR_MARK)
             else "web" if first.startswith(cfg.FULLTEXT_WEB_MARK)
             else "pdftotext")
-
-
-def _txt_symbols_lost(path) -> bool:
-    """¿El `.txt` avisa que perdió el cuerpo de sus ecuaciones? (#113)
-
-    Eje INDEPENDIENTE de `fulltext_source`: aquél dice CÓMO se extrajo el texto, éste dice que las
-    fórmulas no están en el archivo aunque la extracción haya sido normal. Un solo lugar de verdad
-    para leer el header, igual que `_txt_provenance`.
-    """
-    # @inv INV-26
-    with path.open(encoding="utf-8", errors="replace") as fh:
-        return fh.readline().startswith(cfg.FULLTEXT_SYMBOLS_MARK)
-
-
-def _txt_layout(path) -> str:
-    """Maqueta del `.txt`: `two-column` si las columnas del PDF quedaron entrelazadas en la misma
-    línea física, `single-column` si no.
-
-    Va en el frontmatter y **no** en el `.txt` a propósito: el `.txt` es lo que hashea el ancla de
-    fuente (D-20), así que agregarle un header volvería *vencido por fuente* cada par ya verificado
-    de la bóveda. Y va en la nota porque el artefacto es lo que viaja: la sección de extracción está
-    llena de números de línea, y en un `.txt` entrelazado un número de línea **no es un localizador
-    único**. Ese hecho vivía sólo en un skill (#44).
-
-    Se declara también el caso de una columna: la ausencia del campo significa «no medido», que no
-    es lo mismo que «una columna» (D-43).
-    """
-    # @inv INV-102
-    texto = path.read_text(encoding="utf-8", errors="replace")
-    frac = measure_layout.analizar(texto)["frac"]
-    return "two-column" if frac >= measure_layout.UMBRAL_ARCHIVO else "single-column"
 
 
 def pdf_source_info(slug: str | None, stem: str) -> tuple[str | None, str | None]:
@@ -224,15 +192,6 @@ def stamp_fulltext(dest, stem: str, slug: str | None) -> bool:
 
     changed = upsert("fulltext", rel, ("pdf",))
     changed = upsert("fulltext_source", src, ("fulltext", "pdf")) or changed
-    # #113: sólo se estampa cuando es verdad. Ausente = "no lo perdió, o nadie lo midió" — que es
-    # lo mismo para el consumidor: el `.txt` sirve para citar símbolos hasta que algo diga que no.
-    _txt_abs = (dest.parent / rel).resolve()
-    if _txt_abs.exists() and _txt_symbols_lost(_txt_abs):
-        changed = upsert("symbols_lost", "true", ("fulltext_source", "fulltext")) or changed
-    txt_path = (dest.parent / rel).resolve()
-    if txt_path.exists():
-        changed = upsert("fulltext_layout", _txt_layout(txt_path),
-                         ("fulltext_source", "fulltext", "pdf")) or changed
     # `pdf_source` viaja con los otros dos porque se conoce en el mismo momento (el .txt ya está en
     # disco) y porque así se estampa RETROACTIVAMENTE en cualquier bóveda ya ingestada: re-correr
     # extract_fulltext alcanza, no hay que re-bajar nada.
@@ -435,12 +394,10 @@ def migrate_verif_archivo(dest) -> int:
     """Migración #117 de UNA nota: prefija cada celda `Hash fuente` con el archivo que se leyó
     (`txt:` / `pdf:`). Devuelve cuántas filas cambió.
 
-    ⛔ **No infiere del frontmatter: deduce del HASH.** La regla de #113 (`symbols_lost` ⇒ PDF, si
-    no el `.txt`) es más angosta que la práctica —una fuente `ocr` también se verifica contra el PDF
-    cuando el escaneo del editor destruyó los símbolos— y aplicarla acá escribiría una declaración
-    **falsa** justo en las filas que motivaron el issue. En cambio se calculan los dos hashes y se
-    declara el que **coincide** con lo que la fila ya guardaba: eso no es heurística, es identificar
-    el archivo por su huella.
+    ⛔ **No infiere del frontmatter: deduce del HASH.** Inferir de un campo del frontmatter
+    escribiría una declaración **falsa** justo en las filas que motivaron el issue. En cambio se
+    calculan los dos hashes y se declara el que **coincide** con lo que la fila ya guardaba: eso no
+    es heurística, es identificar el archivo por su huella.
 
     Si no coincide ninguno, el par está vencido igual (hay que re-verificarlo) y ahí sí se cae a la
     regla del frontmatter, avisando: la fila declara algo que el próximo `verify-citations` va a
@@ -471,15 +428,13 @@ def migrate_verif_archivo(dest) -> int:
         elif fila.source_hash and fila.source_hash == h_txt:
             kind = "txt"
         else:
-            # ninguno coincide ⇒ el par ya está vencido. Se declara lo que dice el frontmatter de
-            # SU nota de paper y se avisa: no es una verificación, es un puntero para re-verificar.
-            nota_paper = cfg.PAPERS / f"{safe_name(bib)}.md"
-            fm_p = (cfg.split_fm(nota_paper.read_text(encoding="utf-8"))
-                    if nota_paper.exists() else {})
-            kind = "pdf" if fm_p.get("symbols_lost") else "txt"
+            # ninguno coincide ⇒ el par ya está vencido. Se declara `txt:`, que es de donde se
+            # leía cuando estas filas se escribieron (#205 movió la lectura al PDF), y se avisa: no
+            # es una verificación, es un puntero para re-verificar.
+            kind = "txt"
             cfg.print_seguro(f"  ⚠ {dest.name}: la fila de {bib} no coincide con ningún archivo en "
-                             f"disco — se declara `{kind}:` por el frontmatter y hay que "
-                             f"re-verificar el par")
+                             f"disco — se declara `txt:` (el default de cuando se escribió) y hay "
+                             f"que re-verificar el par")
         viejo = f"| {fila.source_hash} |"
         for i, ln in enumerate(lineas):
             if ln.lstrip().startswith("|") and viejo in ln and fila.anchor in ln:
@@ -678,6 +633,36 @@ def migrate_all_registros() -> int:
         cfg.save_registro(slug, data)
         n += 1
     cfg.print_seguro(f"`busqueda:` → `busquedas: []` en {n} registro(s) (D-28).")
+    return n
+
+
+def migrate_all_txt_fields() -> int:
+    """Migrador de un solo uso de #205: saca `symbols_lost:` y `fulltext_layout:` de las notas.
+
+    Los dos campos existían para una sola decisión —**¿el extractor lee el `.txt` o el PDF?**— y esa
+    decisión ya no se toma: la fuente es el PDF, siempre. Un campo sin lector no se deja «por las
+    dudas»: se lee como un gate vivo, y éstos además **mienten**. Medido el 2026-08-28: un paper con
+    `symbols_lost: False` y `single-column` había perdido igual el radical `√`, la prima de `p′` y
+    superíndices de transpuesta.
+
+    Es borrado puro y no pierde nada recuperable: los dos se derivan del `.txt`, que sigue en disco.
+    Edición **quirúrgica a nivel línea** (como `migrate_all_bearing`): no toca la extracción LLM ni
+    el cuerpo.  @inv INV-26"""
+    n = 0
+    for f in sorted(cfg.PAPERS.glob("*.md")):
+        texto = f.read_text(encoding="utf-8")
+        if not texto.startswith("---\n"):
+            continue
+        fin = texto.find("\n---\n", 4)
+        if fin < 0:
+            continue
+        head, resto = texto[4:fin], texto[fin:]
+        lineas = [ln for ln in head.split("\n")
+                  if not ln.startswith(("symbols_lost:", "fulltext_layout:"))]
+        if len(lineas) == len(head.split("\n")):
+            continue
+        cfg.write_text_atomic(f, "---\n" + "\n".join(lineas) + resto)
+        n += 1
     return n
 
 
@@ -2526,6 +2511,10 @@ def main() -> int:
     ap.add_argument("--migrate-bearing", action="store_true", dest="migrate_bearing",
                     help="migración D-21: saca `bearing:` del frontmatter de las notas de paper (la "
                          "postura vive en la tabla de evidencia de la hipótesis). No requiere slug.")
+    ap.add_argument("--migrate-txt-fields", action="store_true", dest="migrate_txt_fields",
+                    help="migración #205: saca `symbols_lost:` y `fulltext_layout:` del frontmatter "
+                         "de las notas de paper (la fuente de lectura es el PDF, así que ya no "
+                         "deciden nada). No requiere slug.")
     ap.add_argument("--sync-mirror", action="store_true", dest="sync_mirror",
                     help="backfill: rellena en `stars/` los campos espejo de NEA (#70) que están en "
                          "null y el ground-truth sí trae (spectral_type/teff_K/dist_pc/P_rot_days y "
@@ -2572,6 +2561,10 @@ def main() -> int:
         n = migrate_all_bearing()
         cfg.print_seguro(f"`bearing` retirado de {n} nota(s) de paper (D-21).")
         return 0
+    if args.migrate_txt_fields:
+        n = migrate_all_txt_fields()
+        cfg.print_seguro(f"`symbols_lost`/`fulltext_layout` retirados de {n} nota(s) (#205).")
+        return 0
 
     if args.migrate_verif_archivo:
         return migrate_all_verif_archivo()
@@ -2595,7 +2588,7 @@ def main() -> int:
         return 0
     if not args.slug:
         ap.error("falta el slug (corren sin slug: --restamp-pdf-links, --restamp-keywords, "
-                 "--restamp-headers, --migrate-disputes, --migrate-bearing, --sync-mirror y "
+                 "--restamp-headers, --migrate-disputes, --migrate-bearing, --migrate-txt-fields, --sync-mirror y "
                  "--rename-paper)")
 
     if args.web:

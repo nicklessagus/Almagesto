@@ -187,6 +187,17 @@ def lineas_declarativas(fuente: str) -> set[int]:
     return ok
 
 
+def is_retired(meta: dict) -> bool:
+    """¿Esta fila del contrato está RETIRADA?
+
+    Un invariante retirado no tiene marca ni test **a propósito**: su implementación se borró. Si
+    contara en los ratchets, retirar uno subiría el techo — o sea que el gate castigaría justamente
+    la limpieza que el contrato manda hacer (§2: *«si un invariante se retira, su fila queda con
+    estado `retirado` y el motivo»*). La fila **no** se borra, para que el ID no se recicle.
+    """
+    return "retirado" in (meta.get("estado") or "").lower()
+
+
 def collect_marks(root: Path) -> list[Mark]:
     """Todas las marcas `@inv` de `scripts/` y `tests/`, en orden estable (ruta, línea)."""
     marcas: list[Mark] = []
@@ -341,8 +352,9 @@ def render(registro: dict, marcas: list[Mark], techos: dict) -> str:
         por_inv.setdefault(m.inv, []).append(m)
 
     huerfanas = [m for m in marcas if m.inv not in registro]
-    sin_marca = [i for i in registro if i not in por_inv]
-    sin_test = [i for i in registro if not any(m.kind == "test" for m in por_inv.get(i, []))]
+    vivos = [i for i, meta in registro.items() if not is_retired(meta)]
+    sin_marca = [i for i in vivos if i not in por_inv]
+    sin_test = [i for i in vivos if not any(m.kind == "test" for m in por_inv.get(i, []))]
 
     out = [
         "# Trazabilidad requisito ↔ código",
@@ -435,8 +447,9 @@ def main(argv=None) -> int:
 
     huerfanas = [m for m in marcas if m.inv not in registro]
     por_inv = {m.inv for m in marcas}
-    sin_marca = [i for i in registro if i not in por_inv]
-    sin_test = [i for i in registro
+    vivos = [i for i, meta in registro.items() if not is_retired(meta)]
+    sin_marca = [i for i in vivos if i not in por_inv]
+    sin_test = [i for i in vivos
                 if not any(m.kind == "test" and m.inv == i for m in marcas)]
 
     artefacto = root / "docs" / "trazabilidad.md"

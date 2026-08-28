@@ -89,7 +89,7 @@
 
 ## ⏳ Fuentes pendientes (pending_source — el usuario debe proveer la fuente) (0)
 
-## 📐 Fuentes cuyo `.txt` perdió las ECUACIONES (citar fórmulas por página del PDF) (0)
+## ⛔ Notas con `symbols_lost`/`fulltext_layout` (schema pre-#205 sin lector — migrar) (0)
 
 ## 📓 Operación sin entrada en `log.md` (la cadena corrió y la bitácora no lo dice) (0)
 

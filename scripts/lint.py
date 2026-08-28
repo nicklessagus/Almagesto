@@ -997,8 +997,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     retracted: list = []               # (stem, "<tipo> <fecha>") — papers marcados retracted (check_retractions)
     corrections: list = []             # (stem, "<tipo> (<fecha>)") — corrección no-retractante (#52)
     pending_srcs: list = []            # (stem, "<motivo> — puntero") — fuentes derivadas al usuario
-    symbols_lost_notes: list = []      # (stem, motivo) — #113: el .txt no tiene las ecuaciones
-    symbols_lost_bibs: set = set()     # bibcodes cuya evidencia se cita por PÁGINA del PDF
+    campos_txt_viejos: list = []       # (stem, motivo) — #205: `symbols_lost`/`fulltext_layout`
     log_sin_entrada: list = []         # (slug, motivo) — #118: la cadena corrió y el log no lo dice
     sweep_pendiente: list = []         # (slug, motivo) — #88: el barrido 2b no consta en el registro
     impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
@@ -1328,15 +1327,16 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             # fuente pendiente (issue #7): derivada al usuario — precondición, como las citas no
             # verificables: sin la fuente no hay fulltext ni verify. Se estampa en el ingest
             # (ingest_theme/make_notes --web con `pending`) o a mano en la nota.
-            if fm.get("symbols_lost"):
-                # #113: no es un defecto de la bóveda sino una PROPIEDAD de la fuente que el
-                # consumidor tiene que ver — `verify-citations` sobre estos papers cita PÁGINA del
-                # PDF, no línea del .txt, y una ecuación ausente del .txt no es una cita rota.
-                # Backlog, nunca bloqueante: el paper sigue siendo perfectamente citable.
-                symbols_lost_bibs.add(stem)
-                symbols_lost_notes.append(
-                    (stem, "el `.txt` perdió el cuerpo de sus ecuaciones — para citar una fórmula "
-                           "de este paper hay que abrir el PDF (la prosa sí es citable)"))
+            # #205 · schema viejo: los dos campos existían para UNA decisión —¿el extractor lee el
+            # `.txt` o el PDF?— y esa decisión ya no se toma (la fuente es el PDF, siempre). Un
+            # campo sin lector no se deja «por las dudas»: se lee como un gate vivo. Bloquea, como
+            # todo schema retirado en este framework —nada de lectores tolerantes—, y la salida es
+            # el migrador, no editar a mano.
+            _viejos = [k for k in ("symbols_lost", "fulltext_layout") if k in fm]
+            if _viejos:
+                campos_txt_viejos.append(
+                    (stem, f"`{'`, `'.join(_viejos)}` — schema pre-#205, ya no lo lee nadie: "
+                           "`python scripts/make_notes.py --migrate-txt-fields`"))
             # #80: la unidad de cita de una fuente larga y el recorte que entró. Vocabulario
             # cerrado (bloquea, como `role`); el `alcance` faltante es backlog porque no se puede
             # inventar — pero sin él un recorte deliberado se lee como omisión.
@@ -2559,7 +2559,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('root_obsidian', 'Obsidian en la raíz del repo (WARN — la bóveda se abre en vault/)', SEV_WARN, tuple(root_obsidian)),
         Categoria('pdf_issues', 'PDF ↔ disco / cuerpo (WARN — higiene: frontmatter `pdf` vs PDF bajado vs link de cabecera)', SEV_WARN, tuple(pdf_issues)),
         Categoria('pending_srcs', '⏳ Fuentes pendientes (pending_source — el usuario debe proveer la fuente)', SEV_BACKLOG, tuple(pending_srcs)),
-        Categoria('symbols_lost', '📐 Fuentes cuyo `.txt` perdió las ECUACIONES (citar fórmulas por página del PDF)', SEV_BACKLOG, tuple(symbols_lost_notes)),
+        Categoria('campos_txt_viejos', '⛔ Notas con `symbols_lost`/`fulltext_layout` (schema pre-#205 sin lector — migrar)', SEV_BLOQUEANTE, tuple(campos_txt_viejos)),
         Categoria('log_sin_entrada', '📓 Operación sin entrada en `log.md` (la cadena corrió y la bitácora no lo dice)', SEV_BACKLOG, tuple(log_sin_entrada)),
         Categoria('illegible_txt', 'Fulltext ilegible (mojibake/escaneo — existe pero no sirve para grep/verify)', SEV_BACKLOG, tuple(illegible_txt)),
         Categoria('divergent_txt', '⛔ Mismo bibcode con `.txt` DISTINTO entre slugs: las copias de '

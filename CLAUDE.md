@@ -113,12 +113,12 @@ dato de un paper adjudicado a otro: Newton al paper de 1997 en vez del de 1999, 
 agua al método en vez de a quien la reportó, «PCA vía SVD» a un paper que nunca dice SVD. Ninguno de
 esos errores es visible desde la ficha: se ven **sólo** abriendo la fuente.
 
-**Cómo, según lo que diga la nota del paper:**
-- por defecto → `.txt`, y citás **línea**;
-- `fulltext_source: ocr` → citable con salvedad; ante duda de **símbolos**, abrí el PDF;
-- `symbols_lost: true` (#113) → las ecuaciones **no están** en el `.txt`; abrí el PDF y citá
-  **página**. Grepear el `.txt` por esa fórmula no la va a encontrar, y su ausencia **no** significa
-  que la ficha esté mal.
+**Cómo (#205):** abrí el **PDF** (`vault/raw/pdfs/**/<bibcode>.pdf`) y citá **página**. El `.txt`
+sirve para *ubicar* con `grep -n` en qué parte mirar, no para citar: es el índice de búsqueda, y
+pierde fórmulas, tablas-imagen y figuras **sin avisar** — medido, incluso en papers donde todos los
+chequeos de calidad dan verde. Un `grep` vacío sobre el `.txt` **no** significa que la ficha esté
+mal. Si la nota declara `pdf_source: eprint`, el PDF es el preprint: una discrepancia numérica
+contra un valor publicado es candidata a diferencia de versión, no a error de la ficha.
 
 Si al validar encontrás una discrepancia, **no la arregles en silencio de tu lado**: es un hallazgo
 de la bóveda. Reportalo para que se corrija acá, o el próximo consumidor tropieza con lo mismo.
@@ -369,28 +369,15 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   marca que arXiv estampa en cada página, visible en el `.txt` — por eso se detecta
   retroactivamente en un corpus ya bajado (re-correr `extract_fulltext`, sin re-bajar nada); si no
   hay marca, vale la rama que registró el fetcher.
-  **`symbols_lost` (#113) — el `.txt` está limpio y las ECUACIONES no están.** Tercer eje,
-  **independiente** de los otros dos: `is_legible` mide *extraíble*, la marca de garble mide
-  *correcto*, y éste mide **completo**. El modo de falla es silencioso en el peor lugar —
-  `pdftotext` deja el marcador `(3)` y vacía su cuerpo, así que el `.txt` **parece** tener la
-  fórmula—, y los dos casos medidos dan garble **0.00**: sin este eje no los ve nadie. Rompe dos
-  promesas a la vez: el estándar **implementation-ready** de `concepts/methods/` (la ecuación es
-  justamente lo que la nota promete que no hace falta ir a buscar) y la de `verify-citations` («las
-  palabras reales del paper»), que leyendo ese mismo `.txt` devolvería **`no-soportada` sobre una
-  afirmación correcta**. Cuando el campo está en `true`: la extracción se hace **del PDF** (`Read`
-  lo rasteriza, así que el modelo *ve* la fórmula — es cuestión de **modalidad, no de modelo**:
-  medido, un modelo chico leyendo el PDF recupera lo mismo que uno grande) y las citas de fórmulas
-  van **por página del PDF**, no por línea del `.txt`. Calibrado sobre 813 `.txt` de dos bóvedas:
-  de los 343 con ≥4 marcadores, p95 = 0.33 y después un salto al grupo de rotos (0.98–1.00); el
-  umbral (60 %) cae en ese hueco y marca 13. ⚠ Con menos de 4 marcadores devuelve **no evaluado**,
-  no `ok` — son **275 de 813 (34 %)**, así que un `False` ahí sería un falso limpio a gran escala
-  (D-43). ⚠ **Los denominadores publicados NO reconcilian, y se declara la discrepancia en vez de
-  elegir uno** (regla de método #5, #155): acá dice *13 de 343* y `extract_fulltext.py` dice *«marca
-  13 de 295 (4.4 %)»*; y 343 (≥4 marcadores) + 275 (<4) = 618, no 813. Lo que **no** depende de cuál
-  denominador sea el bueno son los dos números que el código usa —umbral 0.60 y mínimo 4
-  marcadores—; lo que no se puede afirmar con esto es la tasa de marcado. Re-medir con un corpus a
-  mano. El lint lo lista como **backlog, nunca bloqueante**: no es un defecto de la bóveda sino
-  una propiedad de la fuente que el consumidor tiene que ver.
+  ⚠ **`symbols_lost` y `fulltext_layout` se RETIRARON en 1.71.0 (#205).** Existían para decidir si
+  el extractor leía el `.txt` o el PDF, y esa decisión ya no se toma: la fuente es el PDF. Además
+  ninguno de los dos discriminaba —medido, un paper con los tres chequeos en verde había perdido
+  igual el radical `√`, la prima de `p′` y superíndices de transpuesta (#194), y el detector de
+  maqueta falla en las dos direcciones cerca de su umbral (#193)—. Migrador
+  `python scripts/make_notes.py --migrate-txt-fields`; el lint **bloquea** la nota que los lleve.
+  Lo que sobrevive de todo eso es un hecho: **`Read` rasteriza el PDF, así que el modelo *ve* la
+  fórmula** — es cuestión de **modalidad, no de modelo** (medido: un modelo chico leyendo el PDF
+  recupera lo mismo que uno grande).
   Esa misma re-corrida es el **backfill de la marca de garble**: el chequeo que estampa `fulltext_source: ocr` sobre un PDF **que ya venía
   OCReado por el editor** sólo corría al extraer, así que un `.txt` escrito antes se quedaba
   `pdftotext` para siempre — el camino de skip lo re-leía sólo para preguntarle si era **ilegible**,
@@ -660,25 +647,19 @@ la cascada y **propone**; nunca clasifica.
 ### Ingest (una fuente → cascada de páginas)
 
 **El camino del texto, de punta a punta.** Es el mapa canónico de cómo un PDF se vuelve una cita
-verificable, y dónde se decide qué archivo lee cada capa:
+verificable:
 
 ```
-1. fetch_pdf          →  raw/pdfs/<slug>/<bib>.pdf        (inmutable)
+1. fetch_pdf          →  raw/pdfs/<slug>/<bib>.pdf     (inmutable, y es LO QUE SE LEE)
 
-2. extract_fulltext   →  pdftotext, y TRES chequeos deterministas sobre el texto:
-                           is_legible   ¿sirve?     no → OCR con tesseract
-                           is_garbled   ¿correcto?  sí → header «source: ocr»
-                           symbols_lost ¿completo?  sí → header «simbolos NO extraidos»
-                         escribe raw/fulltext/<slug>/<bib>.txt CON el header adelante.
-                         Una sola vez. Después nadie lo toca.
+2. extract_fulltext   →  pdftotext; si no pasa `is_legible`, OCR con tesseract.
+                         Escribe raw/fulltext/<slug>/<bib>.txt — el ÍNDICE DE BÚSQUEDA
+                         del corpus, no material de lectura. Una sola vez.
 
-3. make_notes         →  lee la 1ª línea del .txt y estampa en la nota del paper:
-                           fulltext_source: pdftotext | ocr | web
-                           symbols_lost: true         (sólo si es cierto)
+3. make_notes         →  stub de la nota + frontmatter mecánico + `## Abstract` (de ADS).
 
-4. extractor (LLM)    →  lee el FRONTMATTER, no el .txt, para saber qué hacer:
-                           ocr o symbols_lost  →  abre el PDF y cita PÁGINA
-                           si no                →  lee el .txt y cita LÍNEA
+4. extractor (LLM)    →  lee EL PDF (`Read` lo rasteriza: ve ecuaciones, tablas y
+                         figuras) y cita PÁGINA. El `.txt` sólo para ubicar con grep.
                          Devuelve UNA VISTA (#188): «qué dice sobre {sujeto}», no
                          «qué dice el paper» — con `vista{sujeto,tipo,txt}` en el JSON.
 
@@ -686,13 +667,51 @@ verificable, y dónde se decide qué archivo lee cada capa:
                          un JSON de verify también trae `bibcode` y también es válido.
                          Estampa la vista (fecha · txt · lente) y la sección de la nota.
 
-6. verify-citations   →  un subagente por fuente, misma regla del paso 4.
+6. verify-citations   →  un subagente por fuente, misma regla del paso 4: lee el PDF.
                          Cada par verificado deja una fila con DOS hashes.
 ```
 
-**Los tres chequeos del paso 2 son ejes independientes** y hacen falta los tres: `is_legible` mide
-**extraíble**, `is_garbled` mide **correcto**, `symbols_lost` mide **completo**. Los dos casos que
-motivaron el tercero dan garble **0.00** y pasan `is_legible` sin ruido.
+⛔ **La fuente es el PDF; el `.txt` es el ÍNDICE (#205).** Hasta 1.71.0 el extractor leía el `.txt`
+y **escalaba al PDF sólo si un detector se lo decía** (`symbols_lost`, `fulltext_layout`,
+`fulltext_source: ocr`). Esa rama se eliminó porque los detectores no discriminan. **Medido el
+2026-08-28**, dos papers extraídos dos veces por subagentes independientes, uno leyendo sólo el
+`.txt` y el otro sólo el PDF:
+
+| paper | vía | tokens | tiempo | tools |
+|---|---|---|---|---|
+| `1998Cichocki` (17 pg, capa rota) | `.txt` | 107.459 | 187 s | 8 |
+| | **PDF** | **98.415** | **125 s** | **3** |
+| `2005Hyvarinen` (11 pg, capa limpia) | `.txt` | 96.967 | 146 s | 6 |
+| | **PDF** | **94.574** | **92 s** | **2** |
+
+El PDF gana en los cuatro ejes en los dos casos —el costo lo domina el razonamiento y la salida, no
+el input— y el paper **"limpio" tampoco estaba limpio**: con los tres chequeos en verde, su `.txt`
+había perdido el radical `√` (sale como una `r` suelta), la prima de `p′` (como `p0`), superíndices
+de transpuesta y un subíndice que hace leer una autocovarianza como una inversa. ⚠ n=2 y los dos
+densos en matemática: lo defendible en costo es *«comparable, no 10× más caro»*; lo grande y
+consistente es el **tiempo** (−34 % y −37 %).
+
+**Qué le queda al `.txt`, y por qué se sigue generando:** el **`grep` sobre el corpus** —
+`query-corpus`, `test-hypothesis`, el retro-tag por alias de `ingest-theme` (paso 3b) y el conteo
+del alcance de hipótesis (D-34) barren cientos de archivos y buscan **prosa**, que es lo que
+`pdftotext` extrae bien. `pdftotext` falla justo donde al `.txt` ya no le importa: nadie greppea una
+fórmula. En un **documento largo** (#80) el índice es además imprescindible: 700 páginas no se
+rasterizan, así que se grepea, se saca la página y se abren **esas** páginas del PDF.
+⛔ **Y el `.txt` NO se genera con el modelo.** Tiene que ser determinista: dos corridas darían
+textos distintos, las citas por línea serían inventadas y verificar sería contrastar un modelo
+contra otro modelo.
+
+**De los tres chequeos queda uno y cambia de trabajo.** `is_legible` dispara el OCR para que el
+paper sea **encontrable** —un escaneo sin capa de texto da un `.txt` vacío y ese paper se vuelve
+invisible al corpus—; `is_garbled` sigue porque la prosa garbleada sí degrada el índice.
+**`symbols_lost` y `fulltext_layout` se retiran** (#193, #194): existían para decidir `.txt` vs PDF
+y esa decisión ya no se toma. Migrador `python scripts/make_notes.py --migrate-txt-fields`; el lint
+**bloquea** la nota que todavía los lleve. `measure_layout` **no** se retira: `CANALETA_MIN` es el
+contrato compartido para grepear un `.txt` entrelazado.
+
+⚠ **Consecuencia: el PDF pasa de respaldo a única fuente de lectura**, así que un `pending_source`
+(paywall / escaneo / mojibake) deja de ser una salvedad y se vuelve un bloqueo real — sin PDF no hay
+de dónde extraer. La cadena hoy lo deriva al usuario sin frenar; a decidir aparte.
 
 ⛔ **Y los tres miden el TEXTO, así que ninguno ve el dato que vive en una IMAGEN (#195).** Medido
 sobre las 65 vistas de un tema real: **29 (45 %)** declaran datos que existen sólo en figuras o
@@ -722,13 +741,14 @@ Por eso la columna de la vista se llama **`Localizador`** y no `Línea`: lleva `
 
 **Los DOS hashes del paso 6 responden preguntas distintas** — el **ancla** hashea el bloque de la
 **ficha** (se dispara si editás la nota) y el **hash de fuente** hashea el archivo que se **leyó**
-(se dispara si cambia la fuente sin que nadie toque la nota). El segundo apunta al `.txt`, o al
-**PDF** cuando la fuente está marcada `symbols_lost` — que es de donde salió la cita.
+(se dispara si cambia la fuente sin que nadie toque la nota). Desde #205 el segundo es el **PDF**,
+que es de donde salió la cita. Las filas viejas con `txt:` siguen siendo válidas —su ancla vigila el
+archivo del que esa cita sí salió— y se re-verifican cuando vencen, no se migran en masa.
 
-⚠ **El `.txt` se reescribe en TRES casos y nada más**: `--force`, upgrade automático a OCR cuando
-aparece `tesseract`, y el backfill de las marcas. Por eso el hash de fuente es una alarma **rara**:
-cuando suena, hay algo. Y por eso una fila anclada al PDF **no** se vence cuando su `.txt` se
-re-extrae — su fuente real no se movió.
+⚠ **El PDF es inmutable: nadie lo reescribe.** Por eso el hash de fuente es una alarma **rarísima**:
+cuando suena, alguien reemplazó el archivo. Y una fila anclada al PDF **no** se vence cuando su
+`.txt` se re-extrae —cosa que el propio framework provoca (`--force`, upgrade a OCR)—, porque su
+fuente real no se movió.
 
 1. Los **orquestadores** corren la cadena mecánica completa (idempotente, no pisa — con una única
    excepción add-only: el retro-linkeo de abajo): `python scripts/ingest_star.py <slug>` para estrellas,
@@ -984,13 +1004,11 @@ reintroducía un eje de **grado** cuyo umbral nunca se calibró. El campo tampoc
 FActScore etiqueta binario y los que suman un tercer valor usan vocabulario cerrado, no una
 escala—, y el vocabulario de acá ya es ese ternario.
 ⛔ **La celda `Hash fuente` declara CONTRA QUÉ ARCHIVO se verificó ese par: `txt:<sha10>` o
-`pdf:<sha10>` (#117).** Hasta 1.53.0 lo inferían el lint y el generador desde el frontmatter
-—`symbols_lost` ⇒ PDF, si no el `.txt`—, y esa regla es **más angosta que la práctica**: una fuente
-`fulltext_source: ocr` también se verifica contra el PDF cuando el escaneo del editor destruyó los
-símbolos, y eso pasó con **3 de las 5** fuentes marcadas de un tema real → el lint hasheaba el
-archivo equivocado y devolvía **17 pares «vencidos por fuente»** sobre fuentes que nadie tocó. La
-decisión la toma **el verificador, par por par**, así que la declara la **fila**; el frontmatter no
-puede saberlo. Una celda sin prefijo es *no consta* —que no es `txt`— y el lint la **bloquea** en
+`pdf:<sha10>` (#117).** Hasta 1.53.0 lo inferían el lint y el generador **desde el frontmatter**, y
+esa regla era más angosta que la práctica: el lint hasheaba el archivo equivocado y devolvía **17
+pares «vencidos por fuente»** sobre fuentes que nadie tocó. La decisión la toma **el verificador,
+par por par**, así que la declara la **fila**; ningún campo del frontmatter puede saberlo — y desde
+#205 tampoco existe el campo que se usaba para inferirlo. En filas nuevas el prefijo es `pdf:`. Una celda sin prefijo es *no consta* —que no es `txt`— y el lint la **bloquea** en
 vez de adivinar: se migra con `python scripts/make_notes.py --migrate-verif-archivo`, que deduce el
 archivo del **hash que la fila ya guardaba** (identificarlo por su huella, no re-inferirlo).
 ⛔ **Documento largo leído del `.txt`: van los DOS localizadores (#200).** Una fuente
@@ -1005,11 +1023,10 @@ caso, todas correctas.
 El **ancla** es el sha256 (10 hex) del **bloque markdown normalizado** que contiene la cita
 —párrafo / fila / ítem / blockquote—: reflowear la nota **no** la mueve, cambiar un número **sí**, y
 una fila sin `[[bibcode]]` propio hereda el del caption hasheando **los dos** bloques. El **hash de
-fuente** es el del archivo que se **leyó**, y es lo único que detecta que la fuente ya no dice lo
-mismo **sin que la nota se haya tocado**: normalmente el `.txt`, y el **PDF** cuando la fuente está
-marcada `symbols_lost` (#113) —porque de ahí salió la cita—. Anclar esas filas al `.txt` las marcaría
-vencidas cada vez que se re-extrae, cosa que el propio framework provoca (`--force`, upgrade a OCR,
-backfill de marcas), mientras la fuente real no se movió; y no vería que el PDF **sí** cambió. Los
+fuente** es el del archivo que se **leyó** —desde #205, el **PDF**— y es lo único que detecta que la
+fuente ya no dice lo mismo **sin que la nota se haya tocado**. Anclar esas filas al `.txt` las
+marcaría vencidas cada vez que se re-extrae, cosa que el propio framework provoca (`--force`,
+upgrade a OCR), mientras la fuente real no se movió; y no vería que el PDF **sí** cambió. Los
 calcula `scripts/lib_blocks.py` (`pairs_of`, `source_hash` para el `.txt`, `bytes_hash` para el PDF —
 un PDF no es texto, y decodificarlo con `errors=replace` hace **colisionar** dos escaneos distintos),
 el mismo código que después los chequea: no se escriben a ojo. ⛔ **Y un veredicto que exige acción NO puede quedar registrado y sin resolver (#91).** El lint leía

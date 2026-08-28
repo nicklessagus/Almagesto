@@ -3831,3 +3831,29 @@ def test_vista_con_fecha_no_dispara(toy_vault, capsys):
     paper_con_vista(toy_vault, vistas=[{"sujeto": "Estrella Test", "tipo": "star",
                                         "fecha": "2026-08-27", "txt": "test_star"}])
     assert lint.collect().por_clave("vista_sin_fecha").items == ()
+
+
+def test_campos_txt_del_schema_pre_205_gritan_con_su_migrador(toy_vault, capsys):
+    """#205 — `symbols_lost` y `fulltext_layout` existían para UNA decisión (¿el extractor lee el
+    `.txt` o el PDF?) que ya no se toma: la fuente es el PDF, siempre. Un campo sin lector no se
+    deja «por las dudas» —se lee como un gate vivo— y en este caso además **mentía**: medido el
+    2026-08-28, un paper con `symbols_lost: False` y `single-column` había perdido igual el radical
+    `√` y superíndices de transpuesta. Bloquea, como todo schema retirado acá, y nombra el
+    migrador."""
+    mk_note(toy_vault.PAPERS, "2020oldS...1..1S",
+            {"tags": ["paper"], "symbols_lost": True, "stars": ["Estrella Test"]}, "")
+    mk_note(toy_vault.PAPERS, "2020oldL...1..1L",
+            {"tags": ["paper"], "fulltext_layout": "two-column", "stars": ["Estrella Test"]}, "")
+    rc, out = run_lint(capsys)
+    assert rc == 1
+    assert "2020oldS...1..1S" in out and "2020oldL...1..1L" in out
+    assert "--migrate-txt-fields" in out
+
+
+def test_una_nota_sin_los_campos_viejos_no_dispara_el_detector(toy_vault, capsys):
+    """La otra mitad: el detector mira la presencia del campo, no su valor. Sin él, toda nota del
+    corpus quedaría reportada y la categoría sería ruido que se deja de mirar."""
+    mk_note(toy_vault.PAPERS, "2020newP...1..1P",
+            {"tags": ["paper"], "fulltext_source": "pdftotext", "stars": ["Estrella Test"]}, "")
+    _, out = run_lint(capsys)
+    assert "--migrate-txt-fields" not in out

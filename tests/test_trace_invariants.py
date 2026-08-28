@@ -443,3 +443,27 @@ def test_el_mapa_commiteado_esta_al_dia_en_el_repo_REAL():
     assert vigente == esperado, (
         "`docs/trazabilidad.md` está desactualizado respecto de las marcas del árbol — "
         "regeneralo con `python scripts/trace_invariants.py`.")
+
+
+def test_un_invariante_retirado_no_cuenta_en_los_ratchets():
+    """#205 — retirar un invariante borra su implementación, así que queda sin marca y sin test **a
+    propósito**. Si contara, retirar uno subiría los dos techos: el gate castigaría justamente la
+    limpieza que §2 del contrato manda hacer. La fila no se borra, para que el ID no se recicle."""
+    assert ti.is_retired({"estado": "**retirado (#205, 2026-08-28)**"})
+    assert ti.is_retired({"estado": "retirado"})
+    assert not ti.is_retired({"estado": "garantizado y medido"})
+    assert not ti.is_retired({"estado": ""})
+    assert not ti.is_retired({})
+
+
+def test_el_contrato_real_tiene_al_menos_un_retirado_y_esta_excluido():
+    """Contra el repo REAL: la convención `retirado` vivía en §2 desde siempre y **nadie la había
+    ejercido**, así que ni el vocabulario de estados del test de doc ni los ratchets la contemplaban.
+    Este test fija que sigue ejercida — si algún día no queda ninguna fila retirada, la exclusión
+    dejaría de estar probada sobre datos reales."""
+    registro = ti.load_registro(ti.ROOT)
+    retirados = [i for i, meta in registro.items() if ti.is_retired(meta)]
+    assert retirados, "ninguna fila `retirado`: la exclusión no se está ejerciendo"
+    marcas = {m.inv for m in ti.collect_marks(ti.ROOT)}
+    for inv in retirados:
+        assert inv not in marcas, f"{inv} está retirado y todavía tiene una marca `@inv` en el árbol"
