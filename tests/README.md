@@ -314,8 +314,8 @@ día y ningún assert lo habría visto. La forma correcta de institucionalizarlo
 emita tests, no veredictos** — un veredicto de modelo no es reproducible y no sirve de red de
 regresión; un test que él propuso, sí. (Sin decidir todavía; anotado.)
 
-> Las **cinco reglas de método** de las que salen estas redes están en `CLAUDE.md`,
-> sección *Cinco reglas de método*. Acá va sólo la mecánica.
+> Las **seis reglas de método** de las que salen estas redes están en `CLAUDE.md`,
+> sección *Seis reglas de método*. Acá va sólo la mecánica.
 
 ### Dos trampas ya pisadas, para no repetirlas
 

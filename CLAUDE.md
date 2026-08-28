@@ -967,6 +967,15 @@ decisión la toma **el verificador, par por par**, así que la declara la **fila
 puede saberlo. Una celda sin prefijo es *no consta* —que no es `txt`— y el lint la **bloquea** en
 vez de adivinar: se migra con `python scripts/make_notes.py --migrate-verif-archivo`, que deduce el
 archivo del **hash que la fila ya guardaba** (identificarlo por su huella, no re-inferirlo).
+⛔ **Documento largo leído del `.txt`: van los DOS localizadores (#200).** Una fuente
+`unidad_cita: pagina` se cita por **página** (#80) pero se lee del `.txt`, que es lo barato y lo que
+el contrato manda por defecto. Las dos reglas son correctas y chocan: la fila queda con `txt:` y una
+evidencia que dice `p. 271`. Las dos salidas obvias **empeoran** la fila —poner `pdf:` **miente**
+sobre qué archivo se abrió y hace que el ancla vigile un archivo que nadie leyó; citar por línea
+rompe #80—. La salida es escribir **los dos**: `(p. 271 / `.txt` L13931)`, que deja las dos verdades
+escritas —la referencia utilizable para un humano y el ancla del archivo que se hasheó— y el
+detector queda en 0 sin ablandarse. Medido: **6 de 8** filas marcadas de un concepto real eran este
+caso, todas correctas.
 El **ancla** es el sha256 (10 hex) del **bloque markdown normalizado** que contiene la cita
 —párrafo / fila / ítem / blockquote—: reflowear la nota **no** la mueve, cambiar un número **sí**, y
 una fila sin `[[bibcode]]` propio hereda el del caption hasheando **los dos** bloques. El **hash de
@@ -1328,7 +1337,7 @@ es **backlog**; se cierra con `python scripts/triage.py <slug> --extraccion todo
 además a mano: claims stale y conceptos referidos sin página. Si faltan datos, abrir queries para
 imputar (web/ADS).
 
-## Cinco reglas de método (por qué existen las redes de abajo)
+## Seis reglas de método (por qué existen las redes de abajo)
 
 Salieron de medir una sesión entera donde **los defectos los encontraron agentes leyendo el código,
 no la suite**. No son consejos: cada una nombra un modo de falla que ya ocurrió acá, y las redes de
@@ -1351,6 +1360,17 @@ la sección siguiente son su mecanización.
 5. **Cuando dos mediciones no reconcilian y no se puede re-medir, se DECLARA la discrepancia** en
    vez de elegir un número. Elegir en silencio es cómo un documento empieza a mentir.
 
+6. **Fan-out para LEER, aplicador serial para ESCRIBIR, barrera antes de CONSUMIR.** El
+   aislamiento de un fan-out es lo que hace fuerte a un chequeo —57 verificadores que ven un solo
+   `.txt`, sin memoria y sin los otros papers— y no se toca; lo que no escala es el lado de
+   **escritura**. Medido en una sola corrida de 75 correcciones: dos correctores que redactan el
+   **mismo bloque** lo corrompen al aplicarse en cadena (#197), y derivar trabajo de una etapa que
+   **todavía corre** deja hallazgos que no mira nadie (#199: 4 de 201, dos de ellos defectos reales).
+   Del otro lado, la redundancia paga: las capas independientes se corrigieron entre sí —un triage
+   afirmó que dos cifras reconciliaban por tamaño de bin y el corrector, al abrir la fuente, encontró
+   que **las dos** lo traían—. La regla no es «paralelizar menos»: es **un solo escritor, y una
+   barrera antes de que algo consuma resultados**.
+
 Corolario que las cruza a todas: **una promesa que el sistema dejó de cumplir en silencio es peor
 que una que nunca hizo.** Si al tocar algo se rompe una promesa declarada —un presupuesto de
 tiempo, una cobertura, un 1:1—, eso **se anota**, aunque no se arregle en el momento.
@@ -1365,7 +1385,7 @@ castellano. **Sin retrofit**: lo que ya está escrito no se renombra — la regl
 interna, que está gitignored) **y no la vigilaba ningún gate**. El resultado, medido: de 237
 funciones nuevas desde el 2026-08-24, **30** tienen nombre en castellano, y `scripts/discover.py`
 —creado el 2026-08-26— nació con 6 docstrings en castellano de 17. *Una promesa que el sistema dejó
-de cumplir en silencio es peor que una que nunca hizo* (corolario de las cinco reglas de método): o
+de cumplir en silencio es peor que una que nunca hizo* (corolario de las seis reglas de método): o
 la regla tiene casa y red, o no es una regla.
 
 La red es `tests/test_idioma_codigo.py` con ratchet en `tools/idioma-ratchet.yaml`: cuenta los

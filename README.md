@@ -230,7 +230,7 @@ descripción, o el usuario con `/<nombre>`). Encapsulan la cadena mecánica + el
 | `test-hypothesis` | "hipótesis: …", "evidencia a favor/contra de …" | Testea un supuesto **durable** contra el fulltext y responde con veredicto citado; **a pedido del usuario** lo archiva en `concepts/hypotheses/`, taggea papers con `thesis_links` y declara la postura de
 cada uno en la tabla de evidencia de la hipótesis (D-21). |
 | `query-corpus` | búsqueda/pregunta general (no hipótesis) | Responde contra índice + frontmatter + fulltext; archiva en `vault/wiki/queries/` **sólo si el usuario lo pide**. |
-| `verify-citations` | cierre de toda operación con prosa `[[bibcode]]` | Chequea, afirmación por afirmación, que la fuente respalde el claim (1 subagente/par lee el fulltext). |
+| `verify-citations` | cierre de toda operación con prosa `[[bibcode]]` | Chequea, afirmación por afirmación, que la fuente respalde el claim: **un subagente por fuente**, que lee ese `.txt` y nada más, y juzga todos los pares que la citan. Las correcciones las aplica un solo escritor serial (`scripts/apply_fixes.py`), que rechaza lo ambiguo en vez de adivinar. |
 | `find-contradictions` | "buscá contradicciones", "¿qué papers discrepan sobre X?" | Barre un eje (estrella/parámetro o concepto) y confirma desacuerdos claim↔claim **entre** papers → propone `disputes` (con una posición por fuente, y un marcador propio cuando quien arbitra es la NASA) para que apruebes. |
 | `maintain` | "actualizá X", "borrá el paper Y", "renombrá el slug", "re-clasificá" | Mantiene entidades **ya ingestadas**: refrescar con papers nuevos, borrar/renombrar limpio, re-clasificar tras cambiar `relevance.facets`, resolver backlog del lint. |
 
@@ -238,8 +238,9 @@ cada uno en la tabla de evidencia de la hipótesis (D-21). |
 
 El diferencial sobre el patrón base: el lint de Karpathy chequea salud estructural, no que la fuente
 **respalde** la afirmación. Acá toda afirmación va citada `[[bibcode]]` o marcada `inferencia`, y el
-skill `verify-citations` la contrasta contra el texto real del paper (un subagente por par, con cita
-textual obligatoria; una contradicción se convierte en disputa tagueada, no en cita rota). Las filas
+skill `verify-citations` la contrasta contra el texto real del paper (un subagente **por fuente**,
+aislado —ve un solo `.txt`, sin memoria y sin los otros papers—, con cita textual obligatoria; una
+contradicción se convierte en disputa tagueada, no en cita rota). Las filas
 de tabla heredan la cita del ámbito que las introduce (si no, se caerían del chequeo), y en las
 transcripciones se pregunta además por lo que la nota **omite**: una tabla truncada no afirma nada
 falso, pero se lee como completa. La tasa de

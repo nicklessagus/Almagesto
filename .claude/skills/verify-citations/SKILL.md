@@ -179,11 +179,47 @@ muestra, definición del observable, época, rango)? Si sí, citalas con su nº 
 puede estar bien y aun así estar sobre-generalizada. No uses memoria ni otros
 papers."*
 
+⛔ **La pregunta de completitud es la del contrato, y se ensancha sin que nada avise (#198).**
+Es *«¿la **tabla o lista de la fuente** tiene más filas/ítems que los transcritos?»*. Al armar el
+prompt es fácil escribirla como *«¿el paper dice **más sobre este eje**?»*, que suena equivalente y
+**no lo es**: sobre una fila que resume lo que un paper aporta a un eje, la respuesta es **sí casi
+siempre** —un paper siempre tiene más que una fila—. Medido: **201 avisos sobre 179 filas**, de los
+que **66** eran reales al triarlos. Los 66 no son ruido (incluían tres teoremas transcritos sin una
+premisa, cuatro «huecos» que la fuente citada cierra dos líneas después, y una enumeración de cuatro
+propiedades de la que la nota transcribía una y después invocaba «las cuatro»); lo que falla es la
+**tasa de disparo**, y un reporte donde 2 de 3 avisos no son accionables se deja de mirar.
+
+> Es la misma clase de error que `parcial` (1.39.0) y la escala `Score` (1.42.0) —**una pregunta mal
+> calibrada**—, con una diferencia: aquéllas se eliminaron por fusionar ejes; ésta **no se elimina**
+> (la completitud es un hallazgo real, #49): se **acota al enunciado del contrato**.
+>
+> Al resolver rige la **regla de poda**: en una nota de concepto, *«el paper tiene más detalle»* NO
+> es una omisión — es el recorte que la nota debe hacer. Y si el reporte de completitud vuelve
+> poblado en **casi todos** los pares, eso es señal de que la pregunta se ensanchó, no de que la
+> nota esté rota.
+
 **Addendum para transcripciones** (agregar al prompt cuando el par sale de una tabla o lista de la
 fuente): *"Esta afirmación es una fila/ítem de una transcripción. La nota transcribe de este paper la
 lista completa: «…». Decime APARTE del veredicto: ¿la tabla/lista del paper tiene MÁS filas/ítems que
 ésos? Si sí, listá los que faltan con su nº de línea. Ojo con el layout: la tabla puede estar
 entrelazada con otra en las mismas líneas físicas — contá las filas de LA tabla que corresponde."*
+
+### 2b. Barrera: el trabajo derivado se arma cuando el fan-out CERRÓ
+
+⛔ **Antes de triar, resolver o escribir el bloque, contá cuántas fuentes devolvieron contra cuántas
+lanzaste, y declaralo.** Si no cerraron todas, o esperás, o decís sobre cuántas estás afirmando.
+
+Medido (#199): armar los lotes de triage con **53 de 57** verificadores todavía corriendo dejó **4
+hallazgos que no miró nadie**, dos de ellos defectos reales —una fila que transcribía una de cuatro
+propiedades y después invocaba «las cuatro», y una no-convergencia presentada como general que el
+paper condiciona al S/N de su dataset—. Se detectaron por casualidad, al recontar para el log; sin
+ese recuento el reporte habría dicho *«201 avisos triados»* sobre 197.
+
+Es exactamente el **falso limpio** que el framework persigue en todos lados —`discover` distingue
+*corrió con N* / *FALLÓ* / *NO CORRIÓ*; la categoría **⛔ No evaluado** del lint cuenta para el exit;
+D-43 devuelve *no evaluado* y no `ok`— y nunca se había enunciado para el **consumidor** de un
+fan-out, que es donde este skill manda derivar trabajo. Es barato de mecanizar: `len(out/*.json)`
+contra el nº de fuentes.
 
 ### 3. El corte: contenido distintivo, sin grado
 
@@ -345,6 +381,16 @@ handbook—, tres cosas cambian y las tres son del contrato, no del gusto:
   tema real, y ahí el lint hasheaba el archivo equivocado y devolvía **17 pares «vencidos por
   fuente»** sobre fuentes que nadie tocó. El frontmatter no sabe qué abriste; la fila sí.
   Que el prefijo case con el localizador de `Evidencia`: `pdf:` va con `p. 628`, `txt:` con `L320`.
+  ⛔ **Documento largo leído del `.txt`: van los DOS localizadores (#200).** Una fuente
+  `unidad_cita: pagina` se cita por **página** (#80: *«línea 18443» no es una referencia
+  utilizable*) pero se lee del `.txt`, que es lo barato y lo que el contrato manda por defecto. Las
+  dos reglas son correctas y chocan: la fila queda con `txt:` y una evidencia que dice `p. 271`. Las
+  dos salidas obvias **empeoran** la fila — poner `pdf:` **miente** sobre qué archivo se abrió y hace
+  que el ancla vigile un archivo que nadie leyó; citar por línea rompe #80. La salida es escribir
+  **los dos**: `«…» (p. 271 / \u0060.txt\u0060 L13931)`. Deja las dos verdades escritas —la
+  referencia utilizable para un humano y el ancla del archivo que se hasheó— y el detector queda en
+  0 sin ablandarse. Medido: **6 de 8** filas marcadas de un concepto real eran este caso, todas
+  correctas.
   Anclar al `.txt` una cita que salió del PDF la marca vencida cada vez que ese `.txt` se re-extrae
   —cosa que el propio framework provoca (`--force`, upgrade a OCR, backfill de marcas)— mientras la
   fuente real no se movió, y **no ve** que el PDF sí cambió. Una celda **sin** prefijo es la

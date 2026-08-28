@@ -3463,6 +3463,48 @@ def test_localizador_que_contradice_al_archivo_vigilado(toy_vault, capsys):
         "y NO se cuenta además como vencido: es un hallazgo propio"
 
 
+def test_doble_localizador_no_es_hallazgo_y_el_mensaje_lo_propone(toy_vault, capsys):
+    """#200: la tensión #80 ↔ #117, y la salida que la resuelve sin ablandar nada.
+
+    Una fuente `unidad_cita: pagina` **leída del `.txt`** cae siempre en esta categoría: #80 manda
+    citar por página (*«línea 18443» no es una referencia utilizable*) y #117 exige que el prefijo
+    case con el localizador. Las dos reglas son correctas, y las dos salidas que el mensaje sugería
+    empeoran la fila: poner `pdf:` **miente** sobre qué archivo se leyó y hace que el ancla vigile
+    un archivo que nadie abrió; citar por línea rompe #80. Medido: **6 de 8** filas marcadas de un
+    concepto real eran este caso, todas correctas.
+
+    La salida es el **doble localizador**: la evidencia lleva la página *y* la línea del archivo
+    vigilado. El detector ya lo soporta (exige `len(_locs) == 1`); lo que faltaba es que el mensaje
+    lo proponga en vez de mandar a empeorar la fila.  @inv INV-113"""
+    ft = _con_ancla(toy_vault, CUERPO)
+    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    t = nota.read_text(encoding="utf-8")
+    t = t.replace("| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente | Condición |",
+                  "| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |")
+    t = t.replace("|---|---|---|---|---|---|---|", "|---|---|---|---|---|---|---|---|")
+    t = t.replace("| soportada | ", '| soportada | "la cita" (p. 628 / `.txt` L120) | ')
+    nota.write_text(t, encoding="utf-8")
+    run_lint_reporte(capsys)
+    assert lint.collect().por_clave("verif_localizador").items == (), \
+        "una fila con los DOS localizadores no es hallazgo: dice la verdad en los dos ejes"
+
+
+def test_el_mensaje_del_localizador_propone_el_doble_localizador(toy_vault, capsys):
+    """#200: el mensaje mandaba a `re-anclar a pdf:`, que sobre un libro leído del `.txt` es mentir
+    sobre qué archivo se abrió. Tiene que nombrar la salida que no ablanda nada.  @inv INV-113"""
+    ft = _con_ancla(toy_vault, CUERPO)
+    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    t = nota.read_text(encoding="utf-8")
+    t = t.replace("| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente | Condición |",
+                  "| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |")
+    t = t.replace("|---|---|---|---|---|---|---|", "|---|---|---|---|---|---|---|---|")
+    t = t.replace("| soportada | ", '| soportada | "la cita" (p. 628) | ')
+    nota.write_text(t, encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    assert "los DOS localizadores" in rep, \
+        "el mensaje tiene que proponer el doble localizador, no sólo re-anclar"
+
+
 def test_veredicto_sin_resolver_en_el_bloque_bloquea(toy_vault, capsys):
     """#91: el lint leía el bloque `## Verificación de citas` **sólo por su encabezado** —¿existe?
     ¿está fresco?— y nunca su contenido. La columna `Veredicto` no la miraba nadie.

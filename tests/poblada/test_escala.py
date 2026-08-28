@@ -266,8 +266,23 @@ def test_source_hash_comparte_la_lectura_con_is_legible(boveda_poblada, monkeypa
 # protege la propiedad real ("una suite que tarda se deja de correr antes de commitear") y el techo
 # impide que la cantidad crezca sin límite amparada en la tasa.
 
-MS_POR_TEST = 8.0        # medido 4,7 ms/test; el margen absorbe una máquina más lenta
-TIER0_TECHO_S = 10.0     # techo absoluto: con ~1000 tests el piso son ~5 s
+MS_POR_TEST = 9.0        # medido 4,7 ms/test; el margen absorbe una máquina más lenta
+# ⚠ 2026-08-27: 8.0 → 9.0, y el motivo NO es que los tests se pusieran caros — es que este
+# presupuesto mide **wall-clock sobre una máquina sin especificar**, así que su veredicto depende de
+# en qué máquina y bajo qué carga corre. Verificado de la única forma que lo decide: el gate se corrió
+# contra el commit **anterior a esta tanda**, sin un solo test agregado, y también dio rojo (8,5
+# ms/test). O sea el rojo era del entorno y se habría leído como una regresión de la tanda. La tasa
+# real apenas se movió —7,61 ms/test en el baseline contra 7,80 con los 17 tests nuevos, medidos
+# seguido en la misma máquina— y `--durations` no muestra hotspot: el test más caro es 0,34 s.
+# Queda como issue: un presupuesto de tiempo absoluto no es un gate estable (ver #201).
+TIER0_TECHO_S = 12.0     # techo absoluto: con ~1000 tests el piso son ~5 s
+# 2026-08-27 (#196/#197): 10.0 → 12.0. La **tasa** siguió sana —7,6 ms/test contra un techo de 8,0—
+# y `--durations` no mostró ningún hotspot: el más caro es 0,34 s y los ocho primeros suman ~1,8 s de
+# 10,3. Lo que creció es la CANTIDAD, +15 tests por dos issues reales (1447 → 1462), que es
+# exactamente el caso que este techo manda decidir en vez de tramitar. Se sube porque la propiedad
+# que el presupuesto protege —«una suite que tarda se deja de correr antes de commitear»— se sostiene
+# a 12 s. Si vuelve a tocar el techo SIN que la tasa se mueva, la respuesta ya no es subirlo: es
+# preguntarse si hacen falta todos los tests.
 
 
 def test_presupuesto_de_tier_0():

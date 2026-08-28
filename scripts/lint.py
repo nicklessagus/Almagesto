@@ -1678,14 +1678,23 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 # #122: el localizador de `Evidencia` y el prefijo dicen lo mismo desde ángulos
                 # distintos. Si discrepan, el hash vigila un archivo del que la cita no salió —
                 # se dispara en falso al re-extraer el `.txt` y no ve que el PDF cambió.
+                # #200: una fila con los DOS localizadores no es hallazgo (`len(_locs) == 1`), y ésa
+                # es la salida que el mensaje tiene que nombrar. Una fuente `unidad_cita: pagina`
+                # leída del `.txt` cae acá **siempre** —#80 manda citar por página, #117 que el
+                # prefijo case— y las dos salidas obvias empeoran la fila: poner `pdf:` miente sobre
+                # qué archivo se abrió, y citar por línea rompe #80. Medido: 6 de 8 filas marcadas
+                # de un concepto real eran ese caso, todas correctas.
                 _locs = lb.locator_kinds(fila.evidence)
                 if _locs and _locs != {fila.source_kind} and len(_locs) == 1:
                     _l = next(iter(_locs))
                     verif_localizador.append(
                         (stem, f"[[{fila.bibcode}]]: la evidencia cita "
                                f"{'una PÁGINA' if _l == 'pdf' else 'una LÍNEA'} y la fila vigila "
-                               f"{'el `.txt`' if fila.source_kind == 'txt' else 'el PDF'} → "
-                               f"re-anclar a `{_l}:` o re-verificar el par"))
+                               f"{'el `.txt`' if fila.source_kind == 'txt' else 'el PDF'} → si la "
+                               f"cita salió de ese archivo, re-anclar a `{_l}:`; si la fuente es "
+                               f"larga (`unidad_cita: pagina`) y se leyó del `.txt`, poné los DOS "
+                               f"localizadores (`p. 271 / \u0060.txt\u0060 L13931`) — las dos cosas "
+                               f"son ciertas y ninguna se ablanda"))
                 vigente = evidencia_hash_de(fila.bibcode, fila.source_kind)
                 que = "el PDF" if fila.source_kind == "pdf" else "el `.txt`"
                 if vigente is None:
