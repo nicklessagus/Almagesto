@@ -58,7 +58,7 @@
 | **INV-39** | P0 | garantizado y medido | — | `tests/test_lint.py:1507` · `test_registro_versionado_cubre_la_falta_de_build`<br>`tests/test_lint.py:1522` · `test_build_local_gana_sobre_el_registro` |
 | **INV-40** | P0 | HUECO (parcial) | `scripts/lint.py:159` · `fm_error` | `tests/test_lint.py:109` · `test_paper_sin_tag_paper_evade_los_chequeos_de_su_tipo` |
 | **INV-41** | P1 | garantizado y medido | — | `tests/poblada/test_golden.py:167` · `test_reporte_lista_todas_las_categorias` |
-| **INV-42** | P0 | garantizado y medido | — | `tests/poblada/test_escala.py:197` · `test_lint_no_muta_la_boveda` |
+| **INV-42** | P0 | garantizado y medido | — | `tests/poblada/test_escala.py:206` · `test_lint_no_muta_la_boveda` |
 | **INV-43** | P1 | garantizado y medido | — | `tests/test_lint.py:2171` · `test_notas_huerfanas_salen_en_orden_estable` |
 | **INV-44** | P0 | garantizado y medido (1.35.0) | `scripts/lib_config.py:1306` · `flags_usados` | `tests/test_ingest_star.py:151` · `test_la_escotilla_del_orquestador_deja_traza`<br>`tests/test_ingest_star.py:163` · `test_save_paso_estampa_la_escotilla_del_orquestador`<br>`tests/test_lib_config.py:842` · `test_flags_usados_no_reporta_el_posicional_como_flag`<br>`tests/test_query_ads.py:1365` · `test_escotillas_quedan_en_el_registro` |
 | **INV-45** | P1 | garantizado y medido | — | `tests/test_lint.py:529` · `test_extraido_sin_llegar_a_ninguna_entidad_es_backlog` |

@@ -138,7 +138,7 @@ def test_el_recolector_no_se_marca_a_si_mismo():
     """Contra el repo REAL: los ejemplos de sintaxis que el propio `trace_invariants.py` y su test
     muestran en la doc no pueden contar como cobertura (se auto-adjudicaba INV-87 e INV-90)."""
     # Se arma un árbol con SÓLO los dos archivos, en vez de barrer el repo entero y filtrar: la
-    # pregunta es sobre esos dos, y el barrido completo costaba **2,6 s del presupuesto de tier 0**
+    # pregunta es sobre esos dos, y el barrido completo costaba **2,6 s de la corrida de tier 0**
     # (el test más caro de la suite, por lejos) para tirar el 95% de lo que leía.
     import shutil, tempfile
     with tempfile.TemporaryDirectory() as tmp:
@@ -430,9 +430,11 @@ def test_el_mapa_commiteado_esta_al_dia_en_el_repo_REAL():
 
     ⚠ **Tier 1, no tier 0.** `collect_marks` parsea el AST de todo `scripts/` + `tests/` y cuesta
     ~4,9 s (in-process; por subprocess es lo mismo más el arranque del intérprete). Meterlo en tier 0
-    llevaba la suite de 7 s a 11,8 s y **rompía el presupuesto declarado** (≤ 8 ms/test **y** ≤ 10 s,
-    `tests/README.md`) — una promesa que el repo mide con su propio test. El gate de cada push vive
-    en CI (`.github/workflows/ci.yml`), que corre el `--check` real; acá queda la red de tier 1.
+    llevaba la suite de 7 s a 11,8 s: **casi el 60 % más caro el tier que se corre antes de cada
+    commit**, para un chequeo que no cambia entre pushes. (Hasta #201 el argumento se apoyaba en un
+    presupuesto declarado —≤ 8 ms/test y ≤ 10 s— que medía la máquina y por eso se borró; el costo
+    sigue siendo el mismo y la decisión también.) El gate de cada push vive en CI
+    (`.github/workflows/ci.yml`), que corre el `--check` real; acá queda la red de tier 1.
 
     Compara in-process con las mismas piezas que usa `--check`, así que la paridad es por
     construcción y no por un doble."""

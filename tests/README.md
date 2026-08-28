@@ -19,46 +19,38 @@ justo cuando más sirve.
 
 | Tier | Qué corre | Comando | Presupuesto |
 |---|---|---|---|
-| **0** — siempre (default, CI en cada push) | todo `tests/*.py` | `python -m pytest tests/ -q` | ≤ 8 ms/test **y** ≤ 10 s |
-| **1** — `poblada` (nightly / pre-release) | `tests/poblada/` sobre corpus sintético (~900 notas) | `python -m pytest tests/ -m poblada -q` | ≤ 120 s |
+| **0** — siempre (default, CI en cada push) | todo `tests/*.py` | `python -m pytest tests/ -q` | ~11 s (referencia, sin gate — ver abajo) |
+| **1** — `poblada` (nightly / pre-release) | `tests/poblada/` sobre corpus sintético (~900 notas) | `python -m pytest tests/ -m poblada -q` | ~91 s (referencia, sin gate) |
 | **2** — `instancia` (sólo en la máquina del usuario; gate del deploy) | invariantes sobre una instancia REAL | `ALMAGESTO_INSTANCIA=/ruta/a/la/instancia python -m pytest tests/ -m instancia -q` | ≤ 60 s |
 | todos | los tres | `ALMAGESTO_INSTANCIA=... python -m pytest tests/ -m "" -q` | ≤ 3 min |
 
 `instancia` **sin** la env var **skipea con motivo visible**, nunca pasa en silencio: un tier que se
 saltea sin decirlo es el mismo modo de falla que el "0 que no miró" (ver abajo).
 
-> **El presupuesto de tier 0 es una TASA, no un absoluto — y esa es la corrección de 10.3.** El
-> techo original (≤ 2,5 s) se escribió con ~400 tests y se fue a **7,3 s** a lo largo de nueve
-> tandas, una decena de tests por vez, **sin que nada fallara nunca**: ninguna corrida se pone roja
-> por lenta. Es el caso de manual de *"una promesa que el sistema dejó de cumplir en silencio"*.
+> **Los presupuestos de tiempo se BORRARON el 2026-08-28 (#201), no se recalibraron.** Los números
+> de la tabla son referencia, no gate. El techo original de tier 0 (≤ 2,5 s) se fue a 7,3 s a lo largo
+> de nueve tandas sin que nada fallara nunca, y la respuesta de entonces fue medirlo con
+> `test_presupuesto_de_tier_0` —una tasa (ms/test) más un techo absoluto, corriendo el tier 0 como
+> subproceso desde tier 1—. Ese gate midió **wall-clock sobre una máquina sin especificar**, con un
+> margen del 15 %, y su único rojo en toda su vida fue **falso**: al cerrar la tanda #196/#197 dio
+> 8,5 ms/test contra un techo de 8,0, y correrlo contra el commit anterior —sin un solo test
+> agregado— dio rojo también. Se resolvió subiendo el techo, que es el trámite que el propio mensaje
+> de error pedía no hacer. Su hermano `test_presupuesto_de_tier_1` tenía margen 1,6× y la misma falla
+> esperando.
 >
-> Lo que la medición mostró (2026-08-24), que es lo que el issue pedía decidir **con la medición en
-> la mano** y no antes:
-> - el hotspot **no** era `is_legible` —tier 0 no tiene corpus grande—: era **un solo test** que
->   barría el repo entero con AST para mirar dos archivos, **2,6 s de los 7,3**. Acotarlo bajó el
->   tier a **4,75 s** sin tocar nada más;
-> - el resto es piso por test (~4 ms de tmpdir por `toy_vault`) × ~1000 tests;
-> - o sea que **el costo por test BAJÓ** desde que se escribió el techo (2,5 s / 400 ≈ 6 ms/test
->   entonces, 4,7 ms/test en esa medición). Lo que creció es la cantidad.
+> **Qué queda en su lugar, y por qué alcanza.** La propiedad que protegían —*una suite que tarda se
+> deja de correr antes de commitear*— no necesita gate: **pytest imprime la duración en cada
+> corrida**, así que una suite que se pone lenta se ve todos los días. Lo que el ojo no ve
+> —complejidad peor que lineal— lo cazan los **ratios** de `test_escala.py`, que son independientes
+> de la máquina (`lint(800)/lint(200)` ≈ 4 contra ≈16 de un barrido cuadrático). Y el presupuesto
+> absoluto que sobrevive, `test_lint_presupuesto_absoluto` (lint(N=900) < 10 s sobre 1,7-1,8 s
+> medidos), tiene **5,5× de margen**: sólo se pone rojo ante una regresión grosera, no ante una
+> máquina cargada.
 >
-> **Re-medido el 2026-08-27**: 1438 tests en ~7,9 s → **5,5 ms/test**. La tasa sigue bajo el techo
-> (≤ 8 ms/test) y el que se está agotando es el **absoluto**: quedan ~2 s de los 10. La cantidad
-> volvió a crecer (~1000 → 1438) y el costo por test subió respecto de 2026-08-24.
->
-> **Tier 1 pasó de ≤ 90 s a ≤ 120 s, y es una decisión, no un trámite.** Medido: 55 s → 91 s en la
-> misma sesión, y el crecimiento es **cobertura real**, no grasa — el generador pasó de sembrar 7
-> anomalías a 16 (nueve siembras parametrizadas nuevas), entraron tres anclas (`source_hash`
-> compartiendo lectura, corpus limpio en las 55 categorías, los números de la doc) y una de ellas
-> es **una corrida entera de tier 0** (5,1 s: es el instrumento que mide el otro presupuesto).
-> Lo que NO puede pasar es que el techo suba solo: lo fija
-> `test_escala.py::test_presupuesto_de_tier_1`, con el mismo criterio que su hermano.
-
-> Por eso el presupuesto es **≤ 8 ms/test y ≤ 10 s absolutos**: la tasa protege la propiedad real
-> —*una suite que tarda se deja de correr antes de commitear*— y el techo absoluto impide que la
-> cantidad crezca sin límite amparada en la tasa. Los dos los mide
-> `tests/poblada/test_escala.py::test_presupuesto_de_tier_0`, que corre el tier 0 como subproceso
-> **desde tier 1**: un tier no puede medirse a sí mismo sin sumar su propio costo al que reporta.
-> Un techo sin test es exactamente cómo éste llegó a 7,3 s.
+> ⛔ **El corte es ese margen.** Un presupuesto de wall-clock con menos de ~5× de margen mide la
+> máquina, no el repo, y su rojo manda a buscar una regresión que no existe — o peor, enseña a subir
+> el techo como trámite. Misma doctrina que la categoría **⛔ No evaluado** del lint: un veredicto que
+> el instrumento no puede sostener no sale como veredicto.
 
 Requiere `pytest` (dev-only, no está en `requirements.txt`; los scripts no lo necesitan).
 

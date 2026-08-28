@@ -12,6 +12,18 @@ umbral de 8 separa ambos con margen amplio para ruido. Los presupuestos absoluto
 llevan margen explícito (≥5×) sobre el número medido, documentado en cada test — nunca un número
 inventado.
 
+⛔ **Y ese ≥5× es el corte: por debajo, un presupuesto de wall-clock mide la MÁQUINA (#201).**
+Los dos que no lo cumplían se borraron el 2026-08-28, no se recalibraron. `test_presupuesto_de_tier_0`
+cronometraba el tier 0 como subproceso con un margen del 15 % (7,8 ms/test medidos contra un techo
+de 9,0): su único rojo en toda su vida fue **falso** —se corrió contra el commit anterior a la tanda,
+sin un solo test agregado, y también dio rojo— y se resolvió subiendo el techo, que es exactamente el
+trámite que su propio mensaje de error pedía no hacer. `test_presupuesto_de_tier_1` tenía margen 1,6×
+(1,75 s medidos contra 2,88 s de presupuesto), la misma falla esperando. Ninguno de los dos aportaba
+señal que no esté ya: **pytest imprime la duración en cada corrida**, así que una suite que se pone
+lenta se ve todos los días sin gate, y lo que el ojo NO ve —complejidad peor que lineal— lo cazan los
+ratios de este archivo, que son independientes de la máquina. Un veredicto que el instrumento no
+puede sostener no sale como veredicto: acá era peor que un cero inventado, era un **rojo** inventado.
+
 Todos los números de referencia de este archivo están MEDIDOS en esta sesión (no estimados),
 corriendo el generador de `tests/poblada/generador.py` sobre esta máquina; se repiten en cada
 docstring para que el próximo ajuste de umbral tenga de dónde partir.
@@ -21,10 +33,7 @@ from __future__ import annotations
 import contextlib
 import io
 import random
-import re
-import sys
 import time
-from pathlib import Path
 
 import pytest
 import yaml
@@ -249,84 +258,3 @@ def test_source_hash_comparte_la_lectura_con_is_legible(boveda_poblada, monkeypa
         f"{len(lecturas)} lecturas para {n_txt} archivos: hay una pasada de más")
 
 
-# ── 10.3 · el presupuesto de la suite, medido ──────────────────────────────────────────────────
-#
-# `tests/README.md` prometía tier 0 ≤ 2,5 s y el número se fue a 7,3 s a lo largo de nueve tandas —
-# una decena de tests por vez, sin que nada fallara nunca: **ninguna corrida se pone roja por
-# lenta**. Es el caso de manual de "una promesa que el sistema dejó de cumplir en silencio", y la
-# respuesta del repo a eso no es bajar la promesa: es medirla.
-#
-# Lo que la medición mostró (2026-08-24, con la medición en la mano, como pide el issue):
-#   · el hotspot NO era `is_legible` —tier 0 no tiene corpus grande—: era **un solo test** que
-#     barría el repo entero con AST para mirar dos archivos (2,6 s de 7,3);
-#   · el resto es piso por test (~4 ms de tmpdir por `toy_vault`) × 1000 tests;
-#   · o sea que el costo POR TEST bajó desde que se escribió el techo (2,5 s / ~400 tests ≈ 6 ms);
-#     lo que creció es la cantidad.
-# Por eso el presupuesto pasa a ser una **tasa** con un techo absoluto encima: la tasa es lo que
-# protege la propiedad real ("una suite que tarda se deja de correr antes de commitear") y el techo
-# impide que la cantidad crezca sin límite amparada en la tasa.
-
-MS_POR_TEST = 9.0        # medido 4,7 ms/test; el margen absorbe una máquina más lenta
-# ⚠ 2026-08-27: 8.0 → 9.0, y el motivo NO es que los tests se pusieran caros — es que este
-# presupuesto mide **wall-clock sobre una máquina sin especificar**, así que su veredicto depende de
-# en qué máquina y bajo qué carga corre. Verificado de la única forma que lo decide: el gate se corrió
-# contra el commit **anterior a esta tanda**, sin un solo test agregado, y también dio rojo (8,5
-# ms/test). O sea el rojo era del entorno y se habría leído como una regresión de la tanda. La tasa
-# real apenas se movió —7,61 ms/test en el baseline contra 7,80 con los 17 tests nuevos, medidos
-# seguido en la misma máquina— y `--durations` no muestra hotspot: el test más caro es 0,34 s.
-# Queda como issue: un presupuesto de tiempo absoluto no es un gate estable (ver #201).
-TIER0_TECHO_S = 12.0     # techo absoluto: con ~1000 tests el piso son ~5 s
-# 2026-08-27 (#196/#197): 10.0 → 12.0. La **tasa** siguió sana —7,6 ms/test contra un techo de 8,0—
-# y `--durations` no mostró ningún hotspot: el más caro es 0,34 s y los ocho primeros suman ~1,8 s de
-# 10,3. Lo que creció es la CANTIDAD, +15 tests por dos issues reales (1447 → 1462), que es
-# exactamente el caso que este techo manda decidir en vez de tramitar. Se sube porque la propiedad
-# que el presupuesto protege —«una suite que tarda se deja de correr antes de commitear»— se sostiene
-# a 12 s. Si vuelve a tocar el techo SIN que la tasa se mueva, la respuesta ya no es subirlo: es
-# preguntarse si hacen falta todos los tests.
-
-
-def test_presupuesto_de_tier_0():
-    """Corre el tier 0 como subproceso y mide. Va en tier 1 porque **un tier no puede medirse a sí
-    mismo**: el test que mide sumaría su propio costo al que reporta."""
-    import subprocess
-    repo = Path(__file__).resolve().parent.parent.parent
-    t0 = time.time()
-    r = subprocess.run([sys.executable, "-m", "pytest", "tests/", "-q", "-p", "no:randomly"],
-                       cwd=repo, capture_output=True, text=True)
-    dur = time.time() - t0
-    assert r.returncode == 0, r.stdout[-2000:]
-    m = re.search(r"(\d+) passed", r.stdout)
-    assert m, r.stdout[-500:]
-    n = int(m.group(1))
-    ms = dur * 1000 / n
-    assert ms <= MS_POR_TEST, (
-        f"tier 0: {dur:.1f}s / {n} tests = {ms:.1f} ms/test (techo {MS_POR_TEST}). No es la "
-        f"cantidad de tests: es que cada uno se puso caro. Mirá `--durations` antes de tocar el techo.")
-    assert dur <= TIER0_TECHO_S, (
-        f"tier 0 tarda {dur:.1f}s (techo absoluto {TIER0_TECHO_S}s) con {n} tests a {ms:.1f} "
-        f"ms/test. El costo por test está bien: creció la CANTIDAD. Decidilo explícitamente — "
-        f"subir el techo acá es una decisión, no un trámite.")
-
-
-TIER1_TECHO_S = 120.0    # medido 91 s; subió de 90 con 10.3 y está razonado en tests/README.md
-
-
-def test_presupuesto_de_tier_1(boveda_poblada):
-    """El hermano del de arriba, para el tier caro. **No corre el tier**: sumaría el suyo y sería
-    recursivo. Mide el costo de lo único que escala con el corpus —una pasada de `lint.collect()`
-    sobre las ~900 notas— y lo compara contra la fracción del presupuesto que le toca.
-
-    Por qué así: el tier 1 son ~25 siembras + ~25 pasadas de lint, y si el reloj de pared se pasa,
-    la pregunta útil es **cuál de las dos** se puso cara. Un techo de wall-clock sin esa distinción
-    manda a mirar el archivo equivocado."""
-    import time
-    t0 = time.time()
-    lint.collect()
-    una_pasada = time.time() - t0
-    # ~25 pasadas de lint en el tier; el resto del presupuesto es siembra e I/O.
-    presupuesto_lint = TIER1_TECHO_S * 0.6 / 25
-    assert una_pasada <= presupuesto_lint, (
-        f"una pasada de `lint.collect()` sobre {len(list(boveda_poblada.PAPERS.glob('*.md')))} "
-        f"notas tarda {una_pasada:.2f}s (presupuesto {presupuesto_lint:.2f}s por pasada, "
-        f"≈{TIER1_TECHO_S}s de tier). El hotspot medido es `is_legible` (77%): mirá primero que "
-        f"`source_hash` siga compartiendo su lectura (`test_source_hash_comparte_la_lectura...`).")
