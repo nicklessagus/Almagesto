@@ -250,7 +250,7 @@ juicio de un modelo.
 | 6 | Un script que **pisa lo que ya escribió** | correr dos veces y hashear `vault/**/*.md` (ver abajo) |
 | 7 | Un símbolo **nuevo con nombre en castellano** | `tests/test_idioma_codigo.py` (tier 0) |
 
-⚠ **La 6 faltaba acá y estaba en `CLAUDE.md`** (#148). El doc normativo titula *"las **seis** redes"*
+⚠ **La 6 faltaba acá y estaba en `CLAUDE.md`** (#148). El doc normativo titulaba *"las **seis** redes"* (hoy son siete)
 y delega el detalle en este archivo, que publicaba cinco — así que la regla de idempotencia se caía
 exactamente en la frontera entre los dos. Vale para **todo script que escriba en `vault/`**, no sólo
 para los de `scripts/`: la idempotencia es invariante del framework («la cadena es idempotente:

@@ -18,7 +18,7 @@
 - **Opcional `tesseract-ocr`** (`sudo apt install tesseract-ocr` · `brew install tesseract`) —
   rescate por **OCR** de PDFs escaneados o con fuentes rotas (mojibake): con tesseract instalado,
   `extract_fulltext.py` cae solo a OCR cuando la capa de texto no es legible y el `.txt` queda
-  marcado `source: ocr` (**citable con salvedad**: símbolos/notación pueden diferir).
+  marcado `source: ocr` (**no se cita de acá** (#205): es el índice; la fuente es el PDF).
 - **Opcional `curl`** (estándar en Linux/macOS) — `fetch_pdf.py` lo usa de fallback para
   publishers cuyo WAF rechaza a python-requests.
 - **Node/npm — sólo para el modo off-ADS por web.** `fetch_web.py` toma el snapshot con
@@ -174,7 +174,7 @@ python scripts/triage.py <slug> --drop-core <bib> … --reason "<motivo>"
 python scripts/triage.py <slug> --drop-source <clave|url> --reason "<motivo>"
 # off-ADS · ACEPTAR una fuente (#111): arma la entrada de `sources:` lista para pegar, con metadata
 #   real de OpenAlex y el archivo resuelto (o `pending: paywall`). NO escribe themes.yaml.
-python scripts/triage.py <slug> --accept-source <doi> --via usuario|descubrimiento|reporte \
+python scripts/triage.py <slug> --accept-source <doi> --via usuario|descubrimiento \
                                 --reason "<motivo>"
 ```
 ⚠ Los dos `via` son vocabularios cerrados **distintos** (#162): `extra_core` (carril ADS) usa

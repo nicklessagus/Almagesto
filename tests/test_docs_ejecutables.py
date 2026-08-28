@@ -63,6 +63,39 @@ def test_todo_comando_que_nombra_un_skill_existe_y_compila():
     assert rotos == [], "scripts que no compilan:\n  " + "\n  ".join(rotos)
 
 
+def test_los_tests_citados_en_forma_ABREVIADA_tambien_existen():
+    """`::test_x` sin el prefijo `tests/archivo.py` — la forma que `docs/contrato.md` usa a mano.
+
+    El gate de arriba matchea la forma completa `tests/<archivo>.py::<test>` y **no ve** la corta, que es 79 de
+    las 189 citas de test del contrato (42 %). Medido el 2026-08-28: los **tres** punteros muertos
+    que dejó #205c estaban los tres en ese punto ciego, y el gate pasaba verde. Es la forma «red que
+    no mira» de INV-101 aplicada a la doc, y la regla de método #4: un mapa que atribuye mal es peor
+    que uno vacío."""
+    vivos = {m.group(1) for p in RAIZ.glob("tests/**/test_*.py")
+             for m in re.finditer(r"^def (test_\w+)", p.read_text(encoding="utf-8"), re.M)}
+    faltan = []
+    for doc in _vivos():
+        for m in re.finditer(r"(?<![\w/.])::(test_\w+)", doc.read_text(encoding="utf-8")):
+            if m.group(1) not in vivos:
+                faltan.append(f"{doc.name}: ::{m.group(1)}")
+    assert faltan == [], ("tests citados por la doc que no existen:\n  " + "\n  ".join(sorted(set(faltan))))
+
+
+def test_los_simbolos_de_scripts_que_nombra_la_doc_existen():
+    """`scripts/x.py::simbolo` — el gate validaba que el ARCHIVO exista y nunca el símbolo.
+
+    `#205c` borró `extraction_prompt._symbols_note` y `docs/contrato.md` lo siguió citando como
+    evidencia de un P0 durante toda la tanda, con el gate en verde."""
+    faltan = []
+    for doc in _vivos():
+        for m in re.finditer(r"scripts/(\w+)\.py::(\w+)", doc.read_text(encoding="utf-8")):
+            mod = RAIZ / "scripts" / f"{m.group(1)}.py"
+            if mod.exists() and f"def {m.group(2)}(" not in mod.read_text(encoding="utf-8"):
+                faltan.append(f"{doc.name}: scripts/{m.group(1)}.py::{m.group(2)}")
+    assert faltan == [], ("símbolos de `scripts/` citados por la doc que no existen:\n  "
+                          + "\n  ".join(sorted(set(faltan))))
+
+
 def test_los_scripts_que_nombra_la_doc_existen():
     """Mismo criterio para `scripts/x.py` citado en prosa. Es el residuo que dejó el renombre R-5:
     `docs/operacion.md` mandaba a correr `scripts/ingest_topic.py` durante semanas."""

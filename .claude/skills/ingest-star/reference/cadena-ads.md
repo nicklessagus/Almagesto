@@ -64,7 +64,7 @@ de disco**. Cada entrada trae su `bibstem` y un `hint` con la rama por donde seg
 de la cascada manual. Esa cascada vive en `reference/rescate-pdfs.md` (del skill `ingest-star`,
 canónica ahí para los dos).
 
-## `extract_fulltext` — los tres chequeos, y el OCR
+## `extract_fulltext` — los dos chequeos, y el OCR
 
 Escribe `vault/raw/fulltext/<slug>/<bibcode>.txt`, que desde #205 es el **índice de búsqueda del
 corpus** y no material de lectura: la extracción y la verificación leen el **PDF**. Por eso quedan

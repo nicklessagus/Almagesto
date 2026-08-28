@@ -1,7 +1,7 @@
 # Playbook: spec → tests → implementación con agentes separados
 
 Método para implementar **lotes** de cambios sin que los tests terminen confirmando lo que el código
-ya hace. Complementa —no reemplaza— las seis redes de `CLAUDE.md` y los principios de
+ya hace. Complementa —no reemplaza— las siete redes de `CLAUDE.md` y los principios de
 `tests/README.md`.
 
 ## El problema que resuelve, y por qué acá aplica

@@ -56,7 +56,7 @@ nombrados** (caían dentro de «régimen omitido»). Dos hallazgos que cambian c
 
 Al copiar un valor a la nota de paper:
 
-- **el nº de línea del `.txt`** al lado (`grep -n`, nunca `splitlines()` — form feeds);
+- **la página del PDF** al lado (#205: la fuente es el PDF; el `.txt` sólo ubica);
 - **el régimen** en el que la fuente lo afirma: muestra, época, corte de datos, modelo ajustado;
 - si la fuente **atribuye el valor a otro trabajo** (*«according to X»*, *«(X et al.)»*), marcarlo
   **segunda mano** y citar a X — el número **no es de esta fuente**;

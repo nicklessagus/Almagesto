@@ -360,9 +360,8 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   declarado: `vault/`; lo que vive afuera se resuelve por el alias. Campos:
   `bibcode, title, first_author, n_authors, year, arxiv_id, doi, bibstem, stars[], facets[], keywords[],
   methods[], thesis_links[], role[], relevance, citation_count, pdf, fulltext,
-  fulltext_source(pdftotext|ocr|web), pdf_source(eprint|ads|publisher|web)`. El contrato apunta a **ambos artefactos**: `fulltext` es el
-  `.txt` **barato** (grep/lectura — el default de todo consumidor) y `pdf` el respaldo caro (abrir
-  sólo para figuras/tablas/ecuaciones o dudas de símbolos); `fulltext_source: ocr` hereda desde el
+  fulltext_source(pdftotext|ocr|web), pdf_source(eprint|ads|publisher|web)`. El contrato apunta a **ambos artefactos**, con los roles que #205 fijó: `pdf` es **lo que se lee**
+  (extracción y verificación) y `fulltext` el **índice de búsqueda** del corpus (`grep`); `fulltext_source: ocr` hereda desde el
   frontmatter la salvedad OCR (sin abrir el archivo). Los estampan `make_notes`/`extract_fulltext`
   por verdad de disco (null si no hay extracción). Cuando un paper vive bajo **varios slugs** (relevante
   para más de un sujeto → su `.txt` extraído bajo cada uno, contenido idéntico) el campo es **estable**:
@@ -726,7 +725,7 @@ verificable:
 4. extractor (LLM)    →  lee EL PDF (`Read` lo rasteriza: ve ecuaciones, tablas y
                          figuras) y cita PÁGINA. El `.txt` sólo para ubicar con grep.
                          Devuelve UNA VISTA (#188): «qué dice sobre {sujeto}», no
-                         «qué dice el paper» — con `vista{sujeto,tipo,txt}` en el JSON.
+                         «qué dice el paper» — con `vista{sujeto,tipo,txt,fuente}` en el JSON (#207).
 
 5. harvest_views      →  la única compuerta que corre `is_extraction` (INV-103):
                          un JSON de verify también trae `bibcode` y también es válido.
@@ -766,7 +765,7 @@ rasterizan, así que se grepea, se saca la página y se abren **esas** páginas 
 textos distintos, las citas por línea serían inventadas y verificar sería contrastar un modelo
 contra otro modelo.
 
-**De los tres chequeos queda uno y cambia de trabajo.** `is_legible` dispara el OCR para que el
+**De los tres chequeos quedan DOS, y cambian de trabajo.** `is_legible` dispara el OCR para que el
 paper sea **encontrable** —un escaneo sin capa de texto da un `.txt` vacío y ese paper se vuelve
 invisible al corpus—; `is_garbled` sigue porque la prosa garbleada sí degrada el índice.
 **`symbols_lost` y `fulltext_layout` se retiran** (#193, #194): existían para decidir `.txt` vs PDF
@@ -829,9 +828,9 @@ fuente real no se movió.
    listo para pegar (D-58). El motivo de la asimetría: el carril del **descarte** ya registraba
    quién y por qué (#51), y el de la **aceptación** no— + re-correr la cadena; descartado → `triage.py --drop … --reason`
    (persiste: no se re-propone); **dudoso → al usuario**. Detalle en el skill `ingest-star`.
-2. **Vos (LLM)** leés el **fulltext `.txt`** (el default: barato y greppable; el PDF se abre sólo
-   para figuras/tablas/ecuaciones o ante duda de símbolos si `fulltext_source: ocr`) y hacés la
-   cascada. ⚠ **Mirá `pdf_source` antes de copiar un número:** con `eprint` el `.txt` es el
+2. **Vos (LLM)** leés el **PDF** (#205: `Read` lo rasteriza, así que ves ecuaciones, tablas y
+   figuras; el `.txt` es el **índice** para ubicar con `grep` en qué parte mirar) y hacés la
+   cascada. Las citas van por **página**. ⚠ **Mirá `pdf_source` antes de copiar un número:** con `eprint` el `.txt` es el
    **preprint** (un `v1` pre-referato puede traer otros valores que el publicado), así que un valor
    que contradice al ground-truth o al abstract de ADS es candidato a **diferencia de versión** —
    abrí el PDF publicado o anotá la salvedad en la nota. El verify lo detecta después; acá es donde
@@ -840,9 +839,10 @@ fuente real no se movió.
    (`methods`, `thesis_links`, `role`, P/K/indicadores). La ficha se escribe **después**
    del contraste (2b) — no saltar de leer a la prosa.
    ⚠ **Cómo anotar cada valor (#103).** Medido sobre una ficha real (68 pares, 16 fuentes: 54
-   soportada / 11 parcial / 3 contradice / **0 no-soportada** — o sea, nada inventado), los 14
+   soportada / 11 parcial / 3 contradice / **0 no-soportada** — o sea, nada inventado; ⚠ el
+   vocabulario `parcial` se retiró en 1.39.0, la medición es del 2026-08-25), los 14
    defectos caen en seis mecanismos, y cuatro se vuelven **chequeo mecánico** si cada valor viaja con
-   su línea. Por eso, al copiar un número: **el nº de línea del `.txt`** (`grep -n`), **el régimen**
+   su localizador. Por eso, al copiar un número: **la página del PDF** (#205), **el régimen**
    en que la fuente lo afirma (muestra, época, corte de datos, modelo), y —si la fuente lo atribuye a
    otro trabajo (*«according to X»*)— la marca **segunda mano** con la cita a X, porque el número
    **no es de esta fuente**. ⛔ **Nada de prosa comparativa en la nota de paper:** comparar dos
@@ -1050,13 +1050,14 @@ maintain cuando re-sintetiza, query archivada, test de hipótesis — **antes de
 **Qué hace:** descompone la nota en pares (afirmación, `[[bibcode]]`) —incluidas las **filas de tabla
 y los ítems de lista**, que **heredan la cita del ámbito que las introduce** (caption / párrafo / encabezado
 de sección) en vez de caerse del fan-out por no llevar `[[bibcode]]` propio, y **excluidas las secciones
-que estampa la máquina** (`lib_config.SECCIONES_ESTAMPADAS`: los tres roll-ups, el apéndice de excluidos
+que estampa la máquina** (`lib_config.SECCIONES_ESTAMPADAS`: los tres roll-ups, las ayudas de
+lectura de #124 (`## Abstract`, `## Conclusiones` y sus `## Traducción …`), el apéndice de excluidos
 y el propio bloque de verificación), porque una fila de `## Papers` no es una afirmación sino metadata
 derivada y no hay nada que contrastar contra la fuente— y lanza **un subagente
 independiente por par** que lee SÓLO ese `vault/raw/fulltext/**/<bibcode>.txt` (grounding-first, prohibido de
 memoria) y devuelve **dos ejes separados** (D-59): un `veredicto` de RESPALDO —vocabulario cerrado
 `soportada|no-soportada|contradice`— y, aparte, la `condición` bajo la que la fuente lo afirma.
-Más **cita textual + nº de línea del `.txt`** (obligatoria; sin cita ⇒ no-soportada: la cita debe
+Más **cita textual + nº de PÁGINA del PDF** (obligatoria; sin cita ⇒ no-soportada: la cita debe
 tocar el **contenido distintivo** de la afirmación, la mera cercanía temática no alcanza).
 
 ⚠ **`parcial` se eliminó en 1.39.0 y no es cosmética.** Ese valor fusionaba dos preguntas
@@ -1101,7 +1102,8 @@ sobre qué archivo se abrió y hace que el ancla vigile un archivo que nadie ley
 rompe #80—. La salida es escribir **los dos**: `(p. 271 / `.txt` L13931)`, que deja las dos verdades
 escritas —la referencia utilizable para un humano y el ancla del archivo que se hasheó— y el
 detector queda en 0 sin ablandarse. Medido: **6 de 8** filas marcadas de un concepto real eran este
-caso, todas correctas.
+caso, todas correctas. ⚠ **Desde #205 el caso ya no se produce en filas nuevas** —se lee el PDF, así que los dos
+localizadores coinciden—; las filas viejas que lo llevan siguen siendo correctas y no se tocan.
 El **ancla** es el sha256 (10 hex) del **bloque markdown normalizado** que contiene la cita
 —párrafo / fila / ítem / blockquote—: reflowear la nota **no** la mueve, cambiar un número **sí**, y
 una fila sin `[[bibcode]]` propio hereda el del caption hasheando **los dos** bloques. El **hash de

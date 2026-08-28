@@ -150,7 +150,7 @@ Para cada par en tensión, lanzar un subagente (tipo `Explore`) **en paralelo**.
 los dos** `vault/raw/fulltext/**/<bibcode>.txt` en juego (grounding-first; prohibido de memoria) y devuelve:
 - `desacuerdo`: `real` | `aparente` | `no-concluyente`
   - **real** = ambos papers afirman valores/hechos incompatibles **más allá del error** (o uno afirma
-    existencia y el otro la niega). Con **cita textual + nº de línea de cada uno**.
+    existencia y el otro la niega). Con **cita textual + nº de página de cada uno** (#205).
     (El estado de las fuentes —`retracted`, `corrections`, `pdf_source: eprint`— se filtró en el
     paso 1: el subagente sólo ve los dos `.txt`, así que no puede juzgarlo.)
   - **aparente** = distinto régimen, distinta definición, distinta época, o dentro de la barra de

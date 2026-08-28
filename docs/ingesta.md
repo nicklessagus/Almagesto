@@ -130,7 +130,7 @@ flowchart TD
         T2 -->|off-ADS| T5 --> T6
     end
 
-    S6 --> L["EXTRACCIÓN LLM · una VISTA por sujeto (#188)<br/>leer fulltext → harvest_views → poblar papers/ → sintetizar la nota viva"]
+    S6 --> L["EXTRACCIÓN LLM · una VISTA por sujeto (#188)<br/>leer el PDF (#205) → harvest_views → poblar papers/ → sintetizar la nota viva"]
     T6 --> L
     L --> V["verify-citations → lint → log → commit"]
 ```

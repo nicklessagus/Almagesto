@@ -71,7 +71,7 @@ Progreso del append de <fuente> → <destino>:
    (`vault/raw/pdfs/<slug>/<clave>.pdf`, #205), ubicando con `grep -n` sobre su `.txt` en qué parte
    mirar y citando **página** — y poblar la
    nota del paper: `methods`, `role` (#73: `fundacional` introduce el método/mecanismo · `aplicacion` lo instancia en un caso · `arbitro` reanaliza y resuelve una tensión previa — sale de leer el paper, la regex del clasificador no puede inferirlo, y sin él contrastarlo contra otro no está definido), `thesis_links`/`stars`, y **la vista del destino** (#188): la entrada en `vistas[]`
-   (`{sujeto, tipo, fecha, txt, lente}` — el `sujeto` es la entidad destino) y su sección
+   (`{sujeto, tipo, fecha, txt, lente, fuente}` — el `sujeto` es la entidad destino; `fuente: pdf|abstract`, #207) y su sección
    `## Vista — <sujeto>`, orientada a **lo que aporta a la entidad destino** (una señal RV, un mecanismo, una ecuación del
    método), no un resumen genérico.
 

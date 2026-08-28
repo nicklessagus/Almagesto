@@ -79,7 +79,7 @@ padre-hijo de un hub/radio.
 
 2. **Leer los hits** (los `.txt`, no el PDF) y clasificar cada paper: **apoya / desafía / método**.
    Ser honesto: buscar activamente contraejemplos, no solo confirmación. La postura **de cada
-   paper** se anota junto con **la cita textual que la sostiene** (frase + nº de línea del `.txt`):
+   paper** se anota junto con **la cita textual que la sostiene** (frase + nº de página del PDF):
    sin cita no es evidencia, es opinión — y es lo que hace que la tabla del paso 4 sea verificable.
 
 > ⚠ **Si vas a reportar un número, mirá `pdf_source` de la nota del paper** (#57): con `eprint` el
@@ -154,7 +154,7 @@ Los pasos 4–9 corren **sólo si el usuario pide archivar**:
 
    | Qué | Es | ¿Verificable? |
    |---|---|---|
-   | cada **fila de evidencia** | cita textual + nº de línea del `.txt` | **sí**, pasa por `verify-citations` |
+   | cada **fila de evidencia** | cita textual + nº de **página del PDF** | **sí**, pasa por `verify-citations` |
    | el **veredicto global** | agregar N filas en una conclusión → juicio del agente | **no** → va marcado `(inferencia de [[b1]], [[b2]])` |
 
    La primera es la mayor parte del contenido y es transcripción con respaldo; el segundo es una
@@ -172,14 +172,14 @@ Los pasos 4–9 corren **sólo si el usuario pide archivar**:
 
 7. **Verificar citas**: correr el skill `verify-citations` sobre la nota de hipótesis (y, si tocaste
    prosa con citas en otra ficha/concepto, sobre eso también). Chequea afirmación por
-   afirmación contra el fulltext (cita textual + nº de línea del `.txt` obligatorios; sin respaldo
+   afirmación contra el fulltext (cita textual + nº de **página del PDF** obligatorios (#205); sin respaldo
    textual ⇒ no-soportada). Resolver cada no-soportada/contradice (bajar, reasignar cita, o marcar
    `inferencia`) y dejar el bloque `## Verificación de citas`. **Las filas de la tabla de evidencia
    son pares como cualquier otro** y entran al fan-out: la postura de cada paper tiene que reflejar
    lo que el texto **realmente** dice, y ahí es donde se comprueba. El veredicto global no entra —
    está marcado `inferencia`, que es justamente la declaración de que no hay fuente que lo diga.
 
-8. **Chequeo de salud**: correr `python scripts/lint.py --cierre` antes de commitear. Debe quedar en **0**
+8. **Chequeo de salud**: correr `python scripts/lint.py --cierre <slug>` antes de commitear (#121). Debe quedar en **0**
    en las **categorías bloqueantes**: cuáles son lo decide el `exit code` del lint (1 si hay), y la
    lista canónica vive en `CLAUDE.md` — **no la copies acá**, que es cómo se desincronizó antes. La
    **fuga de implementación** y las **citas no verificables** son WARN a revisar a mano (los "campos

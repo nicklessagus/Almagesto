@@ -64,7 +64,7 @@ Progreso del ingest de <estrella>:
    `.claude/skills/ingest-star/reference/cadena-ads.md`, que `ingest-theme` apunta también. Ahí
    están la **guardia de expansión** (el checkpoint humano que frena si el pool se multiplicó), el
    citation chaining, el rate limit de `fetch_arxiv`, la cascada de `fetch_pdf` y su residuo
-   `build/<slug>/missing_pdf.json`, los tres chequeos de `extract_fulltext`, `check_retractions` y
+   `build/<slug>/missing_pdf.json`, los dos chequeos de `extract_fulltext`, `check_retractions` y
    `extra_core` como **curación persistente y versionada**. Leelo la primera vez y ante cualquier
    aborto; lo que sigue acá es sólo lo que es **de una estrella**.
    Si el residuo quedó con entradas, la cascada manual de rescate está en
@@ -208,7 +208,7 @@ Progreso del ingest de <estrella>:
    ⛔ **Lo que produce cada subagente es UNA VISTA, no «la extracción del paper» (#188).** El
    prompt pregunta *«¿qué dice sobre {sujeto}?»*, con los `grep` armados desde **sus** alias: el
    mismo paper leído desde otro sujeto da otra vista. Por eso la sección de la nota es
-   `## Vista — <sujeto>` y el JSON trae `vista{sujeto,tipo,txt}`. Sin el scope, el silencio de la
+   `## Vista — <sujeto>` y el JSON trae `vista{sujeto,tipo,txt,fuente}` (#207). Sin el scope, el silencio de la
    nota sobre un eje es indistinguible de *«se miró y no hay nada»* — medido: 141 de 908 notas de
    una bóveda real las reclaman 2+ sujetos y **ninguna** tiene una segunda extracción.
 

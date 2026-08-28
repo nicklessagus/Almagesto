@@ -56,7 +56,7 @@ Progreso del refresh de <entidad>:
 2. **Identificar lo nuevo:** `git status` sobre `vault/wiki/papers/` muestra los stubs recién creados. Leer
    **sólo esos** fulltext y hacer su extracción (methods/`role`/thesis_links/P·K/indicadores).
    ⛔ **Es UNA VISTA del sujeto que se está refrescando (#188)**, no «la extracción del paper»:
-   la nota declara `vistas: [{sujeto, tipo, fecha, txt, lente}]` y lleva su `## Vista — <sujeto>`.
+   la nota declara `vistas: [{sujeto, tipo, fecha, txt, lente, fuente}]` y lleva su `## Vista — <sujeto>`.
    Armá el prompt con `python scripts/extraction_prompt.py <slug> <bibcode> [--theme]` y cosechá
    con `python scripts/harvest_views.py <slug> [--theme]`, que estampa `fecha`/`txt`/`lente` y
    mergea add-only. La incoherencia `vistas[]` ↔ cuerpo es **bloqueante** en el lint.
@@ -328,7 +328,7 @@ existe justamente porque, repartidas, se corren cinco y la sexta nunca:
 | snapshot web | la URL citada cambió | ✅ (1.35.0) — el **más silencioso**: una fuente web no tiene DOI ni bibcode, y como el `.txt` local **no** se toca, el ancla de fuente tampoco se entera |
 | citas-puerta2 | un paper cruzó el `fundacional_min_citas` del tema → sería core (o dejaría de serlo) sin que nadie editara nada | ✅ (1.46.0) — la única metadata que **cambia sola** y admite core. Su gemelo **offline** lo reporta el lint (`puerta2_cruces`): ése ve *«editaste el umbral»*, éste ve *«el mundo se movió»* |
 
-⛔ **Reporta, no aplica sola**: muestra el diff y pregunta. Un snapshot que se actualiza solo cambia
+⛔ **Reporta, no aplica sola**: muestra el diff y pregunta — ⚠ con **una excepción declarada**: `check_retractions` estampa `retracted:`/`corrections:` en las notas sin preguntar (lo dice el header de `sweep_external.py`); `--yes` gatea sólo el ground-truth. Un snapshot que se actualiza solo cambia
 valores **bajo los pies de la prosa que ya los citó**. El renombre preprint→publicado **nunca** es
 automático (reescribe wikilinks de toda la bóveda): se propone el comando.
 
