@@ -764,7 +764,8 @@ _print_seguro = cfg.print_seguro
 # artefacto que mide a la bóveda. Acá la severidad se declara **una vez**, en la tabla, y el exit se
 # deriva de ella.
 
-VIA_FUENTE_OK = {"usuario", "descubrimiento", "reporte"}   # procedencia de una fuente off-ADS (#111)
+VIA_FUENTE_OK = {"usuario", "descubrimiento"}   # procedencia de una fuente off-ADS (#111, #206)
+VIA_FUENTE_RETIRADO = {"reporte": "`via: usuario` + el documento nombrado en `motivo`"}
 
 SEV_BLOQUEANTE = "bloqueante"      # viola el contrato: exit 1 siempre
 SEV_CIERRE = "cierre"              # bloquea SÓLO con `--cierre` (R-1: pares vencidos)
@@ -2485,10 +2486,18 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                      f"consta quién la declaró ni por qué (en off-ADS TODO entra por decisión de "
                      f"alguien). Armá la entrada con `python scripts/triage.py {_slug} "
                      f"--accept-source <doi> --via usuario --reason \"<motivo>\"`"))
-            elif _it.get("via") not in VIA_FUENTE_OK:
+            elif (_v := _it.get("via")) in VIA_FUENTE_RETIRADO:
+                # #206: valor retirado, no typo. `reporte` y `usuario` eran la misma decisión —el
+                # usuario trajo el paper— y partirla hacía que `via` dejara de contestar su propia
+                # pregunta: había que sumar dos casilleros para saber cuántos entraron por decisión
+                # humana. El documento de origen lo lleva `motivo`, que es obligatorio y dice CUÁL.
                 bad_sources.append(
                     (f"{_slug}/{_it.get('key') or '?'}",
-                     f"`via: {_it.get('via')}` fuera del vocabulario cerrado "
+                     f"`via: {_v}` es vocabulario RETIRADO (#206) — usá {VIA_FUENTE_RETIRADO[_v]}"))
+            elif _v not in VIA_FUENTE_OK:
+                bad_sources.append(
+                    (f"{_slug}/{_it.get('key') or '?'}",
+                     f"`via: {_v}` fuera del vocabulario cerrado "
                      f"({' | '.join(sorted(VIA_FUENTE_OK))}) — un typo deja el campo mudo para la "
                      f"única pregunta que existe para consumirlo"))
 

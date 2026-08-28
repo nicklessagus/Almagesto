@@ -106,8 +106,8 @@ extra_core:
 
 Forma **dura** (D-58): es una **lista de mapas** con `via` (vocabulario cerrado de `extra_core`,
 `cfg.EXTRA_CORE_VIA`: `usuario` · `triage` · `citado-por-corpus`), `fecha` y `motivo`. ⛔ **No
-confundir con el `via` de una fuente off-ADS** (`sources:`, #111 — `usuario` · `descubrimiento` ·
-`reporte`, `triage.VIA_FUENTE`): son dos carriles distintos y `load_extra_core` **aborta** si le
+confundir con el `via` de una fuente off-ADS** (`sources:`, #111/#206 — `usuario` ·
+`descubrimiento`, `triage.VIA_FUENTE`): son dos carriles distintos y `load_extra_core` **aborta** si le
 llega un valor del otro. El escalar y la lista de strings **bloquean**, y
 `python scripts/triage.py <slug>` imprime el snippet listo para pegar.
 

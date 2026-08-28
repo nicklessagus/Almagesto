@@ -487,7 +487,13 @@ def drop_core(slug: str, bibcodes: list, motivo: str) -> int:
 # inducía a escribir en `extra_core` un `via` que el loader rechaza, y al revés (#162). Son dos
 # cuadrantes distintos de la tabla de curación de CLAUDE.md, y por buena razón: en off-ADS no hay
 # query que descubra, así que TODO entra por decisión de alguien y el eje es quién.
-VIA_FUENTE = ("usuario", "descubrimiento", "reporte")
+# #206: DOS valores, no tres. El eje que `via` mide es **quién decidió** —una persona o la cascada
+# de descubrimiento— y eso es binario. Que el usuario traiga una lista de papers (un reporte de
+# literatura, una review de terceros) o los PDFs no cambia quién decidió: lo trajo él. Partirlo
+# obligaba a sumar dos casilleros para contestar la única pregunta que el campo existe para
+# contestar. Lo que `reporte` agregaba —de qué documento salió— lo lleva `motivo`, que es
+# obligatorio y nombra CUÁL documento.
+VIA_FUENTE = ("usuario", "descubrimiento")
 
 
 def accept_source(slug: str, idents: list, via: str, motivo: str) -> int:

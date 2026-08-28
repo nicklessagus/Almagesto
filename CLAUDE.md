@@ -924,9 +924,19 @@ pregunta *«¿qué entró porque lo pidió el usuario, qué lo propuso el descub
 reporte externo?»* no tiene respuesta. Medido sobre una bóveda real: los 40 papers que tenía y una
 bóveda nueva no, **entraron los 40 a mano**, y su config no permite saber cuáles pidió el usuario.
 
-`via` es **vocabulario cerrado**: `usuario` (lo pidió) · `descubrimiento` (lo propuso la cascada de
-`discover`) · `reporte` (vino de un documento externo). El lint **bloquea** la entrada sin `via` o
-sin `motivo`, y el `via` fuera del vocabulario — un campo opcional no se llena.
+`via` es **vocabulario cerrado y BINARIO** (#206): `usuario` (lo trajo una persona) ·
+`descubrimiento` (lo propuso la cascada de `discover`). El eje que mide es **quién decidió**, y eso
+no tiene tercer valor: que el usuario traiga una **lista** de papers (un reporte de literatura, una
+review de terceros) o traiga los **PDFs** no cambia quién decidió — lo trajo él, y no salió de
+ninguna query de la bóveda. ⚠ Hasta 1.72.0 existió `reporte` para el caso de la lista, y partir esa
+categoría hacía que el campo dejara de contestar su propia pregunta: había que **sumar dos
+casilleros** para saber cuántos papers entraron por decisión humana. Lo único que ese valor
+agregaba —de qué documento salió— lo lleva **`motivo`**, que es obligatorio y dice *cuál*
+documento. El lint **bloquea** la entrada sin `via` o sin `motivo`, el `via` fuera del vocabulario
+(typo) y el valor **retirado** (con mensaje propio: un typo se corrige, un retiro se traduce).
+⚠ Y el PDF que el usuario aporta para cerrar un `pending_source` **no** necesita valor propio: ese
+paper ya entró, su entrada ya tiene `via` y `motivo`, y completar el archivo no cambia quién lo
+propuso.
 
 ⛔ **El carril off-ADS tiene salida hacia la ingesta** (#111): `python scripts/triage.py <slug>
 --accept-source <doi> --via <via> --reason "<motivo>"` arma la entrada completa —metadata real de

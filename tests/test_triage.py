@@ -898,3 +898,13 @@ def test_note_state_y_subject_name_son_la_pieza_unica(toy_vault):
     assert triage.subject_name("gp") == "procesos-gaussianos"
     assert triage.subject_name("no-existe") == "no-existe", \
         "sin sujeto resoluble no se explota: se lista igual, con el slug como nombre"
+
+
+def test_reporte_ya_no_es_un_via_valido(monkeypatch):
+    """#206 — `reporte` y `usuario` eran la misma decisión: en los dos casos el paper lo trajo una
+    persona y no salió de ninguna query. Partirla obligaba a sumar dos casilleros para contestar la
+    única pregunta que `via` existe para contestar. El documento de origen lo lleva `motivo`, que es
+    obligatorio y dice CUÁL."""
+    with pytest.raises(SystemExit, match="vocabulario cerrado"):
+        triage.accept_source("ica", ["10.1/x"], "reporte", "vino del reporte de Undermind")
+    assert triage.VIA_FUENTE == ("usuario", "descubrimiento")

@@ -3857,3 +3857,33 @@ def test_una_nota_sin_los_campos_viejos_no_dispara_el_detector(toy_vault, capsys
             {"tags": ["paper"], "fulltext_source": "pdftotext", "stars": ["Estrella Test"]}, "")
     _, out = run_lint(capsys)
     assert "--migrate-txt-fields" not in out
+
+
+def test_via_reporte_se_reporta_como_RETIRADO_no_como_typo(toy_vault, capsys):
+    """#206 — `reporte` y `usuario` eran la misma decisión: el paper lo trajo una persona y no salió
+    de ninguna query. Partirla obligaba a sumar dos casilleros para contestar la única pregunta que
+    `via` existe para contestar; el documento de origen lo lleva `motivo`, que dice CUÁL.
+
+    Un valor retirado y un typo se arreglan distinto —el typo se corrige, el retirado se **traduce**—
+    así que el mensaje no puede ser el mismo: mandar a buscar un error de tipeo a quien escribió
+    `reporte` a conciencia es un mapa que atribuye mal."""
+    (cfg.CONFIG / "themes.yaml").write_text(
+        "ica:\n  title: T\n  area: methods\n  concept: ica\n  source: local-pdfs\n"
+        "  sources:\n    - key: 1994Comon\n      pdf: x.pdf\n      via: reporte\n"
+        "      motivo: vino del reporte de Undermind\n", encoding="utf-8")
+    assert lint.main([]) == 1
+    out = capsys.readouterr().out
+    assert "RETIRADO" in out and "#206" in out
+    assert "`motivo`" in out
+
+
+def test_via_typo_sigue_diciendo_fuera_del_vocabulario(toy_vault, capsys):
+    """La otra mitad: un valor que nunca existió no es un retiro, y su mensaje no puede mandar a
+    traducirlo a nada."""
+    (cfg.CONFIG / "themes.yaml").write_text(
+        "ica:\n  title: T\n  area: methods\n  concept: ica\n  source: local-pdfs\n"
+        "  sources:\n    - key: 1994Comon\n      pdf: x.pdf\n      via: usuraio\n"
+        "      motivo: typo\n", encoding="utf-8")
+    assert lint.main([]) == 1
+    out = capsys.readouterr().out
+    assert "fuera del vocabulario cerrado" in out and "RETIRADO" not in out
