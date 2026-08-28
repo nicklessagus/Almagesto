@@ -23,9 +23,17 @@ ABSOLUTA = re.compile(r"(?<![\w.])(?:/home/|/Users/|/root/|C:\\\\)")
 EXT = (".py", ".yaml", ".yml", ".ini", ".cfg", ".toml", ".json")
 
 
+# Este archivo se excluye de su propio barrido: contiene los prefijos por construcción (la regex y
+# el comentario que la explica). ⚠ No es una excepción cómoda — es la única, va nombrada, y el test
+# de abajo fija que el barrido igual mira el resto del árbol. Se descubrió al commitear: mientras el
+# archivo estaba **sin trackear**, `git ls-files` no lo devolvía y el test pasaba; o sea que el
+# «verlo morir» de la regla de método #3 se había hecho sobre una población que no era la final.
+YO = "tests/test_rutas_absolutas.py"
+
+
 def _versionados() -> list[Path]:
     r = subprocess.run(["git", "ls-files"], cwd=RAIZ, capture_output=True, text=True, check=True)
-    return [RAIZ / f for f in r.stdout.split() if f.endswith(EXT)]
+    return [RAIZ / f for f in r.stdout.split() if f.endswith(EXT) and f != YO]
 
 
 def test_ningun_archivo_versionado_lleva_una_ruta_absoluta_de_maquina():
