@@ -547,7 +547,7 @@ _(ninguno relevante — corpus sintético)_
             "bibcode": stem, "title": f"Paper sintético {i:05d}",
             "first_author": f"Autor{i:04d}", "n_authors": rng.randint(1, 6),
             "year": year, "arxiv_id": None, "doi": None, "bibstem": "Synt",
-            "stars": [star_names[i % n_stars]], "facets": [], "methods": methods,
+            "stars": [star_names[i % n_stars]], "facets": [], "keywords": [], "methods": methods,
             "thesis_links": thesis_links,
             "relevance": relev, "citation_count": rng.randint(0, 200),
             "pdf": None, "fulltext": ft_rel, "fulltext_source": ft_src, "pdf_source": None,

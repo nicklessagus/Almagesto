@@ -67,7 +67,7 @@ CLAUDE.md exige "en 0");
 from __future__ import annotations
 
 import datetime as dt
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 import argparse
 import glob
 import json
@@ -878,6 +878,12 @@ class Categoria:
     severidad: str
     items: tuple
     suprimida: bool = False
+    # INV-40 — la clave de la POBLACIÓN sobre la que corrió este chequeo (ver `POBLACIONES`). Un
+    # `(0)` no dice si el chequeo miró 412 notas o ninguna, así que «cada chequeo se aplica a toda
+    # la población que declara cubrir» no era verificable desde la salida: es la mitad que le
+    # faltaba al invariante. Vacío = **no declarada**, que el reporte dice en vez de inventar un
+    # denominador — un denominador equivocado es peor que ninguno (regla de método #4).
+    poblacion: str = ""
 
     def __len__(self) -> int:
         return len(self.items)
@@ -896,6 +902,7 @@ class LintResult:
     cierre: bool = False
     slug: str | None = None
     alcance: frozenset = frozenset()
+    poblaciones: dict = field(default_factory=dict)   # INV-40: clave → (n, qué se contó)
 
     def por_clave(self, clave: str) -> Categoria | None:
         return next((c for c in self.categorias if c.clave == clave), None)
@@ -1076,6 +1083,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     anchor_bodies: dict = {}           # {archivo: texto} de TODA nota de entidad/query — D-47
     old_registro: list = []            # registros con la clave `busqueda:` (schema pre-D-28)
     registro_ilegible: list = []       # registro que no parsea → la curación queda sin aplicar (AUD-131)
+    schema_incompleto: list = []       # (stem, claves) — INV-63: el tipo de nota declara campos que la nota no trae
     old_facets: list = []              # notas de paper con `topics:` (schema pre-R-5)
     infer_sin_premisas: list = []      # marcas `(inferencia …)` sin ningún [[bibcode]] (D-42)
     bad_status: list = []              # `status` de hipótesis fuera del vocabulario (D-37)
@@ -1166,6 +1174,22 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         stem = basename(f)[:-3]
         for motivo in normalize_lists(fm):     # ANTES de cualquier lector (ver normalize_lists)
             fm_broken.append((stem, motivo))
+        # INV-63 — ¿la nota trae los campos que el schema de SU TIPO declara? Presencia, no valor:
+        # un `null` es el caso normal (el espejo #70 deja en `null` lo que la autoridad no trae, y
+        # rellenarlo con literatura está prohibido). El tipo sale de los `tags`, que es lo que el
+        # resto del lint ya usa. Backlog: el corpus viejo tiene notas anteriores al campo.
+        if fm and stem not in refs_stems:
+            _tags = [str(t) for t in cfg.as_list(fm.get("tags"))]
+            _tipo = ("hypothesis" if "hypothesis" in _tags else
+                     "paper" if "paper" in _tags else
+                     "star" if "star" in _tags else
+                     "concept" if in_dir(f, "concepts") else "")
+            if _tipo and (_faltan := cfg.missing_schema_fields(_tipo, fm)):
+                schema_incompleto.append(
+                    (stem, f"nota de tipo `{_tipo}` sin {len(_faltan)} campo(s) del schema: "
+                           f"{', '.join('`%s`' % k for k in _faltan)} → re-corré "
+                           f"`make_notes.py <slug>` (los escribe en `null` si no hay valor; el "
+                           f"campo ausente y el campo vacío NO se leen igual)"))
         kinds[stem] = fm.get("tags", []) or []
         err = fm_error(text)
         if err:
@@ -2724,6 +2748,31 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # campo opcional no se llena. El snippet lo arma `triage.py --accept-source`.
     # `themes_error()` primero: con el YAML roto, `load_themes` levanta y tumbaría el lint entero —
     # el chequeo no puede volverse él mismo un falso rojo (misma doctrina que INV-80).
+    # INV-27 — COLISIÓN de clave. Una clave sintética (`AAAA+Autor`) la elige una persona, y dos
+    # trabajos del mismo autor y año la comparten sin esfuerzo. Toda la cadena resuelve el choque
+    # por «el archivo ya existe, no lo piso», así que la segunda fuente se queda con el `.txt` y la
+    # nota de la PRIMERA: la cita apunta a un documento que nadie abrió. `fetch_web` ya lo frena al
+    # capturar (compara la url del snapshot en disco), pero eso sólo ve las que llegaron a bajarse y
+    # sólo dentro de un slug — acá se ve la colisión **declarada**, incluso entre temas distintos y
+    # antes de gastar red. La forma de la clave ya la valida `BIBCODE_RE`; lo que faltaba es la
+    # unicidad, que es la otra mitad del invariante.
+    _por_clave: dict = {}
+    for _slug, _meta in ({} if cfg.themes_error() else (cfg.load_themes() or {})).items():
+        for _it in cfg.as_list(cfg.as_map(_meta).get("sources")):
+            if not isinstance(_it, dict) or not (_k := str(_it.get("key") or "").strip()):
+                continue
+            _punt = str(_it.get("url") or _it.get("pdf") or "").strip()
+            _por_clave.setdefault(_k, []).append((_slug, _punt))
+    for _k, _usos in sorted(_por_clave.items()):
+        _punteros = {p for _s, p in _usos if p}
+        if len(_punteros) > 1:
+            bad_sources.append(
+                (_k, f"la MISMA clave declara {len(_punteros)} fuentes distintas "
+                     f"({'; '.join(f'{s}: {p}' for s, p in sorted(_usos))}) → las dos escriben "
+                     f"`papers/{_k}.md` y comparten `.txt`: la segunda se queda con el documento de "
+                     f"la primera y la cita apunta a algo que nadie abrió. Desambiguá con un sufijo "
+                     f"(`{_k}b`)"))
+
     for _slug, _meta in ({} if cfg.themes_error() else (cfg.load_themes() or {})).items():
         # AUD-179 / INV-129 — `as_list` devuelve `[]` para un escalar Y para un mapa, así que un
         # `sources:` con forma inválida daba **cero hallazgos**: el bucle no entraba y el tema salía
@@ -2790,100 +2839,119 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # ── la tabla: clave, título, severidad, hallazgos. **Una sola declaración** de cada cosa.
     categorias = [
         Categoria('not_evaluated', '⛔ No evaluado: el chequeo no pudo correr (hecho del ENTORNO, no de la bóveda — cuenta para el exit)', SEV_BLOQUEANTE, tuple(not_evaluated)),
-        Categoria('broken', 'Wikilinks rotos (página faltante)', SEV_BLOQUEANTE, tuple(broken)),
-        Categoria('fm_broken', '⛔ Frontmatter no parseable o con forma inválida (la nota evade los chequeos de su tipo)', SEV_BLOQUEANTE, tuple(fm_broken)),
-        Categoria('retracted', '⛔ Papers RETRACTADOS citados (frontera dura: fuente no válida)', SEV_BLOQUEANTE, tuple(retracted)),
-        Categoria('gt_cambiado', 'Ground-truth que cambió bajo la prosa, sin marcar (backlog)', SEV_BACKLOG, tuple(gt_cambiado)),
-        Categoria('gt_cambiado_marcado', f'Ground-truth cambiado, prosa marcada con `{GT_STALE_MARK}` (visible, no destruida)', SEV_BACKLOG, tuple(gt_cambiado_marcado)),
-        Categoria('prosa_retractada', '⛔ Prosa que cita una fuente RETRACTADA sin marcar', SEV_BLOQUEANTE, tuple(prosa_retractada)),
-        Categoria('prosa_retractada_marcada', 'Prosa sostenida por fuente retractada, marcada (visible, no destruida)', SEV_BACKLOG, tuple(prosa_retractada_marcada)),
-        Categoria('orphans', 'Notas huérfanas (sin links entrantes)', SEV_BLOQUEANTE, tuple([(o, '') for o in orphans])),
-        Categoria('corrections', 'Papers con corrección publicada (erratum/corrigendum/EoC) — revisar los valores extraídos de ellos (backlog, el paper sigue siendo citable)', SEV_BACKLOG, tuple(corrections)),
-        Categoria('contradictions', 'Contradicciones ground-truth ↔ ficha', SEV_BLOQUEANTE, tuple(contradictions)),
-        Categoria('mass_issues', 'Ground-truth: masa inconsistente con m·sini (K,P,e,M*)', SEV_BLOQUEANTE, tuple(mass_issues)),
+        Categoria('broken', 'Wikilinks rotos (página faltante)', SEV_BLOQUEANTE, tuple(broken), poblacion='notas'),
+        Categoria('fm_broken', '⛔ Frontmatter no parseable o con forma inválida (la nota evade los chequeos de su tipo)', SEV_BLOQUEANTE, tuple(fm_broken), poblacion='notas'),
+        Categoria('retracted', '⛔ Papers RETRACTADOS citados (frontera dura: fuente no válida)', SEV_BLOQUEANTE, tuple(retracted), poblacion='papers'),
+        Categoria('gt_cambiado', 'Ground-truth que cambió bajo la prosa, sin marcar (backlog)', SEV_BACKLOG, tuple(gt_cambiado), poblacion='ground_truth'),
+        Categoria('gt_cambiado_marcado', f'Ground-truth cambiado, prosa marcada con `{GT_STALE_MARK}` (visible, no destruida)', SEV_BACKLOG, tuple(gt_cambiado_marcado), poblacion='ground_truth'),
+        Categoria('prosa_retractada', '⛔ Prosa que cita una fuente RETRACTADA sin marcar', SEV_BLOQUEANTE, tuple(prosa_retractada), poblacion='entidades'),
+        Categoria('prosa_retractada_marcada', 'Prosa sostenida por fuente retractada, marcada (visible, no destruida)', SEV_BACKLOG, tuple(prosa_retractada_marcada), poblacion='entidades'),
+        Categoria('orphans', 'Notas huérfanas (sin links entrantes)', SEV_BLOQUEANTE, tuple([(o, '') for o in orphans]), poblacion='notas'),
+        Categoria('corrections', 'Papers con corrección publicada (erratum/corrigendum/EoC) — revisar los valores extraídos de ellos (backlog, el paper sigue siendo citable)', SEV_BACKLOG, tuple(corrections), poblacion='notas'),
+        Categoria('contradictions', 'Contradicciones ground-truth ↔ ficha', SEV_BLOQUEANTE, tuple(contradictions), poblacion='papers'),
+        Categoria('mass_issues', 'Ground-truth: masa inconsistente con m·sini (K,P,e,M*)', SEV_BLOQUEANTE, tuple(mass_issues), poblacion='ground_truth'),
         Categoria('contrast_missing', 'Contraste cross-paper (3b) sin rastro: el inventario por eje quedó en la plantilla (backlog)',
-                  SEV_BACKLOG, tuple(contraste_pendiente)),
+                  SEV_BACKLOG, tuple(contraste_pendiente), poblacion='entidades'),
         Categoria('alias_faltante', 'Identificadores que SIMBAD conoce y `stars.yaml` no declara: '
                   'un alias que falta es un paper que nunca aparece, en silencio (backlog — la '
-                  'elección es curación)', SEV_BACKLOG, tuple(alias_faltantes)),
+                  'elección es curación)', SEV_BACKLOG, tuple(alias_faltantes), poblacion='ground_truth'),
         Categoria('foreign_alias', '⚠ Alias que SIMBAD no reconoce para esta estrella (WARN — puede meter papers de otro objeto)',
-                  SEV_WARN, tuple(alias_ajenos)),
+                  SEV_WARN, tuple(alias_ajenos), poblacion='ground_truth'),
         Categoria('merge_ours', '⛔ `merge=ours` declarado pero sin driver registrado en este clon: la protección no existe',
-                  SEV_BLOQUEANTE, tuple(merge_ours)),
-        Categoria('dangling_thesis', 'thesis_links sin página destino', SEV_BLOQUEANTE, tuple(dangling_thesis)),
+                  SEV_BLOQUEANTE, tuple(merge_ours), poblacion='ground_truth'),
+        Categoria('dangling_thesis', 'thesis_links sin página destino', SEV_BLOQUEANTE, tuple(dangling_thesis), poblacion='entidades'),
         Categoria('dangling_methods', '`methods` sin página destino: el roll-up no puede linkearlo (backlog)',
-                  SEV_BACKLOG, tuple(dangling_methods)),
-        Categoria('dangling_disputes', 'disputes: ref de una posición sin paper destino', SEV_BLOQUEANTE, tuple(dangling_disputes)),
-        Categoria('bad_disputes', 'disputes mal formadas (posiciones explícitas, #71)', SEV_BLOQUEANTE, tuple(bad_disputes)),
-        Categoria('old_disputes', 'disputes en el schema viejo (planets[].disputes[]) — el lint ya no las lee', SEV_BLOQUEANTE, tuple(old_disputes)),
-        Categoria('legacy_triage', 'Juicio de triage en build/<slug>/triage.json (pre-1.9.0) — el lector ya no lo mira', SEV_BLOQUEANTE, tuple(legacy_triage)),
-        Categoria('old_registro', '⛔ Registro con `busqueda:` (schema viejo pre-D-28) — el lector ya no lo lee', SEV_BLOQUEANTE, tuple(old_registro)),
-        Categoria('registro_ilegible', '⛔ Registro del sujeto ilegible — la curación (`decisiones`) queda SIN APLICAR: los descartes vuelven a ser core', SEV_BLOQUEANTE, tuple(registro_ilegible)),
-        Categoria('old_facets', '⛔ Nota de paper con `topics:` (schema viejo pre-R-5) — el campo vigente es `facets:`', SEV_BLOQUEANTE, tuple(old_facets)),
-        Categoria('infer_sin_premisas', '⛔ `inferencia` sin premisas (D-42): la marca no nombra ningún `[[bibcode]]`', SEV_BLOQUEANTE, tuple(infer_sin_premisas)),
-        Categoria('bad_status', '⛔ `status` de hipótesis fuera del vocabulario cerrado (D-37)', SEV_BLOQUEANTE, tuple(bad_status)),
-        Categoria('status_vs_evidencia', '`status: sostenida` contra su propia tabla de evidencia (D-37, #177)', SEV_BACKLOG, tuple(status_vs_evidencia)),
-        Categoria('old_bearing', '⛔ `bearing` en una nota de paper (schema pre-D-21) — la postura vive en la hipótesis', SEV_BLOQUEANTE, tuple(old_bearing)),
-        Categoria('sin_destino', '⛔ Nota de paper sin destino (D-23): no pertenece a ninguna entidad', SEV_BLOQUEANTE, tuple(sin_destino)),
-        Categoria('identidad_dup', '⛔ Identidad duplicada: dos notas del mismo trabajo (mismo doi/arxiv_id)', SEV_BLOQUEANTE, tuple(identidad_dup)),
-        Categoria('bad_sources', '⛔ `sources:` sin procedencia (#111): no consta quién declaró la fuente ni por qué', SEV_BLOQUEANTE, tuple(bad_sources)),
-        Categoria('bad_roles', '⛔ `role` fuera del vocabulario — y todo campo con vocabulario CERRADO (`unidad_cita`, `pending_source`)', SEV_BLOQUEANTE, tuple(bad_roles)),
-        Categoria('impl_leaks', '⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)', SEV_WARN, tuple(impl_leaks)),
-        Categoria('objective_warn', 'Objetivo sin instanciar (WARN — objective.yaml sigue en el placeholder del template)', SEV_WARN, tuple(objective_warn)),
-        Categoria('lente_rota', '⛔ Lente vacía o incoherente: ningún paper puede ser core', SEV_BLOQUEANTE, tuple(lente_rota)),
-        Categoria('undeclared_areas', 'Áreas de concepts/ no declaradas en objective.yaml (WARN, posible typo)', SEV_WARN, tuple(undeclared_areas)),
-        Categoria('root_obsidian', 'Obsidian en la raíz del repo (WARN — la bóveda se abre en vault/)', SEV_WARN, tuple(root_obsidian)),
-        Categoria('pdf_issues', 'PDF ↔ disco / cuerpo (WARN — higiene: frontmatter `pdf` vs PDF bajado vs link de cabecera)', SEV_WARN, tuple(pdf_issues)),
-        Categoria('pending_srcs', '⏳ Fuentes pendientes (pending_source — el usuario debe proveer la fuente)', SEV_BACKLOG, tuple(pending_srcs)),
-        Categoria('campos_txt_viejos', '⛔ Notas con `symbols_lost`/`fulltext_layout` (schema pre-#205 sin lector — migrar)', SEV_BLOQUEANTE, tuple(campos_txt_viejos)),
-        Categoria('log_sin_entrada', '📓 Operación sin entrada en `log.md` (la cadena corrió y la bitácora no lo dice)', SEV_BACKLOG, tuple(log_sin_entrada)),
-        Categoria('illegible_txt', 'Fulltext ilegible (mojibake/escaneo — existe pero no sirve para grep/verify)', SEV_BACKLOG, tuple(illegible_txt)),
+                  SEV_BACKLOG, tuple(dangling_methods), poblacion='entidades'),
+        Categoria('dangling_disputes', 'disputes: ref de una posición sin paper destino', SEV_BLOQUEANTE, tuple(dangling_disputes), poblacion='entidades'),
+        Categoria('bad_disputes', 'disputes mal formadas (posiciones explícitas, #71)', SEV_BLOQUEANTE, tuple(bad_disputes), poblacion='entidades'),
+        Categoria('old_disputes', 'disputes en el schema viejo (planets[].disputes[]) — el lint ya no las lee', SEV_BLOQUEANTE, tuple(old_disputes), poblacion='entidades'),
+        Categoria('legacy_triage', 'Juicio de triage en build/<slug>/triage.json (pre-1.9.0) — el lector ya no lo mira', SEV_BLOQUEANTE, tuple(legacy_triage), poblacion='registros'),
+        Categoria('old_registro', '⛔ Registro con `busqueda:` (schema viejo pre-D-28) — el lector ya no lo lee', SEV_BLOQUEANTE, tuple(old_registro), poblacion='registros'),
+        Categoria('registro_ilegible', '⛔ Registro del sujeto ilegible — la curación (`decisiones`) queda SIN APLICAR: los descartes vuelven a ser core', SEV_BLOQUEANTE, tuple(registro_ilegible), poblacion='registros'),
+        Categoria('old_facets', '⛔ Nota de paper con `topics:` (schema viejo pre-R-5) — el campo vigente es `facets:`', SEV_BLOQUEANTE, tuple(old_facets), poblacion='papers'),
+        Categoria('infer_sin_premisas', '⛔ `inferencia` sin premisas (D-42): la marca no nombra ningún `[[bibcode]]`', SEV_BLOQUEANTE, tuple(infer_sin_premisas), poblacion='notas'),
+        Categoria('bad_status', '⛔ `status` de hipótesis fuera del vocabulario cerrado (D-37)', SEV_BLOQUEANTE, tuple(bad_status), poblacion='entidades'),
+        Categoria('status_vs_evidencia', '`status: sostenida` contra su propia tabla de evidencia (D-37, #177)', SEV_BACKLOG, tuple(status_vs_evidencia), poblacion='entidades'),
+        Categoria('old_bearing', '⛔ `bearing` en una nota de paper (schema pre-D-21) — la postura vive en la hipótesis', SEV_BLOQUEANTE, tuple(old_bearing), poblacion='papers'),
+        Categoria('sin_destino', '⛔ Nota de paper sin destino (D-23): no pertenece a ninguna entidad', SEV_BLOQUEANTE, tuple(sin_destino), poblacion='papers'),
+        Categoria('identidad_dup', '⛔ Identidad duplicada: dos notas del mismo trabajo (mismo doi/arxiv_id)', SEV_BLOQUEANTE, tuple(identidad_dup), poblacion='papers'),
+        Categoria('bad_sources', '⛔ `sources:` sin procedencia (#111): no consta quién declaró la fuente ni por qué', SEV_BLOQUEANTE, tuple(bad_sources), poblacion='temas'),
+        Categoria('bad_roles', '⛔ `role` fuera del vocabulario — y todo campo con vocabulario CERRADO (`unidad_cita`, `pending_source`)', SEV_BLOQUEANTE, tuple(bad_roles), poblacion='papers'),
+        Categoria('impl_leaks', '⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)', SEV_WARN, tuple(impl_leaks), poblacion='notas'),
+        Categoria('objective_warn', 'Objetivo sin instanciar (WARN — objective.yaml sigue en el placeholder del template)', SEV_WARN, tuple(objective_warn), poblacion='config'),
+        Categoria('lente_rota', '⛔ Lente vacía o incoherente: ningún paper puede ser core', SEV_BLOQUEANTE, tuple(lente_rota), poblacion='config'),
+        Categoria('undeclared_areas', 'Áreas de concepts/ no declaradas en objective.yaml (WARN, posible typo)', SEV_WARN, tuple(undeclared_areas), poblacion='notas'),
+        Categoria('root_obsidian', 'Obsidian en la raíz del repo (WARN — la bóveda se abre en vault/)', SEV_WARN, tuple(root_obsidian), poblacion='config'),
+        Categoria('pdf_issues', 'PDF ↔ disco / cuerpo (WARN — higiene: frontmatter `pdf` vs PDF bajado vs link de cabecera)', SEV_WARN, tuple(pdf_issues), poblacion='papers'),
+        Categoria('pending_srcs', '⏳ Fuentes pendientes (pending_source — el usuario debe proveer la fuente)', SEV_BACKLOG, tuple(pending_srcs), poblacion='papers'),
+        Categoria('campos_txt_viejos', '⛔ Notas con `symbols_lost`/`fulltext_layout` (schema pre-#205 sin lector — migrar)', SEV_BLOQUEANTE, tuple(campos_txt_viejos), poblacion='papers'),
+        Categoria('log_sin_entrada', '📓 Operación sin entrada en `log.md` (la cadena corrió y la bitácora no lo dice)', SEV_BACKLOG, tuple(log_sin_entrada), poblacion='registros'),
+        Categoria('illegible_txt', 'Fulltext ilegible (mojibake/escaneo — existe pero no sirve para grep/verify)', SEV_BACKLOG, tuple(illegible_txt), poblacion='fulltext'),
         Categoria('divergent_txt', '⛔ Mismo bibcode con `.txt` DISTINTO entre slugs: las copias de '
                   'D-18 divergieron y el ancla de fuente (D-20) vigila una sola', SEV_BLOQUEANTE,
-                  tuple(divergent_txt)),
-        Categoria('unverifiable', 'Citas no verificables en ficha/query/concepto/hipótesis (sin fulltext)', SEV_BACKLOG, tuple(unverifiable)),
+                  tuple(divergent_txt), poblacion='fulltext'),
+        Categoria('unverifiable', 'Citas no verificables en ficha/query/concepto/hipótesis (sin fulltext)', SEV_BACKLOG, tuple(unverifiable), poblacion='entidades'),
         Categoria('unverified', 'Sin verificar: nota con citas y sin bloque verify-citations'
-                  + (' (BLOQUEA: modo --cierre)' if cierre else ' (backlog: pasada periódica; con `--cierre` bloquea)'), SEV_CIERRE, tuple(unverified)),
-        Categoria('old_verif_template', '⛔ Bloque de verificación con plantilla vieja (sin columnas de hash — no evaluable)', SEV_BLOQUEANTE, tuple(old_verif_template)),
+                  + (' (BLOQUEA: modo --cierre)' if cierre else ' (backlog: pasada periódica; con `--cierre` bloquea)'), SEV_CIERRE, tuple(unverified), poblacion='entidades'),
+        Categoria('old_verif_template', '⛔ Bloque de verificación con plantilla vieja (sin columnas de hash — no evaluable)', SEV_BLOQUEANTE, tuple(old_verif_template), poblacion='entidades'),
         Categoria('verif_sin_archivo', '⛔ Fila de verificación que no declara contra qué archivo se '
                   'verificó (#117): el hash no se puede comparar', SEV_BLOQUEANTE,
-                  tuple(verif_sin_archivo)),
+                  tuple(verif_sin_archivo), poblacion='entidades'),
         Categoria('verif_sin_resolver', '⛔ Veredicto de verificación SIN RESOLVER (`no-soportada` / '
                   '`contradice`): la nota afirma algo que su fuente no respalda', SEV_BLOQUEANTE,
-                  tuple(verif_sin_resolver)),
+                  tuple(verif_sin_resolver), poblacion='entidades'),
         Categoria('verif_localizador', 'Localizador que contradice al archivo vigilado: la evidencia '
                   'cita una página y la fila vigila el `.txt` (o al revés) (backlog)',
-                  SEV_BACKLOG, tuple(verif_localizador)),
-        Categoria('stale_pairs', 'Pares de verificación vencidos' + (' (BLOQUEA: modo --cierre)' if cierre else ' (backlog: pasada periódica; con `--cierre` bloquea)'), SEV_CIERRE, tuple(stale_pairs)),
-        Categoria('stale_verif', 'Verificación stale: la nota se editó después de su último verify-citations (backlog)', SEV_BACKLOG, tuple(stale_verif)),
-        Categoria('artefactos_colgados', 'Capas colgadas: registro/raw/build de una entidad que ya no existe (INV-19, backlog)', SEV_BACKLOG, tuple(artefactos_colgados)),
-        Categoria('alcance_corto', 'Alcance de hipótesis sin declarar o vencido: el veredicto se lee sobre un universo que ya no es el suyo (backlog)', SEV_BACKLOG, tuple(alcance_corto)),
-        Categoria('coverage', 'Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog)', SEV_BACKLOG, tuple(coverage)),
-        Categoria('unsynthesized', 'Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog)', SEV_BACKLOG, tuple(unsynthesized)),
-        Categoria('headerless', 'Cabecera no estampable: ficha/concepto sin la línea del generador — los estampadores de cabecera no-opean en silencio (backlog)', SEV_BACKLOG, tuple(headerless)),
+                  SEV_BACKLOG, tuple(verif_localizador), poblacion='entidades'),
+        Categoria('stale_pairs', 'Pares de verificación vencidos' + (' (BLOQUEA: modo --cierre)' if cierre else ' (backlog: pasada periódica; con `--cierre` bloquea)'), SEV_CIERRE, tuple(stale_pairs), poblacion='entidades'),
+        Categoria('stale_verif', 'Verificación stale: la nota se editó después de su último verify-citations (backlog)', SEV_BACKLOG, tuple(stale_verif), poblacion='entidades'),
+        Categoria('artefactos_colgados', 'Capas colgadas: registro/raw/build de una entidad que ya no existe (INV-19, backlog)', SEV_BACKLOG, tuple(artefactos_colgados), poblacion='registros'),
+        Categoria('alcance_corto', 'Alcance de hipótesis sin declarar o vencido: el veredicto se lee sobre un universo que ya no es el suyo (backlog)', SEV_BACKLOG, tuple(alcance_corto), poblacion='entidades'),
+        Categoria('coverage', 'Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog)', SEV_BACKLOG, tuple(coverage), poblacion='entidades'),
+        Categoria('unsynthesized', 'Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog)', SEV_BACKLOG, tuple(unsynthesized), poblacion='papers'),
+        Categoria('headerless', 'Cabecera no estampable: ficha/concepto sin la línea del generador — los estampadores de cabecera no-opean en silencio (backlog)', SEV_BACKLOG, tuple(headerless), poblacion='entidades'),
         Categoria('sweep_pendiente', 'Barrido full-text (2b) sin rastro o truncado: no consta que la '
                   'segunda red para el punto ciego de la query se haya tendido entera (backlog)',
-                  SEV_BACKLOG, tuple(sweep_pendiente)),
-        Categoria('triage_pending', 'Triage pendiente: candidatos del chaining sin juzgar (backlog)', SEV_BACKLOG, tuple(triage_pending)),
-        Categoria('vistas_schema_viejo', '⛔ Extracción sin declarar la LENTE: `## Extracción (LLM)` sin `vistas[]` (schema viejo, #188)', SEV_BLOQUEANTE, tuple(vistas_schema_viejo)),
-        Categoria('vistas_vs_cuerpo', '⛔ `vistas[]` ↔ cuerpo: vista declarada sin su sección, o sección sin declarar', SEV_BLOQUEANTE, tuple(vistas_vs_cuerpo)),
-        Categoria('reclamo_sin_vista', 'Reclamado por un sujeto y nunca leído desde ahí (backlog: la vista es opcional, el silencio no)', SEV_BACKLOG, tuple(reclamo_sin_vista)),
-        Categoria('vista_sin_fecha', 'Vista declarada y sin `fecha`: el stub la sembró y nadie leyó desde ahí (backlog)', SEV_BACKLOG, tuple(vista_sin_fecha)),
-        Categoria('vista_sin_fuente', 'Vista sin `fuente`: no consta si salió del PDF o sólo del abstract (backlog)', SEV_BACKLOG, tuple(vista_sin_fuente)),
-        Categoria('vista_solo_abstract', '📄 Vista construida SÓLO del abstract — falta el PDF (backlog)', SEV_BACKLOG, tuple(vista_solo_abstract)),
-        Categoria('reclamo_sin_vista_declarado', 'Reclamo sin vista DECLARADO con `no_vista` + motivo (visible, no es deuda)', SEV_BACKLOG, tuple(reclamo_sin_vista_declarado)),
-        Categoria('extraccion_no_declarada', 'Recorte de lectura sin declarar: hay core sin extraer y el registro no dice por qué (backlog)', SEV_BACKLOG, tuple(extraccion_no_declarada)),
-        Categoria('papers_table_stale', 'Lista de papers desactualizada: la tabla estampada no refleja el universo (backlog)', SEV_BACKLOG, tuple(papers_table_stale)),
-        Categoria('cadena_incompleta', 'Cadena incompleta: falta un paso del orden canónico (backlog)', SEV_BACKLOG, tuple(cadena_incompleta)),
-        Categoria('truncated_corpora', 'Corpus truncado: la query directa trajo menos de lo que ADS reporta (backlog)', SEV_BACKLOG, tuple(truncated_corpora)),
-        Categoria('lente_desync', 'Lente desincronizada: el corpus se clasificó con una regla que ya no es la vigente (backlog)', SEV_BACKLOG, tuple(lente_desync)),
-        Categoria('bad_decisions', 'Decisión del registro con forma inválida — load_decisiones la descarta en silencio, el triage la vuelve a proponer sin el motivo (backlog)', SEV_BACKLOG, tuple(bad_decisions)),
+                  SEV_BACKLOG, tuple(sweep_pendiente), poblacion='registros'),
+        Categoria('triage_pending', 'Triage pendiente: candidatos del chaining sin juzgar (backlog)', SEV_BACKLOG, tuple(triage_pending), poblacion='registros'),
+        Categoria('vistas_schema_viejo', '⛔ Extracción sin declarar la LENTE: `## Extracción (LLM)` sin `vistas[]` (schema viejo, #188)', SEV_BLOQUEANTE, tuple(vistas_schema_viejo), poblacion='papers'),
+        Categoria('vistas_vs_cuerpo', '⛔ `vistas[]` ↔ cuerpo: vista declarada sin su sección, o sección sin declarar', SEV_BLOQUEANTE, tuple(vistas_vs_cuerpo), poblacion='papers'),
+        Categoria('reclamo_sin_vista', 'Reclamado por un sujeto y nunca leído desde ahí (backlog: la vista es opcional, el silencio no)', SEV_BACKLOG, tuple(reclamo_sin_vista), poblacion='papers'),
+        Categoria('vista_sin_fecha', 'Vista declarada y sin `fecha`: el stub la sembró y nadie leyó desde ahí (backlog)', SEV_BACKLOG, tuple(vista_sin_fecha), poblacion='papers'),
+        Categoria('vista_sin_fuente', 'Vista sin `fuente`: no consta si salió del PDF o sólo del abstract (backlog)', SEV_BACKLOG, tuple(vista_sin_fuente), poblacion='papers'),
+        Categoria('vista_solo_abstract', '📄 Vista construida SÓLO del abstract — falta el PDF (backlog)', SEV_BACKLOG, tuple(vista_solo_abstract), poblacion='papers'),
+        Categoria('reclamo_sin_vista_declarado', 'Reclamo sin vista DECLARADO con `no_vista` + motivo (visible, no es deuda)', SEV_BACKLOG, tuple(reclamo_sin_vista_declarado), poblacion='papers'),
+        Categoria('extraccion_no_declarada', 'Recorte de lectura sin declarar: hay core sin extraer y el registro no dice por qué (backlog)', SEV_BACKLOG, tuple(extraccion_no_declarada), poblacion='registros'),
+        Categoria('papers_table_stale', 'Lista de papers desactualizada: la tabla estampada no refleja el universo (backlog)', SEV_BACKLOG, tuple(papers_table_stale), poblacion='registros'),
+        Categoria('cadena_incompleta', 'Cadena incompleta: falta un paso del orden canónico (backlog)', SEV_BACKLOG, tuple(cadena_incompleta), poblacion='estrellas'),
+        Categoria('truncated_corpora', 'Corpus truncado: la query directa trajo menos de lo que ADS reporta (backlog)', SEV_BACKLOG, tuple(truncated_corpora), poblacion='registros'),
+        Categoria('lente_desync', 'Lente desincronizada: el corpus se clasificó con una regla que ya no es la vigente (backlog)', SEV_BACKLOG, tuple(lente_desync), poblacion='registros'),
+        Categoria('bad_decisions', 'Decisión del registro con forma inválida — load_decisiones la descarta en silencio, el triage la vuelve a proponer sin el motivo (backlog)', SEV_BACKLOG, tuple(bad_decisions), poblacion='registros'),
+        Categoria('schema_incompleto', 'Nota sin campos del schema de su tipo (INV-63: el campo ausente no se lee igual que el vacío)', SEV_BACKLOG, tuple(schema_incompleto), poblacion='notas'),
         Categoria('incomplete', 'Campos incompletos', SEV_BACKLOG, tuple(incomplete)),
     ]
     for i, c in enumerate(categorias):
         if any(c.titulo.startswith(s) for s in suprimidas):
             categorias[i] = replace(c, suprimida=True)
-    return LintResult(tuple(categorias), cierre=cierre, slug=alcance_slug, alcance=alcance)
+    # INV-40 — los denominadores, contados sobre lo que el barrido realmente miró (no re-derivados
+    # después, que es donde una población se despega del chequeo que dice describir).
+    poblaciones = {
+        "notas": (len(files), "notas de `vault/wiki/`"),
+        "papers": (len(paper_fms), "notas de `papers/`"),
+        "entidades": (len(anchor_bodies), "notas de entidad (fichas, conceptos, queries)"),
+        "fulltext": (len(fulltext_files), "`.txt` de `raw/fulltext/`"),
+        "ground_truth": (len(vistos_gt), "ground-truth de `raw/ground_truth/`"),
+        "registros": (len(list(cfg.REGISTRO.glob("*.yaml"))) if cfg.REGISTRO.exists() else 0,
+                      "registros de sujeto"),
+        "temas": (0 if cfg.themes_error() else len(cfg.load_themes() or {}), "temas de `themes.yaml`"),
+        "estrellas": (len(stars_slugs), "estrellas de `stars.yaml`"),
+        # Los chequeos de config miran UN archivo cada uno (el objetivo, el `.obsidian/` de la
+        # raíz): la población es 1 y decirlo es más honesto que dejarla sin declarar — «miré el
+        # único que hay» no es lo mismo que «no sé sobre qué miré».
+        "config": (1, "archivo de configuración"),
+    }
+    return LintResult(tuple(categorias), cierre=cierre, slug=alcance_slug, alcance=alcance,
+                      poblaciones=poblaciones)
 
 
 def render(res: LintResult) -> str:
@@ -2905,7 +2973,17 @@ def render(res: LintResult) -> str:
         en_alcance = res.en_alcance(c)
         acotada = res.slug is not None and c.severidad == SEV_CIERRE
         cuenta = f"{len(c)}" + (f"; {len(en_alcance)} de `{res.slug}`" if acotada else "")
+        # INV-40 — el denominador. Un `(0)` no dice si el chequeo miró 412 notas o ninguna, así que
+        # «el chequeo cubrió todo lo que dice cubrir» no se podía verificar desde la salida. Lo que
+        # no está declarado se DICE, no se inventa.
         lines.append(f"## {c.titulo} ({cuenta})")
+        # ⚠ El denominador va en su PROPIA línea, debajo del encabezado. El encabezado es un
+        # contrato de facto: el golden, una treintena de tests y cualquier consumidor lo leen como
+        # `"<título> (N)"` —con `rsplit("(", 1)[1].rstrip(")")`— así que meter texto adentro o
+        # después lo rompe. Es formato, no comportamiento, y no hay razón para pagarlo.
+        _pob = res.poblaciones.get(c.poblacion) if c.poblacion else None
+        lines.append(f"> sobre {_pob[0]} {_pob[1]}" if _pob
+                     else "> ⚠ población no declarada")
         for it in c.items:
             a, b = it
             ajeno = " — ⟨ajeno a `%s`: se reporta, no frena⟩" % res.slug if acotada and it not in en_alcance else ""

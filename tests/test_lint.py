@@ -2225,7 +2225,9 @@ def test_facets_vigente_no_dispara_el_detector(toy_vault, capsys):
             {"tags": ["paper"], "bibcode": "2020Nuevo", "facets": ["rv"]})
     link_from_index(toy_vault, "2020Nuevo")
     rc, rep = run_lint_reporte(capsys)
-    assert "2020Nuevo" not in rep or "pre-R-5" not in rep
+    # ⚠ se mira LA categoría, no el reporte entero: una nota mínima dispara otros backlogs
+    # (INV-63, campos del schema) y `not in rep` los confundiría con éste.
+    assert "2020Nuevo" not in _seccion(rep, "pre-R-5")
 
 
 def test_masa_sin_mass_msun_dice_que_NO_se_pudo_evaluar(toy_vault, capsys):
@@ -2539,12 +2541,15 @@ def test_config_ilegible_suprime_las_categorias_que_dependen_de_ella(toy_vault, 
 # ── Tanda 8 · issue 8.3 (D-42 / INV-86): la inferencia nombra sus premisas ─────────────────────
 
 def _seccion(rep: str, titulo: str) -> str:
-    """El cuerpo de una sección `## …<titulo>…` del reporte (para no confundirse con otras)."""
+    """El cuerpo de una sección `## …<titulo>…` del reporte (para no confundirse con otras).
+
+    ⚠ La línea `> sobre N …` que sigue al encabezado (INV-40) es el DENOMINADOR del chequeo, no un
+    hallazgo: se descuenta acá para que «sección vacía» siga significando «cero hallazgos»."""
     dentro, out = False, []
     for l in rep.split("\n"):
         if l.startswith("## "):
             dentro = titulo in l
-        elif dentro:
+        elif dentro and not l.startswith(("> sobre ", "> ⚠ población")):
             out.append(l)
     return "\n".join(out)
 
@@ -3372,6 +3377,97 @@ def test_barrido_truncado_se_reporta(toy_vault, capsys):
     assert "TRUNCADO" in sec and "1800" in sec, sec
 
 
+# ── INV-40 · el reporte declara sobre qué población corrió cada chequeo ──────
+
+SIN_POBLACION = {
+    # Su población no son notas de la bóveda sino los CHEQUEOS que dependen del entorno (git,
+    # config legible). Un denominador de notas acá sería un mapa que atribuye mal.
+    "not_evaluated",
+    # Diez sitios con poblaciones distintas (papers core, planetas del frontmatter, fuentes largas,
+    # fichas sin ground-truth…). Un solo denominador mezclaría diez cosas, que es peor que no darlo.
+    "incomplete",
+}
+
+
+def test_el_schema_por_tipo_de_nota_se_chequea(toy_vault, capsys):
+    """INV-63 — hasta 1.74.0 el schema vivía en la prosa de `CLAUDE.md` y se chequeaba campo por
+    campo, ad-hoc: no había forma de preguntar «¿esta nota cumple el schema de su tipo?».
+
+    Se exige la CLAVE, no el valor: un `null` es el caso normal y a propósito (el espejo #70 deja en
+    `null` lo que la autoridad no trae, y rellenarlo con literatura está prohibido). Backlog, no
+    bloqueante: el corpus viejo tiene notas anteriores al campo.  @inv INV-63"""
+    mk_note(toy_vault.PAPERS, "2020minA...1..1A", {"tags": ["paper"], "bibcode": "2020minA...1..1A"})
+    link_from_index(toy_vault, "2020minA...1..1A")
+    rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "schema de su tipo")
+    assert "2020minA...1..1A" in sec and "`role`" in sec, sec
+    assert rc == 0, "es backlog: no frena"
+
+    # una clave presente y en `null` CUMPLE: es el estado que el contrato manda para lo que la
+    # autoridad no trae, y exigir valor sería lo contrario de #70
+    assert cfg.missing_schema_fields("paper", {k: None for k in cfg.SCHEMA_NOTA["paper"]}) == []
+    assert "slug" in cfg.missing_schema_fields("star", {"name": "X"})
+    assert cfg.missing_schema_fields("desconocido", {}) == [], "sin schema no se inventa uno"
+
+
+def test_cada_categoria_declara_su_poblacion(toy_vault, capsys):
+    """INV-40 — «cada chequeo se aplica a TODA la población que declara cubrir» no se podía
+    verificar desde la salida: un `(0)` no dice si el chequeo miró 412 notas o ninguna.
+
+    Las dos excepciones están **nombradas** y sólo pueden bajar: lo que no se puede declarar
+    honestamente se dice `⚠ población no declarada`, que es el estado correcto — un denominador
+    equivocado es peor que ninguno.  @inv INV-40"""
+    res = lint.collect()
+    sin = {c.clave for c in res.categorias if not c.poblacion}
+    assert sin == SIN_POBLACION, f"cambió el conjunto sin población declarada: {sorted(sin)}"
+    # y toda población declarada existe de verdad: una clave inventada dejaría la línea muda
+    for c in res.categorias:
+        if c.poblacion:
+            assert c.poblacion in res.poblaciones, f"{c.clave} declara `{c.poblacion}`, que no existe"
+
+    _rc, rep = run_lint_reporte(capsys)
+    encabezados = [l for l in rep.split("\n") if l.startswith("## ")]
+    denominadores = [l for l in rep.split("\n") if l.startswith(("> sobre ", "> ⚠ población"))]
+    assert len(encabezados) == len(denominadores), "hay categorías sin su línea de población"
+    assert any(l.startswith("> sobre ") and "notas de `vault/wiki/`" in l
+               for l in rep.split("\n")), "ninguna categoría declaró la población de notas"
+
+
+def test_dos_fuentes_con_la_misma_clave_sintetica_se_reportan(toy_vault, capsys):
+    """INV-27 — la clave sintética (`AAAA+Autor`) la elige una persona, y dos trabajos del mismo
+    autor y año la comparten sin esfuerzo.
+
+    Toda la cadena resuelve el choque por «el archivo ya existe, no lo piso», así que la segunda
+    fuente se queda con el `.txt` y la nota de la PRIMERA: la cita apunta a un documento que nadie
+    abrió. `fetch_web` ya lo frena al capturar, pero eso sólo ve lo que llegó a bajarse y sólo dentro
+    de un slug — acá se ve la colisión **declarada**, entre temas distintos y antes de gastar red.
+    @inv INV-27"""
+    write_yaml(cfg.THEMES_YAML, {
+        "gp": {"concept": "gp", "area": "methods", "source": "web",
+               "sources": [{"key": "2006Rasmussen", "url": "https://a.org/uno",
+                            "via": "usuario", "motivo": "canon"}]},
+        "ica": {"concept": "ica", "area": "methods", "source": "web",
+                "sources": [{"key": "2006Rasmussen", "url": "https://b.org/OTRO",
+                             "via": "usuario", "motivo": "otro trabajo del mismo autor y año"}]},
+    })
+    rc, rep = run_lint_reporte(capsys)
+    assert rc != 0
+    sec = _seccion(rep, "sources")
+    assert "2006Rasmussen" in sec and "2 fuentes distintas" in sec, sec
+
+    # la MISMA fuente declarada en dos temas (mismo puntero) NO es colisión: es un paper compartido
+    write_yaml(cfg.THEMES_YAML, {
+        "gp": {"concept": "gp", "area": "methods", "source": "web",
+               "sources": [{"key": "2006Rasmussen", "url": "https://a.org/uno",
+                            "via": "usuario", "motivo": "canon"}]},
+        "ica": {"concept": "ica", "area": "methods", "source": "web",
+                "sources": [{"key": "2006Rasmussen", "url": "https://a.org/uno",
+                             "via": "usuario", "motivo": "también toca ICA"}]},
+    })
+    _rc2, rep2 = run_lint_reporte(capsys)
+    assert "fuentes distintas" not in _seccion(rep2, "sources")
+
+
 def test_sources_con_forma_invalida_no_da_cero(toy_vault, capsys):
     """AUD-179 / INV-129 — `as_list` devuelve `[]` para un escalar Y para un mapa, así que un
     `sources:` con forma inválida daba **cero hallazgos**: el bucle no entraba y el tema salía
@@ -4184,10 +4280,12 @@ def test_vista_desde_el_pdf_no_dispara_ninguno_de_los_dos(toy_vault, capsys):
              "vistas": [{"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-08-28",
                          "fuente": "pdf"}]},
             "## Vista — Estrella Test\n\ntexto\n")
-    _, out = run_lint(capsys)
-    # contra el STEM, no contra la frase: el encabezado de cada categoría la contiene aunque el
-    # conteo sea (0), así que un assert sobre el texto pasaría con la categoría poblada.
-    assert "2020pdf...1..1P" not in out
+    out = run_lint_reporte(capsys)[1]
+    # contra el STEM y por CATEGORÍA: el encabezado la contiene aunque el conteo sea (0), así que un
+    # assert sobre el texto pasaría con la categoría poblada — y un `not in out` a secas confunde
+    # estas dos con los otros backlogs que una nota mínima dispara (INV-63, campos del schema).
+    for cat in ("Vista sin `fuente`", "SÓLO del abstract"):
+        assert "2020pdf...1..1P" not in _seccion(out, cat), cat
 
 
 @pytest.mark.parametrize("bloque, tipo", [("- a\n- b", "list"), ("una frase", "str"), ("42", "int")])

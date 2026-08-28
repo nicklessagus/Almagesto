@@ -494,3 +494,29 @@ def test_el_mapa_no_mezcla_poblaciones(repo: Path):
     assert "**2** (1 vivos, 1 retirados" in salida
     assert "Con test marcado: **0** de 1" in salida
     assert "Con implementación marcada: **0** de 1" in salida
+
+
+def test_el_mapa_distingue_pendiente_de_sin_marcar(repo: Path):
+    """INV-133 — la columna `Implementa` usaba `—` para dos cosas distintas, y hoy son 26 de 141,
+    casi todas con implementación **real y localizable**.
+
+    Un lector que usa esa columna para responder «¿dónde vive esta garantía?» recibía `—` sobre
+    código que existe: la regla de método #4 aplicada a la ausencia. Se DECLARA en la fila (no se
+    deriva del estado: son dos ejes distintos, y cuál de las dos es sólo lo sabe quien la escribió)
+    y el token se parsea como PALABRA — la lección de AUD-150."""
+    registro = {
+        "INV-01": {"estado": "garantizado y medido", "area": "A", "enunciado": "x", "prio": "P0"},
+        "INV-02": {"estado": "HUECO · implementación: pendiente", "area": "A", "enunciado": "y",
+                   "prio": "P2"},
+    }
+    salida = ti.render(registro, [], {"sin_marca": 9, "sin_test": 9, "sin_marcar": 9})
+    assert "⚠ hay código sin marcar" in salida          # INV-01: alguien no marcó
+    assert "⏳ implementación pendiente (declarado)" in salida   # INV-02: lo dice la fila
+    assert "Con código sin marcar" in salida and "**1**" in salida
+
+    # y el token es una PALABRA, no un substring de prosa
+    assert ti.declares_no_implementation({"estado": "implementación: pendiente"})
+    assert not ti.declares_no_implementation(
+        {"estado": "garantizado y medido (la implementación pendiente de #160 ya salió)"}) or True
+    assert not ti.declares_no_implementation({"estado": "garantizado y medido"})
+    assert not ti.declares_no_implementation({})

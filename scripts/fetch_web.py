@@ -31,6 +31,7 @@ salvo --force. defuddle baja la URL él mismo.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import re
 import shutil
 import subprocess
@@ -186,6 +187,22 @@ def main() -> int:
         stamp = cfg.snapshot_retrieved(out) or stamp
         cfg.print_seguro(f"{args.citekey}: ya existe {out} (usá --force para re-bajar)")
     else:
+        # INV-30 — la captura que estamos por PISAR deja rastro antes de desaparecer: fecha, URL y
+        # `sha256` del `.txt` viejo, en `capturas_web:` del registro versionado. No se versiona el
+        # archivo (entraría a todos los `grep` del corpus, y `verify-citations` podría citar de una
+        # captura obsoleta); se versiona el HECHO de que hubo otra, que es lo que el invariante pide.
+        if out.exists():
+            _viejo = out.read_bytes()
+            cfg.save_captura_web(args.slug, {
+                "clave": args.citekey,
+                "url": cfg.snapshot_url(out) or args.url,
+                "retrieved": cfg.snapshot_retrieved(out),
+                "sha256": hashlib.sha256(_viejo).hexdigest(),
+                "bytes": len(_viejo),
+                "reemplazada": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            })
+            cfg.print_seguro(f"  · la captura anterior ({cfg.snapshot_retrieved(out) or 's/f'}) "
+                             f"queda registrada en {cfg.registro_path(args.slug)} antes de pisarla")
         cfg.print_seguro(f"  defuddle ← {args.url}")
         raw = fetch(args.url)
         if not raw.strip():

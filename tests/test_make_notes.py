@@ -1140,6 +1140,37 @@ def test_stamp_fulltext_multi_slug_empate_no_toca(toy_vault):
     assert mn.stamp_fulltext(dest, stem, "hd40307") is False
 
 
+def test_el_primer_estampado_de_fulltext_NO_depende_del_orden(toy_vault):
+    """INV-23 / INC-3 — el último INCUMPLIDO del contrato.
+
+    Un paper relevante para varios sujetos tiene su `.txt` bajo CADA slug (contenido idéntico) y la
+    nota es una sola. Todo lo demás que el invariante promete se cumplía —re-correr no repunta, la
+    precedencia por calidad anda en las dos direcciones— pero el **primer** estampado tomaba el slug
+    que hubiera corrido, así que `A,B` y `B,A` daban un `fulltext:` distinto byte a byte. No pierde
+    información ni miente: produce un diff que depende del orden de ingesta, que es ruido, y hacía
+    que el «idempotente, sin ruido de diff» de `CLAUDE.md` prometiera más de lo que el código daba.
+
+    El desempate es DECLARADO: mejor calidad primero, y a igual calidad el slug lexicográficamente
+    menor — la misma regla que `artefacto_en_otro_slug` ya usa, así que las dos no divergen.
+    @inv INV-23"""
+    stem = "2009ApJ...700.1732K"
+    seed_txt(toy_vault, "tau_ceti", stem)
+    seed_txt(toy_vault, "hd40307", stem)
+
+    esperado = f"../../raw/fulltext/hd40307/{stem}.txt"      # `hd40307` < `tau_ceti`
+    for primero, segundo in (("tau_ceti", "hd40307"), ("hd40307", "tau_ceti")):
+        dest = _note_con_fulltext(toy_vault, stem, None, None)
+        mn.stamp_fulltext(dest, stem, primero)
+        assert read_fm(dest)["fulltext"] == esperado, f"orden {primero},{segundo}"
+        assert mn.stamp_fulltext(dest, stem, segundo) is False, "y el segundo no repunta"
+
+    # la calidad sigue mandando por sobre el orden alfabético
+    seed_txt(toy_vault, "aaa-primero", stem, header=f"{cfg.FULLTEXT_OCR_MARK}: con salvedad\n")
+    dest = _note_con_fulltext(toy_vault, stem, None, None)
+    mn.stamp_fulltext(dest, stem, "aaa-primero")
+    assert read_fm(dest)["fulltext"] == esperado, "un OCR alfabéticamente menor no gana"
+
+
 def test_stamp_fulltext_multi_slug_no_alterna_el_pdf_source(toy_vault):
     """AUD-186 / INV-23 — la regla de estabilidad cubría `fulltext`/`fulltext_source` y NO al
     tercero.

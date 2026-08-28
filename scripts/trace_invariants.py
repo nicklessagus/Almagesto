@@ -206,6 +206,28 @@ def is_retired(meta: dict) -> bool:
     return bool(re.match(r"^\W*retirad[oa]s?\b", (meta.get("estado") or "").strip(), re.I))
 
 
+# INV-133 — el token que separa «no hay implementación» de «hay y no está marcada». Se DECLARA en
+# la fila (decidido con el usuario, 2026-08-28), no se deriva del estado: son dos ejes distintos —
+# un invariante puede estar `parcial` con código escrito, y uno `garantizado y medido` puede
+# cumplirse por construcción sin una función que marcar.
+SIN_IMPL_RE = re.compile(r"\bimplementaci[oó]n:\s*pendiente\b", re.I)
+
+
+def declares_no_implementation(meta: dict) -> bool:
+    """Does the row DECLARE that there is no implementation yet?
+
+    As a word, not as a substring of prose: the `estado` cell is written by a person, and an `in`
+    against free text turns any mention into a declaration — the very defect AUD-150 found in
+    `is_retired`, and there is no sense repeating it in the function next door.
+
+    Why it is declared and not derived: the `Implementa` column used `—` for both things and today
+    that is 27 of 141, almost all with **real, locatable** implementations (INV-108 lives in
+    `ingest_theme.py` and in `lint.py`, with no mark at all). A reader using that column to answer
+    *«where does this guarantee live?»* got `—` over code that exists — method rule #4 applied to
+    absence. Which of the two it is, only whoever wrote the row knows."""
+    return bool(SIN_IMPL_RE.search(meta.get("estado") or ""))
+
+
 def collect_marks(root: Path) -> list[Mark]:
     """Todas las marcas `@inv` de `scripts/` y `tests/`, en orden estable (ruta, línea)."""
     marcas: list[Mark] = []
@@ -288,12 +310,21 @@ def load_techos(root: Path) -> dict:
     """Techos del ratchet. Ausente = sin techo (0): un ratchet que no está no puede aflojar nada."""
     path = root / "docs" / "trazabilidad-ratchet.yaml"
     if not path.exists():
-        return {"sin_marca": 0, "sin_test": 0}
+        return {"sin_marca": 0, "sin_test": 0, "sin_marcar": None}
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     techos = data.get("techos") if isinstance(data, dict) else None
     if not isinstance(techos, dict):
-        return {"sin_marca": 0, "sin_test": 0}
-    return {"sin_marca": int(techos.get("sin_marca", 0)), "sin_test": int(techos.get("sin_test", 0))}
+        return {"sin_marca": 0, "sin_test": 0, "sin_marcar": None}
+    return {"sin_marca": int(techos.get("sin_marca", 0)),
+            "sin_test": int(techos.get("sin_test", 0)),
+            # INV-133: el tercero. «Hay código y nadie lo marcó» es deuda que SÍ se puede pagar,
+            # a diferencia de «todavía no hay implementación», que es trabajo pendiente y no un
+            # descuido — fusionarlos en `sin_marca` hacía que el techo midiera dos cosas.
+            # ⚠ AUSENTE es `None` = **no declarado**, no 0. Es un techo NUEVO: un ratchet de una
+            # instancia anterior no lo trae, y con el default 0 el primer `git merge upstream/main`
+            # la dejaría en rojo permanente sobre deuda preexistente — justo lo que la doctrina del
+            # ratchet prohíbe. Se reporta pidiendo que lo declare, y no frena.
+            "sin_marcar": (int(techos["sin_marcar"]) if "sin_marcar" in techos else None)}
 
 
 def techos_previos(root: Path) -> dict | None:
@@ -329,7 +360,8 @@ def subidas_de_techo(root: Path) -> list:
 
     Se conserva el `None` como *no evaluado* (D-43): fuera de un repo el chequeo no puede correr, y
     decirlo es la diferencia entre «miré y está bien» y «no miré»."""
-    subidas = cfg.ratchet_raises("docs/trazabilidad-ratchet.yaml", ("sin_marca", "sin_test"), root)
+    subidas = cfg.ratchet_raises("docs/trazabilidad-ratchet.yaml",
+                                 ("sin_marca", "sin_test", "sin_marcar"), root)
     return subidas if subidas is not None else []
 
 
@@ -345,6 +377,9 @@ def render(registro: dict, marcas: list[Mark], techos: dict) -> str:
     vivos = [i for i, meta in registro.items() if not is_retired(meta)]
     sin_marca = [i for i in vivos if i not in por_inv]
     sin_test = [i for i in vivos if not any(m.kind == "test" for m in por_inv.get(i, []))]
+    sin_impl = [i for i in vivos if not any(m.kind == "impl" for m in por_inv.get(i, []))]
+    pendientes = [i for i in sin_impl if declares_no_implementation(registro[i])]
+    sin_marcar = [i for i in sin_impl if i not in pendientes]
 
     out = [
         "# Trazabilidad requisito ↔ código",
@@ -368,6 +403,10 @@ def render(registro: dict, marcas: list[Mark], techos: dict) -> str:
         f"- Con test marcado: **{len(vivos) - len(sin_test)}** de {len(vivos)} "
         f"(techo `sin_test`: {techos['sin_test']}, hoy {len(sin_test)})",
         f"- Sin ninguna marca: **{len(sin_marca)}** (techo `sin_marca`: {techos['sin_marca']})",
+        # INV-133: los dos estados que el `—` fusionaba, contados por separado.
+        f"- **Con código sin marcar** (hay implementación y nadie la marcó): "
+        f"**{len(sin_marcar)}** (techo `sin_marcar`: {techos.get('sin_marcar') if techos.get('sin_marcar') is not None else 'sin declarar'})",
+        f"- Con **implementación pendiente** (declarado en la fila): {len(pendientes)}",
         f"- Marcas huérfanas: **{len(huerfanas)}**",
         "",
     ]
@@ -407,16 +446,22 @@ def render(registro: dict, marcas: list[Mark], techos: dict) -> str:
     out += ["## El mapa", "", "| ID | Prio | Estado (contrato) | Implementa | Prueba |", "|---|---|---|---|---|"]
     for inv, meta in registro.items():
         ms = por_inv.get(inv, [])
-        impl = _celda([m for m in ms if m.kind == "impl"])
+        # INV-133 — la celda distingue los dos estados que antes compartían un `—`: «todavía no hay
+        # implementación» (declarado en la fila) y «hay código y nadie lo marcó». Un lector que usa
+        # esta columna para responder «¿dónde vive esta garantía?» recibía `—` sobre código que
+        # existe: la regla de método #4 aplicada a la ausencia.
+        impl = _celda([m for m in ms if m.kind == "impl"],
+                      vacio="⏳ implementación pendiente (declarado)" if declares_no_implementation(meta)
+                            else "⚠ hay código sin marcar")
         test = _celda([m for m in ms if m.kind == "test"])
         out.append(f"| **{inv}** | {meta['prio']} | {meta['estado']} | {impl} | {test} |")
     out.append("")
     return "\n".join(out)
 
 
-def _celda(marcas: list[Mark]) -> str:
+def _celda(marcas: list[Mark], vacio: str = "—") -> str:
     if not marcas:
-        return "—"
+        return vacio
     return "<br>".join(
         f"`{m.path}:{m.line}`" + (f" · `{m.symbol}`" if m.symbol else "") for m in marcas)
 
@@ -449,6 +494,11 @@ def main(argv=None) -> int:
     sin_marca = [i for i in vivos if i not in por_inv]
     sin_test = [i for i in vivos
                 if not any(m.kind == "test" and m.inv == i for m in marcas)]
+    # INV-133: el que tiene código y nadie lo marcó. Cuenta para el `rc` como los otros dos — hasta
+    # 1.74.0 este número se imprimía SÓLO dentro del artefacto, así que podía crecer sin gate.
+    sin_marcar = [i for i in vivos
+                  if not any(m.kind == "impl" and m.inv == i for m in marcas)
+                  and not declares_no_implementation(registro[i])]
 
     artefacto = root / "docs" / "trazabilidad.md"
     if args.check:
@@ -462,7 +512,10 @@ def main(argv=None) -> int:
         print(f"→ {artefacto}")
 
     print(f"invariantes: {len(registro)} · sin marca: {len(sin_marca)} (techo {techos['sin_marca']}) "
-          f"· sin test: {len(sin_test)} (techo {techos['sin_test']}) · huérfanas: {len(huerfanas)}")
+          f"· sin test: {len(sin_test)} (techo {techos['sin_test']}) "
+          f"· código sin marcar: {len(sin_marcar)} "
+          f"(techo {techos['sin_marcar'] if techos['sin_marcar'] is not None else 'sin declarar'}) "
+          f"· huérfanas: {len(huerfanas)}")
 
     rc = 0
     if huerfanas:
@@ -474,6 +527,14 @@ def main(argv=None) -> int:
         rc = 1
     if len(sin_test) > techos["sin_test"]:
         print(f"⛔ sin test {len(sin_test)} > techo {techos['sin_test']}")
+        rc = 1
+    if techos["sin_marcar"] is None:
+        print(f"· código sin marcar: {len(sin_marcar)} — techo `sin_marcar` **no declarado**; "
+              f"agregalo a docs/trazabilidad-ratchet.yaml para que la deuda no pueda crecer")
+    elif len(sin_marcar) > techos["sin_marcar"]:
+        print(f"⛔ con código sin marcar {len(sin_marcar)} > techo {techos['sin_marcar']} — hay "
+              f"implementación y nadie la marcó; si de verdad no hay código, declaralo en la fila "
+              f"con `implementación: pendiente`")
         rc = 1
     # El techo SÓLO PUEDE BAJAR (#96). Hasta 1.37.0 esa regla vivía sólo en el encabezado del YAML
     # y la sostenía la revisión humana: nada impedía subirlo en el mismo commit que rompía la

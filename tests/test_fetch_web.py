@@ -209,3 +209,33 @@ def test_force_re_estampa_el_accessed_de_la_nota(toy_vault, fake_defuddle, monke
     assert fm["accessed"] != "2020-05-05"
     assert str(fm["accessed"]) == fw.cfg.snapshot_retrieved(
         toy_vault.FULLTEXT / "gp" / "2006RasmussenWilliams.txt")
+
+
+def test_force_deja_rastro_de_la_captura_que_pisa(toy_vault, fake_defuddle, monkeypatch):
+    """INV-30 — `--force` re-baja la página y **pisa** el snapshot anterior: la captura previa
+    desaparecía sin dejar rastro, y es el único carril donde la fuente ES la captura (no hay PDF
+    detrás del que volver a extraer).
+
+    Lo que se guarda es el RASTRO, no el archivo: fecha, URL y `sha256` del `.txt` reemplazado. El
+    archivo no se versiona a propósito (decidido con el usuario): un `<clave>.<fecha>.txt` al lado
+    entra a TODOS los `grep` del corpus y a la población del lint, así que `verify-citations` podría
+    citar de una captura obsoleta."""
+    import hashlib
+    assert run_main(monkeypatch, ARGS) == 0
+    txt = toy_vault.FULLTEXT / "gp" / "2006RasmussenWilliams.txt"
+    viejo = txt.read_bytes()
+
+    fake_defuddle.md = "# Otra cosa\n\nLa página cambió.\n"
+    assert run_main(monkeypatch, [*ARGS, "--force"]) == 0
+
+    capturas = fw.cfg.load_registro("gp")["capturas_web"]
+    assert len(capturas) == 1
+    c = capturas[0]
+    assert c["clave"] == "2006RasmussenWilliams"
+    assert c["url"] == "https://example.org/gp"
+    assert c["sha256"] == hashlib.sha256(viejo).hexdigest()
+    assert c["bytes"] == len(viejo) and c["reemplazada"]
+    # y el archivo NO se versionó al lado: el corpus no se contamina
+    assert sorted(p.name for p in (toy_vault.FULLTEXT / "gp").glob("*.txt")) == \
+        ["2006RasmussenWilliams.txt"]
+    assert "La página cambió." in txt.read_text(encoding="utf-8")

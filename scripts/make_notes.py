@@ -138,6 +138,31 @@ def fulltext_info(slug: str | None, stem: str) -> tuple[str | None, str | None]:
     return f"../../raw/fulltext/{slug}/{stem}.txt", _txt_provenance(p)
 
 
+def best_fulltext(stem: str) -> tuple[str | None, str | None]:
+    """The `.txt` this paper should point at, chosen across ALL slugs: `(rel path, provenance)`.
+
+    ⛔ INV-23 / INC-3 — this closes the last INCUMPLIDO of the contract. A paper relevant to several
+    subjects has its `.txt` extracted under **each** slug (identical content), and the note is one.
+    Everything else the invariant promises held —re-running does not repoint, and quality precedence
+    works in both directions— but the **first** stamp took whatever slug happened to run, so `A,B`
+    and `B,A` produced a different `fulltext:` byte for byte. No information is lost and nothing is
+    misstated; what it produces is a diff that depends on ingest order, which is noise, and it made
+    `CLAUDE.md`'s «idempotente, sin ruido de diff» read stronger than the code delivered.
+
+    The tie-break is DECLARED: highest quality first (`pdftotext`/`web` > `ocr`), then the
+    lexicographically smallest slug — the same rule `lib_config.artefacto_en_otro_slug` already uses
+    to pick among copies, so the two do not diverge."""
+    cands = []
+    for d in sorted(cfg.FULLTEXT.glob(f"*/{stem}.txt")) if cfg.FULLTEXT.exists() else []:
+        rel, src = fulltext_info(d.parent.name, stem)
+        if rel:
+            cands.append((-_FULLTEXT_QUALITY.get(src, 0), d.parent.name, rel, src))
+    if not cands:
+        return None, None
+    _q, _slug, rel, src = min(cands)
+    return rel, src
+
+
 def stamp_fulltext(dest, stem: str, slug: str | None) -> bool:
     """Estampa/actualiza `fulltext:` + `fulltext_source:` (verdad de disco) en una nota que YA
     existe. Hace falta porque en la cadena ADS el stub nace ANTES que el .txt (make_notes corre
@@ -153,7 +178,9 @@ def stamp_fulltext(dest, stem: str, slug: str | None) -> bool:
     disco, el candidato de la corrida en curso sólo lo reemplaza si es de MEJOR calidad
     (`pdftotext`/`web` > `ocr`); en empate gana el primer escritor → re-correr cualquier slug no
     toca la nota. Devuelve True si modificó."""
-    rel, src = fulltext_info(slug, stem)
+    # INV-23: el candidato NO es el del slug que corrió, es el mejor de la bóveda con desempate
+    # declarado. Así el primer estampado deja de depender del orden de ingesta.
+    rel, src = best_fulltext(stem)
     if rel is None or not dest.exists():
         return False
     text = dest.read_text(encoding="utf-8")

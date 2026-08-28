@@ -53,8 +53,20 @@ almagesto_version: "1.68.0"
 # emite el recolector, por el mismo argumento que ya rige para los techos.
 
 techos:
-  sin_marca: 6    # medido: 2026-08-28 (segunda pasada) — 05, 23, 95, 130, 132 y 133.
-  sin_test: 6     # medido: 2026-08-28 — los mismos seis.
+  sin_marca: 5    # medido: 2026-08-28 (tercera pasada) — 05, 95, 130, 132 y 133.
+  sin_test: 5     # medido: 2026-08-28 (tras cerrar INV-23).
+  # ⚠ INV-133 entra a los dos por el mismo motivo que INV-95: su implementación vive en
+  #   `trace_invariants.py`, que el recolector **excluye a propósito** (si no, se auto-adjudicaría
+  #   cobertura — ya pasó con INV-87 e INV-90). O sea que lo único que esta herramienta no puede
+  #   medir sigue siendo a sí misma, y eso está dicho en vez de escondido.
+  # INV-133 — el TERCER techo, y mide algo que los otros dos fusionaban. `sin_marca` cuenta al
+  # invariante sin NINGUNA marca; `sin_marcar` cuenta al que tiene implementación **real y
+  # localizable** y nadie la marcó, que es deuda que sí se puede pagar (a diferencia de «todavía no
+  # hay implementación», que es trabajo pendiente y no un descuido). Hasta 1.74.0 este número se
+  # imprimía dentro del artefacto y no tenía techo, así que podía crecer sin que nada lo dijera.
+  # ⚠ Clasificar los 26 uno por uno es trabajo abierto: quien conozca la fila declara
+  # `implementación: pendiente` en su estado cuando de verdad no hay código, y el techo baja.
+  sin_marcar: 27  # medido: 2026-08-28
   # BAJA 7→6: INV-139 se cerró el mismo día que se enunció. Nació `INCUMPLIDO` a propósito —para
   #   nombrar los seis sitios que faltaban— y los seis se arreglaron en la misma tanda
   #   (AUD-131/145/146/149/200/201/202), así que hoy tiene marcas en implementación y en test. La

@@ -220,6 +220,42 @@ def _es_estampada(linea: str) -> bool:
     return False
 
 
+# ── INV-63 · el schema de cada tipo de nota, declarado UNA vez ────────────────────────────────────
+#
+# Hasta 1.74.0 el schema vivía en la prosa de `CLAUDE.md` y se chequeaba campo por campo, ad-hoc:
+# no había forma de preguntar «¿esta nota cumple el schema de su tipo?», que es la mitad del P0 que
+# faltaba (la otra —la forma que EVADE los chequeos— ya bloquea vía `fm_broken`).
+#
+# ⚠ Lo que se exige es que la CLAVE esté, no que tenga valor. Un `null` es el caso normal y a
+# propósito: el espejo #70 deja en `null` lo que la autoridad no trae, y rellenarlo con literatura
+# está prohibido. Exigir valor convertiría el chequeo en lo contrario de lo que el contrato manda.
+#
+# La lista es exactamente la que ESCRIBEN los writers de `make_notes`, no una copia de la prosa: así
+# el enunciado «toda nota generada lo cumple» es verdadero por construcción y lo que el detector
+# encuentra son notas anteriores al campo, que es deuda real. Backlog, no bloqueante (decidido con
+# el usuario, 2026-08-28): el corpus viejo tiene notas incompletas por diseño y un bloqueante nace
+# en rojo sobre trabajo correcto — el falso positivo que erosiona la categoría entera.
+SCHEMA_NOTA = {
+    "star": ("name", "slug", "aliases", "simbad_id", "spectral_type", "dist_pc",
+             "activity_indicators_expected", "planets", "disputes", "data_local",
+             "methods_applied", "tags"),
+    "paper": ("bibcode", "title", "first_author", "n_authors", "year", "arxiv_id", "doi",
+              "bibstem", "stars", "facets", "keywords", "methods", "thesis_links", "role",
+              "relevance", "citation_count", "pdf", "fulltext", "fulltext_source", "pdf_source",
+              "tags"),
+    "concept": ("name", "aliases", "disputes", "tags"),
+    "hypothesis": ("name", "status", "tags"),
+}
+
+
+def missing_schema_fields(tipo: str, fm: dict) -> list:
+    """Keys that `tipo`'s schema declares and this note does not carry.  @inv INV-63
+
+    Presence, not value: see the comment on `SCHEMA_NOTA`. An unknown type returns `[]` — there is
+    no schema to measure it against, and inventing one would be worse than not checking."""
+    return [k for k in SCHEMA_NOTA.get(tipo, ()) if k not in fm]
+
+
 def solo_prosa(body: str) -> str:
     """El cuerpo SIN las secciones que estampa la máquina — lo que alguien escribió de verdad."""
     out, saltando = [], False
@@ -1695,6 +1731,28 @@ def save_no_disputa(slug: str, entrada: dict) -> None:
     data.setdefault("slug", slug)
     data["no_disputas"] = [d for d in as_list(data.get("no_disputas"))
                            if isinstance(d, dict)] + [nueva]
+    save_registro(slug, data)
+
+
+def save_captura_web(slug: str, entrada: dict) -> None:
+    """APPEND to `capturas_web: []` the capture a re-capture is about to replace.  @inv INV-30
+
+    ⛔ INV-30 — `fetch_web --force` re-fetches the page and **overwrites** the previous snapshot, so
+    the earlier capture vanished without a trace, in the one lane of the vault where the source IS
+    the capture (there is no PDF behind it to re-extract from). The invariant asks that re-capturing
+    «not destroy the previous one without leaving a trace», and what is stored is the **trace**, not
+    the file: date, URL and `sha256` of the replaced `.txt`.
+
+    Why the file is not versioned (decided with the user, 2026-08-28): a `<key>.<date>.txt` next to
+    it would enter EVERY `grep` over the corpus — `query-corpus`, `test-hypothesis`, the alias
+    retro-tag, the hypothesis scope count — and the lint's population, so `verify-citations` could
+    end up quoting an obsolete capture. Losing the old text is a real cost and a bounded one: what
+    the vault **asserts** about that source stays anchored by hash (D-20), so a pair verified against
+    the old capture expires by itself when the file changes."""
+    data = load_registro(slug)
+    data.setdefault("slug", slug)
+    data["capturas_web"] = [c for c in as_list(data.get("capturas_web"))
+                            if isinstance(c, dict)] + [entrada]
     save_registro(slug, data)
 
 

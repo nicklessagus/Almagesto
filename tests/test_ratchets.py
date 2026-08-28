@@ -22,7 +22,7 @@ RAIZ = Path(__file__).resolve().parents[1]
 # `(archivo, campos)` — la lista es el contrato: un ratchet nuevo que no entre acá queda sin guarda,
 # que es exactamente el estado que AUD-139 encontró.
 RATCHETS = [
-    ("docs/trazabilidad-ratchet.yaml", ("sin_marca", "sin_test")),
+    ("docs/trazabilidad-ratchet.yaml", ("sin_marca", "sin_test", "sin_marcar")),
     ("tools/idioma-ratchet.yaml", ("techo", "docstrings_castellano", "sin_docstring")),
     ("tools/cobertura-ratchet.yaml", ("techo",)),
     ("tools/mutacion-ratchet.yaml", ("techo",)),
