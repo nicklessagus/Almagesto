@@ -2140,9 +2140,26 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # Un alias en `versions[]` NO es un duplicado: es el registro de que el trabajo tuvo otro
     # bibcode, y por eso no entra en la población.
     identidad_dup: list = []
+    alias_con_nota: list = []          # #229: listado como alias Y con nota propia — contradicción
     por_identidad: dict = {}
     alias = {str(v.get("bibcode")) for fm_p in paper_fms.values()
              for v in cfg.as_list(fm_p.get("versions")) if isinstance(v, dict) and v.get("bibcode")}
+    # #229 — la exención por alias es incondicional, y eso APAGA los dos detectores de identidad
+    # sobre una nota viva. Medido: una nota usó `versions[]` para decir «no son duplicados, se
+    # conservan los dos» —lo contrario de lo que el campo significa en D-19— y con eso dejó a una
+    # de las 4 notas SIN `doi` ni `arxiv_id` (justo la población que #216 existe para cubrir) fuera
+    # de los dos chequeos, para siempre. El lint seguía declarando «sobre 32 notas» mirando 31.
+    # O es un alias (y entonces NO debe haber nota) o es un trabajo distinto (y entonces NO va en
+    # `versions[]`): la contradicción de schema es lo que bloquea, no la exención.
+    for _a in sorted(alias & set(paper_fms)):
+        _quien = sorted(st for st, fm_p in paper_fms.items()
+                        if any(isinstance(v, dict) and str(v.get("bibcode")) == _a
+                               for v in cfg.as_list(fm_p.get("versions"))))
+        alias_con_nota.append(
+            (_a, f"está listado en `versions[]` de {', '.join(_quien)} Y tiene su propia nota: o es "
+                 f"un alias (y la nota no debería existir) o es otro trabajo (y no va en "
+                 f"`versions[]`). Mientras tanto queda fuera de los DOS chequeos de identidad "
+                 f"(D-19 y #216), que es donde más falta hace"))
     for stem_p, fm_p in sorted(paper_fms.items()):
         if stem_p in alias:
             continue
@@ -3028,6 +3045,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('old_bearing', '⛔ `bearing` en una nota de paper (schema pre-D-21) — la postura vive en la hipótesis', SEV_BLOQUEANTE, tuple(old_bearing), poblacion='papers'),
         Categoria('sin_destino', '⛔ Nota de paper sin destino (D-23): no pertenece a ninguna entidad', SEV_BLOQUEANTE, tuple(sin_destino), poblacion='papers'),
         Categoria('identidad_dup', '⛔ Identidad duplicada: dos notas del mismo trabajo (mismo doi/arxiv_id)', SEV_BLOQUEANTE, tuple(identidad_dup), poblacion='papers'),
+        Categoria('alias_con_nota', '⛔ Bibcode listado en `versions[]` que TIENE su propia nota: apaga los dos chequeos de identidad (#229)', SEV_BLOQUEANTE, tuple(alias_con_nota), poblacion='papers'),
         Categoria('abstract_dup', '👯 Posible duplicado SIN doi ni arxiv_id: mismo abstract verbatim (backlog — decidís vos)', SEV_BACKLOG, tuple(abstract_dup), poblacion='papers'),
         Categoria('bad_sources', '⛔ `sources:` sin procedencia (#111): no consta quién declaró la fuente ni por qué', SEV_BLOQUEANTE, tuple(bad_sources), poblacion='temas'),
         Categoria('bad_roles', '⛔ `role` fuera del vocabulario — y todo campo con vocabulario CERRADO (`unidad_cita`, `pending_source`)', SEV_BLOQUEANTE, tuple(bad_roles), poblacion='papers'),

@@ -392,7 +392,17 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   en todo lo que cuenta papers, dos fuentes donde hay una, y un falso positivo permanente de #75
   (la ficha cita una de las dos). Hay **una sola nota canónica** y los bibcodes viejos viven en
   `versions[]`; el lint bloquea el duplicado y `make_notes` **rehúsa crear** la segunda nota. El
-  ciclo se resuelve con `python scripts/make_notes.py --rename-paper VIEJO NUEVO`, que mueve la nota
+  ⛔ **Y un bibcode listado en `versions[]` que TIENE su propia nota BLOQUEA (#229).** La exención
+  por alias es lo que hace que un preprint consolidado no cuente como duplicado, pero es
+  **incondicional**: listar un bibcode ahí lo saca de los **dos** chequeos de identidad (el
+  bloqueante de arriba y el backlog de #216), tenga nota o no. Medido: una nota usó `versions[]`
+  para declarar que dos trabajos del mismo programa **no** son duplicados —lo contrario de lo que
+  el campo significa— y con eso dejó a una de las notas **sin `doi` ni `arxiv_id`**, justo la
+  población que #216 existe para cubrir, invisible para siempre, mientras el reporte declaraba
+  «sobre 32 notas» habiendo mirado 31. O es un alias (y entonces **no debe haber nota**) o es otro
+  trabajo (y entonces **no va en `versions[]`**): la relación *«mismo programa, resultados
+  distintos»* se declara en **prosa o en `salvedades`**.
+  El ciclo se resuelve con `python scripts/make_notes.py --rename-paper VIEJO NUEVO`, que mueve la nota
   y sus artefactos (`raw/pdfs/`, `raw/fulltext/`), agrega el alias y **reescribe los wikilinks de
   toda la bóveda** — sin eso el renombre deja links rotos, que es la mitad del trabajo. Alcance
   declarado: `vault/`; lo que vive afuera se resuelve por el alias.

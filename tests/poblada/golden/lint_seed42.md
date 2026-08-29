@@ -104,6 +104,9 @@
 ## ⛔ Identidad duplicada: dos notas del mismo trabajo (mismo doi/arxiv_id) (0)
 > sobre 60 notas de `papers/`
 
+## ⛔ Bibcode listado en `versions[]` que TIENE su propia nota: apaga los dos chequeos de identidad (#229) (0)
+> sobre 60 notas de `papers/`
+
 ## 👯 Posible duplicado SIN doi ni arxiv_id: mismo abstract verbatim (backlog — decidís vos) (0)
 > sobre 60 notas de `papers/`
 

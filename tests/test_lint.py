@@ -4679,3 +4679,34 @@ def test_parrafo_duplicado_es_backlog(toy_vault, capsys):
     rc, rep = run_lint_reporte(capsys)
     assert "párrafo repetido" in _seccion(rep, "Forma del artefacto: marcador"), rep
     assert rc == 0
+
+
+def test_alias_con_nota_propia_bloquea(toy_vault, capsys):
+    """#229 — la exención por `versions[]` es incondicional y eso APAGA los dos detectores de
+    identidad sobre una nota VIVA. Medido: una nota usó `versions[]` para decir «no son duplicados,
+    se conservan los dos» —lo contrario de lo que el campo significa en D-19— y con eso dejó a una
+    de las 4 notas sin `doi` ni `arxiv_id` (la población que #216 existe para cubrir) fuera de los
+    dos chequeos, para siempre, mientras el lint declaraba «sobre 32 notas» mirando 31."""
+    mk_note(cfg.PAPERS, "2023MNRAS.521.1233L",
+            {"bibcode": "2023MNRAS.521.1233L", "tags": ["paper"], "stars": ["tau Cet"],
+             "versions": [{"bibcode": "2022eas..conf.1709L", "nota": "se conserva como nota propia"}]},
+            "# a\n")
+    mk_note(cfg.PAPERS, "2022eas..conf.1709L",
+            {"bibcode": "2022eas..conf.1709L", "tags": ["paper"], "stars": ["tau Cet"]}, "# b\n")
+    link_from_index(toy_vault, "2023MNRAS.521.1233L", "2022eas..conf.1709L")
+    rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "listado en `versions[]` que TIENE su propia nota")
+    assert "2022eas..conf.1709L" in sec and "2023MNRAS.521.1233L" in sec, rep
+    assert rc == 1
+
+
+def test_alias_sin_nota_sigue_exento(toy_vault, capsys):
+    """#229, el recorte — el caso legítimo de D-19 (el bibcode viejo del preprint, sin nota) no se
+    toca: sigue exento y no es hallazgo. Sin este límite el arreglo rompería la consolidación."""
+    mk_note(cfg.PAPERS, "2026RASTI...5ag038F",
+            {"bibcode": "2026RASTI...5ag038F", "tags": ["paper"], "stars": ["tau Cet"],
+             "versions": [{"bibcode": "2026arXiv260528635F", "tipo": "eprint"}]}, "# a\n")
+    link_from_index(toy_vault, "2026RASTI...5ag038F")
+    rc, rep = run_lint_reporte(capsys)
+    assert "2026arXiv260528635F" not in _seccion(rep, "listado en `versions[]` que TIENE"), rep
+    assert rc == 0
