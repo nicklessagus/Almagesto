@@ -612,7 +612,9 @@ _(ninguno relevante — corpus sintético)_
     # ── escritura: index/log (prosa plana, sin frontmatter — legítimo, ver fm_error) ────────────
     idx_lines = ["# Índice de la bóveda poblada (tests)", "", "## Estrellas"]
     idx_lines += [f"- [[{s}]]" for s in star_slugs]
-    idx_lines += ["", "## Conceptos"]
+    # #237 — los encabezados CANÓNICOS (los de `make_notes.INDEX_SECCIONES`), no unos parecidos:
+    # el estampador hace cirugía anclada en ellos y el detector compara contra lo que él daría.
+    idx_lines += ["", "## Conceptos (por área)"]
     idx_lines += [f"- [[{s}]]" for s, _ in linkable_concepts]
     idx_lines += ["", "## Queries"]
     idx_lines += [f"- [[{q}]]" for q in query_stems]
@@ -628,6 +630,13 @@ _(ninguno relevante — corpus sintético)_
         for _slug in star_slugs:
             _log += [f"## 2026-01-01 — ingest: {_slug}",
                      f"- cadena completa sembrada para `{_slug}`", ""]
+    # #249 — los links entrantes de las notas linkeables van al LOG: desde #237 el índice se
+    # estampa por verdad de disco y sus links ya no cuentan como evidencia de catalogación.
+    _log += ["## 2026-01-01 — catálogo sembrado", ""]
+    _log += [f"- [[{s}]]" for s in star_slugs]
+    _log += [f"- [[{s}]]" for s, _ in linkable_concepts]
+    _log += [f"- [[{q}]]" for q in query_stems]
+    _log += [f"- [[{matrix_stem}]]", ""]
     paths.LOG.write_text("\n".join(_log), encoding="utf-8")
 
     # ── escritura: config ─────────────────────────────────────────────────────────────────────
@@ -690,7 +699,8 @@ _(ninguno relevante — corpus sintético)_
     # ── 10.3: las anomalías NUEVAS, en notas dedicadas ────────────────────────────────────────
     #
     # Regla de oro de esta pasada: cada nota sembrada dispara **una** categoría y ninguna vecina.
-    # Por eso todas llevan link entrante desde `index.md` (si no, caen además como huérfanas),
+    # Por eso todas llevan link entrante desde `log.md` (si no, caen además como huérfanas; #249:
+    # desde el índice ya no cuenta, porque el índice se estampa por verdad de disco),
     # `methods: []` (con `methods` poblado y sin cita caerían en *extraído no sintetizado*) y la
     # cabecera con su línea de generador. El assert de contaminación de `test_conteos_exactos` es
     # justamente el que verifica que esto se cumplió.
@@ -791,9 +801,14 @@ _(ninguno relevante — corpus sintético)_
         anom_extra["capas_colgadas"] = sorted(stems)
 
     if extra_idx:
-        paths.INDEX.write_text(
-            paths.INDEX.read_text(encoding="utf-8")
-            + "\n\n## Anomalías sembradas (10.3)\n"
+        # #249 — el link entrante lo da el LOG, no el índice. Desde #237 el índice se ESTAMPA por
+        # verdad de disco (lista todo), así que sus links dejaron de ser evidencia de que alguien
+        # catalogó la nota y el lint ya no los cuenta: seguir sembrándolos acá haría que estas notas
+        # se leyeran como enlazadas sin estarlo, que es justo lo que la anomalía viene a probar.
+        # El `log.md` es prosa append-only escrita a mano, así que ahí el link SÍ es evidencia.
+        paths.LOG.write_text(
+            paths.LOG.read_text(encoding="utf-8")
+            + "\n## 2026-01-02 — anomalías sembradas (10.3)\n"
             + "\n".join(f"- [[{s}]]" for s in sorted(extra_idx)) + "\n", encoding="utf-8")
 
     # ── 10.3: la tabla `## Papers` ESTAMPADA (D-10/D-11) ──────────────────────────────────────
@@ -821,6 +836,10 @@ _(ninguno relevante — corpus sintético)_
                 # registro: ruido de fondo permanente, y el detector nuevo nacía en rojo sobre
                 # trabajo correcto.
                 make_notes.stamp_estado(slug, paths.STARS / f"{slug}.md")
+            # #237 — y el ÍNDICE, con el estampador real por el mismo argumento de arriba. Sin esto
+            # el corpus "limpio" reportaba `indice_viejo` en cada corrida: ruido de fondo permanente
+            # sobre trabajo correcto, que es lo que estos conteos exactos existen para no producir.
+            make_notes.restamp_index()
         finally:
             for k, v in _saved:
                 setattr(cfg, k, v)

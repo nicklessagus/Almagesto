@@ -172,7 +172,9 @@ experimentos en la matriz método×estrella quedan a decisión de cada instancia
   `vault/raw/ground_truth/<slug>.json` (hechos de NASA Exoplanet Archive + SIMBAD, fuente de verdad dura).
 - **el LLM** = compilador.
 - **`vault/wiki/`** = ejecutable. `.md` que escribís vos: `stars/` (entidades), `papers/` (resúmenes de
-  fuente), `concepts/{indicators,methods,activity,hypotheses}/`, `queries/`, `matrices/`,
+  fuente), `concepts/{methods,hypotheses}/` (⚠ las áreas son **abiertas**: ésas son las dos que el
+  framework distingue de verdad, cualquier otra que declares es **archivado** — ningún chequeo se
+  ramifica por el área, #246), `queries/`, `matrices/`,
   `index.md` (catálogo) y `log.md` (registro append-only).
 - **lint** = tests. **queries** = runtime.
 - **este `CLAUDE.md`** = schema (cómo te comportás).
@@ -705,7 +707,9 @@ se cita **por página**. Sin `alcance` el prompt lo **dice** (*«NO DECLARADO»*
 `queries/` que se archiven: la nota debe **alcanzar por sí sola**, ser **dual-audiencia (humano y
 modelo)** y llevar `[[bibcode]]` en cada afirmación para **citar/trazar** (un agente redactando un
 informe saca de la nota las referencias correctas sin abrir el paper). Requisitos extra por tipo:
-- **métodos e indicadores** (`concepts/methods`, `concepts/indicators`): además
+- **métodos e indicadores** (`concepts/methods`; un indicador —BIS, S-index, FWHM— es
+  operativamente un procedimiento que produce un número, o sea un método chico, y por eso la semilla
+  ya no trae un área aparte, #246): además
   **implementation-ready** — ecuaciones, inputs/outputs y pasos suficientes para **codificar el método
   tal como lo detallan los papers, sin abrir la fuente**; el detalle fino vive en los `[[links]]`. Y
   **con el régimen explícito** (#74): una ecuación sin las condiciones bajo las que vale es
@@ -1595,7 +1599,12 @@ nota **evade en silencio** los chequeos por elemento de su tipo), **papers retra
 chequea sólo los papers del slug (`--slug`) y el barrido completo de la bóveda es la pasada
 periódica del skill `maintain`— y el lint lo surface offline: una fuente retractada citada rompe la
 frontera dura),
-páginas huérfanas,
+páginas huérfanas (⚠ **el `index.md` NO cuenta como link entrante, #249**: antes de #237 era prosa
+a mano y un link desde ahí era evidencia de que alguien catalogó la nota; desde que se **estampa por
+verdad de disco** lista todo, así que ninguna estrella ni concepto podía volver a ser huérfano y el
+detector —que **bloquea**— quedaba en **0 permanente**. Es el mismo criterio con que las secciones
+estampadas quedan fuera del fan-out y del detector de fuga: **metadata derivada no es evidencia**. Lo
+cazó el corpus sintético al mover el golden),
 contradicciones ground-truth↔ficha —**qué planetas (no cuántos) y campo por campo**: un planeta
 que la ficha lista y NEA no (típicamente una señal no confirmada escrita en `planets[]` en vez de
 `disputes` como `<letra>.existence`), uno que NEA confirma y la ficha no lista, una letra repetida, y

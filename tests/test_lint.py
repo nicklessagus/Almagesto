@@ -19,9 +19,16 @@ def run_lint(capsys):
     return rc, capsys.readouterr().out
 
 
-def link_from_index(toy_vault, *stems):
-    """Evita huérfanos accidentales: index.md linkea las notas del escenario."""
-    toy_vault.INDEX.write_text("".join(f"- [[{s}]]\n" for s in stems), encoding="utf-8")
+def link_from_log(toy_vault, *stems):
+    """Evita huérfanos accidentales: `log.md` linkea las notas del escenario.
+
+    ⚠ Antes era `index.md`, y desde #249 no sirve: el índice se ESTAMPA por verdad de disco, así
+    que sus links dejaron de contar como entrantes (si contaran, ninguna nota podría volver a ser
+    huérfana y el detector —que bloquea— quedaría en 0 permanente). El `log.md` es prosa
+    append-only escrita a mano: ahí el link sí es evidencia de que alguien la enlazó.
+    """
+    toy_vault.LOG.write_text("# log\n\n" + "".join(f"- [[{s}]]\n" for s in stems),
+                             encoding="utf-8")
 
 
 def gt_planet(letter="b", mass=1.0, flag=None):
@@ -65,7 +72,7 @@ def test_wikilink_roto_bloquea(toy_vault, capsys):
     # @inv INV-02
     mk_note(toy_vault.CONCEPTS / "methods", "nota", {"tags": ["methods"]},
             "Cita a [[pagina-inexistente]].\n")
-    link_from_index(toy_vault, "nota")
+    link_from_log(toy_vault, "nota")
     rc, out = run_lint(capsys)
     assert rc == 1
     assert "## Wikilinks rotos (página faltante) (1)" in out
@@ -269,7 +276,7 @@ def test_concept_areas_sin_declarar_se_reporta_una_vez(toy_vault, capsys):
     write_yaml(toy_vault.OBJECTIVE_YAML, obj)
     mk_note(toy_vault.CONCEPTS / "activity", "algo", {"tags": ["activity"]}, "texto\n")
     mk_note(toy_vault.CONCEPTS / "zzz", "otro", {"tags": ["zzz"]}, "texto\n")
-    link_from_index(toy_vault, "algo", "otro")
+    link_from_log(toy_vault, "algo", "otro")
     rc, out = run_lint(capsys)
     assert rc == 0                                        # WARN, no bloquea
     assert "no declara `concept_areas`" in out and "está APAGADO" in out
@@ -380,7 +387,7 @@ def test_disputa_en_un_concepto(toy_vault, capsys):
                  "posiciones": [{"ref": "2018autA...1..1A", "value": "positiva"},
                                 {"ref": "2021autB...1..1B", "value": "negativa"}]}]},
             "Síntesis con [[2018autA...1..1A]] y [[2021autB...1..1B]].\n")
-    link_from_index(toy_vault, "gp")
+    link_from_log(toy_vault, "gp")
     rc, out = run_lint(capsys)
     assert rc == 0 and "(posiciones explícitas, #71) (0)" in out
 
@@ -397,7 +404,7 @@ def test_disputa_mal_formada_en_un_concepto_tambien_bloquea(toy_vault, capsys):
                 {"field": "escala", "posiciones": [{"ref": "2018autA...1..1A", "value": 1},
                                                    {"ref": "2099fantasma..1..1F", "value": 2}]}]},
             "Síntesis con [[2018autA...1..1A]].\n")
-    link_from_index(toy_vault, "gp")
+    link_from_log(toy_vault, "gp")
     rc, out = run_lint(capsys)
     assert rc == 1
     assert "disputa `signo` con 1 posición(es)" in out
@@ -551,7 +558,7 @@ def test_citado_en_un_concepto_tambien_cuenta(toy_vault, capsys):
     paper_extraido(toy_vault)
     mk_note(toy_vault.CONCEPTS / "methods", "periodograma", {"tags": ["methods"]},
             "Definido en [[2020ext....1E]].\n")
-    link_from_index(toy_vault, "periodograma")
+    link_from_log(toy_vault, "periodograma")
     rc, out = run_lint(capsys)
     assert "Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog) (0)" in out
 
@@ -581,7 +588,7 @@ def test_citado_solo_en_una_query_no_alcanza(toy_vault, capsys):
     paper_extraido(toy_vault, role=["arbitro"])
     mk_note(toy_vault.QUERIES, "una-pregunta", {"tags": ["query"]},
             "Respuesta con [[2020ext....1E]].\n")
-    link_from_index(toy_vault, "una-pregunta")
+    link_from_log(toy_vault, "una-pregunta")
     rc, out = run_lint(capsys)
     assert "Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog) (1)" in out
     assert "2020ext....1E → extraído" in out
@@ -596,7 +603,7 @@ def test_dos_notas_con_el_mismo_stem_no_voltean_el_lint(toy_vault, capsys):
     mk_note(toy_vault.QUERIES, "2020ext....1E",
             {"tags": ["paper"], "relevance": "high", "methods": ["periodograma"],
              "no_sintetizado": "copia de trabajo"}, "")
-    link_from_index(toy_vault, "2020ext....1E")
+    link_from_log(toy_vault, "2020ext....1E")
     rc, out = run_lint(capsys)
     assert "Traceback" not in out
     # y reporta: la copia lleva `no_sintetizado` con motivo (se cierra sola), la original no
@@ -907,7 +914,7 @@ def test_el_template_no_satisface_el_proxy_de_planeta(toy_vault, capsys):
     write_gt(toy_vault, [gt_planet(l) for l in "bcdefg"])
     import make_notes as mn
     mn.write_star_note("test_star", force=False)
-    link_from_index(toy_vault, "test_star")
+    link_from_log(toy_vault, "test_star")
     rc, out = run_lint(capsys)
     faltan = [l for l in "bcdefg" if f"planeta {l} en frontmatter pero no discutido en prosa" not in out]
     assert faltan == [], f"el template ya 'discute' {faltan} sin una sola línea de prosa"
@@ -1044,7 +1051,7 @@ def test_thesis_link_colgante(toy_vault, capsys):
     assert "## thesis_links sin página destino (1)" in out
     mk_note(toy_vault.CONCEPTS / "methods", "concepto-inexistente", {"tags": ["methods"]},
             "ahora existe [[2020papA...1..1A]]\n")
-    link_from_index(toy_vault, "concepto-inexistente")
+    link_from_log(toy_vault, "concepto-inexistente")
     rc, out = run_lint(capsys)
     assert "## thesis_links sin página destino (0)" in out
 
@@ -1064,7 +1071,7 @@ def test_dispute_ref_colgante(toy_vault, capsys):
     assert "## disputes: ref de una posición sin paper destino (1)" in out
     # la ref existe pero NO es nota de paper → sigue colgante
     mk_note(toy_vault.QUERIES, "2020disD...1..1D", {"tags": ["query"]}, "")
-    link_from_index(toy_vault, "2020disD...1..1D")
+    link_from_log(toy_vault, "2020disD...1..1D")
     rc, out = run_lint(capsys)
     assert "## disputes: ref de una posición sin paper destino (1)" in out
 
@@ -1125,7 +1132,7 @@ def test_fuga_de_implementacion_warn(toy_vault, capsys):
             {"tags": ["methods"]},
             "La perilla del contraste se ajusta así.\n"
             "> perilla mencionada en blockquote meta: exenta\n")
-    link_from_index(toy_vault, "nota")
+    link_from_log(toy_vault, "nota")
     rc, out = run_lint(capsys)
     assert rc == 0                                   # WARN no bloquea
     assert "Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano) (1)" in out
@@ -1137,7 +1144,7 @@ def test_fuga_numera_lineas_como_grep(toy_vault, capsys):
     colado en la nota no corre la numeración (splitlines() lo contaría como salto extra)."""
     mk_note(toy_vault.CONCEPTS / "methods", "nota", {"tags": ["methods"]},
             "línea uno\ncon un form feed \x0c en el medio\nla perilla en la línea 3\n")
-    link_from_index(toy_vault, "nota")
+    link_from_log(toy_vault, "nota")
     rc, out = run_lint(capsys)
     # AUD-190: la numeración es la del ARCHIVO, no la del cuerpo — es lo que `L{i}` promete por
     # convención (`grep -n`), y en una ficha de estrella el frontmatter tiene decenas de líneas, así
@@ -1175,7 +1182,7 @@ def test_objective_yaml_invalido_no_voltea_el_lint(toy_vault, capsys):
 
 def test_area_no_declarada_warn(toy_vault, capsys):
     mk_note(toy_vault.CONCEPTS / "zzz", "nota", {"tags": ["zzz"]}, "área typo\n")
-    link_from_index(toy_vault, "nota")
+    link_from_log(toy_vault, "nota")
     rc, out = run_lint(capsys)
     assert rc == 0
     assert "concepts/zzz/" in out and "¿typo o área nueva sin declarar?" in out
@@ -1426,7 +1433,7 @@ def test_cita_sin_fulltext_no_verificable(toy_vault, capsys):
     mk_note(toy_vault.PAPERS, "2020citC...1..1C", {"tags": ["paper"]}, "")
     mk_note(toy_vault.QUERIES, "mi-query", {"tags": ["query"]},
             "Según [[2020citC...1..1C]] pasa X.\n")
-    link_from_index(toy_vault, "mi-query")
+    link_from_log(toy_vault, "mi-query")
     rc, out = run_lint(capsys)
     assert rc == 0
     assert "cita 2020citC...1..1C sin fulltext" in out
@@ -1444,7 +1451,7 @@ def test_con_citas_pero_sin_bloque_verify(toy_vault, capsys):
     mk_note(toy_vault.PAPERS, "2020citC...1..1C", {"tags": ["paper"]}, "")
     mk_note(toy_vault.CONCEPTS / "methods", "con-citas", {"tags": ["methods"]},
             "Afirmación citada [[2020citC...1..1C]].\n")
-    link_from_index(toy_vault, "con-citas")
+    link_from_log(toy_vault, "con-citas")
     rc, out = run_lint(capsys)
     assert "sin bloque de verify-citations" in out
     # con el bloque presente deja de listarse
@@ -1457,7 +1464,7 @@ def test_con_citas_pero_sin_bloque_verify(toy_vault, capsys):
 def test_cobertura_concepto_sin_citas(toy_vault, capsys):
     mk_note(toy_vault.CONCEPTS / "methods", "sin-citas", {"tags": ["methods"]},
             "Afirma sin ninguna fuente.\n")
-    link_from_index(toy_vault, "sin-citas")
+    link_from_log(toy_vault, "sin-citas")
     rc, out = run_lint(capsys)
     assert rc == 0
     assert "- sin-citas → sin citas [[bibcode]]" in out
@@ -1473,7 +1480,7 @@ def test_campos_incompletos(toy_vault, capsys):
              "thesis_links": ["algo"], "bearing": None}, "")
     _bajado(toy_vault, "2020papA...1..1A")
     mk_note(toy_vault.CONCEPTS / "methods", "algo", {"tags": ["methods"]}, "destino [[test_star]]\n")
-    link_from_index(toy_vault, "algo")
+    link_from_log(toy_vault, "algo")
     rc, out = run_lint(capsys)
     assert rc == 0
     assert "sin P_rot: NEA no lo trae y el cuerpo no documenta uno citado" in out
@@ -1775,7 +1782,7 @@ def _nota_verif(toy_vault, stem, cuerpo):
     """Nota-concepto con bloque de verificación + el paper que cita (para no romper el wikilink)."""
     mk_note(toy_vault.PAPERS, "2020citC...1..1C", {"tags": ["paper"]}, "")
     mk_note(toy_vault.CONCEPTS / "methods", stem, {"tags": ["methods"]}, cuerpo)
-    link_from_index(toy_vault, stem)
+    link_from_log(toy_vault, stem)
 
 
 def _repo_con_nota(toy_vault, cuerpo, fecha="2020-01-01"):
@@ -1883,7 +1890,7 @@ def test_in_dir_no_confunde_carpeta_hermana_stars_borradores(toy_vault, capsys):
     paper_extraido(toy_vault)
     mk_note(toy_vault.WIKI / "stars-borradores", "borrador", {"tags": ["draft"]},
             "Mención de [[2020ext....1E]] en un borrador.\n")
-    link_from_index(toy_vault, "borrador")
+    link_from_log(toy_vault, "borrador")
     rc, out = run_lint(capsys)
     assert "Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog) (1)" in out
     assert "2020ext....1E → extraído" in out
@@ -1934,7 +1941,7 @@ def test_lint_sin_git_reporta_no_evaluado(toy_vault, capsys, monkeypatch):
     mk_note(toy_vault.QUERIES, "q1", {"tags": ["query"]},
             "Afirmación [[2020aaaA...1..1A]].\n\n## Verificación de citas (2020-01-01)\n")
     mk_note(toy_vault.PAPERS, "2020aaaA...1..1A", {"tags": ["paper"], "bibcode": "2020aaaA...1..1A"})
-    link_from_index(toy_vault, "q1", "2020aaaA...1..1A")
+    link_from_log(toy_vault, "q1", "2020aaaA...1..1A")
     monkeypatch.setattr(lint, "git_out", lambda *a: None)
     rc, rep = run_lint_reporte(capsys)
     assert rc != 0
@@ -1949,7 +1956,7 @@ def test_no_evaluado_no_contamina_conteos(toy_vault, capsys, monkeypatch):
     mk_note(toy_vault.QUERIES, "q1", {"tags": ["query"]},
             "Afirmación [[2020aaaA...1..1A]].\n\n## Verificación de citas (2020-01-01)\n")
     mk_note(toy_vault.PAPERS, "2020aaaA...1..1A", {"tags": ["paper"], "bibcode": "2020aaaA...1..1A"})
-    link_from_index(toy_vault, "q1", "2020aaaA...1..1A")
+    link_from_log(toy_vault, "q1", "2020aaaA...1..1A")
     monkeypatch.setattr(lint, "git_out", lambda *a: None)
     _, rep = run_lint_reporte(capsys)
     assert "Verificación stale" not in rep, (
@@ -2213,7 +2220,7 @@ def test_topics_en_nota_de_paper_es_schema_viejo(toy_vault, capsys):
     tolerante (@inv INV-13)."""
     mk_note(cfg.PAPERS, "2020Viejo",
             {"tags": ["paper"], "bibcode": "2020Viejo", "topics": ["rv", "activity"]})
-    link_from_index(toy_vault, "2020Viejo")
+    link_from_log(toy_vault, "2020Viejo")
     rc, rep = run_lint_reporte(capsys)
     assert rc == 1, "una nota con el campo pre-R-5 tiene que bloquear"
     assert "2020Viejo" in rep and "topics" in rep and "facets" in rep
@@ -2223,7 +2230,7 @@ def test_facets_vigente_no_dispara_el_detector(toy_vault, capsys):
     """Control de cordura: el campo vigente no puede caer en el detector del viejo."""
     mk_note(cfg.PAPERS, "2020Nuevo",
             {"tags": ["paper"], "bibcode": "2020Nuevo", "facets": ["rv"]})
-    link_from_index(toy_vault, "2020Nuevo")
+    link_from_log(toy_vault, "2020Nuevo")
     rc, rep = run_lint_reporte(capsys)
     # ⚠ se mira LA categoría, no el reporte entero: una nota mínima dispara otros backlogs
     # (INV-63, campos del schema) y `not in rep` los confundiría con éste.
@@ -2342,7 +2349,7 @@ def test_lint_detecta_tabla_de_papers_desactualizada(toy_vault, capsys):
     mn.write_star_note("test_star", force=True)
     mk_note(toy_vault.PAPERS, "2020nueA...1..1A",
             {"tags": ["paper"], "bibcode": "2020nueA...1..1A", "stars": ["Estrella Test"]}, "")
-    link_from_index(toy_vault, "test_star", "2020nueA...1..1A")
+    link_from_log(toy_vault, "test_star", "2020nueA...1..1A")
     _, rep = run_lint_reporte(capsys)
     assert "2020nueA...1..1A" in rep
     assert "lista de papers" in rep.lower()
@@ -2364,7 +2371,7 @@ def test_subconjunto_sin_declarar_reporta(toy_vault, capsys):
     mk_note(toy_vault.PAPERS, "2020relA...1..1A",
             {"tags": ["paper"], "bibcode": "2020relA...1..1A", "stars": ["Estrella Test"],
              "relevance": "high"}, "")
-    link_from_index(toy_vault, "2020relA...1..1A")
+    link_from_log(toy_vault, "2020relA...1..1A")
     _, rep = run_lint_reporte(capsys)
     assert _n_recorte(rep) == 1
     assert "no declaró" in rep
@@ -2376,7 +2383,7 @@ def test_subconjunto_declarado_baja_a_backlog(toy_vault, capsys):
     mk_note(toy_vault.PAPERS, "2020relA...1..1A",
             {"tags": ["paper"], "bibcode": "2020relA...1..1A", "stars": ["Estrella Test"],
              "relevance": "high"}, "")
-    link_from_index(toy_vault, "2020relA...1..1A")
+    link_from_log(toy_vault, "2020relA...1..1A")
     cfg.save_extraccion("test_star", subconjunto=True,
                         criterio="los 20 más citados + los 3 árbitros de la señal b")
     _, rep = run_lint_reporte(capsys)
@@ -2392,7 +2399,7 @@ def test_declarar_TODOS_con_core_sin_extraer_no_silencia(toy_vault, capsys):
     mk_note(toy_vault.PAPERS, "2020relA...1..1A",
             {"tags": ["paper"], "bibcode": "2020relA...1..1A", "stars": ["Estrella Test"],
              "relevance": "high"}, "")
-    link_from_index(toy_vault, "2020relA...1..1A")
+    link_from_log(toy_vault, "2020relA...1..1A")
     cfg.save_extraccion("test_star", subconjunto=False, criterio="todos los core del sujeto")
     _, rep = run_lint_reporte(capsys)
     assert _n_recorte(rep) == 1
@@ -2409,7 +2416,7 @@ def test_disputa_entre_autoridades_es_expresable(toy_vault, capsys):
              "disputes": [{"field": "spectral_type",
                            "posiciones": [{"source": "simbad", "value": "K0V"},
                                           {"source": "nea", "value": "G8V"}]}]}, "")
-    link_from_index(toy_vault, "test_star")
+    link_from_log(toy_vault, "test_star")
     rc, rep = run_lint_reporte(capsys)
     linea = [l for l in rep.splitlines() if l.startswith("## disputes mal formadas")][0]
     assert linea.endswith("(0)")
@@ -2421,7 +2428,7 @@ def test_source_inventado_sigue_bloqueando(toy_vault, capsys):
              "disputes": [{"field": "spectral_type",
                            "posiciones": [{"source": "wikipedia", "value": "K0V"},
                                           {"source": "nea", "value": "G8V"}]}]}, "")
-    link_from_index(toy_vault, "test_star")
+    link_from_log(toy_vault, "test_star")
     rc, rep = run_lint_reporte(capsys)
     assert rc == 1 and "wikipedia" in rep
 
@@ -2436,7 +2443,7 @@ def test_dos_notas_mismo_arxiv_id_bloquean(toy_vault, capsys):
             {"tags": ["paper"], "bibcode": "2020preX...1..1X", "arxiv_id": "2001.12345"}, "")
     mk_note(toy_vault.PAPERS, "2021pubY...1..1Y",
             {"tags": ["paper"], "bibcode": "2021pubY...1..1Y", "arxiv_id": "2001.12345"}, "")
-    link_from_index(toy_vault, "2020preX...1..1X", "2021pubY...1..1Y")
+    link_from_log(toy_vault, "2020preX...1..1X", "2021pubY...1..1Y")
     rc, rep = run_lint_reporte(capsys)
     assert rc == 1
     assert "2001.12345" in rep and "--rename-paper" in rep
@@ -2447,7 +2454,7 @@ def test_identidad_por_doi_tambien(toy_vault, capsys):
             {"tags": ["paper"], "bibcode": "2020aX....1..1X", "doi": "10.1/mismo"}, "")
     mk_note(toy_vault.PAPERS, "2021bY....1..1Y",
             {"tags": ["paper"], "bibcode": "2021bY....1..1Y", "doi": "10.1/mismo"}, "")
-    link_from_index(toy_vault, "2020aX....1..1X", "2021bY....1..1Y")
+    link_from_log(toy_vault, "2020aX....1..1X", "2021bY....1..1Y")
     rc, rep = run_lint_reporte(capsys)
     assert rc == 1 and "10.1/mismo" in rep
 
@@ -2464,7 +2471,7 @@ def test_LIST_FIELDS_cubre_los_campos_lista_del_schema(toy_vault, capsys):
     mk_note(toy_vault.PAPERS, "2020escA...1..1A",
             {"tags": ["paper"], "bibcode": "2020escA...1..1A", "keywords": "una-sola",
              "versions": "2019viejo"}, "")
-    link_from_index(toy_vault, "2020escA...1..1A")
+    link_from_log(toy_vault, "2020escA...1..1A")
     rc, rep = run_lint_reporte(capsys)
     assert rc != 0
     assert "`keywords` no es una lista" in rep and "`versions` no es una lista" in rep
@@ -2476,7 +2483,7 @@ def test_versions_no_cuenta_como_duplicado(toy_vault, capsys):
     mk_note(toy_vault.PAPERS, "2021pubY...1..1Y",
             {"tags": ["paper"], "bibcode": "2021pubY...1..1Y", "arxiv_id": "2001.12345",
              "versions": [{"bibcode": "2020preX...1..1X", "pdf_source": "eprint"}]}, "")
-    link_from_index(toy_vault, "2021pubY...1..1Y")
+    link_from_log(toy_vault, "2021pubY...1..1Y")
     rc, rep = run_lint_reporte(capsys)
     assert rc == 0
 
@@ -2493,7 +2500,7 @@ def test_cita_a_retractado_sin_marca_bloquea(toy_vault, capsys):
     mk_note(toy_vault.PAPERS, "2019retR...1..1R", RETRACTADO, "")
     mk_note(toy_vault.CONCEPTS / "methods", "c1", {"tags": ["methods"]},
             "El período es de 34 d [[2019retR...1..1R]].\n")
-    link_from_index(toy_vault, "c1", "2019retR...1..1R")
+    link_from_log(toy_vault, "c1", "2019retR...1..1R")
     rc, rep = run_lint_reporte(capsys)
     assert rc == 1
     assert "c1" in rep and "⛔retractada" in rep       # el mensaje trae la marca a usar
@@ -2506,7 +2513,7 @@ def test_cita_marcada_no_bloquea_y_se_lista(toy_vault, capsys):
     mk_note(toy_vault.PAPERS, "2019retR...1..1R", RETRACTADO, "")
     mk_note(toy_vault.CONCEPTS / "methods", "c1", {"tags": ["methods"]},
             "El período es de 34 d [[2019retR...1..1R]] ⛔retractada, aunque nadie lo re-midió.\n")
-    link_from_index(toy_vault, "c1", "2019retR...1..1R")
+    link_from_log(toy_vault, "c1", "2019retR...1..1R")
     rc, rep = run_lint_reporte(capsys)
     linea = [l for l in rep.splitlines() if l.startswith("## Prosa sostenida por fuente retractada")]
     assert linea and linea[0].endswith("(1)")
@@ -2518,7 +2525,7 @@ def test_marca_no_se_confunde_con_prosa(toy_vault, capsys):
     mk_note(toy_vault.PAPERS, "2019retR...1..1R", RETRACTADO, "")
     mk_note(toy_vault.CONCEPTS / "methods", "c1", {"tags": ["methods"]},
             "La señal fue retractada más tarde [[2019retR...1..1R]].\n")
-    link_from_index(toy_vault, "c1", "2019retR...1..1R")
+    link_from_log(toy_vault, "c1", "2019retR...1..1R")
     rc, rep = run_lint_reporte(capsys)
     assert rc == 1
 
@@ -2564,7 +2571,7 @@ def test_inferencia_pelada_bloquea(toy_vault, capsys):
     respaldo del P_rot)."""
     mk_note(cfg.CONCEPTS / "methods", "infer", {"tags": ["concept"], "name": "infer"},
             "El período es de 34 d (inferencia).\n")
-    link_from_index(toy_vault, "infer")
+    link_from_log(toy_vault, "infer")
     rc, rep = run_lint_reporte(capsys)
     assert rc == 1
     assert "infer" in _seccion(rep, "`inferencia` sin premisas")
@@ -2574,7 +2581,7 @@ def test_inferencia_con_premisas_pasa(toy_vault, capsys):
     mk_note(cfg.PAPERS, "2020Fuente", {"tags": ["paper"], "bibcode": "2020Fuente"})
     mk_note(cfg.CONCEPTS / "methods", "infer2", {"tags": ["concept"], "name": "infer2"},
             "El período es de 34 d (inferencia de [[2020Fuente]]).\n")
-    link_from_index(toy_vault, "infer2", "2020Fuente")
+    link_from_log(toy_vault, "infer2", "2020Fuente")
     _, rep = run_lint_reporte(capsys)
     assert "infer2" not in _seccion(rep, "`inferencia` sin premisas")
 
@@ -2584,7 +2591,7 @@ def test_la_palabra_inferencia_en_prosa_no_es_una_marca(toy_vault, capsys):
     **entre paréntesis** al cierre de una afirmación; «la inferencia bayesiana permite…» no lo es."""
     mk_note(cfg.CONCEPTS / "methods", "infer3", {"tags": ["concept"], "name": "infer3"},
             "La inferencia bayesiana permite estimar el período sin asumir una forma.\n")
-    link_from_index(toy_vault, "infer3")
+    link_from_log(toy_vault, "infer3")
     _, rep = run_lint_reporte(capsys)
     assert "infer3" not in _seccion(rep, "`inferencia` sin premisas")
 
@@ -2606,7 +2613,7 @@ def test_status_de_hipotesis_fuera_del_vocabulario_bloquea(toy_vault, capsys):
     `supuesto operativo con caveat conocido`. Mismo patrón que `role` (#73)."""
     mk_note(cfg.CONCEPTS / "hypotheses", "hip1",
             {"tags": ["concept"], "name": "hip1", "status": "supuesto operativo con caveat"})
-    link_from_index(toy_vault, "hip1")
+    link_from_log(toy_vault, "hip1")
     rc, rep = run_lint_reporte(capsys)
     assert rc == 1 and "hip1" in _seccion(rep, "status")
 
@@ -2615,7 +2622,7 @@ def test_status_del_vocabulario_pasa(toy_vault, capsys):
     for i, st in enumerate(("abierta", "sostenida", "disputada", "refutada")):
         mk_note(cfg.CONCEPTS / "hypotheses", f"ok{i}",
                 {"tags": ["concept"], "name": f"ok{i}", "status": st})
-    link_from_index(toy_vault, *[f"ok{i}" for i in range(4)])
+    link_from_log(toy_vault, *[f"ok{i}" for i in range(4)])
     _, rep = run_lint_reporte(capsys)
     assert not any(f"ok{i}" in _seccion(rep, "status") for i in range(4))
 
@@ -2626,7 +2633,7 @@ def test_bearing_en_una_nota_de_paper_es_schema_viejo(toy_vault, capsys):
     en el paper obligaba a elegir una sola postura para todas."""
     mk_note(cfg.PAPERS, "2020Bear", {"tags": ["paper"], "bibcode": "2020Bear",
                                      "thesis_links": ["hip"], "bearing": "supports"})
-    link_from_index(toy_vault, "2020Bear")
+    link_from_log(toy_vault, "2020Bear")
     rc, rep = run_lint_reporte(capsys)
     assert rc == 1 and "2020Bear" in _seccion(rep, "bearing")
 
@@ -2642,7 +2649,7 @@ def test_data_local_no_bloquea_ni_toca_disco(toy_vault, capsys, monkeypatch):
                                      "planets": [], "activity_indicators_expected": ["S-index"],
                                      "P_rot_days": None},
             "P_rot 34 d [[2020X]].\n")
-    link_from_index(toy_vault, "test_star")
+    link_from_log(toy_vault, "test_star")
     rc, rep = run_lint_reporte(capsys)
     assert "data_local" not in _seccion(rep, "⛔"), "no puede bloquear"
 
@@ -2654,7 +2661,7 @@ def test_paper_sin_ningun_destino_bloquea(toy_vault, capsys):
     eso si alguien lo linkea — por eso se siembra CON link entrante."""
     mk_note(cfg.PAPERS, "2020Nada", {"tags": ["paper"], "bibcode": "2020Nada",
                                      "stars": [], "thesis_links": [], "methods": []})
-    link_from_index(toy_vault, "2020Nada")
+    link_from_log(toy_vault, "2020Nada")
     rc, rep = run_lint_reporte(capsys)
     assert rc == 1 and "2020Nada" in _seccion(rep, "sin destino")
 
@@ -2688,7 +2695,7 @@ def test_lente_igual_calla(toy_vault, capsys):
     Es lo que hace viable el chequeo: cuando habla, hay algo real.  @inv INV-58"""
     _registro_con_lente("test_star", LENTE_VIEJA)
     _paper_de_la_estrella("2020A", titulo="Starspot evolution", abstract="activity")
-    link_from_index(toy_vault, "2020A")
+    link_from_log(toy_vault, "2020A")
     rc, rep = run_lint_reporte(capsys)
     assert "Lente desincronizada" in rep, "la categoría tiene que existir en el reporte"
     assert _seccion(rep, "Lente desincronizada").strip() == "", "lente igual: sin hallazgos"
@@ -2703,7 +2710,7 @@ def test_lente_cambiada_reporta_diff_por_ficha(toy_vault, capsys):
     _registro_con_lente("test_star", LENTE_VIEJA, bibcodes=("2020A", "2021B"))
     _paper_de_la_estrella("2020A", titulo="Starspot evolution", abstract="activity everywhere")
     _paper_de_la_estrella("2021B", titulo="Radial velocity survey", abstract="radial velocity")
-    link_from_index(toy_vault, "2020A", "2021B")
+    link_from_log(toy_vault, "2020A", "2021B")
     rc, rep = run_lint_reporte(capsys)
     sec = _seccion(rep, "Lente desincronizada")
     assert "faceta `actividad` eliminada" in sec, sec
@@ -2717,7 +2724,7 @@ def test_registro_sin_lente_no_evaluado(toy_vault, capsys):
     hallazgo lo DICE; callarlo dejaría la ficha leyéndose como clasificada con la regla vigente."""
     _registro_con_lente("test_star", None)
     _paper_de_la_estrella("2020A", titulo="Starspot evolution", abstract="activity")
-    link_from_index(toy_vault, "2020A")
+    link_from_log(toy_vault, "2020A")
     rc, rep = run_lint_reporte(capsys)
     sec = _seccion(rep, "Lente desincronizada")
     assert "no evaluado" in sec and "test_star" in sec, sec
@@ -2732,7 +2739,7 @@ def test_solo_cambian_los_doctypes_de_ruido_se_declara_no_evaluable(toy_vault, c
     write_yaml(cfg.OBJECTIVE_YAML, obj)
     _registro_con_lente("test_star", LENTE_VIEJA)
     _paper_de_la_estrella("2020A", titulo="Starspot evolution", abstract="activity")
-    link_from_index(toy_vault, "2020A")
+    link_from_log(toy_vault, "2020A")
     rc, rep = run_lint_reporte(capsys)
     sec = _seccion(rep, "Lente desincronizada")
     assert "no lo puede evaluar" in sec and "doctype" in sec, sec
@@ -2759,7 +2766,7 @@ def test_autoreferencia_detectada(toy_vault, capsys):
     _con_downstream(["ICA"])
     _concepto_con_prosa("El valor lo usan los scripts de ICA para fijar el corte.", "conc_nombre")
     _concepto_con_prosa("Supuesto de trabajo del pipeline: la señal es aditiva.", "conc_generico")
-    link_from_index(toy_vault, "conc_nombre", "conc_generico")
+    link_from_log(toy_vault, "conc_nombre", "conc_generico")
     rc, rep = run_lint_reporte(capsys)
     sec = _seccion(rep, "Fuga de implementación")
     assert "conc_nombre" in sec and "ICA" in sec, sec
@@ -2771,7 +2778,7 @@ def test_downstream_vacio_apagado(toy_vault, capsys):
     """Sin `downstream` declarado esa mitad queda apagada y **no** hay WARN de ausencia: declarar a
     quién le sirve la bóveda es opcional por diseño (a diferencia de `concept_areas`)."""
     _concepto_con_prosa("El valor lo usan los scripts de ICA para fijar el corte.", "conc_nombre")
-    link_from_index(toy_vault, "conc_nombre")
+    link_from_log(toy_vault, "conc_nombre")
     rc, rep = run_lint_reporte(capsys)
     assert "conc_nombre" not in _seccion(rep, "Fuga de implementación")
     assert "downstream" not in rep, "la ausencia no se reporta"
@@ -2784,7 +2791,7 @@ def test_nombre_declarado_en_uso_legitimo_no_marca(toy_vault, capsys):
     _con_downstream(["ICA"])
     _concepto_con_prosa("ICA es una separación ciega de fuentes [[2000Hyvarinen]]; aplicando ICA "
                         "a las CCF se recuperan las componentes.", "conc_metodo")
-    link_from_index(toy_vault, "conc_metodo")
+    link_from_log(toy_vault, "conc_metodo")
     rc, rep = run_lint_reporte(capsys)
     assert "conc_metodo" not in _seccion(rep, "Fuga de implementación")
 
@@ -2795,7 +2802,7 @@ def test_blockquote_sigue_exento(toy_vault, capsys):
     _con_downstream(["ICA"])
     _concepto_con_prosa("> Alcance: nada de esto describe los scripts de ICA ni su pipeline.",
                         "conc_bq")
-    link_from_index(toy_vault, "conc_bq")
+    link_from_log(toy_vault, "conc_bq")
     rc, rep = run_lint_reporte(capsys)
     assert "conc_bq" not in _seccion(rep, "Fuga de implementación")
 
@@ -2823,7 +2830,7 @@ def test_alcance_sin_declarar_marca(toy_vault, capsys):
     (cfg.FULLTEXT / "test_star").mkdir(parents=True, exist_ok=True)
     (cfg.FULLTEXT / "test_star" / "2020X.txt").write_text(
         "El corpus no dice nada sobre eso. " * 20, encoding="utf-8")
-    link_from_index(toy_vault, "hip_pelada", "2020X")
+    link_from_log(toy_vault, "hip_pelada", "2020X")
     rc, rep = run_lint_reporte(capsys)
     sec = _seccion(rep, "Alcance de hipótesis")
     assert "hip_pelada" in sec and "universal" in sec, sec
@@ -2841,7 +2848,7 @@ def test_alcance_quedo_corto_marca(toy_vault, capsys):
     _hipotesis("hip_corta",
                "# hip\n\n> Alcance 2026-01-01 · estrellas: [test_star] · 2 papers · 1 con hits\n\n"
                "Sostiene [[2020X]].\n")
-    link_from_index(toy_vault, "hip_corta")
+    link_from_log(toy_vault, "hip_corta")
     rc, rep = run_lint_reporte(capsys)
     sec = _seccion(rep, "Alcance de hipótesis")
     assert "hip_corta" in sec and "+3" in sec and "2026-01-01" in sec, sec
@@ -2857,7 +2864,7 @@ def test_alcance_declarado_pero_no_evaluable_se_reporta(toy_vault, capsys):
     _fulltexts("test_star", 5)
     _hipotesis("hip_sin_slugs", "# hip\n\n> Alcance 2026-01-01 · 2 papers · 1 con hits\n\nX.\n")
     _hipotesis("hip_sin_n", "# hip\n\n> Alcance 2026-01-01 · estrellas: [test_star]\n\nX.\n")
-    link_from_index(toy_vault, "hip_sin_slugs", "hip_sin_n")
+    link_from_log(toy_vault, "hip_sin_slugs", "hip_sin_n")
     _rc, rep = run_lint_reporte(capsys)
     sec = _seccion(rep, "Alcance de hipótesis")
     assert "hip_sin_slugs" in sec and "no nombra ningún slug" in sec, sec
@@ -2870,7 +2877,7 @@ def test_alcance_al_dia_calla(toy_vault, capsys):
     _hipotesis("hip_ok",
                "# hip\n\n> Alcance 2026-01-01 · estrellas: [test_star] · 2 papers · 1 con hits\n\n"
                "Sostiene [[2020X]].\n")
-    link_from_index(toy_vault, "hip_ok")
+    link_from_log(toy_vault, "hip_ok")
     rc, rep = run_lint_reporte(capsys)
     assert "hip_ok" not in _seccion(rep, "Alcance de hipótesis")
 
@@ -2882,7 +2889,7 @@ def test_alcance_con_slug_inexistente_lo_nombra(toy_vault, capsys):
     _hipotesis("hip_typo",
                "# hip\n\n> Alcance 2026-01-01 · estrellas: [test_star, tets_star] · 2 papers\n\n"
                "Sostiene [[2020X]].\n")
-    link_from_index(toy_vault, "hip_typo")
+    link_from_log(toy_vault, "hip_typo")
     rc, rep = run_lint_reporte(capsys)
     sec = _seccion(rep, "Alcance de hipótesis")
     assert "tets_star" in sec and "typo" in sec, sec
@@ -2897,7 +2904,7 @@ def test_la_tabla_estampada_de_planetas_no_cuenta_como_prosa(toy_vault, capsys):
     write_gt(toy_vault, [gt_planet(l) for l in "bcd"])
     import make_notes as mn
     mn.write_star_note("test_star", force=False)
-    link_from_index(toy_vault, "test_star")
+    link_from_log(toy_vault, "test_star")
     rc, rep = run_lint_reporte(capsys)
     sec = _seccion(rep, "Campos incompletos")
     for l in "bcd":
@@ -3074,7 +3081,7 @@ def test_ground_truth_cambiado_pide_la_marca_y_con_la_marca_baja(toy_vault, caps
     mk_note(toy_vault.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test",
                                            "slug": "test_star"},
             "La temperatura efectiva es 5344 K.\n")
-    link_from_index(toy_vault, "test_star")
+    link_from_log(toy_vault, "test_star")
     _, out = run_lint_reporte(capsys)
     assert "NEA cambió host.teff_K" in out and "5344" in out and "5390" in out
     assert "Ground-truth que cambió bajo la prosa, sin marcar" in out
@@ -3111,7 +3118,7 @@ def test_cita_sin_fulltext_en_una_ficha_de_estrella_es_precondicion(toy_vault, c
     mk_note(toy_vault.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test",
                                            "slug": "test_star"},
             "Según [[2020citC...1..1C]] pasa X.\n")
-    link_from_index(toy_vault, "test_star", "2020citC...1..1C")
+    link_from_log(toy_vault, "test_star", "2020citC...1..1C")
     _, out = run_lint_reporte(capsys)
     assert "cita 2020citC...1..1C sin fulltext" in out
 
@@ -3129,7 +3136,7 @@ def test_nota_con_citas_y_sin_bloque_de_verificacion_no_cierra(toy_vault, capsys
     mk_note(toy_vault.PAPERS, "2020citC...1..1C", {"tags": ["paper"]}, "")
     mk_note(toy_vault.CONCEPTS / "methods", "con-citas", {"tags": ["methods"]},
             "Afirmación citada [[2020citC...1..1C]].\n")
-    link_from_index(toy_vault, "con-citas", "2020citC...1..1C")
+    link_from_log(toy_vault, "con-citas", "2020citC...1..1C")
     assert lint.collect(cierre=True).n_block() > 0
     assert lint.collect(cierre=False).n_block() == 0, "sin --cierre es backlog, no bloqueante"
 
@@ -3405,7 +3412,7 @@ def test_el_schema_por_tipo_de_nota_se_chequea(toy_vault, capsys):
     `null` lo que la autoridad no trae, y rellenarlo con literatura está prohibido). Backlog, no
     bloqueante: el corpus viejo tiene notas anteriores al campo.  @inv INV-63"""
     mk_note(toy_vault.PAPERS, "2020minA...1..1A", {"tags": ["paper"], "bibcode": "2020minA...1..1A"})
-    link_from_index(toy_vault, "2020minA...1..1A")
+    link_from_log(toy_vault, "2020minA...1..1A")
     rc, rep = run_lint_reporte(capsys)
     sec = _seccion(rep, "schema de su tipo")
     assert "2020minA...1..1A" in sec and "`role`" in sec, sec
@@ -3506,7 +3513,7 @@ def test_cita_sin_txt_en_una_nota_de_PAPER_se_reporta(toy_vault, capsys):
             {"tags": ["paper"], "bibcode": "2020citA...1..1A"},
             "## Vista — Estrella Test\n\nSegunda mano: el valor es de [[1997fueB...1..1B]].\n")
     mk_note(toy_vault.PAPERS, "1997fueB...1..1B", {"tags": ["paper"], "bibcode": "1997fueB...1..1B"})
-    link_from_index(toy_vault, "2020citA...1..1A", "1997fueB...1..1B")
+    link_from_log(toy_vault, "2020citA...1..1A", "1997fueB...1..1B")
     _rc, rep = run_lint_reporte(capsys)
     sec = _seccion(rep, "Citas no verificables")
     assert "1997fueB...1..1B" in sec, sec
@@ -3527,7 +3534,7 @@ def test_vistas_en_cuerpo_no_inventa_incoherencias(toy_vault, capsys):
              "stars": ["Estrella Test"],
              "vistas": [{"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-08-27",
                          "txt": "test_star", "fuente": "pdf"}]}, cuerpo)
-    link_from_index(toy_vault, "2020visA...1..1A")
+    link_from_log(toy_vault, "2020visA...1..1A")
     _rc, rep = run_lint_reporte(capsys)
     sec = _seccion(rep, "vistas[]")
     assert "2020visA" not in sec, sec
@@ -3579,7 +3586,7 @@ def _dos_sujetos(toy_vault):
             "Afirmación de la estrella [[2020ajeC...1..1A]].\n")
     mk_note(toy_vault.CONCEPTS / "methods", "procesos-gaussianos", {"tags": ["methods"]},
             "Afirmación del tema [[2021propC...1..1B]].\n")
-    link_from_index(toy_vault, "test_star", "procesos-gaussianos",
+    link_from_log(toy_vault, "test_star", "procesos-gaussianos",
                     "2020ajeC...1..1A", "2021propC...1..1B")
 
 
@@ -3611,7 +3618,7 @@ def test_el_alcance_no_debilita_a_los_bloqueantes(toy_vault):
     _dos_sujetos(toy_vault)
     mk_note(toy_vault.CONCEPTS / "methods", "otro-tema", {"tags": ["methods"]},
             "Link a una página que no existe: [[pagina-fantasma]].\n")
-    link_from_index(toy_vault, "test_star", "procesos-gaussianos", "otro-tema",
+    link_from_log(toy_vault, "test_star", "procesos-gaussianos", "otro-tema",
                     "2020ajeC...1..1A", "2021propC...1..1B")
     gp = lint.collect(cierre=True, slug="gp")
     rotos = gp.por_clave("broken")
@@ -3731,7 +3738,7 @@ def test_pending_sin_motivo_se_reporta_pero_no_bloquea(toy_vault, capsys):
             {"tags": ["paper"], "thesis_links": ["ica"], "pending_source": "adquisicion",
              "doi": "10.1/x"}, "")
     mk_note(toy_vault.CONCEPTS / "methods", "ica", {"tags": ["methods"]}, "Tema.\n")
-    link_from_index(toy_vault, "ica", "2001Libro")
+    link_from_log(toy_vault, "ica", "2001Libro")
     rc, rep = run_lint_reporte(capsys)
     assert "sin `pending_motivo`" in rep
     assert rc == 0, "backlog: una fuente sin conseguir no invalida ninguna afirmación"
@@ -3745,7 +3752,7 @@ def test_pending_fuera_del_vocabulario_se_nombra(toy_vault, capsys):
             {"tags": ["paper"], "thesis_links": ["ica"], "pending_source": "paywal",
              "pending_motivo": "x", "doi": "10.1/x"}, "")
     mk_note(toy_vault.CONCEPTS / "methods", "ica", {"tags": ["methods"]}, "Tema.\n")
-    link_from_index(toy_vault, "ica", "2001Typo")
+    link_from_log(toy_vault, "ica", "2001Typo")
     _, rep = run_lint_reporte(capsys)
     assert "fuera del vocabulario" in rep
 
@@ -3757,7 +3764,7 @@ def test_documento_largo_sin_alcance_se_reporta(toy_vault, capsys):
     mk_note(toy_vault.PAPERS, "2001Libro",
             {"tags": ["paper"], "thesis_links": ["ica"], "unidad_cita": "pagina"}, "")
     mk_note(toy_vault.CONCEPTS / "methods", "ica", {"tags": ["methods"]}, "Tema.\n")
-    link_from_index(toy_vault, "ica", "2001Libro")
+    link_from_log(toy_vault, "ica", "2001Libro")
     rc, rep = run_lint_reporte(capsys)
     assert "sin `alcance`" in rep and rc == 0, "backlog: no invalida lo que la nota afirma"
 
@@ -3769,7 +3776,7 @@ def test_unidad_de_cita_invalida_bloquea(toy_vault, capsys):
             {"tags": ["paper"], "thesis_links": ["ica"], "unidad_cita": "paginas",
              "alcance": "cap. 6"}, "")
     mk_note(toy_vault.CONCEPTS / "methods", "ica", {"tags": ["methods"]}, "Tema.\n")
-    link_from_index(toy_vault, "ica", "2001Libro")
+    link_from_log(toy_vault, "ica", "2001Libro")
     rc, rep = run_lint_reporte(capsys)
     assert "fuera del vocabulario" in rep and rc == 1
 
@@ -3794,7 +3801,7 @@ def test_core_sin_pdf_no_se_confunde_con_sin_leer(toy_vault, capsys):
     mk_note(toy_vault.PAPERS, "2020Falta..1..1A",
             {"tags": ["paper"], "stars": ["Estrella Test"], "relevance": "high"}, "")
     mk_note(toy_vault.STARS, "test_star", {"tags": ["star"], "slug": "test_star"}, "Ficha.\n")
-    link_from_index(toy_vault, "test_star", "2020Leido..1..1A", "2020Falta..1..1A")
+    link_from_log(toy_vault, "test_star", "2020Leido..1..1A", "2020Falta..1..1A")
     _, rep = run_lint_reporte(capsys)
     sin_fuente = [l for l in rep.splitlines() if "2020Falta" in l]
     sin_leer = [l for l in rep.splitlines() if "2020Leido" in l]
@@ -3961,7 +3968,7 @@ def test_la_marca_de_ground_truth_se_evalua_POR_CAMPO(toy_vault, capsys):
                                            "slug": "test_star"},
             "La temperatura efectiva es 5344 K ⚠desactualizado.\n\n"
             "El período de b es 3.1 d.\n")
-    link_from_index(toy_vault, "test_star")
+    link_from_log(toy_vault, "test_star")
     r = lint.collect()
     sin_marcar = [d for _, d in r.por_clave("gt_cambiado").items]
     marcados = [d for _, d in r.por_clave("gt_cambiado_marcado").items]
@@ -4445,7 +4452,7 @@ def test_traduccion_estampada_no_dispara_fuga(toy_vault, capsys):
             "# 2007AN....328.1043C\n\n"
             "## Traducción del abstract\nAdemás, nuestro código utiliza un nuevo esquema de "
             "regularización basado en entropía máxima local.\n")
-    link_from_index(toy_vault, "2007AN....328.1043C")
+    link_from_log(toy_vault, "2007AN....328.1043C")
     rc, rep = run_lint_reporte(capsys)
     assert "2007AN....328.1043C" not in _seccion(rep, "Fuga de implementación"), rep
     assert rc == 0
@@ -4462,7 +4469,7 @@ def test_la_exencion_no_alcanza_a_la_vista(toy_vault, capsys):
             "# 2015MNRAS.447.1984D\n\n"
             "## Traducción del abstract\nPresentamos nuestro método.\n\n"
             "## Vista — tau Cet\nLa perilla del contraste se ajusta así.\n")
-    link_from_index(toy_vault, "2015MNRAS.447.1984D")
+    link_from_log(toy_vault, "2015MNRAS.447.1984D")
     rc, rep = run_lint_reporte(capsys)
     sec = _seccion(rep, "Fuga de implementación")
     assert "2015MNRAS.447.1984D" in sec and "perilla" in sec, sec
@@ -4480,7 +4487,7 @@ def test_vista_fechada_sin_fuente_en_disco_es_backlog(toy_vault, capsys):
              "vistas": [{"sujeto": "tau Cet", "tipo": "star", "fecha": "2026-08-29",
                          "fuente": "pdf"}]},
             "# 2021PASP..133g4501V\n\n## Vista — tau Cet\nDice X.\n")
-    link_from_index(toy_vault, "2021PASP..133g4501V")
+    link_from_log(toy_vault, "2021PASP..133g4501V")
     rc, rep = run_lint_reporte(capsys)
     sec = _seccion(rep, "ya no es re-verificable")
     assert "2021PASP..133g4501V" in sec, rep
@@ -4496,7 +4503,7 @@ def test_vista_con_su_txt_en_disco_no_es_hallazgo(toy_vault, capsys):
              "vistas": [{"sujeto": "tau Cet", "tipo": "star", "fecha": "2026-08-29",
                          "fuente": "pdf"}]},
             "# 2021PASP..133g4501V\n\n## Vista — tau Cet\nDice X.\n")
-    link_from_index(toy_vault, "2021PASP..133g4501V")
+    link_from_log(toy_vault, "2021PASP..133g4501V")
     _rc, rep = run_lint_reporte(capsys)
     assert "2021PASP..133g4501V" not in _seccion(rep, "ya no es re-verificable")
 
@@ -4522,7 +4529,7 @@ def test_duplicado_sin_identificador_es_backlog(toy_vault, capsys):
     `ica`: 6 de 52 core sin identificador (12 % invisible al chequeo) y ahí un duplicado real."""
     _paper_sin_id("2023eas..conf.1090L", _ABS, toy_vault)
     _paper_sin_id("2023spfi.confE..19L", _ABS, toy_vault)
-    link_from_index(toy_vault, "2023eas..conf.1090L", "2023spfi.confE..19L")
+    link_from_log(toy_vault, "2023eas..conf.1090L", "2023spfi.confE..19L")
     rc, rep = run_lint_reporte(capsys)
     sec = _seccion(rep, "Posible duplicado SIN doi ni arxiv_id")
     assert "2023eas..conf.1090L" in sec and "2023spfi.confE..19L" in sec, rep
@@ -4534,7 +4541,7 @@ def test_duplicado_por_abstract_truncado(toy_vault, capsys):
     así que exigir igualdad exacta lo perdería justo donde el duplicado es más probable."""
     _paper_sin_id("2023eas..conf.1090L", _ABS, toy_vault)
     _paper_sin_id("2023spfi.confE..19L", _ABS[:320], toy_vault)
-    link_from_index(toy_vault, "2023eas..conf.1090L", "2023spfi.confE..19L")
+    link_from_log(toy_vault, "2023eas..conf.1090L", "2023spfi.confE..19L")
     _rc, rep = run_lint_reporte(capsys)
     assert "2023spfi.confE..19L" in _seccion(rep, "Posible duplicado SIN doi ni arxiv_id"), rep
 
@@ -4544,7 +4551,7 @@ def test_con_doi_no_entra_a_esta_categoria(toy_vault, capsys):
     en dos categorías con severidades distintas es cómo una de las dos se deja de mirar."""
     _paper_sin_id("2023eas..conf.1090L", _ABS, toy_vault, doi="10.1/a")
     _paper_sin_id("2023spfi.confE..19L", _ABS, toy_vault, doi="10.1/b")
-    link_from_index(toy_vault, "2023eas..conf.1090L", "2023spfi.confE..19L")
+    link_from_log(toy_vault, "2023eas..conf.1090L", "2023spfi.confE..19L")
     _rc, rep = run_lint_reporte(capsys)
     assert "2023eas..conf.1090L" not in _seccion(rep, "Posible duplicado SIN doi ni arxiv_id")
 
@@ -4554,7 +4561,7 @@ def test_abstract_placeholder_no_agrupa(toy_vault, capsys):
     él la categoría nacería con un hallazgo gigante que no es un duplicado de nada."""
     _paper_sin_id("2023eas..conf.1090L", "_(no disponible)_", toy_vault)
     _paper_sin_id("2023spfi.confE..19L", "_(no disponible)_", toy_vault)
-    link_from_index(toy_vault, "2023eas..conf.1090L", "2023spfi.confE..19L")
+    link_from_log(toy_vault, "2023eas..conf.1090L", "2023spfi.confE..19L")
     _rc, rep = run_lint_reporte(capsys)
     assert "2023eas..conf.1090L" not in _seccion(rep, "Posible duplicado SIN doi ni arxiv_id")
 
@@ -4574,7 +4581,7 @@ def test_reclamo_refutado_por_la_vista_es_backlog(toy_vault, capsys):
             "# 2012MNRAS.421..666G\n\n## Vista — ica\nAporte: Nada. Es álgebra tensorial.\n")
     mk_note(cfg.CONCEPTS / "methods", "ica",
             {"tags": ["concept"], "name": "ica", "confidence": "medium"}, "# ica\n")
-    link_from_index(toy_vault, "2012MNRAS.421..666G", "ica")
+    link_from_log(toy_vault, "2012MNRAS.421..666G", "ica")
     rc, rep = run_lint_reporte(capsys)
     sec = _seccion(rep, "REFUTA un reclamo")
     assert "2012MNRAS.421..666G" in sec and "ica" in sec, rep
@@ -4589,7 +4596,7 @@ def test_refuta_de_un_sujeto_que_ya_no_reclama_no_es_hallazgo(toy_vault, capsys)
              "vistas": [{"sujeto": "tau Cet", "tipo": "star", "fecha": "2026-08-29",
                          "fuente": "pdf", "refuta": ["ica"]}]},
             "# 2012MNRAS.421..666G\n\n## Vista — tau Cet\nDice X.\n")
-    link_from_index(toy_vault, "2012MNRAS.421..666G")
+    link_from_log(toy_vault, "2012MNRAS.421..666G")
     _rc, rep = run_lint_reporte(capsys)
     assert "2012MNRAS.421..666G" not in _seccion(rep, "REFUTA un reclamo")
 
@@ -4634,7 +4641,7 @@ def test_fila_de_tabla_que_no_renderiza_bloquea(toy_vault, capsys):
     nota certificaba como chequeada una afirmación que su propio artefacto no muestra."""
     mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
             "# nota\n\n| A | B |\n|---|---|\n| uno | dos |\n| tres | cuatro | cinco | seis |\n")
-    link_from_index(toy_vault, "nota")
+    link_from_log(toy_vault, "nota")
     rc, rep = run_lint_reporte(capsys)
     sec = _seccion(rep, "fila de tabla que NO renderiza")
     assert "nota" in sec and "4 celda(s)" in sec, rep
@@ -4645,7 +4652,7 @@ def test_una_tabla_bien_formada_no_es_hallazgo(toy_vault, capsys):
     """#227 — el simétrico, y con el escape de INV-99: un `\\|` dentro de una celda no la parte."""
     mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
             "# nota\n\n| A | B |\n|---|---|\n| uno | dos |\n| con \\| barra | otra |\n")
-    link_from_index(toy_vault, "nota")
+    link_from_log(toy_vault, "nota")
     _rc, rep = run_lint_reporte(capsys)
     assert "nota" not in _seccion(rep, "fila de tabla que NO renderiza"), rep
 
@@ -4656,7 +4663,7 @@ def test_backtick_sin_cerrar_es_backlog(toy_vault, capsys):
     mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
             "# nota\n\nUn párrafo que abre un `inline-code y nunca lo cierra, y sigue hablando de\n"
             "otras cosas durante un buen rato sin cerrarlo jamás en ningún lado.\n")
-    link_from_index(toy_vault, "nota")
+    link_from_log(toy_vault, "nota")
     rc, rep = run_lint_reporte(capsys)
     assert "sin cerrar" in _seccion(rep, "Forma del artefacto: marcador"), rep
     assert rc == 0, "backlog: molesta, no oculta"
@@ -4669,7 +4676,7 @@ def test_una_formula_envuelta_no_dispara(toy_vault, capsys):
     mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
             "# nota\n\nEl paso itera con $w_i^{+} = E[X g(w_i^T X)] -\n"
             "E[g'(w_i^T X)] w_i$ hasta converger.\n")
-    link_from_index(toy_vault, "nota")
+    link_from_log(toy_vault, "nota")
     _rc, rep = run_lint_reporte(capsys)
     assert "sin cerrar" not in _seccion(rep, "Forma del artefacto: marcador"), rep
 
@@ -4683,7 +4690,7 @@ def test_parrafo_duplicado_es_backlog(toy_vault, capsys):
     mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
             f"# nota\n\n{p}sí, con S/N alto.\n\nOtro párrafo en el medio del todo.\n\n{p}no, por "
             "debajo de un umbral.\n")
-    link_from_index(toy_vault, "nota")
+    link_from_log(toy_vault, "nota")
     rc, rep = run_lint_reporte(capsys)
     assert "párrafo repetido" in _seccion(rep, "Forma del artefacto: marcador"), rep
     assert rc == 0
@@ -4701,7 +4708,7 @@ def test_alias_con_nota_propia_bloquea(toy_vault, capsys):
             "# a\n")
     mk_note(cfg.PAPERS, "2022eas..conf.1709L",
             {"bibcode": "2022eas..conf.1709L", "tags": ["paper"], "stars": ["tau Cet"]}, "# b\n")
-    link_from_index(toy_vault, "2023MNRAS.521.1233L", "2022eas..conf.1709L")
+    link_from_log(toy_vault, "2023MNRAS.521.1233L", "2022eas..conf.1709L")
     rc, rep = run_lint_reporte(capsys)
     sec = _seccion(rep, "listado en `versions[]` que TIENE su propia nota")
     assert "2022eas..conf.1709L" in sec and "2023MNRAS.521.1233L" in sec, rep
@@ -4714,7 +4721,7 @@ def test_alias_sin_nota_sigue_exento(toy_vault, capsys):
     mk_note(cfg.PAPERS, "2026RASTI...5ag038F",
             {"bibcode": "2026RASTI...5ag038F", "tags": ["paper"], "stars": ["tau Cet"],
              "versions": [{"bibcode": "2026arXiv260528635F", "tipo": "eprint"}]}, "# a\n")
-    link_from_index(toy_vault, "2026RASTI...5ag038F")
+    link_from_log(toy_vault, "2026RASTI...5ag038F")
     rc, rep = run_lint_reporte(capsys)
     assert "2026arXiv260528635F" not in _seccion(rep, "listado en `versions[]` que TIENE"), rep
     assert rc == 0
@@ -4762,7 +4769,7 @@ def test_salvedad_decidible_en_prosa_es_backlog(toy_vault, capsys):
             {"bibcode": "2020citC...1..1C", "tags": ["paper"], "stars": ["tau Cet"]},
             "# a\n\n**Salvedades:**\n\n- el `.txt` de pdftotext no los contiene, así que el valor "
             "salió de la figura\n")
-    link_from_index(toy_vault, "2020citC...1..1C")
+    link_from_log(toy_vault, "2020citC...1..1C")
     rc, rep = run_lint_reporte(capsys)
     assert "2020citC...1..1C" in _seccion(rep, "un script podría decidir"), rep
     assert "2020citC...1..1C" in _seccion(rep, "sin la marca de #213"), rep
@@ -4776,7 +4783,7 @@ def test_una_salvedad_de_juicio_no_dispara(toy_vault, capsys):
             {"bibcode": "2020citC...1..1C", "tags": ["paper"], "stars": ["tau Cet"]},
             "# a\n\n**Salvedades (⚠ NO VERIFICADAS — juicio del extractor):**\n\n"
             "- la Fig. 3 es difícil de leer y el valor se estimó a ojo\n")
-    link_from_index(toy_vault, "2020citC...1..1C")
+    link_from_log(toy_vault, "2020citC...1..1C")
     _rc, rep = run_lint_reporte(capsys)
     assert "2020citC...1..1C" not in _seccion(rep, "un script podría decidir"), rep
     assert "2020citC...1..1C" not in _seccion(rep, "sin la marca de #213"), rep
@@ -4794,7 +4801,7 @@ def test_cabecera_de_estado_desfasada_es_backlog(toy_vault, capsys):
     mk_note(cfg.CONCEPTS / "methods", "ica",
             {"tags": ["concept"], "name": "ica", "confidence": "medium"},
             "# ica\n\n> _Generado con Almagesto v1.0_\n> _Estado — búsqueda 1999-01-01 (0 → 0 core)._\n")
-    link_from_index(toy_vault, "ica")
+    link_from_log(toy_vault, "ica")
     rc, rep = run_lint_reporte(capsys)
     assert "ica" in _seccion(rep, "Cabecera `> _Estado"), rep
     assert rc == 0, "backlog: la nota es válida, lo que falta es re-estampar"
@@ -4813,7 +4820,7 @@ def test_cabecera_al_dia_no_es_hallazgo(toy_vault, capsys):
             "# ica\n\n> _Generado con Almagesto v1.0_\nPLACEHOLDER\n")
     dest.write_text(dest.read_text(encoding="utf-8").replace(
         "PLACEHOLDER", mn.estado_line("ica", dest).rstrip("\n")), encoding="utf-8")
-    link_from_index(toy_vault, "ica")
+    link_from_log(toy_vault, "ica")
     _rc, rep = run_lint_reporte(capsys)
     assert "ica" not in _seccion(rep, "Cabecera `> _Estado"), rep
 
@@ -4826,7 +4833,7 @@ def test_marca_de_verificar_en_el_pdf_es_backlog(toy_vault, capsys):
     mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
             "# nota\n\nEl umbral es $S/N=800$ ⚠verificar en el PDF (la página citada no lo trae, "
             "2026-08-29).\n")
-    link_from_index(toy_vault, "nota")
+    link_from_log(toy_vault, "nota")
     rc, rep = run_lint_reporte(capsys)
     assert "nota" in _seccion(rep, "Marcada para chequear contra el PDF"), rep
     assert rc == 0, "backlog: la afirmación puede ser cierta; la marca la hace visible"
@@ -4839,7 +4846,7 @@ def test_sin_la_marca_no_hay_hallazgo(toy_vault, capsys):
             "# nota\n\nEl umbral es $S/N=800$ ([[2020citC...1..1C]], p. 6).\n")
     mk_note(cfg.PAPERS, "2020citC...1..1C", {"bibcode": "2020citC...1..1C", "tags": ["paper"],
                                              "stars": ["tau Cet"]}, "# p\n")
-    link_from_index(toy_vault, "nota", "2020citC...1..1C")
+    link_from_log(toy_vault, "nota", "2020citC...1..1C")
     _rc, rep = run_lint_reporte(capsys)
     assert "nota" not in _seccion(rep, "Marcada para chequear contra el PDF"), rep
 
@@ -4863,7 +4870,7 @@ def test_cita_que_no_esta_en_el_txt_es_hallazgo(toy_vault, capsys):
     mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
             "# nota\n\nEl paper advierte que «real-world systematics do not become orthogonal and "
             "might become entangled» ([[2023A&A...675A.187O]]).\n")
-    link_from_index(toy_vault, "nota", "2023A&A...675A.187O")
+    link_from_log(toy_vault, "nota", "2023A&A...675A.187O")
     _rc, rep = run_lint_reporte(capsys)
     assert "nota" in _seccion(rep, "no está en su fuente"), rep
 
@@ -4876,7 +4883,7 @@ def test_la_cita_verbatim_no_dispara(toy_vault, capsys):
     mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
             "# nota\n\nEl paper advierte que «real-world systematics that are not orthogonal might "
             "become entangled» ([[2023A&A...675A.187O]]).\n")
-    link_from_index(toy_vault, "nota", "2023A&A...675A.187O")
+    link_from_log(toy_vault, "nota", "2023A&A...675A.187O")
     _rc, rep = run_lint_reporte(capsys)
     assert "nota" not in _seccion(rep, "no está en su fuente"), rep
 
@@ -4889,7 +4896,7 @@ def test_una_de_las_dos_fuentes_alcanza(toy_vault, capsys):
     mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
             "# nota\n\nEl método es «agnostic to the origin of the systematics involved» "
             "([[2023A&A...675A.187O]]), y lo replica ([[2025A&A...696A.152O]]).\n")
-    link_from_index(toy_vault, "nota", "2023A&A...675A.187O", "2025A&A...696A.152O")
+    link_from_log(toy_vault, "nota", "2023A&A...675A.187O", "2025A&A...696A.152O")
     _rc, rep = run_lint_reporte(capsys)
     assert "nota" not in _seccion(rep, "no está en su fuente"), rep
 
@@ -4903,7 +4910,7 @@ def test_ocr_y_eprint_se_declaran_no_evaluables(toy_vault, capsys):
     mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
             "# nota\n\nDice «a phrase long enough to be worth checking against the source file» "
             "([[2023A&A...675A.187O]]).\n")
-    link_from_index(toy_vault, "nota", "2023A&A...675A.187O")
+    link_from_log(toy_vault, "nota", "2023A&A...675A.187O")
     _rc, rep = run_lint_reporte(capsys)
     assert "nota" not in _seccion(rep, "no está en su fuente"), rep
     assert "nota" in _seccion(rep, "NO EVALUABLE"), rep
@@ -5005,7 +5012,7 @@ def test_fulltext_source_sin_fulltext_es_hallazgo(toy_vault, capsys):
     mk_note(cfg.PAPERS, "2020huer...1..1H",
             {"bibcode": "2020huer...1..1H", "tags": ["paper"], "stars": ["tau Cet"],
              "fulltext": None, "fulltext_source": "pdftotext"}, "# p\n")
-    link_from_index(toy_vault, "2020huer...1..1H")
+    link_from_log(toy_vault, "2020huer...1..1H")
     _, rep = run_lint_reporte(capsys)
     assert "sin `fulltext`" in rep, rep
 
@@ -5018,7 +5025,7 @@ def test_pdf_source_SI_sobrevive_al_borrado(toy_vault, capsys):
     mk_note(cfg.PAPERS, "2020epri...1..1E",
             {"bibcode": "2020epri...1..1E", "tags": ["paper"], "stars": ["tau Cet"],
              "pdf": None, "pdf_source": "eprint"}, "# p\n")
-    link_from_index(toy_vault, "2020epri...1..1E")
+    link_from_log(toy_vault, "2020epri...1..1E")
     _, rep = run_lint_reporte(capsys)
     assert "2020epri...1..1E" not in _seccion(rep, "Campos incompletos"), rep
 
@@ -5063,7 +5070,7 @@ def test_el_hub_que_nombra_un_radio_sin_wikilink(toy_vault, capsys):
             "# noisy ICA\n\nEl radio de [[ica]].\n")
     mk_note(cfg.CONCEPTS / "methods", "ica", {"tags": ["concept"], "name": "ica"},
             "# ica\n\n- el ruido vive en el radio `noisy-ica`\n")
-    link_from_index(toy_vault, "ica", "noisy-ica")
+    link_from_log(toy_vault, "ica", "noisy-ica")
     _, rep = run_lint_reporte(capsys)
     assert "noisy-ica" in _seccion(rep, "sin `[[wikilink]]`"), rep
 
@@ -5075,7 +5082,7 @@ def test_el_hub_que_SI_linkea_el_radio_no_dispara(toy_vault, capsys):
             "# noisy ICA\n\nEl radio de [[ica]].\n")
     mk_note(cfg.CONCEPTS / "methods", "ica", {"tags": ["concept"], "name": "ica"},
             "# ica\n\n- el ruido vive en el radio `noisy-ica` → [[noisy-ica]]\n")
-    link_from_index(toy_vault, "ica", "noisy-ica")
+    link_from_log(toy_vault, "ica", "noisy-ica")
     _, rep = run_lint_reporte(capsys)
     assert "ica" not in _seccion(rep, "sin `[[wikilink]]`"), rep
 
@@ -5128,7 +5135,7 @@ def test_index_desactualizado_nombra_los_stems(toy_vault, capsys):
     bookkeeping manda «agregar el concepto» a un archivo sin una sola línea estática."""
     mk_note(cfg.CONCEPTS / "methods", "un-metodo", {"tags": ["concept"], "name": "un método"},
             "# un método\n")
-    link_from_index(toy_vault, "un-metodo")
+    link_from_log(toy_vault, "un-metodo")
     (cfg.WIKI / "index.md").write_text(
         "# Índice\n\n## Estrellas\n\n## Conceptos (por área)\n\n## Papers\n\n[[un-metodo]]\n",
         encoding="utf-8")
@@ -5163,7 +5170,7 @@ def test_el_backtick_del_ABSTRACT_verbatim_no_es_hallazgo(toy_vault, capsys):
             {"bibcode": "2021A&A...653A..43C", "tags": ["paper"], "stars": ["tau Cet"]},
             "# p\n\n## Abstract\nby `cleaning' individual extracted spectra using the wealth of\n"
             "information contained in spectral time series.\n")
-    link_from_index(toy_vault, "2021A&A...653A..43C")
+    link_from_log(toy_vault, "2021A&A...653A..43C")
     _, rep = run_lint_reporte(capsys)
     assert "2021A&A...653A..43C" not in _seccion(rep, "marcador sin cerrar"), rep
 
@@ -5173,7 +5180,7 @@ def test_el_backtick_abierto_en_PROSA_sigue_siendo_hallazgo(toy_vault, capsys):
     propia un backtick abierto se traga el resto de la nota — medido, 268 líneas."""
     mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
             "# nota\n\n## Síntesis\nver `## Régimen de validez\n")
-    link_from_index(toy_vault, "nota")
+    link_from_log(toy_vault, "nota")
     _, rep = run_lint_reporte(capsys)
     assert "nota" in _seccion(rep, "marcador sin cerrar"), rep
 
@@ -5200,7 +5207,7 @@ def test_las_grafias_no_son_dos_deudas_distintas(toy_vault, capsys):
     for stem, m in (("2020a....1A", ["pca"]), ("2020b....1B", ["PCA"])):
         mk_note(cfg.PAPERS, stem, {"bibcode": stem, "tags": ["paper"], "methods": m,
                                    "stars": ["tau Cet"]}, "# p\n")
-    link_from_index(toy_vault, "pca", "2020a....1A", "2020b....1B")
+    link_from_log(toy_vault, "pca", "2020a....1A", "2020b....1B")
     _, rep = run_lint_reporte(capsys)
     assert "PCA" not in _seccion(rep, "sin página destino"), \
         "`concepts/methods/pca.md` ES el destino de `PCA`"

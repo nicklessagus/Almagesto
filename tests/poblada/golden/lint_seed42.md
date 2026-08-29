@@ -134,10 +134,8 @@
 ## ✂ Evidencia sin localizador: el cruce de #122 NO se pudo evaluar en esa fila (#226, backlog) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 
-## 🗂 `index.md` desactualizado contra la verdad de disco (#237, backlog) (2)
+## 🗂 `index.md` desactualizado contra la verdad de disco (#237, backlog) (0)
 > sobre 89 notas de `vault/wiki/`
-- index → `## Conceptos (por área)` desactualizada — faltan: concepto-activity-001, concepto-activity-005, concepto-activity-009, concepto-activity-013, concepto-activity-017, concepto-hypotheses-003, concepto-hypotheses-007, concepto-hypotheses-011 → `python scripts/make_notes.py --restamp-index`
-- index → `## Papers` desactualizada — faltan: 1996Alm00010A, 1996Alm00057A, 1997Alm00009A, 1997Alm00015A, 1997Alm00036A, 2000Alm00026A, 2000Alm00039A, 2000Alm00043A → `python scripts/make_notes.py --restamp-index`
 
 ## 🛞 Hub que nombra un radio sin `[[wikilink]]`: el radio no entra al grafo (#235, backlog) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)

@@ -81,7 +81,7 @@ Progreso del ingest del tema <tema>:
      callarla deja el tema recortado por un término que nadie decidió.
    - **d. Persistir.** Recién entonces escribir/actualizar la entrada en `vault/config/themes.yaml`:
      `title`, `area` (abierta: cualquiera; idealmente una de `concept_areas` de `objective.yaml` —
-     ej. `indicators|methods|activity|hypotheses` — para que el typo-check la reconozca; si es un área
+     ej. `methods|hypotheses`, o la que tu bóveda declare — para que el typo-check la reconozca; si es un área
      nueva real, agregala a esa lista), `concept` (nota destino, existente o
      a stubbear), `query` (la Solr cruda aprobada) y `aliases` opcional. Si el tema ya existía en el
      YAML, ofrecer reusar la query guardada o re-pulirla.

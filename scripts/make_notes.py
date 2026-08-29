@@ -371,7 +371,7 @@ INDEX_DATAVIEW = {
 }
 
 
-def index_tables() -> dict:
+def index_tables(fms: dict | None = None) -> dict:
     """The index's three tables, materialised from frontmatter truth (#237).
 
     `index.md` was the vault's only artifact left 100 % Dataview — the very thing #60 forbade for the
@@ -386,16 +386,26 @@ def index_tables() -> dict:
     Same rule as the roll-ups: read with `split_fm`, never grep the frontmatter (a list written in
     block style and one in flow style are both normal here).
     """
+    # `fms` es el índice `{stem: frontmatter}` que el llamador YA parseó. Sin él esta función
+    # re-lee y re-parsea la bóveda entera, y como el lint la llama en cada corrida eso duplicaba el
+    # parseo de todo el corpus — medido en el tier `poblada`: el ratio de `yaml.safe_load` por nota
+    # saltó de 2,0x a 3,2x sobre 900 notas. El default (None) mantiene el uso suelto del estampador.
+    def _fm(f):
+        """El frontmatter de esa nota: el que el llamador ya parseó, o uno recién leído."""
+        if fms is not None and f.stem in fms:
+            return fms[f.stem]
+        return cfg.split_fm(f.read_text(encoding="utf-8")) or {}
+
     stars, concepts, papers = [], [], []
     for f in sorted(cfg.STARS.glob("*.md")) if cfg.STARS.exists() else []:
-        fm = cfg.split_fm(f.read_text(encoding="utf-8")) or {}
+        fm = _fm(f)
         stars.append((f.stem, fm.get("spectral_type"), fm.get("P_rot_days"),
                       len(cfg.as_list(fm.get("planets")))))
     for f in sorted(cfg.CONCEPTS.glob("*/*.md")) if cfg.CONCEPTS.exists() else []:
-        fm = cfg.split_fm(f.read_text(encoding="utf-8")) or {}
+        fm = _fm(f)
         concepts.append((f.parent.name, f.stem, fm.get("status"), fm.get("confidence")))
     for f in sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []:
-        fm = cfg.split_fm(f.read_text(encoding="utf-8")) or {}
+        fm = _fm(f)
         papers.append((f.stem, fm.get("year"), fm.get("relevance"),
                        fm.get("citation_count") or 0))
     papers.sort(key=lambda r: (-(r[3] or 0), r[0]))
@@ -446,6 +456,20 @@ def restamp_index() -> int:
     # `_reemplazar_seccion` reemplaza DESDE el encabezado, así que el cuerpo lo lleva puesto. Y el
     # bloque ```dataview``` queda debajo, a propósito: es comodidad para quien abre Obsidian. Lo que
     # #60 prohíbe es que sea la ÚNICA forma, no que exista.
+    # ⛔ Si la sección NO existe, se CREA. `_reemplazar_seccion` es cirugía y por contrato no
+    # inventa secciones —correcto para una ficha, donde inventar una la pondría fuera de lugar—,
+    # pero el índice es un catálogo **estampado por máquina**: una bóveda cuyo `index.md` perdió (o
+    # nunca tuvo) `## Papers` no podía recuperarla con el estampador, y el lint la iba a reportar
+    # para siempre con un arreglo sólo manual. Se inserta antes de `## Matrices`, que es la única
+    # sección de prosa a mano, o al final.
+    texto = dest.read_text(encoding="utf-8")
+    faltan = [h for h in INDEX_SECCIONES if cfg.section_start(texto, h) < 0]
+    if faltan:
+        corte = cfg.section_start(texto, "## Matrices")
+        corte = len(texto) if corte < 0 else corte
+        nuevo = "".join(f"{h}\n\n_(pendiente de estampar)_\n\n" for h in faltan)
+        cfg.write_text_atomic(dest, texto[:corte] + nuevo + texto[corte:])
+        cfg.print_seguro(f"index.md: {len(faltan)} sección(es) creadas ({', '.join(faltan)})")
     cambios = sum(1 for h, cuerpo in index_tables().items()
                   if _reemplazar_seccion(
                       dest, h, f"{h}\n\n{cuerpo}\n\n{INDEX_DATAVIEW[h]}\n\n"))

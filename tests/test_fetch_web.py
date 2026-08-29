@@ -276,3 +276,37 @@ def test_una_url_HTML_sigue_yendo_al_snapshot(toy_vault, monkeypatch, capsys):
     assert fw.main() == 0
     assert (toy_vault.FULLTEXT / "ica" / "2020Pagina.txt").exists()
     assert not (toy_vault.PDFS / "ica" / "2020Pagina.pdf").exists()
+
+
+class _RespFalsa:
+    """Un `urlopen` de mentira: sirve bytes fijos, sin red."""
+
+    def __init__(self, datos): self.datos = datos
+
+    def read(self): return self.datos
+
+    def __enter__(self): return self
+
+    def __exit__(self, *a): return False
+
+
+def test_download_pdf_escribe_el_archivo(toy_vault, monkeypatch):
+    """#242 — la mitad que baja el PDF cuando la URL sirve `application/pdf`. Se prueba de verdad y
+    no monkeypatcheada: una función que la suite nunca ejecuta no está mal probada, está sin mirar
+    (es lo que el tier `poblada` reporta)."""
+    monkeypatch.setattr(fw.urllib.request, "urlopen", lambda req, timeout=0: _RespFalsa(b"%PDF-1.7 x"))
+    dest = toy_vault.PDFS / "ica" / "2015Voss.pdf"
+    assert fw.download_pdf("https://arxiv.org/pdf/1502.04148", dest) is True
+    assert dest.read_bytes().startswith(b"%PDF")
+
+
+def test_download_pdf_rechaza_lo_que_NO_es_un_pdf(toy_vault, monkeypatch, capsys):
+    """#242 — un servidor puede anunciar `application/pdf` y mandar una página de error. Escribir
+    eso bajo `raw/pdfs/` pondría un no-PDF donde toda la cadena de lectura asume uno, y el fallo
+    aparecería mucho después, en `pdftotext`, hablando de otra cosa."""
+    monkeypatch.setattr(fw.urllib.request, "urlopen",
+                        lambda req, timeout=0: _RespFalsa(b"<html>403 Forbidden</html>"))
+    dest = toy_vault.PDFS / "ica" / "2015Voss.pdf"
+    assert fw.download_pdf("https://ejemplo.org/x.pdf", dest) is False
+    assert not dest.exists(), "no se escribe un archivo que no es un PDF"
+    assert "no lo es" in capsys.readouterr().out

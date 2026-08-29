@@ -411,7 +411,13 @@ def test_upgrade_no_pierde_contenido_fuera_de_frontmatter_y_cabecera(sembrar):
     prosa ya escrita. Papers: ningún migrador los toca → cuerpo IDÉNTICO byte a byte. Fichas y
     conceptos: el cuerpo cambia (crece con la cabecera), pero cada línea que estaba ANTES tiene que
     seguir apareciendo DESPUÉS, en el mismo orden relativo — la firma de "sólo inserción, nunca
-    reescritura" (ver `_is_line_subsequence`)."""
+    reescritura" (ver `_is_line_subsequence`).
+
+    ⚠ Desde #247 los PAPERS también reciben cabecera (el aviso de capa LLM: eran la única de las
+    tres clases sin él, y son las que más contenido generado tienen), así que su rama pasó de
+    igualdad byte a byte a la MISMA subsecuencia que las otras. El invariante que importa no cambió
+    —nada se borra ni se edita— y exigir igualdad estricta habría sido afirmar una conducta que
+    dejó de ser la deseada."""
     paths, censo = sembrar(n_papers=40, n_stars=4, n_concepts=6, seed=106, vintage="1.11.0")
     pre_bodies = _all_bodies(paths)
 
@@ -422,10 +428,8 @@ def test_upgrade_no_pierde_contenido_fuera_de_frontmatter_y_cabecera(sembrar):
 
     for path_str, pre in pre_bodies.items():
         post = post_bodies[path_str]
-        if "/papers/" in path_str.replace("\\", "/"):
-            assert post == pre, f"{path_str}: un migrador tocó el cuerpo de un paper (no debería)"
-        else:
-            pre_lines = [l for l in pre.splitlines() if l.strip()]
-            post_lines = [l for l in post.splitlines() if l.strip()]
-            assert _is_line_subsequence(pre_lines, post_lines), (
-                f"{path_str}: alguna línea de la prosa original desapareció o se editó tras el ciclo")
+        # #247: las tres clases comparten la regla de sólo-inserción
+        pre_lines = [l for l in pre.splitlines() if l.strip()]
+        post_lines = [l for l in post.splitlines() if l.strip()]
+        assert _is_line_subsequence(pre_lines, post_lines), (
+            f"{path_str}: alguna línea de la prosa original desapareció o se editó tras el ciclo")

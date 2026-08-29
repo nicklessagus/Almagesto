@@ -66,7 +66,7 @@ población declarada. Ninguno edita: **todos reportan**. La escritura la hace el
 ### Frente 1 — Estándar de la nota
 
 Contra el *Estándar transversal* de `CLAUDE.md`: **autosuficiente**, **dual-audiencia**, y para
-`concepts/methods` y `concepts/indicators` además **implementation-ready con el régimen explícito**.
+`concepts/methods` además **implementation-ready con el régimen explícito** (los indicadores viven ahí: son métodos chicos, #246).
 
 ⛔ **La prueba operativa, que es lo que hace este frente medible:** *escribir el pseudocódigo (o la
 receta de uso) desde la nota y anotar dónde se traba.* Cada punto donde haya que abrir la fuente es

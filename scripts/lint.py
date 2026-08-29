@@ -1258,6 +1258,13 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         whatever happened to be parsed first — a checker that reads it from inside the loop would
         answer differently depending on filename order.
         """
+        # El loop principal ya parsea cada nota y guarda el resultado en `paper_fms`: reusarlo es
+        # gratis. El re-parseo queda sólo para el paper que todavía no llegó en el recorrido —sin
+        # eso, esta función duplicaba el parseo de TODO el corpus de papers (medido: el ratio de
+        # `yaml.safe_load` por nota saltó de 2,0x a 3,2x sobre 900 notas, y el tier `poblada` lo
+        # reporta como regresión de escala).
+        if bib in paper_fms:
+            return paper_fms[bib]
         if bib not in _fm_cache:
             _f = cfg.PAPERS / f"{bib}.md"
             try:
@@ -1266,6 +1273,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 _fm_cache[bib] = {}
         return _fm_cache[bib]
 
+    todos_fm: dict = {}                # {stem: frontmatter} de TODA nota — lo llena el loop, y lo
+    #                                    consume `index_tables` para no re-parsear la bóveda (#237)
     paper_fms: dict = {}               # {stem: frontmatter} de papers/ — para D-10, sin re-parsear
     paper_abstracts: dict = {}         # {stem: abstract normalizado} — #216, duplicado sin doi/arxiv
     sin_extraer_por_sujeto: dict = {}  # nombre de sujeto → {stems core sin extraer} (D-13)
@@ -1283,6 +1292,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                               f"evade TODOS los chequeos de su tipo; `{f}`"))
             continue
         fm = split_fm(text)
+        todos_fm[basename(f)[:-3]] = fm or {}
         if in_dir(f, "papers"):
             paper_fms[basename(f)[:-3]] = fm
             # #216 — el `## Abstract` verbatim, normalizado, para el detector de duplicados SIN
@@ -1363,7 +1373,13 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             tgt = tgt.strip()
             if "/" in tgt or tgt in LINK_SKIP:
                 continue                       # placeholder/ejemplo, no link real
-            if tgt in incoming:
+            # #249 — el ÍNDICE no cuenta como link entrante. Antes de #237 era prosa a mano y un
+            # link desde ahí era evidencia de que alguien catalogó la nota; desde que se ESTAMPA
+            # por verdad de disco lista todo, así que ninguna estrella ni concepto podía volver a
+            # ser huérfano y el detector —que BLOQUEA— quedaba en 0 permanente. Mismo criterio con
+            # que las secciones estampadas quedan fuera del fan-out y del detector de fuga (#214):
+            # metadata derivada no es evidencia. Lo cazó el corpus sintético al mover el golden.
+            if tgt in incoming and stem != "index":
                 incoming[tgt] += 1
             elif tgt not in names:
                 broken.append((stem, tgt))
@@ -3276,7 +3292,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     _idx = cfg.WIKI / "index.md"
     if _idx.exists():
         _txt_idx = _idx.read_text(encoding="utf-8")
-        for _h, _cuerpo in mn.index_tables().items():
+        for _h, _cuerpo in mn.index_tables(fms=todos_fm).items():
             _span = cfg.section_span(_txt_idx, _h)
             _visto = set() if _span is None else set(
                 lb.LINK_RE.findall(_txt_idx[_span[0]:_span[1]]))

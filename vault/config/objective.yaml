@@ -82,8 +82,16 @@ relevance:
 #   · El resto es libre — editá la lista según el foco de TU bóveda.
 #   · Si BORRÁS esta clave, el typo-check queda APAGADO (el lint lo avisa). No se infiere de las
 #     carpetas que ya existen: eso convertiría un typo ya cometido en "área declarada".
+# Áreas de `concepts/` — ABIERTAS: esta lista sólo distingue un TYPO de un área nueva (el lint
+# avisa, nunca bloquea). Las dos que el framework distingue de verdad son `methods` y `hypotheses`;
+# cualquier otra que declares es **archivado**, porque ningún chequeo se ramifica por el área
+# (#246: el único uso funcional es la ruta de la nota, en `entity.py`).
+#
+# ⚠ La semilla trae sólo esas dos a propósito. Hasta 1.97.0 traía además `indicators` y `activity`,
+# y eso prometía una estructura que el código no sostiene: un indicador (BIS, S-index, FWHM) es
+# operativamente un procedimiento que produce un número, o sea un método chico, y separarlo en su
+# propia área no cambiaba nada salvo la ruta. Si a vos te sirve la distinción —el observable que
+# medís vs el mecanismo que lo causa— agregala acá y usala; es tu decisión, no la del framework.
 concept_areas:
-  - indicators
   - methods
-  - activity
   - hypotheses
