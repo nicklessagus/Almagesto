@@ -87,6 +87,27 @@ def planet_row(name="Toy 1 b", K=0.0895, P=365.25, e=0.0, msini=None, bmass=None
 
 
 @pytest.fixture
+def simbad_caido(monkeypatch):
+    """SIMBAD inalcanzable, **sin importar el paquete real**.
+
+    ⚠ Los dos tests que usan esta fixture hacían `import astroquery.simbad as _sim` para
+    monkeypatchear el módulo de verdad. Pasaban en cualquier máquina de desarrollo —donde
+    `astroquery` está instalado— y **fallaban en CI**, que lo declara innecesario a propósito
+    («sin red ni binarios externos: todo mockeado»; el paquete arrastra astropy + numpy). O sea un
+    test que depende del entorno y no de lo que dice probar: verde acá, rojo allá, por un motivo
+    que no tiene nada que ver con SIMBAD (#202). La inyección en `sys.modules` es la misma que ya
+    usa `fake_nea`, y funciona porque producción importa **adentro** del `try`.
+    """
+    def _revienta(*a, **k):
+        raise RuntimeError("SIMBAD mockeado: la suite es offline")
+    mod = types.ModuleType("astroquery.simbad")
+    mod.Simbad = _revienta
+    monkeypatch.setitem(sys.modules, "astroquery", types.ModuleType("astroquery"))
+    monkeypatch.setitem(sys.modules, "astroquery.simbad", mod)
+    return mod
+
+
+@pytest.fixture
 def fake_nea(monkeypatch):
     """Inyecta astroquery falso en sys.modules; setear .rows antes de llamar. `.calls` cuenta
     las consultas query_object (regresión #31: main debe consultar UNA sola vez)."""
@@ -256,18 +277,15 @@ def test_main_sin_simbad_error_amigable(toy_vault, monkeypatch):
         run_main(monkeypatch, ["test_star"])
 
 
-def test_main_force_refresca(toy_vault, monkeypatch):
+def test_main_force_refresca(toy_vault, monkeypatch, simbad_caido):
+    # #123: acá quedaba viva una consulta REAL a SIMBAD (`query_objectids`). El
+    # try/except de producción la degrada limpio, así que la suite no se enteraba:
+    # salía a la red en cada corrida y pasaba igual. La corta `simbad_caido`.
     out = toy_vault.GROUND_TRUTH / "test_star.json"
     out.write_text(json.dumps({"star": "vieja"}), encoding="utf-8")
     monkeypatch.setattr(gt, "fetch_pscomppars", lambda h: [])
     monkeypatch.setattr(gt, "fetch_host", lambda h, tab=None: {"name": h, "mass_msun": 1.0})
     monkeypatch.setattr(gt, "fetch_planets", lambda tab, m: [])
-    # #123: quedaba viva una consulta REAL a SIMBAD (`query_objectids`, para verificar los alias).
-    # El try/except de producción la degrada limpio, así que la suite no se enteraba: salía a la red
-    # en cada corrida y pasaba igual.
-    import astroquery.simbad as _sim
-    monkeypatch.setattr(_sim, "Simbad", lambda *a, **k: (_ for _ in ()).throw(
-        RuntimeError("SIMBAD mockeado: la suite es offline")))
     assert run_main(monkeypatch, ["test_star", "--force"]) == 0
     data = json.loads(out.read_text())
     assert data["star"] == "Estrella Test" and data["slug"] == "test_star"
@@ -503,11 +521,9 @@ def test_los_identificadores_de_simbad_quedan_en_el_ground_truth(toy_vault, monk
     assert gt.simbad_identifiers("tau Cet") == ["HD 10700", "HIP 8102", "GJ 71", "* tau Cet"]
 
 
-def test_sin_respuesta_de_simbad_es_None_y_no_lista_vacia(toy_vault, monkeypatch):
+def test_sin_respuesta_de_simbad_es_None_y_no_lista_vacia(toy_vault, simbad_caido):
     """`None` = SIMBAD no contestó; `[]` = contestó y no hay nada. Sin esa distinción una caída de
     red se lee como «no hay más identificadores», que es el cero inventado de D-43.  @inv INV-122"""
-    import astroquery.simbad as _sim
-    monkeypatch.setattr(_sim, "Simbad", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("caído")))
     assert gt.simbad_identifiers("tau Cet") is None
 
 
