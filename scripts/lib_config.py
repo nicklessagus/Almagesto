@@ -20,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.79.0"
+ALMAGESTO_VERSION = "1.80.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -341,6 +341,20 @@ def section_start(text: str, header: str) -> int:
         if not resto or not resto[0].isalnum():
             return i
     return -1
+
+
+def section_span(text: str, header: str) -> tuple[int, int] | None:
+    """`(start, end)` of the section opening at `header`, up to the next `## ` (or EOF).
+
+    Lives here, next to `section_start`, because it has TWO consumers (the stamper of the reading
+    aids and the duplicate detector of #216) and "where does a section end" is exactly the kind of
+    rule that grows a second, subtly different copy at the second call site — the failure this repo
+    already paid for twice (`section_start` itself, and `_es_estampada`)."""
+    inicio = section_start(text, header)
+    if inicio < 0:
+        return None
+    nxt = text.find("\n## ", inicio + 1)
+    return inicio, (len(text) if nxt < 0 else nxt + 1)
 
 
 def _header_hits(text: str, header: str) -> list[int]:

@@ -101,13 +101,9 @@ def _norm(texto: str) -> str:
     return "\n".join(ln.rstrip() for ln in texto.strip().splitlines() if ln.strip())
 
 
-def section_span(text: str, header: str) -> tuple[int, int] | None:
-    """`(inicio, fin)` de la sección que abre en `header`, hasta el próximo `## ` (o EOF)."""
-    inicio = cfg.section_start(text, header)
-    if inicio < 0:
-        return None
-    nxt = text.find("\n## ", inicio + 1)
-    return inicio, (len(text) if nxt < 0 else nxt + 1)
+# #216 — la implementación vive en `lib_config` (dos consumidores: esto y el detector de
+# duplicados). El nombre local se conserva para no tocar a sus llamadores.
+section_span = cfg.section_span
 
 
 def stamp_reading_aids(dest: Path, data: dict) -> bool:

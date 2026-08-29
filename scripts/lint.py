@@ -494,6 +494,30 @@ def inventario_sin_llenar(text: str) -> bool:
     return not any(c.strip() for f in filas[1:] for c in f.strip("|").split("|"))
 
 
+#: #216 — un abstract más corto que esto no identifica a nadie: es un placeholder
+#: (`_(no disponible)_`), un título repetido o un resumen de dos líneas que dos trabajos distintos
+#: del mismo grupo pueden compartir. El piso convierte la señal en «coincide el texto largo».
+ABSTRACT_MIN = 200
+#: Se compara el ARRANQUE, no el texto entero: el caso medido es «el mismo texto palabra por
+#: palabra, en otro congreso, y TRUNCADO», así que exigir igualdad exacta lo perdería justo donde
+#: el duplicado es más probable.
+ABSTRACT_CLAVE = 300
+
+
+def _abstract_norm(text: str) -> str:
+    """A paper note's verbatim `## Abstract`, normalized for comparison (#216).
+
+    Lowercased with collapsed whitespace: it is a catalogue copy, so two notes of the same work
+    carry it identically except for wrapping. The TITLE is deliberately not compared (measured in
+    `openalex.py`: title matching resolved 18 of 25 cases and **2 pointed at a different work**) —
+    the verbatim abstract is guaranteed in every note since #124 and is far more specific."""
+    span = cfg.section_span(text, "## Abstract")
+    if span is None:
+        return ""
+    cuerpo = text[span[0]:span[1]].split("\n", 1)[-1]
+    return " ".join(cuerpo.lower().split())
+
+
 def basename(p: str) -> str:
     return Path(p).name          # no splitear "/" a mano: glob devuelve separador nativo del OS
 
@@ -1153,6 +1177,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     refs_dir = str(cfg.RAW / "refs")
     refs_stems = {basename(f)[:-3] for f in files if f.startswith(refs_dir)}  # docs de diseño, no fichas
     paper_fms: dict = {}               # {stem: frontmatter} de papers/ — para D-10, sin re-parsear
+    paper_abstracts: dict = {}         # {stem: abstract normalizado} — #216, duplicado sin doi/arxiv
     sin_extraer_por_sujeto: dict = {}  # nombre de sujeto → {stems core sin extraer} (D-13)
     for f in files:
         try:
@@ -1170,6 +1195,10 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         fm = split_fm(text)
         if in_dir(f, "papers"):
             paper_fms[basename(f)[:-3]] = fm
+            # #216 — el `## Abstract` verbatim, normalizado, para el detector de duplicados SIN
+            # identificador. Se guarda acá porque el loop ya tiene el texto: re-leer 900 notas para
+            # una categoría de backlog sería pagar el corpus dos veces.
+            paper_abstracts[basename(f)[:-3]] = _abstract_norm(text)
         else:
             anchor_bodies[f] = text
         stem = basename(f)[:-3]
@@ -2103,6 +2132,45 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                                    f"consolidá: `python scripts/make_notes.py --rename-paper "
                                    f"{stems[0]} {stems[1]}`"))
 
+    # ── #216 · duplicado SIN doi ni arxiv_id (backlog, REPORTA y no fusiona) ─────────────────────
+    # D-19 identifica un trabajo por `doi`/`arxiv_id`, y la clase de fuentes donde el duplicado es
+    # MÁS probable es justamente la que no tiene ninguno de los dos: resúmenes de congreso (el mismo
+    # trabajo presentado en EAS, COSPAR y SPIE), tesis, material pre-DOI. Medido en `ica`: de 52
+    # core, 6 sin ningún identificador —el 12 % del corpus invisible para el chequeo— y ahí apareció
+    # un duplicado real, con el mismo texto palabra por palabra. Y a diferencia del par
+    # preprint↔publicado, éste NO tiene señal alternativa: el bibcode no comparte prefijo, los años
+    # difieren y los autores se abrevian distinto.
+    # ⛔ REPORTA, no fusiona, y por eso es BACKLOG: la distinción «mismo trabajo en dos congresos»
+    # vs «dos etapas del mismo programa con resultados distintos» es real y estuvo presente en el
+    # mismo corpus (un registro de 2022 reporta NO-detección y el de 2023 detección tentativa: no
+    # son duplicados y se conservaron los dos). Sólo quien conoce el trabajo puede decidirlo, y un
+    # dedup automático que fusiona dos trabajos distintos destruye más de lo que arregla.
+    # ⛔ Y NO se compara por TÍTULO: está medido en `openalex.py` y es peor que el problema (18 de
+    # 25 resueltos, **2 apuntando a otro trabajo**). El `## Abstract` verbatim está garantizado en
+    # toda nota desde #124, así que el dato está y es mucho más específico.
+    abstract_dup: list = []
+    por_abstract: dict = {}
+    for stem_p in sorted(paper_fms):
+        fm_p = paper_fms[stem_p]
+        if stem_p in alias or stem_p in ya_reportados:
+            continue
+        if fm_p.get("doi") or fm_p.get("arxiv_id"):
+            continue                    # con identificador ya lo mira el detector bloqueante
+        ab = paper_abstracts.get(stem_p) or ""
+        if len(ab) < ABSTRACT_MIN:
+            continue
+        por_abstract.setdefault(ab[:ABSTRACT_CLAVE], []).append(stem_p)
+    for _clave, stems in sorted(por_abstract.items()):
+        if len(stems) > 1:
+            abstract_dup.append(
+                (", ".join(stems), "ninguna tiene `doi` ni `arxiv_id` y su `## Abstract` coincide "
+                                   "palabra por palabra → ¿el MISMO trabajo en dos congresos, o dos "
+                                   "etapas del mismo programa con resultados distintos? Decidilo "
+                                   f"vos: si es lo primero, consolidá (`--rename-paper {stems[0]} "
+                                   f"{stems[1]}` + `versions[]`) o sacá el registro sobrante "
+                                   "(`triage.py <slug> --drop-core … --reason`); si es lo segundo, "
+                                   "no hay nada que hacer"))
+
     # ── lista de papers desactualizada (D-10) ────────────────────────────────────────────────────
     # La tabla materializada de `## Papers` es un snapshot, y un snapshot que nadie re-estampa
     # miente igual que el roll-up Dataview que reemplazó (medido: 155 prometidos, 8 discutidos).
@@ -2909,6 +2977,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('old_bearing', '⛔ `bearing` en una nota de paper (schema pre-D-21) — la postura vive en la hipótesis', SEV_BLOQUEANTE, tuple(old_bearing), poblacion='papers'),
         Categoria('sin_destino', '⛔ Nota de paper sin destino (D-23): no pertenece a ninguna entidad', SEV_BLOQUEANTE, tuple(sin_destino), poblacion='papers'),
         Categoria('identidad_dup', '⛔ Identidad duplicada: dos notas del mismo trabajo (mismo doi/arxiv_id)', SEV_BLOQUEANTE, tuple(identidad_dup), poblacion='papers'),
+        Categoria('abstract_dup', '👯 Posible duplicado SIN doi ni arxiv_id: mismo abstract verbatim (backlog — decidís vos)', SEV_BACKLOG, tuple(abstract_dup), poblacion='papers'),
         Categoria('bad_sources', '⛔ `sources:` sin procedencia (#111): no consta quién declaró la fuente ni por qué', SEV_BLOQUEANTE, tuple(bad_sources), poblacion='temas'),
         Categoria('bad_roles', '⛔ `role` fuera del vocabulario — y todo campo con vocabulario CERRADO (`unidad_cita`, `pending_source`)', SEV_BLOQUEANTE, tuple(bad_roles), poblacion='papers'),
         Categoria('impl_leaks', '⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)', SEV_WARN, tuple(impl_leaks), poblacion='notas'),

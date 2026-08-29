@@ -357,7 +357,21 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   ciclo se resuelve con `python scripts/make_notes.py --rename-paper VIEJO NUEVO`, que mueve la nota
   y sus artefactos (`raw/pdfs/`, `raw/fulltext/`), agrega el alias y **reescribe los wikilinks de
   toda la bóveda** — sin eso el renombre deja links rotos, que es la mitad del trabajo. Alcance
-  declarado: `vault/`; lo que vive afuera se resuelve por el alias. Campos:
+  declarado: `vault/`; lo que vive afuera se resuelve por el alias.
+  ⛔ **Y el duplicado SIN `doi` ni `arxiv_id` lo reporta otra categoría (#216, backlog):** la clase
+  de fuentes donde este problema es **más** probable es justamente la que no tiene identificador
+  —resúmenes de congreso (el mismo trabajo en EAS, COSPAR y SPIE), tesis, material pre-DOI—, así
+  que `identidad()` devuelve claves distintas y el detector bloqueante **no puede verlo**. Medido en
+  un corpus real: **6 de 52 core** sin ningún identificador (12 % invisible al chequeo) y ahí un
+  duplicado real, con el mismo texto palabra por palabra. La señal es el **`## Abstract` verbatim**
+  —garantizado en toda nota desde #124— normalizado y comparado por su **arranque**, porque el caso
+  medido viene **truncado** en uno de los dos. ⛔ **NO se deduplica por título**: está medido en
+  `openalex.py` y es peor que el problema (18 de 25 resueltos, **2 apuntando a otro trabajo**). Y
+  **reporta, no fusiona** —por eso es backlog—: la distinción *«mismo trabajo en dos congresos»* vs
+  *«dos etapas del mismo programa con resultados distintos»* es real y estuvo presente en el mismo
+  corpus (un registro de 2022 reporta **no-detección** y el de 2023 detección tentativa: no son
+  duplicados, se conservan los dos). La salida es la que el framework ya tiene: `--rename-paper` +
+  `versions[]`, o `--drop-core` con motivo. Campos:
   `bibcode, title, first_author, n_authors, year, arxiv_id, doi, bibstem, stars[], facets[], keywords[],
   methods[], thesis_links[], role[], relevance, citation_count, pdf, fulltext,
   fulltext_source(pdftotext|ocr|web), pdf_source(eprint|ads|publisher|web)`. El contrato apunta a **ambos artefactos**, con los roles que #205 fijó: `pdf` es **lo que se lee**

@@ -4491,3 +4491,61 @@ def test_vista_con_su_txt_en_disco_no_es_hallazgo(toy_vault, capsys):
     link_from_index(toy_vault, "2021PASP..133g4501V")
     _rc, rep = run_lint_reporte(capsys)
     assert "2021PASP..133g4501V" not in _seccion(rep, "ya no es re-verificable")
+
+
+# ── #216 · duplicado sin doi ni arxiv_id ─────────────────────────────────────
+
+_ABS = ("we present espresso observations of wasp-166 b and report a tentative detection of "
+        "sodium and lithium in its atmosphere. the transmission spectrum was extracted with a "
+        "standard telluric correction and compared against forward models spanning a range of "
+        "temperatures and metallicities, with the residuals analysed at high spectral resolution.")
+
+
+def _paper_sin_id(stem, abstract, toy_vault, **fm):
+    mk_note(cfg.PAPERS, stem,
+            {"bibcode": stem, "tags": ["paper"], "stars": ["tau Cet"],
+             "doi": None, "arxiv_id": None, **fm},
+            f"# {stem}\n\n## Abstract\n{abstract}\n")
+
+
+def test_duplicado_sin_identificador_es_backlog(toy_vault, capsys):
+    """#216 — D-19 identifica por `doi`/`arxiv_id`, y la clase de fuentes donde el duplicado es MÁS
+    probable es la que no tiene ninguno: resúmenes de congreso, tesis, material pre-DOI. Medido en
+    `ica`: 6 de 52 core sin identificador (12 % invisible al chequeo) y ahí un duplicado real."""
+    _paper_sin_id("2023eas..conf.1090L", _ABS, toy_vault)
+    _paper_sin_id("2023spfi.confE..19L", _ABS, toy_vault)
+    link_from_index(toy_vault, "2023eas..conf.1090L", "2023spfi.confE..19L")
+    rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "Posible duplicado SIN doi ni arxiv_id")
+    assert "2023eas..conf.1090L" in sec and "2023spfi.confE..19L" in sec, rep
+    assert rc == 0, "backlog: REPORTA y no fusiona — la decisión es del usuario"
+
+
+def test_duplicado_por_abstract_truncado(toy_vault, capsys):
+    """#216 — el caso medido es «el mismo texto palabra por palabra, en otro congreso, y TRUNCADO»,
+    así que exigir igualdad exacta lo perdería justo donde el duplicado es más probable."""
+    _paper_sin_id("2023eas..conf.1090L", _ABS, toy_vault)
+    _paper_sin_id("2023spfi.confE..19L", _ABS[:320], toy_vault)
+    link_from_index(toy_vault, "2023eas..conf.1090L", "2023spfi.confE..19L")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2023spfi.confE..19L" in _seccion(rep, "Posible duplicado SIN doi ni arxiv_id"), rep
+
+
+def test_con_doi_no_entra_a_esta_categoria(toy_vault, capsys):
+    """#216 — con identificador ya lo mira el detector BLOQUEANTE de D-19: duplicar el hallazgo
+    en dos categorías con severidades distintas es cómo una de las dos se deja de mirar."""
+    _paper_sin_id("2023eas..conf.1090L", _ABS, toy_vault, doi="10.1/a")
+    _paper_sin_id("2023spfi.confE..19L", _ABS, toy_vault, doi="10.1/b")
+    link_from_index(toy_vault, "2023eas..conf.1090L", "2023spfi.confE..19L")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2023eas..conf.1090L" not in _seccion(rep, "Posible duplicado SIN doi ni arxiv_id")
+
+
+def test_abstract_placeholder_no_agrupa(toy_vault, capsys):
+    """#216 — el piso de largo: `_(no disponible)_` es idéntico en decenas de notas off-ADS y sin
+    él la categoría nacería con un hallazgo gigante que no es un duplicado de nada."""
+    _paper_sin_id("2023eas..conf.1090L", "_(no disponible)_", toy_vault)
+    _paper_sin_id("2023spfi.confE..19L", "_(no disponible)_", toy_vault)
+    link_from_index(toy_vault, "2023eas..conf.1090L", "2023spfi.confE..19L")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2023eas..conf.1090L" not in _seccion(rep, "Posible duplicado SIN doi ni arxiv_id")
