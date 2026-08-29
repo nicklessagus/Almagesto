@@ -609,6 +609,19 @@ regla pasa a ser `core = facet propia Y (puerta 2 OR puerta 3)`:
 | **2 · fundacional en su campo** | `citation_count >= fundacional_min_citas` | `query_ads.classify_theme` |
 | **3 · lente astro global** | pasa `relevance.facets` de `objective.yaml` | ídem |
 
+⛔ **Y el PREVIEW de un tema se corre con esa lente, no con la global (#208):**
+`python scripts/query_ads.py <slug> --theme --probe` (la query sale de `query:` del tema). Hasta
+1.76.3 `--probe` clasificaba siempre con `relevance.facets`, o sea con la lente que esta misma
+sección declara inservible acá — y sobre la población que el tema existe para capturar el resultado
+no es «menos preciso», es el **veredicto opuesto**: medido en `ica`, los tres papers de separación
+de componentes más citados caían en el no-core y el core se llenaba de binarias eclipsantes que
+matchean `rv`. Importa porque el preview es el **único** lugar donde ese corte se decide **antes**
+de pagar descargas y extracción. En ese modo cada fila lleva **por qué puerta entró** (abajo), el
+desglose por política reemplaza al contraste de combinación —que habla de la lente global— y la
+línea de cierre manda a `themes.yaml`, no a `objective.yaml`. Sin `--theme`, comportamiento
+histórico; con `--theme` y un slug que no existe o que no declara `facet:`, **rehúsa** en vez de
+degradar a la global.
+
 ⛔ **Y queda registrado POR CUÁL puerta entró cada paper (#126): `puertas: [fundacional|astro]` en
 el registro.** Antes las dos se calculaban por separado y, al entrar el paper, se devolvía sólo
 `core=True`: el `why_excluded` explicaba el **no** y nada explicaba el **sí**. Es la única metadata

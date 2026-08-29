@@ -2036,3 +2036,128 @@ def test_search_fq_con_forma_invalida_falla_ruidoso(toy_vault, monkeypatch):
     assert qa.search_fq() == "database:astronomy"
     monkeypatch.setattr(qa.cfg, "load_objective", lambda: {"relevance": {"search_fq": None}})
     assert qa.search_fq() is None            # `null` declarado: no acotar, a propósito (#85)
+
+
+# ── #208 · --probe con la lente del TEMA ─────────────────────────────────────
+
+def _recs_ica():
+    """El caso medido en la ingesta real de `ica`: la lente global invierte el veredicto.
+
+    El paper de separación de componentes NO matchea `rv` (la faceta global), y la binaria
+    eclipsante SÍ — así que el `--probe` viejo imprimía la binaria como CORE y mandaba los papers
+    del tema al no-core."""
+    return [
+        {"bibcode": "2012MNRAS.423.2518C", "doctype": "article", "citation_count": 193,
+         "title": "Foreground removal using FASTICA: LOFAR", "abstract": "independent component",
+         "keyword": [], "facets": [], "relevant": False},
+        {"bibcode": "2020ecl..conf....1X", "doctype": "article", "citation_count": 4,
+         "title": "Radial velocity survey of eclipsing binaries", "abstract": "radial velocity",
+         "keyword": [], "facets": ["rv"], "relevant": True},
+    ]
+
+
+def test_probe_con_lente_del_tema_invierte_el_corte(toy_classifier, capsys):
+    """#208 — `print_probe` leía `r["relevant"]` (lente GLOBAL) y nunca pasaba por
+    `classify_theme`. Para un tema de método eso no es «menos preciso»: es el veredicto OPUESTO,
+    sobre exactamente la población que el tema existe para capturar."""
+    meta = {"title": "ICA", "facet": "independent component", "query": "abs:x",
+            "fundacional_min_citas": 100}
+    recs = _recs_ica()
+    assert qa.print_probe("q", recs, theme_meta=meta) == 0
+    out = capsys.readouterr().out
+    assert "[CORE]" in out
+    linea_ica = next(l for l in out.splitlines() if "2012MNRAS.423.2518C" in l)
+    linea_bin = next(l for l in out.splitlines() if "2020ecl..conf....1X" in l)
+    assert "[CORE]" in linea_ica          # entra por la faceta propia del tema
+    assert "[CORE]" not in linea_bin      # la binaria sale, aunque matchee `rv`
+
+
+def test_probe_del_tema_muestra_por_que_puerta_entro(toy_classifier, capsys):
+    """#208 punto 2 — la puerta (#126) es la única metadata que distingue, sin leer el paper, un
+    fundamento de su campo de una aplicación astro. Ningún preview la mostraba."""
+    meta = {"title": "ICA", "facet": "independent component", "fundacional_min_citas": 100}
+    qa.print_probe("q", _recs_ica(), theme_meta=meta)
+    out = capsys.readouterr().out
+    assert "por qué puerta entró cada core" in out
+    # la fila del desglose, no la coletilla de la línea de cierre (que nombra las dos puertas
+    # siempre): sin la reclasificación el core es la binaria y el desglose diría «(ninguna …)»
+    assert any(l.strip() == "1  fundacional" for l in out.splitlines()), out
+    linea_ica = next(l for l in out.splitlines() if "2012MNRAS.423.2518C" in l)
+    assert "[fundacional]" in linea_ica          # y la puerta va en la fila del paper
+
+
+def test_probe_del_tema_manda_a_themes_yaml(toy_classifier, capsys):
+    """#208 punto 3 — la línea de cierre mandaba a `objective.yaml`, que no es el archivo que
+    decide este corte: para un tema son `facet:` / `fundacional_min_citas` de themes.yaml."""
+    meta = {"title": "ICA", "facet": "independent component"}
+    qa.print_probe("q", _recs_ica(), theme_meta=meta)
+    out = capsys.readouterr().out
+    assert "themes.yaml" in out
+    assert "ajustá relevance.facets en objective.yaml" not in out
+
+
+def test_probe_sin_tema_no_cambia(toy_classifier, capsys):
+    """#208 punto 4 — sin `--theme`, comportamiento histórico intacto."""
+    qa.print_probe("q", _recs_ica())
+    out = capsys.readouterr().out
+    assert "ajustá relevance.facets en objective.yaml" in out
+    assert "por qué puerta entró" not in out
+
+
+def test_probe_theme_sin_slug_rehusa(toy_vault, monkeypatch, capsys):
+    """#208 — `--probe --theme` sin slug NO degrada a la lente global: rehúsa y lo dice (D-43).
+    Degradar sería un preview que dice una cosa y un ingest que hace otra."""
+    monkeypatch.setattr(sys, "argv", ["query_ads.py", "--theme", "--probe", "abs:x"])
+    with pytest.raises(SystemExit):
+        qa.main()
+    assert "necesita el slug del tema" in capsys.readouterr().err
+
+
+def test_probe_theme_slug_inexistente_rehusa(toy_vault, monkeypatch, capsys):
+    """#208 — ídem si el slug no está en themes.yaml."""
+    write_yaml(cfg.THEMES_YAML, {"otro": {"title": "Otro", "facet": "x"}})
+    monkeypatch.setattr(sys, "argv", ["query_ads.py", "ica", "--theme", "--probe", "abs:x"])
+    with pytest.raises(SystemExit, match="no tiene la entrada"):
+        qa.main()
+
+
+def test_probe_theme_sin_facet_rehusa(toy_vault, monkeypatch):
+    """#208 — un tema sin `facet:` no tiene lente propia: rehusar, no caer a la global."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "query": "abs:x"}})
+    monkeypatch.setattr(sys, "argv", ["query_ads.py", "ica", "--theme", "--probe"])
+    with pytest.raises(SystemExit, match="facet"):
+        qa.main()
+
+
+def test_probe_theme_toma_la_query_del_tema(toy_vault, monkeypatch, capsys):
+    """#208 — con `--theme` la QUERY se puede omitir: sale de `query:` de themes.yaml, que es
+    donde ya está declarada (copiarla a mano en cada corrida es cómo el preview y el ingest
+    terminan mirando queries distintas)."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "facet": "independent component",
+                                         "query": 'abs:"independent component"'}})
+    vistas = {}
+    monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000: vistas.setdefault("q", q) and [] or [])
+    monkeypatch.setattr(sys, "argv", ["query_ads.py", "ica", "--theme", "--probe"])
+    assert qa.main() == 0
+    assert vistas["q"] == 'abs:"independent component"'
+
+
+def test_probe_del_tema_no_propone_facetas_globales(toy_classifier, capsys):
+    """#208 — `propose_facets` propone facetas para `objective.yaml`, o sea el archivo que NO
+    decide el corte de un tema. Mostrarlas en modo tema manda a editar el archivo equivocado, que
+    es exactamente el defecto que este issue arregla en la línea de cierre."""
+    meta = {"title": "ICA", "facet": "independent component", "fundacional_min_citas": 100}
+    recs = _recs_ica() + [{"bibcode": f"2020x{i}", "doctype": "article", "citation_count": 1,
+                           "title": "sismo", "abstract": "", "keyword": ["asteroseismology"],
+                           "facets": [], "relevant": False} for i in range(4)]
+    qa.print_probe("q", recs, theme_meta=meta)
+    assert "¿FALTA UNA FACETA?" not in capsys.readouterr().out
+    qa.print_probe("q", recs)                                   # sin tema sí la propone
+    assert "¿FALTA UNA FACETA?" in capsys.readouterr().out
+
+
+def test_desglose_de_puertas_con_cero_core_lo_dice(capsys):
+    """#208 — 0 core no es «el desglose está vacío»: es que ninguna puerta abrió, y el archivo a
+    revisar es `facet:` del tema. Sin la rama, el preview imprimía un encabezado y nada debajo."""
+    qa.print_gate_breakdown([])
+    assert "ninguna puerta abrió" in capsys.readouterr().out

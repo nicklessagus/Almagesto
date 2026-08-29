@@ -65,6 +65,16 @@ Progreso del ingest del tema <tema>:
      query y reconfirmar. **No** bajar PDFs hasta que el usuario apruebe la query final. (`--probe`
      recibe la query cruda, así que corre sin que el tema exista todavía en `themes.yaml` —
      `--theme <slug>` recién funciona después del paso d.)
+   - ⛔ **c1. Para un tema de MÉTODO, re-corré el probe CON la lente del tema, después del paso d:**
+     `python scripts/query_ads.py <slug> --theme --probe` (la query sale de `query:`; se puede pasar
+     otra como argumento). Sin `--theme`, el preview clasifica con la lente **global**, que D-26
+     declara *activamente dañina* para un tema de método — y no es «menos preciso»: es el veredicto
+     **opuesto** sobre la población que el tema existe para capturar. Medido en `ica` (951
+     registros): los tres papers de separación de componentes más citados caían en el **no-core** y
+     el core se llenaba de binarias eclipsantes que matchean `rv`. En este modo cada core lleva
+     además **por qué puerta entró** (`fundacional` / `astro`, #126), que es lo que decide el
+     recorte de lectura, y la línea de cierre manda a `themes.yaml` (`facet:`,
+     `fundacional_min_citas`), que es el archivo que decide este corte.
    - **c2. Sugerir ramas no pedidas.** Con lo que vuelve del `--probe`, si aparece consistentemente
      una familia vecina que el usuario no nombró, **preguntarla** (*"apareció mucho NMF — ¿entra en
      este tema o es otro?"*). Es información que sólo existe después de mirar papers reales, y

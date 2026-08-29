@@ -6,6 +6,7 @@ Uso:
     python scripts/query_ads.py <slug> --extra-only       # sólo los bibcodes de extra_core (tema mixto)
     python scripts/query_ads.py <slug> --dry-run          # re-clasificar en memoria, sin red ni escritura
     python scripts/query_ads.py --probe "<query>"         # previsualizar el corte core/no-core, sin bajar
+    python scripts/query_ads.py <slug> --theme --probe    # ídem con la lente PROPIA del tema (D-26) y su `query:`
 
 Escribe build/<slug>/ads.json con la lista de registros (bibcode, título, autores,
 año, abstract, arxiv_id, doctype, citation_count, facets, relevant, why_excluded —el motivo real
@@ -675,7 +676,14 @@ def _probe_row(r: dict) -> str:
     # El bibcode va en la fila (#104): en un tema MIXTO el operador lee este preview y tiene que
     # copiar bibcodes a `extra_core:`; sin la columna hay que re-llamar a query_ads() a mano.
     bib = r.get("bibcode") or "-"
-    return f"  [{mark}] {cites:>5}  {bib:<19}  {title}  «{tp}»"
+    # #208 — POR QUÉ es core. En un tema de método la puerta (`fundacional` / `astro`) es la única
+    # metadata que distingue, sin leer el paper, un fundamento de su campo —muy citado, puede no
+    # nombrar astro ni una vez— de una aplicación astro con tres citas. Es lo que decide el recorte
+    # de lectura, y ningún preview la mostraba: el usuario veía el corte sin poder ver la regla que
+    # lo produjo (y creía que `fundacional_min_citas` filtraba algo cuando estaba inerte).
+    puertas = r.get("puertas")
+    pu = f"  [{'+'.join(puertas)}]" if puertas else ""
+    return f"  [{mark}] {cites:>5}  {bib:<19}  {title}  «{tp}»{pu}"
 
 
 def fetch_bibcodes(bibs: list[str]) -> list[dict]:
@@ -1205,7 +1213,26 @@ def propose_facets(recs: list, min_n: int = 3) -> list:
     return [(t, n) for t, n in cuenta.most_common() if n >= min_n]
 
 
-def print_probe(q: str, recs: list, noncore_top: int = 25) -> int:
+def print_gate_breakdown(core: list) -> None:
+    """How many core papers each D-26 gate admitted (#126): fundacional only, astro only, or both.
+
+    Same breakdown `triage.py <slug> --prioridad` uses to cut the reading list **by policy** instead
+    of paper by paper, brought forward to the preview — where the decision is still free, before
+    anything is downloaded or read. Measured on `ica`: `fundacional_min_citas: 2000` turned out to
+    be **inert** (0 papers through that gate, because the highly cited canon is not in ADS), and a
+    preview without this breakdown left the user believing the threshold filtered something."""
+    from collections import Counter
+    cuenta = Counter(tuple(sorted(r.get("puertas") or ())) for r in core)
+    if not core:
+        cfg.print_seguro("  (0 core: ninguna puerta abrió — revisá `facet:` del tema)")
+        return
+    cfg.print_seguro("  por qué puerta entró cada core (D-26 / #126):")
+    for puertas, n in cuenta.most_common():
+        etiqueta = " + ".join(puertas) if puertas else "(ninguna — no debería estar acá)"
+        cfg.print_seguro(f"    {n:>5}  {etiqueta}")
+
+
+def print_probe(q: str, recs: list, noncore_top: int = 25, theme_meta: dict | None = None) -> int:
     """Modo preview del skill `setup`: muestra el corte core/no-core de una query sin bajar nada,
     para afinar la regla de relevancia (relevance.facets) contra papers reales. Lista **TODO el core**
     (no un top-N: papers recientes/poco citados caen al fondo del ranking pero pueden ser core); del
@@ -1213,6 +1240,15 @@ def print_probe(q: str, recs: list, noncore_top: int = 25) -> int:
     contraste de la regla de combinación (#41). El barrido 2b de ingest-star, que antes se hacía con
     probes manuales, hoy corre por --sweep (sweep_star)."""
     # @inv INV-59
+    # #208 — con `--theme` el corte se calcula con la lente PROPIA del tema (D-26), que es la única
+    # que sirve para un tema de método: la global es «activamente dañina» ahí, y el preview es el
+    # único lugar donde la decisión se toma ANTES de pagar descargas y extracción. Medido sobre la
+    # query de `ica`: con la lente global los tres papers de separación de componentes más citados
+    # caían en el no-core y el core se llenaba de binarias eclipsantes que matchean `rv`.
+    # Se reusa `reclassify_for_theme` —no una copia de la regla— para que el preview no pueda
+    # divergir del ingest (regla de método nº 2).
+    if theme_meta is not None:
+        reclassify_for_theme(recs, theme_meta)
     core = sorted((r for r in recs if r["relevant"]), key=lambda r: r.get("citation_count") or 0, reverse=True)
     noncore = sorted((r for r in recs if not r["relevant"]), key=lambda r: r.get("citation_count") or 0, reverse=True)
     cfg.print_seguro(f"Probe (no baja PDFs ni escribe build/). q: {q}")
@@ -1223,9 +1259,16 @@ def print_probe(q: str, recs: list, noncore_top: int = 25) -> int:
     proyectado = len(core) * cfg.TOKENS_POR_PAPER
     cfg.print_seguro(f"  costo proyectado de leer el core: ~{proyectado // 1000}k tokens "
                      f"({len(core)} × {cfg.TOKENS_POR_PAPER // 1000}k, mediana del corpus)")
-    print_combination_contrast(recs)
+    if theme_meta is not None:
+        # #208 — el desglose por puerta REEMPLAZA al contraste de combinación en modo tema. Los dos
+        # hablan de la lente GLOBAL (`relevance.facets`, `require`, `min_facets`), que acá es sólo
+        # la puerta 3 de D-26: mostrarlos mandaría a afinar objective.yaml cuando el archivo que
+        # decide este corte es themes.yaml — el mismo error que la línea de cierre cometía.
+        print_gate_breakdown(core)
+    else:
+        print_combination_contrast(recs)
     # #83: qué faceta le FALTA a la lente, minado de los no-core. Propuesta, no edición.
-    if (prop := propose_facets(recs)):
+    if theme_meta is None and (prop := propose_facets(recs)):
         cfg.print_seguro("\n  ¿FALTA UNA FACETA? Términos que se repiten entre los no-core y que "
                          "ninguna faceta matchea:")
         for t, n_ in prop[:8]:
@@ -1241,7 +1284,13 @@ def print_probe(q: str, recs: list, noncore_top: int = 25) -> int:
     cfg.print_seguro(f"\n  no-core (top {len(shown)} de {len(noncore)}, chequeo de sanidad):")
     for r in shown:
         cfg.print_seguro(_probe_row(r))
-    cfg.print_seguro("\n  → ajustá relevance.facets en objective.yaml y re-corré --probe hasta que el corte cierre.")
+    if theme_meta is not None:
+        cfg.print_seguro("\n  → ajustá `facet:` / `fundacional_min_citas` del tema en themes.yaml y "
+                         "re-corré --probe hasta que el corte cierre.")
+        cfg.print_seguro("    (la columna [fundacional|astro] dice por qué puerta entró cada core, #126; "
+                         "sin ninguna puerta abierta no es core)")
+    else:
+        cfg.print_seguro("\n  → ajustá relevance.facets en objective.yaml y re-corré --probe hasta que el corte cierre.")
     return 0
 
 
@@ -1287,10 +1336,14 @@ def main() -> int:
                          "de un tema off-ADS MIXTO: su bibliografía canónica vive fuera de ADS (sin "
                          "`query`), pero los papers que SÍ tienen bibcode van en extra_core. "
                          "La corre ingest_theme.py solo.")
-    ap.add_argument("--probe", metavar="QUERY",
+    ap.add_argument("--probe", metavar="QUERY", nargs="?", const="",
                     help="PREVIEW (skill setup): corre una query Solr CRUDA y muestra el corte "
                          "core/no-core con títulos, clasificando con relevance.facets de objective.yaml. "
-                         "No baja PDFs ni escribe build/ — sólo para afinar la regla de relevancia.")
+                         "No baja PDFs ni escribe build/ — sólo para afinar la regla de relevancia. "
+                         "Con `<slug> --theme` clasifica con la lente PROPIA del tema (D-26: la "
+                         "global es la equivocada para un tema de método) y muestra por qué puerta "
+                         "entró cada core (#126); ahí la QUERY se puede omitir y sale de `query:` "
+                         "del tema en themes.yaml.")
     ap.add_argument("--dry-run", action="store_true",
                     help="PREVIEW de re-clasificación (sub-modo D de maintain): re-clasifica EN "
                          "MEMORIA los build/<slug>/ads.json ya existentes con la regla vigente de "
@@ -1305,8 +1358,29 @@ def main() -> int:
                          "stars.yaml. No baja PDFs ni escribe build/, pero SÍ appendea la corrida a `barridos:` del registro versionado (#88) — no es un preview puro como --probe. Sólo estrellas.")
     args = ap.parse_args()
 
-    if args.probe:
-        return print_probe(args.probe, query_ads(args.probe, rows=args.rows))
+    if args.probe is not None:
+        # #208 — `--probe` previsualizaba SIEMPRE con la lente global, o sea con la que D-26 declara
+        # «activamente dañina» para un tema de método, y sobre exactamente la población que el tema
+        # existe para capturar. El mecanismo correcto ya existía y estaba probado (`classify_theme`
+        # / `reclassify_for_theme`, INV-88): faltaba el cableado.
+        tema_meta = None
+        if args.theme:
+            if not args.slug:
+                # ⛔ No degradar a la lente global: sería el falso limpio de siempre — un preview
+                # que dice una cosa y un ingest que hace otra (D-43).
+                ap.error("--probe --theme necesita el slug del tema: "
+                         'python scripts/query_ads.py <slug> --theme --probe ["<query>"]')
+            tema_meta = cfg.load_themes().get(args.slug)
+            if tema_meta is None:
+                sys.exit(f"themes.yaml no tiene la entrada '{args.slug}' — sin el tema no hay lente "
+                         "propia que aplicar, y previsualizar con la global daría el veredicto "
+                         "opuesto justo donde importa (D-26).")
+            _facet_propia(tema_meta)      # rehúsa (con el mensaje correcto) si no declara `facet:`
+        q = args.probe or (tema_meta or {}).get("query")
+        if not q:
+            ap.error('falta la QUERY: --probe "<query>" (con --theme se puede omitir sólo si el '
+                     "tema declara `query:` en themes.yaml)")
+        return print_probe(q, query_ads(q, rows=args.rows), theme_meta=tema_meta)
 
     if args.dry_run:   # offline: sólo re-clasifica lo que ya está en build/ (no toca ADS)
         slugs = [args.slug] if args.slug else built_slugs()
