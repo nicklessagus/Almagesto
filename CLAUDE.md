@@ -1326,7 +1326,18 @@ en `build/<slug>/triage.json`** (el lugar pre-1.9.0 que el lector ya no mira: mi
 triage vuelve a proponer lo ya descartado **sin el motivo** → `triage.py <slug> --migrate`). La
 **fuga de implementación** (regla #0 / frontera dura) es **WARN no bloqueante** — heurística de alta
 señal (perilla/dial/`w_j`/`peso(`); cada hit se revisa a mano y se saca del vault si es material de
-implementación (no es bibliografía). Las **áreas de `concepts/` fuera de `concept_areas`** (subcarpeta no
+implementación (no es bibliografía). ⛔ **No mira las `SECCIONES_ESTAMPADAS` (#214)**, por el mismo
+argumento con que `verify-citations` ya las exime: una traducción de #124 no es una afirmación de la
+bóveda, y el «nuestro código» del castellano es el *our code* **del paper** — así que todo abstract
+en primera persona del plural (o sea la mayoría) disparaba el WARN al traducirse, y un WARN que
+crece linealmente con los papers traducidos, falso positivo en todos, es cómo una categoría de alta
+señal se vuelve ruido y se deja de mirar. La exención **no** alcanza a `## Vista — <sujeto>`: esa
+prosa la escribe el extractor y ahí una fuga sería real. *(Al arreglarlo apareció la causa de fondo:
+la regla de «sección estampada» tenía **dos implementaciones divergentes** —la estricta de INV-98 en
+`_es_estampada` y el `startswith` pelado de `lib_blocks`—, así que las traducciones quedaban exentas
+para una red y no para la otra, y `## Papers relevantes para el método` se saltaba entero en el
+fan-out sin que nadie verificara sus pares. Hoy es una sola, `lib_config.is_stamped_section`, y los
+nombres del tuple van completos.)* Las **áreas de `concepts/` fuera de `concept_areas`** (subcarpeta no
 declarada en `vault/config/objective.yaml`) son **WARN** — las áreas son **abiertas**: la lista es sólo
 referencia para distinguir un typo de un área nueva, **nunca se bloquea** (`make_notes` **avisa** pero crea
 igual; el lint marca las carpetas fuera de la lista). Si el objetivo **no declara** `concept_areas`,

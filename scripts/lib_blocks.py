@@ -281,7 +281,11 @@ def split_blocks(body: str) -> list[Block]:
         if s.startswith("#"):
             flush()
             # las secciones estampadas se saltean hasta el próximo encabezado
-            en_verificacion = any(s.startswith(h) for h in cfg.SECCIONES_ESTAMPADAS)
+            # #214 — `cfg.is_stamped_section`, no un `startswith` pelado: éste era la regla VIEJA
+            # que INV-98 arregló dentro de `_es_estampada` y que nunca llegó acá, así que
+            # `## Papers relevantes para el método` —una sección PROPIA— se saltaba entera y sus
+            # pares no se verificaban nunca. Una sola implementación.
+            en_verificacion = cfg.is_stamped_section(s)
             intro_actual = None if en_verificacion else s.lstrip("# ").strip()
             continue
         if en_verificacion or not s:

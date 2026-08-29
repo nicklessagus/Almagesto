@@ -1637,3 +1637,26 @@ def test_save_registro_no_pisa_un_registro_en_otra_codificacion(toy_vault):
     with pytest.raises(RuntimeError, match="no lo piso a ciegas"):
         cfg.save_registro("test_star", {"slug": "test_star"})
     assert cfg.registro_path("test_star").read_bytes() == original
+
+
+def test_las_traducciones_son_secciones_estampadas():
+    """#214 — el nombre en `SECCIONES_ESTAMPADAS` va COMPLETO. Con `## Traducción` pelado, el
+    sufijo del encabezado real (« del abstract») empieza con letra y la regla de sufijo de INV-98
+    lo rechaza: las traducciones NO quedaban exentas para `_es_estampada`/`solo_prosa`, mientras el
+    `startswith` pelado de `lib_blocks` (la regla vieja) sí las eximía. Dos copias de la misma
+    regla con semánticas opuestas, o sea cada consumidor con un conjunto distinto."""
+    assert cfg.is_stamped_section("## Traducción del abstract")
+    assert cfg.is_stamped_section("## Traducción de las conclusiones")
+    assert cfg.is_stamped_section("## Abstract")
+    # y la regla de sufijo sigue en pie: una sección PROPIA con nombre parecido no se exime
+    assert not cfg.is_stamped_section("## Papers relevantes para el método")
+    assert not cfg.is_stamped_section("## Vista — tau Cet")
+
+
+def test_solo_prosa_saca_la_traduccion():
+    """#214 — consecuencia medible: `solo_prosa` es lo que alimenta al gate R-1 (¿la nota tiene
+    citas en prosa?), así que una traducción contada como prosa mueve un chequeo de cierre."""
+    cuerpo = ("## Síntesis\nprosa real\n\n"
+              "## Traducción del abstract\nAdemás, nuestro código usa entropía máxima.\n")
+    assert "prosa real" in cfg.solo_prosa(cuerpo)
+    assert "nuestro código" not in cfg.solo_prosa(cuerpo)

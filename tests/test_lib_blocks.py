@@ -516,3 +516,20 @@ def test_parse_corta_en_la_seccion_SIGUIENTE():
     filas = lb.parse_verif_table(bloque)
     assert filas is not None and len(filas) == 1, [f.bibcode for f in (filas or [])]
     assert filas[0].bibcode == "2020ApJ...900...1A"
+
+
+def test_una_seccion_propia_con_nombre_parecido_no_se_saltea():
+    """#214 — `pairs_of` cortaba con un `startswith` pelado, o sea la regla VIEJA que INV-98 ya
+    había arreglado dentro de `_es_estampada` y que nunca llegó acá: `## Papers relevantes para el
+    método` es prosa propia y se saltaba entera, así que sus pares no se verificaban nunca."""
+    texto = ("# nota\n\n## Papers relevantes para el método\n"
+             "El valor es 3.4 m/s [[2020Autor]].\n")
+    pares = lb.pairs_of(texto)
+    assert any("2020Autor" in p.bibcode for p in pares), pares
+
+
+def test_la_traduccion_estampada_sigue_exenta():
+    """#214, la otra mitad: la exención que sí corresponde no se pierde al unificar la regla."""
+    texto = ("# nota\n\n## Traducción del abstract\n"
+             "Presentamos el método de [[2020Autor]].\n")
+    assert lb.pairs_of(texto) == []

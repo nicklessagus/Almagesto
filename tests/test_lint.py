@@ -4418,3 +4418,45 @@ def test_un_typo_en_el_veredicto_se_reporta_como_typo_y_bloquea(toy_vault, capsy
     rc, out = run_lint(capsys)
     assert rc == 1
     assert "no está en el vocabulario cerrado" in out and "contradise" in out
+
+
+# ── #214 · el detector de fuga exime las SECCIONES ESTAMPADAS ────────────────
+
+def test_traduccion_estampada_no_dispara_fuga(toy_vault, capsys):
+    """#214 — el «nuestro código» de una `## Traducción del abstract` es el *our code* del PAPER,
+    traducido: no hay ninguna fuga, la bóveda no se describe a sí misma ni a un consumidor.
+
+    `verify-citations` ya exime `SECCIONES_ESTAMPADAS` con el argumento correcto —una traducción no
+    es una afirmación de la bóveda— y este detector no lo hacía: la misma prosa era «no es una
+    afirmación» para una red y «candidata a fuga» para la otra. Como el castellano dice «nuestro»
+    donde el inglés dice *our*, TODO abstract en primera persona del plural disparaba el WARN al
+    traducirse, y una categoría de alta señal que crece linealmente con falsos positivos se deja
+    de mirar."""
+    mk_note(cfg.PAPERS, "2007AN....328.1043C",
+            {"bibcode": "2007AN....328.1043C", "tags": ["paper"], "stars": ["tau Cet"]},
+            "# 2007AN....328.1043C\n\n"
+            "## Traducción del abstract\nAdemás, nuestro código utiliza un nuevo esquema de "
+            "regularización basado en entropía máxima local.\n")
+    link_from_index(toy_vault, "2007AN....328.1043C")
+    rc, rep = run_lint_reporte(capsys)
+    assert "2007AN....328.1043C" not in _seccion(rep, "Fuga de implementación"), rep
+    assert rc == 0
+
+
+def test_la_exencion_no_alcanza_a_la_vista(toy_vault, capsys):
+    """#214, el recorte — `## Vista — <sujeto>` NO es sección estampada: la escribe el extractor,
+    así que ahí una fuga sí sería una fuga real. Sin este límite, la exención apagaría el detector
+    justo en la única prosa que una nota de paper aporta."""
+    mk_note(cfg.PAPERS, "2015MNRAS.447.1984D",
+            {"bibcode": "2015MNRAS.447.1984D", "tags": ["paper"], "stars": ["tau Cet"],
+             "vistas": [{"sujeto": "tau Cet", "tipo": "star", "fecha": "2026-08-29",
+                         "fuente": "pdf"}]},
+            "# 2015MNRAS.447.1984D\n\n"
+            "## Traducción del abstract\nPresentamos nuestro método.\n\n"
+            "## Vista — tau Cet\nLa perilla del contraste se ajusta así.\n")
+    link_from_index(toy_vault, "2015MNRAS.447.1984D")
+    rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "Fuga de implementación")
+    assert "2015MNRAS.447.1984D" in sec and "perilla" in sec, sec
+    # la traducción, en la MISMA nota, no aparece: la exención es por sección, no por nota
+    assert "Presentamos nuestro" not in sec, sec

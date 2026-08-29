@@ -1290,7 +1290,24 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         scan_leaks = stem not in NON_ORPHAN    # log/index/README son historia/navegación, no fichas
         # split("\n"), no splitlines(): un form feed colado no debe correr la numeración (la
         # convención de conteo es la de `grep -n` — ver skill verify-citations, #29)
+        # #214 — las SECCIONES ESTAMPADAS quedan fuera del scan, igual que en `lib_blocks.pairs_of`.
+        # `verify-citations` ya las exime con el argumento correcto —una traducción «no es una
+        # afirmación de la bóveda y no hay qué contrastar»— y este detector no: la misma prosa era
+        # «no es una afirmación» para una red y «candidata a fuga» para la otra. El caso medido son
+        # las traducciones de #124: el castellano dice «nuestro código» donde el paper dice *our
+        # code*, y el patrón `_CONSUMIDOR_*` busca exactamente eso, así que TODO abstract en primera
+        # persona del plural —o sea la mayoría— disparaba el WARN al traducirse. Importa porque el
+        # valor de esta categoría es ser de alta señal: cada hit se revisa a mano, y un WARN que
+        # crece linealmente con el número de papers traducidos, falso positivo en todos, es cómo una
+        # categoría se vuelve ruido y se deja de mirar.
+        # ⛔ El recorte: `## Vista — <sujeto>` NO es estampada (no está en `SECCIONES_ESTAMPADAS`),
+        # y ahí una fuga sí sería una fuga real — la escribe el extractor, no la máquina.
+        _en_estampada = False
         for i, line in enumerate(body_full.split("\n"), 1 + _offset) if scan_leaks else []:
+            if line.startswith("## "):
+                _en_estampada = cfg.is_stamped_section(line)
+            if _en_estampada:
+                continue
             if line.lstrip().startswith(">"):
                 continue                       # blockquote meta (frontera/alcance)
             for rx, label in leak_patterns:

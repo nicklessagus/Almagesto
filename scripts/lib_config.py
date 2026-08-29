@@ -20,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.78.0"
+ALMAGESTO_VERSION = "1.78.1"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -195,7 +195,15 @@ SECCIONES_ESTAMPADAS = ("## Planetas", "## Papers", "## Métodos aplicados a est
                         # y no lo estampaba **nunca** — dejando a `note_lens_text` sin abstract para
                         # siempre. Es la trampa de prefijo de #176, instanciada en el vocabulario
                         # propio del framework; se saca renombrando, no aflojando el cortador.
-                        "## Abstract", "## Conclusiones", "## Traducción")
+                        # ⚠ Los nombres van COMPLETOS (#214): con `## Traducción` pelado, el
+                        # sufijo del encabezado real (« del abstract») empieza con letra y la regla
+                        # de sufijo de INV-98 lo rechaza — así que las traducciones NO quedaban
+                        # exentas en `_es_estampada`, mientras el `startswith` pelado de
+                        # `lib_blocks` (la regla vieja) sí las eximía. Dos copias de la misma regla
+                        # con semánticas opuestas: cada consumidor veía un conjunto distinto de
+                        # secciones estampadas, que es exactamente el bug de la regla de método nº2.
+                        "## Abstract", "## Conclusiones",
+                        "## Traducción del abstract", "## Traducción de las conclusiones")
 
 
 def _es_estampada(linea: str) -> bool:
@@ -254,6 +262,16 @@ def missing_schema_fields(tipo: str, fm: dict) -> list:
     Presence, not value: see the comment on `SCHEMA_NOTA`. An unknown type returns `[]` — there is
     no schema to measure it against, and inventing one would be worse than not checking."""
     return [k for k in SCHEMA_NOTA.get(tipo, ()) if k not in fm]
+
+
+def is_stamped_section(heading: str) -> bool:
+    """Public entry point for the stamped-section test (#214).
+
+    `solo_prosa` was the only consumer, so the predicate stayed private — but a second detector
+    needs it **keeping line numbers**, which `solo_prosa` cannot give (it drops lines). Exposing
+    the predicate is the fix; re-implementing the heading match at the call site is exactly the
+    duplicated-rule bug that method rule nº 2 is about."""
+    return _es_estampada(heading)
 
 
 def solo_prosa(body: str) -> str:
