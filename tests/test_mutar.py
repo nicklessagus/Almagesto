@@ -372,3 +372,217 @@ def test_los_pares_de_trazabilidad_salen_de_las_DOS_marcas(monkeypatch):
     pares = mutar._traceability_pairs()
     assert [(inv, sym) for inv, _f, sym, _t in pares] == [("INV-01", "f"), ("INV-01", "g")]
     assert pares[0][3] == ["tests/test_a.py::test_x"]
+
+
+# ── AUD-213 · mutación de GUARDAS: el mutante de función vacía el cuerpo entero ────────────────
+#
+# Un módulo donde mueren todos los mutantes de función sigue sin decir nada sobre sus condiciones:
+# `entity.py` tenía 30 guardas de 84 y `harvest_views.py` 18 de 72 sin test que las distinga. Estos
+# tests fijan las tres propiedades que hacen usable el modo: qué se muta, que el código mutado sea
+# válido, y que la baseline roja NO devuelva un cero.
+
+
+_CON_GUARDAS = '''\
+def f(x, y):
+    if x and y:
+        return 1
+    if x:
+        return 2
+    return 3
+'''
+
+
+def test_guardas_muta_la_condicion_entera_y_cada_clausula(tmp_path: Path):
+    """La granularidad ES el hallazgo: `if x and y` con tests que sólo dan `x=False` nunca ejercita
+    `y`, y sólo el mutante por cláusula lo dice. La cláusula se neutraliza con la identidad de su
+    operador (`True` en un `and`), así que la guarda **sigue** firando por la otra."""
+    m = tmp_path / "m.py"; m.write_text(_CON_GUARDAS, encoding="utf-8")
+    etiquetas = [(g.func, g.label, g.replacement) for g in mutar.guards(m)]
+    assert ("f", "if@L2", "False") in etiquetas
+    assert ("f", "if@L2/and[0]", "True") in etiquetas
+    assert ("f", "if@L2/and[1]", "True") in etiquetas
+    assert ("f", "if@L4", "False") in etiquetas
+    assert len(etiquetas) == 4
+
+
+def test_guardas_ignora_lo_que_esta_fuera_de_una_funcion_y_las_constantes(tmp_path: Path):
+    """`if __name__ == "__main__":` y `if TYPE_CHECKING:` no son guardas de nadie. Y una condición
+    constante se saltea porque reescribir `False` como `False` no cambia nada: se reportaría como
+    SOBREVIVE, o sea un hallazgo que la herramienta inventó."""
+    m = tmp_path / "m.py"
+    m.write_text('import sys\n\nif sys.argv:\n    pass\n\n\ndef f(x):\n    if False:\n'
+                 '        return 1\n    if x:\n        return 2\n', encoding="utf-8")
+    # ⚠ El `if` de módulo lleva condición NO constante a propósito: con `if True:` la rama de las
+    # constantes lo tapaba y la mitad «sólo adentro de una función» quedaba sin cubrir — lo
+    # encontró `--guardas` corriéndose sobre sí mismo.
+    assert [(g.func, g.label) for g in mutar.guards(m)] == [("f", "if@L10")]
+
+
+def test_la_clausula_CONSTANTE_de_un_and_tampoco_se_muta(tmp_path: Path):
+    """El caso que el propio `--guardas` encontró al correrse sobre este archivo (2026-08-28): la
+    guarda que saltea una cláusula constante **sobrevivía**, porque el test de la cláusula usaba
+    `if x and y` —dos nombres— y el de las constantes usaba `if False:`, que es un test constante,
+    no una cláusula. O sea: ninguno de los dos ejercitaba esta rama. Sin ella, `if x and True`
+    emitiría un mutante que reescribe `True` como `True` y saldría SOBREVIVE — una guarda sin test
+    que la herramienta se inventó."""
+    m = tmp_path / "m.py"; m.write_text("def f(x):\n    if x and True:\n        return 1\n",
+                                        encoding="utf-8")
+    assert [g.label for g in mutar.guards(m)] == ["if@L2", "if@L2/and[0]"]
+
+
+def test_el_elif_es_una_guarda_y_el_if_de_una_comprension_no(tmp_path: Path):
+    """`elif` es un `ast.If` anidado en `orelse` —una guarda como cualquier otra—; el `if` de una
+    comprensión no es un `ast.If` y queda afuera. Si esto se rompe, la cuenta de guardas de un
+    módulo cambia sin que cambie el código."""
+    m = tmp_path / "m.py"
+    m.write_text("def f(x, xs):\n    if x:\n        return 1\n    elif xs:\n        return 2\n"
+                 "    return [i for i in xs if i]\n", encoding="utf-8")
+    assert [g.label for g in mutar.guards(m)] == ["if@L2", "if@L4"]
+
+
+def test_toda_guarda_de_scripts_produce_codigo_QUE_PARSEA():
+    """La red de la red. `col_offset` es un offset de **bytes UTF-8**, no de caracteres, y este
+    repo tiene prosa acentuada en casi toda línea: cortar el `str` en vez de los bytes parte la
+    condición al medio y el mutante no compila — con lo cual "muere" por SyntaxError, o sea por el
+    motivo equivocado (#202), y el modo devuelve 0 sobrevivientes sobre un módulo que nadie midió.
+    """
+    import ast as _ast
+    scripts = sorted((Path(__file__).resolve().parents[1] / "scripts").glob("*.py"))
+    total = 0
+    for m in scripts:
+        src = m.read_text(encoding="utf-8")
+        for g in mutar.guards(m):
+            total += 1
+            _ast.parse(mutar._replace_span(src, g))     # revienta si el splice cortó mal
+    assert total > 500, f"sólo {total} guardas: el recolector dejó de ver la mayoría del corpus"
+
+
+def test_la_condicion_multilinea_colapsa_en_una_sola(tmp_path: Path):
+    """Una condición repartida en varias líneas se reemplaza entera: lo de antes en la primera, el
+    literal, lo de después en la última. Sin esto quedan colgando el `and` y el paréntesis."""
+    m = tmp_path / "m.py"
+    m.write_text("def f(a, b):\n    if (a\n            and b):\n        return 1\n",
+                 encoding="utf-8")
+    entera = [g for g in mutar.guards(m) if g.label == "if@L2"][0]
+    assert mutar._replace_span(m.read_text(encoding="utf-8"), entera) == (
+        "def f(a, b):\n    if (False):\n        return 1\n")
+
+
+def test_guardas_solo_corre_la_etapa_barata(repo_con_tests: Path, monkeypatch, tmp_path):
+    """Mismo contrato que `--dirigida`: NO escala a la suite, así que sobre-reporta sobrevivientes
+    y nunca da un falso limpio. Si escalara, el modo dejaría de ser el bucle de escritura."""
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    (repo_con_tests / "scripts" / "viejo.py").write_text(_CON_GUARDAS, encoding="utf-8")
+    blancos = _grabando(monkeypatch, [True, False, False, False])
+    copia = tmp_path / "copia"; (copia / "scripts").mkdir(parents=True)
+    (copia / "scripts" / "viejo.py").write_text("x", encoding="utf-8")
+
+    vivos = mutar.mutate_guards(repo_con_tests / "scripts" / "viejo.py", copia,
+                                Path("tests/test_viejo.py"), verbose=False)
+
+    assert vivos == ["f::if@L2"]
+    assert blancos == ["tests/test_viejo.py"] * 4, f"pagó de más: {blancos}"
+
+
+def test_guardas_con_la_baseline_ROJA_no_devuelve_cero(repo_con_tests: Path, monkeypatch, capsys):
+    """D-43 dentro de la herramienta que audita los tests. Con `tests/test_<mod>.py` ya en rojo,
+    TODA guarda 'muere' por el motivo equivocado y el modo imprimiría «murieron todas ✅» sobre un
+    módulo que nadie midió. Sale 2 (no evaluado), no 0."""
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    (repo_con_tests / "scripts" / "viejo.py").write_text(_CON_GUARDAS, encoding="utf-8")
+    monkeypatch.setattr(mutar, "_copia_del_repo", lambda destino: destino)
+    monkeypatch.setattr(mutar, "_suite_verde", lambda cwd, subset=None: False)
+    def _no_llamar(*a, **k):
+        raise AssertionError("mutó con la baseline en rojo")
+    monkeypatch.setattr(mutar, "mutate_guards", _no_llamar)
+
+    rc = mutar._guards(SimpleNamespace(archivos=["scripts/viejo.py"], solo=""))
+
+    assert rc == 2
+    assert "no evaluado" in capsys.readouterr().out
+
+
+def test_guardas_sin_ninguna_guarda_no_es_un_verde(repo_con_tests: Path, monkeypatch, capsys):
+    """Cero guardas NO es «murieron todas» — el mismo cero inventado que `--dirigida` ya rechaza."""
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    (repo_con_tests / "scripts" / "viejo.py").write_text("def f():\n    return 1\n",
+                                                         encoding="utf-8")
+    rc = mutar._guards(SimpleNamespace(archivos=["scripts/viejo.py"], solo=""))
+    assert rc == 2
+    assert "NO es un verde" in capsys.readouterr().out
+
+
+def test_guardas_rehusa_sin_test_1_a_1(repo_con_tests: Path, monkeypatch, capsys):
+    """Sin la etapa barata no hay modo: se rehúsa en vez de degradar a la corrida cara."""
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    (repo_con_tests / "scripts" / "huerfano.py").write_text(_CON_GUARDAS, encoding="utf-8")
+    rc = mutar._guards(SimpleNamespace(archivos=["scripts/huerfano.py"], solo=""))
+    assert rc == 2
+    assert "no hay tests/test_huerfano.py" in capsys.readouterr().out
+
+
+def test_guardas_only_acota_a_las_funciones_pedidas(repo_con_tests: Path, monkeypatch, tmp_path):
+    """`--solo` tiene que **filtrar**: sin el guard se mutan todas (se paga de más y el reporte
+    nombra guardas que nadie pidió), y con el guard invertido no se muta ninguna."""
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    (repo_con_tests / "scripts" / "viejo.py").write_text(
+        "def f(x, y):\n    if x and y:\n        return 1\n\n\ndef g(z):\n    if z:\n"
+        "        return 2\n", encoding="utf-8")
+    blancos = _grabando(monkeypatch, [False] * 3)
+    copia = tmp_path / "copia"; (copia / "scripts").mkdir(parents=True)
+    (copia / "scripts" / "viejo.py").write_text("x", encoding="utf-8")
+
+    mutar.mutate_guards(repo_con_tests / "scripts" / "viejo.py", copia,
+                        Path("tests/test_viejo.py"), only={"f"}, verbose=False)
+
+    assert len(blancos) == 3, f"se mutaron guardas de otra función: {len(blancos)} corridas"
+
+
+def test_guardas_verbose_dice_lo_que_paso_con_cada_una(repo_con_tests: Path, monkeypatch, tmp_path,
+                                                       capsys):
+    """La línea por guarda **es** la salida del modo: sin ella el operador ve un total y no sabe
+    cuál sobrevivió."""
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    (repo_con_tests / "scripts" / "viejo.py").write_text("def f(x):\n    if x:\n        return 1\n",
+                                                         encoding="utf-8")
+    _grabando(monkeypatch, [True])
+    copia = tmp_path / "copia"; (copia / "scripts").mkdir(parents=True)
+    (copia / "scripts" / "viejo.py").write_text("x", encoding="utf-8")
+
+    mutar.mutate_guards(repo_con_tests / "scripts" / "viejo.py", copia,
+                        Path("tests/test_viejo.py"))
+
+    assert "SOBREVIVE" in capsys.readouterr().out
+
+
+def test_guardas_toma_un_solo_modulo(repo_con_tests: Path, monkeypatch):
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    assert mutar._guards(SimpleNamespace(archivos=[], solo="")) == 2
+    assert mutar._guards(SimpleNamespace(archivos=["a.py", "b.py"], solo="")) == 2
+
+
+def test_guardas_rechaza_una_funcion_sin_guardas(repo_con_tests: Path, monkeypatch, capsys):
+    """Un `--solo` que no matchea nada mediría **cero** y cerraría en verde. Se nombra y se rehúsa,
+    igual que `--dirigida` con una función inexistente."""
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    (repo_con_tests / "scripts" / "viejo.py").write_text(_CON_GUARDAS, encoding="utf-8")
+    rc = mutar._guards(SimpleNamespace(archivos=["scripts/viejo.py"], solo="noexiste"))
+    assert rc == 2
+    assert "noexiste" in capsys.readouterr().out
+
+
+def test_guardas_con_sobrevivientes_sale_1_y_los_LISTA(repo_con_tests: Path, monkeypatch, capsys):
+    """El caso que el modo existe para reportar. Sin este guard imprimiría «murieron todas ✅» y
+    devolvería 0 **teniendo sobrevivientes** — el falso limpio adentro del detector de falsos
+    limpios."""
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    (repo_con_tests / "scripts" / "viejo.py").write_text(_CON_GUARDAS, encoding="utf-8")
+    monkeypatch.setattr(mutar, "_copia_del_repo", lambda destino: destino)
+    monkeypatch.setattr(mutar, "_suite_verde", lambda cwd, subset=None: True)
+    monkeypatch.setattr(mutar, "mutate_guards", lambda *a, **k: ["f::if@L2"])
+
+    rc = mutar._guards(SimpleNamespace(archivos=["scripts/viejo.py"], solo=""))
+
+    salida = capsys.readouterr().out
+    assert rc == 1
+    assert "f::if@L2" in salida and "✅" not in salida

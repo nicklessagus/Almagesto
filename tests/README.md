@@ -355,6 +355,39 @@ escribir cada función nueva».
 > estaba en la primera versión de este modo — `ingest_star.py` es todo `main`, que está exento, y
 > cerraba con un ✅ sin haber medido nada).
 
+> **Y un TERCER modo: la mutación de GUARDAS (AUD-213, 2026-08-28).** Vaciar el cuerpo de una
+> función no mide sus condiciones, así que un módulo donde **mueren todos** los mutantes sigue sin
+> decir nada sobre sus guardas — medido por un subagente leyendo el código: `entity.py` **30 de 84**
+> y `harvest_views.py` **18 de 72** sin test que las distinga. Las tres guardas de `apply_fixes.py`
+> de la tanda #196/#197 hubo que romperlas **a mano** justamente porque el gate no sabía hacerlo.
+>
+> ```bash
+> python tools/mutar.py --guardas scripts/entity.py                # las 55 guardas del módulo
+> python tools/mutar.py --guardas scripts/entity.py --solo delete  # sólo las de una función
+> ```
+>
+> Contesta otra pregunta: ***¿algún test ejercita el caso que esta guarda ataja?*** Muta cada `if`
+> de adentro de una función a `False` —la guarda nunca dispara— y, en un `and`/`or`, **cada cláusula
+> por separado**, neutralizada con la identidad de su operador (`True` dentro de un `and`, `False`
+> dentro de un `or`), de modo que la guarda **sigue** disparando por las otras: `if a and b` con
+> tests que sólo dan `a=False` nunca ejercita `b`, y sólo el mutante por cláusula lo dice. Un `elif`
+> es un `If` anidado y entra; el `if` de una comprensión no es un `ast.If` y queda afuera; una
+> condición **constante** se saltea, porque reescribir `False` como `False` no cambia nada y saldría
+> SOBREVIVE — un hallazgo que la herramienta inventó.
+>
+> ⚠ **Mismo contrato que la dirigida** (un módulo, su archivo de tests, no escala, sobre-reporta
+> sobrevivientes, **no toca el ratchet** — que cuenta funciones, y mezclar dos poblaciones en un
+> número dejaría al techo sin significado), **con una diferencia**: es el único de los tres modos
+> que **chequea la baseline**. Con `tests/test_<módulo>.py` ya en rojo toda guarda «muere» por el
+> motivo equivocado y el modo cerraría en verde sobre un módulo que nadie midió — #202 dentro de la
+> herramienta que audita los tests. Sale **no evaluado** (rc 2), no 0.
+>
+> ⚠ El splice corta por **offset de bytes UTF-8**, no de caracteres: `ast` reporta `col_offset` en
+> bytes y este repo tiene prosa acentuada en casi toda línea. Cortar el `str` partiría la condición
+> al medio y el mutante moriría por `SyntaxError`, o sea por el motivo equivocado otra vez. Lo fija
+> `test_toda_guarda_de_scripts_produce_codigo_QUE_PARSEA`, que parsea los **1503** mutantes de
+> `scripts/`.
+
 **Cómo se leen los ratchets** (`tools/mutacion-ratchet.yaml`, `tools/cobertura-ratchet.yaml`): son
 **deuda medida**, no objetivos. El número sólo baja; subirlo hay que justificarlo en el commit. Un
 techo en 0 sería rojo permanente, y un rojo permanente se deja de mirar.

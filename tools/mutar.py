@@ -38,6 +38,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import NamedTuple
 
 RAIZ = Path(__file__).resolve().parent.parent
 RATCHET = Path(__file__).resolve().parent / "mutacion-ratchet.yaml"
@@ -255,6 +256,182 @@ def _directed(args) -> int:
     return 0
 
 
+class Guard(NamedTuple):
+    """One mutable condition: where its source span is and what literal neutralizes it."""
+    func: str
+    label: str
+    lineno: int
+    col: int
+    end_lineno: int
+    end_col: int
+    replacement: str
+
+
+def _guard_mutants(test: ast.expr, func: str) -> list[Guard]:
+    """The mutants of a single `if` condition: the whole test, then each `and`/`or` clause.
+
+    A clause is neutralized with the identity of its operator -- `True` inside an `and`, `False`
+    inside an `or` -- so the guard keeps firing on the OTHER clauses. That is what makes this
+    finer than emptying the condition: `if a and b` with a test that only ever supplies `a=False`
+    never exercises `b`, and only the per-clause mutant says so.
+
+    A constant condition is skipped: rewriting `False` as `False` changes nothing, so it would be
+    reported as a survivor -- a finding the tool invented.
+    """
+    out: list[Guard] = []
+    if not isinstance(test, ast.Constant):
+        out.append(Guard(func, f"if@L{test.lineno}", test.lineno, test.col_offset,
+                         test.end_lineno or test.lineno, test.end_col_offset or 0, "False"))
+    if isinstance(test, ast.BoolOp):
+        es_and = isinstance(test.op, ast.And)
+        neutro, op = ("True", "and") if es_and else ("False", "or")
+        for i, clausula in enumerate(test.values):
+            if isinstance(clausula, ast.Constant):
+                continue
+            out.append(Guard(func, f"if@L{test.lineno}/{op}[{i}]",
+                             clausula.lineno, clausula.col_offset,
+                             clausula.end_lineno or clausula.lineno, clausula.end_col_offset or 0,
+                             neutro))
+    return out
+
+
+def guards(archivo: Path) -> list[Guard]:
+    """Every `if` condition inside a function, plus each clause of a compound one.
+
+    WHY (AUD-213). The function-level mutant empties the whole body, so a module where every
+    mutant dies still says nothing about its **guards**: a subagent reading `entity.py` counted 30
+    of 84 and `harvest_views.py` 18 of 72 with no test that distinguishes them. The question here
+    is narrower and different -- *does any test exercise the case this guard catches?*
+
+    Only the "never fires" direction is emitted. Forcing a guard to fire ALWAYS is the other
+    direction and it dies trivially nearly everywhere -- a `raise`/`return` that runs
+    unconditionally breaks every caller -- so it costs one run per guard and reports nothing.
+
+    `elif` is an `If` nested in `orelse`, so it is picked up like any other; a comprehension's `if`
+    is not an `ast.If` and stays out. Module-level conditions (`if __name__ == ...`,
+    `if TYPE_CHECKING:`) are out too: this walks only inside functions.
+    """
+    arbol = ast.parse(archivo.read_text(encoding="utf-8"))
+    out: list[Guard] = []
+
+    def _walk(nodo: ast.AST, func: str) -> None:
+        for hijo in ast.iter_child_nodes(nodo):
+            if isinstance(hijo, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                _walk(hijo, hijo.name if hijo.name not in EXENTAS else "")
+                continue
+            if isinstance(hijo, ast.If) and func:
+                out.extend(_guard_mutants(hijo.test, func))
+            _walk(hijo, func)
+
+    _walk(arbol, "")
+    return out
+
+
+def _replace_span(source: str, g: Guard) -> str:
+    """`source` with the guard's span replaced by its neutral literal.
+
+    ⚠ `col_offset` is a UTF-8 **byte** offset, not a character index, and this repo's source is
+    full of accented prose and arrows -- slicing the `str` would cut mid-condition on any line that
+    carries a non-ASCII comment. So the slice happens on the encoded line and is decoded back.
+
+    A condition spanning several lines collapses into one: everything before the span on the first
+    line, the literal, everything after it on the last. The lines in between go away with it.
+    """
+    lineas = source.split("\n")
+    primera = lineas[g.lineno - 1].encode("utf-8")
+    ultima = lineas[g.end_lineno - 1].encode("utf-8")
+    fusion = (primera[:g.col] + g.replacement.encode("utf-8") + ultima[g.end_col:]).decode("utf-8")
+    return "\n".join(lineas[:g.lineno - 1] + [fusion] + lineas[g.end_lineno:])
+
+
+def mutate_guards(archivo: Path, copia_raiz: Path, subset: Path, only: set[str] | None = None,
+                  verbose: bool = True) -> list[str]:
+    """Guards that **survive**: no test in `subset` went red when the guard stopped firing.
+
+    `archivo` is read from the REAL tree; its twin inside `copia_raiz` is what gets mutated -- same
+    rule as `mutar_archivo`, and for the same reason (a harness that can corrupt the code it audits
+    does not survive a Ctrl-C).
+    """
+    original = archivo.read_text(encoding="utf-8")
+    gemelo = copia_raiz / archivo.relative_to(RAIZ)
+    sobreviven = []
+    for g in guards(archivo):
+        if only is not None and g.func not in only:
+            continue
+        gemelo.write_text(_replace_span(original, g), encoding="utf-8")
+        try:
+            vivo = _suite_verde(copia_raiz, subset)
+        except subprocess.TimeoutExpired:
+            vivo = True
+        etiqueta = f"{g.func}::{g.label}"
+        if vivo:
+            sobreviven.append(etiqueta)
+        if verbose:
+            print(f"  {'SOBREVIVE' if vivo else 'muere    '}  {archivo.name}::{etiqueta}",
+                  flush=True)
+    gemelo.write_text(original, encoding="utf-8")   # deja la copia sana
+    return sobreviven
+
+
+def _guards(args) -> int:
+    """AUD-213 -- guard-level mutation: ONE module against its own test file.
+
+    Same contract as `--dirigida`, for the same reason: it does not escalate to the full suite, so
+    it **over-reports survivors and never gives a false clean**, and it does NOT touch the ratchet
+    (the ratchet counts functions; mixing two populations into one number would make the ceiling
+    mean nothing).
+
+    Unlike `--dirigida` it checks the BASELINE first. If `tests/test_<mod>.py` is already red every
+    mutant "dies" for the wrong reason and the mode prints zero survivors -- the zero nobody
+    measured (D-43), inside the tool whose job is auditing tests. It is also #202 exactly: a test
+    has to die BY THE REASON it tests.
+    """
+    if len(args.archivos) != 1:
+        print("⛔ --guardas toma UN módulo: python tools/mutar.py --guardas scripts/foo.py")
+        return 2
+    a = args.archivos[0]
+    blanco = Path(a) if Path(a).is_absolute() else RAIZ / a
+    propio = test_file_for(blanco)
+    if propio is None:
+        print(f"⛔ no hay tests/test_{blanco.stem}.py: sin etapa barata no hay modo de guardas.")
+        return 2
+    only = {s.strip() for s in args.solo.split(",") if s.strip()} or None
+    todas = guards(blanco)
+    if only and (faltan := only - {g.func for g in todas}):
+        print(f"⛔ no tienen guardas en {blanco.name} (o no existen): {sorted(faltan)}")
+        return 2
+    # ⛔ Cero guardas NO es "murieron todas" (D-43): un módulo sin un solo `if` no se midió.
+    a_mutar = [g for g in todas if only is None or g.func in only]
+    if not a_mutar:
+        print(f"⛔ {blanco.name} no tiene ninguna guarda mutable: no hay nada que medir, y eso NO "
+              f"es un verde.")
+        return 2
+
+    subset = Path("tests") / propio.name
+    tmp = Path(tempfile.mkdtemp(prefix="almagesto-guardas-"))
+    try:
+        copia = _copia_del_repo(tmp / "repo")
+        print(f"copia de trabajo: {copia}  (el árbol real NO se toca)")
+        if not _suite_verde(copia, subset):
+            print(f"⛔ no evaluado: tests/{propio.name} ya está roja sin mutar — con la baseline "
+                  f"en rojo TODA guarda 'muere' por el motivo equivocado y el modo devuelve 0 "
+                  f"sobrevivientes (#202).")
+            return 2
+        print(f"· {blanco.name}: {len(a_mutar)} guarda(s) contra tests/{propio.name}")
+        sobreviven = mutate_guards(blanco, copia, subset, only=only)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    if sobreviven:
+        print(f"\n{len(sobreviven)} de {len(a_mutar)} guarda(s) sin test que las distinga:")
+        for s in sobreviven:
+            print(f"  - {s}")
+        print("   (no escala a la suite: puede que otro archivo de tests sí las mate)")
+        return 1
+    print(f"\nlas {len(a_mutar)} guardas mueren en su propio test ✅")
+    return 0
+
+
 def _traceability_pairs() -> list[tuple[str, Path, str, list[str]]]:
     """`(inv, impl file, impl symbol, [marked tests])` for every invariant marked in BOTH trees.
 
@@ -359,8 +536,12 @@ def main() -> int:
     ap.add_argument("--ratchet", action="store_true", help="comparar contra el techo y salir 1 si sube")
     ap.add_argument("--dirigida", action="store_true",
                     help="modo barato: muta UN módulo y corre SÓLO su archivo de tests (no es el gate)")
+    ap.add_argument("--guardas", action="store_true",
+                    help="AUD-213: muta cada CONDICIÓN (no el cuerpo) de UN módulo contra su "
+                         "archivo de tests — mide si algún test ejercita el caso que la guarda "
+                         "ataja. No toca el ratchet.")
     ap.add_argument("--solo", default="",
-                    help="con --dirigida: nombres de función separados por coma; con "
+                    help="con --dirigida/--guardas: nombres de función separados por coma; con "
                          "--trazabilidad: ids de invariante (default: todos)")
     ap.add_argument("--trazabilidad", action="store_true",
                     help="AUD-212: audita la ATRIBUCIÓN del mapa — vacía la implementación marcada "
@@ -370,6 +551,8 @@ def main() -> int:
 
     if args.trazabilidad:
         return _trazabilidad(args)
+    if args.guardas:
+        return _guards(args)
     if args.dirigida:
         return _directed(args)
 

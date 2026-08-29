@@ -122,3 +122,14 @@ techo: 3
 # gate hizo exactamente su trabajo —cazó código nuevo del día, que es el caso para el que existe
 # (INV-101)— y el test se apretó a exigir la RUTA del PDF. Corrida dirigida posterior sobre ese
 # módulo: **9 funciones, 0 sobrevivientes**. El techo se queda en 3.
+
+# ── AUD-213 · mutación de GUARDAS (`--guardas`, 1.76.0) ────────────────────────────────────────
+# NO tiene techo acá y es a propósito: el `techo` de arriba cuenta FUNCIONES, y mezclar dos
+# poblaciones en un número lo dejaría sin significado. El modo tampoco escala a la suite, así que
+# sobre-reporta sobrevivientes — un techo sobre un número que sobre-reporta sería deuda inventada.
+#
+# Deuda MEDIDA el 2026-08-28, primera corrida del modo sobre módulos reales (declarada, no cerrada):
+#   apply_fixes.py   5 de 11 guardas sin test que las distinga
+# Los dos módulos que motivaron el hallazgo (`entity.py` 55 guardas, `harvest_views.py` 48) siguen
+# sin medir con el modo nuevo: la medición original la hizo un subagente LEYENDO el código.
+

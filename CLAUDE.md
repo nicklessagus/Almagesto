@@ -1622,6 +1622,24 @@ también para los scripts de una sola operación. Detalle y ratchets en
    ratchet y no reemplaza al barrido. Y **rehúsa** —no degrada a la corrida cara— si el módulo no
    tiene `tests/test_<módulo>.py` o no tiene ninguna función mutable: cero mutaciones no es
    «murieron todas» (D-43; el bug estaba en la primera versión de este modo, con `ingest_star.py`).
+   ⛔ **Y hay un TERCER modo, porque vaciar el cuerpo no mide las GUARDAS (AUD-213):
+   `python tools/mutar.py --guardas scripts/<módulo>.py [--solo f,g]`.** El mutante de función
+   reemplaza el cuerpo entero, así que un módulo donde **mueren todas** sigue sin decir nada sobre
+   sus condiciones —medido: `entity.py` 30 guardas de 84 y `harvest_views.py` 18 de 72 sin test que
+   las distinga, y las tres guardas de `apply_fixes.py` de la tanda #196/#197 hubo que romperlas **a
+   mano** porque el gate no sabía—. La pregunta que contesta es otra: ***¿algún test ejercita el
+   caso que esta guarda ataja?*** Muta cada `if` de adentro de una función a `False` (la guarda
+   nunca dispara) y, en un `and`/`or`, **cada cláusula por separado** neutralizada con la identidad
+   de su operador — `if a and b` con tests que sólo dan `a=False` nunca ejercita `b`, y sólo el
+   mutante por cláusula lo dice. Mismo contrato que la dirigida: un módulo, sólo su archivo de
+   tests, **no escala** (sobre-reporta sobrevivientes, nunca falso limpio) y **no toca el ratchet**
+   —que cuenta funciones: mezclar dos poblaciones en un número dejaría al techo sin significado—.
+   Una condición **constante** se saltea: reescribir `False` como `False` no cambia nada y saldría
+   SOBREVIVE, o sea un hallazgo que la herramienta inventó.
+   ⚠ **Chequea la baseline y es el único de los tres modos que lo hace**: con
+   `tests/test_<módulo>.py` ya en rojo, **toda** guarda «muere» por el motivo equivocado y el modo
+   imprimiría un verde sobre un módulo que nadie midió — es #202 dentro de la herramienta que
+   audita los tests, así que sale **no evaluado** (rc 2) en vez de 0.
    Motivo de la prohibición del barrido: tardaba **~1 h** (416 funciones × la suite entera, secuencial), y con
    `-x` el orden alfabético de pytest hace que mutar `triage.py` pague casi toda la suite antes de
    llegar al test que lo mata. El costo dominante es buscar el test asesino en el lugar equivocado.
