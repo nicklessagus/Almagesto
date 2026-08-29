@@ -1551,8 +1551,7 @@ def papers_universe(slug: str, kind: str, fms: dict | None = None) -> list:
     # no en `build/`, que es scratch. Sin esto la ficha los publica como `sin extraer`.
     # `origen: sujeto` es lo que escribe `--drop-core`; `fuente-declarada` es `--drop-source` y la
     # ausencia de `origen` es el descarte de un candidato del chaining (`--drop`), que NO era core.
-    dropeados = {k for k, v in (cfg.load_decisiones(slug) or {}).items()
-                 if isinstance(v, dict) and str(v.get("origen", "")) == "sujeto"}
+    dropeados = set(cfg.dropped_from_subject(slug))
     filas = []
     for stem, fm in _papers_del_sujeto(slug, kind, fms):
         if stem in dropeados:
@@ -2441,6 +2440,16 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, theme: bool = F
         cfg.print_seguro(f"  (sin {adsfile}; corré query_ads.py primero)")
         return
     recs = json.loads(adsfile.read_text(encoding="utf-8"))["records"]
+    # #112 (cuarto consumidor): `--drop-core` vive en el registro VERSIONADO; `relevant` vive en
+    # `build/`, que sólo `query_ads` reescribe. Sin este filtro, correr `make_notes` solo —lo que el
+    # propio aviso del drop invita a hacer— RESUCITA el paper dropeado como stub, y encima encima de
+    # la extracción que el drop acababa de borrar: la nota vuelve a existir y vuelve vacía. Va antes
+    # que `include_all` a propósito: `--all` pide los no-core, no lo que el usuario sacó a mano.
+    dropeados = set(cfg.dropped_from_subject(slug))
+    if dropeados and (n := sum(1 for r in recs if r.get("bibcode") in dropeados)):
+        recs = [r for r in recs if r.get("bibcode") not in dropeados]
+        cfg.print_seguro(f"  ({n} paper(s) excluidos del sujeto por `--drop-core`: no se les "
+                         f"escribe nota)")
     if not include_all:
         recs = [r for r in recs if r["relevant"]]
     cfg.PAPERS.mkdir(parents=True, exist_ok=True)

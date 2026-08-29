@@ -637,9 +637,7 @@ def excluidos_del_sujeto(slug: str) -> dict:
     INV-24 sigue en pie por la misma razón que con `extra_core`: core es `f(paper, lente)` **módulo
     curación declarada**, y la curación es auditable —motivo obligatorio, fechada, versionada, y el
     registro viaja—. Lo que NO sería auditable es que el veredicto cambiara sin que nadie firme."""
-    return {b: (d.get("motivo") or "(sin motivo)")
-            for b, d in cfg.load_decisiones(slug).items()
-            if d.get("decision") == "descartado" and cfg.es_del_carril(d, "sujeto")}
+    return cfg.dropped_from_subject(slug)
 
 
 def aplicar_excluidos(recs: list, slug: str) -> list:

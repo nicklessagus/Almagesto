@@ -3669,3 +3669,33 @@ def test_stamp_accessed_es_cirugia_de_una_linea(toy_vault):
 
     sin_campo = mk_note(cfg.PAPERS, "2007Otro", {"bibcode": "2007Otro", "tags": ["paper"]}, "x\n")
     assert mn.stamp_accessed(sin_campo, "2026-08-28") is False, "no se inventa la posición"
+
+
+def test_paper_notes_no_resucita_el_dropeado(toy_vault, capsys):
+    """#215 — el cuarto consumidor de `--drop-core`, el que decide QUÉ notas se escriben.
+
+    La decisión vive en el registro VERSIONADO; `relevant` vive en `build/`, que sólo `query_ads`
+    reescribe. Correr `make_notes` solo —lo que el propio aviso del drop invita a hacer— resucitaba
+    el paper como stub, y encima de la extracción que el drop acababa de borrar: la nota volvía a
+    existir y volvía vacía. Medido en `ica` (2026-08-29): 9 notas de ~100 líneas → stubs de 54.
+    """
+    ads_json([rec("2020conA...1..1A"), rec("1990preB....1..1B")])
+    cfg.save_registro("test_star", {"decisiones": {
+        "2020conA...1..1A": {"decision": "descartado", "origen": "sujeto",
+                             "motivo": "falso positivo de polisemia", "fecha": "2026-08-29"}}})
+    mn.write_paper_notes("test_star", include_all=False, force=False)
+    assert not (toy_vault.PAPERS / "2020conA...1..1A.md").exists()
+    assert (toy_vault.PAPERS / "1990preB....1..1B.md").exists()
+    assert "--drop-core" in capsys.readouterr().out
+
+
+def test_paper_notes_all_tampoco_resucita_el_dropeado(toy_vault):
+    """`--all` pide los papers NO-CORE, que es otra cosa que los que el usuario sacó a mano: por eso
+    el filtro va ANTES. Sin esto la escotilla de `--all` reabría en silencio la decisión de
+    curación."""
+    ads_json([rec("2020conA...1..1A", relevant=False)])
+    cfg.save_registro("test_star", {"decisiones": {
+        "2020conA...1..1A": {"decision": "descartado", "origen": "sujeto",
+                             "motivo": "off-topic", "fecha": "2026-08-29"}}})
+    mn.write_paper_notes("test_star", include_all=True, force=False)
+    assert not (toy_vault.PAPERS / "2020conA...1..1A.md").exists()

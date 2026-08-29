@@ -948,3 +948,31 @@ def test_drop_normaliza_como_su_gemelo_drop_source(toy_vault, monkeypatch, capsy
 
     with pytest.raises(SystemExit, match="--reason con contenido"):
         run_main(monkeypatch, ["test_star", "--drop", "2020B....1B", "--reason", "   "])
+
+
+def test_drop_core_no_borra_la_nota_del_falso_positivo(toy_vault, capsys):
+    """#215 — el caso que `methods` no puede ver: un FALSO POSITIVO de polisemia se leyó entero y
+    volvió con `methods` vacío, porque el método del paper no es el del tema. `methods` es lo que la
+    lectura ENCONTRÓ; `vistas[].fecha` es lo que dice que la lectura OCURRIÓ. Con sólo el primer
+    proxy la guarda protegía al revés de donde importa: medido en `ica`, borró 9 notas de ~100
+    líneas cada una —su vista documentaba POR QUÉ el paper no era del tema— informando que no había
+    extracción que perder."""
+    (cfg.PAPERS / "2009Icar..201..504M.md").write_text(
+        "---\nbibcode: 2009Icar..201..504M\ntags: [paper]\nmethods: []\n"
+        "vistas:\n- sujeto: ica\n  tipo: theme\n  fecha: '2026-08-28'\n---\n# T\n",
+        encoding="utf-8")
+    triage.drop_core("ica", ["2009Icar..201..504M"], "off-topic")
+    assert "trabajo pagado" in capsys.readouterr().out
+    assert (cfg.PAPERS / "2009Icar..201..504M.md").exists()
+
+
+def test_drop_core_si_borra_la_vista_sembrada_sin_fecha(toy_vault, capsys):
+    """La otra mitad del par, y es la que hace que la guarda siga siendo una guarda: el stub nace
+    con la vista de su sujeto y SIN fecha (la ausencia es *no consta*, #188). Esa nota no costó una
+    lectura, así que se borra como cualquier stub — si `vistas[]` a secas alcanzara, `drop_core` no
+    borraría nunca nada."""
+    (cfg.PAPERS / "2009Icar..201..504M.md").write_text(
+        "---\nbibcode: 2009Icar..201..504M\ntags: [paper]\nmethods: []\n"
+        "vistas:\n- sujeto: ica\n  tipo: theme\n---\n# T\n", encoding="utf-8")
+    triage.drop_core("ica", ["2009Icar..201..504M"], "off-topic")
+    assert not (cfg.PAPERS / "2009Icar..201..504M.md").exists()

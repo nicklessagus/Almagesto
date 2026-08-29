@@ -481,11 +481,20 @@ def drop_core(slug: str, bibcodes: list, motivo: str) -> int:
             fm = cfg.split_fm(nota.read_text(encoding="utf-8"))
             otros = [x for x in cfg.as_list(fm.get("stars")) + cfg.as_list(fm.get("thesis_links"))
                      if x != slug and x != (cfg.as_map(_tema_meta(slug)).get("concept") or slug)]
-            extraida = bool(cfg.as_list(fm.get("methods")))
+            # ⛔ `methods` es SUFICIENTE pero NO NECESARIO para «tiene extracción» (#188/#207).
+            # `methods` es lo que la lectura ENCONTRÓ; `vistas[].fecha` es lo que dice que la
+            # lectura OCURRIÓ, y sólo la escribe la lectura. La brecha entre las dos es exactamente
+            # el caso que este carril existe para cerrar: un FALSO POSITIVO de polisemia se leyó
+            # entero y volvió con `methods` vacío porque el método del paper no es del tema. Con
+            # sólo el primer proxy la guarda protegía al revés de donde importa — medido en `ica`
+            # (2026-08-29): borró 9 notas de ~100 líneas, cada una con la vista que documentaba POR
+            # QUÉ el paper no era del tema, informando que no había extracción que perder.
+            extraida = bool(cfg.as_list(fm.get("methods"))) or any(
+                isinstance(v, dict) and v.get("fecha") for v in cfg.as_list(fm.get("vistas")))
             if otros or extraida:
                 # No se borra: o pertenece a otro sujeto (la exclusión es del PAR paper-sujeto), o
                 # ya tiene extracción encima —trabajo pagado— y eso no se destruye en silencio.
-                por = ("pertenece también a " + ", ".join(map(str, otros[:3]))) if otros else                     "ya tiene extracción LLM (`methods` poblado): trabajo pagado"
+                por = ("pertenece también a " + ", ".join(map(str, otros[:3]))) if otros else                     "ya tiene extracción LLM (`methods` o vista con fecha): trabajo pagado"
                 cfg.print_seguro(f"  ⚠ {b}: su nota `papers/` NO se borra — {por}. Revisala a mano.")
             else:
                 # #132: la nota se borra, así que todo `[[bibcode]]` que la citaba queda ROTO

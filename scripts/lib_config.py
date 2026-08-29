@@ -20,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.76.1"
+ALMAGESTO_VERSION = "1.76.2"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1171,6 +1171,24 @@ def es_del_carril(d: dict, carril: str) -> bool:
     return (d.get("origen") or "chaining") == carril
 
 
+def dropped_from_subject(slug: str) -> dict:
+    """Papers the user declared OUT of THIS subject: ``{bibcode: motivo}`` (#112, carril `sujeto`).
+
+    Canonical implementation, and it is canonical for a reason. The same comprehension lived
+    copy-pasted in four places —`query_ads.excluidos_del_sujeto`, the roll-up of `make_notes`, the
+    lens diff here— and the fourth consumer, the one that decides WHICH paper notes get written,
+    simply never got a copy. That gap resurrected a dropped paper as an empty stub on top of the
+    extraction that `--drop-core` had just deleted: a curation decision ignored in silence, which
+    is the very bug #112 closed one layer above.
+
+    The `sujeto` rail is deliberate (the exclusion is of the PAIR paper-subject), and the
+    `decision == "descartado"` guard matters just as much: `origen: sujeto` alone also matches
+    decisions that are not discards."""
+    return {b: (d.get("motivo") or "(sin motivo)")
+            for b, d in load_decisiones(slug).items()
+            if d.get("decision") == "descartado" and es_del_carril(d, "sujeto")}
+
+
 # Vocabulario CERRADO de `via` en `extra_core` (D-58): de dónde salió la aceptación de ese paper.
 # Cerrado por el mismo motivo que `role` (#73): un typo deja el campo mudo para el único consumidor
 # que existe —la columna Origen de la ficha—, y un campo mudo se lee como "no se sabe".
@@ -2245,8 +2263,7 @@ def lens_diff_offline(slug: str) -> tuple[list[str], list[str], list[str]]:
     # #112: un paper EXCLUIDO del sujeto por decisión no puede volver a proponerse como "entra" en
     # cada cambio de lente — la decisión ya se tomó, con motivo y fecha. Sin esto, el diff repite
     # para siempre lo que el usuario ya sacó, y la categoría se vuelve ruido que se deja de mirar.
-    excluidos = {b for b, d in load_decisiones(slug).items()
-                 if d.get("decision") == "descartado" and es_del_carril(d, "sujeto")}
+    excluidos = set(dropped_from_subject(slug))
     entran, salen = [], []
     con_nota = set()
     for stem, fm, text in notes_of_subject(slug):
