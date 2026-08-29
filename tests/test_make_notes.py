@@ -3471,6 +3471,46 @@ def test_missing_anchors_separa_al_dia_de_sin_ancla(toy_vault):
     assert mn.missing_anchors(dest, ["## Papers", "## No Existe"]) == ["## No Existe"]
 
 
+# ── #260 · el separador entre la sección estampada y la siguiente ───────────────────────────────
+
+
+def test_reemplazar_seccion_deja_linea_en_blanco_antes_del_proximo_encabezado(toy_vault):
+    """#260 — sin la línea en blanco, Python-Markdown absorbe el `##` siguiente COMO UNA CELDA.
+
+    `fin = nxt + 1` deja `text[fin:]` arrancando en el `## `, así que la línea en blanco que
+    separaba las dos secciones cae dentro del tramo reemplazado; el `rstrip` borra además la que el
+    generador produce (`planetas_table`, `papers_table` y `metodos_table` terminan las tres con
+    `out.append("")`). GFM tolera un encabezado pegado a una fila de tabla y por eso no se veía en
+    Obsidian; Python-Markdown —MkDocs y media cadena de export— no: medido sobre una ficha real, 3
+    de sus 8 `##` desaparecían del outline y con ellos la población que D-10/INV-81 obligan a
+    publicar en el título (`49 · 28 sintetizados`, `297 método(s)`, los cuatro conteos del bloque).
+    """
+    dest = toy_vault.STARS / "x.md"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text("# X\n\n## Planetas (ground-truth NASA Exoplanet Archive) (0)\n\nviejo\n"
+                    "\n## Papers (0 · 0)\n\n| a |\n|---|\n", encoding="utf-8")
+    nuevo = ("## Planetas (ground-truth NASA Exoplanet Archive) (1)\n\n"
+             "| Letra |\n|---|\n| b |\n")
+    assert mn._reemplazar_seccion(dest, mn.PLANETAS_HEADER, nuevo) is True
+    texto = dest.read_text(encoding="utf-8")
+    assert "| b |\n\n## Papers" in texto, \
+        "el `## Papers` quedó pegado a la última fila: Python-Markdown lo absorbe como celda"
+    assert mn._reemplazar_seccion(dest, mn.PLANETAS_HEADER, nuevo) is False, "no es idempotente"
+
+
+def test_reemplazar_seccion_no_agrega_linea_de_mas_al_final_del_archivo(toy_vault):
+    """El separador es `\n\n` **sólo si hay sección siguiente**. En EOF no hay nada que separar, y
+    una línea en blanco de más al final rompería la idempotencia contra el archivo ya escrito."""
+    dest = toy_vault.STARS / "y.md"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text("# Y\n\n## Planetas (ground-truth NASA Exoplanet Archive) (0)\n\nviejo\n",
+                    encoding="utf-8")
+    nuevo = ("## Planetas (ground-truth NASA Exoplanet Archive) (1)\n\n"
+             "| Letra |\n|---|\n| b |\n")
+    assert mn._reemplazar_seccion(dest, mn.PLANETAS_HEADER, nuevo) is True
+    assert dest.read_text(encoding="utf-8").endswith("| b |\n"), "sobra o falta un salto en EOF"
+
+
 # ── #205 · migrador de `symbols_lost` / `fulltext_layout` ───────────────────────────────────────
 
 

@@ -44,6 +44,9 @@
 ## Identificadores que SIMBAD conoce y `stars.yaml` no declara: un alias que falta es un paper que nunca aparece, en silencio (backlog — la elección es curación) (0)
 > sobre 3 ground-truth de `raw/ground_truth/`
 
+## Identificador de SIMBAD DECLARADO como no-alias con motivo (#252: visible, no es deuda) (0)
+> sobre 3 ground-truth de `raw/ground_truth/`
+
 ## ⚠ Alias que SIMBAD no reconoce para esta estrella (WARN — puede meter papers de otro objeto) (0)
 > sobre 3 ground-truth de `raw/ground_truth/`
 

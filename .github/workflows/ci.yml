@@ -50,3 +50,28 @@ jobs:
       # pushes. Se arregla con `python scripts/trace_invariants.py`.
       - name: El mapa requisito↔código está al día
         run: python scripts/trace_invariants.py --check
+
+  # Tier 1 (#261): el corpus sintético a escala (~900 notas) + el golden del lint.
+  #
+  # ⛔ Va en un job PROPIO y no pegado al de arriba, por dos razones. (a) `pytest.ini` lo
+  # deselecciona con `addopts = -m "not poblada …"` a propósito —convierte `pytest tests/` de 2 s en
+  # minutos— así que el job de tier 0 lo saltea **aunque diga `tests/`**, y ésa es exactamente la
+  # forma en que dejó de correr. (b) Es la ÚNICA red del lint contra el corpus a escala: la suite
+  # unitaria valida cada detector aislado, el golden valida el comportamiento del **conjunto**, y ahí
+  # ya se cazó un bloqueante que estaba en 0 permanente (#249).
+  #
+  # Hasta #261 la cadencia declarada era «nightly/pre-release» y no existía ninguna de las dos: el
+  # tier corría sólo si alguien se acordaba. Medido: quedó rojo desde v1.99.0 y se cerraron TRES
+  # tandas encima, con el golden describiendo un lint que ya no existía. El handoff del 2026-08-25
+  # ya había registrado el mismo rojo silencioso — o sea que la doc como red falló dos veces.
+  poblada:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar deps de la suite
+        run: pip install pyyaml requests numpy pytest
+      - name: Tier poblada (corpus sintético + golden del lint)
+        run: python -m pytest tests/poblada -m poblada -q

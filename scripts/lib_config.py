@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.102.0"
+ALMAGESTO_VERSION = "1.103.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -308,6 +308,40 @@ def _n_cells(row: str) -> int:
     as two, and this detector would report every such row as malformed."""
     cuerpo = row.strip().strip("|")
     return len(re.split(r"(?<!\\)\|", cuerpo))
+
+
+def headings_glued_to_table(body: str) -> list:
+    """`## ` headings with no blank line after a table row: `[(line_no, heading)]` (#260).
+
+    Sibling of `table_shape_issues`, same doctrine —**the artefact is what travels**— and a
+    different mechanism. GFM (markdown-it, what Obsidian is closest to) breaks the table at the
+    heading and renders both correctly, so this is invisible where the vault is normally read.
+    Python-Markdown + `tables` —MkDocs and much of the static-export chain— does NOT: the `## …`
+    line becomes **one more row of the table above**, and the heading vanishes from the outline.
+
+    Measured on a real star note: 3 of its 8 `##` disappeared that way, and with them the very
+    metadata this framework added so a roll-up cannot under-declare its universe in silence — the
+    `49 · 28 sintetizados` D-10 mandates, the method count, and the four INV-81 counts in the
+    verification block's header.
+
+    Backlog and not blocking, deliberately: unlike a fused row, GFM does not drop anything here, so
+    the damage is renderer-dependent. The producer was `_reemplazar_seccion`, fixed in the same
+    change; this is the net that keeps a third splice site from re-introducing it.
+
+    Only a **table row** counts as the previous line. A heading right after a paragraph or a code
+    fence is ugly and parses as a heading everywhere, so reporting it would be noise — and a
+    high-signal category that cries wolf stops being read.
+
+    Line numbers are 1-based over the WHOLE file, the `grep -n` convention of this repo (#29).
+    """
+    out, lines = [], body.split("\n")
+    for i, raw in enumerate(lines):
+        if i == 0 or not raw.startswith("## "):
+            continue
+        prev = lines[i - 1].strip()
+        if prev.startswith("|") and prev.endswith("|"):
+            out.append((i + 1, raw.strip()))
+    return out
 
 
 def unclosed_markers(body: str) -> list:

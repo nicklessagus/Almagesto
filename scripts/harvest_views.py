@@ -326,7 +326,9 @@ def write_view_section(dest: Path, sujeto: str, cuerpo: str, *, theme: bool,
                 f"  ⚠ {dest.name}: `## Vista — {sujeto}` ya tiene prosa redactada → NO se pisa "
                 f"(usá --force si la querés reemplazar; sus anclas de verificación se vencen)")
             return False
-        nuevo = text[:ini] + cuerpo.rstrip("\n") + "\n" + text[fin:]
+        # #260: mismo splice, mismo hazard — `section_span` devuelve el fin EN el `## ` siguiente.
+        sep = "\n\n" if fin < len(text) else "\n"
+        nuevo = text[:ini] + cuerpo.rstrip("\n") + sep + text[fin:]
     if nuevo == text:
         return False
     cfg.write_text_atomic(dest, nuevo)

@@ -1680,6 +1680,23 @@ preámbulo de otra sección, que quedó publicada sin prosa). ⚠ Los dos últim
 **párrafo y no por línea**: las notas van hard-wrapped a ~100 columnas y una fórmula cruza el salto
 con naturalidad — contar por línea daba 5 falsos positivos en la primera nota real probada, y una
 categoría de alta señal que grita en falso se deja de mirar.
+⛔ **Y la TERCERA hermana, del mismo eje y otro mecanismo: el `## ` pegado a una fila de tabla,
+sin línea en blanco (#260, backlog).** Acá GFM —o sea Obsidian, donde la bóveda se lee normalmente—
+**corta bien y no se nota**; Python-Markdown + `tables` —MkDocs y media cadena de export— absorbe la
+línea del encabezado **como una fila más de la tabla de arriba**, y el `##` desaparece del outline.
+Medido en una ficha real: **3 de sus 8 encabezados**, y con ellos justo el metadato que este
+framework agregó para que un roll-up no subdeclare su universo en silencio — el `49 · 28
+sintetizados` que D-10 obliga a publicar, el conteo de métodos, y **los cuatro conteos de INV-81**
+en la cabecera del bloque de verificación. El productor era `_reemplazar_seccion`, que con
+`fin = nxt + 1` metía la línea en blanco separadora **dentro** del tramo reemplazado y con
+`nuevo.rstrip("\n")` borraba la que el generador sí produce; el mismo splice estaba copiado en
+`harvest_views`, mientras `stamp_excluded` lo hacía **bien y lo documentaba** —la comprensión
+estaba, no había llegado a los otros dos call sites (cuarta vez: cf. #222, #214, INV-98)—. Es
+**backlog** y no bloqueante a propósito: a diferencia de la fila fusionada, GFM no descarta nada, así
+que el daño es **dependiente del renderer**. ⚠ Sólo cuenta una **fila de tabla** como línea previa:
+un `##` pegado a un párrafo o a un cierre de fence parsea como encabezado en todos lados, y
+reportarlo sería el ruido que erosiona la categoría (medido: `index.md` tiene tres así y ninguno se
+degrada).
 Un **`.obsidian/` en la raíz del repo** es **WARN** (la bóveda se abrió mal: el grafo indexa el
 andamiaje — abrir la carpeta `vault/` como vault y borrar ese directorio). Las **citas no verificables** (bibcode citado en query/concepto/hipótesis sin su `.txt` en
 `vault/raw/fulltext/`) se listan como precondición de `verify-citations`; ídem las **fuentes

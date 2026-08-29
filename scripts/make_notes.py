@@ -1923,7 +1923,16 @@ def _reemplazar_seccion(dest, header: str, nuevo: str) -> bool:
         return False
     nxt = text.find("\n## ", inicio + 1)
     fin = len(text) if nxt < 0 else nxt + 1
-    out = text[:inicio] + nuevo.rstrip("\n") + "\n" + text[fin:]
+    # #260 — `fin = nxt + 1` deja `text[fin:]` arrancando EN el `## ` siguiente, así que la línea en
+    # blanco que separaba las dos secciones cae dentro del tramo reemplazado; el `rstrip` borra
+    # además la que el generador sí produce (las tres tablas terminan con `out.append("")`). Con un
+    # solo `\n` el encabezado queda pegado a la última fila, y Python-Markdown —el parser de MkDocs
+    # y de media cadena de export— lo absorbe **como una celda más**: medido, 3 de los 8 `##` de una
+    # ficha real desaparecían del outline, y con ellos la población que D-10/INV-81 obligan a
+    # publicar en el título. GFM (Obsidian) lo tolera, así que no se veía. `stamp_excluded` ya lo
+    # hacía bien y lo documentaba: la comprensión estaba, no había llegado hasta acá.
+    sep = "\n\n" if nxt >= 0 else "\n"
+    out = text[:inicio] + nuevo.rstrip("\n") + sep + text[fin:]
     if out == text:
         return False
     cfg.write_text_atomic(dest, out)

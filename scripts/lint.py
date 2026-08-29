@@ -1627,6 +1627,16 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             for _ln, _txt in cfg.duplicate_paragraphs(body_full):
                 forma_sospechosa.append(
                     (stem, f"L{_ln + _offset}: párrafo repetido en la misma nota — «{_txt}…»"))
+            # #260 — el encabezado pegado a una fila de tabla. Mismo eje que la fila mal formada,
+            # otro mecanismo: GFM corta bien y Obsidian no lo muestra, pero Python-Markdown lo
+            # absorbe COMO UNA CELDA y el `##` desaparece del outline junto con la población que
+            # D-10/INV-81 obligan a publicar en el título. Lo producía `_reemplazar_seccion`
+            # (arreglado en el mismo cambio); esto es la red para el próximo call site.
+            for _ln, _head in cfg.headings_glued_to_table(body_full):
+                forma_sospechosa.append(
+                    (stem, f"L{_ln + _offset}: «{_head[:60]}» arranca pegado a una fila de tabla, "
+                           f"sin línea en blanco → Python-Markdown lo absorbe como una celda más y "
+                           f"el encabezado desaparece (GFM/Obsidian lo tolera, por eso no se ve)"))
 
         # Cabecera no estampable (#69, backlog): una ficha/concepto sin la línea
         # `> _Generado con Almagesto v…_` deja SIN EFECTO a todos los estampadores de cabecera

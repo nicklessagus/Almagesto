@@ -442,6 +442,23 @@ def test_prosa_redactada_no_se_pisa_pero_se_dice(toy_vault, capsys):
     assert "prosa ya redactada a mano" in dest.read_text(encoding="utf-8")
 
 
+def test_la_vista_escrita_deja_linea_en_blanco_antes_de_la_seccion_siguiente(toy_vault):
+    """#260 — `section_span` devuelve el fin **en** el `## ` siguiente, así que el splice se comía
+    la línea en blanco y el encabezado quedaba pegado al último párrafo de la vista.
+
+    Es el mismo defecto que `_reemplazar_seccion` (los roll-ups de la ficha) por el otro camino de
+    escritura. Acá el daño es menor —una vista termina en prosa, no en tabla, y un `##` pegado a un
+    párrafo sí se parsea como encabezado— pero el arreglo es el mismo y no tener los dos sitios
+    iguales es cómo la comprensión se pierde en el siguiente call site (cf. #222, #214, INV-98).
+    """
+    dest = sembrar(toy_vault, body=mn.vista_block("Estrella Test", False)
+                   + "\n## Verificación de citas (2020-01-01)\n\ntabla\n")
+    hv.harvest("test_star")
+    texto = dest.read_text(encoding="utf-8")
+    assert "\n\n## Verificación de citas" in texto, \
+        "el encabezado siguiente quedó pegado al final de la vista"
+
+
 def test_el_abstract_transcrito_dice_que_lo_transcribio_el_modelo(toy_vault):
     """AUD-203 / INV-110 — el abstract que llega por acá lo **transcribió el modelo del PDF**, no es
     la copia de catálogo, y el contrato hace descansar en esa distinción que `## Abstract` sea la

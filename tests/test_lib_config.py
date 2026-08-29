@@ -1660,3 +1660,47 @@ def test_solo_prosa_saca_la_traduccion():
               "## Traducción del abstract\nAdemás, nuestro código usa entropía máxima.\n")
     assert "prosa real" in cfg.solo_prosa(cuerpo)
     assert "nuestro código" not in cfg.solo_prosa(cuerpo)
+
+
+# ── #260 · el encabezado pegado a una fila de tabla ──────────────────────────────────────────────
+
+
+def test_headings_glued_to_table_caza_el_encabezado_sin_linea_en_blanco():
+    """#260 — hermano de `table_shape_issues`: otro mecanismo, la misma doctrina.
+
+    GFM corta la tabla en el encabezado y Obsidian lo muestra bien, así que esto es invisible donde
+    la bóveda se lee normalmente. Python-Markdown + `tables` —MkDocs y media cadena de export— lo
+    absorbe **como una fila más**, y el `##` desaparece del outline con la población que D-10/INV-81
+    obligan a publicar en el título."""
+    body = ("| Letra | P |\n|---|---|\n| b | 4.3 |\n"
+            "## Papers (49 · 28 sintetizados en esta ficha)\n\n| Bibcode |\n|---|\n| x |\n")
+    assert cfg.headings_glued_to_table(body) == [
+        (4, "## Papers (49 · 28 sintetizados en esta ficha)")]
+
+
+def test_headings_glued_to_table_no_grita_por_el_encabezado_bien_separado():
+    """El caso normal es gratis: con la línea en blanco no hay hallazgo."""
+    body = ("| Letra | P |\n|---|---|\n| b | 4.3 |\n\n## Papers\n\n| Bibcode |\n|---|\n| x |\n")
+    assert cfg.headings_glued_to_table(body) == []
+
+
+def test_headings_glued_to_table_ignora_lo_que_no_es_fila_de_tabla():
+    """Sólo cuenta una **fila de tabla** como línea previa (#260).
+
+    Un `##` pegado a un párrafo o a un cierre de fence es feo y parsea como encabezado en todos
+    lados; reportarlo sería ruido, y una categoría de alta señal que grita en falso se deja de
+    mirar. Medido: `index.md` tiene tres `##` pegados a un ``` y ninguno se degrada."""
+    assert cfg.headings_glued_to_table("prosa cualquiera\n## Papers\n") == []
+    assert cfg.headings_glued_to_table("```\n## Papers\n") == []
+    # Las dos mitades de «es una fila», cada una aislada: sin esto la mutación por cláusula
+    # sobrevive, porque el caso de arriba falla las dos a la vez y no distingue cuál manda (#204).
+    assert cfg.headings_glued_to_table("| celda sin cerrar\n## Papers\n") == [], \
+        "arranca con `|` pero no termina: no es una fila de tabla"
+    assert cfg.headings_glued_to_table("una tubería al final |\n## Papers\n") == [], \
+        "termina en `|` pero no arranca: no es una fila de tabla"
+
+
+def test_headings_glued_to_table_no_mira_atras_de_la_primera_linea():
+    """El `##` en la línea 0 no tiene línea previa: sin la guarda, `lines[-1]` mira **el final del
+    archivo** y puede reportar un hallazgo inventado sobre una nota que arranca con un encabezado."""
+    assert cfg.headings_glued_to_table("## Papers\n\ntexto\n\n| a |\n|---|\n| b |") == []
