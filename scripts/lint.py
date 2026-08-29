@@ -1098,6 +1098,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # "SIMBAD no contestó" y NO es lo mismo que `[]`: se reporta como sin verificar, no como limpio.
     alias_ajenos: list = []
     alias_faltantes: list = []         # (slug, motivo) — #82: SIMBAD los conoce y la bóveda no
+    alias_rechazados: list = []        # (slug, motivo) — #252: considerado y rechazado, no es deuda
     for gt in sorted(cfg.GROUND_TRUTH.glob("*.json")) if cfg.GROUND_TRUTH.exists() else []:
         try:
             data = json.loads(gt.read_text(encoding="utf-8"))
@@ -1110,13 +1111,19 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         # rescate por glifo— y el modo de falla es silencioso: un paper que nunca aparece. Es
         # PROPUESTA, no adopción: SIMBAD devuelve identificadores que no sirven para buscar texto
         # (Gaia DR3, 2MASS J…) junto a los que sí, así que cuáles entran es curación humana.
-        _decl = set()
+        _decl, _rechazados = set(), {}
         if not cfg.stars_error():
             for _n, _m in cfg.load_stars().items():
                 if isinstance(_m, dict) and _m.get("slug") == gt.stem:
                     _decl = {_norm_alias(x) for x in
                              [_n, _m.get("simbad"), _m.get("ads_object"), *cfg.as_list(_m.get("aliases"))]
                              if x}
+                    # #252 — el identificador CONSIDERADO Y RECHAZADO no es deuda. Era el único
+                    # carril de curación sin escotilla del NO, y el propio mensaje del hallazgo
+                    # manda dejar afuera el catálogo-máquina: instruía descartar y reportaba el
+                    # descarte para siempre. Va a su PROPIA categoría, como `no_vista`.
+                    _rechazados = {_norm_alias(x["id"]): x["motivo"]
+                                   for x in cfg.load_discarded_aliases(_m, entry=str(_n))}
         # ⛔ `None` (SIMBAD no contestó) ≠ `[]` (contestó y no hay más). `as_list` los aplana a los
         # dos en `[]`, y ahí «cero alias faltantes» se lee como «está todo declarado» sobre una
         # consulta que nunca volvió — el falso limpio de D-43 en el chequeo que INV-122 sostiene.
@@ -1127,8 +1134,13 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                           "se bajó este ground-truth, así que no consta qué identificadores conoce. "
                           "Re-corré `fetch_ground_truth.py` para saberlo (no es «están todos "
                           "declarados»)"))
-        _faltan = [a for a in cfg.as_list(_crudo if _crudo != "__ausente__" else None)
-                   if _norm_alias(a) not in _decl]
+        _conocidos = cfg.as_list(_crudo if _crudo != "__ausente__" else None)
+        _faltan = [a for a in _conocidos
+                   if _norm_alias(a) not in _decl and _norm_alias(a) not in _rechazados]
+        for a in _conocidos:
+            if _norm_alias(a) in _rechazados:
+                alias_rechazados.append(
+                    (gt.stem, f"`{a}` — considerado y rechazado: {_rechazados[_norm_alias(a)]}"))
         if _faltan:
             alias_faltantes.append(
                 (gt.stem, f"SIMBAD conoce {len(_faltan)} identificador(es) que `stars.yaml` no "
@@ -3449,6 +3461,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('alias_faltante', 'Identificadores que SIMBAD conoce y `stars.yaml` no declara: '
                   'un alias que falta es un paper que nunca aparece, en silencio (backlog — la '
                   'elección es curación)', SEV_BACKLOG, tuple(alias_faltantes), poblacion='ground_truth'),
+        Categoria('alias_rechazado', 'Identificador de SIMBAD DECLARADO como no-alias con motivo '
+                  '(#252: visible, no es deuda)', SEV_BACKLOG, tuple(alias_rechazados), poblacion='ground_truth'),
         Categoria('foreign_alias', '⚠ Alias que SIMBAD no reconoce para esta estrella (WARN — puede meter papers de otro objeto)',
                   SEV_WARN, tuple(alias_ajenos), poblacion='ground_truth'),
         Categoria('merge_ours', '⛔ `merge=ours` declarado pero sin driver registrado en este clon: la protección no existe',

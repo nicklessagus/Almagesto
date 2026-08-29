@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 import lib_config as cfg
 import entity
@@ -3948,6 +3949,59 @@ def test_alias_que_simbad_conoce_y_la_boveda_no(toy_vault, capsys):
     assert "HIP 99999" in rep and "GJ 71" in rep, "los que SIMBAD conoce y stars.yaml no"
     assert "HD 12345" not in rep.split("SIMBAD conoce")[-1].split("##")[0], \
         "el que ya está declarado no se propone"
+
+
+def _gt_con_simbad(toy_vault, conocidos):
+    (toy_vault.GROUND_TRUTH).mkdir(parents=True, exist_ok=True)
+    (toy_vault.GROUND_TRUTH / "test_star.json").write_text(json.dumps({
+        "star": "Estrella Test", "slug": "test_star", "host": {}, "planets": [],
+        "_unresolved_aliases": [], "_simbad_aliases": list(conocidos)}), encoding="utf-8")
+
+
+def _declarar_descartados(toy_vault, entradas):
+    stars = yaml.safe_load(toy_vault.STARS_YAML.read_text(encoding="utf-8"))
+    stars["Estrella Test"]["aliases_descartados"] = entradas
+    write_yaml(toy_vault.STARS_YAML, stars)
+
+
+def test_el_alias_rechazado_con_motivo_deja_de_ser_deuda(toy_vault, capsys):
+    """#252: el carril de `aliases` era el ÚNICO sin escotilla del NO. El mensaje del hallazgo manda
+    dejar afuera el catálogo-máquina (*«los `Gaia DR3`/`2MASS J` no»*), o sea que **instruía
+    descartar y reportaba el descarte para siempre**. Medido en `hd_40307`, con la curación hecha y
+    documentada uno por uno: 18 identificadores reportados igual, en una categoría que quedaba en
+    rojo permanente en cualquier bóveda que siguiera el consejo del propio mensaje.
+
+    Se cierra como sus hermanos (`--drop`, `no_vista`, `no_sintetizado`): declarándolo **con
+    motivo**. Y va a su PROPIA categoría, no al silencio — el mismo criterio con que el lint separa
+    «reclamo sin vista DECLARADO» de la deuda real.
+
+    @inv INV-142"""
+    _gt_con_simbad(toy_vault, ["HD 12345", "HIP 99999", "Gaia DR3 4758877919212831104"])
+    _declarar_descartados(toy_vault, [
+        {"id": "Gaia DR3 4758877919212831104",
+         "motivo": "identificador de catálogo-máquina: ningún paper de RV lo usa en el texto"}])
+    _, rep = run_lint_reporte(capsys)
+    faltantes = rep.split("SIMBAD conoce")[-1].split("##")[0]
+    assert "4758877919212831104" not in faltantes, "el declarado con motivo sale de la deuda"
+    assert "HIP 99999" in faltantes, "y el que nadie miró sigue ahí — la señal no se apaga"
+    assert "considerado y rechazado" in rep and "catálogo-máquina" in rep, \
+        "queda VISIBLE en su propia categoría, con el motivo (no se silencia)"
+    assert "4758877919212831104" in rep.split("considerado y rechazado")[0].split("##")[-1] \
+        or "4758877919212831104" in rep, "y se lo nombra, no es un conteo pelado"
+
+
+def test_el_alias_descartado_sin_motivo_aborta(toy_vault, capsys):
+    """Forma dura como `extra_core` (D-58): sin `motivo` el campo no dice si alguien lo miró, que es
+    **toda** la información que aporta — sería silenciar la señal en vez de cerrarla.
+
+    ⚠ Sin la guarda esto no pasa limpio: revienta con un `TypeError` adentro del lint (`x["id"]`
+    sobre un string). O sea que la guarda no es cosmética — es lo que convierte un crash ilegible
+    en un abort que dice qué arreglar.  @inv INV-142"""
+    _gt_con_simbad(toy_vault, ["HD 12345", "HIP 99999"])
+    _declarar_descartados(toy_vault, ["HIP 99999"])          # lista de strings: la forma prohibida
+    with pytest.raises(SystemExit) as e:
+        run_lint_reporte(capsys)
+    assert "aliases_descartados" in str(e.value) and "motivo" in str(e.value)
 
 
 def test_la_marca_de_ground_truth_se_evalua_POR_CAMPO(toy_vault, capsys):

@@ -1831,6 +1831,22 @@ juicios de curación en silencio. Su hermana, la **decisión con forma inválida
 `decisiones` que no es un mapa — `2006Rasmussen: descartado` a secas), es **backlog** propio:
 `load_decisiones` la descarta y sin el aviso el triage vuelve a proponer lo ya descartado **sin el
 motivo**, que es exactamente el bug que #51 cerró.
+⛔ **Y el alias CONSIDERADO Y RECHAZADO se declara: `aliases_descartados: [{id, motivo}]` (#252).**
+Era el único carril de curación sin escotilla del NO —los otros seis la tienen: `--drop`,
+`--drop-core`, `--drop-source`, `no_vista`, `no_sintetizado`, `--extraccion subconjunto`— y el
+propio mensaje del hallazgo manda dejar afuera el catálogo-máquina, o sea que **instruía descartar y
+reportaba el descarte como deuda, para siempre**. Medido con la curación hecha y documentada uno por
+uno en un comentario del YAML: **18 identificadores** reportados igual. No es un caso raro (SIMBAD
+devuelve catálogo-máquina para toda estrella), así que la categoría quedaba en rojo permanente en
+cualquier bóveda que siguiera el consejo del propio mensaje — y una categoría que grita en falso se
+deja de mirar, que es justo la que dice que un alias que falta es un paper que nunca aparece. Forma
+dura como `extra_core` (D-58: el escalar y la lista de strings **abortan**; sin `motivo` el campo no
+dice si alguien lo miró) y **categoría propia** en el lint —*«considerado y rechazado: visible, no es
+deuda»*—, separada de la deuda real igual que el *reclamo sin vista DECLARADO*. ⛔ Lo que **no** se
+hace: filtrar por patrón desde el código (sería el framework curando por el usuario, y el corte real
+depende del campo: un `TYC` puede servir en material viejo), ni bajar la severidad — el problema no
+era que reportara, era que no se pudiera cerrar.
+
 Los **alias que SIMBAD conoce y `stars.yaml` no declara** (#82) son **backlog**: un alias que falta
 es un paper que nunca aparece **en silencio**, y degrada los **tres** mecanismos de recall a la vez
 —query directa, barrido `--sweep` y rescate por glifo—. Se persisten en `_simbad_aliases` del

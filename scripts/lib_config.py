@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.98.0"
+ALMAGESTO_VERSION = "1.99.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1112,7 +1112,7 @@ def gate2_threshold(meta) -> tuple[int | None, str | None]:
     default —30k citations is normal in ML and enormous in astro— so the gate stays shut and the
     `why_excluded` says so. Anything present but unusable returns the reason, which the caller
     publishes instead of inventing one. A `bool` is rejected on purpose: in Python it *is* an
-    `int`, so `fundacional_min_citas: yes` would silently become a threshold of 1.  @inv INV-141"""
+    `int`, so `fundacional_min_citas: yes` would silently become a threshold of 1.  @inv INV-142"""
     v = as_map(meta).get("fundacional_min_citas") if isinstance(meta, dict) else None
     if v is None:
         return None, None
@@ -1657,6 +1657,54 @@ def _extra_core_error(entry: str, bibcodes: list, motivo: str) -> str:
     return (f"'{entry}': {motivo}. Forma canónica:\n\nextra_core:\n{ejemplo}\n")
 
 
+def load_discarded_aliases(meta: dict, *, entry: str = "?") -> list:
+    """`aliases_descartados: [{id, motivo}]` — a SIMBAD identifier CONSIDERED AND REJECTED (#252).
+
+    WHY IT EXISTS. The `aliases` rail was the only curation rail with no way to record the NO.
+    The #82 check compares what SIMBAD knows against what `stars.yaml` declares, and its own
+    message tells you to leave the machine-catalogue identifiers (`Gaia DR3`, `2MASS J`) out — so
+    it **instructs you to discard and then reports the discard as debt**, forever.
+    Measured on `hd_40307` with the curation done and documented one identifier at a time in a YAML
+    comment: 18 identifiers reported anyway. Not a rare case — SIMBAD returns machine-catalogue ids
+    for every star — so the category stayed permanently red, and a category that cries wolf stops
+    being read: precisely the one whose own text says that a missing alias is a paper that never
+    shows up, silently.
+
+    Same contract as its siblings (`--drop`, `no_vista`, `no_sintetizado`): **motive required**,
+    versioned, travels in git. And the same HARD FORM as `extra_core` (D-58): a bare scalar and a
+    list of strings **abort**, because an identifier without a motive cannot say whether anyone
+    looked at it.
+
+    What this field is NOT: a pattern filter. Excluding `Gaia DR3`/`2MASS J` from code would be the
+    framework curating for the user, and the real cut depends on the field (a `TYC` can be useful
+    in older material). The framework **proposes**, curation **decides and signs**.
+
+    @inv INV-142"""
+    v = meta.get("aliases_descartados")
+    if v is None:
+        return []
+    if not isinstance(v, list) or any(not isinstance(x, dict) for x in v):
+        sueltos = [v] if isinstance(v, str) else [x for x in as_list(v) if isinstance(x, str)]
+        sys.exit(_discarded_alias_error(
+            entry, sueltos, "`aliases_descartados` no acepta un identificador suelto ni una lista "
+                            "de strings: sin `motivo` no se distingue «lo miré y no sirve» de «no "
+                            "lo miró nadie», que es toda la información que el campo aporta"))
+    for x in v:
+        faltan = [k for k in ("id", "motivo") if not x.get(k)]
+        if faltan:
+            sys.exit(_discarded_alias_error(entry, [x.get("id") or "<identificador>"],
+                                            f"a una entrada le falta {', '.join(faltan)}"))
+    return v
+
+
+def _discarded_alias_error(entry: str, ids: list, motivo: str) -> str:
+    """The detector's message, with the canonical form already written out to paste.  @inv INV-142"""
+    ejemplo = "\n".join(
+        f"  - id: {i}\n    motivo: <por qué NO sirve para buscar este sujeto>"
+        for i in (ids or ["<identificador de SIMBAD>"]))
+    return (f"'{entry}': {motivo}. Forma canónica:\n\naliases_descartados:\n{ejemplo}\n")
+
+
 # ── #188 · `vistas[]`: extraction is a reading WITH A LENS ───────────────────────────────────────
 #
 # The extraction prompt never asks "what does this paper say?" but "what does it say ABOUT {name}?",
@@ -1798,7 +1846,7 @@ def _no_vista_error(entry: str, motivo: str) -> str:
 
 
 def _vistas_error(entry: str, sujetos: list, motivo: str) -> str:
-    """The detector's message, with the canonical form already written out to paste."""
+    """The detector's message, with the canonical form already written out to paste.  @inv INV-142"""
     ejemplo = "\n".join(
         f"  - sujeto: {s}\n    tipo: {VISTA_TIPOS[0]}          # {' | '.join(VISTA_TIPOS)}\n"
         f"    fecha: AAAA-MM-DD\n    txt: <slug del .txt que se leyó>\n"
