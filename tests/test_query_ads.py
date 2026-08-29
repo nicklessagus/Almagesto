@@ -1889,6 +1889,29 @@ def test_el_sweep_queda_en_el_registro(toy_vault, monkeypatch, capsys):
     assert b["fecha"] and b["almagesto_version"], "fechado y con la versión que lo corrió"
 
 
+def test_el_sweep_se_estampa_a_si_mismo_en_la_cadena(toy_vault, toy_classifier, no_sleep,
+                                                    monkeypatch):
+    """#265 — el `return sweep_star(...)` salía **antes** del `save_paso` del final de `main`.
+
+    D-57 dice que **cada script se estampa a sí mismo**, «así que un paso corrido a mano deja rastro
+    en vez de leerse como un corte». El barrido era el único del carril que no lo hacía: la traza no
+    se perdía del todo —`barridos` la guarda— pero sí en el lugar donde se reconstruye qué corrió y
+    cuándo, y el lint no lo caza porque compara contra el orden canónico del orquestador, donde
+    `--sweep` no está. Medido en una estrella real: 27 pasos en `cadena`, ninguno con `--sweep`,
+    contra 5 entradas en `barridos`."""
+    build = cfg.ROOT / "build" / "test_star"
+    build.mkdir(parents=True, exist_ok=True)
+    (build / "ads.json").write_text(json.dumps({"records": [{"bibcode": "2020ya....1..1A"}]}),
+                                    encoding="utf-8")
+    monkeypatch.setattr(qa, "query_ads", lambda *a, **k: [])
+    monkeypatch.setattr(sys, "argv", ["query_ads.py", "test_star", "--sweep"])
+    qa.main()
+    pasos = [p for p in cfg.as_list((cfg.load_registro("test_star") or {}).get("cadena"))
+             if isinstance(p, dict)]
+    assert any(p["paso"] == "query_ads" and "--sweep" in p.get("flags", []) for p in pasos), \
+        f"el barrido no dejó rastro en `cadena` (D-57): {pasos}"
+
+
 def test_el_sweep_sin_hallazgos_tambien_deja_rastro(toy_vault, monkeypatch, capsys):
     """Un barrido que no encontró nada **es** información: dice que la red se tendió y volvió vacía.
     Si sólo se registraran los hallazgos, «no se corrió» y «se corrió y no había» se leerían igual —

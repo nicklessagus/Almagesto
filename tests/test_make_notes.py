@@ -3471,6 +3471,44 @@ def test_missing_anchors_separa_al_dia_de_sin_ancla(toy_vault):
     assert mn.missing_anchors(dest, ["## Papers", "## No Existe"]) == ["## No Existe"]
 
 
+# ── #262 / #264 · el conteo del roll-up y la marca del truncado ─────────────────────────────────
+
+
+def test_metodos_table_cuenta_por_clave_normalizada_y_conserva_la_grafia(toy_vault):
+    """#262 — el encabezado contaba **grafías**, no métodos.
+
+    `methods` lo puebla la extracción con vocabulario abierto, así que el mismo método llega
+    escrito de varias maneras y contar el string crudo **sobre**declara el universo — medido sobre
+    una ficha real, 297 publicados sobre 291 reales, con `GLS periodogram`/`gls-periodogram` entre
+    las seis colisiones. Es el defecto que #243 arregló en el detector del lint y en
+    `methods_match`, sobreviviendo en el roll-up que le publica el número al lector.
+
+    ⛔ Y se normaliza al CONTAR, nunca al escribir: las dos grafías siguen en sus filas, porque cómo
+    lo nombra cada paper es información."""
+    rows = [("GLS periodogram", "2020aaa...1..1A", 2020),
+            ("gls-periodogram", "2021bbb...2..2B", 2021),
+            ("MCMC", "2020aaa...1..1A", 2020)]
+    tabla = mn.metodos_table(rows, names=set())
+    assert "(2 método(s) · 3 aplicación(es))" in tabla, \
+        "cuenta grafías: `GLS periodogram` y `gls-periodogram` son el mismo método"
+    assert "`GLS periodogram`" in tabla and "`gls-periodogram`" in tabla, \
+        "se normalizó al escribir: la grafía del extractor es información y no se toca"
+
+
+def test_titulo_corto_marca_el_corte_y_no_deja_espacio_huerfano():
+    """#264 — los dos roll-ups cortaban el título **sin decirlo**.
+
+    La audiencia declarada de la bóveda es un modelo, y un modelo que lee la fila cita el paper por
+    el título truncado. Era además incoherente dentro del mismo artefacto: el bloque de
+    verificación, tres secciones más abajo, sí marca sus truncados porque #226 lo exige."""
+    assert mn._titulo_corto("Chemical abundances of planet-host stars", 20) == "Chemical abundances…"
+    assert mn._titulo_corto("corto", 20) == "corto", "no marca lo que no cortó"
+    # el `rstrip()` antes del `…`: sin él quedaba el espacio huérfano de `excluded_table`
+    assert mn._titulo_corto("hot super-Earths and Neptunes: dynamics", 30) == \
+        "hot super-Earths and Neptunes:…"
+    assert mn._titulo_corto(None, 10) == ""
+
+
 # ── #260 · el separador entre la sección estampada y la siguiente ───────────────────────────────
 
 

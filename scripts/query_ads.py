@@ -1437,7 +1437,15 @@ def main() -> int:
             ap.error("--sweep es de estrellas (surveys que tabulan la estrella sin nombrarla en "
                      "título/abstract); el análogo para temas es el retro-tag 3b del skill "
                      "ingest-theme (grep de aliases sobre el corpus local)")
-        return sweep_star(args.slug, args.rows)
+        # #265 — el `return` salía ANTES del `save_paso` del final, así que un barrido no dejaba
+        # entrada en `cadena` y D-57 («cada script se estampa a sí mismo») valía para todo el
+        # carril menos éste. La traza no se perdía del todo —`barridos` la guarda— pero sí en el
+        # lugar donde se reconstruye qué corrió y cuándo. Y el barrido no es un paso menor: es el
+        # único camino para el punto ciego de la query directa (los surveys que TABULAN la estrella
+        # sin nombrarla), y en una estrella real trajo el 63 % de sus `extra_core`.
+        rc = sweep_star(args.slug, args.rows)
+        cfg.save_paso(args.slug, "query_ads", flags=_flags_usados(args, ap))
+        return rc
 
     star_names: list[str] = []      # sólo estrellas: insumo del rescate por glifo (#28)
     tema_meta = None                # se persiste en la `lente` del registro (regla del tema, #106)

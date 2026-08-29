@@ -1284,7 +1284,7 @@ def excluded_table(slug: str) -> str:
         bibcode = str(r.get("bibcode") or "")   # `bibcode` no-str (p. ej. int): coercer, no crashear
         url = f"https://ui.adsabs.harvard.edu/abs/{quote(bibcode, safe='')}"
         # colapsar espacios/saltos, truncar y RECIÉN escapar (|, []) para no romper el link/tabla
-        title = " ".join(str(r.get("title") or "(sin título)").split())[:70] \
+        title = _titulo_corto(" ".join(str(r.get("title") or "(sin título)").split()), 70) \
             .replace("|", r"\|").replace("[", r"\[").replace("]", r"\]")
         # motivo REAL persistido por query_ads (`why_excluded`, #30 — cubre también la regla de
         # combinación require/min_facets). Sin el campo (ads.json pre-#30) NO se reconstruye con la
@@ -1788,7 +1788,7 @@ def papers_table(rows: list) -> str:
         # el título se trunca y se escapa DESPUÉS: un `|` en el título parte la fila y corre todas
         # las columnas de la derecha, que es el mismo defecto que INV-99 arregló en el bloque de
         # verificación.
-        titulo = (r.get("title") or "")[:80].replace("|", "\\|")
+        titulo = _titulo_corto(r.get("title"), 80).replace("|", "\\|")
         out.append(f"| [[{r['stem']}]] | {titulo} | {r['year']} | {r['relevance']} | {origen} "
                    f"| {r['estado']} |")
     out.append("")
@@ -1833,6 +1833,21 @@ def concept_rollup_table(rows: list) -> str:
         out.append(f"| [[{r['stem']}]] | {r['year']} | {r['entro_por']} |")
     out.append("")
     return "\n".join(out)
+
+
+def _titulo_corto(title, n: int) -> str:
+    """`title` cut to `n` chars, with the cut MARKED (#260-family, #264).
+
+    Both stamped roll-ups cut silently, so a title lost its tail with nothing to say so — and the
+    declared audience of this vault is a model, which then cites the paper as *«…and Fe-group
+    element»*. Measured on a real note: 31 of 49 rows of `## Papers` and 4 of 10 of `## Excluidos`.
+    It was also incoherent inside the same artefact: `## Verificación de citas`, three sections
+    below, does mark its truncations because #226 demands it.
+
+    The `rstrip()` before the ellipsis also closes the orphan space that `excluded_table` left
+    before the `]` of its markdown link (`Neptunes: ]`)."""
+    t = str(title or "").strip()
+    return t[:n].rstrip() + "…" if len(t) > n else t
 
 
 def planetas_table(fm: dict) -> str:
@@ -1894,7 +1909,14 @@ def metodos_table(rows: list, names: set | None = None) -> str:
     La señal no se pierde: el lint la reporta como **backlog** («`methods` sin página destino»),
     igual que ya hace con `thesis_links`."""
     names = note_names() if names is None else names
-    metodos = sorted({m for m, _, _ in rows})
+    # #262 — se cuenta por CLAVE NORMALIZADA, no por string crudo. `methods` lo puebla la extracción
+    # con vocabulario abierto, así que el mismo método llega escrito de varias maneras; contar
+    # grafías **sobre**declara el universo (medido: 297 publicados sobre 291 métodos reales, con
+    # `GLS periodogram`/`gls-periodogram` y `Keplerian fit`/`keplerian-fit` entre las 6 colisiones).
+    # Es el mismo defecto que #243 arregló en el detector del lint y en `methods_match`, en el
+    # roll-up que **publica el número al lector**. ⛔ Se normaliza al CONTAR, nunca al escribir: la
+    # grafía que eligió el extractor es información sobre cómo lo nombra el paper.
+    metodos = {cfg.method_key(m) for m, _, _ in rows}
     out = [f"{METODOS_HEADER} ({len(metodos)} método(s) · {len(rows)} aplicación(es))", ""]
     if not rows:
         out += ["_(ningún paper de esta estrella declara `methods` todavía — o no se extrajo "

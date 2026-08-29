@@ -799,7 +799,15 @@ PROT_NEG = re.compile(r"(?i)no se conoce|no se sabe|sin medir|desconocid|no hay 
 # Y se admite **un nivel de anidado** (`(inferencia (mi lectura))`), que `[^()]*` no cruzaba.
 # `(inferencia de hiperparámetros…)` queda como falso positivo aceptado: es prosa que abre igual que
 # la marca, y ahí el aviso es barato de resolver.
-INFER_MARK = re.compile(r"\(\s*inferencia\b(?:[^()]|\([^()]*\))*\)", re.I)
+# #276 — el `[`*_~]*` NO es cosmético: sin él el bloqueante es ciego al énfasis markdown, y
+# `CLAUDE.md` **induce** la forma que no ve (escribe `(inferencia de [[b1]])` en la sección de
+# las cinco marcas y ``marcado **`inferencia`**`` en la cascada de ingest y en el espejo #70).
+# Medido sobre una ficha real: de sus 5 marcas de prosa, 3 llevan backticks y el detector veía
+# **2 de 5** — un ⛔ que existe para que ninguna afirmación sin respaldo se disfrace de
+# inferencia, sin mirar el 60 % de su población. Es #168 otra vez: `lib_blocks._ADORNO` existe
+# exactamente por esto («no cambian NADA de lo que la fila dice, pero con la comparación
+# literal cualquiera de los tres apagaba el bloqueante») y la comprensión no había llegado acá.
+INFER_MARK = re.compile(r"\(\s*[`*_~]*\s*inferencia(?![^\W_])(?:[^()]|\([^()]*\))*\)", re.I)
 
 
 def inferencias_sin_premisas(body: str) -> list[str]:

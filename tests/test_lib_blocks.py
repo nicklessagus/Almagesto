@@ -569,3 +569,36 @@ def test_el_blockquote_no_pasa_a_ser_el_ambito_vigente():
     texto = ("> _Estado — búsqueda 2026-08-28 ([[2019AJ....158..161D]])._\n\n"
              "| A | B |\n|---|---|\n| uno | dos |\n")
     assert [p.bibcode for p in lb.pairs_of(texto)] == ["2019AJ....158..161D"]
+
+
+# ── #263 · el cuarto veredicto entra al resumen ──────────────────────────────────────────────────
+
+
+def _row(veredicto, cond=""):
+    return lb.Row(n=1, claim="c", bibcode="2020aaa...1..1A", verdict=veredicto, evidence="e",
+                  anchor="a" * 10, source_hash="pdf:" + "b" * 10, condition=cond)
+
+
+def test_verif_counts_cuenta_los_no_verificables_y_los_cuatro_particionan():
+    """#263 — sin el cuarto veredicto los conteos NO PARTICIONAN.
+
+    Medido en una ficha real: 73 + 6 + 5 = 84 sobre 88 pares, y las 4 que faltaban eran
+    `no verificable por extracción` **correctas** (#223: la fuente no está en disco). El lector que
+    suma queda con filas sin explicar, y las dos lecturas naturales —«la tabla está cortada», «el
+    conteo está mal»— son las dos falsas. Es D-43 sin aplicar a la cabecera del propio bloque."""
+    filas = [_row("soportada"), _row("no-soportada→corregida"), _row("contradice→corregida"),
+             _row("no verificable por extracción"), _row("no verificable por extracción")]
+    c = lb.verif_counts(filas)
+    assert c["no_verificables"] == 2
+    assert (c["soportadas"] + c["no_soportadas"] + c["contradicen"] + c["no_verificables"]
+            == c["pares"]), "los cuatro veredictos tienen que particionar las filas"
+
+
+def test_verif_summary_publica_los_no_verificables_y_separa_el_eje_de_condicion():
+    """El `—` separa los dos EJES: los cuatro veredictos particionan; `con_condicion` es ortogonal
+    (una fila `soportada` puede tener condición). Juntarlos con `/` es lo que hacía leer el resumen
+    como una partición de cinco que no cerraba."""
+    linea = lb.verif_summary([_row("soportada", "acota: X"),
+                              _row("no verificable por extracción")])
+    assert "1 no verificables" in linea, "el cuarto veredicto no se publica"
+    assert "— 1 con condición declarada" in linea, "el eje ortogonal no se separa"

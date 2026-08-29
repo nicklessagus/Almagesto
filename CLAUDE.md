@@ -1234,7 +1234,18 @@ pregunta *«¿qué entró porque lo pidió el usuario, qué lo propuso el descub
 reporte externo?»* no tiene respuesta. Medido sobre una bóveda real: los 40 papers que tenía y una
 bóveda nueva no, **entraron los 40 a mano**, y su config no permite saber cuáles pidió el usuario.
 
-`via` es **vocabulario cerrado y BINARIO** (#206): `usuario` (lo trajo una persona) ·
+⛔ **`via` son DOS vocabularios, uno por carril, y comparten un solo valor (#266).** El párrafo que
+sigue describe el de **`sources:`** (off-ADS); el de **`extra_core`** (ADS) es otro y vive en
+`lib_config.EXTRA_CORE_VIA`: `usuario` · `triage` · `citado-por-corpus`. La razón es que miden ejes
+distintos — en off-ADS **no hay query que descubra**, así que todo entra por decisión de alguien y
+el eje es *quién*; en el carril ADS sí hay descubrimiento automático, y lo que el campo distingue es
+**por qué mecanismo** entró un paper que la lente no marcó core. Hasta 1.103.x este documento
+enunciaba **uno solo** debajo de una tabla que muestra los dos, así que mandaba escribir
+`via: descubrimiento` en `extra_core` — que el loader **rechaza duro**. Es exactamente el defecto
+que #162 cerró en el `help=` de la CLI, sobreviviendo en la fuente que un agente lee **antes** de
+editar `stars.yaml` a mano. Lo vigila un test de paridad doc↔código.
+
+En `sources:`, `via` es **vocabulario cerrado y BINARIO** (#206): `usuario` (lo trajo una persona) ·
 `descubrimiento` (lo propuso la cascada de `discover`). El eje que mide es **quién decidió**, y eso
 no tiene tercer valor: que el usuario traiga una **lista** de papers (un reporte de literatura, una
 review de terceros) o traiga los **PDFs** no cambia quién decidió — lo trajo él, y no salió de
@@ -1407,10 +1418,18 @@ sus afirmaciones decían lo contrario de su fuente hasta ayer**. Eso es lo contr
 bloque existe para hacer. La celda se escribe con la notación que la plantilla ya publica —
 `contradice→corregida`, `no-soportada→corregida`— que es exactamente lo que `lib_blocks.resueltos()`
 sabe leer: el veredicto nuevo **no reemplaza** al viejo, lo **anota**.
-⛔ **Y la cabecera del bloque publica los CUATRO conteos, generados por el mismo código que lee la
-tabla** (`lib_blocks.verif_summary`, INV-81): a mano derivan —la cabecera de un bloque real describía
-la ronda 1 sobre **96** pares mientras su tabla tenía **99**, sin decir de dónde salían los tres
-nuevos (los agregaron las propias correcciones)—. Y las **tres sub-secciones** que la plantilla
+⛔ **Y la cabecera del bloque publica los CUATRO VEREDICTOS —que PARTICIONAN— más la condición,
+que es otro eje, generados por el mismo código que lee la tabla** (`lib_blocks.verif_summary`,
+INV-81): a mano derivan —la cabecera de un bloque real describía la ronda 1 sobre **96** pares
+mientras su tabla tenía **99**, sin decir de dónde salían los tres nuevos (los agregaron las propias
+correcciones)—. ⛔ Y hasta 1.103.x faltaba el cuarto veredicto: `no verificable por extracción` no
+tenía contador, así que los conteos **no cerraban** —medido, 73 + 6 + 5 = **84 sobre 88**, y las 4
+que faltaban eran correctas (#223: la fuente no está en disco)—. El lector que suma quedaba con
+filas sin explicar, y las dos lecturas naturales —*«la tabla está cortada»*, *«el conteo está
+mal»*— son las dos falsas. Es D-43 sin aplicar a la cabecera del propio bloque, y pesa el doble
+porque esas filas son las que dicen que **N afirmaciones de la nota no se pudieron contrastar
+contra nada**. Por eso el `con_condicion` va después de un **`—`** y no de un `/`: los cuatro
+primeros suman `pares`, el quinto es ortogonal (una fila `soportada` puede tener condición). Y las **tres sub-secciones** que la plantilla
 cierra (*Inferencias declaradas*, *Omisiones en transcripciones*, *Condiciones perdidas*) van
 **aunque digan «ninguna»**: son el único lugar donde queda escrito el triage de la corrida, y sin
 ellas el razonamiento se queda en `build/`, que es scratch. El lint reporta las dos cosas.
@@ -1449,6 +1468,14 @@ Se escribe **nombrando sus premisas**: `(inferencia de [[b1]], [[b2]])`. Sin al 
 `[[bibcode]]` la marca es una afirmación sin respaldo disfrazada de marca —no hay de qué se dedujo,
 así que no hay nada que auditar— y **el lint la bloquea**. La palabra en prosa normal ("la
 inferencia bayesiana permite…") no es una marca y no dispara nada.
+⚠ **El énfasis markdown alrededor de la palabra NO cambia nada: `` (`inferencia` de …) ``,
+`(**inferencia** de …)` y `(_inferencia_ de …)` son la misma marca** y el bloqueante las ve a todas
+(#276). Hasta 1.104.x el regex exigía la palabra pelada, así que era ciego al adorno —medido sobre
+una ficha real: de sus 5 marcas de prosa, 3 llevaban backticks y el ⛔ miraba **2 de 5**—, y este
+mismo documento **inducía la forma invisible**: escribe la marca pelada acá y ``marcado
+**`inferencia`**`` en la cascada de ingest y en el espejo #70. Es #168 otra vez (`lib_blocks._ADORNO`
+existe exactamente por esto). Lo que **sí** sigue sin contar es otra palabra que empiece igual
+(`inferencial`).
 
 **Regla dura — todo lo apuntable es chequeable:** toda afirmación fáctica va
 **citada `[[bibcode]]` o marcada `inferencia`** — nada sin respaldo. Excepción: los **valores de

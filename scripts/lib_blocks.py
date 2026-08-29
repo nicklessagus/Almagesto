@@ -535,6 +535,14 @@ def verif_counts(rows: list) -> dict:
             "soportadas": sum(1 for v in vs if v.startswith("soportada")),
             "no_soportadas": sum(1 for v in vs if v.startswith("no-soportada")),
             "contradicen": sum(1 for v in vs if v.startswith("contradice")),
+            # #263 — el cuarto veredicto del vocabulario. Sin él los conteos NO PARTICIONAN: medido
+            # en una ficha real, 73 + 6 + 5 = 84 sobre 88 pares, y las 4 que faltaban eran
+            # `no verificable por extracción` correctas (#223: la fuente no está en disco). El
+            # lector que suma queda con filas sin explicar, y las dos lecturas naturales —«la tabla
+            # está cortada», «el conteo está mal»— son las dos falsas. Es D-43 sin aplicar a la
+            # cabecera del propio bloque: lo no evaluable se declara, no se omite — y acá es lo que
+            # dice que N afirmaciones de la nota no se pudieron contrastar contra nada.
+            "no_verificables": sum(1 for v in vs if v.startswith("no verificable")),
             "con_condicion": sum(1 for r in rows
                                  if str(r.condition or "").strip() not in ("", "—", "-", "–"))}
 
@@ -542,9 +550,12 @@ def verif_counts(rows: list) -> dict:
 def verif_summary(rows: list) -> str:
     """The canonical header line for a verification block, from `verif_counts`."""
     c = verif_counts(rows)
+    # El `—` separa los dos EJES: los cuatro primeros particionan las filas por veredicto y suman
+    # `pares`; `con_condicion` es ortogonal (una fila `soportada` puede tener condición). Juntarlos
+    # con `/` es lo que hacía leer el resumen como una partición de cinco que no cerraba.
     return (f"{c['pares']} pares; {c['soportadas']} soportadas / {c['no_soportadas']} no-soportadas "
-            f"/ {c['contradicen']} contradicen (resueltas) / {c['con_condicion']} con condición "
-            f"declarada")
+            f"/ {c['contradicen']} contradicen (resueltas) / {c['no_verificables']} no verificables "
+            f"— {c['con_condicion']} con condición declarada")
 
 
 def parse_verif_table(text: str) -> list[Row] | None:

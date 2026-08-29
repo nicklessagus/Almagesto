@@ -414,3 +414,29 @@ def test_ningun_help_nombra_un_valor_RETIRADO_del_vocabulario():
         for valor in retirados:
             assert f"| {valor}" not in texto and f"{valor} |" not in texto, \
                 f"{modulo} --help nombra `{valor}`, que es vocabulario retirado"
+
+
+# ── #266 · los dos vocabularios de `via`, doc ↔ código ───────────────────────────────────────────
+
+
+def test_claude_md_declara_los_dos_vocabularios_de_via():
+    """#266 — `CLAUDE.md` enunciaba **un** vocabulario binario debajo de una tabla que muestra los
+    **dos** carriles (`extra_core` y `sources:`), y el de `extra_core` no contiene `descubrimiento`.
+
+    Un agente que seguía la doc escribía `via: descubrimiento` en `extra_core` y el loader lo
+    rechaza duro. Es el defecto que #162 cerró en el `help=` de la CLI, sobreviviendo en la fuente
+    que un agente lee **antes** de editar `stars.yaml` a mano — o sea el arreglo aplicado a la mitad
+    de sus lectores. Este test ata la prosa a las dos constantes: agregar o sacar un valor mueve el
+    documento en vez de esconderse.
+    """
+    import lib_config as cfg
+    import triage
+    doc = (Path(__file__).resolve().parent.parent / "CLAUDE.md").read_text(encoding="utf-8")
+    assert cfg.EXTRA_CORE_VIA != triage.VIA_FUENTE, \
+        "si los dos carriles convergieron, este test y el párrafo de CLAUDE.md sobran"
+    for valor in cfg.EXTRA_CORE_VIA:
+        assert f"`{valor}`" in doc, f"`CLAUDE.md` no nombra `{valor}` (vocabulario de `extra_core`)"
+    for valor in triage.VIA_FUENTE:
+        assert f"`{valor}`" in doc, f"`CLAUDE.md` no nombra `{valor}` (vocabulario de `sources:`)"
+    assert "EXTRA_CORE_VIA" in doc, \
+        "la doc tiene que apuntar a la constante: sin el puntero, el próximo valor nuevo la deja vieja"

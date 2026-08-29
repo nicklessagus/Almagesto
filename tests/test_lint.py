@@ -2587,6 +2587,38 @@ def test_inferencia_con_premisas_pasa(toy_vault, capsys):
     assert "infer2" not in _seccion(rep, "`inferencia` sin premisas")
 
 
+@pytest.mark.parametrize("marca", ["(inferencia)", "(`inferencia`)", "(**inferencia**)",
+                                   "(_inferencia_)", "(~~inferencia~~)"])
+def test_la_marca_bloquea_con_cualquier_adorno_markdown(toy_vault, capsys, marca):
+    """#276 — el bloqueante era ciego al énfasis: veía `(inferencia)` y no `` (`inferencia`) ``.
+
+    Medido sobre una ficha real, de sus 5 marcas de prosa 3 llevaban backticks: el ⛔ que existe
+    para que ninguna afirmación sin respaldo se disfrace de inferencia miraba **2 de 5**. Y no era
+    un descuido del autor de la nota: `CLAUDE.md` escribe las dos formas —`(inferencia de [[b1]])`
+    en la sección de las cinco marcas y ``marcado **`inferencia`**`` en la cascada de ingest—, o sea
+    que el contrato **inducía** la forma invisible.
+
+    Es #168 otra vez: `lib_blocks._ADORNO` existe exactamente por esto y la comprensión no había
+    llegado hasta acá."""
+    stem = "infer_" + "".join(c for c in marca if c.isalnum())[:12]
+    mk_note(cfg.CONCEPTS / "methods", stem, {"tags": ["concept"], "name": stem},
+            f"El período es de 34 d {marca}.\n")
+    link_from_log(toy_vault, stem)
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 1, f"la marca {marca} no bloqueó"
+    assert stem in _seccion(rep, "`inferencia` sin premisas")
+
+
+def test_inferencial_no_es_la_marca(toy_vault, capsys):
+    """El borde que el `\b` original protegía y que el arreglo de #276 tiene que conservar: la
+    marca es la palabra `inferencia`, no cualquier palabra que empiece así."""
+    mk_note(cfg.CONCEPTS / "methods", "infer_al", {"tags": ["concept"], "name": "infer_al"},
+            "El resultado es robusto (inferencial en el sentido clásico).\n")
+    link_from_log(toy_vault, "infer_al")
+    _, rep = run_lint_reporte(capsys)
+    assert "infer_al" not in _seccion(rep, "`inferencia` sin premisas")
+
+
 def test_la_palabra_inferencia_en_prosa_no_es_una_marca(toy_vault, capsys):
     """El falso positivo obvio: la palabra usada como sustantivo común. La marca es la que va
     **entre paréntesis** al cierre de una afirmación; «la inferencia bayesiana permite…» no lo es."""
