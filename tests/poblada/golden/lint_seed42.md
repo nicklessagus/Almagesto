@@ -104,6 +104,9 @@
 ## ⛔ Identidad duplicada: dos notas del mismo trabajo (mismo doi/arxiv_id) (0)
 > sobre 60 notas de `papers/`
 
+## 👯 Posible duplicado SIN doi ni arxiv_id: mismo abstract verbatim (backlog — decidís vos) (0)
+> sobre 60 notas de `papers/`
+
 ## ⛔ `sources:` sin procedencia (#111): no consta quién declaró la fuente ni por qué (0)
 > sobre 0 temas de `themes.yaml`
 
@@ -239,6 +242,12 @@
 > sobre 60 notas de `papers/`
 
 ## 📄 Vista construida SÓLO del abstract — falta el PDF (backlog) (0)
+> sobre 60 notas de `papers/`
+
+## 🔒 Vista fechada SIN fuente en disco: ya no es re-verificable (backlog) (0)
+> sobre 60 notas de `papers/`
+
+## ↩ La vista REFUTA un reclamo que sigue en el frontmatter (backlog) (0)
 > sobre 60 notas de `papers/`
 
 ## Reclamo sin vista DECLARADO con `no_vista` + motivo (visible, no es deuda) (0)
