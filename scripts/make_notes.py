@@ -307,6 +307,52 @@ def stamp_pdf_link(dest) -> bool:
     return True
 
 
+def retarget_artifacts(stem: str) -> bool:
+    """Re-point one paper note's `pdf:`/`fulltext:` at DISK TRUTH, nulling them when nothing is
+    left, and re-stamp the header link accordingly (#217). Returns True if it changed the note.
+
+    `drop_core` always deletes the PDF and the `.txt` and **sometimes** keeps the note (the paper
+    belongs to another subject, or carries paid extraction). In that second case the note was left
+    claiming `pdf: ../../raw/pdfs/<slug>/<bib>.pdf` for a file that no longer exists — and both
+    fields are, by contract, disk truth. Before #215 the drift healed itself on the next
+    `make_notes` run, which re-stamped both by disk truth; the #215 fix filters dropped papers out
+    **before** writing notes — which is right, we do not want the dropped paper resurrected — so
+    those notes never pass through the re-stamp again and the drift went from transient to
+    **permanent**. It is not an argument against #215: the cleanup belongs to whoever deleted the
+    files, which is the only code that knows what it deleted.
+
+    ⚠ Not a blanket null: a paper living under several slugs may still have a copy under another
+    one, and the field is stable by design (quality precedence, INV-23). So it re-points to the
+    surviving copy and only nulls when there is none — `best_fulltext` for the `.txt` (which is the
+    same tie-break `stamp_fulltext` uses, not a second rule) and the alphabetically first surviving
+    PDF, the same rule as `artefacto_en_otro_slug`.
+
+    ⛔ It does NOT touch the view or the extraction: the reading happened and its page locators are
+    still valid. What changed is that there is no longer a source to re-verify it against."""
+    dest = cfg.PAPERS / f"{safe_name(stem)}.md"
+    if not dest.exists():
+        return False
+    text = dest.read_text(encoding="utf-8")
+    lim = cfg.fm_bounds(text)
+    if lim is None:
+        return False
+    pdfs = sorted(cfg.PDFS.glob(f"*/{safe_name(stem)}.pdf")) if cfg.PDFS.exists() else []
+    pdf_rel = f"../../raw/pdfs/{pdfs[0].parent.name}/{safe_name(stem)}.pdf" if pdfs else None
+    ft_rel, ft_src = best_fulltext(safe_name(stem))
+    ini, end = lim
+    lines, cambio = text[ini:end].split("\n"), False
+    for i, ln in enumerate(lines):
+        for campo, valor in (("pdf", pdf_rel), ("fulltext", ft_rel), ("fulltext_source", ft_src)):
+            if ln.startswith(f"{campo}:"):
+                nueva = f"{campo}: {valor}" if valor else f"{campo}: null"
+                if ln.rstrip() != nueva:
+                    lines[i], cambio = nueva, True
+    if cambio:
+        cfg.write_text_atomic(dest, text[:ini] + "\n".join(lines) + text[end:])
+    # el link de cabecera es metadata derivada del campo `pdf`: se re-estampa desde ahí (#47)
+    return stamp_pdf_link(dest) or cambio
+
+
 def restamp_pdf_links() -> int:
     """Backfill #47: barre TODAS las notas de papers y re-estampa el link de cabecera. Para
     el corpus pre-#13 de una instancia (re-correr cadena por cadena sería carísimo y build/

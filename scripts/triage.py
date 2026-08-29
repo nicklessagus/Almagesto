@@ -64,6 +64,7 @@ import json
 import sys
 
 import lib_config as cfg
+import make_notes                       # #217: la limpieza de `pdf:`/`fulltext:` vive donde se estampan
 
 ADS_URL = "https://ui.adsabs.harvard.edu/abs/"
 
@@ -496,6 +497,17 @@ def drop_core(slug: str, bibcodes: list, motivo: str) -> int:
                 # ya tiene extracción encima —trabajo pagado— y eso no se destruye en silencio.
                 por = ("pertenece también a " + ", ".join(map(str, otros[:3]))) if otros else                     "ya tiene extracción LLM (`methods` o vista con fecha): trabajo pagado"
                 cfg.print_seguro(f"  ⚠ {b}: su nota `papers/` NO se borra — {por}. Revisala a mano.")
+                # #217 — la nota se conserva, pero los artefactos que este drop borró NO existen
+                # más: `pdf:`/`fulltext:` y el link `[📄 PDF]` de la cabecera quedaban afirmando
+                # algo falso sobre el disco, y son —por contrato— verdad de disco. Antes de #215 el
+                # drift se curaba solo en el próximo `make_notes`; el fix de #215 filtra los
+                # dropeados ANTES de escribir notas (correcto: no queremos resucitar el dropeado),
+                # así que esas notas ya no vuelven a pasar por el re-estampado y el drift pasó de
+                # transitorio a PERMANENTE. La limpieza la tiene que hacer quien borró: es el único
+                # que sabe qué borró. NO se toca la vista ni la extracción: la lectura ocurrió.
+                if make_notes.retarget_artifacts(b):
+                    cfg.print_seguro(f"     ↳ `pdf:`/`fulltext:` re-apuntados por verdad de disco "
+                                     f"(null si no quedó copia bajo otro slug)")
             else:
                 # #132: la nota se borra, así que todo `[[bibcode]]` que la citaba queda ROTO
                 # (INV-02, P0, bloqueante en el próximo lint). No se reparan solos —eso sería

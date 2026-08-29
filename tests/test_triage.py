@@ -976,3 +976,59 @@ def test_drop_core_si_borra_la_vista_sembrada_sin_fecha(toy_vault, capsys):
         "vistas:\n- sujeto: ica\n  tipo: theme\n---\n# T\n", encoding="utf-8")
     triage.drop_core("ica", ["2009Icar..201..504M"], "off-topic")
     assert not (cfg.PAPERS / "2009Icar..201..504M.md").exists()
+
+
+# ── #217 · la nota conservada no queda apuntando al vacío ────────────────────
+
+def _nota_con_artefactos(bib, slug, *, otro_slug=None, extra_fm=""):
+    """Nota de paper con `pdf:`/`fulltext:` + link de cabecera, y los archivos en disco."""
+    for base, suf, cont in ((cfg.PDFS, ".pdf", b"%PDF"), (cfg.FULLTEXT, ".txt", None)):
+        for s in filter(None, (slug, otro_slug)):
+            (base / s).mkdir(parents=True, exist_ok=True)
+            p = base / s / f"{bib}{suf}"
+            p.write_bytes(cont) if cont else p.write_text("texto", encoding="utf-8")
+    (cfg.PAPERS / f"{bib}.md").write_text(
+        f"---\nbibcode: {bib}\ntags: [paper]\nstars: [tau Ceti]\n"
+        f"methods: [ICA]\n{extra_fm}"
+        f"pdf: ../../raw/pdfs/{slug}/{bib}.pdf\n"
+        f"fulltext: ../../raw/fulltext/{slug}/{bib}.txt\nfulltext_source: pdftotext\n---\n"
+        f"# {bib}\n\n· ADS: `{bib}` · [📄 PDF](../../raw/pdfs/{slug}/{bib}.pdf)\n",
+        encoding="utf-8")
+
+
+def test_drop_core_anula_los_punteros_de_la_nota_que_conserva(toy_vault, capsys):
+    """#217 — `drop_core` borra SIEMPRE el PDF y el `.txt` y A VECES conserva la nota (otro sujeto,
+    o extracción paga). En ese segundo caso la nota quedaba afirmando `pdf: …/<bib>.pdf` sobre un
+    archivo que ya no existe, y los dos campos son por contrato VERDAD DE DISCO.
+
+    Antes de #215 el drift se curaba solo en el próximo `make_notes`; el fix de #215 filtra los
+    dropeados antes de escribir notas —correcto: no queremos resucitar el dropeado— así que esas
+    notas no vuelven a pasar por el re-estampado nunca más y el drift pasó de transitorio a
+    PERMANENTE. La limpieza la hace quien borró, que es el único que sabe qué borró."""
+    _nota_con_artefactos("2021PASP..133g4501V", "ica")
+    triage.drop_core("ica", ["2021PASP..133g4501V"], "off-topic por polisemia")
+    txt = (cfg.PAPERS / "2021PASP..133g4501V.md").read_text(encoding="utf-8")
+    assert "pdf: null" in txt and "fulltext: null" in txt, txt
+    assert "[📄 PDF]" not in txt, "el link de cabecera es metadata derivada del campo `pdf`"
+    assert "NO se borra" in capsys.readouterr().out
+
+
+def test_drop_core_repunta_a_la_copia_de_otro_slug(toy_vault, capsys):
+    """#217 punto 2 — NO es un null a ciegas: un paper que vive bajo varios slugs puede conservar
+    su copia bajo otro, y el campo es estable por diseño (INV-23). Se repunta, no se anula."""
+    _nota_con_artefactos("2021PASP..133g4501V", "ica", otro_slug="tau-ceti")
+    triage.drop_core("ica", ["2021PASP..133g4501V"], "off-topic acá, core allá")
+    txt = (cfg.PAPERS / "2021PASP..133g4501V.md").read_text(encoding="utf-8")
+    assert "pdf: ../../raw/pdfs/tau-ceti/2021PASP..133g4501V.pdf" in txt, txt
+    assert "fulltext: ../../raw/fulltext/tau-ceti/2021PASP..133g4501V.txt" in txt, txt
+    assert "[📄 PDF](../../raw/pdfs/tau-ceti/" in txt
+
+
+def test_drop_core_no_toca_la_vista_ni_la_extraccion(toy_vault, capsys):
+    """#217 punto 3 — la lectura ocurrió y sus localizadores de página siguen siendo válidos; lo
+    que cambió es que ya no hay contra qué re-verificarla. Eso es un hallazgo, no una corrección."""
+    _nota_con_artefactos("2021PASP..133g4501V", "ica",
+                         extra_fm="vistas:\n  - {sujeto: ica, tipo: theme, fecha: 2026-08-29}\n")
+    triage.drop_core("ica", ["2021PASP..133g4501V"], "off-topic")
+    txt = (cfg.PAPERS / "2021PASP..133g4501V.md").read_text(encoding="utf-8")
+    assert "fecha: 2026-08-29" in txt and "methods: [ICA]" in txt

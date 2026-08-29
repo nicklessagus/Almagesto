@@ -4460,3 +4460,34 @@ def test_la_exencion_no_alcanza_a_la_vista(toy_vault, capsys):
     assert "2015MNRAS.447.1984D" in sec and "perilla" in sec, sec
     # la traducción, en la MISMA nota, no aparece: la exención es por sección, no por nota
     assert "Presentamos nuestro" not in sec, sec
+
+
+def test_vista_fechada_sin_fuente_en_disco_es_backlog(toy_vault, capsys):
+    """#217, el punto abierto — una nota puede quedar con una vista `fuente: pdf`, con citas por
+    página, y SIN fuente en disco: `verify-citations` no puede contrastarla nunca más. El ancla de
+    fuente (D-20) no lo ve —el archivo no cambió, DESAPARECIÓ— y `## Citas no verificables` mira
+    los bibcodes citados desde conceptos/queries, no los pares ya verificados de una ficha."""
+    mk_note(cfg.PAPERS, "2021PASP..133g4501V",
+            {"bibcode": "2021PASP..133g4501V", "tags": ["paper"], "stars": ["tau Cet"],
+             "vistas": [{"sujeto": "tau Cet", "tipo": "star", "fecha": "2026-08-29",
+                         "fuente": "pdf"}]},
+            "# 2021PASP..133g4501V\n\n## Vista — tau Cet\nDice X.\n")
+    link_from_index(toy_vault, "2021PASP..133g4501V")
+    rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "ya no es re-verificable")
+    assert "2021PASP..133g4501V" in sec, rep
+    assert rc == 0, "es backlog: no bloquea"
+
+
+def test_vista_con_su_txt_en_disco_no_es_hallazgo(toy_vault, capsys):
+    """#217 — el simétrico: mientras la fuente esté, no hay nada que reportar."""
+    (cfg.FULLTEXT / "tau-ceti").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "tau-ceti" / "2021PASP..133g4501V.txt").write_text("x", encoding="utf-8")
+    mk_note(cfg.PAPERS, "2021PASP..133g4501V",
+            {"bibcode": "2021PASP..133g4501V", "tags": ["paper"], "stars": ["tau Cet"],
+             "vistas": [{"sujeto": "tau Cet", "tipo": "star", "fecha": "2026-08-29",
+                         "fuente": "pdf"}]},
+            "# 2021PASP..133g4501V\n\n## Vista — tau Cet\nDice X.\n")
+    link_from_index(toy_vault, "2021PASP..133g4501V")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2021PASP..133g4501V" not in _seccion(rep, "ya no es re-verificable")

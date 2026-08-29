@@ -1139,6 +1139,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     vista_sin_fecha: list = []         # (stem, sujeto) — vista declarada y sin fecha: sin leer
     vista_sin_fuente: list = []        # (stem, sujeto) — #207: no consta de qué se construyó
     vista_solo_abstract: list = []     # (stem, sujeto) — #207: se leyó el abstract, falta el PDF
+    vista_sin_fuente_en_disco: list = []   # (stem, sujeto) — #217: leída y ya no re-verificable
 
     # Los temas DECLARADOS (su `concept`, que es el nombre con el que un paper los nombra en
     # `thesis_links`/`methods`). Una lectura del YAML por corrida, no por nota.
@@ -1649,6 +1650,22 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                             (stem, f"la vista de **{v['sujeto']}** se construyó SÓLO del abstract: "
                                    f"conseguir el PDF para leer el paper (y ojo, el abstract es "
                                    f"donde la fuente afirma de más)"))
+                # #217 — la vista OCURRIÓ (tiene fecha) y su fuente ya no está en disco: sus citas
+                # no se pueden contrastar nunca más. Pasa cuando `--drop-core` borra los artefactos
+                # y conserva la nota, y es peor en la rama «se conserva porque pertenece a OTRO
+                # sujeto»: ahí el paper puede estar citado en la ficha de esa entidad, con pares ya
+                # verificados. El ancla de fuente (D-20) no lo ve —el archivo no cambió,
+                # DESAPARECIÓ— y `## Citas no verificables` mira los bibcodes citados desde
+                # conceptos/queries, no los pares ya verificados de una ficha. Sin esta categoría,
+                # la vista se lee igual de firme que cualquier otra.
+                if any(str(v.get("fecha") or "").strip() for v in vistas) and not (
+                        list(cfg.PDFS.glob(f"*/{stem}.pdf")) if cfg.PDFS.exists() else []) and not (
+                        list(cfg.FULLTEXT.glob(f"*/{stem}.txt")) if cfg.FULLTEXT.exists() else []):
+                    vista_sin_fuente_en_disco.append(
+                        (stem, "tiene vista FECHADA y ya no hay fuente en disco (ni PDF ni `.txt`): "
+                               "la lectura ocurrió y sus localizadores siguen siendo válidos, pero "
+                               "`verify-citations` no puede contrastarla nunca más — conseguir de "
+                               "nuevo la fuente, o declarar la pérdida en `salvedades` de la vista"))
                 for falta in sorted(declaradas - secciones):
                     vistas_vs_cuerpo.append(
                         (stem, f"`vistas[]` declara la lectura de **{falta}** y el cuerpo no tiene "
@@ -2937,6 +2954,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('vista_sin_fecha', 'Vista declarada y sin `fecha`: el stub la sembró y nadie leyó desde ahí (backlog)', SEV_BACKLOG, tuple(vista_sin_fecha), poblacion='papers'),
         Categoria('vista_sin_fuente', 'Vista sin `fuente`: no consta si salió del PDF o sólo del abstract (backlog)', SEV_BACKLOG, tuple(vista_sin_fuente), poblacion='papers'),
         Categoria('vista_solo_abstract', '📄 Vista construida SÓLO del abstract — falta el PDF (backlog)', SEV_BACKLOG, tuple(vista_solo_abstract), poblacion='papers'),
+        Categoria('vista_sin_fuente_en_disco', '🔒 Vista fechada SIN fuente en disco: ya no es re-verificable (backlog)', SEV_BACKLOG, tuple(vista_sin_fuente_en_disco), poblacion='papers'),
         Categoria('reclamo_sin_vista_declarado', 'Reclamo sin vista DECLARADO con `no_vista` + motivo (visible, no es deuda)', SEV_BACKLOG, tuple(reclamo_sin_vista_declarado), poblacion='papers'),
         Categoria('extraccion_no_declarada', 'Recorte de lectura sin declarar: hay core sin extraer y el registro no dice por qué (backlog)', SEV_BACKLOG, tuple(extraccion_no_declarada), poblacion='registros'),
         Categoria('papers_table_stale', 'Lista de papers desactualizada: la tabla estampada no refleja el universo (backlog)', SEV_BACKLOG, tuple(papers_table_stale), poblacion='registros'),

@@ -996,7 +996,23 @@ lee como aplicada, y no lo está. Tres propiedades del carril, y cada una cierra
   desapareciera del registro, dentro de tres meses se leería como *«la búsqueda nunca lo encontró»*.
 - **Los artefactos se borran** (PDF y `.txt`): si quedan, el detector de #108 los reporta como
   extracción pagada sin nota **para siempre**, y el `.txt` sigue saliendo en los greps del corpus. La
-  decisión queda igual —versionada, con motivo— así que borrar el artefacto no borra el juicio. La
+  decisión queda igual —versionada, con motivo— así que borrar el artefacto no borra el juicio.
+  ⛔ **Y en la nota que SE CONSERVA, `drop_core` re-apunta `pdf:`/`fulltext:` por verdad de disco
+  (#217):** a la copia que sobreviva bajo otro slug —el campo es estable por diseño— o a `null` si
+  no queda ninguna, y el link `[📄 PDF]` de la cabecera se cae con él (es metadata derivada). Los
+  dos campos son, por contrato, verdad de disco: dejarlos apuntando a un archivo que este mismo
+  comando borró es afirmar algo falso sobre el disco. Antes de #215 el drift se curaba solo en el
+  próximo `make_notes`; el fix de #215 filtra los dropeados **antes** de escribir notas —correcto,
+  no queremos resucitar el dropeado— así que esas notas ya no vuelven a pasar por el re-estampado y
+  el drift pasó de transitorio a **permanente**. No es un argumento contra #215: la limpieza la
+  tiene que hacer quien borró, que es el único que sabe qué borró. **La vista y la extracción no se
+  tocan**: la lectura ocurrió y sus localizadores de página siguen siendo válidos — lo que cambió
+  es que ya no hay contra qué re-verificarla, y **eso el lint lo dice** (*«vista fechada sin fuente
+  en disco: ya no es re-verificable»*, backlog). Esa categoría existe porque ninguna otra red lo ve:
+  el ancla de fuente (D-20) no se entera —el archivo no cambió, **desapareció**— y `## Citas no
+  verificables` mira los bibcodes citados desde conceptos/queries, no los pares ya verificados de
+  una ficha; es agudo justamente en la rama «se conserva porque pertenece a **otro sujeto**», donde
+  el paper sí puede estar citado en la ficha de esa entidad. La
   **nota** se borra **sólo si el paper no pertenece a otro sujeto Y no tiene extracción** — o sea,
   si nadie más la alcanza y nadie pagó por ella. En cualquiera de los otros dos casos NO se borra y
   se avisa por qué (la exclusión es del par paper-sujeto, y la extracción es trabajo pagado que no

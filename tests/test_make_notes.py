@@ -3699,3 +3699,45 @@ def test_paper_notes_all_tampoco_resucita_el_dropeado(toy_vault):
                              "motivo": "off-topic", "fecha": "2026-08-29"}}})
     mn.write_paper_notes("test_star", include_all=True, force=False)
     assert not (toy_vault.PAPERS / "2020conA...1..1A.md").exists()
+
+
+# ── #217 · retarget_artifacts: verdad de disco después de un borrado ─────────
+
+def _nota_apuntando_a(bib, slug, toy_vault):
+    (cfg.PAPERS).mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / f"{bib}.md").write_text(
+        f"---\nbibcode: {bib}\ntags: [paper]\npdf: ../../raw/pdfs/{slug}/{bib}.pdf\n"
+        f"fulltext: ../../raw/fulltext/{slug}/{bib}.txt\nfulltext_source: pdftotext\n---\n"
+        f"# {bib}\n\n· ADS: `{bib}` · [📄 PDF](../../raw/pdfs/{slug}/{bib}.pdf)\n",
+        encoding="utf-8")
+    return cfg.PAPERS / f"{bib}.md"
+
+
+def test_retarget_anula_cuando_no_queda_copia(toy_vault):
+    """#217 — verdad de disco: sin ningún artefacto, los dos campos van a `null` y el link de
+    cabecera se cae con ellos (es metadata derivada del campo `pdf`)."""
+    dest = _nota_apuntando_a("2021PASP..133g4501V", "ica", toy_vault)
+    assert mn.retarget_artifacts("2021PASP..133g4501V") is True
+    txt = dest.read_text(encoding="utf-8")
+    assert "pdf: null" in txt and "fulltext: null" in txt and "[📄 PDF]" not in txt
+
+
+def test_retarget_es_idempotente(toy_vault):
+    """#217 — segunda corrida: nada que cambiar, devuelve False (la regla nº 6 del repo)."""
+    _nota_apuntando_a("2021PASP..133g4501V", "ica", toy_vault)
+    mn.retarget_artifacts("2021PASP..133g4501V")
+    assert mn.retarget_artifacts("2021PASP..133g4501V") is False
+
+
+def test_retarget_sin_nota_no_revienta(toy_vault):
+    """#217 — `drop_core` lo llama sobre un bibcode cualquiera: sin nota, no-op silencioso."""
+    assert mn.retarget_artifacts("2021NoExiste..1A") is False
+
+
+def test_retarget_no_toca_una_nota_sin_frontmatter(toy_vault):
+    """#217 — sin frontmatter no hay campos que re-apuntar, y adivinar sería peor: el lint ya
+    reporta la nota rota (`fm_error`), acá no se la edita."""
+    (cfg.PAPERS).mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / "2021Suelto.md").write_text("# sin frontmatter\n", encoding="utf-8")
+    assert mn.retarget_artifacts("2021Suelto") is False
+    assert (cfg.PAPERS / "2021Suelto.md").read_text(encoding="utf-8") == "# sin frontmatter\n"
