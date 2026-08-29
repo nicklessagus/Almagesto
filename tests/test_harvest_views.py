@@ -10,6 +10,7 @@ notas terminadas, con JSON perfectamente válido — o sea en silencio.
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 import sys
 from pathlib import Path
 
@@ -491,3 +492,138 @@ def test_sin_refuta_no_pasa_nada(toy_vault, capsys):
     hv.harvest("test_star")
     assert "refuta" not in read_fm(dest)["vistas"][0]
     assert "REFUTAN el reclamo" not in capsys.readouterr().out
+
+
+# ── #213 · las salvedades: chequeo mecánico + marca de no verificada ─────────
+
+def _con_txt(toy_vault, contenido, stem=BIB):
+    (cfg.FULLTEXT / "test_star").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "test_star" / f"{stem}.txt").write_text(contenido, encoding="utf-8")
+
+
+def test_salvedad_estructurada_verdadera_se_publica_verificada(toy_vault):
+    """#213 — «el `.txt` perdió esta cadena» es un `grep`, no un juicio: se chequea con un script y
+    la nota dice CÓMO se verificó, no sólo que alguien lo dijo."""
+    _con_txt(toy_vault, "el texto sin el simbolo raro")
+    d = extraccion()
+    d["salvedades"] = [{"tipo": "txt_pierde", "cadena": "ζ_{×+×}"}]
+    dest = sembrar(toy_vault, d)
+    hv.harvest("test_star")
+    body = dest.read_text(encoding="utf-8")
+    assert "Salvedades (verificadas contra el archivo)" in body
+    assert "⚙ verificada" in body and "ζ_{×+×}" in body
+
+
+def test_salvedad_estructurada_FALSA_no_se_publica_y_se_grita(toy_vault, capsys):
+    """#213, el caso medido — el extractor afirmó una degradación del `.txt` que NO existía,
+    invocando #205 para darse autoridad, y lo cazó un duplicado ACCIDENTAL de la extracción. La
+    afirmación iba a entrar bajo `**Salvedades:**`, que es justo la sección que el consumidor lee
+    para saber cuánto confiar."""
+    _con_txt(toy_vault, "la fuente dice ζ_{×+×} y el .txt también")
+    d = extraccion()
+    d["salvedades"] = [{"tipo": "txt_pierde", "cadena": "ζ_{×+×}"}]
+    dest = sembrar(toy_vault, d)
+    hv.harvest("test_star")
+    assert "ζ_{×+×}" not in dest.read_text(encoding="utf-8")
+    out = capsys.readouterr().out
+    assert "salvedad FALSA" in out and "la salvedad es FALSA" in out
+
+
+def test_salvedad_falsa_no_tira_la_extraccion(toy_vault):
+    """#213 — NO se rechaza la extracción entera (a diferencia de `fuente: pdf` sin PDF, #207):
+    aquello es una contradicción sobre QUÉ se abrió y esto un campo secundario que se descarta sin
+    tirar la lectura, que es la mitad más cara de la cadena."""
+    _con_txt(toy_vault, "contiene ζ_{×+×}")
+    d = extraccion()
+    d["salvedades"] = [{"tipo": "txt_pierde", "cadena": "ζ_{×+×}"}]
+    dest = sembrar(toy_vault, d)
+    n = hv.harvest("test_star")
+    assert n["rechazadas"] == 0 and n["cosechadas"] == 1
+    assert "## Vista — Estrella Test" in dest.read_text(encoding="utf-8")
+
+
+def test_salvedad_en_prosa_se_marca_NO_VERIFICADA(toy_vault):
+    """#213, la otra mitad — lo que no es decidible por un script se publica marcado, en su propio
+    bloque. Publicarlo al mismo nivel visual que una fila chequeada es lo que dejó leer un defecto
+    fabricado como un hecho medido."""
+    d = extraccion()
+    d["salvedades"] = ["la Fig. 3 es difícil de leer"]
+    dest = sembrar(toy_vault, d)
+    hv.harvest("test_star")
+    body = dest.read_text(encoding="utf-8")
+    assert "NO VERIFICADAS — juicio del extractor" in body
+    assert "la Fig. 3 es difícil de leer" in body
+
+
+def test_salvedad_no_evaluable_no_es_verificada_ni_falsa(toy_vault, capsys):
+    """#213 / D-43 — sin `.txt` en disco el chequeo NO CORRIÓ, y eso no es «se verificó» ni «es
+    falsa». Se publica como prosa marcada, diciendo por qué no se pudo evaluar."""
+    d = extraccion()
+    d["salvedades"] = [{"tipo": "txt_pierde", "cadena": "√"}]
+    dest = sembrar(toy_vault, d)
+    hv.harvest("test_star")
+    body = dest.read_text(encoding="utf-8")
+    assert "no evaluable" in body and "NO VERIFICADAS" in body
+    assert "salvedad FALSA" not in capsys.readouterr().out
+
+
+def test_tipo_fuera_del_vocabulario_no_se_da_por_verificado(toy_vault):
+    """#213 — vocabulario CERRADO: un typo no puede producir una salvedad que se lea como
+    chequeada. Cae a no evaluable, con el motivo."""
+    d = extraccion()
+    d["salvedades"] = [{"tipo": "txt_perdio", "cadena": "√"}]
+    dest = sembrar(toy_vault, d)
+    hv.harvest("test_star")
+    body = dest.read_text(encoding="utf-8")
+    assert "verificadas contra el archivo" not in body
+    assert "fuera del vocabulario" in body
+
+
+def test_txt_pierde_sin_cadena_no_es_verificable(toy_vault):
+    """#213 — sin `cadena` no hay qué buscar: no evaluable, nunca «verificada» (D-43)."""
+    _con_txt(toy_vault, "cualquier cosa")
+    assert hv.check_salvedad(BIB, {"tipo": "txt_pierde"}) == (None, "sin `cadena`: no hay qué buscar")
+
+
+def test_pdf_paginas_se_chequea_contra_el_pdf(toy_vault, monkeypatch):
+    """#213 — el segundo tipo del vocabulario: «el PDF tiene N páginas» lo decide el propio PDF,
+    vía `pdfinfo` (la MISMA dependencia de sistema que ya usa `pdftotext`: sin librería nueva)."""
+    (cfg.PDFS / "test_star").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "test_star" / f"{BIB}.pdf").write_bytes(b"%PDF-1.4\n")
+    monkeypatch.setattr(hv.shutil, "which", lambda _c: "/usr/bin/pdfinfo")
+    monkeypatch.setattr(hv.subprocess, "run",
+                        lambda *a, **k: SimpleNamespace(stdout="Title: x\nPages:           2\n"))
+    ok, detalle = hv.check_salvedad(BIB, {"tipo": "pdf_paginas", "n": 2})
+    assert ok is True and "2 página(s)" in detalle
+    mal, detalle = hv.check_salvedad(BIB, {"tipo": "pdf_paginas", "n": 17})
+    assert mal is False and "la salvedad dice 17" in detalle
+
+
+def test_pdf_paginas_sin_pdf_no_es_verificable(toy_vault):
+    """#213 / D-43 — sin PDF el chequeo NO CORRIÓ; resolverlo en contra sería inventar un hallazgo.
+    El motivo importa: «no hay PDF» y «no está `pdfinfo`» son dos no-evaluables distintos."""
+    ok, detalle = hv.check_salvedad(BIB, {"tipo": "pdf_paginas", "n": 3})
+    assert ok is None and "no hay PDF en disco" in detalle
+
+
+def test_pdf_paginas_sin_pdfinfo_lo_declara(toy_vault, monkeypatch):
+    """#213 / D-43 — sin la herramienta el chequeo tampoco corrió, y lo dice con SU motivo."""
+    (cfg.PDFS / "test_star").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "test_star" / f"{BIB}.pdf").write_bytes(b"%PDF-1.4\n")
+    monkeypatch.setattr(hv.shutil, "which", lambda _c: None)
+    ok, detalle = hv.check_salvedad(BIB, {"tipo": "pdf_paginas", "n": 3})
+    # «poppler-utils», no «pdfinfo» a secas: los otros no-evaluables de esta rama también nombran
+    # a `pdfinfo`, así que la aserción laxa pasaba con la guarda rota (#202).
+    assert ok is None and "poppler-utils" in detalle
+
+
+def test_pdfinfo_sin_pages_no_es_verificable(toy_vault, monkeypatch):
+    """#213 / D-43 — `pdfinfo` corrió y no devolvió `Pages:` (PDF corrupto): tercer no-evaluable
+    con su motivo propio. Sin la rama, `int(m.group(1))` reventaría con `AttributeError` y el
+    cosechador moriría a mitad de la cosecha por un campo secundario."""
+    (cfg.PDFS / "test_star").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "test_star" / f"{BIB}.pdf").write_bytes(b"%PDF-1.4\n")
+    monkeypatch.setattr(hv.shutil, "which", lambda _c: "/usr/bin/pdfinfo")
+    monkeypatch.setattr(hv.subprocess, "run", lambda *a, **k: SimpleNamespace(stdout="roto\n"))
+    ok, detalle = hv.check_salvedad(BIB, {"tipo": "pdf_paginas", "n": 3})
+    assert ok is None and "no devolvió el número de páginas" in detalle

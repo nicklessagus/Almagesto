@@ -334,6 +334,28 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   mientras siga siendo la plantilla del stub —prosa redactada no se pisa sin `--force`: puede tener
   anclas de verificación colgando del texto exacto— y **trae el `.txt` al slug del sujeto** (D-18),
   sin lo cual la vista de un paper retro-tagueado no es ejecutable.
+  ⛔ **Las `salvedades` sobre el ARTEFACTO se chequean con un script, o se publican marcadas NO
+  VERIFICADAS (#213).** Una salvedad del tipo *«el `.txt` perdió este símbolo»* **no lleva
+  `[[bibcode]]`** —es una afirmación sobre el archivo, no sobre el paper— así que `verify-citations`
+  la deja afuera **por construcción**: descompone la nota en pares (afirmación, `[[bibcode]]`).
+  Ninguna red la miraba, y el caso medido es una **afirmación fabricada**: un extractor declaró una
+  degradación del `.txt` que no existía —invocando #205 para darse autoridad— y lo cazó un
+  **duplicado accidental** de la extracción. Eso iba a entrar bajo `**Salvedades:**`, que es justo la
+  sección que el consumidor lee para saber **cuánto confiar**. La asimetría dolía más porque el caso
+  simétrico ya tenía red: `fuente: pdf` sin PDF **rechaza la extracción entera** (#207), o sea que
+  *de dónde* leyó se cruza contra el disco y lo que dice *sobre lo que leyó*, contra nada.
+  El arreglo son dos mitades. (a) La salvedad que hace una afirmación **decidible sobre un archivo**
+  se emite **estructurada**, con vocabulario cerrado (`lib_config.SALVEDAD_TIPOS`: `txt_pierde` con
+  su `cadena`, `pdf_paginas` con su `n`), y la chequea el **cosechador** con un `grep` o con
+  `pdfinfo` — máquina, no LLM: pagar un subagente por lo que decide un `grep` es más caro y menos
+  confiable. La que resulta **falsa NO se publica** y el cosechador la grita con su archivo; ⚠ pero
+  **no tira la extracción** (a diferencia de #207: aquello es una contradicción sobre *qué se abrió*
+  y no se puede saber cuál mitad miente; esto es un campo secundario que se descarta sin perder la
+  mitad más cara de la cadena). Y el chequeo que **no pudo correr** —sin `.txt`, sin PDF, sin
+  `pdfinfo`, `tipo` con typo— sale **no evaluable con su motivo**, nunca «verificada» (D-43).
+  (b) Todo lo demás se publica en su **propio bloque**, marcado *«⚠ NO VERIFICADAS — juicio del
+  extractor»*: publicarlo al mismo nivel visual que una fila chequeada es lo que dejó leer un
+  defecto inventado como un hecho medido.
   ⛔ **Y la lectura puede RETRACTAR el reclamo que la trajo: `refuta: [<sujeto>]` (#212).** Es el
   único canal en esa dirección, y faltaba: `stars`/`thesis_links` se siembran **antes** de leer y
   `harvest_views` mergea **add-only** —lo cual está bien, protege la extracción de que un re-seed la

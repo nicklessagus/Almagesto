@@ -20,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.81.0"
+ALMAGESTO_VERSION = "1.82.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1315,6 +1315,20 @@ VISTA_TIPOS = ("star", "theme")
 # Ausente = **no consta**, igual que `fecha`: no se rellena, porque un `pdf` inventado sería peor
 # que el silencio. Una vista `abstract` es legítima y declarada; lo que el lint pide es el PDF.
 VISTA_FUENTES = ("pdf", "abstract")
+
+#: #213 · vocabulario CERRADO de las salvedades ESTRUCTURADAS — las que hacen una afirmación
+#: **decidible sobre un archivo**, o sea las que un script chequea y ningún LLM tiene que juzgar.
+#: Existe porque una salvedad inventada no la miraba nadie: `verify-citations` descompone la nota en
+#: pares (afirmación, `[[bibcode]]`) y una salvedad del tipo *«el `.txt` perdió este símbolo»* no
+#: lleva bibcode —es una afirmación sobre el ARTEFACTO, no sobre el paper— así que se cae del
+#: fan-out por construcción. Medido: un extractor afirmó una degradación del `.txt` que no existía,
+#: invocando #205 para darse autoridad, y lo cazó un duplicado ACCIDENTAL de la extracción.
+#: ⚠ Cerrado y chico a propósito: lo que no es decidible por un script no entra acá — se escribe
+#: como salvedad de prosa y la nota la marca **NO VERIFICADA**, que es la otra mitad del arreglo.
+SALVEDAD_TIPOS = {
+    "txt_pierde": "cadena",      # el `.txt` NO contiene `cadena` (la fuente sí): un grep lo decide
+    "pdf_paginas": "n",          # el PDF tiene `n` páginas: lo decide el propio PDF
+}
 
 
 class VistasError(RuntimeError):

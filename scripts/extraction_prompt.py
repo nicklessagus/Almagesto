@@ -280,6 +280,23 @@ cosechador no crea la sección.
 ⛔ Y la regla de uso: **son ayuda de lectura, nunca fuente de la que citar.** Si citás, citás del
 original con su página.
 
+⛔ **Las `salvedades` que afirman algo DECIDIBLE sobre un archivo van ESTRUCTURADAS (#213),
+porque un script las chequea.** Vocabulario cerrado, dos formas:
+
+    {{"tipo":"txt_pierde","cadena":"ζ_{{×+×}}"}}     → el `.txt` NO contiene esa cadena
+    {{"tipo":"pdf_paginas","n":17}}                 → el PDF tiene N páginas
+
+Todo lo demás va como **string**, y la nota lo publica marcado **⚠ NO VERIFICADA — juicio del
+extractor**, en su propio bloque. La razón: una salvedad sobre el **artefacto** no lleva
+`[[bibcode]]` —es una afirmación sobre el archivo, no sobre el paper— así que `verify-citations` la
+deja afuera **por construcción**, y ninguna red la mira. Medido: un extractor afirmó una degradación
+del `.txt` que **no existía**, invocando #205 para darse autoridad, y lo cazó un duplicado
+accidental de la extracción. Esa afirmación iba a entrar bajo `**Salvedades:**`, que es justo la
+sección que el consumidor lee para saber **cuánto confiar** en la extracción.
+⚠ La estructurada que **no resista su propio chequeo NO se publica** y el cosechador la grita con tu
+nombre de archivo. Si la afirmación es decidible, estructurala: es más barata y más fuerte que la
+prosa.
+
 ⛔ **`refuta` es el único campo que puede DESHACER un reclamo (#212).** El frontmatter de la nota
 trae `stars[]` / `thesis_links[]` sembrados **antes** de leer: son **reclamos**, no lecturas. Si
 leíste el paper entero y el sujeto que lo reclama **no tiene ningún sustento** —el caso típico es

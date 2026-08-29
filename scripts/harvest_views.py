@@ -28,6 +28,8 @@ import argparse
 import datetime as _dt
 import re
 import json
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -64,6 +66,83 @@ def pdf_on_disk(bibcode: str) -> bool:
     return any(cfg.PDFS.glob(f"**/{mn.safe_name(bibcode)}.pdf"))
 
 
+def check_salvedad(bibcode: str, item: dict) -> tuple[bool | None, str]:
+    """Check one STRUCTURED caveat against the file it talks about (#213).
+
+    Returns `(veredicto, detalle)`: `True` it holds, `False` it is FALSE, `None` it could not be
+    evaluated — and the third is not the second (D-43). `detalle` is the human-readable evidence,
+    which is what ends up in the note so the reader sees HOW it was checked and not just that
+    someone said so.
+
+    This exists because a caveat about the ARTEFACT (`the .txt lost this symbol`, `the PDF is an
+    unreadable scan`) carries no `[[bibcode]]`, so `verify-citations` drops it from the fan-out by
+    construction — it decomposes a note into (claim, bibcode) pairs. Measured: an extractor claimed
+    a `.txt` degradation that did not exist, quoting #205 for authority, and what caught it was an
+    ACCIDENTAL duplicate of the extraction. The claim was one `grep` away from being decidable.
+
+    ⛔ Machine, not LLM: the whole point is that these claims are decidable, and paying a subagent
+    to judge what `grep` settles is both more expensive and less reliable."""
+    tipo = str(item.get("tipo") or "").strip()
+    if tipo not in cfg.SALVEDAD_TIPOS:
+        return None, f"`tipo: {tipo}` fuera del vocabulario ({' | '.join(cfg.SALVEDAD_TIPOS)})"
+    stem = mn.safe_name(bibcode)
+    if tipo == "txt_pierde":
+        cadena = str(item.get("cadena") or "")
+        if not cadena:
+            return None, "sin `cadena`: no hay qué buscar"
+        txts = sorted(cfg.FULLTEXT.glob(f"*/{stem}.txt")) if cfg.FULLTEXT.exists() else []
+        if not txts:
+            return None, "no hay `.txt` en disco contra el cual chequear"
+        presente = any(cadena in t.read_text(encoding="utf-8", errors="replace") for t in txts)
+        return (not presente,
+                (f"el `.txt` NO contiene `{cadena}`" if not presente
+                 else f"el `.txt` SÍ contiene `{cadena}` — la salvedad es FALSA"))
+    # pdf_paginas
+    try:
+        n_dicho = int(item.get("n"))
+    except (TypeError, ValueError):
+        return None, "sin `n` numérico: no hay qué comparar"
+    pdfs = sorted(cfg.PDFS.glob(f"*/{stem}.pdf")) if cfg.PDFS.exists() else []
+    if not pdfs:
+        return None, "no hay PDF en disco contra el cual chequear"
+    # `pdfinfo` (poppler), no una librería nueva: es la MISMA dependencia de sistema que ya declara
+    # `requirements.txt` para `pdftotext`, así que el chequeo no agrega un modo de falla propio.
+    if shutil.which("pdfinfo") is None:
+        return None, "sin `pdfinfo` (poppler-utils) no se pueden contar las páginas"
+    try:
+        r = subprocess.run(["pdfinfo", str(pdfs[0])], capture_output=True, text=True, timeout=30)
+        m = re.search(r"^Pages:\s+(\d+)", r.stdout, re.M)
+    except (OSError, subprocess.SubprocessError) as e:
+        return None, f"no se pudo correr `pdfinfo` ({e.__class__.__name__})"
+    if not m:
+        return None, "`pdfinfo` no devolvió el número de páginas"
+    n_real = int(m.group(1))
+    return n_dicho == n_real, f"el PDF tiene {n_real} página(s) (la salvedad dice {n_dicho})"
+
+
+def split_salvedades(bibcode: str, data: dict) -> tuple[list, list, list]:
+    """`(verificadas, sin_verificar, falsas)` — las tres poblaciones de #213.
+
+    A caveat is either **structured** (a map with a `tipo` from `SALVEDAD_TIPOS`: decidable, so it
+    gets checked) or **prose** (a string: not decidable, so it is published marked NOT VERIFIED).
+    Publishing both at the same visual level is what let a fabricated defect read as a measured
+    fact, in the very section a consumer reads to decide how much to trust the extraction."""
+    verificadas, prosa, falsas = [], [], []
+    for item in cfg.as_list(data.get("salvedades")):
+        if isinstance(item, dict):
+            ok, detalle = check_salvedad(bibcode, item)
+            if ok is True:
+                verificadas.append(f"⚙ verificada: {detalle}")
+            elif ok is False:
+                falsas.append(detalle)
+            else:
+                # No evaluable NO es «verificada» ni «falsa» (D-43): se publica como prosa marcada.
+                prosa.append(f"{item.get('nota') or item.get('tipo')} (no evaluable: {detalle})")
+        elif str(item).strip():
+            prosa.append(str(item).strip())
+    return verificadas, prosa, falsas
+
+
 def render_view(sujeto: str, data: dict) -> str:
     """The `## Vista — <sujeto>` section built from one extraction JSON.
 
@@ -91,9 +170,17 @@ def render_view(sujeto: str, data: dict) -> str:
         out.append("")
     if (hueco := _safe_links(str(data.get("hueco") or "").strip())):
         out += [f"**Hueco:** {hueco}", ""]
-    salv = [_safe_links(str(x).strip()) for x in cfg.as_list(data.get("salvedades")) if str(x).strip()]
-    if salv:
-        out += ["**Salvedades:**", ""] + [f"- {s}" for s in salv] + [""]
+    # #213 — dos bloques, no uno: la salvedad CHEQUEADA contra el archivo y la que es juicio del
+    # extractor no pueden publicarse al mismo nivel visual. Ésta es la sección que el consumidor lee
+    # para saber cuánto confiar en la extracción, y un defecto inventado ahí le dice que la fuente
+    # está rota donde no lo está. Las FALSAS no se publican: las filtró el cosechador y las gritó.
+    verificadas, prosa, _falsas = split_salvedades(str(data.get("bibcode") or ""), data)
+    if verificadas:
+        out += ["**Salvedades (verificadas contra el archivo):**", ""] + [
+            f"- {_safe_links(s)}" for s in verificadas] + [""]
+    if prosa:
+        out += ["**Salvedades (⚠ NO VERIFICADAS — juicio del extractor):**", ""] + [
+            f"- {_safe_links(s)}" for s in prosa] + [""]
     return "\n".join(out).rstrip("\n") + "\n"
 
 
@@ -323,6 +410,7 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
     lente = mn.objective_lens()[0]
     hoy = _dt.date.today().isoformat()
     refutados: list = []               # #212 · (bibcode, [sujetos]) — para el aviso de cierre
+    salvedades_falsas: list = []       # #213 · (bibcode, detalle) — chequeadas y desmentidas
     for archivo in sorted(src.glob("*.json")):
         try:
             data = json.loads(archivo.read_text(encoding="utf-8"))
@@ -399,6 +487,15 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
             valores = [str(x).strip() for x in cfg.as_list(data.get(campo)) if str(x).strip()]
             if valores and mn.merge_frontmatter_list(dest, campo, valores):
                 toco = True
+        # #213 — la salvedad estructurada que NO resiste su propio chequeo no se publica, y se
+        # GRITA: es una afirmación fabricada sobre el artefacto, justo en la sección que el
+        # consumidor lee para saber cuánto confiar. ⚠ No se rechaza la extracción entera (a
+        # diferencia de `fuente: pdf` sin PDF, #207): aquello es una contradicción sobre QUÉ se
+        # abrió —no se puede saber cuál mitad miente— y esto es un campo secundario que se puede
+        # descartar sin tirar la lectura, que es la mitad más cara de la cadena.
+        for _detalle in split_salvedades(bib, data)[2]:
+            salvedades_falsas.append((bib, _detalle))
+            cfg.print_seguro(f"  ⛔ {bib}: salvedad FALSA, no se publica — {_detalle}")
         if write_view_section(dest, sujeto, render_view(sujeto, data), theme=theme, force=force):
             toco = True
         if stamp_reading_aids(dest, data):
@@ -411,6 +508,13 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
         + (f", {n['rechazadas']} RECHAZADAS" if n["rechazadas"] else "")
         + (f", {n['sin_nota']} sin nota destino" if n["sin_nota"] else "")
         + (f", {n['txt_traidos']} .txt traídos al slug" if n["txt_traidos"] else ""))
+    if salvedades_falsas:
+        cfg.print_seguro(f"\n⛔ {len(salvedades_falsas)} salvedad(es) ESTRUCTURADAS resultaron "
+                         f"FALSAS contra el archivo y NO se publicaron (#213). Una afirmación "
+                         f"fabricada sobre el artefacto le dice al próximo lector que la fuente "
+                         f"está rota donde no lo está:")
+        for bib, detalle in salvedades_falsas:
+            cfg.print_seguro(f"  - {bib}: {detalle}")
     if refutados:
         # El comando queda listo para pegar, con el motivo puesto: sin él la decisión se toma igual
         # pero el registro no dice por qué, que es lo único que sirve dentro de seis meses.
