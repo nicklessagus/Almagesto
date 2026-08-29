@@ -245,3 +245,34 @@ def test_force_deja_rastro_de_la_captura_que_pisa(toy_vault, fake_defuddle, monk
     assert sorted(p.name for p in (toy_vault.FULLTEXT / "gp").glob("*.txt")) == \
         ["2006RasmussenWilliams.txt"]
     assert "La página cambió." in txt.read_text(encoding="utf-8")
+
+
+def test_una_url_que_sirve_un_PDF_se_baja_como_PDF(toy_vault, monkeypatch, capsys):
+    """#242 — `resolve_pdf` devuelve `best_oa_location.pdf_url` POR CONSTRUCCIÓN, así que el carril
+    que el propio framework imprime (`triage --accept-source`) proponía un `url:` apuntando a un PDF
+    y `fetch_web` se lo pasaba a defuddle, un extractor de HTML, que lo rechazaba: «Not an HTML page
+    (content-type: application/pdf)». El framework proponía una entrada que su propia cadena no
+    podía consumir, y lo reportaba como fallo transitorio — «re-corré» algo que no puede andar."""
+    monkeypatch.setattr(fw, "content_type", lambda url: "application/pdf")
+    monkeypatch.setattr(fw, "download_pdf",
+                        lambda url, dest: (dest.parent.mkdir(parents=True, exist_ok=True),
+                                           dest.write_bytes(b"%PDF-1.4 x"), True)[-1])
+    monkeypatch.setattr(sys, "argv", ["fetch_web.py", "ica", "2015Voss",
+                                      "https://arxiv.org/pdf/1502.04148", "--concept", "ica"])
+    assert fw.main() == 0
+    assert (toy_vault.PDFS / "ica" / "2015Voss.pdf").exists(), "el PDF no fue al carril de PDF"
+    assert not (toy_vault.FULLTEXT / "ica" / "2015Voss.txt").exists(), \
+        "un PDF no es un snapshot web: el `.txt` lo genera `extract_fulltext`, no defuddle"
+    assert (toy_vault.PAPERS / "2015Voss.md").exists()
+
+
+def test_una_url_HTML_sigue_yendo_al_snapshot(toy_vault, monkeypatch, capsys):
+    """#242, el simétrico: la rama nueva se elige por `Content-Type`, no por la extensión de la URL
+    — el snapshot web sigue siendo el carril de una página, que por diseño no tiene PDF (#205)."""
+    monkeypatch.setattr(fw, "content_type", lambda url: "text/html")
+    monkeypatch.setattr(fw, "fetch", lambda url: "# Página\n\ntexto extraído")
+    monkeypatch.setattr(sys, "argv", ["fetch_web.py", "ica", "2020Pagina",
+                                      "https://ejemplo.org/nota", "--concept", "ica"])
+    assert fw.main() == 0
+    assert (toy_vault.FULLTEXT / "ica" / "2020Pagina.txt").exists()
+    assert not (toy_vault.PDFS / "ica" / "2020Pagina.pdf").exists()

@@ -169,6 +169,65 @@ def _pdf_rel(slug: str, bibcode: str) -> str:
     return f"vault/raw/pdfs/{slug}/{bibcode}.pdf"
 
 
+CORTO = """## Cómo leerlo: empezá por las CONCLUSIONES
+Antes de recorrer el paper, leé **abstract y conclusiones**. De ahí sale la lista de **ejes** que el
+trabajo dice aportar, y con esa lista vas al cuerpo — es más rápido que leer linealmente y no te
+perdés lo que el paper considera su resultado.
+
+⛔ **Tratalas como hipótesis a confirmar, no como resumen confiable.** Está medido (RSOS 2025, 4900
+resúmenes / 10 modelos): el resumen afirma **más fuerte** que el cuerpo — genérico donde el cuerpo
+acota, presente donde el cuerpo usa pasado, prescriptivo donde el cuerpo describe. Por cada eje,
+chequeá en el cuerpo si se sostiene y **con qué condiciones**. Si el cuerpo dice menos que las
+conclusiones, eso va en `salvedades`: es un hallazgo sobre la FUENTE, no un error tuyo."""
+"""How to read a SHORT source: the whole paper rasterises, so it starts from the conclusions."""
+
+LARGO = """## Cómo leerlo: es un DOCUMENTO LARGO — empezá por el ÍNDICE
+⛔ **No lo rasterices entero.** Esta fuente declara `unidad_cita: {unidad}`: es un libro, un handbook
+o una tesis. Abrí **las primeras páginas** del PDF, ubicá el índice y de ahí los rangos de página de
+los capítulos que entran. Después grepeá el `.txt` para afinar y abrí **sólo esas páginas** del PDF.
+
+⛔ **El ALCANCE declarado, que es lo que entra y nada más:**
+    {alcance}
+Si lo que el sujeto necesita está **fuera** de ese alcance, **no lo amplíes solo**: extraé lo que hay
+dentro y decilo en `salvedades`. Ampliar el alcance en silencio deja el campo `alcance` de la nota
+afirmando algo falso, y el chequeo de completitud de `verify-citations` —que existe para distinguir
+un recorte deliberado de una omisión— pierde el único dato que lo hace decidible.
+
+⚠ **`conclusiones` va VACÍO.** Un libro no tiene esa sección y transcribir algo que no existe fabrica
+contenido. Es una exclusión estructural, no un umbral de largo.
+
+⚠ **Citá por PÁGINA** (`p. 214`), nunca por línea: «línea 18443» no es una referencia utilizable.
+"""
+"""How to read a LONG source (#80/#241): table of contents, declared scope, only those pages."""
+
+
+def _long_document(bibcode: str) -> tuple[str, str]:
+    """`(unidad_cita, alcance)` of a paper note, or `("", "")` when it is not a long document.
+
+    #241 — the two fields #80 created were wired end to end EXCEPT the last leg: `themes.yaml`
+    declares them, `ingest_theme` validates them, `write_web_paper_note` stamps them and the lint
+    reports the missing one — and the prompt never read them. So a 161-page thesis got the same
+    instructions as an 11-page paper: one telling it to rasterise the whole PDF (700 pages do not
+    rasterise, as the contract says two sections above) and one telling it to start from the
+    conclusions (a book has none, and the same contract forbids transcribing them).
+    """
+    nota = cfg.PAPERS / f"{bibcode}.md"
+    if not nota.exists():
+        return "", ""
+    fm = cfg.split_fm(nota.read_text(encoding="utf-8")) or {}
+    unidad = str(fm.get("unidad_cita") or "").strip()
+    return (unidad, str(fm.get("alcance") or "").strip()) if unidad and unidad != "linea" else ("", "")
+
+
+def _reading_section(bibcode: str) -> str:
+    """The reading-strategy section, branched by `unidad_cita` (#241)."""
+    unidad, alcance = _long_document(bibcode)
+    if not unidad:
+        return CORTO
+    return LARGO.format(unidad=unidad, alcance=alcance or
+                        "⛔ NO DECLARADO — pedilo antes de leer: sin alcance no se sabe qué parte entra")
+
+
 def build_prompt(slug: str, bibcode: str, name: str, aliases, texto: str = "",
                  out_dir: str = "", kind: str = "star", sujeto: str | None = None) -> str:
     """The prompt for one (paper, subject) pair.
@@ -218,17 +277,7 @@ Esto es **una VISTA**, no «la extracción del paper» (#188): el mismo paper le
 da otra vista, y por eso el producto lleva de quién es. Va a la sección `## Vista — {sujeto}` de
 `vault/wiki/papers/{bibcode}.md`. Lo que la fuente diga sobre **otros** sujetos no entra acá.
 
-## Cómo leerlo: empezá por las CONCLUSIONES
-Antes de recorrer el paper, leé **abstract y conclusiones**. De ahí sale la lista de **ejes** que el
-trabajo dice aportar, y con esa lista vas al cuerpo — es más rápido que leer linealmente y no te
-perdés lo que el paper considera su resultado.
-
-⛔ **Tratalas como hipótesis a confirmar, no como resumen confiable.** Está medido (RSOS 2025, 4900
-resúmenes / 10 modelos): el resumen afirma **más fuerte** que el cuerpo — genérico donde el cuerpo
-acota, presente donde el cuerpo usa pasado, prescriptivo donde el cuerpo describe. Por cada eje,
-chequeá en el cuerpo si se sostiene y **con qué condiciones**. Si el cuerpo dice menos que las
-conclusiones, eso va en `salvedades`: es un hallazgo sobre la FUENTE, no un error tuyo.
-
+{_reading_section(bibcode)}
 ## Búsqueda — para UBICAR, no para citar
 Estos patrones sobre el `.txt` te dicen **en qué parte del paper** mirar; el dato lo leés del PDF:
 

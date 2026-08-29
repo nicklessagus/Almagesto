@@ -5176,3 +5176,32 @@ def test_el_backtick_abierto_en_PROSA_sigue_siendo_hallazgo(toy_vault, capsys):
     link_from_index(toy_vault, "nota")
     _, rep = run_lint_reporte(capsys)
     assert "nota" in _seccion(rep, "marcador sin cerrar"), rep
+
+
+def test_el_rollup_junta_las_grafias_del_mismo_metodo(toy_vault, capsys):
+    """#243 — `methods` lo puebla la extracción sin vocabulario cerrado, así que el mismo método
+    llega escrito de varias maneras. Comparando el string exacto, un concepto `pca` alcanzaba 21
+    papers de 24 y no decía nada de los 3 que escribieron `PCA`: un roll-up **subdeclarando su
+    propio universo en silencio**, que es lo que D-10 existe para evitar."""
+    import make_notes as mn
+    write_yaml(cfg.THEMES_YAML, {"pca": {"title": "PCA", "area": "methods", "concept": "pca",
+                                         "source": "web", "aliases": ["PCA"]}})
+    for stem, m in (("2020a....1A", ["pca"]), ("2020b....1B", ["PCA"]), ("2020c....1C", ["SysRem"])):
+        mk_note(cfg.PAPERS, stem, {"bibcode": stem, "tags": ["paper"], "methods": m,
+                                   "stars": ["tau Cet"]}, "# p\n")
+    stems = {r["stem"] for r in mn.concept_rollup_rows("pca")}
+    assert stems == {"2020a....1A", "2020b....1B"}, stems
+
+
+def test_las_grafias_no_son_dos_deudas_distintas(toy_vault, capsys):
+    """#243, el otro lado: `PCA` y `pca` se reportaban como dos entradas del backlog «sin página
+    destino», y la nota `concepts/methods/pca.md` no contaba como destino de `PCA`."""
+    mk_note(cfg.CONCEPTS / "methods", "pca", {"tags": ["concept"], "name": "pca"}, "# pca\n")
+    for stem, m in (("2020a....1A", ["pca"]), ("2020b....1B", ["PCA"])):
+        mk_note(cfg.PAPERS, stem, {"bibcode": stem, "tags": ["paper"], "methods": m,
+                                   "stars": ["tau Cet"]}, "# p\n")
+    link_from_index(toy_vault, "pca", "2020a....1A", "2020b....1B")
+    _, rep = run_lint_reporte(capsys)
+    assert "PCA" not in _seccion(rep, "sin página destino"), \
+        "`concepts/methods/pca.md` ES el destino de `PCA`"
+    assert "PCA, pca" in _seccion(rep, "varias grafías"), rep

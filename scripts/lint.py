@@ -2840,10 +2840,28 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                        "Si de verdad no hay ningún eje en disputa, **borrá la sección** y decilo en "
                        "el `log` (es la escotilla que la plantilla declara)"))
 
+    # #243 — el destino se busca por CLAVE NORMALIZADA, la misma que usa el roll-up
+    # (`cfg.method_matches`): comparando el string exacto, `PCA` y `pca` se reportaban como dos
+    # deudas distintas y la nota `concepts/methods/pca.md` no contaba como destino de `PCA`.
+    _stems_norm = {cfg.method_key(n): n for n in names}
     dangling_methods = sorted(
         (mt, f"usado en {len(refs)} paper(s): {', '.join(sorted(refs)[:3])}"
              + (" …" if len(refs) > 3 else "") + " → sin nota en `concepts/`: ingerí el tema o corregí el slug")
-        for mt, refs in method_refs.items() if mt not in names)
+        for mt, refs in method_refs.items() if cfg.method_key(mt) not in _stems_norm)
+
+    # #243 — y las COLISIONES de grafía, que son el otro lado del mismo defecto: el mismo método
+    # escrito de dos maneras no es una deuda de ingesta, es ruido que infla el backlog y que hasta
+    # 1.95.0 partía el universo del roll-up. Se reportan NOMBRANDO las grafías (no el conteo), y se
+    # cierran unificando la grafía en las notas o dejando que el roll-up las junte —que es lo que
+    # ahora hace—. ⛔ Lo que NO se junta solo son los SINÓNIMOS (`gls` / `periodograma-gls`,
+    # `lbl` / `line-by-line-rv`): eso es juicio, y a veces son cosas distintas.
+    _por_clave: dict = {}
+    for mt in method_refs:
+        _por_clave.setdefault(cfg.method_key(mt), set()).add(str(mt))
+    methods_colision = sorted(
+        (sorted(v)[0], f"el mismo método con {len(v)} grafías: {', '.join(sorted(v))} — el roll-up "
+                       f"ya las junta (#243); unificá la grafía en las notas para sacarlo del backlog")
+        for v in _por_clave.values() if len(v) > 1)
 
     # `ref` de una posición sin paper destino: el bibcode que sostiene esa posición no existe como
     # nota → la disputa no es trazable (typo en el bibcode o paper sin ingestar).
@@ -3422,6 +3440,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('dangling_thesis', 'thesis_links sin página destino', SEV_BLOQUEANTE, tuple(dangling_thesis), poblacion='entidades'),
         Categoria('dangling_methods', '`methods` sin página destino: el roll-up no puede linkearlo (backlog)',
                   SEV_BACKLOG, tuple(dangling_methods), poblacion='entidades'),
+        Categoria('methods_colision', '🔤 `methods` con varias grafías del mismo método: infla el backlog y partía el roll-up (#243, backlog)',
+                  SEV_BACKLOG, tuple(methods_colision), poblacion='papers'),
         Categoria('dangling_disputes', 'disputes: ref de una posición sin paper destino', SEV_BLOQUEANTE, tuple(dangling_disputes), poblacion='entidades'),
         Categoria('bad_disputes', 'disputes mal formadas (posiciones explícitas, #71)', SEV_BLOQUEANTE, tuple(bad_disputes), poblacion='entidades'),
         Categoria('old_disputes', 'disputes en el schema viejo (planets[].disputes[]) — el lint ya no las lee', SEV_BLOQUEANTE, tuple(old_disputes), poblacion='entidades'),

@@ -343,3 +343,42 @@ def test_la_precondicion_mira_el_PDF_no_el_txt(toy_vault, monkeypatch, capsys):
     (toy_vault.PAPERS / f"{bib}.md").unlink()
     assert _run_main(monkeypatch, ["test_star", bib]) == 1
     assert "no hay nada que" in capsys.readouterr().out
+
+
+def test_documento_LARGO_no_manda_empezar_por_las_conclusiones(toy_vault):
+    """#241 — los dos campos de #80 estaban cableados de punta a punta SALVO el último tramo: el
+    prompt no los leía. Una tesis de 161 páginas recibía las mismas instrucciones que un paper de
+    11: «`Read` lo rasteriza, así que ves la página» (700 páginas no se rasterizan, lo dice el
+    propio contrato) y «empezá por las CONCLUSIONES» (un libro no las tiene, y el mismo contrato
+    prohíbe transcribirlas)."""
+    from conftest import mk_note
+    mk_note(toy_vault.PAPERS, "2009Wiklund",
+            {"bibcode": "2009Wiklund", "tags": ["paper"], "thesis_links": ["ica"],
+             "unidad_cita": "pagina", "alcance": "caps. 2-3 (formulación y métodos)"}, "# t\n")
+    p = ep.build_prompt("ica", "2009Wiklund", "ica", ["ICA"], kind="theme")
+    assert "empezá por el ÍNDICE" in p
+    assert "empezá por las CONCLUSIONES" not in p, \
+        "la estrategia de lectura que el contrato prohíbe para esta fuente"
+    assert "caps. 2-3 (formulación y métodos)" in p, "el alcance declarado tiene que llegar al lector"
+    assert "`conclusiones` va VACÍO" in p
+
+
+def test_documento_CORTO_conserva_la_lectura_por_conclusiones(toy_vault):
+    """#241, el simétrico: la rama se elige por `unidad_cita`, y el caso normal —una fuente que se
+    cita por línea— no cambia en nada."""
+    from conftest import mk_note
+    mk_note(toy_vault.PAPERS, "2020corto", {"bibcode": "2020corto", "tags": ["paper"],
+                                      "thesis_links": ["ica"]}, "# t\n")
+    p = ep.build_prompt("ica", "2020corto", "ica", ["ICA"], kind="theme")
+    assert "empezá por las CONCLUSIONES" in p and "empezá por el ÍNDICE" not in p
+
+
+def test_documento_largo_SIN_alcance_lo_declara_en_vez_de_callar(toy_vault):
+    """#241 — `ingest_theme` aborta si falta el `alcance`, pero una nota vieja o editada a mano
+    puede llegar sin él. Ahí el prompt lo DICE: sin alcance no se sabe qué parte entra, y callarlo
+    dejaría al extractor leyendo el libro completo sin enterarse."""
+    from conftest import mk_note
+    mk_note(toy_vault.PAPERS, "2010Libro", {"bibcode": "2010Libro", "tags": ["paper"],
+                                      "thesis_links": ["ica"], "unidad_cita": "pagina"}, "# t\n")
+    p = ep.build_prompt("ica", "2010Libro", "ica", ["ICA"], kind="theme")
+    assert "NO DECLARADO" in p

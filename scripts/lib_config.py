@@ -11,6 +11,7 @@ import html
 import json
 import os
 import re
+import unicodedata
 import sys
 from pathlib import Path
 
@@ -21,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.94.0"
+ALMAGESTO_VERSION = "1.95.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -585,6 +586,29 @@ def escape_cell(texto: str) -> str:
     # `\vert ` necesita el espacio para no pegarse a la letra siguiente; cuando ya venía uno,
     # quedaban dos y el diff se llenaba de ruido invisible.
     return re.sub(r"\\vert\s+", r"\\vert ", "".join(out))
+
+
+def method_key(nombre) -> str:
+    r"""A method name reduced to its comparison key: casefold, NFKD, non-alphanumerics to `-` (#243).
+
+    `methods` is populated by the EXTRACTION —one LLM per paper— with an open vocabulary and no
+    normalisation, so the same method arrives spelled several ways. Measured over 30 notes of one
+    theme: 64 methods, 69 spellings, five collisions (`PCA`/`pca`, `MCMC`/`mcmc`, `SVD`/`svd`,
+    `SysRem`/`sysrem`, `wPCA`/`wpca`). The roll-up compared the raw string, so a concept named `pca`
+    reached **21 papers out of 24** and said nothing about the three it missed — a roll-up
+    under-declaring its own universe in silence, which is what D-10 exists to prevent.
+
+    ⛔ Normalising at COMPARISON time, never at write time: the spelling the extractor chose is
+    information about how the paper names it, and rewriting it would destroy that.
+    """
+    s = unicodedata.normalize("NFKD", str(nombre or "")).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z0-9]+", "-", s.casefold()).strip("-")
+
+
+def method_matches(concepto: str, nombres) -> bool:
+    """Does any of those method names denote `concepto`? Compared by `method_key` (#243)."""
+    clave = method_key(concepto)
+    return bool(clave) and any(method_key(n) == clave for n in as_list(nombres))
 
 
 def looks_decidable(salvedad: str) -> bool:

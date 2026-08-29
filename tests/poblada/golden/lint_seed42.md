@@ -63,6 +63,9 @@
 - metodo-sintetico-4 → usado en 4 paper(s): 2019Alm00013A, 2022Alm00018A, 2023Alm00003A … → sin nota en `concepts/`: ingerí el tema o corregí el slug
 - metodo-sintetico-5 → usado en 1 paper(s): 2004Alm00014A → sin nota en `concepts/`: ingerí el tema o corregí el slug
 
+## 🔤 `methods` con varias grafías del mismo método: infla el backlog y partía el roll-up (#243, backlog) (0)
+> sobre 60 notas de `papers/`
+
 ## disputes: ref de una posición sin paper destino (2)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 - concepto-hypotheses-015 → disputa `eje-sintetico`: ref `__nota_inexistente_0015__` sin nota de paper

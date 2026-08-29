@@ -35,6 +35,7 @@ import hashlib
 import re
 import shutil
 import subprocess
+import urllib.request
 import sys
 from datetime import datetime, timezone
 
@@ -98,6 +99,48 @@ def fetch(url: str) -> str:
         cfg.print_seguro(f"    ! defuddle falló ({r.returncode}): {r.stderr.strip()[:200]}")
         return ""
     return r.stdout
+
+
+HEADERS = {"User-Agent": f"Almagesto/{cfg.ALMAGESTO_VERSION} (academic literature vault)"}
+
+
+def content_type(url: str) -> str:
+    """The `Content-Type` the server announces for a URL, lowercased and without parameters.
+
+    #242 — `resolve_pdf` (which feeds `triage --accept-source`) returns `best_oa_location.pdf_url`
+    **by construction**, so the carril the framework itself prints proposes a `url:` pointing at a
+    PDF — and `fetch_web` used to hand it straight to defuddle, an HTML extractor, which refused it
+    with `Not an HTML page (content-type: application/pdf)`. The framework proposed an entry its own
+    chain could not consume, and the failure was reported as «¿transitorio? → re-corré», inviting a
+    retry of something that can never work.
+
+    Empty string when it cannot be determined: the caller then keeps the historical behaviour
+    (assume HTML) rather than guessing — an unreachable server is not evidence about the format.
+    """
+    req = urllib.request.Request(url, method="HEAD", headers=HEADERS)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return str(r.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+    except Exception:                       # noqa: BLE001 — declarado: se degrada a «no se sabe»
+        return ""
+
+
+def download_pdf(url: str, dest) -> bool:
+    """Download a remote PDF to `dest` (#242). True if it landed and looks like a PDF.
+
+    The magic bytes are checked because a server can answer `application/pdf` and send an error
+    page: writing that under `raw/pdfs/` would put a non-PDF where the whole reading chain assumes
+    one, and `pdftotext` would fail later with a message about the wrong thing.
+    """
+    req = urllib.request.Request(url, headers=HEADERS)
+    with urllib.request.urlopen(req, timeout=180) as r:
+        datos = r.read()
+    if not datos.startswith(b"%PDF"):
+        cfg.print_seguro(f"    ! {url} anunció PDF y no lo es (no arranca con %PDF)")
+        return False
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    cfg.write_bytes_atomic(dest, datos)
+    return True
 
 
 def snapshot_body(texto: str) -> str:
@@ -164,6 +207,27 @@ def main() -> int:
             f"citekey inválida: {args.citekey!r}. Debe empezar con AAAA+letra (año+inicial del autor, "
             "p. ej. 2006RasmussenWilliams) para que el lint la reconozca y el .txt matchee el [[citekey]]."
         )
+
+    # #242 — una `url:` que sirve un PDF NO se snapshotea: se BAJA como PDF y sigue por el carril
+    # de PDF, que es además el que #205 quiere (el PDF es la fuente de lectura; el snapshot es la
+    # excepción nombrada para una página web, que por diseño no tiene PDF). Sin esta rama el
+    # framework proponía —vía `resolve_pdf` / `triage --accept-source`— una entrada que su propia
+    # cadena rechazaba, y la reportaba como fallo transitorio: «re-corré» algo que no puede andar.
+    destino_pdf = cfg.PDFS / args.slug / f"{args.citekey}.pdf"
+    if not args.no_note and not destino_pdf.exists() and content_type(args.url) == "application/pdf":
+        cfg.print_seguro(f"  {args.citekey}: la URL sirve un PDF → se baja a `{destino_pdf}` "
+                         f"(no es un snapshot web)")
+        if download_pdf(args.url, destino_pdf):
+            make_notes.write_web_paper_note(
+                args.citekey, url=None, slug=args.slug, concept=args.concept, title=args.title,
+                first_author=args.author, year=args.year, n_authors=args.n_authors, doi=args.doi,
+                venue=args.venue, force=args.force_note)
+            # `pdf_source: web` — la procedencia de la lectura, que #230 declara que sobrevive.
+            cfg.record_pdf_source(args.slug, args.citekey, "web")
+            cfg.print_seguro(f"  → corré `python scripts/extract_fulltext.py {args.slug}` para el "
+                             f"índice de búsqueda")
+            return 0
+        return 1
 
     outdir = cfg.FULLTEXT / args.slug
     outdir.mkdir(parents=True, exist_ok=True)

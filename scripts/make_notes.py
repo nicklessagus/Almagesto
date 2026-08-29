@@ -1766,8 +1766,12 @@ def concept_rollup_rows(slug: str, fms: dict | None = None) -> list:
     filas = []
     for stem, fm in (fms if fms is not None else papers_fm_index()).items():
     #  @inv INV-35
-        por_m = concept in (cfg.as_list(fm.get("methods")) or [])
-        por_t = concept in (cfg.as_list(fm.get("thesis_links")) or [])
+        # #243 — comparado por CLAVE NORMALIZADA, no por string exacto: `methods` lo puebla la
+        # extracción sin vocabulario cerrado, y el mismo método llega escrito de varias maneras.
+        # Medido: un concepto `pca` alcanzaba 21 papers de 24 y no decía nada de los 3 que
+        # escribieron `PCA` — un roll-up subdeclarando su propio universo en silencio.
+        por_m = cfg.method_matches(concept, fm.get("methods"))
+        por_t = cfg.method_matches(concept, fm.get("thesis_links"))
         if not (por_m or por_t):
             continue
         filas.append({"stem": stem, "year": fm.get("year") or "",

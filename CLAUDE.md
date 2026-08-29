@@ -269,7 +269,20 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   en el mismo corpus. Además el matcheo textual confunde `GJ 71` con `GJ 710`, y `split_fm` compara
   por elemento. Si descargás contenido a un roll-up, es porque ese fallback lo recupera; si no, el
   contenido va inlineado en la ficha.
-    ⚠ **El roll-up de métodos linkea `[[método]]` sólo si la nota existe; si no, lo estampa como
+    ⛔ **El roll-up compara `methods` por CLAVE NORMALIZADA, no por string exacto (#243).** El campo
+  lo puebla la **extracción** —un LLM por paper, vocabulario abierto y sin normalizar—, así que el
+  mismo método llega escrito de varias maneras: medido sobre 30 notas de un tema, **64 métodos en 69
+  grafías**, con cinco colisiones (`PCA`/`pca`, `MCMC`/`mcmc`, `SVD`/`svd`, `SysRem`/`sysrem`,
+  `wPCA`/`wpca`). Comparando el string crudo, un concepto `pca` alcanzaba **21 papers de 24** y no
+  decía nada de los tres que faltaban — un roll-up **subdeclarando su propio universo en silencio**,
+  que es justo lo que D-10 existe para evitar. La clave es `casefold` + NFKD + `[^a-z0-9]+ → -`
+  (`lib_config.method_key`), compartida por el roll-up y por el detector del lint, que sin ella
+  reportaba `PCA` y `pca` como **dos deudas distintas**. ⛔ Se normaliza al **comparar**, nunca al
+  escribir: la grafía que eligió el extractor es información sobre cómo lo nombra el paper. Y los
+  **sinónimos** (`gls` / `periodograma-gls`, `lbl` / `line-by-line-rv`) **no** se juntan solos: eso
+  es juicio, a veces son cosas distintas, y va a un backlog que propone y no aplica.
+
+  ⚠ **El roll-up de métodos linkea `[[método]]` sólo si la nota existe; si no, lo estampa como
   código.** `methods` lo puebla la **extracción** (paso 3 de `ingest-star`) y las notas de
   `concepts/methods/` las crea **`ingest-theme`**, que es otra operación: con el link incondicional,
   seguir `ingest-star` al pie de la letra dejaba el lint en decenas de *wikilinks rotos*
@@ -576,6 +589,17 @@ que choca con el chequeo de **completitud**, que sin `alcance` no puede distingu
 deliberado de una omisión. Es un eje **distinto** del `txt:`/`pdf:` de #117: aquél dice qué
 **archivo** se leyó, éste **cómo se apunta adentro** — el `.txt` de un libro tampoco se cita por
 línea.
+⛔ **Y los dos campos LLEGAN AL EXTRACTOR (#241).** Estaban cableados de punta a punta salvo el
+último tramo —`themes.yaml` los declara, `ingest_theme` los valida, `make_notes` los estampa, el
+lint reporta el que falta— y **el prompt no los leía**: una tesis de 161 páginas recibía las mismas
+instrucciones que un paper de 11, o sea *«`Read` lo rasteriza, así que ves la página»* (700 páginas
+no se rasterizan, lo dice este mismo documento) y *«empezá por las CONCLUSIONES»* (un libro no las
+tiene, y este mismo documento prohíbe transcribirlas). Hoy `extraction_prompt` **ramifica por
+`unidad_cita`**: para una fuente larga manda empezar por el **índice**, pega el **`alcance`
+declarado textual** —con la instrucción de no ampliarlo solo: si lo que el sujeto necesita está
+afuera, se extrae lo que hay dentro y **se declara en `salvedades`**, porque ampliarlo en silencio
+deja el `alcance` de la nota afirmando algo falso—, recuerda que `conclusiones` va **vacío** y que
+se cita **por página**. Sin `alcance` el prompt lo **dice** (*«NO DECLARADO»*) en vez de callar.
   Del mismo origen y opcional, `corrections: [{type,notice_doi,date,source}]` (#52): la corrección
   **no retractante** (`erratum` / `corrigendum` / `expression-of-concern`). **No** invalida el paper
   —sigue siendo citable, por eso el lint la lista como **backlog** y no bloquea— pero es la señal
@@ -1052,7 +1076,12 @@ fuente real no se movió.
 > **`ingest-star` no cambia: es astro-only.** Papers sin bibcode ADS → **clave de cita sintética `AAAA+Autor`** (debe empezar con
 > `AAAA`+letra para el lint; el `.txt` en `vault/raw/fulltext/` se llama igual). Páginas web → **snapshot
 > `.txt` determinista** (URL + fecha; lo genera `scripts/fetch_web.py` vía defuddle y crea además el
-> stub de la nota de paper) para que sea citable/verificable. La **frontera dura sigue
+> stub de la nota de paper) para que sea citable/verificable. ⛔ **Y una `url:` que sirve un PDF NO
+> se snapshotea: se BAJA como PDF (#242)**, que es además el carril que #205 quiere. `fetch_web`
+> mira el `Content-Type` antes de decidir, porque `resolve_pdf` —el resolutor que alimenta
+> `triage --accept-source`— devuelve `best_oa_location.pdf_url` **por construcción**: el framework
+> proponía una entrada que su propia cadena rechazaba (*«Not an HTML page»*) y la reportaba como
+> fallo transitorio, invitando a reintentar algo que no puede andar. La **frontera dura sigue
 > rigiendo**: sólo bibliografía citable.
 
 ### Registro de ingesta (`vault/config/registro/<slug>.yaml` — versionado, #51/#64)
