@@ -924,6 +924,18 @@ distintos**:
   **permiso, no una obligación**: si la curva no permite leer el valor con confianza, sigue siendo
   un **hueco declarado**, porque forzar un número de una curva ilegible es peor que el hueco.
 
+⛔ **Y la prosa que va a una CELDA se escapa: `\|` afuera de la matemática, `\vert` adentro
+(#240).** La tabla de la vista la arma el cosechador con la prosa que escribió el extractor, y esa
+prosa trae `|` todo el tiempo —una ecuación, las columnas transcritas de una tabla del paper, una
+alternación de `grep`—; un `|` crudo **parte la fila**, las celdas de más no se renderizan y una
+afirmación citada **y verificada** queda **invisible para el lector** mientras el lint sigue
+contando su fila. Medido sobre una bóveda real: **19 filas en 13 notas** de un solo tema. La regla
+existía (INV-99) y vivía **sólo** en el skill `verify-citations`, para la otra tabla. ⚠ Dentro de
+`$…$` el escape es `\vert` y **no** `\|`, que en LaTeX es la doble barra ‖: escapar a ciegas
+convierte 19 filas invisibles en 19 fórmulas equivocadas, y eso es peor —la fila invisible se nota,
+la fórmula alterada no—. Lo hace `lib_config.escape_cell`, en el cosechador, que es el único punto
+de escritura.
+
 Por eso la columna de la vista se llama **`Localizador`** y no `Línea`: lleva `L1234`, `p. 271` o
 `Fig. 3, p. 7` según de dónde salga el dato. (La **clave** del JSON de extracción sigue siendo
 `linea`: ese artefacto vive en `build/`, que es scratch regenerable.)

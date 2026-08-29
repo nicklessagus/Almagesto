@@ -21,7 +21,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.93.1"
+ALMAGESTO_VERSION = "1.94.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -556,6 +556,35 @@ def clean_catalog_markup(s: str) -> str:
     if not isinstance(s, str) or not s:
         return s
     return _CATALOG_TAG_RE.sub("", html.unescape(s))
+
+
+_MATH_SPAN_RE = re.compile(r"\$[^$\n]*\$")
+
+
+def escape_cell(texto: str) -> str:
+    r"""Prose safe to put in a markdown table CELL: every `|` neutralised (#240).
+
+    The extractor writes prose into the cells of the view table —an equation, the transcribed
+    columns of a table in the paper, a `grep` alternation— and a raw `|` there SPLITS THE ROW: the
+    extra cells do not render, so a cited and verified claim becomes invisible to the reader while
+    the lint still counts its row. Measured on a real vault: **19 rows in 13 notes of one theme**.
+    The rule existed (INV-99) and lived only in the `verify-citations` skill, for the other table.
+
+    ⛔ Inside `$…$` the escape is ``\\vert``, NOT ``\\|``: in LaTeX ``\\|`` is the DOUBLE bar ‖, so escaping
+    blindly would silently change the formula — 19 invisible rows turned into 19 wrong equations,
+    which is worse (the invisible row is noticed; the altered formula is not).
+    """
+    if "|" not in str(texto or ""):
+        return texto
+    out, i = [], 0
+    for m in _MATH_SPAN_RE.finditer(texto):
+        out.append(texto[i:m.start()].replace("|", r"\|"))
+        out.append(m.group(0).replace("|", r"\vert "))
+        i = m.end()
+    out.append(texto[i:].replace("|", r"\|"))
+    # `\vert ` necesita el espacio para no pegarse a la letra siguiente; cuando ya venía uno,
+    # quedaban dos y el diff se llenaba de ruido invisible.
+    return re.sub(r"\\vert\s+", r"\\vert ", "".join(out))
 
 
 def looks_decidable(salvedad: str) -> bool:

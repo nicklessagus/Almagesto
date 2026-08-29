@@ -654,3 +654,33 @@ def test_el_txt_cae_a_la_copia_que_SI_existe(toy_vault):
     (cfg.FULLTEXT / "test_star" / f"{BIB}.txt").write_text("texto", encoding="utf-8")
     hv.harvest("test_star")
     assert read_fm(dest)["vistas"][0]["txt"] == "test_star"
+
+
+def test_la_prosa_con_barras_no_parte_la_fila(toy_vault):
+    """#240 — el extractor escribe prosa en las celdas de la tabla de la vista, y esa prosa trae `|`
+    todo el tiempo (matemática, columnas transcritas de una tabla del paper, una alternación de
+    `grep`). Un `|` crudo PARTE la fila: las celdas de más no se renderizan, así que una afirmación
+    citada y verificada queda **invisible para el lector** mientras el lint sigue contando su fila.
+    Medido sobre una bóveda real: 19 filas en 13 notas de un solo tema. La regla existía (INV-99) y
+    vivía sólo en el skill `verify-citations`, para la OTRA tabla."""
+    dest = sembrar(toy_vault, extraccion(ground_truth=[
+        {"que": "columnas de la Tabla 3", "valor": "GJ436 | tau Ceti | dominio rechazado",
+         "linea": "p. 8", "regimen": "HARPS", "segunda_mano": None}]))
+    hv.harvest("test_star")
+    fila = [l for l in dest.read_text(encoding="utf-8").split("\n") if "GJ436" in l][0]
+    assert cfg.table_shape_issues("\n".join(
+        ["| Qué | Valor | Localizador | Régimen | Segunda mano |", "|---|---|---|---|---|", fila])) == []
+    assert r"GJ436 \| tau Ceti" in fila
+
+
+def test_dentro_de_la_matematica_va_vert_y_no_la_doble_barra(toy_vault):
+    """#240, el matiz que el arreglo no puede ignorar: en LaTeX `\\|` es la DOBLE barra ‖, así que
+    escapar a ciegas cambiaría la fórmula — 19 filas invisibles convertidas en 19 ecuaciones
+    equivocadas, que es peor: la fila invisible se nota, la fórmula alterada no."""
+    dest = sembrar(toy_vault, extraccion(ground_truth=[
+        {"que": "corte", "valor": r"los bins con $|df_0/d\lambda| > 4.4$", "linea": "p. 3",
+         "regimen": "HARPS", "segunda_mano": None}]))
+    hv.harvest("test_star")
+    fila = [l for l in dest.read_text(encoding="utf-8").split("\n") if "df_0" in l][0]
+    assert r"\vert df_0/d\lambda\vert" in fila, fila
+    assert r"\|" not in fila.split("$")[1], "dentro de `$…$` no puede quedar `\\|`"

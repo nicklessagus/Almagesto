@@ -280,6 +280,13 @@ cosechador no crea la sección.
 ⛔ Y la regla de uso: **son ayuda de lectura, nunca fuente de la que citar.** Si citás, citás del
 original con su página.
 
+⛔ **`ground_truth` se publica como TABLA, así que la `|` de tu prosa PARTE la fila (#240).** No
+tenés que escaparla vos —el cosechador lo hace al renderizar la celda—, pero sabé que va a
+aparecer escapada: `\\|` en prosa y `\\vert` dentro de `$…$`, porque en LaTeX `\\|` es la doble
+barra ‖ y escapar a ciegas cambiaría la fórmula. Si transcribís las columnas de una tabla del
+paper, preferí describirlas en palabras: una fila partida deja la afirmación **invisible para el
+lector** aunque el lint la siga contando como verificada.
+
 ⛔ **Las `salvedades` que afirman algo DECIDIBLE sobre un archivo van ESTRUCTURADAS (#213),
 porque un script las chequea.** Vocabulario cerrado, dos formas:
 

@@ -177,7 +177,12 @@ def render_view(sujeto: str, data: dict) -> str:
         # artefacto vive en `build/` y renombrarla dejaría mudas las extracciones en vuelo.
         out += ["| Qué | Valor | Localizador | Régimen | Segunda mano |", "|---|---|---|---|---|"]
         for f in filas:
-            celdas = [_safe_links(str(f.get(k) or "—").strip()) or "—"
+            # #240 — `cfg.escape_cell` ANTES de armar la fila: la prosa del extractor trae `|`
+            # todo el tiempo (matemática, columnas transcritas de una tabla del paper, una
+            # alternación de `grep`) y un `|` crudo PARTE la fila — las celdas de más no se
+            # renderizan, así que una afirmación citada y verificada queda invisible para el lector
+            # mientras el lint sigue contando su fila. Medido: 19 filas en 13 notas de un tema.
+            celdas = [cfg.escape_cell(_safe_links(str(f.get(k) or "—").strip())) or "—"
                       for k in ("que", "valor", "linea", "regimen", "segunda_mano")]
             out.append("| " + " | ".join(celdas) + " |")
         out.append("")
