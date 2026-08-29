@@ -93,6 +93,20 @@ from make_notes import GENERATOR_LINE        # ancla de la cabecera de fichas/co
 ESTADO_PREFIJO = "> _Estado — "
 
 
+def _lines_with_section(body: str) -> list:
+    """`[(line, section header)]` — each line paired with the `## ` section it lives in.
+
+    Lets a form check exempt the stamped sections without re-implementing «where does a section
+    start», which is the rule this repo has already grown a second copy of twice.
+    """
+    out, sec = [], ""
+    for ln in body.split("\n"):
+        if ln.startswith("## "):
+            sec = ln.strip()
+        out.append((ln, sec))
+    return out
+
+
 def _entity_slug(path: str) -> str | None:
     """The subject slug this entity note belongs to, or `None` if it is not one (#233).
 
@@ -1551,7 +1565,16 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                     (stem, f"L{_ln + _offset}: fila de tabla con {_got} celda(s) y su encabezado "
                            f"tiene {_want} → las de más NO se renderizan (¿dos filas empalmadas en "
                            f"una línea?)"))
-            for _ln, _marca in cfg.unclosed_markers(body_full):
+            # AUD-227 — las SECCIONES ESTAMPADAS quedan fuera del chequeo de marcadores, mismo
+            # criterio que el detector de fuga (#214): `## Abstract` es copia **verbatim** de
+            # catálogo, y ADS devuelve comillas tipo LaTeX (``cleaning'`` con un solo backtick) que
+            # la bóveda **no puede editar** —el verbatim es la capa auditable—. Reportarlo era pedir
+            # que se arregle algo que el contrato prohíbe tocar: backlog permanente sobre una nota
+            # correcta, que es el falso positivo que erosiona la categoría entera.
+            _cuerpo_forma = "\n".join(
+                ln if not cfg.is_stamped_section(_sec) else ""
+                for ln, _sec in _lines_with_section(body_full))
+            for _ln, _marca in cfg.unclosed_markers(_cuerpo_forma):
                 forma_sospechosa.append(
                     (stem, f"L{_ln + _offset}: el párrafo deja un `{_marca}` sin cerrar — se traga "
                            f"el texto que sigue"))

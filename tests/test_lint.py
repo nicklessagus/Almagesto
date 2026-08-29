@@ -5152,3 +5152,27 @@ def test_index_al_dia_no_dispara(toy_vault, capsys):
     mn.restamp_index()
     _, rep = run_lint_reporte(capsys)
     assert "un-metodo" not in _seccion(rep, "desactualizado contra la verdad de disco"), rep
+
+
+def test_el_backtick_del_ABSTRACT_verbatim_no_es_hallazgo(toy_vault, capsys):
+    """AUD-227 — `## Abstract` es copia VERBATIM de catálogo, y ADS devuelve comillas tipo LaTeX
+    (``cleaning'`` con un solo backtick) que la bóveda no puede editar: el verbatim es la capa
+    auditable. Reportarlo era pedir que se arregle algo que el contrato prohíbe tocar — backlog
+    permanente sobre una nota correcta, que es el falso positivo que erosiona la categoría."""
+    mk_note(cfg.PAPERS, "2021A&A...653A..43C",
+            {"bibcode": "2021A&A...653A..43C", "tags": ["paper"], "stars": ["tau Cet"]},
+            "# p\n\n## Abstract\nby `cleaning' individual extracted spectra using the wealth of\n"
+            "information contained in spectral time series.\n")
+    link_from_index(toy_vault, "2021A&A...653A..43C")
+    _, rep = run_lint_reporte(capsys)
+    assert "2021A&A...653A..43C" not in _seccion(rep, "marcador sin cerrar"), rep
+
+
+def test_el_backtick_abierto_en_PROSA_sigue_siendo_hallazgo(toy_vault, capsys):
+    """AUD-227, el simétrico: la exención es de las secciones estampadas, no del chequeo. En prosa
+    propia un backtick abierto se traga el resto de la nota — medido, 268 líneas."""
+    mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
+            "# nota\n\n## Síntesis\nver `## Régimen de validez\n")
+    link_from_index(toy_vault, "nota")
+    _, rep = run_lint_reporte(capsys)
+    assert "nota" in _seccion(rep, "marcador sin cerrar"), rep
