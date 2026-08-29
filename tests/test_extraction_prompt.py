@@ -382,3 +382,45 @@ def test_documento_largo_SIN_alcance_lo_declara_en_vez_de_callar(toy_vault):
                                       "thesis_links": ["ica"], "unidad_cita": "pagina"}, "# t\n")
     p = ep.build_prompt("ica", "2010Libro", "ica", ["ICA"], kind="theme")
     assert "NO DECLARADO" in p
+
+
+# ── #254 · los ejes son la lente de ESTA bóveda, no un literal ───────────────────────────────────
+
+def test_los_ejes_salen_de_las_facetas_del_objetivo(toy_vault):
+    """#254: el esqueleto de `ejes` era un literal de cinco claves —las del `objective.yaml` de
+    ejemplo del template— y `extraction_prompt` no leía `relevance.facets` en ninguna parte. Toda
+    faceta que una instancia declarara de más **no se le preguntaba a ningún extractor**, y la vista
+    volvía sin la clave: indistinguible de «se miró y no hay nada», el falso limpio que #188 cerró
+    con `vistas[]`, reapareciendo un nivel más abajo.
+
+    Medido sobre una bóveda cuyo objetivo declara ocho facetas, en 28 extracciones de una estrella:
+    los cinco cableados 28/28, y `detection`, `ml` y `simulation` —una por capítulo de la tesis—
+    entre 1 y 2 de 28, y esos pocos de extractores que fueron a leer `objective.yaml` por su cuenta.
+
+    @inv INV-143"""
+    esqueleto = ep.axes_skeleton()
+    assert '"actividad":""' in esqueleto and '"rv":""' in esqueleto, \
+        "las facetas del objetivo de la bóveda"
+    assert '"discovery"' not in esqueleto, \
+        "y NADA del literal viejo: la lente de la instancia manda, no la del template"
+    assert esqueleto.index('"actividad"') < esqueleto.index('"rv"'), \
+        "en el orden del YAML, para que dos corridas se comparen"
+
+
+def test_el_prompt_emitido_lleva_esos_ejes(toy_vault):
+    """La otra mitad: que la función exista no alcanza si el prompt sigue emitiendo el literal — es
+    la frontera donde INV-100 mide que las reglas se caen.  @inv INV-143"""
+    prompt = ep.build_prompt("test_star", "2020Test", "Estrella Test", ["HD 12345"])
+    assert '"ejes":{"actividad":"","rv":""}' in prompt
+
+
+def test_sin_facetas_legibles_el_prompt_lo_DICE(toy_vault, monkeypatch):
+    """Un objetivo ilegible o con `facets` vacía no degrada al literal viejo: eso sería clasificar
+    la lectura con una lente que nadie escribió, y es la misma negativa que `query_ads` opone a una
+    lente ilegible (INV-80). El extractor recibe la orden de frenar, no un juego de ejes inventado.
+
+    @inv INV-143"""
+    monkeypatch.setattr(cfg, "load_objective", lambda: {"relevance": {"facets": {}}})
+    esqueleto = ep.axes_skeleton()
+    assert "SIN_FACETAS" in esqueleto and "NO inventes ejes" in esqueleto
+    assert '"rv"' not in esqueleto, "no se rellena con la lente del template"

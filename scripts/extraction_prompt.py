@@ -228,6 +228,40 @@ def _reading_section(bibcode: str) -> str:
                         "⛔ NO DECLARADO — pedilo antes de leer: sin alcance no se sabe qué parte entra")
 
 
+def axes_skeleton() -> str:
+    """The `ejes` skeleton of the output JSON, DERIVED from `relevance.facets` (#254).
+
+    `CLAUDE.md` already says these bullets are the facets of this vault's objective, never a fixed
+    list from memory, and the prompt wrote them as a five-key literal that never read the objective. The five hardcoded ones are the template's example lens, so every
+    facet an instance declares beyond them was **never asked of any extractor** — and the view comes
+    back without the key, which is indistinguishable from "somebody looked and there is nothing":
+    the false clean that #188 introduced `vistas[]` to close, reappearing one level down.
+
+    Measured on a vault whose objective declares eight facets, over 28 extractions of one star: the
+    five wired ones score 28/28 and the three the instance added — `detection`, `ml`, `simulation`,
+    one per thesis chapter — score 1 to 2 of 28, and those few came from extractors who went and
+    read `objective.yaml` on their own initiative.
+
+    Same family as INV-100: a rule that lives in the skill and not in the prompt falls silently at
+    that boundary. Here the rule is the *instance's* objective, which makes it worse — the framework
+    promises each vault that its lens defines what is searched for, and the most expensive step of
+    the chain ignored it.
+
+    Order follows the YAML, so two runs compare. An unreadable or empty lens is SAID, not degraded
+    back to the old literal: same doctrine as `query_ads`, which refuses to classify with a lens it
+    cannot read instead of silently falling back to an empty one (INV-80).
+
+    @inv INV-143"""
+    try:
+        facets = cfg.as_map(cfg.as_map(cfg.load_objective().get("relevance")).get("facets"))
+    except Exception:                     # objetivo ilegible: se DICE, no se inventa una lente
+        facets = {}
+    if not facets:
+        return ('{"SIN_FACETAS": "⛔ `relevance.facets` de `vault/config/objective.yaml` no se pudo '
+                'leer o vino vacia: NO inventes ejes. Frena y avisale al orquestador."}')
+    return "{" + ",".join(f'"{k}":""' for k in facets) + "}"
+
+
 def build_prompt(slug: str, bibcode: str, name: str, aliases, texto: str = "",
                  out_dir: str = "", kind: str = "star", sujeto: str | None = None) -> str:
     """The prompt for one (paper, subject) pair.
@@ -260,6 +294,7 @@ def build_prompt(slug: str, bibcode: str, name: str, aliases, texto: str = "",
     tipo = "theme" if kind == "theme" else "star"
     out = f"{out_dir.rstrip('/')}/{bibcode}.json" if out_dir else f"build/{slug}/extraccion/{bibcode}.json"
     alias_str = ", ".join(f"`{a}`" for a in [name, *(aliases or [])])
+    ejes = axes_skeleton()          # #254: los ejes son la lente de ESTA bóveda, no un literal
     return f"""Sos un extractor de UNA sola fuente. Trabajás desde la raíz del repo.
 
 ⛔ **Leé el PDF: `{_pdf_rel(slug, bibcode)}`.** `Read` lo rasteriza, así que **ves** la página —
@@ -307,7 +342,7 @@ Escribí el resultado en `{out}` y devolvé el mismo JSON en **un solo bloque** 
 {{"bibcode":"{bibcode}","vista":{{"sujeto":"{sujeto}","tipo":"{tipo}","txt":"{slug}","fuente":"pdf"}},
  "role":["fundacional"|"aplicacion"|"arbitro"],"methods":[],"thesis_links":[],"refuta":[],
  "ground_truth":[{{"que":"","valor":"","linea":"","regimen":"","segunda_mano":null}}],
- "ejes":{{"discovery":"","rv":"","activity":"","planet":"","method":""}},
+ "ejes":{ejes},
  "aporte":"","hueco":"","salvedades":[],
  "abstract":"","abstract_es":"","conclusiones":"","conclusiones_es":""}}
 
