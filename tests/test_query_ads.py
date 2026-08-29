@@ -1903,6 +1903,74 @@ def test_el_sweep_sin_hallazgos_tambien_deja_rastro(toy_vault, monkeypatch, caps
     assert len(b) == 1 and b[0]["n_nuevos"] == 0 and b[0]["bibcodes"] == []
 
 
+# ── #251 · el barrido resta las decisiones ya persistidas ────────────────────────────────────────
+
+def _toy_ads_json(bibcodes=("2020ya....1..1A",)):
+    build = cfg.ROOT / "build" / "test_star"
+    build.mkdir(parents=True, exist_ok=True)
+    (build / "ads.json").write_text(
+        json.dumps({"records": [{"bibcode": b} for b in bibcodes]}), encoding="utf-8")
+
+
+def _hit(bibcode):
+    return {"bibcode": bibcode, "title": "survey que tabula", "doctype": "article",
+            "abstract": "we measure radial velocity", "citation_count": 7, "year": "2019",
+            "relevant": True, "facets": ["rv"]}
+
+
+def test_el_sweep_no_repropone_lo_ya_descartado(toy_vault, monkeypatch, capsys):
+    """#251: el barrido restaba **sólo** `ads.json`, así que un paper descartado con motivo volvía
+    como «core NUEVO» corrida tras corrida — el bug que #51 cerró para el chaining, intacto en el
+    carril de al lado, y encima con el propio código mandando el juicio al `log.md`, que no lee
+    ningún script.
+
+    Medido en el ingest real de `hd_40307` (2026-08-29): tras persistir 52 descartes con motivo, el
+    barrido siguiente devolvió esos **52 de 52** como core nuevos.
+
+    @inv INV-118"""
+    _toy_ads_json()
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda *a, **k: [_hit("2019new...1..1A"), _hit("2019out...1..1A")])
+    cfg.save_decisiones("test_star", {"2019out...1..1A": {
+        "decision": "descartado", "motivo": "otro sistema es el sujeto", "fecha": "2026-08-29"}})
+    qa.sweep_star("test_star", rows=50)
+    b = cfg.as_list((cfg.load_registro("test_star") or {}).get("barridos"))[0]
+    assert b["bibcodes"] == ["2019new...1..1A"], \
+        "el descartado con motivo no vuelve a proponerse"
+    assert b["n_descartados_antes"] == 1, \
+        "y no desaparece en silencio: se cuenta (D-43 — «no hay nada nuevo» != «no se miró»)"
+    assert "1 ya descartados antes" in capsys.readouterr().out
+
+
+def test_el_sweep_manda_el_descarte_al_registro_y_no_al_log(toy_vault, monkeypatch, capsys):
+    """La instrucción decía *«listalos en el log — no curar en silencio»*: mandaba el juicio a un
+    artefacto que **ningún script lee**, mientras `decisiones` —que sí se lee— quedaba vacío. Por
+    eso el barrido de `hd_40307` cerró con 61 descartes y `decisiones: {}`.  @inv INV-118"""
+    _toy_ads_json()
+    monkeypatch.setattr(qa, "query_ads", lambda *a, **k: [_hit("2019new...1..1A")])
+    qa.sweep_star("test_star", rows=50)
+    out = capsys.readouterr().out
+    assert "triage.py test_star --drop" in out, "el comando que PERSISTE el descarte, con el slug"
+    assert "--reason" in out, "y con el motivo, que es lo que #51 existe para preservar"
+
+
+def test_el_barrido_distingue_una_corrida_repetida_de_un_hallazgo(toy_vault, monkeypatch, capsys):
+    """#251(b): `save_barrido` decía en su docstring «acumulativo como `busquedas` (D-28)» y sólo
+    appendeaba — sin el `n_nuevos`/`n_ya_estaban` que **es** D-28. Medido: tres entradas idénticas
+    del barrido de `hd_40307`, con los mismos 83 bibcodes, declarando las tres `n_nuevos: 83`.
+
+    @inv INV-118"""
+    _toy_ads_json()
+    monkeypatch.setattr(qa, "query_ads", lambda *a, **k: [_hit("2019new...1..1A")])
+    qa.sweep_star("test_star", rows=50)
+    qa.sweep_star("test_star", rows=50)
+    b = cfg.as_list((cfg.load_registro("test_star") or {}).get("barridos"))
+    assert len(b) == 2, "acumulativo: una entrada por corrida"
+    assert (b[0]["n_nuevos"], b[0]["n_ya_estaban"]) == (1, 0)
+    assert (b[1]["n_nuevos"], b[1]["n_ya_estaban"]) == (0, 1), \
+        "la segunda corrida no descubrió nada: el mismo bibcode ya estaba en la primera"
+
+
 # ── #85 · la lente del BUSCADOR sale del objetivo, no del código ─────────────────────────────────
 
 def test_el_fq_del_buscador_sale_del_objetivo(toy_vault):

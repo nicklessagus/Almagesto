@@ -1846,6 +1846,19 @@ de la query directa: los surveys de muestra grande que **tabulan** la estrella s
 abstract y que tampoco están en el grafo de citas. Hoy `query_ads.py <slug> --sweep` appendea a
 `barridos: []` (acumulativo como `busquedas`) **también cuando no encontró nada** — un barrido vacío
 dice que la red se tendió y volvió sin nada, que no es lo mismo que no haberlo corrido.
+⛔ **Y el barrido RESTA las decisiones ya persistidas, igual que el chaining (#251).** Restaba sólo
+`ads.json`, así que un paper descartado con motivo volvía como *«core NUEVO»* corrida tras corrida —
+el bug que #51 cerró para el chaining, intacto en el carril de al lado— y la instrucción que el
+propio código daba al operador mandaba el juicio al **`log.md`**, que no lee ningún script, en vez de
+a `decisiones`, que sí. Medido en un ingest real: el barrido cerró con **61 descartes por regla de
+poda** y `decisiones` **vacío**; después de persistirlos, el barrido siguiente devolvió **52 de 52**
+como core nuevos. El descarte del barrido va por el mismo carril que el del chaining —
+`triage.py <slug> --drop … --reason`—, porque el juicio es sobre el par `(paper, sujeto)` y no sobre
+el mecanismo que lo propuso. ⚠ Y la entrada del registro computa `n_nuevos`/`n_ya_estaban` contra los
+barridos previos, que es lo que D-28 **significa**: la docstring decía *«acumulativo como
+`busquedas`»* y sólo appendeaba, así que tres corridas idénticas del mismo barrido declaraban las
+tres `n_nuevos: 83` —249 hallazgos donde hubo 83—. El `n_nuevos` viejo era además redundante con
+`len(bibcodes)`, así que redefinirlo no pierde información.
 El **corpus truncado** (un `build/<slug>/ads.json` con `truncated` seteado → la query directa trajo
 menos papers de los que ADS reporta) es **backlog** — `query_ads` persiste la marca (default
 `--rows 2000`, ≈ el máximo de una request; re-ingestar con `--rows` mayor para cubrir el resto). Lo

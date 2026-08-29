@@ -613,8 +613,13 @@ def load_triage(slug: str) -> set[str]:
     perdía al clonar o limpiar (el `build/<slug>/triage.json` pre-1.9.0 ya NO se lee — se migra con
     `triage.py --migrate` y el lint lo bloquea mientras exista).
 
-    **Sólo el carril del chaining** (#81): un rechazo de *fuente declarada* de un tema off-ADS vive
-    en las mismas `decisiones` y no tiene nada que ver con los candidatos del grafo de citas."""
+    **El carril del BIBCODE** (#81): un rechazo de *fuente declarada* de un tema off-ADS vive en
+    las mismas `decisiones` y no tiene nada que ver con un bibcode propuesto por ADS. Lo consumen
+    los DOS proponentes de bibcodes —el chaining y el barrido `--sweep` (#251)—, porque el juicio
+    es sobre el par `(paper, sujeto)` y no sobre el mecanismo que lo trajo: un paper descartado
+    porque su sujeto es otro sistema lo sigue siendo lo proponga el grafo de citas o el full-text.
+    Hasta 1.97.0 el barrido no lo llamaba, así que re-proponía **para siempre** lo ya juzgado —
+    medido en `hd_40307`: 52 de 52 descartes con motivo devueltos como «core NUEVOS»."""
     # @inv INV-49
     return {b for b, d in cfg.load_decisiones(slug).items()
             if d.get("decision") == "descartado" and cfg.es_del_carril(d, "chaining")}
@@ -741,10 +746,17 @@ def sweep_star(slug: str, rows: int) -> int:
     # Orden por citas/AÑO (#79 punto 1, política única en lib_config): este barrido existe para
     # rescatar "core poco citados que caen al fondo del ranking", así que rankearlo por citas crudas
     # lo hacía repetir el sesgo del mecanismo que le falló.
-    news = cfg.sort_by_citation_rate(r for r in hits
-                                     if r["relevant"] and r.get("bibcode") not in known)
+    # #251 — el barrido resta las decisiones ya persistidas, igual que el chaining. Sin esto el
+    # juicio del operador no tenía efecto sobre el mecanismo que lo pidió: el barrido devolvía la
+    # misma lista corrida tras corrida, y la única red del punto ciego de la query directa se
+    # volvía ruido que se deja de mirar.
+    descartados = load_triage(slug)
+    candidatos = [r for r in hits if r["relevant"] and r.get("bibcode") not in known]
+    ya_descartados = sum(1 for r in candidatos if r.get("bibcode") in descartados)
+    news = cfg.sort_by_citation_rate(r for r in candidatos
+                                     if r.get("bibcode") not in descartados)
     cfg.print_seguro(f"  {len(hits)} papers con la estrella en el CUERPO · {len(news)} core NUEVOS "
-          "(no están en ads.json)")
+          f"(no están en ads.json) · {ya_descartados} ya descartados antes")
     for r in news:
         cfg.print_seguro(_probe_row(r))
     if news:
@@ -754,7 +766,10 @@ def sweep_star(slug: str, rows: int) -> int:
         # usa `triage.py`: una sola implementación, así que no puede volver a divergir.
         cfg.print_seguro("\n  → revisá cuáles corresponden y pegá el bloque de abajo en `extra_core:` "
               "de la entrada de la estrella en vault/config/stars.yaml; después re-corré la cadena "
-              "(idempotente). Los que decidas NO bajar, listalos en el log — no curar en silencio.\n")
+              "(idempotente). Los que decidas NO bajar van al registro VERSIONADO, no al log:\n"
+              f"  python scripts/triage.py {slug} --drop <bib> … --reason \"<motivo>\"\n"
+              "  (#251: el log no lo lee ningún script; `decisiones` sí, y es lo que evita que el "
+              "próximo barrido te vuelva a pedir el mismo juicio sin el motivo.)\n")
         cfg.print_seguro(cfg.extra_core_snippet(news))
     else:
         cfg.print_seguro("  → el corpus ya cubre el barrido full-text. (Ojo: en papers pre-digitales un 0 acá "
@@ -765,7 +780,11 @@ def sweep_star(slug: str, rows: int) -> int:
         "query": q,
         "rows": rows,
         "n_hits": len(hits),               # papers con la estrella en el CUERPO
-        "n_nuevos": len(news),             # core que ads.json no tenía
+        # #251 — `n_nuevos`/`n_ya_estaban` los computa `save_barrido` contra los barridos previos,
+        # que es la semántica de D-28. Acá NO se pasa: el `len(news)` que vivía en esta clave era
+        # redundante con `len(bibcodes)` y pisaba la única lectura que distingue una corrida
+        # repetida de un hallazgo.
+        "n_descartados_antes": ya_descartados,
         "bibcodes": [r.get("bibcode") for r in news if r.get("bibcode")],
         # AUD-181 / INV-118 — el barrido es la SEGUNDA red (el punto ciego de la query directa:
         # surveys que tabulan la estrella sin nombrarla en el abstract), y no guardaba si se cortó.

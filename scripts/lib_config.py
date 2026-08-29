@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.97.0"
+ALMAGESTO_VERSION = "1.98.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -2003,10 +2003,25 @@ def save_barrido(slug: str, barrido: dict) -> None:
     volvió sin nada, que no es lo mismo que no haberlo corrido — la distinción de D-43. Acumulativo
     como `busquedas` (D-28), y no toca `decisiones`.
 
+    ⛔ #251 — «acumulativo como `busquedas`» era, hasta 1.97.0, sólo la parte de appendear: la
+    entrada se guardaba **tal cual**, sin el `n_nuevos`/`n_ya_estaban` que ES D-28 («traje 40» vs
+    «traje 40 y 38 ya estaban»). Medido en `hd_40307`: tres entradas idénticas —misma fecha, misma
+    query, los mismos 83 bibcodes— declarando las tres `n_nuevos: 83`, o sea 249 hallazgos donde
+    hubo 83. El `n_nuevos` que escribía el llamador era además **redundante con `len(bibcodes)`**,
+    así que redefinirlo con la semántica de D-28 no pierde información.
+
     @inv INV-118"""
     data = load_registro(slug)
     data.setdefault("slug", slug)
-    data["barridos"] = [b for b in as_list(data.get("barridos")) if isinstance(b, dict)] + [barrido]
+    previos = [b for b in as_list(data.get("barridos")) if isinstance(b, dict)]
+    conocidos: set = set()
+    for b in previos:
+        conocidos.update(as_list(b.get("bibcodes")))
+    entrada = dict(barrido)
+    bibs = as_list(entrada.get("bibcodes"))
+    entrada["n_nuevos"] = len([b for b in bibs if b not in conocidos])
+    entrada["n_ya_estaban"] = len([b for b in bibs if b in conocidos])
+    data["barridos"] = previos + [entrada]
     save_registro(slug, data)
 
 
