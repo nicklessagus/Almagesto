@@ -1167,6 +1167,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     log_sin_entrada: list = []         # (slug, motivo) — #118: la cadena corrió y el log no lo dice
     sweep_pendiente: list = []         # (slug, motivo) — #88: el barrido 2b no consta en el registro
     impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
+    cita_no_verbatim: list = []        # (stem, motivo) — #220: la cadena no está en el `.txt`
+    cita_opaca: list = []              # (stem, motivo) — #220: no evaluable (sin `.txt` / ocr / eprint)
     verificar_pdf: list = []           # (stem, motivo) — #225: marcada para chequear contra el PDF
     forma_rota: list = []              # (stem, motivo) — #227: fila de tabla que NO renderiza
     forma_sospechosa: list = []        # (stem, motivo) — #227: backtick abierto, párrafo duplicado
@@ -1213,6 +1215,23 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                           if isinstance(m, dict)}
     refs_dir = str(cfg.RAW / "refs")
     refs_stems = {basename(f)[:-3] for f in files if f.startswith(refs_dir)}  # docs de diseño, no fichas
+    _fm_cache: dict = {}
+
+    def paper_fm(bib: str) -> dict:
+        """Frontmatter of a paper note, read on demand.
+
+        Deliberately NOT `paper_fms`: that one is filled by the main loop, so mid-loop it holds
+        whatever happened to be parsed first — a checker that reads it from inside the loop would
+        answer differently depending on filename order.
+        """
+        if bib not in _fm_cache:
+            _f = cfg.PAPERS / f"{bib}.md"
+            try:
+                _fm_cache[bib] = split_fm(_f.read_text(encoding="utf-8")) if _f.exists() else {}
+            except Exception:
+                _fm_cache[bib] = {}
+        return _fm_cache[bib]
+
     paper_fms: dict = {}               # {stem: frontmatter} de papers/ — para D-10, sin re-parsear
     paper_abstracts: dict = {}         # {stem: abstract normalizado} — #216, duplicado sin doi/arxiv
     sin_extraer_por_sujeto: dict = {}  # nombre de sujeto → {stems core sin extraer} (D-13)
@@ -1410,6 +1429,57 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                     verificar_pdf.append(
                         (stem, f"L{_i}: una afirmación quedó marcada para chequear contra el PDF — "
                                f"«{_l.strip()[:90]}»"))
+
+        # #220 — la cita textual, que es una afirmación DECIDIBLE SOBRE UN ARCHIVO. «esta cadena
+        # está en este `.txt`» lo contesta un `grep`, y hoy lo único que las mira es el fan-out de
+        # `verify-citations`: un subagente por fuente leyendo el PDF, la parte más cara de la
+        # cadena, para algo que se decide en milisegundos. Y como es juicio de LLM, la cita alterada
+        # PASA: medido en una nota real, seis citas no verbatim volvieron `soportada` —correctamente,
+        # porque el CONTENIDO estaba respaldado: el eje que el contrato mide es ortogonal al que
+        # falla, igual que `condicion` (#74)—. Una de ellas invertía el sentido de la oración
+        # («do not become orthogonal» por «that are not orthogonal»).
+        #
+        # Se marca sólo si NINGUNA de las fuentes citadas en el bloque la tiene: un bloque que cita
+        # dos papers puede legítimamente entrecomillar a uno solo. Y hay tercer estado: sin `.txt`,
+        # con `fulltext_source: ocr` o con `pdf_source: eprint` el fallo es esperable y se DECLARA
+        # (el OCR erra símbolos y el preprint no dice lo mismo que el publicado), en vez de contarse
+        # en contra. ⛔ La PÁGINA no se puede chequear así —el `.txt` no tiene páginas— y eso se
+        # dice: media red declarada vale más que ninguna.
+        if stem not in NON_ORPHAN:
+            _por_bloque: dict = {}
+            for _par in lb.pairs_of(text):
+                _por_bloque.setdefault((_par.block.first_line, _par.block.text), []).append(_par.bibcode)
+            for (_ln, _btxt), _bibs in _por_bloque.items():
+                _citas = cfg.quotes_in(_btxt)
+                if not _citas:
+                    continue
+                _fuentes, _opacas = {}, []
+                for _b in _bibs:
+                    _fm_b = paper_fm(_b)
+                    _motivo = ("`fulltext_source: ocr`" if _fm_b.get("fulltext_source") == "ocr"
+                               else "`pdf_source: eprint`" if _fm_b.get("pdf_source") == "eprint"
+                               else "")
+                    _txts = list(cfg.FULLTEXT.glob(f"*/{_b}.txt")) if cfg.FULLTEXT.exists() else []
+                    if not _txts:
+                        _opacas.append((_b, "sin `.txt` en disco"))
+                    elif _motivo:
+                        _opacas.append((_b, _motivo))
+                    else:
+                        _fuentes[_b] = cfg.normalize_source_text(
+                            _txts[0].read_text(encoding="utf-8", errors="replace"))
+                for _c in _citas:
+                    if any(cfg.quote_found(_c, _t) for _t in _fuentes.values()):
+                        continue
+                    _corte = _c if len(_c) <= 70 else _c[:70] + "…"
+                    if _fuentes:
+                        cita_no_verbatim.append(
+                            (stem, f"L{_ln}: «{_corte}» no está en el `.txt` de "
+                                   f"{', '.join(sorted(_fuentes))} — o no es verbatim, o es de otra "
+                                   f"fuente (la página NO se chequea acá: el `.txt` no las tiene)"))
+                    elif _opacas:
+                        cita_opaca.append(
+                            (stem, f"L{_ln}: «{_corte}» no se puede chequear — "
+                                   + "; ".join(f"{b}: {m}" for b, m in _opacas)))
 
         # #227 — la FORMA del artefacto. El artefacto es lo que viaja, y hasta 1.82.3 nadie miraba
         # si renderiza. Medido en una nota real con `lint --cierre` en 0: una fila de tabla con 9
@@ -3167,6 +3237,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('bad_sources', '⛔ `sources:` sin procedencia (#111): no consta quién declaró la fuente ni por qué', SEV_BLOQUEANTE, tuple(bad_sources), poblacion='temas'),
         Categoria('bad_roles', '⛔ `role` fuera del vocabulario — y todo campo con vocabulario CERRADO (`unidad_cita`, `pending_source`)', SEV_BLOQUEANTE, tuple(bad_roles), poblacion='papers'),
         Categoria('impl_leaks', '⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)', SEV_WARN, tuple(impl_leaks), poblacion='notas'),
+        Categoria('cita_no_verbatim', '❝ Cita textual que no está en su fuente: no es verbatim, o es de otra (#220, backlog)', SEV_BACKLOG, tuple(cita_no_verbatim), poblacion='notas'),
+        Categoria('cita_opaca', '❝ Cita textual NO EVALUABLE: sin `.txt`, OCR o eprint (#220, se declara, no cuenta en contra)', SEV_BACKLOG, tuple(cita_opaca), poblacion='notas'),
         Categoria('verificar_pdf', '🔎 Marcada para chequear contra el PDF: una auditoría no pudo cerrarla (#225, backlog)', SEV_BACKLOG, tuple(verificar_pdf), poblacion='notas'),
         Categoria('forma_rota', '⛔ Forma del artefacto: fila de tabla que NO renderiza (contenido invisible para el lector)', SEV_BLOQUEANTE, tuple(forma_rota), poblacion='notas'),
         Categoria('forma_sospechosa', '⚠ Forma del artefacto: marcador sin cerrar o párrafo duplicado (backlog)', SEV_BACKLOG, tuple(forma_sospechosa), poblacion='notas'),

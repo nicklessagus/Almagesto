@@ -1512,7 +1512,31 @@ Se cierra sintetizándolo donde corresponda o declarando `no_sintetizado: <motiv
 paper. Dos recortes de la población, los mismos que usa el backlog hermano de `role`: la cita tiene
 que estar en una nota de **entidad** (`stars/` o `concepts/`) —una `queries/` es una respuesta
 puntual, no la síntesis durable de un sujeto— y la nota **no-core** (`relevance: low`, escrita con
-`--all`) no entra: no se le pide aterrizar en ninguna síntesis. La **lente desincronizada** (D-49) es **backlog**: la `lente` que el registro guardó en la última
+`--all`) no entra: no se le pide aterrizar en ninguna síntesis. ⛔ **La CITA TEXTUAL entre comillas la chequea un script, no un LLM (#220).** *«Esta cadena está en
+este `.txt`»* es un `grep`: es exactamente el criterio con el que #213 mecanizó las `salvedades`
+—*la afirmación decidible la chequea un script*— y acá no se aplicaba, aunque el dato estaba. Hoy
+el lint busca cada `«…»` de ≥ 40 caracteres que viva en el mismo bloque que un `[[bibcode]]`
+(**backlog**), con **tres estados**: está → nada; **no está en ninguna** de las fuentes que el
+bloque cita → hallazgo (o no es verbatim, o es de otra fuente: las dos causas son reales y se
+distinguen a mano); **no evaluable** (sin `.txt`, `fulltext_source: ocr`, `pdf_source: eprint`) →
+**se declara en su propia categoría**, porque ahí el fallo es esperable y contarlo en contra sería
+inventar deuda. Se marca sólo si **ninguna** fuente del bloque la tiene: un párrafo que cita dos
+papers puede legítimamente entrecomillar a uno solo. La normalización es mínima y **declarada**
+(markup y matemática inline fuera —la nota necesariamente re-marcó la cita—, comillas y guiones
+unificados, espacios colapsados, el guión de corte de línea de `pdftotext` unido, minúsculas), y la
+cita **elidida** (`«A … B»`) se chequea **por fragmentos**. ⛔ **La PÁGINA no se puede chequear así**
+—el `.txt` no tiene páginas— y eso se dice en vez de fingir que sí: media red declarada vale más que
+ninguna.
+**Por qué hacía falta, medido:** en **una sola nota** ya cerrada (`lint --cierre` en 0, 96 pares
+verificados) el fan-out encontró **seis** citas que no son verbatim —una invirtiendo el sentido de
+la oración: *«do not become orthogonal»* por *«that are not orthogonal»*— y **las seis volvieron
+`soportada`**, correctamente: el **contenido** estaba respaldado. El eje que el contrato mide
+(*¿la fuente dice esto?*) es **ortogonal** al que falla (*¿la cita es verbatim?*), igual que
+`condicion` (#74) — así que un fan-out con otro prompt, o con otro modelo, las deja pasar en
+silencio. Y la promesa incumplida era explícita: este documento dice que el `.txt` es determinista
+*«así que la cita son las palabras reales del paper»*.
+
+La **lente desincronizada** (D-49) es **backlog**: la `lente` que el registro guardó en la última
 búsqueda del sujeto ya no es la vigente de `objective.yaml` —editar una regex mueve el corte
 core/no-core **sin mover `almagesto_version`**—, así que el corpus quedó clasificado con una regla
 que nadie usa. El diff corre **sólo** cuando las lentes difieren (el caso normal es igual y es

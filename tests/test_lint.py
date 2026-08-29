@@ -4834,3 +4834,68 @@ def test_sin_la_marca_no_hay_hallazgo(toy_vault, capsys):
     link_from_index(toy_vault, "nota", "2020citC...1..1C")
     _rc, rep = run_lint_reporte(capsys)
     assert "nota" not in _seccion(rep, "Marcada para chequear contra el PDF"), rep
+
+
+def _paper_con_txt(bib: str, texto: str, extra: dict | None = None):
+    """Una nota de paper con su `.txt` en disco — el par que el chequeo de #220 necesita."""
+    mk_note(cfg.PAPERS, bib, {"bibcode": bib, "tags": ["paper"], "stars": ["tau Cet"],
+                              **(extra or {})}, "# p\n")
+    d = cfg.FULLTEXT / "tau-cet"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"{bib}.txt").write_text(texto, encoding="utf-8")
+
+
+def test_cita_que_no_esta_en_el_txt_es_hallazgo(toy_vault, capsys):
+    """#220 — la cita textual es una afirmación DECIDIBLE sobre un archivo, y hoy sólo la miraba el
+    fan-out (juicio de LLM, que la deja pasar: el contenido está respaldado aunque las palabras no
+    sean las del paper). Medido: seis misquotes con veredicto `soportada`, uno invirtiendo el
+    sentido de la oración."""
+    _paper_con_txt("2023A&A...675A.187O",
+                   "real-world systematics that are not orthogonal might become entangled\n")
+    mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
+            "# nota\n\nEl paper advierte que «real-world systematics do not become orthogonal and "
+            "might become entangled» ([[2023A&A...675A.187O]]).\n")
+    link_from_index(toy_vault, "nota", "2023A&A...675A.187O")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "nota" in _seccion(rep, "no está en su fuente"), rep
+
+
+def test_la_cita_verbatim_no_dispara(toy_vault, capsys):
+    """#220, el simétrico — la misma cadena tal cual la dice el paper (con el salto de línea y el
+    guión de corte que mete `pdftotext`, que la normalización declarada une) no es hallazgo."""
+    _paper_con_txt("2023A&A...675A.187O",
+                   "real-world systematics that are not ortho-\ngonal might become entangled\n")
+    mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
+            "# nota\n\nEl paper advierte que «real-world systematics that are not orthogonal might "
+            "become entangled» ([[2023A&A...675A.187O]]).\n")
+    link_from_index(toy_vault, "nota", "2023A&A...675A.187O")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "nota" not in _seccion(rep, "no está en su fuente"), rep
+
+
+def test_una_de_las_dos_fuentes_alcanza(toy_vault, capsys):
+    """#220 — se marca sólo si NINGUNA fuente citada en el bloque la tiene: un párrafo que cita dos
+    papers puede legítimamente entrecomillar a uno solo, y marcar al otro sería inventar un defecto."""
+    _paper_con_txt("2023A&A...675A.187O", "agnostic to the origin of the systematics involved\n")
+    _paper_con_txt("2025A&A...696A.152O", "nada que ver con la cita de al lado\n")
+    mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
+            "# nota\n\nEl método es «agnostic to the origin of the systematics involved» "
+            "([[2023A&A...675A.187O]]), y lo replica ([[2025A&A...696A.152O]]).\n")
+    link_from_index(toy_vault, "nota", "2023A&A...675A.187O", "2025A&A...696A.152O")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "nota" not in _seccion(rep, "no está en su fuente"), rep
+
+
+def test_ocr_y_eprint_se_declaran_no_evaluables(toy_vault, capsys):
+    """#220, el tercer estado — con `fulltext_source: ocr` el fallo es esperable (el OCR erra
+    símbolos) y con `eprint` la fuente no dice lo mismo que el publicado. Se DECLARA, en su propia
+    categoría, en vez de contarse en contra: es la doctrina D-43 dentro del detector."""
+    _paper_con_txt("2023A&A...675A.187O", "texto ocreado que no matchea nada de la nota\n",
+                   {"fulltext_source": "ocr"})
+    mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
+            "# nota\n\nDice «a phrase long enough to be worth checking against the source file» "
+            "([[2023A&A...675A.187O]]).\n")
+    link_from_index(toy_vault, "nota", "2023A&A...675A.187O")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "nota" not in _seccion(rep, "no está en su fuente"), rep
+    assert "nota" in _seccion(rep, "NO EVALUABLE"), rep

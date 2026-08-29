@@ -20,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.85.0"
+ALMAGESTO_VERSION = "1.86.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -479,6 +479,64 @@ def facet_token_leaks(token: str, textos) -> list:
 
 #: Cuántas palabras-ejemplo alcanzan para reconocer una fuga de faceta sin inflar el reporte.
 _LEAK_MAX = 4
+
+
+#: #220 · largo mínimo de una cita textual para chequearla contra su fuente. Por debajo, una
+#: coincidencia no dice nada (una frase de cinco palabras aparece en cualquier paper del tema) y el
+#: ruido de falsos positivos por markup se come la señal.
+QUOTE_MIN = 40
+
+#: Fragmento mínimo tras partir por elipsis: la cita cortada («A … B») se chequea por partes, y una
+#: parte muy corta no es evidencia de nada.
+QUOTE_FRAG_MIN = 25
+
+_QUOTE_RE = re.compile(r"«([^»]+)»")
+_QUOTE_MARKUP_RE = re.compile(r"\$[^$]*\$|\[\[|\]\]|[*_`\\]")
+_QUOTE_ELLIPSIS_RE = re.compile(r"\[\s*(?:\.\.\.|…)\s*\]|…|\.\.\.")
+_QUOTE_SUBS = (("\u201c", '"'), ("\u201d", '"'), ("\u2018", "'"), ("\u2019", "'"),
+               ("\u2013", "-"), ("\u2014", "-"), ("\u00ad", ""))
+
+
+def normalize_quote(s: str) -> str:
+    """A quoted string reduced to what can be compared against a `.txt`.
+
+    The normalization is deliberately minimal and DECLARED (#220): inline math and markdown markup
+    are dropped —the note necessarily re-marked the quote up, so `$A$` would never match the source
+    verbatim—, typographic quotes and dashes are unified, soft hyphens go, whitespace collapses and
+    case is folded. Anything beyond that would start matching text the source does not have.
+    """
+    s = _QUOTE_MARKUP_RE.sub("", s)
+    for a, b in _QUOTE_SUBS:
+        s = s.replace(a, b)
+    return re.sub(r"\s+", " ", s).strip().lower()
+
+
+def normalize_source_text(t: str) -> str:
+    """The same normalization on the source side, plus the hyphen that `pdftotext` leaves at a line
+    break (`inde-\npendent`): without joining it, every quote crossing a line break would fail."""
+    return normalize_quote(t.replace("-\n", ""))
+
+
+def quote_fragments(quote: str) -> list[str]:
+    """The pieces of a quote that can be looked up, split at the ellipsis that marks an elision.
+
+    A quote written «A … B» does not appear verbatim anywhere: what the source has is A and B, with
+    something in between. Checking the pieces is what makes the elided quote decidable at all;
+    pieces below `QUOTE_FRAG_MIN` are dropped, since a short one matches anything.
+    """
+    return [f for f in (x.strip() for x in _QUOTE_ELLIPSIS_RE.split(quote))
+            if len(f) >= QUOTE_FRAG_MIN]
+
+
+def quotes_in(text: str) -> list[str]:
+    """The «…» quotes of a block that are long enough to be worth checking (`QUOTE_MIN`)."""
+    return [q.strip() for q in _QUOTE_RE.findall(text) if len(q.strip()) >= QUOTE_MIN]
+
+
+def quote_found(quote: str, source_norm: str) -> bool:
+    """Is this quote in that (already normalized) source text? All its fragments must be."""
+    frags = quote_fragments(normalize_quote(quote))
+    return bool(frags) and all(f in source_norm for f in frags)
 
 
 def looks_decidable(salvedad: str) -> bool:

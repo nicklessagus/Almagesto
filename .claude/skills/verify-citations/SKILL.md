@@ -34,6 +34,14 @@ inversa. Verificar contra eso devuelve **`no-soportada` sobre afirmaciones corre
 | **fuente WEB** (#205 / AUD-204) | ⛔ **excepción nombrada: acá el `.txt` SÍ es la fuente.** Una nota con `source_url` poblado (`pdf: null`, snapshot de `fetch_web`) no tiene PDF **por diseño**, y el argumento de #205 no le aplica: ahí el `.txt` no es una copia degradada de un original, **es la captura**. Es determinista (defuddle, URL + fecha) y es lo que la cita referencia con `accessed`. Se cita por **línea** y la fila lleva **`txt:<sha10>`**. |
 | **agotar antes de concluir** | si la afirmación no aparece donde el índice la ubica, ampliá la ventana de páginas antes de concluir. `no verificable por extracción` queda para el PDF que es un escaneo ilegible incluso a ojo — distinto de `no-soportada`. |
 
+> ⛔ **La cita textual la chequea un script ANTES que vos (#220).** `python scripts/lint.py` marca
+> como backlog cada `«…»` de ≥ 40 caracteres que no aparezca en el `.txt` de ninguna de las fuentes
+> que cita su bloque, y **declara aparte** las no evaluables (sin `.txt`, OCR, eprint). Corrélo
+> antes del fan-out: es gratis y contesta —en milisegundos, sin abrir un PDF— la mitad decidible de
+> lo que después pagás con un subagente por fuente. ⚠ No reemplaza al fan-out: dice *«esta cadena no
+> está en ese archivo»*, no *«la fuente no respalda esto»*, y **la página no la chequea** (el `.txt`
+> no tiene páginas). Medido: seis misquotes en una sola nota, las seis con veredicto `soportada`.
+
 ## Cuándo correrlo
 - **Paso de cierre obligatorio de toda operación que escriba prosa con `[[bibcode]]`** (regla de
   `CLAUDE.md`), **antes de lint/commit**: `ingest-star` (ficha + papers, paso 5b), `ingest-theme`

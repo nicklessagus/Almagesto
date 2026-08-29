@@ -119,6 +119,12 @@
 ## ⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano) (0)
 > sobre 89 notas de `vault/wiki/`
 
+## ❝ Cita textual que no está en su fuente: no es verbatim, o es de otra (#220, backlog) (0)
+> sobre 89 notas de `vault/wiki/`
+
+## ❝ Cita textual NO EVALUABLE: sin `.txt`, OCR o eprint (#220, se declara, no cuenta en contra) (0)
+> sobre 89 notas de `vault/wiki/`
+
 ## 🔎 Marcada para chequear contra el PDF: una auditoría no pudo cerrarla (#225, backlog) (0)
 > sobre 89 notas de `vault/wiki/`
 
