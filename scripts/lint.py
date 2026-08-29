@@ -2175,6 +2175,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     verif_sin_archivo: list = []       # (stem, motivo) — #117: la fila no dice qué archivo leyó
     verif_localizador: list = []       # (stem, motivo) — #122: el localizador contradice al prefijo
     verif_sin_resolver: list = []      # (stem, motivo) — #91: veredicto que exige acción y no la tuvo
+    verif_estructura: list = []        # (stem, motivo) — #232: sub-secciones o cabecera del bloque
     for stem, texto in sorted(anchor_notes):
         filas = lb.parse_verif_table(texto)
         if filas is None:
@@ -2183,6 +2184,27 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                        "(plantilla vieja) → no se puede evaluar qué par sigue vigente; re-correr "
                        "`verify-citations` para que lo reescriba con un par por fila"))
             continue
+        # #232 — la ESTRUCTURA del bloque, que nadie miraba más allá de la tabla. Las tres
+        # sub-secciones que la plantilla cierra son el único lugar donde queda escrito el triage de
+        # la corrida: medido, de 91 condiciones pobladas 28 declaraban una omisión de la nota y
+        # nada decía cuáles se juzgaron no vinculantes — el razonamiento se hizo, vivió en `build/`
+        # (scratch) y no llegó al artefacto que viaja. Se exigen aunque digan «ninguna»: la
+        # diferencia entre «no hubo» y «nadie miró» es exactamente lo que este framework persigue.
+        _falt = [x for x in lb.VERIF_SUBSECCIONES if x not in texto]
+        if _falt:
+            verif_estructura.append(
+                (stem, f"el bloque no trae {len(_falt)} de las tres sub-secciones que la plantilla "
+                       f"cierra ({', '.join(_falt)}) — van aunque digan «ninguna»: es el único "
+                       f"lugar donde queda escrito el triage de la corrida"))
+        # #232 — y los conteos de la cabecera los da el MISMO código que lee la tabla (INV-81). A
+        # mano derivan: la cabecera de un bloque real describía la ronda 1 sobre 96 pares mientras
+        # su tabla tenía 99, y omitía las condiciones (91/99) y las contradicciones resueltas.
+        _resumen = lb.verif_summary(filas)
+        if f"{len(filas)} pares" not in texto:
+            verif_estructura.append(
+                (stem, f"la cabecera del bloque no publica «{len(filas)} pares» (la tabla tiene "
+                       f"{len(filas)} filas) → línea canónica: «{_resumen}»"))
+
         pendientes = lb.pairs_of(texto)
         for fila in filas:
             # #91: el lint miraba el bloque SÓLO por su encabezado (¿existe? ¿está fresco?) y nunca
@@ -3372,6 +3394,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('bad_roles', '⛔ `role` fuera del vocabulario — y todo campo con vocabulario CERRADO (`unidad_cita`, `pending_source`)', SEV_BLOQUEANTE, tuple(bad_roles), poblacion='papers'),
         Categoria('impl_leaks', '⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)', SEV_WARN, tuple(impl_leaks), poblacion='notas'),
         Categoria('cond_sin_clasificar', '⚖ Condición sin clasificar: no dice si acota la afirmación o sólo la contextualiza (#221, backlog)', SEV_BACKLOG, tuple(cond_sin_clasificar), poblacion='entidades'),
+        Categoria('verif_estructura', '🧾 Bloque de verificación incompleto: faltan sub-secciones o la cabecera no cuadra (#232, backlog)', SEV_BACKLOG, tuple(verif_estructura), poblacion='entidades'),
         Categoria('verif_truncada', '✂ Celda del bloque de verificación truncada: se tiró lo que el fan-out encontró (#226, backlog)', SEV_BACKLOG, tuple(verif_truncada), poblacion='entidades'),
         Categoria('verif_sin_localizador', '✂ Evidencia sin localizador: el cruce de #122 NO se pudo evaluar en esa fila (#226, backlog)', SEV_BACKLOG, tuple(verif_sin_localizador), poblacion='entidades'),
         Categoria('radio_sin_link', '🛞 Hub que nombra un radio sin `[[wikilink]]`: el radio no entra al grafo (#235, backlog)', SEV_BACKLOG, tuple(radio_sin_link), poblacion='entidades'),

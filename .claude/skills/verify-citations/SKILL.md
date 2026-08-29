@@ -360,6 +360,14 @@ ancla: lo que la nota afirma tiene que seguir siendo contable.
 sin fusionar— no se escribe **ninguno**. Un reemplazo que adivina es peor que uno que falla, y una
 nota a medio corregir es indistinguible de una corregida.
 
+⛔ **La segunda ronda PISA el veredicto y ARRASTRA la resolución (#232).** Sin esa regla, la ronda
+de re-verificación **blanquea** la primera: medido, 3 `contradice` de la ronda 1 y **0** en el bloque
+final —las tres arregladas en la prosa, y nadie que abra la nota puede saber que hasta ayer tres de
+sus afirmaciones decían lo contrario de su fuente—. La celda se escribe `contradice→corregida`, que
+es la notación que la plantilla de acá ya publica y la que `lib_blocks.resueltos()` sabe leer.
+Y la cabecera se **genera**, no se escribe: `lib_blocks.verif_summary(filas)` da la línea con los
+cuatro conteos (INV-81 — el encabezado y sus filas salen del mismo código).
+
 ⛔ **Corregir es ESCRIBIR, y lo escrito se verifica: la operación cierra en corregir → RE-VERIFICAR
 lo tocado (#203).** No cierra en *corregir*. Después de aplicar, los pares que tocaste están **sin
 verificar** —el ancla cambió— y las citas que la corrección haya agregado son **pares nuevos**. Hay

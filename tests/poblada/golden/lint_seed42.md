@@ -122,6 +122,9 @@
 ## ⚖ Condición sin clasificar: no dice si acota la afirmación o sólo la contextualiza (#221, backlog) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 
+## 🧾 Bloque de verificación incompleto: faltan sub-secciones o la cabecera no cuadra (#232, backlog) (0)
+> sobre 29 notas de entidad (fichas, conceptos, queries)
+
 ## ✂ Celda del bloque de verificación truncada: se tiró lo que el fan-out encontró (#226, backlog) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 

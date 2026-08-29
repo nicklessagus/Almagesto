@@ -510,6 +510,43 @@ def _split_row(line: str) -> list[str]:
     return [c.replace("\\|", "|").strip() for c in _CELL_SPLIT_RE.split(line.strip().strip("|"))]
 
 
+#: #232 · las tres sub-secciones que la plantilla del bloque cierra, obligatorias aunque digan
+#: «ninguna». Es el ÚNICO lugar donde queda escrito el triage de la corrida: medido, de 91
+#: condiciones pobladas 28 declaraban una omisión de la nota, y nada en la nota decía cuáles se
+#: juzgaron no vinculantes — el razonamiento se hizo, vivió en `build/` (scratch) y no llegó al
+#: artefacto que viaja.
+VERIF_SUBSECCIONES = ("Inferencias declaradas", "Omisiones en transcripciones",
+                      "Condiciones perdidas")
+
+
+def verif_counts(rows: list) -> dict:
+    """The four numbers the block's header must publish, computed from the rows themselves (#232).
+
+    Written by hand they drift: the header of a real block described round 1 over 96 pairs while its
+    table had 99, and omitted both the condition count (91/99) and the resolved contradictions. It is
+    the lesson of INV-81 —the roll-up header and its rows come from the same code— applied to the
+    verification block.
+
+    `contradicen` counts every row whose verdict mentions `contradice`, resolved or not: the point of
+    the number is that the note DID contradict its source, and the second round must not blank it.
+    """
+    vs = [str(r.verdict or "").strip().lower() for r in rows]
+    return {"pares": len(rows),
+            "soportadas": sum(1 for v in vs if v.startswith("soportada")),
+            "no_soportadas": sum(1 for v in vs if v.startswith("no-soportada")),
+            "contradicen": sum(1 for v in vs if v.startswith("contradice")),
+            "con_condicion": sum(1 for r in rows
+                                 if str(r.condition or "").strip() not in ("", "—", "-", "–"))}
+
+
+def verif_summary(rows: list) -> str:
+    """The canonical header line for a verification block, from `verif_counts`."""
+    c = verif_counts(rows)
+    return (f"{c['pares']} pares; {c['soportadas']} soportadas / {c['no_soportadas']} no-soportadas "
+            f"/ {c['contradicen']} contradicen (resueltas) / {c['con_condicion']} con condición "
+            f"declarada")
+
+
 def parse_verif_table(text: str) -> list[Row] | None:
     """Las filas del bloque `## Verificación de citas`, o `None` si el bloque **no se puede
     evaluar** — porque no existe, o porque es de la plantilla vieja (sin las columnas de hash).

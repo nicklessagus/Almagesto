@@ -1308,6 +1308,23 @@ fuente no respalda, o sea justo lo que la frontera dura prohíbe: hoy **bloquea*
 que citar una fuente retractada. No cuentan `no verificable por extracción` (es propiedad de la
 fuente, no defecto de la nota) ni la resolución anotada en la misma celda (`no-soportada→corregida`):
 lo que bloquea es el veredicto **pelado**.
+⛔ **Con DOS RONDAS, la segunda pisa el veredicto y ARRASTRA la resolución (#232).** El ciclo de
+#203 —corregir → re-verificar lo tocado— produce una segunda ronda sobre los pares corregidos, y sin
+regla de composición esa ronda **blanquea** la primera: medido, una corrida registró **3
+`contradice`** en la ronda 1 y el bloque final publica **0** (`{soportada: 90, no verificable: 9}`),
+con las tres arregladas en la prosa —correcto— y **nadie que abra la nota puede saber que tres de
+sus afirmaciones decían lo contrario de su fuente hasta ayer**. Eso es lo contrario de lo que el
+bloque existe para hacer. La celda se escribe con la notación que la plantilla ya publica —
+`contradice→corregida`, `no-soportada→corregida`— que es exactamente lo que `lib_blocks.resueltos()`
+sabe leer: el veredicto nuevo **no reemplaza** al viejo, lo **anota**.
+⛔ **Y la cabecera del bloque publica los CUATRO conteos, generados por el mismo código que lee la
+tabla** (`lib_blocks.verif_summary`, INV-81): a mano derivan —la cabecera de un bloque real describía
+la ronda 1 sobre **96** pares mientras su tabla tenía **99**, sin decir de dónde salían los tres
+nuevos (los agregaron las propias correcciones)—. Y las **tres sub-secciones** que la plantilla
+cierra (*Inferencias declaradas*, *Omisiones en transcripciones*, *Condiciones perdidas*) van
+**aunque digan «ninguna»**: son el único lugar donde queda escrito el triage de la corrida, y sin
+ellas el razonamiento se queda en `build/`, que es scratch. El lint reporta las dos cosas.
+
 ⛔ **Sin fila no hay dónde colgar el ancla** — colapsar las soportadas en un párrafo
 de prosa y dejar en la tabla sólo las que fallaron deja al lint sin poder distinguir "verificada" de
 "nunca se miró".

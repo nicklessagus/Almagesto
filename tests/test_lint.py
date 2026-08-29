@@ -5078,3 +5078,42 @@ def test_el_hub_que_SI_linkea_el_radio_no_dispara(toy_vault, capsys):
     link_from_index(toy_vault, "ica", "noisy-ica")
     _, rep = run_lint_reporte(capsys)
     assert "ica" not in _seccion(rep, "sin `[[wikilink]]`"), rep
+
+
+def test_el_bloque_sin_las_tres_subsecciones(toy_vault, capsys):
+    """#232 — las tres sub-secciones que la plantilla cierra son el ÚNICO lugar donde queda escrito
+    el triage de la corrida. Medido: de 91 condiciones pobladas, 28 declaraban una omisión de la
+    nota y nada decía cuáles se juzgaron no vinculantes — el razonamiento se hizo, vivió en `build/`
+    (scratch) y no llegó al artefacto que viaja. Van aunque digan «ninguna»: la diferencia entre «no
+    hubo» y «nadie miró» es exactamente lo que este framework persigue."""
+    _con_ancla(toy_vault, CUERPO)
+    _, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "Bloque de verificación incompleto")
+    assert "Inferencias declaradas" in sec and "Omisiones en transcripciones" in sec, rep
+
+
+def test_la_cabecera_del_bloque_publica_los_pares_de_su_tabla(toy_vault, capsys):
+    """#232 — los conteos de la cabecera los da el mismo código que lee la tabla (INV-81). A mano
+    derivan: la cabecera de un bloque real describía la ronda 1 sobre 96 pares mientras su tabla
+    tenía 99, sin decir de dónde salían los 3 nuevos (los agregaron las propias correcciones)."""
+    _con_ancla(toy_vault, CUERPO)
+    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    nota.write_text(nota.read_text(encoding="utf-8").replace(
+        "## Verificación de citas", "## Verificación de citas\n\n96 pares; 96 soportadas\n", 1),
+        encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    assert "no publica «1 pares»" in _seccion(rep, "Bloque de verificación incompleto"), rep
+
+
+def test_el_bloque_completo_no_dispara(toy_vault, capsys):
+    """#232, el simétrico: con las tres sub-secciones y la cabecera que cuadra, no hay hallazgo."""
+    _con_ancla(toy_vault, CUERPO)
+    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    t = nota.read_text(encoding="utf-8").replace(
+        "## Verificación de citas", "## Verificación de citas\n\n1 pares; 1 soportadas\n", 1)
+    nota.write_text(t + "\nInferencias declaradas (sin cita, por diseño): ninguna.\n"
+                        "Omisiones en transcripciones: ninguna.\n"
+                        "Condiciones perdidas (afirmaciones sobre-generalizadas): ninguna.\n",
+                    encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    assert "nota-verif" not in _seccion(rep, "Bloque de verificación incompleto"), rep
