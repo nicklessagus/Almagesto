@@ -322,6 +322,25 @@ aplicador la pone. Los dos modos de falla están medidos sobre una corrida de 75
   línea, aplican bien). El aplicador lo localiza por su forma normalizada y lo reescribe re-envuelto,
   conservando la sangría.
 
+⛔ **El contrato de `viejo`: UN BLOQUE ENTERO, tal como lo parte `lib_blocks.split_blocks` — ni un
+fragmento sub-línea, ni dos ítems juntos (#222).** Es la parte que el skill nunca decía, y las dos
+mitades se pagaron en la misma corrida:
+- **Fragmento sub-línea.** Los correctores verificaban —correctamente, y varios lo declararon— que
+  su `viejo` *«aparece exactamente una vez en el archivo»*. **Ése es el chequeo equivocado**: pasa
+  para fragmentos que el aplicador no puede resolver. Medido: **26 de 52** fixes fallaron en el
+  primer intento, y como es todo-o-nada, abortaron los 52. El auto-chequeo correcto es
+  ***«¿`find_block` lo resuelve?»***, o sea correr el aplicador en dry-run.
+- **Varios bloques.** `lib_blocks` parte una lista o una tabla en **un bloque por ítem/fila**, y un
+  `viejo` que abarcaba dos ítems resolvía igual y los **fundía en uno**: los pares de la nota
+  cayeron de **96 a 89** —siete afirmaciones citadas dejaron de existir como par verificable—,
+  bullets de `## Huecos` quedaron pegados y filas de dos tablas se colapsaron entre sí. Era la
+  corrupción que el aplicador existe para evitar, producida por el aplicador. **Hoy se rehúsa**, con
+  el mensaje que lo explica: mandá **un fix por bloque**.
+
+**Red final, y es la decisiva:** el aplicador cuenta `pairs_of` **antes y después** y **no escribe**
+si bajó. Una corrección no puede hacer desaparecer una afirmación citada — mismo principio que el
+ancla: lo que la nota afirma tiene que seguir siendo contable.
+
 **Todo o nada**: si un solo `viejo` no resuelve —no aparece, aparece dos veces, o hay una colisión
 sin fusionar— no se escribe **ninguno**. Un reemplazo que adivina es peor que uno que falla, y una
 nota a medio corregir es indistinguible de una corregida.

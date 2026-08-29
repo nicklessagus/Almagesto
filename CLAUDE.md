@@ -1762,6 +1762,16 @@ la sección siguiente son su mecanización.
    afirmó que dos cifras reconciliaban por tamaño de bin y el corrector, al abrir la fuente, encontró
    que **las dos** lo traían—. La regla no es «paralelizar menos»: es **un solo escritor, y una
    barrera antes de que algo consuma resultados**.
+   ⛔ **Y el aplicador tiene que compartir la definición de «bloque» con el que produce los pares
+   (#222).** `apply_fixes.find_block` llamaba bloque a «corrida de líneas no vacías» y
+   `lib_blocks.split_blocks` parte una lista o una tabla en **un bloque por ítem/fila**: un `viejo`
+   que abarcaba dos ítems resolvía igual y `rewrap` los **fundía en uno**. Medido en la misma
+   corrida: los pares de la nota cayeron de **96 a 89** —siete afirmaciones citadas dejaron de
+   existir como par verificable— y **nada lo señaló**; se detectó comparando `pairs_of` a mano. Es
+   la tercera vez que este repo paga por tener dos implementaciones de la misma regla (#214,
+   INV-98). La red que quedó es del tipo más barato: **contar los pares antes y después y abortar si
+   bajaron** — una corrección no puede hacer desaparecer una afirmación citada.
+
    ⛔ **La cuarta cláusula (#203): corregir es escribir, así que el ciclo no cierra en *corregir*
    sino en *corregir → re-verificar lo tocado*.** En la misma corrida, un corrector que **abrió la
    fuente** escribió igual `166 → 0` donde la Tabla I dice `166 → 17` — o sea, la corrección

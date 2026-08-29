@@ -205,7 +205,11 @@ def test_una_fila_de_tabla_no_se_envuelve(tmp_path):
     assert res.failed == [] and res.applied == 1
     filas = [l for l in nota.read_text(encoding="utf-8").split("\n") if l.startswith("| 3 |")]
     assert len(filas) == 1, "la fila se partió: la tabla quedó rota"
-    assert "corregida" in filas[0] and filas[0].endswith("|")
+    # ⚠ #202 — hasta 1.87.0 esto miraba sólo `"corregida" in filas[0]` y `endswith("|")`, y la fila
+    # PARTIDA los cumple los dos: la primera mitad arranca con `| 3 |` y termina en `|`, y la
+    # continuación no arranca con `| 3 |`, así que ni siquiera entra en `filas`. El test sobrevivía
+    # a mutar la guarda que dice proteger. Lo que lo distingue es exigir la fila ENTERA.
+    assert filas[0] == nueva, "la fila no quedó completa en una sola línea"
 
 
 def test_un_blockquote_se_localiza_y_conserva_sus_marcas(tmp_path):
@@ -239,3 +243,116 @@ def test_la_escritura_pasa_por_el_writer_atomico(tmp_path, monkeypatch):
     af.apply(nota, d, write=True)
     assert visto == [nota], "la escritura no pasó por `lib_config.write_text_atomic`"
     assert "nuevo" in nota.read_text(encoding="utf-8")
+
+
+def _nota222(tmp_path, cuerpo: str):
+    n = tmp_path / "nota.md"
+    n.write_text("---\ntags: [concept]\n---\n\n# nota\n\n" + cuerpo, encoding="utf-8")
+    return n
+
+
+def _fixes222(tmp_path, *entradas):
+    d = tmp_path / "fx"
+    d.mkdir(exist_ok=True)
+    (d / "2020aaaa.json").write_text(json.dumps({
+        "bibcode": "2020aaaa", "fixes": [{"n": i, "viejo": v, "nuevo": nu}
+                                         for i, (v, nu) in enumerate(entradas, 1)]}),
+        encoding="utf-8")
+    return d
+
+
+def test_un_viejo_que_abarca_DOS_items_se_rehusa(tmp_path):
+    """#222 — `find_block` llamaba bloque a «corrida de líneas no vacías» y `lib_blocks` parte una
+    lista en un bloque POR ÍTEM. Un `viejo` que abarca dos ítems resolvía igual y `rewrap` los
+    reescribía como UN párrafo: medido, los pares de una nota real cayeron de 96 a 89 —siete
+    afirmaciones citadas dejaron de existir como par verificable— sin que nada avisara."""
+    nota = _nota222(tmp_path, "- primero, dice algo ([[2020aaaa]])\n- segundo, dice otra ([[2020aaaa]])\n")
+    d = _fixes222(tmp_path, ("- primero, dice algo ([[2020aaaa]]) - segundo, dice otra ([[2020aaaa]])",
+                          "- fundido en uno ([[2020aaaa]])"))
+    res = af.apply(nota, d, write=True)
+    assert res.applied == 0 and res.failed, res
+    assert "abarca 2 bloques" in res.failed[0][2], res.failed
+    assert "- segundo" in nota.read_text(encoding="utf-8"), "no se escribió nada"
+
+
+def test_la_fila_exacta_y_el_bloque_no_se_pisan_en_cadena(tmp_path):
+    """#222 — el paso 1 mutaba `lines` y el paso 2 corría `find_block` sobre el texto YA mutado, así
+    que un bloque que contenía una línea tocada por el paso 1 dejaba de localizar y abortaba todo.
+    Hoy se localiza TODO contra el texto original y el solape se declara."""
+    nota = _nota222(tmp_path, "| a | b ([[2020aaaa]]) |\n\notro párrafo con cita ([[2020aaaa]])\n")
+    d = _fixes222(tmp_path, ("| a | b ([[2020aaaa]]) |", "| a | B ([[2020aaaa]]) |"),
+               ("otro párrafo con cita ([[2020aaaa]])", "otro párrafo corregido ([[2020aaaa]])"))
+    res = af.apply(nota, d, write=True)
+    assert res.applied == 2 and not res.failed, res
+    txt = nota.read_text(encoding="utf-8")
+    assert "| a | B ([[2020aaaa]]) |" in txt and "párrafo corregido" in txt
+
+
+def test_dos_fixes_sobre_las_mismas_lineas_se_rehusan(tmp_path):
+    """#222 — la colisión vista desde el otro lado: los `viejo` DIFIEREN (así que el chequeo por
+    clave no la ve) y las LÍNEAS se pisan. Aplicarlos en cadena haría que el segundo anclara en lo
+    que dejó el primero. Los dos resuelven: lo que se rehúsa es el solape, no una localización
+    fallida — ése era el motivo equivocado por el que este test pasaba antes (#202)."""
+    nota = _nota222(tmp_path, "un párrafo largo con cita ([[2020aaaa]])\ny su continuación ([[2020aaaa]])\n")
+    d = _fixes222(tmp_path,
+                  ("un párrafo largo con cita ([[2020aaaa]]) y su continuación ([[2020aaaa]])",
+                   "todo el párrafo corregido ([[2020aaaa]])"),
+                  ("y su continuación ([[2020aaaa]])", "sólo la segunda línea ([[2020aaaa]])"))
+    res = af.apply(nota, d, write=True)
+    assert res.applied == 0 and res.failed, res
+    assert "se solapa" in res.failed[0][2], res.failed
+    assert "y su continuación" in nota.read_text(encoding="utf-8")
+
+
+def test_si_los_pares_bajan_no_se_escribe(tmp_path):
+    """#222 — la red decisiva, y la única que habría cazado los siete pares perdidos sin contarlos a
+    mano: una corrección NO puede hacer desaparecer una afirmación citada. Mismo principio que el
+    ancla — lo que la nota afirma tiene que seguir siendo contable."""
+    nota = _nota222(tmp_path, "un párrafo con dos citas ([[2020aaaa]], [[2021bbbb]])\n")
+    d = _fixes222(tmp_path, ("un párrafo con dos citas ([[2020aaaa]], [[2021bbbb]])",
+                          "un párrafo con una sola ([[2020aaaa]])"))
+    res = af.apply(nota, d, write=True)
+    assert res.applied == 0, res
+    assert res.pairs_before == 2 and res.pairs_after == 1, res
+    assert "2021bbbb" in nota.read_text(encoding="utf-8"), "no se escribió nada"
+
+
+def test_dos_fixes_disjuntos_en_orden_INVERSO_no_se_solapan(tmp_path):
+    """#222 — el detector de solape es `i1 < j2 and i2 < j1`, y hacen falta las DOS cláusulas: con
+    los fixes en orden de archivo sólo se ejercita la segunda. Acá el primer fix del JSON está
+    DESPUÉS en el archivo, así que es la primera cláusula la que impide el falso positivo."""
+    nota = _nota222(tmp_path, "primer párrafo con cita ([[2020aaaa]])\n\n"
+                              "segundo párrafo con cita ([[2020aaaa]])\n")
+    d = _fixes222(tmp_path, ("segundo párrafo con cita ([[2020aaaa]])", "segundo ok ([[2020aaaa]])"),
+                  ("primer párrafo con cita ([[2020aaaa]])", "primero ok ([[2020aaaa]])"))
+    res = af.apply(nota, d, write=True)
+    assert res.applied == 2 and not res.failed, res
+
+
+def test_el_viejo_no_puede_cruzar_una_linea_en_blanco(tmp_path):
+    """`find_block` corta en la línea vacía, y eso es lo que impide que un `viejo` mal armado una
+    dos párrafos distintos en uno. Sin ese corte, el matcher los concatena y `rewrap` los funde —
+    el mismo daño que #222 mide para los ítems de lista, un separador más arriba."""
+    nota = _nota222(tmp_path, "primer párrafo ([[2020aaaa]])\n\nsegundo párrafo ([[2020aaaa]])\n")
+    d = _fixes222(tmp_path, ("primer párrafo ([[2020aaaa]]) segundo párrafo ([[2020aaaa]])",
+                             "fundido ([[2020aaaa]])"))
+    res = af.apply(nota, d, write=True)
+    assert res.applied == 0 and res.failed, res
+    # ⚠ #202 — el motivo importa: sin el corte, el matcher SÍ resuelve (colapsa la línea vacía) y el
+    # fix cae igual en `failed`, pero por la guarda de #222, no por ésta. Un test que sólo mirara
+    # `failed` pasaría con el corte roto.
+    assert "no se pudo localizar" in res.failed[0][2], res.failed
+    assert "segundo párrafo" in nota.read_text(encoding="utf-8")
+
+
+def test_el_reemplazo_exacto_es_VERBATIM_y_no_pasa_por_rewrap(tmp_path):
+    """El camino exacto no está sólo por eficiencia: `rewrap` normaliza y envuelve a 100 columnas,
+    así que un `nuevo` largo pasado por ahí vuelve con otro formato. Cuando el `viejo` es la línea
+    tal cual está en el archivo, lo que el corrector escribió se escribe VERBATIM."""
+    largo = ("una línea de prosa deliberadamente más larga que cien columnas para que envolverla "
+             "cambie el archivo ([[2020aaaa]])")
+    nota = _nota222(tmp_path, "corregime esta línea ([[2020aaaa]])\n")
+    d = _fixes222(tmp_path, ("corregime esta línea ([[2020aaaa]])", largo))
+    res = af.apply(nota, d, write=True)
+    assert res.applied == 1 and res.exact == 1, res
+    assert largo in nota.read_text(encoding="utf-8").split("\n"), "se envolvió: no fue verbatim"

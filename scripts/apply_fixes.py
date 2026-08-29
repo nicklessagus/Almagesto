@@ -16,6 +16,16 @@ layer exists not to produce. Measured: 5 fixes over 2 items. Merging two correct
 not mechanics**, so this refuses to do it: it names the collision and asks for an explicit merge,
 declared under the `_fusionados` bibcode, which wins and skips the originals.
 
+**Fused blocks (#222).** `find_block` used to call a block «a run of contiguous non-empty lines»
+while `lib_blocks.split_blocks` —which produces the pairs, the anchors and the very text the
+corrector saw— splits a list or a table into one block per item/row. A `viejo` spanning several
+items resolved anyway and came back as a single paragraph (or a single row). Measured: pairs fell
+from 96 to 89, bullets of `## Huecos` fused, rows of two tables collapsed into each other, and
+**nothing said so**. Today a `viejo` covering more than one `lib_blocks` block is refused, every fix
+is located against the ORIGINAL text before anything is mutated (so a row fix and a table fix on the
+same table no longer break each other), overlapping spans are refused, and the run aborts if
+`pairs_of` came out lower than it went in — a correction cannot make a cited claim disappear.
+
 **Multi-line block.** The corrector redacts from the text `lib_blocks.split_blocks` hands it, which
 **normalises** the block by joining its lines with a space; in the file that same block is wrapped
 at column 100. `replace` finds 0 occurrences. Measured: 14 of 75 — every list item and paragraph;
@@ -37,6 +47,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lib_config as cfg  # noqa: E402
+import lib_blocks as lb  # noqa: E402
 
 MERGED = "_fusionados"
 """Bibcode reserved for hand-merged fixes: they win, and the originals they replace are skipped."""
@@ -55,6 +66,8 @@ class Result:
     collisions: list = field(default_factory=list)
     rejected: list = field(default_factory=list)
     skipped: list = field(default_factory=list)
+    pairs_before: int = 0
+    pairs_after: int = 0
 
 
 def normalise(s: str) -> str:
@@ -98,7 +111,13 @@ def load_fixes(fix_dir: Path) -> tuple[list, list]:
 
 
 def find_block(lines: list, old: str) -> tuple | None:
-    """The half-open line range whose joined, normalised text is `old`; `None` if 0 or >1 match."""
+    """The half-open line range whose joined, normalised text is `old`; `None` if 0 or >1 match.
+
+    ⚠ Two of its guards are **atajos, not behaviour**, and `--guardas` reports them as survivors on
+    purpose: skipping a blank start line is already covered by the inner `break`, and bailing out at
+    the second hit only saves work —the final `len(hits) == 1` returns `None` either way—. Chasing
+    them would mean writing a test that cannot distinguish anything, which is worse than the gap.
+    """
     target = normalise(old)
     hits = []
     for i, line in enumerate(lines):
@@ -139,8 +158,23 @@ def rewrap(new: str, first_line: str) -> list:
     return [quote + ln for ln in envuelto] if quote else envuelto
 
 
+def blocks_within(blocks: list, span: tuple) -> list:
+    """The `lib_blocks` blocks that start inside a half-open line span (0-indexed).
+
+    #222 — the guard that was missing. `find_block` calls a block «a run of contiguous non-empty
+    lines»; `lib_blocks.split_blocks` —which is what produces the PAIRS, the ANCHORS and the text
+    the corrector actually saw— splits a list or a table into one block per item/row. So a `viejo`
+    spanning several items resolved fine and `rewrap` rewrote them as a SINGLE paragraph (or, if it
+    started with `|`, a single row). Measured on a real note: pairs fell from 96 to 89 — seven
+    cited claims stopped existing as verifiable pairs, bullets of `## Huecos` were fused, and rows
+    of two tables collapsed into each other. That is exactly the corruption this module exists to
+    prevent, produced by this module.
+    """
+    return [b for b in blocks if span[0] <= b.first_line - 1 < span[1]]
+
+
 def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
-    """Apply every fix, or none. See the module docstring for the two failure modes this guards."""
+    """Apply every fix, or none. See the module docstring for the failure modes this guards."""
     #  @inv INV-137
     res = Result()
     pending, res.rejected = load_fixes(fix_dir)
@@ -157,41 +191,79 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
     if res.collisions:
         return res
 
-    lines = note.read_text(encoding="utf-8").split("\n")
+    text = note.read_text(encoding="utf-8")
+    lines = text.split("\n")
+    blocks = lb.split_blocks(text)
+    res.pairs_before = len(lb.pairs_of(text))
 
-    # 1) Exact, single-line matches first: they do not move anyone else's line indices.
-    done = set()
+    # #222 — EVERYTHING is located against the ORIGINAL text, and nothing is mutated until every
+    # fix has a span. Until 1.87.0 step 1 replaced exact single-line matches by mutating `lines`
+    # and step 2 ran `find_block` over the already-mutated text: a block containing a line step 1
+    # had touched stopped resolving. It happened whenever a table got one ROW fix (exact) and one
+    # TABLE fix (block) — no collision was declared, it simply failed and aborted all of them.
+    planned = []                      # (span, bib, n, replacement lines, kind)
     for bib, n, old, new in pending:
         idx = [k for k, l in enumerate(lines) if l == old]
         if len(idx) == 1:
-            lines[idx[0]] = new
-            done.add((bib, n))
-            res.exact += 1
-
-    # 2) The rest by block, applied back-to-front so the ranges computed above stay valid.
-    located = []
-    for bib, n, old, new in pending:
-        if (bib, n) in done:
+            planned.append(((idx[0], idx[0] + 1), bib, n, [new], "exact"))
             continue
         span = find_block(lines, old)
         if span is None:
-            res.failed.append((bib, n, "el bloque no se pudo localizar (0 o >1 candidatos)"))
-        else:
-            located.append((span, bib, n, new))
-    for (i, j), bib, n, new in sorted(located, key=lambda x: -x[0][0]):
-        lines[i:j] = rewrap(new, lines[i])
-        res.by_block += 1
+            res.failed.append((bib, n, "el bloque no se pudo localizar (0 o >1 candidatos) — "
+                                       "`viejo` debe ser un bloque ENTERO tal como lo parte "
+                                       "`lib_blocks.split_blocks`, no un fragmento sub-línea"))
+            continue
+        cubiertos = blocks_within(blocks, span)
+        if len(cubiertos) > 1:
+            res.failed.append((bib, n, f"`viejo` abarca {len(cubiertos)} bloques de "
+                                       f"`lib_blocks` (ítems de lista o filas de tabla): "
+                                       f"aplicarlo los FUNDE en uno y se pierden "
+                                       f"{len(cubiertos) - 1} par(es) verificable(s). Mandá un "
+                                       f"fix por bloque."))
+            continue
+        planned.append((span, bib, n, new, "block"))
 
-    res.applied = res.exact + res.by_block
+    # Dos fixes que tocan las mismas líneas no se pueden aplicar en cadena: el segundo anclaría en
+    # lo que dejó el primero. Es la colisión de siempre vista desde el otro lado —acá los `viejo`
+    # difieren, lo que se pisa son las LÍNEAS— y también se rehúsa en vez de adivinar.
+    for a in range(len(planned)):
+        for b in range(a + 1, len(planned)):
+            (i1, j1), (i2, j2) = planned[a][0], planned[b][0]
+            if i1 < j2 and i2 < j1:
+                res.failed.append((planned[b][1], planned[b][2],
+                                   f"se solapa en las líneas {max(i1, i2) + 1}–{min(j1, j2)} con el "
+                                   f"fix {planned[a][1]} par {planned[a][2]}"))
+
     if res.failed:
+        return res
+
+    for span, bib, n, new, kind in sorted(planned, key=lambda x: -x[0][0]):
+        if kind == "exact":
+            lines[span[0]] = new[0]
+            res.exact += 1
+        else:
+            lines[span[0]:span[1]] = rewrap(new, lines[span[0]])
+            res.by_block += 1
+    res.applied = res.exact + res.by_block
+
+    # #222 — la red decisiva: una corrección NO puede hacer desaparecer una afirmación citada.
+    # Es el mismo principio que el ancla —lo que la nota afirma tiene que seguir siendo contable—
+    # y es lo único que habría cazado los siete pares perdidos sin que nadie los contara a mano.
+    nuevo_texto = "\n".join(lines)
+    res.pairs_after = len(lb.pairs_of(nuevo_texto))
+    if res.pairs_after < res.pairs_before:
+        res.failed.append(("_pares", 0, f"la aplicación deja {res.pairs_after} pares donde había "
+                                        f"{res.pairs_before}: alguna corrección fundió bloques. "
+                                        f"NO se escribe."))
         res.applied = 0
         return res
+
     if write:
         # AUD-140 — `note.write_text` escribía en `vault/` sin pasar por el único writer del repo:
         # sin tmp+rename un corte deja la nota a medias (INV-90, medido con `ulimit -f`: 16.071 B
         # → 8.192 B sobre una nota con extracción LLM), y la fixture `sin_tocar_la_boveda_real`
         # —que intercepta a `lib_config`— no lo veía pasar.
-        cfg.write_text_atomic(note, "\n".join(lines))
+        cfg.write_text_atomic(note, nuevo_texto)
     return res
 
 
@@ -214,7 +286,8 @@ def main(argv=None) -> int:
         for who, key in res.collisions:
             print(f"   {who}\n     {key[:120]}…")
         return 1
-    print(f"exactos: {res.exact}   por bloque: {res.by_block}   fallan: {len(res.failed)}")
+    print(f"exactos: {res.exact}   por bloque: {res.by_block}   fallan: {len(res.failed)}"
+          + (f"   pares: {res.pairs_before} → {res.pairs_after}" if res.pairs_before else ""))
     for bib, n, motivo in res.failed:
         print(f"  ⛔ {bib} par {n}: {motivo}")
     if res.failed:
