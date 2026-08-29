@@ -238,6 +238,16 @@ Progreso del ingest de <estrella>:
      `## Vista — <sujeto>` — sus bullets ya vienen ramificados por tipo de sujeto (#76):
      ground-truth (P/K/e por planeta), los **ejes de `relevance.facets`** del objetivo de esta
      bóveda, métodos y aporte al objetivo. Llenar los que el stub trae, no una lista fija de memoria.
+     ⛔ **El esqueleto de `ejes` del JSON lo DERIVA el generador de esas facetas (#254).** Era un
+     literal de cinco claves —las del `objective.yaml` de ejemplo del template— y `extraction_prompt`
+     no leía el objetivo en ninguna parte, así que **toda faceta que una instancia declarara de más
+     no se le preguntaba a ningún extractor**, y la vista volvía sin la clave: indistinguible de
+     *«se miró y no hay nada»*, el falso limpio que #188 cerró con `vistas[]`, un nivel más abajo.
+     Medido sobre una bóveda de ocho facetas, en 28 extracciones de una estrella: los cinco
+     cableados **28/28**, y `detection` 2/28, `ml` 1/28, `simulation` 1/28 — esos pocos, de
+     extractores que fueron a leer `objective.yaml` por su cuenta. Sin `facets` legible el prompt
+     **lo dice** en vez de degradar al literal viejo. ⚠ Las vistas ya cosechadas **no se migran**:
+     se leyeron con la lente que el prompt tenía y reescribirlas sería inventar contenido.
    - un paper que este sujeto **reclama** (`stars`/`thesis_links`) y que legítimamente no vas a leer
      desde acá —aporta sólo al roll-up— se **declara**: `no_vista: [{sujeto, motivo}]`. El lint lo
      baja de backlog a informativo. Mismo criterio que `no_sintetizado` y que el `--reason` del

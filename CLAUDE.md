@@ -898,6 +898,9 @@ verificable:
 
 4. extractor (LLM)    →  lee EL PDF (`Read` lo rasteriza: ve ecuaciones, tablas y
                          figuras) y cita PÁGINA. El `.txt` sólo para ubicar con grep.
+                         Sus EJES salen de `relevance.facets` de ESTA bóveda (#254), no de
+                         un literal: una faceta que el prompt no nombra no se pregunta, y el
+                         silencio de la vista sobre ella se lee como «se miró y no hay nada».
                          Devuelve UNA VISTA (#188): «qué dice sobre {sujeto}», no
                          «qué dice el paper» — con `vista{sujeto,tipo,txt,fuente}` en el JSON (#207).
 
