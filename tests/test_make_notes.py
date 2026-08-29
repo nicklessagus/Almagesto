@@ -1755,12 +1755,24 @@ def test_stamp_header_sin_generator_no_inventa_version(toy_vault):
     assert "desconocida" in out
 
 
-def test_stamp_header_no_toca_lo_que_ya_tiene_cabecera_ni_las_notas_de_paper(toy_vault):
+def test_stamp_header_no_toca_lo_que_ya_tiene_cabecera(toy_vault):
     mn.write_star_note("test_star", force=False)                   # nace con cabecera
     assert mn.stamp_header(cfg.STARS / "test_star.md") is False
+
+
+def test_la_nota_de_PAPER_tambien_lleva_el_aviso_de_capa_LLM(toy_vault):
+    """#247 — era la única de las tres clases SIN aviso, y es la que más contenido generado tiene:
+    la vista es 100 % prosa de un LLM, escrita CON UNA LENTE y en castellano sobre una fuente en
+    inglés. La confusión ya ocurrió con un usuario que conoce el sistema: abrió una nota, vio prosa
+    interpretada y preguntó si estaba bien. El aviso nombra las tres capas por separado, porque en
+    esta nota conviven las tres en secciones distintas."""
     from conftest import mk_note
     mk_note(cfg.PAPERS, "2020a....1A", {"tags": ["paper"], "bibcode": "2020a....1A"}, "# Paper\n")
-    assert mn.stamp_header(cfg.PAPERS / "2020a....1A.md") is False  # los papers tienen su contrato (#48)
+    assert mn.stamp_header(cfg.PAPERS / "2020a....1A.md") is True
+    t = (cfg.PAPERS / "2020a....1A.md").read_text(encoding="utf-8")
+    assert "Capa LLM" in t and "con una lente" in t
+    assert "nunca fuente de la que citar" in t, "las traducciones son ayuda de lectura"
+    assert mn.stamp_header(cfg.PAPERS / "2020a....1A.md") is False, "idempotente"
 
 
 def test_stamp_header_destraba_el_puntero_de_busqueda(toy_vault):
@@ -3825,3 +3837,51 @@ def test_no_pisa_una_extraccion_ya_existente_del_bibcode_nuevo(toy_vault, capsys
     mn.rename_paper("2020preX...1..1X", "2021pubY...1..1Y")
     assert (d / "2020preX...1..1X.json").exists(), "se pisó una extracción ya pagada"
     assert "ya hay extracción" in capsys.readouterr().out
+
+
+def test_sacar_pending_source_no_rompe_el_yaml_multilinea(toy_vault):
+    """#244 — `pending_motivo` es obligatorio y de texto libre (#80), así que cualquier motivo de
+    más de ~90 caracteres se serializa MULTILÍNEA. Filtrando por `startswith` se borraba la primera
+    línea del escalar y quedaban huérfanas las de continuación: el frontmatter dejaba de parsear y
+    la nota pasaba a evadir TODOS los chequeos de su tipo (categoría bloqueante del lint). O sea que
+    el camino feliz de #80 —«cuando esté la fuente, reemplazá `pending` por `pdf:` y re-corré»—
+    rompía la nota."""
+    mn.write_web_paper_note(
+        "2001Libro", slug="ica", concept="ica", title="Independent Component Analysis",
+        first_author="Hyvarinen", year=2001, pending="adquisicion",
+        pending_motivo=("libro comercial sin copia libre; lo consigue el usuario. Es la fuente que "
+                        "el STATUS declara como el hueco mas grande del concepto: la derivacion de "
+                        "la negentropia y las condiciones de identificabilidad no estan en ninguna "
+                        "fuente de la boveda"))
+    nota = cfg.PAPERS / "2001Libro.md"
+    assert "pending_motivo" in nota.read_text(encoding="utf-8")
+    (cfg.PDFS / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "ica" / "2001Libro.pdf").write_bytes(b"%PDF-1.4")
+
+    assert mn.unpend_note(nota, "2001Libro", "ica") is True
+    fm = read_fm(nota)
+    assert fm, "el frontmatter dejó de parsear: la nota evade los chequeos de su tipo"
+    assert "pending_source" not in fm and "pending_motivo" not in fm
+    assert fm["pdf"].endswith("2001Libro.pdf"), "y el `pdf` sí quedó linkeado"
+
+
+def test_no_escribe_si_el_frontmatter_quedaria_roto(toy_vault, capsys):
+    """#244, la red decisiva: una operación no puede dejar la nota PEOR de lo que la encontró.
+    Mismo principio que contar los pares antes y después en `apply_fixes` (#222)."""
+    mn.write_web_paper_note("2002Otro", slug="ica", concept="ica", title="T",
+                            first_author="A", year=2002, pending="paywall",
+                            pending_motivo="corto")
+    nota = cfg.PAPERS / "2002Otro.md"
+    (cfg.PDFS / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "ica" / "2002Otro.pdf").write_bytes(b"%PDF-1.4")
+    # se simula un borrado que rompería el YAML: `_drop_keys` mutado a la versión vieja
+    import make_notes
+    viejo = make_notes._drop_keys
+    make_notes._drop_keys = lambda head, pref: [ln for ln in head.split("\n")
+                                                if not ln.startswith(pref)] + ["  huerfana:"]
+    try:
+        assert mn.unpend_note(nota, "2002Otro", "ica") is False
+    finally:
+        make_notes._drop_keys = viejo
+    assert "NO se escribe" in capsys.readouterr().out
+    assert read_fm(nota), "la nota quedó intacta"

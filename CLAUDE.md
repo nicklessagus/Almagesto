@@ -344,6 +344,17 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   lado la clave **no se escribe** — *no consta*, nunca un puntero falso), porque desde #205 una
   vista puede legítimamente no tener `.txt` y rechazarla tiraría una lectura buena. **Forma dura como `extra_core`** (D-58): el escalar y la lista
   de strings **bloquean**; `vistas: [eps Eridani]` sería la misma conflación con otro nombre.
+  ⛔ **Sacar `pending_source` no puede romper el frontmatter (#244).** El borrado filtraba por
+  `startswith`, así que se llevaba la primera línea del escalar y dejaba **huérfanas las de
+  continuación**: el YAML dejaba de parsear y la nota pasaba a evadir **todos** los chequeos de su
+  tipo (categoría **bloqueante**). No era raro: `pending_motivo` es obligatorio y de texto libre, así
+  que cualquier motivo de más de ~90 caracteres se serializa multilínea — o sea que el camino feliz
+  de #80 (*«cuando esté la fuente, reemplazá `pending` por `pdf:` y re-corré»*) **rompía la nota**.
+  Es la tercera vez que este repo paga la misma forma (`_set_lista_de_mapas` ya tenía el flag
+  `dropping`), así que el borrado de una clave es **una sola función**; y la red es la de #222: se
+  re-parsea el frontmatter y **no se escribe** si dejó de parsear — una operación no puede dejar la
+  nota peor de lo que la encontró.
+
   ⛔ **Y `fuente` dice DE QUÉ se construyó (#207): `pdf` | `abstract`.** Un paper sin PDF **no es
   inextraíble**: ADS (y OpenAlex, y arXiv) devuelven el abstract, y ése puede traer lo que la ficha
   necesita — medido en `2020BAAA...61B..27U`, cuyo abstract niega la existencia del planeta g de
@@ -525,6 +536,16 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   como *extraído pero no sintetizado*. Opcional
   `retracted: true` + `retraction{type,notice_doi,date,source}` — lo estampa `scripts/check_retractions.py`
   (Crossref) cuando el paper fue **retractado**; el lint lo surface como bloqueante (fuente no válida).
+  ⛔ **La nota de paper lleva el AVISO DE CAPA LLM (#247), y nombra las tres capas por separado.**
+  Era la única de las tres clases de nota sin él —la ficha y el concepto lo tenían desde #69— y es
+  justamente la que **más** contenido generado tiene: la `## Vista` es 100 % prosa de un LLM,
+  escrita **con una lente** y en castellano sobre una fuente en inglés. La confusión está medida: un
+  usuario que conoce el sistema abrió una nota, vio prosa interpretada y preguntó si estaba bien. El
+  aviso distingue lo **auditable** (`## Abstract` verbatim + frontmatter de catálogo), la
+  **traducción** (ayuda de lectura, **nunca fuente de la que citar**: si citás, citás el original
+  con su página) y la **síntesis lenteada** (la vista). Backfill: `--restamp-headers`, que ahora
+  barre también `papers/`.
+
   ⛔ **`## Abstract` va en TODA nota de paper, verbatim (#124).** Es la capa **auditable** del
   cuerpo —copia de catálogo, no síntesis— y `classify_offline` la lee para re-clasificar sin
   `build/` (D-49). Los tres backends la devuelven: ADS en `abstract`, arXiv en el `summary`,

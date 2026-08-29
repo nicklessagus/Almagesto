@@ -579,6 +579,7 @@ def restamp_headers() -> int:
     síntesis LLM, que es el trabajo caro: por eso esto es cirugía y no regeneración."""
     notes = sorted(cfg.STARS.glob("*.md")) if cfg.STARS.exists() else []
     notes += sorted(cfg.CONCEPTS.glob("*/*.md")) if cfg.CONCEPTS.exists() else []
+    notes += sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []   # #247
     changed = sum(1 for n in notes if stamp_header(n))
     cfg.print_seguro(f"cabeceras: {changed} de {len(notes)} estampadas "
           f"(aviso de capa LLM + línea del generador, versión leída del frontmatter)")
@@ -1342,6 +1343,17 @@ LLM_DISCLAIMER = {
     "concept": """> ⚠ **Capa LLM — revisar antes de citar.** La síntesis la compiló un LLM desde los papers citados:
 > chequeable con `verify-citations`, que es **juicio de LLM, no prueba**. Verificá contra la fuente antes
 > de llevar un dato a un paper/tesis.""",
+    # #247 — la nota de PAPER era la única de las tres sin aviso, y es la que MÁS contenido generado
+    # tiene: la vista es 100 % prosa de un LLM, escrita **con una lente** y en castellano sobre una
+    # fuente en inglés. La confusión ya ocurrió con un usuario que conoce el sistema. El aviso dice
+    # las tres capas por separado, porque en esta nota conviven las tres en secciones distintas.
+    "paper": """> ⚠ **Capa LLM — revisar antes de citar.** En esta nota conviven tres capas: **auditable** el
+> `## Abstract` (copia verbatim del catálogo) y el frontmatter de catálogo; **traducción de un LLM** las
+> secciones `## Traducción …` —ayuda de lectura, **nunca fuente de la que citar**: si citás, citás el
+> original con su página—; y **síntesis de un LLM** la `## Vista — <sujeto>`, que además está escrita
+> **con una lente** (dice qué aporta el paper *a ese sujeto*, no qué dice el paper). Las citas textuales
+> van en el idioma original y se chequean contra el PDF con `verify-citations`, que es **juicio de LLM,
+> no prueba**.""",
 }
 
 
@@ -1521,13 +1533,19 @@ H1_RE = re.compile(r"^# .+$", re.M)
 
 
 def note_kind(dest) -> str | None:
-    """`star` | `concept` según DÓNDE vive la nota (verdad de disco, no heurística sobre el texto).
-    None si no es ninguna de las dos (una nota de paper tiene su propio contrato de cabecera, #48)."""
+    """`star` | `concept` | `paper` según DÓNDE vive la nota (verdad de disco, no heurística).
+
+    #247 — la nota de paper se sumó: era la única de las tres clases **sin** aviso de capa LLM, y
+    es la que más contenido generado tiene (la vista es 100 % prosa de un LLM, escrita con una
+    lente y en castellano sobre una fuente en inglés). `None` sólo para lo que no es ninguna.
+    """
     d = str(dest.resolve())
     if d.startswith(str(cfg.STARS.resolve())):
         return "star"
     if d.startswith(str(cfg.CONCEPTS.resolve())):
         return "concept"
+    if d.startswith(str(cfg.PAPERS.resolve())):
+        return "paper"
     return None
 
 
@@ -2805,6 +2823,8 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, theme: bool = F
 **{', '.join(authors[:6])}{' et al.' if len(authors) > 6 else ''}** ({r.get('year')})
 · [[{link}]] · ADS: `{bib}`{' · arXiv: ' + r['arxiv_id'] if r.get('arxiv_id') else ''}{f' · [📄 PDF]({pdf_rel})' if pdf_rel else ''}
 
+{LLM_DISCLAIMER["paper"]}
+
 ## Abstract
 {abstract or '_(no disponible)_'}
 
@@ -2839,17 +2859,51 @@ def unpend_note(dest, citekey: str, slug: str | None) -> bool:
     # `pending_motivo` viaja con `pending_source` (#80) y sale con él: dejarlo suelto deja la nota
     # con el motivo de un estado que ya no existe —«nadie la está consiguiendo»— sobre una fuente
     # que YA llegó. Hallazgo de la pasada `/auditar` del 2026-08-28.
-    lines = [ln for ln in head.split("\n")
-             if not ln.startswith(("pending_source:", "pending_motivo:"))]
+    lines = _drop_keys(head, ("pending_source:", "pending_motivo:"))
     if has_pdf:
         pdf_rel = f"../../raw/pdfs/{slug}/{safe_name(citekey)}.pdf"
         lines = [f"pdf: {pdf_rel}" if ln.strip() == "pdf: null" else ln for ln in lines]
     body = "\n".join(ln for ln in body.split("\n")
                      if not ln.startswith("> ⏳ **Fuente pendiente"))
-    cfg.write_text_atomic(dest, text[:ini] + "\n".join(lines) + body)
+    nuevo = text[:ini] + "\n".join(lines) + body
+    # #244 — red decisiva: una operación no puede dejar la nota PEOR de lo que la encontró. Si el
+    # frontmatter dejó de parsear, no se escribe. Mismo principio que contar los pares antes y
+    # después en `apply_fixes` (#222), y acá cuesta un `split_fm`.
+    if cfg.split_fm(text) and not cfg.split_fm(nuevo):
+        cfg.print_seguro(f"  ⛔ {dest.name}: sacar `pending_source` dejaría el frontmatter sin "
+                         f"parsear — NO se escribe. Revisá el YAML a mano.")
+        return False
+    cfg.write_text_atomic(dest, nuevo)
     cfg.print_seguro(f"  papers: {dest.name} — fuente obtenida → pending_source removido"
           + (" y `pdf` linkeado" if has_pdf else ""))
     return True
+
+
+def _drop_keys(yaml_block: str, prefijos: tuple) -> list:
+    """Frontmatter lines with those keys removed, **including their continuation lines** (#244).
+
+    Filtering by `startswith` alone deletes the first line of a block scalar and leaves the
+    indented continuation orphaned, so the YAML stops parsing — and the note then evades every
+    per-type check, which the lint reports as BLOCKING. It is not a rare case: `pending_motivo` is
+    mandatory free text (#80), so any motive over ~90 characters serialises multi-line, and the
+    happy path of #80 —«when the source arrives, replace `pending` by `pdf:` and re-run»— broke the
+    note every time.
+
+    ⛔ Third time this repo pays for this shape: `_set_lista_de_mapas` already carries the same
+    `dropping` flag, and its own comment records that without it a `--rename-paper` left the note
+    ILLEGIBLE for the whole tooling.
+    """
+    out, dropping = [], False
+    for ln in yaml_block.split("\n"):
+        if ln.startswith(prefijos):
+            dropping = True
+            continue
+        if dropping:
+            if ln[:1] in (" ", "\t") and ln.strip():
+                continue                  # línea de continuación del escalar que se borró
+            dropping = False
+        out.append(ln)
+    return out
 
 
 def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | None = None,
@@ -2980,6 +3034,8 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
 > Fuente **off-ADS** (fuera de ADS). El respaldo citable es el snapshot determinista
 > `{txt_ptr}` (`source_url` + `accessed` en el frontmatter), verificable por `verify-citations`.
 > El frontmatter es máquina-legible como en cualquier nota de paper.
+
+{LLM_DISCLAIMER["paper"]}
 {pend_line}
 {vista_block(concept or citekey, theme=True)}"""
     cfg.write_text_atomic(dest, body)
