@@ -3951,6 +3951,44 @@ def test_alias_que_simbad_conoce_y_la_boveda_no(toy_vault, capsys):
         "el que ya está declarado no se propone"
 
 
+def _nota_con_vista(toy_vault, stem, vista, no_vista=None):
+    fm = {"tags": ["paper"], "bibcode": stem, "stars": ["Estrella Test"], "vistas": [vista]}
+    if no_vista is not None:
+        fm["no_vista"] = no_vista
+    mk_note(toy_vault.PAPERS, stem, fm,
+            f"# {stem}\n\n## Vista — {vista['sujeto']}\n\ntexto\n")
+
+
+def test_no_vista_saca_la_vista_sin_fecha_del_bolson_de_deuda(toy_vault, capsys):
+    """#256: la escotilla `no_vista` se consultaba en la rama `reclamos - declaradas`, que el propio
+    sembrado de #188 deja SIEMPRE vacía —`make_notes` pone una entrada de `vistas[]` por cada
+    reclamo—, así que ni la deuda ni la escotilla podían dispararse desde ahí. Medido sobre una
+    bóveda real: **0 de 138** notas la alcanzaban, o sea que `load_no_vista` se parseaba y su
+    resultado no lo consumía nadie.
+
+    El caso que lo destapó: dos catálogos VizieR sin PDF y sin cuerpo —tablas de datos, no papers—
+    declarados con motivo y contados igual junto a la deuda real de lo que sí hay que leer.
+
+    @inv INV-145"""
+    _nota_con_vista(toy_vault, "2020Cat", {"sujeto": "Estrella Test", "tipo": "star"},
+                    no_vista=[{"sujeto": "Estrella Test",
+                               "motivo": "catálogo VizieR: es la tabla, no un paper"}])
+    _, rep = run_lint_reporte(capsys)
+    assert "catálogo VizieR: es la tabla" in rep, \
+        "la declaración se ve, con su motivo (visible, no es deuda)"
+    sin_fecha = rep.split("Vista declarada y sin `fecha`")[-1].split("##")[0]
+    assert "2020Cat" not in sin_fecha, "y sale del bolsón de la deuda real"
+
+
+def test_la_vista_sin_fecha_y_SIN_declarar_sigue_siendo_deuda(toy_vault, capsys):
+    """La otra mitad: acotar no puede apagar la señal. Lo que falta leer de verdad —y es la enorme
+    mayoría— sigue reportándose.  @inv INV-145"""
+    _nota_con_vista(toy_vault, "2020Falta", {"sujeto": "Estrella Test", "tipo": "star"})
+    _, rep = run_lint_reporte(capsys)
+    sin_fecha = rep.split("Vista declarada y sin `fecha`")[-1].split("##")[0]
+    assert "2020Falta" in sin_fecha
+
+
 def _gt_con_simbad(toy_vault, conocidos):
     (toy_vault.GROUND_TRUTH).mkdir(parents=True, exist_ok=True)
     (toy_vault.GROUND_TRUTH / "test_star.json").write_text(json.dumps({

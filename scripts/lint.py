@@ -1969,8 +1969,21 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 # ocurrió. Sin este renglón, declarar la vista al crear el stub apagaría
                 # `reclamo_sin_vista` para el sujeto que la sembró y el silencio volvería a leerse
                 # como «se miró y no hay nada» — el defecto que #188 cierra, por otra puerta.
+                # ⛔ #256 — la escotilla `no_vista` decide ACÁ, sobre la vista sin fecha, y no
+                # sobre `reclamos - declaradas`, que el propio sembrado de arriba deja SIEMPRE
+                # vacío: `make_notes` pone una entrada de `vistas[]` por cada reclamo, así que ni
+                # la deuda ni la escotilla podían dispararse desde esa rama. Medido: **0 de 138**
+                # notas de una bóveda real la alcanzaban, o sea que `load_no_vista` se parseaba y
+                # su resultado no lo consumía nadie. Sin esto, «falta leerlo» y «no hay nada que
+                # leer, y está dicho por qué» caen en el mismo bolsón — que es justo lo que la
+                # categoría DECLARADA existe para separar. ⚠ `no_vista` NO borra la entrada de
+                # `vistas[]`: la nota sigue diciendo que ese sujeto la reclama; lo que declara es
+                # por qué no se leyó.
                 for v in vistas:
-                    if not str(v.get("fecha") or "").strip():
+                    if not str(v.get("fecha") or "").strip() and v["sujeto"] in no_vista:
+                        reclamo_sin_vista_declarado.append(
+                            (stem, f"**{v['sujeto']}** — {no_vista[v['sujeto']]}"))
+                    elif not str(v.get("fecha") or "").strip():
                         vista_sin_fecha.append(
                             (stem, f"la vista de **{v['sujeto']}** está declarada y sin `fecha`: no "
                                    f"consta que se haya leído desde ahí"))

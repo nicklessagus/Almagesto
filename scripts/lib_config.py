@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.101.0"
+ALMAGESTO_VERSION = "1.102.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1820,7 +1820,14 @@ def load_no_vista(meta: dict, *, entry: str = "?") -> list:
     Per subject, not the bare `no_vista: <motivo>` of the issue: a paper three subjects claim gets
     skipped for a different reason in each, and a hatch without a subject would exempt all three.
     `motivo` is required — a hatch that turns the finding off and leaves nothing in its place is
-    exactly what `--reason` exists to prevent."""
+    exactly what `--reason` exists to prevent.
+
+    ⛔ #256 — this field was parsed and its result consumed by nobody: the lint read it inside the
+    `reclamos - declaradas` branch, which the stub seeding of #188 leaves ALWAYS empty (one
+    `vistas[]` entry per claim). Measured on a real corpus: 0 of 138 notes could reach it. The hatch
+    now decides over the DATELESS view, which is where a pending claim actually lives.
+
+    @inv INV-145"""
     v = meta.get("no_vista")
     if v is None:
         return []

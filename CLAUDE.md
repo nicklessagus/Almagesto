@@ -1690,7 +1690,17 @@ es la **marca de agua** del bibcode repetida por página (lo agarra la densidad 
 pero no sirve para grep ni verify; rescate: PDF sano, OCR, o marcar `pending`). Las **correcciones
 publicadas** (`corrections`, #52 — erratum/corrigendum/EoC del mismo barrido de Crossref) son
 **backlog, no bloquean**: el paper sigue siendo citable; lo que hay que revisar son los valores que
-se le extrajeron (un corrigendum cambia justamente ese número). El **reclamo sin vista** (#188: un sujeto que reclama el paper y desde el cual nadie lo leyó) es **backlog** —la vista del sujeto que sólo aporta al roll-up es opcional, el silencio no—, y **el declarado con `no_vista` + motivo pasa a su PROPIA categoría** (*«Reclamo sin vista DECLARADO … (visible, no es deuda)»*), separada de la deuda real; su hermana, la **vista sin `fecha`** (declarada por el stub y nunca leída), es backlog propio. ⚠ Acá decía que el declarado «baja a **informativo**» y esa severidad **no existe**: el lint tiene bloqueante, WARN y backlog (AUD-207). Lo que lo distingue no es el nivel, es que se reporta **aparte**, así que la deuda que hay que trabajar no queda mezclada con la que alguien ya resolvió declarándola. Sin esas dos, sembrar la vista al crear el stub apagaría el hallazgo del sujeto que la sembró y el silencio volvería a leerse como «se miró y no hay nada». El **extraído pero no sintetizado** (#75: un paper con `methods` poblado —o sea que ya pagó el paso
+se le extrajeron (un corrigendum cambia justamente ese número). ⛔ **Y la escotilla decide sobre la vista SIN FECHA, que es donde vive el reclamo pendiente (#256).**
+Se consultaba en `reclamos - declaradas`, que el propio sembrado del stub deja **siempre vacío**
+—`make_notes` pone una entrada de `vistas[]` por cada reclamo—, así que `no_vista` se parseaba y su
+resultado **no lo consumía nadie**: medido, **0 de 138** notas de una bóveda real alcanzaban esa
+rama. El caso que lo destapó son dos catálogos VizieR —tablas de datos, no papers: sin PDF, sin
+cuerpo, sin una afirmación que citar— declarados con motivo y contados igual junto a la deuda real.
+⚠ La categoría de la vista sin fecha **no se elimina** (sigue siendo la deuda de lo que sí hay que
+leer) y `no_vista` **no borra** la entrada de `vistas[]`: la nota sigue diciendo que ese sujeto la
+reclama; lo que declara es **por qué no se leyó**.
+
+El **reclamo sin vista** (#188: un sujeto que reclama el paper y desde el cual nadie lo leyó) es **backlog** —la vista del sujeto que sólo aporta al roll-up es opcional, el silencio no—, y **el declarado con `no_vista` + motivo pasa a su PROPIA categoría** (*«Reclamo sin vista DECLARADO … (visible, no es deuda)»*), separada de la deuda real; su hermana, la **vista sin `fecha`** (declarada por el stub y nunca leída), es backlog propio. ⚠ Acá decía que el declarado «baja a **informativo**» y esa severidad **no existe**: el lint tiene bloqueante, WARN y backlog (AUD-207). Lo que lo distingue no es el nivel, es que se reporta **aparte**, así que la deuda que hay que trabajar no queda mezclada con la que alguien ya resolvió declarándola. Sin esas dos, sembrar la vista al crear el stub apagaría el hallazgo del sujeto que la sembró y el silencio volvería a leerse como «se miró y no hay nada». El **extraído pero no sintetizado** (#75: un paper con `methods` poblado —o sea que ya pagó el paso
 más caro de la cadena— cuyo bibcode **no aparece citado en ninguna ficha ni concepto**) es
 **backlog**: la extracción nunca llegó a la síntesis. Es el análogo del proxy que ya existe para
 planetas (cada planeta del frontmatter discutido en prosa) y mide si el paper **llegó**, no si la
