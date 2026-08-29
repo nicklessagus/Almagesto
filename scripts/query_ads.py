@@ -1381,6 +1381,22 @@ def main() -> int:
                          "opuesto justo donde importa (D-26).")
             _facet_propia(tema_meta)      # rehúsa (con el mensaje correcto) si no declara `facet:`
         q = args.probe or (tema_meta or {}).get("query")
+        # #248 — para una ESTRELLA la query se DERIVA de `stars.yaml`, igual que #208 la deriva de
+        # `themes.yaml` para un tema. El preview es el único lugar donde el corte core/no-core se
+        # decide antes de pagar descargas, así que una query tipeada a mano lo vuelve un preview de
+        # OTRO universo: la que el ingest corre expande las variantes de espaciado (`HD 40307` ↔
+        # `HD40307`) y suma los alias, que es justo la parte que un humano no tipea.
+        if not q and args.slug and not args.theme:
+            try:
+                _n, _m = cfg.star_by_slug(args.slug)
+                _nombres = [cfg.require_field(_m, "ads_object", _n, "stars.yaml")] + \
+                    _listify_curado(_m.get("aliases"), "aliases")
+            except (KeyError, SystemExit):
+                _nombres = []
+            if _nombres:
+                q = build_query(_nombres)
+                cfg.print_seguro(f"  (query derivada de `stars.yaml` para `{args.slug}` — la misma "
+                                 f"que corre el ingest)")
         if not q:
             ap.error('falta la QUERY: --probe "<query>" (con --theme se puede omitir sólo si el '
                      "tema declara `query:` en themes.yaml)")

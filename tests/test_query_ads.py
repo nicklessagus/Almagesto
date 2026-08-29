@@ -2161,3 +2161,21 @@ def test_desglose_de_puertas_con_cero_core_lo_dice(capsys):
     revisar es `facet:` del tema. Sin la rama, el preview imprimía un encabezado y nada debajo."""
     qa.print_gate_breakdown([])
     assert "ninguna puerta abrió" in capsys.readouterr().out
+
+
+def test_probe_de_una_ESTRELLA_deriva_la_query_de_stars_yaml(toy_vault, monkeypatch, capsys):
+    """#248 — para un TEMA `--probe` deriva la query de `themes.yaml` (#208) y para una ESTRELLA no
+    derivaba nada, aunque la maquinaria es la misma que el ingest usa (`build_query`). El preview es
+    el ÚNICO lugar donde el corte core/no-core se decide antes de pagar descargas, así que tipear la
+    query a mano lo vuelve un preview de OTRO universo: la del ingest expande las variantes de
+    espaciado (`HD 40307` ↔ `HD40307`), que es justo la parte que un humano no tipea."""
+    write_yaml(cfg.STARS_YAML, {"HD 40307": {"slug": "hd_40307", "ads_object": "HD 40307",
+                                             "aliases": ["HD 40307", "GJ 2046"]}})
+    vistas = {}
+    monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, **k: vistas.setdefault("q", q) or [])
+    monkeypatch.setattr(qa, "print_probe", lambda q, recs, theme_meta=None: 0)
+    monkeypatch.setattr(sys, "argv", ["query_ads.py", "hd_40307", "--probe"])
+    assert qa.main() == 0
+    q = vistas["q"]
+    assert 'title:"HD 40307"' in q and 'abs:"GJ 2046"' in q
+    assert 'title:"HD40307"' in q, "la variante SIN espacio es la mitad que un humano no tipea"

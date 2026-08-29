@@ -771,6 +771,13 @@ desglose por política reemplaza al contraste de combinación —que habla de la
 línea de cierre manda a `themes.yaml`, no a `objective.yaml`. Sin `--theme`, comportamiento
 histórico; con `--theme` y un slug que no existe o que no declara `facet:`, **rehúsa** en vez de
 degradar a la global.
+⛔ **Y para una ESTRELLA la query también se DERIVA (#248): `python scripts/query_ads.py <slug>
+--probe`.** Había que tipearla a mano, y la tipeada **no es la que corre el ingest**: la real
+expande las variantes de espaciado (`HD 40307` ↔ `HD40307`) y suma los alias de `stars.yaml`, que es
+justo la parte que un humano no escribe. O sea que se previsualizaba un universo y se ingestaba
+otro — el mismo falso limpio que #208 cerró del lado de los temas, sobreviviendo en el carril de
+estrellas, y **peor**: acá el veredicto sale plausible, porque la diferencia son los papers con la
+grafía sin espacio y ésos no aparecen por ningún lado del reporte.
 
 ⛔ **Y queda registrado POR CUÁL puerta entró cada paper (#126): `puertas: [fundacional|astro]` en
 el registro.** Antes las dos se calculaban por separado y, al entrar el paper, se devolvía sólo
