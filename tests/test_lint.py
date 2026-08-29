@@ -3964,6 +3964,49 @@ def _declarar_descartados(toy_vault, entradas):
     write_yaml(toy_vault.STARS_YAML, stars)
 
 
+def _nota_con_salvedades(toy_vault, bloques):
+    mk_note(toy_vault.PAPERS, "2020Test.1..1A",
+            {"tags": ["paper"], "bibcode": "2020Test.1..1A", "stars": ["Estrella Test"],
+             "vistas": [{"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-08-29"}]},
+            "# 2020Test.1..1A\n\n## Vista — Estrella Test\n\n" + bloques)
+
+
+def test_la_salvedad_YA_verificada_por_el_cosechador_no_es_hallazgo(toy_vault, capsys):
+    """#253: el detector de #234 recorría TODAS las líneas de ítem de la nota, así que caía sobre
+    las que estampa el propio cosechador bajo `**Salvedades (verificadas contra el archivo):**` —
+    o sea que pedía «emitila estructurada» sobre la línea que **prueba** que se emitió estructurada
+    y se chequeó contra el disco.
+
+    Medido en `hd_40307` tras una tanda de extracción donde los extractores SÍ usaron
+    `SALVEDAD_TIPOS`: **12 de 17** hallazgos eran líneas `⚙ verificada:` del cosechador, y el número
+    crece con cada salvedad correctamente estructurada — cuanto mejor se cumple #213, más ruidoso se
+    pone el detector que existe para hacerla cumplir. Misma exención y mismo argumento que #214 para
+    las `SECCIONES_ESTAMPADAS`.
+
+    @inv INV-142"""
+    _nota_con_salvedades(toy_vault,
+                         "**Salvedades (verificadas contra el archivo):**\n\n"
+                         "- ⚙ verificada: el PDF tiene 13 página(s) (la salvedad dice 13)\n"
+                         "- ⚙ verificada: el `.txt` NO contiene `R′HK`\n")
+    _, rep = run_lint_reporte(capsys)
+    assert "salvedad en prosa que un script podría decidir" not in rep, \
+        "lo que estampa la máquina no se le reprocha al extractor"
+
+
+def test_la_salvedad_decidible_del_extractor_SIGUE_siendo_hallazgo(toy_vault, capsys):
+    """La otra mitad: acotar el barrido no puede apagar la señal. El bloque de juicio del extractor
+    —y el `**Salvedades:**` PELADO del schema anterior a #213, que es donde se coló la salvedad
+    falsa que #213 midió— siguen mirándose.  @inv INV-142"""
+    _nota_con_salvedades(toy_vault,
+                         "**Salvedades (verificadas contra el archivo):**\n\n"
+                         "- ⚙ verificada: el PDF tiene 13 página(s) (la salvedad dice 13)\n\n"
+                         "**Salvedades (⚠ NO VERIFICADAS — juicio del extractor):**\n\n"
+                         "- el `.txt` no contiene la cadena `log R'HK` en ninguna parte\n")
+    _, rep = run_lint_reporte(capsys)
+    assert "salvedad en prosa que un script podría decidir" in rep and "log R'HK" in rep, \
+        "el juicio del extractor que un grep podría decidir sigue reportándose"
+
+
 def test_el_alias_rechazado_con_motivo_deja_de_ser_deuda(toy_vault, capsys):
     """#252: el carril de `aliases` era el ÚNICO sin escotilla del NO. El mensaje del hallazgo manda
     dejar afuera el catálogo-máquina (*«los `Gaia DR3`/`2MASS J` no»*), o sea que **instruía

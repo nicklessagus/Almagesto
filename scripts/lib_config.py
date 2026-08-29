@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.99.0"
+ALMAGESTO_VERSION = "1.99.1"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1112,7 +1112,7 @@ def gate2_threshold(meta) -> tuple[int | None, str | None]:
     default —30k citations is normal in ML and enormous in astro— so the gate stays shut and the
     `why_excluded` says so. Anything present but unusable returns the reason, which the caller
     publishes instead of inventing one. A `bool` is rejected on purpose: in Python it *is* an
-    `int`, so `fundacional_min_citas: yes` would silently become a threshold of 1.  @inv INV-142"""
+    `int`, so `fundacional_min_citas: yes` would silently become a threshold of 1.  @inv INV-141"""
     v = as_map(meta).get("fundacional_min_citas") if isinstance(meta, dict) else None
     if v is None:
         return None, None
@@ -1846,7 +1846,7 @@ def _no_vista_error(entry: str, motivo: str) -> str:
 
 
 def _vistas_error(entry: str, sujetos: list, motivo: str) -> str:
-    """The detector's message, with the canonical form already written out to paste.  @inv INV-142"""
+    """The detector's message, with the canonical form already written out to paste."""
     ejemplo = "\n".join(
         f"  - sujeto: {s}\n    tipo: {VISTA_TIPOS[0]}          # {' | '.join(VISTA_TIPOS)}\n"
         f"    fecha: AAAA-MM-DD\n    txt: <slug del .txt que se leyó>\n"

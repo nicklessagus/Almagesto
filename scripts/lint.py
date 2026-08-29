@@ -1474,9 +1474,27 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                     (stem, "publica `**Salvedades:**` sin la marca de #213: no se distingue la "
                            "chequeada contra el archivo de la que es juicio del extractor → "
                            "re-correr `harvest_views.py <slug>`"))
+            # ⛔ #253 — el barrido va SÓLO sobre el bloque de las NO verificadas, que es la
+            # población que #234 describe: juicio del extractor que podría haberse mecanizado. El
+            # bloque «verificadas contra el archivo» lo escribe el COSECHADOR, y sus líneas dicen,
+            # literalmente, que la salvedad se emitió estructurada y se chequeó — marcarlas es
+            # pedir que se estructure lo que ya está estructurado. Medido en `hd_40307` tras una
+            # tanda de extracción bien hecha: 12 de 17 hallazgos eran líneas del propio cosechador,
+            # y el número CRECE con cada salvedad correctamente estructurada. Misma exención y
+            # mismo argumento que #214 para las `SECCIONES_ESTAMPADAS`: un detector no mira lo que
+            # la máquina escribe, porque si no la categoría de alta señal se vuelve ruido.
+            _en_juicio = False
             for _ln in text.split("\n"):
                 _b = _ln.strip()
-                if _b.startswith(("- ", "* ")) and cfg.looks_decidable(_b):
+                if _b.startswith("**Salvedades"):
+                    # ⚠ El bloque PELADO (`**Salvedades:**`, schema anterior a #213) SÍ entra: es
+                    # justo donde se coló la salvedad falsa que #213 midió. Lo único exento es el
+                    # bloque que escribe el cosechador.
+                    _en_juicio = "verificadas contra el archivo" not in _b
+                    continue
+                if _b.startswith("## "):
+                    _en_juicio = False
+                if _en_juicio and _b.startswith(("- ", "* ")) and cfg.looks_decidable(_b):
                     salv_decidible.append(
                         (stem, f"salvedad en prosa que un script podría decidir: «{_b[2:82]}…» → "
                                f"emitila estructurada (`SALVEDAD_TIPOS`) y el cosechador la chequea"))

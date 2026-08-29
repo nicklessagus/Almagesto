@@ -1790,6 +1790,15 @@ una salvedad estructurada, ninguna nota llevaba la marca, y una salvedad **falsa
 —publicada bajo `**Salvedades:**` pelado, al mismo nivel visual que tendría una chequeada—. El
 segundo detector es heurística de alta señal, como el de fuga: marca la salvedad en prosa cuyo texto
 *parece* decidible (`el .txt no lo contiene`, `tiene N páginas`) para que se reescriba estructurada.
+⛔ **Y mira SÓLO el bloque de las NO verificadas (#253).** Recorría toda la nota, así que caía sobre
+las líneas que estampa el **cosechador** bajo `**Salvedades (verificadas contra el archivo):**` — o
+sea que pedía *«emitila estructurada»* sobre la línea que **prueba** que se emitió estructurada y se
+chequeó contra el disco. Medido tras una tanda de extracción donde los extractores sí usaron
+`SALVEDAD_TIPOS`: **12 de 17** hallazgos eran del propio cosechador, y el número **crece con cada
+salvedad bien estructurada** — cuanto mejor se cumple #213, más ruidoso se pone el detector que
+existe para hacerla cumplir. Misma exención y mismo argumento que #214 con las
+`SECCIONES_ESTAMPADAS`: un detector no mira lo que la máquina escribe. ⚠ El `**Salvedades:**`
+**pelado** (schema anterior a #213) **sí** se mira: es donde se coló la salvedad falsa que #213 midió.
 ⛔ **Y una faceta con un token alfabético CORTO sin `\b` es backlog (#236), porque matchea DENTRO de
 otra palabra.** Medido: `expres` (por el espectrógrafo EXPRES) entraba por *«Venus Express»*, *«Mars
 Express»* y *«expressed»*, y `neid` por el apellido *«Schneider»* — **19 de 193** registros tenían
