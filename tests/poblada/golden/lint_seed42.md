@@ -119,6 +119,9 @@
 ## ⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano) (0)
 > sobre 89 notas de `vault/wiki/`
 
+## 🔎 Marcada para chequear contra el PDF: una auditoría no pudo cerrarla (#225, backlog) (0)
+> sobre 89 notas de `vault/wiki/`
+
 ## ⛔ Forma del artefacto: fila de tabla que NO renderiza (contenido invisible para el lector) (0)
 > sobre 89 notas de `vault/wiki/`
 

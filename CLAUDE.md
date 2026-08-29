@@ -1282,6 +1282,25 @@ ground-truth (NEA)** en `stars/` (P/K/e/m·sini) no se verifican contra papers (
 chequea el lint); sólo se verifican disputas y afirmaciones atribuidas a un paper. El lint reporta como
 backlog los conceptos/hipótesis **sin ninguna cita** (cobertura: afirman sin fuente → no chequeables).
 
+### Auditoría de una FICHA (skill `audit-note`)
+**El eje que ninguna otra capa mira: ¿esta ficha dice la verdad y se sostiene sola?** El lint chequea
+salud estructural, `verify-citations` claim ↔ **su propia** fuente par por par, `find-contradictions`
+claim ↔ claim **entre** fuentes, y `auditar` el **framework**. Falta el artefacto **completo**, y no
+es teórico: una pasada ad-hoc sobre un concepto cerrado —`lint --cierre` en 0, 99 pares en
+`soportada`— encontró **más de 40 defectos**, entre ellos que la nota **no era implementation-ready**
+(faltaba el puente `g = G'`, el criterio de convergencia y la deflación, y **cuatro de los cinco
+huecos estaban en un `.txt` que la bóveda ya tenía bajado**), dos filas de tabla **fusionadas** que
+hacían invisible una afirmación **verificada**, una sección que **se contradecía** con otra 100
+líneas después, y una afirmación **falsa sobre el propio repo**.
+**Cuándo:** a pedido explícito, **nunca** como paso de cierre — es caro por diseño (abre PDFs,
+recuenta, re-renderiza, lanza un subagente por frente) y su valor está en **garantizar** una ficha
+antes de apoyarse en ella. **Qué hace:** siete frentes en paralelo —estándar de la nota (con la
+prueba operativa de *escribir el pseudocódigo desde la nota y anotar dónde se traba*), la nota contra
+sí misma, integridad del artefacto, aritmética, cadena de verdad, coherencia con el mundo declarado,
+y la nota contra su cadena—, cada uno declarando **su población**; barrera; corrección **serial**
+volviendo a la fuente; y **re-verificación de lo tocado** (#203). ⛔ **Lo que no se pudo cerrar sale
+marcado en la nota** con la cuarta marca en línea (arriba), no en un reporte que se pierde.
+
 ### Contradicciones (desacuerdo claim↔claim — skill `find-contradictions`)
 **Complementa Verify en el eje ortogonal:** Verify chequea claim ↔ **su propia** fuente;
 `find-contradictions` chequea claim ↔ claim **entre** fuentes (¿dos papers discrepan sobre el mismo
@@ -1351,8 +1370,18 @@ compara con `in` y no por truthiness: un `fundacional_min_citas: 0` (la puerta a
 una decisión y no puede leerse igual que no declararlo (la puerta **no** abre), que es la misma
 distinción que D-26 protege al no ponerle default.
 
-Éstas son las **tres únicas marcas en línea** del sistema: `(inferencia de [[bibcode]])`,
-`[[bibcode]] ⛔retractada` y `<valor> ⚠desactualizado`.
+**Lo que no se pudo verificar queda MARCADO en la ficha (#225): `<afirmación> ⚠verificar en el PDF
+(<qué se dudó>, <fecha>)`.** Es la marca que produce el skill `audit-note` y tiene las propiedades de
+las otras: **no destruye** la afirmación (puede ser cierta), es **visible para el consumidor** —que
+es quien tiene que saber que ahí hay una duda—, **la levanta el lint** como backlog para que la
+deuda no se olvide, y **se saca cuando alguien la verifica**, con la evidencia. El criterio para
+ponerla es amplio a propósito: un valor cuya página no se pudo confirmar, una cita cuya fuente no
+está en disco, un número que no reconcilia. **Ante la menor duda se marca** — el costo de una marca
+de más es que alguien abra un PDF; el de una de menos es que la bóveda afirme algo falso con cara de
+verificado. ⚠ Lo que **no** es: una excusa para no verificar. Si la fuente está en disco, se abre.
+
+Éstas son las **cuatro únicas marcas en línea** del sistema: `(inferencia de [[bibcode]])`,
+`[[bibcode]] ⛔retractada`, `<valor> ⚠desactualizado` y `<afirmación> ⚠verificar en el PDF`.
 
 ### Mantenimiento (cuidar lo ya ingestado — skill `maintain`)
 **No crea entidades** (eso es Ingest); opera sobre estrellas/conceptos que **ya existen**. Sub-modos:

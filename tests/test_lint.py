@@ -4808,3 +4808,29 @@ def test_cabecera_al_dia_no_es_hallazgo(toy_vault, capsys):
     link_from_index(toy_vault, "ica")
     _rc, rep = run_lint_reporte(capsys)
     assert "ica" not in _seccion(rep, "Cabecera `> _Estado"), rep
+
+
+def test_marca_de_verificar_en_el_pdf_es_backlog(toy_vault, capsys):
+    """#225 — la cuarta marca en línea. Una afirmación que una auditoría de ficha no pudo cerrar
+    queda marcada EN LA NOTA, no en un reporte que se pierde: visible para el consumidor, sin
+    destruir la afirmación (puede ser cierta), y levantada por el lint hasta que alguien la
+    verifique. Misma doctrina que `⛔retractada` y `⚠desactualizado`: hacer visible, no borrar."""
+    mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
+            "# nota\n\nEl umbral es $S/N=800$ ⚠verificar en el PDF (la página citada no lo trae, "
+            "2026-08-29).\n")
+    link_from_index(toy_vault, "nota")
+    rc, rep = run_lint_reporte(capsys)
+    assert "nota" in _seccion(rep, "Marcada para chequear contra el PDF"), rep
+    assert rc == 0, "backlog: la afirmación puede ser cierta; la marca la hace visible"
+
+
+def test_sin_la_marca_no_hay_hallazgo(toy_vault, capsys):
+    """#225, el simétrico — la categoría existe para la deuda ABIERTA: sacada la marca (porque
+    alguien la verificó), el hallazgo desaparece solo."""
+    mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
+            "# nota\n\nEl umbral es $S/N=800$ ([[2020citC...1..1C]], p. 6).\n")
+    mk_note(cfg.PAPERS, "2020citC...1..1C", {"bibcode": "2020citC...1..1C", "tags": ["paper"],
+                                             "stars": ["tau Cet"]}, "# p\n")
+    link_from_index(toy_vault, "nota", "2020citC...1..1C")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "nota" not in _seccion(rep, "Marcada para chequear contra el PDF"), rep

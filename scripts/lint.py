@@ -387,6 +387,11 @@ def merge_ours_unprotected() -> tuple[list[str], str | None]:
 #  @inv INV-128
 GT_STALE_MARK = "⚠desactualizado"
 
+#: #225 · la cuarta marca en línea: lo que una auditoría de ficha (`audit-note`) NO pudo verificar.
+#: No destruye la afirmación —puede ser cierta— y es visible para el consumidor; el lint la levanta
+#: como backlog para que la deuda no se olvide, y se saca cuando alguien la verifica con evidencia.
+VERIFICAR_PDF_MARK = "⚠verificar en el PDF"
+
 
 def _field_is_marked(lineas_marcadas: list[str], campo: str, viejo) -> bool:
     """¿Alguna línea con `⚠desactualizado` está marcando ESTE campo? (#131)
@@ -1162,6 +1167,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     log_sin_entrada: list = []         # (slug, motivo) — #118: la cadena corrió y el log no lo dice
     sweep_pendiente: list = []         # (slug, motivo) — #88: el barrido 2b no consta en el registro
     impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
+    verificar_pdf: list = []           # (stem, motivo) — #225: marcada para chequear contra el PDF
     forma_rota: list = []              # (stem, motivo) — #227: fila de tabla que NO renderiza
     forma_sospechosa: list = []        # (stem, motivo) — #227: backtick abierto, párrafo duplicado
     # D-50: los genéricos + un patrón por consumidor declarado. Se arma UNA vez por corrida, no por
@@ -1393,6 +1399,17 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                     salv_decidible.append(
                         (stem, f"salvedad en prosa que un script podría decidir: «{_b[2:82]}…» → "
                                f"emitila estructurada (`SALVEDAD_TIPOS`) y el cosechador la chequea"))
+
+        # #225 — la cuarta marca en línea. Una afirmación marcada para ir al PDF es deuda ABIERTA:
+        # se reporta hasta que alguien la verifique y la saque. Backlog, nunca bloqueante — la
+        # afirmación puede ser cierta, y la marca existe justamente para hacerla visible sin
+        # destruirla, igual que `⛔retractada` y `⚠desactualizado`.
+        if stem not in NON_ORPHAN:
+            for _i, _l in enumerate(body_full.split("\n"), 1 + _offset):
+                if VERIFICAR_PDF_MARK in _l:
+                    verificar_pdf.append(
+                        (stem, f"L{_i}: una afirmación quedó marcada para chequear contra el PDF — "
+                               f"«{_l.strip()[:90]}»"))
 
         # #227 — la FORMA del artefacto. El artefacto es lo que viaja, y hasta 1.82.3 nadie miraba
         # si renderiza. Medido en una nota real con `lint --cierre` en 0: una fila de tabla con 9
@@ -3150,6 +3167,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('bad_sources', '⛔ `sources:` sin procedencia (#111): no consta quién declaró la fuente ni por qué', SEV_BLOQUEANTE, tuple(bad_sources), poblacion='temas'),
         Categoria('bad_roles', '⛔ `role` fuera del vocabulario — y todo campo con vocabulario CERRADO (`unidad_cita`, `pending_source`)', SEV_BLOQUEANTE, tuple(bad_roles), poblacion='papers'),
         Categoria('impl_leaks', '⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)', SEV_WARN, tuple(impl_leaks), poblacion='notas'),
+        Categoria('verificar_pdf', '🔎 Marcada para chequear contra el PDF: una auditoría no pudo cerrarla (#225, backlog)', SEV_BACKLOG, tuple(verificar_pdf), poblacion='notas'),
         Categoria('forma_rota', '⛔ Forma del artefacto: fila de tabla que NO renderiza (contenido invisible para el lector)', SEV_BLOQUEANTE, tuple(forma_rota), poblacion='notas'),
         Categoria('forma_sospechosa', '⚠ Forma del artefacto: marcador sin cerrar o párrafo duplicado (backlog)', SEV_BACKLOG, tuple(forma_sospechosa), poblacion='notas'),
         Categoria('objective_warn', 'Objetivo sin instanciar (WARN — objective.yaml sigue en el placeholder del template)', SEV_WARN, tuple(objective_warn), poblacion='config'),
