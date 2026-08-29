@@ -353,6 +353,106 @@ def retarget_artifacts(stem: str) -> bool:
     return stamp_pdf_link(dest) or cambio
 
 
+INDEX_SECCIONES = ("## Estrellas", "## Conceptos (por área)", "## Papers")
+"""The index sections this stamps. `## Matrices` is hand-written prose and is left alone."""
+
+INDEX_PAPERS_TOP = 50
+
+#: The Dataview block each section keeps BELOW its materialised table. #60 forbids Dataview being
+#: the only form —an agent opening the `.md` sees the query, not its results, and the plugin is not
+#: versioned—; it does not forbid it existing as a convenience for whoever opens Obsidian.
+INDEX_DATAVIEW = {
+    "## Estrellas": '```dataview\nTABLE spectral_type AS "Tipo", P_rot_days AS "P_rot (d)", '
+                    'length(planets) AS "Planetas"\nFROM "wiki/stars"\nSORT file.name ASC\n```',
+    "## Conceptos (por área)": '```dataview\nTABLE status, confidence\nFROM "wiki/concepts"\n'
+                               'SORT file.folder ASC, file.name ASC\n```',
+    "## Papers": '```dataview\nTABLE WITHOUT ID file.link AS "Paper", year AS "Año", '
+                 'relevance AS "Rel."\nFROM "wiki/papers"\nSORT citation_count DESC\nLIMIT 50\n```',
+}
+
+
+def index_tables() -> dict:
+    """The index's three tables, materialised from frontmatter truth (#237).
+
+    `index.md` was the vault's only artifact left 100 % Dataview — the very thing #60 forbade for the
+    roll-ups, and with more force here: the catalogue is the FIRST thing an agent opens to orient
+    itself, and `CLAUDE.md` names it as one of the four pieces of the in-repo memory. A ```dataview```
+    block shows whoever opens the `.md` **the query, not its results**, and the plugin is not even
+    versioned (`.obsidian/plugins/` is gitignored while `community-plugins.json` declares dataview).
+    On top of that the skill's bookkeeping step said «add the concept to `index.md`» and the file had
+    no static line to add it to, so the step could not be done as written — measured: the three
+    commits touching a real instance's `index.md` all predate its instantiation.
+
+    Same rule as the roll-ups: read with `split_fm`, never grep the frontmatter (a list written in
+    block style and one in flow style are both normal here).
+    """
+    stars, concepts, papers = [], [], []
+    for f in sorted(cfg.STARS.glob("*.md")) if cfg.STARS.exists() else []:
+        fm = cfg.split_fm(f.read_text(encoding="utf-8")) or {}
+        stars.append((f.stem, fm.get("spectral_type"), fm.get("P_rot_days"),
+                      len(cfg.as_list(fm.get("planets")))))
+    for f in sorted(cfg.CONCEPTS.glob("*/*.md")) if cfg.CONCEPTS.exists() else []:
+        fm = cfg.split_fm(f.read_text(encoding="utf-8")) or {}
+        concepts.append((f.parent.name, f.stem, fm.get("status"), fm.get("confidence")))
+    for f in sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []:
+        fm = cfg.split_fm(f.read_text(encoding="utf-8")) or {}
+        papers.append((f.stem, fm.get("year"), fm.get("relevance"),
+                       fm.get("citation_count") or 0))
+    papers.sort(key=lambda r: (-(r[3] or 0), r[0]))
+    return {"## Estrellas": _index_stars(stars),
+            "## Conceptos (por área)": _index_concepts(concepts),
+            "## Papers": _index_papers(papers)}
+
+
+def _celda_idx(v) -> str:
+    """A frontmatter value as an index cell: `—` for absent, so «no value» and «no column» differ."""
+    return "—" if v in (None, "", []) else str(v)
+
+
+def _index_stars(rows: list) -> str:
+    """The `## Estrellas` table."""
+    out = ["| Estrella | Tipo | P_rot (d) | Planetas |", "|---|---|---|---|"]
+    out += [f"| [[{n}]] | {_celda_idx(t)} | {_celda_idx(p)} | {k} |" for n, t, p, k in rows]
+    return "\n".join(out) if rows else "_(sin estrellas todavía)_"
+
+
+def _index_concepts(rows: list) -> str:
+    """The `## Conceptos (por área)` table. `status` only exists for hypotheses, and that is why the
+    column says `—` elsewhere instead of being silently empty (the Dataview version showed a blank
+    column by design and nothing said why)."""
+    out = ["| Área | Concepto | Estado | Confianza |", "|---|---|---|---|"]
+    out += [f"| {a} | [[{n}]] | {_celda_idx(st)} | {_celda_idx(c)} |" for a, n, st, c in rows]
+    return "\n".join(out) if rows else "_(sin conceptos todavía)_"
+
+
+def _index_papers(rows: list) -> str:
+    """The `## Papers` table: the top by citations, with the total said out loud — a truncated list
+    that does not declare its cut reads as the whole corpus."""
+    if not rows:
+        return "_(sin papers todavía)_"
+    top = rows[:INDEX_PAPERS_TOP]
+    out = [f"_{len(rows)} nota(s) de paper; se listan las {len(top)} más citadas._", "",
+           "| Paper | Año | Rel. | Citas |", "|---|---|---|---|"]
+    out += [f"| [[{n}]] | {_celda_idx(y)} | {_celda_idx(r)} | {c} |" for n, y, r, c in top]
+    return "\n".join(out)
+
+
+def restamp_index() -> int:
+    """Materialise `index.md`'s tables from disk (#237). Idempotent, surgical, prose untouched."""
+    dest = cfg.WIKI / "index.md"
+    if not dest.exists():
+        cfg.print_seguro("no hay vault/wiki/index.md — nada que estampar")
+        return 0
+    # `_reemplazar_seccion` reemplaza DESDE el encabezado, así que el cuerpo lo lleva puesto. Y el
+    # bloque ```dataview``` queda debajo, a propósito: es comodidad para quien abre Obsidian. Lo que
+    # #60 prohíbe es que sea la ÚNICA forma, no que exista.
+    cambios = sum(1 for h, cuerpo in index_tables().items()
+                  if _reemplazar_seccion(
+                      dest, h, f"{h}\n\n{cuerpo}\n\n{INDEX_DATAVIEW[h]}\n\n"))
+    cfg.print_seguro(f"index.md: {cambios} de {len(INDEX_SECCIONES)} sección(es) actualizadas")
+    return 0
+
+
 def restamp_pdf_links() -> int:
     """Backfill #47: barre TODAS las notas de papers y re-estampa el link de cabecera. Para
     el corpus pre-#13 de una instancia (re-correr cadena por cadena sería carísimo y build/
@@ -2909,6 +3009,13 @@ def main() -> int:
                     help="backfill D-17: estampa `keywords:` en las notas de paper que nacieron "
                          "sin ellas, desde build/*/ads.json. Add-only (no pisa las que ya están); "
                          "declara cuántas quedaron sin cubrir por falta de build/. No requiere slug.")
+    ap.add_argument("--restamp-index", action="store_true", dest="restamp_index",
+                    help="#237: materializa las tablas de `vault/wiki/index.md` por verdad de "
+                         "frontmatter (estrellas, conceptos, papers). El catálogo era el único "
+                         "artefacto 100%% Dataview —lo que #60 prohibió para los roll-ups— y el paso "
+                         "de bookkeeping mandaba «agregar el concepto» a un archivo sin una sola "
+                         "línea estática. Idempotente, cirugía: no toca `## Matrices` ni la prosa. "
+                         "No requiere slug.")
     ap.add_argument("--restamp-headers", action="store_true", dest="restamp_headers",
                     help="backfill #69: barre TODAS las fichas/conceptos y estampa la cabecera "
                          "(aviso de capa LLM + línea del generador) a las que nacieron sin ella. "
@@ -2980,6 +3087,8 @@ def main() -> int:
         return restamp_pdf_links()
     if args.restamp_keywords:
         return restamp_keywords()
+    if args.restamp_index:
+        return restamp_index()
     if args.restamp_headers:
         return restamp_headers()
     if args.migrate_bearing:

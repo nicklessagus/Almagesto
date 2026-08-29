@@ -179,9 +179,9 @@ los `from conftest import ...` de la suite vieja. Sólo se ve corriendo la suite
 
 ## Cuánto del lint vigila el corpus poblado (10.3)
 
-El lint tiene **93 categorías**; el generador sintético sabe sembrar **16 anomalías**, y
+El lint tiene **94 categorías**; el generador sintético sabe sembrar **16 anomalías**, y
 `test_conteos_exactos` puede afirmar *"reporta exactamente estos K, ni uno más"* sólo sobre esas.
-El resto queda cubierto de otra forma —el corpus limpio tiene que dar **cero en las 93** salvo cuatro
+El resto queda cubierto de otra forma —el corpus limpio tiene que dar **cero en las 94** salvo cuatro
 declaradas (`test_el_corpus_limpio_da_cero_en_TODAS_las_categorias`)—, que detecta el falso positivo
 pero no el falso negativo.
 
@@ -194,7 +194,7 @@ alcance, tres fichas con la tabla `## Papers` desactualizada, tres registros sin
 porque el generador no emitía el schema vigente, y sobre ese ruido de fondo **ninguna anomalía
 sembrada era distinguible**.
 
-Los tres números (93 categorías, 16 anomalías, 4 de ruido declarado) **salen del código, no de acá**:
+Los tres números (94 categorías, 16 anomalías, 4 de ruido declarado) **salen del código, no de acá**:
 los cruza `test_conteos_exactos`, así que agregar una categoría al lint sin sembrarla deja el
 desbalance a la vista en vez de esconderlo.
 

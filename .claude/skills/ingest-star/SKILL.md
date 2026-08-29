@@ -318,7 +318,9 @@ Progreso del ingest de <estrella>:
    corresponda, o declarás por qué no va: `no_sintetizado: <motivo>` en su nota (la **regla de poda**
    es motivo válido; la marca sin motivo se sigue reportando).
 
-5. **Bookkeeping.** Actualizar `vault/wiki/index.md` (agregar la estrella), appendear a `vault/wiki/log.md`,
+5. **Bookkeeping.** Re-estampar el índice —`python scripts/make_notes.py --restamp-index`, #237:
+   `index.md` era 100 % Dataview, o sea que no había dónde «agregar la estrella» y el paso no se
+   podía cumplir como estaba escrito—, appendear a `vault/wiki/log.md`,
    tocar `vault/wiki/matrices/method_star.md` (qué métodos se aplicaron en la literatura) y `vault/STATUS.md`
    si cambió el estado. Y **declarar la fecha de síntesis** —la tercera de la cabecera (INV-82)—:
    ```bash

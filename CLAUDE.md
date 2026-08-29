@@ -28,7 +28,18 @@ El usuario cura las fuentes (`vault/raw/`) y hace preguntas.
 > **Al iniciar sesión, leé `vault/STATUS.md` (estado + próximos pasos) y `vault/wiki/log.md` (historial
 > reciente) para orientarte.** *(Si estás en el repo **template** `Almagesto` —donde esos dos son la
 > **semilla** que una instancia nueva clona, no un estado— el handoff del desarrollo del framework
-> vive en `docs/internal/HANDOFF.md`, que no se versiona.)* La "memoria" del proyecto es in-repo: este `CLAUDE.md` + `vault/STATUS.md`
+> vive en `docs/internal/HANDOFF.md`, que no se versiona.)* ⛔ **`index.md` se ESTAMPA
+> (`python scripts/make_notes.py --restamp-index`, #237), no se edita a mano.** Era el único
+> artefacto que quedó **100 % Dataview** —exactamente lo que #60 prohibió para los roll-ups, y con
+> más fuerza acá: el catálogo es lo primero que un agente abre para orientarse, y un bloque
+> ```dataview``` le muestra **la query, no sus resultados**, con el plugin sin versionar
+> (`.obsidian/plugins/` está gitignored mientras `community-plugins.json` declara `dataview`)—. El
+> efecto medido: el paso de bookkeeping de los skills mandaba *«agregar la estrella/el concepto a
+> `index.md`»* sobre un archivo **sin una sola línea estática**, así que el paso no se podía cumplir
+> como estaba escrito, y los tres commits del `index.md` de una bóveda real son anteriores a su
+> instanciación. Hoy las tres tablas se materializan por verdad de frontmatter, el Dataview queda
+> **debajo** como comodidad de Obsidian, y el lint reporta el índice desactualizado **nombrando los
+> stems** (mismo criterio que D-10 para `## Papers`). La "memoria" del proyecto es in-repo: este `CLAUDE.md` + `vault/STATUS.md`
 > + `vault/wiki/log.md` + `vault/wiki/index.md`. No depender de la memoria local de Claude (`~/.claude/...`),
 > que no viaja entre máquinas. Tras cada operación, actualizá `index.md`, appendeá a `log.md`
 > (entrada `## AAAA-MM-DD — <op>: <título>` + bullets — greppable por fecha) y, si cambió el estado,

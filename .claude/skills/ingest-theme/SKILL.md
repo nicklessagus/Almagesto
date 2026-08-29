@@ -281,7 +281,9 @@ Progreso del ingest del tema <tema>:
    ninguna entidad es extracción perdida. O lo sintetizás donde corresponda, o declarás por qué no
    va: `no_sintetizado: <motivo>` en su nota (la marca sin motivo se sigue reportando).
 
-6. **Bookkeeping.** Actualizar `vault/wiki/index.md` (agregar el concept si es nuevo), appendear a
+6. **Bookkeeping.** Re-estampar el índice —`python scripts/make_notes.py --restamp-index`, #237:
+   `index.md` era 100 % Dataview, o sea que no había dónde «agregar el concepto» y el paso no se
+   podía cumplir como estaba escrito—, appendear a
    `vault/wiki/log.md`, y `vault/STATUS.md` si cambió el estado. **No** tocar la matriz método×estrella.
    (El `lint` va **después** del verify del paso 6b: `CLAUDE.md` lo pide "antes de lint/commit",
    porque resolver una cita no-soportada suele cambiar la prosa.)

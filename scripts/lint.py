@@ -1181,6 +1181,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     cond_sin_clasificar: list = []     # (stem, motivo) — #221: condición sin `acota:`/`contextualiza:`
     verif_truncada: list = []          # (stem, motivo) — #226: `Evidencia`/`Condición` cortada
     verif_sin_localizador: list = []   # (stem, motivo) — #226: #122 no evaluable en esa fila
+    indice_viejo: list = []            # (stem, motivo) — #237: index.md contra la verdad de disco
     radio_sin_link: list = []          # (stem, motivo) — #235: hub que nombra un radio sin wikilink
     cita_log: list = []                # (stem, motivo) — #238: cita del `log.md` que su fuente no dice
     cita_no_verbatim: list = []        # (stem, motivo) — #220: la cadena no está en el `.txt`
@@ -3224,6 +3225,29 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                                 f"es la fuente de lectura, no el índice. Re-corré `make_notes.py` "
                                 f"sobre `{_dir.name}` o borrá el artefacto colgado"))
 
+    # #237 — el ÍNDICE desactualizado, análogo al detector de `## Papers` (D-10) y por el mismo
+    # motivo: `index.md` es lo primero que un agente abre para orientarse y una de las cuatro piezas
+    # de la memoria in-repo, y era el único artefacto que quedó 100 % Dataview — o sea que le muestra
+    # al que abre el `.md` la query, no sus resultados, con el plugin sin versionar. Medido en una
+    # bóveda real: los tres commits de su `index.md` son anteriores a la instanciación, y no tenía
+    # cómo actualizarse (el paso de bookkeeping manda «agregar el concepto» a un archivo sin una
+    # sola línea estática). Nombra los stems, no la diferencia de conteos.
+    _idx = cfg.WIKI / "index.md"
+    if _idx.exists():
+        _txt_idx = _idx.read_text(encoding="utf-8")
+        for _h, _cuerpo in mn.index_tables().items():
+            _span = cfg.section_span(_txt_idx, _h)
+            _visto = set() if _span is None else set(
+                lb.LINK_RE.findall(_txt_idx[_span[0]:_span[1]]))
+            _esperado = set(lb.LINK_RE.findall(_cuerpo))
+            _faltan, _sobran = sorted(_esperado - _visto), sorted(_visto - _esperado)
+            if _faltan or _sobran:
+                indice_viejo.append(
+                    ("index", f"`{_h}` desactualizada"
+                              + (f" — faltan: {', '.join(_faltan[:8])}" if _faltan else "")
+                              + (f" — sobran: {', '.join(_sobran[:8])}" if _sobran else "")
+                              + " → `python scripts/make_notes.py --restamp-index`"))
+
     # `sources:` sin procedencia (#111). Era el ÚNICO de los cuatro cuadrantes de curación sin
     # registro: `extra_core` dice quién y por qué desde D-58, el descarte de un candidato desde #51
     # y el de una fuente declarada desde #81 — pero una fuente off-ADS ACEPTADA no decía nada. Y es
@@ -3397,6 +3421,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('verif_estructura', '🧾 Bloque de verificación incompleto: faltan sub-secciones o la cabecera no cuadra (#232, backlog)', SEV_BACKLOG, tuple(verif_estructura), poblacion='entidades'),
         Categoria('verif_truncada', '✂ Celda del bloque de verificación truncada: se tiró lo que el fan-out encontró (#226, backlog)', SEV_BACKLOG, tuple(verif_truncada), poblacion='entidades'),
         Categoria('verif_sin_localizador', '✂ Evidencia sin localizador: el cruce de #122 NO se pudo evaluar en esa fila (#226, backlog)', SEV_BACKLOG, tuple(verif_sin_localizador), poblacion='entidades'),
+        Categoria('indice_viejo', '🗂 `index.md` desactualizado contra la verdad de disco (#237, backlog)', SEV_BACKLOG, tuple(indice_viejo), poblacion='notas'),
         Categoria('radio_sin_link', '🛞 Hub que nombra un radio sin `[[wikilink]]`: el radio no entra al grafo (#235, backlog)', SEV_BACKLOG, tuple(radio_sin_link), poblacion='entidades'),
         Categoria('cita_log', '❝ Cita de `log.md` que su fuente no dice: la bitácora es append-only, se MARCA (#238, backlog)', SEV_BACKLOG, tuple(cita_log), poblacion='notas'),
         Categoria('cita_no_verbatim', '❝ Cita textual que no está en su fuente: no es verbatim, o es de otra (#220, backlog)', SEV_BACKLOG, tuple(cita_no_verbatim), poblacion='notas'),

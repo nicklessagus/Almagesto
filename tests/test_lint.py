@@ -5117,3 +5117,38 @@ def test_el_bloque_completo_no_dispara(toy_vault, capsys):
                     encoding="utf-8")
     _, rep = run_lint_reporte(capsys)
     assert "nota-verif" not in _seccion(rep, "Bloque de verificación incompleto"), rep
+
+
+def test_index_desactualizado_nombra_los_stems(toy_vault, capsys):
+    """#237 — `index.md` era el ÚNICO artefacto que quedó 100 % Dataview, o sea lo que #60 prohibió
+    para los roll-ups y con más fuerza: el catálogo es lo primero que un agente abre para orientarse
+    y una de las cuatro piezas de la memoria in-repo, y un bloque ```dataview``` le muestra la query,
+    no sus resultados, con el plugin sin versionar. Medido: los tres commits del `index.md` de una
+    bóveda real son anteriores a su instanciación — y no tenía cómo actualizarse, porque el paso de
+    bookkeeping manda «agregar el concepto» a un archivo sin una sola línea estática."""
+    mk_note(cfg.CONCEPTS / "methods", "un-metodo", {"tags": ["concept"], "name": "un método"},
+            "# un método\n")
+    link_from_index(toy_vault, "un-metodo")
+    (cfg.WIKI / "index.md").write_text(
+        "# Índice\n\n## Estrellas\n\n## Conceptos (por área)\n\n## Papers\n\n[[un-metodo]]\n",
+        encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "desactualizado contra la verdad de disco")
+    # ⚠ #202 — «`un-metodo` aparece» lo cumple también el hallazgo INVERSO («sobran»), así que el
+    # test pasaría con la tabla de conceptos vacía. Lo que hay que exigir es la dirección.
+    assert "faltan: un-metodo" in sec, sec
+    assert "--restamp-index" in sec, "el hallazgo nombra el comando que lo cierra"
+
+
+def test_index_al_dia_no_dispara(toy_vault, capsys):
+    """#237, el simétrico: estampado por el propio estampador, el detector calla — que es lo que
+    hace que la categoría signifique algo cuando habla."""
+    mk_note(cfg.CONCEPTS / "methods", "un-metodo", {"tags": ["concept"], "name": "un método"},
+            "# un método\n")
+    (cfg.WIKI / "index.md").write_text(
+        "# Índice\n\n## Estrellas\n\n## Conceptos (por área)\n\n## Papers\n\n## Matrices\n",
+        encoding="utf-8")
+    import make_notes as mn
+    mn.restamp_index()
+    _, rep = run_lint_reporte(capsys)
+    assert "un-metodo" not in _seccion(rep, "desactualizado contra la verdad de disco"), rep
