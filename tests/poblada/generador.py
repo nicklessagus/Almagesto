@@ -816,6 +816,11 @@ _(ninguno relevante — corpus sintético)_
                 setattr(cfg, k, getattr(paths, k))
             for slug in star_notes:
                 make_notes.stamp_papers_table(slug, paths.STARS / f"{slug}.md", "star")
+                # #233 — y la línea de estado, con el estampador REAL por el mismo argumento. Sin
+                # esto el corpus "limpio" reportaba *cabecera desfasada* en cada ficha con
+                # registro: ruido de fondo permanente, y el detector nuevo nacía en rojo sobre
+                # trabajo correcto.
+                make_notes.stamp_estado(slug, paths.STARS / f"{slug}.md")
         finally:
             for k, v in _saved:
                 setattr(cfg, k, v)

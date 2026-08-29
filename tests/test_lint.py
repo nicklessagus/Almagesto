@@ -4710,3 +4710,101 @@ def test_alias_sin_nota_sigue_exento(toy_vault, capsys):
     rc, rep = run_lint_reporte(capsys)
     assert "2026arXiv260528635F" not in _seccion(rep, "listado en `versions[]` que TIENE"), rep
     assert rc == 0
+
+
+# ── #233 / #234 / #236 · lo que el estampador da vs lo que la nota publica ───
+
+def test_faceta_con_token_corto_sin_frontera(toy_vault, capsys):
+    """#236 — un token alfabético corto sin `\\b` matchea DENTRO de otra palabra. Medido: `expres`
+    (por el espectrógrafo EXPRES) entraba por «Venus Express» y «expressed», `neid` por el apellido
+    «Schneider»; 4 de 32 papers vivos eran core por accidente. El falso positivo de una faceta NO
+    deja rastro —el paper entra, se baja, se lee y se sintetiza—, así que sólo se ve mirando QUÉ
+    matcheó."""
+    obj = dict(cfg.load_objective())
+    obj["relevance"] = dict(obj.get("relevance", {}),
+                            facets={"rv": r"radial velocit|EXPRES|\bCCF\b"})
+    write_yaml(cfg.OBJECTIVE_YAML, obj)
+    rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "token corto sin")
+    assert "EXPRES" in sec and "CCF" not in sec, rep
+    assert rc == 0, "backlog: es una recomendación, no una violación"
+
+
+def test_la_faceta_nombra_la_palabra_que_la_disparo(toy_vault, capsys):
+    """#236, la mitad que la vuelve accionable — el token solo es una sospecha; la palabra dentro de
+    la que cayó es la evidencia. Sin esto el operador lee «rv» en un probe y no puede saber que fue
+    «Schneider»."""
+    (cfg.ROOT / "build" / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.ROOT / "build" / "ica" / "ads.json").write_text(json.dumps({"records": [
+        {"title": "Venus Express observations", "abstract": "as expressed by Schneider"}]}),
+        encoding="utf-8")
+    obj = dict(cfg.load_objective())
+    obj["relevance"] = dict(obj.get("relevance", {}), facets={"rv": r"radial velocit|EXPRES"})
+    write_yaml(cfg.OBJECTIVE_YAML, obj)
+    _rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "token corto sin")
+    assert "Express" in sec or "expressed" in sec, sec
+
+
+def test_salvedad_decidible_en_prosa_es_backlog(toy_vault, capsys):
+    """#234 — #213 le dio a la afirmación decidible una forma estructurada y un `grep`; lo que no le
+    dio es nada que haga que el extractor la use. Medido: **0 de 43** extracciones emitieron una
+    salvedad estructurada y una salvedad FALSA volvió a colarse."""
+    mk_note(cfg.PAPERS, "2020citC...1..1C",
+            {"bibcode": "2020citC...1..1C", "tags": ["paper"], "stars": ["tau Cet"]},
+            "# a\n\n**Salvedades:**\n\n- el `.txt` de pdftotext no los contiene, así que el valor "
+            "salió de la figura\n")
+    link_from_index(toy_vault, "2020citC...1..1C")
+    rc, rep = run_lint_reporte(capsys)
+    assert "2020citC...1..1C" in _seccion(rep, "un script podría decidir"), rep
+    assert "2020citC...1..1C" in _seccion(rep, "sin la marca de #213"), rep
+    assert rc == 0
+
+
+def test_una_salvedad_de_juicio_no_dispara(toy_vault, capsys):
+    """#234, el recorte: heurística de alta señal. «la Fig. 3 es difícil de leer» no la decide
+    ningún script, y marcarla ahogaría el caso real."""
+    mk_note(cfg.PAPERS, "2020citC...1..1C",
+            {"bibcode": "2020citC...1..1C", "tags": ["paper"], "stars": ["tau Cet"]},
+            "# a\n\n**Salvedades (⚠ NO VERIFICADAS — juicio del extractor):**\n\n"
+            "- la Fig. 3 es difícil de leer y el valor se estimó a ojo\n")
+    link_from_index(toy_vault, "2020citC...1..1C")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2020citC...1..1C" not in _seccion(rep, "un script podría decidir"), rep
+    assert "2020citC...1..1C" not in _seccion(rep, "sin la marca de #213"), rep
+
+
+def test_cabecera_de_estado_desfasada_es_backlog(toy_vault, capsys):
+    """#233 — nadie compara la cabecera que la nota PUBLICA con la que el estampador daría hoy.
+    `estado_line` y el lint comparten la regla de la fecha (AUD-136), pero ningún chequeo cruza «lo
+    que se publicó» con «lo que se produciría». Medido: una nota publicaba DOS de las tres fechas
+    obligatorias habiendo pasado el gate de cierre, y el estampador daba la correcta."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ica",
+                                         "facet": "independent component"}})
+    cfg.save_busqueda("ica", {"fecha": "2026-08-28", "query": "q", "rows": 10, "n_found": 951,
+                              "n_total": 951, "n_core": 52, "bibcodes": []})
+    mk_note(cfg.CONCEPTS / "methods", "ica",
+            {"tags": ["concept"], "name": "ica", "confidence": "medium"},
+            "# ica\n\n> _Generado con Almagesto v1.0_\n> _Estado — búsqueda 1999-01-01 (0 → 0 core)._\n")
+    link_from_index(toy_vault, "ica")
+    rc, rep = run_lint_reporte(capsys)
+    assert "ica" in _seccion(rep, "Cabecera `> _Estado"), rep
+    assert rc == 0, "backlog: la nota es válida, lo que falta es re-estampar"
+
+
+def test_cabecera_al_dia_no_es_hallazgo(toy_vault, capsys):
+    """#233, el simétrico: con la cabecera que el estampador produce, no hay hallazgo."""
+    import make_notes as mn
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ica",
+                                         "facet": "independent component"}})
+    cfg.save_busqueda("ica", {"fecha": "2026-08-28", "query": "q", "rows": 10, "n_found": 951,
+                              "n_total": 951, "n_core": 52, "bibcodes": []})
+    dest = cfg.CONCEPTS / "methods" / "ica.md"
+    mk_note(cfg.CONCEPTS / "methods", "ica",
+            {"tags": ["concept"], "name": "ica", "confidence": "medium"},
+            "# ica\n\n> _Generado con Almagesto v1.0_\nPLACEHOLDER\n")
+    dest.write_text(dest.read_text(encoding="utf-8").replace(
+        "PLACEHOLDER", mn.estado_line("ica", dest).rstrip("\n")), encoding="utf-8")
+    link_from_index(toy_vault, "ica")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "ica" not in _seccion(rep, "Cabecera `> _Estado"), rep

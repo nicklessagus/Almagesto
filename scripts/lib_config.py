@@ -20,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.84.0"
+ALMAGESTO_VERSION = "1.84.1"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -411,6 +411,88 @@ _DUP_MIN = 120
 #: Cuántos caracteres del arranque identifican al párrafo. Ver el comentario de arriba: un empalme
 #: duplica el párrafo y suele dejarle otro final, así que la igualdad exacta no lo ve.
 _DUP_CLAVE = 100
+
+
+#: #234 · señales de que una salvedad en prosa está haciendo una afirmación DECIDIBLE sobre un
+#: archivo — o sea, una que `SALVEDAD_TIPOS` podría chequear con un `grep` o un `pdfinfo` en vez de
+#: dejarla como juicio. Heurística de alta señal, como el detector de fuga: cada hit se mira a mano.
+_SALVEDAD_DECIDIBLE = re.compile(
+    r"(?:`?\.txt`?|pdftotext).{0,80}?(?:no (?:lo |los |la |las )?(?:contiene|trae|tiene)|pierde|"
+    r"perdi[óo]|falta|renderiza)|(?:tiene|son|de)\s+\d+\s+p[áa]ginas", re.I)
+
+
+#: #236 · largo hasta el cual un token alfabético de una faceta necesita frontera de palabra. Por
+#: encima, la probabilidad de que caiga dentro de otra palabra es despreciable; por debajo es alta y
+#: está medida (`expres` → *Venus Express*, `neid` → *Schneider*).
+FACETA_TOKEN_CORTO = 8
+
+
+def facet_tokens_without_boundary(patron: str) -> list:
+    """Alternatives of a facet regex that are short, alphabetic and carry **no word boundary** (#236).
+
+    A facet is a regex over title + abstract + keywords, so a short acronym without `\b` matches
+    **inside** another word. Measured on a real vault's `rv` axis-facet: `expres` (for the EXPRES
+    spectrograph) matched **21** records via `expressed`, `expressions`, *Venus **Expres**s* and
+    *Mars **Expres**s*; `neid` matched the surname `Sch**neid**er`. **19 of the 193 records with
+    that facet had it only through those**, and since the vault declared `require: [rv]`, that
+    facet was the only gate: **4 of 32 live papers were core by accident**.
+
+    ⛔ Why this needs a detector and not just care: a facet's **false positive leaves no trace** —
+    the paper enters, is downloaded, read and synthesised. It is the mirror of the false negative
+    the contract already warns about (*what the lens discards is never downloaded, so it leaves no
+    trace*), and only one of the two had a net (`propose_facets`).
+
+    Returns the offending alternatives, in order. Case and the `(?i)` flag are irrelevant here."""
+    fuera = []
+    for alt in re.split(r"(?<!\\)\|", str(patron or "")):
+        t = alt.strip()
+        if not t or len(t) > FACETA_TOKEN_CORTO:
+            continue
+        if not t.replace(" ", "").isalpha():        # tiene dígitos, clases o metacaracteres
+            continue
+        if "\\b" in alt or "\\B" in alt:
+            continue
+        fuera.append(t)
+    return fuera
+
+
+def facet_token_leaks(token: str, textos) -> list:
+    """The distinct WORDS a short facet token matched inside, over an already-downloaded corpus (#236).
+
+    The token alone is a suspicion; this turns it into evidence. Without it the operator reads
+    `«rv»` in a probe and cannot know it was `Schneider`. Returns at most `_LEAK_MAX` examples,
+    which is enough to recognise the leak and short enough to fit one report line."""
+    rx = re.compile(r"\w*" + re.escape(token) + r"\w*", re.I)
+    fuera, vistos = [], set()
+    for t in textos:
+        for m in rx.finditer(str(t or "")):
+            palabra = m.group(0)
+            if palabra.lower() == token.lower():
+                continue                       # matcheó la palabra entera: es el uso legítimo
+            if palabra.lower() not in vistos:
+                vistos.add(palabra.lower())
+                fuera.append(palabra)
+                if len(fuera) >= _LEAK_MAX:
+                    return fuera
+    return fuera
+
+
+#: Cuántas palabras-ejemplo alcanzan para reconocer una fuga de faceta sin inflar el reporte.
+_LEAK_MAX = 4
+
+
+def looks_decidable(salvedad: str) -> bool:
+    """Does this prose caveat make a claim a script could settle? (#234)
+
+    The measured failure of #213 is a caveat that **invents** a defect of the artefact — «the
+    `.txt` lost this symbol» — published under the very heading a consumer reads to decide how much
+    to trust the extraction. #213 gave that claim a structured form and a `grep`; what it did not
+    give is anything that makes the extractor USE it. Measured on a real vault: **0 of 43**
+    extractions emitted a structured caveat, and one false one slipped through again.
+
+    High-signal heuristic, same contract as the implementation-leak detector: it points at caveats
+    worth restating as `SALVEDAD_TIPOS`, it does not judge them."""
+    return bool(_SALVEDAD_DECIDIBLE.search(str(salvedad or "")))
 
 
 def is_stamped_section(heading: str) -> bool:

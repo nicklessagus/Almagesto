@@ -229,6 +229,18 @@
 - star02 → sin la línea `_Generado con Almagesto v…_`: los estampadores de cabecera no pueden actuar → `python scripts/make_notes.py --restamp-headers`
 - star01 → sin la línea `_Generado con Almagesto v…_`: los estampadores de cabecera no pueden actuar → `python scripts/make_notes.py --restamp-headers`
 
+## 🗓 Cabecera `> _Estado —_` desfasada: no es la que el estampador da hoy (backlog) (0)
+> sobre 29 notas de entidad (fichas, conceptos, queries)
+
+## 🏷 Salvedades sin la marca de #213 (no se distingue chequeada de juicio) (backlog) (0)
+> sobre 60 notas de `papers/`
+
+## ⚙ Salvedad en prosa que un script podría decidir: emitila estructurada (#234, backlog) (0)
+> sobre 60 notas de `papers/`
+
+## 🕳 Faceta con token corto sin `\b`: matchea DENTRO de otra palabra (#236, backlog) (0)
+> sobre 1 archivo de configuración
+
 ## Barrido full-text (2b) sin rastro o truncado: no consta que la segunda red para el punto ciego de la query se haya tendido entera (backlog) (0)
 > sobre 3 registros de sujeto
 

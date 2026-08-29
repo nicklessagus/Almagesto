@@ -86,6 +86,30 @@ from extract_fulltext import is_legible      # umbral determinista de legibilida
 from fetch_ground_truth import msini_earth   # verificación de masa (m·sini implícita)
 from make_notes import find_header_line      # contrato de la cabecera (mismo que stamp_pdf_link, #48)
 from make_notes import GENERATOR_LINE        # ancla de la cabecera de fichas/concepts (#69)
+
+#: Prefijo de la línea de estado de la cabecera (#233). Vive acá y no en un literal suelto porque lo
+#: comparan dos lados: el que la escribe (`make_notes.estado_line`) y el que verifica que se haya
+#: escrito. Es el mismo criterio que `GENERATOR_LINE`.
+ESTADO_PREFIJO = "> _Estado — "
+
+
+def _entity_slug(path: str) -> str | None:
+    """The subject slug this entity note belongs to, or `None` if it is not one (#233).
+
+    A star note is named after its slug; a concept is named after the `concept` its theme declares,
+    which is **not** the slug — hence the lookup through `themes.yaml` instead of the filename.
+    Returns `None` for papers, queries and matrices: those carry no state line."""
+    nombre = Path(path).stem
+    if path.startswith(str(cfg.STARS)):
+        return nombre
+    if not path.startswith(str(cfg.CONCEPTS)):
+        return None
+    if cfg.themes_error():
+        return None
+    for slug_t, meta in (cfg.load_themes() or {}).items():
+        if str(cfg.as_map(meta).get("concept") or slug_t) == nombre:
+            return slug_t
+    return None
 # @inv INV-02
 # ⛔ Exige que después del target venga un delimitador (`]`, `|` o `#`) y **corta en el salto de
 # línea**. Sin eso, un `[[` sin cerrar se tragaba el link SIGUIENTE: medido el 2026-08-28,
@@ -1145,6 +1169,10 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     leak_patterns = IMPL_LEAK_RE + downstream_leaks(cfg.load_downstream())
     pdf_issues: list = []              # (stem, ...) — drift frontmatter `pdf` ↔ PDF en disco
     headerless: list = []              # (stem, motivo) — ficha/concepto sin cabecera estampable (#69)
+    estado_desfasado: list = []        # (stem, motivo) — #233: la cabecera no es la que el estampador da
+    salv_sin_marca: list = []          # (stem, motivo) — #234: salvedades sin la marca de #213
+    salv_decidible: list = []          # (stem, motivo) — #234: salvedad en prosa que parece chequeable
+    faceta_sin_frontera: list = []     # (faceta, motivo) — #236: token corto que matchea dentro de palabra
     thesis_refs: dict[str, list] = {}  # valor de thesis_link -> notas que lo usan
     method_refs: dict[str, list] = {}  # valor de methods -> notas de paper que lo declaran
     dispute_refs: list = []            # (nota, field, ref) de las posiciones de cada disputa (#71)
@@ -1347,6 +1375,25 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 if rx.search(line):
                     impl_leaks.append((stem, f"L{i} [{label}]: {line.strip()[:80]}"))
                     break
+        # #234 — las salvedades de una nota de paper. #213 le dio a la afirmación decidible una
+        # forma estructurada y un `grep`; lo que no le dio es nada que haga que el extractor la
+        # USE. Medido sobre una bóveda real: 0 de 43 extracciones emitieron una salvedad
+        # estructurada, ninguna nota llevaba la marca de #213, y una salvedad FALSA volvió a
+        # colarse — publicada bajo `**Salvedades:**` pelado, al mismo nivel visual que tendría una
+        # chequeada. Los dos hallazgos son backlog: son deuda de re-corrida, no violación.
+        if in_dir(f, "papers") and "**Salvedades" in text:
+            if "NO VERIFICADAS" not in text and "verificadas contra el archivo" not in text:
+                salv_sin_marca.append(
+                    (stem, "publica `**Salvedades:**` sin la marca de #213: no se distingue la "
+                           "chequeada contra el archivo de la que es juicio del extractor → "
+                           "re-correr `harvest_views.py <slug>`"))
+            for _ln in text.split("\n"):
+                _b = _ln.strip()
+                if _b.startswith(("- ", "* ")) and cfg.looks_decidable(_b):
+                    salv_decidible.append(
+                        (stem, f"salvedad en prosa que un script podría decidir: «{_b[2:82]}…» → "
+                               f"emitila estructurada (`SALVEDAD_TIPOS`) y el cosechador la chequea"))
+
         # #227 — la FORMA del artefacto. El artefacto es lo que viaja, y hasta 1.82.3 nadie miraba
         # si renderiza. Medido en una nota real con `lint --cierre` en 0: una fila de tabla con 9
         # celdas en una tabla de 4 (dos filas fusionadas por un empalme) que **no se renderiza** —y
@@ -1374,6 +1421,33 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         # —hoy el puntero de búsqueda de #64—, que anclan ahí y devuelven False en silencio. Sin
         # esta categoría el no-op no deja rastro: la feature no llega a la nota y nadie se entera
         # (medido en una bóveda real: 22 de 25). Se arregla con `make_notes.py --restamp-headers`.
+        # #233 — la cabecera que la nota PUBLICA contra la que el estampador daría hoy. Nadie las
+        # compara: `estado_line` y el lint comparten la regla de la fecha (AUD-136) pero ningún
+        # chequeo cruza «lo que se publicó» con «lo que se produciría». Medido: una nota publicaba
+        # DOS de las tres fechas obligatorias —le faltaba la de verificación— habiendo pasado el
+        # gate de cierre, y el estampador del framework producía la línea correcta: nadie lo había
+        # re-corrido. Es el defecto que AUD-136 arregló entre lint y estampador, un nivel más
+        # arriba: allá eran dos implementaciones que discrepaban, acá una que nadie verifica que se
+        # haya corrido. Backlog: la nota es válida, lo que falta es re-estampar.
+        _slug_ent = _entity_slug(f)
+        if _slug_ent and GENERATOR_LINE in text:
+            try:
+                _quiere = mn.estado_line(_slug_ent, Path(f))
+            except Exception:                             # noqa: BLE001 — un registro roto ya se reporta
+                _quiere = ""
+            _hay = next((l for l in text.split("\n") if l.startswith(ESTADO_PREFIJO)), "")
+            # ⚠ Sólo la nota que YA publica una línea de estado: el hallazgo es el DESFASE, no la
+            # ausencia. Una nota que nunca la tuvo es el caso de #69 (cabecera no estampable) y
+            # marcarla acá duplicaría ese hallazgo en dos categorías con severidades distintas —
+            # que es cómo una de las dos se deja de mirar. Medido: sin este recorte el corpus
+            # sintético limpio reportaba 4 fichas que nunca habían pasado por el estampador.
+            if _quiere and _hay:
+                if _hay.strip() != _quiere.strip():
+                    estado_desfasado.append(
+                        (stem, "la cabecera `> _Estado — …_` no es la que el estampador da hoy "
+                               "(¿faltó re-correr después del último paso?) → `python "
+                               f"scripts/make_notes.py {_slug_ent}`"))
+
         if f.startswith((str(cfg.STARS), str(cfg.CONCEPTS))) and GENERATOR_LINE not in text:
             headerless.append((stem, "sin la línea `_Generado con Almagesto v…_`: los estampadores "
                                      "de cabecera no pueden actuar → `python scripts/make_notes.py "
@@ -3007,6 +3081,32 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
 
 
     # ── la tabla: clave, título, severidad, hallazgos. **Una sola declaración** de cada cosa.
+    # #236 — un token alfabético corto SIN `\b` en una faceta matchea DENTRO de otra palabra.
+    # Medido: `expres` (por el espectrógrafo EXPRES) entraba por «Venus Express», «Mars Express» y
+    # «expressed», y `neid` por el apellido «Schneider»; 19 de 193 registros tenían esa faceta sólo
+    # por ahí, y como la bóveda declaraba `require: [rv]` eso la volvía la única puerta: **4 de 32
+    # papers vivos eran core por accidente**. El falso positivo de una faceta NO DEJA RASTRO —el
+    # paper entra, se baja, se lee y se sintetiza—, así que sólo se ve corriendo la regex contra el
+    # corpus y mirando QUÉ matcheó. Con `build/<slug>/ads.json` a mano se nombran las palabras.
+    if not cfg.objective_error():
+        _textos = []
+        for _aj in sorted(glob.glob(str(cfg.ROOT / "build" / "*" / "ads.json"))):
+            try:
+                for _r in (json.load(open(_aj, encoding="utf-8")) or {}).get("records", []):
+                    _t = _r.get("title")
+                    _textos.append(" ".join([_t if isinstance(_t, str) else " ".join(_t or []),
+                                             _r.get("abstract") or ""]))
+            except (OSError, ValueError):
+                continue
+        for _nombre, _pat in (cfg.load_objective().get("relevance", {}).get("facets", {}) or {}).items():
+            for _tok in cfg.facet_tokens_without_boundary(_pat):
+                _leaks = cfg.facet_token_leaks(_tok, _textos) if _textos else []
+                _ev = (" — matchea dentro de " + ", ".join(f"«{w}»" for w in _leaks)) if _leaks else \
+                      " (sin corpus en `build/` para medir dentro de qué palabras cae)"
+                faceta_sin_frontera.append(
+                    (str(_nombre), f"el token `{_tok}` no lleva `\\b` y matchea DENTRO de otra "
+                                   f"palabra{_ev} → escribilo `\\b{_tok}\\b`"))
+
     categorias = [
         Categoria('not_evaluated', '⛔ No evaluado: el chequeo no pudo correr (hecho del ENTORNO, no de la bóveda — cuenta para el exit)', SEV_BLOQUEANTE, tuple(not_evaluated)),
         Categoria('broken', 'Wikilinks rotos (página faltante)', SEV_BLOQUEANTE, tuple(broken), poblacion='notas'),
@@ -3084,6 +3184,10 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('coverage', 'Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog)', SEV_BACKLOG, tuple(coverage), poblacion='entidades'),
         Categoria('unsynthesized', 'Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog)', SEV_BACKLOG, tuple(unsynthesized), poblacion='papers'),
         Categoria('headerless', 'Cabecera no estampable: ficha/concepto sin la línea del generador — los estampadores de cabecera no-opean en silencio (backlog)', SEV_BACKLOG, tuple(headerless), poblacion='entidades'),
+        Categoria('estado_desfasado', '🗓 Cabecera `> _Estado —_` desfasada: no es la que el estampador da hoy (backlog)', SEV_BACKLOG, tuple(estado_desfasado), poblacion='entidades'),
+        Categoria('salv_sin_marca', '🏷 Salvedades sin la marca de #213 (no se distingue chequeada de juicio) (backlog)', SEV_BACKLOG, tuple(salv_sin_marca), poblacion='papers'),
+        Categoria('salv_decidible', '⚙ Salvedad en prosa que un script podría decidir: emitila estructurada (#234, backlog)', SEV_BACKLOG, tuple(salv_decidible), poblacion='papers'),
+        Categoria('faceta_sin_frontera', '🕳 Faceta con token corto sin `\\b`: matchea DENTRO de otra palabra (#236, backlog)', SEV_BACKLOG, tuple(faceta_sin_frontera), poblacion='config'),
         Categoria('sweep_pendiente', 'Barrido full-text (2b) sin rastro o truncado: no consta que la '
                   'segunda red para el punto ciego de la query se haya tendido entera (backlog)',
                   SEV_BACKLOG, tuple(sweep_pendiente), poblacion='registros'),

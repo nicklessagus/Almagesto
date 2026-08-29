@@ -1539,6 +1539,29 @@ bloque **debe** llevar fecha—. **Ya no es el mecanismo principal**: las anclas
 granularidad de par, y esto queda como **red** para notas con bloque y sin tabla parseable; **fuera de un repo no degrada a silencio**: el chequeo cae en la
 categoría **⛔ No evaluado** y cuenta para el exit, porque un `stale (0)` que nadie midió se lee
 como "todo al día" (D-43). La rama "bloque sin fecha" no necesita git y sigue corriendo siempre).
+⛔ **Y la cabecera que la nota PUBLICA se compara contra la que el estampador daría hoy (#233,
+backlog).** `estado_line` y el lint comparten la regla de la fecha (AUD-136), pero nadie cruzaba *lo
+que se publicó* con *lo que se produciría*: medido, una nota publicaba **dos de las tres fechas**
+obligatorias —le faltaba la de verificación, que existía— y pasó el gate de cierre, mientras el
+estampador del framework producía la línea correcta. Nadie lo había re-corrido. Es el defecto que
+AUD-136 arregló entre lint y estampador, un nivel más arriba: allá eran dos implementaciones que
+discrepaban, acá **una que nadie verifica que se haya corrido**.
+⛔ **Las salvedades sin la marca de #213 y las que un script podría decidir son backlog (#234).**
+#213 le dio a la afirmación decidible una forma estructurada y un `grep`; lo que no le dio es nada
+que haga que el extractor la **use**. Medido en una bóveda real: **0 de 43** extracciones emitieron
+una salvedad estructurada, ninguna nota llevaba la marca, y una salvedad **falsa** volvió a colarse
+—publicada bajo `**Salvedades:**` pelado, al mismo nivel visual que tendría una chequeada—. El
+segundo detector es heurística de alta señal, como el de fuga: marca la salvedad en prosa cuyo texto
+*parece* decidible (`el .txt no lo contiene`, `tiene N páginas`) para que se reescriba estructurada.
+⛔ **Y una faceta con un token alfabético CORTO sin `\b` es backlog (#236), porque matchea DENTRO de
+otra palabra.** Medido: `expres` (por el espectrógrafo EXPRES) entraba por *«Venus Express»*, *«Mars
+Express»* y *«expressed»*, y `neid` por el apellido *«Schneider»* — **19 de 193** registros tenían
+esa faceta sólo por ahí, y como la bóveda declaraba `require: [rv]` eso la volvía la única puerta:
+**4 de 32 papers vivos eran core por accidente**. El hallazgo **nombra la palabra** que lo disparó
+cuando hay corpus en `build/`, porque el token solo es una sospecha y la palabra es la evidencia.
+⚠ Importa porque el **falso positivo de una faceta no deja rastro** —el paper entra, se baja, se lee
+y se sintetiza—: es el simétrico del falso negativo que este documento ya declara (*lo que la lente
+descarta no se baja*), y hasta 1.84.1 sólo una de las dos direcciones tenía red.
 La **cabecera no estampable** (#69: una ficha o concepto **sin** la línea
 `> _Generado con Almagesto v…_`, que es el ancla de **todos** los estampadores de cabecera) es
 **backlog**: la nota es válida, pero cualquier cirugía de cabecera —hoy el puntero de búsqueda de
