@@ -1433,6 +1433,19 @@ Su hermano **cuerpo ↔ frontmatter** (mismo bloque, WARN) mira lo que aquél no
 **línea de cabecera** —metadata derivada, la re-estampa `make_notes`— debe existir sii `pdf` apunta a un PDF
 vigente. Distingue "sin link" (lo arregla el backfill `python scripts/make_notes.py --restamp-pdf-links`)
 de "cabecera fuera del contrato" (el re-estampado la saltea: hay que normalizar la cabecera primero).
+⛔ **Y la FORMA del artefacto se chequea, porque el artefacto es lo que viaja (#227).** Una **fila
+de tabla con más celdas que su encabezado BLOQUEA**: GFM descarta el excedente, así que el contenido
+queda **invisible para el lector** mientras toda herramienta que parsea el archivo lo sigue viendo —
+y puede estar certificado como par verificado. Medido en una nota con `lint --cierre` en 0: dos
+filas de `## Régimen de validez` fusionadas en una línea por un empalme (9 celdas en una tabla de
+4), y la fila perdida era **la única precondición del corpus** sobre su tema, con su fila en el
+bloque de verificación diciendo `soportada`. Como **backlog** van sus dos hermanas del mismo eje: un
+**marcador sin cerrar** (`` ` ``/`$` — medido uno abierto durante 268 líneas) y un **párrafo
+duplicado** en la misma nota (medido, con dos finales distintos, y entre las dos copias el
+preámbulo de otra sección, que quedó publicada sin prosa). ⚠ Los dos últimos se cuentan por
+**párrafo y no por línea**: las notas van hard-wrapped a ~100 columnas y una fórmula cruza el salto
+con naturalidad — contar por línea daba 5 falsos positivos en la primera nota real probada, y una
+categoría de alta señal que grita en falso se deja de mirar.
 Un **`.obsidian/` en la raíz del repo** es **WARN** (la bóveda se abrió mal: el grafo indexa el
 andamiaje — abrir la carpeta `vault/` como vault y borrar ese directorio). Las **citas no verificables** (bibcode citado en query/concepto/hipótesis sin su `.txt` en
 `vault/raw/fulltext/`) se listan como precondición de `verify-citations`; ídem las **fuentes

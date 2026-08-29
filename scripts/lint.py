@@ -1138,6 +1138,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     log_sin_entrada: list = []         # (slug, motivo) — #118: la cadena corrió y el log no lo dice
     sweep_pendiente: list = []         # (slug, motivo) — #88: el barrido 2b no consta en el registro
     impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
+    forma_rota: list = []              # (stem, motivo) — #227: fila de tabla que NO renderiza
+    forma_sospechosa: list = []        # (stem, motivo) — #227: backtick abierto, párrafo duplicado
     # D-50: los genéricos + un patrón por consumidor declarado. Se arma UNA vez por corrida, no por
     # línea: el scan recorre el cuerpo de toda nota de la bóveda.
     leak_patterns = IMPL_LEAK_RE + downstream_leaks(cfg.load_downstream())
@@ -1345,6 +1347,28 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 if rx.search(line):
                     impl_leaks.append((stem, f"L{i} [{label}]: {line.strip()[:80]}"))
                     break
+        # #227 — la FORMA del artefacto. El artefacto es lo que viaja, y hasta 1.82.3 nadie miraba
+        # si renderiza. Medido en una nota real con `lint --cierre` en 0: una fila de tabla con 9
+        # celdas en una tabla de 4 (dos filas fusionadas por un empalme) que **no se renderiza** —y
+        # que el bloque de verificación certificaba como par verificado—, un backtick abierto
+        # durante 268 líneas, y un párrafo duplicado con dos finales distintos.
+        # La fila mal formada BLOQUEA: no es «se ve feo», es contenido que el lector no ve mientras
+        # toda herramienta que parsea el archivo sí lo ve — y puede estar certificado como
+        # verificado. Las otras dos son backlog: molestan, no ocultan.
+        if stem not in NON_ORPHAN:
+            for _ln, _got, _want in cfg.table_shape_issues(body_full):
+                forma_rota.append(
+                    (stem, f"L{_ln + _offset}: fila de tabla con {_got} celda(s) y su encabezado "
+                           f"tiene {_want} → las de más NO se renderizan (¿dos filas empalmadas en "
+                           f"una línea?)"))
+            for _ln, _marca in cfg.unclosed_markers(body_full):
+                forma_sospechosa.append(
+                    (stem, f"L{_ln + _offset}: el párrafo deja un `{_marca}` sin cerrar — se traga "
+                           f"el texto que sigue"))
+            for _ln, _txt in cfg.duplicate_paragraphs(body_full):
+                forma_sospechosa.append(
+                    (stem, f"L{_ln + _offset}: párrafo repetido en la misma nota — «{_txt}…»"))
+
         # Cabecera no estampable (#69, backlog): una ficha/concepto sin la línea
         # `> _Generado con Almagesto v…_` deja SIN EFECTO a todos los estampadores de cabecera
         # —hoy el puntero de búsqueda de #64—, que anclan ahí y devuelven False en silencio. Sin
@@ -3008,6 +3032,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('bad_sources', '⛔ `sources:` sin procedencia (#111): no consta quién declaró la fuente ni por qué', SEV_BLOQUEANTE, tuple(bad_sources), poblacion='temas'),
         Categoria('bad_roles', '⛔ `role` fuera del vocabulario — y todo campo con vocabulario CERRADO (`unidad_cita`, `pending_source`)', SEV_BLOQUEANTE, tuple(bad_roles), poblacion='papers'),
         Categoria('impl_leaks', '⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)', SEV_WARN, tuple(impl_leaks), poblacion='notas'),
+        Categoria('forma_rota', '⛔ Forma del artefacto: fila de tabla que NO renderiza (contenido invisible para el lector)', SEV_BLOQUEANTE, tuple(forma_rota), poblacion='notas'),
+        Categoria('forma_sospechosa', '⚠ Forma del artefacto: marcador sin cerrar o párrafo duplicado (backlog)', SEV_BACKLOG, tuple(forma_sospechosa), poblacion='notas'),
         Categoria('objective_warn', 'Objetivo sin instanciar (WARN — objective.yaml sigue en el placeholder del template)', SEV_WARN, tuple(objective_warn), poblacion='config'),
         Categoria('lente_rota', '⛔ Lente vacía o incoherente: ningún paper puede ser core', SEV_BLOQUEANTE, tuple(lente_rota), poblacion='config'),
         Categoria('undeclared_areas', 'Áreas de concepts/ no declaradas en objective.yaml (WARN, posible typo)', SEV_WARN, tuple(undeclared_areas), poblacion='notas'),

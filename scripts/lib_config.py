@@ -20,7 +20,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.82.3"
+ALMAGESTO_VERSION = "1.83.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -262,6 +262,155 @@ def missing_schema_fields(tipo: str, fm: dict) -> list:
     Presence, not value: see the comment on `SCHEMA_NOTA`. An unknown type returns `[]` — there is
     no schema to measure it against, and inventing one would be worse than not checking."""
     return [k for k in SCHEMA_NOTA.get(tipo, ()) if k not in fm]
+
+
+def table_shape_issues(body: str) -> list:
+    """Table rows whose cell count does not match their header's (#227). `[(line_no, got, want)]`.
+
+    ⛔ **The artefact is what travels.** A row with more cells than its header does not render —
+    GFM drops the excess— so the content is lost *in the reader's view* while still being there
+    for every tool that parses the file. Measured on a real note: two rows of `## Régimen de
+    validez` fused into one physical line (10 pipes in a 4-column table), so an entire claim —its
+    only precondition on calibrating PCA against synthetic data— became invisible… and it was a
+    **verified pair**: the note certified as checked a claim its own artefact does not show.
+
+    Nothing looked at this. The lint parsed table cells in exactly two places, both counting
+    content, never shape; `verify-citations` checked the fused row's text without noticing the row
+    does not render.
+
+    Line numbers are 1-based over the WHOLE file, the `grep -n` convention of this repo (#29).
+    """
+    out, header, sep = [], None, False
+    for i, raw in enumerate(body.split("\n"), 1):
+        ln = raw.strip()
+        if not ln.startswith("|"):
+            header, sep = None, False
+            continue
+        n = _n_cells(ln)
+        if header is None:
+            header, sep = n, False
+            continue
+        if not sep:                     # la línea de separación `|---|---|`
+            sep = True
+            continue
+        if n != header:
+            out.append((i, n, header))
+    return out
+
+
+def _n_cells(row: str) -> int:
+    """Cells of a markdown table row, honouring the escaped pipe (INV-99).
+
+    Splitting on a bare `|` is the bug INV-99 already paid for once: a cell that legitimately
+    carries an escaped pipe —a quotation that includes a table row of the paper— would be counted
+    as two, and this detector would report every such row as malformed."""
+    cuerpo = row.strip().strip("|")
+    return len(re.split(r"(?<!\\)\|", cuerpo))
+
+
+def unclosed_markers(body: str) -> list:
+    """Inline markers left open in a paragraph: `[(line_no, marker)]` (#227).
+
+    Backtick and `$…$` are the two that swallow the rest of the note when left open. Measured: a
+    `` ` `` opened on line 104 whose next backtick was on line **372** — 268 lines inside an
+    inline-code that never closes, produced by a spliced edit and invisible to every check.
+
+    ⛔ Counted per **paragraph** (contiguous non-empty lines), never per line: notes here are
+    hard-wrapped at ~100 columns, so a formula or an inline-code legitimately straddles a line
+    break. Per-line counting fires in false on every wrapped `$…$` — measured, 5 false positives
+    on the first note tried — and a high-signal category that cries wolf is one that stops being
+    read. Fenced code blocks are skipped whole.
+
+    Line numbers are 1-based over the WHOLE file, the `grep -n` convention of this repo (#29).
+    """
+    out, fenced, ini, acc = [], False, 0, []
+
+    def cerrar():
+        """Close the paragraph being accumulated and report the markers left open in it."""
+        if not acc:
+            return
+        texto = " ".join(acc)
+        for marca in ("`", "$"):
+            # `$$` de bloque va en línea propia y no abre inline
+            limpio = texto.replace("$$", "") if marca == "$" else texto
+            if limpio.count(marca) % 2:
+                out.append((ini, marca))
+
+    for i, raw in enumerate(body.split("\n"), 1):
+        ln = raw.strip()
+        if ln.startswith("```"):
+            cerrar(); acc = []
+            fenced = not fenced
+            continue
+        if fenced:
+            continue
+        if not ln:
+            cerrar(); acc = []
+            continue
+        if not acc:
+            ini = i
+        acc.append(ln)
+    cerrar()
+    return out
+
+
+def duplicate_paragraphs(body: str) -> list:
+    """Paragraphs that appear more than once in the same note: `[(line_no, first_line)]` (#227).
+
+    A spliced edit duplicates a paragraph and nothing notices: measured, one repeated verbatim
+    eleven lines apart, with two different endings, and between the two copies the introductory
+    paragraph of a DIFFERENT section — which left that section published with no prose at all.
+
+    Only paragraphs long enough to identify themselves (`_DUP_MIN`): a short line repeated is
+    normal (a table separator, a `—`, a heading-like bullet), and reporting those would drown the
+    real case. Fenced blocks and stamped sections are skipped: a roll-up legitimately repeats.
+    """
+    vistos, out, fenced, ini, acc, saltando = {}, [], False, 0, [], False
+
+    def cerrar():
+        """Close the paragraph being accumulated and check whether its opening was already seen."""
+        if not acc or saltando:
+            return
+        texto = " ".join(acc)
+        if len(texto) < _DUP_MIN:
+            return
+        # ⛔ Se compara el ARRANQUE, no el texto entero: el caso medido es un párrafo duplicado por
+        # un empalme **con dos finales distintos**, y exigir igualdad exacta lo pierde justo donde
+        # la edición fallida es más probable. Es el mismo criterio con que #216 compara abstracts.
+        clave = texto[:_DUP_CLAVE]
+        if clave in vistos:
+            out.append((ini, acc[0][:70]))
+        else:
+            vistos[clave] = ini
+
+    for i, raw in enumerate(body.split("\n"), 1):
+        ln = raw.strip()
+        if ln.startswith("```"):
+            cerrar(); acc = []
+            fenced = not fenced
+            continue
+        if fenced:
+            continue
+        if ln.startswith("## "):
+            cerrar(); acc = []
+            saltando = is_stamped_section(ln)
+            continue
+        if not ln:
+            cerrar(); acc = []
+            continue
+        if not acc:
+            ini = i
+        acc.append(ln)
+    cerrar()
+    return out
+
+
+#: Largo mínimo (normalizado) para que un párrafo repetido cuente como duplicado. Por debajo, la
+#: repetición es normal —un `—`, un bullet corto, una celda— y reportarla ahogaría el caso real.
+_DUP_MIN = 120
+#: Cuántos caracteres del arranque identifican al párrafo. Ver el comentario de arriba: un empalme
+#: duplica el párrafo y suele dejarle otro final, así que la igualdad exacta no lo ve.
+_DUP_CLAVE = 100
 
 
 def is_stamped_section(heading: str) -> bool:

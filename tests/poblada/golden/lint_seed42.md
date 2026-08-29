@@ -116,6 +116,12 @@
 ## ⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano) (0)
 > sobre 89 notas de `vault/wiki/`
 
+## ⛔ Forma del artefacto: fila de tabla que NO renderiza (contenido invisible para el lector) (0)
+> sobre 89 notas de `vault/wiki/`
+
+## ⚠ Forma del artefacto: marcador sin cerrar o párrafo duplicado (backlog) (0)
+> sobre 89 notas de `vault/wiki/`
+
 ## Objetivo sin instanciar (WARN — objective.yaml sigue en el placeholder del template) (0)
 > sobre 1 archivo de configuración
 

@@ -4614,3 +4614,68 @@ def test_la_exencion_no_alcanza_a_los_otros_veredictos(toy_vault, capsys):
     rc, rep = run_lint_reporte(capsys)
     assert "2020citC...1..1C" in _seccion(rep, "no declara contra qué archivo"), rep
     assert rc == 1
+
+
+# ── #227 · la FORMA del artefacto ────────────────────────────────────────────
+
+def test_fila_de_tabla_que_no_renderiza_bloquea(toy_vault, capsys):
+    """#227 — una fila con más celdas que su encabezado NO se renderiza: GFM descarta el excedente,
+    así que el contenido es invisible para el lector mientras toda herramienta que parsea el archivo
+    sí lo ve. Medido en una nota real: dos filas de `## Régimen de validez` fusionadas en una línea
+    por un empalme (9 celdas en una tabla de 4), y la fila perdida era un par **verificado** — la
+    nota certificaba como chequeada una afirmación que su propio artefacto no muestra."""
+    mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
+            "# nota\n\n| A | B |\n|---|---|\n| uno | dos |\n| tres | cuatro | cinco | seis |\n")
+    link_from_index(toy_vault, "nota")
+    rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "fila de tabla que NO renderiza")
+    assert "nota" in sec and "4 celda(s)" in sec, rep
+    assert rc == 1, "bloqueante: es contenido que el lector no ve"
+
+
+def test_una_tabla_bien_formada_no_es_hallazgo(toy_vault, capsys):
+    """#227 — el simétrico, y con el escape de INV-99: un `\\|` dentro de una celda no la parte."""
+    mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
+            "# nota\n\n| A | B |\n|---|---|\n| uno | dos |\n| con \\| barra | otra |\n")
+    link_from_index(toy_vault, "nota")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "nota" not in _seccion(rep, "fila de tabla que NO renderiza"), rep
+
+
+def test_backtick_sin_cerrar_es_backlog(toy_vault, capsys):
+    """#227 — un `` ` `` abierto se traga el texto que sigue. Medido: uno abierto en la línea 104
+    cuyo siguiente backtick estaba en la **372**."""
+    mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
+            "# nota\n\nUn párrafo que abre un `inline-code y nunca lo cierra, y sigue hablando de\n"
+            "otras cosas durante un buen rato sin cerrarlo jamás en ningún lado.\n")
+    link_from_index(toy_vault, "nota")
+    rc, rep = run_lint_reporte(capsys)
+    assert "sin cerrar" in _seccion(rep, "Forma del artefacto: marcador"), rep
+    assert rc == 0, "backlog: molesta, no oculta"
+
+
+def test_una_formula_envuelta_no_dispara(toy_vault, capsys):
+    """#227, el recorte que hace usable la categoría: las notas van hard-wrapped a ~100 columnas, así
+    que un `$…$` cruza el salto de línea con toda naturalidad. Contar por LÍNEA daba 5 falsos
+    positivos en la primera nota real probada; se cuenta por PÁRRAFO."""
+    mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
+            "# nota\n\nEl paso itera con $w_i^{+} = E[X g(w_i^T X)] -\n"
+            "E[g'(w_i^T X)] w_i$ hasta converger.\n")
+    link_from_index(toy_vault, "nota")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "sin cerrar" not in _seccion(rep, "Forma del artefacto: marcador"), rep
+
+
+def test_parrafo_duplicado_es_backlog(toy_vault, capsys):
+    """#227 — un empalme duplica un párrafo y nadie lo nota. ⚠ Se compara el ARRANQUE: el caso
+    medido venía duplicado **con dos finales distintos**, y la igualdad exacta lo perdería justo
+    donde la edición fallida es más probable."""
+    p = ("⚠ Que el defecto sea estructural no implica que el método lo arregle en datos reales, y "
+         "el único paper del corpus que lo mide contra verdad conocida encuentra que ")
+    mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
+            f"# nota\n\n{p}sí, con S/N alto.\n\nOtro párrafo en el medio del todo.\n\n{p}no, por "
+            "debajo de un umbral.\n")
+    link_from_index(toy_vault, "nota")
+    rc, rep = run_lint_reporte(capsys)
+    assert "párrafo repetido" in _seccion(rep, "Forma del artefacto: marcador"), rep
+    assert rc == 0
