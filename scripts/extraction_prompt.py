@@ -219,8 +219,67 @@ def _long_document(bibcode: str) -> tuple[str, str]:
     return (unidad, str(fm.get("alcance") or "").strip()) if unidad and unidad != "linea" else ("", "")
 
 
-def _reading_section(bibcode: str) -> str:
-    """The reading-strategy section, branched by `unidad_cita` (#241)."""
+SIN_PDF = """⛔ **NO HAY PDF de esta fuente en disco** (`{pdf}` no existe). La vista sale del
+**`## Abstract` de la nota** — `vault/wiki/papers/{bibcode}.md` — y de nada más, así que la
+**declarás `fuente: abstract`** en `vista` (#207). No inventes páginas: sin PDF no hay localizador
+de página, y el `linea` de cada valor dice de dónde salió (`abstract`).
+
+⛔ **El abstract es justo donde la fuente afirma DE MÁS.** Medido (RSOS 2025, 4900 resúmenes / 10
+modelos): el resumen es genérico donde el cuerpo acota, presente donde el cuerpo usa pasado,
+prescriptivo donde el cuerpo describe. Todo lo que saques de acá viaja con esa condición, y lo que
+el paper sostenga en su cuerpo **no se puede afirmar desde esta lectura**: eso va a `hueco`.
+
+⚠ Una vista de ocho líneas de abstract **no puede quedar indistinguible** de haber leído el paper:
+ése es el falso limpio que `fuente` existe para cerrar. Si el abstract no alcanza para decir nada
+del sujeto, decilo — es un resultado válido."""
+"""Reading block when the paper has NO PDF on disk (#255): the abstract is the source, and it says so."""
+
+SIN_TXT = """## Búsqueda — NO HAY ÍNDICE
+⛔ **No existe `{txt}`**, así que no hay `grep` que correr sobre esta fuente. Un `grep` que **no
+corrió** no es «el paper no lo dice» (D-43): si no podés confirmar algo, va a `hueco`, no a una
+afirmación negativa."""
+"""Search block when there is no `.txt` (#255): saying so beats emitting greps over a missing file."""
+
+
+def _source_section(slug: str, bibcode: str, name: str, alias_str: str) -> str:
+    '''The source block, branched by DISK TRUTH (#255).
+
+    `fuente: abstract` (#207) was wired everywhere — schema, the harvester's disk cross-check, the
+    lint category — except this last leg. For a paper with no PDF the prompt still ordered, in bold
+    and with a stop sign, "read the PDF", pointed at a `.txt` that does not exist and told the
+    extractor to start from the conclusions; the only warning went to **stderr**, which every pipe
+    drops, and the skill tells the subagent to follow what the command *prints*. Worse than the
+    silence of #241: the prompt does not omit the instruction, it orders the opposite one.
+
+    @inv INV-144'''
+    if (cfg.PDFS / slug / f"{bibcode}.pdf").exists():
+        return f"""⛔ **Leé el PDF: `{_pdf_rel(slug, bibcode)}`.** `Read` lo rasteriza, así que **ves** la página —
+ecuaciones, tablas y figuras incluidas. Extraé lo que esa fuente dice sobre **{name}**
+(alias: {alias_str}), y **citá por PÁGINA del PDF**."""
+    return SIN_PDF.format(pdf=_pdf_rel(slug, bibcode), bibcode=bibcode)
+
+
+def _search_section(slug: str, bibcode: str, greps: str, hay_txt: bool) -> str:
+    """The search block, branched by disk truth (#255).
+
+    Emitting a dozen `grep` commands over a `.txt` that does not exist is worse than emitting
+    nothing: they all come back empty, and an empty grep reads as "the paper does not say this" —
+    the exact inference D-43 forbids.  @inv INV-144"""
+    if not hay_txt:
+        return SIN_TXT.format(txt=_txt_rel(slug, bibcode))
+    return ("## Búsqueda — para UBICAR, no para citar\n"
+            "Estos patrones sobre el `.txt` te dicen **en qué parte del paper** mirar; el dato lo "
+            f"leés del PDF:\n\n{greps}")
+
+
+def _reading_section(bibcode: str, hay_pdf: bool = True) -> str:
+    """The reading-strategy section, branched by `unidad_cita` (#241) and by disk truth (#255).
+
+    Without a PDF there is no document to walk, so the CORTO block —«open the conclusions, then go
+    to the body»— names two things that do not exist. The abstract-only block already says how to
+    read what there is."""
+    if not hay_pdf:
+        return ""
     unidad, alcance = _long_document(bibcode)
     if not unidad:
         return CORTO
@@ -295,28 +354,26 @@ def build_prompt(slug: str, bibcode: str, name: str, aliases, texto: str = "",
     out = f"{out_dir.rstrip('/')}/{bibcode}.json" if out_dir else f"build/{slug}/extraccion/{bibcode}.json"
     alias_str = ", ".join(f"`{a}`" for a in [name, *(aliases or [])])
     ejes = axes_skeleton()          # #254: los ejes son la lente de ESTA bóveda, no un literal
-    return f"""Sos un extractor de UNA sola fuente. Trabajás desde la raíz del repo.
-
-⛔ **Leé el PDF: `{_pdf_rel(slug, bibcode)}`.** `Read` lo rasteriza, así que **ves** la página —
-ecuaciones, tablas y figuras incluidas. Extraé lo que esa fuente dice sobre **{name}**
-(alias: {alias_str}), y **citá por PÁGINA del PDF**.
-
+    hay_pdf = (cfg.PDFS / slug / f"{bibcode}.pdf").exists()
+    hay_txt = (cfg.FULLTEXT / slug / f"{bibcode}.txt").exists()
+    txt_nota = f"""
 ⛔ **El `.txt` NO es fuente.** `{_txt_rel(slug, bibcode)}` lo produce `pdftotext` y es el **índice
 de búsqueda** del corpus, no material de lectura: sirve para *ubicar* dónde se menciona el sujeto,
 nunca para transcribir ni para citar. Medido el 2026-08-28 sobre dos papers, uno de ellos con los
 tres chequeos de calidad **en verde**: el `.txt` había perdido el radical `√` (sale como una `r`
 suelta), la prima de `p′` (como `p0`), superíndices de transpuesta, y un subíndice que hacía leer
 una autocovarianza como una inversa. Nada de eso se ve desde el `.txt`.
+""" if (hay_pdf and hay_txt) else ""
+    return f"""Sos un extractor de UNA sola fuente. Trabajás desde la raíz del repo.
 
+{_source_section(slug, bibcode, name, alias_str)}
+{txt_nota}
 Esto es **una VISTA**, no «la extracción del paper» (#188): el mismo paper leído desde otro sujeto
 da otra vista, y por eso el producto lleva de quién es. Va a la sección `## Vista — {sujeto}` de
 `vault/wiki/papers/{bibcode}.md`. Lo que la fuente diga sobre **otros** sujetos no entra acá.
 
-{_reading_section(bibcode)}
-## Búsqueda — para UBICAR, no para citar
-Estos patrones sobre el `.txt` te dicen **en qué parte del paper** mirar; el dato lo leés del PDF:
-
-{greps}
+{_reading_section(bibcode, hay_pdf)}
+{_search_section(slug, bibcode, greps, hay_txt)}
 
 - Si la fuente **no dice nada** del sujeto, eso es un resultado válido y legítimo: decilo.
 - Un `grep` vacío **no prueba ausencia**: el `.txt` no tiene lo que vive en tablas-imagen, figuras

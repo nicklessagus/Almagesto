@@ -199,6 +199,12 @@ Progreso del ingest de <estrella>:
    *devueltos vs lanzados*— y re-lanzá **sólo** los que faltan. Los cuatro duplicados de extracción
    que destaparon #213 salieron exactamente de re-lanzar el lote entero ante este error.
 
+   ⚠ **Un paper SIN PDF también se extrae, y el prompt lo sabe (#255).** Ramifica por verdad de
+   disco: nombra el `## Abstract` de la nota como fuente, manda declarar `fuente: abstract` (#207)
+   con su advertencia de *generalization bias*, y **no emite los `grep`** cuando no hay `.txt` —un
+   grep que no corrió no es «el paper no lo dice»—. Antes ordenaba leer un PDF inexistente y el
+   único aviso iba a `stderr`, que todo pipe descarta.
+
    ⛔ **El prompt de cada subagente se GENERA, no se escribe a mano (INV-100):**
    ```bash
    python scripts/extraction_prompt.py <slug> <bibcode>      # --theme si el slug es un tema

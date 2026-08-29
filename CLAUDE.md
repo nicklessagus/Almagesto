@@ -898,6 +898,9 @@ verificable:
 
 4. extractor (LLM)    →  lee EL PDF (`Read` lo rasteriza: ve ecuaciones, tablas y
                          figuras) y cita PÁGINA. El `.txt` sólo para ubicar con grep.
+                         ⚠ Sin PDF en disco el prompt NO manda leerlo (#255): nombra el
+                         `## Abstract` de la nota como fuente, manda declarar `fuente: abstract`
+                         y no emite `grep` sobre un `.txt` que no está.
                          Sus EJES salen de `relevance.facets` de ESTA bóveda (#254), no de
                          un literal: una faceta que el prompt no nombra no se pregunta, y el
                          silencio de la vista sobre ella se lee como «se miró y no hay nada».

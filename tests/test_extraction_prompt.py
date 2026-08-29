@@ -424,3 +424,66 @@ def test_sin_facetas_legibles_el_prompt_lo_DICE(toy_vault, monkeypatch):
     esqueleto = ep.axes_skeleton()
     assert "SIN_FACETAS" in esqueleto and "NO inventes ejes" in esqueleto
     assert '"rv"' not in esqueleto, "no se rellena con la lente del template"
+
+
+# ── #255 · el prompt ramifica por VERDAD DE DISCO ────────────────────────────────────────────────
+#
+# Los tests de arriba ejercen la rama NORMAL (PDF y `.txt` en disco), que es lo que quieren probar.
+# Antes de #255 el prompt no miraba el disco, así que corrían sin artefactos y no se notaba; hoy la
+# diferencia es visible y la fixture tiene que ser fiel al caso que el test describe.
+PARES_CON_ARTEFACTOS = [
+    ("tau_ceti", "2017AJ....154..135F"), ("gp", "2006Rasmussen"), ("gp", "2020X"),
+    ("ica", "1994Comon"), ("ica", "2019Pfister"), ("ica", "2009Wiklund"), ("x", "2020A"),
+    ("ica", "2001Hyvarinen"), ("libro", "2001HKO"),
+    ("ica", "2020corto"), ("ica", "2010Libro"), ("ica", "2010LibroConAlcance"),
+]
+
+
+@pytest.fixture(autouse=True)
+def _artefactos_en_disco(toy_vault):
+    """PDF y `.txt` de los pares que los tests de la rama normal usan.
+
+    Explícita a propósito: `2020SinPDF` NO está en la lista, y es el bibcode con el que los tests de
+    #255 ejercen la rama sin artefactos."""
+    for slug, bib in PARES_CON_ARTEFACTOS:
+        pdf = cfg.PDFS / slug / f"{bib}.pdf"
+        pdf.parent.mkdir(parents=True, exist_ok=True)
+        pdf.write_bytes(b"%PDF-1.4\n")
+        txt = cfg.FULLTEXT / slug / f"{bib}.txt"
+        txt.parent.mkdir(parents=True, exist_ok=True)
+        txt.write_text("texto\n", encoding="utf-8")
+
+
+
+
+def test_sin_PDF_el_prompt_manda_al_abstract_y_no_al_PDF(toy_vault):
+    """#255: el generador avisaba por **stderr** que no hay PDF y emitía por stdout un prompt cuyo
+    cuerpo ordena, con ⛔ y en negrita, «Leé el PDF» — un archivo que no existe. `2>/dev/null` no es
+    un caso rebuscado: es el caso normal, porque todo lo que capture la salida (un pipe, un `$(...)`,
+    un subagente al que se le pasa el prompt) se queda con stdout y tira el aviso.
+
+    Peor que el silencio de #241: el prompt no omite la instrucción, **ordena la contraria**.
+
+    @inv INV-144"""
+    prompt = ep.build_prompt("test_star", "2020SinPDF", "Estrella Test", ["HD 12345"])
+    assert "Leé el PDF" not in prompt, "no se manda leer un archivo que no está"
+    assert "NO HAY PDF" in prompt and "fuente: abstract" in prompt, \
+        "se dice cuál es la fuente real y cómo declararla (#207)"
+    assert "afirma DE MÁS" in prompt, \
+        "y viaja con la advertencia de generalization bias que #207 pide para este caso"
+
+
+def test_sin_txt_no_se_emiten_greps_sobre_un_archivo_inexistente(toy_vault):
+    """Una docena de `grep` sobre un `.txt` que no existe vuelven todos vacíos, y un grep vacío se
+    lee como «el paper no lo dice» — la inferencia que D-43 prohíbe.  @inv INV-144"""
+    prompt = ep.build_prompt("test_star", "2020SinPDF", "Estrella Test", ["HD 12345"])
+    assert "grep -niE" not in prompt
+    assert "NO HAY ÍNDICE" in prompt and "no es «el paper no lo dice»" in prompt
+
+
+def test_con_PDF_el_prompt_no_cambia(toy_vault):
+    """La otra mitad: la rama normal —PDF y `.txt` en disco— sigue diciendo lo de siempre. Sin este
+    test, «no mandes leer el PDF» se podría cumplir no mandándolo nunca.  @inv INV-144"""
+    prompt = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, UNA_COLUMNA)
+    assert "Leé el PDF" in prompt and "NO HAY PDF" not in prompt
+    assert "grep -niE" in prompt and "El `.txt` NO es fuente" in prompt
