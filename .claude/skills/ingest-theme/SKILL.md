@@ -337,6 +337,14 @@ Qué cambia respecto del flujo ADS de arriba:
   lente, mismas puertas, misma compuerta de triage). Sin `query:`, la mitad astro entra sólo por los
   bibcodes que enumeres en `extra_core:` — medido en ICA: 11 papers a mano contra familias enteras
   que la query encuentra sola.
+- ⛔ **Y `sources:` puede quedar VACÍA en la primera corrida (#211).** Es el orden que este mismo
+  skill prescribe: el paso 0b manda barrer los tres backends **antes** de declarar nada a mano, y el
+  **anclaje** —lo que más rinde— necesita la mitad ADS ya bajada. Así que la primera corrida de un
+  tema mixto es `query:` poblada + `sources: []`, se declaran las fuentes off-ADS después, y se
+  vuelve a correr (la cadena es idempotente). El orquestador aborta sólo si el tema no tiene
+  **ninguna** vía de papers (ni `sources:`, ni `query:`, ni `extra_core:`) y **avisa** cuando corre
+  sólo la mitad ADS, para que no se lea como que corrió todo. Hasta 1.76.2 el guard abortaba con
+  `sources:` vacía, o sea medía la premisa que #104 rompió, y el orden de arriba era un **deadlock**.
 - **Sin ADS (si `query:` queda en null):** se saltean `query_ads.py`, `fetch_arxiv.py`, `fetch_pdf.py` y `fetch_ground_truth.py`. En
   `vault/config/themes.yaml` la entrada lleva `query: null`, el switch **`source: web | local-pdfs |
   local-pdfs+web`** y la bibliografía **declarada** en la lista `sources:` (cada item: `key`

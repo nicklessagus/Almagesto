@@ -216,9 +216,25 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
     # conviene degradar a `[]` (no adivinar un elemento): el mensaje de abajo ya explica el formato
     # correcto (`sources:` con items `key + url|pdf`), y un escalar no alcanza para reconstruir eso.
     sources = cfg.as_list(meta.get("sources"))
+    # #211 — el guard viejo abortaba con `sources:` vacía, o sea medía la premisa que #104 rompió
+    # (off-ADS ⇒ hay `sources:`). Un tema MIXTO con `query:` poblada y las fuentes todavía sin
+    # declarar es el caso NORMAL al empezar: el paso 0b del skill manda barrer los tres backends
+    # ANTES de declarar nada a mano, y el anclaje —lo que más rinde— necesita la mitad ADS ya
+    # bajada. Con el guard viejo eso era un deadlock: para declarar bien las fuentes hacía falta
+    # el anclaje, para el anclaje la mitad ADS, y para la mitad ADS haber declarado las fuentes.
+    # Se aborta cuando el tema no tiene NINGUNA vía de papers, no cuando le falta una de tres.
+    extra = [e["bibcode"] for e in cfg.load_extra_core(meta, entry=slug)]
+    if not sources and not meta.get("query") and not extra:
+        sys.exit(f"'{slug}' es off-ADS (source: {meta.get('source')}) y no tiene ninguna vía de "
+                 "papers: ni `sources:` (bibliografía declarada: items con key + url|pdf; ver "
+                 "header del YAML), ni `query:` (mitad ADS del tema mixto), ni `extra_core:` "
+                 "(bibcodes ADS curados). Declará al menos una en themes.yaml.")
     if not sources:
-        sys.exit(f"'{slug}' es off-ADS (source: {meta.get('source')}) pero no declara `sources:` en "
-                 "themes.yaml — listá ahí su bibliografía (items con key + url|pdf; ver header del YAML).")
+        # No callarlo: sin este aviso la corrida se lee como "corrió todo" cuando corrió la mitad.
+        cfg.print_seguro(f"  ⚠ `{slug}`: tema mixto SIN fuentes declaradas todavía → corro sólo la "
+                         f"mitad ADS ({'query' if meta.get('query') else 'extra_core'}). Las "
+                         f"fuentes off-ADS se declaran después en `sources:` (paso 0b del skill: "
+                         f"barré los backends primero, la lista a mano es el último recurso).")
     allowed = OFFADS_KINDS[meta["source"]]
     concept = meta["concept"]
     # #81: el rechazo de una fuente declarada vive en `decisiones` del registro versionado
@@ -346,7 +362,7 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
     # sin corchetes (un solo paper con bibcode ADS en un tema mixto) es truthy y no caía en el
     # `or`; la comprensión de abajo recorría el string letra por letra y el bibcode real nunca
     # entraba a la sub-cadena ADS: la curación manual se perdía en silencio.
-    extra = [e["bibcode"] for e in cfg.load_extra_core(meta, entry=slug)]
+    # (`extra` se calcula arriba, junto al guard de #211 que lo necesita.)
     # #104 — un tema MIXTO puede además declarar `query:`. Sin ella la mitad astro entra SÓLO por
     # los bibcodes que el operador enumeró a mano (`--extra-only`), o sea el modo off-ADS le quitaba
     # el descubrimiento automático a la mitad del tema que ADS sí indexa. Medido en el ingest de
@@ -374,7 +390,10 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
                 sys.exit(f"{script} falló (rc={rc}) — cadena abortada. La cadena es idempotente: "
                          "corregí y re-corré ingest_theme.py (lo ya bajado no se re-baja).")
     extract_rc = 0
-    if n_pdf or extra:
+    # #211 — `query` entra a la condición: la mitad ADS del tema mixto baja PDFs con `fetch_pdf`
+    # y su extracción sale por acá. Sin esto, un tema mixto con `query:` y sin `extra_core:` ni
+    # PDFs locales (el caso normal en la primera corrida) bajaba el corpus y NO lo extraía.
+    if n_pdf or extra or meta.get("query"):
         # el rc de extract se reporta aparte: un fallo de extracción NO es una "fuente fallida"
         # (contarlo ahí inflaba el conteo del aviso final)
         extract_rc = run("extract_fulltext.py", slug, *(["--force"] if force else []),
@@ -417,7 +436,7 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
     # retracciones (Crossref) — una fuente retractada silenciosa rompe la frontera dura igual.
     # Con extra_core también corre: los papers ADS del tema mixto traen DOI. Sólo los papers de
     # ESTE tema (--slug: sources + extra_core); el barrido completo es pasada periódica (maintain).
-    if any(s.get("doi") for s in sources) or extra:
+    if any(s.get("doi") for s in sources) or extra or meta.get("query"):
         _cierre_retracciones(slug)
     else:
         # AUD-159 — esto se salteaba **en silencio**, y el silencio se lee como «corrió y está

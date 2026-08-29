@@ -589,3 +589,58 @@ def test_sin_doi_ni_extra_core_el_chequeo_de_retracciones_lo_DICE(toy_vault, fak
     run_main(monkeypatch)
     salida = capsys.readouterr().out
     assert "retracciones NO EVALUADO" in salida and "ninguna fuente declara `doi`" in salida
+
+
+# ── #211 · deadlock del tema mixto ───────────────────────────────────────────
+
+def test_mixto_con_query_y_sin_sources_corre_la_mitad_ads(toy_vault, fake_run, fake_notes,
+                                                          monkeypatch, capsys):
+    """#211 — el guard viejo abortaba con `sources:` vacía, o sea medía la premisa que #104 rompió.
+
+    Un tema off-ADS MIXTO con `query:` poblada y las fuentes todavía sin declarar es el caso normal
+    de la primera corrida (el paso 0b del skill manda barrer los backends ANTES de declarar nada a
+    mano, y el anclaje necesita la mitad ADS ya bajada). Con el guard viejo eso era un deadlock.
+    """
+    topic(source="local-pdfs", sources=[], query='abs:"independent component"')
+    assert run_main(monkeypatch) == 0
+    scripts = [c[0] for c in fake_run.calls]
+    assert scripts == ["query_ads.py", "fetch_arxiv.py", "fetch_pdf.py", "make_notes.py",
+                       "extract_fulltext.py", "check_retractions.py"]
+    assert ("query_ads.py", "--theme", "gp") in fake_run.calls      # completa, no --extra-only
+    # y lo DICE: sin el aviso, correr la mitad se lee como haber corrido todo
+    assert "SIN fuentes declaradas" in capsys.readouterr().out
+
+
+def test_mixto_con_query_extrae_lo_que_bajo(toy_vault, fake_run, fake_notes, monkeypatch):
+    """#211 (segunda mitad) — la mitad ADS baja PDFs con `fetch_pdf` y su extracción sale del
+    `extract_fulltext` compartido, cuya condición era `n_pdf or extra`: con `query:` y sin
+    `extra_core:` ni PDFs locales, el corpus se bajaba y NO se extraía."""
+    topic(source="local-pdfs", sources=[], query='abs:"independent component"')
+    assert run_main(monkeypatch) == 0
+    assert "extract_fulltext.py" in [c[0] for c in fake_run.calls]
+
+
+def test_mixto_con_query_chequea_retracciones(toy_vault, fake_run, fake_notes, monkeypatch):
+    """#211 — ídem para el cierre de retracciones: los papers ADS del tema mixto traen DOI, así
+    que hay a quién preguntarle a Crossref aunque `sources:` esté vacía."""
+    topic(source="local-pdfs", sources=[], query='abs:"independent component"')
+    assert run_main(monkeypatch) == 0
+    assert "check_retractions.py" in [c[0] for c in fake_run.calls]
+
+
+def test_offads_sin_ninguna_via_de_papers_aborta(toy_vault, fake_run, monkeypatch):
+    """#211 — el guard sigue existiendo: aborta cuando NO hay ninguna vía (ni sources, ni query,
+    ni extra_core), que es la condición que de verdad deja a la cadena sin nada que hacer."""
+    topic(source="web", sources=[])
+    with pytest.raises(SystemExit, match="ninguna vía de papers"):
+        run_main(monkeypatch)
+
+
+def test_mixto_solo_con_extra_core_y_sin_sources_no_aborta(toy_vault, fake_run, fake_notes,
+                                                           monkeypatch):
+    """#211 — la tercera cláusula del guard: `extra_core:` sola también es una vía de papers.
+    Sin ella, un tema cuya mitad astro se enumeró a mano (sin `query:`) seguiría abortando."""
+    topic(source="web", sources=[],
+          extra_core=[{"bibcode": "2012PASP..124.1015B", "via": "usuario", "motivo": "test"}])
+    assert run_main(monkeypatch) == 0
+    assert ("query_ads.py", "--theme", "gp", "--extra-only") in fake_run.calls
