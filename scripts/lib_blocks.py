@@ -261,7 +261,12 @@ def split_blocks(body: str) -> list[Block]:
                 emitir("item", cur_line, texto)       # un ítem hereda, igual que una fila
             else:
                 out.append(Block(cur_kind, cur_line, texto))
-                intro_actual = texto                  # este párrafo pasa a ser el ámbito vigente
+                if cur_kind != "blockquote":
+                    # ⛔ #224 — un blockquote NO pasa a ser el ámbito vigente. Antes se emitía
+                    # directo, sin pasar por acá, así que nunca lo era; al acumularlo como párrafo
+                    # heredaría, y una fila que sigue a la cabecera `> _Estado —_` empezaría a
+                    # colgar de ella. El cambio es sobre el ancla, no sobre la herencia.
+                    intro_actual = texto              # este párrafo pasa a ser el ámbito vigente
         cur, cur_kind = [], "parrafo"
 
     def emitir(kind: str, linea_n: int, texto: str):
@@ -292,8 +297,22 @@ def split_blocks(body: str) -> list[Block]:
             flush()
             continue
         if s.startswith(">"):
-            flush()
-            out.append(Block("blockquote", i, s.lstrip("> ").strip()))
+            # ⛔ #224 — un blockquote se ACUMULA como un párrafo, no se emite por línea. Las notas
+            # van hard-wrapped a ~100 columnas, así que una cita textual larga vive partida en
+            # varias líneas y **sólo la última lleva el `[[bibcode]]`**: emitiendo por línea, el
+            # único par que nace ancla la última línea y las demás no las cubre nadie. Medido: una
+            # cita de 5 líneas donde invertir el sentido de la línea 67 (`uncorrelatedness is
+            # equivalent` → `is NOT equivalent`) dejaba el ancla IDÉNTICA — o sea que se podía
+            # reescribir el contenido de una cita sin que el par se venciera.
+            # Es sub-disparo, la única dirección de error que el docstring de este módulo declara
+            # prohibida, y por el motivo exacto que ahí se usa para descartar la granularidad por
+            # línea. El `Afirmación (extracto)` de esas filas lo delataba: era el fragmento sin
+            # sentido con el que cierra la cita.
+            if cur_kind == "blockquote" and cur:
+                cur.append(s.lstrip("> ").strip())
+            else:
+                flush()
+                cur, cur_line, cur_kind = [s.lstrip("> ").strip()], i, "blockquote"
             continue
         if s.startswith("|"):
             flush()

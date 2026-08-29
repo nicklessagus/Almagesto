@@ -1220,7 +1220,12 @@ detector queda en 0 sin ablandarse. Medido: **6 de 8** filas marcadas de un conc
 caso, todas correctas. ⚠ **Desde #205 el caso ya no se produce en filas nuevas** —se lee el PDF, así que los dos
 localizadores coinciden—; las filas viejas que lo llevan siguen siendo correctas y no se tocan.
 El **ancla** es el sha256 (10 hex) del **bloque markdown normalizado** que contiene la cita
-—párrafo / fila / ítem / blockquote—: reflowear la nota **no** la mueve, cambiar un número **sí**, y
+—párrafo / fila / ítem / blockquote, y un **blockquote hard-wrapped es UN bloque** (#224): emitirlo
+por línea dejaba el par anclado a la última —la que lleva el `[[bibcode]]`— y las demás sin cubrir,
+así que se podía **reescribir el medio de una cita textual sin que el par se venciera**. Medido:
+invertir `uncorrelatedness is equivalent` a `is NOT equivalent` en la línea del medio dejaba el
+ancla idéntica. Es sub-disparo, la única dirección de error que el módulo declara prohibida—:
+reflowear la nota **no** la mueve, cambiar un número **sí**, y
 una fila sin `[[bibcode]]` propio hereda el del caption hasheando **los dos** bloques. El **hash de
 fuente** es el del archivo que se **leyó** —desde #205, el **PDF**— y es lo único que detecta que la
 fuente ya no dice lo mismo **sin que la nota se haya tocado**. Anclar esas filas al `.txt` las

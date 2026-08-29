@@ -533,3 +533,39 @@ def test_la_traduccion_estampada_sigue_exenta():
     texto = ("# nota\n\n## Traducción del abstract\n"
              "Presentamos el método de [[2020Autor]].\n")
     assert lb.pairs_of(texto) == []
+
+
+def test_un_blockquote_hard_wrapped_es_UN_bloque():
+    """#224 — las notas van hard-wrapped a ~100 columnas, así que una cita textual larga vive
+    partida en varias líneas y **sólo la última lleva el `[[bibcode]]`**. Emitiendo por línea, el
+    único par que nacía anclaba la última línea y las demás no las cubría nadie."""
+    texto = ("> *«If the hidden signals under investigation follow Gaussian distributions,\n"
+             "> uncorrelatedness is equivalent to mutual independence and algorithms such as PCA\n"
+             "> are able to separate them»* ([[2019AJ....158..161D]], §2.3, p. 4).\n")
+    pares = lb.pairs_of(texto)
+    assert len(pares) == 1
+    assert "If the hidden signals" in pares[0].block.text, pares[0].block.text
+    assert "uncorrelatedness is equivalent" in pares[0].block.text
+
+
+def test_mutar_el_medio_de_la_cita_vence_el_par():
+    """#224, el punto — sub-disparo es la única dirección de error que este módulo prohíbe. Antes,
+    invertir el sentido de una línea del medio dejaba el ancla IDÉNTICA: se podía reescribir el
+    contenido de una cita textual sin que el par se venciera."""
+    # ⚠ La mutación va en una línea que NO lleva el bibcode: si va en la misma, el ancla cambia
+    # también con el comportamiento viejo y el test pasaría por el motivo equivocado (#202).
+    base = ("> *«If the hidden signals under investigation follow Gaussian distributions,\n"
+            "> uncorrelatedness {} equivalent to mutual independence and algorithms such as PCA\n"
+            "> are able to separate them»* ([[2019AJ....158..161D]], p. 4).\n")
+    a = lb.pairs_of(base.format("is"))[0].anchor
+    b = lb.pairs_of(base.format("is NOT"))[0].anchor
+    assert a != b, "mutar el medio de la cita tiene que vencer el par"
+
+
+def test_el_blockquote_no_pasa_a_ser_el_ambito_vigente():
+    """#224, el recorte — antes el blockquote se emitía sin pasar por `flush`, así que nunca era
+    ámbito de herencia. Al acumularlo como párrafo lo sería, y una fila que sigue a la cabecera
+    `> _Estado — …_` empezaría a colgar de ella. El cambio es sobre el ANCLA, no sobre la herencia."""
+    texto = ("> _Estado — búsqueda 2026-08-28 ([[2019AJ....158..161D]])._\n\n"
+             "| A | B |\n|---|---|\n| uno | dos |\n")
+    assert [p.bibcode for p in lb.pairs_of(texto)] == ["2019AJ....158..161D"]
