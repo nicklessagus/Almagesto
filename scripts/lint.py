@@ -1164,6 +1164,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     vista_sin_fuente: list = []        # (stem, sujeto) — #207: no consta de qué se construyó
     vista_solo_abstract: list = []     # (stem, sujeto) — #207: se leyó el abstract, falta el PDF
     vista_sin_fuente_en_disco: list = []   # (stem, sujeto) — #217: leída y ya no re-verificable
+    reclamo_refutado: list = []        # (stem, sujeto) — #212: la vista lo refuta y sigue reclamado
 
     # Los temas DECLARADOS (su `concept`, que es el nombre con el que un paper los nombra en
     # `thesis_links`/`methods`). Una lectura del YAML por corrida, no por nota.
@@ -1695,6 +1696,25 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                                "la lectura ocurrió y sus localizadores siguen siendo válidos, pero "
                                "`verify-citations` no puede contrastarla nunca más — conseguir de "
                                "nuevo la fuente, o declarar la pérdida en `salvedades` de la vista"))
+                # #212 — la lectura REFUTÓ el reclamo y el reclamo sigue en el frontmatter. Es el
+                # simétrico del «reclamado sin vista» de #188: allá nadie leyó, acá se leyó y el
+                # resultado dice que el reclamo es falso. El lint no lo veía porque mira la
+                # coherencia `vistas[] ↔ sección`, no `reclamo ↔ contenido de la vista`, y el
+                # merge de `harvest_views` es add-only a propósito, así que el reclamo sembrado es
+                # infalsificable por la lectura. Backlog: sacar el paper del sujeto es decisión del
+                # usuario —puede ser core de OTRO— y el roll-up del concepto lo sigue listando
+                # mientras tanto.
+                _reclamados = {str(x).strip() for x in
+                               cfg.as_list(fm.get("stars")) + cfg.as_list(fm.get("thesis_links"))}
+                for v in vistas:
+                    for suj in cfg.as_list(v.get("refuta")):
+                        if str(suj).strip() in _reclamados:
+                            reclamo_refutado.append(
+                                (stem, f"la vista de **{v.get('sujeto')}** REFUTA el reclamo de "
+                                       f"**{suj}**, que sigue en el frontmatter: el roll-up lo va a "
+                                       f"seguir listando → `triage.py <slug> --drop-core {stem} "
+                                       f"--reason \"…\"`, o quitá el reclamo a mano si el paper "
+                                       f"pertenece a otro sujeto"))
                 for falta in sorted(declaradas - secciones):
                     vistas_vs_cuerpo.append(
                         (stem, f"`vistas[]` declara la lectura de **{falta}** y el cuerpo no tiene "
@@ -3024,6 +3044,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('vista_sin_fuente', 'Vista sin `fuente`: no consta si salió del PDF o sólo del abstract (backlog)', SEV_BACKLOG, tuple(vista_sin_fuente), poblacion='papers'),
         Categoria('vista_solo_abstract', '📄 Vista construida SÓLO del abstract — falta el PDF (backlog)', SEV_BACKLOG, tuple(vista_solo_abstract), poblacion='papers'),
         Categoria('vista_sin_fuente_en_disco', '🔒 Vista fechada SIN fuente en disco: ya no es re-verificable (backlog)', SEV_BACKLOG, tuple(vista_sin_fuente_en_disco), poblacion='papers'),
+        Categoria('reclamo_refutado', '↩ La vista REFUTA un reclamo que sigue en el frontmatter (backlog)', SEV_BACKLOG, tuple(reclamo_refutado), poblacion='papers'),
         Categoria('reclamo_sin_vista_declarado', 'Reclamo sin vista DECLARADO con `no_vista` + motivo (visible, no es deuda)', SEV_BACKLOG, tuple(reclamo_sin_vista_declarado), poblacion='papers'),
         Categoria('extraccion_no_declarada', 'Recorte de lectura sin declarar: hay core sin extraer y el registro no dice por qué (backlog)', SEV_BACKLOG, tuple(extraccion_no_declarada), poblacion='registros'),
         Categoria('papers_table_stale', 'Lista de papers desactualizada: la tabla estampada no refleja el universo (backlog)', SEV_BACKLOG, tuple(papers_table_stale), poblacion='registros'),

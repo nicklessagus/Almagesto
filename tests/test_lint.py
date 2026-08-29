@@ -4549,3 +4549,38 @@ def test_abstract_placeholder_no_agrupa(toy_vault, capsys):
     link_from_index(toy_vault, "2023eas..conf.1090L", "2023spfi.confE..19L")
     _rc, rep = run_lint_reporte(capsys)
     assert "2023eas..conf.1090L" not in _seccion(rep, "Posible duplicado SIN doi ni arxiv_id")
+
+
+# ── #212 · la vista refuta el reclamo que la trajo ───────────────────────────
+
+def test_reclamo_refutado_por_la_vista_es_backlog(toy_vault, capsys):
+    """#212 — el reclamo sembrado era INFALSIFICABLE por la lectura. `stars`/`thesis_links` se
+    siembran ANTES de leer y `harvest_views` mergea add-only (bien: protege la extracción de que un
+    re-seed la pise), así que la nota quedaba con `thesis_links: [ica]` y una vista adjunta que
+    dice, textual, que el paper no tiene nada que ver con ICA. #188 daba dos salidas para un
+    reclamo SIN vista y ninguna para el tercer caso: hice la vista y el reclamo es FALSO."""
+    mk_note(cfg.PAPERS, "2012MNRAS.421..666G",
+            {"bibcode": "2012MNRAS.421..666G", "tags": ["paper"], "thesis_links": ["ica"],
+             "vistas": [{"sujeto": "ica", "tipo": "theme", "fecha": "2026-08-29",
+                         "fuente": "pdf", "refuta": ["ica"]}]},
+            "# 2012MNRAS.421..666G\n\n## Vista — ica\nAporte: Nada. Es álgebra tensorial.\n")
+    mk_note(cfg.CONCEPTS / "methods", "ica",
+            {"tags": ["concept"], "name": "ica", "confidence": "medium"}, "# ica\n")
+    link_from_index(toy_vault, "2012MNRAS.421..666G", "ica")
+    rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "REFUTA un reclamo")
+    assert "2012MNRAS.421..666G" in sec and "ica" in sec, rep
+    assert rc == 0, "backlog: sacar el paper del sujeto lo decide el usuario"
+
+
+def test_refuta_de_un_sujeto_que_ya_no_reclama_no_es_hallazgo(toy_vault, capsys):
+    """#212 — resuelto el reclamo (a mano o con `--drop-core`), la categoría se apaga sola: lo que
+    se reporta es la CONTRADICCIÓN viva, no el hecho histórico de haber refutado."""
+    mk_note(cfg.PAPERS, "2012MNRAS.421..666G",
+            {"bibcode": "2012MNRAS.421..666G", "tags": ["paper"], "stars": ["tau Cet"],
+             "vistas": [{"sujeto": "tau Cet", "tipo": "star", "fecha": "2026-08-29",
+                         "fuente": "pdf", "refuta": ["ica"]}]},
+            "# 2012MNRAS.421..666G\n\n## Vista — tau Cet\nDice X.\n")
+    link_from_index(toy_vault, "2012MNRAS.421..666G")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2012MNRAS.421..666G" not in _seccion(rep, "REFUTA un reclamo")

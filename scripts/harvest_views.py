@@ -322,6 +322,7 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
         return n
     lente = mn.objective_lens()[0]
     hoy = _dt.date.today().isoformat()
+    refutados: list = []               # #212 · (bibcode, [sujetos]) — para el aviso de cierre
     for archivo in sorted(src.glob("*.json")):
         try:
             data = json.loads(archivo.read_text(encoding="utf-8"))
@@ -370,6 +371,20 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
                    "txt": str(vista.get("txt") or slug), "lente": list(lente)}
         if fuente:
             entrada["fuente"] = fuente
+        # #212 — el único canal en la dirección que faltaba: la lectura puede REFUTAR el reclamo que
+        # la trajo. `stars`/`thesis_links` son reclamos sembrados ANTES de leer, y el merge es
+        # add-only (bien: protege la extracción de que un re-seed la pise), así que un reclamo falso
+        # era INFALSIFICABLE por la lectura — la nota quedaba con `thesis_links: [ica]` y una vista
+        # adjunta diciendo, textual, que el paper no tiene nada que ver con ICA. #188 daba dos
+        # salidas para un reclamo SIN vista (hacerla, o declarar `no_vista`) y ninguna para el
+        # tercer caso: hice la vista y el reclamo es FALSO.
+        # ⛔ Se REGISTRA, no se aplica: borrar el reclamo sería un LLM editando curación en
+        # silencio, y además la decisión es del par (paper, sujeto) —el paper puede ser core de
+        # otro—. Mismo patrón que `triage --accept-source`: arma la decisión, no la toma.
+        refuta = sorted({str(x).strip() for x in cfg.as_list(data.get("refuta")) if str(x).strip()})
+        if refuta:
+            entrada["refuta"] = refuta
+            refutados.append((bib, refuta))
         try:
             toco = upsert_view(dest, entrada)
         except ViewUpsertError as exc:
@@ -396,6 +411,17 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
         + (f", {n['rechazadas']} RECHAZADAS" if n["rechazadas"] else "")
         + (f", {n['sin_nota']} sin nota destino" if n["sin_nota"] else "")
         + (f", {n['txt_traidos']} .txt traídos al slug" if n["txt_traidos"] else ""))
+    if refutados:
+        # El comando queda listo para pegar, con el motivo puesto: sin él la decisión se toma igual
+        # pero el registro no dice por qué, que es lo único que sirve dentro de seis meses.
+        cfg.print_seguro(f"\n⚠ {len(refutados)} lectura(s) REFUTAN el reclamo que las trajo (#212). "
+                         f"La vista lo deja registrado; sacar el paper del sujeto lo decidís vos "
+                         f"(puede ser core de OTRO sujeto):")
+        for bib, sujetos in refutados:
+            cfg.print_seguro(f"  - {bib} → refuta: {', '.join(sujetos)}")
+            cfg.print_seguro(f"      python scripts/triage.py {slug} --drop-core {bib} "
+                             f"--reason \"la vista del paper no sostiene el reclamo de "
+                             f"{', '.join(sujetos)}\"")
     return n
 
 

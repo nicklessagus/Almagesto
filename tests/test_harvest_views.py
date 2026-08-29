@@ -455,3 +455,39 @@ def test_el_abstract_transcrito_dice_que_lo_transcribio_el_modelo(toy_vault):
     assert "Texto del abstract, transcrito." in texto
     assert "transcrito del PDF por la extracción" in texto
     assert read_fm(dest)["sin_abstract"] is True, "el flag es historia de la CLASIFICACIÓN"
+
+
+# ── #212 · la lectura puede REFUTAR el reclamo que la trajo ──────────────────
+
+def test_refuta_queda_registrado_en_la_vista(toy_vault):
+    """#212 — el reclamo sembrado era infalsificable por la lectura: `stars`/`thesis_links` se
+    siembran ANTES de leer y el merge es add-only (bien: protege la extracción de que un re-seed la
+    pise). #188 daba dos salidas para un reclamo SIN vista —hacerla, o declarar `no_vista`— y
+    ninguna para el tercer caso: hice la vista y el reclamo es FALSO."""
+    d = extraccion()
+    d["refuta"] = ["ica"]
+    dest = sembrar(toy_vault, d)
+    hv.harvest("test_star")
+    assert read_fm(dest)["vistas"][0]["refuta"] == ["ica"]
+
+
+def test_refuta_NO_borra_el_reclamo_y_propone_el_comando(toy_vault, capsys):
+    """#212 — se REGISTRA, no se aplica. Borrar el reclamo sería un LLM editando curación en
+    silencio, y además la decisión es del par (paper, sujeto): el paper puede ser core de OTRO.
+    Mismo patrón que `triage --accept-source`: arma la decisión, no la toma."""
+    d = extraccion()
+    d["refuta"] = ["ica"]
+    dest = sembrar(toy_vault, d, fm_extra={"thesis_links": ["ica"]})
+    hv.harvest("test_star")
+    assert read_fm(dest)["thesis_links"] == ["ica"], "add-only: el guard NO se afloja"
+    out = capsys.readouterr().out
+    assert "REFUTAN el reclamo" in out
+    assert "--drop-core" in out and "--reason" in out
+
+
+def test_sin_refuta_no_pasa_nada(toy_vault, capsys):
+    """#212 — el caso normal (lista vacía o ausente) no agrega campo ni ruido."""
+    dest = sembrar(toy_vault)
+    hv.harvest("test_star")
+    assert "refuta" not in read_fm(dest)["vistas"][0]
+    assert "REFUTAN el reclamo" not in capsys.readouterr().out

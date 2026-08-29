@@ -256,7 +256,7 @@ Estos patrones sobre el `.txt` te dicen **en qué parte del paper** mirar; el da
 Escribí el resultado en `{out}` y devolvé el mismo JSON en **un solo bloque** ```json:
 
 {{"bibcode":"{bibcode}","vista":{{"sujeto":"{sujeto}","tipo":"{tipo}","txt":"{slug}","fuente":"pdf"}},
- "role":["fundacional"|"aplicacion"|"arbitro"],"methods":[],"thesis_links":[],
+ "role":["fundacional"|"aplicacion"|"arbitro"],"methods":[],"thesis_links":[],"refuta":[],
  "ground_truth":[{{"que":"","valor":"","linea":"","regimen":"","segunda_mano":null}}],
  "ejes":{{"discovery":"","rv":"","activity":"","planet":"","method":""}},
  "aporte":"","hueco":"","salvedades":[],
@@ -279,6 +279,16 @@ tiene esa sección y transcribir algo que no existe fabrica contenido. Vacío = 
 cosechador no crea la sección.
 ⛔ Y la regla de uso: **son ayuda de lectura, nunca fuente de la que citar.** Si citás, citás del
 original con su página.
+
+⛔ **`refuta` es el único campo que puede DESHACER un reclamo (#212).** El frontmatter de la nota
+trae `stars[]` / `thesis_links[]` sembrados **antes** de leer: son **reclamos**, no lecturas. Si
+leíste el paper entero y el sujeto que lo reclama **no tiene ningún sustento** —el caso típico es
+la **polisemia**: un paper de flujos de acreción entró a un tema de ICA porque dice *«six mutually
+independent components»* del tensor de tensiones—, poné ese nombre en `refuta`. Con la lista vacía
+(el caso normal) no pasa nada. ⚠ `refuta` **no** es «el paper aporta poco»: eso es `aporte`. Es «el
+reclamo es FALSO». Nadie borra nada por tu cuenta: el cosechador lo **registra** en la vista y te
+imprime el comando de curación listo para pegar — la decisión de sacar el paper del sujeto es del
+usuario, porque el paper puede ser core de OTRO sujeto.
 
 ⛔ **`fuente` dice DE QUÉ construiste la vista.** `pdf` es el caso normal. Poné **`abstract`** si el
 PDF no está y sólo pudiste leer el `## Abstract` de la nota: la vista igual vale, pero una lectura

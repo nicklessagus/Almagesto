@@ -334,6 +334,22 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   mientras siga siendo la plantilla del stub —prosa redactada no se pisa sin `--force`: puede tener
   anclas de verificación colgando del texto exacto— y **trae el `.txt` al slug del sujeto** (D-18),
   sin lo cual la vista de un paper retro-tagueado no es ejecutable.
+  ⛔ **Y la lectura puede RETRACTAR el reclamo que la trajo: `refuta: [<sujeto>]` (#212).** Es el
+  único canal en esa dirección, y faltaba: `stars`/`thesis_links` se siembran **antes** de leer y
+  `harvest_views` mergea **add-only** —lo cual está bien, protege la extracción de que un re-seed la
+  pise—, así que un reclamo falso era **infalsificable por la lectura**. El caso medido es la
+  **polisemia**: un paper de flujos de acreción entró a un tema de ICA porque dice *«six mutually
+  independent components»* del tensor de tensiones, el extractor leyó las 21 páginas, confirmó cero
+  menciones de ICA y la nota quedó igual con `thesis_links: [ica]` y una vista adjunta que dice,
+  textual, que el paper no tiene nada que ver. #188 daba dos salidas para un reclamo **sin** vista
+  (hacerla, o `no_vista` con motivo) y **ninguna para el tercer caso: hice la vista y el reclamo es
+  falso**. ⛔ El cosechador lo **registra y propone, no aplica**: deja el `refuta` en la vista e
+  imprime el `--drop-core` con su motivo listo para pegar —mismo patrón que `triage
+  --accept-source`—, porque borrar el reclamo sería un LLM editando curación en silencio y porque la
+  decisión es del **par (paper, sujeto)**: el paper puede ser core de otro. El lint lo reporta como
+  **backlog** (*«la vista REFUTA un reclamo que sigue en el frontmatter»*), el simétrico del
+  *reclamado sin vista*: allá nadie leyó, acá se leyó y el resultado dice que el reclamo es falso.
+  El add-only **no se afloja**.
   ⛔ **La escribe SÓLO la lectura, nunca el retro-link.** Es lo que mantiene a
   `stars`/`thesis_links`/`methods` como **reclamos** —`make_notes` los mergea add-only **sin leer
   nada**— y a `vistas[]` como **lecturas**. Un reclamo sin vista es backlog *(«lo reclama X y nadie
