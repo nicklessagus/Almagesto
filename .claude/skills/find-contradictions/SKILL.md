@@ -146,7 +146,10 @@ paper árbitro, se re-extrajo un `.txt`, apareció un corrigendum) el par se vue
 `load_no_disputas` devuelve el último.
 
 ### 2. Fan-out: confirmar cada desacuerdo candidato (un subagente por par)
-Para cada par en tensión, lanzar un subagente (tipo `Explore`) **en paralelo**. Cada uno lee **sólo
+Para cada par en tensión, lanzar un subagente (tipo `Explore`: acá el resultado vuelve al padre, no
+va a un directorio — ver #219) **en paralelo**, **en lotes de ≤ 15** (hay un tope de 20 concurrentes
+y pasarlo corta en silencio, #218: contá *lanzados vs pares* antes de creer que el barrido cerró, y
+re-lanzá sólo los que faltan en vez del lote entero). Cada uno lee **sólo
 los dos** `vault/raw/fulltext/**/<bibcode>.txt` en juego (grounding-first; prohibido de memoria) y devuelve:
 - `desacuerdo`: `real` | `aparente` | `no-concluyente`
   - **real** = ambos papers afirman valores/hechos incompatibles **más allá del error** (o uno afirma

@@ -192,6 +192,13 @@ Progreso del ingest de <estrella>:
    acotado, y hace el paso **auditable**: cada extracción tiene su corrida. Lanzalos en tandas
    paralelas; el orquestador (vos) mergea y escribe las notas.
 
+   ⛔ **Tope de 20 subagentes concurrentes: lotealos de a ≤ 15 y NO reintentes a ciegas (#218).**
+   Pasado el tope, el error `Concurrent subagent limit reached … Do not retry.` llega **mezclado
+   con los lanzamientos exitosos del mismo mensaje**: los que no se lanzaron no se ven, y el paso
+   sigue como si hubieran corrido. Antes de cosechar, contá **dos** veces —*lanzados vs papers* y
+   *devueltos vs lanzados*— y re-lanzá **sólo** los que faltan. Los cuatro duplicados de extracción
+   que destaparon #213 salieron exactamente de re-lanzar el lote entero ante este error.
+
    ⛔ **El prompt de cada subagente se GENERA, no se escribe a mano (INV-100):**
    ```bash
    python scripts/extraction_prompt.py <slug> <bibcode>      # --theme si el slug es un tema

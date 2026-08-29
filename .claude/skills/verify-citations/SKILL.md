@@ -111,7 +111,7 @@ fila de tabla con un valor, cada bullet o frase que asevera un hecho. Para cada 
   **flag "afirmación sin cita"** (hay que citarla o marcarla inferencia).
 
 ### 2. Fan-out: un subagente independiente por FUENTE
-Agrupar los pares **por bibcode** y lanzar un subagente (tipo `Explore`) por fuente, **en paralelo**
+Agrupar los pares **por bibcode** y lanzar un subagente por fuente, **en paralelo**
 (varios en un mismo mensaje). Cada uno juzga **todos los pares que citan su fuente**.
 
 > ⚠ **Por fuente, no por par (#100).** Lo que hace fuerte al chequeo es el **aislamiento** —cada
@@ -119,6 +119,34 @@ Agrupar los pares **por bibcode** y lanzar un subagente (tipo `Explore`) por fue
 > intacto: el subagente sigue leyendo un único documento. Lo que se evita es pagar la lectura N
 > veces. Medido el 2026-08-25 sobre una ficha real: **68 pares sobre 16 fuentes → 52 re-lecturas**,
 > con 18 subagentes abriendo los mismos 300 KB.
+
+⛔ **El tipo es `general-purpose`, NO `Explore` — y el motivo es de contrato, no de ergonomía
+(#219).** `Explore` **no tiene herramientas de escritura**, y toda la cadena aguas abajo espera
+archivos: `scripts/apply_fixes.py <nota.md> <dir-de-fixes>` consume **JSON de un directorio**, y el
+fan-out gemelo del mismo framework —el de **extracción**— ya le pide al subagente que escriba él
+mismo (`extraction_prompt`: *«Escribí el resultado en {out}»*), que es lo que cosecha
+`harvest_views`. Medido: **11 de 11** verificadores del primer lote reportaron *«opero en modo
+estrictamente de sólo lectura … no pude crear el archivo»* y devolvieron el JSON en el mensaje
+final. ⚠ **Lo salvó que lo declararan**: un modelo que no lo declare deja el directorio vacío y la
+barrera de §2b cuenta **0 de 30** sin decir por qué.
+
+El canje, medido, se declara: `Explore` cuesta ~20–33 k tokens por fuente y `general-purpose`
+~102–117 k (**3–5×**), pero con `Explore` el **padre** paga re-tipear cada resultado en su propio
+contexto, que en 30 fuentes es lo caro y lo frágil. Regla: **`general-purpose` por default**; con
+pocas fuentes (≲ 5) `Explore` + captura del padre es defendible, y entonces se dice en el log.
+Esto **no** contradice la regla de método nº 6 (*fan-out para leer, aplicador serial para
+escribir*): el subagente escribe **su propio JSON en `build/`**, que es scratch; lo que sigue
+prohibido es que escriba en `vault/`.
+
+⛔ **Hay un TOPE DE 20 SUBAGENTES CONCURRENTES, y lanzar de más corta en silencio (#218).** Con 30
+fuentes, el tercer lote devuelve `Concurrent subagent limit reached. You can run 20 subagents at
+once. Do not retry.` — **mezclado con los lanzamientos exitosos del mismo mensaje**, así que es
+fácil no verlo: quedan fuentes sin verificar y el bloque `## Verificación de citas` se escribe
+igual. Por eso: **lotear de a ≤ 15 por mensaje** y esperar el cierre del lote antes del siguiente.
+⚠ **Y el instinto ante ese error —re-lanzar el lote entero— es el modo de falla que ya se pagó en
+la otra mitad de la cadena**: los cuatro duplicados de extracción que destaparon #213 salieron de
+reintentos ciegos ante este mismo tope, en otro skill. Re-lanzá **sólo las fuentes que no
+devolvieron**, y para saber cuáles, contá (§2b).
 
 Cada uno:
 - Localiza el **PDF**: `vault/raw/pdfs/**/<bibcode>.pdf` (el bibcode puede vivir bajo cualquier
@@ -226,8 +254,14 @@ filas ahí — y si hay más de una tabla en la página, decí de cuál estás c
 
 ### 2b. Barrera: el trabajo derivado se arma cuando el fan-out CERRÓ
 
-⛔ **Antes de triar, resolver o escribir el bloque, contá cuántas fuentes devolvieron contra cuántas
-lanzaste, y declaralo.** Si no cerraron todas, o esperás, o decís sobre cuántas estás afirmando.
+⛔ **Antes de triar, resolver o escribir el bloque, contá DOS veces y declaralo: (a) *lanzadas vs
+existentes* y (b) *devueltas vs lanzadas*.** Si alguno de los dos no cierra, o esperás, o decís
+sobre cuántas fuentes estás afirmando.
+
+⚠ **El primer conteo llegó en #218 y es el que faltaba.** La barrera cubría el **retorno**, y el
+corte del tope de 20 pasa en el **lanzamiento**: tres fuentes que nunca se lanzaron no aparecen
+como «no devolvió», aparecen como si no existieran. Los dos son `len(out/*.json)` contra dos
+denominadores distintos, y los dos son baratos.
 
 Medido (#199): armar los lotes de triage con **53 de 57** verificadores todavía corriendo dejó **4
 hallazgos que no miró nadie**, dos de ellos defectos reales —una fila que transcribía una de cuatro
