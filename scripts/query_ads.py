@@ -1674,6 +1674,14 @@ def main() -> int:
     cfg.save_busqueda(args.slug, {
         "fecha": dt.date.today().isoformat(),
         "query": q,                                   # la Solr efectiva (None con --extra-only)
+        # #238 — el `fq` es la mitad MÁS restrictiva del filtro: acota el universo **server-side,
+        # antes de traer nada**, o sea antes que la lente. Sin él, un «0 encontrados» no es una
+        # medición reproducible — y esa clase de medición negativa se usa como premisa de decisiones
+        # de curación (medido: una bóveda afirma «ningún paper del canon está en ADS: 0/8» sobre un
+        # canon de procesamiento de señales, con `database:astronomy` aplicado y sin registrarlo).
+        # `None` es un valor DECLARADO (`search_fq: null` = no acotar) y no se lee igual que la
+        # clave ausente, que es una corrida anterior a este campo.
+        "fq": search_fq(),
         "rows": args.rows,
         "n_found": qmeta.get("num_found"),            # lo que ADS dice que hay (None sin query directa)
         "n_total": len(recs),                         # lo que se trajo (query + extra_core + chaining)

@@ -603,10 +603,21 @@ línea.
   **su propia query y su propia faceta**, o sea que **la terminología no se solape** — si se solapa,
   la misma query trae las dos cosas y no hay nada que partir. Un radio es entonces un **tema propio**
   (slug, query, faceta, registro y corpus propios) cuya nota apunta de vuelta al hub.
-  Medido en `ica`: *noisy ICA* es radio porque su vocabulario (*gaussian moments, quasi-whitening,
+  Aplicado a `ica`: *noisy ICA* es radio porque su vocabulario (*gaussian moments, quasi-whitening,
   HeteroPCA*) no lo trae una query de «independent component»; *PCA* queda **dentro** del hub
-  —es el baseline contra el que se mide ICA— pero *PCA heterocedástico* se fue al radio. O sea que
-  «PCA» está partido **por régimen**, que es el mismo eje que separa radio de hub.
+  —es el baseline contra el que se mide ICA— y *PCA heterocedástico* **corresponde al radio**, o sea
+  que «PCA» se parte **por régimen**, que es el mismo eje que separa radio de hub.
+  ⚠ **Es el criterio aplicado, NO una descripción de la nota** (#235): en la instancia que motivó el
+  ejemplo, `PCA heterocedástico` sigue **dentro** del hub —una fila de SYSREM glosada literalmente
+  *«o sea PCA heterocedástico»*, con tres fuentes—, así que la partición está **decidida y no
+  aplicada**. Se declara en vez de elegir un número: hasta 1.91.0 este párrafo decía *«medido en
+  `ica`»* y era falso contra su propia instancia, que es el ejemplo que alguien copia para decidir
+  su próxima partición.
+  ⛔ **Y el hub nombra cada radio con `[[wikilink]]`, no con el slug entre backticks.** La convención
+  ya lo pedía (*«X vive en el radio [[…]]»*) y no había red: el lint reporta como backlog el
+  concepto que menciona un radio cuya nota existe y al que **no linkea** — sin el link, el radio no
+  aparece en el grafo, no cuenta como link entrante y el hub se lee como si el sub-aspecto no
+  existiera.
 - **concepts/hypotheses/**: `name`, `status` (**vocabulario CERRADO**, D-37 —
   `abierta | sostenida | disputada | refutada`—: el lint bloquea lo que no esté en la lista, porque
   un consumidor lee ese campo para decidir si se apoya en la hipótesis y la prosa libre lo deja
@@ -1042,7 +1053,11 @@ pasa a `extra_core`, la fuente se vuelve a declarar) no queda contradiciendo lo 
 explícito, con el motivo viejo preservado en `previa` (D-52). Y la compuerta de triage **ya no se
 puede apagar por flag** (D-48: `--no-triage` se eliminó — permitía que un candidato ya descartado
 volviera a entrar en silencio). La sección `busquedas` la escribe `query_ads` al cerrar cada corrida: `fecha`, `query` efectiva
-—en una estrella la arma `build_query` y antes se tiraba—, `rows`, `n_found`, `n_total`, `n_core`,
+—en una estrella la arma `build_query` y antes se tiraba—, **`fq`** (#238: la mitad **más
+restrictiva** del filtro, que acota server-side **antes** que la lente — sin él un «0 encontrados»
+**no es una medición reproducible**, y esa clase de medición negativa se usa como premisa de
+decisiones de curación: medido, una bóveda afirma *«ningún paper del canon está en ADS: 0/8»* sobre
+un canon de procesamiento de señales, con `database:astronomy` aplicado y sin registrarlo), `rows`, `n_found`, `n_total`, `n_core`,
 `n_candidates`, `n_dropped`, `truncated`, `almagesto_version`, **`bibcodes`** —lo que hace posible
 la unión de D-28— y **`lente`** —facetas/`require`/`min_facets` vigentes al correr, contra lo que
 se detecta la lente desincronizada—) y **`decisiones`** (el juicio de
@@ -1432,8 +1447,19 @@ está en disco, un número que no reconcilia. **Ante la menor duda se marca** �
 de más es que alguien abra un PDF; el de una de menos es que la bóveda afirme algo falso con cara de
 verificado. ⚠ Lo que **no** es: una excusa para no verificar. Si la fuente está en disco, se abre.
 
-Éstas son las **cuatro únicas marcas en línea** del sistema: `(inferencia de [[bibcode]])`,
-`[[bibcode]] ⛔retractada`, `<valor> ⚠desactualizado` y `<afirmación> ⚠verificar en el PDF`.
+**Una entrada de `log.md` que quedó REFUTADA se MARCA, no se edita (#238): `⚠ corregido <fecha> →
+<entrada nueva>`.** La bitácora es append-only por contrato —y está bien—, pero eso la dejaba sin
+forma de corregirse: medido, una entrada publica como cita textual **con página** una frase que
+**invierte el sentido** de lo que dice el paper (*«do not become orthogonal»* por *«that are not
+orthogonal»*), y **el propio log lo reconoce 268 líneas después**, en la entrada de la verificación.
+La corrección se aplicó al concepto y a la nota del paper; la bitácora conserva la cita fabricada
+**permanentemente**, sin marca y sin puntero. Es la misma doctrina que las otras marcas —hacer
+visible, no borrar— y el lint la levanta: chequea las citas textuales del `log.md` contra el `.txt`
+de su bibcode y reporta la que su fuente no dice, salvo que ya lleve la marca.
+
+Éstas son las **cinco únicas marcas en línea** del sistema: `(inferencia de [[bibcode]])`,
+`[[bibcode]] ⛔retractada`, `<valor> ⚠desactualizado`, `<afirmación> ⚠verificar en el PDF` y
+`⚠ corregido <fecha> → <entrada nueva>` (sólo en `log.md`).
 
 ### Mantenimiento (cuidar lo ya ingestado — skill `maintain`)
 **No crea entidades** (eso es Ingest); opera sobre estrellas/conceptos que **ya existen**. Sub-modos:

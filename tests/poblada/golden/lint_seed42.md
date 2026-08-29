@@ -128,6 +128,12 @@
 ## ✂ Evidencia sin localizador: el cruce de #122 NO se pudo evaluar en esa fila (#226, backlog) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 
+## 🛞 Hub que nombra un radio sin `[[wikilink]]`: el radio no entra al grafo (#235, backlog) (0)
+> sobre 29 notas de entidad (fichas, conceptos, queries)
+
+## ❝ Cita de `log.md` que su fuente no dice: la bitácora es append-only, se MARCA (#238, backlog) (0)
+> sobre 89 notas de `vault/wiki/`
+
 ## ❝ Cita textual que no está en su fuente: no es verbatim, o es de otra (#220, backlog) (0)
 > sobre 89 notas de `vault/wiki/`
 

@@ -392,6 +392,17 @@ GT_STALE_MARK = "⚠desactualizado"
 #: como backlog para que la deuda no se olvide, y se saca cuando alguien la verifica con evidencia.
 VERIFICAR_PDF_MARK = "⚠verificar en el PDF"
 
+#: #238 · la quinta marca: una entrada de `log.md` que quedó REFUTADA. La bitácora es append-only
+#: por contrato —y está bien—, pero eso la dejaba sin forma de corregirse: medido, una entrada
+#: publica como cita textual con página una frase que invierte el sentido de lo que dice el paper,
+#: y el propio log lo reconoce 268 líneas después, en la entrada de la verificación. La cita
+#: fabricada sigue ahí, sin marca y sin puntero a su corrección. Misma doctrina que las otras:
+#: hacer visible, no borrar.
+LOG_SUPERSEDED_MARK = "⚠ corregido"
+
+#: #235 · «… el radio `slug` …» — un radio nombrado como código en vez de linkeado.
+_RADIO_RE = re.compile(r"radio[s]?\s+(?:[^`\n]{0,40}?)`([a-z0-9][a-z0-9-]{2,})`", re.I)
+
 
 def _field_is_marked(lineas_marcadas: list[str], campo: str, viejo) -> bool:
     """¿Alguna línea con `⚠desactualizado` está marcando ESTE campo? (#131)
@@ -1170,6 +1181,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     cond_sin_clasificar: list = []     # (stem, motivo) — #221: condición sin `acota:`/`contextualiza:`
     verif_truncada: list = []          # (stem, motivo) — #226: `Evidencia`/`Condición` cortada
     verif_sin_localizador: list = []   # (stem, motivo) — #226: #122 no evaluable en esa fila
+    radio_sin_link: list = []          # (stem, motivo) — #235: hub que nombra un radio sin wikilink
+    cita_log: list = []                # (stem, motivo) — #238: cita del `log.md` que su fuente no dice
     cita_no_verbatim: list = []        # (stem, motivo) — #220: la cadena no está en el `.txt`
     cita_opaca: list = []              # (stem, motivo) — #220: no evaluable (sin `.txt` / ocr / eprint)
     verificar_pdf: list = []           # (stem, motivo) — #225: marcada para chequear contra el PDF
@@ -1218,6 +1231,9 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                           if isinstance(m, dict)}
     refs_dir = str(cfg.RAW / "refs")
     refs_stems = {basename(f)[:-3] for f in files if f.startswith(refs_dir)}  # docs de diseño, no fichas
+    #: #235 — los slugs de `concepts/`, para reconocer un radio nombrado como código.
+    _CONCEPT_SLUGS = {p_.stem for p_ in cfg.CONCEPTS.glob("*/*.md")} if cfg.CONCEPTS.exists() else set()
+
     _fm_cache: dict = {}
 
     def paper_fm(bib: str) -> dict:
@@ -1448,6 +1464,29 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         # (el OCR erra símbolos y el preprint no dice lo mismo que el publicado), en vez de contarse
         # en contra. ⛔ La PÁGINA no se puede chequear así —el `.txt` no tiene páginas— y eso se
         # dice: media red declarada vale más que ninguna.
+        # #238 — la bitácora también entrecomilla, y ahí la cita fabricada es PERMANENTE (append-only).
+        # El chequeo es el mismo de #220 y la salida es distinta: no se edita la entrada vieja, se la
+        # MARCA (`⚠ corregido <fecha> → <entrada nueva>`) y se appendea la corrección.
+        if stem == "log":
+            for _b in lb.split_blocks(body_full):
+                if LOG_SUPERSEDED_MARK in _b.text:
+                    continue           # ya marcada: visible, no es deuda
+                for _bib in lb._bibcodes(_b.text):
+                    _txts = list(cfg.FULLTEXT.glob(f"*/{_bib}.txt")) if cfg.FULLTEXT.exists() else []
+                    if not _txts:
+                        continue
+                    _src = cfg.normalize_source_text(
+                        _txts[0].read_text(encoding="utf-8", errors="replace"))
+                    for _c in cfg.quotes_in(_b.text):
+                        if not cfg.quote_found(_c, _src):
+                            cita_log.append(
+                                (stem, f"L{_b.first_line}: la bitácora entrecomilla «"
+                                       f"{_c[:70]}{'…' if len(_c) > 70 else ''}» y esa cadena no "
+                                       f"está en el `.txt` de {_bib} — la entrada NO se edita "
+                                       f"(append-only): se marca `{LOG_SUPERSEDED_MARK} <fecha> → "
+                                       f"<entrada nueva>` y se appendea la corrección"))
+                            break
+
         if stem not in NON_ORPHAN:
             _por_bloque: dict = {}
             for _par in lb.pairs_of(text):
@@ -1483,6 +1522,19 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                         cita_opaca.append(
                             (stem, f"L{_ln}: «{_corte}» no se puede chequear — "
                                    + "; ".join(f"{b}: {m}" for b, m in _opacas)))
+
+        # #235 — el hub que nombra un radio SIN `[[wikilink]]`. La convención hub/radio pide que el
+        # hub «referencie cada radio explícitamente», y sin red el radio aparecía como slug entre
+        # backticks dentro de un bullet: no entra al grafo, no cuenta como link entrante para el
+        # detector de huérfanos, y el hub se lee como si el sub-aspecto no existiera.
+        if _CONCEPT_SLUGS and str(f).startswith(str(cfg.CONCEPTS)):
+            for _m in _RADIO_RE.finditer(body_full):
+                _slug = _m.group(1)
+                if _slug != stem and _slug in _CONCEPT_SLUGS and f"[[{_slug}]]" not in body_full:
+                    radio_sin_link.append(
+                        (stem, f"nombra el radio `{_slug}` entre backticks y no lo linkea "
+                               f"`[[{_slug}]]` — sin el link no entra al grafo ni cuenta como link "
+                               f"entrante, y el hub se lee como si el sub-aspecto no existiera"))
 
         # #227 — la FORMA del artefacto. El artefacto es lo que viaja, y hasta 1.82.3 nadie miraba
         # si renderiza. Medido en una nota real con `lint --cierre` en 0: una fila de tabla con 9
@@ -3322,6 +3374,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('cond_sin_clasificar', '⚖ Condición sin clasificar: no dice si acota la afirmación o sólo la contextualiza (#221, backlog)', SEV_BACKLOG, tuple(cond_sin_clasificar), poblacion='entidades'),
         Categoria('verif_truncada', '✂ Celda del bloque de verificación truncada: se tiró lo que el fan-out encontró (#226, backlog)', SEV_BACKLOG, tuple(verif_truncada), poblacion='entidades'),
         Categoria('verif_sin_localizador', '✂ Evidencia sin localizador: el cruce de #122 NO se pudo evaluar en esa fila (#226, backlog)', SEV_BACKLOG, tuple(verif_sin_localizador), poblacion='entidades'),
+        Categoria('radio_sin_link', '🛞 Hub que nombra un radio sin `[[wikilink]]`: el radio no entra al grafo (#235, backlog)', SEV_BACKLOG, tuple(radio_sin_link), poblacion='entidades'),
+        Categoria('cita_log', '❝ Cita de `log.md` que su fuente no dice: la bitácora es append-only, se MARCA (#238, backlog)', SEV_BACKLOG, tuple(cita_log), poblacion='notas'),
         Categoria('cita_no_verbatim', '❝ Cita textual que no está en su fuente: no es verbatim, o es de otra (#220, backlog)', SEV_BACKLOG, tuple(cita_no_verbatim), poblacion='notas'),
         Categoria('cita_opaca', '❝ Cita textual NO EVALUABLE: sin `.txt`, OCR o eprint (#220, se declara, no cuenta en contra)', SEV_BACKLOG, tuple(cita_opaca), poblacion='notas'),
         Categoria('verificar_pdf', '🔎 Marcada para chequear contra el PDF: una auditoría no pudo cerrarla (#225, backlog)', SEV_BACKLOG, tuple(verificar_pdf), poblacion='notas'),

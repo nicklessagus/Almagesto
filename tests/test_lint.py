@@ -5021,3 +5021,60 @@ def test_pdf_source_SI_sobrevive_al_borrado(toy_vault, capsys):
     link_from_index(toy_vault, "2020epri...1..1E")
     _, rep = run_lint_reporte(capsys)
     assert "2020epri...1..1E" not in _seccion(rep, "Campos incompletos"), rep
+
+
+def test_la_cita_fabricada_del_log_se_reporta(toy_vault, capsys):
+    """#238 — `log.md` es append-only por contrato, y está bien; lo que faltaba era la MARCA. Medido:
+    una entrada publica como cita textual con página una frase que invierte el sentido de lo que dice
+    el paper, y el propio log lo reconoce 268 líneas después. La cita fabricada sigue publicada, sin
+    marca y sin puntero a su corrección — el sistema tiene `⚠desactualizado` para un valor y
+    `⛔retractada` para una fuente, y nada para una entrada de bitácora refutada."""
+    _paper_con_txt("2023A&A...675A.187O",
+                   "real-world systematics that are not orthogonal might become entangled\n")
+    (cfg.WIKI / "log.md").write_text(
+        "# log\n\n## 2026-08-29 — ingest\n\n- dice «real-world systematics do not become orthogonal "
+        "and might become entangled» ([[2023A&A...675A.187O]], p. 10)\n", encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    assert "la bitácora entrecomilla" in rep, rep
+    motivo = lint.collect().por_clave("cita_log").items[0][1]
+    assert "NO se edita" in motivo and lint.LOG_SUPERSEDED_MARK in motivo, \
+        "la salida es marcar y appendear, no reescribir la entrada"
+
+
+def test_la_entrada_YA_MARCADA_no_es_deuda(toy_vault, capsys):
+    """#238, el simétrico: marcada, la entrada es visible y no destruida — que es la doctrina de las
+    otras marcas en línea. Seguir reportándola volvería ruido una deuda ya resuelta."""
+    _paper_con_txt("2023A&A...675A.187O",
+                   "real-world systematics that are not orthogonal might become entangled\n")
+    (cfg.WIKI / "log.md").write_text(
+        "# log\n\n## 2026-08-29 — ingest\n\n- dice «real-world systematics do not become orthogonal "
+        "and might become entangled» ([[2023A&A...675A.187O]], p. 10) ⚠ corregido 2026-08-30 → "
+        "entrada del 2026-08-30\n", encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    assert "la bitácora entrecomilla" not in rep, rep
+
+
+def test_el_hub_que_nombra_un_radio_sin_wikilink(toy_vault, capsys):
+    """#235 — la convención hub/radio pide que el hub «referencie cada radio explícitamente», y no
+    había red: en una bóveda real el radio aparecía una sola vez, como slug entre backticks dentro de
+    un bullet. Sin el `[[wikilink]]` el radio no entra al grafo, no cuenta como link entrante para el
+    detector de huérfanos, y el hub se lee como si el sub-aspecto no existiera."""
+    mk_note(cfg.CONCEPTS / "methods", "noisy-ica", {"tags": ["concept"], "name": "noisy ICA"},
+            "# noisy ICA\n\nEl radio de [[ica]].\n")
+    mk_note(cfg.CONCEPTS / "methods", "ica", {"tags": ["concept"], "name": "ica"},
+            "# ica\n\n- el ruido vive en el radio `noisy-ica`\n")
+    link_from_index(toy_vault, "ica", "noisy-ica")
+    _, rep = run_lint_reporte(capsys)
+    assert "noisy-ica" in _seccion(rep, "sin `[[wikilink]]`"), rep
+
+
+def test_el_hub_que_SI_linkea_el_radio_no_dispara(toy_vault, capsys):
+    """#235, el simétrico: nombrarlo entre backticks Y linkearlo es la forma correcta — el backtick
+    es la referencia al slug del tema, el wikilink es lo que lo mete en el grafo."""
+    mk_note(cfg.CONCEPTS / "methods", "noisy-ica", {"tags": ["concept"], "name": "noisy ICA"},
+            "# noisy ICA\n\nEl radio de [[ica]].\n")
+    mk_note(cfg.CONCEPTS / "methods", "ica", {"tags": ["concept"], "name": "ica"},
+            "# ica\n\n- el ruido vive en el radio `noisy-ica` → [[noisy-ica]]\n")
+    link_from_index(toy_vault, "ica", "noisy-ica")
+    _, rep = run_lint_reporte(capsys)
+    assert "ica" not in _seccion(rep, "sin `[[wikilink]]`"), rep

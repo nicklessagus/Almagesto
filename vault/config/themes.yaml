@@ -73,7 +73,11 @@
 #                  via: usuario               # OBLIGATORIO (#111). Vocabulario CERRADO:
 #                                              #   usuario        — lo pediste vos
 #                                              #   descubrimiento — lo propuso la cascada (discover)
-#                                              #   reporte        — vino de un documento externo
+#                                              # ⚠ `reporte` se RETIRÓ en 1.72.0 y el lint lo bloquea
+#                                              # con mensaje propio: el eje es QUIÉN decidió, y eso
+#                                              # no tiene tercer valor — que el usuario traiga una
+#                                              # lista o los PDFs no cambia que lo trajo él. De qué
+#                                              # documento salió lo dice `motivo`, que es obligatorio.
 #                                              # Era el ÚNICO de los cuatro cuadrantes de curación
 #                                              # sin registro: `extra_core` dice quién y por qué
 #                                              # (D-58), el descarte de un candidato (#51) y el de
@@ -138,8 +142,10 @@
 #     # ejemplo —la única forma escrita de cómo se declara una fuente off-ADS, o sea la que un agente
 #     # copia— los omitía, así que enseñaba la forma que el detector rechaza. Es el mismo problema
 #     # que D-58 cerró para `extra_core` imprimiendo el snippet canónico.
-#     # `via` cerrado: usuario (lo pidió) · descubrimiento (lo propuso la cascada) · reporte (vino de
-#     # un documento externo). NO es el `via` de `extra_core`, que es el carril ADS.
+#     # ⛔ `via` es BINARIO (#206): usuario (lo trajo una persona) · descubrimiento (lo propuso la
+#     # cascada). `reporte` se retiró en 1.72.0 — partir esa categoría hacía que el campo dejara de
+#     # contestar su propia pregunta: había que sumar dos casilleros para saber cuántos papers
+#     # entraron por decisión humana. NO es el `via` de `extra_core`, que es el carril ADS.
 #     - key: 2006RasmussenWilliams
 #       pdf: ~/Descargas/rasmussen_williams_2006.pdf
 #       title: "Gaussian Processes for Machine Learning"
