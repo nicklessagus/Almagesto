@@ -1189,6 +1189,18 @@ disputa) y se deja un bloque `## Verificación de citas` en la nota — **una fi
 columnas de hash (**el ancla**, D-4/D-20):
 `| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |`
 (la celda `Hash fuente` va prefijada `txt:` / `pdf:` — ver abajo).
+⛔ **Qué celda se puede truncar y qué no (#226): sólo `Afirmación (extracto)` — lo dice su propio
+encabezado.** `Evidencia` y `Condición` **no**, y `Evidencia` lleva **su localizador** (`p. N`,
+`L…`, `Fig. 3, p. 7`) **al final y completo**. Medido sobre las 99 filas de una nota real: 81
+`Evidencia` y 79 `Condición` cortadas con `…` a exactamente 191 caracteres, así que una fila corta
+en *«omite dos condiciones más del montaje: (a) la calibración sintética…»* y **nunca llega a (b)** —
+ni un humano ni una re-corrida lo recuperan desde la nota, que es justo lo que el bloque existe para
+guardar. Y truncar **apaga otro chequeo**: el localizador vive al final de la cita, así que se lo
+lleva el corte y **62 de las 90** filas con `pdf:` quedaron sin localizador legible; el cruce de #122
+sólo dispara con `_locs` poblado, o sea que devolvía **0 sobre el 69 % de la nota** y ese cero se lee
+como verde. Hoy el lint reporta las dos cosas como backlog: la celda cortada, y la fila donde #122
+**no se pudo evaluar** (que es *no evaluable*, no *ok* — D-43).
+
 ⚠ **La columna `Score` 0–10 se eliminó en 1.42.0**, por la misma razón que `parcial` en 1.39.0:
 reintroducía un eje de **grado** cuyo umbral nunca se calibró. El campo tampoco gradúa —
 FActScore etiqueta binario y los que suman un tercer valor usan vocabulario cerrado, no una

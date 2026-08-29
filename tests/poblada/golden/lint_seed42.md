@@ -119,6 +119,12 @@
 ## ⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano) (0)
 > sobre 89 notas de `vault/wiki/`
 
+## ✂ Celda del bloque de verificación truncada: se tiró lo que el fan-out encontró (#226, backlog) (0)
+> sobre 29 notas de entidad (fichas, conceptos, queries)
+
+## ✂ Evidencia sin localizador: el cruce de #122 NO se pudo evaluar en esa fila (#226, backlog) (0)
+> sobre 29 notas de entidad (fichas, conceptos, queries)
+
 ## ❝ Cita textual que no está en su fuente: no es verbatim, o es de otra (#220, backlog) (0)
 > sobre 89 notas de `vault/wiki/`
 

@@ -407,6 +407,16 @@ cómo se resolvió — en un concepto, fila de `## Régimen de validez`> — o "
 ```
 Convertir fechas relativas a absolutas. Notación `$...$` en archivos `vault/wiki/` (texto plano en chat).
 
+⛔ **Sólo `Afirmación (extracto)` se trunca — `Evidencia` y `Condición` van ENTERAS (#226).** Lo
+dice el encabezado de la primera: es un extracto por definición, y su ancla vive en la nota, no en
+la celda. Las otras dos son el **output del fan-out**, y cortarlas lo tira sin recuperación: medido
+sobre las 99 filas de una nota real, **81 `Evidencia` y 79 `Condición`** cortadas con `…` a
+exactamente 191 caracteres — una fila termina en *«omite dos condiciones más del montaje: (a) la
+calibración sintética…»* y **nunca llega a (b)**. Y truncar **apaga otro chequeo**: el localizador
+va al final de la cita, así que se lo lleva el corte y **62 de 90** filas quedaron sin él, con el
+cruce de #122 devolviendo 0 sobre el 69 % de la nota. `python scripts/lint.py` hoy reporta las dos
+cosas (celda cortada; #122 no evaluable en esa fila).
+
 ⛔ **La barra vertical dentro de una celda va escapada `\|`** (INV-99). Es el caso normal, no el
 raro: el fan-out junta varias citas textuales con ` | ` de separador, y una cita puede traer la suya
 —una fila de tabla del paper—. Sin escapar, la celda se parte en dos y **todas las columnas a su

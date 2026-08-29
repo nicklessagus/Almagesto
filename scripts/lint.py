@@ -1167,6 +1167,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     log_sin_entrada: list = []         # (slug, motivo) — #118: la cadena corrió y el log no lo dice
     sweep_pendiente: list = []         # (slug, motivo) — #88: el barrido 2b no consta en el registro
     impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
+    verif_truncada: list = []          # (stem, motivo) — #226: `Evidencia`/`Condición` cortada
+    verif_sin_localizador: list = []   # (stem, motivo) — #226: #122 no evaluable en esa fila
     cita_no_verbatim: list = []        # (stem, motivo) — #220: la cadena no está en el `.txt`
     cita_opaca: list = []              # (stem, motivo) — #220: no evaluable (sin `.txt` / ocr / eprint)
     verificar_pdf: list = []           # (stem, motivo) — #225: marcada para chequear contra el PDF
@@ -2181,7 +2183,30 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 # prefijo case— y las dos salidas obvias empeoran la fila: poner `pdf:` miente sobre
                 # qué archivo se abrió, y citar por línea rompe #80. Medido: 6 de 8 filas marcadas
                 # de un concepto real eran ese caso, todas correctas.
+                # #226 — la celda TRUNCADA. Medido sobre las 99 filas de una nota real: 81
+                # `Evidencia` y 79 `Condición` cortadas con `…` a exactamente 191 caracteres. El
+                # docstring de `lib_blocks` dice que sin `condición` el bloque «tiraba lo que la
+                # corrida había encontrado sobre el régimen — el output más valioso del fan-out»;
+                # truncar hace la mitad de eso, y lo cortado NO se recupera desde la nota (una fila
+                # corta en «(a) la calibración sintética…» y nunca llega a (b)). El `Afirmación` sí
+                # se puede truncar: es un extracto por definición, y lo dice su encabezado.
+                for _col, _val in (("Evidencia", fila.evidence), ("Condición", fila.condition)):
+                    if str(_val).rstrip().endswith("…"):
+                        verif_truncada.append(
+                            (stem, f"[[{fila.bibcode}]] par {fila.n}: `{_col}` quedó cortada con "
+                                   f"`…` — lo que el fan-out encontró y no entró no se recupera "
+                                   f"desde la nota; sólo `Afirmación (extracto)` es truncable"))
                 _locs = lb.locator_kinds(fila.evidence)
+                # #226 — `_locs` vacío NO puede ser silencio: es NO EVALUABLE, y acá eso se declara
+                # (D-43) en vez de resolverse a favor. Medido: al truncar `Evidencia` se va el `p. N`
+                # del final, así que 62 de 90 filas con `pdf:` no tenían localizador legible y el
+                # chequeo de #122 devolvía 0 — un cero que se lee como verde sobre el 69 % de la
+                # nota. Sub-disparo silencioso, la dirección de error que `lib_blocks` prohíbe.
+                if not _locs:
+                    verif_sin_localizador.append(
+                        (stem, f"[[{fila.bibcode}]] par {fila.n}: la evidencia no trae localizador "
+                               f"(`p. N` o `L…`), así que el cruce de #122 contra `{fila.source_kind}:` "
+                               f"NO se pudo evaluar en esta fila"))
                 if _locs and _locs != {fila.source_kind} and len(_locs) == 1:
                     _l = next(iter(_locs))
                     verif_localizador.append(
@@ -3237,6 +3262,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('bad_sources', '⛔ `sources:` sin procedencia (#111): no consta quién declaró la fuente ni por qué', SEV_BLOQUEANTE, tuple(bad_sources), poblacion='temas'),
         Categoria('bad_roles', '⛔ `role` fuera del vocabulario — y todo campo con vocabulario CERRADO (`unidad_cita`, `pending_source`)', SEV_BLOQUEANTE, tuple(bad_roles), poblacion='papers'),
         Categoria('impl_leaks', '⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)', SEV_WARN, tuple(impl_leaks), poblacion='notas'),
+        Categoria('verif_truncada', '✂ Celda del bloque de verificación truncada: se tiró lo que el fan-out encontró (#226, backlog)', SEV_BACKLOG, tuple(verif_truncada), poblacion='entidades'),
+        Categoria('verif_sin_localizador', '✂ Evidencia sin localizador: el cruce de #122 NO se pudo evaluar en esa fila (#226, backlog)', SEV_BACKLOG, tuple(verif_sin_localizador), poblacion='entidades'),
         Categoria('cita_no_verbatim', '❝ Cita textual que no está en su fuente: no es verbatim, o es de otra (#220, backlog)', SEV_BACKLOG, tuple(cita_no_verbatim), poblacion='notas'),
         Categoria('cita_opaca', '❝ Cita textual NO EVALUABLE: sin `.txt`, OCR o eprint (#220, se declara, no cuenta en contra)', SEV_BACKLOG, tuple(cita_opaca), poblacion='notas'),
         Categoria('verificar_pdf', '🔎 Marcada para chequear contra el PDF: una auditoría no pudo cerrarla (#225, backlog)', SEV_BACKLOG, tuple(verificar_pdf), poblacion='notas'),

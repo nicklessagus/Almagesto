@@ -4899,3 +4899,49 @@ def test_ocr_y_eprint_se_declaran_no_evaluables(toy_vault, capsys):
     _rc, rep = run_lint_reporte(capsys)
     assert "nota" not in _seccion(rep, "no está en su fuente"), rep
     assert "nota" in _seccion(rep, "NO EVALUABLE"), rep
+
+
+def _con_evidencia(toy_vault, celda: str) -> None:
+    """La nota de `_con_ancla` con la columna `Evidencia` puesta y su celda cargada (#226)."""
+    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    t = nota.read_text(encoding="utf-8")
+    t = t.replace("| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente | Condición |",
+                  "| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |")
+    t = t.replace("|---|---|---|---|---|---|---|", "|---|---|---|---|---|---|---|---|")
+    t = t.replace("| soportada | ", f"| soportada | {celda} | ")
+    nota.write_text(t, encoding="utf-8")
+
+
+def test_evidencia_truncada_es_hallazgo(toy_vault, capsys):
+    """#226 — truncar `Evidencia`/`Condición` tira el output más valioso del fan-out y NO se
+    recupera desde la nota: una fila real cortaba en «(a) la calibración sintética…» y nunca llegaba
+    a (b). Medido: 81 de 99 `Evidencia` y 79 de 99 `Condición` cortadas a 191 caracteres."""
+    _con_ancla(toy_vault, CUERPO)
+    _con_evidencia(toy_vault, '"la cita" (p. 628) omite dos condiciones más del montaje: (a) la…')
+    _, rep = run_lint_reporte(capsys)
+    assert "quedó cortada" in rep, rep
+    assert lint.collect().por_clave("verif_truncada").severidad == lint.SEV_BACKLOG
+
+
+def test_evidencia_sin_localizador_se_declara_NO_EVALUABLE(toy_vault, capsys):
+    """#226, la mitad que apagaba otro chequeo: al truncar `Evidencia` se va el `p. N` del final, y
+    el cruce de #122 sólo dispara `if _locs and …`. Con `_locs` vacío no reportaba NADA — 62 de 90
+    filas de una nota real, o sea un cero que se lee como verde sobre el 69 %. Sub-disparo
+    silencioso: acá se DECLARA (D-43)."""
+    _con_ancla(toy_vault, CUERPO)
+    _con_evidencia(toy_vault, '"una cita sin ningún localizador"')
+    _, rep = run_lint_reporte(capsys)
+    assert "no trae localizador" in rep, rep
+    assert lint.collect().por_clave("verif_localizador").items == (), \
+        "no es un localizador que contradice: es que no hay ninguno — son categorías distintas"
+
+
+def test_evidencia_con_localizador_coherente_no_dispara_ninguna(toy_vault, capsys):
+    """#226, el simétrico — la fila completa, con su localizador y sin truncar, no cae en ninguna de
+    las dos categorías nuevas."""
+    _con_ancla(toy_vault, CUERPO)
+    _con_evidencia(toy_vault, '"la cita" (`.txt` L120)')
+    _, rep = run_lint_reporte(capsys)
+    res = lint.collect()
+    assert res.por_clave("verif_truncada").items == (), rep
+    assert res.por_clave("verif_sin_localizador").items == (), rep
