@@ -30,6 +30,14 @@
 #              en castellano la taxonomía de OpenAlex (inglesa) no matchea y esa mitad de la
 #              cascada no corre. No falla en silencio —lo dice en la cobertura— pero perdés el
 #              backend que más aporta en temas no-astro.
+#   seed_terms : (opcional, TEMAS DE MÉTODO) términos para el slice de texto DENTRO del topic de
+#              OpenAlex — el único eje que alcanza la cola especialista (los papers de 11-72 citas
+#              dentro de un topic de 169.988 works, por debajo del piso de cualquier top-N). Medido
+#              (#107): la recuperación pasa de 7/18 a 13/18 y el universo de candidatos de 776 a
+#              2521. Ése es el canje —cobertura contra costo de triage— y por eso es OPT-IN: sin
+#              declararlo el eje no corre, y la cobertura de `discover.py` lo dice («NO CORRIÓ»).
+#              Son CURACIÓN del tema (para ICA: noisy ICA, quasi-whitening, identifiability), no
+#              algo que se invente en cada corrida. El flag `--seed-terms t1,t2` los pisa.
 #   extra_core : opcional. ⚠ FORMA DURA (D-58): lista de MAPAS `{bibcode, via, motivo}`, no de
 #                bibcodes sueltos — la forma vieja aborta. `via` es vocabulario CERRADO:
 #                usuario | triage | citado-por-corpus. Ver el ejemplo en stars.yaml.

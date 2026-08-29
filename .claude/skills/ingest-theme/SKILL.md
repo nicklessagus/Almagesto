@@ -319,8 +319,20 @@ DOI y conteo de citas. La lista declarada a mano es el **último** recurso, no e
 ```bash
 python scripts/discover.py --topics "<tema en inglés>"      # subtema de OpenAlex (id T…) → `topic:`
 python scripts/discover.py --theme <slug>                   # ADS + arXiv + OpenAlex + anclaje
+python scripts/discover.py --theme <slug> --seed-terms "noisy ICA,quasi-whitening"   # + la cola especialista
 python scripts/discover.py --resolve 10.1016/…              # ¿hay copia libre de ese DOI?
 ```
+
+⛔ **Para un tema de método, preguntá por `seed_terms` (#210).** Los cuatro ejes de arriba rankean
+por citas, y eso tiene un **piso**: los papers especialistas de un tema viven entre **11 y 72
+citas** dentro de un topic de 169.988 works, o sea que **ningún corte por citas los toca**. El eje
+que sí los alcanza es el **slice de texto por término dentro del topic**, y está medido: la
+recuperación pasa de **7/18 a 13/18** con el universo de candidatos de **776 a 2521**. Ése es el
+canje —cobertura contra costo de triage— y **se decide por tema**, por eso es opt-in. Los términos
+son **curación**: el vocabulario especialista que la query general no trae (para ICA: *noisy ICA*,
+*quasi-whitening*, *identifiability*). Se declaran en `seed_terms:` de la entrada del tema
+(`themes.yaml`) y el flag los pisa para probar. Medido en una ingesta real: sin este eje se
+perdieron exactamente esos 10 papers, y la cobertura ahora lo declara *NO CORRIÓ* en vez de callarlo.
 
 **Leé la cobertura que imprime**, no sólo la lista: distingue *corrió con N*, *FALLÓ* (0 por caída,
 que **no** es "no tiene nada del tema") y *NO CORRIÓ* con el motivo. Y declará `topic:` en la

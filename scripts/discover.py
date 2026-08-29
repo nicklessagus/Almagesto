@@ -369,6 +369,9 @@ def cascade(*, ads_query: str | None = None, arxiv_terms: list | None = None,
         # en silencio deja una cascada de tres que corrió una sola, y el resultado se lee como
         # «los tres miraron y esto es todo lo que hay» — el falso limpio que INV-87 prohíbe.
         cobertura.append(("openalex", 0, "NO CORRIÓ: sin `topic:` en themes.yaml y no se pudo inferir — declaralo (`discover.py --topics \"<tema en inglés>\"`)"))
+        # #210 — el eje `seed_terms` cuelga del topic: sin topic no hay pajar donde hacer el slice.
+        cobertura.append(("seed_terms", 0, "NO CORRIÓ: sin `topic:` — el slice de texto es DENTRO "
+                                           "del topic, así que no hay dónde correrlo"))
     if topic_id:
         try:
             recs = seed(topic_id, rows=min(rows, 200), min_citas=min_citas)
@@ -377,10 +380,22 @@ def cascade(*, ads_query: str | None = None, arxiv_terms: list | None = None,
             # universo de candidatos de **776 a 2521**. Es cobertura contra costo de triage, y esa
             # decisión es por tema. (La primera medición decía "217 candidatos, 1 recuperación" y
             # era artefacto de un tope de 15 filas por término — ver el docstring de `seed_terms`.)
+            n_slices = 0
             if term_slices:
-                recs += seed_terms(topic_id, term_slices)
+                extra = seed_terms(topic_id, term_slices)
+                n_slices = len(extra)
+                recs += extra
             batches.append(("openalex", recs))
             cobertura.append(("openalex", len(recs), None))
+            # #210 — el eje tiene FILA PROPIA en la cobertura, con los mismos tres estados que los
+            # backends. Sin ella, «no corrió el slice» y «corrió y no trajo nada» se leían igual, y
+            # una capacidad documentada y medida —el eje que lleva la recuperación de 7/18 a
+            # 13/18— quedaba apagada sin que la salida lo dijera: la lectura por default era que
+            # la cascada ya había mirado todo lo que hay.
+            cobertura.append(("seed_terms", n_slices, None if term_slices else
+                              "NO CORRIÓ: sin `seed_terms:` en la entrada del tema (opt-in por "
+                              "costo de triage — #107 lo mide en 7/18 → 13/18, con el universo "
+                              "de candidatos de 776 a 2521)"))
         except Exception as e:                                  # noqa: BLE001
             cobertura.append(("openalex", 0, str(e)[:120]))
 
@@ -490,7 +505,8 @@ def _theme_anchor(slug: str, concept: str | None = None) -> tuple[list, int]:
 MAX_ARXIV_TERMS = 6
 
 
-def _preview_theme(slug: str, rows: int = 25, min_citadores: int = 2) -> int:
+def _preview_theme(slug: str, rows: int = 25, min_citadores: int = 2,
+                   seed_terms_cli: list | None = None) -> int:
     """Full cascade for one theme, proposes only: downloads no file and writes nothing to `vault/wiki/`. It DOES
     append this run to `descubrimientos:` of the versioned registry (INV-121), which is
     deliberate — a discovery pass that leaves no trace is lost as soon as the terminal
@@ -521,10 +537,24 @@ def _preview_theme(slug: str, rows: int = 25, min_citadores: int = 2) -> int:
         cfg.print_seguro(f"  ⚠ arXiv se busca con los primeros {MAX_ARXIV_TERMS} alias "
                          f"({', '.join(arxiv_terms)}); quedan fuera: "
                          f"{', '.join(_alias[MAX_ARXIV_TERMS:])}")
+    # #210 / INV-132 — `seed_terms` era una capacidad documentada, MEDIDA (7/18 → 13/18) y sin
+    # ninguna entrada de usuario: `_preview_theme` llamaba a `cascade` sin `term_slices` y `main()`
+    # no exponía bandera. Una capacidad así se lee como vigente, y en una ingesta real se perdieron
+    # exactamente los 10 papers que este eje alcanza (la familia *noisy ICA*: 11-72 citas dentro de
+    # un topic de 169.988 works, por debajo del piso de cualquier top-N por citas).
+    # La fuente por default es `themes.yaml`, porque los términos son **curación del tema** —para
+    # ICA: `noisy ICA`, `quasi-whitening`, `identifiability`— y reinventarlos en cada corrida es
+    # cómo dos corridas del mismo tema terminan mirando universos distintos. El flag los pisa.
+    slices = [str(t).strip() for t in (seed_terms_cli if seed_terms_cli is not None
+                                       else cfg.as_list(tema.get("seed_terms"))) if str(t).strip()]
+    if slices:
+        cfg.print_seguro(f"  seed_terms activo ({len(slices)}): {', '.join(slices)} — el eje cuesta "
+                         f"triage (#107: universo 776 → 2521) y por eso es opt-in")
     out = cascade(ads_query=tema.get("query"),
                   arxiv_terms=arxiv_terms,
                   topic_id=topic_id, rows=rows,
-                  min_citas=cfg.gate2_threshold(tema)[0])
+                  min_citas=cfg.gate2_threshold(tema)[0],
+                  term_slices=slices or None)
     cfg.print_seguro(f"\nCascada para `{slug}` (preview — no baja nada, no clasifica):")
     print_cobertura(out["cobertura"])
     # #77: el rastro versionado. La cascada corría tres backends y su resultado moría en stdout, así
@@ -543,7 +573,12 @@ def _preview_theme(slug: str, rows: int = 25, min_citadores: int = 2) -> int:
         # justifica su existencia («sobre qué universo afirma esta nota, y con qué se buscó») sólo
         # tenía media respuesta: la cobertura decía quién contestó y nada decía qué se preguntó. Los
         # tres backends reciben la query en su propio idioma, así que van los tres.
-        "consulta": {"ads": tema.get("query"), "arxiv": arxiv_terms, "topic": topic_id},
+        # #210 — el eje `seed_terms` cambia el universo de candidatos por un factor de 3, así que
+        # dos corridas del mismo tema con y sin él NO son comparables. Sin dejarlo escrito, el
+        # registro afirmaría el mismo universo para las dos. `[]` = corrió sin el eje (que no es lo
+        # mismo que «no consta»: eso sería que la clave falte, en una corrida anterior a #210).
+        "consulta": {"ads": tema.get("query"), "arxiv": arxiv_terms, "topic": topic_id,
+                     "seed_terms": slices},
         "almagesto_version": cfg.ALMAGESTO_VERSION,
     })
     cfg.print_seguro(f"  → registrado en {cfg.registro_path(slug)}")
@@ -600,6 +635,14 @@ def main(argv=()) -> int:
                          "más el anclaje si el tema ya bajó papers con DOI)")
     ap.add_argument("--min-citadores", type=int, default=2,
                     help="anclaje: mínimo de papers TUYOS que tienen que citar un trabajo (default 2)")
+    ap.add_argument("--seed-terms", metavar="T1,T2,…",
+                    help="slice de texto por término DENTRO del topic de OpenAlex (#107): el único "
+                         "eje que alcanza la cola especialista (11-72 citas dentro de un topic de "
+                         "169.988 works). Opt-in por COSTO de triage, no por rendimiento: medido "
+                         "7/18 → 13/18 de recuperación con el universo de candidatos de 776 a "
+                         "2521. Por default sale de `seed_terms:` de la entrada del tema en "
+                         "themes.yaml (son curación del tema); este flag la pisa, y `--seed-terms "
+                         "''` la apaga para esta corrida.")
     args = ap.parse_args(list(argv) or None)
 
     if args.topics:
@@ -609,7 +652,9 @@ def main(argv=()) -> int:
                          "sin él, ordenar por citas trae los papers más citados del mundo, no del tema.")
         return 0
     if args.theme:
-        return _preview_theme(args.theme, rows=args.rows, min_citadores=args.min_citadores)
+        cli = None if args.seed_terms is None else [t for t in args.seed_terms.split(",")]
+        return _preview_theme(args.theme, rows=args.rows, min_citadores=args.min_citadores,
+                              seed_terms_cli=cli)
     if args.resolve:
         url, why = resolve_pdf(args.resolve)
         cfg.print_seguro(f"  {url or '(sin copia libre)'}\n  motivo: {why}")

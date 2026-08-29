@@ -312,7 +312,8 @@ def test_cascade_declara_los_backends_que_no_corrieron():
     out = d.cascade()
     assert out["records"] == []
     motivos = {b: err for b, _n, err in out["cobertura"]}
-    assert set(motivos) == {"ads", "arxiv", "openalex"}
+    # #210 — `seed_terms` es una fila más de la cobertura, con los mismos tres estados
+    assert set(motivos) == {"ads", "arxiv", "openalex", "seed_terms"}
     assert all(m.startswith("NO CORRIÓ") for m in motivos.values())
     assert "query:" in motivos["ads"] and "topic:" in motivos["openalex"]
 
@@ -694,3 +695,81 @@ def test_preview_declara_lo_que_corta_y_ordena_por_citas_por_ano(toy_vault, monk
     consulta = cfg.load_registro("ica")["descubrimientos"][-1]["consulta"]
     assert consulta["ads"] == "q" and consulta["topic"] == "T1"
     assert consulta["arxiv"] == [f"a{i}" for i in range(6)]
+
+
+# ── #210 · seed_terms: la capacidad medida que no tenía entrada de usuario ───
+
+def _tema_ica(**kw):
+    base = {"title": "ICA", "query": "q", "aliases": ["ICA"], "topic": "T11447"}
+    base.update(kw)
+    return {"ica": base}
+
+
+def test_seed_terms_sale_de_themes_yaml(toy_vault, monkeypatch, capsys):
+    """#210 / INV-132 — `_preview_theme` llamaba a `cascade` SIN `term_slices` y no había bandera:
+    el eje que la doc mide en 7/18 → 13/18 era inalcanzable desde cualquier entrada de usuario.
+    Los términos son curación del tema, así que la fuente por default es themes.yaml."""
+    monkeypatch.setattr(d.cfg, "load_themes",
+                        lambda: _tema_ica(seed_terms=["noisy ICA", "quasi-whitening"]))
+    visto = {}
+    monkeypatch.setattr(d, "cascade", lambda **k: visto.update(k) or {
+        "records": [], "undedupable": [], "cobertura": []})
+    monkeypatch.setattr(d, "_theme_anchor", lambda s, c=None: ([], 0))
+    assert d._preview_theme("ica") == 0
+    assert visto["term_slices"] == ["noisy ICA", "quasi-whitening"]
+    assert "seed_terms activo (2)" in capsys.readouterr().out
+
+
+def test_seed_terms_sigue_apagado_por_default(toy_vault, monkeypatch):
+    """#210 punto 3 — sigue siendo opt-in por COSTO (el canje cobertura ↔ triage está medido):
+    sin declararlo, `cascade` no lo recibe."""
+    monkeypatch.setattr(d.cfg, "load_themes", lambda: _tema_ica())
+    visto = {}
+    monkeypatch.setattr(d, "cascade", lambda **k: visto.update(k) or {
+        "records": [], "undedupable": [], "cobertura": []})
+    monkeypatch.setattr(d, "_theme_anchor", lambda s, c=None: ([], 0))
+    d._preview_theme("ica")
+    assert visto["term_slices"] is None
+
+
+def test_flag_seed_terms_pisa_a_themes_yaml(toy_vault, monkeypatch):
+    """#210 punto 1 — la bandera existe y manda sobre lo declarado (probar un término suelto sin
+    editar el YAML es justamente el caso de uso del flag)."""
+    monkeypatch.setattr(d.cfg, "load_themes", lambda: _tema_ica(seed_terms=["viejo"]))
+    visto = {}
+    monkeypatch.setattr(d, "cascade", lambda **k: visto.update(k) or {
+        "records": [], "undedupable": [], "cobertura": []})
+    monkeypatch.setattr(d, "_theme_anchor", lambda s, c=None: ([], 0))
+    assert d.main(["--theme", "ica", "--seed-terms", "noisy ICA,SOBI"]) == 0
+    assert visto["term_slices"] == ["noisy ICA", "SOBI"]
+
+
+def test_cobertura_dice_que_seed_terms_NO_CORRIO(monkeypatch):
+    """#210 punto 4 — mismo criterio que `query:`/`topic:` faltantes: un eje apagado que no se
+    declara se lee como «la cascada ya miró todo lo que hay»."""
+    monkeypatch.setattr(d, "seed", lambda tid, rows=200, min_citas=None: [])
+    out = d.cascade(topic_id="T11447")
+    motivos = {b: err for b, _n, err in out["cobertura"]}
+    assert motivos["seed_terms"].startswith("NO CORRIÓ")
+    assert "seed_terms:" in motivos["seed_terms"]
+
+
+def test_cobertura_cuenta_lo_que_trajo_el_slice(monkeypatch):
+    """#210 — corrió y trajo N es un tercer estado, distinto de no haber corrido."""
+    monkeypatch.setattr(d, "seed", lambda tid, rows=200, min_citas=None: [{"doi": "10.1/a"}])
+    monkeypatch.setattr(d, "seed_terms", lambda tid, terms: [{"doi": "10.1/b"}, {"doi": "10.1/c"}])
+    out = d.cascade(topic_id="T11447", term_slices=["noisy ICA"])
+    fila = next(f for f in out["cobertura"] if f[0] == "seed_terms")
+    assert fila == ("seed_terms", 2, None)
+
+
+def test_registro_guarda_los_seed_terms_de_la_corrida(toy_vault, monkeypatch):
+    """#210 — el eje cambia el universo de candidatos por un factor de 3: dos corridas con y sin él
+    NO son comparables, y sin dejarlo escrito el registro afirmaría el mismo universo para las dos."""
+    monkeypatch.setattr(d.cfg, "load_themes", lambda: _tema_ica(seed_terms=["noisy ICA"]))
+    monkeypatch.setattr(d, "cascade", lambda **k: {"records": [], "undedupable": [], "cobertura": []})
+    monkeypatch.setattr(d, "_theme_anchor", lambda s, c=None: ([], 0))
+    guardado = {}
+    monkeypatch.setattr(d.cfg, "save_descubrimiento", lambda slug, rec: guardado.update(rec))
+    d._preview_theme("ica")
+    assert guardado["consulta"]["seed_terms"] == ["noisy ICA"]
