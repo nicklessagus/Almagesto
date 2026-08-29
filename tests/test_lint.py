@@ -1972,7 +1972,7 @@ import lib_blocks as lb   # noqa: E402
 
 
 def _con_ancla(toy_vault, cuerpo, txt="El período es de 34 días.\n", bib="2020citC...1..1C",
-               anchor=None, source=None, kind="txt"):
+               anchor=None, source=None, kind="txt", verdict="soportada"):
     """Nota con bloque de verificación bien formado: la fila se calcula del propio cuerpo, así que
     el escenario nace VERIFICADO y cada test rompe una sola cosa (D-5: la ficha nace 100%).
 
@@ -1987,7 +1987,7 @@ def _con_ancla(toy_vault, cuerpo, txt="El período es de 34 días.\n", bib="2020
              "|---|---|---|---|---|---|---|"]
     pref = f"{kind}:" if kind else ""
     for i, par in enumerate(pares, 1):
-        filas.append(f"| {i} | extracto | [[{par.bibcode}]] | soportada | "
+        filas.append(f"| {i} | extracto | [[{par.bibcode}]] | {verdict} | "
                      f"{anchor or par.anchor} | {pref}{source or lb.source_hash(ft)} | — |")
     completo = cuerpo + "\n## Verificación de citas (2026-01-01)\n\n" + "\n".join(filas) + "\n"
     _nota_verif(toy_vault, "nota-verif", completo)
@@ -4584,3 +4584,33 @@ def test_refuta_de_un_sujeto_que_ya_no_reclama_no_es_hallazgo(toy_vault, capsys)
     link_from_index(toy_vault, "2012MNRAS.421..666G")
     _rc, rep = run_lint_reporte(capsys)
     assert "2012MNRAS.421..666G" not in _seccion(rep, "REFUTA un reclamo")
+
+
+def test_no_verificable_no_tiene_archivo_que_declarar(toy_vault, capsys):
+    """#223 — `no verificable por extracción` es propiedad de la FUENTE: la nota de paper no tiene
+    PDF ni `.txt` en disco (un `fuente: abstract` de #207, o un paper cuyos artefactos borró
+    `--drop-core`), así que su fila **no puede** declarar un archivo — no hay qué hashear.
+
+    El chequeo de #117 la bloqueaba igual, o sea que el contrato exigía nombrar un archivo justo a
+    la fila que existe para decir que no lo hay. Medido en un concepto real: 9 filas correctas
+    frenando el cierre. Es el mismo criterio con que ese veredicto ya está fuera de
+    `VERDICTS_SIN_RESOLVER`."""
+    _con_ancla(toy_vault, CUERPO, kind=None, source="", verdict="no verificable por extracción")
+    _rc, rep = run_lint_reporte(capsys)
+    # el encabezado de la categoría se imprime siempre (declara su población): lo que no puede
+    # haber es un HALLAZGO, y la fila tampoco puede contarse como par vencido
+    assert "2020citC...1..1C" not in _seccion(rep, "no declara contra qué archivo"), rep
+    assert _n_vencidos(rep) == 0
+    cat = lint.collect().por_clave("verif_sin_archivo")
+    assert cat is not None and not cat.items, cat.items
+    # ⚠ el exit del fixture NO sirve acá: sin `git` la categoría «⛔ No evaluado» bloquea siempre
+    # (D-43), así que se mide la categoría, que es lo que este fix cambia.
+
+
+def test_la_exencion_no_alcanza_a_los_otros_veredictos(toy_vault, capsys):
+    """#223 — el recorte: `soportada` SÍ tiene que declarar su archivo. Sin este límite la exención
+    apagaría el detector entero, que es lo que #117 existe para no permitir."""
+    _con_ancla(toy_vault, CUERPO, kind=None, verdict="soportada")
+    rc, rep = run_lint_reporte(capsys)
+    assert "2020citC...1..1C" in _seccion(rep, "no declara contra qué archivo"), rep
+    assert rc == 1

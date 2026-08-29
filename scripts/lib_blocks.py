@@ -367,6 +367,24 @@ VERDICTS = ("soportada", "no-soportada", "contradice", "no verificable por extra
 # (ecuación, tabla, escaneo), no un defecto de la nota.
 VERDICTS_SIN_RESOLVER = ("no-soportada", "contradice")
 
+#: #223 · el veredicto que NO PUEDE declarar un archivo, porque no hay ninguno. `no verificable por
+#: extracción` es propiedad de la FUENTE —la nota de paper no tiene PDF ni `.txt` en disco, típico
+#: de un `fuente: abstract` (#207) o de un paper cuyos artefactos borró `--drop-core`—, así que su
+#: fila no puede llevar `txt:`/`pdf:` en `Hash fuente`: no hay qué hashear. El chequeo de #117
+#: bloqueaba igual, o sea que el contrato exigía declarar un archivo justo en las filas que existen
+#: para decir que no lo hay. Medido: 9 filas de un concepto real, todas correctas, bloqueando el
+#: cierre. Es el mismo criterio con que este veredicto ya está fuera de `VERDICTS_SIN_RESOLVER`.
+VERDICTS_WITHOUT_SOURCE = ("no verificable por extracción",)
+
+
+def has_no_source_file(verdict: str) -> bool:
+    """Is this verdict one that cannot name a source file? (#223)
+
+    Same normalisation as `resueltos`: a verdict may carry its resolution in the same cell and be
+    dressed in markdown emphasis, and comparing the raw string lets any of those slip through."""
+    pelado = _RESOLUCION_SEP.split(str(verdict or "").strip(), 1)[0].strip(_ADORNO).lower()
+    return pelado in VERDICTS_WITHOUT_SOURCE
+
 
 # Lo que separa el veredicto de su resolución anotada en la misma celda. `→` es lo que la plantilla
 # del skill usa; `->` y el paréntesis son cómo se escribe a mano. El espaciado NO es parte del

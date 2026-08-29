@@ -1191,6 +1191,14 @@ par por par**, así que la declara la **fila**; ningún campo del frontmatter pu
 #205 tampoco existe el campo que se usaba para inferirlo. En filas nuevas el prefijo es `pdf:`. Una celda sin prefijo es *no consta* —que no es `txt`— y el lint la **bloquea** en
 vez de adivinar: se migra con `python scripts/make_notes.py --migrate-verif-archivo`, que deduce el
 archivo del **hash que la fila ya guardaba** (identificarlo por su huella, no re-inferirlo).
+⛔ **Excepción nombrada (#223): la fila cuyo veredicto es `no verificable por extracción` NO declara
+archivo, porque no hay ninguno.** Ese veredicto es propiedad de la **fuente** —la nota de paper no
+tiene PDF ni `.txt` en disco: un `fuente: abstract` (#207), o un paper cuyos artefactos borró
+`--drop-core` (#217)— así que no hay qué hashear. Hasta 1.82.2 el chequeo la bloqueaba igual, o sea
+que el contrato exigía nombrar un archivo justo a la fila que existe para decir que no lo hay
+(medido: **9 filas correctas** de un concepto real frenando el cierre). Es el mismo criterio con que
+ese veredicto ya estaba fuera de los que exigen resolución. La exención **no** alcanza a los otros
+tres: `soportada` sin prefijo sigue bloqueando.
 ⛔ **Documento largo leído del `.txt`: van los DOS localizadores (#200).** Una fuente
 `unidad_cita: pagina` se cita por **página** (#80) pero se lee del `.txt`, que es lo barato y lo que
 el contrato manda por defecto. Las dos reglas son correctas y chocan: la fila queda con `txt:` y una

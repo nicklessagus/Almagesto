@@ -1971,6 +1971,13 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 # pares es una PÁGINA del PDF y el archivo a vigilar es el PDF. Hashear el `.txt`
                 # ahí se dispara en falso al re-extraerlo (la fuente real no se movió) y no vigila
                 # el archivo del que sale la cita.
+                if fila.source_kind is None and lb.has_no_source_file(fila.verdict):
+                    # #223: `no verificable por extracción` es propiedad de la FUENTE —no hay PDF ni
+                    # `.txt` en disco— así que la fila NO PUEDE declarar un archivo: no hay qué
+                    # hashear. Exigírselo era pedirle que nombrara un archivo justo a la fila que
+                    # existe para decir que no lo hay. Mismo criterio con que ese veredicto ya está
+                    # fuera de `VERDICTS_SIN_RESOLVER`.
+                    continue
                 if fila.source_kind is None:
                     # #117: sin declaración no hay contra qué comparar. Inferirlo del frontmatter es
                     # justamente lo que fabricaba pares vencidos, así que acá se declara NO
