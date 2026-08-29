@@ -311,6 +311,20 @@ diferencia operativa de que las fuentes se **declaran**, no se descubren por que
 
 ### 0b. ANTES de declarar nada a mano: barré los tres backends (#104)
 
+⚠ **`source:` no significa «dónde se busca» (#209).** Es una pregunta que el usuario hace con razón
+—*«si busca en todos lados al mismo tiempo, ¿para qué le pongo `source: ads`?»*— y la respuesta es
+que el campo nombra **qué cadena corre el orquestador**, no la búsqueda:
+
+| | qué decide | quién lo corre |
+|---|---|---|
+| `discover.cascade` | **dónde se busca**: ADS + arXiv + OpenAlex a la vez, merge por DOI | paso **a mano** de este skill (`discover.py --theme`) |
+| `source:` de `themes.yaml` | **qué ramas de plomería se ejecutan**: `query_ads` + ground-truth, o sólo las `sources:` declaradas | `ingest_theme.py` |
+
+`ingest_theme.py` usa `discover.resolve_pdf` y **nunca** `discover.cascade`, así que la cascada es
+este paso 0b y no algo que el orquestador haga solo (#95 sigue abierto como **decisión**, no como
+defecto). Lo único que `source:` decide de fondo es una propiedad del **corpus**: *«este tema tiene
+papers sin bibcode ADS, así que además de la query hay una lista declarada»*.
+
 ⛔ **No le digas al usuario "no tengo los fundacionales" habiendo mirado un solo buscador.** Fue un
 defecto medido: ADS devuelve **0 de 8** del canon de ICA/BSS y `author:"Hyvarinen, A"` trae dos
 papers sobre gotas de ácido sulfúrico (es otro Hyvärinen) — pero OpenAlex los tiene **8 de 8**, con

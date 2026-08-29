@@ -966,7 +966,13 @@ fuente real no se movió.
 > descubren por query — por eso es opt-in: si el usuario lo pide **explícitamente**, el skill
 > `ingest-theme` lo soporta (fuente = PDFs locales + web;
 > sin `query_ads`/`fetch_ground_truth`). Formalizado en el tooling: la
-> entrada del tema en `themes.yaml` lleva `source: ads | web | local-pdfs [+web]` y (si es off-ADS) la
+> entrada del tema en `themes.yaml` lleva `source: ads | web | local-pdfs [+web]` —⚠ **el nombre
+> engaña (#209): `source:` NO dice «dónde se busca», dice QUÉ CADENA CORRE el orquestador.** El
+> descubrimiento multi-backend (ADS + arXiv + OpenAlex a la vez, merge por DOI) es
+> `discover.py --theme <slug>`, un paso **aparte** que el skill prescribe a mano (0b) y que
+> `ingest_theme.py` **no** llama; lo que este campo decide de fondo es una propiedad del **corpus**:
+> *«este tema tiene papers sin bibcode ADS, así que además de la query hay una lista declarada»*—
+> y (si es off-ADS) la
 > lista `sources:`; `scripts/ingest_theme.py <slug>` orquesta la cadena según ese campo — también en
 > modo ads. Un tema off-ADS puede ser **mixto**, y su mitad astro entra por una de dos vías (la
 > primera con prioridad): **`query:` poblada** → descubrimiento ADS **completo** (misma lente,

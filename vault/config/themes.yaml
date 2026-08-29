@@ -46,7 +46,12 @@
 #                En un tema OFF-ADS también vale (tema MIXTO): los papers del tema que SÍ tienen
 #                bibcode ADS van acá — NO en sources: con el bibcode de key (degrada el stub:
 #                metadata a mano, blockquote off-ADS falso). ingest_theme les corre la sub-cadena ADS.
-#   source   : de dónde sale la bibliografía (default si falta: ads). Valores:
+#   source   : ⚠ EL NOMBRE ENGAÑA (#209): NO dice "dónde se busca", dice QUÉ CADENA CORRE el
+#              orquestador. El descubrimiento multi-backend (ADS + arXiv + OpenAlex a la vez, merge
+#              por DOI) es `discover.py --theme <slug>`, un paso APARTE que el skill prescribe a
+#              mano (0b) y que `ingest_theme.py` NO llama. Lo que este campo decide de fondo es una
+#              propiedad del CORPUS: «este tema tiene papers sin bibcode ADS, así que además de la
+#              query hay una lista declarada». Valores:
 #              ads | web | local-pdfs | local-pdfs+web. Todo lo no-ads es el modo off-ADS de
 #              ingest-theme (opt-in, sólo a pedido explícito) y requiere `sources:`.
 #              ⚠ En off-ADS, `query:` es OPCIONAL y NO es sólo decorativa (#104): si la poblás, el
