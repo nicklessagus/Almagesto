@@ -312,7 +312,13 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   no derivado, para que el lint cace el typo), y tres campos que dicen **cuándo** y **contra qué**
   se leyó: `fecha`, `txt` (de qué copia del `.txt` salió — el ancla de fuente cuando el mismo
   bibcode vive bajo varios slugs) y `lente` (las facetas vigentes al leer, que es el diff de lente
-  de D-49 **a nivel de lectura**). **Forma dura como `extra_core`** (D-58): el escalar y la lista
+  de D-49 **a nivel de lectura**). ⛔ **`txt` se cruza contra el DISCO al estamparse (#230)**, igual
+  que `fuente`: se escribía lo que el extractor dijera (o el slug por default), y 9 notas de una
+  bóveda real declaraban un `txt:` sin que existiera el archivo — un ancla que apunta a la nada no
+  ancla. La asimetría con `fuente: pdf` es deliberada: aquélla **rechaza** la extracción, ésta
+  **degrada declarando** (si el `.txt` vive bajo otro slug se apunta ahí; si no existe en ningún
+  lado la clave **no se escribe** — *no consta*, nunca un puntero falso), porque desde #205 una
+  vista puede legítimamente no tener `.txt` y rechazarla tiraría una lectura buena. **Forma dura como `extra_core`** (D-58): el escalar y la lista
   de strings **bloquean**; `vistas: [eps Eridani]` sería la misma conflación con otro nombre.
   ⛔ **Y `fuente` dice DE QUÉ se construyó (#207): `pdf` | `abstract`.** Un paper sin PDF **no es
   inextraíble**: ADS (y OpenAlex, y arXiv) devuelven el abstract, y ése puede traer lo que la ficha
@@ -403,7 +409,14 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   trabajo (y entonces **no va en `versions[]`**): la relación *«mismo programa, resultados
   distintos»* se declara en **prosa o en `salvedades`**.
   El ciclo se resuelve con `python scripts/make_notes.py --rename-paper VIEJO NUEVO`, que mueve la nota
-  y sus artefactos (`raw/pdfs/`, `raw/fulltext/`), agrega el alias y **reescribe los wikilinks de
+  y sus artefactos (`raw/pdfs/`, `raw/fulltext/`, **y la extracción de `build/<slug>/extraccion/`**
+  — #228: `harvest_views` mapea JSON→nota por `data["bibcode"]`, así que una extracción dejada bajo
+  el bibcode viejo hace que el cosechador diga *«no hay nota en `papers/`»* y **saltee la nota para
+  siempre**; `build/` es scratch regenerable pero una extracción **no** se regenera sin volver a
+  pagar el paso más caro de la cadena), **re-estampa la cabecera** (`· ADS: \`bibcode\``, que es
+  metadata derivada y publicaba el bibcode del preprint en la nota canónica del publicado), deja
+  `bibstem` en **null** —es verdad de catálogo y el renombre no tiene catálogo: *no consta* es
+  honesto, inventarlo no—, agrega el alias y **reescribe los wikilinks de
   toda la bóveda** — sin eso el renombre deja links rotos, que es la mitad del trabajo. Alcance
   declarado: `vault/`; lo que vive afuera se resuelve por el alias.
   ⛔ **Y el duplicado SIN `doi` ni `arxiv_id` lo reporta otra categoría (#216, backlog):** la clase
@@ -425,7 +438,15 @@ cuando aplique `confidence: high|medium|low`. Schemas específicos:
   fulltext_source(pdftotext|ocr|web), pdf_source(eprint|ads|publisher|web)`. El contrato apunta a **ambos artefactos**, con los roles que #205 fijó: `pdf` es **lo que se lee**
   (extracción y verificación) y `fulltext` el **índice de búsqueda** del corpus (`grep`); `fulltext_source: ocr` hereda desde el
   frontmatter la salvedad OCR (sin abrir el archivo). Los estampan `make_notes`/`extract_fulltext`
-  por verdad de disco (null si no hay extracción). Cuando un paper vive bajo **varios slugs** (relevante
+  por verdad de disco (null si no hay extracción).
+  ⛔ **Y los dos `*_source` NO se comportan igual cuando el archivo desaparece (#230).**
+  `fulltext_source` describe **cómo se extrajo un archivo**, así que se limpia con él (el lint marca
+  como backlog el par `fulltext: null` + `fulltext_source: <valor>`, que afirma cómo se extrajo un
+  texto que no existe). **`pdf_source` sobrevive**, a propósito: no describe el archivo sino la
+  **procedencia de la lectura que ocurrió** —una nota cuelga su salvedad de `pdf_source: eprint`
+  para decir que sus citas son contra el preprint—, así que borrarlo al borrar el PDF destruiría la
+  salvedad junto con el archivo. El par `pdf: null` + `pdf_source: <valor>` **no es hallazgo**.
+  Cuando un paper vive bajo **varios slugs** (relevante
   para más de un sujeto → su `.txt` extraído bajo cada uno, contenido idéntico) el campo es **estable**:
   la copia ya estampada se mantiene salvo que llegue una de **mejor calidad** (`pdftotext`/`web` > `ocr`);
   no se repunta al slug que corrió último (idempotente, sin ruido de diff).
@@ -1002,7 +1023,12 @@ fuente real no se movió.
 
 ### Registro de ingesta (`vault/config/registro/<slug>.yaml` — versionado, #51/#64)
 Cada sujeto ingestado deja un registro que **se commitea y viaja**, con tres secciones de dueños
-distintos: **`busquedas`** (lista, una entrada por corrida — **acumulativo**, D-28: antes pisaba, y
+distintos: **`descubrimientos`** (lo que la cascada de `discover` trajo, **con sus identificadores**
+—#231: sin ellos el registro contaba 391 registros y no podía **nombrar ninguno**, mientras el
+`STATUS.md` de la bóveda afirmaba que la cascada había encontrado los ocho trabajos del canon;
+encontrados, y en ningún carril versionado, así que declararlos en `sources:` obligaba a re-correr
+la cascada o a tipear las referencias a mano. Es el simétrico de `busquedas[].bibcodes`, y es lo que
+vuelve **accionable** un descubrimiento en vez de sólo contable—), **`busquedas`** (lista, una entrada por corrida — **acumulativo**, D-28: antes pisaba, y
 la cabecera de la ficha publicaba el embudo de la última corrida como si fuera el universo entero;
 el universo del sujeto es la **unión**, no la suma, y cada entrada distingue `n_nuevos` de
 `n_ya_estaban`), **`cadena`** (qué pasos corrieron, con fecha, versión, `via: orquestador|suelto` y

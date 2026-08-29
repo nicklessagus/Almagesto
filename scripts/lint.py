@@ -2360,6 +2360,25 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                  f"un alias (y la nota no debería existir) o es otro trabajo (y no va en "
                  f"`versions[]`). Mientras tanto queda fuera de los DOS chequeos de identidad "
                  f"(D-19 y #216), que es donde más falta hace"))
+    # #230 — la contradicción sobre el disco que nadie cruzaba: `fulltext: null` con
+    # `fulltext_source` poblado afirma CÓMO se extrajo un texto que no existe. `retarget_artifacts`
+    # (#217) limpia los tres campos del `.txt`, así que el par lo produce una edición a mano o una
+    # nota anterior a esa versión.
+    #
+    # ⛔ Y la asimetría con `pdf_source` es DELIBERADA y va declarada: ése NO se limpia, porque no
+    # describe un archivo sino la PROCEDENCIA de la lectura que ocurrió — una nota cuelga su
+    # salvedad de `pdf_source: eprint` para decir que sus citas son contra el preprint, y borrarlo
+    # al borrar el archivo destruiría la salvedad junto con el PDF. El contrato lo dice, y por eso
+    # el par `pdf: null` + `pdf_source: <valor>` NO es hallazgo.
+    for stem_p, fm_p in sorted(paper_fms.items()):
+        if fm_p.get("fulltext_source") and not fm_p.get("fulltext"):
+            incomplete.append(
+                (stem_p, f"`fulltext_source: {fm_p['fulltext_source']}` sin `fulltext` — afirma "
+                         f"CÓMO se extrajo un texto que no está en disco → "
+                         f"`python scripts/make_notes.py <slug>` re-estampa por verdad de disco "
+                         f"(⚠ `pdf_source` sí sobrevive al borrado, a propósito: es la procedencia "
+                         f"de la lectura, no del archivo)"))
+
     for stem_p, fm_p in sorted(paper_fms.items()):
         if stem_p in alias:
             continue
@@ -3070,6 +3089,13 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             if not base.exists():
                 continue
             for p_ in sorted(base.glob(patron)):
+                # #230 — `build/` es, por `.gitignore`, «scratch del tooling», así que tratar TODO
+                # subdirectorio suyo como capa de entidad garantiza el falso positivo: el
+                # directorio de trabajo de una auditoría (`build/auditoria/`) se reportaba como
+                # defecto de la bóveda. Capa de entidad es la que trae lo que la cadena escribe.
+                if etiqueta == "build" and not (
+                        (p_ / "ads.json").exists() or (p_ / "extraccion").exists()):
+                    continue
                 slug_ = p_.stem if patron == "*.yaml" else p_.name
                 # `_red.yaml` es de la bóveda entera, no de un sujeto (pasada de red, D-46).
                 if slug_.startswith("_") or slug_ in vivos:
@@ -3106,6 +3132,23 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                                 f"(típico: se angostó la `query` del tema y el registro salió de "
                                 f"`ads.json`). Re-corré `make_notes.py --theme {_dir.name}` o "
                                 f"borrá el artefacto colgado"))
+
+    # #230 — el GEMELO PDF de #108, que no existía. El barrido de arriba mira sólo
+    # `raw/fulltext/*/*.txt`: un `raw/pdfs/<slug>/<bib>.pdf` sin nota no lo veía **nadie** —el glob
+    # de PDFs es sólo para el drift nota→archivo, y INV-19 mira directorios de primer nivel—. Es
+    # exactamente el mismo defecto (descarga ya pagada que no alcanza ninguna síntesis) y desde
+    # #205 pesa MÁS que su hermano, porque el PDF es la fuente de lectura y el `.txt` sólo el
+    # índice: un PDF colgado es la mitad cara de la cadena tirada.
+    for _dir in sorted(cfg.PDFS.glob("*")) if cfg.PDFS.exists() else []:
+        if not _dir.is_dir():
+            continue
+        for _pdf in sorted(_dir.glob("*.pdf")):
+            if not (cfg.PAPERS / f"{_pdf.stem.replace('/', '_')}.md").exists():
+                incomplete.append(
+                    (_pdf.stem, f"`raw/pdfs/{_dir.name}/{_pdf.stem}.pdf` sin su nota en `papers/` → "
+                                f"descarga ya pagada que no alcanza ninguna síntesis, y desde #205 "
+                                f"es la fuente de lectura, no el índice. Re-corré `make_notes.py` "
+                                f"sobre `{_dir.name}` o borrá el artefacto colgado"))
 
     # `sources:` sin procedencia (#111). Era el ÚNICO de los cuatro cuadrantes de curación sin
     # registro: `extra_core` dice quién y por qué desde D-58, el descarte de un candidato desde #51

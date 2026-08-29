@@ -1967,6 +1967,7 @@ def _consolidar_duplicado(old, new, old_stem: str, new_bibcode: str) -> None:
 
     old.unlink()
     _set_lista_de_mapas(new, "versions", versions)
+    _move_extraction(old_stem, new_bibcode)     # #228: mismo camino que `rename_paper`
     n = _reescribir_wikilinks(old_stem, new_bibcode)
     cfg.print_seguro(
         f"  ✓ consolidado: {old.name} → {new.name} (canónica). `versions[]` += {old_stem}; "
@@ -2009,9 +2010,89 @@ def rename_paper(old_stem: str, new_bibcode: str) -> None:
     _set_campo(new, "bibcode", new_bibcode)
     _set_lista_de_mapas(new, "versions", versions)
 
+    _finish_rename(new, old_stem, new_bibcode)
+
     tocadas = _reescribir_wikilinks(old_stem, new_bibcode)
     cfg.print_seguro(f"  {old.name} → {new.name} · {tocadas} nota(s) con wikilinks reescritos · "
                      f"alias en `versions[]`")
+
+
+def _finish_rename(nota, old_stem: str, new_bibcode: str) -> None:
+    """The layers `--rename-paper` promised to touch and did not (#228).
+
+    Renaming was leaving the identity half migrated: the canonical note of the PUBLISHED work
+    showed the PREPRINT's bibcode **in its header line** —derived metadata that `make_notes`
+    re-stamps in every other context— and kept its `bibstem`. Worse, the extraction JSON stayed
+    under the old bibcode: `harvest_views` maps JSON→note by `data["bibcode"]`, so the harvester
+    printed «no hay nota en `papers/`» and **skipped the note** on every later run. Measured on a
+    real vault, the note left out of the harvester's reach was exactly the one carrying a false
+    salvedad — a re-run to fix it would not have touched it.
+
+    ⚠ `build/` is regenerable scratch, but an EXTRACTION is not: it does not come back without
+    paying the most expensive step of the chain again. That is why it moves.
+
+    `bibstem` is NOT invented here: it is catalog truth and this function has no catalog. It is
+    cleared —«no consta» rather than the preprint's value— and said out loud, which is the honest
+    half of the two options the issue named.
+    """
+    texto = nota.read_text(encoding="utf-8")
+    span = find_header_line(texto)
+    if span is not None:
+        i, j = span
+        linea = texto[i:j].replace(f"`{old_stem}`", f"`{new_bibcode}`")
+        cfg.write_text_atomic(nota, texto[:i] + linea + texto[j:])
+
+    fm = cfg.split_fm(nota.read_text(encoding="utf-8"))
+    if str(fm.get("bibstem") or "").strip():
+        _set_campo(nota, "bibstem", "null")
+        cfg.print_seguro("  ⚠ `bibstem` era del bibcode viejo y no se puede derivar sin catálogo: "
+                         "queda en null (no consta). Re-corré `make_notes <slug>` para repoblarlo.")
+
+    _move_extraction(old_stem, new_bibcode)
+
+
+def _slugs_of_bibcode(bibcode: str) -> list:
+    """Which subject slugs hold artifacts for this bibcode, by disk truth (#231).
+
+    A paper can live under several slugs (its `.txt` extracted under each), so the rename is a step
+    in every one of those chains; stamping only one would leave the others reading as a cut.
+    """
+    fuera = set()
+    for base in (cfg.PDFS, cfg.FULLTEXT):
+        for art in base.glob(f"*/{safe_name(bibcode)}.*"):
+            fuera.add(art.parent.name)
+    return sorted(fuera)
+
+
+def _move_extraction(old_stem: str, new_bibcode: str) -> int:
+    """Move `build/<slug>/extraccion/<old>.json` to the new bibcode, rewriting its `bibcode` (#228).
+
+    `harvest_views` maps JSON→note by `data["bibcode"]`, so an extraction left behind makes the
+    harvester print «no hay nota en `papers/`» and **skip the note** on every later run — forever,
+    and silently. If the canonical bibcode already has its own extraction, the old one is left
+    alone: choosing between two paid readings is judgement, not mechanics.
+    """
+    movidos = 0
+    for viejo in sorted(cfg.ROOT.glob(f"build/*/extraccion/{safe_name(old_stem)}.json")):
+        nuevo = viejo.with_name(f"{safe_name(new_bibcode)}.json")
+        if nuevo.exists():
+            cfg.print_seguro(f"  ⚠ {nuevo.parent.parent.name}: ya hay extracción para "
+                             f"{new_bibcode}; la de {old_stem} se deja donde está (elegir entre dos "
+                             f"lecturas pagadas es juicio, no mecánica)")
+            continue
+        try:
+            data = json.loads(viejo.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and data.get("bibcode"):
+                data["bibcode"] = new_bibcode
+                cfg.write_text_atomic(viejo, json.dumps(data, ensure_ascii=False, indent=2))
+        except (json.JSONDecodeError, OSError):
+            pass                      # se mueve igual: un JSON ilegible movido sigue siendo mejor
+        viejo.rename(nuevo)           # que uno ilegible que además el cosechador no encuentra
+        movidos += 1
+    if movidos:
+        cfg.print_seguro(f"  {movidos} extracción(es) de `build/` movidas al bibcode nuevo — sin "
+                         f"esto `harvest_views` saltea la nota para siempre")
+    return movidos
 
 
 def _set_lista_de_mapas(dest, clave: str, valor: list) -> None:
@@ -2943,6 +3024,12 @@ def main() -> int:
     # que uno ausente: el usuario lo copia y el ciclo preprint→publicado queda a medias.
     if args.rename_paper:
         rename_paper(*args.rename_paper)
+        # #231 / D-57 — la rama retornaba ANTES del `save_paso` del final, así que consolidar un
+        # duplicado —una operación que mueve archivos y reescribe wikilinks de TODA la bóveda— no
+        # dejaba rastro en `cadena`. El slug sale de dónde viven los artefactos del bibcode nuevo:
+        # es la misma verdad de disco con la que se movieron.
+        for _slug in _slugs_of_bibcode(args.rename_paper[1]):
+            cfg.save_paso(_slug, "make_notes", flags=["rename-paper"])
         return 0
     if not args.slug:
         ap.error("falta el slug (corren sin slug: --restamp-pdf-links, --restamp-keywords, "

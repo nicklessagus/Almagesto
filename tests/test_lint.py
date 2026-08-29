@@ -2922,9 +2922,17 @@ def test_capas_colgadas_se_reportan(toy_vault, capsys):
     cfg.save_busqueda("fantasma", {"fecha": "2026-01-01", "n_total": 1})
     (cfg.PDFS / "fantasma").mkdir(parents=True, exist_ok=True)
     (cfg.FULLTEXT / "fantasma").mkdir(parents=True, exist_ok=True)
+    # #230 — la capa de `build/` se reconoce por lo que la CADENA escribe (`ads.json` /
+    # `extraccion/`), no por «es un subdirectorio de build»: `.gitignore` declara `build/` como
+    # scratch del tooling, y tratar todo subdirectorio suyo como entidad garantizaba el falso
+    # positivo (el directorio de trabajo de una auditoría se reportaba como defecto de la bóveda).
     (cfg.ROOT / "build" / "fantasma").mkdir(parents=True, exist_ok=True)
+    (cfg.ROOT / "build" / "fantasma" / "ads.json").write_text("{}", encoding="utf-8")
+    (cfg.ROOT / "build" / "scratch-de-una-auditoria").mkdir(parents=True, exist_ok=True)
     rc, rep = run_lint_reporte(capsys)
     sec = _seccion(rep, "Capas colgadas")
+    assert "scratch-de-una-auditoria" not in sec, \
+        "`build/` es scratch del tooling: sólo es capa de entidad lo que la cadena escribió"
     for capa in ("registro/fantasma", "raw/pdfs/fantasma", "raw/fulltext/fantasma", "build/fantasma"):
         assert capa in sec, f"falta {capa}: {sec}"
     assert "ÚNICO artefacto no regenerable" in sec, "el registro es el peor de los cuatro"
@@ -4979,3 +4987,37 @@ def test_condicion_clasificada_y_condicion_vacia_no_disparan(toy_vault, capsys):
     run_lint_reporte(capsys)
     assert lint.collect().por_clave("cond_sin_clasificar").items == (), \
         "la celda vacía no tiene nada que clasificar: marcarla sería marcar toda fila sin condición"
+
+
+def test_pdf_sin_nota_es_el_gemelo_de_108(toy_vault, capsys):
+    """#230 — el barrido de #108 mira SÓLO `raw/fulltext/*/*.txt`, así que un PDF sin nota no lo
+    veía nadie: el glob de PDFs es para el drift nota→archivo e INV-19 mira directorios de primer
+    nivel. Y desde #205 pesa más que su hermano, porque el PDF es la fuente de lectura."""
+    (cfg.PDFS / "un-tema").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "un-tema" / "2020colg...1..1C.pdf").write_bytes(b"%PDF-1.4")
+    _, rep = run_lint_reporte(capsys)
+    assert "2020colg...1..1C.pdf` sin su nota" in rep, rep
+
+
+def test_fulltext_source_sin_fulltext_es_hallazgo(toy_vault, capsys):
+    """#230 — `fulltext: null` + `fulltext_source: pdftotext` afirma CÓMO se extrajo un texto que no
+    existe. Es una contradicción sobre el disco y ninguna categoría la cruzaba."""
+    mk_note(cfg.PAPERS, "2020huer...1..1H",
+            {"bibcode": "2020huer...1..1H", "tags": ["paper"], "stars": ["tau Cet"],
+             "fulltext": None, "fulltext_source": "pdftotext"}, "# p\n")
+    link_from_index(toy_vault, "2020huer...1..1H")
+    _, rep = run_lint_reporte(capsys)
+    assert "sin `fulltext`" in rep, rep
+
+
+def test_pdf_source_SI_sobrevive_al_borrado(toy_vault, capsys):
+    """#230, la asimetría deliberada: `pdf_source` no describe un archivo sino la PROCEDENCIA de la
+    lectura que ocurrió. Una nota cuelga su salvedad de `pdf_source: eprint` para decir que sus
+    citas son contra el preprint; borrarlo al borrar el PDF destruiría la salvedad junto con el
+    archivo. El contrato lo declara, así que el par NO es hallazgo."""
+    mk_note(cfg.PAPERS, "2020epri...1..1E",
+            {"bibcode": "2020epri...1..1E", "tags": ["paper"], "stars": ["tau Cet"],
+             "pdf": None, "pdf_source": "eprint"}, "# p\n")
+    link_from_index(toy_vault, "2020epri...1..1E")
+    _, rep = run_lint_reporte(capsys)
+    assert "2020epri...1..1E" not in _seccion(rep, "Campos incompletos"), rep

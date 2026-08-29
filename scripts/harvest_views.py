@@ -57,6 +57,19 @@ def _safe_links(texto: str) -> str:
 PLACEHOLDER_ABSTRACT = "_(no disponible)_"
 
 
+def _resolve_txt_slug(bib: str, declarado: str) -> str | None:
+    """Which slug actually holds this bibcode's `.txt`, or `None` when no copy exists (#230).
+
+    Prefers the declared one —that is the extractor's claim and, when it holds, the anchor is
+    exact— and falls back to any surviving copy, because the same bibcode legitimately lives under
+    several slugs with identical content. `None` means the vault has no `.txt` for it at all.
+    """
+    if declarado and (cfg.FULLTEXT / declarado / f"{bib}.txt").exists():
+        return declarado
+    otros = sorted(cfg.FULLTEXT.glob(f"*/{bib}.txt")) if cfg.FULLTEXT.exists() else []
+    return otros[0].parent.name if otros else None
+
+
 def pdf_on_disk(bibcode: str) -> bool:
     """¿Hay un PDF de este bibcode bajo cualquier slug? Verdad de disco, no frontmatter.
 
@@ -455,8 +468,25 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
             cfg.print_seguro(f"  ⛔ {archivo.name}: declara `fuente: pdf` y no hay PDF en "
                              f"`raw/pdfs/**/{bib}.pdf` — la vista diría que se leyó el paper")
             continue
-        entrada = {"sujeto": sujeto, "tipo": tipo, "fecha": hoy,
-                   "txt": str(vista.get("txt") or slug), "lente": list(lente)}
+        # #230 — `txt` se CRUZA contra el disco, igual que `fuente` dos líneas más arriba. Se
+        # estampaba lo que el extractor dijera (o el slug, por default), así que 9 notas de una
+        # bóveda real declaraban `txt: ica` sin que existiera `raw/fulltext/ica/<bib>.txt` — el
+        # contrato lo llama «el ancla de fuente cuando el mismo bibcode vive bajo varios slugs», y
+        # un ancla que apunta a un archivo inexistente no ancla nada.
+        #
+        # ⚠ NO se rechaza la extracción, y la asimetría con `fuente: pdf` es deliberada: desde #205
+        # se lee el PDF, así que una vista `fuente: pdf` puede no tener `.txt` en absoluto y
+        # rechazarla tiraría una lectura buena. Se degrada declarando: si el `.txt` declarado no
+        # está pero existe bajo otro slug, se apunta ahí; si no existe en ningún lado, la clave NO
+        # se escribe —«no consta», que es distinto de un puntero falso— y se avisa.
+        entrada = {"sujeto": sujeto, "tipo": tipo, "fecha": hoy, "lente": list(lente)}
+        txt_real = _resolve_txt_slug(bib, str(vista.get("txt") or slug))
+        if txt_real:
+            entrada["txt"] = txt_real
+        else:
+            cfg.print_seguro(f"  ⚠ {archivo.name}: no hay `raw/fulltext/**/{bib}.txt` en disco — la "
+                             f"vista se estampa SIN `txt:` (no consta) en vez de apuntar a un "
+                             f"archivo que no existe")
         if fuente:
             entrada["fuente"] = fuente
         # #212 — el único canal en la dirección que faltaba: la lectura puede REFUTAR el reclamo que

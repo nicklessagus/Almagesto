@@ -584,6 +584,13 @@ def accept_source(slug: str, idents: list, via: str, motivo: str) -> int:
         except Exception as exc:                    # noqa: BLE001 — declarado, no tragado
             fallidos.append((ident, str(exc)[:90]))
             continue
+        # AUD-231 — `_json` devuelve None cuando el archivo contesta 404, y eso NO estaba en la
+        # rama de fallo: seguía derecho y reventaba con `AttributeError` dentro de `openalex`, o
+        # sea la peor forma de fallar (un traceback donde había un carril de error declarado, y la
+        # entrada a medias ya impresa arriba).
+        if not isinstance(w, dict):
+            fallidos.append((ident, "el archivo no devolvió metadata para ese identificador"))
+            continue
         key = oa.citekey(w) or ident
         doi = oa._bare_doi(w.get("doi"))
         url, _por = discover.resolve_pdf(doi)
@@ -679,10 +686,26 @@ def main() -> int:
                          "build/<slug>/triage.json viejo (bóvedas pre-1.9.0) y salir")
     args = ap.parse_args()
 
+    def close(rc: int, paso: str) -> int:
+        """Stamp the step in `cadena:` when it actually ran, and return its exit code.
+
+        #231 / D-57 — «each script stamps itself, so a step run by hand leaves a trace instead of
+        reading as a cut». `triage.py` was the one that did not: measured on a real vault, **21
+        runs** of `--drop-core`/`--drop` left no step at all. The judgement itself was not lost —it
+        lives in `decisiones`, dated— but WHEN it was applied relative to the `make_notes` runs was,
+        and that is exactly what explains a vault holding 32 notes for 30 papers.
+
+        Only on success: a run that refused did not curate anything, and stamping it would put a
+        step in the chain that never happened.
+        """
+        if rc == 0:
+            cfg.save_paso(args.slug, "triage", cfg.flags_usados(args, ap))
+        return rc
+
     if args.drop_core:
-        return drop_core(args.slug, args.drop_core, args.reason)
+        return close(drop_core(args.slug, args.drop_core, args.reason), "triage")
     if args.accept_source:
-        return accept_source(args.slug, args.accept_source, args.via, args.reason)
+        return close(accept_source(args.slug, args.accept_source, args.via, args.reason), "triage")
     if args.prioridad:
         return prioridad(args.slug)
     if args.migrate:
@@ -721,13 +744,14 @@ def main() -> int:
     if args.drop:
         if not args.reason:
             ap.error("--drop necesita --reason (el motivo queda registrado; no curar en silencio)")
-        return drop(args.slug, args.drop, args.reason)
+        return close(drop(args.slug, args.drop, args.reason), "triage")
 
     if args.drop_source:
         if not args.reason:
             ap.error("--drop-source necesita --reason (el motivo queda registrado; no curar en "
                      "silencio)")
-        return drop_source(args.slug, args.drop_source, args.reason, args.pointer or None)
+        return close(drop_source(args.slug, args.drop_source, args.reason,
+                                  args.pointer or None), "triage")
 
     decisiones = load_decisions(args.slug)
     if not (cfg.ROOT / "build" / args.slug / "ads.json").exists():

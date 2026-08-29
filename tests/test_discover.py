@@ -773,3 +773,30 @@ def test_registro_guarda_los_seed_terms_de_la_corrida(toy_vault, monkeypatch):
     monkeypatch.setattr(d.cfg, "save_descubrimiento", lambda slug, rec: guardado.update(rec))
     d._preview_theme("ica")
     assert guardado["consulta"]["seed_terms"] == ["noisy ICA"]
+
+
+def test_el_descubrimiento_guarda_los_identificadores(toy_vault, monkeypatch):
+    """#231 — el registro contaba 391 registros y no podía nombrar NINGUNO, mientras el `STATUS.md`
+    de la bóveda afirmaba que la cascada había encontrado los ocho trabajos del canon. Encontrados,
+    y en ningún carril versionado: declararlos en `sources:` obligaba a re-correr la cascada o a
+    tipear las referencias a mano. Es la mitad de #77 que había quedado sin hacer, y el simétrico
+    exacto de `busquedas[].bibcodes`, que existe por lo mismo (D-28)."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ica",
+                                         "source": "web", "query": 'abs:"independent component"',
+                                         "aliases": ["ICA"], "topic": "T11447"}})
+    monkeypatch.setattr(d, "cascade", lambda **k: {
+        "records": [{"doi": "10.1016/0165-1684(94)90029-9", "title": "Independent component "
+                     "analysis, a new concept?", "year": 1994, "citation_count": 8000,
+                     "found_in": ["openalex", "ads"]}],
+        "undedupable": [{"title": "Un capítulo sin DOI", "found_in": ["openalex"]}],
+        "cobertura": [("openalex", 1, None)]})
+    d._preview_theme("ica", rows=10, min_citadores=2)
+    ds = cfg.load_registro("ica")["descubrimientos"][-1]
+    enc = ds["encontrados"]
+    assert len(enc) == 1
+    assert enc[0]["id"] == "doi:10.1016/0165-1684(94)90029-9"
+    assert "Independent component" in enc[0]["title"], "un DOI pelado no se puede triar"
+    assert enc[0]["found_in"] == ["openalex", "ads"], "la procedencia enruta aunque no clasifique"
+    assert ds["no_deduplicables"][0]["title"] == "Un capítulo sin DOI", \
+        "mezclarlos afirmaría una identidad que el contrato 2 dice no adivinar"
+    assert "id" not in ds["no_deduplicables"][0], "sin DOI ni arXiv id no hay identidad que escribir"

@@ -94,6 +94,22 @@ def ident(rec: dict) -> str | None:
     return f"arxiv:{ax.lower()}" if ax else None
 
 
+def _identifiers(rec: dict) -> dict:
+    """What a discovered record must carry into the registry to stay actionable (#231).
+
+    Not a copy of the record: the identifiers (`id` as `ident` computes it, plus bibcode, doi and
+    arXiv id as they came), the title —a bare DOI cannot be triaged without asking for it again—,
+    the year, the citation count and `found_in`, because provenance ROUTES even though it does not
+    classify. Missing values stay out rather than being written as null: the registry says what the
+    cascade brought, not what it failed to bring.
+    """
+    campos = {"id": ident(rec), "bibcode": rec.get("bibcode"), "doi": rec.get("doi"),
+              "arxiv_id": rec.get("arxiv_id"), "title": rec.get("title"), "year": rec.get("year"),
+              "citation_count": rec.get("citation_count"),
+              "found_in": list(cfg.as_list(rec.get("found_in")))}
+    return {k: v for k, v in campos.items() if v not in (None, "", [])}
+
+
 def dedup(batches: list[tuple[str, list]]) -> tuple[list, list]:
     """`[(backend, records), …]` → `(merged, undedupable)`.
 
@@ -579,6 +595,19 @@ def _preview_theme(slug: str, rows: int = 25, min_citadores: int = 2,
         # mismo que «no consta»: eso sería que la clave falte, en una corrida anterior a #210).
         "consulta": {"ads": tema.get("query"), "arxiv": arxiv_terms, "topic": topic_id,
                      "seed_terms": slices},
+        # #231 — los IDENTIFICADORES de lo que la cascada trajo. Sin esto el registro contaba 391
+        # registros y no podía nombrar **ninguno**, mientras el `STATUS.md` de la bóveda afirmaba
+        # que OpenAlex había encontrado los ocho trabajos del canon: encontrados, y en ningún carril
+        # versionado —ni aceptados ni descartados—, así que declararlos en `sources:` obligaba a
+        # re-correr la cascada o a tipear las referencias a mano. Es la mitad de #77 que había
+        # quedado sin hacer, y la que vuelve **accionable** un descubrimiento en vez de sólo
+        # contable — el simétrico exacto de `busquedas[].bibcodes`, que existe por lo mismo (D-28).
+        # Va `found_in` porque la procedencia ENRUTA (qué puerta se pregunta) aunque no clasifique,
+        # y va el título porque un DOI pelado no se puede triar sin volver a pedirlo.
+        "encontrados": [_identifiers(r) for r in out["records"]],
+        # Los no deduplicables se guardan APARTE, como los devuelve `dedup`: mezclarlos afirmaría
+        # una identidad que el contrato 2 dice no adivinar.
+        "no_deduplicables": [_identifiers(r) for r in out["undedupable"]],
         "almagesto_version": cfg.ALMAGESTO_VERSION,
     })
     cfg.print_seguro(f"  → registrado en {cfg.registro_path(slug)}")

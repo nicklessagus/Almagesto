@@ -796,11 +796,15 @@ def to_record(d: dict) -> dict:
     facets, relevant = classify(d)
     return {
         "bibcode": d.get("bibcode"),
-        "title": (d.get("title") or [""])[0],
+        # #230 — el markup de catálogo se normaliza ACÁ, que es donde el schema se define: ADS
+        # devuelve `Ca II H&amp;K`, `H<SUB>2</SUB>O` y `m s<SUP>-1</SUP>` tal cual, y eso se
+        # publicaba en el `title:` de la nota y en todo roll-up, rompiendo cualquier cruce
+        # título↔texto (el grep por alias, el diff de lente, el detector de duplicados).
+        "title": cfg.clean_catalog_markup((d.get("title") or [""])[0]),
         "authors": d.get("author", []),
         "year": d.get("year"),
         "pubdate": d.get("pubdate"),
-        "abstract": d.get("abstract", ""),
+        "abstract": cfg.clean_catalog_markup(d.get("abstract", "")),
         "arxiv_id": extract_arxiv(d.get("identifier", [])),
         "doi": (d.get("doi") or [None])[0],
         "doctype": d.get("doctype"),

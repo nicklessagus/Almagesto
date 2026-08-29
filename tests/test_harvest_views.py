@@ -63,6 +63,8 @@ def test_cosecha_estampa_la_vista_con_fecha_txt_y_lente(toy_vault):
 
     @inv INV-134"""
     dest = sembrar(toy_vault)
+    (cfg.FULLTEXT / "test_star").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "test_star" / f"{BIB}.txt").write_text("texto", encoding="utf-8")
     hv.harvest("test_star")
     v = read_fm(dest)["vistas"]
     assert len(v) == 1 and v[0]["sujeto"] == "Estrella Test" and v[0]["tipo"] == "star"
@@ -627,3 +629,28 @@ def test_pdfinfo_sin_pages_no_es_verificable(toy_vault, monkeypatch):
     monkeypatch.setattr(hv.subprocess, "run", lambda *a, **k: SimpleNamespace(stdout="roto\n"))
     ok, detalle = hv.check_salvedad(BIB, {"tipo": "pdf_paginas", "n": 3})
     assert ok is None and "no devolvió el número de páginas" in detalle
+
+
+def test_el_txt_de_la_vista_se_cruza_contra_el_disco(toy_vault, capsys):
+    """#230 — `txt` se estampaba con lo que el extractor dijera (o el slug por default), sin mirar
+    el disco: 9 notas de una bóveda real declaraban `txt: ica` sin que existiera
+    `raw/fulltext/ica/<bib>.txt`. El contrato lo llama «el ancla de fuente cuando el mismo bibcode
+    vive bajo varios slugs», y un ancla que apunta a un archivo inexistente no ancla nada. Es la
+    asimetría exacta que #207 cerró para `fuente` y que quedó abierta acá."""
+    dest = sembrar(toy_vault)
+    hv.harvest("test_star")
+    v = read_fm(dest)["vistas"][0]
+    assert "txt" not in v, "sin `.txt` en disco, «no consta» — nunca un puntero falso"
+    assert "no consta" in capsys.readouterr().out
+
+
+def test_el_txt_cae_a_la_copia_que_SI_existe(toy_vault):
+    """#230, la otra rama: el mismo bibcode vive legítimamente bajo varios slugs con contenido
+    idéntico, así que si la copia declarada no está y hay otra, se apunta a ésa — degradar
+    declarando, no rechazar la lectura (rechazarla tiraría una extracción buena)."""
+    dest = sembrar(toy_vault, extraccion(vista={"sujeto": "Estrella Test", "tipo": "star",
+                                                "txt": "otro-slug"}))
+    (cfg.FULLTEXT / "test_star").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "test_star" / f"{BIB}.txt").write_text("texto", encoding="utf-8")
+    hv.harvest("test_star")
+    assert read_fm(dest)["vistas"][0]["txt"] == "test_star"

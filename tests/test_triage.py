@@ -1032,3 +1032,27 @@ def test_drop_core_no_toca_la_vista_ni_la_extraccion(toy_vault, capsys):
     triage.drop_core("ica", ["2021PASP..133g4501V"], "off-topic")
     txt = (cfg.PAPERS / "2021PASP..133g4501V.md").read_text(encoding="utf-8")
     assert "fecha: 2026-08-29" in txt and "methods: [ICA]" in txt
+
+
+def test_el_drop_deja_paso_en_la_cadena(toy_vault, monkeypatch, capsys):
+    """#231 / D-57 — «cada script se estampa a sí mismo, así que un paso corrido a mano deja rastro
+    en vez de leerse como un corte». `triage.py` era el que no lo hacía: medido en una bóveda real,
+    21 corridas de `--drop-core`/`--drop` no dejaron un solo paso. El juicio no se perdía —vive en
+    `decisiones`, con fecha— pero sí CUÁNDO se aplicó respecto de las corridas de `make_notes`, que
+    es justo lo que explica una bóveda con 32 notas para 30 papers."""
+    write_ads(toy_vault, candidates=[cand("2020a....1A", "ruido", cites=1)])
+    assert run_main(monkeypatch, ["test_star", "--drop", "2020a....1A",
+                                  "--reason", "no habla del sujeto"]) == 0
+    pasos = [p.get("paso") for p in cfg.load_cadena("test_star")]
+    assert "triage" in pasos, pasos
+
+
+def test_el_triage_que_rehusa_NO_estampa_paso(toy_vault, monkeypatch, capsys):
+    """#231, el simétrico: sólo al salir 0. Una corrida que no curó nada y estampa igual mete en la
+    cadena un paso que no ocurrió — que es el falso positivo que D-57 existe para no producir."""
+    import discover
+    monkeypatch.setattr(discover, "_json", lambda url: None)      # el DOI no resuelve
+    assert run_main(monkeypatch, ["test_star", "--accept-source", "10.1/no-existe",
+                                  "--via", "usuario", "--reason", "canon"]) != 0
+    assert [p.get("paso") for p in cfg.load_cadena("test_star")] == [], \
+        "una corrida que no curó nada mete en la cadena un paso que no ocurrió"

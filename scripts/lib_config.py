@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import datetime as _dt
+import html
 import json
 import os
 import re
@@ -20,7 +21,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.89.0"
+ALMAGESTO_VERSION = "1.90.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -537,6 +538,24 @@ def quote_found(quote: str, source_norm: str) -> bool:
     """Is this quote in that (already normalized) source text? All its fragments must be."""
     frags = quote_fragments(normalize_quote(quote))
     return bool(frags) and all(f in source_norm for f in frags)
+
+
+_CATALOG_TAG_RE = re.compile(r"</?(?:SUB|SUP|SUP1|I|B|BR)\s*/?>", re.I)
+
+
+def clean_catalog_markup(s: str) -> str:
+    """Catalog text (title, abstract) with ADS's HTML markup resolved (#230).
+
+    ADS returns `Ca II H&amp;K`, `H<SUB>2</SUB>O`, `m s<SUP>-1</SUP>` verbatim, and nobody
+    normalised them: the string went into the note's `title:`, got published in every roll-up, and
+    broke any title↔text cross-check —which is what the alias grep, the lens diff and the duplicate
+    detector all do—. Entities are unescaped and the sub/superscript tags dropped: the digit stays,
+    which is what a plain-text index needs, and no attempt is made to render `₂` (guessing a
+    typographic form the source did not send would be inventing).
+    """
+    if not isinstance(s, str) or not s:
+        return s
+    return _CATALOG_TAG_RE.sub("", html.unescape(s))
 
 
 def looks_decidable(salvedad: str) -> bool:

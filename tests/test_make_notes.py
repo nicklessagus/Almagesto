@@ -3741,3 +3741,87 @@ def test_retarget_no_toca_una_nota_sin_frontmatter(toy_vault):
     (cfg.PAPERS / "2021Suelto.md").write_text("# sin frontmatter\n", encoding="utf-8")
     assert mn.retarget_artifacts("2021Suelto") is False
     assert (cfg.PAPERS / "2021Suelto.md").read_text(encoding="utf-8") == "# sin frontmatter\n"
+
+
+# ── #228 · el renombre completo: cabecera, `bibstem` y la extracción de `build/` ─────────────────
+
+def _con_artefactos(bib: str, *, slug: str = "test_star"):
+    """Un paper con `.txt`, PDF y extracción en `build/` — las tres capas que el renombre mueve."""
+    _paper(bib)
+    (cfg.FULLTEXT / slug).mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / slug / f"{bib}.txt").write_text("texto", encoding="utf-8")
+    (cfg.PDFS / slug).mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / slug / f"{bib}.pdf").write_bytes(b"%PDF-1.4")
+    d = cfg.ROOT / "build" / slug / "extraccion"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"{bib}.json").write_text(json.dumps({"bibcode": bib, "methods": ["ica"]}),
+                                   encoding="utf-8")
+    return d
+
+
+def test_el_renombre_mueve_la_extraccion_de_build(toy_vault):
+    """#228 — `harvest_views` mapea JSON→nota por `data["bibcode"]`, así que una extracción dejada
+    bajo el bibcode viejo hace que el cosechador imprima «no hay nota en `papers/`» y SALTEE la nota
+    en toda corrida futura, en silencio. Medido: la única nota fuera del alcance del cosechador era
+    justo la que cargaba una salvedad falsa — re-correr el cosechador no la habría tocado.
+    `build/` es scratch regenerable, pero una EXTRACCIÓN no se regenera sin volver a pagarla."""
+    d = _con_artefactos("2020preX...1..1X")
+    mn.rename_paper("2020preX...1..1X", "2021pubY...1..1Y")
+    assert not (d / "2020preX...1..1X.json").exists()
+    nuevo = d / "2021pubY...1..1Y.json"
+    assert nuevo.exists(), "la extracción quedó huérfana del cosechador"
+    assert json.loads(nuevo.read_text(encoding="utf-8"))["bibcode"] == "2021pubY...1..1Y", \
+        "el nombre del archivo no alcanza: el cosechador mapea por el CAMPO"
+
+
+def test_el_renombre_reestampa_la_cabecera(toy_vault):
+    """#228 — la línea `· ADS: \\`bibcode\\`` es metadata DERIVADA (la re-estampa `make_notes` en
+    cualquier otro contexto) y el renombre no la tocaba: la nota canónica del trabajo publicado le
+    mostraba al lector el bibcode del preprint."""
+    _con_artefactos("2020preX...1..1X")
+    nota = cfg.PAPERS / "2020preX...1..1X.md"
+    t = nota.read_text(encoding="utf-8")
+    fm_end = t.index("---", 3) + 4
+    nota.write_text(t[:fm_end] + "\n· [[test_star]] · ADS: `2020preX...1..1X`\n" + t[fm_end:],
+                    encoding="utf-8")
+    mn.rename_paper("2020preX...1..1X", "2021pubY...1..1Y")
+    cuerpo = (cfg.PAPERS / "2021pubY...1..1Y.md").read_text(encoding="utf-8")
+    assert "ADS: `2021pubY...1..1Y`" in cuerpo
+    assert "2020preX...1..1X" not in cuerpo.split("## ")[0].split("---")[-1], \
+        "la cabecera todavía publica el bibcode viejo"
+
+
+def test_el_renombre_deja_bibstem_en_no_consta(toy_vault, capsys):
+    """#228 — `bibstem` es verdad de CATÁLOGO y el renombre no tiene catálogo: dejarlo con el valor
+    del preprint sería afirmar una procedencia falsa, e inventarlo es peor. Queda en null («no
+    consta») y se dice, que es la mitad honesta de las dos opciones."""
+    _con_artefactos("2020preX...1..1X")
+    nota = cfg.PAPERS / "2020preX...1..1X.md"
+    t = nota.read_text(encoding="utf-8")
+    nota.write_text(t.replace("bibcode:", "bibstem: arXiv\nbibcode:", 1), encoding="utf-8")
+    mn.rename_paper("2020preX...1..1X", "2021pubY...1..1Y")
+    assert read_fm(cfg.PAPERS / "2021pubY...1..1Y.md").get("bibstem") is None
+    assert "bibstem" in capsys.readouterr().out
+
+
+def test_el_renombre_deja_paso_en_la_cadena(toy_vault, monkeypatch):
+    """#231 / D-57 — la rama de `--rename-paper` retornaba ANTES del `save_paso` del final, así que
+    una operación que mueve archivos y reescribe wikilinks de toda la bóveda no dejaba rastro. El
+    slug sale de la verdad de disco: la misma con la que se movieron los artefactos."""
+    _con_artefactos("2020preX...1..1X")
+    monkeypatch.setattr(sys, "argv", ["make_notes.py", "--rename-paper",
+                                      "2020preX...1..1X", "2021pubY...1..1Y"])
+    mn.main()
+    pasos = [p.get("paso") for p in cfg.load_cadena("test_star")]
+    assert "make_notes" in pasos, pasos
+
+
+def test_no_pisa_una_extraccion_ya_existente_del_bibcode_nuevo(toy_vault, capsys):
+    """#228 — elegir entre dos lecturas pagadas es juicio, no mecánica: si la canónica ya tiene su
+    extracción, la vieja se deja donde está y se avisa."""
+    d = _con_artefactos("2020preX...1..1X")
+    (d / "2021pubY...1..1Y.json").write_text(json.dumps({"bibcode": "2021pubY...1..1Y"}),
+                                             encoding="utf-8")
+    mn.rename_paper("2020preX...1..1X", "2021pubY...1..1Y")
+    assert (d / "2020preX...1..1X.json").exists(), "se pisó una extracción ya pagada"
+    assert "ya hay extracción" in capsys.readouterr().out
