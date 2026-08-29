@@ -164,6 +164,37 @@ _LOC_PAGINA = re.compile(r"\bp{1,2}\.\s*\d+", re.I)     # `p. 628`, `pp. 12-14`
 _LOC_LINEA = re.compile(r"\bL\s?\d+\b")                  # `L320`, `L 320`
 
 
+#: #221 · vocabulario CERRADO de la condición. El fan-out la puebla al 89 % de los pares (medido
+#: sobre 96), así que «resolvé cada condición» no es una lista de trabajo: es la nota entera. Lo que
+#: faltaba no era señal —ninguna de las condiciones medidas era descartable— sino el criterio para
+#: separar la que cambia lo que el consumidor haría de la que sólo agrega procedencia.
+#:
+#: `acota`         — la afirmación es FALSA fuera de esa condición (el umbral es de otra estrella;
+#:                   la medición no es sobre RVs). Se resuelve sí o sí: fila de `## Régimen de
+#:                   validez`, o corrección de la prosa.
+#: `contextualiza` — la afirmación sigue siendo cierta y la condición agrega procedencia
+#:                   (instrumento, tamaño de muestra, año). Va al reporte y NO obliga a editar;
+#:                   rige la regla de poda.
+#:
+#: ⚠ Salvedad honesta: la clasificación es en sí misma un juicio, así que hereda parte del problema
+#: que la eliminación de `parcial` atacó (1.39.0). La diferencia es que acá el juicio tiene un test
+#: operativo —**¿la afirmación queda falsa si se saca la condición?**— que `parcial` nunca tuvo.
+CONDITION_KINDS = ("acota", "contextualiza")
+
+
+def condition_kind(condicion: str) -> str | None:
+    """The declared kind of a condition cell (`acota:` / `contextualiza:` prefix), or `None`.
+
+    `None` covers both «the cell is empty» (nothing to classify) and «it has prose but no kind» —
+    the caller separates them, because only the second is a finding.
+    """
+    cabeza = str(condicion or "").strip().lower()
+    for k in CONDITION_KINDS:
+        if cabeza.startswith(k + ":"):
+            return k
+    return None
+
+
 def locator_kinds(evidencia: str) -> set:
     """Qué tipo de localizador usa la celda `Evidencia`: `{"pdf"}`, `{"txt"}`, los dos, o vacío.
 

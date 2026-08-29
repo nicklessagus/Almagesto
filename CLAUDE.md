@@ -1178,6 +1178,20 @@ reprodujo 2/2. El umbral nunca estuvo definido, y no se puede definir: es de gra
 nota no dice (→ `soportada` con la `condición` poblada), o la cita no toca el contenido distintivo
 (→ `no-soportada`, como el contrato ya mandaba).
 
+⛔ **Y la condición se CLASIFICA, con vocabulario cerrado: `acota` | `contextualiza` (#221).** El
+fan-out la puebla al **89 %** de los pares (86 de 96, medido) contra el **7 %** de la completitud,
+que #198 ya había acotado — así que la instrucción *«resolvé cada condición no vacía»* no es una
+lista de trabajo: **es la nota entera**, y en un concepto la resolución que el propio contrato
+prescribe (una fila de `## Régimen de validez`) daría 86 filas sobre una nota de 413 líneas, contra
+la regla de poda. Una instrucción inaplicable se deja de cumplir, y se deja de cumplir **en
+silencio**. El corte tiene test operativo: ***¿la afirmación queda falsa si se saca la condición?***
+→ **`acota`** (se resuelve sí o sí) / **`contextualiza`** (va al reporte, no obliga a editar). ⚠ El
+89 % **no es ruido** —*«el umbral crítico baja de 200 a 75 para la enana K»*, *«la medición no es
+sobre RVs»*: varias vuelven **falsa** la afirmación fuera de su régimen—; lo que faltaba era el
+criterio. Es el movimiento de 1.39.0 otra vez —partir un eje que fusionaba lo decidible con lo de
+grado— con una salvedad honesta: clasificar es en sí mismo un juicio, y hereda parte de lo que
+`parcial` sufría. La diferencia es que **este juicio tiene un test** y aquél nunca lo tuvo.
+
 El mismo experimento mostró **por qué la condición tiene que ser columna y no prosa**: pares que las
 dos corridas dieron `soportada` idéntica traían condiciones **distintas** entre corridas. El juez es
 estable en el eje textual y **no exhaustivo** en el de régimen, así que absorber la condición en la

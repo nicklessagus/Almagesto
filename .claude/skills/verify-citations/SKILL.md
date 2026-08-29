@@ -180,6 +180,19 @@ Cada uno:
     menos" de las tablas truncadas, en versión conceptual: la nota no afirma falso, afirma **de
     más**. En una nota de **concepto** la resolución tiene lugar propio: la condición va a
     `## Régimen de validez`; en una ficha, se agrega a la afirmación.
+  - ⛔ **Y la CLASIFICA, con vocabulario cerrado (#221): `acota` o `contextualiza`.** El test es
+    operativo: ***¿la afirmación queda FALSA si se saca la condición?*** Sí → `acota` (el umbral es
+    de otra estrella, la medición no es sobre RVs, el escalado es por fila): **se resuelve sí o sí**
+    —fila de `## Régimen de validez`, o corrección de la prosa—. No → `contextualiza` (instrumento,
+    tamaño de muestra, año, definición): **va al reporte y no obliga a editar**, y ahí rige la regla
+    de poda. Medido sobre 96 pares: **86 con condición poblada (89 %)** contra **7 % de
+    completitud**, que #198 ya había acotado. Sin clasificar, «resolvé cada condición no vacía» es
+    la nota entera —86 filas de régimen sobre 413 líneas, contra la regla de poda—, así que se deja
+    de cumplir **en silencio**. ⚠ Y el 89 % **no es ruido**: *«el S/N está medido en el continuo a
+    4000 Å»*, *«el umbral crítico baja de 200 a 75 para la enana K»*, *«la medición no es sobre
+    RVs»* — varias vuelven **falsa** la afirmación fuera de su régimen. Lo que faltaba era el
+    criterio, no la señal. La celda del bloque se escribe `acota: …` / `contextualiza: …`, y el lint
+    reporta como backlog la que no lo declara.
   - `completitud` (**sólo cuando el par sale de una transcripción** de tabla o lista de la fuente):
     ¿la tabla/lista del paper tiene **más filas/ítems** que los que la nota transcribe? Si sí,
     **listarlos** (con nº de línea). Es un **hallazgo aparte**, no un grado de soporte: no cambia el
@@ -224,7 +237,9 @@ común del tema — que el paper hable de lo mismo NO alcanza, tiene que tocar e
 distintivo; si el paper afirma lo CONTRARIO, es contradice (pegá la frase que lo contradice).
 Decime APARTE del veredicto: ¿el paper afirma esto bajo CONDICIONES que la afirmación no menciona
 (SNR, muestreo, tamaño de muestra, definición del observable, época, rango)? Si sí, citalas con su
-página — la afirmación puede estar bien y aun así estar sobre-generalizada. No uses memoria ni otros
+página — la afirmación puede estar bien y aun así estar sobre-generalizada — y CLASIFICALAS con una
+sola palabra: `acota` si la afirmación queda FALSA sin esa condición, `contextualiza` si sigue
+siendo cierta y la condición sólo agrega procedencia. No uses memoria ni otros
 papers."*
 
 ⛔ **La pregunta de completitud es la del contrato, y se ensancha sin que nada avise (#198).**
@@ -362,7 +377,9 @@ sobre esa fila. El mecanismo funcionó, pero sólo porque alguien miró los pare
 por qué: si la edición no hubiera movido el ancla, la afirmación falsa se quedaba. Por eso la
 segunda pasada se **manda** acá en vez de aparecer como un hallazgo a interpretar.
 
-Cada **no-soportada / contradice**, y cada `condicion` no vacía, se resuelve antes de cerrar:
+Cada **no-soportada / contradice**, y cada `condicion` marcada **`acota`** (#221: la que deja
+falsa la afirmación; la `contextualiza` va al reporte y no obliga a editar), se resuelve antes de
+cerrar:
 - **Contradicción** (`contradice`) → decidir cuál de dos casos es. (a) **La nota está mal** →
   corregirla a lo que dice la fuente. (b) **Desacuerdo real entre fuentes** → es una **disputa**:
   si es un parámetro de una ficha, taguearla en `disputes` (posiciones explícitas, #71)

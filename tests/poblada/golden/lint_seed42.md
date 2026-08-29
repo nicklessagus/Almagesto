@@ -119,6 +119,9 @@
 ## ⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano) (0)
 > sobre 89 notas de `vault/wiki/`
 
+## ⚖ Condición sin clasificar: no dice si acota la afirmación o sólo la contextualiza (#221, backlog) (0)
+> sobre 29 notas de entidad (fichas, conceptos, queries)
+
 ## ✂ Celda del bloque de verificación truncada: se tiró lo que el fan-out encontró (#226, backlog) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 

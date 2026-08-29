@@ -4945,3 +4945,37 @@ def test_evidencia_con_localizador_coherente_no_dispara_ninguna(toy_vault, capsy
     res = lint.collect()
     assert res.por_clave("verif_truncada").items == (), rep
     assert res.por_clave("verif_sin_localizador").items == (), rep
+
+
+def _con_condicion(toy_vault, celda: str) -> None:
+    """La nota de `_con_ancla` con la celda `Condición` cargada (#221)."""
+    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    t = nota.read_text(encoding="utf-8").replace("| — |", f"| {celda} |")
+    nota.write_text(t, encoding="utf-8")
+
+
+def test_condicion_sin_clasificar_es_hallazgo(toy_vault, capsys):
+    """#221 — el fan-out puebla `condicion` al 89 % de los pares (86 de 96 medidos), así que
+    «resolvé cada condición no vacía» no es una lista de trabajo: es la nota entera, y se deja de
+    cumplir EN SILENCIO. El vocabulario cerrado separa la que obliga a editar de la que no."""
+    _con_ancla(toy_vault, CUERPO)
+    _con_condicion(toy_vault, "el S/N está medido en el continuo a 4000 Å")
+    _, rep = run_lint_reporte(capsys)
+    assert "no declara si" in rep, rep
+    assert lint.collect().por_clave("cond_sin_clasificar").severidad == lint.SEV_BACKLOG
+
+
+def test_condicion_clasificada_y_condicion_vacia_no_disparan(toy_vault, capsys):
+    """#221, los dos simétricos: la clasificada está resuelta, y la vacía no tiene nada que
+    clasificar — confundirlas haría que la categoría marcara toda fila sin condición."""
+    _con_ancla(toy_vault, CUERPO)
+    _con_condicion(toy_vault, "acota: el umbral 200→75 es para la enana K, no para la G")
+    run_lint_reporte(capsys)
+    assert lint.collect().por_clave("cond_sin_clasificar").items == ()
+    # ⚠ #202 — la celda vacía hay que RE-CREARLA: `_con_condicion` reemplaza `| — |`, que después
+    # de la línea de arriba ya no existe, así que un segundo llamado sería un no-op y el test
+    # pasaría sin haber probado la rama de la celda vacía.
+    _con_ancla(toy_vault, CUERPO)
+    run_lint_reporte(capsys)
+    assert lint.collect().por_clave("cond_sin_clasificar").items == (), \
+        "la celda vacía no tiene nada que clasificar: marcarla sería marcar toda fila sin condición"

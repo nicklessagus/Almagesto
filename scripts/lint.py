@@ -1167,6 +1167,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     log_sin_entrada: list = []         # (slug, motivo) — #118: la cadena corrió y el log no lo dice
     sweep_pendiente: list = []         # (slug, motivo) — #88: el barrido 2b no consta en el registro
     impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
+    cond_sin_clasificar: list = []     # (stem, motivo) — #221: condición sin `acota:`/`contextualiza:`
     verif_truncada: list = []          # (stem, motivo) — #226: `Evidencia`/`Condición` cortada
     verif_sin_localizador: list = []   # (stem, motivo) — #226: #122 no evaluable en esa fila
     cita_no_verbatim: list = []        # (stem, motivo) — #220: la cadena no está en el `.txt`
@@ -2196,6 +2197,19 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                             (stem, f"[[{fila.bibcode}]] par {fila.n}: `{_col}` quedó cortada con "
                                    f"`…` — lo que el fan-out encontró y no entró no se recupera "
                                    f"desde la nota; sólo `Afirmación (extracto)` es truncable"))
+                # #221 — la condición sin CLASIFICAR. El fan-out la puebla al 89 % de los pares,
+                # así que la instrucción «resolvé cada condición no vacía» es inaplicable tal cual
+                # —86 filas de `## Régimen de validez` sobre una nota de 413 líneas, contra la regla
+                # de poda— y se deja de cumplir en silencio. El vocabulario cerrado separa la que
+                # obliga a editar (`acota`: la afirmación es FALSA fuera de esa condición) de la que
+                # sólo agrega procedencia (`contextualiza`). Es el diagnóstico de #198 un eje más
+                # allá: acotar la pregunta, no eliminarla.
+                _cond = str(fila.condition or "").strip()
+                if _cond and _cond not in ("—", "-", "–") and lb.condition_kind(_cond) is None:
+                    cond_sin_clasificar.append(
+                        (stem, f"[[{fila.bibcode}]] par {fila.n}: la condición no declara si "
+                               f"`acota:` (la afirmación es falsa fuera de ella → hay que resolverla) "
+                               f"o `contextualiza:` (agrega procedencia → va al reporte)"))
                 _locs = lb.locator_kinds(fila.evidence)
                 # #226 — `_locs` vacío NO puede ser silencio: es NO EVALUABLE, y acá eso se declara
                 # (D-43) en vez de resolverse a favor. Medido: al truncar `Evidencia` se va el `p. N`
@@ -3262,6 +3276,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('bad_sources', '⛔ `sources:` sin procedencia (#111): no consta quién declaró la fuente ni por qué', SEV_BLOQUEANTE, tuple(bad_sources), poblacion='temas'),
         Categoria('bad_roles', '⛔ `role` fuera del vocabulario — y todo campo con vocabulario CERRADO (`unidad_cita`, `pending_source`)', SEV_BLOQUEANTE, tuple(bad_roles), poblacion='papers'),
         Categoria('impl_leaks', '⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)', SEV_WARN, tuple(impl_leaks), poblacion='notas'),
+        Categoria('cond_sin_clasificar', '⚖ Condición sin clasificar: no dice si acota la afirmación o sólo la contextualiza (#221, backlog)', SEV_BACKLOG, tuple(cond_sin_clasificar), poblacion='entidades'),
         Categoria('verif_truncada', '✂ Celda del bloque de verificación truncada: se tiró lo que el fan-out encontró (#226, backlog)', SEV_BACKLOG, tuple(verif_truncada), poblacion='entidades'),
         Categoria('verif_sin_localizador', '✂ Evidencia sin localizador: el cruce de #122 NO se pudo evaluar en esa fila (#226, backlog)', SEV_BACKLOG, tuple(verif_sin_localizador), poblacion='entidades'),
         Categoria('cita_no_verbatim', '❝ Cita textual que no está en su fuente: no es verbatim, o es de otra (#220, backlog)', SEV_BACKLOG, tuple(cita_no_verbatim), poblacion='notas'),
