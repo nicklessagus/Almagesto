@@ -188,7 +188,14 @@ OCR, o marcar `pending`).
   dos mañas del formato que producían falsos positivos en masa: el **guión de corte** (se borra de
   los dos lados) y el **de-entrelazado por canaleta** de un `.txt` a dos columnas — se busca por
   columna, nunca en el texto plano, porque ahí vive el empalme col.1→col.2 que nadie escribió (#46).
-  La población declarada son **las citas evaluables**, no las notas. Sólo cuenta si **ninguna** fuente del bloque la tiene; la cita elidida
+  La población declarada son **las citas evaluables**, no las notas.
+  ⛔ Y desde #267 se chequean también las citas del **frontmatter**: `disputes[].posiciones[].value`
+  contra **su propia** `ref` —juntar los refs de la nota fabricaría una atribución cruzada— y
+  `disputes[].note` contra cualquiera de las fuentes de esa disputa (misma regla que el cuerpo).
+  Quedaban fuera de todo, porque `pairs_of` opera sobre el cuerpo: medido, 23 posiciones con `ref:`
+  y 6 citas textuales sin mirar en una ficha real, y una corrección de la verificación que aterrizó
+  sólo en la prosa y dejó el frontmatter —la capa que el contrato llama auditable— con el número
+  viejo. Sólo cuenta si **ninguna** fuente del bloque la tiene; la cita elidida
   (`«A … B»`) se chequea por fragmentos; la **página** no se puede chequear así y se dice (media red
   declarada vale más que ninguna). Existe porque el eje *¿la fuente dice esto?* es **ortogonal** a
   *¿la cita es verbatim?*: seis citas no-verbatim volvieron `soportada`, correctamente.

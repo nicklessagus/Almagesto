@@ -5547,3 +5547,78 @@ def test_el_aviso_nombrado_en_el_frontmatter_no_cuenta(toy_vault, capsys):
     link_from_log(toy_vault, "2020aaa...1..1A")
     _rc, rep = run_lint_reporte(capsys)
     assert "2020aaa...1..1A" in _seccion(rep, "aviso de capa LLM"), rep
+
+
+# ── #267 · las citas del frontmatter (`disputes[]`) también se chequean ──────────────────────────
+
+def _ficha_con_disputa(disputas, body="# f\n"):
+    return mk_note(cfg.STARS, "test_star", {"name": "Test", "slug": "test_star", "tags": ["star"],
+                                            "planets": [], "disputes": disputas}, body)
+
+
+def test_cita_en_disputes_value_que_el_txt_no_dice_es_hallazgo(toy_vault, capsys):
+    """#267 — `pairs_of` opera sobre el CUERPO, así que las citas de `disputes[]` quedaban fuera del
+    fan-out y de #220 las dos. Medido en una ficha real: 23 posiciones con `ref:` y 6 citas «…»,
+    cero chequeadas — y una corrección de la verificación aterrizó sólo en la prosa, dejando el
+    frontmatter (la capa que el contrato llama auditable) con el número ya corregido."""
+    _paper_con_txt("2023A&A...675A.187O", "el paper dice una cosa completamente distinta\n")
+    _ficha_con_disputa([{"field": "P_rot",
+                         "posiciones": [{"ref": "2023A&A...675A.187O",
+                                         "value": "«a phrase long enough to be worth checking here»"},
+                                        {"source": "ground_truth", "value": 34.0}]}])
+    link_from_log(toy_vault, "test_star", "2023A&A...675A.187O")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "disputes[P_rot]" in _seccion(rep, "no está en su fuente"), rep
+
+
+def test_cita_verbatim_en_disputes_no_dispara(toy_vault, capsys):
+    """El simétrico: la misma cadena presente en el `.txt` de SU `ref` no es hallazgo."""
+    _paper_con_txt("2023A&A...675A.187O", "a phrase long enough to be worth checking here\n")
+    _ficha_con_disputa([{"field": "P_rot",
+                         "posiciones": [{"ref": "2023A&A...675A.187O",
+                                         "value": "«a phrase long enough to be worth checking here»"},
+                                        {"source": "ground_truth", "value": 34.0}]}])
+    link_from_log(toy_vault, "test_star", "2023A&A...675A.187O")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "disputes[P_rot]" not in _seccion(rep, "no está en su fuente"), rep
+
+
+def test_la_cita_de_disputes_no_cruza_a_otra_fuente(toy_vault, capsys):
+    """⛔ La falla obvia de implementación: juntar los refs de la nota. El `value` se chequea contra
+    **su propia** `ref` — llevarlo a otra fabricaría la atribución cruzada que este framework
+    persigue como modo de falla dominante."""
+    _paper_con_txt("2023A&A...675A.187O", "nada que ver\n")
+    _paper_con_txt("2025A&A...696A.152O", "a phrase long enough to be worth checking here\n")
+    _ficha_con_disputa([{"field": "P_rot",
+                         "posiciones": [{"ref": "2023A&A...675A.187O",
+                                         "value": "«a phrase long enough to be worth checking here»"},
+                                        {"ref": "2025A&A...696A.152O", "value": 34.0}]}])
+    link_from_log(toy_vault, "test_star", "2023A&A...675A.187O", "2025A&A...696A.152O")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "disputes[P_rot]" in _seccion(rep, "no está en su fuente"), rep
+
+
+def test_la_note_de_la_disputa_usa_cualquiera_de_sus_refs(toy_vault, capsys):
+    """La `note` habla de la disputa entera, así que rige la misma regla que en el cuerpo: alcanza
+    con que UNA de las fuentes de la disputa la tenga."""
+    _paper_con_txt("2023A&A...675A.187O", "nada que ver\n")
+    _paper_con_txt("2025A&A...696A.152O", "a phrase long enough to be worth checking here\n")
+    _ficha_con_disputa([{"field": "P_rot",
+                         "note": "El árbitro dice «a phrase long enough to be worth checking here».",
+                         "posiciones": [{"ref": "2023A&A...675A.187O", "value": 48.0},
+                                        {"ref": "2025A&A...696A.152O", "value": 34.0}]}])
+    link_from_log(toy_vault, "test_star", "2023A&A...675A.187O", "2025A&A...696A.152O")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "disputes[P_rot].note" not in _seccion(rep, "no está en su fuente"), rep
+
+
+def test_un_value_numerico_no_voltea_el_lint(toy_vault, capsys):
+    """`value` puede ser un número: sin el `str()` defensivo, `quotes_in(47.2)` revienta y el lint
+    entero se cae — sobre el schema NORMAL de una disputa de valores."""
+    _ficha_con_disputa([{"field": "b.K", "posiciones": [{"ref": "2019A....1A", "value": 47.2},
+                                                        {"source": "ground_truth", "value": 2.5}]}])
+    mk_note(cfg.PAPERS, "2019A....1A", {"bibcode": "2019A....1A", "tags": ["paper"],
+                                        "stars": ["Test"]}, "# p\n")
+    link_from_log(toy_vault, "test_star", "2019A....1A")
+    rc, _rep = run_lint_reporte(capsys)
+    assert rc in (0, 1), "el lint tiene que terminar, no explotar"

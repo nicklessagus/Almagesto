@@ -637,7 +637,7 @@ def note_disputes(fm: dict) -> list:
     mitad de los casos. Lo que sí hace falta es que la presencia del viejo **grite** en vez de
     volverse invisible — eso lo reporta `legacy_disputes` como bloqueante, con el comando.
 
-    Devuelve `(field, posiciones, motivos_de_forma)`. Dos detalles que costaron un bug cada uno:
+    Devuelve `(field, posiciones, motivos_de_forma, note)`. Dos detalles que costaron un bug cada uno:
     `field` se lee con `or ""` y **no** con el default de `.get` —la clave presente y **nula**
     (`field:` a secas, la forma normal de dejarla sin llenar) devuelve `None`, y `str(None)` es
     `"None"`, truthy: el chequeo bloqueante "disputa sin `field`" no disparaba—; y `posiciones`
@@ -655,7 +655,9 @@ def note_disputes(fm: dict) -> list:
             motivos.append(f"disputa `{campo or '?'}`: `posiciones` no es una lista (es "
                            f"{type(pos).__name__}) → no se puede leer ninguna posición")
             pos = []
-        out.append((campo, pos or [], motivos))
+        # #267 · la `note` viaja con la disputa: sus citas textuales se chequean como las del cuerpo
+        # (una fuente de la disputa alcanza), y hasta 1.113.x nadie las miraba.
+        out.append((campo, pos or [], motivos, str(d.get("note") or "")))
     return out
 
 
@@ -1724,7 +1726,13 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                                        f"`python scripts/make_notes.py --migrate-disputes` (#71)"))
         for motivo in motivos_viejas:
             old_disputes.append((stem, motivo))
-        for campo, posiciones, motivos_forma in note_disputes(fm):
+        # #267 — las citas textuales de `disputes[]` quedaban fuera de TODO: `pairs_of` opera sobre
+        # el cuerpo y el frontmatter no es prosa, así que ni el fan-out ni #220 las miraban. Medido
+        # en una ficha real: 23 posiciones con `ref:` y 6 citas «…», cero chequeadas — y una
+        # corrección de la verificación aterrizó sólo en la prosa, dejando el frontmatter (la capa
+        # que el contrato llama auditable) con el número que la verificación había corregido.
+        _refs_disputa: list = []
+        for campo, posiciones, motivos_forma, _nota_disputa in note_disputes(fm):
             for motivo in motivos_forma:
                 bad_disputes.append((stem, motivo))
             if not campo:
@@ -1733,6 +1741,24 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 bad_disputes.append((stem, f"disputa `{campo or '?'}` con {len(posiciones)} "
                                            f"posición(es): un desacuerdo necesita al menos dos — con "
                                            f"una sola es una afirmación, y va a la prosa citada"))
+            _refs_campo: list = []
+            for pos in posiciones:
+                if isinstance(pos, dict) and str(pos.get("ref") or "").strip():
+                    _refs_campo.append(str(pos["ref"]).strip())
+            for _c in cfg.quotes_in(_nota_disputa):
+                _f, _o = _sources_for(_refs_campo)
+                _corte = _c if len(_c) <= 70 else _c[:70] + "…"
+                if any(cfg.quote_found(_c, _t) for _ts in _f.values() for _t in _ts):
+                    continue
+                if _f:
+                    cita_no_verbatim.append(
+                        (stem, f"frontmatter `disputes[{campo}].note`: «{_corte}» no está en el "
+                               f"`.txt` de {', '.join(sorted(_f))} — misma regla que el cuerpo: "
+                               f"alcanza con que UNA de las fuentes de la disputa la tenga"))
+                elif _o:
+                    cita_opaca.append(
+                        (stem, f"frontmatter `disputes[{campo}].note`: «{_corte}» no se puede "
+                               f"chequear — " + "; ".join(f"{b}: {m}" for b, m in _o)))
             for pos in posiciones:
                 if not isinstance(pos, dict):
                     bad_disputes.append((stem, f"disputa `{campo or '?'}`: posición que no es un mapa "
@@ -1749,6 +1775,26 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                                                f"→ una posición la sostiene UNA fuente"))
                 if ref:
                     dispute_refs.append((stem, campo, ref))
+                    _refs_disputa.append(ref)
+                    # El `value` se chequea contra SU PROPIA `ref`: juntar los refs de la nota
+                    # fabricaría la atribución cruzada que este framework persigue como modo de
+                    # falla dominante. `str()` defensivo: `value` puede ser numérico.
+                    _citas_pos = cfg.quotes_in(str(pos.get("value") or ""))
+                    if _citas_pos:
+                        _f, _o = _sources_for([ref])
+                        for _c in _citas_pos:
+                            _corte = _c if len(_c) <= 70 else _c[:70] + "…"
+                            if any(cfg.quote_found(_c, _t) for _t in _f.get(ref, [])):
+                                continue
+                            if _f:
+                                cita_no_verbatim.append(
+                                    (stem, f"frontmatter `disputes[{campo}].posiciones[].value`: "
+                                           f"«{_corte}» no está en el `.txt` de {ref}"))
+                            elif _o:
+                                cita_opaca.append(
+                                    (stem, f"frontmatter `disputes[{campo}].posiciones[].value`: "
+                                           f"«{_corte}» no se puede chequear — "
+                                           + "; ".join(f"{b}: {m}" for b, m in _o)))
                 elif not src:
                     bad_disputes.append((stem, f"disputa `{campo}`: posición sin `ref` ni `source` "
                                                f"→ no se sabe quién la sostiene"))
