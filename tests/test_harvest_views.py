@@ -701,3 +701,12 @@ def test_dentro_de_la_matematica_va_vert_y_no_la_doble_barra(toy_vault):
     fila = [l for l in dest.read_text(encoding="utf-8").split("\n") if "df_0" in l][0]
     assert r"\vert df_0/d\lambda\vert" in fila, fila
     assert r"\|" not in fila.split("$")[1], "dentro de `$…$` no puede quedar `\\|`"
+
+
+def test_el_eje_contestado_vacio_se_estampa_igual(tmp_path):
+    """#270 — filtrando el eje vacío, «se preguntó y no hay nada» era indistinguible de «nunca se
+    preguntó»: el mismo falso limpio que #188 cierra un nivel más arriba, y sin esto el detector de
+    ejes faltantes nace con centenares de ítems permanentes."""
+    md = hv.render_view("tau Cet", {"ejes": {"rv": "una medición", "ml": ""}})
+    assert "- **ml:** " + hv.SIN_DATOS in md
+    assert "- **rv:** una medición" in md

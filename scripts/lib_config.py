@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.117.0"
+ALMAGESTO_VERSION = "1.118.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -738,6 +738,48 @@ def is_stamped_section(heading: str) -> bool:
     the predicate is the fix; re-implementing the heading match at the call site is exactly the
     duplicated-rule bug that method rule nº 2 is about."""
     return _es_estampada(heading)
+
+
+_VISTA_HEAD = re.compile(r"^##\s+Vista\s*[—–-]\s*(.+?)\s*$", re.M)
+_EJES_HEAD = re.compile(r"^\*\*Ejes:\*\*\s*$", re.M)
+_EJE_BULLET = re.compile(r"^-\s+\*\*(.+?):\*\*", re.M)
+
+
+def view_axes(text: str) -> dict:
+    """`{subject: {axes answered}}` — the bullets of each view's `**Ejes:**` block (#270).
+
+    #254 made the prompt derive its axes from `relevance.facets` and left no net: nothing compares
+    the axes a view **answers** against the lens it **declares**. Measured on a real vault: 257 gaps
+    over 79 views that declare a lens.
+
+    ⚠ Only bullets INSIDE the `**Ejes:**` block count: `- **Aporte:**`, `- **Métodos:**` and
+    `- **Hueco:**` are not axes, and a plain bold-bullet regex would count them. Headings inside a
+    code fence are skipped, same as `lint.vistas_en_cuerpo` (AUD-178)."""
+    dentro = _offsets_en_fence(text)
+    encabezados = [(m.start(), m.group(1).strip()) for m in _VISTA_HEAD.finditer(text)
+                   if m.start() not in dentro]
+    out: dict = {}
+    for i, (ini, sujeto) in enumerate(encabezados):
+        fin = encabezados[i + 1][0] if i + 1 < len(encabezados) else len(text)
+        seccion = text[ini:fin]
+        if (corte := re.search(r"\s+[^\w\s]", sujeto)):
+            sujeto = sujeto[:corte.start()].strip()
+        m_ejes = _EJES_HEAD.search(seccion)
+        if not m_ejes:
+            continue
+        # El bloque son los bullets CONTIGUOS que siguen al encabezado: se saltean las líneas en
+        # blanco iniciales (el escritor deja una) y se corta en la primera línea que no es un
+        # bullet, blanco incluido. Sin cortar en el blanco, `- **Aporte al tema:**` —que vive más
+        # abajo y NO es un eje— entraba al conjunto y tapaba el hueco que el detector busca.
+        bloque, arranco = [], False
+        for linea in seccion[m_ejes.end():].split("\n"):
+            if linea.strip().startswith("- "):
+                bloque.append(linea); arranco = True
+            elif arranco or linea.strip():
+                break
+        out.setdefault(sujeto, set()).update(m.group(1).strip()
+                                             for m in _EJE_BULLET.finditer("\n".join(bloque)))
+    return out
 
 
 def solo_prosa(body: str) -> str:

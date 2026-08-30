@@ -5844,3 +5844,49 @@ def test_el_no_vista_mal_formado_sigue_siendo_bloqueante(toy_vault, capsys):
     link_from_log(toy_vault, "2009yCat..1")
     rc, rep = run_lint_reporte(capsys)
     assert rc != 0 and "2009yCat..1" in _seccion(rep, "Frontmatter"), rep
+
+
+# ── #270 · la vista que no contesta los ejes de su propia lente ──────────────────────────────────
+
+def _nota_con_lente(toy_vault, lente, ejes_contestados):
+    bullets = "\n".join(f"- **{e}:** algo" for e in ejes_contestados)
+    mk_note(cfg.PAPERS, "2020aaa...1..1A",
+            {"tags": ["paper"], "bibcode": "2020aaa...1..1A", "stars": ["Estrella Test"],
+             "vistas": [{"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-08-30",
+                         "lente": lente, "fuente": "pdf"}]},
+            f"# p\n\n## Vista — Estrella Test (2026-08-30)\n\n**Ejes:**\n\n{bullets}\n")
+    link_from_log(toy_vault, "2020aaa...1..1A")
+
+
+def test_la_vista_que_contesta_menos_ejes_que_su_lente_los_NOMBRA(toy_vault, capsys):
+    """#270 — #254 arregló el prompt (los ejes salen de `relevance.facets`) y no dejó red: nada
+    compara los ejes CONTESTADOS contra la lente DECLARADA. Medido: 257 huecos sobre 79 vistas."""
+    _nota_con_lente(toy_vault, ["rv", "activity", "ml"], ["rv"])
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 0, "es backlog"
+    seccion = _seccion(rep, "ejes de su propia lente")
+    assert "activity" in seccion and "ml" in seccion, rep
+
+
+def test_la_vista_que_cubre_su_lente_no_dispara(toy_vault, capsys):
+    _nota_con_lente(toy_vault, ["rv", "activity"], ["rv", "activity"])
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2020aaa...1..1A" not in _seccion(rep, "ejes de su propia lente"), rep
+
+
+def test_una_vista_sin_lente_declarada_no_se_reporta(toy_vault, capsys):
+    """Sin `lente` no hay contra qué comparar: reportarla sería inventar la deuda (D-43)."""
+    _nota_con_lente(toy_vault, [], [])
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2020aaa...1..1A" not in _seccion(rep, "ejes de su propia lente"), rep
+
+
+def test_una_vista_sin_fecha_no_se_reporta(toy_vault, capsys):
+    """La fecha es lo que dice que la lectura OCURRIÓ: sin ella el hueco no es de la vista."""
+    mk_note(cfg.PAPERS, "2020aaa...1..1A",
+            {"tags": ["paper"], "bibcode": "2020aaa...1..1A", "stars": ["Estrella Test"],
+             "vistas": [{"sujeto": "Estrella Test", "tipo": "star", "lente": ["rv", "ml"]}]},
+            "# p\n\n## Vista — Estrella Test\n\n**Ejes:**\n\n- **rv:** algo\n")
+    link_from_log(toy_vault, "2020aaa...1..1A")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2020aaa...1..1A" not in _seccion(rep, "ejes de su propia lente"), rep

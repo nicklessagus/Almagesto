@@ -205,6 +205,14 @@ OCR, o marcar `pending`).
   (`«A … B»`) se chequea por fragmentos; la **página** no se puede chequear así y se dice (media red
   declarada vale más que ninguna). Existe porque el eje *¿la fuente dice esto?* es **ortogonal** a
   *¿la cita es verbatim?*: seis citas no-verbatim volvieron `soportada`, correctamente.
+- **La vista no contesta los ejes de su propia lente** (#254/#270, backlog): el prompt deriva sus
+  ejes de `relevance.facets` desde #254 y nada comparaba lo **contestado** contra lo **declarado**
+  en `vistas[].lente` — y el silencio de una vista sobre una faceta se lee como «se miró y no hay
+  nada». Medido: 257 huecos sobre 79 vistas con lente declarada. Se reporta **nombrando los ejes**;
+  no se reporta la vista sin `lente` (no hay contra qué comparar) ni la que no tiene `fecha` (la
+  lectura no ocurrió). Del lado del origen, el cosechador estampa el eje contestado en vacío como
+  `_(sin datos)_`: sin eso la deuda es permanente, porque «se preguntó y no hay nada» no se
+  distingue de «nunca se preguntó».
 - **`no_vista` se consulta en las cuatro redes** (#268): la escotilla que #256 hizo alcanzable
   decidía sobre **una** categoría, y las otras tres contaban la misma nota como deuda — medido, una
   nota con `no_vista` declarado y motivo seguía recibiendo *«conseguir el PDF»* sobre una tabla

@@ -55,6 +55,9 @@ def _safe_links(texto: str) -> str:
     return _APERTURA.sub("[", texto)
 
 
+#: #270 · lo que se estampa en un eje que la extracción contestó vacío.
+SIN_DATOS = "_(sin datos)_"
+
 PLACEHOLDER_ABSTRACT = cfg.ABSTRACT_PLACEHOLDER   # #277: una sola definición, en `lib_config`
 
 
@@ -165,10 +168,14 @@ def render_view(sujeto: str, data: dict) -> str:
     out = [f"## Vista — {sujeto}", ""]
     if (aporte := _safe_links(str(data.get("aporte") or "").strip())):
         out += [f"**Aporte:** {aporte}", ""]
-    ejes = {k: _safe_links(str(v).strip()) for k, v in (cfg.as_map(data.get("ejes")) or {}).items()
-            if str(v).strip()}
+    ejes = {k: _safe_links(str(v).strip()) for k, v in (cfg.as_map(data.get("ejes")) or {}).items()}
     if ejes:
-        out += ["**Ejes:**", ""] + [f"- **{k}:** {v}" for k, v in ejes.items()] + [""]
+        # #270 — el eje contestado en VACÍO se estampa igual, con `_(sin datos)_`. Filtrándolo,
+        # «se preguntó y no hay nada» era indistinguible de «nunca se preguntó», que es el mismo
+        # falso limpio que #188 cierra un nivel más arriba — y sin esta línea el detector de ejes
+        # faltantes nace con centenares de ítems permanentes.
+        out += ["**Ejes:**", ""] + [f"- **{k}:** {str(v).strip() or SIN_DATOS}"
+                                    for k, v in ejes.items()] + [""]
     filas = [f for f in cfg.as_list(data.get("ground_truth")) if isinstance(f, dict)]
     if filas:
         # «Localizador», no «Línea» (#195): la columna ya no lleva sólo un nº de línea del `.txt`.

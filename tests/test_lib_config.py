@@ -1770,3 +1770,40 @@ def test_paridad_de_la_canaleta_entre_lib_config_y_measure_layout():
     import measure_layout as ml
     assert ml.CANALETA_MIN is cfg.CANALETA_MIN
     assert ml.GUTTER is cfg.GUTTER
+
+
+# ── #270 · los ejes que una vista contesta ──────────────────────────────────────────────────────
+
+_VISTA_EJES = """## Vista — tau Cet (2026-08-30)
+
+**Ejes:**
+
+- **rv:** una medición
+- **activity:** otra
+
+**Aporte:** algo
+
+- **Hueco:** falta el PDF
+"""
+
+
+def test_view_axes_lee_los_bullets_del_bloque_de_ejes():
+    assert cfg.view_axes(_VISTA_EJES) == {"tau Cet": {"rv", "activity"}}
+
+
+def test_view_axes_no_cuenta_los_bullets_de_fuera_del_bloque():
+    """⛔ `- **Aporte:**` y `- **Hueco:**` no son ejes: una regex de bullets en negrita a secas los
+    contaría y taparía justo el hueco que el detector de #270 busca."""
+    assert "Hueco" not in cfg.view_axes(_VISTA_EJES)["tau Cet"]
+
+
+def test_view_axes_ignora_un_encabezado_dentro_de_un_fence():
+    """Paridad con AUD-178: un `## Vista` dentro de un ```fence``` es un EJEMPLO de la doc, no una
+    sección — y contarlo produce hallazgos sobre notas correctas."""
+    assert cfg.view_axes("```\n" + _VISTA_EJES + "```\n") == {}
+
+
+def test_view_axes_sin_bloque_de_ejes_no_inventa_la_clave():
+    """Una vista sin `**Ejes:**` no contesta ninguno: la clave ausente y el conjunto vacío se leen
+    distinto aguas arriba (sin lente declarada no hay nada que comparar)."""
+    assert cfg.view_axes("## Vista — X\n\n**Aporte:** algo\n") == {}

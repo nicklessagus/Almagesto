@@ -1276,6 +1276,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     sin_conclusiones: list = []        # (stem, motivo) — #277: sin `## Conclusiones` ni exención
     sin_conclusiones_ok: list = []     # (stem, motivo) — #277: declarado con motivo (visible, no es deuda)
     sin_aviso_llm: list = []           # (stem, motivo) — #247/#277: nota de paper sin el aviso de capa LLM
+    vista_ejes_faltantes: list = []    # (stem, motivo) — #270: la vista no cubre su propia lente
     segunda_mano: dict = {}            # {bibcode: [(qué, valor, de quién)]} — #279
     segunda_mano_perdida: list = []    # (stem, motivo) — #279: la ficha se apoya y no lo dice
     cita_log: list = []                # (stem, motivo) — #238: cita del `log.md` que su fuente no dice
@@ -2170,6 +2171,22 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 fm_broken.append((stem, str(e).replace("\n", " ")))
                 vistas, no_vista = [], {}
             else:
+                # #270 — #254 hizo que el prompt derive sus ejes de `relevance.facets` y no dejó
+                # red: nada compara los ejes que la vista CONTESTA contra la `lente` que DECLARA, y
+                # una faceta que la vista no menciona se lee como «se miró y no hay nada». Medido:
+                # 257 huecos sobre 79 vistas con lente declarada. Backlog: una vista puede
+                # legítimamente no tener nada que decir sobre un eje — lo que no puede es callarlo.
+                _ejes_por_sujeto = cfg.view_axes(text)
+                for _v in vistas:
+                    _lente = [str(x).strip() for x in (_v.get("lente") or []) if str(x).strip()]
+                    if not _lente or not _v.get("fecha"):
+                        continue          # sin lente declarada o sin lectura, no hay qué comparar
+                    _faltan = [e for e in _lente if e not in _ejes_por_sujeto.get(_v["sujeto"], set())]
+                    if _faltan:
+                        vista_ejes_faltantes.append(
+                            (stem, f"la vista de «{_v['sujeto']}» declara la lente "
+                                   f"`{', '.join(_lente)}` y no contesta `{', '.join(_faltan)}`: el "
+                                   f"silencio sobre un eje se lee como «se miró y no hay nada»"))
                 secciones = vistas_en_cuerpo(text)
                 declaradas = {v["sujeto"] for v in vistas}
                 #  @inv INV-134
@@ -3841,6 +3858,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('vista_sin_fuente_en_disco', '🔒 Vista fechada SIN fuente en disco: ya no es re-verificable (backlog)', SEV_BACKLOG, tuple(vista_sin_fuente_en_disco), poblacion='papers'),
         Categoria('reclamo_refutado', '↩ La vista REFUTA un reclamo que sigue en el frontmatter (backlog)', SEV_BACKLOG, tuple(reclamo_refutado), poblacion='papers'),
         Categoria('reclamo_sin_vista_declarado', 'Reclamo sin vista DECLARADO con `no_vista` + motivo (visible, no es deuda)', SEV_BACKLOG, tuple(reclamo_sin_vista_declarado), poblacion='papers'),
+        Categoria('vista_ejes_faltantes', '🎯 La vista no contesta los ejes de su propia lente: el silencio se lee como «se miró y no hay nada» (#254/#270, backlog)', SEV_BACKLOG, tuple(vista_ejes_faltantes), poblacion='papers'),
         Categoria('gt_prosa', '🪞 La prosa afirma sobre la autoridad algo que su ground-truth desmiente (#278, backlog)', SEV_BACKLOG, tuple(gt_prosa), poblacion='ground_truth'),
         Categoria('segunda_mano', '🔁 Valor de SEGUNDA MANO levantado sin la marca: la atribución se pierde en la síntesis (#103/#279, backlog)', SEV_BACKLOG, tuple(segunda_mano_perdida), poblacion='entidades'),
         Categoria('sin_conclusiones_ok', 'Fuente sin `## Conclusiones` DECLARADA con motivo (#277: visible, no es deuda)', SEV_BACKLOG, tuple(sin_conclusiones_ok), poblacion='papers'),
