@@ -6187,3 +6187,84 @@ def test_alcance_desfasado_es_backlog(toy_vault):
     hallazgos = dict(lint.collect().por_clave("alcance_desfasado").items)
     assert "cap. 13" in hallazgos["2001HKO"] and "--restamp-alcance" in hallazgos["2001HKO"]
     assert lint.collect().por_clave("alcance_desfasado").severidad == lint.SEV_BACKLOG
+
+
+# ── #315/#316 · a quién se le pregunta, y contra qué se decide ───────────────
+def test_la_cita_se_prueba_contra_SU_fuente(toy_vault, capsys):
+    """#316 — un párrafo que contrasta dos papers es la forma normal de la prosa que este framework
+    pide, y probar cada cita contra cada bibcode marca la nota **por decir la verdad**: medido, 12
+    de 12 hallazgos duros de un hub, en cuatro líneas que atribuyen bien en prosa. Y el arreglo
+    aparente —reatribuir la cita al bibcode contra el que se testeó— **destruye la inferencia**."""
+    for stem, txt in (("2013Voss", "requires the latent signals to be whitened"),
+                      ("2004Davies", "the issues become significantly more complicated")):
+        paper_extraido(toy_vault, stem)
+        (cfg.FULLTEXT / "ica").mkdir(parents=True, exist_ok=True)
+        (cfg.FULLTEXT / "ica" / f"{stem}.txt").write_text(txt, encoding="utf-8")
+    (cfg.CONCEPTS / "methods").mkdir(parents=True, exist_ok=True)
+    (cfg.CONCEPTS / "methods" / "ica.md").write_text(
+        "---\ntags: [concept]\n---\n\n# ICA\n\n"
+        "El primero pide «requires the latent signals to be whitened» [[2013Voss]], mientras que "
+        "«the issues become significantly more complicated» [[2004Davies]] lo generaliza.\n",
+        encoding="utf-8")
+    assert lint.collect().por_clave("cita_no_verbatim").items == (), \
+        "cada cita está en SU fuente: probarlas contra todas fabricaba dos hallazgos"
+
+
+def test_la_cita_ambigua_declara_que_lo_es(toy_vault):
+    """Sin `[[bibcode]]` adyacente la ambigüedad es un DATO FALTANTE, no un hallazgo: se prueba
+    contra todas —como antes— pero el mensaje dice que el hallazgo es más débil."""
+    paper_extraido(toy_vault, "2013Voss")
+    (cfg.FULLTEXT / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "ica" / "2013Voss.txt").write_text("otra cosa", encoding="utf-8")
+    paper_extraido(toy_vault, "2004Davies")
+    (cfg.FULLTEXT / "ica" / "2004Davies.txt").write_text("otra cosa", encoding="utf-8")
+    (cfg.CONCEPTS / "methods").mkdir(parents=True, exist_ok=True)
+    (cfg.CONCEPTS / "methods" / "ica.md").write_text(
+        "---\ntags: [concept]\n---\n\n# ICA\n\nSegún [[2013Voss]] y [[2004Davies]], vale la "
+        "afirmación «una cita que no lleva su bibcode al lado».\n", encoding="utf-8")
+    hallazgos = [m for _s, m in lint.collect().por_clave("cita_no_verbatim").items]
+    assert any("no lleva `[[bibcode]]` adyacente" in h and "más débil" in h for h in hallazgos)
+
+
+def test_la_cita_que_esta_en_la_EXTRACCION_no_es_defecto_de_la_nota(toy_vault):
+    """#315/#317 — la extracción es la transcripción hecha **leyendo el PDF**, así que si la cita
+    está ahí la nota es fiel y lo que falló es el `.txt` (#205 lo declara índice degradado). Medido
+    con el `.txt` como único juez: señal 2 de 17 en un concepto y **0 de 35** en otro."""
+    paper_extraido(toy_vault, "1998Hyvarinen")
+    (cfg.FULLTEXT / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "ica" / "1998Hyvarinen.txt").write_text(
+        "texto con   columnas   empalmadas y la fórmula vaciada", encoding="utf-8")
+    (cfg.EXTRACCION / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.EXTRACCION / "ica" / "1998Hyvarinen.json").write_text(json.dumps(
+        {"bibcode": "1998Hyvarinen", "ejes": {},
+         "ground_truth": [{"que": "ruido", "valor": "The noise in the model is assumed to be "
+                                                    "Gaussian with known covariance"}]}),
+        encoding="utf-8")
+    (cfg.CONCEPTS / "methods").mkdir(parents=True, exist_ok=True)
+    (cfg.CONCEPTS / "methods" / "ica.md").write_text(
+        "---\ntags: [concept]\n---\n\n# ICA\n\nDice «The noise in the model is assumed to be "
+        "Gaussian with known covariance» [[1998Hyvarinen]].\n", encoding="utf-8")
+    assert lint.collect().por_clave("cita_no_verbatim").items == ()
+    degradado = [m for _s, m in lint.collect().por_clave("cita_txt_degradado").items]
+    assert any("está en la EXTRACCIÓN" in m and "la nota está bien" in m for m in degradado)
+
+
+def test_la_cita_que_NO_esta_en_la_extraccion_ni_en_el_txt_SIGUE_siendo_hallazgo(toy_vault):
+    """El control: lo que ni la extracción ni el `.txt` tienen es justamente lo que el sintetizador
+    inventó — y eso no admite excusa de artefacto degradado."""
+    paper_extraido(toy_vault, "2013Voss")
+    (cfg.FULLTEXT / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "ica" / "2013Voss.txt").write_text(
+        "which requires the latent signals to be whitened", encoding="utf-8")
+    (cfg.EXTRACCION / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.EXTRACCION / "ica" / "2013Voss.json").write_text(json.dumps(
+        {"bibcode": "2013Voss", "ejes": {}, "ground_truth": [
+            {"que": "blanqueo", "valor": "which requires the latent signals to be whitened"}]}),
+        encoding="utf-8")
+    (cfg.CONCEPTS / "methods").mkdir(parents=True, exist_ok=True)
+    (cfg.CONCEPTS / "methods" / "ica.md").write_text(
+        "---\ntags: [concept]\n---\n\n# ICA\n\nDice «which requires the noise covariance to be "
+        "known» [[2013Voss]].\n", encoding="utf-8")
+    hallazgos = [m for _s, m in lint.collect().por_clave("cita_no_verbatim").items]
+    assert any("noise covariance to be known" in h for h in hallazgos), \
+        "la cita FABRICADA tiene que seguir saliendo"

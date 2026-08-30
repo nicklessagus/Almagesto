@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.129.0"
+ALMAGESTO_VERSION = "1.130.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -857,6 +857,41 @@ def quote_found_degraded(quote: str, source_norm: str) -> bool:
                          for f in frags):
             return True
     return False
+
+
+def extraction_texts(bibcode: str) -> list:
+    """Every textual field of this paper's EXTRACTIONS, normalised for quote lookup (#315/#317).
+
+    ⛔ The decisive comparison nobody was making. #220 tests a note's verbatim quote against the
+    `.txt`, which #205 declares a degraded index — so the check reports the degradation of the
+    `.txt` as if it were a defect of the note: measured, **2 of 17** real findings in one concept
+    and **0 of 35** in another. The extraction JSON, on the other hand, is the transcription made
+    **while reading the PDF**, so comparing against it makes *"the synthesiser invented this quote"*
+    decidable offline and without opening the PDF: if the quote is not in any extraction of its
+    bibcode, no degraded-artefact excuse applies.
+
+    Returns the normalised readings (same shape `quote_found` expects), one per JSON on disk."""
+    out = []
+    for f in sorted(EXTRACCION.glob(f"*/{bibcode}.json")) if EXTRACCION.exists() else []:
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        trozos: list = []
+
+        def _walk(v):
+            """Every string inside the JSON — the extractor's quotes live in several fields."""
+            if isinstance(v, str):
+                trozos.append(v)
+            elif isinstance(v, dict):
+                for x in v.values():
+                    _walk(x)
+            elif isinstance(v, list):
+                for x in v:
+                    _walk(x)
+        _walk(data)
+        out.append(normalize_source_text(" \n ".join(trozos)))
+    return out
 
 
 def quote_found(quote: str, source_norm: str) -> bool:

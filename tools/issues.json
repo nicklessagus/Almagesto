@@ -1439,126 +1439,146 @@
   {
    "number": 289,
    "title": "`--theme --probe` no dice POR QUÉ quedó afuera cada no-core, y es la pantalla que existe para decidirlo: `why_excluded` ya está en el registro y el printer no lo lee (medido: 261 «sin faceta» vs 32 «faceta OK, puerta cerrada», acciones opuestas)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 290,
    "title": "`discover.py --topics` con cero resultados no dice nada y sale 0: el primer comando del paso 0b no distingue «la taxonomía no tiene el tema» de «falló», contra el contrato nº 3 del propio módulo",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 291,
    "title": "Nadie detecta una alternativa de faceta con POBLACIÓN CERO: #236 cubrió «matchea de más» y dejó abierta la simétrica (medido: `non-?gaussianity matrix` en la faceta de `ica` — 0 archivos con la frase, 29 con el término)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 292,
    "title": "Un `(#N)` se escribe en el código antes de que el issue exista, y el próximo issue se lleva el número: la trazabilidad pasa de vacía a MAL ATRIBUIDA (pasó en vivo con #288; 247 refs barridas, 1 colgada)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 293,
    "title": "`seed_terms` intersecta SIEMPRE con un único `topics.id` y `topic:` es escalar: un tema que cruza disciplinas pierde su literatura en silencio (medido: recall 15/25, y 6 de los 10 perdidos son la misma familia, repartida en 5 topics)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 294,
    "title": "El aviso de `seed_terms` manda subir `rows_por_termino`, que no se puede subir (no hay flag ni campo), sería no-op sobre 200 y la función no pagina — mientras su docstring justifica el cap con esa paginación (medido: 2 de 25 del gold standard se pierden sólo por eso)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 295,
    "title": "D-26 hizo propia la lente del tema y dejó GLOBAL el `search_fq`, que es la mitad más restrictiva: un tema de método se busca sobre un universo que excluye su literatura (medido: `title:\"noisy ICA\"` da 0 con el fq y 12 sin él; 306 vs 6946 en la query del tema)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 296,
    "title": "`pdf_source` y `fulltext_source` se declaran vocabulario CERRADO en CLAUDE.md y nadie los valida: 2 notas llevan prosa en el campo, y `pdf_source: eprint` es la exención que apaga el chequeo de cita textual (85 de 138 notas)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 297,
    "title": "El reuso D-18 importa a un sujeto nuevo un artefacto de antigüedad no chequeada, y el detector de versiones sólo vive en la pasada periódica — que en la bóveda medida NUNCA corrió (62 % del corpus es `eprint`, y #216 garantiza que preprint↔publicado no colisionan)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 298,
    "title": "El detector de versiones mira 3 de 138 notas sin declarar su población, y es la ÚNICA de las seis caducidades que no deja marca en la nota — mientras 82 notas citan el preprint teniendo bibcode publicado y ningún detector las mira",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 299,
    "title": "AUD-160 cambió el repunte de `sources[].pdf` a «propone y para» y la doc quedó en la conducta vieja: el docstring del MÓDULO promete lo contrario que el de su propia función 145 líneas abajo, y el schema de `themes.yaml` también (8 de 8 sin repuntar en una corrida real)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 300,
    "title": "El roll-up de un CONCEPTO perdió las dos garantías de D-10 que la ficha de estrella sí tiene —los dos números y la columna `Estado`—: medido, `ica` promete 89 papers arriba de una síntesis de 30, con 57 reclamados y sin leer",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 301,
    "title": "El grafo de Obsidian dibuja como estructura las aristas que #249 declaró sin significado: `index.md` aporta 50 links a papers cuyo sentido es «está en el top 50 por citas» (7 % de las aristas de la bóveda medida salen de index + log)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 302,
    "title": "`STATUS.md` se volvió append-only —el trabajo del `log`— y nadie lo declara ni lo detecta: medido, 537 líneas con 12 encabezados fechados y CUATRO listas de próximos pasos, una de las cuales contradice un estado posterior del mismo archivo",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 303,
    "title": "La guarda de #179 nunca corre para `extra_core`: el merge ocurre DESPUÉS de `reclassify_for_theme`, así que 12 de 15 core quedan «sin puerta registrada» — y el `via` sale `manual` o `usuario` según si la query devolvió el bibcode",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 304,
    "title": "Un PDF que aparece en disco DESPUÉS de creada la nota no se linkea nunca: existe `stamp_fulltext` y no su gemelo para `pdf:` — el lint imprime la ruta exacta y ningún comando la aplica (4 de 4 rescates manuales quedaron en `pdf: null`)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 305,
    "title": "`extraction_prompt` busca el PDF sólo bajo el slug del sujeto y `harvest_views.pdf_on_disk` bajo todos: el prompt manda declarar `fuente: abstract` sobre papers que SÍ están en disco — es #207 al revés, y pega justo en los retro-tagueados (7 de 31 medidos, dos de ellos libros)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 306,
    "title": "`merge_frontmatter_list` escribe listas flow que envuelven a los 80 caracteres y su propio lector sólo mira la primera línea: la salida de la función no es entrada válida para la función (medido: perdió `weighted PCA`, alias del tema, en 1 de 31 cosechas)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 307,
    "title": "Un tema de método clasifica con faceta propia (D-26) y se LEE con los ejes de la lente global: `axes_skeleton()` no recibe el tema — medido, 4 de 8 ejes vinieron vacíos en 25 de 32 papers y los ejes que el tema necesita no se preguntaron nunca",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 308,
    "title": "#239 quedó a medias: `harvest_views` sabe cosechar `### Lente — <énfasis>` y `extraction_prompt` no tiene forma de PEDIRLA — la única vía a un JSON con `enfasis` es escribirlo a mano, que es lo que INV-100 prohíbe",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 309,
    "title": "`unclosed_markers` no honra el escape `\\$`, así que el arreglo CORRECTO no lo satisface: el operador elige entre un bug de renderizado real o un backlog permanente (4.ª vez de la misma ceguera al markdown, cf. #168/#276/#283)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 310,
    "title": "DOC: el ciclo de la lente de un tema no está escrito en ningún lado — todas las piezas están documentadas por separado (#188, D-26, #254, #72, #239, #124) y su encadenamiento no, más el invariante de procedencia de los ejes que falta",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 311,
    "title": "Las extracciones —el artefacto más caro de la cadena— viven en `build/`, que el repo declara «scratch regenerable» y el `.gitignore` no versiona: medido, 4,9 M tokens de lectura de PDF que no viajan a otra máquina",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 312,
    "title": "`alcance` y `unidad_cita` se estampan al crear la nota y nunca se re-sincronizan: al ampliar el alcance de un libro, la nota afirma que ese material «no entra» mientras lo publica en su vista (medido en 2 libros, 37 valores nuevos)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 313,
    "title": "`resolve_pdf` consulta OpenAlex y Unpaywall y NO arXiv, en un repo con `search_arxiv.py` y `fetch_arxiv.py`: un falso «sin copia libre» congela una fuente como inconseguible (medido: 2 de 2 `pending: paywall` de la bóveda eran obtenibles, uno de ellos en arXiv)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 314,
+   "title": "El paso 3c (contraste cross-paper) no tiene herramienta y su modo de falla es predecible: el digest ad-hoc trunca dentro de la cita y el modelo la completa — medido, 2 citas FABRICADAS sobre 88 pares, en el carácter exacto del corte",
+   "state": "OPEN"
+  },
+  {
+   "number": 315,
+   "title": "El chequeo de cita verbatim CAZÓ una cita fabricada y quedó enterrado: compara contra el `.txt` —que #205 declara degradado— así que su señal es 2 de 17 (11 %) y delega 54 confirmaciones manuales al PDF",
+   "state": "OPEN"
+  },
+  {
+   "number": 316,
+   "title": "El emparejador atribuye la cita a TODOS los bibcodes del bloque: un párrafo que contrasta dos fuentes queda marcado por decir la verdad — medido, 12 de 12 hallazgos «duros» del hub `ica` son falsos, y «resolverlos» rompería la nota",
+   "state": "OPEN"
+  },
+  {
+   "number": 317,
+   "title": "DISEÑO: `contrast.py` — la herramienta que le falta al paso 3c, con validación cruzada JSON ↔ nota ↔ `.txt`. La comparación contra el JSON vuelve DECIDIBLE «esta cita la inventó el sintetizador», sin abrir el PDF",
    "state": "OPEN"
   }
  ]

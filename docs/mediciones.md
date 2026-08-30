@@ -496,3 +496,26 @@ lo que se consultó, no lo que hay.
 **Qué cambió.** Tercera rama (arXiv por **título exacto**, nunca aproximado), la procedencia en el
 motivo —un eprint no es la versión publicada, y eso decide cómo se citan sus números (#57)— y el
 mensaje de cierre enumerando lo consultado. Se mantiene la doctrina: **propone y para**.
+
+## 2026-08-30 · El paso sin herramienta, y contra qué se decide una cita (#314–#317)
+
+**Qué era.** Síntesis del concepto de un tema de 32 papers, escrita desde un digest ad-hoc de las
+extracciones (`valor[:200]`, `regimen[:150]`), y su verificación posterior.
+
+| Qué se midió | Número | Salvedad |
+|---|---|---|
+| Pares verificados | 139 | `soportada` 115 · `contradice` 12 · `no-soportada` 8 · sobregeneraliza 40 |
+| **Citas fabricadas** | **2** | las dos en el **carácter exacto** donde el digest cortó; los JSON tenían la frase entera (354 y 326 caracteres) |
+| **Atribuciones colectivas falsas** | **6** | de agrupar varios bibcodes bajo una glosa compartida |
+| Filas del inventario con cita, y con ≥2 bibcodes | 61 · 8 | contra 11 · 0 en el hub escrito paper por paper |
+| Señal del chequeo de cita verbatim contra el `.txt` | **2 de 17** (11 %) en un concepto · **0 de 35** en otro | los otros son citas correctas que el `.txt` degradado no contiene |
+| De los 35 del hub, por causa | 21 `.txt` degradado · **12 atribución por bloque** · 2 limpias | las 12 en **cuatro líneas** que atribuyen bien en prosa |
+| Control: nota escrita paper por paper | **0 defectos reales** sobre 35 citas re-verificadas contra el PDF | |
+
+⚠ **El defecto vivía sólo en la nota del concepto**: el PDF, el JSON de extracción y las 32 notas de
+paper estaban bien. Es decir, falló **el único eslabón de la cadena sin herramienta**.
+
+**Qué cambió.** `scripts/contrast.py` (nunca trunca una cita, agrupa por campo, arrastra la
+procedencia, una fila = una fuente, y `--validar` cruza la nota contra las extracciones); el chequeo
+del lint decide contra la extracción antes que contra el `.txt` y prueba cada cita contra **su**
+fuente; y la regla queda escrita: *la cita se copia entera o se parafrasea sin comillas*.

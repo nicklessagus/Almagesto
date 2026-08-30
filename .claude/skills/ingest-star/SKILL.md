@@ -289,7 +289,10 @@ Progreso del ingest de <estrella>:
    dejar marca: medido, `si = 1` donde el paper dice `si = ±1` (el supuesto binario **es** el ±1) y
    «model (8)» donde dice «model (3)».
 
-3c. > ⚠ **Un ítem de linaje = un BULLET propio, no una oración con seis citas.** Cuando enumeres
+3c. > ⚠ **Un ítem de linaje = un BULLET propio, no una oración con seis citas.** ⚠ Y su simétrico
+> (#316): un párrafo que **contrasta** dos fuentes legítimamente las cita a las dos — lo que no
+> puede pasar es que una **cita entrecomillada** quede sin su `[[bibcode]]` al lado, porque ahí el
+> chequeo no sabe de quién es y la prueba contra todas (la convención es `«…» [[bibcode]]`). Cuando enumeres
 > quién hizo qué —«PCA vía SVD [[A]], [[B]]; Wapiti [[C]], [[D]]; YARARA [[E]]»— dale a cada fuente
 > su propio bullet. Medido sobre cuatro rondas de verificación de un concepto real: **los 7
 > `no-soportada`/`contradice` fueron TODOS de atribución**, ninguno de invención, y todos vivían en

@@ -159,6 +159,13 @@ python scripts/extraction_prompt.py <slug> <bibcode> [--theme] [--out-dir DIR]
 python scripts/extraction_prompt.py <slug> <bib> --theme --enfasis "<lente>" [--ejes a,b]
                                     # SEGUNDA lectura del mismo sujeto con otra lente (#239/#308):
                                     # convive con la anterior, no la pisa
+python scripts/contrast.py <slug> [--campo X] [--grep RE] [--eje] [--filas]
+                                    # el lector de extracciones del paso 3b/3c (#314/#317): agrupa
+                                    #   por CAMPO y **nunca trunca una cita** (un recorte cae dentro
+                                    #   y el modelo la completa: 2 citas fabricadas medidas)
+python scripts/contrast.py <slug> --validar <nota>
+                                    # cruza la nota contra las extracciones: una cita que la
+                                    #   extracción no respalda la inventó el sintetizador (#315)
 python scripts/harvest_views.py <slug> [--theme] [--force]
                                     # COSECHA el fan-out: vault/raw/extraccion/<slug>/*.json → las
                                     # notas. Estampa la vista (fecha · txt · lente), mergea

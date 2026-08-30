@@ -1704,10 +1704,40 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 _citas = cfg.quotes_in(_btxt)
                 if not _citas:
                     continue
-                _fuentes, _opacas = _sources_for(_bibs)
                 for _c in _citas:
+                    # #316 — la cita se prueba contra SU fuente, no contra todas las del bloque. Un
+                    # párrafo que contrasta dos o tres papers es la forma normal de la prosa que
+                    # este framework pide, y probar cada cita contra cada bibcode marca la nota
+                    # **por decir la verdad** (medido: 12 de 12 hallazgos duros de un hub, en cuatro
+                    # líneas que atribuyen bien en prosa). Peor: el arreglo aparente —reatribuir la
+                    # cita al bibcode contra el que se testeó— **destruye la inferencia** que la
+                    # nota declara. Sin dueño adyacente la ambigüedad se DECLARA en el mensaje.
+                    _duenio = lb.quote_owner(_btxt, _c, _bibs)
+                    _bibs_c = [_duenio] if _duenio else _bibs
+                    _fuentes, _opacas = _sources_for(_bibs_c)
                     _n_citas_evaluadas[0] += 1 if _fuentes else 0
+                    _amb = "" if _duenio or len(_bibs) == 1 else (
+                        f" ⚠ el bloque cita {', '.join(sorted(_bibs))} y la cita no lleva "
+                        f"`[[bibcode]]` adyacente: se probó contra TODAS, así que el hallazgo es "
+                        f"más débil — poné la cita al lado de su fuente (#316)")
                     if any(cfg.quote_found(_c, _t) for _ts in _fuentes.values() for _t in _ts):
+                        continue
+                    # #315/#317 — la comparación DECIDIBLE que faltaba: la EXTRACCIÓN es la
+                    # transcripción hecha leyendo el PDF, así que si la cita está ahí, la nota es
+                    # fiel y lo que falló es el `.txt` (#205 lo declara índice degradado). Medido:
+                    # con el `.txt` como único juez la señal era 2 de 17 en un concepto y 0 de 35 en
+                    # otro — un detector que delega 54 confirmaciones manuales al PDF es un detector
+                    # que se deja de leer. Lo que la extracción NO tiene y el `.txt` tampoco es
+                    # justamente lo que el sintetizador inventó, y eso no admite excusa.
+                    _en_extraccion = [b for b in (_bibs_c or [])
+                                      if any(cfg.quote_found(_c, _t)
+                                             for _t in cfg.extraction_texts(b))]
+                    if _en_extraccion:
+                        cita_txt_degradado.append(
+                            (stem, f"L{_ln}: «{_c[:70]}{'…' if len(_c) > 70 else ''}» está en la "
+                                   f"EXTRACCIÓN de {', '.join(sorted(_en_extraccion))} (que se hizo "
+                                   f"leyendo el PDF) y no en su `.txt`: la nota está bien y el "
+                                   f"defecto es del índice — re-extraé el `.txt` si molesta (#315)"))
                         continue
                     _corte = _c if len(_c) <= 70 else _c[:70] + "…"
                     if _fuentes and any(cfg.quote_found_degraded(_c, _t)
@@ -1721,7 +1751,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                             (stem, f"L{_ln}: «{_corte}» está en la fuente pero el `.txt` la parte "
                                    f"({', '.join(sorted(_fuentes))}): números de línea o columnas "
                                    f"empalmadas. La cita no se toca — confirmala en el PDF y, si "
-                                   f"hace falta, re-extraé el `.txt`"))
+                                   f"hace falta, re-extraé el `.txt`{_amb}"))
                     elif _fuentes:
                         cita_no_verbatim.append(
                             (stem, f"L{_ln}: «{_corte}» no está en el `.txt` de "
@@ -1729,7 +1759,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                                    f"de tocar la nota**: desde #205 el `.txt` es el ÍNDICE, no la "
                                    f"fuente, y un `.txt` a dos columnas empalma texto vecino en "
                                    f"medio de la frase. Si el PDF la dice, el defecto es de la "
-                                   f"extracción; si no, la cita no es verbatim o es de otra fuente"))
+                                   f"extracción; si no, la cita no es verbatim{_amb}"))
                     elif _opacas:
                         cita_opaca.append(
                             (stem, f"L{_ln}: «{_corte}» no se puede chequear — "

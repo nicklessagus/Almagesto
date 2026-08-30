@@ -225,7 +225,23 @@ Progreso del ingest del tema <tema>:
    y el guión de corte antes de dar por no-taguable un paper; un 0 acá **no** es "el tema no está",
    es un retro-tag que no se hizo.
 
-3c. **Contraste cross-paper (#72) — antes de escribir la síntesis.** Entre "leí los papers" y
+3c. **Contraste cross-paper (#72) — antes de escribir la síntesis.**
+   ⛔ **Usá `python scripts/contrast.py <slug>` — no improvises un digest (#314/#317).** Es el único
+   eslabón de la cadena que no tenía herramienta, y su modo de falla está medido: leer 32 JSON de
+   ~25 KB lleva a imprimir un resumen recortado, el recorte cae **dentro de la cita textual** y el
+   modelo la completa con lo plausible. **2 citas fabricadas sobre 139 pares**, las dos en el
+   carácter exacto del corte, y una invirtiendo el alcance de la afirmación. La herramienta agrupa
+   por campo (`--campo`, `--grep`, `--eje`, `--paper`), arrastra `linea` y `segunda_mano`, emite
+   filas de **una fuente cada una** (`--filas`) y **nunca trunca una cita**: si no entra, filtrá
+   menos filas.
+   ⛔ **Al escribir: la cita se copia ENTERA o se parafrasea SIN comillas.** Y **una fila, una
+   fuente** — agrupar bibcodes bajo una glosa compartida es cómo se fabrican atribuciones (6 falsas
+   en esa misma corrida, contra 0 en una nota escrita paper por paper).
+   ⛔ **Antes de cerrar, `python scripts/contrast.py <slug> --validar <nota>`**: cruza cada cita del
+   concepto contra las extracciones. Una cita que la extracción **no** respalda la inventó el
+   sintetizador —la extracción se hizo leyendo el PDF, así que no vale la excusa del `.txt`
+   degradado— y sale bloqueante (#315/#317).
+   Entre "leí los papers" y
    "escribo la síntesis" hay una operación, y es la de más apalancamiento de la cadena: armar el
    **`## Inventario por eje`** del concept. Una fila por paper para cada **eje** —parámetro, efecto o
    hecho— donde los papers **no coinciden** (`Eje | Paper | Dice | Método / baseline`). Los ejes con
@@ -258,7 +274,10 @@ Progreso del ingest del tema <tema>:
    roll-up, pero **no** a la prosa de la ficha — reescribir un bloque **vence las anclas** de los
    pares que vivían ahí (D-4/D-20) y obliga a re-verificar lo tocado (#203), que con #282 no
    converge solo. La síntesis se re-escribe leyendo, como siempre.
-4. > ⚠ **Un ítem de linaje = un BULLET propio, no una oración con seis citas.** Cuando enumeres
+4. > ⚠ **Un ítem de linaje = un BULLET propio, no una oración con seis citas.** ⚠ Y su simétrico
+> (#316): un párrafo que **contrasta** dos fuentes legítimamente las cita a las dos — lo que no
+> puede pasar es que una **cita entrecomillada** quede sin su `[[bibcode]]` al lado, porque ahí el
+> chequeo no sabe de quién es y la prueba contra todas (la convención es `«…» [[bibcode]]`). Cuando enumeres
 > quién hizo qué —«PCA vía SVD [[A]], [[B]]; Wapiti [[C]], [[D]]; YARARA [[E]]»— dale a cada fuente
 > su propio bullet. Medido sobre cuatro rondas de verificación de un concepto real: **los 7
 > `no-soportada`/`contradice` fueron TODOS de atribución**, ninguno de invención, y todos vivían en

@@ -203,8 +203,19 @@ OCR, o marcar `pending`).
   **cuerpo** (un `pending_motivo` que la mencione daría falso negativo, AUD-135) y la repara
   `--restamp-headers`, que desde #277 también arregla la nota que tiene la línea del generador y
   perdió el blockquote — antes esa nota no se reparaba nunca y la categoría era incerrable.
-- **Cita textual entre comillas que ninguna fuente del bloque contiene** (#220): «esta cadena está
-  en este `.txt`» es un `grep`, no un LLM. Tres estados: está → nada; no está en ninguna → hallazgo
+- **Cita textual entre comillas que su fuente no contiene** (#220): «esta cadena está en este
+  archivo» es un `grep`, no un LLM. ⛔ **Se decide contra la EXTRACCIÓN antes que contra el `.txt`**
+  (#315/#317): la extracción es la transcripción hecha **leyendo el PDF**, así que una cita que está
+  ahí y no en el `.txt` dice que el índice está degradado y **la nota está bien** (cae en la
+  categoría de #288), mientras que una que no está en ninguno de los dos la **inventó el
+  sintetizador**. Con el `.txt` como único juez la señal era **2 de 17** en un concepto y **0 de
+  35** en otro — un detector que delega 54 confirmaciones manuales al PDF se deja de leer.
+  ⛔ **Y la cita se prueba contra SU fuente, no contra todas las del bloque** (#316): el dueño es el
+  `[[bibcode]]` adyacente (la convención `«…» [[bib]]`), y una **lista** de fuentes pegada a la cita
+  (`[[A]], [[B]]`) no tiene dueño — ahí se prueba contra todas y **el mensaje declara que el
+  hallazgo es más débil**. Medido: 12 de 12 hallazgos duros de un hub eran párrafos de contraste que
+  atribuían bien en prosa, y «resolverlos» —reatribuir la cita al bibcode contra el que se testeó—
+  habría **destruido la inferencia** que la nota declara. Tres estados: está → nada; no está en ninguna → hallazgo
   (no-verbatim o de otra fuente, se distingue a mano); **no evaluable** (sin `.txt` o
   `fulltext_source: ocr`) → categoría propia, porque contarlo en contra sería inventar deuda.
   ⛔ `pdf_source: eprint` **salió de la exención en #275**: cubría 45 de 49 papers de una ficha real

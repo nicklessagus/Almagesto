@@ -418,6 +418,61 @@ def _bibcodes(text: str) -> list[str]:
     return out
 
 
+#: #316 · lo que puede haber ENTRE dos links sin que dejen de ser una lista de fuentes
+#: (`[[A]], [[B]]`, `[[A]] y [[B]]`, `[[A]] · [[B]]`). Con prosa en el medio ya no es una lista: es
+#: una atribución por cita, que es justo lo que hay que distinguir.
+_SEPARADORES = re.compile(r"^[\]\|#\w]*[\s,;/&·—-]*(?:y|e|and|,)?[\s,;/&·]*$")
+
+
+def _solo_separadores(gap: str) -> bool:
+    """Is what sits between two `[[…]]` links nothing but list punctuation? (#316)"""
+    return bool(_SEPARADORES.match(gap.strip()[:12] if len(gap.strip()) <= 12 else gap.strip()))
+
+
+def quote_owner(text: str, quote: str, bibs: list) -> str | None:
+    """Which of the block's bibcodes OWNS this quote, or `None` when the block does not say (#316).
+
+    ⛔ A block that cites two or three sources is the normal shape of a paragraph that CONTRASTS
+    them, and testing every quote against every bibcode marks the note **for telling the truth**.
+    Measured on a real hub: 12 of 12 "hard" findings of that category were this, concentrated in
+    four lines that attribute each quote correctly in prose — and a verifier warned that "fixing"
+    them by re-attributing the quote to the bibcode it was tested against **destroys the inference
+    the note is making**.
+
+    The convention this vault writes by is `«…» [[bibcode]]`: the owner is the citation that
+    follows the closing quote, and failing that the nearest one before it. When the block has
+    several and none is adjacent, this returns `None` — ambiguity is a MISSING DATUM, not a
+    finding, and today it was resolved against the note N times, once per source.
+
+    With a single bibcode in the block there is nothing to disambiguate: that one owns it (the
+    inherited-scope case D-4 exists for)."""
+    if len(bibs) <= 1:
+        return bibs[0] if bibs else None
+    pos = text.find(quote)
+    if pos < 0:
+        return None
+    fin = pos + len(quote)
+    enlaces = [(m.start(), m.end(), m.group(1).strip()) for m in LINK_RE.finditer(text)
+               if m.group(1).strip() in bibs]
+    despues = [e for e in enlaces if e[0] >= fin]
+    antes = [e for e in enlaces if e[1] <= pos]
+    # ⚠ Una LISTA de fuentes pegada a la cita (`[[A]], [[B]]`, `[[A]] y [[B]]`) NO tiene dueño: es
+    # el caso que produjo el defecto —«tomó el bibcode equivocado de la columna Fuente de esa
+    # fila»—. Sólo separadores entre dos links: la cita es de las dos, o de ninguna en particular.
+    if despues:
+        i, j, t = despues[0]
+        # ¿el que sigue es otro link pegado por separadores? → es una LISTA, no un dueño
+        if len(despues) > 1 and _solo_separadores(text[j:despues[1][0]]):
+            return None
+        return t
+    if antes:
+        i, j, t = antes[-1]
+        if len(antes) > 1 and _solo_separadores(text[antes[-2][1]:i]):
+            return None
+        return t
+    return None
+
+
 def pairs_of(body: str) -> list[Pair]:
     """Un par por cada (cita, bloque). Un bloque con 3 citas da 3 pares con la MISMA ancla.
 

@@ -156,6 +156,12 @@ Cada uno:
   `.txt` es la fuente (ver la tabla de arriba).
   **Ojo:** los nombres tienen `&` y puntos → citarlos entre comillas simples al leer/grep.
 - Lee **sólo esa fuente** (grounding-first; **prohibido** responder de memoria o de otro paper).
+- ⛔ **Una cita entrecomillada que lleva OTRO `[[bibcode]]` adyacente no es tuya (#316).** El par se
+  arma por **bloque**, así que un párrafo que contrasta dos o tres fuentes te llega entero: la
+  afirmación que tenés que juzgar es la del bloque, no cada `«…»` que aparezca en él. Si la cita
+  pertenece a otra fuente del mismo bloque, **decilo en la `nota` y no la cuentes en contra** —
+  medido: 12 de 12 hallazgos duros de un hub eran esto, y «resolverlos» reatribuyendo la cita al
+  bibcode contra el que se testeó **habría destruido la inferencia que la nota declara**.
 - Devuelve, para la afirmación dada:
   - `veredicto`: `soportada` | `no-soportada` | `contradice` — **vocabulario cerrado**, y el eje es
     **sólo el respaldo textual**: ¿la fuente dice esto? La pregunta «¿está completa la afirmación?»

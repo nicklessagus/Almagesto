@@ -1110,3 +1110,41 @@ def test_pares_que_no_es_una_lista_se_nombra_y_no_se_recorre():
     `for p in data['pares']` iterando sus CLAVES: cero veredictos, sin ruido."""
     errores = lb.fanout_errors({"bibcode": "2020X", "pares": {"ancla": "a"}}, entry="d.json")
     assert any("`pares`" in e and "dict" in e for e in errores), errores
+
+
+# ── #316 · la cita tiene DUEÑO, y la lista de fuentes no lo tiene ────────────
+def test_quote_owner_prefiere_el_bibcode_adyacente():
+    """#316 — probar cada cita contra cada bibcode del bloque marca la nota por decir la verdad: un
+    párrafo que CONTRASTA dos fuentes es la forma normal de la prosa que el framework pide. La
+    convención de la bóveda es `«…» [[bibcode]]`, así que el dueño es la cita que sigue al cierre de
+    comillas, y si no hay, la anterior más cercana."""
+    t = ('«uno dos tres» [[2013Voss]], mientras que [[2004Davies]] dice «cuatro cinco seis».')
+    bibs = ["2013Voss", "2004Davies"]
+    assert lb.quote_owner(t, "uno dos tres", bibs) == "2013Voss"
+    assert lb.quote_owner(t, "cuatro cinco seis", bibs) == "2004Davies"
+    assert lb.quote_owner("[[2013Voss]] dice «algo».", "algo", bibs) == "2013Voss"
+    # con UN solo bibcode no hay nada que desambiguar (es el caso de herencia de D-4)
+    assert lb.quote_owner("una fila con «cita»", "cita", ["2013Voss"]) == "2013Voss"
+    assert lb.quote_owner("sin fuentes «cita»", "cita", []) is None
+
+
+def test_una_LISTA_de_fuentes_no_es_atribucion():
+    """Lo que produjo el defecto: «tomó el bibcode equivocado de la columna *Fuente* de esa fila».
+    Dos links pegados por separadores son una LISTA —la cita es de las dos, o de ninguna en
+    particular— y eso es un dato faltante, no un hallazgo."""
+    bibs = ["2013Voss", "2004Davies"]
+    assert lb.quote_owner("| «cita de la fila» | [[2013Voss]], [[2004Davies]] |",
+                          "cita de la fila", bibs) is None
+    assert lb.quote_owner("Según [[2013Voss]] y [[2004Davies]], vale «la cita esta».",
+                          "la cita esta", bibs) is None
+    assert lb.quote_owner("«c» [[2013Voss]] · [[2004Davies]]", "c", bibs) is None
+    # el control de la rama «antes»: con UNA sola fuente delante, esa fuente es la dueña
+    assert lb.quote_owner("[[2013Voss]] lo dice: «la cita esta», y punto.",
+                          "la cita esta", bibs) == "2013Voss"
+
+
+def test_quote_owner_no_inventa_si_la_cita_no_esta_en_el_bloque():
+    """Sin la cita en el texto no hay posición desde la cual medir cercanía: se declara `None`, que
+    el llamador lee como ambigüedad — nunca se elige la primera fuente por descarte."""
+    assert lb.quote_owner("un bloque con [[A]] y [[B]] pero sin esa cita", "otra cosa",
+                          ["A", "B"]) is None

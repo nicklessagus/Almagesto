@@ -1002,6 +1002,20 @@ el `.txt` se re-extrae.
    corresponde entre dos filas. **La red de que ocurrió (#101):** el lint reporta la ficha con la
    **fila vacía de la plantilla** y ≥2 papers extraídos citados — ausencia = declarado,
    presente-y-vacío = saltado.
+   ⛔ **Y tiene herramienta: `python scripts/contrast.py <slug>` (#314/#317).** Era el único eslabón
+   de la cadena sin una —producir, cosechar y verificar la tienen— y su modo de falla es predecible:
+   sin herramienta se improvisa un digest, el recorte cae **dentro de la cita** y el modelo la
+   completa con lo plausible (medido: 2 citas fabricadas sobre 139 pares, las dos en el carácter
+   exacto del corte, una invirtiendo el alcance de la afirmación). `contrast.py` **nunca trunca una
+   cita**, agrupa por campo (`--campo`, `--grep`, `--eje`, `--paper`), arrastra `linea` y
+   `segunda_mano`, y emite filas de **una fuente cada una**. Propone: el inventario lo escribís vos.
+   ⛔ **Al sintetizar, la cita se copia ENTERA o no se copia** — si no entra, se parafrasea **sin
+   comillas**. Y **una fila, una fuente**: agrupar bibcodes bajo una glosa compartida es cómo se
+   fabrican atribuciones (medido: 6 falsas en la misma corrida, contra 0 en una nota escrita paper
+   por paper). ⛔ **La cita se verifica contra la EXTRACCIÓN, no contra el `.txt`**
+   (`contrast.py --validar <nota>`, #315/#317): la extracción es la transcripción hecha **leyendo el
+   PDF**, así que «no está ahí» significa que la inventó el sintetizador y no admite la excusa del
+   índice degradado — con el `.txt` como único juez la señal era 2 de 17 y 0 de 35.
 
 #### El CICLO DE LA LENTE — cómo se encadenan las piezas (#310)
 
@@ -1215,62 +1229,50 @@ prohibido de memoria) y devuelve **dos ejes separados** (D-59): un `veredicto` d
 pérdida en `soportada`+`condición` o `no-soportada`) y la **columna `Score` 0–10** (1.42.0).
 
 ⛔ **La condición se CLASIFICA, con vocabulario cerrado: `acota` | `contextualiza` (#221).** El
-fan-out la puebla en la gran mayoría de los pares, así que *«resolvé cada condición»* sería la nota
-entera. Test operativo: ***¿la afirmación queda falsa si se saca la condición?*** → **`acota`** (se
-resuelve sí o sí: en un concepto, fila de `## Régimen de validez`) / **`contextualiza`** (va al
-reporte, no obliga a editar). Y la condición es **columna, no prosa**: el juez es estable en el eje
-textual y no exhaustivo en el de régimen, así que absorberla sin rastro borra lo que hay que poder
-re-auditar.
+fan-out la puebla en casi todos los pares, así que *«resolvé cada condición»* sería la nota entera.
+Test operativo: ***¿la afirmación queda falsa si se saca la condición?*** → **`acota`** (se resuelve
+sí o sí: fila de `## Régimen de validez`) / **`contextualiza`** (va al reporte). Y es **columna, no
+prosa**: el juez es estable en el eje textual y no exhaustivo en el de régimen, así que absorberla
+sin rastro borra lo que hay que poder re-auditar.
 
-El subagente contesta además, en todos los casos, la **sobre-generalización** (#74: la fuente
-afirma bajo condiciones que la nota no dice — la nota no afirma falso, afirma **de más**) y, en
-transcripciones de tablas/listas, la **completitud** (una tabla truncada sin un solo error vuelve
-100% soportada — afirma **de menos**; se completa o se declara el recorte).
+El subagente contesta además la **sobre-generalización** (#74: la fuente afirma bajo condiciones
+que la nota no dice — no afirma falso, afirma **de más**) y, en transcripciones, la **completitud**
+(una tabla truncada sin un solo error vuelve 100% soportada: afirma **de menos**).
 
 **El bloque `## Verificación de citas`** — una fila por par:
 `| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |`
-
 - ⛔ **Sin fila no hay dónde colgar el ancla**: colapsar las soportadas en prosa deja al lint sin
   distinguir "verificada" de "nunca se miró".
 - ⛔ **Sólo `Afirmación (extracto)` se trunca (#226)**; `Evidencia` y `Condición` no, y `Evidencia`
-  lleva su localizador (`p. N`, `L…`, `Fig. 3, p. 7`) **al final y completo** — el corte se lleva el
-  localizador y apaga el cruce de #122, que sin él devuelve un 0 que se lee verde. ⛔ **Y el corte
-  no cae dentro de `$…$`, `` ` `` ni `[[ ]]` (#274b/#257c):** retrocede al límite del bloque —
-  `lib_blocks.truncate_claim`—, porque un `$` huérfano se traga texto en Obsidian y un `[[` partido
-  es bloqueante. ⛔ **La celda lleva PROSA, nunca un `repr()`** de la salida del fan-out (#274a).
+  lleva su localizador **al final y completo** — el corte se lo lleva y apaga el cruce de #122, que
+  sin él devuelve un 0 que se lee verde. ⛔ **El corte no cae dentro de `$…$`, `` ` `` ni `[[ ]]`**
+  (#274b/#257c: `lib_blocks.truncate_claim` retrocede al límite del bloque). ⛔ **La celda lleva
+  PROSA, nunca un `repr()`** (#274a).
 - ⛔ **`Hash fuente` declara CONTRA QUÉ ARCHIVO se verificó: `txt:<sha10>` o `pdf:<sha10>` (#117).**
-  La decisión la toma el verificador par por par, así que la declara la **fila** (ningún campo del
-  frontmatter puede saberlo). En filas nuevas: `pdf:`. Sin prefijo = *no consta* y el lint
-  **bloquea** (migrar con `python scripts/make_notes.py --migrate-verif-archivo`, que deduce del
-  hash). Excepción nombrada (#223): la fila `no verificable por extracción` **no declara archivo**,
-  porque no hay ninguno (fuente sin PDF ni `.txt` en disco).
-- ⛔ **Documento largo leído del `.txt`: los DOS localizadores (#200)** — `(p. 271 / `.txt` L13931)`:
-  `pdf:` mentiría sobre qué se abrió y la línea sola rompe #80. ⚠ Desde #205 el caso no se produce
-  en filas nuevas; las viejas son correctas y no se tocan.
+  La decisión la toma el verificador par por par, así que la declara la **fila**. En filas nuevas:
+  `pdf:`. Sin prefijo = *no consta* y el lint **bloquea** (`make_notes.py
+  --migrate-verif-archivo`). Excepción (#223): la fila `no verificable por extracción` **no declara
+  archivo**, porque no hay ninguno.
+- ⛔ **Documento largo leído del `.txt`: los DOS localizadores (#200)** — `pdf:` mentiría sobre qué
+  se abrió y la línea sola rompe #80. ⚠ Desde #205 no se produce en filas nuevas.
 - ⛔ **Un veredicto que exige acción NO queda registrado y sin resolver (#91):** `no-soportada` /
-  `contradice` **pelados bloquean** (mismo trato que citar una retractada). No cuentan
-  `no verificable por extracción` ni la resolución anotada en la celda.
-- ⛔ **Con DOS RONDAS, la segunda ANOTA, no pisa (#232):** `contradice→corregida` — es lo que lee
-  `lib_blocks.resueltos()`. Si pisara, el bloque final publicaría 0 donde hubo 3 `contradice` y
-  nadie podría saberlo desde la nota. Con **más** rondas la celda encadena
-  (`no-soportada→contradice→corregida`, #274c): la partición de la cabecera sigue siendo por el
-  **primer** veredicto y la cadena se publica aparte.
+  `contradice` **pelados bloquean**. No cuentan `no verificable por extracción` ni la resolución
+  anotada en la celda.
+- ⛔ **Con DOS RONDAS, la segunda ANOTA, no pisa (#232):** `contradice→corregida`. Si pisara, el
+  bloque final publicaría 0 donde hubo 3 `contradice`. Con más rondas la celda encadena (#274c): la
+  partición de la cabecera es por el **primer** veredicto y la cadena se publica aparte.
 - ⛔ **La cabecera la genera el mismo código que lee la tabla** (`lib_blocks.verif_summary`,
-  INV-81): los **cuatro** veredictos —que particionan: `soportada`, `no-soportada`, `contradice`,
-  `no verificable por extracción`— y, tras un **`—`**, `con_condicion` (eje ortogonal). Las **tres
-  sub-secciones** (*Inferencias declaradas*, *Omisiones en transcripciones*, *Condiciones perdidas*)
-  van **aunque digan «ninguna»**: son el único rastro del triage de la corrida.
+  INV-81): los **cuatro** veredictos —que particionan— y, tras un **`—`**, `con_condicion` (eje
+  ortogonal). Las **tres sub-secciones** van **aunque digan «ninguna»**: son el único rastro del
+  triage de la corrida.
 
 **Los dos hashes (el ancla, D-4/D-20)** responden preguntas distintas: el **ancla** hashea el
 **bloque markdown normalizado** que contiene la cita —reflowear no la mueve, cambiar un número sí; un
 blockquote hard-wrapped es UN bloque (#224: por línea se podía reescribir el medio de una cita sin
 vencer el par, y el sub-disparo es la única dirección prohibida); una fila sin `[[bibcode]]` propio
-hereda el del caption hasheando los dos bloques— y el **hash de fuente** hashea el archivo que se
-**leyó** (desde #205, el PDF: `bytes_hash`, no `source_hash`) — lo único que detecta que la fuente
-cambió sin que nadie tocara la nota. El PDF es inmutable, así que esa alarma es rarísima: cuando
-suena, alguien reemplazó el archivo; y una fila anclada al PDF **no** se vence cuando el `.txt` se
-re-extrae. Los calcula `scripts/lib_blocks.py` (`pairs_of`, `source_hash`, `bytes_hash`), el mismo
-código que después los chequea: **no se escriben a ojo**. ⛔ **Y el bloque escrito se re-parsea antes de publicarse (#284):** `lib_blocks.render_verif_table` escapa cada celda y **rehúsa** devolver un bloque cuya lectura no reproduce lo que se le escribió — sin esa puerta, reescribir una fila leída parte la fila y el ancla se lee de la columna equivocada.
+hereda el del caption— y el **hash de fuente** hashea el archivo que se **leyó** (desde #205, el
+PDF), lo único que detecta que la fuente cambió sin que nadie tocara la nota. Los calcula
+`lib_blocks.py`, el mismo código que después los chequea: **no se escriben a ojo**. ⛔ **Y el bloque escrito se re-parsea antes de publicarse (#284):** `lib_blocks.render_verif_table` escapa cada celda y **rehúsa** devolver un bloque cuya lectura no reproduce lo que se le escribió — sin esa puerta, reescribir una fila leída parte la fila y el ancla se lee de la columna equivocada.
 
 **Salvedades de fuente:** `.txt` con header `source: ocr` → citable con salvedad (ante discrepancia
 de símbolos, abrir el PDF). `pdf_source: eprint` → una discrepancia numérica contra un valor
@@ -1281,13 +1283,11 @@ con el **auto-benchmark** (`python scripts/bench_verify.py seed` siembra citas f
 el verificador las juzga a ciegas y `score` reporta el recall; nada de eso entra al vault).
 
 **Qué es una `inferencia` y cómo se escribe (D-42).** Una afirmación que la bóveda sostiene y que
-**ninguna fuente dice**: sale de combinar dos o más que sí lo dicen. No es excusa para lo no
-verificado: es la declaración explícita de que el respaldo es un razonamiento, para que el
-consumidor la pese distinto. Se escribe **nombrando sus premisas**: `(inferencia de [[b1]], [[b2]])`
-— sin al menos un `[[bibcode]]` **el lint la bloquea** (no hay nada que auditar). La palabra en
-prosa normal no es una marca. ⚠ El énfasis markdown alrededor no cambia nada (#276):
-`` (`inferencia` de …) ``, `(**inferencia** de …)` y `(_inferencia_ de …)` son la misma marca; lo que
-no cuenta es otra palabra que empiece igual (`inferencial`).
+**ninguna fuente dice**: sale de combinar dos o más que sí. No es excusa para lo no verificado: es
+la declaración de que el respaldo es un razonamiento, para que el consumidor la pese distinto. Se
+escribe **nombrando sus premisas** —`(inferencia de [[b1]], [[b2]])`—: sin al menos un `[[bibcode]]`
+**el lint la bloquea**. ⚠ El énfasis markdown alrededor no cambia nada (#276); lo que no cuenta es
+otra palabra que empiece igual (`inferencial`).
 
 **Regla dura — todo lo apuntable es chequeable:** toda afirmación fáctica va **citada `[[bibcode]]`
 o marcada `inferencia`** — nada sin respaldo. Excepción: los valores de ground-truth (NEA) en
