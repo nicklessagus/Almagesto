@@ -199,6 +199,45 @@ Cada uno:
     **listarlos** (con nº de línea). Es un **hallazgo aparte**, no un grado de soporte: no cambia el
     veredicto de la fila que sí está.
 
+⛔ **Y la FORMA del archivo es ésta, literal (#259).** Pegá este fence en el prompt tal cual — no lo
+describas en prosa:
+
+```json
+{
+  "bibcode": "2020ApJ...900....1A",
+  "pares": [
+    {
+      "ancla": "<las 10 hex de la columna `Ancla` del par que se juzga>",
+      "veredicto": "soportada | no-soportada | contradice",
+      "evidencia": "«cita textual del PDF» (p. 7)",
+      "condicion": "<la condición que la nota no dice, citada con su página — o \"\">",
+      "cond_tipo": "acota | contextualiza | \"\"",
+      "completitud": "<filas/ítems de la tabla o lista de la fuente que la nota omite — o \"\">",
+      "nota": "<una línea de por qué; en `no-soportada`, qué dice el paper en cambio>"
+    }
+  ]
+}
+```
+
+Un objeto por par, en `pares`, identificado por su **`ancla`** (la de la fila del bloque). `condicion`,
+`cond_tipo`, `completitud` y `nota` van vacías cuando no aplican; ninguna otra clave entra.
+
+**Por qué literal.** Hasta 1.117.0 el skill fijaba los **campos** y nunca la **forma**. Medido al
+cerrar una ficha real (2026-08-29: 8 rondas, ~60 subagentes, el mismo prompt salvo el bibcode), la
+clave de la lista llegó en **tres** formas —`pares`, `veredictos`, `resultados`— y el identificador
+del par en **dos** —`ancla`, `n`—: el consumidor reventó **dos veces con `KeyError`** con 60
+lecturas de PDF ya pagadas, y terminó en un lector tolerante
+(`data.get('pares') or data.get('veredictos') or …`) que este repo prohíbe. ⛔ Y el `KeyError` es el
+modo benigno: un consumidor menos paranoico lee **0 veredictos de un archivo que sí los tiene** y
+sigue. El fence lo **genera** `lib_blocks.verify_fanout_json_block()` desde
+`lib_blocks.VERIF_FANOUT_SCHEMA`, que es la misma constante que valida el paso 2b — el prompt y el
+validador no pueden divergir.
+
+⚠ **Dos divergencias declaradas, no resueltas acá.** (a) El fence ofrece **tres** veredictos y
+`lb.VERDICTS` tiene **cuatro**: `no verificable por extracción` es propiedad de la fuente (#223) y
+hoy lo escribe quien arma la fila, no el juez. (b) `nota` se pide y **no tiene columna** en el
+bloque (`VERIF_COLS`) ni campo en `Row`: sirve al triage y muere en `build/`.
+
 > **Claims multi-cláusula (espeja la regla del paso 1).** Una afirmación suele arrastrar varias
 > cláusulas: una de encuadre sin cita, la atribuida a *esta* fuente, y a veces las de *otras*
 > fuentes citadas al lado. El subagente juzga **la parte que se le atribuye a su paper** — que el
@@ -241,7 +280,10 @@ Decime APARTE del veredicto: ¿el paper afirma esto bajo CONDICIONES que la afir
 página — la afirmación puede estar bien y aun así estar sobre-generalizada — y CLASIFICALAS con una
 sola palabra: `acota` si la afirmación queda FALSA sin esa condición, `contextualiza` si sigue
 siendo cierta y la condición sólo agrega procedencia. No uses memoria ni otros
-papers."*
+papers.
+Escribí el resultado en `build/<slug>/verif/<ronda>/<bibcode>.json` con EXACTAMENTE la forma del
+JSON de arriba —clave `pares`, un objeto por par identificado por su `ancla`—: otra forma no la lee
+nadie."*
 
 ⛔ **La pregunta de completitud es la del contrato, y se ensancha sin que nada avise (#198).**
 Es *«¿la **tabla o lista de la fuente** tiene más filas/ítems que los transcritos?»*. Al armar el
@@ -290,6 +332,19 @@ Es exactamente el **falso limpio** que el framework persigue en todos lados —`
 D-43 devuelve *no evaluado* y no `ok`— y nunca se había enunciado para el **consumidor** de un
 fan-out, que es donde este skill manda derivar trabajo. Es barato de mecanizar: `len(out/*.json)`
 contra el nº de fuentes.
+
+⛔ **Y los dos conteos se corren, no se estiman (#259):**
+
+```bash
+python scripts/check_verify_fanout.py build/<slug>/verif/<ronda> --esperados <nº de pares lanzados>
+```
+
+Valida **cada** `*.json` contra `VERIF_FANOUT_SCHEMA` **nombrando el archivo y la clave** que falta
+o sobra, y **aborta** si los pares devueltos no son los que se mandaron a juzgar (la red barata de
+#222: contar antes y después). Un subagente que devolvió la mitad de sus pares escribe un archivo
+**válido** —la forma no lo ve, el conteo sí—. Directorio inexistente → **rc 2**: rehúsa en vez de
+reportar un cero limpio (D-43). rc ≠ 0 ⇒ **no se deriva trabajo**: se re-corre la fuente que no
+cumple, nunca se afloja el lector.
 
 ### 3. El corte: contenido distintivo, sin grado
 

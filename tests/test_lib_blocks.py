@@ -971,3 +971,142 @@ def test_second_hand_rows_solo_mira_las_secciones_de_vista():
     """Otra tabla con la misma forma en otra sección no es una vista."""
     fuera = _VISTA.replace("## Vista — tau Cet (2026-08-30)", "## Inventario por eje")
     assert lb.second_hand_rows(fuera) == []
+
+
+import json as _json
+import re
+
+RAIZ = Path(__file__).resolve().parent.parent
+SKILL = RAIZ / ".claude" / "skills" / "verify-citations" / "SKILL.md"
+
+# ── #259 · el schema declarado de la salida del fan-out ──────────────────────────────────────
+#
+# Los tests viven ACÁ y no en un archivo propio para que `mutar.py --dirigida
+# scripts/lib_blocks.py` los encuentre: ese modo corre sólo `tests/test_<módulo>.py`, así que
+# una función probada en otro archivo queda sin red medible.
+SKILL = RAIZ / ".claude" / "skills" / "verify-citations" / "SKILL.md"
+
+#: Un archivo que CUMPLE, del que salen todas las mutaciones de abajo. Se arma desde la constante
+#: para que agregar una clave obligatoria al schema no deje este molde silenciosamente viejo.
+def _ok(**cambios) -> dict:
+    par = {k: "x" for k in lb.VERIF_FANOUT_SCHEMA["par"]}
+    par.update({k: "" for k in lb.VERIF_FANOUT_SCHEMA["par_opt"]})
+    datos = {"bibcode": "2020ApJ...900....1A", "pares": [par]}
+    datos.update(cambios)
+    return datos
+
+
+# ── el fence del skill es el schema, no una copia que se le parece ───────────
+
+def _fence_del_skill() -> dict:
+    """El primer bloque ```json del `SKILL.md`, parseado.
+
+    Precedente exacto: `tests/test_docs_ejecutables.py::test_la_plantilla_y_el_parser_hablan_de_las_mismas_columnas`
+    hace esto mismo con la plantilla de la tabla de verificación."""
+    m = re.search(r"```json\n(.*?)\n```", SKILL.read_text(encoding="utf-8"), re.S)
+    assert m, "el SKILL.md no pega ningún fence ```json: el prompt volvió a describir la forma en prosa"
+    return _json.loads(m.group(1))
+
+
+def test_el_bloque_json_del_skill_parsea_y_tiene_las_claves_del_schema():
+    """Si el fence del prompt y `VERIF_FANOUT_SCHEMA` divergen, el productor promete una forma y el
+    validador exige otra — que es el defecto de #259 con un paso más de indirección.
+
+    Muere con el código viejo por partida doble: no había fence (el skill describía los campos en
+    prosa) ni constante contra la cual compararlo."""
+    datos = _fence_del_skill()
+    assert tuple(datos) == lb.VERIF_FANOUT_SCHEMA["top"], "las claves de la raíz no son las del schema"
+    assert isinstance(datos["pares"], list) and datos["pares"], "`pares` no es una lista poblada"
+    par = datos["pares"][0]
+    declaradas = lb.VERIF_FANOUT_SCHEMA["par"] + lb.VERIF_FANOUT_SCHEMA["par_opt"]
+    assert tuple(par) == declaradas, f"el par del fence no declara {declaradas}"
+    assert lb.fanout_errors(datos, entry="fence") == [], "el propio fence del skill no valida"
+
+
+def test_el_fence_del_skill_es_el_que_genera_el_codigo():
+    """El fence se **genera** desde la constante (`verify_fanout_json_block`), así que el del skill
+    tiene que ser ése y no uno tipeado a mano que se le parezca: el día que la constante cambie,
+    quien no regenere el skill deja el prompt pidiendo la forma vieja — y nada avisaría."""
+    assert _json.loads(re.search(r"```json\n(.*?)\n```",
+                                lb.verify_fanout_json_block(), re.S).group(1)) == _fence_del_skill()
+
+
+def test_el_generador_rehusa_una_clave_del_schema_sin_placeholder(monkeypatch):
+    """Un campo que el schema exige y el prompt no explica es un campo que el productor no puede
+    llenar: se rehúsa en vez de imprimir un relleno, que sería la prosa vaga otra vez."""
+    monkeypatch.setitem(lb.VERIF_FANOUT_SCHEMA, "par_opt",
+                        lb.VERIF_FANOUT_SCHEMA["par_opt"] + ("regimen",))
+    with pytest.raises(ValueError, match="regimen"):
+        lb.verify_fanout_json_block()
+
+
+# ── `fanout_errors`: nombra el archivo Y la clave ────────────────────────────
+
+#: Las TRES formas MEDIDAS en la corrida de `hd_40307`, más las degradaciones que un LLM produce al
+#: escribir JSON a mano. `(id, archivo, clave que el mensaje tiene que nombrar)`.
+FORMAS = [
+    # ronda 1 · la lista llegó como `veredictos`
+    ("veredictos", {"bibcode": "2020X", "veredictos": [{"ancla": "aaaaaaaaaa", "veredicto": "soportada", "evidencia": "«x» (p. 1)"}]}, "veredictos"),
+    # ronda 3 · dos archivos la llamaron `resultados`
+    ("resultados", {"bibcode": "2020X", "resultados": [{"ancla": "aaaaaaaaaa", "veredicto": "soportada", "evidencia": "«x» (p. 1)"}]}, "resultados"),
+    # ronda 7 · cinco archivos identificaron el par por `n` en vez de por `ancla`
+    ("n", {"bibcode": "2020X",
+           "pares": [{"n": 1, "veredicto": "soportada", "evidencia": "«x» (p. 1)"}]}, "n"),
+]
+
+
+@pytest.mark.parametrize("archivo,clave", [(f, k) for _, f, k in FORMAS],
+                         ids=[i for i, _, _ in FORMAS])
+def test_fanout_errors_nombra_la_clave_que_falta(archivo, clave):
+    """El mensaje tiene que nombrar **el archivo y la clave**: el consumidor tiene ~60 archivos en
+    el directorio de la ronda y «salida malformada» no dice cuál re-correr.
+
+    Muere con el código viejo porque no había validador: las tres formas se leían con
+    `data.get('pares') or data.get('veredictos') or …` y ninguna producía un solo hallazgo."""
+    errores = lb.fanout_errors(archivo, entry="r3/2020X.json")
+    assert errores, "una forma medida en producción pasó como válida"
+    assert all("r3/2020X.json" in e for e in errores), errores
+    assert any(f"`{clave}`" in e for e in errores), (
+        f"ningún mensaje nombra `{clave}`:\n  " + "\n  ".join(errores))
+
+
+def test_fanout_errors_calla_sobre_un_archivo_que_cumple():
+    """La otra mitad del contrato: un detector que grita siempre se apaga. Las opcionales vacías
+    (`condicion`, `cond_tipo`, `completitud`, `nota`) son el caso NORMAL, no una violación."""
+    assert lb.fanout_errors(_ok(), entry="ok.json") == []
+    minimo = {"bibcode": "2020X", "pares": [{k: "x" for k in lb.VERIF_FANOUT_SCHEMA["par"]}]}
+    assert lb.fanout_errors(minimo, entry="min.json") == [], "las opcionales se volvieron obligatorias"
+
+
+@pytest.mark.parametrize("dato", [[], "pares", None, 3], ids=["lista", "str", "none", "int"])
+def test_fanout_errors_no_revienta_con_una_raiz_que_no_es_un_objeto(dato):
+    """El validador es lo que corre ANTES de derivar trabajo: si él mismo levanta una excepción,
+    reprodujo el `KeyError` que #259 vino a cerrar, sólo que un paso más arriba."""
+    errores = lb.fanout_errors(dato, entry="raro.json")
+    assert errores and all("raro.json" in e for e in errores)
+
+
+def test_fanout_errors_reporta_la_clave_de_mas_en_vez_de_tolerarla():
+    """Decisión declarada (docstring de `fanout_errors`): los extras **se reportan**, no hay
+    whitelist. Un extra es un productor inventando una forma —el defecto medido— o un schema que
+    tiene que crecer; los dos necesitan una persona."""
+    errores = lb.fanout_errors(_ok(**{"score": 8}), entry="e.json")
+    assert any("`score`" in e for e in errores), errores
+
+
+def test_un_par_que_no_es_un_objeto_se_nombra_por_su_indice():
+    """`"pares": ["soportada", …]` —el juez que devuelve la lista de veredictos pelados— reventaría
+    cualquier consumidor con `par['veredicto']`. Se nombra el índice, y los pares siguientes se
+    siguen mirando: el archivo malo no puede esconder a los que vienen detrás."""
+    errores = lb.fanout_errors({"bibcode": "2020X", "pares": ["soportada", {"n": 1}]},
+                               entry="p.json")
+    assert any("`pares[1]`" in e and "str" in e for e in errores), errores
+    assert any("`pares[2]`" in e for e in errores), ("el par siguiente dejó de mirarse:\n  "
+                                                     + "\n  ".join(errores))
+
+
+def test_pares_que_no_es_una_lista_se_nombra_y_no_se_recorre():
+    """`"pares": {...}` —un solo par sin lista, la degradación clásica de un LLM— se leería con
+    `for p in data['pares']` iterando sus CLAVES: cero veredictos, sin ruido."""
+    errores = lb.fanout_errors({"bibcode": "2020X", "pares": {"ancla": "a"}}, entry="d.json")
+    assert any("`pares`" in e and "dict" in e for e in errores), errores

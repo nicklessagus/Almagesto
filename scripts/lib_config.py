@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.119.0"
+ALMAGESTO_VERSION = "1.120.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -722,6 +722,68 @@ def method_key(nombre) -> str:
     """
     s = unicodedata.normalize("NFKD", str(nombre or "")).encode("ascii", "ignore").decode()
     return re.sub(r"[^a-z0-9]+", "-", s.casefold()).strip("-")
+
+
+def concept_alias_index() -> dict:
+    """`{method_key(name): stem}` for every ingested concept: its own stem **and** its `aliases`.
+
+    The canonical name of a method IS the stem of its note, and `aliases` is the synonym table the
+    schema already asks for — and nobody read it: the roll-up and the lint compared only against the
+    stem, so `bisector span` and `bis` were two different methods. Measured on a real vault: of 121
+    `methods` without a destination page, the alias index closes 7 (`ff-prime` → the activity
+    indicators note, `rv-color` → `crx`, `heteroscedastic-noise` → `ica-noise`…). Small, and the
+    right kind of small: what fills that backlog is the extractor SEEING the list before inventing
+    a spelling, not the index alone.
+
+    ⛔ The stem wins over a foreign alias: if `pca.md` exists and another note claims `pca` as an
+    alias, the destination is `pca`. An index that picked by glob order would not be deterministic.
+    ⚠ An alias↔alias collision is **not resolved here**: the first stem in alphabetical order wins
+    and `alias_collisions` reports it — choosing in silence would decide for the user which concept
+    a name denotes."""
+    if not CONCEPTS.exists():
+        return {}
+    stems = sorted(p_.stem for p_ in CONCEPTS.glob("*/*.md"))
+    idx: dict = {}
+    for nota in sorted(CONCEPTS.glob("*/*.md")):   # los alias primero: el stem los pisa después
+        try:
+            fm = split_fm(nota.read_text(encoding="utf-8")) or {}
+        except OSError:
+            continue
+        for alias in as_list(fm.get("aliases")):
+            idx.setdefault(method_key(alias), nota.stem)
+    for stem in stems:                       # el stem SIEMPRE gana
+        idx[method_key(stem)] = stem
+    return {k: v for k, v in idx.items() if k}
+
+
+def alias_collisions() -> list:
+    """`[(alias, [stems])]` — aliases claimed by more than one concept (#245).
+
+    The alias is reported with the SPELLING the note wrote, not its comparison key: the user has to
+    find it in a YAML, and `senal-comun` is not what is written there.
+
+    Reported, never resolved: which concept a name denotes is curation, and picking one in silence
+    is deciding for the user (regla de método 5)."""
+    if not CONCEPTS.exists():
+        return []
+    por_clave: dict = {}
+    for nota in sorted(CONCEPTS.glob("*/*.md")):
+        try:
+            fm = split_fm(nota.read_text(encoding="utf-8")) or {}
+        except OSError:
+            continue
+        for alias in as_list(fm.get("aliases")):
+            if (k := method_key(alias)):
+                por_clave.setdefault(k, []).append((nota.stem, str(alias).strip()))
+    return [(pares[0][1], [st for st, _ in pares])
+            for _k, pares in sorted(por_clave.items())
+            if len({st for st, _ in pares}) > 1]
+
+
+def method_target(nombre, index: dict | None = None) -> str | None:
+    """The concept note this method name denotes (stem), or `None` (#245)."""
+    idx = concept_alias_index() if index is None else index
+    return idx.get(method_key(nombre))
 
 
 def method_matches(concepto: str, nombres) -> bool:

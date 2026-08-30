@@ -52,6 +52,7 @@ benchmark, y el equivalente determinista del skill `verify-citations`.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -1002,3 +1003,134 @@ def match_rows_to_pairs(pairs: list, rows: list, umbral: float = 0.60) -> tuple:
         else:
             sin_fila.append(p)
     return asignado, sin_fila, [r for r in rows if id(r) not in usadas]
+
+
+# ── #259 · el SCHEMA de la salida del fan-out de `verify-citations` ─────────────────────────────
+#
+# QUÉ PROBLEMA CIERRA. El skill le dice al verificador **qué campos** devolver y nunca fijó **la
+# forma del archivo**. Medido al cerrar `hd_40307` (2026-08-29: 8 rondas, ~60 subagentes, el mismo
+# prompt salvo el bibcode): la clave de la lista llegó en **tres** formas —`pares` (la mayoría),
+# `veredictos` (ronda 1), `resultados` (2 archivos de la ronda 3)— y el identificador del par en
+# **dos** —`ancla` (la mayoría), `n` (5 archivos de la ronda 7)—. El consumidor falló **dos veces
+# con `KeyError`** antes de terminar en un lector tolerante
+# (`data.get('pares') or data.get('veredictos') or data.get('resultados') or []`).
+#
+# ⛔ Ese lector tolerante es la salida PROHIBIDA (política de «sin capa de retrocompatibilidad»):
+# el productor no se entera de nada y la forma sigue derivando. Y lo peor no es el `KeyError`, que
+# se ve: es que un consumidor menos paranoico lee **0 veredictos de un archivo que sí los tiene** y
+# sigue como si nada — un falso limpio en la capa que existe para no producir falsos limpios, sobre
+# el artefacto **más caro** de la cadena (un PDF leído por subagente).
+#
+# La salida es la red nº 2 de las ocho: si N productores prometen la misma forma, se declara **una
+# vez** y se valida, no se describe en prosa en N lugares. Acá los productores no son N módulos
+# versionados sino **N invocaciones de un LLM**, o sea la población donde menos se puede confiar en
+# que la forma se sostenga sola. Precedente del costo: `extraction_prompt.is_extraction` (INV-103)
+# existe porque «la salida de verify-citations también lleva bibcode», y un cosechador tolerante
+# pisó 13 notas terminadas en silencio — aquel arreglo endureció la identidad del OTRO producto en
+# vez de declarar la de éste.
+VERIF_FANOUT_SCHEMA = {
+    "top": ("bibcode", "pares"),
+    # `ancla` es el identificador del par —lo que permite volver a la fila—, `veredicto` el eje de
+    # respaldo y `evidencia` la cita textual con su página: sin las tres el archivo no dice nada
+    # utilizable, y por eso son obligatorias aunque el juez no haya encontrado respaldo (un
+    # `no-soportada` también exige cita, de lo que el paper sí dice).
+    "par": ("ancla", "veredicto", "evidencia"),
+    # Opcionales porque dependen del par: `condicion`/`cond_tipo` sólo si la fuente condiciona
+    # (#221), `completitud` sólo si el par sale de una transcripción (#198).
+    "par_opt": ("condicion", "cond_tipo", "completitud", "nota"),
+}
+
+#: Los veredictos que el FAN-OUT puede emitir, derivados de `VERDICTS`.
+#:
+#: ⚠ **DIVERGENCIA DECLARADA (#259).** `VERDICTS` tiene **cuatro** y la cabecera del bloque publica
+#: los cuatro, pero el prompt del skill ofrece **tres**: `no verificable por extracción` es
+#: propiedad de la FUENTE (#223, no hay PDF ni `.txt` que leer), así que hoy lo escribe quien arma
+#: la fila y el verificador **no tiene cómo producirlo**. El schema se deja consistente con lo que
+#: el código produce hoy —tres— y la divergencia queda declarada acá en vez de resolverse de
+#: costado: ofrecérselo al juez es una decisión sobre el contrato del fan-out, no un detalle de
+#: serialización.
+VERDICTS_FANOUT = tuple(v for v in VERDICTS if v not in VERDICTS_WITHOUT_SOURCE)
+
+#: Qué va en cada campo, para el fence que el skill pega en el prompt. Se declaran acá —y no en el
+#: `SKILL.md`— para que el prompt y el validador lean **la misma** constante.
+#:
+#: ⚠ **DIVERGENCIA DECLARADA (#259):** `nota` se le pide al verificador y **no tiene destino**: no
+#: hay columna en `VERIF_COLS` ni campo en `Row`, así que muere en `build/`. Se conserva como
+#: **opcional** —es lo que el prompt pide hoy, y es lo que el triage lee al resolver un
+#: `no-soportada`— pero el schema no puede afirmar que llegue al artefacto que viaja. Darle columna
+#: o dejar de pedirla es decisión del contrato del bloque, no de este módulo.
+_FANOUT_PLACEHOLDERS = {
+    "bibcode": "2020ApJ...900....1A",
+    "ancla": "<las 10 hex de la columna `Ancla` del par que se juzga>",
+    "veredicto": " | ".join(VERDICTS_FANOUT),
+    "evidencia": "«cita textual del PDF» (p. 7)",
+    "condicion": "<la condición que la nota no dice, citada con su página — o \"\">",
+    "cond_tipo": " | ".join(CONDITION_KINDS) + " | \"\"",
+    "completitud": "<filas/ítems de la tabla o lista de la fuente que la nota omite — o \"\">",
+    "nota": "<una línea de por qué; en `no-soportada`, qué dice el paper en cambio>",
+}
+
+
+def fanout_errors(data, *, entry: str) -> list[str]:
+    """Schema violations of one fan-out file (#259). `[]` means it complies; `entry` names it.
+
+    **Presence and shape, never the value** — same contract as `lib_config.missing_schema_fields`.
+    The closed vocabularies already have their own readers (`verdict_valido`, `condition_kind`) and
+    re-deciding them here would give a second, divergent verdict on the same cell.
+
+    ⛔ **An undeclared key is REPORTED, not whitelisted.** The measured defect arrives as exactly
+    that pair of findings: a file carrying `veredictos` instead of `pares` is *missing* a declared
+    key **and** *carrying* an extra one, and naming both is what tells the reader it was a rename
+    rather than an empty run. Any other extra is either a producer inventing a form —the thing this
+    schema exists to catch— or a schema that has to grow; both need a person, and neither is served
+    by swallowing it.
+
+    ⛔ **It does not degrade.** Every message names the file and the key, because the caller holds a
+    directory of ~60 files and «malformed output» does not say which one to re-run.
+    """
+    errors: list[str] = []
+    top = VERIF_FANOUT_SCHEMA["top"]
+    if not isinstance(data, dict):
+        return [f"{entry}: la raíz es {type(data).__name__} y no un objeto JSON con "
+                f"{list(top)}"]
+    errors += [f"{entry}: falta la clave `{k}` en la raíz" for k in top if k not in data]
+    errors += [f"{entry}: la clave `{k}` de la raíz está fuera del schema (declaradas: "
+               f"{list(top)})" for k in sorted(set(data) - set(top))]
+    if "pares" not in data:
+        return errors
+    pares = data["pares"]
+    if not isinstance(pares, list):
+        errors.append(f"{entry}: `pares` es {type(pares).__name__} y no una lista")
+        return errors
+    obligatorias = VERIF_FANOUT_SCHEMA["par"]
+    declaradas = set(obligatorias) | set(VERIF_FANOUT_SCHEMA["par_opt"])
+    for i, par in enumerate(pares, 1):
+        if not isinstance(par, dict):
+            errors.append(f"{entry}: `pares[{i}]` es {type(par).__name__} y no un objeto")
+            continue
+        errors += [f"{entry}: `pares[{i}]` no declara `{k}`" for k in obligatorias if k not in par]
+        errors += [f"{entry}: `pares[{i}]` trae `{k}`, fuera del schema (declaradas: "
+                   f"{sorted(declaradas)})" for k in sorted(set(par) - declaradas)]
+    return errors
+
+
+def verify_fanout_json_block() -> str:
+    """The literal ```json fence the skill pastes into the fan-out prompt, BUILT from the schema.
+
+    Prose describing a shape is precisely what #259 measured failing: the same prompt, minus the
+    bibcode, produced three different key names for the list. So the prompt and the validator read
+    **one** constant — a key added to `VERIF_FANOUT_SCHEMA` reaches the producer with no second
+    edit, and a key never shown to the producer cannot be demanded of it.
+
+    Raises `ValueError` for a schema key with no placeholder: printing a filler would ship a prompt
+    that asks for a field without saying what goes in it, which is the prose-shaped failure again.
+    """
+    s = VERIF_FANOUT_SCHEMA
+    # `pares` es la LISTA, no un valor: su contenido es el objeto `par` de abajo.
+    falta = [k for k in s["top"] + s["par"] + s["par_opt"]
+             if k != "pares" and k not in _FANOUT_PLACEHOLDERS]
+    if falta:
+        raise ValueError(f"claves del schema sin placeholder para el prompt: {falta}")
+    par = {k: _FANOUT_PLACEHOLDERS[k] for k in s["par"] + s["par_opt"]}
+    top = {k: [par] if k == "pares" else _FANOUT_PLACEHOLDERS[k] for k in s["top"]}
+    return "```json\n" + json.dumps(top, ensure_ascii=False, indent=2) + "\n```"
