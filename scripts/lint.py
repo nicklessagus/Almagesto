@@ -1220,7 +1220,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     radio_sin_link: list = []          # (stem, motivo) — #235: hub que nombra un radio sin wikilink
     cita_log: list = []                # (stem, motivo) — #238: cita del `log.md` que su fuente no dice
     cita_no_verbatim: list = []        # (stem, motivo) — #220: la cadena no está en el `.txt`
-    cita_opaca: list = []              # (stem, motivo) — #220: no evaluable (sin `.txt` / ocr / eprint)
+    cita_opaca: list = []              # (stem, motivo) — #220: no evaluable (sin `.txt` / ocr; #275)
     verificar_pdf: list = []           # (stem, motivo) — #225: marcada para chequear contra el PDF
     forma_rota: list = []              # (stem, motivo) — #227: fila de tabla que NO renderiza
     forma_sospechosa: list = []        # (stem, motivo) — #227: backtick abierto, párrafo duplicado
@@ -1293,6 +1293,45 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             except Exception:
                 _fm_cache[bib] = {}
         return _fm_cache[bib]
+
+    _src_cache: dict = {}
+    #: #275 · cuántas citas «…» se pudieron EVALUAR de verdad. La categoría declaraba su población
+    #: en notas, así que un `(0)` sobre población efectiva CERO —45 de 49 papers exentos— se leía
+    #: como «miré y está limpio». Se cuenta acá, donde el chequeo ocurre.
+    _n_citas_evaluadas = [0]
+
+    def _source_readings(txt_path) -> list:
+        """Normalized readings of a `.txt`, one per physical column, memoised (#275).
+
+        Memoised because the check runs per citing BLOCK: a note with 88 blocks citing 49 papers
+        would otherwise de-interleave and normalise the same file dozens of times."""
+        clave = str(txt_path)
+        if clave not in _src_cache:
+            _src_cache[clave] = cfg.source_texts(
+                txt_path.read_text(encoding="utf-8", errors="replace"))
+        return _src_cache[clave]
+
+    def _sources_for(bibs) -> tuple:
+        """`({bibcode: [texts]}, [(bibcode, reason)])` — the checkable sources and the ones that are not.
+
+        ⛔ The only exemptions are «no `.txt` on disk» and `fulltext_source: ocr`. `pdf_source:
+        eprint` was one until 1.110.x and covered 45 of 49 papers of a real star, leaving the check
+        with population **zero**: since #205 the `.txt` is derived from the very PDF the extractor
+        read, and #220 does not ask «does this value match the published one?» (where `eprint` IS a
+        caveat, and still is for `verify-citations`) but «is this string in the file that was
+        read?», which is just as decidable over a preprint."""
+        fuentes, opacas = {}, []
+        for b in bibs:
+            motivo = ("`fulltext_source: ocr`" if paper_fm(b).get("fulltext_source") == "ocr"
+                      else "")
+            txts = list(cfg.FULLTEXT.glob(f"*/{b}.txt")) if cfg.FULLTEXT.exists() else []
+            if not txts:
+                opacas.append((b, "sin `.txt` en disco"))
+            elif motivo:
+                opacas.append((b, motivo))
+            else:
+                fuentes[b] = _source_readings(txts[0])
+        return fuentes, opacas
 
     todos_fm: dict = {}                # {stem: frontmatter} de TODA nota — lo llena el loop, y lo
     #                                    consume `index_tables` para no re-parsear la bóveda (#237)
@@ -1545,10 +1584,9 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                     _txts = list(cfg.FULLTEXT.glob(f"*/{_bib}.txt")) if cfg.FULLTEXT.exists() else []
                     if not _txts:
                         continue
-                    _src = cfg.normalize_source_text(
-                        _txts[0].read_text(encoding="utf-8", errors="replace"))
+                    _srcs = _source_readings(_txts[0])
                     for _c in cfg.quotes_in(_b.text):
-                        if not cfg.quote_found(_c, _src):
+                        if not any(cfg.quote_found(_c, _s) for _s in _srcs):
                             cita_log.append(
                                 (stem, f"L{_b.first_line}: la bitácora entrecomilla «"
                                        f"{_c[:70]}{'…' if len(_c) > 70 else ''}» y esa cadena no "
@@ -1565,22 +1603,10 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 _citas = cfg.quotes_in(_btxt)
                 if not _citas:
                     continue
-                _fuentes, _opacas = {}, []
-                for _b in _bibs:
-                    _fm_b = paper_fm(_b)
-                    _motivo = ("`fulltext_source: ocr`" if _fm_b.get("fulltext_source") == "ocr"
-                               else "`pdf_source: eprint`" if _fm_b.get("pdf_source") == "eprint"
-                               else "")
-                    _txts = list(cfg.FULLTEXT.glob(f"*/{_b}.txt")) if cfg.FULLTEXT.exists() else []
-                    if not _txts:
-                        _opacas.append((_b, "sin `.txt` en disco"))
-                    elif _motivo:
-                        _opacas.append((_b, _motivo))
-                    else:
-                        _fuentes[_b] = cfg.normalize_source_text(
-                            _txts[0].read_text(encoding="utf-8", errors="replace"))
+                _fuentes, _opacas = _sources_for(_bibs)
                 for _c in _citas:
-                    if any(cfg.quote_found(_c, _t) for _t in _fuentes.values()):
+                    _n_citas_evaluadas[0] += 1 if _fuentes else 0
+                    if any(cfg.quote_found(_c, _t) for _ts in _fuentes.values() for _t in _ts):
                         continue
                     _corte = _c if len(_c) <= 70 else _c[:70] + "…"
                     if _fuentes:
@@ -3547,8 +3573,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('indice_viejo', '🗂 `index.md` desactualizado contra la verdad de disco (#237, backlog)', SEV_BACKLOG, tuple(indice_viejo), poblacion='notas'),
         Categoria('radio_sin_link', '🛞 Hub que nombra un radio sin `[[wikilink]]`: el radio no entra al grafo (#235, backlog)', SEV_BACKLOG, tuple(radio_sin_link), poblacion='entidades'),
         Categoria('cita_log', '❝ Cita de `log.md` que su fuente no dice: la bitácora es append-only, se MARCA (#238, backlog)', SEV_BACKLOG, tuple(cita_log), poblacion='notas'),
-        Categoria('cita_no_verbatim', '❝ Cita textual que no está en su fuente: no es verbatim, o es de otra (#220, backlog)', SEV_BACKLOG, tuple(cita_no_verbatim), poblacion='notas'),
-        Categoria('cita_opaca', '❝ Cita textual NO EVALUABLE: sin `.txt`, OCR o eprint (#220, se declara, no cuenta en contra)', SEV_BACKLOG, tuple(cita_opaca), poblacion='notas'),
+        Categoria('cita_no_verbatim', '❝ Cita textual que no está en su fuente: no es verbatim, o es de otra (#220, backlog)', SEV_BACKLOG, tuple(cita_no_verbatim), poblacion='citas'),
+        Categoria('cita_opaca', '❝ Cita textual NO EVALUABLE: sin `.txt` o con OCR (#220, se declara, no cuenta en contra)', SEV_BACKLOG, tuple(cita_opaca), poblacion='citas'),
         Categoria('verificar_pdf', '🔎 Marcada para chequear contra el PDF: una auditoría no pudo cerrarla (#225, backlog)', SEV_BACKLOG, tuple(verificar_pdf), poblacion='notas'),
         Categoria('forma_rota', '⛔ Forma del artefacto: fila de tabla que NO renderiza (contenido invisible para el lector)', SEV_BLOQUEANTE, tuple(forma_rota), poblacion='notas'),
         Categoria('forma_sospechosa', '⚠ Forma del artefacto: marcador sin cerrar o párrafo duplicado (backlog)', SEV_BACKLOG, tuple(forma_sospechosa), poblacion='notas'),
@@ -3623,6 +3649,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         "ground_truth": (len(vistos_gt), "ground-truth de `raw/ground_truth/`"),
         "registros": (len(list(cfg.REGISTRO.glob("*.yaml"))) if cfg.REGISTRO.exists() else 0,
                       "registros de sujeto"),
+        "citas": (_n_citas_evaluadas[0], "citas «…» de ≥40 caracteres con fuente chequeable"),
         "temas": (0 if cfg.themes_error() else len(cfg.load_themes() or {}), "temas de `themes.yaml`"),
         "estrellas": (len(stars_slugs), "estrellas de `stars.yaml`"),
         # Los chequeos de config miran UN archivo cada uno (el objetivo, el `.obsidian/` de la

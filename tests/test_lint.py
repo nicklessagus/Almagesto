@@ -5070,10 +5070,10 @@ def test_una_de_las_dos_fuentes_alcanza(toy_vault, capsys):
     assert "nota" not in _seccion(rep, "no está en su fuente"), rep
 
 
-def test_ocr_y_eprint_se_declaran_no_evaluables(toy_vault, capsys):
+def test_ocr_se_declara_no_evaluable(toy_vault, capsys):
     """#220, el tercer estado — con `fulltext_source: ocr` el fallo es esperable (el OCR erra
-    símbolos) y con `eprint` la fuente no dice lo mismo que el publicado. Se DECLARA, en su propia
-    categoría, en vez de contarse en contra: es la doctrina D-43 dentro del detector."""
+    símbolos). Se DECLARA, en su propia categoría, en vez de contarse en contra: es la doctrina D-43
+    dentro del detector. ⚠ `eprint` salió de la exención en #275, y tiene su propio test."""
     _paper_con_txt("2023A&A...675A.187O", "texto ocreado que no matchea nada de la nota\n",
                    {"fulltext_source": "ocr"})
     mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
@@ -5083,6 +5083,68 @@ def test_ocr_y_eprint_se_declaran_no_evaluables(toy_vault, capsys):
     _rc, rep = run_lint_reporte(capsys)
     assert "nota" not in _seccion(rep, "no está en su fuente"), rep
     assert "nota" in _seccion(rep, "NO EVALUABLE"), rep
+
+
+def test_eprint_ya_no_exime_del_chequeo_de_cita(toy_vault, capsys):
+    """#275 — la exención por `pdf_source: eprint` cubría **45 de 49** papers de una ficha real y
+    dejaba el chequeo con población CERO: 66 citas, 0 evaluadas, y un `(0)` que se lee verde.
+
+    Desde #205 el `.txt` se deriva del MISMO PDF eprint que el extractor abrió, y #220 no pregunta
+    «¿este valor coincide con el publicado?» —ahí `eprint` sí es salvedad, y sigue rigiendo para
+    `verify-citations`— sino «¿esta cadena está en el archivo que se leyó?», que es igual de
+    decidible sobre un preprint."""
+    _paper_con_txt("2023A&A...675A.187O", "el preprint dice otra cosa completamente distinta\n",
+                   {"pdf_source": "eprint"})
+    mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
+            "# nota\n\nDice «a phrase long enough to be worth checking against the source file» "
+            "([[2023A&A...675A.187O]]).\n")
+    link_from_log(toy_vault, "nota", "2023A&A...675A.187O")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "nota" in _seccion(rep, "no está en su fuente"), rep
+    assert "nota" not in _seccion(rep, "NO EVALUABLE"), rep
+
+
+def test_cita_de_un_txt_a_dos_columnas_no_es_hallazgo(toy_vault, capsys):
+    """#275 — en un `.txt` de `pdftotext -layout` cada línea física lleva la columna 1, la canaleta
+    y la columna 2, así que el texto plano **interleava** y ninguna cita de más de una línea se
+    encuentra. Se busca por columna (`cfg.source_texts`)."""
+    _paper_con_txt("2023A&A...675A.187O",
+                   "the temporal variance of the residual ACF is        The Whittle approximation\n"
+                   "between 2.5 and 4.5 orders of magnitude            applies only in the case of\n")
+    mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
+            "# nota\n\nDice «the temporal variance of the residual ACF is between 2.5 and 4.5 "
+            "orders of magnitude» ([[2023A&A...675A.187O]]).\n")
+    link_from_log(toy_vault, "nota", "2023A&A...675A.187O")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "nota" not in _seccion(rep, "no está en su fuente"), rep
+
+
+def test_el_empalme_por_la_canaleta_NO_pasa_como_verbatim(toy_vault, capsys):
+    """La dirección peligrosa de #275, pineada desde #46: la frase que cruza la canaleta —fin de la
+    columna 1 + arranque de la columna 2— **no la escribió nadie**. Buscar también en el texto plano
+    «por las dudas» la haría pasar como verbatim."""
+    _paper_con_txt("2023A&A...675A.187O",
+                   "the temporal variance of the residual ACF is        The Whittle approximation\n"
+                   "between 2.5 and 4.5 orders of magnitude            applies only in the case of\n")
+    mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
+            "# nota\n\nDice «the residual ACF is The Whittle approximation applies only» "
+            "([[2023A&A...675A.187O]]).\n")
+    link_from_log(toy_vault, "nota", "2023A&A...675A.187O")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "nota" in _seccion(rep, "no está en su fuente"), rep
+
+
+def test_la_poblacion_del_chequeo_de_citas_son_las_citas(toy_vault, capsys):
+    """INV-40 dentro de #275: la categoría declaraba «sobre N notas», así que un cero sobre
+    población efectiva CERO se leía como veredicto. La población son las citas evaluables."""
+    _paper_con_txt("2023A&A...675A.187O", "a phrase long enough to be worth checking against the "
+                                          "source file\n")
+    mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
+            "# nota\n\nDice «a phrase long enough to be worth checking against the source file» "
+            "([[2023A&A...675A.187O]]).\n")
+    link_from_log(toy_vault, "nota", "2023A&A...675A.187O")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "sobre 1 citas «…»" in rep, rep
 
 
 def _con_evidencia(toy_vault, celda: str) -> None:

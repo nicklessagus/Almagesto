@@ -1704,3 +1704,69 @@ def test_headings_glued_to_table_no_mira_atras_de_la_primera_linea():
     """El `##` en la línea 0 no tiene línea previa: sin la guarda, `lines[-1]` mira **el final del
     archivo** y puede reportar un hallazgo inventado sobre una nota que arranca con un encabezado."""
     assert cfg.headings_glued_to_table("## Papers\n\ntexto\n\n| a |\n|---|\n| b |") == []
+
+
+# ── #275 · el comparador de citas: guión de corte y de-entrelazado por canaleta ──────────────────
+
+def test_el_guion_de_corte_no_rompe_una_cita_con_guion_real():
+    """#275 — la fuente trae `p-\\nmode` (guión de corte de `pdftotext`) y la nota cita `p-mode`.
+
+    Sin borrar el guión de los DOS lados, la fuente queda `pmode` y la cita `p-mode`: toda cita con
+    un guión real fallaba contra una fuente donde ese guión cayó en un fin de línea."""
+    src = cfg.normalize_source_text("not related to the onset of p-\nmode oscillations.")
+    assert cfg.quote_found("not related to the onset of p-mode oscillations", src)
+
+
+def test_de_hifenado_sigue_uniendo_la_palabra_partida():
+    """⛔ El ORDEN de las dos operaciones: si el `-` se borra ANTES del join, `inde-\\npendent` da
+    `inde pendent` y el defecto se invierte."""
+    src = cfg.normalize_source_text("inde-\npendent component analysis of the data")
+    assert cfg.quote_found("independent component analysis of the data", src)
+
+
+_DOS_COLUMNAS = "\n".join([
+    "We validated the fidelity of the shift by computing              The Whittle approximation applies only in the",
+    "heliocentric velocities. We find that the temporal               case of noise-free models. In this work, by",
+    "variance of the residual ACF is between 2.5 and 4.5              contrast, we take additive noise into account",
+])
+# vive entera en la columna 1, partida en tres líneas físicas
+_CITA_COL1 = "the temporal variance of the residual ACF is between 2.5 and 4.5"
+# frase que el paper NUNCA escribió: cruza la canaleta (fin col.1 + arranque col.2)
+_EMPALME = "between 2.5 and 4.5 contrast, we take additive noise"
+
+
+def test_deinterleave_columns_separa_las_dos_columnas():
+    """`pdftotext -layout` conserva la página física: cada línea lleva col.1, la canaleta y col.2."""
+    cols = cfg.deinterleave_columns(_DOS_COLUMNAS)
+    assert len(cols) == 2
+    assert "The Whittle" not in cols[0] and "The Whittle" in cols[1]
+
+
+def test_deinterleave_de_una_columna_devuelve_un_solo_stream():
+    """Un `.txt` de una columna da exactamente un stream: el llamador no ramifica por maqueta —que
+    es el punto, porque si el PDF es a dos columnas no lo declara nadie."""
+    assert cfg.deinterleave_columns("una linea sin canaleta\notra linea igual") == \
+        ["una linea sin canaleta\notra linea igual"]
+
+
+def test_source_texts_encuentra_la_cita_partida_en_tres_lineas_de_la_columna_1():
+    """El texto plano **interleava** las dos columnas, así que ninguna cita de más de una línea
+    física se encuentra. Buscando por columna, sí."""
+    assert any(cfg.quote_found(_CITA_COL1, s) for s in cfg.source_texts(_DOS_COLUMNAS))
+    assert not cfg.quote_found(_CITA_COL1, cfg.normalize_source_text(_DOS_COLUMNAS)), \
+        "si el texto plano ya la encontrara, este test no probaría nada"
+
+
+def test_source_texts_NO_valida_el_empalme_por_la_canaleta():
+    """⛔ La dirección peligrosa (pineada desde #46): el texto plano contiene el empalme
+    columna1→columna2, o sea una frase que no escribió nadie. Buscar ahí «por las dudas» la haría
+    pasar como verbatim."""
+    assert not any(cfg.quote_found(_EMPALME, s) for s in cfg.source_texts(_DOS_COLUMNAS))
+
+
+def test_paridad_de_la_canaleta_entre_lib_config_y_measure_layout():
+    """Regla de método 2: el que MIDE la maqueta y el que PARTE por ella comparten la definición, o
+    divergen sin que nadie se entere."""
+    import measure_layout as ml
+    assert ml.CANALETA_MIN is cfg.CANALETA_MIN
+    assert ml.GUTTER is cfg.GUTTER

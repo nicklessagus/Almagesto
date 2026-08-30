@@ -36,7 +36,8 @@ inversa. Verificar contra eso devuelve **`no-soportada` sobre afirmaciones corre
 
 > ⛔ **La cita textual la chequea un script ANTES que vos (#220).** `python scripts/lint.py` marca
 > como backlog cada `«…»` de ≥ 40 caracteres que no aparezca en el `.txt` de ninguna de las fuentes
-> que cita su bloque, y **declara aparte** las no evaluables (sin `.txt`, OCR, eprint). Corrélo
+> que cita su bloque, y **declara aparte** las no evaluables (sin `.txt` o con OCR; `eprint` dejó
+> de eximir en #275 — el `.txt` sale del mismo PDF que se leyó). Corrélo
 > antes del fan-out: es gratis y contesta —en milisegundos, sin abrir un PDF— la mitad decidible de
 > lo que después pagás con un subagente por fuente. ⚠ No reemplaza al fan-out: dice *«esta cadena no
 > está en ese archivo»*, no *«la fuente no respalda esto»*, y **la página no la chequea** (el `.txt`

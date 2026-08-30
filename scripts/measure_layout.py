@@ -24,14 +24,13 @@ import re
 import sys
 from collections import Counter
 
-from lib_config import RAW, ROOT, print_seguro, stdout_tolerante
+from lib_config import CANALETA_MIN, GUTTER, RAW, ROOT, print_seguro, stdout_tolerante
 
 # Una línea "útil" tiene suficiente texto como para que la maqueta se note.
 MIN_LINEA = 40
-# Canaleta: dos no-espacios separados por un hueco largo DENTRO de la línea. El mínimo de espacios
-# es la definición compartida (la importa tests/test_multicolumn_matching.py — single source, #46).
-CANALETA_MIN = 8
-GUTTER = re.compile(rf"\S {{{CANALETA_MIN},}}\S")
+# Canaleta: dos no-espacios separados por un hueco largo DENTRO de la línea. La definición vive en
+# `lib_config` desde #275 —ahí la usa `deinterleave_columns` para PARTIR por ella— y acá se la
+# **detecta**: una sola fuente, o el que mide y el que parte divergen (single source, #46).
 # Corte de palabra por guión al final de línea.
 HYPHEN = re.compile(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]-$")
 # Un archivo se considera multi-columna si esta fracción de sus líneas útiles tiene canaleta.

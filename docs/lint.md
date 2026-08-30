@@ -161,9 +161,17 @@ OCR, o marcar `pending`).
   producible — una nota puede publicar dos de las tres fechas obligatorias y pasar el gate.
 - **Cita textual entre comillas que ninguna fuente del bloque contiene** (#220): «esta cadena está
   en este `.txt`» es un `grep`, no un LLM. Tres estados: está → nada; no está en ninguna → hallazgo
-  (no-verbatim o de otra fuente, se distingue a mano); **no evaluable** (sin `.txt`,
-  `fulltext_source: ocr`, `pdf_source: eprint`) → categoría propia, porque contarlo en contra sería
-  inventar deuda. Sólo cuenta si **ninguna** fuente del bloque la tiene; la cita elidida
+  (no-verbatim o de otra fuente, se distingue a mano); **no evaluable** (sin `.txt` o
+  `fulltext_source: ocr`) → categoría propia, porque contarlo en contra sería inventar deuda.
+  ⛔ `pdf_source: eprint` **salió de la exención en #275**: cubría 45 de 49 papers de una ficha real
+  y dejaba el chequeo con población **cero** (66 citas, 0 evaluadas), o sea un `(0)` que se lee
+  verde. Desde #205 el `.txt` se deriva del mismo PDF eprint que el extractor abrió, y este chequeo
+  no pregunta si el valor coincide con el publicado —ahí `eprint` sigue siendo salvedad, para
+  `verify-citations`— sino si la cadena está en el archivo que se leyó. Y el comparador resuelve
+  dos mañas del formato que producían falsos positivos en masa: el **guión de corte** (se borra de
+  los dos lados) y el **de-entrelazado por canaleta** de un `.txt` a dos columnas — se busca por
+  columna, nunca en el texto plano, porque ahí vive el empalme col.1→col.2 que nadie escribió (#46).
+  La población declarada son **las citas evaluables**, no las notas. Sólo cuenta si **ninguna** fuente del bloque la tiene; la cita elidida
   (`«A … B»`) se chequea por fragmentos; la **página** no se puede chequear así y se dice (media red
   declarada vale más que ninguna). Existe porque el eje *¿la fuente dice esto?* es **ortogonal** a
   *¿la cita es verbatim?*: seis citas no-verbatim volvieron `soportada`, correctamente.

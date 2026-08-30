@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.110.0"
+ALMAGESTO_VERSION = "1.111.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -550,6 +550,12 @@ def normalize_quote(s: str) -> str:
     s = _QUOTE_MARKUP_RE.sub("", s)
     for a, b in _QUOTE_SUBS:
         s = s.replace(a, b)
+    # #275 — el guión se borra de los DOS lados. `normalize_source_text` ya unió el corte de línea
+    # (`inde-\npendent` → `independent`), así que el `-` que queda es el de `p-mode`, que el `.txt`
+    # puede traer partido (`p-\nmode` → `pmode`) o entero. Sin esto, toda cita con un guión real
+    # fallaba contra una fuente donde ese guión cayó en un fin de línea. ⛔ El orden importa: borrar
+    # el `-` ANTES del join daría `p mode` y el defecto se invierte.
+    s = s.replace("-", "")
     return re.sub(r"\s+", " ", s).strip().lower()
 
 
@@ -573,6 +579,50 @@ def quote_fragments(quote: str) -> list[str]:
 def quotes_in(text: str) -> list[str]:
     """The «…» quotes of a block that are long enough to be worth checking (`QUOTE_MIN`)."""
     return [q.strip() for q in _QUOTE_RE.findall(text) if len(q.strip()) >= QUOTE_MIN]
+
+
+#: #46/#275 · la canaleta: el hueco de espacios que separa dos columnas en un `.txt` de
+#: `pdftotext -layout`. Se DEFINE una vez acá; `measure_layout` la **detecta** (con `\S…\S`, que
+#: exige contenido a los lados) y `deinterleave_columns` **parte** por ella. Lo que no puede pasar
+#: es que difieran en qué cuenta como canaleta — lo fija un test de paridad (regla de método 2).
+CANALETA_MIN = 8
+GUTTER = re.compile(rf"\S {{{CANALETA_MIN},}}\S")
+_GUTTER_SPLIT = re.compile(rf" {{{CANALETA_MIN},}}")
+
+
+def deinterleave_columns(t: str) -> list:
+    """The physical COLUMNS of a `pdftotext -layout` `.txt`, one string per column index (#275).
+
+    `-layout` keeps the physical page: in a two-column paper every line carries column 1, a run of
+    spaces (the gutter) and column 2, so the flat text **interleaves** them and no quote longer than
+    one physical line can be found. Segment `i` of every line feeds stream `i`, joined with `\n` so
+    the end-of-line hyphen still joins inside its own column. A single-column file yields exactly
+    one stream, identical to the flat text.
+
+    ⛔ The flat text is NOT searched as a fallback: it contains the column-1→column-2 splice, so a
+    quote nobody ever wrote would pass as verbatim (pinned since #46)."""
+    columnas: list = []
+    for linea in str(t or "").split("\n"):
+        for i, seg in enumerate(_GUTTER_SPLIT.split(linea)):
+            while len(columnas) <= i:
+                columnas.append([])
+            columnas[i].append(seg.rstrip())
+    return ["\n".join(c) for c in columnas]
+
+
+def source_texts(raw: str) -> list:
+    """Every normalized reading of a `.txt` a quote may legitimately live in (#275).
+
+    One per physical column, deduplicated. A single-column source gives exactly one, so the caller
+    does not branch on layout — which is the point: whether the `.txt` is interleaved is a property
+    of the PDF nobody declared anywhere."""
+    vistos, out = set(), []
+    for col in deinterleave_columns(raw):
+        norm = normalize_source_text(col)
+        if norm and norm not in vistos:
+            vistos.add(norm)
+            out.append(norm)
+    return out
 
 
 def quote_found(quote: str, source_norm: str) -> bool:
