@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.122.1"
+ALMAGESTO_VERSION = "1.123.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -2041,7 +2041,17 @@ def load_vistas(meta: dict, *, entry: str = "?") -> list:
             raise VistasError(_vistas_error(
                 entry, [sujeto],
                 f"`fuente: {fuente}` no está en el vocabulario ({' | '.join(VISTA_FUENTES)})"))
+        # #239 — `enfasis` OPCIONAL: la segunda lectura del mismo sujeto con otra lente. Sin él,
+        # `vistas[]` se indexa por sujeto a secas y la segunda lectura no tiene dónde ir — peor, el
+        # cosechador PISABA la anterior en silencio. Ausente = la lectura por default del sujeto.
+        enfasis = str(x.get("enfasis") or "").strip()
         nueva = dict(x, sujeto=sujeto, tipo=tipo)
+        if enfasis:
+            nueva["enfasis"] = enfasis
+        elif "enfasis" in nueva:
+            # presente y vacío es «no consta», no una lente distinta: se saca para que la CLAVE de
+            # las dos formas coincida y no convivan dos entradas que son la misma lectura.
+            nueva.pop("enfasis")
         if "lente" in nueva:
             # NOT `as_list`: that one drops a scalar to `[]`, and a `lente: rv` written by hand
             # would vanish in silence — the informational field would then read as "no lens
@@ -2050,6 +2060,16 @@ def load_vistas(meta: dict, *, entry: str = "?") -> list:
             nueva["lente"] = lente if isinstance(lente, list) else ([] if lente in (None, "") else [lente])
         out.append(nueva)
     return out
+
+
+def vista_key(vista: dict) -> tuple:
+    """The identity of a view: `(sujeto, enfasis)` (#239).
+
+    A paper read twice for the same subject **with a different lens** is two readings, not one: the
+    second used to have nowhere to go, and the harvester overwrote the first in silence. The
+    emphasis defaults to `""`, so a view without one keeps the identity it always had."""
+    return (str((vista or {}).get("sujeto") or "").strip(),
+            str((vista or {}).get("enfasis") or "").strip())
 
 
 def load_no_vista(meta: dict, *, entry: str = "?") -> list:

@@ -466,6 +466,10 @@ como lo nombra el paper — eso es una respuesta legítima, no un error.
 {metodos_conocidos}
 
 ## Salida
+⚠ **Si te pidieron RE-leer este paper con otra lente** (#239), agregá `"enfasis": "<nombre de la
+lente>"` dentro de `vista`: la lectura anterior **no se pisa**, las dos conviven como sub-secciones
+de la misma `## Vista`. Sin ese pedido, no lo pongas.
+
 Escribí el resultado en `{out}` y devolvé el mismo JSON en **un solo bloque** ```json:
 
 {{"bibcode":"{bibcode}","vista":{{"sujeto":"{sujeto}","tipo":"{tipo}","txt":"{slug}","fuente":"pdf"}},

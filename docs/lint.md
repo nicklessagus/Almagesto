@@ -211,6 +211,13 @@ OCR, o marcar `pending`).
   en una bóveda real: cierra 7 de 121. Chico, y del tipo correcto: lo que vacía ese backlog es que
   el **extractor vea la lista** antes de inventar una grafía, que es la otra mitad del arreglo (el
   prompt ahora la pega, con tope declarado y sin cerrar el vocabulario).
+- **Markup crudo de catálogo en `## Abstract`** (#271): ADS devuelve `<SUB>`, `<ASTROBJ>`,
+  `<A href>`, `<P />` y eso **es HTML válido** para cualquier renderer — medido, 249 ocurrencias en
+  42 notas. `<ASTROBJ>HD 40307</ASTROBJ>` deja el nombre del objeto **invisible**, `<A href>` vuelve
+  un link vivo una copia que se promete verbatim, y el resultado **depende del parser**. La limpieza
+  corre en los tres backends al ingestar; lo ya publicado se cierra con
+  `python scripts/make_notes.py --clean-catalog-markup`. ⚠ Ese backfill cambia bytes que leen el
+  detector de duplicados (#216) y el diff de lente offline (D-49): re-medirlos después.
 - **Indicador de actividad esperado sin nota de concepto** (#250, backlog): era el **único**
   campo-lista de `stars/` sin destino chequeado ni link —`thesis_links` bloquea, `methods` es
   backlog, y éste no tenía ninguno de los dos—, así que la ficha nombra cinco indicadores y el

@@ -251,7 +251,10 @@ extracción.
 
 `## Papers`, `## Planetas` y `## Métodos aplicados a esta estrella` los regenera
 `python scripts/make_notes.py <slug>` (idempotente, cirugía: no toca la prosa); el lint reporta como
-backlog la tabla desactualizada **nombrando los stems**. `## Papers` es una tabla materializada
+backlog la tabla desactualizada **nombrando los stems**. `## Métodos aplicados a esta estrella` lleva **una fila por MÉTODO** (agrupado por clave
+normalizada, con las variantes al lado) y colapsa la cola en un `<details>` que **declara cuántos
+quedan adentro** (#273: por par eran 369 filas sobre 291 métodos, el 30 % de una ficha real).
+`## Papers` es una tabla materializada
 —`Bibcode | Año | Relevancia | Origen | Estado`— cuyo encabezado lleva **los dos números** (universo
 · sintetizados en esta ficha): el defecto que evita es prometer 155 arriba de una síntesis de 8. El
 **estado** dice cuán lejos llegó cada paper: `fuera del filtro` → `sin extraer` → `extraído, no
@@ -395,6 +398,13 @@ deja el `refuta` en la vista e imprime el `--drop-core` con su motivo listo para
 borrar el reclamo sería un LLM editando curación en silencio y porque la decisión es del **par
 (paper, sujeto)** — el paper puede ser core de otro. El lint lo reporta como **backlog**. El
 add-only **no se afloja**.
+
+⛔ **Una SEGUNDA lectura del mismo sujeto con otra lente CONVIVE: `enfasis` (#239).** La identidad
+de una vista es el par `(sujeto, enfasis)` y su sección es `### Lente — <énfasis>` **dentro** de la
+`## Vista` del sujeto —partir el encabezado no serviría: `section_start` recorta el sufijo que
+arranca con puntuación (AUD-178) y las dos colapsarían—. El cosechador **rehúsa** cambiar un valor
+ya escrito bajo la misma clave (hasta 1.122.x lo pisaba en silencio): completa lo que falta, o
+manda declarar la lente.
 
 ⛔ **`vistas[]` la escribe SÓLO la lectura, nunca el retro-link.** Es lo que mantiene a
 `stars`/`thesis_links`/`methods` como **reclamos** (`make_notes` los mergea add-only sin leer nada)

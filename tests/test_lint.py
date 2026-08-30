@@ -5951,3 +5951,26 @@ def test_el_indicador_llega_por_alias(toy_vault, capsys):
     link_from_log(toy_vault, "activity-rv-indicators")
     _rc, rep = run_lint_reporte(capsys)
     assert "S-index" not in _seccion(rep, "Indicador de actividad"), rep
+
+
+def test_la_lente_declarada_sin_su_sub_seccion_bloquea(toy_vault, capsys):
+    """#239 — el chequeo de coherencia de #188, un nivel abajo: la lente es lo que distingue dos
+    lecturas del mismo sujeto, así que sin él la segunda vuelve a ser invisible."""
+    mk_note(cfg.PAPERS, "2020aaa...1..1A",
+            {"tags": ["paper"], "bibcode": "2020aaa...1..1A", "stars": ["Estrella Test"],
+             "vistas": [{"sujeto": "Estrella Test", "tipo": "star", "enfasis": "ruido"}]},
+            "# p\n\n## Vista — Estrella Test\n\ntexto\n")
+    link_from_log(toy_vault, "2020aaa...1..1A")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc != 0 and "ruido" in _seccion(rep, "vista declarada sin su sección"), rep
+
+
+def test_la_sub_seccion_de_lente_sin_declarar_tambien_bloquea(toy_vault, capsys):
+    """El otro sentido: una lectura escrita en el cuerpo que `vistas[]` no declara."""
+    mk_note(cfg.PAPERS, "2020aaa...1..1A",
+            {"tags": ["paper"], "bibcode": "2020aaa...1..1A", "stars": ["Estrella Test"],
+             "vistas": [{"sujeto": "Estrella Test", "tipo": "star"}]},
+            "# p\n\n## Vista — Estrella Test\n\ntexto\n\n### Lente — ruido\n\notra lectura\n")
+    link_from_log(toy_vault, "2020aaa...1..1A")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc != 0 and "ruido" in _seccion(rep, "vista declarada sin su sección"), rep

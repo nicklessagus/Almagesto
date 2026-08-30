@@ -471,6 +471,8 @@ INVENTARIO_HEADER = "## Inventario por eje"
 # real, que es la peor moneda de un gate bloqueante.
 EXTRACCION_VIEJA_RE = re.compile(r"^##\s+Extracci[oó]n\s*\(LLM\)\s*$", re.M)
 VISTA_RE = re.compile(r"^##\s+Vista\s*[—–-]\s*(.+?)\s*$", re.M)
+#: #239 · la sub-sección de una lente dentro de una vista.
+_LENTE_RE = re.compile(r"^###\s+Lente\s*[—–-]\s*(.+?)\s*$", re.M)
 
 
 def vistas_en_cuerpo(text: str) -> set:
@@ -2218,6 +2220,21 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                             (stem, f"la vista de «{_v['sujeto']}» declara la lente "
                                    f"`{', '.join(_lente)}` y no contesta `{', '.join(_faltan)}`: el "
                                    f"silencio sobre un eje se lee como «se miró y no hay nada»"))
+                # #239 — la coherencia de las SUB-secciones por lente, en los dos sentidos: una
+                # lente declarada sin su `### Lente — …` y una sub-sección sin declarar. Es el mismo
+                # chequeo de #188 un nivel abajo, y hace falta porque la lente es lo que distingue
+                # dos lecturas del mismo sujeto: sin él, la segunda vuelve a ser invisible.
+                _lentes_cuerpo = {m.group(1).strip() for m in _LENTE_RE.finditer(text)}
+                _lentes_decl = {str(v.get("enfasis") or "").strip() for v in vistas
+                                if str(v.get("enfasis") or "").strip()}
+                for _falta in sorted(_lentes_decl - _lentes_cuerpo):
+                    vistas_vs_cuerpo.append(
+                        (stem, f"declara la lente «{_falta}» en `vistas[]` y el cuerpo no tiene su "
+                               f"`### Lente — {_falta}`"))
+                for _sobra in sorted(_lentes_cuerpo - _lentes_decl):
+                    vistas_vs_cuerpo.append(
+                        (stem, f"tiene `### Lente — {_sobra}` en el cuerpo y ninguna entrada de "
+                               f"`vistas[]` la declara"))
                 secciones = vistas_en_cuerpo(text)
                 declaradas = {v["sujeto"] for v in vistas}
                 #  @inv INV-134

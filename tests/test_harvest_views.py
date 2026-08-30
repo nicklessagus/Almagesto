@@ -710,3 +710,70 @@ def test_el_eje_contestado_vacio_se_estampa_igual(tmp_path):
     md = hv.render_view("tau Cet", {"ejes": {"rv": "una medición", "ml": ""}})
     assert "- **ml:** " + hv.SIN_DATOS in md
     assert "- **rv:** una medición" in md
+
+
+# ── #239 · dos lecturas del mismo sujeto con lentes distintas CONVIVEN ──────────────────────────
+
+def _nota_con_vista(tmp_path, vistas):
+    import yaml
+    dest = tmp_path / "p.md"
+    fm = yaml.safe_dump({"bibcode": "2020a", "tags": ["paper"], "vistas": vistas},
+                        sort_keys=False, allow_unicode=True)
+    dest.write_text(f"---\n{fm}---\n# p\n\n## Vista — tau Cet\n\ntexto viejo\n", encoding="utf-8")
+    return dest
+
+
+def test_una_segunda_lente_NO_pisa_la_vista_anterior(tmp_path):
+    """#239 — la identidad de una vista es `(sujeto, enfasis)`. Con la clave vieja (el sujeto a
+    secas), una segunda lectura del mismo sujeto con otra lente entraba por la misma rama y
+    `{**v, **vista}` **pisaba la anterior en silencio**: no es que no estuviera soportada, es que
+    era destructiva."""
+    dest = _nota_con_vista(tmp_path, [{"sujeto": "tau Cet", "tipo": "star", "fecha": "2026-01-01"}])
+    assert hv.upsert_view(dest, {"sujeto": "tau Cet", "tipo": "star", "fecha": "2026-08-30",
+                                 "enfasis": "ruido"}) is True
+    vistas = cfg.split_fm(dest.read_text(encoding="utf-8"))["vistas"]
+    assert len(vistas) == 2, vistas
+    assert {v.get("enfasis", "") for v in vistas} == {"", "ruido"}
+    assert [v for v in vistas if not v.get("enfasis")][0]["fecha"] == "2026-01-01", \
+        "la lectura anterior conserva su fecha"
+
+
+def test_la_misma_clave_no_cambia_un_valor_ya_escrito(tmp_path):
+    """Y aun con la MISMA clave el merge es add-only: un valor distinto bajo la misma clave es otra
+    lectura mal declarada, y resolverlo en silencio es lo que este issue arregla."""
+    dest = _nota_con_vista(tmp_path, [{"sujeto": "tau Cet", "tipo": "star", "fecha": "2026-01-01"}])
+    with pytest.raises(hv.ViewUpsertError, match="ya declara otro valor"):
+        hv.upsert_view(dest, {"sujeto": "tau Cet", "tipo": "star", "fecha": "2026-08-30"})
+    assert hv.upsert_view(dest, {"sujeto": "tau Cet", "tipo": "star", "fecha": "2026-08-30"},
+                          force=True) is True
+    assert cfg.split_fm(dest.read_text(encoding="utf-8"))["vistas"][0]["fecha"] == "2026-08-30"
+
+
+def test_la_misma_clave_completa_lo_que_falta(tmp_path):
+    """La otra mitad del add-only: re-cosechar la misma lectura sí puede completar campos que la
+    entrada no tenía (es lo que hace idempotente al cosechador)."""
+    dest = _nota_con_vista(tmp_path, [{"sujeto": "tau Cet", "tipo": "star"}])
+    assert hv.upsert_view(dest, {"sujeto": "tau Cet", "tipo": "star", "fecha": "2026-08-30"}) is True
+    assert cfg.split_fm(dest.read_text(encoding="utf-8"))["vistas"][0]["fecha"] == "2026-08-30"
+
+
+def test_la_sub_seccion_de_lente_no_pisa_la_vista_del_sujeto(tmp_path):
+    """La segunda lectura se escribe como `### Lente — …` DENTRO de `## Vista — <sujeto>`: la prosa
+    de la primera queda intacta."""
+    dest = _nota_con_vista(tmp_path, [{"sujeto": "tau Cet", "tipo": "star"}])
+    cuerpo = hv.render_view("tau Cet", {"enfasis": "ruido", "aporte": "lo nuevo"})
+    assert hv.write_view_section(dest, "tau Cet", cuerpo, theme=False, enfasis="ruido") is True
+    texto = dest.read_text(encoding="utf-8")
+    assert "texto viejo" in texto, "la lectura anterior no se toca"
+    assert "### Lente — ruido" in texto and texto.count("## Vista — tau Cet") == 1
+
+
+def test_la_sub_seccion_con_prosa_tampoco_se_pisa(tmp_path, capsys):
+    """Misma regla que la sección entera, un nivel abajo: sus anclas cuelgan del texto exacto."""
+    dest = _nota_con_vista(tmp_path, [{"sujeto": "tau Cet", "tipo": "star"}])
+    cuerpo = hv.render_view("tau Cet", {"enfasis": "ruido", "aporte": "primera"})
+    hv.write_view_section(dest, "tau Cet", cuerpo, theme=False, enfasis="ruido")
+    otro = hv.render_view("tau Cet", {"enfasis": "ruido", "aporte": "segunda"})
+    assert hv.write_view_section(dest, "tau Cet", otro, theme=False, enfasis="ruido") is False
+    assert "NO se pisa" in capsys.readouterr().out
+    assert "primera" in dest.read_text(encoding="utf-8")

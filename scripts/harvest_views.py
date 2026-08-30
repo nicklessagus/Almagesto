@@ -165,7 +165,15 @@ def render_view(sujeto: str, data: dict) -> str:
 
     Deterministic on purpose: the same JSON has to render byte-identical, or the idempotence rule
     of the framework (`corré dos veces y hasheá`) cannot hold for this step."""
+    # #239 — con `enfasis`, la lectura va en una SUB-sección dentro de la vista del sujeto. Se
+    # eligió así y no partiendo el encabezado (`## Vista — X · <énfasis>`) porque `section_start` y
+    # `vistas_en_cuerpo` recortan a propósito el sufijo que arranca con puntuación (AUD-178, para
+    # tolerar `## Vista — X (2026-08-27)`): las dos secciones colapsarían al mismo sujeto y el
+    # chequeo de coherencia pasaría **en verde** con una vista invisible.
+    enfasis = str((data or {}).get("enfasis") or "").strip()
     out = [f"## Vista — {sujeto}", ""]
+    if enfasis:
+        out += [f"### Lente — {enfasis}", ""]
     if (aporte := _safe_links(str(data.get("aporte") or "").strip())):
         out += [f"**Aporte:** {aporte}", ""]
     ejes = {k: _safe_links(str(v).strip()) for k, v in (cfg.as_map(data.get("ejes")) or {}).items()}
@@ -312,14 +320,63 @@ def upsert_section(dest: Path, header: str, cuerpo: str) -> bool:
     return True
 
 
+def _lens_span(seccion: str, enfasis: str) -> tuple | None:
+    """Span of the `### Lente — <énfasis>` sub-section inside a view section, or `None` (#239)."""
+    marca = f"### Lente — {enfasis}"
+    ini = seccion.find(marca)
+    if ini < 0:
+        return None
+    fin = seccion.find("\n### ", ini + 1)
+    return (ini, len(seccion) if fin < 0 else fin + 1)
+
+
+def _write_lens_subsection(dest: Path, text: str, sujeto: str, enfasis: str, cuerpo: str, *,
+                           force: bool) -> bool:
+    """Write one `### Lente — <énfasis>` inside `## Vista — <sujeto>`, without touching the rest.
+
+    The view section is created if missing; an existing sub-section with prose is NOT overwritten
+    without `force` — same rule as the whole section, one level down."""
+    span = section_span(text, f"## Vista — {sujeto}")
+    if span is None:
+        nuevo = text.rstrip("\n") + "\n\n" + cuerpo.rstrip("\n") + "\n"
+    else:
+        ini, fin = span
+        seccion = text[ini:fin]
+        sub = _lens_span(seccion, enfasis)
+        # el cuerpo trae el `## Vista — X` arriba; acá se escribe SÓLO la sub-sección
+        solo_sub = cuerpo[cuerpo.find(f"### Lente — {enfasis}"):] if f"### Lente — {enfasis}" in cuerpo else cuerpo
+        if sub is None:
+            seccion_nueva = seccion.rstrip("\n") + "\n\n" + solo_sub.rstrip("\n") + "\n"
+        else:
+            s_ini, s_fin = sub
+            if not force and _norm(seccion[s_ini:s_fin]) != _norm(solo_sub):
+                cfg.print_seguro(
+                    f"  ⚠ {dest.name}: `### Lente — {enfasis}` de «{sujeto}» ya tiene prosa → NO se "
+                    f"pisa (usá --force; sus anclas de verificación se vencen)")
+                return False
+            seccion_nueva = seccion[:s_ini] + solo_sub.rstrip("\n") + "\n" + seccion[s_fin:]
+        sep = "\n" if fin < len(text) else ""
+        nuevo = text[:ini] + seccion_nueva.rstrip("\n") + "\n" + sep + text[fin:]
+    if nuevo == text:
+        return False
+    cfg.write_text_atomic(dest, nuevo)
+    return True
+
+
 def write_view_section(dest: Path, sujeto: str, cuerpo: str, *, theme: bool,
-                       force: bool = False) -> bool:
+                       force: bool = False, enfasis: str = "") -> bool:
     """Escribe la sección de la vista. Devuelve True si tocó el archivo.
 
     ⛔ Sólo pisa mientras la sección sigue siendo **la plantilla del stub** (se compara contra
     `make_notes.vista_block`, la misma fuente que la escribió). Prosa ya redactada no se toca sin
-    `--force`: puede estar verificada, y sus anclas cuelgan del texto exacto."""
+    `--force`: puede estar verificada, y sus anclas cuelgan del texto exacto.
+
+    #239 — con `enfasis`, la unidad que se escribe es la **sub-sección** `### Lente — <énfasis>`
+    DENTRO de la vista del sujeto: dos lecturas del mismo sujeto con lentes distintas conviven, y
+    ninguna pisa a la otra. Una sub-sección con prosa tampoco se pisa sin `--force`."""
     text = dest.read_text(encoding="utf-8")
+    if enfasis:
+        return _write_lens_subsection(dest, text, sujeto, enfasis, cuerpo, force=force)
     span = section_span(text, f"## Vista — {sujeto}")
     if span is None:
         nuevo = text.rstrip("\n") + "\n\n" + cuerpo
@@ -349,8 +406,8 @@ class ViewUpsertError(RuntimeError):
     Distinct from «nothing to change», which is the normal idempotent case.  @inv INV-139"""
 
 
-def upsert_view(dest: Path, vista: dict) -> bool:
-    """Mergea `vista` en `vistas[]` del frontmatter, por `sujeto`. Devuelve True si modificó.
+def upsert_view(dest: Path, vista: dict, *, force: bool = False) -> bool:
+    """Mergea `vista` en `vistas[]` del frontmatter, por `(sujeto, enfasis)`. True si modificó.
 
     Reescribe **sólo el bloque `vistas:`**, dejando el resto del frontmatter byte a byte — mismo
     criterio que `merge_frontmatter_list`: ahí abajo hay campos que tocó la extracción LLM.
@@ -377,8 +434,24 @@ def upsert_view(dest: Path, vista: dict) -> bool:
     previas = [v for v in cfg.as_list(data.get("vistas")) if isinstance(v, dict)]
     nuevas, visto = [], False
     for v in previas:
-        if str(v.get("sujeto") or "").strip() == vista["sujeto"]:
-            nuevas.append({**v, **vista})
+        # #239 — la identidad de una vista es `(sujeto, enfasis)`, no el sujeto a secas. Con la
+        # clave vieja, una segunda lectura del mismo sujeto con OTRA lente entraba por esta rama y
+        # `{**v, **vista}` **pisaba la anterior en silencio**: no es que la segunda lectura no
+        # estuviera soportada, es que era destructiva.
+        if cfg.vista_key(v) == cfg.vista_key(vista):
+            # Y aun con la MISMA clave el merge es add-only: completa lo que falta (`fecha`, `txt`)
+            # y **rehúsa** cambiar un valor ya escrito. Un valor distinto bajo la misma clave es
+            # otra lectura mal declarada, y resolverla en silencio es lo que este issue arregla.
+            choques = [k for k, nuevo in vista.items()
+                       if k in v and str(v[k] or "").strip()
+                       and str(nuevo or "").strip() != str(v[k] or "").strip()]
+            if choques and not force:
+                raise ViewUpsertError(
+                    f"la vista de «{vista['sujeto']}»"
+                    + (f" (lente «{vista['enfasis']}»)" if vista.get("enfasis") else "")
+                    + f" ya declara otro valor en {', '.join(sorted(choques))}: si es otra lectura, "
+                      f"declarala con su propio `enfasis`; si querés reemplazarla, --force")
+            nuevas.append({**v, **vista} if force else {**vista, **v})
             visto = True
         else:
             nuevas.append(v)
@@ -495,6 +568,11 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
         # está pero existe bajo otro slug, se apunta ahí; si no existe en ningún lado, la clave NO
         # se escribe —«no consta», que es distinto de un puntero falso— y se avisa.
         entrada = {"sujeto": sujeto, "tipo": tipo, "fecha": hoy, "lente": list(lente)}
+        # #239 — la lente con la que se leyó, si la extracción declara una. Ausente = la lectura
+        # por default del sujeto; presente = una segunda lectura que CONVIVE con la anterior.
+        if (_enfasis := str((cfg.as_map(data.get("vista")) or {}).get("enfasis") or "").strip()):
+            entrada["enfasis"] = _enfasis
+            data["enfasis"] = _enfasis
         txt_real = _resolve_txt_slug(bib, str(vista.get("txt") or slug))
         if txt_real:
             entrada["txt"] = txt_real
@@ -541,7 +619,9 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
         for _detalle in split_salvedades(bib, data)[2]:
             salvedades_falsas.append((bib, _detalle))
             cfg.print_seguro(f"  ⛔ {bib}: salvedad FALSA, no se publica — {_detalle}")
-        if write_view_section(dest, sujeto, render_view(sujeto, data), theme=theme, force=force):
+        _enf = str(data.get("enfasis") or "").strip()
+        if write_view_section(dest, sujeto, render_view(sujeto, data), theme=theme, force=force,
+                              enfasis=_enf):
             toco = True
         if stamp_reading_aids(dest, data):
             toco = True

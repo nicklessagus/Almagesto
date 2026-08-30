@@ -1892,3 +1892,21 @@ def test_indicator_key_saca_la_glosa_final_y_nada_mas():
         "sin paréntesis se comporta como `method_key`"
     assert cfg.indicator_key("índice (a) de (b)") == cfg.method_key("índice (a) de"), \
         "sólo el paréntesis final: el del medio puede ser parte del nombre"
+
+
+def test_vista_key_distingue_dos_lecturas_del_mismo_sujeto():
+    """#239 — la identidad de una vista es `(sujeto, enfasis)`. Con el sujeto a secas, la segunda
+    lectura con otra lente no tenía dónde ir y el cosechador pisaba la primera en silencio."""
+    a = {"sujeto": "tau Cet", "tipo": "star"}
+    b = {"sujeto": "tau Cet", "tipo": "star", "enfasis": "ruido"}
+    assert cfg.vista_key(a) != cfg.vista_key(b)
+    assert cfg.vista_key(a) == ("tau Cet", "")
+    assert cfg.vista_key({"sujeto": " tau Cet ", "enfasis": " ruido "}) == cfg.vista_key(b)
+
+
+def test_el_enfasis_vacio_no_crea_una_lectura_distinta():
+    """Presente y vacío es «no consta», no otra lente: si no, dos entradas que son la MISMA lectura
+    convivirían y el roll-up contaría dos."""
+    v = cfg.load_vistas({"vistas": [{"sujeto": "X", "tipo": "star", "enfasis": ""}]})[0]
+    assert "enfasis" not in v
+    assert cfg.vista_key(v) == ("X", "")

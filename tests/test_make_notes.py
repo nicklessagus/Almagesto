@@ -2763,6 +2763,7 @@ def test_metodos_solo_linkea_el_que_tiene_nota(toy_vault):
     (cfg.CONCEPTS / "methods" / "gp.md").write_text(FM_GP, encoding="utf-8")
     filas = [("gp", "2020Mio", "2020"), ("sin-nota", "2020Mio", "2020")]
     t = mn.metodos_table(filas)
+    # #273 — la fila es por MÉTODO (agrupada), así que la celda ya no es sólo el link.
     assert "| [[gp]] |" in t, f"el método CON nota tiene que linkear:\n{t}"
     assert "| `sin-nota` |" in t and "[[sin-nota]]" not in t, \
         f"el método SIN nota no puede estamparse como wikilink:\n{t}"
@@ -4164,3 +4165,74 @@ def test_la_seccion_de_indicadores_esta_declarada_como_ESTAMPADA():
     contaminando el proxy de «planeta discutido»: el falso limpio permanente que el lint documenta
     para `## Planetas`."""
     assert mn.INDICADORES_HEADER in cfg.SECCIONES_ESTAMPADAS
+
+
+# ── #273 · el roll-up de métodos: una fila por método, con tope declarado ────────────────────────
+
+def test_el_rollup_agrupa_por_clave_y_muestra_las_variantes(toy_vault):
+    """#273 — 369 filas sobre 291 métodos, 374 de 1278 líneas: el 30 % de la ficha para una tabla
+    que nadie puede leer. Una fila por MÉTODO, no por par (método, paper).
+
+    ⛔ La grafía que eligió el extractor no se reescribe: se agrupa y las variantes se muestran."""
+    filas = [("PCA", "2020a", "2020"), ("pca", "2021b", "2021"), ("PCA", "2019c", "2019")]
+    t = mn.metodos_table(filas, names=set())
+    assert t.count("\n| ") == 2, f"encabezado + una sola fila de datos:\n{t}"
+    assert "`PCA`" in t and "`pca`" in t, "las dos grafías se muestran"
+    assert "| 3 | 2019-2021 |" in t, "3 papers, rango de años"
+    assert "(1 método(s) · 3 aplicación(es))" in t, "el encabezado publica los DOS números (#262)"
+
+
+def test_el_tope_declara_cuantos_metodos_quedan_adentro(toy_vault):
+    """#107 — un corte silencioso es cómo se saca una conclusión estructural de un truncamiento que
+    nadie declaró. El `<summary>` dice cuántos hay adentro."""
+    filas = [(f"m{i:03d}", f"20{i:02d}x", f"20{i:02d}") for i in range(10)]
+    t = mn.metodos_table(filas, names=set(), tope=3)
+    assert "<details><summary>7 método(s) más" in t, t
+    assert "</details>" in t
+
+
+def test_el_details_no_rompe_la_forma_del_artefacto(toy_vault):
+    """El `<details>` va FUERA de la tabla y con su línea en blanco: si la partiera, las filas de
+    adentro dejarían de renderizar (#227) o el `##` siguiente se absorbería como celda (#260)."""
+    filas = [(f"m{i:03d}", f"20{i:02d}x", f"20{i:02d}") for i in range(10)]
+    t = mn.metodos_table(filas, names=set(), tope=3)
+    assert cfg.table_shape_issues(t) == [], cfg.table_shape_issues(t)
+    assert cfg.unclosed_markers(t) == [], cfg.unclosed_markers(t)
+    assert cfg.headings_glued_to_table(t + "\n## Papers\n") == []
+
+
+def test_el_rollup_ordena_por_aplicaciones_y_es_determinista(toy_vault):
+    """Lo más usado arriba, y el empate se rompe alfabéticamente: dos corridas tienen que dar el
+    mismo byte (red 6)."""
+    filas = [("zzz", "a", "2020"), ("aaa", "b", "2020"), ("aaa", "c", "2021")]
+    t = mn.metodos_table(filas, names=set())
+    assert t.index("`aaa`") < t.index("`zzz`")
+    assert t == mn.metodos_table(filas, names=set())
+
+
+# ── #271 · el backfill del markup de catálogo en `## Abstract` ──────────────────────────────────
+
+def test_clean_catalog_markup_notes_limpia_solo_el_abstract(toy_vault):
+    """#271 — medido: 249 ocurrencias en 42 notas. `<ASTROBJ>` deja el nombre del objeto
+    **invisible** al renderizar, `<A href>` vuelve un link vivo una copia que se promete verbatim.
+
+    ⚠ Sólo `## Abstract`: el resto del cuerpo es prosa de la bóveda, no copia de catálogo."""
+    dest = mk_note(cfg.PAPERS, "2019A....1A", {"bibcode": "2019A....1A", "tags": ["paper"],
+                                               "stars": ["tau Cet"]},
+                   "# p\n\n## Abstract\nR<SUB>p</SUB> de <ASTROBJ>HD 40307</ASTROBJ>\n\n"
+                   "## Vista — tau Cet\nesto <B>no</B> se toca\n", crudo=True)
+    assert mn.clean_catalog_markup_notes() == 0
+    texto = dest.read_text(encoding="utf-8")
+    assert "Rp de HD 40307" in texto
+    assert "<B>no</B>" in texto, "fuera del abstract no se toca nada"
+
+
+def test_clean_catalog_markup_notes_es_idempotente(toy_vault):
+    """Red 6: dos corridas, mismo byte."""
+    dest = mk_note(cfg.PAPERS, "2019A....1A", {"bibcode": "2019A....1A", "tags": ["paper"],
+                                               "stars": ["tau Cet"]},
+                   "# p\n\n## Abstract\nH<SUB>2</SUB>O\n", crudo=True)
+    mn.clean_catalog_markup_notes()
+    antes = dest.read_bytes()
+    mn.clean_catalog_markup_notes()
+    assert dest.read_bytes() == antes

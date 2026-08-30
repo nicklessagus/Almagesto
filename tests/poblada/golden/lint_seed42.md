@@ -66,14 +66,8 @@
 - metodo-sintetico-4 → usado en 4 paper(s): 2019Alm00013A, 2022Alm00018A, 2023Alm00003A … → sin nota en `concepts/` (ni por `aliases`): ingerí el tema, corregí el slug, o declaralo como alias del concepto que lo denota
 - metodo-sintetico-5 → usado en 1 paper(s): 2004Alm00014A → sin nota en `concepts/` (ni por `aliases`): ingerí el tema, corregí el slug, o declaralo como alias del concepto que lo denota
 
-## 🌡 Indicador de actividad esperado sin nota de concepto: la ficha lo nombra y el lector no puede llegar (#250, backlog) (6)
+## 🌡 Indicador de actividad esperado sin nota de concepto: la ficha lo nombra y el lector no puede llegar (#250, backlog) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
-- star02 → `H-alpha` no tiene nota en `concepts/` (ni por `aliases`): ingerí el tema, o declaralo como alias del concepto que lo denota
-- star02 → `Ca II H&K` no tiene nota en `concepts/` (ni por `aliases`): ingerí el tema, o declaralo como alias del concepto que lo denota
-- star01 → `H-alpha` no tiene nota en `concepts/` (ni por `aliases`): ingerí el tema, o declaralo como alias del concepto que lo denota
-- star01 → `Ca II H&K` no tiene nota en `concepts/` (ni por `aliases`): ingerí el tema, o declaralo como alias del concepto que lo denota
-- star00 → `H-alpha` no tiene nota en `concepts/` (ni por `aliases`): ingerí el tema, o declaralo como alias del concepto que lo denota
-- star00 → `Ca II H&K` no tiene nota en `concepts/` (ni por `aliases`): ingerí el tema, o declaralo como alias del concepto que lo denota
 
 ## 🔤 Dos conceptos declaran el mismo alias: el roll-up resuelve al primero y nadie lo decidió (#245, backlog) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)

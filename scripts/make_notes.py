@@ -685,6 +685,41 @@ def restamp_vista_stub() -> int:
     return 0
 
 
+def clean_catalog_markup_notes() -> int:
+    """Backfill #271: strips the catalog's raw markup from `## Abstract` in every paper note.
+
+    `## Abstract` is **verbatim from catalog** and ADS returns live markup: `<SUB>`, `<SUP>`,
+    `<ASTROBJ>`, `<A href>`, `<P />`. Measured on a real vault: **249 occurrences in 42 notes**, and
+    what they do when rendered is not cosmetic — `<ASTROBJ>HD 40307</ASTROBJ>` leaves the object's
+    name **invisible** in a renderer that does not escape, `<A href>` turns a copy promised verbatim
+    into a live link, and `<SUB>` silently drops the subscript. Worse, the result depends on the
+    parser, so the layer the contract calls **auditable** says different things to different readers.
+
+    ⚠ Only the `## Abstract` section is touched, and only with `cfg.clean_catalog_markup` — the same
+    function the three backends now use, so a note cleaned here reads exactly like one ingested
+    today. ⛔ Two consumers read those bytes back —the duplicate detector (#216) and the offline lens
+    diff (D-49)— so the command reports how many notes it changed: whoever runs it re-measures."""
+    notes = sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []
+    tocadas = 0
+    for dest in notes:
+        text = dest.read_text(encoding="utf-8")
+        ini = cfg.section_start(text, "## Abstract")
+        if ini < 0:
+            continue
+        fin = text.find("\n## ", ini + 1)
+        fin = len(text) if fin < 0 else fin
+        limpio = cfg.clean_catalog_markup(text[ini:fin])
+        if limpio == text[ini:fin]:
+            continue
+        cfg.write_text_atomic(dest, text[:ini] + limpio + text[fin:])
+        tocadas += 1
+    cfg.print_seguro(
+        f"markup de catálogo: {tocadas} de {len(notes)} notas de paper limpiadas en `## Abstract` "
+        f"(#271). ⚠ Re-medí el detector de duplicados (#216) y el diff de lente offline (D-49): "
+        f"los dos leen esos bytes.")
+    return 0
+
+
 def restamp_abstracts() -> int:
     """Backfill #277: writes the `## Abstract` section into every paper note that lacks it.
 
@@ -2065,48 +2100,83 @@ def note_names() -> set:
     return {f.stem for f in cfg.WIKI.rglob("*.md")} if cfg.WIKI.exists() else set()
 
 
-def metodos_table(rows: list, names: set | None = None) -> str:
-    """`## Métodos aplicados a esta estrella` materializada (D-11 / INV-81).
+#: #273 · cuántos métodos se listan antes de colapsar el resto en un `<details>`. El tope es
+#: **declarado**, nunca silencioso (#107): el `<summary>` dice cuántos quedaron adentro.
+TOPE_METODOS = 40
 
-    ⚠ El método se estampa como `[[wikilink]]` **sólo si su nota existe**; si no, va como código.
-    Por qué: `methods` lo puebla la EXTRACCIÓN (paso 3 de `ingest-star`) y las notas de
-    `concepts/methods/` las crea `ingest-theme`, que es **otra operación**. Con el link
-    incondicional, seguir `ingest-star` al pie de la letra dejaba el lint en decenas de *wikilinks
-    rotos* —bloqueantes— que no se podían cerrar dentro de la operación que los creó: la máquina
-    fabricaba su propia violación a partir de un campo que ella misma pide llenar (medido en el
-    clean-room del 2026-08-25: 106 sobre dos estrellas). Hasta 1.35.0 no se notaba porque el
-    roll-up era un bloque ```dataview``` y el detector, que lee el texto, no veía esos links.
-    La señal no se pierde: el lint la reporta como **backlog** («`methods` sin página destino»),
-    igual que ya hace con `thesis_links`."""
+
+def metodos_table(rows: list, names: set | None = None, tope: int = TOPE_METODOS) -> str:
+    """`## Métodos aplicados a esta estrella` materializada (D-11 / INV-81), **agrupada** (#273).
+
+    ⚠ El método se estampa como `[[wikilink]]` **sólo si su nota existe** —por stem o por `aliases`
+    del concepto (#245)—; si no, va como código. Por qué: `methods` lo puebla la EXTRACCIÓN (paso 3
+    de `ingest-star`) y las notas de `concepts/methods/` las crea `ingest-theme`, que es **otra
+    operación**. Con el link incondicional, seguir `ingest-star` al pie de la letra dejaba el lint
+    en decenas de *wikilinks rotos* —bloqueantes— que no se podían cerrar dentro de la operación que
+    los creó (medido: 106 sobre dos estrellas). La señal no se pierde: el lint la reporta como
+    backlog.
+
+    #273 — **una fila por MÉTODO, no por par (método, paper)**. Medido en una ficha real: 369 filas
+    sobre 291 métodos, 374 de 1278 líneas, o sea el 30 % de la nota para una tabla que nadie puede
+    leer. Agrupar por clave normalizada sola baja a 291 (21 %) y **no alcanza** —está medido—, así
+    que además se colapsa la cola en un `<details>` cuyo `summary` **declara cuántos hay adentro**.
+    ⛔ La grafía que eligió el extractor NO se reescribe: se agrupa, y las variantes se muestran.
+    El detalle par a par sigue siendo recuperable con el one-liner determinista de `CLAUDE.md`.
+    """
     names = note_names() if names is None else names
-    # #262 — se cuenta por CLAVE NORMALIZADA, no por string crudo. `methods` lo puebla la extracción
-    # con vocabulario abierto, así que el mismo método llega escrito de varias maneras; contar
-    # grafías **sobre**declara el universo (medido: 297 publicados sobre 291 métodos reales, con
-    # `GLS periodogram`/`gls-periodogram` y `Keplerian fit`/`keplerian-fit` entre las 6 colisiones).
-    # Es el mismo defecto que #243 arregló en el detector del lint y en `methods_match`, en el
-    # roll-up que **publica el número al lector**. ⛔ Se normaliza al CONTAR, nunca al escribir: la
-    # grafía que eligió el extractor es información sobre cómo lo nombra el paper.
-    metodos = {cfg.method_key(m) for m, _, _ in rows}
-    out = [f"{METODOS_HEADER} ({len(metodos)} método(s) · {len(rows)} aplicación(es))", ""]
+    idx = cfg.concept_alias_index()
+    # #262 — se cuenta por CLAVE NORMALIZADA, no por string crudo: `methods` lo puebla la extracción
+    # con vocabulario abierto, así que el mismo método llega escrito de varias maneras y contar
+    # grafías **sobre**declara el universo (medido: 297 publicados sobre 291 reales).
+    grupos: dict = {}
+    for m, stem, year in rows:
+        g = grupos.setdefault(cfg.method_key(m), {"variantes": [], "papers": set(), "anios": set()})
+        if m not in g["variantes"]:
+            g["variantes"].append(m)
+        g["papers"].add(stem)
+        if str(year).strip():
+            g["anios"].add(str(year).strip())
+    out = [f"{METODOS_HEADER} ({len(grupos)} método(s) · {len(rows)} aplicación(es))", ""]
     if not rows:
         out += ["_(ningún paper de esta estrella declara `methods` todavía — o no se extrajo "
                 "ninguno, o la extracción no pobló el campo.)_", ""]
         return "\n".join(out)
-    out += ["| Método | Paper | Año |", "|---|---|---|"]
-    # #245 — el destino se resuelve por stem **o por `aliases`** del concepto: el nombre canónico de
-    # un método es el stem de su nota y `aliases` es la tabla de sinónimos que el schema ya pide, y
-    # nadie la leía — `bisector span` y `bis` eran dos métodos distintos. ⛔ La grafía NO se
-    # reescribe: se linkea el destino y se muestra lo que el extractor escribió.
-    idx = cfg.concept_alias_index()
-    for m, stem, year in rows:
-        destino = m if m in names else cfg.method_target(m, idx)
+
+    def _fila(clave: str) -> str:
+        """One row: the destination link, the spellings the extractors used, and the two counts."""
+        g = grupos[clave]
+        principal = g["variantes"][0]
+        destino = principal if principal in names else cfg.method_target(principal, idx)
         # ⚠ El alias-link `[[stem|texto]]` NO se usa: el `|` dentro de una celda hay que escaparlo
-        # (#240/#227) y un escape de más parte la fila. Se linkea el destino y la grafía del
-        # extractor va al lado, como código — que además deja ver POR QUÉ resolvió ahí.
-        celda = (f"[[{m}]]" if destino == m else
-                 f"[[{destino}]] · `{m}`" if destino else f"`{m}`")
-        out.append(f"| {celda} | [[{stem}]] | {year} |")
+        # (#240/#227) y un escape de más parte la fila. Se linkea el destino y las variantes van al
+        # lado como código — que además deja ver POR QUÉ resolvió ahí.
+        etiqueta = (f"[[{principal}]]" if destino == principal else
+                    f"[[{destino}]]" if destino else "")
+        # Las variantes se muestran sólo cuando AGREGAN algo: si la única es el nombre del
+        # destino, repetirla es ruido en una tabla que este issue existe para achicar.
+        extras = [v for v in g["variantes"] if v != destino]
+        variantes = " · ".join(f"`{cfg.escape_cell(v)}`" for v in extras)
+        celda = " · ".join(x for x in (etiqueta, variantes) if x)
+        anios = sorted(g["anios"])
+        rango = "—" if not anios else (anios[0] if anios[0] == anios[-1]
+                                       else f"{anios[0]}-{anios[-1]}")
+        return f"| {celda} | {len(g['papers'])} | {rango} |"
+
+    orden = sorted(grupos, key=lambda k: (-len(grupos[k]["papers"]), k))
+    cabeza, cola = orden[:tope], orden[tope:]
+    out += ["_(una fila por método; el detalle par a par sale del one-liner determinista de "
+            "`CLAUDE.md`.)_", "",
+            "| Método | Papers | Años |", "|---|---|---|"]
+    out += [_fila(k) for k in cabeza]
     out.append("")
+    if cola:
+        # El tope se DECLARA (#107): un corte silencioso es cómo se saca una conclusión estructural
+        # de un truncamiento que nadie anunció. El `<details>` va FUERA de la tabla —con su línea en
+        # blanco— para no romper la forma del artefacto (#227/#260).
+        out += [f"<details><summary>{len(cola)} método(s) más, con menos aplicaciones</summary>", "",
+                "| Método | Papers | Años |", "|---|---|---|"]
+        out += [_fila(k) for k in cola]
+        out += ["", "</details>", ""]
     return "\n".join(out)
 
 
@@ -3359,6 +3429,11 @@ def main() -> int:
                          "<sujeto>`. El sujeto sale del reclamo de la nota cuando es UNO solo; con "
                          "varios se lista para declararlo a mano (elegir uno afirmaría una lectura "
                          "que nadie hizo). No estampa `fecha`: ausente es «no consta». Sin slug.")
+    ap.add_argument("--clean-catalog-markup", action="store_true", dest="clean_catalog_markup",
+                    help="backfill #271: saca el markup crudo de catálogo (`<SUB>`, `<ASTROBJ>`, "
+                         "`<A href>`…) de `## Abstract` en las notas de paper. ⚠ Cambia bytes que "
+                         "leen el detector de duplicados (#216) y el diff de lente (D-49): "
+                         "re-medilos después. Sin slug.")
     ap.add_argument("--restamp-vista-stub", action="store_true", dest="restamp_vista_stub",
                     help="migración #269: re-estampa la plantilla de `## Vista` en las notas que "
                          "todavía traen la anterior (la que mandaba citar por nº de línea del "
@@ -3416,6 +3491,8 @@ def main() -> int:
         return restamp_abstracts()
     if args.restamp_vista_stub:
         return restamp_vista_stub()
+    if args.clean_catalog_markup:
+        return clean_catalog_markup_notes()
     if args.migrate_bearing:
         n = migrate_all_bearing()
         cfg.print_seguro(f"`bearing` retirado de {n} nota(s) de paper (D-21).")
@@ -3468,6 +3545,7 @@ def main() -> int:
     if not args.slug:
         ap.error("falta el slug (corren sin slug: --restamp-pdf-links, --restamp-keywords, "
                  "--restamp-headers, --restamp-abstracts, --restamp-vista-stub, "
+                 "--clean-catalog-markup, "
                  "--migrate-disputes, --migrate-bearing, "
                  "--migrate-txt-fields, --migrate-vistas, --sync-mirror y --rename-paper)")
 
