@@ -751,7 +751,8 @@ ROLES = cfg.ROLES
 # literatura borra la distinción. Hasta 1.13.0 nada lo detectaba —el único chequeo comparaba el
 # NÚMERO de planetas, nunca los valores—, así que la promesa no tenía quién la sostuviera.
 MIRROR_HOST = (("spectral_type", "spectral_type"), ("teff_K", "teff_K"),
-               ("dist_pc", "dist_pc"), ("P_rot_days", "st_rotp_days"))
+               ("dist_pc", "dist_pc"), ("P_rot_days", "st_rotp_days"),
+               ("mass_msun", "mass_msun"))   # #272
 MIRROR_PLANET = ("P_days", "K_ms", "e", "mass_earth", "status")
 # P_rot documentado en la PROSA (que es donde va cuando NEA no lo tiene). Heurística deliberada,
 # como la de fuga de implementación: barata y de alta señal. Tres decisiones, cada una por un modo

@@ -321,3 +321,35 @@ a favor —Sonnet como extractor— quedó medido pero con n = 5.
   INV-100 el paso 3 es reproducible; antes no lo era, así que no hay línea de base con la que
   comparar. Los bloques (b) y (c) del 2026-08-25 **sí** usan el prompt canónico en las dos ramas, así
   que esa deuda queda saldada para esas dos mediciones y sigue abierta para el baseline Opus original.
+
+## Recorte de `CLAUDE.md`, pasada 2 (2026-08-30) — el postmortem que salió de la sección de curación
+
+Movido acá al aplicar la regla de escritura del ratchet (`tools/doc-size-ratchet.yaml`): la regla y
+su ancla quedan en `CLAUDE.md`; el caso medido vive donde se lo puede consultar.
+
+- **#217 / #215 — por qué `drop_core` re-apunta `pdf:`/`fulltext:` él mismo.** Antes de #215 el
+  drift ficha↔disco se curaba solo en el próximo `make_notes`. El fix de #215 filtra los dropeados
+  **antes** de escribir notas —correcto: no queremos resucitar el dropeado— así que esas notas ya no
+  vuelven a pasar por el re-estampado y el drift pasó de transitorio a **permanente**. No es un
+  argumento contra #215: la limpieza la tiene que hacer quien borró, que es el único que sabe qué
+  borró. La categoría *«vista fechada sin fuente en disco»* existe porque ninguna otra red lo ve: el
+  ancla de fuente (D-20) no se entera —el archivo no cambió, **desapareció**— y `## Citas no
+  verificables` mira los bibcodes citados desde conceptos/queries, no los pares ya verificados de
+  una ficha. Es agudo en la rama «la nota se conserva porque el paper pertenece a **otro sujeto**»,
+  donde el paper sí puede estar citado en la ficha de esa entidad.
+  ⚠ Hasta 1.73.0 `CLAUDE.md` decía sólo *«la nota no se borra sola»*, que describe **una** de las
+  dos ramas: la doc callaba un borrado irreversible.
+- **#266 — el `via` equivocado en la doc.** Hasta 1.103.x `CLAUDE.md` enunciaba **un solo**
+  vocabulario debajo de una tabla que muestra los dos, así que mandaba escribir
+  `via: descubrimiento` en `extra_core` — que el loader rechaza duro. Es exactamente el defecto que
+  #162 cerró en el `help=` de la CLI, sobreviviendo en la fuente que un agente lee **antes** de
+  editar `stars.yaml` a mano.
+- **#206 — por qué `via` en `sources:` es binario.** Hasta 1.72.0 existió `reporte` para el caso de
+  la lista de papers traída por el usuario, y partir esa categoría hacía que el campo dejara de
+  contestar su propia pregunta: había que **sumar dos casilleros** para saber cuántos papers
+  entraron por decisión humana.
+- **#111 — el cuadrante mudo, medido.** Sobre una bóveda real: los 40 papers que tenía y una bóveda
+  nueva no, **entraron los 40 a mano**, y su config no permitía saber cuáles había pedido el
+  usuario. Y sin la salida hacia la ingesta (`triage --accept-source`) el descubrimiento se cortaba
+  en el hallazgo: proponía el paper y bajarlo quedaba como trabajo manual — que es exactamente por
+  qué una bóveda con búsqueda peor puede terminar con más papers que una con búsqueda mejor.

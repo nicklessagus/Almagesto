@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.109.0"
+ALMAGESTO_VERSION = "1.110.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -246,7 +246,13 @@ def _es_estampada(linea: str) -> bool:
 # el usuario, 2026-08-28): el corpus viejo tiene notas incompletas por diseño y un bloqueante nace
 # en rojo sobre trabajo correcto — el falso positivo que erosiona la categoría entera.
 SCHEMA_NOTA = {
-    "star": ("name", "slug", "aliases", "simbad_id", "spectral_type", "dist_pc",
+    # #272 — `mass_msun` es el campo con más consecuencias aguas abajo después de `planets[]`:
+    # m·sini ∝ M★^(2/3), así que el rango 0,699–0,78 M☉ que la literatura publica mueve cada masa
+    # mínima un 7,6 %. NEA ya lo arbitra (`_autoridad.mass_msun`), y sin lugar en el frontmatter la
+    # ficha declaraba un HUECO de arbitraje sobre un campo para el que su propia autoridad tiene
+    # valor. Rige el espejo puro (#70): lo copia el script, `null` si NEA calla, y no se rellena con
+    # literatura. `Vmag`/`ra_deg`/`dec_deg` NO entran: no cambian ninguna lectura de una señal RV.
+    "star": ("name", "slug", "aliases", "simbad_id", "spectral_type", "dist_pc", "mass_msun",
              "activity_indicators_expected", "planets", "disputes", "data_local",
              "methods_applied", "tags"),
     "paper": ("bibcode", "title", "first_author", "n_authors", "year", "arxiv_id", "doi",
@@ -1934,6 +1940,12 @@ AUTORIDAD_NOMBRE = {"nea": "NASA Exoplanet Archive (pscomppars)", "simbad": "SIM
 # Cómo se llama cada campo del JSON EN LA FICHA. La cabecera nombra lo que el lector ve en el
 # frontmatter, no la clave interna del ground-truth (`st_rotp_days` no aparece en ninguna ficha).
 CAMPO_EN_FICHA = {"st_rotp_days": "P_rot_days"}
+
+#: #272 · qué campos del ground-truth el frontmatter de la ficha PUBLICA. La cabecera prometía
+#: autoridad NEA sobre cuatro que la nota no tiene dónde mostrar (`Vmag`, `ra_deg`, `dec_deg` y
+#: —hasta que entró al schema— `mass_msun`): el consumidor leía la promesa, bajaba al frontmatter y
+#: no los encontraba, en la línea que existe justamente para que el artefacto viaje solo.
+CAMPO_EN_FRONTMATTER = frozenset({"spectral_type", "teff_K", "dist_pc", "st_rotp_days", "mass_msun"})
 
 
 def artefacto_en_otro_slug(base: Path, slug: str, stem: str, sufijo: str):

@@ -1946,6 +1946,29 @@ def test_sync_mirror_rellena_tambien_los_campos_estelares(toy_vault):
     assert (fm["teff_K"], fm["dist_pc"]) == (5344.0, 3.6)
 
 
+def test_sync_mirror_escribe_la_clave_que_falta_aunque_nea_calle(toy_vault):
+    """#272 — `mass_msun` entró al schema después de que estas fichas se crearan, así que la clave
+    **no existe** en ninguna. Sin escribirla, la nota evade el espejo y queda reportada como schema
+    incompleto para siempre; escribir `null` es el estado correcto (la autoridad contestó y no tiene
+    el dato), no un campo a completar."""
+    gt("s", [], mass_msun=None)
+    ficha("s", {"planets": []})
+    assert "mass_msun" not in read_fm(cfg.STARS / "s.md")
+    mn.sync_mirror()
+    fm = read_fm(cfg.STARS / "s.md")
+    assert "mass_msun" in fm and fm["mass_msun"] is None
+
+
+def test_sync_mirror_espeja_la_masa_estelar(toy_vault):
+    """#272 — la masa estelar es el factor que convierte K en m·sini (m·sini ∝ M★^(2/3)), así que
+    el rango 0,699–0,78 M☉ de la literatura mueve cada masa mínima un 7,6 %. Sin el campo, la ficha
+    declaraba un hueco de arbitraje sobre un valor que su propia autoridad ya tiene."""
+    gt("s", [], mass_msun=0.77)
+    ficha("s", {"planets": []})
+    mn.sync_mirror()
+    assert read_fm(cfg.STARS / "s.md")["mass_msun"] == 0.77
+
+
 # ── formas inesperadas del ground_truth: host/planets escalares ────────────
 
 def test_sync_mirror_con_host_escalar_no_revienta(toy_vault, capsys):
@@ -2367,6 +2390,33 @@ def test_procedencia_distingue_sin_dato_de_no_preguntado(toy_vault):
              if l.startswith("> _Ground-truth")][0]
     assert "sin dato: `P_rot_days`, `spectral_type`" in linea
     assert "`st_rotp_days`" not in linea      # se nombra como lo ve el lector en la ficha
+
+
+def test_la_cabecera_marca_el_campo_que_la_ficha_no_publica(toy_vault):
+    """#272 — la cabecera prometía autoridad NEA sobre campos que el frontmatter **no tiene dónde
+    mostrar** (`Vmag`, `ra_deg`, `dec_deg`), y el consumidor que baja a buscarlos no los encuentra.
+    La línea existe justamente para que el artefacto viaje solo."""
+    (cfg.GROUND_TRUTH / "test_star.json").write_text(json.dumps({
+        "slug": "test_star", "consultado": "2026-08-30",
+        "host": {"teff_K": 5344.0, "Vmag": 7.17, "mass_msun": 0.77,
+                 "_autoridad": {"teff_K": "nea", "Vmag": "nea", "mass_msun": "nea"}},
+        "planets": []}), encoding="utf-8")
+    mn.write_star_note("test_star", force=True)
+    linea = [l for l in (cfg.STARS / "test_star.md").read_text(encoding="utf-8").splitlines()
+             if l.startswith("> _Ground-truth")][0]
+    assert "`Vmag` (sólo en el JSON)" in linea, linea
+    assert "`teff_K` (sólo en el JSON)" not in linea, "teff_K SÍ está en el frontmatter"
+    assert "`mass_msun` (sólo en el JSON)" not in linea, "#272: mass_msun entró al frontmatter"
+
+
+def test_la_masa_estelar_se_espeja_al_crear_la_ficha(toy_vault):
+    """#272 — espejo puro (#70): lo copia el script del JSON, `null` si NEA calla."""
+    (cfg.GROUND_TRUTH / "test_star.json").write_text(json.dumps({
+        "slug": "test_star", "host": {"mass_msun": 0.77, "_autoridad": {"mass_msun": "nea"}},
+        "planets": []}), encoding="utf-8")
+    mn.write_star_note("test_star", force=True)
+    fm = cfg.split_fm((cfg.STARS / "test_star.md").read_text(encoding="utf-8"))
+    assert fm["mass_msun"] == 0.77
 
 
 # ── Tanda 5 · D-19: renombre preprint → publicado ───────────────────────────────────────────────

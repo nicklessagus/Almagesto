@@ -199,14 +199,16 @@ cuando aplique `confidence: high|medium|low`.
 ### stars/
 
 Campos: `name, slug, aliases, aliases_descartados, simbad_id, spectral_type, teff_K, dist_pc,
-P_rot_days, activity_indicators_expected, planets[], disputes[], data_local,
+P_rot_days, mass_msun, activity_indicators_expected, planets[], disputes[], data_local,
 methods_applied{literature,ours}`. Cada `planets[]` lleva `letter, P_days, K_ms, e, mass_earth,
 status` (de ground-truth NEA; `mass_earth` RV-only ≈ $m\sin i$). Los desacuerdos van en `disputes` a
 **nivel nota**, no dentro de `planets[]`.
 
 ⛔ **Espejo con AUTORIDAD POR CAMPO (#70 + D-1) — cada campo vale lo que dice SU autoridad o NADA.**
-`spectral_type` ← **SIMBAD**; `teff_K`, `dist_pc`, `P_rot_days` y los cinco campos de cada
-`planets[]` ← **NEA** (pscomppars). Si la autoridad declarada calla, el campo queda `null` **aunque
+`spectral_type` ← **SIMBAD**; `teff_K`, `dist_pc`, `P_rot_days`, `mass_msun` (#272 — es el
+factor que convierte $K$ en $m\sin i$, así que sin él la ficha declara un hueco de arbitraje sobre
+un valor que su propia autoridad ya tiene) y los cinco campos de cada `planets[]` ← **NEA**
+(pscomppars). La cabecera nombra *(sólo en el JSON)* el campo que el frontmatter no publica. Si la autoridad declarada calla, el campo queda `null` **aunque
 la otra tenga el dato**: un valor cuya procedencia depende de quién contestó primero no es
 auditable. El JSON registra en `_autoridad` quién contestó cada campo y en `_otras_autoridades` lo
 que la otra decía y no se adoptó (D-2); el desacuerdo se expresa como `disputes` con `source: nea` /
@@ -1090,32 +1092,18 @@ lee como aplicada, y no lo está. Tres propiedades del carril, y cada una cierra
 - **El paper excluido queda VISIBLE**, con `via: manual-drop` y el motivo en `why_excluded`. Si
   desapareciera del registro, dentro de tres meses se leería como *«la búsqueda nunca lo encontró»*.
 - **Los artefactos se borran** (PDF y `.txt`): si quedan, el detector de #108 los reporta como
-  extracción pagada sin nota **para siempre**, y el `.txt` sigue saliendo en los greps del corpus. La
-  decisión queda igual —versionada, con motivo— así que borrar el artefacto no borra el juicio.
-  ⛔ **Y en la nota que SE CONSERVA, `drop_core` re-apunta `pdf:`/`fulltext:` por verdad de disco
-  (#217):** a la copia que sobreviva bajo otro slug —el campo es estable por diseño— o a `null` si
-  no queda ninguna, y el link `[📄 PDF]` de la cabecera se cae con él (es metadata derivada). Los
-  dos campos son, por contrato, verdad de disco: dejarlos apuntando a un archivo que este mismo
-  comando borró es afirmar algo falso sobre el disco. Antes de #215 el drift se curaba solo en el
-  próximo `make_notes`; el fix de #215 filtra los dropeados **antes** de escribir notas —correcto,
-  no queremos resucitar el dropeado— así que esas notas ya no vuelven a pasar por el re-estampado y
-  el drift pasó de transitorio a **permanente**. No es un argumento contra #215: la limpieza la
-  tiene que hacer quien borró, que es el único que sabe qué borró. **La vista y la extracción no se
-  tocan**: la lectura ocurrió y sus localizadores de página siguen siendo válidos — lo que cambió
-  es que ya no hay contra qué re-verificarla, y **eso el lint lo dice** (*«vista fechada sin fuente
-  en disco: ya no es re-verificable»*, backlog). Esa categoría existe porque ninguna otra red lo ve:
-  el ancla de fuente (D-20) no se entera —el archivo no cambió, **desapareció**— y `## Citas no
-  verificables` mira los bibcodes citados desde conceptos/queries, no los pares ya verificados de
-  una ficha; es agudo justamente en la rama «se conserva porque pertenece a **otro sujeto**», donde
-  el paper sí puede estar citado en la ficha de esa entidad. La
-  **nota** se borra **sólo si el paper no pertenece a otro sujeto Y no tiene extracción** — o sea,
-  si nadie más la alcanza y nadie pagó por ella. En cualquiera de los otros dos casos NO se borra y
-  se avisa por qué (la exclusión es del par paper-sujeto, y la extracción es trabajo pagado que no
-  se destruye en silencio). Cuando sí se borra, los `[[wikilink]]` que la citaban quedan **rotos y
-  visibles**, con el puntero de dónde están: no se reparan solos, porque eso sería decidir por el
-  usuario qué decía esa frase (#132, mismo criterio que `entity.py delete`).
-  ⚠ Hasta 1.73.0 esta línea decía sólo *«la nota no se borra sola»*, que describe **una** de las dos
-  ramas: la doc callaba un borrado irreversible.
+  extracción pagada sin nota **para siempre**. La decisión queda versionada, así que borrar el
+  artefacto no borra el juicio. ⛔ **Y en la nota que SE CONSERVA, `drop_core` re-apunta
+  `pdf:`/`fulltext:` por verdad de disco (#217):** a la copia que sobreviva bajo otro slug, o a
+  `null`, con el link `[📄 PDF]` de la cabecera cayéndose detrás — dejarlos apuntando a un archivo
+  que este mismo comando borró es afirmar algo falso sobre el disco. **La vista y la extracción no
+  se tocan**: la lectura ocurrió y sus localizadores siguen siendo válidos; lo que cambió es que ya
+  no hay contra qué re-verificarla, y **eso el lint lo dice** (*«vista fechada sin fuente en disco:
+  ya no es re-verificable»*, backlog — ninguna otra red lo ve: el ancla de fuente no se entera de un
+  archivo que **desapareció**). La **nota** se borra **sólo si el paper no pertenece a otro sujeto Y
+  no tiene extracción**; en cualquier otro caso NO se borra y se avisa por qué. Cuando sí se borra,
+  los `[[wikilink]]` que la citaban quedan **rotos y visibles**: no se reparan solos, porque sería
+  decidir por el usuario qué decía esa frase (#132, mismo criterio que `entity.py delete`).
 - **El diff de re-clasificación lo respeta** (`lens_diff_offline`, `reclass_diff`): sin eso, cada
   cambio de lente vuelve a proponer lo que el usuario ya sacó, y la categoría se vuelve ruido que se
   deja de mirar.
@@ -1124,44 +1112,30 @@ INV-24 sigue en pie por la misma razón que con `extra_core`: core es `f(paper, 
 curación declarada**, y la curación es auditable —motivo obligatorio, fechada, versionada, viaja—.
 Lo que no sería auditable es que el veredicto cambiara sin que nadie firme.
 
-El cuadrante que faltaba —la fuente off-ADS **aceptada**— es justamente el que más lo necesita: ahí
-**no hay query que descubra**, así que **todo** entra por decisión de alguien, y sin el campo la
-pregunta *«¿qué entró porque lo pidió el usuario, qué lo propuso el descubrimiento y qué salió de un
-reporte externo?»* no tiene respuesta. Medido sobre una bóveda real: los 40 papers que tenía y una
-bóveda nueva no, **entraron los 40 a mano**, y su config no permite saber cuáles pidió el usuario.
+El cuadrante que faltaba —la fuente off-ADS **aceptada**— es el que más lo necesita: ahí **todo**
+entra por decisión de alguien, y sin el campo *«¿qué pidió el usuario y qué propuso el
+descubrimiento?»* no tiene respuesta.
 
-⛔ **`via` son DOS vocabularios, uno por carril, y comparten un solo valor (#266).** El párrafo que
-sigue describe el de **`sources:`** (off-ADS); el de **`extra_core`** (ADS) es otro y vive en
-`lib_config.EXTRA_CORE_VIA`: `usuario` · `triage` · `citado-por-corpus`. La razón es que miden ejes
-distintos — en off-ADS **no hay query que descubra**, así que todo entra por decisión de alguien y
-el eje es *quién*; en el carril ADS sí hay descubrimiento automático, y lo que el campo distingue es
-**por qué mecanismo** entró un paper que la lente no marcó core. Hasta 1.103.x este documento
-enunciaba **uno solo** debajo de una tabla que muestra los dos, así que mandaba escribir
-`via: descubrimiento` en `extra_core` — que el loader **rechaza duro**. Es exactamente el defecto
-que #162 cerró en el `help=` de la CLI, sobreviviendo en la fuente que un agente lee **antes** de
-editar `stars.yaml` a mano. Lo vigila un test de paridad doc↔código.
+⛔ **`via` son DOS vocabularios, uno por carril (#266).** El párrafo que sigue describe el de
+**`sources:`** (off-ADS); el de **`extra_core`** (ADS) es otro y vive en
+`lib_config.EXTRA_CORE_VIA`: `usuario` · `triage` · `citado-por-corpus`. Miden ejes distintos — en
+off-ADS no hay query que descubra, así que el eje es *quién decidió*; en el carril ADS lo que
+distingue es **por qué mecanismo** entró un paper que la lente no marcó core. Escribir el valor del
+otro carril hace que el loader **rechace duro**. Lo vigila un test de paridad doc↔código.
 
 En `sources:`, `via` es **vocabulario cerrado y BINARIO** (#206): `usuario` (lo trajo una persona) ·
 `descubrimiento` (lo propuso la cascada de `discover`). El eje que mide es **quién decidió**, y eso
-no tiene tercer valor: que el usuario traiga una **lista** de papers (un reporte de literatura, una
-review de terceros) o traiga los **PDFs** no cambia quién decidió — lo trajo él, y no salió de
-ninguna query de la bóveda. ⚠ Hasta 1.72.0 existió `reporte` para el caso de la lista, y partir esa
-categoría hacía que el campo dejara de contestar su propia pregunta: había que **sumar dos
-casilleros** para saber cuántos papers entraron por decisión humana. Lo único que ese valor
-agregaba —de qué documento salió— lo lleva **`motivo`**, que es obligatorio y dice *cuál*
-documento. El lint **bloquea** la entrada sin `via` o sin `motivo`, el `via` fuera del vocabulario
-(typo) y el valor **retirado** (con mensaje propio: un typo se corrige, un retiro se traduce).
-⚠ Y el PDF que el usuario aporta para cerrar un `pending_source` **no** necesita valor propio: ese
-paper ya entró, su entrada ya tiene `via` y `motivo`, y completar el archivo no cambia quién lo
-propuso.
+no tiene tercer valor: que el usuario traiga una lista de papers o los PDFs no cambia quién decidió.
+De qué documento salió lo lleva **`motivo`**, obligatorio. El lint **bloquea** la entrada sin `via`
+o sin `motivo`, el `via` fuera del vocabulario (typo) y el valor **retirado** (con mensaje propio:
+un typo se corrige, un retiro se traduce). ⚠ El PDF que el usuario aporta para cerrar un
+`pending_source` **no** necesita valor propio: ese paper ya entró con su `via` y su `motivo`.
 
 ⛔ **El carril off-ADS tiene salida hacia la ingesta** (#111): `python scripts/triage.py <slug>
 --accept-source <doi> --via <via> --reason "<motivo>"` arma la entrada completa —metadata real de
 OpenAlex, archivo resuelto por `resolve_pdf` o `pending: paywall`, y la procedencia— **lista para
-pegar**. Sin esto el descubrimiento se cortaba en el hallazgo: proponía el paper y bajarlo quedaba
-como trabajo manual, que es exactamente por qué una bóveda con búsqueda peor puede tener más papers
-que una con búsqueda mejor. No escribe `themes.yaml`: la config es curada y versionada, y un script
-que la edita solo convierte una decisión en un efecto colateral.
+pegar**. No escribe `themes.yaml`: la config es curada y versionada, y un script que la edita solo
+convierte una decisión en un efecto colateral.
 
 ### Append (plegar UNA fuente puntual a una entidad existente — skill `append-knowledge`)
 El usuario trae **una fuente concreta** (bibcode ADS, PDF local o URL) para una ficha/concepto que

@@ -1086,6 +1086,15 @@ def sync_mirror() -> int:
 
         for campo, key in MIRROR_HOST:
             val, val_gt = front.get(campo), host.get(key)
+            if campo not in front:
+                # #272 — la clave que FALTA se escribe, aunque la autoridad calle: `mass_msun` entró
+                # al schema después de que estas fichas se crearan, y sin la clave la nota evade el
+                # espejo y el lint la reporta como schema incompleto. Escribir `null` es el estado
+                # correcto (la autoridad contestó y no tiene el dato), no un campo a completar.
+                front[campo] = val_gt
+                changed = True
+                rellenados += 1
+                continue
             if same_value(val, val_gt):
                 continue
             if val is None:
@@ -2386,7 +2395,13 @@ def ground_truth_line(slug: str) -> str:
     if not autoridad:
         return ""
     def visible(campo: str) -> str:
-        return f"`{cfg.CAMPO_EN_FICHA.get(campo, campo)}`"
+        # #272 — el campo que la ficha NO publica se nombra como lo que es. La cabecera existe para
+        # que el artefacto viaje solo, así que prometer autoridad sobre un valor que el consumidor
+        # no va a encontrar en el frontmatter es peor que no nombrarlo.
+        nombre = cfg.CAMPO_EN_FICHA.get(campo, campo)
+        if campo in cfg.CAMPO_EN_FRONTMATTER:
+            return f"`{nombre}`"
+        return f"`{nombre}` (sólo en el JSON)"
 
     por_fuente: dict = {}
     for campo, fuente in sorted(autoridad.items()):
@@ -2582,6 +2597,10 @@ def write_star_note(slug: str, force: bool) -> None:
         # El valor de literatura va al CUERPO, citado `[[bibcode]]` (la autosuficiencia se cumple
         # igual: el dato está, con su fuente). Lo vigila el lint.
         "P_rot_days": host.get("st_rotp_days"),
+        # #272 — la masa estelar, espejo puro como los de arriba. Es el factor que convierte K en
+        # m·sini, así que sin él la ficha no puede publicar ni siquiera como `inferencia` cuánto
+        # mueve a las masas mínimas la dispersión de la literatura.
+        "mass_msun": host.get("mass_msun"),
         "activity_indicators_expected": [],           # poblar con extracción LLM
         "planets": planets,
         # Desacuerdos con POSICIONES EXPLÍCITAS (#71), a nivel nota: `field` nombra el eje

@@ -673,7 +673,9 @@ def ficha_espejo(toy_vault, front=None, body="**b** (P=365 d)\n"):
     """Ficha que ESPEJA el `gt_planet` por defecto; los tests pisan sólo el campo que prueban.
     Crea también el paper citable, para que un `[[bibcode]]` en el cuerpo no sea link roto."""
     mk_note(toy_vault.PAPERS, "2019A....1A", {"tags": ["paper"], "relevance": "low"}, "")
-    fm = {"tags": ["star"], "activity_indicators_expected": ["halpha"],
+    # `mass_msun` espeja el default de `write_gt` (#272: la masa estelar entró al frontmatter, así
+    # que la ficha que dice espejar tiene que espejarla — si no, el escenario prueba otra cosa).
+    fm = {"tags": ["star"], "activity_indicators_expected": ["halpha"], "mass_msun": 1.0,
           "planets": [{"letter": "b", "P_days": 365.25, "K_ms": 0.0895, "e": 0.0,
                        "mass_earth": 1.0, "status": "confirmed"}]}
     fm.update(front or {})
