@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.123.0"
+ALMAGESTO_VERSION = "1.124.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -2059,6 +2059,34 @@ def load_vistas(meta: dict, *, entry: str = "?") -> list:
             lente = nueva["lente"]
             nueva["lente"] = lente if isinstance(lente, list) else ([] if lente in (None, "") else [lente])
         out.append(nueva)
+    return out
+
+
+def alias_bibcodes() -> set:
+    """Bibcodes some note declares as an ALIAS of itself in `versions[]` (D-19).
+
+    The preprint and the published paper are two bibcodes for the **same work**: there is one
+    canonical note and the old bibcodes live in `versions[]`. Nothing told the fetchers, so after a
+    `--rename-paper` the next run of the chain **re-downloaded the preprint under its old bibcode** —
+    a byte-identical copy of a PDF already on disk, which the lint then reports as a hanging
+    artefact **for ever** (it has no note, and it cannot have one: #229 blocks the second note).
+    Measured in a real vault: the leftover pair was dated a day AFTER the consolidation.
+
+    ⚠ A bibcode that HAS its own note is not returned: that case is the blocking one of #229 and
+    must not be silently skipped by a fetcher."""
+    if not PAPERS.exists():
+        return set()
+    stems = {f.stem for f in PAPERS.glob("*.md")}
+    out = set()
+    for f in sorted(PAPERS.glob("*.md")):
+        try:
+            fm = split_fm(f.read_text(encoding="utf-8")) or {}
+        except OSError:
+            continue
+        for v in as_list(fm.get("versions")):
+            bib = str((v or {}).get("bibcode") if isinstance(v, dict) else v or "").strip()
+            if bib and bib not in stems:
+                out.add(bib)
     return out
 
 

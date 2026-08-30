@@ -437,6 +437,11 @@ nota o no. O es un alias (y entonces **no debe haber nota**) o es otro trabajo (
 en `versions[]`**); la relación *«mismo programa, resultados distintos»* se declara en **prosa o en
 `salvedades`**.
 
+⚠ **Y el bibcode que `versions[]` declara como alias NO se vuelve a bajar** (D-19): es el mismo
+trabajo, ya está en disco bajo el canónico. Sin esa guarda, la corrida siguiente a un renombre lo
+re-baja y el par PDF+`.txt` queda como artefacto colgado **para siempre** —no tiene nota, y #229
+impide que la tenga—. Lo filtran los dos fetchers, junto con los descartes de curación.
+
 El ciclo se resuelve con `python scripts/make_notes.py --rename-paper VIEJO NUEVO`, que mueve la
 nota y sus artefactos (`raw/pdfs/`, `raw/fulltext/` **y la extracción de `build/<slug>/extraccion/`**
 — #228: `harvest_views` mapea JSON→nota por `data["bibcode"]`, así que una extracción dejada bajo el

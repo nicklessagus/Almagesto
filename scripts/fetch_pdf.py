@@ -244,10 +244,20 @@ def drop_filter(recs: list, slug: str) -> tuple[list, list]:
     exactly what #112 deletes from disk on purpose: a curation decision that a script quietly
     undoes is worse than not having taken it.
 
+    Also skipped: a bibcode declared as an alias in some note's `versions[]` (D-19) — same work,
+    already on disk under the canonical bibcode.
+
     Both carriles are honoured: the chaining drop and the per-subject one. A decision that was
     `anulada` (D-52) is not a drop any more, and `load_decisiones` only returns what the registro
     says — an unreadable registro raises rather than reviving everything (INV-139)."""
     fuera = {b for b, d in cfg.load_decisiones(slug).items() if d.get("decision") == "descartado"}
+    # D-19 — y el bibcode que alguna nota declara como ALIAS de sí misma en `versions[]`: es el
+    # MISMO trabajo, ya está en disco bajo el bibcode canónico. Sin esto, después de un
+    # `--rename-paper` la próxima corrida lo re-bajaba y el lint reportaba el par PDF+`.txt` como
+    # artefacto colgado **para siempre** — no tiene nota, y no puede tenerla (#229 bloquea la
+    # segunda). Medido en una bóveda real: la copia sobrante quedó fechada un día DESPUÉS de la
+    # consolidación, byte a byte idéntica.
+    fuera |= cfg.alias_bibcodes()
     if not fuera:
         return recs, []
     dentro = [r for r in recs if r.get("bibcode") not in fuera]

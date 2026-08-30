@@ -10,6 +10,7 @@ import requests as real_requests
 
 import fetch_pdf as fp
 import lib_config as cfg
+from conftest import mk_note
 
 
 # ── candidatos desde el resolver ─────────────────────────────────────────────
@@ -525,3 +526,16 @@ def test_all_no_resucita_un_descarte_vigente(toy_vault, monkeypatch, capsys):
     assert "1990nonB...1..1B" not in pedidos, "se re-pidió un descarte vigente"
     assert "2020newA...1..1A" in pedidos, "una decisión ANULADA ya no es un descarte (D-52)"
     assert "excluido(s) por decisión de curación" in capsys.readouterr().out
+
+
+def test_no_re_baja_un_bibcode_que_ya_es_ALIAS_de_otra_nota(toy_vault):
+    """D-19 — el preprint y el publicado son el MISMO trabajo, y el canónico ya está en disco.
+    Sin esta guarda, la corrida siguiente a un `--rename-paper` re-bajaba el preprint y dejaba un
+    par PDF+`.txt` que el lint reporta como artefacto colgado **para siempre**."""
+    mk_note(cfg.PAPERS, "2026RASTI...5ag038F",
+            {"bibcode": "2026RASTI...5ag038F", "tags": ["paper"], "stars": ["X"],
+             "versions": [{"bibcode": "2026arXiv260528635F", "tipo": "eprint"}]}, "# p\n")
+    recs = [{"bibcode": "2026arXiv260528635F"}, {"bibcode": "2020otro...1..1A"}]
+    dentro, fuera = fp.drop_filter(recs, "ica")
+    assert [r["bibcode"] for r in dentro] == ["2020otro...1..1A"]
+    assert [r["bibcode"] for r in fuera] == ["2026arXiv260528635F"]

@@ -1910,3 +1910,27 @@ def test_el_enfasis_vacio_no_crea_una_lectura_distinta():
     v = cfg.load_vistas({"vistas": [{"sujeto": "X", "tipo": "star", "enfasis": ""}]})[0]
     assert "enfasis" not in v
     assert cfg.vista_key(v) == ("X", "")
+
+
+# ── D-19 · el bibcode que ya es alias de otra nota no se vuelve a bajar ──────────────────────────
+
+def test_alias_bibcodes_devuelve_los_declarados_en_versions(toy_vault):
+    """D-19 — el preprint y el publicado son dos bibcodes del MISMO trabajo. Nada se lo decía a los
+    fetchers, así que después de un `--rename-paper` la próxima corrida re-bajaba el preprint y el
+    lint reportaba el par PDF+`.txt` como artefacto colgado **para siempre**: no tiene nota, y no
+    puede tenerla (#229 bloquea la segunda). Medido en una bóveda real."""
+    mk_note(cfg.PAPERS, "2026RASTI...5ag038F",
+            {"bibcode": "2026RASTI...5ag038F", "tags": ["paper"], "stars": ["X"],
+             "versions": [{"bibcode": "2026arXiv260528635F", "tipo": "eprint"}]}, "# p\n")
+    assert cfg.alias_bibcodes() == {"2026arXiv260528635F"}
+
+
+def test_un_alias_que_TIENE_su_propia_nota_no_se_saltea(toy_vault):
+    """⚠ Ese caso es el BLOQUEANTE de #229 (o es alias y no debe haber nota, o es otro trabajo y no
+    va en `versions[]`): un fetcher que lo saltee en silencio lo taparía."""
+    mk_note(cfg.PAPERS, "2026RASTI...5ag038F",
+            {"bibcode": "2026RASTI...5ag038F", "tags": ["paper"], "stars": ["X"],
+             "versions": [{"bibcode": "2026arXiv260528635F"}]}, "# p\n")
+    mk_note(cfg.PAPERS, "2026arXiv260528635F",
+            {"bibcode": "2026arXiv260528635F", "tags": ["paper"], "stars": ["X"]}, "# p\n")
+    assert cfg.alias_bibcodes() == set()
