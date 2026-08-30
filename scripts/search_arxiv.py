@@ -63,11 +63,11 @@ def to_record(entry) -> dict:
     cats = [c.get("term") for c in entry.findall("a:category", NS) if c.get("term")]
     rec = {
         "bibcode": _citekey(anio, autores),
-        "title": _texto(entry.find("a:title", NS)),
+        "title": cfg.clean_catalog_markup(_texto(entry.find("a:title", NS))),   # #271
         "authors": autores,
         "year": anio,
         "pubdate": published[:10] or None,
-        "abstract": _texto(entry.find("a:summary", NS)),
+        "abstract": cfg.clean_catalog_markup(_texto(entry.find("a:summary", NS))),  # #271
         "arxiv_id": _arxiv_id(_texto(entry.find("a:id", NS))),
         "doi": doi,
         "doctype": "eprint",

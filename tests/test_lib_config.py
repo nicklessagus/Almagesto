@@ -1,4 +1,5 @@
 """lib_config: token ADS, loaders de config, áreas de concepts (declarado vs tolerante)."""
+import pathlib
 from pathlib import Path
 import re
 
@@ -1807,3 +1808,41 @@ def test_view_axes_sin_bloque_de_ejes_no_inventa_la_clave():
     """Una vista sin `**Ejes:**` no contesta ninguno: la clave ausente y el conjunto vacío se leen
     distinto aguas arriba (sin lente declarada no hay nada que comparar)."""
     assert cfg.view_axes("## Vista — X\n\n**Aporte:** algo\n") == {}
+
+
+# ── #271 · el markup de catálogo dentro de la capa auditable ─────────────────────────────────────
+
+def test_clean_catalog_markup_saca_astrobj_y_el_link():
+    """#271 — medido en una bóveda real: 249 ocurrencias en 42 notas dentro de `## Abstract`, y
+    111 de ellas fuera de las seis etiquetas que la lista original cubría. `<ASTROBJ>` deja el
+    nombre del objeto **invisible** en un renderer que no escapa, y `<A href>` convierte una copia
+    que se promete verbatim en un **link vivo**."""
+    sucio = 'R<SUB>p</SUB> de <ASTROBJ>HD 40307</ASTROBJ> en <A href="http://cds">la tabla</A>'
+    assert cfg.clean_catalog_markup(sucio) == "Rp de HD 40307 en la tabla"
+    assert cfg.clean_catalog_markup("<inline-formula><mml:math>x</mml:math></inline-formula>") == "x"
+    assert cfg.clean_catalog_markup("un<P />parrafo<BR />cortado") == "unparrafocortado"
+
+
+def test_no_convierte_una_entidad_escapada_en_markup_vivo():
+    """⛔ El ORDEN: con `html.unescape` primero y una sola pasada, un `&lt;P /&gt;` que el catálogo
+    mandó **escapado** se convertía en un `<P />` vivo — la función fabricaba el markup que existe
+    para sacar."""
+    assert cfg.clean_catalog_markup("&lt;P /&gt;dos parrafos") == "dos parrafos"
+    assert cfg.clean_catalog_markup("Ca II H&amp;K") == "Ca II H&K", "las entidades normales sí se desescapan"
+
+
+def test_no_se_come_texto_que_no_es_markup():
+    """La dirección peligrosa: sin el borde de nombre de etiqueta, `A` matchea el arranque de
+    `<Author>` y la limpieza borra texto real de un abstract."""
+    assert cfg.clean_catalog_markup("texto <Author> que no es markup") == "texto <Author> que no es markup"
+    assert cfg.clean_catalog_markup("a < b y c > d") == "a < b y c > d"
+
+
+def test_los_tres_backends_limpian_el_markup_de_catalogo():
+    """Los tres prometen el MISMO schema de registro (`tests/test_backends_schema.py`), así que la
+    limpieza no puede vivir en uno solo: hasta 1.118.x sólo la hacía `query_ads`."""
+    import openalex
+    import search_arxiv
+    for mod in (openalex, search_arxiv):
+        fuente = pathlib.Path(mod.__file__).read_text(encoding="utf-8")
+        assert "clean_catalog_markup" in fuente, mod.__name__

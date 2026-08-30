@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.118.0"
+ALMAGESTO_VERSION = "1.119.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -646,7 +646,17 @@ def quote_found(quote: str, source_norm: str) -> bool:
     return bool(frags) and all(f in source_norm for f in frags)
 
 
-_CATALOG_TAG_RE = re.compile(r"</?(?:SUB|SUP|SUP1|I|B|BR)\s*/?>", re.I)
+# #271 — el markup que los catálogos meten en título y abstract. La lista original cubría seis
+# etiquetas y dejaba afuera 111 de las 249 ocurrencias medidas en una bóveda real: `<ASTROBJ>` deja
+# el nombre del objeto INVISIBLE en un renderer que no escapa, `<A href>` convierte una copia
+# verbatim en un link vivo, y `<P />`/`<BR />` parten el párrafo, así que la estructura publicada no
+# es la del abstract de catálogo. Y el comportamiento depende del parser —markdown-it y pandoc
+# escapan, Python-Markdown no—, o sea que la capa que el contrato declara **auditable** dice cosas
+# distintas según quién la abra.
+# ⚠ El `(?=[\s/>])` no es cosmético: sin él, `A` matchea el arranque de `<Author>` y la limpieza
+# se come texto que no es markup.
+_CATALOG_TAG_RE = re.compile(
+    r"</?(?:SUB|SUP|SUP1|I|B|BR|P|A|ASTROBJ|INLINE-FORMULA|MML:[A-Z]+)(?=[\s/>])[^<>]*>", re.I)
 
 
 def clean_catalog_markup(s: str) -> str:
@@ -661,7 +671,11 @@ def clean_catalog_markup(s: str) -> str:
     """
     if not isinstance(s, str) or not s:
         return s
-    return _CATALOG_TAG_RE.sub("", html.unescape(s))
+    # ⛔ Dos pasadas, y el orden importa (#271): con `unescape` PRIMERO y una sola pasada, un
+    # `&lt;P /&gt;` que el catálogo mandó escapado se convertía en un `<P />` **vivo** — la función
+    # fabricaba el markup que existe para sacar. Se limpia el crudo, se desescapan las entidades
+    # (`&amp;` → `&`, que es lo que se quiere ver), y se limpia otra vez lo que haya aparecido.
+    return _CATALOG_TAG_RE.sub("", html.unescape(_CATALOG_TAG_RE.sub("", s)))
 
 
 _MATH_SPAN_RE = re.compile(r"\$[^$\n]*\$")

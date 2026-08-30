@@ -103,12 +103,12 @@ def to_record(work: dict) -> dict:
     venue = ((work.get("primary_location") or {}).get("source") or {}).get("display_name")
     rec = {
         "bibcode": citekey(work),
-        "title": work.get("title") or "",
+        "title": cfg.clean_catalog_markup(work.get("title") or ""),   # #271
         "authors": [((a or {}).get("author") or {}).get("display_name")
                     for a in (work.get("authorships") or [])],
         "year": work.get("publication_year"),
         "pubdate": None,
-        "abstract": _abstract(work),
+        "abstract": cfg.clean_catalog_markup(_abstract(work)),        # #271
         "arxiv_id": None,
         "doi": _bare_doi(work.get("doi")),
         "doctype": work.get("type"),
