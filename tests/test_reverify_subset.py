@@ -90,10 +90,65 @@ def test_main_escribe_el_json_agrupado_y_no_toca_la_nota(tmp_path, monkeypatch, 
     monkeypatch.setattr(sys, "argv", ["reverify_subset.py", str(nota), "--json", str(salida)])
     assert rs.main() == 0
     datos = json.loads(salida.read_text(encoding="utf-8"))
-    assert sorted(datos) == ["2020aaa...1..1A", "2021bbb...2..2B"]
-    assert "ancla" in datos["2020aaa...1..1A"][0] and "texto" in datos["2020aaa...1..1A"][0]
+    sub = datos["re_verificar"]
+    assert sorted(sub) == ["2020aaa...1..1A", "2021bbb...2..2B"]
+    assert "ancla" in sub["2020aaa...1..1A"][0] and "texto" in sub["2020aaa...1..1A"][0]
     assert nota.read_text(encoding="utf-8") == antes, "el emisor tocó la nota"
     assert "sin bloque" in capsys.readouterr().out
+
+
+# ── #285 · el re-anclaje que se proponía y no se emitía ──────────────────────────────────────────
+
+
+def test_el_json_emite_las_TRES_listas_no_una(tmp_path, monkeypatch):
+    """#285 — `--json` escribía **sólo** el subconjunto a re-verificar, así que el grupo más grande
+    —y el único donde un error transfiere un veredicto al par equivocado— se aceptaba a ciegas."""
+    nota = tmp_path / "n.md"
+    nota.write_text(_nota_con_anclas(), encoding="utf-8")
+    salida = tmp_path / "sub.json"
+    monkeypatch.setattr(sys, "argv", ["reverify_subset.py", str(nota), "--json", str(salida)])
+    assert rs.main() == 0
+    datos = json.loads(salida.read_text(encoding="utf-8"))
+    assert sorted(datos) == ["banda", "huerfanas", "nota", "re_anclaje", "re_verificar", "umbral"]
+    assert len(datos["re_anclaje"]) == 2, "el emparejamiento propuesto no se emitió"
+    uno = datos["re_anclaje"][0]
+    for clave in ("fila", "bibcode", "score", "ancla_vieja", "ancla_nueva", "veredicto", "extracto"):
+        assert clave in uno, clave
+    assert uno["score"] == 1.0, "el par intacto se empareja por ancla idéntica"
+
+
+def test_la_banda_de_revision_lista_el_re_anclaje_flojo(tmp_path, monkeypatch, capsys):
+    """La banda de #285: lo que entra por cobertura baja sale listado para revisar A MANO, con su
+    score y las dos puntas. Medido: 2 de 86 propuestas eran a la fila equivocada, las dos apenas
+    sobre el umbral y las dos **dentro del mismo bibcode** (donde la guarda de bibcode no ve nada)."""
+    # se reescribe el CUERPO de un par: la fila sigue hablando de lo mismo pero sólo a medias
+    texto = _nota_con_anclas().replace(
+        "La amplitud rotacional vale cero coma cincuenta metros por segundo [[2020aaa...1..1A]].",
+        "La amplitud rotacional vale otra cosa distinta según el instrumento [[2020aaa...1..1A]].", 1)
+    nota = tmp_path / "n.md"
+    nota.write_text(texto, encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["reverify_subset.py", str(nota), "--umbral", "0.30"])
+    assert rs.main() == 0
+    out = capsys.readouterr().out
+    assert "REVISAR A MANO" in out, out
+    assert "fila 1" in out and "2020aaa...1..1A" in out
+
+
+def test_la_banda_no_marca_el_re_anclaje_por_ancla_identica(tmp_path, monkeypatch, capsys):
+    """La otra dirección: un par que nadie tocó tiene score 1,0 y no puede caer en la banda — si
+    cayera, la banda sería ruido sobre la nota entera y se dejaría de mirar."""
+    nota = tmp_path / "n.md"
+    nota.write_text(_nota_con_anclas(), encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["reverify_subset.py", str(nota)])
+    assert rs.main() == 0
+    assert "REVISAR A MANO" not in capsys.readouterr().out
+
+
+def test_reanchor_list_ordena_por_score_ascendente():
+    """Lo dudoso primero: es lo que se revisa."""
+    r = rs.classify(_nota_con_anclas(), umbral=0.60)
+    lista = rs.reanchor_list(r)
+    assert [x["score"] for x in lista] == sorted(x["score"] for x in lista)
 
 
 def test_main_rehusa_sobre_una_nota_que_no_existe(tmp_path, monkeypatch):

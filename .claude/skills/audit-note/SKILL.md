@@ -241,7 +241,16 @@ correr `verify-citations` sobre **ese subconjunto**. No sobre la nota entera: so
 python scripts/reverify_subset.py <nota> --json build/<slug>/reverif.json
 ```
 
-Reparte los pares en tres: **re-anclables**, **a re-verificar** y **filas huérfanas**.
+Reparte los pares en tres: **re-anclables**, **a re-verificar** y **filas huérfanas**, y el JSON
+emite **las tres listas** (#285) — el subconjunto por fuente, el **emparejamiento propuesto con su
+`score`** y las huérfanas.
+
+⛔ **Mirá la banda de revisión antes de aceptar el re-anclaje.** Lo que cae por debajo de `--banda`
+(0,85) sale listado en el stdout con las dos puntas del emparejamiento: es donde un error **transfiere
+el veredicto al par equivocado** y publica una cita real, verificada, bajo la afirmación que no es.
+Medido: de 86 propuestas, **2 iban a la fila equivocada** —scores 0,60 y 0,67— y las dos eran **del
+mismo bibcode**, o sea justo donde la guarda de «nunca cruza `bibcode`» no ve nada. ⚠ La salida **no**
+es subir `--umbral`: eso manda al fan-out re-anclajes buenos, que es el costo que #282 bajó.
 
 ⚠ **Y esperá que sea grande.** El ancla es de **bloque**, así que tocar una cláusula vence **todos**
 los pares de su párrafo: medido en un `audit-note` real, el 55–60 % de la nota. Peor, el ciclo **no

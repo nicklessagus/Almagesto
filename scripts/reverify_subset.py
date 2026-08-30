@@ -55,6 +55,28 @@ def classify(text: str, umbral: float) -> dict:
             "sin_fila": sin_fila, "huerfanas": huerfanas}
 
 
+#: #285 · por debajo de esta cobertura el re-anclaje se lista para revisar a mano. En el caso
+#: medido (86 propuestas) 0,85 marcaba exactamente los dos malos y dos más, los cuatro revisables en
+#: un minuto. NO es un umbral de aceptación: lo que cae debajo se revisa, no se descarta.
+BANDA_REVISION = 0.85
+
+
+def reanchor_list(r: dict) -> list:
+    """The proposed re-anchoring, one entry per pair, sorted by score (#285).
+
+    This is the group the command used to keep to itself: it printed how many were re-anchorable and
+    never which row went to which pair. It is also the only group where an error **transfers a
+    verdict to a different pair** — a real, verified quote published under the wrong claim, which is
+    indistinguishable from a good row for any reader."""
+    out = []
+    for par, (fila, score) in r.get("asignado", {}).items():
+        out.append({"fila": fila.n, "bibcode": par.bibcode, "score": round(score, 3),
+                    "ancla_vieja": fila.anchor, "ancla_nueva": par.anchor,
+                    "veredicto": fila.verdict, "extracto": fila.claim,
+                    "texto": par.block.text})
+    return sorted(out, key=lambda x: x["score"])
+
+
 def _by_source(pares: list) -> dict:
     """Group pairs by bibcode, preserving order. The fan-out is one agent per source (#100)."""
     out: dict = {}
@@ -73,8 +95,12 @@ def main() -> int:
     ap.add_argument("nota", help="ruta de la nota (p. ej. vault/wiki/stars/hd_40307.md)")
     ap.add_argument("--umbral", type=float, default=0.60,
                     help="cobertura mínima del extracto para proponer re-anclaje (default 0.60)")
+    ap.add_argument("--banda", type=float, default=BANDA_REVISION,
+                    help=f"por debajo de esta cobertura el re-anclaje sale listado para REVISAR A "
+                         f"MANO (default {BANDA_REVISION}); no lo descarta")
     ap.add_argument("--json", dest="salida",
-                    help="escribe el subconjunto a re-verificar, agrupado por fuente")
+                    help="escribe las TRES listas: subconjunto a re-verificar (por fuente), "
+                         "re-anclaje propuesto con su score, y filas huérfanas")
     args = ap.parse_args()
 
     nota = Path(args.nota)
@@ -102,9 +128,30 @@ def main() -> int:
     for row in r["huerfanas"]:
         print(f"  ⚠ huérfana · {row.bibcode} · {(row.claim or '')[:70]}…")
 
+    # #285 — la BANDA de revisión. El grupo re-anclable es el más grande y el único donde un error
+    # **transfiere un veredicto de un par a otro**; medido, 2 de 86 propuestas eran a la fila
+    # equivocada, las dos apenas sobre el umbral (0,60 y 0,67) y las dos **dentro del mismo
+    # bibcode**, o sea donde la guarda de «nunca cruza bibcode» no ve nada. Sub-reportar acá es
+    # barato; sobre-reportar, también. ⚠ NO se sube el umbral: eso convierte re-anclajes buenos en
+    # trabajo de fan-out, que es el costo que #282 bajó.
+    dudosos = [x for x in reanchor_list(r) if x["score"] < args.banda]
+    if dudosos:
+        print(f"\n  ⚠ re-anclajes por debajo de {args.banda:.2f} — REVISAR A MANO "
+              f"({len(dudosos)} de {len(r['asignado'])}): el veredicto se lleva a otra fila, y un "
+              f"error acá publica una cita real bajo la afirmación equivocada")
+        for x in dudosos:
+            print(f"    {x['score']:.2f} · fila {x['fila']} · {x['bibcode']}")
+            print(f"           fila: «{x['extracto'][:80]}»")
+            print(f"           par : «{x['texto'][:80]}»")
+
     if args.salida:
-        datos = {bib: [{"ancla": p.anchor, "texto": p.block.text} for p in ps]
-                 for bib, ps in _by_source(r["sin_fila"]).items()}
+        datos = {"nota": str(nota),
+                 "umbral": args.umbral, "banda": args.banda,
+                 "re_verificar": {bib: [{"ancla": p.anchor, "texto": p.block.text} for p in ps]
+                                  for bib, ps in _by_source(r["sin_fila"]).items()},
+                 "re_anclaje": reanchor_list(r),
+                 "huerfanas": [{"fila": row.n, "bibcode": row.bibcode, "extracto": row.claim,
+                                "veredicto": row.verdict} for row in r["huerfanas"]]}
         Path(args.salida).write_text(json.dumps(datos, ensure_ascii=False, indent=1), encoding="utf-8")
         print(f"\n→ {args.salida}")
 
