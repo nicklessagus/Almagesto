@@ -1846,3 +1846,37 @@ def test_los_tres_backends_limpian_el_markup_de_catalogo():
     for mod in (openalex, search_arxiv):
         fuente = pathlib.Path(mod.__file__).read_text(encoding="utf-8")
         assert "clean_catalog_markup" in fuente, mod.__name__
+
+
+# ── #245 · el vocabulario canónico de métodos (stems + aliases) ─────────────────────────────────
+
+def _concepto(toy_vault, stem, aliases=()):
+    return mk_note(cfg.CONCEPTS / "methods", stem,
+                   {"tags": ["concept"], "name": stem, "aliases": list(aliases)}, f"# {stem}\n")
+
+
+def test_el_indice_resuelve_un_metodo_por_su_sinonimo(toy_vault):
+    """#245 — el nombre canónico de un método ES el stem de su nota y `aliases` es la tabla de
+    sinónimos que el schema ya pide; nadie la leía, así que `bisector span` y `bis` contaban como
+    dos métodos y el backlog reportaba dos deudas donde hay una."""
+    _concepto(toy_vault, "bis", ["bisector span", "bisector velocity span"])
+    idx = cfg.concept_alias_index()
+    assert cfg.method_target("Bisector Span", idx) == "bis"
+    assert cfg.method_target("bis", idx) == "bis"
+    assert cfg.method_target("algo que nadie declaró", idx) is None
+
+
+def test_el_stem_gana_sobre_un_alias_ajeno(toy_vault):
+    """⛔ Si `pca.md` existe y otra nota reclama `pca` como alias, el destino es `pca`: un índice que
+    eligiera por orden de glob no sería determinista."""
+    _concepto(toy_vault, "pca")
+    _concepto(toy_vault, "ica-ruido", ["pca"])
+    assert cfg.method_target("PCA") == "pca"
+
+
+def test_la_colision_alias_alias_se_REPORTA_no_se_resuelve(toy_vault):
+    """Cuál concepto denota un nombre es curación: elegir en silencio decide por el usuario."""
+    _concepto(toy_vault, "aaa", ["señal común"])
+    _concepto(toy_vault, "bbb", ["señal común"])
+    colisiones = cfg.alias_collisions()
+    assert len(colisiones) == 1 and sorted(colisiones[0][1]) == ["aaa", "bbb"]

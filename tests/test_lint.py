@@ -5890,3 +5890,30 @@ def test_una_vista_sin_fecha_no_se_reporta(toy_vault, capsys):
     link_from_log(toy_vault, "2020aaa...1..1A")
     _rc, rep = run_lint_reporte(capsys)
     assert "2020aaa...1..1A" not in _seccion(rep, "ejes de su propia lente"), rep
+
+
+def test_dangling_methods_no_reporta_lo_que_un_alias_resuelve(toy_vault, capsys):
+    """#245 — `bisector span` y `bis` eran dos métodos distintos: el detector comparaba sólo contra
+    el stem y el backlog contaba dos deudas donde hay una. Medido en una bóveda real: el índice de
+    alias cierra 7 de 121 (chico, y del tipo correcto — lo que vacía el backlog es que el extractor
+    VEA la lista antes de inventar la grafía)."""
+    mk_note(cfg.CONCEPTS / "methods", "bis", {"tags": ["concept"], "name": "bis",
+                                              "aliases": ["bisector span"]}, "# bis\n")
+    mk_note(cfg.PAPERS, "2020aaa...1..1A", {"tags": ["paper"], "bibcode": "2020aaa...1..1A",
+                                            "stars": ["Estrella Test"],
+                                            "methods": ["Bisector Span"]}, "# p\n")
+    link_from_log(toy_vault, "2020aaa...1..1A", "bis")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "Bisector Span" not in _seccion(rep, "sin página destino"), rep
+
+
+def test_el_alias_reclamado_por_dos_conceptos_se_reporta(toy_vault, capsys):
+    """Cuál concepto denota un nombre es curación: el roll-up resuelve al primero en orden
+    alfabético y el lint lo dice, en vez de elegir en silencio (regla de método 5)."""
+    mk_note(cfg.CONCEPTS / "methods", "aaa", {"tags": ["concept"], "name": "aaa",
+                                              "aliases": ["señal común"]}, "# aaa\n")
+    mk_note(cfg.CONCEPTS / "methods", "bbb", {"tags": ["concept"], "name": "bbb",
+                                              "aliases": ["señal común"]}, "# bbb\n")
+    link_from_log(toy_vault, "aaa", "bbb")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "señal común" in _seccion(rep, "mismo alias"), rep

@@ -205,6 +205,15 @@ OCR, o marcar `pending`).
   (`«A … B»`) se chequea por fragmentos; la **página** no se puede chequear así y se dice (media red
   declarada vale más que ninguna). Existe porque el eje *¿la fuente dice esto?* es **ortogonal** a
   *¿la cita es verbatim?*: seis citas no-verbatim volvieron `soportada`, correctamente.
+- **`methods` sin página destino, resuelto también por `aliases`** (#245): el nombre canónico de
+  un método es el **stem** de su nota y `aliases` es la tabla de sinónimos que el schema ya pide —
+  y nadie la leía, así que `bisector span` y `bis` contaban como dos deudas donde hay una. Medido
+  en una bóveda real: cierra 7 de 121. Chico, y del tipo correcto: lo que vacía ese backlog es que
+  el **extractor vea la lista** antes de inventar una grafía, que es la otra mitad del arreglo (el
+  prompt ahora la pega, con tope declarado y sin cerrar el vocabulario).
+- **Dos conceptos declaran el mismo alias** (#245, backlog): el roll-up resuelve al primero en
+  orden alfabético y **lo dice**. Cuál concepto denota un nombre es curación: elegir en silencio
+  decide por el usuario (regla de método 5).
 - **La vista no contesta los ejes de su propia lente** (#254/#270, backlog): el prompt deriva sus
   ejes de `relevance.facets` desde #254 y nada comparaba lo **contestado** contra lo **declarado**
   en `vistas[].lente` — y el silencio de una vista sobre una faceta se lee como «se miró y no hay

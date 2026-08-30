@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import extraction_prompt as ep
 import lib_config as cfg
+from conftest import mk_note
 
 ALIASES = ["HD 10700", "GJ 71", "HIP 8102"]
 DOS_COLUMNAS = "\n".join(
@@ -531,3 +532,31 @@ def test_con_PDF_el_prompt_no_cambia(toy_vault):
     prompt = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, UNA_COLUMNA)
     assert "Leé el PDF" in prompt and "NO HAY PDF" not in prompt
     assert "grep -niE" in prompt and "El `.txt` NO es fuente" in prompt
+
+
+# ── #245 · el prompt muestra el vocabulario que la bóveda ya tiene ──────────────────────────────
+
+def test_el_prompt_lista_los_metodos_conocidos(toy_vault):
+    """#245 — la lista canónica existe (los stems de `concepts/` + sus `aliases`) y el extractor no
+    la veía: inventa una grafía por paper. Medido en una bóveda real: 136 métodos distintos, **121
+    sin página destino**, muchos el mismo método con dos nombres."""
+    mk_note(cfg.CONCEPTS / "methods", "bis", {"tags": ["concept"], "name": "bis",
+                                              "aliases": ["bisector span"]}, "# bis\n")
+    prompt = ep.build_prompt("tau-cet", "2020aaa...1..1A", "tau Cet", [])
+    assert "`bis`" in prompt and "bisector span" in prompt
+    assert "no está cerrado" in prompt, "cerrar el vocabulario sería peor que el problema"
+
+
+def test_sin_conceptos_el_prompt_lo_DICE(toy_vault):
+    """Espejo de `SIN_FACETAS` (#254): una lista vacía se leería como «esta bóveda no conoce ningún
+    método», que es un cero inventado."""
+    assert "todavía no tiene notas" in ep.known_methods()
+
+
+def test_el_tope_de_metodos_se_DECLARA(toy_vault):
+    """#107 — un corte silencioso es cómo se saca una conclusión estructural de un truncamiento que
+    nadie declaró. Si hay más métodos que el tope, el prompt dice cuántos quedaron afuera."""
+    for i in range(5):
+        mk_note(cfg.CONCEPTS / "methods", f"m{i}", {"tags": ["concept"], "name": f"m{i}"}, "# m\n")
+    salida = ep.known_methods(tope=2)
+    assert "y 3 más (tope declarado: 2)" in salida, salida

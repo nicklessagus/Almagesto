@@ -283,7 +283,8 @@ normaliza al **comparar**, nunca al escribir: la grafía que eligió el extracto
 cómo lo nombra el paper. Los **sinónimos** (`gls` / `periodograma-gls`) **no** se juntan solos: eso
 es juicio, a veces son cosas distintas, y va a un backlog que propone y no aplica.
 
-⚠ **El roll-up de métodos linkea `[[método]]` sólo si la nota existe; si no, lo estampa como
+⚠ **El roll-up de métodos linkea `[[método]]` sólo si la nota existe —por stem **o por
+`aliases`** del concepto (#245), con la grafía del extractor al lado— y si no, lo estampa como
 código.** `methods` lo puebla la extracción (paso 3 de `ingest-star`) y las notas de
 `concepts/methods/` las crea **`ingest-theme`**, que es otra operación: con el link incondicional,
 seguir `ingest-star` al pie de la letra dejaba decenas de *wikilinks rotos* —bloqueantes— que no se

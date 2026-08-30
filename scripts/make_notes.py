@@ -2063,8 +2063,18 @@ def metodos_table(rows: list, names: set | None = None) -> str:
                 "ninguno, o la extracción no pobló el campo.)_", ""]
         return "\n".join(out)
     out += ["| Método | Paper | Año |", "|---|---|---|"]
+    # #245 — el destino se resuelve por stem **o por `aliases`** del concepto: el nombre canónico de
+    # un método es el stem de su nota y `aliases` es la tabla de sinónimos que el schema ya pide, y
+    # nadie la leía — `bisector span` y `bis` eran dos métodos distintos. ⛔ La grafía NO se
+    # reescribe: se linkea el destino y se muestra lo que el extractor escribió.
+    idx = cfg.concept_alias_index()
     for m, stem, year in rows:
-        celda = f"[[{m}]]" if m in names else f"`{m}`"
+        destino = m if m in names else cfg.method_target(m, idx)
+        # ⚠ El alias-link `[[stem|texto]]` NO se usa: el `|` dentro de una celda hay que escaparlo
+        # (#240/#227) y un escape de más parte la fila. Se linkea el destino y la grafía del
+        # extractor va al lado, como código — que además deja ver POR QUÉ resolvió ahí.
+        celda = (f"[[{m}]]" if destino == m else
+                 f"[[{destino}]] · `{m}`" if destino else f"`{m}`")
         out.append(f"| {celda} | [[{stem}]] | {year} |")
     out.append("")
     return "\n".join(out)

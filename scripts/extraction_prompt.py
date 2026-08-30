@@ -343,6 +343,48 @@ def axes_skeleton() -> str:
     return "{" + ",".join(f'"{k}":""' for k in facets) + "}"
 
 
+#: #245 · cuántos métodos conocidos entran al prompt. Es un tope DECLARADO, no silencioso: en una
+#: bóveda con 291 métodos, pegarlos todos ahoga el prompt, y cortar sin decirlo es el defecto que
+#: #107 midió (una conclusión estructural sacada de un truncamiento que nadie declaró).
+MAX_METODOS_PROMPT = 60
+
+
+def known_methods(tope: int = MAX_METODOS_PROMPT) -> str:
+    """The vocabulary of methods this vault already has a note for, for the extractor to reuse (#245).
+
+    The canonical name of a method is the stem of its concept note and `aliases` is its synonym
+    table — the list exists and nothing showed it to the extractor, which invents a spelling per
+    paper. Measured on a real vault: 136 distinct `methods`, **121 with no destination page**, many
+    of them the same method under two names.
+
+    ⛔ It does not close the vocabulary: a method with no note is a legitimate answer (that is what
+    the backlog is for). What it does is stop the avoidable divergence. With no concepts it SAYS so
+    instead of emitting an empty list, which would read as «this vault knows no methods» — same
+    doctrine as `axes_skeleton`'s `SIN_FACETAS`."""
+    # Se leen los alias TAL COMO están escritos, no la clave normalizada: el extractor tiene que
+    # ver el nombre humano (`bisector span`), que es el que va a reconocer en el paper.
+    por_stem: dict = {}
+    if cfg.CONCEPTS.exists():
+        for nota in sorted(cfg.CONCEPTS.glob("*/*.md")):
+            try:
+                fm = cfg.split_fm(nota.read_text(encoding="utf-8")) or {}
+            except OSError:
+                continue
+            por_stem[nota.stem] = {str(a).strip() for a in cfg.as_list(fm.get("aliases"))
+                                   if str(a).strip() and str(a).strip() != nota.stem}
+    if not por_stem:
+        return ("⚠ Esta bóveda todavía no tiene notas de `concepts/`: no hay vocabulario que "
+                "reusar. Escribí el método como lo nombra el paper.")
+    nombres = sorted(por_stem)
+    recorte = nombres[:tope]
+    lineas = [f"- `{stem}`" + (f" (alias: {', '.join(sorted(por_stem[stem]))})"
+                               if por_stem[stem] else "")
+              for stem in recorte]
+    cola = (f"\n… y {len(nombres) - tope} más (tope declarado: {tope})" if len(nombres) > tope
+            else "")
+    return "\n".join(lineas) + cola
+
+
 def build_prompt(slug: str, bibcode: str, name: str, aliases, texto: str = "",
                  out_dir: str = "", kind: str = "star", sujeto: str | None = None) -> str:
     """The prompt for one (paper, subject) pair.
@@ -376,6 +418,7 @@ def build_prompt(slug: str, bibcode: str, name: str, aliases, texto: str = "",
     out = f"{out_dir.rstrip('/')}/{bibcode}.json" if out_dir else f"build/{slug}/extraccion/{bibcode}.json"
     alias_str = ", ".join(f"`{a}`" for a in [name, *(aliases or [])])
     ejes = axes_skeleton()          # #254: los ejes son la lente de ESTA bóveda, no un literal
+    metodos_conocidos = known_methods()   # #245: el vocabulario que la bóveda ya tiene
     hay_pdf = (cfg.PDFS / slug / f"{bibcode}.pdf").exists()
     hay_txt = (cfg.FULLTEXT / slug / f"{bibcode}.txt").exists()
     txt_nota = f"""
@@ -413,6 +456,14 @@ da otra vista, y por eso el producto lleva de quién es. Va a la sección `## Vi
   porque un valor que discrepa del publicado es candidato a diferencia de versión.
 - ⛔ **Nada de prosa comparativa con otros papers.** Comparar dos fuentes es tarea del
   orquestador y va al `## Inventario por eje`, no a esta nota.
+
+## Métodos: reusá el vocabulario que la bóveda ya tiene (#245)
+Estos métodos ya tienen nota en `concepts/`. Si el paper usa uno de ellos, **escribilo con ese
+nombre** (o con uno de sus alias) en `methods`; así el roll-up lo linkea en vez de dejarlo colgando.
+⛔ El vocabulario **no está cerrado**: si el paper usa un método que no está en la lista, escribilo
+como lo nombra el paper — eso es una respuesta legítima, no un error.
+
+{metodos_conocidos}
 
 ## Salida
 Escribí el resultado en `{out}` y devolvé el mismo JSON en **un solo bloque** ```json:

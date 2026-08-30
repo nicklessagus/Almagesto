@@ -3176,10 +3176,24 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # (`cfg.method_matches`): comparando el string exacto, `PCA` y `pca` se reportaban como dos
     # deudas distintas y la nota `concepts/methods/pca.md` no contaba como destino de `PCA`.
     _stems_norm = {cfg.method_key(n): n for n in names}
+    # #245 — el destino se resuelve también por los `aliases` del concepto: el nombre canónico de un
+    # método es el stem de su nota y `aliases` es la tabla de sinónimos que el schema ya pide. Nadie
+    # la leía, así que `bisector span` y `bis` eran dos métodos distintos y el backlog contaba dos
+    # deudas donde hay una. Medido en una bóveda real: cierra 7 de 121 — chico, y del tipo correcto:
+    # lo que vacía el backlog es que el extractor VEA la lista antes de inventar la grafía.
+    _alias_idx = cfg.concept_alias_index()
     dangling_methods = sorted(
         (mt, f"usado en {len(refs)} paper(s): {', '.join(sorted(refs)[:3])}"
-             + (" …" if len(refs) > 3 else "") + " → sin nota en `concepts/`: ingerí el tema o corregí el slug")
-        for mt, refs in method_refs.items() if cfg.method_key(mt) not in _stems_norm)
+             + (" …" if len(refs) > 3 else "") + " → sin nota en `concepts/` (ni por `aliases`): "
+             "ingerí el tema, corregí el slug, o declaralo como alias del concepto que lo denota")
+        for mt, refs in method_refs.items()
+        if cfg.method_key(mt) not in _stems_norm and not cfg.method_target(mt, _alias_idx))
+    # #245 — y el alias reclamado por DOS conceptos: se reporta, no se resuelve. Cuál concepto
+    # denota un nombre es curación, y elegir en silencio decide por el usuario (regla de método 5).
+    alias_colision = [(", ".join(sorted(set(stems))),
+                       f"declaran el mismo alias `{alias}` → el roll-up resuelve al primero en orden "
+                       f"alfabético; decidí cuál lo denota y sacalo del otro")
+                      for alias, stems in cfg.alias_collisions()]
 
     # #243 — y las COLISIONES de grafía, que son el otro lado del mismo defecto: el mismo método
     # escrito de dos maneras no es una deuda de ingesta, es ruido que infla el backlog y que hasta
@@ -3774,6 +3788,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('dangling_thesis', 'thesis_links sin página destino', SEV_BLOQUEANTE, tuple(dangling_thesis), poblacion='entidades'),
         Categoria('dangling_methods', '`methods` sin página destino: el roll-up no puede linkearlo (backlog)',
                   SEV_BACKLOG, tuple(dangling_methods), poblacion='entidades'),
+        Categoria('alias_colision', '🔤 Dos conceptos declaran el mismo alias: el roll-up resuelve al primero y nadie lo decidió (#245, backlog)',
+                  SEV_BACKLOG, tuple(alias_colision), poblacion='entidades'),
         Categoria('methods_colision', '🔤 `methods` con varias grafías del mismo método: infla el backlog y partía el roll-up (#243, backlog)',
                   SEV_BACKLOG, tuple(methods_colision), poblacion='papers'),
         Categoria('dangling_disputes', 'disputes: ref de una posición sin paper destino', SEV_BLOQUEANTE, tuple(dangling_disputes), poblacion='entidades'),
