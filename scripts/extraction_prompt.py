@@ -187,8 +187,13 @@ def _media_note(slug: str, bibcode: str) -> str:
 
 
 def _pdf_rel(slug: str, bibcode: str) -> str:
-    """Ruta repo-root-relative del PDF del par, que es de donde salen las fórmulas con #113."""
-    return f"vault/raw/pdfs/{slug}/{bibcode}.pdf"
+    """Repo-root-relative path of the pair's PDF — **the copy that exists** (#305).
+
+    The prompt used to name `vault/raw/pdfs/<slug del sujeto>/…` unconditionally, so for a
+    retro-tagged paper (whose PDF lives under the slug that first ingested it) it pointed at a file
+    that is not there. Falls back to the subject's slug, which is the right path for the message
+    that says the PDF is missing."""
+    return f"vault/raw/pdfs/{cfg.pdf_slug(bibcode, slug) or slug}/{bibcode}.pdf"
 
 
 CORTO = """## Cómo leerlo: empezá por las CONCLUSIONES
@@ -274,7 +279,7 @@ def _source_section(slug: str, bibcode: str, name: str, alias_str: str) -> str:
     silence of #241: the prompt does not omit the instruction, it orders the opposite one.
 
     @inv INV-144'''
-    if (cfg.PDFS / slug / f"{bibcode}.pdf").exists():
+    if cfg.pdf_slug(bibcode, slug):        # #305: bajo CUALQUIER slug, como el cosechador
         return f"""⛔ **Leé el PDF: `{_pdf_rel(slug, bibcode)}`.** `Read` lo rasteriza, así que **ves** la página —
 ecuaciones, tablas y figuras incluidas. Extraé lo que esa fuente dice sobre **{name}**
 (alias: {alias_str}), y **citá por PÁGINA del PDF**."""
@@ -309,8 +314,36 @@ def _reading_section(bibcode: str, hay_pdf: bool = True) -> str:
                         "⛔ NO DECLARADO — pedilo antes de leer: sin alcance no se sabe qué parte entra")
 
 
-def axes_skeleton() -> str:
-    """The `ejes` skeleton of the output JSON, DERIVED from `relevance.facets` (#254).
+def _lens_section(bibcode: str, sujeto: str, enfasis: str) -> str:
+    """The framing of a SECOND reading of the same subject, under another lens (#239/#308).
+
+    ⛔ #239 built the whole harvesting half —`### Lente — <énfasis>`, the `(sujeto, enfasis)`
+    identity, the refusal to overwrite— and nothing could PRODUCE that JSON: `extraction_prompt`
+    did not mention `enfasis` and had no flag, so the only path was writing the JSON by hand, which
+    is what INV-100 forbids for the measured reason this repo already recorded (a subagent prompt
+    written from memory loses the skill's rules). Same shape as #210/INV-132: a documented
+    capability whose expensive half exists and that no user entry can reach.
+
+    The second reading must also SEE the first one — that is what makes it cheap, and why `#124`
+    keeps the lens-free `## Conclusiones` around."""
+    if not enfasis:
+        return ""
+    return f"""
+⛔ **Ésta es una SEGUNDA lectura del mismo sujeto, bajo la lente «{enfasis}» (#239).** La vista
+anterior **no se pisa**: las dos conviven como sub-secciones de la misma `## Vista — {sujeto}`.
+- Leé primero lo que ya está en `vault/wiki/papers/{bibcode}.md` (`## Vista — {sujeto}` y las
+  `## Conclusiones`, que son sin lente): **no re-narres** lo que la vista anterior ya dice.
+- Contestá lo que esta lente pregunta y **nada más**; si el paper no tiene nada bajo esta lente, eso
+  es un resultado válido: decilo en `aporte`.
+- Devolvé `"enfasis": "{enfasis}"` dentro de `vista` — sin eso, el cosechador escribe sobre la
+  lectura anterior en vez de convivir con ella."""
+
+
+def axes_skeleton(meta=None) -> str:
+    """The `ejes` skeleton of the output JSON, DERIVED from the lens in force (#254 + #307).
+
+    With `meta` (the theme's entry) it uses the theme's own `ejes:` when declared — the symmetric
+    half of D-26, which `cfg.theme_axes` documents with its measurement.
 
     `CLAUDE.md` already says these bullets are the facets of this vault's objective, never a fixed
     list from memory, and the prompt wrote them as a five-key literal that never read the objective. The five hardcoded ones are the template's example lens, so every
@@ -333,6 +366,12 @@ def axes_skeleton() -> str:
     cannot read instead of silently falling back to an empty one (INV-80).
 
     @inv INV-143"""
+    propios = cfg.theme_axes(meta)        # #307: la mitad simétrica de D-26
+    if propios is not None:
+        if not propios:
+            return ('{"SIN_EJES": "el tema declara `ejes: []` — NO se piden ejes en esta lectura; '
+                    'lo que el paper aporte va en `aporte` y `ground_truth`."}')
+        return "{" + ",".join(f'"{k}":""' for k in propios) + "}"
     try:
         facets = cfg.as_map(cfg.as_map(cfg.load_objective().get("relevance")).get("facets"))
     except Exception:                     # objetivo ilegible: se DICE, no se inventa una lente
@@ -386,7 +425,8 @@ def known_methods(tope: int = MAX_METODOS_PROMPT) -> str:
 
 
 def build_prompt(slug: str, bibcode: str, name: str, aliases, texto: str = "",
-                 out_dir: str = "", kind: str = "star", sujeto: str | None = None) -> str:
+                 out_dir: str = "", kind: str = "star", sujeto: str | None = None,
+                 meta=None, enfasis: str = "", ejes_cli=None) -> str:
     """The prompt for one (paper, subject) pair.
 
     ⚠ `texto` is DEAD since #205 and kept only so the positional call sites do not have to move:
@@ -415,11 +455,15 @@ def build_prompt(slug: str, bibcode: str, name: str, aliases, texto: str = "",
         greps = "\n".join(f"  grep -niE '{_anclado(p)}' \"{_txt_rel(slug, bibcode)}\"" for p in pats)
     sujeto = sujeto or name
     tipo = "theme" if kind == "theme" else "star"
-    out = f"{out_dir.rstrip('/')}/{bibcode}.json" if out_dir else f"build/{slug}/extraccion/{bibcode}.json"
+    out = (f"{out_dir.rstrip('/')}/{bibcode}.json" if out_dir else
+           f"{(cfg.EXTRACCION / slug).relative_to(cfg.ROOT).as_posix()}/{bibcode}.json")
     alias_str = ", ".join(f"`{a}`" for a in [name, *(aliases or [])])
-    ejes = axes_skeleton()          # #254: los ejes son la lente de ESTA bóveda, no un literal
+    # #254 los ejes son la lente de ESTA bóveda; #307 los del TEMA si los declara; #308 los que
+    # pide una segunda lectura con otra lente, que es lo que la hace distinta de la primera.
+    ejes = ("{" + ",".join(f'"{e}":""' for e in ejes_cli) + "}") if ejes_cli \
+        else axes_skeleton(meta)
     metodos_conocidos = known_methods()   # #245: el vocabulario que la bóveda ya tiene
-    hay_pdf = (cfg.PDFS / slug / f"{bibcode}.pdf").exists()
+    hay_pdf = cfg.pdf_slug(bibcode, slug) is not None    # #305: la misma resolución que el cosechador
     hay_txt = (cfg.FULLTEXT / slug / f"{bibcode}.txt").exists()
     txt_nota = f"""
 ⛔ **El `.txt` NO es fuente.** `{_txt_rel(slug, bibcode)}` lo produce `pdftotext` y es el **índice
@@ -436,6 +480,7 @@ una autocovarianza como una inversa. Nada de eso se ve desde el `.txt`.
 Esto es **una VISTA**, no «la extracción del paper» (#188): el mismo paper leído desde otro sujeto
 da otra vista, y por eso el producto lleva de quién es. Va a la sección `## Vista — {sujeto}` de
 `vault/wiki/papers/{bibcode}.md`. Lo que la fuente diga sobre **otros** sujetos no entra acá.
+{_lens_section(bibcode, sujeto, enfasis)}
 
 {_reading_section(bibcode, hay_pdf)}
 {_search_section(slug, bibcode, greps, hay_txt)}
@@ -544,7 +589,17 @@ def main() -> int:
     ap.add_argument("slug")
     ap.add_argument("bibcode")
     ap.add_argument("--theme", action="store_true", help="el slug es un tema, no una estrella")
-    ap.add_argument("--out-dir", default="", help="directorio de salida (default build/<slug>/extraccion)")
+    ap.add_argument("--out-dir", default="", help="directorio de salida (default vault/raw/extraccion/<slug> — #311: "
+                         "versionado, porque una extracción no es regenerable como un `ads.json`)")
+    ap.add_argument("--enfasis", default="", metavar="LENTE",
+                    help="#239/#308: SEGUNDA lectura del mismo sujeto bajo otra lente. La vista "
+                         "anterior no se pisa: las dos conviven como sub-secciones de la misma "
+                         "`## Vista`. El prompt lo pide en el JSON y manda leer primero lo que ya "
+                         "está, para no re-narrarlo.")
+    ap.add_argument("--ejes", default="", metavar="E1,E2",
+                    help="ejes de ESTA lectura, si son otros que los de la lente (los del tema "
+                         "vía `ejes:` de themes.yaml, o los de `relevance.facets`). Van al "
+                         "esqueleto del JSON: es lo que hace distinta a una segunda lente.")
     args = ap.parse_args()
 
     if args.theme:
@@ -578,8 +633,21 @@ def main() -> int:
     # #188 · el sujeto de la VISTA es el nombre con el que el paper declara la entidad: para un
     # tema es el `concept` (lo que va en `thesis_links`), no el slug que devuelve `theme_by_slug`.
     sujeto = (meta.get("concept") or args.slug) if args.theme else name
+    ejes_cli = [e.strip() for e in args.ejes.split(",") if e.strip()] or None
+    # #308 — la decisión de re-leer bajo la MISMA clave es del usuario, con el mismo criterio con
+    # que `harvest_views` rehúsa pisar: si `(sujeto, enfasis)` ya tiene prosa escrita, se rehúsa.
+    if args.enfasis and nota.exists():
+        import lib_config as _c
+        _fm = _c.split_fm(nota.read_text(encoding="utf-8"))
+        if any(str(v.get("sujeto")) == str(sujeto) and str(v.get("enfasis") or "") == args.enfasis
+               for v in _c.as_list(_fm.get("vistas")) if isinstance(v, dict)):
+            cfg.print_seguro(f"⛔ `{args.bibcode}` ya tiene una vista de «{sujeto}» bajo la lente "
+                             f"«{args.enfasis}»: re-leer bajo la MISMA clave pisaría esa lectura. "
+                             f"Usá otro `--enfasis`, o borrá la vista a mano si es lo que querés.")
+            return 1
     cfg.print_seguro(build_prompt(args.slug, args.bibcode, name, cfg.as_list(meta.get("aliases")),
-                                  "", args.out_dir, "theme" if args.theme else "star", sujeto))
+                                  "", args.out_dir, "theme" if args.theme else "star", sujeto,
+                                  meta=meta, enfasis=args.enfasis, ejes_cli=ejes_cli))
     return 0
 
 

@@ -46,6 +46,16 @@
 #                En un tema OFF-ADS también vale (tema MIXTO): los papers del tema que SÍ tienen
 #                bibcode ADS van acá — NO en sources: con el bibcode de key (degrada el stub:
 #                metadata a mano, blockquote off-ADS falso). ingest_theme les corre la sub-cadena ADS.
+#   ejes     : (opcional, #307) los EJES DE LECTURA que el extractor pregunta por cada paper de este
+#              tema. Sin declarar → los de `relevance.facets` del objetivo; declarados → ésos;
+#              `ejes: []` → no se piden ejes, a propósito. Para un tema de método los globales son
+#              los equivocados, por el mismo argumento de D-26 con `facet:`.
+#   search_fq: (opcional, #295) el `fq` de Solr de ESTE tema, que acota el universo server-side
+#              ANTES de la lente. Sin declarar → hereda `relevance.search_fq` del objetivo;
+#              `search_fq: null` → no acota, a propósito. Un tema de otra disciplina buscado con
+#              `database:astronomy` no encuentra su literatura, y ninguna `facet:` lo recupera.
+#   rows_por_termino: (opcional, #294) cuántos works trae cada slice de `seed_terms` (default 200).
+#              El slice se pagina, así que subirlo cubre el resto del slice.
 #   source   : ⚠ EL NOMBRE ENGAÑA (#209): NO dice "dónde se busca", dice QUÉ CADENA CORRE el
 #              orquestador. El descubrimiento multi-backend (ADS + arXiv + OpenAlex a la vez, merge
 #              por DOI) es `discover.py --theme <slug>`, un paso APARTE que el skill prescribe a
@@ -63,9 +73,11 @@
 #                - key: 2006RasmussenWilliams       # clave de cita sintética AAAA+Autor (obligatoria)
 #                  url: https://...            # fuente web (snapshot vía fetch_web/defuddle) — o bien
 #                  pdf: ~/ruta/al/archivo.pdf  # PDF provisto (se copia a raw/pdfs/<slug>/<key>.pdf;
-#                                              # tras copiar, el orquestador REPUNTA este campo solo
-#                                              # a la copia de la bóveda — repo-relative, portable —
-#                                              # porque el path declarado suele ser staging efímero)
+#                                              # tras copiar, el orquestador PROPONE repuntar este
+#                                              # campo a la copia de la bóveda —repo-relative,
+#                                              # portable— e imprime la línea: aplicarlo es del
+#                                              # operador (#299/AUD-160). Hacelo: el path declarado
+#                                              # suele ser staging efímero y queda muerto)
 #                  title/author/year/venue     # opcionales: metadata para la nota de paper
 #                  n_authors/doi               # opcionales: nº de autores; DOI si existe (un PDF con
 #                                              # DOI sigue siendo off-ADS — sin bibcode ADS — y el DOI

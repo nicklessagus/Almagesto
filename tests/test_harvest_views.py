@@ -1,6 +1,6 @@
 """#188 paso 5 / #191 — el cosechador del fan-out de extracción.
 
-Hasta 1.68.0 **no existía**: cada subagente escribía su JSON en `build/<slug>/extraccion/` y
+Hasta 1.68.0 **no existía**: cada subagente escribía su JSON en el directorio de extracciones y
 **nadie lo leía**. El cosechado era manual, y por eso `is_extraction` (INV-103, P0) —la función
 que distingue una extracción de cualquier otro JSON con `bibcode`— no tenía un solo llamador de
 producción. El defecto que la motivó está medido: un cosechador escrito a mano que aceptaba
@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import harvest_views as hv
 import lib_config as cfg
 import make_notes as mn
-from conftest import mk_note, read_fm
+from conftest import mk_note, read_fm, write_yaml
 
 
 BIB = "2020ext....1E"
@@ -40,8 +40,8 @@ def extraccion(**cambios) -> dict:
 
 
 def sembrar(toy_vault, data=None, *, stem=BIB, fm_extra=None, body=None):
-    """Un JSON de extracción en `build/<slug>/extraccion/` + la nota stub que le corresponde."""
-    d = cfg.ROOT / "build" / "test_star" / "extraccion"
+    """Un JSON de extracción en `vault/raw/extraccion/<slug>/` + la nota stub (#311)."""
+    d = cfg.EXTRACCION / "test_star"
     d.mkdir(parents=True, exist_ok=True)
     (d / f"{stem}.json").write_text(json.dumps(data if data is not None else extraccion()),
                                     encoding="utf-8")
@@ -124,7 +124,7 @@ def test_una_extraccion_sin_vista_se_rechaza(toy_vault):
 
 
 def test_sin_nota_destino_no_se_inventa(toy_vault):
-    d = cfg.ROOT / "build" / "test_star" / "extraccion"
+    d = cfg.EXTRACCION / "test_star"
     d.mkdir(parents=True, exist_ok=True)
     (d / f"{BIB}.json").write_text(json.dumps(extraccion()), encoding="utf-8")
     r = hv.harvest("test_star")
@@ -402,7 +402,7 @@ def test_la_traduccion_no_es_prefijo_del_original(toy_vault):
     hv.harvest("test_star")                       # sólo la traducción
     assert "## Traducción del abstract" in dest.read_text(encoding="utf-8")
 
-    (cfg.ROOT / "build" / "test_star" / "extraccion" / f"{BIB}.json").write_text(
+    (cfg.EXTRACCION / "test_star" / f"{BIB}.json").write_text(
         json.dumps(extraccion(abstract="The verbatim abstract.", abstract_es="Resumen traducido.")),
         encoding="utf-8")
     hv.harvest("test_star")                       # ahora sí el verbatim
@@ -777,3 +777,28 @@ def test_la_sub_seccion_con_prosa_tampoco_se_pisa(tmp_path, capsys):
     assert hv.write_view_section(dest, "tau Cet", otro, theme=False, enfasis="ruido") is False
     assert "NO se pisa" in capsys.readouterr().out
     assert "primera" in dest.read_text(encoding="utf-8")
+
+
+def test_la_vista_registra_los_ejes_QUE_SE_PREGUNTARON(toy_vault, monkeypatch):
+    """#307 — `vistas[].lente` guarda la lente vigente al leer, que es lo que hace posible el diff
+    de D-49 a nivel de lectura. Con ejes propios del tema, registrar las facetas globales
+    describiría una lectura que no ocurrió.
+
+    @inv INV-146"""
+    write_yaml(cfg.THEMES_YAML, {"ica_ruido": {
+        "title": "ICA ruidosa", "concept": "ica-ruido", "area": "methods", "facet": "noisy ICA",
+        "ejes": ["heterocedasticidad", "identificabilidad"]}})
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / "2002Cardoso.md").write_text(
+        "---\nbibcode: 2002Cardoso\nthesis_links: [ica-ruido]\nvistas: []\n---\n\n"
+        "## Abstract\n\nx\n## Vista — ica-ruido\n\n_(pendiente)_\n", encoding="utf-8")
+    src = cfg.EXTRACCION / "ica_ruido"
+    src.mkdir(parents=True, exist_ok=True)
+    (src / "2002Cardoso.json").write_text(json.dumps({
+        "bibcode": "2002Cardoso", "ejes": {"heterocedasticidad": "Σ diagonal"},
+        "ground_truth": [], "aporte": "x",
+        "vista": {"sujeto": "ica-ruido", "tipo": "theme", "fuente": "abstract"}}),
+        encoding="utf-8")
+    hv.harvest("ica_ruido", theme=True)
+    fm = cfg.split_fm((cfg.PAPERS / "2002Cardoso.md").read_text(encoding="utf-8"))
+    assert fm["vistas"][0]["lente"] == ["heterocedasticidad", "identificabilidad"]

@@ -19,7 +19,8 @@ LAS SIETE CAPAS de una entidad, que es la lista que hay que no olvidar:
   2. `vault/config/registro/<slug>.yaml`   ← el ÚNICO artefacto no regenerable
   3. `vault/raw/ground_truth/<slug>.json`
   4. `vault/raw/pdfs/<slug>/`
-  5. `vault/raw/fulltext/<slug>/`
+  5. `vault/raw/fulltext/<slug>/` y `vault/raw/extraccion/<slug>/` (#311: la extracción es el
+     artefacto MÁS caro y vive versionada, no en `build/`)
   6. la nota: `vault/wiki/stars/<slug>.md` (estrella) o `concepts/<area>/<concept>.md` (tema)
   7. `build/<slug>/`  (scratch, pero si queda se re-propone triage de una entidad que no existe)
 
@@ -91,6 +92,7 @@ def capas(slug: str, tipo: str, meta: dict) -> list[tuple[str, Path]]:
         ("ground_truth", cfg.GROUND_TRUTH / f"{slug}.json"),
         ("pdfs", cfg.PDFS / slug),
         ("fulltext", cfg.FULLTEXT / slug),
+        ("extraccion", cfg.EXTRACCION / slug),     # #311
         ("nota", nota_de(tipo, slug, meta)),
         ("build", cfg.ROOT / "build" / slug),
     ]

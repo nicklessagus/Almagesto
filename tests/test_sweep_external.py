@@ -421,7 +421,7 @@ def test_el_registro_declara_lo_que_NO_se_pudo_mirar(toy_vault, monkeypatch, cap
     stdout — el mismo argumento con el que #55 y #88 mudaron el triage y el barrido al registro."""
     for nombre in ("sweep_retracciones", "sweep_correcciones"):
         monkeypatch.setattr(sw, nombre, lambda: [])
-    monkeypatch.setattr(sw, "discover_versions", lambda: ([], []))
+    monkeypatch.setattr(sw, "discover_versions", lambda **k: ([], []))
     monkeypatch.setattr(sw, "sweep_web", lambda: ([], ["tema/a", "tema/b", "tema/c"]))
     monkeypatch.setattr(sw, "sweep_ground_truth", lambda: ([], []))
     monkeypatch.setattr(sw, "sweep_citas", lambda: ([], []))
@@ -438,7 +438,7 @@ def test_una_pasada_limpia_no_declara_no_evaluados(toy_vault, monkeypatch):
     `no_evaluados: []` fijo en cada pasada sería ruido en el único artefacto no regenerable."""
     for nombre in ("sweep_retracciones", "sweep_correcciones"):
         monkeypatch.setattr(sw, nombre, lambda: [])
-    monkeypatch.setattr(sw, "discover_versions", lambda: ([], []))
+    monkeypatch.setattr(sw, "discover_versions", lambda **k: ([], []))
     for nombre in ("sweep_web", "sweep_ground_truth", "sweep_citas"):
         monkeypatch.setattr(sw, nombre, lambda: ([], []))
     sw.main([])
@@ -493,3 +493,43 @@ def test_el_modo_acotado_declara_el_bibcode_sin_nota(toy_vault, monkeypatch, cap
     monkeypatch.setattr(sw, "discover_versions", lambda solo=None: ([], []))
     sw.main(["--bibcodes", "2002noExiste"])
     assert "sin nota en la bóveda" in capsys.readouterr().out
+
+
+def test_el_hallazgo_de_version_sobrevive_a_la_corrida(toy_vault, monkeypatch):
+    """#298 — versiones era la única de las seis que no dejaba marca: retracciones estampa
+    `retracted`, correcciones `corrections`, ground-truth deja `_cambios` y el lint pide la marca…
+    y ésta imprimía una línea. Se estampa `versions_disponible` con el mismo criterio que
+    `corrections` (es metadata, no un valor que la prosa citó), y el renombre sigue siendo
+    propuesto: reescribe wikilinks de toda la bóveda (D-19)."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    nota = cfg.PAPERS / "2024arXiv240108468K.md"
+    nota.write_text("---\nbibcode: 2024arXiv240108468K\narxiv_id: '2401.08468'\n---\n\n"
+                    "## Abstract\n\nx\n", encoding="utf-8")
+    import query_ads
+    monkeypatch.setattr(query_ads, "query_ads",
+                        lambda q, **k: [{"bibcode": "2025ITSP...73..876S"}])
+    hallazgos, fallidos = sw.discover_versions()
+    assert hallazgos == [("2024arXiv240108468K", "2025ITSP...73..876S")] and not fallidos
+    assert cfg.split_fm(nota.read_text(encoding="utf-8"))["versions_disponible"] == \
+        "2025ITSP...73..876S"
+    # idempotente: la segunda corrida no re-escribe
+    assert sw.stamp_version_disponible("2024arXiv240108468K", "2025ITSP...73..876S") is False
+
+
+def test_el_detector_de_versiones_declara_su_poblacion(toy_vault, monkeypatch):
+    """#298 / INV-40 — `cubrió: versiones` sobre 3 de 138 notas se lee como «se miraron las
+    versiones de la bóveda». El filtro (sólo notas cuyo bibcode SIGUE siendo el eprint) es correcto
+    por contrato: D-19 es sobre identidad. Lo que faltaba era declarar sobre cuántas."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / "2024arXiv240108468K.md").write_text(
+        "---\nbibcode: 2024arXiv240108468K\narxiv_id: '2401.08468'\n---\n\n## Abstract\n\nx\n",
+        encoding="utf-8")
+    for stem in ("2020ApJ...900....1X", "2019MNRAS.482.1872K"):
+        (cfg.PAPERS / f"{stem}.md").write_text(
+            f"---\nbibcode: {stem}\narxiv_id: '1901.00001'\n---\n\n## Abstract\n\nx\n",
+            encoding="utf-8")
+    import query_ads
+    monkeypatch.setattr(query_ads, "query_ads", lambda q, **k: [])
+    meta = {}
+    sw.discover_versions(meta=meta)
+    assert meta == {"miradas": 1, "notas": 3}

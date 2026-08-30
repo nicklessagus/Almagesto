@@ -13,37 +13,37 @@ El usuario cura las fuentes (`vault/raw/`) y hace preguntas.
 > cada instancia es `vault/config/objective.yaml` + el
 > contenido de `vault/wiki/`/`vault/raw/`. Para instanciar una bóveda nueva ver `README.md` (sección *Instanciar*).
 
-> **La cabecera de una ficha/concepto lleva una línea `> _Estado — …_`** con **tres fechas**
-> que avanzan por separado y pueden divergir sin que ninguna mienta (D-12): **búsqueda** (última
-> corrida + universo acumulado + escotillas), **síntesis** (cuándo se destiló el sujeto a la prosa —
-> se **declara**, `cfg.save_sintesis` / `triage.py --sintesis`, porque no se puede derivar: `git`
-> fecha el ARCHIVO, así que una cirugía de cabecera contaría igual que reescribir el resumen) y
+> **La cabecera de una ficha/concepto lleva una línea `> _Estado — …_`** con **tres fechas** que
+> avanzan por separado y pueden divergir sin que ninguna mienta (D-12): **búsqueda** (última corrida
+> + universo acumulado + escotillas), **síntesis** (cuándo se destiló el sujeto a la prosa — se
+> **declara**, `cfg.save_sintesis` / `triage.py --sintesis`, porque no se puede derivar: `git` fecha
+> el ARCHIVO, así que una cirugía de cabecera contaría igual que reescribir el resumen) y
 > **verificación** (fecha del bloque, con la salvedad fija *"vigencia por par: la dicen las anclas"*
-> — sin ella, la fecha se lee como "todo verificado a esta fecha", que es justo la lectura que el
-> ancla corrige). Con una sola fecha por nota, refrescar el corpus hacía parecer re-verificado lo
-> que nadie volvió a chequear —y re-sintetizado lo que nadie volvió a escribir (INV-82; hasta #150
-> este párrafo prometía tres y enumeraba dos, así que la de síntesis no la estampaba nadie que
-> siguiera sólo este documento).
+> — sin ella la fecha se lee como "todo verificado a esta fecha", que es lo que el ancla corrige).
+> Con una sola fecha, refrescar el corpus hacía parecer re-verificado lo que nadie volvió a chequear
+> —y re-sintetizado lo que nadie volvió a escribir (INV-82).
 
 > **Al iniciar sesión, leé `vault/STATUS.md` (estado + próximos pasos) y `vault/wiki/log.md` (historial
 > reciente) para orientarte.** *(Si estás en el repo **template** `Almagesto` —donde esos dos son la
 > **semilla** que una instancia nueva clona, no un estado— el handoff del desarrollo del framework
 > vive en `docs/internal/HANDOFF.md`, que no se versiona.)* ⛔ **`index.md` se ESTAMPA
 > (`python scripts/make_notes.py --restamp-index`, #237), no se edita a mano.** Era el único
-> artefacto que quedó **100 % Dataview** —exactamente lo que #60 prohibió para los roll-ups, y con
-> más fuerza acá: el catálogo es lo primero que un agente abre para orientarse, y un bloque
-> ```dataview``` le muestra **la query, no sus resultados**, con el plugin sin versionar
-> (`.obsidian/plugins/` está gitignored mientras `community-plugins.json` declara `dataview`)—. El
-> efecto medido: el paso de bookkeeping de los skills mandaba *«agregar la estrella/el concepto a
-> `index.md`»* sobre un archivo **sin una sola línea estática**, así que el paso no se podía cumplir
-> como estaba escrito, y los tres commits del `index.md` de una bóveda real son anteriores a su
-> instanciación. Hoy las tres tablas se materializan por verdad de frontmatter, el Dataview queda
+> artefacto **100 % Dataview** —lo que #60 prohibió para los roll-ups, y con más fuerza acá: el
+> catálogo es lo primero que un agente abre, y un bloque ```dataview``` le muestra **la query, no
+> sus resultados**, con el plugin sin versionar—. El efecto medido: el paso de bookkeeping de los
+> skills mandaba *«agregar la estrella a `index.md`»* sobre un archivo **sin una sola línea
+> estática**, así que no se podía cumplir como estaba escrito. Hoy las tres tablas se materializan
+> por verdad de frontmatter, el Dataview queda
 > **debajo** como comodidad de Obsidian, y el lint reporta el índice desactualizado **nombrando los
 > stems** (mismo criterio que D-10 para `## Papers`). La "memoria" del proyecto es in-repo: este `CLAUDE.md` + `vault/STATUS.md`
 > + `vault/wiki/log.md` + `vault/wiki/index.md`. No depender de la memoria local de Claude (`~/.claude/...`),
 > que no viaja entre máquinas. Tras cada operación, actualizá `index.md`, appendeá a `log.md`
 > (entrada `## AAAA-MM-DD — <op>: <título>` + bullets — greppable por fecha) y, si cambió el estado,
-> `vault/STATUS.md`.
+> `vault/STATUS.md`. ⛔ **El `STATUS.md` se REESCRIBE, no se appendea (#302)** —lo histórico y el
+> handoff por corte de contexto van al `log`, con su fecha—: es la pieza de memoria que no tenía
+> política declarada y se volvió bitácora (medido: 537 líneas, 12 encabezados fechados y **cuatro**
+> listas de próximos pasos, una contradiciendo un estado posterior del mismo archivo). Queda el
+> estado vigente + **una** lista de próximos pasos; el lint levanta el apilamiento y su techo.
 
 ## Layout del repo — la bóveda vive en `vault/`
 
@@ -56,7 +56,7 @@ Almagesto/
 └── vault/                                                              ← la bóveda — Obsidian abre ACÁ
     ├── config/  (objective.yaml, stars.yaml, themes.yaml, ads_dev_key, registro/<slug>.yaml)
     ├── wiki/    (stars, papers, concepts, queries, matrices, index.md, log.md)
-    ├── raw/     (pdfs, fulltext, ground_truth, refs)
+    ├── raw/     (pdfs, fulltext, extraccion, ground_truth, refs)
     ├── STATUS.md
     └── .obsidian/
 ```
@@ -131,42 +131,32 @@ el preprint: una discrepancia numérica es candidata a diferencia de versión, n
 Si al validar encontrás una discrepancia, **no la arregles en silencio de tu lado**: es un hallazgo
 de la bóveda — reportalo, o el próximo consumidor tropieza con lo mismo.
 
-**Test de admisión (aplicá a TODA línea de `vault/wiki/` — fichas, conceptos, queries, hipótesis, matrices,
-log):** *¿esto sale de una fuente (`vault/raw/`) y lo puedo respaldar con un `[[bibcode]]`, o es una
-conclusión derivada de fuentes citadas?* Si la respuesta es **no → no entra al vault.** Sin excepciones
-—ni por "es útil para quien la consume" ni por "es obvio".
+**Test de admisión (aplicá a TODA línea de `vault/wiki/`):** *¿esto sale de una fuente (`vault/raw/`)
+y lo puedo respaldar con un `[[bibcode]]`, o es una conclusión derivada de fuentes citadas?* Si la
+respuesta es **no → no entra al vault**, sin excepciones —ni por "es útil para quien la consume" ni
+por "es obvio".
 
-**Prohibido inlinear en `vault/wiki/` (no es bibliografía):**
-- Parámetros, perillas o **dials** de un generador/pipeline (p. ej. un "contraste $C$", pesos por orden
-  $w_j$, recetas de "qué inyectar").
-- Nombres de variables / estructura de código.
-- Reparametrizaciones o **decisiones de diseño** de una implementación (p. ej. "usar $g=\ln C$ como perilla").
-- Recetas operativas de "cómo correr" que no sean un hecho citable.
+**Prohibido inlinear en `vault/wiki/` (no es bibliografía):** parámetros, perillas o **dials** de un
+generador/pipeline; nombres de variables o estructura de código; reparametrizaciones y **decisiones
+de diseño** de una implementación; recetas operativas de "cómo correr" que no sean un hecho citable.
+**Sí es citable (entra):** resultados publicados —**incluidos papers de simulación**: rangos
+medidos, mecanismos, signos, escalas temporales, fórmulas de la fuente. La distinción es
+**publicado-y-citable vs implementación de código**, no "simulación sí/no". **Si detectás
+contaminación**, sacala de `vault/wiki/` y marcalo en el `log`.
 
-**Sí es citable (entra):** resultados publicados de papers —**incluidos papers de simulación**
-(p. ej. StarSim / Baroch+2020): rangos medidos, mecanismos físicos, signos, escalas temporales,
-fórmulas de la fuente. La distinción es **publicado-y-citable (entra) vs implementación de código
-(no entra)**, no "simulación sí/no".
-
-**Si detectás contaminación** (material de implementación que se coló en una nota): sacalo de `vault/wiki/`.
-Lo que no es bibliografía no vive acá. Marcalo en el `log`.
-
-**Punteros a otros repos — regla afinada (prosa no, frontmatter estructural sí):** lo prohibido es
-el puntero downstream **en prosa / como motivación** ("para qué sirve en <repo consumidor>", "esto
-decide X en <pipeline>") — eso es describir al consumidor y rompe el flujo unidireccional. En cambio,
-los **campos estructurales del frontmatter** de `stars/` —`data_local`, `methods_applied.ours`—
-**sí** pueden apuntar a rutas/experimentos externos: registran *qué datos hay* y *qué se les aplicó*,
-son parte del contrato máquina-legible de la ficha, no motivación. **Migración de una instancia con
-prosa downstream heredada** (regla vieja → estricta): (a) borrar de notas de método/queries los
-comentarios "para qué sirve en <downstream>" y la parte decisión-downstream de las disputas;
-(b) `data_local`, `methods_applied.ours` y `log.md` (bitácora histórica) se quedan; (c) los links a
-experimentos en la matriz método×estrella quedan a decisión de cada instancia.
+**Punteros a otros repos (prosa no, frontmatter estructural sí):** lo prohibido es el puntero
+downstream **en prosa / como motivación** ("para qué sirve en <repo consumidor>") — eso describe al
+consumidor y rompe el flujo unidireccional. Los **campos estructurales** de `stars/` —`data_local`,
+`methods_applied.ours`— **sí** pueden apuntar a rutas externas: registran *qué datos hay* y *qué se
+les aplicó*, son contrato máquina-legible, no motivación. **Migrando una instancia heredada**:
+borrar de notas de método/queries los comentarios "para qué sirve en <downstream>" y la parte
+decisión-downstream de las disputas; `data_local`, `methods_applied.ours` y `log.md` se quedan.
 
 ## Arquitectura (analogía de compilador)
 
-- **`vault/raw/`** = código fuente **inmutable**. Leer, nunca modificar. Contiene `vault/raw/pdfs/<slug>/`
-  (git-lfs), `vault/raw/fulltext/<slug>/*.txt` (texto para grep/lectura barata) y
-  `vault/raw/ground_truth/<slug>.json` (hechos de NASA Exoplanet Archive + SIMBAD, fuente de verdad dura).
+- **`vault/raw/`** = lo que se leyó, **inmutable una vez escrito**: `pdfs/<slug>/` (git-lfs),
+  `fulltext/<slug>/*.txt` (índice de búsqueda), `extraccion/<slug>/*.json` (#311: las vistas del
+  fan-out, **versionadas** — no se regeneran sin volver a leer el PDF) y `ground_truth/<slug>.json`.
 - **el LLM** = compilador.
 - **`vault/wiki/`** = ejecutable. `.md` que escribís vos: `stars/` (entidades), `papers/` (resúmenes de
   fuente), `concepts/{methods,hypotheses}/` (⚠ las áreas son **abiertas**: ésas son las dos que el
@@ -260,17 +250,19 @@ quedan adentro** (#273: por par eran 369 filas sobre 291 métodos, el 30 % de un
 · sintetizados en esta ficha): el defecto que evita es prometer 155 arriba de una síntesis de 8. El
 **estado** dice cuán lejos llegó cada paper: `fuera del filtro` → `sin extraer` → `extraído, no
 sintetizado` → `sintetizado`. En un concepto el roll-up es la **unión** de `methods` y
-`thesis_links`, con la columna *Entró por* (D-24: esas dos llaves viven en papers distintos).
+`thesis_links`, con la columna *Entró por* (D-24: esas dos llaves viven en papers distintos) — y
+lleva **las mismas dos garantías** (los dos números y `Estado`, #300): se habían aplicado sólo a
+`stars/` y el defecto seguía vivo acá (medido: un concepto cerrado prometía 89 arriba de una
+síntesis de 30, con 57 reclamados y sin leer).
 
 El motivo (#60): un bloque ```dataview``` le muestra a un agente que abre el `.md` **la query, no
-sus resultados**, y el plugin ni siquiera está versionado. El equivalente determinista parsea el
-frontmatter con el mismo parser que el tooling (`lib_config.split_fm`), desde la raíz del repo:
+sus resultados**, y el plugin ni está versionado. El equivalente determinista parsea el frontmatter
+con el mismo parser que el tooling (`lib_config.split_fm`), desde la raíz del repo:
 
 ```bash
-# papers de una estrella (equivale al roll-up `## Papers`)
+# papers de una estrella (equivale al roll-up `## Papers`); con `fm.get('methods')` en el print,
+# los métodos DE esos papers (no todo paper que use el método)
 python -c "import sys,glob;sys.path.insert(0,'scripts');import lib_config as c;[print(f) for f in sorted(glob.glob('vault/wiki/papers/*.md')) if '<nombre>' in (c.split_fm(open(f,encoding='utf-8').read()).get('stars') or [])]"
-# métodos aplicados a esa estrella (los métodos DE los papers de la estrella, no todo paper que use el método)
-python -c "import sys,glob;sys.path.insert(0,'scripts');import lib_config as c;[print(f,'→',fm.get('methods')) for f in sorted(glob.glob('vault/wiki/papers/*.md')) for fm in [c.split_fm(open(f,encoding='utf-8').read())] if '<nombre>' in (fm.get('stars') or []) and fm.get('methods')]"
 ```
 
 ⛔ **No uses `grep`/`awk` sobre el frontmatter para esto.** La lista puede estar en **bloque** (como
@@ -316,9 +308,8 @@ discrepancias **materiales** (mayores que el error). Reflejar la disputa tambié
 ⚠ **El schema viejo** (`planets[].disputes[]` con `field`/`ref`/`note`/`alt`) tenía el polo de
 verdad hardcodeado en la forma: servía para paper↔NEA y **no podía expresar paper↔paper** —el caso
 normal cuando NEA calla—, y `P_rot`, que es de la estrella, no tenía dónde colgar. **El lint no lo
-lee: lo detecta y bloquea**, con el comando de migración
-(`python scripts/make_notes.py --migrate-disputes`) — una disputa que el lector ignora en silencio
-es peor que un error.
+lee: lo detecta y bloquea** (`python scripts/make_notes.py --migrate-disputes`) — una disputa que el
+lector ignora en silencio es peor que un error.
 
 ### papers/
 
@@ -338,13 +329,11 @@ cara es del usuario.
 
 El prompt del fan-out nunca pregunta *«¿qué dice este paper?»* sino *«¿qué dice **sobre
 {sujeto}**?»* — pero la nota es **una por bibcode**. Con una sola sección sin scope, **el silencio
-de la nota sobre un eje es indistinguible de «se miró y no hay nada»**.
-
-Cada entrada de `vistas[]`: `sujeto` (el mismo nombre que usan `stars[]`/`thesis_links[]` — es lo
-que hace comparables reclamo y lectura), `tipo` (vocabulario **cerrado** `star | theme`, declarado y
-no derivado, para que el lint cace el typo), `fecha`, `txt` (de qué copia del `.txt` salió — el
-ancla de fuente cuando el mismo bibcode vive bajo varios slugs), `lente` (las facetas vigentes al
-leer) y `fuente`. La sección del cuerpo es `## Vista — <sujeto>` y **no** es sección estampada: es
+de la nota sobre un eje es indistinguible de «se miró y no hay nada»**. Cada entrada de `vistas[]`:
+`sujeto` (el mismo nombre que usan `stars[]`/`thesis_links[]` — es lo que hace comparables reclamo y
+lectura), `tipo` (vocabulario **cerrado** `star | theme`, declarado y no derivado, para que el lint
+cace el typo), `fecha`, `txt` (de qué copia del `.txt` salió), `lente` (las facetas vigentes al
+leer) y `fuente`. La sección del cuerpo es `## Vista — <sujeto>` y **no** es estampada: es
 exactamente lo que `verify-citations` contrasta contra la fuente. El lint **bloquea** la
 incoherencia en los dos sentidos (vista declarada sin su sección; sección sin declarar) y el schema
 viejo (`## Extracción (LLM)` sin `vistas[]`). **Forma dura como `extra_core`** (D-58): el escalar y
@@ -352,55 +341,51 @@ la lista de strings bloquean.
 
 ⛔ **`txt` se cruza contra el DISCO al estamparse (#230).** Un ancla que apunta a la nada no ancla.
 La asimetría con `fuente: pdf` es deliberada: aquélla **rechaza** la extracción, ésta **degrada
-declarando** — si el `.txt` vive bajo otro slug se apunta ahí; si no existe en ningún lado **la
-clave no se escribe** (*no consta*, nunca un puntero falso), porque desde #205 una vista puede
-legítimamente no tener `.txt` y rechazarla tiraría una lectura buena.
+declarando** — si el `.txt` vive bajo otro slug se apunta ahí; si no existe **la clave no se
+escribe** (*no consta*, nunca un puntero falso): desde #205 una vista puede legítimamente no tener
+`.txt`.
 
 ⛔ **`fuente` dice DE QUÉ se construyó: `pdf` | `abstract` (#207).** Un paper sin PDF **no es
-inextraíble**: ADS, OpenAlex y arXiv devuelven el abstract, y ése puede traer lo que la ficha
-necesita. Lo que no puede pasar es que una lectura de ocho líneas quede indistinguible de haber
-leído el paper —y encima el abstract es justo donde la fuente afirma **de más** (*generalization
-bias*)—. Lo **declara el extractor** (el único que sabe qué abrió) y el **cosechador lo cruza contra
-el disco**: `fuente: pdf` sin PDF **rechaza la extracción entera**, porque adivinar cuál de las dos
-mitades miente es lo que el campo existe para evitar. Ausente = *no consta*, backlog;
+inextraíble** —ADS, OpenAlex y arXiv devuelven el abstract—; lo que no puede pasar es que una
+lectura de ocho líneas quede indistinguible de haber leído el paper, y encima el abstract es donde
+la fuente afirma **de más**. Lo **declara el extractor** y el **cosechador lo cruza contra el
+disco**: `fuente: pdf` sin PDF **rechaza la extracción entera**. Ausente = *no consta*, backlog;
 `fuente: abstract` también, pero ahí el pedido es **conseguir el PDF**.
 
 ⛔ **La `fecha` es lo que dice que la lectura OCURRIÓ.** El stub nace con la vista de su sujeto y
-**sin** fecha (la ausencia es *no consta*), así la nota es coherente desde el minuto cero y el lint
-reporta la vista sin fecha como backlog. La estampa el **cosechador**
-(`python scripts/harvest_views.py <slug> [--theme]`), que además mergea `methods`/`thesis_links`/
-`role` add-only, escribe la sección mientras siga siendo la plantilla del stub —prosa redactada no
-se pisa sin `--force`: puede tener anclas de verificación colgando del texto exacto— y **trae el
-`.txt` al slug del sujeto** (D-18), sin lo cual la vista de un paper retro-tagueado no es ejecutable.
+**sin** fecha (*no consta*), así la nota es coherente desde el minuto cero y el lint reporta la vista
+sin fecha como backlog. La estampa el **cosechador** (`harvest_views.py <slug> [--theme]`), que
+además mergea `methods`/`thesis_links`/`role` add-only, escribe la sección mientras siga siendo la
+plantilla del stub —prosa redactada no se pisa sin `--force`— y **trae el `.txt` al slug del sujeto**
+(D-18), sin lo cual la vista de un paper retro-tagueado no es ejecutable.
 
 ⛔ **Las `salvedades` sobre el ARTEFACTO se chequean con un script, o se publican marcadas NO
-VERIFICADAS (#213).** Una salvedad del tipo *«el `.txt` perdió este símbolo»* no lleva `[[bibcode]]`
-—es una afirmación sobre el archivo, no sobre el paper— así que `verify-citations` la deja afuera
-**por construcción**. Dos mitades:
+VERIFICADAS (#213).** *«El `.txt` perdió este símbolo»* no lleva `[[bibcode]]` —es sobre el archivo,
+no sobre el paper—, así que `verify-citations` la deja afuera **por construcción**. Dos mitades:
 
-- La salvedad que hace una afirmación **decidible sobre un archivo** se emite **estructurada**, con
-  vocabulario cerrado (`lib_config.SALVEDAD_TIPOS`: `txt_pierde` con su `cadena`, `pdf_paginas` con
-  su `n`), y la chequea el **cosechador** con `grep` o `pdfinfo` — máquina, no LLM. La que resulta
-  **falsa NO se publica** y el cosechador la grita con su archivo; ⚠ pero **no tira la extracción**
-  (a diferencia de #207: aquello es una contradicción sobre *qué se abrió*; esto es un campo
-  secundario que se descarta sin perder la mitad más cara de la cadena). El chequeo que **no pudo
-  correr** —sin `.txt`, sin PDF, sin `pdfinfo`, `tipo` con typo— sale **no evaluable con su motivo**,
-  nunca «verificada» (D-43).
+- La salvedad **decidible sobre un archivo** se emite **estructurada**, con vocabulario cerrado
+  (`lib_config.SALVEDAD_TIPOS`: `txt_pierde` + `cadena`, `pdf_paginas` + `n`), y la chequea el
+  **cosechador** con `grep` o `pdfinfo` — máquina, no LLM. La **falsa NO se publica** y el cosechador
+  la grita con su archivo; ⚠ pero **no tira la extracción** (a diferencia de #207: aquello es una
+  contradicción sobre *qué se abrió*). El chequeo que **no pudo correr** sale **no evaluable con su
+  motivo**, nunca «verificada» (D-43).
 - Todo lo demás se publica en su **propio bloque**, marcado *«⚠ NO VERIFICADAS — juicio del
   extractor»*: publicarlo al mismo nivel visual que una fila chequeada es lo que dejó leer un
   defecto inventado como un hecho medido.
 
 ⛔ **La lectura puede RETRACTAR el reclamo que la trajo: `refuta: [<sujeto>]` (#212).** Es el único
-canal en esa dirección: `stars`/`thesis_links` se siembran **antes** de leer y `harvest_views`
-mergea **add-only** —lo cual protege la extracción de que un re-seed la pise—, así que un reclamo
-falso era **infalsificable por la lectura**. El caso típico es la **polisemia** (un paper entra a un
-tema por un término que usa en otro sentido). ⛔ El cosechador **registra y propone, no aplica**:
-deja el `refuta` en la vista e imprime el `--drop-core` con su motivo listo para pegar, porque
-borrar el reclamo sería un LLM editando curación en silencio y porque la decisión es del **par
-(paper, sujeto)** — el paper puede ser core de otro. El lint lo reporta como **backlog**. El
+canal en esa dirección: `stars`/`thesis_links` se siembran **antes** de leer y `harvest_views` mergea
+**add-only**, así que un reclamo falso era **infalsificable por la lectura** (el caso típico es la
+**polisemia**). ⛔ El cosechador **registra y propone, no aplica**: deja el `refuta` en la vista e
+imprime el `--drop-core` con su motivo, porque borrar el reclamo sería un LLM editando curación en
+silencio y porque la decisión es del **par (paper, sujeto)**. El lint lo reporta como **backlog**; el
 add-only **no se afloja**.
 
-⛔ **Una SEGUNDA lectura del mismo sujeto con otra lente CONVIVE: `enfasis` (#239).** La identidad
+⛔ **Una SEGUNDA lectura del mismo sujeto con otra lente CONVIVE: `enfasis` (#239), y se PIDE con
+`extraction_prompt.py … --enfasis "<lente>" [--ejes a,b]` (#308)** —el prompt manda leer primero la
+vista anterior para no re-narrarla, y **rehúsa** si `(sujeto, enfasis)` ya tiene lectura—: la mitad
+de cosecha existía desde #239 y la única forma de producir ese JSON era escribirlo a mano, que es lo
+que INV-100 prohíbe. La identidad
 de una vista es el par `(sujeto, enfasis)` y su sección es `### Lente — <énfasis>` **dentro** de la
 `## Vista` del sujeto —partir el encabezado no serviría: `section_start` recorta el sufijo que
 arranca con puntuación (AUD-178) y las dos colapsarían—. El cosechador **rehúsa** cambiar un valor
@@ -408,22 +393,20 @@ ya escrito bajo la misma clave (hasta 1.122.x lo pisaba en silencio): completa l
 manda declarar la lente.
 
 ⛔ **`vistas[]` la escribe SÓLO la lectura, nunca el retro-link.** Es lo que mantiene a
-`stars`/`thesis_links`/`methods` como **reclamos** (`make_notes` los mergea add-only sin leer nada)
-y a `vistas[]` como **lecturas**. Un reclamo sin vista es backlog, y se cierra de dos maneras:
-haciendo la vista, o declarándola `no_vista: [{sujeto, motivo}]` cuando ese sujeto sólo aporta al
-roll-up — declaración que vale en **las cuatro** redes que cuentan la nota (#268), con estado propio
-en el roll-up: `sin vista (declarado)`, que no es `sin extraer`. **Motivo obligatorio y por sujeto**: un paper que tres sujetos reclaman se saltea por
-motivos distintos en cada uno, y una escotilla sin sujeto los eximiría a los tres. Qué cuenta como
-reclamo: `stars` y `thesis_links` siempre; `methods` **sólo si ese nombre es un tema declarado** —lo
-puebla la extracción, así que es producto de la lectura, y contarlo entero haría nacer el backlog
-con centenares.
+`stars`/`thesis_links`/`methods` como **reclamos** (`make_notes` los mergea add-only sin leer nada) y
+a `vistas[]` como **lecturas**. Un reclamo sin vista es backlog y se cierra de dos maneras: haciendo
+la vista, o declarándola `no_vista: [{sujeto, motivo}]` cuando ese sujeto sólo aporta al roll-up —
+vale en **las cuatro** redes que cuentan la nota (#268), con estado propio: `sin vista (declarado)`,
+que no es `sin extraer`. **Motivo obligatorio y por sujeto**: un paper que tres sujetos reclaman se
+saltea por motivos distintos en cada uno. Qué cuenta como reclamo: `stars` y `thesis_links` siempre;
+`methods` **sólo si ese nombre es un tema declarado** —lo puebla la extracción, así que es producto
+de la lectura—.
 
-⛔ **Sacar `pending_source` no puede romper el frontmatter (#244).** El borrado de una clave es **una
-sola función**: filtrar por `startswith` se lleva la primera línea de un escalar multilínea y deja
-huérfanas las de continuación, con lo que el YAML deja de parsear y la nota pasa a evadir **todos**
-los chequeos de su tipo. No es raro: `pending_motivo` es de texto libre, así que cualquier motivo
-largo se serializa multilínea. La red es la de #222: se re-parsea el frontmatter y **no se escribe**
-si dejó de parsear — una operación no puede dejar la nota peor de lo que la encontró.
+⛔ **Sacar `pending_source` no puede romper el frontmatter (#244).** El borrado de una clave es
+**una sola función**: filtrar por `startswith` se lleva la primera línea de un escalar multilínea y
+deja huérfanas las de continuación, el YAML deja de parsear y la nota evade **todos** los chequeos de
+su tipo (y no es raro: `pending_motivo` es texto libre). La red es la de #222: se re-parsea y **no se
+escribe** si dejó de parsear.
 
 #### Identidad: el `doi`/`arxiv_id`, no el bibcode (D-19)
 
@@ -433,10 +416,9 @@ canónica** y los bibcodes viejos viven en `versions[]`; el lint bloquea el dupl
 **rehúsa crear** la segunda nota.
 
 ⛔ **Un bibcode listado en `versions[]` que TIENE su propia nota BLOQUEA (#229).** La exención por
-alias es incondicional: listar un bibcode ahí lo saca de los **dos** chequeos de identidad, tenga
-nota o no. O es un alias (y entonces **no debe haber nota**) o es otro trabajo (y entonces **no va
-en `versions[]`**); la relación *«mismo programa, resultados distintos»* se declara en **prosa o en
-`salvedades`**.
+alias es incondicional: listarlo ahí lo saca de los **dos** chequeos de identidad. O es un alias (y
+**no debe haber nota**) o es otro trabajo (y **no va en `versions[]`**); *«mismo programa,
+resultados distintos»* se declara en **prosa o en `salvedades`**.
 
 ⚠ **Y el bibcode que `versions[]` declara como alias NO se vuelve a bajar** (D-19): es el mismo
 trabajo, ya está en disco bajo el canónico. Sin esa guarda, la corrida siguiente a un renombre lo
@@ -444,7 +426,7 @@ re-baja y el par PDF+`.txt` queda como artefacto colgado **para siempre** —no 
 impide que la tenga—. Lo filtran los dos fetchers, junto con los descartes de curación.
 
 El ciclo se resuelve con `python scripts/make_notes.py --rename-paper VIEJO NUEVO`, que mueve la
-nota y sus artefactos (`raw/pdfs/`, `raw/fulltext/` **y la extracción de `build/<slug>/extraccion/`**
+nota y sus artefactos (`raw/pdfs/`, `raw/fulltext/` **y la extracción de `raw/extraccion/<slug>/`**
 — #228: `harvest_views` mapea JSON→nota por `data["bibcode"]`, así que una extracción dejada bajo el
 bibcode viejo hace que el cosechador saltee la nota **para siempre**, y una extracción no se
 regenera sin volver a pagar el paso más caro), **re-estampa la cabecera**, deja `bibstem` en `null`
@@ -452,19 +434,21 @@ regenera sin volver a pagar el paso más caro), **re-estampa la cabecera**, deja
 de toda la bóveda**. Alcance declarado: `vault/`.
 
 ⛔ **El duplicado SIN `doi` ni `arxiv_id` lo reporta otra categoría (#216, backlog).** La clase de
-fuentes donde el problema es **más** probable es justamente la que no tiene identificador —resúmenes
-de congreso, tesis, material pre-DOI—, así que `identidad()` devuelve claves distintas y el detector
-bloqueante no puede verlo. La señal es el **`## Abstract` verbatim** normalizado y comparado por su
-**arranque** (el caso típico viene truncado en una de las dos copias). ⛔ **NO se deduplica por
-título**: está medido en `openalex.py` y es peor que el problema. Y **reporta, no fusiona**: la
-distinción *«mismo trabajo en dos congresos»* vs *«dos etapas del mismo programa con resultados
-distintos»* es real. La salida es `--rename-paper` + `versions[]`, o `--drop-core` con motivo.
+fuentes donde el problema es **más** probable es la que no tiene identificador —resúmenes de
+congreso, tesis, material pre-DOI—, así que `identidad()` devuelve claves distintas y el detector
+bloqueante no lo ve. La señal es el **`## Abstract` verbatim** normalizado y comparado por su
+**arranque**. ⛔ **NO se deduplica por título** (medido en `openalex.py`: peor que el problema), y
+**reporta, no fusiona**: *«mismo trabajo en dos congresos»* vs *«dos etapas con resultados
+distintos»* es una distinción real. La salida es `--rename-paper` + `versions[]`, o `--drop-core`.
 
 #### Los dos artefactos y sus dos `*_source`
 
 `pdf` es **lo que se lee** (extracción y verificación) y `fulltext` el **índice de búsqueda** del
-corpus (`grep`), con los roles que fijó #205. Los estampan `make_notes`/`extract_fulltext` por
-verdad de disco (`null` si no hay extracción).
+corpus (`grep`), con los roles que fijó #205. Los estampan por **verdad de disco** —`fulltext` lo
+cierra `extract_fulltext` (`stamp_fulltext`) y `pdf` su gemelo `stamp_pdf` desde `fetch_pdf` y
+`--restamp-pdf-links` (#304: el campo se escribía sólo al crear el stub, así que el PDF que aparece
+después —el rescate manual, cerrar un `pending`— no se linkeaba **nunca**)—, con `null` si no hay
+archivo.
 
 ⛔ **Los dos `*_source` NO se comportan igual cuando el archivo desaparece (#230).**
 `fulltext_source` describe **cómo se extrajo un archivo**, así que se limpia con él (el lint marca
@@ -476,7 +460,8 @@ borrarlo destruiría la salvedad junto con el archivo. El par `pdf: null` + `pdf
 
 Cuando un paper vive bajo **varios slugs** el campo es **estable**: la copia ya estampada se mantiene
 salvo que llegue una de **mejor calidad** (`pdftotext`/`web` > `ocr`); no se repunta al slug que
-corrió último (idempotente, sin ruido de diff).
+corrió último (idempotente, sin ruido de diff). Un puntero que **ya no resuelve** sí se repunta: una
+nota que apunta a un archivo que no está afirma algo falso sobre el disco (#217/#304).
 
 ⛔ **Los dos son vocabulario CERRADO y el lint los BLOQUEA (#296)** —`pdf_source: eprint|ads|
 publisher|web`, `fulltext_source: pdftotext|ocr|web`, con `null`/ausente = **desconocido**—: no es
@@ -523,29 +508,26 @@ selección (`classify()` es regex sobre título+abstract+keywords y clasifica **
 Es distinto de la **postura** respecto de una tesis, que desde D-21 **no vive en el paper**: vive en
 la tabla de evidencia de la hipótesis, porque depende de la tesis y un paper puede tocar varias.
 
-Sin `role`, *"contrastar dos papers" no está definido*: fundacional↔fundacional se comparan
-supuestos y derivaciones; aplicación↔aplicación se pregunta si replica y **en qué régimen**;
-**fundacional↔aplicación NO es contraste, es instanciación** —la aplicación no contradice la
-ecuación, la pone a prueba— y tratarlo como desacuerdo **fabrica disputas falsas**; el `arbitro`
-pesa distinto (resuelve, no promedia). El vocabulario es **cerrado** y el lint lo valida como
-bloqueante: un typo deja el campo mudo para la única operación que existe para consumirlo. Es
-especialmente agudo en temas de **método**, donde fundamentos y aplicaciones astro conviven en el
-mismo concepto por diseño.
+Sin `role`, *"contrastar dos papers" no está definido*: fundacional↔fundacional compara supuestos
+y derivaciones; aplicación↔aplicación pregunta si replica y **en qué régimen**;
+**fundacional↔aplicación NO es contraste, es instanciación** —tratarlo como desacuerdo **fabrica
+disputas falsas**—; el `arbitro` resuelve, no promedia. Vocabulario **cerrado** y bloqueante: un
+typo deja el campo mudo para la única operación que existe para consumirlo. Es agudo en temas de
+**método**, donde fundamentos y aplicaciones conviven en el mismo concepto por diseño.
 
 #### Escotillas y metadata de estado
 
 - `no_sintetizado: <motivo>` (#75): declara que este paper **ya extraído** legítimamente no se
-  inlinea en ninguna ficha ni concepto —típicamente por la **regla de poda**, o porque aporta sólo
-  vía roll-up—. Motivo **obligatorio** (mismo criterio que el `--reason` del triage: no curar en
-  silencio); sin ella, el lint lo reporta como *extraído pero no sintetizado*.
+  inlinea en ninguna ficha ni concepto —típicamente por la **regla de poda**—. Motivo
+  **obligatorio** (mismo criterio que el `--reason` del triage: no curar en silencio); sin ella, el
+  lint lo reporta como *extraído pero no sintetizado*.
 - `retracted: true` + `retraction{type,notice_doi,date,source}`: lo estampa
   `scripts/check_retractions.py` (Crossref) y el lint lo surface como **bloqueante** (fuente no
   válida).
-- `corrections: [{type,notice_doi,date,source}]` (#52): la corrección **no retractante** (`erratum`
-  / `corrigendum` / `expression-of-concern`). **No** invalida el paper —sigue siendo citable, por eso
-  es **backlog**— pero es la señal que más directamente **envejece un número ya extraído**: un
-  corrigendum corrige justo el valor que la ficha destiló. Al verla, revisar las afirmaciones que
-  citan ese `[[bibcode]]`, no la existencia del paper.
+- `corrections: [{type,notice_doi,date,source}]` (#52): la corrección **no retractante** (`erratum` /
+  `corrigendum` / `expression-of-concern`). **No** invalida el paper —sigue citable, por eso es
+  **backlog**— pero es la señal que más directamente **envejece un número ya extraído**: al verla,
+  revisar las afirmaciones que citan ese `[[bibcode]]`, no la existencia del paper.
 
 #### El aviso de capa LLM y las cuatro secciones de lectura (#124, #247)
 
@@ -601,33 +583,35 @@ fuente de la que citar.**
 #### Notas off-ADS y fuentes largas
 
 En notas **off-ADS** el schema suma `source_url` (URL de la fuente web; `null` si es PDF local),
-`accessed` (fecha del snapshot — es la cita "Retrieved <fecha>") y, si la fuente no se pudo
-conseguir, `pending_source: paywall|scan|unextractable|adquisicion` (el lint la lista como
-precondición).
+`accessed` (la cita "Retrieved <fecha>") y, si la fuente no se pudo conseguir, `pending_source:
+paywall|scan|unextractable|adquisicion` (el lint la lista como precondición).
 
 ⛔ **`pending` es vocabulario CERRADO y lleva `pending_motivo` obligatorio (#80).** Los tres valores
 históricos describen **por qué falló** la adquisición o la extracción; **`adquisicion`** describe
-otra cosa: un libro que el usuario va a conseguir **no falló**, tiene otra latencia — entraba
-forzado como `paywall` y se perdía el motivo real. El motivo es libre y obligatorio por el mismo
-argumento que el `--reason` del triage: en seis meses lo que sirve es el motivo, no la categoría. El
-valor se escribía **verbatim** en la nota, así que un typo entraba mudo: hoy la cadena aborta y el
-lint lo nombra.
+otra cosa —un libro que el usuario va a conseguir **no falló**, tiene otra latencia— y entraba
+forzado como `paywall`, perdiendo el motivo real. El motivo es obligatorio por el mismo argumento
+que el `--reason` del triage: en seis meses sirve el motivo, no la categoría. Un typo entraba mudo:
+hoy la cadena aborta y el lint lo nombra.
 
 ⛔ **Una fuente LARGA declara cómo se la cita y qué parte entró (#80):** `unidad_cita:
-linea|pagina|seccion` (default `linea`, no se estampa) y **`alcance`** (qué capítulos o secciones
-entraron), obligatorio cuando la unidad no es la línea. Un libro rompe dos supuestos del contrato de
-`verify-citations`: el fan-out asume un `.txt` que un subagente lee **entero** —700 páginas lo
-revientan— y «línea 18443» no es una referencia utilizable. Y casi nunca entra el libro entero, lo
-que choca con el chequeo de **completitud**, que sin `alcance` no puede distinguir un recorte
-deliberado de una omisión. Es un eje **distinto** del `txt:`/`pdf:` de #117: aquél dice qué
-**archivo** se leyó, éste **cómo se apunta adentro**.
+linea|pagina|seccion` (default `linea`) y **`alcance`** (qué capítulos entraron), obligatorio cuando
+la unidad no es la línea. Un libro rompe dos supuestos de `verify-citations`: el fan-out asume un
+`.txt` que se lee **entero** —700 páginas lo revientan— y «línea 18443» no es una referencia
+utilizable; y casi nunca entra el libro entero, lo que choca con el chequeo de **completitud**, que
+sin `alcance` no distingue un recorte deliberado de una omisión. Eje **distinto** del `txt:`/`pdf:`
+de #117: aquél dice qué **archivo** se leyó, éste **cómo se apunta adentro**.
+
+⛔ **Y se RE-SINCRONIZAN: la autoridad es la config (#312).** Viajan al stub al crearlo y se
+congelaban ahí, así que ampliar el `alcance` dejaba la nota afirmando que ese material *no entra*
+mientras lo publicaba en su vista (medido: 2 libros, 37 valores). El chequeo de completitud compara
+contra el de la nota, o sea que un alcance viejo lo deja con información **falsa**, no sin
+información: `make_notes.py --restamp-alcance`, y el lint reporta el desfasaje.
 
 ⛔ **Y los dos campos LLEGAN AL EXTRACTOR (#241).** `extraction_prompt` **ramifica por
-`unidad_cita`**: para una fuente larga manda empezar por el **índice**, pega el **`alcance`
-declarado textual** —con la instrucción de no ampliarlo solo: si lo que el sujeto necesita está
-afuera, se extrae lo que hay dentro y **se declara en `salvedades`**, porque ampliarlo en silencio
-deja el `alcance` de la nota afirmando algo falso—, recuerda que `conclusiones` va **vacío** y que se
-cita **por página**. Sin `alcance` el prompt lo **dice** (*«NO DECLARADO»*) en vez de callar.
+`unidad_cita`**: para una fuente larga manda empezar por el **índice**, pega el **`alcance` declarado
+textual** —sin ampliarlo solo: si lo que el sujeto necesita está afuera, se extrae lo que hay dentro
+y **se declara en `salvedades`**—, recuerda que `conclusiones` va **vacío** y que se cita **por
+página**. Sin `alcance` el prompt lo **dice** (*«NO DECLARADO»*) en vez de callar.
 
 ### concepts/
 
@@ -667,13 +651,11 @@ hub. Un radio es una nota de concepto normal (mismo frontmatter y estándar de a
 editorial y no se puede chequear; lo que de hecho decide la partición es que cada tema necesite **su
 propia query y su propia faceta**, o sea que **la terminología no se solape** — si se solapa, la
 misma query trae las dos cosas y no hay nada que partir. Un radio es entonces un **tema propio**
-(slug, query, faceta, registro y corpus propios) cuya nota apunta de vuelta al hub. Ejemplo en
-`ica`: *noisy ICA* es radio porque su vocabulario (*gaussian moments, quasi-whitening, HeteroPCA*)
-no lo trae una query de «independent component»; *PCA* queda **dentro** del hub —es el baseline
-contra el que se mide ICA— y *PCA heterocedástico* **corresponde al radio**, o sea que «PCA» se
-parte **por régimen**, que es el mismo eje que separa radio de hub. ⚠ Es el criterio **aplicado**,
-no una descripción de ninguna nota: en la instancia que motivó el ejemplo la partición está
-**decidida y no aplicada** (#235).
+(slug, query, faceta, registro y corpus propios) cuya nota apunta de vuelta al hub. Ejemplo: *noisy
+ICA* es radio porque su vocabulario (*gaussian moments, quasi-whitening, HeteroPCA*) no lo trae una
+query de «independent component»; *PCA* queda **dentro** del hub —es el baseline contra el que se
+mide— y *PCA heterocedástico* **corresponde al radio**: «PCA» se parte **por régimen**, el mismo eje
+que separa radio de hub.
 
 ⛔ **El hub nombra cada radio con `[[wikilink]]`, no con el slug entre backticks.** Sin el link el
 radio no aparece en el grafo, no cuenta como link entrante y el hub se lee como si el sub-aspecto no
@@ -731,34 +713,31 @@ nota**.
 
 Filenames kebab-case (los papers usan el bibcode); links internos `[[wikilink]]` por nombre de nota
 (sobreviven a mover carpetas); reportar agregados declarando mean vs median. **Notación matemática
-según destino:** en archivos de `vault/wiki/` SIEMPRE `$...$` (Obsidian lo renderiza); en
-**respuestas de consola o chat** usar **texto plano** (`P_rot`, `m·sini`, `K=2.5 m/s`), porque la
-terminal no renderiza LaTeX.
+según destino:** en `vault/wiki/` SIEMPRE `$...$` (Obsidian lo renderiza); en **consola o chat**,
+**texto plano** (`P_rot`, `m·sini`, `K=2.5 m/s`) — la terminal no renderiza LaTeX.
 
 ## Operaciones
 
 ### Setup (definir el objetivo — paso 0, skill `setup`)
-Genera/afina `vault/config/objective.yaml` (la **lente**: `name`/`description` + `relevance.facets`, el
-clasificador de papers core). El agente traduce el foco del usuario (en palabras) a la regex — el usuario
-**no** escribe regex — y la valida contra papers reales con `python scripts/query_ads.py --probe "<query>"`
-(muestra el corte core/no-core sin bajar nada) iterando hasta que cierre. ⛔ **La lente del BUSCADOR también sale del objetivo (#85): `relevance.search_fq`.** Es el `fq` de
-Solr que acota el universo **server-side, antes de traer nada** — o sea la mitad **más restrictiva**
-del filtro, más que `relevance.facets`, que actúa después sobre lo ya traído. Estaba hardcodeada en
-`query_ads` como `database:astronomy`, lo que era incoherente con el resto de la lente (todo lo demás
-sale del objetivo) y bloqueaba el caso que este framework declara soportar: los **métodos de otras
-disciplinas** cuya bibliografía canónica ADS no clasifica como astronomía. Tres estados: sin declarar
-→ `database:astronomy`; con valor → ése; **`search_fq: null`** → no acota (todo ADS, a propósito). Un
-`null` declarado es una decisión y no se lee igual que no declarar nada.
-`relevance.facets` son **facetas**
-(constantes; clasifican los papers de estrella, y los de tema **salvo que el tema declare su
-lente propia** — ver *Relevancia de un tema de método*), **no** sujetos (las estrellas/temas van en
-la query, `stars.yaml`/`themes.yaml`). La **regla de combinación** de facetas es declarativa (no
+Genera/afina `vault/config/objective.yaml` (la **lente**: `name`/`description` + `relevance.facets`,
+el clasificador de papers core). El agente traduce el foco del usuario a la regex —el usuario **no**
+escribe regex— y la valida contra papers reales con `python scripts/query_ads.py --probe "<query>"`
+(muestra el corte core/no-core sin bajar nada) iterando hasta que cierre. ⛔ **La lente del BUSCADOR
+también sale del objetivo (#85): `relevance.search_fq`** — el `fq` de Solr que acota el universo
+**server-side, antes de traer nada**, o sea la mitad **más restrictiva** del filtro (`facets` actúa
+después, sobre lo ya traído). Hardcodearlo bloqueaba el caso que este framework declara soportar:
+los **métodos de otras disciplinas** cuya bibliografía ADS no clasifica como astronomía. Tres
+estados: sin declarar → `database:astronomy`; con valor → ése; **`search_fq: null`** → no acota, a
+propósito (un `null` declarado es una decisión y no se lee igual que no declarar nada).
+`relevance.facets` son **facetas** (constantes; clasifican los papers de estrella, y los de tema
+**salvo que el tema declare su lente propia**), **no** sujetos (las estrellas/temas van en la query,
+`stars.yaml`/`themes.yaml`). La **regla de combinación** de facetas es declarativa (no
 hardcodeada): por default OR (≥1 faceta cualquiera), pero una instancia puede declarar
-`relevance.require: [<faceta>, …]` (AND: obligatorias) y/o `relevance.min_facets: N` (≥N cualesquiera) —
-`core = (≥min_facets) Y (todas las de require) Y (doctype no-ruido)`. Es la palanca contra el ruido que
-el citation chaining mete al ampliar el pool (podar regex no alcanza si la combinación sigue siendo OR);
-sin declarar nada, comportamiento histórico. Cambiar la regla **re-clasifica** el corpus → sub-modo
-re-clasificar de `maintain`. No ingesta nada; después se usan `ingest-star`/`ingest-theme`.
+`relevance.require: [<faceta>, …]` (AND) y/o `relevance.min_facets: N` (≥N cualesquiera) —
+`core = (≥min_facets) Y (todas las de require) Y (doctype no-ruido)`. Es la palanca contra el ruido
+que el chaining mete al ampliar el pool; sin declarar nada, comportamiento histórico. Cambiar la
+regla **re-clasifica** el corpus → sub-modo re-clasificar de `maintain`. No ingesta nada; después se
+usan `ingest-star`/`ingest-theme`.
 
 ### Relevancia de un TEMA DE MÉTODO — la lente propia y las tres puertas (D-26 / INV-88)
 
@@ -773,6 +752,12 @@ regla pasa a ser `core = facet propia Y (puerta 2 OR puerta 3)`:
 | **2 · fundacional en su campo** | `citation_count >= fundacional_min_citas` | `query_ads.classify_theme` |
 | **3 · lente astro global** | pasa `relevance.facets` de `objective.yaml` | ídem |
 
+⛔ **Y los EJES DE LECTURA también son del tema (#307): `ejes:` en `themes.yaml`.** #254 los
+derivó de la lente… global, así que a un tema de método se le preguntan los ejes de una bóveda astro
+(medido: 4 de 8 vacíos en 25 de 32 papers, y los que el tema necesitaba no se preguntaron nunca —
+volvieron desparramados en `aporte`, sin clave con la que compararlos). Mismos tres estados; la
+`lente` de la vista guarda **los ejes que se preguntaron**, o el diff de D-49 describiría otra
+lectura.
 ⛔ **Y el `search_fq` también es del tema (#295), porque es la mitad MÁS restrictiva.** D-26 hizo
 propia la lente y dejó global el `fq`, que acota **server-side, antes de traer nada**: un tema de
 otra disciplina se buscaba sobre un universo que **excluye su literatura por construcción**, y
@@ -803,14 +788,17 @@ espaciado (`HD 40307` ↔ `HD40307`) y suma los alias—, así que se previsuali
 ingestaba otro. Peor que #208: acá el veredicto sale plausible, porque los papers que faltan no
 aparecen por ningún lado del reporte.
 
-⛔ **Y queda registrado POR CUÁL puerta entró cada paper (#126): `puertas: [fundacional|astro]` en
+⛔ **Y queda registrado POR CUÁL puerta entró cada paper (#126): `puertas: [fundacional|astro|manual]` en
 el registro.** El `why_excluded` explicaba el **no** y nada explicaba el **sí**. Es la única
 metadata que distingue **sin leer el paper** un fundamento de su campo (muy citado, puede no
 mencionar astro) de una aplicación astro (tres citas, pero es lo que la bóveda busca) — `role` no
 sirve: lo puebla la **extracción**, o sea después de leer. Con la puerta registrada,
 `triage.py <slug> --prioridad` agrupa los core por política y el recorte de lectura se decide **una
 vez**, declarado con `--extraccion subconjunto --reason`. Lista vacía = no es core; el campo existe
-siempre, así que «no consta» y «ninguna puerta» no se confunden.
+siempre, así que «no consta» y «ninguna puerta» no se confunden. ⛔ **`manual` es la procedencia
+de la CURACIÓN y la escriben las dos ramas del merge de `extra_core` (#303)** —la rescatada del
+corte y la traída por bibcode—: cuál toca lo decide un accidente de la query, no una diferencia
+real, y el `via` que va al registro es siempre el **declarado** en la config.
 
 ⚠ **`fundacional_min_citas` no tiene default**: el número depende del campo (30k citas es normal en
 ML y muchísimo en astro) y esconderlo sería decidir por el usuario. Sin declararlo la puerta 2 **no
@@ -858,28 +846,24 @@ la cascada y **propone**; nunca clasifica.
   nadie" sobre un dato que nadie miró, y con esa columna se decide qué mandar a triage. ⛔ **Y `--topics` —el PRIMER comando del paso 0b— declara sus dos
   ceros (#290)**: «la taxonomía no tiene nada parecido» (probá una frase más general) y **FALLÓ**
   (volvé a correrlo) piden lo contrario, y salían idénticos.
-- **Dedup por DOI, nunca por título** (`ident`/`dedup`): lo fija la medición de `openalex.py` —el
-  matcheo por título resolvió 18 de 25 casos y **2 apuntaban a otro trabajo**—. Lo que no tiene DOI
-  ni arXiv id se devuelve **aparte, como no-deduplicable**; no se adivina. Cada registro acumula
-  `found_in` con todos los backends que lo trajeron: la procedencia **enruta** (qué puerta se
-  pregunta), la lente **decide**.
+- **Dedup por DOI, nunca por título** (`ident`/`dedup`): el matcheo por título resolvió 18 de 25 y
+  **2 apuntaban a otro trabajo**. Lo que no tiene DOI ni arXiv id se devuelve **aparte, como
+  no-deduplicable**. Cada registro acumula `found_in`: la procedencia **enruta**, la lente
+  **decide**.
 - **Rankear sin filtro estructural amplifica, no filtra** (`topics` antes de `seed`): una frase
   genérica ordenada por citas devuelve 143.450 works con **2 de 30** en tema en el top 30; con
   `filter=topics.id:` primero, el canon entra al top 25. ⚠ El filtro es más laxo que su nombre:
   T11447 declara 55.210 works y devuelve 169.977 (matchea temas secundarios).
 - **Descubrimiento ANCLADO** (`anchored_records`) — el de más apalancamiento: las **referencias de
-  la mitad astro del propio tema**, rankeadas por cuántos de esos papers las citan. Es la puerta 1
-  aplicada a un tema **nuevo**, donde el `citation_index` todavía no existe. Medido sobre 19 papers
-  astro de ICA: devolvió los **ocho** del canon sin declarar nada a mano, y el consenso ordena mejor
-  que las citas globales. Es además lo único que alcanza lo que ninguna keyword del tema alcanza:
-  los papers de **PCA con ruido** (el paso de blanqueo) que el barrido por keyword nunca vio.
+  la mitad astro del propio tema**, rankeadas por cuántos de esos papers las citan (la puerta 1
+  aplicada a un tema **nuevo**, donde el `citation_index` no existe todavía). Medido sobre 19 papers:
+  devolvió los **ocho** del canon sin declarar nada, y alcanza lo que ninguna keyword del tema
+  alcanza — los papers del **paso de blanqueo**.
 - **La cola especialista SÍ se alcanza, con el eje correcto — y el costo es triage (#107, medido).**
-  Los papers que una bóveda real había curado a mano viven entre **11 y 72 citas** dentro de un
-  topic de 169.977 works: **ningún corte por citas sobre el topic entero** los toca. El eje que sí
-  los alcanza es `seed_terms` (**slice de texto por término dentro del topic**), que colapsa el
-  pajar. Medido: la recuperación pasa de **7/18 a 13/18**, y el universo de candidatos de **776 a
-  2521**. Ése es el canje —cobertura contra costo de triage—, se decide por tema, y por eso el eje
-  es **opt-in**, no porque no sirva.
+  Esos papers viven entre **11 y 72 citas** dentro de un topic de 169.977 works, así que ningún
+  corte por citas los toca; el eje que sí los alcanza es `seed_terms` (**slice de texto por término
+  dentro del topic**). Medido: recuperación **7/18 → 13/18**, universo de candidatos **776 → 2521**.
+  Ése es el canje —cobertura contra costo de triage—, se decide por tema, y por eso es **opt-in**.
   ⚠ **Lección de método:** la primera medición (*"217 candidatos, límite estructural"*) era
   artefacto de un tope de 15 filas puesto por el propio agente — conclusión estructural sacada de
   un truncamiento silencioso. Hoy `seed_terms` **avisa por término**.
@@ -918,7 +902,9 @@ verificable:
                          figuras) y cita PÁGINA. El `.txt` sólo para ubicar con grep.
                          ⚠ Sin PDF en disco el prompt NO manda leerlo (#255): nombra el
                          `## Abstract` de la nota como fuente y manda declarar
-                         `fuente: abstract`. Sus EJES salen de `relevance.facets` de ESTA
+                         `fuente: abstract`. ⛔ «En disco» = bajo CUALQUIER slug (#305),
+                         la misma resolución que el cosechador: buscarlo sólo bajo el
+                         del sujeto producía la lectura degradada que #207 caza. Sus EJES salen de `relevance.facets` de ESTA
                          bóveda (#254): una faceta que el prompt no nombra no se pregunta,
                          y su silencio se lee como «se miró y no hay nada».
                          Devuelve UNA VISTA (#188): «qué dice sobre {sujeto}», con
@@ -932,62 +918,55 @@ verificable:
 ```
 
 ⛔ **La fuente es el PDF; el `.txt` es el ÍNDICE (#205).** La rama vieja —leer el `.txt` y escalar
-al PDF si un detector lo decía— se eliminó: los detectores no discriminaban, y el A/B medido
-(`docs/mediciones.md`, 2026-08-28) dio al PDF ganando en tokens, tiempo y tools **también en el
-paper de capa "limpia"**, cuyo `.txt` había perdido `√`, primas y superíndices con los tres chequeos
-en verde. **Qué le queda al `.txt`, y por qué se sigue generando:** el `grep` sobre el corpus
-(`query-corpus`, `test-hypothesis`, el retro-tag por alias, el conteo del alcance de hipótesis
-D-34) busca **prosa**, que es lo que `pdftotext` extrae bien; y en un **documento largo** (#80) es
-imprescindible: 700 páginas no se rasterizan — se grepea, se saca la página y se abren **esas**
-páginas del PDF. ⛔ **El `.txt` NO se genera con el modelo**: tiene que ser determinista, o las
-citas por línea serían inventadas y verificar sería contrastar un modelo contra otro.
-⚠ **Consecuencia:** un `pending_source` deja de ser salvedad y es **bloqueo real** — sin PDF no hay
-de dónde extraer; la cadena lo deriva al usuario sin frenar.
+al PDF si un detector lo decía— se eliminó: los detectores no discriminaban y el A/B medido dio al
+PDF ganando en tokens, tiempo y tools **también en el paper de capa "limpia"**, cuyo `.txt` había
+perdido `√`, primas y superíndices con los tres chequeos en verde. **Qué le queda al `.txt`:** el
+`grep` sobre el corpus busca **prosa**, que es lo que `pdftotext` extrae bien; y en un **documento
+largo** (#80) es imprescindible —700 páginas no se rasterizan: se grepea, se saca la página y se
+abren **esas**—. ⛔ **El `.txt` NO se genera con el modelo**: tiene que ser determinista, o las citas
+por línea serían inventadas y verificar sería contrastar un modelo contra otro. ⚠ **Consecuencia:**
+un `pending_source` es **bloqueo real** — sin PDF no hay de dónde extraer.
 
 ⚠ **Excepción nombrada: la fuente WEB.** Un snapshot de `fetch_web` (`source_url` poblado,
 `pdf: null`) no tiene PDF **por diseño**: ahí el `.txt` no es copia degradada, **es la captura**
 (determinista: defuddle, URL + fecha, citada con `accessed`). Se lee, se cita por **línea** y su
 fila de verificación lleva `txt:<sha10>`.
 
-De los tres chequeos de calidad quedan **dos**, con otro trabajo: `is_legible` dispara el OCR (un
-escaneo sin capa de texto da un `.txt` vacío y el paper se vuelve invisible al corpus) e
-`is_garbled` sigue porque la prosa garbleada degrada el índice. `symbols_lost` y `fulltext_layout`
-se retiraron (#193/#194); `measure_layout` **no** (`CANALETA_MIN` es el contrato para grepear un
-`.txt` entrelazado).
+De los tres chequeos de calidad quedan **dos**: `is_legible` dispara el OCR (un escaneo sin capa de
+texto deja un `.txt` vacío y el paper invisible al corpus) e `is_garbled` sigue porque la prosa
+garbleada degrada el índice. `symbols_lost` y `fulltext_layout` se retiraron (#193/#194);
+`measure_layout` **no** (`CANALETA_MIN` es el contrato para grepear un `.txt` entrelazado).
 
-⛔ **Los tres miden el TEXTO, así que ninguno ve el dato que vive en una IMAGEN (#195)** — y es casi
-la mitad del corpus (medido: 29/65 vistas; `docs/mediciones.md`). El prompt
-(`extraction_prompt._media_note`) trata los tres casos:
+⛔ **Los tres miden el TEXTO, así que ninguno ve el dato que vive en una IMAGEN (#195)** — casi la
+mitad del corpus (medido: 29/65 vistas). El prompt (`extraction_prompt._media_note`) trata los tres
+casos:
 
-- **tabla extraída como texto** → se cita por línea, declarando **cómo se verificó la fila** (el
-  entrelazado la parte; en una tabla multi-objeto la fila equivocada es el modo de falla);
+- **tabla extraída como texto** → se cita por línea, declarando **cómo se verificó la fila** (en una
+  tabla multi-objeto la fila equivocada es el modo de falla);
 - **tabla-imagen** → el `.txt` no la tiene y el grep vacío **no prueba ausencia**: si el dato
-  sostiene algo, se abre el PDF y se cita **página** (misma regla que una ecuación);
-- **figura** → el número existe sólo como curva: **se permite leerla** (decisión del usuario,
-  2026-08-27) y el valor viaja con la **figura y su página** (`Fig. 3, p. 7`), el **`≈`** y la
-  palabra **lectura de gráfico** en el régimen — doctrina de `inferencia`: declarar de dónde salió.
-  Es un **permiso, no una obligación**: si la curva no se deja leer con confianza, queda como
-  **hueco declarado** (forzar un número de una curva ilegible es peor que el hueco);
+  sostiene algo, se abre el PDF y se cita **página**;
+- **figura** → el número existe sólo como curva: **se permite leerla** y el valor viaja con la
+  **figura y su página** (`Fig. 3, p. 7`), el **`≈`** y la palabra **lectura de gráfico** en el
+  régimen — doctrina de `inferencia`. Es un **permiso, no una obligación**: si la curva no se deja
+  leer con confianza, queda como **hueco declarado**;
 - **figura que es un CAMPO** (contornos, mapa de color, densidad) → el valor **no existe sin el
-  nivel**: se cita `Fig. N, p. M, contorno del X %`, y todos los niveles si el dato los necesita.
-  Dos lecturas que no reconcilian son figura **subespecificada** antes que dato ilegible (#281) — un
-  hueco declarado de más dice *«el corpus no puede responder esto»* y el consumidor deja de buscar.
+  nivel**: se cita `Fig. N, p. M, contorno del X %`. Dos lecturas que no reconcilian son figura
+  **subespecificada** antes que dato ilegible (#281).
 
 Por eso la columna de la vista se llama **`Localizador`** y no `Línea`: lleva `L1234`, `p. 271` o
-`Fig. 3, p. 7` según de dónde salga el dato (la clave del JSON sigue siendo `linea`: vive en
-`build/`, scratch).
+`Fig. 3, p. 7` según de dónde salga el dato (la clave del JSON sigue siendo `linea`).
 
 ⛔ **La prosa que va a una CELDA se escapa: `\|` fuera de la matemática, `\vert` adentro (#240).**
 Un `|` crudo parte la fila y una afirmación citada y verificada queda **invisible para el lector**
-mientras el lint cuenta su fila. ⚠ Dentro de `$…$` el escape es `\vert` y no `\|` (en LaTeX es ‖):
-escapar a ciegas cambia filas invisibles por fórmulas equivocadas, que es peor. Lo hace
-`lib_config.escape_cell` en el cosechador, el único punto de escritura.
+mientras el lint cuenta su fila. ⚠ Dentro de `$…$` el escape es `\vert` (en LaTeX `\|` es ‖):
+escapar a ciegas cambia filas invisibles por fórmulas equivocadas. Lo hace `lib_config.escape_cell`
+en el cosechador, el único punto de escritura.
 
 **Los DOS hashes del paso 6** responden preguntas distintas: el **ancla** hashea el bloque de la
-**ficha** (se dispara si editás la nota) y el **hash de fuente** hashea el archivo **leído** —desde
-#205, el PDF—. Las filas viejas con `txt:` siguen siendo válidas y se re-verifican cuando vencen, no
-se migran en masa. ⚠ El PDF es inmutable: esa alarma es rarísima (alguien reemplazó el archivo), y
-una fila anclada al PDF no se vence cuando el `.txt` se re-extrae.
+**ficha** (se dispara si editás la nota) y el **hash de fuente**, el archivo **leído** (desde #205,
+el PDF). Las filas viejas con `txt:` siguen válidas y se re-verifican al vencer, no se migran en
+masa. ⚠ El PDF es inmutable: esa alarma es rarísima, y una fila anclada al PDF no se vence cuando
+el `.txt` se re-extrae.
 
 **La cascada, paso a paso:**
 
@@ -996,38 +975,67 @@ una fila anclada al PDF no se vence cuando el `.txt` se re-extrae.
    `python scripts/ingest_theme.py <slug>` para temas. **El orden canónico vive en el header de su
    orquestador** (fuente de verdad única — puntero, no copia).
 
-1b. **Compuerta de triage (estrellas).** El citation chaining amplía el pool con papers del grafo
-   que mencionan al sujeto sin hablar de él (medido: 18 % de precisión). Sólo entra solo el que
-   lleva el **sujeto en el título**; el resto queda como **candidato** en `build/<slug>/ads.json`
-   —sin bajarse— y lo juzgás vos por título+abstract (`python scripts/triage.py <slug>`): aceptado →
-   `extra_core` en `stars.yaml` (lista de mapas `{bibcode, via, fecha, motivo}`, forma dura D-58:
-   el escalar y la lista de strings bloquean; `triage.py` imprime el snippet listo) + re-correr la
-   cadena; descartado → `triage.py --drop … --reason` (persiste: no se re-propone); **dudoso → al
-   usuario**. Detalle en el skill `ingest-star`.
+1b. **Compuerta de triage (estrellas).** El citation chaining amplía el pool con papers que
+   mencionan al sujeto sin hablar de él (medido: 18 % de precisión). Sólo entra solo el que lleva el
+   **sujeto en el título**; el resto queda como **candidato** en `build/<slug>/ads.json` —sin
+   bajarse— y lo juzgás por título+abstract (`triage.py <slug>`): aceptado → `extra_core` (mapas
+   `{bibcode, via, fecha, motivo}`, forma dura D-58; `triage.py` imprime el snippet) + re-correr la
+   cadena; descartado → `--drop … --reason` (persiste); **dudoso → al usuario**.
 
-2. **Vos (LLM)** leés el **PDF** y hacés la cascada: poblás la extracción **de las notas de paper**
-   (`methods`, `thesis_links`, `role`, P/K/indicadores). La ficha se escribe **después** del
-   contraste (2b) — no saltar de leer a la prosa. ⚠ **Mirá `pdf_source` antes de copiar un número:**
-   con `eprint` el documento es el preprint — un valor que contradice al ground-truth o al abstract
-   de ADS es candidato a **diferencia de versión** (abrí el PDF publicado o anotá la salvedad).
-   **Cómo anotar cada valor (#103):** con **la página del PDF**, **el régimen** en que la fuente lo
-   afirma (muestra, época, corte de datos, modelo) y —si la fuente lo atribuye a otro trabajo— la
-   marca **segunda mano** con la cita a X, porque el número **no es de esta fuente** (es el
-   mecanismo de error nº 1 medido en #103). ⛔ **Nada de prosa comparativa en la nota de paper**:
-   comparar dos papers es `inferencia` y va al `## Inventario por eje` (2b).
+2. **Vos (LLM)** leés el **PDF** y poblás la extracción **de las notas de paper** (`methods`,
+   `thesis_links`, `role`, P/K/indicadores). La ficha se escribe **después** del contraste (2b) — no
+   saltar de leer a la prosa. ⚠ **Mirá `pdf_source` antes de copiar un número:** con `eprint` el
+   documento es el preprint, así que un valor que contradice al ground-truth es candidato a
+   **diferencia de versión**. **Cómo anotar cada valor (#103):** con **la página del PDF**, **el
+   régimen** en que la fuente lo afirma y —si la fuente lo atribuye a otro trabajo— la marca
+   **segunda mano** con la cita a X, porque el número **no es de esta fuente** (el mecanismo de
+   error nº 1 medido). ⛔ **Nada de prosa comparativa en la nota de paper**: comparar dos papers es
+   `inferencia` y va al `## Inventario por eje` (2b).
 
-2b. **Contraste cross-paper (#72)** ⚠ *(el skill `ingest-star` lo numera **3b**; su `2b` es el
-   barrido full-text)* — **entre leer los papers y escribir la síntesis.** Es el paso con más
-   apalancamiento y el que más fácil se saltea, porque su producto no se nota si falta. Produce el
-   **`## Inventario por eje`**: una fila por paper para cada **eje** donde los papers **no
-   coinciden** (`Eje | Paper | Dice | Método / baseline`); los ejes con acuerdo unánime no entran.
-   ⛔ **Sin columna "valor adoptado" ni "por qué"**: sería decidir por el consumidor (regla #0) — la
-   bóveda reporta el **estado de la literatura**; la lectura propia va aparte, marcada `inferencia`.
-   Sin este paso, tres `P_rot` terminan en una frase con un solo `[[bibcode]]` y se evapora que los
-   otros dos valores existen. El `role` (#73) dice qué operación corresponde entre dos filas.
-   **La red de que ocurrió (#101):** el lint reporta la ficha con la **fila vacía de la plantilla**
-   y ≥2 papers extraídos citados — ausencia = declarado (la plantilla dice borrar la sección y
-   decirlo en el log), presente-y-vacío = saltado.
+2b. **Contraste cross-paper (#72)** ⚠ *(el skill `ingest-star` lo numera **3b**)* — **entre leer los
+   papers y escribir la síntesis.** Es el paso con más apalancamiento y el que más fácil se saltea,
+   porque su producto no se nota si falta. Produce el **`## Inventario por eje`**: una fila por paper
+   para cada **eje** donde los papers **no coinciden** (`Eje | Paper | Dice | Método / baseline`);
+   los ejes con acuerdo unánime no entran. ⛔ **Sin columna "valor adoptado" ni "por qué"**: sería
+   decidir por el consumidor (regla #0). Sin este paso, tres `P_rot` terminan en una frase con un
+   solo `[[bibcode]]` y se evapora que los otros dos existen; el `role` (#73) dice qué operación
+   corresponde entre dos filas. **La red de que ocurrió (#101):** el lint reporta la ficha con la
+   **fila vacía de la plantilla** y ≥2 papers extraídos citados — ausencia = declarado,
+   presente-y-vacío = saltado.
+
+#### El CICLO DE LA LENTE — cómo se encadenan las piezas (#310)
+
+Las seis piezas estaban documentadas por separado y su encadenamiento no, así que el ciclo se
+reconstruía hablando en vez de leyendo. En orden, con su consecuencia:
+
+1. **La lente de SUJETO es lo que hace que una vista no sea un resumen** (#188): se pregunta *«qué
+   dice sobre {sujeto}»* con los alias pegados. ⚠ En la primera pasada **no puede ser angosta**: lo
+   bastante amplia como para que entren las dos mitades del campo, lo bastante enfocada como para
+   que ninguna vista sea un resumen.
+2. ⛔ **Los EJES no se declaran antes de leer: se DESCUBREN al contrastar.** Un tema se ingesta
+   normalmente **porque no se lo conoce**, así que pedir los ejes antes es pedir la respuesta que la
+   operación existe para producir — y encima **cierra hallazgos**: los dos más valiosos de una
+   ingesta medida salieron de extractores libres de contestar algo que nadie preguntó.
+3. **El paso 3b/2b es el PRODUCTOR de ejes, no un resumen**: un eje sólo existe al poner las vistas
+   una al lado de la otra. Ahí nace el vocabulario del tema (medido: el mismo término nombrando
+   cinco objetos distintos, y el alias central significando dos operaciones según la escuela).
+4. **El eje descubierto tiene tres destinos**: la **config** del tema (`ejes:`, #307), la
+   **re-lectura** con esos ejes (`--enfasis`, #308) y la **próxima búsqueda** (una celda vacía del
+   inventario *es* una query). Sin ellos el ciclo queda abierto justo donde el aprendizaje debería
+   realimentar.
+5. **Los ejes son DEL USUARIO**: viven en `themes.yaml` (versionado, editable), el paso 3b los
+   **propone y no los escribe** (misma doctrina que `--drop-core` y AUD-160), y sin declarar rigen
+   los de `relevance.facets` — los tres estados de D-43.
+6. ⛔ **Qué se propaga solo y qué no**: la vista nueva → nota del paper (#239) y el roll-up del
+   concepto, **sí**; la vista → **prosa de la ficha**, **NO**, y es deliberado: reescribir un bloque
+   **vence las anclas** de los pares que vivían ahí (D-4/D-20) y obliga a re-verificar lo tocado
+   (#203), con el agravante de #282 —ese ciclo no converge solo—. Propagar automático convertiría
+   cada re-lectura en una cascada de re-verificación.
+
+**El invariante (INV-146):** toda vista declara **los ejes vigentes al leerla** (`vistas[].lente`), y
+cambiar los ejes de un tema produce un **diff computable**, nunca una re-interpretación silenciosa de
+lo ya leído. Una vista leída bajo los ejes A sigue siendo válida bajo los B: lo que cambia es su
+**cobertura**, y el detector de #270 pasa de ruido a señal.
 
 2c. **Síntesis a la nota viva**, apoyada en el inventario: la ficha (frontmatter propio, prosa,
    huecos), los conceptos e hipótesis relacionados y la matriz método×estrella. ⛔ Los campos de
@@ -1035,29 +1043,24 @@ una fila anclada al PDF no se vence cuando el `.txt` se re-extrae.
 
 3. Actualizás `index.md` y appendeás a `log.md`.
 
-> **Retro-linkeo (papers pre-existentes ↔ entidad nueva) — tres capas:** (a) una ficha-método junta
-> en su roll-up estampado también por `methods` — pero la tabla **no acumula sola**: re-correr
-> `python scripts/make_notes.py <slug> --theme` (el lint reporta la tabla desactualizada);
-> (b) `make_notes` mergea **add-only** los seeds del ingest (`stars`/`thesis_links`) en notas que ya
-> existían (nunca pisa la extracción LLM); (c) `ingest-theme` incluye el **retro-tag por grep**:
-> buscar los `aliases` del tema en el fulltext de **todo** el corpus y taguear (add-only, con juicio
-> de LLM: uso real, no mención al pasar) lo que la query ADS no devolvió.
+> **Retro-linkeo (papers pre-existentes ↔ entidad nueva) — tres capas:** (a) el roll-up de una
+> ficha-método junta también por `methods`, pero **no acumula solo**: re-correr `make_notes.py <slug>
+> --theme` (el lint reporta la tabla desactualizada); (b) `make_notes` mergea **add-only** los seeds
+> del ingest (nunca pisa la extracción LLM); (c) `ingest-theme` incluye el **retro-tag por grep** de
+> los `aliases` sobre todo el corpus, con juicio de LLM (uso real, no mención al pasar).
 
 > **Tema fuera de ADS (opt-in — sólo a pedido explícito).** Por default un tema se baja por **ADS**;
-> el modo off-ADS existe para los **métodos de otras disciplinas** cuya bibliografía canónica vive
-> fuera de ADS: las fuentes se **declaran**, no se descubren por query. La entrada del tema en
-> `themes.yaml` lleva `source: ads | web | local-pdfs [+web]` — ⚠ **el nombre engaña (#209):
-> `source:` no dice «dónde se busca», dice QUÉ CADENA CORRE el orquestador**; el descubrimiento
-> multi-backend es `discover.py --theme <slug>`, un paso aparte que el skill prescribe a mano (0b) y
-> que `ingest_theme.py` no llama — y (si es off-ADS) la lista `sources:`. Un tema off-ADS puede ser
-> **mixto**, y su mitad astro entra por una de dos vías (la primera con prioridad): **`query:`
-> poblada** → descubrimiento ADS completo (misma lente, mismas puertas D-26, misma compuerta de
-> triage), o **sólo `extra_core:`** → sub-cadena acotada a esos bibcodes. Los papers con bibcode ADS
-> van siempre en `extra_core:`, nunca en `sources:`. Una fuente que no se consigue se marca
-> `pending: paywall|scan|unextractable` en su item de `sources:` → stub con `pending_source`,
-> derivada al usuario sin frenar la cadena. **`ingest-star` no cambia: es astro-only.** Papers sin
-> bibcode ADS → clave sintética `AAAA+Autor` (debe empezar con `AAAA`+letra); páginas web →
-> **snapshot `.txt` determinista** (`scripts/fetch_web.py` vía defuddle, que crea además el stub).
+> el modo off-ADS existe para los **métodos de otras disciplinas** cuya bibliografía vive fuera de
+> ADS: las fuentes se **declaran**, no se descubren por query. La entrada lleva `source: ads | web |
+> local-pdfs [+web]` — ⚠ **el nombre engaña (#209): no dice «dónde se busca», dice QUÉ CADENA CORRE
+> el orquestador**; el descubrimiento multi-backend es `discover.py --theme <slug>`, un paso aparte
+> (0b) que `ingest_theme.py` no llama. Un tema off-ADS puede ser **mixto**, y su mitad astro entra
+> por **`query:` poblada** → descubrimiento ADS completo (misma lente, mismas puertas, misma
+> compuerta de triage), o **sólo `extra_core:`** → sub-cadena acotada a esos bibcodes; los papers con
+> bibcode ADS van siempre en `extra_core:`, nunca en `sources:`. Una fuente que no se consigue se
+> marca `pending: …` → stub con `pending_source`, derivada al usuario sin frenar. **`ingest-star` no
+> cambia: es astro-only.** Papers sin bibcode ADS → clave sintética `AAAA+Autor`; páginas web →
+> **snapshot `.txt` determinista** (`fetch_web.py` vía defuddle, que crea además el stub).
 > ⛔ **Una `url:` que sirve un PDF NO se snapshotea: se BAJA como PDF (#242)** — `fetch_web` mira el
 > `Content-Type`, porque `resolve_pdf` devuelve `pdf_url` por construcción y el framework proponía
 > una entrada que su propia cadena rechazaba. La **frontera dura sigue rigiendo**: sólo bibliografía
@@ -1098,17 +1101,14 @@ off-ADS `sources:` registra sólo lo aceptado. `ingest_theme` **avisa** —no fr
 `sources:` lleva una clave ya descartada. Regla de
 oro: **`build/` guarda lo regenerable, el registro guarda lo que no lo es.** Un `ads.json` se
 recupera pidiéndoselo de nuevo a ADS; el juicio de por qué descartaste un candidato, no.
-`busquedas` responde la otra pregunta, la del consumidor:
-**sobre qué universo de papers afirma esta ficha, y con qué lente se filtró.** Efectos: (a)
-`make_notes` estampa en la cabecera de la ficha/concept **una línea** con fecha, universo→core,
-pendientes y la ruta al registro (cirugía idempotente, no toca la prosa LLM); (b) el lint deja de
+`busquedas` responde la otra pregunta, la del consumidor: **sobre qué universo de papers afirma esta
+ficha, y con qué lente se filtró.** Efectos: (a) `make_notes` estampa en la cabecera **una línea**
+con fecha, universo→core, pendientes y la ruta al registro (cirugía idempotente); (b) el lint deja de
 dar **falso limpio** sin `build/` — *triage pendiente* y *corpus truncado* caen al registro y
-reportan el snapshot **con su fecha**, aclarando que no es el conteo vigente. Migración: el
-`build/<slug>/triage.json` viejo **ya no se lee** —el framework no lleva capas de compatibilidad,
-que son complejidad permanente en el lector— y se consolida con
-`python scripts/triage.py <slug> --migrate` (idempotente: ante el mismo bibcode gana lo ya
-versionado). Mientras exista, el **lint lo reporta como bloqueante**: que un juicio viejo quede mudo
-es justamente el bug que #51 arregló.
+reportan el snapshot **con su fecha**. Migración: el `build/<slug>/triage.json` viejo **ya no se
+lee** (el framework no lleva capas de compatibilidad) y se consolida con `triage.py <slug>
+--migrate`; mientras exista, el **lint lo bloquea** — que un juicio viejo quede mudo es el bug que
+#51 arregló.
 
 ### Los cuatro cuadrantes de la curación — quién decidió y por qué (#111)
 
@@ -1121,27 +1121,24 @@ ninguno mudo:
 | **fuente off-ADS** | `sources: {…, via, fecha, motivo}` (#111) | `triage --drop-source … --reason` (#81) |
 
 ⛔ **`extra_core` fuerza la ENTRADA; `--drop-core` es su simétrico y faltaba (#112).** Un paper que
-la lente dice core **no se podía sacar**: `--drop` se consultaba sólo para no re-proponer candidatos
-del chaining, así que sobre un core la decisión quedaba escrita y **no se aplicaba** — medido en un
-tema real, 7 papers off-topic descartados con motivo seguían siendo core corrida tras corrida. Una
-decisión de curación que el clasificador ignora en silencio es peor que no tomarla: queda escrita, se
-lee como aplicada, y no lo está. Tres propiedades del carril, y cada una cierra un modo de falla:
+la lente dice core **no se podía sacar** (medido: 7 papers off-topic descartados con motivo seguían
+siendo core corrida tras corrida). Una decisión de curación que el clasificador ignora en silencio es
+peor que no tomarla: queda escrita, se lee como aplicada, y no lo está. Tres propiedades del carril,
+cada una cerrando un modo de falla:
 - **El carril es `sujeto`, no global.** La exclusión es del par `(paper, sujeto)`: lo que se saca de
   un tema de método por polisemia —"componentes independientes" de un tensor— puede ser legítimamente
   core de otro. Un descarte global decidiría por bóvedas que no son ésta.
 - **El paper excluido queda VISIBLE**, con `via: manual-drop` y el motivo en `why_excluded`. Si
   desapareciera del registro, dentro de tres meses se leería como *«la búsqueda nunca lo encontró»*.
-- **Los artefactos se borran** (PDF y `.txt`): si quedan, el detector de #108 los reporta como
-  extracción pagada sin nota **para siempre**; la decisión queda versionada, así que borrar el
-  artefacto no borra el juicio. ⛔ **Y en la nota que SE CONSERVA, `drop_core` re-apunta
-  `pdf:`/`fulltext:` por verdad de disco (#217):** a la copia que sobreviva bajo otro slug, o a
-  `null` — dejarlos apuntando a un archivo que este mismo comando borró afirma algo falso sobre el
-  disco. **La vista y la extracción no se tocan**: la lectura ocurrió; lo que cambió es que ya no
-  hay contra qué re-verificarla, y **eso el lint lo dice** (*«vista fechada sin fuente en disco»*,
-  backlog — el ancla de fuente no se entera de un archivo que **desapareció**). La **nota** se borra
-  **sólo si el paper no pertenece a otro sujeto Y no tiene extracción**; si no, NO se borra y se
-  avisa por qué. Cuando sí se borra, los `[[wikilink]]` que la citaban quedan **rotos y visibles**:
-  repararlos sería decidir por el usuario qué decía esa frase (#132).
+- **Los artefactos se borran** (PDF y `.txt`): si quedan, #108 los reporta como extracción pagada
+  sin nota **para siempre**; la decisión queda versionada, así que borrar el artefacto no borra el
+  juicio. ⛔ **En la nota que SE CONSERVA, `drop_core` re-apunta `pdf:`/`fulltext:` por verdad de
+  disco (#217)** —a la copia que sobreviva, o a `null`—: dejarlos apuntando a un archivo que este
+  mismo comando borró afirma algo falso sobre el disco. **La vista y la extracción no se tocan**: la
+  lectura ocurrió; lo que cambió es que ya no hay contra qué re-verificarla, y **eso el lint lo
+  dice** (backlog). La **nota** se borra **sólo si el paper no pertenece a otro sujeto Y no tiene
+  extracción**; si no, se avisa por qué. Los `[[wikilink]]` que quedan rotos **no se reparan**:
+  sería decidir por el usuario qué decía esa frase (#132).
 - **El diff de re-clasificación lo respeta** (`lens_diff_offline`, `reclass_diff`): sin eso, cada
   cambio de lente vuelve a proponer lo que el usuario ya sacó, y la categoría se vuelve ruido que se
   deja de mirar.
@@ -1175,11 +1172,11 @@ convierte una decisión en un efecto colateral.
 ### Append (plegar UNA fuente puntual a una entidad existente — skill `append-knowledge`)
 El usuario trae **una fuente concreta** (bibcode ADS, PDF local o URL) para una ficha/concepto que
 **ya existe**: plomería mínima según el tipo (bibcode → `extra_core` + cadena idempotente; off-ADS →
-item en `sources:` + `ingest_theme.py`, o las piezas sueltas `fetch_web`/`make_notes --web`),
-extracción enfocada en el eje del destino, síntesis a la nota viva (rige la regla de poda y
-`disputes`) y cierre estándar (autosuficiencia + verify-citations + lint + log). **No crea
-entidades** (eso es Ingest) **ni barre por query lo nuevo** (eso es Mantenimiento/refrescar); un dato
-suelto sin fuente citable no entra (regla #0). Detalle en el skill.
+item en `sources:` + `ingest_theme.py`, o `fetch_web`/`make_notes --web`), extracción enfocada en el
+eje del destino, síntesis a la nota viva (rige la regla de poda y `disputes`) y cierre estándar
+(autosuficiencia + verify-citations + lint + log). **No crea entidades** (eso es Ingest) **ni barre
+por query lo nuevo** (eso es Mantenimiento/refrescar); un dato suelto sin fuente citable no entra
+(regla #0). Detalle en el skill.
 
 ### Query / hipótesis (pregunta → respuesta; archivar SÓLO si el usuario lo pide)
 1. Para búsqueda general o test de hipótesis: `grep` sobre `vault/raw/fulltext/`, leé los hits, sintetizá
@@ -1199,25 +1196,23 @@ suelto sin fuente citable no entra (regla #0). Detalle en el skill.
 
 **Extensión propia de esta wiki** (el lint canónico de Karpathy no valida que la fuente respalde la
 afirmación — sólo salud estructural). **Cuándo:** paso de cierre de **toda operación que escriba
-prosa con `[[bibcode]]`** — antes de lint/commit. **La nota nace 100% verificada (D-5):** el estado
-*"sin verificar"* sólo puede aparecer después, por una edición; por eso el caso normal es que el
-lint calle, y cuando habla hay algo real. El procedimiento completo (fan-out, prompts, barrera,
-resolución) vive en el skill; acá va el contrato del artefacto.
+prosa con `[[bibcode]]`** — antes de lint/commit. **La nota nace 100% verificada (D-5):** *"sin
+verificar"* sólo puede aparecer después, por una edición; por eso el caso normal es que el lint
+calle, y cuando habla hay algo real. El procedimiento (fan-out, prompts, barrera, resolución) vive
+en el skill; acá va el contrato del artefacto.
 
 **Qué hace:** descompone la nota en pares (afirmación, `[[bibcode]]`) —las filas de tabla y los
 ítems de lista **heredan la cita del ámbito que los introduce**; las `SECCIONES_ESTAMPADAS` quedan
-afuera (metadata derivada, no hay qué contrastar)— y lanza **un subagente independiente por par**
-que lee SÓLO esa fuente (grounding-first, prohibido de memoria) y devuelve **dos ejes separados**
-(D-59): un `veredicto` de RESPALDO —vocabulario cerrado `soportada|no-soportada|contradice`— y,
-aparte, la `condición` bajo la que la fuente lo afirma. Más **cita textual + nº de PÁGINA del PDF**
-(obligatoria; sin cita ⇒ no-soportada: la cita debe tocar el **contenido distintivo**, la cercanía
-temática no alcanza). `no-soportada` = la fuente **calla**; `contradice` = **afirma lo contrario** →
-corrección de la nota o **disputa** (#71). Cada falla se **resuelve** (bajar la afirmación a lo que
-dice la fuente, reasignar la cita, marcar `inferencia`, o taguear la disputa).
+afuera— y lanza **un subagente independiente por par** que lee SÓLO esa fuente (grounding-first,
+prohibido de memoria) y devuelve **dos ejes separados** (D-59): un `veredicto` de RESPALDO
+—`soportada|no-soportada|contradice`— y, aparte, la `condición` bajo la que la fuente lo afirma. Más
+**cita textual + nº de PÁGINA del PDF** (obligatoria; sin cita ⇒ no-soportada: tiene que tocar el
+**contenido distintivo**, la cercanía temática no alcanza). `no-soportada` = la fuente **calla**;
+`contradice` = **afirma lo contrario** → corrección o **disputa** (#71). Cada falla se **resuelve**
+(bajar la afirmación a lo que dice la fuente, reasignar la cita, marcar `inferencia`, o taguearla).
 
-⚠ Dos ejes de **grado** se eliminaron y no vuelven: **`parcial`** (1.39.0 — fusionaba lo decidible
-con lo de grado; se descompone sin pérdida en `soportada`+`condición` o `no-soportada`) y la
-**columna `Score` 0–10** (1.42.0 — el campo no gradúa: el vocabulario ternario ya es el estándar).
+⚠ Dos ejes de **grado** se eliminaron y no vuelven: **`parcial`** (1.39.0 — se descompone sin
+pérdida en `soportada`+`condición` o `no-soportada`) y la **columna `Score` 0–10** (1.42.0).
 
 ⛔ **La condición se CLASIFICA, con vocabulario cerrado: `acota` | `contextualiza` (#221).** El
 fan-out la puebla en la gran mayoría de los pares, así que *«resolvé cada condición»* sería la nota
@@ -1277,15 +1272,13 @@ suena, alguien reemplazó el archivo; y una fila anclada al PDF **no** se vence 
 re-extrae. Los calcula `scripts/lib_blocks.py` (`pairs_of`, `source_hash`, `bytes_hash`), el mismo
 código que después los chequea: **no se escriben a ojo**. ⛔ **Y el bloque escrito se re-parsea antes de publicarse (#284):** `lib_blocks.render_verif_table` escapa cada celda y **rehúsa** devolver un bloque cuya lectura no reproduce lo que se le escribió — sin esa puerta, reescribir una fila leída parte la fila y el ancla se lee de la columna equivocada.
 
-**Salvedades de fuente:** `.txt` con header `source: ocr` → citable con salvedad (la verificación
-vale para prosa; ante discrepancia de símbolos, abrir el PDF). `pdf_source: eprint` → una
-discrepancia numérica contra un valor publicado es candidata a **diferencia de versión**, no se
-"corrige" la nota hacia el preprint. Si una afirmación no aparece en el `.txt` (ecuación, tabla,
-escaneo): abrir el PDF o marcar `no verificable por extracción`.
-
-Es **juicio de LLM**, robusto pero no prueba: su tasa de error se mide con el **auto-benchmark**
-(a pedido): `python scripts/bench_verify.py seed` siembra citas falsas deterministas, el verificador
-las juzga a ciegas y `score` reporta el recall; nada del benchmark entra al vault.
+**Salvedades de fuente:** `.txt` con header `source: ocr` → citable con salvedad (ante discrepancia
+de símbolos, abrir el PDF). `pdf_source: eprint` → una discrepancia numérica contra un valor
+publicado es candidata a **diferencia de versión**, no se "corrige" la nota hacia el preprint. Si
+una afirmación no aparece en el `.txt` (ecuación, tabla, escaneo): abrir el PDF o marcar `no
+verificable por extracción`. Es **juicio de LLM**, robusto pero no prueba: su tasa de error se mide
+con el **auto-benchmark** (`python scripts/bench_verify.py seed` siembra citas falsas deterministas,
+el verificador las juzga a ciegas y `score` reporta el recall; nada de eso entra al vault).
 
 **Qué es una `inferencia` y cómo se escribe (D-42).** Una afirmación que la bóveda sostiene y que
 **ninguna fuente dice**: sale de combinar dos o más que sí lo dicen. No es excusa para lo no
@@ -1306,19 +1299,18 @@ hipótesis sin ninguna cita.
 **El eje que ninguna otra capa mira: ¿esta ficha dice la verdad y se sostiene sola?** El lint chequea
 salud estructural, `verify-citations` claim ↔ **su propia** fuente par por par, `find-contradictions`
 claim ↔ claim **entre** fuentes, y `auditar` el **framework**. Falta el artefacto **completo**, y no
-es teórico: una pasada ad-hoc sobre un concepto cerrado —`lint --cierre` en 0, 99 pares en
-`soportada`— encontró **más de 40 defectos**, entre ellos que la nota **no era implementation-ready**
-(faltaba el puente `g = G'`, el criterio de convergencia y la deflación, y **cuatro de los cinco
-huecos estaban en un `.txt` que la bóveda ya tenía bajado**), dos filas de tabla **fusionadas** que
-hacían invisible una afirmación **verificada**, una sección que **se contradecía** con otra 100
-líneas después, y una afirmación **falsa sobre el propio repo**.
-**Cuándo:** a pedido explícito, **nunca** como paso de cierre — es caro por diseño (abre PDFs,
-recuenta, re-renderiza, lanza un subagente por frente) y su valor está en **garantizar** una ficha
-antes de apoyarse en ella. **Qué hace:** siete frentes en paralelo —estándar de la nota (con la
-prueba operativa de *escribir el pseudocódigo desde la nota y anotar dónde se traba*), la nota contra
-sí misma, integridad del artefacto, aritmética, cadena de verdad, coherencia con el mundo declarado,
-y la nota contra su cadena—, cada uno declarando **su población**; barrera; corrección **serial**
-volviendo a la fuente; y **re-verificación de lo tocado** (#203). ⛔ **Lo que no se pudo cerrar sale
+es teórico: sobre un concepto cerrado —`lint --cierre` en 0, 99 pares `soportada`— una pasada ad-hoc
+encontró **más de 40 defectos**: la nota no era implementation-ready (y **cuatro de los cinco huecos
+estaban en un `.txt` que la bóveda ya tenía**), dos filas **fusionadas** que hacían invisible una
+afirmación verificada, una sección que se contradecía con otra 100 líneas después, y una afirmación
+**falsa sobre el propio repo**.
+**Cuándo:** a pedido explícito, **nunca** como paso de cierre — es caro por diseño y su valor está
+en **garantizar** una ficha antes de apoyarse en ella. **Qué hace:** siete frentes en paralelo
+—estándar de la nota (con la prueba operativa de *escribir el pseudocódigo desde la nota y anotar
+dónde se traba*), la nota contra sí misma, integridad del artefacto, aritmética, cadena de verdad,
+coherencia con el mundo declarado, y la nota contra su cadena—, cada uno declarando **su
+población**; barrera; corrección **serial** volviendo a la fuente; y **re-verificación de lo
+tocado** (#203). ⛔ **Lo que no se pudo cerrar sale
 marcado en la nota** con la cuarta marca en línea (arriba), no en un reporte que se pierde.
 
 ### Contradicciones (desacuerdo claim↔claim — skill `find-contradictions`)
@@ -1342,6 +1334,14 @@ toca, el ancla de fuente tampoco se entera — es el modo de caducidad más sile
 **ground-truth** (NEA cambia valores entre releases, y el snapshot era un JSON congelado que
 **nada** comparaba) y el **conteo de citas de la puerta 2** (#106, ver abajo). Si están repartidas,
 se corren cinco y la sexta nunca.
+⛔ **El hallazgo de VERSIONES sobrevive a la corrida (#298): `versions_disponible: <bibcode>`
+estampado en la nota** (mismo criterio que `corrections`: es metadata, no un valor que la prosa
+citó) + backlog del lint con el `--rename-paper`. Era la única de las seis que no dejaba nada en la
+bóveda. Y **declara su población** —las notas cuyo bibcode SIGUE siendo el eprint: 3 de 138 medido—,
+porque *«cubrió: versiones»* sin denominador se lee como «se miraron las versiones de la bóveda».
+⚠ Su hueco simétrico es backlog aparte: la nota con **bibcode publicado** que igual lee el preprint
+(82 de 138) no tiene problema de identidad, así que ningún detector la ve — y `pdf_source: eprint`
+le apaga además el chequeo de cita textual.
 ⛔ **Y el REUSO entre slugs (D-18) deja una pregunta hecha, no una respuesta (#297).** Copiar el
 artefacto que ya estaba bajo otro slug es correcto y se conserva, pero además importa a un sujeto
 nuevo un archivo cuya **antigüedad nadie chequeó** — y la salida natural («si hubiera versión nueva
@@ -1499,29 +1499,29 @@ mecanización.
    scripts/<módulo>.py`.
 4. **Un mapa que atribuye mal es peor que uno vacío**: el vacío se ve, la atribución falsa se lee
    como verdad. Vale para `docs/trazabilidad.md`, `docs/contrato.md` y cualquier tabla estampada.
-5. **Cuando dos mediciones no reconcilian y no se puede re-medir, se DECLARA la discrepancia** en
-   vez de elegir un número. Elegir en silencio es cómo un documento empieza a mentir.
+   ⛔ **Todo chequeo que mire texto de una nota NORMALIZA EL MARKDOWN primero** (#168, #276, #283,
+   #309): cuatro veces la misma ceguera —el adorno, el énfasis, el escape— y la cuarta dejaba al
+   operador eligiendo entre un bug de renderizado y un backlog permanente.
+5. **Cuando dos mediciones no reconcilian y no se puede re-medir, se DECLARA la discrepancia**; elegir en silencio es cómo un documento empieza a mentir.
 6. **Fan-out para LEER, aplicador serial para ESCRIBIR, barrera antes de CONSUMIR — y lo escrito se
    RE-VERIFICA.** El aislamiento del fan-out no se toca; lo que no escala es la **escritura**: dos
    correctores sobre el mismo bloque lo corrompen en cadena (#197) y derivar trabajo de una etapa
-   que todavía corre deja hallazgos que no mira nadie (#199). La regla no es «paralelizar menos»:
-   es **un solo escritor, y una barrera antes de que algo consuma resultados**.
-   - ⛔ **El aplicador comparte la definición de «bloque» con quien produce los pares (#222)** — dos
-     implementaciones de la misma regla ya costaron pares desaparecidos sin señal; la red barata:
+   que todavía corre deja hallazgos que no mira nadie (#199). **Un solo escritor, y una barrera
+   antes de que algo consuma resultados.**
+   - ⛔ **El aplicador comparte la definición de «bloque» con quien produce los pares (#222)**: dos
+     implementaciones de la misma regla ya costaron pares desaparecidos sin señal — la red barata es
      **contar los pares antes y después y abortar si bajaron**.
-   - ⛔ **La cuarta cláusula (#203): el ciclo no cierra en *corregir* sino en *corregir →
-     re-verificar lo tocado*.** Un corrector que abrió la fuente escribió igual un valor falso
-     nuevo; lo cazó el ancla, de rebote. Un aplicador no valida lo que aplica.
+   - ⛔ **La cuarta cláusula (#203): el ciclo cierra en *corregir → re-verificar lo tocado*.** Un
+     corrector que abrió la fuente escribió igual un valor falso nuevo, y lo cazó el ancla de
+     rebote: un aplicador no valida lo que aplica.
    - ⚠ **Y ese ciclo NO CONVERGE solo (#282):** el ancla es de **bloque**, así que cada ronda vence
      los pares vecinos y produce trabajo del tamaño de la anterior. La salida **no es aflojar el
      ancla** (#224: el sub-disparo es la única dirección prohibida): es distinguir la corrección que
      **cambia lo que la afirmación dice** (se re-verifica) de la **derivada de la propia
-     verificación** (el texto nuevo son las palabras que el juez sacó de la fuente: se re-ancla, no
-     se re-pregunta). Lo emite `python scripts/reverify_subset.py <nota>` (#257): re-anclables / a
-     re-verificar / filas huérfanas, `--json` agrupado por fuente. ⛔ **Propone y no escribe**
-     (doctrina `--drop-core`); empareja por **cobertura del extracto** (la celda está truncada por
-     contrato, #226) y **nunca cruza `bibcode`** — llevar un veredicto de una fuente a otra sería
-     fabricar la atribución que este framework más persigue.
+     verificación** (se re-ancla, no se re-pregunta). Lo emite `python scripts/reverify_subset.py
+     <nota>` (#257): re-anclables / a re-verificar / filas huérfanas. ⛔ **Propone y no escribe**;
+     empareja por **cobertura del extracto** (#226) y **nunca cruza `bibcode`** — llevar un
+     veredicto de una fuente a otra sería fabricar la atribución que este framework más persigue.
 
 Corolario que las cruza a todas: **una promesa que el sistema dejó de cumplir en silencio es peor
 que una que nunca hizo.** Si al tocar algo se rompe una promesa declarada, eso **se anota**, aunque

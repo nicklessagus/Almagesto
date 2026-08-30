@@ -117,7 +117,43 @@ def sweep_correcciones() -> list:
     return out
 
 
-def discover_versions(solo: set | None = None) -> tuple[list, list]:
+def stamp_version_disponible(stem: str, nuevo_bib: str) -> bool:
+    """Stamp `versions_disponible: <bibcode>` on the note, so the finding SURVIVES the run (#298).
+
+    ⛔ Versions was the only one of the six expiries leaving **nothing** in the vault: retractions
+    stamp `retracted`, corrections stamp `corrections`, ground-truth writes `_cambios` and the lint
+    demands a mark, web and citations propose a command. This one printed one line to stdout — run
+    the pass, don't act right then, and the finding is gone: not in the note, not in `log.md`, not
+    in the lint, and the next pass rediscovers it from scratch. Same treatment as `corrections`,
+    which also does not invalidate the paper: it is a metadata MARK, not a value the prose cited,
+    so stamping it without asking is the same exception the retraction branch already carries.
+
+    ⚠ It is NOT `versions[]`: that field declares an alias of the SAME work already resolved, and a
+    bibcode listed there with its own note blocks (#229). This one says *"there is a published
+    version and nobody renamed anything yet"* — the lint reports it as backlog with the command."""
+    dest = cfg.PAPERS / f"{stem}.md"
+    if not dest.exists():
+        return False
+    texto = dest.read_text(encoding="utf-8")
+    lim = cfg.fm_bounds(texto)
+    if lim is None:
+        return False
+    ini, fin = lim
+    lineas = texto[ini:fin].split("\n")
+    want = f"versions_disponible: {nuevo_bib}"
+    for i, ln in enumerate(lineas):
+        if ln.startswith("versions_disponible:"):
+            if ln == want:
+                return False
+            lineas[i] = want
+            break
+    else:
+        lineas.append(want)
+    cfg.write_text_atomic(dest, texto[:ini] + "\n".join(lineas) + texto[fin:])
+    return True
+
+
+def discover_versions(solo: set | None = None, meta: dict | None = None) -> tuple[list, list]:
     """`[(bibcode_viejo, bibcode_nuevo)]` — preprints que ya salieron publicados (D-19).
 
     `solo` acota el barrido a unos bibcodes concretos (#297). Existe para el momento del **reuso
@@ -140,13 +176,20 @@ def discover_versions(solo: set | None = None) -> tuple[list, list]:
     barrido que no miró nada. Tragarse el error y devolver la lista vacía es el cero inventado."""
     import query_ads
     out, fallidos = [], []
-    for f in sorted(cfg.PAPERS.glob("*.md")):
+    notas = sorted(cfg.PAPERS.glob("*.md"))
+    miradas = 0
+    for f in notas:
         if solo is not None and f.stem not in solo:
             continue
         fm = cfg.split_fm(f.read_text(encoding="utf-8"))
         arxiv = fm.get("arxiv_id")
         if not arxiv or "arXiv" not in str(fm.get("bibcode") or ""):
             continue
+        # #298 — la POBLACIÓN, declarada. El filtro es correcto por contrato (D-19 es sobre
+        # IDENTIDAD, y una nota que ya tiene bibcode publicado no tiene problema de identidad), pero
+        # `cubrió: versiones` sobre 3 de 138 notas se lee como «se miraron las versiones de la
+        # bóveda». Es INV-40 aplicado a la pasada de red, el único carril que no lo hacía.
+        miradas += 1
         ya_alias = {str(v.get("bibcode")) for v in cfg.as_list(fm.get("versions"))
                     if isinstance(v, dict)}
         try:
@@ -164,7 +207,12 @@ def discover_versions(solo: set | None = None) -> tuple[list, list]:
             bib = r.get("bibcode")
             if bib and "arXiv" not in bib and bib != f.stem and bib not in ya_alias:
                 out.append((f.stem, bib))
+                if stamp_version_disponible(f.stem, bib):
+                    cfg.print_seguro(f"    · {f.stem}: `versions_disponible: {bib}` estampado "
+                                     f"(el hallazgo sobrevive a la corrida — #298)")
                 break
+    if meta is not None:
+        meta.update(miradas=miradas, notas=len(notas))
     return out, fallidos
 
 
@@ -358,7 +406,8 @@ def load_ultima_pasada() -> dict:
     return cfg.as_map(cfg.as_map(data).get("ultima_pasada_red"))
 
 
-def save_ultima_pasada(cubrio: list, no_evaluados: list | None = None) -> None:
+def save_ultima_pasada(cubrio: list, no_evaluados: list | None = None,
+                       poblaciones: dict | None = None) -> None:
     """Persiste qué se miró afuera y **qué no se pudo mirar** (#172).
 
     Acá se guardaba sólo `cubrio`, así que en el archivo versionado un detector que falló
@@ -375,6 +424,11 @@ def save_ultima_pasada(cubrio: list, no_evaluados: list | None = None) -> None:
               "version": cfg.ALMAGESTO_VERSION}
     if no_evaluados:
         pasada["no_evaluados"] = [{"detector": n, "motivo": m} for n, m in no_evaluados]
+    # #298 — SOBRE CUÁNTAS miró cada detector. «cubrió: versiones» sobre 3 de 138 notas se lee como
+    # «se miraron las versiones de la bóveda», que es el mismo `(0)` sin denominador que INV-40
+    # prohíbe en el lint. Sólo aparece cuando hay algo que declarar (el registro no es regenerable).
+    if poblaciones:
+        pasada["poblaciones"] = {k: dict(v) for k, v in poblaciones.items() if v}
     cfg.write_text_atomic(_red_path(), yaml.safe_dump(
         {"ultima_pasada_red": pasada}, sort_keys=False, allow_unicode=True))
 
@@ -413,6 +467,7 @@ def main(argv=None) -> int:
         return 0
 
     cubrio, pendientes = [], 0
+    poblaciones: dict = {}          # #298: sobre cuántas notas miró cada detector
 
     def _cubrir(nombre: str, fallidos: list) -> None:
         """`cubrio` sólo si el detector realmente miró. Un fallo por ítem no tumba la pasada —a
@@ -461,13 +516,20 @@ def main(argv=None) -> int:
             cfg.print_seguro(f"  · web: {h}")
         pendientes += len(web)
 
+    vmeta: dict = {}
     try:
-        versiones, v_fallidos = discover_versions()
+        versiones, v_fallidos = discover_versions(meta=vmeta)
     except Exception as exc:                          # noqa: BLE001 — red ajena
         no_evaluados.append(("versiones", str(exc)))
         cfg.print_seguro(f"  ⛔ versiones: NO EVALUADO — {exc}")
     else:
         _cubrir("versiones", v_fallidos)
+        # #298 — INV-40 en la pasada de red: `cubrió: versiones` sin población se lee como «se
+        # miraron las versiones de la bóveda», y son las notas cuyo bibcode SIGUE siendo el eprint
+        # (medido: 3 de 138). El filtro es correcto; lo que faltaba era decirlo.
+        cfg.print_seguro(f"  > versiones: sobre {vmeta.get('miradas', 0)} nota(s) con bibcode de "
+                         f"eprint, de {vmeta.get('notas', 0)} notas de paper")
+        poblaciones["versiones"] = dict(vmeta)
         for viejo, nuevo in versiones:
             # se PROPONE: el renombre reescribe wikilinks de toda la bóveda (D-19).
             cfg.print_seguro(f"  · versiones: {viejo} salió publicado como {nuevo} → "
@@ -504,7 +566,7 @@ def main(argv=None) -> int:
                          "regla. Re-corré la cadena del tema para aplicarlo (no se aplica solo).")
         pendientes += len(cruces)
 
-    save_ultima_pasada(cubrio, no_evaluados)
+    save_ultima_pasada(cubrio, no_evaluados, poblaciones)
 
     if gt_cambios:
         # El diff YA se mostró. Aplicar es lo que se pregunta — no lo que se hace y después se avisa.

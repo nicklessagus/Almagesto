@@ -587,13 +587,21 @@ def test_chain_candidates_arma_subqueries_ancladas(no_sleep, monkeypatch):
     assert all(h["via"] in ("chain:references", "chain:citations") for h in out)
 
 
-def test_fetch_bibcodes_marca_manual(no_sleep, monkeypatch):
-    # @inv INV-60
+def test_fetch_bibcodes_marca_la_curacion(no_sleep, monkeypatch):
+    """#303 — el paper traído por bibcode entra core por CURACIÓN, y eso se registra en `puertas`
+    (#126), no en un `via` hardcodeado: el `via` es el DECLARADO en la config (`EXTRA_CORE_VIA`), el
+    mismo que escribe la otra rama del merge. Antes, el mismo item salía `manual` o `usuario` según
+    si la query de ADS había devuelto ese bibcode — un reparto que no decidió nadie, y `manual` ni
+    siquiera es un valor válido del vocabulario.
+
+    @inv INV-60"""
     monkeypatch.setattr(qa, "query_ads",
                         lambda q, rows=400, quiet_truncate=False, fq=qa.ASTRO_FQ:
                         [rec("2019man....1M", relevant=False)])
-    out = qa.fetch_bibcodes(["2019man....1M"])
-    assert out[0]["relevant"] is True and out[0]["via"] == "manual"
+    out = qa.fetch_bibcodes(["2019man....1M"], {"2019man....1M": "usuario"})
+    assert out[0]["relevant"] is True
+    assert out[0]["via"] == "usuario" and out[0]["via"] in cfg.EXTRA_CORE_VIA
+    assert out[0]["puertas"] == ["manual"], "la procedencia de curación, siempre registrada"
 
 
 def test_query_ads_aplica_la_lente_astro_por_default(toy_classifier, ads_token, no_sleep, monkeypatch):
@@ -628,10 +636,10 @@ def test_fetch_bibcodes_no_aplica_la_lente_astro(toy_classifier, ads_token, no_s
     doc = {"bibcode": "2024arXiv240513912Z", "title": ["Spectral estimators"], "doctype": "eprint"}
     monkeypatch.setattr(qa, "requests", SimpleNamespace(
         get=fake_get_seq([FakeResp(200, payload([doc]))], calls=calls)))
-    out = qa.fetch_bibcodes(["2024arXiv240513912Z"])
+    out = qa.fetch_bibcodes(["2024arXiv240513912Z"], {"2024arXiv240513912Z": "triage"})
     assert "fq" not in calls[0]["params"]                  # sin lente astro
     assert out[0]["bibcode"] == "2024arXiv240513912Z"
-    assert out[0]["relevant"] is True and out[0]["via"] == "manual"
+    assert out[0]["relevant"] is True and out[0]["via"] == "triage"
 
 
 # ── main(): integración con red mockeada ─────────────────────────────────────
@@ -802,11 +810,15 @@ def test_main_extra_core_persistente(toy_vault, toy_classifier, no_sleep, monkey
     monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k: [rec("2020dirA....1A")])
     monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
     monkeypatch.setattr(qa, "fetch_bibcodes",
-                        lambda bibs: [dict(rec("1988old.....1O", relevant=True), via="manual")])
+                        lambda bibs, via_de=None: [dict(rec("1988old.....1O", relevant=True),
+                                                          via="usuario", puertas=["manual"])])
     run_main(monkeypatch, ["test_star"])
     data = json.loads((toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text())
-    manual = [r for r in data["records"] if r["via"] == "manual"]
-    assert [r["bibcode"] for r in manual] == ["1988old.....1O"]
+    # #303: la curación se reconoce por `puertas: [manual]` (la procedencia), y el `via` es el
+    # DECLARADO en la config — no un string que dos ramas del merge escribían distinto.
+    curados = [r for r in data["records"] if "manual" in (r.get("puertas") or [])]
+    assert [r["bibcode"] for r in curados] == ["1988old.....1O"]
+    assert curados[0]["via"] == "usuario"
 
 
 def test_main_extra_core_rescata_del_corte(toy_vault, toy_classifier, no_sleep, monkeypatch, capsys):
@@ -823,7 +835,7 @@ def test_main_extra_core_rescata_del_corte(toy_vault, toy_classifier, no_sleep, 
                         [dict(r) for r in directo])
     monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
     pedidos = []
-    def fake_fetch(bibs):
+    def fake_fetch(bibs, via_de=None):
         pedidos.extend(bibs)
         return [dict(rec("1988old.....1O", relevant=True), via="manual")]
     monkeypatch.setattr(qa, "fetch_bibcodes", fake_fetch)
@@ -835,6 +847,9 @@ def test_main_extra_core_rescata_del_corte(toy_vault, toy_classifier, no_sleep, 
     # D-58: el `via` declarado en la config reemplaza al "manual" hardcodeado — la ficha puede
     # decir si el paper entró por juicio del usuario, por el triage o por el corpus.
     assert r["relevant"] is True and r["why_excluded"] is None and r["via"] == "usuario"
+    # #303 — y con su PUERTA registrada. En una ESTRELLA no corre `reclassify_for_theme`, así que
+    # el único lugar donde puede quedar la marca de curación es este merge.
+    assert "manual" in (r.get("puertas") or []), "el rescatado del corte quedó sin puerta"
     assert bibs["2020dirA....1A"]["via"] == "query"     # el resto no se toca
     assert data["n_relevant"] == 3
     assert "1 traídos de ADS · 1 rescatados del corte" in capsys.readouterr().out
@@ -849,7 +864,7 @@ def test_main_extra_core_avisa_bibcode_inexistente(toy_vault, toy_classifier, no
                         lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k:
                         [rec("2020dirA....1A")])
     monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
-    monkeypatch.setattr(qa, "fetch_bibcodes", lambda bibs: [])
+    monkeypatch.setattr(qa, "fetch_bibcodes", lambda bibs, via_de=None: [])
     assert run_main(monkeypatch, ["test_star"]) == 0
     assert "2020typo....1X" in capsys.readouterr().out
 
@@ -876,7 +891,7 @@ def test_main_extra_core_escalar_no_pierde_la_curacion(toy_vault, monkeypatch, c
                         lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k: [])
     monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
     pedidos: list = []
-    monkeypatch.setattr(qa, "fetch_bibcodes", lambda bibs: pedidos.extend(bibs) or [])
+    monkeypatch.setattr(qa, "fetch_bibcodes", lambda bibs, via_de=None: pedidos.extend(bibs) or [])
     run_main(monkeypatch, ["test_star"])
     assert pedidos == ["1988old.....1O"], f"se le pidió a ADS: {pedidos}"
 
@@ -901,7 +916,7 @@ def test_main_aliases_escalar_en_stars_yaml(toy_vault, monkeypatch, capsys):
     monkeypatch.setattr(qa, "query_ads",
                         lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k: [])
     monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
-    monkeypatch.setattr(qa, "fetch_bibcodes", lambda bibs: [])
+    monkeypatch.setattr(qa, "fetch_bibcodes", lambda bibs, via_de=None: [])
     # ⚠ **#182.** Esto asserteaba SÓLO «no revienta con TypeError», y el comentario afirmaba además
     # que «el alias mal escrito se reporta» sin medirlo. Con eso, cambiar `_listify_curado` por
     # `cfg.as_list` —que TIRA el escalar en vez de preservarlo— dejaba la suite ENTERA verde: el
@@ -928,12 +943,14 @@ def test_main_tema_extra_only(toy_vault, toy_classifier, no_sleep, monkeypatch):
     monkeypatch.setattr(qa, "query_ads", lambda *a, **kw: pytest.fail("no debe correr la query"))
     monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: pytest.fail("no debe encadenar"))
     monkeypatch.setattr(qa, "fetch_bibcodes",
-                        lambda bibs: [dict(rec("2012PASP..124.1015B", relevant=True), via="manual")])
+                        lambda bibs, via_de=None: [dict(rec("2012PASP..124.1015B", relevant=True),
+                                                          via="usuario", puertas=["manual"])])
     assert run_main(monkeypatch, ["gp", "--theme", "--extra-only"]) == 0
     data = json.loads((toy_vault.ROOT / "build" / "gp" / "ads.json").read_text())
     assert data["kind"] == "theme" and data["query"] is None
     assert [r["bibcode"] for r in data["records"]] == ["2012PASP..124.1015B"]
-    assert data["records"][0]["via"] == "manual"
+    assert data["records"][0]["via"] == "usuario"                     # #303: el declarado
+    assert data["records"][0]["puertas"] == ["manual"]
 
 
 def test_main_extra_only_sin_extra_core_error(toy_vault, toy_classifier, monkeypatch):
@@ -1324,7 +1341,8 @@ def test_main_extra_core_no_vuelve_a_la_cola_de_triage(toy_vault, toy_classifier
                         lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k:
                         [rec("2020dirA....1A")])
     monkeypatch.setattr(qa, "fetch_bibcodes",
-                        lambda bibs: [dict(rec("2010ext.....1E"), via="manual")])
+                        lambda bibs, via_de=None: [dict(rec("2010ext.....1E"), via="usuario",
+                                                          puertas=["manual"])])
     sembrados = {}
     def fake_chain(bibs, rows, filt, **k):
         sembrados["core"] = list(bibs)
@@ -1335,7 +1353,7 @@ def test_main_extra_core_no_vuelve_a_la_cola_de_triage(toy_vault, toy_classifier
     assert "2010ext.....1E" in sembrados["core"]          # el curado siembra el grafo
     data = json.loads((toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text())
     bibs = {r["bibcode"]: r["via"] for r in data["records"]}
-    assert bibs["2010ext.....1E"] == "manual"             # core por decisión del usuario…
+    assert bibs["2010ext.....1E"] == "usuario"            # core por decisión del usuario (#303)…
     assert [c["bibcode"] for c in data["candidates"]] == ["2023PhDT....1P"]   # …y FUERA de la cola
 
 
@@ -2398,3 +2416,53 @@ def test_el_fq_del_tema_entra_en_la_lente_guardada(toy_vault, monkeypatch):
     nulo = qa.lens_used({"facet": "ica", "search_fq": None})
     assert cfg.lens_delta(sin, nulo) == ["`search_fq` del tema sin declarar (hereda el objetivo) → "
                                          "null (no acota)"]
+
+
+# ── #303 · la guarda de #179 nunca corría para `extra_core` ──────────────────
+def test_los_curados_quedan_CON_PUERTA_registrada(toy_vault, toy_classifier, no_sleep, monkeypatch):
+    """#303 — la guarda de #179 existía para que un paper aceptado a mano no quedara sin `puertas`
+    («indistinguible de nadie miró»), y **nunca corría** para `extra_core`: `reclassify_for_theme`
+    se ejecuta sobre la query directa y el merge ocurre ~40 líneas después. Medido sobre un tema
+    real: 12 de 15 core con `puertas: []`, y `triage.py --prioridad` pidiendo elegir una política
+    sobre un corpus donde el 80 % no tiene política registrada.
+
+    Las DOS ramas del merge dejan la misma marca: la rescatada del corte (el bibcode que la query
+    devolvió no-core) y la traída por bibcode. Cuál de las dos toca no lo decide nadie: lo decide
+    si ADS devolvió ese bibcode."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {
+        "title": "ICA", "concept": "ica", "area": "methods", "facet": "independent component",
+        "query": 'abs:"independent component"',
+        "extra_core": [{"bibcode": "2012PASP..124.1015B", "via": "usuario", "motivo": "blanqueo"},
+                       {"bibcode": "2015MNRAS.446.3545D", "via": "usuario", "motivo": "weighted PCA"}]}})
+    # el primero lo devuelve la query (no-core: no matchea la faceta del tema) → rama RESCATADA;
+    # el segundo no lo devuelve → rama traída por bibcode.
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k:
+                        [rec("2012PASP..124.1015B", relevant=False, title="PCA with noisy data"),
+                         rec("2020icaA....1A", abstract="independent component analysis")])
+    monkeypatch.setattr(qa, "fetch_bibcodes",
+                        lambda bibs, via_de=None: [dict(rec("2015MNRAS.446.3545D", relevant=True),
+                                                        via=(via_de or {}).get("2015MNRAS.446.3545D"),
+                                                        puertas=["manual"])])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
+    assert run_main(monkeypatch, ["ica", "--theme"]) == 0
+    data = json.loads((toy_vault.ROOT / "build" / "ica" / "ads.json").read_text())
+    por_bib = {r["bibcode"]: r for r in data["records"]}
+    for b in ("2012PASP..124.1015B", "2015MNRAS.446.3545D"):
+        assert por_bib[b]["relevant"] is True
+        assert "manual" in (por_bib[b].get("puertas") or []), f"{b} quedó sin puerta registrada"
+        assert por_bib[b]["via"] == "usuario", "un solo `via` por decisión, el declarado"
+    assert set(por_bib["2020icaA....1A"]["puertas"]) <= set(qa.PUERTAS)
+
+
+def test_la_regla_del_tema_no_re_juzga_un_curado(toy_classifier):
+    """El predicado es «está en `extra_core`», no el string `via`: la mitad rescatada del corte
+    lleva el `via` de la config, así que testear `via == "manual"` la dejaba afuera de la guarda."""
+    meta = {"title": "ICA", "facet": "independent component"}
+    recs = [rec("2012PASP..124.1015B", relevant=True, via="usuario", title="PCA noisy")]
+    entraron, salieron = qa.reclassify_for_theme(recs, meta, curados={"2012PASP..124.1015B"})
+    assert (entraron, salieron) == ([], []), "la curación pisa al clasificador (#39/#68)"
+    assert recs[0]["relevant"] is True and recs[0]["puertas"] == ["manual"]
+    # sin declararlo curado, la regla del tema SÍ lo saca: es el control del test de arriba
+    otro = [rec("2012PASP..124.1015B", relevant=True, via="usuario", title="PCA noisy")]
+    assert qa.reclassify_for_theme(otro, meta)[1] == ["2012PASP..124.1015B"]

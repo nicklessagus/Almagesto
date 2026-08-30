@@ -1510,6 +1510,51 @@
    "number": 303,
    "title": "La guarda de #179 nunca corre para `extra_core`: el merge ocurre DESPUÉS de `reclassify_for_theme`, así que 12 de 15 core quedan «sin puerta registrada» — y el `via` sale `manual` o `usuario` según si la query devolvió el bibcode",
    "state": "OPEN"
+  },
+  {
+   "number": 304,
+   "title": "Un PDF que aparece en disco DESPUÉS de creada la nota no se linkea nunca: existe `stamp_fulltext` y no su gemelo para `pdf:` — el lint imprime la ruta exacta y ningún comando la aplica (4 de 4 rescates manuales quedaron en `pdf: null`)",
+   "state": "OPEN"
+  },
+  {
+   "number": 305,
+   "title": "`extraction_prompt` busca el PDF sólo bajo el slug del sujeto y `harvest_views.pdf_on_disk` bajo todos: el prompt manda declarar `fuente: abstract` sobre papers que SÍ están en disco — es #207 al revés, y pega justo en los retro-tagueados (7 de 31 medidos, dos de ellos libros)",
+   "state": "OPEN"
+  },
+  {
+   "number": 306,
+   "title": "`merge_frontmatter_list` escribe listas flow que envuelven a los 80 caracteres y su propio lector sólo mira la primera línea: la salida de la función no es entrada válida para la función (medido: perdió `weighted PCA`, alias del tema, en 1 de 31 cosechas)",
+   "state": "OPEN"
+  },
+  {
+   "number": 307,
+   "title": "Un tema de método clasifica con faceta propia (D-26) y se LEE con los ejes de la lente global: `axes_skeleton()` no recibe el tema — medido, 4 de 8 ejes vinieron vacíos en 25 de 32 papers y los ejes que el tema necesita no se preguntaron nunca",
+   "state": "OPEN"
+  },
+  {
+   "number": 308,
+   "title": "#239 quedó a medias: `harvest_views` sabe cosechar `### Lente — <énfasis>` y `extraction_prompt` no tiene forma de PEDIRLA — la única vía a un JSON con `enfasis` es escribirlo a mano, que es lo que INV-100 prohíbe",
+   "state": "OPEN"
+  },
+  {
+   "number": 309,
+   "title": "`unclosed_markers` no honra el escape `\\$`, así que el arreglo CORRECTO no lo satisface: el operador elige entre un bug de renderizado real o un backlog permanente (4.ª vez de la misma ceguera al markdown, cf. #168/#276/#283)",
+   "state": "OPEN"
+  },
+  {
+   "number": 310,
+   "title": "DOC: el ciclo de la lente de un tema no está escrito en ningún lado — todas las piezas están documentadas por separado (#188, D-26, #254, #72, #239, #124) y su encadenamiento no, más el invariante de procedencia de los ejes que falta",
+   "state": "OPEN"
+  },
+  {
+   "number": 311,
+   "title": "Las extracciones —el artefacto más caro de la cadena— viven en `build/`, que el repo declara «scratch regenerable» y el `.gitignore` no versiona: medido, 4,9 M tokens de lectura de PDF que no viajan a otra máquina",
+   "state": "OPEN"
+  },
+  {
+   "number": 312,
+   "title": "`alcance` y `unidad_cita` se estampan al crear la nota y nunca se re-sincronizan: al ampliar el alcance de un libro, la nota afirma que ese material «no entra» mientras lo publica en su vista (medido en 2 libros, 37 valores nuevos)",
+   "state": "OPEN"
   }
  ]
 }

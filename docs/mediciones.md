@@ -410,3 +410,72 @@ distingue su vacío de su fallo.
 ⚠ **Salvedad transversal:** todas salen de **una** bóveda (`Almagesto-Tesis`, 2026-08-30) y de un
 solo tema de método. Lo que sostienen es que el modo de falla **existe y es alcanzable**, no una
 frecuencia poblacional.
+
+## 2026-08-30 · Segunda tanda de la auditoría (#298–#304)
+
+| Qué se midió | Número | Salvedad |
+|---|---|---|
+| Población real del detector de versiones | **3 de 138 notas** (2 %) | 79 tienen `arxiv_id`; sólo 3 tienen bibcode **de eprint**, que es su filtro correcto por contrato (D-19 es sobre identidad) |
+| Notas con `pdf_source: eprint` | 85 de 138 (62 %) | de ésas, **82 con bibcode publicado**: leen el preprint sin problema de identidad, o sea invisibles para D-19 |
+| Fuentes off-ADS con `pdf:` repuntado tras una ingesta real | **0 de 8** | la conducta (proponer y parar) es correcta; la doc prometía lo contrario en dos lugares |
+| PDFs rescatados a mano que quedaron linkeados en la nota | **0 de 4** | `pdf:` se escribía sólo al crear el stub; el lint imprimía la ruta exacta y ningún comando la aplicaba |
+| Core de un tema **sin puerta registrada** | **12 de 15** | 8 con `via: manual` (hardcodeado) y 4 con `via: usuario` (de la config), reparto decidido por si ADS devolvió el bibcode |
+| Roll-up de un concepto cerrado: promesa vs síntesis | **89 papers · 30 citados** | 32 con vista fechada → **57 reclamados y sin leer**, indistinguibles entre sí sin la columna `Estado` |
+| Aristas del grafo que salen de `index.md` + `log.md` | **7 %** (65 de ~1000) | 50 de las 54 del índice apuntan a papers, y su sentido es «está en el top 50 por citas» |
+| `STATUS.md` de una bóveda real | **537 líneas**, 12 encabezados fechados, **4** listas de próximos pasos | una de las cuatro contradice un estado posterior del mismo archivo |
+
+⚠ **Salvedad transversal:** todo sale de la misma bóveda (`Almagesto-Tesis`, 2026-08-30). Sostienen
+que el modo de falla existe y es alcanzable, no una frecuencia poblacional.
+
+## 2026-08-30 · Tercera tanda: la lente de lectura y las dos resoluciones (#305–#308)
+
+| Qué se midió | Número | Salvedad |
+|---|---|---|
+| Papers de un tema con el PDF **sólo bajo otro slug** | **7 de 31** | el prompt mandaba `fuente: abstract` sobre los 7; son el núcleo fundacional del tema y dos libros de 500+ páginas |
+| Cosechas donde `merge_frontmatter_list` rechazó una lista flow **multilínea** | **1 de 31** | lo perdido fue `weighted PCA`, alias del tema: el único `methods` con destino en el roll-up |
+| Ejes globales contestados en un tema de método (32 extracciones) | `method` 32 · `ml` 30 · `simulation` 28 · `detection` 16 · `rv`/`activity`/`planet`/`discovery` **7** | los mismos 7: las únicas fuentes astro del corpus |
+| Ejes que el tema necesitaba y se preguntaron | **0** | aparecieron igual en `aporte`, desordenados y sin clave con la que compararlos |
+
+⚠ Dos de los 7 del primer caso los detectaron **subagentes que desobedecieron el prompt** y fueron a
+buscar el PDF igual, verificándolo con las funciones del propio framework. Que acertaran es suerte,
+no red: un extractor obediente habría entregado 7 vistas `fuente: abstract` sobre papers con el PDF
+en disco, y ninguna capa aguas abajo lo habría marcado.
+
+## 2026-08-30 · El ciclo de la lente, medido sobre una ingesta completa (#310)
+
+**Qué era.** Ingesta del tema `ica-ruido` (ICA con ruido + blanqueo heterocedástico) en
+`Almagesto-Tesis`: 32 extracciones, corpus mixto estadística/signal-processing con minoría astro.
+
+| Qué se midió | Número | Salvedad |
+|---|---|---|
+| Alias pegados a la lente de sujeto en la primera pasada | **14** | amplia para que entren las dos mitades del campo, enfocada para que ninguna vista sea un resumen |
+| Papers que **no mencionan ICA ni una vez** | **10 de 32** | las dos mitades del tema no se citan entre sí: el puente lo hace el lector, así que toda afirmación que lo cruce es `inferencia` |
+| Ejes producidos por el contraste cross-paper | **6 ejes · 43 filas** | **ninguno** declarado antes de leer |
+| Posturas incompatibles sobre el supuesto más básico del modelo | **4** | Σ conocida / desconocida-se-evita / desconocida-se-estima / conocida por dato |
+| Objetos distintos nombrados por el mismo término del tema | **5** | por muestra, por coordenada, por dato, doble, y ARCH en el tiempo |
+| Ejes globales que 25 de 32 papers no podían contestar | **4 de 8** | `rv`, `activity`, `planet`, `discovery`: poblados sólo en los 7 papers astro |
+
+**Los dos hallazgos que la lente libre habilitó** —y que con ejes declarados de antemano se habrían
+perdido, porque las celdas habrían vuelto contestadas—: (a) que las dos mitades del campo no se
+citan entre sí; (b) que la *«heteroscedasticity»* de uno de los papers es varianza condicional
+**ARCH en el tiempo**, no ruido entre canales — polisemia **dentro** del propio tema.
+
+**Qué cambió.** Los ejes pasan a ser del tema (#307), la segunda lectura se puede pedir (#308), y el
+ciclo completo queda escrito con su invariante de procedencia (INV-146): toda vista declara los ejes
+vigentes al leerla, así que cambiar los ejes produce un **diff computable** y no una
+re-interpretación silenciosa.
+
+## 2026-08-30 · Los dos artefactos que el framework declaraba descartables (#311, #312)
+
+| Qué se midió | Número | Salvedad |
+|---|---|---|
+| Extracciones de un tema, en `build/` | **33** · 988 KB · ~680 valores con localizador | costaron ~**4,9 M tokens** de subagente leyendo PDFs |
+| De ésas, versionadas (`git ls-files build/`) | **0** | `build/` es scratch por `.gitignore`: no viajaban a ninguna otra máquina |
+| Libros cuyo `alcance` se amplió en `themes.yaml` | **2** | la nota siguió declarando el alcance viejo: ningún backfill lo re-estampa |
+| Valores nuevos que la re-lectura extrajo de capítulos «fuera de alcance» | **37** | la nota los publicaba en su vista mientras afirmaba que no entraban |
+
+**Qué cambió.** Las extracciones pasan a `vault/raw/extraccion/<slug>/` (versionadas, con migrador y
+detector bloqueante); `alcance`/`unidad_cita` se re-estampan desde la config
+(`--restamp-alcance`) y el lint reporta el desfasaje. ⚠ Lo que **no** se hizo, anotado en #312: que
+`vistas[]` registre bajo qué **alcance** se leyó, que es lo que haría computable el delta *«esta
+vista es incompleta respecto del alcance vigente»* — hoy `lente` guarda los ejes y no el alcance.

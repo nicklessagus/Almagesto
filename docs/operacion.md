@@ -153,9 +153,14 @@ python scripts/extraction_prompt.py <slug> <bibcode> [--theme] [--out-dir DIR]
                                     # arma el prompt del paso 3 (extracción) para UN par
                                     # (paper, sujeto). Es INV-100: las reglas del skill viajan
                                     # generadas, no escritas de memoria en cada fan-out.
-                                    # Pide UNA VISTA (#188), no «la extracción del paper»
+                                    # Pide UNA VISTA (#188), no «la extracción del paper».
+                                    # Los ejes salen del tema si los declara (#307), y el PDF se
+                                    # resuelve bajo CUALQUIER slug (#305)
+python scripts/extraction_prompt.py <slug> <bib> --theme --enfasis "<lente>" [--ejes a,b]
+                                    # SEGUNDA lectura del mismo sujeto con otra lente (#239/#308):
+                                    # convive con la anterior, no la pisa
 python scripts/harvest_views.py <slug> [--theme] [--force]
-                                    # COSECHA el fan-out: build/<slug>/extraccion/*.json → las
+                                    # COSECHA el fan-out: vault/raw/extraccion/<slug>/*.json → las
                                     # notas. Estampa la vista (fecha · txt · lente), mergea
                                     # methods/thesis_links/role add-only y escribe la sección
                                     # mientras siga siendo la plantilla del stub. Es el único

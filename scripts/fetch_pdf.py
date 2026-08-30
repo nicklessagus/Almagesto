@@ -377,6 +377,16 @@ def main() -> int:
                           "Lo que no salga: pedir el PDF al usuario / marcar `pending`.")
     elif miss.exists():
         miss.unlink()      # el listado de fetch_arxiv quedó cubierto: no dejar un residuo viejo
+    # #304 — simétrico de `extract_fulltext` → `stamp_fulltext`: el PDF ya está en disco, así que
+    # la nota que ya existe se estampa por verdad de disco. Sin esto, un PDF que aparece DESPUÉS
+    # del stub —el rescate manual, o cerrar un `pending`— no se linkea nunca y la nota afirma
+    # `pdf: null` sobre un archivo que está ahí.
+    import make_notes
+    _stamped = sum(1 for r in recs
+                   if make_notes.stamp_pdf(cfg.PAPERS / f"{safe_name(r['bibcode'])}.md",
+                                           safe_name(r["bibcode"])))
+    if _stamped:
+        cfg.print_seguro(f"  {_stamped} nota(s) con `pdf:` estampado por verdad de disco (#304)")
     cfg.save_paso(args.slug, "fetch_pdf", flags=_flags_usados(args, ap))
     return 0
 

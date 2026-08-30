@@ -2039,3 +2039,52 @@ def test_la_linea_del_reuso_no_inventa_la_procedencia(toy_vault):
     origen = cfg.PDFS / "ica" / "2020Sin.pdf"
     origen.write_bytes(b"%PDF-1.4\n")
     assert "pdf_source: no consta" in cfg.reuse_note("2020Sin", origen)
+
+
+# ── #305/#307 · dos resoluciones que tienen que ser UNA ─────────────────────
+def test_pdf_slug_resuelve_bajo_cualquier_slug_con_precedencia(toy_vault):
+    """#305 — las dos mitades de #207 buscaban el PDF distinto: el prompt sólo bajo el slug del
+    sujeto, el cosechador bajo todos. Resultado: el prompt mandaba declarar `fuente: abstract` sobre
+    papers que SÍ están en disco (7 de 31 medidos, el núcleo fundacional de un tema y dos libros).
+    Precedencia declarada, como `artefacto_en_otro_slug`: el preferido primero, después el menor."""
+    for slug in ("zeta", "ica"):
+        (cfg.PDFS / slug).mkdir(parents=True, exist_ok=True)
+        (cfg.PDFS / slug / "2002Cardoso.pdf").write_bytes(b"%PDF")
+    assert cfg.pdf_slug("2002Cardoso") == "ica", "sin preferencia, el menor: determinista"
+    assert cfg.pdf_slug("2002Cardoso", "zeta") == "zeta", "el preferido, si está"
+    assert cfg.pdf_slug("2002Cardoso", "no_existe") == "ica", "cae al menor, no a None"
+    assert cfg.pdf_slug("2020nada") is None
+
+
+def test_theme_axes_tiene_los_tres_estados(toy_vault):
+    """#307 / D-43 — sin declarar hereda los ejes globales; declarado son ésos; declarado **vacío**
+    es la decisión explícita de no preguntar ejes, que no se lee igual que no declarar nada."""
+    assert cfg.theme_axes({"title": "T"}) is None
+    assert cfg.theme_axes({"title": "T", "ejes": ["a", " b "]}) == ["a", "b"]
+    assert cfg.theme_axes({"title": "T", "ejes": []}) == []
+    assert cfg.theme_axes({"title": "T", "ejes": None}) == []
+    assert cfg.theme_axes(None) is None
+
+
+# ── #309 · el marcador ESCAPADO no abre nada ────────────────────────────────
+def test_unclosed_markers_honra_el_escape():
+    """#309 — `\\$` es el arreglo CORRECTO de un dólar literal (Obsidian lo renderiza y no abre
+    matemática) y el detector lo seguía contando, así que el operador elegía entre un bug de
+    renderizado real, un backlog permanente, o borrar el carácter de una transcripción verbatim. El
+    caso real: la línea «1070-9908/04$20.00 © 2004 IEEE» transcrita de un pie de página para probar
+    que el PDF es la versión publicada. Cuarta vez de la misma ceguera al markdown (#168/#276/#283)."""
+    assert list(cfg.unclosed_markers(r"precio de 04\$20.00 pesos")) == []
+    assert list(cfg.unclosed_markers(r"texto con $x$ y precio 04\$20.00")) == []
+    assert list(cfg.unclosed_markers(r"un \` backtick literal")) == []
+    # dos backslashes escapan al BACKSLASH, no al marcador: ahí el `$` sí abre
+    doble = "dos backslashes " + chr(92) * 2 + " y un $ suelto"
+    assert [m for _l, m, _i in cfg.unclosed_markers(doble)] == ["$"]
+    # y el control: un `$` de verdad sin cerrar se sigue reportando
+    assert [m for _l, m, _i in cfg.unclosed_markers("una $formula sin cerrar")] == ["$"]
+
+
+def test_unclosed_markers_nombra_la_LINEA_del_impar():
+    """El reporte apuntaba al arranque del párrafo, no a la línea culpable: con párrafos de seis
+    bullets, es mandar al operador a buscar a mano lo que el detector ya sabe."""
+    parrafo = "- uno con $x$\n- dos con $y$\n- tres con un $ suelto\n- cuatro"
+    assert list(cfg.unclosed_markers(parrafo)) == [(1, "$", 3)]

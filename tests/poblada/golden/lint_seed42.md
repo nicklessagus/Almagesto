@@ -301,6 +301,15 @@
 ## 🕳 Artefacto reusado entre slugs sin chequear su versión, y pasada de red que nunca corrió (#297, backlog) (0)
 > sobre 60 notas de `papers/`
 
+## 🕳 La nota se apoya en el PREPRINT habiendo versión publicada (#298, backlog) (0)
+> sobre 60 notas de `papers/`
+
+## 🕳 `STATUS.md` apilado como bitácora: es ESTADO, se reescribe (#302, backlog) (0)
+> sobre 1 archivo de configuración
+
+## 🕳 `alcance`/`unidad_cita` de la nota ≠ el declarado en `sources[]` (#312, backlog) (0)
+> sobre 60 notas de `papers/`
+
 ## Barrido full-text (2b) sin rastro o truncado: no consta que la segunda red para el punto ciego de la query se haya tendido entera (backlog) (0)
 > sobre 3 registros de sujeto
 

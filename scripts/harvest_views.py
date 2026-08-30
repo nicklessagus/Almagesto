@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Harvest the extraction fan-out: `build/<slug>/extraccion/*.json` → the paper notes (#188 / #191).
+"""Harvest the extraction fan-out: `vault/raw/extraccion/<slug>/*.json` → the paper notes (#188 / #191).
 
 Until 1.68.0 this step **did not exist**. Each subagent wrote its JSON and nobody read it: the
 harvest was manual, and `extraction_prompt.is_extraction` — the P0 guard that tells an extraction
@@ -80,7 +80,7 @@ def pdf_on_disk(bibcode: str) -> bool:
     El cruce de #207 tiene que mirar el archivo: el campo `pdf` de la nota puede estar en drift (es
     justo lo que el WARN `pdf_issues` del lint reporta), y usarlo acá haría que un drift se leyera
     como «la vista miente»."""
-    return any(cfg.PDFS.glob(f"**/{mn.safe_name(bibcode)}.pdf"))
+    return cfg.pdf_slug(mn.safe_name(bibcode)) is not None   # #305: una sola resolución
 
 
 def check_salvedad(bibcode: str, item: dict) -> tuple[bool | None, str]:
@@ -503,12 +503,22 @@ def bring_fulltext(slug: str, bibcode: str) -> bool:
 def harvest(slug: str, *, theme: bool = False, force: bool = False,
             src: Path | None = None) -> dict:
     """Cosecha todas las extracciones de `slug`. Devuelve los contadores del reporte."""
-    src = src or (cfg.ROOT / "build" / slug / "extraccion")
+    src = src or (cfg.EXTRACCION / slug)     # #311: versionadas, no en `build/`
     n = {"cosechadas": 0, "rechazadas": 0, "sin_nota": 0, "sin_cambios": 0, "txt_traidos": 0}
     if not src.exists():
         cfg.print_seguro(f"  (sin {src}; nada que cosechar)")
         return n
-    lente = mn.objective_lens()[0]
+    # #307 — la `lente` de la vista guarda LOS EJES QUE SE PREGUNTARON, que es lo que hace posible
+    # el diff de D-49 a nivel de lectura. Con ejes propios del tema, registrar las facetas globales
+    # describiría una lectura que no ocurrió.
+    _tmeta = None
+    try:
+        _tmeta = cfg.theme_by_slug(slug)[1] if theme else None
+    except (KeyError, RuntimeError):
+        _tmeta = None
+    lente = cfg.theme_axes(_tmeta)
+    if lente is None:
+        lente = mn.objective_lens()[0]
     hoy = _dt.date.today().isoformat()
     refutados: list = []               # #212 · (bibcode, [sujetos]) — para el aviso de cierre
     salvedades_falsas: list = []       # #213 · (bibcode, detalle) — chequeadas y desmentidas

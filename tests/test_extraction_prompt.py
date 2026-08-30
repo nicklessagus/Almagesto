@@ -560,3 +560,82 @@ def test_el_tope_de_metodos_se_DECLARA(toy_vault):
         mk_note(cfg.CONCEPTS / "methods", f"m{i}", {"tags": ["concept"], "name": f"m{i}"}, "# m\n")
     salida = ep.known_methods(tope=2)
     assert "y 3 más (tope declarado: 2)" in salida, salida
+
+
+# ── #305 · las dos mitades de #207 miran el MISMO disco ─────────────────────
+def test_el_prompt_ve_el_PDF_que_esta_bajo_otro_slug(toy_vault):
+    """#305 — `extraction_prompt` buscaba el PDF **sólo bajo el slug del sujeto** y
+    `harvest_views.pdf_on_disk` bajo todos, así que el prompt mandaba declarar `fuente: abstract`
+    sobre papers que SÍ están en disco: #207 al revés — en vez de cazar una lectura degradada, el
+    framework la producía, y el cosechador la aceptaba porque `abstract` siempre es legal.
+
+    Pega justo en los retro-tagueados, que por definición ya estaban en el corpus bajo OTRO sujeto:
+    medido, 7 de 31, el núcleo fundacional del tema y dos libros de 500+ páginas —que desde el
+    abstract no se pueden leer en absoluto—."""
+    (cfg.PDFS / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "ica" / "1998Hyvarinen.pdf").write_bytes(b"%PDF-1.4\n")
+    texto = ep.build_prompt("ica_ruido", "1998Hyvarinen", "ICA ruidosa", [], kind="theme")
+    assert "Leé el PDF" in texto
+    assert "vault/raw/pdfs/ica/1998Hyvarinen.pdf" in texto, "la ruta del archivo QUE EXISTE"
+    assert "fuente: abstract" not in texto.split("## Salida")[0]
+
+
+def test_el_prompt_y_el_COSECHADOR_responden_lo_mismo(toy_vault):
+    """Test de PARIDAD (regla de método nº 2): las dos mitades de #207 no pueden diferir. Hoy la
+    resolución es una sola función; sin esta red, dos implementaciones vuelven a divergir y el bug
+    vive otra vez en la diferencia."""
+    import harvest_views as hv
+    (cfg.PDFS / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "ica" / "2002Cardoso.pdf").write_bytes(b"%PDF-1.4\n")
+    for bib in ("2002Cardoso", "2020sinpdf"):
+        del_prompt = cfg.pdf_slug(bib, "ica_ruido") is not None
+        assert del_prompt is hv.pdf_on_disk(bib), f"las dos mitades discrepan sobre {bib}"
+
+
+def test_sin_PDF_en_NINGUN_slug_el_prompt_sigue_mandando_al_abstract(toy_vault):
+    """El control de #255: sin PDF en ningún lado, el prompt no puede mandar a leerlo, y la ruta que
+    nombra (para el mensaje de faltante) es la del slug del sujeto."""
+    texto = ep.build_prompt("ica_ruido", "2020sinpdf", "ICA ruidosa", [], kind="theme")
+    assert "Leé el PDF" not in texto
+    assert "vault/raw/pdfs/ica_ruido/2020sinpdf.pdf" in texto
+
+
+# ── #307 · los ejes del TEMA (la mitad simétrica de D-26) ───────────────────
+def test_los_ejes_salen_del_TEMA_cuando_los_declara(toy_vault, monkeypatch):
+    """#307 — D-26 hizo propia la faceta del tema porque la lente global es «activamente dañina»
+    ahí, y #254 derivó los ejes de lectura de la lente… global. Medido sobre 32 extracciones de un
+    tema de método: `rv`/`activity`/`planet`/`discovery` poblados en **7 de 32** (los mismos 7: sus
+    únicas fuentes astro), y los ejes que el tema necesitaba —identificabilidad, heterocedasticidad
+    por época y por canal— **no se preguntaron nunca**, así que volvieron desparramados en `aporte`
+    y sin clave con la que compararlos."""
+    monkeypatch.setattr(ep.cfg, "load_objective",
+                        lambda: {"relevance": {"facets": {"rv": "radial velocity",
+                                                          "activity": "activity"}}})
+    assert ep.axes_skeleton() == '{"rv":"","activity":""}'
+    meta = {"title": "ICA ruidosa", "facet": "noisy ICA",
+            "ejes": ["heterocedasticidad", "identificabilidad", "blanqueo"]}
+    assert ep.axes_skeleton(meta) == \
+        '{"heterocedasticidad":"","identificabilidad":"","blanqueo":""}'
+    # tres estados (D-43): sin declarar hereda; declarado vacío es una DECISIÓN, no un olvido
+    assert ep.axes_skeleton({"title": "T"}) == '{"rv":"","activity":""}'
+    assert "SIN_EJES" in ep.axes_skeleton({"title": "T", "ejes": []})
+
+
+# ── #308 · la segunda lectura con otra lente se puede PEDIR ─────────────────
+def test_el_prompt_de_una_SEGUNDA_lente(toy_vault):
+    """#308 — #239 construyó toda la mitad de cosecha (`### Lente — <énfasis>`, la identidad
+    `(sujeto, enfasis)`, la guarda de no pisar) y **nada podía producir ese JSON**: el prompt no
+    mencionaba `enfasis` ni tenía bandera, así que el único camino era escribirlo a mano — que es
+    lo que INV-100 prohíbe. Misma forma que #210/INV-132: capacidad documentada, mitad cara ya
+    construida, sin entrada de usuario."""
+    texto = ep.build_prompt("ica_ruido", "2002Cardoso", "ICA ruidosa", [], kind="theme",
+                            sujeto="ica-ruido", enfasis="ruido por canal",
+                            ejes_cli=["heterocedasticidad", "canales"])
+    assert "SEGUNDA lectura" in texto and "«ruido por canal»" in texto
+    assert '"enfasis": "ruido por canal"' in texto
+    assert "no re-narres" in texto and "## Conclusiones" in texto
+    assert '"ejes":{"heterocedasticidad":"","canales":""}' in texto
+    # sin `--enfasis`, el prompt es el de siempre (la primera lectura no cambia)
+    normal = ep.build_prompt("ica_ruido", "2002Cardoso", "ICA ruidosa", [], kind="theme",
+                             sujeto="ica-ruido")
+    assert "SEGUNDA lectura" not in normal

@@ -19,6 +19,8 @@ htmlcov/
 
 # Intermedios de ingesta y reportes de lint (regenerables): scratch del tooling, viven en
 # la raíz del repo FUERA de vault/ para no contaminar la bóveda de Obsidian.
+# ⚠ Lo que NO va acá son las EXTRACCIONES (#311): no son regenerables en el sentido de un `ads.json`
+# —cuestan volver a leer el PDF con un LLM— así que viven versionadas en `vault/raw/extraccion/`.
 build/
 outputs/
 

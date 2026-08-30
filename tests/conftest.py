@@ -191,10 +191,12 @@ def toy_vault(tmp_path, monkeypatch):
         "ADS_KEY_FILE": vault / "config" / "ads_dev_key",
         "MAILTO_FILE": vault / "config" / "mailto",
         "REGISTRO": vault / "config" / "registro",
+        "STATUS": vault / "STATUS.md",          # #302: el estado vigente de la instancia
         "RAW": vault / "raw",
         "WIKI": vault / "wiki",
         "PDFS": vault / "raw" / "pdfs",
         "FULLTEXT": vault / "raw" / "fulltext",
+        "EXTRACCION": vault / "raw" / "extraccion",     # #311
         "GROUND_TRUTH": vault / "raw" / "ground_truth",
         "STARS": vault / "wiki" / "stars",
         "PAPERS": vault / "wiki" / "papers",

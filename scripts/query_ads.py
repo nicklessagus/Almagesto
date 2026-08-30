@@ -716,10 +716,18 @@ def _probe_row(r: dict) -> str:
     return f"  [{mark}] {cites:>5}  {bib:<19}  {title}  «{tp}»{pu}"
 
 
-def fetch_bibcodes(bibs: list[str]) -> list[dict]:
+def fetch_bibcodes(bibs: list[str], via_de: dict | None = None) -> list[dict]:
     """Trae registros ADS de una lista explícita de bibcodes (curación manual `extra_core`). Se
     marcan `relevant: True` a la fuerza (el usuario los declaró core: entraron porque el clasificador
-    los perdió, no para re-juzgarlos) y `via: manual`.
+    los perdió, no para re-juzgarlos), con el `via` **declarado en la config** y `puertas: ["manual"]`.
+
+    ⛔ #303 — acá se hardcodeaba `via: "manual"`, y el mismo item de `extra_core` terminaba con
+    `manual` o con su `via` de config **según un accidente**: si la query de ADS había devuelto ese
+    bibcode, el merge lo rescataba del corte y escribía el declarado; si no, venía por acá y se
+    escribía `manual`. Medido: 8/4 sobre 12 items con `via: usuario` declarado, un reparto que no
+    decidió nadie. Y `manual` **no está** en `EXTRA_CORE_VIA` (#266), o sea que el valor escrito no
+    era válido para el campo que dice representar. La marca de «entró por curación» es `puertas`,
+    que es donde vive esa pregunta (#126).
 
     Corre **sin la lente astro** (`fq=None`, #68): `extra_core` es override del clasificador, y el
     `fq` era un segundo filtro que el override no esquivaba — un bibcode real pero fuera de
@@ -733,7 +741,8 @@ def fetch_bibcodes(bibs: list[str]) -> list[dict]:
         for r in query_ads(q, rows=len(chunk), quiet_truncate=True, fq=None):
             r["relevant"] = True
             r["why_excluded"] = None   # forzado core por el usuario: sin motivo de exclusión
-            r["via"] = "manual"
+            r["via"] = (via_de or {}).get(r.get("bibcode")) or "usuario"
+            r["puertas"] = ["manual"]  # #303: la procedencia de curación, siempre registrada
             out.append(r)
         time.sleep(1.0)
     return out
@@ -1011,7 +1020,7 @@ def puertas_abiertas(rec: dict, meta: dict) -> tuple:
     return tuple(out)
 
 
-def reclassify_for_theme(recs: list, meta: dict) -> tuple[list, list]:
+def reclassify_for_theme(recs: list, meta: dict, curados=()) -> tuple[list, list]:
     """Re-juzga `recs` con la regla del tema (D-26) y devuelve `(entraron, salieron)` por bibcode.
 
     Los registros llegan clasificados por la lente **global** (`to_records`); para un tema de
@@ -1025,9 +1034,14 @@ def reclassify_for_theme(recs: list, meta: dict) -> tuple[list, list]:
     clasificador (#68/#39).  @inv INV-88"""
     if not (meta or {}).get("facet"):
         return [], []
+    curados = set(curados or ())
     entraron, salieron = [], []
     for r in recs:
-        if r.get("via") == "manual":
+        # #303 — el predicado correcto es «este paper es core por CURACIÓN», o sea «su bibcode está
+        # en `extra_core`». Testear el string `via == "manual"` era testear un valor que dos ramas
+        # escribían distinto: la mitad rescatada del corte llevaba el `via` de la config y caía
+        # afuera de la guarda. Se conserva `manual` por las notas ya escritas con ese valor.
+        if r.get("via") == "manual" or r.get("bibcode") in curados:
             # #179: es core **por decisión del usuario** (override de `extra_core`, #39) y la regla
             # no lo toca — pero eso TAMBIÉN es una procedencia. Saltearlo entero lo dejaba sin
             # `puertas`, o sea indistinguible de «nadie miró», y en un tema de método el aceptado a
@@ -1603,7 +1617,12 @@ def main() -> int:
         # D-26: para un tema de método la lente global es la equivocada (mata al fundacional y deja
         # pasar miles de fMRI). Se re-juzga con la regla del tema y se IMPRIME el delta.
         if head.get("kind") == "theme":
-            entraron, salieron = reclassify_for_theme(recs, meta)
+            # #303 — los curados se pasan ACÁ. `reclassify_for_theme` corre sobre la query directa
+            # y el merge de `extra_core` ocurre ~40 líneas más abajo, así que la guarda de #179
+            # —que preguntaba por `via == "manual"`— **nunca corría** para ellos: quedaban con el
+            # `puertas: []` del default, indistinguibles de «nadie miró» (medido: 12 de 15 core).
+            entraron, salieron = reclassify_for_theme(
+                recs, meta, curados={e["bibcode"] for e in cfg.load_extra_core(meta, entry=args.slug)})
             if entraron or salieron:
                 cfg.print_seguro(f"  regla del tema (D-26): +{len(entraron)} core / -{len(salieron)}"
                                  f" · entran {entraron[:5]} · salen {salieron[:5]}")
@@ -1665,14 +1684,19 @@ def main() -> int:
             if r is not None and not r["relevant"]:
                 # el `via` declarado en la config reemplaza al "manual" hardcodeado: la ficha puede
                 # decir si ese paper entró por juicio del usuario, por el triage o por el corpus.
-                r["relevant"], r["why_excluded"], r["via"] = True, None, via_de.get(b, "manual")
+                r["relevant"], r["why_excluded"], r["via"] = True, None, via_de.get(b, "usuario")
                 rescued.append(b)
+            if r is not None:
+                # #303 — la marca de curación va en las DOS ramas (rescatada y traída por bibcode),
+                # o el reparto entre ellas —que decide un accidente de la query— se lee como si
+                # fueran dos clases distintas de paper.
+                r["puertas"] = sorted(set(r.get("puertas") or []) | {"manual"})
             # D-52: si ese bibcode figuraba DESCARTADO, la aceptación lo revierte — se anula la
             # decisión preservando el motivo viejo, en vez de dejarla contradiciendo lo hecho.
             if cfg.anular_decision(args.slug, b, por="extra_core"):
                 cfg.print_seguro(f"  ↩ {b}: figuraba descartado y está en `extra_core` → decisión "
                                  "ANULADA en el registro (el motivo viejo queda en `previa`)")
-        manual = [m for m in fetch_bibcodes([b for b in extra if b not in present])
+        manual = [m for m in fetch_bibcodes([b for b in extra if b not in present], via_de)
                   if m.get("bibcode")]
         cfg.print_seguro(f"  extra_core: +{len(manual)} traídos de ADS · {len(rescued)} rescatados del corte "
               f"(de {len(extra)} en config)")

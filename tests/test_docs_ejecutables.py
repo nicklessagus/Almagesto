@@ -502,3 +502,19 @@ def test_la_cache_de_issues_no_puede_estar_vacia():
     """Una caché vacía volvería VERDE el chequeo entero — el `(0)` que nadie midió (D-43)."""
     datos = json.loads(ISSUES_JSON.read_text(encoding="utf-8"))
     assert len(datos["issues"]) > 50 and datos.get("fetched")
+
+
+def test_el_grafo_no_dibuja_como_estructura_lo_que_el_lint_no_cuenta():
+    """#301 — #249 estableció que las aristas del `index.md` estampado **no significan nada** (no
+    cuentan como link entrante). El grafo de Obsidian no lo sabía y las dibujaba igual, con
+    `graph.json` versionado y sin filtro: medido, 50 de los 54 wikilinks del índice apuntan a
+    papers y su sentido es «está en el top 50 por citas» — un artefacto del orden de una tabla
+    dentro de la vista que existe para mostrar estructura (7 % de las aristas de la bóveda medida,
+    entre índice y log).
+
+    ⚠ No se arregla sacando los wikilinks: el índice se materializó (#237) **para** ser navegable.
+    Es display, y por eso el filtro es un default que el usuario borra en dos clics."""
+    graph = json.loads((RAIZ / "vault" / ".obsidian" / "graph.json").read_text(encoding="utf-8"))
+    for excluido in ("wiki/log.md", "wiki/index.md"):
+        assert f"-path:{excluido}" in graph["search"], (
+            f"el grafo dibuja {excluido} como estructura; #249 ya declaró que esas aristas no lo son")

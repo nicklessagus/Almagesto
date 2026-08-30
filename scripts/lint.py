@@ -401,6 +401,14 @@ def merge_ours_unprotected() -> tuple[list[str], str | None]:
 #  @inv INV-128
 GT_STALE_MARK = "⚠desactualizado"
 
+# #302 · techos del `STATUS.md`. Es **estado**, no bitácora: lo histórico va a `wiki/log.md`, que es
+# append-only por contrato y lo cumple. Los dos números son el umbral por encima del cual el archivo
+# dejó de ser un estado — están declarados acá (y no en `tools/doc-size-ratchet.yaml`) porque el
+# STATUS es de la INSTANCIA (`merge=ours`), así que un ratchet versionado del template no lo
+# describiría. Medido en una bóveda real: 537 líneas con 12 encabezados fechados.
+STATUS_MAX_FECHADOS = 3
+STATUS_MAX_LINEAS = 300
+
 #: #225 · la cuarta marca en línea: lo que una auditoría de ficha (`audit-note`) NO pudo verificar.
 #: No destruye la afirmación —puede ser cierta— y es visible para el consumidor; el lint la levanta
 #: como backlog para que la deuda no se olvide, y se saca cuando alguien la verifica con evidencia.
@@ -1308,6 +1316,9 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     faceta_sin_frontera: list = []     # (faceta, motivo) — #236: token corto que matchea dentro de palabra
     faceta_muerta: list = []           # (faceta, motivo) — #291: alternativa con POBLACIÓN CERO
     reuso_sin_chequear: list = []      # (stem, motivo) — #297: artefacto reusado, antigüedad no mirada
+    version_publicada: list = []       # (stem, motivo) — #298: el preprint citado teniendo publicado
+    status_apilado: list = []          # (archivo, motivo) — #302: el STATUS se volvió bitácora
+    alcance_desfasado: list = []       # (stem, motivo) — #312: la nota y `sources[]` no coinciden
     thesis_refs: dict[str, list] = {}  # valor de thesis_link -> notas que lo usan
     method_refs: dict[str, list] = {}  # valor de methods -> notas de paper que lo declaran
     dispute_refs: list = []            # (nota, field, ref) de las posiciones de cada disputa (#71)
@@ -1760,10 +1771,16 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             _cuerpo_forma = "\n".join(
                 ln if not cfg.is_stamped_section(_sec) else ""
                 for ln, _sec in _lines_with_section(body_full))
-            for _ln, _marca in cfg.unclosed_markers(_cuerpo_forma):
+            for _ln, _marca, _impar in cfg.unclosed_markers(_cuerpo_forma):
+                # #309 — las DOS líneas: el párrafo que queda abierto y aquella donde el conteo se
+                # vuelve impar. Con párrafos de seis bullets, mandar al arranque es hacerle buscar
+                # a mano al operador lo que el detector ya sabe.
+                _donde = (f"L{_ln + _offset}" if _impar == _ln else
+                          f"L{_ln + _offset} (el impar cae en L{_impar + _offset})")
                 forma_sospechosa.append(
-                    (stem, f"L{_ln + _offset}: el párrafo deja un `{_marca}` sin cerrar — se traga "
-                           f"el texto que sigue"))
+                    (stem, f"{_donde}: el párrafo deja un `{_marca}` sin cerrar — se traga el "
+                           f"texto que sigue. Un literal se escribe escapado (`\\{_marca}`), y así "
+                           f"escrito ya no cuenta (#309)"))
             for _ln, _txt in cfg.duplicate_paragraphs(body_full):
                 forma_sospechosa.append(
                     (stem, f"L{_ln + _offset}: párrafo repetido en la misma nota — «{_txt}…»"))
@@ -2150,6 +2167,25 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                                             f"«desconocido»; si querías escribir una nota, va a "
                                             f"`pending_motivo` o a `salvedades`. Migrador: "
                                             f"`python scripts/make_notes.py --migrate-source-fields`"))
+            # #298 — las dos señales de «la bóveda se apoya en el preprint». (a) El hallazgo del
+            # detector de versiones, estampado para que SOBREVIVA a la corrida: sin él, correr la
+            # pasada y no actuar en el momento borraba el hallazgo y la siguiente lo redescubría.
+            # (b) La nota que ya tiene bibcode PUBLICADO y sigue leyendo el eprint: no tiene
+            # problema de identidad, así que ningún detector la toca — y es justo donde el contrato
+            # avisa que una discrepancia numérica es diferencia de versión, y donde `pdf_source:
+            # eprint` EXIME del chequeo de cita textual (medido: 82 de 138 notas).
+            if (_vd := str(fm.get("versions_disponible") or "").strip()):
+                version_publicada.append(
+                    (stem, f"`versions_disponible: {_vd}`: el preprint salió publicado y nadie "
+                           f"renombró nada → `python scripts/make_notes.py --rename-paper {stem} "
+                           f"{_vd}` (o declaralo en `versions[]` si ya lo revisaste)"))
+            elif (str(fm.get("pdf_source") or "") == "eprint"
+                    and "arxiv" not in str(fm.get("bibcode") or stem).lower()):
+                version_publicada.append(
+                    (stem, "`pdf_source: eprint` con bibcode PUBLICADO: la nota se apoya en el "
+                           "preprint teniendo versión publicada, y esa marca además exime del "
+                           "chequeo de cita textual → conseguí el PDF publicado "
+                           "(`python scripts/fetch_pdf.py <slug> --force`) o dejá la salvedad"))
             if fm.get("pending_source"):
                 ptr = fm.get("doi") or fm.get("source_url") or "(sin puntero conocido)"
                 _p = str(fm["pending_source"])
@@ -3679,6 +3715,70 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # preprint y publicado no colisionen — queda el detector de abstract verbatim, que es backlog.
     # Medido en una bóveda real: 62 % del corpus es `eprint` y `_red.yaml` NO EXISTÍA.
     # Se detecta por verdad de disco: el mismo bibcode con PDF bajo ≥2 slugs.
+    # #302 — `STATUS.md` se volvió APPEND-ONLY, que es el trabajo del `log`. Es la única de las
+    # cuatro piezas de memoria in-repo cuya política de escritura no estaba declarada (del `log` se
+    # dice que es append-only, del `index.md` que se estampa, de `CLAUDE.md` que lleva regla +
+    # ancla con techo), y el resultado medido: 537 líneas, 12 encabezados fechados apilados y
+    # **cuatro** listas de próximos pasos, una de las cuales contradice un estado posterior del
+    # mismo archivo. El daño no es cosmético: es el primer archivo que un agente lee al iniciar
+    # sesión, y arranca por la lista equivocada.
+    if cfg.STATUS.exists():
+        try:
+            _st = cfg.STATUS.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            _st = ""
+        _pasos = re.findall(r"^#{1,4}\s+.*(?:pr[oó]ximos?\s+pasos?|lo que sigue).*$", _st,
+                            re.M | re.I)
+        _fechados = re.findall(r"^#{1,4}\s+.*\d{4}-\d{2}-\d{2}.*$", _st, re.M)
+        if len(_pasos) > 1:
+            status_apilado.append(
+                ("STATUS.md", f"{len(_pasos)} secciones de próximos pasos ("
+                              + " · ".join(p.strip()[:40] for p in _pasos[:4]) +
+                              ") — el estado tiene UNA: las viejas contradicen a la vigente y el "
+                              "agente arranca por la primera. Lo histórico va a `wiki/log.md`"))
+        if len(_fechados) > STATUS_MAX_FECHADOS:
+            status_apilado.append(
+                ("STATUS.md", f"{len(_fechados)} encabezados fechados apilados (techo declarado: "
+                              f"{STATUS_MAX_FECHADOS}) — eso es una bitácora, y la bitácora es "
+                              f"`wiki/log.md`: el STATUS **se reescribe**, no se appendea"))
+        if len(_st.splitlines()) > STATUS_MAX_LINEAS:
+            status_apilado.append(
+                ("STATUS.md", f"{len(_st.splitlines())} líneas (techo declarado: "
+                              f"{STATUS_MAX_LINEAS}) — si es estado, no crece sin techo"))
+    # #312 — `alcance`/`unidad_cita` viajan de `sources[]` al stub y se congelan ahí: ampliar el
+    # alcance de un libro dejaba la nota **afirmando que ese material no entra mientras lo publica
+    # en su vista** (medido: 2 libros, 37 valores nuevos). Y no deja al chequeo de completitud sin
+    # información: lo deja con información FALSA, que es peor.
+    if not cfg.themes_error():
+        for _slug, _tmeta in (cfg.load_themes() or {}).items():
+            for _item in cfg.as_list(cfg.as_map(_tmeta).get("sources")):
+                if not isinstance(_item, dict) or not str(_item.get("key") or "").strip():
+                    continue
+                _key = str(_item["key"]).strip()
+                _fm = paper_fms.get(_key)
+                if _fm is None:
+                    continue
+                for _campo in ("alcance", "unidad_cita"):
+                    _cfgv = str(_item.get(_campo) or "").strip()
+                    _notav = str(_fm.get(_campo) or "").strip()
+                    if _cfgv and _cfgv != _notav:
+                        alcance_desfasado.append(
+                            (_key, f"`{_campo}` de la nota («{_notav or 'sin declarar'}») ≠ el "
+                                   f"declarado en `sources[]` de `{_slug}` («{_cfgv}») → el chequeo "
+                                   f"de completitud compara contra el equivocado; "
+                                   f"`python scripts/make_notes.py --restamp-alcance`"))
+
+    # #311 — la extracción en `build/` es schema viejo: ese directorio es scratch por `.gitignore`,
+    # así que ahí las extracciones NO viajan (medido: `git ls-files build/` = 0 sobre 33 extracciones
+    # que costaron ~4,9 M tokens de lectura de PDF). Bloqueante y con migrador, como el
+    # `triage.json` pre-1.9.0: un artefacto caro en un directorio declarado descartable es una
+    # trampa puesta, no una convención.
+    for _ext in sorted(cfg.ROOT.glob("build/*/extraccion/*.json"))[:1]:
+        _n = len(list(cfg.ROOT.glob("build/*/extraccion/*.json")))
+        old_registro.append(
+            ("build/", f"{_n} extracción(es) en `build/*/extraccion/` (schema pre-#311): ahí NO se "
+                       f"versionan ni viajan, y una extracción no se regenera sin volver a leer el "
+                       f"PDF → `python scripts/make_notes.py --migrate-extracciones`"))
     _pasada_red = cfg.REGISTRO / "_red.yaml"
     if not _pasada_red.exists() and any(cfg.PAPERS.glob("*.md")):
         reuso_sin_chequear.append(
@@ -4040,6 +4140,9 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('faceta_sin_frontera', '🕳 Faceta con token corto sin `\\b`: matchea DENTRO de otra palabra (#236, backlog)', SEV_BACKLOG, tuple(faceta_sin_frontera), poblacion='config'),
         Categoria('faceta_muerta', '🕳 Alternativa de faceta con POBLACIÓN CERO o duplicada (#291, backlog)', SEV_BACKLOG, tuple(faceta_muerta), poblacion='config'),
         Categoria('reuso_sin_chequear', '🕳 Artefacto reusado entre slugs sin chequear su versión, y pasada de red que nunca corrió (#297, backlog)', SEV_BACKLOG, tuple(reuso_sin_chequear), poblacion='papers'),
+        Categoria('version_publicada', '🕳 La nota se apoya en el PREPRINT habiendo versión publicada (#298, backlog)', SEV_BACKLOG, tuple(version_publicada), poblacion='papers'),
+        Categoria('status_apilado', '🕳 `STATUS.md` apilado como bitácora: es ESTADO, se reescribe (#302, backlog)', SEV_BACKLOG, tuple(status_apilado), poblacion='config'),
+        Categoria('alcance_desfasado', '🕳 `alcance`/`unidad_cita` de la nota ≠ el declarado en `sources[]` (#312, backlog)', SEV_BACKLOG, tuple(alcance_desfasado), poblacion='papers'),
         Categoria('sweep_pendiente', 'Barrido full-text (2b) sin rastro o truncado: no consta que la '
                   'segunda red para el punto ciego de la query se haya tendido entera (backlog)',
                   SEV_BACKLOG, tuple(sweep_pendiente), poblacion='registros'),

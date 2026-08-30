@@ -446,7 +446,7 @@ def test_concept_note_methods(toy_vault):
     # es un bloque ```dataview``` sino una tabla ESTAMPADA — un agente que abre el .md ve los
     # papers, no el código de una query que nunca va a correr.
     texto = dest.read_text(encoding="utf-8")
-    assert "## Papers que tocan este tema (auto) (0)" in texto
+    assert "## Papers que tocan este tema (auto) (0 · 0 sintetizados en este concepto)" in texto
     assert "```dataview" not in texto.split("## Papers que tocan", 1)[1]
 
 
@@ -3890,25 +3890,26 @@ def test_retarget_no_toca_una_nota_sin_frontmatter(toy_vault):
 # ── #228 · el renombre completo: cabecera, `bibstem` y la extracción de `build/` ─────────────────
 
 def _con_artefactos(bib: str, *, slug: str = "test_star"):
-    """Un paper con `.txt`, PDF y extracción en `build/` — las tres capas que el renombre mueve."""
+    """Un paper con `.txt`, PDF y extracción — las tres capas que el renombre mueve (#311: la
+    extracción vive versionada en `vault/raw/extraccion/<slug>/`, no en `build/`)."""
     _paper(bib)
     (cfg.FULLTEXT / slug).mkdir(parents=True, exist_ok=True)
     (cfg.FULLTEXT / slug / f"{bib}.txt").write_text("texto", encoding="utf-8")
     (cfg.PDFS / slug).mkdir(parents=True, exist_ok=True)
     (cfg.PDFS / slug / f"{bib}.pdf").write_bytes(b"%PDF-1.4")
-    d = cfg.ROOT / "build" / slug / "extraccion"
+    d = cfg.EXTRACCION / slug
     d.mkdir(parents=True, exist_ok=True)
     (d / f"{bib}.json").write_text(json.dumps({"bibcode": bib, "methods": ["ica"]}),
                                    encoding="utf-8")
     return d
 
 
-def test_el_renombre_mueve_la_extraccion_de_build(toy_vault):
+def test_el_renombre_mueve_la_extraccion(toy_vault):
     """#228 — `harvest_views` mapea JSON→nota por `data["bibcode"]`, así que una extracción dejada
     bajo el bibcode viejo hace que el cosechador imprima «no hay nota en `papers/`» y SALTEE la nota
     en toda corrida futura, en silencio. Medido: la única nota fuera del alcance del cosechador era
     justo la que cargaba una salvedad falsa — re-correr el cosechador no la habría tocado.
-    `build/` es scratch regenerable, pero una EXTRACCIÓN no se regenera sin volver a pagarla."""
+    Una EXTRACCIÓN no se regenera sin volver a pagarla: por eso vive versionada (#311)."""
     d = _con_artefactos("2020preX...1..1X")
     mn.rename_paper("2020preX...1..1X", "2021pubY...1..1Y")
     assert not (d / "2020preX...1..1X.json").exists()
@@ -4318,3 +4319,237 @@ def test_migrar_source_fields_no_escribe_si_rompe_el_yaml(toy_vault, capsys, mon
     assert mn.migrate_all_source_fields() == (0, [])
     assert f.read_text(encoding="utf-8") == antes
     assert "NO se escribe" in capsys.readouterr().out
+
+
+# ── #304 · `stamp_pdf`: el gemelo que faltaba de `stamp_fulltext` ────────────
+def _nota_304(stem, **fm):
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    campos = "\n".join(f"{k}: {v}" for k, v in fm.items())
+    f = cfg.PAPERS / f"{stem}.md"
+    f.write_text(f"---\nbibcode: {stem}\ntitle: T\n{campos}\n---\n\n· ADS: `{stem}`\n\n"
+                 f"## Abstract\n\nx\n", encoding="utf-8")
+    return f
+
+
+def _pdf_304(slug, stem):
+    (cfg.PDFS / slug).mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / slug / f"{stem}.pdf").write_bytes(b"%PDF-1.4\n")
+
+
+def test_stamp_pdf_linkea_el_PDF_que_aparecio_despues(toy_vault):
+    """#304 — `pdf:` se escribía SÓLO al crear el stub, así que un PDF que aparece en disco después
+    de la nota no se linkeaba nunca. No es un caso de borde: es el rescate manual de PDFs (que tiene
+    su propio documento de referencia y su residuo declarado) y el cierre de un `pending`. Medido:
+    4 de 4 rescates quedaron en `pdf: null`, con el lint imprimiendo la ruta exacta y ningún
+    comando que la aplicara."""
+    f = _nota_304("1999ISPL....6..145H", pdf="null")
+    _pdf_304("ica_ruido", "1999ISPL....6..145H")
+    assert mn.stamp_pdf(f, "1999ISPL....6..145H") is True
+    fm = cfg.split_fm(f.read_text(encoding="utf-8"))
+    assert fm["pdf"] == "../../raw/pdfs/ica_ruido/1999ISPL....6..145H.pdf"
+    assert mn.stamp_pdf(f, "1999ISPL....6..145H") is False, "idempotente"
+
+
+def test_stamp_pdf_no_des_estampa_ni_pisa_lo_que_resuelve(toy_vault):
+    """Mismas dos propiedades que su gemelo: sin PDF en disco NO borra el campo (la ausencia la
+    surface el lint), y un valor que todavía resuelve se queda — primer escritor gana, así que
+    re-correr cualquier slug no repunta la nota (INV-23)."""
+    f = _nota_304("2020sinpdf", pdf="../../raw/pdfs/ica/2020sinpdf.pdf")
+    assert mn.stamp_pdf(f, "2020sinpdf") is False
+    assert cfg.split_fm(f.read_text(encoding="utf-8"))["pdf"].endswith("ica/2020sinpdf.pdf")
+    _pdf_304("ica", "2020sinpdf")
+    _pdf_304("zeta", "2020sinpdf")
+    assert mn.stamp_pdf(f, "2020sinpdf") is False, "el que ya está resuelve: no se repunta"
+    # y el caso que la estabilidad protege (INV-23): la nota apunta al slug NO preferido y las dos
+    # copias existen → se queda con la suya. Sin esto, el campo alterna según qué slug corrió.
+    g = _nota_304("2003Comon", pdf="../../raw/pdfs/zeta/2003Comon.pdf")
+    _pdf_304("zeta", "2003Comon")
+    _pdf_304("ica", "2003Comon")
+    assert mn.stamp_pdf(g, "2003Comon") is False
+    assert cfg.split_fm(g.read_text(encoding="utf-8"))["pdf"].endswith("zeta/2003Comon.pdf")
+
+
+def test_stamp_pdf_no_toca_una_nota_sin_frontmatter(toy_vault):
+    """Sin frontmatter no hay dónde estampar, y adivinar dónde empieza sería inventar: la nota
+    ilegible ya es un bloqueante del lint."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    f = cfg.PAPERS / "2020sinfm.md"
+    f.write_text("no tengo frontmatter\n", encoding="utf-8")
+    _pdf_304("ica", "2020sinfm")
+    assert mn.stamp_pdf(f, "2020sinfm") is False
+    assert f.read_text(encoding="utf-8") == "no tengo frontmatter\n"
+
+
+def test_stamp_pdf_repunta_el_puntero_MUERTO(toy_vault):
+    """El otro lado de #217: una nota que apunta a un archivo que no está afirma algo falso sobre el
+    disco. Si el PDF existe bajo otro slug, el campo se repunta ahí."""
+    f = _nota_304("2015MNRAS.446.3545D", pdf="../../raw/pdfs/borrado/2015MNRAS.446.3545D.pdf")
+    _pdf_304("ica", "2015MNRAS.446.3545D")
+    assert mn.stamp_pdf(f, "2015MNRAS.446.3545D") is True
+    assert cfg.split_fm(f.read_text(encoding="utf-8"))["pdf"] == \
+        "../../raw/pdfs/ica/2015MNRAS.446.3545D.pdf"
+
+
+def test_stamp_pdf_elige_el_slug_con_precedencia_declarada(toy_vault):
+    """Un paper de varios sujetos tiene su PDF bajo cada slug y la nota es una sola: sin regla
+    declarada el campo se repunta al que corrió último. La misma que `artefacto_en_otro_slug`: el
+    slug lexicográficamente menor."""
+    f = _nota_304("2002Cardoso", pdf="null")
+    _pdf_304("zeta", "2002Cardoso")
+    _pdf_304("ica", "2002Cardoso")
+    mn.stamp_pdf(f, "2002Cardoso")
+    assert cfg.split_fm(f.read_text(encoding="utf-8"))["pdf"] == "../../raw/pdfs/ica/2002Cardoso.pdf"
+    assert mn.best_pdf("no_existe") is None
+
+
+def test_stamp_pdf_agrega_el_campo_si_la_nota_no_lo_trae(toy_vault):
+    """Notas pre-contrato: el campo se inserta, no se pide que ya exista."""
+    f = _nota_304("2018IEEEA...625336F")
+    _pdf_304("ica_ruido", "2018IEEEA...625336F")
+    assert mn.stamp_pdf(f, "2018IEEEA...625336F") is True
+    assert cfg.split_fm(f.read_text(encoding="utf-8"))["pdf"].endswith("2018IEEEA...625336F.pdf")
+
+
+def test_el_backfill_estampa_el_campo_y_DESPUES_el_link(toy_vault, capsys):
+    """El drift que el lint reporta —«PDF en disco sin linkear», con la ruta exacta— ahora tiene
+    comando: `--restamp-pdf-links` estampa primero el campo por verdad de disco y después el link
+    que lo lee. Antes sólo podía QUITAR el link, porque leía un `pdf: null` que era falso."""
+    f = _nota_304("2004ISPL...11..470D", pdf="null")
+    _pdf_304("ica_ruido", "2004ISPL...11..470D")
+    mn.restamp_pdf_links()
+    texto = f.read_text(encoding="utf-8")
+    assert "[📄 PDF](../../raw/pdfs/ica_ruido/2004ISPL...11..470D.pdf)" in texto
+    assert "con `pdf:` estampado por verdad de disco" in capsys.readouterr().out
+
+
+# ── #300 · el roll-up de CONCEPTO recupera las dos garantías de D-10 ─────────
+def test_el_rollup_de_concepto_publica_los_dos_numeros_y_el_estado(toy_vault):
+    """#300 — D-10 le puso al roll-up los DOS números y la columna `Estado` con un motivo
+    enunciado («el defecto que evita es prometer 155 arriba de una síntesis de 8»), y las dos se
+    aplicaron sólo a `stars/`. El defecto estaba VIVO en los conceptos: medido, un concepto cerrado
+    y verificado anunciaba 89 papers arriba de una síntesis que cita 30, con 57 reclamados y sin
+    leer — y esos 57 no son todos iguales (`sin extraer` vs `extraído, no sintetizado` vs `sin
+    vista (declarado)`), que es exactamente lo que la columna transporta."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "concept": "ica", "area": "methods",
+                                         "query": "q"}})
+    (cfg.CONCEPTS / "methods").mkdir(parents=True, exist_ok=True)
+    (cfg.CONCEPTS / "methods" / "ica.md").write_text(
+        "---\ntags: [concept]\n---\n\n# ICA\n\nLo sintetizado sale de [[2000Hyv]].\n",
+        encoding="utf-8")
+    for stem, extra in (("2000Hyv", {"methods": ["ICA"], "thesis_links": ["ica"]}),
+                        ("2002Cardoso", {"thesis_links": ["ica"]}),
+                        ("2004Davies", {"methods": ["ica"]})):
+        campos = "\n".join(f"{k}: {v}" for k, v in extra.items())
+        (cfg.PAPERS / f"{stem}.md").write_text(
+            f"---\nbibcode: {stem}\ntitle: T\nyear: 2000\nrelevance: high\n{campos}\n---\n\n"
+            f"## Abstract\n\nx\n", encoding="utf-8")
+    filas = mn.concept_rollup_rows("ica")
+    por_stem = {r["stem"]: r for r in filas}
+    assert por_stem["2000Hyv"]["estado"] == mn.ESTADO_SINTETIZADO
+    assert por_stem["2002Cardoso"]["estado"] == mn.ESTADO_SIN_EXTRAER, "reclamado y sin leer"
+    assert por_stem["2004Davies"]["estado"] == mn.ESTADO_EXTRAIDO
+    tabla = mn.concept_rollup_table(filas)
+    assert "(3 · 1 sintetizados en este concepto)" in tabla, "la promesa que la tabla sostiene"
+    assert "| Bibcode | Año | Entró por | Estado |" in tabla
+    assert "| [[2002Cardoso]] | 2000 | thesis_links | sin extraer |" in tabla
+
+
+# ── #306 · la salida de la función tiene que ser entrada válida para la función ──
+def test_merge_lee_una_lista_flow_MULTILINEA(toy_vault, capsys):
+    """#306 — `yaml.safe_dump(default_flow_style=True)` envuelve a los ~80 caracteres, así que la
+    propia salida de `merge_frontmatter_list` dejaba de ser entrada válida para ella: el lector
+    miraba UNA línea, `endswith("]")` daba False, y caía en el `else` que además reportaba «escalar
+    con valor» sobre una lista flow perfectamente válida. Medido: 1 de 31 cosechas, y lo perdido
+    fue `weighted PCA` — alias del tema, o sea el único `methods` con destino en el roll-up."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    f = cfg.PAPERS / "2023A&A...675A.187O.md"
+    f.write_text(
+        "---\nbibcode: 2023A&A...675A.187O\n"
+        "methods: [wpca, pca, lbl, permutation-test, leave-p-out-cv, gls-periodogram,\n"
+        "  quasi-periodic-gp, mcmc]\ntitle: T\n---\n\n## Abstract\n\nx\n", encoding="utf-8")
+    assert mn.merge_frontmatter_list(f, "methods", ["weighted PCA", "pca"]) is True
+    fm = cfg.split_fm(f.read_text(encoding="utf-8"))
+    assert "weighted PCA" in fm["methods"] and "mcmc" in fm["methods"]
+    assert len(fm["methods"]) == 9, "add-only: no se pierde ni se duplica nada"
+    assert fm["title"] == "T", "el resto del frontmatter, intacto"
+    assert "no pude linkear" not in capsys.readouterr().err
+
+
+def test_merge_escribe_una_lista_flow_QUE_NO_ENVUELVE(toy_vault):
+    """La otra mitad: si el escritor sigue envolviendo, la corrida siguiente vuelve al bug. La
+    lista flow se emite en UNA línea (`width`), que es lo que hace que la salida sea entrada."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    f = cfg.PAPERS / "2020largo.md"
+    f.write_text("---\nbibcode: 2020largo\nmethods: [a]\n---\n\n## Abstract\n\nx\n",
+                 encoding="utf-8")
+    mn.merge_frontmatter_list(f, "methods", [f"metodo-largo-numero-{i}" for i in range(12)])
+    linea = next(ln for ln in f.read_text(encoding="utf-8").split("\n")
+                 if ln.startswith("methods:"))
+    assert linea.endswith("]"), "la lista flow no puede quedar partida en dos líneas"
+    assert len(cfg.split_fm(f.read_text(encoding="utf-8"))["methods"]) == 13
+
+
+# ── #311 · la extracción es cara, así que se versiona ───────────────────────
+def test_migrar_extracciones_las_saca_de_build(toy_vault, capsys):
+    """#311 — el framework decía dos cosas contradictorias del mismo directorio: la regla de oro
+    del scratch («`build/` guarda lo REGENERABLE») y, para las extracciones, «no se regenera sin
+    volver a pagar el paso más caro» (#228). Medido en un tema: 33 extracciones, 988 KB, ~4,9 M
+    tokens de lectura de PDF, y `git ls-files build/` = **0** — no viajaban a ninguna máquina."""
+    viejo = cfg.ROOT / "build" / "ica_ruido" / "extraccion"
+    viejo.mkdir(parents=True, exist_ok=True)
+    (viejo / "2002Cardoso.json").write_text('{"bibcode": "2002Cardoso"}', encoding="utf-8")
+    n, choques = mn.migrate_all_extracciones()
+    assert (n, choques) == (1, [])
+    assert (cfg.EXTRACCION / "ica_ruido" / "2002Cardoso.json").exists()
+    assert not (viejo / "2002Cardoso.json").exists(), "se MUEVE: dos copias es cosechar una vieja"
+
+
+def test_migrar_extracciones_no_pisa_el_destino(toy_vault):
+    """Un destino que ya existe no se sobreescribe: comparar dos extracciones del mismo bibcode es
+    juicio, y pisarla sería tirar la que ya estaba versionada."""
+    viejo = cfg.ROOT / "build" / "ica" / "extraccion"
+    viejo.mkdir(parents=True, exist_ok=True)
+    (viejo / "2000Hyv.json").write_text('{"bibcode": "2000Hyv", "v": "vieja"}', encoding="utf-8")
+    (cfg.EXTRACCION / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.EXTRACCION / "ica" / "2000Hyv.json").write_text('{"bibcode": "2000Hyv", "v": "nueva"}',
+                                                         encoding="utf-8")
+    n, choques = mn.migrate_all_extracciones()
+    assert n == 0 and choques == ["ica/2000Hyv.json"]
+    assert "nueva" in (cfg.EXTRACCION / "ica" / "2000Hyv.json").read_text(encoding="utf-8")
+    assert (viejo / "2000Hyv.json").exists(), "la vieja queda para comparar a mano"
+
+
+# ── #312 · `alcance`/`unidad_cita`: la config es la autoridad ────────────────
+def test_restamp_alcance_re_sincroniza_la_nota(toy_vault, capsys):
+    """#312 — los dos campos viajan de `sources[]` al stub y se congelan ahí, así que ampliar el
+    `alcance` de un libro dejaba la nota **afirmando que ese material no entra mientras lo publica
+    en su vista** (medido: 2 libros, 37 valores nuevos de capítulos declarados fuera de alcance). No
+    deja al chequeo de completitud sin información: lo deja con información **falsa**."""
+    write_yaml(cfg.THEMES_YAML, {"ica_ruido": {
+        "title": "ICA ruidosa", "concept": "ica-ruido", "area": "methods", "source": "local-pdfs",
+        "sources": [{"key": "2001HKO", "unidad_cita": "pagina",
+                     "alcance": "caps. 6-9, 15, sec. 2.7, cap. 13, cap. 21"}]}})
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    f = cfg.PAPERS / "2001HKO.md"
+    f.write_text("---\nbibcode: 2001HKO\nunidad_cita: pagina\nalcance: caps. 6-9 y 15\n---\n\n"
+                 "## Abstract\n\nx\n", encoding="utf-8")
+    mn.restamp_scope()
+    fm = cfg.split_fm(f.read_text(encoding="utf-8"))
+    assert fm["alcance"] == "caps. 6-9, 15, sec. 2.7, cap. 13, cap. 21"
+    assert fm["unidad_cita"] == "pagina"
+    assert mn.stamp_scope(f, "caps. 6-9, 15, sec. 2.7, cap. 13, cap. 21", "pagina") is False
+
+
+def test_stamp_alcance_no_inventa_ni_borra(toy_vault):
+    """La config es la autoridad **cuando declara**: sin `alcance` declarado la nota no se toca (el
+    lint lo reporta), y el campo se agrega si la nota no lo traía."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    f = cfg.PAPERS / "2010CJ.md"
+    f.write_text("---\nbibcode: 2010CJ\nalcance: caps. 1-2\n---\n\n## Abstract\n\nx\n",
+                 encoding="utf-8")
+    assert mn.stamp_scope(f, None, None) is False
+    assert cfg.split_fm(f.read_text(encoding="utf-8"))["alcance"] == "caps. 1-2"
+    g = cfg.PAPERS / "2020nuevo.md"
+    g.write_text("---\nbibcode: 2020nuevo\n---\n\n## Abstract\n\nx\n", encoding="utf-8")
+    assert mn.stamp_scope(g, "cap. 3", "pagina") is True
+    assert cfg.split_fm(g.read_text(encoding="utf-8"))["alcance"] == "cap. 3"

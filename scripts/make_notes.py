@@ -163,6 +163,135 @@ def best_fulltext(stem: str) -> tuple[str | None, str | None]:
     return rel, src
 
 
+def best_pdf(stem: str) -> str | None:
+    """The PDF this paper should point at, chosen across ALL slugs (#304). Relative to the note.
+
+    Same shape as `best_fulltext` and the same declared tie-break as
+    `lib_config.artefacto_en_otro_slug`: the lexicographically smallest slug. There is no quality
+    axis here —the PDF is the same bytes under every slug— but the precedence still matters: a
+    paper relevant to several subjects has its PDF under each one and the note is one, so without a
+    declared rule the field repoints to whichever slug ran last (INV-23, noise of diff)."""
+    cands = sorted(cfg.PDFS.glob(f"*/{stem}.pdf")) if cfg.PDFS.exists() else []
+    if not cands:
+        return None
+    mejor = min(cands, key=lambda p: p.parent.name)
+    return f"../../raw/pdfs/{mejor.parent.name}/{stem}.pdf"
+
+
+def stamp_pdf(dest, stem: str) -> bool:
+    """Stamp `pdf:` on an existing note, by TRUTH OF DISK — the twin of `stamp_fulltext` (#304).
+
+    ⛔ There was none, and the asymmetry had a measured cost: `pdf:` is written **only** when the
+    stub is created, so **a PDF that shows up on disk after the note exists is never linked**. That
+    is not an edge case, it is the flow the framework prescribes — the manual PDF rescue has its own
+    reference document, its own declared residue (`missing_pdf.json`) and its own mention in
+    `CLAUDE.md`, and it ends with the operator dropping a file into `vault/raw/pdfs/<slug>/` after
+    the note exists. Same for closing a `pending: paywall` when the user gets the source. Measured
+    on a real ingest: 4 of 4 rescued PDFs stayed `pdf: null`, with the lint printing the exact path
+    it should hold and no command applying it — a note asserting something false about the disk,
+    which is what #217 fixed in the other direction.
+
+    Like its twin: surgery on one frontmatter line, never the LLM extraction; it does **not**
+    un-stamp when there is no PDF (the lint already surfaces that); and it keeps a value that still
+    resolves — first writer wins, so re-running any slug does not repoint. ⚠ It does not touch
+    `pdf_source`: that one survives the file (#230) because it describes the provenance of the
+    reading that happened, not the file. Returns True when it changed the note."""
+    rel = best_pdf(stem)
+    if rel is None or not dest.exists():
+        return False
+    text = dest.read_text(encoding="utf-8")
+    lim = cfg.fm_bounds(text)
+    if lim is None:
+        return False
+    ini, end = lim
+    lines = text[ini:end].split("\n")
+    cur = next((ln.split(":", 1)[1].strip().strip("'\"") for ln in lines if ln.startswith("pdf:")),
+               None)
+    if cur in ("null", "~", ""):
+        cur = None                        # el `null` del stub NO es un puntero
+    if cur and (dest.parent / cur).resolve().exists():
+        return False                      # el que ya está resuelve: no se repunta (idempotente)
+    # `cur` que NO resuelve se repunta: una nota que apunta a un archivo que no está afirma algo
+    # falso sobre el disco, que es lo que #217 corrige en la dirección contraria (al borrarlo).
+    want = f"pdf: {rel}"
+    for i, ln in enumerate(lines):
+        if ln.startswith("pdf:"):
+            lines[i] = want
+            break
+    else:
+        lines.append(want)
+    head = "\n".join(lines)
+    if head == text[ini:end]:
+        return False                      # nada que escribir: idempotente por contenido
+    cfg.write_text_atomic(dest, text[:ini] + head + text[end:])
+    return True
+
+
+def stamp_scope(dest, alcance: str | None, unidad_cita: str | None) -> bool:
+    """Re-stamp `alcance:`/`unidad_cita:` on an existing note, from the CONFIG (#312).
+
+    ⛔ Same class as #304 —a field written when the note is created and never re-synced— with the
+    authority reversed: here `themes.yaml` is the authority, not the disk. The two fields travel
+    from `sources[]` into the stub and freeze there, so widening a book's `alcance` left the note
+    **asserting that the material does not enter while publishing it in its view**. Measured on two
+    books: the re-reading extracted 37 new values from chapters the note declared out of scope.
+
+    It is not cosmetic: `CLAUDE.md` gives `alcance` a precise job — *without it the completeness
+    check cannot tell a deliberate cut from an omission* — so a stale one does not leave the check
+    without information, it leaves it with **false** information. Surgery on those two lines only,
+    never the LLM extraction. Returns True when it changed the note."""
+    if not dest.exists() or not (alcance or unidad_cita):
+        return False
+    text = dest.read_text(encoding="utf-8")
+    lim = cfg.fm_bounds(text)
+    if lim is None:
+        return False
+    ini, end = lim
+    lines = text[ini:end].split("\n")
+
+    def upsert(field: str, value: str) -> None:
+        """Replace that frontmatter line, or append it when the note does not carry the field."""
+        want = f"{field}: {json.dumps(value, ensure_ascii=False)}"
+        for i, ln in enumerate(lines):
+            if ln.startswith(f"{field}:"):
+                lines[i] = want
+                return
+        lines.append(want)
+
+    if unidad_cita:
+        upsert("unidad_cita", str(unidad_cita))
+    if alcance:
+        upsert("alcance", str(alcance))
+    head = "\n".join(lines)
+    if head == text[ini:end]:
+        return False
+    nuevo_txt = text[:ini] + head + text[end:]
+    if cfg.split_fm(text) and not cfg.split_fm(nuevo_txt):    # #244: no dejar la nota peor
+        cfg.print_seguro(f"  ⛔ {dest.name}: re-estampar el alcance dejaría el frontmatter sin "
+                         f"parsear — NO se escribe.")
+        return False
+    cfg.write_text_atomic(dest, nuevo_txt)
+    return True
+
+
+def restamp_scope() -> int:
+    """Backfill of #312 over every declared source: `themes.yaml` → the note's frontmatter."""
+    n = 0
+    for slug, meta in (cfg.load_themes() or {}).items():
+        for item in cfg.as_list(cfg.as_map(meta).get("sources")):
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("key") or "").strip()
+            if not key:
+                continue
+            if stamp_scope(cfg.PAPERS / f"{safe_name(key)}.md",
+                             item.get("alcance"), item.get("unidad_cita")):
+                cfg.print_seguro(f"  {key}: `alcance`/`unidad_cita` re-estampados desde themes.yaml")
+                n += 1
+    cfg.print_seguro(f"papers: {n} nota(s) re-sincronizadas con `sources[]` (#312)")
+    return 0
+
+
 def stamp_fulltext(dest, stem: str, slug: str | None) -> bool:
     """Estampa/actualiza `fulltext:` + `fulltext_source:` (verdad de disco) en una nota que YA
     existe. Hace falta porque en la cadena ADS el stub nace ANTES que el .txt (make_notes corre
@@ -483,8 +612,14 @@ def restamp_pdf_links() -> int:
     es scratch que puede no existir); en el flujo normal el re-estampado viaja solo con el
     re-run idempotente de la cadena."""
     notes = sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []
+    # #304 — primero el CAMPO por verdad de disco, después el link que lo lee. Sin el primer paso
+    # el backfill sólo podía **quitar** el link (un `pdf: null` con el PDF en disco se leía como
+    # «no hay PDF»), así que el drift que el lint reporta —«PDF en disco sin linkear», con la ruta
+    # exacta impresa— no tenía ningún comando que lo aplicara.
+    campos = sum(1 for p in notes if stamp_pdf(p, p.stem))
     changed = sum(1 for p in notes if stamp_pdf_link(p))
-    cfg.print_seguro(f"papers: {changed} de {len(notes)} re-estampados (link [📄 PDF] ↔ frontmatter `pdf`)")
+    cfg.print_seguro(f"papers: {campos} con `pdf:` estampado por verdad de disco · {changed} de "
+                     f"{len(notes)} re-estampados (link [📄 PDF] ↔ frontmatter `pdf`)")
     return 0
 
 
@@ -1038,6 +1173,33 @@ def migrate_all_txt_fields() -> int:
     return n
 
 
+def migrate_all_extracciones() -> tuple[int, list]:
+    """One-shot migrator for #311: `build/<slug>/extraccion/` → `vault/raw/extraccion/<slug>/`.
+
+    ⛔ The framework declared two contradictory things about the same directory: the golden rule of
+    scratch (*"`build/` holds what is REGENERABLE"*) and, for extractions, *"an extraction is not
+    regenerated without paying the most expensive step again"* (#228). Measured on one theme: 33
+    extractions, 988 KB, ~4.9 M subagent tokens of PDF reading — and `git ls-files build/` returned
+    **0**, so none of it travelled to another machine. The user's stated intent was that they
+    persist; the repo did not deliver it, they survived by filesystem inertia and any `git clean`
+    erased them.
+
+    Moves, never copies: two copies of the same extraction is how a stale one gets harvested.
+    Returns `(moved, [collisions])` — a destination that already exists is NOT overwritten."""
+    n, choques = 0, []
+    for viejo in sorted(cfg.ROOT.glob("build/*/extraccion/*.json")):
+        slug = viejo.parent.parent.name
+        dest = cfg.EXTRACCION / slug / viejo.name
+        if dest.exists():
+            choques.append(f"{slug}/{viejo.name}")
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        cfg.write_text_atomic(dest, viejo.read_text(encoding="utf-8"))
+        viejo.unlink()
+        n += 1
+    return n, choques
+
+
 def migrate_all_source_fields() -> tuple[int, list]:
     """One-shot migrator for #296: a `pdf_source`/`fulltext_source` outside its closed vocabulary.
 
@@ -1401,12 +1563,28 @@ def merge_frontmatter_list(dest, field: str, values: list) -> bool:
         # campo ausente: no inventar posición (el stub siempre lo trae)
         return _no(f"`{field}` no está en el frontmatter — no se inventa la posición")
     rest = lines[idx][len(field) + 1:].strip()
+    # #306 — una lista flow puede ocupar VARIAS líneas: `yaml.safe_dump(default_flow_style=True)`
+    # envuelve a los ~80 caracteres, así que la propia salida de esta función dejaba de ser entrada
+    # válida para ella —el lector miraba una sola línea, `endswith("]")` daba False y caía en el
+    # `else`, que encima reportaba «escalar con valor» sobre una lista flow perfectamente válida—.
+    # Medido: 1 de 31 cosechas, y lo perdido fue `weighted PCA`, alias del tema (o sea el único
+    # `methods` con destino en el roll-up). Se lee hasta el `]` de cierre, y se escribe **sin
+    # envolver** (`width`) para no volver a producir la forma que costó este issue.
+    fin_flow = idx
+    if rest.startswith("[") and not rest.endswith("]"):
+        j = idx + 1
+        while j < len(lines) and "]" not in lines[j]:
+            j += 1
+        if j < len(lines):
+            rest = " ".join([rest] + [ln.strip() for ln in lines[idx + 1:j + 1]])
+            fin_flow = j
     if rest.startswith("[") and rest.endswith("]"):
         # Lista inline (`field: []` / `field: [a, b]`): se re-emite ENTERA con el dumper, no se
         # concatena texto. Partir por `,` rompía cualquier item que llevara una coma —propia o de
         # un valor nuevo— y en contexto flow la coma no se puede dejar sin comillas (AUD-145).
-        lines[idx] = f"{field}: " + yaml.safe_dump(
-            list(current) + list(missing), default_flow_style=True, allow_unicode=True).strip()
+        lines[idx:fin_flow + 1] = [f"{field}: " + yaml.safe_dump(
+            list(current) + list(missing), default_flow_style=True, allow_unicode=True,
+            width=10 ** 6).strip()]
     elif rest == "" or rest.startswith("#") or data.get(field) is None:
         # lista en bloque (o campo null): insertar tras el último "- item" existente
         j = idx + 1
@@ -1940,6 +2118,21 @@ SECCIONES_MAQUINA = cfg.SECCIONES_ESTAMPADAS
 _prosa = cfg.solo_prosa
 
 
+def _estado_paper(stem: str, fm: dict, cuerpo: str, dropeados: set, sujetos: set) -> str:
+    """How far this paper got in the funnel, for the subject whose prose is `cuerpo` (D-10).
+
+    One implementation, two roll-ups: the star/concept `## Papers` table and the concept's
+    `## Papers que tocan este tema` (#300). Two copies of this ladder would be two vocabularies
+    that drift, and the whole point of the column is that the reader can compare rows."""
+    if stem in dropeados:
+        return ESTADO_DROPEADO
+    if (fm.get("relevance") or "").lower() == "low":
+        return ESTADO_FUERA
+    if not (fm.get("methods") or []):
+        return (ESTADO_SIN_VISTA if _no_vista_declarada(fm, stem, sujetos) else ESTADO_SIN_EXTRAER)
+    return ESTADO_SINTETIZADO if f"[[{stem}" in cuerpo else ESTADO_EXTRAIDO
+
+
 def papers_universe(slug: str, kind: str, fms: dict | None = None) -> list:
     """El universo de papers del sujeto.  @inv INV-81, por paper: `{stem, year, relevance, origen, via, estado}`.
 
@@ -1967,17 +2160,7 @@ def papers_universe(slug: str, kind: str, fms: dict | None = None) -> list:
         _sujetos = {slug}
     filas = []
     for stem, fm in _papers_del_sujeto(slug, kind, fms):
-        if stem in dropeados:
-            estado = ESTADO_DROPEADO
-        elif (fm.get("relevance") or "").lower() == "low":
-            estado = ESTADO_FUERA
-        elif not (fm.get("methods") or []):
-            estado = (ESTADO_SIN_VISTA if _no_vista_declarada(fm, stem, _sujetos)
-                      else ESTADO_SIN_EXTRAER)
-        elif f"[[{stem}" in cuerpo:
-            estado = ESTADO_SINTETIZADO
-        else:
-            estado = ESTADO_EXTRAIDO
+        estado = _estado_paper(stem, fm, cuerpo, dropeados, _sujetos)
         # @inv INV-115
         # #125: el TÍTULO. Sin él, la fila es un bibcode pelado y para saber si un paper `sin
         # extraer` te sirve hay que abrir la nota, una por una (25 en un caso real). Es la puerta de
@@ -2031,6 +2214,13 @@ def concept_rollup_rows(slug: str, fms: dict | None = None) -> list:
     except KeyError:
         return []
     concept = meta.get("concept") or slug
+    # #300 — las dos garantías de D-10 que este roll-up había perdido: los DOS números y la columna
+    # `Estado`. Se calculan con el MISMO insumo que en `stars/` (la prosa de la nota destino y el
+    # registro de descartes), no con una copia de la escalera.
+    dest = _concept_dest(slug)
+    cuerpo = _prosa(dest.read_text(encoding="utf-8")) if dest and dest.exists() else ""
+    dropeados = set(cfg.dropped_from_subject(slug))
+    sujetos = {slug, concept}
     filas = []
     for stem, fm in (fms if fms is not None else papers_fm_index()).items():
     #  @inv INV-35
@@ -2043,20 +2233,31 @@ def concept_rollup_rows(slug: str, fms: dict | None = None) -> list:
         if not (por_m or por_t):
             continue
         filas.append({"stem": stem, "year": fm.get("year") or "",
-                      "entro_por": "ambos" if por_m and por_t else ("methods" if por_m else "thesis_links")})
+                      "entro_por": "ambos" if por_m and por_t else ("methods" if por_m else "thesis_links"),
+                      "estado": _estado_paper(stem, fm, cuerpo, dropeados, sujetos)})
     return sorted(filas, key=lambda r: r["stem"])
 
 
 def concept_rollup_table(rows: list) -> str:
-    out = [f"{CONCEPT_ROLLUP_HEADER} ({len(rows)})", ""]
+    """Like `papers_table`, plus the `Entró por` column of D-24 (#300).
+
+    ⛔ D-10 gave the roll-up **both numbers** (universe · synthesised) and the `Estado` column with
+    a stated reason —*"the defect it prevents is promising 155 above a synthesis of 8"*— and both
+    had been applied to `stars/` only. The defect was ALIVE in concepts: measured, a closed and
+    verified concept announced **89** papers above a synthesis citing 30, with 57 claimed and
+    unread. Those 57 are not all alike (`ESTADO_SIN_EXTRAER` vs `ESTADO_EXTRAIDO` vs
+    `ESTADO_SIN_VISTA`, #268) — exactly what a spoke needs to know about the hub whose corpus it
+    inherits, and what previously required a script parsing every note."""
+    n_sint = sum(1 for r in rows if r.get("estado") == ESTADO_SINTETIZADO)
+    out = [f"{CONCEPT_ROLLUP_HEADER} ({len(rows)} · {n_sint} sintetizados en este concepto)", ""]
     if not rows:
         out += ["_(ninguna nota de paper declara este tema todavía.)_", ""]
         return "\n".join(out)
     # Sin columna `Bearing`: D-21 la retiró del paper — la postura depende de la TESIS y un
     # paper puede tocar varias, así que vive en la tabla de evidencia de la hipótesis.
-    out += ["| Bibcode | Año | Entró por |", "|---|---|---|"]
+    out += ["| Bibcode | Año | Entró por | Estado |", "|---|---|---|---|"]
     for r in rows:
-        out.append(f"| [[{r['stem']}]] | {r['year']} | {r['entro_por']} |")
+        out.append(f"| [[{r['stem']}]] | {r['year']} | {r['entro_por']} | {r.get('estado', '')} |")
     out.append("")
     return "\n".join(out)
 
@@ -2543,7 +2744,7 @@ def _slugs_of_bibcode(bibcode: str) -> list:
 
 
 def _move_extraction(old_stem: str, new_bibcode: str) -> int:
-    """Move `build/<slug>/extraccion/<old>.json` to the new bibcode, rewriting its `bibcode` (#228).
+    """Move `vault/raw/extraccion/<slug>/<old>.json` to the new bibcode, rewriting `bibcode` (#228).
 
     `harvest_views` maps JSON→note by `data["bibcode"]`, so an extraction left behind makes the
     harvester print «no hay nota en `papers/`» and **skip the note** on every later run — forever,
@@ -2551,7 +2752,7 @@ def _move_extraction(old_stem: str, new_bibcode: str) -> int:
     alone: choosing between two paid readings is judgement, not mechanics.
     """
     movidos = 0
-    for viejo in sorted(cfg.ROOT.glob(f"build/*/extraccion/{safe_name(old_stem)}.json")):
+    for viejo in sorted(cfg.EXTRACCION.glob(f"*/{safe_name(old_stem)}.json")):
         nuevo = viejo.with_name(f"{safe_name(new_bibcode)}.json")
         if nuevo.exists():
             cfg.print_seguro(f"  ⚠ {nuevo.parent.parent.name}: ya hay extracción para "
@@ -3474,6 +3675,12 @@ def main() -> int:
                     help="migración #205: saca `symbols_lost:` y `fulltext_layout:` del frontmatter "
                          "de las notas de paper (la fuente de lectura es el PDF, así que ya no "
                          "deciden nada). No requiere slug.")
+    ap.add_argument("--restamp-alcance", action="store_true", dest="restamp_alcance",
+                    help="#312: re-estampa `alcance`/`unidad_cita` de las notas desde `sources[]` de "
+                         "themes.yaml (la config es la autoridad). No requiere slug.")
+    ap.add_argument("--migrate-extracciones", action="store_true", dest="migrate_extracciones",
+                    help="migración #311: mueve `build/<slug>/extraccion/*.json` a "
+                         "`vault/raw/extraccion/<slug>/`, que SÍ se versiona. No requiere slug.")
     ap.add_argument("--migrate-source-fields", action="store_true", dest="migrate_source_fields",
                     help="migración #296: `pdf_source`/`fulltext_source` fuera de su vocabulario "
                          "cerrado → `null`, y la prosa que vivía en el campo se MUEVE (a "
@@ -3556,6 +3763,17 @@ def main() -> int:
         cfg.print_seguro(f"`symbols_lost`/`fulltext_layout` retirados de {n} nota(s) (#205).")
         return 0
 
+    if args.restamp_alcance:
+        return restamp_scope()
+
+    if args.migrate_extracciones:
+        n, choques = migrate_all_extracciones()
+        cfg.print_seguro(f"{n} extracción(es) movidas a `vault/raw/extraccion/` (#311) — "
+                         f"commiteálas: son el artefacto más caro de la cadena.")
+        for c in choques:
+            cfg.print_seguro(f"  ⚠ {c}: ya existe en el destino, NO se pisó — comparalas a mano")
+        return 0
+
     if args.migrate_source_fields:
         n, movidas = migrate_all_source_fields()
         cfg.print_seguro(f"{n} nota(s) con `pdf_source`/`fulltext_source` fuera de vocabulario → "
@@ -3607,8 +3825,9 @@ def main() -> int:
     if not args.slug:
         ap.error("falta el slug (corren sin slug: --restamp-pdf-links, --restamp-keywords, "
                  "--restamp-headers, --restamp-abstracts, --restamp-vista-stub, "
-                 "--clean-catalog-markup, "
-                 "--migrate-disputes, --migrate-bearing, "
+                 "--restamp-alcance, --clean-catalog-markup, "
+                 "--migrate-disputes, --migrate-bearing, --migrate-extracciones, "
+                 "--migrate-source-fields, "
                  "--migrate-txt-fields, --migrate-vistas, --sync-mirror y --rename-paper)")
 
     if args.web:

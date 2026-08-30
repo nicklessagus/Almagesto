@@ -56,7 +56,12 @@ Deben quedar en **0**:
   de `maintain`): una fuente retractada citada rompe la frontera dura.
 - **Páginas huérfanas.** ⚠ El `index.md` **no** cuenta como link entrante (#249): desde que se
   estampa por verdad de disco lista todo, así que contarlo dejaba el detector en 0 permanente —
-  **metadata derivada no es evidencia**.
+  **metadata derivada no es evidencia**. ⚠ La misma decisión vale para el **grafo de Obsidian**
+  (#301): `vault/.obsidian/graph.json` viene con `search: -path:wiki/log.md -path:wiki/index.md`,
+  porque si esas aristas no son evidencia para el lint tampoco son estructura para el grafo —
+  medido, el 7 % de las aristas de una bóveda salía de esos dos archivos, y las 50 del índice
+  significan «está en el top 50 por citas». Es un **default**, visible en el panel del grafo y
+  reversible en dos clics; en una instancia ya creada entra por el próximo merge del template.
 - **Contradicciones ground-truth↔ficha** — **qué planetas (no cuántos) y campo por campo**: planeta
   que la ficha lista y NEA no (típicamente una señal no confirmada escrita en `planets[]` en vez de
   `disputes` como `<letra>.existence`), planeta que NEA confirma y la ficha no lista, letra
@@ -93,6 +98,10 @@ Deben quedar en **0**:
   `## Vista — <sujeto>`; sección sin declarar).
 - **Juicio de triage en `build/<slug>/triage.json`** (pre-1.9.0: mientras exista, el triage
   re-propone lo descartado sin el motivo → `python scripts/triage.py <slug> --migrate`).
+- **Extracciones en `build/*/extraccion/`** (pre-#311): ahí no se versionan ni viajan —medido,
+  `git ls-files build/` = 0 sobre 33 extracciones que costaron ~4,9 M tokens de lectura de PDF— y
+  una extracción no se regenera sin volver a pagar el paso más caro (#228) → `python
+  scripts/make_notes.py --migrate-extracciones`.
 - **Fila de tabla con más celdas que su encabezado (#227)**: GFM descarta el excedente, así que el
   contenido queda **invisible para el lector** mientras toda herramienta que parsea el archivo lo
   sigue viendo — y puede estar certificado como par verificado.
@@ -134,9 +143,13 @@ Deben quedar en **0**:
   clasifica "core" con la regex del ejemplo — correr el skill `setup`.
 - **PDF ↔ disco** (higiene): el campo `pdf` no refleja el PDF real (bajado y `null`, o puntero
   roto). Su hermano **cuerpo ↔ frontmatter**: el link `[📄 PDF]` de la cabecera —metadata derivada—
-  debe existir sii `pdf` apunta a un PDF vigente; "sin link" lo arregla
-  `python scripts/make_notes.py --restamp-pdf-links`, "cabecera fuera del contrato" pide normalizar
-  la cabecera primero.
+  debe existir sii `pdf` apunta a un PDF vigente. Las dos las cierra
+  `python scripts/make_notes.py --restamp-pdf-links`, que desde #304 estampa **primero el campo**
+  por verdad de disco (`stamp_pdf`, el gemelo de `stamp_fulltext`) y después el link: hasta
+  entonces el lint imprimía la ruta exacta y **ningún comando la aplicaba** —`pdf:` se escribía sólo
+  al crear el stub, así que el PDF que aparece después (rescate manual, cierre de un `pending`) no
+  se linkeaba nunca; medido, 4 de 4—. "Cabecera fuera del contrato" pide normalizar la cabecera
+  primero.
 - **`.obsidian/` en la raíz del repo**: la bóveda se abrió mal (el grafo indexa el andamiaje);
   abrir `vault/` como vault y borrar ese directorio.
 - **Alias de más** (declarado en `stars.yaml` y que resuelve a otro objeto).
@@ -328,7 +341,12 @@ OCR, o marcar `pending`).
   veredicto negativo se lee como universal; los slugs son directorios de `raw/fulltext/`, así que el
   universo se re-cuenta y el lint marca la hipótesis que quedó corta.
 - **Marcador sin cerrar** (`` ` ``/`$`) y **párrafo duplicado** en la misma nota (#227): se cuentan
-  por **párrafo**, no por línea (las notas van hard-wrapped y contar por línea grita en falso).
+  por **párrafo**, no por línea (las notas van hard-wrapped y contar por línea grita en falso). ⚠ Un
+  marcador **escapado** (`\$`, ``\` ``) no abre ni cierra (#309): ése es el arreglo correcto de un
+  literal —Obsidian lo renderiza— y contarlo dejaba al operador eligiendo entre un bug de
+  renderizado, un backlog permanente o borrar el carácter de una transcripción verbatim, que el
+  framework justamente pide. El hallazgo nombra **las dos líneas**: la del párrafo abierto y la del
+  impar.
 - **`## ` pegado a una fila de tabla, sin línea en blanco** (#260): GFM corta bien, pero
   Python-Markdown absorbe el encabezado como fila de la tabla de arriba y el `##` desaparece del
   outline. Backlog y no bloqueante a propósito: el daño depende del renderer. Sólo cuenta una
@@ -336,6 +354,29 @@ OCR, o marcar `pending`).
 - **Faceta con token alfabético corto sin `\b`** (#236): matchea **dentro** de otra palabra
   (`expres` → *expressed*) y el falso positivo de una faceta no deja rastro — el paper entra, se
   baja y se sintetiza. El hallazgo nombra la palabra que lo disparó cuando hay corpus en `build/`.
+- **`alcance`/`unidad_cita` de la nota ≠ el declarado en `sources[]`** (#312): los dos campos viajan
+  de `themes.yaml` al stub **al crearlo** y ahí se congelan, así que ampliar el alcance de un libro
+  deja la nota afirmando que ese material *no entra* mientras lo publica en su vista (medido: 2
+  libros, 37 valores nuevos). El chequeo de completitud compara contra el de la **nota**, así que un
+  alcance viejo no lo deja sin información: lo deja con información **falsa**. Se cierra con
+  `python scripts/make_notes.py --restamp-alcance` (acá la autoridad es la **config**, al revés que
+  `pdf:`/`fulltext:`, donde es el disco).
+- **`STATUS.md` apilado como bitácora** (#302): el estado tiene **una** lista de próximos pasos y
+  no se appendea — lo histórico y el handoff por corte de contexto van a `wiki/log.md`, que es
+  append-only por contrato. Tres señales, las tres offline: más de una sección de *próximos pasos*
+  (la que produce el daño: medido, cuatro listas y una contradiciendo un estado posterior del mismo
+  archivo, en el primer archivo que un agente lee al iniciar sesión), más de
+  `lint.STATUS_MAX_FECHADOS` encabezados fechados apilados, y el techo de tamaño
+  `lint.STATUS_MAX_LINEAS`. Los números viven en `lint.py` y no en `tools/doc-size-ratchet.yaml`
+  porque el STATUS es de la **instancia** (`merge=ours`): un ratchet del template no lo describiría.
+- **La nota se apoya en el PREPRINT habiendo versión publicada** (#298): dos señales en una
+  categoría. (a) `versions_disponible: <bibcode>` — el hallazgo del detector de versiones, que desde
+  #298 se **estampa** para sobrevivir a la corrida (antes era una línea en stdout: correr la pasada
+  y no actuar en el momento borraba el hallazgo, y la siguiente lo redescubría); se cierra con
+  `--rename-paper` o declarándolo en `versions[]`. (b) `pdf_source: eprint` con bibcode **publicado**
+  — no hay problema de identidad, así que `discover_versions` no la mira por contrato (D-19 es sobre
+  identidad), y es justo donde el framework avisa que una discrepancia numérica es diferencia de
+  versión **y** donde el `eprint` exime del chequeo de cita textual. Medido: 82 de 138 notas.
 - **Artefacto reusado entre slugs sin chequear su versión, y pasada de red que nunca corrió**
   (#297): el reuso D-18 (copiar el PDF que ya estaba bajo otro slug) es correcto y se conserva, pero
   importa a un sujeto nuevo un archivo cuya **antigüedad nadie chequeó**; y la salida natural —«si

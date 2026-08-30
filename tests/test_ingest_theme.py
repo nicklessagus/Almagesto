@@ -1,5 +1,6 @@
 """ingest_theme: despacho por `source`, validaciones de sources:, pending, copia de PDFs."""
 import inspect
+import pathlib
 import sys
 from types import SimpleNamespace
 
@@ -445,6 +446,39 @@ def test_repoint_source_pdf_PROPONE_y_no_edita_themes_yaml(toy_vault, capsys):
     salida = capsys.readouterr().out
     assert "pdf: vault/raw/pdfs/gp/2006R.pdf" in salida and "a mano" in salida
     assert cfg.THEMES_YAML.read_text(encoding="utf-8") == antes, "la config curada no se edita sola"
+
+
+def test_el_orquestador_ENTERO_deja_themes_yaml_byte_a_byte_igual(toy_vault, fake_run, fake_notes,
+                                                                   monkeypatch, tmp_path, capsys):
+    """#299 — el test unitario de arriba cubre la función; éste cubre la **corrida**, que es donde
+    el operador (y el agente) miran. La conducta de AUD-160 es la correcta y no se toca; lo que
+    faltaba era una red que hiciera fallar cualquier regresión hacia la conducta vieja, y que la
+    doc dejara de prometerla — el docstring del módulo decía «se repunta solo» mientras el de su
+    propia función, 145 líneas abajo, decía «PROPONE y para». Medido: 8 de 8 fuentes sin repuntar
+    en una corrida real, con la doc diciendo que se repuntaban solas."""
+    src = tmp_path / "staging" / "rw.pdf"
+    src.parent.mkdir(parents=True, exist_ok=True)
+    src.write_bytes(b"%PDF-contenido")
+    topic(source="local-pdfs", sources=[{"key": "2006Rasmussen", "pdf": str(src)}])
+    antes = cfg.THEMES_YAML.read_bytes()
+    assert run_main(monkeypatch) == 0
+    assert cfg.THEMES_YAML.read_bytes() == antes, "la config curada no se edita sola (AUD-160)"
+    salida = capsys.readouterr().out
+    assert "vault/raw/pdfs/gp/2006Rasmussen.pdf" in salida and "a mano" in salida
+
+
+def test_la_doc_del_modulo_no_promete_el_repunte_automatico():
+    """#299 — la contradicción vivía **dentro del mismo archivo**, y el skill manda leer el header
+    del orquestador («el orden canónico vive en el header — puntero, no copia»). Un agente que lee
+    ahí que el repunte ya ocurrió no lo hace, y `themes.yaml` queda apuntando al staging."""
+    doc = it.__doc__ or ""
+    assert "repunta solo" not in doc
+    assert "PROPONE" in doc and "aplicarlo es del operador" in doc
+    schema = (cfg.THEMES_YAML.parent / "themes.yaml")
+    # el comentario de schema de la SEMILLA es la tercera copia, y la que viaja a cada instancia
+    semilla = (pathlib.Path(it.__file__).resolve().parents[1] / "vault" / "config" / "themes.yaml")
+    texto = semilla.read_text(encoding="utf-8")
+    assert "REPUNTA este campo solo" not in texto and "PROPONE repuntar" in texto
 
 
 def test_repoint_source_pdf_no_hace_nada_sin_copia(toy_vault):

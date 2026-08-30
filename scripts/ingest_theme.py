@@ -16,10 +16,16 @@ campo `source` (formaliza el modo off-ADS del skill ingest-theme en el tooling):
   `url` (fuente web) o `pdf` (ruta a un PDF provisto por el usuario) + metadata opcional
   `title/author/year/venue/n_authors/doi`). El orquestador stubbea el concept, procesa cada
   fuente (`fetch_web.py` para URLs; copia a raw/pdfs/<slug>/<key>.pdf para PDFs) y corre
-  extract_fulltext. Tras copiar un PDF, el campo `pdf` del item se **repunta solo** a la
-  copia de la bóveda (`vault/raw/pdfs/<slug>/<key>.pdf`, repo-relative): el path declarado
-  suele ser staging efímero (scratchpad/descargas) que muere y deja un puntero roto en
-  themes.yaml; la copia versionada es la que vale. Rutas `pdf` relativas se resuelven
+  extract_fulltext. Tras copiar un PDF, el orquestador **PROPONE** repuntar el campo `pdf`
+  del item a la copia de la bóveda (`vault/raw/pdfs/<slug>/<key>.pdf`, repo-relative) e
+  imprime la línea exacta: **aplicarlo es del operador** (AUD-160 — la config es curada y
+  versionada; un script que la edita solo convierte una decisión en un efecto colateral,
+  misma regla que `triage.accept_source` y `discover.resolve_pdf`). Hacerlo importa: el path
+  declarado suele ser staging efímero (scratchpad/descargas) que muere y deja un puntero roto
+  en themes.yaml. ⚠ Hasta 1.127.x este párrafo decía que el repunte era automático mientras el
+  docstring de la propia función, 145 líneas abajo, decía lo contrario — y un agente que sigue
+  la doc no lo hace (#299: 8 de 8 fuentes sin repuntar en una corrida real).
+  Rutas `pdf` relativas se resuelven
   contra la raíz del repo (portable entre máquinas). Sin query_ads / fetch_ground_truth (no aplican fuera de ADS);
   check_retractions SÍ corre cuando algún item declara `doi` (Crossref lo cubre igual).
   **Tema MIXTO:** un tema off-ADS puede además traer papers del tema que SÍ están en ADS (un

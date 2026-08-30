@@ -241,6 +241,23 @@ Progreso del ingest del tema <tema>:
    `[[bibcode]]` y se evapora que los otros dos existen — que es exactamente lo que el concept
    promete responder sin abrir un paper. La red de que el contraste ocurrió es #75 (*extraído pero
    no sintetizado*).
+   ⛔ **Y este paso es el PRODUCTOR de los ejes del tema (#310), no un resumen.** Un eje sólo existe
+   al poner las vistas una al lado de la otra: acá nace el vocabulario del tema (medido en una
+   ingesta real: 6 ejes y 43 filas, ninguno declarado antes de leer; el mismo término nombrando
+   **cinco objetos distintos** y el alias central significando dos operaciones según la escuela).
+   ⚠ **Por eso los ejes NO se declaran antes de leer**: un tema se ingesta normalmente porque no se
+   lo conoce, y pedirlos antes es pedir la respuesta que la operación existe para producir — encima
+   **cierra hallazgos**, porque los dos más valiosos de esa ingesta salieron de extractores libres de
+   contestar algo que nadie preguntó.
+   **Cerrá el paso PROPONIENDO los `ejes:` del tema** para que el usuario los apruebe y los edite en
+   `themes.yaml` (#307) — proponer, no escribir: la config es curada, y un script (o un agente) que
+   la edita solo convierte una decisión en un efecto colateral. Con ellos declarados, la lectura
+   siguiente pregunta lo que el tema necesita, y una segunda pasada sobre el mismo corpus es un
+   **modo** (`--enfasis`, #308), no una re-ingesta.
+   ⚠ **Lo que NO se propaga solo, y es deliberado:** la vista nueva va sola a la nota del paper y al
+   roll-up, pero **no** a la prosa de la ficha — reescribir un bloque **vence las anclas** de los
+   pares que vivían ahí (D-4/D-20) y obliga a re-verificar lo tocado (#203), que con #282 no
+   converge solo. La síntesis se re-escribe leyendo, como siempre.
 4. > ⚠ **Un ítem de linaje = un BULLET propio, no una oración con seis citas.** Cuando enumeres
 > quién hizo qué —«PCA vía SVD [[A]], [[B]]; Wapiti [[C]], [[D]]; YARARA [[E]]»— dale a cada fuente
 > su propio bullet. Medido sobre cuatro rondas de verificación de un concepto real: **los 7
@@ -371,6 +388,21 @@ que declara sus dos ceros (#290): *«la taxonomía de OpenAlex no tiene nada que
 (probá una más general, o dejá `topic:` sin declarar) y *FALLÓ* (volvé a correrlo) piden lo
 contrario. Y declará `topic:` en la entrada del tema: sin él, la mitad OpenAlex se infiere del
 `title` y con títulos en castellano no matchea la taxonomía inglesa.
+
+⛔ **Declará los EJES DE LECTURA del tema si no son los de la bóveda: `ejes:` (#307).** El extractor
+pregunta por los ejes de `relevance.facets` salvo que el tema declare los suyos — y para un tema de
+método eso es preguntar los ejes de una bóveda astro: medido, 4 de 8 ejes vacíos en 25 de 32 papers,
+y los ejes que el tema necesitaba (identificabilidad, heterocedasticidad por época y por canal)
+**no se preguntaron nunca**, así que volvieron desparramados en `aporte` y sin clave con la que
+compararlos entre papers. Preguntale al usuario qué quiere saber de este tema **antes** de la
+extracción: eso es la lista. Tres estados: sin declarar hereda las facetas globales, declarado son
+ésos, `ejes: []` es la decisión explícita de no preguntar ejes.
+
+⚠ **Y una SEGUNDA lectura del mismo corpus con otra lente se pide, no se escribe a mano (#239/#308):**
+`python scripts/extraction_prompt.py <slug> <bibcode> --theme --enfasis "<lente>" --ejes a,b`. Es el
+flujo de una bóveda viva —lo que se aprende define qué había que haber preguntado—: la vista anterior
+**no se pisa** (conviven como sub-secciones de la misma `## Vista`), el prompt manda leerla primero
+para no re-narrarla, y rehúsa si `(sujeto, enfasis)` ya tiene lectura.
 
 ⛔ **`topic:` acepta una LISTA, y para un tema que cruza disciplinas hay que usarla (#293).**
 Medido: la familia del blanqueo heterocedástico está repartida en **cinco** topics, y el mismo

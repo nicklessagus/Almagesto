@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.127.0"
+ALMAGESTO_VERSION = "1.128.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -102,6 +102,13 @@ WIKI = VAULT / "wiki"
 
 PDFS = RAW / "pdfs"
 FULLTEXT = RAW / "fulltext"
+#: #311 · las EXTRACCIONES del fan-out. Viven en `raw/` —versionadas, viajan— y no en `build/`,
+#: porque la regla de oro del scratch es «`build/` guarda lo REGENERABLE» y una extracción no lo es
+#: en ese sentido: un `ads.json` se recupera con una llamada HTTP, una extracción cuesta volver a
+#: leer el PDF con un LLM (medido: 33 extracciones ≈ 4,9 M tokens de subagente, 988 KB en disco, y
+#: `git ls-files build/` devolvía 0 — o sea que no viajaban a ninguna otra máquina). Convive con
+#: `fulltext/`, que también lo produce esta cadena y también es inmutable una vez escrito.
+EXTRACCION = RAW / "extraccion"
 GROUND_TRUTH = RAW / "ground_truth"
 
 # Marcas de provenance en la PRIMERA línea de un .txt de fulltext/ — las escriben
@@ -382,8 +389,27 @@ def headings_glued_to_table(body: str) -> list:
     return out
 
 
+_ESCAPADO_RE = re.compile(r"\\+[`$]")
+
+
+def _drop_escaped(texto: str) -> str:
+    """Text with markdown-ESCAPED markers removed, so they neither open nor close (#309).
+
+    ⛔ Fourth time this repo pays for the same blindness (#168 the markdown ornament, #276 the
+    `inferencia` mark under emphasis, #283 `condition_kind` against `**contextualiza**`, this one).
+    An escaped dollar is the CORRECT fix for a literal one —Obsidian renders it and does not open
+    math— and
+    the detector kept reporting it, so the operator's options were a real rendering bug, a
+    permanent backlog entry, or deleting the character from a verbatim transcription. The framework
+    ASKS for verbatim transcriptions (`## Abstract`, textual quotes, artefact caveats), so a price,
+    a `$PATH` or a currency was going to collide sooner or later. An even number of backslashes
+    escapes the backslash, not the marker, so only the odd case is dropped."""
+    return _ESCAPADO_RE.sub(lambda m: "" if len(m.group(0)) % 2 == 0 else m.group(0)[:-2] + m.group(0)[-1],
+                            texto)
+
+
 def unclosed_markers(body: str) -> list:
-    """Inline markers left open in a paragraph: `[(line_no, marker)]` (#227).
+    """Inline markers left open in a paragraph: `[(line_no, marker, line_no del impar)]` (#227).
 
     Backtick and `$…$` are the two that swallow the rest of the note when left open. Measured: a
     `` ` `` opened on line 104 whose next backtick was on line **372** — 268 lines inside an
@@ -400,15 +426,27 @@ def unclosed_markers(body: str) -> list:
     out, fenced, ini, acc = [], False, 0, []
 
     def cerrar():
-        """Close the paragraph being accumulated and report the markers left open in it."""
+        """Close the paragraph being accumulated and report the markers left open in it.
+
+        #309 — reports TWO line numbers: the paragraph that stays open and the line where the count
+        turns odd. With six-bullet paragraphs, sending the operator to the paragraph's first line is
+        making them hand-search what the detector already knows."""
         if not acc:
             return
-        texto = " ".join(acc)
         for marca in ("`", "$"):
-            # `$$` de bloque va en línea propia y no abre inline
-            limpio = texto.replace("$$", "") if marca == "$" else texto
-            if limpio.count(marca) % 2:
-                out.append((ini, marca))
+            # `$$` de bloque va en línea propia y no abre inline; `\$` está escapado y no abre (#309)
+            def _n(t):
+                limpio = _drop_escaped(t)
+                return (limpio.replace("$$", "") if marca == "$" else limpio).count(marca)
+            if sum(_n(t) for t in acc) % 2 == 0:
+                continue
+            impar, corridos = ini, 0
+            for offset, t in enumerate(acc):
+                corridos += _n(t)
+                if corridos % 2:
+                    impar = ini + offset
+                    break
+            out.append((ini, marca, impar))
 
     for i, raw in enumerate(body.split("\n"), 1):
         ln = raw.strip()
@@ -1156,6 +1194,7 @@ QUERIES = WIKI / "queries"
 MATRICES = WIKI / "matrices"
 INDEX = WIKI / "index.md"
 LOG = WIKI / "log.md"
+STATUS = VAULT / "STATUS.md"        # #302: estado vigente de la instancia (se REESCRIBE, no se appendea)
 
 
 def get_mailto() -> str:
@@ -2375,6 +2414,58 @@ CAMPO_EN_FICHA = {"st_rotp_days": "P_rot_days"}
 #: —hasta que entró al schema— `mass_msun`): el consumidor leía la promesa, bajaba al frontmatter y
 #: no los encontraba, en la línea que existe justamente para que el artefacto viaje solo.
 CAMPO_EN_FRONTMATTER = frozenset({"spectral_type", "teff_K", "dist_pc", "st_rotp_days", "mass_msun"})
+
+
+def theme_axes(meta) -> list | None:
+    """The theme's own reading axes (`ejes:` in themes.yaml), or `None` when it does not declare
+    them (#307). `[]` is a DECLARED decision: do not ask for axes.
+
+    ⛔ D-26 made a method theme classify with its **own facet** because the global lens is
+    *"actively harmful"* there; #254 then derived the extractor's reading axes from the lens — the
+    **global** one. Nobody did the symmetric half, so a statistics theme was asked the axes of an
+    astronomy vault. Measured over 32 extractions of one method theme: `rv`, `activity`, `planet`
+    and `discovery` came back populated in **7 of 32** (the same 7: its only astro sources), while
+    the axes the theme actually needed —identifiability, heteroscedasticity per epoch and per
+    channel, what whitening guarantees— were **never asked**, so they came back scattered across
+    `aporte` with no key to compare them by. That is #254's own argument one level down: a key the
+    view does not carry is indistinguishable from *"somebody looked and there is nothing"*.
+
+    Three states, like the rest of the lens (D-43): absent → the global facets; declared → those;
+    declared empty → no axes, on purpose.
+
+    @inv INV-146"""
+    m = as_map(meta)
+    if "ejes" not in m:
+        return None
+    v = m.get("ejes")
+    if v is None:
+        return []
+    return [str(e).strip() for e in as_list(v) if str(e).strip()]
+
+
+def pdf_slug(stem: str, prefiere: str | None = None) -> str | None:
+    """Which slug actually holds this paper's PDF, or `None` when no copy exists (#305).
+
+    ⛔ **One resolution, two halves of #207.** The extractor's prompt asked
+    `(PDFS / slug / f"{bib}.pdf").exists()` —only the subject's slug— while the harvester's
+    `pdf_on_disk` globbed `**/`, and the harvester's docstring says why its criterion is the right
+    one: *"is there a PDF of this bibcode under ANY slug? truth of disk"*. So the prompt told the
+    extractor *"there is no PDF, declare `fuente: abstract`"* about a paper that IS on disk under
+    another slug, and the harvester accepted it because `abstract` is always a legal value: #207
+    inverted — instead of catching a degraded reading, the framework produced one.
+
+    It bites exactly the retro-tagged population, which is by definition the paper that was already
+    in the corpus under **another** subject. Measured on a real theme: 7 of 31, the founding core,
+    two of them 500+ page books whose `alcance` says to read by index and cite by page — unreadable
+    from an abstract.
+
+    Declared precedence, same as `artefacto_en_otro_slug`: the preferred slug first (that is where
+    the chain put it), then the lexicographically smallest, so the answer does not depend on ingest
+    order."""
+    if prefiere and (PDFS / prefiere / f"{stem}.pdf").exists():
+        return prefiere
+    otros = sorted(PDFS.glob(f"*/{stem}.pdf")) if PDFS.exists() else []
+    return otros[0].parent.name if otros else None
 
 
 def artefacto_en_otro_slug(base: Path, slug: str, stem: str, sufijo: str):

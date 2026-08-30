@@ -6097,3 +6097,93 @@ def test_el_registro_de_la_pasada_de_red_no_es_un_sujeto(toy_vault, capsys):
         "ultima_pasada_red:\n  fecha: 2026-08-30\n  cubrio: [versiones]\n", encoding="utf-8")
     slugs = {s for s, _m in lint.collect().por_clave("lente_desync").items}
     assert "_red" not in slugs
+
+
+# ── #298 · la bóveda apoyada en el preprint ─────────────────────────────────
+def test_la_version_publicada_disponible_es_backlog(toy_vault):
+    """#298 — versiones era la ÚNICA de las seis caducidades que no dejaba nada en la bóveda: una
+    línea en stdout y listo, así que correr la pasada y no actuar en el momento borraba el
+    hallazgo. `versions_disponible` lo hace sobrevivir, y el lint lo levanta con el comando."""
+    paper_extraido(toy_vault, "2024arXiv240108468K", versions_disponible="2025ITSP...73..876S")
+    hallazgos = dict(lint.collect().por_clave("version_publicada").items)
+    assert "2025ITSP...73..876S" in hallazgos["2024arXiv240108468K"]
+    assert "--rename-paper" in hallazgos["2024arXiv240108468K"]
+
+
+def test_el_eprint_con_bibcode_publicado_es_backlog(toy_vault):
+    """El hueco que ningún detector tenía dueño: `fetch_pdf` prueba el eprint PRIMERO (bien: es
+    libre y es la rama que más rinde), y la consecuencia no la miraba nadie — 82 de 138 notas
+    medidas leen el preprint **teniendo bibcode publicado**, o sea sin problema de identidad que
+    `discover_versions` pueda ver. Y `pdf_source: eprint` exime del chequeo de cita textual, así
+    que la rama que prefiere el preprint infla la exención y nada empuja en la otra dirección."""
+    paper_extraido(toy_vault, "2018IEEEA...625336F", pdf_source="eprint")
+    hallazgos = dict(lint.collect().por_clave("version_publicada").items)
+    assert "bibcode PUBLICADO" in hallazgos["2018IEEEA...625336F"]
+    # el que sigue siendo eprint NO es este hallazgo: ahí manda `discover_versions` (D-19)
+    paper_extraido(toy_vault, "2024arXiv240513912Z", pdf_source="eprint")
+    assert "2024arXiv240513912Z" not in dict(lint.collect().por_clave("version_publicada").items)
+    assert lint.collect().por_clave("version_publicada").severidad == lint.SEV_BACKLOG
+
+
+# ── #302 · el STATUS es ESTADO, no bitácora ─────────────────────────────────
+def test_status_con_varias_listas_de_proximos_pasos_es_backlog(toy_vault):
+    """#302 — el `STATUS.md` se volvió append-only, que es el trabajo del `log`. Medido: 537 líneas,
+    12 encabezados fechados y **cuatro** listas de próximos pasos, una de las cuales afirma que
+    falta algo que otra parte del mismo archivo declara hecho. Es el primer archivo que un agente
+    lee al iniciar sesión, así que arranca por la lista equivocada y trabaja sobre un estado que no
+    existe."""
+    cfg.STATUS.write_text(
+        "# Estado\n\n## Próximos pasos, en orden\n\n1. a\n\n# ESTADO AL 2026-08-29\n\n"
+        "## Próximos pasos, en orden\n\n1. b\n\n## Lo que sigue\n\n- c\n", encoding="utf-8")
+    hallazgos = [m for _f, m in lint.collect().por_clave("status_apilado").items]
+    assert any("3 secciones de próximos pasos" in h for h in hallazgos)
+    assert any("wiki/log.md" in h for h in hallazgos)
+    assert lint.collect().por_clave("status_apilado").severidad == lint.SEV_BACKLOG
+
+
+def test_status_con_encabezados_fechados_apilados_y_su_techo(toy_vault):
+    """La firma del apilamiento: un `# ESTADO AL <fecha>` por corte de contexto, uno arriba del
+    otro. El agente, al quedarse sin contexto, appendea un snapshot de handoff en vez de reemplazar
+    el estado — porque reemplazar destruiría lo que todavía no está en el `log`, y nada le decía
+    que el `log` es el lugar de eso."""
+    cabeceras = "\n".join(f"# ESTADO AL 2026-08-2{i}\n\ntexto\n" for i in range(5))
+    cfg.STATUS.write_text("# Estado\n\n" + cabeceras, encoding="utf-8")
+    hallazgos = [m for _f, m in lint.collect().por_clave("status_apilado").items]
+    assert any("encabezados fechados apilados" in h and "se reescribe" in h for h in hallazgos)
+    # y el techo de tamaño, declarado
+    cfg.STATUS.write_text("# Estado\n\n" + "línea\n" * (lint.STATUS_MAX_LINEAS + 5),
+                          encoding="utf-8")
+    assert any("techo declarado" in m and "líneas" in m
+               for _f, m in lint.collect().por_clave("status_apilado").items)
+
+
+def test_un_status_sano_no_es_hallazgo(toy_vault):
+    """La semilla del template: un estado con UNA lista de próximos pasos y sin bitácora."""
+    cfg.STATUS.write_text("# Estado de la bóveda\n\n## Estado actual\n\n- recién instanciada\n\n"
+                          "## Próximos pasos\n\n1. definir el objetivo\n", encoding="utf-8")
+    assert lint.collect().por_clave("status_apilado").items == ()
+
+
+def test_la_extraccion_en_build_bloquea(toy_vault, capsys):
+    """#311 — `build/` es scratch por `.gitignore`, así que una extracción ahí no viaja. Bloqueante
+    con migrador, como el `triage.json` pre-1.9.0: un artefacto caro en un directorio declarado
+    descartable es una trampa puesta, no una convención."""
+    d = cfg.ROOT / "build" / "ica" / "extraccion"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "2000Hyv.json").write_text('{"bibcode": "2000Hyv"}', encoding="utf-8")
+    rc, out = run_lint(capsys)
+    assert rc != 0
+    assert "--migrate-extracciones" in out and "no se regenera" in out
+
+
+def test_alcance_desfasado_es_backlog(toy_vault):
+    """#312 — el chequeo de completitud compara contra el `alcance` de la NOTA, así que uno viejo lo
+    hace concluir que se citó material fuera de alcance cuando lo que pasó es que el alcance se
+    amplió y nadie lo estampó."""
+    write_yaml(cfg.THEMES_YAML, {"ica_ruido": {
+        "title": "ICA ruidosa", "concept": "ica-ruido", "area": "methods", "source": "local-pdfs",
+        "sources": [{"key": "2001HKO", "unidad_cita": "pagina", "alcance": "caps. 6-9, 15, cap. 13"}]}})
+    paper_extraido(toy_vault, "2001HKO", unidad_cita="pagina", alcance="caps. 6-9 y 15")
+    hallazgos = dict(lint.collect().por_clave("alcance_desfasado").items)
+    assert "cap. 13" in hallazgos["2001HKO"] and "--restamp-alcance" in hallazgos["2001HKO"]
+    assert lint.collect().por_clave("alcance_desfasado").severidad == lint.SEV_BACKLOG
