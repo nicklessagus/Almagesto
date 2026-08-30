@@ -1261,7 +1261,7 @@ hereda el del caption hasheando los dos bloques— y el **hash de fuente** hashe
 cambió sin que nadie tocara la nota. El PDF es inmutable, así que esa alarma es rarísima: cuando
 suena, alguien reemplazó el archivo; y una fila anclada al PDF **no** se vence cuando el `.txt` se
 re-extrae. Los calcula `scripts/lib_blocks.py` (`pairs_of`, `source_hash`, `bytes_hash`), el mismo
-código que después los chequea: **no se escriben a ojo**.
+código que después los chequea: **no se escriben a ojo**. ⛔ **Y el bloque escrito se re-parsea antes de publicarse (#284):** `lib_blocks.render_verif_table` escapa cada celda y **rehúsa** devolver un bloque cuya lectura no reproduce lo que se le escribió — sin esa puerta, reescribir una fila leída parte la fila y el ancla se lee de la columna equivocada.
 
 **Salvedades de fuente:** `.txt` con header `source: ocr` → citable con salvedad (la verificación
 vale para prosa; ante discrepancia de símbolos, abrir el PDF). `pdf_source: eprint` → una

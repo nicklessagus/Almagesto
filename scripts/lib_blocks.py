@@ -181,18 +181,29 @@ _LOC_LINEA = re.compile(r"\bL\s?\d+\b")                  # `L320`, `L 320`
 #: operativo —**¿la afirmación queda falsa si se saca la condición?**— que `parcial` nunca tuvo.
 CONDITION_KINDS = ("acota", "contextualiza")
 
+# Lo que separa la clase de la condición de su prosa. Mismo problema que `_RESOLUCION_SEP` en la
+# columna de al lado, más el guión suelto: la celda se escribe `acota: …` en la plantilla y
+# `**contextualiza** — …` cuando la escribe un fan-out que pone negrita en toda la tabla (#283).
+_COND_SEP = re.compile(r"\s*(?:→|->|—|–|--|-|:)\s*")
+
 
 def condition_kind(condicion: str) -> str | None:
-    """The declared kind of a condition cell (`acota:` / `contextualiza:` prefix), or `None`.
+    """The declared kind of a condition cell (`acota` / `contextualiza` head), or `None`.
 
     `None` covers both «the cell is empty» (nothing to classify) and «it has prose but no kind» —
     the caller separates them, because only the second is a finding.
+
+    #283 — the head is read **normalised**: markdown emphasis and the separator that follows it are
+    dropped, the same way `_bare_verdict` reads the cell next door. Comparing the raw string made
+    `**contextualiza** — …` unclassifiable: measured on a real note, 74 of 88 cells were reported as
+    «condition without a kind» purely because of the adornment, i.e. 84 % false positives in a
+    category whose whole job is to separate the condition that forces an edit (`acota`) from the one
+    that only goes to the report. Third time this repo pays for adornment blindness (cf. #168, #276).
     """
-    cabeza = str(condicion or "").strip().lower()
-    for k in CONDITION_KINDS:
-        if cabeza.startswith(k + ":"):
-            return k
-    return None
+    # (#221 no tiene invariante propio: la clase de la condición es una categoría de backlog del
+    # lint, no una promesa P0/P1 del contrato — la red es el test de paridad con `verdict_valido`.)
+    cabeza = _COND_SEP.split(str(condicion or "").strip().lower(), maxsplit=1)[0].strip(_ADORNO).strip()
+    return cabeza if cabeza in CONDITION_KINDS else None
 
 
 def locator_kinds(evidencia: str) -> set:
@@ -543,6 +554,17 @@ def verif_counts(rows: list) -> dict:
             # cabecera del propio bloque: lo no evaluable se declara, no se omite — y acá es lo que
             # dice que N afirmaciones de la nota no se pudieron contrastar contra nada.
             "no_verificables": sum(1 for v in vs if v.startswith("no verificable")),
+            # #286 — cuántas de esas dos ya no están abiertas. ⛔ Sin RESTARLAS del total: el punto
+            # de #232 es que el número no se blanquea —la nota SÍ contradijo a su fuente— y lo que
+            # faltaba era decir cuántas se resolvieron. Sin el desglose, «9 no-soportadas» tiene dos
+            # lecturas —«hay 9 afirmaciones sin respaldo» (falsa y grave) y «las tuvo y se
+            # corrigieron» (verdadera)— y la cabecera existe para no tener que bajar a la tabla.
+            "no_soportadas_resueltas": sum(1 for r in rows
+                                           if str(r.verdict or "").strip().lower().startswith("no-soportada")
+                                           and resueltos(r.verdict)),
+            "contradicen_resueltas": sum(1 for r in rows
+                                         if str(r.verdict or "").strip().lower().startswith("contradice")
+                                         and resueltos(r.verdict)),
             "con_condicion": sum(1 for r in rows
                                  if str(r.condition or "").strip() not in ("", "—", "-", "–"))}
 
@@ -553,8 +575,14 @@ def verif_summary(rows: list) -> str:
     # El `—` separa los dos EJES: los cuatro primeros particionan las filas por veredicto y suman
     # `pares`; `con_condicion` es ortogonal (una fila `soportada` puede tener condición). Juntarlos
     # con `/` es lo que hacía leer el resumen como una partición de cinco que no cerraba.
-    return (f"{c['pares']} pares; {c['soportadas']} soportadas / {c['no_soportadas']} no-soportadas "
-            f"/ {c['contradicen']} contradicen (resueltas) / {c['no_verificables']} no verificables "
+    # #286 — los dos veredictos con resolución publican cuántas de las suyas están resueltas. El
+    # `(resueltas)` fijo del texto viejo lo decía de uno solo y sin número, justo en la categoría
+    # donde un valor PELADO bloquea el cierre (#91): el número más alarmante de la línea era el peor
+    # etiquetado. Medido: «9 no-soportadas» con las 9 resueltas y `lint --cierre` en 0.
+    return (f"{c['pares']} pares; {c['soportadas']} soportadas "
+            f"/ {c['no_soportadas']} no-soportadas ({c['no_soportadas_resueltas']} resueltas) "
+            f"/ {c['contradicen']} contradicen ({c['contradicen_resueltas']} resueltas) "
+            f"/ {c['no_verificables']} no verificables "
             f"— {c['con_condicion']} con condición declarada")
 
 
@@ -641,6 +669,88 @@ def parse_verif_table(text: str) -> list[Row] | None:
         out.append(Row(celdas[i_n], celdas[i_claim], bibs[0], celdas[i_verd],
                        celdas[i_ancla], h, celdas[i_cond], kind, evid))
     return out
+
+
+# ── #284 · la puerta de ESCRITURA del bloque, simétrica de `_split_row` ──────────────────────────
+#
+# `_split_row` **des-escapa** los `\|` al leer, y hasta 1.106.x no había ninguna puerta del lado de
+# la escritura. Quien lee filas para reescribirlas —el flujo que #282 creó— recibía pipes crudos y,
+# al escribirlos, **partía la fila**: la fila queda con más celdas que el encabezado, `Ancla` se lee
+# de la columna equivocada y el par se cuenta vencido contra una fuente que nadie tocó. Medido en la
+# reconstrucción de una ficha real: **73 de 131** filas volvieron con `anchor == ""`, todas ellas
+# filas acarreadas cuya `Evidencia` transcribe una tabla del paper — el caso normal, no el raro.
+#
+# Es la cuarta vez que este repo paga por tener la regla de escape en un solo lado (#240, #214,
+# INV-98, #222). La salida es la de #222: **re-parsear lo escrito y exigir que devuelva lo que se le
+# escribió**; un bloque cuya lectura no reproduce lo que se escribió NO SE PUBLICA.
+
+#: Las ocho columnas de la plantilla vigente, en orden. La escritura las produce; la lectura
+#: (`parse_verif_table`) indexa por NOMBRE, así que el orden de acá no es un contrato para leer.
+VERIF_COLS = ("#", "Afirmación (extracto)", "Fuente", "Veredicto", "Evidencia", "Ancla",
+              "Hash fuente", "Condición")
+
+
+def _hash_cell(row) -> str:
+    """The `Hash fuente` cell, restoring the prefix `split_source_ref` stripped when reading.
+
+    `source_kind is None` means *not stated* (#117) and is written back verbatim: inventing a prefix
+    would guess which file the pair was verified against, which is the very thing the field exists
+    to avoid."""
+    h = str(row.source_hash or "")
+    return f"{row.source_kind}:{h}" if row.source_kind and ":" not in h else h
+
+
+def render_verif_row(row) -> str:
+    r"""The canonical markdown line for one `Row`, with **every cell escaped** (#240/#284).
+
+    The `Fuente` cell is written as the `[[wikilink]]` the parser reads back, and the hash cell
+    recomposes its prefix. Escaping is `cfg.escape_cell`, the same one the view harvester uses:
+    inside `$…$` a bar is `\vert`, outside it is `\|`."""
+    celdas = (str(row.n), row.claim, f"[[{row.bibcode}]]" if row.bibcode else "",
+              row.verdict, row.evidence, row.anchor, _hash_cell(row), row.condition or "—")
+    return "| " + " | ".join(cfg.escape_cell(str(c or "").strip()) or "—" for c in celdas) + " |"
+
+
+def verif_roundtrip_errors(rows: list, tabla: str) -> list:
+    """What a written table loses when read back. `[]` means the round trip is faithful.
+
+    The cheap net of #222 applied to #284: **count and compare, do not trust the writer**. It checks
+    the row count and, per row, the four cells a broken row silently shifts —anchor, source hash,
+    verdict and bibcode—, which is exactly what the measured defect corrupted while leaving the row
+    visibly present."""
+    leidas = parse_verif_table(f"{VERIFY_HEADER}\n\n{tabla}\n")
+    if leidas is None:
+        return ["el bloque escrito no se puede parsear (¿faltan las columnas de hash?)"]
+    if len(leidas) != len(rows):
+        return [f"se escribieron {len(rows)} filas y se leen {len(leidas)}"]
+    errores = []
+    for esperada, leida in zip(rows, leidas):
+        for campo in ("anchor", "verdict", "bibcode"):
+            if str(getattr(leida, campo) or "") != str(getattr(esperada, campo) or ""):
+                errores.append(f"fila {esperada.n}: `{campo}` se escribió "
+                               f"«{getattr(esperada, campo)}» y se lee «{getattr(leida, campo)}» "
+                               f"— ¿una barra sin escapar corrió las columnas?")
+        if _hash_cell(leida) != _hash_cell(esperada):
+            errores.append(f"fila {esperada.n}: `Hash fuente` se escribió «{_hash_cell(esperada)}» "
+                           f"y se lee «{_hash_cell(leida)}»")
+    return errores
+
+
+def render_verif_table(rows: list) -> str:
+    """The whole table —header, separator and rows— escaped, **round-trip checked** (#284).
+
+    ⛔ Raises `ValueError` if reading it back does not reproduce what was written. Returning a
+    corrupted block would reproduce the measured defect: the row stays visible, the lint keeps
+    counting it, and what breaks is the anchor — the silent direction."""
+    lineas = ["| " + " | ".join(VERIF_COLS) + " |",
+              "|" + "---|" * len(VERIF_COLS)]
+    lineas += [render_verif_row(r) for r in rows]
+    tabla = "\n".join(lineas)
+    errores = verif_roundtrip_errors(rows, tabla)
+    if errores:
+        raise ValueError("el bloque escrito no se lee como se escribió — no se publica:\n  "
+                         + "\n  ".join(errores))
+    return tabla
 
 
 # ── #282 · re-anclaje: qué se re-verifica y qué sólo cambió de ancla ─────────────────────────────

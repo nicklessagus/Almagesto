@@ -414,14 +414,14 @@ Agregar/refrescar al final de la nota (idempotente — si ya existe, reemplazar)
 
 ```markdown
 ## Verificación de citas (YYYY-MM-DD)
-Chequeo afirmación↔fulltext (skill `verify-citations`). N pares; X soportadas / Z no-soportadas / W contradicen (resueltas) / C con condición declarada.
+Chequeo afirmación↔fulltext (skill `verify-citations`). N pares; X soportadas / Z no-soportadas (z resueltas) / W contradicen (w resueltas) / V no verificables — C con condición declarada.
 
 | # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |
 |---|---|---|---|---|---|---|---|
 | 1 | YZ CMi κ ≈ −2.6 | [[2018A&A...609A..12Z]] | soportada | "gradient of −2.6 Np−1 (±21%)" (L966) | 3f9c1e2ab4 | txt:7b40d8aa11 | — |
 | 2 | activas −2.4/−2.6 | [[2025A&A...696A..27J]] | no-soportada→corregida | el paper da −2.65 a −3.70; el −2.6 es de Zechmeister | c17e0a9b22 | txt:55aa10ffe3 | — |
 | 3 | señal g confirmada | [[2016A&A...585A.134D]] | contradice→disputa | "is an artifact of... rotation" (L2101) → tagueada en disputes[] | 90bb4c1de7 | txt:0ab77e2c41 | — |
-| 4 | P_rot = 36,5 d | [[2017MNRAS.468.4772S]] | soportada | "36.5 ± 2.3" (L320) | 5c1de790bb | txt:41c0ab772e | promedio pesado de 4 proxies; el K de 0,50 m/s es de la señal a 35,0 d, no a 36,5 |
+| 4 | P_rot = 36,5 d | [[2017MNRAS.468.4772S]] | soportada | "36.5 ± 2.3" (L320) | 5c1de790bb | txt:41c0ab772e | contextualiza: promedio pesado de 4 proxies; el K de 0,50 m/s es de la señal a 35,0 d, no a 36,5 |
 
 Inferencias declaradas (sin cita, por diseño): <listar>.
 
@@ -441,6 +441,17 @@ calibración sintética…»* y **nunca llega a (b)**. Y truncar **apaga otro ch
 va al final de la cita, así que se lo lleva el corte y **62 de 90** filas quedaron sin él, con el
 cruce de #122 devolviendo 0 sobre el 69 % de la nota. `python scripts/lint.py` hoy reporta las dos
 cosas (celda cortada; #122 no evaluable en esa fila).
+
+⛔ **La celda `Condición` arranca con su CLASE: `acota: …` o `contextualiza: …`** (#221) — como la
+fila 4 del ejemplo. El adorno no rompe nada (`**contextualiza** — …` se lee igual desde #283), pero
+la clase **tiene que estar**: es lo que separa la condición que obliga a editar de la que sólo va al
+reporte, y sin ella el lint la reporta fila por fila.
+
+Si el bloque lo arma un **script** —el flujo de re-anclaje de #282 lee filas y las vuelve a
+escribir— la puerta es `lib_blocks.render_verif_table(filas)`: escapa cada celda y **re-parsea lo
+escrito**, rehusando devolver un bloque que no se lee como se escribió (#284). Medido en una
+reconstrucción real: sin esa puerta, **73 de 131** filas quedaron con el ancla vacía, todas ellas
+filas cuya `Evidencia` transcribe una tabla del paper.
 
 ⛔ **La barra vertical dentro de una celda va escapada `\|`** (INV-99). Es el caso normal, no el
 raro: el fan-out junta varias citas textuales con ` | ` de separador, y una cita puede traer la suya

@@ -604,6 +604,122 @@ def test_verif_summary_publica_los_no_verificables_y_separa_el_eje_de_condicion(
     assert "— 1 con condición declarada" in linea, "el eje ortogonal no se separa"
 
 
+def test_verif_summary_distingue_la_no_soportada_resuelta_de_la_pelada():
+    """#286 — el número que bloquea el cierre era el peor etiquetado.
+
+    Medido en una ficha real: la cabecera publicaba «9 no-soportadas» con las 9 resueltas y
+    `lint --cierre` en 0, así que la lectura natural —«esta ficha tiene 9 afirmaciones que su fuente
+    no respalda»— era falsa y grave. ⛔ Sin restarlas del total (#232: el número no se blanquea)."""
+    filas = [_row("no-soportada→corregida"), _row("no-soportada"),
+             _row("contradice→corregida"), _row("soportada")]
+    c = lb.verif_counts(filas)
+    assert c["no_soportadas"] == 2, "las resueltas NO se restan del total (#232)"
+    assert c["no_soportadas_resueltas"] == 1
+    assert c["contradicen"] == 1 and c["contradicen_resueltas"] == 1
+    linea = lb.verif_summary(filas)
+    assert "2 no-soportadas (1 resueltas)" in linea, linea
+    assert "1 contradicen (1 resueltas)" in linea, linea
+
+
+def test_verif_summary_no_promete_resueltas_donde_no_las_hay():
+    """La dirección peligrosa: publicar «(N resueltas)» sobre filas peladas leería como cerrada una
+    ficha que el lint bloquea."""
+    linea = lb.verif_summary([_row("no-soportada"), _row("contradice")])
+    assert "1 no-soportadas (0 resueltas)" in linea, linea
+    assert "1 contradicen (0 resueltas)" in linea, linea
+
+
+# ── #284 · la puerta de escritura, simétrica del des-escape de lectura ───────────────────────────
+
+
+def _row_completa(**kw):
+    base = dict(n="1", claim="Parámetros estelares", bibcode="2009A&A...493..639M",
+                verdict="soportada", anchor="abc1234567", source_hash="def8901234",
+                condition="contextualiza: HARPS", source_kind="pdf",
+                evidence='"1.97 ± 0.11 | 2.47 ± 0.11" (p. 6)')
+    base.update(kw)
+    return lb.Row(**base)
+
+
+def test_la_fila_escrita_se_lee_como_se_escribio_aunque_la_evidencia_traiga_barras():
+    """#284 — el ciclo roto: se lee una fila (pipes ya des-escapados), se reescribe verbatim, la
+    fila queda con más celdas que el encabezado y el `Ancla` se lee de la columna equivocada.
+
+    Medido en la reconstrucción de una ficha real: **73 de 131** filas volvieron con `anchor == ""`,
+    todas ellas filas cuya `Evidencia` transcribe una tabla del paper."""
+    fila = _row_completa()
+    tabla = lb.render_verif_table([fila])
+    leidas = lb.parse_verif_table(f"{lb.VERIFY_HEADER}\n\n{tabla}\n")
+    assert len(leidas) == 1
+    assert leidas[0].anchor == "abc1234567", "el ancla se leyó de la columna equivocada"
+    assert leidas[0].source_kind == "pdf" and leidas[0].source_hash == "def8901234"
+    assert "|" in leidas[0].evidence, "el des-escape de lectura tiene que devolver la barra"
+
+
+def test_la_ida_y_vuelta_es_idempotente_sobre_una_fila_ya_leida():
+    """La propiedad que el flujo de #282 necesita: leer una fila y volver a escribirla no la degrada
+    —si no, cada ronda de re-anclaje rompe un poco más el bloque."""
+    tabla = lb.render_verif_table([_row_completa()])
+    leidas = lb.parse_verif_table(f"{lb.VERIFY_HEADER}\n\n{tabla}\n")
+    assert lb.render_verif_table(leidas) == tabla
+
+
+def test_render_verif_table_no_publica_un_bloque_que_no_se_lee_como_se_escribio():
+    """La red de #222 aplicada a #284: re-parsear lo escrito y **no publicar** si no vuelve igual.
+    Sin ella, la fila sigue visible, el lint la sigue contando, y lo que se rompe es el ancla."""
+    import lib_config as cfg
+    orig = cfg.escape_cell
+    try:
+        cfg.escape_cell = lambda t: t          # un escritor que se olvida del escape (#240)
+        with pytest.raises(ValueError, match="no se lee como se escribió"):
+            lb.render_verif_table([_row_completa()])
+    finally:
+        cfg.escape_cell = orig
+
+
+def test_verif_roundtrip_errors_nombra_la_fila_y_el_campo():
+    """El error tiene que decir QUÉ fila y QUÉ campo, o el escritor no sabe dónde mirar."""
+    fila = _row_completa(n="7")
+    tabla = lb.render_verif_table([fila]).replace(r"\|", "|")   # se rompe el escape a mano
+    errores = lb.verif_roundtrip_errors([fila], tabla)
+    assert errores and "fila 7" in errores[0] and "anchor" in errores[0], errores
+
+
+# ── #283 · la condición se lee normalizada, igual que el veredicto de al lado ────────────────────
+
+
+def test_condition_kind_lee_la_clase_con_adorno_markdown():
+    """#283 — `**contextualiza** — …` declara su clase para cualquier lector humano.
+
+    Medido sobre una ficha real: 74 de 88 celdas escritas así, las 74 reportadas por el lint como
+    *condición sin clasificar*, o sea 84 % de falsos positivos en la categoría que separa la
+    condición que obliga a editar de la que sólo va al reporte."""
+    assert lb.condition_kind("**contextualiza** — la muestra es de 4 estrellas") == "contextualiza"
+    assert lb.condition_kind("**acota** — sólo para K < 2 m/s") == "acota"
+    assert lb.condition_kind("`acota`: sólo bajo SNR alto") == "acota"
+    assert lb.condition_kind("_contextualiza_ - HARPS, 2003-2012") == "contextualiza"
+    assert lb.condition_kind("acota: X") == "acota", "el prefijo pelado sigue valiendo"
+
+
+def test_condition_kind_no_inventa_clase_donde_no_la_hay():
+    """La ceguera se arregla en una sola dirección: prosa sin clase sigue siendo un hallazgo, y la
+    celda vacía no es una clase. Sobre-reportar acá manda a clasificar; sub-reportar apaga #221."""
+    assert lb.condition_kind("promedio pesado de 4 proxies") is None
+    assert lb.condition_kind("") is None
+    assert lb.condition_kind("—") is None
+    assert lb.condition_kind("contextualizado por el instrumento") is None
+
+
+def test_paridad_de_adorno_entre_las_dos_columnas_de_la_misma_fila():
+    """La red de #283: lo que `verdict_valido` tolera de adorno en `Veredicto`, `condition_kind` lo
+    tolera en `Condición`. Sin la paridad, la misma fila se lee con dos criterios distintos — que es
+    exactamente el estado que el issue midió."""
+    for forma in ("{0}", "**{0}**", "`{0}`", "_{0}_", "{0} "):
+        assert lb.verdict_valido(forma.format("soportada")), forma
+        assert lb.condition_kind(forma.format("acota") + ": X") == "acota", forma
+        assert lb.condition_kind(forma.format("acota") + " — X") == "acota", forma
+
+
 # ── #282 · re-anclaje: llevar el veredicto en vez de tirarlo ─────────────────────────────────────
 
 
