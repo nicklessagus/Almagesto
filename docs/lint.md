@@ -211,6 +211,13 @@ OCR, o marcar `pending`).
   en una bóveda real: cierra 7 de 121. Chico, y del tipo correcto: lo que vacía ese backlog es que
   el **extractor vea la lista** antes de inventar una grafía, que es la otra mitad del arreglo (el
   prompt ahora la pega, con tope declarado y sin cerrar el vocabulario).
+- **Indicador de actividad esperado sin nota de concepto** (#250, backlog): era el **único**
+  campo-lista de `stars/` sin destino chequeado ni link —`thesis_links` bloquea, `methods` es
+  backlog, y éste no tenía ninguno de los dos—, así que la ficha nombra cinco indicadores y el
+  lector no puede llegar al concepto que explica ninguno. Se compara con `cfg.indicator_key`, que
+  saca la **glosa final entre paréntesis**: el campo es prosa para un humano (`BIS (bisector de la
+  CCF)`) y comparar crudo haría dangling al 100 % — un backlog que nace todo falso es uno que nadie
+  vuelve a mirar. El puente visible es la sección estampada `## Indicadores de actividad esperados`.
 - **Dos conceptos declaran el mismo alias** (#245, backlog): el roll-up resuelve al primero en
   orden alfabético y **lo dice**. Cuál concepto denota un nombre es curación: elegir en silencio
   decide por el usuario (regla de método 5).

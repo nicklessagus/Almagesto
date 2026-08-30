@@ -4134,3 +4134,33 @@ def test_un_no_vista_roto_no_tumba_el_rollup(toy_vault):
                                         "no_vista": "un escalar"}, "# p\n")
     filas = mn.papers_universe("s", "star")
     assert [f["estado"] for f in filas] == [mn.ESTADO_SIN_EXTRAER], filas
+
+
+# ── #250 · la sección de indicadores, con su puente al concepto ─────────────────────────────────
+
+def test_el_indicador_con_nota_se_linkea_y_sin_nota_queda_declarado(toy_vault):
+    """#250 — el puente ficha→concepto que faltaba. La glosa entre paréntesis se saca al comparar
+    (el campo es prosa para un humano) y la grafía se muestra tal cual: nunca se reescribe."""
+    mk_note(cfg.CONCEPTS / "methods", "bis", {"tags": ["concept"], "name": "bis"}, "# bis\n")
+    tabla = mn.indicadores_table({"activity_indicators_expected": ["BIS (bisector de la CCF)",
+                                                                  "FWHM de la CCF"]})
+    assert "| `BIS (bisector de la CCF)` | [[bis]] |" in tabla
+    assert "| `FWHM de la CCF` | _(sin nota)_ |" in tabla
+
+
+def test_la_seccion_de_indicadores_es_idempotente(toy_vault):
+    """Red 6: todo lo que escribe en `vault/` corre dos veces sin cambiar un byte."""
+    write_yaml(cfg.STARS_YAML, {"Estrella Test": {"slug": "test_star"}})
+    mn.write_star_note("test_star", force=True)
+    dest = cfg.STARS / "test_star.md"
+    mn.stamp_star_rollups("test_star", dest)
+    antes = dest.read_bytes()
+    mn.stamp_star_rollups("test_star", dest)
+    assert dest.read_bytes() == antes
+
+
+def test_la_seccion_de_indicadores_esta_declarada_como_ESTAMPADA():
+    """⛔ Sin esto `solo_prosa` no la descuenta y sus `[[links]]` cuentan como citas de prosa,
+    contaminando el proxy de «planeta discutido»: el falso limpio permanente que el lint documenta
+    para `## Planetas`."""
+    assert mn.INDICADORES_HEADER in cfg.SECCIONES_ESTAMPADAS

@@ -5917,3 +5917,37 @@ def test_el_alias_reclamado_por_dos_conceptos_se_reporta(toy_vault, capsys):
     link_from_log(toy_vault, "aaa", "bbb")
     _rc, rep = run_lint_reporte(capsys)
     assert "señal común" in _seccion(rep, "mismo alias"), rep
+
+
+# ── #250 · el indicador de actividad esperado y su nota de concepto ─────────────────────────────
+
+def test_indicador_sin_pagina_destino_es_backlog_y_lo_nombra(toy_vault, capsys):
+    """#250 — era el único campo-lista de `stars/` sin destino chequeado ni link: `thesis_links`
+    bloquea, `methods` es backlog, y éste no tenía ninguno de los dos. La ficha nombra cinco
+    indicadores y el lector no puede llegar al concepto que explica ninguno."""
+    ficha_espejo(toy_vault, {"activity_indicators_expected": ["BIS (bisector de la CCF)"]})
+    write_gt(toy_vault, [gt_planet("b")])
+    _rc, rep = run_lint_reporte(capsys)
+    assert "BIS (bisector de la CCF)" in _seccion(rep, "Indicador de actividad"), rep
+
+
+def test_la_glosa_entre_parentesis_no_rompe_el_matcheo(toy_vault, capsys):
+    """⚠ El campo es **prosa para un humano**: comparando crudo, `BIS (bisector de la CCF)` no
+    matchea `bis.md` y el backlog nace 100 % falso — que es cómo una categoría se deja de mirar."""
+    mk_note(cfg.CONCEPTS / "methods", "bis", {"tags": ["concept"], "name": "bis"}, "# bis\n")
+    ficha_espejo(toy_vault, {"activity_indicators_expected": ["BIS (bisector de la CCF)"]})
+    write_gt(toy_vault, [gt_planet("b")])
+    link_from_log(toy_vault, "bis")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "BIS" not in _seccion(rep, "Indicador de actividad"), rep
+
+
+def test_el_indicador_llega_por_alias(toy_vault, capsys):
+    """La otra mitad de #245 aplicada acá: el nombre canónico puede estar en `aliases`."""
+    mk_note(cfg.CONCEPTS / "methods", "activity-rv-indicators",
+            {"tags": ["concept"], "name": "x", "aliases": ["S-index"]}, "# x\n")
+    ficha_espejo(toy_vault, {"activity_indicators_expected": ["S-index (Ca II H&K)"]})
+    write_gt(toy_vault, [gt_planet("b")])
+    link_from_log(toy_vault, "activity-rv-indicators")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "S-index" not in _seccion(rep, "Indicador de actividad"), rep

@@ -1792,6 +1792,7 @@ def stamp_header(dest) -> bool:
 PAPERS_HEADER = "## Papers"
 PLANETAS_HEADER = "## Planetas (ground-truth NASA Exoplanet Archive)"
 METODOS_HEADER = "## Métodos aplicados a esta estrella"
+INDICADORES_HEADER = "## Indicadores de actividad esperados"   # #250
 CONCEPT_ROLLUP_HEADER = "## Papers que tocan este tema (auto)"
 
 # Los cuatro estados posibles de un paper del universo de un sujeto. El orden es el del embudo:
@@ -1990,6 +1991,35 @@ def _titulo_corto(title, n: int) -> str:
     return t[:n].rstrip() + "…" if len(t) > n else t
 
 
+def indicadores_table(fm: dict, names: set | None = None) -> str:
+    """`## Indicadores de actividad esperados` materialised, with its link to the concept (#250).
+
+    `activity_indicators_expected` was the only list field of `stars/` whose entries had **no
+    destination checked and no link**: `thesis_links` blocks, `methods` is backlog, and this one had
+    neither — so the note names five indicators and the reader has no way to reach the concept that
+    explains any of them. Read from the note's own frontmatter, like `planetas_table`: cheap,
+    idempotent, no cross-note sweep.
+
+    The destination resolves through the alias index of #245 after dropping the gloss (#250): the
+    field is prose for a human, so `BIS (bisector de la CCF)` has to reach `bis.md`."""
+    names = note_names() if names is None else names
+    inds = [str(x).strip() for x in cfg.as_list(fm.get("activity_indicators_expected"))
+            if str(x).strip()]
+    out = [f"{INDICADORES_HEADER} ({len(inds)})", ""]
+    if not inds:
+        out += ["_(la ficha no declara indicadores esperados todavía — los puebla la síntesis.)_", ""]
+        return "\n".join(out)
+    idx = cfg.concept_alias_index()
+    out += ["| Indicador | Concepto |", "|---|---|"]
+    for ind in inds:
+        destino = cfg.method_target(cfg.indicator_key(ind), idx)
+        if destino is None and cfg.indicator_key(ind) in {cfg.method_key(n) for n in names}:
+            destino = next(n for n in names if cfg.method_key(n) == cfg.indicator_key(ind))
+        out.append(f"| `{ind}` | " + (f"[[{destino}]]" if destino else "_(sin nota)_") + " |")
+    out.append("")
+    return "\n".join(out)
+
+
 def planetas_table(fm: dict) -> str:
     """`## Planetas` **materializada** (D-11 / INV-81). Era un bloque ```dataviewjs``` — el peor de
     los tres, porque los cinco campos por planeta son **ground-truth de NEA**, la capa que el
@@ -2149,6 +2179,7 @@ def stamp_star_rollups(slug: str, dest) -> bool:
     except (KeyError, RuntimeError):
         name = fm.get("name") or slug
     tocado = _reemplazar_seccion(dest, PLANETAS_HEADER, planetas_table(fm))
+    tocado = _reemplazar_seccion(dest, INDICADORES_HEADER, indicadores_table(fm)) or tocado   # #250
     return _reemplazar_seccion(dest, METODOS_HEADER, metodos_table(metodos_rows(name))) or tocado
 
 
@@ -2783,6 +2814,9 @@ _(se estampa determinista: `make_notes.py {slug}` lo regenera.)_
 ## Papers
 _(se estampa determinista: `make_notes.py {slug}` lo regenera. D-11 — ninguna promesa del contrato
 depende de un plugin.)_
+
+## Indicadores de actividad esperados
+_(se estampa determinista: `make_notes.py {slug}` lo regenera.)_
 
 ## Métodos aplicados a esta estrella
 _(se estampa determinista: `make_notes.py {slug}` lo regenera.)_

@@ -1276,6 +1276,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     sin_conclusiones: list = []        # (stem, motivo) — #277: sin `## Conclusiones` ni exención
     sin_conclusiones_ok: list = []     # (stem, motivo) — #277: declarado con motivo (visible, no es deuda)
     sin_aviso_llm: list = []           # (stem, motivo) — #247/#277: nota de paper sin el aviso de capa LLM
+    indicador_sin_destino: list = []   # (stem, motivo) — #250: indicador sin nota de concepto
     vista_ejes_faltantes: list = []    # (stem, motivo) — #270: la vista no cubre su propia lente
     segunda_mano: dict = {}            # {bibcode: [(qué, valor, de quién)]} — #279
     segunda_mano_perdida: list = []    # (stem, motivo) — #279: la ficha se apoya y no lo dice
@@ -1963,6 +1964,21 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                                          "con su `[[bibcode]]` (el frontmatter NO se rellena)"))
             if not fm.get("activity_indicators_expected"):
                 incomplete.append((stem, "activity_indicators_expected vacío"))
+            # #250 — el ÚNICO campo-lista de `stars/` sin destino chequeado ni link: `thesis_links`
+            # bloquea, `methods` es backlog, y éste no tenía ninguno de los dos, así que la ficha
+            # nombra cinco indicadores y el lector no tiene cómo llegar al concepto que explica
+            # ninguno. Backlog por la misma asimetría que `methods`: la nota del indicador la crea
+            # `ingest-theme`, que es otra operación. ⚠ Se compara con `indicator_key`, que saca la
+            # glosa final entre paréntesis: el campo es prosa para un humano (`BIS (bisector de la
+            # CCF)`), y comparar crudo haría dangling al 100 % — un backlog que nace todo falso es
+            # uno que nadie vuelve a mirar.
+            for _ind in cfg.as_list(fm.get("activity_indicators_expected")):
+                _clave = cfg.indicator_key(_ind)
+                if _clave and not cfg.method_target(_clave) and _clave not in {
+                        cfg.method_key(n) for n in names}:
+                    indicador_sin_destino.append(
+                        (stem, f"`{_ind}` no tiene nota en `concepts/` (ni por `aliases`): ingerí "
+                               f"el tema, o declaralo como alias del concepto que lo denota"))
             # autosuficiencia (proxy estructural): cada planeta del frontmatter debe discutirse en
             # la prosa (la ficha tiene que alcanzar sola; ver "estándar de la ficha" en CLAUDE.md).
             for pl in fm.get("planets") or []:
@@ -3788,6 +3804,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('dangling_thesis', 'thesis_links sin página destino', SEV_BLOQUEANTE, tuple(dangling_thesis), poblacion='entidades'),
         Categoria('dangling_methods', '`methods` sin página destino: el roll-up no puede linkearlo (backlog)',
                   SEV_BACKLOG, tuple(dangling_methods), poblacion='entidades'),
+        Categoria('indicador_sin_destino', '🌡 Indicador de actividad esperado sin nota de concepto: la ficha lo nombra y el lector no puede llegar (#250, backlog)',
+                  SEV_BACKLOG, tuple(indicador_sin_destino), poblacion='entidades'),
         Categoria('alias_colision', '🔤 Dos conceptos declaran el mismo alias: el roll-up resuelve al primero y nadie lo decidió (#245, backlog)',
                   SEV_BACKLOG, tuple(alias_colision), poblacion='entidades'),
         Categoria('methods_colision', '🔤 `methods` con varias grafías del mismo método: infla el backlog y partía el roll-up (#243, backlog)',

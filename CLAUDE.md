@@ -228,7 +228,9 @@ capa-LLM** (la prosa es síntesis a revisar; el frontmatter es auditable) — va
 lint lo exime del scan de fuga.
 
 El cuerpo trae **`## Inventario por eje`** (el paso de contraste), **`## Huecos`** (qué falta para
-que la ficha alcance sola) y el apéndice **`## Excluidos por el filtro`** (los no-core, top por
+que la ficha alcance sola), la sección estampada **`## Indicadores de actividad esperados`** —el
+puente al concepto que explica cada uno, resuelto por alias y sin la glosa entre paréntesis
+(#250)— y el apéndice **`## Excluidos por el filtro`** (los no-core, top por
 citas con link a ADS — puntero, no se bajan).
 
 **Estándar: autosuficiente.** La ficha debe alcanzar por sí sola — un agente que la lee queda

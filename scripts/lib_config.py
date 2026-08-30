@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.121.0"
+ALMAGESTO_VERSION = "1.122.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -182,6 +182,11 @@ def snapshot_retrieved(path) -> str | None:
 # fulltext y los cinco declarados `no_sintetizado`. Correr `verify-citations` según el skill habría
 # lanzado 110 subagentes a verificar filas de tabla, cuatro de ellos contra un `.txt` inexistente.
 SECCIONES_ESTAMPADAS = ("## Planetas", "## Papers", "## Métodos aplicados a esta estrella",
+                        # #250 — la sección de indicadores es ESTAMPADA: sin esto `solo_prosa` no
+                        # la descuenta, sus `[[links]]` cuentan como citas de prosa y contaminan el
+                        # proxy de «planeta discutido» — el falso limpio permanente que el lint
+                        # documenta para `## Planetas`.
+                        "## Indicadores de actividad esperados",
                         "## Papers que tocan este tema (auto)", "## Excluidos por el filtro",
                         "## Verificación de citas",
                         # #124 · las ayudas de lectura de una nota de paper: el original de la
@@ -784,6 +789,20 @@ def method_target(nombre, index: dict | None = None) -> str | None:
     """The concept note this method name denotes (stem), or `None` (#245)."""
     idx = concept_alias_index() if index is None else index
     return idx.get(method_key(nombre))
+
+
+_GLOSA_FINAL = re.compile(r"\s*\([^()]*\)\s*$")
+
+
+def indicator_key(nombre) -> str:
+    """`method_key` after dropping the trailing parenthetical GLOSS (#250).
+
+    `activity_indicators_expected` is prose written for a human —`BIS (bisector de la CCF)`,
+    `S-index (Ca II H&K)`— so comparing it raw against concept stems makes **every** entry dangle,
+    and a backlog that is born 100 % false is one nobody looks at again. ⛔ Only the trailing
+    parenthesis, and only when COMPARING: the field itself is never rewritten (same doctrine as
+    `method_key`)."""
+    return method_key(_GLOSA_FINAL.sub("", str(nombre or "").strip()))
 
 
 def method_matches(concepto: str, nombres) -> bool:

@@ -1880,3 +1880,15 @@ def test_la_colision_alias_alias_se_REPORTA_no_se_resuelve(toy_vault):
     _concepto(toy_vault, "bbb", ["señal común"])
     colisiones = cfg.alias_collisions()
     assert len(colisiones) == 1 and sorted(colisiones[0][1]) == ["aaa", "bbb"]
+
+
+def test_indicator_key_saca_la_glosa_final_y_nada_mas():
+    """#250 — `activity_indicators_expected` es prosa para un humano, así que comparar crudo hace
+    dangling al 100 % y el backlog nace todo falso. ⛔ Sólo el paréntesis FINAL, y sólo al comparar:
+    el campo nunca se reescribe."""
+    assert cfg.indicator_key("BIS (bisector de la CCF)") == "bis"
+    assert cfg.indicator_key("S-index (Ca II H&K)") == "s-index"
+    assert cfg.indicator_key("FWHM de la CCF") == cfg.method_key("FWHM de la CCF"), \
+        "sin paréntesis se comporta como `method_key`"
+    assert cfg.indicator_key("índice (a) de (b)") == cfg.method_key("índice (a) de"), \
+        "sólo el paréntesis final: el del medio puede ser parte del nombre"
