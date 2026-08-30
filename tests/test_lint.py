@@ -5974,3 +5974,126 @@ def test_la_sub_seccion_de_lente_sin_declarar_tambien_bloquea(toy_vault, capsys)
     link_from_log(toy_vault, "2020aaa...1..1A")
     rc, rep = run_lint_reporte(capsys)
     assert rc != 0 and "ruido" in _seccion(rep, "vista declarada sin su sección"), rep
+
+
+# ── #291 · la alternativa de faceta con POBLACIÓN CERO (la simétrica de #236) ─
+def test_alternativa_de_faceta_con_poblacion_cero(toy_vault, monkeypatch):
+    """#291 — #236 cubrió la faceta que matchea DE MÁS y dejó abierta la simétrica, que es más
+    silenciosa: la alternativa que no matchea nada. La faceta sigue compilando, el corte sigue
+    dando un número plausible, el registro guarda la lente como vigente, y el término no participa
+    — indistinguible de «ese término no aparece en la literatura». Medido: `non-?gaussianity
+    matrix` (un `|` perdido) sobre un corpus con 29 archivos que dicen `non-gaussianity`."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "concept": "ica", "area": "methods",
+                                         "facet": "non-?gaussianity matrix|negentropy|negentropy"}})
+    (cfg.CONCEPTS / "methods").mkdir(parents=True, exist_ok=True)
+    (cfg.CONCEPTS / "methods" / "ica.md").write_text(
+        "---\ntags: [concept]\n---\n\n# ICA\n\nVer [[2000Hyv]].\n", encoding="utf-8")
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / "2000Hyv.md").write_text(
+        "---\nbibcode: 2000Hyv\ntitle: Independent component analysis\nthesis_links: [ica]\n"
+        "keywords: [non-gaussianity]\n---\n\n## Abstract\n\nnegentropy maximisation.\n",
+        encoding="utf-8")
+    cat = lint.collect().por_clave("faceta_muerta")
+    hallazgos = [m for _n, m in cat.items]
+    assert any("non-?gaussianity matrix" in h and "no matchea" in h for h in hallazgos)
+    assert any("DUPLICADA" in h and "negentropy" in h for h in hallazgos)
+    assert not any("negentropy" in h and "no matchea" in h for h in hallazgos), \
+        "la alternativa VIVA no se reporta"
+    assert cat.severidad == lint.SEV_BACKLOG, "nunca bloqueante (#291)"
+
+
+def test_faceta_sin_notas_es_NO_EVALUABLE_y_no_todas_muertas(toy_vault, monkeypatch):
+    """D-43 — sobre un tema recién declarado el chequeo no puede correr, y «todas muertas» sería el
+    veredicto inventado que la categoría existe para no producir."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "concept": "ica", "area": "methods",
+                                         "facet": "independent component|negentropy"}})
+    hallazgos = [m for _n, m in lint.collect().por_clave("faceta_muerta").items]
+    assert any("no evaluable" in h and "población 0" in h for h in hallazgos)
+    assert not any("no matchea" in h for h in hallazgos)
+
+
+# ── #296 · los dos vocabularios cerrados que nadie validaba ──────────────────
+def test_pdf_source_fuera_de_vocabulario_bloquea(toy_vault, capsys):
+    """#296 — `CLAUDE.md` los declara CERRADOS y nadie los validaba, a diferencia de sus hermanos
+    (`role`, `pending_source`, `unidad_cita`). No es cosmético: `pdf_source: eprint` es la EXENCIÓN
+    que apaga el chequeo de cita textual (#220/#275), así que un valor fuera de vocabulario la apaga
+    por el `else` en silencio, y un `eprint` mal escrito la enciende y produce hallazgos que no lo
+    son. Medido: 2 de 138 notas llevaban PROSA en el campo."""
+    paper_extraido(toy_vault, "2020malA....1A", pdf_source="null el 2026-08-29")
+    rc, out = run_lint(capsys)
+    assert rc != 0
+    assert "pdf_source" in out and "fuera del vocabulario" in out
+    assert "--migrate-source-fields" in out
+
+
+def test_fulltext_source_fuera_de_vocabulario_bloquea(toy_vault, capsys):
+    paper_extraido(toy_vault, "2020malB....1B", fulltext_source="a mano")
+    rc, out = run_lint(capsys)
+    assert rc != 0 and "fulltext_source" in out
+
+
+def test_source_ausente_o_null_es_DESCONOCIDO_y_no_bloquea(toy_vault, capsys):
+    """`null`/ausente es el valor legítimo de *desconocido*, que NO es «publicado» (#57): tratarlo
+    como error obligaría a inventar una procedencia."""
+    paper_extraido(toy_vault, "2020okA....1A", pdf_source=None)
+    rc, out = run_lint(capsys)
+    assert rc == 0
+    assert "`pdf_source:" not in out
+
+
+# ── #297 · el reuso D-18 y la pasada de red que nunca corrió ─────────────────
+def test_reuso_entre_slugs_con_eprint_y_sin_versions_es_backlog(toy_vault, capsys):
+    """#297 — `↺ copiado sin ir a la red` se lee como «nos ahorramos una descarga», y lo que también
+    pasó es que un sujeto nuevo heredó un artefacto cuya antigüedad nadie chequeó. La respuesta
+    natural —«si hubiera versión nueva la búsqueda habría traído OTRO bibcode y D-19 los une»— es
+    falsa justo en el caso frecuente: el DOI del preprint identifica el **depósito**, así que #216
+    garantiza que preprint y publicado no colisionen. Medido: 62 % de un corpus real es `eprint`."""
+    paper_extraido(toy_vault, "2002Cardoso", pdf_source="eprint")
+    for slug in ("ica", "ica_ruido"):
+        (cfg.PDFS / slug).mkdir(parents=True, exist_ok=True)
+        (cfg.PDFS / slug / "2002Cardoso.pdf").write_bytes(b"%PDF-1.4\n")
+    cat = lint.collect().por_clave("reuso_sin_chequear")
+    assert any(stem == "2002Cardoso" and "sin `versions[]`" in m for stem, m in cat.items)
+    assert any("--bibcodes 2002Cardoso" in m for _s, m in cat.items), "el comando, listo para pegar"
+    assert cat.severidad == lint.SEV_BACKLOG
+
+
+def test_el_reuso_ya_chequeado_no_es_hallazgo(toy_vault):
+    """Con `versions[]` poblado alguien ya miró: repetirlo convierte la categoría en ruido. Y un
+    artefacto que vive bajo UN solo slug no fue reusado."""
+    paper_extraido(toy_vault, "2002Cardoso", pdf_source="eprint",
+                   versions=[{"bibcode": "2002arXiv...1C"}])
+    for slug in ("ica", "ica_ruido"):
+        (cfg.PDFS / slug).mkdir(parents=True, exist_ok=True)
+        (cfg.PDFS / slug / "2002Cardoso.pdf").write_bytes(b"%PDF-1.4\n")
+    paper_extraido(toy_vault, "2015Solo", pdf_source="eprint")
+    (cfg.PDFS / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "ica" / "2015Solo.pdf").write_bytes(b"%PDF-1.4\n")
+    stems = {s for s, _m in lint.collect().por_clave("reuso_sin_chequear").items}
+    assert "2002Cardoso" not in stems and "2015Solo" not in stems
+
+
+def test_la_pasada_de_red_que_nunca_corrio_se_dice(toy_vault, capsys):
+    """D-43 aplicado a la caducidad: una bóveda donde `sweep_external` nunca corrió no tiene
+    NINGUNA de las seis caducidades chequeadas, y eso no se veía en ningún lado — el mismo falso
+    limpio que un chequeo que no corrió leído como verde."""
+    paper_extraido(toy_vault, "2020unoA....1A")
+    hallazgos = [m for _s, m in lint.collect().por_clave("reuso_sin_chequear").items]
+    assert any("_red.yaml` no existe" in h and "seis caducidades" in h for h in hallazgos)
+    (cfg.REGISTRO).mkdir(parents=True, exist_ok=True)
+    (cfg.REGISTRO / "_red.yaml").write_text(
+        "ultima_pasada_red:\n  fecha: 2026-08-30\n  cubrio: [versiones]\n", encoding="utf-8")
+    hallazgos = [m for _s, m in lint.collect().por_clave("reuso_sin_chequear").items]
+    assert not any("_red.yaml" in h for h in hallazgos)
+
+
+def test_el_registro_de_la_pasada_de_red_no_es_un_sujeto(toy_vault, capsys):
+    """#297 — `_red.yaml` es de la bóveda entera (D-46), no de un sujeto: no tiene `busquedas`, así
+    que el bloque de *lente desincronizada* lo reportaba como «no evaluado» y mandaba a re-correr
+    «la cadena del sujeto» sobre un slug que no existe. Un hallazgo sobre un sujeto inventado es la
+    atribución falsa de la regla de método nº 4."""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    (cfg.REGISTRO / "_red.yaml").write_text(
+        "ultima_pasada_red:\n  fecha: 2026-08-30\n  cubrio: [versiones]\n", encoding="utf-8")
+    slugs = {s for s, _m in lint.collect().por_clave("lente_desync").items}
+    assert "_red" not in slugs

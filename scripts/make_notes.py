@@ -1038,6 +1038,56 @@ def migrate_all_txt_fields() -> int:
     return n
 
 
+def migrate_all_source_fields() -> tuple[int, list]:
+    """One-shot migrator for #296: a `pdf_source`/`fulltext_source` outside its closed vocabulary.
+
+    The value becomes `null` —which is the legitimate value for *unknown*, and not "published"—
+    and the prose that was living in the field is **moved, never dropped**: measured, one of the
+    two real cases was a legitimate acquisition note (*«the user gets it; ADS only indexes a REVIEW
+    of the book»*) that ended up in the wrong field because the schema had nowhere to put it. It
+    goes to `pending_motivo` when the note declares `pending_source`, and to `salvedades`
+    otherwise, so the migration cannot destroy information the operator wrote on purpose.
+
+    Returns `(migrated, [(stem, where the prose went)])`, and writes nothing when the resulting
+    frontmatter stops parsing (#244)."""
+    n, movidas = 0, []
+    for f in sorted(cfg.PAPERS.glob("*.md")):
+        texto = f.read_text(encoding="utf-8")
+        fm = cfg.split_fm(texto)
+        lim = cfg.fm_bounds(texto)
+        if not fm or lim is None:
+            continue
+        malos = {campo: str(fm[campo]).strip()
+                 for campo, ok in (("pdf_source", cfg.PDF_SOURCE_OK),
+                                   ("fulltext_source", cfg.FULLTEXT_SOURCE_OK))
+                 if fm.get(campo) not in (None, "") and str(fm[campo]).strip() not in ok}
+        if not malos:
+            continue
+        ini, fin = lim
+        head, resto = texto[ini:fin], texto[fin:]
+        lineas = _drop_keys(head, tuple(f"{c}:" for c in malos))
+        destino = "pending_motivo" if fm.get("pending_source") else "salvedades"
+        for campo, valor in sorted(malos.items()):
+            lineas.append(f"{campo}: null")
+            nota = f"[{campo} decía] {valor}"
+            if destino == "pending_motivo" and not str(fm.get("pending_motivo") or "").strip():
+                lineas = [ln for ln in lineas if not ln.startswith("pending_motivo:")]
+                lineas.append(f"pending_motivo: {json.dumps(nota, ensure_ascii=False)}")
+            else:
+                lineas.append(f"salvedades:\n  - {json.dumps(nota, ensure_ascii=False)}"
+                              if not fm.get("salvedades") else
+                              f"# ⚠ #296 — mové a mano esta nota: {nota}")
+        nuevo = texto[:ini] + "\n".join(lineas) + resto
+        if not cfg.split_fm(nuevo):
+            cfg.print_seguro(f"  ⛔ {f.name}: la migración dejaría el frontmatter sin parsear — NO "
+                             f"se escribe. Movelo a mano.")
+            continue
+        cfg.write_text_atomic(f, nuevo)
+        movidas.append((f.stem, destino))
+        n += 1
+    return n, movidas
+
+
 EXTRACCION_VIEJA_RE = re.compile(r"^##\s+Extracci[oó]n\s*\(LLM\)\s*$", re.M)
 
 
@@ -3424,6 +3474,10 @@ def main() -> int:
                     help="migración #205: saca `symbols_lost:` y `fulltext_layout:` del frontmatter "
                          "de las notas de paper (la fuente de lectura es el PDF, así que ya no "
                          "deciden nada). No requiere slug.")
+    ap.add_argument("--migrate-source-fields", action="store_true", dest="migrate_source_fields",
+                    help="migración #296: `pdf_source`/`fulltext_source` fuera de su vocabulario "
+                         "cerrado → `null`, y la prosa que vivía en el campo se MUEVE (a "
+                         "`pending_motivo` o a `salvedades`), no se tira. No requiere slug.")
     ap.add_argument("--migrate-vistas", action="store_true", dest="migrate_vistas",
                     help="migración #188: `## Extracción (LLM)` → `vistas[]` + `## Vista — "
                          "<sujeto>`. El sujeto sale del reclamo de la nota cuando es UNO solo; con "
@@ -3500,6 +3554,14 @@ def main() -> int:
     if args.migrate_txt_fields:
         n = migrate_all_txt_fields()
         cfg.print_seguro(f"`symbols_lost`/`fulltext_layout` retirados de {n} nota(s) (#205).")
+        return 0
+
+    if args.migrate_source_fields:
+        n, movidas = migrate_all_source_fields()
+        cfg.print_seguro(f"{n} nota(s) con `pdf_source`/`fulltext_source` fuera de vocabulario → "
+                         f"`null` (#296).")
+        for stem, destino in movidas:
+            cfg.print_seguro(f"  {stem}: la prosa se movió a `{destino}` — revisala")
         return 0
 
     if args.migrate_vistas:

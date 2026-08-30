@@ -477,16 +477,19 @@ def test_seed_terms_una_slice_por_termino_y_dedup(monkeypatch):
             status_code = 200
             @staticmethod
             def json():
-                return {"results": [{"id": "https://openalex.org/W1", "title": "t",
+                # `count` alto: el término es ambiguo, así que el slice se filtra por topic (#293)
+                return {"meta": {"count": 9000},
+                        "results": [{"id": "https://openalex.org/W1", "title": "t",
                                      "cited_by_count": 3}]}
         return R()
     monkeypatch.setattr(d.requests, "get", fake)
     monkeypatch.setattr(d.time, "sleep", lambda s: None)
     out = d.seed_terms("T11447", ["noisy ICA", "quasi-whitening"])
-    assert len(urls) == 2                      # una request por término
+    slices = [u for u in urls if "topics.id" in u]
+    assert len(slices) == 2                    # un slice por término
     assert len(out) == 1                       # el mismo work no se duplica entre slices
     assert out[0]["found_in"] == ["openalex"]
-    assert "topics.id" in urls[0] and "title_and_abstract.search" in urls[0]
+    assert "title_and_abstract.search" in slices[0]
 
 
 def test_seed_terms_declara_el_termino_que_falla_y_sigue(monkeypatch, capsys):
@@ -757,7 +760,8 @@ def test_cobertura_dice_que_seed_terms_NO_CORRIO(monkeypatch):
 def test_cobertura_cuenta_lo_que_trajo_el_slice(monkeypatch):
     """#210 — corrió y trajo N es un tercer estado, distinto de no haber corrido."""
     monkeypatch.setattr(d, "seed", lambda tid, rows=200, min_citas=None: [{"doi": "10.1/a"}])
-    monkeypatch.setattr(d, "seed_terms", lambda tid, terms: [{"doi": "10.1/b"}, {"doi": "10.1/c"}])
+    monkeypatch.setattr(d, "seed_terms",
+                        lambda tid, terms, **k: [{"doi": "10.1/b"}, {"doi": "10.1/c"}])
     out = d.cascade(topic_id="T11447", term_slices=["noisy ICA"])
     fila = next(f for f in out["cobertura"] if f[0] == "seed_terms")
     assert fila == ("seed_terms", 2, None)
@@ -800,3 +804,243 @@ def test_el_descubrimiento_guarda_los_identificadores(toy_vault, monkeypatch):
     assert ds["no_deduplicables"][0]["title"] == "Un capítulo sin DOI", \
         "mezclarlos afirmaría una identidad que el contrato 2 dice no adivinar"
     assert "id" not in ds["no_deduplicables"][0], "sin DOI ni arXiv id no hay identidad que escribir"
+
+
+# ── #290 · `--topics`: el primer comando del módulo, con su cobertura ────────
+def test_topics_vacio_dice_por_que_y_no_finge_un_resultado(monkeypatch, capsys):
+    """#290 — con cero filas salía SÓLO la nota de cierre («el filtro por topic es lo que hace
+    usable el ranking…»), una frase sobre resultados que no estaban, y exit 0. Así, «OpenAlex
+    contestó y su taxonomía no tiene nada parecido» se leía igual que «la llamada falló», y los dos
+    piden lo contrario. Medido: `--topics "matrix denoising"` no dice nada."""
+    monkeypatch.setattr(d, "topics", lambda q, rows=5: [])
+    assert d.print_topics("matrix denoising") == 0
+    out = capsys.readouterr().out
+    assert "sin topic para «matrix denoising»" in out
+    assert "no tiene ninguno que matchee" in out
+    assert "hace usable el ranking" not in out, "la nota de cierre habla de filas que no hay"
+
+
+def test_topics_que_falla_sale_como_FALLO_y_no_como_cero(monkeypatch, capsys):
+    """Contrato 3 del módulo: un backend caído no es un backend vacío. Hoy `_json` propaga y el
+    operador ve un traceback donde el resto del módulo imprime una línea de cobertura."""
+    def revienta(q, rows=5):
+        raise RuntimeError("OpenAlex HTTP 429: Rate limit exceeded")
+    monkeypatch.setattr(d, "topics", revienta)
+    assert d.print_topics("independent component analysis") == 1
+    out = capsys.readouterr().out
+    assert "FALLÓ" in out and "429" in out
+    assert "NO significa" in out
+
+
+def test_topics_con_filas_imprime_la_nota_y_ofrece_la_lista(monkeypatch, capsys):
+    monkeypatch.setattr(d, "topics", lambda q, rows=5: [
+        {"id": "T11447", "name": "BSS", "works_count": 55070},
+        {"id": "T10500", "name": "Compressive Sensing", "works_count": 30000}])
+    assert d.print_topics("ICA") == 0
+    out = capsys.readouterr().out
+    assert "T11447" in out and "hace usable el ranking" in out
+    assert "topic: [T11447, T10500]" in out, "#293: el campo acepta varios y hay dos candidatos"
+
+
+# ── #293 · el topic es una LISTA, y el filtro se decide por término ──────────
+def test_topic_filter_acepta_escalar_lista_y_coma():
+    """⚠ El escalar es el caso que YA existía en toda instancia: `as_list` devuelve `[]` para un
+    escalar, así que resolverlo con ese helper convertía cada `topic: T11447` declarado en «sin
+    topic» — en silencio, que es el modo de falla que este issue viene a cerrar."""
+    assert d.topic_filter("T11447") == "T11447"
+    assert d.topic_filter(["T11447", "T10500"]) == "T11447|T10500"
+    assert d.topic_filter("T11447,T10500") == "T11447|T10500"
+    assert d.topic_filter(["T1", "T1"]) == "T1", "sin repetir"
+    assert d.topic_filter(None) is None and d.topic_filter([]) is None
+
+
+def test_preview_theme_manda_el_topic_en_or(toy_vault, monkeypatch, capsys):
+    """#293 — medido: la familia del blanqueo heterocedástico está repartida en CINCO topics, y el
+    mismo trabajo cae en topics distintos según sea preprint o publicado. Con `topic:` escalar,
+    cuatro de esos cinco son inalcanzables hagas los `seed_terms` que hagas."""
+    monkeypatch.setattr(d.cfg, "load_themes",
+                        lambda: _tema_ica(topic=["T11447", "T10500", "T11716"]))
+    visto = {}
+    monkeypatch.setattr(d, "cascade", lambda **k: visto.update(k) or {
+        "records": [], "undedupable": [], "cobertura": []})
+    monkeypatch.setattr(d, "_theme_anchor", lambda s, c=None: ([], 0))
+    assert d._preview_theme("ica") == 0
+    assert visto["topic_id"] == "T11447|T10500|T11716"
+    assert cfg.load_registro("ica")["descubrimientos"][-1]["topic"] == "T11447|T10500|T11716"
+
+
+def _fake_oa(monkeypatch, universo, paginas):
+    """Doble de OpenAlex: la request de conteo (`per-page=1`) y las páginas del slice."""
+    urls = []
+
+    def fake(url, **k):
+        urls.append(url)
+        vueltas = len([u for u in urls if "cursor" in u])
+
+        class R:
+            status_code = 200
+            @staticmethod
+            def json():
+                if "cursor" not in url:
+                    return {"meta": {"count": universo}, "results": []}
+                return paginas[min(vueltas - 1, len(paginas) - 1)]
+        return R()
+    monkeypatch.setattr(d.requests, "get", fake)
+    monkeypatch.setattr(d.time, "sleep", lambda s: None)
+    return urls
+
+
+def test_seed_terms_saca_el_topic_cuando_el_termino_es_AUTOFILTRANTE(monkeypatch, capsys):
+    """#293 — `HeteroPCA` tiene **9 works en todo OpenAlex** y el topic deja 4: ahí el filtro sólo
+    puede sacar señal, y el universo entero se triagea en una pantalla. El valor del filtro escala
+    con la ambigüedad del término, así que se mide cuál es cuál."""
+    urls = _fake_oa(monkeypatch, 9, [{"meta": {"count": 9}, "results": [{"id": "W1"}]}])
+    d.seed_terms("T11447", ["HeteroPCA"])
+    slice_url = [u for u in urls if "cursor" in u][0]
+    assert "topics.id" not in slice_url
+    out = capsys.readouterr().out
+    assert "9 works sin filtro" in out and "SIN topic (autofiltrante)" in out
+
+
+def test_seed_terms_MANTIENE_el_topic_cuando_el_termino_es_ambiguo(monkeypatch, capsys):
+    """⚠ La doctrina no se afloja: `gaussian moments` tiene 13.396 works y `weighted PCA` 6.790 —
+    ahí el filtro es lo que hace usable el ranking (el top 30 sin filtro es AlphaFold y guías de
+    cardiología)."""
+    urls = _fake_oa(monkeypatch, 13396, [{"meta": {"count": 414}, "results": [{"id": "W1"}]}])
+    d.seed_terms("T11447", ["gaussian moments"])
+    slice_url = [u for u in urls if "cursor" in u][0]
+    assert "topics.id" in slice_url
+    assert "∩ topic T11447" in capsys.readouterr().out
+
+
+def test_seed_terms_filtra_si_no_pudo_contar_el_universo(monkeypatch, capsys):
+    """D-43 — un chequeo que no pudo correr no se lee como veredicto: sin el conteo se filtra, que
+    es el modo conocido, y se DICE que no se pudo contar."""
+    def fake(url, **k):
+        class R:
+            status_code = 200
+            @staticmethod
+            def json():
+                if "cursor" not in url:
+                    raise ValueError("no json")
+                return {"meta": {"count": 5}, "results": [{"id": "W1"}]}
+        return R()
+    monkeypatch.setattr(d.requests, "get", fake)
+    monkeypatch.setattr(d.time, "sleep", lambda s: None)
+    d.seed_terms("T11447", ["noisy ICA"])
+    out = capsys.readouterr().out
+    assert "no se pudo contar el universo" in out and "∩ topic" in out
+
+
+# ── #294 · el slice se PAGINA, y la perilla del aviso existe ────────────────
+def test_seed_terms_pagina_el_slice(monkeypatch):
+    """#294 — el docstring justificaba el cap diciendo que paginar el slice es asequible, y el
+    cuerpo hacía UNA request con `per-page` topeado en los 200 del backend. Medidos: dos papers del
+    gold standard quedaban fuera del top 200 de su slice, los dos exactamente de la cola
+    especialista que este eje existe para alcanzar."""
+    urls = _fake_oa(monkeypatch, 1405, [
+        {"meta": {"count": 1405, "next_cursor": "c2"},
+         "results": [{"id": f"W{i}"} for i in range(200)]},
+        {"meta": {"count": 1405, "next_cursor": None},
+         "results": [{"id": f"W{200 + i}"} for i in range(50)]}])
+    out = d.seed_terms("T11447", ["noisy independent component analysis"], rows_por_termino=250)
+    assert len(out) == 250, "sin paginar sólo llegaban los primeros 200"
+    assert len([u for u in urls if "cursor" in u]) == 2
+
+
+def test_seed_terms_no_trae_mas_de_rows_por_termino(monkeypatch):
+    """El tope sigue siendo un tope: paginar no es traer el slice entero sin que nadie lo pida."""
+    _fake_oa(monkeypatch, 5000, [{"meta": {"count": 5000, "next_cursor": "c2"},
+                                  "results": [{"id": f"W{i}"} for i in range(200)]}])
+    out = d.seed_terms("T1", ["matrix denoising"], rows_por_termino=200)
+    assert len(out) == 200
+
+
+def test_el_aviso_de_truncamiento_nombra_una_perilla_QUE_EXISTE(monkeypatch, capsys):
+    """#294 / INV-132 — el aviso mandaba subir `rows_por_termino`, que no se podía subir desde
+    ninguna entrada de usuario (`cascade` no lo pasaba, no había flag ni campo de tema) y que por
+    encima de 200 era un no-op silencioso. Un remedio inexistente deja al operador donde lo dejaba
+    el cap mudo."""
+    _fake_oa(monkeypatch, 5000, [{"meta": {"count": 579, "next_cursor": None},
+                                  "results": [{"id": f"W{i}"} for i in range(15)]}])
+    d.seed_terms("T11447", ["noisy ICA"], rows_por_termino=15)
+    out = capsys.readouterr().out
+    assert "579" in out and "themes.yaml" in out and "--rows-por-termino" in out
+    assert "--rows-por-termino" in _flags_de_main(), "la perilla tiene que ser alcanzable"
+
+
+def _flags_de_main():
+    import io
+    import contextlib
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf), pytest.raises(SystemExit):
+        d.main(["--help"])
+    return buf.getvalue()
+
+
+def test_rows_por_termino_sale_del_tema_y_el_flag_lo_pisa(toy_vault, monkeypatch, capsys):
+    monkeypatch.setattr(d.cfg, "load_themes",
+                        lambda: _tema_ica(seed_terms=["noisy ICA"], rows_por_termino=600))
+    visto = {}
+    monkeypatch.setattr(d, "cascade", lambda **k: visto.update(k) or {
+        "records": [], "undedupable": [], "cobertura": []})
+    monkeypatch.setattr(d, "_theme_anchor", lambda s, c=None: ([], 0))
+    d._preview_theme("ica")
+    assert visto["rows_por_termino"] == 600
+    assert "rows_por_termino = 600" in capsys.readouterr().out, "una perilla movida se DECLARA"
+    d._preview_theme("ica", rows_por_termino_cli=1000)
+    assert visto["rows_por_termino"] == 1000
+    # y el registro deja escrito con qué perilla corrió: el universo del slice depende de ella
+    assert cfg.load_registro("ica")["descubrimientos"][-1]["consulta"]["rows_por_termino"] == 1000
+
+
+def test_seed_terms_sin_topic_declarado_corre_igual_y_lo_dice(monkeypatch, capsys):
+    """El slice es DENTRO del topic, pero un tema sin `topic:` no tiene por qué perder el eje: se
+    corre sin filtro y se dice cuál de los dos motivos es (no es lo mismo que «autofiltrante»)."""
+    urls = _fake_oa(monkeypatch, 13396, [{"meta": {"count": 13396}, "results": [{"id": "W1"}]}])
+    d.seed_terms(None, ["gaussian moments"])
+    assert "topics.id" not in [u for u in urls if "cursor" in u][0]
+    assert "el tema no declara `topic:`" in capsys.readouterr().out
+
+
+def test_la_perilla_se_declara_SOLO_cuando_cambia_algo(toy_vault, monkeypatch, capsys):
+    """La línea existe para decir «esta corrida no es comparable con la anterior». Con el default,
+    o sin slices, no hay nada que declarar y el aviso sería ruido — que es cómo un aviso deja de
+    leerse."""
+    monkeypatch.setattr(d, "cascade", lambda **k: {"records": [], "undedupable": [],
+                                                   "cobertura": []})
+    monkeypatch.setattr(d, "_theme_anchor", lambda s, c=None: ([], 0))
+    monkeypatch.setattr(d.cfg, "load_themes",
+                        lambda: _tema_ica(seed_terms=["noisy ICA"], rows_por_termino=200))
+    d._preview_theme("ica")
+    assert "rows_por_termino =" not in capsys.readouterr().out, "el default no se anuncia"
+    monkeypatch.setattr(d.cfg, "load_themes", lambda: _tema_ica(rows_por_termino=600))
+    d._preview_theme("ica")
+    assert "rows_por_termino =" not in capsys.readouterr().out, "sin slices la perilla no corre"
+
+
+def test_el_anclaje_declara_su_propio_corte(toy_vault, monkeypatch, capsys):
+    """AUD-185 aplicado al segundo listado: el corte a `--rows` del ANCLAJE no tenía test, y un
+    corte mudo se lee como «esto es todo lo que hay» (la misma regla que este archivo aplica al
+    slice y al listado principal)."""
+    monkeypatch.setattr(d.cfg, "load_themes", lambda: _tema_ica())
+    monkeypatch.setattr(d, "cascade", lambda **k: {"records": [], "undedupable": [],
+                                                   "cobertura": []})
+    monkeypatch.setattr(d, "_theme_anchor", lambda s, c=None: ([{"doi": "10.1/a"}], 1))
+    monkeypatch.setattr(d, "anchored_records", lambda recs, min_citadores=2, rows=25: (
+        [{"title": f"T{i}", "citadores": 3, "citation_count": 5, "year": 2000} for i in range(4)],
+        []))
+    d._preview_theme("ica", rows=2)
+    assert "y 2 más" in capsys.readouterr().out
+
+
+def test_rows_por_termino_invalido_no_rompe_la_cascada(toy_vault, monkeypatch):
+    """Un `rows_por_termino: mucho` tipeado a mano no puede tumbar la corrida ni convertirse en un
+    tope inventado: vuelve al default declarado."""
+    monkeypatch.setattr(d.cfg, "load_themes", lambda: _tema_ica(rows_por_termino="mucho"))
+    visto = {}
+    monkeypatch.setattr(d, "cascade", lambda **k: visto.update(k) or {
+        "records": [], "undedupable": [], "cobertura": []})
+    monkeypatch.setattr(d, "_theme_anchor", lambda s, c=None: ([], 0))
+    assert d._preview_theme("ica") == 0
+    assert visto["rows_por_termino"] == 200

@@ -458,3 +458,38 @@ def test_sweep_citas_dice_las_claves_off_ADS_que_nadie_consulto(monkeypatch, cap
     assert fallidos == [], "una clave no consultable no es una caída de red"
     salida = capsys.readouterr().out
     assert "clave sintética off-ADS" in salida and "2006Rasmussen" in salida
+
+
+# ── #297 · el detector de versiones, acotado a lo que el reuso importó ───────
+def test_versiones_acotado_a_unos_bibcodes(toy_vault, monkeypatch, capsys):
+    """#297 — el reuso D-18 es correcto y se conserva; lo que falta es que el momento del reuso deje
+    una pregunta hecha. Acotado son unidades, no el corpus: `discover_versions` mira sólo lo pedido
+    y el modo NO registra la pasada (mirar 7 papers no es haber mirado la bóveda)."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    for stem, arxiv in (("2002arXiv...1C", "0202.001"), ("2015arXiv...9D", "1509.009")):
+        (cfg.PAPERS / f"{stem}.md").write_text(
+            f"---\nbibcode: {stem}\narxiv_id: '{arxiv}'\n---\n\n## Abstract\n\nx\n",
+            encoding="utf-8")
+    mirados = []
+    import query_ads
+    monkeypatch.setattr(query_ads, "query_ads",
+                        lambda q, **k: mirados.append(q) or [{"bibcode": "2003ApJ...1C"}])
+    hallazgos, fallidos = sw.discover_versions(solo={"2002arXiv...1C"})
+    assert len(mirados) == 1, "el barrido acotado NO recorre el corpus entero"
+    assert hallazgos == [("2002arXiv...1C", "2003ApJ...1C")] and fallidos == []
+
+
+def test_el_modo_acotado_no_registra_la_pasada(toy_vault, monkeypatch, capsys):
+    """Registrar «cubrió: versiones» tras mirar dos bibcodes haría que otro clon leyera la bóveda
+    como chequeada — el registro no puede afirmar haber mirado lo que no miró (D-43)."""
+    monkeypatch.setattr(sw, "discover_versions", lambda solo=None: ([], []))
+    assert sw.main(["--bibcodes", "2002arXiv...1C"]) == 0
+    assert not (cfg.REGISTRO / sw.RED_FILE).exists()
+    assert "NO es una pasada de red completa" in capsys.readouterr().out
+
+
+def test_el_modo_acotado_declara_el_bibcode_sin_nota(toy_vault, monkeypatch, capsys):
+    """Un bibcode sin nota no se miró, y decir «nada nuevo» sobre él sería el cero inventado."""
+    monkeypatch.setattr(sw, "discover_versions", lambda solo=None: ([], []))
+    sw.main(["--bibcodes", "2002noExiste"])
+    assert "sin nota en la bóveda" in capsys.readouterr().out

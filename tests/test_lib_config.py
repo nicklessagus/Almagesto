@@ -1971,3 +1971,71 @@ def test_quote_found_degraded_no_acepta_una_cita_ajena():
     que haría matchear un número equivocado, así que nunca puede aceptar por su cuenta."""
     src = cfg.normalize_source_text("el paper habla de otra cosa completamente distinta")
     assert not cfg.quote_found_degraded("since wPCA constructs orthogonal components", src)
+
+
+# ── #291 · particionar una faceta por alternación de NIVEL 0 ─────────────────
+def test_la_particion_de_la_faceta_respeta_los_grupos():
+    """⚠ Medido al escribir #291: partir con `split('|')` corta adentro de los grupos —
+    `line-by-line` aparece dos veces porque vive en dos grupos distintos, se lee como duplicada, y
+    deduplicar sobre eso rompe `(telluric|line-by-line|stellar activity)`: el diff de
+    re-clasificación da **−1** (se pierde un paper real del core). El chequeo que existe para
+    cuidar la lente no puede ser el que la rompe."""
+    patron = r"(telluric|line-by-line|stellar activity)|non-?gaussianity matrix"
+    assert cfg.facet_alternatives(patron) == ["(telluric|line-by-line|stellar activity)",
+                                              "non-?gaussianity matrix"]
+    assert cfg.facet_duplicated_alternatives(
+        r"(a|line-by-line)|(b|line-by-line)") == [], "los grupos NO son alternativas de nivel 0"
+    assert cfg.facet_alternatives(r"a\|b") == [r"a\|b"], "el `|` escapado es un literal"
+    assert cfg.facet_alternatives(r"[a|b]c") == [r"[a|b]c"], "adentro de una clase tampoco parte"
+    assert cfg.facet_alternatives(r"[ab]x|c") == [r"[ab]x", "c"], "y la clase CIERRA"
+    assert cfg.facet_alternatives("") == [] and cfg.facet_alternatives(None) == []
+
+
+def test_la_alternativa_muerta_se_reporta_y_la_viva_no():
+    """La dirección simétrica de #236: una alternativa que no matchea nada no se ve nunca — la
+    faceta compila, el corte da un número plausible y el término no participa."""
+    fuera = dict(cfg.facet_dead_alternatives("negentropy|non-?gaussianity matrix",
+                                             ["bla negentropy y non-gaussianity bla"]))
+    assert "non-?gaussianity matrix" in fuera and "no matchea" in fuera["non-?gaussianity matrix"]
+    assert "negentropy" not in fuera, "la alternativa VIVA no es un hallazgo"
+
+
+def test_alternativa_que_no_compila_sale_como_no_evaluada():
+    """D-43 — un `(0)` que nadie midió se lee como veredicto. Si una alternativa no compila por
+    separado, eso se DICE: no se saltea en silencio."""
+    fuera = dict(cfg.facet_dead_alternatives("buena|(mala", ["buena"]))
+    assert "no se pudo evaluar" in fuera["(mala"]
+
+
+def test_la_duplicada_se_nombra_UNA_vez():
+    """Tres copias de la misma alternativa son UN hallazgo: repetir la fila por cada copia
+    convierte una señal barata en ruido."""
+    assert cfg.facet_duplicated_alternatives("a|negentropy|b|negentropy|negentropy") == ["negentropy"]
+    assert cfg.facet_duplicated_alternatives("a|A") == ["A"], "la faceta se compila con re.I"
+    assert cfg.facet_duplicated_alternatives("a|b") == []
+
+
+# ── #297 · la línea del reuso D-18 dice QUÉ NO SE CHEQUEÓ ────────────────────
+def test_la_linea_del_reuso_declara_lo_que_no_miro(toy_vault, tmp_path):
+    """#297 — `↺ copiado sin ir a la red` se lee como «nos ahorramos una descarga»; lo que también
+    pasó es que un sujeto nuevo heredó un artefacto cuya antigüedad nadie chequeó. INV-87 aplicado
+    al reuso: lo que **no** se miró se declara."""
+    (cfg.PDFS / "ica").mkdir(parents=True, exist_ok=True)
+    origen = cfg.PDFS / "ica" / "2002Cardoso.pdf"
+    origen.write_bytes(b"%PDF-1.4\n")
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / "2002Cardoso.md").write_text(
+        "---\nbibcode: 2002Cardoso\npdf_source: eprint\n---\n\n## Abstract\n\nx\n", encoding="utf-8")
+    linea = cfg.reuse_note("2002Cardoso", origen)
+    assert "ya estaba bajo `ica`" in linea and "D-18" in linea
+    assert "pdf_source: eprint" in linea
+    assert "no se chequeó si hay versión publicada" in linea
+
+
+def test_la_linea_del_reuso_no_inventa_la_procedencia(toy_vault):
+    """Sin nota (o sin `pdf_source`), la línea dice **no consta** en vez de callar: «desconocido» y
+    «eprint» mandan a leer la nota de maneras opuestas (#57)."""
+    (cfg.PDFS / "ica").mkdir(parents=True, exist_ok=True)
+    origen = cfg.PDFS / "ica" / "2020Sin.pdf"
+    origen.write_bytes(b"%PDF-1.4\n")
+    assert "pdf_source: no consta" in cfg.reuse_note("2020Sin", origen)

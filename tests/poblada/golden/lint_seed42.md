@@ -295,6 +295,12 @@
 ## 🕳 Faceta con token corto sin `\b`: matchea DENTRO de otra palabra (#236, backlog) (0)
 > sobre 1 archivo de configuración
 
+## 🕳 Alternativa de faceta con POBLACIÓN CERO o duplicada (#291, backlog) (0)
+> sobre 1 archivo de configuración
+
+## 🕳 Artefacto reusado entre slugs sin chequear su versión, y pasada de red que nunca corrió (#297, backlog) (0)
+> sobre 60 notas de `papers/`
+
 ## Barrido full-text (2b) sin rastro o truncado: no consta que la segunda red para el punto ciego de la query se haya tendido entera (backlog) (0)
 > sobre 3 registros de sujeto
 

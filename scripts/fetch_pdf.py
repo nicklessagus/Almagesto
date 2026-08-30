@@ -61,7 +61,10 @@ PDF_TYPES = ("EPRINT_PDF", "ADS_PDF", "PUB_PDF")
 # Qué DOCUMENTO entrega cada rama del resolver (#57): el eprint de arXiv puede ser un v1
 # pre-referato (valores y secciones distintos de la versión publicada que cita el bibcode);
 # ADS_PDF suele ser el escaneo del publicado; PUB_PDF es el publicado. Se registra al bajar.
-PDF_SOURCE = {"EPRINT_PDF": "eprint", "ADS_PDF": "ads", "PUB_PDF": "publisher"}
+# #296 — los valores DERIVAN de la constante, no la duplican (regla de método nº 2: un doble con
+# otro contrato esconde el bug en la diferencia). Acá el "doble" era este dict: si alguien renombra
+# un valor del vocabulario, el escritor seguiría estampando el viejo y el lint lo bloquearía.
+PDF_SOURCE = dict(zip(("EPRINT_PDF", "ADS_PDF", "PUB_PDF"), cfg.PDF_SOURCE_OK))
 
 # Ramas de la cascada MANUAL de rescate (issue #50): lo que el resolver no entrega se busca a mano,
 # y el bibstem dice por dónde empezar (medido en un ingest real: 5 de 17 fallaron; 4 se recuperaron
@@ -314,8 +317,7 @@ def main() -> int:
         otro = cfg.artefacto_en_otro_slug(cfg.PDFS, args.slug, stem, ".pdf")
         if otro is not None:
             cfg.write_bytes_atomic(destdir / f"{stem}.pdf", otro.read_bytes())
-            cfg.print_seguro(f"  ↺ {r['bibcode']}: ya estaba bajo `{otro.parent.name}` — copiado "
-                             "sin ir a la red (D-18)")
+            cfg.print_seguro(cfg.reuse_note(r["bibcode"], otro))   # #297: qué NO se chequeó
             pendientes.remove(r)
             reusados += 1
     skipped = len(recs) - len(pendientes)

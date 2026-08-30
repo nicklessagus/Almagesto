@@ -117,8 +117,15 @@ def sweep_correcciones() -> list:
     return out
 
 
-def discover_versions() -> tuple[list, list]:
+def discover_versions(solo: set | None = None) -> tuple[list, list]:
     """`[(bibcode_viejo, bibcode_nuevo)]` — preprints que ya salieron publicados (D-19).
+
+    `solo` acota el barrido a unos bibcodes concretos (#297). Existe para el momento del **reuso
+    D-18**: cuando un tema nuevo importa el artefacto que ya estaba bajo otro slug, se ahorra la
+    descarga y además se hereda un archivo cuya antigüedad nadie chequeó — y la respuesta natural
+    («si hubiera versión nueva, la búsqueda habría traído OTRO bibcode y D-19 los une») es falsa
+    justo en el caso frecuente: el DOI del preprint identifica el *depósito*, así que #216
+    **garantiza** que preprint y publicado no colisionen. Acotado son unidades, no el corpus.
 
     Por cada nota con `arxiv_id` cuyo bibcode es de eprint (`…arXiv…`), se le pregunta a ADS qué
     bibcodes tiene ese arXiv id. Si aparece uno que **no** es de eprint, el trabajo salió publicado
@@ -134,6 +141,8 @@ def discover_versions() -> tuple[list, list]:
     import query_ads
     out, fallidos = [], []
     for f in sorted(cfg.PAPERS.glob("*.md")):
+        if solo is not None and f.stem not in solo:
+            continue
         fm = cfg.split_fm(f.read_text(encoding="utf-8"))
         arxiv = fm.get("arxiv_id")
         if not arxiv or "arXiv" not in str(fm.get("bibcode") or ""):
@@ -380,7 +389,28 @@ def main(argv=None) -> int:
                     "antes de aplicar.")
     ap.add_argument("--yes", action="store_true",
                     help="no interactivo: aplica lo aplicable sin preguntar (queda registrado)")
+    ap.add_argument("--bibcodes", metavar="B1,B2",
+                    help="#297: corre SÓLO el detector de versiones, acotado a esos bibcodes. Es "
+                         "lo que el reuso D-18 deja pendiente —un artefacto importado a un sujeto "
+                         "nuevo cuya antigüedad nadie chequeó— y son unidades, no el corpus. No "
+                         "registra la pasada: mirar 7 papers no es haber mirado la bóveda.")
     args = ap.parse_args(argv if argv is not None else sys.argv[1:])
+
+    if args.bibcodes:
+        pedidos = {b.strip() for b in args.bibcodes.split(",") if b.strip()}
+        versiones, fallidos = discover_versions(solo=pedidos)
+        for viejo_b, nuevo_b in versiones:
+            cfg.print_seguro(f"  · versiones: {viejo_b} salió publicado como {nuevo_b} → "
+                             f"`python scripts/make_notes.py --rename-paper {viejo_b} {nuevo_b}`")
+        if fallidos:
+            cfg.print_seguro(f"  ⛔ {len(fallidos)} sin poder mirar: {', '.join(fallidos[:5])}")
+        sin_nota = sorted(pedidos - {f.stem for f in cfg.PAPERS.glob("*.md")})
+        if sin_nota:
+            cfg.print_seguro(f"  ⚠ sin nota en la bóveda (no se miraron): {', '.join(sin_nota[:5])}")
+        if not versiones:
+            cfg.print_seguro(f"  versiones: nada nuevo sobre {len(pedidos) - len(sin_nota)} "
+                             f"bibcode(s) mirado(s) — ⚠ esto NO es una pasada de red completa")
+        return 0
 
     cubrio, pendientes = [], 0
 

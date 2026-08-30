@@ -160,8 +160,7 @@ def main() -> int:
         # bajada idéntica (33 copias medidas en la instancia) y un modo de falla (la red).
         if not args.force and (otro := cfg.artefacto_en_otro_slug(cfg.PDFS, args.slug, stem, ".pdf")):
             cfg.write_bytes_atomic(dest, otro.read_bytes())
-            cfg.print_seguro(f"  ↺ {r['bibcode']}: ya estaba bajo `{otro.parent.name}` — copiado "
-                             "sin ir a la red (D-18)")
+            cfg.print_seguro(cfg.reuse_note(r["bibcode"], otro))   # #297: qué NO se chequeó
             got += 1
             continue
         cfg.print_seguro(f"  [{i}/{len(todo)}] {r['arxiv_id']}  {r['bibcode']}")

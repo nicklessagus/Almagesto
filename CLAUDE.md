@@ -116,23 +116,20 @@ otra síntesis: abrí el `.txt` de su `[[bibcode]]` (`vault/raw/fulltext/**/<bib
 que la fuente dice eso, **antes** de propagarlo. Es un chequeo por par, no una re-lectura del paper:
 grepeá la afirmación, mirá la línea, seguí.
 
-**Por qué, y no es paranoia — está medido.** La prosa de una ficha es **capa LLM** (lo dice su propia
-cabecera) y `verify-citations` es **juicio de LLM, no prueba**. En una sola operación de esta bóveda,
-sobre un concepto ya extraído y sintetizado, el fan-out encontró **13 defectos**: cuatro
-`no-soportada`, tres `contradice` y varias sobre-generalizaciones. **Siete eran de atribución** — el
-dato de un paper adjudicado a otro: Newton al paper de 1997 en vez del de 1999, una detección de
-agua al método en vez de a quien la reportó, «PCA vía SVD» a un paper que nunca dice SVD. Ninguno de
-esos errores es visible desde la ficha: se ven **sólo** abriendo la fuente.
+**Por qué, y no es paranoia — está medido.** La prosa de una ficha es **capa LLM** y
+`verify-citations` es **juicio de LLM, no prueba**. Sobre un concepto ya extraído y sintetizado, el
+fan-out encontró **13 defectos** (cuatro `no-soportada`, tres `contradice`, varias
+sobre-generalizaciones) y **siete eran de atribución** — el dato de un paper adjudicado a otro.
+Ninguno de esos errores es visible desde la ficha: se ven **sólo** abriendo la fuente.
 
 **Cómo (#205):** abrí el **PDF** (`vault/raw/pdfs/**/<bibcode>.pdf`) y citá **página**. El `.txt`
-sirve para *ubicar* con `grep -n` en qué parte mirar, no para citar: es el índice de búsqueda, y
-pierde fórmulas, tablas-imagen y figuras **sin avisar** — medido, incluso en papers donde todos los
-chequeos de calidad dan verde. Un `grep` vacío sobre el `.txt` **no** significa que la ficha esté
-mal. Si la nota declara `pdf_source: eprint`, el PDF es el preprint: una discrepancia numérica
-contra un valor publicado es candidata a diferencia de versión, no a error de la ficha.
+sirve para *ubicar* con `grep -n`, no para citar: es el índice de búsqueda y pierde fórmulas,
+tablas-imagen y figuras **sin avisar** —medido, incluso en papers con todos los chequeos en verde—,
+así que un `grep` vacío **no** significa que la ficha esté mal. Con `pdf_source: eprint` el PDF es
+el preprint: una discrepancia numérica es candidata a diferencia de versión, no a error de la ficha.
 
 Si al validar encontrás una discrepancia, **no la arregles en silencio de tu lado**: es un hallazgo
-de la bóveda. Reportalo para que se corrija acá, o el próximo consumidor tropieza con lo mismo.
+de la bóveda — reportalo, o el próximo consumidor tropieza con lo mismo.
 
 **Test de admisión (aplicá a TODA línea de `vault/wiki/` — fichas, conceptos, queries, hipótesis, matrices,
 log):** *¿esto sale de una fuente (`vault/raw/`) y lo puedo respaldar con un `[[bibcode]]`, o es una
@@ -194,7 +191,11 @@ cuando aplique `confidence: high|medium|low`.
 > (`github.com/nicklessagus/Almagesto/issues`) tiene el caso que la produjo y la medición;
 > `docs/contrato.md` tiene el invariante; `docs/mediciones.md`, la evidencia con su corpus y su
 > fecha. Este archivo lleva **la regla y su consecuencia**, que es lo que hay que saber antes de
-> escribir una nota.
+> escribir una nota. ⛔ **El issue se CREA antes de escribir su número (#292):** el `(#N)` escrito
+> antes de que el issue exista se lo lleva el issue siguiente, y la trazabilidad pasa de vacía a
+> **mal atribuida** —el caso que la regla de método nº 4 llama peor—; pasó en vivo. La red es
+> `tests/test_docs_ejecutables.py::test_todo_numero_de_issue_que_el_repo_cita_existe` contra la
+> caché versionada `tools/issues.json` (`python tools/refresh_issues.py` al cerrar cada tanda).
 
 ### stars/
 
@@ -476,6 +477,15 @@ borrarlo destruiría la salvedad junto con el archivo. El par `pdf: null` + `pdf
 Cuando un paper vive bajo **varios slugs** el campo es **estable**: la copia ya estampada se mantiene
 salvo que llegue una de **mejor calidad** (`pdftotext`/`web` > `ocr`); no se repunta al slug que
 corrió último (idempotente, sin ruido de diff).
+
+⛔ **Los dos son vocabulario CERRADO y el lint los BLOQUEA (#296)** —`pdf_source: eprint|ads|
+publisher|web`, `fulltext_source: pdftotext|ocr|web`, con `null`/ausente = **desconocido**—: no es
+cosmético, porque `pdf_source: eprint` es la **exención** que apaga el chequeo de cita textual, así
+que un valor fuera de vocabulario la apaga por el `else` en silencio y un `eprint` mal escrito la
+enciende y produce hallazgos que no lo son. Medido: 2 de 138 notas llevaban **prosa** en el campo
+—una, información de adquisición legítima que terminó ahí porque el schema no tenía dónde ponerla—.
+Migrador: `python scripts/make_notes.py --migrate-source-fields`, que pasa el valor a `null` y
+**mueve** la prosa (a `pending_motivo` o a `salvedades`), no la tira.
 
 **`fulltext_source` vs `pdf_source` (#57):** el primero dice **cómo se extrajo** el texto, el segundo
 **de qué documento salió** — `eprint` (arXiv: puede ser un **v1 pre-referato**, con `eprint_version`
@@ -763,42 +773,49 @@ regla pasa a ser `core = facet propia Y (puerta 2 OR puerta 3)`:
 | **2 · fundacional en su campo** | `citation_count >= fundacional_min_citas` | `query_ads.classify_theme` |
 | **3 · lente astro global** | pasa `relevance.facets` de `objective.yaml` | ídem |
 
+⛔ **Y el `search_fq` también es del tema (#295), porque es la mitad MÁS restrictiva.** D-26 hizo
+propia la lente y dejó global el `fq`, que acota **server-side, antes de traer nada**: un tema de
+otra disciplina se buscaba sobre un universo que **excluye su literatura por construcción**, y
+ninguna `facet:` propia puede recuperarla (la faceta clasifica lo ya traído). Medido: 306
+resultados con `database:astronomy` contra 6946 sin él, y `title:"noisy ICA"` —el término que da
+nombre al tema— devolviendo **cero**. La salida **no** es sacar el `fq` (sin él el top por citas es
+genómica y cardiología): es `search_fq:` en la entrada del tema, con los **mismos tres estados**
+(sin declarar → hereda el objetivo · con valor → ése · `null` → no acota). El registro guarda el
+**resuelto** y entra en la lente, porque cambiarlo re-clasifica el universo igual que la faceta.
+
 ⛔ **Y el PREVIEW de un tema se corre con esa lente, no con la global (#208):**
-`python scripts/query_ads.py <slug> --theme --probe` (la query sale de `query:` del tema). Hasta
-1.76.3 `--probe` clasificaba siempre con `relevance.facets`, o sea con la lente que esta misma
-sección declara inservible acá — y sobre la población que el tema existe para capturar el resultado
-no es «menos preciso», es el **veredicto opuesto**: medido en `ica`, los tres papers de separación
-de componentes más citados caían en el no-core y el core se llenaba de binarias eclipsantes que
-matchean `rv`. Importa porque el preview es el **único** lugar donde ese corte se decide **antes**
-de pagar descargas y extracción. En ese modo cada fila lleva **por qué puerta entró** (abajo), el
+`python scripts/query_ads.py <slug> --theme --probe` (la query sale de `query:` del tema).
+Clasificar ahí con `relevance.facets` no es «menos preciso» sobre la población que el tema existe
+para capturar: es el **veredicto opuesto** (medido en `ica`). Importa porque el preview es el
+**único** lugar donde ese corte se decide **antes** de pagar descargas y extracción. En ese modo cada fila lleva **por qué puerta entró** (abajo), el
 desglose por política reemplaza al contraste de combinación —que habla de la lente global— y la
 línea de cierre manda a `themes.yaml`, no a `objective.yaml`. Sin `--theme`, comportamiento
 histórico; con `--theme` y un slug que no existe o que no declara `facet:`, **rehúsa** en vez de
-degradar a la global.
+degradar a la global. ⛔ **Y el probe dice POR QUÉ quedó afuera cada no-core (#289):** las dos
+poblaciones piden acciones **opuestas** —*sin la faceta propia* (apretala) vs *pasa la faceta y
+muere en la puerta* (`extra_core` o `fundacional_min_citas`)— y se mostraban idénticas sobre la
+pantalla que existe para decidir eso; medido, 261 contra 32, con los dos papers que el tema existía
+para capturar entre los 32. El segundo bloque lista los que **pasan la faceta**: es de donde sale
+`extra_core`.
 ⛔ **Y para una ESTRELLA la query también se DERIVA (#248): `python scripts/query_ads.py <slug>
---probe`.** Había que tipearla a mano, y la tipeada **no es la que corre el ingest**: la real
-expande las variantes de espaciado (`HD 40307` ↔ `HD40307`) y suma los alias de `stars.yaml`, que es
-justo la parte que un humano no escribe. O sea que se previsualizaba un universo y se ingestaba
-otro — el mismo falso limpio que #208 cerró del lado de los temas, sobreviviendo en el carril de
-estrellas, y **peor**: acá el veredicto sale plausible, porque la diferencia son los papers con la
-grafía sin espacio y ésos no aparecen por ningún lado del reporte.
+--probe`.** La tipeada a mano **no es la que corre el ingest** —la real expande las variantes de
+espaciado (`HD 40307` ↔ `HD40307`) y suma los alias—, así que se previsualizaba un universo y se
+ingestaba otro. Peor que #208: acá el veredicto sale plausible, porque los papers que faltan no
+aparecen por ningún lado del reporte.
 
 ⛔ **Y queda registrado POR CUÁL puerta entró cada paper (#126): `puertas: [fundacional|astro]` en
-el registro.** Antes las dos se calculaban por separado y, al entrar el paper, se devolvía sólo
-`core=True`: el `why_excluded` explicaba el **no** y nada explicaba el **sí**. Es la única metadata
-que distingue **sin leer el paper** un fundamento de su campo (muy citado, puede no mencionar astro
-ni una vez) de una aplicación astro (tres citas, pero es lo que la bóveda busca) — y `role` no sirve
-para eso, porque lo puebla la **extracción**, o sea después de leer, y esta decisión se toma antes.
-Con la puerta registrada, `triage.py <slug> --prioridad` agrupa los core por política —*«12 sólo
-fundacionales, 20 sólo astro, 5 por las dos»*— y el recorte de lectura se decide **una vez** y se
-declara con `--extraccion subconjunto --reason`, en vez de reconstruirse a ojo cada corrida. Lista
-vacía = no es core; el campo existe siempre, así que «no consta» y «ninguna puerta» no se confunden.
+el registro.** El `why_excluded` explicaba el **no** y nada explicaba el **sí**. Es la única
+metadata que distingue **sin leer el paper** un fundamento de su campo (muy citado, puede no
+mencionar astro) de una aplicación astro (tres citas, pero es lo que la bóveda busca) — `role` no
+sirve: lo puebla la **extracción**, o sea después de leer. Con la puerta registrada,
+`triage.py <slug> --prioridad` agrupa los core por política y el recorte de lectura se decide **una
+vez**, declarado con `--extraccion subconjunto --reason`. Lista vacía = no es core; el campo existe
+siempre, así que «no consta» y «ninguna puerta» no se confunden.
 
 ⚠ **`fundacional_min_citas` no tiene default**: el número depende del campo (30k citas es normal en
 ML y muchísimo en astro) y esconderlo sería decidir por el usuario. Sin declararlo la puerta 2 **no
-abre** y el motivo queda en `why_excluded`. *(Anotado en `vault/STATUS.md` como **decisión abierta**
-si la puerta 2 debería existir: mete una propiedad del mundo —cuántos te citan— en una regla que
-era sólo sobre el texto del paper.)*
+abre** y el motivo queda en `why_excluded`. *(Decisión abierta en `vault/STATUS.md`: si la puerta 2
+debería existir — mete una propiedad del mundo en una regla que era sólo sobre el texto.)*
 
 ⛔ **La puerta 1 («lo cita tu corpus») PROPONE, no clasifica** (§4.3 del plan): alimenta los
 candidatos del triage con `via: citado-por-corpus`, nunca marca core. Si clasificara, ser core
@@ -827,59 +844,60 @@ la cascada y **propone**; nunca clasifica.
   cosas distintas. ⛔ **Declará `topic:` en `themes.yaml`**: sin él `discover` lo infiere del
   `title`, y si tu bóveda escribe los títulos en castellano la taxonomía inglesa de OpenAlex no
   matchea — no falla en silencio (lo dice en la cobertura), pero perdés el backend que más aporta
-  fuera de astro. Con esto **#95 queda cerrado en el sentido que faltaba**: `search_arxiv` tiene
-  llamador de producción (`discover.cascade`) y se ejerce desde `discover.py --theme`. Lo que sigue
-  sin pasar —decisión abierta, no defecto— es que `ingest_theme.py` corra la cascada por su cuenta:
-  hoy es un paso que el skill prescribe a mano (0b).
+  fuera de astro. ⛔ **Y `topic:` acepta una LISTA (#293)**: un tema de método que cruza disciplinas
+  tiene su literatura repartida —medido, una sola familia en cinco topics, y el mismo trabajo en
+  topics distintos según sea preprint o publicado—, así que obligarlo a elegir uno es pedirle que
+  elija qué mitad perder. Se buscan en OR (`topics.id:T1|T2`). ⚠ Lo que **no** pasa —decisión
+  abierta, no defecto— es que `ingest_theme.py` corra la cascada por su cuenta: es un paso que el
+  skill prescribe a mano (0b).
 - **La cobertura distingue tres estados, no dos** (`print_cobertura`): corrió con N registros,
   **FALLÓ** (0 por caída — que no significa que el backend no tenga nada), y **NO CORRIÓ** con el
-  motivo (`query:` sin declarar, `topic:` sin declarar). Saltear un backend en silencio deja una
-  cascada de tres que corrió una, y el resultado se lee como "los tres miraron y esto es todo lo
-  que hay". Ídem el conteo de citas: arXiv no lo publica, así que la columna muestra **`?`, no
-  `0`** — un `0` afirma "no lo cita nadie" sobre un dato que nadie miró, y es la columna con la que
-  se decide qué mandar a triage.
+  motivo (`query:`/`topic:` sin declarar). Saltear un backend en silencio deja una cascada de tres
+  que corrió una, leída como "los tres miraron y esto es todo lo que hay". Ídem el conteo de citas:
+  arXiv no lo publica, así que la columna muestra **`?`, no `0`** — un `0` afirma "no lo cita
+  nadie" sobre un dato que nadie miró, y con esa columna se decide qué mandar a triage. ⛔ **Y `--topics` —el PRIMER comando del paso 0b— declara sus dos
+  ceros (#290)**: «la taxonomía no tiene nada parecido» (probá una frase más general) y **FALLÓ**
+  (volvé a correrlo) piden lo contrario, y salían idénticos.
 - **Dedup por DOI, nunca por título** (`ident`/`dedup`): lo fija la medición de `openalex.py` —el
   matcheo por título resolvió 18 de 25 casos y **2 apuntaban a otro trabajo**—. Lo que no tiene DOI
   ni arXiv id se devuelve **aparte, como no-deduplicable**; no se adivina. Cada registro acumula
   `found_in` con todos los backends que lo trajeron: la procedencia **enruta** (qué puerta se
   pregunta), la lente **decide**.
-- **Rankear sin filtro estructural amplifica, no filtra** (`topics` antes de `seed`): OpenAlex
-  `search:"independent component analysis blind source separation"` ordenado por citas devuelve
-  143.450 works cuyo top 30 es AlphaFold, guías de cardiología y carcinoma hepatocelular —**2 de
-  30** en tema—. Con `filter=topics.id:` primero, el canon entra al top 25. ⚠ El filtro es más laxo
-  que su nombre: T11447 declara 55.210 works y devuelve 169.977 (matchea temas secundarios).
+- **Rankear sin filtro estructural amplifica, no filtra** (`topics` antes de `seed`): una frase
+  genérica ordenada por citas devuelve 143.450 works con **2 de 30** en tema en el top 30; con
+  `filter=topics.id:` primero, el canon entra al top 25. ⚠ El filtro es más laxo que su nombre:
+  T11447 declara 55.210 works y devuelve 169.977 (matchea temas secundarios).
 - **Descubrimiento ANCLADO** (`anchored_records`) — el de más apalancamiento: las **referencias de
   la mitad astro del propio tema**, rankeadas por cuántos de esos papers las citan. Es la puerta 1
-  aplicada a un tema **nuevo**, donde el `citation_index` todavía no existe porque se construye
-  desde el corpus ya ingestado. Medido sobre 19 papers astro de ICA: devolvió los **ocho** del
-  canon sin declarar nada a mano (Hyvärinen&Oja 2000 citado por 9, Comon 1994 por 8, Jutten&Hérault
-  por 6), y el consenso ordena mejor que las citas globales —*"Cocktail Parties"* tiene 67 citas y
-  lo citan 7 de los 19—. Es además lo único que alcanza lo que ninguna keyword del tema alcanza: los
-  papers de **PCA con ruido** (el paso de blanqueo) que la bóveda vieja tenía y el barrido por
-  keyword nunca vio.
+  aplicada a un tema **nuevo**, donde el `citation_index` todavía no existe. Medido sobre 19 papers
+  astro de ICA: devolvió los **ocho** del canon sin declarar nada a mano, y el consenso ordena mejor
+  que las citas globales. Es además lo único que alcanza lo que ninguna keyword del tema alcanza:
+  los papers de **PCA con ruido** (el paso de blanqueo) que el barrido por keyword nunca vio.
 - **La cola especialista SÍ se alcanza, con el eje correcto — y el costo es triage (#107, medido).**
-  Los papers de noisy-ICA que una bóveda real había curado a mano viven entre **11 y 72 citas**
-  dentro de un topic de 169.977 works, así que **ningún corte por citas sobre el topic entero** los
-  toca. El eje que sí los alcanza es `seed_terms`: **slice de texto por término dentro del topic**,
-  que colapsa el pajar —*noisy ICA* ∩ T11447 da **579** works, no 169.977— y ahí caen en los
-  puestos 28, 44, 110 y 121, o sea perfectamente al alcance. Medido sobre el corpus real: la
-  recuperación pasa de **7/18 a 13/18** al activarlo, y el universo de candidatos de **776 a 2521**.
-  Ése es el canje —cobertura contra costo de triage— y se decide por tema, por eso el eje es
-  **opt-in** (`cascade(..., term_slices=[…])`), no porque no sirva.
-  ⚠ **Y es una lección de método, no un detalle:** la primera medición dijo *"217 candidatos, 1
-  recuperación, límite estructural"* — y era **artefacto de un tope de 15 filas por término que
-  había puesto el propio agente**. Sacar una conclusión estructural de la salida de un truncamiento
-  silencioso es el modo de falla que la regla *«no silent caps»* existe para evitar. Hoy
-  `seed_terms` **avisa por término** cuántos tiene el slice contra cuántos trajo.
-  Lo que queda fuera del alcance automático es chico y de una forma sola: **capítulos y actas**
-  (ICANN, handbooks) y papers cuyo título/abstract no usa ninguno de los términos del tema. Ahí sí
-  manda la curación a mano, y el aporte del framework es que cada entrada registre **por qué**
-  entró (`extra_core` con `via`/`motivo`, o `sources`).
-- **Encontrar ≠ conseguir** (`resolve_pdf`): OpenAlex identificó 8/8 y devolvió
-  `best_oa_location.pdf_url = None` **8/8**. La cascada del archivo (OpenAlex → Unpaywall) **propone
-  una URL y para**: no reescribe un `pending:` que declaró el usuario ni edita `sources:` —cambiar
-  en silencio una fuente declarada por una que adivinó un script es cómo una cita termina apuntando
-  a un documento que nadie abrió—.
+  Los papers que una bóveda real había curado a mano viven entre **11 y 72 citas** dentro de un
+  topic de 169.977 works: **ningún corte por citas sobre el topic entero** los toca. El eje que sí
+  los alcanza es `seed_terms` (**slice de texto por término dentro del topic**), que colapsa el
+  pajar. Medido: la recuperación pasa de **7/18 a 13/18**, y el universo de candidatos de **776 a
+  2521**. Ése es el canje —cobertura contra costo de triage—, se decide por tema, y por eso el eje
+  es **opt-in**, no porque no sirva.
+  ⚠ **Lección de método:** la primera medición (*"217 candidatos, límite estructural"*) era
+  artefacto de un tope de 15 filas puesto por el propio agente — conclusión estructural sacada de
+  un truncamiento silencioso. Hoy `seed_terms` **avisa por término**.
+  ⛔ **El aviso manda subir una perilla que EXISTE, y el slice se PAGINA (#294):**
+  `rows_por_termino` es campo del tema y flag (`--rows-por-termino`); el backend topea en 200 por
+  request, así que sin paginar el remedio era un no-op (medido: 2 papers perdidos sólo por el
+  techo). ⛔ **Y el filtro por topic se decide POR TÉRMINO, con el conteo, y se declara (#293):** su
+  valor escala con la **ambigüedad** del término — `HeteroPCA` tiene 9 works en todo OpenAlex (ahí
+  el topic sólo puede sacar señal), `gaussian moments` 13.396 (ahí hace usable el ranking).
+  Lo que queda fuera del alcance automático es chico y de una forma sola: **capítulos y actas** y
+  papers cuyo título/abstract no usa ninguno de los términos del tema. Ahí manda la curación a
+  mano, y el framework pide que cada entrada registre **por qué** entró (`extra_core` con
+  `via`/`motivo`, o `sources`).
+- **Encontrar ≠ conseguir** (`resolve_pdf`): OpenAlex identificó 8/8 de los canónicos y devolvió
+  `pdf_url = None` **8/8**. La cascada del archivo (OpenAlex → Unpaywall) **propone una URL y
+  para**: no reescribe un `pending:` que declaró el usuario ni edita `sources:` —cambiar en silencio
+  una fuente declarada por una que adivinó un script es cómo una cita termina apuntando a un
+  documento que nadie abrió—.
 
 
 ### Ingest (una fuente → cascada de páginas)
@@ -1048,11 +1066,10 @@ una fila anclada al PDF no se vence cuando el `.txt` se re-extrae.
 ### Registro de ingesta (`vault/config/registro/<slug>.yaml` — versionado, #51/#64)
 Cada sujeto ingestado deja un registro que **se commitea y viaja**, con tres secciones de dueños
 distintos: **`descubrimientos`** (lo que la cascada de `discover` trajo, **con sus identificadores**
-—#231: sin ellos el registro contaba 391 registros y no podía **nombrar ninguno**, mientras el
-`STATUS.md` de la bóveda afirmaba que la cascada había encontrado los ocho trabajos del canon;
-encontrados, y en ningún carril versionado, así que declararlos en `sources:` obligaba a re-correr
-la cascada o a tipear las referencias a mano. Es el simétrico de `busquedas[].bibcodes`, y es lo que
-vuelve **accionable** un descubrimiento en vez de sólo contable—), **`busquedas`** (lista, una entrada por corrida — **acumulativo**, D-28: antes pisaba, y
+—#231: sin ellos el registro contaba 391 registros y no podía **nombrar ninguno**, así que
+declararlos en `sources:` obligaba a re-correr la cascada. Es el simétrico de `busquedas[].bibcodes`
+y lo que vuelve **accionable** un descubrimiento en vez de sólo contable—),
+**`busquedas`** (lista, una entrada por corrida — **acumulativo**, D-28: antes pisaba, y
 la cabecera de la ficha publicaba el embudo de la última corrida como si fuera el universo entero;
 el universo del sujeto es la **unión**, no la suma, y cada entrada distingue `n_nuevos` de
 `n_ya_estaban`), **`cadena`** (qué pasos corrieron, con fecha, versión, `via: orquestador|suelto` y
@@ -1066,24 +1083,22 @@ pasa a `extra_core`, la fuente se vuelve a declarar) no queda contradiciendo lo 
 explícito, con el motivo viejo preservado en `previa` (D-52). Y la compuerta de triage **ya no se
 puede apagar por flag** (D-48: `--no-triage` se eliminó — permitía que un candidato ya descartado
 volviera a entrar en silencio). La sección `busquedas` la escribe `query_ads` al cerrar cada corrida: `fecha`, `query` efectiva
-—en una estrella la arma `build_query` y antes se tiraba—, **`fq`** (#238: la mitad **más
-restrictiva** del filtro, que acota server-side **antes** que la lente — sin él un «0 encontrados»
-**no es una medición reproducible**, y esa clase de medición negativa se usa como premisa de
-decisiones de curación: medido, una bóveda afirma *«ningún paper del canon está en ADS: 0/8»* sobre
-un canon de procesamiento de señales, con `database:astronomy` aplicado y sin registrarlo), `rows`, `n_found`, `n_total`, `n_core`,
+—en una estrella la arma `build_query` y antes se tiraba—, **`fq`** (#238/#295: el **resuelto**, o
+sea el del tema si lo declara — es la mitad más restrictiva del filtro, y sin él un «0 encontrados»
+**no es una medición reproducible**, aunque se use como premisa de decisiones de curación),
+`rows`, `n_found`, `n_total`, `n_core`,
 `n_candidates`, `n_dropped`, `truncated`, `almagesto_version`, **`bibcodes`** —lo que hace posible
 la unión de D-28— y **`lente`** —facetas/`require`/`min_facets` vigentes al correr, contra lo que
 se detecta la lente desincronizada—) y **`decisiones`** (el juicio de
 curación, por clave: `decision`/`motivo`/`fecha`). Las `decisiones` cubren los **dos carriles**:
 `triage.py --drop` para el candidato del citation chaining (por bibcode) y `triage.py --drop-source`
 para la **fuente declarada** de un tema off-ADS (#81 — clave sintética o url, con `origen:
-fuente-declarada` y un `fuente:` que la resuelva; sin `origen` = chaining). El segundo existe porque
-en off-ADS `sources:` registra sólo lo aceptado: es la misma asimetría de #51 en el otro carril, y
-`ingest_theme` **avisa** —no frena— si un item de `sources:` lleva una clave (o una url) ya descartada. Regla de
-oro: **`build/` guarda lo regenerable, el registro guarda lo que no lo es.** Un `ads.json` se recupera pidiéndoselo de nuevo a
-ADS; el juicio de por qué descartaste un candidato, no —y hasta 1.8.x vivía en `build/`, gitignored,
-así que en otra máquina el triage lo re-proponía todo sin el motivo (los **aceptados** ya persistían
-en `extra_core`: la asimetría era el bug). `busquedas` responde la otra pregunta, la del consumidor:
+fuente-declarada` y un `fuente:` que la resuelva; sin `origen` = chaining), que existe porque en
+off-ADS `sources:` registra sólo lo aceptado. `ingest_theme` **avisa** —no frena— si un item de
+`sources:` lleva una clave ya descartada. Regla de
+oro: **`build/` guarda lo regenerable, el registro guarda lo que no lo es.** Un `ads.json` se
+recupera pidiéndoselo de nuevo a ADS; el juicio de por qué descartaste un candidato, no.
+`busquedas` responde la otra pregunta, la del consumidor:
 **sobre qué universo de papers afirma esta ficha, y con qué lente se filtró.** Efectos: (a)
 `make_notes` estampa en la cabecera de la ficha/concept **una línea** con fecha, universo→core,
 pendientes y la ruta al registro (cirugía idempotente, no toca la prosa LLM); (b) el lint deja de
@@ -1117,44 +1132,39 @@ lee como aplicada, y no lo está. Tres propiedades del carril, y cada una cierra
 - **El paper excluido queda VISIBLE**, con `via: manual-drop` y el motivo en `why_excluded`. Si
   desapareciera del registro, dentro de tres meses se leería como *«la búsqueda nunca lo encontró»*.
 - **Los artefactos se borran** (PDF y `.txt`): si quedan, el detector de #108 los reporta como
-  extracción pagada sin nota **para siempre**. La decisión queda versionada, así que borrar el
+  extracción pagada sin nota **para siempre**; la decisión queda versionada, así que borrar el
   artefacto no borra el juicio. ⛔ **Y en la nota que SE CONSERVA, `drop_core` re-apunta
   `pdf:`/`fulltext:` por verdad de disco (#217):** a la copia que sobreviva bajo otro slug, o a
-  `null`, con el link `[📄 PDF]` de la cabecera cayéndose detrás — dejarlos apuntando a un archivo
-  que este mismo comando borró es afirmar algo falso sobre el disco. **La vista y la extracción no
-  se tocan**: la lectura ocurrió y sus localizadores siguen siendo válidos; lo que cambió es que ya
-  no hay contra qué re-verificarla, y **eso el lint lo dice** (*«vista fechada sin fuente en disco:
-  ya no es re-verificable»*, backlog — ninguna otra red lo ve: el ancla de fuente no se entera de un
-  archivo que **desapareció**). La **nota** se borra **sólo si el paper no pertenece a otro sujeto Y
-  no tiene extracción**; en cualquier otro caso NO se borra y se avisa por qué. Cuando sí se borra,
-  los `[[wikilink]]` que la citaban quedan **rotos y visibles**: no se reparan solos, porque sería
-  decidir por el usuario qué decía esa frase (#132, mismo criterio que `entity.py delete`).
+  `null` — dejarlos apuntando a un archivo que este mismo comando borró afirma algo falso sobre el
+  disco. **La vista y la extracción no se tocan**: la lectura ocurrió; lo que cambió es que ya no
+  hay contra qué re-verificarla, y **eso el lint lo dice** (*«vista fechada sin fuente en disco»*,
+  backlog — el ancla de fuente no se entera de un archivo que **desapareció**). La **nota** se borra
+  **sólo si el paper no pertenece a otro sujeto Y no tiene extracción**; si no, NO se borra y se
+  avisa por qué. Cuando sí se borra, los `[[wikilink]]` que la citaban quedan **rotos y visibles**:
+  repararlos sería decidir por el usuario qué decía esa frase (#132).
 - **El diff de re-clasificación lo respeta** (`lens_diff_offline`, `reclass_diff`): sin eso, cada
   cambio de lente vuelve a proponer lo que el usuario ya sacó, y la categoría se vuelve ruido que se
   deja de mirar.
 
 INV-24 sigue en pie por la misma razón que con `extra_core`: core es `f(paper, lente)` **módulo
 curación declarada**, y la curación es auditable —motivo obligatorio, fechada, versionada, viaja—.
-Lo que no sería auditable es que el veredicto cambiara sin que nadie firme.
-
-El cuadrante que faltaba —la fuente off-ADS **aceptada**— es el que más lo necesita: ahí **todo**
-entra por decisión de alguien, y sin el campo *«¿qué pidió el usuario y qué propuso el
-descubrimiento?»* no tiene respuesta.
+Lo que no sería auditable es que el veredicto cambiara sin que nadie firme. El cuadrante que
+faltaba —la fuente off-ADS **aceptada**— es el que más lo necesita: ahí **todo** entra por decisión
+de alguien.
 
 ⛔ **`via` son DOS vocabularios, uno por carril (#266).** El párrafo que sigue describe el de
-**`sources:`** (off-ADS); el de **`extra_core`** (ADS) es otro y vive en
-`lib_config.EXTRA_CORE_VIA`: `usuario` · `triage` · `citado-por-corpus`. Miden ejes distintos — en
-off-ADS no hay query que descubra, así que el eje es *quién decidió*; en el carril ADS lo que
-distingue es **por qué mecanismo** entró un paper que la lente no marcó core. Escribir el valor del
-otro carril hace que el loader **rechace duro**. Lo vigila un test de paridad doc↔código.
+**`sources:`** (off-ADS); el de **`extra_core`** (ADS) vive en `lib_config.EXTRA_CORE_VIA`:
+`usuario` · `triage` · `citado-por-corpus`. Miden ejes distintos — en off-ADS el eje es *quién
+decidió*; en el carril ADS, **por qué mecanismo** entró un paper que la lente no marcó core.
+Escribir el valor del otro carril hace que el loader **rechace duro**; lo vigila un test de paridad
+doc↔código.
 
 En `sources:`, `via` es **vocabulario cerrado y BINARIO** (#206): `usuario` (lo trajo una persona) ·
-`descubrimiento` (lo propuso la cascada de `discover`). El eje que mide es **quién decidió**, y eso
-no tiene tercer valor: que el usuario traiga una lista de papers o los PDFs no cambia quién decidió.
-De qué documento salió lo lleva **`motivo`**, obligatorio. El lint **bloquea** la entrada sin `via`
-o sin `motivo`, el `via` fuera del vocabulario (typo) y el valor **retirado** (con mensaje propio:
-un typo se corrige, un retiro se traduce). ⚠ El PDF que el usuario aporta para cerrar un
-`pending_source` **no** necesita valor propio: ese paper ya entró con su `via` y su `motivo`.
+`descubrimiento` (lo propuso la cascada de `discover`). Mide **quién decidió**, y eso no tiene
+tercer valor. De qué documento salió lo lleva **`motivo`**, obligatorio. El lint **bloquea** la
+entrada sin `via` o sin `motivo`, el `via` fuera del vocabulario (typo) y el valor **retirado** (con
+mensaje propio: un typo se corrige, un retiro se traduce). ⚠ El PDF que el usuario aporta para
+cerrar un `pending_source` **no** necesita valor propio: ese paper ya entró con su `via`.
 
 ⛔ **El carril off-ADS tiene salida hacia la ingesta** (#111): `python scripts/triage.py <slug>
 --accept-source <doi> --via <via> --reason "<motivo>"` arma la entrada completa —metadata real de
@@ -1332,6 +1342,16 @@ toca, el ancla de fuente tampoco se entera — es el modo de caducidad más sile
 **ground-truth** (NEA cambia valores entre releases, y el snapshot era un JSON congelado que
 **nada** comparaba) y el **conteo de citas de la puerta 2** (#106, ver abajo). Si están repartidas,
 se corren cinco y la sexta nunca.
+⛔ **Y el REUSO entre slugs (D-18) deja una pregunta hecha, no una respuesta (#297).** Copiar el
+artefacto que ya estaba bajo otro slug es correcto y se conserva, pero además importa a un sujeto
+nuevo un archivo cuya **antigüedad nadie chequeó** — y la salida natural («si hubiera versión nueva
+la búsqueda habría traído otro bibcode y D-19 los une») es falsa justo en el caso frecuente: el DOI
+del preprint identifica el **depósito**, así que #216 garantiza que preprint y publicado **no**
+colisionen. La línea del reuso declara `pdf_source` y fecha y dice que **no se chequeó**; el
+detector se puede correr acotado (`sweep_external.py --bibcodes b1,b2` — unidades, no el corpus, y
+**no** registra la pasada); y el lint lo levanta como backlog, junto con *«`_red.yaml` no existe»*
+—una bóveda donde `sweep_external` nunca corrió no tiene **ninguna** de las seis caducidades
+chequeadas, y eso no se veía en ningún lado (medido: 62 % del corpus `eprint`, sin `_red.yaml`)—.
 ⛔ **Reporta, no aplica solo — con UNA excepción nombrada** (AUD-206): el diff se muestra y se
 pregunta antes de tocar nada, porque un snapshot que se actualiza solo cambia valores **bajo los
 pies de la prosa que ya los citó**. La excepción es **`retracciones`**: `check_retractions` estampa
@@ -1349,56 +1369,43 @@ afuera" es información de la bóveda, no de la máquina. Un detector que **no p
 declara y **no** entra en `cubrio`: el registro no puede afirmar haber mirado lo que no miró.
 
 **Fuente retractada citada en prosa (D-47):** la afirmación **no se borra** —puede ser cierta por
-otra vía y borrarla destruye trabajo—: se **marca en línea** con `[[bibcode]] ⛔retractada`. Sin la
-marca, el lint la localiza y **bloquea**; con la marca baja a informativa (visible, no destruida).
-El símbolo es deliberado: un `(retractada)` pelado daría falso positivo con cualquier mención del
-hecho en prosa.
+otra vía—: se **marca en línea** con `[[bibcode]] ⛔retractada`. Sin la marca el lint la localiza y
+**bloquea**; con la marca baja a informativa. El símbolo es deliberado: un `(retractada)` pelado
+daría falso positivo con cualquier mención del hecho en prosa.
 
 **Ground-truth que cambió bajo la prosa (AUD-42):** el ancla de fuente (D-20) hashea
 `raw/fulltext/**/*.txt` y **nunca** `raw/ground_truth/<slug>.json`, así que cuando NEA corrige un
-valor entre releases, la frase que ya lo citaba queda igual de verde que antes y **ninguna fila de
-verificación se entera** — es el modo de caducidad más silencioso, dentro del detector que el propio
-módulo llama "el más silencioso de los cinco". Al aplicar un diff, `sweep_external` deja `_cambios`
-en el JSON (qué campo, de qué a qué, cuándo) y el lint **pide la marca**: `⚠desactualizado` pegado
-al valor. Mismo criterio que con una fuente retractada — la afirmación **no se borra** (puede seguir
-siendo correcta), se hace visible; con la marca el hallazgo baja a informativo. Cuando actualizás la
-frase de verdad, sacás la marca.
+valor entre releases la frase que ya lo citaba queda igual de verde y **ninguna fila de verificación
+se entera**. Al aplicar un diff, `sweep_external` deja `_cambios` en el JSON y el lint **pide la
+marca** `⚠desactualizado` pegada al valor: la afirmación **no se borra** (puede seguir siendo
+correcta), se hace visible. Cuando actualizás la frase, sacás la marca.
 
-**El conteo de citas que mueve la puerta 2 (#106 / INV-104).** La puerta 2 de D-26 admite un paper
-como core por `citation_count`. Ese número **es** metadata del paper —vive en el frontmatter, así
-que INV-24 se sostiene y el veredicto sigue siendo re-derivable offline—, pero es la única metadata
-que **cambia sola**: la función es estable y su entrada deriva, de modo que un paper puede volverse
-core sin que nadie edite ni el paper ni la regla. Era la única dependencia del mundo sin detector.
-⛔ La regla bien enunciada **no** es *"core no puede cambiar"* —sería falsa: un paper que juntó 5000
-citas desde que lo miraste **debería** volverse core— sino **"todo cambio de veredicto es visible y
-fechado"**, que es la misma doctrina de las otras cinco caducidades. Se vigila por los dos lados,
-cada uno con su alcance declarado: **`lib_config.puerta2_cruces`** (offline, lo reporta el lint)
-compara el umbral vigente de `themes.yaml` contra el que el registro guardó en `lente.regla_tema`
-—ve *"editaste el umbral"*— y **`sweep_external.sweep_citas`** re-consulta los conteos —ve *"el
-mundo se movió"*—. Ninguno aplica nada. El umbral se persiste con `query_ads.lens_used(meta)`, y se
-compara con `in` y no por truthiness: un `fundacional_min_citas: 0` (la puerta abre para todos) es
-una decisión y no puede leerse igual que no declararlo (la puerta **no** abre), que es la misma
-distinción que D-26 protege al no ponerle default.
+**El conteo de citas que mueve la puerta 2 (#106 / INV-104).** La puerta 2 admite un paper como
+core por `citation_count`: metadata del paper —así que INV-24 se sostiene y el veredicto sigue
+siendo re-derivable offline— y la única que **cambia sola**, o sea que un paper puede volverse core
+sin que nadie edite nada. ⛔ La regla no es *"core no puede cambiar"* —sería falsa— sino **"todo
+cambio de veredicto es visible y fechado"**. Se vigila por los dos lados, cada uno con su alcance:
+**`lib_config.puerta2_cruces`** (offline, lo reporta el lint) compara el umbral vigente contra el
+que guardó el registro —*"editaste el umbral"*— y **`sweep_external.sweep_citas`** re-consulta los
+conteos —*"el mundo se movió"*—. Ninguno aplica nada. El umbral se persiste con
+`query_ads.lens_used(meta)` y se compara con `in`, no por truthiness: un `fundacional_min_citas: 0`
+(abre para todos) es una decisión y no se lee igual que no declararlo (no abre).
 
 **Lo que no se pudo verificar queda MARCADO en la ficha (#225): `<afirmación> ⚠verificar en el PDF
-(<qué se dudó>, <fecha>)`.** Es la marca que produce el skill `audit-note` y tiene las propiedades de
-las otras: **no destruye** la afirmación (puede ser cierta), es **visible para el consumidor** —que
-es quien tiene que saber que ahí hay una duda—, **la levanta el lint** como backlog para que la
-deuda no se olvide, y **se saca cuando alguien la verifica**, con la evidencia. El criterio para
-ponerla es amplio a propósito: un valor cuya página no se pudo confirmar, una cita cuya fuente no
-está en disco, un número que no reconcilia. **Ante la menor duda se marca** — el costo de una marca
-de más es que alguien abra un PDF; el de una de menos es que la bóveda afirme algo falso con cara de
-verificado. ⚠ Lo que **no** es: una excusa para no verificar. Si la fuente está en disco, se abre.
+(<qué se dudó>, <fecha>)`.** La produce el skill `audit-note` y tiene las propiedades de las otras:
+**no destruye** la afirmación, es **visible para el consumidor**, **la levanta el lint** como
+backlog y **se saca cuando alguien la verifica**, con la evidencia. El criterio es amplio a
+propósito (una página que no se pudo confirmar, una fuente que no está en disco, un número que no
+reconcilia): **ante la menor duda se marca** — una marca de más cuesta abrir un PDF; una de menos
+deja a la bóveda afirmando algo falso con cara de verificado. ⚠ No es excusa para no verificar: si
+la fuente está en disco, se abre.
 
 **Una entrada de `log.md` que quedó REFUTADA se MARCA, no se edita (#238): `⚠ corregido <fecha> →
-<entrada nueva>`.** La bitácora es append-only por contrato —y está bien—, pero eso la dejaba sin
-forma de corregirse: medido, una entrada publica como cita textual **con página** una frase que
-**invierte el sentido** de lo que dice el paper (*«do not become orthogonal»* por *«that are not
-orthogonal»*), y **el propio log lo reconoce 268 líneas después**, en la entrada de la verificación.
-La corrección se aplicó al concepto y a la nota del paper; la bitácora conserva la cita fabricada
-**permanentemente**, sin marca y sin puntero. Es la misma doctrina que las otras marcas —hacer
-visible, no borrar— y el lint la levanta: chequea las citas textuales del `log.md` contra el `.txt`
-de su bibcode y reporta la que su fuente no dice, salvo que ya lleve la marca.
+<entrada nueva>`.** La bitácora es append-only por contrato, y eso la dejaba sin forma de
+corregirse: medido, una entrada publica como cita textual **con página** una frase que **invierte
+el sentido** de lo que dice el paper, y el propio log lo reconoce 268 líneas después. Misma doctrina
+que las otras marcas —hacer visible, no borrar—: el lint chequea las citas textuales del `log.md`
+contra el `.txt` de su bibcode y reporta la que su fuente no dice, salvo que lleve la marca.
 
 Éstas son las **cinco únicas marcas en línea** del sistema: `(inferencia de [[bibcode]])`,
 `[[bibcode]] ⛔retractada`, `<valor> ⚠desactualizado`, `<afirmación> ⚠verificar en el PDF` y
@@ -1410,17 +1417,14 @@ de su bibcode y reporta la que su fuente no dice, salvo que ya lleve la marca.
 —`python scripts/entity.py delete|rename` (INV-19): las **siete** capas (clave del YAML, registro,
 ground-truth, `raw/pdfs`, `raw/fulltext`, nota, `build/`), dry-run sin `--yes` porque el registro es
 el único artefacto no regenerable. Lo que no hace solo lo **avisa**: no borra el paper compartido, no
-repara los `[[wikilink]]` que quedan rotos ni la nota que queda sin destino. Del otro lado, el lint
-reporta las **capas colgadas** de un slug que ya no existe—, **re-clasificar** tras cambiar
-`relevance.facets`, **resolver el
-backlog del lint** (P_rot sin documentar, drift PDF↔disco, cobertura — los **huérfanos no**: son
-bloqueantes, se arreglan al cierre de la operación que los creó), y la **pasada periódica de red**
-(`python scripts/sweep_external.py`, toda la bóveda — la cadena de ingest sólo chequea el slug en
-curso; **esa misma pasada estampa también `corrections`**, con el mismo valor
-que para las retracciones: cazar lo publicado **después** del ingest y cubrir el corpus anterior a
-1.8.0. Lo ingestado desde entonces ya trae sus `corrections` estampadas por la cadena). Invariante: la cadena es
-idempotente (refrescar es seguro); **nunca** se pisa la extracción LLM ni el ground-truth sin `--force`
-explícito. Detalle en el skill.
+repara los `[[wikilink]]` rotos ni la nota que queda sin destino; del otro lado, el lint reporta las
+**capas colgadas** de un slug que ya no existe—, **re-clasificar** tras cambiar `relevance.facets`,
+**resolver el backlog del lint** (P_rot sin documentar, drift PDF↔disco, cobertura — los
+**huérfanos no**: son bloqueantes, se arreglan al cierre de la operación que los creó), y la
+**pasada periódica de red** (`python scripts/sweep_external.py`, toda la bóveda — la cadena de
+ingest sólo chequea el slug en curso; esa misma pasada estampa también `corrections`). Invariante:
+la cadena es idempotente (refrescar es seguro); **nunca** se pisa la extracción LLM ni el
+ground-truth sin `--force` explícito. Detalle en el skill.
 
 ### Lint (chequeo de salud)
 

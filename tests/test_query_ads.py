@@ -312,13 +312,13 @@ def test_main_rescate_glifo_siembra_el_chaining(toy_vault, toy_classifier, no_sl
                              "aliases": ["ε Eri"]}}
     write_yaml(cfg.STARS_YAML, stars)
     monkeypatch.setattr(qa, "query_ads",
-                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k:
                         [rec("2020dirA....1A")])
     monkeypatch.setattr(qa, "glyph_rescue",
                         lambda names, rows, meta=None: [dict(rec("2000ApJ...544L.145H"), via="glyph"),
                                                         dict(rec("2020dirA....1A"), via="glyph")])  # dup → afuera
     sembrados = {}
-    def fake_chain(bibs, rows, filt):
+    def fake_chain(bibs, rows, filt, **k):
         sembrados["core"] = list(bibs)
         return []
     monkeypatch.setattr(qa, "chain_candidates", fake_chain)
@@ -357,7 +357,7 @@ def test_main_persiste_truncado_glifo(toy_vault, toy_classifier, no_sleep, monke
                              "aliases": ["ε Eri"]}}
     write_yaml(cfg.STARS_YAML, stars)
     monkeypatch.setattr(qa, "query_ads",
-                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k:
                         [rec("2020dirA....1A")])
     marca = [{"letter": "epsilon", "constellations": ["Eri", "Eridani"],
               "num_found": 2342, "rows": 2000}]
@@ -366,7 +366,7 @@ def test_main_persiste_truncado_glifo(toy_vault, toy_classifier, no_sleep, monke
             meta["truncated_glyph"] = list(marca)
         return []
     monkeypatch.setattr(qa, "glyph_rescue", fake_glyph)
-    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
     assert run_main(monkeypatch, ["test_star"]) == 0
     data = json.loads((toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text())
     assert data["truncated"] is None and data["truncated_glyph"] == marca
@@ -378,20 +378,20 @@ def test_main_no_glyph_desactiva(toy_vault, toy_classifier, no_sleep, monkeypatc
                              "aliases": []}}
     write_yaml(cfg.STARS_YAML, stars)
     monkeypatch.setattr(qa, "query_ads",
-                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k:
                         [rec("2020dirA....1A")])
     monkeypatch.setattr(qa, "glyph_rescue", lambda *a: pytest.fail("no debe rescatar"))
-    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
     assert run_main(monkeypatch, ["test_star", "--no-glyph"]) == 0
 
 
 def test_main_sujeto_no_bayer_no_rescata(toy_vault, toy_classifier, no_sleep, monkeypatch):
     """toy_vault trae 'Test Star' (no Bayer): el rescate ni se dispara — sin query extra."""
     monkeypatch.setattr(qa, "query_ads",
-                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k:
                         [rec("2020dirA....1A")])
     monkeypatch.setattr(qa, "glyph_rescue", lambda *a: pytest.fail("no debe rescatar"))
-    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
     assert run_main(monkeypatch, ["test_star"]) == 0
 
 
@@ -543,11 +543,11 @@ def test_query_ads_cero_legitimo_sin_expect_hits(toy_classifier, ads_token, no_s
 def test_main_query_directa_espera_hits(toy_vault, toy_classifier, no_sleep, monkeypatch):
     """El call-site de la query directa (estrella) pasa expect_hits=True; el chaining, no."""
     seen = {}
-    def fake_qa(q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False):
+    def fake_qa(q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k):
         seen["expect_hits"] = expect_hits
         return [rec("2020dirA....1A")]
     monkeypatch.setattr(qa, "query_ads", fake_qa)
-    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
     assert run_main(monkeypatch, ["test_star"]) == 0
     assert seen["expect_hits"] is True
 
@@ -575,7 +575,7 @@ def rec(bib, relevant=True, cites=0, **kw):
 def test_chain_candidates_arma_subqueries_ancladas(no_sleep, monkeypatch):
     queries = []
 
-    def fake_qa(q, rows=400, quiet_truncate=False):
+    def fake_qa(q, rows=400, quiet_truncate=False, **k):
         queries.append(q)
         return [rec("2020chain...1C")]
     monkeypatch.setattr(qa, "query_ads", fake_qa)
@@ -648,8 +648,8 @@ def test_main_estrella_chaining_dedup_y_via(toy_vault, toy_classifier, no_sleep,
                rec("2020chD....1D", relevant=False)]             # no-core encadenado → afuera
     for c in chained:
         c["via"] = "chain:references"
-    monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False: [dict(r) for r in direct])
-    monkeypatch.setattr(qa, "chain_candidates", lambda bibs, rows, filt: [dict(r) for r in chained])
+    monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k: [dict(r) for r in direct])
+    monkeypatch.setattr(qa, "chain_candidates", lambda bibs, rows, filt, **k: [dict(r) for r in chained])
     assert run_main(monkeypatch, ["test_star"]) == 0
     data = json.loads((toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text())
     assert data["truncated"] is None                    # meta vacío (mock) → no truncó (#17)
@@ -664,8 +664,8 @@ def test_main_estrella_chaining_dedup_y_via(toy_vault, toy_classifier, no_sleep,
 
 def test_main_no_chain(toy_vault, toy_classifier, no_sleep, monkeypatch):
     called = []
-    monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False: [rec("2020dirA....1A")])
-    monkeypatch.setattr(qa, "chain_candidates", lambda *a: called.append(a) or [])
+    monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k: [rec("2020dirA....1A")])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: called.append(a) or [])
     run_main(monkeypatch, ["test_star", "--no-chain"])
     assert called == []
 
@@ -675,12 +675,12 @@ def test_main_persiste_truncado(toy_vault, toy_classifier, no_sleep, monkeypatch
     (#17 + #79), convirtiendo el aviso de stdout en una marca que el lint surface. La segunda
     pasada NO levanta la marca: sigue faltando el medio del universo.  @inv INV-52"""
     def fake_qa(q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False,
-                sort=qa.CITES_SORT):
+                sort=qa.CITES_SORT, **k):
         if meta is not None:
             meta.update(num_found=410, rows=rows, truncated=True)
         return [rec("2020dirA....1A")]           # la pasada por fecha no trae nada nuevo
     monkeypatch.setattr(qa, "query_ads", fake_qa)
-    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
     assert run_main(monkeypatch, ["test_star", "--rows", "400"]) == 0
     data = json.loads((toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text())
     assert data["truncated"] == {"num_found": 410, "rows": 400, "recent": 0}
@@ -695,7 +695,7 @@ def test_main_segunda_pasada_por_fecha_al_truncar(toy_vault, toy_classifier, no_
     ordenes = []
 
     def fake_qa(q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False,
-                sort=qa.CITES_SORT):
+                sort=qa.CITES_SORT, **k):
         ordenes.append(sort)
         if sort == qa.CITES_SORT:
             if meta is not None:
@@ -707,7 +707,7 @@ def test_main_segunda_pasada_por_fecha_al_truncar(toy_vault, toy_classifier, no_
     monkeypatch.setattr(qa, "query_ads", fake_qa)
     sembrados = {}
     monkeypatch.setattr(qa, "chain_candidates",
-                        lambda bibs, rows, filt: sembrados.setdefault("core", list(bibs)) and [])
+                        lambda bibs, rows, filt, **k: sembrados.setdefault("core", list(bibs)) and [])
     assert run_main(monkeypatch, ["test_star"]) == 0
     assert ordenes == [qa.CITES_SORT, qa.RECENT_SORT]
     data = json.loads((toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text())
@@ -724,8 +724,8 @@ def test_main_sin_truncar_no_hay_segunda_pasada(toy_vault, toy_classifier, no_sl
     ordenes = []
     monkeypatch.setattr(qa, "query_ads",
                         lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False,
-                        sort=qa.CITES_SORT: ordenes.append(sort) or [rec("2020dirA....1A")])
-    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+                        sort=qa.CITES_SORT, **k: ordenes.append(sort) or [rec("2020dirA....1A")])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
     assert run_main(monkeypatch, ["test_star"]) == 0
     assert ordenes == [qa.CITES_SORT]
 
@@ -737,14 +737,14 @@ def test_fallo_de_la_segunda_pasada_no_tira_la_corrida(toy_vault, toy_classifier
     estado honesto: `recent` AUSENTE = "no sé si la cola está cubierta", que es lo que el lint
     distingue de un `0` (que afirma cobertura)."""
     def fake_qa(q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False,
-                sort=qa.CITES_SORT):
+                sort=qa.CITES_SORT, **k):
         if sort == qa.RECENT_SORT:
             raise RuntimeError("ADS 502")
         if meta is not None:
             meta.update(num_found=5000, rows=rows, truncated=True)
         return [rec("2020dirA....1A")]
     monkeypatch.setattr(qa, "query_ads", fake_qa)
-    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
     assert run_main(monkeypatch, ["test_star"]) == 0
     data = json.loads((toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text())
     assert data["truncated"]["num_found"] == 5000
@@ -774,7 +774,7 @@ def test_recent_pass_pide_fecha_dedup_y_marca_via(toy_classifier, no_sleep, monk
     llamadas = []
 
     def fake_qa(q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False,
-                sort=qa.CITES_SORT):
+                sort=qa.CITES_SORT, **k):
         llamadas.append({"q": q, "rows": rows, "sort": sort, "quiet": quiet_truncate})
         return [rec("2020viejo...1V"), rec("2026nuevo...1N"),
                 rec("2026noncore..1C", relevant=False)]
@@ -799,8 +799,8 @@ def test_main_extra_core_persistente(toy_vault, toy_classifier, no_sleep, monkey
     stars = {"Estrella Test": {"slug": "test_star", "simbad": "s", "ads_object": "Test Star",
                                "aliases": [], "extra_core": [{"bibcode": "1988old.....1O", "via": "usuario", "motivo": "test"}]}}
     write_yaml(cfg.STARS_YAML, stars)
-    monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False: [rec("2020dirA....1A")])
-    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k: [rec("2020dirA....1A")])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
     monkeypatch.setattr(qa, "fetch_bibcodes",
                         lambda bibs: [dict(rec("1988old.....1O", relevant=True), via="manual")])
     run_main(monkeypatch, ["test_star"])
@@ -819,9 +819,9 @@ def test_main_extra_core_rescata_del_corte(toy_vault, toy_classifier, no_sleep, 
     directo = [rec("2020dirA....1A"),
                dict(rec("1991AJ....102.1813F", relevant=False), why_excluded="sin faceta obligatoria (rv)")]
     monkeypatch.setattr(qa, "query_ads",
-                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k:
                         [dict(r) for r in directo])
-    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
     pedidos = []
     def fake_fetch(bibs):
         pedidos.extend(bibs)
@@ -846,9 +846,9 @@ def test_main_extra_core_avisa_bibcode_inexistente(toy_vault, toy_classifier, no
                                "aliases": [], "extra_core": [{"bibcode": "2020typo....1X", "via": "usuario", "motivo": "test"}]}}
     write_yaml(cfg.STARS_YAML, stars)
     monkeypatch.setattr(qa, "query_ads",
-                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k:
                         [rec("2020dirA....1A")])
-    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
     monkeypatch.setattr(qa, "fetch_bibcodes", lambda bibs: [])
     assert run_main(monkeypatch, ["test_star"]) == 0
     assert "2020typo....1X" in capsys.readouterr().out
@@ -873,8 +873,8 @@ def test_main_extra_core_escalar_no_pierde_la_curacion(toy_vault, monkeypatch, c
     monkeypatch.setattr(qa, "MIN_FACETS", 1)
     monkeypatch.setattr(qa, "time", type("T", (), {"sleep": staticmethod(lambda s: None)})())
     monkeypatch.setattr(qa, "query_ads",
-                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False: [])
-    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k: [])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
     pedidos: list = []
     monkeypatch.setattr(qa, "fetch_bibcodes", lambda bibs: pedidos.extend(bibs) or [])
     run_main(monkeypatch, ["test_star"])
@@ -899,8 +899,8 @@ def test_main_aliases_escalar_en_stars_yaml(toy_vault, monkeypatch, capsys):
     monkeypatch.setattr(qa, "MIN_FACETS", 1)
     monkeypatch.setattr(qa, "time", type("T", (), {"sleep": staticmethod(lambda s: None)})())
     monkeypatch.setattr(qa, "query_ads",
-                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False: [])
-    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k: [])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
     monkeypatch.setattr(qa, "fetch_bibcodes", lambda bibs: [])
     # ⚠ **#182.** Esto asserteaba SÓLO «no revienta con TypeError», y el comentario afirmaba además
     # que «el alias mal escrito se reporta» sin medirlo. Con eso, cambiar `_listify_curado` por
@@ -909,7 +909,7 @@ def test_main_aliases_escalar_en_stars_yaml(toy_vault, monkeypatch, capsys):
     # los tres mecanismos de recall a la vez (#82). Se mide lo que la función promete.
     queries: list = []
     monkeypatch.setattr(qa, "query_ads",
-                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k:
                         queries.append(q) or [])
     run_main(monkeypatch, ["test_star"])
     assert queries and "HD 12345" in queries[0], (
@@ -926,7 +926,7 @@ def test_main_tema_extra_only(toy_vault, toy_classifier, no_sleep, monkeypatch):
                                         "concept": "gaussian-processes", "source": "web",
                                         "extra_core": [{"bibcode": "2012PASP..124.1015B", "via": "usuario", "motivo": "test"}]}})
     monkeypatch.setattr(qa, "query_ads", lambda *a, **kw: pytest.fail("no debe correr la query"))
-    monkeypatch.setattr(qa, "chain_candidates", lambda *a: pytest.fail("no debe encadenar"))
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: pytest.fail("no debe encadenar"))
     monkeypatch.setattr(qa, "fetch_bibcodes",
                         lambda bibs: [dict(rec("2012PASP..124.1015B", relevant=True), via="manual")])
     assert run_main(monkeypatch, ["gp", "--theme", "--extra-only"]) == 0
@@ -1096,7 +1096,7 @@ def test_main_probe_no_pide_slug_y_cablea_query_y_rows(toy_classifier, monkeypat
     pasarían la suite entera y recién explotarían en el primer preview real del skill `setup`."""
     seen = {}
     def fake_qa(q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, fq=None,
-                sort=qa.CITES_SORT):
+                sort=qa.CITES_SORT, **k):
         seen["q"], seen["rows"] = q, rows
         return [rec("2020probe.1P", cites=3)]
     monkeypatch.setattr(qa, "query_ads", fake_qa)
@@ -1124,7 +1124,7 @@ def test_sweep_lista_solo_core_nuevos(toy_vault, toy_classifier, no_sleep, monke
     queries = []
     monkeypatch.setattr(qa, "query_ads",
                         lambda q, rows=2000, **kw: queries.append(q) or [dict(r) for r in hits])
-    monkeypatch.setattr(qa, "chain_candidates", lambda *a: pytest.fail("--sweep no encadena"))
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: pytest.fail("--sweep no encadena"))
     before = (toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text()
     assert run_main(monkeypatch, ["test_star", "--sweep"]) == 0
     out = capsys.readouterr().out
@@ -1206,9 +1206,9 @@ def test_main_chaining_solo_auto_acepta_sujeto_en_titulo(toy_vault, toy_classifi
     """El core del grafo con el sujeto en el título entra; el resto queda como CANDIDATO en
     ads.json (no se baja) a la espera del juicio.  @inv INV-50"""
     monkeypatch.setattr(qa, "query_ads",
-                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k:
                         [rec("2020dirA....1A")])
-    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [
         dict(rec("2020tit....1T", title="Activity of Test Star"), via="chain:citations"),
         dict(rec("2023PhDT....1P", title="Hunting for New Physics"), via="chain:references"),
     ])
@@ -1233,9 +1233,9 @@ def test_la_politica_de_auto_aceptacion_se_declara(toy_vault, toy_classifier, no
     write_yaml(cfg.OBJECTIVE_YAML, obj)
     monkeypatch.setattr(qa, "_OBJ", obj)
     monkeypatch.setattr(qa, "query_ads",
-                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k:
                         [rec("2020dirA....1A")])
-    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [
         dict(rec("2020tit....1T", title="Activity of Test Star"), via="chain:citations")])
     assert run_main(monkeypatch, ["test_star"]) == 0
     data = json.loads((toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text())
@@ -1257,9 +1257,9 @@ def test_main_triage_no_repropone_descartados(toy_vault, toy_classifier, no_slee
     cfg.save_decisiones("test_star", {
         "2023PhDT....1P": {"decision": "descartado", "motivo": "física de partículas"}})
     monkeypatch.setattr(qa, "query_ads",
-                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k:
                         [rec("2020dirA....1A")])
-    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [
         dict(rec("2023PhDT....1P", title="Hunting for New Physics"), via="chain:references")])
     assert run_main(monkeypatch, ["test_star"]) == 0
     data = json.loads((d / "ads.json").read_text())
@@ -1321,12 +1321,12 @@ def test_main_extra_core_no_vuelve_a_la_cola_de_triage(toy_vault, toy_classifier
                                "aliases": [], "extra_core": [{"bibcode": "2010ext.....1E", "via": "usuario", "motivo": "test"}]}}
     write_yaml(cfg.STARS_YAML, stars)
     monkeypatch.setattr(qa, "query_ads",
-                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k:
                         [rec("2020dirA....1A")])
     monkeypatch.setattr(qa, "fetch_bibcodes",
                         lambda bibs: [dict(rec("2010ext.....1E"), via="manual")])
     sembrados = {}
-    def fake_chain(bibs, rows, filt):
+    def fake_chain(bibs, rows, filt, **k):
         sembrados["core"] = list(bibs)
         return [dict(rec("2010ext.....1E"), via="chain:citations"),      # ya curado → NO re-proponer
                 dict(rec("2023PhDT....1P", title="Hunting for New Physics"), via="chain:references")]
@@ -1358,9 +1358,9 @@ def test_la_compuerta_no_se_puede_apagar(toy_vault, toy_classifier, no_sleep, mo
     consultado = []
     monkeypatch.setattr(qa, "load_triage", lambda slug: consultado.append(slug) or set())
     monkeypatch.setattr(qa, "query_ads",
-                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k:
                         [rec("2020dirA....1A")])
-    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [
         dict(rec("2023PhDT....1P", title="Hunting for New Physics"), via="chain:references")])
     assert run_main(monkeypatch, ["test_star"]) == 0
     assert consultado == ["test_star"]
@@ -1373,9 +1373,9 @@ def test_main_tema_no_aplica_la_compuerta(toy_vault, toy_classifier, no_sleep, m
     write_yaml(cfg.THEMES_YAML, {"gp": {"title": "GP", "area": "methods", "concept": "gp",
                                         "query": 'abs:"gaussian process"'}})
     monkeypatch.setattr(qa, "query_ads",
-                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k:
                         [rec("2020dirA....1A")])
-    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [
         dict(rec("2020chX....1X", title="cualquier cosa"), via="chain:references")])
     assert run_main(monkeypatch, ["gp", "--theme"]) == 0
     data = json.loads((toy_vault.ROOT / "build" / "gp" / "ads.json").read_text())
@@ -1389,12 +1389,12 @@ def test_main_persiste_el_registro_de_busqueda(toy_vault, toy_classifier, no_sle
     direct = [rec("2020dirA....1A", cites=5), rec("2020dirB....1B", relevant=False, cites=9)]
 
     def fake_query(q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, fq=None,
-                   sort=qa.CITES_SORT):
+                   sort=qa.CITES_SORT, **k):
         if meta is not None:
             meta.update(num_found=1837, rows=rows, truncated=True)
         return [dict(r) for r in direct]
     monkeypatch.setattr(qa, "query_ads", fake_query)
-    monkeypatch.setattr(qa, "chain_candidates", lambda bibs, rows, filt: [])
+    monkeypatch.setattr(qa, "chain_candidates", lambda bibs, rows, filt, **k: [])
     cfg.save_decisiones("test_star", {"2019old....1..1O": {"decision": "descartado"}})
     assert run_main(monkeypatch, ["test_star"]) == 0
     b = cfg.load_busquedas("test_star")[-1]
@@ -1429,9 +1429,9 @@ def test_escotillas_quedan_en_el_registro(toy_vault, toy_classifier, no_sleep, m
     """D-48: lo que no se puede apagar se registra. Dos entradas del registro con los mismos
     conteos pueden describir corridas distintas si una usó `--yes` y la otra no.  @inv INV-44"""
     monkeypatch.setattr(qa, "query_ads",
-                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k:
                         [rec("2020dirA....1A")])
-    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
     assert run_main(monkeypatch, ["test_star", "--no-chain"]) == 0
     assert "--no-chain" in cfg.load_busquedas("test_star")[-1]["escotillas"]
 
@@ -1586,9 +1586,9 @@ def test_main_aplica_la_regla_del_tema_a_la_query_directa(toy_vault, toy_classif
                        citation_count=30000)
     ajeno = dict(rec("2020ajenB...1B", title="Something else entirely"), citation_count=5)
     monkeypatch.setattr(qa, "query_ads",
-                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False:
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k:
                         [fundacional, ajeno])
-    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
     assert run_main(monkeypatch, ["ica", "--theme"]) == 0
     data = json.loads((toy_vault.ROOT / "build" / "ica" / "ads.json").read_text())
     por_bib = {r["bibcode"]: r for r in data["records"]}
@@ -1671,8 +1671,8 @@ def test_main_puerta_1_deja_el_candidato_en_ads_json(toy_vault, toy_classifier, 
     eeg = dict(rec("2005eegX....1X", title="Independent component analysis of EEG"),
                citation_count=12)
     monkeypatch.setattr(qa, "query_ads",
-                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False: [eeg])
-    monkeypatch.setattr(qa, "chain_candidates", lambda *a: [])
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k: [eeg])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
     assert run_main(monkeypatch, ["ica", "--theme"]) == 0
     data = json.loads((toy_vault.ROOT / "build" / "ica" / "ads.json").read_text())
     cand = {c["bibcode"]: c for c in data["candidates"]}
@@ -2227,7 +2227,8 @@ def test_probe_theme_toma_la_query_del_tema(toy_vault, monkeypatch, capsys):
     write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "facet": "independent component",
                                          "query": 'abs:"independent component"'}})
     vistas = {}
-    monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000: vistas.setdefault("q", q) and [] or [])
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda q, rows=2000, **k: vistas.setdefault("q", q) and [] or [])
     monkeypatch.setattr(sys, "argv", ["query_ads.py", "ica", "--theme", "--probe"])
     assert qa.main() == 0
     assert vistas["q"] == 'abs:"independent component"'
@@ -2270,3 +2271,130 @@ def test_probe_de_una_ESTRELLA_deriva_la_query_de_stars_yaml(toy_vault, monkeypa
     q = vistas["q"]
     assert 'title:"HD 40307"' in q and 'abs:"GJ 2046"' in q
     assert 'title:"HD40307"' in q, "la variante SIN espacio es la mitad que un humano no tipea"
+
+
+# ── #289 · el probe de un tema dice POR QUÉ quedó afuera cada no-core ────────
+def test_probe_del_tema_desglosa_el_no_core_por_motivo(toy_classifier, capsys):
+    """#289 — medido sobre un tema real: **261** no-core sin la faceta propia contra **32** que
+    pasan la faceta y mueren en la puerta. Las dos poblaciones piden lo contrario —apretar la
+    faceta / abrir la puerta o declarar `extra_core`— y la pantalla las mostraba idénticas, con la
+    línea de cierre mandando a tocar una de las dos cosas sin decir cuál. El dato ya estaba
+    calculado y pegado al registro (`why_excluded`): el printer no lo leía."""
+    meta = {"title": "ICA", "facet": "independent component"}
+    recs = [
+        # pasa la faceta propia, pero la lente astro no lo trae y la puerta 2 está apagada
+        rec("2012PASP..124.1015B", relevant=False, cites=90,
+            title="Principal Component Analysis with Noisy Data",
+            abstract="independent component analysis of noisy data"),
+        # ni siquiera pasa la faceta del tema
+        rec("2020otroA....1A", relevant=False, cites=5, title="Eclipsing binaries",
+            abstract="radial velocity of eclipsing binaries"),
+    ]
+    qa.print_probe("q", recs, theme_meta=meta)
+    out = capsys.readouterr().out
+    assert "por qué quedó afuera cada no-core" in out
+    assert "sin la faceta propia del tema" in out
+    assert "pasan la faceta, ninguna puerta abre" in out
+    # y el bloque que más rinde: la lista de la que sale `extra_core`
+    assert "no-core que PASAN la faceta" in out
+    assert "2012PASP..124.1015B" in out.split("no-core que PASAN la faceta")[1]
+
+
+def test_el_desglose_del_no_core_es_SOLO_del_modo_tema(toy_classifier, capsys):
+    """En modo global el diagnóstico del no-core es `propose_facets` (#83). El desglose por puerta
+    habla de D-26, que en una bóveda global no rige: mostrarlo mandaría a tocar `themes.yaml` por
+    un corte que decide `objective.yaml`."""
+    qa.print_probe("q", [rec("2020noA....1A", relevant=False)])
+    assert "por qué quedó afuera cada no-core" not in capsys.readouterr().out
+
+
+def test_clase_noncore_no_inventa_un_motivo(toy_classifier):
+    """D-43 — un registro sin `why_excluded` no se clasifica en ninguna de las dos poblaciones: se
+    declara «no consta». Meterlo en cualquiera de las dos manda a tocar la perilla equivocada."""
+    assert qa._clase_noncore(None) == "sin motivo registrado (no consta)"
+    assert qa._clase_noncore("sin la faceta propia del tema") == "sin la faceta propia del tema"
+    assert qa._clase_noncore("doctype: abstract") == "doctype de ruido"
+    assert qa._clase_noncore("ninguna puerta abre; la 2 (fundacional) está apagada porque el tema "
+                             "no declara `fundacional_min_citas`") == "pasan la faceta, ninguna puerta abre"
+    assert qa._clase_noncore("excluido del sujeto por decisión: off-topic") == \
+        "excluido por decisión (#112)"
+    # el no evaluable NO se cuenta como «la puerta lo rechazó»: no se sabe (D-43)
+    assert qa._clase_noncore("ninguna puerta abre; la 2 (fundacional) NO se pudo evaluar: umbral "
+                             "mal formado") == "pasan la faceta; la puerta 2 NO se pudo evaluar"
+    assert qa._clase_noncore("la lente astro no lo trae y la puerta 2 (fundacional) **no se pudo "
+                             "evaluar**: el registro viene sin dato de citas") == \
+        "pasan la faceta; la puerta 2 NO se pudo evaluar"
+
+
+def test_el_desglose_calla_si_no_hay_no_core(toy_classifier, capsys):
+    """Con 0 no-core no hay nada que desglosar, y un encabezado con la tabla vacía debajo se lee
+    como si el desglose hubiera fallado."""
+    qa.print_noncore_breakdown([])
+    assert capsys.readouterr().out == ""
+
+
+# ── #295 · el `fq` del tema: la mitad más restrictiva, al nivel de D-26 ──────
+def test_search_fq_del_tema_pisa_al_del_objetivo(toy_vault, monkeypatch):
+    """#295 — D-26 hizo propia la lente del tema y dejó GLOBAL la mitad **más restrictiva**. En una
+    bóveda astro, un tema de signal processing se buscaba sobre un universo que excluye su
+    literatura por construcción, y ninguna `facet:` propia puede recuperarla: la faceta clasifica
+    lo ya traído. Medido: 306 resultados con `database:astronomy` contra 6946 sin él, y
+    `title:"noisy ICA"` —el término que da nombre al tema— devolviendo CERO bajo el fq."""
+    monkeypatch.setattr(qa.cfg, "load_objective",
+                        lambda: {"relevance": {"search_fq": "database:astronomy"}})
+    assert qa.search_fq() == "database:astronomy"
+    assert qa.search_fq({"title": "ICA"}) == "database:astronomy", "sin declarar: hereda"
+    assert qa.search_fq({"search_fq": "database:astronomy OR database:physics"}) == \
+        "database:astronomy OR database:physics"
+    # `null` DECLARADO en el tema: no acotar, a propósito — distinto de no declararlo
+    assert qa.search_fq({"search_fq": None}) is None
+    assert qa.search_fq({"search_fq": ""}) is None, "el YAML vacío es el mismo `null` declarado"
+
+
+def test_search_fq_del_tema_valida_la_forma(toy_vault, monkeypatch):
+    """AUD-182 vale igual en el nivel nuevo: una lista se manda como su `repr` de Python y filtra el
+    corpus con una regla que nadie escribió. El mensaje nombra el archivo del tema, no el objetivo."""
+    monkeypatch.setattr(qa.cfg, "load_objective", lambda: {"relevance": {}})
+    with pytest.raises(RuntimeError, match="themes.yaml"):
+        qa.search_fq({"search_fq": ["database:astronomy", "x"]})
+
+
+def test_la_corrida_del_tema_usa_y_REGISTRA_su_propio_fq(toy_vault, toy_classifier, no_sleep,
+                                                         monkeypatch):
+    """Las dos mitades de #295: el `fq` resuelto viaja a la búsqueda **y** al registro. Si el
+    registro guardara el global, volvería a mentir sobre la corrida — que es justo lo que #238
+    arregló para el caso en que el `fq` no se registraba en absoluto."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "concept": "ica", "area": "methods",
+                                         "facet": "independent component",
+                                         "search_fq": "database:astronomy OR database:physics",
+                                         "query": 'abs:"independent component"'}})
+    monkeypatch.setattr(qa.cfg, "load_objective",
+                        lambda: {"relevance": {"search_fq": "database:astronomy"}})
+    vistos = []
+
+    def fake_qa(q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k):
+        vistos.append(k.get("fq"))
+        return [rec("2020icaA....1A", abstract="independent component analysis")]
+    monkeypatch.setattr(qa, "query_ads", fake_qa)
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
+    assert run_main(monkeypatch, ["ica", "--theme"]) == 0
+    assert vistos and all(f == "database:astronomy OR database:physics" for f in vistos)
+    bs = cfg.load_busquedas("ica")
+    assert bs[-1]["fq"] == "database:astronomy OR database:physics"
+
+
+def test_el_fq_del_tema_entra_en_la_lente_guardada(toy_vault, monkeypatch):
+    """Consecuencia 2 de #295: cambiar el `fq` de un tema **re-clasifica su universo**, igual que
+    cambiar la faceta, así que tiene que estar en la lente que el registro guarda o el detector de
+    lente desincronizada no puede verlo."""
+    monkeypatch.setattr(qa.cfg, "load_objective", lambda: {"relevance": {}})
+    con = qa.lens_used({"facet": "ica", "search_fq": "database:physics"})
+    assert con["regla_tema"]["search_fq"] == "database:physics"
+    sin = qa.lens_used({"facet": "ica"})
+    assert "search_fq" not in sin["regla_tema"], "no declararlo NO es un cambio de lente"
+    assert cfg.lens_delta(sin, con) == ["`search_fq` del tema sin declarar (hereda el objetivo) → "
+                                        "database:physics"]
+    # `null` declarado es una decisión, y no se lee igual que no declarar nada
+    nulo = qa.lens_used({"facet": "ica", "search_fq": None})
+    assert cfg.lens_delta(sin, nulo) == ["`search_fq` del tema sin declarar (hereda el objetivo) → "
+                                         "null (no acota)"]

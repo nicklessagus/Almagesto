@@ -119,8 +119,8 @@ ASTRO_FQ = "database:astronomy"          # default histórico; la instancia pued
 _FQ_DEFAULT = object()      # centinela: `fq=None` explícito (no acotar) ≠ no pasar `fq`
 
 
-def search_fq() -> str | None:
-    """La lente del BUSCADOR (`fq` de Solr), desde `objective.yaml` (`relevance.search_fq`).
+def search_fq(meta: dict | None = None) -> str | None:
+    """La lente del BUSCADOR (`fq` de Solr): la del TEMA si la declara, si no la de `objective.yaml`.
 
     #85 — era constante de módulo, y es la mitad **más restrictiva** del filtro: acota el universo
     **server-side, antes de traer nada**, mientras que `relevance.facets` decide qué es core dentro
@@ -136,11 +136,32 @@ def search_fq() -> str | None:
     leerse igual que no haber declarado nada — misma distinción que D-26 protege con
     `fundacional_min_citas`.
 
+    ⛔ **Y el tema puede declarar el suyo (#295).** D-26 hizo propia la lente del tema —`facet:` y
+    `fundacional_min_citas` viven en `themes.yaml` porque la global es *«activamente dañina»* ahí—
+    y dejó GLOBAL justamente la mitad más restrictiva. En una bóveda con foco astro, un tema de
+    estadística o signal processing se buscaba entonces sobre un universo que **excluye su
+    literatura por construcción**, y ninguna `facet:` propia puede recuperarla: la faceta clasifica
+    lo ya traído. Medido en la query de un tema real: 306 resultados con `database:astronomy` y
+    6946 sin él (22,7×), con `title:"noisy ICA"` —el término que da nombre al tema— devolviendo
+    **cero** bajo el fq. Y la salida NO es sacar el fq: sin él, el top por citas de esa misma query
+    es software de mapeo genómico y guías de cardiología. Es mover el fq al nivel donde D-26 puso
+    todo lo demás. Misma cascada de tres estados que arriba, resuelta tema → objetivo.
+
     @inv INV-119"""
+    tema = cfg.as_map(meta)
+    if "search_fq" in tema:
+        return _fq_valor(tema.get("search_fq"), "themes.yaml", "la entrada del tema")
     rel = cfg.as_map(cfg.load_objective().get("relevance"))
     if "search_fq" not in rel:
         return ASTRO_FQ
-    v = rel.get("search_fq")
+    return _fq_valor(rel.get("search_fq"), "vault/config/objective.yaml", "relevance")
+
+
+def _fq_valor(v, archivo: str, donde: str) -> str | None:
+    """A declared `search_fq:` → the `fq` that gets sent, or `None` for the deliberate `null`.
+
+    Shared by both levels (objective and theme) on purpose: two implementations of the same rule is
+    how a `null` ends up meaning different things depending on who reads it."""
     if v is None or v == "":
         return None                       # `null` declarado: no acotar, a propósito (#85)
     # AUD-182 / INV-119 — `str(v)` sobre una lista manda el **`repr` de Python** a Solr
@@ -149,7 +170,7 @@ def search_fq() -> str | None:
     # vigente. La forma se valida como el resto de la config: falla ruidoso.
     if not isinstance(v, str):
         raise RuntimeError(
-            f"vault/config/objective.yaml: relevance.search_fq tiene que ser un string con el `fq` "
+            f"{archivo}: {donde} → search_fq tiene que ser un string con el `fq` "
             f"de Solr y es {type(v).__name__} ({v!r}). Si querés varias condiciones, escribilas en "
             f"un solo string (`database:astronomy AND property:refereed`); una lista se manda como "
             f"su repr de Python y filtra el corpus con una regla que nadie escribió."
@@ -487,7 +508,8 @@ def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
     return [to_record(d) for d in docs]
 
 
-def recent_pass(q: str, rows: int, known: set[str]) -> list[dict]:
+def recent_pass(q: str, rows: int, known: set[str],
+                fq: str | None = _FQ_DEFAULT) -> list[dict]:
     """Segunda pasada de la query directa ordenada por FECHA, para cuando la primera truncó (#79).
 
     Con `numFound > rows` ADS devuelve el top por citas y **corta el resto**. Ese corte no es
@@ -510,7 +532,8 @@ def recent_pass(q: str, rows: int, known: set[str]) -> list[dict]:
     está cubierta": afirmar de más justo donde #57 dice que no saber es mejor."""
     time.sleep(1.0)          # cortesía entre requests, como el chaining y el rescate por glifo
     out = []
-    for r in query_ads(q, rows=rows, quiet_truncate=True, sort=RECENT_SORT, expect_hits=True):
+    for r in query_ads(q, rows=rows, quiet_truncate=True, sort=RECENT_SORT, expect_hits=True,
+                       fq=fq):
         b = r.get("bibcode")
         if b and b not in known:
             known.add(b)
@@ -522,7 +545,8 @@ def recent_pass(q: str, rows: int, known: set[str]) -> list[dict]:
 CHAIN_CHUNK = 40   # bibcodes por sub-query encadenada (mantiene la URL corta)
 
 
-def chain_candidates(core_bibcodes: list[str], rows: int, subject_filter: str) -> list[dict]:
+def chain_candidates(core_bibcodes: list[str], rows: int, subject_filter: str,
+                     fq: str | None = _FQ_DEFAULT) -> list[dict]:
     """Citation chaining (snowballing) sobre el grafo de citas de ADS: `references()` (hacia atrás,
     qué citan los core) y `citations()` (hacia adelante, quién los cita). Un paper clave que se le
     escapó a la query directa casi seguro cita o es citado por alguno que sí entró.
@@ -539,7 +563,8 @@ def chain_candidates(core_bibcodes: list[str], rows: int, subject_filter: str) -
         for i in range(0, len(core_bibcodes), CHAIN_CHUNK):
             chunk = core_bibcodes[i:i + CHAIN_CHUNK]
             inner = " OR ".join(f'bibcode:"{b}"' for b in chunk)
-            hits = query_ads(f"{op}({inner}) AND ({subject_filter})", rows=rows, quiet_truncate=True)
+            hits = query_ads(f"{op}({inner}) AND ({subject_filter})", rows=rows,
+                             quiet_truncate=True, fq=fq)
             for h in hits:
                 h["via"] = f"chain:{op}"
             out += hits
@@ -1105,6 +1130,12 @@ def lens_used(meta: dict | None = None) -> dict:
         # para todos) y no puede leerse igual que "no lo declaró" (la puerta no abre). Es la misma
         # distinción que D-26 protege al no ponerle default.
         regla = {"facet": meta.get("facet")}
+        # #295 — el `fq` propio del tema re-clasifica su universo igual que la faceta (acota
+        # server-side, antes de traer nada), así que entra en la lente guardada o el detector de
+        # lente desincronizada no puede ver que cambió. Sólo si el tema lo declara: la clave
+        # ausente en las dos lentes es "no lo declara", no un cambio.
+        if "search_fq" in cfg.as_map(meta):
+            regla["search_fq"] = search_fq(meta)
         if "fundacional_min_citas" in meta:
             # AUD-142: se persiste el umbral NORMALIZADO, el mismo que el clasificador usó — si no,
             # el registro guarda `"30000"` y `puerta2_cruces` compara un string contra un int y
@@ -1255,6 +1286,63 @@ def print_gate_breakdown(core: list) -> None:
         cfg.print_seguro(f"    {n:>5}  {etiqueta}")
 
 
+# #289 — las dos clases de no-core que piden acciones OPUESTAS. `classify_theme` ya las distingue
+# en su `motivo`; lo que faltaba era leerlo. El prefijo alcanza porque el motivo lo escribe una sola
+# función (arriba) y se compara contra su texto, no contra una copia.
+_SIN_FACETA = "sin la faceta propia del tema"
+
+
+def _clase_noncore(why: str | None) -> str:
+    """A theme's `why_excluded` → the label that says WHAT TO DO about that non-core (#289)."""
+    w = (why or "").strip()
+    if not w:
+        return "sin motivo registrado (no consta)"
+    if w.startswith(_SIN_FACETA):
+        return _SIN_FACETA
+    if w.startswith("doctype:"):
+        return "doctype de ruido"
+    if w.startswith("excluido del sujeto por decisión"):
+        return "excluido por decisión (#112)"
+    if "no se pudo evaluar" in w or "NO se pudo evaluar" in w:
+        return "pasan la faceta; la puerta 2 NO se pudo evaluar"
+    return "pasan la faceta, ninguna puerta abre"
+
+
+def print_noncore_breakdown(noncore: list, top: int = 10) -> None:
+    """Why each non-core stayed out, and which ones the GATE rejected rather than the facet (#289).
+
+    `--theme --probe` is the only place where a method theme's cut is decided before paying for
+    downloads and extraction (#208), and its closing line says to adjust `facet:` or
+    `fundacional_min_citas` — while the screen showed nothing about which of the two to touch.
+    Measured on a real theme: **261** non-core *without the theme's facet* against **32** that
+    **pass the facet and die at the gate**, and the two populations ask for opposite moves (tighten
+    the facet / open the gate or declare `extra_core`). Among those 32 sat the two noisy-whitening
+    papers this module's own header names as the case the ADS chain loses: from the screen they
+    read exactly like the other 261, and loosening the facet — the move they suggested — lets those
+    261 in.
+
+    In global mode the non-core diagnosis is `propose_facets` (#83), correctly off here: it
+    proposes facets for `objective.yaml`, which is not the file deciding this cut."""
+    if not noncore:
+        return
+    from collections import Counter
+    clases = Counter(_clase_noncore(r.get("why_excluded")) for r in noncore)
+    cfg.print_seguro("\n  por qué quedó afuera cada no-core (D-26):")
+    for etiqueta, n in clases.most_common():
+        pista = ("  ← candidatos a `extra_core` o a `fundacional_min_citas`"
+                 if etiqueta.startswith("pasan la faceta") else "")
+        cfg.print_seguro(f"    {n:>5}  {etiqueta}{pista}")
+    # El bloque que más rinde: la lista de la que sale `extra_core`. Hoy hay que escribir un script
+    # propio para obtenerla, y es la decisión que el probe existe para tomar.
+    pasan = [r for r in noncore if _clase_noncore(r.get("why_excluded")).startswith("pasan la faceta")]
+    if pasan:
+        pasan.sort(key=lambda r: r.get("citation_count") or 0, reverse=True)
+        cfg.print_seguro(f"\n  no-core que PASAN la faceta (top {min(top, len(pasan))} de "
+                         f"{len(pasan)} por citas — son los que rechaza la PUERTA, no la faceta):")
+        for r in pasan[:top]:
+            cfg.print_seguro(_probe_row(r))
+
+
 def print_probe(q: str, recs: list, noncore_top: int = 25, theme_meta: dict | None = None) -> int:
     """Modo preview del skill `setup`: muestra el corte core/no-core de una query sin bajar nada,
     para afinar la regla de relevancia (relevance.facets) contra papers reales. Lista **TODO el core**
@@ -1288,6 +1376,7 @@ def print_probe(q: str, recs: list, noncore_top: int = 25, theme_meta: dict | No
         # la puerta 3 de D-26: mostrarlos mandaría a afinar objective.yaml cuando el archivo que
         # decide este corte es themes.yaml — el mismo error que la línea de cierre cometía.
         print_gate_breakdown(core)
+        print_noncore_breakdown(noncore)      # #289 — el simétrico, del lado del no-core
     else:
         print_combination_contrast(recs)
     # #83: qué faceta le FALTA a la lente, minado de los no-core. Propuesta, no edición.
@@ -1308,8 +1397,9 @@ def print_probe(q: str, recs: list, noncore_top: int = 25, theme_meta: dict | No
     for r in shown:
         cfg.print_seguro(_probe_row(r))
     if theme_meta is not None:
-        cfg.print_seguro("\n  → ajustá `facet:` / `fundacional_min_citas` del tema en themes.yaml y "
-                         "re-corré --probe hasta que el corte cierre.")
+        cfg.print_seguro("\n  → ajustá `facet:` / `fundacional_min_citas` (y, si hace falta, "
+                         "`search_fq:`) del tema en themes.yaml y re-corré --probe hasta que el "
+                         "corte cierre.")
         cfg.print_seguro("    (la columna [fundacional|astro] dice por qué puerta entró cada core, #126; "
                          "sin ninguna puerta abierta no es core)")
     else:
@@ -1419,7 +1509,15 @@ def main() -> int:
         if not q:
             ap.error('falta la QUERY: --probe "<query>" (con --theme se puede omitir sólo si el '
                      "tema declara `query:` en themes.yaml)")
-        return print_probe(q, query_ads(q, rows=args.rows), theme_meta=tema_meta)
+        # #295 — el preview se corre con el `fq` que va a correr el ingest. Con el global, un tema
+        # de método previsualiza un universo que EXCLUYE su literatura server-side, y ninguna
+        # `facet:` puede recuperarla desde ahí: es el mismo falso limpio que #208 cerró del lado de
+        # la lente, sobreviviendo en la mitad más restrictiva del filtro.
+        fq_probe = search_fq(tema_meta)
+        if tema_meta is not None and fq_probe != search_fq():
+            cfg.print_seguro(f"  (fq propio del tema: "
+                             f"{fq_probe if fq_probe is not None else 'null — no acota'})")
+        return print_probe(q, query_ads(q, rows=args.rows, fq=fq_probe), theme_meta=tema_meta)
 
     if args.dry_run:   # offline: sólo re-clasifica lo que ya está en build/ (no toca ADS)
         slugs = [args.slug] if args.slug else built_slugs()
@@ -1449,9 +1547,17 @@ def main() -> int:
 
     star_names: list[str] = []      # sólo estrellas: insumo del rescate por glifo (#28)
     tema_meta = None                # se persiste en la `lente` del registro (regla del tema, #106)
+    fq_run = search_fq()            # #295: el `fq` EFECTIVO de esta corrida (el del tema si lo declara)
     if args.theme:
         _, meta = cfg.theme_by_slug(args.slug)
         tema_meta = meta
+        # #295 — la mitad MÁS restrictiva de la lente se resuelve una vez, acá, y se usa en los
+        # tres carriles de la corrida (query directa, segunda pasada por fecha y chaining) y en el
+        # registro. Resolverla adentro de `query_ads` como antes dejaba al tema con el `fq` global:
+        # un tema de método buscando en un universo que excluye su literatura por construcción.
+        fq_run = search_fq(meta)
+        if fq_run != search_fq():
+            cfg.print_seguro(f"  fq propio del tema (#295): {fq_run if fq_run is not None else 'null (no acota)'}")
         if args.extra_only:
             # Tema MIXTO (off-ADS + extra_core): sin `query` no hay búsqueda ni chaining — la
             # única fuente ADS es la curación manual de `extra_core` (el bloque de abajo).
@@ -1491,7 +1597,7 @@ def main() -> int:
     else:
         # expect_hits: la query directa de un sujeto NO puede volver vacía — un 0 es el cero
         # espurio de ADS (#27) o un nombre mal escrito; en ambos casos abortar > persistir vacío.
-        recs = query_ads(q, rows=args.rows, meta=qmeta, expect_hits=True)
+        recs = query_ads(q, rows=args.rows, meta=qmeta, expect_hits=True, fq=fq_run)
         for r in recs:
             r["via"] = "query"
         # D-26: para un tema de método la lente global es la equivocada (mata al fundacional y deja
@@ -1515,7 +1621,7 @@ def main() -> int:
         if qmeta.get("truncated"):
             conocidos = {r["bibcode"] for r in recs if r.get("bibcode")}
             try:
-                recientes = recent_pass(q, args.rows, conocidos)
+                recientes = recent_pass(q, args.rows, conocidos, fq=fq_run)
             except (EmptyResultError, RuntimeError, requests.RequestException) as e:
                 # Rescate BEST-EFFORT: la query directa ya volvió bien y su `ads.json` vale. Antes
                 # cualquier excepción acá abortaba antes de escribirlo y tiraba la corrida entera.
@@ -1628,7 +1734,7 @@ def main() -> int:
         gate = bool(star_names) or politica == "never"
         descartados = load_triage(args.slug) if gate else set()
         chained, ya_descartados = [], 0
-        for c in chain_candidates(core_bibs, args.rows, chain_filter):
+        for c in chain_candidates(core_bibs, args.rows, chain_filter, fq=fq_run):
             b = c.get("bibcode")
             if not (c["relevant"] and b and b not in seen):  # sólo core nuevos (dedup vs query y ops)
                 continue
@@ -1723,8 +1829,9 @@ def main() -> int:
         # de curación (medido: una bóveda afirma «ningún paper del canon está en ADS: 0/8» sobre un
         # canon de procesamiento de señales, con `database:astronomy` aplicado y sin registrarlo).
         # `None` es un valor DECLARADO (`search_fq: null` = no acotar) y no se lee igual que la
-        # clave ausente, que es una corrida anterior a este campo.
-        "fq": search_fq(),
+        # clave ausente, que es una corrida anterior a este campo. #295: el RESUELTO (el del tema
+        # si lo declara), no el global — si no, el registro vuelve a mentir sobre la corrida.
+        "fq": fq_run,
         "rows": args.rows,
         "n_found": qmeta.get("num_found"),            # lo que ADS dice que hay (None sin query directa)
         "n_total": len(recs),                         # lo que se trajo (query + extra_core + chaining)

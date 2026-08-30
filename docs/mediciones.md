@@ -366,3 +366,47 @@ su ancla quedan en `CLAUDE.md`; el caso medido vive donde se lo puede consultar.
   usuario. Y sin la salida hacia la ingesta (`triage --accept-source`) el descubrimiento se cortaba
   en el hallazgo: proponía el paper y bajarlo quedaba como trabajo manual — que es exactamente por
   qué una bóveda con búsqueda peor puede terminar con más papers que una con búsqueda mejor.
+
+## 2026-08-30 · Descubrimiento de un tema de método que cruza disciplinas (#290/#293/#294)
+
+**Qué era.** Primera cascada de un tema nuevo (`ica-ruido`: ICA ruidosa + blanqueo heterocedástico)
+en una bóveda real, contra un **gold standard de 25 papers** curados a mano en otra bóveda.
+
+| Qué se midió | Número | Salvedad |
+|---|---|---|
+| Recuperación de la cascada con `topic:` escalar y 8 `seed_terms` | **15/25** | 1141 registros tras dedup |
+| De los 15 recuperados, por backend | openalex 11 · arxiv 2 · ads 2 | consistente con el 8/8 de #104 |
+| De los 10 perdidos, misma familia (blanqueo heterocedástico) | **6** | repartida en **5 topics** de OpenAlex |
+| Perdidos **sólo** por el techo de 200 del slice | **2** | están en OpenAlex, con el topic correcto, fuera del top 200 por citas |
+| `heteropca` / `heteroskedastic` / `dyson` / `alpcah` en los 1242 registros | **0 hits** | no es ranking ni truncamiento: no entran al universo |
+
+**El eje que decide.** El valor del filtro por topic **escala con la ambigüedad del término**: en
+`meta.count` sin filtro, `HeteroPCA` tiene **9** works en todo OpenAlex (∩ topic: 4), `heteroskedastic
+PCA` **79** (8), `quasi-whitening` **103** (15) — ahí el filtro sólo puede sacar señal —, mientras
+`matrix denoising` tiene **4823**, `weighted PCA` **6790** y `gaussian moments` **13.396**, donde es
+lo que hace usable el ranking. De ahí que se **mida por término** en vez de aplicarlo a ciegas.
+
+⚠ **Salvedad de la primera fila:** el mismo trabajo cae en topics distintos según sea preprint o
+publicado, así que «5 topics para una familia» describe la taxonomía tal como está, no un error de
+declaración.
+
+**Qué cambió.** `topic:` acepta lista (OR); el slice pagina hasta `rows_por_termino`, que pasa a ser
+campo del tema y flag; el filtro por término se decide con el conteo y se declara; `--topics`
+distingue su vacío de su fallo.
+
+## 2026-08-30 · Tanda del carril de lente y schema (#289/#291/#292/#295/#296/#297)
+
+| Qué se midió | Número | Salvedad |
+|---|---|---|
+| Universo de la query de un tema de método, con y sin `fq=database:astronomy` | **306 → 6946** (22,7×) | `title:"noisy ICA"` da **0** con el fq y 12 sin él (#295) |
+| Gold standard del tema alcanzable por la mitad ADS, con fq / sin fq | **4/10 → 10/10** | verificado término por término: no es problema de la query |
+| No-core del probe de un tema, por motivo | **261** sin la faceta propia · **32** pasan la faceta y mueren en la puerta · 10 doctype | los dos primeros piden acciones **opuestas** (#289) |
+| Papers que el tema existía para capturar, dentro de esos 32 | **2** | `2012PASP..124.1015B`, `2015MNRAS.446.3545D` |
+| Alternativas de la faceta de un tema real | **27**, una con población **cero** y una duplicada | `non-?gaussianity matrix`: 0 archivos con la frase, **29** con `non-gaussianity` (#291) |
+| `#N` del repo contrastados contra los issues de GitHub | **247** distintas, **1** colgada | la colisión de #288 ocurrió **en vivo** (#292) |
+| `pdf_source` sobre las notas de paper de una bóveda | 85 `eprint` · 50 ausente · 1 `ads` · **2 con prosa** | el `eprint` es la exención que apaga el chequeo de cita textual (#296) |
+| Notas `eprint` y pasadas de red registradas | **85/138 (62 %)** · `_red.yaml` **no existe** | ninguna de las seis caducidades estaba chequeada (#297) |
+
+⚠ **Salvedad transversal:** todas salen de **una** bóveda (`Almagesto-Tesis`, 2026-08-30) y de un
+solo tema de método. Lo que sostienen es que el modo de falla **existe y es alcanzable**, no una
+frecuencia poblacional.

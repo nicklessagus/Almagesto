@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.126.2"
+ALMAGESTO_VERSION = "1.127.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -65,6 +65,18 @@ PENDING_OK = ("paywall", "scan", "unextractable", "adquisicion")
 # `txt:`/`pdf:` de #117 —aquél dice QUÉ ARCHIVO se leyó, éste CÓMO se apunta adentro— y hacen falta
 # los dos: el `.txt` de un libro tampoco se cita por línea.
 UNIDAD_CITA_OK = ("linea", "pagina", "seccion")
+
+# #296 · DE QUÉ DOCUMENTO salió la lectura, y CÓMO se extrajo el índice. Vocabularios CERRADOS —la
+# familia de `role`/`pending`/`unidad_cita`— y hasta ahora los únicos dos declarados cerrados en
+# `CLAUDE.md` que nadie validaba. No es cosmético: `pdf_source: eprint` es una EXENCIÓN que apaga el
+# chequeo de cita textual (#220/#275), así que un valor fuera de vocabulario cae por el `else` de
+# todo `== "eprint"` en silencio, y un `eprint` mal escrito enciende un chequeo que iba a estar
+# exento y produce hallazgos que no lo son. Medido sobre 138 notas: 85 `eprint`, 50 sin valor, 1
+# `ads` y **2 con prosa dentro del campo** (una de ellas, información legítima de adquisición que
+# terminó en el campo equivocado sin que nada lo dijera).
+# ⚠ `null`/ausente es el valor legítimo para **desconocido**, que NO es «publicado» (#57).
+PDF_SOURCE_OK = ("eprint", "ads", "publisher", "web")
+FULLTEXT_SOURCE_OK = ("pdftotext", "ocr", "web")
 
 # D-37 · en qué quedó una hipótesis. Vocabulario CERRADO: `status` es lo ÚNICO que un consumidor lee
 # para decidir si se apoya en ella, y en prosa libre no dice nada (el caso medido en la instancia
@@ -516,6 +528,122 @@ def facet_tokens_without_boundary(patron: str) -> list:
             continue
         fuera.append(t)
     return fuera
+
+
+def reuse_note(bibcode: str, origen) -> str:
+    """The D-18 reuse line, saying WHAT WAS NOT CHECKED about the artefact it imports (#297).
+
+    `↺ … copiado sin ir a la red` reads as *"we saved a download"*, and what also happened is
+    *"a subject just inherited an artefact whose age nobody checked"*. The framework HAS the
+    version detector (`sweep_external`, one of the six expiries) and the ingest chain does not run
+    it, which is coherent — the chain only checks the subject at hand — except that the moment of
+    reuse is exactly when an old artefact enters a new subject. And the answer one would expect
+    («if there were a newer version the search would have returned ANOTHER bibcode, and D-19 joins
+    them») is false in the frequent case: the preprint's DOI identifies the *deposit*, so #216
+    **guarantees** preprint and published never collide. Measured on a real vault: 85 of 138 notes
+    are `pdf_source: eprint` (62 %) and `_red.yaml` did not exist — the network pass had never run.
+
+    So the line declares the two facts the operator needs and stops there (INV-87: what was NOT
+    looked at is stated). It does not go to the network: the reuse must stay cheap."""
+    fecha = ""
+    try:
+        fecha = _dt.date.fromtimestamp(Path(origen).stat().st_mtime).isoformat()
+    except (OSError, ValueError, TypeError):
+        pass
+    nota = PAPERS / f"{bibcode}.md"
+    src = None
+    if nota.exists():
+        try:
+            src = split_fm(nota.read_text(encoding="utf-8")).get("pdf_source")
+        except OSError:
+            src = None
+    detalle = ", ".join(filter(None, [f"en disco desde {fecha}" if fecha else "",
+                                      f"pdf_source: {src}" if src else "pdf_source: no consta"]))
+    return (f"  ↺ {bibcode}: ya estaba bajo `{Path(origen).parent.name}` — copiado sin ir "
+            f"a la red (D-18; {detalle}) — no se chequeó si hay versión publicada")
+
+
+def facet_alternatives(patron: str) -> list:
+    """A facet regex → its **level-0** alternatives, groups kept whole (#291).
+
+    ⚠ This is NOT `patron.split("|")`, and the difference is measured. A naive split cuts INSIDE
+    groups: with it, `line-by-line` shows up twice — it lives in two different `(...)` groups — and
+    reads as a duplicate; deduping on that breaks `(telluric|line-by-line|stellar activity)` and
+    the reclassification diff comes out **−1** (one real paper leaves the core). A check that
+    exists to look after the lens cannot be the thing that breaks it.
+
+    ⚠ It is deliberately NOT shared with `facet_tokens_without_boundary`, whose naive split is
+    correct for ITS question: a short token without `\b` leaks whether or not it sits inside a
+    group, so that detector wants the inner alternatives too. Same string, two questions."""
+    fuera, actual, depth, in_class, esc = [], [], 0, False, False
+    for ch in str(patron or ""):
+        if esc:
+            actual.append(ch)
+            esc = False
+            continue
+        if ch == "\\":
+            actual.append(ch)
+            esc = True
+            continue
+        if in_class:
+            actual.append(ch)
+            if ch == "]":
+                in_class = False
+            continue
+        if ch == "[":
+            in_class = True
+        elif ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth = max(0, depth - 1)
+        elif ch == "|" and depth == 0:
+            fuera.append("".join(actual))
+            actual = []
+            continue
+        actual.append(ch)
+    fuera.append("".join(actual))
+    return [a for a in (x.strip() for x in fuera) if a]
+
+
+def facet_dead_alternatives(patron: str, textos) -> list:
+    """Alternatives of a facet that match **nothing** in `textos` (#291), as `(alternativa, motivo)`.
+
+    #236 built the machinery to audit a facet alternative by alternative and covered ONE direction
+    —the alternative that matches too much—, leaving open the quieter one: **the alternative that
+    matches nothing**. A dead alternative is never seen. The facet still compiles, the cut still
+    prints a plausible number, the registry stores the lens as current, and the term simply does
+    not participate — indistinguishable from "that term does not appear in the literature".
+
+    Measured on a real theme: `non-?gaussianity matrix` (almost certainly a lost `|`) required the
+    literal phrase, which **0** files hold, while 29 hold `non-gaussianity` — so non-Gaussianity,
+    one of the two or three terms that DEFINE the theme and a declared alias of it, never
+    classified anybody, and no net said so.
+
+    The caller must declare the population: over 0 notes this is **not evaluable**, not "all dead"
+    (D-43). An alternative that does not compile on its own is reported as such rather than
+    silently skipped — a `(0)` nobody measured reads as a verdict."""
+    fuera = []
+    for alt in facet_alternatives(patron):
+        try:
+            rx = re.compile(alt, re.I)
+        except re.error as exc:
+            fuera.append((alt, f"no compila por separado ({exc}) — no se pudo evaluar"))
+            continue
+        if not any(rx.search(str(t or "")) for t in textos):
+            fuera.append((alt, "no matchea NINGUNA nota del sujeto"))
+    return fuera
+
+
+def facet_duplicated_alternatives(patron: str) -> list:
+    """Alternatives repeated verbatim within the same facet (#291). Harmless, and the cheap signal
+    that the chain was hand-edited blind — which is how the dead alternative above got there."""
+    vistos, repetidas = set(), []
+    for alt in facet_alternatives(patron):
+        clave = alt.casefold()
+        if clave in vistos and alt not in repetidas:
+            repetidas.append(alt)
+        vistos.add(clave)
+    return repetidas
 
 
 def facet_token_leaks(token: str, textos) -> list:
@@ -2905,6 +3033,12 @@ def lens_current(slug: str | None = None) -> dict:
         except (KeyError, RuntimeError):
             return lente                      # una estrella no tiene regla de tema: no es un cambio
         regla = {"facet": as_map(tmeta).get("facet")}
+        # #295 — espeja `query_ads.lens_used`: el `fq` propio del tema es la mitad MÁS restrictiva
+        # de su lente. Se resuelve acá sin importar `query_ads` (arrastraría `requests` al lint):
+        # es la misma cascada de tres estados, y el caso "declarado null" no se lee como ausente.
+        if "search_fq" in as_map(tmeta):
+            v = as_map(tmeta).get("search_fq")
+            regla["search_fq"] = None if v in (None, "") else v
         if "fundacional_min_citas" in as_map(tmeta):
             regla["umbral"] = gate2_threshold(tmeta)[0]
         lente["regla_tema"] = regla
@@ -2957,6 +3091,14 @@ def lens_delta(stored: dict, current: dict) -> list[str]:
             delta.append("`facet` del tema: regex cambiada")
         # `in`, no truthiness: pasar de "sin declarar" (la puerta NO abre) a `0` (abre para todos)
         # es el cambio más grande que este campo admite, y con `or None` los dos se leían igual.
+        # #295 — mismo criterio de presencia: pasar de "hereda el global" a `search_fq: null`
+        # cambia el universo entero del tema, y con `or None` los dos se leerían igual.
+        fa_, fb_ = ("search_fq" in ta, ta.get("search_fq")), ("search_fq" in tb, tb.get("search_fq"))
+        if fa_ != fb_:
+            def _fmt_fq(par):
+                return (str(par[1]) if par[1] is not None else "null (no acota)") if par[0] \
+                    else "sin declarar (hereda el objetivo)"
+            delta.append(f"`search_fq` del tema {_fmt_fq(fa_)} → {_fmt_fq(fb_)}")
         ua, ub = ("umbral" in ta, ta.get("umbral")), ("umbral" in tb, tb.get("umbral"))
         if ua != ub:
             def _fmt(par):

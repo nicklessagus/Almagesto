@@ -1306,6 +1306,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     salv_sin_marca: list = []          # (stem, motivo) — #234: salvedades sin la marca de #213
     salv_decidible: list = []          # (stem, motivo) — #234: salvedad en prosa que parece chequeable
     faceta_sin_frontera: list = []     # (faceta, motivo) — #236: token corto que matchea dentro de palabra
+    faceta_muerta: list = []           # (faceta, motivo) — #291: alternativa con POBLACIÓN CERO
+    reuso_sin_chequear: list = []      # (stem, motivo) — #297: artefacto reusado, antigüedad no mirada
     thesis_refs: dict[str, list] = {}  # valor de thesis_link -> notas que lo usan
     method_refs: dict[str, list] = {}  # valor de methods -> notas de paper que lo declaran
     dispute_refs: list = []            # (nota, field, ref) de las posiciones de cada disputa (#71)
@@ -1421,6 +1423,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     #                                    consume `index_tables` para no re-parsear la bóveda (#237)
     paper_fms: dict = {}               # {stem: frontmatter} de papers/ — para D-10, sin re-parsear
     paper_abstracts: dict = {}         # {stem: abstract normalizado} — #216, duplicado sin doi/arxiv
+    paper_lens_text: dict = {}         # {stem: título+abstract+keywords} — #291, el texto que lee la lente
     sin_extraer_por_sujeto: dict = {}  # nombre de sujeto → {stems core sin extraer} (D-13)
     for f in files:
         try:
@@ -1443,6 +1446,9 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             # identificador. Se guarda acá porque el loop ya tiene el texto: re-leer 900 notas para
             # una categoría de backlog sería pagar el corpus dos veces.
             paper_abstracts[basename(f)[:-3]] = _abstract_norm(text)
+            # #291 — el MISMO texto que lee la lente (título + abstract + keywords), no el
+            # fulltext: el veredicto tiene que ser el de la lente, y el loop ya tiene el texto.
+            paper_lens_text[basename(f)[:-3]] = cfg.note_lens_text(fm or {}, text)
         else:
             anchor_bodies[f] = text
         stem = basename(f)[:-3]
@@ -2129,6 +2135,21 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                     incomplete.append((stem, f"`unidad_cita: {_u}` (documento largo) sin `alcance`: "
                                              f"no consta qué parte entró, así que un recorte "
                                              f"deliberado se lee como omisión"))
+            # #296 — los otros dos vocabularios CERRADOS del schema de paper, que `CLAUDE.md`
+            # declaraba cerrados y nadie validaba. `pdf_source: eprint` es la exención que apaga el
+            # chequeo de cita textual: un valor fuera de vocabulario la apaga por el `else` en
+            # silencio, y un `eprint` mal escrito la enciende y produce hallazgos que no lo son.
+            for _campo, _ok in (("pdf_source", cfg.PDF_SOURCE_OK),
+                                ("fulltext_source", cfg.FULLTEXT_SOURCE_OK)):
+                _v = fm.get(_campo)
+                if _v in (None, ""):
+                    continue          # ausente/`null` = DESCONOCIDO, que es un valor legítimo (#57)
+                if str(_v).strip() not in _ok:
+                    bad_roles.append((stem, f"`{_campo}: {str(_v)[:60]}` fuera del vocabulario "
+                                            f"({' | '.join(_ok)}) — `null`/ausente es el valor de "
+                                            f"«desconocido»; si querías escribir una nota, va a "
+                                            f"`pending_motivo` o a `salvedades`. Migrador: "
+                                            f"`python scripts/make_notes.py --migrate-source-fields`"))
             if fm.get("pending_source"):
                 ptr = fm.get("doi") or fm.get("source_url") or "(sin puntero conocido)"
                 _p = str(fm["pending_source"])
@@ -3460,6 +3481,12 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # diciendo que falta el scratch: mejor un dato fechado que un cero inventado.
     for rf in sorted(glob.glob(str(cfg.REGISTRO / "*.yaml"))):
         slug = Path(rf).stem
+        # #297 — `_red.yaml` (la pasada de red, D-46) es de la BÓVEDA entera, no de un sujeto: no
+        # tiene `busquedas`, así que este bloque lo reportaba como *lente desincronizada: no
+        # evaluado* y mandaba a «re-correr la cadena del sujeto» sobre un slug que no existe. El
+        # otro loop sobre `REGISTRO/*.yaml` ya lo saltea con este mismo criterio; éste no.
+        if slug.startswith("_"):
+            continue
         # Lector BLINDADO (#h05): antes esto reimplementaba `yaml.safe_load` a mano acá mismo —
         # el único de seis lectores del registro que lo hacía— y por eso se saltaba el blindaje
         # que `cfg.load_registro` ya tiene (YAML roto / forma inválida → `{}`, no una excepción).
@@ -3644,6 +3671,35 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                                             f"stars.yaml/themes.yaml{extra} → "
                                             f"`python scripts/entity.py plan {slug_}` no lo va a "
                                             f"encontrar: borralo a mano, o recreá la entidad"))
+
+    # #297 — el reuso D-18 importa a un sujeto nuevo un artefacto cuya antigüedad nadie chequeó, y
+    # el detector de versiones vive SÓLO en la pasada periódica. La respuesta natural («si hubiera
+    # versión nueva, la búsqueda habría traído otro bibcode y D-19 los une») es falsa justo en el
+    # caso frecuente: el DOI del preprint identifica el DEPÓSITO, así que #216 garantiza que
+    # preprint y publicado no colisionen — queda el detector de abstract verbatim, que es backlog.
+    # Medido en una bóveda real: 62 % del corpus es `eprint` y `_red.yaml` NO EXISTÍA.
+    # Se detecta por verdad de disco: el mismo bibcode con PDF bajo ≥2 slugs.
+    _pasada_red = cfg.REGISTRO / "_red.yaml"
+    if not _pasada_red.exists() and any(cfg.PAPERS.glob("*.md")):
+        reuso_sin_chequear.append(
+            ("(la bóveda)", "`vault/config/registro/_red.yaml` no existe: `sweep_external` nunca "
+                            "corrió acá, así que NINGUNA de las seis caducidades está chequeada "
+                            "(retracciones, correcciones, versiones, snapshot web, ground-truth, "
+                            "citas de la puerta 2) → `python scripts/sweep_external.py`"))
+    _por_stem: dict = {}
+    for _pdf in cfg.PDFS.glob("*/*.pdf"):
+        _por_stem.setdefault(_pdf.stem, []).append(_pdf.parent.name)
+    for _stem, _slugs in sorted(_por_stem.items()):
+        if len(_slugs) < 2:
+            continue
+        _fm = paper_fms.get(_stem)
+        if not _fm or str(_fm.get("pdf_source") or "") != "eprint" or cfg.as_list(_fm.get("versions")):
+            continue
+        reuso_sin_chequear.append(
+            (_stem, f"reusado entre slugs ({', '.join(sorted(_slugs))}) con `pdf_source: eprint` y "
+                    f"sin `versions[]`: el artefacto entró a otro sujeto sin que nadie chequeara si "
+                    f"salió publicado (D-18/#216) → `python scripts/sweep_external.py --bibcodes "
+                    f"{_stem}`"))
 
     # Fulltext SIN nota de paper (#108). Hermano simétrico de la «cita no verificable» (bibcode
     # citado sin `.txt`) y del `ground_truth` sin ficha: acá el `.txt` **existe** y la nota no, así
@@ -3833,6 +3889,52 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                     (str(_nombre), f"el token `{_tok}` no lleva `\\b` y matchea DENTRO de otra "
                                    f"palabra{_ev} → escribilo `\\b{_tok}\\b`"))
 
+    # #291 — la dirección SIMÉTRICA de #236: la alternativa que no matchea nada. Una alternativa
+    # muerta no se ve nunca —la faceta compila, el corte da un número plausible, el registro guarda
+    # la lente como vigente— y el término simplemente no participa, indistinguible de «ese término
+    # no aparece en la literatura». Medido: `non-?gaussianity matrix` (un `|` perdido) exigía una
+    # frase que 0 archivos tienen, mientras 29 tienen `non-gaussianity`: el tema clasificaba por su
+    # vocabulario MENOS su término central. Se corre contra el texto que lee la LENTE (título +
+    # abstract + keywords de las notas), no contra el fulltext, para que el veredicto sea el de la
+    # lente. Backlog, nunca bloqueante: una alternativa puede ser legítimamente rara, o estar
+    # puesta para lo que todavía no se ingestó.
+    if not cfg.themes_error():
+        for _slug, _tmeta in (cfg.load_themes() or {}).items():
+            _facet = cfg.as_map(_tmeta).get("facet")
+            if not _facet:
+                continue
+            _stems = {st for st, _f, _t in cfg.notes_of_subject(_slug)}
+            _textos = [paper_lens_text[st] for st in sorted(_stems) if st in paper_lens_text]
+            for _alt in cfg.facet_duplicated_alternatives(str(_facet)):
+                faceta_muerta.append((f"tema `{_slug}`",
+                                      f"alternativa DUPLICADA `{_alt}` — inofensiva, pero es la "
+                                      f"señal barata de que la cadena se editó a mano y a ciegas"))
+            if not _textos:
+                # D-43 — sobre un tema recién declarado el chequeo NO es evaluable, y decir «todas
+                # muertas» sería el veredicto inventado que esta categoría existe para no producir.
+                faceta_muerta.append((f"tema `{_slug}`",
+                                      "no evaluable: el tema todavía no tiene notas de paper "
+                                      "(población 0) — no es que sus alternativas estén muertas"))
+                continue
+            for _alt, _motivo in cfg.facet_dead_alternatives(str(_facet), _textos):
+                faceta_muerta.append((f"tema `{_slug}`",
+                                      f"alternativa `{_alt}`: {_motivo} (sobre {len(_textos)} "
+                                      f"notas del tema) → ¿un `|` perdido, o un término que "
+                                      f"todavía no se ingestó?"))
+    if not cfg.objective_error():
+        _todos = [paper_lens_text[st] for st in sorted(paper_lens_text)]
+        for _nombre, _pat in (cfg.load_objective().get("relevance", {}).get("facets", {}) or {}).items():
+            for _alt in cfg.facet_duplicated_alternatives(str(_pat)):
+                faceta_muerta.append((f"faceta `{_nombre}`", f"alternativa DUPLICADA `{_alt}`"))
+            if not _todos:
+                faceta_muerta.append((f"faceta `{_nombre}`",
+                                      "no evaluable: la bóveda no tiene notas de paper (población 0)"))
+                continue
+            for _alt, _motivo in cfg.facet_dead_alternatives(str(_pat), _todos):
+                faceta_muerta.append((f"faceta `{_nombre}`",
+                                      f"alternativa `{_alt}`: {_motivo} (sobre {len(_todos)} "
+                                      f"notas de paper)"))
+
     categorias = [
         Categoria('not_evaluated', '⛔ No evaluado: el chequeo no pudo correr (hecho del ENTORNO, no de la bóveda — cuenta para el exit)', SEV_BLOQUEANTE, tuple(not_evaluated)),
         Categoria('broken', 'Wikilinks rotos (página faltante)', SEV_BLOQUEANTE, tuple(broken), poblacion='notas'),
@@ -3936,6 +4038,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('salv_sin_marca', '🏷 Salvedades sin la marca de #213 (no se distingue chequeada de juicio) (backlog)', SEV_BACKLOG, tuple(salv_sin_marca), poblacion='papers'),
         Categoria('salv_decidible', '⚙ Salvedad en prosa que un script podría decidir: emitila estructurada (#234, backlog)', SEV_BACKLOG, tuple(salv_decidible), poblacion='papers'),
         Categoria('faceta_sin_frontera', '🕳 Faceta con token corto sin `\\b`: matchea DENTRO de otra palabra (#236, backlog)', SEV_BACKLOG, tuple(faceta_sin_frontera), poblacion='config'),
+        Categoria('faceta_muerta', '🕳 Alternativa de faceta con POBLACIÓN CERO o duplicada (#291, backlog)', SEV_BACKLOG, tuple(faceta_muerta), poblacion='config'),
+        Categoria('reuso_sin_chequear', '🕳 Artefacto reusado entre slugs sin chequear su versión, y pasada de red que nunca corrió (#297, backlog)', SEV_BACKLOG, tuple(reuso_sin_chequear), poblacion='papers'),
         Categoria('sweep_pendiente', 'Barrido full-text (2b) sin rastro o truncado: no consta que la '
                   'segunda red para el punto ciego de la query se haya tendido entera (backlog)',
                   SEV_BACKLOG, tuple(sweep_pendiente), poblacion='registros'),
@@ -3973,8 +4077,11 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         "entidades": (len(anchor_bodies), "notas de entidad (fichas, conceptos, queries)"),
         "fulltext": (len(fulltext_files), "`.txt` de `raw/fulltext/`"),
         "ground_truth": (len(vistos_gt), "ground-truth de `raw/ground_truth/`"),
-        "registros": (len(list(cfg.REGISTRO.glob("*.yaml"))) if cfg.REGISTRO.exists() else 0,
-                      "registros de sujeto"),
+        # #297 — `_red.yaml` es de la bóveda entera (D-46), no de un sujeto: contarlo infla el
+        # denominador de las siete categorías que declaran esta población, y un denominador que
+        # incluye lo que el barrido no mira es exactamente lo que INV-40 existe para evitar.
+        "registros": (len([f for f in cfg.REGISTRO.glob("*.yaml") if not f.name.startswith("_")])
+                      if cfg.REGISTRO.exists() else 0, "registros de sujeto"),
         "citas": (_n_citas_evaluadas[0], "citas «…» de ≥40 caracteres con fuente chequeable"),
         "temas": (0 if cfg.themes_error() else len(cfg.load_themes() or {}), "temas de `themes.yaml`"),
         "estrellas": (len(stars_slugs), "estrellas de `stars.yaml`"),

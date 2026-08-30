@@ -7,6 +7,7 @@ es un assert y no un ritual.
 """
 from __future__ import annotations
 
+import json
 import py_compile
 import re
 from pathlib import Path
@@ -440,3 +441,64 @@ def test_claude_md_declara_los_dos_vocabularios_de_via():
         assert f"`{valor}`" in doc, f"`CLAUDE.md` no nombra `{valor}` (vocabulario de `sources:`)"
     assert "EXTRA_CORE_VIA" in doc, \
         "la doc tiene que apuntar a la constante: sin el puntero, el próximo valor nuevo la deja vieja"
+
+
+# ── #292 · todo `(#N)` que el repo cita apunta a un issue que EXISTE ─────────
+ISSUES_JSON = RAIZ / "tools" / "issues.json"
+# ⚠ ALCANCE DECLARADO (INV-40): sólo `#N` de dos dígitos para arriba. Por debajo el repo escribe
+# ordinales en prosa —«regla #0», «contrato #1», «frente #3»— y separarlos de una referencia a
+# issue no es decidible textualmente. La colisión que motivó el issue vive en el rango moderno.
+REF_ISSUE_RE = re.compile(r"#(\d{2,4})\b")
+REF_DIRS = ("scripts", "docs", ".claude/skills", "tests", "tools")
+REF_SUFIJOS = (".py", ".md", ".yaml", ".yml")
+
+
+def _refs_de_issue():
+    """`{número: {archivos}}` de los `#N` que el repo cita. Excluye `docs/assets/` (los colores hex
+    `#30363d` matchean) y `docs/internal/`, que no se versiona."""
+    fuera = {}
+    for raiz in REF_DIRS:
+        base = RAIZ / raiz
+        if not base.exists():
+            continue
+        for f in sorted(base.rglob("*")):
+            if f.suffix not in REF_SUFIJOS or "assets" in f.parts or "internal" in f.parts:
+                continue
+            try:
+                texto = f.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            for m in REF_ISSUE_RE.finditer(texto):
+                fuera.setdefault(int(m.group(1)), set()).add(str(f.relative_to(RAIZ)))
+    for f in (RAIZ / "CLAUDE.md", RAIZ / "README.md"):
+        if f.exists():
+            for m in REF_ISSUE_RE.finditer(f.read_text(encoding="utf-8")):
+                fuera.setdefault(int(m.group(1)), set()).add(f.name)
+    return fuera
+
+
+def test_todo_numero_de_issue_que_el_repo_cita_existe():
+    """#292 — medido en vivo: un `(#N)` se escribió en el código ANTES de que el issue existiera, el
+    siguiente issue se llevó ese número, y cinco referencias pasaron a resolver a otra cosa.
+    `CLAUDE.md` declara el `(#N)` como el mecanismo de trazabilidad del framework y la regla de
+    método nº 4 dice que un mapa que atribuye mal es peor que uno vacío: el `(#N)` colgado es el
+    mapa vacío; el **colisionado**, el que atribuye mal.
+
+    La lista está **cacheada y versionada** (`tools/issues.json`) para que el chequeo corra en CI,
+    offline y sin token: `python tools/refresh_issues.py` al cerrar cada tanda."""
+    assert ISSUES_JSON.exists(), (
+        "falta tools/issues.json — refrescala con `python tools/refresh_issues.py`. Sin la caché "
+        "este chequeo no puede correr, y un verde que nadie midió es el falso limpio de D-43.")
+    datos = json.loads(ISSUES_JSON.read_text(encoding="utf-8"))
+    conocidos = {i["number"] for i in datos["issues"]}
+    colgadas = {n: sorted(fs) for n, fs in _refs_de_issue().items() if n not in conocidos}
+    assert not colgadas, (
+        "referencias `#N` a issues que NO existen (¿el número se escribió antes de crear el "
+        f"issue?). Si el issue es nuevo, refrescá la caché:\n  " +
+        "\n  ".join(f"#{n} ← {', '.join(fs)}" for n, fs in sorted(colgadas.items())))
+
+
+def test_la_cache_de_issues_no_puede_estar_vacia():
+    """Una caché vacía volvería VERDE el chequeo entero — el `(0)` que nadie midió (D-43)."""
+    datos = json.loads(ISSUES_JSON.read_text(encoding="utf-8"))
+    assert len(datos["issues"]) > 50 and datos.get("fetched")

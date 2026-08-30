@@ -1,0 +1,1515 @@
+{
+ "fetched": "2026-08-30",
+ "issues": [
+  {
+   "number": 2,
+   "title": "ingest-topic: switch `source: ads | web | local-pdfs` (formalizar el modo off-ADS en el tooling)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 3,
+   "title": "Skill `append-knowledge`: plegar un paper/dato nuevo a una ficha o concepto existente sin re-correr el ingest",
+   "state": "CLOSED"
+  },
+  {
+   "number": 4,
+   "title": "Retro-linkeo al ingerir un topic: conectar papers pre-existentes del corpus al concepto nuevo",
+   "state": "CLOSED"
+  },
+  {
+   "number": 5,
+   "title": "Afinar la frontera \"ningún puntero a otro repo\": eximir campos estructurales del frontmatter (`data_local`)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 6,
+   "title": "Stub off-ADS de make_notes --web: estampar n_authors/doi desde sources: y no taguear 'web' a PDFs con DOI",
+   "state": "CLOSED"
+  },
+  {
+   "number": 7,
+   "title": "Fallback para fuentes no-conseguibles: paywall / PDF no extraíble → marcar pendiente y derivar al usuario",
+   "state": "CLOSED"
+  },
+  {
+   "number": 8,
+   "title": "OCR opt-in en la cadena off-ADS: incluir tesseract en la instalación + paso OCR para PDFs no extraíbles",
+   "state": "CLOSED"
+  },
+  {
+   "number": 9,
+   "title": "Guard 'objetivo sin instanciar': comparar contra un placeholder, no contra un nombre real (falso positivo permanente en Almagesto-RV)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 10,
+   "title": "Los reportes de lint aparecen en el grafo de Obsidian: nada impide abrir el REPO ROOT como vault (y el filtro -path:outputs quedó vestigial tras la migración a vault/)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 11,
+   "title": "Un tema off-ADS no puede absorber un paper que SÍ tiene bibcode ADS: extra_core es inalcanzable y el stub queda mal etiquetado",
+   "state": "CLOSED"
+  },
+  {
+   "number": 12,
+   "title": "vault/.obsidian/app.json vacío: 'Strict line breaks' queda OFF y las notas hard-wrapped se leen con saltos en medio de las frases",
+   "state": "CLOSED"
+  },
+  {
+   "number": 13,
+   "title": "El stub de nota de paper no deja ningún link clickeable al PDF: el campo pdf: del frontmatter no es navegable en Obsidian",
+   "state": "CLOSED"
+  },
+  {
+   "number": 14,
+   "title": "El contrato de frontmatter apunta al PDF pero NO al fulltext .txt — el agente consumidor no tiene puntero al artefacto barato, ni a su provenance (OCR)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 15,
+   "title": "La regla de combinación de relevance.topics está hardcodeada (relevant = bool(topics)): una instancia no puede declarar qué faceta es obligatoria, y el citation chaining vuelve eso load-bearing",
+   "state": "CLOSED"
+  },
+  {
+   "number": 16,
+   "title": "El campo fulltext: es no determinista para un paper que vive en varios slugs: se repunta al slug que corrió último",
+   "state": "CLOSED"
+  },
+  {
+   "number": 17,
+   "title": "El corte por --rows descarta por 'menos citado', que no es 'menos relevante': el truncamiento silencioso pre-2026-07-03 dejó corpus incompletos sin registro",
+   "state": "CLOSED"
+  },
+  {
+   "number": 18,
+   "title": "bench_verify: el claim sembrado conserva los [[wikilinks]] inline — la sembrada se caza por mismatch de strings, sin leer el paper",
+   "state": "CLOSED"
+  },
+  {
+   "number": 19,
+   "title": "bench_verify: claims por bloque lógico (bullet/párrafo), no por línea hard-wrapped — los fragmentos rompen la medición en ambas direcciones",
+   "state": "CLOSED"
+  },
+  {
+   "number": 20,
+   "title": "bench_verify: rotación con preferencia cross-nota — sembrar dentro del corpus temático de la misma nota produce ~25% de \"falsas\" que el otro paper sí respalda",
+   "state": "CLOSED"
+  },
+  {
+   "number": 21,
+   "title": "verify-citations: endurecer la regla de parcial — sin cita textual del contenido distintivo, es no-soportada",
+   "state": "CLOSED"
+  },
+  {
+   "number": 22,
+   "title": "bench_verify: recortar el claim a la cláusula que porta la cita — los bloques multi-cláusula dejan pasar sembradas como parcial",
+   "state": "CLOSED"
+  },
+  {
+   "number": 23,
+   "title": "verify-citations: el prompt sugerido no le dice al subagente que el claim puede ser multi-cláusula (contradice el paso 1)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 24,
+   "title": "check_retractions: modo --slug para la cadena (el barrido completo pasa a pasada periódica)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 25,
+   "title": "query_ads: modo --sweep — automatizar el barrido full-text 2b de ingest-star",
+   "state": "CLOSED"
+  },
+  {
+   "number": 26,
+   "title": "lib_config: star_by_slug crashea con AttributeError si stars.yaml está vacío",
+   "state": "CLOSED"
+  },
+  {
+   "number": 27,
+   "title": "query_ads: ADS devuelve numFound=0 con HTTP 200 de forma intermitente — la cadena persiste un corpus vacío y sale con exit 0",
+   "state": "CLOSED"
+  },
+  {
+   "number": 28,
+   "title": "query_ads: agujero de recall por glifo — los papers que escriben el nombre con ∊ (U+220A) o ϵ (U+03F5) son invisibles a build_query (ε Eri: 121 core perdidos, incluido el descubrimiento)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 29,
+   "title": "verify-citations: fijar cómo se cuentan las líneas del .txt — los form feeds de pdftotext corren la numeración",
+   "state": "CLOSED"
+  },
+  {
+   "number": 30,
+   "title": "make_notes: el apéndice \"Excluidos por el filtro\" reporta un motivo falso bajo la regla de combinación (require/min_topics)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 31,
+   "title": "fetch_ground_truth: consulta pscomppars duplicada por corrida + parámetro muerto tab_row (el reuso nunca cableado)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 32,
+   "title": "fetch_arxiv/fetch_pdf: una bajada arXiv fallida queda invisible — ni en missing_pdf.json ni en el barrido del resolver",
+   "state": "CLOSED"
+  },
+  {
+   "number": 33,
+   "title": "lint: los chequeos de verificabilidad/cobertura comparan \"/queries/\"·\"/concepts/\" por substring — en Windows no matchean nunca",
+   "state": "CLOSED"
+  },
+  {
+   "number": 34,
+   "title": "make_notes --web: `accessed` estampa la fecha de hoy aunque el snapshot en disco tenga otra `retrieved` — la cita web queda con provenance falsa",
+   "state": "CLOSED"
+  },
+  {
+   "number": 35,
+   "title": "make_notes: maintain D.4 promete \"re-estampar el apéndice Excluidos\" pero no existe ese camino — regenerarlo exige --force, que pisa la síntesis LLM",
+   "state": "CLOSED"
+  },
+  {
+   "number": 36,
+   "title": "docs/labels: paquete de drifts menores detectados en la auditoría (lint docstring, ⛔ en WARN, listas desactualizadas en skills, categorías sin documentar en CLAUDE.md, conteo Crossref)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 37,
+   "title": "ingest_star/ingest_topic: guardia de expansión — un refresh puede multiplicar el corpus en silencio (au_mic: 850 \"core\" vs ~230 notas) antes de ningún checkpoint",
+   "state": "CLOSED"
+  },
+  {
+   "number": 38,
+   "title": "citation chaining: PROMUEVE a core en vez de proponer — falta una compuerta de triage antes de gastar red y disco",
+   "state": "CLOSED"
+  },
+  {
+   "number": 39,
+   "title": "query_ads: extra_core no rescata un paper que la query ya trajo marcado no-core — fetch_bibcodes sólo agrega los ausentes",
+   "state": "CLOSED"
+  },
+  {
+   "number": 40,
+   "title": "maintain D: falta un preview del delta de re-clasificación (--dry-run) — hoy hay que cruzar ads.json contra las notas a mano",
+   "state": "CLOSED"
+  },
+  {
+   "number": 41,
+   "title": "setup: guiar a declarar relevance.require (la faceta-eje) — podar relevance.topics es un paliativo",
+   "state": "CLOSED"
+  },
+  {
+   "number": 42,
+   "title": "triage (#38): la cola de candidatos re-propone papers ya curados en extra_core — el bloque de chaining corre antes de mezclarlo",
+   "state": "CLOSED"
+  },
+  {
+   "number": 43,
+   "title": "rescate por glifo (#28): la query superset trunca en silencio — avisa que 'queda marcado en ads.json' y no marca nada",
+   "state": "CLOSED"
+  },
+  {
+   "number": 44,
+   "title": "verify-citations: falta prescribir CÓMO buscar en .txt a dos columnas — el caveat está, la estrategia de matcheo no",
+   "state": "CLOSED"
+  },
+  {
+   "number": 45,
+   "title": "find-contradictions: falta el puntero a la estrategia de matcheo de #44 — dos citas por par amplifican el falso negativo",
+   "state": "CLOSED"
+  },
+  {
+   "number": 46,
+   "title": "verify-citations: el escape \"normalizar por línea\" de #44 no cierra el empalme por canaleta — la forma segura es partir la línea en la canaleta",
+   "state": "CLOSED"
+  },
+  {
+   "number": 47,
+   "title": "make_notes: el link al PDF del cuerpo nunca se re-estampa — 56% de las notas con PDF en disco no lo tienen",
+   "state": "CLOSED"
+  },
+  {
+   "number": 48,
+   "title": "lint: nada compara el cuerpo contra el frontmatter — una cabecera fuera del contrato de stamp_pdf_link queda sin link en silencio",
+   "state": "CLOSED"
+  },
+  {
+   "number": 49,
+   "title": "verify-citations: las filas de tabla se caen del fan-out (72% en un caso real), y el chequeo no mira lo que la nota OMITE",
+   "state": "CLOSED"
+  },
+  {
+   "number": 50,
+   "title": "ingest-star/ingest-topic: falta la cascada de rescate cuando el resolver de ADS no entrega el PDF (falló 5/17 en un ingest real)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 51,
+   "title": "El registro de curación (triage drops, ads.json) vive en build/, gitignored y documentado como regenerable",
+   "state": "CLOSED"
+  },
+  {
+   "number": 52,
+   "title": "check_retractions descarta las correcciones no-retractantes (erratum/corrigendum/expression-of-concern)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 53,
+   "title": "maintain E lista los huérfanos como backlog, pero el lint los cuenta como bloqueantes",
+   "state": "CLOSED"
+  },
+  {
+   "number": 54,
+   "title": "La convención de matcheo multi-columna no llega a query-corpus ni test-hypothesis (los que deciden 'esto no está en el corpus')",
+   "state": "CLOSED"
+  },
+  {
+   "number": 55,
+   "title": "Los candidatos de triage sin juzgar son invisibles al lint: un ingest puede cerrarse 'en 0' con 300 pendientes",
+   "state": "CLOSED"
+  },
+  {
+   "number": 56,
+   "title": "No hay detector de verificación stale: el bloque '## Verificación de citas' queda viejo y se lee como vigente",
+   "state": "CLOSED"
+  },
+  {
+   "number": 57,
+   "title": "Preprint vs versión publicada: el .txt puede salir del eprint y nada lo registra (verify puede 'corregir' una nota hacia un v1)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 58,
+   "title": "setup no manda a re-clasificar: cambiar la lente con corpus vivo desincroniza el corte y nadie avisa",
+   "state": "CLOSED"
+  },
+  {
+   "number": 59,
+   "title": "Convención de directorio de trabajo mezclada dentro del mismo skill (cd scripts/ vs raíz del repo)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 60,
+   "title": "La regla de poda manda a consultar la tabla '## Papers', que es Dataview: invisible para el consumidor-modelo",
+   "state": "CLOSED"
+  },
+  {
+   "number": 61,
+   "title": "test-hypothesis: falta el veredicto 'el corpus calla' y la declaración del sesgo de selección",
+   "state": "CLOSED"
+  },
+  {
+   "number": 62,
+   "title": "ingest-star paso 3 no acota la extracción: con 850 core el costo de la operación queda indefinido",
+   "state": "CLOSED"
+  },
+  {
+   "number": 63,
+   "title": "find-contradictions re-litiga lo ya juzgado: los veredictos 'aparente' no se persisten y no excluye las disputas ya tagueadas",
+   "state": "CLOSED"
+  },
+  {
+   "number": 64,
+   "title": "No queda registro de búsqueda en la bóveda: sobre qué universo de papers afirma una ficha es irreconstruible",
+   "state": "CLOSED"
+  },
+  {
+   "number": 65,
+   "title": "Skills sin progressive disclosure: 29% de verify-citations es casuística que se paga en contexto en cada carga",
+   "state": "CLOSED"
+  },
+  {
+   "number": 66,
+   "title": "Sin checklist copiable en las operaciones multi-paso — y el lint ya tiene un detector de 'se saltearon el verify'",
+   "state": "CLOSED"
+  },
+  {
+   "number": 67,
+   "title": "ingest-star e ingest-topic duplican la descripción de la cadena ADS y ya divergieron",
+   "state": "CLOSED"
+  },
+  {
+   "number": 68,
+   "title": "extra_core no puede rescatar papers fuera de database:astronomy: el fq de la lente astro se aplica también al override manual",
+   "state": "CLOSED"
+  },
+  {
+   "number": 69,
+   "title": "La cabecera de fichas/conceptos no tiene backfill, y los estampadores que dependen de ella no-opean en silencio",
+   "state": "CLOSED"
+  },
+  {
+   "number": 70,
+   "title": "El frontmatter de stars/ mezcla ground-truth NEA con valores extraídos por LLM, sin marca ni detección",
+   "state": "CLOSED"
+  },
+  {
+   "number": 71,
+   "title": "disputes[] tiene el polo de verdad hardcodeado: no puede expresar un desacuerdo paper↔paper",
+   "state": "CLOSED"
+  },
+  {
+   "number": 72,
+   "title": "Falta el paso de contraste cross-paper: entre leer los papers y escribir la síntesis no hay operación descrita",
+   "state": "CLOSED"
+  },
+  {
+   "number": 73,
+   "title": "La nota de paper no registra el ROL del paper (fundacional / aplicación / árbitro), sin el cual 'contrastar' no está definido",
+   "state": "CLOSED"
+  },
+  {
+   "number": 74,
+   "title": "Conceptos: el régimen de validez no es explícito, y verify-citations da 'soportada' a una afirmación sobre-generalizada",
+   "state": "CLOSED"
+  },
+  {
+   "number": 75,
+   "title": "No hay red para el paper extraído que nunca llegó a la ficha ('extraído pero no sintetizado')",
+   "state": "CLOSED"
+  },
+  {
+   "number": 76,
+   "title": "El stub de nota de paper no ramifica por tipo de sujeto: un tema ADS recibe bullets de planetas y actividad",
+   "state": "CLOSED"
+  },
+  {
+   "number": 77,
+   "title": "No hay descubrimiento fuera de ADS: un tema off-ADS no puede llenar el registro de búsqueda",
+   "state": "CLOSED"
+  },
+  {
+   "number": 78,
+   "title": "El tema mixto sólo funciona off-ADS-first, y en esa dirección no hay descubrimiento del lado astro",
+   "state": "CLOSED"
+  },
+  {
+   "number": 79,
+   "title": "El orden por citas sesga contra lo reciente en las dos fugas de ranking (truncamiento y --sweep)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 80,
+   "title": "Libros y fuentes de adquisición lenta: pending no distingue fallo de adquisición, y la unidad de cita no escala",
+   "state": "CLOSED"
+  },
+  {
+   "number": 81,
+   "title": "No se registra el rechazo de una fuente declarada (asimetría con triage --drop --reason)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 82,
+   "title": "Los aliases de una estrella son manuales y salen de la memoria del LLM, siendo la entrada de tres mecanismos de recall",
+   "state": "CLOSED"
+  },
+  {
+   "number": 83,
+   "title": "setup no propone facetas ni mina el --probe: la lente queda limitada a lo que el usuario supo nombrar",
+   "state": "CLOSED"
+  },
+  {
+   "number": 84,
+   "title": "No hay forma declarativa de acotar la lente a un sujeto: la restricción es paper por paper y a posteriori",
+   "state": "CLOSED"
+  },
+  {
+   "number": 85,
+   "title": "La lente del buscador (fq=database:astronomy) está hardcodeada y no sale del objetivo: recorta el universo antes de que la lente de relevancia lo vea",
+   "state": "CLOSED"
+  },
+  {
+   "number": 86,
+   "title": "Un registro sin abstract se clasifica sólo por el título, y nada lo marca (sesgo contra papers pre-digitales)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 87,
+   "title": "Cuántas facetas del objetivo matcheó un paper se guarda y nunca se usa para priorizar la extracción",
+   "state": "CLOSED"
+  },
+  {
+   "number": 88,
+   "title": "--sweep no deja rastro: es un preview de stdout, y es el único camino para los surveys que tabulan la estrella",
+   "state": "CLOSED"
+  },
+  {
+   "number": 89,
+   "title": "El lado aceptado de la curación no registra motivo ni origen: extra_core es una lista pelada (espejo de #51)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 90,
+   "title": "Un core sin PDF no queda marcado en su nota: el residuo vive en build/ y el lint lo confunde con 'falta leerlo'",
+   "state": "CLOSED"
+  },
+  {
+   "number": 91,
+   "title": "El lint mira que el bloque de verificación exista y esté fresco, nunca que sus veredictos estén resueltos",
+   "state": "CLOSED"
+  },
+  {
+   "number": 92,
+   "title": "Las keywords del propio paper se piden a ADS, se usan como texto plano y se tiran: el único vocabulario que no inventamos no llega a la nota",
+   "state": "CLOSED"
+  },
+  {
+   "number": 93,
+   "title": "Una lente vacía (objective.yaml pre-R-5 con `topics:`) deja el lint en verde y el corpus sin poder clasificar nada",
+   "state": "CLOSED"
+  },
+  {
+   "number": 94,
+   "title": "El apéndice «Excluidos por el filtro» ordena por citas crudas y contradice la política única de sort_by_citation_rate",
+   "state": "CLOSED"
+  },
+  {
+   "number": 95,
+   "title": "search_arxiv.py está implementado y testeado pero no tiene ningún llamador ni CLI: no está cableado al descubrimiento off-ADS",
+   "state": "CLOSED"
+  },
+  {
+   "number": 96,
+   "title": "INV-95: nada verifica que una marca @inv sea CIERTA, y nada impide subir un techo en el commit que rompe la cobertura",
+   "state": "CLOSED"
+  },
+  {
+   "number": 97,
+   "title": "Las 8 funciones que sobreviven a la mutación son todas fronteras con el entorno: falta el doble en la frontera o el smoke test real",
+   "state": "CLOSED"
+  },
+  {
+   "number": 98,
+   "title": "make_notes estampa el roll-up `## Papers` antes de crear las notas: toda ingesta limpia termina diciendo «0 papers» sobre 53",
+   "state": "CLOSED"
+  },
+  {
+   "number": 99,
+   "title": "El driver de merge=ours no se registra solo y nada lo verifica: la instancia está a un git pull de perder su config",
+   "state": "CLOSED"
+  },
+  {
+   "number": 100,
+   "title": "El fan-out de verify-citations lanza un subagente por PAR y no por FUENTE: N-1 re-lecturas del mismo .txt",
+   "state": "CLOSED"
+  },
+  {
+   "number": 101,
+   "title": "El contraste cross-paper (3b) es el único paso sin red, y caza errores que verify-citations no puede ver",
+   "state": "CLOSED"
+  },
+  {
+   "number": 102,
+   "title": "Falta un modo de revalidación: un par verificado no se vuelve a mirar nunca, así que un error del juez es permanente y silencioso",
+   "state": "CLOSED"
+  },
+  {
+   "number": 103,
+   "title": "La extracción no registra de qué línea salió cada valor: cuatro de los seis mecanismos de error medidos serían chequeo mecánico con ese puntero",
+   "state": "CLOSED"
+  },
+  {
+   "number": 104,
+   "title": "El paso 3 (extracción) es el más caro de la cadena y el único sin paralelización prevista",
+   "state": "CLOSED"
+  },
+  {
+   "number": 105,
+   "title": "La idempotencia se estaba midiendo sobre la bitácora, no sobre el contenido",
+   "state": "CLOSED"
+  },
+  {
+   "number": 106,
+   "title": "La puerta 2 (core por conteo de citas) es la única metadata que cambia sola y no tenía detector",
+   "state": "CLOSED"
+  },
+  {
+   "number": 107,
+   "title": "El «límite estructural» del descubrimiento era un tope propio sin declarar",
+   "state": "CLOSED"
+  },
+  {
+   "number": 108,
+   "title": "Un fulltext sin nota es extracción ya pagada que ninguna síntesis alcanza",
+   "state": "CLOSED"
+  },
+  {
+   "number": 109,
+   "title": "El tema `ica` necesita hub + radios: la query ICA-céntrica no alcanza la familia RV-PCA",
+   "state": "CLOSED"
+  },
+  {
+   "number": 110,
+   "title": "El 429 de OpenAlex se leía como «0 registros»: un cero silencioso en el peor lugar",
+   "state": "CLOSED"
+  },
+  {
+   "number": 111,
+   "title": "El cuadrante que falta de la curación: la fuente off-ADS ACEPTADA no registra quién ni por qué",
+   "state": "CLOSED"
+  },
+  {
+   "number": 112,
+   "title": "`--drop-core`: un paper que la lente dice core no se podía sacar",
+   "state": "CLOSED"
+  },
+  {
+   "number": 113,
+   "title": "El `.txt` puede estar limpio y sin las ECUACIONES: el tercer eje de calidad que faltaba",
+   "state": "CLOSED"
+  },
+  {
+   "number": 114,
+   "title": "El detector de identidad duplicada (D-19) es ciego a la forma más común",
+   "state": "CLOSED"
+  },
+  {
+   "number": 115,
+   "title": "`--rename-paper` no cubre el caso que D-19 nombra",
+   "state": "CLOSED"
+  },
+  {
+   "number": 116,
+   "title": "El `--drop-core` se aplica pero NO se ve en la ficha",
+   "state": "CLOSED"
+  },
+  {
+   "number": 117,
+   "title": "La fila de verificación no declara CONTRA QUÉ ARCHIVO se verificó",
+   "state": "CLOSED"
+  },
+  {
+   "number": 118,
+   "title": "Que el `log.md` tenga red",
+   "state": "CLOSED"
+  },
+  {
+   "number": 119,
+   "title": "El párrafo-enumeración fabrica errores de atribución",
+   "state": "CLOSED"
+  },
+  {
+   "number": 120,
+   "title": "Un hallazgo de verificación dice DÓNDE mirar, no QUÉ escribir",
+   "state": "CLOSED"
+  },
+  {
+   "number": 121,
+   "title": "`lint --cierre` es GLOBAL pero las operaciones son POR SLUG",
+   "state": "CLOSED"
+  },
+  {
+   "number": 122,
+   "title": "La fila puede declarar `txt:` y citar una PÁGINA en Evidencia: nadie cruza los dos ejes",
+   "state": "CLOSED"
+  },
+  {
+   "number": 123,
+   "title": "La suite de tests hace peticiones HTTP reales, y la cadena sale a la red por una fuente que el usuario declaró `pending`",
+   "state": "CLOSED"
+  },
+  {
+   "number": 124,
+   "title": "Cómo se LEE un paper: abstract + conclusiones completos en castellano, y los ejes salen de las conclusiones",
+   "state": "CLOSED"
+  },
+  {
+   "number": 125,
+   "title": "La tabla `## Papers` no tiene el título: desde la ficha no se sabe de qué trata un paper que no se sintetizó",
+   "state": "CLOSED"
+  },
+  {
+   "number": 126,
+   "title": "Un tema de método no puede curarse por política: la puerta que admitió cada paper se calcula y se tira, y la faceta se escribe a ciegas",
+   "state": "CLOSED"
+  },
+  {
+   "number": 127,
+   "title": "PENSAR: cómo se define el alcance de una ficha, y cuándo algo es un radio y no parte del hub",
+   "state": "CLOSED"
+  },
+  {
+   "number": 128,
+   "title": "lib_blocks: parse_verif_table descarta en silencio la fila con `|` sin escapar y pierde tres bloqueantes",
+   "state": "CLOSED"
+  },
+  {
+   "number": 129,
+   "title": "lint: un `pending_source` fuera de vocabulario es backlog, no bloqueante — INV-46 dice lo contrario",
+   "state": "CLOSED"
+  },
+  {
+   "number": 130,
+   "title": "sweep_external: `_cambios` asigna en vez de appendear y pierde la caducidad pendiente de la pasada anterior",
+   "state": "CLOSED"
+  },
+  {
+   "number": 131,
+   "title": "lint: la marca `⚠desactualizado` se chequea a nivel archivo, así que una apaga todas",
+   "state": "CLOSED"
+  },
+  {
+   "number": 132,
+   "title": "triage: `drop_core` borra una nota citada y no avisa de los wikilinks que deja rotos",
+   "state": "CLOSED"
+  },
+  {
+   "number": 133,
+   "title": "discover: el docstring promete \"preview only — writes nothing\" y escribe config versionada",
+   "state": "CLOSED"
+  },
+  {
+   "number": 134,
+   "title": "lint: la marca `@inv INV-96` en `merge_ours_unprotected` está mal atribuida (es INV-68)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 135,
+   "title": "lint: dos `@inv INV-46` duplicadas y sin símbolo inflan el conteo de punteros",
+   "state": "CLOSED"
+  },
+  {
+   "number": 136,
+   "title": "INV-114 (P0, la suite no sale a la red) no tiene marca sobre el assert que lo cumple",
+   "state": "CLOSED"
+  },
+  {
+   "number": 137,
+   "title": "La red de INV-90 corre sobre una allowlist hardcodeada que no incluye `entity.py`",
+   "state": "CLOSED"
+  },
+  {
+   "number": 138,
+   "title": "docs/trazabilidad.md commiteado está desactualizado y nada corre `trace_invariants --check`",
+   "state": "CLOSED"
+  },
+  {
+   "number": 139,
+   "title": "trazabilidad-ratchet.yaml publica tres conteos distintos de invariantes (91 / 96 / 126)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 140,
+   "title": "cobertura-ratchet.yaml: el techo es correcto (4) pero la lista de funciones sin ejecutar miente",
+   "state": "CLOSED"
+  },
+  {
+   "number": 141,
+   "title": "mutacion-ratchet.yaml declara una población de 343 funciones y hoy hay 406",
+   "state": "CLOSED"
+  },
+  {
+   "number": 142,
+   "title": "docs/ingesta.md §5 lista como \"backlog abierto\" 14 issues ya cerrados",
+   "state": "CLOSED"
+  },
+  {
+   "number": 143,
+   "title": "docs/ingesta.md y README afirman que un tema off-ADS no tiene descubrimiento (falso desde #104)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 144,
+   "title": "CLAUDE.md dice a la vez que search_arxiv está y no está cableado (#95)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 145,
+   "title": "INV-41 publica 48 categorías del lint y hay 63 — y el test que dice atarlo no cubre esa fila",
+   "state": "CLOSED"
+  },
+  {
+   "number": 146,
+   "title": "README, operacion.md y el skill maintain dicen \"cinco detectores\" de la pasada de red y son seis",
+   "state": "CLOSED"
+  },
+  {
+   "number": 147,
+   "title": "El conteo de campos `incomplete` del lint: CLAUDE.md dice 7 y enumera 8, contrato.md dice 7, el código tiene 10",
+   "state": "CLOSED"
+  },
+  {
+   "number": 148,
+   "title": "tests/README.md publica \"las cinco redes\" donde CLAUDE.md dice seis: falta la de idempotencia",
+   "state": "CLOSED"
+  },
+  {
+   "number": 149,
+   "title": "docs/contrato.md:65 dice medir \"sobre los 104\" invariantes y su propio desglose suma 126",
+   "state": "CLOSED"
+  },
+  {
+   "number": 150,
+   "title": "CLAUDE.md promete \"tres fechas\" en la cabecera y enumera dos: falta la de síntesis (INV-82)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 151,
+   "title": "docs/operacion.md no menciona discover.py ni ocho flags/campos incorporados entre #104 y #126",
+   "state": "CLOSED"
+  },
+  {
+   "number": 152,
+   "title": "El skill setup no menciona relevance.search_fq, que CLAUDE.md declara parte obligatoria del objetivo",
+   "state": "CLOSED"
+  },
+  {
+   "number": 153,
+   "title": "extraction_prompt.py no tiene rama para symbols_lost: la regla de #113 no viaja al subagente",
+   "state": "CLOSED"
+  },
+  {
+   "number": 154,
+   "title": "make_notes --pending no acepta `adquisicion`, el cuarto valor del vocabulario cerrado",
+   "state": "CLOSED"
+  },
+  {
+   "number": 155,
+   "title": "La calibración de #113 publica dos denominadores (295 vs 343) y una partición que no suma",
+   "state": "CLOSED"
+  },
+  {
+   "number": 156,
+   "title": "La convención de idioma del código nuevo no está en ningún doc versionado ni la vigila un gate — y está violada en 30 funciones",
+   "state": "CLOSED"
+  },
+  {
+   "number": 157,
+   "title": "18 commits sin taggear: último tag v1.56.0 contra ALMAGESTO_VERSION 1.67.1",
+   "state": "CLOSED"
+  },
+  {
+   "number": 158,
+   "title": "INV-95 declara `parcial` una mitad que `subidas_de_techo` ya cierra",
+   "state": "CLOSED"
+  },
+  {
+   "number": 159,
+   "title": "Siete huecos de contrato de la auditoría 2026-08-27: comportamiento con consecuencia que ningún invariante exige",
+   "state": "CLOSED"
+  },
+  {
+   "number": 160,
+   "title": "docs/trazabilidad.md: `Implementa: —` no distingue \"no hay implementación\" de \"hay y no está marcada\" (24 de 126)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 161,
+   "title": "query_ads --sweep dicta un snippet de `extra_core` que el propio framework bloquea (D-58)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 162,
+   "title": "El help de `triage --via` dice ser \"gemelo de extra_core\" y los dos vocabularios son disjuntos salvo un valor",
+   "state": "CLOSED"
+  },
+  {
+   "number": 163,
+   "title": "query_ads --sweep se anuncia como preview y escribe el registro versionado",
+   "state": "CLOSED"
+  },
+  {
+   "number": 164,
+   "title": "make_notes --web --pending no puede producir pending_motivo, unidad_cita ni alcance",
+   "state": "CLOSED"
+  },
+  {
+   "number": 165,
+   "title": "Cinco desactualizaciones de ayuda: docs/operacion.md (x3) y README (x2)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 166,
+   "title": "18 flags de argparse sin documentar (incluido `fetch_web --force-note`, destructivo) y dos help incompletos",
+   "state": "CLOSED"
+  },
+  {
+   "number": 167,
+   "title": "Gate de mutación por debajo del techo: 3 de 406 (techo 4) — bajar el techo y fijar el alcance",
+   "state": "CLOSED"
+  },
+  {
+   "number": 168,
+   "title": "lib_blocks.resueltos: un veredicto `**no-soportada**` en negrita NO bloquea, y `no-soportada → corregida` sí — reabre INV-117",
+   "state": "CLOSED"
+  },
+  {
+   "number": 169,
+   "title": "entity.rename de un tema renombra la nota por substring ciego y no actualiza `concept:`: deja la entidad sin nota alcanzable",
+   "state": "CLOSED"
+  },
+  {
+   "number": 170,
+   "title": "_consolidar_duplicado promete conservar el mejor artefacto y borra el bueno",
+   "state": "CLOSED"
+  },
+  {
+   "number": 171,
+   "title": "Una caída de SIMBAD no entra en `fallidos` y además fabrica un cambio de ground-truth",
+   "state": "CLOSED"
+  },
+  {
+   "number": 172,
+   "title": "sweep_external: los `no_evaluados` nunca llegan al registro versionado",
+   "state": "CLOSED"
+  },
+  {
+   "number": 173,
+   "title": "search_arxiv.main re-clasifica con la función equivocada y descarta el título",
+   "state": "CLOSED"
+  },
+  {
+   "number": 174,
+   "title": "bench_verify: el docstring garantiza determinismo sobre `bench.json`, que el propio código borra",
+   "state": "CLOSED"
+  },
+  {
+   "number": 175,
+   "title": "make_notes escribe `status: active` en toda hipótesis nueva, valor fuera del vocabulario cerrado: nace bloqueante",
+   "state": "CLOSED"
+  },
+  {
+   "number": 176,
+   "title": "stamp_concept_rollup es código muerto: `## Papers` se come su sección y se pierde la columna \"Entró por\" (D-24)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 177,
+   "title": "El chequeo prometido \"filas `desafía` con `status: sostenida`\" no existe en ningún código",
+   "state": "CLOSED"
+  },
+  {
+   "number": 178,
+   "title": "El stub de hipótesis no scaffoldea ninguna de las tres secciones propias (D-34, D-21, D-36)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 179,
+   "title": "El campo `puertas` no existe siempre: `to_record` no lo define y #126 promete que sí",
+   "state": "CLOSED"
+  },
+  {
+   "number": 180,
+   "title": "objective.yaml y lib_config prometen un \"roll-up Dataview\" que D-10/D-11 eliminó",
+   "state": "CLOSED"
+  },
+  {
+   "number": 181,
+   "title": "El ejemplo canónico off-ADS de themes.yaml declara `sources:` sin `via` ni `motivo`",
+   "state": "CLOSED"
+  },
+  {
+   "number": 182,
+   "title": "Ningún test distingue `listify_curado` de `as_list`: perder un alias escalar deja la suite entera verde",
+   "state": "CLOSED"
+  },
+  {
+   "number": 183,
+   "title": "test_quitar_del_frontmatter… está marcado `@inv INV-90` y no mide atomicidad",
+   "state": "CLOSED"
+  },
+  {
+   "number": 184,
+   "title": "La marca `@inv INV-61` de test_excluded_table_no_lanza… está mal atribuida",
+   "state": "CLOSED"
+  },
+  {
+   "number": 185,
+   "title": "test_determinista_byte_a_byte corre las dos pasadas en el mismo proceso: no puede ver lo que dice medir",
+   "state": "CLOSED"
+  },
+  {
+   "number": 186,
+   "title": "test_reintenta_ante_5xx_transitorio parchea `time.sleep` global y cuenta esperas ajenas",
+   "state": "CLOSED"
+  },
+  {
+   "number": 187,
+   "title": "El gate de mutación tarda ~1 h y por eso dejó de correr: dos etapas lo bajarían a ~12 min",
+   "state": "CLOSED"
+  },
+  {
+   "number": 188,
+   "title": "`vistas[]`: la extracción es una lectura CON LENTE y la nota no declara cuál se hizo",
+   "state": "CLOSED"
+  },
+  {
+   "number": 189,
+   "title": "El `◆` del triage afirma \"ya está extraído\" sobre papers leídos con otra lente",
+   "state": "CLOSED"
+  },
+  {
+   "number": 190,
+   "title": "Copias del mismo `.txt` entre slugs: comparar, no sincronizar (el hash de fuente mira una sola)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 191,
+   "title": "INV-103 (P0) no tiene ningún llamador de producción: el cosechador del fan-out no existe",
+   "state": "CLOSED"
+  },
+  {
+   "number": 192,
+   "title": "`symbols_lost` es ciego al modo de falla del OCR, y el prompt no declara el estado «no evaluado» (41% del corpus)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 193,
+   "title": "`measure_layout` falla en las dos direcciones cerca del umbral 0.30 — 7% del corpus cae en la banda gris",
+   "state": "CLOSED"
+  },
+  {
+   "number": 194,
+   "title": "Tercer modo de falla de `symbols_lost`: la ecuación está, tiene cuerpo y DICE OTRA COSA — el detector devuelve `False`",
+   "state": "CLOSED"
+  },
+  {
+   "number": 195,
+   "title": "El dato que vive en una tabla-imagen o en una figura: 45% del corpus, y la regla dura sólo cubre ecuaciones",
+   "state": "CLOSED"
+  },
+  {
+   "number": 196,
+   "title": "make_notes --theme no estampa `## Papers`: el estampador no encuentra su ancla y devuelve False en silencio",
+   "state": "CLOSED"
+  },
+  {
+   "number": 197,
+   "title": "El fan-out de verify-citations no tiene aplicador: dos correctores sobre el mismo bloque lo corrompen, y el `viejo` normalizado no matchea un bloque multilínea",
+   "state": "CLOSED"
+  },
+  {
+   "number": 198,
+   "title": "La pregunta de completitud del fan-out se puede ensanchar sin que nada avise: 201 avisos, 66 reales",
+   "state": "CLOSED"
+  },
+  {
+   "number": 199,
+   "title": "Barrera antes de consumir: derivar trabajo de una etapa que sigue corriendo deja hallazgos que no mira nadie",
+   "state": "CLOSED"
+  },
+  {
+   "number": 200,
+   "title": "Tensión #80 ↔ #117: una fuente `unidad_cita: pagina` leída del .txt cae siempre en «localizador que contradice al archivo vigilado»",
+   "state": "CLOSED"
+  },
+  {
+   "number": 201,
+   "title": "El presupuesto de tier 0 mide wall-clock sobre una máquina sin especificar: su rojo no distingue regresión de entorno",
+   "state": "CLOSED"
+  },
+  {
+   "number": 202,
+   "title": "«Verlo morir» no alcanza: un test tiene que morir POR LA RAZÓN que prueba, y eso la regla no lo dice",
+   "state": "CLOSED"
+  },
+  {
+   "number": 203,
+   "title": "La corrección es una escritura y no se auto-verifica: el bucle es corregir → RE-VERIFICAR lo que tocaste",
+   "state": "CLOSED"
+  },
+  {
+   "number": 204,
+   "title": "La mutación DIRIGIDA cuesta segundos y encontró dos tests falsos: decidir si la prohibición cubre este caso o sólo el barrido",
+   "state": "CLOSED"
+  },
+  {
+   "number": 205,
+   "title": "El extractor lee el PDF, no el `.txt`: medido, el `.txt` no es más barato y pierde datos que el detector no ve",
+   "state": "CLOSED"
+  },
+  {
+   "number": 206,
+   "title": "`via` de una fuente off-ADS: `reporte` y `usuario` son la misma decisión, y el documento de origen ya lo lleva `motivo`",
+   "state": "CLOSED"
+  },
+  {
+   "number": 207,
+   "title": "Una vista no dice DE QUÉ se construyó: un paper sin PDF queda mudo cuando su abstract alcanzaba",
+   "state": "CLOSED"
+  },
+  {
+   "number": 208,
+   "title": "`--probe` es ciego a la lente del TEMA: previsualiza con la lente global e invierte el veredicto justo donde importa",
+   "state": "CLOSED"
+  },
+  {
+   "number": 209,
+   "title": "`source:` nombra la plomería, no la búsqueda — y con la cascada sin cablear el nombre miente",
+   "state": "CLOSED"
+  },
+  {
+   "number": 210,
+   "title": "`seed_terms` no tiene bandera (INV-132): el eje medido como 7/18 → 13/18 es inalcanzable desde la CLI, y una ingesta real perdió exactamente esos 10 papers",
+   "state": "CLOSED"
+  },
+  {
+   "number": 211,
+   "title": "Deadlock del tema mixto: `ingest_theme` aborta con `sources:` vacía y nunca llega a correr la mitad ADS que el propio skill manda correr primero",
+   "state": "CLOSED"
+  },
+  {
+   "number": 212,
+   "title": "La vista no puede RETRACTAR el reclamo que refuta: `harvest_views` mergea add-only y el `thesis_links` sembrado sobrevive a la lectura que lo desmiente",
+   "state": "CLOSED"
+  },
+  {
+   "number": 213,
+   "title": "Las `salvedades` de una extracción no las verifica nadie: un extractor inventó un defecto del `.txt` y sólo lo cazó un duplicado accidental",
+   "state": "CLOSED"
+  },
+  {
+   "number": 214,
+   "title": "El detector de fuga no exime las SECCIONES_ESTAMPADAS: las traducciones de #124 disparan «auto-referencia al consumidor» con el «nuestro» del propio paper",
+   "state": "CLOSED"
+  },
+  {
+   "number": 215,
+   "title": "`--drop-core` destruye extracción paga y `make_notes` la reemplaza por un stub: dos defectos encadenados que dejan el lint en verde",
+   "state": "CLOSED"
+  },
+  {
+   "number": 216,
+   "title": "D-19 no puede ver el duplicado sin DOI ni arXiv: resúmenes de congreso y tesis quedan fuera del único chequeo de identidad",
+   "state": "CLOSED"
+  },
+  {
+   "number": 217,
+   "title": "`--drop-core` borra el PDF y el `.txt` pero deja el `pdf:`/`fulltext:` de la nota que conservó apuntando al vacío — y desde #215 el drift ya no se auto-cura",
+   "state": "CLOSED"
+  },
+  {
+   "number": 218,
+   "title": "El fan-out de verify-citations no declara el tope de 20 subagentes, y la barrera de §2b sólo cubre el retorno",
+   "state": "CLOSED"
+  },
+  {
+   "number": 219,
+   "title": "El skill manda subagentes `Explore` (sólo lectura) y toda la cadena aguas abajo espera que ESCRIBAN el JSON",
+   "state": "CLOSED"
+  },
+  {
+   "number": 220,
+   "title": "La cita textual entre comillas no la chequea ningún script — y el fan-out encontró seis que no son verbatim, todas con veredicto `soportada`",
+   "state": "CLOSED"
+  },
+  {
+   "number": 221,
+   "title": "`condicion` no tiene regla de triage: al 89 % de los pares, «resolvé cada condición» es inaplicable — el diagnóstico de #198 un eje más allá",
+   "state": "CLOSED"
+  },
+  {
+   "number": 222,
+   "title": "`apply_fixes` y `lib_blocks` no comparten la definición de «bloque»: el aplicador funde bullets y filas, y se llevó 7 pares puestos sin que nada avisara",
+   "state": "CLOSED"
+  },
+  {
+   "number": 223,
+   "title": "La fila `no verificable por extracción` no puede declarar un archivo, y el chequeo de #117 se lo exigía igual: 9 filas correctas frenaban el cierre",
+   "state": "CLOSED"
+  },
+  {
+   "number": 224,
+   "title": "El ancla de un blockquote cubre UNA línea: se puede reescribir la cita textual sin que el par se venza (sub-disparo)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 225,
+   "title": "Falta un skill que audite la COHERENCIA de una ficha: una pasada ad-hoc encontró 40+ defectos con el lint en 0 y los 99 pares verificados",
+   "state": "CLOSED"
+  },
+  {
+   "number": 226,
+   "title": "El truncado de celdas del bloque de verificación apaga el chequeo de #122 en 62 de 90 filas, en silencio — y tira las condiciones a medias",
+   "state": "CLOSED"
+  },
+  {
+   "number": 227,
+   "title": "El lint no chequea la FORMA del artefacto: una fila de tabla que no renderiza —y que el bloque certifica como verificada— pasó el cierre en 0",
+   "state": "CLOSED"
+  },
+  {
+   "number": 228,
+   "title": "`--rename-paper` deja la identidad a medio migrar: `bibstem` y la cabecera con el bibcode viejo, y la EXTRACCIÓN huérfana del cosechador",
+   "state": "CLOSED"
+  },
+  {
+   "number": 229,
+   "title": "`versions[]` exime incondicionalmente de los DOS detectores de identidad: una nota viva listada como alias queda invisible para siempre",
+   "state": "CLOSED"
+  },
+  {
+   "number": 230,
+   "title": "«Verdad de disco» cumplida a medias: `pdf_source` sobrevive al borrado, `vistas[].txt` no se cruza, falta el gemelo PDF de #108, e INV-19 marca el scratch de `build/`",
+   "state": "CLOSED"
+  },
+  {
+   "number": 231,
+   "title": "El registro pierde lo irregenerable: `descubrimientos[]` sin identificadores, y `triage`/`--rename-paper` sin rastro en `cadena` (D-57)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 232,
+   "title": "El bloque de verificación pierde lo que el skill manda registrar: faltan las tres sub-secciones, y la 2ª ronda BLANQUEA las contradicciones de la 1ª",
+   "state": "CLOSED"
+  },
+  {
+   "number": 233,
+   "title": "Nadie compara lo que el estampador produce con lo que la nota publica: cabecera sin la 3ª fecha, roll-up de concepto sin D-10, y vistas divergentes del cosechador",
+   "state": "CLOSED"
+  },
+  {
+   "number": 234,
+   "title": "Las salvedades estructuradas de #213: adopción 0 de 43, y una salvedad falsa volvió a colarse — el mecanismo existe y nada lo hace ocurrir",
+   "state": "CLOSED"
+  },
+  {
+   "number": 235,
+   "title": "La doc enseña formas que el código rechaza: `via: reporte` en `themes.yaml`, el ejemplo hub/radio de `ica` es falso contra su instancia, y falta la 4ª marca en línea",
+   "state": "CLOSED"
+  },
+  {
+   "number": 236,
+   "title": "Una faceta con acrónimo corto sin `\\b` matchea DENTRO de palabras: `expres` entra por «Venus Express» y 4 de 32 papers son core por accidente",
+   "state": "CLOSED"
+  },
+  {
+   "number": 237,
+   "title": "`index.md` es 100 % Dataview con el plugin gitignored —lo que #60 prohibió para los roll-ups— y el paso 6 del skill manda una edición que el archivo no admite",
+   "state": "CLOSED"
+  },
+  {
+   "number": 238,
+   "title": "La bitácora no se puede corregir y una medición no se puede reproducir: una cita FABRICADA sigue en `log.md`, y el `fq` que produjo un «0 encontrados» no lo guarda nadie",
+   "state": "CLOSED"
+  },
+  {
+   "number": 239,
+   "title": "Segunda lectura de un paper con otra LENTE, aditiva: `vistas[]` casi lo soporta, pero hoy se indexa por sujeto y falta decidir qué le pasa a la ficha",
+   "state": "CLOSED"
+  },
+  {
+   "number": 240,
+   "title": "El cosechador escribe prosa del LLM en celdas de tabla sin escapar el `|`: 19 filas invisibles en una sola bóveda, y la regla INV-99 sólo vive en el otro skill",
+   "state": "CLOSED"
+  },
+  {
+   "number": 241,
+   "title": "Un documento LARGO se decidió en #80 y nunca se cableó a la LECTURA: el prompt manda rasterizar 161 páginas, empezar por conclusiones que no existen, y no dice cuál es el `alcance` declarado",
+   "state": "CLOSED"
+  },
+  {
+   "number": 242,
+   "title": "`triage --accept-source` propone `url:` con un PDF y `fetch_web` lo rechaza por no ser HTML: el carril off-ADS se corta contra su propio resolutor",
+   "state": "CLOSED"
+  },
+  {
+   "number": 243,
+   "title": "`methods` no tiene normalización y el roll-up compara string exacto: un concepto `pca` alcanza 21 papers y pierde 3 que escribieron `PCA`, en silencio",
+   "state": "CLOSED"
+  },
+  {
+   "number": 244,
+   "title": "Sacar `pending_source` deja huérfanas las líneas de continuación de `pending_motivo` y la nota queda con el frontmatter ILEGIBLE — bloqueante, y lo produce la propia cadena",
+   "state": "CLOSED"
+  },
+  {
+   "number": 245,
+   "title": "La lista canónica de `methods` ya existe (las notas de `concepts/` + sus `aliases`) y nadie la usa: ni el extractor la ve, ni el roll-up resuelve sinónimos",
+   "state": "CLOSED"
+  },
+  {
+   "number": 246,
+   "title": "El área `indicators/` no está cableada: `activity_indicators_expected` es una lista de strings que no apunta a ninguna nota, y ningún chequeo la cruza",
+   "state": "CLOSED"
+  },
+  {
+   "number": 247,
+   "title": "La nota de PAPER no lleva el aviso de capa LLM: la vista es 100 % prosa generada con lente, y es la única de las tres clases de nota que no avisa",
+   "state": "CLOSED"
+  },
+  {
+   "number": 248,
+   "title": "`--probe` de una ESTRELLA no deriva la query de `stars.yaml`: hay que tipearla a mano, y la tipeada no expande las grafías que el ingest sí expande",
+   "state": "CLOSED"
+  },
+  {
+   "number": 249,
+   "title": "#237 dejó el detector de huérfanas en 0 PERMANENTE: el índice estampado lista todas las notas, y sus links cuentan como entrantes",
+   "state": "CLOSED"
+  },
+  {
+   "number": 250,
+   "title": "El wiring de `activity_indicators_expected` quedó sin hacer: #246 se cerró con el colapso de carpetas y sin el puente ficha→concepto",
+   "state": "CLOSED"
+  },
+  {
+   "number": 251,
+   "title": "El BARRIDO full-text no tiene carril de descarte: re-propone para siempre lo ya juzgado, y su registro cuenta 52 hallazgos nuevos donde no hay ninguno",
+   "state": "CLOSED"
+  },
+  {
+   "number": 252,
+   "title": "El carril de `aliases` es el único sin escotilla de «considerado y rechazado»: el lint manda descartar identificadores y después los reporta para siempre",
+   "state": "CLOSED"
+  },
+  {
+   "number": 253,
+   "title": "El detector de #234 marca las líneas que estampa el propio cosechador: el lint pide emitir estructurada la salvedad que YA se emitió estructurada y se chequeó",
+   "state": "CLOSED"
+  },
+  {
+   "number": 254,
+   "title": "El prompt de extracción hardcodea 5 ejes: las facetas que la bóveda declara de más nunca se preguntan, y el silencio de la vista sobre ellas se lee como «se miró y no hay nada»",
+   "state": "CLOSED"
+  },
+  {
+   "number": 255,
+   "title": "El prompt de un paper SIN PDF sigue ordenando leer el PDF: el aviso de #207 va a stderr y el cuerpo del prompt lo contradice",
+   "state": "CLOSED"
+  },
+  {
+   "number": 256,
+   "title": "La escotilla `no_vista` es inalcanzable: el propio stub de #188 siembra `vistas[]` para todo reclamo, así que `reclamos - declaradas` es siempre vacío",
+   "state": "CLOSED"
+  },
+  {
+   "number": 257,
+   "title": "El subconjunto de re-verificación (#203) no lo emite ningún comando, y es mucho más grande de lo que el skill sugiere",
+   "state": "CLOSED"
+  },
+  {
+   "number": 258,
+   "title": "El prompt de re-verificación (#203) no debe decirle al verificador qué corrección esperar — el escritor le mete su propio sesgo al juez",
+   "state": "CLOSED"
+  },
+  {
+   "number": 259,
+   "title": "La salida del fan-out de verify-citations no tiene schema declarado: cada consumidor adivina (medido, 4 formas distintas en una corrida)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 260,
+   "title": "El estampador se come la línea en blanco entre secciones: el `##` siguiente queda absorbido como celda de la tabla de arriba (3 de 8 encabezados de una ficha real)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 261,
+   "title": "El tier `poblada` no lo corre nadie: rojo en main desde v1.99.0 (#252) y CI lo deselecciona por `addopts` — tres tandas cerradas encima",
+   "state": "CLOSED"
+  },
+  {
+   "number": 262,
+   "title": "`metodos_table` cuenta grafías, no métodos: #243 llegó al lint y a `methods_match`, y no al roll-up que publica el número (297 donde hay 291)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 263,
+   "title": "La cabecera del bloque de verificación no particiona: 73+6+5 = 84 sobre 88, porque `no verificable por extracción` no tiene contador",
+   "state": "CLOSED"
+  },
+  {
+   "number": 264,
+   "title": "Los dos roll-ups truncan el título sin marca (31 de 49 filas), mientras el bloque de verificación de la misma nota sí marca los suyos",
+   "state": "CLOSED"
+  },
+  {
+   "number": 265,
+   "title": "`query_ads --sweep` no se estampa en `cadena`: el `return` sale antes del `save_paso` y el barrido no deja rastro (D-57)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 266,
+   "title": "`CLAUDE.md` declara un solo vocabulario `via` para dos carriles con vocabularios distintos: manda escribir en `extra_core` un valor que el loader rechaza (#162 en la doc)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 267,
+   "title": "El `disputes[]` del frontmatter queda fuera de `verify-citations` y de #220: 23 pares y 6 citas textuales sin mirar en una ficha real, y una corrección que se perdió ahí",
+   "state": "CLOSED"
+  },
+  {
+   "number": 268,
+   "title": "`no_vista` (#256) se consulta en 1 de 4 redes: las otras tres cuentan la nota como deuda, y una manda conseguir el PDF de una tabla VizieR",
+   "state": "CLOSED"
+  },
+  {
+   "number": 269,
+   "title": "La plantilla del stub de vista manda citar por nº de línea del `.txt`: publica dentro de la nota la doctrina que #205 retiró (y es #255 en el otro artefacto)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 270,
+   "title": "#254 arregló el prompt y no dejó red: nadie compara los ejes que una vista contesta contra la `lente` que declara (125 huecos en 47 notas, lint en 0)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 271,
+   "title": "El markup crudo de ADS (`<SUB>`, `<ASTROBJ>`, `<A href>`) vive sin escapar dentro de `## Abstract`: 267 ocurrencias en 43 notas, en la capa que el contrato declara auditable",
+   "state": "CLOSED"
+  },
+  {
+   "number": 272,
+   "title": "La cabecera promete ground-truth de NEA sobre 4 campos que el schema de `stars/` no lleva — y uno es `mass_msun`, sobre el que la misma ficha declara un hueco",
+   "state": "CLOSED"
+  },
+  {
+   "number": 273,
+   "title": "El roll-up de métodos es el 40 % de la ficha y es inusable: 369 filas y ~135 casi-duplicadas, mientras `methods_applied.literature` contesta lo mismo en 23 entradas",
+   "state": "CLOSED"
+  },
+  {
+   "number": 274,
+   "title": "Higiene del bloque de verificación: un `repr()` de lista volcado en una celda, 10 truncados que parten un `$…$`, y la notación de una flecha que no registra 8 rondas",
+   "state": "CLOSED"
+  },
+  {
+   "number": 275,
+   "title": "#220 tiene población efectiva CERO en una bóveda astro: la exención por `eprint` cubre 45 de 49 papers, y el comparador no sabe leer dos columnas ni el guión de corte",
+   "state": "CLOSED"
+  },
+  {
+   "number": 276,
+   "title": "El bloqueante D-42 (`inferencia` sin premisas) es ciego al énfasis markdown: ve 2 de 5 marcas de una ficha real, y `CLAUDE.md` induce la forma que no ve",
+   "state": "CLOSED"
+  },
+  {
+   "number": 277,
+   "title": "Tres ⛔ del schema de nota de paper (#124 ×2, #247) sin ningún detector: 39 de 138 notas ya están sin `## Abstract`, con el lint en rc 0",
+   "state": "CLOSED"
+  },
+  {
+   "number": 278,
+   "title": "La prosa puede contradecir su propio ground-truth y nadie mira: el espejo #70 vigila el frontmatter y no el cuerpo (medido: «NEA publica las dos como confirmed» sobre un planeta que NEA no lista)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 279,
+   "title": "La marca «segunda mano» se pierde de la nota de paper a la ficha: la extracción la puebla y la síntesis la tira (4 casos en una ficha, uno usado como falsa corroboración independiente)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 280,
+   "title": "Las tres sub-secciones del bloque de verificación publican conteos que su propia tabla desmiente: INV-81 mecanizó la cabecera y las dejó como prosa libre (medido: «20 acota» sobre una tabla con 3)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 281,
+   "title": "#195 asume que una figura es una curva: cuando es un CAMPO (mapa de contornos) el valor no existe sin nombrar el nivel — medido, tres lecturas «irreconciliables» eran los contornos del 10/50/90 %",
+   "state": "CLOSED"
+  },
+  {
+   "number": 282,
+   "title": "El ciclo corregir→re-verificar (#203) no converge: con ancla de bloque cada ronda genera un subconjunto igual de grande (medido 63 → 76 → 78) y no hay criterio escrito de dónde cortar",
+   "state": "CLOSED"
+  },
+  {
+   "number": 283,
+   "title": "`condition_kind` es ciego al adorno markdown: 74 de 88 celdas `**contextualiza** —` reportadas como «sin clasificar», mientras la columna de al lado sí usa `_ADORNO`",
+   "state": "CLOSED"
+  },
+  {
+   "number": 284,
+   "title": "`parse_verif_table` des-escapa los `\\|` y no hay puerta simétrica de escritura: reescribir una fila leída PARTE la fila (medido: 73 de 131 anclas vacías)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 285,
+   "title": "`reverify_subset` no emite el re-anclaje que propone: se acepta a ciegas el único grupo que puede transferir un veredicto al par equivocado (medido: 2 de 86, score 0,60 y 0,67)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 286,
+   "title": "La cabecera del bloque dice `contradicen (resueltas)` y `no-soportadas` a secas: el número que bloquea el cierre es el peor etiquetado (medido: «9 no-soportadas» con las 9 resueltas y el lint en 0)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 287,
+   "title": "El comparador de #220 borra el span `$…$` de la cita y la deja irreconocible: «of either $A$ and $S$» → «of either and» (medido: 2 de 40 falsos positivos, y la clase es general)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 288,
+   "title": "Un hallazgo de «no está en su fuente» mandaba a corregir la nota contra un artefacto degradado: categoría `cita_txt_degradado` + el mensaje manda al PDF",
+   "state": "CLOSED"
+  },
+  {
+   "number": 289,
+   "title": "`--theme --probe` no dice POR QUÉ quedó afuera cada no-core, y es la pantalla que existe para decidirlo: `why_excluded` ya está en el registro y el printer no lo lee (medido: 261 «sin faceta» vs 32 «faceta OK, puerta cerrada», acciones opuestas)",
+   "state": "OPEN"
+  },
+  {
+   "number": 290,
+   "title": "`discover.py --topics` con cero resultados no dice nada y sale 0: el primer comando del paso 0b no distingue «la taxonomía no tiene el tema» de «falló», contra el contrato nº 3 del propio módulo",
+   "state": "OPEN"
+  },
+  {
+   "number": 291,
+   "title": "Nadie detecta una alternativa de faceta con POBLACIÓN CERO: #236 cubrió «matchea de más» y dejó abierta la simétrica (medido: `non-?gaussianity matrix` en la faceta de `ica` — 0 archivos con la frase, 29 con el término)",
+   "state": "OPEN"
+  },
+  {
+   "number": 292,
+   "title": "Un `(#N)` se escribe en el código antes de que el issue exista, y el próximo issue se lleva el número: la trazabilidad pasa de vacía a MAL ATRIBUIDA (pasó en vivo con #288; 247 refs barridas, 1 colgada)",
+   "state": "OPEN"
+  },
+  {
+   "number": 293,
+   "title": "`seed_terms` intersecta SIEMPRE con un único `topics.id` y `topic:` es escalar: un tema que cruza disciplinas pierde su literatura en silencio (medido: recall 15/25, y 6 de los 10 perdidos son la misma familia, repartida en 5 topics)",
+   "state": "OPEN"
+  },
+  {
+   "number": 294,
+   "title": "El aviso de `seed_terms` manda subir `rows_por_termino`, que no se puede subir (no hay flag ni campo), sería no-op sobre 200 y la función no pagina — mientras su docstring justifica el cap con esa paginación (medido: 2 de 25 del gold standard se pierden sólo por eso)",
+   "state": "OPEN"
+  },
+  {
+   "number": 295,
+   "title": "D-26 hizo propia la lente del tema y dejó GLOBAL el `search_fq`, que es la mitad más restrictiva: un tema de método se busca sobre un universo que excluye su literatura (medido: `title:\"noisy ICA\"` da 0 con el fq y 12 sin él; 306 vs 6946 en la query del tema)",
+   "state": "OPEN"
+  },
+  {
+   "number": 296,
+   "title": "`pdf_source` y `fulltext_source` se declaran vocabulario CERRADO en CLAUDE.md y nadie los valida: 2 notas llevan prosa en el campo, y `pdf_source: eprint` es la exención que apaga el chequeo de cita textual (85 de 138 notas)",
+   "state": "OPEN"
+  },
+  {
+   "number": 297,
+   "title": "El reuso D-18 importa a un sujeto nuevo un artefacto de antigüedad no chequeada, y el detector de versiones sólo vive en la pasada periódica — que en la bóveda medida NUNCA corrió (62 % del corpus es `eprint`, y #216 garantiza que preprint↔publicado no colisionan)",
+   "state": "OPEN"
+  },
+  {
+   "number": 298,
+   "title": "El detector de versiones mira 3 de 138 notas sin declarar su población, y es la ÚNICA de las seis caducidades que no deja marca en la nota — mientras 82 notas citan el preprint teniendo bibcode publicado y ningún detector las mira",
+   "state": "OPEN"
+  },
+  {
+   "number": 299,
+   "title": "AUD-160 cambió el repunte de `sources[].pdf` a «propone y para» y la doc quedó en la conducta vieja: el docstring del MÓDULO promete lo contrario que el de su propia función 145 líneas abajo, y el schema de `themes.yaml` también (8 de 8 sin repuntar en una corrida real)",
+   "state": "OPEN"
+  },
+  {
+   "number": 300,
+   "title": "El roll-up de un CONCEPTO perdió las dos garantías de D-10 que la ficha de estrella sí tiene —los dos números y la columna `Estado`—: medido, `ica` promete 89 papers arriba de una síntesis de 30, con 57 reclamados y sin leer",
+   "state": "OPEN"
+  },
+  {
+   "number": 301,
+   "title": "El grafo de Obsidian dibuja como estructura las aristas que #249 declaró sin significado: `index.md` aporta 50 links a papers cuyo sentido es «está en el top 50 por citas» (7 % de las aristas de la bóveda medida salen de index + log)",
+   "state": "OPEN"
+  },
+  {
+   "number": 302,
+   "title": "`STATUS.md` se volvió append-only —el trabajo del `log`— y nadie lo declara ni lo detecta: medido, 537 líneas con 12 encabezados fechados y CUATRO listas de próximos pasos, una de las cuales contradice un estado posterior del mismo archivo",
+   "state": "OPEN"
+  },
+  {
+   "number": 303,
+   "title": "La guarda de #179 nunca corre para `extra_core`: el merge ocurre DESPUÉS de `reclassify_for_theme`, así que 12 de 15 core quedan «sin puerta registrada» — y el `via` sale `manual` o `usuario` según si la query devolvió el bibcode",
+   "state": "OPEN"
+  }
+ ]
+}

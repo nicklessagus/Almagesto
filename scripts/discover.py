@@ -159,7 +159,83 @@ def topics(query: str, rows: int = 5) -> list[dict]:
             for r in d.get("results", [])]
 
 
-def seed_terms(topic_id: str, terms: list, rows_por_termino: int = 200) -> list[dict]:
+def print_topics(query: str, rows: int = 5) -> int:
+    """Print the topic candidates for `query`, declaring the EMPTY case and the FAILED one (#290).
+
+    Contract 3 applied to the module's first command. `--topics` is step 0b of `ingest-theme` and
+    its output is what gets written into `topic:` of themes.yaml; with zero rows it used to print
+    only the closing note — a sentence about results that were not there — and exit 0, so *"OpenAlex
+    answered and its taxonomy has nothing matching that phrase"* looked exactly like *"the call
+    failed"*. Those two ask for opposite next moves, and the second one is invisible today because
+    `_json` raises and the operator sees a traceback where the rest of the module prints a coverage
+    line. Measured 2026-08-30: `--topics "matrix denoising"` and `--topics "heteroscedastic
+    principal component analysis"` both return nothing and both say nothing."""
+    try:
+        cands = topics(query, rows=rows)
+    except Exception as e:                                      # noqa: BLE001 — declarado
+        cfg.print_seguro(f"  ⚠ topics    FALLÓ ({e}) — 0 candidatos, y eso NO significa que la "
+                         "taxonomía de OpenAlex no tenga el tema")
+        return 1
+    if not cands:
+        cfg.print_seguro(f"  — topics    sin topic para «{query}»: OpenAlex contestó y su taxonomía "
+                         "no tiene ninguno que matchee esa frase — probá términos más generales, o "
+                         "dejá `topic:` sin declarar (la cascada lo va a reportar como NO CORRIÓ)")
+        return 0
+    for t in cands:
+        cfg.print_seguro(f'  {t["id"]:<8} works={t["works_count"]:<8} {t["name"]}')
+    cfg.print_seguro("\n  → el filtro por topic es lo que hace usable el ranking por citas: "
+                     "sin él, ordenar por citas trae los papers más citados del mundo, no del tema.")
+    # #293 — el topic es una LISTA en themes.yaml: un tema de método que cruza disciplinas tiene su
+    # literatura repartida (medido: una sola familia, la del blanqueo heterocedástico, cae en cinco
+    # topics distintos — y el mismo trabajo cae en topics distintos según sea preprint o publicado).
+    if len(cands) > 1:
+        cfg.print_seguro(f"  → `topic:` acepta varios: `topic: [{cands[0]['id']}, {cands[1]['id']}]` "
+                         "si el tema cruza disciplinas (se buscan en OR).")
+    return 0
+
+
+def topic_filter(valor) -> str | None:
+    """`topic:` of themes.yaml → the OpenAlex filter value, `T1|T2` (#293).
+
+    A method theme that crosses disciplines has its literature SPLIT, and forcing it to pick one
+    topic is asking it to pick which half to lose. Measured on the heteroscedastic-whitening
+    family: `Heteroskedastic PCA` sits in T11447, one version of `Deflated HeteroPCA` in T11304 and
+    another in T10500, `Inference for heteroskedastic PCA` in T11716, `Towards a theoretical
+    analysis of PCA for heteroscedastic data` in T11901 — five topics for one family, and the same
+    work in different topics depending on the version. OpenAlex already supports the OR
+    (`topics.id:T11447|T10500`); what was missing was letting the theme declare it. Accepts a
+    scalar, a list, or a comma-separated string (the CLI form); `None` stays `None`, because "no
+    topic" is a state the cascade reports as NO CORRIÓ."""
+    # ⚠ `as_list` NO sirve acá: devuelve `[]` para un escalar (es el helper del caso «el YAML trajo
+    # un escalar donde el schema pide lista»), y `topic:` era escalar hasta este cambio — usarlo
+    # habría convertido cada `topic: T11447` ya declarado en «sin topic», en silencio.
+    vals = valor if isinstance(valor, (list, tuple)) else [valor]
+    ids = [str(t).strip() for v in vals if v is not None for t in str(v).split(",")]
+    ids = [t for t in ids if t]
+    return "|".join(dict.fromkeys(ids)) or None
+
+
+SLICE_PER_PAGE = 200        # tope DURO de OpenAlex por request — no es una elección de este repo
+
+
+def _term_universe(term: str) -> int | None:
+    """How many works the term has in ALL of OpenAlex: `meta.count` with `per-page=1` (#293).
+
+    One cheap call that answers whether the topic filter is doing any work for THIS term. `None`
+    means the count could not be taken — the caller must then filter, which is the known mode."""
+    url = oa.API + "?" + urllib.parse.urlencode(
+        {"filter": f"title_and_abstract.search:{term}", "per-page": 1, "mailto": oa._mailto()})
+    try:
+        d = _json(url)
+    except Exception as e:                                      # noqa: BLE001 — declarado
+        cfg.print_seguro(f"  ⚠ «{term}»: no se pudo contar el universo sin topic ({e}) — "
+                         f"se filtra por topic, que es el modo por default")
+        return None
+    n = (d.get("meta") or {}).get("count")
+    return n if isinstance(n, int) else None
+
+
+def seed_terms(topic_id: str | None, terms: list, rows_por_termino: int = 200) -> list[dict]:
     """Text search **inside** the topic, one slice per term → records.
 
     WHY THE CITATION-RANKED SEED IS NOT ENOUGH, measured (#107). `seed` sorts a topic's works by
@@ -180,36 +256,76 @@ def seed_terms(topic_id: str, terms: list, rows_por_termino: int = 200) -> list[
     and then concluding the tail was unreachable was drawing a structural conclusion from a silent
     truncation. The slice is bounded (hundreds, not the topic's 169,977), so paging it is
     affordable; what is not affordable is a cap that hides its own effect — hence the warning
-    printed per term when the slice holds more than was taken."""
+    printed per term when the slice holds more than was taken.
+
+    ⛔ **And the remedy the warning names has to EXIST (#294).** Until v1.126.2 this said paging was
+    affordable while the body made ONE request, `per-page` topped out at the backend's 200, and
+    `rows_por_termino` was reachable only from a hand-written Python call — `cascade` never passed
+    it and no flag or theme field set it. The warning therefore prescribed a knob the operator did
+    not have, which for them ends where a silent cap ends: the rest of the slice cannot be seen.
+    Measured, two papers of the gold standard were lost to exactly that ceiling — both of them the
+    specialist mid-tail this axis exists to reach. Now the slice PAGES with a cursor up to
+    `rows_por_termino`, which is a theme field and a CLI flag."""
     out: list[dict] = []
     vistos: set = set()
     for term in terms:
-        f = f"topics.id:{topic_id},title_and_abstract.search:{term}"
-        url = oa.API + "?" + urllib.parse.urlencode(
-            {"filter": f, "sort": "cited_by_count:desc",
-             "per-page": min(rows_por_termino, 200), "mailto": oa._mailto()})
-        try:
-            d = _json(url)
-        except Exception as e:                                  # noqa: BLE001 — declarado
-            cfg.print_seguro(f"  ⚠ seed_terms: «{term}» falló ({e}) — 0 de ese término")
-            continue
-        hay = ((d.get("meta") or {}).get("count") or 0)
-        traidos = 0
-        for w in d.get("results", []):
-            traidos += 1
-            wid = _oa_id(w.get("id"))
-            if wid in vistos:
-                continue
-            vistos.add(wid)
-            r = oa.to_record(w)
-            r["found_in"] = ["openalex"]
-            out.append(r)
+        # #293 — el filtro por topic se decide POR TÉRMINO, con el conteo, y se declara. El
+        # argumento de «rankear sin filtro estructural amplifica» está medido sobre una frase
+        # genérica (143.450 works) y no vale para un término específico: `HeteroPCA` tiene 9 works
+        # en todo OpenAlex —triageable entero en una pantalla— y de esos el topic deja 4. Ahí el
+        # filtro sólo puede sacar señal. El valor del filtro escala con la ambigüedad del término,
+        # así que se mide cuál es cuál en vez de aplicarlo a ciegas — sin aflojar la doctrina:
+        # `gaussian moments` (13.396) y `weighted PCA` (6.790) se siguen filtrando.
+        universo = _term_universe(term)
+        sin_topic = isinstance(universo, int) and universo <= rows_por_termino
+        if sin_topic or not topic_id:
+            f = f"title_and_abstract.search:{term}"
+        else:
+            f = f"topics.id:{topic_id},title_and_abstract.search:{term}"
+        cfg.print_seguro(
+            f"  «{term}»: {universo if universo is not None else '?'} works sin filtro → slice "
+            + ("SIN topic (autofiltrante)" if sin_topic
+               else (f"∩ topic {topic_id}" if topic_id else "SIN topic (el tema no declara `topic:`)")))
+        # #294 — el slice se PAGINA con cursor. El cap de 200 no era del framework sino del
+        # backend (`per-page` topea ahí), el docstring justificaba el cap «con la paginación que
+        # esta función no hacía», y el aviso mandaba subir una perilla que no existía en ninguna
+        # entrada de usuario. Medido: dos papers del gold standard —los dos exactamente del tipo
+        # que este eje existe para alcanzar— quedaban fuera del top 200 de su slice.
+        hay, traidos, cursor = 0, 0, "*"
+        while cursor and traidos < rows_por_termino:
+            url = oa.API + "?" + urllib.parse.urlencode(
+                {"filter": f, "sort": "cited_by_count:desc",
+                 "per-page": min(rows_por_termino - traidos, SLICE_PER_PAGE),
+                 "cursor": cursor, "mailto": oa._mailto()})
+            try:
+                d = _json(url)
+            except Exception as e:                              # noqa: BLE001 — declarado
+                cfg.print_seguro(f"  ⚠ seed_terms: «{term}» falló ({e}) — {traidos} de ese término")
+                break
+            meta = d.get("meta") or {}
+            if isinstance(meta.get("count"), int):
+                hay = meta["count"]
+            pagina = d.get("results") or []
+            for w in pagina:
+                traidos += 1
+                wid = _oa_id(w.get("id"))
+                if wid in vistos:
+                    continue
+                vistos.add(wid)
+                r = oa.to_record(w)
+                r["found_in"] = ["openalex"]
+                out.append(r)
+            cursor = meta.get("next_cursor") if pagina else None
+            time.sleep(0.2)
         # No silent caps: si el slice tiene más de lo que se trajo, se DICE. Es la regla que el
         # framework ya aplica al `truncated` de ADS, y su ausencia acá produjo una conclusión falsa.
+        # El remedio que se propone tiene que EXISTIR (#294): `rows_por_termino` es campo del tema
+        # en themes.yaml y bandera de CLI, y la paginación es lo que hace que subirlo sirva.
         if hay > traidos:
             cfg.print_seguro(f"  ⚠ «{term}»: el slice tiene {hay} y se trajeron {traidos} "
-                             f"(top por citas) — subí `rows_por_termino` para cubrir el resto")
-        time.sleep(0.2)
+                             f"(top por citas, paginado) — subí `rows_por_termino` "
+                             f"(campo del tema en themes.yaml, o `--rows-por-termino`) "
+                             f"para cubrir el resto")
     return out
 
 
@@ -315,7 +431,8 @@ def hydrate(openalex_ids: list, rows: int = 50) -> list[dict]:
 # ── the cascade proper: ADS → arXiv → OpenAlex, deduped, coverage declared ───
 def cascade(*, ads_query: str | None = None, arxiv_terms: list | None = None,
             topic_id: str | None = None, rows: int = 100,
-            min_citas: int | None = None, term_slices: list | None = None) -> dict:
+            min_citas: int | None = None, term_slices: list | None = None,
+            rows_por_termino: int = 200) -> dict:
     """Run every discovery backend and merge → `{records, undedupable, cobertura}`.
 
     Each backend gets its query **in its own language**, which is why this takes three arguments
@@ -398,7 +515,7 @@ def cascade(*, ads_query: str | None = None, arxiv_terms: list | None = None,
             # era artefacto de un tope de 15 filas por término — ver el docstring de `seed_terms`.)
             n_slices = 0
             if term_slices:
-                extra = seed_terms(topic_id, term_slices)
+                extra = seed_terms(topic_id, term_slices, rows_por_termino=rows_por_termino)
                 n_slices = len(extra)
                 recs += extra
             batches.append(("openalex", recs))
@@ -522,7 +639,8 @@ MAX_ARXIV_TERMS = 6
 
 
 def _preview_theme(slug: str, rows: int = 25, min_citadores: int = 2,
-                   seed_terms_cli: list | None = None) -> int:
+                   seed_terms_cli: list | None = None,
+                   rows_por_termino_cli: int | None = None) -> int:
     """Full cascade for one theme, proposes only: downloads no file and writes nothing to `vault/wiki/`. It DOES
     append this run to `descubrimientos:` of the versioned registry (INV-121), which is
     deliberate — a discovery pass that leaves no trace is lost as soon as the terminal
@@ -532,7 +650,7 @@ def _preview_theme(slug: str, rows: int = 25, min_citadores: int = 2,
     if not tema:
         cfg.print_seguro(f"'{slug}' no está en themes.yaml")
         return 2
-    topic_id = tema.get("topic")
+    topic_id = topic_filter(tema.get("topic"))     # #293: `topic:` puede ser una LISTA
     if not topic_id:
         # sin `topic:` declarado, se propone el mejor match y se DICE que se eligió solo. Se busca
         # por el TÍTULO del tema, no por el primer alias: los alias son siglas (`ICA`, `BSS`, `GP`)
@@ -566,11 +684,23 @@ def _preview_theme(slug: str, rows: int = 25, min_citadores: int = 2,
     if slices:
         cfg.print_seguro(f"  seed_terms activo ({len(slices)}): {', '.join(slices)} — el eje cuesta "
                          f"triage (#107: universo 776 → 2521) y por eso es opt-in")
+    # #294 — la perilla del slice, alcanzable: campo del tema (curación, viaja con el repo) y
+    # bandera de CLI que lo pisa. El aviso de truncamiento la nombra, así que tiene que existir.
+    rpt = rows_por_termino_cli
+    if rpt is None:
+        try:
+            rpt = int(tema.get("rows_por_termino"))
+        except (TypeError, ValueError):
+            rpt = 200
+    if slices and rpt != 200:
+        cfg.print_seguro(f"  rows_por_termino = {rpt} por slice (default 200; el backend topea en "
+                         f"{SLICE_PER_PAGE} por request y el slice se pagina)")
     out = cascade(ads_query=tema.get("query"),
                   arxiv_terms=arxiv_terms,
                   topic_id=topic_id, rows=rows,
                   min_citas=cfg.gate2_threshold(tema)[0],
-                  term_slices=slices or None)
+                  term_slices=slices or None,
+                  rows_por_termino=rpt)
     cfg.print_seguro(f"\nCascada para `{slug}` (preview — no baja nada, no clasifica):")
     print_cobertura(out["cobertura"])
     # #77: el rastro versionado. La cascada corría tres backends y su resultado moría en stdout, así
@@ -594,7 +724,7 @@ def _preview_theme(slug: str, rows: int = 25, min_citadores: int = 2,
         # registro afirmaría el mismo universo para las dos. `[]` = corrió sin el eje (que no es lo
         # mismo que «no consta»: eso sería que la clave falte, en una corrida anterior a #210).
         "consulta": {"ads": tema.get("query"), "arxiv": arxiv_terms, "topic": topic_id,
-                     "seed_terms": slices},
+                     "seed_terms": slices, "rows_por_termino": rpt},
         # #231 — los IDENTIFICADORES de lo que la cascada trajo. Sin esto el registro contaba 391
         # registros y no podía nombrar **ninguno**, mientras el `STATUS.md` de la bóveda afirmaba
         # que OpenAlex había encontrado los ocho trabajos del canon: encontrados, y en ningún carril
@@ -672,24 +802,26 @@ def main(argv=()) -> int:
                          "2521. Por default sale de `seed_terms:` de la entrada del tema en "
                          "themes.yaml (son curación del tema); este flag la pisa, y `--seed-terms "
                          "''` la apaga para esta corrida.")
+    ap.add_argument("--rows-por-termino", type=int, default=None,
+                    help="cuántos works traer por slice de `seed_terms` (default 200). El backend "
+                         "topea en 200 por request, así que el slice se PAGINA (#294): subirlo "
+                         "cubre el resto del slice, que es lo que el aviso de truncamiento pide. "
+                         "Por default sale de `rows_por_termino:` de la entrada del tema.")
     args = ap.parse_args(list(argv) or None)
 
     if args.topics:
-        for t in topics(args.topics):
-            cfg.print_seguro(f'  {t["id"]:<8} works={t["works_count"]:<8} {t["name"]}')
-        cfg.print_seguro("\n  → el filtro por topic es lo que hace usable el ranking por citas: "
-                         "sin él, ordenar por citas trae los papers más citados del mundo, no del tema.")
-        return 0
+        return print_topics(args.topics)
     if args.theme:
         cli = None if args.seed_terms is None else [t for t in args.seed_terms.split(",")]
         return _preview_theme(args.theme, rows=args.rows, min_citadores=args.min_citadores,
-                              seed_terms_cli=cli)
+                              seed_terms_cli=cli,
+                              rows_por_termino_cli=args.rows_por_termino)
     if args.resolve:
         url, why = resolve_pdf(args.resolve)
         cfg.print_seguro(f"  {url or '(sin copia libre)'}\n  motivo: {why}")
         return 0 if url else 1
     if args.seed:
-        recs = seed(args.seed, rows=args.rows)
+        recs = seed(topic_filter(args.seed) or args.seed, rows=args.rows)
         cfg.print_seguro(f"  {len(recs)} works (preview — NO clasifica: son candidatos a triage)\n")
         for r in cfg.sort_by_citation_rate(recs):   # AUD-185: citas/AÑO, la política única (#79)
             cfg.print_seguro(_row(r))

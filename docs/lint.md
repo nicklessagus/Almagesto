@@ -80,6 +80,14 @@ Deben quedar en **0**:
   con `busqueda:`** (mapa, schema pre-D-28; hoy es `busquedas:`, lista).
 - **`role` fuera del vocabulario** (`fundacional|aplicacion|arbitro`): un typo deja el rol mudo
   para el contraste cross-paper.
+- **`pdf_source` / `fulltext_source` fuera de su vocabulario cerrado** (#296:
+  `eprint|ads|publisher|web` y `pdftotext|ocr|web`; `null`/ausente = **desconocido**, que es
+  legítimo y no significa «publicado»). No es cosmético: `pdf_source: eprint` es la **exención** que
+  apaga el chequeo de cita textual, así que un valor fuera de vocabulario la apaga por el `else` en
+  silencio y un `eprint` mal escrito la enciende y produce hallazgos que no lo son. Medido: 2 de 138
+  notas llevaban **prosa** en el campo. Migrador: `python scripts/make_notes.py
+  --migrate-source-fields` (pasa el valor a `null` y **mueve** la prosa a `pending_motivo` o
+  `salvedades`).
 - **Extracción que no dice desde qué sujeto se leyó** (#188: `## Extracción (LLM)` sin `vistas[]`)
   e **incoherencia `vistas[]` ↔ cuerpo** en los dos sentidos (vista declarada sin su
   `## Vista — <sujeto>`; sección sin declarar).
@@ -328,6 +336,26 @@ OCR, o marcar `pending`).
 - **Faceta con token alfabético corto sin `\b`** (#236): matchea **dentro** de otra palabra
   (`expres` → *expressed*) y el falso positivo de una faceta no deja rastro — el paper entra, se
   baja y se sintetiza. El hallazgo nombra la palabra que lo disparó cuando hay corpus en `build/`.
+- **Artefacto reusado entre slugs sin chequear su versión, y pasada de red que nunca corrió**
+  (#297): el reuso D-18 (copiar el PDF que ya estaba bajo otro slug) es correcto y se conserva, pero
+  importa a un sujeto nuevo un archivo cuya **antigüedad nadie chequeó**; y la salida natural —«si
+  hubiera versión nueva la búsqueda habría traído otro bibcode y D-19 los une»— es falsa justo en el
+  caso frecuente, porque el DOI del preprint identifica el **depósito** y #216 garantiza que
+  preprint y publicado no colisionen. Se detecta por verdad de disco (mismo bibcode con PDF bajo ≥2
+  slugs) con `pdf_source: eprint` y sin `versions[]`, y el hallazgo trae el comando acotado
+  (`sweep_external.py --bibcodes <b>`). En la misma categoría, *«`_red.yaml` no existe»*: una bóveda
+  donde `sweep_external` nunca corrió no tiene **ninguna** de las seis caducidades chequeadas.
+- **Alternativa de faceta con POBLACIÓN CERO, o duplicada** (#291): la dirección **simétrica** de
+  #236 y la más silenciosa — una alternativa muerta no se ve nunca: la faceta compila, el corte da
+  un número plausible, el registro guarda la lente como vigente y el término no participa,
+  indistinguible de *«ese término no aparece en la literatura»*. Medido: `non-?gaussianity matrix`
+  (un `|` perdido) exigía una frase que **0** archivos tienen mientras 29 tenían `non-gaussianity`,
+  o sea que el término central del tema nunca clasificó a nadie. Se corre por alternativa contra el
+  texto que lee la LENTE (título + abstract + keywords de las notas del sujeto), sobre las facetas
+  de `themes.yaml` **y** las de `relevance.facets`. ⚠ La partición es por alternación de **nivel 0**
+  (`cfg.facet_alternatives`): partir con `split('|')` corta adentro de los grupos y deduplicar sobre
+  eso **rompe la lente** (medido: −1 paper del core). Con 0 notas sale *no evaluable*, nunca «todas
+  muertas».
 - **Lente desincronizada** (D-49): la `lente` del registro ya no es la vigente de `objective.yaml`.
   El diff corre sólo cuando difieren y es **offline** (título + abstract + `keywords`); nombra los
   stems que entrarían y saldrían. Alcance declarado: evalúa la mitad textual; un cambio que sólo

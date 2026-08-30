@@ -4236,3 +4236,85 @@ def test_clean_catalog_markup_notes_es_idempotente(toy_vault):
     antes = dest.read_bytes()
     mn.clean_catalog_markup_notes()
     assert dest.read_bytes() == antes
+
+
+# ── #296 · `pdf_source`/`fulltext_source`, vocabulario cerrado y su migrador ──
+def _paper_con_source(toy_vault, stem, **fm):
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    campos = "\n".join(f"{k}: {v}" for k, v in fm.items())
+    (cfg.PAPERS / f"{stem}.md").write_text(
+        f"---\nbibcode: {stem}\ntitle: T\nstars: [tau Cet]\n{campos}\n---\n\n## Abstract\n\nx\n",
+        encoding="utf-8")
+    return cfg.PAPERS / f"{stem}.md"
+
+
+def test_migrar_source_fields_pone_null_y_MUEVE_la_prosa(toy_vault, capsys):
+    """#296 — el valor fuera de vocabulario pasa a `null` (que es el valor legítimo de
+    *desconocido*, y no «publicado»), pero la prosa **se mueve, no se tira**: medido, uno de los dos
+    casos reales era una nota de adquisición legítima que terminó en el campo equivocado porque el
+    schema no tenía dónde ponerla."""
+    f = _paper_con_source(toy_vault, "2010ComonJutten",
+                          pdf_source="'null consigue el usuario. ADS sólo indexa una RESEÑA'")
+    n, movidas = mn.migrate_all_source_fields()
+    assert n == 1 and movidas == [("2010ComonJutten", "salvedades")]
+    fm = cfg.split_fm(f.read_text(encoding="utf-8"))
+    assert fm["pdf_source"] is None
+    assert any("consigue el usuario" in str(s) for s in cfg.as_list(fm.get("salvedades"))), \
+        "la prosa no se puede perder: era información que alguien escribió a propósito"
+
+
+def test_migrar_source_fields_manda_a_pending_motivo_si_la_fuente_falta(toy_vault):
+    """Si la nota declara `pending_source`, el lugar natural de esa prosa es `pending_motivo` (#80):
+    describe por qué la fuente todavía no está."""
+    f = _paper_con_source(toy_vault, "1998Hyvarinen", pending_source="adquisicion",
+                          pdf_source="'null el 2026-08-29'")
+    n, movidas = mn.migrate_all_source_fields()
+    assert n == 1 and movidas == [("1998Hyvarinen", "pending_motivo")]
+    fm = cfg.split_fm(f.read_text(encoding="utf-8"))
+    assert fm["pdf_source"] is None and "2026-08-29" in str(fm["pending_motivo"])
+
+
+def test_migrar_source_fields_no_pisa_un_pending_motivo_que_ya_existe(toy_vault):
+    """El motivo declarado por el usuario es información que alguien escribió: la prosa rescatada no
+    puede reemplazarlo. Cuando el destino ya está ocupado, la nota queda **visible** para moverla a
+    mano en vez de perderse o pisar."""
+    f = _paper_con_source(toy_vault, "2011libro", pending_source="adquisicion",
+                          pending_motivo="'lo consigue el usuario'",
+                          pdf_source="'null el 2026-08-29'")
+    mn.migrate_all_source_fields()
+    texto = f.read_text(encoding="utf-8")
+    fm = cfg.split_fm(texto)
+    assert fm["pending_motivo"] == "lo consigue el usuario"
+    assert "2026-08-29" in texto, "la prosa sigue visible en la nota"
+
+
+def test_migrar_source_fields_saltea_la_nota_ilegible(toy_vault):
+    """Una nota cuyo frontmatter no parsea ya es un bloqueante del lint; el migrador no la toca —
+    editar a ciegas un YAML roto es cómo se rompe más."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    rota = cfg.PAPERS / "2020rota.md"
+    rota.write_text("---\nbibcode: [sin cerrar\npdf_source: 'prosa'\n---\n\ntexto\n",
+                    encoding="utf-8")
+    antes = rota.read_text(encoding="utf-8")
+    assert mn.migrate_all_source_fields() == (0, [])
+    assert rota.read_text(encoding="utf-8") == antes
+
+
+def test_migrar_source_fields_no_toca_lo_valido(toy_vault):
+    """`eprint`, `ads`, `publisher`, `web` y la ausencia son todos valores legítimos: un migrador
+    que reescribe lo válido es un migrador que hay que revisar entero."""
+    _paper_con_source(toy_vault, "2020ok", pdf_source="eprint", fulltext_source="ocr")
+    _paper_con_source(toy_vault, "2021sin", pdf_source="null")
+    assert mn.migrate_all_source_fields() == (0, [])
+
+
+def test_migrar_source_fields_no_escribe_si_rompe_el_yaml(toy_vault, capsys, monkeypatch):
+    """#244 — una operación no puede dejar la nota PEOR de lo que la encontró: si el frontmatter
+    resultante dejó de parsear, no se escribe."""
+    f = _paper_con_source(toy_vault, "2020roto", pdf_source="'prosa suelta'")
+    antes = f.read_text(encoding="utf-8")
+    monkeypatch.setattr(cfg, "split_fm", lambda t: {} if "pdf_source: null" in t
+                        else {"bibcode": "2020roto", "pdf_source": "prosa suelta"})
+    assert mn.migrate_all_source_fields() == (0, [])
+    assert f.read_text(encoding="utf-8") == antes
+    assert "NO se escribe" in capsys.readouterr().out

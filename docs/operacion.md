@@ -139,6 +139,9 @@ python scripts/discover.py --theme <slug>     # DESCUBRIMIENTO multi-backend (#1
                                     #   OpenAlex), y la cobertura distingue TRES estados: corrió con
                                     #   N, FALLÓ, o NO CORRIÓ y por qué. PROPONE; no clasifica
 python scripts/discover.py --topics "<tema en inglés>"   # el id T… de OpenAlex → `topic:` en themes.yaml
+                                    #   (acepta VARIOS: `topic: [T1, T2]`, se buscan en OR — #293;
+                                    #   y declara sus dos ceros: taxonomía vacía vs FALLÓ — #290)
+python scripts/discover.py --theme <slug> --rows-por-termino 600   # el slice de `seed_terms` se PAGINA (#294)
 python scripts/discover.py --resolve 10.1016/…           # ¿hay copia libre de ese DOI? (OpenAlex → Unpaywall)
 ```
 

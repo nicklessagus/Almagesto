@@ -658,7 +658,7 @@ _(ninguno relevante — corpus sintético)_
         "short": "poblada",
         "description": "Corpus sintético determinista para tests/poblada — no es una bóveda real.",
         "concept_areas": [*AREAS_OPEN, "methods", "hypotheses"],
-        "relevance": {"facets": {"sintetico": "synthetic|sintetico"}, "noise_doctypes": ["catalog"]},
+        "relevance": {"facets": {"sintetico": "synthetic"}, "noise_doctypes": ["catalog"]},
     }
     stars_yaml = {star_names[i]: {"slug": star_slugs[i], "simbad": f"TST {i:04d}",
                                   "ads_object": star_names[i], "aliases": [], "data_local": None}
@@ -685,7 +685,7 @@ _(ninguno relevante — corpus sintético)_
                     "bibcodes": sorted(paper_stems),
                     # la lente TEXTUAL del objective sintético: si difiere, el lint reporta
                     # *lente desincronizada* — otro ruido de fondo que hacía incontable la categoría.
-                    "lente": {"facets": {"sintetico": "synthetic|sintetico"}, "require": [],
+                    "lente": {"facets": {"sintetico": "synthetic"}, "require": [],
                               "min_facets": 1, "noise_doctypes": ["catalog"]},
                 }],
                 "cadena": [{"paso": paso, "fecha": "2026-01-01", "version": ALMAGESTO_VERSION,
@@ -701,6 +701,13 @@ _(ninguno relevante — corpus sintético)_
                 "extraccion": {"subconjunto": True, "fecha": "2026-01-01",
                                "criterio": "corpus sintético: se extrae una fracción a propósito"},
             })
+        # #297 — una bóveda sana ya miró afuera: sin `_red.yaml` el corpus "limpio" reporta
+        # «`sweep_external` nunca corrió acá», que es ruido de fondo permanente sobre el que no se
+        # distingue ninguna anomalía sembrada. Mismo criterio que `busquedas`/`cadena`/`barridos`.
+        write_yaml(paths.REGISTRO / "_red.yaml", {
+            "ultima_pasada_red": {"fecha": "2026-01-01", "version": ALMAGESTO_VERSION,
+                                  "cubrio": ["retracciones", "correcciones", "versiones", "web",
+                                             "ground-truth", "citas-puerta2"]}})
     paths.PDFS.mkdir(parents=True, exist_ok=True)
 
     # ── vintage: resto pre-1.9.0/#51 (triage.json legacy) ─────────────────────────────────────

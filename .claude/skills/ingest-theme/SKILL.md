@@ -75,6 +75,20 @@ Progreso del ingest del tema <tema>:
      además **por qué puerta entró** (`fundacional` / `astro`, #126), que es lo que decide el
      recorte de lectura, y la línea de cierre manda a `themes.yaml` (`facet:`,
      `fundacional_min_citas`), que es el archivo que decide este corte.
+     ⛔ **Leé el desglose del NO-CORE (#289) antes de tocar nada:** distingue *sin la faceta propia*
+     (la faceta está bien / apretala más) de *pasa la faceta y ninguna puerta abre* (la faceta
+     acertó y el problema es la puerta) — piden acciones **opuestas** y antes se mostraban
+     idénticas. Medido: 261 contra 32, con los dos papers que el tema existía para capturar entre
+     los 32; aflojar la faceta —el movimiento que sugería la pantalla— deja entrar los otros 261.
+     El bloque *«no-core que PASAN la faceta»* es de donde sale `extra_core`.
+     ⛔ **Y si el tema es de otra disciplina, mirá el `search_fq` (#295).** Es la mitad **más
+     restrictiva** del filtro (acota server-side, antes de traer nada) y sale del **objetivo** salvo
+     que el tema declare el suyo: en una bóveda astro, un tema de estadística o signal processing se
+     busca sobre un universo que excluye su literatura **por construcción**, y ninguna `facet:`
+     puede recuperarla. Medido: 306 resultados con `database:astronomy` contra 6946 sin él, y
+     `title:"noisy ICA"` en **cero** bajo el fq. Se declara `search_fq:` en la entrada del tema
+     (`null` = no acotar, a propósito). ⚠ No es un permiso para sacarlo en `objective.yaml`: sin fq
+     el top por citas de esa misma query es software de genómica y guías de cardiología.
    - **c2. Sugerir ramas no pedidas.** Con lo que vuelve del `--probe`, si aparece consistentemente
      una familia vecina que el usuario no nombró, **preguntarla** (*"apareció mucho NMF — ¿entra en
      este tema o es otro?"*). Es información que sólo existe después de mirar papers reales, y
@@ -336,6 +350,7 @@ DOI y conteo de citas. La lista declarada a mano es el **último** recurso, no e
 python scripts/discover.py --topics "<tema en inglés>"      # subtema de OpenAlex (id T…) → `topic:`
 python scripts/discover.py --theme <slug>                   # ADS + arXiv + OpenAlex + anclaje
 python scripts/discover.py --theme <slug> --seed-terms "noisy ICA,quasi-whitening"   # + la cola especialista
+python scripts/discover.py --theme <slug> --rows-por-termino 600   # el slice se pagina: destapa lo que el aviso corta (#294)
 python scripts/discover.py --resolve 10.1016/…              # ¿hay copia libre de ese DOI?
 ```
 
@@ -351,9 +366,25 @@ son **curación**: el vocabulario especialista que la query general no trae (par
 perdieron exactamente esos 10 papers, y la cobertura ahora lo declara *NO CORRIÓ* en vez de callarlo.
 
 **Leé la cobertura que imprime**, no sólo la lista: distingue *corrió con N*, *FALLÓ* (0 por caída,
-que **no** es "no tiene nada del tema") y *NO CORRIÓ* con el motivo. Y declará `topic:` en la
-entrada del tema: sin él, la mitad OpenAlex se infiere del `title` y con títulos en castellano no
-matchea la taxonomía inglesa.
+que **no** es "no tiene nada del tema") y *NO CORRIÓ* con el motivo. Vale también para `--topics`,
+que declara sus dos ceros (#290): *«la taxonomía de OpenAlex no tiene nada que matchee esa frase»*
+(probá una más general, o dejá `topic:` sin declarar) y *FALLÓ* (volvé a correrlo) piden lo
+contrario. Y declará `topic:` en la entrada del tema: sin él, la mitad OpenAlex se infiere del
+`title` y con títulos en castellano no matchea la taxonomía inglesa.
+
+⛔ **`topic:` acepta una LISTA, y para un tema que cruza disciplinas hay que usarla (#293).**
+Medido: la familia del blanqueo heterocedástico está repartida en **cinco** topics, y el mismo
+trabajo cae en topics distintos según sea preprint o publicado — con un solo topic, cuatro quintos
+son inalcanzables hagas los `seed_terms` que hagas. `--topics` te muestra los candidatos; declarálos
+todos los que correspondan (`topic: [T11447, T10500]`, se buscan en OR). ⚠ Y el slice **decide por
+término** si el topic aporta: con el conteo sin filtro a la vista, un término específico
+(`HeteroPCA`: 9 works en todo OpenAlex) corre **sin** topic —el filtro ahí sólo puede sacar señal—
+y uno ambiguo (`gaussian moments`: 13.396) lo mantiene. La pantalla lo declara término por término.
+
+⚠ **Si el aviso dice que el slice tiene más de lo que trajo, se puede destapar (#294):**
+`rows_por_termino:` en la entrada del tema (o `--rows-por-termino`), que ahora **pagina** — el
+backend topea en 200 por request. Medido: dos papers del gold standard se perdían sólo por ese
+techo, los dos exactamente de la cola especialista que este eje existe para alcanzar.
 
 ⚠ **El orden importa y está medido:** `search` + orden por citas sobre OpenAlex devuelve 143.450
 works cuyo top 30 es AlphaFold y guías de cardiología (**2 de 30** en tema). Filtrando por
