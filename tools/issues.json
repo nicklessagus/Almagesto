@@ -1555,6 +1555,11 @@
    "number": 312,
    "title": "`alcance` y `unidad_cita` se estampan al crear la nota y nunca se re-sincronizan: al ampliar el alcance de un libro, la nota afirma que ese material «no entra» mientras lo publica en su vista (medido en 2 libros, 37 valores nuevos)",
    "state": "OPEN"
+  },
+  {
+   "number": 313,
+   "title": "`resolve_pdf` consulta OpenAlex y Unpaywall y NO arXiv, en un repo con `search_arxiv.py` y `fetch_arxiv.py`: un falso «sin copia libre» congela una fuente como inconseguible (medido: 2 de 2 `pending: paywall` de la bóveda eran obtenibles, uno de ellos en arXiv)",
+   "state": "OPEN"
   }
  ]
 }

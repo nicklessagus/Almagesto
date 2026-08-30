@@ -575,6 +575,10 @@ def resolve_pdf(doi: str | None, title: str | None = None) -> tuple[str | None, 
         d = _json(oa.API + "/doi:" + urllib.parse.quote(doi) + "?" +
                   urllib.parse.urlencode({"mailto": oa._mailto()}))
         url = ((d.get("best_oa_location") or {}).get("pdf_url"))
+        # #313 — el título sale de acá cuando el llamador no lo pasó: los tres call-sites tienen el
+        # DOI a mano y no siempre el título, y sin título la rama de arXiv no puede correr (la
+        # búsqueda por id no aplica: si tuviéramos el arXiv id no estaríamos resolviendo nada).
+        title = title or d.get("display_name") or d.get("title")
         if url:
             return url, "OpenAlex best_oa_location"
     except Exception as e:                                      # noqa: BLE001 — declarado, no tragado
@@ -588,8 +592,51 @@ def resolve_pdf(doi: str | None, title: str | None = None) -> tuple[str | None, 
             return url, "Unpaywall"
     except Exception as e:                                      # noqa: BLE001
         cfg.print_seguro(f"  ⚠ resolve_pdf: Unpaywall falló para {doi} ({e})")
-    return None, ("sin copia libre en OpenAlex ni Unpaywall — probá la página del autor o el "
-                  "repositorio institucional; si no, dejalo `pending: paywall`")
+    # 3. arXiv (#313). El repo tiene dos módulos de arXiv y `fetch_pdf` prueba el eprint PRIMERO en
+    # el carril ADS, pero el carril `sources:` (off-ADS) sólo tiene esta función — y no lo miraba.
+    # Medido: las 2 fuentes `pending: paywall` de una bóveda eran obtenibles, y una estaba en arXiv
+    # con el mismo título y los mismos autores. Un falso «sin copia libre» no es un fallo
+    # transitorio: `pending` es una DECLARACIÓN que congela la fuente como inconseguible hasta que
+    # una persona se acuerde, porque esta función propone y no reescribe.
+    if title:
+        url, why = _arxiv_pdf(title)
+        if url:
+            return url, why
+    return None, ("sin copia libre en OpenAlex, Unpaywall ni arXiv" +
+                  ("" if title else " (arXiv NO se consultó: sin título con que buscar)") +
+                  " — probá la página del autor o el repositorio institucional; si no, dejalo "
+                  "`pending: paywall`")
+
+
+def _arxiv_pdf(title: str) -> tuple[str | None, str]:
+    """arXiv by EXACT title → `(pdf url, why)` (#313). Never an approximate match.
+
+    ⛔ The title match is accepted only when the normalised titles are identical: `openalex.py`
+    measured that matching by title resolved 18 of 25 blind cases and **2 of those pointed at a
+    different work**, and here the cost of a wrong match is worse than a `pending` — the note would
+    cite a document nobody opened. Ambiguity returns `None` with the reason, never a guess.
+
+    ⚠ And the provenance goes in the reason, because an eprint **is not the published version**:
+    that decides how its numbers are cited (`pdf_source: eprint`, #57 — a discrepancy against a
+    published value is a version difference and the note is NOT corrected towards the preprint)."""
+    def _norm(t: str) -> str:
+        """Title normalised for comparison: lowercase, whitespace collapsed."""
+        return " ".join(str(t or "").lower().split())
+    try:
+        import search_arxiv
+        recs = search_arxiv.search(f'ti:"{title}"', rows=5)
+    except Exception as e:                                      # noqa: BLE001 — red ajena
+        cfg.print_seguro(f"  ⚠ resolve_pdf: arXiv falló para «{title[:60]}» ({e})")
+        return None, ""
+    exactos = [r for r in recs if _norm(r.get("title")) == _norm(title) and r.get("arxiv_id")]
+    if len(exactos) == 1:
+        return (f"https://arxiv.org/pdf/{exactos[0]['arxiv_id']}",
+                f"arXiv por título exacto ({exactos[0]['arxiv_id']}) — es el EPRINT, no la versión "
+                f"publicada: la nota va con `pdf_source: eprint` (#57)")
+    if len(exactos) > 1:
+        cfg.print_seguro(f"  ⚠ resolve_pdf: {len(exactos)} eprints con el mismo título — no se "
+                         f"adivina; resolvelo a mano")
+    return None, ""
 
 
 # ── CLI (preview only) ───────────────────────────────────────────────────────

@@ -117,10 +117,9 @@ que la fuente dice eso, **antes** de propagarlo. Es un chequeo por par, no una r
 grepeá la afirmación, mirá la línea, seguí.
 
 **Por qué, y no es paranoia — está medido.** La prosa de una ficha es **capa LLM** y
-`verify-citations` es **juicio de LLM, no prueba**. Sobre un concepto ya extraído y sintetizado, el
-fan-out encontró **13 defectos** (cuatro `no-soportada`, tres `contradice`, varias
-sobre-generalizaciones) y **siete eran de atribución** — el dato de un paper adjudicado a otro.
-Ninguno de esos errores es visible desde la ficha: se ven **sólo** abriendo la fuente.
+`verify-citations` es **juicio de LLM, no prueba**. Sobre un concepto ya extraído y sintetizado el
+fan-out encontró **13 defectos**, y **siete eran de atribución** —el dato de un paper adjudicado a
+otro—: ninguno visible desde la ficha, se ven **sólo** abriendo la fuente.
 
 **Cómo (#205):** abrí el **PDF** (`vault/raw/pdfs/**/<bibcode>.pdf`) y citá **página**. El `.txt`
 sirve para *ubicar* con `grep -n`, no para citar: es el índice de búsqueda y pierde fórmulas,
@@ -838,11 +837,10 @@ la cascada y **propone**; nunca clasifica.
   elija qué mitad perder. Se buscan en OR (`topics.id:T1|T2`). ⚠ Lo que **no** pasa —decisión
   abierta, no defecto— es que `ingest_theme.py` corra la cascada por su cuenta: es un paso que el
   skill prescribe a mano (0b).
-- **La cobertura distingue tres estados, no dos** (`print_cobertura`): corrió con N registros,
-  **FALLÓ** (0 por caída — que no significa que el backend no tenga nada), y **NO CORRIÓ** con el
-  motivo (`query:`/`topic:` sin declarar). Saltear un backend en silencio deja una cascada de tres
-  que corrió una, leída como "los tres miraron y esto es todo lo que hay". Ídem el conteo de citas:
-  arXiv no lo publica, así que la columna muestra **`?`, no `0`** — un `0` afirma "no lo cita
+- **La cobertura distingue tres estados, no dos** (`print_cobertura`): corrió con N, **FALLÓ** (0
+  por caída, que no es «no tiene nada») y **NO CORRIÓ** con el motivo. Saltear un backend en
+  silencio deja una cascada de tres que corrió una, leída como "los tres miraron". Ídem el conteo de
+  citas: arXiv no lo publica, así que la columna muestra **`?`, no `0`** — un `0` afirma "no lo cita
   nadie" sobre un dato que nadie miró, y con esa columna se decide qué mandar a triage. ⛔ **Y `--topics` —el PRIMER comando del paso 0b— declara sus dos
   ceros (#290)**: «la taxonomía no tiene nada parecido» (probá una frase más general) y **FALLÓ**
   (volvé a correrlo) piden lo contrario, y salían idénticos.
@@ -878,10 +876,13 @@ la cascada y **propone**; nunca clasifica.
   mano, y el framework pide que cada entrada registre **por qué** entró (`extra_core` con
   `via`/`motivo`, o `sources`).
 - **Encontrar ≠ conseguir** (`resolve_pdf`): OpenAlex identificó 8/8 de los canónicos y devolvió
-  `pdf_url = None` **8/8**. La cascada del archivo (OpenAlex → Unpaywall) **propone una URL y
-  para**: no reescribe un `pending:` que declaró el usuario ni edita `sources:` —cambiar en silencio
-  una fuente declarada por una que adivinó un script es cómo una cita termina apuntando a un
-  documento que nadie abrió—.
+  `pdf_url = None` **8/8**. La cascada del archivo es **OpenAlex → Unpaywall → arXiv por título
+  EXACTO** (#313: el carril off-ADS no miraba el depósito que el carril ADS prueba primero — medido,
+  las 2 fuentes `pending: paywall` de una bóveda eran obtenibles y una estaba en arXiv) y **propone
+  una URL y para**: no reescribe un `pending:` declarado ni edita `sources:`. ⛔ Nunca por título
+  **aproximado**, y el motivo enumera **lo que se consultó**: un `pending` es una declaración que
+  congela la fuente como inconseguible, así que un falso «no hay copia libre» dura hasta que alguien
+  se acuerde.
 
 
 ### Ingest (una fuente → cascada de páginas)
@@ -927,10 +928,9 @@ abren **esas**—. ⛔ **El `.txt` NO se genera con el modelo**: tiene que ser d
 por línea serían inventadas y verificar sería contrastar un modelo contra otro. ⚠ **Consecuencia:**
 un `pending_source` es **bloqueo real** — sin PDF no hay de dónde extraer.
 
-⚠ **Excepción nombrada: la fuente WEB.** Un snapshot de `fetch_web` (`source_url` poblado,
-`pdf: null`) no tiene PDF **por diseño**: ahí el `.txt` no es copia degradada, **es la captura**
-(determinista: defuddle, URL + fecha, citada con `accessed`). Se lee, se cita por **línea** y su
-fila de verificación lleva `txt:<sha10>`.
+⚠ **Excepción nombrada: la fuente WEB.** Un snapshot de `fetch_web` (`source_url` poblado, `pdf:
+null`) no tiene PDF **por diseño**: ahí el `.txt` **es la captura** (defuddle, URL + fecha, citada
+con `accessed`). Se lee, se cita por **línea**, y su fila de verificación lleva `txt:<sha10>`.
 
 De los tres chequeos de calidad quedan **dos**: `is_legible` dispara el OCR (un escaneo sin capa de
 texto deja un `.txt` vacío y el paper invisible al corpus) e `is_garbled` sigue porque la prosa

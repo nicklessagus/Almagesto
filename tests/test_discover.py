@@ -1044,3 +1044,66 @@ def test_rows_por_termino_invalido_no_rompe_la_cascada(toy_vault, monkeypatch):
     monkeypatch.setattr(d, "_theme_anchor", lambda s, c=None: ([], 0))
     assert d._preview_theme("ica") == 0
     assert visto["rows_por_termino"] == 200
+
+
+# ── #313 · la cascada de ADQUISICIÓN también mira arXiv ─────────────────────
+def test_resolve_pdf_cae_a_arxiv_por_titulo_exacto(toy_vault, monkeypatch, capsys):
+    """#313 — la cascada era OpenAlex → Unpaywall → rendirse, en un repo con dos módulos de arXiv y
+    con `fetch_pdf` probando el eprint PRIMERO en el carril ADS. El carril `sources:` (off-ADS) sólo
+    tiene esta función. Medido: las **2** fuentes `pending: paywall` de una bóveda eran obtenibles,
+    y una estaba en arXiv con el mismo título y los mismos autores.
+
+    Un falso «sin copia libre» no es un fallo transitorio: `pending` es una DECLARACIÓN, y como esta
+    función propone y no reescribe, congela la fuente como inconseguible hasta que alguien se
+    acuerde."""
+    monkeypatch.setattr(d, "_json", lambda url: {"best_oa_location": None,
+                                                 "display_name": "Painful intelligence"})
+    monkeypatch.setattr(d.requests, "get", lambda *a, **k: _Resp({"best_oa_location": None}))
+    import search_arxiv
+    monkeypatch.setattr(search_arxiv, "search",
+                        lambda q, rows=100: [{"title": "Painful Intelligence",
+                                              "arxiv_id": "2303.16535v2"}])
+    url, why = d.resolve_pdf("10.1016/j.patter.2023.100844")
+    assert url == "https://arxiv.org/pdf/2303.16535v2"
+    assert "arXiv por título exacto" in why
+    assert "eprint" in why, "un eprint NO es la versión publicada, y eso decide cómo se cita (#57)"
+
+
+def test_resolve_pdf_NO_acepta_un_titulo_aproximado(toy_vault, monkeypatch, capsys):
+    """⛔ Nunca por título aproximado: `openalex.py` midió que el matcheo por título resolvió 18 de
+    25 casos y **2 apuntaban a otro trabajo**. Acá el costo de errar es peor que un `pending`: la
+    nota citaría un documento que nadie abrió."""
+    monkeypatch.setattr(d, "_json", lambda url: {"best_oa_location": None,
+                                                 "display_name": "Noisy ICA with unknown noise"})
+    monkeypatch.setattr(d.requests, "get", lambda *a, **k: _Resp({"best_oa_location": None}))
+    import search_arxiv
+    monkeypatch.setattr(search_arxiv, "search",
+                        lambda q, rows=100: [{"title": "Noisy ICA with unknown noise covariance",
+                                              "arxiv_id": "1234.5678"}])
+    url, why = d.resolve_pdf("10.1/x")
+    assert url is None
+    assert "ni arXiv" in why, "el motivo enumera lo que SE CONSULTÓ, no «no hay copia libre»"
+
+
+def test_dos_eprints_con_el_mismo_titulo_no_se_adivinan(toy_vault, monkeypatch, capsys):
+    """Ambigüedad → `None` con el motivo, nunca una elección. Es la misma regla del dedup por DOI:
+    ante dos candidatos idénticos, adivinar es cómo una cita termina apuntando a otro trabajo."""
+    monkeypatch.setattr(d, "_json", lambda url: {"best_oa_location": None,
+                                                 "display_name": "Deflated HeteroPCA"})
+    monkeypatch.setattr(d.requests, "get", lambda *a, **k: _Resp({"best_oa_location": None}))
+    import search_arxiv
+    monkeypatch.setattr(search_arxiv, "search", lambda q, rows=100: [
+        {"title": "Deflated HeteroPCA", "arxiv_id": "2303.06198"},
+        {"title": "deflated heteropca", "arxiv_id": "2401.00001"}])
+    url, why = d.resolve_pdf("10.1/dup")
+    assert url is None and "ni arXiv" in why
+    assert "2 eprints con el mismo título" in capsys.readouterr().out
+
+
+def test_el_motivo_dice_si_arxiv_NO_se_consulto(toy_vault, monkeypatch):
+    """D-43 en el mensaje: sin título no se pudo buscar en arXiv, y eso no se lee igual que «se
+    buscó y no está»."""
+    monkeypatch.setattr(d, "_json", lambda url: {"best_oa_location": None})
+    monkeypatch.setattr(d.requests, "get", lambda *a, **k: _Resp({"best_oa_location": None}))
+    _url, why = d.resolve_pdf("10.1/sin-titulo")
+    assert "arXiv NO se consultó" in why

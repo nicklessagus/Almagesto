@@ -479,3 +479,20 @@ detector bloqueante); `alcance`/`unidad_cita` se re-estampan desde la config
 (`--restamp-alcance`) y el lint reporta el desfasaje. ⚠ Lo que **no** se hizo, anotado en #312: que
 `vistas[]` registre bajo qué **alcance** se leyó, que es lo que haría computable el delta *«esta
 vista es incompleta respecto del alcance vigente»* — hoy `lente` guarda los ejes y no el alcance.
+
+## 2026-08-30 · La cascada de adquisición sin arXiv (#313)
+
+| Qué se midió | Número | Salvedad |
+|---|---|---|
+| Fuentes `pending: paywall` de la bóveda | **2** | es la **población entera** de pendientes, no una muestra |
+| De ésas, obtenibles | **2 de 2** | una en la biblioteca del usuario; la otra en arXiv (`2303.16535v2`, mismo título y mismos tres autores, verificado abriendo el PDF) |
+| `grep -ci arxiv` sobre `resolve_pdf` | **0** | en un repo con `search_arxiv.py`, `fetch_arxiv.py`, y `fetch_pdf` probando `EPRINT_PDF` **primero** en el carril ADS |
+
+⚠ **n=2 es chico y el 2 de 2 no es estadística**: lo que sostiene es que el modo de falla es
+**sistemático** —hay un depósito entero que la cascada no miraba— y que el motivo escrito en el
+registro (*«OpenAlex/Unpaywall no resolvió copia libre»*) era cierto y engañoso a la vez: describía
+lo que se consultó, no lo que hay.
+
+**Qué cambió.** Tercera rama (arXiv por **título exacto**, nunca aproximado), la procedencia en el
+motivo —un eprint no es la versión publicada, y eso decide cómo se citan sus números (#57)— y el
+mensaje de cierre enumerando lo consultado. Se mantiene la doctrina: **propone y para**.
