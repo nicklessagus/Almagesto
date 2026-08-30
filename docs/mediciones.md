@@ -534,3 +534,27 @@ hecho**, que es exactamente para lo que sirve una revisión de cierre:
 ⚠ Los tres son de la clase que el barrido de mutación **no** ve: un gate que falta, una expresión
 que no decide, y un costo. Ninguno rompe un test — y por eso hacía falta que alguien leyera el
 commit.
+
+## 2026-08-30 · El gate de #318, aplicado a una bóveda real (#321)
+
+Corrida de v1.132.0 sobre `Almagesto-Tesis` tras `--migrate-extracciones`: 122 extracciones, 135
+citas con fuente chequeable, **32 hits** de `cita_inventada`. Clasificados volviendo a la nota (no al
+reporte):
+
+| clase | n | veredicto |
+|---|---|---|
+| la frase está verbatim en la extracción de **otro** bibcode | **6** | verdadero — error de atribución |
+| coincide el arranque y **diverge la cola** | **6** | verdadero — el patrón de #314 |
+| no está en ninguna extracción | **20** | **mezclado**: paráfrasis entrecomilladas (verdadero) y citas legítimas leídas del PDF (falso) |
+
+⛔ Entre los 20 estaba una cita que **#315 usa como ejemplo de cita correcta**, confirmada verbatim
+contra el PDF por el fan-out. La premisa del gate —*«si no está en el JSON, la fabricó el
+sintetizador»*— sólo valdría si la extracción contuviera toda frase citable del paper, y es una
+transcripción **selectiva y lenteada** (#188) sobre un corpus que se cita **del PDF** (#205).
+
+⚠ **Nota de método**: el reporte trunca el extracto a 70 caracteres (#226), así que clasificar desde
+el reporte da un resultado falso — la primera pasada de esta medición se equivocó por eso.
+
+**Qué cambió.** El gate bloquea sólo con **evidencia positiva** (la frase bajo otro bibcode, o el
+prefijo largo con la cola divergente); el silencio de la extracción baja a backlog con su propio
+mensaje. Doctrina: **evidencia positiva bloquea, el silencio se declara** (D-43).

@@ -203,14 +203,19 @@ OCR, o marcar `pending`).
   **cuerpo** (un `pending_motivo` que la mencione daría falso negativo, AUD-135) y la repara
   `--restamp-headers`, que desde #277 también arregla la nota que tiene la línea del generador y
   perdió el blockquote — antes esa nota no se reparaba nunca y la categoría era incerrable.
-- ⛔ **Cita textual que NO está ni en el `.txt` ni en la EXTRACCIÓN** (#318, `--cierre`): la
-  extracción se hizo **leyendo el PDF**, así que un hit acá significa que la cita **la fabricó el
-  sintetizador** — no hay excusa de artefacto degradado. Sube a **bloqueante con `--cierre <slug>`**
-  (como los pares sin verificar): una operación que fabricó una cita textual no puede cerrar en
-  verde. ⚠ La partición es en **tres**: sin extracción en disco el caso es *no evaluable* y queda en
-  backlog —bloquear ahí sería un falso bloqueante, la simétrica de lo que D-43 prohíbe—, y la cita
-  **ambigua** (bloque con lista de fuentes, #316) tampoco sube: su mensaje ya declara que el
-  hallazgo es más débil.
+- ⛔ **Cita textual que la EXTRACCIÓN desmiente** (#318/#321, `--cierre`): bloquea sólo con
+  **evidencia positiva** de que la cita se movió o se completó — la frase está verbatim en la
+  extracción de **otro** bibcode de la nota (atribución), o coincide un prefijo largo del mismo
+  bibcode y **diverge la cola** (el patrón de #314, la cita completada al copiar). Sube a bloqueante
+  con `--cierre <slug>`: una operación que altera una cita textual no puede cerrar en verde.
+  ⛔ **El silencio de la extracción NO cuenta** (#321): es una transcripción **selectiva y lenteada**
+  (#188) y el framework manda citar del PDF (#205), así que «no está en el JSON» no prueba
+  fabricación — medido, entre los 20 hits de esa clase había citas legítimas, una usada por #315
+  como ejemplo de cita **correcta**. Ese caso queda en backlog, junto con la fuente **sin extracción
+  en disco** (no evaluable) y la cita **ambigua** (#316). Es la doctrina de siempre: **evidencia
+  positiva bloquea, el silencio se declara** (D-43).
+  ⚠ Y para clasificar un hit hay que volver a la **nota**, no al reporte: el extracto va truncado a
+  70 caracteres (#226), así que decidir desde el reporte da un resultado falso.
 - **Cita textual entre comillas que su fuente no contiene** (#220): «esta cadena está en este
   archivo» es un `grep`, no un LLM. ⛔ **Se decide contra la EXTRACCIÓN antes que contra el `.txt`**
   (#315/#317): la extracción es la transcripción hecha **leyendo el PDF**, así que una cita que está

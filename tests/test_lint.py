@@ -6256,56 +6256,78 @@ def test_la_cita_que_esta_en_la_EXTRACCION_no_es_defecto_de_la_nota(toy_vault):
     assert any("está en la EXTRACCIÓN" in m and "la nota está bien" in m for m in degradado)
 
 
-def test_la_cita_que_NO_esta_en_la_extraccion_ni_en_el_txt_SIGUE_siendo_hallazgo(toy_vault):
-    """El control: lo que ni la extracción ni el `.txt` tienen es justamente lo que el sintetizador
-    inventó — y eso no admite excusa de artefacto degradado."""
-    paper_extraido(toy_vault, "2013Voss")
+def test_el_silencio_de_la_extraccion_NO_es_fabricacion(toy_vault):
+    """#321 — la premisa de #317 §5 («si no está en el JSON, la fabricó el sintetizador») sólo
+    valdría si la extracción contuviera toda frase citable del paper. Es una transcripción
+    **selectiva y lenteada** (#188), y el framework manda citar del PDF (#205): medido, entre los 20
+    hits «no está en ninguna extracción» había citas legítimas, una de ellas usada por #315 como
+    ejemplo de cita CORRECTA. El silencio se declara, no bloquea (D-43)."""
+    paper_extraido(toy_vault, "2010ComonJutten")
     (cfg.FULLTEXT / "ica").mkdir(parents=True, exist_ok=True)
-    (cfg.FULLTEXT / "ica" / "2013Voss.txt").write_text(
-        "which requires the latent signals to be whitened", encoding="utf-8")
+    (cfg.FULLTEXT / "ica" / "2010ComonJutten.txt").write_text("texto   con   columnas empalmadas",
+                                                              encoding="utf-8")
     (cfg.EXTRACCION / "ica").mkdir(parents=True, exist_ok=True)
-    (cfg.EXTRACCION / "ica" / "2013Voss.json").write_text(json.dumps(
-        {"bibcode": "2013Voss", "ejes": {}, "ground_truth": [
-            {"que": "blanqueo", "valor": "which requires the latent signals to be whitened"}]}),
+    (cfg.EXTRACCION / "ica" / "2010ComonJutten.json").write_text(
+        '{"bibcode": "2010ComonJutten", "ground_truth": [{"valor": "otra cosa que sí extrajo"}]}',
         encoding="utf-8")
     (cfg.CONCEPTS / "methods").mkdir(parents=True, exist_ok=True)
     (cfg.CONCEPTS / "methods" / "ica.md").write_text(
-        "---\ntags: [concept]\n---\n\n# ICA\n\nDice «which requires the noise covariance to be "
-        "known» [[2013Voss]].\n", encoding="utf-8")
-    # #318 — y sube a la categoría de CIERRE: con la extracción en disco, «no está en ninguno de los
-    # dos» significa que la fabricó el sintetizador, y eso no puede cerrar una operación en verde.
-    cat = lint.collect().por_clave("cita_inventada")
-    hallazgos = [m for _s, m in cat.items]
-    assert any("noise covariance to be known" in h and "ni en la extracción" in h
-               for h in hallazgos), "la cita FABRICADA tiene que seguir saliendo"
-    assert cat.severidad == lint.SEV_CIERRE
+        "---\ntags: [concept]\n---\n\n# ICA\n\nDice «If the noise spatial coherence is known one "
+        "can build an unbiased estimator of the mixing matrix» [[2010ComonJutten]].\n",
+        encoding="utf-8")
+    assert lint.collect().por_clave("cita_inventada").items == (), \
+        "una cita leída del PDF que la extracción no transcribió NO es una fabricación"
+    assert lint.collect().por_clave("cita_no_verbatim").items != ()
 
 
-def test_la_cita_inventada_BLOQUEA_el_cierre_del_sujeto(toy_vault):
-    """#318 — el gate que #315/#317 pidieron con las mismas palabras y que quedó afuera: después de
-    limpiar la categoría (la extracción como juez, la cita contra SU fuente), un hit significa que
-    la fabricó el sintetizador — y hoy una operación que fabricó una cita textual cerraba en verde.
-    Con `--cierre <slug>` sube a bloqueante, como los pares sin verificar."""
+def test_la_cita_ATRIBUIDA_a_otra_fuente_si_bloquea(toy_vault):
+    """#321 — evidencia POSITIVA: la frase está verbatim en la extracción de **otro** bibcode de la
+    misma nota. Ahí la extracción no calla: dice que la cita se movió de fuente (6 de 32 medidos)."""
+    for stem, valor in (("2013Voss", "la frase que este paper sí dice sobre el blanqueo previo"),
+                        ("2004Davies", "otra cosa completamente distinta que dice el otro paper")):
+        paper_extraido(toy_vault, stem)
+        (cfg.FULLTEXT / "ica").mkdir(parents=True, exist_ok=True)
+        (cfg.FULLTEXT / "ica" / f"{stem}.txt").write_text("nada de eso", encoding="utf-8")
+        (cfg.EXTRACCION / "ica").mkdir(parents=True, exist_ok=True)
+        (cfg.EXTRACCION / "ica" / f"{stem}.json").write_text(
+            '{"bibcode": "%s", "ground_truth": [{"valor": "%s"}]}' % (stem, valor),
+            encoding="utf-8")
+    (cfg.CONCEPTS / "methods").mkdir(parents=True, exist_ok=True)
+    (cfg.CONCEPTS / "methods" / "ica.md").write_text(
+        "---\ntags: [concept]\n---\n\n# ICA\n\nPor un lado [[2013Voss]] lo plantea.\n\n"
+        "Y «la frase que este paper sí dice sobre el blanqueo previo» [[2004Davies]].\n",
+        encoding="utf-8")
+    hallazgos = [m for _s, m in lint.collect().por_clave("cita_inventada").items]
+    assert any("atribuida a la fuente equivocada" in h and "2013Voss" in h for h in hallazgos)
+
+
+def test_la_cita_COMPLETADA_al_copiar_bloquea_el_cierre(toy_vault):
+    """#318 con la premisa de #321: la otra evidencia positiva es el patrón medido en #314 — el
+    arranque coincide con lo que la extracción transcribió y la **cola diverge**, o sea que el
+    recorte se completó con lo plausible. Eso sí prueba que la cita se alteró, y una operación que
+    altera una cita textual no puede cerrar en verde."""
     write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "concept": "ica", "area": "methods",
                                          "query": "q"}})
     paper_extraido(toy_vault, "2013Voss", thesis_links=["ica"])
+    real = ("conflicts with the definition of quasi-whitening given in the reference which "
+            "requires the latent signals to be whitened")
+    inventada = ("conflicts with the definition of quasi-whitening given in the reference which "
+                 "requires the noise covariance to be known")
     (cfg.FULLTEXT / "ica").mkdir(parents=True, exist_ok=True)
-    (cfg.FULLTEXT / "ica" / "2013Voss.txt").write_text("lo que la fuente dice de verdad",
-                                                       encoding="utf-8")
+    (cfg.FULLTEXT / "ica" / "2013Voss.txt").write_text(real, encoding="utf-8")
     (cfg.EXTRACCION / "ica").mkdir(parents=True, exist_ok=True)
     (cfg.EXTRACCION / "ica" / "2013Voss.json").write_text(
-        '{"bibcode": "2013Voss", "ground_truth": [{"valor": "lo que la fuente dice de verdad"}]}',
-        encoding="utf-8")
+        '{"bibcode": "2013Voss", "ground_truth": [{"valor": "%s"}]}' % real, encoding="utf-8")
     (cfg.CONCEPTS / "methods").mkdir(parents=True, exist_ok=True)
     (cfg.CONCEPTS / "methods" / "ica.md").write_text(
-        "---\ntags: [concept]\n---\n\n# ICA\n\nDice «una frase larga que la fuente nunca dijo jamás en ningún lugar» "
-        "[[2013Voss]].\n", encoding="utf-8")
-    assert lint.collect().por_clave("cita_inventada").items != ()
+        f"---\ntags: [concept]\n---\n\n# ICA\n\nDice «{inventada}» [[2013Voss]].\n",
+        encoding="utf-8")
+    cat = lint.collect().por_clave("cita_inventada")
+    assert any("se completó al copiar" in m for _s, m in cat.items)
+    assert cat.severidad == lint.SEV_CIERRE
     sin, con = lint.collect(cierre=False), lint.collect(cierre=True, slug="ica")
-    bloquean_sin = {c.clave for c in sin.bloquean()}
-    bloquean_con = {c.clave for c in con.bloquean()}
-    assert "cita_inventada" not in bloquean_sin, "sin --cierre es deuda visible, no un freno"
-    assert "cita_inventada" in bloquean_con, "con --cierre frena: la operación fabricó una cita"
+    assert "cita_inventada" not in {c.clave for c in sin.bloquean()}
+    assert "cita_inventada" in {c.clave for c in con.bloquean()}
 
 
 def test_sin_extraccion_en_disco_NO_es_una_cita_inventada(toy_vault):

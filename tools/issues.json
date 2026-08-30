@@ -1595,6 +1595,11 @@
    "number": 320,
    "title": "`extraction_texts` no memoiza y repite glob + read + walk + normalize por cada cita fallida: es exactamente la asimetría que #275 arregló en `_source_readings`, agravada porque esta tanda movió `_sources_for` al loop por cita",
    "state": "CLOSED"
+  },
+  {
+   "number": 321,
+   "title": "El gate de #318 bloquea una cita que #315 usa como ejemplo de cita CORRECTA: «no está en la extracción» no prueba fabricación, porque la extracción es una transcripción SELECTIVA — medido, 12 de 32 hits son verdaderos y el resto mezcla",
+   "state": "OPEN"
   }
  ]
 }

@@ -1003,21 +1003,22 @@ el `.txt` se re-extrae.
    **fila vacía de la plantilla** y ≥2 papers extraídos citados — ausencia = declarado,
    presente-y-vacío = saltado.
    ⛔ **Y tiene herramienta: `python scripts/contrast.py <slug>` (#314/#317).** Era el único eslabón
-   de la cadena sin una —producir, cosechar y verificar la tienen— y su modo de falla es predecible:
-   sin herramienta se improvisa un digest, el recorte cae **dentro de la cita** y el modelo la
-   completa con lo plausible (medido: 2 citas fabricadas sobre 139 pares, las dos en el carácter
-   exacto del corte, una invirtiendo el alcance de la afirmación). `contrast.py` **nunca trunca una
-   cita**, agrupa por campo (`--campo`, `--grep`, `--eje`, `--paper`), arrastra `linea` y
-   `segunda_mano`, y emite filas de **una fuente cada una**. Propone: el inventario lo escribís vos.
+   sin una —producir, cosechar y verificar la tienen— y su modo de falla es predecible: sin
+   herramienta se improvisa un digest, el recorte cae **dentro de la cita** y el modelo la completa
+   con lo plausible (2 citas fabricadas sobre 139 pares, en el carácter exacto del corte).
+   `contrast.py` **nunca trunca una cita**, agrupa por campo, arrastra `linea` y `segunda_mano`, y
+   emite filas de **una fuente cada una**. Propone: el inventario lo escribís vos.
    ⛔ **Al sintetizar, la cita se copia ENTERA o no se copia** — si no entra, se parafrasea **sin
    comillas**. Y **una fila, una fuente**: agrupar bibcodes bajo una glosa compartida es cómo se
-   fabrican atribuciones (medido: 6 falsas en la misma corrida, contra 0 en una nota escrita paper
-   por paper). ⛔ **La cita se verifica contra la EXTRACCIÓN, no contra el `.txt`**
+   fabrican atribuciones (6 falsas medidas, contra 0 escribiendo paper por paper). ⛔ **La cita se verifica contra la EXTRACCIÓN, no contra el `.txt`**
    (`contrast.py --validar <nota>`, #315/#317): la extracción es la transcripción hecha **leyendo el
    PDF**, así que «no está ahí» significa que la inventó el sintetizador y no admite la excusa del
-   índice degradado — con el `.txt` como único juez la señal era 2 de 17 y 0 de 35. ⛔ **Y eso
-   BLOQUEA el cierre del sujeto (#318)**: el lint lo sube a bloqueante con `--cierre <slug>`, salvo
-   que la fuente no tenga extracción en disco (no evaluable) o la cita sea ambigua (#316).
+   índice degradado — con el `.txt` como único juez la señal era 2 de 17 y 0 de 35. ⛔ **Y con
+   EVIDENCIA POSITIVA eso bloquea el cierre (#318/#321)**: la frase bajo **otro** bibcode
+   (atribución) o un prefijo largo con la cola divergente (se completó al copiar) suben a bloqueante
+   con `--cierre <slug>`. ⚠ El **silencio** de la extracción no: es selectiva y lenteada (#188) y se
+   cita del PDF (#205), así que «no está en el JSON» no prueba fabricación — evidencia positiva
+   bloquea, el silencio se declara.
 
 #### El CICLO DE LA LENTE — cómo se encadenan las piezas (#310)
 
@@ -1587,9 +1588,8 @@ los scripts de una sola operación. Detalle y ratchets en `tests/README.md`; el 
    ya lo hace).
 7. **Idioma** — `pytest tests/test_idioma_codigo.py` (ver arriba).
 8. **Condicional que no decide nada** — `tests/test_codigo_muerto.py` (#319): el ternario cuyas dos
-   ramas valen lo mismo es una regla escrita a medias, y **ningún otro gate la ve** (no cambia
-   comportamiento, así que no hay test que matar). Se encontró leyendo un commit; ahora es un
-   assert.
+   ramas valen lo mismo es una regla escrita a medias y **ningún otro gate la ve** (no cambia
+   comportamiento: no hay test que matar). Se encontró leyendo un commit; ahora es un assert.
 9. **Atribución del mapa** — `python tools/mutar.py --trazabilidad` (AUD-212, ~20 min): vacía cada
    implementación marcada `@inv` y corre **sólo el test marcado**; si pasa, esa fila de
    `docs/trazabilidad.md` afirma una cobertura que no existe (20 atribuciones falsas sobre 143 en la
