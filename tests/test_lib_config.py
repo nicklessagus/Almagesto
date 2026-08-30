@@ -1934,3 +1934,22 @@ def test_un_alias_que_TIENE_su_propia_nota_no_se_saltea(toy_vault):
     mk_note(cfg.PAPERS, "2026arXiv260528635F",
             {"bibcode": "2026arXiv260528635F", "tags": ["paper"], "stars": ["X"]}, "# p\n")
     assert cfg.alias_bibcodes() == set()
+
+
+def test_la_cita_con_matematica_en_el_medio_se_busca_de_las_DOS_formas():
+    """#287 — `normalize_quote` **borra** el span `$…$` (correcto cuando la nota re-marcó una
+    fórmula que el `.txt` no puede tener igual), pero eso convierte «of either $A$ and $S$» en «of
+    either and», que no está en ninguna fuente **aunque el paper diga exactamente esa frase** con
+    las letras sueltas. Medido al desactivar la exención de #275 sobre una bóveda real."""
+    fuente = cfg.normalize_source_text(
+        "…without any additional prior knowledge of either A and S. The estimation…")
+    assert cfg.quote_found("without any additional prior knowledge of either $A$ and $S$", fuente)
+
+
+def test_las_dos_lecturas_no_aflojan_el_chequeo():
+    """⛔ La dirección peligrosa: las palabras siguen teniendo que estar en la fuente. Lo único que
+    cambia es contra cuál de los dos markups de las MISMAS palabras se compara."""
+    fuente = cfg.normalize_source_text("el paper habla de otra cosa completamente distinta")
+    assert not cfg.quote_found("without any additional prior knowledge of either $A$ and $S$", fuente)
+    assert cfg.quote_variants("sin matemática ninguna acá") == ["sin matemática ninguna acá"], \
+        "sin `$…$` hay UNA sola lectura: no se duplica trabajo"

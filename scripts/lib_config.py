@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.124.0"
+ALMAGESTO_VERSION = "1.125.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -645,10 +645,34 @@ def source_texts(raw: str) -> list:
     return out
 
 
+#: #287 · las DOS lecturas de una cita con matemática en el medio. `normalize_quote` **borra** el
+#: span `$…$` —correcto cuando la nota re-marcó una fórmula que el `.txt` no puede tener igual—,
+#: pero eso convierte «of either $A$ and $S$» en «of either and», que no está en ninguna fuente
+#: aunque el paper diga exactamente esa frase con las letras sueltas. Medido al desactivar la
+#: exención de #275 sobre una bóveda real: falsos positivos en masa, sobre citas correctas.
+_MATH_DELIMS = re.compile(r"\$([^$\n]*)\$")
+
+
+def quote_variants(quote: str) -> list:
+    """The normalized readings of a quote a source may legitimately contain (#287).
+
+    Two, and both are conservative: the math span **dropped** (the note re-marked a formula the
+    `.txt` cannot carry) and the math span **unwrapped** (`$A$` → `A`, which is exactly how a plain
+    letter appears in the extracted text). A quote counts as found if **either** reading is there —
+    the words still have to be in the source; what changes is which of the two markups of the same
+    words we compare against."""
+    directa = normalize_quote(quote)
+    sin_delim = normalize_quote(_MATH_DELIMS.sub(r"\1", str(quote or "")))
+    return [directa] if sin_delim == directa else [directa, sin_delim]
+
+
 def quote_found(quote: str, source_norm: str) -> bool:
     """Is this quote in that (already normalized) source text? All its fragments must be."""
-    frags = quote_fragments(normalize_quote(quote))
-    return bool(frags) and all(f in source_norm for f in frags)
+    for variante in quote_variants(quote):
+        frags = quote_fragments(variante)
+        if frags and all(f in source_norm for f in frags):
+            return True
+    return False
 
 
 # #271 — el markup que los catálogos meten en título y abstract. La lista original cubría seis
