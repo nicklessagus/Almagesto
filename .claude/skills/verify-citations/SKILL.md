@@ -548,6 +548,18 @@ corrió **ocho** rondas emitió 13 veredictos malos y publicó 11. La partición
 siendo por el **primer** veredicto (el que dice qué hizo mal la nota) y las cadenas se publican
 aparte.
 
+⛔ **Al citar NO se normaliza la notación del original** (#288). Medido abriendo cinco hallazgos
+uno por uno: una cita correcta y bien atribuida figuraba como no-verbatim porque la nota había
+sacado la numeración de la lista del paper (`1. g1 (u) is a good…` → `$G_1$ is a good…`) y el
+argumento de la función. Si hay que recortar, se marca la elisión con `…` —el comparador la
+soporta— y si hay que re-marcar la matemática, se acepta que el chequeo mecánico la busque en sus
+dos lecturas (#287); lo que no se hace es reescribir las palabras del original.
+
+⚠ **Y un hallazgo de «no está en su fuente» NO se resuelve editando la nota contra el `.txt`.**
+Desde #205 el `.txt` es el **índice**, no la fuente: en un paper a dos columnas empalma texto vecino
+en medio de la frase, y una cita perfectamente correcta aparece rota. Se confirma en el **PDF**; si
+el PDF la dice, el defecto es de la extracción y la cita **no se toca**.
+
 ⛔ **La celda `Condición` arranca con su CLASE: `acota: …` o `contextualiza: …`** (#221) — como la
 fila 4 del ejemplo. El adorno no rompe nada (`**contextualiza** — …` se lee igual desde #283), pero
 la clase **tiene que estar**: es lo que separa la condición que obliga a editar de la que sólo va al

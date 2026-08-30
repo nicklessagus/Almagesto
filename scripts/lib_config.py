@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.125.0"
+ALMAGESTO_VERSION = "1.126.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -664,6 +664,33 @@ def quote_variants(quote: str) -> list:
     directa = normalize_quote(quote)
     sin_delim = normalize_quote(_MATH_DELIMS.sub(r"\1", str(quote or "")))
     return [directa] if sin_delim == directa else [directa, sin_delim]
+
+
+#: #288 · tokens que la EXTRACCIÓN mete en medio de la prosa y el paper no tiene: números de línea
+#: de un preprint A&A, marcas de columna, coordenadas. Sirven para **clasificar** un hallazgo que ya
+#: falló, nunca para aceptarlo.
+_TOKEN_RUIDO = re.compile(r"(?<![a-z])\d+(?:[.,]\d+)?(?![a-z])")
+
+
+def quote_found_degraded(quote: str, source_norm: str) -> bool:
+    """Would this quote be in that source if the extraction had not degraded it? (#288)
+
+    ⛔ **This never makes a finding pass.** It only tells apart two things that need opposite work:
+    a note that misquotes its source (fix the note) and a `.txt` whose extraction dropped the quote
+    apart — line numbers of a two-column preprint injected mid-sentence, a neighbouring column
+    spliced in. Measured on a real vault: of five findings opened one by one, **four** were the
+    artefact and only one was the note.
+
+    The comparison drops standalone numeric tokens from BOTH sides, which is exactly what would make
+    a wrong number match — hence it may never accept, only classify, and the message it produces
+    sends the reader to the PDF."""
+    limpio = _TOKEN_RUIDO.sub(" ", source_norm)
+    for variante in quote_variants(quote):
+        frags = quote_fragments(_TOKEN_RUIDO.sub(" ", variante))
+        if frags and all(re.sub(r"\s+", " ", f).strip() in re.sub(r"\s+", " ", limpio)
+                         for f in frags):
+            return True
+    return False
 
 
 def quote_found(quote: str, source_norm: str) -> bool:

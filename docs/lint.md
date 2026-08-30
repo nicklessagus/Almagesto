@@ -195,6 +195,13 @@ OCR, o marcar `pending`).
   los dos lados) y el **de-entrelazado por canaleta** de un `.txt` a dos columnas — se busca por
   columna, nunca en el texto plano, porque ahí vive el empalme col.1→col.2 que nadie escribió (#46).
   La población declarada son **las citas evaluables**, no las notas.
+  ⚠ **Un hallazgo de esta categoría NO se resuelve editando la nota contra el `.txt`** (#288):
+  desde #205 el `.txt` es el **índice**, no la fuente, y en un paper a dos columnas empalma texto
+  vecino en medio de la frase — una cita correcta aparece rota. Se confirma en el **PDF**; si el PDF
+  la dice, el defecto es de la extracción y la cita **no se toca**. Cuando eso se puede decidir
+  mecánicamente —números de línea metidos entre las palabras— el hallazgo cae en su propia
+  categoría, *«la fuente SÍ la dice y el `.txt` la parte»*, que no pide corregir nada de la nota.
+  Medido abriendo cinco hallazgos uno por uno: **cuatro eran el artefacto, uno era la nota**.
   ⛔ Y desde #267 se chequean también las citas del **frontmatter**: `disputes[].posiciones[].value`
   contra **su propia** `ref` —juntar los refs de la nota fabricaría una atribución cruzada— y
   `disputes[].note` contra cualquiera de las fuentes de esa disputa (misma regla que el cuerpo).

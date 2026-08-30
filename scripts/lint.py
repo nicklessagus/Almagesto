@@ -1284,6 +1284,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     segunda_mano_perdida: list = []    # (stem, motivo) — #279: la ficha se apoya y no lo dice
     cita_log: list = []                # (stem, motivo) — #238: cita del `log.md` que su fuente no dice
     cita_no_verbatim: list = []        # (stem, motivo) — #220: la cadena no está en el `.txt`
+    cita_txt_degradado: list = []      # (stem, motivo) — #288: la fuente la dice, el `.txt` la parte
     cita_opaca: list = []              # (stem, motivo) — #220: no evaluable (sin `.txt` / ocr; #275)
     verificar_pdf: list = []           # (stem, motivo) — #225: marcada para chequear contra el PDF
     forma_rota: list = []              # (stem, motivo) — #227: fila de tabla que NO renderiza
@@ -1684,11 +1685,26 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                     if any(cfg.quote_found(_c, _t) for _ts in _fuentes.values() for _t in _ts):
                         continue
                     _corte = _c if len(_c) <= 70 else _c[:70] + "…"
-                    if _fuentes:
+                    if _fuentes and any(cfg.quote_found_degraded(_c, _t)
+                                        for _ts in _fuentes.values() for _t in _ts):
+                        # #288 — la fuente SÍ la dice: lo que la rompió es la EXTRACCIÓN (números
+                        # de línea de un preprint a dos columnas metidos en medio de la frase, una
+                        # columna vecina empalmada). Es otro trabajo y otra severidad: acá no hay
+                        # nada que corregir en la nota. Medido sobre cinco hallazgos abiertos uno
+                        # por uno, CUATRO eran esto y uno era la nota.
+                        cita_txt_degradado.append(
+                            (stem, f"L{_ln}: «{_corte}» está en la fuente pero el `.txt` la parte "
+                                   f"({', '.join(sorted(_fuentes))}): números de línea o columnas "
+                                   f"empalmadas. La cita no se toca — confirmala en el PDF y, si "
+                                   f"hace falta, re-extraé el `.txt`"))
+                    elif _fuentes:
                         cita_no_verbatim.append(
                             (stem, f"L{_ln}: «{_corte}» no está en el `.txt` de "
-                                   f"{', '.join(sorted(_fuentes))} — o no es verbatim, o es de otra "
-                                   f"fuente (la página NO se chequea acá: el `.txt` no las tiene)"))
+                                   f"{', '.join(sorted(_fuentes))} → ⚠ **confirmala en el PDF antes "
+                                   f"de tocar la nota**: desde #205 el `.txt` es el ÍNDICE, no la "
+                                   f"fuente, y un `.txt` a dos columnas empalma texto vecino en "
+                                   f"medio de la frase. Si el PDF la dice, el defecto es de la "
+                                   f"extracción; si no, la cita no es verbatim o es de otra fuente"))
                     elif _opacas:
                         cita_opaca.append(
                             (stem, f"L{_ln}: «{_corte}» no se puede chequear — "
@@ -3868,6 +3884,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('radio_sin_link', '🛞 Hub que nombra un radio sin `[[wikilink]]`: el radio no entra al grafo (#235, backlog)', SEV_BACKLOG, tuple(radio_sin_link), poblacion='entidades'),
         Categoria('cita_log', '❝ Cita de `log.md` que su fuente no dice: la bitácora es append-only, se MARCA (#238, backlog)', SEV_BACKLOG, tuple(cita_log), poblacion='notas'),
         Categoria('cita_no_verbatim', '❝ Cita textual que no está en su fuente: no es verbatim, o es de otra (#220, backlog)', SEV_BACKLOG, tuple(cita_no_verbatim), poblacion='citas'),
+        Categoria('cita_txt_degradado', '❝ Cita que la fuente SÍ dice y el `.txt` parte: el defecto es de la EXTRACCIÓN, no de la nota (#288, backlog)', SEV_BACKLOG, tuple(cita_txt_degradado), poblacion='citas'),
         Categoria('cita_opaca', '❝ Cita textual NO EVALUABLE: sin `.txt` o con OCR (#220, se declara, no cuenta en contra)', SEV_BACKLOG, tuple(cita_opaca), poblacion='citas'),
         Categoria('verificar_pdf', '🔎 Marcada para chequear contra el PDF: una auditoría no pudo cerrarla (#225, backlog)', SEV_BACKLOG, tuple(verificar_pdf), poblacion='notas'),
         Categoria('forma_rota', '⛔ Forma del artefacto: fila de tabla que NO renderiza (contenido invisible para el lector)', SEV_BLOQUEANTE, tuple(forma_rota), poblacion='notas'),

@@ -1953,3 +1953,21 @@ def test_las_dos_lecturas_no_aflojan_el_chequeo():
     assert not cfg.quote_found("without any additional prior knowledge of either $A$ and $S$", fuente)
     assert cfg.quote_variants("sin matemática ninguna acá") == ["sin matemática ninguna acá"], \
         "sin `$…$` hay UNA sola lectura: no se duplica trabajo"
+
+
+def test_quote_found_degraded_clasifica_la_cita_que_el_txt_parte():
+    """#288 — números de línea de un preprint a dos columnas metidos EN MEDIO de la frase. La
+    fuente dice la cita; el `.txt` la parte. Es otro trabajo y otra severidad: en la nota no hay
+    nada que corregir."""
+    src = cfg.normalize_source_text(
+        "since wpca constructs orthogonal components by 87.0 design, real-world systematics")
+    q = "since wPCA constructs orthogonal components by design, real-world systematics"
+    assert not cfg.quote_found(q, src), "el chequeo estricto NO se afloja"
+    assert cfg.quote_found_degraded(q, src)
+
+
+def test_quote_found_degraded_no_acepta_una_cita_ajena():
+    """⛔ Sólo CLASIFICA un hallazgo que ya falló: sacar números de los dos lados es exactamente lo
+    que haría matchear un número equivocado, así que nunca puede aceptar por su cuenta."""
+    src = cfg.normalize_source_text("el paper habla de otra cosa completamente distinta")
+    assert not cfg.quote_found_degraded("since wPCA constructs orthogonal components", src)

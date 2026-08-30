@@ -155,6 +155,9 @@
 ## ❝ Cita textual que no está en su fuente: no es verbatim, o es de otra (#220, backlog) (0)
 > sobre 0 citas «…» de ≥40 caracteres con fuente chequeable
 
+## ❝ Cita que la fuente SÍ dice y el `.txt` parte: el defecto es de la EXTRACCIÓN, no de la nota (#288, backlog) (0)
+> sobre 0 citas «…» de ≥40 caracteres con fuente chequeable
+
 ## ❝ Cita textual NO EVALUABLE: sin `.txt` o con OCR (#220, se declara, no cuenta en contra) (0)
 > sobre 0 citas «…» de ≥40 caracteres con fuente chequeable
 
