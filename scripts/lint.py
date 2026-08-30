@@ -1356,6 +1356,17 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 _fm_cache[bib] = {}
         return _fm_cache[bib]
 
+    _alias_idx: dict = {}
+
+    def _alias_idx_cached() -> dict:
+        """The concept alias index (#245), built once per run.
+
+        `concept_alias_index` reads every note of `concepts/`: calling it per indicator turns a
+        cheap check into an O(notas × conceptos) sweep."""
+        if not _alias_idx:
+            _alias_idx.update(cfg.concept_alias_index() or {"__vacio__": ""})
+        return _alias_idx
+
     _src_cache: dict = {}
     #: #275 · cuántas citas «…» se pudieron EVALUAR de verdad. La categoría declaraba su población
     #: en notas, así que un `(0)` sobre población efectiva CERO —45 de 49 papers exentos— se leía
@@ -1974,7 +1985,11 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             # uno que nadie vuelve a mirar.
             for _ind in cfg.as_list(fm.get("activity_indicators_expected")):
                 _clave = cfg.indicator_key(_ind)
-                if _clave and not cfg.method_target(_clave) and _clave not in {
+                # ⛔ El índice se construye UNA vez por corrida (`_alias_idx_cached`): llamar
+                # `method_target` sin índice re-lee TODAS las notas de `concepts/` por cada
+                # indicador de cada ficha, y el tier `poblada` lo cazó como salto de 2,0x a 2,4x en
+                # parseos de YAML por nota.
+                if _clave and not cfg.method_target(_clave, _alias_idx_cached()) and _clave not in {
                         cfg.method_key(n) for n in names}:
                     indicador_sin_destino.append(
                         (stem, f"`{_ind}` no tiene nota en `concepts/` (ni por `aliases`): ingerí "

@@ -60,11 +60,23 @@
 
 ## `methods` sin página destino: el roll-up no puede linkearlo (backlog) (5)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
-- metodo-sintetico-1 → usado en 5 paper(s): 1996Alm00010A, 1997Alm00015A, 2007Alm00020A … → sin nota en `concepts/`: ingerí el tema o corregí el slug
-- metodo-sintetico-2 → usado en 3 paper(s): 2002Alm00051A, 2003Alm00046A, 2019Alm00056A → sin nota en `concepts/`: ingerí el tema o corregí el slug
-- metodo-sintetico-3 → usado en 3 paper(s): 1996Alm00057A, 2002Alm00017A, 2009Alm00022A → sin nota en `concepts/`: ingerí el tema o corregí el slug
-- metodo-sintetico-4 → usado en 4 paper(s): 2019Alm00013A, 2022Alm00018A, 2023Alm00003A … → sin nota en `concepts/`: ingerí el tema o corregí el slug
-- metodo-sintetico-5 → usado en 1 paper(s): 2004Alm00014A → sin nota en `concepts/`: ingerí el tema o corregí el slug
+- metodo-sintetico-1 → usado en 5 paper(s): 1996Alm00010A, 1997Alm00015A, 2007Alm00020A … → sin nota en `concepts/` (ni por `aliases`): ingerí el tema, corregí el slug, o declaralo como alias del concepto que lo denota
+- metodo-sintetico-2 → usado en 3 paper(s): 2002Alm00051A, 2003Alm00046A, 2019Alm00056A → sin nota en `concepts/` (ni por `aliases`): ingerí el tema, corregí el slug, o declaralo como alias del concepto que lo denota
+- metodo-sintetico-3 → usado en 3 paper(s): 1996Alm00057A, 2002Alm00017A, 2009Alm00022A → sin nota en `concepts/` (ni por `aliases`): ingerí el tema, corregí el slug, o declaralo como alias del concepto que lo denota
+- metodo-sintetico-4 → usado en 4 paper(s): 2019Alm00013A, 2022Alm00018A, 2023Alm00003A … → sin nota en `concepts/` (ni por `aliases`): ingerí el tema, corregí el slug, o declaralo como alias del concepto que lo denota
+- metodo-sintetico-5 → usado en 1 paper(s): 2004Alm00014A → sin nota en `concepts/` (ni por `aliases`): ingerí el tema, corregí el slug, o declaralo como alias del concepto que lo denota
+
+## 🌡 Indicador de actividad esperado sin nota de concepto: la ficha lo nombra y el lector no puede llegar (#250, backlog) (6)
+> sobre 29 notas de entidad (fichas, conceptos, queries)
+- star02 → `H-alpha` no tiene nota en `concepts/` (ni por `aliases`): ingerí el tema, o declaralo como alias del concepto que lo denota
+- star02 → `Ca II H&K` no tiene nota en `concepts/` (ni por `aliases`): ingerí el tema, o declaralo como alias del concepto que lo denota
+- star01 → `H-alpha` no tiene nota en `concepts/` (ni por `aliases`): ingerí el tema, o declaralo como alias del concepto que lo denota
+- star01 → `Ca II H&K` no tiene nota en `concepts/` (ni por `aliases`): ingerí el tema, o declaralo como alias del concepto que lo denota
+- star00 → `H-alpha` no tiene nota en `concepts/` (ni por `aliases`): ingerí el tema, o declaralo como alias del concepto que lo denota
+- star00 → `Ca II H&K` no tiene nota en `concepts/` (ni por `aliases`): ingerí el tema, o declaralo como alias del concepto que lo denota
+
+## 🔤 Dos conceptos declaran el mismo alias: el roll-up resuelve al primero y nadie lo decidió (#245, backlog) (0)
+> sobre 29 notas de entidad (fichas, conceptos, queries)
 
 ## 🔤 `methods` con varias grafías del mismo método: infla el backlog y partía el roll-up (#243, backlog) (0)
 > sobre 60 notas de `papers/`
@@ -147,10 +159,10 @@
 > sobre 89 notas de `vault/wiki/`
 
 ## ❝ Cita textual que no está en su fuente: no es verbatim, o es de otra (#220, backlog) (0)
-> sobre 89 notas de `vault/wiki/`
+> sobre 0 citas «…» de ≥40 caracteres con fuente chequeable
 
-## ❝ Cita textual NO EVALUABLE: sin `.txt`, OCR o eprint (#220, se declara, no cuenta en contra) (0)
-> sobre 89 notas de `vault/wiki/`
+## ❝ Cita textual NO EVALUABLE: sin `.txt` o con OCR (#220, se declara, no cuenta en contra) (0)
+> sobre 0 citas «…» de ≥40 caracteres con fuente chequeable
 
 ## 🔎 Marcada para chequear contra el PDF: una auditoría no pudo cerrarla (#225, backlog) (0)
 > sobre 89 notas de `vault/wiki/`
@@ -265,6 +277,15 @@
 - star02 → sin la línea `_Generado con Almagesto v…_`: los estampadores de cabecera no pueden actuar → `python scripts/make_notes.py --restamp-headers`
 - star01 → sin la línea `_Generado con Almagesto v…_`: los estampadores de cabecera no pueden actuar → `python scripts/make_notes.py --restamp-headers`
 
+## ⛔ Nota de paper sin `## Abstract`: se pierde la única capa AUDITABLE del cuerpo (#124/#277) (0)
+> sobre 60 notas de `papers/`
+
+## 📄 Nota de paper sin `## Conclusiones` ni exención declarada (#124/#277, backlog) (0)
+> sobre 60 notas de `papers/`
+
+## ⚠ Nota de paper sin el aviso de capa LLM: no dice cuál de sus tres capas es auditable (#247/#277, backlog) (0)
+> sobre 60 notas de `papers/`
+
 ## 🗓 Cabecera `> _Estado —_` desfasada: no es la que el estampador da hoy (backlog) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 
@@ -308,6 +329,18 @@
 > sobre 60 notas de `papers/`
 
 ## Reclamo sin vista DECLARADO con `no_vista` + motivo (visible, no es deuda) (0)
+> sobre 60 notas de `papers/`
+
+## 🎯 La vista no contesta los ejes de su propia lente: el silencio se lee como «se miró y no hay nada» (#254/#270, backlog) (0)
+> sobre 60 notas de `papers/`
+
+## 🪞 La prosa afirma sobre la autoridad algo que su ground-truth desmiente (#278, backlog) (0)
+> sobre 3 ground-truth de `raw/ground_truth/`
+
+## 🔁 Valor de SEGUNDA MANO levantado sin la marca: la atribución se pierde en la síntesis (#103/#279, backlog) (0)
+> sobre 29 notas de entidad (fichas, conceptos, queries)
+
+## Fuente sin `## Conclusiones` DECLARADA con motivo (#277: visible, no es deuda) (0)
 > sobre 60 notas de `papers/`
 
 ## Recorte de lectura sin declarar: hay core sin extraer y el registro no dice por qué (backlog) (0)

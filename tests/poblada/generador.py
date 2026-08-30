@@ -49,6 +49,7 @@ if str(SCRIPTS) not in sys.path:
 import lib_blocks as lb
 import lib_config as cfg                       # noqa: E402  (constante pura: ALMAGESTO_VERSION)
 from extract_fulltext import is_legible         # noqa: E402  (función pura, sin side effects de ruta)
+import make_notes                              # noqa: E402  (#277: el aviso de capa LLM, una sola fuente)
 
 # AUD-171: el alcance de una hipótesis tiene que nombrar SLUGS y un `· N papers` para poder
 # re-contarse; sin eso el lint lo reporta (antes apagaba el chequeo en silencio). El generador lo
@@ -444,7 +445,14 @@ def sembrar_corpus(paths, n_papers: int = 900, n_stars: int = 4, n_concepts: int
             "simbad_id": f"TST {i:04d}",
             "spectral_type": host["spectral_type"], "teff_K": host["teff_K"],
             "dist_pc": host["dist_pc"], "P_rot_days": host["st_rotp_days"],
-            "activity_indicators_expected": ["H-alpha", "Ca II H&K"],
+            # #272 — la masa estelar es campo del schema y del espejo desde 1.110.0: la ficha
+            # sintética la espeja como cualquier otra, salvo en `vintage`, donde la ausencia es
+            # justamente el residuo que `--sync-mirror` tiene que cerrar.
+            **({} if vintage_old else {"mass_msun": host["mass_msun"]}),
+            # #250 — los indicadores nombran conceptos QUE EXISTEN en el corpus: el detector nuevo
+            # exige destino, y un corpus «limpio» que reporta 8 hallazgos deja de servir como
+            # baseline (el test de conteos exactos pide cero en todas las categorías).
+            "activity_indicators_expected": [c for c, _ in all_concepts[:2]] or ["H-alpha"],
             "planets": planets_ficha,
         }
         if not vintage_old:
@@ -570,8 +578,13 @@ _(ninguno relevante — corpus sintético)_
                   if (i + off) % n_papers != i][:rng.randint(2, 5)]
         related_txt = ("\n\nVer también " + ", ".join(f"[[{r}]]" for r in related) + "."
                       if related else "")
-        body = (f"# {front['title']}\n\n**{front['first_author']}** ({year}) · ADS: `{stem}`\n\n"
-               f"## Abstract\n{_lorem(rng, 40)}{related_txt}\n")
+        # #277 — el aviso de capa LLM lo estampa `make_notes` en toda nota de paper, así que el
+        # corpus sintético lo lleva: sin él, el golden nace con una categoría de 60 hallazgos que
+        # no describe ningún defecto de la bóveda y tapa las regresiones que el golden existe para
+        # cazar. (En `vintage` NO se estampa: ahí la ausencia es el residuo a migrar.)
+        aviso = "" if vintage_old else f"\n{make_notes.LLM_DISCLAIMER['paper']}\n"
+        body = (f"# {front['title']}\n\n**{front['first_author']}** ({year}) · ADS: `{stem}`\n"
+               f"{aviso}\n## Abstract\n{_lorem(rng, 40)}{related_txt}\n")
         _write_note(paths.PAPERS / f"{stem}.md", front, body, flow)
 
         if has_ft:
@@ -819,7 +832,7 @@ _(ninguno relevante — corpus sintético)_
     # la tabla es un censo de ellas. Sin esto, el corpus "limpio" reportaba *lista de papers
     # desactualizada* en cada ficha — ruido de fondo permanente.
     if not vintage_old:
-        import make_notes
+        # (#277: `make_notes` ya está importado a nivel de módulo)
         # El estampador lee la bóveda por las constantes de módulo de `lib_config`, y las fixtures
         # las re-apuntan DESPUÉS de sembrar. Se apuntan acá, con save/restore manual, para la
         # duración del estampado: es la única forma de usar el estampador REAL en vez de una copia

@@ -147,7 +147,10 @@ def test_vintage_bloquea_con_categorias_de_schema_viejo_y_receta_visible(sembrar
     assert f"python scripts/triage.py {censo.star_slugs[0]} --migrate" in items_legacy[0]
 
     n_mirror, _ = _categoria(reporte, "Contradicciones ground-truth")
-    assert n_mirror == n_planetas            # un `mass_earth` faltante por planeta (#70)
+    # un `mass_earth` faltante por planeta (#70) **y** un `mass_msun` por estrella: la masa estelar
+    # entró al espejo en #272 y el generador vintage no la escribe, así que es una asimetría más de
+    # la misma clase (campo del ground-truth que la ficha vieja no tiene).
+    assert n_mirror == n_planetas + len(censo.star_slugs)
 
     n_headerless, items_headerless = _categoria(reporte, "Cabecera no estampable")
     assert n_headerless == len(censo.star_slugs) + len(censo.concept_stems)
@@ -253,14 +256,15 @@ def test_sync_mirror_cierra_el_espejo_del_vintage_y_es_idempotente(sembrar):
 
     rc0, reporte0 = _run_lint_reporte()
     n0, _ = _categoria(reporte0, "Contradicciones ground-truth")
-    assert n0 == n_planetas
+    assert n0 == n_planetas + len(censo.star_slugs)   # + `mass_msun` por estrella (#272)
 
     rc = make_notes.sync_mirror()
     assert rc == 0
 
     rc1, reporte1 = _run_lint_reporte()
     n1, _ = _categoria(reporte1, "Contradicciones ground-truth")
-    assert n1 == 0, f"sync-mirror debería cerrar las {n_planetas} contradicciones de mass_earth a 0"
+    assert n1 == 0, (f"sync-mirror debería cerrar a 0 las {n_planetas} contradicciones de "
+                     f"`mass_earth` y las {len(censo.star_slugs)} de `mass_msun`")
 
     assert _all_bodies(paths) == pre_bodies
 
