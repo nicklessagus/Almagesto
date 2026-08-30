@@ -148,6 +148,15 @@ def _media_note(slug: str, bibcode: str) -> str:
     Medido (#195): 29 de 65 vistas de un tema real (45 %) declaran datos que viven sólo en figuras
     o tablas-imagen, y varias veces la figura **es** el resultado.
 
+    #281 lo extiende con el caso que #195 no contempla: una figura que es un **campo** (contornos,
+    mapa de color, densidad) y no una curva. Ahí «el valor a x» no está definido sin el **nivel**, y
+    dos lecturas honestas devuelven números distintos. Medido: la Fig. H.2 de
+    `2023A&A...680A..64D` es un mapa de probabilidad de detección, y tres lecturas
+    «irreconciliables» de la banda de 30-50 M_J (2-3, 1,8-4 y 3,5-6 UA) eran los contornos del
+    10, 50 y 90 % de la MISMA figura. El costo no fue un número mal copiado: fue **declarar un
+    hueco que no existía**. De ahí el orden del bloque — sospechar de la figura ANTES de la salida
+    «hueco declarado», que cierra la puerta.
+
     @inv INV-100"""
     return (
         "- **Tablas:** transcribí la fila y **decí cómo la verificaste**. En una tabla "
@@ -159,6 +168,19 @@ def _media_note(slug: str, bibcode: str) -> str:
         "**figura y su página** (`Fig. 3, p. 7`) en el localizador, el **`≈` explícito** (o el "
         "rango) en el valor, y la palabra **lectura de gráfico** en el régimen. No es un valor "
         "publicado y no puede entrar como si lo fuera.\n"
+        "- 🗺 **Si la figura es un CAMPO —mapa de contornos, mapa de color, diagrama de densidad— "
+        "el valor NO EXISTE sin el nivel.** «El valor a x» está definido en una curva y no en un "
+        "campo: dos lectores honestos leyendo la misma figura devuelven números distintos sin que "
+        "ninguno se equivoque. Se cita `Fig. N, p. M, contorno del X %` (o el nivel que "
+        "corresponda), y si el dato necesita varios niveles, se dan todos. Antes de leer, mirá la "
+        "escala de color o la leyenda de niveles: si la figura tiene una, es un campo.\n"
+        "  ⛔ Leer «la curva» de un campo es la forma de producir tres lecturas incompatibles y "
+        "archivarlas como hueco. Medido (#281): una banda de 30-50 M_J leída como 2-3, 1,8-4 y "
+        "3,5-6 UA eran los contornos del 10, 50 y 90 % de la MISMA figura.\n"
+        "  ⛔ **Si dos lecturas de la misma figura no reconcilian, la primera hipótesis es figura "
+        "SUBESPECIFICADA (¿es un campo? ¿leíste dos niveles distintos?), no dato ilegible.** El "
+        "orden importa: la segunda cierra la puerta —el hueco declarado es una promesa de que la "
+        "bóveda no puede responder— y la primera la abre.\n"
         "  ⛔ Es un **permiso, no una obligación**: si la figura no permite leer el valor con "
         "confianza, sigue siendo un **hueco declarado**. Forzar un número de una curva ilegible es "
         "peor que el hueco.\n")

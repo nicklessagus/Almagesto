@@ -928,7 +928,11 @@ la mitad del corpus (medido: 29/65 vistas; `docs/mediciones.md`). El prompt
   2026-08-27) y el valor viaja con la **figura y su página** (`Fig. 3, p. 7`), el **`≈`** y la
   palabra **lectura de gráfico** en el régimen — doctrina de `inferencia`: declarar de dónde salió.
   Es un **permiso, no una obligación**: si la curva no se deja leer con confianza, queda como
-  **hueco declarado** (forzar un número de una curva ilegible es peor que el hueco).
+  **hueco declarado** (forzar un número de una curva ilegible es peor que el hueco);
+- **figura que es un CAMPO** (contornos, mapa de color, densidad) → el valor **no existe sin el
+  nivel**: se cita `Fig. N, p. M, contorno del X %`, y todos los niveles si el dato los necesita.
+  Dos lecturas que no reconcilian son figura **subespecificada** antes que dato ilegible (#281) — un
+  hueco declarado de más dice *«el corpus no puede responder esto»* y el consumidor deja de buscar.
 
 Por eso la columna de la vista se llama **`Localizador`** y no `Línea`: lleva `L1234`, `p. 271` o
 `Fig. 3, p. 7` según de dónde salga el dato (la clave del JSON sigue siendo `linea`: vive en

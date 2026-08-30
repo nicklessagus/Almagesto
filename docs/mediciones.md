@@ -257,13 +257,26 @@ mismo que uno grande leyendo el `.txt` roto — es cuestión de **modalidad, no 
 
 ## 2026-08-27/28 · El dato que vive en una imagen (#195) y el `|` que parte la fila (#240)
 
-Dos mediciones sobre el mismo tema real (65 vistas), las dos movieron reglas:
+Dos mediciones sobre el mismo tema real (65 vistas), las dos movieron reglas — más una tercera
+(#281, 2026-08-30) sobre otra bóveda, que extiende la primera:
 
 - **29 de 65 vistas (45 %)** declaran datos que existen sólo en figuras o tablas-imagen: casi la
   mitad del corpus tiene información que ninguna búsqueda sobre el `.txt` puede encontrar. La regla
   dura cubría sólo ecuaciones → desde 1.71.0 `extraction_prompt._media_note` trata los tres casos
   (tabla extraída como texto / tabla-imagen / figura como lectura de gráfico con `≈`, figura y
   página).
+- **Tres lecturas «irreconciliables» eran tres contornos de la MISMA figura (#281).** La Fig. H.2
+  de `2023A&A...680A..64D` es un mapa de contornos de probabilidad de detección (0 / 10 / 50 / 68 /
+  90 / 100 %); la banda de 30-50 M_J se leyó como 2-3 UA, 1,8-4 UA y 3,5-6 UA — los contornos del
+  **10, 50 y 90 %**. #195 asume que una figura es una **curva**, donde «el valor a x» está
+  definido; en un **campo** (contornos, mapa de color, densidad) no lo está sin nombrar el nivel, y
+  dos lectores honestos devuelven números distintos sin que ninguno se equivoque. El costo no fue
+  un número mal copiado: fue **declarar un hueco que no existía** — la ficha dijo «el corpus no
+  puede responder esto» y el corpus sí podía, con más precisión que la que la ficha pedía. La regla
+  (extensión de #195, no reemplazo) vive en `extraction_prompt._media_note` —el nivel es parte del
+  localizador (`Fig. N, p. M, contorno del X %`) y dos lecturas que no reconcilian apuntan **primero
+  a figura subespecificada**, no a dato ilegible— y en el frente 1 de `audit-note`, donde la
+  bifurcación *omisión de la síntesis / hueco real* pasó a tener tres ramas.
 - **19 filas en 13 notas** tenían un `|` crudo en la prosa que va a una celda: la fila se parte, las
   celdas de más no se renderizan y una afirmación citada **y verificada** queda invisible mientras
   el lint sigue contando su fila. La regla (INV-99) existía y vivía sólo en el skill

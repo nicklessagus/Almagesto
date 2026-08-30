@@ -70,10 +70,15 @@ Contra el *Estándar transversal* de `CLAUDE.md`: **autosuficiente**, **dual-aud
 
 ⛔ **La prueba operativa, que es lo que hace este frente medible:** *escribir el pseudocódigo (o la
 receta de uso) desde la nota y anotar dónde se traba.* Cada punto donde haya que abrir la fuente es
-un hallazgo. Y por cada uno, decir **cuál de las dos cosas es**:
+un hallazgo. Y por cada uno, decir **cuál de las tres cosas es**:
 
 - lo que falta **está en un `.txt`/PDF que la bóveda ya tiene** → **omisión de la síntesis**, se
   cierra copiando de la fuente;
+- lo que falta es un valor que la nota declaró **ilegible en una figura** → antes de aceptar el
+  hueco, chequeá si la figura es un **campo** (contornos, mapa de color, densidad): ahí «el valor a
+  x» **no existe sin el nivel**, y las lecturas que «no reconcilian» son **niveles distintos**, no
+  ruido. Un hueco declarado de más es peor que uno de menos: dice *«el corpus no puede responder
+  esto»* y el consumidor deja de buscar. Medido (#281): el corpus **sí** tenía la respuesta;
 - lo que falta **no está en el corpus** → **hueco real**, va a `## Huecos` declarado.
 
 La distinción es el producto principal del frente: sin ella, «falta X» no es accionable.

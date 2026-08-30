@@ -235,6 +235,50 @@ def test_la_lectura_de_figura_esta_permitida_y_declarada():
         "que el hueco")
 
 
+# ── #281 · la figura que es un CAMPO: «el valor a x» no existe sin el NIVEL ─────────────────────
+
+
+def test_la_figura_que_es_un_campo_pide_el_NIVEL():
+    """#281 extiende #195, que asume que una figura es una CURVA. Cuando es un campo —contornos,
+    mapa de color, densidad— «el valor a x» no está definido sin el nivel, y dos lecturas honestas
+    de la misma figura devuelven números distintos. Medido sobre la Fig. H.2 de
+    `2023A&A...680A..64D`: tres lecturas «irreconciliables» de la banda de 30-50 M_J (2-3, 1,8-4 y
+    3,5-6 UA) eran los contornos del 10, 50 y 90 % de la MISMA figura.
+
+    @inv INV-100"""
+    nota = ep._media_note("hd40307", "2023A&A...680A..64D").lower()
+    assert "contorno del" in nota, "sin el formato del nivel, la lectura de un campo no es citable"
+    assert "no existe sin el nivel" in nota, \
+        "la regla es que el valor NO está definido sin el nivel, no que convenga aclararlo"
+
+
+def test_el_prompt_emitido_lleva_la_regla_del_campo():
+    """La frontera donde INV-100 mide que las reglas se caen: la regla puede existir en
+    `_media_note` y no llegar al subagente. Va con y sin PDF —el prompt ramifica por verdad de
+    disco (#255)— porque leer una figura es justamente lo que se hace con el PDF abierto.
+
+    @inv INV-100"""
+    con_pdf = ep.build_prompt("ica", "1994Comon", "ICA", [], "Texto limpio.\n", kind="theme")
+    sin_pdf = ep.build_prompt("test_star", "2020SinPDF", "Estrella Test", ["HD 12345"])
+    for p in (con_pdf, sin_pdf):
+        assert "contorno del" in p, "la regla existe pero no llega al subagente"
+
+
+def test_dos_lecturas_que_no_reconcilian_apuntan_primero_a_la_figura():
+    """El orden es la mitad del arreglo (#281): la salida «hueco declarado» CIERRA la puerta —dice
+    «el corpus no puede responder esto» y el consumidor deja de buscar—, así que la sospecha de
+    figura subespecificada tiene que leerse ANTES. En el caso medido el corpus sí tenía la
+    respuesta, con más precisión que la que la ficha pedía.
+
+    @inv INV-100"""
+    nota = ep._media_note("hd40307", "2023A&A...680A..64D")
+    assert "SUBESPECIFICADA" in nota
+    salida = "sigue siendo un **hueco declarado**"
+    assert salida in nota, "la escotilla de #195 no se reemplaza: se extiende"
+    assert nota.index("SUBESPECIFICADA") < nota.index(salida), \
+        "primero se sospecha de la figura; el hueco declarado es la última salida, no la primera"
+
+
 def test_la_regla_de_medios_no_depende_de_la_marca_de_simbolos():
     """A diferencia de la de ecuaciones (#113), ésta va SIEMPRE: `symbols_lost` mide si `pdftotext`
     vació las fórmulas y no dice nada sobre si las tablas del paper son imágenes."""
