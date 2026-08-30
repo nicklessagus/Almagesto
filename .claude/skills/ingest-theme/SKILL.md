@@ -43,6 +43,7 @@ Progreso del ingest del tema <tema>:
 - [ ] 4  síntesis del concept durable (+ régimen de validez / disputes)
 - [ ] 5  auto-revisión de autosuficiencia
 - [ ] 6  bookkeeping (index, log, STATUS)
+- [ ] 6a `contrast.py <slug> --validar-todo` en 0 — **antes** del verify (#323)
 - [ ] 6b verify-citations sobre el concept + notas nuevas
 - [ ] 7  `lint.py --cierre <slug>` en 0 → commit → preguntar push
 ```
@@ -234,13 +235,13 @@ Progreso del ingest del tema <tema>:
    por campo (`--campo`, `--grep`, `--eje`, `--paper`), arrastra `linea` y `segunda_mano`, emite
    filas de **una fuente cada una** (`--filas`) y **nunca trunca una cita**: si no entra, filtrá
    menos filas.
-   ⛔ **Al escribir: la cita se copia ENTERA o se parafrasea SIN comillas.** Y **una fila, una
-   fuente** — agrupar bibcodes bajo una glosa compartida es cómo se fabrican atribuciones (6 falsas
-   en esa misma corrida, contra 0 en una nota escrita paper por paper).
-   ⛔ **Antes de cerrar, `python scripts/contrast.py <slug> --validar <nota>`**: cruza cada cita del
-   concepto contra las extracciones. Una cita que la extracción **no** respalda la inventó el
-   sintetizador —la extracción se hizo leyendo el PDF, así que no vale la excusa del `.txt`
-   degradado— y sale bloqueante (#315/#317).
+   ⛔ **La fila sale de `--filas` CON LA CITA ADENTRO: no la re-tipees (#322).** Los 12 verdaderos
+   positivos medidos son errores de **copiado** —6 de atribución (la frase de un paper bajo otro), 6
+   de cola alterada—, **ninguno** de comprensión: o sea, de mover una cadena de un archivo a otro,
+   que es lo que un script hace perfecto y un LLM mal. Vos escribís **la glosa** y elegís qué filas
+   entran; la cadena entre «» y su `[[bibcode]]` vienen de la máquina. Si la cita no entra en la
+   celda, se **parafrasea SIN comillas** — nunca se recorta entre comillas. Y **una fila, una
+   fuente**: agrupar bibcodes bajo una glosa compartida es cómo se fabrican atribuciones.
    Entre "leí los papers" y
    "escribo la síntesis" hay una operación, y es la de más apalancamiento de la cadena: armar el
    **`## Inventario por eje`** del concept. Una fila por paper para cada **eje** —parámetro, efecto o
@@ -337,6 +338,17 @@ Progreso del ingest del tema <tema>:
    `vault/wiki/log.md`, y `vault/STATUS.md` si cambió el estado. **No** tocar la matriz método×estrella.
    (El `lint` va **después** del verify del paso 6b: `CLAUDE.md` lo pide "antes de lint/commit",
    porque resolver una cita no-soportada suele cambiar la prosa.)
+
+6a. **Cruzar la nota contra las extracciones — `python scripts/contrast.py <slug> --validar-todo`
+   (#323).** Obligatorio, con vos todavía en contexto, y **antes** del fan-out: es un `grep` exacto
+   que cuesta segundos, mientras el verify son N subagentes leyendo PDFs — mandar a verificar con
+   LLM una cita que un `grep` ya sabe alterada es pagar el paso caro para llegar a lo que el barato
+   sabía (#315: 32 subagentes y ~4 M tokens para llegar a lo que el lint sabía en segundos).
+   Bloquea con **evidencia positiva** (la frase aparece bajo otro bibcode, o el arranque coincide y
+   la cola diverge); el silencio de la extracción se declara **no evaluable** y no es hallazgo
+   (#321). Medido: la nota que produjo esta serie cerró con verify completo y `lint --cierre` en 0
+   con **12 citas alteradas adentro** — la comparación que las cazaba estaba escrita y nadie la
+   corría, porque nada decía que había que correrla.
 
 6b. **Verificar citas.** Correr el skill `verify-citations` sobre el **concept** (y las notas de paper
    nuevas). El concept es dual-audiencia e implementation-ready: cada afirmación con `[[bibcode]]`

@@ -28,7 +28,7 @@ Progreso del append de <fuente> → <destino>:
 - [ ] 2 plomería mínima (extra_core / sources: / piezas sueltas) — fulltext extraído
 - [ ] 3 extracción LLM enfocada en el eje del destino (= la VISTA del destino, #188)
 - [ ] 4 síntesis a la nota viva (regla de poda; disputes con posiciones / régimen si es concepto)
-- [ ] 5 cierre: autosuficiencia → verify-citations (re-fechar el bloque) → lint 0 → log → commit
+- [ ] 5 cierre: autosuficiencia → `contrast.py <slug> --validar-todo` (#323) → verify-citations (re-fechar el bloque) → lint 0 → log → commit
 ```
 
 1. **Resolver destino y tipo de fuente.** Confirmar que la nota destino existe y clasificar la
@@ -117,7 +117,9 @@ Progreso del append de <fuente> → <destino>:
    descartó, o porque nadie lo notó). Es barato: el embudo corre sobre las extracciones.
 
 5. **Cierre estándar** (idéntico a ingest): **auto-revisión de autosuficiencia** de la nota destino
-   (¿se entiende sin abrir el paper nuevo?) → **`verify-citations`** sobre la prosa tocada y la
+   (¿se entiende sin abrir el paper nuevo?) → **`python scripts/contrast.py <slug> --validar-todo`**
+   (#323: el chequeo barato antes del caro — bloquea la cita que aparece verbatim bajo otro bibcode
+   o cuya cola diverge; el silencio de la extracción no es hallazgo, #321) → **`verify-citations`** sobre la prosa tocada y la
    nota de paper nueva —si la nota destino ya traía bloque `## Verificación de citas`, **re-fechar
    el encabezado**: el lint compara esa fecha contra la del último cambio del archivo y marca
    **verificación stale** si quedó atrás (#56)— → `python scripts/lint.py --cierre <slug>` en 0 (R-1: en el cierre de una operación, un par de verificación vencido frena; sin el flag sólo reportaría. #121: con el slug de la entidad destino, la deuda de otro sujeto se reporta pero no frena) → bookkeeping (`vault/wiki/log.md` SIEMPRE —

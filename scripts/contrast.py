@@ -24,15 +24,21 @@ Three guarantees, each closing one of the measured failure modes:
      filter fewer rows, never to cut more text (#226's doctrine, one step earlier).
   2. **Provenance travels**: `linea` (the locator) and `segunda_mano` ride with every value. The six
      false attributions of that run came from a digest that dropped them.
-  3. **One row, one source.** The row skeleton it prints carries a single bibcode, so grouping
-     several under a shared gloss becomes an explicit decision instead of the natural output.
+  3. **One row, one source, and the quote already inside it (#322).** The row carries a single
+     bibcode **and the string from the JSON**, quoted, escaped and with its locator: measured, the
+     12 true positives of the gate were **copying** errors, not comprehension ones — 6 of
+     attribution (one paper's sentence under another) and 6 of altered tail. Those are the class of
+     task a script does perfectly and an LLM does badly, so the synthesiser writes the **gloss** and
+     picks which rows enter; the quoted string is the machine's.
 
 ⛔ **It proposes and does not write**: the inventory is written by the synthesiser.
 
     python scripts/contrast.py <slug> --campo regimen
     python scripts/contrast.py <slug> --grep 'Sigma|covarian'
     python scripts/contrast.py <slug> --eje identificabilidad --filas
-    python scripts/contrast.py <slug> --validar vault/wiki/concepts/methods/<x>.md
+    python scripts/contrast.py --validar vault/wiki/concepts/methods/<x>.md
+    python scripts/contrast.py --validar-todo            # toda la bóveda (gate: exit ≠ 0)
+    python scripts/contrast.py <slug> --validar-todo     # sólo las notas del sujeto
 """
 from __future__ import annotations
 
@@ -46,6 +52,11 @@ import lib_config as cfg
 import lib_blocks as lb
 
 CAMPOS = ("valor", "regimen", "aporte", "hueco", "ejes", "salvedades")
+
+#: #322 · el único hueco que el sintetizador llena a mano en una fila. Se emite como marcador
+#: visible —no como celda vacía— para que una fila pegada sin escribir la glosa se note al leer la
+#: nota, en vez de publicarse como una fila muda.
+GLOSA = "«…tu glosa…»"
 
 
 def extracciones(slug: str) -> list[tuple[str, dict]]:
@@ -119,59 +130,155 @@ def imprimir(slug: str, *, campo: str | None, patron: str | None, paper: str | N
             if filas:
                 # Una fila, UNA fuente (#317): agrupar bibcodes bajo una glosa compartida es cómo
                 # se fabrican atribuciones — que sea una decisión explícita, no la salida natural.
+                # ⛔ #322 — la fila sale con la CITA YA ADENTRO, entre comillas, con su `[[bibcode]]`
+                # y su localizador pegados. Medido sobre 32 hits: los 12 verdaderos positivos eran
+                # errores de **copiado**, no de comprensión —6 de atribución (la frase de un paper
+                # bajo otro) y 6 de cola alterada—, o sea de mover una cadena de un archivo a otro:
+                # lo que un LLM hace mal y un script hace perfecto. El sintetizador escribe la
+                # GLOSA y elige qué filas entran; la cadena entre comillas es de la máquina.
                 cfg.print_seguro(f"| {cfg.escape_cell(que)} | [[{bib}]] | "
-                                 f"{cfg.escape_cell(mostrado)} | {loc}{sm} |")
+                                 f"«{cfg.escape_cell(texto)}» ({loc}){sm} | {GLOSA} |")
             else:
                 cfg.print_seguro(f"[[{bib}]] · {loc}{sm}\n    {mostrado}"
                                  + (f"\n    régimen: {regimen}" if regimen and not campo else ""))
             n += 1
     if filas and n:
-        cfg.print_seguro("\n  ⛔ Las filas son un ESQUELETO: el inventario lo redactás vos. Una "
-                         "fila = una fuente, y la cita se copia ENTERA o se parafrasea sin comillas.")
+        cfg.print_seguro(f"\n  ⛔ La cadena entre «» ya es correcta por construcción (sale del JSON "
+                         f"con su bibcode y su localizador): **no la re-tipees** — ahí es donde se "
+                         f"pierden las citas (#322). Vos escribís la glosa (`{GLOSA}`) y decidís "
+                         f"qué filas entran; si la cita no entra en la celda, se parafrasea SIN "
+                         f"comillas.")
     return n
 
 
-def validar(slug: str, nota: pathlib.Path) -> int:
-    """Cross-check note ↔ extraction ↔ `.txt`, and say what each discrepancy MEANS (#317).
+#: #321 · largo de prefijo con el que se decide *«el arranque coincide y la cola diverge»*. El mismo
+#: número que usa el lint (`lint.CITA_PREFIJO`), y por el mismo motivo: por debajo, cualquier arranque
+#: formulaico («we show that the…») coincide con cualquier extracción.
+CITA_PREFIJO = 60
+
+
+def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
+    """Cross-check one note against the extractions of the bibcodes it cites (#317/#321/#323).
 
     ⛔ The comparison nobody was making. #220 tests the note's verbatim quote against the `.txt`,
     which #205 declares a degraded index, so its signal was **2 of 17** in one concept and **0 of
-    35** in another. The extraction is the transcription made while reading the PDF, so:
+    35** in another. The extraction is the transcription made while reading the PDF.
 
-      · quote not in ANY extraction of its bibcode  → **the synthesiser invented it** (blocking)
-      · quote in the extraction but not in the `.txt` → the `.txt` is degraded, the note is fine
-      · quote in both                                 → nothing to say
+    ⛔ **It blocks only on POSITIVE evidence, the partition of #321.** An extraction is a
+    **selective, lensed** transcription (#188) and the framework tells you to quote from the PDF
+    (#205), so its silence does not prove fabrication — measured, only 12 of 32 hits were real, and
+    one of the other 20 is a quote #315 uses as an example of a CORRECT one. So:
 
-    Returns the count of the first class, which is the one that must be zero."""
+      · verbatim under ANOTHER cited bibcode → **wrong attribution** (blocking; 6 of the 12)
+      · long prefix matches and the tail diverges → **completed while copying** (blocking; 6 of 12)
+      · extraction silent, or none on disk → **not evaluable**, declared and never counted as a
+        finding (D-43)
+
+    Returns `{"alteradas": [(línea, motivo)], "no_evaluables": [(línea, motivo)], "citas": N}` —
+    counts, so the sweep can declare its population (INV-40) instead of printing a bare zero."""
     texto = nota.read_text(encoding="utf-8")
-    por_bib = {b: cfg.extraction_texts(b) for b, _d in extracciones(slug)}
-    inventadas = 0
+    out = {"alteradas": [], "no_evaluables": [], "citas": 0}
+    bibs_nota = set(lb._bibcodes(texto))
     for b in lb.split_blocks(texto):
         bibs = lb._bibcodes(b.text) or lb._bibcodes(b.intro or "")
         for cita in cfg.quotes_in(b.text):
+            out["citas"] += 1
             duenio = lb.quote_owner(b.text, cita, bibs)          # #316
             candidatos = [duenio] if duenio else bibs
-            fuentes = [t for x in candidatos for t in por_bib.get(x, [])]
-            if not fuentes:
-                continue                # sin extracción de esa fuente: no evaluable, no se inventa
-            if any(cfg.quote_found(cita, t) for t in fuentes):
+            por_bib = {x: cfg.extraction_texts(x) for x in candidatos}
+            corte = cita if len(cita) <= 70 else cita[:70] + "…"
+            if not any(por_bib.values()):
+                out["no_evaluables"].append(
+                    (b.first_line, f"«{corte}» — {', '.join(candidatos) or 'sin fuente adyacente'} "
+                                   f"sin extracción en disco: no evaluable, no es una cita alterada"))
                 continue
-            inventadas += 1
-            cfg.print_seguro(
-                f"  ⛔ L{b.first_line}: «{cita[:80]}{'…' if len(cita) > 80 else ''}» NO está en la "
-                f"extracción de {', '.join(candidatos)} — la extracción se hizo leyendo el PDF, "
-                f"así que esto no es un `.txt` degradado: la cita se alteró al sintetizar")
-    cfg.print_seguro(f"  {inventadas} cita(s) que la extracción no respalda"
-                     + (" ✅" if not inventadas else " ⛔ — corregilas contra el JSON, no contra el "
-                        "`.txt`"))
-    return inventadas
+            if any(cfg.quote_found(cita, t) for ts in por_bib.values() for t in ts):
+                continue
+            otro = [x for x in sorted(bibs_nota - set(candidatos))
+                    if any(cfg.quote_found(cita, t) for t in cfg.extraction_texts(x))]
+            prefijo = (len(cita) > CITA_PREFIJO
+                       and any(cfg.quote_found(cita[:CITA_PREFIJO], t)
+                               for ts in por_bib.values() for t in ts))
+            if otro:
+                out["alteradas"].append(
+                    (b.first_line, f"«{corte}» está verbatim en la extracción de "
+                                   f"**{', '.join(otro)}**, no en la de {', '.join(candidatos)}: la "
+                                   f"cita está atribuida a la fuente equivocada"))
+            elif prefijo:
+                out["alteradas"].append(
+                    (b.first_line, f"«{corte}» — el arranque coincide con la extracción de "
+                                   f"{', '.join(candidatos)} y la cola diverge: la cita se completó "
+                                   f"al copiar (el patrón de #314)"))
+            else:
+                out["no_evaluables"].append(
+                    (b.first_line, f"«{corte}» — la extracción de {', '.join(candidatos)} calla: la "
+                                   f"transcripción es SELECTIVA, así que su silencio no prueba nada "
+                                   f"(#321). Si la citaste del PDF, está bien"))
+    if mostrar:
+        for ln, motivo in out["alteradas"]:
+            cfg.print_seguro(f"  ⛔ L{ln}: {motivo}. Copiala del JSON con `contrast.py <slug> "
+                             f"--grep …` — NO la re-tipees (#322)")
+        for ln, motivo in out["no_evaluables"]:
+            cfg.print_seguro(f"  · L{ln}: {motivo}")
+    return out
+
+
+def _notes_of(slug: str | None) -> list:
+    """The notes the sweep looks at, and it says so: whole vault, or the subject's (#121/#323).
+
+    With a slug the population is the entity note plus the paper notes whose extraction lives under
+    that subject — the same asymmetry as `lint --cierre`: the scope narrows what is MINE to close,
+    not what exists."""
+    todas = sorted(cfg.WIKI.rglob("*.md")) if cfg.WIKI.exists() else []
+    if not slug:
+        return todas
+    dir_ = cfg.EXTRACCION / slug
+    stems = {f.stem for f in dir_.glob("*.json")} if dir_.exists() else set()
+    stems.add(slug)
+    return [f for f in todas if f.stem in stems]
+
+
+def validar_todo(slug: str | None = None) -> int:
+    """Sweep mode: every note of the vault (or of one subject) against its extractions (#323).
+
+    ⛔ **The capability existed and nobody ran it.** `--validar` took one note at a time and no
+    skill named it, so it only ran if somebody remembered — which is the definition of a control
+    that does not exist. Measured: the note that produced #314–#318 closed with a full
+    `verify-citations`, `lint --cierre` at 0 and **12 altered or misattributed quotes inside**; the
+    comparison that caught them in seconds was written and never run.
+
+    Declares its population (INV-40) and what it could not evaluate (D-43) — without
+    `--migrate-extracciones` that population is **zero**, and a silent zero would read as a verdict.
+    Returns the number of blocking findings, so it works as a gate."""
+    notas = _notes_of(slug)
+    alteradas = no_eval = citas = 0
+    for f in notas:
+        r = validar(f, mostrar=False)
+        citas += r["citas"]
+        no_eval += len(r["no_evaluables"])
+        if r["alteradas"]:
+            cfg.print_seguro(f"\n{f.relative_to(cfg.ROOT)}")
+            for ln, motivo in r["alteradas"]:
+                cfg.print_seguro(f"  ⛔ L{ln}: {motivo}")
+            alteradas += len(r["alteradas"])
+    ambito = f"las notas de `{slug}`" if slug else "toda la bóveda"
+    cfg.print_seguro(f"\n> sobre {len(notas)} nota(s) de {ambito} · {citas} cita(s) «…» · "
+                     f"{no_eval} no evaluable(s) (sin extracción en disco, o la extracción calla)")
+    if not citas:
+        cfg.print_seguro("  ⚠ NO EVALUADO: ninguna cita mirada. Si la bóveda es anterior a #311, "
+                         "corré `python scripts/make_notes.py --migrate-extracciones` — un cero sin "
+                         "denominador se lee como veredicto (D-43)")
+    cfg.print_seguro(f"  {alteradas} cita(s) con evidencia POSITIVA de alteración"
+                     + (" ✅" if not alteradas else " ⛔ — corregilas contra el JSON de extracción, "
+                        "no contra el `.txt`"))
+    return alteradas
 
 
 def main(argv=()) -> int:
     """CLI: filtra las extracciones del sujeto, o valida una nota contra ellas (`--validar`)."""
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0],
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("slug")
+    ap.add_argument("slug", nargs="?", help="el sujeto (opcional con --validar/--validar-todo)")
     ap.add_argument("--campo", choices=CAMPOS + ("que",), help="agrupar por ese campo")
     ap.add_argument("--grep", metavar="RE", help="filtrar por expresión regular")
     ap.add_argument("--paper", metavar="BIBCODE", help="sólo esa fuente")
@@ -186,17 +293,29 @@ def main(argv=()) -> int:
                          "entra, filtrá menos filas — un recorte cae dentro de la cita y el modelo "
                          "la completa (#314: 2 citas fabricadas en el carácter exacto del corte)")
     ap.add_argument("--validar", metavar="NOTA",
-                    help="cruza esa nota contra las extracciones: una cita que la extracción no "
-                         "respalda la inventó el sintetizador (#317)")
+                    help="cruza esa nota contra las extracciones: la cita que aparece bajo OTRO "
+                         "bibcode, o cuya cola diverge, se alteró al sintetizar (#317/#321)")
+    ap.add_argument("--validar-todo", action="store_true",
+                    help="barrido: toda la bóveda, o las notas del sujeto si das el slug (#323)")
     args = ap.parse_args(list(argv) or None)
+
+    if args.validar_todo:
+        return 1 if validar_todo(args.slug) else 0
 
     if args.validar:
         nota = pathlib.Path(args.validar)
         if not nota.exists():
             cfg.print_seguro(f"⛔ no existe {nota}")
             return 2
-        return 1 if validar(args.slug, nota) else 0
+        r = validar(nota)
+        cfg.print_seguro(f"  {len(r['alteradas'])} cita(s) con evidencia positiva de alteración "
+                         f"· {len(r['no_evaluables'])} no evaluable(s) · {r['citas']} mirada(s)"
+                         + (" ✅" if not r["alteradas"] else " ⛔"))
+        return 1 if r["alteradas"] else 0
 
+    if not args.slug:
+        cfg.print_seguro("⛔ falta el slug (sólo --validar/--validar-todo pueden ir sin él)")
+        return 2
     if not (cfg.EXTRACCION / args.slug).exists():
         cfg.print_seguro(f"⛔ no hay extracciones en {cfg.EXTRACCION / args.slug} — corré el "
                          f"fan-out del paso 3 primero (`extraction_prompt.py {args.slug} <bib>`)")

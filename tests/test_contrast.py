@@ -74,9 +74,14 @@ def test_filtrar_por_campo_grep_y_eje(toy_vault, capsys):
     assert "eje `identificabilidad`" in out
 
 
-def test_las_filas_llevan_UNA_sola_fuente(toy_vault, capsys):
+def test_las_filas_llevan_UNA_sola_fuente_y_la_CITA_ADENTRO(toy_vault, capsys):
     """Agrupar bibcodes bajo una glosa compartida es cómo se fabrican atribuciones (6 medidas): que
-    agrupar sea una decisión explícita y no la salida natural de la herramienta."""
+    agrupar sea una decisión explícita y no la salida natural.
+
+    #322 — y la fila sale **con la cita adentro**, entre comillas y con su localizador: los 12
+    verdaderos positivos del gate eran errores de **copiado** (6 de atribución, 6 de cola alterada),
+    o sea de mover una cadena de un archivo a otro. Si el sintetizador no re-tipea, esas dos clases
+    desaparecen por construcción."""
     _extraccion("ica_ruido", "2013Voss")
     _extraccion("ica_ruido", "2004Davies")
     ct.main(["ica_ruido", "--filas"])
@@ -84,22 +89,56 @@ def test_las_filas_llevan_UNA_sola_fuente(toy_vault, capsys):
     filas = [l for l in salida.splitlines() if l.startswith("| ")]
     assert len(filas) == 2
     assert all(l.count("[[") == 1 for l in filas), "una fila, una fuente"
-    assert "ESQUELETO" in salida and "se copia ENTERA" in salida
+    assert all(f"«{LARGA}»" in l for l in filas), "la cadena ENTERA, del JSON, no un esqueleto"
+    assert all("(p. 4)" in l for l in filas), "el localizador viaja pegado a la cita"
+    assert all(ct.GLOSA in l for l in filas), "el único hueco es la glosa, y es visible"
+    assert "no la re-tipees" in salida
 
 
-def test_validar_caza_la_cita_que_la_extraccion_NO_respalda(toy_vault, capsys):
-    """#317 — la comparación decidible que nadie hacía: la extracción es la transcripción hecha
-    **leyendo el PDF**, así que una cita del concepto que no está ahí la fabricó el sintetizador, y
-    eso no admite la excusa del `.txt` degradado. Es exactamente el defecto medido."""
+def test_validar_caza_la_cita_ATRIBUIDA_A_LA_FUENTE_EQUIVOCADA(toy_vault, capsys):
+    """#317/#321 — la mitad más frecuente de los verdaderos positivos (6 de 12): la frase está
+    verbatim, pero en la extracción de OTRO paper citado por la nota. Eso es evidencia positiva de
+    que la cita se movió, y no admite la excusa del `.txt` degradado."""
+    _extraccion("ica_ruido", "2013Voss")
+    _extraccion("ica_ruido", "2004Davies", ground_truth=[
+        {"que": "otro", "valor": "algo completamente distinto", "linea": "p. 9"}])
+    nota = cfg.CONCEPTS / "methods" / "ica-ruido.md"
+    nota.parent.mkdir(parents=True, exist_ok=True)
+    nota.write_text("---\ntags: [concept]\n---\n\n# ICA ruidosa\n\n"
+                    f"Dice «{LARGA}» [[2004Davies]], y lo discute [[2013Voss]].\n",
+                    encoding="utf-8")
+    assert ct.main(["--validar", str(nota)]) == 1
+    out = capsys.readouterr().out
+    assert "2013Voss" in out and "atribuida a la fuente equivocada" in out
+
+
+def test_validar_caza_la_cita_COMPLETADA_al_copiar(toy_vault, capsys):
+    """#314/#321 — la otra mitad (6 de 12): el arranque coincide con la extracción y la cola
+    diverge. Es la firma del digest truncado que el modelo completó con lo plausible."""
     _extraccion("ica_ruido", "2013Voss")
     nota = cfg.CONCEPTS / "methods" / "ica-ruido.md"
     nota.parent.mkdir(parents=True, exist_ok=True)
     nota.write_text("---\ntags: [concept]\n---\n\n# ICA ruidosa\n\n"
-                    "El método «which requires the noise covariance to be known» según "
+                    f"Dice «{LARGA[:80]} y por lo tanto el problema es mucho más difícil» "
+                    f"[[2013Voss]].\n", encoding="utf-8")
+    assert ct.main(["--validar", str(nota)]) == 1
+    assert "la cola diverge" in capsys.readouterr().out
+
+
+def test_el_SILENCIO_de_la_extraccion_no_bloquea(toy_vault, capsys):
+    """#321 — la extracción es una transcripción **selectiva y lenteada** (#188) y el framework manda
+    citar del PDF (#205): su silencio no prueba fabricación. Medido, sólo 12 de 32 hits eran reales
+    y entre los otros 20 había una cita que #315 usa como ejemplo de cita CORRECTA. Se declara como
+    no evaluable (D-43), nunca como hallazgo."""
+    _extraccion("ica_ruido", "2013Voss")
+    nota = cfg.CONCEPTS / "methods" / "ica-ruido.md"
+    nota.parent.mkdir(parents=True, exist_ok=True)
+    nota.write_text("---\ntags: [concept]\n---\n\n# ICA ruidosa\n\n"
+                    "El método «una frase legítima leída del PDF y no transcripta» "
                     "[[2013Voss]].\n", encoding="utf-8")
-    assert ct.main(["ica_ruido", "--validar", str(nota)]) == 1
+    assert ct.main(["--validar", str(nota)]) == 0
     out = capsys.readouterr().out
-    assert "NO está en la extracción" in out and "se alteró al sintetizar" in out
+    assert "su silencio no prueba nada" in out and "1 no evaluable" in out
 
 
 def test_validar_calla_cuando_la_nota_es_FIEL_a_la_extraccion(toy_vault, capsys):
@@ -110,8 +149,8 @@ def test_validar_calla_cuando_la_nota_es_FIEL_a_la_extraccion(toy_vault, capsys)
     nota.parent.mkdir(parents=True, exist_ok=True)
     nota.write_text("---\ntags: [concept]\n---\n\n# ICA ruidosa\n\n"
                     f"Dice «{LARGA}» [[2013Voss]].\n", encoding="utf-8")
-    assert ct.main(["ica_ruido", "--validar", str(nota)]) == 0
-    assert "0 cita(s) que la extracción no respalda ✅" in capsys.readouterr().out
+    assert ct.main(["--validar", str(nota)]) == 0
+    assert "0 cita(s) con evidencia positiva de alteración" in capsys.readouterr().out
 
 
 def test_la_nota_de_filas_sale_SOLO_con_filas(toy_vault, capsys):
@@ -131,9 +170,11 @@ def test_validar_no_inventa_sobre_una_fuente_SIN_extraccion(toy_vault, capsys):
     nota = cfg.CONCEPTS / "methods" / "ica-ruido.md"
     nota.parent.mkdir(parents=True, exist_ok=True)
     nota.write_text("---\ntags: [concept]\n---\n\n# ICA ruidosa\n\n"
-                    "Dice «una cita de una fuente sin extracción» [[2099Nadie]].\n",
+                    "Dice «una cita larga de una fuente que no tiene extracción en disco» "
+                    "[[2099Nadie]].\n",
                     encoding="utf-8")
-    assert ct.main(["ica_ruido", "--validar", str(nota)]) == 0
+    assert ct.main(["--validar", str(nota)]) == 0
+    assert "sin extracción en disco" in capsys.readouterr().out
 
 
 def test_sin_extracciones_rehusa_en_vez_de_imprimir_cero(toy_vault, capsys):
@@ -149,3 +190,82 @@ def test_un_json_ROTO_se_declara(toy_vault, capsys):
     (cfg.EXTRACCION / "ica_ruido" / "roto.json").write_text("{no json", encoding="utf-8")
     ct.main(["ica_ruido"])
     assert "no parsea" in capsys.readouterr().out
+
+
+def test_la_atribucion_viaja_pegada_a_la_cita(toy_vault, capsys):
+    """#322 — la clase medida más frecuente (6 de 12): la frase de un paper puesta bajo otro
+    bibcode. Con la cita y el `[[bibcode]]` saliendo juntos del mismo JSON, elegir mal deja de ser
+    posible: no hay elección."""
+    _extraccion("ica_ruido", "2013Voss", ground_truth=[
+        {"que": "blanqueo", "valor": "lo que dice Voss 2013", "linea": "p. 4"}])
+    _extraccion("ica_ruido", "2015Voss", ground_truth=[
+        {"que": "blanqueo", "valor": "lo que dice el OTRO Voss", "linea": "p. 7"}])
+    ct.main(["ica_ruido", "--filas"])
+    filas = [l for l in capsys.readouterr().out.splitlines() if l.startswith("| ")]
+    por_bib = {l.split("[[")[1].split("]]")[0]: l for l in filas}
+    assert "«lo que dice Voss 2013» (p. 4)" in por_bib["2013Voss"]
+    assert "«lo que dice el OTRO Voss» (p. 7)" in por_bib["2015Voss"]
+
+
+def test_la_celda_de_la_fila_escapa_la_barra(toy_vault, capsys):
+    """#240 — un `|` crudo en la cita PARTE la fila, y la afirmación queda invisible para el lector
+    mientras el lint la sigue contando. Lo hace la máquina, que es el punto de #322."""
+    _extraccion("ica_ruido", "2013Voss", ground_truth=[
+        {"que": "norma", "valor": "el operador |x| de la ecuación", "linea": "p. 2"}])
+    ct.main(["ica_ruido", "--filas"])
+    fila = next(l for l in capsys.readouterr().out.splitlines() if l.startswith("| "))
+    assert r"\|x\|" in fila, "el `|` de la cita sale escapado"
+    # Cuatro celdas: el `|` escapado no cuenta como separador, así que GFM no parte la fila.
+    assert fila.replace(r"\|", "").count("|") == 5
+
+
+def _nota_323(nombre: str, cuerpo: str):
+    f = cfg.CONCEPTS / "methods" / f"{nombre}.md"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(f"---\ntags: [concept]\n---\n\n# {nombre}\n\n{cuerpo}\n", encoding="utf-8")
+    return f
+
+
+def test_el_barrido_declara_su_POBLACION(toy_vault, capsys):
+    """INV-40 — un `0` sin denominador no distingue «miré todo» de «no miré nada», y acá el segundo
+    caso pasa de verdad: sin `--migrate-extracciones` la población es cero."""
+    _extraccion("ica_ruido", "2013Voss")
+    _nota_323("ica-ruido", f"Dice «{LARGA}» [[2013Voss]].")
+    assert ct.main(["--validar-todo"]) == 0
+    out = capsys.readouterr().out
+    assert "nota(s) de toda la bóveda" in out and "1 cita(s)" in out
+    assert "0 cita(s) con evidencia POSITIVA de alteración ✅" in out
+
+
+def test_el_barrido_sin_UNA_cita_mirada_sale_NO_EVALUADO(toy_vault, capsys):
+    """D-43 — la bóveda anterior a #311 no tiene extracciones, así que el barrido no puede mirar
+    nada. Un cero silencioso ahí se lee como veredicto: es el falso limpio que el framework
+    persigue."""
+    _nota_323("sin-citas", "Prosa sin ninguna cita textual.")
+    assert ct.main(["--validar-todo"]) == 0
+    out = capsys.readouterr().out
+    assert "NO EVALUADO" in out and "--migrate-extracciones" in out
+
+
+def test_el_barrido_es_un_GATE(toy_vault, capsys):
+    """exit ≠ 0 con hallazgos bloqueantes, para que sirva en CI y en el cierre de la operación."""
+    _extraccion("ica_ruido", "2013Voss")
+    _extraccion("ica_ruido", "2004Davies", ground_truth=[
+        {"que": "otro", "valor": "algo distinto", "linea": "p. 9"}])
+    _nota_323("ica-ruido", f"Dice «{LARGA}» [[2004Davies]], y lo discute [[2013Voss]].")
+    assert ct.main(["--validar-todo"]) == 1
+    assert "atribuida a la fuente equivocada" in capsys.readouterr().out
+
+
+def test_el_barrido_por_SUJETO_acota_la_poblacion(toy_vault, capsys):
+    """#121 — con el slug el alcance son las notas del sujeto (la entidad y los papers con extracción
+    ahí). Sin slug, toda la bóveda."""
+    _extraccion("ica_ruido", "2013Voss")
+    _nota_323("ica_ruido", f"Dice «{LARGA}» [[2013Voss]].")
+    _nota_323("otro-tema", "Prosa de otro tema.")
+    ct.main(["ica_ruido", "--validar-todo"])
+    acotado = capsys.readouterr().out
+    ct.main(["--validar-todo"])
+    entero = capsys.readouterr().out
+    assert "notas de `ica_ruido`" in acotado
+    assert int(acotado.split("> sobre ")[1].split(" ")[0]) < int(entero.split("> sobre ")[1].split(" ")[0])

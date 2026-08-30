@@ -30,11 +30,10 @@ El usuario cura las fuentes (`vault/raw/`) y hace preguntas.
 > (`python scripts/make_notes.py --restamp-index`, #237), no se edita a mano.** Era el único
 > artefacto **100 % Dataview** —lo que #60 prohibió para los roll-ups, y con más fuerza acá: el
 > catálogo es lo primero que un agente abre, y un bloque ```dataview``` le muestra **la query, no
-> sus resultados**, con el plugin sin versionar—. El efecto medido: el paso de bookkeeping de los
-> skills mandaba *«agregar la estrella a `index.md`»* sobre un archivo **sin una sola línea
-> estática**, así que no se podía cumplir como estaba escrito. Hoy las tres tablas se materializan
-> por verdad de frontmatter, el Dataview queda
-> **debajo** como comodidad de Obsidian, y el lint reporta el índice desactualizado **nombrando los
+> sus resultados**, con el plugin sin versionar—. El efecto medido: el bookkeeping de los skills
+> mandaba *«agregar la estrella a `index.md`»* sobre un archivo **sin una sola línea estática**, así
+> que no se podía cumplir. Hoy las tres tablas se materializan por verdad de frontmatter, el
+> Dataview queda **debajo** como comodidad, y el lint reporta el índice desactualizado **nombrando los
 > stems** (mismo criterio que D-10 para `## Papers`). La "memoria" del proyecto es in-repo: este `CLAUDE.md` + `vault/STATUS.md`
 > + `vault/wiki/log.md` + `vault/wiki/index.md`. No depender de la memoria local de Claude (`~/.claude/...`),
 > que no viaja entre máquinas. Tras cada operación, actualizá `index.md`, appendeá a `log.md`
@@ -244,15 +243,13 @@ extracción.
 backlog la tabla desactualizada **nombrando los stems**. `## Métodos aplicados a esta estrella` lleva **una fila por MÉTODO** (agrupado por clave
 normalizada, con las variantes al lado) y colapsa la cola en un `<details>` que **declara cuántos
 quedan adentro** (#273: por par eran 369 filas sobre 291 métodos, el 30 % de una ficha real).
-`## Papers` es una tabla materializada
-—`Bibcode | Año | Relevancia | Origen | Estado`— cuyo encabezado lleva **los dos números** (universo
-· sintetizados en esta ficha): el defecto que evita es prometer 155 arriba de una síntesis de 8. El
-**estado** dice cuán lejos llegó cada paper: `fuera del filtro` → `sin extraer` → `extraído, no
-sintetizado` → `sintetizado`. En un concepto el roll-up es la **unión** de `methods` y
-`thesis_links`, con la columna *Entró por* (D-24: esas dos llaves viven en papers distintos) — y
-lleva **las mismas dos garantías** (los dos números y `Estado`, #300): se habían aplicado sólo a
-`stars/` y el defecto seguía vivo acá (medido: un concepto cerrado prometía 89 arriba de una
-síntesis de 30, con 57 reclamados y sin leer).
+`## Papers` es una tabla materializada —`Bibcode | Año | Relevancia | Origen | Estado`— cuyo
+encabezado lleva **los dos números** (universo · sintetizados acá): evita prometer 155 arriba de una
+síntesis de 8. El **estado** dice cuán lejos llegó cada paper (`fuera del filtro` → `sin extraer` →
+`extraído, no sintetizado` → `sintetizado`). En un concepto el roll-up es la **unión** de `methods` y
+`thesis_links`, con la columna *Entró por* (D-24: esas dos llaves viven en papers distintos), y
+lleva **las mismas dos garantías** (#300): se habían aplicado sólo a `stars/` y el defecto seguía
+vivo acá (un concepto cerrado prometía 89 arriba de una síntesis de 30, 57 reclamados sin leer).
 
 El motivo (#60): un bloque ```dataview``` le muestra a un agente que abre el `.md` **la query, no
 sus resultados**, y el plugin ni está versionado. El equivalente determinista parsea el frontmatter
@@ -384,12 +381,11 @@ add-only **no se afloja**.
 `extraction_prompt.py … --enfasis "<lente>" [--ejes a,b]` (#308)** —el prompt manda leer primero la
 vista anterior para no re-narrarla, y **rehúsa** si `(sujeto, enfasis)` ya tiene lectura—: la mitad
 de cosecha existía desde #239 y la única forma de producir ese JSON era escribirlo a mano, que es lo
-que INV-100 prohíbe. La identidad
-de una vista es el par `(sujeto, enfasis)` y su sección es `### Lente — <énfasis>` **dentro** de la
+que INV-100 prohíbe. La identidad de
+una vista es el par `(sujeto, enfasis)` y su sección es `### Lente — <énfasis>` **dentro** de la
 `## Vista` del sujeto —partir el encabezado no serviría: `section_start` recorta el sufijo que
 arranca con puntuación (AUD-178) y las dos colapsarían—. El cosechador **rehúsa** cambiar un valor
-ya escrito bajo la misma clave (hasta 1.122.x lo pisaba en silencio): completa lo que falta, o
-manda declarar la lente.
+ya escrito bajo la misma clave: completa lo que falta, o manda declarar la lente.
 
 ⛔ **`vistas[]` la escribe SÓLO la lectura, nunca el retro-link.** Es lo que mantiene a
 `stars`/`thesis_links`/`methods` como **reclamos** (`make_notes` los mergea add-only sin leer nada) y
@@ -1003,22 +999,27 @@ el `.txt` se re-extrae.
    **fila vacía de la plantilla** y ≥2 papers extraídos citados — ausencia = declarado,
    presente-y-vacío = saltado.
    ⛔ **Y tiene herramienta: `python scripts/contrast.py <slug>` (#314/#317).** Era el único eslabón
-   sin una —producir, cosechar y verificar la tienen— y su modo de falla es predecible: sin
-   herramienta se improvisa un digest, el recorte cae **dentro de la cita** y el modelo la completa
-   con lo plausible (2 citas fabricadas sobre 139 pares, en el carácter exacto del corte).
-   `contrast.py` **nunca trunca una cita**, agrupa por campo, arrastra `linea` y `segunda_mano`, y
-   emite filas de **una fuente cada una**. Propone: el inventario lo escribís vos.
-   ⛔ **Al sintetizar, la cita se copia ENTERA o no se copia** — si no entra, se parafrasea **sin
-   comillas**. Y **una fila, una fuente**: agrupar bibcodes bajo una glosa compartida es cómo se
-   fabrican atribuciones (6 falsas medidas, contra 0 escribiendo paper por paper). ⛔ **La cita se verifica contra la EXTRACCIÓN, no contra el `.txt`**
-   (`contrast.py --validar <nota>`, #315/#317): la extracción es la transcripción hecha **leyendo el
-   PDF**, así que «no está ahí» significa que la inventó el sintetizador y no admite la excusa del
-   índice degradado — con el `.txt` como único juez la señal era 2 de 17 y 0 de 35. ⛔ **Y con
-   EVIDENCIA POSITIVA eso bloquea el cierre (#318/#321)**: la frase bajo **otro** bibcode
-   (atribución) o un prefijo largo con la cola divergente (se completó al copiar) suben a bloqueante
-   con `--cierre <slug>`. ⚠ El **silencio** de la extracción no: es selectiva y lenteada (#188) y se
-   cita del PDF (#205), así que «no está en el JSON» no prueba fabricación — evidencia positiva
-   bloquea, el silencio se declara.
+   sin una —producir, cosechar y verificar la tienen— y sin herramienta se improvisa un digest: el
+   recorte cae **dentro de la cita** y el modelo la completa (2 citas fabricadas sobre 139 pares, en
+   el carácter exacto del corte). `contrast.py` **nunca trunca una cita**, agrupa por campo y
+   arrastra `linea`/`segunda_mano`. Propone: el inventario lo escribís vos.
+   ⛔ **La fila de `--filas` sale CON LA CITA ADENTRO y NO SE RE-TIPEA (#322).** Los 12 verdaderos
+   positivos medidos son errores de **copiado** —6 de atribución, 6 de cola alterada—, ninguno de
+   comprensión: mover una cadena entre archivos es lo que un script hace perfecto y un LLM mal. Vos
+   escribís **la glosa** y elegís qué filas entran; si no entra, se parafrasea **sin comillas** —
+   nunca se recorta entre comillas. Y **una fila, una fuente**: agrupar bibcodes bajo una glosa
+   compartida es cómo se fabrican atribuciones (6 falsas medidas, 0 escribiendo paper por paper).
+   ⛔ **La cita se verifica contra la EXTRACCIÓN, no contra el `.txt`** (#315/#317): es la
+   transcripción hecha leyendo el PDF, y con el `.txt` de juez la señal era 2 de 17 y 0 de 35.
+   Bloquea con **evidencia positiva** (#318/#321) —la frase bajo **otro** bibcode (atribución), o un
+   prefijo largo con la cola divergente (se completó al copiar)—; el **silencio** no, que la
+   extracción es selectiva y lenteada (#188) y se cita del PDF (#205).
+   ⛔ **Y ese cruce es PASO DE CIERRE de toda operación que sintetice, ANTES del verify (#323):**
+   `python scripts/contrast.py [<slug>] --validar-todo` (sin slug, toda la bóveda; exit ≠ 0, declara
+   población y no evaluables). Un `grep` de segundos contra N subagentes leyendo PDFs: verificar con
+   LLM lo que el `grep` ya sabe alterado es pagar el caro para llegar a lo que el barato sabía. La
+   capacidad existía y **no la corría nadie** — la nota que produjo esta serie cerró con verify
+   completo y `lint --cierre` en 0 **con 12 citas alteradas adentro**.
 
 #### El CICLO DE LA LENTE — cómo se encadenan las piezas (#310)
 
@@ -1610,11 +1611,10 @@ entorno `ADS_DEV_KEY`.
 ⛔ **El `mailto` del polite pool es OPT-IN y no sale de `git config user.email`.** OpenAlex, Crossref
 y Unpaywall dan un tier de rate-limit más rápido a quien declara un email de contacto. Se declara en
 `vault/config/mailto` (gitignored) o en `ALMAGESTO_MAILTO`; **sin declararlo no sale ninguna
-dirección** y las tres APIs funcionan igual, sólo que en el pool público. Hasta 1.73.0 se tomaba el
-email de git —dato personal entregado para autoría, no para egress a tres terceros en cada corrida,
-sin opt-in y sin forma de apagarlo—: medido en vivo el 2026-08-28, doce llamadas lo llevaron
-embebido en la URL, y por lo tanto en cualquier mensaje de `raise_for_status` y en cualquier log de
-proxy intermedio. Token gratis en <https://ui.adsabs.harvard.edu/user/settings/token>.
+dirección** y las tres APIs funcionan igual, en el pool público. Hasta 1.73.0 se tomaba el email de
+git —dato personal entregado para autoría, no para egress a tres terceros—: medido el 2026-08-28,
+doce llamadas lo llevaron embebido en la URL, y por lo tanto en cualquier `raise_for_status` y en
+cualquier log de proxy. Token gratis en <https://ui.adsabs.harvard.edu/user/settings/token>.
 `build/` y `outputs/` gitignored. PDFs por git-lfs (`vault/raw/pdfs/**/*.pdf`). El resto de
 `vault/config/` **sí se commitea**, incluido `registro/<slug>.yaml` (es el punto: el juicio de
 curación y el registro de búsqueda tienen que viajar).

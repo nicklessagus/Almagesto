@@ -33,7 +33,7 @@ Progreso del refresh de <entidad>:
 - [ ] 2b inventario por eje actualizado con lo nuevo (fila nueva / eje nuevo)
 - [ ] 3  síntesis actualizada con SÓLO lo nuevo (+ disputes / régimen si es concepto / matriz)
 - [ ] 3b auto-revisión de autosuficiencia sobre la nota COMPLETA
-- [ ] 4  verify-citations sobre la prosa cambiada (re-fechar el bloque) → lint 0 → log → commit
+- [ ] 4  `contrast.py <slug> --validar-todo` (#323) → verify-citations sobre la prosa cambiada (re-fechar el bloque) → lint 0 → log → commit
 ```
 
 1. Re-correr el **orquestador** (idempotente — sólo agrega lo nuevo, no re-baja ni pisa; el orden
@@ -93,7 +93,10 @@ Progreso del refresh de <entidad>:
    la sección `## Huecos` no lista (un parámetro que ahora tiene dos valores, un método aplicado sin
    registrar)? Agregar cinco papers sin releer el conjunto es cómo una ficha deja de alcanzar sola
    sin que nadie lo note.
-4. Cierre: verify-citations sobre la prosa cambiada → lint → `log` → commit → preguntar push.
+4. Cierre: **`python scripts/contrast.py <slug> --validar-todo`** (#323 — obligatorio antes del
+   fan-out: es un `grep` que cuesta segundos y el verify son N subagentes leyendo PDFs; bloquea sólo
+   con evidencia positiva de que la cita se movió o se completó, #321) → verify-citations sobre la
+   prosa cambiada → lint → `log` → commit → preguntar push.
 
 ## B. Borrar un paper / estrella / tema
 

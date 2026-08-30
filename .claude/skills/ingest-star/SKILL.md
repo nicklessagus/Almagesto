@@ -29,6 +29,7 @@ Progreso del ingest de <estrella>:
 - [ ] 3c síntesis a la ficha (frontmatter propio + prosa + disputes)
 - [ ] 4  auto-revisión de autosuficiencia
 - [ ] 5  bookkeeping (index, log, matriz, STATUS) + `triage.py <slug> --sintesis`
+- [ ] 5a `contrast.py <slug> --validar-todo` en 0 — **antes** del verify (#323)
 - [ ] 5b verify-citations sobre la ficha + notas nuevas
 - [ ] 6  `lint.py --cierre <slug>` en 0 → commit → preguntar push
 ```
@@ -350,6 +351,13 @@ Progreso del ingest de <estrella>:
    que reescribir el resumen. Sin ella, refrescar el corpus mueve la fecha de búsqueda y la ficha se
    lee como re-sintetizada cuando la prosa es la de tres meses atrás. (El `lint` va **después** del verify del paso 5b: `CLAUDE.md` lo pide
    "antes de lint/commit", porque resolver una cita no-soportada suele cambiar la prosa.)
+
+5a. **Cruzar la ficha contra las extracciones — `python scripts/contrast.py <slug> --validar-todo`
+   (#323).** Obligatorio y **antes** del fan-out: el `grep` exacto cuesta segundos y el verify son N
+   subagentes leyendo PDFs, así que el chequeo barato corre primero (#315). Bloquea sólo con
+   evidencia positiva —la frase verbatim bajo **otro** bibcode citado (atribución movida), o el
+   arranque que coincide con la cola divergente (cita completada al copiar)—; el silencio de una
+   transcripción selectiva se declara no evaluable (#321/D-43).
 
 5b. **Verificar citas.** Correr el skill `verify-citations` sobre la **ficha de la estrella** (y sobre
    las notas de paper nuevas con extracción). La ficha es el artefacto **más reusado** (se arma un

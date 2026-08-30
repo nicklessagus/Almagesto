@@ -163,9 +163,18 @@ python scripts/contrast.py <slug> [--campo X] [--grep RE] [--eje] [--filas]
                                     # el lector de extracciones del paso 3b/3c (#314/#317): agrupa
                                     #   por CAMPO y **nunca trunca una cita** (un recorte cae dentro
                                     #   y el modelo la completa: 2 citas fabricadas medidas)
-python scripts/contrast.py <slug> --validar <nota>
-                                    # cruza la nota contra las extracciones: una cita que la
-                                    #   extracción no respalda la inventó el sintetizador (#315)
+python scripts/contrast.py [<slug>] --validar <nota>
+                                    # cruza la nota contra las extracciones (#315/#317). Bloquea
+                                    #   con EVIDENCIA POSITIVA (#321): la frase verbatim bajo otro
+                                    #   bibcode (atribución movida) o el arranque que coincide con
+                                    #   la cola divergente (se completó al copiar). El silencio de
+                                    #   la extracción se declara no evaluable, no es hallazgo
+python scripts/contrast.py [<slug>] --validar-todo
+                                    # BARRIDO (#323) — paso de cierre de toda operación que
+                                    #   sintetice, ANTES del verify (el grep barato antes del
+                                    #   fan-out caro). Con slug, las notas del sujeto; sin él, toda
+                                    #   la bóveda. Declara población (INV-40) y no evaluables
+                                    #   (D-43); exit ≠ 0 con hallazgos, así sirve de gate
 python scripts/harvest_views.py <slug> [--theme] [--force]
                                     # COSECHA el fan-out: vault/raw/extraccion/<slug>/*.json → las
                                     # notas. Estampa la vista (fecha · txt · lente), mergea

@@ -558,3 +558,29 @@ el reporte da un resultado falso — la primera pasada de esta medición se equi
 **Qué cambió.** El gate bloquea sólo con **evidencia positiva** (la frase bajo otro bibcode, o el
 prefijo largo con la cola divergente); el silencio de la extracción baja a backlog con su propio
 mensaje. Doctrina: **evidencia positiva bloquea, el silencio se declara** (D-43).
+
+## 2026-08-30 · Las 12 verdaderas eran de COPIADO, y el control no tenía momento (#322/#323)
+
+Misma corrida que arriba, releída por su **causa** en vez de por su clase. Los 12 verdaderos
+positivos se reparten en dos, y las dos son la misma operación:
+
+| causa | n | qué pasó materialmente |
+|---|---|---|
+| atribución movida | 6 | la frase de un paper quedó bajo el `[[bibcode]]` de otro |
+| cola alterada | 6 | el arranque coincide y el final no: se completó al re-escribir |
+
+⛔ **Ninguno es un error de comprensión.** Los 12 son errores de **mover una cadena de un archivo a
+otro** — la clase de tarea que un script hace perfecto y un LLM mal. El paso que los produce estaba
+en el propio diseño: `--filas` emitía un **esqueleto** y el sintetizador tipeaba la cita adentro.
+**Qué cambió (#322):** la fila sale con la cita ya adentro (cadena del JSON, su `[[bibcode]]`, su
+localizador, escapada con `escape_cell`); el sintetizador escribe **la glosa** y elige qué filas
+entran.
+
+**Y el control existía sin momento (#323).** `--validar` hacía exactamente la comparación decisiva,
+pero tomaba una nota por vez y **ningún skill lo nombraba**: la nota que produjo toda esta serie
+cerró con `verify-citations` completo y `lint --cierre` en 0 **con las 12 citas adentro**. La
+comparación que las cazaba en segundos estaba escrita y no se corrió, porque nada decía que había
+que correrla — *una capacidad sin momento de ejecución no es un control*. Hoy hay barrido
+(`--validar-todo`, con población declarada, no-evaluables declarados y exit ≠ 0) y los cuatro skills
+que escriben prosa citada lo corren **antes** del fan-out: el `grep` cuesta segundos y el verify son
+N subagentes leyendo PDFs (#315).
