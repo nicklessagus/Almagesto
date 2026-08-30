@@ -2088,3 +2088,26 @@ def test_unclosed_markers_nombra_la_LINEA_del_impar():
     bullets, es mandar al operador a buscar a mano lo que el detector ya sabe."""
     parrafo = "- uno con $x$\n- dos con $y$\n- tres con un $ suelto\n- cuatro"
     assert list(cfg.unclosed_markers(parrafo)) == [(1, "$", 3)]
+
+
+def test_extraction_texts_memoiza_por_boveda(toy_vault, monkeypatch):
+    """#320 — misma asimetría que #275 arregló en `_source_readings`: el chequeo corre **por cita**,
+    así que sin caché el mismo JSON de ~25 KB se lee, recorre y normaliza decenas de veces.
+    ⚠ La clave incluye el directorio: `EXTRACCION` se re-apunta, y una caché por bibcode pelado
+    devolvería la extracción de otra bóveda."""
+    (cfg.EXTRACCION / "ica").mkdir(parents=True, exist_ok=True)
+    f = cfg.EXTRACCION / "ica" / "2013Voss.json"
+    f.write_text('{"bibcode": "2013Voss", "ground_truth": [{"valor": "la frase de la fuente"}]}',
+                 encoding="utf-8")
+    lecturas = []
+    real = pathlib.Path.read_text
+
+    def contando(self, *a, **k):
+        if self.suffix == ".json":
+            lecturas.append(self.name)
+        return real(self, *a, **k)
+    monkeypatch.setattr(pathlib.Path, "read_text", contando)
+    assert "la frase de la fuente" in cfg.extraction_texts("2013Voss")[0]
+    cfg.extraction_texts("2013Voss")
+    cfg.extraction_texts("2013Voss")
+    assert lecturas.count("2013Voss.json") == 1, "el JSON se lee UNA vez por corrida"

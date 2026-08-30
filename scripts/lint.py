@@ -1300,6 +1300,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     segunda_mano_perdida: list = []    # (stem, motivo) — #279: la ficha se apoya y no lo dice
     cita_log: list = []                # (stem, motivo) — #238: cita del `log.md` que su fuente no dice
     cita_no_verbatim: list = []        # (stem, motivo) — #220: la cadena no está en el `.txt`
+    cita_inventada: list = []          # (stem, motivo) — #318: ni en el `.txt` NI en la extracción
     cita_txt_degradado: list = []      # (stem, motivo) — #288: la fuente la dice, el `.txt` la parte
     cita_opaca: list = []              # (stem, motivo) — #220: no evaluable (sin `.txt` / ocr; #275)
     verificar_pdf: list = []           # (stem, motivo) — #225: marcada para chequear contra el PDF
@@ -1729,9 +1730,13 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                     # otro — un detector que delega 54 confirmaciones manuales al PDF es un detector
                     # que se deja de leer. Lo que la extracción NO tiene y el `.txt` tampoco es
                     # justamente lo que el sintetizador inventó, y eso no admite excusa.
-                    _en_extraccion = [b for b in (_bibs_c or [])
-                                      if any(cfg.quote_found(_c, _t)
-                                             for _t in cfg.extraction_texts(b))]
+                    _extracciones = {b: cfg.extraction_texts(b) for b in (_bibs_c or [])}
+                    # #318 — «no está en la extracción» sólo significa algo si la extracción EXISTE:
+                    # una fuente off-ADS sin extraer, o una bóveda pre-#311 sin migrar, no es una
+                    # cita inventada, es un chequeo que no se pudo correr.
+                    _con_extraccion = any(_extracciones.get(b) for b in _fuentes)
+                    _en_extraccion = [b for b, _ts in _extracciones.items()
+                                      if any(cfg.quote_found(_c, _t) for _t in _ts)]
                     if _en_extraccion:
                         cita_txt_degradado.append(
                             (stem, f"L{_ln}: «{_c[:70]}{'…' if len(_c) > 70 else ''}» está en la "
@@ -1752,6 +1757,22 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                                    f"({', '.join(sorted(_fuentes))}): números de línea o columnas "
                                    f"empalmadas. La cita no se toca — confirmala en el PDF y, si "
                                    f"hace falta, re-extraé el `.txt`{_amb}"))
+                    elif _fuentes and _con_extraccion and not _amb:
+                        # #318 — el GATE que #315/#317 pidieron. Después de #315/#316 un hit acá
+                        # significa: la cita no está en el `.txt` **ni en la extracción** —la
+                        # transcripción hecha leyendo el PDF— y se probó contra SU fuente. O sea que
+                        # la fabricó el sintetizador, y una operación que fabrica una cita textual
+                        # no puede cerrar en verde. ⚠ La partición es en TRES: sin extracción en
+                        # disco el caso es **no evaluable** (backlog, abajo) y no un bloqueante
+                        # inventado —la simétrica del falso limpio que D-43 prohíbe—, y la cita
+                        # ambigua (bloque con lista de fuentes) tampoco sube: su propio mensaje ya
+                        # declara que el hallazgo es más débil (#316).
+                        cita_inventada.append(
+                            (stem, f"L{_ln}: «{_corte}» no está en el `.txt` **ni en la "
+                                   f"extracción** de {', '.join(sorted(_fuentes))} — la extracción "
+                                   f"se hizo leyendo el PDF, así que no es un `.txt` degradado: la "
+                                   f"cita se alteró al sintetizar. Copiala del JSON de extracción "
+                                   f"(`contrast.py {stem} --grep …`) o parafraseá SIN comillas"))
                     elif _fuentes:
                         cita_no_verbatim.append(
                             (stem, f"L{_ln}: «{_corte}» no está en el `.txt` de "
@@ -4123,6 +4144,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('indice_viejo', '🗂 `index.md` desactualizado contra la verdad de disco (#237, backlog)', SEV_BACKLOG, tuple(indice_viejo), poblacion='notas'),
         Categoria('radio_sin_link', '🛞 Hub que nombra un radio sin `[[wikilink]]`: el radio no entra al grafo (#235, backlog)', SEV_BACKLOG, tuple(radio_sin_link), poblacion='entidades'),
         Categoria('cita_log', '❝ Cita de `log.md` que su fuente no dice: la bitácora es append-only, se MARCA (#238, backlog)', SEV_BACKLOG, tuple(cita_log), poblacion='notas'),
+        Categoria('cita_inventada', '❝ Cita textual que NO está ni en el `.txt` ni en la EXTRACCIÓN: la fabricó el sintetizador (#318)', SEV_CIERRE, tuple(cita_inventada), poblacion='citas'),
         Categoria('cita_no_verbatim', '❝ Cita textual que no está en su fuente: no es verbatim, o es de otra (#220, backlog)', SEV_BACKLOG, tuple(cita_no_verbatim), poblacion='citas'),
         Categoria('cita_txt_degradado', '❝ Cita que la fuente SÍ dice y el `.txt` parte: el defecto es de la EXTRACCIÓN, no de la nota (#288, backlog)', SEV_BACKLOG, tuple(cita_txt_degradado), poblacion='citas'),
         Categoria('cita_opaca', '❝ Cita textual NO EVALUABLE: sin `.txt` o con OCR (#220, se declara, no cuenta en contra)', SEV_BACKLOG, tuple(cita_opaca), poblacion='citas'),

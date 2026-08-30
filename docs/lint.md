@@ -203,6 +203,14 @@ OCR, o marcar `pending`).
   **cuerpo** (un `pending_motivo` que la mencione daría falso negativo, AUD-135) y la repara
   `--restamp-headers`, que desde #277 también arregla la nota que tiene la línea del generador y
   perdió el blockquote — antes esa nota no se reparaba nunca y la categoría era incerrable.
+- ⛔ **Cita textual que NO está ni en el `.txt` ni en la EXTRACCIÓN** (#318, `--cierre`): la
+  extracción se hizo **leyendo el PDF**, así que un hit acá significa que la cita **la fabricó el
+  sintetizador** — no hay excusa de artefacto degradado. Sube a **bloqueante con `--cierre <slug>`**
+  (como los pares sin verificar): una operación que fabricó una cita textual no puede cerrar en
+  verde. ⚠ La partición es en **tres**: sin extracción en disco el caso es *no evaluable* y queda en
+  backlog —bloquear ahí sería un falso bloqueante, la simétrica de lo que D-43 prohíbe—, y la cita
+  **ambigua** (bloque con lista de fuentes, #316) tampoco sube: su mensaje ya declara que el
+  hallazgo es más débil.
 - **Cita textual entre comillas que su fuente no contiene** (#220): «esta cadena está en este
   archivo» es un `grep`, no un LLM. ⛔ **Se decide contra la EXTRACCIÓN antes que contra el `.txt`**
   (#315/#317): la extracción es la transcripción hecha **leyendo el PDF**, así que una cita que está

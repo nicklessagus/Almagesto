@@ -519,3 +519,18 @@ paper estaban bien. Es decir, falló **el único eslabón de la cadena sin herra
 procedencia, una fila = una fuente, y `--validar` cruza la nota contra las extracciones); el chequeo
 del lint decide contra la extracción antes que contra el `.txt` y prueba cada cita contra **su**
 fuente; y la regla queda escrita: *la cita se copia entera o se parafrasea sin comillas*.
+
+## 2026-08-30 · Revisión de cierre de la propia tanda (#318–#320)
+
+La otra instancia auditó el commit `789a49c` (v1.130.0) y encontró tres cosas **en el trabajo recién
+hecho**, que es exactamente para lo que sirve una revisión de cierre:
+
+| hallazgo | qué era |
+|---|---|
+| **#318** | el **gate** que #315 §2 y #317 §6 pedían con las mismas palabras quedó sin implementar: la categoría limpia seguía en backlog, así que una operación que fabricó una cita textual cerraba en verde |
+| **#319** | `s[:12] if len(s) <= 12 else s` — las dos ramas dan lo mismo: una regla a medio escribir que **ningún test podía matar**, porque no decidía nada |
+| **#320** | `extraction_texts` sin memoizar, en un chequeo que corre **por cita**: la misma asimetría que #275 arregló en la función de al lado, agravada porque esta tanda movió `_sources_for` al loop |
+
+⚠ Los tres son de la clase que el barrido de mutación **no** ve: un gate que falta, una expresión
+que no decide, y un costo. Ninguno rompe un test — y por eso hacía falta que alguien leyera el
+commit.

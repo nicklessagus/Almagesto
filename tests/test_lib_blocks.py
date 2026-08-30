@@ -1143,6 +1143,18 @@ def test_una_LISTA_de_fuentes_no_es_atribucion():
                           "la cita esta", bibs) == "2013Voss"
 
 
+def test_dos_fuentes_con_PROSA_en_el_medio_no_son_una_lista():
+    """#319 — el criterio es el regex y **no hay tope de largo**: la expresión llevaba un ternario
+    cuyas dos ramas daban lo mismo, o sea una regla a medio escribir que ningún test podía matar.
+    Lo que separa una lista de una atribución es que haya PROSA entre los dos links."""
+    bibs = ["2013Voss", "2004Davies"]
+    assert lb.quote_owner("«c» [[2013Voss]] contradice a [[2004Davies]]", "c", bibs) == "2013Voss"
+    assert lb.quote_owner("«c» [[2013Voss]] y también, con matices, [[2004Davies]]", "c",
+                          bibs) == "2013Voss"
+    assert not lb._solo_separadores(" contradice a ")
+    assert lb._solo_separadores(", ") and lb._solo_separadores(" y ")
+
+
 def test_quote_owner_no_inventa_si_la_cita_no_esta_en_el_bloque():
     """Sin la cita en el texto no hay posición desde la cual medir cercanía: se declara `None`, que
     el llamador lee como ambigüedad — nunca se elige la primera fuente por descarte."""

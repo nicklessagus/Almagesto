@@ -6265,6 +6265,70 @@ def test_la_cita_que_NO_esta_en_la_extraccion_ni_en_el_txt_SIGUE_siendo_hallazgo
     (cfg.CONCEPTS / "methods" / "ica.md").write_text(
         "---\ntags: [concept]\n---\n\n# ICA\n\nDice «which requires the noise covariance to be "
         "known» [[2013Voss]].\n", encoding="utf-8")
-    hallazgos = [m for _s, m in lint.collect().por_clave("cita_no_verbatim").items]
-    assert any("noise covariance to be known" in h for h in hallazgos), \
-        "la cita FABRICADA tiene que seguir saliendo"
+    # #318 — y sube a la categoría de CIERRE: con la extracción en disco, «no está en ninguno de los
+    # dos» significa que la fabricó el sintetizador, y eso no puede cerrar una operación en verde.
+    cat = lint.collect().por_clave("cita_inventada")
+    hallazgos = [m for _s, m in cat.items]
+    assert any("noise covariance to be known" in h and "ni en la extracción" in h
+               for h in hallazgos), "la cita FABRICADA tiene que seguir saliendo"
+    assert cat.severidad == lint.SEV_CIERRE
+
+
+def test_la_cita_inventada_BLOQUEA_el_cierre_del_sujeto(toy_vault):
+    """#318 — el gate que #315/#317 pidieron con las mismas palabras y que quedó afuera: después de
+    limpiar la categoría (la extracción como juez, la cita contra SU fuente), un hit significa que
+    la fabricó el sintetizador — y hoy una operación que fabricó una cita textual cerraba en verde.
+    Con `--cierre <slug>` sube a bloqueante, como los pares sin verificar."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "concept": "ica", "area": "methods",
+                                         "query": "q"}})
+    paper_extraido(toy_vault, "2013Voss", thesis_links=["ica"])
+    (cfg.FULLTEXT / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "ica" / "2013Voss.txt").write_text("lo que la fuente dice de verdad",
+                                                       encoding="utf-8")
+    (cfg.EXTRACCION / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.EXTRACCION / "ica" / "2013Voss.json").write_text(
+        '{"bibcode": "2013Voss", "ground_truth": [{"valor": "lo que la fuente dice de verdad"}]}',
+        encoding="utf-8")
+    (cfg.CONCEPTS / "methods").mkdir(parents=True, exist_ok=True)
+    (cfg.CONCEPTS / "methods" / "ica.md").write_text(
+        "---\ntags: [concept]\n---\n\n# ICA\n\nDice «una frase larga que la fuente nunca dijo jamás en ningún lugar» "
+        "[[2013Voss]].\n", encoding="utf-8")
+    assert lint.collect().por_clave("cita_inventada").items != ()
+    sin, con = lint.collect(cierre=False), lint.collect(cierre=True, slug="ica")
+    bloquean_sin = {c.clave for c in sin.bloquean()}
+    bloquean_con = {c.clave for c in con.bloquean()}
+    assert "cita_inventada" not in bloquean_sin, "sin --cierre es deuda visible, no un freno"
+    assert "cita_inventada" in bloquean_con, "con --cierre frena: la operación fabricó una cita"
+
+
+def test_sin_extraccion_en_disco_NO_es_una_cita_inventada(toy_vault):
+    """D-43 — «no está en la extracción» sólo significa algo si la extracción EXISTE: una fuente
+    off-ADS sin extraer, o una bóveda pre-#311 sin migrar, daría un **bloqueante inventado**, que es
+    la simétrica del falso limpio. Queda en backlog, como siempre."""
+    paper_extraido(toy_vault, "2013Voss")
+    (cfg.FULLTEXT / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "ica" / "2013Voss.txt").write_text("otra cosa", encoding="utf-8")
+    (cfg.CONCEPTS / "methods").mkdir(parents=True, exist_ok=True)
+    (cfg.CONCEPTS / "methods" / "ica.md").write_text(
+        "---\ntags: [concept]\n---\n\n# ICA\n\nDice «una frase larga que no está en ningún lado del corpus» "
+        "[[2013Voss]].\n", encoding="utf-8")
+    assert lint.collect().por_clave("cita_inventada").items == ()
+    assert lint.collect().por_clave("cita_no_verbatim").items != ()
+
+
+def test_la_cita_AMBIGUA_tampoco_sube_a_cierre(toy_vault):
+    """La tercera parte de la partición (#316): sin `[[bibcode]]` adyacente el hallazgo ya se declara
+    más débil — subirlo a bloqueante sería frenar el cierre por un dato faltante."""
+    for stem in ("2013Voss", "2004Davies"):
+        paper_extraido(toy_vault, stem)
+        (cfg.FULLTEXT / "ica").mkdir(parents=True, exist_ok=True)
+        (cfg.FULLTEXT / "ica" / f"{stem}.txt").write_text("otra cosa", encoding="utf-8")
+        (cfg.EXTRACCION / "ica").mkdir(parents=True, exist_ok=True)
+        (cfg.EXTRACCION / "ica" / f"{stem}.json").write_text(
+            '{"bibcode": "%s", "ground_truth": [{"valor": "otra cosa"}]}' % stem, encoding="utf-8")
+    (cfg.CONCEPTS / "methods").mkdir(parents=True, exist_ok=True)
+    (cfg.CONCEPTS / "methods" / "ica.md").write_text(
+        "---\ntags: [concept]\n---\n\n# ICA\n\nSegún [[2013Voss]] y [[2004Davies]], vale «una cita larga "
+        "que no lleva su bibcode adyacente en ningún lado».\n", encoding="utf-8")
+    assert lint.collect().por_clave("cita_inventada").items == ()
+    assert lint.collect().por_clave("cita_no_verbatim").items != ()

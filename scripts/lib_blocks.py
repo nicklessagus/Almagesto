@@ -425,8 +425,15 @@ _SEPARADORES = re.compile(r"^[\]\|#\w]*[\s,;/&·—-]*(?:y|e|and|,)?[\s,;/&·]*$
 
 
 def _solo_separadores(gap: str) -> bool:
-    """Is what sits between two `[[…]]` links nothing but list punctuation? (#316)"""
-    return bool(_SEPARADORES.match(gap.strip()[:12] if len(gap.strip()) <= 12 else gap.strip()))
+    """Is what sits between two `[[…]]` links nothing but list punctuation? (#316)
+
+    ⛔ The only criterion is the regex — there is **no length cap** (#319). The expression here used
+    to read `s[:12] if len(s) <= 12 else s`, whose two branches are the same string: a rule written
+    halfway, that no test could kill because it decided nothing. The cap is not reinstated because
+    the regex already refuses prose (`[[A]] contradice [[B]]` has a word between the links), and
+    where it does not, the outcome is ambiguity — a missing datum, not a finding (#316's doctrine),
+    which is the safe side."""
+    return bool(_SEPARADORES.match(gap.strip()))
 
 
 def quote_owner(text: str, quote: str, bibs: list) -> str | None:

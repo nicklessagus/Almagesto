@@ -1015,7 +1015,9 @@ el `.txt` se re-extrae.
    por paper). ⛔ **La cita se verifica contra la EXTRACCIÓN, no contra el `.txt`**
    (`contrast.py --validar <nota>`, #315/#317): la extracción es la transcripción hecha **leyendo el
    PDF**, así que «no está ahí» significa que la inventó el sintetizador y no admite la excusa del
-   índice degradado — con el `.txt` como único juez la señal era 2 de 17 y 0 de 35.
+   índice degradado — con el `.txt` como único juez la señal era 2 de 17 y 0 de 35. ⛔ **Y eso
+   BLOQUEA el cierre del sujeto (#318)**: el lint lo sube a bloqueante con `--cierre <slug>`, salvo
+   que la fuente no tenga extracción en disco (no evaluable) o la cita sea ambigua (#316).
 
 #### El CICLO DE LA LENTE — cómo se encadenan las piezas (#310)
 
@@ -1437,10 +1439,9 @@ pasada completa periódica. Es barato. Correr `python scripts/lint.py`.
 El reporte del lint es autodescriptivo (cada categoría nombra su resolución); esta sección fija las
 reglas del gate que hay que saber antes de correrlo.
 
-**Tres severidades** — bloqueante (exit ≠ 0), WARN (se revisa a mano, no frena) y backlog (deuda
-declarada; se trabaja con `maintain`). No existe "informativo" (AUD-207): lo declarado-y-resuelto
-(`no_vista` con motivo, `aliases_descartados`) se reporta **aparte** (*«visible, no es deuda»*),
-nunca mezclado con la deuda real. Y dos reglas del reporte mismo:
+**Tres severidades** — bloqueante (exit ≠ 0), WARN (se revisa a mano) y backlog (deuda declarada;
+se trabaja con `maintain`). No existe "informativo" (AUD-207): lo declarado-y-resuelto se reporta
+**aparte** (*«visible, no es deuda»*), nunca mezclado con la deuda real. Dos reglas del reporte:
 
 - **⛔ No evaluado cuenta para el exit** (D-43): un chequeo que no pudo correr (`objective.yaml`
   ilegible, sin `git`) suprime su categoría normal — un `(0)` que nadie midió se lee como veredicto,
@@ -1463,9 +1464,8 @@ curación entera — `load_decisiones` rehúsa operar y `save_registro` rehúsa 
 `Hash fuente` sin prefijo (#117) · duplicado por identidad (D-19/#229) · `inferencia` sin premisas
 (D-42) · fuente retractada citada sin la marca `⛔retractada` (D-47).
 
-**La fuga de implementación** (regla #0) es **WARN**: heurística de alta señal, cada hit se revisa a
-mano. No mira las `SECCIONES_ESTAMPADAS` (#214) — la exención no alcanza a `## Vista — <sujeto>`,
-donde una fuga sería real.
+**La fuga de implementación** (regla #0) es **WARN**: heurística de alta señal, cada hit se revisa
+a mano. No mira las `SECCIONES_ESTAMPADAS` (#214), y la exención no alcanza a `## Vista — <sujeto>`.
 
 **El cierre toma el SUJETO: `python scripts/lint.py --cierre <slug>` (R-1, #121).** Un solo detector,
 dos severidades: sin flag, los pares de verificación vencidos (D-4/D-20) y la cobertura de

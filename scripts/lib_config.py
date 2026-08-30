@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.130.0"
+ALMAGESTO_VERSION = "1.131.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -859,6 +859,14 @@ def quote_found_degraded(quote: str, source_norm: str) -> bool:
     return False
 
 
+#: #320 · caché de `extraction_texts`, por bibcode. Misma asimetría que #275 arregló en
+#: `_source_readings`: el chequeo corre **por cita**, así que sin caché el mismo JSON de ~25 KB se
+#: leía, recorría y normalizaba decenas de veces en la pasada que `CLAUDE.md` describe como barata.
+#: ⚠ La clave incluye el DIRECTORIO, no sólo el bibcode: `EXTRACCION` se re-apunta (los tests lo
+#: hacen por fixture), y una caché por bibcode pelado devolvería la extracción de otra bóveda.
+_EXTRACCION_CACHE: dict = {}
+
+
 def extraction_texts(bibcode: str) -> list:
     """Every textual field of this paper's EXTRACTIONS, normalised for quote lookup (#315/#317).
 
@@ -870,7 +878,12 @@ def extraction_texts(bibcode: str) -> list:
     decidable offline and without opening the PDF: if the quote is not in any extraction of its
     bibcode, no degraded-artefact excuse applies.
 
-    Returns the normalised readings (same shape `quote_found` expects), one per JSON on disk."""
+    Returns the normalised readings (same shape `quote_found` expects), one per JSON on disk.
+    Memoised per bibcode (#320): the check runs per QUOTE, and this is the only disk read left
+    uncached on that hot path."""
+    clave = (str(EXTRACCION), bibcode)
+    if clave in _EXTRACCION_CACHE:
+        return _EXTRACCION_CACHE[clave]
     out = []
     for f in sorted(EXTRACCION.glob(f"*/{bibcode}.json")) if EXTRACCION.exists() else []:
         try:
@@ -891,6 +904,7 @@ def extraction_texts(bibcode: str) -> list:
                     _walk(x)
         _walk(data)
         out.append(normalize_source_text(" \n ".join(trozos)))
+    _EXTRACCION_CACHE[clave] = out
     return out
 
 

@@ -152,6 +152,9 @@
 ## ❝ Cita de `log.md` que su fuente no dice: la bitácora es append-only, se MARCA (#238, backlog) (0)
 > sobre 89 notas de `vault/wiki/`
 
+## ❝ Cita textual que NO está ni en el `.txt` ni en la EXTRACCIÓN: la fabricó el sintetizador (#318) (0)
+> sobre 0 citas «…» de ≥40 caracteres con fuente chequeable
+
 ## ❝ Cita textual que no está en su fuente: no es verbatim, o es de otra (#220, backlog) (0)
 > sobre 0 citas «…» de ≥40 caracteres con fuente chequeable
 
