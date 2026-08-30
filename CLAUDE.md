@@ -2055,7 +2055,25 @@ la sección siguiente son su mecanización.
    bajaron** — una corrección no puede hacer desaparecer una afirmación citada.
 
    ⛔ **La cuarta cláusula (#203): corregir es escribir, así que el ciclo no cierra en *corregir*
-   sino en *corregir → re-verificar lo tocado*.** En la misma corrida, un corrector que **abrió la
+   sino en *corregir → re-verificar lo tocado*.** ⚠ **Y ese ciclo NO CONVERGE solo (#282).** El ancla
+   es de **bloque**, así que tocar una cláusula vence **todos** los pares de su párrafo: medido sobre
+   una ficha real en un `audit-note` completo, el subconjunto fue **63 → 76 → 78**. Cada ronda
+   produce trabajo del tamaño de la anterior. ⛔ La salida **no es aflojar el ancla** (#224: emitirla
+   por línea deja reescribir el medio de una cita sin que el par se venza, y el sub-disparo es la
+   única dirección de error prohibida): es **distinguir dos correcciones que hoy vencen igual** —
+   la que **cambia lo que la afirmación dice** (el veredicto no vale, se re-verifica) y la
+   **derivada de la propia verificación**, donde el texto nuevo son las palabras que el verificador
+   sacó de la fuente con su página (el texto quedó **más** anclado, y re-preguntarle al juez si
+   confirma su propio dictamen no es verificación). Medido: de 78 vencidos, **72 del segundo tipo**.
+   Lo emite `python scripts/reverify_subset.py <nota>` —que además es el comando que #257 pedía y no
+   existía—: reparte los pares en **re-anclables** (el veredicto se lleva, el ancla se recalcula),
+   **a re-verificar** y **filas huérfanas**, y `--json` escribe el subconjunto agrupado por fuente.
+   ⛔ **Propone y no escribe** (misma doctrina que `--drop-core`): el re-anclaje dice que la
+   afirmación sigue siendo reconociblemente la misma, **no** que la corrección haya sido fiel — quien
+   lo acepta lo declara en el bloque, con la ronda de la que viene el veredicto. El emparejamiento es
+   por **cobertura del extracto** y no Jaccard (la celda `Afirmación` está truncada por contrato,
+   #226, así que el bloque vigente casi siempre tiene MÁS texto) y **nunca cruza `bibcode`**: llevar
+   un veredicto de una fuente a otra sería fabricar la atribución que este framework más persigue. En la misma corrida, un corrector que **abrió la
    fuente** escribió igual `166 → 0` donde la Tabla I dice `166 → 17` — o sea, la corrección
    **introdujo una afirmación falsa nueva** en una nota recién verificada. Lo cazó el **ancla**, que
    se venció al reescribir el bloque, y por lo tanto **de rebote**: si la edición no hubiera movido

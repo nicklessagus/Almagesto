@@ -602,3 +602,131 @@ def test_verif_summary_publica_los_no_verificables_y_separa_el_eje_de_condicion(
                               _row("no verificable por extracción")])
     assert "1 no verificables" in linea, "el cuarto veredicto no se publica"
     assert "— 1 con condición declarada" in linea, "el eje ortogonal no se separa"
+
+
+# ── #282 · re-anclaje: llevar el veredicto en vez de tirarlo ─────────────────────────────────────
+
+
+def _fila(n, claim, bib, veredicto="soportada", ancla="a" * 10):
+    return lb.Row(n=n, claim=claim, bibcode=bib, verdict=veredicto, evidence="e",
+                  anchor=ancla, source_hash="pdf:" + "b" * 10, condition="")
+
+
+def test_claim_tokens_ignora_markup_y_wikilinks():
+    """#282 — el emparejamiento no puede depender del énfasis ni de los links.
+
+    Los `[[wikilink]]` se sacan porque **no discriminan**: están en todos los pares de la misma
+    fuente. Y el markup se ignora por construcción (sólo entran letras y dígitos), que es la lección
+    que #168 y #276 ya pagaron dos veces con detectores ciegos al adorno."""
+    a = lb.claim_tokens("El **período** de [[2016A&A...585A.134D]] es 47,9 d")
+    b = lb.claim_tokens("El periodo de [[otro]] es 47,9 d")
+    assert "47,9" in a and "período" in a
+    assert not any("2016" in t for t in a), "el wikilink entró como token"
+    assert a & b, "el adorno rompió el emparejamiento"
+
+
+def test_match_prioriza_el_ancla_intacta_sobre_el_parecido():
+    """El par que nadie tocó se queda con SU fila, aunque otra se le parezca más.
+
+    Sin esta prioridad, una fila ajena con más solapamiento podía robarle la suya a un par intacto y
+    dejarlo `sin_fila` — o sea inventar trabajo de re-verificación sobre algo que no cambió."""
+    body = "El período orbital medido resulta ser 4,3115 días exactos.\n\n[[2020aaa...1..1A]]\n"
+    pares = lb.pairs_of("## X\n\nEl período orbital medido resulta ser 4,3115 días "
+                        "exactos [[2020aaa...1..1A]].\n")
+    assert len(pares) == 1
+    suya = _fila("1", "El período orbital medido resulta ser 4,3115 días exactos",
+                "2020aaa...1..1A", ancla=pares[0].anchor)
+    parecida = _fila("2", "El período orbital medido resulta ser 4,3115 días exactos y algo más",
+                    "2020aaa...1..1A", ancla="zzzzzzzzzz")
+    asign, sin_fila, huerf = lb.match_rows_to_pairs(pares, [parecida, suya])
+    assert asign[pares[0]][0] is suya, "no ganó el ancla intacta"
+    assert sin_fila == [] and huerf == [parecida]
+
+
+def test_match_no_cruza_bibcodes():
+    """⛔ Un par es (afirmación, FUENTE). Llevar un veredicto de una fuente a otra sería fabricar
+    justamente la atribución que este framework mide como su modo de falla dominante — 7 de 13
+    defectos de una operación real."""
+    pares = lb.pairs_of("## X\n\nLa amplitud vale 0,50 metros por segundo [[2020aaa...1..1A]].\n")
+    ajena = _fila("1", "La amplitud vale 0,50 metros por segundo", "2021bbb...2..2B")
+    asign, sin_fila, huerf = lb.match_rows_to_pairs(pares, [ajena])
+    assert asign == {} and sin_fila == pares and huerf == [ajena], \
+        "llevó el veredicto de otra fuente"
+
+
+def test_match_lleva_el_veredicto_cuando_el_extracto_sobrevive():
+    """El caso que motiva #282: la corrección **agrega** una salvedad que el propio verificador
+    aportó, así que el extracto de la fila sigue entero dentro del bloque nuevo. El ancla se movió;
+    el veredicto vale."""
+    pares = lb.pairs_of("## X\n\nLa amplitud rotacional vale 0,50 metros por segundo, medida "
+                        "después de restar las señales planetarias [[2020aaa...1..1A]].\n")
+    fila = _fila("1", "La amplitud rotacional vale 0,50 metros por segundo", "2020aaa...1..1A")
+    asign, sin_fila, _ = lb.match_rows_to_pairs(pares, [fila])
+    assert sin_fila == [] and asign[pares[0]][0] is fila
+    assert asign[pares[0]][1] == 1.0, "el extracto sobrevive entero: cobertura 1,0"
+
+
+def test_match_no_lleva_el_veredicto_cuando_la_afirmacion_cambio():
+    """La otra mitad, y es la que protege: si la corrección **cambió lo que la afirmación dice**, el
+    veredicto no vale y el par va al subconjunto. Cobertura, no Jaccard: el extracto está truncado
+    por contrato (#226), así que el bloque vigente casi siempre tiene MÁS texto."""
+    pares = lb.pairs_of("## X\n\nNinguna fuente aplica separación ciega de componentes "
+                        "independientes [[2020aaa...1..1A]].\n")
+    fila = _fila("1", "La amplitud rotacional vale 0,50 metros por segundo medida sobre diez años",
+                "2020aaa...1..1A")
+    asign, sin_fila, huerf = lb.match_rows_to_pairs(pares, [fila])
+    assert asign == {} and sin_fila == pares and huerf == [fila]
+
+
+def test_match_el_ancla_intacta_gana_aunque_otra_fila_calce_mejor():
+    """Aísla la prioridad del ancla: la fila propia puede tener PEOR cobertura que una ajena —su
+    extracto quedó viejo, o trae texto que la corrección sacó— y aun así es la suya. Sin la
+    prioridad, una fila con menos texto (y por eso cobertura trivialmente alta) se la roba."""
+    pares = lb.pairs_of("## X\n\nLa amplitud rotacional vale cero coma cincuenta "
+                        "[[2020aaa...1..1A]].\n")
+    suya = _fila("1", "La amplitud rotacional vale cero coma cincuenta pero además la "
+                      "excentricidad resulta francamente despreciable",
+                 "2020aaa...1..1A", ancla=pares[0].anchor)
+    corta = _fila("2", "amplitud rotacional", "2020aaa...1..1A", ancla="zzzzzzzzzz")
+    asign, sin_fila, huerf = lb.match_rows_to_pairs(pares, [corta, suya])
+    assert asign[pares[0]][0] is suya, "una fila ajena con menos texto le robó la suya"
+    assert huerf == [corta] and sin_fila == []
+
+
+def test_match_no_reusa_una_fila_para_dos_pares():
+    """Cada fila se consume una vez. Sin la guarda, una sola fila certificaría **dos** afirmaciones
+    distintas — que es exactamente la certificación fabricada que el bloque existe para no producir.
+    """
+    pares = lb.pairs_of("## X\n\nLa amplitud rotacional vale cero coma cincuenta "
+                        "[[2020aaa...1..1A]].\n\nLa amplitud rotacional vale cero coma cincuenta "
+                        "también acá [[2020aaa...1..1A]].\n")
+    assert len(pares) == 2
+    una = _fila("1", "La amplitud rotacional vale cero coma cincuenta", "2020aaa...1..1A")
+    asign, sin_fila, huerf = lb.match_rows_to_pairs(pares, [una])
+    assert len(asign) == 1 and len(sin_fila) == 1, "la misma fila cubrió dos pares"
+    assert huerf == []
+
+
+def test_match_respeta_el_umbral_con_solapamiento_parcial():
+    """Aísla el umbral: una fila que solapa **algo** pero no lo suficiente NO lleva su veredicto.
+    Es la mitad que protege — sin ella, cualquier parecido remoto arrastraría una certificación."""
+    pares = lb.pairs_of("## X\n\nLa amplitud rotacional vale cero coma cincuenta metros "
+                        "[[2020aaa...1..1A]].\n")
+    parcial = _fila("1", "amplitud rotacional pero además excentricidad francamente despreciable "
+                         "sobre diez temporadas consecutivas", "2020aaa...1..1A")
+    asign, sin_fila, _ = lb.match_rows_to_pairs(pares, [parcial], umbral=0.60)
+    assert asign == {} and sin_fila == pares, "llevó el veredicto por un parecido remoto"
+    # y con el umbral bajo, la misma fila sí califica: el corte es el parámetro, no un accidente
+    asign2, sin_fila2, _ = lb.match_rows_to_pairs(pares, [parcial], umbral=0.15)
+    assert sin_fila2 == [] and asign2[pares[0]][0] is parcial
+
+
+def test_match_con_umbral_cero_no_inventa_una_fila_donde_no_hay():
+    """La guarda `mejor is not None` sólo se distingue en el borde, y el borde es una llamada
+    legítima: `umbral=0` significa «aceptá cualquier parecido». Ahí `score >= umbral` es cierto
+    **siempre**, así que sin la guarda un par sin ninguna fila candidata se asignaría a `None` — o
+    sea una fila inventada, que es peor que ninguna."""
+    pares = lb.pairs_of("## X\n\nLa amplitud rotacional vale cero coma cincuenta "
+                        "[[2020aaa...1..1A]].\n")
+    asign, sin_fila, huerf = lb.match_rows_to_pairs(pares, [], umbral=0.0)
+    assert asign == {} and sin_fila == pares and huerf == []

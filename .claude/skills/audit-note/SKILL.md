@@ -235,6 +235,30 @@ A escala, las correcciones **no se aplican a mano**: `python scripts/apply_fixes
 sin verificar —el ancla se movió— y toda cita que la corrección haya agregado es un **par nuevo**:
 correr `verify-citations` sobre **ese subconjunto**. No sobre la nota entera: sobre lo que cambió.
 
+⛔ **El subconjunto lo emite un comando, no se arma a ojo:**
+
+```bash
+python scripts/reverify_subset.py <nota> --json build/<slug>/reverif.json
+```
+
+Reparte los pares en tres: **re-anclables**, **a re-verificar** y **filas huérfanas**.
+
+⚠ **Y esperá que sea grande.** El ancla es de **bloque**, así que tocar una cláusula vence **todos**
+los pares de su párrafo: medido en un `audit-note` real, el 55–60 % de la nota. Peor, el ciclo **no
+converge solo** — 63 → 76 → 78 en tres rondas (#282). Por eso el comando separa dos correcciones que
+vencen igual y no son lo mismo:
+
+- la que **cambia lo que la afirmación dice** → el veredicto no vale, va al fan-out;
+- la **derivada de la propia verificación** —el texto nuevo son las palabras que el verificador sacó
+  de la fuente, con su página— → el texto quedó **más** anclado, y re-preguntarle al juez si confirma
+  su propio dictamen no es verificación. Se **re-ancla**: el veredicto se lleva, el ancla se
+  recalcula. Medido: de 78 vencidos, **72 de este tipo**.
+
+⛔ El re-anclaje es una **propuesta**: dice que la afirmación sigue siendo reconociblemente la misma,
+**no** que la corrección haya sido fiel. Quien lo acepta **lo declara en el bloque** — de qué ronda
+viene el veredicto, y que el texto es posterior a la corrección. Sin esa línea, el bloque afirma una
+frescura que no tiene.
+
 ### 5. Cerrar
 
 ```bash

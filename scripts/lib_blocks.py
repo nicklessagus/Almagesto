@@ -641,3 +641,82 @@ def parse_verif_table(text: str) -> list[Row] | None:
         out.append(Row(celdas[i_n], celdas[i_claim], bibs[0], celdas[i_verd],
                        celdas[i_ancla], h, celdas[i_cond], kind, evid))
     return out
+
+
+# ── #282 · re-anclaje: qué se re-verifica y qué sólo cambió de ancla ─────────────────────────────
+#
+# El ciclo de #203 —corregir → re-verificar— **no converge** con el ancla a nivel de bloque: tocar
+# una cláusula vence TODOS los pares de su párrafo, así que cada ronda produce un subconjunto del
+# tamaño de la anterior. Medido sobre una ficha real en un `audit-note` completo: **63 → 76 → 78**.
+#
+# Lo que faltaba no era otra ronda: era distinguir dos cosas que hoy vencen igual.
+#   · la corrección que **cambia lo que la afirmación dice** → el veredicto no vale más, se re-verifica;
+#   · la corrección **derivada de la propia verificación** —el texto nuevo son las palabras que el
+#     verificador sacó de la fuente, con su página— → el texto quedó MÁS anclado que antes, y
+#     re-preguntarle al juez si confirma su propio dictamen no es verificación.
+# Medido en la misma pasada: de 78 pares vencidos, **72 eran del segundo tipo**.
+#
+# ⛔ Esto NO afloja el ancla (#224: emitir por línea deja reescribir el medio de una cita sin que el
+# par se venza, y el sub-disparo es la única dirección de error que el módulo prohíbe). El ancla
+# sigue siendo de bloque; lo que se agrega es **saber a qué fila corresponde cada par después de
+# editar**, para poder llevar el veredicto en vez de tirarlo.
+
+_LINK_FULL_RE = re.compile(r"\[\[[^\]]*\]\]")   # el wikilink ENTERO: acá se borra, no se captura
+_PALABRA_RE = re.compile(r"[^\W\d_]{4,}|\d+[\d.,]*", re.UNICODE)
+
+
+def claim_tokens(text: str) -> set:
+    """Comparable tokens of a claim: words of 4+ letters, plus numbers.
+
+    `[[wikilink]]`s are dropped —they do not discriminate, every pair of the same source carries
+    them— and markup is ignored by construction (the regex only takes letters and digits), so
+    **emphasis and punctuation cannot move the result**: the lesson of #168 and #276, where two
+    detectors turned out blind to the adornment."""
+    return set(_PALABRA_RE.findall(_LINK_FULL_RE.sub(" ", text or "").casefold()))
+
+
+def match_rows_to_pairs(pairs: list, rows: list, umbral: float = 0.60) -> tuple:
+    """Match the body's pairs against the block's rows. `(assigned, unmatched, orphans)`.
+
+    Two routes, in order: **identical anchor** (the pair was not touched) and, failing that,
+    **coverage of the row's extract by the current block** — what fraction of what the row claims to
+    have verified is still in the text. Coverage rather than Jaccard, deliberately: the `Afirmación`
+    cell is truncated by contract (#226 allows cutting **only** that column), so the current block
+    almost always holds MORE text than the extract, and Jaccard would penalise precisely the pair
+    that survived best.
+
+    ⛔ Matching happens **within one `bibcode` only**: a pair is (claim, source), and carrying a
+    verdict across sources would fabricate the very misattribution this framework measures as its
+    dominant failure mode. Each row is consumed once.
+
+    ⚠ **It decides nothing**: it returns the pairing. Who writes it, and with what declaration, is
+    the caller's business — same doctrine as `--drop-core`, which records and proposes (#212).
+    """
+    por_bib: dict = {}
+    for r in rows:
+        por_bib.setdefault(r.bibcode, []).append(r)
+    usadas, asignado, sin_fila = set(), {}, []
+    # primero las anclas intactas, para que un par sin tocar no se quede sin su propia fila
+    pendientes = []
+    for p in pairs:
+        exacta = next((r for r in por_bib.get(p.bibcode, [])
+                       if r.anchor == p.anchor and id(r) not in usadas), None)
+        if exacta is not None:
+            asignado[p] = (exacta, 1.0); usadas.add(id(exacta))
+        else:
+            pendientes.append(p)
+    for p in pendientes:
+        cur = claim_tokens(p.block.text)
+        mejor, score = None, 0.0
+        for r in por_bib.get(p.bibcode, []):
+            if id(r) in usadas:
+                continue
+            q = claim_tokens(r.claim)
+            s = len(cur & q) / len(q) if q else 0.0
+            if s > score:
+                mejor, score = r, s
+        if mejor is not None and score >= umbral:
+            asignado[p] = (mejor, score); usadas.add(id(mejor))
+        else:
+            sin_fila.append(p)
+    return asignado, sin_fila, [r for r in rows if id(r) not in usadas]
