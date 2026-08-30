@@ -1542,7 +1542,7 @@ tres techos **sólo bajan** y ninguno es un rojo: son deuda anterior a la conven
 fuera de la lista `conocidos` pone el test en rojo aunque el total no suba (impide que la deuda
 rote). Los números los dan las funciones del test, no esta prosa.
 
-## Al escribir código: las ocho redes (regla permanente)
+## Al escribir código: las nueve redes (regla permanente)
 
 Toda función nueva de `scripts/` pasa por esto **antes de cerrar el issue**; la 6 rige también para
 los scripts de una sola operación. Detalle y ratchets en `tests/README.md`; el resumen operativo:
@@ -1561,13 +1561,10 @@ los scripts de una sola operación. Detalle y ratchets en `tests/README.md`; el 
      inventado). ⚠ Es el único modo que chequea la **baseline**: con el archivo de tests en rojo,
      toda guarda «muere» por el motivo equivocado (#202) → sale **no evaluado** (rc 2), no un verde.
    - **Barrido** (`--diff` / `--todo --ratchet`) — corre en **dos etapas** (#187: primero
-     `tests/test_<módulo>.py`, sólo los sobrevivientes pagan la suite; el conjunto de sobrevivientes
-     no cambia). Medido en v1.75.0: `--todo` = **11,3 min / 464 funciones** — con ese número la
-     prohibición histórica perdió su motivo. **Cadencia: a pedido, y recomendado al cerrar una
-     tanda**, con el árbol **quieto** (#199: el barrido copia el repo al arrancar; si seguís
-     editando, su resultado describe un árbol que ya no existe). Un lote con roles separados
-     (spec → tests → implementación, `docs/playbook-spec-tests.md`) no necesita el gate en su tanda:
-     ahí el defecto se previene, no se detecta.
+     `tests/test_<módulo>.py`, sólo los sobrevivientes pagan la suite). Medido: `--todo` = **11,3
+     min / 464 funciones**. **Cadencia: a pedido, y recomendado al cerrar una tanda**, con el árbol
+     **quieto** (#199: el barrido copia el repo al arrancar; si seguís editando, su resultado
+     describe un árbol que ya no existe).
 2. **Schema compartido** — si N módulos prometen la misma forma, se prueba **una vez parametrizada**
    (`tests/test_backends_schema.py`), no con prosa en N docstrings.
 3. **Doble vs real** — un doble de test no se escribe a ojo: o deriva de la función real, o hay un
@@ -1589,14 +1586,17 @@ los scripts de una sola operación. Detalle y ratchets en `tests/README.md`; el 
    centinelas (`<!-- almagesto:… -->`) y lo de afuera no se toca (`make_notes._reemplazar_seccion`
    ya lo hace).
 7. **Idioma** — `pytest tests/test_idioma_codigo.py` (ver arriba).
-8. **Atribución del mapa** — `python tools/mutar.py --trazabilidad` (AUD-212, ~20 min): vacía cada
+8. **Condicional que no decide nada** — `tests/test_codigo_muerto.py` (#319): el ternario cuyas dos
+   ramas valen lo mismo es una regla escrita a medias, y **ningún otro gate la ve** (no cambia
+   comportamiento, así que no hay test que matar). Se encontró leyendo un commit; ahora es un
+   assert.
+9. **Atribución del mapa** — `python tools/mutar.py --trazabilidad` (AUD-212, ~20 min): vacía cada
    implementación marcada `@inv` y corre **sólo el test marcado**; si pasa, esa fila de
-   `docs/trazabilidad.md` afirma una cobertura que no existe (primera corrida: 20 atribuciones
-   falsas sobre 143 filas). ⚠ Sobre-reporta y nunca da falso limpio; la salida ante un
-   sobreviviente por coincidencia es marcar un test que ejerza la rama verdadera, no aflojar el
-   gate.
+   `docs/trazabilidad.md` afirma una cobertura que no existe (20 atribuciones falsas sobre 143 en la
+   primera corrida). ⚠ Sobre-reporta y nunca da falso limpio: ante un sobreviviente por
+   coincidencia se marca un test que ejerza la rama verdadera, no se afloja el gate.
 
-Las 2, 5 y 7 corren solas en tier 0; la 1 y la 8 son a pedido (cuestan minutos). El motivo de la
+Las 2, 5, 7 y 8 corren solas en tier 0; la 1 y la 9 son a pedido (cuestan minutos). El motivo de la
 regla: en la sesión que la produjo, los bugs los encontraron agentes leyendo el código, no la suite
 — y cada hallazgo era decidible, o sea que podría haber sido un assert.
 

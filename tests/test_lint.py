@@ -3029,6 +3029,13 @@ def test_la_severidad_se_declara_una_sola_vez(toy_vault):
             incoherentes.append(f"{c.clave}: SEV_WARN pero el título no lo dice")
         if c.severidad == lint.SEV_BACKLOG and dice_warn:
             incoherentes.append(f"{c.clave}: SEV_BACKLOG con título de WARN")
+        # #318 — la cuarta severidad entraba por la puerta de atrás: `SEV_CIERRE` no se miraba acá,
+        # así que una categoría podía anunciarse como freno del cierre y no serlo (o al revés). El
+        # gate de #318 quedó fuera de su tanda justamente por vivir en ese punto ciego.
+        if c.severidad == lint.SEV_CIERRE and "cierre" not in c.titulo:
+            incoherentes.append(f"{c.clave}: SEV_CIERRE y el título no dice que frena el cierre")
+        if "--cierre" in c.titulo and c.severidad != lint.SEV_CIERRE:
+            incoherentes.append(f"{c.clave}: el título promete frenar el cierre y no lo hace")
     assert incoherentes == [], "\n  ".join(incoherentes)
 
 

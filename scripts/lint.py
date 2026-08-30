@@ -4144,7 +4144,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('indice_viejo', '🗂 `index.md` desactualizado contra la verdad de disco (#237, backlog)', SEV_BACKLOG, tuple(indice_viejo), poblacion='notas'),
         Categoria('radio_sin_link', '🛞 Hub que nombra un radio sin `[[wikilink]]`: el radio no entra al grafo (#235, backlog)', SEV_BACKLOG, tuple(radio_sin_link), poblacion='entidades'),
         Categoria('cita_log', '❝ Cita de `log.md` que su fuente no dice: la bitácora es append-only, se MARCA (#238, backlog)', SEV_BACKLOG, tuple(cita_log), poblacion='notas'),
-        Categoria('cita_inventada', '❝ Cita textual que NO está ni en el `.txt` ni en la EXTRACCIÓN: la fabricó el sintetizador (#318)', SEV_CIERRE, tuple(cita_inventada), poblacion='citas'),
+        Categoria('cita_inventada', '❝ Cita textual que NO está ni en el `.txt` ni en la EXTRACCIÓN: la fabricó el sintetizador (#318, BLOQUEA con `--cierre`)', SEV_CIERRE, tuple(cita_inventada), poblacion='citas'),
         Categoria('cita_no_verbatim', '❝ Cita textual que no está en su fuente: no es verbatim, o es de otra (#220, backlog)', SEV_BACKLOG, tuple(cita_no_verbatim), poblacion='citas'),
         Categoria('cita_txt_degradado', '❝ Cita que la fuente SÍ dice y el `.txt` parte: el defecto es de la EXTRACCIÓN, no de la nota (#288, backlog)', SEV_BACKLOG, tuple(cita_txt_degradado), poblacion='citas'),
         Categoria('cita_opaca', '❝ Cita textual NO EVALUABLE: sin `.txt` o con OCR (#220, se declara, no cuenta en contra)', SEV_BACKLOG, tuple(cita_opaca), poblacion='citas'),
