@@ -179,7 +179,23 @@ _LOC_LINEA = re.compile(r"\bL\s?\d+\b")                  # `L320`, `L 320`
 #: ⚠ Salvedad honesta: la clasificación es en sí misma un juicio, así que hereda parte del problema
 #: que la eliminación de `parcial` atacó (1.39.0). La diferencia es que acá el juicio tiene un test
 #: operativo —**¿la afirmación queda falsa si se saca la condición?**— que `parcial` nunca tuvo.
+#: #276/#280 · la marca `(inferencia de [[b1]], [[b2]])` en prosa. Vive acá porque la cuentan DOS
+#: consumidores: el bloqueante del lint (`inferencias_sin_premisas`, INV-86) y el conteo que la
+#: sub-sección del bloque publica. El `[`*_~]*` no es cosmético: sin él la marca es ciega al énfasis
+#: markdown y el detector veía 2 de 5 (#276).
+INFER_MARK = re.compile(r"\(\s*[`*_~]*\s*inferencia(?![^\W_])(?:[^()]|\([^()]*\))*\)", re.I)
+
+
+def inference_marks(prose: str) -> list:
+    """Every `(inferencia …)` mark in the prose, adornment and all (#280)."""
+    return [m.group(0) for m in INFER_MARK.finditer(prose or "")]
+
+
 CONDITION_KINDS = ("acota", "contextualiza")
+
+#: #280 · la resolución de una condición `acota`, anotada en la MISMA celda y con la misma notación
+#: que el veredicto de al lado (#232: la segunda ronda ANOTA, no pisa): `acota→resuelta: <dónde>`.
+CONDITION_RESOLUTIONS = ("resuelta",)
 
 # Lo que separa la clase de la condición de su prosa. Mismo problema que `_RESOLUCION_SEP` en la
 # columna de al lado, más el guión suelto: la celda se escribe `acota: …` en la plantilla y
@@ -204,6 +220,19 @@ def condition_kind(condicion: str) -> str | None:
     # lint, no una promesa P0/P1 del contrato — la red es el test de paridad con `verdict_valido`.)
     cabeza = _COND_SEP.split(str(condicion or "").strip().lower(), maxsplit=1)[0].strip(_ADORNO).strip()
     return cabeza if cabeza in CONDITION_KINDS else None
+
+
+def condition_resolved(condicion: str) -> bool:
+    """Does this condition cell record that its `acota` was already resolved? (#280)
+
+    ⛔ It does NOT reuse `resueltos()`: there, anything after the separator means «resolved», and in
+    a condition cell what follows the separator is **the condition's own prose** — every cell would
+    come back resolved. The token right after the first separator must be one of
+    `CONDITION_RESOLUTIONS`, whole (the lesson of #276: `resueltamente` is not `resuelta`)."""
+    partes = _COND_SEP.split(str(condicion or "").strip().lower(), maxsplit=2)
+    if len(partes) < 2:
+        return False
+    return partes[1].strip(_ADORNO).strip() in CONDITION_RESOLUTIONS
 
 
 def locator_kinds(evidencia: str) -> set:
@@ -571,8 +600,17 @@ def verif_counts(rows: list) -> dict:
             # notación de una sola flecha no podía registrar. Medido: una nota de 8 rondas emitió 13
             # veredictos malos y publicó 11.
             "cadenas": sum(1 for r in rows if len(verdict_chain(r.verdict)) > 1),
-            "con_condicion": sum(1 for r in rows
-                                 if str(r.condition or "").strip() not in ("", "—", "-", "–"))}
+            # #280 — la condición, desglosada por CLASE. Los tres particionan `con_condicion`, que
+            # es lo que hace chequeable el conteo que la sub-sección publica: escrito a mano deriva
+            # (medido: «las 20 marcadas `acota`» sobre una tabla que tenía 3).
+            "cond_acota": sum(1 for r in rows if condition_kind(r.condition) == "acota"),
+            "cond_acota_resueltas": sum(1 for r in rows if condition_kind(r.condition) == "acota"
+                                        and condition_resolved(r.condition)),
+            "cond_contextualiza": sum(1 for r in rows
+                                      if condition_kind(r.condition) == "contextualiza"),
+            "con_condicion": (_cc := sum(1 for r in rows
+                                         if str(r.condition or "").strip() not in ("", "—", "-", "–"))),
+            "cond_sin_clase": _cc - sum(1 for r in rows if condition_kind(r.condition))}
 
 
 def verif_summary(rows: list) -> str:
@@ -591,6 +629,29 @@ def verif_summary(rows: list) -> str:
             f"/ {c['no_verificables']} no verificables "
             f"— {c['con_condicion']} con condición declarada"
             + (f" · {c['cadenas']} con más de una ronda" if c["cadenas"] else ""))
+
+
+def verif_subsection_lines(rows: list, prose: str) -> dict:
+    """The generated count fragment for each of the three sub-sections, or `None` (#280).
+
+    INV-81 one level down: the header's numbers come from the same code that reads the table, and
+    the three sub-sections were left as free prose — so they drifted. Measured on a real note:
+    «las 20 marcadas `acota`» over a table holding **3**, and «cinco inferencias» over **six** marks
+    in the body, with one item too many and one missing.
+
+    ⛔ `Omisiones en transcripciones` maps to `None` on purpose: completeness is the judgement half
+    of the fan-out and nothing in the table encodes it. Emitting a number there would be the
+    invented zero D-43 forbids.
+
+    ⚠ `prose` must be the note's prose **without stamped sections** (`cfg.solo_prosa`): the
+    sub-section itself enumerates the marks, and counting them there counts them twice."""
+    c = verif_counts(rows)
+    return {"Inferencias declaradas": f"— {len(inference_marks(prose))} marcas en el cuerpo",
+            "Omisiones en transcripciones": None,
+            "Condiciones perdidas": (f"— {c['con_condicion']} con condición: {c['cond_acota']} "
+                                     f"`acota` ({c['cond_acota_resueltas']} resueltas) / "
+                                     f"{c['cond_contextualiza']} `contextualiza` / "
+                                     f"{c['cond_sin_clase']} sin clasificar")}
 
 
 def parse_verif_table(text: str) -> list[Row] | None:

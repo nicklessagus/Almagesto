@@ -810,7 +810,7 @@ PROT_NEG = re.compile(r"(?i)no se conoce|no se sabe|sin medir|desconocid|no hay 
 # inferencia, sin mirar el 60 % de su población. Es #168 otra vez: `lib_blocks._ADORNO` existe
 # exactamente por esto («no cambian NADA de lo que la fila dice, pero con la comparación
 # literal cualquiera de los tres apagaba el bloqueante») y la comprensión no había llegado acá.
-INFER_MARK = re.compile(r"\(\s*[`*_~]*\s*inferencia(?![^\W_])(?:[^()]|\([^()]*\))*\)", re.I)
+INFER_MARK = lb.INFER_MARK      # #280: una sola definición, en `lib_blocks` (la cuentan dos consumidores)
 
 
 def inferencias_sin_premisas(body: str) -> list[str]:
@@ -824,9 +824,9 @@ def inferencias_sin_premisas(body: str) -> list[str]:
     era `"[[" not in ...`, así que `(inferencia de [[gp-kernels]])` —un link a una nota de
     concepto— pasaba limpia: el verify no tiene ahí ningún `.txt` que leer, que es justo lo que la
     marca promete. `BIBCODE_RE` es la misma heurística que usa el barrido de citas.  @inv INV-86"""
-    return [m.group(0) for m in INFER_MARK.finditer(body)
+    return [m for m in lb.inference_marks(body)
             if not any(BIBCODE_RE.match(t.split("|")[0].split("#")[0].strip())
-                       for t in re.findall(r"\[\[([^\]]+)\]\]", m.group(0)))]
+                       for t in re.findall(r"\[\[([^\]]+)\]\]", m))]
 
 
 def prot_documentado(body: str) -> bool:
@@ -2421,6 +2421,18 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             verif_estructura.append(
                 (stem, f"la cabecera del bloque no publica «{len(filas)} pares» (la tabla tiene "
                        f"{len(filas)} filas) → línea canónica: «{_resumen}»"))
+
+        # #280 — y el conteo de cada SUB-SECCIÓN, por el mismo argumento (INV-81) un nivel abajo.
+        # Se compara por FRAGMENTO verbatim, como el `N pares` de arriba: parsear el primer entero
+        # de la prosa erraría justo en el caso medido, donde la frase tiene dos números y el malo es
+        # el segundo. Sólo se chequea la sub-sección PRESENTE: la ausente ya la reporta `_falt`, y
+        # duplicar el hallazgo manda a hacer dos veces el mismo trabajo.
+        _frags = lb.verif_subsection_lines(filas, cfg.solo_prosa(body_full))
+        for _sub, _frag in _frags.items():
+            if _frag and _sub in texto and _frag not in texto:
+                verif_estructura.append(
+                    (stem, f"la sub-sección «{_sub}» no publica el conteo que su propia tabla da → "
+                           f"línea canónica: «{_sub} {_frag}: …»"))
 
         pendientes = lb.pairs_of(texto)
         for fila in filas:

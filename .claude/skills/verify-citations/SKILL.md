@@ -367,7 +367,13 @@ final —las tres arregladas en la prosa, y nadie que abra la nota puede saber q
 sus afirmaciones decían lo contrario de su fuente—. La celda se escribe `contradice→corregida`, que
 es la notación que la plantilla de acá ya publica y la que `lib_blocks.resueltos()` sabe leer.
 Y la cabecera se **genera**, no se escribe: `lib_blocks.verif_summary(filas)` da la línea con los
-cuatro conteos (INV-81 — el encabezado y sus filas salen del mismo código).
+cuatro conteos (INV-81 — el encabezado y sus filas salen del mismo código). ⛔ **Y los conteos de
+las tres sub-secciones también** (#280): `lib_blocks.verif_subsection_lines(filas, prosa)`. A mano
+derivan — medido, «las 20 marcadas `acota`» sobre una tabla que tenía **3**, y «cinco inferencias»
+sobre **seis** marcas del cuerpo. *Omisiones en transcripciones* **no lleva número generado**: la
+completitud es la mitad de juicio del fan-out y no está en la tabla, así que un número ahí sería
+inventado. Y la condición `acota` ya resuelta se anota en su celda: `acota→resuelta: <dónde>`,
+misma notación que el veredicto de al lado (#232: la segunda ronda anota, no pisa).
 
 ⛔ **Corregir es ESCRIBIR, y lo escrito se verifica: la operación cierra en corregir → RE-VERIFICAR
 lo tocado (#203).** No cierra en *corregir*. Después de aplicar, los pares que tocaste están **sin
@@ -424,12 +430,11 @@ Chequeo afirmación↔fulltext (skill `verify-citations`). N pares; X soportadas
 | 3 | señal g confirmada | [[2016A&A...585A.134D]] | contradice→disputa | "is an artifact of... rotation" (L2101) → tagueada en disputes[] | 90bb4c1de7 | txt:0ab77e2c41 | — |
 | 4 | P_rot = 36,5 d | [[2017MNRAS.468.4772S]] | soportada | "36.5 ± 2.3" (L320) | 5c1de790bb | txt:41c0ab772e | contextualiza: promedio pesado de 4 proxies; el K de 0,50 m/s es de la señal a 35,0 d, no a 36,5 |
 
-Inferencias declaradas (sin cita, por diseño): <listar>.
+Inferencias declaradas (sin cita, por diseño) — 6 marcas en el cuerpo: <listar las 6>.
 
 Omisiones en transcripciones: <tabla/lista, qué faltaba, cómo se resolvió> — o "ninguna".
 
-Condiciones perdidas (afirmaciones sobre-generalizadas): <afirmación, condición que el paper le pone,
-cómo se resolvió — en un concepto, fila de `## Régimen de validez`> — o "ninguna".
+Condiciones perdidas (afirmaciones sobre-generalizadas) — 88 con condición: 3 `acota` (3 resueltas) / 75 `contextualiza` / 10 sin clasificar: <las `acota` y cómo se resolvió cada una>.
 ```
 Convertir fechas relativas a absolutas. Notación `$...$` en archivos `vault/wiki/` (texto plano en chat).
 

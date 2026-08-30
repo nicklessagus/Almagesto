@@ -720,6 +720,41 @@ def test_paridad_de_adorno_entre_las_dos_columnas_de_la_misma_fila():
         assert lb.condition_kind(forma.format("acota") + " — X") == "acota", forma
 
 
+# ── #280 · los conteos de las tres sub-secciones también se generan ──────────────────────────────
+
+
+def test_verif_counts_particiona_las_condiciones():
+    """Las tres clases suman `con_condicion`: es lo que hace chequeable el conteo publicado."""
+    filas = [_row("soportada", "acota: X"), _row("soportada", "**contextualiza** — Y"),
+             _row("soportada", "prosa sin clase"), _row("soportada", "")]
+    c = lb.verif_counts(filas)
+    assert c["cond_acota"] + c["cond_contextualiza"] + c["cond_sin_clase"] == c["con_condicion"] == 3
+
+
+def test_verif_subsection_lines_cuenta_las_inferencias_del_CUERPO():
+    """#280 — «cinco inferencias» sobre **seis** marcas en el cuerpo, con un elemento de más y uno
+    de menos. El conteo sale del mismo código que después lo chequea."""
+    prosa = "una (inferencia de [[2020a]]) y otra (**inferencia** de [[2021b]]) más"
+    frags = lb.verif_subsection_lines([_row("soportada")], prosa)
+    assert frags["Inferencias declaradas"] == "— 2 marcas en el cuerpo"
+
+
+def test_verif_subsection_lines_no_inventa_un_numero_para_las_omisiones():
+    """⛔ D-43 — la completitud es la mitad de JUICIO del fan-out y no está en la tabla: emitir un
+    número ahí sería el cero inventado."""
+    assert lb.verif_subsection_lines([_row("soportada")], "")["Omisiones en transcripciones"] is None
+
+
+def test_condition_resolved_no_confunde_la_prosa_con_la_resolucion():
+    """⛔ No reusa `resueltos()`: ahí «cualquier cosa después del separador» significa resuelto, y en
+    una condición lo que sigue al separador es **la prosa de la condición** — daría 100 % resueltas.
+    Y el token se compara ENTERO (#276: `resueltamente` no es `resuelta`)."""
+    assert lb.condition_resolved("acota: sólo para K<2 m/s") is False
+    assert lb.condition_resolved("**acota**→resuelta: fila en `## Régimen de validez`") is True
+    assert lb.condition_resolved("acota → resuelta: X") is True
+    assert lb.condition_resolved("acota→resueltamente distinto") is False
+
+
 # ── #274 · higiene del bloque: el repr, el corte a media fórmula y la cadena de rondas ───────────
 
 

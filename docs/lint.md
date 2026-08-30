@@ -157,6 +157,12 @@ OCR, o marcar `pending`).
 - **Celda truncada que no puede truncarse** (#226): sólo `Afirmación (extracto)` admite `…`;
   `Evidencia` (con su localizador al final, completo) y `Condición` no. Y la fila donde el cruce de
   localizadores **no se pudo evaluar** se reporta como *no evaluable*, no como ok.
+- **Sub-sección del bloque con un conteo que su propia tabla desmiente** (#280): INV-81 mecanizó la
+  cabecera y dejó las tres sub-secciones como prosa libre, y derivaron igual — medido, «las 20
+  marcadas `acota`» sobre una tabla con **3**. Los fragmentos los genera
+  `lib_blocks.verif_subsection_lines`, el mismo código que lee la tabla; *Omisiones* no lleva número
+  (es juicio, no está en la tabla). Sólo se reporta la sub-sección **presente**: la ausente ya la
+  reporta el chequeo de #232.
 - **Cabecera publicada ≠ la que el estampador daría hoy** (#233): nadie cruzaba lo publicado con lo
   producible — una nota puede publicar dos de las tres fechas obligatorias y pasar el gate.
 - **Nota de paper sin `## Abstract`** (#124/#277, **bloqueante**): es la única capa **auditable**

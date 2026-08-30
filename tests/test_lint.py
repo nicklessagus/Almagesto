@@ -5350,12 +5350,47 @@ def test_el_bloque_completo_no_dispara(toy_vault, capsys):
     nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
     t = nota.read_text(encoding="utf-8").replace(
         "## Verificación de citas", "## Verificación de citas\n\n1 pares; 1 soportadas\n", 1)
-    nota.write_text(t + "\nInferencias declaradas (sin cita, por diseño): ninguna.\n"
+    # #280 — las sub-secciones publican el conteo que su propia tabla da, generado por el mismo
+    # código que la lee. Sin los fragmentos, la nota es justamente el caso que el issue mide.
+    nota.write_text(t + "\nInferencias declaradas (sin cita, por diseño) — 0 marcas en el cuerpo: "
+                        "ninguna.\n"
                         "Omisiones en transcripciones: ninguna.\n"
-                        "Condiciones perdidas (afirmaciones sobre-generalizadas): ninguna.\n",
+                        "Condiciones perdidas (afirmaciones sobre-generalizadas) — 0 con condición: "
+                        "0 `acota` (0 resueltas) / 0 `contextualiza` / 0 sin clasificar: ninguna.\n",
                     encoding="utf-8")
     _, rep = run_lint_reporte(capsys)
     assert "nota-verif" not in _seccion(rep, "Bloque de verificación incompleto"), rep
+
+
+def test_la_subseccion_con_un_conteo_que_su_tabla_desmiente_es_hallazgo(toy_vault, capsys):
+    """#280 — INV-81 mecanizó la cabecera y dejó las tres sub-secciones como prosa libre; derivaron
+    igual. Medido: «las 20 marcadas `acota`» sobre una tabla con **3**, y 4 de los 5 ejemplos
+    citados como `acota` resueltas viven hoy en filas `contextualiza` o vacías."""
+    _con_ancla(toy_vault, CUERPO)
+    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    t = nota.read_text(encoding="utf-8").replace(
+        "## Verificación de citas", "## Verificación de citas\n\n1 pares; 1 soportadas\n", 1)
+    nota.write_text(t + "\nInferencias declaradas (sin cita, por diseño): ninguna.\n"
+                        "Omisiones en transcripciones: ninguna.\n"
+                        "Condiciones perdidas — las 20 marcadas `acota` se resolvieron.\n",
+                    encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    seccion = _seccion(rep, "Bloque de verificación incompleto")
+    assert "Condiciones perdidas" in seccion, rep
+    assert "0 `acota`" in seccion, "el mensaje tiene que traer la línea canónica"
+
+
+def test_la_subseccion_ausente_no_se_reporta_dos_veces(toy_vault, capsys):
+    """Sin la guarda de «presente», la sub-sección que falta genera DOS hallazgos —el de #232 y el
+    del conteo— y manda a hacer dos veces el mismo trabajo."""
+    _con_ancla(toy_vault, CUERPO)
+    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    nota.write_text(nota.read_text(encoding="utf-8").replace(
+        "## Verificación de citas", "## Verificación de citas\n\n1 pares; 1 soportadas\n", 1),
+        encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    seccion = _seccion(rep, "Bloque de verificación incompleto")
+    assert seccion.count("Condiciones perdidas") == 1, seccion
 
 
 def test_index_desactualizado_nombra_los_stems(toy_vault, capsys):
