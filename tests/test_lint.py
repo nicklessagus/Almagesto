@@ -9,6 +9,7 @@ import yaml
 
 import lib_config as cfg
 import entity
+import make_notes as mn
 import lint
 from conftest import mk_note, write_yaml
 
@@ -5443,3 +5444,106 @@ def test_las_grafias_no_son_dos_deudas_distintas(toy_vault, capsys):
     assert "PCA" not in _seccion(rep, "sin página destino"), \
         "`concepts/methods/pca.md` ES el destino de `PCA`"
     assert "PCA, pca" in _seccion(rep, "varias grafías"), rep
+
+
+# ── #277 · los tres ⛔ del schema de nota de paper que no tenían detector ─────────────────────────
+
+def _paper_completo(bib="2020aaa...1..1A", body=None, fm=None):
+    """Nota de paper con todo lo que el schema exige, para que el test aísle lo que quita."""
+    cuerpo = body if body is not None else (
+        f"# p\n\n{mn.LLM_DISCLAIMER['paper']}\n\n## Abstract\nun abstract cualquiera\n\n"
+        "## Conclusiones\nlo que el paper concluye\n")
+    return mk_note(cfg.PAPERS, bib, {"bibcode": bib, "tags": ["paper"], "stars": ["tau Cet"],
+                                     **(fm or {})}, cuerpo, crudo=True)
+
+
+def _pdf_en_disco(bib="2020aaa...1..1A"):
+    d = cfg.RAW / "pdfs" / "tau-cet"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"{bib}.pdf").write_bytes(b"%PDF-1.4\n")
+
+
+def test_paper_sin_abstract_bloquea(toy_vault, capsys):
+    """#277 — `## Abstract` es la única capa AUDITABLE del cuerpo y `classify_offline` la lee para
+    re-clasificar sin `build/` (D-49). Medido: **39 de 138** notas de una bóveda real ya no la
+    tenían, con el lint en rc 0 — el stub off-ADS nunca la escribió."""
+    _paper_completo(body=f"# p\n\n{mn.LLM_DISCLAIMER['paper']}\n\n## Conclusiones\nx\n")
+    link_from_log(toy_vault, "2020aaa...1..1A")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc != 0, "borrar la capa auditable del cuerpo no puede pasar limpio"
+    assert "2020aaa...1..1A" in _seccion(rep, "sin `## Abstract`"), rep
+
+
+def test_paper_sin_conclusiones_es_backlog(toy_vault, capsys):
+    """Con PDF en disco y vista del PDF, faltar `## Conclusiones` es deuda: son lo que el paper
+    afirma SIN lente, o sea lo que hace barata una segunda vista (#124)."""
+    _paper_completo(body=f"# p\n\n{mn.LLM_DISCLAIMER['paper']}\n\n## Abstract\nx\n")
+    _pdf_en_disco()
+    link_from_log(toy_vault, "2020aaa...1..1A")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 0, "es backlog, no bloqueante"
+    assert "2020aaa...1..1A" in _seccion(rep, "sin `## Conclusiones`"), rep
+
+
+def test_documento_largo_no_debe_conclusiones(toy_vault, capsys):
+    """Exención estructural: un libro no tiene esa sección y transcribir algo que no existe fabrica
+    contenido (#80). No es un umbral de largo."""
+    _paper_completo(body=f"# p\n\n{mn.LLM_DISCLAIMER['paper']}\n\n## Abstract\nx\n",
+                    fm={"unidad_cita": "pagina", "alcance": "caps. 6 y 15"})
+    _pdf_en_disco()
+    link_from_log(toy_vault, "2020aaa...1..1A")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2020aaa...1..1A" not in _seccion(rep, "sin `## Conclusiones`"), rep
+
+
+def test_la_vista_construida_del_abstract_no_debe_conclusiones(toy_vault, capsys):
+    """La otra exención estructural (#207): un abstract no tiene conclusiones **por
+    construcción**, así que pedirlas sería deuda inextinguible sobre una nota correcta."""
+    _paper_completo(body=f"# p\n\n{mn.LLM_DISCLAIMER['paper']}\n\n## Abstract\nx\n",
+                    fm={"vistas": [{"sujeto": "tau Cet", "tipo": "star", "fuente": "abstract"}]})
+    _pdf_en_disco()
+    link_from_log(toy_vault, "2020aaa...1..1A")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2020aaa...1..1A" not in _seccion(rep, "sin `## Conclusiones`"), rep
+
+
+def test_sin_conclusiones_declarado_con_motivo_no_es_deuda(toy_vault, capsys):
+    """La escotilla declarada: la fuente que legítimamente no tiene esa sección (un catálogo de
+    datos) se declara, y sale en «visible, no es deuda» en vez de en el backlog."""
+    _paper_completo(body=f"# p\n\n{mn.LLM_DISCLAIMER['paper']}\n\n## Abstract\nx\n",
+                    fm={"sin_conclusiones": "catálogo de datos: no tiene esa sección"})
+    _pdf_en_disco()
+    link_from_log(toy_vault, "2020aaa...1..1A")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2020aaa...1..1A" not in _seccion(rep, "sin `## Conclusiones` ni exención"), rep
+    assert "2020aaa...1..1A" in _seccion(rep, "DECLARADA con motivo"), rep
+
+
+def test_sin_conclusiones_sin_motivo_sigue_siendo_deuda(toy_vault, capsys):
+    """El centinela: sin él, la clave vacía apaga el chequeo — que es curar en silencio, lo que
+    todas las escotillas de este framework prohíben."""
+    _paper_completo(body=f"# p\n\n{mn.LLM_DISCLAIMER['paper']}\n\n## Abstract\nx\n",
+                    fm={"sin_conclusiones": ""})
+    _pdf_en_disco()
+    link_from_log(toy_vault, "2020aaa...1..1A")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2020aaa...1..1A" in _seccion(rep, "sin `## Conclusiones` ni exención"), rep
+
+
+def test_paper_sin_aviso_de_capa_llm_es_backlog(toy_vault, capsys):
+    """#247 — la nota de paper es la que más contenido generado tiene y era la única de las tres
+    clases sin el aviso que dice cuál de sus capas es auditable. Nadie lo chequeaba."""
+    _paper_completo(body="# p\n\n## Abstract\nx\n\n## Conclusiones\ny\n")
+    link_from_log(toy_vault, "2020aaa...1..1A")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2020aaa...1..1A" in _seccion(rep, "aviso de capa LLM"), rep
+
+
+def test_el_aviso_nombrado_en_el_frontmatter_no_cuenta(toy_vault, capsys):
+    """AUD-135 — se busca en el CUERPO: un `pending_motivo` que mencione esas dos palabras daría
+    falso negativo sobre una nota que no tiene el aviso."""
+    _paper_completo(body="# p\n\n## Abstract\nx\n\n## Conclusiones\ny\n",
+                    fm={"pending_motivo": "la Capa LLM del PDF está pendiente"})
+    link_from_log(toy_vault, "2020aaa...1..1A")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2020aaa...1..1A" in _seccion(rep, "aviso de capa LLM"), rep

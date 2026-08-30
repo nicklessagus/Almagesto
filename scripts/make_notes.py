@@ -613,6 +613,47 @@ def restamp_headers() -> int:
     return 0
 
 
+#: #277 · la marca por la que se reconoce el aviso de capa LLM en el cuerpo. La miden el lint y
+#: `stamp_header`, así que vive una sola vez: con dos literales, el detector y el reparador pueden
+#: dejar de hablar del mismo texto sin que nadie se entere.
+AVISO_LLM_MARCA = "Capa LLM"
+
+
+def restamp_abstracts() -> int:
+    """Backfill #277: writes the `## Abstract` section into every paper note that lacks it.
+
+    The section is the body's only **auditable** layer and `classify_offline` reads it to
+    re-classify without `build/` (D-49), yet nothing ever checked it was there: measured on a real
+    vault, **39 of 138** notes had no `## Abstract` with the lint at rc 0 — the off-ADS stub never
+    wrote it. The content is the placeholder, never invented: what is missing is the SECTION, and
+    the harvester fills it from the PDF on the next extraction (it overwrites the placeholder,
+    never a verbatim already in place).
+
+    Surgery, not regeneration: the section goes right after the header blockquote and no prose is
+    touched. Idempotent."""
+    notes = sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []
+    changed = 0
+    for dest in notes:
+        text = dest.read_text(encoding="utf-8")
+        if cfg.section_start(text, "## Abstract") >= 0:
+            continue
+        i = text.find(GENERATOR_LINE)
+        if i < 0:
+            # Sin la línea del generador no hay dónde anclar: se dice, no se adivina un punto de
+            # inserción (mismo criterio que `stamp_estado`). `--restamp-headers` la pone primero.
+            cfg.print_seguro(f"  ⚠ {dest.name}: sin la línea del generador — corré "
+                             f"`--restamp-headers` antes")
+            continue
+        corte = text.find("\n", i) + 1
+        nuevo = (text[:corte] + f"\n## Abstract\n{cfg.ABSTRACT_PLACEHOLDER}\n" + text[corte:])
+        cfg.write_text_atomic(dest, nuevo)
+        changed += 1
+    cfg.print_seguro(f"abstracts: {changed} de {len(notes)} notas de paper recuperaron su "
+                     f"`## Abstract` (contenido `{cfg.ABSTRACT_PLACEHOLDER}`: falta la copia de "
+                     f"catálogo, la completa la próxima extracción)")
+    return 0
+
+
 # `field` viejo (dentro de planets[]) → clave del frontmatter con el valor de NEA, para materializar
 # la posición `{source: ground_truth}` con su valor real. `existence` no tiene valor numérico: lo que
 # NEA sostiene es el `status` del planeta.
@@ -1611,8 +1652,15 @@ def stamp_header(dest) -> bool:
     if kind is None:
         return False
     text = dest.read_text(encoding="utf-8")
-    if GENERATOR_LINE in text:
+    if GENERATOR_LINE in text and AVISO_LLM_MARCA in text:
         return False                                  # ya tiene la línea que el lint mide: nada que hacer
+    if GENERATOR_LINE in text:
+        # #277 — la línea está y el AVISO no: alguien lo borró. Con el early-return de arriba pelado
+        # esa nota no se reparaba nunca y la categoría del lint era incerrable — el deadlock de #69
+        # espejado. Se inserta sólo el blockquote que falta, sin duplicar la línea del generador.
+        i = text.find(GENERATOR_LINE)
+        cfg.write_text_atomic(dest, text[:i] + LLM_DISCLAIMER[kind].strip() + "\n" + text[i:])
+        return True
     gen = (cfg.split_fm(text) or {}).get("generator")
     # La rama de fallback TIENE que llevar `GENERATOR_LINE`. Medido corriendo el ensayo de deploy
     # sobre un corpus real: la línea vieja ("Cabecera normalizada por Almagesto; la nota no registra
@@ -2900,7 +2948,7 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, theme: bool = F
 {LLM_DISCLAIMER["paper"]}
 
 ## Abstract
-{abstract or '_(no disponible)_'}
+{abstract or cfg.ABSTRACT_PLACEHOLDER}
 
 {extraccion}"""
         cfg.write_text_atomic(dest, body)
@@ -3111,6 +3159,9 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
 
 {LLM_DISCLAIMER["paper"]}
 {pend_line}
+## Abstract
+{cfg.ABSTRACT_PLACEHOLDER}
+
 {vista_block(concept or citekey, theme=True)}"""
     cfg.write_text_atomic(dest, body)
     cfg.print_seguro(f"  papers: {dest.name} escrito (stub off-ADS)")
@@ -3181,6 +3232,10 @@ def main() -> int:
                          "<sujeto>`. El sujeto sale del reclamo de la nota cuando es UNO solo; con "
                          "varios se lista para declararlo a mano (elegir uno afirmaría una lectura "
                          "que nadie hizo). No estampa `fecha`: ausente es «no consta». Sin slug.")
+    ap.add_argument("--restamp-abstracts", action="store_true", dest="restamp_abstracts",
+                    help="backfill #277: escribe el `## Abstract` que falte en una nota de paper "
+                         "(contenido `_(no disponible)_` — lo completa la próxima extracción). La "
+                         "sección es obligatoria: es la capa auditable del cuerpo. Sin slug.")
     ap.add_argument("--sync-mirror", action="store_true", dest="sync_mirror",
                     help="backfill: rellena en `stars/` los campos espejo de NEA (#70) que están en "
                          "null y el ground-truth sí trae (spectral_type/teff_K/dist_pc/P_rot_days y "
@@ -3225,6 +3280,8 @@ def main() -> int:
         return restamp_index()
     if args.restamp_headers:
         return restamp_headers()
+    if args.restamp_abstracts:
+        return restamp_abstracts()
     if args.migrate_bearing:
         n = migrate_all_bearing()
         cfg.print_seguro(f"`bearing` retirado de {n} nota(s) de paper (D-21).")
@@ -3276,8 +3333,8 @@ def main() -> int:
         return 0
     if not args.slug:
         ap.error("falta el slug (corren sin slug: --restamp-pdf-links, --restamp-keywords, "
-                 "--restamp-headers, --migrate-disputes, --migrate-bearing, --migrate-txt-fields, "
-                 "--migrate-vistas, --sync-mirror y --rename-paper)")
+                 "--restamp-headers, --restamp-abstracts, --migrate-disputes, --migrate-bearing, "
+                 "--migrate-txt-fields, --migrate-vistas, --sync-mirror y --rename-paper)")
 
     if args.web:
         if args.pending and not str(args.pending_motivo or "").strip():

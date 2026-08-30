@@ -54,7 +54,7 @@ def _safe_links(texto: str) -> str:
     return _APERTURA.sub("[", texto)
 
 
-PLACEHOLDER_ABSTRACT = "_(no disponible)_"
+PLACEHOLDER_ABSTRACT = cfg.ABSTRACT_PLACEHOLDER   # #277: una sola definición, en `lib_config`
 
 
 def _resolve_txt_slug(bib: str, declarado: str) -> str | None:

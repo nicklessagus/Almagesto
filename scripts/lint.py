@@ -1218,6 +1218,10 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     verif_sin_localizador: list = []   # (stem, motivo) — #226: #122 no evaluable en esa fila
     indice_viejo: list = []            # (stem, motivo) — #237: index.md contra la verdad de disco
     radio_sin_link: list = []          # (stem, motivo) — #235: hub que nombra un radio sin wikilink
+    sin_abstract: list = []            # (stem, motivo) — #277: nota de paper sin `## Abstract`
+    sin_conclusiones: list = []        # (stem, motivo) — #277: sin `## Conclusiones` ni exención
+    sin_conclusiones_ok: list = []     # (stem, motivo) — #277: declarado con motivo (visible, no es deuda)
+    sin_aviso_llm: list = []           # (stem, motivo) — #247/#277: nota de paper sin el aviso de capa LLM
     cita_log: list = []                # (stem, motivo) — #238: cita del `log.md` que su fuente no dice
     cita_no_verbatim: list = []        # (stem, motivo) — #220: la cadena no está en el `.txt`
     cita_opaca: list = []              # (stem, motivo) — #220: no evaluable (sin `.txt` / ocr; #275)
@@ -1904,6 +1908,45 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             # campo sin lector no se deja «por las dudas»: se lee como un gate vivo. Bloquea, como
             # todo schema retirado en este framework —nada de lectores tolerantes—, y la salida es
             # el migrador, no editar a mano.
+            # #277 — los tres ⛔ del schema de nota de paper que no tenía ningún detector. Medido
+            # sobre 138 notas reales con el lint en rc 0: **39 sin `## Abstract`** y 69 sin
+            # `## Conclusiones`. Las tres secciones se podían borrar sin que nada las extrañara, y
+            # una de ellas es la única capa AUDITABLE del cuerpo.
+            if cfg.section_start(text, "## Abstract") < 0:
+                sin_abstract.append(
+                    (stem, "sin `## Abstract`: es la única capa AUDITABLE del cuerpo (copia de "
+                           "catálogo, no síntesis) y `classify_offline` la lee para re-clasificar "
+                           "sin `build/` (D-49) → `python scripts/make_notes.py --restamp-abstracts`"))
+            # `## Conclusiones` es lo que el paper afirma SIN lente (#124): lo que hace barata una
+            # segunda vista cuando otro sujeto reclama el mismo paper. Tres exenciones, las tres
+            # estructurales y machine-readable — un documento largo no tiene esa sección, y un paper
+            # leído sólo del abstract no la tiene POR CONSTRUCCIÓN (#207).
+            _marca_sc = fm.get("sin_conclusiones", _SIN_MARCA)
+            _solo_abstract = bool(fm.get("vistas")) and all(
+                str((v_ or {}).get("fuente") or "") == "abstract"
+                for v_ in cfg.as_list(fm.get("vistas")) if isinstance(v_, dict))
+            if _marca_sc is not _SIN_MARCA:
+                # Escotilla declarada: motivo OBLIGATORIO, mismo criterio que `no_vista` /
+                # `no_sintetizado` / el `--reason` del triage. Sin motivo sigue siendo deuda.
+                if str(_marca_sc or "").strip():
+                    sin_conclusiones_ok.append((stem, f"`sin_conclusiones: {_marca_sc}`"))
+                else:
+                    sin_conclusiones.append(
+                        (stem, "`sin_conclusiones` sin motivo: la escotilla lo exige (en seis meses "
+                               "sirve el motivo, no la categoría)"))
+            elif (str(fm.get("unidad_cita") or "") != "pagina" and stem in pdf_on_disk
+                    and not _solo_abstract and cfg.section_start(text, "## Conclusiones") < 0):
+                sin_conclusiones.append(
+                    (stem, "sin `## Conclusiones`: es lo que el paper afirma SIN lente, y lo que "
+                           "hace barata una segunda vista (#124) → transcribilas, o declará "
+                           "`sin_conclusiones: <motivo>` si la fuente no tiene esa sección"))
+            # #247 — el aviso de capa LLM. Se busca en el CUERPO, no en el texto entero: un
+            # `pending_motivo` que mencione esas dos palabras daría falso negativo (AUD-135).
+            if mn.AVISO_LLM_MARCA not in body_full:
+                sin_aviso_llm.append(
+                    (stem, "sin el aviso de **capa LLM**: la nota de paper es la que más contenido "
+                           "generado tiene y no dice cuál de sus tres capas es auditable → "
+                           "`python scripts/make_notes.py --restamp-headers`"))
             _viejos = [k for k in ("symbols_lost", "fulltext_layout") if k in fm]
             if _viejos:
                 campos_txt_viejos.append(
@@ -3610,6 +3653,9 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('coverage', 'Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog)', SEV_BACKLOG, tuple(coverage), poblacion='entidades'),
         Categoria('unsynthesized', 'Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog)', SEV_BACKLOG, tuple(unsynthesized), poblacion='papers'),
         Categoria('headerless', 'Cabecera no estampable: ficha/concepto sin la línea del generador — los estampadores de cabecera no-opean en silencio (backlog)', SEV_BACKLOG, tuple(headerless), poblacion='entidades'),
+        Categoria('sin_abstract', '⛔ Nota de paper sin `## Abstract`: se pierde la única capa AUDITABLE del cuerpo (#124/#277)', SEV_BLOQUEANTE, tuple(sin_abstract), poblacion='papers'),
+        Categoria('sin_conclusiones', '📄 Nota de paper sin `## Conclusiones` ni exención declarada (#124/#277, backlog)', SEV_BACKLOG, tuple(sin_conclusiones), poblacion='papers'),
+        Categoria('sin_aviso_llm', '⚠ Nota de paper sin el aviso de capa LLM: no dice cuál de sus tres capas es auditable (#247/#277, backlog)', SEV_BACKLOG, tuple(sin_aviso_llm), poblacion='papers'),
         Categoria('estado_desfasado', '🗓 Cabecera `> _Estado —_` desfasada: no es la que el estampador da hoy (backlog)', SEV_BACKLOG, tuple(estado_desfasado), poblacion='entidades'),
         Categoria('salv_sin_marca', '🏷 Salvedades sin la marca de #213 (no se distingue chequeada de juicio) (backlog)', SEV_BACKLOG, tuple(salv_sin_marca), poblacion='papers'),
         Categoria('salv_decidible', '⚙ Salvedad en prosa que un script podría decidir: emitila estructurada (#234, backlog)', SEV_BACKLOG, tuple(salv_decidible), poblacion='papers'),
@@ -3627,6 +3673,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('vista_sin_fuente_en_disco', '🔒 Vista fechada SIN fuente en disco: ya no es re-verificable (backlog)', SEV_BACKLOG, tuple(vista_sin_fuente_en_disco), poblacion='papers'),
         Categoria('reclamo_refutado', '↩ La vista REFUTA un reclamo que sigue en el frontmatter (backlog)', SEV_BACKLOG, tuple(reclamo_refutado), poblacion='papers'),
         Categoria('reclamo_sin_vista_declarado', 'Reclamo sin vista DECLARADO con `no_vista` + motivo (visible, no es deuda)', SEV_BACKLOG, tuple(reclamo_sin_vista_declarado), poblacion='papers'),
+        Categoria('sin_conclusiones_ok', 'Fuente sin `## Conclusiones` DECLARADA con motivo (#277: visible, no es deuda)', SEV_BACKLOG, tuple(sin_conclusiones_ok), poblacion='papers'),
         Categoria('extraccion_no_declarada', 'Recorte de lectura sin declarar: hay core sin extraer y el registro no dice por qué (backlog)', SEV_BACKLOG, tuple(extraccion_no_declarada), poblacion='registros'),
         Categoria('papers_table_stale', 'Lista de papers desactualizada: la tabla estampada no refleja el universo (backlog)', SEV_BACKLOG, tuple(papers_table_stale), poblacion='registros'),
         Categoria('cadena_incompleta', 'Cadena incompleta: falta un paso del orden canónico (backlog)', SEV_BACKLOG, tuple(cadena_incompleta), poblacion='estrellas'),

@@ -4013,3 +4013,55 @@ def test_no_escribe_si_el_frontmatter_quedaria_roto(toy_vault, capsys):
         make_notes._drop_keys = viejo
     assert "NO se escribe" in capsys.readouterr().out
     assert read_fm(nota), "la nota quedó intacta"
+
+
+# ── #277 · el `## Abstract` que el stub off-ADS nunca escribía ──────────────────────────────────
+
+def test_el_stub_off_ads_escribe_la_seccion_abstract(toy_vault):
+    """#277 — `write_web_paper_note` no la escribía **nunca**, y `CLAUDE.md` afirmaba que sí «al
+    crear». De ahí salían las 39 notas sin la capa auditable del cuerpo."""
+    mn.write_web_paper_note("2020Autor", url="https://x.test/a", slug="ica", concept="ica")
+    texto = (cfg.PAPERS / "2020Autor.md").read_text(encoding="utf-8")
+    assert "## Abstract" in texto
+    assert cfg.ABSTRACT_PLACEHOLDER in texto, "sin catálogo el contenido es el placeholder, no se inventa"
+
+
+def test_restamp_abstracts_recupera_la_seccion_y_es_idempotente(toy_vault, capsys):
+    """El backfill: escribe la SECCIÓN que falta (el contenido lo completa la próxima extracción) y
+    una segunda corrida no cambia un byte — invariante del framework para todo lo que escribe en
+    `vault/` (red 6)."""
+    dest = mk_note(cfg.PAPERS, "2019A....1A", {"bibcode": "2019A....1A", "tags": ["paper"],
+                                               "stars": ["tau Cet"]},
+                   f"# p\n\n{mn.GENERATOR_LINE}\n\n## Conclusiones\nx\n")
+    assert mn.restamp_abstracts() == 0
+    texto = dest.read_text(encoding="utf-8")
+    assert "## Abstract" in texto and cfg.ABSTRACT_PLACEHOLDER in texto
+    mn.restamp_abstracts()
+    assert dest.read_text(encoding="utf-8") == texto, "la segunda corrida tiene que ser no-op"
+
+
+def test_restamp_abstracts_no_adivina_donde_insertar(toy_vault, capsys):
+    """Sin la línea del generador no hay dónde anclar: se dice y no se toca la nota (mismo criterio
+    que `stamp_estado`). Inventar el punto de inserción es cómo una cirugía parte una nota."""
+    dest = mk_note(cfg.PAPERS, "2019A....1A", {"bibcode": "2019A....1A", "tags": ["paper"],
+                                               "stars": ["tau Cet"]}, "# p\n\n## Conclusiones\nx\n",
+                   crudo=True)
+    antes = dest.read_text(encoding="utf-8")
+    mn.restamp_abstracts()
+    assert dest.read_text(encoding="utf-8") == antes
+    assert "--restamp-headers" in capsys.readouterr().out
+
+
+def test_stamp_header_repara_el_aviso_borrado(toy_vault):
+    """#277 — con la línea del generador presente y el aviso borrado, el early-return dejaba esa
+    nota sin reparar **para siempre**: el deadlock de #69 espejado, y la categoría del lint quedaba
+    incerrable."""
+    dest = mk_note(cfg.PAPERS, "2019A....1A", {"bibcode": "2019A....1A", "tags": ["paper"],
+                                               "stars": ["tau Cet"]},
+                   f"# p\n\n{mn.GENERATOR_LINE}\n\n## Abstract\nx\n", crudo=True)
+    assert mn.AVISO_LLM_MARCA not in dest.read_text(encoding="utf-8")
+    assert mn.stamp_header(dest) is True
+    texto = dest.read_text(encoding="utf-8")
+    assert mn.AVISO_LLM_MARCA in texto
+    assert texto.count(mn.GENERATOR_LINE) == 1, "no se duplica la línea del generador"
+    assert mn.stamp_header(dest) is False, "idempotente"

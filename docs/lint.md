@@ -159,6 +159,23 @@ OCR, o marcar `pending`).
   localizadores **no se pudo evaluar** se reporta como *no evaluable*, no como ok.
 - **Cabecera publicada ≠ la que el estampador daría hoy** (#233): nadie cruzaba lo publicado con lo
   producible — una nota puede publicar dos de las tres fechas obligatorias y pasar el gate.
+- **Nota de paper sin `## Abstract`** (#124/#277, **bloqueante**): es la única capa **auditable**
+  del cuerpo —copia de catálogo, no síntesis— y `classify_offline` la lee para re-clasificar sin
+  `build/` (D-49). Medido: **39 de 138** notas de una bóveda real ya no la tenían, con el lint en
+  rc 0, porque el stub off-ADS nunca la escribía y nadie chequeaba. Se cierra con
+  `python scripts/make_notes.py --restamp-abstracts` (escribe la SECCIÓN con `_(no disponible)_`;
+  el contenido lo completa la próxima extracción, que no pisa un verbatim ya puesto).
+- **Nota de paper sin `## Conclusiones`** (#124/#277, backlog): son lo que el paper afirma **sin
+  lente**, o sea lo que hace barata una segunda vista cuando otro sujeto reclama el mismo paper.
+  Tres exenciones, las tres estructurales: `unidad_cita: pagina` (un libro no tiene esa sección),
+  sin PDF en disco o con la vista construida del abstract (#207: no las tiene por construcción), y
+  la escotilla declarada **`sin_conclusiones: <motivo>`** — motivo obligatorio, como toda escotilla
+  de curación acá; la declarada se reporta aparte, en «visible, no es deuda».
+- **Nota de paper sin el aviso de capa LLM** (#247/#277, backlog): es la clase de nota con más
+  contenido generado y era la única sin el aviso que nombra sus tres capas. La marca se busca en el
+  **cuerpo** (un `pending_motivo` que la mencione daría falso negativo, AUD-135) y la repara
+  `--restamp-headers`, que desde #277 también arregla la nota que tiene la línea del generador y
+  perdió el blockquote — antes esa nota no se reparaba nunca y la categoría era incerrable.
 - **Cita textual entre comillas que ninguna fuente del bloque contiene** (#220): «esta cadena está
   en este `.txt`» es un `grep`, no un LLM. Tres estados: está → nada; no está en ninguna → hallazgo
   (no-verbatim o de otra fuente, se distingue a mano); **no evaluable** (sin `.txt` o

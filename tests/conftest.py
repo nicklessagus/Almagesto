@@ -54,15 +54,25 @@ def write_yaml(path: Path, data) -> None:
     path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
 
 
-def mk_note(dirpath: Path, stem: str, fm: dict, body: str = "") -> Path:
-    """Nota .md con frontmatter, mismo formato que make_notes.fm()."""
+def mk_note(dirpath: Path, stem: str, fm: dict, body: str = "", crudo: bool = False) -> Path:
+    """Nota .md con frontmatter, mismo formato que make_notes.fm().
+
+    `crudo=True` apaga los defaults de abajo: es lo que usa el test que quiere justamente la nota
+    **sin** lo que el schema exige (si el helper lo rellenara siempre, esa categoría no se podría
+    probar)."""
     # D-23: una nota de paper SIN destino (`stars`/`thesis_links`/`methods`) es un hallazgo
     # bloqueante — no pertenece a nada y ninguna síntesis la alcanza. En la vida real
     # `make_notes` siempre siembra uno; acá se le da el default para que las fixtures mínimas
     # no disparen la categoría. El test que quiere el caso vacío pone las tres claves a mano.
     if "paper" in (fm.get("tags") or []) and not any(
-            k in fm for k in ("stars", "thesis_links", "methods")):
+            k in fm for k in ("stars", "thesis_links", "methods")) and not crudo:
         fm = {**fm, "stars": ["Estrella Test"]}
+    # #277 — mismo criterio con `## Abstract`, que desde 1.113.0 BLOQUEA: en la vida real lo escribe
+    # `make_notes` (los dos raíles), así que una fixture sin él probaría un estado que la cadena no
+    # produce. Se agrega al final para no correr la primera línea del cuerpo, que varios tests usan
+    # como ancla de línea.
+    if "paper" in (fm.get("tags") or []) and not crudo and "## Abstract" not in body:
+        body = f"{body}\n## Abstract\n{cfg.ABSTRACT_PLACEHOLDER}\n"
     dirpath.mkdir(parents=True, exist_ok=True)
     head = yaml.safe_dump(fm, sort_keys=False, allow_unicode=True, default_flow_style=False)
     p = dirpath / f"{stem}.md"

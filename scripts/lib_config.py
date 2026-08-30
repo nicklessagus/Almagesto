@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.112.0"
+ALMAGESTO_VERSION = "1.113.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -245,6 +245,12 @@ def _es_estampada(linea: str) -> bool:
 # encuentra son notas anteriores al campo, que es deuda real. Backlog, no bloqueante (decidido con
 # el usuario, 2026-08-28): el corpus viejo tiene notas incompletas por diseño y un bloqueante nace
 # en rojo sobre trabajo correcto — el falso positivo que erosiona la categoría entera.
+#: #124/#277 · lo que va en `## Abstract` cuando el catálogo no devolvió ninguno. La sección es
+#: OBLIGATORIA aunque el contenido falte: es la capa auditable del cuerpo, y su ausencia y su vacío
+#: se arreglan distinto (una nota sin la sección no se puede re-clasificar offline; una con el
+#: placeholder está esperando que el cosechador la complete desde el PDF).
+ABSTRACT_PLACEHOLDER = "_(no disponible)_"
+
 SCHEMA_NOTA = {
     # #272 — `mass_msun` es el campo con más consecuencias aguas abajo después de `planets[]`:
     # m·sini ∝ M★^(2/3), así que el rango 0,699–0,78 M☉ que la literatura publica mueve cada masa
@@ -2769,7 +2775,7 @@ def note_lens_text(fm: dict, body: str) -> str:
     `write_paper_notes` deja cuando ADS no lo devolvió y no es texto del paper."""
     m = re.search(r"^##\s+Abstract\s*$(.*?)(?=^##\s|\Z)", body, re.M | re.S)
     abstract = (m.group(1).strip() if m else "")
-    if abstract == "_(no disponible)_":
+    if abstract == ABSTRACT_PLACEHOLDER:
         abstract = ""
     return " ".join(filter(None, [
         " ".join(as_list(fm.get("title")) or ([fm["title"]] if fm.get("title") else [])),

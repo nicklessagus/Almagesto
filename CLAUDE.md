@@ -548,12 +548,14 @@ traducción en la nota, el guard del verbatim la daba por el original y **no lo 
 la trampa de prefijo de #176 en el vocabulario propio del framework — se saca renombrando, no
 aflojando el cortador.
 
-⚠ El `## Abstract` **verbatim** lo escribe el cosechador **sólo si la nota no lo tiene**: el del
-catálogo es copia de máquina y no se pisa con una transcripción del modelo. Existe porque una nota
-off-ADS creada antes de #124 no tiene la sección en absoluto y `write_web_paper_note` sólo la
-escribe al **crear**, así que el hueco se cierra en la próxima extracción sin re-ingestar nada.
+⚠ La **sección** la escriben los dos raíles al crear —con `_(no disponible)_` si no hay copia de
+catálogo— y el cosechador la **completa** sin pisar un verbatim ya puesto (#124/#277; el stub
+off-ADS no la escribía **nunca**, y sin detector 39 de 138 notas de una bóveda real se habían
+quedado sin ella). Backfill: `make_notes.py --restamp-abstracts`; el lint la **bloquea**.
 
-⚠ **Documento largo (`unidad_cita: pagina`): sin conclusiones.** Un libro no tiene esa sección y
+⚠ **Documento largo (`unidad_cita: pagina`): sin conclusiones** — igual que la fuente leída sólo
+del abstract (#207), y la que no tiene esa sección se declara `sin_conclusiones: <motivo>` (#277).
+Un libro no tiene esa sección y
 transcribir algo que no existe fabrica contenido. Es una exclusión **estructural**, no un umbral de
 largo.
 
