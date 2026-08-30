@@ -936,3 +936,38 @@ def test_match_con_umbral_cero_no_inventa_una_fila_donde_no_hay():
                         "[[2020aaa...1..1A]].\n")
     asign, sin_fila, huerf = lb.match_rows_to_pairs(pares, [], umbral=0.0)
     assert asign == {} and sin_fila == pares and huerf == []
+
+
+# ── #279 · la marca «segunda mano» de la vista, leída por columna ────────────────────────────────
+
+_VISTA = """# p
+
+## Vista — tau Cet (2026-08-30)
+
+| Qué | Valor | Localizador | Régimen | Segunda mano |
+|---|---|---|---|---|
+| m_V | 7,15 | p. 3 | — | Koen et al. 2010 |
+| P_rot | 34 d | p. 5 | HARPS | — |
+"""
+
+
+def test_second_hand_rows_lee_la_columna_por_nombre():
+    """#279/#103 — el número marcado de segunda mano NO es de esa fuente, y es el mecanismo de error
+    nº 1 medido. Se lee por NOMBRE de columna: una nota vieja puede traer el encabezado `Línea`
+    pre-#195."""
+    assert lb.second_hand_rows(_VISTA) == [("m_V", "7,15", "Koen et al. 2010")]
+    assert lb.second_hand_rows(_VISTA.replace("Localizador", "Línea")) == \
+        [("m_V", "7,15", "Koen et al. 2010")]
+
+
+def test_second_hand_rows_sobrevive_al_pipe_escapado():
+    """La celda puede traer su propia barra escapada (#240/#284): partir por `|` pelado correría las
+    columnas y la última celda dejaría de ser «Segunda mano»."""
+    con_pipe = _VISTA.replace("| 7,15 |", r"| 7,15 \| 7,17 |")
+    assert lb.second_hand_rows(con_pipe) == [("m_V", "7,15 | 7,17", "Koen et al. 2010")]
+
+
+def test_second_hand_rows_solo_mira_las_secciones_de_vista():
+    """Otra tabla con la misma forma en otra sección no es una vista."""
+    fuera = _VISTA.replace("## Vista — tau Cet (2026-08-30)", "## Inventario por eje")
+    assert lb.second_hand_rows(fuera) == []

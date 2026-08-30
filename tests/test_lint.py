@@ -5657,3 +5657,159 @@ def test_un_value_numerico_no_voltea_el_lint(toy_vault, capsys):
     link_from_log(toy_vault, "test_star", "2019A....1A")
     rc, _rep = run_lint_reporte(capsys)
     assert rc in (0, 1), "el lint tiene que terminar, no explotar"
+
+
+# ── #279 · la marca «segunda mano» que se pierde de la nota de paper a la ficha ──────────────────
+
+def _paper_con_segunda_mano(bib="2010A....2A"):
+    mk_note(cfg.PAPERS, bib, {"bibcode": bib, "tags": ["paper"], "stars": ["Test"],
+                              "vistas": [{"sujeto": "Test", "tipo": "star", "fecha": "2026-08-30",
+                                          "fuente": "pdf"}]},
+            "# p\n\n## Vista — Test (2026-08-30)\n\n"
+            "| Qué | Valor | Localizador | Régimen | Segunda mano |\n|---|---|---|---|---|\n"
+            "| m_V | 7,15 | p. 3 | — | Koen et al. 2010 |\n")
+
+
+def test_valor_de_segunda_mano_sin_marca_en_la_ficha_es_backlog(toy_vault, capsys):
+    """#279/#103 — la extracción marca el valor que la fuente atribuye a OTRO trabajo, y la síntesis
+    lo tira. Medido: 4 casos en una ficha real, uno usado como **falsa corroboración
+    independiente** («otras dos fuentes dan 7,15» era una sola medición ajena contada dos veces)."""
+    _paper_con_segunda_mano()
+    mk_note(cfg.STARS, "test_star", {"name": "Test", "slug": "test_star", "tags": ["star"],
+                                     "planets": []},
+            "# f\n\nLa magnitud es $V = 7{,}15$ [[2010A....2A]].\n")
+    link_from_log(toy_vault, "test_star", "2010A....2A")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 0, "es backlog"
+    seccion = _seccion(rep, "SEGUNDA MANO")
+    assert "test_star" in seccion and "Koen" in seccion, rep
+
+
+def test_la_ficha_que_declara_la_segunda_mano_no_dispara(toy_vault, capsys):
+    """La escotilla: sin ella la deuda es inextinguible aunque el operador ya la haya resuelto, y
+    una categoría que no se puede cerrar se deja de mirar."""
+    _paper_con_segunda_mano()
+    mk_note(cfg.STARS, "test_star", {"name": "Test", "slug": "test_star", "tags": ["star"],
+                                     "planets": []},
+            "# f\n\nLa magnitud es $V = 7{,}15$ (de segunda mano: Koen+2010) [[2010A....2A]].\n")
+    link_from_log(toy_vault, "test_star", "2010A....2A")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "test_star" not in _seccion(rep, "SEGUNDA MANO"), rep
+
+
+def test_la_tabla_estampada_de_papers_no_cuenta_como_apoyo(toy_vault, capsys):
+    """⛔ Se mira por bloque de `pairs_of`, que excluye las secciones estampadas: `## Papers` cita
+    TODOS los bibcodes de la ficha y haría estallar la categoría sobre notas correctas."""
+    _paper_con_segunda_mano()
+    mk_note(cfg.STARS, "test_star", {"name": "Test", "slug": "test_star", "tags": ["star"],
+                                     "planets": []},
+            "# f\n\n## Papers (1 · 1 sintetizados)\n\n| Bibcode |\n|---|\n| [[2010A....2A]] |\n")
+    link_from_log(toy_vault, "test_star", "2010A....2A")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "test_star" not in _seccion(rep, "SEGUNDA MANO"), rep
+
+
+# ── #278 · la prosa que contradice su propio ground-truth ────────────────────────────────────────
+
+def test_la_prosa_que_afirma_lo_que_NEA_no_lista_es_hallazgo(toy_vault, capsys):
+    """#278 — el espejo #70 vigila el frontmatter campo por campo y **nunca el cuerpo**. Medido: una
+    ficha publica «NEA publica las dos como `confirmed`» sobre un planeta que NEA no lista — falso
+    contra cuatro lugares del mismo archivo, con el lint en verde. `verify-citations` no lo cubre
+    (los valores de ground-truth están exentos por contrato) y `find-contradictions` compara
+    claim↔claim entre fuentes."""
+    write_gt(toy_vault, [gt_planet("g")])
+    ficha_espejo(toy_vault, {"planets": [{"letter": "g", "P_days": 365.25, "K_ms": 0.0895,
+                                          "e": 0.0, "mass_earth": 1.0, "status": "confirmed"}]},
+                "# f\n\nLas señales `e` y `g` siguen discutidas.\nNEA publica las dos como `confirmed`.\n")
+    _rc, rep = run_lint_reporte(capsys)
+    seccion = _seccion(rep, "su ground-truth desmiente")
+    assert "test_star" in seccion and "`e`" in seccion, rep
+    assert "NEA publica las dos" in seccion, "el hallazgo reporta la FRASE (#236)"
+
+
+def test_la_negacion_correcta_no_dispara(toy_vault, capsys):
+    """La dirección peligrosa: reportar la frase CORRECTA de una disputa sería un falso positivo
+    permanente sobre la nota que sí está bien — y una categoría que grita en falso se deja de mirar."""
+    write_gt(toy_vault, [gt_planet("g")])
+    ficha_espejo(toy_vault, {"planets": [{"letter": "g", "P_days": 365.25, "K_ms": 0.0895,
+                                          "e": 0.0, "mass_earth": 1.0, "status": "confirmed"}]},
+                "# f\n\nNEA no lista el planeta `e`, así que la señal sigue sin árbitro.\n")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "test_star" not in _seccion(rep, "su ground-truth desmiente"), rep
+
+
+def test_la_anafora_sin_aridad_exacta_no_se_reporta(toy_vault, capsys):
+    """«las dos» se resuelve hacia atrás y **sólo** si encuentra exactamente esa cantidad: con tres
+    letras la oración no es evaluable, y adivinar cuál de las tres es sería inventar el hallazgo."""
+    write_gt(toy_vault, [gt_planet("g")])
+    ficha_espejo(toy_vault, {"planets": [{"letter": "g", "P_days": 365.25, "K_ms": 0.0895,
+                                          "e": 0.0, "mass_earth": 1.0, "status": "confirmed"}]},
+                "# f\n\nLas señales `e`, `f` y `g` siguen discutidas.\nNEA publica las dos como `confirmed`.\n")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "test_star" not in _seccion(rep, "su ground-truth desmiente"), rep
+
+
+def test_la_tabla_estampada_de_planetas_no_es_prosa(toy_vault, capsys):
+    """⛔ `## Planetas` nombra la autoridad en su propio encabezado y lista todas las letras: sin el
+    recorte de `solo_prosa` el detector se dispara contra la tabla que el estampador escribe."""
+    write_gt(toy_vault, [gt_planet("g")])
+    ficha_espejo(toy_vault, {"planets": [{"letter": "g", "P_days": 365.25, "K_ms": 0.0895,
+                                          "e": 0.0, "mass_earth": 1.0, "status": "confirmed"}]},
+                "# f\n\n## Planetas (ground-truth NASA Exoplanet Archive)\n\n"
+                "| Letra |\n|---|\n| `e` |\n")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "test_star" not in _seccion(rep, "su ground-truth desmiente"), rep
+
+
+def test_gt_prose_conflicts_exige_autoridad_Y_verbo():
+    """Las dos mitades del filtro, cada una aislada: sin esto la mutación por cláusula sobrevive
+    porque un solo caso falla las dos a la vez y no distingue cuál manda (#204)."""
+    assert lint.gt_prose_conflicts("El planeta `e` figura como confirmed.", {"g"}) == [], \
+        "sin nombrar la autoridad, la oración habla de otra cosa"
+    assert lint.gt_prose_conflicts("NEA y el planeta `e` aparecen acá.", {"g"}) == [], \
+        "sin verbo de listar no se está afirmando qué lista la autoridad"
+
+
+def test_gt_prose_conflicts_exige_que_la_letra_este_INTRODUCIDA():
+    """Un `` `e` `` suelto es la excentricidad, y `` `b.K` `` un campo de disputa: sin el
+    introductor (`planeta`/`señal`/`candidata`) la letra no se cuenta."""
+    assert lint.gt_prose_conflicts("NEA publica `e` = 0,2 para ese ajuste.", {"g"}) == []
+    assert lint.gt_prose_conflicts("NEA publica el planeta `e`.", {"g"}) != []
+
+
+def test_gt_prose_conflicts_resuelve_la_anafora_con_la_oracion_previa():
+    """«las dos» mira hacia atrás y toma las letras de la oración que las introdujo — que es el caso
+    medido, donde la afirmación falsa no nombra ninguna letra por sí misma."""
+    p = "Las señales `e` y `g` siguen abiertas. NEA publica las dos como confirmed."
+    assert len(lint.gt_prose_conflicts(p, {"g"})) == 1
+    assert lint.gt_prose_conflicts(p, {"e", "g"}) == []
+
+
+def test_gt_prose_conflicts_prefiere_las_letras_PROPIAS_de_la_oracion():
+    """Si la oración nombra sus letras, la anáfora no manda: leer hacia atrás igual traería letras
+    de otra frase y el hallazgo apuntaría a la señal equivocada."""
+    p = "Las señales `b` y `c` están confirmadas. NEA publica las dos y el planeta `e` como confirmed."
+    hallazgos = lint.gt_prose_conflicts(p, {"b", "c"})
+    assert len(hallazgos) == 1 and "`e`" in hallazgos[0][1], hallazgos
+
+
+def test_gt_prose_conflicts_marca_la_negacion_que_el_ground_truth_desmiente():
+    """La otra dirección del cruce: la ficha dice que la autoridad NO lo lista y el JSON sí lo
+    trae. Sin esta rama el detector sólo ve la mitad de los desacuerdos."""
+    assert lint.gt_prose_conflicts("NEA no lista el planeta `e`.", {"e"}) != []
+
+
+def test_gt_prose_conflicts_actualiza_las_letras_previas_en_cada_oracion():
+    """La anáfora se resuelve contra la ÚLTIMA introducción, no contra la primera de la nota."""
+    p = ("Las señales `b` y `c` están confirmadas. Las señales `e` y `f` siguen abiertas. "
+         "NEA publica las dos como confirmed.")
+    hallazgos = lint.gt_prose_conflicts(p, {"b", "c"})
+    assert {h[1].split("`")[1] for h in hallazgos} == {"e", "f"}, hallazgos
+
+
+def test_gt_prose_conflicts_una_oracion_de_autoridad_tambien_deja_sus_letras():
+    """La oración que nombra la autoridad Y sus letras es la introducción de la siguiente: si no
+    actualizara `letras_previas`, la anáfora de después se resolvería contra una frase más vieja."""
+    p = "NEA confirma los planetas `e` y `f`. NEA publica las dos como confirmed."
+    hallazgos = lint.gt_prose_conflicts(p, set())
+    assert len(hallazgos) == 4, hallazgos      # 2 de la primera oración + 2 por la anáfora

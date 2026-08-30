@@ -829,6 +829,58 @@ def inferencias_sin_premisas(body: str) -> list[str]:
                        for t in re.findall(r"\[\[([^\]]+)\]\]", m))]
 
 
+# #278 — la prosa que afirma algo sobre la AUTORIDAD y su ground-truth desmiente. El espejo #70
+# vigila el frontmatter campo por campo y **nunca el cuerpo**, así que una ficha podía publicar
+# «NEA publica las dos como confirmed» sobre un planeta que NEA no lista — falso contra cuatro
+# lugares del mismo archivo, con el lint en verde. `verify-citations` no lo cubre (los valores de
+# ground-truth están exentos por contrato) y `find-contradictions` compara claim↔claim entre
+# fuentes, no contra la autoridad.
+GT_AUTHORITY = re.compile(r"\bNEA\b|NASA Exoplanet Archive|ground[-\s]truth", re.I)
+GT_VERB = re.compile(r"\b(publica|lista|trae|confirma|reporta|da)\b|\bconfirmed\b", re.I)
+GT_NEG = re.compile(r"\b(no|tampoco|sin)\b", re.I)
+# La letra sólo cuenta si la oración la INTRODUCE como planeta/señal: un `` `e` `` suelto es la
+# excentricidad y `` `b.K` `` es un campo de disputa. Sobre-restringir acá es correcto: el falso
+# positivo erosiona la categoría, y el punto ciego queda declarado.
+GT_INTRO = re.compile(r"\b(planetas?|se[ñn]al(?:es)?|candidatas?)\b", re.I)
+GT_LETTER = re.compile(r"`([b-z])`")
+GT_ANAPHORA = re.compile(r"\b(?:la[s]?\s+(dos|tres|cuatro)|ambas|ambos)\b", re.I)
+_ARIDAD = {"dos": 2, "tres": 3, "cuatro": 4, "ambas": 2, "ambos": 2}
+
+
+def gt_prose_conflicts(prose: str, gt_letters: set) -> list:
+    """Prose sentences stating what the ground-truth authority lists, denied by the JSON (#278).
+
+    `[(sentence, reason)]`. The sentence is reported whole (#236: the wording is the evidence).
+
+    Deliberately narrow, because a false positive erodes the category: the sentence must name the
+    authority AND a verb of listing, and the letter must be introduced as a planet/signal. An
+    anaphora («las dos») resolves backwards **within the same sentence block** and only if it finds
+    exactly that many letters — otherwise the sentence is dropped as not evaluable, never guessed."""
+    out: list = []
+    letras_previas: list = []
+    for oracion in re.split(r"(?<=[.;])\s+|\n\s*\n", prose or ""):
+        propias = GT_LETTER.findall(oracion) if GT_INTRO.search(oracion) else []
+        if not (GT_AUTHORITY.search(oracion) and GT_VERB.search(oracion)):
+            if propias:
+                letras_previas = propias
+            continue
+        letras = propias
+        if not letras and (m := GT_ANAPHORA.search(oracion)):
+            n = _ARIDAD.get((m.group(1) or m.group(0)).lower().strip())
+            letras = letras_previas if n and len(letras_previas) == n else []
+        negada = bool(GT_NEG.search(oracion[:GT_VERB.search(oracion).end()]))
+        for letra in letras:
+            if not negada and letra not in gt_letters:
+                out.append((oracion.strip(),
+                            f"afirma que la autoridad lista `{letra}` y el ground-truth no lo trae"))
+            elif negada and letra in gt_letters:
+                out.append((oracion.strip(),
+                            f"afirma que la autoridad NO lista `{letra}` y el ground-truth sí lo trae"))
+        if propias:
+            letras_previas = propias
+    return out
+
+
 def prot_documentado(body: str) -> bool:
     """¿El cuerpo documenta un `P_rot` con respaldo? Por ORACIÓN: mención + cita (en cualquier
     orden) y sin negador que niegue esa mención en particular. Ver el comentario de arriba para el
@@ -1224,6 +1276,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     sin_conclusiones: list = []        # (stem, motivo) — #277: sin `## Conclusiones` ni exención
     sin_conclusiones_ok: list = []     # (stem, motivo) — #277: declarado con motivo (visible, no es deuda)
     sin_aviso_llm: list = []           # (stem, motivo) — #247/#277: nota de paper sin el aviso de capa LLM
+    segunda_mano: dict = {}            # {bibcode: [(qué, valor, de quién)]} — #279
+    segunda_mano_perdida: list = []    # (stem, motivo) — #279: la ficha se apoya y no lo dice
     cita_log: list = []                # (stem, motivo) — #238: cita del `log.md` que su fuente no dice
     cita_no_verbatim: list = []        # (stem, motivo) — #220: la cadena no está en el `.txt`
     cita_opaca: list = []              # (stem, motivo) — #220: no evaluable (sin `.txt` / ocr; #275)
@@ -1993,6 +2047,13 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                     (stem, "sin el aviso de **capa LLM**: la nota de paper es la que más contenido "
                            "generado tiene y no dice cuál de sus tres capas es auditable → "
                            "`python scripts/make_notes.py --restamp-headers`"))
+            # #279 — los valores que la vista marcó de SEGUNDA MANO. La marca la pide #103 (el
+            # número no es de esta fuente: es el mecanismo de error nº 1 medido) y nadie chequeaba
+            # que llegara a la ficha. Medido: 4 casos en una ficha real, uno usado como falsa
+            # corroboración independiente —«otras dos fuentes dan 7,15» era una sola medición ajena
+            # contada dos veces—.
+            if (_sm := lb.second_hand_rows(body_full)):
+                segunda_mano[stem] = _sm
             _viejos = [k for k in ("symbols_lost", "fulltext_layout") if k in fm]
             if _viejos:
                 campos_txt_viejos.append(
@@ -2570,7 +2631,27 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # ser cierta por otra vía. Se marca en línea (R-3: `[[bib]] ⛔retractada`), y ahí baja a
     # informativa: visible, no destruida. El símbolo es deliberado — un `(retractada)` pelado daría
     # falso positivo con cualquier mención del hecho en prosa ("la señal fue retractada más tarde").
+    # #279 — la ficha que se apoya en un paper cuya vista marcó valores de SEGUNDA MANO y no lo
+    # dice. Se mira por BLOQUE citante (`pairs_of`, que ya excluye las secciones estampadas: la
+    # tabla `## Papers` cita todos los bibcodes y haría estallar la categoría), y el hallazgo se
+    # apaga si el bloque ya nombra la segunda mano — sin esa escotilla la deuda es inextinguible y
+    # una categoría que no se puede cerrar se deja de mirar.
+    for f, texto_n in anchor_bodies.items():
+        if not (in_dir(f, "stars") or in_dir(f, "concepts")):
+            continue
+        for _par in lb.pairs_of(texto_n):
+            _filas = segunda_mano.get(_par.bibcode)
+            if not _filas or "segunda mano" in _par.block.text.lower():
+                continue
+            _quien = "; ".join(f"{q} → {de}" for q, _v, de in _filas[:3])
+            segunda_mano_perdida.append(
+                (basename(f)[:-3],
+                 f"L{_par.block.first_line}: la prosa se apoya en [[{_par.bibcode}]] y su vista "
+                 f"marca {len(_filas)} valor(es) de SEGUNDA MANO ({_quien}) → si el valor es uno de "
+                 f"ésos, la ficha tiene que decir de quién es (#103): el número no es de esta fuente"))
+
     retracted_stems = {stem for stem, fm_p in paper_fms.items() if fm_p.get("retracted")}
+    gt_prosa: list = []                # (slug, motivo) — #278: la prosa desmiente su ground-truth
     prosa_retractada: list = []        # @inv INV-93
     prosa_retractada_marcada: list = []
     for f, texto_n in anchor_bodies.items():
@@ -2942,6 +3023,15 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                                              "no puede compararla con el ground-truth"))
             else:
                 contradictions += mirror_issues(slug, fm_ficha, gt)
+                # #278 — la otra mitad: la PROSA. `solo_prosa` saca las secciones estampadas, que
+                # nombran la autoridad en su propio encabezado y listan todas las letras (`##
+                # Planetas`): sin ese recorte el detector se dispara contra la tabla que el
+                # estampador escribe — mismo argumento que #214 con el detector de fuga.
+                _partes_f = cfg.frontmatter_span(texto_ficha)
+                _prosa_f = cfg.solo_prosa(_partes_f[1] if _partes_f else texto_ficha)
+                _letras_gt = {str(pl.get("letter")) for pl in planetas_gt if isinstance(pl, dict)}
+                for _frase, _motivo in gt_prose_conflicts(_prosa_f, _letras_gt):
+                    gt_prosa.append((slug, f"{_motivo} → «{_frase[:160]}»"))
         else:
             # Hermano simétrico de "ficha sin ground-truth" (más abajo): un ground-truth sin su
             # ficha es un renombre a medias (el skill `maintain` renombra el JSON pero no llegó a
@@ -3731,6 +3821,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('vista_sin_fuente_en_disco', '🔒 Vista fechada SIN fuente en disco: ya no es re-verificable (backlog)', SEV_BACKLOG, tuple(vista_sin_fuente_en_disco), poblacion='papers'),
         Categoria('reclamo_refutado', '↩ La vista REFUTA un reclamo que sigue en el frontmatter (backlog)', SEV_BACKLOG, tuple(reclamo_refutado), poblacion='papers'),
         Categoria('reclamo_sin_vista_declarado', 'Reclamo sin vista DECLARADO con `no_vista` + motivo (visible, no es deuda)', SEV_BACKLOG, tuple(reclamo_sin_vista_declarado), poblacion='papers'),
+        Categoria('gt_prosa', '🪞 La prosa afirma sobre la autoridad algo que su ground-truth desmiente (#278, backlog)', SEV_BACKLOG, tuple(gt_prosa), poblacion='ground_truth'),
+        Categoria('segunda_mano', '🔁 Valor de SEGUNDA MANO levantado sin la marca: la atribución se pierde en la síntesis (#103/#279, backlog)', SEV_BACKLOG, tuple(segunda_mano_perdida), poblacion='entidades'),
         Categoria('sin_conclusiones_ok', 'Fuente sin `## Conclusiones` DECLARADA con motivo (#277: visible, no es deuda)', SEV_BACKLOG, tuple(sin_conclusiones_ok), poblacion='papers'),
         Categoria('extraccion_no_declarada', 'Recorte de lectura sin declarar: hay core sin extraer y el registro no dice por qué (backlog)', SEV_BACKLOG, tuple(extraccion_no_declarada), poblacion='registros'),
         Categoria('papers_table_stale', 'Lista de papers desactualizada: la tabla estampada no refleja el universo (backlog)', SEV_BACKLOG, tuple(papers_table_stale), poblacion='registros'),

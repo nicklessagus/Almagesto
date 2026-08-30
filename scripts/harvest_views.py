@@ -34,6 +34,7 @@ import sys
 from pathlib import Path
 
 import extraction_prompt as ep
+import lib_blocks as lb
 import lib_config as cfg
 import make_notes as mn
 
@@ -175,7 +176,7 @@ def render_view(sujeto: str, data: dict) -> str:
         # gráfico por `Fig. N, p. M` — llamar «Línea» a eso es la misma mentira de encabezado que
         # #200 corrige en el bloque de verificación. La CLAVE del JSON sigue siendo `linea`: el
         # artefacto vive en `build/` y renombrarla dejaría mudas las extracciones en vuelo.
-        out += ["| Qué | Valor | Localizador | Régimen | Segunda mano |", "|---|---|---|---|---|"]
+        out += ["| " + " | ".join(lb.VISTA_COLS) + " |", "|" + "---|" * len(lb.VISTA_COLS)]
         for f in filas:
             # #240 — `cfg.escape_cell` ANTES de armar la fila: la prosa del extractor trae `|`
             # todo el tiempo (matemática, columnas transcritas de una tabla del paper, una

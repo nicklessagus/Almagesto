@@ -538,7 +538,7 @@ def verdict_valido(verdict: str) -> bool:
 _COLS_HASH = ("ancla", "hash", "condici")
 
 
-def _split_row(line: str) -> list[str]:
+def split_row(line: str) -> list[str]:
     """Cells of a markdown table row, splitting only on **unescaped** pipes.
 
     A verbatim quote can carry a `|` of its own (a table row of the paper), and the generator
@@ -703,7 +703,7 @@ def parse_verif_table(text: str) -> list[Row] | None:
     for ln in filas[1:]:
         if _SEP_ROW_RE.match(ln):
             continue
-        celdas = _split_row(ln)
+        celdas = split_row(ln)
         # ⚠ Una fila con MENOS celdas que el encabezado —típico: la `Condición` vacía omitida— caía
         # acá con un `continue` y se perdía ENTERA, y con ella el `Veredicto`: un `no-soportada`
         # dejaba de disparar el bloqueante de INV-117 y quedaba registrado bajo un encabezado que
@@ -818,6 +818,48 @@ def verdict_chain(verdict: str) -> list:
     one that says what the note actually did wrong."""
     partes = [x.strip(_ADORNO).strip() for x in _RESOLUCION_SEP.split(str(verdict or "").lower())]
     return [x for x in partes if x in VERDICTS]
+
+
+#: Las cinco columnas de la tabla de una vista. Las escribe `harvest_views.render_view` y las lee
+#: `second_hand_rows`: una sola definición, o el lector y el escritor divergen (regla de método 2).
+VISTA_COLS = ("Qué", "Valor", "Localizador", "Régimen", "Segunda mano")
+
+_VISTA_HEAD_RE = re.compile(r"^## Vista\b", re.M)
+
+
+def second_hand_rows(text: str) -> list:
+    """`(qué, valor, a quién)` for every view row whose *Segunda mano* cell is populated (#279).
+
+    #103 asks the extraction to mark a value the source attributes to someone else — it is the #1
+    measured error mechanism — and nothing checked the mark survived into the star note. Measured on
+    a real note: 4 values lost it, one of them used as **independent corroboration** of itself.
+
+    Indexed by column NAME, never by position: an older note may carry the pre-#195 `Línea` header,
+    and a row with an unescaped pipe shifts every column to its right."""
+    out: list = []
+    dentro, cols = False, None
+    for linea in str(text or "").split("\n"):
+        if linea.startswith("## "):
+            dentro, cols = bool(_VISTA_HEAD_RE.match(linea)), None
+            continue
+        if not dentro or not linea.strip().startswith("|"):
+            if not linea.strip().startswith("|"):
+                cols = None
+            continue
+        celdas = split_row(linea)
+        if cols is None:
+            cols = [c.strip().lower() for c in celdas]
+            continue
+        if _SEP_ROW_RE.match(linea.strip()) or len(celdas) != len(cols):
+            continue
+        try:
+            i_q, i_v, i_s = (cols.index("qué"), cols.index("valor"),
+                             next(j for j, c in enumerate(cols) if "segunda mano" in c))
+        except (ValueError, StopIteration):
+            continue
+        if (de := celdas[i_s].strip()) and de not in ("—", "-", "–"):
+            out.append((celdas[i_q], celdas[i_v], de))
+    return out
 
 
 def render_verif_row(row) -> str:

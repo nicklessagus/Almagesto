@@ -205,6 +205,20 @@ OCR, o marcar `pending`).
   (`«A … B»`) se chequea por fragmentos; la **página** no se puede chequear así y se dice (media red
   declarada vale más que ninguna). Existe porque el eje *¿la fuente dice esto?* es **ortogonal** a
   *¿la cita es verbatim?*: seis citas no-verbatim volvieron `soportada`, correctamente.
+- **La prosa afirma sobre la autoridad algo que su ground-truth desmiente** (#278, backlog): el
+  espejo #70 vigila el **frontmatter** campo por campo y nunca el cuerpo. Medido: una ficha publica
+  *«NEA publica las dos como `confirmed`»* sobre un planeta que NEA no lista — falso contra cuatro
+  lugares del mismo archivo, con el lint en verde. Ninguna otra capa lo ve: `verify-citations` exime
+  por contrato los valores de ground-truth y `find-contradictions` compara claim↔claim **entre
+  fuentes**. Heurística deliberadamente angosta (la oración tiene que nombrar la autoridad, un verbo
+  de listar y la letra **introducida** como planeta/señal), y se reporta **la frase** (#236). Punto
+  ciego declarado: la letra escrita sin introductor y la oración de polaridad mixta.
+- **Valor de segunda mano levantado sin la marca** (#103/#279, backlog): la extracción marca el
+  valor que la fuente atribuye a **otro** trabajo —es el mecanismo de error nº 1 medido— y la
+  síntesis lo tira. Medido: 4 casos en una ficha real, uno usado como **falsa corroboración
+  independiente** («otras dos fuentes dan 7,15» era una sola medición ajena contada dos veces). Se
+  mira por bloque citante (las secciones estampadas quedan fuera) y el hallazgo se apaga cuando el
+  bloque ya nombra la segunda mano — sin esa escotilla la deuda sería inextinguible.
 - **Cita textual de `log.md` que su fuente no dice** (#238): la bitácora es append-only y no podía
   corregirse; la entrada refutada se marca `⚠ corregido <fecha> → <entrada nueva>`, no se edita.
 - **Entradas de `## Verificación de citas` sin las tres sub-secciones** o con cabecera derivada a
