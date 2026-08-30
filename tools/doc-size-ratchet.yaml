@@ -1,0 +1,23 @@
+# Techo de tamaño de `CLAUDE.md`. Sólo puede BAJAR. Se mide con `pytest tests/test_doc_size.py`.
+#
+# QUÉ ES ESTO. `CLAUDE.md` se inyecta ENTERO en el contexto de cada sesión de cada instancia: es el
+# único documento del repo cuyo tamaño cuesta en cada operación. El 2026-08-30 medía 2258 líneas /
+# 201 KB, y el 73 % de sus bytes era color-desarrollo (postmortems de issues, mediciones con corpus,
+# «hasta 1.x este documento decía») — la cuarta copia de material que ya vive en los issues públicos,
+# `docs/mediciones.md` y `docs/contrato.md`. El recorte lo bajó a lo de abajo; este ratchet impide
+# que vuelva a crecer por acreción.
+#
+# LA REGLA DE ESCRITURA que este techo mecaniza: CLAUDE.md lleva **la regla y su consecuencia en una
+# línea, con su ancla (#N/D-N)**; el caso que la produjo y la medición van al issue y a
+# `docs/mediciones.md`. Idea tomada de agentic-memory-vault (límite de tamaño como regla forzada),
+# implementada como ratchet al estilo `idioma-ratchet.yaml`.
+#
+#   - por ENCIMA del techo → el test falla: alguien inlineó color-desarrollo. La salida es mover el
+#     porqué a su issue/mediciones.md y dejar la regla con su ancla — no subir el techo.
+#   - por DEBAJO con margen (>3 %) → pasa y avisa que hay que bajar el techo (un techo que nadie
+#     ajusta se vuelve decorativo — AUD-07).
+#   - subirlo es una decisión del usuario del template, nunca de un agente, y se hace editando este
+#     archivo con el motivo en el commit.
+medido_en: "2026-08-30"
+techo_lineas: 1620
+techo_bytes: 128500

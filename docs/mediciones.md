@@ -231,6 +231,47 @@ Opus de esa tabla existe sólo para Jofré (el brazo de control se corrió sobre
 el único solapado): ahí Opus sacó 31, Sonnet 27 (**87 %**) y Haiku 5 (**16 %**). No comparar el total de
 49 de Sonnet contra ese 31 — son poblaciones distintas.
 
+## 2026-08-28 · `.txt` vs PDF como fuente de extracción (#205)
+
+**Qué era.** Dos papers extraídos dos veces por subagentes independientes, uno leyendo sólo el
+`.txt` y el otro sólo el PDF (`Read` lo rasteriza). Decidió retirar la rama "leer el `.txt` y
+escalar al PDF si un detector lo dice" y hacer del PDF la única fuente de lectura.
+
+| paper | vía | tokens | tiempo | tools |
+|---|---|---|---|---|
+| `1998Cichocki` (17 pg, capa rota) | `.txt` | 107.459 | 187 s | 8 |
+| | **PDF** | **98.415** | **125 s** | **3** |
+| `2005Hyvarinen` (11 pg, capa limpia) | `.txt` | 96.967 | 146 s | 6 |
+| | **PDF** | **94.574** | **92 s** | **2** |
+
+El PDF gana en los cuatro ejes en los dos casos — el costo lo domina el razonamiento y la salida,
+no el input. Y el paper "limpio" tampoco estaba limpio: con los tres chequeos de calidad en verde,
+su `.txt` había perdido el radical `√` (sale como una `r` suelta), la prima de `p′` (como `p0`),
+superíndices de transpuesta y un subíndice que hace leer una autocovarianza como una inversa (#194).
+
+⚠ **n = 2, y los dos densos en matemática.** Lo defendible en costo es *«comparable, no 10× más
+caro»*; lo grande y consistente es el **tiempo** (−34 % y −37 %). Consecuencias: #205 (la fuente es
+el PDF, el `.txt` es el índice), retiro de `symbols_lost`/`fulltext_layout` (#193/#194 — los
+detectores no discriminaban), y la regla de modalidad: un modelo chico leyendo el PDF recupera lo
+mismo que uno grande leyendo el `.txt` roto — es cuestión de **modalidad, no de modelo**.
+
+## 2026-08-27/28 · El dato que vive en una imagen (#195) y el `|` que parte la fila (#240)
+
+Dos mediciones sobre el mismo tema real (65 vistas), las dos movieron reglas:
+
+- **29 de 65 vistas (45 %)** declaran datos que existen sólo en figuras o tablas-imagen: casi la
+  mitad del corpus tiene información que ninguna búsqueda sobre el `.txt` puede encontrar. La regla
+  dura cubría sólo ecuaciones → desde 1.71.0 `extraction_prompt._media_note` trata los tres casos
+  (tabla extraída como texto / tabla-imagen / figura como lectura de gráfico con `≈`, figura y
+  página).
+- **19 filas en 13 notas** tenían un `|` crudo en la prosa que va a una celda: la fila se parte, las
+  celdas de más no se renderizan y una afirmación citada **y verificada** queda invisible mientras
+  el lint sigue contando su fila. La regla (INV-99) existía y vivía sólo en el skill
+  `verify-citations`, para la otra tabla → hoy escapa `lib_config.escape_cell` en el cosechador
+  (único punto de escritura): `\|` fuera de la matemática, `\vert` adentro — escapar a ciegas
+  convierte 19 filas invisibles en 19 fórmulas equivocadas, que es peor (la fila invisible se nota,
+  la fórmula alterada no).
+
 ## Próximas pruebas (anotadas, no corridas)
 
 Salen de lo medido arriba y están ordenadas por lo que cuestan. Las pruebas 1 y 4 de la lista anterior
