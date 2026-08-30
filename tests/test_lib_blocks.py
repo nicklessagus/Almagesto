@@ -720,6 +720,61 @@ def test_paridad_de_adorno_entre_las_dos_columnas_de_la_misma_fila():
         assert lb.condition_kind(forma.format("acota") + " — X") == "acota", forma
 
 
+# ── #274 · higiene del bloque: el repr, el corte a media fórmula y la cadena de rondas ───────────
+
+
+def test_el_corte_del_extracto_no_deja_un_dolar_huerfano():
+    """#274b — medido: 10 de 88 filas cortadas a media fórmula, las únicas 10 celdas con `$` impar
+    de toda la nota. En Obsidian un `$` sin cerrar se traga texto hasta el próximo `$` de la fila."""
+    largo = ("sobre 135 medidas HARPS de 4,5 años, con $\\sigma(O-C) = 0{,}92$ m/s y una cola de "
+             "texto que empuja el corte justo adentro de la fórmula")
+    corte = lb.truncate_claim(largo, 60)
+    assert corte.count("$") % 2 == 0, corte
+    assert corte.endswith("…")
+
+
+def test_el_corte_del_extracto_no_parte_un_wikilink():
+    """#257c — un `[[` sin cerrar es **bloqueante** en el lint: el corte tiene que retroceder."""
+    largo = "la señal la reporta [[2020aaa...1..1A]] y después sigue un rato largo más de prosa"
+    corte = lb.truncate_claim(largo, 30)
+    assert corte.count("[[") == corte.count("]]"), corte
+
+
+def test_el_extracto_corto_no_se_toca_y_el_impartible_vuelve_entero():
+    """Las dos direcciones seguras: no se trunca lo que entra, y si NO hay corte seguro se devuelve
+    entero — una celda rota es peor que una celda larga."""
+    assert lb.truncate_claim("corto", 180) == "corto"
+    impartible = "$" + "x" * 200 + "$"
+    assert lb.truncate_claim(impartible, 50) == impartible
+
+
+def test_render_verif_row_rechaza_un_repr_de_lista():
+    """#274a — la salida estructurada del fan-out serializada con `repr()` en vez de convertida a
+    prosa. Medido en dos filas de una ficha real; y `\\'` no es escape de markdown, así que la misma
+    celda se lee distinto en Python-Markdown que en markdown-it."""
+    fila = _row_completa(evidence="['Tabla 1, fila HD 40307', 'y otra cosa']")
+    with pytest.raises(ValueError, match="repr"):
+        lb.render_verif_row(fila)
+
+
+def test_la_cadena_de_rondas_se_lee_entera_y_no_rompe_la_particion():
+    """#274c — con una sola flecha no se distingue «una ronda lo corrigió» de «tres lo pelearon».
+    Medido: una nota de 8 rondas emitió 13 veredictos malos y publicó 11.
+
+    ⛔ La partición sigue siendo por el PRIMER veredicto: contar la fila en dos baldes rompería el
+    invariante de #263, que es lo que hace legible la cabecera."""
+    assert lb.verdict_chain("no-soportada→contradice→corregida") == ["no-soportada", "contradice"]
+    assert lb.verdict_chain("soportada") == ["soportada"]
+    assert lb.resueltos("no-soportada→contradice→corregida") is True
+    assert lb.verdict_valido("no-soportada→contradice→corregida") is True
+    filas = [_row("no-soportada→contradice→corregida"), _row("soportada")]
+    c = lb.verif_counts(filas)
+    assert c["cadenas"] == 1
+    assert (c["soportadas"] + c["no_soportadas"] + c["contradicen"] + c["no_verificables"]
+            == c["pares"]), "la cadena no puede romper la partición de #263"
+    assert "1 con más de una ronda" in lb.verif_summary(filas)
+
+
 # ── #282 · re-anclaje: llevar el veredicto en vez de tirarlo ─────────────────────────────────────
 
 

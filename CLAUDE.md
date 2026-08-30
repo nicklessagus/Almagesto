@@ -1230,7 +1230,10 @@ transcripciones de tablas/listas, la **completitud** (una tabla truncada sin un 
   distinguir "verificada" de "nunca se miró".
 - ⛔ **Sólo `Afirmación (extracto)` se trunca (#226)**; `Evidencia` y `Condición` no, y `Evidencia`
   lleva su localizador (`p. N`, `L…`, `Fig. 3, p. 7`) **al final y completo** — el corte se lleva el
-  localizador y apaga el cruce de #122, que sin él devuelve un 0 que se lee verde.
+  localizador y apaga el cruce de #122, que sin él devuelve un 0 que se lee verde. ⛔ **Y el corte
+  no cae dentro de `$…$`, `` ` `` ni `[[ ]]` (#274b/#257c):** retrocede al límite del bloque —
+  `lib_blocks.truncate_claim`—, porque un `$` huérfano se traga texto en Obsidian y un `[[` partido
+  es bloqueante. ⛔ **La celda lleva PROSA, nunca un `repr()`** de la salida del fan-out (#274a).
 - ⛔ **`Hash fuente` declara CONTRA QUÉ ARCHIVO se verificó: `txt:<sha10>` o `pdf:<sha10>` (#117).**
   La decisión la toma el verificador par por par, así que la declara la **fila** (ningún campo del
   frontmatter puede saberlo). En filas nuevas: `pdf:`. Sin prefijo = *no consta* y el lint
@@ -1245,7 +1248,9 @@ transcripciones de tablas/listas, la **completitud** (una tabla truncada sin un 
   `no verificable por extracción` ni la resolución anotada en la celda.
 - ⛔ **Con DOS RONDAS, la segunda ANOTA, no pisa (#232):** `contradice→corregida` — es lo que lee
   `lib_blocks.resueltos()`. Si pisara, el bloque final publicaría 0 donde hubo 3 `contradice` y
-  nadie podría saberlo desde la nota.
+  nadie podría saberlo desde la nota. Con **más** rondas la celda encadena
+  (`no-soportada→contradice→corregida`, #274c): la partición de la cabecera sigue siendo por el
+  **primer** veredicto y la cadena se publica aparte.
 - ⛔ **La cabecera la genera el mismo código que lee la tabla** (`lib_blocks.verif_summary`,
   INV-81): los **cuatro** veredictos —que particionan: `soportada`, `no-soportada`, `contradice`,
   `no verificable por extracción`— y, tras un **`—`**, `con_condicion` (eje ortogonal). Las **tres

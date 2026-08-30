@@ -565,6 +565,12 @@ def verif_counts(rows: list) -> dict:
             "contradicen_resueltas": sum(1 for r in rows
                                          if str(r.verdict or "").strip().lower().startswith("contradice")
                                          and resueltos(r.verdict)),
+            # #274c — filas cuya celda registra MÁS DE UNA ronda (`no-soportada→contradice→
+            # corregida`). La partición sigue siendo por el PRIMER veredicto —el que dice qué hizo
+            # mal la nota—; esto dice cuántas filas pelearon más de una vuelta, que es lo que la
+            # notación de una sola flecha no podía registrar. Medido: una nota de 8 rondas emitió 13
+            # veredictos malos y publicó 11.
+            "cadenas": sum(1 for r in rows if len(verdict_chain(r.verdict)) > 1),
             "con_condicion": sum(1 for r in rows
                                  if str(r.condition or "").strip() not in ("", "—", "-", "–"))}
 
@@ -583,7 +589,8 @@ def verif_summary(rows: list) -> str:
             f"/ {c['no_soportadas']} no-soportadas ({c['no_soportadas_resueltas']} resueltas) "
             f"/ {c['contradicen']} contradicen ({c['contradicen_resueltas']} resueltas) "
             f"/ {c['no_verificables']} no verificables "
-            f"— {c['con_condicion']} con condición declarada")
+            f"— {c['con_condicion']} con condición declarada"
+            + (f" · {c['cadenas']} con más de una ronda" if c["cadenas"] else ""))
 
 
 def parse_verif_table(text: str) -> list[Row] | None:
@@ -700,14 +707,76 @@ def _hash_cell(row) -> str:
     return f"{row.source_kind}:{h}" if row.source_kind and ":" not in h else h
 
 
+#: #226 · el largo con que se trunca `Afirmación (extracto)`, la ÚNICA columna truncable.
+TRUNCADO_CLAIM = 180
+
+# Aperturas que un corte no puede dejar sin cerrar. `$…$` es el caso medido (10 de 88 filas de una
+# ficha real cortadas a media fórmula, las únicas 10 con `$` impar de toda la nota: en Obsidian un
+# `$` huérfano se traga texto hasta el próximo `$`); `[[…]]` es peor todavía, porque un wikilink
+# partido es un **bloqueante** del lint (#257c).
+_SPANS_ABIERTOS = (("$", "$"), ("`", "`"), ("[[", "]]"))
+
+
+def _cut_is_safe(texto: str, i: int) -> bool:
+    """Does cutting at `i` leave every delimited span closed? (#274b)"""
+    prefijo = texto[:i]
+    for abre, cierra in _SPANS_ABIERTOS:
+        if abre == cierra:
+            if prefijo.count(abre) % 2:
+                return False
+        elif prefijo.count(abre) != prefijo.count(cierra):
+            return False
+    return True
+
+
+def truncate_claim(texto: str, limite: int = TRUNCADO_CLAIM) -> str:
+    """The `Afirmación (extracto)` cell, cut at a **safe** boundary (#274b, #257c).
+
+    Truncating is legal here and only here (#226: the extract's anchor lives in the note, not in the
+    cell), but the cut must not fall inside `$…$`, a backtick span or a `[[wikilink]]`: measured on a
+    real note, 10 of 88 rows were cut mid-formula and left an odd `$`, and a split `[[` is a lint
+    blocker. The cut retreats to the last safe word boundary; if there is none —the whole prefix is
+    one long span— the text is returned **whole**, because a broken cell is worse than a long one."""
+    t = str(texto or "").strip()
+    if len(t) <= limite:
+        return t
+    corte = next((i for i in range(limite, 0, -1)
+                  if _cut_is_safe(t, i) and t[i - 1].isspace()), 0)
+    if not corte:
+        return t
+    return t[:corte].rstrip() + "…"
+
+
+def verdict_chain(verdict: str) -> list:
+    """The verdicts a cell records, in order — `no-soportada→contradice→corregida` gives two (#274c).
+
+    The notation carries one arrow per round. With a single arrow the cell cannot tell «one round
+    corrected it» from «three rounds fought over it»: measured on a note that ran **eight** rounds,
+    13 bad verdicts were issued and 11 reached the block. Reading the chain is what lets a consumer
+    count rounds; the partition of `verif_counts` still keys on the **first** verdict, which is the
+    one that says what the note actually did wrong."""
+    partes = [x.strip(_ADORNO).strip() for x in _RESOLUCION_SEP.split(str(verdict or "").lower())]
+    return [x for x in partes if x in VERDICTS]
+
+
 def render_verif_row(row) -> str:
     r"""The canonical markdown line for one `Row`, with **every cell escaped** (#240/#284).
 
     The `Fuente` cell is written as the `[[wikilink]]` the parser reads back, and the hash cell
     recomposes its prefix. Escaping is `cfg.escape_cell`, the same one the view harvester uses:
     inside `$…$` a bar is `\vert`, outside it is `\|`."""
-    celdas = (str(row.n), row.claim, f"[[{row.bibcode}]]" if row.bibcode else "",
+    celdas = (str(row.n), truncate_claim(row.claim), f"[[{row.bibcode}]]" if row.bibcode else "",
               row.verdict, row.evidence, row.anchor, _hash_cell(row), row.condition or "—")
+    for c in celdas:
+        # #274a — la salida estructurada del fan-out serializada con `repr()` en vez de convertida a
+        # prosa: al lector le llegan los corchetes, los `', '` y los apóstrofos escapados. Medido en
+        # dos filas de una ficha real, y el daño no es sólo estético: `\'` NO es un escape de
+        # markdown, así que Python-Markdown imprime la barra y markdown-it se la come — la misma
+        # celda se lee distinto según el parser. La red es la de #240: un `assert` en el punto que
+        # arma la fila, que es el único lugar por donde pasa toda celda.
+        if str(c or "").lstrip().startswith(("['", '["')):
+            raise ValueError(f"celda con un `repr()` de lista de Python: «{str(c)[:60]}…» — la "
+                             f"salida del fan-out se convierte a PROSA, no se vuelca")
     return "| " + " | ".join(cfg.escape_cell(str(c or "").strip()) or "—" for c in celdas) + " |"
 
 

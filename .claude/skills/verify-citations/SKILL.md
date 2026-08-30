@@ -442,6 +442,23 @@ va al final de la cita, así que se lo lleva el corte y **62 de 90** filas queda
 cruce de #122 devolviendo 0 sobre el 69 % de la nota. `python scripts/lint.py` hoy reporta las dos
 cosas (celda cortada; #122 no evaluable en esa fila).
 
+⛔ **El corte de `Afirmación (extracto)` no puede caer dentro de `$…$`, `` ` `` ni `[[ ]]`**
+(#274b): retrocede al límite del bloque. Medido en una ficha real, **10 de 88** filas cortadas a
+media fórmula —las únicas 10 celdas con `$` impar de toda la nota—, y en Obsidian un `$` huérfano se
+traga texto hasta el próximo `$`; un `[[` partido es peor, porque es **bloqueante** del lint. Si
+generás la tabla con un script, el corte lo hace `lib_blocks.truncate_claim`.
+
+⛔ **Las celdas llevan PROSA. Nunca un `repr()` de la salida del fan-out** (#274a): los corchetes,
+los `', '` y los `\'` llegan tal cual al lector, y `\'` **no es un escape de markdown** —
+Python-Markdown imprime la barra y markdown-it se la come, así que la misma celda se lee distinto
+según el parser. Dentro de una celda se escapa **sólo** `|`; las comillas van crudas.
+
+⛔ **Más de dos rondas: la celda ENCADENA** (#274c) — `no-soportada→contradice→corregida`. Con una
+sola flecha no se distingue *«una ronda lo corrigió»* de *«tres lo pelearon»*: medido, una nota que
+corrió **ocho** rondas emitió 13 veredictos malos y publicó 11. La partición de la cabecera sigue
+siendo por el **primer** veredicto (el que dice qué hizo mal la nota) y las cadenas se publican
+aparte.
+
 ⛔ **La celda `Condición` arranca con su CLASE: `acota: …` o `contextualiza: …`** (#221) — como la
 fila 4 del ejemplo. El adorno no rompe nada (`**contextualiza** — …` se lee igual desde #283), pero
 la clase **tiene que estar**: es lo que separa la condición que obliga a editar de la que sólo va al
