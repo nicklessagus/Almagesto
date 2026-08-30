@@ -1584,17 +1584,17 @@
   {
    "number": 318,
    "title": "El gate que #315/#317 pidieron quedó afuera: `cita_no_verbatim` sigue en backlog y NO sube a bloqueante con `--cierre` — justo ahora que la comparación contra la extracción la volvió creíble, una cita fabricada cierra la operación en verde",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 319,
    "title": "`_solo_separadores` lleva un condicional MUERTO: `s[:12] if len(s)<=12 else s` da `s` en las dos ramas, así que el tope de 12 caracteres que la expresión insinúa no está aplicado — una regla a medio escribir que ninguna red puede matar (#316)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 320,
    "title": "`extraction_texts` no memoiza y repite glob + read + walk + normalize por cada cita fallida: es exactamente la asimetría que #275 arregló en `_source_readings`, agravada porque esta tanda movió `_sources_for` al loop por cita",
-   "state": "OPEN"
+   "state": "CLOSED"
   }
  ]
 }
