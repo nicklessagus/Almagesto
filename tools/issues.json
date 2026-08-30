@@ -1564,21 +1564,36 @@
   {
    "number": 314,
    "title": "El paso 3c (contraste cross-paper) no tiene herramienta y su modo de falla es predecible: el digest ad-hoc trunca dentro de la cita y el modelo la completa — medido, 2 citas FABRICADAS sobre 88 pares, en el carácter exacto del corte",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 315,
    "title": "El chequeo de cita verbatim CAZÓ una cita fabricada y quedó enterrado: compara contra el `.txt` —que #205 declara degradado— así que su señal es 2 de 17 (11 %) y delega 54 confirmaciones manuales al PDF",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 316,
    "title": "El emparejador atribuye la cita a TODOS los bibcodes del bloque: un párrafo que contrasta dos fuentes queda marcado por decir la verdad — medido, 12 de 12 hallazgos «duros» del hub `ica` son falsos, y «resolverlos» rompería la nota",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 317,
    "title": "DISEÑO: `contrast.py` — la herramienta que le falta al paso 3c, con validación cruzada JSON ↔ nota ↔ `.txt`. La comparación contra el JSON vuelve DECIDIBLE «esta cita la inventó el sintetizador», sin abrir el PDF",
+   "state": "CLOSED"
+  },
+  {
+   "number": 318,
+   "title": "El gate que #315/#317 pidieron quedó afuera: `cita_no_verbatim` sigue en backlog y NO sube a bloqueante con `--cierre` — justo ahora que la comparación contra la extracción la volvió creíble, una cita fabricada cierra la operación en verde",
+   "state": "OPEN"
+  },
+  {
+   "number": 319,
+   "title": "`_solo_separadores` lleva un condicional MUERTO: `s[:12] if len(s)<=12 else s` da `s` en las dos ramas, así que el tope de 12 caracteres que la expresión insinúa no está aplicado — una regla a medio escribir que ninguna red puede matar (#316)",
+   "state": "OPEN"
+  },
+  {
+   "number": 320,
+   "title": "`extraction_texts` no memoiza y repite glob + read + walk + normalize por cada cita fallida: es exactamente la asimetría que #275 arregló en `_source_readings`, agravada porque esta tanda movió `_sources_for` al loop por cita",
    "state": "OPEN"
   }
  ]
