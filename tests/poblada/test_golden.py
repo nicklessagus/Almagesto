@@ -121,6 +121,14 @@ def test_lint_golden_semilla_fija(sembrar):
         f"falta {GOLDEN_FILE} — generalo con `UPDATE_GOLDEN=1 python -m pytest "
         "tests/poblada/test_golden.py -m poblada -q`")
     esperado = GOLDEN_FILE.read_text(encoding="utf-8")
+    if normalizado != esperado:
+        # El diff, acotado: un golden cuyo fallo no muestra QUÉ cambió obliga a reproducir el
+        # entorno para poder leerlo — y el caso que motivó esto fue un CI en rojo cuyo mensaje no
+        # decía una sola línea del cambio.
+        import difflib
+        _d = [l for l in difflib.unified_diff(esperado.splitlines(), normalizado.splitlines(),
+                                              "golden", "ahora", lineterm="", n=1)][:40]
+        print("\n".join(_d))
     assert normalizado == esperado, (
         "el lint cambió de comportamiento sobre el corpus congelado (seed=42) respecto del golden "
         "commiteado — si el cambio es INTENCIONAL, regenerar con `UPDATE_GOLDEN=1 python -m "

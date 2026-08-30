@@ -10,3 +10,7 @@ astroquery>=0.4.6   # fetch_ground_truth.py: NASA Exoplanet Archive + SIMBAD (tr
 # --- desarrollo (la suite; no hacen falta para usar la bóveda) ---
 pytest>=7.0
 pytest-xdist>=3.0   # `pytest -n auto`: tier 0 20 s → 10 s, tier 1 2 min → 46 s (medido 2026-08-28)
+coverage>=7.0       # tier `poblada`: `test_cobertura` corre la suite bajo coverage para
+                    # encontrar la función que NADIE ejecuta. Sin él ese test no mide nada
+                    # (y hasta 1.126.0 moría con un FileNotFoundError que mandaba a buscar
+                    # el defecto donde no estaba: faltaba en las deps del CI).

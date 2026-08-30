@@ -27,12 +27,23 @@ RATCHET = RAIZ / "tools" / "cobertura-ratchet.yaml"
 def _sin_ejecutar(tmp_path) -> list[str]:
     """Corre la suite tier 0 bajo `coverage` y devuelve `archivo::funcion` sin un solo hit."""
     datafile = tmp_path / ".coverage"
-    subprocess.run([sys.executable, "-m", "coverage", "run", "--source=scripts",
-                    f"--data-file={datafile}", "-m", "pytest", "tests/", "-q", "--no-header"],
-                   cwd=RAIZ, capture_output=True, text=True, timeout=900)
+    r_run = subprocess.run([sys.executable, "-m", "coverage", "run", "--source=scripts",
+                            f"--data-file={datafile}", "-m", "pytest", "tests/", "-q", "--no-header"],
+                           cwd=RAIZ, capture_output=True, text=True, timeout=900)
     salida = tmp_path / "cov.json"
-    subprocess.run([sys.executable, "-m", "coverage", "json", f"--data-file={datafile}",
-                    "-o", str(salida)], cwd=RAIZ, capture_output=True, timeout=300)
+    r_json = subprocess.run([sys.executable, "-m", "coverage", "json", f"--data-file={datafile}",
+                             "-o", str(salida)], cwd=RAIZ, capture_output=True, text=True,
+                            timeout=300)
+    # D-43 — un chequeo que NO PUDO CORRER se declara con su motivo, no muere con un
+    # `FileNotFoundError` sobre el archivo que el paso anterior no llegó a escribir. Medido: en CI
+    # faltaba `coverage` en las deps del job y el fallo se leía como «falta cov.json», que manda a
+    # buscar el defecto donde no está.
+    if not salida.exists():
+        raise AssertionError(
+            "el barrido de cobertura NO PUDO CORRER, así que este test no midió nada (D-43).\n"
+            f"  `coverage run` rc={r_run.returncode}: {(r_run.stderr or r_run.stdout or '')[-400:]}\n"
+            f"  `coverage json` rc={r_json.returncode}: {(r_json.stderr or '')[-200:]}\n"
+            "  ¿está instalado `coverage` en este entorno?")
     datos = json.loads(salida.read_text(encoding="utf-8"))
     import ast
     faltan = []

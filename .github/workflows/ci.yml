@@ -38,7 +38,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Instalar deps de la suite
-        run: pip install pyyaml requests numpy pytest
+        run: pip install pyyaml requests numpy pytest coverage
       - name: Tests de scripts/
         run: python -m pytest tests/ -q
 
@@ -72,6 +72,6 @@ jobs:
         with:
           python-version: '3.12'
       - name: Instalar deps de la suite
-        run: pip install pyyaml requests numpy pytest
+        run: pip install pyyaml requests numpy pytest coverage
       - name: Tier poblada (corpus sintético + golden del lint)
         run: python -m pytest tests/poblada -m poblada -q
