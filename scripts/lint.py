@@ -586,10 +586,18 @@ def in_dir(path: str, name: str) -> bool:
 
 
 def note_files() -> list:
-    # incluye index.md/log.md (aportan links entrantes); se excluyen de orfandad por nombre.
+    """The notes the lint sweeps, in a STABLE order.
+
+    ⛔ `glob` returns **filesystem** order, which differs between machines: since every category
+    accumulates its findings in sweep order, the same corpus produced reports with the same lines in
+    a different order. Measured: the golden (`test_lint_golden_semilla_fija`) passed locally and
+    failed in CI with a diff where **not one finding changed**, only its position — a gate that
+    cannot tell a regression from a filesystem. And without this, diffing two lint reports is noise.
+
+    Includes `index.md`/`log.md` (they contribute incoming links); orphanhood excludes them by name."""
     files = glob.glob(str(cfg.WIKI / "**" / "*.md"), recursive=True)
     files += glob.glob(str(cfg.RAW / "refs" / "*.md"))
-    return files
+    return sorted(files)
 
 
 def _norm_alias(x: str) -> str:
