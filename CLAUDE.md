@@ -397,7 +397,8 @@ add-only **no se afloja**.
 `stars`/`thesis_links`/`methods` como **reclamos** (`make_notes` los mergea add-only sin leer nada)
 y a `vistas[]` como **lecturas**. Un reclamo sin vista es backlog, y se cierra de dos maneras:
 haciendo la vista, o declarándola `no_vista: [{sujeto, motivo}]` cuando ese sujeto sólo aporta al
-roll-up. **Motivo obligatorio y por sujeto**: un paper que tres sujetos reclaman se saltea por
+roll-up — declaración que vale en **las cuatro** redes que cuentan la nota (#268), con estado propio
+en el roll-up: `sin vista (declarado)`, que no es `sin extraer`. **Motivo obligatorio y por sujeto**: un paper que tres sujetos reclaman se saltea por
 motivos distintos en cada uno, y una escotilla sin sujeto los eximiría a los tres. Qué cuenta como
 reclamo: `stars` y `thesis_links` siempre; `methods` **sólo si ese nombre es un tema declarado** —lo
 puebla la extracción, así que es producto de la lectura, y contarlo entero haría nacer el backlog

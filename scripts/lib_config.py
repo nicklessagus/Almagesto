@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.116.0"
+ALMAGESTO_VERSION = "1.117.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -249,6 +249,15 @@ def _es_estampada(linea: str) -> bool:
 #: OBLIGATORIA aunque el contenido falte: es la capa auditable del cuerpo, y su ausencia y su vacío
 #: se arreglan distinto (una nota sin la sección no se puede re-clasificar offline; una con el
 #: placeholder está esperando que el cosechador la complete desde el PDF).
+#: #205/#269 · dónde se apunta un valor. Vive una sola vez porque la escriben DOS artefactos —el
+#: prompt de extracción y la plantilla de la vista que se estampa en la nota— y divergieron: el
+#: stub siguió mandando citar por nº de línea del `.txt` durante 40 versiones después de que #205
+#: hiciera del PDF la fuente, publicando dentro del vault la doctrina retirada.
+REGLA_LOCALIZADOR = (
+    "el **localizador** es la **página** del PDF (`p. 7`); `L1234` sólo en fuente web o documento "
+    "largo (#80/#200), y `Fig. N, p. M` en lectura de gráfico (#195). El `grep -n` sobre el `.txt` "
+    "sirve para **ubicar** dónde mirar, no para citar")
+
 ABSTRACT_PLACEHOLDER = "_(no disponible)_"
 
 SCHEMA_NOTA = {

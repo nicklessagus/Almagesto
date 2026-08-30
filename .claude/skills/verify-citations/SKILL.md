@@ -392,6 +392,34 @@ sobre esa fila. El mecanismo funcionó, pero sólo porque alguien miró los pare
 por qué: si la edición no hubiera movido el ancla, la afirmación falsa se quedaba. Por eso la
 segunda pasada se **manda** acá en vez de aparecer como un hallazgo a interpretar.
 
+⛔ **Y el prompt de esa segunda ronda va CIEGO: se manda el par, no la historia (#258).** El
+verificador recibe **la afirmación tal como está hoy y su fuente**, nada más. Prohibido *«antes decía
+X»*, *«la ronda anterior marcó Y»* y *«verificá que Z»*: eso es *leading the witness* —el juez entra
+sabiendo qué respuesta se espera, y se la da **quien escribió la corrección que tiene que juzgar**—,
+y rompe el aislamiento del paso 2 justo en la ronda que existe **porque el escritor ya se equivocó
+una vez**. Es la misma regla que el modo revalidación de `reference/modos-a-pedido.md` ya exige a
+pedido (*«verificadores nuevos y ciegos a los veredictos anteriores»*, *«SIN pasarle la tabla
+vigente»*), subida acá a la ronda **obligatoria**.
+
+- **El insumo canónico es el JSON del subconjunto**, y sólo una de sus claves:
+  ```bash
+  python scripts/reverify_subset.py <nota> --json build/<slug>/reverif.json
+  ```
+  se le pasa al verificador **`re_verificar[<bibcode>][].texto`** —el texto vigente— y **nada más de
+  ese JSON**. `re_anclaje` lleva `ancla_vieja` y `veredicto`: eso es **la historia**, y es
+  exactamente lo que no se le manda.
+- **Dirigir la pregunta, no la respuesta.** Si hace falta orientar la atención, se orienta al lugar
+  donde mirar, nunca al veredicto esperado. Legítimo: *«prestá atención a qué método atribuye la
+  fuente a cada valor de la Tabla 2»*. Prohibido: *«la nota dice que son estimados de calibración,
+  verificá»*.
+- ⚠ **Excepción nombrada: el par marcado `inferencia`.** Ahí el prompt **sí** declara sus premisas
+  —los `[[bibcode]]` que la marca nombra—, porque eso es justamente lo que hay que verificar y no se
+  infiere del texto solo.
+
+**Por qué:** medido en una ficha real (8 rondas, 88 pares), **2 correcciones metieron afirmaciones
+falsas nuevas** y las cazó el ancla, no el prompt; en un caso el sesgo se propagó por **tres**
+agentes hasta que una **cuarta** lectura independiente lo rompió.
+
 Cada **no-soportada / contradice**, y cada `condicion` marcada **`acota`** (#221: la que deja
 falsa la afirmación; la `contextualiza` va al reporte y no obliga a editar), se resuelve antes de
 cerrar:

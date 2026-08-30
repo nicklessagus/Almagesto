@@ -205,6 +205,14 @@ OCR, o marcar `pending`).
   (`«A … B»`) se chequea por fragmentos; la **página** no se puede chequear así y se dice (media red
   declarada vale más que ninguna). Existe porque el eje *¿la fuente dice esto?* es **ortogonal** a
   *¿la cita es verbatim?*: seis citas no-verbatim volvieron `soportada`, correctamente.
+- **`no_vista` se consulta en las cuatro redes** (#268): la escotilla que #256 hizo alcanzable
+  decidía sobre **una** categoría, y las otras tres contaban la misma nota como deuda — medido, una
+  nota con `no_vista` declarado y motivo seguía recibiendo *«conseguir el PDF»* sobre una tabla
+  VizieR, que no es un paper y para la que ninguno de los cuatro valores de `pending` sirve. Hoy el
+  sujeto declarado no entra al detector de *sin fuente en disco*, no cuenta en el recorte de lectura
+  (`extraccion: todos los core` dejaba de cerrar por su culpa) y el roll-up lo publica con estado
+  propio, `sin vista (declarado)`, en vez de `sin extraer`. ⚠ La forma **inválida** del campo sigue
+  siendo bloqueante: el parseo temprano guarda el error y lo re-levanta donde se reporta.
 - **La prosa afirma sobre la autoridad algo que su ground-truth desmiente** (#278, backlog): el
   espejo #70 vigila el **frontmatter** campo por campo y nunca el cuerpo. Medido: una ficha publica
   *«NEA publica las dos como `confirmed`»* sobre un planeta que NEA no lista — falso contra cuatro

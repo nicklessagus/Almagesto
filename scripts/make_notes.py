@@ -619,6 +619,72 @@ def restamp_headers() -> int:
 AVISO_LLM_MARCA = "Capa LLM"
 
 
+#: #269 · el bullet de anotación ANTERIOR a 1.117.0, embebido sólo para que el migrador reconozca
+#: el stub viejo. Se borra cuando la migración termine: una copia del texto retirado que sobreviva
+#: es exactamente lo que este issue arregla.
+_BULLET_ANOTACION_VIEJO = (
+    "- **Cómo anotar cada valor (#103):** pegá el **nº de línea** del `.txt` (`grep -n`, nunca "
+    "`splitlines()`) junto a cada número que copies, y el **régimen** en el que la fuente lo afirma "
+    "(muestra, época, corte de datos, modelo). Si la fuente **atribuye el valor a otro trabajo** "
+    "(«according to X», «(X et al.)»), marcalo **segunda mano** y citá a X: el número **no es de "
+    "esta fuente**. Copiá el **tiempo verbal y el cuantificador tal cual** (si dice «was "
+    "associated», no escribas «is associated»; si dice «el 75 % de la muestra», no escribas «la "
+    "muestra»). ⛔ No escribas prosa que compare este paper con otro — comparar es `inferencia` "
+    "y va al `## Inventario por eje` de la ficha, no acá._")
+
+
+def _no_vista_declarada(fm: dict, stem: str, sujetos: set) -> bool:
+    """Did this note declare `no_vista` for the subject of this roll-up? (#268)
+
+    ⛔ A broken `no_vista` must not abort the chain: `papers_universe` runs inside note writing, and
+    one malformed note cannot stop the whole pass (same doctrine as `fm_broken` in the lint). It
+    falls back to the plain ladder, and the lint reports the malformed field on its own."""
+    try:
+        declaradas = {v["sujeto"] for v in cfg.load_no_vista(fm, entry=stem)}
+    except cfg.VistasError:
+        return False
+    return bool(declaradas & sujetos)
+
+
+def restamp_vista_stub() -> int:
+    """Migration #269: re-stamps the view template on notes that still carry the OLD one.
+
+    Needed because `harvest_views.write_view_section` only overwrites a view section **while it is
+    still the template**, comparing against the live `vista_block`. Changing the template therefore
+    makes every already-written stub stop matching, and the next harvest would print «ya tiene prosa
+    redactada → NO se pisa» and **write no view at all** — the fix would break the harvest it is
+    meant to unblock.
+
+    Only sections that are byte-for-byte the old template are touched: a view with real prose is
+    left alone (its anchors hang off the exact text)."""
+    import harvest_views as hv          # import local: `harvest_views` importa `make_notes`
+    notes = sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []
+    tocadas = 0
+    for dest in notes:
+        text = dest.read_text(encoding="utf-8")
+        fm = cfg.split_fm(text) or {}
+        for v in cfg.as_list(fm.get("vistas")):
+            if not isinstance(v, dict) or not (suj := str(v.get("sujeto") or "").strip()):
+                continue
+            theme = str(v.get("tipo") or "") == "theme"
+            span = hv.section_span(text, f"## Vista — {suj}")
+            if span is None:
+                continue
+            actual = text[span[0]:span[1]]
+            viejo = vista_block(suj, theme).replace(_BULLET_ANOTACION, _BULLET_ANOTACION_VIEJO)
+            if hv._norm(actual) != hv._norm(viejo):
+                continue                 # o ya está migrada, o tiene prosa: no se toca
+            sep = "\n\n" if span[1] < len(text) else "\n"
+            text = text[:span[0]] + vista_block(suj, theme).rstrip("\n") + sep + text[span[1]:]
+            tocadas += 1
+        if text != dest.read_text(encoding="utf-8"):
+            cfg.write_text_atomic(dest, text)
+    cfg.print_seguro(f"vistas: {tocadas} sección(es) de stub re-estampadas con la plantilla vigente "
+                     f"(#269: la anterior mandaba citar por nº de línea del `.txt`, la doctrina que "
+                     f"#205 retiró)")
+    return 0
+
+
 def restamp_abstracts() -> int:
     """Backfill #277: writes the `## Abstract` section into every paper note that lacks it.
 
@@ -1529,9 +1595,13 @@ sección y decirlo en el `log`.)_
 # taxonomía de sobre-generalización medida por Royal Society Open Science 2025 sobre 4900
 # resúmenes: "cuantificado → genérico" y "pasado → presente". Son verificables contra el .txt,
 # que es el punto — el mismo paper mide que PEDIR exactitud en el prompt DUPLICA el sesgo.
+#: #269 — hasta 1.116.x este bullet mandaba *«pegá el nº de línea del `.txt`»*, o sea la doctrina
+#: que #205 retiró, **publicada dentro de la nota**: el stub se estampa en el cuerpo de toda nota de
+#: paper, así que el texto obsoleto sobrevivía exactamente donde nadie había extraído todavía. La
+#: regla del localizador sale de `cfg.REGLA_LOCALIZADOR`, compartida con el prompt.
 _BULLET_ANOTACION = (
-    "- **Cómo anotar cada valor (#103):** pegá el **nº de línea** del `.txt` (`grep -n`, nunca "
-    "`splitlines()`) junto a cada número que copies, y el **régimen** en el que la fuente lo afirma "
+    f"- **Cómo anotar cada valor (#103):** {cfg.REGLA_LOCALIZADOR}. Anotá también el **régimen** "
+    "en el que la fuente lo afirma "
     "(muestra, época, corte de datos, modelo). Si la fuente **atribuye el valor a otro trabajo** "
     "(«according to X», «(X et al.)»), marcalo **segunda mano** y citá a X: el número **no es de "
     "esta fuente**. Copiá el **tiempo verbal y el cuantificador tal cual** (si dice «was "
@@ -1729,6 +1799,11 @@ CONCEPT_ROLLUP_HEADER = "## Papers que tocan este tema (auto)"
 ESTADO_SINTETIZADO = "sintetizado"
 ESTADO_EXTRAIDO = "extraído, no sintetizado"
 ESTADO_SIN_EXTRAER = "sin extraer"
+#: #268 · el paper cuyo dueño DECLARÓ que no lo va a leer para este sujeto (`no_vista` + motivo).
+#: Sin este escalón se publicaba como `sin extraer`, o sea deuda, y la declaración del usuario no
+#: valía nada en el roll-up — la misma escotilla que #256 hizo alcanzable, ignorada por las otras
+#: tres redes que cuentan esa nota.
+ESTADO_SIN_VISTA = "sin vista (declarado)"
 ESTADO_FUERA = "fuera del filtro"
 # #116: el paper que el USUARIO sacó del sujeto con `--drop-core`. Distinto de `fuera del filtro`
 # (que lo decidió la lente) y sobre todo de `sin extraer` (que se lee como «todavía no llegamos»,
@@ -1797,6 +1872,13 @@ def papers_universe(slug: str, kind: str, fms: dict | None = None) -> list:
     # `origen: sujeto` es lo que escribe `--drop-core`; `fuente-declarada` es `--drop-source` y la
     # ausencia de `origen` es el descarte de un candidato del chaining (`--drop`), que NO era core.
     dropeados = set(cfg.dropped_from_subject(slug))
+    # #268 — cómo se nombra ESTE sujeto en una nota de paper: `no_vista[].sujeto` usa el mismo
+    # nombre que `stars`/`thesis_links`, que es el canónico del YAML, no el slug.
+    try:
+        _sujetos = {slug, (cfg.star_by_slug(slug)[0] if kind == "star"
+                           else cfg.theme_by_slug(slug)[0])}
+    except (KeyError, IndexError, TypeError):
+        _sujetos = {slug}
     filas = []
     for stem, fm in _papers_del_sujeto(slug, kind, fms):
         if stem in dropeados:
@@ -1804,7 +1886,8 @@ def papers_universe(slug: str, kind: str, fms: dict | None = None) -> list:
         elif (fm.get("relevance") or "").lower() == "low":
             estado = ESTADO_FUERA
         elif not (fm.get("methods") or []):
-            estado = ESTADO_SIN_EXTRAER
+            estado = (ESTADO_SIN_VISTA if _no_vista_declarada(fm, stem, _sujetos)
+                      else ESTADO_SIN_EXTRAER)
         elif f"[[{stem}" in cuerpo:
             estado = ESTADO_SINTETIZADO
         else:
@@ -3232,6 +3315,11 @@ def main() -> int:
                          "<sujeto>`. El sujeto sale del reclamo de la nota cuando es UNO solo; con "
                          "varios se lista para declararlo a mano (elegir uno afirmaría una lectura "
                          "que nadie hizo). No estampa `fecha`: ausente es «no consta». Sin slug.")
+    ap.add_argument("--restamp-vista-stub", action="store_true", dest="restamp_vista_stub",
+                    help="migración #269: re-estampa la plantilla de `## Vista` en las notas que "
+                         "todavía traen la anterior (la que mandaba citar por nº de línea del "
+                         "`.txt`). Sin ella el cosechador deja de reconocerlas y no escribe la "
+                         "vista. No toca una vista con prosa. Sin slug.")
     ap.add_argument("--restamp-abstracts", action="store_true", dest="restamp_abstracts",
                     help="backfill #277: escribe el `## Abstract` que falte en una nota de paper "
                          "(contenido `_(no disponible)_` — lo completa la próxima extracción). La "
@@ -3282,6 +3370,8 @@ def main() -> int:
         return restamp_headers()
     if args.restamp_abstracts:
         return restamp_abstracts()
+    if args.restamp_vista_stub:
+        return restamp_vista_stub()
     if args.migrate_bearing:
         n = migrate_all_bearing()
         cfg.print_seguro(f"`bearing` retirado de {n} nota(s) de paper (D-21).")
@@ -3333,7 +3423,8 @@ def main() -> int:
         return 0
     if not args.slug:
         ap.error("falta el slug (corren sin slug: --restamp-pdf-links, --restamp-keywords, "
-                 "--restamp-headers, --restamp-abstracts, --migrate-disputes, --migrate-bearing, "
+                 "--restamp-headers, --restamp-abstracts, --restamp-vista-stub, "
+                 "--migrate-disputes, --migrate-bearing, "
                  "--migrate-txt-fields, --migrate-vistas, --sync-mirror y --rename-paper)")
 
     if args.web:

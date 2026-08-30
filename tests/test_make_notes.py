@@ -2970,7 +2970,10 @@ def test_la_regla_de_anotacion_nombra_las_tres_cosas_que_previene(toy_vault):
     segunda mano cierra el de «el dato de A atribuido a B» (3 casos); la prohibición de prosa
     comparativa cierra el de «inferencia con voz de cita» (3 casos)."""
     b = mn._BULLET_ANOTACION
-    assert "nº de línea" in b and "grep -n" in b, "sin puntero de línea nada se puede re-chequear"
+    # #269 — el localizador es la PÁGINA del PDF desde #205; el `grep -n` sobre el `.txt` sirve para
+    # ubicar, no para citar. Hasta 1.116.x este bullet mandaba lo contrario, publicado en la nota.
+    assert "página** del PDF" in b and "grep -n" in b, "sin localizador nada se puede re-chequear"
+    assert "pegá el **nº de línea**" not in b, "es la doctrina que #205 retiró"
     assert "segunda mano" in b, "el mecanismo con más casos medidos"
     assert "régimen" in b, "los 11 `parcial` eran casi todos régimen faltante"
     assert "inferencia" in b and "Inventario por eje" in b, \
@@ -4065,3 +4068,69 @@ def test_stamp_header_repara_el_aviso_borrado(toy_vault):
     assert mn.AVISO_LLM_MARCA in texto
     assert texto.count(mn.GENERATOR_LINE) == 1, "no se duplica la línea del generador"
     assert mn.stamp_header(dest) is False, "idempotente"
+
+
+# ── #269 · la plantilla de la vista publicaba la doctrina que #205 retiró ────────────────────────
+
+def test_el_stub_y_el_prompt_no_divergen_sobre_el_localizador(toy_vault):
+    """#269 — el stub se estampa en el CUERPO de toda nota de paper, así que su texto viaja en el
+    vault versionado. Mandaba citar por nº de línea del `.txt` mientras el prompt vigente manda la
+    página del PDF: la regla vive una sola vez (`cfg.REGLA_LOCALIZADOR`) y los dos la rinden."""
+    import extraction_prompt as ep
+    assert cfg.REGLA_LOCALIZADOR.split(";")[0] in mn._BULLET_ANOTACION
+    prompt = ep.build_prompt("tau-cet", "2020aaa...1..1A", "tau Cet", [])
+    assert "la **página** del PDF (`p. 7`)" in prompt
+
+
+def test_el_migrador_deja_la_vista_cosechable(toy_vault):
+    """Sin el migrador, cambiar la plantilla rompe la cosecha que el arreglo viene a destrabar:
+    `write_view_section` sólo pisa mientras la sección **sea** la plantilla, así que todo stub ya
+    escrito deja de matchear y la próxima cosecha no escribe la vista."""
+    import harvest_views as hv
+    dest = mk_note(cfg.PAPERS, "2019A....1A",
+                   {"bibcode": "2019A....1A", "tags": ["paper"], "stars": ["tau Cet"],
+                    "vistas": [{"sujeto": "tau Cet", "tipo": "star"}]},
+                   "# p\n\n" + mn.vista_block("tau Cet", theme=False).replace(
+                       mn._BULLET_ANOTACION, mn._BULLET_ANOTACION_VIEJO))
+    assert hv.write_view_section(dest, "tau Cet", "## Vista — tau Cet\n\nnueva\n",
+                                 theme=False) is False, "la guarda no reconoce el stub viejo"
+    mn.restamp_vista_stub()
+    assert "pegá el **nº de línea**" not in dest.read_text(encoding="utf-8")
+    assert hv.write_view_section(dest, "tau Cet", "## Vista — tau Cet\n\nnueva\n",
+                                 theme=False) is True, "tras migrar, la vista se puede cosechar"
+
+
+def test_el_migrador_no_toca_una_vista_con_prosa(toy_vault):
+    """Prosa ya redactada no se pisa: sus anclas de verificación cuelgan del texto exacto."""
+    cuerpo = "# p\n\n## Vista — tau Cet (2026-08-30)\n\nprosa redactada de verdad\n"
+    dest = mk_note(cfg.PAPERS, "2019A....1A",
+                   {"bibcode": "2019A....1A", "tags": ["paper"], "stars": ["tau Cet"],
+                    "vistas": [{"sujeto": "tau Cet", "tipo": "star"}]}, cuerpo)
+    antes = dest.read_text(encoding="utf-8")
+    mn.restamp_vista_stub()
+    assert dest.read_text(encoding="utf-8") == antes
+
+
+def test_no_vista_no_es_sin_extraer_en_el_rollup(toy_vault):
+    """#268 — el roll-up publicaba `sin extraer` sobre un paper cuyo dueño DECLARÓ que no lo va a
+    leer para ese sujeto: la declaración no valía nada donde el consumidor la mira."""
+    write_yaml(cfg.STARS_YAML, {"Estrella S": {"slug": "s"}})
+    mk_note(cfg.PAPERS, "2009yCat..1", {"tags": ["paper"], "bibcode": "2009yCat..1",
+                                        "stars": ["Estrella S"], "relevance": "high",
+                                        "no_vista": [{"sujeto": "Estrella S",
+                                                      "motivo": "tabla VizieR, no es un paper"}]},
+            "# p\n")
+    filas = mn.papers_universe("s", "star")
+    assert [f["estado"] for f in filas] == [mn.ESTADO_SIN_VISTA], filas
+
+
+def test_un_no_vista_roto_no_tumba_el_rollup(toy_vault):
+    """`papers_universe` corre DENTRO de la escritura de notas: una nota con el campo mal formado no
+    puede abortar la pasada entera (misma doctrina que `fm_broken` en el lint). Cae a la escalera
+    vieja y el lint reporta la forma por su cuenta."""
+    write_yaml(cfg.STARS_YAML, {"Estrella S": {"slug": "s"}})
+    mk_note(cfg.PAPERS, "2009yCat..1", {"tags": ["paper"], "bibcode": "2009yCat..1",
+                                        "stars": ["Estrella S"], "relevance": "high",
+                                        "no_vista": "un escalar"}, "# p\n")
+    filas = mn.papers_universe("s", "star")
+    assert [f["estado"] for f in filas] == [mn.ESTADO_SIN_EXTRAER], filas

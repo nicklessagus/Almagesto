@@ -398,3 +398,85 @@ def test_el_cierre_reporta_cuantos_pares_se_saltearon():
     que D-43 protege en todo el framework."""
     t = _find_contradictions()
     assert "saltear" in t or "salteados" in t or "saltearon" in t
+
+
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# #258 — el prompt de la re-verificación de #203 va CIEGO
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+#
+# #203 manda una segunda ronda sobre lo corregido y no decía **cómo promptearla**. Medido en una
+# ficha real (8 rondas, 88 pares): el escritor le pasaba al juez «la ronda anterior marcó X, el
+# texto ahora dice Y, verificá» — o sea la respuesta esperada, y de quien escribió la corrección.
+# La regla ya existía en el repo para el modo revalidación a pedido
+# (`verify-citations/reference/modos-a-pedido.md`: «verificadores nuevos y ciegos a los veredictos
+# anteriores», «SIN pasarle la tabla vigente»); #258 la sube a la ronda obligatoria.
+
+def _seccion_desde(texto: str, patron: str) -> str:
+    """El bloque que arranca en la línea que matchea `patron` y termina en el próximo encabezado.
+
+    Acotar es el punto: la prohibición tiene que estar **donde se prescribe la segunda ronda**, no
+    en cualquier parte del archivo. Un `substring in texto` pasaría con una mención al pasar en el
+    paso 2, que es justamente el paso cuyo aislamiento #258 viene a extender."""
+    lineas = texto.splitlines()
+    inicio = next((i for i, ln in enumerate(lineas) if re.match(patron, ln)), None)
+    assert inicio is not None, f"no se encontró el bloque que matchea {patron!r} en el skill"
+    for j in range(inicio + 1, len(lineas)):
+        if re.match(r"^#{2,4}\s", lineas[j]):
+            return "\n".join(lineas[inicio:j])
+    return "\n".join(lineas[inicio:])
+
+
+def _reverificacion_de_verify() -> str:
+    return _seccion_desde(_skill("verify-citations"), r"^⛔ \*\*Corregir es ESCRIBIR")
+
+
+def test_la_reverificacion_se_prompta_ciega():
+    """Modo de falla: *leading the witness* en la ronda que existe porque el escritor ya se
+    equivocó una vez. Medido sobre 8 rondas / 88 pares de una ficha real: **2 correcciones metieron
+    afirmaciones falsas nuevas** —las cazó el ancla, no el prompt— y en un caso el sesgo se propagó
+    por **tres** agentes hasta que una cuarta lectura independiente lo rompió.
+
+    Se exige (a) la prohibición explícita, (b) las **dos formulaciones prohibidas** nombradas —«la
+    ronda anterior marcó …» y «verificá que …», que son las que de hecho se escribieron— y (c) el
+    insumo canónico acotado a la clave del JSON que sólo lleva el texto vigente. Sin (b) el skill
+    diría «no sesgues» sin decir qué es sesgar, que es lo que ya no alcanzó."""
+    seccion = _reverificacion_de_verify()
+    assert "ciego" in seccion.lower(), (
+        "el paso de re-verificación no manda promptear a ciegas")
+    for prohibida in ("la ronda anterior marcó", "verificá que"):
+        assert prohibida in seccion, (
+            f"el paso de re-verificación no nombra la formulación prohibida «{prohibida} …»")
+    assert "re_verificar" in seccion and "reverify_subset.py" in seccion, (
+        "el paso no nombra el insumo canónico (`reverify_subset.py --json` → `re_verificar`)")
+    assert "re_anclaje" in seccion, (
+        "el paso no dice cuál clave del JSON es la HISTORIA que NO se le manda al verificador")
+
+
+def test_la_excepcion_de_inferencia_esta_nombrada():
+    """Contra-caso de la regla de arriba: «no le mandes contexto» aplicado sin excepción rompe el
+    par marcado `inferencia`, cuyas premisas declaradas **son** lo que hay que verificar y no se
+    infieren del texto solo — el juez lo leería como una afirmación sin respaldo y lo marcaría
+    `no-soportada`. La excepción tiene que estar en **ese** paso: nombrada en cualquier otra parte
+    del archivo no la lee quien está armando el prompt de la segunda ronda."""
+    seccion = _reverificacion_de_verify()
+    assert "inferencia" in seccion, (
+        "el paso de re-verificación no nombra la excepción del par marcado `inferencia`")
+    assert "premisas" in seccion, (
+        "el paso nombra `inferencia` pero no dice que el prompt SÍ declara sus premisas")
+
+
+def test_audit_note_no_contradice_la_regla_ciega():
+    """`audit-note` prescribe la misma segunda ronda (#203, vía `reverify_subset.py`) y es el otro
+    lugar donde el prompt se redacta. Si su paso 4 callara, el agente que audita una ficha armaría
+    el prompt sesgado sin haber leído nunca la regla — el mismo modo de falla, en el skill que más
+    correcciones produce por corrida.
+
+    Se exige **remisión, no copia**: dos copias de una prescripción es dos lugares donde corregirla
+    y uno donde olvidarse (ítem 1 de este archivo)."""
+    seccion = _seccion_desde(_skill("audit-note"), r"^### 4\. Re-verificar")
+    assert "ciego" in seccion.lower(), (
+        "el paso 4 de `audit-note` no dice que el prompt de re-verificación va a ciegas")
+    assert "verify-citations" in seccion, (
+        "el paso 4 de `audit-note` no remite a la regla, que vive en `verify-citations`")
+    assert "re_verificar" in seccion and "re_anclaje" in seccion, (
+        "el paso 4 de `audit-note` no distingue el texto vigente de la historia")

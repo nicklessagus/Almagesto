@@ -268,6 +268,14 @@ vencen igual y no son lo mismo:
   su propio dictamen no es verificación. Se **re-ancla**: el veredicto se lleva, el ancla se
   recalcula. Medido: de 78 vencidos, **72 de este tipo**.
 
+⛔ **El prompt de la re-verificación va CIEGO, y la regla no se copia acá: vive en
+`verify-citations` (#258).** Lo que se lanza al fan-out es `verify-citations` sobre el subconjunto,
+así que rige su forma de prompt — se manda el par (la afirmación tal como está hoy y su fuente), no
+la historia de qué marcó la ronda anterior ni qué se corrigió, con la excepción del par marcado
+`inferencia`. Del JSON de arriba, al verificador le va **`re_verificar[<bibcode>][].texto`** y nada
+más: `re_anclaje` es la historia. El detalle, con la medición que lo motiva, en el paso *Resolver lo
+que falla* de `.claude/skills/verify-citations/SKILL.md`.
+
 ⛔ El re-anclaje es una **propuesta**: dice que la afirmación sigue siendo reconociblemente la misma,
 **no** que la corrección haya sido fiel. Quien lo acepta **lo declara en el bloque** — de qué ronda
 viene el veredicto, y que el texto es posterior a la corrección. Sin esa línea, el bloque afirma una

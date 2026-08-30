@@ -402,8 +402,7 @@ da otra vista, y por eso el producto lleva de quién es. Va a la sección `## Vi
   ni fórmulas. Confirmalo en el PDF antes de afirmar que no está.
 {_media_note(slug, bibcode)}
 ## Cómo anotar cada valor
-- El **localizador** (va en el campo `linea` del JSON): la **página** del PDF (`p. 7`). Si es
-  lectura de gráfico, `Fig. N, p. M`.
+- El localizador va en el campo `linea` del JSON: {cfg.REGLA_LOCALIZADOR[len("el **localizador** es "):]}.
 - El **régimen** en que la fuente lo afirma: muestra, época, corte de datos, instrumento, modelo.
 - El **tiempo verbal y el cuantificador de la fuente, tal cual**. Si dice «was associated», no
   escribas «is associated»; si dice «el 75 % de la muestra», no escribas «la muestra». Un

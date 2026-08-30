@@ -2095,7 +2095,20 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             # el tooling escribe siempre `high`/`low`; el `.lower()` cubre la edición a mano,
             # donde un `Low` entraba a la población que el recorte quería dejar afuera.
             relevancia = str(fm.get("relevance") or "").strip().lower()
-            if relevancia == "high" and not fm.get("methods"):
+            # #268 — `no_vista` se parsea ACÁ porque tres redes que corren antes lo necesitaban y
+            # ninguna lo miraba: la escotilla que #256 hizo alcanzable decidía sobre UNA sola
+            # categoría, y las otras contaban la misma nota como deuda. Medido: una nota con
+            # `no_vista` declarado y motivo seguía recibiendo *«conseguir el PDF»* sobre una tabla
+            # VizieR, que no es un paper. La forma inválida se reporta más abajo, en su bloque.
+            try:
+                _no_vista, _nv_error = (
+                    {v["sujeto"]: v["motivo"] for v in cfg.load_no_vista(fm, entry=stem)}, None)
+            except cfg.VistasError as _e:
+                # La forma inválida NO se pierde: se guarda y se re-levanta en el bloque de vistas,
+                # que es el que la reporta como `fm_broken`. Tragarla acá dejaría la nota evadiendo
+                # el chequeo de su propio campo, que es el bug que ese bloqueante existe para cerrar.
+                _no_vista, _nv_error = {}, _e
+            if relevancia == "high" and not fm.get("methods") and not _no_vista:
                 # #90: dos situaciones OPUESTAS salían con el mismo mensaje — «bajado y nadie lo
                 # leyó» (trabajo del agente) y «nunca se pudo bajar» (trabajo del usuario: conseguir
                 # la fuente). Son colas distintas con dueños distintos, así que mezclarlas hace
@@ -2119,6 +2132,11 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 # `make_notes._papers_del_sujeto`.
                 for campo in ("stars", "thesis_links"):
                     for sujeto in cfg.as_list(fm.get(campo)):
+                        # #268 — el sujeto DECLARADO no cuenta como «sin extraer» para el recorte:
+                        # con él adentro, el detector afirmaba *«quedan N sin extraer»* sobre un
+                        # `criterio: todos los core` que sí se había cumplido.
+                        if str(sujeto) in _no_vista:
+                            continue
                         sin_extraer_por_sujeto.setdefault(str(sujeto), set()).add(stem)
             # El eslabón SIGUIENTE (#75): el paper que SÍ se extrajo. `methods` poblado significa
             # que alguien gastó en él el paso más caro de la cadena; si su contenido nunca llegó a
@@ -2142,7 +2160,9 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             # hay nada» — el mismo falso limpio que D-34 persigue en las hipótesis.
             try:
                 vistas = cfg.load_vistas(fm, entry=stem)
-                no_vista = {v["sujeto"]: v["motivo"] for v in cfg.load_no_vista(fm, entry=stem)}
+                if _nv_error is not None:
+                    raise _nv_error
+                no_vista = _no_vista          # #268: ya parseado arriba, misma fuente
             except cfg.VistasError as e:
                 # Se REPORTA, no tumba el barrido: es la razón de que el loader levante en vez de
                 # salir. Cae en `fm_broken` porque es literalmente eso — un campo con forma

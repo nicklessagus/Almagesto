@@ -5813,3 +5813,34 @@ def test_gt_prose_conflicts_una_oracion_de_autoridad_tambien_deja_sus_letras():
     p = "NEA confirma los planetas `e` y `f`. NEA publica las dos como confirmed."
     hallazgos = lint.gt_prose_conflicts(p, set())
     assert len(hallazgos) == 4, hallazgos      # 2 de la primera oración + 2 por la anáfora
+
+
+# ── #268 · `no_vista` se consulta en las CUATRO redes, no en una ─────────────────────────────────
+
+def test_con_no_vista_no_se_manda_conseguir_el_PDF(toy_vault, capsys):
+    """#268 — la escotilla decidía sobre UNA categoría (#256) y las otras tres contaban la misma
+    nota como deuda. Medido: una nota con `no_vista` declarado y motivo seguía recibiendo
+    *«conseguir el PDF»* sobre una **tabla VizieR**, que no es un paper — y ninguno de los cuatro
+    valores de `pending` dice eso."""
+    mk_note(cfg.PAPERS, "2009yCat..1", {"tags": ["paper"], "bibcode": "2009yCat..1",
+                                        "stars": ["Estrella Test"], "relevance": "high",
+                                        "vistas": [{"sujeto": "Estrella Test", "tipo": "star"}],
+                                        "no_vista": [{"sujeto": "Estrella Test",
+                                                      "motivo": "tabla VizieR, no es un paper"}]},
+            "# p\n\n## Vista — Estrella Test\n\ntexto\n")
+    link_from_log(toy_vault, "2009yCat..1")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "conseguir el PDF" not in _seccion(rep, "Campos incompletos"), rep
+
+
+def test_el_no_vista_mal_formado_sigue_siendo_bloqueante(toy_vault, capsys):
+    """⛔ El parseo temprano no puede TRAGARSE la forma inválida: si la tragara, la nota evadiría el
+    chequeo de su propio campo — el bug que ese bloqueante existe para cerrar."""
+    mk_note(cfg.PAPERS, "2009yCat..1", {"tags": ["paper"], "bibcode": "2009yCat..1",
+                                        "stars": ["Estrella Test"], "relevance": "high",
+                                        "vistas": [{"sujeto": "Estrella Test", "tipo": "star"}],
+                                        "no_vista": [{"sujeto": "Estrella Test"}]},
+            "# p\n\n## Vista — Estrella Test\n\ntexto\n")
+    link_from_log(toy_vault, "2009yCat..1")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc != 0 and "2009yCat..1" in _seccion(rep, "Frontmatter"), rep
