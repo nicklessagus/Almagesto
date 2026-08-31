@@ -495,6 +495,12 @@ OCR, o marcar `pending`).
   (#79, `truncated.recent`). Ídem el **rescate por glifo incompleto** (`truncated_glyph`).
 - **Recorte de lectura sin declarar** (core sin extraer y sin `extraccion:` en el registro): se
   cierra con `python scripts/triage.py <slug> --extraccion todos|subconjunto`.
+  ⛔ **Cubre los DOS tipos de sujeto desde #346**, por el mismo defecto de forma que #338 y con el
+  mismo remedio: recorría estrellas y temas y le pedía `slug` al **mapa** de los dos, pero en
+  `themes.yaml` el slug es la **clave** del YAML, así que para todo tema salía `None` y el sujeto
+  se salteaba en silencio (medido sobre una bóveda real: la categoría pasa de `(0)` a `(1)`, un
+  tema con **26** core sin extraer y sin criterio declarado). El barrido es hoy **una sola
+  implementación**, `cfg.all_subjects()`, compartida con el detector de roll-up.
 - **Capas colgadas de un slug que ya no existe** (INV-19, tras un `entity.py delete|rename` a
   medias).
 

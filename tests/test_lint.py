@@ -2410,6 +2410,29 @@ def test_declarar_TODOS_con_core_sin_extraer_no_silencia(toy_vault, capsys):
     assert "declara `extraccion: todos los core`" in rep
 
 
+def test_recorte_sin_declarar_de_un_TEMA_tambien_se_reporta(toy_vault, capsys):
+    """#346 — el detector recorría estrellas **y** temas y le pedía `slug` al mapa de las dos, pero
+    en `themes.yaml` el slug es la CLAVE del YAML: `None` para todo tema, `continue`, y el recorte
+    de lectura silencioso que D-13/D-15 existe para cazar quedaba sin vigilar para 2 de los 3
+    sujetos de una bóveda real.
+
+    El caso simétrico (con `extraccion` declarada, calla) va en el mismo test a propósito: sin él,
+    un detector que reportara SIEMPRE —el falso positivo permanente— pasaría igual.  @inv INV-83"""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ica",
+                                         "query": "independent component analysis"}})
+    mk_note(toy_vault.PAPERS, "2020relA...1..1A",
+            {"tags": ["paper"], "bibcode": "2020relA...1..1A", "thesis_links": ["ica"],
+             "relevance": "high"}, "")
+    link_from_log(toy_vault, "2020relA...1..1A")
+    _, rep = run_lint_reporte(capsys)
+    assert _n_recorte(rep) == 1
+    assert "ica" in _seccion(rep, "Recorte de lectura") and "no declaró" in rep
+
+    cfg.save_extraccion("ica", subconjunto=True, criterio="los 20 más citados del tema")
+    _, rep2 = run_lint_reporte(capsys)
+    assert _n_recorte(rep2) == 0
+
+
 def test_disputa_entre_autoridades_es_expresable(toy_vault, capsys):
     """D-2 / INV-77: con `DISPUTE_SOURCES = ("ground_truth",)` las dos posiciones de una disputa
     nea↔simbad decían lo mismo — el desacuerdo entre autoridades no tenía forma. Desde D-1 es un

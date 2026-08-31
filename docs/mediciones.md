@@ -1103,3 +1103,33 @@ una hipótesis no cuenta: declara el alcance del *veredicto*, que es otra afirma
 alcance *«¿tu paper dice algo de X?»*— es un **fan-out por hueco** y queda como issue aparte. Esto es
 la red barata: **declarar el alcance y chequearlo contra el disco**, que es lo que convierte una
 universal falsa en una acotada verdadera.
+
+## 2026-08-31 · El mismo error de forma, tercera copia: el slug de un tema es la CLAVE (#346)
+
+**Qué era.** `lint.extraccion_no_declarada` (INV-83) barre estrellas **y** temas y le pedía
+`meta.get("slug")` al mapa de los dos. En `stars.yaml` el slug es un **campo** de la entrada; en
+`themes.yaml` es la **clave del YAML** (lo dice el docstring de `cfg.theme_by_slug`). Para todo
+tema salía `None` y el loop hacía `continue`: el detector del recorte de lectura silencioso —lo que
+D-13/D-15 existen para cazar— estaba **apagado para todos los temas**.
+
+| Qué se midió | Antes | Después |
+|---|---|---|
+| «Recorte de lectura sin declarar» sobre la bóveda de `Almagesto-Prueba` | **(0)** | **(1)** — `ica`, 26 core sin extraer y sin criterio declarado |
+| Hallazgos bloqueantes en la misma corrida | 154 | 154 (sin cambio: la categoría es backlog) |
+| Sujetos que el detector miraba | 2 de 3 (las estrellas) | 3 de 3 |
+
+**Por qué importa el `(0)`.** El reporte imprime la categoría siempre, con su conteo, y un `(0)` que
+nadie midió se lee como veredicto — es el falso limpio que D-43 persigue, acá producido no por un
+chequeo que no pudo correr sino por uno que se saltea la mitad de su población **en silencio**.
+
+**Por qué es la misma clase que #338.** #338 encontró exactamente este `None` en el detector de
+roll-up y lo resolvió **en línea**, construyendo su lista de sujetos a mano. La regla quedó escrita
+dos veces en el mismo archivo y la segunda copia estaba mal: es el molde de #215/#324/#331/#335/#339.
+El arreglo no es corregir la segunda copia sino que haya **una**: `cfg.all_subjects()` devuelve
+`(kind, slug, name, meta)` y la usan los dos detectores.
+
+⚠ **Lo que sigue afuera, declarado:** los dos call sites viven en `lint.main`, que está en `EXENTAS`
+de `mutar.py`, así que ninguna red de mutación los mira — es el hallazgo de #334/#343 otra vez. Lo
+que sí se muta es la regla extraída (`cfg.all_subjects`: dirigida ✅, las 3 guardas ✅); el call site
+lo cubre `test_recorte_sin_declarar_de_un_TEMA_tambien_se_reporta`, visto morir con `assert 0 == 1`
+al devolverle el `meta.get("slug")` a la rama del tema.
