@@ -151,12 +151,6 @@ def imprimir(slug: str, *, campo: str | None, patron: str | None, paper: str | N
     return n
 
 
-#: #321 · largo de prefijo con el que se decide *«el arranque coincide y la cola diverge»*. El mismo
-#: número que usa el lint (`lint.CITA_PREFIJO`), y por el mismo motivo: por debajo, cualquier arranque
-#: formulaico («we show that the…») coincide con cualquier extracción.
-CITA_PREFIJO = 60
-
-
 def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
     """Cross-check one note against the extractions of the bibcodes it cites (#317/#321/#323).
 
@@ -174,6 +168,10 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
       · extraction silent, or none on disk → **not evaluable**, declared and never counted as a
         finding (D-43)
 
+    ⛔ **The rule lives in ONE place** (#324): `cfg.quote_verdict`, shared with `lint.collect`. With
+    separate code they already diverged —13 against 12 over the same vault the same day— and the
+    extra one was a FALSE positive this command would have turned into a blocked closing step.
+
     Returns `{"alteradas": [(línea, motivo)], "no_evaluables": [(línea, motivo)], "citas": N}` —
     counts, so the sweep can declare its population (INV-40) instead of printing a bare zero."""
     texto = nota.read_text(encoding="utf-8")
@@ -185,35 +183,36 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
             out["citas"] += 1
             duenio = lb.quote_owner(b.text, cita, bibs)          # #316
             candidatos = [duenio] if duenio else bibs
-            por_bib = {x: cfg.extraction_texts(x) for x in candidatos}
+            ambiguo = not duenio and len(bibs) > 1
+            txts = {x: cfg.fulltext_readings(x) for x in candidatos}
+            # #324 — la MISMA función que usa el lint, no una re-implementación: con código separado
+            # daban 13 y 12 sobre el mismo corpus, y el de más era una cita CORRECTA cuya extracción
+            # simplemente no la había transcripto.
+            ver, det = cfg.quote_verdict(cita, candidatos, bibs_nota, txts, ambiguo=ambiguo)
             corte = cita if len(cita) <= 70 else cita[:70] + "…"
-            if not any(por_bib.values()):
-                out["no_evaluables"].append(
-                    (b.first_line, f"«{corte}» — {', '.join(candidatos) or 'sin fuente adyacente'} "
-                                   f"sin extracción en disco: no evaluable, no es una cita alterada"))
+            quienes = ", ".join(candidatos) or "sin fuente adyacente"
+            if ver in ("en_su_txt", "txt_degradado", "txt_parte"):
                 continue
-            if any(cfg.quote_found(cita, t) for ts in por_bib.values() for t in ts):
-                continue
-            otro = [x for x in sorted(bibs_nota - set(candidatos))
-                    if any(cfg.quote_found(cita, t) for t in cfg.extraction_texts(x))]
-            prefijo = (len(cita) > CITA_PREFIJO
-                       and any(cfg.quote_found(cita[:CITA_PREFIJO], t)
-                               for ts in por_bib.values() for t in ts))
-            if otro:
+            if ver == "alterada" and det["otro_bib"]:
                 out["alteradas"].append(
                     (b.first_line, f"«{corte}» está verbatim en la extracción de "
-                                   f"**{', '.join(otro)}**, no en la de {', '.join(candidatos)}: la "
+                                   f"**{', '.join(det['otro_bib'])}**, no en la de {quienes}: la "
                                    f"cita está atribuida a la fuente equivocada"))
-            elif prefijo:
+            elif ver == "alterada":
                 out["alteradas"].append(
                     (b.first_line, f"«{corte}» — el arranque coincide con la extracción de "
-                                   f"{', '.join(candidatos)} y la cola diverge: la cita se completó "
-                                   f"al copiar (el patrón de #314)"))
+                                   f"{quienes} y la cola diverge: la cita se completó al copiar (el "
+                                   f"patrón de #314)"))
+            elif ver == "no_evaluable":
+                out["no_evaluables"].append(
+                    (b.first_line, f"«{corte}» — {quienes} sin `.txt` ni extracción en disco: no "
+                                   f"evaluable, no es una cita alterada"))
             else:
                 out["no_evaluables"].append(
-                    (b.first_line, f"«{corte}» — la extracción de {', '.join(candidatos)} calla: la "
-                                   f"transcripción es SELECTIVA, así que su silencio no prueba nada "
-                                   f"(#321). Si la citaste del PDF, está bien"))
+                    (b.first_line, f"«{corte}» — ni el `.txt` ni la extracción de {quienes} la "
+                                   f"dicen, y ninguna es evidencia positiva: la transcripción es "
+                                   f"SELECTIVA y el `.txt` un índice degradado (#321/#205). "
+                                   f"Confirmala en el PDF"))
     if mostrar:
         for ln, motivo in out["alteradas"]:
             cfg.print_seguro(f"  ⛔ L{ln}: {motivo}. Copiala del JSON con `contrast.py <slug> "

@@ -584,3 +584,43 @@ que correrla — *una capacidad sin momento de ejecución no es un control*. Hoy
 (`--validar-todo`, con población declarada, no-evaluables declarados y exit ≠ 0) y los cuatro skills
 que escriben prosa citada lo corren **antes** del fan-out: el `grep` cuesta segundos y el verify son
 N subagentes leyendo PDFs (#315).
+
+## 2026-08-30 · La misma regla, dos implementaciones, y ya divergían (#324)
+
+Verificación de #321–#323 sobre `Almagesto-Tesis` (v1.134.0, 163 notas, 2232 citas). El fix de #321
+queda confirmado: **32 → 12 hallazgos**, y los 12 coinciden con la clasificación independiente. Lo
+que apareció es que `lint.collect` y `contrast.validar` decidían lo mismo con código separado y
+daban **12 y 13** sobre el mismo corpus el mismo día.
+
+El de más era un falso positivo:
+
+```
+hd_40307 L602: «only available in electronic form at the CDS» está verbatim en la extracción de
+2009A&A...497..563N, no en la de 2016A&A...585A.134D: atribuida a la fuente equivocada
+```
+
+| | en su `.txt` | en su extracción |
+|---|---|---|
+| `2016A&A...585A.134D` (el que la nota cita) | **True** | False |
+| `2009A&A...497..563N` (el que `contrast` proponía) | False | True |
+
+**La cita es correcta**: está verbatim en el `.txt` del paper que la nota cita. Lo que pasa es que la
+extracción —selectiva y lenteada (#188)— no la transcribió, y la frase es *boilerplate* de A&A que
+aparece en varios papers del corpus. El lint no la marcaba porque prueba contra el `.txt` de la
+fuente citada **primero**; `contrast` iba derecho a comparar extracciones.
+
+⛔ Es **la misma forma de error que #321 acababa de arreglar** —juzgar contra un artefacto que no
+contiene lo que se le pregunta— desplazada del lint a la herramienta, y pega más fuerte ahí: desde
+#323 `--validar-todo` es paso de cierre obligatorio con exit ≠ 0, así que un falso positivo **frena
+operaciones**. El boilerplate compartido (CDS, agradecimientos, descripción de instrumento) es
+justo donde más iba a pasar.
+
+**Qué cambió.** Una sola implementación (`lib_config.quote_verdict`) con el orden explícito —el
+`.txt` de su fuente, la extracción, el `.txt` que parte la cita, la evidencia positiva— y un solo
+`CITA_PREFIJO`. El número estaba duplicado con un comentario que **declaraba** que tenían que
+coincidir y nada que lo chequeara (`grep CITA_PREFIJO tests/` no devolvía nada): regla de método
+nº 2, y el test de paridad compara **las dos salidas sobre el mismo insumo**, no las dos constantes
+—comparar constantes no habría cazado esta divergencia, que era de **orden**—.
+
+⚠ Dos guardas del código nuevo salieron **redundantes** en la mutación de guardas (`fuentes and …`
+implicado por el `any(...)` de al lado): se sacaron en el momento, que es la regla de #319.

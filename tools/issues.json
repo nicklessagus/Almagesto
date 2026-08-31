@@ -1610,6 +1610,11 @@
    "number": 323,
    "title": "`contrast.py --validar` existe y no lo corre NADIE: ningún skill lo nombra y no hay modo barrido — la nota que produjo #314–#318 cerró con verify completo, `lint --cierre` en 0 y 12 citas alteradas adentro",
    "state": "OPEN"
+  },
+  {
+   "number": 324,
+   "title": "`contrast --validar` y el lint implementan la misma regla por separado y ya divergen (13 vs 12): el comando no prueba contra el `.txt` de la fuente citada, así que marca como mal atribuida una cita CORRECTA — y ahora es paso de cierre obligatorio con exit ≠ 0",
+   "state": "OPEN"
   }
  ]
 }

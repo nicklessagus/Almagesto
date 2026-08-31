@@ -2111,3 +2111,134 @@ def test_extraction_texts_memoiza_por_boveda(toy_vault, monkeypatch):
     cfg.extraction_texts("2013Voss")
     cfg.extraction_texts("2013Voss")
     assert lecturas.count("2013Voss.json") == 1, "el JSON se lee UNA vez por corrida"
+
+
+# ── #324 · la regla compartida: `quote_verdict` y su lector de `.txt` ──────────────────────────────
+# Viven acá, y no sólo en los tests de sus dos llamadores, porque la función ES el contrato: hasta
+# 1.134.0 la misma regla estaba implementada dos veces (lint y contrast) y ya divergía —13 contra 12
+# sobre el mismo corpus el mismo día—, con el número duplicado y un comentario que declaraba que
+# tenían que coincidir. Regla de método nº 2.
+
+def _extr_324(bib: str, valor: str, slug: str = "tema"):
+    import json
+    (cfg.EXTRACCION / slug).mkdir(parents=True, exist_ok=True)
+    (cfg.EXTRACCION / slug / f"{bib}.json").write_text(
+        json.dumps({"bibcode": bib, "ground_truth": [{"que": "x", "valor": valor}]}), encoding="utf-8")
+
+
+def _txt_324(bib: str, texto: str, slug: str = "tema"):
+    (cfg.FULLTEXT / slug).mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / slug / f"{bib}.txt").write_text(texto, encoding="utf-8")
+
+
+CITA_324 = "the whitening step is not enough to identify the model"
+
+
+def test_fulltext_readings_sin_txt_devuelve_vacio_no_una_negacion(toy_vault):
+    """Sin `.txt` en disco la respuesta es *no evaluable*, nunca «la cita no está» (D-43)."""
+    assert cfg.fulltext_readings("2013SinTxt") == []
+    _txt_324("2013Voss", f"prosa. {CITA_324}. más prosa.")
+    assert any(CITA_324 in t for t in cfg.fulltext_readings("2013Voss"))
+
+
+def test_quote_verdict_la_cita_en_SU_txt_no_dice_nada(toy_vault):
+    """#324, el paso 1 y el falso positivo medido: la cita está verbatim en el `.txt` del paper que
+    la nota cita, su extracción —selectiva (#188)— no la transcribió, y la de otro paper sí. El
+    `.txt` es un índice degradado (#205), no un mal testigo: encontrar la cadena ahí prueba que la
+    frase es de ESE paper, y no hay nada que reportar."""
+    _txt_324("citado", f"prosa. {CITA_324}. más prosa.")
+    _extr_324("citado", "otra cosa que este paper aporta")
+    _extr_324("ajeno", CITA_324)
+    ver, _ = cfg.quote_verdict(CITA_324, ["citado"], {"citado", "ajeno"},
+                               {"citado": cfg.fulltext_readings("citado")})
+    assert ver == "en_su_txt"
+
+
+def test_quote_verdict_la_extraccion_la_dice_y_el_txt_no(toy_vault):
+    """#315 — la extracción se hizo leyendo el PDF: si la cita está ahí, la nota es fiel y el que
+    falló es el índice."""
+    _txt_324("citado", "un `.txt` que perdió la frase")
+    _extr_324("citado", CITA_324)
+    ver, det = cfg.quote_verdict(CITA_324, ["citado"], {"citado"},
+                                 {"citado": cfg.fulltext_readings("citado")})
+    assert ver == "txt_degradado" and det["en_extraccion"] == ["citado"]
+
+
+def test_quote_verdict_atribucion_movida_BLOQUEA(toy_vault):
+    """La mitad más frecuente de los verdaderos positivos (6 de 12): la frase está verbatim en la
+    extracción de otro bibcode de la misma nota, y en el `.txt` de su fuente no está."""
+    _txt_324("citado", "prosa que no dice la cita")
+    _extr_324("citado", "otra cosa")
+    _extr_324("ajeno", CITA_324)
+    ver, det = cfg.quote_verdict(CITA_324, ["citado"], {"citado", "ajeno"},
+                                 {"citado": cfg.fulltext_readings("citado")})
+    assert ver == "alterada" and det["otro_bib"] == ["ajeno"]
+
+
+def test_quote_verdict_cola_alterada_BLOQUEA(toy_vault):
+    """La otra mitad (6 de 12): coincide un prefijo largo y diverge la cola — el patrón de #314."""
+    largo = CITA_324 + " under gaussian noise of known covariance"
+    _txt_324("citado", "prosa que no dice la cita")
+    _extr_324("citado", largo)
+    ver, det = cfg.quote_verdict(largo[:len(largo) - 20] + " y una cola inventada",
+                                 ["citado"], {"citado"},
+                                 {"citado": cfg.fulltext_readings("citado")})
+    assert ver == "alterada" and det["prefijo"] and not det["otro_bib"]
+
+
+def test_quote_verdict_el_SILENCIO_no_bloquea(toy_vault):
+    """#321 — la extracción es selectiva y se cita del PDF: su silencio no prueba fabricación."""
+    _txt_324("citado", "prosa que no dice la cita")
+    _extr_324("citado", "otra cosa")
+    ver, _ = cfg.quote_verdict(CITA_324, ["citado"], {"citado"},
+                               {"citado": cfg.fulltext_readings("citado")})
+    assert ver == "no_verbatim"
+
+
+def test_quote_verdict_sin_txt_es_NO_EVALUABLE(toy_vault):
+    """D-43 — sin el `.txt` de su fuente no se puede descartar que la frase esté en ese paper, así
+    que ni siquiera la evidencia positiva alcanza: el chequeo no pudo correr."""
+    _extr_324("ajeno", CITA_324)
+    ver, _ = cfg.quote_verdict(CITA_324, ["citado"], {"citado", "ajeno"}, {})
+    assert ver == "no_evaluable"
+
+
+def test_quote_verdict_la_cita_AMBIGUA_no_bloquea(toy_vault):
+    """#316 — sin `[[bibcode]]` adyacente la cita se probó contra todas las fuentes del bloque: el
+    hallazgo es más débil y no puede frenar un cierre."""
+    _txt_324("citado", "prosa que no dice la cita")
+    _extr_324("citado", "otra cosa")
+    _extr_324("ajeno", CITA_324)
+    ver, _ = cfg.quote_verdict(CITA_324, ["citado"], {"citado", "ajeno"},
+                               {"citado": cfg.fulltext_readings("citado")}, ambiguo=True)
+    assert ver == "no_verbatim"
+
+
+def test_quote_verdict_sin_EXTRACCION_de_la_fuente_no_bloquea(toy_vault):
+    """#318 — «no está en la extracción» sólo significa algo si la extracción existe. La fuente
+    off-ADS sin extraer, o la bóveda pre-#311 sin migrar, no es una cita alterada: es un chequeo que
+    no se pudo correr, aunque la frase aparezca en la extracción de otro paper."""
+    _txt_324("citado", "prosa que no dice la cita")          # `.txt` sí, extracción no
+    _extr_324("ajeno", CITA_324)
+    ver, _ = cfg.quote_verdict(CITA_324, ["citado"], {"citado", "ajeno"},
+                               {"citado": cfg.fulltext_readings("citado")})
+    assert ver == "no_verbatim"
+
+
+def test_fulltext_readings_memoiza(toy_vault):
+    """#320/#324 — el chequeo corre **por cita**, así que sin caché el mismo `.txt` se lee y
+    normaliza decenas de veces en la pasada que `CLAUDE.md` describe como barata."""
+    _txt_324("2013Voss", f"prosa. {CITA_324}. más prosa.")
+    assert cfg.fulltext_readings("2013Voss") is cfg.fulltext_readings("2013Voss")
+
+
+def test_quote_verdict_el_txt_que_PARTE_la_cita_no_es_culpa_de_la_nota(toy_vault):
+    """#288 — la fuente sí la dice y el `.txt` la parte (números de línea de un preprint a dos
+    columnas metidos en medio de la frase). Es otro trabajo y otra severidad: no hay nada que
+    corregir en la nota. Medido sobre cinco hallazgos abiertos uno por uno, CUATRO eran esto."""
+    partido = CITA_324.replace("enough", "enough 1234")     # el número que inyecta el `.txt`
+    _txt_324("citado", f"prosa. {partido}. más prosa.")
+    _extr_324("citado", "otra cosa")
+    ver, _ = cfg.quote_verdict(CITA_324, ["citado"], {"citado"},
+                               {"citado": cfg.fulltext_readings("citado")})
+    assert ver == "txt_parte"

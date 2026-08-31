@@ -401,10 +401,10 @@ def merge_ours_unprotected() -> tuple[list[str], str | None]:
 #  @inv INV-128
 GT_STALE_MARK = "⚠desactualizado"
 
-#: #321 · cuántos caracteres del arranque tienen que coincidir para llamarlo «se completó al copiar».
-#: Por encima de `cfg.QUOTE_MIN` (40) a propósito: un prefijo corto coincide por casualidad entre dos
-#: frases del mismo paper, y este chequeo BLOQUEA — la evidencia tiene que ser positiva, no plausible.
-CITA_PREFIJO = 60
+#: #321/#324 · el umbral de «se completó al copiar» vive en `lib_config`, junto con la regla que lo
+#: usa: hasta 1.134.0 `contrast.py` llevaba su propia copia y un comentario que **declaraba** que
+#: tenían que coincidir, sin nada que lo chequeara.
+CITA_PREFIJO = cfg.CITA_PREFIJO
 
 # #302 · techos del `STATUS.md`. Es **estado**, no bitácora: lo histórico va a `wiki/log.md`, que es
 # append-only por contrato y lo cumple. Los dos números son el umbral por encima del cual el archivo
@@ -1729,74 +1729,53 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                         f" ⚠ el bloque cita {', '.join(sorted(_bibs))} y la cita no lleva "
                         f"`[[bibcode]]` adyacente: se probó contra TODAS, así que el hallazgo es "
                         f"más débil — poné la cita al lado de su fuente (#316)")
-                    if any(cfg.quote_found(_c, _t) for _ts in _fuentes.values() for _t in _ts):
-                        continue
-                    # #315/#317 — la comparación DECIDIBLE que faltaba: la EXTRACCIÓN es la
-                    # transcripción hecha leyendo el PDF, así que si la cita está ahí, la nota es
-                    # fiel y lo que falló es el `.txt` (#205 lo declara índice degradado). Medido:
-                    # con el `.txt` como único juez la señal era 2 de 17 en un concepto y 0 de 35 en
-                    # otro — un detector que delega 54 confirmaciones manuales al PDF es un detector
-                    # que se deja de leer. Lo que la extracción NO tiene y el `.txt` tampoco es
-                    # justamente lo que el sintetizador inventó, y eso no admite excusa.
-                    _extracciones = {b: cfg.extraction_texts(b) for b in (_bibs_c or [])}
-                    # #318 — «no está en la extracción» sólo significa algo si la extracción EXISTE:
-                    # una fuente off-ADS sin extraer, o una bóveda pre-#311 sin migrar, no es una
-                    # cita inventada, es un chequeo que no se pudo correr.
-                    _con_extraccion = any(_extracciones.get(b) for b in _fuentes)
-                    _en_extraccion = [b for b, _ts in _extracciones.items()
-                                      if any(cfg.quote_found(_c, _t) for _t in _ts)]
-                    # #321 — las dos formas de evidencia POSITIVA de que la cita se movió o se
-                    # completó. Sin una de ellas, la extracción simplemente calla, y el silencio de
-                    # una transcripción selectiva no prueba fabricación.
-                    _otro_bib = [b for b in sorted(_bibs_nota - set(_bibs_c))
-                                 if any(cfg.quote_found(_c, _t) for _t in cfg.extraction_texts(b))]
-                    _prefijo = (len(_c) > CITA_PREFIJO and not _en_extraccion
-                                and any(cfg.quote_found(_c[:CITA_PREFIJO], _t)
-                                        for _ts in _extracciones.values() for _t in _ts))
-                    if _en_extraccion:
-                        cita_txt_degradado.append(
-                            (stem, f"L{_ln}: «{_c[:70]}{'…' if len(_c) > 70 else ''}» está en la "
-                                   f"EXTRACCIÓN de {', '.join(sorted(_en_extraccion))} (que se hizo "
-                                   f"leyendo el PDF) y no en su `.txt`: la nota está bien y el "
-                                   f"defecto es del índice — re-extraé el `.txt` si molesta (#315)"))
-                        continue
+                    # #324 — UNA sola implementación de la regla, en `cfg.quote_verdict`: acá y
+                    # en `contrast.validar` se decide lo mismo, y con código separado ya divergían
+                    # (13 contra 12 sobre el mismo corpus el mismo día). El orden lo fija esa
+                    # función, y su primer paso —la cita contra el `.txt` de SU fuente— es el que
+                    # evita marcar como mal atribuida una cita correcta cuya extracción,
+                    # selectiva (#188), no la transcribió.
+                    _ver, _det = cfg.quote_verdict(_c, _bibs_c, _bibs_nota, _fuentes, ambiguo=bool(_amb))
                     _corte = _c if len(_c) <= 70 else _c[:70] + "…"
-                    if _fuentes and any(cfg.quote_found_degraded(_c, _t)
-                                        for _ts in _fuentes.values() for _t in _ts):
-                        # #288 — la fuente SÍ la dice: lo que la rompió es la EXTRACCIÓN (números
-                        # de línea de un preprint a dos columnas metidos en medio de la frase, una
-                        # columna vecina empalmada). Es otro trabajo y otra severidad: acá no hay
-                        # nada que corregir en la nota. Medido sobre cinco hallazgos abiertos uno
-                        # por uno, CUATRO eran esto y uno era la nota.
+                    if _ver == "en_su_txt":
+                        continue
+                    if _ver == "txt_degradado":
+                        # #315/#317 — la EXTRACCIÓN es la transcripción hecha leyendo el PDF, así
+                        # que si la cita está ahí la nota es fiel y lo que falló es el `.txt` (#205
+                        # lo declara índice degradado). Medido: con el `.txt` de único juez la señal
+                        # era 2 de 17 en un concepto y 0 de 35 en otro.
+                        cita_txt_degradado.append(
+                            (stem, f"L{_ln}: «{_corte}» está en la EXTRACCIÓN de "
+                                   f"{', '.join(_det['en_extraccion'])} (que se hizo leyendo el "
+                                   f"PDF) y no en su `.txt`: la nota está bien y el defecto es del "
+                                   f"índice — re-extraé el `.txt` si molesta (#315)"))
+                    elif _ver == "txt_parte":
+                        # #288 — la fuente SÍ la dice: lo que la rompió es la EXTRACCIÓN del `.txt`
+                        # (números de línea de un preprint a dos columnas metidos en medio de la
+                        # frase, una columna vecina empalmada). Es otro trabajo y otra severidad.
+                        # Medido sobre cinco hallazgos abiertos uno por uno, CUATRO eran esto.
                         cita_txt_degradado.append(
                             (stem, f"L{_ln}: «{_corte}» está en la fuente pero el `.txt` la parte "
                                    f"({', '.join(sorted(_fuentes))}): números de línea o columnas "
                                    f"empalmadas. La cita no se toca — confirmala en el PDF y, si "
                                    f"hace falta, re-extraé el `.txt`{_amb}"))
-                    elif _fuentes and _con_extraccion and not _amb and (_otro_bib or _prefijo):
-                        # #318/#321 — el GATE, con la premisa corregida. #317 §5 lo había fundado en
-                        # *«si no está en el JSON, la fabricó el sintetizador»*, y eso sólo valdría
-                        # si la extracción contuviera toda frase citable del paper: es una
-                        # transcripción **selectiva y lenteada** (#188), y el framework manda citar
-                        # del PDF (#205). Medido sobre 32 hits: 6 eran atribución, 6 alteración, y
-                        # los otros 20 mezclaban paráfrasis con citas legítimas leídas del PDF —
-                        # entre ellas una que #315 usa como ejemplo de cita CORRECTA.
-                        # Así que bloquea sólo la **evidencia positiva**: la frase aparece bajo OTRO
-                        # bibcode (se movió), o coincide un prefijo largo y diverge la cola (se
-                        # completó, el patrón de #314). El silencio de la extracción se declara
-                        # abajo — es la doctrina de D-43, y la misma forma del error que #315
-                        # arregló un eslabón antes: juzgar contra un artefacto que no contiene lo
-                        # que se le pregunta.
+                    elif _ver == "alterada":
+                        # #318/#321 — el GATE, con la premisa corregida: bloquea sólo la EVIDENCIA
+                        # POSITIVA (la frase bajo otro bibcode, o el prefijo largo con la cola
+                        # divergente). El silencio de una transcripción selectiva (#188) sobre un
+                        # corpus que se cita del PDF (#205) no prueba fabricación — medido sobre 32
+                        # hits: 6 de atribución, 6 de alteración, y entre los otros 20 una cita que
+                        # #315 usa como ejemplo de cita CORRECTA.
                         _porque = (f"la frase está verbatim en la extracción de "
-                                   f"**{', '.join(sorted(_otro_bib))}**, no en la de "
+                                   f"**{', '.join(_det['otro_bib'])}**, no en la de "
                                    f"{', '.join(sorted(_fuentes))}: la cita está atribuida a la "
-                                   f"fuente equivocada" if _otro_bib else
+                                   f"fuente equivocada" if _det["otro_bib"] else
                                    "el arranque coincide con la extracción y la cola diverge: la "
                                    "cita se completó al copiar (el patrón de #314)")
                         cita_inventada.append(
                             (stem, f"L{_ln}: «{_corte}» — {_porque}. Copiala del JSON de extracción "
                                    f"(`contrast.py <slug> --grep …`) o parafraseá SIN comillas"))
-                    elif _fuentes:
+                    elif _ver == "no_verbatim":
                         cita_no_verbatim.append(
                             (stem, f"L{_ln}: «{_corte}» no está en el `.txt` de "
                                    f"{', '.join(sorted(_fuentes))} → ⚠ **confirmala en el PDF antes "

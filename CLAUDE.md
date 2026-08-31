@@ -135,8 +135,8 @@ respuesta es **no → no entra al vault**, sin excepciones —ni por "es útil p
 por "es obvio".
 
 **Prohibido inlinear en `vault/wiki/` (no es bibliografía):** parámetros, perillas o **dials** de un
-generador/pipeline; nombres de variables o estructura de código; reparametrizaciones y **decisiones
-de diseño** de una implementación; recetas operativas de "cómo correr" que no sean un hecho citable.
+generador/pipeline; nombres de variables o estructura de código; reparametrizaciones y **decisiones de
+diseño** de una implementación; recetas operativas de "cómo correr" que no sean un hecho citable.
 **Sí es citable (entra):** resultados publicados —**incluidos papers de simulación**: rangos
 medidos, mecanismos, signos, escalas temporales, fórmulas de la fuente. La distinción es
 **publicado-y-citable vs implementación de código**, no "simulación sí/no". **Si detectás
@@ -481,9 +481,9 @@ discrepancia numérica contra un valor publicado es candidata a **diferencia de 
 
 ⚠ **`symbols_lost` y `fulltext_layout` se RETIRARON en 1.71.0 (#205).** Existían para decidir si el
 extractor leía el `.txt` o el PDF, y esa decisión ya no se toma: la fuente es el PDF. Ninguno de los
-dos discriminaba (#193, #194). Migrador `python scripts/make_notes.py --migrate-txt-fields`; el lint
-**bloquea** la nota que los lleve. Lo que sobrevive de todo eso es un hecho: **`Read` rasteriza el
-PDF, así que el modelo *ve* la fórmula** — es cuestión de **modalidad, no de modelo**.
+dos discriminaba (#193, #194). Migrador `--migrate-txt-fields`; el lint **bloquea** la nota que los
+lleve. Lo que sobrevive es un hecho: **`Read` rasteriza el PDF, así que el
+modelo *ve* la fórmula** — es cuestión de **modalidad, no de modelo**.
 
 #### `keywords` (D-17)
 
@@ -555,25 +555,22 @@ la trampa de prefijo de #176 en el vocabulario propio del framework — se saca 
 aflojando el cortador.
 
 ⚠ La **sección** la escriben los dos raíles al crear —con `_(no disponible)_` si no hay copia de
-catálogo— y el cosechador la **completa** sin pisar un verbatim ya puesto (#124/#277; el stub
-off-ADS no la escribía **nunca**, y sin detector 39 de 138 notas de una bóveda real se habían
-quedado sin ella). Backfill: `make_notes.py --restamp-abstracts`; el lint la **bloquea**.
+catálogo— y el cosechador la **completa** sin pisar un verbatim ya puesto (#124/#277; el stub off-ADS
+no la escribía **nunca**: 39 de 138 notas de una bóveda real sin ella). Backfill:
+`make_notes.py --restamp-abstracts`; el lint la **bloquea**.
 
-⚠ **Documento largo (`unidad_cita: pagina`): sin conclusiones** — igual que la fuente leída sólo
-del abstract (#207), y la que no tiene esa sección se declara `sin_conclusiones: <motivo>` (#277).
-Un libro no tiene esa sección y
-transcribir algo que no existe fabrica contenido. Es una exclusión **estructural**, no un umbral de
-largo.
+⚠ **Documento largo (`unidad_cita: pagina`): sin conclusiones** — igual que la fuente leída sólo del
+abstract (#207), y la que no tiene esa sección se declara `sin_conclusiones: <motivo>` (#277): un
+libro no la tiene, y transcribir algo que no existe fabrica contenido. Exclusión **estructural**, no
+umbral de largo.
 
 ⚠ **Cómo se leen las conclusiones, y por qué es un método:** el extractor empieza por ahí, saca los
-**ejes** que el trabajo dice aportar, y los **chequea contra el cuerpo** — porque es justo donde
-vive el *afirmar de más*. Si el cuerpo dice menos, eso es un hallazgo sobre la **fuente** y va a
-`salvedades`.
+**ejes** que el trabajo dice aportar y los **chequea contra el cuerpo** — es donde vive el *afirmar
+de más*. Si el cuerpo dice menos, es un hallazgo sobre la **fuente** y va a `salvedades`.
 
 ⛔ Las cuatro secciones están en `SECCIONES_ESTAMPADAS`, así que `verify-citations` **no las mira**:
-una traducción no es una afirmación de la bóveda. La red está aguas abajo —lo que de acá llegue a
-una **ficha** sí se verifica contra el PDF—, y de ahí la regla de uso: **son ayuda de lectura, nunca
-fuente de la que citar.**
+una traducción no es una afirmación de la bóveda. La red está aguas abajo —lo que de acá llegue a una
+**ficha** sí se verifica contra el PDF—: **son ayuda de lectura, nunca fuente de la que citar.**
 
 #### Notas off-ADS y fuentes largas
 
@@ -767,9 +764,9 @@ genómica y cardiología): es `search_fq:` en la entrada del tema, con los **mis
 `python scripts/query_ads.py <slug> --theme --probe` (la query sale de `query:` del tema).
 Clasificar ahí con `relevance.facets` no es «menos preciso» sobre la población que el tema existe
 para capturar: es el **veredicto opuesto** (medido en `ica`). Importa porque el preview es el
-**único** lugar donde ese corte se decide **antes** de pagar descargas y extracción. En ese modo cada fila lleva **por qué puerta entró** (abajo), el
-desglose por política reemplaza al contraste de combinación —que habla de la lente global— y la
-línea de cierre manda a `themes.yaml`, no a `objective.yaml`. Sin `--theme`, comportamiento
+**único** lugar donde ese corte se decide **antes** de pagar descargas y extracción. En ese modo
+cada fila lleva **por qué puerta entró**, el desglose por política reemplaza al contraste de
+combinación —que habla de la lente global— y la línea de cierre manda a `themes.yaml`. Sin `--theme`, comportamiento
 histórico; con `--theme` y un slug que no existe o que no declara `facet:`, **rehúsa** en vez de
 degradar a la global. ⛔ **Y el probe dice POR QUÉ quedó afuera cada no-core (#289):** las dos
 poblaciones piden acciones **opuestas** —*sin la faceta propia* (apretala) vs *pasa la faceta y
@@ -797,8 +794,7 @@ real, y el `via` que va al registro es siempre el **declarado** en la config.
 
 ⚠ **`fundacional_min_citas` no tiene default**: el número depende del campo (30k citas es normal en
 ML y muchísimo en astro) y esconderlo sería decidir por el usuario. Sin declararlo la puerta 2 **no
-abre** y el motivo queda en `why_excluded`. *(Decisión abierta en `vault/STATUS.md`: si la puerta 2
-debería existir — mete una propiedad del mundo en una regla que era sólo sobre el texto.)*
+abre** y el motivo queda en `why_excluded`. *(Decisión abierta en `vault/STATUS.md`.)*
 
 ⛔ **La puerta 1 («lo cita tu corpus») PROPONE, no clasifica** (§4.3 del plan): alimenta los
 candidatos del triage con `via: citado-por-corpus`, nunca marca core. Si clasificara, ser core
@@ -859,8 +855,8 @@ la cascada y **propone**; nunca clasifica.
   dentro del topic**). Medido: recuperación **7/18 → 13/18**, universo de candidatos **776 → 2521**.
   Ése es el canje —cobertura contra costo de triage—, se decide por tema, y por eso es **opt-in**.
   ⚠ **Lección de método:** la primera medición (*"217 candidatos, límite estructural"*) era
-  artefacto de un tope de 15 filas puesto por el propio agente — conclusión estructural sacada de
-  un truncamiento silencioso. Hoy `seed_terms` **avisa por término**.
+  artefacto de un tope de 15 filas puesto por el propio agente. Hoy `seed_terms` **avisa por
+  término**.
   ⛔ **El aviso manda subir una perilla que EXISTE, y el slice se PAGINA (#294):**
   `rows_por_termino` es campo del tema y flag (`--rows-por-termino`); el backend topea en 200 por
   request, así que sin paginar el remedio era un no-op (medido: 2 papers perdidos sólo por el
@@ -1006,20 +1002,24 @@ el `.txt` se re-extrae.
    ⛔ **La fila de `--filas` sale CON LA CITA ADENTRO y NO SE RE-TIPEA (#322).** Los 12 verdaderos
    positivos medidos son errores de **copiado** —6 de atribución, 6 de cola alterada—, ninguno de
    comprensión: mover una cadena entre archivos es lo que un script hace perfecto y un LLM mal. Vos
-   escribís **la glosa** y elegís qué filas entran; si no entra, se parafrasea **sin comillas** —
-   nunca se recorta entre comillas. Y **una fila, una fuente**: agrupar bibcodes bajo una glosa
-   compartida es cómo se fabrican atribuciones (6 falsas medidas, 0 escribiendo paper por paper).
+   escribís **la glosa** y elegís qué filas entran; si no entra, se parafrasea **sin comillas**. Y
+   **una fila, una fuente**: agrupar bibcodes bajo una glosa compartida es cómo se fabrican
+   atribuciones (6 falsas medidas, 0 escribiendo paper por paper).
    ⛔ **La cita se verifica contra la EXTRACCIÓN, no contra el `.txt`** (#315/#317): es la
    transcripción hecha leyendo el PDF, y con el `.txt` de juez la señal era 2 de 17 y 0 de 35.
    Bloquea con **evidencia positiva** (#318/#321) —la frase bajo **otro** bibcode (atribución), o un
-   prefijo largo con la cola divergente (se completó al copiar)—; el **silencio** no, que la
-   extracción es selectiva y lenteada (#188) y se cita del PDF (#205).
+   prefijo largo con la cola divergente—; el **silencio** no, que la extracción es selectiva (#188)
+   y se cita del PDF (#205). ⛔ **Pero PRIMERO se prueba contra el `.txt` de SU fuente, y la regla es
+   UNA implementación (`lib_config.quote_verdict`, #324):** el `.txt` es índice degradado, no mal
+   testigo, así que la cadena que está ahí prueba que la frase es de ese paper — sin ese paso, el
+   *boilerplate* que la extracción no transcribió salía «mal atribuido». Duplicada, la regla ya
+   divergía (13 contra 12), y desde #323 un falso positivo **frena operaciones**.
    ⛔ **Y ese cruce es PASO DE CIERRE de toda operación que sintetice, ANTES del verify (#323):**
    `python scripts/contrast.py [<slug>] --validar-todo` (sin slug, toda la bóveda; exit ≠ 0, declara
    población y no evaluables). Un `grep` de segundos contra N subagentes leyendo PDFs: verificar con
    LLM lo que el `grep` ya sabe alterado es pagar el caro para llegar a lo que el barato sabía. La
-   capacidad existía y **no la corría nadie** — la nota que produjo esta serie cerró con verify
-   completo y `lint --cierre` en 0 **con 12 citas alteradas adentro**.
+   capacidad existía y **no la corría nadie** — la nota que produjo esta serie cerró con verify y
+   `lint --cierre` en 0 **con 12 citas alteradas adentro**.
 
 #### El CICLO DE LA LENTE — cómo se encadenan las piezas (#310)
 
@@ -1355,19 +1355,19 @@ colisionen. La línea del reuso declara `pdf_source` y fecha y dice que **no se 
 detector se puede correr acotado (`sweep_external.py --bibcodes b1,b2` — unidades, no el corpus, y
 **no** registra la pasada); y el lint lo levanta como backlog, junto con *«`_red.yaml` no existe»*
 —una bóveda donde `sweep_external` nunca corrió no tiene **ninguna** de las seis caducidades
-chequeadas, y eso no se veía en ningún lado (medido: 62 % del corpus `eprint`, sin `_red.yaml`)—.
+chequeadas, y eso no se veía en ningún lado—.
 ⛔ **Reporta, no aplica solo — con UNA excepción nombrada** (AUD-206): el diff se muestra y se
 pregunta antes de tocar nada, porque un snapshot que se actualiza solo cambia valores **bajo los
 pies de la prosa que ya los citó**. La excepción es **`retracciones`**: `check_retractions` estampa
 `retracted:` / `corrections:` en las notas **sin preguntar**, a propósito — una fuente retractada
 citada rompe la frontera dura, así que enterarse tarde es peor que el ruido de diff, y lo que
 escribe es una **marca de metadata**, no un valor que la prosa haya citado. Los otros cinco no
-escriben: versiones y web proponen el comando, ground-truth pregunta, y citas-puerta2 sólo reporta
-el cruce. Lo que sí es
-automático es la consecuencia offline: al cambiar un `.txt`, el **ancla de fuente** (D-20) marca
-sola los pares verificados contra él. El ground-truth **no** lo cubre esa ancla (no es un `.txt`):
-al aplicar, se registra `_cambios` en el JSON y el lint pide la marca `⚠desactualizado` (ver abajo). El renombre preprint→publicado **nunca** es automático
-(reescribe wikilinks de toda la bóveda): se propone el comando.
+escriben: versiones y web proponen el comando, ground-truth pregunta, citas-puerta2 reporta el
+cruce. Lo automático es la consecuencia offline: al cambiar un `.txt`, el **ancla de fuente** (D-20)
+marca sola los pares verificados contra él. El ground-truth **no** lo cubre esa ancla (no es un
+`.txt`): al aplicar se registra `_cambios` en el JSON y el lint pide la marca `⚠desactualizado`. El
+renombre preprint→publicado **nunca** es automático (reescribe wikilinks de toda la bóveda): se
+propone el comando.
 La caducidad se registra **versionada** en `vault/config/registro/_red.yaml` — "cuándo se miró
 afuera" es información de la bóveda, no de la máquina. Un detector que **no pudo correr** se
 declara y **no** entra en `cubrio`: el registro no puede afirmar haber mirado lo que no miró.

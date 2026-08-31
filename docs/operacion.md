@@ -167,8 +167,10 @@ python scripts/contrast.py [<slug>] --validar <nota>
                                     # cruza la nota contra las extracciones (#315/#317). Bloquea
                                     #   con EVIDENCIA POSITIVA (#321): la frase verbatim bajo otro
                                     #   bibcode (atribución movida) o el arranque que coincide con
-                                    #   la cola divergente (se completó al copiar). El silencio de
-                                    #   la extracción se declara no evaluable, no es hallazgo
+                                    #   la cola divergente (se completó al copiar). PRIMERO prueba
+                                    #   contra el `.txt` de SU fuente (#324): la cadena que está ahí
+                                    #   prueba que la frase es de ese paper. Misma implementación
+                                    #   que el lint (`cfg.quote_verdict`), no una copia
 python scripts/contrast.py [<slug>] --validar-todo
                                     # BARRIDO (#323) — paso de cierre de toda operación que
                                     #   sintetice, ANTES del verify (el grep barato antes del

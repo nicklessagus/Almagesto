@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.134.0"
+ALMAGESTO_VERSION = "1.135.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -906,6 +906,91 @@ def extraction_texts(bibcode: str) -> list:
         out.append(normalize_source_text(" \n ".join(trozos)))
     _EXTRACCION_CACHE[clave] = out
     return out
+
+
+#: #321/#324 · how many characters of the opening must match to call it «completed while copying».
+#: Above `QUOTE_MIN` (40) on purpose: a short prefix matches by chance between two sentences of the
+#: same paper, and this check BLOCKS — the evidence must be positive, not plausible.
+#: ⛔ ONE definition (#324): `lint.py` and `contrast.py --validar` decide the same thing, and while
+#: each carried its own copy the comment *declared* they had to be the same number and nothing
+#: checked it. Tuning one would leave a skill closing green on what the other blocks.
+CITA_PREFIJO = 60
+
+_FULLTEXT_CACHE: dict = {}
+
+
+def fulltext_readings(bibcode: str) -> list:
+    """Normalised readings of this paper's `.txt`, one per physical column (#275), memoised.
+
+    `[]` when there is no `.txt` on disk, which is *not evaluable*, never *"the quote is not
+    there"*. Shared by the two callers that ask the same question (#324)."""
+    clave = (str(FULLTEXT), bibcode)
+    if clave in _FULLTEXT_CACHE:
+        return _FULLTEXT_CACHE[clave]
+    txts = sorted(FULLTEXT.glob(f"*/{bibcode}.txt")) if FULLTEXT.exists() else []
+    out = []
+    if txts:
+        try:
+            out = source_texts(txts[0].read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            out = []
+    _FULLTEXT_CACHE[clave] = out
+    return out
+
+
+def quote_verdict(quote: str, cited, note_bibs, txt_texts: dict, *, ambiguo: bool = False) -> tuple:
+    """Is this quote altered, or is the artefact the problem? ONE implementation (#324).
+
+    ⛔ `lint.collect` and `contrast.validar` were deciding this with separate code and **already
+    diverged**: measured the same day over the same vault, 13 against 12. The extra one was a
+    FALSE positive — a piece of A&A boilerplate («only available in electronic form at the CDS»)
+    that is verbatim in the `.txt` of the paper the note cites and that the *selective* extraction
+    (#188) of that paper did not transcribe, while another paper's extraction did. `lint` never saw
+    it because it tests against the cited source's `.txt` **first**; `contrast` went straight to
+    comparing extractions and called it a wrong attribution. It is the very shape of error #321 had
+    just fixed —judging against an artefact that does not contain what is being asked of it—
+    displaced into the tool, and it hurts more there: since #323 `--validar-todo` is a mandatory
+    closing step with exit ≠ 0, so a false positive **stops operations**.
+
+    Order (each step is a different job, so it is not interchangeable):
+
+      1. the quote is in the `.txt` of ITS source → `en_su_txt`: nothing to say, whatever the
+         extractions hold. #205 makes the `.txt` a degraded INDEX, not a bad witness: finding the
+         string there proves the sentence is in THAT paper.
+      2. an extraction of its source has it → `txt_degradado`: the note is right, the index lost it.
+      3. the source says it and the `.txt` breaks it apart → `txt_parte` (#288).
+      4. positive evidence that it moved or was completed → `alterada` (blocking, #321).
+      5. sources on disk and nothing else → `no_verbatim`; no sources → `no_evaluable` (D-43).
+
+    `txt_texts` is injected —`{bibcode: [readings]}`— because each caller obtains it differently;
+    `ambiguo` reproduces #316 (a quote with no adjacent `[[bibcode]]` was tested against every
+    source of the block, so the finding is weaker and never blocks).
+
+    Returns `(veredicto, detalle)`."""
+    fuentes = {b: ts for b, ts in (txt_texts or {}).items() if ts}
+    if any(quote_found(quote, t) for ts in fuentes.values() for t in ts):
+        return "en_su_txt", {}
+    extracciones = {b: extraction_texts(b) for b in (cited or [])}
+    en_extraccion = sorted(b for b, ts in extracciones.items()
+                           if any(quote_found(quote, t) for t in ts))
+    if en_extraccion:
+        return "txt_degradado", {"en_extraccion": en_extraccion}
+    if any(quote_found_degraded(quote, t) for ts in fuentes.values() for t in ts):
+        return "txt_parte", {}
+    otro = [b for b in sorted(set(note_bibs or ()) - set(cited or ()))
+            if any(quote_found(quote, t) for t in extraction_texts(b))]
+    prefijo = (len(quote) > CITA_PREFIJO
+               and any(quote_found(quote[:CITA_PREFIJO], t)
+                       for ts in extracciones.values() for t in ts))
+    # #318 — «no está en la extracción» sólo significa algo si la extracción EXISTE: una fuente
+    # off-ADS sin extraer, o una bóveda pre-#311 sin migrar, no es una cita alterada. (Y esto ya
+    # implica `fuentes` no vacío, así que agregarlo sería una condición que no decide nada, #319.)
+    con_extraccion = any(extracciones.get(b) for b in fuentes)
+    if con_extraccion and not ambiguo and (otro or prefijo):
+        return "alterada", {"otro_bib": otro, "prefijo": prefijo}
+    if fuentes:
+        return "no_verbatim", {}
+    return "no_evaluable", {}
 
 
 def quote_found(quote: str, source_norm: str) -> bool:

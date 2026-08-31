@@ -21,6 +21,13 @@ LARGA = ("which requires the latent signals to be whitened before the model can 
          "and that condition is not the same as knowing the noise covariance")
 
 
+def _txt(slug: str, bib: str, texto: str = "prosa del paper que no dice la cita"):
+    """El `.txt` de la fuente. Sin él la cita **no es evaluable** (#324): la extracción es selectiva,
+    así que sin poder mirar el índice de su propio paper no se puede afirmar que la cita se movió."""
+    (cfg.FULLTEXT / slug).mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / slug / f"{bib}.txt").write_text(texto, encoding="utf-8")
+
+
 def _extraccion(slug: str, bib: str, **cambios):
     d = {"bibcode": bib, "ejes": {"identificabilidad": "hace falta Sigma conocida"},
          "ground_truth": [{"que": "blanqueo", "valor": LARGA, "linea": "p. 4",
@@ -102,6 +109,7 @@ def test_validar_caza_la_cita_ATRIBUIDA_A_LA_FUENTE_EQUIVOCADA(toy_vault, capsys
     _extraccion("ica_ruido", "2013Voss")
     _extraccion("ica_ruido", "2004Davies", ground_truth=[
         {"que": "otro", "valor": "algo completamente distinto", "linea": "p. 9"}])
+    _txt("ica_ruido", "2004Davies")
     nota = cfg.CONCEPTS / "methods" / "ica-ruido.md"
     nota.parent.mkdir(parents=True, exist_ok=True)
     nota.write_text("---\ntags: [concept]\n---\n\n# ICA ruidosa\n\n"
@@ -116,6 +124,7 @@ def test_validar_caza_la_cita_COMPLETADA_al_copiar(toy_vault, capsys):
     """#314/#321 — la otra mitad (6 de 12): el arranque coincide con la extracción y la cola
     diverge. Es la firma del digest truncado que el modelo completó con lo plausible."""
     _extraccion("ica_ruido", "2013Voss")
+    _txt("ica_ruido", "2013Voss")
     nota = cfg.CONCEPTS / "methods" / "ica-ruido.md"
     nota.parent.mkdir(parents=True, exist_ok=True)
     nota.write_text("---\ntags: [concept]\n---\n\n# ICA ruidosa\n\n"
@@ -131,6 +140,7 @@ def test_el_SILENCIO_de_la_extraccion_no_bloquea(toy_vault, capsys):
     y entre los otros 20 había una cita que #315 usa como ejemplo de cita CORRECTA. Se declara como
     no evaluable (D-43), nunca como hallazgo."""
     _extraccion("ica_ruido", "2013Voss")
+    _txt("ica_ruido", "2013Voss")
     nota = cfg.CONCEPTS / "methods" / "ica-ruido.md"
     nota.parent.mkdir(parents=True, exist_ok=True)
     nota.write_text("---\ntags: [concept]\n---\n\n# ICA ruidosa\n\n"
@@ -138,7 +148,7 @@ def test_el_SILENCIO_de_la_extraccion_no_bloquea(toy_vault, capsys):
                     "[[2013Voss]].\n", encoding="utf-8")
     assert ct.main(["--validar", str(nota)]) == 0
     out = capsys.readouterr().out
-    assert "su silencio no prueba nada" in out and "1 no evaluable" in out
+    assert "la transcripción es SELECTIVA" in out and "1 no evaluable" in out
 
 
 def test_validar_calla_cuando_la_nota_es_FIEL_a_la_extraccion(toy_vault, capsys):
@@ -174,7 +184,7 @@ def test_validar_no_inventa_sobre_una_fuente_SIN_extraccion(toy_vault, capsys):
                     "[[2099Nadie]].\n",
                     encoding="utf-8")
     assert ct.main(["--validar", str(nota)]) == 0
-    assert "sin extracción en disco" in capsys.readouterr().out
+    assert "sin `.txt` ni extracción en disco" in capsys.readouterr().out
 
 
 def test_sin_extracciones_rehusa_en_vez_de_imprimir_cero(toy_vault, capsys):
@@ -252,6 +262,7 @@ def test_el_barrido_es_un_GATE(toy_vault, capsys):
     _extraccion("ica_ruido", "2013Voss")
     _extraccion("ica_ruido", "2004Davies", ground_truth=[
         {"que": "otro", "valor": "algo distinto", "linea": "p. 9"}])
+    _txt("ica_ruido", "2004Davies")
     _nota_323("ica-ruido", f"Dice «{LARGA}» [[2004Davies]], y lo discute [[2013Voss]].")
     assert ct.main(["--validar-todo"]) == 1
     assert "atribuida a la fuente equivocada" in capsys.readouterr().out
@@ -269,3 +280,59 @@ def test_el_barrido_por_SUJETO_acota_la_poblacion(toy_vault, capsys):
     entero = capsys.readouterr().out
     assert "notas de `ica_ruido`" in acotado
     assert int(acotado.split("> sobre ")[1].split(" ")[0]) < int(entero.split("> sobre ")[1].split(" ")[0])
+
+
+def test_la_cita_que_SU_txt_dice_no_es_atribucion_equivocada(toy_vault, capsys):
+    """#324 — el falso positivo medido, y el que más iba a doler: `--validar-todo` es paso de cierre
+    con exit ≠ 0 desde #323, así que un falso positivo **frena operaciones**.
+
+    Boilerplate de A&A («only available in electronic form at the CDS») que está verbatim en el
+    `.txt` del paper que la nota cita, que la extracción **selectiva** (#188) de ese paper no
+    transcribió, y que la extracción de otro paper del corpus sí. El lint no lo marcaba porque prueba
+    contra el `.txt` de su fuente **primero**; `contrast` iba derecho a comparar extracciones."""
+    BOILER = "only available in electronic form at the CDS via anonymous ftp"
+    _extraccion("ica_ruido", "2016Diaz", ground_truth=[
+        {"que": "otra cosa", "valor": "lo que este paper sí aporta", "linea": "p. 3"}])
+    _extraccion("ica_ruido", "2009Nunez", ground_truth=[
+        {"que": "tablas", "valor": BOILER, "linea": "p. 1"}])
+    _txt("ica_ruido", "2016Diaz", f"prosa del paper. {BOILER}. más prosa.")
+    _txt("ica_ruido", "2009Nunez")
+    nota = _nota_323("ica-ruido", f"Las tablas están «{BOILER}» [[2016Diaz]].\n\n"
+                                  f"El blanqueo lo trata [[2009Nunez]].")
+    assert ct.main(["--validar", str(nota)]) == 0
+    assert "atribuida a la fuente equivocada" not in capsys.readouterr().out
+    # Y no sale por ninguna otra puerta: la cita está en el `.txt` de SU fuente, así que no hay NADA
+    # que decir — ni «se movió» ni «el `.txt` la parte». Es el paso 1 del orden, y es el que muere si
+    # alguien lo saltea.
+    import lint as lt
+    lt.main([])
+    assert BOILER[:40] not in capsys.readouterr().out
+
+
+def test_PARIDAD_con_el_lint_sobre_el_mismo_insumo(toy_vault, capsys):
+    """Regla de método nº 2 y #222 — las dos implementaciones de la misma regla ya divergían (13 vs
+    12 sobre el mismo corpus el mismo día). Lo que se compara son **las dos salidas sobre el mismo
+    insumo**, no las dos constantes: que el número estuviera duplicado es justo lo que no se
+    detectaba, y comparar constantes no habría cazado la divergencia de orden que produjo el falso
+    positivo."""
+    import lint as lt
+    assert lt.CITA_PREFIJO is cfg.CITA_PREFIJO
+    BOILER = "only available in electronic form at the CDS via anonymous ftp"
+    _extraccion("ica_ruido", "2016Diaz", ground_truth=[
+        {"que": "otra", "valor": "otra cosa", "linea": "p. 3"}])
+    _extraccion("ica_ruido", "2009Nunez", ground_truth=[
+        {"que": "tablas", "valor": BOILER, "linea": "p. 1"}])
+    _txt("ica_ruido", "2016Diaz", f"prosa del paper. {BOILER}. más prosa.")
+    _txt("ica_ruido", "2009Nunez")
+    nota = _nota_323("ica-ruido",
+                     f"Las tablas están «{BOILER}» [[2016Diaz]].\n\n"
+                     f"Y además dice «{LARGA}» [[2009Nunez]].")
+    lt.main([])
+    reporte = capsys.readouterr().out
+    de_contrast = ct.validar(nota, mostrar=False)["alteradas"]
+    # ninguno de los dos marca el boilerplate: está en el `.txt` de SU fuente (#324)
+    assert BOILER[:40] not in reporte
+    assert not [m for _ln, m in de_contrast if BOILER[:40] in m]
+    # y ninguno de los dos lo llama alterado: la extracción calla, y el silencio no es evidencia
+    assert "atribuida a la fuente equivocada" not in reporte
+    assert not de_contrast
