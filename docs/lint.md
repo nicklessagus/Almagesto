@@ -370,14 +370,43 @@ OCR, o marcar `pending`).
 - **Cabecera no estampable** (#69: sin la línea `> _Generado con Almagesto v…_`, ancla de todos los
   estampadores): las cirugías de cabecera devuelven `False` en silencio sobre ella. Se arregla con
   `python scripts/make_notes.py --restamp-headers` (lee la versión del `generator`, no la inventa).
-- **Roll-up estampado desactualizado** (D-10): se reporta **nombrando los stems**; re-correr
-  `python scripts/make_notes.py <slug>` (o `--theme`).
+- **Roll-up estampado desactualizado** (D-10): se reporta **nombrando los stems** y el comando lo
+  arma `cfg.make_notes_cmd` (INV-141), así que sale con `--theme` cuando corresponde.
+  ⛔ **Cubre los DOS tipos de sujeto desde #338**: #300 llevó las dos garantías de D-10 al
+  estampador de un concepto y el detector se había quedado en `stars/` —medido, 2 de 3 sujetos de
+  una bóveda real son temas, y un paper que reclama una estrella y un tema con las dos tablas
+  vacías se reportaba 1 de 2—. Un tema estampa su roll-up bajo **uno** de los dos encabezados
+  (`## Papers` estilo ficha → `papers_universe`, o `## Papers que tocan este tema (auto)` →
+  `concept_rollup_rows`, D-24) y **cada uno se compara contra SU universo**: exigir el ausente
+  inventaría un hueco en la nota que eligió el otro. La nota que no trae **ninguno** de los dos es
+  su propio hallazgo — no puede recibir la cirugía nunca, y eso sólo lo decía un `print` de
+  `make_notes` al pasar. ⚠ El corte es `cfg.section_span`: `## Papers` es **prefijo** de
+  `## Papers que tocan este tema (auto)` (la trampa de #176).
 - **Hub que menciona un radio existente sin `[[wikilink]]`**: sin el link el radio no está en el
   grafo y el hub se lee como si el sub-aspecto no existiera.
 - **Concepto/hipótesis sin ninguna cita** (cobertura): afirma sin fuente → no chequeable.
 - **Alcance de hipótesis sin declarar o vencido** (D-34): sin el blockquote `> Alcance …` un
   veredicto negativo se lee como universal; los slugs son directorios de `raw/fulltext/`, así que el
   universo se re-cuenta y el lint marca la hipótesis que quedó corta.
+- **Hueco sin ALCANCE declarado** (#342): un hueco es una afirmación **negativa** —*«nadie da un
+  criterio para elegir $n$»*, *«ICASSO no aparece en ninguna fuente»*— y **por construcción no tiene
+  `[[bibcode]]` que la respalde**, así que no la mira ninguna otra capa: `verify-citations` va
+  claim↔su propia fuente y `find-contradictions` claim↔claim, y las dos parten de una cita. Medido
+  el 2026-08-31: **2 huecos falsos en `ica` y 4 en `ica-ruido`**, los seis afirmando que la bóveda
+  no puede responder algo que **sí** responde, y los seis cazados **de casualidad** (verificadores
+  que contradijeron la afirmación desde su propia fuente sin habérselo propuesto). El origen no fue
+  descuido: los seis salieron de **agregar los campos `hueco` de las extracciones**, que son **por
+  lente** —lo que *esa* fuente no da— y agregarlos los convierte en una afirmación universal.
+  ⛔ La red es la misma forma que D-34: el `## Huecos` con bullets declara
+  `> Alcance <fecha> · temas: [...] / estrellas: [...] · N papers` **dentro de la sección**, y el
+  lint lo cruza contra el disco (sin declarar · sin slugs · sin `· N papers` · slug fantasma ·
+  quedó corto). El blockquote de **nivel de nota** de una hipótesis no cuenta: declara el alcance
+  del *veredicto*, que es otra afirmación. La escalera es una sola implementación
+  (`lint.scope_state`) para los dos consumidores. Población: las notas de `stars/` y `concepts/`
+  con `## Huecos` **escrito** — la sección con la glosa del stub y sin un solo bullet no afirma
+  nada y no entra. ⛔ **Lo que esto NO hace** es verificar la negativa: preguntarle a cada fuente
+  del alcance *«¿tu paper dice algo de X?»* es un fan-out por hueco, y queda aparte. Ésta es la red
+  barata: declarar el alcance y chequearlo contra el disco.
 - **Marcador sin cerrar** (`` ` ``/`$`) y **párrafo duplicado** en la misma nota (#227): se cuentan
   por **párrafo**, no por línea (las notas van hard-wrapped y contar por línea grita en falso). ⚠ Un
   marcador **escapado** (`\$`, ``\` ``) no abre ni cierra (#309): ése es el arreglo correcto de un
@@ -480,7 +509,10 @@ core sin `methods` (sin extraer); paper extraído sin `role`; `unidad_cita` de d
 vigila la ficha — es "la garantía no corrió acá", no "hay una violación"); un
 `raw/fulltext/<slug>/<clave>.txt` sin su nota en `papers/` (#108: extracción pagada que no alcanza
 ningún roll-up — pasa al angostar la `query` de un tema; se cierra re-corriendo
-`make_notes.py --theme <slug>` o borrando el artefacto colgado); y su hermano simétrico, un
+el comando que `cfg.make_notes_cmd` arma para ese slug, o borrando el artefacto colgado — #338: el
+remedio traía `--theme` hardcodeado sobre un directorio que puede ser una **estrella**, la imagen
+especular de #334); su **gemelo PDF** (#230/#338: mismo defecto y desde #205 la mitad cara de la
+cadena, y hasta 1.146.0 emitía prosa en vez de un comando ejecutable); y su hermano simétrico, un
 `raw/ground_truth/<slug>.json` sin su `stars/<slug>.md` (renombre a medias o ficha borrada sin
 limpiar).
 

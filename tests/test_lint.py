@@ -2931,6 +2931,80 @@ def test_alcance_con_slug_inexistente_lo_nombra(toy_vault, capsys):
     assert "tets_star" in sec and "typo" in sec, sec
 
 
+# ── #342 · el `## Huecos` declara su alcance (la red barata contra la negativa falsa) ──
+HUECOS = "## Huecos\n\n- nadie da un criterio para elegir $n$.\n- ICASSO no aparece en ninguna fuente.\n"
+
+
+def _concepto_con_huecos(toy_vault, stem, huecos):
+    mk_note(cfg.CONCEPTS / "methods", stem, {"tags": ["methods"], "name": stem},
+            f"# {stem}\n\n## Síntesis\n\ntexto.\n\n{huecos}")
+    link_from_log(toy_vault, stem)
+
+
+def test_hueco_sin_alcance_declarado_es_backlog(toy_vault, capsys):
+    """#342 — una afirmación NEGATIVA («nadie da un criterio», «X no aparece en ninguna fuente») no
+    tiene fuente que la respalde por construcción, así que **ninguna capa la mira**:
+    `verify-citations` va claim↔su propia fuente y `find-contradictions` claim↔claim, y las dos
+    parten de un `[[bibcode]]`. Medido el 2026-08-31: 2 huecos falsos en un tema y 4 en otro, los
+    seis afirmando que la bóveda no puede responder algo que sí responde, y los seis cazados de
+    casualidad. Con el alcance —el mismo blockquote que las hipótesis ya llevan (D-34)— la
+    afirmación universal falsa pasa a acotada verdadera, que era todo lo que hacía falta."""
+    _concepto_con_huecos(toy_vault, "ica", HUECOS)
+    _rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "Hueco sin ALCANCE declarado")
+    assert "ica" in sec and "2 afirmación(es) negativa(s)" in sec, sec
+    # backlog, no bloqueante: al hueco le falta una declaración, no es inválido.
+    assert not any(l.startswith("## ⛔") and "Hueco sin ALCANCE" in l for l in rep.split("\n")), rep
+
+
+def test_hueco_con_alcance_al_dia_calla(toy_vault, capsys):
+    """El simétrico: el caso correcto no puede ser ruido. El alcance va DENTRO de `## Huecos`."""
+    _fulltexts("ica", 2)
+    _concepto_con_huecos(toy_vault, "ica",
+                         "## Huecos\n\n> Alcance 2026-01-01 · temas: [ica] · 2 papers\n\n"
+                         "- nadie da un criterio para elegir $n$.\n")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "ica" not in _seccion(rep, "Hueco sin ALCANCE declarado"), rep
+
+
+def test_hueco_con_alcance_que_quedo_corto_es_backlog(toy_vault, capsys):
+    """#342 — el corpus crece debajo del hueco: se declaró sobre 2 papers y hoy el slug tiene 5, así
+    que la negativa se pesó contra un universo que ya no es el vigente (la staleness de D-34)."""
+    _fulltexts("ica", 5)
+    _concepto_con_huecos(toy_vault, "ica",
+                         "## Huecos\n\n> Alcance 2026-01-01 · temas: [ica] · 2 papers\n\n"
+                         "- nadie da un criterio para elegir $n$.\n")
+    _rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "Hueco sin ALCANCE declarado")
+    assert "ica" in sec and "+3" in sec and "2026-01-01" in sec, sec
+
+
+def test_la_seccion_de_huecos_VACIA_no_es_deuda(toy_vault, capsys):
+    """La plantilla del stub deja `## Huecos` con su glosa en cursiva y sin un solo bullet: exigirle
+    alcance a una sección que no afirma nada sería deuda inventada, y la población declarada
+    (INV-40) mentiría sobre el denominador."""
+    _concepto_con_huecos(toy_vault, "ica", "## Huecos\n_(qué falta para entender el tema)._\n")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "ica" not in _seccion(rep, "Hueco sin ALCANCE declarado"), rep
+    assert "> sobre 0 notas con `## Huecos` escrito" in rep, rep
+
+
+def test_el_alcance_de_la_HIPOTESIS_no_tapa_el_de_sus_huecos(toy_vault, capsys):
+    """#342 — el blockquote de nivel de nota (D-34) declara el alcance del VEREDICTO, que es otra
+    afirmación: leerlo como si cubriera los huecos dejaría la negativa de la sección sin declarar y
+    con cara de declarada. Por eso el corte es la sección, no la nota."""
+    _fulltexts("test_star", 2)
+    _hipotesis("hip_con_huecos",
+               "# hip\n\n> Alcance 2026-01-01 · estrellas: [test_star] · 2 papers\n\n"
+               "Sostiene [[2020X]].\n\n## Huecos\n\n- nadie midió esto en enanas M.\n")
+    link_from_log(toy_vault, "hip_con_huecos")
+    _rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "Hueco sin ALCANCE declarado")
+    assert "hip_con_huecos" in sec, sec
+    assert "hip_con_huecos" not in _seccion(rep, "Alcance de hipótesis"), (
+        "el alcance del veredicto está y cuadra: el hallazgo es SÓLO el de los huecos")
+
+
 def test_la_tabla_estampada_de_planetas_no_cuenta_como_prosa(toy_vault, capsys):
     """Desde que `## Planetas` dejó de ser ```dataviewjs``` y pasó a tabla materializada
     (D-11/INV-81), sus celdas satisfacen el patrón `|\\s*b\\s*|` del proxy de autosuficiencia: TODO
@@ -3310,6 +3384,8 @@ def test_fulltext_sin_nota_es_backlog(toy_vault, capsys):
     """Medido: al angostar la `query` de un tema, sus registros salen de `ads.json`, `make_notes`
     deja de escribirles nota y el `.txt` queda en disco — 10 de 30 en una bóveda real. Nadie lo
     miraba: es el hermano simétrico de la «cita no verificable» (bibcode citado SIN .txt)."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ica",
+                                         "query": "q"}})
     d = cfg.FULLTEXT / "ica"
     d.mkdir(parents=True, exist_ok=True)
     (d / "2012ApJ...747...12W.txt").write_text("texto", encoding="utf-8")
@@ -3317,7 +3393,99 @@ def test_fulltext_sin_nota_es_backlog(toy_vault, capsys):
     out = capsys.readouterr().out
     assert "2012ApJ...747...12W.txt" in out
     assert "sin su nota" in out
-    assert "make_notes.py --theme ica" in out          # el arreglo, nombrado
+    assert "python scripts/make_notes.py ica --theme" in out   # el arreglo, nombrado
+
+
+def test_el_remedio_del_artefacto_colgado_CORRE_en_el_slug_que_nombra(toy_vault, capsys):
+    """#338 — `_dir` sale de `raw/fulltext/`, o sea que puede ser una ESTRELLA, y el remedio traía
+    `--theme` hardcodeado: la imagen especular de #334, que lo omitía sobre un tema. Sobre una
+    estrella `make_notes` REHÚSA ese comando. El flag lo decide `cfg.make_notes_cmd` (INV-141), una
+    sola vez — escribirlo a mano en cada sitio es el molde de #215/#324."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ica",
+                                         "query": "q"}})
+    for slug in ("ica", "test_star"):
+        d = cfg.FULLTEXT / slug
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"2012col{slug[:3]}..1..1C.txt").write_text("texto", encoding="utf-8")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "`python scripts/make_notes.py ica --theme`" in rep, rep
+    assert "`python scripts/make_notes.py test_star`" in rep, rep
+    # ⛔ la estrella no se lleva el flag por arrastre: el remedio de un sujeto no puede nombrar la
+    # config del otro.
+    assert "make_notes.py test_star --theme" not in rep, rep
+
+
+def test_el_gemelo_PDF_del_artefacto_colgado_emite_COMANDO(toy_vault, capsys):
+    """#338 — el hermano de #230 decía «re-corré `make_notes.py` sobre `<slug>`»: prosa, no un
+    comando que se pueda pegar, y la TERCERA forma de la misma regla en el mismo archivo. Desde #205
+    es además el artefacto que más pesa (el PDF es la fuente de lectura, el `.txt` el índice)."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ica",
+                                         "query": "q"}})
+    d = cfg.PDFS / "ica"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "2012ApJ...747...12W.pdf").write_bytes(b"%PDF-1.4")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "`python scripts/make_notes.py ica --theme`" in rep, rep
+
+
+# ── D-10 · la tabla estampada desactualizada, en los DOS tipos de sujeto (#338) ──
+def _sujeto_con_rollup_vacio(toy_vault, encabezado_tema):
+    """Un paper que reclama la estrella Y el tema, con las dos tablas estampadas VACÍAS.
+
+    Es el repro de #338: `papers_universe` devuelve el paper para los dos sujetos y hasta 1.145.0
+    sólo alguien lo comparaba del lado de la estrella."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ica",
+                                         "query": "q"}})
+    mk_note(cfg.PAPERS, "2020ambo...1..1A",
+            {"bibcode": "2020ambo...1..1A", "tags": ["paper"], "stars": ["Estrella Test"],
+             "thesis_links": ["ica"]}, "# p\n")
+    mk_note(cfg.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test"},
+            "# Estrella Test\n\n## Papers (0 · 0 sintetizados en esta ficha)\n\n"
+            "_(ninguna nota de paper declara este sujeto todavía.)_\n")
+    mk_note(cfg.CONCEPTS / "methods", "ica", {"tags": ["methods"], "name": "ICA"},
+            f"# ICA\n\n{encabezado_tema} (0 · 0 sintetizados en este concepto)\n\n"
+            "_(ninguna nota de paper declara este tema todavía.)_\n")
+    link_from_log(toy_vault, "test_star", "ica", "2020ambo...1..1A")
+
+
+def test_la_tabla_desactualizada_de_un_CONCEPTO_se_reporta(toy_vault, capsys):
+    """#338 — #300 llevó las dos garantías de D-10 al estampador de conceptos y el detector se quedó
+    en `stars/`: la promesa «el lint reporta la tabla desactualizada» valía para la mitad del vault
+    (medido: 2 de 3 sujetos de una bóveda real son temas). Con el mismo paper reclamando los dos
+    sujetos, se reportaba 1 de 2 — el roll-up subdeclarando su universo en silencio, que es
+    exactamente lo que D-10 existe para evitar."""
+    _sujeto_con_rollup_vacio(toy_vault, mn.CONCEPT_ROLLUP_HEADER)
+    _rc, rep = run_lint_reporte(capsys)
+    seccion = _seccion(rep, "Lista de papers desactualizada")
+    assert "test_star" in seccion, seccion
+    assert "ica" in seccion and "2020ambo...1..1A" in seccion, seccion
+    assert "`python scripts/make_notes.py ica --theme`" in seccion, seccion
+
+
+def test_el_concepto_con_encabezado_estilo_ficha_tambien_se_compara(toy_vault, capsys):
+    """#338, la otra mitad: una nota de concepto puede llevar `## Papers` en vez del roll-up de tema
+    —los dos estampadores conviven desde #196— y ahí el universo es `papers_universe(slug, 'theme')`.
+    ⚠ El corte es `cfg.section_span`: `## Papers` es PREFIJO de `## Papers que tocan este tema
+    (auto)` y un `split("\\n## Papers")` se lleva el roll-up del tema como si fuera esta tabla
+    (#176)."""
+    _sujeto_con_rollup_vacio(toy_vault, mn.PAPERS_HEADER)
+    _rc, rep = run_lint_reporte(capsys)
+    seccion = _seccion(rep, "Lista de papers desactualizada")
+    assert "- ica → " in seccion and "2020ambo...1..1A" in seccion, seccion
+
+
+def test_el_concepto_sin_ninguno_de_los_dos_encabezados(toy_vault, capsys):
+    """#338 — la nota que no trae NINGUNO de los dos no puede recibir la cirugía nunca, y eso hasta
+    hoy sólo lo decía un `print` de `make_notes` al pasar. Exigirle los DOS sería el error opuesto:
+    la nota que eligió uno recibiría un hueco inventado por el otro."""
+    _sujeto_con_rollup_vacio(toy_vault, mn.CONCEPT_ROLLUP_HEADER)
+    (cfg.CONCEPTS / "methods" / "ica.md").write_text(
+        "---\ntags: [methods]\nname: ICA\n---\n# ICA\n\nsin roll-up.\n", encoding="utf-8")
+    _rc, rep = run_lint_reporte(capsys)
+    seccion = _seccion(rep, "Lista de papers desactualizada")
+    assert "no trae `## Papers` ni" in seccion, seccion
+    assert seccion.count("ica →") == 1, ("un solo hallazgo: exigir los dos encabezados inventaría "
+                                         "un hueco en la nota que eligió el otro\n" + seccion)
 
 
 def test_fulltext_con_nota_no_es_hallazgo(toy_vault, capsys):
@@ -5398,6 +5566,66 @@ def test_la_subseccion_ausente_no_se_reporta_dos_veces(toy_vault, capsys):
     _, rep = run_lint_reporte(capsys)
     seccion = _seccion(rep, "Bloque de verificación incompleto")
     assert seccion.count("Condiciones perdidas") == 1, seccion
+
+
+def _nota_con_bloque(toy_vault, stem, cuerpo, ft):
+    """Nota-concepto con su bloque de verificación bien formado, calculado de SU propio cuerpo.
+
+    Hermana de `_con_ancla`, que sólo sabe escribir una nota: #337 se mide con VARIAS notas
+    verificadas en la misma bóveda, que es cuando se ve que el conteo sale de otra."""
+    pares = lb.pairs_of(cuerpo)
+    filas = ["| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente | Condición |",
+             "|---|---|---|---|---|---|---|"]
+    for i, par in enumerate(pares, 1):
+        filas.append(f"| {i} | extracto | [[{par.bibcode}]] | soportada | {par.anchor} | "
+                     f"txt:{lb.source_hash(ft)} | — |")
+    n_marcas = len(lb.inference_marks(cuerpo))
+    bloque = (f"\n## Verificación de citas (2026-01-01)\n\n{len(pares)} pares; {len(pares)} "
+              f"soportadas\n\n" + "\n".join(filas) + "\n\n"
+              f"Inferencias declaradas (sin cita, por diseño) — {n_marcas} marcas en el cuerpo: "
+              f"las del cuerpo.\nOmisiones en transcripciones: ninguna.\n"
+              f"Condiciones perdidas (afirmaciones sobre-generalizadas) — 0 con condición: "
+              f"0 `acota` (0 resueltas) / 0 `contextualiza` / 0 sin clasificar: ninguna.\n")
+    mk_note(toy_vault.CONCEPTS / "methods", stem, {"tags": ["methods"]}, cuerpo + bloque)
+    return stem
+
+
+def test_cada_nota_publica_SU_conteo_de_inferencias(toy_vault, capsys):
+    """#337 — la línea canónica de «Inferencias declaradas» salía de `body_full`, que lo asigna el
+    barrido principal (OTRO loop, ya terminado): las tres notas de un `--cierre` real recibían el
+    conteo de la última nota barrida —«19 marcas» sobre conteos reales de 1, 7 y 19—. Es INV-81
+    violado en el chequeo que lo mecaniza, y deja como deuda PERMANENTE a la nota que publica su
+    número correcto."""
+    mk_note(toy_vault.PAPERS, "2020citC...1..1C", {"tags": ["paper"]}, "")
+    (toy_vault.FULLTEXT / "slug").mkdir(parents=True, exist_ok=True)
+    ft = toy_vault.FULLTEXT / "slug" / "2020citC...1..1C.txt"
+    ft.write_text("El período es de 34 días.\n", encoding="utf-8")
+    una = "Afirmación con cita [[2020citC...1..1C]].\n\nUna (inferencia de [[2020citC...1..1C]]).\n"
+    dos = una + "\nOtra (inferencia de [[2020citC...1..1C]]).\n"
+    _nota_con_bloque(toy_vault, "nota-una", una, ft)
+    _nota_con_bloque(toy_vault, "nota-dos", dos, ft)
+    link_from_log(toy_vault, "nota-una", "nota-dos", "2020citC...1..1C")
+    _, rep = run_lint_reporte(capsys)
+    seccion = _seccion(rep, "Bloque de verificación incompleto")
+    assert "Inferencias declaradas" not in seccion, (
+        "cada nota publica el conteo que SU propia tabla y SU propio cuerpo dan: " + seccion)
+
+
+def test_la_cita_correcta_del_log_no_se_multiplica_por_bibcode(toy_vault, capsys):
+    """#337 — la rama de `log.md` iteraba `_bibcodes` y probaba cada cita contra CADA bibcode de la
+    entrada, mientras la rama gemela de la prosa —17 líneas más abajo— ya usaba `quote_owner`:
+    #316/#325 se arregló en un camino y quedó vivo en el hermano. Efecto: una cita correcta y
+    verbatim en un párrafo que nombra varios papers produce un hallazgo POR BIBCODE, y partir el
+    párrafo en dos los baja."""
+    _paper_con_txt("2023A&A...675A.187O", "real-world systematics might become entangled\n")
+    for otro in ("2021otrA...1..1A", "2022otrB...1..1B"):
+        _paper_con_txt(otro, "un texto que no dice nada de eso\n")
+    (cfg.WIKI / "log.md").write_text(
+        "# log\n\n## 2026-08-29 — ingest\n\n- se contrastó con [[2021otrA...1..1A]] y "
+        "[[2022otrB...1..1B]]: la fuente dice «real-world systematics might become entangled» "
+        "[[2023A&A...675A.187O]]\n", encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    assert "la bitácora entrecomilla" not in rep, rep
 
 
 def test_index_desactualizado_nombra_los_stems(toy_vault, capsys):

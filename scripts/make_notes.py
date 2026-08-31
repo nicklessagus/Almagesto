@@ -2151,7 +2151,7 @@ def papers_universe(slug: str, kind: str, fms: dict | None = None) -> list:
 
     `origen` es `manual` si el paper está en `extra_core` (el juicio del usuario pisa a la lente,
     #68) y `lente` si no; `via` trae el valor declarado en la config (D-58)."""
-    dest = (cfg.STARS / f"{slug}.md") if kind == "star" else _concept_dest(slug)
+    dest = subject_note(slug, kind)
     cuerpo = _prosa(dest.read_text(encoding="utf-8")) if dest and dest.exists() else ""
     meta = (cfg.star_by_slug(slug)[1] if kind == "star" else cfg.theme_by_slug(slug)[1])
     via_de = {e["bibcode"]: e["via"] for e in cfg.load_extra_core(meta, entry=slug)}
@@ -2188,6 +2188,17 @@ def _concept_dest(slug: str):
     except KeyError:
         return None
     return cfg.CONCEPTS / str(meta.get("area") or "") / f"{meta.get('concept') or slug}.md"
+
+
+def subject_note(slug: str, kind: str):
+    """The note a subject's roll-ups are stamped into — the star's ficha, or the theme's concept.
+
+    Public because the roll-up STAMPER and the roll-up DETECTOR both need it (#338): D-10 promises
+    that the lint reports the stale table, and the detector only looked at stars, so the guarantee
+    held for one of the two kinds of subject (measured: 2 of 3 subjects of a real vault are themes).
+    Two ways of answering «where does this subject's table live» is how the stamper and the checker
+    end up disagreeing — the shape of #215/#324."""
+    return (cfg.STARS / f"{slug}.md") if kind == "star" else _concept_dest(slug)
 
 
 def papers_table(rows: list) -> str:
