@@ -475,7 +475,9 @@ STATUS_MAX_LINEAS = 300
 #: #225 · la cuarta marca en línea: lo que una auditoría de ficha (`audit-note`) NO pudo verificar.
 #: No destruye la afirmación —puede ser cierta— y es visible para el consumidor; el lint la levanta
 #: como backlog para que la deuda no se olvide, y se saca cuando alguien la verifica con evidencia.
-VERIFICAR_PDF_MARK = "⚠verificar en el PDF"
+#: ⛔ UNA definición (#341): desde 1.162.0 `contrast --validar` la **emite** lista para pegar, así
+#: que el string que este detector busca y el que esa herramienta ofrece no pueden divergir.
+VERIFICAR_PDF_MARK = cfg.VERIFICAR_PDF_MARK
 
 #: #238 · la quinta marca: una entrada de `log.md` que quedó REFUTADA. La bitácora es append-only
 #: por contrato —y está bien—, pero eso la dejaba sin forma de corregirse: medido, una entrada

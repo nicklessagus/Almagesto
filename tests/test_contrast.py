@@ -575,6 +575,45 @@ def test_el_txt_que_CONTRADICE_al_unico_testigo_se_nombra(toy_vault, capsys):
     assert "el OTRO lector del mismo PDF dice otra cosa" in barrido
 
 
+def test_la_divergencia_decidible_EMITE_la_marca_lista_para_pegar(toy_vault, capsys):
+    """#341, parte 2 — cuando las dos lecturas del PDF no coinciden hoy **no pasaba nada**: el gate
+    callaba y la ficha quedaba con la versión de una de las dos, sin decir cuál ni que hubo
+    discrepancia. No hace falta mecanismo nuevo: `⚠verificar en el PDF (<qué se dudó>, <fecha>)` ya
+    existe y tiene justo las propiedades que hacen falta.
+
+    ⛔ Se **emite**, no se aplica: `contrast` propone y no escribe en `vault/`. Y el motivo lleva las
+    **dos colas**, no una categoría — en seis meses sirve el motivo."""
+    _extraccion("ica_ruido", "2013Voss")
+    _txt("ica_ruido", "2013Voss", "prosa. " + LARGA[:LARGA.index("and that")]
+         + "but the noise covariance has to be estimated first. más prosa.")
+    nota = _nota_323("ica-ruido", f"Dice «{LARGA}» [[2013Voss]].")
+    _ln, _motivo, marca = ct.validar(nota, mostrar=False)["discrepan"][0]
+    assert marca.startswith(cfg.VERIFICAR_PDF_MARK), "es LA marca, no una prosa parecida"
+    assert "but the noise covariance" in marca and "and that condition" in marca
+    assert nota.read_text(encoding="utf-8").count(cfg.VERIFICAR_PDF_MARK) == 0, "no la aplica"
+    ct.main(["--validar", str(nota)])
+    assert "pegá al final de la afirmación" in capsys.readouterr().out
+    ct.main(["--validar-todo"])
+    assert cfg.VERIFICAR_PDF_MARK in capsys.readouterr().out, "y también en el barrido"
+
+
+def test_la_marca_que_emite_es_LA_QUE_EL_LINT_LEVANTA(toy_vault, capsys):
+    """El cierre del circuito, y la razón por la que el string vive en `lib_config` desde 1.162.0: la
+    marca que esta herramienta ofrece y la que el detector del lint busca son **la misma
+    definición**. Con dos copias, `contrast` podría proponer una marca que nadie levanta — deuda
+    escrita que se lee como agendada y no lo está."""
+    import lint as lt
+    assert lt.VERIFICAR_PDF_MARK is cfg.VERIFICAR_PDF_MARK
+    _extraccion("ica_ruido", "2013Voss")
+    _txt("ica_ruido", "2013Voss", "prosa. " + LARGA[:LARGA.index("and that")]
+         + "but the noise covariance has to be estimated first. más prosa.")
+    nota = _nota_323("ica-ruido", f"Dice «{LARGA}» [[2013Voss]].")
+    marca = ct.validar(nota, mostrar=False)["discrepan"][0][2]
+    nota.write_text(nota.read_text(encoding="utf-8").rstrip() + f" {marca}\n", encoding="utf-8")
+    levantadas = [m for _s, m in lt.collect().por_clave("verificar_pdf").items]
+    assert any("chequear contra el PDF" in m for m in levantadas)
+
+
 def test_el_txt_que_contradice_NO_mueve_el_rc(toy_vault, capsys):
     """#333, la restricción explícita del issue: **no** se vuelve una cuarta forma de romper el
     cierre. El `.txt` es un índice degradado y desde #323 este gate frena operaciones, así que un

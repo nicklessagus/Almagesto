@@ -1022,8 +1022,10 @@ re-extraer el `.txt`.
    borde es la guarda que lo hace usable: `pdftotext` rompe **palabras** (ligadura `ﬁ`, `mix tures`,
    empalme) y un LLM que transcribe mal cambia **palabras** — medido con el cortador de #332 ya
    arreglado, 7 candidatas → **3 acusaciones, las 3 verdaderas**. ⛔ **No bloquea** (el `.txt` es
-   índice degradado) y la salida es una **marca**, no una corrección: cuál lectura gana lo decide
-   quien abra la página.
+   índice degradado) y la salida es la **marca `⚠verificar en el PDF`**, que `contrast --validar`
+   deja **lista para pegar** y no aplica (#341): cuál lectura gana lo decide quien abra la página, y
+   corregir solo iría en la dirección equivocada — medido, un `.txt` partido ya hizo recortar una
+   nota **hacia** la cadena inventada.
    ⛔ **Y ese cruce es PASO DE CIERRE de toda operación que sintetice, ANTES del verify (#323):**
    `python scripts/contrast.py [<slug>] --validar-todo` (sin slug, toda la bóveda; exit ≠ 0, declara
    población y no evaluables). Un `grep` de segundos contra N subagentes leyendo PDFs: verificar con
@@ -1404,7 +1406,8 @@ conteos —*"el mundo se movió"*—. Ninguno aplica nada. El umbral se persiste
 (abre para todos) es una decisión y no se lee igual que no declararlo (no abre).
 
 **Lo que no se pudo verificar queda MARCADO en la ficha (#225): `<afirmación> ⚠verificar en el PDF
-(<qué se dudó>, <fecha>)`.** La produce `audit-note` y tiene las propiedades de las otras: **no
+(<qué se dudó>, <fecha>)`.** La producen `audit-note` y `contrast --validar` (#341) —una sola
+definición, `lib_config.verificar_pdf_mark`— y tiene las propiedades de las otras: **no
 destruye** la afirmación, es **visible**, **la levanta el lint** y **se saca cuando alguien la
 verifica**, con la evidencia. El criterio es amplio a propósito: **ante la menor duda se marca** —
 una marca de más cuesta abrir un PDF; una de menos deja a la bóveda afirmando algo falso con cara de

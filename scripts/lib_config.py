@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.161.0"
+ALMAGESTO_VERSION = "1.162.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1048,6 +1048,29 @@ def extraction_texts(bibcode: str) -> list:
 #: each carried its own copy the comment *declared* they had to be the same number and nothing
 #: checked it. Tuning one would leave a skill closing green on what the other blocks.
 CITA_PREFIJO = 60
+
+#: #225/#341 · the fourth in-line mark, and the ONE place its wording lives. It does not destroy the
+#: claim —which may well be true—, it is visible to the consumer, the lint raises it as backlog, and
+#: it comes off when somebody verifies it with evidence. Until 1.162.0 only `lint.py` knew the
+#: string, so the only tool that could ever produce one was a human reading the report.
+VERIFICAR_PDF_MARK = "⚠verificar en el PDF"
+
+
+def verificar_pdf_mark(motivo: str, fecha: str = "") -> str:
+    """The mark to paste at the end of a claim nobody could close: `⚠verificar en el PDF (…)`.
+
+    ⛔ **Emitted, never applied** (#341). Which of the two readings of the PDF wins is decided by
+    whoever opens the page — and the measurement that settles it is the opposite case: the `log.md`
+    of a real vault records a correction that trimmed the note **towards** an invented tail, because
+    the split `.txt` seemed to say it. A broken reading artefact does not produce silence, it
+    produces corrections in the wrong direction. So the tool hands over the string and stops.
+
+    The `motivo` says **what was doubted** — a category would not survive six months, the sentence
+    does — and the date says when. Both are part of the mark by contract (`CLAUDE.md`), and this is
+    the only function that builds it, so the string the lint looks for and the string a tool offers
+    cannot drift apart (regla de método 2)."""
+    return f"{VERIFICAR_PDF_MARK} ({motivo}, {fecha or _dt.date.today().isoformat()})"
+
 
 #: #333 · how far the `.txt` must KEEP GOING past the divergence point for it to be a divergence at
 #: all. A reading that simply runs out —a page break, a column edge— does not say something else: it

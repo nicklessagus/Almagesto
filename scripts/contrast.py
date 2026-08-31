@@ -264,9 +264,16 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
     It **does not move the rc**: the `.txt` is a degraded index and this gate stops operations
     (#323), so an accusation of it is a *go and look at the page*, never a failed close.
 
+    ⛔ **And when the divergence is decidable it hands over the MARK (#341).** No new mechanism is
+    needed: `⚠verificar en el PDF (<what was doubted>, <date>)` already exists —the fourth of the
+    five in-line marks— and has exactly the properties this case wants: it does **not** destroy the
+    claim, it is visible, the lint raises it, and it comes off when somebody verifies it with
+    evidence. ⛔ It is **emitted, never applied**: `contrast` proposes and does not write in
+    `vault/`, and which of the two readings wins is decided by whoever opens the page.
+
     Returns `{"alteradas": [(línea, motivo)], "no_evaluables": [(línea, motivo)],
-    "discrepan": [(línea, motivo)], "citas": N, "solo_extraccion": J}` — counts, so the sweep can
-    declare its population (INV-40) instead of printing a bare zero."""
+    "discrepan": [(línea, motivo, marca)], "citas": N, "solo_extraccion": J}` — counts, so the sweep
+    can declare its population (INV-40) instead of printing a bare zero."""
     texto = nota.read_text(encoding="utf-8")
     out = {"alteradas": [], "no_evaluables": [], "discrepan": [], "citas": 0, "solo_extraccion": 0}
     bibs_nota = set(lb._bibcodes(texto))
@@ -291,13 +298,18 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
                 out["solo_extraccion"] += 1
             if ver == "txt_acusa":
                 # #333 — y de esas, la que el OTRO lector contradice: no es un hallazgo bloqueante
-                # (el `.txt` es índice degradado, #205) y tampoco es silencio.
+                # (el `.txt` es índice degradado, #205) y tampoco es silencio. #341 — y como la
+                # divergencia es decidible, sale con la MARCA armada: no hace falta mecanismo nuevo,
+                # `⚠verificar en el PDF` ya existe y tiene justo las propiedades que hacen falta.
                 out["discrepan"].append(
                     (b.first_line, f"«{corte}» — el `.txt` de {det['bib']} trae el mismo arranque y "
                                    f"sigue distinto: dice «…{det['cola_txt'][:70]}» donde la "
                                    f"extracción dice «…{det['cola_cita'][:70]}». Son DOS lecturas "
                                    f"del mismo PDF —`pdftotext` y un LLM— y la fuente es el PDF: "
-                                   f"andá a la página (#333)"))
+                                   f"andá a la página (#333)",
+                     cfg.verificar_pdf_mark(
+                         f"el `.txt` de {det['bib']} sigue «…{det['cola_txt'][:40]}» y la "
+                         f"extracción «…{det['cola_cita'][:40]}»")))
             if ver in ("en_su_txt", "txt_degradado", "txt_acusa", "txt_parte"):
                 continue
             if ver == "alterada" and det["otro_bib"]:
@@ -324,8 +336,9 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
         for ln, motivo in out["alteradas"]:
             cfg.print_seguro(f"  ⛔ L{ln}: {motivo}. Copiala del JSON con `contrast.py <slug> "
                              f"--grep …` — NO la re-tipees (#322)")
-        for ln, motivo in out["discrepan"]:
-            cfg.print_seguro(f"  ⚠ L{ln}: {motivo}")
+        for ln, motivo, marca in out["discrepan"]:
+            cfg.print_seguro(f"  ⚠ L{ln}: {motivo}\n     → si no podés abrirlo ahora, pegá al final "
+                             f"de la afirmación:  {marca}")
         for ln, motivo in out["no_evaluables"]:
             cfg.print_seguro(f"  · L{ln}: {motivo}")
     return out
@@ -373,14 +386,16 @@ def validar_todo(slug: str | None = None) -> int:
         citas += r["citas"]
         no_eval += len(r["no_evaluables"])
         solo_ext += r["solo_extraccion"]
-        discrepan += [(f, ln, m) for ln, m in r["discrepan"]]
+        discrepan += [(f, ln, m, k) for ln, m, k in r["discrepan"]]
         if r["alteradas"]:
             cfg.print_seguro(f"\n{f.relative_to(cfg.ROOT)}")
             for ln, motivo in r["alteradas"]:
                 cfg.print_seguro(f"  ⛔ L{ln}: {motivo}")
             alteradas += len(r["alteradas"])
-    for f, ln, motivo in discrepan:
-        cfg.print_seguro(f"\n{f.relative_to(cfg.ROOT)}\n  ⚠ L{ln}: {motivo}")
+    for f, ln, motivo, marca in discrepan:
+        cfg.print_seguro(f"\n{f.relative_to(cfg.ROOT)}\n  ⚠ L{ln}: {motivo}"
+                         f"\n     → si no podés abrirlo ahora, pegá al final de la afirmación:"
+                         f"  {marca}")
     ambito = f"las notas de `{slug}`" if slug else "toda la bóveda"
     cfg.print_seguro(f"\n> sobre {len(notas)} nota(s) de {ambito} · {citas} cita(s) «…» · "
                      f"{no_eval} no evaluable(s) (sin extracción en disco, o la extracción calla) · "
@@ -400,8 +415,9 @@ def validar_todo(slug: str | None = None) -> int:
                          f"**no** es un hallazgo: ante la duda, la página del PDF (#341)")
     if discrepan:
         cfg.print_seguro(f"  ⚠ y en {len(discrepan)} de ésas el OTRO lector del mismo PDF dice "
-                         f"otra cosa (arriba, con su cola). No mueve el rc —el `.txt` es índice "
-                         f"degradado— y tampoco es silencio: andá a la página (#333)")
+                         f"otra cosa (arriba, con su cola y su marca lista para pegar). No mueve el "
+                         f"rc —el `.txt` es índice degradado— y tampoco es silencio: andá a la "
+                         f"página, y lo que no puedas cerrar queda MARCADO en la nota (#333/#341)")
     return alteradas
 
 

@@ -2540,6 +2540,18 @@ def test_txt_accuses_el_txt_de_OTRO_bibcode_no_acusa(toy_vault):
     assert ver == "txt_degradado"
 
 
+def test_verificar_pdf_mark_lleva_el_MOTIVO_y_la_FECHA():
+    """#225/#341 — la marca es `⚠verificar en el PDF (<qué se dudó>, <fecha>)`, y las dos partes son
+    del contrato: en seis meses sirve **el motivo**, no una categoría, y la fecha dice desde cuándo
+    la deuda está abierta. Una sola definición, porque desde 1.162.0 la emite una herramienta
+    (`contrast --validar`) y la busca otra (el detector del lint)."""
+    import datetime as _dt
+    m = cfg.verificar_pdf_mark("el `.txt` y la extracción difieren en la cola", "2026-08-31")
+    assert m == "⚠verificar en el PDF (el `.txt` y la extracción difieren en la cola, 2026-08-31)"
+    assert m.startswith(cfg.VERIFICAR_PDF_MARK)
+    assert cfg.verificar_pdf_mark("x").endswith(f", {_dt.date.today().isoformat()})")
+
+
 def test_txt_accuses_sin_txt_devuelve_None():
     """D-43 — sin lectura en disco no hay testigo, y eso no es una acusación vacía: es no evaluable."""
     assert cfg.txt_accuses(CITA_333 + "do not become orthogonal", []) is None

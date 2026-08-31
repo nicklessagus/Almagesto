@@ -990,6 +990,21 @@ cambia PALABRAS.** Con esa guarda la señal es 3/3 y sin ella 3/7 — o sea que 
 **Qué cambió.** `lib_config.txt_accuses` + el veredicto `txt_acusa`, **no bloqueante**, reportado por
 `contrast --validar` y por el lint (`cita_txt_discrepa`, backlog).
 
+**Y con eso desbloqueada, la parte 2 de #341: la marca.** Cuando la divergencia es decidible,
+`contrast --validar` **emite** `⚠verificar en el PDF (<las dos colas>, <fecha>)` lista para pegar —la
+cuarta de las cinco marcas en línea, que ya existía— y **no la aplica**: cuál de las dos lecturas gana
+lo decide quien abra la página. No hacía falta mecanismo nuevo; lo que faltaba era que alguna
+herramienta pudiera producirla. El string pasó de `lint.py` a `lib_config.VERIFICAR_PDF_MARK`, y el
+test que cierra el circuito pega la marca emitida en una nota y comprueba que la **levanta el lint**:
+con dos copias, una herramienta podía proponer una marca que ningún detector levanta.
+
+⚠ **Nota de método sobre esta medición.** El primer barrido de mutación ad-hoc dio dos falsos rojos
+al restaurar los archivos: `cp` deja el `.pyc` y el fuente **dentro del mismo segundo**, y la
+invalidación de bytecode de CPython compara mtimes con granularidad de segundo, así que el intérprete
+siguió corriendo el módulo **mutado** después de restaurarlo. `tools/mutar.py` no tiene el problema
+(copia el repo entero a un directorio nuevo). Los números de arriba son los de la re-corrida con
+`__pycache__` borrado entre pasos.
+
 ⚠ **Salvedades del número.** (a) La bóveda se editó entre las dos mediciones —el caso de `ica.md` que
 originó el issue ya está corregido allá—, así que las dos columnas no son un A/B congelado: miden la
 bóveda de su día. (b) 3047 de las 3321 citas salen `no_evaluable` porque su bloque **no tiene ningún

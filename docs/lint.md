@@ -290,7 +290,11 @@ OCR, o marcar `pending`).
   degradado y desde #323 este gate frena operaciones. ⛔ **La salida es la marca, no la corrección**
   (#341): cuál de las dos lecturas gana lo decide quien abra la página — medido en contra, el
   `log.md` de esa bóveda registra una corrección previa que recortó la nota **hacia** la cadena
-  inventada porque el `.txt` partido parecía decirla.
+  inventada porque el `.txt` partido parecía decirla. Por eso `contrast --validar` **emite**
+  `⚠verificar en el PDF (<las dos colas>, <fecha>)` lista para pegar y **no escribe** en `vault/`;
+  una vez pegada, la levanta la categoría de abajo. Desde 1.162.0 el string vive en
+  `lib_config.VERIFICAR_PDF_MARK`: con dos copias, una herramienta podía proponer una marca que
+  ningún detector levanta — deuda escrita que se lee como agendada y no lo está.
 - **`methods` sin página destino, resuelto también por `aliases`** (#245): el nombre canónico de
   un método es el **stem** de su nota y `aliases` es la tabla de sinónimos que el schema ya pide —
   y nadie la leía, así que `bisector span` y `bis` contaban como dos deudas donde hay una. Medido
