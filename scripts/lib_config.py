@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.143.0"
+ALMAGESTO_VERSION = "1.144.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -720,6 +720,15 @@ QUOTE_FRAG_MIN = 25
 
 _QUOTE_RE = re.compile(r"«([^»]+)»")
 _QUOTE_MARKUP_RE = re.compile(r"\$[^$]*\$|\[\[|\]\]|[*_`\\]")
+#: #336 · lo MISMO menos el span `$…$`. Es la única diferencia entre las dos normalizaciones, y es
+#: asimétrica a propósito: en la CITA los `$` son marcado que la nota puso (`CLAUDE.md` lo manda) y
+#: el `.txt` no puede tener igual; en la FUENTE son caracteres del documento —el copyright de
+#: Elsevier trae uno—, así que borrar entre dos se come el texto del medio.
+_SOURCE_MARKUP_RE = re.compile(r"\[\[|\]\]|[*_`\\]")
+#: #336 · el guión de corte de `pdftotext -layout` y **la sangría de su continuación**: la línea
+#: siguiente arranca indentada porque es la columna física, así que sin absorberla la palabra
+#: partida queda como dos.
+_HYPHEN_BREAK_RE = re.compile(r"-\n[ \t]*")
 _QUOTE_ELLIPSIS_RE = re.compile(r"\[\s*(?:\.\.\.|…)\s*\]|…|\.\.\.")
 _QUOTE_SUBS = (("\u201c", '"'), ("\u201d", '"'), ("\u2018", "'"), ("\u2019", "'"),
                ("\u2013", "-"), ("\u2014", "-"), ("\u00ad", ""))
@@ -733,7 +742,14 @@ def normalize_quote(s: str) -> str:
     verbatim—, typographic quotes and dashes are unified, soft hyphens go, whitespace collapses and
     case is folded. Anything beyond that would start matching text the source does not have.
     """
-    s = _QUOTE_MARKUP_RE.sub("", s)
+    return _normalize_text(_QUOTE_MARKUP_RE.sub("", s))
+
+
+def _normalize_text(s: str) -> str:
+    """What the quote side and the source side SHARE: typographic substitutions, the hyphen,
+    whitespace and case. One function on purpose (regla de método 2) — a difference between the two
+    sides that nobody decided is a match that nobody decided. What legitimately differs is the
+    markup regex each caller passes in, and that difference is declared where it lives."""
     for a, b in _QUOTE_SUBS:
         s = s.replace(a, b)
     # #275 — el guión se borra de los DOS lados. `normalize_source_text` ya unió el corte de línea
@@ -746,9 +762,23 @@ def normalize_quote(s: str) -> str:
 
 
 def normalize_source_text(t: str) -> str:
-    """The same normalization on the source side, plus the hyphen that `pdftotext` leaves at a line
-    break (`inde-\npendent`): without joining it, every quote crossing a line break would fail."""
-    return normalize_quote(t.replace("-\n", ""))
+    """The same normalization on the SOURCE side — with two differences, both measured (#336).
+
+    The hyphen `pdftotext` leaves at a line break (`inde-\npendent`) is joined, or every quote
+    crossing a line break would fail; and the join absorbs **the indentation of the continuation**
+    (`homoscedas-\n     tic`), because `-layout` keeps the physical column so the next line starts
+    indented. Joining only `-\n` left `homoscedas tic` and the split word never came back together:
+    measured over a real vault, **141 of 155** `.txt`, **4232** occurrences.
+
+    ⛔ And the `$…$` span is **not** dropped here. That deletion belongs to the quote (#287/#326),
+    where the `$` is markup the note added and the `.txt` cannot carry; in a `.txt` the `$` is a
+    character of the document, so deleting between two of them eats whatever lies in the middle —
+    the Elsevier copyright line (`0925-2312/98/$ — see front matter`) plus one more `$` ate
+    **16 434 of 43 401 characters (37,9 %)** of one column, and **10 of 155** `.txt` lost text,
+    the worst three 37,9 %, 26,1 % and 22,5 %. What that costs is step 1 of `quote_verdict` (`en_su_txt`,
+    #324), the step that prevents the false `alterada` — and since #323 that gate stops
+    operations."""
+    return _normalize_text(_SOURCE_MARKUP_RE.sub("", _HYPHEN_BREAK_RE.sub("", t)))
 
 
 def quote_fragments(quote: str) -> list[str]:

@@ -1725,6 +1725,36 @@ def test_de_hifenado_sigue_uniendo_la_palabra_partida():
     assert cfg.quote_found("independent component analysis of the data", src)
 
 
+def test_el_guion_de_corte_absorbe_la_SANGRIA_de_la_continuacion():
+    """#336 — en un `.txt` de `pdftotext -layout` la continuación viene INDENTADA (es la columna
+    física), así que `homoscedas-\\n     tic` quedaba `homoscedas tic`: la palabra partida no se unía
+    y toda cita que la contenga fallaba contra su propia fuente. Medido: **141 de 155** `.txt` de una
+    bóveda real, **4232** ocurrencias."""
+    src = cfg.normalize_source_text("the model is homoscedas-\n     tic and the noise is white")
+    assert cfg.quote_found("the model is homoscedastic and the noise is white", src)
+
+
+def test_una_cita_sin_ningun_fragmento_util_NO_cuenta_como_encontrada():
+    """⛔ La dirección peligrosa de `quote_found`: si todos los fragmentos caen por debajo de
+    `QUOTE_FRAG_MIN`, `all(...)` sobre la lista vacía es `True` y la cita pasaría como verbatim
+    contra **cualquier** fuente. La guarda `frags and …` es la que lo impide, y sin test no se
+    distingue de no tenerla."""
+    src = cfg.normalize_source_text("el paper habla de una cosa completamente distinta")
+    assert not cfg.quote_found("A … B", src)
+
+
+def test_el_texto_FUENTE_no_pierde_lo_que_haya_entre_dos_signos_de_peso():
+    """#336 — borrar el span `$…$` es correcto sobre la CITA (la nota re-marcó una fórmula que el
+    `.txt` no puede tener igual, #287/#326) y no sobre la FUENTE: ahí los `$` son caracteres del
+    documento —el copyright de Elsevier trae uno— y borrar entre dos se come el texto del medio.
+    Medido: **10 de 155** `.txt` pierden texto, los tres peores el 37,9 %, 26,1 % y 22,5 %
+    de una columna."""
+    src = cfg.normalize_source_text(
+        "0925-2312/98/$ - see front matter. The mixing matrix is estimated from the data, "
+        "and the residual cost is $ 0.02 at convergence.")
+    assert cfg.quote_found("The mixing matrix is estimated from the data", src)
+
+
 _DOS_COLUMNAS = "\n".join([
     "We validated the fidelity of the shift by computing              The Whittle approximation applies only in the",
     "heliocentric velocities. We find that the temporal               case of noise-free models. In this work, by",
