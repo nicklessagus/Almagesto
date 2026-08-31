@@ -1625,6 +1625,16 @@
    "number": 326,
    "title": "`quote_fragments` parte la cita en la elipsis pero BORRA la matemática y pega las mitades, creando una cadena que no existe en ningún `.txt`: 412 de 3036 citas llevan `$…$` y ninguna puede pasar el paso 1 de `quote_verdict` — el detector manda a corregir lo ya correcto",
    "state": "OPEN"
+  },
+  {
+   "number": 327,
+   "title": "`stamp_scope.upsert` reemplaza sólo la PRIMERA línea de la clave y deja huérfanas las de continuación, así que #312 rehúsa escribir en 5 de 5 notas con `alcance` — el 100 % de su población, y no por casualidad: un `alcance` es largo por definición",
+   "state": "OPEN"
+  },
+  {
+   "number": 328,
+   "title": "DASHBOARD (futuro): las PROPUESTAS del sistema no tienen superficie — ampliar un `alcance`, un `refuta`, un eje descubierto o un `--drop-core` se proponen y se pierden si nadie lee la corrida; son una cola distinta de la deuda del lint",
+   "state": "OPEN"
   }
  ]
 }

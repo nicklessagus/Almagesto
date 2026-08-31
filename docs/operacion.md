@@ -177,6 +177,12 @@ python scripts/contrast.py [<slug>] --validar-todo
                                     #   fan-out caro). Con slug, las notas del sujeto; sin él, toda
                                     #   la bóveda. Declara población (INV-40) y no evaluables
                                     #   (D-43); exit ≠ 0 con hallazgos, así sirve de gate
+python scripts/proposals.py [<slug>]
+                                    # las PROPUESTAS pendientes (#328): ampliar un `alcance`
+                                    #   (#241), un `refuta` (#212) y las celdas vacías del
+                                    #   inventario (#310), con su MOTIVO textual. No es la deuda
+                                    #   del lint: una propuesta espera una FIRMA, no una agenda.
+                                    #   Declara población y lo no barrible; siempre sale 0
 python scripts/harvest_views.py <slug> [--theme] [--force]
                                     # COSECHA el fan-out: vault/raw/extraccion/<slug>/*.json → las
                                     # notas. Estampa la vista (fecha · txt · lente), mergea

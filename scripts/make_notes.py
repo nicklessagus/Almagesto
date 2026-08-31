@@ -250,13 +250,18 @@ def stamp_scope(dest, alcance: str | None, unidad_cita: str | None) -> bool:
     lines = text[ini:end].split("\n")
 
     def upsert(field: str, value: str) -> None:
-        """Replace that frontmatter line, or append it when the note does not carry the field."""
+        """Replace that frontmatter KEY —line plus continuations (#327)— or append it.
+
+        ⛔ Replacing only the first line left the continuation of a wrapped scalar orphaned, the
+        frontmatter stopped parsing and the #244 guard —correctly— refused to write: **5 of 5**
+        notes with `alcance`, since the field is long by definition. The span comes from
+        `cfg.fm_key_span`, the same notion `_drop_keys` uses for the deletion side."""
         want = f"{field}: {json.dumps(value, ensure_ascii=False)}"
-        for i, ln in enumerate(lines):
-            if ln.startswith(f"{field}:"):
-                lines[i] = want
-                return
-        lines.append(want)
+        span = cfg.fm_key_span(lines, field)
+        if span:
+            lines[span[0]:span[1]] = [want]
+        else:
+            lines.append(want)
 
     if unidad_cita:
         upsert("unidad_cita", str(unidad_cita))
@@ -675,9 +680,13 @@ def stamp_keywords(dest, keywords: list) -> bool:
     lines = head.split("\n")
     linea = "keywords: " + yaml.safe_dump(list(keywords), default_flow_style=True,
                                           allow_unicode=True).strip()
-    idx = next((i for i, ln in enumerate(lines) if ln.startswith("keywords:")), None)
-    if idx is not None:
-        lines[idx] = linea              # `keywords: []` (o null) de una nota post-D-17 vacía
+    # #327 — la MISMA noción de «bloque de una clave» que usan `_drop_keys` y `stamp_scope`, no una
+    # tercera implementación (#222/#324). ⚠ Acá el campo llega siempre vacío (add-only: si ya trae
+    # keywords, la función salió antes), así que el span es de una línea: se comparte la definición,
+    # no se arregla un defecto vivo — auditado para #327, junto con `_set_campo`.
+    span = cfg.fm_key_span(lines, "keywords")
+    if span is not None:
+        lines[span[0]:span[1]] = [linea]   # `keywords: []` (o null) de una nota post-D-17 vacía
     else:
         ancla = next((i for i, ln in enumerate(lines) if ln.startswith("facets:")), None)
         if ancla is None:
@@ -2816,8 +2825,12 @@ def _set_campo(dest, clave: str, valor: str) -> None:
     if span is None:
         return
     yaml_block, _ = span
-    lineas = [f"{clave}: {valor}" if ln.startswith(f"{clave}:") else ln
-              for ln in yaml_block.split("\n")]
+    lineas = yaml_block.split("\n")
+    # #327 — la clave, no su primera línea. ⚠ Acá los valores son cortos (`bibcode`, `bibstem`), así
+    # que tampoco había defecto vivo: lo que se comparte es la definición.
+    span = cfg.fm_key_span(lineas, clave)
+    if span is not None:
+        lineas[span[0]:span[1]] = [f"{clave}: {valor}"]
     cfg.write_text_atomic(dest, text.replace(yaml_block, "\n".join(lineas), 1))
 
 
@@ -3463,17 +3476,14 @@ def _drop_keys(yaml_block: str, prefijos: tuple) -> list:
     `dropping` flag, and its own comment records that without it a `--rename-paper` left the note
     ILLEGIBLE for the whole tooling.
     """
-    out, dropping = [], False
-    for ln in yaml_block.split("\n"):
-        if ln.startswith(prefijos):
-            dropping = True
-            continue
-        if dropping:
-            if ln[:1] in (" ", "\t") and ln.strip():
-                continue                  # línea de continuación del escalar que se borró
-            dropping = False
-        out.append(ln)
-    return out
+    lines = yaml_block.split("\n")
+    fuera: set = set()
+    for pref in prefijos:
+        i = 0
+        while (span := cfg.fm_key_span(lines, pref.rstrip(":"), i)):
+            fuera.update(range(*span))
+            i = span[1]
+    return [ln for k, ln in enumerate(lines) if k not in fuera]
 
 
 def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | None = None,

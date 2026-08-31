@@ -129,10 +129,9 @@ el preprint: una discrepancia numérica es candidata a diferencia de versión, n
 Si al validar encontrás una discrepancia, **no la arregles en silencio de tu lado**: es un hallazgo
 de la bóveda — reportalo, o el próximo consumidor tropieza con lo mismo.
 
-**Test de admisión (aplicá a TODA línea de `vault/wiki/`):** *¿esto sale de una fuente (`vault/raw/`)
-y lo puedo respaldar con un `[[bibcode]]`, o es una conclusión derivada de fuentes citadas?* Si la
-respuesta es **no → no entra al vault**, sin excepciones —ni por "es útil para quien la consume" ni
-por "es obvio".
+**Test de admisión (aplicá a TODA línea de `vault/wiki/`):** *¿esto sale de una fuente
+(`vault/raw/`) y lo puedo respaldar con un `[[bibcode]]`, o es una conclusión derivada de fuentes
+citadas?* Si la respuesta es **no → no entra al vault**, sin excepciones — ni por útil ni por obvio.
 
 **Prohibido inlinear en `vault/wiki/` (no es bibliografía):** parámetros, perillas o **dials** de un
 generador/pipeline; nombres de variables o estructura de código; reparametrizaciones y **decisiones de
@@ -145,8 +144,7 @@ contaminación**, sacala de `vault/wiki/` y marcalo en el `log`.
 **Punteros a otros repos (prosa no, frontmatter estructural sí):** lo prohibido es el puntero
 downstream **en prosa / como motivación** ("para qué sirve en <repo consumidor>") — eso describe al
 consumidor y rompe el flujo unidireccional. Los **campos estructurales** de `stars/` —`data_local`,
-`methods_applied.ours`— **sí** pueden apuntar a rutas externas: registran *qué datos hay* y *qué se
-les aplicó*, son contrato máquina-legible, no motivación. **Migrando una instancia heredada**:
+`methods_applied.ours`— **sí** pueden apuntar afuera: son contrato máquina-legible, no motivación. **Migrando una instancia heredada**:
 borrar de notas de método/queries los comentarios "para qué sirve en <downstream>" y la parte
 decisión-downstream de las disputas; `data_local`, `methods_applied.ours` y `log.md` se quedan.
 
@@ -165,9 +163,8 @@ decisión-downstream de las disputas; `data_local`, `methods_applied.ours` y `lo
 - **este `CLAUDE.md`** = schema (cómo te comportás).
 
 Divergencia deliberada respecto del patrón Karpathy (mantener): el frontmatter de `stars/` y
-`papers/` es **máquina-legible** y sirve de **contrato para cualquier consumidor** (un agente o humano
-que arme código, un informe o un paper a partir de la bóveda), no es sólo para Q&A humano. No romper
-esos campos.
+`papers/` es **máquina-legible** y sirve de **contrato para cualquier consumidor** que arme código,
+un informe o un paper a partir de la bóveda, no sólo para Q&A humano. No romper esos campos.
 
 ## Frontmatter obligatorio
 
@@ -1339,19 +1336,17 @@ toca, el ancla de fuente tampoco se entera — es el modo de caducidad más sile
 **nada** comparaba) y el **conteo de citas de la puerta 2** (#106, ver abajo). Si están repartidas,
 se corren cinco y la sexta nunca.
 ⛔ **El hallazgo de VERSIONES sobrevive a la corrida (#298): `versions_disponible: <bibcode>`
-estampado en la nota** (mismo criterio que `corrections`: es metadata, no un valor que la prosa citó)
-+ backlog del lint con el `--rename-paper`. Era la única de las seis que no dejaba nada en la bóveda,
-y **declara su población** —las notas cuyo bibcode SIGUE siendo el eprint: 3 de 138—, porque
-*«cubrió: versiones»* sin denominador se lee como «se miraron todas».
+estampado en la nota** (metadata, no un valor que la prosa citó) + backlog del lint con el
+`--rename-paper`. Era la única de las seis que no dejaba nada en la bóveda, y **declara su
+población** (3 de 138), porque *«cubrió: versiones»* sin denominador se lee como «se miraron todas».
 ⚠ Su hueco simétrico es backlog aparte: la nota con **bibcode publicado** que igual lee el preprint
 (82 de 138) no tiene problema de identidad, así que ningún detector la ve — y `pdf_source: eprint`
 le apaga además el chequeo de cita textual.
 ⛔ **Y el REUSO entre slugs (D-18) deja una pregunta hecha, no una respuesta (#297).** Copiar el
-artefacto que ya estaba bajo otro slug es correcto y se conserva, pero además importa a un sujeto
-nuevo un archivo cuya **antigüedad nadie chequeó** — y la salida natural («si hubiera versión nueva
-la búsqueda habría traído otro bibcode y D-19 los une») es falsa justo en el caso frecuente: el DOI
-del preprint identifica el **depósito**, así que #216 garantiza que preprint y publicado **no**
-colisionen. La línea del reuso declara `pdf_source` y fecha y dice que **no se chequeó**; el
+artefacto que ya estaba bajo otro slug es correcto, pero importa a un sujeto nuevo un archivo cuya
+**antigüedad nadie chequeó** — y la salida natural («si hubiera versión nueva la búsqueda habría
+traído otro bibcode y D-19 los une») es falsa en el caso frecuente: el DOI del preprint identifica el
+**depósito**, así que preprint y publicado **no** colisionan (#216). La línea del reuso declara `pdf_source` y fecha y dice que **no se chequeó**; el
 detector se puede correr acotado (`sweep_external.py --bibcodes b1,b2` — unidades, no el corpus, y
 **no** registra la pasada); y el lint lo levanta como backlog, junto con *«`_red.yaml` no existe»*
 —una bóveda donde `sweep_external` nunca corrió no tiene **ninguna** de las seis caducidades
@@ -1373,21 +1368,18 @@ afuera" es información de la bóveda, no de la máquina. Un detector que **no p
 declara y **no** entra en `cubrio`: el registro no puede afirmar haber mirado lo que no miró.
 
 **Fuente retractada citada en prosa (D-47):** la afirmación **no se borra** —puede ser cierta por
-otra vía—: se **marca en línea** con `[[bibcode]] ⛔retractada`. Sin la marca el lint la localiza y
-**bloquea**; con la marca baja a informativa. El símbolo es deliberado: un `(retractada)` pelado
-daría falso positivo con cualquier mención del hecho en prosa.
+otra vía—: se **marca en línea** con `[[bibcode]] ⛔retractada`. Sin la marca el lint **bloquea**. Un
+`(retractada)` pelado daría falso positivo con cualquier mención en prosa.
 
 **Ground-truth que cambió bajo la prosa (AUD-42):** el ancla de fuente (D-20) hashea
 `raw/fulltext/**/*.txt` y **nunca** `raw/ground_truth/<slug>.json`, así que cuando NEA corrige un
-valor entre releases la frase que ya lo citaba queda igual de verde y **ninguna fila de verificación
-se entera**. Al aplicar un diff, `sweep_external` deja `_cambios` en el JSON y el lint **pide la
-marca** `⚠desactualizado` pegada al valor: la afirmación **no se borra** (puede seguir siendo
-correcta), se hace visible. Cuando actualizás la frase, sacás la marca.
+valor la frase que ya lo citaba queda verde y **ninguna fila se entera**. Al aplicar un diff,
+`sweep_external` deja `_cambios` en el JSON y el lint **pide la marca** `⚠desactualizado` pegada al
+valor: no se borra, se hace visible.
 
-**El conteo de citas que mueve la puerta 2 (#106 / INV-104).** La puerta 2 admite un paper como
-core por `citation_count`: metadata del paper —así que INV-24 se sostiene y el veredicto sigue
-siendo re-derivable offline— y la única que **cambia sola**, o sea que un paper puede volverse core
-sin que nadie edite nada. ⛔ La regla no es *"core no puede cambiar"* —sería falsa— sino **"todo
+**El conteo de citas que mueve la puerta 2 (#106 / INV-104).** La puerta 2 admite un paper como core
+por `citation_count`: metadata del paper —INV-24 sigue en pie, el veredicto es re-derivable offline—
+y la única que **cambia sola**: un paper puede volverse core sin que nadie edite nada. ⛔ La regla no es *"core no puede cambiar"* —sería falsa— sino **"todo
 cambio de veredicto es visible y fechado"**. Se vigila por los dos lados, cada uno con su alcance:
 **`lib_config.puerta2_cruces`** (offline, lo reporta el lint) compara el umbral vigente contra el
 que guardó el registro —*"editaste el umbral"*— y **`sweep_external.sweep_citas`** re-consulta los
@@ -1396,20 +1388,18 @@ conteos —*"el mundo se movió"*—. Ninguno aplica nada. El umbral se persiste
 (abre para todos) es una decisión y no se lee igual que no declararlo (no abre).
 
 **Lo que no se pudo verificar queda MARCADO en la ficha (#225): `<afirmación> ⚠verificar en el PDF
-(<qué se dudó>, <fecha>)`.** La produce el skill `audit-note` y tiene las propiedades de las otras:
-**no destruye** la afirmación, es **visible para el consumidor**, **la levanta el lint** como
-backlog y **se saca cuando alguien la verifica**, con la evidencia. El criterio es amplio a
-propósito (una página que no se pudo confirmar, una fuente que no está en disco, un número que no
-reconcilia): **ante la menor duda se marca** — una marca de más cuesta abrir un PDF; una de menos
-deja a la bóveda afirmando algo falso con cara de verificado. ⚠ No es excusa para no verificar: si
+(<qué se dudó>, <fecha>)`.** La produce `audit-note` y tiene las propiedades de las otras: **no
+destruye** la afirmación, es **visible**, **la levanta el lint** y **se saca cuando alguien la
+verifica**, con la evidencia. El criterio es amplio a propósito: **ante la menor duda se marca** —
+una marca de más cuesta abrir un PDF; una de menos deja a la bóveda afirmando algo falso con cara de
+verificado. ⚠ No es excusa para no verificar: si
 la fuente está en disco, se abre.
 
 **Una entrada de `log.md` que quedó REFUTADA se MARCA, no se edita (#238): `⚠ corregido <fecha> →
-<entrada nueva>`.** La bitácora es append-only por contrato, y eso la dejaba sin forma de
-corregirse: medido, una entrada publica como cita textual **con página** una frase que **invierte
-el sentido** de lo que dice el paper, y el propio log lo reconoce 268 líneas después. Misma doctrina
-que las otras marcas —hacer visible, no borrar—: el lint chequea las citas textuales del `log.md`
-contra el `.txt` de su bibcode y reporta la que su fuente no dice, salvo que lleve la marca.
+<entrada nueva>`.** La bitácora es append-only por contrato y eso la dejaba sin forma de corregirse:
+medido, una entrada publica como cita textual **con página** una frase que **invierte el sentido**
+de lo que dice el paper. Misma doctrina que las otras marcas —hacer visible, no borrar—: el lint
+chequea las citas textuales del `log.md` contra el `.txt` de su bibcode, salvo que lleven la marca.
 
 Éstas son las **cinco únicas marcas en línea** del sistema: `(inferencia de [[bibcode]])`,
 `[[bibcode]] ⛔retractada`, `<valor> ⚠desactualizado`, `<afirmación> ⚠verificar en el PDF` y
@@ -1429,6 +1419,16 @@ repara los `[[wikilink]]` rotos ni la nota que queda sin destino; del otro lado,
 ingest sólo chequea el slug en curso; esa misma pasada estampa también `corrections`). Invariante:
 la cadena es idempotente (refrescar es seguro); **nunca** se pisa la extracción LLM ni el
 ground-truth sin `--force` explícito. Detalle en el skill.
+
+### Propuestas (lo que el sistema sugiere y espera una firma — `scripts/proposals.py`)
+
+⛔ **Una PROPUESTA no es deuda, y por eso tiene su propia superficie (#328).** La deuda falta y se
+**agenda** —la reporta el lint—; una propuesta el sistema la sugiere y necesita que alguien **firme**.
+Envejecen distinto: la deuda persiste hasta que se cierra, la propuesta **se pierde si nadie la lee
+cuando aparece** (medido: el pedido de ampliar el `alcance` de un libro quedó en el `hueco` de uno de
+43 JSON y lo vio alguien de casualidad). `python scripts/proposals.py [<slug>]` las junta con **su
+motivo textual** —no una categoría: en seis meses sirve el motivo—, declara su población y declara
+**lo que no puede barrer** (un eje descubierto en 3b vive en la conversación). Reporta y no aplica.
 
 ### Lint (chequeo de salud)
 

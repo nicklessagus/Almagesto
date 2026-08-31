@@ -2276,3 +2276,36 @@ def test_el_backtick_y_el_wikilink_DESENVUELVEN_no_borran(toy_vault):
     inexistente."""
     txt = cfg.normalize_source_text("el parámetro alpha vale 3 y el resto de la frase sigue acá")
     assert cfg.quote_found("el parámetro `alpha` vale 3 y el resto de la frase sigue acá", txt)
+
+
+# ── #327 · «el bloque de una clave», una sola definición ──────────────────────────────────────────
+
+def test_fm_key_span_toma_las_lineas_de_CONTINUACION():
+    """#327 — un escalar de YAML envuelve, y tocar sólo su primera línea deja la continuación
+    huérfana bajo la clave siguiente: el frontmatter deja de parsear y la nota evade todos los
+    chequeos de su tipo. Es la cuarta vez que el repo paga esta forma (#244 el borrado, el renombre,
+    #306 la lista flow, #327 el reemplazo), así que la noción vive en UN lugar."""
+    #  @inv INV-147
+    lines = ["bibcode: 2010CJ",
+             "alcance: caps. 2-3 (formulación del problema y métodos de separación); 161",
+             "  páginas, el resto es aplicación a audio y no entra",
+             "tags: [paper]"]
+    assert cfg.fm_key_span(lines, "alcance") == (1, 3)
+    assert cfg.fm_key_span(lines, "tags") == (3, 4)
+    assert cfg.fm_key_span(lines, "no_existe") is None, "«no está» no es «está vacía»"
+
+
+def test_fm_key_span_toma_los_items_de_una_lista_en_BLOQUE():
+    """La otra forma multilínea del frontmatter de esta bóveda: la lista en bloque que escribe
+    `make_notes` al crear la nota, con o sin indentación."""
+    lines = ["salvedades:", "  - la primera", "  - la segunda", "stars:", "- tau Cet", "year: 2020"]
+    assert cfg.fm_key_span(lines, "salvedades") == (0, 3)
+    assert cfg.fm_key_span(lines, "stars") == (3, 5)
+
+
+def test_fm_key_span_arranca_donde_se_le_pide():
+    """`desde` existe para recorrer una clave REPETIDA sin volver a encontrar la primera — es lo que
+    hace decidible el borrado de todas sus apariciones."""
+    lines = ["a: 1", "b: 2", "a: 3"]
+    assert cfg.fm_key_span(lines, "a") == (0, 1)
+    assert cfg.fm_key_span(lines, "a", 1) == (2, 3)

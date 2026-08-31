@@ -4553,3 +4553,28 @@ def test_stamp_alcance_no_inventa_ni_borra(toy_vault):
     g.write_text("---\nbibcode: 2020nuevo\n---\n\n## Abstract\n\nx\n", encoding="utf-8")
     assert mn.stamp_scope(g, "cap. 3", "pagina") is True
     assert cfg.split_fm(g.read_text(encoding="utf-8"))["alcance"] == "cap. 3"
+
+
+def test_re_estampar_un_alcance_MULTILINEA_no_rompe_el_frontmatter(toy_vault, capsys):
+    """#327 — el caso que es el 100 % de la población, y no por casualidad: un `alcance` dice qué
+    capítulos de un libro entran, así que es largo **por definición**, así que el serializador lo
+    envuelve, así que pisar sólo su primera línea dejaba la continuación huérfana bajo la clave
+    siguiente. El frontmatter dejaba de parsear y la guarda de #244 —bien— rehusaba escribir:
+    medido, **5 de 5** notas con `alcance`. La red funcionaba; lo que no funcionaba era #312.
+
+    ⚠ El test viejo usaba un `alcance` corto, que cabe en una línea: un caso que no representa a su
+    población, y por eso el gate no lo cazó."""
+    largo = ("caps. 2-3 (formulación del problema y métodos de separación); 161 páginas, el resto "
+             "es aplicación a audio y no entra")
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    f = cfg.PAPERS / "2010CJ.md"
+    f.write_text("---\nbibcode: 2010CJ\nunidad_cita: pagina\n"
+                 "alcance: caps. 2-3 (formulación del problema y métodos de separación); 161\n"
+                 "  páginas, el resto es aplicación a audio y no entra\ntags: [paper]\n---\n\n"
+                 "## Abstract\n\nx\n", encoding="utf-8")
+    assert mn.stamp_scope(f, largo + " (ampliado: caps. 3 y 6)", "pagina") is True
+    fm = cfg.split_fm(f.read_text(encoding="utf-8"))
+    assert fm, "el frontmatter tiene que seguir parseando"
+    assert fm["alcance"] == largo + " (ampliado: caps. 3 y 6)"
+    assert fm["tags"] == ["paper"], "la clave siguiente no se comió la continuación huérfana"
+    assert "⛔" not in capsys.readouterr().out

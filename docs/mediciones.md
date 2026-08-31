@@ -677,3 +677,45 @@ a la comparación contra la extracción y podían salir `alterada`.
 el defecto real— y **sólo aparece al corregirla**, porque el detector no se apaga. Un gate
 verificado únicamente sobre corpus defectuoso no lo caza: hay que verificar también el camino de
 salida.
+
+## 2026-08-31 · El re-estampado que no podía escribir, y las propuestas sin superficie (#327/#328)
+
+### #327 · 5 de 5, o sea el 100 % de la población
+
+`stamp_scope.upsert` reemplazaba **la primera línea** de la clave. El valor real es un escalar
+multilínea:
+
+```yaml
+alcance: caps. 2-3 (formulacion del problema y metodos de separacion); 161 paginas,
+  el resto es aplicacion a audio y no entra      ← queda huérfana bajo la clave siguiente
+```
+
+El frontmatter dejaba de parsear y la guarda de #244 —bien— rehusaba escribir. Medido: **5 notas
+tienen `alcance` y las 5 son multilínea**, y no por accidente de formato: un `alcance` dice qué
+capítulos de un libro entran, así que es largo **por definición**. O sea, #312 no funcionaba en
+ningún caso real, y lo que #312 arregla no es un hueco sino una **afirmación falsa** — la nota seguía
+declarando que ese material no entra mientras la vista lo publicaba.
+
+⚠ **Nota de método:** el gate de #312 no lo cazó porque sus tests usan un `alcance` **corto**, que
+cabe en una línea. La forma que hace fallar a la función es justamente la que la función existe para
+manejar — un caso de test que no representa a su población.
+
+**Auditoría de los otros re-estampadores** (lo pedía el issue): `stamp_keywords` es **add-only**, así
+que cuando llega a reemplazar el campo está vacío (una línea); `_set_campo` sólo escribe `bibcode` y
+`bibstem`, que son cortos; `stamp_fulltext`/`restamp_pdf_links` escriben rutas, que no se envuelven
+porque no pasan por el serializador. **Ninguno tenía defecto vivo**: se les pasó la definición
+compartida por #222/#324, no porque estuvieran rotos.
+
+### #328 · las propuestas eran cinco lugares que nadie miraba junto
+
+| propuesta | dónde vivía | quién la veía |
+|---|---|---|
+| ampliar el `alcance` de una fuente larga | `hueco` del JSON de extracción | nadie |
+| `refuta:` (#212) | `vistas[].refuta` + backlog del lint | el lint, mezclado |
+| eje descubierto en 3b (#307/#310) | la conversación | nadie |
+| celda vacía del inventario (#310) | la nota | quien la lea |
+
+`scripts/proposals.py` junta las tres que están en disco, con el motivo **textual** de quien las
+escribió, y **declara** la que no puede barrer. La distinción que hace falta y el lint no puede
+hacer: la deuda se **agenda** y persiste en el reporte hasta cerrarse; la propuesta necesita que
+alguien **firme** y, si nadie la lee cuando aparece, **se pierde**.

@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.136.0"
+ALMAGESTO_VERSION = "1.137.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1013,6 +1013,34 @@ def quote_verdict(quote: str, cited, note_bibs, txt_texts: dict, *, ambiguo: boo
     if fuentes:
         return "no_verbatim", {}
     return "no_evaluable", {}
+
+
+def fm_key_span(lines: list, field: str, desde: int = 0) -> tuple | None:
+    """`(i, j)` — the frontmatter lines that BELONG to that key: its own plus every continuation.
+
+    ⛔ One definition of «the block of a key», because the repo has now paid four times for having
+    it implicit (#244 el borrado, `_set_lista_de_mapas` el renombre, #306 la lista flow envuelta,
+    #327 el reemplazo). A YAML scalar wraps: `alcance: caps. 2-3 (…)` runs on to an indented second
+    line, so touching only the first one leaves the continuation orphaned under the NEXT key, the
+    frontmatter stops parsing, and the note then evades every check of its type.
+
+    Measured for #327: the `alcance` re-stamp refused to write on **5 of 5** notes that carry the
+    field — 100 % of its population, and not by chance: an `alcance` says which chapters of a book
+    are in, so it is long **by definition**, so it always wraps. The guard of #244 held (nothing was
+    corrupted); what did not work was the operation, and the note kept asserting that material does
+    not enter while its view published it.
+
+    A continuation is an indented non-empty line, or a `- ` item of a block list. Returns `None`
+    when the key is absent — «no está» is not «está vacía»."""
+    #  @inv INV-147
+    for i in range(desde, len(lines)):
+        if lines[i].startswith(f"{field}:"):
+            j = i + 1
+            while j < len(lines) and (lines[j].startswith("- ")
+                                      or (lines[j][:1] in (" ", "\t") and lines[j].strip())):
+                j += 1
+            return i, j
+    return None
 
 
 def quote_found(quote: str, source_norm: str) -> bool:
