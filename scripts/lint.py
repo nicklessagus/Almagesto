@@ -1687,20 +1687,28 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             for _b in lb.split_blocks(body_full):
                 if LOG_SUPERSEDED_MARK in _b.text:
                     continue           # ya marcada: visible, no es deuda
-                for _bib in lb._bibcodes(_b.text):
-                    _txts = list(cfg.FULLTEXT.glob(f"*/{_bib}.txt")) if cfg.FULLTEXT.exists() else []
-                    if not _txts:
+                _bibs_log = lb._bibcodes(_b.text)
+                for _c in cfg.quotes_in(_b.text):
+                    # #337 — el DUEÑO de la cita, igual que la rama gemela de la prosa que sigue
+                    # abajo: #316/#325 se arregló en un camino y quedó vivo en el hermano. Sin esto
+                    # la cita se probaba contra CADA bibcode de la entrada, así que una cita
+                    # correcta y verbatim en un párrafo que nombra ocho papers producía ocho
+                    # hallazgos —uno por bibcode— y partir el párrafo en dos los bajaba.
+                    _duenio_log = lb.quote_owner(_b.text, _c, _bibs_log)
+                    _bibs_c = [_duenio_log] if _duenio_log else _bibs_log
+                    _fuentes_log, _ = _sources_for(_bibs_c)
+                    if not _fuentes_log:
+                        continue       # sin `.txt` chequeable: no evaluable, no es hallazgo
+                    if any(cfg.quote_found(_c, _s)
+                           for _ss in _fuentes_log.values() for _s in _ss):
                         continue
-                    _srcs = _source_readings(_txts[0])
-                    for _c in cfg.quotes_in(_b.text):
-                        if not any(cfg.quote_found(_c, _s) for _s in _srcs):
-                            cita_log.append(
-                                (stem, f"L{_b.first_line}: la bitácora entrecomilla «"
-                                       f"{_c[:70]}{'…' if len(_c) > 70 else ''}» y esa cadena no "
-                                       f"está en el `.txt` de {_bib} — la entrada NO se edita "
-                                       f"(append-only): se marca `{LOG_SUPERSEDED_MARK} <fecha> → "
-                                       f"<entrada nueva>` y se appendea la corrección"))
-                            break
+                    cita_log.append(
+                        (stem, f"L{_b.first_line}: la bitácora entrecomilla «"
+                               f"{_c[:70]}{'…' if len(_c) > 70 else ''}» y esa cadena no "
+                               f"está en el `.txt` de {', '.join(sorted(_fuentes_log))} — la "
+                               f"entrada NO se edita (append-only): se marca "
+                               f"`{LOG_SUPERSEDED_MARK} <fecha> → <entrada nueva>` y se appendea "
+                               f"la corrección"))
 
         if stem not in NON_ORPHAN:
             _por_bloque: dict = {}
@@ -2710,7 +2718,13 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         # de la prosa erraría justo en el caso medido, donde la frase tiene dos números y el malo es
         # el segundo. Sólo se chequea la sub-sección PRESENTE: la ausente ya la reporta `_falt`, y
         # duplicar el hallazgo manda a hacer dos veces el mismo trabajo.
-        _frags = lb.verif_subsection_lines(filas, cfg.solo_prosa(body_full))
+        # ⛔ #337 — la prosa sale de ESTA nota. Hasta 1.144.0 se pasaba `body_full`, que lo asigna
+        # el barrido principal —otro loop, ya terminado—, así que las tres notas de un `--cierre`
+        # recibían el conteo de marcas `inferencia` de la ÚLTIMA nota barrida (medido: 1, 7 y 19
+        # marcas reales, «19» para las tres). Es INV-81 violado en el chequeo que lo mecaniza: la
+        # nota que publicaba SU número correcto quedaba reportada como deuda para siempre.
+        _fm_v = cfg.frontmatter_span(texto)
+        _frags = lb.verif_subsection_lines(filas, cfg.solo_prosa(_fm_v[1] if _fm_v else texto))
         for _sub, _frag in _frags.items():
             if _frag and _sub in texto and _frag not in texto:
                 verif_estructura.append(

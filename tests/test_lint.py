@@ -5400,6 +5400,66 @@ def test_la_subseccion_ausente_no_se_reporta_dos_veces(toy_vault, capsys):
     assert seccion.count("Condiciones perdidas") == 1, seccion
 
 
+def _nota_con_bloque(toy_vault, stem, cuerpo, ft):
+    """Nota-concepto con su bloque de verificación bien formado, calculado de SU propio cuerpo.
+
+    Hermana de `_con_ancla`, que sólo sabe escribir una nota: #337 se mide con VARIAS notas
+    verificadas en la misma bóveda, que es cuando se ve que el conteo sale de otra."""
+    pares = lb.pairs_of(cuerpo)
+    filas = ["| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente | Condición |",
+             "|---|---|---|---|---|---|---|"]
+    for i, par in enumerate(pares, 1):
+        filas.append(f"| {i} | extracto | [[{par.bibcode}]] | soportada | {par.anchor} | "
+                     f"txt:{lb.source_hash(ft)} | — |")
+    n_marcas = len(lb.inference_marks(cuerpo))
+    bloque = (f"\n## Verificación de citas (2026-01-01)\n\n{len(pares)} pares; {len(pares)} "
+              f"soportadas\n\n" + "\n".join(filas) + "\n\n"
+              f"Inferencias declaradas (sin cita, por diseño) — {n_marcas} marcas en el cuerpo: "
+              f"las del cuerpo.\nOmisiones en transcripciones: ninguna.\n"
+              f"Condiciones perdidas (afirmaciones sobre-generalizadas) — 0 con condición: "
+              f"0 `acota` (0 resueltas) / 0 `contextualiza` / 0 sin clasificar: ninguna.\n")
+    mk_note(toy_vault.CONCEPTS / "methods", stem, {"tags": ["methods"]}, cuerpo + bloque)
+    return stem
+
+
+def test_cada_nota_publica_SU_conteo_de_inferencias(toy_vault, capsys):
+    """#337 — la línea canónica de «Inferencias declaradas» salía de `body_full`, que lo asigna el
+    barrido principal (OTRO loop, ya terminado): las tres notas de un `--cierre` real recibían el
+    conteo de la última nota barrida —«19 marcas» sobre conteos reales de 1, 7 y 19—. Es INV-81
+    violado en el chequeo que lo mecaniza, y deja como deuda PERMANENTE a la nota que publica su
+    número correcto."""
+    mk_note(toy_vault.PAPERS, "2020citC...1..1C", {"tags": ["paper"]}, "")
+    (toy_vault.FULLTEXT / "slug").mkdir(parents=True, exist_ok=True)
+    ft = toy_vault.FULLTEXT / "slug" / "2020citC...1..1C.txt"
+    ft.write_text("El período es de 34 días.\n", encoding="utf-8")
+    una = "Afirmación con cita [[2020citC...1..1C]].\n\nUna (inferencia de [[2020citC...1..1C]]).\n"
+    dos = una + "\nOtra (inferencia de [[2020citC...1..1C]]).\n"
+    _nota_con_bloque(toy_vault, "nota-una", una, ft)
+    _nota_con_bloque(toy_vault, "nota-dos", dos, ft)
+    link_from_log(toy_vault, "nota-una", "nota-dos", "2020citC...1..1C")
+    _, rep = run_lint_reporte(capsys)
+    seccion = _seccion(rep, "Bloque de verificación incompleto")
+    assert "Inferencias declaradas" not in seccion, (
+        "cada nota publica el conteo que SU propia tabla y SU propio cuerpo dan: " + seccion)
+
+
+def test_la_cita_correcta_del_log_no_se_multiplica_por_bibcode(toy_vault, capsys):
+    """#337 — la rama de `log.md` iteraba `_bibcodes` y probaba cada cita contra CADA bibcode de la
+    entrada, mientras la rama gemela de la prosa —17 líneas más abajo— ya usaba `quote_owner`:
+    #316/#325 se arregló en un camino y quedó vivo en el hermano. Efecto: una cita correcta y
+    verbatim en un párrafo que nombra varios papers produce un hallazgo POR BIBCODE, y partir el
+    párrafo en dos los baja."""
+    _paper_con_txt("2023A&A...675A.187O", "real-world systematics might become entangled\n")
+    for otro in ("2021otrA...1..1A", "2022otrB...1..1B"):
+        _paper_con_txt(otro, "un texto que no dice nada de eso\n")
+    (cfg.WIKI / "log.md").write_text(
+        "# log\n\n## 2026-08-29 — ingest\n\n- se contrastó con [[2021otrA...1..1A]] y "
+        "[[2022otrB...1..1B]]: la fuente dice «real-world systematics might become entangled» "
+        "[[2023A&A...675A.187O]]\n", encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    assert "la bitácora entrecomilla" not in rep, rep
+
+
 def test_index_desactualizado_nombra_los_stems(toy_vault, capsys):
     """#237 — `index.md` era el ÚNICO artefacto que quedó 100 % Dataview, o sea lo que #60 prohibió
     para los roll-ups y con más fuerza: el catálogo es lo primero que un agente abre para orientarse
