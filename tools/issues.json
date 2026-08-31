@@ -1659,7 +1659,7 @@
   {
    "number": 333,
    "title": "Una cita alterada que nace EN la extracción es invisible para `contrast --validar` por construcción: su juez es la extracción (#315/#317), y el `.txt` sólo puede absolver, nunca acusar — medido, 40 de 169 citas aprobadas no están en el `.txt` de su fuente, y una es alteración confirmada contra el PDF",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 334,
@@ -1699,7 +1699,7 @@
   {
    "number": 341,
    "title": "Cuando las dos lecturas de un PDF no coinciden no pasa nada: emitir la marca `⚠verificar en el PDF` que YA existe, y que el gate declare cuántas citas aprobó con un solo testigo (40 de 169)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 342,
@@ -1734,6 +1734,21 @@
   {
    "number": 348,
    "title": "Tres veces más #243 por string crudo, ahora en `lint.py` — y G1 es un falso positivo BLOQUEANTE: `thesis_links: [PCA]` con `pca.md` en disco se reporta «sin página destino» mientras `theme_membership` dice que es el mismo concepto",
+   "state": "CLOSED"
+  },
+  {
+   "number": 349,
+   "title": "El detector de «párrafo duplicado» marca como daño lo que estampa el framework: en una nota con varias vistas (#239) cada vista escribe su propia línea estructural — 7 de 7 hallazgos son falsos positivos",
+   "state": "OPEN"
+  },
+  {
+   "number": 350,
+   "title": "El detector de «segunda mano sin marca» dispara en 398 de 462 pares (86 %): pregunta si el PAPER tiene alguna segunda mano, no si el VALOR que la línea toma lo es — la forma de #198, con 6 de cada 7 avisos no accionables",
+   "state": "OPEN"
+  },
+  {
+   "number": 351,
+   "title": "Un tema con `facet:` propia y sin `search_fq` hereda `database:astronomy` en silencio, y ahí la puerta fundacional NO ABRE NUNCA — medido en `ica`: 0 papers fundacionales con el fq heredado, 2 sin él (incl. Comon 1994)",
    "state": "OPEN"
   }
  ]

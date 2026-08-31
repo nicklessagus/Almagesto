@@ -1438,3 +1438,45 @@ se llena y se consulta por clave, y el reclamo por `methods` entra al set con el
 del tema**, no con la grafía del extractor. Los comentarios quedaron descriptivos: el de G2 dice
 ahora que `methods` no se recorre **porque la rama exige `not fm.get("methods")`** —recorrerlo sería
 un condicional que no decide nada (red 8)—, en vez de prometer una equivalencia que no existía.
+
+## 2026-08-31 · El detector de párrafo duplicado marcaba lo que estampa el framework (#349)
+
+**Qué era.** *«Forma del artefacto: marcador sin cerrar o párrafo duplicado»* comparaba el arranque
+de cada párrafo contra **toda la nota**. En una nota de paper con varias vistas (#239), cada vista
+estampa su propia línea estructural —el bloque `**Ejes:**` con los ejes que la lente preguntó y la
+fuente calló, y las salvedades chequeadas de #213—, y esas líneas son idénticas **por
+construcción**.
+
+**Medido** sobre `Almagesto-Tesis` (2026-08-31, 165 notas), con el `lint.py` de 1.164.0 corrido
+contra esa bóveda:
+
+| Nota | Vistas | Hallazgos | Qué línea |
+|---|---|---|---|
+| `2001HyvarinenKarhunenOja` | 3 | 2 | `- ⚙ verificada: el PDF tiene 503 página(s)…` · `- **rv:** _(sin datos)_` |
+| `2010ComonJutten` | 4 | 4 | `- **rv:** _(sin datos)_` ×3 · `- ⚙ verificada: … 824 página(s)` |
+| `2026A&A...705A.234O` | 2 | 1 | `- PREPRINT: el PDF lleva la marca de agua 'arXiv:…v1'` |
+
+**7 hallazgos, los 7 falsos positivos** — el 100 % de la categoría en esa bóveda.
+
+**Por qué el corte es por ámbito y no por prefijo exento.** El issue ofrecía las dos vías. La lista
+de prefijos que proponía (`- **<eje>:**` y `- ⚙ verificada:`) **ya estaba incompleta sobre el corpus
+que la motivó**: el hallazgo de `2026A&A...705A.234O` es `- PREPRINT: …`, una salvedad no
+estructurada que no matchea ninguno de los dos. Una lista de excepciones hay que mantenerla y falla
+en silencio cuando el estampador gana una forma nueva; el ámbito no.
+
+**Diff medido, `Almagesto-Tesis`:**
+
+| Categoría | Antes (1.164.0) | Después (1.167.0) |
+|---|---|---|
+| Forma del artefacto: marcador sin cerrar o párrafo duplicado | 7 | **0** |
+
+⚠ **Precisión antes/después:** 0/7 accionables → 0 hallazgos. No se perdió ningún verdadero
+positivo porque en esa bóveda no había ninguno; lo que la red prueba es que el caso real sobrevive
+—el párrafo repetido **dentro** de la misma vista sigue reportándose, y el ámbito de la prosa normal
+no cambió—.
+
+**Qué cambió (1.167.0).** `cfg.duplicate_paragraphs` indexa por `(ámbito, arranque)`: el ámbito es
+`""` para el cuerpo de la nota, la línea del `## Vista — <sujeto>` dentro de una vista, y
+`vista + ### Lente — <énfasis>` dentro de una segunda lectura (#239). El `###` sólo corta **dentro**
+de una vista: fuera, es prosa normal y no parte nada.
+

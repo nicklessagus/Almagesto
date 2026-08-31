@@ -444,7 +444,13 @@ OCR, o marcar `pending`).
   literal —Obsidian lo renderiza— y contarlo dejaba al operador eligiendo entre un bug de
   renderizado, un backlog permanente o borrar el carácter de una transcripción verbatim, que el
   framework justamente pide. El hallazgo nombra **las dos líneas**: la del párrafo abierto y la del
-  impar.
+  impar. ⛔ El duplicado se cuenta **dentro de su vista** (#349): con varias vistas (#239) cada una
+  estampa su propia línea estructural —el eje que la lente preguntó y la fuente calló, la salvedad
+  chequeada— y son idénticas **por construcción** (medido: 7 hallazgos, los 7 falsos). Cada
+  `## Vista — <sujeto>` y cada `### Lente — <énfasis>` es un ámbito; el resto de la nota sigue
+  siendo uno solo, que es lo que mantiene vivo el caso de #227. Se cortó por ámbito y **no** eximiendo
+  prefijos: esa lista habría que mantenerla, y el corpus medido ya traía una tercera forma
+  estampada (`- PREPRINT: …`) que no estaba en ella.
 - **`## ` pegado a una fila de tabla, sin línea en blanco** (#260): GFM corta bien, pero
   Python-Markdown absorbe el encabezado como fila de la tabla de arriba y el `##` desaparece del
   outline. Backlog y no bloqueante a propósito: el daño depende del renderer. Sólo cuenta una

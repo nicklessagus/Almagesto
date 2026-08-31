@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.164.0"
+ALMAGESTO_VERSION = "1.167.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -476,8 +476,20 @@ def duplicate_paragraphs(body: str) -> list:
     Only paragraphs long enough to identify themselves (`_DUP_MIN`): a short line repeated is
     normal (a table separator, a `—`, a heading-like bullet), and reporting those would drown the
     real case. Fenced blocks and stamped sections are skipped: a roll-up legitimately repeats.
+
+    ⛔ Each **view** is its own scope (#349). A note with several views (#239) has every view write
+    the same structural line —`- **<axis>:** _(sin datos)_` for an axis its lens asked and the
+    source did not answer, `- ⚙ verificada: …` for its checked salvedad— and those are identical BY
+    CONSTRUCTION: measured on a real vault, 7 findings and all 7 false. Counting inside
+    `## Vista — <subject>` (and each of its `### Lente — <emphasis>`) kills them without a list of
+    exempt prefixes to maintain — and the measured corpus already had a third stamped shape
+    (`- PREPRINT: …`) that such a list would have missed. A paragraph repeated **inside** one view
+    is still the finding, and so is one repeated across ordinary prose sections: the note-level
+    scope is unchanged, which is what keeps the #227 case (two copies with a different section's
+    intro between them) alive.
     """
     vistos, out, fenced, ini, acc, saltando = {}, [], False, 0, [], False
+    vista = ambito = ""
 
     def cerrar():
         """Close the paragraph being accumulated and check whether its opening was already seen."""
@@ -489,7 +501,7 @@ def duplicate_paragraphs(body: str) -> list:
         # ⛔ Se compara el ARRANQUE, no el texto entero: el caso medido es un párrafo duplicado por
         # un empalme **con dos finales distintos**, y exigir igualdad exacta lo pierde justo donde
         # la edición fallida es más probable. Es el mismo criterio con que #216 compara abstracts.
-        clave = texto[:_DUP_CLAVE]
+        clave = (ambito, texto[:_DUP_CLAVE])
         if clave in vistos:
             out.append((ini, acc[0][:70]))
         else:
@@ -506,6 +518,15 @@ def duplicate_paragraphs(body: str) -> list:
         if ln.startswith("## "):
             cerrar(); acc = []
             saltando = is_stamped_section(ln)
+            # El ámbito se fija DESPUÉS de cerrar: el párrafo que venía acumulándose pertenece al
+            # ámbito donde vivía, no al que abre este encabezado.
+            vista = ambito = ln if _VISTA_HEAD.match(ln) else ""
+            continue
+        if ln.startswith("### ") and vista:
+            # `### Lente — <énfasis>` es una SEGUNDA lectura del mismo sujeto (#239): otra vista,
+            # otro ámbito. Fuera de una `## Vista` un `###` es prosa normal y no corta nada.
+            cerrar(); acc = []
+            ambito = f"{vista}\n{ln}"
             continue
         if not ln:
             cerrar(); acc = []

@@ -5109,6 +5109,49 @@ def test_parrafo_duplicado_es_backlog(toy_vault, capsys):
     assert rc == 0
 
 
+#: #349 · el bloque de ejes que **cada vista** estampa por su cuenta: idénticos por construcción,
+#: porque la lente es la misma y la fuente calló los mismos ejes en las dos lecturas.
+_EJES_VACIOS = ("**Ejes:**\n\n- **rv:** _(sin datos)_\n- **activity:** _(sin datos)_\n"
+                "- **planet:** _(sin datos)_\n- **discovery:** _(sin datos)_\n"
+                "- **method:** _(sin datos)_\n- **detection:** _(sin datos)_\n")
+
+
+def test_dos_vistas_con_el_mismo_eje_vacio_no_es_duplicado(toy_vault, capsys):
+    """#349 — el detector marcaba como daño lo que **estampa el framework**. Con varias vistas
+    (#239) cada una escribe su línea estructural y son idénticas por construcción: medido en una
+    bóveda real, 7 hallazgos y los 7 falsos. Cada `## Vista` es su propio ámbito."""
+    paper_con_vista(toy_vault, vistas=[{"sujeto": "Estrella Test", "tipo": "star"},
+                                       {"sujeto": "s_index", "tipo": "theme"}],
+                    body=(f"## Vista — Estrella Test\n\n{_EJES_VACIOS}\n"
+                          f"## Vista — s_index\n\n{_EJES_VACIOS}"))
+    link_from_log(toy_vault, "2020vis....1V")
+    rc, rep = run_lint_reporte(capsys)
+    seccion = _seccion(rep, "Forma del artefacto: marcador")
+    assert "párrafo repetido" not in seccion, seccion
+    assert rc == 0, rep
+
+
+def test_parrafo_repetido_DENTRO_de_una_vista_sigue_siendo_hallazgo(toy_vault, capsys):
+    """#349, la mitad que no se afloja: acotar el ámbito a la vista no puede apagar el caso real.
+    El mismo párrafo dos veces **en la misma vista** es el empalme de #227, y se sigue reportando.
+    ⚠ Y `### Lente — <énfasis>` (#239) es otro ámbito: la segunda lectura del mismo sujeto vive
+    dentro de la `## Vista` y no se compara contra la primera."""
+    p = ("⚠ Que el defecto sea estructural no implica que el método lo arregle en datos reales, y "
+         "el único paper del corpus que lo mide contra verdad conocida encuentra que ")
+    paper_con_vista(toy_vault,
+                    vistas=[{"sujeto": "Estrella Test", "tipo": "star"},
+                            {"sujeto": "Estrella Test", "tipo": "star",
+                             "enfasis": "segunda lectura"}],
+                    body=(f"## Vista — Estrella Test\n\n{p}sí, con S/N alto.\n\n"
+                          f"Otro párrafo en el medio del todo.\n\n{p}no, bajo un umbral.\n\n"
+                          f"### Lente — segunda lectura\n\n{p}sí, con S/N alto.\n"))
+    link_from_log(toy_vault, "2020vis....1V")
+    rc, rep = run_lint_reporte(capsys)
+    seccion = _seccion(rep, "Forma del artefacto: marcador")
+    assert seccion.count("párrafo repetido") == 1, seccion
+    assert rc == 0, rep
+
+
 def test_alias_con_nota_propia_bloquea(toy_vault, capsys):
     """#229 — la exención por `versions[]` es incondicional y eso APAGA los dos detectores de
     identidad sobre una nota VIVA. Medido: una nota usó `versions[]` para decir «no son duplicados,

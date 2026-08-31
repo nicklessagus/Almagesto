@@ -2230,6 +2230,46 @@ def test_unclosed_markers_nombra_la_LINEA_del_impar():
     assert list(cfg.unclosed_markers(parrafo)) == [(1, "$", 3)]
 
 
+# ── #349 · el duplicado se cuenta DENTRO de su vista ────────────────────────
+#: Un párrafo largo, para pasar `_DUP_MIN` sin depender de la prosa que lo rodea.
+_LARGO = ("Que el defecto sea estructural no implica que el método lo arregle en datos reales, y el "
+          "único paper del corpus que lo mide contra verdad conocida encuentra que ")
+
+
+def test_duplicate_paragraphs_cada_vista_es_su_propio_ambito():
+    """#349 — con varias vistas (#239) cada una estampa la misma línea estructural (el eje que la
+    lente preguntó y la fuente calló, la salvedad chequeada) y son idénticas **por construcción**:
+    medido en una bóveda real, 7 hallazgos y los 7 falsos. `## Vista` y `### Lente` son ámbitos."""
+    dos_vistas = (f"## Vista — tau Cet\n\n{_LARGO}sí.\n\n"
+                  f"## Vista — s_index\n\n{_LARGO}sí.\n")
+    assert cfg.duplicate_paragraphs(dos_vistas) == []
+    # ⚠ y la segunda lectura del MISMO sujeto tampoco se compara contra la primera
+    con_lente = (f"## Vista — tau Cet\n\n{_LARGO}sí.\n\n"
+                 f"### Lente — cumulantes\n\n{_LARGO}sí.\n")
+    assert cfg.duplicate_paragraphs(con_lente) == []
+
+
+def test_duplicate_paragraphs_dentro_del_mismo_ambito_sigue_siendo_hallazgo():
+    """#349, la mitad que no se afloja: acotar el ámbito no puede apagar el caso de #227. Vale
+    dentro de una vista y, sin ninguna vista, sobre la nota entera — que es donde vivía el empalme
+    medido (dos copias con el párrafo introductorio de OTRA sección en el medio)."""
+    dentro = f"## Vista — tau Cet\n\n{_LARGO}sí.\n\notra cosa\n\n{_LARGO}no.\n"
+    assert [ln for ln, _t in cfg.duplicate_paragraphs(dentro)] == [7]
+    entre_secciones = f"## Síntesis\n\n{_LARGO}sí.\n\n## Huecos\n\nintro\n\n{_LARGO}no.\n"
+    assert [ln for ln, _t in cfg.duplicate_paragraphs(entre_secciones)] == [9]
+    # y un `###` FUERA de una vista es prosa normal: no abre ámbito, así que un duplicado que lo
+    # cruza se sigue viendo. Sin esta mitad, «`###` siempre abre ámbito» pasa los otros asserts.
+    fuera = f"{_LARGO}sí.\n\n### Un subtítulo\n\n{_LARGO}no.\n"
+    assert [ln for ln, _t in cfg.duplicate_paragraphs(fuera)] == [5]
+
+
+def test_duplicate_paragraphs_no_mira_dentro_de_un_fence():
+    """#227 — un bloque ```…``` repite texto a propósito (dos ejemplos de la misma forma) y no es
+    un empalme. Sin la guarda, el ejemplo duplicado de la doc entra a la categoría."""
+    fence = f"{_LARGO}sí.\n\n```\n\n{_LARGO}sí.\n\n```\n"
+    assert cfg.duplicate_paragraphs(fence) == []
+
+
 def test_extraction_texts_memoiza_por_boveda(toy_vault, monkeypatch):
     """#320 — misma asimetría que #275 arregló en `_source_readings`: el chequeo corre **por cita**,
     así que sin caché el mismo JSON de ~25 KB se lee, recorre y normaliza decenas de veces.
