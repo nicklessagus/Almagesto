@@ -30,8 +30,8 @@
 # nadie lo declare — que es lo que el ratchet vino a frenar. `test_la_suba_del_techo_esta_declarada`
 # lo vigila: el techo vigente tiene que ser el de la última entrada.
 medido_en: "2026-08-31"
-techo_lineas: 1640
-techo_bytes: 130500
+techo_lineas: 1652
+techo_bytes: 131000
 
 crecimientos:
   - fecha: "2026-08-31"
@@ -44,3 +44,14 @@ crecimientos:
       alcance), las dos pedidas por el usuario.
     techo_lineas: 1640
     techo_bytes: 130500
+  - fecha: "2026-08-31"
+    ancla: "#345"
+    motivo: >-
+      El alcance de las redes 1 y 4 es una REGLA ESCRITA de CLAUDE.md («toda función nueva de
+      `scripts/`»), así que meter `tools/` adentro se tiene que escribir ahí y no en tests/README.md:
+      el documento que define qué pasa antes de cerrar un issue no puede decir un alcance y la
+      herramienta correr otro. Se buscó primero el lugar dentro del techo vigente (1639 de 1640
+      líneas: no había). Lo que entra es la regla, su consecuencia y la exención declarada de
+      `tools/refresh_issues.py` con su ancla; la medición y el postmortem van a docs/mediciones.md.
+    techo_lineas: 1652
+    techo_bytes: 131000

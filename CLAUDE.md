@@ -1565,25 +1565,33 @@ rote). Los números los dan las funciones del test, no esta prosa.
 
 ## Al escribir código: las nueve redes (regla permanente)
 
-Toda función nueva de `scripts/` pasa por esto **antes de cerrar el issue**; la 6 rige también para
-los scripts de una sola operación. Detalle y ratchets en `tests/README.md`; el resumen operativo:
+Toda función nueva de `scripts/` **y de `tools/`** pasa por esto **antes de cerrar el issue**; la 6
+rige también para los scripts de una sola operación. ⛔ **Las redes 1 y 4 cubren `tools/` desde
+#345** (`mutar.ALCANCE`, que la red 4 **importa** en vez de repetir, para que no diverjan): acotarlas
+a `scripts/` dejaba sin red a **la herramienta que las ejecuta**, medido en 5 guardas de
+`tools/mutar.py` sin un test que las distinga. La **única exención es `tools/refresh_issues.py`** y
+se **declara con su motivo** en `mutar.EXENTOS_MODULO`, nunca por omisión del alcance: es un cliente
+HTTP contra la API de GitHub y la **regla de método 1** manda probarlo contra el servicio real, así
+que mutarlo sólo mediría el doble. Los tres estados de `scope_refusal` —fuera de alcance · exento ·
+sin `tests/test_<mod>.py`— piden acciones opuestas, y una selección **toda** exenta sale *no
+evaluado*, no verde. Detalle y ratchets en `tests/README.md`; el resumen operativo:
 
 1. **Mutación** — romper cada función y exigir que **algún test muera**: es lo único que distingue
    "el test pasa" de "el test **podría** fallar". Trabaja sobre una copia del repo. Tres modos:
-   - **Dirigida** (`python tools/mutar.py --dirigida scripts/<módulo>.py [--solo f,g]`) — **es un
+   - **Dirigida** (`python tools/mutar.py --dirigida <scripts|tools>/<mód>.py [--solo f,g]`) — **es un
      paso al escribir una función con guardas** (#204): un módulo, sólo su archivo de tests, ~0,44 s
      por mutación. Sobre-reporta sobrevivientes y nunca da falso limpio (la dirección segura); no
      toca el ratchet. **Rehúsa** si el módulo no tiene `tests/test_<módulo>.py` o nada mutable —
      cero mutaciones no es «murieron todas» (D-43).
-   - **Guardas** (`python tools/mutar.py --guardas scripts/<módulo>.py [--solo f,g]`, AUD-213) —
+   - **Guardas** (`python tools/mutar.py --guardas <scripts|tools>/<mód>.py [--solo f,g]`, AUD-213) —
      vaciar el cuerpo no mide las **condiciones**: muta cada `if` interno a `False` y, en un
      `and`/`or`, **cada cláusula por separado** (sólo eso revela la cláusula que ningún test
      ejercita). Mismo contrato que la dirigida; una condición constante se saltea (el hallazgo sería
      inventado). ⚠ Es el único modo que chequea la **baseline**: con el archivo de tests en rojo,
      toda guarda «muere» por el motivo equivocado (#202) → sale **no evaluado** (rc 2), no un verde.
    - **Barrido** (`--diff` / `--todo --ratchet`) — corre en **dos etapas** (#187: primero
-     `tests/test_<módulo>.py`, sólo los sobrevivientes pagan la suite). Medido: `--todo` = **11,3
-     min / 464 funciones**. **Cadencia: a pedido, y recomendado al cerrar una tanda**, con el árbol
+     `tests/test_<módulo>.py`, sólo los sobrevivientes pagan la suite). Medido 2026-08-31: `--todo`
+     = **32,5 min / 655 funciones** (#345). **Cadencia: a pedido, y recomendado al cerrar una tanda**, con el árbol
      **quieto** (#199: el barrido copia el repo al arrancar; si seguís editando, su resultado
      describe un árbol que ya no existe).
 2. **Schema compartido** — si N módulos prometen la misma forma, se prueba **una vez parametrizada**
@@ -1591,7 +1599,7 @@ los scripts de una sola operación. Detalle y ratchets en `tests/README.md`; el 
 3. **Doble vs real** — un doble de test no se escribe a ojo: o deriva de la función real, o hay un
    test de paridad (regla de método 2).
 4. **Nadie sin ejecutar** — `pytest tests/poblada/test_cobertura.py -m poblada` (~11 s): una función
-   que la suite nunca corre no está "mal probada", está **sin mirar**.
+   que la suite nunca corre no está "mal probada", está **sin mirar**. Mismo alcance que la 1.
 5. **La doc es ejecutable** — `tests/test_docs_ejecutables.py`: todo test, script y config que la
    documentación nombra existe, y todo comando de skill compila.
 6. **Corré dos veces y hasheá** — para **todo script que escriba en `vault/`**, versionado o de una

@@ -1,4 +1,5 @@
-"""Gate de mutación: por cada función de `scripts/`, romperla y exigir que **algún test muera**.
+"""Gate de mutación: por cada función de `scripts/` y `tools/`, romperla y exigir que **algún test
+muera**.
 
 POR QUÉ. Un test que pasa no dice nada por sí solo — puede estar pasando por construcción. En una
 sola sesión aparecieron cuatro casos: un `assert path.glob(...)` (un generador es siempre truthy),
@@ -26,6 +27,11 @@ corre al cerrar un issue, sobre los archivos que ese issue tocó.
     python tools/mutar.py --diff                          # lo que cambió vs HEAD
     python tools/mutar.py --todo --ratchet                # barrido completo + techo
 
+⛔ **ALCANCE (#345): `scripts/` Y `tools/`.** Hasta 1.162.0 la red se acotaba a `scripts/`, así que
+**la herramienta que ejecuta la red era la única que no la recibía** — medido: 5 guardas de este
+archivo sin un solo test que las distinga. La exención que queda es UNA y está declarada con su
+motivo en `EXENTOS_MODULO`, no por omisión del alcance.
+
 El **ratchet** (`tools/mutacion-ratchet.yaml`) guarda cuántas funciones sobreviven hoy: el número
 sólo puede bajar. Sin techo esto sería un rojo permanente, y un rojo permanente se deja de mirar.
 """
@@ -42,16 +48,47 @@ from typing import NamedTuple
 
 RAIZ = Path(__file__).resolve().parent.parent
 RATCHET = Path(__file__).resolve().parent / "mutacion-ratchet.yaml"
-# El directorio que la red de mutación cubre. `CLAUDE.md` la acota a «toda función nueva de
-# `scripts/`»: es una decisión DECLARADA, no un olvido, y por eso vive en una constante que
-# `scope_refusal` nombra al rehusar (#339) — lo que era defecto no era el alcance sino el mensaje,
-# que negaba un `tests/test_<mod>.py` existente en vez de decir «fuera de alcance».
-ALCANCE = "scripts"
+# Los directorios que la red de mutación cubre. Hasta #345 era sólo `scripts/`, y la consecuencia
+# medida es que **la herramienta que ejecuta la red era la única que no la recibía**: 5 guardas de
+# este mismo archivo no tenían un solo test que las distinguiera. `tools/` entra acá.
+ALCANCE = ("scripts", "tools")
+_ALCANCE_TXT = " / ".join(f"`{d}/`" for d in ALCANCE)
+# Módulos DENTRO del alcance que la red igual no mira, cada uno con su motivo. La exención se
+# **declara acá**, no queda por omisión del alcance (#345): «no lo mira nadie» y «no lo mira nadie
+# POR ESTO» piden acciones opuestas —la primera es un hueco que se cierra, la segunda una decisión
+# firmada— y sin este mapa las dos se leen igual desde afuera.
+EXENTOS_MODULO = {
+    "tools/refresh_issues.py":
+        "es un cliente HTTP contra la API de GitHub, y la REGLA DE MÉTODO 1 dice que un cliente de "
+        "red se prueba contra el SERVICIO REAL: un test con la red falseada valida que el cliente "
+        "funcione, no que el contrato se cumpla. Mutarlo sólo mediría si el doble está bien "
+        "escrito, que es el verde que esa regla existe para no comprar.",
+}
 # Funciones que NO se mutan, con motivo. Sin motivo no se agrega nada acá.
 EXENTAS = {
     "main",              # orquestación: su contrato son los sub-pasos, ya mutados por separado
     "__init__",
 }
+
+
+def module_exemption(module: Path) -> str | None:
+    """The declared motive for leaving `module` out of the net, or None when there is none.
+
+    Keyed by `<dir>/<file>.py`, which is how `EXENTOS_MODULO` reads and how the diff lists paths --
+    not by an absolute path, so a monkeypatched `RAIZ` (every test in this file) resolves the same
+    way the real tree does."""
+    return EXENTOS_MODULO.get(f"{module.parent.name}/{module.name}")
+
+
+def split_exempt(modules: list[Path]) -> tuple[list[Path], list[tuple[Path, str]]]:
+    """`(what the net actually mutates, [(module, its declared motive)])`.
+
+    It lives OUT of `main` on purpose. `EXENTAS` hides `main` from every mutation net, so a guard
+    written in there is invisible to the very tool it belongs to -- that is #331, which CLAUDE.md
+    names, and writing the new rule inside `main` would have reproduced it in the same commit that
+    brings `tools/` into the net."""
+    exentos = [(m, motivo) for m in modules if (motivo := module_exemption(m))]
+    return [m for m in modules if not module_exemption(m)], exentos
 
 
 def funciones(archivo: Path) -> list[tuple[str, int, int]]:
@@ -87,7 +124,7 @@ def _suite_verde(cwd: Path, subset: Path | None = None) -> bool:
 
 
 def test_file_for(module: Path) -> Path | None:
-    """`scripts/foo.py` -> `tests/test_foo.py`, or None when there is no 1:1 file.
+    """`<dir of ALCANCE>/foo.py` -> `tests/test_foo.py`, or None when there is no 1:1 file.
 
     Stage 1 of the two-stage sweep needs a file that is *part of the suite stage 2 would run*; that
     is what makes the split safe (a death there is a death). A wider guess -- every test file that
@@ -96,33 +133,42 @@ def test_file_for(module: Path) -> Path | None:
     `lib_config` is killed by tests all over the repo and `poblada/` is another tier: for those the
     stage is skipped, not approximated.
     """
-    if module.parent.name != ALCANCE:
+    if module.parent.name not in ALCANCE:
         return None
     candidato = RAIZ / "tests" / f"test_{module.stem}.py"
     return candidato if candidato.exists() else None
 
 
 def scope_refusal(module: Path, modo: str, escalar: str = "") -> str | None:
-    """Why `modo` cannot run on `module`, or None when it can — two states, opposite actions (#339).
+    """Why `modo` cannot run on `module`, or None when it can — THREE states, three actions (#345).
 
-    **Out of scope**: the module does not live in `scripts/`. `CLAUDE.md` scopes the mutation net to
-    *«toda función nueva de `scripts/`»*, so this is a declared decision and there is nothing to
-    write — auditing a module of `tools/` takes a driver of its own. Reporting it as *«no hay
-    tests/test_<stem>.py»* **denied a file that is there**: pointing `--dirigida` at `tools/mutar.py`
-    said exactly that, with `tests/test_mutar.py` in the tree, so the tool that runs the net gave a
-    false reason for not receiving it.
+    **Out of scope**: the module lives outside `ALCANCE`. `CLAUDE.md` scopes the mutation net to
+    `scripts/` and `tools/`, so this is a declared decision and there is nothing to write here.
+    Reporting it as *«no hay tests/test_<stem>.py»* **denied a file that is there** (#339), and the
+    two ask for opposite things.
 
-    **No test file of its own**: it IS in scope and `tests/test_<stem>.py` is missing. That one is a
-    real gap, and the answer is to write the file (or, for `--dirigida`, pay the full sweep).
+    **Exempt module**: it IS in `ALCANCE` and `EXENTOS_MODULO` names it, with the motive. That
+    motive is the whole point of the state: without it, a module nobody mutates reads exactly like a
+    module nobody got around to mutating. The action is *«read the motive and decide if it still
+    holds»*, never *«write the missing test file»* — for `tools/refresh_issues.py` writing it is
+    precisely what method rule 1 forbids.
 
-    `escalar` is the mode's own way out, appended to the second message only; the first has none by
-    construction.
+    **No test file of its own**: in scope, not exempt, and `tests/test_<stem>.py` is missing. That
+    one is a real gap, and the answer is to write the file (or, for `--dirigida`, pay the full
+    sweep).
+
+    `escalar` is the mode's own way out, appended to the last message only; the other two have none
+    by construction.
     """
-    if module.parent.name != ALCANCE:
+    if module.parent.name not in ALCANCE:
         return (f"⛔ fuera de alcance: `{module.parent.name}/` no entra en la red de mutación, que "
-                f"CLAUDE.md acota a `{ALCANCE}/` — {module.name} no se muta por acá, y para "
-                f"auditarlo hace falta un driver propio. NO es que falte tests/test_"
-                f"{module.stem}.py.")
+                f"CLAUDE.md acota a {_ALCANCE_TXT} — {module.name} no se muta por acá. NO es que "
+                f"falte tests/test_{module.stem}.py.")
+    if (motivo := module_exemption(module)):
+        return (f"⛔ EXENTO por decisión declarada (`EXENTOS_MODULO` de tools/mutar.py): "
+                f"{module.parent.name}/{module.name} no entra en la red — {motivo}\n"
+                f"   NO es que falte tests/test_{module.stem}.py: escribirlo con la red falseada "
+                f"es lo que la exención existe para evitar.")
     if test_file_for(module) is None:
         return (f"⛔ no hay tests/test_{module.stem}.py: sin etapa barata no hay modo {modo}."
                 + escalar)
@@ -210,6 +256,10 @@ def archivos_del_diff() -> list[Path]:
     el issue»— quedaba afuera y el gate salía en verde **sin haberlo mirado**. Un chequeo que no
     puede fallar sobre el código que vino a cubrir es peor que no tenerlo: se lee como cobertura.
     `--others --exclude-standard` respeta `.gitignore`, así que el scratch no entra.
+
+    Devuelve todo lo que está en `ALCANCE`, **exentos incluidos**: quién los filtra y los NOMBRA con
+    su motivo es `main` (#345), en un solo lugar y con la misma salida para `--diff` y `--todo`. Un
+    filtro silencioso acá volvería a hacer indistinguible «no se mutó» de «no se mutó por esto».
     """
     #  @inv INV-101
     salida = []
@@ -218,7 +268,8 @@ def archivos_del_diff() -> list[Path]:
         salida += r.stdout.split()
     vistos, archivos = set(), []
     for f in salida:                                  # `git add` de un archivo nuevo lo pone en los dos
-        if not (f.startswith("scripts/") and f.endswith(".py")) or f in vistos:
+        en_alcance = any(f.startswith(f"{d}/") for d in ALCANCE)
+        if not (en_alcance and f.endswith(".py")) or f in vistos:
             continue
         vistos.add(f)
         # AUD-191 / INV-101 — `git diff --name-only` lista también lo **borrado**, y sobre un
@@ -691,9 +742,9 @@ def _trazabilidad(args) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("archivos", nargs="*", help="archivos de scripts/ a mutar")
+    ap.add_argument("archivos", nargs="*", help="archivos de scripts/ o tools/ a mutar")
     ap.add_argument("--diff", action="store_true", help="los que cambiaron vs HEAD")
-    ap.add_argument("--todo", action="store_true", help="todo scripts/")
+    ap.add_argument("--todo", action="store_true", help="todo scripts/ + tools/")
     ap.add_argument("--ratchet", action="store_true", help="comparar contra el techo y salir 1 si sube")
     ap.add_argument("--dirigida", action="store_true",
                     help="modo barato: muta UN módulo y corre SÓLO su archivo de tests (no es el gate)")
@@ -718,14 +769,27 @@ def main() -> int:
         return _directed(args)
 
     if args.todo:
-        objetivo = sorted((RAIZ / "scripts").glob("*.py"))
+        objetivo = sorted(p for d in ALCANCE for p in (RAIZ / d).glob("*.py"))
     elif args.diff:
         objetivo = archivos_del_diff()
     else:
         objetivo = [Path(a) if Path(a).is_absolute() else RAIZ / a for a in args.archivos]
     if not objetivo:
-        print("nada que mutar (¿`--diff` sin cambios en scripts/?)")
+        print(f"nada que mutar (¿`--diff` sin cambios en {_ALCANCE_TXT}?)")
         return 0
+    # #345 — el exento se NOMBRA con su motivo antes de sacarlo. Filtrarlo en silencio dejaría al
+    # barrido publicando una población de la que faltan módulos sin decir cuáles ni por qué, que es
+    # la exención por omisión que este mapa vino a reemplazar.
+    objetivo, exentos = split_exempt(objetivo)
+    for f, motivo in exentos:
+        print(f"· {f.parent.name}/{f.name}: EXENTO de la red por decisión declarada — {motivo}")
+    if not objetivo:
+        # ⛔ D-43 — todo lo seleccionado era exento: no se midió NADA, y un 0 sobre cero mutantes
+        # comparado contra el techo del ratchet sería el falso limpio adentro del detector de falsos
+        # limpios. La exención explica el cero; no lo convierte en un verde.
+        print("⛔ no evaluado: todo lo seleccionado está EXENTO, así que no se mutó ni una función "
+              "— eso NO es un verde.")
+        return 2
 
     tmp = Path(tempfile.mkdtemp(prefix="almagesto-mutacion-"))
     try:

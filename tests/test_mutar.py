@@ -96,11 +96,22 @@ def test_file_for_devuelve_none_sin_archivo_1_a_1(repo_con_tests: Path, monkeypa
     assert mutar.test_file_for(repo_con_tests / "scripts" / "huerfano.py") is None
 
 
-def test_file_for_ignora_lo_que_no_es_de_scripts(repo_con_tests: Path, monkeypatch):
+def test_file_for_ignora_lo_que_esta_fuera_del_ALCANCE(repo_con_tests: Path, monkeypatch):
     monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
-    (repo_con_tests / "tools").mkdir()
+    (repo_con_tests / "docs").mkdir()
+    (repo_con_tests / "docs" / "viejo.py").write_text("def f(): return 1\n", encoding="utf-8")
+    assert mutar.test_file_for(repo_con_tests / "docs" / "viejo.py") is None
+
+
+def test_file_for_SI_resuelve_un_modulo_de_tools(repo_con_tests: Path, monkeypatch):
+    """#345 — `tools/` entró al alcance, así que la etapa 1 tiene que encontrarle su archivo de
+    tests igual que a uno de `scripts/`. Sin esto un módulo de `tools/` pagaría la suite entera por
+    mutante (el fallback de «sin archivo 1:1»), que es hasta 18× más caro."""
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    (repo_con_tests / "tools").mkdir(exist_ok=True)
     (repo_con_tests / "tools" / "viejo.py").write_text("def f(): return 1\n", encoding="utf-8")
-    assert mutar.test_file_for(repo_con_tests / "tools" / "viejo.py") is None
+    assert mutar.test_file_for(repo_con_tests / "tools" / "viejo.py") == (
+        repo_con_tests / "tests" / "test_viejo.py")
 
 
 def _grabando(monkeypatch, veredictos: list[bool]) -> list[str]:
@@ -441,16 +452,21 @@ def test_el_elif_es_una_guarda_y_el_if_de_una_comprension_no(tmp_path: Path):
     assert [g.label for g in mutar.guards(m)] == ["if@L2", "if@L4"]
 
 
-def test_toda_guarda_de_scripts_produce_codigo_QUE_PARSEA():
+def test_toda_guarda_del_ALCANCE_produce_codigo_QUE_PARSEA():
     """La red de la red. `col_offset` es un offset de **bytes UTF-8**, no de caracteres, y este
     repo tiene prosa acentuada en casi toda línea: cortar el `str` en vez de los bytes parte la
     condición al medio y el mutante no compila — con lo cual "muere" por SyntaxError, o sea por el
     motivo equivocado (#202), y el modo devuelve 0 sobrevivientes sobre un módulo que nadie midió.
-    """
+
+    Barre **todo `ALCANCE`** (#345), o sea también `tools/`: el módulo con más prosa acentuada por
+    línea de código de este repo es justamente `tools/mutar.py`, y era el único que este chequeo no
+    miraba."""
     import ast as _ast
-    scripts = sorted((Path(__file__).resolve().parents[1] / "scripts").glob("*.py"))
+    raiz = Path(__file__).resolve().parents[1]
+    modulos = sorted(m for d in mutar.ALCANCE for m in (raiz / d).glob("*.py"))
+    assert any(m.parent.name == "tools" for m in modulos), "el alcance dejó de incluir tools/"
     total = 0
-    for m in scripts:
+    for m in modulos:
         src = m.read_text(encoding="utf-8")
         for g in mutar.guards(m):
             total += 1
@@ -741,12 +757,17 @@ def test_report_states_revienta_si_un_estado_con_nombres_no_tiene_texto():
         mutar.report_states({"a": ["x"]}, {})
 
 
-# ── #339 · `tools/` está FUERA DE ALCANCE, y decirlo no es negar un archivo que existe ──────────
+# ── #345 · `tools/` ENTRÓ al alcance, y la única exención se DECLARA con su motivo ──────────────
+#
+# #339 arregló el MENSAJE («fuera de alcance», no «no hay tests/test_mutar.py») y dejó a la vista la
+# consecuencia real: la herramienta que ejecuta la red era la única que no la recibía. Medido: 5
+# guardas de `tools/mutar.py` sin un solo test que las distinga. Los tres estados de `scope_refusal`
+# piden tres acciones distintas y ninguna sirve para otro.
 
 
 @pytest.fixture
 def repo_con_tools(repo_con_tests: Path, monkeypatch) -> Path:
-    """`tools/mutar.py` **con** su `tests/test_mutar.py`: el caso exacto que el mensaje negaba."""
+    """`tools/mutar.py` **con** su `tests/test_mutar.py`: el módulo que ahora sí entra."""
     monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
     (repo_con_tests / "tools").mkdir(exist_ok=True)
     (repo_con_tests / "tools" / "mutar.py").write_text(_TRES_ESTADOS, encoding="utf-8")
@@ -756,28 +777,98 @@ def repo_con_tools(repo_con_tests: Path, monkeypatch) -> Path:
 
 
 @pytest.mark.parametrize("modo", ["_directed", "_guards"])
-def test_apuntar_a_tools_dice_fuera_de_alcance_y_no_niega_el_test_que_existe(repo_con_tools, modo,
-                                                                            monkeypatch, capsys):
-    """El alcance (`CLAUDE.md`: «toda función nueva de `scripts/`») es una decisión DECLARADA y se
-    queda. El defecto era el mensaje: apuntar cualquiera de los dos modos a `tools/mutar.py`
-    contestaba «⛔ no hay tests/test_mutar.py» **con ese archivo en el árbol**, o sea que la
-    herramienta que corre la red daba un motivo falso para no recibirla."""
+def test_apuntar_a_tools_YA_NO_rehusa_por_alcance(repo_con_tools, modo, monkeypatch, capsys):
+    """#345 — el módulo de `tools/` con su archivo de tests **se muta**. Ése es el punto del issue:
+    que la herramienta que corre la red la reciba. Antes los dos modos rehusaban acá."""
+    llamado = []
+    monkeypatch.setattr(mutar, "_copia_del_repo", lambda d: (llamado.append(d), d)[1])
+    monkeypatch.setattr(mutar, "_suite_verde", lambda cwd, subset=None: True)
+    monkeypatch.setattr(mutar, "mutar_archivo", lambda *a, **k: [])
+    monkeypatch.setattr(mutar, "mutate_guards", lambda *a, **k: [])
+
+    assert getattr(mutar, modo)(_args(["tools/mutar.py"])) == 0
+    assert llamado, "rehusó sin mutar: `tools/` sigue afuera de la red"
+    assert "fuera de alcance" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("modo", ["_directed", "_guards"])
+def test_lo_que_de_veras_esta_fuera_del_alcance_sigue_rehusando(repo_con_tools, modo, monkeypatch,
+                                                                capsys):
+    """El estado no desapareció: se corrió el borde. Un `.py` de `docs/` no entra, y el mensaje
+    sigue sin poder negar un `tests/test_<mod>.py` que existe."""
+    (repo_con_tools / "docs").mkdir(exist_ok=True)
+    (repo_con_tools / "docs" / "mutar.py").write_text(_TRES_ESTADOS, encoding="utf-8")
     monkeypatch.setattr(mutar, "_copia_del_repo",
                         lambda d: pytest.fail("mutó algo fuera de alcance"))
-    assert getattr(mutar, modo)(_args(["tools/mutar.py"])) == 2
+    assert getattr(mutar, modo)(_args(["docs/mutar.py"])) == 2
     out = capsys.readouterr().out
-    assert "fuera de alcance" in out and "tools/" in out
+    assert "fuera de alcance" in out and "docs/" in out
     assert "⛔ no hay tests/test_mutar.py" not in out, "niega un archivo que existe"
 
 
-def test_el_modulo_de_scripts_sin_test_propio_sigue_siendo_el_OTRO_estado(repo_con_tools,
-                                                                         monkeypatch, capsys):
-    """El estado que no se puede tragar: dentro del alcance y sin `tests/test_<mod>.py` sí es un
-    hueco real, y su acción —escribir el archivo— es la opuesta a la de «fuera de alcance»."""
+@pytest.mark.parametrize("modo", ["_directed", "_guards"])
+def test_el_modulo_EXENTO_se_declara_con_SU_MOTIVO_y_no_como_un_hueco(repo_con_tools, modo,
+                                                                      monkeypatch, capsys):
+    """⛔ La exención de `tools/refresh_issues.py` se DECLARA, no queda por omisión del alcance.
+
+    Su motivo es la **regla de método 1**: son 59 líneas de cliente HTTP contra la API de GitHub, y
+    un cliente de red se prueba contra el SERVICIO REAL — un test con la red falseada validaría que
+    el cliente funciona, no que el contrato se cumpla. Sin este estado propio, «no lo muta nadie» y
+    «no lo muta nadie POR ESTO» se leen igual desde afuera, y el remedio que la herramienta
+    sugeriría (escribir `tests/test_refresh_issues.py`) sería justo lo que la regla prohíbe."""
+    (repo_con_tools / "tools" / "refresh_issues.py").write_text(_TRES_ESTADOS, encoding="utf-8")
+    (repo_con_tools / "tests" / "test_refresh_issues.py").write_text("def test_z(): assert True\n",
+                                                                     encoding="utf-8")
+    monkeypatch.setattr(mutar, "_copia_del_repo",
+                        lambda d: pytest.fail("mutó un módulo EXENTO"))
+
+    assert getattr(mutar, modo)(_args(["tools/refresh_issues.py"])) == 2
+    out = capsys.readouterr().out
+    assert "EXENTO" in out
+    assert "REGLA DE MÉTODO 1" in out, "la exención salió sin su motivo: es la exención por omisión"
+    assert "fuera de alcance" not in out, "no es alcance: el módulo SÍ está en tools/"
+    assert "⛔ no hay tests/test_refresh_issues.py" not in out
+
+
+def test_el_modulo_en_alcance_sin_test_propio_sigue_siendo_el_OTRO_estado(repo_con_tools,
+                                                                          monkeypatch, capsys):
+    """El estado que no se puede tragar: dentro del alcance, no exento y sin `tests/test_<mod>.py`
+    sí es un hueco real, y su acción —escribir el archivo— es la opuesta a las otras dos."""
     (repo_con_tools / "scripts" / "huerfano.py").write_text("def z(): return 1\n", encoding="utf-8")
     assert mutar._guards(_args(["scripts/huerfano.py"])) == 2
     out = capsys.readouterr().out
-    assert "no hay tests/test_huerfano.py" in out and "fuera de alcance" not in out
+    assert "no hay tests/test_huerfano.py" in out
+    assert "fuera de alcance" not in out and "EXENTO" not in out
+
+
+def test_el_barrido_NOMBRA_al_exento_con_su_motivo_en_vez_de_saltearlo(repo_con_tools, monkeypatch,
+                                                                       capsys):
+    """`--todo`/`--diff` filtran al exento, pero lo IMPRIMEN antes con su motivo: un filtro
+    silencioso publicaría una población a la que le faltan módulos sin decir cuáles ni por qué —
+    que es la exención por omisión que este mapa vino a reemplazar."""
+    (repo_con_tools / "tools" / "refresh_issues.py").write_text(_TRES_ESTADOS, encoding="utf-8")
+    monkeypatch.setattr(mutar, "_copia_del_repo", lambda d: repo_con_tools)
+    monkeypatch.setattr(mutar, "_suite_verde", lambda cwd, subset=None: True)
+    mutados = []
+    monkeypatch.setattr(mutar, "mutar_archivo",
+                        lambda f, *a, **k: (mutados.append(f.name), [])[1])
+
+    assert _args_main(monkeypatch, ["--todo"]) == 0
+    out = capsys.readouterr().out
+    assert "refresh_issues.py" not in mutados, "mutó el módulo exento"
+    assert "EXENTO" in out and "REGLA DE MÉTODO 1" in out
+    assert "mutar.py" in mutados, "el resto de tools/ tiene que entrar igual"
+
+
+def test_una_seleccion_TODA_exenta_no_es_un_verde(repo_con_tools, monkeypatch, capsys):
+    """D-43 adentro del detector de falsos limpios: si lo único seleccionado está exento no se mutó
+    ni una función, y comparar ese 0 contra el techo del ratchet sería el verde que nadie midió."""
+    (repo_con_tools / "tools" / "refresh_issues.py").write_text(_TRES_ESTADOS, encoding="utf-8")
+    monkeypatch.setattr(mutar, "_copia_del_repo",
+                        lambda d: pytest.fail("copió el repo para mutar cero funciones"))
+
+    assert _args_main(monkeypatch, ["tools/refresh_issues.py", "--ratchet"]) == 2
+    assert "no evaluado" in capsys.readouterr().out
 
 
 # ── #339 · `--trazabilidad --solo`: tres estados, no una disyunción ─────────────────────────────
@@ -823,3 +914,315 @@ def test_contract_rows_lee_el_contrato_real_y_separa_los_retirados():
     assert "INV-01" in filas and "INV-01" not in retirados
     assert retirados, ("el contrato tiene al menos un invariante retirado; sin ninguno, el estado "
                        "`retirado` de `unmarked_reasons` nunca se ejercita contra datos reales")
+
+
+# ── #345 · las 5 guardas que la red no miraba, porque la red no se miraba a sí misma ────────────
+#
+# `tools/mutar.py` audita a todo `scripts/` y hasta 1.162.0 nadie lo auditaba a él: medido con un
+# driver aparte, 5 de sus guardas no tenían un solo test que las distinguiera —`_directed::if
+# sobreviven` y las cuatro de `_trazabilidad`—. Son justo las que deciden el VEREDICTO de cada modo,
+# o sea la última línea de la que depende que un rojo salga rojo.
+
+
+def test_dirigida_con_sobrevivientes_sale_1_y_los_LISTA(repo_con_tests: Path, monkeypatch, capsys):
+    """`_directed::if sobreviven` — el caso que el modo existe para reportar. Sin la guarda,
+    `--dirigida` cierra con «murieron todas ✅» y devuelve 0 **teniendo sobrevivientes**: el falso
+    limpio adentro del detector de falsos limpios. `--guardas` ya tenía su gemelo (#335); éste no.
+    """
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    monkeypatch.setattr(mutar, "_copia_del_repo", lambda destino: destino)
+    monkeypatch.setattr(mutar, "mutar_archivo", lambda *a, **k: ["f"])
+
+    rc = mutar._directed(_args(["scripts/viejo.py"]))
+
+    salida = capsys.readouterr().out
+    assert rc == 1
+    assert "1 sin test propio que las mate: f" in salida
+    assert "murieron todas" not in salida and "✅" not in salida
+
+
+def test_dirigida_sin_sobrevivientes_sale_0_y_lo_dice(repo_con_tests: Path, monkeypatch, capsys):
+    """La otra rama de la misma guarda: con la lista vacía el veredicto es 0 y se nombra. Sin este
+    par, `if sobreviven` se puede neutralizar sin que nada se ponga rojo."""
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    monkeypatch.setattr(mutar, "_copia_del_repo", lambda destino: destino)
+    monkeypatch.setattr(mutar, "mutar_archivo", lambda *a, **k: [])
+
+    rc = mutar._directed(_args(["scripts/viejo.py"]))
+
+    assert rc == 0
+    assert "murieron todas en su propio test" in capsys.readouterr().out
+
+
+@pytest.fixture
+def repo_traza(repo_con_tests: Path, monkeypatch) -> Path:
+    """Un repo de juguete para `--trazabilidad`: la copia de trabajo ES el repo (nada que copiar) y
+    el par a auditar se inyecta, así que lo que se ejerce es el veredicto, no el contrato."""
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    (repo_con_tests / "scripts" / "conclase.py").write_text(
+        "class C:\n    pass\n\n\ndef f():\n    return 1\n", encoding="utf-8")
+    monkeypatch.setattr(mutar, "_copia_del_repo", lambda destino: repo_con_tests)
+    return repo_con_tests
+
+
+def _par(repo: Path, modulo: str, simbolo: str):
+    return [("INV-01", repo / "scripts" / modulo, simbolo, ["tests/test_viejo.py::test_x"])]
+
+
+def test_trazabilidad_sin_UN_SOLO_PAR_no_es_un_verde(monkeypatch, capsys):
+    """`_trazabilidad::if not pares` — D-43 en la red nº 9. Sin la guarda el modo recorre cero
+    filas, imprime «0 fila(s) auditadas · 0 con atribución FALSA» y devuelve **0**: un mapa que
+    nadie midió, publicado como mapa limpio, en la herramienta cuyo trabajo es que el mapa no
+    atribuya de más."""
+    monkeypatch.setattr(mutar, "_traceability_pairs", lambda: [])
+    monkeypatch.setattr(mutar, "_copia_del_repo",
+                        lambda d: pytest.fail("copió el repo para auditar cero filas"))
+
+    assert mutar._trazabilidad(_args([], solo="")) == 2
+    assert "no evaluado" in capsys.readouterr().out
+
+
+def test_trazabilidad_declara_NO_EVALUADO_el_simbolo_que_no_es_funcion(repo_traza, monkeypatch,
+                                                                       capsys):
+    """`_trazabilidad::if fn is None` — una marca `@inv` puede caer sobre una clase, una constante o
+    una función EXENTA, y ahí no hay cuerpo que vaciar. La guarda lo declara *no evaluado* y sigue;
+    sin ella el desempaquetado revienta y el modo se **cae** en vez de reportar (mismo modo de falla
+    que AUD-191 en `--diff`)."""
+    monkeypatch.setattr(mutar, "_traceability_pairs", lambda: _par(repo_traza, "conclase.py", "C"))
+    monkeypatch.setattr(mutar, "_suite_verde",
+                        lambda cwd, subset=None: pytest.fail("corrió la suite sobre algo no mutable"))
+
+    assert mutar._trazabilidad(_args([], solo="")) == 0
+    salida = capsys.readouterr().out
+    assert "no es una función mutable" in salida and "no evaluado" in salida
+
+
+def test_trazabilidad_CUENTA_la_atribucion_falsa_y_sale_1(repo_traza, monkeypatch, capsys):
+    """`_trazabilidad::if vivo` — el test marcado pasa con la implementación marcada VACÍA, o sea
+    que esa fila del mapa afirma una cobertura que no existe. Sin la guarda la lista queda vacía, el
+    cierre publica «0 con atribución FALSA» y el modo devuelve 0: el mapa que atribuye mal saliendo
+    en verde, que es exactamente lo que la regla de método 4 llama peor que un mapa vacío."""
+    monkeypatch.setattr(mutar, "_traceability_pairs", lambda: _par(repo_traza, "viejo.py", "f"))
+    monkeypatch.setattr(mutar, "_suite_verde", lambda cwd, subset=None: True)
+
+    rc = mutar._trazabilidad(_args([], solo=""))
+
+    salida = capsys.readouterr().out
+    assert rc == 1
+    assert "1 con atribución FALSA" in salida
+    assert "- INV-01 (viejo.py::f)" in salida
+
+
+def test_trazabilidad_dice_QUE_HACER_con_la_atribucion_falsa(repo_traza, monkeypatch, capsys):
+    """`_trazabilidad::if falsas` — el bloque de remedio. Neutralizarlo deja el rc y el conteo
+    intactos, así que ningún otro test lo distingue: se pierde SÓLO la salida accionable, y un
+    hallazgo sin acción es el que se archiva. Dice las dos ramas (mover la marca o marcar el test
+    que sí cubre) y la que está prohibida (borrar la fila)."""
+    monkeypatch.setattr(mutar, "_traceability_pairs", lambda: _par(repo_traza, "viejo.py", "f"))
+    monkeypatch.setattr(mutar, "_suite_verde", lambda cwd, subset=None: True)
+
+    mutar._trazabilidad(_args([], solo=""))
+
+    salida = capsys.readouterr().out
+    assert "Mover la marca o marcar el test" in salida
+    assert "no borrar la fila" in salida
+
+
+def test_trazabilidad_sin_atribuciones_falsas_sale_0_y_NO_imprime_el_remedio(repo_traza,
+                                                                             monkeypatch, capsys):
+    """La otra rama de las dos guardas anteriores: si el test marcado MUERE con la implementación
+    vacía la atribución es buena, el rc es 0 y el remedio no se imprime — un remedio que sale
+    siempre no se lee nunca."""
+    monkeypatch.setattr(mutar, "_traceability_pairs", lambda: _par(repo_traza, "viejo.py", "f"))
+    monkeypatch.setattr(mutar, "_suite_verde", lambda cwd, subset=None: False)
+
+    rc = mutar._trazabilidad(_args([], solo=""))
+
+    salida = capsys.readouterr().out
+    assert rc == 0
+    assert "0 con atribución FALSA" in salida
+    assert "no borrar la fila" not in salida
+
+
+def test_split_exempt_parte_la_poblacion_y_arrastra_el_MOTIVO(tmp_path: Path):
+    """Vive fuera de `main` a propósito: `EXENTAS` esconde a `main` de TODA red de mutación, así que
+    escribir la regla nueva ahí adentro habría reproducido #331 en el mismo commit que mete `tools/`
+    en la red. Y devuelve el motivo, no un bool: lo que hace que la exención no sea por omisión es
+    que el barrido pueda IMPRIMIRLO."""
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "scripts").mkdir()
+    exento = tmp_path / "tools" / "refresh_issues.py"
+    normal = tmp_path / "scripts" / "lint.py"
+
+    a_mutar, exentos = mutar.split_exempt([normal, exento])
+
+    assert a_mutar == [normal]
+    assert [m for m, _ in exentos] == [exento]
+    assert "REGLA DE MÉTODO 1" in exentos[0][1], "la exención salió sin motivo"
+
+
+def test_copia_del_repo_deja_afuera_lo_pesado_y_CONSERVA_el_vault(tmp_path: Path, monkeypatch):
+    """`_copia_del_repo` contra el disco de verdad, en **tier 0**.
+
+    La única otra prueba que la ejerce es `poblada` (tier 1), así que la red nº 4 —que corre la
+    suite tier 0 bajo `coverage`— la contaba **sin ejecutar**: apareció el día que `tools/` entró al
+    alcance (#345), y es el hermano barato de la mutación (una función que nadie corre siempre
+    sobrevive). Lo que se chequea es el contrato que hace usable la copia: `.git`, `build/` y los
+    PDF no viajan —pesan y la suite no los lee— y el resto de `vault/` sí, porque sí los lee."""
+    origen = tmp_path / "repo"
+    (origen / "scripts").mkdir(parents=True)
+    (origen / "scripts" / "x.py").write_text("def f(): return 1\n", encoding="utf-8")
+    (origen / ".git").mkdir()
+    (origen / ".git" / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+    (origen / "build").mkdir()
+    (origen / "build" / "scratch.json").write_text("{}", encoding="utf-8")
+    (origen / "vault" / "pdfs" / "s").mkdir(parents=True)
+    (origen / "vault" / "pdfs" / "s" / "a.pdf").write_bytes(b"%PDF-1.4")
+    (origen / "vault" / "config").mkdir(parents=True)
+    (origen / "vault" / "config" / "objective.yaml").write_text("name: x\n", encoding="utf-8")
+    monkeypatch.setattr(mutar, "RAIZ", origen)
+
+    copia = mutar._copia_del_repo(tmp_path / "copia")
+
+    assert copia == tmp_path / "copia", "no devolvió la raíz de la copia"
+    assert (copia / "scripts" / "x.py").exists()
+    assert (copia / "vault" / "config" / "objective.yaml").exists(), "sin vault la suite no corre"
+    assert not (copia / ".git").exists() and not (copia / "build").exists()
+    assert not (copia / "vault" / "pdfs").exists(), "los PDF pesan y ningún test tier 0 los lee"
+
+
+# ── #345 · las OTRAS guardas que la primera corrida del modo sobre sí mismo encontró ────────────
+#
+# El issue nombraba 5. Con `tools/` adentro, `python tools/mutar.py --guardas tools/mutar.py` barre
+# las **70** y midió **9** sin test que las distinga: las 5 del issue más estas cuatro familias, que
+# nadie había contado. Es la red haciendo sobre sí misma exactamente lo que hace sobre `scripts/`.
+
+
+_CON_DOCSTRINGS = '''\
+def con_doc():
+    """doc"""
+    return 1
+
+
+def solo_doc():
+    """no tiene cuerpo"""
+
+
+def arranca_con_un_numero():
+    42
+    return 2
+'''
+
+
+def test_funciones_salta_el_docstring_SOLO_cuando_lo_es_y_hay_cuerpo(tmp_path: Path):
+    """`funciones::if@L102` y sus tres cláusulas. La guarda decide **desde qué línea** se vacía el
+    cuerpo, y cada cláusula ataja un caso distinto que ningún test ejercía:
+
+    · la guarda entera → el docstring se mutaría junto con el código (se documenta lo contrario);
+    · `isinstance(cuerpo.value, ast.Constant)` → una función que arranca con una llamada explota
+      buscándole `.value.value` a un `Call`;
+    · `isinstance(cuerpo.value.value, str)` → una que arranca con `42` perdería esa línea;
+    · `len(n.body) > 1` → una que es SÓLO docstring indexa `body[1]` y revienta.
+    """
+    m = tmp_path / "m.py"
+    m.write_text(_CON_DOCSTRINGS, encoding="utf-8")
+
+    spans = {n: (ini, fin) for n, ini, fin in mutar.funciones(m)}
+
+    assert spans["con_doc"] == (3, 3), "el docstring se muta junto con el cuerpo"
+    assert spans["solo_doc"] == (7, 7), "una función que es sólo docstring no tiene body[1]"
+    assert spans["arranca_con_un_numero"] == (11, 12), "se comió el primer statement"
+
+
+def test_funciones_no_confunde_una_LLAMADA_inicial_con_un_docstring(tmp_path: Path):
+    """La cláusula `isinstance(cuerpo.value, ast.Constant)`: sin ella, `cuerpo.value.value` sobre un
+    `ast.Call` es un `AttributeError` y el recolector se **cae** en vez de reportar."""
+    m = tmp_path / "m.py"
+    m.write_text("def f(x):\n    print(x)\n    return 1\n", encoding="utf-8")
+    assert [n for n, _, _ in mutar.funciones(m)] == ["f"]
+    assert mutar.funciones(m)[0][1] == 2, "arrancó después del `print`"
+
+
+def test_la_etiqueta_de_ETAPA_sale_solo_para_el_sobreviviente_de_la_etapa_1(repo_con_tests: Path,
+                                                                            monkeypatch, tmp_path,
+                                                                            capsys):
+    """`mutar_archivo::if@L229` — el texto dice lo que PASÓ. Sin la guarda no sale nunca y el
+    operador pierde la única señal de que ese mutante pagó la suite entera."""
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    _grabando(monkeypatch, [True, False])          # sobrevive a su test, muere en la suite
+    copia = tmp_path / "copia"; (copia / "scripts").mkdir(parents=True)
+    (copia / "scripts" / "viejo.py").write_text("x", encoding="utf-8")
+
+    mutar.mutar_archivo(repo_con_tests / "scripts" / "viejo.py", copia)
+
+    assert "se pagó la suite" in capsys.readouterr().out
+
+
+def test_la_etiqueta_de_ETAPA_no_sale_para_el_que_MURIO_en_la_etapa_1(repo_con_tests: Path,
+                                                                      monkeypatch, tmp_path,
+                                                                      capsys):
+    """La cláusula `vivo` de esa misma guarda. Neutralizarla anuncia «sobrevivió a su propio test»
+    sobre un mutante que murió ahí — una afirmación falsa sobre lo que se corrió."""
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    _grabando(monkeypatch, [False])
+    copia = tmp_path / "copia"; (copia / "scripts").mkdir(parents=True)
+    (copia / "scripts" / "viejo.py").write_text("x", encoding="utf-8")
+
+    mutar.mutar_archivo(repo_con_tests / "scripts" / "viejo.py", copia)
+
+    assert "sobrevivió a su propio test" not in capsys.readouterr().out
+
+
+def test_la_etiqueta_de_ETAPA_no_sale_cuando_NO_HUBO_etapa_1(repo_con_tests: Path, monkeypatch,
+                                                              tmp_path, capsys):
+    """La cláusula `subset`. Sin archivo 1:1 la etapa 1 no existe, así que anunciar que el mutante
+    «sobrevivió a su propio test» nombra una corrida que nunca ocurrió — el mismo defecto que la
+    nota de #187 documenta para `escalate=False`, en el otro eje."""
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    _grabando(monkeypatch, [True])
+    copia = tmp_path / "copia"; (copia / "scripts").mkdir(parents=True)
+    (copia / "scripts" / "viejo.py").write_text("x", encoding="utf-8")
+
+    mutar.mutar_archivo(repo_con_tests / "scripts" / "viejo.py", copia, two_stage=False,
+                        escalate=False)
+
+    assert "sobrevivió a su propio test" not in capsys.readouterr().out
+
+
+def test_verbose_False_no_imprime_NADA_por_mutante(repo_con_tests: Path, monkeypatch, tmp_path,
+                                                    capsys):
+    """`mutar_archivo::if@L244`. La línea por mutante **es** la salida del barrido; `verbose=False`
+    existe para los tests, y que las dos ramas se distingan es lo que impide que una se pierda."""
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    _grabando(monkeypatch, [True])
+    copia = tmp_path / "copia"; (copia / "scripts").mkdir(parents=True)
+    (copia / "scripts" / "viejo.py").write_text("x", encoding="utf-8")
+
+    mutar.mutar_archivo(repo_con_tests / "scripts" / "viejo.py", copia, verbose=False,
+                        escalate=False)
+
+    assert capsys.readouterr().out == ""
+
+
+def test_traceability_pairs_IGNORA_la_marca_huerfana_en_vez_de_reventar(monkeypatch):
+    """`_traceability_pairs::if@L615/or[0]` — la cláusula `inv not in registro`, la última guarda
+    de este módulo que ningún test distinguía.
+
+    En el árbol real **nunca** hay una marca huérfana: `trace_invariants` la bloquea con rc 1. Por
+    eso la cláusula sobrevivía a la mutación — y sin ella `registro[inv]` es un `KeyError`, o sea
+    que la red nº 9 **se cae** en vez de reportar, justo en el estado del árbol que su propio gate
+    hermano produce. Es AUD-191 (`--diff` reventando con un archivo borrado) en el otro modo."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    import trace_invariants as ti
+    marcas = [ti.Mark("INV-01", "impl", "scripts/x.py", 1, "f"),
+              ti.Mark("INV-01", "test", "tests/test_x.py", 2, "test_f"),
+              ti.Mark("INV-999", "impl", "scripts/y.py", 1, "g"),
+              ti.Mark("INV-999", "test", "tests/test_y.py", 2, "test_g")]
+    monkeypatch.setattr(ti, "collect_marks", lambda root: marcas)
+    monkeypatch.setattr(ti, "load_registro", lambda root: {"INV-01": {"estado": "garantizado"}})
+
+    pares = mutar._traceability_pairs()
+
+    assert [inv for inv, _, _, _ in pares] == ["INV-01"], (
+        "una marca que el contrato no declara no tiene atribución que auditar — y buscarle la fila "
+        "es un KeyError")
