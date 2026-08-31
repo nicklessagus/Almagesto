@@ -1419,6 +1419,9 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     conceptos_de_temas = {str(m.get("concept") or slug_t)
                           for slug_t, m in ({} if cfg.themes_error() else cfg.load_themes()).items()
                           if isinstance(m, dict)}
+    #: #348 — los mismos temas, indexados por `method_key` para preguntar «¿este `methods` ES un
+    #: tema declarado?» por clave y no por string crudo (#243).
+    theme_index = cfg.name_index(conceptos_de_temas)
     refs_dir = str(cfg.RAW / "refs")
     refs_stems = {basename(f)[:-3] for f in files if f.startswith(refs_dir)}  # docs de diseño, no fichas
     #: #235 — los slugs de `concepts/`, para reconocer un radio nombrado como código.
@@ -2427,9 +2430,17 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                                "declararlo con `pending`/`pending_motivo` para derivarlo"))
                 # D-13/INV-83: el sujeto de ese paper queda anotado; después del barrido se
                 # contrasta contra lo que el registro DECLARÓ haber leído.
-                # `stars` para estrellas y `thesis_links` para temas: la pertenencia de un paper
-                # a un tema NO vive en las facetas (otro eje) — mismo predicado que
-                # `make_notes._papers_del_sujeto`.
+                # ⛔ #348 — se indexa por CLAVE NORMALIZADA (`method_key`, #243) y el consumidor
+                # busca con la misma clave: con el string crudo, un paper con `thesis_links: [PCA]`
+                # no caía en el balde del tema `pca` y el recorte se reportaba o no según la grafía
+                # que eligió el extractor (medido: 0 con `PCA`, 1 con `pca`).
+                # Qué campos entran: `stars` para estrellas y `thesis_links` para temas — la
+                # pertenencia de un paper a un tema NO vive en las facetas (otro eje). `methods` no
+                # se recorre, y **no es la mitad que falta** de la unión de
+                # `make_notes.theme_membership` (D-24): esta rama exige `not fm.get("methods")`, así
+                # que acá el campo está vacío por construcción y recorrerlo sería un condicional que
+                # no decide nada (red 8). El comentario anterior prometía «mismo predicado que
+                # `make_notes._papers_del_sujeto`» y era falso por los dos ejes (#348).
                 for campo in ("stars", "thesis_links"):
                     for sujeto in cfg.as_list(fm.get(campo)):
                         # #268 — el sujeto DECLARADO no cuenta como «sin extraer» para el recorte:
@@ -2437,7 +2448,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                         # `criterio: todos los core` que sí se había cumplido.
                         if str(sujeto) in _no_vista:
                             continue
-                        sin_extraer_por_sujeto.setdefault(str(sujeto), set()).add(stem)
+                        if (subject_key := cfg.method_key(sujeto)):
+                            sin_extraer_por_sujeto.setdefault(subject_key, set()).add(stem)
             # El eslabón SIGUIENTE (#75): el paper que SÍ se extrajo. `methods` poblado significa
             # que alguien gastó en él el paso más caro de la cadena; si su contenido nunca llegó a
             # una ficha ni a un concepto, la extracción se perdió. Se recolecta acá y se resuelve
@@ -2604,12 +2616,17 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                     # la pidió. Contarlo entero le exigiría una vista propia a cada método
                     # nombrado, y así nace un backlog de centenares que nadie mira. Cuenta sólo
                     # cuando ese nombre ES un tema declarado, que es cuando su roll-up alcanza al
-                    # paper — el mismo predicado de pertenencia que `_papers_del_sujeto` (D-24).
+                    # paper — el mismo predicado de pertenencia que `theme_membership` (D-24).
+                    # ⛔ #348 — «ES un tema declarado» se evalúa por CLAVE NORMALIZADA (#243): con
+                    # el string crudo, `methods: [PCA]` no era el tema `pca` y la categoría salía
+                    # vacía o no según la grafía que eligió el extractor. Y lo que entra al set es
+                    # el nombre DECLARADO del tema, no esa grafía: es contra el nombre declarado que
+                    # se comparan las vistas y el `no_vista` de abajo.
                     reclamos = {str(x).strip()
                                 for campo in ("stars", "thesis_links")
                                 for x in cfg.as_list(fm.get(campo)) if str(x).strip()}
-                    reclamos |= {str(x).strip() for x in cfg.as_list(fm.get("methods"))
-                                 if str(x).strip() in conceptos_de_temas}
+                    reclamos |= {theme for x in cfg.as_list(fm.get("methods"))
+                                 if (theme := cfg.declared_name(x, theme_index))}
                     for sujeto in sorted(reclamos - declaradas):
                         if sujeto in no_vista:
                             reclamo_sin_vista_declarado.append(
@@ -3294,8 +3311,12 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     for _kind_s, slug_s, nombre_s, meta_s in cfg.all_subjects():
         # Cómo lo NOMBRA un paper: el canónico del YAML (`stars`/`thesis_links`) y, en un tema, el
         # `concept` si difiere del slug — el mismo par que `papers_universe` usa para `no_vista`.
-        pendientes = sin_extraer_por_sujeto.get(nombre_s, set()) | \
-            sin_extraer_por_sujeto.get(str(meta_s.get("concept") or ""), set())
+        # Por CLAVE NORMALIZADA (#348): el índice se llena con la grafía del extractor y acá se
+        # busca con la del YAML, así que compararlas crudas apagaba el detector por un `PCA`.
+        pendientes: set = set()
+        for named_as in (nombre_s, meta_s.get("concept") or ""):
+            if (subject_key := cfg.method_key(named_as)):
+                pendientes |= sin_extraer_por_sujeto.get(subject_key, set())
         if not pendientes:
             continue
         decl = cfg.load_extraccion(slug_s)
@@ -3499,20 +3520,29 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                                     "ninguna ficha ni concepto → sintetizarlo donde corresponda, o "
                                     "marcar `no_sintetizado: <motivo>` en la nota del paper"))
 
+    # #243/#348 — «¿este nombre tiene nota destino?» se pregunta por CLAVE NORMALIZADA, la misma que
+    # usa el roll-up (`cfg.method_matches`) y `make_notes.theme_membership`. Comparando el string
+    # exacto, `PCA` y `pca` eran dos deudas distintas y `concepts/methods/pca.md` no contaba como
+    # destino de `PCA`. #243 lo cerró para `methods` (backlog) y dejó vivo el gemelo de
+    # `thesis_links`, que **bloquea**: el framework decía a la vez que es el mismo concepto (el
+    # roll-up lo acumulaba) y que el destino no existe, y obligaba a "arreglar" trabajo correcto.
+    _stems_norm = cfg.name_index(names)
+
+    def _is_dangling(name) -> bool:
+        """No note claims this name — neither by stem nor by `aliases` (#243/#245/#348).
+
+        One predicate for the two dangling categories: they differ in SEVERITY, never in what
+        counts as a destination, and two copies of the rule already diverged once."""
+        return (cfg.declared_name(name, _stems_norm) is None
+                and cfg.method_target(name, _alias_idx_cached()) is None)
+
     # thesis_links sin página destino: el tag no matchea ninguna nota → no acumula en el roll-up
     # Dataview de ninguna hipótesis/concepto (típico typo: shift-vs-shape vs shift_vs_shape).
     dangling_thesis = sorted(
         (tl, f"usado en {len(refs)} paper(s): {', '.join(sorted(refs)[:3])}"
              + (" …" if len(refs) > 3 else ""))
-        for tl, refs in thesis_refs.items() if tl not in names)
+        for tl, refs in thesis_refs.items() if _is_dangling(tl))
 
-    # `methods` sin página destino: el slug no matchea ninguna nota, así que el roll-up de la ficha
-    # lo estampa como código en vez de `[[link]]` (ver `make_notes.metodos_table`) y el tema no tiene
-    # dónde acumular. Es BACKLOG y no bloqueante, al revés que su hermano `thesis_links`, y la
-    # asimetría es real: un `thesis_links` nombra un concepto que `ingest-theme` **crea** en la misma
-    # operación que lo siembra, mientras que `methods` lo puebla la extracción de `ingest-star`, que
-    # no crea conceptos. Bloquear acá le pediría a `ingest-star` cerrar algo que no está en su
-    # cadena. Se cierra ingiriendo el tema (o corrigiendo el typo).
     # Contraste cross-paper (3b) sin rastro (#101): la sección está con la fila de la plantilla.
     # Sólo se pide donde el contraste es POSIBLE — hacen falta al menos dos papers extraídos del
     # sujeto; con uno solo no hay contra qué contrastar y el hallazgo sería ruido fijo.
@@ -3534,22 +3564,24 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                        "Si de verdad no hay ningún eje en disputa, **borrá la sección** y decilo en "
                        "el `log` (es la escotilla que la plantilla declara)"))
 
-    # #243 — el destino se busca por CLAVE NORMALIZADA, la misma que usa el roll-up
-    # (`cfg.method_matches`): comparando el string exacto, `PCA` y `pca` se reportaban como dos
-    # deudas distintas y la nota `concepts/methods/pca.md` no contaba como destino de `PCA`.
-    _stems_norm = {cfg.method_key(n): n for n in names}
-    # #245 — el destino se resuelve también por los `aliases` del concepto: el nombre canónico de un
-    # método es el stem de su nota y `aliases` es la tabla de sinónimos que el schema ya pide. Nadie
-    # la leía, así que `bisector span` y `bis` eran dos métodos distintos y el backlog contaba dos
-    # deudas donde hay una. Medido en una bóveda real: cierra 7 de 121 — chico, y del tipo correcto:
-    # lo que vacía el backlog es que el extractor VEA la lista antes de inventar la grafía.
-    _alias_idx = cfg.concept_alias_index()
+    # `methods` sin página destino: el slug no matchea ninguna nota, así que el roll-up de la ficha
+    # lo estampa como código en vez de `[[link]]` (ver `make_notes.metodos_table`) y el tema no tiene
+    # dónde acumular. Es BACKLOG y no bloqueante, al revés que su hermano `thesis_links`, y la
+    # asimetría es real: un `thesis_links` nombra un concepto que `ingest-theme` **crea** en la misma
+    # operación que lo siembra, mientras que `methods` lo puebla la extracción de `ingest-star`, que
+    # no crea conceptos. Bloquear acá le pediría a `ingest-star` cerrar algo que no está en su
+    # cadena. Se cierra ingiriendo el tema (o corrigiendo el typo).
+    # #245 — el destino se resuelve también por los `aliases` del concepto (dentro de `_is_dangling`):
+    # el nombre canónico de un método es el stem de su nota y `aliases` es la tabla de sinónimos que
+    # el schema ya pide. Nadie la leía, así que `bisector span` y `bis` eran dos métodos distintos y
+    # el backlog contaba dos deudas donde hay una. Medido en una bóveda real: cierra 7 de 121 —
+    # chico, y del tipo correcto: lo que vacía el backlog es que el extractor VEA la lista antes de
+    # inventar la grafía.
     dangling_methods = sorted(
         (mt, f"usado en {len(refs)} paper(s): {', '.join(sorted(refs)[:3])}"
              + (" …" if len(refs) > 3 else "") + " → sin nota en `concepts/` (ni por `aliases`): "
              "ingerí el tema, corregí el slug, o declaralo como alias del concepto que lo denota")
-        for mt, refs in method_refs.items()
-        if cfg.method_key(mt) not in _stems_norm and not cfg.method_target(mt, _alias_idx))
+        for mt, refs in method_refs.items() if _is_dangling(mt))
     # #245 — y el alias reclamado por DOS conceptos: se reporta, no se resuelve. Cuál concepto
     # denota un nombre es curación, y elegir en silencio decide por el usuario (regla de método 5).
     alias_colision = [(", ".join(sorted(set(stems))),

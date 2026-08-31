@@ -1988,6 +1988,32 @@ def test_el_stem_gana_sobre_un_alias_ajeno(toy_vault):
     assert cfg.method_target("PCA") == "pca"
 
 
+def test_el_universo_declarado_se_indexa_y_se_consulta_por_clave(toy_vault):
+    """#348 — `name_index` + `declared_name` son la ÚNICA implementación de «¿este nombre denota un
+    concepto/tema declarado?». La pregunta estaba re-implementada por string crudo tres veces en
+    `lint.py`, y una de ellas —`thesis_links` sin página destino— es BLOQUEANTE: `PCA` contra la
+    nota `pca.md` salía colgante mientras `theme_membership` decía que es el mismo concepto.
+
+    Los tres invariantes del par, cada uno con su caso simétrico: se compara por clave, se devuelve
+    el nombre DECLARADO (no la grafía del reclamo), y el nombre vacío no denota nada — dejarlo entrar
+    haría que `""` matcheara todo reclamo en blanco."""
+    idx = cfg.name_index(["pca", "Bisector Span", "", "   "])
+    assert cfg.declared_name("PCA", idx) == "pca", "se compara por `method_key`, no por el string"
+    assert cfg.declared_name("bisector-span", idx) == "Bisector Span", \
+        "devuelve el nombre DECLARADO, no la grafía con la que se preguntó"
+    assert cfg.declared_name("wPCA", idx) is None, "`wpca` no es `pca`: el detector no es siempre-sí"
+    assert cfg.declared_name("", idx) is None and "" not in idx, "el nombre vacío no denota nada"
+
+
+def test_el_indice_de_nombres_resuelve_una_colision_en_orden_ESTABLE(toy_vault):
+    """Dos grafías que colapsan en la misma clave tienen que resolver siempre igual: construido
+    sobre un `set`, el ganador dependía del orden de iteración y el universo dejaba de ser
+    auditable."""
+    assert cfg.name_index({"PCA", "pca", "p.c.a."})["pca"] == \
+        cfg.name_index({"pca", "p.c.a.", "PCA"})["pca"] == "PCA", \
+        "el primero en orden alfabético, no el primero que salga del set"
+
+
 def test_la_colision_alias_alias_se_REPORTA_no_se_resuelve(toy_vault):
     """Cuál concepto denota un nombre es curación: elegir en silencio decide por el usuario."""
     _concepto(toy_vault, "aaa", ["señal común"])

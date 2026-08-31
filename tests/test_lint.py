@@ -2433,6 +2433,31 @@ def test_recorte_sin_declarar_de_un_TEMA_tambien_se_reporta(toy_vault, capsys):
     assert _n_recorte(rep2) == 0
 
 
+def test_el_recorte_de_lectura_no_depende_de_la_grafia_del_reclamo(toy_vault, capsys):
+    """#348 — `sin_extraer_por_sujeto` indexaba por el string CRUDO del reclamo y el consumidor
+    buscaba por el nombre crudo del sujeto: sobre el MISMO corpus, con `thesis_links: [PCA]` la
+    categoría daba 0 y con `[pca]` daba 1. Es #243 re-implementado por string crudo, bajo un
+    comentario que prometía «mismo predicado que `make_notes._papers_del_sujeto`».
+
+    El caso simétrico —una grafía que NO denota al tema— va en el mismo test: sin él, un índice que
+    metiera todo en el mismo balde pasaría igual. (Sin marca `@inv`: la fila de INV-83 ya la sostiene
+    `test_recorte_sin_declarar_de_un_TEMA_tambien_se_reporta`, y una atribución que el gate de
+    `mutar.py --trazabilidad` no verificó es peor que ninguna — regla de método 4.)"""
+    write_yaml(cfg.THEMES_YAML, {"pca": {"title": "PCA", "area": "methods", "concept": "pca",
+                                         "query": "principal component analysis"}})
+
+    def _recorte(grafia):
+        mk_note(toy_vault.PAPERS, "2020relA...1..1A",
+                {"tags": ["paper"], "bibcode": "2020relA...1..1A", "thesis_links": [grafia],
+                 "relevance": "high"}, "")
+        link_from_log(toy_vault, "2020relA...1..1A")
+        return {slug for slug, _ in lint.collect().por_clave("extraccion_no_declarada").items}
+
+    assert _recorte("pca") == {"pca"}, "baseline: con la grafía canónica el recorte se reporta"
+    assert _recorte("PCA") == {"pca"}, "la MISMA deuda, escrita como la escribe el extractor"
+    assert _recorte("wPCA") == set(), "`wpca` no denota al tema `pca`: no hay recorte que declarar"
+
+
 def test_disputa_entre_autoridades_es_expresable(toy_vault, capsys):
     """D-2 / INV-77: con `DISPUTE_SOURCES = ("ground_truth",)` las dos posiciones de una disputa
     nea↔simbad decían lo mismo — el desacuerdo entre autoridades no tenía forma. Desde D-1 es un
@@ -4500,6 +4525,26 @@ def test_reclamo_sin_vista_es_backlog_y_nombra_al_sujeto(toy_vault, capsys):
     assert "reclamo_sin_vista" not in [c.clave for c in r.bloquean()], "backlog: no bloquea"
 
 
+def test_el_reclamo_por_methods_se_reconoce_con_otra_grafia(toy_vault, capsys):
+    """#348 — la regla que `CLAUDE.md` escribe como «`methods` cuenta sólo si ese nombre ES un tema
+    declarado» se evaluaba con el string CRUDO: con `methods: [PCA]` y el tema `pca` declarado la
+    categoría salía vacía, y con `[pca]` reportaba. O sea que el reclamo existe o no según la grafía
+    que eligió el extractor — exactamente lo que #243 sacó del roll-up.
+
+    El caso simétrico —un `methods` que NO es tema— va adentro: contarlo entero le exigiría una
+    vista a cada método nombrado, que es el backlog de centenares que el recorte existe para
+    evitar."""
+    write_yaml(cfg.THEMES_YAML, {"pca": {"title": "PCA", "area": "methods", "concept": "pca",
+                                         "query": "principal component analysis"}})
+    paper_con_vista(toy_vault, methods=["PCA", "periodograma"])
+    link_from_log(toy_vault, "2020vis....1V")
+    mensajes = [d for _stem, d in lint.collect().por_clave("reclamo_sin_vista").items]
+    assert any("**pca**" in d for d in mensajes), \
+        f"`PCA` denota al tema declarado `pca`: el reclamo existe (#243) — {mensajes}"
+    assert not any("periodograma" in d for d in mensajes), \
+        f"`periodograma` no es tema declarado: `methods` no cuenta entero — {mensajes}"
+
+
 def test_reclamo_declarado_con_no_vista_es_informativo(toy_vault, capsys):
     """La escotilla con motivo obligatorio, misma familia que `no_sintetizado` y que la prosa
     retractada MARCADA: el hallazgo baja a informativo y el motivo queda a la vista."""
@@ -6163,6 +6208,29 @@ def test_dangling_methods_no_reporta_lo_que_un_alias_resuelve(toy_vault, capsys)
     link_from_log(toy_vault, "2020aaa...1..1A", "bis")
     _rc, rep = run_lint_reporte(capsys)
     assert "Bisector Span" not in _seccion(rep, "sin página destino"), rep
+
+
+def test_thesis_links_con_otra_grafia_no_es_un_colgante_bloqueante(toy_vault, capsys):
+    """#348 — el peor de los tres, porque la categoría **bloquea**: un paper con
+    `thesis_links: [PCA]` y la nota `concepts/methods/pca.md` en disco se reportaba «sin página
+    destino» mientras `make_notes.theme_membership` —que desde #347 compara por clave normalizada—
+    decía que es el mismo concepto y lo acumulaba en el roll-up. El framework contradiciéndose, con
+    la mitad que bloquea obligando a "arreglar" trabajo correcto.
+
+    El typo REAL va en el mismo test: sin él, un detector que no reportara nunca nada pasaría."""
+    mk_note(cfg.CONCEPTS / "methods", "pca", {"tags": ["concept"], "name": "pca"}, "# pca\n")
+    mk_note(cfg.PAPERS, "2020aaa...1..1A",
+            {"tags": ["paper"], "bibcode": "2020aaa...1..1A", "relevance": "low",
+             "thesis_links": ["PCA"]}, "# p\n")
+    mk_note(cfg.PAPERS, "2020bbb...1..1B",
+            {"tags": ["paper"], "bibcode": "2020bbb...1..1B", "relevance": "low",
+             "thesis_links": ["shift_vs_shape"]}, "# p\n")
+    link_from_log(toy_vault, "pca", "2020aaa...1..1A", "2020bbb...1..1B")
+    r = lint.collect()
+    colgantes = {tl for tl, _ in r.por_clave("dangling_thesis").items}
+    assert "PCA" not in colgantes, "`pca.md` ES el destino de `PCA` (#243): no es un colgante"
+    assert "shift_vs_shape" in colgantes, "el typo real sigue siendo hallazgo"
+    assert "dangling_thesis" in [c.clave for c in r.bloquean()], "y sigue bloqueando"
 
 
 def test_el_alias_reclamado_por_dos_conceptos_se_reporta(toy_vault, capsys):
