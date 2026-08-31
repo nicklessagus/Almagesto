@@ -175,8 +175,12 @@ python scripts/contrast.py [<slug>] --validar-todo
                                     # BARRIDO (#323) — paso de cierre de toda operación que
                                     #   sintetice, ANTES del verify (el grep barato antes del
                                     #   fan-out caro). Con slug, las notas del sujeto; sin él, toda
-                                    #   la bóveda. Declara población (INV-40) y no evaluables
-                                    #   (D-43); exit ≠ 0 con hallazgos, así sirve de gate
+                                    #   la bóveda. Declara población (INV-40), no evaluables
+                                    #   (D-43) y —desde #341— cuántas de las que APROBÓ se apoyan
+                                    #   en un solo testigo: la extracción de su fuente las dice y
+                                    #   el `.txt` de esa misma fuente no (medido: 45 de 242). No
+                                    #   es un hallazgo y NO mueve el rc; exit ≠ 0 sólo con
+                                    #   evidencia positiva de alteración, así sirve de gate
 python scripts/proposals.py [<slug>]
                                     # las PROPUESTAS pendientes (#328): ampliar un `alcance`
                                     #   (#241), un `refuta` (#212) y las celdas vacías del

@@ -1,5 +1,5 @@
 {
- "fetched": "2026-08-30",
+ "fetched": "2026-08-31",
  "issues": [
   {
    "number": 2,
@@ -1619,21 +1619,91 @@
   {
    "number": 325,
    "title": "`quote_owner` toma el bibcode que sigue a la cita A CUALQUIER DISTANCIA (medido: 131, 247, 436 y 657 caracteres, cruzando prosa), aunque su docstring declara la convención `«…» [[bib]]`: 6 de 12 hallazgos bloqueantes son notas que atribuyen BIEN",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 326,
    "title": "`quote_fragments` parte la cita en la elipsis pero BORRA la matemática y pega las mitades, creando una cadena que no existe en ningún `.txt`: 412 de 3036 citas llevan `$…$` y ninguna puede pasar el paso 1 de `quote_verdict` — el detector manda a corregir lo ya correcto",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 327,
    "title": "`stamp_scope.upsert` reemplaza sólo la PRIMERA línea de la clave y deja huérfanas las de continuación, así que #312 rehúsa escribir en 5 de 5 notas con `alcance` — el 100 % de su población, y no por casualidad: un `alcance` es largo por definición",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 328,
    "title": "DASHBOARD (futuro): las PROPUESTAS del sistema no tienen superficie — ampliar un `alcance`, un `refuta`, un eje descubierto o un `--drop-core` se proponen y se pierden si nadie lee la corrida; son una cola distinta de la deuda del lint",
+   "state": "CLOSED"
+  },
+  {
+   "number": 329,
+   "title": "`contrast.py` sirve al paso 3b las extracciones de papers ya DESCARTADOS con `--drop-core`: 13 de 51 (25 %) en `ica`, y los 13 son falsos positivos de polisemia declarados — el cuarto consumidor de `dropped_from_subject` que nunca recibió copia (#215)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 330,
+   "title": "`contrast.py --filas` entrecomilla TODO `valor` y su banner afirma que «ya es correcta por construcción»: 1262 de 1948 (65 %) salen presentando como verbatim algo que no lo es — 315 son la GLOSA EN CASTELLANO del extractor publicada como palabras del paper, y 686 salen `««…»»`, que saca la cita de la población del gate de #323",
+   "state": "CLOSED"
+  },
+  {
+   "number": 331,
+   "title": "El próximo paso que `triage.py --sintesis` y `harvest_views` imprimen omite `--theme`, así que en un TEMA mandan correr un comando que revienta con `KeyError` crudo — y el mensaje culpa a `stars.yaml` de un slug que está bien definido en `themes.yaml` (2 de 3 sujetos de una bóveda real)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 332,
+   "title": "`deinterleave_columns` parte un párrafo continuo entre dos «columnas»: 148 de 155 `.txt` devuelven más de 2 lecturas (hasta 19), y una oración de UNA columna física cae en dos lecturas distintas — el paso 1 de `quote_verdict` no puede encontrar una cita que SÍ está en el `.txt` (5 de 318 medidas hoy)",
+   "state": "OPEN"
+  },
+  {
+   "number": 333,
+   "title": "Una cita alterada que nace EN la extracción es invisible para `contrast --validar` por construcción: su juez es la extracción (#315/#317), y el `.txt` sólo puede absolver, nunca acusar — medido, 40 de 169 citas aprobadas no están en el `.txt` de su fuente, y una es alteración confirmada contra el PDF",
+   "state": "OPEN"
+  },
+  {
+   "number": 334,
+   "title": "#331 arregló 2 de 4 sitios: `lint.py:1881` y `extraction_prompt.py:619` siguen emitiendo `make_notes.py <slug>` sin `--theme` — y el del lint es el remedio de una categoría cuya población de conceptos es el 100 %",
+   "state": "CLOSED"
+  },
+  {
+   "number": 335,
+   "title": "`mutar.py --guardas` da el MISMO mensaje para «la función está en EXENTAS» y «el símbolo no existe», que piden acciones opuestas — es el D-43 que el propio módulo predica, y ya costó que el guard de #331 fuera invisible para toda red mientras vivió dentro de `main`",
+   "state": "CLOSED"
+  },
+  {
+   "number": 336,
+   "title": "La lectura del `.txt` pierde texto por tres vías más: el borrado de `$…$` aplicado a la FUENTE se come el 36 % de una columna (9 de 155 archivos), el guión de corte no absorbe la sangría (102 de 155) y los fragmentos de una cita elidida caen en lecturas distintas",
+   "state": "OPEN"
+  },
+  {
+   "number": 337,
+   "title": "Dos falsos positivos permanentes del lint: la línea canónica de «Inferencias declaradas» usa una variable de otro loop (las tres notas reciben 19 cuando son 1, 7 y 19), y el chequeo de citas del `log.md` no usa `quote_owner` — #316 sobrevive en el camino hermano",
+   "state": "OPEN"
+  },
+  {
+   "number": 338,
+   "title": "`lint.py` otra vez por los dos lados: el remedio del artefacto colgado hardcodea `--theme` sobre lo que puede ser una estrella (espejo de #334), y `papers_table_stale` (D-10) no mira NINGÚN concepto — 2 de 3 sujetos de esta bóveda",
+   "state": "OPEN"
+  },
+  {
+   "number": 339,
+   "title": "`tools/mutar.py`: la conflación de #335 sigue en `--trazabilidad` y `--dirigida` (y ahí SIN hedge: afirma «no existen» sobre `triage.main`, que existe), `tools/` queda fuera de las redes 1 y 4 con un mensaje que niega un archivo que existe, y ningún flag de `tools/` se valida",
+   "state": "OPEN"
+  },
+  {
+   "number": 340,
+   "title": "`CLAUDE.md` está clavado en el techo del ratchet (~500 bytes libres), así que «¿esta regla va a CLAUDE.md?» se está contestando con «¿entra?» — tres fixes de la tanda #329-#335 lo resolvieron por omisión",
+   "state": "OPEN"
+  },
+  {
+   "number": 341,
+   "title": "Cuando las dos lecturas de un PDF no coinciden no pasa nada: emitir la marca `⚠verificar en el PDF` que YA existe, y que el gate declare cuántas citas aprobó con un solo testigo (40 de 169)",
+   "state": "OPEN"
+  },
+  {
+   "number": 342,
+   "title": "Nada chequea las afirmaciones NEGATIVAS de una ficha: 6 huecos falsos medidos en dos temas, cazados de casualidad — que un hueco declare su ALCANCE, como ya hacen las hipótesis (D-34)",
    "state": "OPEN"
   }
  ]

@@ -719,3 +719,30 @@ compartida por #222/#324, no porque estuvieran rotos.
 escribió, y **declara** la que no puede barrer. La distinción que hace falta y el lint no puede
 hacer: la deuda se **agenda** y persiste en el reporte hasta cerrarse; la propuesta necesita que
 alguien **firme** y, si nadie la lee cuando aparece, **se pierde**.
+
+## 2026-08-31 · El `✅` que se apoyaba en un solo testigo (#341, parte 1)
+
+`contrast.py --validar` / `--validar-todo` cerraba con `0 cita(s) con evidencia POSITIVA de
+alteración ✅` sobre **toda** la población que había mirado, sin distinguir que dentro de las que
+aprobó hay un subconjunto cuyo respaldo es **una sola lectura del PDF**: la del LLM que hizo la
+extracción. Es el paso 2 de `lib_config.quote_verdict` (`txt_degradado`) — la cita está en la
+extracción de su fuente y **no** en el `.txt` de esa misma fuente.
+
+⛔ **La discrepancia no es «PDF vs `.txt`»**: el PDF es la fuente y siempre tiene razón. Lo que
+cambia es **quién lo leyó** — `pdftotext` (determinista, pero pierde fórmulas, tablas-imagen y
+columnas) contra un LLM (ve todo, a veces transcribe mal). Aprobar por el segundo es **el veredicto
+correcto** (#205 declara al `.txt` índice degradado, no mal testigo), y aun así es un testigo solo.
+
+**Medido el 2026-08-31 sobre `Almagesto-Tesis`** (163 notas, 3099 citas textuales): **2857 no
+evaluables** y, de las **242** restantes que el comando aprobaba, **45 se apoyan en un solo
+testigo** — el 19 % de lo aprobado, invisible detrás del `0 ✅`. (El issue reportaba 40 de 169 sobre
+un corte anterior de la misma bóveda; el orden de magnitud y la proporción se sostienen.)
+
+La parte 1 no agrega mecanismo: cuenta el veredicto que `quote_verdict` ya emitía y lo nombra en la
+línea de población (INV-40), en los **dos** modos. ⛔ **El rc no se mueve** — si lo moviera, el paso
+de cierre obligatorio de #323 se frenaría en 45 citas correctas, que es exactamente cómo un gate se
+vuelve ruido que se deja de mirar.
+
+⚠ **Lo que NO entra acá:** la parte 2 del issue (emitir la marca `⚠verificar en el PDF` cuando la
+cola diverge) sigue **bloqueada por #332 y #336** — medido, sus 6 candidatos de hoy son 6 artefactos
+del cortador de columnas, así que emitiría 6 marcas falsas.

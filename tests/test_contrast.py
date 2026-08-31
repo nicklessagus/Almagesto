@@ -336,3 +336,53 @@ def test_PARIDAD_con_el_lint_sobre_el_mismo_insumo(toy_vault, capsys):
     # y ninguno de los dos lo llama alterado: la extracción calla, y el silencio no es evidencia
     assert "atribuida a la fuente equivocada" not in reporte
     assert not de_contrast
+
+
+def test_la_poblacion_declara_lo_aprobado_con_UN_SOLO_TESTIGO(toy_vault, capsys):
+    """#341 — el `0 ✅` se apoyaba en un solo testigo y no lo decía.
+
+    La cita está en la extracción de su fuente y **no** en el `.txt` de esa misma fuente: es el paso
+    2 de `quote_verdict` (`txt_degradado`), o sea una única lectura del PDF, la del LLM. El
+    veredicto es correcto —el `.txt` es un índice degradado (#205)—, pero medido sobre la bóveda
+    real son **40 de 169** las citas que el comando aprobaba así mientras imprimía `0 ✅` sobre las
+    169. INV-40: la población se declara, en los dos modos."""
+    _extraccion("ica_ruido", "2013Voss")
+    _txt("ica_ruido", "2013Voss")                    # existe y NO dice la cita
+    nota = _nota_323("ica-ruido", f"Dice «{LARGA}» [[2013Voss]].")
+    assert ct.validar(nota, mostrar=False)["solo_extraccion"] == 1
+    ct.main(["--validar", str(nota)])
+    assert "1 sólo respaldada(s) por la extracción" in capsys.readouterr().out
+    ct.main(["--validar-todo"])
+    barrido = capsys.readouterr().out
+    assert "1 sólo respaldada(s) por la extracción" in barrido
+    # y el barrido dice QUÉ significa el conteo: sin eso es un número sin doctrina y el lector no
+    # sabe si el `✅` de arriba lo incluye ni qué hacer con él.
+    assert "UN SOLO TESTIGO" in barrido
+
+
+def test_la_poblacion_de_un_solo_testigo_declara_el_CERO(toy_vault, capsys):
+    """D-43/INV-40 — una categoría que sólo aparece cuando hay algo no distingue «no hay ninguna» de
+    «no se miró». Acá la cita está verbatim en el `.txt` de su fuente (paso 1, `en_su_txt`): hay dos
+    testigos, así que el conteo es cero **y se imprime**."""
+    _extraccion("ica_ruido", "2013Voss")
+    _txt("ica_ruido", "2013Voss", f"prosa del paper. {LARGA}. más prosa.")
+    nota = _nota_323("ica-ruido", f"Dice «{LARGA}» [[2013Voss]].")
+    ct.main(["--validar", str(nota)])
+    assert "0 sólo respaldada(s) por la extracción" in capsys.readouterr().out
+    ct.main(["--validar-todo"])
+    barrido = capsys.readouterr().out
+    assert "0 sólo respaldada(s) por la extracción" in barrido
+    # el cero se declara en la población, pero la advertencia NO se emite: no hay ninguna página que
+    # ir a mirar, y una advertencia sobre cero casos entrena a saltearla.
+    assert "UN SOLO TESTIGO" not in barrido
+
+
+def test_lo_aprobado_con_un_solo_testigo_NO_mueve_el_rc(toy_vault, capsys):
+    """#341 — no es un hallazgo nuevo ni un bloqueante: es hacer visible sobre qué se apoya el `✅`.
+    Si moviera el rc, el paso de cierre de #323 se frenaría en 40 de 169 citas correctas."""
+    _extraccion("ica_ruido", "2013Voss")
+    _txt("ica_ruido", "2013Voss")
+    nota = _nota_323("ica-ruido", f"Dice «{LARGA}» [[2013Voss]].")
+    assert ct.main(["--validar", str(nota)]) == 0
+    assert ct.main(["--validar-todo"]) == 0
+    assert "0 cita(s) con evidencia POSITIVA de alteración ✅" in capsys.readouterr().out
