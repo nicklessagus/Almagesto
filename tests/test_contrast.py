@@ -336,3 +336,95 @@ def test_PARIDAD_con_el_lint_sobre_el_mismo_insumo(toy_vault, capsys):
     # y ninguno de los dos lo llama alterado: la extracción calla, y el silencio no es evidencia
     assert "atribuida a la fuente equivocada" not in reporte
     assert not de_contrast
+
+
+# ── #329 · la curación declarada se aplica al carril de LECTURA, y sólo a ése ──
+
+def _dropear(slug: str, bib: str, motivo: str = "polisemia: no es el ICA/BSS del tema"):
+    """El `--drop-core` como lo escribe `triage.py`: registro VERSIONADO, carril `sujeto` (#112).
+
+    Se escribe el archivo de verdad —no un `monkeypatch` de `load_decisiones`— porque lo que este
+    test prueba es que `contrast` cruza la **implementación canónica** (`dropped_from_subject`), que
+    es donde vive el `origen: sujeto` y el `decision: descartado`."""
+    reg = cfg.load_registro(slug) or {"slug": slug}
+    reg.setdefault("decisiones", {})[bib] = {
+        "decision": "descartado", "origen": "sujeto", "motivo": motivo, "fecha": "2026-08-31"}
+    cfg.save_registro(slug, reg)
+
+
+def test_el_paper_DROPEADO_no_entra_al_material_del_3b(toy_vault, capsys):
+    """#329 — medido en una bóveda real: 13 de 51 extracciones (25 %) del tema `ica` eran de papers
+    que el usuario ya había sacado con `--drop-core`, y los trece eran falsos positivos de polisemia
+    **declarados**. 3b es el paso que PRODUCE los ejes: servirle ese material es darle exactamente
+    lo que fabrica un eje falso (#112 — la decisión de curación que el lector ignora en silencio es
+    peor que no tomarla)."""
+    _extraccion("ica_ruido", "2013Voss")
+    _extraccion("ica_ruido", "1982MNRAS", ground_truth=[
+        {"que": "componentes independientes", "valor": "las componentes del tensor de tensiones",
+         "linea": "p. 3"}])
+    _dropear("ica_ruido", "1982MNRAS")
+    for extra in ([], ["--filas"], ["--eje"], ["--campo", "valor"]):
+        assert ct.main(["ica_ruido"] + extra) == 0
+        out = capsys.readouterr().out
+        assert "2013Voss" in out, f"el paper vivo sigue saliendo ({extra})"
+        assert "1982MNRAS" not in out, f"el dropeado no entra al 3b ({extra})"
+        assert "tensor de tensiones" not in out
+
+
+def test_la_poblacion_DECLARA_cuantas_excluyo_la_curacion(toy_vault, capsys):
+    """INV-40/D-43 — se marca, no se borra en silencio. La extracción se pagó (#311) y sigue en
+    disco: un listado que no dice cuántas dejó afuera no distingue «no había ninguna dropeada» de
+    «nadie miró la curación»."""
+    _extraccion("ica_ruido", "2013Voss")
+    _extraccion("ica_ruido", "1982MNRAS")
+    _dropear("ica_ruido", "1982MNRAS")
+    ct.main(["ica_ruido"])
+    out = capsys.readouterr().out
+    assert "> sobre 2 extracción(es) del sujeto · 1 excluida(s) por `--drop-core`" in out
+    assert "--incluir-dropeados" in out, "la escotilla se nombra donde se aplica el filtro"
+
+
+def test_la_poblacion_declara_TAMBIEN_el_cero(toy_vault, capsys):
+    """El `(0)` que nadie declara se lee como veredicto (D-43): sin la línea, «no hay dropeados» y
+    «este comando no mira la curación» —el bug de #329— salen idénticos por pantalla."""
+    _extraccion("ica_ruido", "2013Voss")
+    ct.main(["ica_ruido"])
+    assert "> sobre 1 extracción(es) del sujeto · 0 excluida(s) por `--drop-core`" \
+        in capsys.readouterr().out
+
+
+def test_incluir_dropeados_las_muestra_MARCADAS(toy_vault, capsys):
+    """La escotilla existe porque a veces se quiere mirar el descarte; lo que no puede pasar es que
+    salga mezclado con el material bueno. Cada fuente dropeada sale detrás de su propio banner."""
+    _extraccion("ica_ruido", "1982MNRAS")
+    _dropear("ica_ruido", "1982MNRAS")
+    assert ct.main(["ica_ruido", "--incluir-dropeados"]) == 0
+    out = capsys.readouterr().out
+    assert "1982MNRAS" in out and "DESCARTADO del sujeto con `--drop-core`" in out
+    assert "polisemia: no es el ICA/BSS del tema" in out, "el MOTIVO viaja, no la categoría"
+    assert "1 DROPEADA(s) mostrada(s) por `--incluir-dropeados`" in out
+
+
+def test_el_carril_de_VALIDACION_sigue_viendo_al_dropeado(toy_vault, capsys):
+    """⛔ El límite del arreglo (#317/#321/#323): un paper dropeado sigue siendo un testigo válido de
+    a quién pertenece una frase. Filtrarlo acá bajaría la población del detector y convertiría una
+    atribución correcta en un falso «mal atribuido» — la clase de falso positivo que #324/#325
+    acaban de sacar de un paso de cierre que bloquea."""
+    # el TESTIGO es el paper dropeado: la nota atribuye la frase a `2013Voss` y quien la tiene
+    # verbatim es la extracción de `1982MNRAS`, que el usuario sacó del sujeto.
+    _extraccion("ica_ruido", "2013Voss", ground_truth=[
+        {"que": "otro", "valor": "algo completamente distinto", "linea": "p. 9"}])
+    _extraccion("ica_ruido", "1982MNRAS")
+    _txt("ica_ruido", "2013Voss")
+    _dropear("ica_ruido", "1982MNRAS")
+    nota = _nota_323("ica_ruido", f"Dice «{LARGA}» [[2013Voss]], y lo discute [[1982MNRAS]].")
+    assert ct.main(["--validar", str(nota)]) == 1
+    out = capsys.readouterr().out
+    assert "atribuida a la fuente equivocada" in out
+    assert "1982MNRAS" in out, "el dropeado sigue siendo TESTIGO de a quién pertenece la frase"
+    # y el barrido —que desde #323 es paso de cierre con exit ≠ 0— bloquea igual, entero y acotado
+    # al sujeto: filtrar acá bajaría su población y el hallazgo real desaparecería.
+    assert ct.main(["--validar-todo"]) == 1
+    assert "atribuida a la fuente equivocada" in capsys.readouterr().out
+    assert ct.main(["ica_ruido", "--validar-todo"]) == 1
+    assert "notas de `ica_ruido`" in capsys.readouterr().out

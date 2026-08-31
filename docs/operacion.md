@@ -162,7 +162,15 @@ python scripts/extraction_prompt.py <slug> <bib> --theme --enfasis "<lente>" [--
 python scripts/contrast.py <slug> [--campo X] [--grep RE] [--eje] [--filas]
                                     # el lector de extracciones del paso 3b/3c (#314/#317): agrupa
                                     #   por CAMPO y **nunca trunca una cita** (un recorte cae dentro
-                                    #   y el modelo la completa: 2 citas fabricadas medidas)
+                                    #   y el modelo la completa: 2 citas fabricadas medidas).
+                                    #   NO sirve las extracciones que `--drop-core` sacó del sujeto
+                                    #   (#329: 13 de 51 en un tema real, y las 13 eran polisemia
+                                    #   declarada — material que le fabrica un eje falso al paso que
+                                    #   PRODUCE los ejes). Declara cuántas excluyó (INV-40)
+python scripts/contrast.py <slug> --incluir-dropeados
+                                    # la escotilla: las muestra, cada una detrás de su banner con el
+                                    #   MOTIVO del descarte. Se marca, no se borra en silencio — la
+                                    #   extracción se pagó (#311) y sigue en disco
 python scripts/contrast.py [<slug>] --validar <nota>
                                     # cruza la nota contra las extracciones (#315/#317). Bloquea
                                     #   con EVIDENCIA POSITIVA (#321): la frase verbatim bajo otro
@@ -172,6 +180,10 @@ python scripts/contrast.py [<slug>] --validar <nota>
                                     #   prueba que la frase es de ese paper. Misma implementación
                                     #   que el lint (`cfg.quote_verdict`), no una copia
 python scripts/contrast.py [<slug>] --validar-todo
+                                    # ⛔ los dos --validar NO filtran por `--drop-core` (#329): un
+                                    #   paper dropeado sigue siendo TESTIGO válido de a quién
+                                    #   pertenece una frase, y filtrarlo bajaría la población del
+                                    #   detector fabricando falsos «mal atribuido»
                                     # BARRIDO (#323) — paso de cierre de toda operación que
                                     #   sintetice, ANTES del verify (el grep barato antes del
                                     #   fan-out caro). Con slug, las notas del sujeto; sin él, toda

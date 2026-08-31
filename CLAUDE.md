@@ -988,11 +988,11 @@ re-extraer el `.txt`.
    corresponde entre dos filas. **La red de que ocurrió (#101):** el lint reporta la ficha con la
    **fila vacía de la plantilla** y ≥2 papers extraídos citados — ausencia = declarado,
    presente-y-vacío = saltado.
-   ⛔ **Y tiene herramienta: `python scripts/contrast.py <slug>` (#314/#317).** Era el único eslabón
-   sin una —producir, cosechar y verificar la tienen— y sin herramienta se improvisa un digest: el
-   recorte cae **dentro de la cita** y el modelo la completa (2 citas fabricadas sobre 139 pares, en
-   el carácter exacto del corte). `contrast.py` **nunca trunca una cita**, agrupa por campo y
-   arrastra `linea`/`segunda_mano`. Propone: el inventario lo escribís vos.
+   ⛔ **Y tiene herramienta: `python scripts/contrast.py <slug>` (#314/#317).** Sin ella se improvisa
+   un digest, el recorte cae **dentro de la cita** y el modelo la completa (2 fabricadas sobre 139
+   pares). Nunca trunca una cita, agrupa por campo, arrastra `linea`/`segunda_mano` y ⛔ **no le
+   sirve al 3b lo que `--drop-core` sacó del sujeto (#329)** —declara cuántas excluyó, y
+   `--incluir-dropeados` las muestra—. Propone: el inventario lo escribís vos.
    ⛔ **La fila de `--filas` sale CON LA CITA ADENTRO y NO SE RE-TIPEA (#322).** Los 12 verdaderos
    positivos medidos son errores de **copiado** —6 de atribución, 6 de cola alterada—, ninguno de
    comprensión: mover una cadena entre archivos es lo que un script hace perfecto y un LLM mal. Vos

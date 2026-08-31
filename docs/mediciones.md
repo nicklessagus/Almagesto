@@ -719,3 +719,46 @@ compartida por #222/#324, no porque estuvieran rotos.
 escribió, y **declara** la que no puede barrer. La distinción que hace falta y el lint no puede
 hacer: la deuda se **agenda** y persiste en el reporte hasta cerrarse; la propuesta necesita que
 alguien **firme** y, si nadie la lee cuando aparece, **se pierde**.
+
+
+## 2026-08-31 · El cuarto consumidor de la curación, otra vez (#329)
+
+`contrast.extracciones` juntaba el material del **paso 3b** con un `glob` sobre
+`vault/raw/extraccion/<slug>/*.json` y nunca lo cruzaba contra `lib_config.dropped_from_subject`.
+Mismo molde que #215: la comprensión de *«qué papers son de este sujeto»* vive en **una** función y
+el cuarto consumidor no recibió copia.
+
+| consumidor | ¿cruza `dropped_from_subject`? |
+|---|---|
+| `make_notes.papers_universe` · `concept_rollup_rows` · `write_paper_notes` | ✅ |
+| `query_ads.excluidos_del_sujeto` | ✅ |
+| `contrast.extracciones` (paso 3b) | ⛔ **no** |
+
+**Medición** (bóveda `Almagesto-Tesis`, 2026-08-31, framework v1.137.0):
+
+| tema | extracciones en disco | dropeados | extracciones de dropeados servidas al 3b |
+|---|---|---|---|
+| `ica` | 51 | 21 | **13 (25 %)** |
+| `ica-ruido` | 32 | 0 | 0 |
+| `hd_40307` | 47 | 0 | 0 |
+
+Los trece no son ruido neutro: son **falsos positivos de polisemia declarados**, y las propias
+extracciones lo dicen —*«homonimia de vocabulario, no del dominio de la bóveda»*
+(`1982MNRAS.200..361B`, cuyas *independent components* son $\sigma_r$ y $\sigma_\theta$ de un
+tensor)—. Servirlos al paso que **produce los ejes** es ofrecerle al agente exactamente el material
+que fabrica un eje falso. El contraste que lo vuelve inequívoco: en la misma bóveda
+`make_notes.py ica --theme` imprime *«21 paper(s) excluidos del sujeto por `--drop-core`»* y estampa
+`Estado: excluido a mano` — la curación era visible en **todas** las superficies menos en la del 3b.
+
+**Los dos carriles no se tratan igual.** El de LECTURA (`--campo`/`--eje`/`--filas`/`--grep`/
+`--paper`) filtra; el de VALIDACIÓN (`--validar`, `--validar-todo`) **no**: un paper dropeado sigue
+siendo testigo válido de a quién pertenece una frase, y filtrarlo bajaría la población del detector
+de #323 fabricando falsos *«mal atribuido»* — la clase de falso positivo que #324/#325 acababan de
+sacar de un paso de cierre que **bloquea**. El test que lo fija muere con el arreglo equivocado: al
+filtrar el carril de validación, un hallazgo bloqueante real pasa a *«no evaluable»* y el barrido
+devuelve `0 ✅`.
+
+Y se **marca**, no se borra en silencio (INV-40/D-43): la línea de población declara cuántas excluyó
+—incluido el cero, porque sin ella *«no hay dropeados»* y *«este comando no mira la curación»* salen
+idénticos por pantalla— y `--incluir-dropeados` las muestra, cada una detrás de su banner con el
+**motivo** del descarte.

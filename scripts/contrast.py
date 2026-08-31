@@ -33,7 +33,7 @@ Three guarantees, each closing one of the measured failure modes:
 
 ⛔ **It proposes and does not write**: the inventory is written by the synthesiser.
 
-    python scripts/contrast.py <slug> --campo regimen
+    python scripts/contrast.py <slug> --campo regimen        # sin lo que `--drop-core` sacó (#329)
     python scripts/contrast.py <slug> --grep 'Sigma|covarian'
     python scripts/contrast.py <slug> --eje identificabilidad --filas
     python scripts/contrast.py --validar vault/wiki/concepts/methods/<x>.md
@@ -92,14 +92,40 @@ def _mostrar(texto: str, completo: bool, limite: int) -> str:
 
 
 def imprimir(slug: str, *, campo: str | None, patron: str | None, paper: str | None,
-             eje: str | None, completo: bool, limite: int, filas: bool) -> int:
+             eje: str | None, completo: bool, limite: int, filas: bool,
+             incluir_dropeados: bool = False) -> int:
     """The contrast view: group by FIELD, not by paper — contrasting is filtering, not reading 32
-    files. Returns the number of lines printed."""
+    files. Returns the number of lines printed.
+
+    ⛔ **Declared curation applies HERE (#329).** The extractions of the papers the user took out of
+    the subject with `--drop-core` are not served to step 3b: measured on a real theme, **13 of 51
+    (25 %)** of its material, and all thirteen were declared polysemy false positives — feeding them
+    to the step that PRODUCES the axes is handing the agent exactly the material that fabricates a
+    false one (#112: a curation decision the reader ignores in silence is worse than not taking it).
+
+    Two boundaries. It is the READING rail only: `validar`/`validar_todo` keep seeing every
+    extraction, because a dropped paper is still a valid witness of whose sentence a quote is
+    (#317/#321/#323) and filtering there would lower the detector's population and manufacture false
+    «wrong attribution». And it MARKS instead of silently dropping: the population line declares how
+    many were excluded (INV-40) and `--incluir-dropeados` shows them, each behind its own banner."""
     rx = re.compile(patron, re.I) if patron else None
+    todas = extracciones(slug)
+    # #112 vive en el registro VERSIONADO, no en `build/`: la única implementación de «qué papers
+    # sacó el usuario de ESTE sujeto» es `cfg.dropped_from_subject` (regla de método nº 2 — el molde
+    # de #215 es justamente el consumidor que nunca recibió copia).
+    dropeados = cfg.dropped_from_subject(slug)
+    n_drop = sum(1 for bib, _ in todas if bib in dropeados)
+    items = todas if incluir_dropeados else [(b, d) for b, d in todas if b not in dropeados]
     n = 0
-    for bib, data in extracciones(slug):
+    for bib, data in items:
         if paper and paper != bib:
             continue
+        if bib in dropeados:
+            # sólo alcanzable con `--incluir-dropeados`: la extracción se pagó (#311) y a veces se
+            # quiere ver, pero mezclada sin marca vuelve a ser material del 3b.
+            cfg.print_seguro(f"  ⚠ [[{bib}]] fue DESCARTADO del sujeto con `--drop-core` "
+                             f"({dropeados[bib]}): se muestra por `--incluir-dropeados` — NO lo "
+                             f"pegues en el inventario")
         if eje is not None:
             for k, v in cfg.as_map(data.get("ejes")).items():
                 if eje and eje.lower() not in k.lower():
@@ -148,6 +174,15 @@ def imprimir(slug: str, *, campo: str | None, patron: str | None, paper: str | N
                          f"pierden las citas (#322). Vos escribís la glosa (`{GLOSA}`) y decidís "
                          f"qué filas entran; si la cita no entra en la celda, se parafrasea SIN "
                          f"comillas.")
+    # INV-40 — la población se DECLARA, incluido el cero: un listado que calla cuántas extracciones
+    # dejó afuera no distingue «no había ninguna dropeada» de «nadie miró la curación» (#329).
+    if incluir_dropeados:
+        cola = f"{n_drop} DROPEADA(s) mostrada(s) por `--incluir-dropeados`"
+    elif n_drop:
+        cola = f"{n_drop} excluida(s) por `--drop-core` (`--incluir-dropeados` para verlas)"
+    else:
+        cola = "0 excluida(s) por `--drop-core`"
+    cfg.print_seguro(f"\n> sobre {len(todas)} extracción(es) del sujeto · {cola}")
     return n
 
 
@@ -227,7 +262,12 @@ def _notes_of(slug: str | None) -> list:
 
     With a slug the population is the entity note plus the paper notes whose extraction lives under
     that subject — the same asymmetry as `lint --cierre`: the scope narrows what is MINE to close,
-    not what exists."""
+    not what exists.
+
+    ⛔ **It does NOT cross `dropped_from_subject`, unlike the reading rail (#329).** A paper the user
+    took out of the subject is still a valid witness of whose sentence a quote is, so filtering here
+    would lower the detector's population and turn a correct attribution into a false «wrong
+    attribution» — the very class of false positive #324/#325 just removed from a closing step."""
     todas = sorted(cfg.WIKI.rglob("*.md")) if cfg.WIKI.exists() else []
     if not slug:
         return todas
@@ -291,6 +331,10 @@ def main(argv=()) -> int:
                     help="acorta los valores MARCANDO el corte. Por default NO se corta: si no "
                          "entra, filtrá menos filas — un recorte cae dentro de la cita y el modelo "
                          "la completa (#314: 2 citas fabricadas en el carácter exacto del corte)")
+    ap.add_argument("--incluir-dropeados", action="store_true",
+                    help="mostrar TAMBIÉN las extracciones de los papers que `--drop-core` sacó del "
+                         "sujeto (#329). Por default no entran al 3b: son curación declarada, y "
+                         "cada una sale con su banner para que no se mezclen con el material")
     ap.add_argument("--validar", metavar="NOTA",
                     help="cruza esa nota contra las extracciones: la cita que aparece bajo OTRO "
                          "bibcode, o cuya cola diverge, se alteró al sintetizar (#317/#321)")
@@ -320,7 +364,8 @@ def main(argv=()) -> int:
                          f"fan-out del paso 3 primero (`extraction_prompt.py {args.slug} <bib>`)")
         return 2
     n = imprimir(args.slug, campo=args.campo, patron=args.grep, paper=args.paper, eje=args.eje,
-                 completo=not args.corto, limite=args.limite, filas=args.filas)
+                 completo=not args.corto, limite=args.limite, filas=args.filas,
+                 incluir_dropeados=args.incluir_dropeados)
     cfg.print_seguro(f"\n  {n} valor(es) — el contraste es FILTRAR, no leer los JSON enteros. "
                      f"⛔ La cita se copia ENTERA o se parafrasea sin comillas.")
     return 0
