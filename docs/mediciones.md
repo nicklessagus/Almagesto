@@ -1480,3 +1480,59 @@ no cambió—.
 `vista + ### Lente — <énfasis>` dentro de una segunda lectura (#239). El `###` sólo corta **dentro**
 de una vista: fuera, es prosa normal y no parte nada.
 
+## 2026-08-31 · «Segunda mano sin marca» preguntaba por el PAPER, no por el valor (#350)
+
+**Qué era.** El aviso se emitía por par (bloque citante, bibcode) cuando **la vista de ese bibcode
+tenía ALGÚN valor de segunda mano**, en cualquier parte. O sea que contestaba *«¿este paper tiene
+alguna segunda mano?»* en vez de *«¿el valor que ESTA línea toma es una de ellas?»*. Con la mayoría
+de las fuentes fundacionales llenas de atribuciones a terceros —lo normal en un survey o un
+handbook—, casi toda línea que citara una de ellas disparaba.
+
+**Medido** sobre `Almagesto-Tesis` (2026-08-31), con el `lint.py` de 1.164.0:
+
+```
+hallazgos                : 399        (el issue midió 398; el corpus creció en una nota)
+líneas distintas de prosa: 307
+bibcodes distintos       :  82
+por nota                 : ica-ruido 155 · ica 137 · hd_40307 107
+pares (afirmación, bibcode) en esas 3 notas: 463   → 86 % de disparo
+```
+
+**Diff medido, misma bóveda, mismos pares:**
+
+| | 1.164.0 | 1.168.0 |
+|---|---|---|
+| Hallazgos | **399** | **16** |
+| Tasa de disparo sobre los 463 pares | 86 % | 3,5 % |
+| Población declarada | «sobre 8 notas de entidad» | «sobre **399 pares** (bloque citante, bibcode)» |
+
+**Precisión antes/después, clasificada a mano abriendo la nota y la vista** (es juicio, y se declara
+como tal): de los 7 hallazgos que el issue revisó, **1 accionable** (≈14 %); de los 16 de hoy,
+**≈10 accionables** (≈63 %) —el `⚠verificar` que faltaba en una edad tomada de Bonfanti, un $T_{eff}$
+de PASTEL, la zona habitable calculada con las recetas de Selsis, tres apariciones del período de
+Tuomi, el $\log R'_{HK}$ de Noyes—, **4 falsos** (colisión numérica: el mismo número significando
+otra cosa en las dos puntas) y **2 dudosos**.
+
+**Qué se descartó y por qué, todo medido sobre el mismo corpus:**
+
+| Recorte | Hallazgos | Motivo |
+|---|---|---|
+| cruce crudo de cifras | 110 | los años de cita (`2009`, `2013`) cruzan con cualquier bloque |
+| sin años | 78 | quedan las referencias `[27]`, los tags `(6.18)` y los localizadores `Sect. 2.3` |
+| sin referencias/tags/localizadores | 47 | queda `Gl 725` — una designación de catálogo es un **nombre** |
+| sin designaciones | 26 | quedan las cifras de una o dos significativas (`0,1`, `4,5`) |
+| + una específica **o** dos de la misma fila | **16** | lo que se publica |
+
+⛔ **Y el decimal castellano vive DENTRO de la matemática:** la bóveda escribe `$P = 4{,}3115$` —las
+llaves son lo que evita que LaTeX espacie la coma—, así que leído crudo son dos números y **ningún
+valor de una ficha real cruzaba**. Es la cuarta forma de la ceguera al markdown que persigue la
+regla de método 4 (#168/#276/#283/#309); deshacerla es lo que hizo aparecer los hallazgos reales
+(26 contra 11 sin ella).
+
+**Qué cambió (1.168.0).** `lib_blocks.second_hand_lifted(bloque, filas, atribuido=…)` devuelve las
+filas cuyo **valor** el bloque parece levantar, con el literal que cruzó; `quantities` limpia lo que
+no es una cantidad afirmada y `cited_names` extrae apellidos **en posición de cita** (anclados a un
+año o a un «et al.», para no necesitar una lista de palabras capitalizadas). El lint pasa además los
+primeros autores de los `[[bibcode]]` que el bloque cita: la prosa que dice *«reclamadas por
+[[2013A&A...549A..48T]]»* nombra a Tuomi sin escribirlo. La categoría declara su población en
+**pares**.

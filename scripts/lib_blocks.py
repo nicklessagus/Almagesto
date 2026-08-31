@@ -993,6 +993,122 @@ def second_hand_rows(text: str) -> list:
     return out
 
 
+#: Lo que en un texto NO es una cantidad afirmada: la referencia (`[27]`), el tag de ecuación
+#: (`(3.14)`), el localizador (`p. 4`, `Fig. 3`, `Prop. 3.11`, `Sect. 2.3`) y el año de una cita.
+#: Se saca ANTES de leer números — si no, «Darmois [27]» y «ec. (10)» cruzan contra cualquier
+#: bloque que hable de otra cosa, que es de dónde salía la mitad del ruido medido en #350.
+_REF_BRACKET_RE = re.compile(r"\[[^\]]*\]")
+_EQ_TAG_RE = re.compile(r"\(\s*\d+(?:\.\d+)*\s*\)")
+_LOCATOR_RE = re.compile(
+    r"\b(?:pp?|figs?|figuras?|tab(?:la|le)s?|sects?|secs?|sections?|secciones?|seccion|props?|"
+    r"proposicion(?:es)?|proposition|ecs?|eqs?|ecuacion(?:es)?|equations?|refs?|caps?|"
+    r"capitulos?|chapters?|teoremas?|theorems?|lemmas?|lemas?|pasos?|steps?|items?|vols?|nos?)"
+    r"\b\.?\s*\(?\d+(?:[.\-–]\d+)*\)?", re.I)
+_YEAR_RE = re.compile(r"\b(?:19|20)\d\d[a-z]?\b")
+#: Una designación de catálogo (`Gl 725`, `HD 40307`, `GJ 581`, `K2 18`) es un NOMBRE, no una
+#: cantidad. Es regla de FORMA, no una lista de catálogos que mantener: sigla corta capitalizada +
+#: número. Medido en #350: `Gl 725 B` producía 6 de los 9 falsos positivos que quedaban.
+_DESIGNACION_RE = re.compile(r"\b[A-Z][A-Za-z]{0,2}\s?\d+\b")
+_NUM_RE = re.compile(r"\d+(?:[.,]\d+)?")
+#: ⛔ La bóveda escribe el decimal castellano DENTRO de la matemática: `$P = 4{,}3115$`, `$0{,}85$`
+#: (las llaves son lo que hace que LaTeX no lo espacie como una coma de lista). Sin deshacer eso,
+#: `4{,}3115` se lee como dos números y **ningún valor de una ficha real cruza** — la cuarta forma
+#: de la misma ceguera al markdown que persigue la regla de método 4 (#168/#276/#283/#309).
+_TEX_DECIMAL_RE = re.compile(r"(?<=\d)\{([.,])\}(?=\d)")
+_TEX_ESPACIO_RE = re.compile(r"(?<=\d)\\[,;:! ]\s*(?=\d)")
+#: Un apellido en posición de CITA: seguido, cerca, de un año o de un «et al.». Sin ese anclaje
+#: haría falta una lista de palabras castellanas capitalizadas que mantener, que es justo lo que
+#: #349 evitó del otro lado.
+_CITED_NAME_RE = re.compile(
+    r"\b([A-ZÁÉÍÓÚÑÜ][a-záéíóúñü'\-]{2,})(?=[^;|]{0,40}?(?:et\s+al|\(?(?:19|20)\d\d))")
+#: Un fragmento entrecomillado corto no identifica nada: «no» o «es» aparecen en cualquier bloque.
+_CITA_MIN = 30
+_QUOTED_RE = re.compile(r"«([^»]+)»|“([^”]+)”|\"([^\"]+)\"")
+
+
+def quantities(text: str) -> set:
+    """The numbers a text actually ASSERTS — locators, references and years stripped first (#350).
+
+    A view's *Valor* cell is full of numbers that are not values: `[27]` is a reference of the
+    source, `(6.18)` an equation tag, `Sect. 2.3` a locator, `(2013a)` a year. Measured on a real
+    vault, those were most of what crossed against a citing block, so the crossing said nothing.
+
+    A catalogue designation (`Gl 725`, `HD 40307`) goes too: it is a NAME, and it produced 6 of the
+    9 false positives left after the rest of the filter.
+
+    Kept: a number with a decimal separator, or with four digits or more — a value specific enough
+    to be the same value. A bare two- or three-digit integer is dropped on purpose: it is a count as
+    often as a measurement, and measured on a real vault every one of those crossings was a
+    collision (`135 RV` against `135 min`, `200 exposiciones` against a period of 200 d). Declared
+    blind spot: a round value (`198 d`) does not cross by itself — the quoted fragment still does."""
+    plano = _TEX_ESPACIO_RE.sub("", _TEX_DECIMAL_RE.sub(r"\1", str(text or "")))
+    limpio = _DESIGNACION_RE.sub(" ", _YEAR_RE.sub(" ", _EQ_TAG_RE.sub(
+        " ", _LOCATOR_RE.sub(" ", _REF_BRACKET_RE.sub(" ", plano)))))
+    out = set()
+    for m in _NUM_RE.finditer(limpio):
+        t = m.group(0).replace(",", ".")
+        if "." in t or len(t) >= 4:
+            out.add(t)
+    return out
+
+
+def cited_names(text: str) -> set:
+    """Surnames in CITATION position — followed, nearby, by a year or an «et al.».
+
+    Used to tell «the note lifted the value and says nothing» from «the note names whose it is»,
+    which is what the #350 finding asks for. Anchoring on the year is what keeps this from needing a
+    stop-list of capitalised Spanish words."""
+    return {m.group(1).casefold() for m in _CITED_NAME_RE.finditer(str(text or ""))}
+
+
+def _significativas(token: str) -> int:
+    """How many significant digits a number token carries — `0.05` has one, `34.6` has three."""
+    return len(token.replace(".", "").lstrip("0"))
+
+
+def _quoted(text: str) -> list:
+    """The quoted fragments of a text, normalised, long enough to identify themselves."""
+    out = []
+    for m in _QUOTED_RE.finditer(str(text or "")):
+        frag = normalize_ws(next(g for g in m.groups() if g is not None)).casefold()
+        if len(frag) >= _CITA_MIN:
+            out.append(frag)
+    return out
+
+
+def second_hand_lifted(block: str, rows: list, *, atribuido: set | None = None) -> list:
+    """Of `rows`, the ones whose VALUE this block appears to lift: `[(qué, valor, de, evidencia)]`.
+
+    #350 — the finding used to fire on «this paper has SOME second-hand value», so a note citing a
+    survey (full of attributions by construction) fired on every line: measured, 398 of 462 pairs,
+    86 %. The question the detector has to answer is the other one — *does the value THIS line takes
+    happen to be one of them?* — and it is decidable: the block and the value share a **literal**,
+    either an asserted quantity (`quantities`) or a verbatim quoted fragment.
+
+    `atribuido` is the set of names the block already credits — its own cited surnames plus, from
+    the caller, the first authors of the bibcodes it links. A row whose *Segunda mano* cell names
+    one of them is NOT a finding: the note does say whose the value is, which is the whole ask.
+    Recall-only: a block naming the right author for another reason hides a real case, and that is
+    the safe direction for a category whose problem is the firing rate."""
+    nombres = (atribuido or set()) | cited_names(block)
+    cantidades, citas = quantities(block), normalize_ws(block).casefold()
+    out = []
+    for que, valor, de in rows:
+        if cited_names(de) & nombres:
+            continue
+        # ⛔ UNA cifra de dos dígitos significativos (`4,5`, `0,85`) es una coincidencia tanto como
+        # un valor: medida en una bóveda real, la mitad de esos cruces era colisión («4,5 años» de
+        # baseline contra «4,5 Gyr» de edad). Se pide **una específica** (tres significativas o
+        # más) o **dos de la misma fila**, que es lo que ya no pasa por casualidad.
+        nums = quantities(valor) & cantidades
+        evidencia = (sorted(nums) if len(nums) >= 2 or any(_significativas(t) >= 3 for t in nums)
+                     else [])
+        evidencia += [f"«{q[:60]}…»" for q in _quoted(valor) if q in citas]
+        if evidencia:
+            out.append((que, valor, de, evidencia))
+    return out
+
+
 def render_verif_row(row) -> str:
     r"""The canonical markdown line for one `Row`, with **every cell escaped** (#240/#284).
 
