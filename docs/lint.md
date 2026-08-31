@@ -373,6 +373,20 @@ OCR, o marcar `pending`).
   independiente** («otras dos fuentes dan 7,15» era una sola medición ajena contada dos veces). Se
   mira por bloque citante (las secciones estampadas quedan fuera) y el hallazgo se apaga cuando el
   bloque ya nombra la segunda mano — sin esa escotilla la deuda sería inextinguible.
+  ⛔ **Se cruza el VALOR, no el paper (#350).** El aviso preguntaba *«¿este paper tiene ALGUNA
+  segunda mano?»*, que sobre un survey o un handbook —llenos de atribuciones a terceros por
+  construcción— se contesta que sí siempre: medido, **398 de 462 pares, el 86 %**, la forma de #198
+  con 6 de cada 7 avisos no accionables. Hoy se pide que el bloque y el valor marcado compartan un
+  **literal** —una cantidad afirmada o un fragmento entrecomillado—, y el hallazgo lo **nombra**
+  (`la línea toma 34.6 …`), que es lo que lo vuelve triage en vez de relectura.
+  ⚠ Tres recortes, todos medidos: no cuentan los números que no son valores (la referencia `[27]`,
+  el tag `(6.18)`, el localizador `Sect. 2.3`, el año, la designación de catálogo `Gl 725`); una
+  sola cifra de menos de tres dígitos significativos tampoco (colisiona: *«4,5 años»* de baseline
+  contra *«4,5 Gyr»* de edad), salvo que la fila comparta **dos**; y el bloque que ya nombra al
+  tercero —en prosa, o citando **su** paper— no dispara. ⛔ El decimal castellano se lee **dentro de
+  la matemática** (`$P = 4{,}3115$`): sin deshacer las llaves no cruza ni un valor de una ficha
+  real. Población: el **par** (bloque citante, bibcode), no la nota — con 8 de denominador, 398
+  hallazgos no se pueden leer (INV-40 cumplido en la letra y no en el espíritu).
 - **Cita textual de `log.md` que su fuente no dice** (#238): la bitácora es append-only y no podía
   corregirse; la entrada refutada se marca `⚠ corregido <fecha> → <entrada nueva>`, no se edita.
 - **Entradas de `## Verificación de citas` sin las tres sub-secciones** o con cabecera derivada a
@@ -465,7 +479,13 @@ OCR, o marcar `pending`).
   literal —Obsidian lo renderiza— y contarlo dejaba al operador eligiendo entre un bug de
   renderizado, un backlog permanente o borrar el carácter de una transcripción verbatim, que el
   framework justamente pide. El hallazgo nombra **las dos líneas**: la del párrafo abierto y la del
-  impar.
+  impar. ⛔ El duplicado se cuenta **dentro de su vista** (#349): con varias vistas (#239) cada una
+  estampa su propia línea estructural —el eje que la lente preguntó y la fuente calló, la salvedad
+  chequeada— y son idénticas **por construcción** (medido: 7 hallazgos, los 7 falsos). Cada
+  `## Vista — <sujeto>` y cada `### Lente — <énfasis>` es un ámbito; el resto de la nota sigue
+  siendo uno solo, que es lo que mantiene vivo el caso de #227. Se cortó por ámbito y **no** eximiendo
+  prefijos: esa lista habría que mantenerla, y el corpus medido ya traía una tercera forma
+  estampada (`- PREPRINT: …`) que no estaba en ella.
 - **`## ` pegado a una fila de tabla, sin línea en blanco** (#260): GFM corta bien, pero
   Python-Markdown absorbe el encabezado como fila de la tabla de arriba y el `##` desaparece del
   outline. Backlog y no bloqueante a propósito: el daño depende del renderer. Sólo cuenta una

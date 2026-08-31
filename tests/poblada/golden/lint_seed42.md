@@ -374,7 +374,7 @@
 > sobre 3 ground-truth de `raw/ground_truth/`
 
 ## 🔁 Valor de SEGUNDA MANO levantado sin la marca: la atribución se pierde en la síntesis (#103/#279, backlog) (0)
-> sobre 29 notas de entidad (fichas, conceptos, queries)
+> sobre 0 pares (bloque citante, bibcode) que citan una fuente con valores de segunda mano
 
 ## Fuente sin `## Conclusiones` DECLARADA con motivo (#277: visible, no es deuda) (0)
 > sobre 60 notas de `papers/`

@@ -1477,6 +1477,11 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     #: #342 · cuántas notas traen un `## Huecos` con bullets — la población sobre la que corre
     #: el chequeo de alcance. La nota sin huecos escritos no entra: no hay negativa que pesar.
     _n_huecos = [0]
+    #: #350 · los pares (bloque citante, bibcode) sobre los que el chequeo de segunda mano se
+    #: pronuncia de verdad — o sea, los que citan un paper cuya vista marcó alguna. La categoría
+    #: declaraba «sobre 8 notas de entidad» y publicaba 398 hallazgos: con 8 de denominador el
+    #: número no se puede leer, y INV-40 quedaba cumplido en la letra y no en el espíritu.
+    _n_pares_sm = [0]
 
     def _source_readings(txt_path) -> list:
         """Normalized readings of a `.txt`, one per physical column, memoised (#275).
@@ -3050,6 +3055,13 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # tabla `## Papers` cita todos los bibcodes y haría estallar la categoría), y el hallazgo se
     # apaga si el bloque ya nombra la segunda mano — sin esa escotilla la deuda es inextinguible y
     # una categoría que no se puede cerrar se deja de mirar.
+    # ⛔ #350 — y se cruza el VALOR, no el paper. La pregunta era *«¿este paper tiene ALGUNA segunda
+    # mano?»*, que sobre un survey o un handbook —llenos de atribuciones a terceros por
+    # construcción— la contesta que sí siempre: medido, 398 de 462 pares, el 86 %. Es la forma de
+    # #198 (*«un reporte donde 2 de 3 avisos no son accionables se deja de mirar»*), acá con 6 de
+    # cada 7. La pregunta accionable es *«¿el valor que ESTA línea toma es uno de ellos?»* y la
+    # contesta `second_hand_lifted` por el literal compartido; el hallazgo lo NOMBRA, que es lo que
+    # lo vuelve triage y no lectura.
     for f, texto_n in anchor_bodies.items():
         if not (in_dir(f, "stars") or in_dir(f, "concepts")):
             continue
@@ -3057,12 +3069,22 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             _filas = segunda_mano.get(_par.bibcode)
             if not _filas or "segunda mano" in _par.block.text.lower():
                 continue
-            _quien = "; ".join(f"{q} → {de}" for q, _v, de in _filas[:3])
-            segunda_mano_perdida.append(
-                (basename(f)[:-3],
-                 f"L{_par.block.first_line}: la prosa se apoya en [[{_par.bibcode}]] y su vista "
-                 f"marca {len(_filas)} valor(es) de SEGUNDA MANO ({_quien}) → si el valor es uno de "
-                 f"ésos, la ficha tiene que decir de quién es (#103): el número no es de esta fuente"))
+            _n_pares_sm[0] += 1
+            # Los `[[bibcode]]` que el bloque cita también ATRIBUYEN: la prosa que dice «reclamadas
+            # por [[2013A&A...549A..48T]]» nombra a Tuomi sin escribir el apellido, y el aviso ahí
+            # no es accionable. El primer autor sale del frontmatter del paper, que el barrido ya
+            # leyó.
+            _atribuido = {a.split(",")[0].strip().casefold()
+                          for b in lb._bibcodes(_par.block.text)
+                          if (a := str((paper_fms.get(b) or {}).get("first_author") or "").strip())}
+            for _q, _v, _de, _ev in lb.second_hand_lifted(_par.block.text, _filas,
+                                                          atribuido=_atribuido):
+                segunda_mano_perdida.append(
+                    (basename(f)[:-3],
+                     f"L{_par.block.first_line}: la línea toma {', '.join(_ev)} de "
+                     f"[[{_par.bibcode}]], y su vista marca ese valor como SEGUNDA MANO "
+                     f"(«{_q[:80]}» → {_de[:120]}) → la ficha tiene que decir de quién es (#103): "
+                     f"el número no es de esta fuente"))
 
     retracted_stems = {stem for stem, fm_p in paper_fms.items() if fm_p.get("retracted")}
     gt_prosa: list = []                # (slug, motivo) — #278: la prosa desmiente su ground-truth
@@ -4517,7 +4539,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('reclamo_sin_vista_declarado', 'Reclamo sin vista DECLARADO con `no_vista` + motivo (visible, no es deuda)', SEV_BACKLOG, tuple(reclamo_sin_vista_declarado), poblacion='papers'),
         Categoria('vista_ejes_faltantes', '🎯 La vista no contesta los ejes de su propia lente: el silencio se lee como «se miró y no hay nada» (#254/#270, backlog)', SEV_BACKLOG, tuple(vista_ejes_faltantes), poblacion='papers'),
         Categoria('gt_prosa', '🪞 La prosa afirma sobre la autoridad algo que su ground-truth desmiente (#278, backlog)', SEV_BACKLOG, tuple(gt_prosa), poblacion='ground_truth'),
-        Categoria('segunda_mano', '🔁 Valor de SEGUNDA MANO levantado sin la marca: la atribución se pierde en la síntesis (#103/#279, backlog)', SEV_BACKLOG, tuple(segunda_mano_perdida), poblacion='entidades'),
+        Categoria('segunda_mano', '🔁 Valor de SEGUNDA MANO levantado sin la marca: la atribución se pierde en la síntesis (#103/#279, backlog)', SEV_BACKLOG, tuple(segunda_mano_perdida), poblacion='pares_segunda_mano'),
         Categoria('sin_conclusiones_ok', 'Fuente sin `## Conclusiones` DECLARADA con motivo (#277: visible, no es deuda)', SEV_BACKLOG, tuple(sin_conclusiones_ok), poblacion='papers'),
         Categoria('extraccion_no_declarada', 'Recorte de lectura sin declarar: hay core sin extraer y el registro no dice por qué (backlog)', SEV_BACKLOG, tuple(extraccion_no_declarada), poblacion='registros'),
         Categoria('papers_table_stale', 'Lista de papers desactualizada: la tabla estampada no refleja el universo (backlog)', SEV_BACKLOG, tuple(papers_table_stale), poblacion='registros'),
@@ -4546,6 +4568,9 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                       if cfg.REGISTRO.exists() else 0, "registros de sujeto"),
         "citas": (_n_citas_evaluadas[0], "citas «…» de ≥40 caracteres con fuente chequeable"),
         "huecos": (_n_huecos[0], "notas con `## Huecos` escrito"),
+        "pares_segunda_mano": (_n_pares_sm[0],
+                               "pares (bloque citante, bibcode) que citan una fuente con valores "
+                               "de segunda mano"),
         "temas": (0 if cfg.themes_error() else len(cfg.load_themes() or {}), "temas de `themes.yaml`"),
         "estrellas": (len(stars_slugs), "estrellas de `stars.yaml`"),
         # Los chequeos de config miran UN archivo cada uno (el objetivo, el `.obsidian/` de la

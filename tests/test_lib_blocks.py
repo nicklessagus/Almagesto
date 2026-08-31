@@ -973,6 +973,75 @@ def test_second_hand_rows_solo_mira_las_secciones_de_vista():
     assert lb.second_hand_rows(fuera) == []
 
 
+# ── #350 · se cruza el VALOR, no el paper ────────────────────────────────────────────────────────
+
+#: Dos valores de la misma fuente, uno marcado de segunda mano y el otro no.
+_FILAS = [("m_V", "7,15", "Koen et al. 2010"), ("P_rot", "34,8 d", "")]
+
+
+def test_second_hand_lifted_cruza_el_valor_no_el_paper():
+    """#350 — el aviso se emitía si el paper tenía ALGUNA segunda mano, así que sobre un survey lo
+    tenía siempre: 398 de 462 pares, 86 %. La pregunta accionable es si el valor que ESTA línea
+    toma es uno de ellos."""
+    toma = "La estrella tiene $m_V = 7{,}15$ ([[b]])."
+    assert [ev for *_r, ev in lb.second_hand_lifted(toma, _FILAS[:1])] == [["7.15"]]
+    # otra cifra de la MISMA fuente, que la vista no marcó: no es hallazgo
+    otro = "El período de rotación es de 34,8 d ([[b]])."
+    assert lb.second_hand_lifted(otro, _FILAS[:1]) == []
+
+
+def test_second_hand_lifted_no_cruza_referencias_ni_localizadores():
+    """La celda *Valor* está llena de números que no son valores: `[27]` es una referencia de la
+    fuente, `(6.18)` un tag de ecuación, `Sect. 2.3` un localizador, `(2013a)` un año. Medido en
+    #350: eran la mayor parte de lo que cruzaba, y hacían que el cruce no dijera nada."""
+    filas = [("Darmois", "el resultado se prueba en [3.14], ec. (2015) y Sect. 27.2", "Otro 1999")]
+    assert lb.second_hand_lifted("La prueba está en Sect. 27.2 y en 2015 ([[b]])", filas) == []
+    # y una designación de catálogo es un NOMBRE: `Gl 725` no es una cantidad
+    catalogo = [("compañera", "el objeto Gl 725 B está a 3,5 pc", "Otro 1999")]
+    assert lb.second_hand_lifted("El comparador es Gl 725 B ([[b]])", catalogo) == []
+
+
+def test_quantities_deja_afuera_el_entero_corto_y_conserva_el_largo():
+    """El corte medido en #350: una cifra de dos o tres dígitos sin decimales es un conteo tan a
+    menudo como una medición, y TODOS esos cruces resultaron colisión (`135 RV` contra `135 min`,
+    `200 exposiciones` contra un período de 200 d). Un entero de cuatro dígitos —un $T_{eff}$— sí
+    identifica un valor, y un decimal también aunque sea corto."""
+    assert lb.quantities("hubo 200 exposiciones y 48 noches") == set()
+    assert lb.quantities("Teff = 4866 K") == {"4866"}
+    assert lb.quantities("una barra de 0,8 m/s") == {"0.8"}
+
+
+def test_second_hand_lifted_no_cruza_un_entrecomillado_CORTO():
+    """Un fragmento corto no identifica nada: «no» o «es» aparecen en cualquier bloque, y el cruce
+    diría que la línea levantó el valor cuando sólo comparte una palabra."""
+    filas = [("qué", "el autor lo llama «ruido»", "Otro 1999")]
+    assert lb.second_hand_lifted("Acá el ruido es «ruido» y nada más ([[b]])", filas) == []
+    # y el control: el fragmento LARGO —el otro canal del cruce, el que alcanza a un valor que no
+    # es una cifra— sí cruza, y el hallazgo lo nombra
+    largo = "«the noise covariance matrix is also identifiable»"
+    filas_l = [("identificabilidad", f"la fuente dice {largo}", "atribuido por la fuente a otro")]
+    ev = [ev for *_r, ev in lb.second_hand_lifted(f"La covarianza {largo} ([[b]])", filas_l)]
+    assert ev and ev[0][0].startswith("«the noise covariance"), ev
+
+
+def test_second_hand_lifted_ve_el_decimal_CASTELLANO_de_la_matematica():
+    """⛔ La bóveda escribe `$P = 4{,}3115$` — las llaves son lo que evita que LaTeX espacie la coma
+    como separador de lista. Leído crudo son dos números y NINGÚN valor de una ficha real cruza:
+    la cuarta forma de la ceguera al markdown de la regla de método 4."""
+    filas = [("P_b", "el período es 4,3115 d", "Mayor et al. 2009")]
+    toma = "El período de `b` es $P = 4{,}3115$ d ([[b]])."
+    assert [ev for *_r, ev in lb.second_hand_lifted(toma, filas)] == [["4.3115"]]
+
+
+def test_second_hand_lifted_calla_si_el_bloque_YA_atribuye():
+    """El hallazgo pide que la ficha «diga de quién es»: si el bloque nombra al tercero, ya lo dice.
+    `atribuido` deja además que el llamador sume los primeros autores de los `[[bibcode]]` que el
+    bloque cita — la prosa que dice «reclamadas por [[2013…T]]» nombra a Tuomi sin escribirlo."""
+    toma = "La estrella tiene $m_V = 7{,}15$ ([[b]])."
+    assert lb.second_hand_lifted(toma + " El valor es de Koen et al. 2010.", _FILAS[:1]) == []
+    assert lb.second_hand_lifted(toma, _FILAS[:1], atribuido={"koen"}) == []
+
+
 import json as _json
 import re
 

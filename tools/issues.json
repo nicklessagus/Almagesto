@@ -1659,7 +1659,7 @@
   {
    "number": 333,
    "title": "Una cita alterada que nace EN la extracción es invisible para `contrast --validar` por construcción: su juez es la extracción (#315/#317), y el `.txt` sólo puede absolver, nunca acusar — medido, 40 de 169 citas aprobadas no están en el `.txt` de su fuente, y una es alteración confirmada contra el PDF",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 334,
@@ -1699,7 +1699,7 @@
   {
    "number": 341,
    "title": "Cuando las dos lecturas de un PDF no coinciden no pasa nada: emitir la marca `⚠verificar en el PDF` que YA existe, y que el gate declare cuántas citas aprobó con un solo testigo (40 de 169)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 342,

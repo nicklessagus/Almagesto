@@ -5106,6 +5106,49 @@ def test_parrafo_duplicado_es_backlog(toy_vault, capsys):
     assert rc == 0
 
 
+#: #349 · el bloque de ejes que **cada vista** estampa por su cuenta: idénticos por construcción,
+#: porque la lente es la misma y la fuente calló los mismos ejes en las dos lecturas.
+_EJES_VACIOS = ("**Ejes:**\n\n- **rv:** _(sin datos)_\n- **activity:** _(sin datos)_\n"
+                "- **planet:** _(sin datos)_\n- **discovery:** _(sin datos)_\n"
+                "- **method:** _(sin datos)_\n- **detection:** _(sin datos)_\n")
+
+
+def test_dos_vistas_con_el_mismo_eje_vacio_no_es_duplicado(toy_vault, capsys):
+    """#349 — el detector marcaba como daño lo que **estampa el framework**. Con varias vistas
+    (#239) cada una escribe su línea estructural y son idénticas por construcción: medido en una
+    bóveda real, 7 hallazgos y los 7 falsos. Cada `## Vista` es su propio ámbito."""
+    paper_con_vista(toy_vault, vistas=[{"sujeto": "Estrella Test", "tipo": "star"},
+                                       {"sujeto": "s_index", "tipo": "theme"}],
+                    body=(f"## Vista — Estrella Test\n\n{_EJES_VACIOS}\n"
+                          f"## Vista — s_index\n\n{_EJES_VACIOS}"))
+    link_from_log(toy_vault, "2020vis....1V")
+    rc, rep = run_lint_reporte(capsys)
+    seccion = _seccion(rep, "Forma del artefacto: marcador")
+    assert "párrafo repetido" not in seccion, seccion
+    assert rc == 0, rep
+
+
+def test_parrafo_repetido_DENTRO_de_una_vista_sigue_siendo_hallazgo(toy_vault, capsys):
+    """#349, la mitad que no se afloja: acotar el ámbito a la vista no puede apagar el caso real.
+    El mismo párrafo dos veces **en la misma vista** es el empalme de #227, y se sigue reportando.
+    ⚠ Y `### Lente — <énfasis>` (#239) es otro ámbito: la segunda lectura del mismo sujeto vive
+    dentro de la `## Vista` y no se compara contra la primera."""
+    p = ("⚠ Que el defecto sea estructural no implica que el método lo arregle en datos reales, y "
+         "el único paper del corpus que lo mide contra verdad conocida encuentra que ")
+    paper_con_vista(toy_vault,
+                    vistas=[{"sujeto": "Estrella Test", "tipo": "star"},
+                            {"sujeto": "Estrella Test", "tipo": "star",
+                             "enfasis": "segunda lectura"}],
+                    body=(f"## Vista — Estrella Test\n\n{p}sí, con S/N alto.\n\n"
+                          f"Otro párrafo en el medio del todo.\n\n{p}no, bajo un umbral.\n\n"
+                          f"### Lente — segunda lectura\n\n{p}sí, con S/N alto.\n"))
+    link_from_log(toy_vault, "2020vis....1V")
+    rc, rep = run_lint_reporte(capsys)
+    seccion = _seccion(rep, "Forma del artefacto: marcador")
+    assert seccion.count("párrafo repetido") == 1, seccion
+    assert rc == 0, rep
+
+
 def test_alias_con_nota_propia_bloquea(toy_vault, capsys):
     """#229 — la exención por `versions[]` es incondicional y eso APAGA los dos detectores de
     identidad sobre una nota VIVA. Medido: una nota usó `versions[]` para decir «no son duplicados,
@@ -5973,13 +6016,15 @@ def test_un_value_numerico_no_voltea_el_lint(toy_vault, capsys):
 
 # ── #279 · la marca «segunda mano» que se pierde de la nota de paper a la ficha ──────────────────
 
-def _paper_con_segunda_mano(bib="2010A....2A"):
+def _paper_con_segunda_mano(bib="2010A....2A", first_author="Autor, A."):
     mk_note(cfg.PAPERS, bib, {"bibcode": bib, "tags": ["paper"], "stars": ["Test"],
+                              "first_author": first_author,
                               "vistas": [{"sujeto": "Test", "tipo": "star", "fecha": "2026-08-30",
                                           "fuente": "pdf"}]},
             "# p\n\n## Vista — Test (2026-08-30)\n\n"
             "| Qué | Valor | Localizador | Régimen | Segunda mano |\n|---|---|---|---|---|\n"
-            "| m_V | 7,15 | p. 3 | — | Koen et al. 2010 |\n")
+            "| m_V | 7,15 | p. 3 | — | Koen et al. 2010 |\n"
+            "| P_rot | 34,8 d | p. 5 | HARPS | — |\n")
 
 
 def test_valor_de_segunda_mano_sin_marca_en_la_ficha_es_backlog(toy_vault, capsys):
@@ -6019,6 +6064,53 @@ def test_la_tabla_estampada_de_papers_no_cuenta_como_apoyo(toy_vault, capsys):
     link_from_log(toy_vault, "test_star", "2010A....2A")
     _rc, rep = run_lint_reporte(capsys)
     assert "test_star" not in _seccion(rep, "SEGUNDA MANO"), rep
+
+
+def test_la_linea_que_cita_OTRO_valor_del_mismo_paper_no_dispara(toy_vault, capsys):
+    """#350 — el aviso preguntaba *«¿este paper tiene ALGUNA segunda mano?»*, que sobre un survey o
+    un handbook —llenos de atribuciones por construcción— se contesta que sí siempre: medido, 398
+    de 462 pares, el 86 %. La forma de #198, con 6 de cada 7 avisos no accionables. La pregunta
+    accionable es la otra: *¿el valor que ESTA línea toma es uno de ellos?*"""
+    _paper_con_segunda_mano()
+    mk_note(cfg.STARS, "test_star", {"name": "Test", "slug": "test_star", "tags": ["star"],
+                                     "planets": []},
+            "# f\n\nEl período de rotación es de $34{,}8$ d [[2010A....2A]].\n")
+    link_from_log(toy_vault, "test_star", "2010A....2A")
+    _rc, rep = run_lint_reporte(capsys)
+    seccion = _seccion(rep, "SEGUNDA MANO")
+    assert "test_star" not in seccion, seccion
+
+
+def test_el_hallazgo_de_segunda_mano_declara_su_poblacion_en_PARES(toy_vault, capsys):
+    """#350 / INV-40 — la categoría declaraba «sobre N notas de entidad» y publicaba 398 hallazgos:
+    con 8 de denominador el número no se puede leer. El denominador natural es el **par** (bloque
+    citante, bibcode), que es la unidad sobre la que el chequeo se pronuncia."""
+    _paper_con_segunda_mano()
+    mk_note(cfg.STARS, "test_star", {"name": "Test", "slug": "test_star", "tags": ["star"],
+                                     "planets": []},
+            "# f\n\nLa magnitud es $V = 7{,}15$ [[2010A....2A]].\n\n"
+            "El período es de $34{,}8$ d [[2010A....2A]].\n")
+    link_from_log(toy_vault, "test_star", "2010A....2A")
+    _rc, rep = run_lint_reporte(capsys)
+    # ⚠ el denominador NO está en `_seccion` (que lo descuenta a propósito): se lee del reporte
+    assert "> sobre 2 pares (bloque citante, bibcode)" in rep, rep
+
+
+def test_el_hallazgo_de_segunda_mano_NOMBRA_el_valor_que_cruza(toy_vault, capsys):
+    """#350 — sin nombrar el literal, el aviso manda a releer la vista entera; con él es triage.
+    Y la escotilla nueva: si el bloque ya nombra al tercero —en prosa o citando su paper— la ficha
+    YA dice de quién es, que es todo lo que el hallazgo pide."""
+    _paper_con_segunda_mano()
+    mk_note(cfg.STARS, "test_star", {"name": "Test", "slug": "test_star", "tags": ["star"],
+                                     "planets": []},
+            "# f\n\nLa magnitud es $V = 7{,}15$ [[2010A....2A]].\n\n"
+            "Y la misma magnitud, dicha por su dueño: $V = 7{,}15$, de Koen et al. 2010 "
+            "[[2010A....2A]].\n")
+    link_from_log(toy_vault, "test_star", "2010A....2A")
+    _rc, rep = run_lint_reporte(capsys)
+    seccion = _seccion(rep, "SEGUNDA MANO")
+    assert seccion.count("test_star") == 1, seccion
+    assert "toma 7.15" in seccion, seccion
 
 
 # ── #278 · la prosa que contradice su propio ground-truth ────────────────────────────────────────
