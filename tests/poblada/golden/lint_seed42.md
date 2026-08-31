@@ -134,7 +134,19 @@
 ## ⚖ Condición sin clasificar: no dice si acota la afirmación o sólo la contextualiza (#221, backlog) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 
-## 🧾 Bloque de verificación incompleto: faltan sub-secciones o la cabecera no cuadra (#232, backlog) (0)
+## 🧾 Bloque de verificación incompleto: faltan sub-secciones o su conteo no cuadra (#232, backlog) (0)
+> sobre 29 notas de entidad (fichas, conceptos, queries)
+
+## ⛔ Tabla de verificación DENTRO de la nota (schema pre-1.165.0) → `make_notes.py --migrate-verif-sidecar` (#344) (0)
+> sobre 29 notas de entidad (fichas, conceptos, queries)
+
+## ⛔ Nota con cabecera de verificación y SIN su hermano `<nota>.verif.md` (#344): afirma pares que no se pueden evaluar (0)
+> sobre 29 notas de entidad (fichas, conceptos, queries)
+
+## ⛔ Hermano `.verif.md` HUÉRFANO (#344): la nota que audita ya no existe (0)
+> sobre 89 notas de `vault/wiki/`
+
+## Cabecera del bloque desincronizada de la tabla de su hermano (INV-148/#344) (backlog: pasada periódica; con `--cierre` bloquea) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 
 ## ✂ Celda del bloque de verificación truncada: se tiró lo que el fan-out encontró (#226, backlog) (0)
@@ -159,6 +171,9 @@
 > sobre 0 citas «…» de ≥40 caracteres con fuente chequeable
 
 ## ❝ Cita que la fuente SÍ dice y el `.txt` parte: el defecto es de la EXTRACCIÓN, no de la nota (#288, backlog) (0)
+> sobre 0 citas «…» de ≥40 caracteres con fuente chequeable
+
+## ❝ Las DOS lecturas del mismo PDF no coinciden: `pdftotext` dice una cosa y la extracción otra — andá a la página (#333, backlog) (0)
 > sobre 0 citas «…» de ≥40 caracteres con fuente chequeable
 
 ## ❝ Cita textual NO EVALUABLE: sin `.txt` o con OCR (#220, se declara, no cuenta en contra) (0)

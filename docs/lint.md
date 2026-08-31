@@ -119,6 +119,19 @@ Deben quedar en **0**:
   resolución se anota en la celda (`contradice→corregida`), nunca pisa el veredicto (#232).
 - **Bloque de verificación con plantilla vieja** (sin las columnas de hash): no es "cero vencidos",
   es un bloque que nadie puede evaluar. **Bloqueante siempre**, con o sin `--cierre`.
+- **El par nota ↔ hermano de auditoría** (#344/INV-148) — tres categorías, las tres bloqueantes.
+  Desde 1.165.0 la **tabla** del bloque vive en `<nota>.verif.md` (hermano, mismo directorio) y en la
+  nota quedan la línea de cabecera, las tres sub-secciones y un puntero:
+  - **Tabla DENTRO de la nota** (schema anterior a 1.165.0): detector, nunca lector tolerante —
+    leerla de los dos lados dejaría dos casas para una tabla. Se cierra con
+    `python scripts/make_notes.py --migrate-verif-sidecar` (mueve la tabla **verbatim**: no
+    re-renderiza, así que anclas y hashes quedan intactos; idempotente).
+  - **Nota con cabecera de verificación y SIN su hermano**: la nota publica una línea que afirma N
+    pares y la tabla que la respalda no está en ningún lado — no es «cero vencidos», es una
+    afirmación que nadie puede evaluar (D-43).
+  - **Hermano `.verif.md` HUÉRFANO** (su nota ya no existe): un rastro de auditoría que no se puede
+    cerrar contra nada. Lo llevan solos `entity.py delete|rename` (octava capa, INV-19) y
+    `--rename-paper`; aparece cuando algo movió la nota a mano.
 - **Celda `Hash fuente` sin prefijo `txt:`/`pdf:`** (#117): *no consta* no es `txt`; se migra con
   `python scripts/make_notes.py --migrate-verif-archivo`. Excepción nombrada (#223): la fila
   `no verificable por extracción` no declara archivo, porque no hay ninguno.
@@ -188,6 +201,14 @@ OCR, o marcar `pending`).
   `lib_blocks.verif_subsection_lines`, el mismo código que lee la tabla; *Omisiones* no lleva número
   (es juicio, no está en la tabla). Sólo se reporta la sub-sección **presente**: la ausente ya la
   reporta el chequeo de #232.
+- **Cabecera del bloque desincronizada de la tabla de su hermano** (#344/INV-148, **R-1**: backlog
+  en la pasada periódica, **bloquea con `--cierre`**). INV-81 cruzando archivos: los conteos los da
+  `lib_blocks.verif_summary`, el mismo código que lee la tabla, y desde #344 la tabla vive en OTRO
+  archivo — la cabecera es lo único del rastro que viaja con la nota, así que si deriva el
+  consumidor no tiene con qué notarlo. Se exige la **línea canónica entera** (hasta 1.164.0 se
+  comparaba sólo el fragmento «N pares», con la tabla ahí al lado para desmentirla), comparada con
+  el markdown normalizado. Bloquea con `--cierre` porque la cabecera la escribe `verify-citations`,
+  que es paso de cierre.
 - **Cabecera publicada ≠ la que el estampador daría hoy** (#233): nadie cruzaba lo publicado con lo
   producible — una nota puede publicar dos de las tres fechas obligatorias y pasar el gate.
 - **Nota de paper sin `## Abstract`** (#124/#277, **bloqueante**): es la única capa **auditable**

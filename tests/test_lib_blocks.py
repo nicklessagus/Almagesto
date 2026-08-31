@@ -1228,3 +1228,81 @@ def test_la_columna_Fuente_solo_se_lee_en_una_FILA_de_tabla():
     prosa = "El paper dice «la cita esta de largo | con una barra» y lo discute [[2013Voss]] | [[A]] |"
     assert lb.quote_owner(prosa, "la cita esta de largo | con una barra",
                           ["2013Voss", "A"]) is None
+
+
+# ── #344 · el hermano de auditoría: dónde vive la tabla ──────────────────────────────────────────
+
+_TABLA_344 = ("| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente "
+              "| Condición |\n|---|---|---|---|---|---|---|---|\n"
+              "| 1 | x | [[2019Autor]] | soportada | «y» (p. 1) | aaaaaaaaaa | pdf:bbbbbbbbbb | — |")
+
+
+def _par_344(tmp_path, cabecera=None):
+    """Nota + hermano, tal como quedan después de la migración."""
+    import lib_config as cfg
+    nota = tmp_path / "ica.md"
+    linea = cabecera if cabecera is not None else "1 pares; 1 soportadas"
+    nota.write_text(f"# ica\n\nAfirmación [[2019Autor]].\n\n{lb.VERIFY_HEADER} (2026-08-31)\n\n"
+                    f"{linea}\n\n{lb.verif_pointer(nota)}\n", encoding="utf-8")
+    cfg.verif_sidecar(nota).write_text(lb.render_verif_sidecar(nota, _TABLA_344), encoding="utf-8")
+    return nota
+
+
+def test_verif_sidecar_es_el_hermano_en_el_mismo_directorio(tmp_path):
+    """#344 — `<nota>.verif.md` al lado, NO un `.verif/` con punto: con punto Obsidian lo esconde y
+    el par deja de ser obvio."""
+    import lib_config as cfg
+    assert cfg.verif_sidecar(tmp_path / "a" / "ica.md") == tmp_path / "a" / "ica.verif.md"
+    assert cfg.is_verif_sidecar(tmp_path / "ica.verif.md")
+    assert not cfg.is_verif_sidecar(tmp_path / "ica.md")
+
+
+def test_verif_rows_lee_la_tabla_DEL_HERMANO(tmp_path):
+    """El resolvedor único: los cuatro consumidores preguntan por la NOTA y la tabla sale del
+    hermano. Sin esto cada uno tendría su propia idea de dónde vive, que es la duplicación que este
+    repo pagó siete veces en un día.  @inv INV-148"""
+    filas = lb.verif_rows(_par_344(tmp_path))
+    assert filas is not None and len(filas) == 1
+    assert filas[0].bibcode == "2019Autor" and filas[0].anchor == "aaaaaaaaaa"
+
+
+def test_verif_rows_sin_hermano_no_es_cero_pares(tmp_path):
+    """D-43 — sin hermano la tabla no está en ningún lado: eso es NO EVALUABLE (`None`), no una
+    lista vacía que se lee como «cero pares vencidos»."""
+    nota = tmp_path / "ica.md"
+    nota.write_text(f"# ica\n\n{lb.VERIFY_HEADER}\n\n1 pares\n", encoding="utf-8")
+    assert lb.verif_rows(nota) is None
+
+
+def test_inline_verif_rows_detecta_el_schema_viejo_y_solo_en_su_seccion(tmp_path):
+    """#344 — detector del schema anterior a 1.165.0, nunca lector tolerante. Y mira SÓLO la
+    sección del bloque: una tabla de evidencia en el cuerpo no es la tabla de verificación."""
+    viejo = f"# ica\n\n| Paper | Postura |\n|---|---|\n\n{lb.VERIFY_HEADER}\n\n{_TABLA_344}\n"
+    assert len(lb.inline_verif_rows(viejo)) == 3
+    nuevo = _par_344(tmp_path).read_text(encoding="utf-8")
+    assert lb.inline_verif_rows(nuevo) == []
+
+
+def test_verif_summary_stated_compara_con_el_markdown_NORMALIZADO(tmp_path):
+    """INV-148 — INV-81 cruzando archivos: la cabecera de la nota tiene que ser la que da la tabla
+    del hermano. ⚠ Con el markdown normalizado (regla de método nº4): un fan-out que pone en negrita
+    los números no puede leerse como un desfasaje."""
+    filas = lb.verif_rows(_par_344(tmp_path))
+    canonica = lb.verif_summary(filas)
+    nota = _par_344(tmp_path, cabecera=canonica)
+    assert lb.verif_summary_stated(nota.read_text(encoding="utf-8"), filas)
+    negrita = _par_344(tmp_path, cabecera=f"**{canonica}**.")
+    assert lb.verif_summary_stated(negrita.read_text(encoding="utf-8"), filas)
+    desync = _par_344(tmp_path, cabecera="96 pares; 96 soportadas")
+    assert not lb.verif_summary_stated(desync.read_text(encoding="utf-8"), filas)
+
+
+def test_verif_pointer_es_un_link_markdown_y_no_un_wikilink(tmp_path):
+    """#344 — el hermano NO es una nota: no está en la tabla de nombres del lint, así que un
+    `[[wikilink]]` hacia él se reportaría ROTO (bloqueante) en toda bóveda migrada. Y nombra el
+    archivo real, que es lo único que hace navegable el par."""
+    nota = tmp_path / "ica.md"
+    puntero = lb.verif_pointer(nota)
+    assert "ica.verif.md" in puntero
+    assert "[[" not in puntero, "un wikilink al hermano se reporta roto"
+    assert puntero.lstrip().startswith(">"), "va en blockquote: no lo mira el scan de fuga"

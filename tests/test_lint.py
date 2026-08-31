@@ -1782,10 +1782,36 @@ def _git(root, *args, fecha=None):
                           capture_output=True, text=True, env=env)
 
 
+def _hermano(toy_vault, stem="nota-verif"):
+    """Dónde vive la tabla desde #344: el hermano `<nota>.verif.md`, no la nota."""
+    import lib_config as cfg
+    return cfg.verif_sidecar(toy_vault.CONCEPTS / "methods" / f"{stem}.md")
+
+
+def _editar_tabla(toy_vault, viejo, nuevo, stem="nota-verif"):
+    """Cambia una celda de la tabla de verificación, que vive en el hermano (#344)."""
+    h = _hermano(toy_vault, stem)
+    h.write_text(h.read_text(encoding="utf-8").replace(viejo, nuevo), encoding="utf-8")
+    return h
+
+
+def _al_hermano(nota):
+    """#344 — la tabla del bloque se va a `<nota>.verif.md`, que es donde el lint la lee.
+
+    Se usa el MIGRADOR de verdad, no una copia: un doble con otro contrato esconde el bug en la
+    diferencia (regla de método nº2), y acá el contrato es exactamente «qué queda en la nota y qué
+    se va al hermano»."""
+    import make_notes
+    make_notes.migrate_verif_sidecar(nota)
+    return nota
+
+
 def _nota_verif(toy_vault, stem, cuerpo):
-    """Nota-concepto con bloque de verificación + el paper que cita (para no romper el wikilink)."""
+    """Nota-concepto con bloque de verificación + el paper que cita (para no romper el wikilink).
+
+    El cuerpo se escribe con la tabla inline —es como se lee— y se parte al hermano (#344)."""
     mk_note(toy_vault.PAPERS, "2020citC...1..1C", {"tags": ["paper"]}, "")
-    mk_note(toy_vault.CONCEPTS / "methods", stem, {"tags": ["methods"]}, cuerpo)
+    _al_hermano(mk_note(toy_vault.CONCEPTS / "methods", stem, {"tags": ["methods"]}, cuerpo))
     link_from_log(toy_vault, stem)
 
 
@@ -2095,9 +2121,7 @@ def test_symbols_lost_vigila_el_PDF_y_no_el_txt(toy_vault, capsys):
     ft = _con_ancla(toy_vault, CUERPO)
     pdf = _fuente_sin_ecuaciones(toy_vault)
     # la fila tiene que nacer anclada al PDF, que es de donde salió la cita
-    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
-    nota.write_text(nota.read_text(encoding="utf-8").replace(
-        f"txt:{lb.source_hash(ft)}", f"pdf:{lb.bytes_hash(pdf)}"), encoding="utf-8")
+    _editar_tabla(toy_vault, f"txt:{lb.source_hash(ft)}", f"pdf:{lb.bytes_hash(pdf)}")
     _, rep = run_lint_reporte(capsys)
     assert _n_vencidos(rep) == 0, "nace verificada contra el PDF"
 
@@ -2110,9 +2134,7 @@ def test_symbols_lost_marca_cuando_cambia_el_PDF(toy_vault, capsys):
     """La otra mitad: si cambia el archivo del que SÍ sale la cita, el par vence."""
     ft = _con_ancla(toy_vault, CUERPO)
     pdf = _fuente_sin_ecuaciones(toy_vault)
-    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
-    nota.write_text(nota.read_text(encoding="utf-8").replace(
-        f"txt:{lb.source_hash(ft)}", f"pdf:{lb.bytes_hash(pdf)}"), encoding="utf-8")
+    _editar_tabla(toy_vault, f"txt:{lb.source_hash(ft)}", f"pdf:{lb.bytes_hash(pdf)}")
     pdf.write_bytes(b"%PDF-1.4\n un escaneo distinto \xfe\n")
     _, rep = run_lint_reporte(capsys)
     assert _n_vencidos(rep) == 1
@@ -3949,9 +3971,7 @@ def test_ocr_verificado_contra_el_PDF_no_vence_al_re_extraer_el_txt(toy_vault, c
     (toy_vault.PDFS / "slug").mkdir(parents=True, exist_ok=True)
     pdf = toy_vault.PDFS / "slug" / "2020citC...1..1C.pdf"
     pdf.write_bytes(b"%PDF-1.4\n el escaneo del editor \xff\n")
-    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
-    nota.write_text(nota.read_text(encoding="utf-8").replace(
-        f"txt:{lb.source_hash(ft)}", f"pdf:{lb.bytes_hash(pdf)}"), encoding="utf-8")
+    _editar_tabla(toy_vault, f"txt:{lb.source_hash(ft)}", f"pdf:{lb.bytes_hash(pdf)}")
     _, rep = run_lint_reporte(capsys)
     assert _n_vencidos(rep) == 0, "nace verificada contra el PDF que declara"
 
@@ -3981,9 +4001,7 @@ def test_fila_que_declara_un_archivo_ausente_no_da_limpio(toy_vault, capsys):
     """Dice haberse verificado contra el PDF y el PDF no está: el hash no se puede comparar. Es
     «no evaluado», que no es «al día».  @inv INV-107"""
     ft = _con_ancla(toy_vault, CUERPO)
-    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
-    nota.write_text(nota.read_text(encoding="utf-8").replace(
-        f"txt:{lb.source_hash(ft)}", "pdf:aaaaaaaaaa"), encoding="utf-8")
+    _editar_tabla(toy_vault, f"txt:{lb.source_hash(ft)}", "pdf:aaaaaaaaaa")
     rc, rep = run_lint_reporte(capsys)
     assert "ese archivo no está en la bóveda" in rep
     assert rc == 1
@@ -4080,13 +4098,7 @@ def test_localizador_que_contradice_al_archivo_vigilado(toy_vault, capsys):
     Backlog y no bloqueante: el par puede estar perfectamente verificado; lo que hay que hacer es
     re-anclarlo.  @inv INV-113"""
     ft = _con_ancla(toy_vault, CUERPO)
-    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
-    t = nota.read_text(encoding="utf-8")
-    t = t.replace("| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente | Condición |",
-                  "| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |")
-    t = t.replace("|---|---|---|---|---|---|---|", "|---|---|---|---|---|---|---|---|")
-    t = t.replace("| soportada | ", '| soportada | "la cita" (p. 628) | ')
-    nota.write_text(t, encoding="utf-8")
+    _con_evidencia(toy_vault, '"la cita" (p. 628)')
     _, rep = run_lint_reporte(capsys)
     assert "cita una PÁGINA y la fila vigila el `.txt`" in rep
     cat = lint.collect().por_clave("verif_localizador")
@@ -4110,13 +4122,7 @@ def test_doble_localizador_no_es_hallazgo_y_el_mensaje_lo_propone(toy_vault, cap
     vigilado. El detector ya lo soporta (exige `len(_locs) == 1`); lo que faltaba es que el mensaje
     lo proponga en vez de mandar a empeorar la fila.  @inv INV-113"""
     ft = _con_ancla(toy_vault, CUERPO)
-    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
-    t = nota.read_text(encoding="utf-8")
-    t = t.replace("| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente | Condición |",
-                  "| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |")
-    t = t.replace("|---|---|---|---|---|---|---|", "|---|---|---|---|---|---|---|---|")
-    t = t.replace("| soportada | ", '| soportada | "la cita" (p. 628 / `.txt` L120) | ')
-    nota.write_text(t, encoding="utf-8")
+    _con_evidencia(toy_vault, '"la cita" (p. 628 / `.txt` L120)')
     run_lint_reporte(capsys)
     assert lint.collect().por_clave("verif_localizador").items == (), \
         "una fila con los DOS localizadores no es hallazgo: dice la verdad en los dos ejes"
@@ -4126,13 +4132,7 @@ def test_el_mensaje_del_localizador_propone_el_doble_localizador(toy_vault, caps
     """#200: el mensaje mandaba a `re-anclar a pdf:`, que sobre un libro leído del `.txt` es mentir
     sobre qué archivo se abrió. Tiene que nombrar la salida que no ablanda nada.  @inv INV-113"""
     ft = _con_ancla(toy_vault, CUERPO)
-    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
-    t = nota.read_text(encoding="utf-8")
-    t = t.replace("| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente | Condición |",
-                  "| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |")
-    t = t.replace("|---|---|---|---|---|---|---|", "|---|---|---|---|---|---|---|---|")
-    t = t.replace("| soportada | ", '| soportada | "la cita" (p. 628) | ')
-    nota.write_text(t, encoding="utf-8")
+    _con_evidencia(toy_vault, '"la cita" (p. 628)')
     _, rep = run_lint_reporte(capsys)
     assert "los DOS localizadores" in rep, \
         "el mensaje tiene que proponer el doble localizador, no sólo re-anclar"
@@ -4149,9 +4149,7 @@ def test_veredicto_sin_resolver_en_el_bloque_bloquea(toy_vault, capsys):
 
     Bloqueante: es la frontera dura, igual que una fuente retractada citada.  @inv INV-117"""
     _con_ancla(toy_vault, CUERPO)
-    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
-    nota.write_text(nota.read_text(encoding="utf-8").replace("| soportada |", "| no-soportada |"),
-                    encoding="utf-8")
+    _editar_tabla(toy_vault, "| soportada |", "| no-soportada |")
     rc, rep = run_lint_reporte(capsys)
     assert "SIN RESOLVER" in rep, "la categoría se nombra"
     assert "afirma algo que su propia fuente no respalda" in rep, "y el hallazgo dice qué hacer"
@@ -4166,9 +4164,7 @@ def test_contradice_tambien_cuenta_y_soportada_no(toy_vault, capsys):
     dejaría de mirar.  @inv INV-117"""
     _con_ancla(toy_vault, CUERPO)
     assert lint.collect().por_clave("verif_sin_resolver").items == ()
-    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
-    nota.write_text(nota.read_text(encoding="utf-8").replace("| soportada |", "| contradice |"),
-                    encoding="utf-8")
+    _editar_tabla(toy_vault, "| soportada |", "| contradice |")
     assert len(lint.collect().por_clave("verif_sin_resolver")) == 1
 
 
@@ -4842,6 +4838,7 @@ def test_un_typo_en_el_veredicto_se_reporta_como_typo_y_bloquea(toy_vault, capsy
         "|---|---|---|---|---|---|---|---|\n"
         f"| 1 | x | [[2020tip...1..1T]] | contradise | \"y\" (p. 1) | {ancla} | pdf:aaaaaaaaaa | — |\n",
         encoding="utf-8")
+    _al_hermano(toy_vault.CONCEPTS / "methods" / "typo.md")      # #344: la tabla vive en el hermano
     mk_note(toy_vault.PAPERS, "2020tip...1..1T", {"tags": ["paper"], "stars": []}, "")
     rc, out = run_lint(capsys)
     assert rc == 1
@@ -5391,15 +5388,22 @@ def test_la_poblacion_del_chequeo_de_citas_son_las_citas(toy_vault, capsys):
     assert "sobre 1 citas «…»" in rep, rep
 
 
+def _cabecera(toy_vault, stem="nota-verif"):
+    """La línea canónica que da la tabla del hermano — el mismo código que la lee (INV-81/#344)."""
+    return lb.verif_summary(lb.verif_rows(toy_vault.CONCEPTS / "methods" / f"{stem}.md"))
+
+
 def _con_evidencia(toy_vault, celda: str) -> None:
-    """La nota de `_con_ancla` con la columna `Evidencia` puesta y su celda cargada (#226)."""
-    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
-    t = nota.read_text(encoding="utf-8")
+    """La tabla de `_con_ancla` con la columna `Evidencia` puesta y su celda cargada (#226).
+
+    ⚠ Se escribe en el HERMANO (#344): desde 1.165.0 la tabla no vive en la nota."""
+    h = _hermano(toy_vault)
+    t = h.read_text(encoding="utf-8")
     t = t.replace("| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente | Condición |",
                   "| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |")
     t = t.replace("|---|---|---|---|---|---|---|", "|---|---|---|---|---|---|---|---|")
     t = t.replace("| soportada | ", f"| soportada | {celda} | ")
-    nota.write_text(t, encoding="utf-8")
+    h.write_text(t, encoding="utf-8")
 
 
 def test_evidencia_truncada_es_hallazgo(toy_vault, capsys):
@@ -5438,10 +5442,9 @@ def test_evidencia_con_localizador_coherente_no_dispara_ninguna(toy_vault, capsy
 
 
 def _con_condicion(toy_vault, celda: str) -> None:
-    """La nota de `_con_ancla` con la celda `Condición` cargada (#221)."""
-    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
-    t = nota.read_text(encoding="utf-8").replace("| — |", f"| {celda} |")
-    nota.write_text(t, encoding="utf-8")
+    """La tabla de `_con_ancla` con la celda `Condición` cargada (#221) — en el hermano (#344)."""
+    h = _hermano(toy_vault)
+    h.write_text(h.read_text(encoding="utf-8").replace("| — |", f"| {celda} |"), encoding="utf-8")
 
 
 def test_condicion_sin_clasificar_es_hallazgo(toy_vault, capsys):
@@ -5575,16 +5578,19 @@ def test_el_bloque_sin_las_tres_subsecciones(toy_vault, capsys):
 
 
 def test_la_cabecera_del_bloque_publica_los_pares_de_su_tabla(toy_vault, capsys):
-    """#232 — los conteos de la cabecera los da el mismo código que lee la tabla (INV-81). A mano
-    derivan: la cabecera de un bloque real describía la ronda 1 sobre 96 pares mientras su tabla
-    tenía 99, sin decir de dónde salían los 3 nuevos (los agregaron las propias correcciones)."""
+    """#232/#344 — los conteos de la cabecera los da el mismo código que lee la tabla (INV-81). A
+    mano derivan: la cabecera de un bloque real describía la ronda 1 sobre 96 pares mientras su
+    tabla tenía 99, sin decir de dónde salían los 3 nuevos (los agregaron las propias correcciones).
+
+    Desde #344 la tabla vive en OTRO archivo, así que la cabecera es lo único del rastro que viaja
+    con la nota: se exige la línea canónica entera, no el fragmento «N pares».  @inv INV-148"""
     _con_ancla(toy_vault, CUERPO)
     nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
     nota.write_text(nota.read_text(encoding="utf-8").replace(
         "## Verificación de citas", "## Verificación de citas\n\n96 pares; 96 soportadas\n", 1),
         encoding="utf-8")
     _, rep = run_lint_reporte(capsys)
-    assert "no publica «1 pares»" in _seccion(rep, "Bloque de verificación incompleto"), rep
+    assert "1 pares; 1 soportadas" in _seccion(rep, "desincronizada de la tabla de su hermano"), rep
 
 
 def test_el_bloque_completo_no_dispara(toy_vault, capsys):
@@ -5592,7 +5598,8 @@ def test_el_bloque_completo_no_dispara(toy_vault, capsys):
     _con_ancla(toy_vault, CUERPO)
     nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
     t = nota.read_text(encoding="utf-8").replace(
-        "## Verificación de citas", "## Verificación de citas\n\n1 pares; 1 soportadas\n", 1)
+        "## Verificación de citas",
+        f"## Verificación de citas\n\n{_cabecera(toy_vault)}\n", 1)
     # #280 — las sub-secciones publican el conteo que su propia tabla da, generado por el mismo
     # código que la lee. Sin los fragmentos, la nota es justamente el caso que el issue mide.
     nota.write_text(t + "\nInferencias declaradas (sin cita, por diseño) — 0 marcas en el cuerpo: "
@@ -5612,7 +5619,8 @@ def test_la_subseccion_con_un_conteo_que_su_tabla_desmiente_es_hallazgo(toy_vaul
     _con_ancla(toy_vault, CUERPO)
     nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
     t = nota.read_text(encoding="utf-8").replace(
-        "## Verificación de citas", "## Verificación de citas\n\n1 pares; 1 soportadas\n", 1)
+        "## Verificación de citas",
+        f"## Verificación de citas\n\n{_cabecera(toy_vault)}\n", 1)
     nota.write_text(t + "\nInferencias declaradas (sin cita, por diseño): ninguna.\n"
                         "Omisiones en transcripciones: ninguna.\n"
                         "Condiciones perdidas — las 20 marcadas `acota` se resolvieron.\n",
@@ -5629,7 +5637,8 @@ def test_la_subseccion_ausente_no_se_reporta_dos_veces(toy_vault, capsys):
     _con_ancla(toy_vault, CUERPO)
     nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
     nota.write_text(nota.read_text(encoding="utf-8").replace(
-        "## Verificación de citas", "## Verificación de citas\n\n1 pares; 1 soportadas\n", 1),
+        "## Verificación de citas",
+        f"## Verificación de citas\n\n{_cabecera(toy_vault)}\n", 1),
         encoding="utf-8")
     _, rep = run_lint_reporte(capsys)
     seccion = _seccion(rep, "Bloque de verificación incompleto")
@@ -6738,3 +6747,114 @@ def test_el_remedio_de_la_cabecera_desfasada_CORRE_en_el_sujeto_que_nombra(toy_v
     # ⛔ La estrella NO se lleva el flag de arrastre: el remedio de un sujeto no puede nombrar la
     # config del otro.
     assert "make_notes.py test_star --theme" not in rep
+
+
+# ── #344 · el par nota ↔ hermano de auditoría ────────────────────────────────────────────────────
+
+def _con_subsecciones(toy_vault, stem="nota-verif"):
+    """La nota de `_con_ancla` con su cabecera canónica y las tres sub-secciones: así el escenario
+    nace limpio y cada test de abajo rompe UNA sola cosa."""
+    nota = toy_vault.CONCEPTS / "methods" / f"{stem}.md"
+    frags = lb.verif_subsection_lines(lb.verif_rows(nota), "")
+    t = nota.read_text(encoding="utf-8").replace(
+        "## Verificación de citas",
+        f"## Verificación de citas\n\n{_cabecera(toy_vault, stem)}\n", 1)
+    nota.write_text(t + f"\nInferencias declaradas {frags['Inferencias declaradas']}: ninguna.\n"
+                        f"Omisiones en transcripciones: ninguna.\n"
+                        f"Condiciones perdidas {frags['Condiciones perdidas']}: ninguna.\n",
+                    encoding="utf-8")
+    return nota
+
+
+def test_el_par_completo_no_dispara_ninguna_de_las_cuatro(toy_vault, capsys):
+    """Control de cordura (#344): nota con cabecera canónica + hermano con la tabla = sin hallazgo.
+    Sin este test, los cuatro de abajo podrían pasar por un escenario roto de base."""
+    _con_ancla(toy_vault, CUERPO)
+    _con_subsecciones(toy_vault)
+    rc, _ = run_lint_reporte(capsys)
+    res = lint.collect()
+    for clave in ("verif_inline", "verif_sin_hermano", "verif_huerfano", "verif_cabecera"):
+        assert res.por_clave(clave).items == (), clave
+    assert rc == 0
+
+
+def test_la_tabla_dentro_de_la_nota_es_schema_viejo_y_BLOQUEA(toy_vault, capsys):
+    """#344 — detector del schema anterior a 1.165.0, **nunca** lector tolerante: leer la tabla de
+    los dos lados dejaría dos casas para una tabla, que es la duplicación que el issue vino a sacar.
+    El hallazgo trae su migrador.  @inv INV-148"""
+    _con_ancla(toy_vault, CUERPO)
+    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    hermano = _hermano(toy_vault)
+    # se deshace la migración: la tabla vuelve adentro
+    tabla = "\n".join(l for l in hermano.read_text(encoding="utf-8").split("\n")
+                      if l.startswith("|"))
+    hermano.unlink()
+    nota.write_text(nota.read_text(encoding="utf-8") + "\n" + tabla + "\n", encoding="utf-8")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 1
+    assert "--migrate-verif-sidecar" in _seccion(rep, "DENTRO de la nota"), rep
+    assert lint.collect().por_clave("verif_inline").severidad == lint.SEV_BLOQUEANTE
+
+
+def test_la_cabecera_sin_su_hermano_BLOQUEA(toy_vault, capsys):
+    """#344 — la nota publica una línea que afirma N pares y la tabla que la respalda no está en
+    ningún lado. No es «cero vencidos»: es una afirmación que nadie puede evaluar (D-43)."""
+    _con_ancla(toy_vault, CUERPO)
+    _hermano(toy_vault).unlink()
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 1
+    assert "nota-verif.verif.md" in _seccion(rep, "SIN su hermano"), rep
+    assert lint.collect().por_clave("verif_sin_hermano").severidad == lint.SEV_BLOQUEANTE
+
+
+def test_el_hermano_sin_su_nota_BLOQUEA(toy_vault, capsys):
+    """La otra mitad del par: un rastro de auditoría cuya nota ya no existe no se puede cerrar
+    contra nada, y dentro de tres meses se lee como si la nota nunca hubiera existido."""
+    _con_ancla(toy_vault, CUERPO)
+    _con_subsecciones(toy_vault)
+    (toy_vault.CONCEPTS / "methods" / "nota-verif.md").unlink()
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 1
+    assert "nota-verif.verif.md" in _seccion(rep, "HUÉRFANO"), rep
+    assert lint.collect().por_clave("verif_huerfano").severidad == lint.SEV_BLOQUEANTE
+
+
+def test_la_cabecera_desincronizada_del_hermano_bloquea_en_el_cierre(toy_vault, capsys):
+    """INV-148 — INV-81 cruzando archivos. Desde #344 la cabecera es lo ÚNICO del rastro que viaja
+    con la nota, y la tabla que describe vive en otro archivo: si deriva, el consumidor no tiene
+    con qué notarlo. Severidad R-1: la escribe `verify-citations`, que es paso de cierre."""
+    _con_ancla(toy_vault, CUERPO)
+    _con_subsecciones(toy_vault)
+    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    nota.write_text(nota.read_text(encoding="utf-8").replace("1 pares", "96 pares"),
+                    encoding="utf-8")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 0, "en la pasada periódica es deuda, no bloqueo"
+    assert "1 pares; 1 soportadas" in _seccion(rep, "desincronizada de la tabla de su hermano"), rep
+    assert lint.main(["--cierre"]) == 1, "con --cierre bloquea: la escribe el paso de cierre"
+    capsys.readouterr()
+
+
+def test_el_hermano_no_se_barre_como_NOTA(toy_vault, capsys):
+    """#344 — un hermano no tiene frontmatter, no tiene tipo y su stem (`nota-verif.verif`) no lo
+    nombra ningún wikilink: barrerlo como nota lo reportaría como frontmatter roto y como huérfano,
+    las dos bloqueantes, en TODA bóveda migrada."""
+    _con_ancla(toy_vault, CUERPO)
+    _con_subsecciones(toy_vault)
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 0
+    assert "nota-verif.verif" not in _seccion(rep, "huérfanas"), rep
+    assert "nota-verif.verif" not in _seccion(rep, "Frontmatter"), rep
+
+
+def test_los_wikilinks_del_hermano_siguen_contando(toy_vault, capsys):
+    """La tabla vivía en la nota hasta 1.164.0, así que sacarla del barrido bajaría en SILENCIO la
+    población del detector de wikilinks rotos —bloqueante— justo sobre el artefacto que existe para
+    poder re-auditar."""
+    _con_ancla(toy_vault, CUERPO)
+    _con_subsecciones(toy_vault)
+    h = _hermano(toy_vault)
+    h.write_text(h.read_text(encoding="utf-8").replace("[[2020citC...1..1C]]", "[[2020noExiste]]"),
+                 encoding="utf-8")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 1 and "2020noExiste" in rep, rep

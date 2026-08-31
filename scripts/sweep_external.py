@@ -108,7 +108,7 @@ def sweep_correcciones() -> list:
     no listaba ninguna. Es la misma familia del cero inventado que `sweep_web` evita levantando —
     con la diferencia de que acá el dato SÍ está, sólo que nadie lo leía."""
     out = []
-    for f in sorted(cfg.PAPERS.glob("*.md")):
+    for f in cfg.note_paths(cfg.PAPERS):
         fm = cfg.split_fm(f.read_text(encoding="utf-8"))
         correcciones = [c for c in cfg.as_list(fm.get("corrections")) if isinstance(c, dict)]
         if correcciones:
@@ -176,7 +176,7 @@ def discover_versions(solo: set | None = None, meta: dict | None = None) -> tupl
     barrido que no miró nada. Tragarse el error y devolver la lista vacía es el cero inventado."""
     import query_ads
     out, fallidos = [], []
-    notas = sorted(cfg.PAPERS.glob("*.md"))
+    notas = cfg.note_paths(cfg.PAPERS)
     miradas = 0
     for f in notas:
         if solo is not None and f.stem not in solo:
@@ -458,7 +458,7 @@ def main(argv=None) -> int:
                              f"`python scripts/make_notes.py --rename-paper {viejo_b} {nuevo_b}`")
         if fallidos:
             cfg.print_seguro(f"  ⛔ {len(fallidos)} sin poder mirar: {', '.join(fallidos[:5])}")
-        sin_nota = sorted(pedidos - {f.stem for f in cfg.PAPERS.glob("*.md")})
+        sin_nota = sorted(pedidos - {f.stem for f in cfg.note_paths(cfg.PAPERS)})
         if sin_nota:
             cfg.print_seguro(f"  ⚠ sin nota en la bóveda (no se miraron): {', '.join(sin_nota[:5])}")
         if not versiones:

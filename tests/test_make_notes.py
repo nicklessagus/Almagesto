@@ -3125,6 +3125,17 @@ def test_el_drop_core_se_ve_en_la_tabla_de_papers(toy_vault, monkeypatch):
 
 # ── #117 · el migrador deduce el archivo del HASH, no del frontmatter ────────────────────────────
 
+def _tabla(nota):
+    """La tabla de verificación de esa nota — que desde #344 vive en su hermano."""
+    return cfg.verif_sidecar(nota).read_text(encoding="utf-8")
+
+
+def _fila(nota, viejo, nuevo):
+    """Edita una celda de la tabla, en el hermano (#344)."""
+    h = cfg.verif_sidecar(nota)
+    h.write_text(h.read_text(encoding="utf-8").replace(viejo, nuevo), encoding="utf-8")
+
+
 def _nota_con_fila(toy_vault, bib="2020citC...1..1C", hash_fila=""):
     """Una nota con un bloque de verificación de UNA fila, más el `.txt` y el PDF de esa fuente."""
     import lib_blocks as lb
@@ -3146,6 +3157,7 @@ def _nota_con_fila(toy_vault, bib="2020citC...1..1C", hash_fila=""):
         "|---|---|---|---|---|---|---|\n"
         f"| 1 | extracto | [[{bib}]] | soportada | {par.anchor} | {hash_fila} | — |\n",
         encoding="utf-8")
+    mn.migrate_verif_sidecar(nota)   # #344: la tabla vive en el hermano, que es lo que se migra
     return nota, ft, pdf
 
 
@@ -3158,34 +3170,30 @@ def test_migrar_verif_deduce_el_archivo_del_hash_no_del_frontmatter(toy_vault, c
     @inv INV-107"""
     import lib_blocks as lb
     nota, ft, pdf = _nota_con_fila(toy_vault, hash_fila="")
-    # la fila guarda el hash del PDF
-    nota.write_text(nota.read_text(encoding="utf-8").replace("|  | — |",
-                                                             f"| {lb.bytes_hash(pdf)} | — |"),
-                    encoding="utf-8")
+    # la fila guarda el hash del PDF — y vive en el hermano (#344)
+    _fila(nota, "|  | — |", f"| {lb.bytes_hash(pdf)} | — |")
     assert mn.migrate_verif_archivo(nota) == 1
-    assert f"| pdf:{lb.bytes_hash(pdf)} |" in nota.read_text(encoding="utf-8")
+    assert f"| pdf:{lb.bytes_hash(pdf)} |" in _tabla(nota)
 
     nota2, ft2, _ = _nota_con_fila(toy_vault, bib="2021txtC...1..1D",
                                    hash_fila=lb.source_hash(
                                        toy_vault.FULLTEXT / "slug" / "2021txtC...1..1D.txt")
                                    if (toy_vault.FULLTEXT / "slug" / "2021txtC...1..1D.txt").exists()
                                    else "")
-    nota2.write_text(nota2.read_text(encoding="utf-8").replace(
-        "|  | — |", f"| {lb.source_hash(ft2)} | — |"), encoding="utf-8")
+    _fila(nota2, "|  | — |", f"| {lb.source_hash(ft2)} | — |")
     assert mn.migrate_verif_archivo(nota2) == 1
-    assert f"| txt:{lb.source_hash(ft2)} |" in nota2.read_text(encoding="utf-8")
+    assert f"| txt:{lb.source_hash(ft2)} |" in _tabla(nota2)
 
 
 def test_migrar_verif_es_idempotente(toy_vault):
     """Segunda corrida: cero cambios. Una celda ya prefijada se saltea.  @inv INV-107"""
     import lib_blocks as lb
     nota, ft, _ = _nota_con_fila(toy_vault)
-    nota.write_text(nota.read_text(encoding="utf-8").replace(
-        "|  | — |", f"| {lb.source_hash(ft)} | — |"), encoding="utf-8")
+    _fila(nota, "|  | — |", f"| {lb.source_hash(ft)} | — |")
     assert mn.migrate_verif_archivo(nota) == 1
-    antes = nota.read_text(encoding="utf-8")
+    antes = _tabla(nota)
     assert mn.migrate_verif_archivo(nota) == 0
-    assert nota.read_text(encoding="utf-8") == antes
+    assert _tabla(nota) == antes
 
 
 def test_migrar_verif_avisa_cuando_no_coincide_ningun_archivo(toy_vault, capsys):
@@ -3194,10 +3202,9 @@ def test_migrar_verif_avisa_cuando_no_coincide_ningun_archivo(toy_vault, capsys)
     re-verificar. Lo que no se hace es callarse y escribir una declaración que se lee como
     verificada.  @inv INV-107"""
     nota, _, _ = _nota_con_fila(toy_vault, hash_fila="")
-    nota.write_text(nota.read_text(encoding="utf-8").replace("|  | — |", "| deadbeef99 | — |"),
-                    encoding="utf-8")
+    _fila(nota, "|  | — |", "| deadbeef99 | — |")
     assert mn.migrate_verif_archivo(nota) == 1
-    assert "| txt:deadbeef99 |" in nota.read_text(encoding="utf-8")
+    assert "| txt:deadbeef99 |" in _tabla(nota)
     assert "re-verificar el par" in capsys.readouterr().out
 
 
@@ -3209,12 +3216,11 @@ def test_migrar_verif_backfill_recorre_la_boveda(toy_vault, capsys):
     assert "0 fila(s)" in capsys.readouterr().out, "sin bloques no hay nada que migrar"
 
     nota, ft, _ = _nota_con_fila(toy_vault)
-    nota.write_text(nota.read_text(encoding="utf-8").replace(
-        "|  | — |", f"| {lb.source_hash(ft)} | — |"), encoding="utf-8")
+    _fila(nota, "|  | — |", f"| {lb.source_hash(ft)} | — |")
     assert mn.migrate_all_verif_archivo() == 0            # exit code, no cantidad
     salida = capsys.readouterr().out
     assert "nota-verif.md: 1 fila(s)" in salida and "1 fila(s) declaran su archivo" in salida
-    assert f"txt:{lb.source_hash(ft)}" in nota.read_text(encoding="utf-8")
+    assert f"txt:{lb.source_hash(ft)}" in _tabla(nota)
 
 
 # ── #125 · la puerta de entrada al paper que no se sintetizó ─────────────────────────────────────
@@ -4640,3 +4646,129 @@ def test_un_slug_que_no_esta_en_NINGUNA_config_nombra_las_dos(toy_vault, monkeyp
     assert "Generando notas para" not in out
     assert "stars.yaml" in out and "themes.yaml" in out
     assert "--theme" not in out, "no se inventa un flag para un slug que no está en themes.yaml"
+
+
+# ── #344 · el migrador: la tabla se va al hermano ────────────────────────────────────────────────
+
+_BLOQUE_344 = (
+    "## Verificación de citas (2026-08-31)\n\n"
+    "1 pares; 1 soportadas / 0 no-soportadas (0 resueltas) / 0 contradicen (0 resueltas) / "
+    "0 no verificables — 0 con condición declarada.\n\n"
+    "| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |\n"
+    "|---|---|---|---|---|---|---|---|\n"
+    "| 1 | x | [[2020citC...1..1C]] | soportada | «y» (p. 1) | aaaaaaaaaa | pdf:bbbbbbbbbb | — |\n\n"
+    "**Inferencias declaradas** — 0 marcas en el cuerpo: ninguna.\n"
+    "**Omisiones en transcripciones:** ninguna.\n"
+    "**Condiciones perdidas** — 0 con condición: ninguna.\n")
+
+
+def _nota_inline(toy_vault, stem="ica"):
+    """Una nota con el schema VIEJO: la tabla adentro. Es lo que el migrador tiene que mover."""
+    d = toy_vault.CONCEPTS / "methods"
+    d.mkdir(parents=True, exist_ok=True)
+    nota = d / f"{stem}.md"
+    nota.write_text("---\ntags: [methods]\n---\n# ica\n\nAfirmación [[2020citC...1..1C]].\n\n"
+                    + _BLOQUE_344 + "\n## Huecos\n\nnada\n", encoding="utf-8")
+    return nota
+
+
+def test_migrar_sidecar_mueve_la_tabla_y_deja_cabecera_subsecciones_y_puntero(toy_vault):
+    """#344 — el 71-77 % de los bytes de una nota de entidad es la tabla, y NO es para el lector.
+    Lo que se queda es lo que le sirve a quien copia la nota: la línea de cabecera (que es la
+    afirmación), las tres sub-secciones de hallazgos y el puntero al hermano.  @inv INV-148"""
+    import lib_blocks as lb
+    nota = _nota_inline(toy_vault)
+    assert mn.migrate_verif_sidecar(nota) == 3        # encabezado + separador + 1 fila
+    texto = nota.read_text(encoding="utf-8")
+    assert lb.inline_verif_rows(texto) == [], "la tabla se fue de la nota"
+    assert "1 pares; 1 soportadas" in texto, "la cabecera se queda: es la afirmación que viaja"
+    assert "Omisiones en transcripciones" in texto, "las tres sub-secciones se quedan"
+    assert lb.verif_pointer(nota) in texto, "y el puntero al hermano"
+    assert "## Huecos" in texto, "no se tocó nada fuera del bloque"
+    hermano = cfg.verif_sidecar(nota)
+    assert "| 1 | x | [[2020citC...1..1C]] | soportada |" in hermano.read_text(encoding="utf-8")
+    assert lb.verif_rows(nota) is not None and len(lb.verif_rows(nota)) == 1
+
+
+def test_migrar_sidecar_es_idempotente(toy_vault):
+    """Red 6 — la segunda corrida no encuentra ninguna línea de tabla dentro de la nota y no
+    escribe NADA: ni la nota ni el hermano cambian."""
+    nota = _nota_inline(toy_vault)
+    assert mn.migrate_verif_sidecar(nota) == 3
+    antes_n = nota.read_text(encoding="utf-8")
+    antes_h = cfg.verif_sidecar(nota).read_text(encoding="utf-8")
+    assert mn.migrate_verif_sidecar(nota) == 0
+    assert nota.read_text(encoding="utf-8") == antes_n
+    assert cfg.verif_sidecar(nota).read_text(encoding="utf-8") == antes_h
+
+
+def test_migrar_sidecar_no_re_renderiza_la_tabla(toy_vault):
+    """⛔ La tabla se mueve VERBATIM. Re-renderizarla exigiría que las filas parseen, y la nota que
+    más necesita migrar es justo la de plantilla vieja; además mover byte a byte deja intactos los
+    anclas y los hashes, que es la propiedad que #344 promete."""
+    nota = _nota_inline(toy_vault)
+    original = [l for l in nota.read_text(encoding="utf-8").split("\n") if l.startswith("|")]
+    mn.migrate_verif_sidecar(nota)
+    hermano = cfg.verif_sidecar(nota).read_text(encoding="utf-8").split("\n")
+    assert [l for l in hermano if l.startswith("|")] == original
+
+
+def test_migrar_sidecar_no_toca_una_nota_sin_bloque(toy_vault):
+    """Una nota sin bloque de verificación no se reescribe ni estrena hermano."""
+    d = toy_vault.CONCEPTS / "methods"
+    d.mkdir(parents=True, exist_ok=True)
+    nota = d / "sin.md"
+    nota.write_text("---\ntags: [methods]\n---\n# sin\n\nProsa.\n", encoding="utf-8")
+    antes = nota.read_text(encoding="utf-8")
+    assert mn.migrate_verif_sidecar(nota) == 0
+    assert nota.read_text(encoding="utf-8") == antes
+    assert not cfg.verif_sidecar(nota).exists()
+
+
+def test_migrar_sidecar_backfill_recorre_la_boveda_y_saltea_los_hermanos(toy_vault, capsys):
+    """El backfill nombra cada nota tocada, y NO se barre a sí mismo: un hermano no es una nota, así
+    que pasarlo por el migrador crearía `ica.verif.verif.md`."""
+    nota = _nota_inline(toy_vault)
+    assert mn.migrate_all_verif_sidecar() == 0
+    salida = capsys.readouterr().out
+    assert "ica.md" in salida and "3 línea(s)" in salida
+    assert mn.migrate_all_verif_sidecar() == 0
+    assert "#344: 0 línea(s)" in capsys.readouterr().out
+    assert not cfg.verif_sidecar(cfg.verif_sidecar(nota)).exists()
+
+
+def test_rename_paper_se_lleva_el_hermano_de_verificacion(toy_vault):
+    """#344/D-19 — el renombre preprint→publicado mueve la nota y sus artefactos; si deja el hermano
+    atrás, queda un rastro de auditoría huérfano (bloqueante) y la nota nueva sin su tabla."""
+    mk_note(cfg.PAPERS, "2020arXiv", {"bibcode": "2020arXiv", "tags": ["paper"],
+                                      "stars": ["Estrella Test"]}, "# T\n")
+    viejo = cfg.verif_sidecar(cfg.PAPERS / "2020arXiv.md")
+    viejo.write_text("# Rastro\n\n## Verificación de citas\n\n| # |\n|---|\n", encoding="utf-8")
+    mn.rename_paper("2020arXiv", "2021ApJ")
+    assert cfg.verif_sidecar(cfg.PAPERS / "2021ApJ.md").exists()
+    assert not viejo.exists()
+
+
+def test_migrar_sidecar_rehusa_sobre_un_hermano_y_sobre_lo_que_no_existe(toy_vault):
+    """Las dos guardas de entrada. Sobre un HERMANO produciría `ica.verif.verif.md` —un rastro del
+    rastro— y sobre una ruta inexistente devolvería un 0 que se lee como «no había nada que
+    migrar» habiendo mirado la nada."""
+    nota = _nota_inline(toy_vault)
+    mn.migrate_verif_sidecar(nota)
+    hermano = cfg.verif_sidecar(nota)
+    assert mn.migrate_verif_sidecar(hermano) == 0
+    assert not cfg.verif_sidecar(hermano).exists()
+    assert mn.migrate_verif_sidecar(toy_vault.CONCEPTS / "methods" / "no-existe.md") == 0
+
+
+def test_rename_paper_no_pisa_un_hermano_que_ya_esta_en_el_destino(toy_vault):
+    """#344 — el hermano del destino es un rastro de auditoría (caro, y no regenerable sin volver a
+    correr el fan-out). Si ya hay uno bajo el bibcode nuevo, el renombre NO lo pisa."""
+    mk_note(cfg.PAPERS, "2020arXiv", {"bibcode": "2020arXiv", "tags": ["paper"],
+                                      "stars": ["Estrella Test"]}, "# T\n")
+    viejo = cfg.verif_sidecar(cfg.PAPERS / "2020arXiv.md")
+    viejo.write_text("VIEJO\n", encoding="utf-8")
+    nuevo = cfg.verif_sidecar(cfg.PAPERS / "2021ApJ.md")
+    nuevo.write_text("YA ESTABA\n", encoding="utf-8")
+    mn.rename_paper("2020arXiv", "2021ApJ")
+    assert nuevo.read_text(encoding="utf-8") == "YA ESTABA\n"

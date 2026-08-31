@@ -667,8 +667,14 @@ def note_files() -> list:
     failed in CI with a diff where **not one finding changed**, only its position — a gate that
     cannot tell a regression from a filesystem. And without this, diffing two lint reports is noise.
 
-    Includes `index.md`/`log.md` (they contribute incoming links); orphanhood excludes them by name."""
-    files = glob.glob(str(cfg.WIKI / "**" / "*.md"), recursive=True)
+    Includes `index.md`/`log.md` (they contribute incoming links); orphanhood excludes them by name.
+
+    ⛔ **Excludes the `.verif.md` siblings** (#344): a sidecar is the audit trail of its note, not a
+    note — no frontmatter, no type, and a stem no wikilink names. Swept as one it would report as
+    broken frontmatter and as an orphan, both blocking, on every vault. Its `[[bibcode]]` links are
+    still read, in the main loop, so the broken-wikilink check keeps its population."""
+    files = [f for f in glob.glob(str(cfg.WIKI / "**" / "*.md"), recursive=True)
+             if not cfg.is_verif_sidecar(f)]
     files += glob.glob(str(cfg.RAW / "refs" / "*.md"))
     return sorted(files)
 
@@ -1337,7 +1343,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     stars_slugs = (set() if cfg.stars_error() else
                    {m.get("slug") for m in cfg.load_stars().values() if isinstance(m, dict)})
     verif_blocks: list = []            # (archivo, fecha del bloque|None) — notas CON bloque de verify
-    anchor_notes: list = []            # (stem, texto) de esas mismas notas — insumo del ancla (D-4)
+    anchor_notes: list = []            # (stem, texto, path) de esas notas — insumo del ancla (D-4)
     names = {basename(p)[:-3] for p in files}  # stems referenciables por [[..]]
     incoming: dict[str, int] = {n: 0 for n in names}
     kinds: dict[str, list] = {}
@@ -1425,7 +1431,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     refs_dir = str(cfg.RAW / "refs")
     refs_stems = {basename(f)[:-3] for f in files if f.startswith(refs_dir)}  # docs de diseño, no fichas
     #: #235 — los slugs de `concepts/`, para reconocer un radio nombrado como código.
-    _CONCEPT_SLUGS = {p_.stem for p_ in cfg.CONCEPTS.glob("*/*.md")} if cfg.CONCEPTS.exists() else set()
+    _CONCEPT_SLUGS = {p_.stem for p_ in cfg.note_paths(cfg.CONCEPTS, "*/*.md")}
 
     _fm_cache: dict = {}
 
@@ -1604,7 +1610,12 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 nbib += 1
                 if in_verifiable_note and tgt not in fulltext:
                     unverifiable.append((stem, f"cita {tgt} sin fulltext (no chequeable claim↔fuente)"))
-        for tgt in LINK_RE.findall(text):
+        # #344 — los links del HERMANO cuentan como los de la nota. La tabla vivía adentro hasta
+        # 1.164.0, así que sacarla del barrido bajaría en silencio la población del detector de
+        # wikilinks rotos —bloqueante— justo sobre el artefacto que existe para poder re-auditar.
+        _side = cfg.verif_sidecar(Path(f))
+        _link_text = text + ("\n" + _side.read_text(encoding="utf-8") if _side.exists() else "")
+        for tgt in LINK_RE.findall(_link_text):
             tgt = tgt.strip()
             if "/" in tgt or tgt in LINK_SKIP:
                 continue                       # placeholder/ejemplo, no link real
@@ -1647,7 +1658,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         # arriba: ampliar una ficha es justo cuando el bloque queda atrás.
         if has_verif and stem not in NON_ORPHAN:
             verif_blocks.append((f, verif_date))
-            anchor_notes.append((stem, text))
+            anchor_notes.append((stem, text, Path(f)))
         # frontera dura: fuga de implementación (código no bibliográfico) al vault (WARN, no bloquea).
         # AUD-190 / INV-4 — el número de línea se contaba desde el CUERPO y el hallazgo se publica
         # como `L{i}`, que por convención de este repo es la de `grep -n` sobre el ARCHIVO (skill
@@ -2821,14 +2832,37 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     verif_sin_archivo: list = []       # (stem, motivo) — #117: la fila no dice qué archivo leyó
     verif_localizador: list = []       # (stem, motivo) — #122: el localizador contradice al prefijo
     verif_sin_resolver: list = []      # (stem, motivo) — #91: veredicto que exige acción y no la tuvo
-    verif_estructura: list = []        # (stem, motivo) — #232: sub-secciones o cabecera del bloque
-    for stem, texto in sorted(anchor_notes):
-        filas = lb.parse_verif_table(texto)
+    verif_estructura: list = []        # (stem, motivo) — #232: sub-secciones del bloque
+    verif_inline: list = []            # (stem, motivo) — #344: la tabla sigue dentro de la nota
+    verif_sin_hermano: list = []       # (stem, motivo) — #344: cabecera sin su `<nota>.verif.md`
+    verif_cabecera: list = []          # (stem, motivo) — #344/INV-148: cabecera ≠ tabla del hermano
+    for stem, texto, ruta in sorted(anchor_notes):
+        # #344 · schema viejo: la tabla adentro de la nota. **Detector, nunca lector tolerante** —
+        # leerla de los dos lados dejaría dos casas para una tabla, que es la duplicación que #344
+        # vino a sacar (y la política del repo es migrador + bloqueante, sin capa de compat).
+        if lb.inline_verif_rows(texto):
+            verif_inline.append(
+                (stem, f"la tabla de verificación sigue DENTRO de la nota (schema anterior a "
+                       f"1.165.0) → `python scripts/make_notes.py --migrate-verif-sidecar` la mueve "
+                       f"a `{cfg.verif_sidecar(ruta).name}` y deja la cabecera, las tres "
+                       f"sub-secciones y el puntero"))
+            continue
+        if not cfg.verif_sidecar(ruta).exists():
+            # La otra mitad del par (INV-148): la nota publica su línea de cabecera —que es una
+            # afirmación sobre N pares— y la tabla que la respalda no está en ningún lado.
+            verif_sin_hermano.append(
+                (stem, f"la nota tiene bloque `## Verificación de citas` y no existe su hermano "
+                       f"`{cfg.verif_sidecar(ruta).name}` → la cabecera afirma pares que no se "
+                       f"pueden evaluar; re-correr `verify-citations` o mover la tabla con "
+                       f"`make_notes.py --migrate-verif-sidecar`"))
+            continue
+        filas = lb.verif_rows(ruta)
         if filas is None:
             old_verif_template.append(
-                (stem, "el bloque de verificación no tiene las columnas `Ancla` / `Hash fuente` "
-                       "(plantilla vieja) → no se puede evaluar qué par sigue vigente; re-correr "
-                       "`verify-citations` para que lo reescriba con un par por fila"))
+                (stem, f"`{cfg.verif_sidecar(ruta).name}` no tiene las columnas `Ancla` / "
+                       f"`Hash fuente` (plantilla vieja) → no se puede evaluar qué par sigue "
+                       f"vigente; re-correr `verify-citations` para que lo reescriba con un par "
+                       f"por fila"))
             continue
         # #232 — la ESTRUCTURA del bloque, que nadie miraba más allá de la tabla. Las tres
         # sub-secciones que la plantilla cierra son el único lugar donde queda escrito el triage de
@@ -2842,14 +2876,19 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 (stem, f"el bloque no trae {len(_falt)} de las tres sub-secciones que la plantilla "
                        f"cierra ({', '.join(_falt)}) — van aunque digan «ninguna»: es el único "
                        f"lugar donde queda escrito el triage de la corrida"))
-        # #232 — y los conteos de la cabecera los da el MISMO código que lee la tabla (INV-81). A
-        # mano derivan: la cabecera de un bloque real describía la ronda 1 sobre 96 pares mientras
-        # su tabla tenía 99, y omitía las condiciones (91/99) y las contradicciones resueltas.
+        # #232/#344 — los conteos de la cabecera los da el MISMO código que lee la tabla (INV-81),
+        # y desde que la tabla vive en OTRO ARCHIVO la cabecera es lo único del rastro que viaja
+        # con la nota: si deriva, el consumidor no tiene cómo notarlo. Por eso se exige la línea
+        # CANÓNICA entera y bloquea (hasta 1.164.0 se comparaba sólo el fragmento «N pares», con la
+        # tabla ahí al lado para desmentirla). Severidad R-1: la cabecera la escribe
+        # `verify-citations`, que es paso de CIERRE, así que ahí bloquea; en la pasada periódica es
+        # deuda.  @inv INV-148
         _resumen = lb.verif_summary(filas)
-        if f"{len(filas)} pares" not in texto:
-            verif_estructura.append(
-                (stem, f"la cabecera del bloque no publica «{len(filas)} pares» (la tabla tiene "
-                       f"{len(filas)} filas) → línea canónica: «{_resumen}»"))
+        if not lb.verif_summary_stated(texto, filas):
+            verif_cabecera.append(
+                (stem, f"la cabecera de la nota no es la que da la tabla de "
+                       f"`{cfg.verif_sidecar(ruta).name}` ({len(filas)} filas) → línea canónica: "
+                       f"«{_resumen}»"))
 
         # #280 — y el conteo de cada SUB-SECCIÓN, por el mismo argumento (INV-81) un nivel abajo.
         # Se compara por FRAGMENTO verbatim, como el `N pares` de arriba: parsear el primer entero
@@ -3471,7 +3510,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # justo donde promete vigilar.
     # Backlog, no bloqueante: la distinción del framework es "hay una violación" (bloquea) vs "la
     # garantía no corrió acá" (backlog, como #55 triage pendiente y #56 verificación stale).
-    for sf in sorted(cfg.STARS.glob("*.md")) if cfg.STARS.exists() else []:
+    for sf in cfg.note_paths(cfg.STARS):
         if sf.stem not in vistos_gt:
             incomplete.append((sf.stem, "ficha sin `raw/ground_truth/<slug>.json` → el espejo #70 "
                                         "no la vigila: los campos de NEA quedan sin nadie que los "
@@ -3973,6 +4012,20 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                                             f"`python scripts/entity.py plan {slug_}` no lo va a "
                                             f"encontrar: borralo a mano, o recreá la entidad"))
 
+    # #344 · el hermano HUÉRFANO: un `<x>.verif.md` cuya nota no existe. Es la otra mitad del
+    # invariante de par (INV-148) y aparece solo cuando algo movió la nota sin llevarse su rastro —
+    # `entity.py delete|rename` y `--rename-paper` lo llevan; una mano no—. Bloquea: un rastro de
+    # auditoría sin la nota que audita no se puede cerrar contra nada, y el mensaje de #249 vale
+    # igual acá (dentro de tres meses se lee como si la nota nunca hubiera existido).
+    verif_huerfano: list = []
+    for _side in sorted(cfg.WIKI.rglob("*" + cfg.VERIF_SUFFIX)) if cfg.WIKI.exists() else []:
+        _nota = _side.with_name(_side.name[:-len(cfg.VERIF_SUFFIX)] + ".md")
+        if not _nota.exists():
+            verif_huerfano.append(
+                (_side.relative_to(cfg.WIKI).as_posix(),
+                 f"hermano de verificación huérfano (`{_nota.name}` no existe) → borralo, o "
+                 f"recuperá la nota: el rastro de auditoría no se puede cerrar contra nada"))
+
     # #297 — el reuso D-18 importa a un sujeto nuevo un artefacto cuya antigüedad nadie chequeó, y
     # el detector de versiones vive SÓLO en la pasada periódica. La respuesta natural («si hubiera
     # versión nueva, la búsqueda habría traído otro bibcode y D-19 los une») es falsa justo en el
@@ -4045,7 +4098,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                        f"versionan ni viajan, y una extracción no se regenera sin volver a leer el "
                        f"PDF → `python scripts/make_notes.py --migrate-extracciones`"))
     _pasada_red = cfg.REGISTRO / "_red.yaml"
-    if not _pasada_red.exists() and any(cfg.PAPERS.glob("*.md")):
+    if not _pasada_red.exists() and any(cfg.note_paths(cfg.PAPERS)):
         reuso_sin_chequear.append(
             ("(la bóveda)", "`vault/config/registro/_red.yaml` no existe: `sweep_external` nunca "
                             "corrió acá, así que NINGUNA de las seis caducidades está chequeada "
@@ -4358,7 +4411,11 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('bad_roles', '⛔ `role` fuera del vocabulario — y todo campo con vocabulario CERRADO (`unidad_cita`, `pending_source`)', SEV_BLOQUEANTE, tuple(bad_roles), poblacion='papers'),
         Categoria('impl_leaks', '⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)', SEV_WARN, tuple(impl_leaks), poblacion='notas'),
         Categoria('cond_sin_clasificar', '⚖ Condición sin clasificar: no dice si acota la afirmación o sólo la contextualiza (#221, backlog)', SEV_BACKLOG, tuple(cond_sin_clasificar), poblacion='entidades'),
-        Categoria('verif_estructura', '🧾 Bloque de verificación incompleto: faltan sub-secciones o la cabecera no cuadra (#232, backlog)', SEV_BACKLOG, tuple(verif_estructura), poblacion='entidades'),
+        Categoria('verif_estructura', '🧾 Bloque de verificación incompleto: faltan sub-secciones o su conteo no cuadra (#232, backlog)', SEV_BACKLOG, tuple(verif_estructura), poblacion='entidades'),
+        Categoria('verif_inline', '⛔ Tabla de verificación DENTRO de la nota (schema pre-1.165.0) → `make_notes.py --migrate-verif-sidecar` (#344)', SEV_BLOQUEANTE, tuple(verif_inline), poblacion='entidades'),
+        Categoria('verif_sin_hermano', '⛔ Nota con cabecera de verificación y SIN su hermano `<nota>.verif.md` (#344): afirma pares que no se pueden evaluar', SEV_BLOQUEANTE, tuple(verif_sin_hermano), poblacion='entidades'),
+        Categoria('verif_huerfano', '⛔ Hermano `.verif.md` HUÉRFANO (#344): la nota que audita ya no existe', SEV_BLOQUEANTE, tuple(verif_huerfano), poblacion='notas'),
+        Categoria('verif_cabecera', 'Cabecera del bloque desincronizada de la tabla de su hermano (INV-148/#344)' + (' (BLOQUEA: modo --cierre)' if cierre else ' (backlog: pasada periódica; con `--cierre` bloquea)'), SEV_CIERRE, tuple(verif_cabecera), poblacion='entidades'),
         Categoria('verif_truncada', '✂ Celda del bloque de verificación truncada: se tiró lo que el fan-out encontró (#226, backlog)', SEV_BACKLOG, tuple(verif_truncada), poblacion='entidades'),
         Categoria('verif_sin_localizador', '✂ Evidencia sin localizador: el cruce de #122 NO se pudo evaluar en esa fila (#226, backlog)', SEV_BACKLOG, tuple(verif_sin_localizador), poblacion='entidades'),
         Categoria('indice_viejo', '🗂 `index.md` desactualizado contra la verdad de disco (#237, backlog)', SEV_BACKLOG, tuple(indice_viejo), poblacion='notas'),

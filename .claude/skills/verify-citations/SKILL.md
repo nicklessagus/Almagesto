@@ -505,12 +505,46 @@ cerrar:
   transcripción parcial que se lea como completa. Ídem si la fuente introduce la enumeración con
   "e.g." y la nota la presenta cerrada → abrir la lista en la nota.
 
-### 5. Escribir el bloque de veredicto en la nota
-Agregar/refrescar al final de la nota (idempotente — si ya existe, reemplazar):
+### 5. Escribir el bloque de veredicto — la nota y su HERMANO (#344)
+
+⛔ **La TABLA no va en la nota: va en `<nota>.verif.md`, el hermano en el mismo directorio.** Una
+nota de entidad pesaba ~72-75 k tokens y el **71-77 %** de esos bytes era esta tabla, que **no es
+para el lector** —es para el lint y para re-auditar—; el contenido real son 16-21 k. En la nota
+quedan **la línea de cabecera** (que es la afirmación, y lo único que le sirve a quien copia la
+nota), **las tres sub-secciones** de hallazgos y un **puntero** al hermano. Las **anclas no
+cambian**: hashean bloques de la NOTA. El lint bloquea las tres formas de romper el par —tabla
+todavía adentro, cabecera sin hermano, hermano huérfano— y reporta la cabecera desincronizada
+(bloqueante con `--cierre`). Una nota heredada se migra con
+`python scripts/make_notes.py --migrate-verif-sidecar`.
+
+**En la NOTA** (agregar/refrescar, idempotente — si ya existe, reemplazar):
 
 ```markdown
 ## Verificación de citas (YYYY-MM-DD)
-Chequeo afirmación↔fulltext (skill `verify-citations`). N pares; X soportadas / Z no-soportadas (z resueltas) / W contradicen (w resueltas) / V no verificables — C con condición declarada.
+Chequeo afirmación↔fuente (skill `verify-citations`). N pares; X soportadas / Z no-soportadas (z resueltas) / W contradicen (w resueltas) / V no verificables — C con condición declarada.
+
+> ⬇ La tabla —una fila por par, con su ancla y su hash de fuente— vive en el hermano [`<nota>.verif.md`](<nota>.verif.md) (#344).
+
+Inferencias declaradas (sin cita, por diseño) — 6 marcas en el cuerpo: <listar las 6>.
+
+Omisiones en transcripciones: <tabla/lista, qué faltaba, cómo se resolvió> — o "ninguna".
+
+Condiciones perdidas (afirmaciones sobre-generalizadas) — 88 con condición: 3 `acota` (3 resueltas) / 75 `contextualiza` / 10 sin clasificar: <las `acota` y cómo se resolvió cada una>.
+```
+
+⛔ **La línea de cabecera se GENERA** —`lib_blocks.verif_summary(filas)`— y el lint la compara
+contra la tabla del hermano (INV-148: INV-81 cruzando archivos). El puntero lo da
+`lib_blocks.verif_pointer(nota)`; es un link markdown, **nunca** un `[[wikilink]]` (el hermano no es
+una nota y el link se reportaría roto).
+
+**En el HERMANO `<nota>.verif.md`** — lo arma `lib_blocks.render_verif_sidecar(nota, tabla)`:
+
+```markdown
+# Rastro de verificación — <stem>
+
+> _Hermano de auditoría de `<nota>.md` (#344)._ …
+
+## Verificación de citas
 
 | # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |
 |---|---|---|---|---|---|---|---|
@@ -518,12 +552,6 @@ Chequeo afirmación↔fulltext (skill `verify-citations`). N pares; X soportadas
 | 2 | activas −2.4/−2.6 | [[2025A&A...696A..27J]] | no-soportada→corregida | el paper da −2.65 a −3.70; el −2.6 es de Zechmeister | c17e0a9b22 | txt:55aa10ffe3 | — |
 | 3 | señal g confirmada | [[2016A&A...585A.134D]] | contradice→disputa | "is an artifact of... rotation" (L2101) → tagueada en disputes[] | 90bb4c1de7 | txt:0ab77e2c41 | — |
 | 4 | P_rot = 36,5 d | [[2017MNRAS.468.4772S]] | soportada | "36.5 ± 2.3" (L320) | 5c1de790bb | txt:41c0ab772e | contextualiza: promedio pesado de 4 proxies; el K de 0,50 m/s es de la señal a 35,0 d, no a 36,5 |
-
-Inferencias declaradas (sin cita, por diseño) — 6 marcas en el cuerpo: <listar las 6>.
-
-Omisiones en transcripciones: <tabla/lista, qué faltaba, cómo se resolvió> — o "ninguna".
-
-Condiciones perdidas (afirmaciones sobre-generalizadas) — 88 con condición: 3 `acota` (3 resueltas) / 75 `contextualiza` / 10 sin clasificar: <las `acota` y cómo se resolvió cada una>.
 ```
 Convertir fechas relativas a absolutas. Notación `$...$` en archivos `vault/wiki/` (texto plano en chat).
 

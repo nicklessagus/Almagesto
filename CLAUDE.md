@@ -54,7 +54,8 @@ Almagesto/
 ├── build/  outputs/                                                    ← scratch del tooling (gitignored)
 └── vault/                                                              ← la bóveda — Obsidian abre ACÁ
     ├── config/  (objective.yaml, stars.yaml, themes.yaml, ads_dev_key, registro/<slug>.yaml)
-    ├── wiki/    (stars, papers, concepts, queries, matrices, index.md, log.md)
+    ├── wiki/    (stars, papers, concepts, queries, matrices, index.md, log.md
+    │             + <nota>.verif.md — el hermano de auditoría de cada nota verificada, #344)
     ├── raw/     (pdfs, fulltext, extraccion, ground_truth, refs)
     ├── STATUS.md
     └── .obsidian/
@@ -1255,7 +1256,22 @@ El subagente contesta además la **sobre-generalización** (#74: la fuente afirm
 que la nota no dice — no afirma falso, afirma **de más**) y, en transcripciones, la **completitud**
 (una tabla truncada sin un solo error vuelve 100% soportada: afirma **de menos**).
 
-**El bloque `## Verificación de citas`** — una fila por par:
+⛔ **La TABLA vive en el HERMANO `<nota>.verif.md`, no en la nota (#344).** Medido: una nota de
+entidad pesa ~72-75 k tokens y el **71-77 %** de esos bytes es esa tabla —que no es para el lector:
+es para el lint y para re-auditar—, contra 16-21 k de contenido. En la nota quedan **la línea de
+cabecera** (la afirmación, y lo único que le sirve a quien copia la nota), **las tres
+sub-secciones** de hallazgos y un **puntero**. ⚠ Hermano en el mismo directorio, **no** un `.verif/`
+con punto: con punto Obsidian lo esconde y el par deja de ser obvio. Las **anclas no cambian**:
+hashean bloques **de la nota**. El par es un **iff** (INV-148) y el lint lo vigila con cuatro
+categorías: tabla todavía adentro (schema viejo → `make_notes.py --migrate-verif-sidecar`), cabecera
+sin hermano, hermano huérfano —las tres bloqueantes— y cabecera desincronizada de su tabla (INV-81
+cruzando archivos: R-1, la escribe el paso de cierre). ⛔ **Una sola función resuelve dónde vive**
+(`lib_blocks.verif_rows`) para los cuatro consumidores —lint, `make_notes`, `reverify_subset`,
+`contrast`—. Un hermano **no es una nota** (`cfg.note_paths` lo saca de todo enumerador), pero sus
+`[[bibcode]]` cuentan para los wikilinks rotos y los reescribe todo renombre; es la **octava capa**
+de `entity.py`.
+
+**El bloque `## Verificación de citas`** — una fila por par, en el hermano:
 `| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |`
 - ⛔ **Sin fila no hay dónde colgar el ancla**: colapsar las soportadas en prosa deja al lint sin
   distinguir "verificada" de "nunca se miró".
@@ -1427,8 +1443,9 @@ chequea las citas textuales del `log.md` contra el `.txt` de su bibcode, salvo q
 ### Mantenimiento (cuidar lo ya ingestado — skill `maintain`)
 **No crea entidades** (eso es Ingest); opera sobre estrellas/conceptos que **ya existen**. Sub-modos:
 **refrescar** (papers nuevos → re-sintetizar sólo lo nuevo), **borrar** y **renombrar** una entidad
-—`python scripts/entity.py delete|rename` (INV-19): las **siete** capas (clave del YAML, registro,
-ground-truth, `raw/pdfs`, `raw/fulltext`, nota, `build/`), dry-run sin `--yes` porque el registro es
+—`python scripts/entity.py delete|rename` (INV-19): las **ocho** capas (clave del YAML, registro,
+ground-truth, `raw/pdfs`, `raw/fulltext`, extracción, nota + su hermano `.verif.md` (#344),
+`build/`), dry-run sin `--yes` porque el registro es
 el único artefacto no regenerable. Lo que no hace solo lo **avisa**: no borra el paper compartido, no
 repara los `[[wikilink]]` rotos ni la nota que queda sin destino; del otro lado, el lint reporta las
 **capas colgadas** de un slug que ya no existe—, **re-clasificar** tras cambiar `relevance.facets`,

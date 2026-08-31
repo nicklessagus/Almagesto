@@ -785,9 +785,94 @@ def verif_subsection_lines(rows: list, prose: str) -> dict:
                                      f"{c['cond_sin_clase']} sin clasificar")}
 
 
+def verif_section(text: str) -> str:
+    """The `## Verificación de citas` section of a text, or `""` — cut once, for everybody.
+
+    The header is anchored to a line break and a trailing suffix is allowed (`(2026-08-31)`); the
+    section ends at the next `## `. Both halves of #344 —the note, which keeps the header line and
+    the three sub-sections, and the sidecar, which keeps the table— are cut with this."""
+    i = cfg.section_start(text, VERIFY_HEADER)
+    if i < 0:
+        return ""
+    seccion = text[i:]
+    corte = seccion.find("\n## ", 1)
+    return seccion[:corte] if corte > 0 else seccion
+
+
+def inline_verif_rows(text: str) -> list[str]:
+    """Table rows still sitting **inside** the note — the pre-1.165.0 schema (#344).
+
+    ⛔ Detector, never a tolerant reader: the repo does not carry compatibility layers. A note that
+    keeps its table inline is migrated with `make_notes.py --migrate-verif-sidecar`, and until then
+    the lint blocks. Reading it from either place would leave two homes for one table, which is the
+    duplication #344 exists to remove."""
+    return [ln.strip() for ln in verif_section(text).split("\n") if ln.strip().startswith("|")]
+
+
+_ADORNO_MD = re.compile(r"[*_`]+")
+
+
+def verif_summary_stated(text: str, rows: list) -> bool:
+    """Does the note publish the header line **its own sidecar's table** gives? (INV-148)
+
+    INV-81 across files. The counts and the rows used to live in the same block, so nothing could
+    drift between them; since #344 the header line is the only thing about the audit that travels
+    with the note, and the table it describes is in another file. Compared with the markdown
+    stripped (regla de método nº4): a fan-out that bolds the numbers must not read as a mismatch."""
+    return _plain_line(verif_summary(rows)) in _plain_line(verif_section(text))
+
+
+def _plain_line(s: str) -> str:
+    """One line, whitespace collapsed and markdown emphasis removed."""
+    return normalize_ws(_ADORNO_MD.sub("", s))
+
+
+def verif_rows(note) -> list[Row] | None:
+    """The rows of this note's verification table, read from its sidecar (#344).
+
+    ⛔ **The single entry point for the four consumers** (`lint`, `make_notes.migrate_verif_archivo`,
+    `reverify_subset`, `contrast`). `None` means *not evaluable* —no sidecar, or a sidecar with the
+    pre-hash template— and that is not "zero expired pairs": D-43 again."""
+    #  @inv INV-148
+    side = cfg.verif_sidecar(note)
+    if not side.exists():
+        return None
+    return parse_verif_table(side.read_text(encoding="utf-8"))
+
+
+def verif_pointer(note) -> str:
+    """The line the note carries in place of its table (#344).
+
+    A plain markdown link, **not** a `[[wikilink]]`: the sidecar is not a note, it is not in the
+    lint's name table, and a wikilink to it would report broken. It lives inside
+    `## Verificación de citas`, a stamped section, so no prose check reads it."""
+    return (f"> ⬇ La tabla —una fila por par, con su ancla y su hash de fuente— vive en el hermano "
+            f"[`{cfg.verif_sidecar(note).name}`]({cfg.verif_sidecar(note).name}) (#344).")
+
+
+def render_verif_sidecar(note, tabla: str) -> str:
+    """The whole sidecar file: title, what it is, and the table under its canonical header (#344).
+
+    The header is the same `## Verificación de citas` the parser cuts on, so `parse_verif_table`
+    reads the sidecar with no branch of its own."""
+    stem = Path(note).stem
+    return (f"# Rastro de verificación — {stem}\n\n"
+            f"> _Hermano de auditoría de `{Path(note).name}` (#344)._ Acá vive **la tabla**: una "
+            f"fila por par (afirmación, `[[bibcode]]`), con su ancla (D-4) y su hash de fuente "
+            f"(D-20). La **línea de cabecera** que resume estos pares y las tres sub-secciones de "
+            f"hallazgos viven en la nota, que es lo que viaja.\n"
+            f"> ⛔ No se edita a mano: lo escribe `verify-citations` y lo leen el lint, "
+            f"`reverify_subset` y `contrast`.\n\n"
+            f"{VERIFY_HEADER}\n\n{tabla.rstrip()}\n")
+
+
 def parse_verif_table(text: str) -> list[Row] | None:
-    """Las filas del bloque `## Verificación de citas`, o `None` si el bloque **no se puede
-    evaluar** — porque no existe, o porque es de la plantilla vieja (sin las columnas de hash).
+    """Las filas del bloque `## Verificación de citas` de un TEXTO, o `None` si el bloque **no se
+    puede evaluar** — porque no existe, o porque es de la plantilla vieja (sin las columnas de hash).
+
+    ⚠ Desde #344 el texto que se le pasa es el del **hermano** `<nota>.verif.md`, y quien lo
+    resuelve es `verif_rows(nota)` — el único que sabe dónde vive la tabla. Acá queda el parseo
+    puro, que además es lo que `verif_roundtrip_errors` necesita sobre un bloque recién escrito.
 
     La distinción importa: un bloque sin columnas de hash NO es "cero pares vencidos". Es un bloque
     que nadie puede chequear, y leerlo como limpio sería el mismo cero inventado que D-43 prohíbe.
@@ -796,13 +881,9 @@ def parse_verif_table(text: str) -> list[Row] | None:
     Un bloque bien formado y **sin filas** devuelve `[]` — eso sí es evaluable, y deja todo par del
     cuerpo como *sin verificar*.
     """
-    i = cfg.section_start(text, VERIFY_HEADER)
-    if i < 0:
+    seccion = verif_section(text)
+    if not seccion:
         return None
-    seccion = text[i:]
-    corte = seccion.find("\n## ", 1)
-    if corte > 0:
-        seccion = seccion[:corte]
     filas = [ln.strip() for ln in seccion.split("\n") if ln.strip().startswith("|")]
     if not filas:
         return None

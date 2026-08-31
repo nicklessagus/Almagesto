@@ -1,19 +1,19 @@
 """Borrar o renombrar una ENTIDAD (estrella / tema) sin dejar nada colgado — INV-19.
 
     python scripts/entity.py plan   <slug>                 # qué toca (no escribe nada)
-    python scripts/entity.py rename <viejo> <nuevo> --yes  # renombrar en las siete capas
-    python scripts/entity.py delete <slug> --yes           # borrar en las siete capas
+    python scripts/entity.py rename <viejo> <nuevo> --yes  # renombrar en las ocho capas
+    python scripts/entity.py delete <slug> --yes           # borrar en las ocho capas
 
 POR QUÉ EXISTE. El contrato promete que *"después de borrar o renombrar una entidad no queda
 ninguna referencia colgada **en ninguna capa** ni archivo huérfano en `raw/`"*, y hasta hoy eso era
-un **procedimiento en prosa** del skill `maintain`: nueve pasos a mano, en orden, sobre siete
+un **procedimiento en prosa** del skill `maintain`: nueve pasos a mano, en orden, sobre ocho
 lugares distintos. El único renombre con herramienta era el de un PAPER (`make_notes
 --rename-paper`), que es el caso chico. Un procedimiento manual de nueve pasos no es una garantía:
 es una lista de cosas que alguien puede saltear, y las que se saltean no dejan rastro —el lint
 tenía red para `wiki/` (wikilinks rotos, huérfanos) y **ninguna** para el registro, los directorios
 de `raw/`, la entrada del YAML ni `build/`.
 
-LAS SIETE CAPAS de una entidad, que es la lista que hay que no olvidar:
+LAS OCHO CAPAS de una entidad, que es la lista que hay que no olvidar:
 
   1. la clave en `vault/config/stars.yaml` (o `themes.yaml`)
   2. `vault/config/registro/<slug>.yaml`   ← el ÚNICO artefacto no regenerable
@@ -22,7 +22,8 @@ LAS SIETE CAPAS de una entidad, que es la lista que hay que no olvidar:
   5. `vault/raw/fulltext/<slug>/` y `vault/raw/extraccion/<slug>/` (#311: la extracción es el
      artefacto MÁS caro y vive versionada, no en `build/`)
   6. la nota: `vault/wiki/stars/<slug>.md` (estrella) o `concepts/<area>/<concept>.md` (tema)
-  7. `build/<slug>/`  (scratch, pero si queda se re-propone triage de una entidad que no existe)
+  7. su hermano de auditoría `<nota>.verif.md` (#344: la tabla de verificación vive ahí)
+  8. `build/<slug>/`  (scratch, pero si queda se re-propone triage de una entidad que no existe)
 
   …más las **referencias**: los `[[wikilink]]` de toda la bóveda y los `stars:` / `thesis_links:`
   del frontmatter de las notas de paper.
@@ -94,9 +95,19 @@ def capas(slug: str, tipo: str, meta: dict) -> list[tuple[str, Path]]:
         ("fulltext", cfg.FULLTEXT / slug),
         ("extraccion", cfg.EXTRACCION / slug),     # #311
         ("nota", nota_de(tipo, slug, meta)),
+        # #344 — la OCTAVA capa: el hermano de auditoría de la nota. Borrar la nota y dejarlo es
+        # exactamente el hermano huérfano que el lint bloquea, y renombrar sin llevarlo lo deja
+        # apuntando a una nota que ya no existe.
+        ("verif", cfg.verif_sidecar(nota_de(tipo, slug, meta))),
         ("build", cfg.ROOT / "build" / slug),
     ]
     return [(k, p) for k, p in candidatas if p.exists()]
+
+
+#: Los nombres de las capas de `capas()`, en su orden. Se derivan de la función, no se re-tipean:
+#: `plan` publicaba «de 6» sobre siete capas y su lista de faltantes omitía `extraccion` — dos
+#: números escritos a mano que ya habían quedado atrás de la única lista que manda.
+CAPAS = ("registro", "ground_truth", "pdfs", "fulltext", "extraccion", "nota", "verif", "build")
 
 
 def _campo_de(tipo: str) -> str:
@@ -155,7 +166,7 @@ def notas_del_slug(slug: str) -> set[str] | None:
     # fuera del barrido de capas de `entity delete`.
     claves = {nombre, slug, str(meta.get("concept") or slug)}
     claves |= {str(a) for a in cfg.as_list(meta.get("aliases")) if str(a).strip()}
-    for f in sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []:
+    for f in cfg.note_paths(cfg.PAPERS):
         fm = cfg.split_fm(f.read_text(encoding="utf-8"))
         if any(claves & set(cfg.as_list(fm.get(campo))) for campo in campos):
             stems.add(f.stem)
@@ -269,6 +280,7 @@ def _reescribir_wikilinks(viejo: str, nuevo: str) -> int:
     import re
     rx = re.compile(r"\[\[" + re.escape(viejo) + r"(\||\]\])")
     n = 0
+    # ⚠ Los hermanos `.verif.md` (#344) entran a propósito: llevan un `[[bibcode]]` por fila.
     for f in sorted(cfg.WIKI.rglob("*.md")):
         texto = f.read_text(encoding="utf-8")
         nuevo_texto = rx.sub(lambda m: f"[[{nuevo}{m.group(1)}", texto)
@@ -283,11 +295,11 @@ def plan(slug: str) -> int:
     tipo, nombre, meta = resolver(slug)
     cfg.print_seguro(f"{slug} — {tipo}, clave en YAML: {nombre!r}")
     cs = capas(slug, tipo, meta)
-    cfg.print_seguro(f"\ncapas en disco ({len(cs)} de 6):")
+    cfg.print_seguro(f"\ncapas en disco ({len(cs)} de {len(CAPAS)}):")
     for k, p in cs:
         marca = "  ⚠ NO REGENERABLE" if k == "registro" else ""
         cfg.print_seguro(f"  · {k:<12} {p}{marca}")
-    faltan = {"registro", "ground_truth", "pdfs", "fulltext", "nota", "build"} - {k for k, _ in cs}
+    faltan = set(CAPAS) - {k for k, _ in cs}
     if faltan:
         cfg.print_seguro(f"  (no existen: {', '.join(sorted(faltan))})")
     papers, wikis = referencias(nombre, tipo)
@@ -301,7 +313,7 @@ def plan(slug: str) -> int:
 
 
 def delete(slug: str, yes: bool) -> int:
-    """Borra la entidad en las siete capas. Dry-run sin `--yes`.  @inv INV-19"""
+    """Borra la entidad en las ocho capas. Dry-run sin `--yes`.  @inv INV-19"""
     tipo, nombre, meta = resolver(slug)
     cs = capas(slug, tipo, meta)
     papers, wikis = referencias(nombre, tipo)
@@ -342,14 +354,14 @@ def delete(slug: str, yes: bool) -> int:
 
 
 def rename(viejo: str, nuevo: str, yes: bool) -> int:
-    """Renombra el slug en las siete capas. Dry-run sin `--yes`.  @inv INV-19"""
+    """Renombra el slug en las ocho capas. Dry-run sin `--yes`.  @inv INV-19"""
     tipo, nombre, meta = resolver(viejo)
     if not yes:
         plan(viejo)
         cfg.print_seguro(f"\n⛔ dry-run: no se renombró nada. Repetí con `--yes` para aplicar "
                          f"({viejo} → {nuevo}).")
         return 0
-    # ⛔ La guarda mira LAS SIETE CAPAS, con la misma lista que usan las tres operaciones. Miraba
+    # ⛔ La guarda mira LAS OCHO CAPAS, con la misma lista que usan las tres operaciones. Miraba
     # dos (`registro` y `fulltext`), así que renombrar sobre un slug con ground-truth y ficha los
     # **pisaba**: `Path.rename` sobreescribe en POSIX, y el script salía con 0 y mensaje de éxito.
     # Reproducido en la pasada `/auditar` del 2026-08-28: la síntesis cara del LLM de la ficha
@@ -358,19 +370,21 @@ def rename(viejo: str, nuevo: str, yes: bool) -> int:
     # consistente. Es exactamente lo que el mensaje de abajo dice que no puede pasar.
     # La capa `nota` de un TEMA se excluye porque el rename no la toca (#169: se llama por
     # `concept`, no por slug), así que su existencia no es una colisión.
-    ocupadas = [k for k, _ in capas(nuevo, tipo, meta) if not (k == "nota" and tipo != "star")]
+    ocupadas = [k for k, _ in capas(nuevo, tipo, meta)
+                if not (k in ("nota", "verif") and tipo != "star")]
     if ocupadas:
         sys.exit(f"ya hay artefactos bajo el slug {nuevo!r} ({', '.join(ocupadas)}) — renombrar "
                  f"encima fusionaría dos entidades en silencio y PISARÍA esas capas. Elegí otro "
                  f"slug o borrá la que sobra primero (`entity.py delete {nuevo}`).")
     for capa, p in capas(viejo, tipo, meta):
-        if capa == "nota" and tipo != "star":
+        if capa in ("nota", "verif") and tipo != "star":
             # ⛔ #169. La nota de un TEMA se llama por `concept`, un campo APARTE del slug: renombrar
             # el slug no la toca. Acá había un `p.name.replace(viejo, nuevo, 1)` con un guard
             # `if p.name == destino.name: continue`, que sólo cubre el caso en que el slug NO aparece
             # en el nombre. Con `ica` → nota `ica-bss.md` —la forma normal— la nota se movía y
             # `themes.yaml` seguía apuntando a `ica-bss`: la entidad quedaba SIN NOTA ALCANZABLE y
             # los `[[wikilink]]` rotos, mientras el script imprimía que había renombrado.
+            # ⚠ Su hermano de verificación (#344) va con ella: mover uno sin el otro rompe el par.
             continue
         destino = p.parent / p.name.replace(viejo, nuevo, 1)
         if p.name == destino.name:
@@ -387,7 +401,7 @@ def rename(viejo: str, nuevo: str, yes: bool) -> int:
     else:
         _yaml_renombrar(cfg.THEMES_YAML, viejo, nuevo)
         n_fm = sum(_renombrar_en_frontmatter(f, "thesis_links", viejo, nuevo)
-                   for f in sorted(cfg.PAPERS.glob("*.md")))
+                   for f in cfg.note_paths(cfg.PAPERS))
         n_wl = _reescribir_wikilinks(viejo, nuevo)
         cfg.print_seguro(f"  → themes.yaml: {viejo!r} → {nuevo!r} · {n_fm} frontmatter(s) · "
                          f"{n_wl} nota(s) con wikilinks reescritos")
@@ -398,12 +412,12 @@ def rename(viejo: str, nuevo: str, yes: bool) -> int:
 def main(argv=None) -> int:
     cfg.stdout_tolerante()
     ap = argparse.ArgumentParser(
-        description="Borrar o renombrar una ENTIDAD (estrella/tema) en sus siete capas (INV-19). "
+        description="Borrar o renombrar una ENTIDAD (estrella/tema) en sus ocho capas (INV-19). "
                     "Destructivo: sin --yes sólo imprime el plan.")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p_plan = sub.add_parser("plan", help="qué tocaría (no escribe nada)")
     p_plan.add_argument("slug")
-    p_del = sub.add_parser("delete", help="borrar la entidad en las siete capas")
+    p_del = sub.add_parser("delete", help="borrar la entidad en las ocho capas")
     p_del.add_argument("slug")
     p_del.add_argument("--yes", action="store_true", help="aplicar (sin esto es dry-run)")
     p_ren = sub.add_parser("rename", help="renombrar el slug de la entidad")

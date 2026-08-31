@@ -311,3 +311,61 @@ def test_el_alcance_del_slug_incluye_los_ALIASES(toy_vault):
     mk_note(cfg.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test"}, "prosa\n")
     stems = entity.notas_del_slug("test_star")
     assert bib in stems, "el paper tagueado con el ALIAS quedó fuera del alcance del sujeto"
+
+
+# ── #344 · la OCTAVA capa: el hermano de auditoría ───────────────────────────────────────────────
+
+def _con_hermano(slug="test_star"):
+    """Le pone a la ficha su `<nota>.verif.md`, que es donde vive la tabla desde #344."""
+    h = cfg.verif_sidecar(cfg.STARS / f"{slug}.md")
+    h.write_text("# Rastro\n\n## Verificación de citas\n\n| # |\n|---|\n", encoding="utf-8")
+    return h
+
+
+def test_delete_borra_el_hermano_de_verificacion(toy_vault):
+    """#344 — dejarlo produce el hermano HUÉRFANO que el lint bloquea: un rastro de auditoría cuya
+    nota ya no existe, o sea que no se puede cerrar contra nada.  @inv INV-148"""
+    slug, _ = poblar()
+    h = _con_hermano(slug)
+    assert run(["delete", slug, "--yes"]) == 0
+    assert not h.exists(), "la octava capa quedó colgada"
+
+
+def test_rename_mueve_el_hermano_de_verificacion(toy_vault):
+    """La otra mitad: si el hermano se queda con el nombre viejo, la nota renombrada pierde su
+    tabla y el hermano queda huérfano — las dos categorías bloqueantes a la vez.  @inv INV-148"""
+    slug, _ = poblar()
+    _con_hermano(slug)
+    assert run(["rename", slug, "nuevo_slug", "--yes"]) == 0
+    assert (cfg.STARS / "nuevo_slug.verif.md").exists()
+    assert not (cfg.STARS / f"{slug}.verif.md").exists()
+
+
+def test_plan_declara_las_ocho_capas_sin_re_tipear_el_numero(toy_vault, capsys):
+    """El conteo y la lista de faltantes salen de `entity.CAPAS`, no de un número escrito a mano:
+    `plan` publicaba «de 6» sobre siete capas y su lista omitía `extraccion`."""
+    slug, _ = poblar()
+    _con_hermano(slug)
+    assert run(["plan", slug]) == 0
+    out = capsys.readouterr().out
+    assert f"de {len(entity.CAPAS)}" in out and "verif" in out
+
+
+def test_rename_de_tema_SI_mueve_las_capas_que_no_son_la_nota(toy_vault):
+    """El simétrico de #169, que faltaba: la excepción es de la nota **y su hermano** (#344), no de
+    la operación. Con la excepción abierta de más, renombrar un tema no movía NADA —el registro, que
+    es el único artefacto no regenerable, quedaba bajo el slug viejo— y el script igual imprimía que
+    había renombrado.  @inv INV-19"""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ica-bss"}})
+    cfg.save_busqueda("ica", {"fecha": "2026-01-01", "n_total": 1})
+    (cfg.FULLTEXT / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "ica" / "2020A.txt").write_text("t", encoding="utf-8")
+    nota = cfg.CONCEPTS / "methods" / "ica-bss.md"
+    nota.parent.mkdir(parents=True, exist_ok=True)
+    nota.write_text("---\nname: ICA\ntags: [methods]\n---\n\n# ICA\n", encoding="utf-8")
+    hermano = cfg.verif_sidecar(nota)
+    hermano.write_text("# Rastro\n", encoding="utf-8")
+    assert run(["rename", "ica", "componentes-independientes", "--yes"]) == 0
+    assert cfg.registro_path("componentes-independientes").exists()
+    assert (cfg.FULLTEXT / "componentes-independientes" / "2020A.txt").exists()
+    assert nota.exists() and hermano.exists(), "la nota del tema y su hermano NO se renombran"
