@@ -2760,3 +2760,30 @@ def test_fq_value_rechaza_la_lista(toy_vault):
     assert cfg.fq_value("", "x", "y") is None
     with pytest.raises(RuntimeError, match="search_fq tiene que ser un string"):
         cfg.fq_value(["a", "b"], "themes.yaml", "la entrada del tema")
+
+# ── #344 · el hermano de auditoría es un archivo, no una nota ────────────────────────────────────
+
+def test_verif_sidecar_es_el_hermano_en_el_MISMO_directorio(tmp_path):
+    """#344 — `<nota>.verif.md` al lado, NO un `.verif/` con punto: con punto Obsidian lo esconde y
+    el par deja de ser obvio. Es la ÚNICA definición de dónde vive la tabla de una nota: los cuatro
+    consumidores (lint, make_notes, reverify_subset, contrast) pasan por acá."""
+    assert cfg.verif_sidecar(tmp_path / "wiki" / "ica.md") == tmp_path / "wiki" / "ica.verif.md"
+    assert cfg.verif_sidecar(tmp_path / "2020A&A...1..1X.md").name == "2020A&A...1..1X.verif.md"
+
+
+def test_is_verif_sidecar_distingue_el_hermano_de_la_nota(tmp_path):
+    """La otra mitad: `note_paths` lo usa para sacar los hermanos de TODO enumerador. Con la
+    pregunta al revés, cada barrido tomaría los hermanos por notas —sin frontmatter, sin tipo— y
+    con la respuesta siempre `True` no quedaría ninguna nota."""
+    assert cfg.is_verif_sidecar(tmp_path / "ica.verif.md")
+    assert not cfg.is_verif_sidecar(tmp_path / "ica.md")
+    assert not cfg.is_verif_sidecar(tmp_path / "verif.md")
+
+
+def test_note_paths_saca_los_hermanos_y_ordena(tmp_path):
+    """El enumerador único (#344). El orden estable es de INV-43: sin él, cada barrido reporta lo
+    mismo en otro orden y dos reportes dejan de ser comparables."""
+    for n in ("b.md", "a.md", "a.verif.md"):
+        (tmp_path / n).write_text("x", encoding="utf-8")
+    assert [p.name for p in cfg.note_paths(tmp_path)] == ["a.md", "b.md"]
+    assert cfg.note_paths(tmp_path / "no-existe") == []

@@ -355,7 +355,11 @@ def _notes_of(slug: str | None) -> list:
     took out of the subject is still a valid witness of whose sentence a quote is, so filtering here
     would lower the detector's population and turn a correct attribution into a false «wrong
     attribution» — the very class of false positive #324/#325 just removed from a closing step."""
-    todas = sorted(cfg.WIKI.rglob("*.md")) if cfg.WIKI.exists() else []
+    # #344 — los hermanos `.verif.md` NO son notas: su tabla es el rastro de auditoría, y sus
+    # celdas `Evidencia` son citas que el fan-out ya sacó de la fuente. Barrerlas acá inventaría una
+    # población entera de «citas de la bóveda» sobre un artefacto que no afirma nada, y este gate
+    # frena operaciones (#323).
+    todas = cfg.note_paths(cfg.WIKI, "**/*.md")
     if not slug:
         return todas
     dir_ = cfg.EXTRACCION / slug

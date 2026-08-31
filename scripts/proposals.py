@@ -80,7 +80,7 @@ def refutations(slug: str | None = None) -> tuple:
     **proposes**; applying it would be an LLM editing curation in silence. Returns
     `([(bibcode, subject, motive)], population)`, the population being the paper notes read."""
     out, poblacion = [], 0
-    for f in sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []:
+    for f in cfg.note_paths(cfg.PAPERS):
         poblacion += 1
         fm = cfg.split_fm(f.read_text(encoding="utf-8")) or {}
         for v in cfg.as_list(fm.get("vistas")):
@@ -104,8 +104,8 @@ def empty_axis_cells(slug: str | None = None) -> tuple:
     nothing in it is not a formatting defect: it says *this source has not been asked about this
     axis*. Returns `(nota, eje, fuente)`."""
     out, poblacion = [], 0
-    notas = [p for p in (list(cfg.STARS.glob("*.md")) if cfg.STARS.exists() else [])
-             + (list(cfg.CONCEPTS.glob("*/*.md")) if cfg.CONCEPTS.exists() else [])
+    notas = [p for p in cfg.note_paths(cfg.STARS)
+             + cfg.note_paths(cfg.CONCEPTS, "*/*.md")
              if not slug or p.stem == slug]
     for f in sorted(notas):
         texto = f.read_text(encoding="utf-8")

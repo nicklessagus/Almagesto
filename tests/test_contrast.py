@@ -636,3 +636,22 @@ def test_lo_aprobado_con_un_solo_testigo_NO_mueve_el_rc(toy_vault, capsys):
     assert ct.main(["--validar", str(nota)]) == 0
     assert ct.main(["--validar-todo"]) == 0
     assert "0 cita(s) con evidencia POSITIVA de alteración ✅" in capsys.readouterr().out
+
+
+# ── #344 · el hermano de auditoría no es una nota ────────────────────────────────────────────────
+
+def test_el_barrido_NO_mira_los_hermanos_de_verificacion(toy_vault, capsys):
+    """#344 — las celdas `Evidencia` del hermano son citas que el fan-out ya sacó de la fuente:
+    barrerlas acá inventaría una población entera de «citas de la bóveda» sobre un artefacto que no
+    afirma nada, y este gate **frena operaciones** (#323). El hermano no es una nota."""
+    _extraccion("ica_ruido", "2013Voss")
+    nota = _nota_323("ica-ruido", f"Dice «{LARGA}» [[2013Voss]].")
+    cfg.verif_sidecar(nota).write_text(
+        "# Rastro\n\n## Verificación de citas\n\n"
+        "| # | Fuente | Evidencia |\n|---|---|---|\n"
+        f"| 1 | [[2013Voss]] | «{LARGA} y una cola que la extracción no tiene» |\n",
+        encoding="utf-8")
+    assert nota in ct._notes_of(None)
+    assert cfg.verif_sidecar(nota) not in ct._notes_of(None)
+    ct.main(["--validar-todo"])
+    assert "una cola que la extracción no tiene" not in capsys.readouterr().out

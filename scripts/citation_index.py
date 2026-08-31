@@ -53,7 +53,7 @@ def corpus_idents() -> list[dict]:
     no-core no vota. El paper **sin clave** tampoco entra al conteo — se reporta aparte, porque
     saltearlo en silencio bajaría el denominador de la cobertura sin que nadie lo vea."""
     out = []
-    for f in sorted(cfg.PAPERS.glob("*.md")):
+    for f in cfg.note_paths(cfg.PAPERS):
         fm = cfg.split_fm(f.read_text(encoding="utf-8"))
         if not isinstance(fm, dict) or "paper" not in (fm.get("tags") or []):
             continue

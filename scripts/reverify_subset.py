@@ -37,14 +37,15 @@ import lib_blocks as lb          # noqa: E402
 import lib_config as cfg         # noqa: E402
 
 
-def classify(text: str, umbral: float) -> dict:
-    """The three buckets, from the note's own text. No I/O beyond the note.
+def classify(nota: Path, text: str, umbral: float) -> dict:
+    """The three buckets: the pairs from the note's text, the rows from its sidecar (#344).
 
     A note with no evaluable block sends **every** pair to the subset and says so: that is not
     "zero expired pairs", it is a block nobody can evaluate, and reporting it as clean would be the
-    invented zero D-43 exists to forbid."""
+    invented zero D-43 exists to forbid. Since #344 «no evaluable» also covers *the sibling is not
+    there*, and `lb.verif_rows` is the single place that knows where to look."""
     pares = lb.pairs_of(text)
-    filas = lb.parse_verif_table(text)
+    filas = lb.verif_rows(nota)
     if filas is None:
         # D-43: a note with no block (or with the pre-1.54.0 template) is NOT "zero expired pairs".
         # It is a note nobody can evaluate, and saying otherwise is the invented zero the lint exists
@@ -110,12 +111,13 @@ def main() -> int:
         print(f"⛔ no existe: {nota}", file=sys.stderr)
         return 2
     text = nota.read_text(encoding="utf-8")
-    r = classify(text, args.umbral)
+    r = classify(nota, text, args.umbral)
 
     print(f"{nota}: {len(r['pares'])} pares en el cuerpo")
     if r["sin_bloque"]:
-        print("⛔ sin bloque `## Verificación de citas` evaluable (ausente o plantilla anterior a "
-              "1.54.0): NO es «cero vencidos», es un bloque que nadie puede evaluar (D-43).")
+        print(f"⛔ sin tabla de verificación evaluable en `{cfg.verif_sidecar(nota).name}` "
+              f"(ausente, o plantilla anterior a 1.54.0): NO es «cero vencidos», es un bloque que "
+              f"nadie puede evaluar (D-43).")
     else:
         print(f"  ✅ re-anclables (el veredicto se lleva, el ancla se recalcula) … {len(r['asignado']):4}")
         print(f"  ⛔ A RE-VERIFICAR (sin fila que llevar) ……………………………… {len(r['sin_fila']):4}")

@@ -404,7 +404,7 @@ def known_methods(tope: int = MAX_METODOS_PROMPT) -> str:
     # ver el nombre humano (`bisector span`), que es el que va a reconocer en el paper.
     por_stem: dict = {}
     if cfg.CONCEPTS.exists():
-        for nota in sorted(cfg.CONCEPTS.glob("*/*.md")):
+        for nota in cfg.note_paths(cfg.CONCEPTS, "*/*.md"):
             try:
                 fm = cfg.split_fm(nota.read_text(encoding="utf-8")) or {}
             except OSError:

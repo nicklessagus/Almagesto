@@ -369,7 +369,7 @@ def main() -> int:
               "bóveda es la pasada periódica — correr sin --slug)")
     else:
         notes = ([cfg.PAPERS / f"{args.paper.replace('/', '_')}.md"] if args.paper
-                 else sorted(cfg.PAPERS.glob("*.md")))
+                 else cfg.note_paths(cfg.PAPERS))
     headers = _ua()
 
     found, checked, marked = [], 0, 0

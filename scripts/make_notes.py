@@ -531,14 +531,14 @@ def index_tables(fms: dict | None = None) -> dict:
         return cfg.split_fm(f.read_text(encoding="utf-8")) or {}
 
     stars, concepts, papers = [], [], []
-    for f in sorted(cfg.STARS.glob("*.md")) if cfg.STARS.exists() else []:
+    for f in cfg.note_paths(cfg.STARS):
         fm = _fm(f)
         stars.append((f.stem, fm.get("spectral_type"), fm.get("P_rot_days"),
                       len(cfg.as_list(fm.get("planets")))))
-    for f in sorted(cfg.CONCEPTS.glob("*/*.md")) if cfg.CONCEPTS.exists() else []:
+    for f in cfg.note_paths(cfg.CONCEPTS, "*/*.md"):
         fm = _fm(f)
         concepts.append((f.parent.name, f.stem, fm.get("status"), fm.get("confidence")))
-    for f in sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []:
+    for f in cfg.note_paths(cfg.PAPERS):
         fm = _fm(f)
         papers.append((f.stem, fm.get("year"), fm.get("relevance"),
                        fm.get("citation_count") or 0))
@@ -616,7 +616,7 @@ def restamp_pdf_links() -> int:
     el corpus pre-#13 de una instancia (re-correr cadena por cadena sería carísimo y build/
     es scratch que puede no existir); en el flujo normal el re-estampado viaja solo con el
     re-run idempotente de la cadena."""
-    notes = sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []
+    notes = cfg.note_paths(cfg.PAPERS)
     # #304 — primero el CAMPO por verdad de disco, después el link que lo lee. Sin el primer paso
     # el backfill sólo podía **quitar** el link (un `pdf: null` con el PDF en disco se leía como
     # «no hay PDF»), así que el drift que el lint reporta —«PDF en disco sin linkear», con la ruta
@@ -719,7 +719,7 @@ def restamp_keywords() -> int:
         for r in cfg.as_list(data.get("records")):
             if isinstance(r, dict) and r.get("bibcode") and cfg.as_list(r.get("keyword")):
                 kw.setdefault(r["bibcode"], cfg.as_list(r["keyword"]))
-    notes = sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []
+    notes = cfg.note_paths(cfg.PAPERS)
     changed = sin_registro = 0
     for n in notes:
         fm = cfg.split_fm(n.read_text(encoding="utf-8"))
@@ -745,9 +745,9 @@ def restamp_headers() -> int:
     Para el corpus creado antes de que la cabecera existiera (medido en una bóveda real: 22 de 25
     notas sin el aviso de capa LLM). Regenerar con --force sí escribiría la cabecera, pero PISA la
     síntesis LLM, que es el trabajo caro: por eso esto es cirugía y no regeneración."""
-    notes = sorted(cfg.STARS.glob("*.md")) if cfg.STARS.exists() else []
-    notes += sorted(cfg.CONCEPTS.glob("*/*.md")) if cfg.CONCEPTS.exists() else []
-    notes += sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []   # #247
+    notes = cfg.note_paths(cfg.STARS)
+    notes += cfg.note_paths(cfg.CONCEPTS, "*/*.md")
+    notes += cfg.note_paths(cfg.PAPERS)   # #247
     changed = sum(1 for n in notes if stamp_header(n))
     cfg.print_seguro(f"cabeceras: {changed} de {len(notes)} estampadas "
           f"(aviso de capa LLM + línea del generador, versión leída del frontmatter)")
@@ -802,7 +802,7 @@ def restamp_vista_stub() -> int:
     Only sections that are byte-for-byte the old template are touched: a view with real prose is
     left alone (its anchors hang off the exact text)."""
     import harvest_views as hv          # import local: `harvest_views` importa `make_notes`
-    notes = sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []
+    notes = cfg.note_paths(cfg.PAPERS)
     tocadas = 0
     for dest in notes:
         text = dest.read_text(encoding="utf-8")
@@ -843,7 +843,7 @@ def clean_catalog_markup_notes() -> int:
     function the three backends now use, so a note cleaned here reads exactly like one ingested
     today. ⛔ Two consumers read those bytes back —the duplicate detector (#216) and the offline lens
     diff (D-49)— so the command reports how many notes it changed: whoever runs it re-measures."""
-    notes = sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []
+    notes = cfg.note_paths(cfg.PAPERS)
     tocadas = 0
     for dest in notes:
         text = dest.read_text(encoding="utf-8")
@@ -876,7 +876,7 @@ def restamp_abstracts() -> int:
 
     Surgery, not regeneration: the section goes right after the header blockquote and no prose is
     touched. Idempotent."""
-    notes = sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []
+    notes = cfg.note_paths(cfg.PAPERS)
     changed = 0
     for dest in notes:
         text = dest.read_text(encoding="utf-8")
@@ -915,19 +915,22 @@ def migrate_verif_archivo(dest) -> int:
     calculan los dos hashes y se declara el que **coincide** con lo que la fila ya guardaba: eso no
     es heurística, es identificar el archivo por su huella.
 
-    Si no coincide ninguno, el par está vencido igual (hay que re-verificarlo) y ahí sí se cae a la
-    regla del frontmatter, avisando: la fila declara algo que el próximo `verify-citations` va a
-    reescribir. Cirugía a nivel celda: no toca la prosa. Idempotente — una celda ya prefijada se
-    saltea.
+    Si no coincide ninguno, el par está vencido igual (hay que re-verificarlo) y ahí se declara
+    `txt:` —el default de cuando esas filas se escribieron— avisando: la fila declara algo que el
+    próximo `verify-citations` va a reescribir. Cirugía a nivel celda: no toca la prosa.
+    Idempotente — una celda ya prefijada se saltea.
+
+    ⚠ Desde #344 la cirugía es sobre el **hermano** `<nota>.verif.md`, que es donde vive la tabla;
+    quién la resuelve es `lb.verif_rows`, el mismo camino que usan los otros tres consumidores.
 
     @inv INV-107"""
-    if not dest.exists():
+    if not dest.exists() or cfg.is_verif_sidecar(dest):
         return 0
-    text = dest.read_text(encoding="utf-8")
-    filas = lb.parse_verif_table(text)
+    filas = lb.verif_rows(dest)
     if not filas:
         return 0
-    fm = cfg.split_fm(text)
+    dest = cfg.verif_sidecar(dest)
+    text = dest.read_text(encoding="utf-8")
     cambios, lineas = 0, text.split("\n")
     for fila in filas:
         if fila.source_kind is not None:
@@ -965,12 +968,65 @@ def migrate_verif_archivo(dest) -> int:
 def migrate_all_verif_archivo() -> int:
     """Backfill #117 sobre toda la bóveda. Toca sólo notas con bloque de verificación."""
     total = tocadas = 0
-    for nota in sorted(cfg.WIKI.rglob("*.md")):
+    for nota in cfg.note_paths(cfg.WIKI, "**/*.md"):
         n = migrate_verif_archivo(nota)
         if n:
             total, tocadas = total + n, tocadas + 1
             cfg.print_seguro(f"  → {nota.relative_to(cfg.WIKI)}: {n} fila(s)")
     cfg.print_seguro(f"#117: {total} fila(s) declaran su archivo en {tocadas} nota(s).")
+    return 0
+
+
+def migrate_verif_sidecar(dest) -> int:
+    """#344 — move ONE note's inline verification table to its `<nota>.verif.md` sibling.
+
+    Returns how many table lines moved; `0` when there is nothing to move (no block, or already
+    migrated), which is what makes it idempotent — the second run finds no `|` line inside the
+    section and writes nothing at all.
+
+    ⛔ **The table moves verbatim, it is not re-rendered.** Re-rendering through
+    `render_verif_table` would need the rows to parse, and the one note that most needs migrating is
+    the one whose block is of the pre-hash template: a migrator that refuses exactly there leaves
+    the schema it was written to retire. Moving the lines byte for byte also keeps every anchor and
+    every hash untouched, which is the property #344 promises (the anchors hash blocks of the NOTE).
+
+    What stays in the note: the header line —the claim, and the only part useful to whoever copies
+    the note—, the three sub-sections of findings, and the pointer to the sibling.
+
+    @inv INV-148"""
+    if not dest.exists() or cfg.is_verif_sidecar(dest):
+        return 0
+    text = dest.read_text(encoding="utf-8")
+    seccion = lb.verif_section(text)
+    tabla = lb.inline_verif_rows(text)
+    if not tabla:
+        return 0
+    puntero = lb.verif_pointer(dest)
+    fuera, puesto = [], False
+    for ln in seccion.split("\n"):
+        if ln.strip().startswith("|"):
+            if not puesto:
+                fuera.append(puntero)
+                puesto = True
+            continue
+        fuera.append(ln)
+    nueva = "\n".join(fuera)
+    side = cfg.verif_sidecar(dest)
+    cfg.write_text_atomic(side, lb.render_verif_sidecar(dest, "\n".join(tabla)))
+    cfg.write_text_atomic(dest, text.replace(seccion, nueva, 1))
+    return len(tabla)
+
+
+def migrate_all_verif_sidecar() -> int:
+    """#344 over the whole vault: every note's table moves to its sibling. Idempotent."""
+    total = tocadas = 0
+    for nota in cfg.note_paths(cfg.WIKI, "**/*.md"):
+        n = migrate_verif_sidecar(nota)
+        if n:
+            total, tocadas = total + n, tocadas + 1
+            cfg.print_seguro(f"  → {nota.relative_to(cfg.WIKI)}: {n} línea(s) → "
+                             f"{cfg.verif_sidecar(nota).name}")
+    cfg.print_seguro(f"#344: {total} línea(s) de tabla movidas al hermano en {tocadas} nota(s).")
     return 0
 
 
@@ -1095,7 +1151,7 @@ def migrate_all_facets() -> int:
     LLM ni el cuerpo. Si la nota ya trae `facets:`, el `topics:` residual se **borra** en vez de
     pisarlo — el vigente manda.  @inv INV-64"""
     n = 0
-    for f in sorted(cfg.PAPERS.glob("*.md")):
+    for f in cfg.note_paths(cfg.PAPERS):
         texto = f.read_text(encoding="utf-8")
         span = cfg.frontmatter_span(texto)
         if span is None:
@@ -1166,7 +1222,7 @@ def migrate_all_txt_fields() -> int:
     Edición **quirúrgica a nivel línea** (como `migrate_all_bearing`): no toca la extracción LLM ni
     el cuerpo.  @inv INV-26"""
     n = 0
-    for f in sorted(cfg.PAPERS.glob("*.md")):
+    for f in cfg.note_paths(cfg.PAPERS):
         texto = f.read_text(encoding="utf-8")
         lim = cfg.fm_bounds(texto)        # AUD-147
         if lim is None:
@@ -1222,7 +1278,7 @@ def migrate_all_source_fields() -> tuple[int, list]:
     Returns `(migrated, [(stem, where the prose went)])`, and writes nothing when the resulting
     frontmatter stops parsing (#244)."""
     n, movidas = 0, []
-    for f in sorted(cfg.PAPERS.glob("*.md")):
+    for f in cfg.note_paths(cfg.PAPERS):
         texto = f.read_text(encoding="utf-8")
         fm = cfg.split_fm(texto)
         lim = cfg.fm_bounds(texto)
@@ -1281,7 +1337,7 @@ def migrate_all_vistas() -> tuple[int, list]:
 
     Returns `(migrated, ambiguous)`."""
     migradas, ambiguas = 0, []
-    for f in sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []:
+    for f in cfg.note_paths(cfg.PAPERS):
         text = f.read_text(encoding="utf-8")
         if not EXTRACCION_VIEJA_RE.search(text):
             continue
@@ -1320,7 +1376,7 @@ def migrate_all_bearing() -> int:
     sea que ya estaba mal por construcción. Edición **quirúrgica a nivel línea** (como
     `merge_frontmatter_list`): no toca la extracción LLM ni el cuerpo.  @inv INV-13"""
     n = 0
-    for f in sorted(cfg.PAPERS.glob("*.md")):
+    for f in cfg.note_paths(cfg.PAPERS):
         texto = f.read_text(encoding="utf-8")
         lim = cfg.fm_bounds(texto)        # AUD-147
         if lim is None:
@@ -1338,7 +1394,7 @@ def migrate_all_bearing() -> int:
 def migrate_all_disputes() -> int:
     """Backfill #71 sobre toda la bóveda. Ver migrate_disputes para el porqué del alcance."""
     # @inv INV-64
-    notes = sorted(cfg.STARS.glob("*.md")) if cfg.STARS.exists() else []
+    notes = cfg.note_paths(cfg.STARS)
     changed = sum(1 for n in notes if migrate_disputes(n))
     cfg.print_seguro(f"disputas: {changed} de {len(notes)} ficha(s) migradas al schema con posiciones (#71)")
     if changed:
@@ -1398,7 +1454,7 @@ def sync_mirror() -> int:
                   f"sincronización")
         reportados += 1
 
-    notes = sorted(cfg.STARS.glob("*.md")) if cfg.STARS.exists() else []
+    notes = cfg.note_paths(cfg.STARS)
     rellenados = reportados = 0
     for dest in notes:
         text = dest.read_text(encoding="utf-8")
@@ -2093,7 +2149,7 @@ def papers_fm_index() -> dict:
     (el techo del test de escala es 2,3). Un consumidor que ya tiene el índice lo pasa; el resto
     paga una sola pasada."""
     return {f.stem: cfg.split_fm(f.read_text(encoding="utf-8"))
-            for f in sorted(cfg.PAPERS.glob("*.md"))}
+            for f in cfg.note_paths(cfg.PAPERS)}
 
 
 def theme_membership(concept: str, fm: dict) -> tuple[bool, bool]:
@@ -2387,7 +2443,7 @@ def metodos_rows(name: str, fms: dict | None = None) -> list:
 def note_names() -> set:
     """Los stems de TODA nota de `vault/wiki/` — para no estampar un `[[link]]` hacia una página que
     no existe. Mismo criterio que el detector de wikilinks rotos del lint, que es quien lo cobra."""
-    return {f.stem for f in cfg.WIKI.rglob("*.md")} if cfg.WIKI.exists() else set()
+    return {f.stem for f in cfg.note_paths(cfg.WIKI, "**/*.md")}
 
 
 #: #273 · cuántos métodos se listan antes de colapsar el resto en un `<details>`. El tope es
@@ -2614,6 +2670,9 @@ def _reescribir_wikilinks(old_stem: str, new_bibcode: str) -> int:
     """
     patron = _wikilink_re(safe_name(old_stem))
     tocadas = 0
+    # ⚠ Los hermanos `.verif.md` (#344) entran a propósito: su columna `Fuente` lleva el
+    # `[[bibcode]]` de cada fila, así que saltearlos dejaría el rastro de auditoría apuntando al
+    # bibcode viejo — links rotos, y en el único artefacto que existe para poder re-auditar.
     for f in sorted(cfg.VAULT.rglob("*.md")):
         cuerpo = f.read_text(encoding="utf-8")
         nuevo_cuerpo = patron.sub(lambda m: f"[[{safe_name(new_bibcode)}{m.group(1)}", cuerpo)
@@ -2638,8 +2697,8 @@ def _consolidar_duplicado(old, new, old_stem: str, new_bibcode: str) -> None:
     `rename_paper` cubría sólo *«existe el preprint y todavía no el publicado»*. Cuando existen las
     dos —que es literalmente el duplicado que D-19 nombra— abortaba con «resolvé a mano», así que la
     doc prometía un remedio que no corría. Consolidar es: el bibcode viejo pasa a `versions[]` de la
-    canónica, se conserva el MEJOR artefacto de cada tipo, se borra la nota vieja y se reescriben los
-    wikilinks de toda la bóveda.
+    canónica, se conserva el MEJOR artefacto de cada tipo, se borra la nota vieja —con su hermano de
+    verificación, #344— y se reescriben los wikilinks de toda la bóveda.
 
     ⛔ Rehúsa si la nota vieja tiene extracción LLM y la canónica no: descartar el paso más caro de
     la cadena en silencio es justo lo que el framework evita en todos lados (cf. `entity.py delete`,
@@ -2684,6 +2743,13 @@ def _consolidar_duplicado(old, new, old_stem: str, new_bibcode: str) -> None:
                 art_old.unlink(); borrados.append(art_old.name)
 
     old.unlink()
+    # #344 — la nota vieja se va y su hermano de auditoría con ella: si la canónica ya tiene el
+    # suyo, el de la vieja se borra (su nota ya no existe: sería un hermano huérfano, bloqueante);
+    # si no, se conserva bajo el nombre canónico. Es el mismo criterio con que se consolidan los
+    # artefactos de arriba — nunca dejar dos casas para una cosa.
+    _side_old, _side_new = cfg.verif_sidecar(old), cfg.verif_sidecar(new)
+    if _side_old.exists():
+        _side_old.unlink() if _side_new.exists() else _side_old.rename(_side_new)
     _set_lista_de_mapas(new, "versions", versions)
     _move_extraction(old_stem, new_bibcode)     # #228: mismo camino que `rename_paper`
     n = _reescribir_wikilinks(old_stem, new_bibcode)
@@ -2696,7 +2762,8 @@ def _consolidar_duplicado(old, new, old_stem: str, new_bibcode: str) -> None:
 def rename_paper(old_stem: str, new_bibcode: str) -> None:
     """Renombra una nota de paper y TODO lo que la referencia (D-19).  @inv INV-84
 
-    Mueve la nota y sus artefactos (`raw/pdfs/*/`, `raw/fulltext/*/`), agrega el bibcode viejo a
+    Mueve la nota, su hermano `<nota>.verif.md` (#344) y sus artefactos (`raw/pdfs/*/`,
+    `raw/fulltext/*/`), agrega el bibcode viejo a
     `versions[]` —el alias: lo que el mundo exterior conserva— y **reescribe los wikilinks de toda
     la bóveda**. Sin esa reescritura el renombre deja links rotos, que es la mitad del trabajo y la
     que no se nota hasta que el lint la grita.
@@ -2725,6 +2792,11 @@ def rename_paper(old_stem: str, new_bibcode: str) -> None:
 
     cfg.write_text_atomic(new, texto)
     old.unlink()
+    # #344 — el hermano de auditoría va con la nota. Dejarlo atrás produce el hermano huérfano que
+    # el lint bloquea, y con él el rastro que permite re-auditar el paper bajo su bibcode viejo.
+    _side_old, _side_new = cfg.verif_sidecar(old), cfg.verif_sidecar(new)
+    if _side_old.exists() and not _side_new.exists():
+        _side_old.rename(_side_new)
     _set_campo(new, "bibcode", new_bibcode)
     _set_lista_de_mapas(new, "versions", versions)
 
@@ -3324,7 +3396,7 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, theme: bool = F
     # todo lo que cuenta papers, y un falso positivo permanente de #75 —la ficha cita una de las
     # dos—. Se atajan acá, que es donde nacen.
     ya_en_corpus = {}
-    for f in cfg.PAPERS.glob("*.md"):
+    for f in cfg.note_paths(cfg.PAPERS):
         if (ident := identidad(cfg.split_fm(f.read_text(encoding="utf-8")))):
             ya_en_corpus.setdefault(ident, f.stem)
     written = skipped = merged = restamped = duplicados = 0
@@ -3709,6 +3781,10 @@ def main() -> int:
                     help="migración #117: prefija cada `Hash fuente` del bloque de verificación con "
                          "el archivo que se leyó (`txt:`/`pdf:`), deducido del hash que la fila ya "
                          "guardaba. No requiere slug.")
+    ap.add_argument("--migrate-verif-sidecar", action="store_true", dest="migrate_verif_sidecar",
+                    help="migración #344: mueve la TABLA del bloque de verificación al hermano "
+                         "`<nota>.verif.md` (la nota conserva la línea de cabecera, las tres "
+                         "sub-secciones y un puntero). Idempotente. No requiere slug.")
     ap.add_argument("--migrate-bearing", action="store_true", dest="migrate_bearing",
                     help="migración D-21: saca `bearing:` del frontmatter de las notas de paper (la "
                          "postura vive en la tabla de evidencia de la hipótesis). No requiere slug.")
@@ -3839,6 +3915,8 @@ def main() -> int:
 
     if args.migrate_verif_archivo:
         return migrate_all_verif_archivo()
+    if args.migrate_verif_sidecar:
+        return migrate_all_verif_sidecar()
     if args.migrate_facets:
         migrate_all_facets()
         return 0

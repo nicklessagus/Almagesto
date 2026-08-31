@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.166.0"
+ALMAGESTO_VERSION = "1.167.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1381,9 +1381,9 @@ def concept_alias_index() -> dict:
     a name denotes."""
     if not CONCEPTS.exists():
         return {}
-    stems = sorted(p_.stem for p_ in CONCEPTS.glob("*/*.md"))
+    stems = sorted(p_.stem for p_ in note_paths(CONCEPTS, "*/*.md"))
     idx: dict = {}
-    for nota in sorted(CONCEPTS.glob("*/*.md")):   # los alias primero: el stem los pisa después
+    for nota in note_paths(CONCEPTS, "*/*.md"):   # los alias primero: el stem los pisa después
         try:
             fm = split_fm(nota.read_text(encoding="utf-8")) or {}
         except OSError:
@@ -1406,7 +1406,7 @@ def alias_collisions() -> list:
     if not CONCEPTS.exists():
         return []
     por_clave: dict = {}
-    for nota in sorted(CONCEPTS.glob("*/*.md")):
+    for nota in note_paths(CONCEPTS, "*/*.md"):
         try:
             fm = split_fm(nota.read_text(encoding="utf-8")) or {}
         except OSError:
@@ -1643,6 +1643,46 @@ MATRICES = WIKI / "matrices"
 INDEX = WIKI / "index.md"
 LOG = WIKI / "log.md"
 STATUS = VAULT / "STATUS.md"        # #302: estado vigente de la instancia (se REESCRIBE, no se appendea)
+
+# ── #344 · el hermano de auditoría: `<nota>.verif.md` ────────────────────────────────────────────
+#
+# Medido el 2026-08-31 sobre una bóveda real: una nota de entidad pesa ~72-75 k tokens y el 71-77 %
+# de esos bytes es el bloque `## Verificación de citas`, que **no es para el lector** —es para el
+# lint y para re-auditar—. El contenido real (síntesis, inventario, régimen, huecos) son 16-21 k.
+# La tabla se va al hermano; la nota conserva la línea de cabecera (que es la afirmación), las tres
+# sub-secciones de hallazgos y un puntero.
+#
+# ⚠ Hermano en el MISMO directorio, no un `.verif/` oculto: con punto Obsidian lo esconde y el par
+# deja de ser obvio.
+VERIF_SUFFIX = ".verif.md"
+
+
+def is_verif_sidecar(path) -> bool:
+    """Is this file a verification sidecar rather than a note? (#344)"""
+    return Path(path).name.endswith(VERIF_SUFFIX)
+
+
+def verif_sidecar(note) -> Path:
+    """The sidecar that holds this note's verification table (#344).
+
+    ⛔ **The one implementation of «where does this note's table live».** Four consumers read that
+    table (`lint`, `make_notes`, `reverify_subset`, `contrast`) and this repo has paid seven times
+    in one day for the same rule written twice (#215, #324, #331, #335, #339, #346, #347)."""
+    p = Path(note)
+    return p.with_name(p.stem + VERIF_SUFFIX)
+
+
+def note_paths(base, pattern: str = "*.md") -> list:
+    """Note files under `base`, in a stable order and **without the sidecars** (#344).
+
+    Every enumerator globs `*.md`, and a sidecar matches: without this it would be swept as a note
+    —no frontmatter, no type, and a stem (`ica.verif`) no wikilink names—, so it would report as
+    broken frontmatter and get stamped as if it were content. What it holds is the audit trail of
+    its note, not a note."""
+    base = Path(base)
+    if not base.exists():
+        return []
+    return sorted(p for p in base.glob(pattern) if not is_verif_sidecar(p))
 
 
 def get_mailto() -> str:
@@ -2905,9 +2945,9 @@ def alias_bibcodes() -> set:
     must not be silently skipped by a fetcher."""
     if not PAPERS.exists():
         return set()
-    stems = {f.stem for f in PAPERS.glob("*.md")}
+    stems = {f.stem for f in note_paths(PAPERS)}
     out = set()
-    for f in sorted(PAPERS.glob("*.md")):
+    for f in note_paths(PAPERS):
         try:
             fm = split_fm(f.read_text(encoding="utf-8")) or {}
         except OSError:
@@ -3890,7 +3930,7 @@ def notes_of_subject(slug: str) -> list:
     if not name:
         return []
     out = []
-    for f in sorted(PAPERS.glob("*.md")):
+    for f in note_paths(PAPERS):
         text = f.read_text(encoding="utf-8")
         fm = split_fm(text)
         if name in as_list(fm.get(campo)):
