@@ -235,13 +235,20 @@ Progreso del ingest del tema <tema>:
    por campo (`--campo`, `--grep`, `--eje`, `--paper`), arrastra `linea` y `segunda_mano`, emite
    filas de **una fuente cada una** (`--filas`) y **nunca trunca una cita**: si no entra, filtrá
    menos filas.
-   ⛔ **La fila sale de `--filas` CON LA CITA ADENTRO: no la re-tipees (#322).** Los 12 verdaderos
+   ⛔ **La fila sale de `--filas` CON EL VALOR ADENTRO: no lo re-tipees (#322).** Los 12 verdaderos
    positivos medidos son errores de **copiado** —6 de atribución (la frase de un paper bajo otro), 6
    de cola alterada—, **ninguno** de comprensión: o sea, de mover una cadena de un archivo a otro,
    que es lo que un script hace perfecto y un LLM mal. Vos escribís **la glosa** y elegís qué filas
-   entran; la cadena entre «» y su `[[bibcode]]` vienen de la máquina. Si la cita no entra en la
+   entran; la cadena y su `[[bibcode]]` vienen de la máquina. Si la cita no entra en la
    celda, se **parafrasea SIN comillas** — nunca se recorta entre comillas. Y **una fila, una
    fuente**: agrupar bibcodes bajo una glosa compartida es cómo se fabrican atribuciones.
+   ⛔ **Las comillas de la celda son las del EXTRACTOR: el script no pone ninguna (#330).** `valor`
+   no es «la cita»: es lo que escribió el extractor, y llega en tres formas — **entre «»** (es cita
+   textual), **con «» adentro** (glosa del extractor **con** la cita adentro: la glosa NO es del
+   paper) y **sin «»** (dato de tabla o prosa: **no es verbatim, y no se entrecomilla al pegarlo**).
+   Envolver las tres publicaba como palabras del paper 1262 de 1948 valores medidos —315 de ellos la
+   glosa en castellano de un LLM— y doblaba 686 en `««…»»`, que además se caen de la población del
+   gate de #323. El banner de `--filas` dice cuántas de cada forma emitió la corrida.
    Entre "leí los papers" y
    "escribo la síntesis" hay una operación, y es la de más apalancamiento de la cadena: armar el
    **`## Inventario por eje`** del concept. Una fila por paper para cada **eje** —parámetro, efecto o

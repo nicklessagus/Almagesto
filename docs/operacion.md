@@ -166,7 +166,13 @@ python scripts/contrast.py <slug> [--campo X] [--grep RE] [--eje] [--filas]
                                     #   NO sirve las extracciones que `--drop-core` sacó del sujeto
                                     #   (#329: 13 de 51 en un tema real, y las 13 eran polisemia
                                     #   declarada — material que le fabrica un eje falso al paso que
-                                    #   PRODUCE los ejes). Declara cuántas excluyó (INV-40)
+                                    #   PRODUCE los ejes). Declara cuántas excluyó (INV-40).
+                                    #   ⛔ Con `--filas`, la celda sale TAL CUAL: las comillas son
+                                    #   las del extractor y el script no pone ninguna (#330 — `valor`
+                                    #   llega en tres formas y sólo una es cita de punta a punta;
+                                    #   envolverlas todas publicaba 1262 de 1948 valores medidos
+                                    #   como verbatim sin serlo). El banner dice cuántas de cada
+                                    #   forma emitió, y que lo que sale sin «» NO se entrecomilla
 python scripts/contrast.py <slug> --incluir-dropeados
                                     # la escotilla: las muestra, cada una detrás de su banner con el
                                     #   MOTIVO del descarte. Se marca, no se borra en silencio — la

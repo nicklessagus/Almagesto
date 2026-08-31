@@ -1640,6 +1640,16 @@
    "number": 329,
    "title": "`contrast.py` sirve al paso 3b las extracciones de papers ya DESCARTADOS con `--drop-core`: 13 de 51 (25 %) en `ica`, y los 13 son falsos positivos de polisemia declarados — el cuarto consumidor de `dropped_from_subject` que nunca recibió copia (#215)",
    "state": "OPEN"
+  },
+  {
+   "number": 330,
+   "title": "`contrast.py --filas` entrecomilla TODO `valor` y su banner afirma que «ya es correcta por construcción»: 1262 de 1948 (65 %) salen presentando como verbatim algo que no lo es — 315 son la GLOSA EN CASTELLANO del extractor publicada como palabras del paper, y 686 salen `««…»»`, que saca la cita de la población del gate de #323",
+   "state": "OPEN"
+  },
+  {
+   "number": 331,
+   "title": "El próximo paso que `triage.py --sintesis` y `harvest_views` imprimen omite `--theme`, así que en un TEMA mandan correr un comando que revienta con `KeyError` crudo — y el mensaje culpa a `stars.yaml` de un slug que está bien definido en `themes.yaml` (2 de 3 sujetos de una bóveda real)",
+   "state": "OPEN"
   }
  ]
 }

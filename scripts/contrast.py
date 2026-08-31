@@ -24,12 +24,17 @@ Three guarantees, each closing one of the measured failure modes:
      filter fewer rows, never to cut more text (#226's doctrine, one step earlier).
   2. **Provenance travels**: `linea` (the locator) and `segunda_mano` ride with every value. The six
      false attributions of that run came from a digest that dropped them.
-  3. **One row, one source, and the quote already inside it (#322).** The row carries a single
-     bibcode **and the string from the JSON**, quoted, escaped and with its locator: measured, the
-     12 true positives of the gate were **copying** errors, not comprehension ones — 6 of
-     attribution (one paper's sentence under another) and 6 of altered tail. Those are the class of
-     task a script does perfectly and an LLM does badly, so the synthesiser writes the **gloss** and
-     picks which rows enter; the quoted string is the machine's.
+  3. **One row, one source, and the string from the JSON already inside it (#322).** The row
+     carries a single bibcode **and the value verbatim from the JSON**, escaped and with its
+     locator: measured, the 12 true positives of the gate were **copying** errors, not comprehension
+     ones — 6 of attribution (one paper's sentence under another) and 6 of altered tail. Those are
+     the class of task a script does perfectly and an LLM does badly, so the synthesiser writes the
+     **gloss** and picks which rows enter; the string is the machine's.
+  4. ⛔ **And the script NEVER adds a quotation mark of its own (#330).** `valor` is not «the
+     quotation»: it is what the extractor wrote, and it arrives in three shapes. Wrapping all three
+     in guillemets published 1262 of 1948 real values as verbatim when they were not — 315 of them
+     the extractor's Spanish gloss presented as the words of an English paper, and 686 doubled into
+     `««…»»`, which silently drops the quote from the effective population of the #323 gate.
 
 ⛔ **It proposes and does not write**: the inventory is written by the synthesiser.
 
@@ -57,6 +62,32 @@ CAMPOS = ("valor", "regimen", "aporte", "hueco", "ejes", "salvedades")
 #: visible —no como celda vacía— para que una fila pegada sin escribir la glosa se note al leer la
 #: nota, en vez de publicarse como una fila muda.
 GLOSA = "«…tu glosa…»"
+
+#: #330 · las tres formas en que llega `ground_truth[].valor`, con lo que la fila afirma de cada una.
+#: El orden importa: es el del test de `quote_form`, y el banner las nombra a las tres.
+FORMAS = {"cita": "cita textual, tal como la escribió el extractor",
+          "glosa": "glosa del extractor CON la cita adentro, entre «»",
+          "pelado": "SIN comillas: no es verbatim — no lo entrecomilles al pegarlo"}
+
+
+def quote_form(texto: str) -> str:
+    """Which of the three shapes `ground_truth[].valor` has: `cita` | `glosa` | `pelado` (#330).
+
+    ⛔ **The script cannot know whether a value is verbatim** — that is the extractor's knowledge,
+    and there is no honest heuristic for it. So it decides only what is decidable **on the string**,
+    and it **never adds a guillemet of its own**: the quotation marks a row shows are the ones the
+    extractor wrote. Measured over 1948 real values: 686 already open with `«` (wrapping them again
+    produced `««…»»`, and `_QUOTE_RE` then captures a dangling `«` that exists in no source — the
+    quote leaves the effective population of the #323 gate while the report still says `0 ✅`, the
+    mould of #275), 315 carry a quote **inside** a gloss (wrapping published the extractor's Spanish
+    prose as the words of an English paper — the very mechanism #322 exists to prevent) and 947 have
+    no quotation at all (a table value presented as a quotation)."""
+    t = (texto or "").strip()
+    if t.startswith("«"):
+        return "cita"
+    if "«" in t:
+        return "glosa"
+    return "pelado"
 
 
 def extracciones(slug: str) -> list[tuple[str, dict]]:
@@ -109,6 +140,7 @@ def imprimir(slug: str, *, campo: str | None, patron: str | None, paper: str | N
     «wrong attribution». And it MARKS instead of silently dropping: the population line declares how
     many were excluded (INV-40) and `--incluir-dropeados` shows them, each behind its own banner."""
     rx = re.compile(patron, re.I) if patron else None
+    formas = dict.fromkeys(FORMAS, 0)          # #330: qué emitió, por forma — se declara al cerrar
     todas = extracciones(slug)
     # #112 vive en el registro VERSIONADO, no en `build/`: la única implementación de «qué papers
     # sacó el usuario de ESTE sujeto» es `cfg.dropped_from_subject` (regla de método nº 2 — el molde
@@ -156,24 +188,34 @@ def imprimir(slug: str, *, campo: str | None, patron: str | None, paper: str | N
             if filas:
                 # Una fila, UNA fuente (#317): agrupar bibcodes bajo una glosa compartida es cómo
                 # se fabrican atribuciones — que sea una decisión explícita, no la salida natural.
-                # ⛔ #322 — la fila sale con la CITA YA ADENTRO, entre comillas, con su `[[bibcode]]`
-                # y su localizador pegados. Medido sobre 32 hits: los 12 verdaderos positivos eran
+                # ⛔ #322 — la fila sale con el VALOR YA ADENTRO, con su `[[bibcode]]` y su
+                # localizador pegados. Medido sobre 32 hits: los 12 verdaderos positivos eran
                 # errores de **copiado**, no de comprensión —6 de atribución (la frase de un paper
                 # bajo otro) y 6 de cola alterada—, o sea de mover una cadena de un archivo a otro:
                 # lo que un LLM hace mal y un script hace perfecto. El sintetizador escribe la
-                # GLOSA y elige qué filas entran; la cadena entre comillas es de la máquina.
+                # GLOSA y elige qué filas entran; la cadena es de la máquina.
+                # ⛔ #330 — y sale TAL CUAL: las comillas son las que escribió el extractor. El
+                # script no puede saber qué parte de `valor` es verbatim, así que no agrega ni una:
+                # envolviendo las tres formas, 1262 de 1948 valores reales salían presentados como
+                # cita sin serlo (686 doblados `««…»»`, que además se caen de la población del gate
+                # de #323, y 315 con la glosa en castellano publicada como palabras del paper).
+                formas[quote_form(texto)] += 1
                 cfg.print_seguro(f"| {cfg.escape_cell(que)} | [[{bib}]] | "
-                                 f"«{cfg.escape_cell(texto)}» ({loc}){sm} | {GLOSA} |")
+                                 f"{cfg.escape_cell(texto)} ({loc}){sm} | {GLOSA} |")
             else:
                 cfg.print_seguro(f"[[{bib}]] · {loc}{sm}\n    {mostrado}"
                                  + (f"\n    régimen: {regimen}" if regimen and not campo else ""))
             n += 1
     if filas and n:
-        cfg.print_seguro(f"\n  ⛔ La cadena entre «» ya es correcta por construcción (sale del JSON "
-                         f"con su bibcode y su localizador): **no la re-tipees** — ahí es donde se "
-                         f"pierden las citas (#322). Vos escribís la glosa (`{GLOSA}`) y decidís "
-                         f"qué filas entran; si la cita no entra en la celda, se parafrasea SIN "
-                         f"comillas.")
+        cfg.print_seguro(f"\n  ⛔ La celda sale TAL CUAL del JSON, con su bibcode y su localizador: "
+                         f"**no la re-tipees** — ahí es donde se pierden las citas (#322). Vos "
+                         f"escribís la glosa (`{GLOSA}`) y decidís qué filas entran; si no entra en "
+                         f"la celda, se parafrasea SIN comillas.")
+        cfg.print_seguro(f"  ⚠ Las comillas son las del EXTRACTOR, no las pone el script (#330). "
+                         f"Tres formas, y esta corrida emitió: "
+                         f"{formas['cita']} que abren con «» ({FORMAS['cita']}) · "
+                         f"{formas['glosa']} con «» adentro ({FORMAS['glosa']}) · "
+                         f"{formas['pelado']} sin «» ({FORMAS['pelado']}).")
     # INV-40 — la población se DECLARA, incluido el cero: un listado que calla cuántas extracciones
     # dejó afuera no distingue «no había ninguna dropeada» de «nadie miró la curación» (#329).
     if incluir_dropeados:

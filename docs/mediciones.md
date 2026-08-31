@@ -762,3 +762,50 @@ Y se **marca**, no se borra en silencio (INV-40/D-43): la línea de población d
 —incluido el cero, porque sin ella *«no hay dropeados»* y *«este comando no mira la curación»* salen
 idénticos por pantalla— y `--incluir-dropeados` las muestra, cada una detrás de su banner con el
 **motivo** del descarte.
+
+
+## 2026-08-31 · El script ponía las comillas que el extractor no puso (#330)
+
+`--filas` (#322) envolvía **todo** `ground_truth[].valor` en guillemets, y cerraba con un banner que
+afirmaba *«la cadena entre «» ya es correcta por construcción: no la re-tipees»*. El campo `valor`
+**no** es «la cita»: es lo que escribió el extractor, y llega en tres formas.
+
+**Medición** (bóveda `Almagesto-Tesis`, 2026-08-31, v1.137.0 · 1948 valores no vacíos):
+
+| forma | n | % | qué producía `--filas` |
+|---|---:|---:|---|
+| **A** · el valor ya abre con `«` | 686 | 35 % | `««…»»` |
+| **B** · glosa del extractor **con** la cita adentro | 315 | 16 % | la prosa del LLM publicada como palabras del paper |
+| **C** · valor pelado, sin comillas | 947 | 49 % | un dato de tabla presentado como cita |
+
+**1262 de 1948 (65 %)** salían presentando como verbatim algo que no lo era. La clase B es la grave:
+*«promedio de las dos líneas»*, *«límite superior; Li no detectado»* no están en el paper — las
+escribió el extractor, y con los guillemets del script la nota afirmaba que sí. O sea que **seguir el
+procedimiento documentado al pie de la letra inyectaba el defecto**, y lo que inyectaba en la clase B
+es exactamente el mecanismo que #322 existe para impedir.
+
+**Y la clase A tocaba el gate de cierre.** `_QUOTE_RE` (`«([^»]+)»`) sobre `««X»»` captura `«X`, con
+un guillemet colgado que no existe en ninguna fuente: la cita pasa de verificada contra el `.txt` a
+**no evaluable** y el barrido sigue diciendo `0 ✅` — el molde de **#275**, población efectiva que
+cae sin que el veredicto lo diga. Medido punta a punta sobre una fuente con `.txt` y sin extracción:
+
+```
+cita simple  → 0 alteración · 0 no evaluable · 1 mirada  ✅
+cita ««…»»   → 0 alteración · 1 NO EVALUABLE · 1 mirada  ✅
+```
+
+En esa bóveda ya hay **2850 de 2984 citas no evaluables (95,5 %)**: margen para perder más no había.
+Y no era deuda vieja —hoy tiene **0** ocurrencias de `««`, porque los inventarios vigentes se
+escribieron antes de que `--filas` existiera—: lo que estaba por entrar eran 402 filas dobladas en
+`ica`, 232 en `ica-ruido` y 52 en `hd_40307`.
+
+**El arreglo es lo decidible sobre el string, y nada más.** El script **no puede saber** si un
+`valor` es verbatim —eso lo sabe el extractor—, así que ya no agrega ni un guillemet: la celda sale
+tal cual, `contrast.quote_form` clasifica las tres formas y el banner declara **cuántas de cada una
+emitió la corrida**, con la instrucción que faltaba: *lo que sale sin comillas no se entrecomilla al
+pegarlo*.
+
+⚠ **Lo que NO se hizo, y por qué se declara acá:** la mitad estructural —que el extractor emita un
+campo `cita` separado de `valor`, la única forma de que el script sepa qué parte es verbatim— cambia
+el schema de la extracción, y #311 dice que una extracción no se regenera sin volver a pagar el PDF.
+Queda como propuesta con su evidencia, no aplicada.

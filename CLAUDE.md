@@ -993,12 +993,12 @@ re-extraer el `.txt`.
    pares). Nunca trunca una cita, agrupa por campo, arrastra `linea`/`segunda_mano` y ⛔ **no le
    sirve al 3b lo que `--drop-core` sacó del sujeto (#329)** —declara cuántas excluyó, y
    `--incluir-dropeados` las muestra—. Propone: el inventario lo escribís vos.
-   ⛔ **La fila de `--filas` sale CON LA CITA ADENTRO y NO SE RE-TIPEA (#322).** Los 12 verdaderos
-   positivos medidos son errores de **copiado** —6 de atribución, 6 de cola alterada—, ninguno de
-   comprensión: mover una cadena entre archivos es lo que un script hace perfecto y un LLM mal. Vos
-   escribís **la glosa** y elegís qué filas entran; si no entra, se parafrasea **sin comillas**. Y
-   **una fila, una fuente**: agrupar bibcodes bajo una glosa compartida es cómo se fabrican
-   atribuciones (6 falsas medidas, 0 escribiendo paper por paper).
+   ⛔ **La fila de `--filas` sale CON EL VALOR ADENTRO y NO SE RE-TIPEA (#322):** los 12 verdaderos
+   positivos medidos eran de **copiado** —6 de atribución, 6 de cola alterada—, y mover una cadena
+   entre archivos lo hace perfecto un script y mal un LLM. Vos escribís **la glosa**; **una fila,
+   una fuente** (agrupar bibcodes bajo una glosa compartida fabrica atribuciones). ⛔ **Y las
+   comillas son las del EXTRACTOR: el script no pone ninguna (#330)** —`valor` llega entre «», con
+   «» adentro (glosa) o sin «»—; lo que sale sin comillas NO es verbatim y no se entrecomilla.
    ⛔ **La cita se verifica contra la EXTRACCIÓN, no contra el `.txt`** (#315/#317): es la
    transcripción hecha leyendo el PDF, y con el `.txt` de juez la señal era 2 de 17 y 0 de 35.
    Bloquea con **evidencia positiva** (#318/#321) —la frase bajo **otro** bibcode (atribución), o un

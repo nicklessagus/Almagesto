@@ -96,7 +96,10 @@ def test_las_filas_llevan_UNA_sola_fuente_y_la_CITA_ADENTRO(toy_vault, capsys):
     filas = [l for l in salida.splitlines() if l.startswith("| ")]
     assert len(filas) == 2
     assert all(l.count("[[") == 1 for l in filas), "una fila, una fuente"
-    assert all(f"«{LARGA}»" in l for l in filas), "la cadena ENTERA, del JSON, no un esqueleto"
+    assert all(LARGA in l for l in filas), "la cadena ENTERA, del JSON, no un esqueleto"
+    # ⛔ #330 — y sin comillas puestas por el script: `LARGA` no las trae, así que la fila no puede
+    # presentarla como verbatim (ver los tests por forma, más abajo).
+    assert all("«" not in l.split("|")[3] for l in filas)
     assert all("(p. 4)" in l for l in filas), "el localizador viaja pegado a la cita"
     assert all(ct.GLOSA in l for l in filas), "el único hueco es la glosa, y es visible"
     assert "no la re-tipees" in salida
@@ -213,8 +216,8 @@ def test_la_atribucion_viaja_pegada_a_la_cita(toy_vault, capsys):
     ct.main(["ica_ruido", "--filas"])
     filas = [l for l in capsys.readouterr().out.splitlines() if l.startswith("| ")]
     por_bib = {l.split("[[")[1].split("]]")[0]: l for l in filas}
-    assert "«lo que dice Voss 2013» (p. 4)" in por_bib["2013Voss"]
-    assert "«lo que dice el OTRO Voss» (p. 7)" in por_bib["2015Voss"]
+    assert "lo que dice Voss 2013 (p. 4)" in por_bib["2013Voss"]
+    assert "lo que dice el OTRO Voss (p. 7)" in por_bib["2015Voss"]
 
 
 def test_la_celda_de_la_fila_escapa_la_barra(toy_vault, capsys):
@@ -428,3 +431,86 @@ def test_el_carril_de_VALIDACION_sigue_viendo_al_dropeado(toy_vault, capsys):
     assert "atribuida a la fuente equivocada" in capsys.readouterr().out
     assert ct.main(["ica_ruido", "--validar-todo"]) == 1
     assert "notas de `ica_ruido`" in capsys.readouterr().out
+
+
+# ── #330 · las tres formas de `valor`, y por qué el script no pone NI UNA comilla ──
+
+CITA_A = "«As conclusion, the cost is dominated by the whitening step of the algorithm»"
+GLOSA_B = "0.11 ± 0.11 (promedio de las dos líneas; el paper las llama «the two Zn lines»)"
+PELADO_C = "< -0.09 (límite superior; Li no detectado)"
+
+
+def _celda(slug: str, bib: str, valor: str, capsys) -> tuple[str, str]:
+    """La celda del valor de la ÚNICA fila de `--filas`, más la salida entera."""
+    _extraccion(slug, bib, ground_truth=[{"que": "eje", "valor": valor, "linea": "p. 4"}])
+    ct.main([slug, "--filas", "--paper", bib])
+    out = capsys.readouterr().out
+    fila = next(l for l in out.splitlines() if l.startswith("| "))
+    return fila.split("|")[3].strip(), out
+
+
+def test_A_el_valor_que_YA_es_cita_no_se_DOBLA(toy_vault, capsys):
+    """#330 — 686 de 1948 valores reales ya abren con `«`: envolverlos otra vez producía `««…»»`.
+    No es cosmético: `«([^»]+)»` captura entonces `«As conclusion…` —con un guillemet colgado que no
+    existe en ninguna fuente—, y la cita se cae de la población efectiva del gate de #323."""
+    celda, _ = _celda("ica_ruido", "1994Comon", CITA_A, capsys)
+    assert "««" not in celda and "»»" not in celda
+    assert celda.startswith(CITA_A), "la cita del extractor, entera y sin una comilla de más"
+
+
+def test_B_la_GLOSA_del_extractor_no_se_publica_como_palabras_del_paper(toy_vault, capsys):
+    """La clase más grave (315 de 1948): el `valor` es la glosa del extractor **con** la cita
+    adentro. Envolviéndola entera, la prosa en castellano de un LLM se publicaba como las palabras
+    de un paper en inglés — exactamente el mecanismo que #322 existe para impedir."""
+    celda, _ = _celda("ica_ruido", "2004Ecuvillon", GLOSA_B, capsys)
+    assert not celda.startswith("«"), "la glosa NO se entrecomilla"
+    assert "«the two Zn lines»" in celda, "y la cita de adentro se preserva tal cual"
+
+
+def test_C_el_valor_PELADO_no_se_presenta_como_cita(toy_vault, capsys):
+    """947 de 1948: un dato de tabla, sin una comilla en el JSON. El script no puede saber si es
+    verbatim —eso lo sabe el extractor—, así que no lo afirma: la celda sale sin comillas, que es lo
+    que el propio banner manda para lo que no es cita."""
+    celda, _ = _celda("ica_ruido", "2004Israelian", PELADO_C, capsys)
+    assert "«" not in celda and "»" not in celda
+    assert celda.startswith(PELADO_C)
+
+
+def test_el_BANNER_nombra_las_tres_formas_y_declara_lo_que_emitio(toy_vault, capsys):
+    """El banner afirmaba *«la cadena entre «» ya es correcta por construcción»*, que era falso para
+    el 65 % de los valores — y le ordenaba al sintetizador pegarla sin tocarla. Ahora dice cuál es
+    cuál, cuántas de cada una emitió esta corrida, y que lo que sale sin comillas **no se
+    entrecomilla al pegarlo**."""
+    _extraccion("ica_ruido", "1994Comon", ground_truth=[
+        {"que": "a", "valor": CITA_A, "linea": "p. 1"}])
+    _extraccion("ica_ruido", "2004Ecuvillon", ground_truth=[
+        {"que": "b", "valor": GLOSA_B, "linea": "p. 2"}])
+    _extraccion("ica_ruido", "2004Israelian", ground_truth=[
+        {"que": "c", "valor": PELADO_C, "linea": "p. 3"}])
+    ct.main(["ica_ruido", "--filas"])
+    out = capsys.readouterr().out
+    assert "las comillas son las del EXTRACTOR".lower() in out.lower()
+    assert "1 que abren" in out and "1 con «» adentro" in out and "1 sin «»" in out
+    assert ct.FORMAS["pelado"] in out, "y dice qué hacer con la que no es cita"
+    assert "no lo entrecomilles al pegarlo" in out
+
+
+def test_la_fila_pegada_SIGUE_en_la_poblacion_del_gate_de_cierre(toy_vault, capsys):
+    """La consecuencia medida punta a punta, y el molde de #275: con `««…»»` la cita pasaba de
+    *verificada* a **no evaluable** y el barrido seguía diciendo `0 ✅` — población efectiva que cae
+    sin que el veredicto lo diga. En una bóveda real ya hay 2850 de 2984 citas no evaluables, así
+    que margen para perder más no hay.
+
+    Se prueba contra el **paso 1** de `quote_verdict` (`en_su_txt`), que es donde se midió: la fuente
+    tiene `.txt` y no tiene extracción —el caso mayoritario—, así que el único testigo es el archivo
+    del paper, y ahí el guillemet de más **no existe**. Con la extracción presente el defecto queda
+    tapado por el JSON que produjo la fila, que es justamente el testigo que no hay que creerle
+    (#205/#324: la cadena que está en el `.txt` prueba que la frase es de ese paper)."""
+    celda, _ = _celda("ica_ruido", "1994Comon", CITA_A, capsys)
+    (cfg.EXTRACCION / "ica_ruido" / "1994Comon.json").unlink()
+    _txt("ica_ruido", "1994Comon", "prosa del paper. As conclusion, the cost is dominated by the "
+                                   "whitening step of the algorithm. más prosa.")
+    nota = _nota_323("ica_ruido", f"El costo lo fija {celda} [[1994Comon]].")
+    r = ct.validar(nota, mostrar=False)
+    assert r["citas"] == 1, "la cita se mira"
+    assert r["no_evaluables"] == [] and r["alteradas"] == [], "y se VERIFICA contra el `.txt`"
