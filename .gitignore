@@ -58,3 +58,7 @@ docs/internal/
 
 # Notas sueltas del usuario: scratch, no doc del framework (se coló en e147daf)
 docs/mejoras.txt
+
+# Worktrees efímeros de los subagentes (viven DENTRO del repo y no son del proyecto).
+# `.claude/skills/` sí se versiona: es framework.
+.claude/worktrees/
