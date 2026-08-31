@@ -760,6 +760,11 @@ nombre al tema— devolviendo **cero**. La salida **no** es sacar el `fq` (sin �
 genómica y cardiología): es `search_fq:` en la entrada del tema, con los **mismos tres estados**
 (sin declarar → hereda el objetivo · con valor → ése · `null` → no acota). El registro guarda el
 **resuelto** y entra en la lente, porque cambiarlo re-clasifica el universo igual que la faceta.
+⛔ **Y el tema de método que NO lo declara recibe un AVISO (#351)** —en el probe, antes del corte, y
+como backlog del lint—: sin `search_fq` hereda `database:astronomy` y ahí la puerta fundacional **no
+abre nunca** (medido en `ica`: 0 papers con el `fq` heredado teniendo `fundacional_min_citas: 2000`,
+2 sin él —Comon 1994—; el tema se cerró sin su canon y hubo que re-sintetizarlo entero). Es **sólo
+un aviso**: los tres estados no se tocan y un `null` **declarado** lo hace callar.
 
 ⛔ **Y el PREVIEW de un tema se corre con esa lente, no con la global (#208):**
 `python scripts/query_ads.py <slug> --theme --probe` (la query sale de `query:` del tema).

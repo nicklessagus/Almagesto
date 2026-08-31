@@ -54,6 +54,9 @@
 #              ANTES de la lente. Sin declarar → hereda `relevance.search_fq` del objetivo;
 #              `search_fq: null` → no acota, a propósito. Un tema de otra disciplina buscado con
 #              `database:astronomy` no encuentra su literatura, y ninguna `facet:` lo recupera.
+#              ⚠ Si el tema declara `facet:` y NO declara esto, el probe y el lint AVISAN (#351):
+#              con el `fq` heredado la puerta 2 puede no abrir NUNCA (medido en `ica`: 0 papers
+#              fundacionales con `database:astronomy`, 2 sin él). Declaralo, aunque sea `null`.
 #   rows_por_termino: (opcional, #294) cuántos works trae cada slice de `seed_terms` (default 200).
 #              El slice se pagina, así que subirlo cubre el resto del slice.
 #   source   : ⚠ EL NOMBRE ENGAÑA (#209): NO dice "dónde se busca", dice QUÉ CADENA CORRE el

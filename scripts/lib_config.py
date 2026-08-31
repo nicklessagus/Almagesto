@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.164.0"
+ALMAGESTO_VERSION = "1.166.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1845,6 +1845,72 @@ def load_objective() -> dict:
     except (yaml.YAMLError, UnicodeDecodeError, OSError):
         return {}
     return data if isinstance(data, dict) else {}
+
+
+# Lente del BUSCADOR (`fq` de Solr): acota el universo de toda query de DESCUBRIMIENTO
+# **server-side, antes de traer nada**. Vive acá y no en `query_ads` desde 1.166.0 (#351) porque el
+# lint resuelve la misma cascada para el aviso del tema de método y no puede importar ese módulo
+# (arrastraría `requests`) — dos implementaciones de esta regla es cómo un `null` termina
+# significando cosas distintas según quién lo lea.
+ASTRO_FQ = "database:astronomy"          # default histórico; la instancia puede declarar otro
+
+
+def fq_value(v, archivo: str, donde: str) -> str | None:
+    """A declared `search_fq:` → the `fq` that gets sent, or `None` for the deliberate `null`.
+
+    Shared by both levels (objective and theme) on purpose: two implementations of the same rule is
+    how a `null` ends up meaning different things depending on who reads it."""
+    if v is None or v == "":
+        return None                       # `null` declarado: no acotar, a propósito (#85)
+    # AUD-182 / INV-119 — `str(v)` sobre una lista manda el **`repr` de Python** a Solr
+    # (`['a', 'b']`), que no es una query: ADS devuelve otra cosa (o nada) y el corpus queda
+    # filtrado por un `fq` que nadie escribió, con el registro guardando ese repr como la lente
+    # vigente. La forma se valida como el resto de la config: falla ruidoso.
+    if not isinstance(v, str):
+        raise RuntimeError(
+            f"{archivo}: {donde} → search_fq tiene que ser un string con el `fq` "
+            f"de Solr y es {type(v).__name__} ({v!r}). Si querés varias condiciones, escribilas en "
+            f"un solo string (`database:astronomy AND property:refereed`); una lista se manda como "
+            f"su repr de Python y filtra el corpus con una regla que nadie escribió."
+        )
+    return v
+
+
+def objective_search_fq() -> str | None:
+    """The searcher lens declared in `objective.yaml`, with its three states (#85, D-43).
+
+    Undeclared → `ASTRO_FQ`; declared with a value → that one; declared **`null`** → `None`, i.e.
+    search all of ADS on purpose. `query_ads.search_fq` calls it for the objective level, and the
+    lint calls it to know what a theme that declares none of its own inherits (#351).
+
+    @inv INV-119"""
+    rel = as_map(load_objective().get("relevance"))
+    if "search_fq" not in rel:
+        return ASTRO_FQ
+    return fq_value(rel.get("search_fq"), "vault/config/objective.yaml", "relevance")
+
+
+def theme_inherited_fq(meta: dict | None) -> str | None:
+    """The global `fq` a METHOD theme silently inherits by not declaring its own (#351).
+
+    A theme that declares its own `facet:` is by definition a **method theme** (D-26: the global
+    lens is *«activamente dañina»* there). If it also leaves `search_fq` undeclared it inherits the
+    objective's — `database:astronomy` in an astro vault — which excludes its own literature
+    **server-side, before anything is fetched**, and no `facet:` can recover it: the facet
+    classifies what was already brought in. Measured on `ica`: with the inherited `fq` **zero**
+    papers enter through the fundacional gate, with `fundacional_min_citas: 2000` declared; without
+    it, two, Comon 1994 (2297 citations, the field's founding paper) among them. That theme was
+    ingested, synthesised and **closed** without its canon, and nothing in the report said so.
+
+    Returns the inherited `fq` when it is worth a warning, `None` otherwise. Three ways to stay
+    silent, each a real case: no `facet:` of its own (not a method theme); `search_fq` declared —
+    **`null` included**, which is a decision and does not read like not declaring anything; and an
+    objective that itself narrows nothing (there is no exclusion to warn about). It warns and
+    decides nothing: the three states of `search_fq` are unchanged."""
+    tema = as_map(meta)
+    if not tema.get("facet") or "search_fq" in tema:
+        return None
+    return objective_search_fq()
 
 
 def yaml_error(path: Path, que: str) -> str | None:

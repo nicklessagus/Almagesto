@@ -161,6 +161,9 @@
 ## ❝ Cita que la fuente SÍ dice y el `.txt` parte: el defecto es de la EXTRACCIÓN, no de la nota (#288, backlog) (0)
 > sobre 0 citas «…» de ≥40 caracteres con fuente chequeable
 
+## ❝ Las DOS lecturas del mismo PDF no coinciden: `pdftotext` dice una cosa y la extracción otra — andá a la página (#333, backlog) (0)
+> sobre 0 citas «…» de ≥40 caracteres con fuente chequeable
+
 ## ❝ Cita textual NO EVALUABLE: sin `.txt` o con OCR (#220, se declara, no cuenta en contra) (0)
 > sobre 0 citas «…» de ≥40 caracteres con fuente chequeable
 
@@ -315,6 +318,9 @@
 
 ## 🕳 `alcance`/`unidad_cita` de la nota ≠ el declarado en `sources[]` (#312, backlog) (0)
 > sobre 60 notas de `papers/`
+
+## 🕳 Tema de MÉTODO sin `search_fq`: hereda el del objetivo, que excluye su literatura server-side (#351, backlog) (0)
+> sobre 0 temas de `themes.yaml`
 
 ## Barrido full-text (2b) sin rastro o truncado: no consta que la segunda red para el punto ciego de la query se haya tendido entera (backlog) (0)
 > sobre 3 registros de sujeto

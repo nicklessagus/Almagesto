@@ -2716,3 +2716,47 @@ def test_subject_refusal_sin_NINGUNA_config_no_ofrece_comando(toy_vault):
     assert "stars.yaml" in msg and "themes.yaml" in msg
     assert "no me llames" not in msg, "el remedio del llamador no aplica: no hay a qué mandar"
     assert "--theme" not in msg
+
+
+# ── #351 · qué `fq` hereda un tema de MÉTODO que no declara el suyo ──────────
+
+def test_objective_search_fq_tiene_TRES_estados(toy_vault):
+    """#85 / D-43 — sin declarar → el default astro; con valor → ése; `null` declarado → no acota.
+    La cascada vive acá desde 1.166.0 porque el lint la necesita y no puede importar `query_ads`
+    (arrastraría `requests`): dos implementaciones es cómo un `null` termina significando cosas
+    distintas según quién lo lea."""
+    write_yaml(cfg.OBJECTIVE_YAML, {"relevance": {"facets": {"a": "x"}}})
+    assert cfg.objective_search_fq() == cfg.ASTRO_FQ
+    write_yaml(cfg.OBJECTIVE_YAML, {"relevance": {"search_fq": "database:physics"}})
+    assert cfg.objective_search_fq() == "database:physics"
+    write_yaml(cfg.OBJECTIVE_YAML, {"relevance": {"search_fq": None}})
+    assert cfg.objective_search_fq() is None
+
+
+def test_theme_inherited_fq_avisa_solo_cuando_hay_exclusion(toy_vault):
+    """#351 — un tema con `facet:` propia y sin `search_fq` hereda el del objetivo, que le excluye
+    su literatura server-side (medido en `ica`: 0 papers por la puerta fundacional con el fq
+    heredado, 2 sin él). Devuelve lo que hereda; `None` cuando no hay nada que avisar."""
+    write_yaml(cfg.OBJECTIVE_YAML, {"relevance": {"search_fq": "database:astronomy"}})
+    assert cfg.theme_inherited_fq({"facet": "independent component"}) == "database:astronomy"
+    # `search_fq` DECLARADO —`null` incluido— es una decisión, y no se lee como no declarar nada
+    assert cfg.theme_inherited_fq({"facet": "ica", "search_fq": None}) is None
+    assert cfg.theme_inherited_fq({"facet": "ica", "search_fq": "database:physics"}) is None
+    # sin `facet:` propia no es un tema de método: heredar la lente global es lo que corresponde
+    assert cfg.theme_inherited_fq({"query": "abs:x"}) is None
+    assert cfg.theme_inherited_fq(None) is None
+
+
+def test_theme_inherited_fq_calla_si_el_objetivo_no_acota(toy_vault):
+    """#351 — heredar `search_fq: null` no deja nada afuera: nombrar una exclusión inexistente es
+    la atribución falsa que la regla de método nº 4 prohíbe."""
+    write_yaml(cfg.OBJECTIVE_YAML, {"relevance": {"search_fq": None}})
+    assert cfg.theme_inherited_fq({"facet": "independent component"}) is None
+
+
+def test_fq_value_rechaza_la_lista(toy_vault):
+    """AUD-182 / INV-119 — `str(v)` sobre una lista manda el `repr` de Python a Solr y filtra el
+    corpus con una regla que nadie escribió. Falla ruidoso, como el resto de la config."""
+    assert cfg.fq_value("", "x", "y") is None
+    with pytest.raises(RuntimeError, match="search_fq tiene que ser un string"):
+        cfg.fq_value(["a", "b"], "themes.yaml", "la entrada del tema")

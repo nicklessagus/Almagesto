@@ -1438,3 +1438,39 @@ se llena y se consulta por clave, y el reclamo por `methods` entra al set con el
 del tema**, no con la grafía del extractor. Los comentarios quedaron descriptivos: el de G2 dice
 ahora que `methods` no se recorre **porque la rama exige `not fm.get("methods")`** —recorrerlo sería
 un condicional que no decide nada (red 8)—, en vez de prometer una equivalencia que no existía.
+
+
+## 2026-08-31 · El `fq` que un tema de método hereda en silencio (#351)
+
+Un tema que declara **`facet:` propia** es, por D-26, un tema de **método**. Si además no declara
+`search_fq`, hereda el del objetivo —`database:astronomy` en una bóveda astro—, que acota el
+universo **server-side, antes de traer nada**, y ninguna `facet:` puede recuperar lo que ese `fq`
+dejó afuera: la faceta clasifica lo ya traído.
+
+**Medido sobre `ica`** (misma query, misma faceta, `fundacional_min_citas: 2000` declarado):
+
+| `search_fq` | universo | core | **por la puerta FUNDACIONAL** |
+|---|---:|---:|---|
+| `database:astronomy` (el heredado) | 947 | 30 | **0** |
+| `database:(astronomy OR physics OR general)` | 2000 | 27 | 1 |
+| **`null`** | 2000 | **31** | **2 — incluido `1994SigPr..36..287C`** (Comon 1994, 2297 citas) |
+
+⛔ Con el `fq` heredado la puerta 2 **no abre nunca**: el tema tiene el umbral puesto y la puerta
+cerrada por otro lado, sin decirlo. ⚠ Y ensancharlo no alcanza: la literatura de ICA vive en *Signal
+Processing*, *Neural Networks* e *IEEE TNN*, que no están en `astronomy OR physics OR general`.
+
+**El costo, ya pagado:** `ica` se ingestó, se sintetizó y se **cerró** sin su canon; los 8
+fundacionales entraron a mano después y obligaron a **re-sintetizar el tema entero** al día
+siguiente. Nada en el reporte decía que faltaran — el tema traía 900 papers de aplicación astro y la
+síntesis se leía completa.
+
+**Qué cambió (1.166.0).** Un **aviso**, no un default nuevo: los tres estados de `search_fq` quedan
+intactos (sin declarar → hereda · con valor → ése · `null` → no acota). `query_ads.py <slug>
+--theme --probe` lo emite **antes del corte** —la pantalla donde la decisión se toma antes de pagar
+descargas (#208)— y el lint lo reporta como **backlog** con su población (`temas`). La cascada de
+tres estados se movió a `lib_config` (`ASTRO_FQ`, `fq_value`, `objective_search_fq`) porque el lint
+la necesita y no puede importar `query_ads` (arrastraría `requests`): dos implementaciones de esta
+regla es cómo un `null` termina significando cosas distintas según quién lo lea.
+`cfg.theme_inherited_fq` calla en los **tres** casos que no son hallazgo: sin `facet:` propia,
+con `search_fq` declarado —**`null` incluido**, que es una decisión— y con un objetivo que ya no
+acota nada (nombrar una exclusión inexistente sería la atribución falsa de la regla de método nº 4).

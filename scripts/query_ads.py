@@ -113,7 +113,9 @@ FIELDS = ("bibcode,title,author,year,pubdate,abstract,identifier,doctype,"
 # Lente astro del BUSCADOR (fq de Solr): acota el universo de toda query de DESCUBRIMIENTO.
 # No se aplica cuando el universo ya lo fijó el usuario con una lista de bibcodes — ver
 # `fetch_bibcodes` y el parámetro `fq` de `query_ads` (#68).
-ASTRO_FQ = "database:astronomy"          # default histórico; la instancia puede declarar otro
+# Vive en `lib_config` desde 1.166.0 (#351): el lint resuelve la misma cascada para avisarle a un
+# tema de método qué hereda, y no puede importar este módulo (arrastraría `requests`).
+ASTRO_FQ = cfg.ASTRO_FQ
 
 
 _FQ_DEFAULT = object()      # centinela: `fq=None` explícito (no acotar) ≠ no pasar `fq`
@@ -150,32 +152,8 @@ def search_fq(meta: dict | None = None) -> str | None:
     @inv INV-119"""
     tema = cfg.as_map(meta)
     if "search_fq" in tema:
-        return _fq_valor(tema.get("search_fq"), "themes.yaml", "la entrada del tema")
-    rel = cfg.as_map(cfg.load_objective().get("relevance"))
-    if "search_fq" not in rel:
-        return ASTRO_FQ
-    return _fq_valor(rel.get("search_fq"), "vault/config/objective.yaml", "relevance")
-
-
-def _fq_valor(v, archivo: str, donde: str) -> str | None:
-    """A declared `search_fq:` → the `fq` that gets sent, or `None` for the deliberate `null`.
-
-    Shared by both levels (objective and theme) on purpose: two implementations of the same rule is
-    how a `null` ends up meaning different things depending on who reads it."""
-    if v is None or v == "":
-        return None                       # `null` declarado: no acotar, a propósito (#85)
-    # AUD-182 / INV-119 — `str(v)` sobre una lista manda el **`repr` de Python** a Solr
-    # (`['a', 'b']`), que no es una query: ADS devuelve otra cosa (o nada) y el corpus queda
-    # filtrado por un `fq` que nadie escribió, con el registro guardando ese repr como la lente
-    # vigente. La forma se valida como el resto de la config: falla ruidoso.
-    if not isinstance(v, str):
-        raise RuntimeError(
-            f"{archivo}: {donde} → search_fq tiene que ser un string con el `fq` "
-            f"de Solr y es {type(v).__name__} ({v!r}). Si querés varias condiciones, escribilas en "
-            f"un solo string (`database:astronomy AND property:refereed`); una lista se manda como "
-            f"su repr de Python y filtra el corpus con una regla que nadie escribió."
-        )
-    return v
+        return cfg.fq_value(tema.get("search_fq"), "themes.yaml", "la entrada del tema")
+    return cfg.objective_search_fq()
 
 
 # Normalización de campos de CURACIÓN MANUAL: vive en `lib_config` desde que el diff de lente
@@ -1377,6 +1355,16 @@ def print_probe(q: str, recs: list, noncore_top: int = 25, theme_meta: dict | No
     core = sorted((r for r in recs if r["relevant"]), key=lambda r: r.get("citation_count") or 0, reverse=True)
     noncore = sorted((r for r in recs if not r["relevant"]), key=lambda r: r.get("citation_count") or 0, reverse=True)
     cfg.print_seguro(f"Probe (no baja PDFs ni escribe build/). q: {q}")
+    # #351 — el aviso va ANTES del corte, porque el corte que se está mirando ya salió del `fq`
+    # heredado: con `database:astronomy`, un tema de método previsualiza un universo que excluye su
+    # propia literatura y la pantalla no lo dice. Es un aviso, no un default nuevo.
+    if (heredado := cfg.theme_inherited_fq(theme_meta)) is not None:
+        cfg.print_seguro(
+            f"  ⚠ tema de MÉTODO sin `search_fq`: hereda `{heredado}` del objetivo, que acota el "
+            f"universo server-side,\n    antes de traer nada — y ninguna `facet:` puede recuperar "
+            f"lo que ese `fq` dejó afuera. Medido en `ica`:\n    0 papers por la puerta "
+            f"fundacional con el fq heredado, 2 sin él (incl. Comon 1994, 2297 citas).\n"
+            f"    → declaralo en la entrada del tema de `themes.yaml`, aunque sea `null` (#351).")
     cfg.print_seguro(f"  {len(recs)} papers · {len(core)} CORE · {len(noncore)} no-core")
     # T-3: la lente es un PRESUPUESTO, no sólo un filtro. El probe existe para afinar el corte, y
     # el costo de leer lo que entra es la otra mitad de esa decisión (D-13 promete leer TODOS los

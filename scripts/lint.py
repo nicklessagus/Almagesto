@@ -1387,6 +1387,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     version_publicada: list = []       # (stem, motivo) — #298: el preprint citado teniendo publicado
     status_apilado: list = []          # (archivo, motivo) — #302: el STATUS se volvió bitácora
     alcance_desfasado: list = []       # (stem, motivo) — #312: la nota y `sources[]` no coinciden
+    tema_fq_heredado: list = []        # (tema, motivo) — #351: `facet:` propia y `search_fq` sin declarar
     thesis_refs: dict[str, list] = {}  # valor de thesis_link -> notas que lo usan
     method_refs: dict[str, list] = {}  # valor de methods -> notas de paper que lo declaran
     dispute_refs: list = []            # (nota, field, ref) de las posiciones de cada disputa (#71)
@@ -4269,6 +4270,32 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # abstract + keywords de las notas), no contra el fulltext, para que el veredicto sea el de la
     # lente. Backlog, nunca bloqueante: una alternativa puede ser legítimamente rara, o estar
     # puesta para lo que todavía no se ingestó.
+    # #351 — un tema que declara `facet:` propia es, por definición, un tema de MÉTODO (D-26: la
+    # lente global es «activamente dañina» ahí). Si además no declara `search_fq`, hereda el del
+    # objetivo —`database:astronomy` en una bóveda astro—, que acota el universo **server-side,
+    # antes de traer nada**, y ninguna `facet:` puede recuperar lo que ese `fq` dejó afuera. Medido
+    # sobre `ica`: **cero** papers entran por la puerta fundacional con el fq heredado (teniendo
+    # `fundacional_min_citas: 2000` declarado) y dos sin él, Comon 1994 incluido. Ese tema se
+    # ingestó, se sintetizó y se **cerró** sin su canon, y nada en el reporte decía que faltara.
+    # Backlog y no bloqueante: heredar puede ser correcto (un tema de método con literatura astro),
+    # y lo que falta es que la herencia deje de ser invisible.
+    if not cfg.themes_error():
+        for _slug, _tmeta in (cfg.load_themes() or {}).items():
+            try:
+                _fq_h = cfg.theme_inherited_fq(_tmeta)
+            except RuntimeError:
+                # `search_fq` del objetivo con forma inválida: lo reporta `query_ads` al clasificar
+                # (falla ruidoso). Acá el aviso se calla — un backlog no puede tumbar al lint.
+                continue
+            if _fq_h is None:
+                continue
+            tema_fq_heredado.append(
+                (f"tema `{_slug}`",
+                 f"declara `facet:` propia (tema de MÉTODO, D-26) y NO declara `search_fq`: hereda "
+                 f"`{_fq_h}` del objetivo, que acota el universo server-side, antes de traer nada. "
+                 f"Medido en `ica`: 0 papers por la puerta fundacional con el fq heredado, 2 sin él "
+                 f"(incl. Comon 1994) → declaralo en `themes.yaml`, aunque sea `null`"))
+
     if not cfg.themes_error():
         for _slug, _tmeta in (cfg.load_themes() or {}).items():
             _facet = cfg.as_map(_tmeta).get("facet")
@@ -4417,6 +4444,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('version_publicada', '🕳 La nota se apoya en el PREPRINT habiendo versión publicada (#298, backlog)', SEV_BACKLOG, tuple(version_publicada), poblacion='papers'),
         Categoria('status_apilado', '🕳 `STATUS.md` apilado como bitácora: es ESTADO, se reescribe (#302, backlog)', SEV_BACKLOG, tuple(status_apilado), poblacion='config'),
         Categoria('alcance_desfasado', '🕳 `alcance`/`unidad_cita` de la nota ≠ el declarado en `sources[]` (#312, backlog)', SEV_BACKLOG, tuple(alcance_desfasado), poblacion='papers'),
+        Categoria('tema_fq_heredado', '🕳 Tema de MÉTODO sin `search_fq`: hereda el del objetivo, que excluye su literatura server-side (#351, backlog)', SEV_BACKLOG, tuple(tema_fq_heredado), poblacion='temas'),
         Categoria('sweep_pendiente', 'Barrido full-text (2b) sin rastro o truncado: no consta que la '
                   'segunda red para el punto ciego de la query se haya tendido entera (backlog)',
                   SEV_BACKLOG, tuple(sweep_pendiente), poblacion='registros'),

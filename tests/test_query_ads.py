@@ -2466,3 +2466,53 @@ def test_la_regla_del_tema_no_re_juzga_un_curado(toy_classifier):
     # sin declararlo curado, la regla del tema SÍ lo saca: es el control del test de arriba
     otro = [rec("2012PASP..124.1015B", relevant=True, via="usuario", title="PCA noisy")]
     assert qa.reclassify_for_theme(otro, meta)[1] == ["2012PASP..124.1015B"]
+
+
+# ── #351 · el tema de MÉTODO que hereda el `fq` del objetivo en silencio ─────
+
+def _objetivo_con_fq(monkeypatch, **rel):
+    monkeypatch.setattr(qa.cfg, "load_objective", lambda: {"relevance": rel})
+
+
+def test_probe_avisa_el_fq_HEREDADO_de_un_tema_de_metodo(toy_classifier, monkeypatch, capsys):
+    """#351 — un tema que declara `facet:` propia es un tema de MÉTODO (D-26). Si no declara
+    `search_fq` hereda el del objetivo, que acota el universo server-side y le excluye su propia
+    literatura: medido en `ica`, CERO papers por la puerta fundacional con el fq heredado (con
+    `fundacional_min_citas: 2000` declarado) y dos sin él, Comon 1994 incluido. El probe es la
+    pantalla donde ese corte se decide antes de pagar descargas (#208) y no lo decía."""
+    _objetivo_con_fq(monkeypatch, search_fq="database:astronomy")
+    meta = {"title": "ICA", "facet": "independent component", "fundacional_min_citas": 100}
+    qa.print_probe("q", _recs_ica(), theme_meta=meta)
+    out = capsys.readouterr().out
+    assert "sin `search_fq`" in out and "database:astronomy" in out, out
+    # ANTES del corte: el número que se está por mirar YA salió de ese `fq`
+    assert out.index("sin `search_fq`") < out.index(" CORE · "), out
+
+
+def test_probe_calla_con_search_fq_DECLARADO_incluido_null(toy_classifier, monkeypatch, capsys):
+    """#351 — el aviso es sobre el NO declarar. Un `search_fq: null` declarado es una decisión y no
+    se lee igual que no declarar nada (D-43, misma doctrina que `fundacional_min_citas`)."""
+    _objetivo_con_fq(monkeypatch, search_fq="database:astronomy")
+    base = {"title": "ICA", "facet": "independent component", "fundacional_min_citas": 100}
+    for declarado in ("database:(astronomy OR physics)", None):
+        qa.print_probe("q", _recs_ica(), theme_meta={**base, "search_fq": declarado})
+        assert "sin `search_fq`" not in capsys.readouterr().out, declarado
+
+
+def test_probe_calla_sin_facet_propia_y_sin_tema(toy_classifier, monkeypatch, capsys):
+    """#351 — la señal de «tema de método» es la `facet:` propia: sin ella no hay nada que avisar,
+    y menos todavía en el probe global (que ni tema tiene)."""
+    _objetivo_con_fq(monkeypatch, search_fq="database:astronomy")
+    qa.print_probe("q", _recs_ica(), theme_meta={"title": "GP", "query": "abs:x"})
+    assert "sin `search_fq`" not in capsys.readouterr().out
+    qa.print_probe("q", _recs_ica())
+    assert "sin `search_fq`" not in capsys.readouterr().out
+
+
+def test_probe_calla_si_el_OBJETIVO_no_acota(toy_classifier, monkeypatch, capsys):
+    """#351 — heredar `search_fq: null` no excluye nada: avisar ahí sería nombrar una exclusión que
+    no existe, y un mapa que atribuye mal es peor que uno vacío (regla de método nº 4)."""
+    _objetivo_con_fq(monkeypatch, search_fq=None)
+    meta = {"title": "ICA", "facet": "independent component", "fundacional_min_citas": 100}
+    qa.print_probe("q", _recs_ica(), theme_meta=meta)
+    assert "sin `search_fq`" not in capsys.readouterr().out

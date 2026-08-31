@@ -533,6 +533,16 @@ OCR, o marcar `pending`).
   se salteaba en silencio (medido sobre una bóveda real: la categoría pasa de `(0)` a `(1)`, un
   tema con **26** core sin extraer y sin criterio declarado). El barrido es hoy **una sola
   implementación**, `cfg.all_subjects()`, compartida con el detector de roll-up.
+- **Tema de MÉTODO sin `search_fq`** (#351): un tema que declara `facet:` propia es, por D-26, un
+  tema de método; si no declara `search_fq` hereda el del objetivo —`database:astronomy` en una
+  bóveda astro—, que acota el universo **server-side, antes de traer nada**, y ninguna `facet:`
+  puede recuperar lo que ese `fq` dejó afuera. Medido en `ica`: **cero** papers entran por la
+  puerta fundacional con el fq heredado (teniendo `fundacional_min_citas: 2000` declarado) y dos
+  sin él, Comon 1994 incluido — el tema se ingestó, se sintetizó y se **cerró** sin su canon.
+  Backlog y no bloqueante (heredar puede ser correcto); se cierra declarando `search_fq:` en la
+  entrada del tema, **aunque sea `null`**. El aviso simétrico sale en
+  `query_ads.py <slug> --theme --probe`, que es donde el corte se decide antes de pagar
+  descargas (#208).
 - **Capas colgadas de un slug que ya no existe** (INV-19, tras un `entity.py delete|rename` a
   medias).
 

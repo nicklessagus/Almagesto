@@ -6738,3 +6738,51 @@ def test_el_remedio_de_la_cabecera_desfasada_CORRE_en_el_sujeto_que_nombra(toy_v
     # ⛔ La estrella NO se lleva el flag de arrastre: el remedio de un sujeto no puede nombrar la
     # config del otro.
     assert "make_notes.py test_star --theme" not in rep
+
+
+# ── #351 · el tema de MÉTODO que hereda el `fq` del objetivo en silencio ─────
+
+def _tema_ica(**extra):
+    return {"ica": {"title": "ICA", "concept": "ica", "area": "methods",
+                    "facet": "independent component", **extra}}
+
+
+def test_tema_de_metodo_sin_search_fq_se_reporta_con_lo_que_hereda(toy_vault):
+    """#351 — `facet:` propia = tema de MÉTODO (D-26); sin `search_fq` hereda el del objetivo, que
+    acota el universo **server-side, antes de traer nada**, y ninguna faceta puede recuperar lo que
+    ese `fq` dejó afuera. Medido en `ica`: 0 papers por la puerta fundacional con el fq heredado
+    (con `fundacional_min_citas: 2000` declarado) y 2 sin él. Ese tema se ingestó, se sintetizó y se
+    cerró sin su canon, y nada en el reporte decía que faltara."""
+    write_yaml(cfg.THEMES_YAML, _tema_ica())
+    cat = lint.collect().por_clave("tema_fq_heredado")
+    hallazgos = [m for _n, m in cat.items]
+    assert any("NO declara `search_fq`" in h and "database:astronomy" in h for h in hallazgos), \
+        hallazgos
+    assert cat.severidad == lint.SEV_BACKLOG, "heredar puede ser correcto: nunca bloqueante"
+    assert cat.poblacion == "temas", "INV-40: la categoría declara sobre qué población miró"
+
+
+def test_search_fq_DECLARADO_incluido_null_calla_al_lint(toy_vault):
+    """#351 — el hallazgo es sobre el NO declarar. Un `null` declarado es una decisión (D-43) y no
+    se lee igual que no declarar nada: si lo reportáramos, la única salida sería la que el usuario
+    ya tomó."""
+    for declarado in ("database:(astronomy OR physics)", None):
+        write_yaml(cfg.THEMES_YAML, _tema_ica(search_fq=declarado))
+        assert lint.collect().por_clave("tema_fq_heredado").items == (), declarado
+
+
+def test_tema_sin_facet_propia_no_es_tema_de_metodo(toy_vault):
+    """#351 — un tema sin `facet:` propia corre con la lente global a propósito: heredar el `fq`
+    del objetivo es exactamente lo que le corresponde."""
+    write_yaml(cfg.THEMES_YAML, {"gp": {"title": "GP", "concept": "gp", "query": "abs:x"}})
+    assert lint.collect().por_clave("tema_fq_heredado").items == ()
+
+
+def test_objetivo_que_no_acota_no_deja_nada_afuera(toy_vault):
+    """#351 — con `search_fq: null` en el objetivo, heredar no excluye nada: nombrar una exclusión
+    que no existe es la atribución falsa que la regla de método nº 4 prohíbe."""
+    obj = yaml.safe_load(cfg.OBJECTIVE_YAML.read_text(encoding="utf-8"))
+    obj["relevance"]["search_fq"] = None
+    write_yaml(cfg.OBJECTIVE_YAML, obj)
+    write_yaml(cfg.THEMES_YAML, _tema_ica())
+    assert lint.collect().por_clave("tema_fq_heredado").items == ()

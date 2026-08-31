@@ -1734,6 +1734,21 @@
   {
    "number": 348,
    "title": "Tres veces más #243 por string crudo, ahora en `lint.py` — y G1 es un falso positivo BLOQUEANTE: `thesis_links: [PCA]` con `pca.md` en disco se reporta «sin página destino» mientras `theme_membership` dice que es el mismo concepto",
+   "state": "CLOSED"
+  },
+  {
+   "number": 349,
+   "title": "El detector de «párrafo duplicado» marca como daño lo que estampa el framework: en una nota con varias vistas (#239) cada vista escribe su propia línea estructural — 7 de 7 hallazgos son falsos positivos",
+   "state": "OPEN"
+  },
+  {
+   "number": 350,
+   "title": "El detector de «segunda mano sin marca» dispara en 398 de 462 pares (86 %): pregunta si el PAPER tiene alguna segunda mano, no si el VALOR que la línea toma lo es — la forma de #198, con 6 de cada 7 avisos no accionables",
+   "state": "OPEN"
+  },
+  {
+   "number": 351,
+   "title": "Un tema con `facet:` propia y sin `search_fq` hereda `database:astronomy` en silencio, y ahí la puerta fundacional NO ABRE NUNCA — medido en `ica`: 0 papers fundacionales con el fq heredado, 2 sin él (incl. Comon 1994)",
    "state": "OPEN"
   }
  ]
