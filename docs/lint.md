@@ -370,8 +370,18 @@ OCR, o marcar `pending`).
 - **Cabecera no estampable** (#69: sin la línea `> _Generado con Almagesto v…_`, ancla de todos los
   estampadores): las cirugías de cabecera devuelven `False` en silencio sobre ella. Se arregla con
   `python scripts/make_notes.py --restamp-headers` (lee la versión del `generator`, no la inventa).
-- **Roll-up estampado desactualizado** (D-10): se reporta **nombrando los stems**; re-correr
-  `python scripts/make_notes.py <slug>` (o `--theme`).
+- **Roll-up estampado desactualizado** (D-10): se reporta **nombrando los stems** y el comando lo
+  arma `cfg.make_notes_cmd` (INV-141), así que sale con `--theme` cuando corresponde.
+  ⛔ **Cubre los DOS tipos de sujeto desde #338**: #300 llevó las dos garantías de D-10 al
+  estampador de un concepto y el detector se había quedado en `stars/` —medido, 2 de 3 sujetos de
+  una bóveda real son temas, y un paper que reclama una estrella y un tema con las dos tablas
+  vacías se reportaba 1 de 2—. Un tema estampa su roll-up bajo **uno** de los dos encabezados
+  (`## Papers` estilo ficha → `papers_universe`, o `## Papers que tocan este tema (auto)` →
+  `concept_rollup_rows`, D-24) y **cada uno se compara contra SU universo**: exigir el ausente
+  inventaría un hueco en la nota que eligió el otro. La nota que no trae **ninguno** de los dos es
+  su propio hallazgo — no puede recibir la cirugía nunca, y eso sólo lo decía un `print` de
+  `make_notes` al pasar. ⚠ El corte es `cfg.section_span`: `## Papers` es **prefijo** de
+  `## Papers que tocan este tema (auto)` (la trampa de #176).
 - **Hub que menciona un radio existente sin `[[wikilink]]`**: sin el link el radio no está en el
   grafo y el hub se lee como si el sub-aspecto no existiera.
 - **Concepto/hipótesis sin ninguna cita** (cobertura): afirma sin fuente → no chequeable.
@@ -480,7 +490,10 @@ core sin `methods` (sin extraer); paper extraído sin `role`; `unidad_cita` de d
 vigila la ficha — es "la garantía no corrió acá", no "hay una violación"); un
 `raw/fulltext/<slug>/<clave>.txt` sin su nota en `papers/` (#108: extracción pagada que no alcanza
 ningún roll-up — pasa al angostar la `query` de un tema; se cierra re-corriendo
-`make_notes.py --theme <slug>` o borrando el artefacto colgado); y su hermano simétrico, un
+el comando que `cfg.make_notes_cmd` arma para ese slug, o borrando el artefacto colgado — #338: el
+remedio traía `--theme` hardcodeado sobre un directorio que puede ser una **estrella**, la imagen
+especular de #334); su **gemelo PDF** (#230/#338: mismo defecto y desde #205 la mitad cara de la
+cadena, y hasta 1.146.0 emitía prosa en vez de un comando ejecutable); y su hermano simétrico, un
 `raw/ground_truth/<slug>.json` sin su `stars/<slug>.md` (renombre a medias o ficha borrada sin
 limpiar).
 

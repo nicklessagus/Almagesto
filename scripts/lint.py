@@ -3091,31 +3091,74 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # `paper_fms` se llena en el LOOP principal (ver más arriba), que ya parsea cada nota: una
     # pasada extra acá subía el ratio a ~3,0 (el techo del test de escala es 2,3), y el hotspot
     # conocido —el doble parseo de split_fm+fm_error— ya se come 2,0.
-    for nombre, meta_s in ({} if cfg.stars_error() else cfg.load_stars()).items():
-        slug_s = meta_s.get("slug") if isinstance(meta_s, dict) else None
-        dest_s = cfg.STARS / f"{slug_s}.md" if slug_s else None
+    # ⛔ #338 — y los CONCEPTOS, que estaban afuera. #300 llevó las dos garantías de D-10 al
+    # ESTAMPADOR de un concepto y el detector se quedó en `stars/`, así que la promesa «el lint
+    # reporta la tabla desactualizada» valía para la mitad del vault: medido, 2 de 3 sujetos de una
+    # bóveda real son temas, y un paper que reclama una estrella Y un tema con las dos tablas
+    # vacías se reportaba 1 de 2. Un tema estampa su roll-up bajo UNO de los dos encabezados
+    # —`## Papers` estilo ficha o `## Papers que tocan este tema (auto)` (D-24)—, y cada uno tiene
+    # su propio universo, así que se compara el que la nota trae contra el suyo: exigir el ausente
+    # inventaría un hueco en la nota que eligió el otro. La nota que no trae NINGUNO no puede
+    # recibir la cirugía nunca, y eso hasta hoy sólo lo decía un stdout de `make_notes`.
+    # ⚠ El slug de una ESTRELLA es un campo de su entrada; el de un TEMA es la CLAVE del YAML
+    # (`theme_by_slug`: «la clave del YAML ES el slug»). Pedirle `slug` a la entrada de un tema
+    # devuelve `None` y saltea el sujeto entero, en silencio.
+    sujetos_rollup = (
+        [("star", m.get("slug") if isinstance(m, dict) else None)
+         for m in ({} if cfg.stars_error() else cfg.load_stars()).values()]
+        + [("theme", s) for s in ({} if cfg.themes_error() else cfg.load_themes())])
+    for _kind, slug_s in sujetos_rollup:
+        # `mn.subject_note` es la MISMA función que usa el estampador: dos respuestas a «dónde vive
+        # la tabla de este sujeto» es cómo el estampador y el chequeo terminan discrepando.
+        dest_s = mn.subject_note(slug_s, _kind) if slug_s else None
         if not dest_s or not dest_s.exists():
             continue
-        try:
-            esperados = {r["stem"] for r in mn.papers_universe(slug_s, "star", paper_fms)}
-        except Exception:
-            continue                      # config rota: ya lo reporta otra categoría
         texto_s = dest_s.read_text(encoding="utf-8")
-        seccion = texto_s.split("\n" + mn.PAPERS_HEADER, 1)
-        listados = set()
-        if len(seccion) > 1:
-            cuerpo_s = seccion[1].split("\n## ", 1)[0]
-            listados = {m for m in LINK_RE.findall(cuerpo_s)}
-        faltan, sobran = esperados - listados, listados - esperados
-        if faltan or sobran:
-            detalle = []
-            if faltan:
-                detalle.append("faltan " + ", ".join(sorted(faltan)))
-            if sobran:
-                detalle.append("sobran " + ", ".join(sorted(sobran)))
+        # Encabezado → cómo se arma SU universo. El orden importa poco; lo que no puede pasar es
+        # cruzarlos, porque `concept_rollup_rows` compara por clave normalizada (#243) y
+        # `papers_universe` por string exacto.
+        universos = [(mn.PAPERS_HEADER,
+                      lambda s=slug_s, k=_kind: {r["stem"]
+                                                 for r in mn.papers_universe(s, k, paper_fms)})]
+        if _kind == "theme":
+            universos.append((mn.CONCEPT_ROLLUP_HEADER,
+                              lambda s=slug_s: {r["stem"]
+                                                for r in mn.concept_rollup_rows(s, paper_fms)}))
+        # ⚠ `cfg.section_span`, nunca un `split("\n## Papers")`: `## Papers` es PREFIJO de
+        # `## Papers que tocan este tema (auto)` y el corte crudo se llevaba el roll-up del tema
+        # como si fuera la tabla de ficha (la trampa de #176, que `section_start` ya resuelve).
+        spans = [(h, universo, cfg.section_span(texto_s, h)) for h, universo in universos]
+        if _kind == "theme" and all(span is None for _h, _u, span in spans):
             papers_table_stale.append(
-                (slug_s, "la lista de papers estampada no refleja el universo: " +
-                         "; ".join(detalle) + f" → `python scripts/make_notes.py {slug_s}`"))
+                (slug_s, f"la nota del tema no trae `{mn.PAPERS_HEADER}` ni "
+                         f"`{mn.CONCEPT_ROLLUP_HEADER}`: el roll-up de papers no se puede estampar "
+                         f"nunca → agregá uno de los dos y re-corré "
+                         f"`{cfg.make_notes_cmd(slug_s)}`"))
+            continue
+        for header_s, universo, span in spans:
+            if span is None:
+                # En un tema los dos estampadores conviven y la nota lleva uno: el ausente no es
+                # deuda. En una estrella el roll-up es uno solo, así que su ausencia SÍ es la tabla
+                # que falta —y ése es el comportamiento histórico del detector—.
+                if _kind == "theme":
+                    continue
+                listados = set()
+            else:
+                listados = set(LINK_RE.findall(texto_s[span[0]:span[1]]))
+            try:
+                esperados = universo()
+            except Exception:
+                continue                  # config rota: ya lo reporta otra categoría
+            faltan, sobran = esperados - listados, listados - esperados
+            if faltan or sobran:
+                detalle = []
+                if faltan:
+                    detalle.append("faltan " + ", ".join(sorted(faltan)))
+                if sobran:
+                    detalle.append("sobran " + ", ".join(sorted(sobran)))
+                papers_table_stale.append(
+                    (slug_s, f"`{header_s}` no refleja el universo: " +
+                             "; ".join(detalle) + f" → `{cfg.make_notes_cmd(slug_s)}`"))
 
     # ── el recorte de lectura no declarado (D-13/D-15 · INV-83) ──────────────────────────────────
     # El contrato dice que el ingest lee TODOS los core. La reconciliación anticipa que el
@@ -3881,6 +3924,12 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # familia que INV-94 (paper sin entidad) un escalón más abajo: allá la nota existe y no la
     # alcanza nadie; acá ni siquiera hay nota. Backlog: el artefacto es válido, lo que falta es la
     # nota — o borrarlo si el sujeto ya no lo quiere.
+    # ⛔ #338 — el remedio sale de `cfg.make_notes_cmd` (INV-141), no de un flag escrito a mano.
+    # `_dir` es cualquier directorio de `raw/fulltext/`, o sea que puede ser una ESTRELLA, y acá
+    # el `--theme` estaba hardcodeado: la imagen especular de #334, que omitía el flag sobre un
+    # tema. Su gemelo PDF, veinte líneas abajo, hacía la tercera variante —prosa sin comando
+    # ejecutable («re-corré `make_notes.py` sobre `<slug>`»)—; las tres formas de la misma regla
+    # son el patrón de #215/#324, y ya habían divergido.
     for _dir in sorted(cfg.FULLTEXT.glob("*")) if cfg.FULLTEXT.exists() else []:
         if not _dir.is_dir():
             continue
@@ -3890,7 +3939,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                     (_txt.stem, f"`raw/fulltext/{_dir.name}/{_txt.stem}.txt` sin su nota en "
                                 f"`papers/` → extracción ya pagada que no alcanza ninguna síntesis "
                                 f"(típico: se angostó la `query` del tema y el registro salió de "
-                                f"`ads.json`). Re-corré `make_notes.py --theme {_dir.name}` o "
+                                f"`ads.json`). Re-corré `{cfg.make_notes_cmd(_dir.name)}` o "
                                 f"borrá el artefacto colgado"))
 
     # #230 — el GEMELO PDF de #108, que no existía. El barrido de arriba mira sólo
@@ -3907,8 +3956,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 incomplete.append(
                     (_pdf.stem, f"`raw/pdfs/{_dir.name}/{_pdf.stem}.pdf` sin su nota en `papers/` → "
                                 f"descarga ya pagada que no alcanza ninguna síntesis, y desde #205 "
-                                f"es la fuente de lectura, no el índice. Re-corré `make_notes.py` "
-                                f"sobre `{_dir.name}` o borrá el artefacto colgado"))
+                                f"es la fuente de lectura, no el índice. Re-corré "
+                                f"`{cfg.make_notes_cmd(_dir.name)}` o borrá el artefacto colgado"))
 
     # #237 — el ÍNDICE desactualizado, análogo al detector de `## Papers` (D-10) y por el mismo
     # motivo: `index.md` es lo primero que un agente abre para orientarse y una de las cuatro piezas

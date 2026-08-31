@@ -3310,6 +3310,8 @@ def test_fulltext_sin_nota_es_backlog(toy_vault, capsys):
     """Medido: al angostar la `query` de un tema, sus registros salen de `ads.json`, `make_notes`
     deja de escribirles nota y el `.txt` queda en disco — 10 de 30 en una bóveda real. Nadie lo
     miraba: es el hermano simétrico de la «cita no verificable» (bibcode citado SIN .txt)."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ica",
+                                         "query": "q"}})
     d = cfg.FULLTEXT / "ica"
     d.mkdir(parents=True, exist_ok=True)
     (d / "2012ApJ...747...12W.txt").write_text("texto", encoding="utf-8")
@@ -3317,7 +3319,99 @@ def test_fulltext_sin_nota_es_backlog(toy_vault, capsys):
     out = capsys.readouterr().out
     assert "2012ApJ...747...12W.txt" in out
     assert "sin su nota" in out
-    assert "make_notes.py --theme ica" in out          # el arreglo, nombrado
+    assert "python scripts/make_notes.py ica --theme" in out   # el arreglo, nombrado
+
+
+def test_el_remedio_del_artefacto_colgado_CORRE_en_el_slug_que_nombra(toy_vault, capsys):
+    """#338 — `_dir` sale de `raw/fulltext/`, o sea que puede ser una ESTRELLA, y el remedio traía
+    `--theme` hardcodeado: la imagen especular de #334, que lo omitía sobre un tema. Sobre una
+    estrella `make_notes` REHÚSA ese comando. El flag lo decide `cfg.make_notes_cmd` (INV-141), una
+    sola vez — escribirlo a mano en cada sitio es el molde de #215/#324."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ica",
+                                         "query": "q"}})
+    for slug in ("ica", "test_star"):
+        d = cfg.FULLTEXT / slug
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"2012col{slug[:3]}..1..1C.txt").write_text("texto", encoding="utf-8")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "`python scripts/make_notes.py ica --theme`" in rep, rep
+    assert "`python scripts/make_notes.py test_star`" in rep, rep
+    # ⛔ la estrella no se lleva el flag por arrastre: el remedio de un sujeto no puede nombrar la
+    # config del otro.
+    assert "make_notes.py test_star --theme" not in rep, rep
+
+
+def test_el_gemelo_PDF_del_artefacto_colgado_emite_COMANDO(toy_vault, capsys):
+    """#338 — el hermano de #230 decía «re-corré `make_notes.py` sobre `<slug>`»: prosa, no un
+    comando que se pueda pegar, y la TERCERA forma de la misma regla en el mismo archivo. Desde #205
+    es además el artefacto que más pesa (el PDF es la fuente de lectura, el `.txt` el índice)."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ica",
+                                         "query": "q"}})
+    d = cfg.PDFS / "ica"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "2012ApJ...747...12W.pdf").write_bytes(b"%PDF-1.4")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "`python scripts/make_notes.py ica --theme`" in rep, rep
+
+
+# ── D-10 · la tabla estampada desactualizada, en los DOS tipos de sujeto (#338) ──
+def _sujeto_con_rollup_vacio(toy_vault, encabezado_tema):
+    """Un paper que reclama la estrella Y el tema, con las dos tablas estampadas VACÍAS.
+
+    Es el repro de #338: `papers_universe` devuelve el paper para los dos sujetos y hasta 1.145.0
+    sólo alguien lo comparaba del lado de la estrella."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ica",
+                                         "query": "q"}})
+    mk_note(cfg.PAPERS, "2020ambo...1..1A",
+            {"bibcode": "2020ambo...1..1A", "tags": ["paper"], "stars": ["Estrella Test"],
+             "thesis_links": ["ica"]}, "# p\n")
+    mk_note(cfg.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test"},
+            "# Estrella Test\n\n## Papers (0 · 0 sintetizados en esta ficha)\n\n"
+            "_(ninguna nota de paper declara este sujeto todavía.)_\n")
+    mk_note(cfg.CONCEPTS / "methods", "ica", {"tags": ["methods"], "name": "ICA"},
+            f"# ICA\n\n{encabezado_tema} (0 · 0 sintetizados en este concepto)\n\n"
+            "_(ninguna nota de paper declara este tema todavía.)_\n")
+    link_from_log(toy_vault, "test_star", "ica", "2020ambo...1..1A")
+
+
+def test_la_tabla_desactualizada_de_un_CONCEPTO_se_reporta(toy_vault, capsys):
+    """#338 — #300 llevó las dos garantías de D-10 al estampador de conceptos y el detector se quedó
+    en `stars/`: la promesa «el lint reporta la tabla desactualizada» valía para la mitad del vault
+    (medido: 2 de 3 sujetos de una bóveda real son temas). Con el mismo paper reclamando los dos
+    sujetos, se reportaba 1 de 2 — el roll-up subdeclarando su universo en silencio, que es
+    exactamente lo que D-10 existe para evitar."""
+    _sujeto_con_rollup_vacio(toy_vault, mn.CONCEPT_ROLLUP_HEADER)
+    _rc, rep = run_lint_reporte(capsys)
+    seccion = _seccion(rep, "Lista de papers desactualizada")
+    assert "test_star" in seccion, seccion
+    assert "ica" in seccion and "2020ambo...1..1A" in seccion, seccion
+    assert "`python scripts/make_notes.py ica --theme`" in seccion, seccion
+
+
+def test_el_concepto_con_encabezado_estilo_ficha_tambien_se_compara(toy_vault, capsys):
+    """#338, la otra mitad: una nota de concepto puede llevar `## Papers` en vez del roll-up de tema
+    —los dos estampadores conviven desde #196— y ahí el universo es `papers_universe(slug, 'theme')`.
+    ⚠ El corte es `cfg.section_span`: `## Papers` es PREFIJO de `## Papers que tocan este tema
+    (auto)` y un `split("\\n## Papers")` se lleva el roll-up del tema como si fuera esta tabla
+    (#176)."""
+    _sujeto_con_rollup_vacio(toy_vault, mn.PAPERS_HEADER)
+    _rc, rep = run_lint_reporte(capsys)
+    seccion = _seccion(rep, "Lista de papers desactualizada")
+    assert "- ica → " in seccion and "2020ambo...1..1A" in seccion, seccion
+
+
+def test_el_concepto_sin_ninguno_de_los_dos_encabezados(toy_vault, capsys):
+    """#338 — la nota que no trae NINGUNO de los dos no puede recibir la cirugía nunca, y eso hasta
+    hoy sólo lo decía un `print` de `make_notes` al pasar. Exigirle los DOS sería el error opuesto:
+    la nota que eligió uno recibiría un hueco inventado por el otro."""
+    _sujeto_con_rollup_vacio(toy_vault, mn.CONCEPT_ROLLUP_HEADER)
+    (cfg.CONCEPTS / "methods" / "ica.md").write_text(
+        "---\ntags: [methods]\nname: ICA\n---\n# ICA\n\nsin roll-up.\n", encoding="utf-8")
+    _rc, rep = run_lint_reporte(capsys)
+    seccion = _seccion(rep, "Lista de papers desactualizada")
+    assert "no trae `## Papers` ni" in seccion, seccion
+    assert seccion.count("ica →") == 1, ("un solo hallazgo: exigir los dos encabezados inventaría "
+                                         "un hueco en la nota que eligió el otro\n" + seccion)
 
 
 def test_fulltext_con_nota_no_es_hallazgo(toy_vault, capsys):
