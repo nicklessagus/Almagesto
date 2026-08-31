@@ -891,9 +891,9 @@ resolución de símbolos.
 
 ```bash
 grep -c '^\s*if ' scripts/triage.py                                          # 56
-python tools/mutar.py --guardas --solo main scripts/triage.py                # existe, EXENTA
-python tools/mutar.py --guardas --solo make_notes_cmd scripts/lib_config.py  # existe, sin condicionales
-python tools/mutar.py --guardas --solo no_existe_jamas scripts/triage.py     # typo
+python tools/mutar.py --guardas scripts/triage.py --solo main                # existe, EXENTA
+python tools/mutar.py --guardas scripts/lib_config.py --solo make_notes_cmd  # existe, sin condicionales
+python tools/mutar.py --guardas scripts/triage.py --solo no_existe_jamas     # typo
 ```
 
 | Qué se midió | Número | Salvedad |
@@ -909,4 +909,94 @@ que sí recibió no distinguía «tu función está exenta» de «te equivocaste
 
 ⚠ **Lo que quedó afuera, y es el mismo defecto:** `--dirigida` conflaciona los **dos** casos con un
 texto **peor** —`⛔ no existen en triage.py: ['main']`, que afirma algo falso sobre una función que
-sí existe—. Reproducible con `python tools/mutar.py --dirigida --solo main scripts/triage.py`.
+sí existe—. Reproducible con `python tools/mutar.py --dirigida scripts/triage.py --solo main`.
+**Cerrado en #339**, junto con el tercer sitio (`--trazabilidad`) que esta medición no había mirado.
+
+
+## 2026-08-31 · #339 · la conflación de #335 vivía en tres sitios, y `tools/` no recibía sus redes
+
+**Qué era.** Cuatro defectos del mismo barrido, los cuatro en `tools/`.
+
+**1 · La regla en tres copias, otra vez.** `_report_unmutable` se escribió en #335 (v1.142.0) y quedó
+cableado en **un solo** modo. Los otros dos seguían con el texto fusionado, y en `--dirigida` sin
+siquiera el hedge que `--guardas` sí tenía: el mensaje **afirma algo falso**.
+
+| Comando | Antes | Qué es en realidad |
+|---|---|---|
+| `--dirigida --solo main scripts/triage.py` | `⛔ no existen en triage.py: ['main']` | `triage.main` existe y tiene **56** `if`; está en `EXENTAS` |
+| `--trazabilidad --solo INV-126` | `⛔ no existen (o no tienen las dos marcas): INV-126` | fila viva y P0 de `docs/contrato.md`, cuyo propio texto dice *«hay código sin marcar»* — el remedio es **agregar el `@inv`** |
+| `--trazabilidad --solo INV-999-NOPE` | idéntico, byte a byte | typo: el remedio es corregir el argumento |
+
+Es el molde de #215/#324/#335: **la misma regla en varios lugares ya divergió tres veces en este
+repo.** Desde v1.147.0 los tres modos cierran por `tools/mutar.py::report_states`, que imprime **una
+línea por estado no vacío** y **revienta** si un estado con nombres no tiene texto — un salteo en
+silencio sería el mensaje fusionado otra vez, sólo que invisible.
+
+| Qué se midió | Número | Salvedad |
+|---|---|---|
+| Sitios con la conflación, tras #335 | **2 de 3** | `--guardas` era el único cableado |
+| Implementaciones del reporte de tres estados, después | **1** (`report_states`) | los estados los clasifica cada dominio (`unmutable_reasons` para símbolos, `unmarked_reasons` para invariantes); lo que estaba duplicado —y es lo que divergía— era el **impreso** |
+| Estados de `--trazabilidad --solo`, antes → después | **1 → 3** | `no_existe` · `retirado` · `sin_marcas`; los tres siguen siendo rc 2 |
+
+⛔ Y `--trazabilidad` ahora rehúsa **en cuanto uno** de los pedidos no se puede auditar, aunque el
+resto sí: antes sólo rehusaba si **ninguno** quedaba en pie, así que `--solo INV-01,INV-BOGUS`
+auditaba uno y publicaba su veredicto como si fueran dos. Se pidieron N y se midieron M < N: es el
+falso limpio que D-43 nombra.
+
+**2 · `tools/` está fuera de las redes 1 y 4 — y el mensaje que lo decía MENTÍA.**
+`test_file_for` exige `parent.name == "scripts"`, así que apuntar cualquiera de los dos modos a
+`tools/mutar.py` contestaba *«⛔ no hay tests/test_mutar.py»* **con ese archivo en el árbol**: la
+herramienta que corre la red de mutación daba un motivo **falso** para no recibirla, y el
+implementador de #335 tuvo que escribir un driver aparte sin que nada se lo dijera.
+
+⚠ **El alcance NO se tocó**: `CLAUDE.md` acota la red a *«toda función nueva de `scripts/`»* y eso es
+una decisión declarada. Lo que cambió es el mensaje — vive en `tools/mutar.py::scope_refusal`, que
+separa *«fuera de alcance»* (nada que escribir; hace falta un driver propio) de *«no hay
+`tests/test_<mod>.py`»* (hueco real: escribí el archivo). Las dos acciones son opuestas.
+
+Reproducible con `python tools/mutar.py --dirigida tools/mutar.py`; el alcance vive en la constante
+`tools/mutar.py::ALCANCE`, y un driver que la mueve para una corrida es lo que permite mutar la
+herramienta misma.
+
+**3 y 4 · Ningún flag de `tools/` se validaba, y el barrido atribuía mal.** El universo de
+`tests/test_docs_ejecutables.py` se armaba con `scripts/*.py` sola, así que los siete flags de
+`tools/mutar.py` estaban en `FLAGS_AJENOS` — que los **exime**, no los chequea: un typo en
+`--guardas` dentro de cualquier doc no lo cazaba nadie, y la lista se leía como si estuvieran
+validados. Y el patrón ``scripts/(\w+)\.py([^\n`]*)`` se llevaba **todo lo que siguiera a cualquier
+ruta hasta el fin de la línea**:
+
+```
+python tools/mutar.py --guardas scripts/triage.py --solo main
+→ antes: «scripts/triage.py `--solo`»   (un flag de mutar, atribuido a triage)
+```
+
+Un mapa que atribuye mal es peor que uno vacío (regla de método nº 4), y acá el mapa decide si un
+flag que la doc promete existe. Se había **esquivado reordenando** los comandos de este mismo
+documento (el flag antes de la ruta); con `comandos_de_la_linea` el orden natural volvió a las dos
+recetas de #335, que es la prueba en vivo.
+
+| Qué se midió | Número | Salvedad |
+|---|---|---|
+| Pares `(script, flag)` que el barrido chequeaba, antes → después | **74 → 80** | ninguno perdido; los 6 nuevos son los de `tools/mutar.py` |
+| Flags de `tools/` exentos en `FLAGS_AJENOS`, antes → después | **7 → 0** | el test exige además que **ningún** flag declarado por un argparse esté en la lista de exentos |
+| Rutas `.py` que el barrido trata como comando en `python tools/mutar.py --guardas scripts/triage.py --solo main` | **2 → 1** | `scripts/triage.py` es un **argumento**; una ruta encabeza comando propio sólo si abre el tramo o viene detrás de `python` |
+
+**Cómo re-medirlo.**
+
+```bash
+python tools/mutar.py --dirigida scripts/triage.py --solo main   # existe, EXENTA — no «no existe»
+python tools/mutar.py --dirigida tools/mutar.py                  # fuera de alcance — no «no hay tests»
+python tools/mutar.py --trazabilidad --solo INV-102,INV-126,INV-999-NOPE   # tres líneas, tres estados
+python -m pytest tests/test_docs_ejecutables.py tests/test_mutar.py -q
+```
+
+**Lo que el driver midió, y lo que queda abierto.** Como `tools/` está fuera del alcance, la
+mutación de `tools/mutar.py` se corrió con un driver que mueve `ALCANCE` para la corrida
+(`tests/test_mutar.py` es su archivo de tests: el mapeo ya resolvía).
+
+| Qué se midió | Número | Salvedad |
+|---|---|---|
+| Funciones nuevas de #339 que mueren en `tests/test_mutar.py` | **5 de 5** | `report_states`, `scope_refusal`, `unmarked_reasons`, `_contract_rows`, `_report_unmutable` — `_contract_rows` sobrevivió a la primera corrida y por eso tiene test propio |
+| Guardas de los módulos tocados que mueren | **22 de 27** | los 5 sobrevivientes son **anteriores** a #339 |
+| Sobrevivientes, uno por uno | `_directed::if sobreviven` · `_trazabilidad::if not pares` · `if fn is None` · `if vivo` · `if falsas` | ramas de **reporte** de `tools/`, que ninguna red mira porque el alcance las excluye. **No** se tocaron acá: bajar deuda vieja dentro del issue que arregla el mensaje mezclaría dos cosas |
+

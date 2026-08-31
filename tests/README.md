@@ -295,6 +295,7 @@ nota no puede cambiar si no cambió lo que afirma; el registro tiene que crecer 
 | los `tests/x.py::test_y` que nombra la doc existen | referencias a tests borrados |
 | los `scripts/x.py` que invoca un skill existen y compilan | un skill que llama a un script muerto |
 | los `scripts/x.py` que nombra la doc existen | scripts renombrados o borrados |
+| los `--flag` que la doc nombra los declara el argparse de **`scripts/` o `tools/`** | un flag inventado, o el typo en un flag de `tools/` que nadie chequeaba (#339) |
 | los archivos de config que nombra la doc existen | rutas de `vault/config/` renombradas |
 | los `--flag` que nombra la doc existen — en bloque de comandos **y en prosa** | `--restamp-keywords` inventado; `--topic` sobrevivió a R-5 dentro de una frase |
 | los flags declarados **retirados** siguen retirados | la lista de excepciones convirtiéndose en colador |
@@ -392,6 +393,26 @@ escribir cada función nueva».
 > pide. Costó caro una vez: el guard nuevo de #331 vivía dentro de `main` y **ninguna red de
 > mutación lo miraba**; lo movió el implementador por criterio propio, no porque la herramienta se
 > lo dijera.
+>
+> ⛔ **Y los TRES modos cierran por la misma función (#339): `tools/mutar.py::report_states`.**
+> #335 escribió el reporte de tres estados y lo cableó en **uno solo**; `--dirigida` y
+> `--trazabilidad` siguieron con el texto fusionado —y `--dirigida` sin siquiera el hedge:
+> `--solo main scripts/triage.py` contestaba *«no existen en triage.py: ['main']»* sobre una función
+> que existe y tiene **56** `if`—. Es el molde de #215/#324/#335: la misma regla en varios lugares
+> ya divergió tres veces acá. En `--trazabilidad` los estados son otros —`no_existe` (no es fila de
+> §3 del contrato) · `retirado` (lo es y está retirado a propósito, así que no lleva marcas) ·
+> `sin_marcas` (fila viva a la que le falta el `@inv`: el remedio es **agregarlo**, no corregir el
+> argumento)— y rehúsa **en cuanto uno** de los pedidos no se puede auditar, aunque el resto sí: se
+> pidieron N y se midieron M < N.
+>
+> ⚠ **`tools/` está FUERA del alcance de la mutación, y el modo lo DICE (#339).** El alcance es una
+> decisión declarada (`CLAUDE.md`: *«toda función nueva de `scripts/`»*) y vive en la constante
+> `tools/mutar.py::ALCANCE`. Lo que era defecto es que apuntar cualquiera de los dos modos a
+> `tools/mutar.py` contestaba *«no hay tests/test_mutar.py»* **con ese archivo existiendo** —la
+> herramienta que corre la red daba un motivo falso para no recibirla—. Hoy `scope_refusal` separa
+> *«fuera de alcance»* (nada que escribir: hace falta un driver propio, que mueva `ALCANCE` para la
+> corrida) de *«no hay `tests/test_<mod>.py`»* (hueco real: escribí el archivo). Las dos acciones
+> son opuestas.
 >
 > ⚠ El splice corta por **offset de bytes UTF-8**, no de caracteres: `ast` reporta `col_offset` en
 > bytes y este repo tiene prosa acentuada en casi toda línea. Cortar el `str` partiría la condición

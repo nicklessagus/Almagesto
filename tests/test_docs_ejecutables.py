@@ -119,14 +119,17 @@ def test_los_archivos_de_config_que_nombra_la_doc_existen():
     assert faltan == [], "config nombrada por la doc que no existe:\n  " + "\n  ".join(faltan)
 
 
-# Flags que la doc nombra y NO son de `scripts/`: son de herramientas de terceros o del tooling
-# meta. Se listan a mano, con su dueño — una lista de excepciones sin dueño se vuelve un colador.
+# Los dos árboles cuyos flags la doc puede nombrar. `tools/` entró en #339: el universo se armaba
+# con `scripts/*.py` sola, así que los siete flags de `tools/mutar.py` vivían en `FLAGS_AJENOS`, que
+# los EXIME en vez de chequearlos — un typo en `--guardas` dentro de cualquier doc no lo cazaba
+# nadie. ⚠ Nada que ver con el ALCANCE de la red de mutación (`mutar.ALCANCE`, también `scripts/`):
+# ése decide qué se muta; éste, de qué argparse se leen los flags que la doc promete.
+ARBOLES_CON_FLAGS = ("scripts", "tools")
+
+# Flags que la doc nombra y NO son de `scripts/` ni de `tools/`: son de herramientas de terceros o
+# del tooling meta. Se listan a mano, con su dueño — una lista de excepciones sin dueño se vuelve un
+# colador.
 FLAGS_AJENOS = {
-    "--check",        # `trace_invariants.py --check` … y `tools/mutar.py`
-    # tools/mutar.py — el universo se arma con `scripts/*.py`, así que NINGÚN flag de `tools/`
-    # entra. ⚠ Eso los deja sin validar, no validados: un typo en `--guardas` dentro de un doc no
-    # lo caza nadie. Se listan igual para que el test no dé un falso positivo sobre un flag real.
-    "--diff", "--todo", "--ratchet", "--dirigida", "--guardas", "--solo", "--trazabilidad",
     "--markdown",     # npx defuddle parse --markdown
     "--no-verify",    # git commit
     "--help",         # lo agrega argparse solo, no aparece en ningún `add_argument`
@@ -139,6 +142,46 @@ FLAGS_RETIRADOS = {
     "--no-triage": "D-48 — se eliminó: permitía que un candidato ya descartado volviera a entrar "
                    "en silencio. La doc lo nombra para decir que no está.",
 }
+
+
+_RUTA = re.compile(r"(" + "|".join(ARBOLES_CON_FLAGS) + r")/(\w+)\.py")
+
+
+def comandos_de_la_linea(linea: str):
+    """`(ruta del script, el resto de SU comando)` por cada comando que la línea escribe.
+
+    ⛔ Los argumentos de un comando terminan donde empieza el siguiente, y una ruta `.py` que es un
+    ARGUMENTO no es un comando (#339). `python tools/mutar.py --guardas scripts/triage.py --solo
+    main` reportaba *«scripts/triage.py `--solo`»* —atribuyéndole a `triage` un flag que es de
+    `mutar`— porque el patrón viejo se llevaba todo lo que siguiera a cualquier ruta hasta el fin de
+    la línea. Un mapa que atribuye mal es peor que uno vacío, y acá el mapa decide si un flag que la
+    doc promete existe.
+
+    La PRIMERA ruta de un tramo encabeza el comando (la doc los escribe con `python` adelante y sin
+    él, las dos formas); una posterior encabeza uno nuevo **sólo si viene detrás de `python`**, y si
+    no es un argumento del comando en curso. Los tramos los separan los backticks y los separadores
+    de shell, porque una línea de prosa puede llevar dos comandos citados."""
+    def _ruta(m):
+        return RAIZ / m.group(1) / f"{m.group(2)}.py"
+    for tramo in re.split(r"[`;]|&&|\|\|", linea):
+        actual = None
+        for m in _RUTA.finditer(tramo):
+            if actual is None:
+                actual = m
+            elif tramo[actual.end():m.start()].rstrip().endswith(("python", "python3")):
+                yield _ruta(actual), tramo[actual.end():m.start()]
+                actual = m
+        if actual is not None:
+            yield _ruta(actual), tramo[actual.end():]
+
+
+def _universo_de_flags() -> set:
+    """Todos los `--flag` que declara algún argparse de los árboles con flags.
+
+    UNA implementación: el test de prosa y el que fija que `tools/` entre miran el mismo conjunto.
+    Con dos copias, agregar un árbol en una y no en la otra dejaría media red mirando de menos."""
+    return set().union(*(_flags_declarados(f) for arbol in ARBOLES_CON_FLAGS
+                         for f in sorted((RAIZ / arbol).glob("*.py"))))
 
 
 def _flags_declarados(script: Path) -> set:
@@ -164,24 +207,24 @@ def test_todo_flag_que_nombra_la_doc_existe():
         if not doc.exists():
             continue
         texto = doc.read_text(encoding="utf-8")
-        # `python scripts/x.py [args…] --flag` — se toman los flags que siguen en la MISMA línea
+        # `python scripts/x.py [args…] --flag` — los flags de SU comando, no los de la línea entera
         for linea in texto.split("\n"):
-            for m in re.finditer(r"scripts/(\w+)\.py([^\n`]*)", linea):
-                script = RAIZ / "scripts" / f"{m.group(1)}.py"
+            for script, resto in comandos_de_la_linea(linea):
                 if not script.exists():
                     continue                      # lo cubre el test de arriba
                 declarados = _flags_declarados(script)
-                for flag in re.findall(r"(?<![\w-])(--[a-z][\w-]+)", m.group(2)):
+                for flag in re.findall(r"(?<![\w-])(--[a-z][\w-]+)", resto):
                     if flag not in declarados:
-                        faltan.append(f"{etiqueta}: scripts/{m.group(1)}.py {flag}")
+                        faltan.append(f"{etiqueta}: {script.parent.name}/{script.name} {flag}")
         # Y los flags nombrados EN PROSA, sin el script en la misma línea: `--topic` sobrevivió a
         # R-5 en `docs/operacion.md` porque la frase decía «corre la cadena de arriba con `--topic`»
         # y el barrido de arriba, anclado en `scripts/x.py`, no lo veía. Un flag inventado en prosa
         # se copia igual que uno en un bloque de comandos.
-        universo = set().union(*(_flags_declarados(f) for f in sorted((RAIZ / "scripts").glob("*.py"))))
+        universo = _universo_de_flags()
         for flag in set(re.findall(r"`(--[a-z][\w-]+)`", texto)):
             if flag not in universo and flag not in FLAGS_AJENOS and flag not in FLAGS_RETIRADOS:
-                faltan.append(f"{etiqueta}: `{flag}` no lo declara NINGÚN script de scripts/")
+                faltan.append(f"{etiqueta}: `{flag}` no lo declara NINGÚN script de "
+                              f"{'/ ni '.join(ARBOLES_CON_FLAGS)}/")
     assert faltan == [], ("flags nombrados en la doc que el script no declara:\n  "
                           + "\n  ".join(sorted(set(faltan))))
 
@@ -521,3 +564,51 @@ def test_el_grafo_no_dibuja_como_estructura_lo_que_el_lint_no_cuenta():
     for excluido in ("wiki/log.md", "wiki/index.md"):
         assert f"-path:{excluido}" in graph["search"], (
             f"el grafo dibuja {excluido} como estructura; #249 ya declaró que esas aristas no lo son")
+
+
+# ── #339 · los flags de `tools/` y a quién se le atribuyen ──────────────────────────────────────
+
+
+def test_el_universo_de_flags_incluye_los_de_tools():
+    """`tools/` estaba fuera del barrido, así que sus siete flags vivían en `FLAGS_AJENOS` — que los
+    EXIME, no los chequea. Con la lista de excepciones tapando el hueco, un typo en `--guardas`
+    dentro de cualquier doc no lo cazaba nadie, y la lista se leía como si estuvieran validados."""
+    universo = _universo_de_flags()
+    assert {"--guardas", "--dirigida", "--trazabilidad", "--ratchet"} <= universo
+    assert not (universo & FLAGS_AJENOS), ("un flag que algún argparse declara no puede estar "
+                                           "además exento: la exención lo dejaría sin chequear")
+
+
+def test_un_flag_inventado_de_tools_no_pasa():
+    """La otra mitad: que el árbol nuevo se CHEQUEE, no sólo que se lea. Sin esto, incluir `tools/`
+    se cumpliría agregando el directorio y no mirándolo."""
+    declarados = _flags_declarados(RAIZ / "tools" / "mutar.py")
+    assert "--guardas" in declarados and "--guardaz" not in declarados
+    (script, resto), = comandos_de_la_linea("python tools/mutar.py --guardaz scripts/triage.py")
+    assert script == RAIZ / "tools" / "mutar.py"
+    assert [f for f in re.findall(r"(?<![\w-])(--[a-z][\w-]+)", resto)
+            if f not in declarados] == ["--guardaz"]
+
+
+def test_el_flag_que_sigue_a_una_ruta_ARGUMENTO_no_se_le_atribuye_a_ella():
+    """El defecto: el patrón viejo se llevaba TODO lo que siguiera a cualquier ruta hasta el fin de
+    línea, así que `python tools/mutar.py --guardas scripts/triage.py --solo main` reportaba
+    «scripts/triage.py `--solo`» — un flag de `mutar` atribuido a `triage`. Se esquivó reordenando
+    `docs/mediciones.md` (el flag antes de la ruta), pero la heurística seguía."""
+    linea = "python tools/mutar.py --guardas scripts/triage.py --solo main"
+    salida = list(comandos_de_la_linea(linea))
+    assert [s.name for s, _ in salida] == ["mutar.py"], (
+        "`scripts/triage.py` es un ARGUMENTO de mutar, no un comando: tratarlo como comando le "
+        "cuelga los flags que vienen después")
+    assert "--solo" in salida[0][1] and "--guardas" in salida[0][1]
+
+
+def test_dos_comandos_encadenados_en_una_linea_no_se_mezclan():
+    """La mitad que no se puede perder al arreglar lo de arriba: dos comandos reales en la misma
+    línea siguen siendo dos, cada uno con SUS flags. Sin esto, «no atribuye de más» se cumpliría
+    dejando de mirar el segundo comando."""
+    salida = dict((s.name, r) for s, r in comandos_de_la_linea(
+        "python scripts/lint.py --cierre && python tools/mutar.py --todo"))
+    assert set(salida) == {"lint.py", "mutar.py"}
+    assert "--cierre" in salida["lint.py"] and "--cierre" not in salida["mutar.py"]
+    assert "--todo" in salida["mutar.py"] and "--todo" not in salida["lint.py"]
