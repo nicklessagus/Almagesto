@@ -310,3 +310,47 @@ def test_download_pdf_rechaza_lo_que_NO_es_un_pdf(toy_vault, monkeypatch, capsys
     assert fw.download_pdf("https://ejemplo.org/x.pdf", dest) is False
     assert not dest.exists(), "no se escribe un archivo que no es un PDF"
     assert "no lo es" in capsys.readouterr().out
+
+
+# ── #352 · `content_type`: la decisión PDF-vs-snapshot se toma con esto ──────
+
+class _RespConHeaders(_RespFalsa):
+    """Un `urlopen` de mentira que además anuncia headers, como el HEAD real."""
+
+    def __init__(self, ctype):
+        super().__init__(b"")
+        self.headers = {"Content-Type": ctype}
+
+
+def test_content_type_normaliza_lo_que_anuncia_el_servidor(monkeypatch):
+    """#352 — `content_type` sobrevivía a la mutación: los dos tests de #242 la monkeypatchean, así
+    que la suite nunca la ejecutaba y vaciarla entera (→ `return None`) no ponía nada en rojo. Es la
+    función que decide el CARRIL de la fuente (`== "application/pdf"`), y el servidor manda el valor
+    con parámetros y en cualquier caja: sin normalizar, `Application/PDF; charset=binary` no matchea
+    y un PDF se va a defuddle, que es el fallo de #242 otra vez."""
+    vistos = []
+
+    def fake_urlopen(req, timeout=0):
+        vistos.append(req)
+        return _RespConHeaders("Application/PDF; charset=binary ")
+    monkeypatch.setattr(fw.urllib.request, "urlopen", fake_urlopen)
+    assert fw.content_type("https://arxiv.org/pdf/1502.04148") == "application/pdf"
+    # HEAD, no GET: preguntar el formato no puede costar bajarse el archivo entero.
+    assert vistos[0].get_method() == "HEAD"
+
+
+def test_content_type_degrada_a_cadena_vacia_cuando_no_se_sabe(monkeypatch):
+    """El servidor inalcanzable NO es evidencia sobre el formato: el llamador conserva la conducta
+    histórica (asumir HTML). Y es `""`, no `None`: la función promete un `str`."""
+    def revienta(req, timeout=0):
+        raise OSError("sin red")
+    monkeypatch.setattr(fw.urllib.request, "urlopen", revienta)
+    assert fw.content_type("https://ejemplo.org/x") == ""
+
+
+def test_content_type_sin_header_no_inventa_un_formato(monkeypatch):
+    """Un servidor que no manda `Content-Type` cae en el mismo «no se sabe» — `str(None)` daría la
+    cadena `'none'`, que no es ningún formato pero tampoco es el vacío que el llamador espera."""
+    monkeypatch.setattr(fw.urllib.request, "urlopen",
+                        lambda req, timeout=0: _RespConHeaders(None))
+    assert fw.content_type("https://ejemplo.org/x") == ""

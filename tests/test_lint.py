@@ -6380,6 +6380,59 @@ def test_el_indicador_llega_por_alias(toy_vault, capsys):
     assert "S-index" not in _seccion(rep, "Indicador de actividad"), rep
 
 
+def _contar_indices(monkeypatch) -> list:
+    """Cuenta las construcciones del índice de alias, delegando en la función real (red #3)."""
+    n, real = [0], cfg.concept_alias_index
+
+    def contando():
+        n[0] += 1
+        return real()
+    monkeypatch.setattr(cfg, "concept_alias_index", contando)
+    return n
+
+
+def test_el_indice_de_alias_se_construye_una_sola_vez_por_corrida(toy_vault, monkeypatch, capsys):
+    """#352 — `_alias_idx_cached` sobrevivía a la mutación: vaciarlo entero (→ `return None`) deja
+    el veredicto INTACTO, porque `method_target(nombre, None)` re-construye el índice solo. Lo que
+    se pierde es lo único que la función promete: construirlo **una** vez por corrida. Sin eso,
+    `concept_alias_index` —que lee y parsea TODAS las notas de `concepts/`— corre una vez por
+    indicador de cada ficha y por cada `methods` sin destino, o sea O(notas × conceptos).
+
+    Dos garantías, y por eso dos asserts: que **cachea** (el conteo) y que el índice que devuelve es
+    el bueno (el indicador que sólo se alcanza por `aliases` no se reporta). La mutación mata sólo
+    la primera — el conteo es el assert que hace al test significar algo."""
+    mk_note(cfg.CONCEPTS / "methods", "activity-rv-indicators",
+            {"tags": ["concept"], "name": "x", "aliases": ["S-index"]}, "# x\n")
+    for s in ("est-uno", "est-dos", "est-tres"):
+        mk_note(toy_vault.STARS, s,
+                {"tags": ["star"], "P_rot_days": 1.0, "planets": [],
+                 "activity_indicators_expected": ["S-index (Ca II H&K)", "BIS", "FWHM"]},
+                "Prosa.\n")
+    link_from_log(toy_vault, "activity-rv-indicators", "est-uno", "est-dos", "est-tres")
+    n = _contar_indices(monkeypatch)
+    lint.collect()
+    capsys.readouterr()
+    assert n[0] == 1, f"el índice se re-construyó {n[0]} veces: la caché no está cacheando"
+    _rc, rep = run_lint_reporte(capsys)
+    assert "S-index" not in _seccion(rep, "Indicador de actividad"), rep
+
+
+def test_el_indice_vacio_igual_se_cachea(toy_vault, monkeypatch, capsys):
+    """El centinela `or {"__vacio__": ""}` es la otra mitad: sin él, una bóveda **sin conceptos**
+    deja `_alias_idx` en `{}`, `not _alias_idx` sigue siendo verdadero para siempre y la caché
+    no cachea nunca — justo en la bóveda joven, donde cada indicador cuelga sin destino y el bucle
+    es más largo."""
+    for s in ("est-uno", "est-dos", "est-tres"):
+        mk_note(toy_vault.STARS, s,
+                {"tags": ["star"], "P_rot_days": 1.0, "planets": [],
+                 "activity_indicators_expected": ["BIS", "S-index", "FWHM"]}, "Prosa.\n")
+    link_from_log(toy_vault, "est-uno", "est-dos", "est-tres")
+    n = _contar_indices(monkeypatch)
+    lint.collect()
+    capsys.readouterr()
+    assert n[0] == 1, f"el índice se re-construyó {n[0]} veces sin un solo concepto en la bóveda"
+
+
 def test_la_lente_declarada_sin_su_sub_seccion_bloquea(toy_vault, capsys):
     """#239 — el chequeo de coherencia de #188, un nivel abajo: la lente es lo que distingue dos
     lecturas del mismo sujeto, así que sin él la segunda vuelve a ser invisible."""

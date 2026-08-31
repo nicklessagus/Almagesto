@@ -1633,3 +1633,53 @@ año o a un «et al.», para no necesitar una lista de palabras capitalizadas). 
 primeros autores de los `[[bibcode]]` que el bloque cita: la prosa que dice *«reclamadas por
 [[2013A&A...549A..48T]]»* nombra a Tuomi sin escribirlo. La categoría declara su población en
 **pares**.
+
+## 2026-08-31 · El gate de mutación salía rojo en `main` y nadie leía el resultado (#352)
+
+**Qué era.** La corrida «antes» de #345 —sobre `scripts/` solo, con el cambio stasheado— midió **6
+sobrevivientes contra un techo de 3**. Tres son las fronteras de red declaradas; **tres eran nuevos
+y de tandas anteriores**: `fetch_web.py::content_type`, `lint.py::_alias_idx_cached`,
+`make_notes.py::_celda_idx`. O sea tres funciones que se podían **vaciar enteras** sin que ningún
+test muriera. El ratchet hacía su trabajo —el rojo era real desde hacía varias tandas— y el defecto
+no era el techo sino que **nadie corría el barrido**: la misma forma que el tier `poblada`, *una red
+que nadie corre no es una red*.
+
+**Las tres sobrevivían por motivos DISTINTOS, y conviene no mezclarlos** (regla de método 5):
+
+| Función | Por qué ningún test la mataba | Qué la mata ahora |
+|---|---|---|
+| `fetch_web.content_type` | los **dos** tests de #242 la **monkeypatchean** (`lambda url: "application/pdf"`), así que la suite nunca la ejecutó: entraba en la población de la red 1 sin estar de veras en la de la red 4 | `test_content_type_normaliza_lo_que_anuncia_el_servidor` + 2: `urlopen` falso que anuncia `Application/PDF; charset=binary `, y se exige `application/pdf`, el método `HEAD` y el `""` de «no se sabe» |
+| `lint._alias_idx_cached` | **la mutación no cambia el veredicto del lint**: `method_target(nombre, None)` re-construye el índice solo, así que vaciarla deja el reporte idéntico —sólo más lento—. Lo único que la función promete es lo que ningún assert miraba | `test_el_indice_de_alias_se_construye_una_sola_vez_por_corrida` + `test_el_indice_vacio_igual_se_cachea`: cuentan las construcciones |
+| `make_notes._celda_idx` | nada en la suite miraba `index_tables`/`_index_stars`: `restamp_index` se ejerce de refilón en un test de `lint` que no lee las celdas | `test_la_celda_del_indice_marca_el_valor_ausente` + 2 (incluye la fila estampada entera) |
+
+⛔ **La del medio es la que enseña algo, y es la que el issue avisó de antemano: dos garantías, y la
+mutación mata una sola.** `_alias_idx_cached` promete (a) devolver el índice bueno y (b)
+construirlo **una** vez por corrida. Un test que hubiera chequeado sólo el veredicto —el reflejo
+natural— habría quedado **verde con el cuerpo vaciado**: exactamente el test que pasa por
+construcción que esta red existe para cazar. El assert que hace al test significar algo es el
+**conteo**.
+
+| Qué se midió | Número | Salvedad |
+|---|---|---|
+| Construcciones de `concept_alias_index` en una corrida de `lint.collect()`, con caché → vaciada | **1 → 9** | corpus sembrado: 3 fichas × 3 `activity_indicators_expected`. El 9 es 3×3: escala con la bóveda, no es constante |
+| Ídem con la bóveda **sin un solo concepto** (el centinela `or {"__vacio__": ""}`) | **1 → 9** | sin el centinela, `not _alias_idx` sigue siendo verdadero para siempre: la caché no cachea **nunca** justo en la bóveda joven |
+| Guardas de las tres funciones sin test que las distinga (`--guardas`) | **0 de 1** | `_celda_idx` y `content_type` salen **no evaluado** (rc 2): no tienen condicional mutable, y eso NO es un verde (D-43) |
+| Sobrevivientes del barrido completo, antes → después | **6 → 3** | = el techo. Los 3 que quedan son las fronteras de red conocidas y declaradas: `citation_index._fetch_ads_default`, `_fetch_oa_default`, `fetch_web.fetch` |
+| Población del barrido, `alcance` declarado → real | **464 → 672** | 648 (`scripts/`) + 24 (`tools/`), exento declarado aparte. El campo `alcance` del ratchet estaba vencido desde el 2026-08-28: **AUD-35 por tercera vez, en el archivo que lo documenta** |
+| Costo del barrido `--todo`, 2026-08-28 → hoy | **11,3 min / 464 → 29,9 min / 672** | = 1,47 → **2,67 s por mutante**. No comparables: cambió la población **y** el costo unitario (el tier 0 pasó a ~63 s y cada sobreviviente de la etapa 1 la paga entera). ⚠ La máquina no estuvo ociosa (el tier `poblada`, 203 s, compartió CPU): 1794 s es un **techo** del costo limpio |
+
+⚠ **Las tres se vieron morir por su propia línea antes de contarlas** (regla de método 3), con el
+mensaje del fallo a la vista: `AssertionError: el índice se re-construyó 9 veces: la caché no está
+cacheando` · `assert None == '—'` · `assert None == 'application/pdf'`. `tools/mutar.py --dirigida`
+sobre los tres módulos confirma después: *«murieron todas en su propio test»*.
+
+⛔ **Lo que este issue NO cerró y queda declarado: la cadencia.** `CLAUDE.md` dice *«a pedido, y
+recomendado al cerrar una tanda»*, y en la práctica *a pedido* fue *nunca* durante varias tandas —
+que es cómo se acumularon estos tres. El techo no era el problema: el problema es que ningún momento
+del flujo **obliga** a mirar el resultado. Sigue siendo decisión abierta.
+
+⚠ **Y el `alcance` del ratchet no lo chequea nada.** El número vive en un string de prosa
+(`alcance: "TODO scripts/ — 464 funciones…"`) mientras `mutar.funciones` sabe contar la población
+real; nada cruza los dos, así que la única forma de detectar el desfasaje es que alguien lo lea. Es
+el mismo hueco que AUD-35 y el que #345 volvió a encontrar. No se cerró acá (sería otro frente):
+queda anotado con su mecanismo.

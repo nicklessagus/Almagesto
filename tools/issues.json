@@ -1714,12 +1714,12 @@
   {
    "number": 344,
    "title": "DECISIÓN: una nota de entidad pesa ~72 k tokens y el 71 % es el bloque de verificación, no contenido — el contrato promete que la nota deja al lector «servido» y a ese tamaño entra una sola por ventana",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 345,
    "title": "DECISIÓN: `tools/` queda fuera de las redes 1 y 4 por alcance declarado, y ahí vive la herramienta que EJECUTA la red de mutación — 5 guardas sin test medidas, y `INV-126` sigue sin su marca `@inv`",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 346,
@@ -1749,6 +1749,11 @@
   {
    "number": 351,
    "title": "Un tema con `facet:` propia y sin `search_fq` hereda `database:astronomy` en silencio, y ahí la puerta fundacional NO ABRE NUNCA — medido en `ica`: 0 papers fundacionales con el fq heredado, 2 sin él (incl. Comon 1994)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 352,
+   "title": "El gate de mutación sale ROJO en `main` y nadie lo estaba corriendo: 3 sobrevivientes nuevos de tandas anteriores",
    "state": "OPEN"
   }
  ]
