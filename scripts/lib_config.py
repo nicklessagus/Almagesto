@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.139.0"
+ALMAGESTO_VERSION = "1.140.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1460,6 +1460,42 @@ def theme_by_slug(slug: str) -> tuple[str, dict]:
     if slug in themes:
         return slug, themes[slug]
     raise KeyError(f"tema desconocido: {slug!r}. Definilo en vault/config/themes.yaml")
+
+
+def subject_kinds(slug: str) -> tuple[str, ...]:
+    """Which subject configs define `slug`: `("star",)`, `("theme",)`, both, or empty (#331).
+
+    The single implementation of «is this slug a star or a theme?», the question every "next step"
+    hint has to answer before printing a command: `make_notes.py <slug>` reads `stars.yaml` and
+    needs `--theme` to read `themes.yaml`. Answering it again at each call site is the shape of
+    #215/#324 — the same rule written twice and already diverged.
+
+    A tuple, not a single winner: with both configs defining the slug there is no precedence to
+    invent, and the caller asks about the kind it needs (`"star" in subject_kinds(slug)`). An
+    unreadable config answers "not defined here" rather than raising: this feeds messages, and a
+    hint that crashes is worse than a hint that is short — the strict loaders (`star_by_slug`,
+    `themes_error`) are what report a broken YAML.  @inv INV-141"""
+    kinds = []
+    for kind, lookup in (("star", star_by_slug), ("theme", theme_by_slug)):
+        try:
+            lookup(slug)
+        except (KeyError, RuntimeError, OSError, yaml.YAMLError, UnicodeDecodeError):
+            continue
+        kinds.append(kind)
+    return tuple(kinds)
+
+
+def make_notes_cmd(slug: str) -> str:
+    """The `make_notes.py` invocation that actually runs for `slug` — with `--theme` when it is a
+    theme (#331).
+
+    Two scripts printed this command with the slug interpolated and no flag, so on a theme they
+    told the operator to run something that died with a raw `KeyError` blaming `stars.yaml` for a
+    slug correctly defined in `themes.yaml` (measured: 2 of 3 subjects of a real vault). A slug
+    defined in both configs, or in neither, gets the bare form: that is the invocation `make_notes`
+    resolves (or refuses) — never a flag guessed on its behalf."""
+    theme_only = subject_kinds(slug) == ("theme",)
+    return f"python scripts/make_notes.py {slug}" + (" --theme" if theme_only else "")
 
 
 def load_objective() -> dict:

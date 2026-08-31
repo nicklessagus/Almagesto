@@ -547,7 +547,9 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
         dest = cfg.PAPERS / f"{mn.safe_name(bib)}.md"
         if not dest.exists():
             n["sin_nota"] += 1
-            cfg.print_seguro(f"  ⚠ {bib}: no hay nota en papers/ — corré `make_notes.py {slug}`")
+            # #331 — con el slug pelado, en un tema el remedio que se imprime no corre (`KeyError`).
+            cfg.print_seguro(f"  ⚠ {bib}: no hay nota en papers/ — corré "
+                             f"`{cfg.make_notes_cmd(slug)}`")
             continue
         # #207 · de QUÉ se construyó la vista. Lo DECLARA el extractor (es el único que sabe qué
         # abrió) y acá se CRUZA contra el disco: `fuente: pdf` sin PDF es una contradicción, y

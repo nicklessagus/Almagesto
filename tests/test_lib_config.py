@@ -2309,3 +2309,33 @@ def test_fm_key_span_arranca_donde_se_le_pide():
     lines = ["a: 1", "b: 2", "a: 3"]
     assert cfg.fm_key_span(lines, "a") == (0, 1)
     assert cfg.fm_key_span(lines, "a", 1) == (2, 3)
+
+
+# ── #331 · UNA implementación de «¿este slug es estrella o tema?» ─────────────
+def test_subject_kinds_responde_por_config_y_no_inventa(toy_vault):
+    """La pregunta que todo «próximo paso» tiene que contestar antes de imprimir un comando.
+    Estaba contestada de rebote en tres lugares y ninguno la contestaba: los dos que imprimían el
+    comando lo hacían sin `--theme`, y `make_notes` la contestaba muriendo. Un slug que no está en
+    ninguna config devuelve la tupla vacía — que NO es «es una estrella».
+
+    @inv INV-141"""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "concept": "ica", "area": "methods"}})
+    assert cfg.subject_kinds("test_star") == ("star",)
+    assert cfg.subject_kinds("ica") == ("theme",)
+    assert cfg.subject_kinds("no-existe") == ()
+
+
+def test_subject_kinds_con_una_config_ILEGIBLE_no_se_muere(toy_vault):
+    """Alimenta MENSAJES: un `themes.yaml` roto tiene que dejar el hint corto, no tumbar al script
+    que lo imprime (el YAML roto lo reportan `themes_error` y el lint, que es su lugar)."""
+    cfg.THEMES_YAML.write_text("ica: [sin cerrar\n", encoding="utf-8")
+    assert cfg.subject_kinds("test_star") == ("star",)
+    assert cfg.subject_kinds("ica") == ()
+
+
+def test_make_notes_cmd_pone_theme_SOLO_donde_corresponde(toy_vault):
+    """El constructor del comando: es lo que hace que el remedio impreso corra."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "concept": "ica", "area": "methods"}})
+    assert cfg.make_notes_cmd("ica") == "python scripts/make_notes.py ica --theme"
+    assert cfg.make_notes_cmd("test_star") == "python scripts/make_notes.py test_star"
+    assert cfg.make_notes_cmd("no-existe") == "python scripts/make_notes.py no-existe"

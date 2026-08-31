@@ -802,3 +802,33 @@ def test_la_vista_registra_los_ejes_QUE_SE_PREGUNTARON(toy_vault, monkeypatch):
     hv.harvest("ica_ruido", theme=True)
     fm = cfg.split_fm((cfg.PAPERS / "2002Cardoso.md").read_text(encoding="utf-8"))
     assert fm["vistas"][0]["lente"] == ["heterocedasticidad", "identificabilidad"]
+
+
+# ── #331 · el remedio que imprime el cosechador tiene que CORRER ──────────────
+def test_el_remedio_por_nota_faltante_lleva_theme_en_un_TEMA(toy_vault, capsys):
+    """Gemelo del de `triage.py --sintesis`: con el slug pelado, en un tema el comando que se
+    imprime como remedio muere con un `KeyError` que culpa a `stars.yaml` de un slug definido en
+    `themes.yaml`.
+
+    @inv INV-141"""
+    write_yaml(cfg.THEMES_YAML, {"ica_ruido": {"title": "ICA ruidosa", "concept": "ica-ruido",
+                                               "area": "methods", "facet": "noisy ICA"}})
+    src = cfg.EXTRACCION / "ica_ruido"
+    src.mkdir(parents=True, exist_ok=True)
+    (src / "2002Cardoso.json").write_text(json.dumps({
+        "bibcode": "2002Cardoso", "ejes": {}, "ground_truth": [], "aporte": "x",
+        "vista": {"sujeto": "ica-ruido", "tipo": "theme", "fuente": "abstract"}}),
+        encoding="utf-8")
+    r = hv.harvest("ica_ruido", theme=True)
+    assert r["sin_nota"] == 1
+    assert "`python scripts/make_notes.py ica_ruido --theme`" in capsys.readouterr().out
+
+
+def test_el_remedio_por_nota_faltante_NO_lleva_theme_en_una_ESTRELLA(toy_vault, capsys):
+    """El simétrico, por el mismo motivo que en `triage`: el flag se resuelve."""
+    d = cfg.EXTRACCION / "test_star"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"{BIB}.json").write_text(json.dumps(extraccion()), encoding="utf-8")
+    assert hv.harvest("test_star")["sin_nota"] == 1
+    out = capsys.readouterr().out
+    assert "`python scripts/make_notes.py test_star`" in out and "--theme" not in out

@@ -3633,6 +3633,33 @@ def _flags_usados(args, ap=None) -> list:
     registrarlas la traza dice "corrió make_notes" sobre dos corridas que no hicieron lo mismo."""
     return cfg.flags_usados(args, ap)
 
+
+def subject_refusal(slug: str, theme: bool) -> str | None:
+    """Why this invocation cannot generate notes for `slug`, or `None` when it can (#331).
+
+    `write_star_note` reached `star_by_slug` on the way, so `make_notes.py <theme-slug>` printed
+    «Generando notas para ica» and only then died with a raw `KeyError` (rc 1) telling the operator
+    to define in `stars.yaml` a slug that is correctly defined in `themes.yaml` — following that
+    instruction adds a fake star to the config. Measured: 2 of 3 subjects of a real vault, and the
+    command came recommended by two other scripts.
+
+    D-43: a step that cannot run **declares it**. It neither degrades (the `--theme` is not guessed
+    on the operator's behalf: generating a concept is a different operation) nor blows up halfway,
+    and the message names **both** configs plus, when the slug is defined in the other one, the
+    invocation that does run.  @inv INV-141"""
+    kinds = cfg.subject_kinds(slug)
+    esperado = "theme" if theme else "star"
+    if esperado in kinds:
+        return None
+    que = {"star": "una estrella (`vault/config/stars.yaml`)",
+           "theme": "un tema (`vault/config/themes.yaml`)"}
+    if kinds:
+        return (f"⛔ '{slug}' es {que[kinds[0]]}, no {que[esperado]} — no se generó ninguna nota.\n"
+                f"   Corré: `{cfg.make_notes_cmd(slug)}`")
+    return (f"⛔ slug desconocido: '{slug}' — no está en `vault/config/stars.yaml` ni en "
+            f"`vault/config/themes.yaml`. Definilo ahí antes de generar notas.")
+
+
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser()
@@ -3850,6 +3877,11 @@ def main() -> int:
                              accessed=args.accessed, pending=args.pending,
                              pending_motivo=args.pending_motivo, force=args.force)
         return 0
+
+    # #331 — el guard del sujeto va ANTES de la línea de arranque (ver `subject_refusal`).
+    if (motivo := subject_refusal(args.slug, args.theme)) is not None:
+        cfg.print_seguro(motivo)
+        return 2
 
     cfg.print_seguro(f"Generando notas para {args.slug}")
     if args.theme:

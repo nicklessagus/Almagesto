@@ -809,3 +809,44 @@ pegarlo*.
 campo `cita` separado de `valor`, la única forma de que el script sepa qué parte es verbatim— cambia
 el schema de la extracción, y #311 dice que una extracción no se regenera sin volver a pagar el PDF.
 Queda como propuesta con su evidencia, no aplicada.
+
+## 2026-08-31 · #331 · el «próximo paso» que dos scripts imprimen no corría en un tema
+
+**Qué era.** `triage.py --sintesis` y `harvest_views` cierran nombrando el paso siguiente con el
+slug interpolado y **sin `--theme`**. En un tema, ese comando muere con un `KeyError` sin manejar
+(rc 1) **después** de imprimir «Generando notas para …», y el mensaje manda definir en
+`stars.yaml` un slug que está bien definido en `themes.yaml`: un operador que sigue la instrucción
+agrega una estrella falsa a la config.
+
+**Cómo re-medirlo.** Sobre una bóveda con temas declarados:
+
+```bash
+python -c "import sys;sys.path.insert(0,'scripts');import lib_config as c;\
+print({k: c.subject_kinds(k) for k in list(c.load_themes()) + [m['slug'] for m in c.load_stars().values()]})"
+```
+
+Cada slug que responde `('theme',)` era un sujeto en el que los dos mensajes proponían un comando
+que aborta.
+
+| Qué se midió | Número | Salvedad |
+|---|---|---|
+| Sujetos de `Almagesto-Tesis` (2026-08-31, framework v1.137.0) | 3 (`HD 40307`, `ica`, `ica-ruido`) | — |
+| Sujetos donde el remedio impreso **no corre** | **2 de 3** | los dos temas; la estrella nunca vio el defecto |
+| Sitios del framework que interpolan el slug sin resolver el flag | 4 | `triage.main`, `harvest_views.harvest` (arreglados); `lint.collect` (el remedio de la cabecera desfasada de un CONCEPTO) y `extraction_prompt.main`, fuera del alcance de #331 |
+
+**Por qué duele más que un mensaje feo.** `triage.py --sintesis` es el **único** canal de la tercera
+fecha de la cabecera (INV-82): el detector del lint existía y el hallazgo sólo se podía cerrar si el
+operador sabía agregar el flag a mano — el mismo modo de falla que el propio comentario del código
+cita como motivo de que ese canal exista.
+
+**Qué cambió.** Una sola implementación de «¿este slug es estrella o tema?»
+(`lib_config.subject_kinds`, con su constructor de comando `make_notes_cmd`), usada por los tres
+puntos: copiarla habría sido el molde de #215/#324, donde la misma regla escrita dos veces ya había
+divergido. `subject_kinds` devuelve una **tupla** y no un ganador: con las dos configs definiendo el
+slug no hay precedencia que inventar, y el que pregunta pregunta por la clase que necesita. Y
+`make_notes.subject_refusal` rehúsa **antes** de la línea de arranque, nombrando las **dos** configs
+y —cuando el slug está en la otra— el comando que sí corre (D-43: un paso que no puede correr se
+declara; no degrada ni revienta).
+
+⚠ **Lo que NO se hizo, y es medible:** el `--theme` no se adivina por el operador. Generar un
+concepto es otra operación, no un flag olvidado.
