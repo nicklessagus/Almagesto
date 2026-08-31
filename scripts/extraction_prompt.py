@@ -615,8 +615,12 @@ def main() -> int:
     hay_txt = (cfg.ROOT / txt_rel).exists()
     nota = cfg.PAPERS / f"{args.bibcode.replace('/', '_')}.md"
     if not hay_pdf and not nota.exists():
+        # #334 — sólo la SEGUNDA mitad pasa por `make_notes_cmd`: el sujeto habitual de este
+        # generador es un tema, y sin `--theme` el comando no corre. ⛔ `fetch_pdf` toma el slug
+        # pelado y **no tiene** `--theme`: la primera mitad ya estaba bien y no se contagia.
         cfg.print_seguro(f"⛔ no hay ni PDF (`{pdf_rel}`) ni nota (`{nota.name}`) — no hay nada que "
-                         f"leer; corré `fetch_pdf.py {args.slug}` y `make_notes.py {args.slug}`")
+                         f"leer; corré `fetch_pdf.py {args.slug}` y "
+                         f"`{cfg.make_notes_cmd(args.slug)}`")
         return 1
     if not hay_pdf:
         # #207: sin PDF la vista se construye del `## Abstract` y se DECLARA `fuente: abstract`.

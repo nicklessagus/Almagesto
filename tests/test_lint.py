@@ -6361,3 +6361,32 @@ def test_la_cita_AMBIGUA_tampoco_sube_a_cierre(toy_vault):
         "que no lleva su bibcode adyacente en ningún lado».\n", encoding="utf-8")
     assert lint.collect().por_clave("cita_inventada").items == ()
     assert lint.collect().por_clave("cita_no_verbatim").items != ()
+
+
+def _con_estado_desfasado(dirpath, stem, slug, tags):
+    """Nota que PUBLICA una línea de estado distinta de la que el estampador daría hoy (#233)."""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    cfg.save_registro(slug, {"slug": slug, "busquedas": [
+        {"fecha": "2026-01-01", "query": "q", "rows": 10, "n_total": 3, "n_found": 3,
+         "n_core": 1, "n_candidates": 0, "bibcodes": ["2013Voss"]}]})
+    return mk_note(dirpath, stem, {"tags": tags},
+                   f"{mn.GENERATOR_LINE}1.0.0_\n{lint.ESTADO_PREFIJO}algo viejo_\n\ncuerpo\n")
+
+
+def test_el_remedio_de_la_cabecera_desfasada_CORRE_en_el_sujeto_que_nombra(toy_vault, capsys):
+    """#334 — el remedio salía como `make_notes.py <slug>` pelado, y `_entity_slug` devuelve el slug
+    del TEMA para toda nota de `concepts/`: el 100 % de la población de conceptos recibía un comando
+    que `make_notes` REHÚSA (desde #331; antes reventaba con `KeyError`). El comando es uno solo y
+    vive en `lib_config.make_notes_cmd` (INV-141) — escribirlo acá otra vez es el molde de #215/#324.
+    """
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ICA",
+                                         "query": "q"}})
+    _con_estado_desfasado(cfg.CONCEPTS / "methods", "ICA", "ica", ["methods"])
+    _con_estado_desfasado(cfg.STARS, "test_star", "test_star", ["star"])
+    link_from_log(toy_vault, "ICA", "test_star")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "`python scripts/make_notes.py ica --theme`" in rep
+    assert "`python scripts/make_notes.py test_star`" in rep
+    # ⛔ La estrella NO se lleva el flag de arrastre: el remedio de un sujeto no puede nombrar la
+    # config del otro.
+    assert "make_notes.py test_star --theme" not in rep

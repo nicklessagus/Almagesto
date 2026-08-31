@@ -1875,10 +1875,13 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             # sintético limpio reportaba 4 fichas que nunca habían pasado por el estampador.
             if _quiere and _hay:
                 if _hay.strip() != _quiere.strip():
+                    # #334 — el comando sale de `make_notes_cmd`, no del slug pelado: `_entity_slug`
+                    # devuelve el slug del TEMA para toda nota de `concepts/`, así que sin el flag
+                    # el 100 % de la población de conceptos recibía un remedio que no corre.
                     estado_desfasado.append(
                         (stem, "la cabecera `> _Estado — …_` no es la que el estampador da hoy "
-                               "(¿faltó re-correr después del último paso?) → `python "
-                               f"scripts/make_notes.py {_slug_ent}`"))
+                               "(¿faltó re-correr después del último paso?) → "
+                               f"`{cfg.make_notes_cmd(_slug_ent)}`"))
 
         if f.startswith((str(cfg.STARS), str(cfg.CONCEPTS))) and GENERATOR_LINE not in text:
             headerless.append((stem, "sin la línea `_Generado con Almagesto v…_`: los estampadores "

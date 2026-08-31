@@ -850,3 +850,29 @@ declara; no degrada ni revienta).
 
 ⚠ **Lo que NO se hizo, y es medible:** el `--theme` no se adivina por el operador. Generar un
 concepto es otra operación, no un flag olvidado.
+
+
+## 2026-08-31 · #334 · la cola de #331: los otros dos sitios
+
+**Qué era.** #331 arregló **2 de 4** sitios que interpolan el slug pelado en un «próximo paso». Los
+otros dos son `lint.collect` (el remedio de la categoría *«cabecera `> _Estado — …_` desfasada»*) y
+`extraction_prompt.main` (el aviso *«no hay nada que leer»*). El helper que los cierra ya existía:
+`lib_config.make_notes_cmd` (INV-141, v1.140.0).
+
+**Cómo re-medirlo.** Sobre una bóveda con conceptos, el slug que el lint le adjudica a cada nota:
+
+```bash
+python -c "import sys;sys.path.insert(0,'scripts');import lint;from pathlib import Path;\
+print({p.name: lint._entity_slug(str(p)) for p in sorted(Path('vault/wiki/concepts').rglob('*.md'))})"
+```
+
+| Qué se midió | Número | Salvedad |
+|---|---|---|
+| Notas de `concepts/` cuyo `_entity_slug` es el slug de un **tema** | 100 % | por construcción: `_entity_slug` resuelve un concepto **a través de `themes.yaml`**, lo dice su propio docstring. Confirmado en `Almagesto-Tesis` (2026-08-31): `ica.md → 'ica'`, `ica-ruido.md → 'ica-ruido'` |
+| Población de la categoría en esa bóveda, hoy | 0 | un remedio roto **esperando su primer caso**, no un daño en curso |
+| Sitios que interpolan el slug sin resolver el flag, tras #334 | 0 de 4 | `grep -nE 'make_notes\.py \{' scripts/*.py` deja 7 líneas, y ninguna es un «próximo paso» sin resolver: 5 son el literal `{slug}` de las secciones estampadas de `make_notes` (texto de la nota, no un comando; el del roll-up de tema ya trae `--theme`) y 2 son remedios del lint cuyos loops recorren **sólo `load_stars()`** |
+
+**Qué NO cambió, y por qué importa.** La primera mitad del aviso de `extraction_prompt` —
+`fetch_pdf.py <slug>`— es correcta: `fetch_pdf` toma el slug pelado y **no tiene** `--theme`.
+Arreglar «a ojo» las dos mitades de la misma línea es exactamente cómo se rompe; hoy hay un assert
+propio que lo fija.

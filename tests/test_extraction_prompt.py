@@ -639,3 +639,27 @@ def test_el_prompt_de_una_SEGUNDA_lente(toy_vault):
     normal = ep.build_prompt("ica_ruido", "2002Cardoso", "ICA ruidosa", [], kind="theme",
                              sujeto="ica-ruido")
     assert "SEGUNDA lectura" not in normal
+
+
+def test_el_aviso_de_no_hay_nada_que_leer_nombra_UN_comando_QUE_CORRE(toy_vault, monkeypatch,
+                                                                     capsys):
+    """#334 — la segunda mitad del aviso salía como `make_notes.py <slug>` pelado, y el sujeto
+    habitual de este generador **es un tema**: el comando moría (hoy `make_notes` REHÚSA; antes,
+    `KeyError` culpando a `stars.yaml`). El comando es uno solo y vive en
+    `lib_config.make_notes_cmd` (INV-141).
+
+    ⛔ Y la PRIMERA mitad no se contagia: `fetch_pdf` toma el slug pelado y **no tiene** `--theme`.
+    Es el detalle que se pierde arreglando a ojo, así que va con assert propio."""
+    from conftest import write_yaml
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ICA",
+                                         "query": "q"}})
+    assert _run_main(monkeypatch, ["ica", "2020NiPdfNiNota", "--theme"]) == 1
+    out = capsys.readouterr().out
+    assert "`python scripts/make_notes.py ica --theme`" in out
+    assert "`fetch_pdf.py ica`" in out and "fetch_pdf.py ica --theme" not in out
+
+    # y en una ESTRELLA el flag no aparece por arrastre
+    assert _run_main(monkeypatch, ["test_star", "2020NiPdfNiNota"]) == 1
+    out = capsys.readouterr().out
+    assert "`python scripts/make_notes.py test_star`" in out
+    assert "make_notes.py test_star --theme" not in out
