@@ -258,11 +258,17 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
     saying so. So it travels in the population line (INV-40); it is not a finding and **does not
     move the rc** — if it did, the mandatory closing step of #323 would stop on 45 correct quotes.
 
-    Returns `{"alteradas": [(línea, motivo)], "no_evaluables": [(línea, motivo)], "citas": N,
-    "solo_extraccion": J}` — counts, so the sweep can declare its population (INV-40) instead of
-    printing a bare zero."""
+    ⛔ **And the single witness can be CONTRADICTED by the other one (#333).** When the `.txt` of
+    that same source carries the opening of the quote and continues differently in running prose,
+    the two readings of one PDF disagree and that is reported —`discrepan`— as its own population.
+    It **does not move the rc**: the `.txt` is a degraded index and this gate stops operations
+    (#323), so an accusation of it is a *go and look at the page*, never a failed close.
+
+    Returns `{"alteradas": [(línea, motivo)], "no_evaluables": [(línea, motivo)],
+    "discrepan": [(línea, motivo)], "citas": N, "solo_extraccion": J}` — counts, so the sweep can
+    declare its population (INV-40) instead of printing a bare zero."""
     texto = nota.read_text(encoding="utf-8")
-    out = {"alteradas": [], "no_evaluables": [], "citas": 0, "solo_extraccion": 0}
+    out = {"alteradas": [], "no_evaluables": [], "discrepan": [], "citas": 0, "solo_extraccion": 0}
     bibs_nota = set(lb._bibcodes(texto))
     for b in lb.split_blocks(texto):
         bibs = lb._bibcodes(b.text) or lb._bibcodes(b.intro or "")
@@ -278,12 +284,21 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
             ver, det = cfg.quote_verdict(cita, candidatos, bibs_nota, txts, ambiguo=ambiguo)
             corte = cita if len(cita) <= 70 else cita[:70] + "…"
             quienes = ", ".join(candidatos) or "sin fuente adyacente"
-            if ver == "txt_degradado":
+            if ver in ("txt_degradado", "txt_acusa"):
                 # #341 — aprobada por UN SOLO TESTIGO: la extracción de su fuente la dice y el
                 # `.txt` de esa misma fuente no. Se cuenta acá, antes del `continue`, porque el
                 # veredicto es correcto y aun así la población que lo lleva tiene que ser visible.
                 out["solo_extraccion"] += 1
-            if ver in ("en_su_txt", "txt_degradado", "txt_parte"):
+            if ver == "txt_acusa":
+                # #333 — y de esas, la que el OTRO lector contradice: no es un hallazgo bloqueante
+                # (el `.txt` es índice degradado, #205) y tampoco es silencio.
+                out["discrepan"].append(
+                    (b.first_line, f"«{corte}» — el `.txt` de {det['bib']} trae el mismo arranque y "
+                                   f"sigue distinto: dice «…{det['cola_txt'][:70]}» donde la "
+                                   f"extracción dice «…{det['cola_cita'][:70]}». Son DOS lecturas "
+                                   f"del mismo PDF —`pdftotext` y un LLM— y la fuente es el PDF: "
+                                   f"andá a la página (#333)"))
+            if ver in ("en_su_txt", "txt_degradado", "txt_acusa", "txt_parte"):
                 continue
             if ver == "alterada" and det["otro_bib"]:
                 out["alteradas"].append(
@@ -309,6 +324,8 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
         for ln, motivo in out["alteradas"]:
             cfg.print_seguro(f"  ⛔ L{ln}: {motivo}. Copiala del JSON con `contrast.py <slug> "
                              f"--grep …` — NO la re-tipees (#322)")
+        for ln, motivo in out["discrepan"]:
+            cfg.print_seguro(f"  ⚠ L{ln}: {motivo}")
         for ln, motivo in out["no_evaluables"]:
             cfg.print_seguro(f"  · L{ln}: {motivo}")
     return out
@@ -343,26 +360,32 @@ def validar_todo(slug: str | None = None) -> int:
     `verify-citations`, `lint --cierre` at 0 and **12 altered or misattributed quotes inside**; the
     comparison that caught them in seconds was written and never run.
 
-    Declares its population (INV-40), what it could not evaluate (D-43) and what it approved with
-    a single witness (#341) — without `--migrate-extracciones` that population is **zero**, and a
-    silent zero would read as a verdict. Returns the number of blocking findings, so it works as a
-    gate: neither of the two extra counts moves it."""
+    Declares its population (INV-40), what it could not evaluate (D-43), what it approved with
+    a single witness (#341) and where the OTHER reading of the same PDF contradicts it (#333) —
+    without `--migrate-extracciones` that population is **zero**, and a silent zero would read as a
+    verdict. Returns the number of blocking findings, so it works as a gate: none of the three extra
+    counts moves it."""
     notas = _notes_of(slug)
     alteradas = no_eval = citas = solo_ext = 0
+    discrepan: list = []
     for f in notas:
         r = validar(f, mostrar=False)
         citas += r["citas"]
         no_eval += len(r["no_evaluables"])
         solo_ext += r["solo_extraccion"]
+        discrepan += [(f, ln, m) for ln, m in r["discrepan"]]
         if r["alteradas"]:
             cfg.print_seguro(f"\n{f.relative_to(cfg.ROOT)}")
             for ln, motivo in r["alteradas"]:
                 cfg.print_seguro(f"  ⛔ L{ln}: {motivo}")
             alteradas += len(r["alteradas"])
+    for f, ln, motivo in discrepan:
+        cfg.print_seguro(f"\n{f.relative_to(cfg.ROOT)}\n  ⚠ L{ln}: {motivo}")
     ambito = f"las notas de `{slug}`" if slug else "toda la bóveda"
     cfg.print_seguro(f"\n> sobre {len(notas)} nota(s) de {ambito} · {citas} cita(s) «…» · "
                      f"{no_eval} no evaluable(s) (sin extracción en disco, o la extracción calla) · "
-                     f"{solo_ext} sólo respaldada(s) por la extracción")
+                     f"{solo_ext} sólo respaldada(s) por la extracción, "
+                     f"{len(discrepan)} de ellas con el `.txt` en contra")
     if not citas:
         cfg.print_seguro("  ⚠ NO EVALUADO: ninguna cita mirada. Si la bóveda es anterior a #311, "
                          "corré `python scripts/make_notes.py --migrate-extracciones` — un cero sin "
@@ -375,6 +398,10 @@ def validar_todo(slug: str | None = None) -> int:
                          f"extracción de su fuente las dice y el `.txt` de esa misma fuente no. Es "
                          f"el veredicto correcto (el `.txt` es un índice degradado, #205) y "
                          f"**no** es un hallazgo: ante la duda, la página del PDF (#341)")
+    if discrepan:
+        cfg.print_seguro(f"  ⚠ y en {len(discrepan)} de ésas el OTRO lector del mismo PDF dice "
+                         f"otra cosa (arriba, con su cola). No mueve el rc —el `.txt` es índice "
+                         f"degradado— y tampoco es silencio: andá a la página (#333)")
     return alteradas
 
 
@@ -418,7 +445,8 @@ def main(argv=()) -> int:
         r = validar(nota)
         cfg.print_seguro(f"  {len(r['alteradas'])} cita(s) con evidencia positiva de alteración "
                          f"· {len(r['no_evaluables'])} no evaluable(s) · "
-                         f"{r['solo_extraccion']} sólo respaldada(s) por la extracción · "
+                         f"{r['solo_extraccion']} sólo respaldada(s) por la extracción "
+                         f"({len(r['discrepan'])} con el `.txt` en contra) · "
                          f"{r['citas']} mirada(s)"
                          + (" ✅" if not r["alteradas"] else " ⛔"))
         return 1 if r["alteradas"] else 0

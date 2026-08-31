@@ -937,7 +937,65 @@ vuelve ruido que se deja de mirar.
 
 ⚠ **Lo que NO entra acá:** la parte 2 del issue (emitir la marca `⚠verificar en el PDF` cuando la
 cola diverge) sigue **bloqueada por #332 y #336** — medido, sus 6 candidatos de hoy son 6 artefactos
-del cortador de columnas, así que emitiría 6 marcas falsas.
+del cortador de columnas, así que emitiría 6 marcas falsas. *(Re-medido con el cortador arreglado en
+la entrada de abajo: la señal pasó de **0 de 6** a **3 de 3**.)*
+
+## 2026-08-31 · RE-MEDICIÓN con el cortador arreglado: el `.txt` puede acusar (#333)
+
+**Por qué se re-midió.** Los números de #333 y de #341 parte 2 se tomaron con `deinterleave_columns`
+partiendo un párrafo continuo (#332) y con el `$…$` borrado del texto FUENTE (#336). Los dos están
+cerrados (1.143.0 / 1.144.0), así que el conteo anterior estaba contaminado por construcción — y su
+propio issue lo declaraba.
+
+**Cómo.** Mismo procedimiento y misma bóveda (`Almagesto-Tesis`, 163 notas), corriendo
+`lib_config.quote_verdict` de esta versión sobre cada cita `«…»` de ≥ 40 caracteres y clasificando
+la población que el paso 2 aprueba (`txt_degradado`, el único testigo). Reproducible con
+`python scripts/contrast.py --validar-todo` desde la raíz de esa bóveda.
+
+| Población | Antes (#332 sin cerrar) | Hoy |
+|---|---|---|
+| Citas miradas | 3099 | 3321 |
+| Aprobadas con **un solo testigo** | 45 | **25** |
+| ⛔ cola divergente en prosa → *el `.txt` acusa* | 6 | **3** |
+| ~ divergencia sobre `$…$` → *el `.txt` no opina* | 0 | 3 |
+| · ausencia limpia → no evaluable | 80 | 11 (+ 8 elididas, cortas o sin `.txt`) |
+| **Verdaderos positivos entre las acusaciones** | **0 de 6** | **3 de 3** |
+
+Las 20 citas que salieron de «un solo testigo» las recuperó el cortador: hoy están en el `.txt` y las
+absuelve el paso 1. Los 3 verdaderos positivos, abiertos uno por uno contra el `.txt` de su fuente:
+
+- `2026A&A...705A.234O` (dos veces en `ica.md`) — la fuente dice «real-world systematics **that are
+  not orthogonal** might become entangled» y la extracción transcribió «**do not become orthogonal
+  and** might become entangled»: **invierte el sentido**, y es la misma frase que #220 usa de
+  ejemplo. La nota copió la extracción, fielmente, y el gate daba `0 ✅` porque su juez **es** la
+  extracción;
+- `2017MNRAS.468.4772S` (`hd_40307.md`) — la fuente dice «an effective temperature of 4800 K» y la
+  extracción le agregó un **«about»** adentro de una cita textual.
+
+**El discriminador, y es el hallazgo de método.** La regla del issue (prefijo largo + cola divergente
+en prosa sin matemática) daba **7** candidatas, con 4 falsas. Las 4 divergen **dentro de una
+palabra** y las 3 verdaderas en un **borde de palabra**:
+
+| Candidata | Dónde corta el prefijo común | Qué era |
+|---|---|---|
+| `2017PhRvE..96d2114K` | `…breaks th` + «ereby overcomes» | empalme del `.txt` |
+| `2018IEEEA...625336F` | `…implies non` + « identifiability» | guión de corte sin guión |
+| `2011Naik` | `…simple and ef` + «ﬁcient» | **ligadura** `ﬁ` (U+FB01) |
+| `1998Cardoso` | `…convolutive mix` + « tures» | palabra partida por un espacio pelado |
+
+Es la asimetría que el issue nombra, afilada: **`pdftotext` rompe PALABRAS; un LLM que transcribe mal
+cambia PALABRAS.** Con esa guarda la señal es 3/3 y sin ella 3/7 — o sea que el detector nacería con
+4 falsos positivos en un gate que desde #323 frena operaciones.
+
+**Qué cambió.** `lib_config.txt_accuses` + el veredicto `txt_acusa`, **no bloqueante**, reportado por
+`contrast --validar` y por el lint (`cita_txt_discrepa`, backlog).
+
+⚠ **Salvedades del número.** (a) La bóveda se editó entre las dos mediciones —el caso de `ica.md` que
+originó el issue ya está corregido allá—, así que las dos columnas no son un A/B congelado: miden la
+bóveda de su día. (b) 3047 de las 3321 citas salen `no_evaluable` porque su bloque **no tiene ningún
+`[[bibcode]]`** — son las `«…»` del cuerpo de las notas de paper, donde el bibcode del sujeto vive en
+el nombre del archivo y nunca como wikilink: la población efectiva del gate es **272 de 3321
+(8,2 %)**, y eso no lo declara nadie (backlog, no arreglado acá).
 
 sí existe—. Reproducible con `python tools/mutar.py --dirigida scripts/triage.py --solo main`.
 **Cerrado en #339**, junto con el tercer sitio (`--trazabilidad`) que esta medición no había mirado.

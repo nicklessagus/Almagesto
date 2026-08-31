@@ -271,6 +271,26 @@ OCR, o marcar `pending`).
   (`«A … B»`) se chequea por fragmentos; la **página** no se puede chequear así y se dice (media red
   declarada vale más que ninguna). Existe porque el eje *¿la fuente dice esto?* es **ortogonal** a
   *¿la cita es verbatim?*: seis citas no-verbatim volvieron `soportada`, correctamente.
+- **Las DOS lecturas del mismo PDF no coinciden** (#333, backlog): la extracción aprueba la cita
+  —o sea que el detector de arriba dice `✅`— y el `.txt` de **esa misma fuente** trae un prefijo
+  largo de la cita y **sigue distinto**. ⛔ La discrepancia **no** es «PDF vs `.txt`»: el PDF es la
+  fuente y siempre tiene razón; lo que difiere es **quién lo leyó** —`pdftotext`, determinista, y un
+  LLM—, así que lo único cierto es *andá a mirar esta página*. Existe porque una cita alterada que
+  nace **en la extracción** es invisible para `contrast --validar` por construcción: su juez **es**
+  la extracción (#315/#317), y hasta 1.161.0 el `.txt` sólo podía absolver.
+  Lo que vuelve admisible la acusación es una asimetría medida: **cuando el `.txt` falla la cadena
+  está AUSENTE, no distinta** (matemática, corte de columnas, salto de línea). De ahí las tres
+  guardas, y la del medio es la que compró la re-medición: la divergencia arranca en un **borde de
+  palabra** —`pdftotext` rompe PALABRAS (ligadura `ﬁ`, `mix tures`, empalme) y un LLM que transcribe
+  mal cambia PALABRAS—, no toca `$…$` ni un borde de celda, y el `.txt` sigue al menos
+  `CITA_COLA_MIN` caracteres (una lectura que se corta calla, no contradice). Medido sobre una
+  bóveda real el 2026-08-31, con el cortador de #332/#336 ya arreglado: de 25 citas aprobadas con un
+  solo testigo, **7 candidatas → 3 acusaciones, las 3 verdaderas** (los 4 descartes eran artefactos
+  del `.txt`, cazados por el borde de palabra). **Backlog, nunca bloqueante**: el `.txt` es un índice
+  degradado y desde #323 este gate frena operaciones. ⛔ **La salida es la marca, no la corrección**
+  (#341): cuál de las dos lecturas gana lo decide quien abra la página — medido en contra, el
+  `log.md` de esa bóveda registra una corrección previa que recortó la nota **hacia** la cadena
+  inventada porque el `.txt` partido parecía decirla.
 - **`methods` sin página destino, resuelto también por `aliases`** (#245): el nombre canónico de
   un método es el **stem** de su nota y `aliases` es la tabla de sinónimos que el schema ya pide —
   y nadie la leía, así que `bisector span` y `bis` contaban como dos deudas donde hay una. Medido

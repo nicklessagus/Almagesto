@@ -1366,6 +1366,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     cita_no_verbatim: list = []        # (stem, motivo) — #220: la cadena no está en el `.txt`
     cita_inventada: list = []          # (stem, motivo) — #318: ni en el `.txt` NI en la extracción
     cita_txt_degradado: list = []      # (stem, motivo) — #288: la fuente la dice, el `.txt` la parte
+    cita_txt_discrepa: list = []       # (stem, motivo) — #333: las dos lecturas del PDF no coinciden
     cita_opaca: list = []              # (stem, motivo) — #220: no evaluable (sin `.txt` / ocr; #275)
     verificar_pdf: list = []           # (stem, motivo) — #225: marcada para chequear contra el PDF
     forma_rota: list = []              # (stem, motivo) — #227: fila de tabla que NO renderiza
@@ -1819,6 +1820,16 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                                    f"{', '.join(_det['en_extraccion'])} (que se hizo leyendo el "
                                    f"PDF) y no en su `.txt`: la nota está bien y el defecto es del "
                                    f"índice — re-extraé el `.txt` si molesta (#315)"))
+                    elif _ver == "txt_acusa":
+                        # #333 — la extracción la aprueba y el `.txt` de ESA MISMA fuente trae el
+                        # arranque y sigue distinto, en prosa y sobre un borde de palabra. Son dos
+                        # lecturas del mismo PDF —`pdftotext` y un LLM— y la única certeza es la
+                        # página. Backlog, nunca bloqueante: el `.txt` es índice degradado (#205).
+                        cita_txt_discrepa.append(
+                            (stem, f"L{_ln}: «{_corte}» — el `.txt` de {_det['bib']} dice "
+                                   f"«…{_det['cola_txt'][:70]}» donde la extracción dice "
+                                   f"«…{_det['cola_cita'][:70]}». Confirmala en el PDF y, si no "
+                                   f"podés, marcala `{VERIFICAR_PDF_MARK}`{_amb}"))
                     elif _ver == "txt_parte":
                         # #288 — la fuente SÍ la dice: lo que la rompió es la EXTRACCIÓN del `.txt`
                         # (números de línea de un preprint a dos columnas metidos en medio de la
@@ -4322,6 +4333,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('cita_inventada', '❝ Cita textual que NO está ni en el `.txt` ni en la EXTRACCIÓN: la fabricó el sintetizador (#318, BLOQUEA con `--cierre`)', SEV_CIERRE, tuple(cita_inventada), poblacion='citas'),
         Categoria('cita_no_verbatim', '❝ Cita textual que no está en su fuente: no es verbatim, o es de otra (#220, backlog)', SEV_BACKLOG, tuple(cita_no_verbatim), poblacion='citas'),
         Categoria('cita_txt_degradado', '❝ Cita que la fuente SÍ dice y el `.txt` parte: el defecto es de la EXTRACCIÓN, no de la nota (#288, backlog)', SEV_BACKLOG, tuple(cita_txt_degradado), poblacion='citas'),
+        Categoria('cita_txt_discrepa', '❝ Las DOS lecturas del mismo PDF no coinciden: `pdftotext` dice una cosa y la extracción otra — andá a la página (#333, backlog)', SEV_BACKLOG, tuple(cita_txt_discrepa), poblacion='citas'),
         Categoria('cita_opaca', '❝ Cita textual NO EVALUABLE: sin `.txt` o con OCR (#220, se declara, no cuenta en contra)', SEV_BACKLOG, tuple(cita_opaca), poblacion='citas'),
         Categoria('verificar_pdf', '🔎 Marcada para chequear contra el PDF: una auditoría no pudo cerrarla (#225, backlog)', SEV_BACKLOG, tuple(verificar_pdf), poblacion='notas'),
         Categoria('forma_rota', '⛔ Forma del artefacto: fila de tabla que NO renderiza (contenido invisible para el lector)', SEV_BLOQUEANTE, tuple(forma_rota), poblacion='notas'),

@@ -6507,6 +6507,35 @@ def test_la_cita_que_esta_en_la_EXTRACCION_no_es_defecto_de_la_nota(toy_vault):
     assert any("está en la EXTRACCIÓN" in m and "la nota está bien" in m for m in degradado)
 
 
+def test_las_dos_lecturas_del_MISMO_pdf_que_no_coinciden_tienen_categoria(toy_vault):
+    """#333 — la extracción aprueba la cita y el `.txt` de esa misma fuente trae el arranque y sigue
+    distinto, en prosa. Sin esta rama el veredicto nuevo caía por el `else` y se reportaba como
+    *«no se puede chequear»*, que es la atribución falsa que la regla de método nº 4 llama peor.
+
+    Backlog, nunca bloqueante: el `.txt` es un índice degradado (#205) y el lint no puede decidir
+    cuál de las dos lecturas gana — la marca `⚠verificar en el PDF` es lo que sí puede pedir."""
+    paper_extraido(toy_vault, "1998Hyvarinen")
+    comun = "The noise in the model is assumed to be Gaussian with a covariance matrix that is "
+    cita = comun + "known in advance"
+    (cfg.FULLTEXT / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "ica" / "1998Hyvarinen.txt").write_text(
+        "prosa. " + comun + "estimated from the residuals of the fit. más prosa.",
+        encoding="utf-8")
+    (cfg.EXTRACCION / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.EXTRACCION / "ica" / "1998Hyvarinen.json").write_text(json.dumps(
+        {"bibcode": "1998Hyvarinen", "ejes": {},
+         "ground_truth": [{"que": "ruido", "valor": cita}]}), encoding="utf-8")
+    (cfg.CONCEPTS / "methods").mkdir(parents=True, exist_ok=True)
+    (cfg.CONCEPTS / "methods" / "ica.md").write_text(
+        f"---\ntags: [concept]\n---\n\n# ICA\n\nDice «{cita}» [[1998Hyvarinen]].\n",
+        encoding="utf-8")
+    rep = lint.collect()
+    assert rep.por_clave("cita_txt_degradado").items == (), "no es «el índice lo perdió»"
+    discrepa = [m for _s, m in rep.por_clave("cita_txt_discrepa").items]
+    assert any("el `.txt` de 1998Hyvarinen dice" in m and lint.VERIFICAR_PDF_MARK in m
+               for m in discrepa)
+
+
 def test_el_silencio_de_la_extraccion_NO_es_fabricacion(toy_vault):
     """#321 — la premisa de #317 §5 («si no está en el JSON, la fabricó el sintetizador») sólo
     valdría si la extracción contuviera toda frase citable del paper. Es una transcripción

@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.159.0"
+ALMAGESTO_VERSION = "1.161.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1049,6 +1049,94 @@ def extraction_texts(bibcode: str) -> list:
 #: checked it. Tuning one would leave a skill closing green on what the other blocks.
 CITA_PREFIJO = 60
 
+#: #333 · how far the `.txt` must KEEP GOING past the divergence point for it to be a divergence at
+#: all. A reading that simply runs out —a page break, a column edge— does not say something else: it
+#: falls silent, and silence is absence (step 3 of the rule), never an accusation.
+CITA_COLA_MIN = 12
+
+
+def _common_prefix_len(a: str, b: str) -> int:
+    """How many leading characters two strings share."""
+    n = min(len(a), len(b))
+    i = 0
+    while i < n and a[i] == b[i]:
+        i += 1
+    return i
+
+
+def txt_accuses(quote: str, readings: list) -> dict | None:
+    """Does the DETERMINISTIC reading contradict the quote the extraction approved? (#333)
+
+    ⛔ **The discrepancy is not «PDF vs `.txt`».** The PDF is the source and is always right; what
+    differs is **who read it**: the `.txt` was read by `pdftotext` (deterministic, loses formulas,
+    image-tables and columns) and the extraction by **an LLM** (sees everything, sometimes
+    transcribes wrong). Two readings of the same document — so an alteration born IN the extraction
+    is invisible to the check whose judge IS the extraction (#315/#317), and until now the `.txt`
+    could only absolve (`en_su_txt`), never accuse.
+
+    What makes the accusation admissible is an asymmetry that was **measured**: when the `.txt`
+    fails, the chain is **ABSENT, not different** — the three failure modes are the math span, the
+    column cut (#332) and the line break. None of them makes the `.txt` say *something else* in
+    running prose. So there is positive evidence, the same shape #318/#321 accept against another
+    bibcode, applied here to the same bibcode between **its two artefacts**:
+
+      · a long prefix (`CITA_PREFIJO`) of the quote is in the `.txt`, and it **continues
+        differently** for at least `CITA_COLA_MIN` more characters;
+      · the divergence starts **on a word boundary**. This is the discriminator, and it is what the
+        re-measurement bought: of 7 candidates over a real vault, the 4 false ones diverge **inside
+        a word** —a `ﬁ` ligature, a word split by a bare space (`mix tures`, `non identifiability`),
+        a splice— and the 3 true ones diverge at a whole word. `pdftotext` breaks WORDS; an LLM
+        that transcribes badly changes WORDS;
+      · nothing of the divergence touches `$…$` or a table pipe → otherwise the `.txt` **does not
+        opine** and the answer is the PDF. The math guard carries its weight: all 3 excluded cases
+        of that vault would otherwise have accused, and a 60-character prefix can only match where
+        the span deletion glued nothing, so *«the quote carries math»* and *«the divergence touches
+        math»* coincide in practice.
+
+    ⛔ **The output is a MARK, never a correction** (#341): which of the two readings wins is decided
+    by whoever opens the page. Measured against the opposite: the `log.md` of that vault records a
+    previous correction that trimmed the note **towards** the invented tail, because the split `.txt`
+    seemed to say it — a broken reading artefact does not produce silence, it produces corrections
+    in the wrong direction.
+
+    Returns `{"comun", "cola_cita", "cola_txt"}`, or `None` when the `.txt` has nothing to say."""
+    if _MATH_DELIMS.search(str(quote or "")):
+        return None
+    q = normalize_quote(str(quote or ""))
+    # Una cita elidida («A … B») no está verbatim en ningún lado por definición, así que su «cola
+    # divergente» sería el propio recorte: se chequea por fragmentos (`quote_fragments`) o no se
+    # chequea. Acá no se chequea.
+    if len(quote_fragments(q)) != 1:
+        return None
+    # ⚠ El «prefijo largo» lo IMPONE este recorte, no una guarda aparte (#319): con una cita más
+    # corta que `CITA_PREFIJO` el arranque es la cita entera, así que un hit implica `comun ==
+    # len(q)` y lo corta la guarda de abajo. Una condición que no decide nada es una regla escrita
+    # a medias. Ídem `readings` vacío: sin lecturas el barrido no encuentra nada y `mejor` queda
+    # `None`, que es la respuesta correcta (D-43: no evaluable, no una acusación vacía).
+    arranque = q[:CITA_PREFIJO]
+    mejor = None
+    for src in readings:
+        pos = src.find(arranque)
+        while pos != -1:
+            comun = _common_prefix_len(q, src[pos:])
+            if mejor is None or comun > mejor[0]:
+                mejor = (comun, src[pos + comun:pos + comun + 2 * CITA_PREFIJO])
+            pos = src.find(arranque, pos + 1)
+    if mejor is None:
+        return None
+    comun, cola_txt = mejor
+    # El borde de palabra, y de paso la cita que el `.txt` tiene ENTERA: `normalize_quote` recorta
+    # el espacio final, así que una coincidencia completa termina en una letra y la guarda la corta
+    # sola — un `comun >= len(q)` aparte no decidiría nada (#319).
+    if q[comun - 1] != " ":
+        return None
+    if len(cola_txt.strip()) < CITA_COLA_MIN:
+        return None
+    if "|" in q[comun:] or "|" in cola_txt:
+        return None
+    return {"comun": comun, "cola_cita": q[comun:], "cola_txt": cola_txt}
+
+
 _FULLTEXT_CACHE: dict = {}
 
 
@@ -1090,7 +1178,11 @@ def quote_verdict(quote: str, cited, note_bibs, txt_texts: dict, *, ambiguo: boo
       1. the quote is in the `.txt` of ITS source → `en_su_txt`: nothing to say, whatever the
          extractions hold. #205 makes the `.txt` a degraded INDEX, not a bad witness: finding the
          string there proves the sentence is in THAT paper.
-      2. an extraction of its source has it → `txt_degradado`: the note is right, the index lost it.
+      2. an extraction of its source has it → `txt_degradado`: the note is right, the index lost it
+         — unless the `.txt` of that SAME source carries the opening and continues differently in
+         prose, and then it is `txt_acusa` (#333): two readings of one PDF disagree, go to the page.
+         It does not block, on purpose — the `.txt` is a degraded index, and since #323 this gate
+         stops operations.
       3. the source says it and the `.txt` breaks it apart → `txt_parte` (#288).
       4. positive evidence that it moved or was completed → `alterada` (blocking, #321).
       5. sources on disk and nothing else → `no_verbatim`; no sources → `no_evaluable` (D-43).
@@ -1107,6 +1199,13 @@ def quote_verdict(quote: str, cited, note_bibs, txt_texts: dict, *, ambiguo: boo
     en_extraccion = sorted(b for b, ts in extracciones.items()
                            if any(quote_found(quote, t) for t in ts))
     if en_extraccion:
+        # #333 — el `.txt` del MISMO bibcode, no el de otro: la evidencia es entre los dos
+        # artefactos de una fuente (`pdftotext` contra el LLM), y cruzarla con otra fuente sería
+        # fabricar la atribución que este framework más persigue.
+        for b in en_extraccion:
+            acusa = txt_accuses(quote, fuentes.get(b) or [])
+            if acusa:
+                return "txt_acusa", {"en_extraccion": en_extraccion, "bib": b, **acusa}
         return "txt_degradado", {"en_extraccion": en_extraccion}
     if any(quote_found_degraded(quote, t) for ts in fuentes.values() for t in ts):
         return "txt_parte", {}

@@ -1015,6 +1015,15 @@ re-extraer el `.txt`.
    testigo, así que la cadena que está ahí prueba que la frase es de ese paper — sin ese paso, el
    *boilerplate* que la extracción no transcribió salía «mal atribuido». Duplicada, la regla ya
    divergía (13 contra 12), y desde #323 un falso positivo **frena operaciones**.
+   ⛔ **Y el `.txt` también puede ACUSAR, en un dominio acotado (#333):** una cita alterada que nace
+   **en la extracción** es invisible para un juez que **es** la extracción, así que si el `.txt` de
+   esa misma fuente trae un **prefijo largo** de la cita y **sigue distinto** —en prosa, arrancando
+   en un **borde de palabra**, sin tocar `$…$` ni una celda— gana el determinista sobre el LLM. Ese
+   borde es la guarda que lo hace usable: `pdftotext` rompe **palabras** (ligadura `ﬁ`, `mix tures`,
+   empalme) y un LLM que transcribe mal cambia **palabras** — medido con el cortador de #332 ya
+   arreglado, 7 candidatas → **3 acusaciones, las 3 verdaderas**. ⛔ **No bloquea** (el `.txt` es
+   índice degradado) y la salida es una **marca**, no una corrección: cuál lectura gana lo decide
+   quien abra la página.
    ⛔ **Y ese cruce es PASO DE CIERRE de toda operación que sintetice, ANTES del verify (#323):**
    `python scripts/contrast.py [<slug>] --validar-todo` (sin slug, toda la bóveda; exit ≠ 0, declara
    población y no evaluables). Un `grep` de segundos contra N subagentes leyendo PDFs: verificar con

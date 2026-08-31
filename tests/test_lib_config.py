@@ -2392,6 +2392,159 @@ def test_el_backtick_y_el_wikilink_DESENVUELVEN_no_borran(toy_vault):
     assert cfg.quote_found("el parámetro `alpha` vale 3 y el resto de la frase sigue acá", txt)
 
 
+# ── #333 · el `.txt` puede ACUSAR, en un dominio acotado ─────────────────────────────────────────
+# El caso real que lo produjo, medido sobre `Almagesto-Tesis` el 2026-08-31 con el cortador de #332
+# ya arreglado: `2026A&A...705A.234O` dice «real-world systematics **that are not orthogonal**
+# might become entangled» y la extracción transcribió «**do not become orthogonal and** might become
+# entangled». La nota copió la extracción, fielmente, y `contrast --validar` daba `0 ✅` porque su
+# juez ES la extracción. El `.txt` —`pdftotext`, determinista— lo tenía bien.
+
+CITA_333 = "since wPCA constructs orthogonal components by design, real-world systematics "
+
+
+def test_txt_accuses_la_cola_divergente_EN_PROSA_es_evidencia(toy_vault):
+    """#333, la clase que el issue pide detectar: prefijo largo compartido y cola distinta, en prosa
+    y arrancando en un borde de palabra. Gana el lector determinista sobre el LLM."""
+    _txt_324("citado", "bla. " + CITA_333 + "that are not orthogonal might become entangled "
+                                            "within the same vector. bla")
+    _extr_324("citado", CITA_333 + "do not become orthogonal and might become entangled")
+    ver, det = cfg.quote_verdict(CITA_333 + "do not become orthogonal and might become entangled",
+                                 ["citado"], {"citado"},
+                                 {"citado": cfg.fulltext_readings("citado")})
+    assert ver == "txt_acusa" and det["bib"] == "citado"
+    assert det["cola_cita"].startswith("do not become orthogonal")
+    assert det["cola_txt"].startswith("that are not orthogonal")
+
+
+def test_txt_accuses_NO_opina_cuando_la_divergencia_toca_la_matematica(toy_vault):
+    """#333, paso 2 de la regla: `$…$` es exactamente donde el `.txt` degrada (#205/#326), así que
+    ahí no es testigo — la respuesta es el PDF, no una marca. Medido: los 3 casos con matemática de
+    esa bóveda habrían acusado sin esta guarda, y los tres tienen la fórmula EN el punto de
+    divergencia."""
+    cita = CITA_333 + "the inverse covariance $V^{-1}_j$ is just a diagonal matrix"
+    _txt_324("citado", "bla. " + CITA_333 + "the inverse covariance v-1 is just a diagonal ma~ "
+                                            "col . note that the covariance. bla")
+    _extr_324("citado", cita)
+    ver, _ = cfg.quote_verdict(cita, ["citado"], {"citado"},
+                               {"citado": cfg.fulltext_readings("citado")})
+    assert ver == "txt_degradado"
+
+
+def test_txt_accuses_la_AUSENCIA_LIMPIA_no_acusa(toy_vault):
+    """#333, paso 3: el `.txt` simplemente no tiene la cadena → como siempre, `txt_degradado`. Sin
+    prefijo compartido no hay evidencia positiva de nada, y ésta es la clase mayoritaria (11 de 25
+    en la re-medición)."""
+    _txt_324("citado", "un `.txt` que perdió la frase entera y habla de otra cosa completamente")
+    _extr_324("citado", CITA_333 + "do not become orthogonal and might become entangled")
+    ver, _ = cfg.quote_verdict(CITA_333 + "do not become orthogonal and might become entangled",
+                               ["citado"], {"citado"},
+                               {"citado": cfg.fulltext_readings("citado")})
+    assert ver == "txt_degradado"
+
+
+def test_txt_accuses_la_divergencia_A_MEDIA_PALABRA_es_del_ARTEFACTO(toy_vault):
+    """#333, el discriminador que compró la re-medición. `pdftotext` rompe PALABRAS —la ligadura
+    `ﬁ`, la palabra partida por un espacio pelado (`mix tures`), el empalme— y un LLM que transcribe
+    mal cambia PALABRAS. Sobre 7 candidatos de una bóveda real: los **4** que divergen dentro de una
+    palabra eran artefactos del `.txt`, los **3** que divergen en un borde eran alteraciones reales.
+    Sin esta guarda el detector nacería con 4 falsos positivos de 7."""
+    _txt_324("citado", "bla. " + CITA_333 + "do not become orthogonal and might become entangled "
+                                            "within the same vec tor of the run. bla")
+    largo = CITA_333 + "do not become orthogonal and might become entangled within the same vector"
+    _extr_324("citado", largo)
+    ver, _ = cfg.quote_verdict(largo, ["citado"], {"citado"},
+                               {"citado": cfg.fulltext_readings("citado")})
+    assert ver == "txt_degradado"
+
+
+def test_txt_accuses_el_txt_que_SE_CORTA_no_dice_otra_cosa(toy_vault):
+    """#333 — una lectura que se queda sin texto (borde de página o de columna) calla, no
+    contradice: sin `CITA_COLA_MIN` caracteres más, no hay divergencia que declarar. La divergencia
+    cae en un borde de palabra —o sea que pasa la otra guarda— y aun así el `.txt` no acusa: lo que
+    tiene después del corte no alcanza para afirmar que dice otra cosa."""
+    _txt_324("citado", "bla. " + CITA_333 + "that")
+    largo = CITA_333 + "do not become orthogonal and might become entangled"
+    _extr_324("citado", largo)
+    ver, _ = cfg.quote_verdict(largo, ["citado"], {"citado"},
+                               {"citado": cfg.fulltext_readings("citado")})
+    assert ver == "txt_degradado"
+
+
+def test_txt_accuses_no_opina_si_la_CITA_cruza_un_borde_de_celda(toy_vault):
+    """#333, la otra mitad del paso 2. Desde #240 una cita que viaja en una celda lleva su `\\|`
+    escapado, y ahí lo que se está comparando ya no es prosa corrida: la respuesta es el PDF."""
+    cita = CITA_333 + "do not become orthogonal \\| might become entangled here"
+    _txt_324("citado", "bla. " + CITA_333 + "that are not orthogonal might become entangled. bla")
+    _extr_324("citado", cita)
+    ver, _ = cfg.quote_verdict(cita, ["citado"], {"citado"},
+                               {"citado": cfg.fulltext_readings("citado")})
+    assert ver == "txt_degradado"
+
+
+def test_txt_accuses_no_opina_si_el_TXT_cruza_un_borde_de_celda(toy_vault):
+    """El otro lado del mismo paso: un `.txt` normalizado colapsa los espacios, así que una tabla
+    queda con forma de prosa y su «cola» son celdas vecinas, no una oración que diga otra cosa."""
+    cita = CITA_333 + "do not become orthogonal and might become entangled here"
+    _txt_324("citado", "bla. " + CITA_333 + "that | are | not | orthogonal | 0.12. bla")
+    _extr_324("citado", cita)
+    ver, _ = cfg.quote_verdict(cita, ["citado"], {"citado"},
+                               {"citado": cfg.fulltext_readings("citado")})
+    assert ver == "txt_degradado"
+
+
+def test_txt_accuses_se_queda_con_la_MEJOR_ocurrencia(toy_vault):
+    """#333 — un paper repite su propia frase, y la comparación es contra la ocurrencia que **más**
+    comparte: quedarse con la primera haría que un arranque repetido en otro contexto tapara la
+    lectura que de verdad contradice a la extracción."""
+    corto = CITA_333[:CITA_333.index("systematics")]      # comparte menos que la ocurrencia buena
+    _txt_324("citado", "bla. " + corto + "systemic drifts dominate the budget. otra cosa. "
+                       + CITA_333 + "that are not orthogonal might become entangled. bla")
+    largo = CITA_333 + "do not become orthogonal and might become entangled"
+    _extr_324("citado", largo)
+    ver, det = cfg.quote_verdict(largo, ["citado"], {"citado"},
+                                 {"citado": cfg.fulltext_readings("citado")})
+    assert ver == "txt_acusa" and det["cola_txt"].startswith("that are not orthogonal")
+
+
+def test_txt_accuses_la_cita_ENTERA_en_el_txt_no_es_divergencia(toy_vault):
+    """El contrato de la función, que la misma línea del borde de palabra ya sostiene: si el `.txt`
+    la tiene completa no hay cola que comparar, y una «acusación» con la cola vacía sería una marca
+    sobre nada. Lo cierra `normalize_quote`, que recorta el espacio final — una coincidencia entera
+    termina en una letra, nunca en un borde. (Por el llamador esto no debería llegar: el paso 1 la
+    habría absuelto; la función se puede llamar sola.)"""
+    lectura = cfg.normalize_source_text("bla. " + CITA_333 + "do not become orthogonal. bla")
+    assert cfg.txt_accuses(CITA_333 + "do not become orthogonal", [lectura]) is None
+
+
+def test_txt_accuses_la_cita_ELIDIDA_no_se_juzga_por_su_cola(toy_vault):
+    """#333 — «A … B» no está verbatim en ningún lado por construcción (`quote_fragments`), así que
+    su «cola divergente» sería el propio recorte. Se chequea por fragmentos o no se chequea."""
+    _txt_324("citado", "bla. " + CITA_333 + "that are not orthogonal might become entangled. bla")
+    cita = CITA_333 + "… and might become entangled within the same vector of the run"
+    _extr_324("citado", cita)
+    ver, _ = cfg.quote_verdict(cita, ["citado"], {"citado"},
+                               {"citado": cfg.fulltext_readings("citado")})
+    assert ver == "txt_degradado"
+
+
+def test_txt_accuses_el_txt_de_OTRO_bibcode_no_acusa(toy_vault):
+    """#333 — la evidencia es entre los DOS artefactos de una misma fuente. Cruzarla con el `.txt`
+    de otro paper fabricaría la atribución que este framework más persigue."""
+    _txt_324("ajeno", "bla. " + CITA_333 + "that are not orthogonal might become entangled. bla")
+    largo = CITA_333 + "do not become orthogonal and might become entangled"
+    _extr_324("citado", largo)
+    _txt_324("citado", "un `.txt` que perdió la frase")
+    ver, _ = cfg.quote_verdict(largo, ["citado"], {"citado", "ajeno"},
+                               {"citado": cfg.fulltext_readings("citado"),
+                                "ajeno": cfg.fulltext_readings("ajeno")})
+    assert ver == "txt_degradado"
+
+
+def test_txt_accuses_sin_txt_devuelve_None():
+    """D-43 — sin lectura en disco no hay testigo, y eso no es una acusación vacía: es no evaluable."""
+    assert cfg.txt_accuses(CITA_333 + "do not become orthogonal", []) is None
+
+
 # ── #327 · «el bloque de una clave», una sola definición ──────────────────────────────────────────
 
 def test_fm_key_span_toma_las_lineas_de_CONTINUACION():

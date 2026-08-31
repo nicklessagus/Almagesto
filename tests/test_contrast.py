@@ -554,6 +554,40 @@ def test_la_poblacion_de_un_solo_testigo_declara_el_CERO(toy_vault, capsys):
     assert "UN SOLO TESTIGO" not in barrido
 
 
+def test_el_txt_que_CONTRADICE_al_unico_testigo_se_nombra(toy_vault, capsys):
+    """#333 — la cita que nace alterada EN la extracción era invisible por construcción: el juez del
+    comando **es** la extracción (#315/#317), y el `.txt` sólo podía absolver.
+
+    Acá el `.txt` de la misma fuente trae el arranque de la cita y sigue distinto, en prosa: es la
+    forma de evidencia positiva de #318/#321 aplicada al mismo bibcode entre sus dos artefactos, y
+    el testigo que gana es el determinista. Medido: sobre una bóveda real fueron 3 de 25, las 3
+    verdaderas — una de ellas, `2026A&A...705A.234O`, invirtiendo el sentido de la oración."""
+    _extraccion("ica_ruido", "2013Voss")
+    _txt("ica_ruido", "2013Voss", "prosa. " + LARGA[:LARGA.index("and that")]
+         + "but the noise covariance has to be estimated first. más prosa.")
+    nota = _nota_323("ica-ruido", f"Dice «{LARGA}» [[2013Voss]].")
+    r = ct.validar(nota, mostrar=False)
+    assert len(r["discrepan"]) == 1 and r["solo_extraccion"] == 1
+    assert r["alteradas"] == [], "no es un hallazgo bloqueante: el `.txt` es índice degradado"
+    ct.main(["--validar-todo"])
+    barrido = capsys.readouterr().out
+    assert "1 de ellas con el `.txt` en contra" in barrido
+    assert "el OTRO lector del mismo PDF dice otra cosa" in barrido
+
+
+def test_el_txt_que_contradice_NO_mueve_el_rc(toy_vault, capsys):
+    """#333, la restricción explícita del issue: **no** se vuelve una cuarta forma de romper el
+    cierre. El `.txt` es un índice degradado y desde #323 este gate frena operaciones, así que un
+    falso positivo suyo costaría lo que #324/#325 acaban de sacar."""
+    _extraccion("ica_ruido", "2013Voss")
+    _txt("ica_ruido", "2013Voss", "prosa. " + LARGA[:LARGA.index("and that")]
+         + "but the noise covariance has to be estimated first. más prosa.")
+    nota = _nota_323("ica-ruido", f"Dice «{LARGA}» [[2013Voss]].")
+    assert ct.main(["--validar", str(nota)]) == 0
+    assert ct.main(["--validar-todo"]) == 0
+    assert "0 cita(s) con evidencia POSITIVA de alteración ✅" in capsys.readouterr().out
+
+
 def test_lo_aprobado_con_un_solo_testigo_NO_mueve_el_rc(toy_vault, capsys):
     """#341 — no es un hallazgo nuevo ni un bloqueante: es hacer visible sobre qué se apoya el `✅`.
     Si moviera el rc, el paso de cierre de #323 se frenaría en 40 de 169 citas correctas."""
