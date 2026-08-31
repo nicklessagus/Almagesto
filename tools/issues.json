@@ -1690,6 +1690,21 @@
    "number": 339,
    "title": "`tools/mutar.py`: la conflación de #335 sigue en `--trazabilidad` y `--dirigida` (y ahí SIN hedge: afirma «no existen» sobre `triage.main`, que existe), `tools/` queda fuera de las redes 1 y 4 con un mensaje que niega un archivo que existe, y ningún flag de `tools/` se valida",
    "state": "OPEN"
+  },
+  {
+   "number": 340,
+   "title": "`CLAUDE.md` está clavado en el techo del ratchet (~500 bytes libres), así que «¿esta regla va a CLAUDE.md?» se está contestando con «¿entra?» — tres fixes de la tanda #329-#335 lo resolvieron por omisión",
+   "state": "OPEN"
+  },
+  {
+   "number": 341,
+   "title": "Cuando las dos lecturas de un PDF no coinciden no pasa nada: emitir la marca `⚠verificar en el PDF` que YA existe, y que el gate declare cuántas citas aprobó con un solo testigo (40 de 169)",
+   "state": "OPEN"
+  },
+  {
+   "number": 342,
+   "title": "Nada chequea las afirmaciones NEGATIVAS de una ficha: 6 huecos falsos medidos en dos temas, cazados de casualidad — que un hueco declare su ALCANCE, como ya hacen las hipótesis (D-34)",
+   "state": "OPEN"
   }
  ]
 }
