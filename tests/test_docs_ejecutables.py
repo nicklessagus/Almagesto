@@ -123,7 +123,10 @@ def test_los_archivos_de_config_que_nombra_la_doc_existen():
 # meta. Se listan a mano, con su dueño — una lista de excepciones sin dueño se vuelve un colador.
 FLAGS_AJENOS = {
     "--check",        # `trace_invariants.py --check` … y `tools/mutar.py`
-    "--diff", "--todo", "--ratchet",   # tools/mutar.py
+    # tools/mutar.py — el universo se arma con `scripts/*.py`, así que NINGÚN flag de `tools/`
+    # entra. ⚠ Eso los deja sin validar, no validados: un typo en `--guardas` dentro de un doc no
+    # lo caza nadie. Se listan igual para que el test no dé un falso positivo sobre un flag real.
+    "--diff", "--todo", "--ratchet", "--dirigida", "--guardas", "--solo", "--trazabilidad",
     "--markdown",     # npx defuddle parse --markdown
     "--no-verify",    # git commit
     "--help",         # lo agrega argparse solo, no aparece en ningún `add_argument`

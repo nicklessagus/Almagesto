@@ -383,6 +383,16 @@ escribir cada función nueva».
 > motivo equivocado y el modo cerraría en verde sobre un módulo que nadie midió — #202 dentro de la
 > herramienta que audita los tests. Sale **no evaluado** (rc 2), no 0.
 >
+> ⛔ **Y un `--solo` sin nada que mutar sale en TRES estados, no en uno (#335).** Hasta 1.141.0 el
+> mensaje era *«no tienen guardas en `<mod>` (o no existen)»* para las dos causas, que piden
+> acciones **opuestas**: **exenta** (existe y está en `EXENTAS` → *mové el condicional a una función
+> propia*, que es lo único que hace que alguna red lo mire), **sin guardas** (existe, no exenta, sin
+> un solo condicional mutable → cero por causa legítima) y **no existe** (typo en `--solo`). Los
+> tres siguen siendo **no evaluado** (rc 2) —nada se midió—, pero con su motivo, que es lo que D-43
+> pide. Costó caro una vez: el guard nuevo de #331 vivía dentro de `main` y **ninguna red de
+> mutación lo miraba**; lo movió el implementador por criterio propio, no porque la herramienta se
+> lo dijera.
+>
 > ⚠ El splice corta por **offset de bytes UTF-8**, no de caracteres: `ast` reporta `col_offset` en
 > bytes y este repo tiene prosa acentuada en casi toda línea. Cortar el `str` partiría la condición
 > al medio y el mutante moriría por `SyntaxError`, o sea por el motivo equivocado otra vez. Lo fija

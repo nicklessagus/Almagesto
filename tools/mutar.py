@@ -327,6 +327,59 @@ def guards(archivo: Path) -> list[Guard]:
     return out
 
 
+def defined_functions(archivo: Path) -> set[str]:
+    """Every function name the module defines, **exempt ones included** (#335).
+
+    `funciones()` and `guards()` both drop what `EXENTAS` covers, so neither can tell *«the symbol
+    is exempt»* from *«the symbol is not there»* -- and those two ask for opposite actions. This is
+    the only reader that answers "does this name exist at all?"."""
+    return {n.name for n in ast.walk(ast.parse(archivo.read_text(encoding="utf-8")))
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+
+def unmutable_reasons(archivo: Path, nombres: set[str]) -> dict[str, list[str]]:
+    """Split the requested names that have nothing to mutate into the three states of D-43 (#335).
+
+    `exenta` (it is there, `EXENTAS` excluded it -- move the condition into a function of its own),
+    `sin_guardas` (it is there and carries no mutable condition -- a zero with a legitimate cause)
+    and `no_existe` (a typo in `--solo`). One message for all three sent the reader looking for a
+    typo in a name that was correct: measured on #331, whose new guard lived inside `main` and was
+    therefore invisible to every mutation net -- the implementer moved it out on his own judgement,
+    not because the tool said so.
+
+    Keys are always present, values sorted: an empty list is «none in this state», never «not
+    looked at»."""
+    definidas = defined_functions(archivo)
+    fuera: dict[str, list[str]] = {"exenta": [], "sin_guardas": [], "no_existe": []}
+    for nombre in sorted(nombres):
+        if nombre not in definidas:
+            fuera["no_existe"].append(nombre)
+        elif nombre in EXENTAS:
+            fuera["exenta"].append(nombre)
+        else:
+            fuera["sin_guardas"].append(nombre)
+    return fuera
+
+
+def _report_unmutable(archivo: Path, nombres: set[str]) -> None:
+    """Print one line per non-empty state of `unmutable_reasons` (#335).
+
+    ⛔ One line **per state**, never a merged one: the whole point is that the three ask for
+    different actions, so joining them back into a single sentence restores the conflation even
+    with the three texts written."""
+    fuera = unmutable_reasons(archivo, nombres)
+    mod = archivo.name
+    if fuera["exenta"]:
+        print(f"⛔ no evaluado: {fuera['exenta']} está(n) en EXENTAS de mutar.py, así que sus "
+              f"condicionales no se miran en {mod} — mové el condicional a una función propia "
+              f"para que alguna red lo mire (es lo que #331 tuvo que descubrir solo).")
+    if fuera["sin_guardas"]:
+        print(f"⛔ no evaluado: {fuera['sin_guardas']} no tiene(n) ningún condicional mutable en "
+              f"{mod}: no hay nada que medir, y eso NO es un verde (D-43).")
+    if fuera["no_existe"]:
+        print(f"⛔ no existe en {mod}: {fuera['no_existe']} — ¿typo en `--solo`?")
+
+
 def _replace_span(source: str, g: Guard) -> str:
     """`source` with the guard's span replaced by its neutral literal.
 
@@ -397,8 +450,11 @@ def _guards(args) -> int:
         return 2
     only = {s.strip() for s in args.solo.split(",") if s.strip()} or None
     todas = guards(blanco)
+    # #335 — «está en EXENTAS» y «el símbolo no existe» piden acciones OPUESTAS y salían con el
+    # mismo texto: es el D-43 que este módulo predica dos líneas más abajo, aplicado al conteo de
+    # mutaciones y no a la resolución de símbolos.
     if only and (faltan := only - {g.func for g in todas}):
-        print(f"⛔ no tienen guardas en {blanco.name} (o no existen): {sorted(faltan)}")
+        _report_unmutable(blanco, faltan)
         return 2
     # ⛔ Cero guardas NO es "murieron todas" (D-43): un módulo sin un solo `if` no se midió.
     a_mutar = [g for g in todas if only is None or g.func in only]

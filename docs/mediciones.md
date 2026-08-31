@@ -876,3 +876,37 @@ print({p.name: lint._entity_slug(str(p)) for p in sorted(Path('vault/wiki/concep
 `fetch_pdf.py <slug>`— es correcta: `fetch_pdf` toma el slug pelado y **no tiene** `--theme`.
 Arreglar «a ojo» las dos mitades de la misma línea es exactamente cómo se rompe; hoy hay un assert
 propio que lo fija.
+
+
+## 2026-08-31 · #335 · `mutar.py --guardas` daba el mismo mensaje para dos causas opuestas
+
+**Qué era.** Un `--solo` sin nada que mutar salía siempre como *«no tienen guardas en `<mod>` (o no
+existen)»*. Las dos causas piden acciones **opuestas**: si la función está en `EXENTAS` hay que
+**mover el condicional a una función propia** (es lo único que hace que alguna red lo mire); si el
+símbolo no existe hay que **corregir el nombre**. Es el D-43 que el propio módulo predica dos líneas
+más abajo (*«cero mutaciones no es murieron todas»*), aplicado al conteo de mutaciones y **no** a la
+resolución de símbolos.
+
+**Cómo re-medirlo.**
+
+```bash
+grep -c '^\s*if ' scripts/triage.py                                          # 56
+python tools/mutar.py --guardas --solo main scripts/triage.py                # existe, EXENTA
+python tools/mutar.py --guardas --solo make_notes_cmd scripts/lib_config.py  # existe, sin condicionales
+python tools/mutar.py --guardas --solo no_existe_jamas scripts/triage.py     # typo
+```
+
+| Qué se midió | Número | Salvedad |
+|---|---|---|
+| `if` de `scripts/triage.py` (2026-08-31, v1.141.0) | **56** | `triage.main` los tiene, y el modo contestaba «no tienen guardas» |
+| Mensajes distintos que producían los tres casos, **antes** | **1** | texto idéntico salvo el nombre pedido |
+| Mensajes distintos, **después** | **3**, uno por estado | los tres siguen siendo `no evaluado` (rc 2): nada se midió, y eso no cambia |
+
+**Consecuencia medida, en vivo.** Al implementar #331 el guard nuevo vivía dentro de `main`, así que
+**ninguna red de mutación lo miraba**. El implementador lo movió a `make_notes.subject_refusal`
+*«porque `main` está en `EXENTAS`»* — criterio suyo, no algo que la herramienta le dijera; el mensaje
+que sí recibió no distinguía «tu función está exenta» de «te equivocaste de nombre».
+
+⚠ **Lo que quedó afuera, y es el mismo defecto:** `--dirigida` conflaciona los **dos** casos con un
+texto **peor** —`⛔ no existen en triage.py: ['main']`, que afirma algo falso sobre una función que
+sí existe—. Reproducible con `python tools/mutar.py --dirigida --solo main scripts/triage.py`.

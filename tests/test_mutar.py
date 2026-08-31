@@ -586,3 +586,103 @@ def test_guardas_con_sobrevivientes_sale_1_y_los_LISTA(repo_con_tests: Path, mon
     salida = capsys.readouterr().out
     assert rc == 1
     assert "f::if@L2" in salida and "✅" not in salida
+
+
+# ── #335 · los tres estados de un `--solo` sin nada que mutar ───────────────────────────────────
+#
+# D-43 aplicado a la RESOLUCIÓN DE SÍMBOLOS, no sólo al conteo de mutaciones: «la función está en
+# EXENTAS» y «el símbolo no existe» piden acciones OPUESTAS —mover el condicional a una función
+# propia contra corregir el nombre— y salían con el mismo texto. Consecuencia medida: al implementar
+# #331 el guard nuevo vivía dentro de `main` y ninguna red de mutación lo miraba; el implementador
+# lo movió por criterio propio, no porque la herramienta se lo dijera.
+
+_TRES_ESTADOS = '''\
+def main():
+    if 1 == 2:
+        return 1
+    return 0
+
+
+def sin_condicionales():
+    return 42
+
+
+def con_guarda(x):
+    if x:
+        return 1
+    return 0
+'''
+
+
+@pytest.fixture
+def repo_tres_estados(repo_con_tests: Path, monkeypatch) -> Path:
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    (repo_con_tests / "scripts" / "viejo.py").write_text(_TRES_ESTADOS, encoding="utf-8")
+    return repo_con_tests
+
+
+def test_la_funcion_EXENTA_se_declara_como_tal_y_nombra_EXENTAS(repo_tres_estados, monkeypatch,
+                                                                capsys):
+    """`main` EXISTE y tiene condicionales: lo que pasa es que está exenta. El remedio es mover el
+    condicional a una función propia — exactamente lo que #331 tuvo que descubrir solo."""
+    monkeypatch.setattr(mutar, "_copia_del_repo",
+                        lambda d: pytest.fail("mutó sin haber resuelto el símbolo"))
+    assert mutar._guards(_args(["scripts/viejo.py"], solo="main")) == 2
+    out = capsys.readouterr().out
+    assert "EXENTAS" in out, "el mensaje tiene que NOMBRAR la lista que la excluyó"
+    assert "función propia" in out, "y decir el remedio, que es mover el condicional"
+    assert "no existe" not in out, "existe: decir lo contrario manda a corregir un nombre correcto"
+
+
+def test_la_funcion_SIN_GUARDAS_no_se_confunde_con_un_typo(repo_tres_estados, monkeypatch, capsys):
+    """Existe, no está exenta y no tiene un solo condicional: es un cero por causa legítima. Sigue
+    sin ser un verde (no se midió nada), pero el motivo es otro y la acción también: acá no hay
+    nada que corregir."""
+    monkeypatch.setattr(mutar, "_copia_del_repo",
+                        lambda d: pytest.fail("mutó sin haber resuelto el símbolo"))
+    assert mutar._guards(_args(["scripts/viejo.py"], solo="sin_condicionales")) == 2
+    out = capsys.readouterr().out
+    assert "sin_condicionales" in out and "ningún condicional" in out
+    assert "EXENTAS" not in out and "no existe" not in out
+
+
+def test_el_SIMBOLO_INEXISTENTE_se_llama_typo(repo_tres_estados, monkeypatch, capsys):
+    """El tercer estado, y el único cuya acción es corregir el `--solo`. El mensaje viejo **ofrecía
+    las dos causas juntas** (`o no existen`), que es la conflación: quien lo lee no sabe si buscar
+    un typo o mover un condicional."""
+    monkeypatch.setattr(mutar, "_copia_del_repo",
+                        lambda d: pytest.fail("mutó sin haber resuelto el símbolo"))
+    assert mutar._guards(_args(["scripts/viejo.py"], solo="no_existe_jamas")) == 2
+    out = capsys.readouterr().out
+    assert "no existe" in out and "no_existe_jamas" in out and "typo" in out
+    assert "o no existen" not in out, "la disyunción ES la conflación"
+    assert "EXENTAS" not in out and "ningún condicional" not in out
+
+
+def test_los_tres_estados_salen_SEPARADOS_en_la_misma_corrida(repo_tres_estados, monkeypatch,
+                                                              capsys):
+    """La partición es lo que se rompe primero: con los tres pedidos juntos, un mensaje que los
+    junta vuelve a la conflación aunque los textos existan por separado."""
+    monkeypatch.setattr(mutar, "_copia_del_repo",
+                        lambda d: pytest.fail("mutó sin haber resuelto el símbolo"))
+    assert mutar._guards(_args(["scripts/viejo.py"],
+                               solo="main,sin_condicionales,no_existe_jamas")) == 2
+    lineas = [l for l in capsys.readouterr().out.split("\n") if l.strip()]
+    def _linea(nombre):
+        return next(l for l in lineas if nombre in l)
+    assert _linea("main") != _linea("sin_condicionales") != _linea("no_existe_jamas")
+    assert "EXENTAS" in _linea("main")
+    assert "ningún condicional" in _linea("sin_condicionales")
+    assert "no existe" in _linea("no_existe_jamas")
+
+
+def test_la_funcion_CON_guardas_sigue_pasando_a_mutar(repo_tres_estados, monkeypatch, tmp_path):
+    """La otra mitad: los tres estados nuevos no pueden tragarse el caso normal. Sin esto, «no
+    confunde estados» se cumpliría rehusando siempre."""
+    monkeypatch.setattr(mutar, "_copia_del_repo", lambda d: tmp_path / "copia")
+    monkeypatch.setattr(mutar, "_suite_verde", lambda *a, **k: True)
+    llamadas: list = []
+    monkeypatch.setattr(mutar, "mutate_guards",
+                        lambda *a, **k: llamadas.append(k.get("only")) or [])
+    assert mutar._guards(_args(["scripts/viejo.py"], solo="con_guarda")) == 0
+    assert llamadas == [{"con_guarda"}]
