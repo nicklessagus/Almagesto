@@ -12,6 +12,7 @@ TABLE spectral_type AS "Tipo", P_rot_days AS "P_rot (d)", length(planets) AS "Pl
 FROM "wiki/stars"
 SORT file.name ASC
 ```
+
 ## Conceptos (por área)
 
 _(sin conceptos todavía)_
@@ -21,6 +22,7 @@ TABLE status, confidence
 FROM "wiki/concepts"
 SORT file.folder ASC, file.name ASC
 ```
+
 ## Papers
 
 _(sin papers todavía)_
@@ -31,5 +33,6 @@ FROM "wiki/papers"
 SORT citation_count DESC
 LIMIT 50
 ```
+
 ## Matrices
 - [[method_star]] — método × estrella (celda = `[[bibcode]]` que lo aplica; huecos = backlog)
