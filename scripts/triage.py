@@ -721,7 +721,12 @@ def main() -> int:
         cfg.print_seguro(f"{args.slug}: síntesis declarada hoy"
                          + (f" sobre {args.n_papers} papers" if args.n_papers else "")
                          + f"\n  → {cfg.registro_path(args.slug)}"
-                         + f"\n  Estampala en la ficha: `python scripts/make_notes.py {args.slug}`")
+                         # #331 — el comando sale de `make_notes_cmd`, no del slug pelado: en un
+                         # tema falta `--theme` y el paso siguiente muere con un `KeyError` que
+                         # culpa a `stars.yaml` de un slug bien definido en `themes.yaml`. Este
+                         # script es el ÚNICO canal de la fecha de síntesis (INV-82), así que el
+                         # hallazgo del lint sólo se podía cerrar sabiendo agregar el flag a mano.
+                         + f"\n  Estampala en la ficha: `{cfg.make_notes_cmd(args.slug)}`")
         return 0
 
     if args.extraccion:

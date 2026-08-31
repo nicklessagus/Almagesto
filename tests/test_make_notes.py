@@ -4578,3 +4578,41 @@ def test_re_estampar_un_alcance_MULTILINEA_no_rompe_el_frontmatter(toy_vault, ca
     assert fm["alcance"] == largo + " (ampliado: caps. 3 y 6)"
     assert fm["tags"] == ["paper"], "la clave siguiente no se comió la continuación huérfana"
     assert "⛔" not in capsys.readouterr().out
+
+
+# ── #331 · el slug que no es de esta operación se REHÚSA, no revienta ─────────
+def test_un_slug_de_TEMA_sin_flag_REHUSA_antes_de_arrancar(toy_vault, monkeypatch, capsys):
+    """`write_star_note` llamaba a `star_by_slug` de rebote, así que `make_notes.py <tema>`
+    imprimía «Generando notas para ica» y recién después moría con un `KeyError` crudo (rc 1)
+    mandando definir en `stars.yaml` un slug que está bien definido en `themes.yaml` — un operador
+    que sigue la instrucción agrega una estrella falsa a la config. D-43: se declara, no revienta;
+    y se declara ANTES de arrancar la operación.
+
+    @inv INV-141"""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "concept": "ica", "area": "methods",
+                                         "query": "independent component"}})
+    assert run_main(monkeypatch, ["ica"]) == 2
+    out = capsys.readouterr().out
+    assert "Generando notas para" not in out, "no puede arrancar la operación y abortar a mitad"
+    assert "themes.yaml" in out and "stars.yaml" in out, "el mensaje nombra las DOS configs"
+    assert "`python scripts/make_notes.py ica --theme`" in out, "y da el comando que sí corre"
+
+
+def test_un_slug_de_ESTRELLA_con_theme_REHUSA_igual(toy_vault, monkeypatch, capsys):
+    """El gemelo en la otra dirección (`write_concept_note` → `theme_by_slug`): el mismo
+    `KeyError`, la misma mentira sobre la causa, la misma negativa."""
+    assert run_main(monkeypatch, ["test_star", "--theme"]) == 2
+    out = capsys.readouterr().out
+    assert "Generando notas para" not in out
+    assert "`python scripts/make_notes.py test_star`" in out
+
+
+def test_un_slug_que_no_esta_en_NINGUNA_config_nombra_las_dos(toy_vault, monkeypatch, capsys):
+    """Sin ninguna entrada no hay comando alternativo que ofrecer: lo que sí hay que decir es
+    dónde se define un sujeto, que es la mitad que el `KeyError` de `star_by_slug` acertaba a
+    medias (nombraba una sola config)."""
+    assert run_main(monkeypatch, ["no-existe"]) == 2
+    out = capsys.readouterr().out
+    assert "Generando notas para" not in out
+    assert "stars.yaml" in out and "themes.yaml" in out
+    assert "--theme" not in out, "no se inventa un flag para un slug que no está en themes.yaml"

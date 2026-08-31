@@ -1056,3 +1056,27 @@ def test_el_triage_que_rehusa_NO_estampa_paso(toy_vault, monkeypatch, capsys):
                                   "--via", "usuario", "--reason", "canon"]) != 0
     assert [p.get("paso") for p in cfg.load_cadena("test_star")] == [], \
         "una corrida que no curó nada mete en la cadena un paso que no ocurrió"
+
+
+# ── #331 · el próximo paso que se imprime tiene que CORRER ────────────────────
+def test_el_proximo_paso_de_la_sintesis_lleva_theme_en_un_TEMA(toy_vault, monkeypatch, capsys):
+    """`--sintesis` es el ÚNICO canal de la tercera fecha de la cabecera (INV-82), y cerraba
+    mandando `make_notes.py <slug>` sin `--theme`: en un tema ese comando muere con un `KeyError`
+    crudo que manda definir en `stars.yaml` un slug que está bien definido en `themes.yaml`
+    (medido: 2 de 3 sujetos de una bóveda real). Un remedio impreso que no corre deja el hallazgo
+    del lint sin forma de cerrarse salvo que el operador sepa agregar el flag a mano.
+
+    @inv INV-141"""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "concept": "ica", "area": "methods",
+                                         "query": "independent component"}})
+    assert run_main(monkeypatch, ["ica", "--sintesis"]) == 0
+    assert "`python scripts/make_notes.py ica --theme`" in capsys.readouterr().out
+
+
+def test_el_proximo_paso_de_la_sintesis_NO_lleva_theme_en_una_ESTRELLA(toy_vault, monkeypatch,
+                                                                       capsys):
+    """El simétrico: el flag se RESUELVE, no se pega siempre — con `--theme` sobre una estrella el
+    comando muere igual, por la otra config."""
+    assert run_main(monkeypatch, ["test_star", "--sintesis"]) == 0
+    out = capsys.readouterr().out
+    assert "`python scripts/make_notes.py test_star`" in out and "--theme" not in out
