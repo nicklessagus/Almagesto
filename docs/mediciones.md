@@ -1255,3 +1255,63 @@ El caso simétrico —una cita que el corte viejo encontraba y el nuevo no (`en_
 otro stream **por accidente** y dejaba la prosa limpia. Es la misma mecánica que fabricó el falso
 `en_su_txt` de arriba, así que se va con ella; cae en `no_verbatim`, que es **backlog** y nunca
 bloquea.
+
+## 2026-08-31 · El mismo error de forma, tercera copia: el slug de un tema es la CLAVE (#346)
+
+**Qué era.** `lint.extraccion_no_declarada` (INV-83) barre estrellas **y** temas y le pedía
+`meta.get("slug")` al mapa de los dos. En `stars.yaml` el slug es un **campo** de la entrada; en
+`themes.yaml` es la **clave del YAML** (lo dice el docstring de `cfg.theme_by_slug`). Para todo
+tema salía `None` y el loop hacía `continue`: el detector del recorte de lectura silencioso —lo que
+D-13/D-15 existen para cazar— estaba **apagado para todos los temas**.
+
+| Qué se midió | Antes | Después |
+|---|---|---|
+| «Recorte de lectura sin declarar» sobre la bóveda de `Almagesto-Prueba` | **(0)** | **(1)** — `ica`, 26 core sin extraer y sin criterio declarado |
+| Hallazgos bloqueantes en la misma corrida | 154 | 154 (sin cambio: la categoría es backlog) |
+| Sujetos que el detector miraba | 2 de 3 (las estrellas) | 3 de 3 |
+
+**Por qué importa el `(0)`.** El reporte imprime la categoría siempre, con su conteo, y un `(0)` que
+nadie midió se lee como veredicto — es el falso limpio que D-43 persigue, acá producido no por un
+chequeo que no pudo correr sino por uno que se saltea la mitad de su población **en silencio**.
+
+**Por qué es la misma clase que #338.** #338 encontró exactamente este `None` en el detector de
+roll-up y lo resolvió **en línea**, construyendo su lista de sujetos a mano. La regla quedó escrita
+dos veces en el mismo archivo y la segunda copia estaba mal: es el molde de #215/#324/#331/#335/#339.
+El arreglo no es corregir la segunda copia sino que haya **una**: `cfg.all_subjects()` devuelve
+`(kind, slug, name, meta)` y la usan los dos detectores.
+
+⚠ **Lo que sigue afuera, declarado:** los dos call sites viven en `lint.main`, que está en `EXENTAS`
+de `mutar.py`, así que ninguna red de mutación los mira — es el hallazgo de #334/#343 otra vez. Lo
+que sí se muta es la regla extraída (`cfg.all_subjects`: dirigida ✅, las 3 guardas ✅); el call site
+lo cubre `test_recorte_sin_declarar_de_un_TEMA_tambien_se_reporta`, visto morir con `assert 0 == 1`
+al devolverle el `meta.get("slug")` a la rama del tema.
+
+## 2026-08-31 · El comentario que prometía delegar, y no delegaba (#347)
+
+**Qué era.** `make_notes._papers_del_sujeto` decía, en su propio comentario, que la pertenencia de un
+paper a un tema es *«la misma unión que `concept_rollup_rows` (D-24), y por eso se delega ahí: dos
+predicados de pertenencia distintos para el mismo tema es cómo la tabla y el roll-up terminan
+discrepando»* — y **no delegaba**: comparaba `methods` y `thesis_links` por **string exacto**
+mientras `concept_rollup_rows` usaba `cfg.method_matches` (clave normalizada, #243). Es el defecto
+que #243 arregló, vivo en el camino hermano, bajo un comentario que afirmaba lo contrario.
+
+| Qué se midió | Resultado |
+|---|---|
+| Repro (tema `pca`, paper con `methods: [PCA]`) | `papers_universe('pca','theme')` → `set()` · `concept_rollup_rows('pca')` → el paper |
+| Reporte del lint sobre `Almagesto-Prueba` (201 notas de paper) | **sin cambio** — los 90 papers de `ica` escriben el concepto igual, así que ahí las dos formas coincidían |
+| Grafías que colapsan bajo `method_key` en ese corpus | 2 de 702 claves (`log-rhk`/`log_rhk`, `s-index`/`s_index`) — ninguna es un tema declarado |
+| Ídem en `Almagesto-RV` (908 notas de paper) | 3 de 139 claves; esa instancia no declara temas |
+
+⚠ **Declarado, porque el número es incómodo:** en las dos bóvedas que se pudieron medir el arreglo
+**no mueve el reporte**. Lo que cierra es un defecto **latente**, y la población donde muerde ya está
+medida: es la de #243 —un concepto `pca` alcanzando **21 papers de 24** y no diciendo nada de los 3
+que escribieron `PCA`—. Lo que cambió desde entonces es que ese universo dejó de ser sólo cosmético:
+desde #338 el detector de tabla desactualizada compara el `## Papers` estilo ficha de un concepto
+**contra él**, así que un falso negativo del predicado se volvía un falso limpio del lint.
+
+**Qué cambió (1.157.0).** El predicado es **uno**: `mn.theme_membership(concept, fm)` devuelve
+`(por methods, por thesis_links)` y lo usan los dos. Devuelve el **par** y no un `bool` porque el
+roll-up publica por cuál llave entró el paper (`Entró por`, D-24) y colapsarlo le sacaría esa columna
+a la única función que puede calcularla. El comentario de `_papers_del_sujeto` ahora describe lo que
+el código hace — regla de método 4: un comentario que afirma una cobertura que el código no da es
+peor que no tenerlo.

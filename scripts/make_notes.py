@@ -2096,6 +2096,25 @@ def papers_fm_index() -> dict:
             for f in sorted(cfg.PAPERS.glob("*.md"))}
 
 
+def theme_membership(concept: str, fm: dict) -> tuple[bool, bool]:
+    """Does this paper claim `concept`, `(by methods, by thesis_links)`? — D-24's union, once.
+
+    The single implementation of «does this paper belong to this theme», shared by the ficha-style
+    `## Papers` universe (`_papers_del_sujeto`) and the concept roll-up (`concept_rollup_rows`).
+    The two answered it separately and had already diverged: the roll-up compared by normalised key
+    (#243) and the universe by raw string, so a paper writing `PCA` for a concept named `pca` was
+    in one and not the other (measured: `papers_universe('pca','theme')` → `set()` against
+    `concept_rollup_rows('pca')` → the paper). That is the roll-up under-declaring its own universe
+    in silence, which is what D-10 exists to prevent — and since #338 the stale-table detector
+    compares a concept's `## Papers` against that universe, so it inherited the defect.
+
+    A pair and not a `bool` because the roll-up publishes WHICH key let the paper in (`Entró por`,
+    D-24: those two keys live in different papers), and folding it into one answer would take that
+    column away from the only function that can compute it.  @inv INV-35"""
+    return (cfg.method_matches(concept, fm.get("methods")),
+            cfg.method_matches(concept, fm.get("thesis_links")))
+
+
 def _papers_del_sujeto(slug: str, kind: str, fms: dict | None = None) -> list:
     """(stem, frontmatter) de cada nota de paper que declara este sujeto.
 
@@ -2109,13 +2128,13 @@ def _papers_del_sujeto(slug: str, kind: str, fms: dict | None = None) -> list:
                 if nombre in (cfg.as_list(fm.get("stars")) or [])]
     # Un TEMA no se declara en `facets` (eso son las facetas de la lente, otro eje): la pertenencia
     # de un paper a un tema vive en `thesis_links` —lo que siembra el ingest— y en `methods`. Es la
-    # misma unión que `concept_rollup_rows` (D-24), y por eso se delega ahí: dos predicados de
-    # pertenencia distintos para el mismo tema es cómo la tabla y el roll-up terminan discrepando.
+    # misma unión que `concept_rollup_rows` (D-24), y por eso el predicado es UNO SOLO
+    # (`theme_membership`, #347): dos predicados de pertenencia distintos para el mismo tema es cómo
+    # la tabla y el roll-up terminan discrepando — y ya habían discrepado.
     _, meta = cfg.theme_by_slug(slug)
     concept = meta.get("concept") or slug
     return [(stem, fm) for stem, fm in (fms if fms is not None else papers_fm_index()).items()
-            if concept in (cfg.as_list(fm.get("thesis_links")) or [])
-            or concept in (cfg.as_list(fm.get("methods")) or [])]
+            if any(theme_membership(concept, fm))]
 
 
 # Secciones ESTAMPADAS por máquina: no son síntesis. Se excluyen al medir "citado en esta ficha"
@@ -2248,8 +2267,8 @@ def concept_rollup_rows(slug: str, fms: dict | None = None) -> list:
         # extracción sin vocabulario cerrado, y el mismo método llega escrito de varias maneras.
         # Medido: un concepto `pca` alcanzaba 21 papers de 24 y no decía nada de los 3 que
         # escribieron `PCA` — un roll-up subdeclarando su propio universo en silencio.
-        por_m = cfg.method_matches(concept, fm.get("methods"))
-        por_t = cfg.method_matches(concept, fm.get("thesis_links"))
+        # #347 — y la regla es `theme_membership`, la MISMA que usa `_papers_del_sujeto`.
+        por_m, por_t = theme_membership(concept, fm)
         if not (por_m or por_t):
             continue
         filas.append({"stem": stem, "year": fm.get("year") or "",

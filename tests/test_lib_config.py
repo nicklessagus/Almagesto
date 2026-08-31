@@ -2447,6 +2447,35 @@ def test_subject_kinds_con_una_config_ILEGIBLE_no_se_muere(toy_vault):
     assert cfg.subject_kinds("ica") == ()
 
 
+def test_all_subjects_saca_el_slug_del_tema_de_la_CLAVE(toy_vault):
+    """#346 — el barrido de sujetos, en UNA implementación: en `stars.yaml` el slug es un CAMPO de
+    la entrada y en `themes.yaml` es la CLAVE del YAML.
+
+    Pedirle `slug` al mapa del tema devuelve `None` y saltea el sujeto en silencio, que es cómo
+    `extraccion_no_declarada` (INV-83) quedó apagado para todo tema. `name` es cómo lo NOMBRA un
+    paper (`stars`/`thesis_links`), no el slug: en una estrella los dos difieren.  @inv INV-83"""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "concept": "componentes-independientes",
+                                         "area": "methods"}})
+    porkind = {k: (slug, name, meta) for k, slug, name, meta in cfg.all_subjects()}
+    assert porkind["star"][:2] == ("test_star", "Estrella Test")
+    assert porkind["theme"][:2] == ("ica", "ica")
+    assert porkind["theme"][2]["concept"] == "componentes-independientes"
+
+
+def test_all_subjects_con_una_config_ILEGIBLE_aporta_lo_que_puede(toy_vault):
+    """Los llamadores son DETECTORES del lint: morir sobre un `themes.yaml` roto no reportaría nada
+    de la mitad sana, y el YAML roto ya lo levanta su propia categoría (`themes_error`).
+
+    La entrada sin slug resoluble se cae acá por el mismo motivo por el que se caía en los dos
+    call sites: sin slug no hay nota ni registro a los que apuntar. Y una entrada que **no es un
+    mapa** parsea sin error (el YAML es válido, la forma no): sin el `isinstance`, `meta.get`
+    tumba al detector entero con un `AttributeError` en vez de reportar la mitad sana."""
+    cfg.THEMES_YAML.write_text("ica: [sin cerrar\n", encoding="utf-8")
+    assert [k for k, *_ in cfg.all_subjects()] == ["star"]
+    write_yaml(cfg.STARS_YAML, {"Sin Slug": {"simbad": "x"}, "No Es Un Mapa": "test_star"})
+    assert cfg.all_subjects() == []
+
+
 def test_make_notes_cmd_pone_theme_SOLO_donde_corresponde(toy_vault):
     """El constructor del comando: es lo que hace que el remedio impreso corra."""
     write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "concept": "ica", "area": "methods"}})

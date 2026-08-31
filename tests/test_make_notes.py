@@ -2252,6 +2252,30 @@ def test_rollup_de_concepto_es_union_y_declara_llave(toy_vault):
                      "2020ambC...1..1C": "ambos"}
 
 
+def test_el_universo_y_el_rollup_de_un_tema_coinciden_con_OTRA_GRAFIA(toy_vault):
+    """#347 — `_papers_del_sujeto` PROMETÍA en su comentario delegar en `concept_rollup_rows`
+    «porque dos predicados de pertenencia distintos para el mismo tema es cómo la tabla y el roll-up
+    terminan discrepando», y no delegaba: comparaba `methods` por **string exacto** mientras el
+    roll-up usa `cfg.method_matches` (clave normalizada, #243).
+
+    O sea el defecto que #243 arregló, vivo en el camino hermano, y con un comentario afirmando lo
+    contrario. Importa doble desde #338: el detector de tabla desactualizada compara el `## Papers`
+    estilo ficha de un concepto contra ESE universo, así que heredaba la subdeclaración.
+
+    El caso simétrico —`wPCA`, que NO es el mismo método (`method_key` los separa)— va en el mismo
+    test: sin él, un predicado que devolviera siempre `True` pasaría igual.  @inv INV-35"""
+    seed_topic(slug="pca", area="methods", concept="pca")
+    mk_note(cfg.PAPERS, "2020mayu...1..1M",
+            {"tags": ["paper"], "bibcode": "2020mayu...1..1M", "methods": ["PCA"]}, "")
+    mk_note(cfg.PAPERS, "2020thlN...1..1N",
+            {"tags": ["paper"], "bibcode": "2020thlN...1..1N", "thesis_links": ["Pca"]}, "")
+    mk_note(cfg.PAPERS, "2020otrO...1..1O",
+            {"tags": ["paper"], "bibcode": "2020otrO...1..1O", "methods": ["wPCA"]}, "")
+    universo = {r["stem"] for r in mn.papers_universe("pca", "theme")}
+    rollup = {r["stem"] for r in mn.concept_rollup_rows("pca")}
+    assert universo == rollup == {"2020mayu...1..1M", "2020thlN...1..1N"}
+
+
 def test_la_tabla_estampada_no_se_cuenta_a_si_misma(toy_vault):
     """Bug medido al cablear el estampado: la tabla de `## Papers` lleva un `[[bibcode]]` por fila,
     así que apenas se estampa TODO paper aparecía como "sintetizado". Un artefacto que se mide a sí

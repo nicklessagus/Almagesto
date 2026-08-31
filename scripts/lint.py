@@ -3208,23 +3208,21 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # su propio universo, así que se compara el que la nota trae contra el suyo: exigir el ausente
     # inventaría un hueco en la nota que eligió el otro. La nota que no trae NINGUNO no puede
     # recibir la cirugía nunca, y eso hasta hoy sólo lo decía un stdout de `make_notes`.
-    # ⚠ El slug de una ESTRELLA es un campo de su entrada; el de un TEMA es la CLAVE del YAML
-    # (`theme_by_slug`: «la clave del YAML ES el slug»). Pedirle `slug` a la entrada de un tema
-    # devuelve `None` y saltea el sujeto entero, en silencio.
-    sujetos_rollup = (
-        [("star", m.get("slug") if isinstance(m, dict) else None)
-         for m in ({} if cfg.stars_error() else cfg.load_stars()).values()]
-        + [("theme", s) for s in ({} if cfg.themes_error() else cfg.load_themes())])
-    for _kind, slug_s in sujetos_rollup:
+    # ⚠ El slug de una ESTRELLA es un campo de su entrada; el de un TEMA es la CLAVE del YAML.
+    # Ese barrido es `cfg.all_subjects()` — UNA implementación, porque la segunda copia (INV-83)
+    # ya se había equivocado y salteaba todos los temas en silencio (#346).
+    for _kind, slug_s, _nombre_s, _meta_s in cfg.all_subjects():
         # `mn.subject_note` es la MISMA función que usa el estampador: dos respuestas a «dónde vive
         # la tabla de este sujeto» es cómo el estampador y el chequeo terminan discrepando.
-        dest_s = mn.subject_note(slug_s, _kind) if slug_s else None
+        dest_s = mn.subject_note(slug_s, _kind)
         if not dest_s or not dest_s.exists():
             continue
         texto_s = dest_s.read_text(encoding="utf-8")
-        # Encabezado → cómo se arma SU universo. El orden importa poco; lo que no puede pasar es
-        # cruzarlos, porque `concept_rollup_rows` compara por clave normalizada (#243) y
-        # `papers_universe` por string exacto.
+        # Encabezado → cómo se arma SU universo. Los dos parten del MISMO predicado de pertenencia
+        # (`mn.theme_membership`, #347: comparación por clave normalizada, #243) y difieren en lo
+        # que publican: el roll-up declara además por cuál llave entró el paper (D-24). Hasta 1.156.0
+        # sólo el roll-up normalizaba y el universo comparaba el string exacto — o sea que este
+        # detector heredaba la subdeclaración del universo que compara.
         universos = [(mn.PAPERS_HEADER,
                       lambda s=slug_s, k=_kind: {r["stem"]
                                                  for r in mn.papers_universe(s, k, paper_fms)})]
@@ -3276,15 +3274,16 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # Dos severidades sobre el mismo hecho: sin `extraccion.criterio` declarado, hallazgo con señal
     # (el ingest no leyó todo y no dijo por qué); con criterio, backlog normal — la cola visible de
     # D-15, que el skill `maintain` consume.
+    # ⛔ #346 — el barrido es `cfg.all_subjects()`, el MISMO que el roll-up de arriba. Acá se le
+    # pedía `slug` también a la entrada de un tema, donde el slug es la CLAVE del YAML: `None`
+    # para todo tema, `continue`, y el detector apagado para 2 de los 3 sujetos de una bóveda real.
     extraccion_no_declarada: list = []      # @inv INV-83
-    for nombre_s, meta_s in (list(({} if cfg.stars_error() else cfg.load_stars()).items())
-                             + list(({} if cfg.themes_error() else cfg.load_themes()).items())):
-        if not isinstance(meta_s, dict):
-            continue
-        slug_s = meta_s.get("slug")
-        pendientes = sin_extraer_por_sujeto.get(str(nombre_s), set()) | \
+    for _kind_s, slug_s, nombre_s, meta_s in cfg.all_subjects():
+        # Cómo lo NOMBRA un paper: el canónico del YAML (`stars`/`thesis_links`) y, en un tema, el
+        # `concept` si difiere del slug — el mismo par que `papers_universe` usa para `no_vista`.
+        pendientes = sin_extraer_por_sujeto.get(nombre_s, set()) | \
             sin_extraer_por_sujeto.get(str(meta_s.get("concept") or ""), set())
-        if not slug_s or not pendientes:
+        if not pendientes:
             continue
         decl = cfg.load_extraccion(slug_s)
         if not decl.get("criterio"):

@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.158.0"
+ALMAGESTO_VERSION = "1.159.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1571,6 +1571,35 @@ def theme_by_slug(slug: str) -> tuple[str, dict]:
     if slug in themes:
         return slug, themes[slug]
     raise KeyError(f"tema desconocido: {slug!r}. Definilo en vault/config/themes.yaml")
+
+
+def all_subjects() -> list[tuple[str, str, str, dict]]:
+    """Every subject the vault declares, as `(kind, slug, name, meta)` — stars first, then themes.
+
+    The single implementation of «sweep the subjects and get each one's slug», because the two
+    configs answer that differently: a star's slug is a FIELD of its entry, a theme's slug is the
+    KEY of the YAML (`theme_by_slug`: «la clave del YAML ES el slug»). Asking a theme entry for
+    `slug` returns `None` and drops the subject **in silence** — written twice inside `lint.py`
+    and wrong the second time: `extraccion_no_declarada` (INV-83) `continue`d on every theme, so
+    the silent reading cut that D-13/D-15 exists to catch was unwatched for 2 of the 3 subjects of
+    a real vault (#346). Same shape as #215/#324/#331/#335/#339.
+
+    `name` is how a paper NAMES this subject in `stars`/`thesis_links`: the canonical key for a
+    star, the slug for a theme (whose `concept` may add a second name, which is the caller's
+    business — this function does not guess which one a claim used).
+
+    An unreadable config contributes nothing instead of raising: every caller is a detector that
+    reports broken YAML in its own category (`stars_error`/`themes_error`), and a sweep that dies
+    on one config would report nothing about the half that is fine. A star entry with no
+    resolvable slug is dropped for the reason both call sites already drop it: with no slug there
+    is no note and no registro to point at.  @inv INV-83"""
+    out: list[tuple[str, str, str, dict]] = []
+    for name, meta in ({} if stars_error() else load_stars()).items():
+        if isinstance(meta, dict) and meta.get("slug"):
+            out.append(("star", str(meta["slug"]), str(name), meta))
+    for slug, meta in ({} if themes_error() else load_themes()).items():
+        out.append(("theme", str(slug), str(slug), meta if isinstance(meta, dict) else {}))
+    return out
 
 
 def subject_kinds(slug: str) -> tuple[str, ...]:
