@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.159.0"
+ALMAGESTO_VERSION = "1.160.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1297,10 +1297,41 @@ def alias_collisions() -> list:
             if len({st for st, _ in pares}) > 1]
 
 
+def name_index(nombres) -> dict:
+    """`{method_key(n): n}` — a universe of DECLARED names, keyed for comparison (#243/#348).
+
+    The companion of `declared_name`: whoever owns the universe (the note stems, the `concept` of
+    every declared theme) builds the index once, and every lookup then costs one `method_key`.
+    Two names colliding on one key resolve to the FIRST in alphabetical order —the same tie-break
+    as `concept_alias_index`—: built over a `set`, the winner depended on iteration order and the
+    universe stopped being auditable. Empty keys are dropped: a blank name denotes nothing, and
+    letting it in makes `""` match every blank claim."""
+    idx: dict = {}
+    for name in sorted(nombres, key=str):
+        if (key := method_key(name)):
+            idx.setdefault(key, str(name))
+    return idx
+
+
+def declared_name(nombre, index: dict) -> str | None:
+    """Which declared name of `index` does `nombre` denote, or `None`? Compared by `method_key`.
+
+    ⛔ The single implementation of «does this name denote a declared concept/theme?» (#348). The
+    question was re-implemented with the RAW string three times in `lint.py` alone, and one of them
+    —`thesis_links` without a destination page— is a BLOCKING category: a paper writing `PCA` for
+    the note `pca.md` was reported as dangling while `make_notes.theme_membership`, which already
+    compared by key, said it is the same concept. The framework contradicting itself, and the half
+    that blocks being the wrong one.
+
+    ⛔ Normalising at COMPARISON time, never at write time (#243): the spelling the extractor chose
+    is information about how the paper names it. The value returned is the DECLARED name, not the
+    claim: what the caller needs downstream is the canonical subject."""
+    return index.get(method_key(nombre))
+
+
 def method_target(nombre, index: dict | None = None) -> str | None:
     """The concept note this method name denotes (stem), or `None` (#245)."""
-    idx = concept_alias_index() if index is None else index
-    return idx.get(method_key(nombre))
+    return declared_name(nombre, concept_alias_index() if index is None else index)
 
 
 _GLOSA_FINAL = re.compile(r"\s*\([^()]*\)\s*$")

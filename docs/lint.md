@@ -76,7 +76,11 @@ Deben quedar en **0**:
 - **`thesis_links` sin página destino** (tag que no matchea ninguna nota → no acumula en el
   roll-up; typo típico `shift-vs-shape` vs `shift_vs_shape`). Su hermano `methods` sin destino es
   backlog (ver abajo): la asimetría es real — un `thesis_links` nombra un concepto que
-  `ingest-theme` crea en la misma operación que lo siembra.
+  `ingest-theme` crea en la misma operación que lo siembra. ⛔ **El destino se busca por clave
+  normalizada y por `aliases`, el mismo predicado que el hermano backlog (#243/#245/#348):** con el
+  string crudo, `thesis_links: [PCA]` contra `concepts/methods/pca.md` en disco salía colgante —un
+  falso positivo **bloqueante**— mientras `make_notes.theme_membership` decía que es el mismo
+  concepto y lo acumulaba en el roll-up.
 - **`disputes` con la `ref` de una posición sin paper destino** (la disputa no es trazable),
   **`disputes` mal formadas** (#71: sin `field`, con menos de dos posiciones, con una posición que
   no dice quién la sostiene, o `source` fuera del vocabulario) y **`disputes` en el schema viejo**
@@ -334,7 +338,10 @@ OCR, o marcar `pending`).
 
 - **`methods` sin página destino**: la versión no bloqueante de `thesis_links` (la nota destino la
   crea otra operación, `ingest-theme`).
-- **Reclamo sin vista** (#188): un sujeto reclama el paper y nadie lo leyó desde ahí. Se cierra
+- **Reclamo sin vista** (#188): un sujeto reclama el paper y nadie lo leyó desde ahí. Un
+  `methods` cuenta como reclamo **sólo si ese nombre denota un tema declarado**, y eso se evalúa por
+  clave normalizada (#348): con el string crudo, `methods: [PCA]` no era el tema `pca` y la categoría
+  quedaba vacía según la grafía que eligió el extractor. Se cierra
   haciendo la vista o declarando `no_vista: [{sujeto, motivo}]`; el **declarado pasa a su propia
   categoría** (*«visible, no es deuda»*). Su hermana, la **vista sin `fecha`** (sembrada por el stub
   y nunca leída), es backlog propio. ⛔ La escotilla decide sobre la vista **sin fecha** (#256), que
@@ -493,7 +500,8 @@ OCR, o marcar `pending`).
 - **Corpus truncado** (`truncated` en `build/<slug>/ads.json`): re-ingestar con `--rows` mayor. Lo
   que falta es **el medio**, no la cola: al truncar corre una segunda pasada ordenada por fecha
   (#79, `truncated.recent`). Ídem el **rescate por glifo incompleto** (`truncated_glyph`).
-- **Recorte de lectura sin declarar** (core sin extraer y sin `extraccion:` en el registro): se
+- **Recorte de lectura sin declarar** (core sin extraer y sin `extraccion:` en el registro; el
+  sujeto del paper se indexa y se busca por clave normalizada, #348): se
   cierra con `python scripts/triage.py <slug> --extraccion todos|subconjunto`.
   ⛔ **Cubre los DOS tipos de sujeto desde #346**, por el mismo defecto de forma que #338 y con el
   mismo remedio: recorría estrellas y temas y le pedía `slug` al **mapa** de los dos, pero en

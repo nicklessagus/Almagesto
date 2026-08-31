@@ -1315,3 +1315,53 @@ roll-up publica por cuál llave entró el paper (`Entró por`, D-24) y colapsarl
 a la única función que puede calcularla. El comentario de `_papers_del_sujeto` ahora describe lo que
 el código hace — regla de método 4: un comentario que afirma una cobertura que el código no da es
 peor que no tenerlo.
+
+## 2026-08-31 · Tres veces más #243 por string crudo, y una de ellas BLOQUEA (#348)
+
+**Qué era.** Derivado de #347: la pregunta *«¿este nombre denota un concepto/tema declarado?»* estaba
+re-implementada **por string crudo** tres veces en `lint.py`, mientras `make_notes.theme_membership`
+—desde #347— la contesta por clave normalizada (#243). Las tres, con su repro en bóveda de juguete
+(tema `pca`, `concept: pca`, nota `concepts/methods/pca.md`):
+
+| # | Detector | Con `PCA` | Con `pca` | Severidad |
+|---|---|---|---|---|
+| G1 | `thesis_links` sin página destino | **1 hallazgo** (falso) | 0 | ⛔ **bloqueante** |
+| G2 | `sin_extraer_por_sujeto` → «Recorte de lectura sin declarar» | 0 | 1 | backlog |
+| G3 | `reclamo_sin_vista` («reclamado y nunca leído») | 0 | 1 | backlog |
+
+G1 es el peor porque **bloquea**: obligaba a "arreglar" trabajo correcto, y desde #347 el framework se
+contradecía —el roll-up acumulaba el paper en el concepto y el lint decía que el destino no existe—.
+G2 traía además la regla de método 4: su comentario afirmaba *«mismo predicado que
+`make_notes._papers_del_sujeto`»* y era falso por **dos** ejes (indexaba crudo, y no miraba
+`methods`).
+
+**Población latente en las bóvedas reales** (4 medidas, `method_key` contra el valor crudo):
+
+| Bóveda | Papers | Temas | G1 | G2 | G3 |
+|---|---|---|---|---|---|
+| `Almagesto-Prueba` | 201 | 3 | 0 | 0 | 0 |
+| `Almagesto-RV` | 908 | 0 | 0 | 0 | 0 |
+| `Almagesto-Tesis` | 157 | 2 | 0 | 0 | **1** (`ICA` ↔ tema `ica`) |
+| `Almagesto-Actividad` | 26 | 0 | 0 | 0 | 0 |
+
+**Diff del reporte del lint, medido antes de dar el arreglo por bueno:**
+
+| Corrida | Bloqueantes antes → después | Qué se movió |
+|---|---|---|
+| `Almagesto-Prueba` (tal cual) | 154 → 154 | reporte **byte-idéntico** |
+| `Almagesto-Tesis` (tal cual) | 1 → 1 | *«Reclamado por un sujeto y nunca leído desde ahí»* **1 → 6**: cinco papers cuyo `methods: [ICA]` reclama el tema declarado `ica` y sólo tienen vista de `ica-ruido` (verificado paper por paper: `2000Ikeda`, `2009Bonhomme`, `2017PhRvE..96d2114K`, `2018IEEEA...625336F`, `2019Pfister`) |
+| `Almagesto-Prueba` con G1 forzado (`2025sklearn`: `thesis_links: ica` → `ICA`) | **155 → 154** | desaparece el único hallazgo `ICA → sin página destino`; `methods` sin destino queda en 698, igual |
+
+⚠ **Ningún hallazgo desaparece que no fuera falso positivo**: el único que se va es el G1 forzado.
+Lo que aparece —los 5 de `Almagesto-Tesis`— es la subdeclaración que #348 describe, no ruido nuevo.
+⛔ **No evaluable, declarado:** `Almagesto-RV` no llega a producir reporte —su `extra_core` está en el
+schema pre-D-58 y el loader **rehúsa operar**—, así que ahí sólo se midió la población latente.
+
+**Qué cambió (1.160.0).** Una sola implementación: `cfg.name_index(nombres)` construye el universo
+declarado indexado por `method_key` y `cfg.declared_name(nombre, index)` lo consulta —`method_target`
+pasa a delegar en ella—. En `lint.py`, `_is_dangling` es **un** predicado para las dos categorías
+colgantes (difieren en severidad, nunca en qué cuenta como destino), el índice de sujetos sin extraer
+se llena y se consulta por clave, y el reclamo por `methods` entra al set con el **nombre declarado
+del tema**, no con la grafía del extractor. Los comentarios quedaron descriptivos: el de G2 dice
+ahora que `methods` no se recorre **porque la rama exige `not fm.get("methods")`** —recorrerlo sería
+un condicional que no decide nada (red 8)—, en vez de prometer una equivalencia que no existía.

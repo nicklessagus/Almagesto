@@ -1654,7 +1654,7 @@
   {
    "number": 332,
    "title": "`deinterleave_columns` parte un párrafo continuo entre dos «columnas»: 148 de 155 `.txt` devuelven más de 2 lecturas (hasta 19), y una oración de UNA columna física cae en dos lecturas distintas — el paso 1 de `quote_verdict` no puede encontrar una cita que SÍ está en el `.txt` (5 de 318 medidas hoy)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 333,
@@ -1674,7 +1674,7 @@
   {
    "number": 336,
    "title": "La lectura del `.txt` pierde texto por tres vías más: el borrado de `$…$` aplicado a la FUENTE se come el 36 % de una columna (9 de 155 archivos), el guión de corte no absorbe la sangría (102 de 155) y los fragmentos de una cita elidida caen en lecturas distintas",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 337,
@@ -1724,11 +1724,16 @@
   {
    "number": 346,
    "title": "`extraccion_no_declarada` (INV-83) no dispara para NINGÚN tema: le pide `slug` al mapa y en `themes.yaml` el slug es la CLAVE — el recorte de lectura silencioso está sin vigilar para la mitad de los sujetos",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 347,
    "title": "`_papers_del_sujeto` promete delegar en `concept_rollup_rows` y NO delega: compara `methods` por string exacto, así que el universo de un tema subdeclara por grafía — el defecto de #243, vivo, con un comentario que afirma lo contrario",
+   "state": "CLOSED"
+  },
+  {
+   "number": 348,
+   "title": "Tres veces más #243 por string crudo, ahora en `lint.py` — y G1 es un falso positivo BLOQUEANTE: `thesis_links: [PCA]` con `pca.md` en disco se reporta «sin página destino» mientras `theme_membership` dice que es el mismo concepto",
    "state": "OPEN"
   }
  ]
