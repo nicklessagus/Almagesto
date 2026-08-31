@@ -333,6 +333,64 @@ def corpus_vigente(slugs: list) -> tuple[int, list]:
     return total, faltan
 
 
+#: El estado «el alcance está y cuadra con el disco» (`scope_state`).
+SCOPE_OK = "ok"
+
+#: La sección cuyos bullets son las afirmaciones NEGATIVAS de una ficha o de un concepto (#342).
+GAPS_HEADER = "## Huecos"
+
+#: Un bullet de `## Huecos`. Una línea de blockquote (`>`) nunca lo es: ahí vive el alcance.
+_BULLET_RE = re.compile(r"^(?:[-*+]\s|\d+[.)]\s)")
+
+
+def scope_state(text: str) -> tuple:
+    """`(estado, alc, vigente, faltan)` for the scope blockquote declared in `text` (D-34, #342).
+
+    `estado` is one of `sin_declarar` (no blockquote at all) · `sin_slugs` (there is one and it
+    names none, so the universe cannot be re-counted) · `sin_n` (no `· N papers`: nothing to
+    compare today's count against) · `slug_fantasma` (names slugs with no fulltext on disk) ·
+    `quedo_corto` (there are more today than it declared) · `ok`.
+
+    ⛔ ONE implementation for the two consumers: a hypothesis's blockquote (D-34) and a
+    `## Huecos` one (#342). Both hold NEGATIVE claims —*«no evidence»*, *«this is missing»*— that
+    read as universal without a declared scope and go stale the same way, so writing the ladder
+    twice is the shape of #215/#324. What is NOT shared is the wording of the finding: each
+    consumer names its own way out."""
+    alc = alcance_declarado(text)
+    if alc is None:
+        return "sin_declarar", None, 0, []
+    if not alc["slugs"]:
+        return "sin_slugs", alc, 0, []
+    vigente, faltan = corpus_vigente(alc["slugs"])
+    if alc["n_papers"] is None:
+        return "sin_n", alc, vigente, faltan
+    if faltan:
+        return "slug_fantasma", alc, vigente, faltan
+    if vigente > alc["n_papers"]:
+        return "quedo_corto", alc, vigente, faltan
+    return SCOPE_OK, alc, vigente, faltan
+
+
+def gaps_section(text: str) -> str | None:
+    """The body of the note's `## Huecos` section, or `None` when it has none (#342).
+
+    Cut with `cfg.section_span` and not with a bare `find`: a note that points the reader at its
+    own gaps from the prose (``ver `## Huecos```) would otherwise hand back an empty section."""
+    span = cfg.section_span(text, GAPS_HEADER)
+    return None if span is None else text[span[0]:span[1]]
+
+
+def gaps_bullets(section: str) -> list:
+    """The bullets of a `## Huecos` section — the note's NEGATIVE claims, one per line (#342).
+
+    They are what nothing else checks: `verify-citations` goes claim↔its own source and
+    `find-contradictions` claim↔claim, and both start from a `[[bibcode]]` — a gap has none **by
+    construction**. Measured 2026-08-31: 2 false gaps in one theme and 4 in another, all six
+    claiming the vault cannot answer something it does answer, and all six caught by accident."""
+    return [ln.strip() for ln in (section or "").split("\n")[1:]
+            if _BULLET_RE.match(ln.strip())]
+
+
 # Secciones que la máquina ESTAMPA en una ficha: son metadata materializada, no prosa. El proxy de
 # autosuficiencia ("¿cada planeta se discute?") las tiene que descontar — desde que `## Planetas` y
 # `## Métodos aplicados` dejaron de ser bloques ```dataview``` y pasaron a tabla (D-11/INV-81), sus
@@ -1265,6 +1323,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     bad_status: list = []              # `status` de hipótesis fuera del vocabulario (D-37)
     status_vs_evidencia: list = []     # `sostenida` con filas `desafía` (D-37 / #177)
     alcance_corto: list = []           # (stem, motivo) — alcance de hipótesis sin declarar o vencido (D-34)
+    huecos_sin_alcance: list = []      # (stem, motivo) — #342: `## Huecos` sin alcance, o corto
     old_bearing: list = []             # `bearing` en nota de paper: schema pre-D-21
     sin_destino: list = []             # paper sin stars/thesis_links/methods (D-23)  @inv INV-94
     cadena_incompleta: list = []       # (slug, "se cortó en <paso>") — D-57
@@ -1402,6 +1461,9 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     #: en notas, así que un `(0)` sobre población efectiva CERO —45 de 49 papers exentos— se leía
     #: como «miré y está limpio». Se cuenta acá, donde el chequeo ocurre.
     _n_citas_evaluadas = [0]
+    #: #342 · cuántas notas traen un `## Huecos` con bullets — la población sobre la que corre
+    #: el chequeo de alcance. La nota sin huecos escritos no entra: no hay negativa que pesar.
+    _n_huecos = [0]
 
     def _source_readings(txt_path) -> list:
         """Normalized readings of a `.txt`, one per physical column, memoised (#275).
@@ -2031,13 +2093,15 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             # refrescar uno) deja el veredicto testeado contra un universo que ya no es el vigente —
             # misma familia de staleness que los pares de verificación. Backlog: la nota no es
             # inválida, quedó atrás. Se cierra re-corriendo el test y re-estampando la línea.
-            alc = alcance_declarado(text)
-            if alc is None:
+            # La escalera es `scope_state` (una sola implementación, #342); la prosa del
+            # reproche no, que la salida de una hipótesis no es la de un `## Huecos`.
+            _est, alc, vigente, faltan = scope_state(text)
+            if _est == "sin_declarar":
                 alcance_corto.append(
                     (stem, "sin blockquote `> Alcance <fecha> · …`: un veredicto negativo sin "
                            "alcance declarado se lee como universal → declararlo (skill "
                            "`test-hypothesis`, paso 0)"))
-            elif not alc["slugs"]:
+            elif _est == "sin_slugs":
                 # AUD-171 / INV-92 — un blockquote SIN slugs apagaba el chequeo entero en silencio:
                 # la nota tiene la línea, así que pasa el primer caso, y el `elif` no entra. El
                 # veredicto sigue leyéndose como universal y encima ahora parece declarado.
@@ -2045,28 +2109,72 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                     (stem, f"el alcance del {alc['fecha']} no nombra ningún slug "
                            f"(`temas: [...]` / `estrellas: [...]`) → no se puede re-contar el "
                            f"universo, así que el veredicto no se puede pesar: declaralos"))
-            elif alc["n_papers"] is None:
+            elif _est == "sin_n":
                 # AUD-171, la otra puerta: con slugs pero sin `· N papers` no hay contra qué
                 # comparar el conteo de hoy, y el detector de «quedó corto» queda mudo.
-                vigente, faltan = corpus_vigente(alc["slugs"])
                 alcance_corto.append(
                     (stem, f"el alcance del {alc['fecha']} no declara `· N papers` → no hay contra "
                            f"qué comparar (hoy esos slugs tienen {vigente}); completá la línea"))
-            else:
-                vigente, faltan = corpus_vigente(alc["slugs"])
-                if faltan:
-                    # No se puede contar lo que no existe: se DICE cuál falta en vez de comparar
-                    # contra un universo recortado en silencio (que daría "quedó corto" al revés).
-                    alcance_corto.append(
-                        (stem, f"el alcance nombra slug(s) sin fulltext en disco "
-                               f"({', '.join(faltan)}) → ¿typo, o entidad borrada/renombrada?"))
-                elif vigente > alc["n_papers"]:
-                    alcance_corto.append(
-                        (stem, f"alcance del {alc['fecha']} declarado sobre {alc['n_papers']} "
-                               f"papers y hoy esos slugs tienen {vigente} (+"
-                               f"{vigente - alc['n_papers']}) → el veredicto se testeó contra un "
-                               f"universo que ya no es el vigente: re-correr el test sobre lo nuevo "
-                               f"y re-estampar la línea de alcance"))
+            elif _est == "slug_fantasma":
+                # No se puede contar lo que no existe: se DICE cuál falta en vez de comparar
+                # contra un universo recortado en silencio (que daría "quedó corto" al revés).
+                alcance_corto.append(
+                    (stem, f"el alcance nombra slug(s) sin fulltext en disco "
+                           f"({', '.join(faltan)}) → ¿typo, o entidad borrada/renombrada?"))
+            elif _est == "quedo_corto":
+                alcance_corto.append(
+                    (stem, f"alcance del {alc['fecha']} declarado sobre {alc['n_papers']} "
+                           f"papers y hoy esos slugs tienen {vigente} (+"
+                           f"{vigente - alc['n_papers']}) → el veredicto se testeó contra un "
+                           f"universo que ya no es el vigente: re-correr el test sobre lo nuevo "
+                           f"y re-estampar la línea de alcance"))
+
+        # #342 — el ALCANCE de un `## Huecos`. Un hueco es una afirmación NEGATIVA —«nadie da un
+        # criterio para elegir $n$», «X no aparece en ninguna fuente»— y por construcción no tiene
+        # `[[bibcode]]` que la respalde, así que no la mira NADIE: `verify-citations` va
+        # claim↔su propia fuente y `find-contradictions` claim↔claim, y las dos parten de una cita.
+        # Medido el 2026-08-31: 2 huecos falsos en un tema y 4 en otro, los seis afirmando que la
+        # bóveda no puede responder algo que sí responde, y los seis cazados de casualidad. Con el
+        # alcance declarado —el mismo blockquote de D-34— la afirmación universal falsa pasa a ser
+        # acotada verdadera, y eso alcanzaba: los seis habrían sido correctos escritos así.
+        # ⛔ Esto NO verifica la negativa (preguntarle a cada fuente «¿tu paper dice algo de X?» es
+        # un fan-out por hueco): sólo exige que declare su alcance y lo cruza contra el disco.
+        if in_dir(f, "stars") or in_dir(f, "concepts"):
+            _sec_h = gaps_section(text)
+            _bul_h = gaps_bullets(_sec_h) if _sec_h else []
+            if _bul_h:
+                _n_huecos[0] += 1
+                # El blockquote se busca DENTRO de la sección: el de nivel de nota de una hipótesis
+                # (D-34) declara el alcance del veredicto, que es otra afirmación.
+                _est_h, _alc_h, _vig_h, _falt_h = scope_state(_sec_h)
+                if _est_h == "sin_declarar":
+                    huecos_sin_alcance.append(
+                        (stem, f"`## Huecos` con {len(_bul_h)} afirmación(es) negativa(s) y sin "
+                               f"`> Alcance <fecha> · temas: [...] / estrellas: [...] · N papers`: "
+                               f"«esto falta» sin alcance se lee como «no existe en la "
+                               f"literatura», y ninguna otra capa lo mira (un hueco no tiene "
+                               f"`[[bibcode]]` por construcción) → declaralo"))
+                elif _est_h == "sin_slugs":
+                    huecos_sin_alcance.append(
+                        (stem, f"el alcance de `## Huecos` ({_alc_h['fecha']}) no nombra ningún "
+                               f"slug → no se puede re-contar el universo, así que los huecos "
+                               f"siguen leyéndose como universales: declaralos"))
+                elif _est_h == "sin_n":
+                    huecos_sin_alcance.append(
+                        (stem, f"el alcance de `## Huecos` ({_alc_h['fecha']}) no declara "
+                               f"`· N papers` → no hay contra qué comparar (hoy esos slugs tienen "
+                               f"{_vig_h}); completá la línea"))
+                elif _est_h == "slug_fantasma":
+                    huecos_sin_alcance.append(
+                        (stem, f"el alcance de `## Huecos` nombra slug(s) sin fulltext en disco "
+                               f"({', '.join(_falt_h)}) → ¿typo, o entidad borrada/renombrada?"))
+                elif _est_h == "quedo_corto":
+                    huecos_sin_alcance.append(
+                        (stem, f"los {len(_bul_h)} hueco(s) se declararon sobre "
+                               f"{_alc_h['n_papers']} papers ({_alc_h['fecha']}) y hoy esos slugs "
+                               f"tienen {_vig_h} (+{_vig_h - _alc_h['n_papers']}) → el corpus "
+                               f"creció debajo: re-mirar los huecos sobre lo nuevo y re-estampar "
+                               f"la línea"))
         cuerpo_nota = text.split("---", 2)[-1] if text.startswith("---") else text
         for marca in inferencias_sin_premisas(cuerpo_nota):
             infer_sin_premisas.append(
@@ -4248,6 +4356,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('stale_verif', 'Verificación stale: la nota se editó después de su último verify-citations (backlog)', SEV_BACKLOG, tuple(stale_verif), poblacion='entidades'),
         Categoria('artefactos_colgados', 'Capas colgadas: registro/raw/build de una entidad que ya no existe (INV-19, backlog)', SEV_BACKLOG, tuple(artefactos_colgados), poblacion='registros'),
         Categoria('alcance_corto', 'Alcance de hipótesis sin declarar o vencido: el veredicto se lee sobre un universo que ya no es el suyo (backlog)', SEV_BACKLOG, tuple(alcance_corto), poblacion='entidades'),
+        Categoria('huecos_sin_alcance', 'Hueco sin ALCANCE declarado: una afirmación negativa sin alcance se lee como universal, y ninguna otra capa la mira (#342, backlog)', SEV_BACKLOG, tuple(huecos_sin_alcance), poblacion='huecos'),
         Categoria('coverage', 'Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog)', SEV_BACKLOG, tuple(coverage), poblacion='entidades'),
         Categoria('unsynthesized', 'Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog)', SEV_BACKLOG, tuple(unsynthesized), poblacion='papers'),
         Categoria('headerless', 'Cabecera no estampable: ficha/concepto sin la línea del generador — los estampadores de cabecera no-opean en silencio (backlog)', SEV_BACKLOG, tuple(headerless), poblacion='entidades'),
@@ -4306,6 +4415,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         "registros": (len([f for f in cfg.REGISTRO.glob("*.yaml") if not f.name.startswith("_")])
                       if cfg.REGISTRO.exists() else 0, "registros de sujeto"),
         "citas": (_n_citas_evaluadas[0], "citas «…» de ≥40 caracteres con fuente chequeable"),
+        "huecos": (_n_huecos[0], "notas con `## Huecos` escrito"),
         "temas": (0 if cfg.themes_error() else len(cfg.load_themes() or {}), "temas de `themes.yaml`"),
         "estrellas": (len(stars_slugs), "estrellas de `stars.yaml`"),
         # Los chequeos de config miran UN archivo cada uno (el objetivo, el `.obsidian/` de la

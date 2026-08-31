@@ -257,6 +257,9 @@
 ## Alcance de hipótesis sin declarar o vencido: el veredicto se lee sobre un universo que ya no es el suyo (backlog) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 
+## Hueco sin ALCANCE declarado: una afirmación negativa sin alcance se lee como universal, y ninguna otra capa la mira (#342, backlog) (0)
+> sobre 0 notas con `## Huecos` escrito
+
 ## Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog) (7)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 - concepto-activity-017 → sin citas [[bibcode]] → afirmaciones no chequeables (cobertura)

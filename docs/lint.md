@@ -388,6 +388,25 @@ OCR, o marcar `pending`).
 - **Alcance de hipótesis sin declarar o vencido** (D-34): sin el blockquote `> Alcance …` un
   veredicto negativo se lee como universal; los slugs son directorios de `raw/fulltext/`, así que el
   universo se re-cuenta y el lint marca la hipótesis que quedó corta.
+- **Hueco sin ALCANCE declarado** (#342): un hueco es una afirmación **negativa** —*«nadie da un
+  criterio para elegir $n$»*, *«ICASSO no aparece en ninguna fuente»*— y **por construcción no tiene
+  `[[bibcode]]` que la respalde**, así que no la mira ninguna otra capa: `verify-citations` va
+  claim↔su propia fuente y `find-contradictions` claim↔claim, y las dos parten de una cita. Medido
+  el 2026-08-31: **2 huecos falsos en `ica` y 4 en `ica-ruido`**, los seis afirmando que la bóveda
+  no puede responder algo que **sí** responde, y los seis cazados **de casualidad** (verificadores
+  que contradijeron la afirmación desde su propia fuente sin habérselo propuesto). El origen no fue
+  descuido: los seis salieron de **agregar los campos `hueco` de las extracciones**, que son **por
+  lente** —lo que *esa* fuente no da— y agregarlos los convierte en una afirmación universal.
+  ⛔ La red es la misma forma que D-34: el `## Huecos` con bullets declara
+  `> Alcance <fecha> · temas: [...] / estrellas: [...] · N papers` **dentro de la sección**, y el
+  lint lo cruza contra el disco (sin declarar · sin slugs · sin `· N papers` · slug fantasma ·
+  quedó corto). El blockquote de **nivel de nota** de una hipótesis no cuenta: declara el alcance
+  del *veredicto*, que es otra afirmación. La escalera es una sola implementación
+  (`lint.scope_state`) para los dos consumidores. Población: las notas de `stars/` y `concepts/`
+  con `## Huecos` **escrito** — la sección con la glosa del stub y sin un solo bullet no afirma
+  nada y no entra. ⛔ **Lo que esto NO hace** es verificar la negativa: preguntarle a cada fuente
+  del alcance *«¿tu paper dice algo de X?»* es un fan-out por hueco, y queda aparte. Ésta es la red
+  barata: declarar el alcance y chequearlo contra el disco.
 - **Marcador sin cerrar** (`` ` ``/`$`) y **párrafo duplicado** en la misma nota (#227): se cuentan
   por **párrafo**, no por línea (las notas van hard-wrapped y contar por línea grita en falso). ⚠ Un
   marcador **escapado** (`\$`, ``\` ``) no abre ni cierra (#309): ése es el arreglo correcto de un

@@ -937,3 +937,33 @@ vuelve ruido que se deja de mirar.
 ⚠ **Lo que NO entra acá:** la parte 2 del issue (emitir la marca `⚠verificar en el PDF` cuando la
 cola diverge) sigue **bloqueada por #332 y #336** — medido, sus 6 candidatos de hoy son 6 artefactos
 del cortador de columnas, así que emitiría 6 marcas falsas.
+
+## 2026-08-31 · Los seis huecos falsos, cazados de casualidad (#342)
+
+**Qué era.** Una afirmación **negativa** de una ficha o de un concepto —*«nadie da un criterio para
+elegir $n$»*, *«ICASSO no aparece en ninguna fuente»*— **no tiene fuente que la respalde por
+construcción**, así que ninguna capa de la bóveda la mira: `verify-citations` chequea claim ↔ **su
+propia** fuente y `find-contradictions` claim ↔ claim **entre** fuentes, y las dos parten de un
+`[[bibcode]]`.
+
+| Qué se midió | Número | Salvedad |
+|---|---|---|
+| Huecos falsos en `ica` | **2** | afirmaban que la bóveda no puede responder algo que sí responde |
+| Huecos falsos en `ica-ruido` | **4** | ídem |
+| De esos seis, cuántos los cazó un detector | **0** | los seis salieron de verificadores que **contradijeron la afirmación desde su propia fuente** sin habérselo propuesto |
+| Cuántos habrían sido correctos con el alcance declarado | **2 de 2** en `ica` | *«no lo dice ninguno de los N papers de este tema, a esta fecha»* en vez de *«no existe en la literatura»* |
+
+**Por qué pasó, y no fue descuido.** Los seis salieron de **agregar los campos `hueco` de las
+extracciones**. Un `hueco` de extracción es **por lente** —lo que *esa* fuente no da— y agregarlos lo
+convierte en una afirmación universal. Es una operación que parece correcta y no lo es.
+
+**Qué cambió (1.148.0).** El `## Huecos` con bullets declara su **alcance**, el mismo blockquote que
+las hipótesis ya llevaban (D-34), **dentro de la sección**; el lint lo cruza contra el disco con la
+misma escalera (`lint.scope_state`, una sola implementación para los dos consumidores: sin declarar ·
+sin slugs · sin `· N papers` · slug fantasma · quedó corto). El blockquote de **nivel de nota** de
+una hipótesis no cuenta: declara el alcance del *veredicto*, que es otra afirmación.
+
+⚠ **Lo que NO entra acá, declarado:** verificar la negativa de verdad —preguntarle a cada fuente del
+alcance *«¿tu paper dice algo de X?»*— es un **fan-out por hueco** y queda como issue aparte. Esto es
+la red barata: **declarar el alcance y chequearlo contra el disco**, que es lo que convierte una
+universal falsa en una acotada verdadera.

@@ -2931,6 +2931,80 @@ def test_alcance_con_slug_inexistente_lo_nombra(toy_vault, capsys):
     assert "tets_star" in sec and "typo" in sec, sec
 
 
+# ── #342 · el `## Huecos` declara su alcance (la red barata contra la negativa falsa) ──
+HUECOS = "## Huecos\n\n- nadie da un criterio para elegir $n$.\n- ICASSO no aparece en ninguna fuente.\n"
+
+
+def _concepto_con_huecos(toy_vault, stem, huecos):
+    mk_note(cfg.CONCEPTS / "methods", stem, {"tags": ["methods"], "name": stem},
+            f"# {stem}\n\n## Síntesis\n\ntexto.\n\n{huecos}")
+    link_from_log(toy_vault, stem)
+
+
+def test_hueco_sin_alcance_declarado_es_backlog(toy_vault, capsys):
+    """#342 — una afirmación NEGATIVA («nadie da un criterio», «X no aparece en ninguna fuente») no
+    tiene fuente que la respalde por construcción, así que **ninguna capa la mira**:
+    `verify-citations` va claim↔su propia fuente y `find-contradictions` claim↔claim, y las dos
+    parten de un `[[bibcode]]`. Medido el 2026-08-31: 2 huecos falsos en un tema y 4 en otro, los
+    seis afirmando que la bóveda no puede responder algo que sí responde, y los seis cazados de
+    casualidad. Con el alcance —el mismo blockquote que las hipótesis ya llevan (D-34)— la
+    afirmación universal falsa pasa a acotada verdadera, que era todo lo que hacía falta."""
+    _concepto_con_huecos(toy_vault, "ica", HUECOS)
+    _rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "Hueco sin ALCANCE declarado")
+    assert "ica" in sec and "2 afirmación(es) negativa(s)" in sec, sec
+    # backlog, no bloqueante: al hueco le falta una declaración, no es inválido.
+    assert not any(l.startswith("## ⛔") and "Hueco sin ALCANCE" in l for l in rep.split("\n")), rep
+
+
+def test_hueco_con_alcance_al_dia_calla(toy_vault, capsys):
+    """El simétrico: el caso correcto no puede ser ruido. El alcance va DENTRO de `## Huecos`."""
+    _fulltexts("ica", 2)
+    _concepto_con_huecos(toy_vault, "ica",
+                         "## Huecos\n\n> Alcance 2026-01-01 · temas: [ica] · 2 papers\n\n"
+                         "- nadie da un criterio para elegir $n$.\n")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "ica" not in _seccion(rep, "Hueco sin ALCANCE declarado"), rep
+
+
+def test_hueco_con_alcance_que_quedo_corto_es_backlog(toy_vault, capsys):
+    """#342 — el corpus crece debajo del hueco: se declaró sobre 2 papers y hoy el slug tiene 5, así
+    que la negativa se pesó contra un universo que ya no es el vigente (la staleness de D-34)."""
+    _fulltexts("ica", 5)
+    _concepto_con_huecos(toy_vault, "ica",
+                         "## Huecos\n\n> Alcance 2026-01-01 · temas: [ica] · 2 papers\n\n"
+                         "- nadie da un criterio para elegir $n$.\n")
+    _rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "Hueco sin ALCANCE declarado")
+    assert "ica" in sec and "+3" in sec and "2026-01-01" in sec, sec
+
+
+def test_la_seccion_de_huecos_VACIA_no_es_deuda(toy_vault, capsys):
+    """La plantilla del stub deja `## Huecos` con su glosa en cursiva y sin un solo bullet: exigirle
+    alcance a una sección que no afirma nada sería deuda inventada, y la población declarada
+    (INV-40) mentiría sobre el denominador."""
+    _concepto_con_huecos(toy_vault, "ica", "## Huecos\n_(qué falta para entender el tema)._\n")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "ica" not in _seccion(rep, "Hueco sin ALCANCE declarado"), rep
+    assert "> sobre 0 notas con `## Huecos` escrito" in rep, rep
+
+
+def test_el_alcance_de_la_HIPOTESIS_no_tapa_el_de_sus_huecos(toy_vault, capsys):
+    """#342 — el blockquote de nivel de nota (D-34) declara el alcance del VEREDICTO, que es otra
+    afirmación: leerlo como si cubriera los huecos dejaría la negativa de la sección sin declarar y
+    con cara de declarada. Por eso el corte es la sección, no la nota."""
+    _fulltexts("test_star", 2)
+    _hipotesis("hip_con_huecos",
+               "# hip\n\n> Alcance 2026-01-01 · estrellas: [test_star] · 2 papers\n\n"
+               "Sostiene [[2020X]].\n\n## Huecos\n\n- nadie midió esto en enanas M.\n")
+    link_from_log(toy_vault, "hip_con_huecos")
+    _rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "Hueco sin ALCANCE declarado")
+    assert "hip_con_huecos" in sec, sec
+    assert "hip_con_huecos" not in _seccion(rep, "Alcance de hipótesis"), (
+        "el alcance del veredicto está y cuadra: el hallazgo es SÓLO el de los huecos")
+
+
 def test_la_tabla_estampada_de_planetas_no_cuenta_como_prosa(toy_vault, capsys):
     """Desde que `## Planetas` dejó de ser ```dataviewjs``` y pasó a tabla materializada
     (D-11/INV-81), sus celdas satisfacen el patrón `|\\s*b\\s*|` del proxy de autosuficiencia: TODO

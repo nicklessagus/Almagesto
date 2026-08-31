@@ -218,6 +218,13 @@ que la ficha alcance sola), la sección estampada **`## Indicadores de actividad
 puente al concepto que explica cada uno, resuelto por alias y sin la glosa entre paréntesis (#250)—
 y el apéndice **`## Excluidos por el filtro`** (los no-core, top por citas con link a ADS).
 
+⛔ **Un `## Huecos` —de ficha o de concepto— declara su ALCANCE, igual que una hipótesis (D-34,
+#342):** `> Alcance <fecha> · temas: […] + estrellas: […] · N papers`, **dentro de la sección**. Un
+hueco es una afirmación **negativa** y por construcción no lleva `[[bibcode]]`, así que no la mira
+ninguna capa —`verify-citations` va claim↔su fuente y `find-contradictions` claim↔claim, y las dos
+parten de una cita—: medido, **6 huecos falsos** en dos temas, los seis cazados de casualidad. El
+alcance vuelve *acotada verdadera* una universal falsa, y el lint lo cruza contra el disco.
+
 **Estándar: autosuficiente.** La ficha debe alcanzar por sí sola — un agente que la lee queda
 servido **sin abrir ningún paper**: parámetros estelares, inventario de señales RV con $P/K/e/m\sin
 i$ y estado, señales disputadas, indicadores esperados, métodos aplicados y huecos. Los
