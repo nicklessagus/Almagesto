@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.153.0"
+ALMAGESTO_VERSION = "1.154.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1496,6 +1496,38 @@ def make_notes_cmd(slug: str) -> str:
     resolves (or refuses) — never a flag guessed on its behalf."""
     theme_only = subject_kinds(slug) == ("theme",)
     return f"python scripts/make_notes.py {slug}" + (" --theme" if theme_only else "")
+
+
+def subject_refusal(slug: str, expected: str, consequence: str,
+                    remedy: str | None = None) -> str | None:
+    """Why this invocation cannot run on `slug`, or `None` when it can (#331, lifted by #343).
+
+    Three scripts resolve their subject through `star_by_slug`/`theme_by_slug` on the way in, so a
+    theme slug without `--theme` died with a raw `KeyError` telling the operator to define in
+    `stars.yaml` a slug that is correctly defined in `themes.yaml` — following that instruction
+    adds a fake star to the config. #331 fixed it in `make_notes` only; measured again on the real
+    vault, `extraction_prompt.py ica <bib>` and `fetch_ground_truth.py ica` still blew up.
+
+    D-43: a step that cannot run **declares it**. It neither degrades (the `--theme` is not guessed
+    on the operator's behalf: a concept is a different operation) nor blows up halfway, and the
+    message names **both** configs.
+
+    The rule lives here once and not copied per script — the shape of #215/#324/#335, already
+    diverged three times in this repo. What each caller supplies is only what it alone knows: the
+    `consequence` (what did not happen) and the `remedy`, which is **not** always "you forgot the
+    flag": a theme has no ground-truth at all, so `fetch_ground_truth` offers no command rather than
+    sending the operator to run something that does not exist.  @inv INV-141"""
+    kinds = subject_kinds(slug)
+    if expected in kinds:
+        return None
+    que = {"star": "una estrella (`vault/config/stars.yaml`)",
+           "theme": "un tema (`vault/config/themes.yaml`)"}
+    if kinds:
+        linea = f"⛔ '{slug}' es {que[kinds[0]]}, no {que[expected]} — {consequence}."
+        return linea + (f"\n   {remedy}" if remedy else "")
+    return (f"⛔ slug desconocido: '{slug}' — no está en `vault/config/stars.yaml` ni en "
+            f"`vault/config/themes.yaml`, así que {consequence}. Definilo ahí antes de correr "
+            f"este paso.")
 
 
 def load_objective() -> dict:

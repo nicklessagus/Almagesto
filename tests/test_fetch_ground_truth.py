@@ -591,3 +591,36 @@ def test_el_payload_preserva_el_None_de_simbad(monkeypatch):
     i = fuente.index('"_simbad_aliases"')
     linea = fuente[i:fuente.index("\n", i)]
     assert "or []" not in linea, f"el llamador colapsa el None de INV-122: {linea.strip()}"
+
+
+# ── #343 · un TEMA no tiene ground-truth, y eso se DICE ──────────────────────
+def _run_main(monkeypatch, argv):
+    monkeypatch.setattr(sys, "argv", ["fetch_ground_truth.py", *argv])
+    return gt.main()
+
+
+def test_un_slug_de_TEMA_REHUSA_diciendo_que_no_HAY_ground_truth(toy_vault, monkeypatch, capsys):
+    """#343 — `fetch_ground_truth.py ica` moría con el `KeyError` crudo de `star_by_slug`, que
+    manda definir en `stars.yaml` un slug bien definido en `themes.yaml`. Es la misma negativa de
+    #331 (INV-141) pero **otro remedio**: acá no falta un flag — la autoridad de ground-truth
+    (NEA/SIMBAD) es de objetos, no de conceptos, así que un tema no tiene ground-truth y no hay
+    comando que ofrecer. Un «te faltó `--theme`» sería mandar a correr algo que no existe.
+
+    @inv INV-141"""
+    from conftest import write_yaml
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ICA",
+                                         "query": "q"}})
+    assert _run_main(monkeypatch, ["ica"]) == 2
+    out = capsys.readouterr().out
+    assert "themes.yaml" in out and "stars.yaml" in out, "el mensaje nombra las DOS configs"
+    assert "no tienen ground-truth" in out, "el remedio no es un flag: es que no hay qué bajar"
+    assert "--theme" not in out, "no se ofrece un flag que este script no tiene"
+    assert not (cfg.GROUND_TRUTH / "ica.json").exists(), "y no escribió nada"
+
+
+def test_un_slug_de_ESTRELLA_no_se_rehusa(toy_vault, monkeypatch, capsys):
+    """La otra mitad: el caso bueno no cambia. Con el snapshot ya en disco `main` toma el atajo
+    idempotente (rc 0, sin red) — lo que importa es que la negativa no se dispare."""
+    (cfg.GROUND_TRUTH / "test_star.json").write_text("{}", encoding="utf-8")
+    assert _run_main(monkeypatch, ["test_star"]) == 0
+    assert "⛔" not in capsys.readouterr().out

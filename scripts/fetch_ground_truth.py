@@ -383,6 +383,18 @@ def main() -> int:
     ap.add_argument("--force", action="store_true",
                     help="refrescar un ground-truth existente desde NEA/SIMBAD (pisa el snapshot)")
     args = ap.parse_args()
+
+    # #343 — la negativa va ANTES de imprimir o escribir nada. Acá NO es «te faltó `--theme`»: la
+    # autoridad del ground-truth (NEA/SIMBAD) es de objetos, no de conceptos, así que un tema no
+    # tiene ground-truth y este script no tiene ese flag. Ofrecerlo mandaría a correr algo que no
+    # existe; el que falta es el que #331 arregló, no éste.
+    if (motivo := cfg.subject_refusal(
+            args.slug, "star", "no se bajó ningún ground-truth",
+            "Los temas no tienen ground-truth: NEA y SIMBAD son autoridades sobre objetos, no "
+            "sobre conceptos.")) is not None:
+        cfg.print_seguro(motivo)
+        return 2
+
     name, meta = cfg.star_by_slug(args.slug)
     out = cfg.GROUND_TRUTH / f"{args.slug}.json"
     if out.exists() and not args.force:

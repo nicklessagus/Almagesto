@@ -663,3 +663,39 @@ def test_el_aviso_de_no_hay_nada_que_leer_nombra_UN_comando_QUE_CORRE(toy_vault,
     out = capsys.readouterr().out
     assert "`python scripts/make_notes.py test_star`" in out
     assert "make_notes.py test_star --theme" not in out
+
+
+# ── #343 · el slug de otro tipo se REHÚSA, no revienta ───────────────────────
+def test_un_slug_de_TEMA_sin_flag_REHUSA_en_vez_de_reventar(toy_vault, monkeypatch, capsys):
+    """#343 — `extraction_prompt.py ica <bib>` moría con el `KeyError` crudo de `star_by_slug`,
+    que además manda definir en `stars.yaml` un slug que está bien definido en `themes.yaml`: el
+    operador que sigue la instrucción agrega una estrella falsa a la config. Es el defecto que
+    #331 arregló en `make_notes` y que quedó vivo acá — misma forma, misma negativa (INV-141),
+    otro remedio: acá lo que falta es el `--theme`, y el comando va COMPLETO (con el bibcode).
+
+    @inv INV-141"""
+    from conftest import write_yaml
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ICA",
+                                         "query": "q"}})
+    assert _run_main(monkeypatch, ["ica", "1995BellSejnowski"]) == 2
+    out = capsys.readouterr().out
+    assert "themes.yaml" in out and "stars.yaml" in out, "el mensaje nombra las DOS configs"
+    assert "`python scripts/extraction_prompt.py ica 1995BellSejnowski --theme`" in out, \
+        "el remedio es el comando completo: sin el bibcode no se puede copiar y pegar"
+
+
+def test_un_slug_de_ESTRELLA_con_theme_REHUSA_en_la_otra_direccion(toy_vault, monkeypatch, capsys):
+    """El gemelo: `theme_by_slug` reventaba igual. El remedio es el mismo comando SIN el flag —
+    no se inventa un `--theme` por arrastre."""
+    assert _run_main(monkeypatch, ["test_star", "1995BellSejnowski", "--theme"]) == 2
+    out = capsys.readouterr().out
+    assert "`python scripts/extraction_prompt.py test_star 1995BellSejnowski`" in out
+    assert "1995BellSejnowski --theme" not in out
+
+
+def test_un_slug_de_ESTRELLA_sigue_generando_el_prompt(toy_vault, monkeypatch, capsys):
+    """La otra mitad de la negativa: el caso bueno no cambia (rc 0 y el prompt sale)."""
+    (cfg.PDFS / "test_star").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "test_star" / "2020Test.pdf").write_bytes(b"%PDF-1.4\n")
+    assert _run_main(monkeypatch, ["test_star", "2020Test"]) == 0
+    assert "⛔ '" not in capsys.readouterr().out

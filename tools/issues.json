@@ -1694,7 +1694,7 @@
   {
    "number": 340,
    "title": "`CLAUDE.md` está clavado en el techo del ratchet (~500 bytes libres), así que «¿esta regla va a CLAUDE.md?» se está contestando con «¿entra?» — tres fixes de la tanda #329-#335 lo resolvieron por omisión",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 341,
@@ -1704,6 +1704,16 @@
   {
    "number": 342,
    "title": "Nada chequea las afirmaciones NEGATIVAS de una ficha: 6 huecos falsos medidos en dos temas, cazados de casualidad — que un hueco declare su ALCANCE, como ya hacen las hipótesis (D-34)",
+   "state": "OPEN"
+  },
+  {
+   "number": 343,
+   "title": "#331 dejó dos scripts con el `KeyError` crudo sobre un slug de tema: `extraction_prompt.py` y `fetch_ground_truth.py` — y el mensaje sigue culpando a `stars.yaml` de un slug que está en `themes.yaml`",
+   "state": "OPEN"
+  },
+  {
+   "number": 344,
+   "title": "DECISIÓN: una nota de entidad pesa ~72 k tokens y el 71 % es el bloque de verificación, no contenido — el contrato promete que la nota deja al lector «servido» y a ese tamaño entra una sola por ventana",
    "state": "OPEN"
   }
  ]
