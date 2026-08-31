@@ -1615,6 +1615,16 @@
    "number": 324,
    "title": "`contrast --validar` y el lint implementan la misma regla por separado y ya divergen (13 vs 12): el comando no prueba contra el `.txt` de la fuente citada, así que marca como mal atribuida una cita CORRECTA — y ahora es paso de cierre obligatorio con exit ≠ 0",
    "state": "CLOSED"
+  },
+  {
+   "number": 325,
+   "title": "`quote_owner` toma el bibcode que sigue a la cita A CUALQUIER DISTANCIA (medido: 131, 247, 436 y 657 caracteres, cruzando prosa), aunque su docstring declara la convención `«…» [[bib]]`: 6 de 12 hallazgos bloqueantes son notas que atribuyen BIEN",
+   "state": "OPEN"
+  },
+  {
+   "number": 326,
+   "title": "`quote_fragments` parte la cita en la elipsis pero BORRA la matemática y pega las mitades, creando una cadena que no existe en ningún `.txt`: 412 de 3036 citas llevan `$…$` y ninguna puede pasar el paso 1 de `quote_verdict` — el detector manda a corregir lo ya correcto",
+   "state": "OPEN"
   }
  ]
 }

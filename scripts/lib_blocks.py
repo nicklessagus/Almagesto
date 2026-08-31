@@ -436,6 +436,62 @@ def _solo_separadores(gap: str) -> bool:
     return bool(_SEPARADORES.match(gap.strip()))
 
 
+#: #325 · lo que puede haber entre el cierre de la cita y su `[[bibcode]]` sin que dejen de estar
+#: pegados: el markup de cierre (`»*`, `_`, comillas), puntuación, y **un** paréntesis de
+#: localizador —`(p. 4)`, `(Fig. 3, p. 7)`—, que es la forma que la bóveda escribe de verdad.
+_ADYACENTE = re.compile(r"^[\s*_`»”\"'.,;:—–-]*(?:\([^()]{0,40}\))?[\s*_`.,;:—–-]*$")
+
+
+#: #325 · la rama «antes» es ASIMÉTRICA a propósito: la bóveda escribe de verdad `[[bib]] dice:
+#: «cita»`, o sea una cláusula que INTRODUCE la cita, así que exigir ahí sólo puntuación mataría la
+#: forma dominante. Lo que sí se exige es que no se cruce un límite: otra cita (`«`/`»`), un fin de
+#: línea, un punto y seguido o **un borde de celda**. Con eso, «el link de la oración anterior» —o el
+#: de la celda de al lado— deja de ser dueño: dentro de una fila atribuye la columna *Fuente*, que es
+#: lo que `_cell_source` resuelve un paso antes.
+_CORTE_ANTES = re.compile(r"[«»\n|]|\.\s")
+
+
+def _introduce(gap: str) -> bool:
+    """Does what sits between a link and the quote read as the clause that INTRODUCES it? (#325)
+
+    ⚠ The gap ends at the quote's TEXT, so the opening `«` and its markup are trimmed first — they
+    are the delimiter of this very quote, not the boundary of another one."""
+    return not _CORTE_ANTES.search(re.sub(r"[«*_`\"'\s]*$", "", gap))
+
+
+def _pegado(gap: str) -> bool:
+    """Is the `[[bibcode]]` ADJACENT to the quote, as the convention declares? (#325)
+
+    ⛔ `quote_owner` documented the convention `«…» [[bibcode]]` and never enforced it: it took the
+    first link **after** the quote at any distance. Measured over the six «wrong attribution»
+    findings of a real vault: **131, 247, 436 and 657 characters**, crossing prose. The clear case
+    is a table row whose *Fuente* cell is `[[2015Voss]]` and whose prose cell ends *«…attributing
+    that step to [[2013Voss]]»*: the note attributes CORRECTLY, the mention 131 characters later
+    won, and the check reported the note for telling the truth — the very defect #316 was opened to
+    fix, surviving inside the mechanism that fixed it. With prose in between there is **no adjacent
+    owner**, and the existing exit is the right one: `None` → ambiguity → the finding does not
+    block and says so."""
+    return bool(_ADYACENTE.match(gap))
+
+
+def _cell_source(fila: str, bibs: list) -> str | None:
+    """In a table ROW, the bibcode that sits ALONE in its cell: the *Fuente* column (#325).
+
+    It wins over any mention later in the prose cell, and that is not a heuristic about tables in
+    general: a cell whose whole content is `[[bibcode]]` **is** the declared attribution (D-4, the
+    inherited-scope case), and the table is the dominant shape in this vault — the three roll-ups
+    and the `## Inventario por eje` are tables. Only when exactly one such cell exists: two would
+    be a list of sources, which #316 already resolves as ambiguity.
+
+    Takes the ROW —el llamador ya sabe dónde está la cita— so there is no second, unreachable «is
+    the quote here?» guard: a condition no caller can trigger is a rule written halfway (#319)."""
+    if not fila.lstrip().startswith("|"):
+        return None
+    solos = {m.group(1).strip() for c in split_row(fila)
+             if (m := re.fullmatch(r"\[\[([^\]]+)\]\]", c.strip())) and m.group(1).strip() in bibs}
+    return solos.pop() if len(solos) == 1 else None
+
+
 def quote_owner(text: str, quote: str, bibs: list) -> str | None:
     """Which of the block's bibcodes OWNS this quote, or `None` when the block does not say (#316).
 
@@ -446,10 +502,15 @@ def quote_owner(text: str, quote: str, bibs: list) -> str | None:
     them by re-attributing the quote to the bibcode it was tested against **destroys the inference
     the note is making**.
 
-    The convention this vault writes by is `«…» [[bibcode]]`: the owner is the citation that
-    follows the closing quote, and failing that the nearest one before it. When the block has
-    several and none is adjacent, this returns `None` — ambiguity is a MISSING DATUM, not a
-    finding, and today it was resolved against the note N times, once per source.
+    The convention this vault writes by is `«…» [[bibcode]]`: the owner is the citation ADJACENT to
+    the closing quote, and failing that the adjacent one before it. ⛔ **Adjacency is REQUIRED, not
+    just documented** (#325): until 1.135.0 it took the first link after the quote at any distance
+    —measured at 131, 247, 436 and 657 characters, across prose— so a mention in the same paragraph
+    («…attributing that step to [[X]]») outvoted the declared source and the check reported notes
+    that attribute correctly: 6 of 12 blocking findings of a real vault. In a table row the *Fuente*
+    cell wins first (`_cell_source`). When the block has several and none is adjacent, this returns
+    `None` — ambiguity is a MISSING DATUM, not a finding, and it used to be resolved against the
+    note N times, once per source.
 
     With a single bibcode in the block there is nothing to disambiguate: that one owns it (the
     inherited-scope case D-4 exists for)."""
@@ -458,6 +519,11 @@ def quote_owner(text: str, quote: str, bibs: list) -> str | None:
     pos = text.find(quote)
     if pos < 0:
         return None
+    ini_f = text.rfind("\n", 0, pos) + 1
+    fin_f = text.find("\n", pos)
+    de_celda = _cell_source(text[ini_f:fin_f if fin_f >= 0 else len(text)], bibs)
+    if de_celda:
+        return de_celda
     fin = pos + len(quote)
     enlaces = [(m.start(), m.end(), m.group(1).strip()) for m in LINK_RE.finditer(text)
                if m.group(1).strip() in bibs]
@@ -468,15 +534,17 @@ def quote_owner(text: str, quote: str, bibs: list) -> str | None:
     # fila»—. Sólo separadores entre dos links: la cita es de las dos, o de ninguna en particular.
     if despues:
         i, j, t = despues[0]
-        # ¿el que sigue es otro link pegado por separadores? → es una LISTA, no un dueño
-        if len(despues) > 1 and _solo_separadores(text[j:despues[1][0]]):
-            return None
-        return t
+        if _pegado(text[fin:i]):
+            # ¿el que sigue es otro link pegado por separadores? → es una LISTA, no un dueño
+            if len(despues) > 1 and _solo_separadores(text[j:despues[1][0]]):
+                return None
+            return t
     if antes:
         i, j, t = antes[-1]
-        if len(antes) > 1 and _solo_separadores(text[antes[-2][1]:i]):
-            return None
-        return t
+        if _introduce(text[j:pos]):
+            if len(antes) > 1 and _solo_separadores(text[antes[-2][1]:i]):
+                return None
+            return t
     return None
 
 

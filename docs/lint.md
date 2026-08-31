@@ -226,11 +226,25 @@ OCR, o marcar `pending`).
   ⛔ **Y la cita se prueba contra SU fuente, no contra todas las del bloque** (#316): el dueño es el
   `[[bibcode]]` adyacente (la convención `«…» [[bib]]`), y una **lista** de fuentes pegada a la cita
   (`[[A]], [[B]]`) no tiene dueño — ahí se prueba contra todas y **el mensaje declara que el
-  hallazgo es más débil**. Medido: 12 de 12 hallazgos duros de un hub eran párrafos de contraste que
+  hallazgo es más débil**. ⛔ **La adyacencia se EXIGE (#325):** entre la cita y su link sólo puede
+  haber puntuación, markup de cierre y el paréntesis del localizador (`»* (p. 4) [[bib]]`); antes de
+  la cita se admite la cláusula que la introduce (`[[bib]] dice: «…»`) pero no cruzar otra cita, un
+  fin de línea, un punto y seguido o un borde de celda; y **en una fila de tabla manda la columna
+  *Fuente*** (la celda que contiene sólo un `[[bibcode]]`). Hasta 1.135.0 la convención estaba
+  documentada y no exigida —tomaba el primer link posterior a **cualquier** distancia: 131, 247, 436
+  y 657 caracteres medidos—, así que una **mención** («…atribuyendo ese paso a [[X]]») le ganaba a la
+  fuente declarada: **6 de 12 hallazgos bloqueantes** de una bóveda real eran notas que atribuyen
+  bien. Con prosa en el medio no hay dueño → ambigüedad → no bloquea. Medido: 12 de 12 hallazgos duros de un hub eran párrafos de contraste que
   atribuían bien en prosa, y «resolverlos» —reatribuir la cita al bibcode contra el que se testeó—
   habría **destruido la inferencia** que la nota declara. Tres estados: está → nada; no está en ninguna → hallazgo
   (no-verbatim o de otra fuente, se distingue a mano); **no evaluable** (sin `.txt` o
   `fulltext_source: ocr`) → categoría propia, porque contarlo en contra sería inventar deuda.
+  ⛔ **La matemática PARTE la cita, no se borra (#326):** `$…$` se eliminaba y las dos mitades se
+  **pegaban**, produciendo una cadena que no existe en ningún `.txt` — el mismo argumento por el que
+  la elipsis parte, aplicado al marcador equivocado. Con `CLAUDE.md` mandando `$...$` en la bóveda,
+  la población afectada era toda cita que toque una fórmula (**412 de 3036** medidas), y ninguna
+  podía pasar el primer paso del veredicto: el detector mandaba a corregir lo ya correcto y no había
+  corrección que lo apagara.
   ⛔ `pdf_source: eprint` **salió de la exención en #275**: cubría 45 de 49 papers de una ficha real
   y dejaba el chequeo con población **cero** (66 citas, 0 evaluadas), o sea un `(0)` que se lee
   verde. Desde #205 el `.txt` se deriva del mismo PDF eprint que el extractor abrió, y este chequeo

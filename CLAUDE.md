@@ -218,20 +218,17 @@ lint lo exime del scan de fuga.
 
 El cuerpo trae **`## Inventario por eje`** (el paso de contraste), **`## Huecos`** (qué falta para
 que la ficha alcance sola), la sección estampada **`## Indicadores de actividad esperados`** —el
-puente al concepto que explica cada uno, resuelto por alias y sin la glosa entre paréntesis
-(#250)— y el apéndice **`## Excluidos por el filtro`** (los no-core, top por
-citas con link a ADS — puntero, no se bajan).
+puente al concepto que explica cada uno, resuelto por alias y sin la glosa entre paréntesis (#250)—
+y el apéndice **`## Excluidos por el filtro`** (los no-core, top por citas con link a ADS).
 
 **Estándar: autosuficiente.** La ficha debe alcanzar por sí sola — un agente que la lee queda
 servido **sin abrir ningún paper**: parámetros estelares, inventario de señales RV con $P/K/e/m\sin
-i$ y estado, señales disputadas o descartadas, indicadores de actividad esperados, métodos aplicados
-y huecos. Corta y suficiente. Los `[[bibcode]]` son **trazabilidad**, no lectura obligatoria. Si
-para responder algo hace falta abrir el paper, eso que falta va a la ficha.
+i$ y estado, señales disputadas, indicadores esperados, métodos aplicados y huecos. Los
+`[[bibcode]]` son **trazabilidad**: si para responder hace falta abrir el paper, eso va a la ficha.
 
 **Regla de poda (paper secundario → ficha sólo si cambia una señal RV).** Un hecho de un paper
-tangencial (no discovery, no árbitro de planetas, no actividad-$P_{rot}$) entra a la prosa
-**únicamente si cambia cómo se lee una señal RV** (p. ej. un mecanismo que produce falsos positivos
-en el régimen de período de un planeta dudoso). Todo lo demás —era instrumental, metodología RV
+tangencial (no discovery, no árbitro, no actividad-$P_{rot}$) entra a la prosa **únicamente si cambia
+cómo se lee una señal RV**. Todo lo demás —era instrumental, metodología RV
 genérica, dinámica, ausencia de tránsito, debris, astrosismología, habitabilidad— vive en su nota de
 paper y se consulta por la tabla `## Papers`. No re-narrar en la ficha lo que ya está en la
 extracción.
@@ -951,14 +948,14 @@ Por eso la columna de la vista se llama **`Localizador`** y no `Línea`: lleva `
 ⛔ **La prosa que va a una CELDA se escapa: `\|` fuera de la matemática, `\vert` adentro (#240).**
 Un `|` crudo parte la fila y una afirmación citada y verificada queda **invisible para el lector**
 mientras el lint cuenta su fila. ⚠ Dentro de `$…$` el escape es `\vert` (en LaTeX `\|` es ‖):
-escapar a ciegas cambia filas invisibles por fórmulas equivocadas. Lo hace `lib_config.escape_cell`
-en el cosechador, el único punto de escritura.
+escapar a ciegas cambia filas invisibles por fórmulas equivocadas. Lo hace `escape_cell` en el
+cosechador, el único punto de escritura.
 
 **Los DOS hashes del paso 6** responden preguntas distintas: el **ancla** hashea el bloque de la
 **ficha** (se dispara si editás la nota) y el **hash de fuente**, el archivo **leído** (desde #205,
 el PDF). Las filas viejas con `txt:` siguen válidas y se re-verifican al vencer, no se migran en
-masa. ⚠ El PDF es inmutable: esa alarma es rarísima, y una fila anclada al PDF no se vence cuando
-el `.txt` se re-extrae.
+masa. ⚠ El PDF es inmutable: esa alarma es rarísima, y la fila anclada al PDF no se vence al
+re-extraer el `.txt`.
 
 **La cascada, paso a paso:**
 
@@ -1017,9 +1014,9 @@ el `.txt` se re-extrae.
    ⛔ **Y ese cruce es PASO DE CIERRE de toda operación que sintetice, ANTES del verify (#323):**
    `python scripts/contrast.py [<slug>] --validar-todo` (sin slug, toda la bóveda; exit ≠ 0, declara
    población y no evaluables). Un `grep` de segundos contra N subagentes leyendo PDFs: verificar con
-   LLM lo que el `grep` ya sabe alterado es pagar el caro para llegar a lo que el barato sabía. La
-   capacidad existía y **no la corría nadie** — la nota que produjo esta serie cerró con verify y
-   `lint --cierre` en 0 **con 12 citas alteradas adentro**.
+   LLM lo que el `grep` ya sabe alterado es pagar el caro por lo que el barato sabía. La capacidad
+   existía y **no la corría nadie** — la nota que produjo la serie cerró con verify y `lint --cierre`
+   en 0 **con 12 citas alteradas adentro**.
 
 #### El CICLO DE LA LENTE — cómo se encadenan las piezas (#310)
 
@@ -1294,7 +1291,10 @@ escribe **nombrando sus premisas** —`(inferencia de [[b1]], [[b2]])`—: sin a
 otra palabra que empiece igual (`inferencial`).
 
 **Regla dura — todo lo apuntable es chequeable:** toda afirmación fáctica va **citada `[[bibcode]]`
-o marcada `inferencia`** — nada sin respaldo. Excepción: los valores de ground-truth (NEA) en
+o marcada `inferencia`** — nada sin respaldo. ⛔ **Y la cita textual lleva su `[[bibcode]]` PEGADO
+(#316/#325):** `«…» [[bib]]`, `«…» (p. 4) [[bib]]`, o en una fila la celda *Fuente*; con prosa en el
+medio se declara ambigua — una **mención** posterior le robaba la atribución (6 de 12 bloqueantes).
+⚠ La matemática **parte** el chequeo como la elipsis (#326). Excepción: los valores de ground-truth (NEA) en
 `stars/` no se verifican contra papers (su consistencia la chequea el lint); sólo se verifican
 disputas y afirmaciones atribuidas a un paper. El lint reporta como backlog los conceptos e
 hipótesis sin ninguna cita.
@@ -1339,10 +1339,10 @@ toca, el ancla de fuente tampoco se entera — es el modo de caducidad más sile
 **nada** comparaba) y el **conteo de citas de la puerta 2** (#106, ver abajo). Si están repartidas,
 se corren cinco y la sexta nunca.
 ⛔ **El hallazgo de VERSIONES sobrevive a la corrida (#298): `versions_disponible: <bibcode>`
-estampado en la nota** (mismo criterio que `corrections`: es metadata, no un valor que la prosa
-citó) + backlog del lint con el `--rename-paper`. Era la única de las seis que no dejaba nada en la
-bóveda. Y **declara su población** —las notas cuyo bibcode SIGUE siendo el eprint: 3 de 138 medido—,
-porque *«cubrió: versiones»* sin denominador se lee como «se miraron las versiones de la bóveda».
+estampado en la nota** (mismo criterio que `corrections`: es metadata, no un valor que la prosa citó)
++ backlog del lint con el `--rename-paper`. Era la única de las seis que no dejaba nada en la bóveda,
+y **declara su población** —las notas cuyo bibcode SIGUE siendo el eprint: 3 de 138—, porque
+*«cubrió: versiones»* sin denominador se lee como «se miraron todas».
 ⚠ Su hueco simétrico es backlog aparte: la nota con **bibcode publicado** que igual lee el preprint
 (82 de 138) no tiene problema de identidad, así que ningún detector la ve — y `pdf_source: eprint`
 le apaga además el chequeo de cita textual.

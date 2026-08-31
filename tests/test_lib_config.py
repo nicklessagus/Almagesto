@@ -2242,3 +2242,37 @@ def test_quote_verdict_el_txt_que_PARTE_la_cita_no_es_culpa_de_la_nota(toy_vault
     ver, _ = cfg.quote_verdict(CITA_324, ["citado"], {"citado"},
                                {"citado": cfg.fulltext_readings("citado")})
     assert ver == "txt_parte"
+
+
+def test_la_matematica_PARTE_la_cita_como_la_elipsis(toy_vault):
+    """#326 — `$…$` se borraba y las dos mitades se PEGABAN, produciendo una cadena que no existe en
+    ningún `.txt`: «Reaching such a high $S/N_{cont}$ is not achievable» quedaba *«reaching such a
+    high is not achievable»*, con `s/ncont` en el medio del archivo. Es el mismo argumento que
+    `quote_fragments` hace para la elipsis, aplicado al marcador equivocado.
+
+    Pesa porque `CLAUDE.md` **manda** `$...$` en `vault/wiki/`: 412 de 3036 citas de una bóveda real
+    lo llevan, y ninguna podía pasar el paso 1 de `quote_verdict` — el detector mandaba a corregir
+    algo ya correcto, y no había corrección que lo apagara."""
+    cita = ("Reaching such a high $S/N_{cont}$ is not achievable for any star and telescope that "
+            "put strong constraints on the observational method")
+    txt = cfg.normalize_source_text(
+        "bla. reaching such a high s/ncont is not achievable for any star and telescope that put "
+        "strong constraints on the observational method. fin")
+    assert cfg.quote_found(cita, txt)
+
+
+def test_la_matematica_partida_NO_acepta_una_cita_que_la_fuente_no_dice(toy_vault):
+    """El control: partir en la matemática no afloja el chequeo — las palabras de cada lado tienen
+    que seguir estando, y las piezas cortas se descartan igual (`QUOTE_FRAG_MIN`)."""
+    cita = ("Reaching such a high $S/N_{cont}$ is not achievable for any star and telescope that "
+            "put strong constraints on the observational method")
+    txt = cfg.normalize_source_text("reaching such a high s/ncont is not achievable for any star. fin")
+    assert not cfg.quote_found(cita, txt)
+
+
+def test_el_backtick_y_el_wikilink_DESENVUELVEN_no_borran(toy_vault):
+    """#326, la ⚠ del issue, medida: sólo `$…$` tenía el trato de «borrar y pegar». El backtick y el
+    `[[wikilink]]` pierden sus DELIMITADORES y conservan el texto, así que no fabrican una cadena
+    inexistente."""
+    txt = cfg.normalize_source_text("el parámetro alpha vale 3 y el resto de la frase sigue acá")
+    assert cfg.quote_found("el parámetro `alpha` vale 3 y el resto de la frase sigue acá", txt)

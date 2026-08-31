@@ -624,3 +624,56 @@ nº 2, y el test de paridad compara **las dos salidas sobre el mismo insumo**, n
 
 ⚠ Dos guardas del código nuevo salieron **redundantes** en la mutación de guardas (`fuentes and …`
 implicado por el `any(...)` de al lado): se sacaron en el momento, que es la regla de #319.
+
+## 2026-08-31 · El dueño de la cita, y la matemática que se pegaba (#325/#326)
+
+Corrigiendo los 12 hallazgos de `cita_inventada` en `Almagesto-Tesis` con v1.135.0: **6 son defectos
+reales** y **6 son artefactos de `quote_owner`**.
+
+### #325 · la adyacencia estaba documentada y no exigida
+
+El docstring declaraba la convención `«…» [[bibcode]]`; el código tomaba el primer link posterior a
+**cualquier** distancia:
+
+| nota | dueño asignado | distancia al link |
+|---|---|---|
+| `ica-ruido` L282 | `2013Voss` | **131** caracteres |
+| `ica-ruido` L362 | `1998Cichocki` | 12 |
+| `ica` L163 | `2024MNRAS.535.2562C` | **247** |
+| `hd_40307` L274 | `2016A&A...585A.134D` | **436** |
+| `hd_40307` L315 | `2017MNRAS.468.4772S` | **100** |
+| `hd_40307` L368 | `2015MNRAS.452.2745S` | **657** |
+
+El caso claro es una fila cuya celda *Fuente* es `[[2015Voss]]` y cuya celda de prosa termina
+*«…atribuyendo ese paso a [[2013Voss]]»*: la nota atribuye **bien**, y la mención 131 caracteres
+después ganaba. Es el defecto que #316 se abrió para arreglar —*«un párrafo que contrasta dos
+fuentes queda marcado por decir la verdad»*— sobreviviendo dentro del mecanismo que lo arregló, y
+ahora con más peso: la categoría bloquea `--cierre` (#318) y `--validar-todo` es paso obligatorio de
+cuatro skills (#323). ⚠ Y el arreglo aparente —reatribuir la cita al bibcode que el reporte nombra—
+**rompe la nota**: en L282 movería la cita al revés de lo que dice la fuente.
+
+Las otras 6 son alteraciones reales, cada una distinta (un régimen comido *«in the noiseless case»*,
+un *«do not become orthogonal and»* → *«that are not orthogonal»* que **invierte el sentido**, un
+*«a priori»*, un enumerador, una cola continuada 90 caracteres). O sea: el detector de #321
+**funciona**; lo que fallaba era a quién le preguntaba.
+
+### #326 · la matemática se borraba y las mitades se pegaban
+
+`quote_fragments` parte en la elipsis con un argumento explícito —«A … B» no está verbatim en
+ninguna parte, así que se chequea por piezas—. El `$…$` recibía el trato **opuesto**:
+
+```
+cita:      «Reaching such a high $S/N_{cont}$ is not achievable for any star and telescope …»
+fragmento: 'reaching such a high is not achievable for any star and telescope …'   ← UNA pieza
+```
+
+Esa cadena no está en ningún `.txt`, porque el archivo tiene `s/ncont` en el medio — y no puede
+estarlo nunca. **412 de 3036 citas** de una bóveda real llevan `$…$` (14 %), y no por estilo:
+`CLAUDE.md` **manda** esa notación en `vault/wiki/`. Consecuencia: el paso 1 de `quote_verdict`
+(*¿está en el `.txt` de su fuente?*) **nunca** podía dar True para esas citas, así que caían siempre
+a la comparación contra la extracción y podían salir `alterada`.
+
+⚠ **Nota de método:** este bug es **invisible mientras la cita esté mal** —el hallazgo se explica por
+el defecto real— y **sólo aparece al corregirla**, porque el detector no se apaga. Un gate
+verificado únicamente sobre corpus defectuoso no lo caza: hay que verificar también el camino de
+salida.

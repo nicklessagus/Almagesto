@@ -1160,3 +1160,71 @@ def test_quote_owner_no_inventa_si_la_cita_no_esta_en_el_bloque():
     el llamador lee como ambigüedad — nunca se elige la primera fuente por descarte."""
     assert lb.quote_owner("un bloque con [[A]] y [[B]] pero sin esa cita", "otra cosa",
                           ["A", "B"]) is None
+    # ⚠ y sin el guard el `find` fallido (-1) se usaría como posición: con un link justo en
+    # `len(cita) - 1` la función devolvía una atribución **inventada**.
+    assert lb.quote_owner("abcde[[A]] y nada de [[B]]", "zzzzzz", ["A", "B"]) is None
+
+
+def test_el_bibcode_LEJANO_no_es_dueno_de_la_cita():
+    """#325 — la convención `«…» [[bibcode]]` estaba **declarada en el docstring y nunca exigida**:
+    tomaba el primer link posterior a cualquier distancia (medido: 131, 247, 436 y 657 caracteres,
+    cruzando prosa). 6 de 12 hallazgos bloqueantes de una bóveda real eran notas que atribuyen BIEN,
+    marcadas por una MENCIÓN posterior — el defecto que #316 se abrió para arreglar, sobreviviendo
+    dentro del mecanismo que lo arregló."""
+    bibs = ["2015Voss", "2013Voss"]
+    lejos = ("«una cita textual de largo más que suficiente» es lo que se demuestra ahí, y la "
+             "discusión sigue por un rato largo hasta que alguien menciona a [[2013Voss]]")
+    assert lb.quote_owner(lejos, "una cita textual de largo más que suficiente", bibs) is None
+    # pegado, con y sin el paréntesis del localizador: sigue habiendo dueño
+    assert lb.quote_owner("«c de largo» [[2015Voss]] y luego [[2013Voss]] dice otra cosa",
+                          "c de largo", bibs) == "2015Voss"
+    assert lb.quote_owner("*«c de largo»* (p. 4) [[2015Voss]], contra lo de [[2013Voss]]",
+                          "c de largo", bibs) == "2015Voss"
+    # con UN solo link después, la comprobación de «lista» no tiene con qué comparar: no hay
+    # segundo elemento, y el dueño es ése.
+    assert lb.quote_owner("[[2013Voss]] decía otra cosa. Después: «c de largo» [[2015Voss]]",
+                          "c de largo", bibs) == "2015Voss"
+
+
+def test_en_una_FILA_la_columna_Fuente_le_gana_a_la_mencion():
+    """#325, el caso claro medido: la celda *Fuente* es `[[2015Voss]]` y la celda de prosa termina
+    *«…atribuyendo ese paso a [[2013Voss]]»*. La nota atribuye bien; el dueño es el de la fila.
+    Una celda cuyo contenido ENTERO es un `[[bibcode]]` **es** la atribución declarada (D-4)."""
+    fila = ("| [[2015Voss]] | **sí, pero al revés** | … *«We demonstrate that quasi-orthogonalization "
+            "is unnecessary»* (p. 4), atribuyendo ese paso a [[2013Voss]] |")
+    assert lb.quote_owner(fila, "We demonstrate that quasi-orthogonalization is unnecessary",
+                          ["2015Voss", "2013Voss"]) == "2015Voss"
+
+
+def test_la_rama_ANTES_admite_la_clausula_que_introduce_pero_no_cruza_el_limite():
+    """#325 — asimetría deliberada: la bóveda escribe `[[bib]] dice: «cita»`, así que exigir sólo
+    puntuación antes mataría la forma dominante. Lo que no puede pasar es cruzar un límite —otra
+    cita, un fin de línea, un punto y seguido—, que es como «el link de la oración anterior» se
+    volvía dueño."""
+    bibs = ["2013Voss", "2004Davies"]
+    assert lb.quote_owner("[[2013Voss]] lo dice: «la cita esta de largo», y punto.",
+                          "la cita esta de largo", bibs) == "2013Voss"
+    assert lb.quote_owner("[[2013Voss]] dice cosas. Otra oración distinta: «la cita esta de largo».",
+                          "la cita esta de largo", bibs) is None
+    assert lb.quote_owner("[[2013Voss]] dice «otra cita larga» y después «la cita esta de largo»",
+                          "la cita esta de largo", bibs) is None
+
+
+def test_dentro_de_una_FILA_atribuye_la_columna_Fuente_y_no_la_celda_de_al_lado():
+    """#325 — el borde de celda es un límite: una mención en la celda de prosa no atribuye, ni desde
+    adelante ni desde atrás. Dentro de una fila la atribución declarada es la celda que contiene
+    SÓLO un `[[bibcode]]` (D-4), y por eso `_cell_source` se resuelve antes que las dos ramas."""
+    fila = "| [[2015Voss]] | contradice a [[2013Voss]] en su premisa | «la cita esta de largo» |"
+    assert lb.quote_owner(fila, "la cita esta de largo", ["2015Voss", "2013Voss"]) == "2015Voss"
+    # y con DOS celdas-fuente no hay dueño: es una lista, la ambigüedad de #316
+    dos = "| [[2015Voss]] | [[2013Voss]] | «la cita esta de largo» |"
+    assert lb.quote_owner(dos, "la cita esta de largo", ["2015Voss", "2013Voss"]) is None
+
+
+def test_la_columna_Fuente_solo_se_lee_en_una_FILA_de_tabla():
+    """#325 — la regla de la celda vale dentro de una tabla. En prosa, un `|` suelto (una cita que
+    trae la barra de una tabla del paper, un `grep` con alternación) no convierte al párrafo en una
+    fila: leerlo así inventaría una columna *Fuente* que no existe."""
+    prosa = "El paper dice «la cita esta de largo | con una barra» y lo discute [[2013Voss]] | [[A]] |"
+    assert lb.quote_owner(prosa, "la cita esta de largo | con una barra",
+                          ["2013Voss", "A"]) is None

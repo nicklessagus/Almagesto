@@ -293,7 +293,10 @@ Progreso del ingest de <estrella>:
 3c. > ⚠ **Un ítem de linaje = un BULLET propio, no una oración con seis citas.** ⚠ Y su simétrico
 > (#316): un párrafo que **contrasta** dos fuentes legítimamente las cita a las dos — lo que no
 > puede pasar es que una **cita entrecomillada** quede sin su `[[bibcode]]` al lado, porque ahí el
-> chequeo no sabe de quién es y la prueba contra todas (la convención es `«…» [[bibcode]]`). Cuando enumeres
+> chequeo no sabe de quién es y la prueba contra todas (la convención es `«…» [[bibcode]]`).
+> ⛔ **«Al lado» es literal (#325):** entre la cita y su link sólo puntuación y, si va, el paréntesis
+> del localizador — con prosa en el medio el chequeo declara ambigüedad, y una **mención** posterior
+> («…atribuyendo eso a [[X]]») ya no se lleva la atribución. En una fila manda la columna *Fuente*. Cuando enumeres
 > quién hizo qué —«PCA vía SVD [[A]], [[B]]; Wapiti [[C]], [[D]]; YARARA [[E]]»— dale a cada fuente
 > su propio bullet. Medido sobre cuatro rondas de verificación de un concepto real: **los 7
 > `no-soportada`/`contradice` fueron TODOS de atribución**, ninguno de invención, y todos vivían en

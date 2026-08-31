@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.135.0"
+ALMAGESTO_VERSION = "1.136.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -820,16 +820,38 @@ _MATH_DELIMS = re.compile(r"\$([^$\n]*)\$")
 
 
 def quote_variants(quote: str) -> list:
-    """The normalized readings of a quote a source may legitimately contain (#287).
+    """The normalized readings of a quote a source may legitimately contain (#287/#326).
 
-    Two, and both are conservative: the math span **dropped** (the note re-marked a formula the
-    `.txt` cannot carry) and the math span **unwrapped** (`$A$` → `A`, which is exactly how a plain
-    letter appears in the extracted text). A quote counts as found if **either** reading is there —
-    the words still have to be in the source; what changes is which of the two markups of the same
-    words we compare against."""
+    Three, and las tres conservadoras: the math span **dropped** (the note re-marked a formula the
+    `.txt` cannot carry), the math span **unwrapped** (`$A$` → `A`, which is exactly how a plain
+    letter appears in the extracted text) and the math span treated as an **ELISION** (#326). A
+    quote counts as found if **any** reading is there — the words still have to be in the source;
+    what changes is which markup of the same words we compare against.
+
+    ⛔ The third one is the fix for a defect that made the whole check unusable on 14 % of a real
+    vault (**412 of 3036 quotes carry `$…$`**, and `CLAUDE.md` MANDATES that notation inside
+    `vault/wiki/`, so the affected population is by design every quote that touches a formula).
+    Dropping the span **glued the two halves together** and produced a string that exists nowhere:
+    «Reaching such a high $S/N_{cont}$ is not achievable» became *«reaching such a high is not
+    achievable»*, while the `.txt` has `s/ncont` in the middle. It is the very argument this
+    module's `quote_fragments` makes one screen below —a quote written «A … B» is not verbatim
+    anywhere, so it is checked in pieces— applied to the wrong marker. Consequence with the
+    #315→#321→#324 chain: step 1 of `quote_verdict` (*is it in the `.txt` of its source?*) could
+    **never** return True for those quotes, so they always fell through to the extraction
+    comparison and could be reported `alterada`, which blocks `--cierre` (#318) and the closing step
+    of four skills (#323) — **with no correction able to switch it off**, since the quote was
+    already right.
+
+    ⚠ Only `$…$` had this treatment: backticks and `[[wikilink]]` lose their DELIMITERS and keep
+    their text, which is unwrapping, not deletion."""
     directa = normalize_quote(quote)
-    sin_delim = normalize_quote(_MATH_DELIMS.sub(r"\1", str(quote or "")))
-    return [directa] if sin_delim == directa else [directa, sin_delim]
+    crudo = str(quote or "")
+    lecturas = [directa]
+    for otra in (normalize_quote(_MATH_DELIMS.sub(r"\1", crudo)),
+                 normalize_quote(_MATH_DELIMS.sub(" … ", crudo))):
+        if otra not in lecturas:
+            lecturas.append(otra)
+    return lecturas
 
 
 #: #288 · tokens que la EXTRACCIÓN mete en medio de la prosa y el paper no tiene: números de línea
