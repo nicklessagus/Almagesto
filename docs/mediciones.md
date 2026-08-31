@@ -719,3 +719,56 @@ compartida por #222/#324, no porque estuvieran rotos.
 escribió, y **declara** la que no puede barrer. La distinción que hace falta y el lint no puede
 hacer: la deuda se **agenda** y persiste en el reporte hasta cerrarse; la propuesta necesita que
 alguien **firme** y, si nadie la lee cuando aparece, **se pierde**.
+
+
+## 2026-08-31 · La canaleta era de la línea y no de la página (#332)
+
+**Qué era.** `lib_config.deinterleave_columns` partía **cada línea** por cada run de ≥ 8 espacios y
+mandaba el segmento `i` al stream `i`. En una página real ese índice **deriva renglón a renglón**
+—una ecuación con su número, una canaleta que se angosta a 7 espacios, un enunciado a todo el
+ancho—, así que una oración continua de **una** columna física caía en dos lecturas distintas y
+`source_texts` no podía encontrar una cita que **sí está verbatim en el `.txt`**. El paso 1 de
+`quote_verdict` (`en_su_txt`, #324) es justamente el que evita el falso «mal atribuido», y desde
+#323 ese gate frena operaciones.
+
+**Corpus.** Bóveda `Almagesto-Tesis`, 2026-08-31: **155 `.txt`** bajo `vault/raw/fulltext/` y
+**251 pares únicos (cita, bibcode con `.txt` en disco)** — los que arma `contrast.validar`
+(`split_blocks` + `quotes_in` + `quote_owner`), quedándose con el primer candidato que tiene `.txt` y
+resolviendo el bibcode duplicado entre slugs como lo hace `fulltext_readings` (`sorted(...)[0]`).
+⚠ **Es un A/B congelado**: la misma población, medida contra las dos versiones del módulo en la
+misma corrida (`git show a243977:scripts/lib_config.py` contra `HEAD`), porque la bóveda es una
+instancia viva y se estaba editando mientras se medía — dos corridas separadas no habrían sido
+comparables.
+
+| | antes (a243977) | después |
+|---|---:|---:|
+| `.txt` que devuelven **más de 2** lecturas | **148 / 155** (95 %), máximo **19** | **0 / 155** |
+| lecturas por `.txt` | 2 a 19 | **2 en los 155** |
+| citas encontradas por `source_texts` | 176 / 251 (70,1 %) | **196 / 251 (78,1 %)** |
+| de ésas, las que perdía **el corte de columnas** (están en el texto aplanado y en ninguna lectura) | 6 | **0** |
+
+Delta por par: **+25 recuperadas, −5**.
+
+⚠ **Discrepancia declarada (regla de método #5).** El issue #332 reportó *«5 de 318»* y *«168
+encontradas»*: contó **toda** cita ≥ 40 caracteres cuya fuente tenga `.txt`, sin resolver dueño y
+sin deduplicar el par. Los dos números miden poblaciones distintas y **no se mezclan**; las cuatro
+filas de arriba salen todas de la misma, antes y después.
+
+**Cómo se arregló, y por qué NO aplanando.** El texto aplanado contiene el empalme
+columna1→columna2, o sea frases que no escribió nadie (#46/#275): sirve como **cota superior de lo
+recuperable**, nunca como fuente. La canaleta pasa a ser de la **página**: se parte por `\f`, cada
+página elige **un** borde (`column_boundary` — el fin de canaleta más votado por sus líneas, que es
+donde arranca la columna derecha) y cada línea se corta ahí, en su propia canaleta más cercana, o
+queda entera a la izquierda si cruza el ancho.
+
+**El umbral que sí decide** (`BOUNDARY_SPACES_MIN`): cuántos espacios alcanzan para leer el borde de
+la página en una línea sin canaleta propia. Sobre los mismos 251 pares — **1**: 189 · **2**: 198 ·
+**3**: 198 · **4**: 196 · **8**: 187. Con 1 se acepta la separación normal entre palabras y se corta
+por el medio una línea a todo el ancho; de 2 en adelante no. La guarda decide; su valor exacto por
+encima de 2, no.
+
+**Las 5 que el corte nuevo pierde y el viejo encontraba** son la clase opuesta, y son legítimas
+(#205): un fragmento corto e indentado —un exponente, un `−2`, el `1 1` de dos superíndices— que
+pertenece **de verdad** a esa columna y que el cortador viejo mandaba por accidente al stream de al
+lado, dejando la prosa limpia. Hoy quedan donde están, la cita cae al paso 2 de `quote_verdict` (la
+extracción) y el `.txt` queda declarado como lo que es: un índice degradado.

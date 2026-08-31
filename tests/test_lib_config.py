@@ -1773,6 +1773,90 @@ def test_paridad_de_la_canaleta_entre_lib_config_y_measure_layout():
     assert ml.GUTTER is cfg.GUTTER
 
 
+# ── #332 · la canaleta es de la PÁGINA, no de cada línea ────────────────────────────────────────
+
+# Página de dos columnas donde la canaleta se ANGOSTA en una línea (7 espacios: la columna
+# izquierda casi llega al borde) y se ENSANCHA en otra. Renglón a renglón eso corre el índice de
+# columna, así que la oración de la derecha —una sola, continua, partida en cuatro renglones
+# físicos— cae en lecturas distintas. Es la forma exacta del caso medido en #332 sobre
+# `1994SigPr..36..287C` (p. 296).
+_PAGINA_CANALETA_IRREGULAR = "\n".join([
+    "3. Optimization criteria                                    16 fails to separate them (this is the",
+    "H(p) = - I(p),          where y = Q x.    (3.1)             same behaviour as for Gaussian compo-",
+    "In practice the densities are not known, so that the        nents). However, as in Theorem 11, at",
+    "criterion cannot be directly utilized. The aim of this      most one source component is allowed",
+    "section is to express the contrast as a function of         to have a null cumulant.",
+])
+_ORACION_COL2 = ("same behaviour as for Gaussian components). However, as in Theorem 11, at most "
+                 "one source component is allowed to have a null cumulant.")
+
+
+def test_source_texts_no_parte_una_oracion_continua_entre_dos_lecturas():
+    """#332 — la oración vive ENTERA en la columna derecha; el cortador la partía en dos lecturas.
+
+    El paso 1 de `quote_verdict` (`en_su_txt`, #324) es el que evita el falso «mal atribuido», y
+    desde #323 ese gate frena operaciones: una cita que SÍ está verbatim en el `.txt` de su fuente
+    no puede salir «no está» porque el cortador la repartió."""
+    lecturas = cfg.source_texts(_PAGINA_CANALETA_IRREGULAR)
+    assert any(cfg.quote_found(_ORACION_COL2, s) for s in lecturas), \
+        "la oración de la columna derecha no está entera en ninguna lectura"
+
+
+def test_source_texts_da_UNA_lectura_POR_COLUMNA_FISICA():
+    """#332 — una página impresa tiene una o dos columnas. Medido sobre una bóveda real: **148 de
+    155** `.txt` devolvían más de dos lecturas, hasta **19**; con 19 lecturas sobre un paper de dos
+    columnas, qué cita sobrevive es un accidente del corte."""
+    assert len(cfg.source_texts(_PAGINA_CANALETA_IRREGULAR)) == 2
+
+
+_PAGINA_CON_TITULO_Y_LINEA_CORTA = "\n".join([
+    'THEOREM 14. For a standardized scalar variable Z, the negentropy is approximated by',
+    'We start with the Edgeworth expansion of a         and the calculus of the mutual information',
+    'density. A central limit theorem says that         of a standardized vector needs not only',
+    'if z is a sum of m independent variables,          the marginal negentropy of each component',
+    'then the cumulant of z is of order two.            but also the joint negentropy of it.',
+    'Q.E.D.',
+])
+
+
+def test_la_linea_a_todo_ancho_no_se_corta_por_el_borde_de_la_pagina():
+    """#332 — un enunciado, un título o un epígrafe cruza la página entera: en el borde de columna
+    lleva TEXTO, no espacios. Cortarlo ahí partiría en dos una frase que la fuente escribió
+    seguida; queda entero del lado izquierdo, que es donde vive el flujo que lo rodea."""
+    titulo = "standardized scalar variable Z, the negentropy is approximated by"
+    lecturas = cfg.source_texts(_PAGINA_CON_TITULO_Y_LINEA_CORTA)
+    assert cfg.quote_found(titulo, lecturas[0])
+
+
+def test_la_linea_mas_corta_que_el_borde_queda_entera_a_la_izquierda():
+    """#332 — el último renglón de un párrafo no llega al borde de columna. No tiene mitad derecha:
+    va entero a la izquierda (y leer más allá de su largo sería leer otra línea)."""
+    lecturas = cfg.source_texts(_PAGINA_CON_TITULO_Y_LINEA_CORTA)
+    assert "q.e.d." in lecturas[0]
+
+
+def test_source_texts_de_un_txt_en_blanco_no_devuelve_una_lectura_vacia():
+    """Una lectura vacía no es una lectura: `fulltext_readings` la pasaría como fuente y
+    `quote_verdict` leería «hay `.txt` y la cita no está» donde lo cierto es *no evaluable* (D-43).
+    Pasa de verdad: un escaneo cuyo OCR no sacó nada deja un `.txt` de puros espacios."""
+    assert cfg.source_texts("   \n  \n") == []
+
+
+def test_source_texts_deduplica_dos_lecturas_identicas():
+    """El contrato dice «deduplicated»: dos columnas que normalizan igual son UNA lectura, o el
+    llamador paga dos veces el mismo `quote_found` y cualquier conteo de lecturas miente."""
+    assert len(cfg.source_texts("una frase repetida a los dos lados        "
+                                "una frase repetida a los dos lados")) == 1
+
+
+def test_source_texts_sigue_sin_validar_el_empalme_con_canaleta_irregular():
+    """⛔ La dirección peligrosa de #46/#275 no se afloja para arreglar #332: el empalme
+    columna1→columna2 sigue siendo una frase que no escribió nadie."""
+    empalme = "the contrast as a function of to have a null cumulant"
+    assert not any(cfg.quote_found(empalme, s)
+                   for s in cfg.source_texts(_PAGINA_CANALETA_IRREGULAR))
+
+
 # ── #270 · los ejes que una vista contesta ──────────────────────────────────────────────────────
 
 _VISTA_EJES = """## Vista — tau Cet (2026-08-30)

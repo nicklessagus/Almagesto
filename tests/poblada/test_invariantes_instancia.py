@@ -339,6 +339,26 @@ def test_papers_declaran_facets_no_topics(instancia_real):
     assert sin_facets == [], f"notas de paper sin `facets:` (schema pre-R-5): {len(sin_facets)}"
 
 
+def test_ningun_txt_del_corpus_devuelve_mas_de_dos_lecturas(instancia_real):
+    """#332 — una página impresa tiene una o dos columnas, así que `source_texts` devuelve una o dos
+    lecturas. Es el invariante BARATO del cortador: el número de lecturas no depende del contenido,
+    sólo de la maqueta, y un `.txt` que devuelve tres ya partió algo de más.
+
+    Medido antes del fix sobre esta misma población: **148 de 155** devolvían más de dos, hasta
+    **19** — y con 19 lecturas sobre un paper de dos columnas, qué cita sobrevive es un accidente
+    del corte. Declara su población (INV-40): un `(0)` sobre cero archivos no es un veredicto."""
+    txts = sorted(cfg.FULLTEXT.rglob("*.txt"))
+    assert txts, "sin `.txt` bajo raw/fulltext/ — ¿ALMAGESTO_INSTANCIA apunta a la instancia correcta?"
+    # la clave es la ruta relativa, no el basename: el mismo bibcode vive bajo varios slugs (D-18)
+    # y un dict por nombre se pisaría a sí mismo, subdeclarando su propia población.
+    de_mas = {str(p.relative_to(cfg.FULLTEXT)):
+              len(cfg.source_texts(p.read_text(encoding="utf-8", errors="replace")))
+              for p in txts}
+    peores = {k: v for k, v in de_mas.items() if v > 2}
+    assert not peores, (f"sobre {len(txts)} `.txt` de raw/fulltext/: {len(peores)} devuelven más de "
+                        f"dos lecturas — {dict(sorted(peores.items(), key=lambda kv: -kv[1])[:5])}")
+
+
 # ── el hueco documentado que SÍ falla hoy: se escribe como test del hallazgo, no se esconde ──────
 
 @pytest.mark.xfail(
