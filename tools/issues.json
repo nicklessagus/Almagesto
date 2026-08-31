@@ -1664,11 +1664,31 @@
   {
    "number": 334,
    "title": "#331 arregló 2 de 4 sitios: `lint.py:1881` y `extraction_prompt.py:619` siguen emitiendo `make_notes.py <slug>` sin `--theme` — y el del lint es el remedio de una categoría cuya población de conceptos es el 100 %",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 335,
    "title": "`mutar.py --guardas` da el MISMO mensaje para «la función está en EXENTAS» y «el símbolo no existe», que piden acciones opuestas — es el D-43 que el propio módulo predica, y ya costó que el guard de #331 fuera invisible para toda red mientras vivió dentro de `main`",
+   "state": "CLOSED"
+  },
+  {
+   "number": 336,
+   "title": "La lectura del `.txt` pierde texto por tres vías más: el borrado de `$…$` aplicado a la FUENTE se come el 36 % de una columna (9 de 155 archivos), el guión de corte no absorbe la sangría (102 de 155) y los fragmentos de una cita elidida caen en lecturas distintas",
+   "state": "OPEN"
+  },
+  {
+   "number": 337,
+   "title": "Dos falsos positivos permanentes del lint: la línea canónica de «Inferencias declaradas» usa una variable de otro loop (las tres notas reciben 19 cuando son 1, 7 y 19), y el chequeo de citas del `log.md` no usa `quote_owner` — #316 sobrevive en el camino hermano",
+   "state": "OPEN"
+  },
+  {
+   "number": 338,
+   "title": "`lint.py` otra vez por los dos lados: el remedio del artefacto colgado hardcodea `--theme` sobre lo que puede ser una estrella (espejo de #334), y `papers_table_stale` (D-10) no mira NINGÚN concepto — 2 de 3 sujetos de esta bóveda",
+   "state": "OPEN"
+  },
+  {
+   "number": 339,
+   "title": "`tools/mutar.py`: la conflación de #335 sigue en `--trazabilidad` y `--dirigida` (y ahí SIN hedge: afirma «no existen» sobre `triage.main`, que existe), `tools/` queda fuera de las redes 1 y 4 con un mensaje que niega un archivo que existe, y ningún flag de `tools/` se valida",
    "state": "OPEN"
   }
  ]
