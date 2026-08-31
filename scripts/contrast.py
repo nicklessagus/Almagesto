@@ -249,10 +249,20 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
     separate code they already diverged —13 against 12 over the same vault the same day— and the
     extra one was a FALSE positive this command would have turned into a blocked closing step.
 
-    Returns `{"alteradas": [(línea, motivo)], "no_evaluables": [(línea, motivo)], "citas": N}` —
-    counts, so the sweep can declare its population (INV-40) instead of printing a bare zero."""
+    ⛔ **What it approves with ONE witness is counted, not hidden (#341).** Step 2 of
+    `quote_verdict` —`txt_degradado`— clears a quote because an extraction of its own source holds
+    it while the `.txt` of that same source does not. That is the right call (the `.txt` is a
+    degraded index, #205) and it is **a single reading of the PDF**: the one made by an LLM.
+    Measured over a real vault (2026-08-31, 163 notes, 3099 quotes): of the **242** it approved,
+    **45** rest on that single witness, and the command printed `0 ✅` over all of them without
+    saying so. So it travels in the population line (INV-40); it is not a finding and **does not
+    move the rc** — if it did, the mandatory closing step of #323 would stop on 45 correct quotes.
+
+    Returns `{"alteradas": [(línea, motivo)], "no_evaluables": [(línea, motivo)], "citas": N,
+    "solo_extraccion": J}` — counts, so the sweep can declare its population (INV-40) instead of
+    printing a bare zero."""
     texto = nota.read_text(encoding="utf-8")
-    out = {"alteradas": [], "no_evaluables": [], "citas": 0}
+    out = {"alteradas": [], "no_evaluables": [], "citas": 0, "solo_extraccion": 0}
     bibs_nota = set(lb._bibcodes(texto))
     for b in lb.split_blocks(texto):
         bibs = lb._bibcodes(b.text) or lb._bibcodes(b.intro or "")
@@ -268,6 +278,11 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
             ver, det = cfg.quote_verdict(cita, candidatos, bibs_nota, txts, ambiguo=ambiguo)
             corte = cita if len(cita) <= 70 else cita[:70] + "…"
             quienes = ", ".join(candidatos) or "sin fuente adyacente"
+            if ver == "txt_degradado":
+                # #341 — aprobada por UN SOLO TESTIGO: la extracción de su fuente la dice y el
+                # `.txt` de esa misma fuente no. Se cuenta acá, antes del `continue`, porque el
+                # veredicto es correcto y aun así la población que lo lleva tiene que ser visible.
+                out["solo_extraccion"] += 1
             if ver in ("en_su_txt", "txt_degradado", "txt_parte"):
                 continue
             if ver == "alterada" and det["otro_bib"]:
@@ -328,15 +343,17 @@ def validar_todo(slug: str | None = None) -> int:
     `verify-citations`, `lint --cierre` at 0 and **12 altered or misattributed quotes inside**; the
     comparison that caught them in seconds was written and never run.
 
-    Declares its population (INV-40) and what it could not evaluate (D-43) — without
-    `--migrate-extracciones` that population is **zero**, and a silent zero would read as a verdict.
-    Returns the number of blocking findings, so it works as a gate."""
+    Declares its population (INV-40), what it could not evaluate (D-43) and what it approved with
+    a single witness (#341) — without `--migrate-extracciones` that population is **zero**, and a
+    silent zero would read as a verdict. Returns the number of blocking findings, so it works as a
+    gate: neither of the two extra counts moves it."""
     notas = _notes_of(slug)
-    alteradas = no_eval = citas = 0
+    alteradas = no_eval = citas = solo_ext = 0
     for f in notas:
         r = validar(f, mostrar=False)
         citas += r["citas"]
         no_eval += len(r["no_evaluables"])
+        solo_ext += r["solo_extraccion"]
         if r["alteradas"]:
             cfg.print_seguro(f"\n{f.relative_to(cfg.ROOT)}")
             for ln, motivo in r["alteradas"]:
@@ -344,7 +361,8 @@ def validar_todo(slug: str | None = None) -> int:
             alteradas += len(r["alteradas"])
     ambito = f"las notas de `{slug}`" if slug else "toda la bóveda"
     cfg.print_seguro(f"\n> sobre {len(notas)} nota(s) de {ambito} · {citas} cita(s) «…» · "
-                     f"{no_eval} no evaluable(s) (sin extracción en disco, o la extracción calla)")
+                     f"{no_eval} no evaluable(s) (sin extracción en disco, o la extracción calla) · "
+                     f"{solo_ext} sólo respaldada(s) por la extracción")
     if not citas:
         cfg.print_seguro("  ⚠ NO EVALUADO: ninguna cita mirada. Si la bóveda es anterior a #311, "
                          "corré `python scripts/make_notes.py --migrate-extracciones` — un cero sin "
@@ -352,6 +370,11 @@ def validar_todo(slug: str | None = None) -> int:
     cfg.print_seguro(f"  {alteradas} cita(s) con evidencia POSITIVA de alteración"
                      + (" ✅" if not alteradas else " ⛔ — corregilas contra el JSON de extracción, "
                         "no contra el `.txt`"))
+    if solo_ext:
+        cfg.print_seguro(f"  ⚠ de las aprobadas, {solo_ext} se apoyan en UN SOLO TESTIGO: la "
+                         f"extracción de su fuente las dice y el `.txt` de esa misma fuente no. Es "
+                         f"el veredicto correcto (el `.txt` es un índice degradado, #205) y "
+                         f"**no** es un hallazgo: ante la duda, la página del PDF (#341)")
     return alteradas
 
 
@@ -394,7 +417,9 @@ def main(argv=()) -> int:
             return 2
         r = validar(nota)
         cfg.print_seguro(f"  {len(r['alteradas'])} cita(s) con evidencia positiva de alteración "
-                         f"· {len(r['no_evaluables'])} no evaluable(s) · {r['citas']} mirada(s)"
+                         f"· {len(r['no_evaluables'])} no evaluable(s) · "
+                         f"{r['solo_extraccion']} sólo respaldada(s) por la extracción · "
+                         f"{r['citas']} mirada(s)"
                          + (" ✅" if not r["alteradas"] else " ⛔"))
         return 1 if r["alteradas"] else 0
 
