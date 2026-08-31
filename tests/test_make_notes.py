@@ -4772,3 +4772,30 @@ def test_rename_paper_no_pisa_un_hermano_que_ya_esta_en_el_destino(toy_vault):
     nuevo.write_text("YA ESTABA\n", encoding="utf-8")
     mn.rename_paper("2020arXiv", "2021ApJ")
     assert nuevo.read_text(encoding="utf-8") == "YA ESTABA\n"
+
+
+# ── #352 · la celda del índice: «sin valor» no es lo mismo que «sin columna» ──────────────────────
+
+def test_la_celda_del_indice_marca_el_valor_ausente():
+    """#352 — `_celda_idx` sobrevivía a la mutación: vaciarla entera (→ `return None`) publica la
+    cadena `None` en el catálogo que #237 estampó justamente para que un agente lea RESULTADOS, y
+    ningún test se ponía rojo. Lo que la función promete es que un campo ausente se vea como `—`:
+    una celda vacía (`|  |`) es GFM legal y se lee igual que una columna que no está."""
+    assert mn._celda_idx(None) == "—"
+    assert mn._celda_idx("") == "—"
+    assert mn._celda_idx([]) == "—"
+
+
+def test_la_celda_del_indice_no_confunde_un_cero_con_un_hueco():
+    """La otra mitad, y el motivo de que la guarda sea `v in (None, "", [])` y no `not v`: un `0`
+    está PRESENTE. Con `not v` el índice publicaría `—` sobre un valor que la ficha sí trae, o sea
+    afirmaría un hueco que no existe."""
+    assert mn._celda_idx(0) == "0"
+    assert mn._celda_idx(0.0) == "0.0"
+    assert mn._celda_idx("K5V") == "K5V"
+
+
+def test_la_fila_del_indice_publica_el_guion_y_no_la_cadena_None():
+    """La misma garantía donde el lector la ve: la fila estampada de `## Estrellas`."""
+    filas = mn._index_stars([("tau-cet", None, 34.0, 2)]).split("\n")
+    assert filas[-1] == "| [[tau-cet]] | — | 34.0 | 2 |"

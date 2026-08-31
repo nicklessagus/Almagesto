@@ -5,9 +5,15 @@
 # esta sesión encontró cuatro veces (un `assert path.glob(...)` siempre truthy, una guarda cuyo
 # test pasaba sin la guarda, un "espera creciente" que `[2.0, 2.0]` satisface, un test de
 # determinismo corriendo las dos pasadas en el mismo proceso).
-medido_en: "2026-08-28"
-alcance: "TODO `scripts/` — 464 funciones, barrido completo (`--todo --ratchet`, 1.75.0)"
+medido_en: "2026-08-31"
+alcance: "TODO `scripts/` (648) + `tools/` (24) = 672 funciones, barrido completo
+  (`--todo --ratchet`, 1.169.0); exento declarado aparte: tools/refresh_issues.py"
 techo: 3
+
+# ⚠ Los dos campos de arriba se leen JUNTOS: `techo` es el veredicto y `alcance` es la población
+# sobre la que se midió (INV-40). Un `alcance` vencido convierte al techo en un número sin
+# denominador — es AUD-35, y este archivo ya lo documenta dos veces más abajo. Se re-declara en cada
+# barrido completo, aunque el techo no se mueva.
 
 # RE-MEDIDO EL 2026-08-28 (1.75.0) sobre 464 funciones: **siguen siendo LAS MISMAS 3**, así que el
 # techo no se mueve. La población creció de 338 a 464 —dos sesiones de auditoría, seis huecos de
@@ -21,8 +27,13 @@ techo: 3
 # f-string que no matcheaba, así que no cambiaba el archivo y la aserción se cumplía sola—. Ninguna
 # la vio la revisión; las tres las cazó la mutación. Cubiertas, el barrido vuelve a 3.
 #
-# COSTO MEDIDO: **11,3 min** (681 s) para 464 funciones = **1,47 s por mutante**, con las dos etapas
-# de #187. El número viejo del handoff (~1 h) es de antes de esa partición y no es comparable.
+# COSTO MEDIDO ENTONCES: **11,3 min** (681 s) para 464 funciones = **1,47 s por mutante**, con las
+# dos etapas de #187. El número viejo del handoff (~1 h) es de antes de esa partición y no es
+# comparable. ⚠ **Este número está VENCIDO desde el 2026-08-31** y se deja acá porque describe su
+# corrida, no porque siga valiendo: el costo por mutante casi se triplicó sin que cambiara la
+# herramienta —la suite tier 0 pasó a ~63 s y cada sobreviviente de la etapa 1 la paga entera—. El
+# vigente está al pie, en el bloque de #352; las tres cifras son tres universos distintos y se
+# declaran las tres en vez de elegir una (regla de método 5).
 
 # ⚠ NOTA HISTÓRICA (2026-08-24, cuando `techo` valía 10 — hoy vale 3, ver arriba).
 # EL TECHO SUBIÓ DE 7 A 10, Y NO ES UNA REGRESIÓN — es la primera medición sobre el árbol
@@ -178,3 +189,32 @@ techo: 3
 #   · `_traceability_pairs::if inv not in registro or …` (cláusula `or[0]`)
 # Cerradas TODAS con test, ninguna con techo: segunda corrida **0 de 70** (1154 s). Cada una vista
 # morir por su propia línea antes de contarla (regla de método 3).
+
+# ── 2026-08-31 · #352: el gate VOLVIÓ A VERDE, y las dos mediciones vencidas (1.169.0) ─────────
+# Tres cosas que no se mezclan (regla de método 5).
+#
+# (a) EL TECHO NO SE MOVIÓ Y EL GATE PASA. Barrido completo sobre **672 funciones** —648 de
+#     `scripts/` + 24 de `tools/`, con `tools/refresh_issues.py` exento y nombrado— → **3
+#     sobrevivientes**, o sea el techo exacto. Los 3 son las fronteras de red conocidas y
+#     declaradas: `citation_index._fetch_ads_default`, `citation_index._fetch_oa_default`,
+#     `fetch_web.fetch`. Los TRES de #345 que no eran frontera se cerraron **con test, no con
+#     amnistía** —`fetch_web.content_type`, `lint._alias_idx_cached`, `make_notes._celda_idx`—,
+#     cada uno visto morir por su propia línea antes de contarlo (regla de método 3).
+#
+#     ⚠ `_alias_idx_cached` es el caso que vale la pena recordar: vaciarla **no cambia el veredicto
+#     del lint** (`method_target(nombre, None)` re-construye el índice solo), así que un test que
+#     chequeara sólo el resultado habría quedado VERDE con el cuerpo vaciado. Tiene dos garantías y
+#     la mutación mata una sola; el assert que hace al test significar algo es el **conteo** de
+#     construcciones (1 con caché, 9 sin ella sobre 3 fichas × 3 indicadores).
+#
+# (b) EL `alcance` DE ARRIBA ESTABA VENCIDO Y SE RE-DECLARA. Decía «464 funciones» (2026-08-28);
+#     la población real de hoy es **672**. Es AUD-35 por tercera vez en este mismo archivo, así que
+#     de acá en más el campo se re-declara en CADA barrido completo, se mueva o no el techo.
+#     ⚠ Y nada lo chequea: el número vive en un string de prosa mientras `mutar.funciones` sabe
+#     contar la población real. Queda declarado como hueco, no cerrado.
+#
+# (c) COSTO VIGENTE: **29,9 min (1794 s) para 672 funciones = 2,67 s por mutante**. El 11,3 min /
+#     464 del 2026-08-28 y el 32,5 min / 655 del 2026-08-31 (#345) NO son comparables con éste ni
+#     entre sí: son tres poblaciones. ⚠ **Salvedad de la medición**: la máquina no estuvo ociosa —el
+#     tier `poblada` (203 s) y una corrida de `lint.py` compartieron CPU—, así que 1794 s es un
+#     TECHO del costo limpio, no el costo limpio. El árbol sí estuvo quieto (#199).
