@@ -1103,3 +1103,155 @@ una hipótesis no cuenta: declara el alcance del *veredicto*, que es otra afirma
 alcance *«¿tu paper dice algo de X?»*— es un **fan-out por hueco** y queda como issue aparte. Esto es
 la red barata: **declarar el alcance y chequearlo contra el disco**, que es lo que convierte una
 universal falsa en una acotada verdadera.
+
+## 2026-08-31 · La canaleta era de la línea y no de la página (#332)
+
+**Qué era.** `lib_config.deinterleave_columns` partía **cada línea** por cada run de ≥ 8 espacios y
+mandaba el segmento `i` al stream `i`. En una página real ese índice **deriva renglón a renglón**
+—una ecuación con su número, una canaleta que se angosta a 7 espacios, un enunciado a todo el
+ancho—, así que una oración continua de **una** columna física caía en dos lecturas distintas y
+`source_texts` no podía encontrar una cita que **sí está verbatim en el `.txt`**. El paso 1 de
+`quote_verdict` (`en_su_txt`, #324) es justamente el que evita el falso «mal atribuido», y desde
+#323 ese gate frena operaciones.
+
+**Corpus.** Bóveda `Almagesto-Tesis`, 2026-08-31: **155 `.txt`** bajo `vault/raw/fulltext/` y
+**251 pares únicos (cita, bibcode con `.txt` en disco)** — los que arma `contrast.validar`
+(`split_blocks` + `quotes_in` + `quote_owner`), quedándose con el primer candidato que tiene `.txt` y
+resolviendo el bibcode duplicado entre slugs como lo hace `fulltext_readings` (`sorted(...)[0]`).
+⚠ **Es un A/B congelado**: la misma población, medida contra las dos versiones del módulo en la
+misma corrida (`git show a243977:scripts/lib_config.py` contra `HEAD`), porque la bóveda es una
+instancia viva y se estaba editando mientras se medía — dos corridas separadas no habrían sido
+comparables.
+
+| | antes (a243977) | después |
+|---|---:|---:|
+| `.txt` que devuelven **más de 2** lecturas | **148 / 155** (95 %), máximo **19** | **0 / 155** |
+| lecturas por `.txt` | 2 a 19 | **2 en los 155** |
+| citas encontradas por `source_texts` | 176 / 251 (70,1 %) | **196 / 251 (78,1 %)** |
+| de ésas, las que perdía **el corte de columnas** (están en el texto aplanado y en ninguna lectura) | 6 | **0** |
+
+Delta por par: **+25 recuperadas, −5**.
+
+⚠ **Discrepancia declarada (regla de método #5).** El issue #332 reportó *«5 de 318»* y *«168
+encontradas»*: contó **toda** cita ≥ 40 caracteres cuya fuente tenga `.txt`, sin resolver dueño y
+sin deduplicar el par. Los dos números miden poblaciones distintas y **no se mezclan**; las cuatro
+filas de arriba salen todas de la misma, antes y después.
+
+**Cómo se arregló, y por qué NO aplanando.** El texto aplanado contiene el empalme
+columna1→columna2, o sea frases que no escribió nadie (#46/#275): sirve como **cota superior de lo
+recuperable**, nunca como fuente. La canaleta pasa a ser de la **página**: se parte por `\f`, cada
+página elige **un** borde (`column_boundary` — el fin de canaleta más votado por sus líneas, que es
+donde arranca la columna derecha) y cada línea se corta ahí, en su propia canaleta más cercana, o
+queda entera a la izquierda si cruza el ancho.
+
+**El umbral que sí decide** (`BOUNDARY_SPACES_MIN`): cuántos espacios alcanzan para leer el borde de
+la página en una línea sin canaleta propia. Sobre los mismos 251 pares — **1**: 189 · **2**: 198 ·
+**3**: 198 · **4**: 196 · **8**: 187. Con 1 se acepta la separación normal entre palabras y se corta
+por el medio una línea a todo el ancho; de 2 en adelante no. La guarda decide; su valor exacto por
+encima de 2, no.
+
+**Las 5 que el corte nuevo pierde y el viejo encontraba** son la clase opuesta, y son legítimas
+(#205): un fragmento corto e indentado —un exponente, un `−2`, el `1 1` de dos superíndices— que
+pertenece **de verdad** a esa columna y que el cortador viejo mandaba por accidente al stream de al
+lado, dejando la prosa limpia. Hoy quedan donde están, la cita cae al paso 2 de `quote_verdict` (la
+extracción) y el `.txt` queda declarado como lo que es: un índice degradado.
+
+## 2026-08-31 · Los otros tres agujeros de la misma lectura del `.txt` (#336)
+
+Hermanos de #332 (que es el cuarto), con la misma consecuencia: una cita **verbatim en la fuente**
+sale como «no está», y lo que eso cuesta es el paso 1 de `quote_verdict` (`en_su_txt`, #324) — el que
+evita el falso `alterada`, y desde #323 un gate que frena operaciones. Mismo corpus congelado que
+#332: `Almagesto-Tesis`, 2026-08-31, **155 `.txt`**, **251 pares únicos** (cita, bibcode con `.txt`).
+
+### 1 · el borrado de `$…$` se aplicaba al TEXTO FUENTE
+
+`normalize_source_text` delegaba entero en `normalize_quote`, cuya `_QUOTE_MARKUP_RE` borra
+`\$[^$]*\$`. Eso es correcto **sobre la cita** —la nota re-marcó una fórmula que el `.txt` no puede
+tener igual (#287/#326)— y no sobre el `.txt`, donde el `$` es un carácter del documento: dos `$`
+literales borran **todo lo que hay en el medio**.
+
+| `.txt` | qué se comía | de una columna de |
+|---|---:|---:|
+| `1998Cichocki` (copyright de Elsevier `0925-2312/98/$ — see front matter`, más otro `$`) | 16 434 caracteres (**37,9 %**) | 43 401 |
+| `2011ApJ...730...95B` | 8 457 (**26,1 %**) | 32 441 |
+| `2010ApJ...718..543M` | 6 961 (**22,5 %**) | 30 935 |
+
+Población: **10 de 155** `.txt` (6 %) perdían texto. ⚠ El issue reportó **9** y un peor caso de
+36 %: la diferencia es que acá se mide sobre las columnas que produce el cortador de #332 y sobre la
+bóveda del día, con `1998Cichocki` presente bajo dos slugs. Se declara en vez de elegir uno (regla de
+método #5).
+
+**El arreglo es una regex, no una excepción:** `_SOURCE_MARKUP_RE` es `_QUOTE_MARKUP_RE` **menos** el
+span de matemática, y lo compartido (sustituciones tipográficas, guión, espacios, `casefold`) vive en
+**una** función, `_normalize_text` — una diferencia entre los dos lados que nadie decidió es un match
+que nadie decidió (regla de método #2).
+
+### 2 · el join del guión de corte no absorbía la sangría
+
+`t.replace("-\n", "")`. En un `.txt` de `pdftotext -layout` la continuación viene **indentada**
+—es la columna física—, así que `homoscedas-\n     tic` quedaba `homoscedas tic` y la palabra
+partida no volvía a unirse nunca. Medido: **141 de 155** archivos y **4232** ocurrencias de
+`[A-Za-z]-\n[ \t]+[a-z]` sobre el `.txt` crudo (**140 / 3126** sobre las columnas ya cortadas, que es
+donde el join corre de verdad). ⚠ El issue reportó 102 / 1860 sobre la bóveda de ese momento; misma
+salvedad que arriba. Hoy el join es `_HYPHEN_BREAK_RE = -\n[ \t]*`.
+
+### 3 · los fragmentos de una cita elidida en lecturas distintas — **desapareció solo con #332**
+
+`quote_found` exige todos los fragmentos de una cita elidida en la **misma** lectura. El caso del
+issue (`2010ComonJutten`, la coherencia espacial, líneas 813-816 del `.txt`) fallaba porque el
+cortador viejo mandaba dos líneas **consecutivas de la misma columna** a lecturas distintas. Con la
+canaleta de página los dos fragmentos vuelven a la lectura 0 y `quote_found` devuelve `True`:
+
+```
+variante «$G$» borrada:      ['if the noise spatial coherence is known' → []      , 'one can build an unbiased estimate…' → [0]]
+variante «$G$» desenvuelta:  ['if the noise spatial coherence g is known' → [0]   , 'one can build an unbiased estimate…' → [0]]
+variante «$G$» como elisión: ['if the noise spatial coherence' → [0]              , 'one can build an unbiased estimate…' → [0]]
+```
+
+**Se confirmó antes de tocar nada y `quote_found` NO se tocó.** Aflojar ahí habría sido exactamente
+lo contrario de lo que hace falta: exigir los fragmentos en la misma lectura es lo que impide que una
+cita se arme cruzando la canaleta (#46/#275).
+
+### El efecto de 1 y 2, sobre la misma población
+
+Citas encontradas: **196 / 251 con #332 → 198 / 251 con #332 + #336** (+2 sobre las +25 de #332).
+El número es chico porque los dos defectos golpean donde ya golpeaba el corte de columnas; lo que
+cambia es que dejan de golpear **en silencio**, y el 37,9 % de una columna que el borrado de `$…$`
+se comía era una porción del índice de búsqueda que simplemente no existía para nadie.
+
+### Cómo se movió la población de `quote_verdict` (#332 + #336, mismo corpus)
+
+Ninguno de los dos issues toca `quote_verdict`, pero los dos cambian **su insumo**, así que la
+población de cada paso se mide antes y después. Sobre los **3082 casos únicos** `(cita, fuentes,
+nota)` de la bóveda —el universo completo, no sólo los que tienen `.txt`—:
+
+| veredicto | antes | después | qué significa |
+|---|---:|---:|---|
+| `no_evaluable` | 2825 | 2825 | sin `.txt` ni extracción — el fix no puede tocarlo (D-43) |
+| **`en_su_txt`** (paso 1) | 195 | **218** | la cadena está en el `.txt` de SU fuente: nada que decir |
+| `txt_degradado` (paso 2) | 42 | 24 | ya no hace falta la extracción para rescatarlas |
+| `no_verbatim` (paso 5, backlog) | 19 | 12 | — |
+| `txt_parte` (paso 3, #288) | 1 | 2 | — |
+| **`alterada`** (paso 4, BLOQUEA) | 0 | **1** | ⚠ ver abajo |
+
+⛔ **El `alterada` que aparece es un VERDADERO positivo, y su historia es el argumento entero de
+#332.** La nota cita *«Reaching such a high $S/N_{cont}$ is not achievable for any star and
+telescope that put strong constraints on the observational **method**»* y el paper
+([[2022A&A...659A..68C]], p. 13, columna derecha) dice *«…constraints on the observational
+**strategies needed to correct for stellar activity with the present** method»*. La cita se comió 63
+caracteres del medio y pegó las dos puntas.
+
+Lo decisivo es **por qué nadie lo veía**: con el cortador viejo la línea del medio caía en otra
+«columna», así que el `.txt` **parecía** decir «observational method» seguido — la adyacencia
+fabricada que #46/#275 existe para impedir— y el paso 1 devolvía `en_su_txt`. Peor: el `log.md` de
+esa bóveda registra una corrección previa que **recortó la nota hacia esa cadena inventada**
+(*«la fuente cierra en “constraints on the observational method” y la nota continuaba 90 caracteres
+inventados»*), y la cola falsa se propagó a la columna *Evidencia* del bloque de verificación. O sea:
+el cortador roto no sólo escondió un defecto, **dictó una corrección equivocada y la dejó en verde**.
+
+El caso simétrico —una cita que el corte viejo encontraba y el nuevo no (`en_su_txt` →
+`no_verbatim`, 1 caso)— es el `.txt` que intercala un superíndice en medio de la prosa
+(`…which are simply inverse` / `−2` / `variances wij = σij`): el corte viejo mandaba ese fragmento a
+otro stream **por accidente** y dejaba la prosa limpia. Es la misma mecánica que fabricó el falso
+`en_su_txt` de arriba, así que se va con ella; cae en `no_verbatim`, que es **backlog** y nunca
+bloquea.

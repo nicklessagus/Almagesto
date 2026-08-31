@@ -1679,17 +1679,17 @@
   {
    "number": 337,
    "title": "Dos falsos positivos permanentes del lint: la línea canónica de «Inferencias declaradas» usa una variable de otro loop (las tres notas reciben 19 cuando son 1, 7 y 19), y el chequeo de citas del `log.md` no usa `quote_owner` — #316 sobrevive en el camino hermano",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 338,
    "title": "`lint.py` otra vez por los dos lados: el remedio del artefacto colgado hardcodea `--theme` sobre lo que puede ser una estrella (espejo de #334), y `papers_table_stale` (D-10) no mira NINGÚN concepto — 2 de 3 sujetos de esta bóveda",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 339,
    "title": "`tools/mutar.py`: la conflación de #335 sigue en `--trazabilidad` y `--dirigida` (y ahí SIN hedge: afirma «no existen» sobre `triage.main`, que existe), `tools/` queda fuera de las redes 1 y 4 con un mensaje que niega un archivo que existe, y ningún flag de `tools/` se valida",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 340,
@@ -1704,16 +1704,31 @@
   {
    "number": 342,
    "title": "Nada chequea las afirmaciones NEGATIVAS de una ficha: 6 huecos falsos medidos en dos temas, cazados de casualidad — que un hueco declare su ALCANCE, como ya hacen las hipótesis (D-34)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 343,
    "title": "#331 dejó dos scripts con el `KeyError` crudo sobre un slug de tema: `extraction_prompt.py` y `fetch_ground_truth.py` — y el mensaje sigue culpando a `stars.yaml` de un slug que está en `themes.yaml`",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 344,
    "title": "DECISIÓN: una nota de entidad pesa ~72 k tokens y el 71 % es el bloque de verificación, no contenido — el contrato promete que la nota deja al lector «servido» y a ese tamaño entra una sola por ventana",
+   "state": "OPEN"
+  },
+  {
+   "number": 345,
+   "title": "DECISIÓN: `tools/` queda fuera de las redes 1 y 4 por alcance declarado, y ahí vive la herramienta que EJECUTA la red de mutación — 5 guardas sin test medidas, y `INV-126` sigue sin su marca `@inv`",
+   "state": "OPEN"
+  },
+  {
+   "number": 346,
+   "title": "`extraccion_no_declarada` (INV-83) no dispara para NINGÚN tema: le pide `slug` al mapa y en `themes.yaml` el slug es la CLAVE — el recorte de lectura silencioso está sin vigilar para la mitad de los sujetos",
+   "state": "OPEN"
+  },
+  {
+   "number": 347,
+   "title": "`_papers_del_sujeto` promete delegar en `concept_rollup_rows` y NO delega: compara `methods` por string exacto, así que el universo de un tema subdeclara por grafía — el defecto de #243, vivo, con un comentario que afirma lo contrario",
    "state": "OPEN"
   }
  ]

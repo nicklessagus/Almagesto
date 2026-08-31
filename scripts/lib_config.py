@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.155.0"
+ALMAGESTO_VERSION = "1.158.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -720,6 +720,15 @@ QUOTE_FRAG_MIN = 25
 
 _QUOTE_RE = re.compile(r"«([^»]+)»")
 _QUOTE_MARKUP_RE = re.compile(r"\$[^$]*\$|\[\[|\]\]|[*_`\\]")
+#: #336 · lo MISMO menos el span `$…$`. Es la única diferencia entre las dos normalizaciones, y es
+#: asimétrica a propósito: en la CITA los `$` son marcado que la nota puso (`CLAUDE.md` lo manda) y
+#: el `.txt` no puede tener igual; en la FUENTE son caracteres del documento —el copyright de
+#: Elsevier trae uno—, así que borrar entre dos se come el texto del medio.
+_SOURCE_MARKUP_RE = re.compile(r"\[\[|\]\]|[*_`\\]")
+#: #336 · el guión de corte de `pdftotext -layout` y **la sangría de su continuación**: la línea
+#: siguiente arranca indentada porque es la columna física, así que sin absorberla la palabra
+#: partida queda como dos.
+_HYPHEN_BREAK_RE = re.compile(r"-\n[ \t]*")
 _QUOTE_ELLIPSIS_RE = re.compile(r"\[\s*(?:\.\.\.|…)\s*\]|…|\.\.\.")
 _QUOTE_SUBS = (("\u201c", '"'), ("\u201d", '"'), ("\u2018", "'"), ("\u2019", "'"),
                ("\u2013", "-"), ("\u2014", "-"), ("\u00ad", ""))
@@ -733,7 +742,14 @@ def normalize_quote(s: str) -> str:
     verbatim—, typographic quotes and dashes are unified, soft hyphens go, whitespace collapses and
     case is folded. Anything beyond that would start matching text the source does not have.
     """
-    s = _QUOTE_MARKUP_RE.sub("", s)
+    return _normalize_text(_QUOTE_MARKUP_RE.sub("", s))
+
+
+def _normalize_text(s: str) -> str:
+    """What the quote side and the source side SHARE: typographic substitutions, the hyphen,
+    whitespace and case. One function on purpose (regla de método 2) — a difference between the two
+    sides that nobody decided is a match that nobody decided. What legitimately differs is the
+    markup regex each caller passes in, and that difference is declared where it lives."""
     for a, b in _QUOTE_SUBS:
         s = s.replace(a, b)
     # #275 — el guión se borra de los DOS lados. `normalize_source_text` ya unió el corte de línea
@@ -746,9 +762,23 @@ def normalize_quote(s: str) -> str:
 
 
 def normalize_source_text(t: str) -> str:
-    """The same normalization on the source side, plus the hyphen that `pdftotext` leaves at a line
-    break (`inde-\npendent`): without joining it, every quote crossing a line break would fail."""
-    return normalize_quote(t.replace("-\n", ""))
+    """The same normalization on the SOURCE side — with two differences, both measured (#336).
+
+    The hyphen `pdftotext` leaves at a line break (`inde-\npendent`) is joined, or every quote
+    crossing a line break would fail; and the join absorbs **the indentation of the continuation**
+    (`homoscedas-\n     tic`), because `-layout` keeps the physical column so the next line starts
+    indented. Joining only `-\n` left `homoscedas tic` and the split word never came back together:
+    measured over a real vault, **141 of 155** `.txt`, **4232** occurrences.
+
+    ⛔ And the `$…$` span is **not** dropped here. That deletion belongs to the quote (#287/#326),
+    where the `$` is markup the note added and the `.txt` cannot carry; in a `.txt` the `$` is a
+    character of the document, so deleting between two of them eats whatever lies in the middle —
+    the Elsevier copyright line (`0925-2312/98/$ — see front matter`) plus one more `$` ate
+    **16 434 of 43 401 characters (37,9 %)** of one column, and **10 of 155** `.txt` lost text,
+    the worst three 37,9 %, 26,1 % and 22,5 %. What that costs is step 1 of `quote_verdict` (`en_su_txt`,
+    #324), the step that prevents the false `alterada` — and since #323 that gate stops
+    operations."""
+    return _normalize_text(_SOURCE_MARKUP_RE.sub("", _HYPHEN_BREAK_RE.sub("", t)))
 
 
 def quote_fragments(quote: str) -> list[str]:
@@ -773,35 +803,116 @@ def quotes_in(text: str) -> list[str]:
 #: es que difieran en qué cuenta como canaleta — lo fija un test de paridad (regla de método 2).
 CANALETA_MIN = 8
 GUTTER = re.compile(rf"\S {{{CANALETA_MIN},}}\S")
-_GUTTER_SPLIT = re.compile(rf" {{{CANALETA_MIN},}}")
+
+#: #332 · cuántos espacios alcanzan para leer el borde de columna de la PÁGINA en una línea que no
+#: tiene canaleta propia. **Un** espacio es separación entre palabras, así que cortar ahí partiría
+#: una línea a todo el ancho por el medio; dos ya no aparecen dentro de una palabra. Medido sobre
+#: los 251 pares únicos (cita, `.txt`) de una bóveda real: con 1 se recuperan 189; con 2 y con 3,
+#: 198; con 4, 196; con 8, 187 — o sea que la guarda decide, y su valor exacto por encima de 2 no.
+BOUNDARY_SPACES_MIN = 2
+
+
+def gutter_runs(line: str) -> list:
+    """`(start, end)` of every gutter on this line — `end` is where the next column starts.
+
+    Uses `GUTTER`, the module's ONE definition of a gutter (content on both sides), and resumes the
+    scan on the character that closed the previous match: `finditer` would eat it and miss the
+    second gutter of a three-column line."""
+    out: list = []
+    pos = 0
+    while True:
+        m = GUTTER.search(line, pos)
+        if not m:
+            return out
+        out.append((m.start() + 1, m.end() - 1))
+        pos = m.end() - 1
+
+
+def column_boundary(lines: list) -> int | None:
+    """The offset where this PAGE breaks into two columns, or `None` if it has only one (#332).
+
+    The most voted gutter END over the page's non-blank lines: the end is where the right column
+    starts, and a printed page keeps that offset even where the gutter narrows or widens. Ties go to
+    the leftmost, so the answer does not depend on dict order."""
+    votos: dict = {}
+    for line in lines:
+        for _, end in gutter_runs(line):
+            votos[end] = votos.get(end, 0) + 1
+    if not votos:
+        return None
+    return min(votos, key=lambda c: (-votos[c], c))
+
+
+def split_at_boundary(line: str, boundary: int) -> tuple:
+    """`(left, right)` — this line cut at the page's column boundary (#332).
+
+    The cut lands on the candidate CLOSEST to `boundary`: one of the line's own gutters, or
+    `boundary` itself when the line merely has `BOUNDARY_SPACES_MIN` spaces there (the narrow gutter
+    of a line whose left column almost reaches the edge — the shape that #332 measured). A line with
+    no candidate spans the whole width (a heading, a caption, a running header) and stays left,
+    which is where the flow that surrounds it lives."""
+    if boundary >= len(line):
+        return line, ""
+    cortes = [end for _, end in gutter_runs(line)]
+    # ⚠ Sin `boundary > 0`, a propósito (#319): con `boundary == 0` la línea vacía ya salió por la
+    # guarda de arriba y `line[-1]` no puede aportar un corte —el run de espacios que termina en 0
+    # mide 0, y 0 < BOUNDARY_SPACES_MIN—, así que la cláusula no decidiría nada.
+    if line[boundary - 1] == " ":
+        inicio = boundary
+        while inicio > 0 and line[inicio - 1] == " ":
+            inicio -= 1
+        if boundary - inicio >= BOUNDARY_SPACES_MIN:
+            cortes.append(boundary)
+    if not cortes:
+        return line, ""
+    corte = min(cortes, key=lambda x: (abs(x - boundary), x))
+    return line[:corte], line[corte:]
 
 
 def deinterleave_columns(t: str) -> list:
-    """The physical COLUMNS of a `pdftotext -layout` `.txt`, one string per column index (#275).
+    """The physical COLUMNS of a `pdftotext -layout` `.txt`, one string per column (#275/#332).
 
     `-layout` keeps the physical page: in a two-column paper every line carries column 1, a run of
     spaces (the gutter) and column 2, so the flat text **interleaves** them and no quote longer than
-    one physical line can be found. Segment `i` of every line feeds stream `i`, joined with `\n` so
-    the end-of-line hyphen still joins inside its own column. A single-column file yields exactly
-    one stream, identical to the flat text.
+    one physical line can be found. A single-column file yields exactly one stream, identical to the
+    flat text.
+
+    ⛔ **The gutter belongs to the PAGE, not to the line (#332).** Splitting each line at every run
+    of spaces made the column index drift line by line —an equation and its number, a narrow gutter,
+    a full-width caption each shift it— so a continuous paragraph landed in two different readings
+    and a quote that IS verbatim in the `.txt` came back «not there». Measured over a real vault:
+    **148 of 155** `.txt` returned more than two readings, up to **19**, and a single sentence of
+    ONE physical column fell into two of them. Pages are split at `\f`, each page gets ONE boundary
+    (`column_boundary`), and every line is cut there or, when it spans the width, kept whole on the
+    left. Recovery over the 251 unique (quote, `.txt`) pairs of that vault: **176 → 196**, measured
+    as a FROZEN A/B —the same population against both versions of the module in one run, because the
+    vault is a live instance and was being edited while it was measured—.
 
     ⛔ The flat text is NOT searched as a fallback: it contains the column-1→column-2 splice, so a
-    quote nobody ever wrote would pass as verbatim (pinned since #46)."""
-    columnas: list = []
-    for linea in str(t or "").split("\n"):
-        for i, seg in enumerate(_GUTTER_SPLIT.split(linea)):
-            while len(columnas) <= i:
-                columnas.append([])
-            columnas[i].append(seg.rstrip())
-    return ["\n".join(c) for c in columnas]
+    quote nobody ever wrote would pass as verbatim (pinned since #46). That is why the fix is a
+    better cut and never a flattening."""
+    izquierda: list = []
+    derecha: list = []
+    for pagina in str(t or "").split("\f"):
+        lineas = pagina.split("\n")
+        borde = column_boundary([l for l in lineas if l.strip()])
+        for linea in lineas:
+            l, r = (linea, "") if borde is None else split_at_boundary(linea, borde)
+            izquierda.append(l.rstrip())
+            derecha.append(r.rstrip())
+    columnas = ["\n".join(izquierda)]
+    if any(x.strip() for x in derecha):
+        columnas.append("\n".join(derecha))
+    return columnas
 
 
 def source_texts(raw: str) -> list:
     """Every normalized reading of a `.txt` a quote may legitimately live in (#275).
 
-    One per physical column, deduplicated. A single-column source gives exactly one, so the caller
-    does not branch on layout — which is the point: whether the `.txt` is interleaved is a property
-    of the PDF nobody declared anywhere."""
+    One per physical column, deduplicated — so **one or two**, never the up-to-19 that #332
+    measured. A single-column source gives exactly one, so the caller does not branch on layout —
+    which is the point: whether the `.txt` is interleaved is a property of the PDF nobody declared
+    anywhere."""
     vistos, out = set(), []
     for col in deinterleave_columns(raw):
         norm = normalize_source_text(col)
