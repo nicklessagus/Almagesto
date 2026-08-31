@@ -251,7 +251,8 @@ def test_dirigida_rechaza_una_funcion_inexistente(repo_con_tests: Path, monkeypa
     """Un `--solo` con un typo mutaría cero funciones y cerraría en verde: mismo falso limpio."""
     monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
     assert mutar._directed(_args(["scripts/viejo.py"], solo="noexiste")) == 2
-    assert "no existen en viejo.py" in capsys.readouterr().out
+    # #339 — el texto pasó al singular de `_report_unmutable`, que es el que distingue los estados
+    assert "no existe en viejo.py" in capsys.readouterr().out
 
 
 # ── la copia de trabajo tiene que arrancar VERDE (auditoría 2026-08-28) ─────────────────────────
@@ -686,3 +687,139 @@ def test_la_funcion_CON_guardas_sigue_pasando_a_mutar(repo_tres_estados, monkeyp
                         lambda *a, **k: llamadas.append(k.get("only")) or [])
     assert mutar._guards(_args(["scripts/viejo.py"], solo="con_guarda")) == 0
     assert llamadas == [{"con_guarda"}]
+
+
+# ── #339 · la conflación de #335 seguía viva en los otros dos modos ─────────────────────────────
+#
+# `_report_unmutable` estaba escrito (v1.142.0) y NO estaba cableado en `--dirigida` ni en
+# `--trazabilidad`: la misma regla en tres copias es cómo divergió tres veces en este repo
+# (#215/#324/#335). Los tres modos cierran por `report_states`.
+
+
+def test_dirigida_declara_la_funcion_EXENTA_y_no_la_llama_inexistente(repo_tres_estados,
+                                                                      monkeypatch, capsys):
+    """El defecto medido: `--dirigida --solo main scripts/triage.py` contestaba «⛔ no existen en
+    triage.py: ['main']` sobre una función que existe y tiene 56 `if`. Peor que la de `--guardas`,
+    que al menos hedgeaba con «o no tienen guardas»: ésta AFIRMA algo falso."""
+    monkeypatch.setattr(mutar, "_copia_del_repo",
+                        lambda d: pytest.fail("mutó sin haber resuelto el símbolo"))
+    assert mutar._directed(_args(["scripts/viejo.py"], solo="main")) == 2
+    out = capsys.readouterr().out
+    assert "EXENTAS" in out, "el mensaje tiene que NOMBRAR la lista que la excluyó"
+    assert "no existe" not in out, "existe: decir lo contrario manda a corregir un nombre correcto"
+
+
+def test_dirigida_llama_typo_al_simbolo_que_de_veras_no_esta(repo_tres_estados, monkeypatch,
+                                                             capsys):
+    """La otra mitad de la partición: sin esto, «no dice no-existe» se cumpliría no diciéndolo
+    nunca, y el typo real se quedaría sin su única acción posible."""
+    monkeypatch.setattr(mutar, "_copia_del_repo",
+                        lambda d: pytest.fail("mutó sin haber resuelto el símbolo"))
+    assert mutar._directed(_args(["scripts/viejo.py"], solo="no_existe_jamas")) == 2
+    out = capsys.readouterr().out
+    assert "no existe" in out and "no_existe_jamas" in out and "typo" in out
+    assert "EXENTAS" not in out
+
+
+def test_report_states_no_junta_dos_estados_en_una_linea(capsys):
+    """La unidad compartida por los tres modos. La partición es lo primero que se rompe: con los
+    textos escritos aparte pero impresos juntos, la conflación vuelve intacta."""
+    assert mutar.report_states({"a": ["x"], "b": [], "c": ["y", "z"]},
+                               {"a": "A: {nombres}", "b": "B: {nombres}",
+                                "c": "C: {nombres}"}) == 2
+    lineas = [l for l in capsys.readouterr().out.split("\n") if l.strip()]
+    assert lineas == ["A: x", "C: y, z"], ("una línea por estado con nombres, y el estado vacío no "
+                                           "imprime nada — «ninguno» no es «no se miró»")
+    assert mutar.report_states({"a": [], "b": []}, {}) == 0, "sin nombres no se dice nada"
+    assert capsys.readouterr().out == ""
+
+
+def test_report_states_revienta_si_un_estado_con_nombres_no_tiene_texto():
+    """Un estado sin texto se salteaba en silencio sería el mensaje fusionado otra vez, sólo que
+    invisible: el lector no ve ni la línea ni el hueco."""
+    with pytest.raises(KeyError):
+        mutar.report_states({"a": ["x"]}, {})
+
+
+# ── #339 · `tools/` está FUERA DE ALCANCE, y decirlo no es negar un archivo que existe ──────────
+
+
+@pytest.fixture
+def repo_con_tools(repo_con_tests: Path, monkeypatch) -> Path:
+    """`tools/mutar.py` **con** su `tests/test_mutar.py`: el caso exacto que el mensaje negaba."""
+    monkeypatch.setattr(mutar, "RAIZ", repo_con_tests)
+    (repo_con_tests / "tools").mkdir(exist_ok=True)
+    (repo_con_tests / "tools" / "mutar.py").write_text(_TRES_ESTADOS, encoding="utf-8")
+    (repo_con_tests / "tests" / "test_mutar.py").write_text("def test_x(): assert True\n",
+                                                            encoding="utf-8")
+    return repo_con_tests
+
+
+@pytest.mark.parametrize("modo", ["_directed", "_guards"])
+def test_apuntar_a_tools_dice_fuera_de_alcance_y_no_niega_el_test_que_existe(repo_con_tools, modo,
+                                                                            monkeypatch, capsys):
+    """El alcance (`CLAUDE.md`: «toda función nueva de `scripts/`») es una decisión DECLARADA y se
+    queda. El defecto era el mensaje: apuntar cualquiera de los dos modos a `tools/mutar.py`
+    contestaba «⛔ no hay tests/test_mutar.py» **con ese archivo en el árbol**, o sea que la
+    herramienta que corre la red daba un motivo falso para no recibirla."""
+    monkeypatch.setattr(mutar, "_copia_del_repo",
+                        lambda d: pytest.fail("mutó algo fuera de alcance"))
+    assert getattr(mutar, modo)(_args(["tools/mutar.py"])) == 2
+    out = capsys.readouterr().out
+    assert "fuera de alcance" in out and "tools/" in out
+    assert "⛔ no hay tests/test_mutar.py" not in out, "niega un archivo que existe"
+
+
+def test_el_modulo_de_scripts_sin_test_propio_sigue_siendo_el_OTRO_estado(repo_con_tools,
+                                                                         monkeypatch, capsys):
+    """El estado que no se puede tragar: dentro del alcance y sin `tests/test_<mod>.py` sí es un
+    hueco real, y su acción —escribir el archivo— es la opuesta a la de «fuera de alcance»."""
+    (repo_con_tools / "scripts" / "huerfano.py").write_text("def z(): return 1\n", encoding="utf-8")
+    assert mutar._guards(_args(["scripts/huerfano.py"])) == 2
+    out = capsys.readouterr().out
+    assert "no hay tests/test_huerfano.py" in out and "fuera de alcance" not in out
+
+
+# ── #339 · `--trazabilidad --solo`: tres estados, no una disyunción ─────────────────────────────
+
+
+def test_unmarked_reasons_separa_typo_de_retirado_de_sin_marcas():
+    """El mensaje viejo era byte-idéntico para `INV-999-NOPE` y para `INV-126`, que existe, es P0 y
+    cuya fila dice «hay código sin marcar». Su remedio es AGREGAR la marca `@inv`, no corregir el
+    `--solo`: la disyunción («o no tienen las dos marcas») manda a buscar un typo en un nombre
+    correcto."""
+    fuera = mutar.unmarked_reasons({"INV-01", "INV-02", "INV-03", "INV-04"},
+                                   filas={"INV-01", "INV-02", "INV-03"},
+                                   retirados={"INV-02"}, auditables={"INV-01"})
+    assert fuera == {"no_existe": ["INV-04"], "retirado": ["INV-02"], "sin_marcas": ["INV-03"]}
+
+
+def test_trazabilidad_rehusa_nombrando_el_estado_y_no_muta_nada(repo_con_tests, monkeypatch,
+                                                                capsys):
+    """Y rehúsa aunque el resto del `--solo` sí sea auditable: se pidieron N filas y se midieron
+    M < N, y publicar el 0 de M como veredicto de N es el falso limpio que D-43 nombra."""
+    monkeypatch.setattr(mutar, "_traceability_pairs",
+                        lambda: [("INV-01", Path("scripts/x.py"), "f", ["tests/t.py::test_f"])])
+    monkeypatch.setattr(mutar, "_contract_rows",
+                        lambda: ({"INV-01", "INV-03"}, set()))
+    monkeypatch.setattr(mutar, "_copia_del_repo",
+                        lambda d: pytest.fail("auditó con un `--solo` sin resolver"))
+    assert mutar._trazabilidad(_args([], solo="INV-01,INV-03,INV-99")) == 2
+    lineas = [l for l in capsys.readouterr().out.split("\n") if l.strip()]
+    def _linea(nombre):
+        return next(l for l in lineas if nombre in l)
+    assert _linea("INV-99") != _linea("INV-03")
+    assert "typo" in _linea("INV-99") and "no existe" in _linea("INV-99")
+    assert "AGREGAR" in _linea("INV-03") and "marca" in _linea("INV-03")
+    assert "o no tienen las dos marcas" not in "\n".join(lineas), "la disyunción ES la conflación"
+
+
+def test_contract_rows_lee_el_contrato_real_y_separa_los_retirados():
+    """El adaptador que le da a `unmarked_reasons` sus dos sets. Sin test propio sobrevivía a que
+    le vaciaran el cuerpo: el resto de los tests de `--trazabilidad` lo monkeypatchean, así que la
+    única función que toca el contrato de verdad quedaba sin mirar."""
+    filas, retirados = mutar._contract_rows()
+    assert len(filas) > 50 and retirados <= filas, "los retirados son filas, no un universo aparte"
+    assert "INV-01" in filas and "INV-01" not in retirados
+    assert retirados, ("el contrato tiene al menos un invariante retirado; sin ninguno, el estado "
+                       "`retirado` de `unmarked_reasons` nunca se ejercita contra datos reales")

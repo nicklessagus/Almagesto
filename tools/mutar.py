@@ -42,6 +42,11 @@ from typing import NamedTuple
 
 RAIZ = Path(__file__).resolve().parent.parent
 RATCHET = Path(__file__).resolve().parent / "mutacion-ratchet.yaml"
+# El directorio que la red de mutación cubre. `CLAUDE.md` la acota a «toda función nueva de
+# `scripts/`»: es una decisión DECLARADA, no un olvido, y por eso vive en una constante que
+# `scope_refusal` nombra al rehusar (#339) — lo que era defecto no era el alcance sino el mensaje,
+# que negaba un `tests/test_<mod>.py` existente en vez de decir «fuera de alcance».
+ALCANCE = "scripts"
 # Funciones que NO se mutan, con motivo. Sin motivo no se agrega nada acá.
 EXENTAS = {
     "main",              # orquestación: su contrato son los sub-pasos, ya mutados por separado
@@ -91,10 +96,37 @@ def test_file_for(module: Path) -> Path | None:
     `lib_config` is killed by tests all over the repo and `poblada/` is another tier: for those the
     stage is skipped, not approximated.
     """
-    if module.parent.name != "scripts":
+    if module.parent.name != ALCANCE:
         return None
     candidato = RAIZ / "tests" / f"test_{module.stem}.py"
     return candidato if candidato.exists() else None
+
+
+def scope_refusal(module: Path, modo: str, escalar: str = "") -> str | None:
+    """Why `modo` cannot run on `module`, or None when it can — two states, opposite actions (#339).
+
+    **Out of scope**: the module does not live in `scripts/`. `CLAUDE.md` scopes the mutation net to
+    *«toda función nueva de `scripts/`»*, so this is a declared decision and there is nothing to
+    write — auditing a module of `tools/` takes a driver of its own. Reporting it as *«no hay
+    tests/test_<stem>.py»* **denied a file that is there**: pointing `--dirigida` at `tools/mutar.py`
+    said exactly that, with `tests/test_mutar.py` in the tree, so the tool that runs the net gave a
+    false reason for not receiving it.
+
+    **No test file of its own**: it IS in scope and `tests/test_<stem>.py` is missing. That one is a
+    real gap, and the answer is to write the file (or, for `--dirigida`, pay the full sweep).
+
+    `escalar` is the mode's own way out, appended to the second message only; the first has none by
+    construction.
+    """
+    if module.parent.name != ALCANCE:
+        return (f"⛔ fuera de alcance: `{module.parent.name}/` no entra en la red de mutación, que "
+                f"CLAUDE.md acota a `{ALCANCE}/` — {module.name} no se muta por acá, y para "
+                f"auditarlo hace falta un driver propio. NO es que falte tests/test_"
+                f"{module.stem}.py.")
+    if test_file_for(module) is None:
+        return (f"⛔ no hay tests/test_{module.stem}.py: sin etapa barata no hay modo {modo}."
+                + escalar)
+    return None
 
 
 def mutar_archivo(archivo: Path, copia_raiz: Path, verbose=True, two_stage: bool = True,
@@ -219,15 +251,19 @@ def _directed(args) -> int:
         return 2
     a = args.archivos[0]
     blanco = Path(a) if Path(a).is_absolute() else RAIZ / a
-    propio = test_file_for(blanco)
-    if propio is None:
-        print(f"⛔ no hay tests/test_{blanco.stem}.py: sin etapa barata no hay modo dirigido.\n"
-              f"   Corré el barrido completo sobre el módulo: python tools/mutar.py {a}")
+    if (rechazo := scope_refusal(blanco, "dirigido",
+                                 f"\n   Corré el barrido completo sobre el módulo: "
+                                 f"python tools/mutar.py {a}")):
+        print(rechazo)
         return 2
+    propio = test_file_for(blanco)
     only = {s.strip() for s in args.solo.split(",") if s.strip()} or None
     nombres = {n for n, _, _ in funciones(blanco)}
+    # #339 — el mismo `--solo main scripts/triage.py` que #335 arregló en `--guardas` seguía acá
+    # diciendo «no existen en triage.py: ['main']» sobre una función que existe y tiene 56 `if`:
+    # la conflación, y encima sin el hedge que el mensaje viejo de `--guardas` sí tenía.
     if only and (faltan := only - nombres):
-        print(f"⛔ no existen en {blanco.name}: {sorted(faltan)}")
+        _report_unmutable(blanco, faltan)
         return 2
     # ⛔ Cero mutaciones NO es "murieron todas" (D-43 aplicado a esta herramienta). `ingest_star.py`
     # es todo `main` —que está en EXENTAS— así que el modo corría cero mutantes y cerraba con un ✅
@@ -361,23 +397,46 @@ def unmutable_reasons(archivo: Path, nombres: set[str]) -> dict[str, list[str]]:
     return fuera
 
 
-def _report_unmutable(archivo: Path, nombres: set[str]) -> None:
-    """Print one line per non-empty state of `unmutable_reasons` (#335).
+def report_states(fuera: dict[str, list[str]], textos: dict[str, str]) -> int:
+    """The ONE implementation of a D-43 split report: one line per non-empty state, never merged.
 
-    ⛔ One line **per state**, never a merged one: the whole point is that the three ask for
-    different actions, so joining them back into a single sentence restores the conflation even
-    with the three texts written."""
-    fuera = unmutable_reasons(archivo, nombres)
+    Returns how many states it printed, so a caller can tell «nothing to say» from «said it».
+
+    ⛔ One line **per state**: the whole point is that the states ask for different actions, so
+    joining them back into a single sentence restores the conflation even with the texts written
+    apart. #335 wrote this inline for `--guardas`; #339 found the same conflation still live in
+    `--dirigida` and in `--trazabilidad` — that is what a rule kept in three copies does. It lives
+    here now, and every mode closes through it.
+
+    `fuera` is a partition: every key present, an empty list reading «none in this state» and never
+    «not looked at». A state with names and no text in `textos` raises instead of being skipped —
+    a silent skip is the merged message again, only invisible.
+    """
+    dichos = 0
+    for estado, nombres in fuera.items():
+        if not nombres:
+            continue
+        print(textos[estado].format(nombres=", ".join(nombres)))
+        dichos += 1
+    return dichos
+
+
+def _report_unmutable(archivo: Path, nombres: set[str]) -> None:
+    """Print the three states of `unmutable_reasons` for `--guardas` and `--dirigida` (#335/#339).
+
+    The `exenta` line is worded for BOTH modes on purpose: `--dirigida` empties bodies and
+    `--guardas` neutralizes conditions, but `EXENTAS` hides the symbol from either, and the remedy
+    is the same one #331 had to find on its own. `sin_guardas` is unreachable from `--dirigida`
+    (every defined name that is not exempt is mutable there), so it stays worded for guards."""
     mod = archivo.name
-    if fuera["exenta"]:
-        print(f"⛔ no evaluado: {fuera['exenta']} está(n) en EXENTAS de mutar.py, así que sus "
-              f"condicionales no se miran en {mod} — mové el condicional a una función propia "
-              f"para que alguna red lo mire (es lo que #331 tuvo que descubrir solo).")
-    if fuera["sin_guardas"]:
-        print(f"⛔ no evaluado: {fuera['sin_guardas']} no tiene(n) ningún condicional mutable en "
-              f"{mod}: no hay nada que medir, y eso NO es un verde (D-43).")
-    if fuera["no_existe"]:
-        print(f"⛔ no existe en {mod}: {fuera['no_existe']} — ¿typo en `--solo`?")
+    report_states(unmutable_reasons(archivo, nombres), {
+        "exenta": f"⛔ no evaluado: {{nombres}} está(n) en EXENTAS de mutar.py, así que ninguna red "
+                  f"de mutación las mira en {mod} — mové el código a una función propia para que "
+                  f"alguna red lo mire (es lo que #331 tuvo que descubrir solo).",
+        "sin_guardas": f"⛔ no evaluado: {{nombres}} no tiene(n) ningún condicional mutable en "
+                       f"{mod}: no hay nada que medir, y eso NO es un verde (D-43).",
+        "no_existe": f"⛔ no existe en {mod}: {{nombres}} — ¿typo en `--solo`?",
+    })
 
 
 def _replace_span(source: str, g: Guard) -> str:
@@ -444,10 +503,10 @@ def _guards(args) -> int:
         return 2
     a = args.archivos[0]
     blanco = Path(a) if Path(a).is_absolute() else RAIZ / a
-    propio = test_file_for(blanco)
-    if propio is None:
-        print(f"⛔ no hay tests/test_{blanco.stem}.py: sin etapa barata no hay modo de guardas.")
+    if (rechazo := scope_refusal(blanco, "de guardas")):
+        print(rechazo)
         return 2
+    propio = test_file_for(blanco)
     only = {s.strip() for s in args.solo.split(",") if s.strip()} or None
     todas = guards(blanco)
     # #335 — «está en EXENTAS» y «el símbolo no existe» piden acciones OPUESTAS y salían con el
@@ -517,6 +576,41 @@ def _traceability_pairs() -> list[tuple[str, Path, str, list[str]]]:
     return out
 
 
+def unmarked_reasons(invs: set[str], filas: set[str], retirados: set[str],
+                     auditables: set[str]) -> dict[str, list[str]]:
+    """Split the `--solo` invariants that `--trazabilidad` cannot audit into three states (#339).
+
+    `no_existe` (not a row of §3 of `docs/contrato.md` — a typo in `--solo`), `retirado` (the row is
+    there and retired **on purpose**, so it carries no mark by design and there is no attribution to
+    audit) and `sin_marcas` (the row is live and lacks the `@inv` of the implementation and/or of
+    the test — the remedy is to ADD the mark, never to fix the argument).
+
+    One message for the three read *«no existen (o no tienen las dos marcas)»*, byte-identical for
+    `INV-999-NOPE` and for `INV-126` — which exists, is P0, and whose own row says «hay código sin
+    marcar». Sending the reader to hunt a typo in a correct name is the same defect #335 closed one
+    mode over.
+
+    An invariant that IS auditable falls in no bucket: the caller passes everything it was asked
+    for, and what comes back is only what could not be measured."""
+    fuera: dict[str, list[str]] = {"no_existe": [], "retirado": [], "sin_marcas": []}
+    for inv in sorted(invs):
+        if inv not in filas:
+            fuera["no_existe"].append(inv)
+        elif inv in retirados:
+            fuera["retirado"].append(inv)
+        elif inv not in auditables:
+            fuera["sin_marcas"].append(inv)
+    return fuera
+
+
+def _contract_rows() -> tuple[set[str], set[str]]:
+    """`(every INV row of §3 of the contract, the retired ones)` — the two sets of `unmarked_reasons`."""
+    sys.path.insert(0, str(RAIZ / "scripts"))
+    import trace_invariants as ti
+    registro = ti.load_registro(RAIZ)
+    return set(registro), {inv for inv, meta in registro.items() if ti.is_retired(meta)}
+
+
 def _trazabilidad(args) -> int:
     """AUD-212 — audit the map's ATTRIBUTION: does the marked test prove the marked symbol?
 
@@ -540,10 +634,21 @@ def _trazabilidad(args) -> int:
         return 2
     solo = {x.strip() for x in args.solo.split(",") if x.strip()}
     if solo:
-        pares = [p for p in pares if p[0] in solo]
-        if not pares:
-            print(f"⛔ no existen (o no tienen las dos marcas): {', '.join(sorted(solo))}")
+        filas, retirados = _contract_rows()
+        fuera = unmarked_reasons(solo, filas, retirados, {p[0] for p in pares})
+        # ⛔ Rehúsa en cuanto UNO de los pedidos no se puede auditar, aunque el resto sí: se pidieron
+        # N filas y se midieron M < N, y un 0 sobre M leído como veredicto de N es el falso limpio
+        # que D-43 nombra. Antes sólo se rehusaba si NINGUNO quedaba en pie.
+        if report_states(fuera, {
+            "no_existe": "⛔ no existe en docs/contrato.md §3: {nombres} — ¿typo en `--solo`?",
+            "retirado": "⛔ no evaluado: {nombres} está(n) RETIRADO(s) en el contrato, así que no "
+                        "lleva(n) marcas a propósito (§2) — no hay atribución que auditar.",
+            "sin_marcas": "⛔ no evaluado: {nombres} existe(n) y está(n) vivo(s), pero le(s) falta "
+                          "la marca `@inv` de implementación y/o de test — el remedio es AGREGAR "
+                          "la marca, no corregir el `--solo`.",
+        }):
             return 2
+        pares = [p for p in pares if p[0] in solo]
     tmp = Path(tempfile.mkdtemp(prefix="almagesto-traza-"))
     falsas = []
     try:
