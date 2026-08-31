@@ -329,8 +329,14 @@ escribir cada función nueva».
 > 4,5 s → 1,7 s. Los dos extremos confirman el diagnóstico: la ganancia **es** la distancia entre
 > el test asesino y el arranque del alfabeto.
 >
-> ✅ **`--todo` medido el 2026-08-28 (v1.75.0): 11,3 min (681 s) sobre 464 funciones = 1,47 s por
-> mutante.** El `~1 h` que motivó la prohibición es de antes de la partición y no es comparable. Con
+> ✅ **`--todo` RE-MEDIDO el 2026-08-31 (v1.163.0): 32,5 min (1951 s) sobre 655 funciones = 2,98 s
+> por mutante** — `scripts/` (631) **más `tools/`** (24), que entró al alcance con #345. La corrida
+> gemela sobre `scripts/` solo, ese mismo día y esa misma máquina, dio **28,9 min (1737 s) sobre
+> 631**: o sea que `tools/` cuesta **+214 s (+12,3 %)** y aporta **cero** sobrevivientes. ⚠ El
+> número viejo —11,3 min sobre 464, del 2026-08-28— no es comparable con ninguno de los dos: cambió
+> la población y cambió el costo unitario, porque la suite tier 0 pasó a **63 s** y cada
+> sobreviviente de la etapa 1 la paga entera (regla de método 5: se declara, no se elige uno).
+> El `~1 h` que motivó la prohibición es de antes de la partición y tampoco es comparable. Con
 > ese número el barrido pasa a ser **recomendado al cerrar una tanda**, no sólo a pedido — esa
 > corrida encontró tres sobrevivientes que la revisión no había visto, dos de ellos tests escritos
 > ese mismo día que pasaban por construcción. ⚠ Correlo con el **árbol quieto**: copia el repo al
@@ -405,20 +411,36 @@ escribir cada función nueva».
 > argumento)— y rehúsa **en cuanto uno** de los pedidos no se puede auditar, aunque el resto sí: se
 > pidieron N y se midieron M < N.
 >
-> ⚠ **`tools/` está FUERA del alcance de la mutación, y el modo lo DICE (#339).** El alcance es una
-> decisión declarada (`CLAUDE.md`: *«toda función nueva de `scripts/`»*) y vive en la constante
-> `tools/mutar.py::ALCANCE`. Lo que era defecto es que apuntar cualquiera de los dos modos a
-> `tools/mutar.py` contestaba *«no hay tests/test_mutar.py»* **con ese archivo existiendo** —la
-> herramienta que corre la red daba un motivo falso para no recibirla—. Hoy `scope_refusal` separa
-> *«fuera de alcance»* (nada que escribir: hace falta un driver propio, que mueva `ALCANCE` para la
-> corrida) de *«no hay `tests/test_<mod>.py`»* (hueco real: escribí el archivo). Las dos acciones
-> son opuestas.
+> ⛔ **`tools/` ENTRÓ al alcance de las redes 1 y 4 (#345).** `ALCANCE` es hoy `("scripts",
+> "tools")` y la red 4 (`tests/poblada/test_cobertura.py`) **importa esa constante** en vez de
+> repetirla, así que las dos redes no pueden divergir en silencio. El argumento: acotarlas a
+> `scripts/` dejaba sin red a **la herramienta que las ejecuta** —medido, 5 guardas de
+> `tools/mutar.py` sin un solo test que las distinga: `_directed::if sobreviven` y las cuatro de
+> `_trazabilidad`—. #339 ya había arreglado el **mensaje** (decir «fuera de alcance» en vez de negar
+> un `tests/test_mutar.py` que existe); lo que quedaba era la decisión, y el usuario la tomó.
+>
+> ⛔ **La única exención es `tools/refresh_issues.py`, y se DECLARA con su motivo** —
+> `mutar.EXENTOS_MODULO`, no por omisión del alcance. Son 59 líneas de cliente HTTP contra la API de
+> GitHub y la **regla de método 1** manda probar un cliente de red contra el **servicio real**: un
+> test con la red falseada validaría que el cliente funciona, no que el contrato se cumpla, así que
+> mutarlo sólo mediría si el doble está bien escrito. Sin el mapa, *«no lo mira nadie»* y *«no lo
+> mira nadie POR ESTO»* se leen igual desde afuera — y el remedio que la herramienta sugeriría
+> (escribir el archivo de tests) sería justo lo que la regla prohíbe.
+>
+> Con eso `scope_refusal` tiene **tres** estados con tres acciones opuestas: *fuera de alcance*
+> (`docs/`, la raíz: nada que escribir) · *exento* (leé el motivo y decidí si sigue valiendo) · *no
+> hay `tests/test_<mod>.py>`* (hueco real: escribí el archivo). El barrido **nombra** al exento con
+> su motivo antes de sacarlo, y una selección **toda** exenta sale `no evaluado` (rc 2): un 0 sobre
+> cero mutantes comparado contra el techo sería el falso limpio adentro del detector de falsos
+> limpios.
 >
 > ⚠ El splice corta por **offset de bytes UTF-8**, no de caracteres: `ast` reporta `col_offset` en
 > bytes y este repo tiene prosa acentuada en casi toda línea. Cortar el `str` partiría la condición
 > al medio y el mutante moriría por `SyntaxError`, o sea por el motivo equivocado otra vez. Lo fija
-> `test_toda_guarda_de_scripts_produce_codigo_QUE_PARSEA`, que parsea los **1503** mutantes de
-> `scripts/`.
+> `test_toda_guarda_del_ALCANCE_produce_codigo_QUE_PARSEA`, que parsea los **2204** mutantes de
+> `scripts/` + `tools/` (2134 + 70, medidos el 2026-08-31). El **1503** que decía acá se midió sobre
+> `scripts/` solo y sobre un corpus más chico: son dos poblaciones distintas y se declara el cambio
+> en vez de comparar los números (regla de método 5).
 
 **Cómo se leen los ratchets** (`tools/mutacion-ratchet.yaml`, `tools/cobertura-ratchet.yaml`): son
 **deuda medida**, no objetivos. El número sólo baja; subirlo hay que justificarlo en el commit. Un

@@ -1,4 +1,4 @@
-# Techo de funciones de `scripts/` que la suite NO ejecuta ni una vez.
+# Techo de funciones de `scripts/` **y de `tools/`** que la suite NO ejecuta ni una vez.
 #
 # Sólo puede BAJAR. Se mide con `pytest tests/poblada/test_cobertura.py -m poblada` (~11 s).
 # Una función acá no es "mal probada": es **no mirada por nadie**, y su mutación siempre sobrevive
@@ -33,3 +33,25 @@ techo: 3
 # ejecutar. El techo (4) era correcto: lo que mentía era la lista. Es AUD-07 un nivel más abajo —
 # un techo bien ajustado con una lista decorativa se lee igual de mal que un techo decorativo.
 # Medición de hoy: 4 sin ejecutar, exactamente las cuatro de arriba (en el techo, no por debajo).
+
+# ── 2026-08-31 · #345: `tools/` ENTRÓ al alcance (1.163.0) ─────────────────────────────────────
+# El barrido corría `coverage run --source=scripts`, así que ninguna función de `tools/` contaba
+# como ejecutada — la herramienta que ejecuta las redes 1 y 4 no recibía ninguna de las dos. Hoy el
+# alcance sale de `mutar.ALCANCE` (importado, no repetido: la misma regla en dos copias ya divergió
+# tres veces acá — #215/#324/#335) y el módulo EXENTO se saltea por `mutar.module_exemption`, o sea
+# por la MISMA declaración con motivo que usa la red 1.
+#
+# ⛔ `tools/refresh_issues.py` tampoco cuenta como deuda acá, y es la misma decisión firmada: que no
+# lo ejecute nadie es la CONSECUENCIA de la regla de método 1 (un cliente de red se prueba contra el
+# servicio real), no un hueco que se cierre escribiendo un test con la red falseada.
+#
+# MEDIDO: al ampliar el alcance apareció **una** función nueva sin ejecutar —
+# `mutar.py::_copia_del_repo`, 4 contra un techo de 3—. NO se amnistió: su único ejercitador real
+# vivía en `poblada` (tier 1) y el barrido corre el tier 0, así que se le escribió el test tier 0
+# que faltaba (`test_copia_del_repo_deja_afuera_lo_pesado_y_CONSERVA_el_vault`, visto morir). El
+# techo queda en **3** y las tres son las mismas de siempre: red y subprocess.
+#
+# ⛔ Y esta medición SE ANGOSTABA SIN PONERSE ROJA: revertir el `--source` a `scripts` bajaba el
+# conteo y el test pasaba igual (medido con mutación, #345). Ahora `_sin_ejecutar` declara su
+# población — si un directorio de `ALCANCE` no aparece en el reporte, aborta con D-43 en vez de
+# publicar un cero sobre una población más chica.

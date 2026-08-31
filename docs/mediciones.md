@@ -1052,14 +1052,14 @@ falso limpio que D-43 nombra.
 herramienta que corre la red de mutación daba un motivo **falso** para no recibirla, y el
 implementador de #335 tuvo que escribir un driver aparte sin que nada se lo dijera.
 
-⚠ **El alcance NO se tocó**: `CLAUDE.md` acota la red a *«toda función nueva de `scripts/`»* y eso es
-una decisión declarada. Lo que cambió es el mensaje — vive en `tools/mutar.py::scope_refusal`, que
-separa *«fuera de alcance»* (nada que escribir; hace falta un driver propio) de *«no hay
+⚠ **El alcance NO se tocó**: `CLAUDE.md` acotaba la red a *«toda función nueva de `scripts/`»* y eso
+era una decisión declarada. Lo que cambió acá es el mensaje — vive en `tools/mutar.py::scope_refusal`,
+que separa *«fuera de alcance»* (nada que escribir; hace falta un driver propio) de *«no hay
 `tests/test_<mod>.py`»* (hueco real: escribí el archivo). Las dos acciones son opuestas.
 
-Reproducible con `python tools/mutar.py --dirigida tools/mutar.py`; el alcance vive en la constante
-`tools/mutar.py::ALCANCE`, y un driver que la mueve para una corrida es lo que permite mutar la
-herramienta misma.
+⛔ **Superado el 2026-08-31 por #345**, que es la otra mitad: el usuario decidió meter `tools/` en
+las redes 1 y 4, así que hoy `python tools/mutar.py --dirigida tools/mutar.py` **corre** y el driver
+aparte ya no hace falta. Ver la entrada de #345 al final de este documento.
 
 **3 y 4 · Ningún flag de `tools/` se validaba, y el barrido atribuía mal.** El universo de
 `tests/test_docs_ejecutables.py` se armaba con `scripts/*.py` sola, así que los siete flags de
@@ -1474,3 +1474,65 @@ regla es cómo un `null` termina significando cosas distintas según quién lo l
 `cfg.theme_inherited_fq` calla en los **tres** casos que no son hallazgo: sin `facet:` propia,
 con `search_fq` declarado —**`null` incluido**, que es una decisión— y con un objetivo que ya no
 acota nada (nombrar una exclusión inexistente sería la atribución falsa de la regla de método nº 4).
+
+## 2026-08-31 · La herramienta que ejecuta las redes era la única que no las recibía (#345)
+
+**Qué era.** `CLAUDE.md` acotaba las redes 1 (mutación) y 4 (cobertura) a *«toda función nueva de
+`scripts/`»*. Eso dejaba a `tools/mutar.py` —782 líneas, 23 funciones, 70 guardas— **auditando a
+todo `scripts/` sin que nadie lo auditara a él**, y a `tests/poblada/test_cobertura.py` corriendo
+`coverage run --source=scripts`, o sea sin contar una sola función de `tools/` como ejecutada. #339
+había arreglado el **mensaje** (decir «fuera de alcance» en vez de negar un `tests/test_mutar.py`
+que existe) y dejó la decisión a la vista; la decisión la tomó el usuario.
+
+| Qué se midió | Número | Salvedad |
+|---|---|---|
+| Guardas de `tools/mutar.py` sin un test que las distinga (antes) | **5 de 70** | `_directed::if sobreviven`, `_trazabilidad::if not pares` / `if fn is None` / `if vivo` / `if falsas`. Medidas con un driver aparte que movía `ALCANCE`, porque el modo rehusaba. |
+| Ídem, después (`--guardas tools/mutar.py`, con la herramienta misma) | **0 de 70** | las cinco se cerraron con test, no con techo |
+| Guardas que el splice parsea (`test_toda_guarda_del_ALCANCE_…`) | **2204** = 2134 (`scripts/`) + 70 (`tools/`) | el 1503 anterior se midió sobre `scripts/` solo y un corpus más chico: dos poblaciones, se declara el cambio (regla de método 5) |
+| Guardas de `tools/mutar.py` sin test, **medidas sobre las 70** | **9**, no 5 | el conteo del issue era PARCIAL (lo hizo un driver que movía `ALCANCE`): además de las 5, `funciones::if@L102` + 3 cláusulas, `mutar_archivo::if vivo and subset` + 2 cláusulas + `if verbose`, y `_traceability_pairs::or[0]` |
+| Población del barrido `--todo`, antes → después | **631 → 655** | +24 (`tools/mutar.py`); `tools/refresh_issues.py` sale por exención declarada |
+| Costo del barrido `--todo`, antes → después | **1737 s (28,9 min) → 1951 s (32,5 min)** | +214 s = **+12,3 %**; misma máquina, mismo día, árbol quieto |
+| Sobrevivientes del barrido, antes → después | **6 → los mismos 6** | `tools/` no aporta ninguno |
+| Funciones sin ejecutar (red 4), al ampliar el alcance | **3 → 4 → 3** | apareció `mutar.py::_copia_del_repo` y se **cerró con test**, no con techo |
+
+⛔ **La exención se DECLARA, no queda por omisión del alcance.** `tools/refresh_issues.py` (59
+líneas) es un cliente HTTP contra la API de GitHub, y la **regla de método 1** dice que un cliente
+de red se prueba **contra el servicio real**: un test con la red falseada validaría que el cliente
+funciona, no que el contrato se cumpla, así que mutarlo sólo mediría si el doble está bien escrito.
+Vive en `tools/mutar.py::EXENTOS_MODULO`, con su motivo textual, y de ahí la leen **las dos** redes
+—la 4 importa `mutar.ALCANCE` y `mutar.module_exemption` en vez de repetirlos, que es el molde de
+#215/#324/#335: la misma regla en dos copias ya divergió tres veces acá—.
+
+El estado nuevo se ve desde afuera: `scope_refusal` tiene hoy **tres** estados con tres acciones
+opuestas —*fuera de alcance* (`docs/`, la raíz: nada que escribir) · *exento* (leé el motivo y
+decidí si sigue valiendo) · *sin `tests/test_<mod>.py`* (hueco real: escribí el archivo)—, el
+barrido **nombra** al exento con su motivo antes de sacarlo de la población, y una selección **toda**
+exenta sale *no evaluado* (rc 2): un 0 sobre cero mutantes comparado contra el techo del ratchet
+sería el falso limpio adentro del detector de falsos limpios.
+
+⚠ **Se muerde la cola y no pasa nada, por construcción.** `mutar` copia el repo a un tmpdir y muta
+**el gemelo**; el proceso que decide corre desde el árbol real, sin mutar. Lo que la mutación de
+`tools/mutar.py` afecta es sólo lo que los tests de la copia importen —`tests/test_mutar.py` hace
+`sys.path.insert(0, .../tools)` relativo a su propio archivo, así que importa la copia mutada—. O
+sea: el auditor es el árbol real y el auditado es la copia, y la herramienta se audita a sí misma
+sin ninguna capa nueva.
+
+⛔ **Lo que el barrido dejó a la vista y NO es de este issue: el gate de mutación ya salía rojo en
+`main`.** La corrida «antes» —sobre `scripts/` solo, sin una línea de este cambio— midió **6
+sobrevivientes contra un techo de 3**. Tres son las fronteras de red conocidas y declaradas; los
+otros tres entraron en tandas anteriores sin que nadie corriera el barrido:
+`fetch_web.py::content_type`, `lint.py::_alias_idx_cached`, `make_notes.py::_celda_idx`. El techo
+**no se movió** —subirlo para poner verde un rojo es lo que `tools/mutacion-ratchet.yaml` prohíbe
+explícitamente—, así que queda declarado y con dueño: se cierra con test, en su propia tanda.
+
+⚠ **Y el costo documentado estaba vencido**: 11,3 min / 464 funciones (2026-08-28) contra 28,9 min /
+631 hoy sobre el mismo `scripts/`. Lo que cambió no es la herramienta sino la suite — el tier 0 pasó
+a **63 s** y cada sobreviviente de la etapa 1 la paga entera. Se declaran las tres mediciones en vez
+de elegir una (regla de método 5).
+
+⛔ **La red 4 se angostaba sin ponerse roja.** Mutando `--source={','.join(mutar.ALCANCE)}` de vuelta
+a `--source=scripts`, `tests/poblada/test_cobertura.py` seguía **en verde**: el conteo bajaba y el
+ratchet pasaba igual, así que la red podía perder `tools/` entero sin que nada avisara. Es INV-40
+adentro de la red que mide cobertura. Se cerró haciendo que `_sin_ejecutar` **declare su población**
+—si un directorio de `ALCANCE` no aparece en el reporte de `coverage`, aborta con D-43 en vez de
+publicar un cero sobre una población más chica—.

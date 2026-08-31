@@ -1,5 +1,5 @@
-# Techo de funciones de `scripts/` que SOBREVIVEN a la mutación (romperlas no pone rojo a ningún
-# test). Sólo puede BAJAR. Se mide con `python tools/mutar.py --todo --ratchet`.
+# Techo de funciones de `scripts/` **y de `tools/`** que SOBREVIVEN a la mutación (romperlas no pone
+# rojo a ningún test). Sólo puede BAJAR. Se mide con `python tools/mutar.py --todo --ratchet`.
 #
 # Una función acá no está probada: su test —si existe— pasa por construcción. Es el defecto que
 # esta sesión encontró cuatro veces (un `assert path.glob(...)` siempre truthy, una guarda cuyo
@@ -133,3 +133,48 @@ techo: 3
 # Los dos módulos que motivaron el hallazgo (`entity.py` 55 guardas, `harvest_views.py` 48) siguen
 # sin medir con el modo nuevo: la medición original la hizo un subagente LEYENDO el código.
 
+# ── 2026-08-31 · #345: `tools/` ENTRÓ al alcance (1.163.0) ─────────────────────────────────────
+# Tres cosas que NO se mezclan (regla de método 5).
+#
+# (a) EL ALCANCE ES OTRO. `ALCANCE` pasó de `"scripts"` a `("scripts", "tools")`: la herramienta que
+#     EJECUTA esta red era la única que no la recibía. La única exención es
+#     `tools/refresh_issues.py`, declarada con su motivo en `mutar.EXENTOS_MODULO` —cliente HTTP
+#     contra la API de GitHub, regla de método 1: se prueba contra el servicio real— y el barrido la
+#     NOMBRA con ese motivo antes de sacarla de la población, en vez de saltearla en silencio.
+#
+# (b) LA POBLACIÓN CAMBIÓ DOS VECES, y el `alcance` de arriba estaba VENCIDO. Declaraba «464
+#     funciones» (2026-08-28); el contador de hoy da **631** en `scripts/` — creció 167 sin que nadie
+#     lo declarara, que es AUD-35 otra vez, en el mismo archivo que lo documenta. Con `tools/`
+#     adentro son **655**. Las tres cifras no son comparables: son tres universos.
+#
+# (c) MEDIDO HOY, misma máquina, mismo día, con el árbol quieto:
+#       antes   (`scripts/`, 631 funciones) → 6 sobrevivientes · 1737 s (28,9 min)
+#       después (`scripts/`+`tools/`, 655)  → los MISMOS 6      · 1951 s (32,5 min)
+#     O sea: `tools/` suma **24 mutantes (+3,8 %) y 214 s (+12,3 %)** y **cero sobrevivientes**. El
+#     costo por mutante de `tools/mutar.py` es mayor que el promedio porque su etapa 1 es
+#     `tests/test_mutar.py`, que corre subprocesos de pytest.
+#
+# ⛔ EL TECHO NO SE MUEVE, Y EL GATE SALE ROJO — a propósito. Los 6 medidos superan el techo de 3
+#    **ya en `main`, antes de este cambio**: los tres viejos son las fronteras de red conocidas
+#    (`citation_index._fetch_ads_default`, `_fetch_oa_default`, `fetch_web.fetch`) y los tres nuevos
+#    entraron en tandas anteriores sin que nadie corriera el barrido —`fetch_web.content_type`,
+#    `lint._alias_idx_cached`, `make_notes._celda_idx`—. Subir el techo para ponerlos en verde es
+#    exactamente lo que este archivo prohíbe cuatro párrafos más arriba: la deuda se cierra con
+#    test, no con amnistía. Se declara acá y queda para su propia tanda.
+#
+# ⚠ El costo documentado también estaba vencido: **11,3 min / 464 funciones** (2026-08-28) contra
+#   **28,9 min / 631** hoy, sobre el mismo `scripts/`. Lo que cambió no es la herramienta sino la
+#   suite: el tier 0 pasa de segundos a **63 s**, y cada sobreviviente de la etapa 1 la paga entera.
+
+# ── AUD-213 · guardas de `tools/mutar.py`, tras #345 ───────────────────────────────────────────
+# Primera corrida del modo sobre el propio módulo (`python tools/mutar.py --guardas
+# tools/mutar.py`, 1109 s): **9 de 70** sin test que las distinga. El issue #345 nombraba **5**
+# —las midió un driver aparte que movía `ALCANCE`—, así que su conteo era PARCIAL; las otras cuatro
+# familias no las había contado nadie:
+#   · `_directed::if sobreviven`                     ← las 5 del issue
+#   · `_trazabilidad::if not pares` / `if fn is None` / `if vivo` / `if falsas`
+#   · `funciones::if@L102` + 3 de sus 4 cláusulas    ← las 4 que el issue no vio
+#   · `mutar_archivo::if vivo and subset` + sus 2 cláusulas, y `if verbose`
+#   · `_traceability_pairs::if inv not in registro or …` (cláusula `or[0]`)
+# Cerradas TODAS con test, ninguna con techo: segunda corrida **0 de 70** (1154 s). Cada una vista
+# morir por su propia línea antes de contarla (regla de método 3).
