@@ -602,6 +602,17 @@ def main() -> int:
                          "esqueleto del JSON: es lo que hace distinta a una segunda lente.")
     args = ap.parse_args()
 
+    # #343 — la negativa va ANTES de imprimir nada: sin ella, `extraction_prompt.py <tema> <bib>`
+    # moría con el `KeyError` de `star_by_slug`, que manda definir en `stars.yaml` un slug que
+    # está bien definido en `themes.yaml`. Acá el remedio SÍ es un flag (a diferencia de
+    # `fetch_ground_truth`), y el comando va completo: sin el bibcode no se copia y pega.
+    remedio = (f"Corré: `python scripts/extraction_prompt.py {args.slug} {args.bibcode}"
+               f"{'' if args.theme else ' --theme'}`")
+    if (motivo := cfg.subject_refusal(args.slug, "theme" if args.theme else "star",
+                                      "no se generó ningún prompt", remedio)) is not None:
+        cfg.print_seguro(motivo)
+        return 2
+
     if args.theme:
         name, meta = cfg.theme_by_slug(args.slug)
     else:

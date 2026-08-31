@@ -844,7 +844,7 @@ cita como motivo de que ese canal exista.
 puntos: copiarla habría sido el molde de #215/#324, donde la misma regla escrita dos veces ya había
 divergido. `subject_kinds` devuelve una **tupla** y no un ganador: con las dos configs definiendo el
 slug no hay precedencia que inventar, y el que pregunta pregunta por la clase que necesita. Y
-`make_notes.subject_refusal` rehúsa **antes** de la línea de arranque, nombrando las **dos** configs
+`subject_refusal` rehúsa **antes** de la línea de arranque, nombrando las **dos** configs
 y —cuando el slug está en la otra— el comando que sí corre (D-43: un paso que no puede correr se
 declara; no degrada ni revienta).
 
@@ -903,9 +903,10 @@ python tools/mutar.py --guardas --solo no_existe_jamas scripts/triage.py     # t
 | Mensajes distintos, **después** | **3**, uno por estado | los tres siguen siendo `no evaluado` (rc 2): nada se midió, y eso no cambia |
 
 **Consecuencia medida, en vivo.** Al implementar #331 el guard nuevo vivía dentro de `main`, así que
-**ninguna red de mutación lo miraba**. El implementador lo movió a `make_notes.subject_refusal`
-*«porque `main` está en `EXENTAS`»* — criterio suyo, no algo que la herramienta le dijera; el mensaje
-que sí recibió no distinguía «tu función está exenta» de «te equivocaste de nombre».
+**ninguna red de mutación lo miraba**. El implementador lo movió a una función propia
+(`subject_refusal`) *«porque `main` está en `EXENTAS`»* — criterio suyo, no algo que la herramienta
+le dijera; el mensaje que sí recibió no distinguía «tu función está exenta» de «te equivocaste de
+nombre».
 
 ⚠ **Lo que quedó afuera, y es el mismo defecto:** `--dirigida` conflaciona los **dos** casos con un
 texto **peor** —`⛔ no existen en triage.py: ['main']`, que afirma algo falso sobre una función que
@@ -937,3 +938,46 @@ vuelve ruido que se deja de mirar.
 ⚠ **Lo que NO entra acá:** la parte 2 del issue (emitir la marca `⚠verificar en el PDF` cuando la
 cola diverge) sigue **bloqueada por #332 y #336** — medido, sus 6 candidatos de hoy son 6 artefactos
 del cortador de columnas, así que emitiría 6 marcas falsas.
+
+## 2026-08-31 · #343 · la otra cola de #331: los dos scripts que seguían reventando
+
+**Qué era.** #331 (v1.140.0) le dio a `make_notes.py` una negativa limpia cuando el slug es un tema
+y falta `--theme`, y #334 cerró los dos sitios que **imprimían** el comando mal armado. Quedaba una
+población distinta y sin tocar: los scripts que **resuelven el sujeto ellos mismos** y por lo tanto
+morían con el `KeyError` crudo. Medido en vivo sobre la bóveda real, corriendo
+`extraction_prompt.py ica <bib>` para leer los papers que cierran los huecos declarados de `ica`:
+
+```
+$ python scripts/extraction_prompt.py ica 1995BellSejnowski
+KeyError: "slug desconocido: 'ica'. Definilo en vault/config/stars.yaml"
+
+$ python scripts/fetch_ground_truth.py ica
+KeyError: "slug desconocido: 'ica'. Definilo en vault/config/stars.yaml"
+```
+
+| Qué se midió | Número | Salvedad |
+|---|---|---|
+| Scripts con `subject_refusal` antes de #343 | **1** | `grep -l subject_refusal scripts/*.py` → sólo `make_notes.py` |
+| Scripts que reventaban con el `KeyError` crudo | **2** | `extraction_prompt.py`, `fetch_ground_truth.py` |
+| Scripts con la misma forma que **no** estaban rotos | **3** | `harvest_views.py` rechaza por la guarda add-only (correcto); `query_ads.py` y `triage.py` dan error de `argparse`, no traceback |
+
+**Por qué el `KeyError` es peor que feo.** No dice sólo «no sé qué es esto»: **manda definir en
+`stars.yaml` un slug que está bien definido en `themes.yaml`**. El operador que sigue la instrucción
+agrega una estrella falsa a la config — el error de operador se convierte en corrupción de la
+curación.
+
+**Qué cambió.** `subject_refusal` subió a `lib_config` y la usan los **tres**. Copiarla habría sido
+el molde de #215/#324/#335, la misma regla escrita dos veces y ya divergida tres veces en este repo.
+Lo que cada llamador aporta es sólo lo que él sabe: la **consecuencia** y el **remedio**.
+
+⛔ **Y el remedio NO es el mismo, que es el punto que un copy-paste habría perdido:** en
+`extraction_prompt` lo que falta es el flag, y el comando va **completo con el bibcode**
+(`extraction_prompt.py <slug> <bib> --theme`) porque un remedio que no se copia y pega no es un
+remedio. En `fetch_ground_truth` **no hay flag que ofrecer**: NEA y SIMBAD son autoridades sobre
+**objetos, no sobre conceptos**, así que un tema no tiene ground-truth y el script ni siquiera tiene
+`--theme` — un «te faltó `--theme`» mandaría a correr algo que no existe.
+
+⚠ **Lo que sigue afuera, y es el hallazgo de #334 otra vez:** las dos negativas viven en `main`,
+que está en `EXENTAS` de `mutar.py`, así que **ninguna red de mutación mira el call site**. Lo que
+sí se mutó es la regla (`lib_config.subject_refusal`: dirigida ✅, las 2 guardas ✅); el call site lo
+cubren los tests de integración, vistos morir con el `KeyError` exacto de arriba.

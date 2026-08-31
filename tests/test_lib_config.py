@@ -2339,3 +2339,46 @@ def test_make_notes_cmd_pone_theme_SOLO_donde_corresponde(toy_vault):
     assert cfg.make_notes_cmd("ica") == "python scripts/make_notes.py ica --theme"
     assert cfg.make_notes_cmd("test_star") == "python scripts/make_notes.py test_star"
     assert cfg.make_notes_cmd("no-existe") == "python scripts/make_notes.py no-existe"
+
+
+def test_subject_refusal_calla_cuando_el_sujeto_ES_del_tipo_pedido(toy_vault):
+    """#343 — la negativa la usan TRES scripts (`make_notes`, `extraction_prompt`,
+    `fetch_ground_truth`), así que vive acá y no copiada: es el molde de #215/#324/#335, ya
+    divergido tres veces en este repo. El caso bueno tiene que callar, o cada corrida legítima
+    aborta.
+
+    @inv INV-141"""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "concept": "ica", "area": "methods"}})
+    assert cfg.subject_refusal("test_star", "star", "no se hizo nada") is None
+    assert cfg.subject_refusal("ica", "theme", "no se hizo nada") is None
+
+
+def test_subject_refusal_nombra_las_DOS_configs_y_el_remedio_del_LLAMADOR(toy_vault):
+    """El mensaje que reemplaza al `KeyError`: nombra las dos configs (el `KeyError` acertaba a
+    medias — nombraba una sola, y la equivocada) y pega el remedio **que le pasa el llamador**,
+    porque no es el mismo en los tres: en `extraction_prompt` es «te faltó `--theme`», en
+    `fetch_ground_truth` es «los temas no tienen ground-truth»."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "concept": "ica", "area": "methods"}})
+    msg = cfg.subject_refusal("ica", "star", "no se bajó nada", "Corré: `otra cosa`")
+    assert "themes.yaml" in msg and "stars.yaml" in msg
+    assert "no se bajó nada" in msg, "la consecuencia es del llamador, no una genérica"
+    assert msg.endswith("Corré: `otra cosa`"), "el remedio va en su propia línea, al final"
+
+
+def test_subject_refusal_SIN_remedio_no_inventa_una_linea_vacia(toy_vault):
+    """`fetch_ground_truth` no tiene comando que ofrecer: un tema no tiene ground-truth. El
+    remedio es opcional, y sin él el mensaje termina en la diagnosis — nunca en un renglón
+    colgado que se lea como un comando cortado."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "concept": "ica", "area": "methods"}})
+    msg = cfg.subject_refusal("ica", "star", "no se bajó ningún ground-truth")
+    assert "\n" not in msg and msg.endswith(".")
+
+
+def test_subject_refusal_sin_NINGUNA_config_no_ofrece_comando(toy_vault):
+    """Sin entrada en ninguna de las dos no hay invocación alternativa: lo que sí hay que decir es
+    dónde se define un sujeto. Y no se inventa un `--theme` para un slug que no está en
+    `themes.yaml`."""
+    msg = cfg.subject_refusal("no-existe", "star", "no se hizo nada", "Corré: `no me llames`")
+    assert "stars.yaml" in msg and "themes.yaml" in msg
+    assert "no me llames" not in msg, "el remedio del llamador no aplica: no hay a qué mandar"
+    assert "--theme" not in msg
