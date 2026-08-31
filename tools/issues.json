@@ -1599,22 +1599,22 @@
   {
    "number": 321,
    "title": "El gate de #318 bloquea una cita que #315 usa como ejemplo de cita CORRECTA: «no está en la extracción» no prueba fabricación, porque la extracción es una transcripción SELECTIVA — medido, 12 de 32 hits son verdaderos y el resto mezcla",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 322,
    "title": "La cita se RE-TIPEA al sintetizar, y ahí se pierde: los 12 verdaderos positivos medidos son errores de COPIADO (6 de atribución, 6 de cola alterada), ninguno de comprensión — `contrast.py` debe emitir la fila con la cita ya adentro, no el esqueleto",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 323,
    "title": "`contrast.py --validar` existe y no lo corre NADIE: ningún skill lo nombra y no hay modo barrido — la nota que produjo #314–#318 cerró con verify completo, `lint --cierre` en 0 y 12 citas alteradas adentro",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 324,
    "title": "`contrast --validar` y el lint implementan la misma regla por separado y ya divergen (13 vs 12): el comando no prueba contra el `.txt` de la fuente citada, así que marca como mal atribuida una cita CORRECTA — y ahora es paso de cierre obligatorio con exit ≠ 0",
-   "state": "OPEN"
+   "state": "CLOSED"
   }
  ]
 }
