@@ -3218,9 +3218,11 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         if not dest_s or not dest_s.exists():
             continue
         texto_s = dest_s.read_text(encoding="utf-8")
-        # Encabezado → cómo se arma SU universo. El orden importa poco; lo que no puede pasar es
-        # cruzarlos, porque `concept_rollup_rows` compara por clave normalizada (#243) y
-        # `papers_universe` por string exacto.
+        # Encabezado → cómo se arma SU universo. Los dos parten del MISMO predicado de pertenencia
+        # (`mn.theme_membership`, #347: comparación por clave normalizada, #243) y difieren en lo
+        # que publican: el roll-up declara además por cuál llave entró el paper (D-24). Hasta 1.156.0
+        # sólo el roll-up normalizaba y el universo comparaba el string exacto — o sea que este
+        # detector heredaba la subdeclaración del universo que compara.
         universos = [(mn.PAPERS_HEADER,
                       lambda s=slug_s, k=_kind: {r["stem"]
                                                  for r in mn.papers_universe(s, k, paper_fms)})]
