@@ -1,5 +1,5 @@
 {
- "fetched": "2026-08-31",
+ "fetched": "2026-09-01",
  "issues": [
   {
    "number": 2,
@@ -1739,12 +1739,12 @@
   {
    "number": 349,
    "title": "El detector de «párrafo duplicado» marca como daño lo que estampa el framework: en una nota con varias vistas (#239) cada vista escribe su propia línea estructural — 7 de 7 hallazgos son falsos positivos",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 350,
    "title": "El detector de «segunda mano sin marca» dispara en 398 de 462 pares (86 %): pregunta si el PAPER tiene alguna segunda mano, no si el VALOR que la línea toma lo es — la forma de #198, con 6 de cada 7 avisos no accionables",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 351,
@@ -1754,6 +1754,126 @@
   {
    "number": 352,
    "title": "El gate de mutación sale ROJO en `main` y nadie lo estaba corriendo: 3 sobrevivientes nuevos de tandas anteriores",
+   "state": "CLOSED"
+  },
+  {
+   "number": 353,
+   "title": "Una fuente off-ADS declara su metadata a mano y NADA la cruza contra el `doi` que ella misma declara: medido, una nota publica autor y título de otro paper",
+   "state": "OPEN"
+  },
+  {
+   "number": 354,
+   "title": "El `--probe` con query cruda NO declara el `search_fq` que aplicó: seis ceros que parecían «no está en ADS» eran el fq del objetivo — el falso negativo de #238, repetido con su doc delante",
+   "state": "OPEN"
+  },
+  {
+   "number": 355,
+   "title": "`--rename-paper` asume que todo renombre es un alias D-19 y escribe `versions[]` incondicionalmente: corregir una clave EQUIVOCADA deja publicada la afirmación falsa de que ese bibcode identifica al mismo trabajo",
+   "state": "OPEN"
+  },
+  {
+   "number": 356,
+   "title": "`--rename-paper` mueve los artefactos y deja la nota apuntando a los viejos: `pdf:`, `fulltext:`, el link del cuerpo y el blockquote off-ADS quedan señalando archivos que el propio comando movió (#217 al revés)",
+   "state": "OPEN"
+  },
+  {
+   "number": 357,
+   "title": "La puerta 2 promete «fundacional en SU campo» pero compara contra el `citation_count` de ADS: en un tema de otra disciplina eso mide «cuánto lo cita astro» y la puerta no abre nunca — medido en `icasso` con `search_fq: null` ya declarado, 21/21 en tema y 0 core",
+   "state": "OPEN"
+  },
+  {
+   "number": 358,
+   "title": "El carril ADS de `fetch_pdf` nunca consulta el resolver de acceso abierto que el repo ya tiene: 2 de 6 papers declarados «sin conseguir» eran open access — el simétrico de #313, más Europe PMC que no está en ninguna cascada",
+   "state": "OPEN"
+  },
+  {
+   "number": 359,
+   "title": "El cruce de citas contra el `.txt` corre sobre la NOTA, no sobre la EXTRACCIÓN: una cita mal transcrita al leer el PDF sobrevive al cosechador y sólo se caza si llega a una nota — medido, 2 de 265 valores",
+   "state": "OPEN"
+  },
+  {
+   "number": 360,
+   "title": "Un tema de método sin `ejes:` declarado no avisa NADA: el simétrico de #351 quedó sin construir, y el chequeo de ejes del lint corre contra la lente equivocada — medido, 6 de 8 facetas vacías en 12 extracciones",
+   "state": "OPEN"
+  },
+  {
+   "number": 361,
+   "title": "El anclaje de `discover --theme` crashea con traceback en vez de declarar FALLÓ (viola el contrato de cobertura de #290 en la etapa que más rinde), y `descubrimientos: 0` no lo mira ningún gate: cerré un tema entero con todos los verdes sin correr el paso 0b",
+   "state": "OPEN"
+  },
+  {
+   "number": 362,
+   "title": "OpenAlex ahora tiene presupuesto y el framework lo trata como gratis: `refs_of` usa el endpoint MEDIDO para resolver DOIs conocidos, que el endpoint libre devuelve igual — el anclaje y `citation_index` quedan sin cuota sin necesitarla",
+   "state": "OPEN"
+  },
+  {
+   "number": 363,
+   "title": "La exención de `pdf_source: eprint` sobre el chequeo de cita textual se sacó en v1.111.0 (#275) y 9 lugares siguen afirmando que existe — uno es el mensaje que el lint le IMPRIME al usuario",
+   "state": "OPEN"
+  },
+  {
+   "number": 364,
+   "title": "El detector de #333 acusa por interleaving de columnas y por glifo de comilla: 3 de 3 falsos positivos",
+   "state": "OPEN"
+  },
+  {
+   "number": 365,
+   "title": "El fence de #259 no dice que las claves son CERRADAS: el subagente agrega una y la barrera lo rebota después de leer el PDF",
+   "state": "OPEN"
+  },
+  {
+   "number": 366,
+   "title": "La cadena de veredictos de #232 no se forma cuando la corrección cambia el ancla: el bloque publica 0 donde hubo un contradice",
+   "state": "OPEN"
+  },
+  {
+   "number": 367,
+   "title": "Cerrar un `pending` off-ADS copia el PDF y deja la nota con `pdf: null`: #304 cubrió el carril ADS y el off-ADS quedó afuera — y es el caso donde la nota SIEMPRE preexiste",
+   "state": "OPEN"
+  },
+  {
+   "number": 368,
+   "title": "Un `[[bibcode]]` en el blockquote de alcance de `## Huecos` es infalsificable por construcción: el fan-out lo toma como par y vuelve `no-soportada` (bloqueante)",
+   "state": "OPEN"
+  },
+  {
+   "number": 369,
+   "title": "El `--esperados` de la barrera lo cuenta el operador a ojo: lancé 15 verificadores para 16 fuentes y el conteo lo sabía el generador",
+   "state": "OPEN"
+  },
+  {
+   "number": 370,
+   "title": "Falta la regla simétrica de #322 para PROSA: una afirmación que agrupa N fuentes bajo un mecanismo común exige haberlo visto en las N",
+   "state": "OPEN"
+  },
+  {
+   "number": 371,
+   "title": "`extraction_prompt --enfasis` manda escribir la SEGUNDA lente al mismo archivo que la primera: destruye una extracción versionada y no regenerable, y deja sin testigo al gate de #323",
+   "state": "OPEN"
+  },
+  {
+   "number": 372,
+   "title": "`harvest_views` estampa la lente del TEMA en toda vista, así que una segunda lente con `--ejes` propios queda declarando ejes que nunca preguntó (rompe INV-146 y el diff de D-49)",
+   "state": "OPEN"
+  },
+  {
+   "number": 373,
+   "title": "Las citas de `## Vista` no las mira NINGUNA capa: 3838 transcripciones del PDF sin verificar, y una alteración deliberada pasa con rc=0",
+   "state": "OPEN"
+  },
+  {
+   "number": 374,
+   "title": "`contrast.py` identifica la extracción por el NOMBRE DEL ARCHIVO y `harvest_views` por el `bibcode` de adentro: dos consumidores del mismo directorio con dos identidades, y el gate de #323 da falso limpio sobre 309 citas",
+   "state": "OPEN"
+  },
+  {
+   "number": 375,
+   "title": "Código muerto: `schema` se asigna y no se usa en test_ingest_theme.py:477",
+   "state": "OPEN"
+  },
+  {
+   "number": 376,
+   "title": "Tests del framework assertan sobre archivos `merge=ours`: el arreglo no puede llegar nunca a una instancia",
    "state": "OPEN"
   }
  ]
