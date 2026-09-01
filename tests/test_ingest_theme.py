@@ -474,9 +474,12 @@ def test_la_doc_del_modulo_no_promete_el_repunte_automatico():
     doc = it.__doc__ or ""
     assert "repunta solo" not in doc
     assert "PROPONE" in doc and "aplicarlo es del operador" in doc
-    schema = (cfg.THEMES_YAML.parent / "themes.yaml")
-    # el comentario de schema de la SEMILLA es la tercera copia, y la que viaja a cada instancia
-    semilla = (pathlib.Path(it.__file__).resolve().parents[1] / "vault" / "config" / "themes.yaml")
+    # #376 — la semilla del schema es `themes.example.yaml`, NO `themes.yaml`. Aquél es framework
+    # y viaja; éste es de la instancia y está en `merge=ours`, así que assertar sobre su redacción
+    # era exigir un arreglo que por contrato no puede llegarle nunca (medido: rojo permanente en
+    # las 3 instancias). La línea muerta `schema = ...` que había acá se fue con #375.
+    semilla = (pathlib.Path(it.__file__).resolve().parents[1]
+               / "vault" / "config" / "themes.example.yaml")
     texto = semilla.read_text(encoding="utf-8")
     assert "REPUNTA este campo solo" not in texto and "PROPONE repuntar" in texto
 

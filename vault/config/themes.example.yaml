@@ -1,0 +1,177 @@
+# Registro de TEMAS para ingest-theme (análogo a stars.yaml, pero por tema en vez de por estrella).
+#
+# La clave de cada entrada ES el slug → dir de build/<slug>/ y raw/{pdfs,fulltext}/<slug>/.
+# Campos:
+#   title    : nombre humano del tema.
+#   area     : subcarpeta de vault/wiki/concepts/. ABIERTA — cualquiera; idealmente una de
+#              `concept_areas` (objective.yaml; ej. indicators|methods|activity|hypotheses) para que
+#              el typo-check la reconozca. Si no figura, make_notes AVISA pero crea igual (no bloquea)
+#              y el lint la marca WARN; si es un área nueva real, agregala a concept_areas.
+#   concept  : nombre de la nota concept durable destino (puede diferir del slug; existente o a stubbear).
+#   query    : query Solr ADS CRUDA (control total; ver scripts/query_ads.py). NO es por nombre de estrella.
+#   facet    : (TEMAS DE MÉTODO) la lente PROPIA del tema — una regex sobre título+abstract+keywords.
+#              Hace falta porque la lente global de objective.yaml no sirve acá, y no por falta de
+#              ajuste: con `require: [rv]` mata al paper FUNDACIONAL del método (Hyvärinen no
+#              menciona RV ni una vez), y sin filtro "independent component analysis" devuelve
+#              miles de papers de fMRI, EEG y finanzas. La regla es:
+#                  core = facet propia  Y  (puerta 2  OR  puerta 3)
+#              · puerta 2 «fundacional en su campo» — citation_count >= fundacional_min_citas
+#              · puerta 3 «lente astro global»      — pasa relevance.facets de objective.yaml
+#              (La puerta 1, «lo cita tu corpus», NO clasifica: PROPONE candidatos al triage.)
+#   fundacional_min_citas : (opcional) umbral de la puerta 2. SIN default a propósito: el número
+#              depende de tu campo —30k citas es normal en ML y muchísimo en astro— y esconderlo en
+#              el código sería decidir por vos. Si no lo declarás, la puerta 2 NO abre y el motivo
+#              lo dice; el tema entra sólo por la lente astro.
+#   aliases  : opcional. Sirven para prosa, para el retro-tag por grep… y son los términos que
+#              `discover.py` le manda a arXiv (cada backend recibe la query en SU idioma).
+#   topic    : (opcional) id de subtema de OpenAlex (`T…`) para la cascada de `discover.py`.
+#              Sacalo con `python scripts/discover.py --topics "<tema en inglés>"`. ⚠ DECLARALO:
+#              sin él, `discover` intenta inferirlo del `title`, y si tu bóveda escribe los títulos
+#              en castellano la taxonomía de OpenAlex (inglesa) no matchea y esa mitad de la
+#              cascada no corre. No falla en silencio —lo dice en la cobertura— pero perdés el
+#              backend que más aporta en temas no-astro.
+#   seed_terms : (opcional, TEMAS DE MÉTODO) términos para el slice de texto DENTRO del topic de
+#              OpenAlex — el único eje que alcanza la cola especialista (los papers de 11-72 citas
+#              dentro de un topic de 169.988 works, por debajo del piso de cualquier top-N). Medido
+#              (#107): la recuperación pasa de 7/18 a 13/18 y el universo de candidatos de 776 a
+#              2521. Ése es el canje —cobertura contra costo de triage— y por eso es OPT-IN: sin
+#              declararlo el eje no corre, y la cobertura de `discover.py` lo dice («NO CORRIÓ»).
+#              Son CURACIÓN del tema (para ICA: noisy ICA, quasi-whitening, identifiability), no
+#              algo que se invente en cada corrida. El flag `--seed-terms t1,t2` los pisa.
+#   extra_core : opcional. ⚠ FORMA DURA (D-58): lista de MAPAS `{bibcode, via, motivo}`, no de
+#                bibcodes sueltos — la forma vieja aborta. `via` es vocabulario CERRADO:
+#                usuario | triage | citado-por-corpus. Ver el ejemplo en stars.yaml.
+#                Override del clasificador: query_ads trae por bibcode los ausentes y rescata los
+#                que la query trajo marcados no-core. Persistente (config se commitea).
+#                En un tema OFF-ADS también vale (tema MIXTO): los papers del tema que SÍ tienen
+#                bibcode ADS van acá — NO en sources: con el bibcode de key (degrada el stub:
+#                metadata a mano, blockquote off-ADS falso). ingest_theme les corre la sub-cadena ADS.
+#   ejes     : (opcional, #307) los EJES DE LECTURA que el extractor pregunta por cada paper de este
+#              tema. Sin declarar → los de `relevance.facets` del objetivo; declarados → ésos;
+#              `ejes: []` → no se piden ejes, a propósito. Para un tema de método los globales son
+#              los equivocados, por el mismo argumento de D-26 con `facet:`.
+#   search_fq: (opcional, #295) el `fq` de Solr de ESTE tema, que acota el universo server-side
+#              ANTES de la lente. Sin declarar → hereda `relevance.search_fq` del objetivo;
+#              `search_fq: null` → no acota, a propósito. Un tema de otra disciplina buscado con
+#              `database:astronomy` no encuentra su literatura, y ninguna `facet:` lo recupera.
+#              ⚠ Si el tema declara `facet:` y NO declara esto, el probe y el lint AVISAN (#351):
+#              con el `fq` heredado la puerta 2 puede no abrir NUNCA (medido en `ica`: 0 papers
+#              fundacionales con `database:astronomy`, 2 sin él). Declaralo, aunque sea `null`.
+#   rows_por_termino: (opcional, #294) cuántos works trae cada slice de `seed_terms` (default 200).
+#              El slice se pagina, así que subirlo cubre el resto del slice.
+#   source   : ⚠ EL NOMBRE ENGAÑA (#209): NO dice "dónde se busca", dice QUÉ CADENA CORRE el
+#              orquestador. El descubrimiento multi-backend (ADS + arXiv + OpenAlex a la vez, merge
+#              por DOI) es `discover.py --theme <slug>`, un paso APARTE que el skill prescribe a
+#              mano (0b) y que `ingest_theme.py` NO llama. Lo que este campo decide de fondo es una
+#              propiedad del CORPUS: «este tema tiene papers sin bibcode ADS, así que además de la
+#              query hay una lista declarada». Valores:
+#              ads | web | local-pdfs | local-pdfs+web. Todo lo no-ads es el modo off-ADS de
+#              ingest-theme (opt-in, sólo a pedido explícito) y requiere `sources:`.
+#              ⚠ En off-ADS, `query:` es OPCIONAL y NO es sólo decorativa (#104): si la poblás, el
+#              orquestador corre el descubrimiento ADS COMPLETO para la mitad astro del tema (misma
+#              lente, mismas puertas de D-26, misma compuerta de triage) en vez de limitarse a los
+#              bibcodes de `extra_core`. Es lo que convierte un tema mixto de "enumerado a mano" en
+#              "descubierto"; dejala en null si de verdad no querés que busque.
+#   sources  : (sólo off-ADS) la bibliografía declarada del tema. Cada item:
+#                - key: 2006RasmussenWilliams       # clave de cita sintética AAAA+Autor (obligatoria)
+#                  url: https://...            # fuente web (snapshot vía fetch_web/defuddle) — o bien
+#                  pdf: ~/ruta/al/archivo.pdf  # PDF provisto (se copia a raw/pdfs/<slug>/<key>.pdf;
+#                                              # tras copiar, el orquestador PROPONE repuntar este
+#                                              # campo a la copia de la bóveda —repo-relative,
+#                                              # portable— e imprime la línea: aplicarlo es del
+#                                              # operador (#299/AUD-160). Hacelo: el path declarado
+#                                              # suele ser staging efímero y queda muerto)
+#                  title/author/year/venue     # opcionales: metadata para la nota de paper
+#                  n_authors/doi               # opcionales: nº de autores; DOI si existe (un PDF con
+#                                              # DOI sigue siendo off-ADS — sin bibcode ADS — y el DOI
+#                                              # habilita el chequeo de retracciones vía Crossref)
+#                  via: usuario               # OBLIGATORIO (#111). Vocabulario CERRADO:
+#                                              #   usuario        — lo pediste vos
+#                                              #   descubrimiento — lo propuso la cascada (discover)
+#                                              # ⚠ `reporte` se RETIRÓ en 1.72.0 y el lint lo bloquea
+#                                              # con mensaje propio: el eje es QUIÉN decidió, y eso
+#                                              # no tiene tercer valor — que el usuario traiga una
+#                                              # lista o los PDFs no cambia que lo trajo él. De qué
+#                                              # documento salió lo dice `motivo`, que es obligatorio.
+#                                              # Era el ÚNICO de los cuatro cuadrantes de curación
+#                                              # sin registro: `extra_core` dice quién y por qué
+#                                              # (D-58), el descarte de un candidato (#51) y el de
+#                                              # una fuente (#81) también. Y es el que MÁS lo
+#                                              # necesita: en off-ADS no hay query que descubra, así
+#                                              # que TODO entra por decisión de alguien. El lint lo
+#                                              # bloquea; el snippet lo arma
+#                                              # `triage.py <slug> --accept-source <doi>`.
+#                  fecha: 2026-08-26           # cuándo se aceptó
+#                  motivo: "..."               # OBLIGATORIO: por qué entra esta fuente
+#                  pending: paywall            # la fuente NO está en disco todavía. Vocabulario
+#                                              # CERRADO: paywall | scan | unextractable |
+#                                              # adquisicion. Los tres primeros son un FALLO; el
+#                                              # cuarto no —un libro que vas a conseguir no falló,
+#                                              # tiene otra latencia— y antes entraba forzado como
+#                                              # paywall, perdiendo el motivo real (#80). El item
+#                                              # queda DERIVADO al usuario: stub con pending_source
+#                                              # (url/doi como puntero), no cuenta como fallo y el
+#                                              # lint lo lista. Al conseguir la fuente: reemplazar
+#                                              # por pdf:/url: y re-correr.
+#                  pending_motivo: "..."       # OBLIGATORIO con `pending`. En seis meses la
+#                                              # categoría sola no dice si alguien la está
+#                                              # consiguiendo o si nadie la miró nunca.
+#                  unidad_cita: pagina         # (#80) cómo se apunta ADENTRO de esta fuente:
+#                                              # linea (default, no hace falta declararlo) | pagina
+#                                              # | seccion. Para un LIBRO o un handbook: el fan-out
+#                                              # de verify-citations asume un .txt que se lee
+#                                              # ENTERO (700 páginas lo revientan) y «línea 18443»
+#                                              # no es una referencia que alguien pueda seguir.
+#                                              # Es OTRO eje que el txt:/pdf: de la fila de
+#                                              # verificación, que dice qué ARCHIVO se leyó.
+#                  alcance: "caps. 6 y 15"     # OBLIGATORIO si unidad_cita no es `linea`: qué parte
+#                                              # de la fuente entró. Un libro casi nunca entra
+#                                              # entero, y sin esto el chequeo de completitud no
+#                                              # puede distinguir un recorte deliberado de una
+#                                              # omisión.
+#
+# La cadena mecánica se corre con `python scripts/ingest_theme.py <slug>` (despacha según `source`).
+#
+# Agregá tus temas acá (o dejá que `ingest-theme` los agregue). Ejemplo comentado:
+#
+# activity-rv:
+#   title: "Actividad estelar ↔ velocidad radial (indicadores, signos, desfasajes)"
+#   area: activity
+#   concept: activity-rv-degeneracy
+#   query: '(abs:"radial velocity" OR abs:"radial-velocity") (abs:"planet" OR abs:"exoplanet") (abs:"bisector" OR abs:"FWHM" OR abs:"S-index" OR abs:"activity indicator" OR abs:"chromospheric")'
+#   aliases: ["BIS-RV", "indicadores de actividad"]
+#
+# Ejemplo off-ADS (método no-astro que se quiere usar en la bóveda; ver Modo off-ADS del skill ingest-theme):
+#
+# gaussian-processes:
+#   title: "Procesos gaussianos (regresión: algoritmo y kernels)"
+#   area: methods
+#   concept: gaussian-processes
+#   query: null
+#   source: local-pdfs+web
+#   aliases: ["GP", "gaussian process regression", "procesos gaussianos"]
+#   facet: 'gaussian process|GP regression|kernel (function|method)'
+#   fundacional_min_citas: 2000
+#   sources:
+#     # ⛔ `via` y `motivo` son OBLIGATORIOS (#111) y el lint los BLOQUEA si faltan. Hasta #181 este
+#     # ejemplo —la única forma escrita de cómo se declara una fuente off-ADS, o sea la que un agente
+#     # copia— los omitía, así que enseñaba la forma que el detector rechaza. Es el mismo problema
+#     # que D-58 cerró para `extra_core` imprimiendo el snippet canónico.
+#     # ⛔ `via` es BINARIO (#206): usuario (lo trajo una persona) · descubrimiento (lo propuso la
+#     # cascada). `reporte` se retiró en 1.72.0 — partir esa categoría hacía que el campo dejara de
+#     # contestar su propia pregunta: había que sumar dos casilleros para saber cuántos papers
+#     # entraron por decisión humana. NO es el `via` de `extra_core`, que es el carril ADS.
+#     - key: 2006RasmussenWilliams
+#       pdf: ~/Descargas/rasmussen_williams_2006.pdf
+#       title: "Gaussian Processes for Machine Learning"
+#       author: Rasmussen
+#       year: 2006
+#       via: usuario
+#       motivo: el libro de referencia del tema; lo pidió el usuario para la nota de método
+#     - key: 2025sklearn
+#       url: https://scikit-learn.org/stable/modules/gaussian_process.html
+#       title: "scikit-learn User Guide: Gaussian Processes"
+#       venue: scikit-learn.org
+#       year: 2025
+#       via: usuario
+#       motivo: documenta la parametrización de kernels que la nota necesita citar
