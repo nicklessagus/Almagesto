@@ -5,7 +5,14 @@
 
 # Almagesto: template de wiki de conocimiento astro (patrón LLM Wiki)
 
-[![CI](https://github.com/nicklessagus/Almagesto/actions/workflows/ci.yml/badge.svg)](https://github.com/nicklessagus/Almagesto/actions/workflows/ci.yml)
+<!-- El badge de CI va RELATIVO a propósito (y `../../` es exacto, no aproximado): GitHub
+     reescribe las imágenes del README contra `/<owner>/<repo>/raw/<branch>/` y los links contra
+     `/<owner>/<repo>/blob/<branch>/`, así que subir dos niveles cae en la raíz del repo EN QUE SE
+     LEE. En una instancia el badge muestra el CI de ESA instancia (su vault, su lint), no el del
+     template — que es lo único que le sirve a quien la abre. ⛔ No lo "arregles" a absoluto.
+     Los otros tres quedan absolutos a propósito: hablan DEL FRAMEWORK (su versión, su plantilla),
+     no del repo que los lee. -->
+[![CI](../../actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
 [![Version](https://img.shields.io/github/v/tag/nicklessagus/Almagesto?label=version)](https://github.com/nicklessagus/Almagesto/tags)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Use this template](https://img.shields.io/badge/Use%20this-template-2ea44f?logo=github)](https://github.com/nicklessagus/Almagesto/generate)
