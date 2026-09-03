@@ -154,6 +154,79 @@ se **marca**, no se edita).
 
 ---
 
+## 2b · v1.175.0-v1.177.0 (#374 · #371 · #372) — la cadena de la segunda lente
+
+Los tres arreglan el mismo ciclo: el **archivo** donde escribe una segunda lectura, la **identidad**
+con que se la lee, y los **ejes** que su vista declara. Sólo el primero deja algo que revisar en el
+contenido, y es el que más importa.
+
+### #374 — el gate ahora VE las citas de las segundas lentes
+
+`contrast` identificaba una extracción por el nombre del archivo y `harvest_views` por el `bibcode`
+de adentro. Mientras el nombre **es** el bibcode las dos coinciden; con una segunda lente
+(`<bib>__<lente>.json`) divergen, y todas las citas de esa lectura caían en *no evaluable* con el
+gate devolviendo `rc 0` — sobre citas que no había mirado.
+
+⛔ **Lo que esto significa para vos: el barrido puede reportar HOY cosas que ayer callaba.** No es
+una regresión: es población que entra por primera vez.
+
+```bash
+python scripts/contrast.py --validar-todo
+```
+
+Si aparecen hallazgos nuevos, se corrigen como siempre: **copiando la cadena del JSON de
+extracción** (`python scripts/contrast.py <slug> --grep "<re>"`), nunca re-tipeándola (#322).
+
+> Medido en `Almagesto-Tesis` (2026-09-03): **187** extracciones, **13** con nombre distinto de su
+> bibcode. Ésas son las que entran a la población del gate por primera vez.
+
+### #371 — dónde escribe la próxima segunda lectura
+
+`extraction_prompt … --enfasis` mandaba escribir en `<bibcode>.json`, o sea **el archivo de la
+primera lente**, que es un artefacto versionado y no regenerable (#311). Ahora deriva el nombre de
+la lente.
+
+**Nada que reparar hacia atrás si usaste el workaround** de repuntar los prompts a mano: los
+archivos ya tienen el nombre correcto. Lo que cambia es que la próxima corrida no necesita el
+workaround, y que el cosechador **avisa** si dos archivos declaran el mismo `(bibcode, sujeto,
+lente)`.
+
+### #372 — la lente que declara cada vista
+
+`harvest_views` estampaba los ejes del **tema** en toda vista, así que una segunda lente con
+`--ejes` propios quedaba declarando ejes que nunca preguntó (rompe INV-146 y el diff de D-49).
+
+**Chequeo:** una vista con `enfasis` cuya `lente` no sean las claves de `ejes` de **su** JSON.
+
+```bash
+python - <<'EOF'
+import json, pathlib, sys
+sys.path.insert(0, "scripts"); import lib_config as cfg
+ejes = {}
+for f in sorted(cfg.EXTRACCION.glob("*/*.json")):
+    try: d = json.loads(f.read_text(encoding="utf-8"))
+    except Exception: continue
+    v = d.get("vista") or {}
+    if v.get("enfasis"):
+        ejes[(str(d.get("bibcode") or "").strip(), v.get("sujeto"), v["enfasis"])] = list(d.get("ejes") or {})
+mal = 0
+for nota in sorted(cfg.PAPERS.glob("*.md")):
+    fm = cfg.split_fm(nota.read_text(encoding="utf-8"))
+    for v in (fm.get("vistas") or []):
+        k = (fm.get("bibcode"), v.get("sujeto"), v.get("enfasis")) if isinstance(v, dict) else None
+        if k and k[2] and k in ejes and list(v.get("lente") or []) != ejes[k]:
+            print("⛔", nota.name, k[2]); mal += 1
+print(f"vistas con lente desalineada: {mal}")
+EOF
+```
+
+Se corrige a mano en el frontmatter de la nota (la `lente` de esa vista pasa a ser las claves de
+`ejes` de su JSON): el cosechador **no pisa** una vista ya escrita, así que re-correrlo no la
+repara.
+
+> Medido en `Almagesto-Tesis`: **16** vistas con `enfasis`, **0** desalineadas — ya se habían
+> corregido a mano cuando se abrió el issue.
+
 ## 3 · Cierre
 
 ```bash
