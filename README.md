@@ -367,6 +367,8 @@ seguir leyendo los papers centrales de tu tema.
 - **Operación día a día**: dependencias completas, layout del repo, scripts sueltos, traer mejoras
   del framework (`upstream`/`merge=ours`), portabilidad entre máquinas, Obsidian:
   [`docs/operacion.md`](docs/operacion.md)
+- **Traer una versión nueva a una bóveda ya instanciada** (qué revisar en tu contenido, no sólo en
+  el código): [`docs/migracion-instancia.md`](docs/migracion-instancia.md)
 - **Schema del agente** (frontmatter, reglas, operaciones): [`CLAUDE.md`](CLAUDE.md) · estado en
   `vault/STATUS.md` · catálogo en `vault/wiki/index.md`
 - **Tests del framework** (suite determinista, corre en CI): [`tests/README.md`](tests/README.md)
