@@ -2293,6 +2293,32 @@ def test_extraction_texts_memoiza_por_boveda(toy_vault, monkeypatch):
     assert lecturas.count("2013Voss.json") == 1, "el JSON se lee UNA vez por corrida"
 
 
+# ── #371 · el archivo de una SEGUNDA lente no puede ser el de la primera ──
+
+def test_lens_filename_sin_lente_es_el_canonico():
+    """El recorte: la primera lectura sigue escribiendo `<bibcode>.json`. Un nombre distinto ahí
+    movería todo el corpus existente."""
+    assert cfg.lens_filename("2013Voss") == "2013Voss.json"
+    assert cfg.lens_filename("2013Voss", "   ") == "2013Voss.json"
+
+
+def test_lens_filename_con_lente_NO_pisa_la_primera():
+    """#371 — el prompt decía «la vista anterior no se pisa» y mandaba escribir al archivo de la
+    primera lente. Lo que #239 protege es la vista en la NOTA; la extracción quedaba desprotegida, y
+    es el artefacto que #311 declara versionado y **no regenerable**."""
+    assert cfg.lens_filename("2013Voss", "orden") == "2013Voss__orden.json"
+    assert cfg.lens_filename("2013Voss", "orden") != cfg.lens_filename("2013Voss")
+
+
+def test_lens_filename_normaliza_la_lente_para_ser_un_ARCHIVO():
+    """La lente es texto libre del operador y termina en un nombre de archivo: separadores, acentos
+    y mayúsculas no pueden viajar. Comparte la transformación con `method_key` y NO su regla —
+    aquélla normaliza sólo al comparar, ésta normaliza justamente para escribir."""
+    n = cfg.lens_filename("2013Voss", "¿Cuántas componentes? (orden/PCA)")
+    assert n == "2013Voss__cuantas-componentes-orden-pca.json"
+    assert "/" not in n and n.isascii()
+
+
 # ── #324 · la regla compartida: `quote_verdict` y su lector de `.txt` ──────────────────────────────
 # Viven acá, y no sólo en los tests de sus dos llamadores, porque la función ES el contrato: hasta
 # 1.134.0 la misma regla estaba implementada dos veces (lint y contrast) y ya divergía —13 contra 12

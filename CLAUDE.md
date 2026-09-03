@@ -386,13 +386,13 @@ add-only **no se afloja**.
 
 ⛔ **Una SEGUNDA lectura del mismo sujeto con otra lente CONVIVE: `enfasis` (#239), y se PIDE con
 `extraction_prompt.py … --enfasis "<lente>" [--ejes a,b]` (#308)** —el prompt manda leer primero la
-vista anterior para no re-narrarla, y **rehúsa** si `(sujeto, enfasis)` ya tiene lectura—: la mitad
-de cosecha existía desde #239 y la única forma de producir ese JSON era escribirlo a mano, que es lo
-que INV-100 prohíbe. La identidad de
-una vista es el par `(sujeto, enfasis)` y su sección es `### Lente — <énfasis>` **dentro** de la
+vista anterior para no re-narrarla, y **rehúsa** si `(sujeto, enfasis)` ya tiene lectura—. La
+identidad de una vista es el par `(sujeto, enfasis)` y su sección es `### Lente — <énfasis>` **dentro** de la
 `## Vista` del sujeto —partir el encabezado no serviría: `section_start` recorta el sufijo que
 arranca con puntuación (AUD-178) y las dos colapsarían—. El cosechador **rehúsa** cambiar un valor
-ya escrito bajo la misma clave: completa lo que falta, o manda declarar la lente.
+ya escrito bajo la misma clave: completa lo que falta, o manda declarar la lente. ⛔ **Y su extracción va a
+`<bibcode>__<lente>.json` (#371):** al canónico pisaba, en silencio, un artefacto versionado y **no
+regenerable** (#311).
 
 ⛔ **`vistas[]` la escribe SÓLO la lectura, nunca el retro-link.** Es lo que mantiene a
 `stars`/`thesis_links`/`methods` como **reclamos** (`make_notes` los mergea add-only sin leer nada) y

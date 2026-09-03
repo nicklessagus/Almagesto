@@ -56,6 +56,26 @@ def sembrar(toy_vault, data=None, *, stem=BIB, fm_extra=None, body=None):
                    body if body is not None else mn.vista_block("Estrella Test", theme=False))
 
 
+def test_dos_archivos_con_el_mismo_par_sujeto_lente_se_AVISAN(toy_vault, capsys):
+    """#371, la red simétrica del nombre de archivo: la identidad de una vista es el par
+    `(sujeto, enfasis)`, así que dos JSON que declaran el mismo par son dos lecturas compitiendo por
+    la misma sub-sección — y el cosechador escribiría una y después la otra sin decir nada.
+
+    ⚠ Avisa, no rechaza: las dos extracciones son artefactos caros (#311) y cuál gana es una
+    decisión de quien las produjo, no del cosechador."""
+    v = {"sujeto": "Estrella Test", "tipo": "star", "txt": "test_star", "fuente": "abstract",
+         "enfasis": "ruido"}
+    sembrar(toy_vault, extraccion(vista=v))                      # `<bib>.json`
+    (cfg.EXTRACCION / "test_star" / f"{BIB}__ruido.json").write_text(
+        json.dumps(extraccion(vista=dict(v))), encoding="utf-8")  # el MISMO par, otro archivo
+    hv.harvest("test_star")
+    out = capsys.readouterr().out
+    assert "mismo par" in out, out
+    assert BIB in out and "lente «ruido»" in out
+    # y NO rechaza: las dos entran, que es la asimetría deliberada
+    assert "RECHAZADAS" not in out
+
+
 def test_cosecha_estampa_la_vista_con_fecha_txt_y_lente(toy_vault):
     """La vista pasa de DECLARADA a HECHA: la `fecha` es lo que dice que la lectura ocurrió, el
     `txt` de qué copia salió (el ancla de fuente, D-18) y la `lente` con qué facetas se leyó — el

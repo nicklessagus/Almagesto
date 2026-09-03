@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.175.0"
+ALMAGESTO_VERSION = "1.176.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1488,8 +1488,37 @@ def method_key(nombre) -> str:
     ⛔ Normalising at COMPARISON time, never at write time: the spelling the extractor chose is
     information about how the paper names it, and rewriting it would destroy that.
     """
-    s = unicodedata.normalize("NFKD", str(nombre or "")).encode("ascii", "ignore").decode()
+    return slugify(nombre)
+
+
+def slugify(texto) -> str:
+    """casefold + NFKD + non-alphanumerics to `-`. The transformation, without anybody's rule.
+
+    Two callers want the same string and mean opposite things by it: `method_key` normalises at
+    COMPARISON time and must never write it back, while `lens_filename` (#371) normalises precisely
+    in order to WRITE a file name. Sharing the function keeps one regex; sharing `method_key` would
+    have smuggled its contract into a writer."""
+    s = unicodedata.normalize("NFKD", str(texto or "")).encode("ascii", "ignore").decode()
     return re.sub(r"[^a-z0-9]+", "-", s.casefold()).strip("-")
+
+
+def lens_filename(bibcode: str, enfasis: str = "") -> str:
+    """The extraction file for a reading: `<bibcode>.json`, or `<bibcode>__<lens>.json` (#371).
+
+    ⛔ The prompt of a second reading said at the top *«the previous view is NOT overwritten»* and
+    eighty lines below told the extractor to write to `<bibcode>.json` — the first lens's own file.
+    What #239 protects is the view in the NOTE; what was left unprotected is the **extraction**,
+    which #311 declares versioned and not regenerable: overwriting it throws away the reading of the
+    paper. And it fails silently — valid JSON at a valid path, harvested without complaint.
+
+    Measured on the vault where it was caught: 13 prompts generated, all 13 pointing at the first
+    lens's file, over a subject where **33 quotes rested on the extraction as their only witness**
+    — so overwriting would have left them unverifiable while the gate of #323 kept saying ✅.
+
+    ⚠ Ordering matters: this can only ship after #374 (identity by the `bibcode` INSIDE the file),
+    or every second lens falls out of that gate's population and `--filas` emits wikilinks that do
+    not resolve."""
+    return f"{bibcode}__{slugify(enfasis)}.json" if str(enfasis or "").strip() else f"{bibcode}.json"
 
 
 def concept_alias_index() -> dict:

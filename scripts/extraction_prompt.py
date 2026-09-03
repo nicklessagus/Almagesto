@@ -455,8 +455,11 @@ def build_prompt(slug: str, bibcode: str, name: str, aliases, texto: str = "",
         greps = "\n".join(f"  grep -niE '{_anclado(p)}' \"{_txt_rel(slug, bibcode)}\"" for p in pats)
     sujeto = sujeto or name
     tipo = "theme" if kind == "theme" else "star"
-    out = (f"{out_dir.rstrip('/')}/{bibcode}.json" if out_dir else
-           f"{(cfg.EXTRACCION / slug).relative_to(cfg.ROOT).as_posix()}/{bibcode}.json")
+    # #371 — con `--enfasis` el nombre sale de la lente: el canónico es el archivo de la PRIMERA
+    # lectura, y mandarlo ahí pisa una extracción versionada y no regenerable (#311).
+    archivo = cfg.lens_filename(bibcode, enfasis)
+    out = (f"{out_dir.rstrip('/')}/{archivo}" if out_dir else
+           f"{(cfg.EXTRACCION / slug).relative_to(cfg.ROOT).as_posix()}/{archivo}")
     alias_str = ", ".join(f"`{a}`" for a in [name, *(aliases or [])])
     # #254 los ejes son la lente de ESTA bóveda; #307 los del TEMA si los declara; #308 los que
     # pide una segunda lectura con otra lente, que es lo que la hace distinta de la primera.

@@ -522,6 +522,12 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
     hoy = _dt.date.today().isoformat()
     refutados: list = []               # #212 · (bibcode, [sujetos]) — para el aviso de cierre
     salvedades_falsas: list = []       # #213 · (bibcode, detalle) — chequeadas y desmentidas
+    # #371 — la identidad de una VISTA es el par `(sujeto, enfasis)`, y desde que el nombre del
+    # archivo sale de la lente puede haber varios JSON del mismo bibcode. Dos que declaren el mismo
+    # par compiten por la misma sub-sección y el cosechador escribiría una y después la otra sin
+    # decir nada. AVISA y no rechaza: las dos son artefactos caros (#311) y cuál gana lo decide
+    # quien las produjo.
+    vistos_par: dict = {}
     for archivo in sorted(src.glob("*.json")):
         try:
             data = json.loads(archivo.read_text(encoding="utf-8"))
@@ -547,6 +553,13 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
         # que usan los otros lectores de `raw/extraccion/`: con una copia por consumidor ya
         # divergieron una vez, y el que quedó atrás dio un gate en verde sobre 309 citas.
         bib = cfg.extraction_identity(data)
+        par = (bib, sujeto, str(vista.get("enfasis") or "").strip())
+        if par in vistos_par:
+            cfg.print_seguro(f"  ⚠ {archivo.name}: declara el mismo par (bibcode, sujeto, lente) "
+                             f"que `{vistos_par[par]}` — «{par[0]}» sobre «{par[1]}»"
+                             + (f", lente «{par[2]}»" if par[2] else " (sin lente)")
+                             + ": son dos lecturas compitiendo por la misma sub-sección (#371)")
+        vistos_par.setdefault(par, archivo.name)
         dest = cfg.PAPERS / f"{mn.safe_name(bib)}.md"
         if not dest.exists():
             n["sin_nota"] += 1

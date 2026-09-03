@@ -641,6 +641,39 @@ def test_el_prompt_de_una_SEGUNDA_lente(toy_vault):
     assert "SEGUNDA lectura" not in normal
 
 
+def test_con_enfasis_el_prompt_NO_manda_pisar_la_primera_lente(toy_vault):
+    """#371 — el prompt decía arriba «la vista anterior **no se pisa**» y ochenta líneas más abajo
+    mandaba escribir el resultado en `<bibcode>.json`, que es EXACTAMENTE el archivo de la primera
+    lente. Lo que #239 protege es la vista en la NOTA; lo que quedaba desprotegido es la
+    **extracción**, que #311 declara versionada y no regenerable: pisarla tira la lectura del paper.
+
+    Y el daño es silencioso —JSON válido en un path válido, el cosechador no se queja— con un
+    agravante medido: 33 citas de esa nota se apoyaban SÓLO en la extracción de su fuente, así que
+    pisarla las dejaba sin testigo y el gate de #323 habría seguido diciendo ✅."""
+    texto = ep.build_prompt("ica_ruido", "2002Cardoso", "ICA ruidosa", [], kind="theme",
+                            sujeto="ica-ruido", enfasis="ruido por canal")
+    assert "2002Cardoso__ruido-por-canal.json" in texto
+    assert "extraccion/ica_ruido/2002Cardoso.json" not in texto
+
+
+def test_sin_enfasis_el_nombre_del_archivo_no_cambia(toy_vault):
+    """El recorte: la primera lectura sigue escribiendo el canónico. Un nombre distinto ahí movería
+    todo el corpus existente."""
+    texto = ep.build_prompt("ica_ruido", "2002Cardoso", "ICA ruidosa", [], kind="theme",
+                            sujeto="ica-ruido")
+    assert "extraccion/ica_ruido/2002Cardoso.json" in texto and "__" not in texto
+
+
+def test_el_nombre_de_la_lente_se_normaliza_para_ser_un_ARCHIVO(toy_vault):
+    """La lente es texto libre del operador (acentos, mayúsculas, barras), y va a un nombre de
+    archivo. Se normaliza al ESCRIBIR —que es lo contrario de `method_key`, que normaliza sólo al
+    comparar— y por eso las dos comparten la transformación, no la regla."""
+    texto = ep.build_prompt("ica_ruido", "2002Cardoso", "ICA ruidosa", [], kind="theme",
+                            sujeto="ica-ruido", enfasis="¿Cuántas componentes? (orden/PCA)")
+    assert "2002Cardoso__cuantas-componentes-orden-pca.json" in texto
+    assert "/" not in texto.split("2002Cardoso__")[1].split(".json")[0]
+
+
 def test_el_aviso_de_no_hay_nada_que_leer_nombra_UN_comando_QUE_CORRE(toy_vault, monkeypatch,
                                                                      capsys):
     """#334 — la segunda mitad del aviso salía como `make_notes.py <slug>` pelado, y el sujeto
