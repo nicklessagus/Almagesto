@@ -1042,7 +1042,9 @@ re-extraer el `.txt`.
    población y no evaluables). Un `grep` de segundos contra N subagentes leyendo PDFs: verificar con
    LLM lo que el `grep` ya sabe alterado es pagar el caro por lo que el barato sabía. La capacidad
    existía y **no la corría nadie** — la nota que produjo la serie cerró con verify y `lint --cierre`
-   en 0 **con 12 citas alteradas adentro**.
+   en 0 **con 12 citas alteradas adentro**. ⛔ **Y sin slug es además pasada periódica de
+   `maintain` (#386)**, registrada en `_citas.yaml` como la de red: el cierre lo corre CON slug y
+   eso mira un rincón — medido, 0 acotado contra 1 global.
 
 #### El CICLO DE LA LENTE — cómo se encadenan las piezas (#310)
 
@@ -1445,6 +1447,12 @@ la fuente está en disco, se abre.
 medido, una entrada publica como cita textual **con página** una frase que **invierte el sentido**
 de lo que dice el paper. Misma doctrina que las otras marcas —hacer visible, no borrar—: el lint
 chequea las citas textuales del `log.md` contra el `.txt` de su bibcode, salvo que lleven la marca.
+⛔ **La exención la decide UNA función (`lib_config.log_quote_exempt`) y la llaman los dos chequeos
+(#386):** una convención en prosa **no compone**, y ya divergía —el lint la honraba, `contrast
+--validar` no la conocía—, así que la entrada marcada bloqueaba el gate de #323 para siempre. ⛔ **Y
+la entrada que CITA una cita defectuosa para explicarla la pone en un blockquote (#387): ahí es
+mención, no afirmación** — sin eso el caso reflexivo no tiene salida. Las dos valen **sólo en
+`log.md`**: en una nota la corrección se hace editando.
 
 Éstas son las **cinco únicas marcas en línea** del sistema: `(inferencia de [[bibcode]])`,
 `[[bibcode]] ⛔retractada`, `<valor> ⚠desactualizado`, `<afirmación> ⚠verificar en el PDF` y

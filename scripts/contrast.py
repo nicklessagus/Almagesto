@@ -48,10 +48,13 @@ Three guarantees, each closing one of the measured failure modes:
 from __future__ import annotations
 
 import argparse
+import datetime as _dt
 import json
 import pathlib
 import re
 import sys
+
+import yaml
 
 import lib_config as cfg
 import lib_blocks as lb
@@ -275,9 +278,20 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
     "discrepan": [(línea, motivo, marca)], "citas": N, "solo_extraccion": J}` — counts, so the sweep
     can declare its population (INV-40) instead of printing a bare zero."""
     texto = nota.read_text(encoding="utf-8")
-    out = {"alteradas": [], "no_evaluables": [], "discrepan": [], "citas": 0, "solo_extraccion": 0}
+    out = {"alteradas": [], "no_evaluables": [], "discrepan": [], "resueltas": [],
+           "citas": 0, "solo_extraccion": 0}
     bibs_nota = set(lb._bibcodes(texto))
     for b in lb.split_blocks(texto):
+        # #386/#387 — el `log` es append-only por contrato, así que su corrección es una MARCA y no
+        # una edición, y una entrada que documenta una cita defectuosa tiene que citarla. Las dos
+        # exenciones las decide UNA función, compartida con el lint: una convención en prosa que
+        # cada chequeo aprende por su cuenta no compone, y éstos ya divergían.
+        exento = cfg.log_quote_exempt(nota.stem, b.text, b.kind)
+        if exento:
+            for _c in cfg.quotes_in(b.text):
+                out["citas"] += 1
+                out["resueltas"].append((b.first_line, f"{exento}: visible, no es deuda"))
+            continue
         bibs = lb._bibcodes(b.text) or lb._bibcodes(b.intro or "")
         for cita in cfg.quotes_in(b.text):
             out["citas"] += 1
@@ -341,6 +355,8 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
                              f"de la afirmación:  {marca}")
         for ln, motivo in out["no_evaluables"]:
             cfg.print_seguro(f"  · L{ln}: {motivo}")
+        for ln, motivo in out["resueltas"]:
+            cfg.print_seguro(f"  ✓ L{ln}: declarada y resuelta — {motivo}")
     return out
 
 
@@ -368,6 +384,30 @@ def _notes_of(slug: str | None) -> list:
     return [f for f in todas if f.stem in stems]
 
 
+CITAS_FILE = "_citas.yaml"
+
+
+def save_ultima_pasada_citas(poblacion: dict, alteradas: int) -> None:
+    """Registra que el barrido GLOBAL de citas corrió, con su población (#386).
+
+    Same doctrine as `_red.yaml` (D-46): *when it was last looked at* is information about the
+    vault, not about the machine, so it is versioned and travels. Without it a clone reports
+    «never run», which is false.
+
+    ⛔ **Only the global sweep writes it.** With a slug the sweep looks at the notes of ONE subject,
+    and recording that as «the pass» would claim the vault was swept when a corner was — the same
+    reason `sweep_external --bibcodes` does not register a pass. That gap is exactly what #386
+    measured: the skill's closing step runs it **with the slug**, which returns 0 while the global
+    returns 1, so four subjects closed green over a gate that had never been in the green."""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    pasada = {"fecha": _dt.date.today().isoformat(),
+              "version": cfg.ALMAGESTO_VERSION,
+              "poblacion": dict(poblacion),
+              "alteradas": alteradas}
+    cfg.write_text_atomic(cfg.REGISTRO / CITAS_FILE, yaml.safe_dump(
+        {"ultima_pasada_citas": pasada}, sort_keys=False, allow_unicode=True))
+
+
 def validar_todo(slug: str | None = None) -> int:
     """Sweep mode: every note of the vault (or of one subject) against its extractions (#323).
 
@@ -378,18 +418,20 @@ def validar_todo(slug: str | None = None) -> int:
     comparison that caught them in seconds was written and never run.
 
     Declares its population (INV-40), what it could not evaluate (D-43), what it approved with
-    a single witness (#341) and where the OTHER reading of the same PDF contradicts it (#333) —
+    a single witness (#341), where the OTHER reading of the same PDF contradicts it (#333) and what
+    the `log` declared and resolved with the mark of #238 (#386) —
     without `--migrate-extracciones` that population is **zero**, and a silent zero would read as a
     verdict. Returns the number of blocking findings, so it works as a gate: none of the three extra
     counts moves it."""
     notas = _notes_of(slug)
-    alteradas = no_eval = citas = solo_ext = 0
+    alteradas = no_eval = citas = solo_ext = resueltas = 0
     discrepan: list = []
     for f in notas:
         r = validar(f, mostrar=False)
         citas += r["citas"]
         no_eval += len(r["no_evaluables"])
         solo_ext += r["solo_extraccion"]
+        resueltas += len(r["resueltas"])
         discrepan += [(f, ln, m, k) for ln, m, k in r["discrepan"]]
         if r["alteradas"]:
             cfg.print_seguro(f"\n{f.relative_to(cfg.ROOT)}")
@@ -404,7 +446,9 @@ def validar_todo(slug: str | None = None) -> int:
     cfg.print_seguro(f"\n> sobre {len(notas)} nota(s) de {ambito} · {citas} cita(s) «…» · "
                      f"{no_eval} no evaluable(s) (sin extracción en disco, o la extracción calla) · "
                      f"{solo_ext} sólo respaldada(s) por la extracción, "
-                     f"{len(discrepan)} de ellas con el `.txt` en contra")
+                     f"{len(discrepan)} de ellas con el `.txt` en contra"
+                     + (f" · {resueltas} declarada(s) y resuelta(s) en el `log` (#386/#387)"
+                        if resueltas else ""))
     if not citas:
         cfg.print_seguro("  ⚠ NO EVALUADO: ninguna cita mirada. Si la bóveda es anterior a #311, "
                          "corré `python scripts/make_notes.py --migrate-extracciones` — un cero sin "
@@ -412,6 +456,11 @@ def validar_todo(slug: str | None = None) -> int:
     cfg.print_seguro(f"  {alteradas} cita(s) con evidencia POSITIVA de alteración"
                      + (" ✅" if not alteradas else " ⛔ — corregilas contra el JSON de extracción, "
                         "no contra el `.txt`"))
+    if not slug:
+        # #386 — sólo la pasada GLOBAL cuenta como pasada: con slug se miró un rincón.
+        save_ultima_pasada_citas({"notas": len(notas), "citas": citas, "no_evaluables": no_eval,
+                                  "solo_extraccion": solo_ext, "discrepan": len(discrepan),
+                                  "resueltas": resueltas}, alteradas)
     if solo_ext:
         cfg.print_seguro(f"  ⚠ de las aprobadas, {solo_ext} se apoyan en UN SOLO TESTIGO: la "
                          f"extracción de su fuente las dice y el `.txt` de esa misma fuente no. Es "

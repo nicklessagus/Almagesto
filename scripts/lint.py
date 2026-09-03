@@ -501,7 +501,11 @@ VERIFICAR_PDF_MARK = cfg.VERIFICAR_PDF_MARK
 #: y el propio log lo reconoce 268 líneas después, en la entrada de la verificación. La cita
 #: fabricada sigue ahí, sin marca y sin puntero a su corrección. Misma doctrina que las otras:
 #: hacer visible, no borrar.
-LOG_SUPERSEDED_MARK = "⚠ corregido"
+#: ⛔ UNA definición (#386): hasta 1.172.0 el string vivía sólo acá, así que `contrast --validar`
+#: —gate obligatorio desde #323— no conocía la marca y bloqueaba para siempre una entrada corregida
+#: como el framework manda. Una convención en prosa que cada chequeo aprende por su cuenta NO
+#: COMPONE: eran dos y ya divergían.
+LOG_SUPERSEDED_MARK = cfg.LOG_SUPERSEDED_MARK
 
 #: #235 · «… el radio `slug` …» — un radio nombrado como código en vez de linkeado.
 _RADIO_RE = re.compile(r"radio[s]?\s+(?:[^`\n]{0,40}?)`([a-z0-9][a-z0-9-]{2,})`", re.I)
@@ -1780,8 +1784,10 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         # MARCA (`⚠ corregido <fecha> → <entrada nueva>`) y se appendea la corrección.
         if stem == "log":
             for _b in lb.split_blocks(body_full):
-                if LOG_SUPERSEDED_MARK in _b.text:
-                    continue           # ya marcada: visible, no es deuda
+                # #386/#387 — la MISMA función que usa `contrast.validar`, no un `in` propio: la
+                # marca y la mención en blockquote son la misma regla para los dos consumidores.
+                if cfg.log_quote_exempt(stem, _b.text, _b.kind):
+                    continue           # marcada, o mención: visible, no es deuda
                 _bibs_log = lb._bibcodes(_b.text)
                 for _c in cfg.quotes_in(_b.text):
                     # #337 — el DUEÑO de la cita, igual que la rama gemela de la prosa que sigue

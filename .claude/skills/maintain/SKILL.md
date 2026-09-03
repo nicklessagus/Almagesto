@@ -362,6 +362,32 @@ edición de la nota (y, si toca un parámetro planetario, puede ser una `dispute
 `expression-of-concern` no cambia ningún número: baja la confianza de lo que se apoya sólo en esa
 fuente. Dejar en el `log` qué se revisó.
 
+## F2. Pasada periódica de CITAS (bóveda completa) — `contrast.py --validar-todo`
+
+```bash
+python scripts/contrast.py --validar-todo        # SIN slug: toda la bóveda (exit ≠ 0 si hay hallazgos)
+```
+
+⛔ **Sin slug.** El paso de cierre de cada operación lo corre **con el slug del sujeto** (#323), y
+eso mira sólo las notas de ese sujeto: medido en una bóveda real, el acotado devolvía **0** mientras
+el global devolvía **1**, así que cuatro sujetos cerraron con `lint --cierre` en 0 sobre un gate
+global que **nunca estuvo en verde**, y sin que nada lo dijera (#386). Es el chequeo **fuerte** de
+citas —contra la extracción, con evidencia positiva—; el del lint es el débil, contra el `.txt`
+(medido en 2 de 17 y 0 de 35).
+
+La pasada queda **versionada** en `vault/config/registro/_citas.yaml`, igual que la caducidad de
+red: cuándo se miró es información de la bóveda, no de la máquina. **Sólo la global registra** — con
+slug se miró un rincón, y anotarlo como «la pasada» afirmaría que se barrió la bóveda.
+
+Al resolver: la cita alterada se corrige **copiándola del JSON de extracción** (`contrast.py <slug>
+--grep …`), nunca re-tipeándola (#322), y nunca contra el `.txt`, que es índice degradado. Lo que el
+`.txt` contradice (#333) no bloquea: manda a abrir la página, o a pegar la marca
+`⚠verificar en el PDF` que el propio comando arma (#341).
+
+⚠ En `log.md` no se edita: una entrada refutada se **marca** `⚠ corregido <fecha> → <entrada nueva>`
+(#238) y el barrido la cuenta como *declarada y resuelta*; y una entrada que **cita** una cita
+defectuosa para explicarla la pone en un **blockquote**, que es mención y no afirmación (#387).
+
 ## G. Pasada periódica de REVALIDACIÓN (a pedido) — modo revalidación de `verify-citations`
 
 Complementa la pasada F. Aquélla mira lo que cambió **afuera** (retracciones, correcciones,

@@ -341,6 +341,111 @@ def test_PARIDAD_con_el_lint_sobre_el_mismo_insumo(toy_vault, capsys):
     assert not de_contrast
 
 
+# ── #386/#387 · el `log` es append-only, así que su corrección es una MARCA y no una edición ──
+
+def _log(cuerpo: str):
+    """El `log.md` de la bóveda: append-only por contrato, y por eso corregible sólo por marca."""
+    cfg.LOG.parent.mkdir(parents=True, exist_ok=True)
+    cfg.LOG.write_text(f"# Log\n\n{cuerpo}\n", encoding="utf-8")
+    return cfg.LOG
+
+
+def test_una_entrada_del_log_MARCADA_no_mueve_el_rc(toy_vault, capsys):
+    """#386 — #238 manda MARCAR la entrada refutada (`⚠ corregido …`), no editarla, y `contrast`
+    no conocía la marca: una entrada corregida exactamente como el framework manda seguía
+    bloqueando el gate obligatorio de #323 **para siempre**, y la única salida era editar el `log`
+    — justo lo que #238 prohíbe. No había salida dentro de las reglas."""
+    _extraccion("ica_ruido", "2013Voss")
+    _extraccion("ica_ruido", "2004Davies", ground_truth=[
+        {"que": "otro", "valor": "algo completamente distinto", "linea": "p. 9"}])
+    _txt("ica_ruido", "2004Davies")
+    _log(f"## 2026-08-31 — nota vieja\n\n"
+         f"- Dice «{LARGA}» [[2004Davies]], y lo discute [[2013Voss]].\n"
+         f"  ⚠ corregido 2026-09-01 → entrada «corrección» del 2026-09-01: la atribución va al "
+         f"otro bibcode.")
+    assert ct.main(["--validar-todo"]) == 0
+    out = capsys.readouterr().out
+    assert "declarada(s) y resuelta(s)" in out, out
+
+
+def test_la_entrada_del_log_que_CITA_una_cita_defectuosa_es_MENCION(toy_vault, capsys):
+    """#387 — el caso REFLEXIVO, que no tenía salida dentro de la regla: una entrada que documenta
+    una cita mal formada **tiene que citarla para explicarla**, y en cuanto la cita *es* una cita
+    mal formada a los ojos del chequeo. Medido en una bóveda real: la entrada que corrige el
+    defecto se reportaba a sí misma. Dentro de un blockquote del `log` la cita es una MENCIÓN, no
+    una afirmación de la bóveda — misma doctrina que `SECCIONES_ESTAMPADAS`."""
+    _extraccion("ica_ruido", "2013Voss")
+    _extraccion("ica_ruido", "2004Davies", ground_truth=[
+        {"que": "otro", "valor": "algo completamente distinto", "linea": "p. 9"}])
+    _txt("ica_ruido", "2004Davies")
+    _log("## 2026-09-01 — corrección de una cita del propio log (#238)\n\n"
+         "La entrada vieja publicaba el bibcode del lado equivocado:\n\n"
+         f"> Dice «{LARGA}» [[2004Davies]], y lo discute [[2013Voss]].")
+    assert ct.main(["--validar-todo"]) == 0, capsys.readouterr().out
+
+
+def test_la_marca_del_log_NO_exime_a_una_nota_normal(toy_vault, capsys):
+    """El recorte que hace que la exención no sea un agujero: `⚠ corregido` es la quinta marca en
+    línea y vive **sólo en `log.md`** (es la salida de un artefacto append-only). Escribirla en una
+    ficha o un concepto no apaga nada — ahí la corrección se hace editando la nota."""
+    _extraccion("ica_ruido", "2013Voss")
+    _extraccion("ica_ruido", "2004Davies", ground_truth=[
+        {"que": "otro", "valor": "algo completamente distinto", "linea": "p. 9"}])
+    _txt("ica_ruido", "2004Davies")
+    _nota_323("ica-ruido", f"⚠ corregido 2026-09-01 → otra cosa. "
+                           f"Dice «{LARGA}» [[2004Davies]], y lo discute [[2013Voss]].")
+    assert ct.main(["--validar-todo"]) == 1
+
+
+def test_PARIDAD_lint_contrast_sobre_la_marca_del_log(toy_vault, capsys):
+    """#387 nombra el problema de fondo: una convención en PROSA **no compone** — cada chequeo la
+    tiene que aprender por separado, hoy son dos y ya divergían. La regla vive en UNA función
+    (`cfg.log_quote_exempt`) y los dos consumidores la llaman; lo que se compara son las dos
+    salidas sobre el mismo insumo, no las dos constantes."""
+    import lint as lt
+    _extraccion("ica_ruido", "2013Voss")
+    _extraccion("ica_ruido", "2004Davies", ground_truth=[
+        {"que": "otro", "valor": "algo completamente distinto", "linea": "p. 9"}])
+    _txt("ica_ruido", "2004Davies")
+    _log(f"## 2026-08-31 — vieja\n\n"
+         f"- Dice «{LARGA}» [[2004Davies]], y lo discute [[2013Voss]].\n"
+         f"  ⚠ corregido 2026-09-01 → entrada «corrección» del 2026-09-01.")
+    lt.main([])
+    reporte = capsys.readouterr().out
+    assert LARGA[:40] not in reporte, "el lint tampoco la reporta"
+    assert ct.validar(cfg.LOG, mostrar=False)["alteradas"] == []
+
+
+def test_el_barrido_GLOBAL_registra_cuando_se_corrio(toy_vault, capsys):
+    """#386 — el gate más fuerte del framework se corría «cuando alguien se acordaba»: `maintain`
+    declara la pasada periódica de RED y ninguna de citas, y el paso 6a del skill lo corre **con el
+    slug**, que devuelve 0 mientras el global devuelve 1. Medido: cuatro sujetos cerrados con
+    `lint --cierre` en 0 y el gate global **nunca en verde**, sin que nada lo dijera.
+
+    Se registra igual que la caducidad (D-46): *cuándo se miró* es información de la bóveda, no de
+    la máquina, así que viaja versionada."""
+    _extraccion("ica_ruido", "2013Voss")
+    _nota_323("ica-ruido", f"Dice «{LARGA}» [[2013Voss]].")
+    assert ct.main(["--validar-todo"]) == 0
+    reg = cfg.REGISTRO / "_citas.yaml"
+    assert reg.exists(), "la pasada global no dejó registro"
+    import yaml
+    pasada = yaml.safe_load(reg.read_text(encoding="utf-8"))["ultima_pasada_citas"]
+    assert pasada["fecha"] and pasada["version"]
+    assert pasada["poblacion"]["notas"] == 1 and pasada["poblacion"]["citas"] == 1
+    assert pasada["alteradas"] == 0
+
+
+def test_el_barrido_ACOTADO_no_registra_la_pasada(toy_vault, capsys):
+    """El recorte que evita la afirmación falsa: con slug el barrido mira **las notas del sujeto**,
+    así que registrar eso como «la pasada» diría que se miró la bóveda cuando se miró un rincón. Es
+    la misma distinción que `sweep_external --bibcodes`, que tampoco registra la pasada."""
+    _extraccion("ica_ruido", "2013Voss")
+    _nota_323("ica-ruido", f"Dice «{LARGA}» [[2013Voss]].")
+    assert ct.main(["ica_ruido", "--validar-todo"]) == 0
+    assert not (cfg.REGISTRO / "_citas.yaml").exists()
+
+
 # ── #329 · la curación declarada se aplica al carril de LECTURA, y sólo a ése ──
 
 def _dropear(slug: str, bib: str, motivo: str = "polisemia: no es el ICA/BSS del tema"):

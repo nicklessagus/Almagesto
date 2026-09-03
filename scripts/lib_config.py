@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.172.0"
+ALMAGESTO_VERSION = "1.173.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1091,6 +1091,60 @@ def verificar_pdf_mark(motivo: str, fecha: str = "") -> str:
     the only function that builds it, so the string the lint looks for and the string a tool offers
     cannot drift apart (regla de método 2)."""
     return f"{VERIFICAR_PDF_MARK} ({motivo}, {fecha or _dt.date.today().isoformat()})"
+
+
+#: #238 · the fifth in-line mark, and the ONE place its wording lives (#386). `log.md` is
+#: append-only by contract —and rightly so—, which left it with no way to correct itself: an entry
+#: that turns out to be refuted is MARKED, never edited. Until 1.172.0 only `lint.py` knew the
+#: string, so `contrast --validar` —a mandatory closing gate since #323— kept blocking on an entry
+#: corrected exactly as the framework prescribes, and the only way to green it was to edit the log,
+#: which is what #238 forbids. There was no way out inside the rules.
+LOG_SUPERSEDED_MARK = "⚠ corregido"
+
+
+def log_quote_exempt(stem: str, texto: str, kind: str = "") -> str | None:
+    """Why this block of `log.md` is NOT a claim of the vault, or `None` if it is one (#386/#387).
+
+    ⛔ **ONE implementation, because a convention written in prose does not COMPOSE.** The mark is
+    free text that every check has to learn separately: there were two and they had already
+    diverged —the lint honoured it, `contrast` had never heard of it (`grep -c corregido` → 0)—, and
+    the third one to be written would not know it either. Same failure mode as regla de método 2,
+    applied to a convention instead of to a test double.
+
+    Two exemptions, both scoped to `log.md`:
+
+    · **the mark** (#238): the entry is refuted and says so, pointing at the entry that corrects it.
+      Declared and resolved — «visible, not debt» (AUD-207) — so it does not move the rc. ⚠ It must
+      be **adjacent** to the claim (same block), which is how the vault actually writes it: a
+      continuation line of the bullet carrying the quote. A mark on the entry's heading exempts the
+      heading, not a claim four bullets down.
+
+    · **the blockquote** (#387): the REFLEXIVE case, which had no way out inside the rule. An entry
+      that documents a malformed quote **has to quote it in order to explain it**, and the moment it
+      does, it *is* a malformed quote in the eyes of the check — measured in a real vault, the entry
+      that corrects the defect reported itself. Inside a blockquote of the `log` a quote is a
+      MENTION, not an assertion of the vault: the same doctrine that keeps `SECCIONES_ESTAMPADAS`
+      out of `verify-citations`.
+
+    ⚠ The blockquote is recognised by the parser's own `Block.kind`, not by sniffing for a `>`:
+    `split_blocks` **strips** the marker when it builds `text`, so a text-level check would silently
+    never fire — the same shape of bug as #168/#276, a check looking at markup that the layer below
+    already normalised away.
+
+    @inv INV-100
+
+    ⚠ **Scoped to `log.md` on purpose.** The mark is the way out of an *append-only* artefact; in a
+    note or a concept the correction is made by editing, so neither exemption applies there and a
+    quote inside a blockquote of a ficha is still a claim. Widening this to a general
+    assert/mention distinction is the open half of #387, and it touches `verify-citations` and the
+    leak detector too — it is not decided here."""
+    if stem != "log":
+        return None
+    if LOG_SUPERSEDED_MARK in texto:
+        return f"entrada marcada `{LOG_SUPERSEDED_MARK}` (#238)"
+    if kind == "blockquote":
+        return "cita dentro de un blockquote del `log`: es mención, no afirmación (#387)"
+    return None
 
 
 #: #333 · how far the `.txt` must KEEP GOING past the divergence point for it to be a divergence at
