@@ -52,19 +52,26 @@ git fetch upstream
 git log --merges --format=%H | while read m; do
   p2=$(git rev-parse -q --verify "$m^2") || continue
   git merge-base --is-ancestor "$p2" upstream/main && continue   # merge del TEMPLATE: descartar lo suyo es lo correcto
+  mb=$(git merge-base "$m^1" "$p2")
   for f in vault/wiki/log.md vault/STATUS.md vault/wiki/index.md \
            vault/config/objective.yaml vault/config/stars.yaml vault/config/themes.yaml \
            vault/wiki/matrices/method_star.md; do
-    if git diff --quiet "$m" "$m^1" -- "$f" && ! git diff --quiet "$m^1" "$p2" -- "$f"; then
+    git diff --quiet "$mb" "$p2" -- "$f" && continue   # el remoto no lo cambió: no hay nada que descartar
+    if git diff --quiet "$m" "$m^1" -- "$f"; then
       echo "⛔ $(git log -1 --format='%h %ad' --date=short $m)  $f"
     fi
   done
 done
 ```
 
-Dice: *el merge conservó tu versión byte a byte y la del remoto era distinta* — o sea, lo del otro
-clon se descartó. El filtro por `upstream` es el que evita el falso positivo: contra el template,
-descartar lo suyo **es** lo que `merge=ours` promete.
+Dice: *el remoto cambió ese archivo respecto del ancestro común y el merge conservó tu versión byte
+a byte* — o sea, lo del otro clon se descartó. Dos filtros, y los dos hacen falta:
+
+- **contra `upstream`**: descartar lo del template **es** lo que `merge=ours` promete, así que ahí
+  no hay hallazgo;
+- **contra el `merge-base`**, no contra tu propio padre: comparar las dos ramas entre sí marca todo
+  archivo donde **sólo avanzó tu máquina**, que es el caso normal y no una pérdida. Sin este filtro
+  el auditor sobre-reportaba, medido: 2 de 4 hits eran de esa clase.
 
 ⛔ **Un hallazgo NO es pérdida por sí solo: depende del artefacto.** Los tres se comportan distinto
 y confundirlos hace perder tiempo o, peor, restaurar estado viejo encima del vigente:
@@ -86,10 +93,14 @@ y appendear a mano lo que falte, en su fecha. **No** `git checkout` del archivo 
 puesto lo tuyo.
 
 > **Medido en una bóveda real** (`Almagesto-Tesis`, 2026-09-03): 58 merges revisados, **1** con
-> descarte real (2026-09-02, el incidente que produjo #390), sobre 4 archivos. Resultado del
-> triage: el `log` se había recuperado a mano (0 líneas faltantes), y `STATUS.md` e `index.md`
-> figuraban con líneas «faltantes» que eran **estado superado por contenido más nuevo** — 0 daño
-> vivo. Sin la clasificación por artefacto, esas 87 líneas se leían como pérdida.
+> descarte (2026-09-02, el incidente que produjo #390), sobre **2** archivos —`log.md` y
+> `STATUS.md`—. Resultado del triage: el `log` se había recuperado a mano (0 líneas faltantes) y el
+> `STATUS.md` era **estado superado por contenido más nuevo** — 0 daño vivo.
+>
+> ⚠ La primera versión de este auditor reportaba **4**: `index.md` y `themes.yaml` entraban sin que
+> el remoto los hubiera tocado, y la tabla de abajo los clasificaba como «regenerable» y «pérdida
+> real» — o sea que mandaba a buscar en el historial algo que nunca se perdió. Lo cazó el revisor
+> de la instancia; el filtro por `merge-base` es lo que lo cierra.
 
 ---
 
