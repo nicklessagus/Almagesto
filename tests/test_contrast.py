@@ -341,6 +341,91 @@ def test_PARIDAD_con_el_lint_sobre_el_mismo_insumo(toy_vault, capsys):
     assert not de_contrast
 
 
+# ── #374 · la identidad de una extracción es su `bibcode`, no el nombre del archivo ──
+
+def _segunda_lente(slug: str, bib: str, valor: str, sufijo: str = "__orden"):
+    """La extracción de una SEGUNDA lente (#239/#308): mismo `bibcode`, otro archivo.
+
+    Es el caso que #308 construyó y que destapó el defecto: mientras el nombre del archivo ES el
+    bibcode, las dos identidades coinciden y la divergencia es invisible."""
+    d = {"bibcode": bib, "ejes": {"cuantas_se_piden": "por criterio de orden"},
+         "vista": {"sujeto": slug, "tipo": "theme", "txt": slug, "fuente": "abstract"},
+         "ground_truth": [{"que": "orden", "valor": valor, "linea": "p. 7"}]}
+    (cfg.EXTRACCION / slug).mkdir(parents=True, exist_ok=True)
+    (cfg.EXTRACCION / slug / f"{bib}{sufijo}.json").write_text(json.dumps(d), encoding="utf-8")
+
+
+def test_la_extraccion_se_identifica_por_su_BIBCODE(toy_vault):
+    """#374 — `contrast` la identificaba por `f.stem` y `harvest_views` por `data["bibcode"]`: dos
+    consumidores del MISMO directorio con dos identidades. Es el defecto que #228 ya pagó una vez en
+    el otro sentido, y la conclusión de entonces fue mapear por el campo de adentro."""
+    _segunda_lente("ica_ruido", "2013Voss", LARGA)
+    assert [b for b, _ in ct.extracciones("ica_ruido")] == ["2013Voss"]
+
+
+def test_la_segunda_lente_ENTRA_en_la_poblacion_del_gate(toy_vault, capsys):
+    """El falso limpio que el defecto producía: las citas de la segunda lente caían **todas** en «no
+    evaluable» y `--validar-todo` daba `rc 0` sobre citas que no había mirado. Medido en una bóveda
+    real: 309 citas nuevas, 309 no evaluables, rc 0 (#374).
+
+    Acá la nota altera la cola de una cita que la segunda lente sí tiene: tiene que BLOQUEAR."""
+    _segunda_lente("ica_ruido", "2013Voss", LARGA)
+    _txt("ica_ruido", "2013Voss")
+    _nota_323("ica-ruido", f"Dice «{LARGA[:80]} y por eso el problema se vuelve trivial» "
+                           f"[[2013Voss]].")
+    assert ct.main(["--validar-todo"]) == 1
+    assert "la cola diverge" in capsys.readouterr().out
+
+
+def test_un_bibcode_con_VARIAS_lentes_se_cruza_contra_TODAS(toy_vault, capsys):
+    """El corolario: un bibcode puede tener N extracciones (una por lente), y la cita respaldada por
+    cualquiera de ellas es correcta. Cruzar contra una sola convertiría una cita fiel en hallazgo."""
+    _extraccion("ica_ruido", "2013Voss")                       # primera lente
+    _segunda_lente("ica_ruido", "2013Voss", "el orden se elige por el criterio de estabilidad")
+    _txt("ica_ruido", "2013Voss")
+    _nota_323("ica-ruido", "Dice «el orden se elige por el criterio de estabilidad» [[2013Voss]].")
+    assert ct.main(["--validar-todo"]) == 0
+    # ⛔ El `rc 0` no alcanza: con el defecto vivo también daba 0, por SILENCIO (la cita no estaba en
+    # la extracción que el stem le hacía ver). La diferencia es que ahora la mira y la respalda.
+    assert "0 no evaluable(s)" in capsys.readouterr().out
+
+
+def test_las_filas_emiten_el_BIBCODE_como_wikilink(toy_vault, capsys):
+    """#322 manda pegar la fila sin re-tipearla, así que un wikilink al nombre del archivo se
+    llevaba puesto el inventario: `[[2001Levine__orden]]` no resuelve, y un wikilink roto es
+    **bloqueante**. Medido: 13 identificadores que no resolvían."""
+    _segunda_lente("ica_ruido", "2013Voss", LARGA)
+    ct.main(["ica_ruido", "--filas"])
+    out = capsys.readouterr().out
+    assert "[[2013Voss]]" in out and "__orden" not in out
+
+
+def test_la_poblacion_del_sujeto_sale_del_BIBCODE(toy_vault, capsys):
+    """La otra mitad del mismo `f.stem`: con el archivo renombrado, la nota del paper quedaba fuera
+    de la población del barrido acotado. Medido: 32 stems de extracción, 13 sin ninguna nota."""
+    _segunda_lente("ica_ruido", "2013Voss", LARGA)
+    (cfg.PAPERS).mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / "2013Voss.md").write_text("---\ntags: [paper]\n---\n\n# V\n", encoding="utf-8")
+    assert cfg.PAPERS / "2013Voss.md" in ct._notes_of("ica_ruido")
+
+
+def test_PARIDAD_de_identidad_entre_los_consumidores_de_extraccion(toy_vault):
+    """Regla de método nº 2 sobre dos LECTORES del mismo artefacto: o comparten la función, o
+    divergen. Hoy son dos (`contrast` y `harvest_views`) y ya habían divergido; lo que se compara es
+    la resolución sobre el mismo archivo, no las dos constantes."""
+    import harvest_views as hv
+    _segunda_lente("ica_ruido", "2013Voss", LARGA)
+    (cfg.PAPERS).mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / "2013Voss.md").write_text("---\ntags: [paper]\n---\n\n# V\n", encoding="utf-8")
+    # los TRES lectores sobre el mismo archivo: el que lista, el que indexa para el gate, y el
+    # cosechador — que resuelve la nota destino y por eso su respuesta se ve en el disco.
+    assert [b for b, _ in ct.extracciones("ica_ruido")] == ["2013Voss"]
+    assert cfg._extraction_index().get("2013Voss")
+    assert hv.harvest("ica_ruido", theme=True)["cosechadas"] == 1
+    # el cosechador resolvió `2013Voss__orden.json` → `2013Voss.md`: la vista quedó en ESA nota
+    assert "sujeto: ica_ruido" in (cfg.PAPERS / "2013Voss.md").read_text(encoding="utf-8")
+
+
 # ── #386/#387 · el `log` es append-only, así que su corrección es una MARCA y no una edición ──
 
 def _log(cuerpo: str):

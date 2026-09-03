@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.174.0"
+ALMAGESTO_VERSION = "1.175.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1022,6 +1022,39 @@ def quote_found_degraded(quote: str, source_norm: str) -> bool:
 _EXTRACCION_CACHE: dict = {}
 
 
+_EXTRACTION_INDEX: dict = {}
+
+
+def _extraction_index() -> dict:
+    """`{bibcode: [data]}` over `raw/extraccion/`, built from the `bibcode` INSIDE each file (#374).
+
+    ⛔ The glob it replaces was `*/<bibcode>.json`, i.e. the **file name** as identity — the third
+    reader of this directory to carry its own answer, and the one that decides the verdict of the
+    closing gate. With a second lens (`<bib>__<lens>.json`, #308) that glob finds nothing, so every
+    quote of the re-reading fell into *not evaluable* and the gate returned rc 0 over them.
+
+    ⚠ Reading every file once and indexing is also **cheaper** than the glob it replaces: the old
+    one ran per bibcode (memoised per bibcode, but a sweep asks for hundreds), this one runs once
+    per vault. It is rebuilt when `EXTRACCION` changes, which is what a monkeypatched vault does."""
+    clave = str(EXTRACCION)
+    if clave in _EXTRACTION_INDEX:
+        return _EXTRACTION_INDEX[clave]
+    idx: dict = {}
+    for f in sorted(EXTRACCION.glob("*/*.json")) if EXTRACCION.exists() else []:
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue          # el JSON roto lo DECLARA quien lo lee entero (`contrast.extracciones`)
+        bib = extraction_identity(data)
+        if bib:
+            # ⚠ Se guarda el DATO ya parseado, no el path: si no, cada consumidor vuelve a abrir el
+            # archivo y se pierde la propiedad que #320 midió —un JSON, una lectura por corrida—,
+            # que importa porque el chequeo corre por CITA sobre JSON de decenas de KB.
+            idx.setdefault(bib, []).append(data)
+    _EXTRACTION_INDEX[clave] = idx
+    return idx
+
+
 def extraction_texts(bibcode: str) -> list:
     """Every textual field of this paper's EXTRACTIONS, normalised for quote lookup (#315/#317).
 
@@ -1040,11 +1073,7 @@ def extraction_texts(bibcode: str) -> list:
     if clave in _EXTRACCION_CACHE:
         return _EXTRACCION_CACHE[clave]
     out = []
-    for f in sorted(EXTRACCION.glob(f"*/{bibcode}.json")) if EXTRACCION.exists() else []:
-        try:
-            data = json.loads(f.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            continue
+    for data in _extraction_index().get(bibcode, []):
         trozos: list = []
 
         def _walk(v):
@@ -1092,6 +1121,30 @@ def verificar_pdf_mark(motivo: str, fecha: str = "") -> str:
     the only function that builds it, so the string the lint looks for and the string a tool offers
     cannot drift apart (regla de método 2)."""
     return f"{VERIFICAR_PDF_MARK} ({motivo}, {fecha or _dt.date.today().isoformat()})"
+
+
+def extraction_identity(data: dict) -> str:
+    """Which bibcode an extraction belongs to: the `bibcode` INSIDE it, never the file name (#374).
+
+    ⛔ ONE implementation for every reader of `raw/extraccion/`. `contrast` keyed by `f.stem` and
+    `harvest_views` by `data["bibcode"]` — two consumers of the same directory with two identities.
+    While the file name IS the bibcode the two coincide and the divergence is invisible; it shows up
+    the moment a **second lens** (#239/#308) writes `<bibcode>__<lens>.json`, which is the very
+    mechanism #308 built. Measured in a real vault: 32 extractions, 13 whose stem matched no note,
+    **309 quotes that fell into «not evaluable» while the gate returned rc 0** over quotes it had
+    never looked at — the false clean D-43 exists to prevent. And `--filas` emitted `[[<stem>]]`, a
+    wikilink that does not resolve, straight into an inventory #322 says to paste unedited.
+
+    This is the error #228 already paid for once in the other direction —an extraction left under
+    the old bibcode made the harvester skip that note forever— and the conclusion was the same one:
+    map by the field inside.
+
+    Empty when the extraction declares none: an artefact that cannot say whose reading it is gets
+    DECLARED by the caller, never guessed from the file name — guessing is what put the two
+    identities out of step to begin with.
+
+    @inv INV-103"""
+    return str(data.get("bibcode") or "").strip()
 
 
 #: #238 · the fifth in-line mark, and the ONE place its wording lives (#386). `log.md` is

@@ -429,9 +429,9 @@ impide que la tenga—. Lo filtran los dos fetchers, junto con los descartes de 
 
 El ciclo se resuelve con `python scripts/make_notes.py --rename-paper VIEJO NUEVO`, que mueve la
 nota y sus artefactos (`raw/pdfs/`, `raw/fulltext/` **y la extracción de `raw/extraccion/<slug>/`**
-— #228: `harvest_views` mapea JSON→nota por `data["bibcode"]`, así que una extracción dejada bajo el
-bibcode viejo hace que el cosechador saltee la nota **para siempre**, y una extracción no se
-regenera sin volver a pagar el paso más caro), **re-estampa la cabecera**, deja `bibstem` en `null`
+— #228/#374: la identidad de una extracción es el `bibcode` **de adentro**, con UNA función para
+sus tres lectores, así que dejarla bajo el bibcode viejo hace que el cosechador saltee la nota
+**para siempre**, y una extracción no se regenera sin re-pagar el paso más caro), **re-estampa la cabecera**, deja `bibstem` en `null`
 —es verdad de catálogo y el renombre no tiene catálogo—, agrega el alias y **reescribe los wikilinks
 de toda la bóveda**. Alcance declarado: `vault/`.
 

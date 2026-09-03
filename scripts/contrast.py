@@ -102,10 +102,20 @@ def extracciones(slug: str) -> list[tuple[str, dict]]:
     out = []
     for f in sorted((cfg.EXTRACCION / slug).glob("*.json")):
         try:
-            out.append((f.stem, json.loads(f.read_text(encoding="utf-8"))))
+            data = json.loads(f.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
             cfg.print_seguro(f"  ⛔ {f.name}: no parsea ({exc}) — NO se saltea en silencio")
-    return out
+            continue
+        # #374 — la identidad es el `bibcode` DE ADENTRO, no `f.stem`: con una segunda lente
+        # (`<bib>__<lente>.json`, #308) el nombre deja de ser el bibcode y este lector divergía del
+        # cosechador, que mapea por el campo desde #228.
+        bib = cfg.extraction_identity(data)
+        if not bib:
+            cfg.print_seguro(f"  ⛔ {f.name}: sin `bibcode` — de quién es la lectura no se adivina "
+                             f"del nombre del archivo (#374)")
+            continue
+        out.append((bib, data))
+    return sorted(out, key=lambda par: par[0])
 
 
 def valores(data: dict) -> list[dict]:
@@ -378,8 +388,9 @@ def _notes_of(slug: str | None) -> list:
     todas = cfg.note_paths(cfg.WIKI, "**/*.md")
     if not slug:
         return todas
-    dir_ = cfg.EXTRACCION / slug
-    stems = {f.stem for f in dir_.glob("*.json")} if dir_.exists() else set()
+    # #374 — por BIBCODE, no por `f.stem`: con el stem, la nota de un paper releído bajo otra lente
+    # quedaba fuera de la población del barrido acotado (medido: 13 stems sin ninguna nota).
+    stems = {b for b, _ in extracciones(slug)}
     stems.add(slug)
     return [f for f in todas if f.stem in stems]
 

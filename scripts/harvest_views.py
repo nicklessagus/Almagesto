@@ -543,7 +543,10 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
             cfg.print_seguro(f"  ⛔ {archivo.name}: sin `vista` válida (`sujeto` + `tipo` en "
                              f"{' | '.join(cfg.VISTA_TIPOS)}) — de quién es la lectura no se adivina")
             continue
-        bib = str(data.get("bibcode")).strip()
+        # #228/#374 — la identidad es el `bibcode` DE ADENTRO, y la resuelve la MISMA función
+        # que usan los otros lectores de `raw/extraccion/`: con una copia por consumidor ya
+        # divergieron una vez, y el que quedó atrás dio un gate en verde sobre 309 citas.
+        bib = cfg.extraction_identity(data)
         dest = cfg.PAPERS / f"{mn.safe_name(bib)}.md"
         if not dest.exists():
             n["sin_nota"] += 1
