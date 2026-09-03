@@ -56,6 +56,37 @@ def sembrar(toy_vault, data=None, *, stem=BIB, fm_extra=None, body=None):
                    body if body is not None else mn.vista_block("Estrella Test", theme=False))
 
 
+def test_la_lente_de_la_vista_sale_de_LO_QUE_LA_LECTURA_PREGUNTO(toy_vault):
+    """#372 — la lente se tomaba del TEMA, una sola vez antes del bucle, así que toda vista
+    declaraba los ejes del tema sin mirar cuáles contestó esa lectura. Con `--enfasis --ejes`
+    (#308) el resultado es una vista que dice haber cubierto ejes **que nunca se le preguntaron**:
+    medido, 13 de 13 vistas de segunda lente, con solapamiento **0 de 7**.
+
+    Rompe INV-146 en su enunciado literal —«toda vista declara los ejes vigentes AL LEERLA»—, así
+    que el diff de D-49 describe otra lectura y el detector de ejes sin contestar (#254/#270) pasa
+    de medir cobertura a inventarla."""
+    propios = {"como_se_estima": "por remuestreo", "cuantas_se_piden": "por criterio de orden"}
+    sembrar(toy_vault, extraccion(ejes=propios,
+                                  vista={"sujeto": "Estrella Test", "tipo": "star",
+                                         "txt": "test_star", "fuente": "abstract",
+                                         "enfasis": "orden"}))
+    hv.harvest("test_star")
+    vistas = read_fm(cfg.PAPERS / f"{BIB}.md")["vistas"]
+    v = [x for x in vistas if x.get("enfasis") == "orden"][0]
+    assert list(v["lente"]) == list(propios), v["lente"]
+
+
+def test_sin_enfasis_la_lente_declarada_del_sujeto_es_la_que_MANDA(toy_vault):
+    """El recorte, y no es cosmético: en una lectura NORMAL las claves del JSON son lo **contestado**
+    —el extractor puede dejar afuera las que no aplican— así que tomarlas como lente encogería el
+    denominador del detector de ejes sin contestar (#254/#270), que pasaría de medir cobertura a no
+    poder medirla. El discriminante es `enfasis`, la marca declarada de que se pidió otra lente."""
+    sembrar(toy_vault, extraccion(ejes={"rv": "reporta K"}))
+    hv.harvest("test_star")
+    v = read_fm(cfg.PAPERS / f"{BIB}.md")["vistas"][0]
+    assert v["lente"] == list(mn.objective_lens()[0])
+
+
 def test_dos_archivos_con_el_mismo_par_sujeto_lente_se_AVISAN(toy_vault, capsys):
     """#371, la red simétrica del nombre de archivo: la identidad de una vista es el par
     `(sujeto, enfasis)`, así que dos JSON que declaran el mismo par son dos lecturas compitiendo por

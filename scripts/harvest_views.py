@@ -595,7 +595,18 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
         # rechazarla tiraría una lectura buena. Se degrada declarando: si el `.txt` declarado no
         # está pero existe bajo otro slug, se apunta ahí; si no existe en ningún lado, la clave NO
         # se escribe —«no consta», que es distinto de un puntero falso— y se avisa.
-        entrada = {"sujeto": sujeto, "tipo": tipo, "fecha": hoy, "lente": list(lente)}
+        # #372 — la lente de una vista son los ejes que se PREGUNTARON. `theme_axes` se resolvía una
+        # vez antes del bucle, así que una SEGUNDA lente con `--ejes` propios (#308) quedaba
+        # declarando los del tema, que nadie le preguntó: medido, 13 de 13 vistas, solapamiento 0 de
+        # 7. Rompe INV-146 en su enunciado literal, y con eso el diff de D-49 describe otra lectura.
+        # ⛔ El discriminante es `enfasis`, no «qué trae el JSON»: con una lectura normal las claves
+        # del JSON son lo CONTESTADO —el extractor puede dejar afuera las que no aplican— y tomarlas
+        # como lente encogería el denominador del detector de ejes sin contestar (#254/#270), que
+        # pasaría de medir cobertura a no poder medirla. `enfasis` es la marca DECLARADA de que esta
+        # lectura se pidió con otra lente, así que ahí sus claves sí son lo preguntado.
+        _propios = cfg.as_map(data.get("ejes"))
+        lente_vista = list(_propios) if (vista.get("enfasis") and _propios) else list(lente)
+        entrada = {"sujeto": sujeto, "tipo": tipo, "fecha": hoy, "lente": lente_vista}
         # #239 — la lente con la que se leyó, si la extracción declara una. Ausente = la lectura
         # por default del sujeto; presente = una segunda lectura que CONVIVE con la anterior.
         if (_enfasis := str((cfg.as_map(data.get("vista")) or {}).get("enfasis") or "").strip()):
