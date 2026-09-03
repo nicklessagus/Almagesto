@@ -89,8 +89,10 @@ estructura e historia limpia. Después cloná *tu* repo nuevo y configurálo:
 git clone git@github.com:TU_USUARIO/mi-boveda.git && cd mi-boveda
 git config core.hooksPath scripts/hooks     # (opcional) pre-commit que corre el lint
 git lfs install                             # PDFs por git-lfs
-git config merge.ours.driver true           # protege tus archivos de instancia en futuros merges
-                                            #   (el lint lo verifica: sin esto `merge=ours` no hace nada)
+                                            # ⛔ NO registres `merge.ours.driver` (#390): protege
+                                            #   contra el template y DESTRUYE contra tu propio
+                                            #   origin. Se pasa por comando al traer mejoras:
+                                            #   git -c merge.ours.driver=true merge upstream/main
 git remote add upstream https://github.com/nicklessagus/Almagesto.git  # de acá traés mejoras del framework
 pip install -r requirements.txt
 echo "TU_TOKEN" > vault/config/ads_dev_key  # token ADS (gratis, gitignored)

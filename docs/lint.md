@@ -144,6 +144,15 @@ Deben quedar en **0**:
   auditar). El énfasis markdown alrededor de la palabra no cambia nada (#276).
 - **Fuente retractada citada en prosa sin la marca `⛔retractada`** (D-47): con la marca baja a
   informativa (visible, no destruida).
+- **Driver `merge=ours` REGISTRADO en un clon que tiene `origin`** (#390, invierte #99):
+  `merge=ours` es una regla por **path** y git no puede condicionarla por remoto, así que el mismo
+  driver que protege contra `upstream` **descarta en silencio** lo que traiga `origin` — la otra
+  máquina del mismo usuario, sin conflicto y sin aviso. Arreglo:
+  `git config --unset merge.ours.driver`, y traer el template con
+  `git -c merge.ours.driver=true merge upstream/main`, que conserva la protección sin dejarla
+  puesta contra `origin`. ⚠ Sin `origin` el chequeo **no aplica**: ahí el driver es pura
+  protección. Se reporta **una vez** —es una decisión del clon, no de cada patrón— nombrando
+  cuántos patrones abarca.
 
 ## WARN (se revisa a mano, no frena)
 

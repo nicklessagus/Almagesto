@@ -408,52 +408,68 @@ def _muestra(xs: list, n: int = 5) -> str:
     return ", ".join(xs[:n]) + (" …" if len(xs) > n else "")
 
 
-def merge_ours_unprotected() -> tuple[list[str], str | None]:
-    """Patrones `merge=ours` de `.gitattributes` que el clon NO está protegiendo, y por qué (#99).
+def merge_ours_patterns() -> tuple[list[str], str | None]:
+    """Los patrones que `.gitattributes` declara `merge=ours`, y el motivo si no se pudieron leer.
 
-    `merge=ours` sólo hace algo si el clon registró el driver — `git config merge.ours.driver true`,
-    que `.gitattributes` pide "una vez por clon". No lo hace ningún script, ningún hook y ningún
-    paso de la cadena, así que la protección de los archivos de instancia (`objective.yaml`,
-    `stars.yaml`, …) **falla en silencio**: el próximo `git pull` los pisa con la versión del
-    template. Medido el 2026-08-25 sobre tres clones reales: dos de los tres sin el driver.
+    Una sola implementación para los dos consumidores —el chequeo de riesgo y la población que ese
+    chequeo declara (INV-40)—: parsear el archivo dos veces es la regla de método 2 aplicada a un
+    lector, y un denominador que no sale del mismo parseo que el hallazgo puede contradecirlo.
 
-    Es la misma familia que #93 —un mecanismo de protección cuya precondición nadie chequea— y por
-    eso el resultado se reporta en dos canales distintos: los patrones en riesgo son un hallazgo de
-    la BÓVEDA, y no poder mirarlo (sin git) es un hecho del ENTORNO que va a *no evaluado*: un `(0)`
-    que nadie midió se lee como veredicto.
-
-    ⚠ **Sólo cuenta el archivo que tiene ALGO QUE PERDER**: uno que no difiere de su upstream se
-    re-escribe idéntico y el driver es indiferente. Sin ese recorte el chequeo marcaba los 7
-    patrones en un clon recién hecho —el template, y cualquier corrida de CI— donde no hay riesgo
-    ninguno, y un hallazgo que aparece siempre se deja de mirar. El riesgo aparece justo cuando la
-    instancia **personalizó** su config, que es el caso que #99 vino a cubrir.
-
-    Sin git el chequeo **no aplica** (no hay `pull` posible), igual que sin `.gitattributes`. El
-    segundo valor del retorno queda para un motivo de *no evaluado* futuro; hoy siempre es `None`.
-
-    Devuelve `(patrones_en_riesgo, motivo_de_no_evaluado)`."""
+    Sin `.gitattributes` la lista es vacía: no hay nada declarado, que **no** es "no se pudo
+    evaluar" (D-43)."""
     ga = cfg.ROOT / ".gitattributes"
     if not ga.exists():
-        return [], None       # nada declara `merge=ours`: el chequeo NO APLICA, que no es
-                              # "no se pudo evaluar" — esa distinción es justo la de D-43
+        return [], None
     try:
         lineas = ga.read_text(encoding="utf-8", errors="replace").splitlines()
     except OSError as e:
         return [], f"`.gitattributes` ilegible ({e})"
-    patrones = [ln.split()[0] for ln in lineas
-                if not ln.lstrip().startswith("#") and "merge=ours" in ln and ln.split()]
-    if not patrones:
-        return [], None                       # nada que proteger: el chequeo no aplica
-    if git_out("rev-parse", "--git-dir") is None:
-        return [], None       # `merge=ours` es un mecanismo de git: sin git no hay `pull` que pueda
-                              # pisar nada, así que NO APLICA. Mandarlo a *no evaluado* ponía en
-                              # rojo toda copia sin `.git` — incluida la que usa el gate de mutación,
-                              # que fue donde se detectó. Distinto del caso de la verificación
-                              # stale (D-43), donde sin git queda algo real sin medir.
+    return [ln.split()[0] for ln in lineas
+            if not ln.lstrip().startswith("#") and "merge=ours" in ln and ln.split()], None
+
+
+def merge_ours_driver_risk() -> tuple[list[str], str | None]:
+    """Patrones `merge=ours` que este clon DESTRUYE al sincronizar entre máquinas (#390).
+
+    Invierte el chequeo de #99. Aquél hizo obligatorio registrar el driver
+    —`git config merge.ours.driver true`— porque `merge=ours` sin él no hace nada; el argumento era
+    correcto y miraba **un solo eje**. `merge=ours` es una regla por **path** y git no puede
+    condicionarla por remoto: contra `upstream` (el template) protege, y contra `origin` (la otra
+    máquina del mismo usuario) **descarta en silencio lo que trae el remoto**. Medido en repos
+    sintéticos el 2026-09-03 — dos clones del mismo `origin` tocando un archivo `merge=ours`:
+
+    | configuración | resultado |
+    |---|---|
+    | driver registrado + merge de `origin` | ⛔ se pierde lo del remoto, sin conflicto |
+    | **sin driver** + merge de `origin` | ✅ conflicto con marcadores, las dos versiones visibles |
+    | **sin driver** + `git -c merge.ours.driver=true merge upstream/main` | ✅ gana la local |
+    | sin driver + merge de `upstream` sin el `-c` | ⚠ conflicto: degradación segura |
+
+    O sea que la protección no se pierde al desregistrar el driver: se mueve del `config` al
+    comando, y olvidarse del flag cuesta un conflicto, nunca datos. Por eso el hallazgo es el clon
+    que **sí** lo tiene registrado, y el arreglo es `git config --unset merge.ours.driver`.
+
+    ⚠ **Sólo cuenta el clon que tiene ALGO QUE PERDER**: sin un remoto `origin` no hay otra máquina
+    que mergear y el driver es pura protección. Es el mismo recorte que traía #99 —un hallazgo que
+    aparece donde no puede hacer daño se deja de mirar—, movido al eje que hoy decide el riesgo.
+
+    Sin git el chequeo **no aplica** (no hay merge que pueda descartar nada) y sale por la guarda
+    del driver, que sin `git` no lee nada: no lleva guarda propia porque devolvería lo mismo por
+    construcción, y un condicional que no decide nada es una regla escrita a medias (#319). Lo
+    mismo vale para un `.gitattributes` sin ninguna línea `merge=ours`: la lista sale vacía y el
+    retorno final ya es `[]`. El segundo valor del retorno queda para un motivo de *no evaluado*;
+    hoy sólo lo usa el `.gitattributes` ilegible.
+
+    Devuelve `(patrones_en_riesgo, motivo_de_no_evaluado)`."""
+    patrones, err = merge_ours_patterns()
+    if err or not patrones:
+        return [], err
     #  @inv INV-68
-    if (git_out("config", "--get", "merge.ours.driver") or "").strip():
-        return [], None                       # protegido: no hay riesgo
-    return [pat for pat in patrones if _diverge_del_upstream(pat)], None
+    if not (git_out("config", "--get", "merge.ours.driver") or "").strip():
+        return [], None       # la receta: el driver se pasa por comando al traer el template
+    if "origin" not in (git_out("remote") or "").split():
+        return [], None       # sin `origin` no hay eje destructivo: nada que mergear de otra máquina
+    return patrones, None
 
 
 #  @inv INV-128
@@ -519,17 +535,6 @@ def _field_is_marked(lineas_marcadas: list[str], campo: str, viejo) -> bool:
             if pat_campo.search(seg) or (pat_val and pat_val.search(seg)):
                 return True
     return False
-
-
-def _diverge_del_upstream(pattern: str) -> bool:
-    """¿El archivo tiene cambios propios que un `git pull` podría pisar?
-
-    Dos formas de tenerlos: sin commitear (working tree) o commiteados por encima del upstream.
-    Sin upstream configurado sólo se mira el working tree — es lo único decidible."""
-    if (git_out("status", "--porcelain", "--", pattern) or "").strip():
-        return True
-    diff = git_out("diff", "--name-only", "@{u}...HEAD", "--", pattern)
-    return bool((diff or "").strip())
 
 
 _SEP_ROW = re.compile(r"^\|[\s\-:|]+\|?$")   # `|---|---|`: estructura, no contenido
@@ -1305,14 +1310,19 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                                           "lista como identificador de esta estrella → puede resolver "
                                           "a OTRO objeto y meter sus papers al corpus"))
 
-    # merge=ours sin driver registrado (#99): la protección de los archivos de instancia no existe.
-    sin_driver, driver_err = merge_ours_unprotected()
+    # merge=ours con el driver REGISTRADO (#390): protege contra el template y destruye contra la
+    # otra máquina. Es una decisión del CLON, así que se reporta una vez nombrando lo que abarca —
+    # una línea por patrón serían 7 hallazgos de una sola causa.
+    con_driver, driver_err = merge_ours_driver_risk()
     if driver_err:
         not_evaluated.append(("driver de `merge=ours`", driver_err))
-    merge_ours = [(pat, "tiene cambios propios y está declarado `merge=ours`, pero el clon NO "
-                        "registró el driver → el próximo `git pull` los pisa con la versión del "
-                        "template. Arreglo: `git config merge.ours.driver true` (una vez por clon)")
-                  for pat in sin_driver]
+    merge_ours = [("merge.ours.driver",
+                   f"este clon registró el driver y tiene `origin`, así que el próximo merge de la "
+                   f"otra máquina DESCARTA en silencio lo que el remoto traiga en {len(con_driver)} "
+                   f"patrón(es) `merge=ours` ({_muestra(con_driver, 3)}) — sin conflicto y sin "
+                   f"aviso. Arreglo: `git config --unset merge.ours.driver`, y traer el template "
+                   f"con `git -c merge.ours.driver=true merge upstream/main`, que conserva la "
+                   f"protección sin dejarla puesta contra `origin`")] if con_driver else []
 
     # ── "no evaluado" (D-43 / INV-87) ────────────────────────────────────────────────────────────
     # Un chequeo que NO PUDO correr no aporta un cero: reporta error. La diferencia no es
@@ -4430,8 +4440,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                   '(#252: visible, no es deuda)', SEV_BACKLOG, tuple(alias_rechazados), poblacion='ground_truth'),
         Categoria('foreign_alias', '⚠ Alias que SIMBAD no reconoce para esta estrella (WARN — puede meter papers de otro objeto)',
                   SEV_WARN, tuple(alias_ajenos), poblacion='ground_truth'),
-        Categoria('merge_ours', '⛔ `merge=ours` declarado pero sin driver registrado en este clon: la protección no existe',
-                  SEV_BLOQUEANTE, tuple(merge_ours), poblacion='ground_truth'),
+        Categoria('merge_ours', '⛔ Driver `merge=ours` REGISTRADO en un clon con `origin`: el próximo merge de la otra máquina descarta lo del remoto en silencio (#390)',
+                  SEV_BLOQUEANTE, tuple(merge_ours), poblacion='merge_ours'),
         Categoria('dangling_thesis', 'thesis_links sin página destino', SEV_BLOQUEANTE, tuple(dangling_thesis), poblacion='entidades'),
         Categoria('dangling_methods', '`methods` sin página destino: el roll-up no puede linkearlo (backlog)',
                   SEV_BACKLOG, tuple(dangling_methods), poblacion='entidades'),
@@ -4577,6 +4587,10 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         # raíz): la población es 1 y decirlo es más honesto que dejarla sin declarar — «miré el
         # único que hay» no es lo mismo que «no sé sobre qué miré».
         "config": (1, "archivo de configuración"),
+        # #390 · lo que este chequeo mira son los patrones declarados, no el ground-truth: la
+        # categoría declaraba una población ajena, y «sobre 0 ground-truth» arriba de un hallazgo
+        # se lee como que no se miró nada.
+        "merge_ours": (len(merge_ours_patterns()[0]), "patrones `merge=ours` de `.gitattributes`"),
     }
     return LintResult(tuple(categorias), cierre=cierre, slug=alcance_slug, alcance=alcance,
                       poblaciones=poblaciones)

@@ -50,8 +50,8 @@
 ## ⚠ Alias que SIMBAD no reconoce para esta estrella (WARN — puede meter papers de otro objeto) (0)
 > sobre 3 ground-truth de `raw/ground_truth/`
 
-## ⛔ `merge=ours` declarado pero sin driver registrado en este clon: la protección no existe (0)
-> sobre 3 ground-truth de `raw/ground_truth/`
+## ⛔ Driver `merge=ours` REGISTRADO en un clon con `origin`: el próximo merge de la otra máquina descarta lo del remoto en silencio (#390) (0)
+> sobre 0 patrones `merge=ours` de `.gitattributes`
 
 ## thesis_links sin página destino (2)
 > sobre 29 notas de entidad (fichas, conceptos, queries)

@@ -1,5 +1,5 @@
 {
- "fetched": "2026-09-01",
+ "fetched": "2026-09-03",
  "issues": [
   {
    "number": 2,
@@ -1869,11 +1869,76 @@
   {
    "number": 375,
    "title": "Código muerto: `schema` se asigna y no se usa en test_ingest_theme.py:477",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 376,
    "title": "Tests del framework assertan sobre archivos `merge=ours`: el arreglo no puede llegar nunca a una instancia",
+   "state": "OPEN"
+  },
+  {
+   "number": 377,
+   "title": "La regla de oro dice \"aplicala en el template\" y en la práctica el operador quiere sólo el issue",
+   "state": "OPEN"
+  },
+  {
+   "number": 378,
+   "title": "`--restamp-headers` inserta el aviso de capa LLM ENTRE el H1 y la línea de cabecera, y el orden invertido termina borrándola",
+   "state": "OPEN"
+  },
+  {
+   "number": 379,
+   "title": "`upsert_section` reemplaza la sección entera sin mirar qué descarta: `harvest_views` borró 6 líneas de cabecera en silencio",
+   "state": "OPEN"
+  },
+  {
+   "number": 380,
+   "title": "El lint no ve la cabecera DESPLAZADA: `has_link` mira el texto entero y la conjunción apaga el detector (3 libros invisibles)",
+   "state": "OPEN"
+  },
+  {
+   "number": 382,
+   "title": "Una fuente LARGA con bibcode ADS no puede declararse larga: `unidad_cita`/`alcance` sólo se leen de `sources:`",
+   "state": "OPEN"
+  },
+  {
+   "number": 383,
+   "title": "Reemplazar un PDF por otro de mejor procedencia deja `pdf_source` y `eprint_version` mintiendo: #230 cubre el borrado, no el reemplazo",
+   "state": "OPEN"
+  },
+  {
+   "number": 384,
+   "title": "Un tema ADS de CORPUS DECLARADO tiene que mentir en `source:` para existir: la sub-cadena `--extra-only` sólo la alcanza el carril off-ADS",
+   "state": "OPEN"
+  },
+  {
+   "number": 385,
+   "title": "El copiado sin re-tipear existe sólo para el INVENTARIO (`--filas`): la síntesis en PROSA —donde viven la mayoría de las citas— se transcribe a mano",
+   "state": "OPEN"
+  },
+  {
+   "number": 386,
+   "title": "#238 y #323 se contradicen: la marca `⚠ corregido` del log NO la conoce `contrast --validar`, así que una entrada marcada bloquea el gate para siempre",
+   "state": "OPEN"
+  },
+  {
+   "number": 387,
+   "title": "REPLANTEO DE REGLA: la supersesión del `log` es una convención en PROSA y no compone — decidir entre sacar el log del chequeo, hacer append-only estructurado, o distinguir afirmar de mencionar",
+   "state": "OPEN"
+  },
+  {
+   "number": 388,
+   "title": "La guarda de borde-de-palabra de #333 NO filtra el EMPALME DE COLUMNAS: 4 candidatas → 4 falsos positivos, verificadas una por una contra el PDF",
+   "state": "OPEN"
+  },
+  {
+   "number": 389,
+   "title": "Los defectos que nacen AL CORREGIR llegan con material AGREGADO: falta el contador simétrico de #222 y la doctrina de corregir por sustracción",
+   "state": "OPEN"
+  },
+  {
+   "number": 390,
+   "title": "#99 EXIGE el driver `merge=ours`, y ese mismo driver DESTRUYE en silencio al sincronizar la bóveda entre máquinas — el flujo que el propio framework promueve",
    "state": "OPEN"
   }
  ]

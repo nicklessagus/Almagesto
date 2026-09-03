@@ -78,12 +78,17 @@ Esta bóveda puede estar corriendo como **instancia** del template **Almagesto**
 `Almagesto` como `upstream`). **Regla de oro: en una instancia NO se edita ningún archivo de framework**
 — este `CLAUDE.md`, `scripts/`, `tests/`, `tools/`, `docs/`, `.claude/skills/`,
 `vault/.obsidian/`, `README.md`, `requirements.txt`. El
-framework es **una sola implementación**: los cambios se hacen en el repo template `Almagesto` (issue/PR
-o parche), se pushean, y se traen por `git pull` / `git merge upstream/main`. Editarlos en la instancia
+framework es **una sola implementación**: los cambios se hacen en el repo template `Almagesto`
+(issue/PR o parche), se pushean, y se traen con el merge de abajo. Editarlos en la instancia
 **da conflictos** en el próximo merge. En la instancia sólo se edita **contenido** (`vault/wiki/`, `vault/raw/`) y los
 **archivos de instancia** protegidos por `merge=ours` (`vault/config/objective.yaml`, `vault/config/stars.yaml`,
 `vault/config/themes.yaml`, `vault/STATUS.md`, `vault/wiki/index.md`, `vault/wiki/log.md`,
-`vault/wiki/matrices/method_star.md`). **Si una operación revela una mejora
+`vault/wiki/matrices/method_star.md`). ⛔ **El driver de `merge=ours` se pasa POR COMANDO y NO se registra en el
+clon (#390):** `git -c merge.ours.driver=true merge upstream/main`. Es una regla por **path** y git
+no puede condicionarla por remoto, así que el driver que protege contra `upstream` **descarta en
+silencio** lo que traiga `origin` —la otra máquina—; sin registrarlo, ese merge conflictúa y las dos
+versiones quedan visibles. El lint **bloquea** al clon que lo tiene puesto.
+**Si una operación revela una mejora
 de framework** (skill nuevo, fix de script, regla), anotala como backlog en `vault/STATUS.md`/`vault/wiki/log.md` y
 aplicala en el template — no la inlines acá. *(Si estás trabajando en el repo template `Almagesto` mismo,
 editar framework **es** la tarea; esta regla rige para las instancias.)*
