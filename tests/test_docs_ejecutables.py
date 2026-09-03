@@ -612,3 +612,48 @@ def test_dos_comandos_encadenados_en_una_linea_no_se_mezclan():
     assert set(salida) == {"lint.py", "mutar.py"}
     assert "--cierre" in salida["lint.py"] and "--cierre" not in salida["mutar.py"]
     assert "--todo" in salida["mutar.py"] and "--todo" not in salida["lint.py"]
+
+
+def test_la_doc_no_afirma_la_exencion_que_275_saco():
+    """#363 — la red 5 valida que lo que la doc **nombra** exista; no que lo que **afirma sobre el
+    comportamiento** siga siendo cierto. Y ahí se coló una premisa falsa que duró 59 versiones
+    menores: `pdf_source: eprint` dejó de eximir del chequeo de cita textual en 1.111.0 (#275) y
+    **9 lugares en 7 archivos** seguían diciendo que exime — uno de ellos el mensaje que el lint le
+    IMPRIME al usuario, en la categoría de backlog más numerosa del reporte (94 hallazgos medidos
+    en una bóveda real, cada uno arrastrando la premisa falsa en su propio texto).
+
+    El mecanismo no fue envejecer: #296 **re-afirmó** la exención el mismo día en que #275 la había
+    sacado, tomando la premisa de los issues sin releer el código que #275 acababa de dejar.
+
+    ⚠ Una línea puede hablar de la exención para decir que **se retiró** —los registros fechados
+    (`docs/mediciones.md`, `docs/contrato.md`) se **marcan**, no se reescriben—: por eso la salida
+    es citar `#363`, que obliga a un acto consciente en vez de a un `grep` que se aprende a
+    esquivar."""
+    afirma = re.compile(r"(?:es (?:la|una) \*{0,2}exenci[óo]n|exime (?:adem[áa]s )?del chequeo|"
+                        r"exenci[óo]n que apaga|apaga (?:adem[áa]s )?el chequeo)", re.I)
+    culpables = []
+    for f in sorted(RAIZ.rglob("*")):
+        if f.suffix not in (".md", ".py") or not f.is_file():
+            continue
+        # `docs/internal/` no se versiona (informes de auditoría fechados, con su estado de ese día)
+        if any(x in f.parts for x in (".git", "build", "outputs", "__pycache__", ".claude",
+                                      "internal")):
+            continue
+        lineas = f.read_text(encoding="utf-8", errors="replace").splitlines()
+        for n, ln in enumerate(lineas, 1):
+            # ⚠ Por PAR de líneas, no por línea suelta: la prosa de este repo va hard-wrapped y la
+            # frase cae partida —el hard wrap corta entre el campo y el verbo—, que es justo uno
+            # de los 9 lugares que #363 midió. Un detector por línea suelta lo perdía.
+            ctx = ln + "\n" + (lineas[n] if n < len(lineas) else "")
+            # La escotilla se busca en una ventana MÁS ANCHA que la detección: la corrección de un
+            # registro fechado se escribe al lado de la frase, no necesariamente en su misma línea.
+            escotilla = "\n".join(lineas[max(0, n - 2):n + 1])
+            if "eprint" in ctx and afirma.search(ctx) and "#363" not in escotilla:
+                donde = f"{f.relative_to(RAIZ)}:{n}"
+                if culpables[-1:] != [f"{f.relative_to(RAIZ)}:{n - 1}"]:
+                    culpables.append(donde)   # la ventana solapa: no contar dos veces la misma frase
+    assert not culpables, (
+        "#363 — afirman una exención que el código no tiene: `pdf_source: eprint` dejó de "
+        "eximir del chequeo de cita textual en 1.111.0 (#275), y hoy se exime SÓLO por "
+        "`.txt` ausente y `fulltext_source: ocr` "
+        f"(`lint._sources_for`):\n  " + "\n  ".join(culpables))

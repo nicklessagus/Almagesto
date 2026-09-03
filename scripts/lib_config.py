@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.173.0"
+ALMAGESTO_VERSION = "1.174.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -68,10 +68,11 @@ UNIDAD_CITA_OK = ("linea", "pagina", "seccion")
 
 # #296 · DE QUÉ DOCUMENTO salió la lectura, y CÓMO se extrajo el índice. Vocabularios CERRADOS —la
 # familia de `role`/`pending`/`unidad_cita`— y hasta ahora los únicos dos declarados cerrados en
-# `CLAUDE.md` que nadie validaba. No es cosmético: `pdf_source: eprint` es una EXENCIÓN que apaga el
-# chequeo de cita textual (#220/#275), así que un valor fuera de vocabulario cae por el `else` de
-# todo `== "eprint"` en silencio, y un `eprint` mal escrito enciende un chequeo que iba a estar
-# exento y produce hallazgos que no lo son. Medido sobre 138 notas: 85 `eprint`, 50 sin valor, 1
+# `CLAUDE.md` que nadie validaba. No es cosmético: el campo DECIDE LECTURAS —`eprint` dice que las
+# citas son contra el preprint, así que una discrepancia numérica es candidata a diferencia de
+# versión— y un valor fuera de vocabulario cae por el `else` de todo `== "eprint"` en silencio.
+# ⚠ #363: hasta 1.111.0 ese `else` eximía además del chequeo de cita textual; #275 la sacó y nueve
+# lugares (éste incluido) siguieron afirmándola 59 versiones menores. Medido sobre 138 notas: 85 `eprint`, 50 sin valor, 1
 # `ads` y **2 con prosa dentro del campo** (una de ellas, información legítima de adquisición que
 # terminó en el campo equivocado sin que nada lo dijera).
 # ⚠ `null`/ausente es el valor legítimo para **desconocido**, que NO es «publicado» (#57).

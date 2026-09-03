@@ -467,9 +467,9 @@ nota que apunta a un archivo que no está afirma algo falso sobre el disco (#217
 
 ⛔ **Los dos son vocabulario CERRADO y el lint los BLOQUEA (#296)** —`pdf_source: eprint|ads|
 publisher|web`, `fulltext_source: pdftotext|ocr|web`, con `null`/ausente = **desconocido**—: no es
-cosmético, porque `pdf_source: eprint` es la **exención** que apaga el chequeo de cita textual, así
-que un valor fuera de vocabulario la apaga por el `else` en silencio y un `eprint` mal escrito la
-enciende y produce hallazgos que no lo son. Medido: 2 de 138 notas llevaban **prosa** en el campo
+cosmético, porque el campo **decide lecturas** —`eprint` dice que las citas son contra el
+preprint— y un valor fuera de vocabulario cae por el `else` de todo `== "eprint"` **en silencio**.
+⚠ Ese `else` **ya no exime** del chequeo de cita textual (#275/#363). Medido: 2 de 138 notas llevaban **prosa** en el campo
 —una, información de adquisición legítima que terminó ahí porque el schema no tenía dónde ponerla—.
 Migrador: `python scripts/make_notes.py --migrate-source-fields`, que pasa el valor a `null` y
 **mueve** la prosa (a `pending_motivo` o a `salvedades`), no la tira.
@@ -1386,8 +1386,7 @@ estampado en la nota** (metadata, no un valor que la prosa citó) + backlog del 
 `--rename-paper`. Era la única de las seis que no dejaba nada en la bóveda, y **declara su
 población** (3 de 138), porque *«cubrió: versiones»* sin denominador se lee como «se miraron todas».
 ⚠ Su hueco simétrico es backlog aparte: la nota con **bibcode publicado** que igual lee el preprint
-(82 de 138) no tiene problema de identidad, así que ningún detector la ve — y `pdf_source: eprint`
-le apaga además el chequeo de cita textual.
+(82 de 138) no tiene problema de identidad, así que ningún detector la ve.
 ⛔ **Y el REUSO entre slugs (D-18) deja una pregunta hecha, no una respuesta (#297).** Copiar el
 artefacto que ya estaba bajo otro slug es correcto, pero importa a un sujeto nuevo un archivo cuya
 **antigüedad nadie chequeó** — y la salida natural («si hubiera versión nueva la búsqueda habría

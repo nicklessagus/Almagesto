@@ -404,7 +404,7 @@ distingue su vacío de su fallo.
 | Papers que el tema existía para capturar, dentro de esos 32 | **2** | `2012PASP..124.1015B`, `2015MNRAS.446.3545D` |
 | Alternativas de la faceta de un tema real | **27**, una con población **cero** y una duplicada | `non-?gaussianity matrix`: 0 archivos con la frase, **29** con `non-gaussianity` (#291) |
 | `#N` del repo contrastados contra los issues de GitHub | **247** distintas, **1** colgada | la colisión de #288 ocurrió **en vivo** (#292) |
-| `pdf_source` sobre las notas de paper de una bóveda | 85 `eprint` · 50 ausente · 1 `ads` · **2 con prosa** | el `eprint` es la exención que apaga el chequeo de cita textual (#296) |
+| `pdf_source` sobre las notas de paper de una bóveda | 85 `eprint` · 50 ausente · 1 `ads` · **2 con prosa** | el `eprint` es la exención que apaga el chequeo de cita textual (#296) ⚠ corregido 2026-09-03 (#363): la MEDICIÓN sigue valiendo, su justificación no — la exención se retiró en 1.111.0 (#275) y #296 la re-afirmó el mismo día |
 | Notas `eprint` y pasadas de red registradas | **85/138 (62 %)** · `_red.yaml` **no existe** | ninguna de las seis caducidades estaba chequeada (#297) |
 
 ⚠ **Salvedad transversal:** todas salen de **una** bóveda (`Almagesto-Tesis`, 2026-08-30) y de un

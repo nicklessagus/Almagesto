@@ -6495,9 +6495,9 @@ def test_faceta_sin_notas_es_NO_EVALUABLE_y_no_todas_muertas(toy_vault, monkeypa
 # ── #296 · los dos vocabularios cerrados que nadie validaba ──────────────────
 def test_pdf_source_fuera_de_vocabulario_bloquea(toy_vault, capsys):
     """#296 — `CLAUDE.md` los declara CERRADOS y nadie los validaba, a diferencia de sus hermanos
-    (`role`, `pending_source`, `unidad_cita`). No es cosmético: `pdf_source: eprint` es la EXENCIÓN
-    que apaga el chequeo de cita textual (#220/#275), así que un valor fuera de vocabulario la apaga
-    por el `else` en silencio, y un `eprint` mal escrito la enciende y produce hallazgos que no lo
+    (`role`, `pending_source`, `unidad_cita`). No es cosmético: el campo DECIDE LECTURAS —`eprint`
+    dice que las citas son contra el preprint— y un valor fuera de vocabulario cae por el `else` de
+    todo `== "eprint"` en silencio, y un `eprint` mal escrito enciende ramas que no lo
     son. Medido: 2 de 138 notas llevaban PROSA en el campo."""
     paper_extraido(toy_vault, "2020malA....1A", pdf_source="null el 2026-08-29")
     rc, out = run_lint(capsys)
@@ -6594,8 +6594,8 @@ def test_el_eprint_con_bibcode_publicado_es_backlog(toy_vault):
     """El hueco que ningún detector tenía dueño: `fetch_pdf` prueba el eprint PRIMERO (bien: es
     libre y es la rama que más rinde), y la consecuencia no la miraba nadie — 82 de 138 notas
     medidas leen el preprint **teniendo bibcode publicado**, o sea sin problema de identidad que
-    `discover_versions` pueda ver. Y `pdf_source: eprint` exime del chequeo de cita textual, así
-    que la rama que prefiere el preprint infla la exención y nada empuja en la otra dirección."""
+    `discover_versions` pueda ver, y nada empuja en la otra dirección. ⚠ #363: acá decía además que
+    el `eprint` exime del chequeo de cita textual — salió en 1.111.0 (#275)."""
     paper_extraido(toy_vault, "2018IEEEA...625336F", pdf_source="eprint")
     hallazgos = dict(lint.collect().por_clave("version_publicada").items)
     assert "bibcode PUBLICADO" in hallazgos["2018IEEEA...625336F"]

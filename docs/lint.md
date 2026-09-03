@@ -91,9 +91,10 @@ Deben quedar en **0**:
   para el contraste cross-paper.
 - **`pdf_source` / `fulltext_source` fuera de su vocabulario cerrado** (#296:
   `eprint|ads|publisher|web` y `pdftotext|ocr|web`; `null`/ausente = **desconocido**, que es
-  legítimo y no significa «publicado»). No es cosmético: `pdf_source: eprint` es la **exención** que
-  apaga el chequeo de cita textual, así que un valor fuera de vocabulario la apaga por el `else` en
-  silencio y un `eprint` mal escrito la enciende y produce hallazgos que no lo son. Medido: 2 de 138
+  legítimo y no significa «publicado»). No es cosmético: el campo **decide lecturas** —`eprint` dice
+  que las citas son contra el preprint— y un valor fuera de vocabulario cae por el `else` de todo
+  `== "eprint"` en silencio (#363: ese `else` eximía además del chequeo de cita textual hasta
+  1.111.0, y la doc lo siguió afirmando 59 versiones menores). Medido: 2 de 138
   notas llevaban **prosa** en el campo. Migrador: `python scripts/make_notes.py
   --migrate-source-fields` (pasa el valor a `null` y **mueve** la prosa a `pending_motivo` o
   `salvedades`).
@@ -524,7 +525,8 @@ OCR, o marcar `pending`).
   `--rename-paper` o declarándolo en `versions[]`. (b) `pdf_source: eprint` con bibcode **publicado**
   — no hay problema de identidad, así que `discover_versions` no la mira por contrato (D-19 es sobre
   identidad), y es justo donde el framework avisa que una discrepancia numérica es diferencia de
-  versión **y** donde el `eprint` exime del chequeo de cita textual. Medido: 82 de 138 notas.
+  versión. Medido: 82 de 138 notas. ⚠ Y **no** hay agujero de verificación asociado: la exención
+  del chequeo de cita textual salió en 1.111.0 (#275/#363).
 - **Artefacto reusado entre slugs sin chequear su versión, y pasada de red que nunca corrió**
   (#297): el reuso D-18 (copiar el PDF que ya estaba bajo otro slug) es correcto y se conserva, pero
   importa a un sujeto nuevo un archivo cuya **antigüedad nadie chequeó**; y la salida natural —«si

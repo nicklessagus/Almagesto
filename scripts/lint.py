@@ -2374,9 +2374,10 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                                              f"no consta qué parte entró, así que un recorte "
                                              f"deliberado se lee como omisión"))
             # #296 — los otros dos vocabularios CERRADOS del schema de paper, que `CLAUDE.md`
-            # declaraba cerrados y nadie validaba. `pdf_source: eprint` es la exención que apaga el
-            # chequeo de cita textual: un valor fuera de vocabulario la apaga por el `else` en
-            # silencio, y un `eprint` mal escrito la enciende y produce hallazgos que no lo son.
+            # declaraba cerrados y nadie validaba. El campo DECIDE LECTURAS (`eprint` dice que las
+            # citas son contra el preprint), así que un valor fuera de vocabulario cae por el `else`
+            # de todo `== "eprint"` en silencio. ⚠ #363: hasta 1.111.0 ese `else` eximía además del
+            # chequeo de cita textual; #275 la sacó y la doc lo siguió afirmando 59 versiones.
             for _campo, _ok in (("pdf_source", cfg.PDF_SOURCE_OK),
                                 ("fulltext_source", cfg.FULLTEXT_SOURCE_OK)):
                 _v = fm.get(_campo)
@@ -2393,8 +2394,10 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             # pasada y no actuar en el momento borraba el hallazgo y la siguiente lo redescubría.
             # (b) La nota que ya tiene bibcode PUBLICADO y sigue leyendo el eprint: no tiene
             # problema de identidad, así que ningún detector la toca — y es justo donde el contrato
-            # avisa que una discrepancia numérica es diferencia de versión, y donde `pdf_source:
-            # eprint` EXIME del chequeo de cita textual (medido: 82 de 138 notas).
+            # avisa que una discrepancia numérica es diferencia de versión (medido: 82 de 138
+            # notas). ⚠ #363: acá decía que el `eprint` EXIME además del chequeo de cita textual;
+            # esa exención salió en 1.111.0 (#275) y la premisa falsa viajaba en las 94 líneas que
+            # esta categoría imprime.
             if (_vd := str(fm.get("versions_disponible") or "").strip()):
                 version_publicada.append(
                     (stem, f"`versions_disponible: {_vd}`: el preprint salió publicado y nadie "
@@ -2404,9 +2407,10 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                     and "arxiv" not in str(fm.get("bibcode") or stem).lower()):
                 version_publicada.append(
                     (stem, "`pdf_source: eprint` con bibcode PUBLICADO: la nota se apoya en el "
-                           "preprint teniendo versión publicada, y esa marca además exime del "
-                           "chequeo de cita textual → conseguí el PDF publicado "
-                           "(`python scripts/fetch_pdf.py <slug> --force`) o dejá la salvedad"))
+                           "preprint teniendo versión publicada, así que una discrepancia numérica "
+                           "contra un valor publicado es candidata a diferencia de VERSIÓN → "
+                           "conseguí el PDF publicado (`python scripts/fetch_pdf.py <slug> "
+                           "--force`) o dejá la salvedad"))
             if fm.get("pending_source"):
                 ptr = fm.get("doi") or fm.get("source_url") or "(sin puntero conocido)"
                 _p = str(fm["pending_source"])
