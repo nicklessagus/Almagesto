@@ -285,9 +285,9 @@ def test_una_url_se_cruza_contra_el_snapshot_web(toy_vault, monkeypatch):
 def test_las_guardas_de_los_carriles_nuevos_no_miran_donde_no_deben(toy_vault, tmp_path, monkeypatch):
     """Sin `pdf:` declarado no se globea la raíz del repo; una clave vacía no lee `<slug>/.txt`;
     un `.txt` que no es snapshot web (es un PDF extraído) no entra al carril web."""
-    monkeypatch.setattr(cs.cfg, "ROOT", tmp_path / "repo")          # sin `pdf:`, `Path("")` resolvería
-    (tmp_path / "repo").mkdir()                                       # al PADRE de la raíz: ahí va la trampa
-    (tmp_path / "trampa.bib").write_text("@article{x, author={Y}}", encoding="utf-8")
+    raiz = tmp_path / "raiz"; raiz.mkdir()                          # sin `pdf:`, `Path("")` resolvería
+    monkeypatch.setattr(cs.cfg, "ROOT", raiz)
+    (tmp_path / "trampa.bib").write_text("@article{x, author={Y}}", encoding="utf-8")   # el PADRE de la raíz
     assert cs.bib_files_near({}) == [] and cs.bib_files_near({"pdf": ""}) == []
     d = cfg.FULLTEXT / "ica"; d.mkdir(parents=True, exist_ok=True)
     (d / ".txt").write_text(f"{cfg.FULLTEXT_WEB_MARK}\n# ---- contenido extraído (defuddle) ----\nx",
