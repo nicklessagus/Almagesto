@@ -712,8 +712,9 @@ def promote_source(slug: str, key: str, bibcode: str) -> int:
     cfg.print_seguro(f"    - bibcode: {bibcode}")
     cfg.print_seguro(f"      via: usuario")
     cfg.print_seguro(f"      fecha: {hoy}")
-    cfg.print_seguro(f"      motivo: {(motivo + ' ' if motivo else '')!s}(promovido desde `sources:` "
-                     f"`{key}`, via {item.get('via') or '?'}; tiene bibcode ADS, #353)".strip())
+    texto_motivo = ((motivo + " ") if motivo else "") + (
+        f"(promovido desde `sources:` `{key}`, via {item.get('via') or '?'}; tiene bibcode ADS, #353)")
+    cfg.print_seguro(f"      motivo: {_yaml_scalar(texto_motivo)}")
     cfg.print_seguro(f"\n  → y SACÁ el item `key: {key}` de `sources:` (la misma decisión, en el "
                      f"carril correcto). Después: `python scripts/ingest_theme.py {slug}` "
                      f"(idempotente: sólo baja lo que falte).")

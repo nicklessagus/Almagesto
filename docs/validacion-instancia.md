@@ -147,3 +147,16 @@ del frontmatter contra `git show HEAD:`), `versions` vacío, `first_author`/`cit
 huérfanas ni wikilinks rotos por el renombre. **Devolver si** se pierde una clave curada sin que
 el comando lo grite (rc 1 + «PERDIÓ curación»), o si escribe `themes.yaml`. **Al cerrar:** qué
 fuente se promovió y el diff de frontmatter.
+
+---
+
+## Seguimiento de #353 · v1.199.0 — guía §2j
+
+Los seis hallazgos del cierre de #353, en un commit. **Validar:** `check_sources.py ica` de nuevo
+→ los cuatro Hyvärinen en `no-evaluable (primera página ilegible …)`, `2007GomezHerrero` (o su
+clave actual) en `ok`; `make_notes.py --restamp-sources-meta` → 0 notas (ya corregidas a mano) o
+las que difieran de `sources:`; `triage.py ica --promote-source <key> --bibcode <bib>` en
+cualquier item → el bloque `extra_core:` impreso pasa por `yaml.safe_load`; `--rename-paper …
+--fix-key` → el resumen dice «sin alias». **Devolver si** un apellido compuesto correcto sigue
+saliendo `autor` por Crossref, o si el carril PDF sigue acusando sobre una primera página
+mojibake. Sin issue nuevo: los seis quedaron en el comentario de cierre de #353.

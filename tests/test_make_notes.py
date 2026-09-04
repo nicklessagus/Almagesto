@@ -4987,3 +4987,46 @@ def test_restamp_alcance_saltea_los_items_malformados_de_sources(toy_vault, caps
     assert mn.restamp_scope() == 0
     assert "0 nota(s) re-sincronizadas" in capsys.readouterr().out
     assert not list(cfg.PAPERS.glob("*.md"))
+
+
+def test_restamp_sources_meta_lleva_la_correccion_de_sources_al_stub(toy_vault, capsys):
+    """Seguimiento de #353 (validación en la instancia): corregir `author`/`title`/`year`/`doi` en
+    `sources:` no llegaba a la nota off-ADS —el stub no se pisa— y las cuatro notas se arreglaron a
+    mano. La config es la autoridad (#312): se re-sincroniza por cirugía, sólo lo declarado."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "concept": "ica", "area": "methods",
+                                         "source": "local-pdfs",
+                                         "sources": [{"key": "2006Vrabie", "title": "Título real",
+                                                      "author": "Vrabie", "year": 2006,
+                                                      "doi": "10.1/real", "n_authors": 3,
+                                                      "via": "usuario", "motivo": "m"},
+                                                     {"key": "2099Sin", "via": "usuario", "motivo": "m"}]}})
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    f = cfg.PAPERS / "2006Vrabie.md"
+    f.write_text("---\nbibcode: 2006Vrabie\ntitle: 'Título inventado'\nfirst_author: VanDerBaan\n"
+                 "n_authors: 1\nyear: 2005\ndoi: 10.1/x\nno_vista:\n- sujeto: ica\n  motivo: m\n---\n\n"
+                 "## Abstract\n\nx\n", encoding="utf-8")
+    assert mn.restamp_sources_meta() == 0
+    fm = read_fm(f)
+    assert (fm["title"], fm["first_author"], fm["year"], fm["doi"], fm["n_authors"]) == \
+        ("Título real", "Vrabie", 2006, "10.1/real", 3)
+    assert fm["no_vista"] == [{"sujeto": "ica", "motivo": "m"}], "la curación no se toca"
+    assert "1 nota(s)" in capsys.readouterr().out
+    assert mn.restamp_sources_meta() == 0 and read_fm(f)["year"] == 2006      # idempotente
+    assert "0 nota(s)" in capsys.readouterr().out, "sin diferencias no se toca ni se cuenta nada"
+    # un item que NO declara el campo no borra lo que la nota tiene (la config manda cuando declara)
+    g = cfg.PAPERS / "2099Sin.md"
+    g.write_text("---\nbibcode: 2099Sin\ntitle: 'Lo que había'\nyear: 2099\n---\n\n## Abstract\n\nx\n",
+                 encoding="utf-8")
+    mn.restamp_sources_meta()
+    assert read_fm(g)["title"] == "Lo que había" and read_fm(g)["year"] == 2099
+
+
+def test_fix_key_no_promete_un_alias_que_no_escribe(toy_vault, capsys):
+    """Validación en la instancia: el resumen de `--rename-paper --fix-key` decía «alias en
+    `versions[]`» aunque con el flag no lo escribe (#355)."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / "2006VanDerBaan.md").write_text("---\nbibcode: 2006VanDerBaan\n---\n\n# x\n",
+                                                  encoding="utf-8")
+    mn.rename_paper("2006VanDerBaan", "2006Vrabie", fix_key=True)
+    out = capsys.readouterr().out
+    assert "alias en `versions[]`" not in out and "sin alias" in out, out

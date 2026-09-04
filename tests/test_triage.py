@@ -1210,3 +1210,18 @@ def test_promote_source_grita_si_perdio_curacion(toy_vault, monkeypatch, capsys)
     monkeypatch.setattr(make_notes_mod, "rename_paper", rename_que_pierde)
     assert triage.promote_source("ica", "2011Yang", "2011PLoSO...627594P") == 1
     assert "PERDIÓ curación" in capsys.readouterr().out
+
+
+def test_promote_source_imprime_un_extra_core_que_parsea_como_yaml(toy_vault, monkeypatch, capsys):
+    """Validación en la instancia: `motivo:` salía sin indentar; pegado tal cual rompía el YAML."""
+    import query_ads
+    _fuente_off_ads(toy_vault)
+    monkeypatch.setattr(query_ads, "fetch_bibcodes", lambda bibs, via_de=None: [])
+    triage.promote_source("ica", "2011Yang", "2011PLoSO...627594P")
+    out = capsys.readouterr().out
+    bloque = out[out.index("  extra_core:"):out.index("\n  \u2192")]
+    bloque = "\n".join(ln.split("   # ")[0] for ln in bloque.split("\n"))
+    data = yaml.safe_load(bloque)
+    assert data["extra_core"][0]["bibcode"] == "2011PLoSO...627594P"
+    m = data["extra_core"][0]["motivo"]
+    assert "extension de RAICAR" in m and "2011Yang" in m

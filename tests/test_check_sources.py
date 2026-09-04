@@ -71,7 +71,8 @@ def test_compare_crossref_distingue_anio_titulo_y_ok():
 # ── primera página del PDF ───────────────────────────────────────────────────────────────────────
 
 def test_compare_pdf_exige_apellido_y_anio_en_la_pagina():
-    page = "Independent Component Analysis\nAapo Hyv¨arinen and Erkki Oja\nNeural Networks 13 (2000)"
+    page = ("Independent Component Analysis\nAapo Hyv¨arinen and Erkki Oja\nNeural Networks 13 (2000)\n"
+            + "abstract " * 60)          # una primera página real supera el mínimo de `is_legible`
     assert cs.compare_pdf({"author": "Hyvärinen, A.", "year": 2000, "title": ""}, page) == ("ok", "")
     assert cs.compare_pdf({"author": "Yang", "year": 2000, "title": ""}, page)[0] == "autor"
     assert cs.compare_pdf({"author": "Hyvarinen", "year": 2004, "title": ""}, page)[0] == "anio"
@@ -110,7 +111,7 @@ def test_check_item_sin_registro_en_crossref_cae_al_pdf(toy_vault, monkeypatch):
     _crossref(monkeypatch, None, "sin-registro")
     pdf = cfg.PDFS / "ica" / "2015Voss.pdf"
     pdf.parent.mkdir(parents=True, exist_ok=True); pdf.write_bytes(b"%PDF")
-    monkeypatch.setattr(cs, "pdf_first_page", lambda p: "Voss, Belkin, Saul 2015")
+    monkeypatch.setattr(cs, "pdf_first_page", lambda p: "Voss, Belkin, Saul 2015 " + "abstract " * 60)
     rec = cs.check_item({"key": "2015Voss", "doi": "10.48550/arxiv.1502.04148", "author": "Voss",
                          "year": 2015}, "ica")
     assert rec["via"] == "pdf" and rec["veredicto"] == "ok"
@@ -172,3 +173,35 @@ def test_run_sin_fuentes_validas_no_escribe_el_registro(toy_vault, monkeypatch):
     monkeypatch.setattr(cs.cr, "crossref_message", lambda *a, **k: pytest.fail("nada que consultar"))
     assert cs.run("ica") == {}
     assert not cfg.registro_path("ica").exists()
+
+
+# ── seguimiento de #353 (validación en la instancia): tres falsos del carril PDF y del apellido ──
+
+def test_primera_pagina_ilegible_es_no_evaluable_no_autor():
+    """Validación en la instancia: los cuatro PDFs de Hyvärinen salen como glifos (fuentes sin
+    ToUnicode) y el carril decía «falta el apellido». `is_legible` ya los marca como mojibake."""
+    mojibake = "\u00c3\u00bf\u00c2\u00a7\u00e2" * 200
+    v, det = cs.compare_pdf({"author": "Hyv\u00e4rinen", "year": 2001, "title": ""}, mojibake)
+    assert v == "no-evaluable" and "ilegible" in det, (v, det)
+
+
+def test_digito_de_afiliacion_pegado_al_apellido_no_es_autor_falso():
+    """Validación en la instancia: `G\u00f3mez-Herrero1` (el superíndice de afiliación pegado por
+    pdftotext) daba «falta el apellido»."""
+    page = ("Independent Component Analysis of EEG\nG. G\u00f3mez-Herrero1, Z. Koldovsk\u00fd2, "
+            "P. Tichavsk\u00fd2\n2007 IEEE " + "x " * 200)
+    assert cs.compare_pdf({"author": "G\u00f3mez-Herrero", "year": 2007, "title": ""}, page) == ("ok", "")
+
+
+@pytest.mark.parametrize("declarado,crossref,esperado", [
+    ("Le Bihan", "Le Bihan", True), ("VanDerBaan", "van der Baan", True), ("Bihan", "Le Bihan", True),
+    ("G\u00f3mez-Herrero", "G\u00f3mez-Herrero", True), ("Gomez", "G\u00f3mez-Herrero", False),
+    ("Yang", "Pendse", False),
+])
+def test_family_match_tolera_apellidos_compuestos(declarado, crossref, esperado):
+    """Validación en la instancia: `declared_family` se quedaba con el último token, así que un
+    apellido compuesto (Le Bihan, van der Baan) bloqueaba contra Crossref siendo correcto."""
+    assert cs.family_match(declarado, crossref) is esperado
+    if esperado:
+        assert cs.compare_crossref({"author": declarado, "year": None, "title": ""},
+                                   {"family": crossref, "year": None, "title": ""})[0] != "autor"

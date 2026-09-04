@@ -50,7 +50,20 @@ def norm(s) -> str:
     t = unicodedata.normalize("NFKD", t)
     t = "".join(ch for ch in t if unicodedata.category(ch) != "Mn")
     t = t.encode("ascii", "ignore").decode()
+    t = re.sub(r"(?<=[A-Za-z])(?=\d)", " ", t)          # `Herrero1`: el superindice de afiliacion
     return " ".join(re.sub(r"[^a-z0-9]+", " ", t.casefold()).split())
+
+
+def family_match(declared_author, found_family) -> bool:
+    """Does the declared author name the same surname Crossref/the page gives? Compound surnames
+    (`Le Bihan`, `van der Baan`, `Gomez-Herrero`) compare with spaces collapsed, and a declared
+    LAST token (`Bihan`) matches a compound found surname: the last token alone was blocking
+    correct entries (measured by the instance with the module, not among its 52 sources)."""
+    nd, nf = norm(declared_family(declared_author)), norm(found_family)
+    nd_full = norm(_SPLIT_AUTHORS.split(str(declared_author or ""), 1)[0])
+    if not nd or not nf:
+        return False
+    return nd == nf or nd_full.replace(" ", "") == nf.replace(" ", "") or nd == nf.split()[-1]
 
 
 def declared_family(author) -> str:
@@ -93,8 +106,7 @@ def compare_crossref(declared: dict, found: dict) -> tuple[str, str]:
     compared normalised and is backlog (punctuation and case vary legitimately)."""
     if not found.get("family") and not found.get("year"):
         return "no-evaluable", "Crossref no trae autor ni año para ese DOI"
-    fam_d, fam_f = declared_family(declared.get("author")), norm(found.get("family"))
-    if fam_d and fam_f and fam_d != fam_f:
+    if declared.get("author") and found.get("family") and not family_match(declared["author"], found["family"]):
         return "autor", f"declarado «{declared['author']}», Crossref dice «{found['family']}»"
     if declared.get("year") and found.get("year") and declared["year"] != found["year"]:
         return "anio", f"declarado {declared['year']}, Crossref dice {found['year']}"
@@ -108,8 +120,15 @@ def compare_pdf(declared: dict, page: str) -> tuple[str, str]:
     texto = norm(page)
     if not texto.strip():
         return "no-evaluable", "la primera página del PDF no tiene texto (¿escaneo sin OCR?)"
+    import extract_fulltext
+    ok, motivo = extract_fulltext.is_legible(page)
+    if not ok:
+        # Measured on the instance: four PDFs of one author render as glyphs (fonts without
+        # ToUnicode) and the rail said «the surname is missing». Illegible is not evaluable.
+        return "no-evaluable", f"primera página ilegible ({motivo}) — abrí el PDF a ojo"
     fam = declared_family(declared.get("author"))
-    if fam and not re.search(rf"\b{re.escape(fam)}\b", texto):
+    fam_full = norm(_SPLIT_AUTHORS.split(str(declared.get("author") or ""), 1)[0]).replace(" ", "")
+    if fam and not re.search(rf"\b{re.escape(fam)}\b", texto) and fam_full not in texto.replace(" ", ""):
         return "autor", f"declarado «{declared['author']}» y el apellido no está en la primera página del PDF"
     if declared.get("year") and not re.search(rf"\b{declared['year']}\b", texto):
         return "anio", f"declarado {declared['year']} y ese año no aparece en la primera página del PDF"

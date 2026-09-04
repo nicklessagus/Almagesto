@@ -311,6 +311,39 @@ def stamp_scope(dest, alcance: str | None, unidad_cita: str | None) -> bool:
     return True
 
 
+SOURCES_META = (("title", "title"), ("author", "first_author"), ("year", "year"), ("doi", "doi"),
+                ("n_authors", "n_authors"))
+
+
+def restamp_sources_meta() -> int:
+    """Re-sync the catalog-like fields an off-ADS stub took from its `sources:` item (#353
+    follow-up): `title`, `author` to `first_author`, `year`, `doi`, `n_authors`. The stub is
+    written once and never overwritten, so correcting the item, which is what `check_sources`
+    asks for, did not reach the note: measured on the instance, four notes were fixed by hand.
+    Config is the authority (#312): only declared keys are written, by surgery; curation untouched."""
+    n = 0
+    for slug, meta in (cfg.load_themes() or {}).items():
+        for item in cfg.as_list(cfg.as_map(meta).get("sources")):
+            if not isinstance(item, dict) or not (key := str(item.get("key") or "").strip()):
+                continue
+            dest = cfg.PAPERS / f"{safe_name(key)}.md"
+            if not dest.exists():
+                continue
+            fm = cfg.split_fm(dest.read_text(encoding="utf-8")) or {}
+            cambios = 0
+            for src_k, note_k in SOURCES_META:
+                if item.get(src_k) in (None, "") or fm.get(note_k) == item.get(src_k):
+                    continue
+                _set_campo(dest, note_k, yaml.safe_dump(item.get(src_k), allow_unicode=True,
+                                                        width=10 ** 6).split("\n")[0])
+                cambios += 1
+            if cambios:
+                cfg.print_seguro(f"  {key}: {cambios} campo(s) re-sincronizados desde `sources:` de `{slug}`")
+                n += 1
+    cfg.print_seguro(f"papers: {n} nota(s) con metadata re-sincronizada desde `sources[]` (#353)")
+    return 0
+
+
 def restamp_scope() -> int:
     """Backfill of #312 over every declared source — `sources:` items and, since #382, the
     `extra_core` entries of themes AND stars that declare a scope: config → the note's frontmatter."""
@@ -2935,7 +2968,7 @@ def rename_paper(old_stem: str, new_bibcode: str, *, fix_key: bool = False) -> N
 
     tocadas = _reescribir_wikilinks(old_stem, new_bibcode)
     cfg.print_seguro(f"  {old.name} → {new.name} · {tocadas} nota(s) con wikilinks reescritos · "
-                     f"alias en `versions[]`")
+                     + ("sin alias: clave errónea (#355)" if fix_key else "alias en `versions[]`"))
 
 
 def _finish_rename(nota, old_stem: str, new_bibcode: str) -> None:
@@ -3961,6 +3994,9 @@ def main() -> int:
                     help="migración #205: saca `symbols_lost:` y `fulltext_layout:` del frontmatter "
                          "de las notas de paper (la fuente de lectura es el PDF, así que ya no "
                          "deciden nada). No requiere slug.")
+    ap.add_argument("--restamp-sources-meta", action="store_true", dest="restamp_sources_meta",
+                    help="#353: re-sincroniza title/first_author/year/doi/n_authors del stub off-ADS "
+                         "desde su item de `sources:` (la corrección de la config no llegaba a la nota)")
     ap.add_argument("--restamp-alcance", action="store_true", dest="restamp_alcance",
                     help="#312: re-estampa `alcance`/`unidad_cita` de las notas desde `sources[]` de "
                          "themes.yaml (la config es la autoridad). No requiere slug.")
@@ -4052,6 +4088,8 @@ def main() -> int:
         cfg.print_seguro(f"`symbols_lost`/`fulltext_layout` retirados de {n} nota(s) (#205).")
         return 0
 
+    if args.restamp_sources_meta:
+        return restamp_sources_meta()
     if args.restamp_alcance:
         return restamp_scope()
 

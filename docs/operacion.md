@@ -240,6 +240,9 @@ python scripts/triage.py <slug> --accept-source <doi> --via usuario|descubrimien
 #   preserva `no_vista`/`no_sintetizado`/`salvedades`/`vistas`; imprime el `extra_core` y el item
 #   a sacar de `sources:`. NO escribe themes.yaml.
 python scripts/triage.py <slug> --promote-source <key> --bibcode <bibcode>
+# off-ADS · la CORRECCIÓN de un item de `sources:` (title/author/year/doi/n_authors) llega al stub,
+#   que no se pisa solo (#353): cirugía sobre lo declarado, la curación de la nota no se toca
+python scripts/make_notes.py --restamp-sources-meta
 ```
 ⚠ Los dos `via` son vocabularios cerrados **distintos** (#162): `extra_core` (carril ADS) usa
 `usuario | triage | citado-por-corpus`; `sources:` (carril off-ADS) usa

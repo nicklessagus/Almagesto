@@ -483,6 +483,20 @@ lo grita con el `git show` para recuperarlo (rc 1). Candidatos en tu bóveda: lo
 `sources:` cuyo DOI resuelva a un bibcode ADS (`2012Waldmann`/`2013Waldmann` son ApJ: casi seguro
 lo tienen; verificá con `python scripts/query_ads.py --probe 'doi:"<doi>"'`).
 
+## 2j · v1.199.0 — seguimiento de #353 (los seis hallazgos del validador)
+
+**Una cosa para correr:** `python scripts/make_notes.py --restamp-sources-meta` — desde ahora,
+corregir `author`/`title`/`year`/`doi`/`n_authors` en `sources:` llega al stub off-ADS (antes
+había que editar la nota a mano; la curación no se toca). Esperado en `Almagesto-Tesis`: 0 notas
+si ya arreglaste las cuatro a mano; si alguna difiere de la config, la lista.
+
+Y **re-corré `check_sources.py` sobre `ica`**: cambia el carril PDF —primera página ilegible
+(mojibake) sale *no-evaluable*, no «falta el apellido»; `Herrero1` ya no es falso; y un apellido
+compuesto (`Le Bihan`, `van der Baan`) ya no bloquea contra Crossref. Esperado: los cuatro
+Hyvärinen pasan de `autor` a `no-evaluable (primera página ilegible)`, y `2007GomezHerrero` a
+`ok`. Lo demás es cosmético: el `extra_core` de `--promote-source` parsea como YAML y el resumen
+de `--fix-key` ya no promete un alias que no escribe.
+
 ## 3 · Cierre
 
 ```bash
