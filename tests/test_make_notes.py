@@ -1649,7 +1649,7 @@ Un ciclo tipo-solar no es una sinusoide fija [[2020A&A...638A..69W]].
 
 def test_stamp_header_backfillea_la_nota_que_nacio_sin_cabecera(toy_vault):
     """#69: la nota vieja tiene blockquote propio (prosa del LLM) pero no la cabecera del template.
-    El estampador ancla en el H1, no en la línea del generador, que es justo la que falta."""
+    El estampador ancla en el H1, no en la línea del generador, que es justo la que falta.  @inv INV-48"""
     dest = cfg.CONCEPTS / "activity" / "cycle-shape-and-variability.md"
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(VIEJA, encoding="utf-8")

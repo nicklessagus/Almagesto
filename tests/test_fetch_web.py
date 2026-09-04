@@ -225,7 +225,7 @@ def test_force_deja_rastro_de_la_captura_que_pisa(toy_vault, fake_defuddle, monk
     Lo que se guarda es el RASTRO, no el archivo: fecha, URL y `sha256` del `.txt` reemplazado. El
     archivo no se versiona a propósito (decidido con el usuario): un `<clave>.<fecha>.txt` al lado
     entra a TODOS los `grep` del corpus y a la población del lint, así que `verify-citations` podría
-    citar de una captura obsoleta."""
+    citar de una captura obsoleta.  @inv INV-30"""
     import hashlib
     assert run_main(monkeypatch, ARGS) == 0
     txt = toy_vault.FULLTEXT / "gp" / "2006RasmussenWilliams.txt"

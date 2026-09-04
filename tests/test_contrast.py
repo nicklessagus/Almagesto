@@ -460,7 +460,7 @@ def _segunda_lente(slug: str, bib: str, valor: str, sufijo: str = "__orden"):
 def test_la_extraccion_se_identifica_por_su_BIBCODE(toy_vault):
     """#374 — `contrast` la identificaba por `f.stem` y `harvest_views` por `data["bibcode"]`: dos
     consumidores del MISMO directorio con dos identidades. Es el defecto que #228 ya pagó una vez en
-    el otro sentido, y la conclusión de entonces fue mapear por el campo de adentro."""
+    el otro sentido, y la conclusión de entonces fue mapear por el campo de adentro.  @inv INV-103"""
     _segunda_lente("ica_ruido", "2013Voss", LARGA)
     assert [b for b, _ in ct.extracciones("ica_ruido")] == ["2013Voss"]
 
@@ -541,7 +541,7 @@ def test_una_entrada_del_log_MARCADA_no_mueve_el_rc(toy_vault, capsys):
     """#386 — #238 manda MARCAR la entrada refutada (`⚠ corregido …`), no editarla, y `contrast`
     no conocía la marca: una entrada corregida exactamente como el framework manda seguía
     bloqueando el gate obligatorio de #323 **para siempre**, y la única salida era editar el `log`
-    — justo lo que #238 prohíbe. No había salida dentro de las reglas."""
+    — justo lo que #238 prohíbe. No había salida dentro de las reglas.  @inv INV-100"""
     _extraccion("ica_ruido", "2013Voss")
     _extraccion("ica_ruido", "2004Davies", ground_truth=[
         {"que": "otro", "valor": "algo completamente distinto", "linea": "p. 9"}])
