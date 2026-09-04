@@ -417,6 +417,52 @@ cuesta 0 (#362) — el orden de gasto está en `docs/operacion.md`.
 > Medido en el template (2026-09-04): smoke real con los dos DOI del issue, 874 KB y 750 KB, el
 > segundo sólo por Europe PMC. La instancia mide lo suyo y lo deja en el `log`.
 
+## 2h · v1.191.0-v1.197.0 (T5: #354 · #360 · #384 · #382 · #357 · #353 · T6: #377 · #376) — temas de método y config
+
+**Dos cosas para correr, una para decidir, y un hallazgo real que el lint va a bloquear.**
+
+- **`check_sources.py` (#353): correlo sobre cada tema con `sources:` y mirá el bloqueante.**
+  Nuevo script; cruza lo que cada item de `sources:` declara (`author`/`year`/`title`) contra
+  Crossref por `doi` o, sin registro (los `10.48550/arXiv.*`) o sin `doi`, contra la primera
+  página del PDF. Registra el veredicto en `registro/<slug>.yaml` (`fuentes_chequeadas`) y no toca
+  `themes.yaml`. Hasta que corra, el lint reporta cada fuente como *nunca cruzada* (backlog):
+
+  ```bash
+  for t in ica ica-ruido icasso; do python scripts/check_sources.py $t; done
+  python scripts/lint.py
+  ```
+
+  Medido en dry-run sobre tus 52 fuentes (2026-09-04): **1 bloqueante** — `2006VanDerBaan` declara
+  «VanDerBaan» y Crossref dice **Vrabie** para ese DOI (es la atribución falsa de #353, repetida);
+  se corrige la entrada (autor, clave si corresponde vía `--rename-paper … --fix-key`, #355) o el
+  DOI. Backlog esperado: 3 títulos con variantes (`2013Waldmann`, `2006Tichavsky`, `2010ComonJutten`),
+  `2008Yang` año 2008 vs 2007 (online-first: no bloquea), 6 `no-evaluable` (5 arXiv sin PDF legible
+  + `2001LevineDomany` sin registro) y **14 primeras páginas** que no confirman apellido o año
+  (capítulos, preprints): ésas se cierran abriendo el PDF; si la declaración es correcta, quedan
+  como backlog declarado — el carril PDF nunca bloquea.
+- **`fetch_pdf` ya corrió para #358; nada nuevo acá.** `--restamp-alcance` ahora también lee
+  `extra_core` (#382): corré `python scripts/make_notes.py --restamp-alcance` (esperado: 0 notas
+  si ninguna entrada de `extra_core` declara `unidad_cita`; la tesis `2021PhDT.........6D` de
+  `rv-doppler` es la candidata — declarale `unidad_cita: pagina` + `alcance:` en su entrada y
+  re-corré; el prompt de extracción va a ramificar).
+- **`rv-doppler` deja de mentir en `source:` (#384):** ponele `source: ads` (o borrá `source`) y
+  dejá `query: null` + `extra_core:`; sacá `sources: []`. `ingest_theme.py rv-doppler` corre la
+  sub-cadena `--extra-only` sin el aviso de tema mixto, y el tema sale de `cascada_sin_correr`
+  (#361) porque ya no es off-ADS.
+- **Dos categorías de backlog nuevas que van a aparecer:** `tema_ejes_heredados` (#360) para todo
+  tema con `facet:` y sin `ejes:` (esperado: `ica`, `ica-ruido`, `icasso` si no los declararon), y
+  `vista_ejes_faltantes` pasa a decir *no evaluable* para las vistas de esos temas. Se cierra
+  declarando `ejes:` (los del contraste 3b), aunque sea `ejes: []`.
+- **Cambia una pantalla, no un artefacto:** el probe y la corrida imprimen SIEMPRE `fq: … (del
+  objetivo | del tema | heredado | null — no acota)` (#354), y el probe del tema con
+  `fundacional_min_citas` muestra el rango de citas de ADS y avisa si el `fq` no es astro (#357).
+  La decisión `fundacional_fuente: openalex` queda abierta en `docs/decisiones-abiertas.md`.
+- **Regla de oro (#377):** desde una instancia se abre el issue y se para ahí. Sin efecto en
+  contenido.
+
+> Medido en el template (2026-09-04): las 52 fuentes de `Almagesto-Tesis` en dry-run (sin escribir
+> nada en la instancia); la instancia mide con el registro escrito y lo deja en el `log`.
+
 ## 3 · Cierre
 
 ```bash
