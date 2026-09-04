@@ -1142,7 +1142,7 @@ puede apagar por flag** (D-48: `--no-triage` se eliminó — permitía que un ca
 volviera a entrar en silencio). La sección `busquedas` la escribe `query_ads` al cerrar cada corrida: `fecha`, `query` efectiva
 —en una estrella la arma `build_query` y antes se tiraba—, **`fq`** (#238/#295: el **resuelto**, o
 sea el del tema si lo declara — es la mitad más restrictiva del filtro, y sin él un «0 encontrados»
-**no es una medición reproducible**, aunque se use como premisa de decisiones de curación),
+**no es una medición reproducible**; ⛔ y la pantalla lo imprime SIEMPRE con procedencia, #354),
 `rows`, `n_found`, `n_total`, `n_core`,
 `n_candidates`, `n_dropped`, `truncated`, `almagesto_version`, **`bibcodes`** —lo que hace posible
 la unión de D-28— y **`lente`** —facetas/`require`/`min_facets` vigentes al correr, contra lo que

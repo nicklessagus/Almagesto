@@ -117,6 +117,9 @@ papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** 
      `abs:"radial velocity" OR abs:"stellar activity"`). **Ojo:** la query de prueba **no es** la regex
      — es solo para traer una muestra de papers del área y ver cómo los corta el clasificador.
    - Correr: `python scripts/query_ads.py --probe "<query de prueba>" --rows 50`
+     ⛔ La primera línea es `fq: … (del objetivo | del tema | heredado | null — no acota)` (#354): un
+     `0 papers` sin ese filtro a la vista NO es «no está en ADS» — seis ceros medidos eran
+     `database:astronomy` aplicado en silencio.
    - Leer el corte que imprime: `N CORE / no-core`, el top por citas con marcador `[CORE/—]` + qué
      tópicos matchearon, y el **contraste de la regla de combinación** que cierra el reporte: sin regla
      declarada lista qué cortaría **cada faceta si fuera la obligatoria** (`require: [rv] → 123 CORE

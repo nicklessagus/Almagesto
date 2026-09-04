@@ -2516,3 +2516,70 @@ def test_probe_calla_si_el_OBJETIVO_no_acota(toy_classifier, monkeypatch, capsys
     meta = {"title": "ICA", "facet": "independent component", "fundacional_min_citas": 100}
     qa.print_probe("q", _recs_ica(), theme_meta=meta)
     assert "sin `search_fq`" not in capsys.readouterr().out
+
+
+# ── #354 · el `fq` se declara SIEMPRE, con su procedencia ────────────────────────────────────────
+
+def test_fq_line_declara_valor_y_procedencia():
+    """#354 — un filtro que decide el universo no puede depender de si difiere de otro para ser
+    visible. Cuatro casos, cuatro procedencias distintas; `null` se dice, no se calla."""
+    assert qa.fq_line("database:astronomy", None) == "fq: database:astronomy (del objetivo)"
+    assert qa.fq_line("database:physics", {"search_fq": "database:physics"}) == \
+        "fq: database:physics (del tema)"
+    assert qa.fq_line(None, {"search_fq": None}) == "fq: null — no acota (del tema)"
+    assert qa.fq_line("database:astronomy", {"facet": "ica"}) == \
+        "fq: database:astronomy (heredado del objetivo: el tema no declara `search_fq`)"
+    assert qa.fq_line(None, None) == "fq: null — no acota (del objetivo)"
+
+
+def test_probe_crudo_imprime_el_fq_que_aplico(toy_classifier, monkeypatch, capsys):
+    """#354 — seis probes con query cruda dieron cero y se leyeron como «no está en ADS»: era
+    `database:astronomy` del objetivo, aplicado en silencio. El falso negativo de #238, repetido
+    con su doc delante y ya medido antes en un `STATUS.md` que afirmaba «0/8 del canon en ADS»."""
+    monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, **k: [])
+    assert run_main(monkeypatch, ["--probe", 'title:"Icasso"']) == 0
+    out = capsys.readouterr().out
+    assert "fq: database:astronomy (del objetivo)" in out, out
+    assert out.index("fq: ") < out.index(" CORE · "), "ANTES del conteo que ese fq produjo"
+
+
+def test_probe_del_tema_con_fq_heredado_lo_imprime_igual(toy_vault, monkeypatch, capsys):
+    """#354 — el `!=` suprimía la línea justo cuando el tema NO declaró el suyo, que es el caso
+    que produce el cero engañoso."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "facet": "independent component",
+                                         "query": 'abs:"independent component"'}})
+    monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, **k: [])
+    monkeypatch.setattr(sys, "argv", ["query_ads.py", "ica", "--theme", "--probe"])
+    assert qa.main() == 0
+    assert "fq: database:astronomy (heredado del objetivo" in capsys.readouterr().out
+
+
+def test_la_corrida_del_tema_imprime_el_fq_aunque_coincida(toy_vault, toy_classifier, no_sleep,
+                                                            monkeypatch, capsys):
+    """#354 — misma regla en la corrida real (#238: la medición lleva su filtro), no sólo en el
+    probe: `n_found: 0` en el registro sin el `fq` a la vista no es reproducible."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "concept": "ica", "area": "methods",
+                                         "query": 'abs:"independent component"'}})
+    monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, **k: [])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
+    monkeypatch.setattr(sys, "argv", ["query_ads.py", "ica", "--theme"])
+    qa.main()
+    assert "fq: database:astronomy (heredado del objetivo" in capsys.readouterr().out
+
+
+def test_la_corrida_de_una_estrella_imprime_el_fq(toy_vault, toy_classifier, no_sleep, monkeypatch,
+                                                  capsys):
+    """#354 — y la estrella también: `busquedas[].fq` va al registro desde #238, pero la pantalla
+    donde se lee «0 encontrados» no lo decía."""
+    monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, **k: [])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
+    run_main(monkeypatch, ["test_star"])
+    assert "fq: database:astronomy (del objetivo)" in capsys.readouterr().out
+
+
+def test_el_sweep_imprime_el_fq(toy_vault, toy_classifier, no_sleep, monkeypatch, capsys):
+    """#354 — `--sweep` también reporta un conteo («N core NUEVOS») y también corre con el `fq`."""
+    mk_ads_json(toy_vault.ROOT, "test_star", ["2020dirA....1A"])
+    monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, **kw: [])
+    assert run_main(monkeypatch, ["test_star", "--sweep"]) == 0
+    assert "fq: database:astronomy (del objetivo)" in capsys.readouterr().out

@@ -121,6 +121,23 @@ ASTRO_FQ = cfg.ASTRO_FQ
 _FQ_DEFAULT = object()      # centinela: `fq=None` explícito (no acotar) ≠ no pasar `fq`
 
 
+def fq_line(fq: str | None, tema_meta: dict | None) -> str:
+    """The `fq` a run applied, with WHERE it came from — printed unconditionally (#354).
+
+    A filter that decides the universe cannot depend on differing from another filter to be
+    visible. Measured: six raw `--probe`s returned zero and read as «not in ADS»; all six were the
+    objective's `database:astronomy`, applied silently — the #238 false negative, repeated with
+    its own doc in front, after it had already produced a false «0/8 of the canon in ADS» in a
+    real `STATUS.md`. Four provenances: the objective's, the theme's own, the theme's INHERITED
+    (undeclared — the case that produces the misleading zero) and `null` (declared not to narrow)."""
+    valor = fq if fq is not None else "null — no acota"
+    if tema_meta is None:
+        return f"fq: {valor} (del objetivo)"
+    if "search_fq" in cfg.as_map(tema_meta):
+        return f"fq: {valor} (del tema)"
+    return f"fq: {valor} (heredado del objetivo: el tema no declara `search_fq`)"
+
+
 def search_fq(meta: dict | None = None) -> str | None:
     """La lente del BUSCADOR (`fq` de Solr): la del TEMA si la declara, si no la de `objective.yaml`.
 
@@ -753,6 +770,7 @@ def sweep_star(slug: str, rows: int) -> int:
         _listify_curado(meta.get("aliases"), "aliases")
     q = build_fulltext_filter(names)
     cfg.print_seguro(f"Barrido full-text (2b) de {name} — q: {q}")
+    cfg.print_seguro(f"  {fq_line(search_fq(), None)}")                      # #354: la medición lleva su filtro
     bmeta: dict = {}
     hits = query_ads(q, rows=rows, meta=bmeta)
     # Orden por citas/AÑO (#79 punto 1, política única en lib_config): este barrido existe para
@@ -1516,9 +1534,10 @@ def main() -> int:
         # `facet:` puede recuperarla desde ahí: es el mismo falso limpio que #208 cerró del lado de
         # la lente, sobreviviendo en la mitad más restrictiva del filtro.
         fq_probe = search_fq(tema_meta)
-        if tema_meta is not None and fq_probe != search_fq():
-            cfg.print_seguro(f"  (fq propio del tema: "
-                             f"{fq_probe if fq_probe is not None else 'null — no acota'})")
+        # #354 — SIEMPRE, con procedencia: la línea salía sólo si el tema difería del objetivo, o
+        # sea callaba en los dos casos que producen el cero engañoso (probe crudo; tema con el fq
+        # heredado). Va ANTES del conteo, porque el conteo ya salió de este filtro (#238).
+        cfg.print_seguro(f"  {fq_line(fq_probe, tema_meta)}")
         return print_probe(q, query_ads(q, rows=args.rows, fq=fq_probe), theme_meta=tema_meta)
 
     if args.dry_run:   # offline: sólo re-clasifica lo que ya está en build/ (no toca ADS)
@@ -1558,8 +1577,7 @@ def main() -> int:
         # registro. Resolverla adentro de `query_ads` como antes dejaba al tema con el `fq` global:
         # un tema de método buscando en un universo que excluye su literatura por construcción.
         fq_run = search_fq(meta)
-        if fq_run != search_fq():
-            cfg.print_seguro(f"  fq propio del tema (#295): {fq_run if fq_run is not None else 'null (no acota)'}")
+        cfg.print_seguro(f"  {fq_line(fq_run, meta)}")                       # #354: siempre
         if args.extra_only:
             # Tema MIXTO (off-ADS + extra_core): sin `query` no hay búsqueda ni chaining — la
             # única fuente ADS es la curación manual de `extra_core` (el bloque de abajo).
@@ -1587,6 +1605,7 @@ def main() -> int:
         q = build_query(names)
         chain_filter = build_fulltext_filter(names)
         cfg.print_seguro(f"Consultando ADS: {name}  (nombres: {', '.join(names)})")
+        cfg.print_seguro(f"  {fq_line(fq_run, None)}")                        # #354: siempre
         # `query`: la Solr EFECTIVA, tal cual se manda (#64). En un tema la escribe el usuario en
         # themes.yaml (versionada); en una estrella la arma build_query y hasta ahora se tiraba →
         # no había forma de reconstruir sobre qué universo afirma la ficha.
