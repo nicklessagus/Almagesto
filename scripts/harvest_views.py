@@ -606,6 +606,34 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
             cfg.print_seguro(f"  ⛔ {archivo.name}: declara `fuente: pdf` y no hay PDF en "
                              f"`raw/pdfs/**/{bib}.pdf` — la vista diría que se leyó el paper")
             continue
+        # #359 — el cruce contra el `.txt` corría sobre la NOTA, así que una cita mal transcrita AL
+        # LEER EL PDF pasaba por acá sin que nadie la mirara y sólo se cazaba si llegaba a una ficha
+        # (medido: 2 de 265 valores de una ingesta, las dos nacidas en la extracción). Importa dónde
+        # se caza: una extracción no se regenera (#311) y alimenta a N sujetos, así que verla en el
+        # origen es verla UNA vez en lugar de una por nota. ⛔ Se LLAMA a la regla, no se
+        # re-implementa (#324), y AVISA sin rechazar: el `.txt` es índice degradado (#205) y
+        # rechazar produciría falsos negativos sobre extracciones correctas — la misma asimetría
+        # que #213 ya eligió para la salvedad falsa.
+        # ⛔ Va ANTES de tocar la nota, y eso lo decidió una bóveda real: abajo del estampado,
+        # el `continue` del rechazo de la vista corre primero, así que en una bóveda donde
+        # todas las extracciones se rechazan —187 con `vista.fecha` vacía: el cosechador
+        # propone la de hoy y la vista estampada dice otra— el cruce NO SE ALCANZA NUNCA.
+        # El cruce compara la EXTRACCIÓN con su `.txt` y no mira la nota: su población es
+        # «toda extracción admisible», no «toda nota que cambió».
+        _lecturas = cfg.fulltext_readings(bib)
+        for _v in cfg.as_list(data.get("ground_truth")):
+            for _q in (cfg.quotes_in(str(cfg.as_map(_v).get("valor") or "")) if _lecturas else []):
+                # ⚠ Sin guarda de «ya está en el `.txt`»: una cita presente ENTERA no puede acusar
+                # —el prefijo común la cubre toda y termina en letra, así que la corta el borde de
+                # palabra—, y un condicional que no decide nada es una regla escrita a medias
+                # (#319). En `contrast` el orden sí decide, porque ahí el veredicto es otro.
+                _ac = cfg.txt_accuses(_q, _lecturas)
+                if _ac:
+                    citas_dudosas.append((bib, _q))
+                    cfg.print_seguro(
+                        f"  ⚠ {bib}: el `.txt` trae el arranque de «{_q[:60]}…» y sigue distinto "
+                        f"(«…{_ac['cola_txt'][:60]}»). Son DOS lecturas del mismo PDF y la fuente es "
+                        f"el PDF: andá a la página antes de propagar esta cita (#359/#333)")
         # #230 — `txt` se CRUZA contra el disco, igual que `fuente` dos líneas más arriba. Se
         # estampaba lo que el extractor dijera (o el slug, por default), así que 9 notas de una
         # bóveda real declaraban `txt: ica` sin que existiera `raw/fulltext/ica/<bib>.txt` — el
@@ -680,28 +708,6 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
         for _detalle in split_salvedades(bib, data)[2]:
             salvedades_falsas.append((bib, _detalle))
             cfg.print_seguro(f"  ⛔ {bib}: salvedad FALSA, no se publica — {_detalle}")
-        # #359 — el cruce contra el `.txt` corría sobre la NOTA, así que una cita mal transcrita AL
-        # LEER EL PDF pasaba por acá sin que nadie la mirara y sólo se cazaba si llegaba a una ficha
-        # (medido: 2 de 265 valores de una ingesta, las dos nacidas en la extracción). Importa dónde
-        # se caza: una extracción no se regenera (#311) y alimenta a N sujetos, así que verla en el
-        # origen es verla UNA vez en lugar de una por nota. ⛔ Se LLAMA a la regla, no se
-        # re-implementa (#324), y AVISA sin rechazar: el `.txt` es índice degradado (#205) y
-        # rechazar produciría falsos negativos sobre extracciones correctas — la misma asimetría
-        # que #213 ya eligió para la salvedad falsa.
-        _lecturas = cfg.fulltext_readings(bib)
-        for _v in cfg.as_list(data.get("ground_truth")):
-            for _q in (cfg.quotes_in(str(cfg.as_map(_v).get("valor") or "")) if _lecturas else []):
-                # ⚠ Sin guarda de «ya está en el `.txt`»: una cita presente ENTERA no puede acusar
-                # —el prefijo común la cubre toda y termina en letra, así que la corta el borde de
-                # palabra—, y un condicional que no decide nada es una regla escrita a medias
-                # (#319). En `contrast` el orden sí decide, porque ahí el veredicto es otro.
-                _ac = cfg.txt_accuses(_q, _lecturas)
-                if _ac:
-                    citas_dudosas.append((bib, _q))
-                    cfg.print_seguro(
-                        f"  ⚠ {bib}: el `.txt` trae el arranque de «{_q[:60]}…» y sigue distinto "
-                        f"(«…{_ac['cola_txt'][:60]}»). Son DOS lecturas del mismo PDF y la fuente es "
-                        f"el PDF: andá a la página antes de propagar esta cita (#359/#333)")
         _enf = str(data.get("enfasis") or "").strip()
         if write_view_section(dest, sujeto, render_view(sujeto, data), theme=theme, force=force,
                               enfasis=_enf):

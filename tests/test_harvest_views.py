@@ -9,6 +9,7 @@ notas terminadas, con JSON perfectamente válido — o sea en silencio.
 """
 from __future__ import annotations
 
+import datetime as _dt
 import json
 from types import SimpleNamespace
 import sys
@@ -130,6 +131,39 @@ def test_el_aviso_del_txt_vuelve_a_salir_en_una_boveda_YA_COSECHADA(toy_vault, c
     out = capsys.readouterr().out
     assert "sin cambios" in out, "el escenario es una bóveda ya cosechada"
     assert "el `.txt`" in out, "el aviso NO puede depender de que la nota cambie"
+
+
+def test_el_aviso_del_txt_sale_AUNQUE_la_vista_se_RECHACE(toy_vault, capsys):
+    """El caso real que reportó quien migró la instancia, y que el test de «sin cambios» no cubría.
+
+    Sus 187 extracciones tienen `vista.fecha` vacía, así que el cosechador propone la de hoy, la
+    vista ya estampada dice otra, `upsert_view` **rehúsa** cambiar un valor escrito (#239) y el
+    `continue` del rechazo corre **antes** del cruce. Consecuencia medida: en una bóveda así,
+    re-correr el cosechador no muestra #359 sobre lo ya cosechado **nunca**.
+
+    El cruce no depende de la nota —compara la EXTRACCIÓN con su `.txt`—, así que va antes de tocar
+    la nota. Su población es «toda extracción admisible», no «toda nota que cambió»."""
+    v = {"sujeto": "Estrella Test", "tipo": "star", "txt": "test_star", "fuente": "abstract"}
+    d = extraccion(vista=dict(v), ground_truth=[
+        {"que": "velocidad", "linea": "412", "regimen": "", "segunda_mano": None,
+         "valor": "«Speed is, however, a crucial factor because we have to run the ICA algorithm "
+                  "many times and again»"}])
+    sembrar(toy_vault, d)
+    (cfg.FULLTEXT / "test_star").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "test_star" / f"{BIB}.txt").write_text(
+        "Speed is, however, a crucial factor because we have to run the ICA algorithm many times "
+        "which is why FastICA is very suitable for this purpose.", encoding="utf-8")
+    hv.harvest("test_star")                          # primera: estampa la vista con la fecha de hoy
+    capsys.readouterr()
+    # y ahora la vista queda declarando OTRA fecha, así que la segunda corrida la rechaza
+    mn.merge_frontmatter_list  # noqa: B018 — sólo para dejar claro de dónde sale el frontmatter
+    dest = cfg.PAPERS / f"{BIB}.md"
+    dest.write_text(dest.read_text(encoding="utf-8").replace(_dt.date.today().isoformat(),
+                                                             "2020-01-01"), encoding="utf-8")
+    hv.harvest("test_star")
+    out = capsys.readouterr().out
+    assert "RECHAZADAS" in out, "el escenario es el rechazo, no el «sin cambios»"
+    assert "el `.txt`" in out, "el cruce no puede depender de que la vista se pueda declarar"
 
 
 def test_el_SILENCIO_del_txt_sobre_una_cita_no_avisa(toy_vault, capsys):
