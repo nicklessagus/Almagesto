@@ -228,3 +228,47 @@ def test_el_abstract_invertido_se_rearma_en_orden():
 
 def test_sin_abstract_invertido_devuelve_cadena_vacia():
     assert oa.to_record(work())["abstract"] == ""
+
+
+# ── #362 · OpenAlex tiene PRESUPUESTO, y el framework lo trataba como gratis ──
+
+class BudgetResp(FakeResp):
+    """El 429 de presupuesto: `retry-after` con el segundo del reset y `remaining: 0`."""
+    def __init__(self):
+        super().__init__(429, None)
+        self.headers = {"x-ratelimit-remaining": "0", "retry-after": "10140",
+                        "x-ratelimit-cost-required-usd": "0.0001"}
+        self.text = '{"message": "Rate limit exceeded — Insufficient budget. Resets at midnight UTC."}'
+
+
+def test_el_429_por_PRESUPUESTO_no_se_reintenta(monkeypatch):
+    """#362 — el backoff de `_get` razona sobre 5xx en rachas, que es otra cosa: la cuota no se
+    recupera esperando, y reintentar consume los MAX_ATTEMPTS contra un error que no va a ceder.
+    La distinción es un header (`retry-after` trae el segundo del reset), no el texto."""
+    esperas = []
+    monkeypatch.setattr(oa, "_sleep", esperas.append)
+    fake_get(monkeypatch, [BudgetResp(), BudgetResp(), BudgetResp()])
+    with pytest.raises(oa.BudgetExhausted, match="AGOTADO"):
+        oa._get({"filter": "doi:10.1/a"})
+    assert esperas == [], "no durmió ni una vez: no es throttling"
+
+
+def test_el_429_por_RITMO_sigue_reintentando(monkeypatch):
+    """El control: el 429 clásico (sin `remaining: 0`) es el caso que el backoff existe para cubrir."""
+    monkeypatch.setattr(oa, "_sleep", lambda s: None)
+    fake_get(monkeypatch, [FakeResp(429), FakeResp(200, {"results": [], "meta": {}})])
+    assert oa._get({"filter": "x"}) == {"results": [], "meta": {}}
+
+
+def test_refs_of_cae_a_la_entidad_unica_con_la_cuota_en_cero(monkeypatch):
+    """#362 — `refs_of` resuelve DOIs conocidos y usaba el endpoint MEDIDO (lista); cada DOI es
+    exactamente lo que `works/doi:<doi>` devuelve a costo 0. Medido con la cuota en cero: 3 de 3,
+    91 referencias. El anclaje que crasheaba en #361 habría funcionado ese día."""
+    monkeypatch.setattr(oa, "_sleep", lambda s: None)
+    llamadas = []
+    fake_get(monkeypatch, [BudgetResp(),
+                           FakeResp(200, work("W1", "10.1/a", refs=("https://openalex.org/W9",))),
+                           FakeResp(200, work("W2", "10.1/b", refs=()))], calls=llamadas)
+    refs, no_res = oa.refs_of(["10.1/a", "10.1/b"])
+    assert refs == {"10.1/a": ["W9"], "10.1/b": []} and no_res == []
+    assert sum("/doi:" in u for u in llamadas) == 2, "una request por DOI, por el endpoint gratis"

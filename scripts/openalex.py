@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 import time
 import urllib.parse
 
@@ -152,6 +153,42 @@ def to_record(work: dict) -> dict:
 _sleep = time.sleep
 
 
+class BudgetExhausted(RuntimeError):
+    """The daily OpenAlex budget is at zero: waiting does not help, and retrying wastes attempts."""
+
+
+def _budget_exhausted(r) -> bool:
+    """Is this 429 the BUDGET (`x-ratelimit-remaining: 0`, «Insufficient budget») or the rate?"""
+    headers = {k.lower(): v for k, v in (getattr(r, "headers", None) or {}).items()}
+    if headers.get("x-ratelimit-remaining", "").strip() == "0":
+        return True
+    return "insufficient budget" in str(getattr(r, "text", "") or "").lower()
+
+
+def _budget_message(r) -> str:
+    """The message for a budget 429: says WHEN it comes back, from `retry-after`, not «try later»."""
+    headers = {k.lower(): v for k, v in (getattr(r, "headers", None) or {}).items()}
+    secs = headers.get("retry-after", "").strip()
+    cuando = (f"vuelve en {int(secs) // 3600} h {(int(secs) % 3600) // 60} min (medianoche UTC)"
+              if secs.isdigit() else "vuelve a medianoche UTC")
+    return (f"OpenAlex: presupuesto diario AGOTADO — no es una caída y no se arregla esperando; "
+            f"{cuando}. Las entidades únicas (`works/doi:<doi>`) cuestan 0 y siguen andando")
+
+
+def entity_by_doi(doi: str) -> dict | None:
+    """ONE work by DOI via the single-entity endpoint, which OpenAlex prices at ZERO (#362).
+
+    Measured with the quota at zero: `works/doi:<doi>` answers 200 with `x-ratelimit-cost-usd: 0`,
+    while `works?filter=doi:A|B` (the list endpoint) answers 429. Same fields — `referenced_works`,
+    `cited_by_count` — so whatever only needs to RESOLVE known DOIs has a free path."""
+    url = f"{API}/doi:{urllib.parse.quote(_bare_doi(doi) or doi)}?{urllib.parse.urlencode({'select': SELECT})}"
+    r = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
+    if r.status_code == 404:
+        return None
+    r.raise_for_status()
+    return r.json()
+
+
 def _get(params: dict) -> dict:
     """GET con reintento ante 5xx/429 y espera creciente.
 
@@ -168,6 +205,12 @@ def _get(params: dict) -> dict:
     url = f"{API}?{urllib.parse.urlencode(params, safe=':|/.')}"
     for intento in range(MAX_ATTEMPTS):
         r = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
+        if r.status_code == 429 and _budget_exhausted(r):
+            # #362 — este 429 NO es throttling: es la CUOTA diaria (1000 créditos, $0.10) en cero, y
+            # no se recupera esperando. Reintentar con backoff creciente consume los MAX_ATTEMPTS
+            # contra un error que no va a ceder — tiempo perdido y ruido en el log. La distinción
+            # es un header, no adivinar por el texto: `retry-after` trae el segundo exacto del reset.
+            raise BudgetExhausted(_budget_message(r))
         if r.status_code < 500 and r.status_code != 429:
             r.raise_for_status()
             return r.json()
@@ -207,8 +250,18 @@ def refs_of(idents: list) -> tuple[dict, list]:
     refs: dict[str, list] = {}
     for i in range(0, len(dois), BATCH):
         lote = dois[i:i + BATCH]
-        data = _get({"filter": "doi:" + "|".join(lote), "per-page": PER_PAGE})
-        for w in data.get("results", []):
+        try:
+            data = _get({"filter": "doi:" + "|".join(lote), "per-page": PER_PAGE})
+            works_ = data.get("results", [])
+        except BudgetExhausted as exc:
+            # #362 — `refs_of` RESUELVE DOIs conocidos, no busca nada: cada uno es exactamente lo
+            # que el endpoint de entidad única devuelve GRATIS. El lote es 1 request por 200 DOIs y
+            # esto es 1 por DOI —más tráfico, cero presupuesto—, y es el canje correcto cuando el
+            # recurso que se agota es el presupuesto. Sin esto el anclaje de `discover` (#361) y
+            # `citation_index` quedaban en la cola del recurso escaso sin necesitarlo.
+            print(f"  ⚠ {exc} → resolviendo {len(lote)} DOI(s) por entidad única", file=sys.stderr)
+            works_ = [w for w in (entity_by_doi(d) for d in lote) if w]
+        for w in works_:
             k = _bare_doi(w.get("doi"))
             if k in lote:
                 refs[k] = [r.split("/")[-1] for r in (w.get("referenced_works") or [])]

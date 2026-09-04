@@ -280,6 +280,14 @@ python scripts/make_notes.py --restamp-headers    # cabecera a las notas que nac
 python scripts/make_notes.py --fix-header-order  # #378: el aviso de capa LLM, debajo de la cabecera
 python scripts/verify_fanout.py <nota> --out build/<slug>/verif/r1   # #369: prompts por fuente + manifiesto
 python scripts/make_notes.py --rename-paper VIEJO NUEVO --fix-key   # #355: clave errónea, no alias
+
+> **OpenAlex tiene presupuesto (#362):** 1000 créditos por día (US$ 0,10), reset a medianoche UTC.
+> Lo cobran los endpoints de **lista y búsqueda** (`works?filter=…`, `works?search=…`); la **entidad
+> única** (`works/doi:<doi>`) cuesta **0**. Orden de gasto, medido: el slice de `seed_terms` de
+> `discover --theme` es el único consumidor grande (13 términos × páginas de 200, y quemó el día
+> corrido dos veces); `resolve_pdf` y `refs_of` (el anclaje, `citation_index`) van por la entidad
+> única y andan con la cuota en cero. Un 429 «Insufficient budget» **no se reintenta**: el mensaje
+> dice cuándo vuelve.
 python scripts/make_notes.py --restamp-keywords   # D-17: `keywords:` desde build/*/ads.json
 python scripts/make_notes.py --restamp-pdf-links  # #47: el link [📄 PDF] ↔ frontmatter `pdf`
 python scripts/make_notes.py --sync-mirror        # #70: campos espejo de NEA que quedaron en null
