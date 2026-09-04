@@ -612,6 +612,19 @@ OCR, o marcar `pending`).
   entrada del tema, **aunque sea `null`**. El aviso simétrico sale en
   `query_ads.py <slug> --theme --probe`, que es donde el corte se decide antes de pagar
   descargas (#208).
+- **`sources:` con autor o año que Crossref desmiente** (#353, `fuente_metadata_falsa`,
+  **bloqueante**) y **`sources:` sin cruzar o cruzada con duda** (#353, `fuente_metadata_dudosa`,
+  backlog): una fuente off-ADS declara su metadata a mano y nada la cruzaba. Medido: una nota
+  publicaba **autor y título de otro paper** —clave sintética, `first_author`, `title` y hasta el
+  `motivo` derivados del NOMBRE DEL ARCHIVO del PDF—; sólo el `doi` y el PDF eran correctos. El
+  cruce lo hace `python scripts/check_sources.py <slug>` (Crossref por `doi`; sin registro o sin
+  `doi`, la primera página del PDF vía `pdftotext -f 1 -l 1`), corre al ingestar y deja el
+  veredicto en el registro con un snapshot de lo declarado; el lint lo lee **offline**. Severidad
+  medida sobre 52 fuentes reales: bloquea sólo **autor por Crossref** y **año por Crossref con
+  diferencia ≥ 2** (a ±1 es online-first vs impreso); título distinto, primera página que no
+  confirma (14 de 20 sin DOI: capítulos, preprints, `Hyv¨arinen`), no evaluable, nunca cruzada y
+  cruce anterior a un cambio de lo declarado son backlog con su motivo. **No reescribe**
+  `sources:`: se corrige la entrada (o se migra a `extra_core` si tiene bibcode ADS) y se re-corre.
 - **Tema de MÉTODO sin `ejes:`** (#360, `tema_ejes_heredados`): el simétrico literal del anterior
   sobre el otro eje de #307. Sin `ejes:` la extracción pregunta los del objetivo —los de una bóveda
   astro— a un tema de otra disciplina; medido: **6 de 8** facetas vacías en 12 extracciones y los

@@ -179,6 +179,35 @@ def stamp_corrections(path, fm: dict, body: str, corrections: list) -> None:
     stamp_fields(path, fm, body, {"corrections": corrections})
 
 
+def crossref_message(doi: str, headers: dict) -> tuple[dict | None, str]:
+    """Crossref `message` for a DOI → `(message | None, estado)`, with the same tolerant-network
+    contract as `crossref_retraction` (which is built on this): `ok` · `sin-registro` (404 is an
+    answer) · `error` (did not answer, 5xx, non-JSON — that DOI stays UNCHECKED). Shared with
+    `check_sources` (#353) so both cross the same record."""
+    for wait in (2, 6, None):
+        try:
+            resp = requests.get(CROSSREF.format(doi=doi), headers=headers, timeout=30)
+        except requests.RequestException:
+            if wait is None:
+                return None, "error"
+            time.sleep(wait)
+            continue
+        if resp.status_code == 404:
+            return None, "sin-registro"
+        if resp.status_code == 429 and wait is not None:
+            time.sleep(wait)
+            continue
+        if resp.status_code != 200:
+            return None, "error"
+        break
+    else:
+        return None, "error"
+    try:
+        return resp.json()["message"], "ok"
+    except (ValueError, KeyError):
+        return None, "error"
+
+
 def crossref_retraction(doi: str, headers: dict) -> tuple[dict | None, list, str]:
     """Consulta Crossref por DOI → `(retraction | None, soft_updates, estado)`.
 
@@ -196,28 +225,9 @@ def crossref_retraction(doi: str, headers: dict) -> tuple[dict | None, list, str
     - `"error"`   no contestó (red caída tras los retries, 5xx, cuerpo no-json). Ese paper quedó
       **sin chequear**: el llamador no puede reportarlo como limpio.
     """
-    for wait in (2, 6, None):
-        try:
-            resp = requests.get(CROSSREF.format(doi=doi), headers=headers, timeout=30)
-        except requests.RequestException:
-            if wait is None:
-                return None, [], "error"
-            time.sleep(wait)
-            continue
-        if resp.status_code == 404:
-            return None, [], "sin-registro"
-        if resp.status_code == 429 and wait is not None:
-            time.sleep(wait)
-            continue
-        if resp.status_code != 200:
-            return None, [], "error"
-        break
-    else:
-        return None, [], "error"
-    try:
-        msg = resp.json()["message"]
-    except (ValueError, KeyError):
-        return None, [], "error"
+    msg, estado = crossref_message(doi, headers)
+    if msg is None:
+        return None, [], estado
     retraction, soft = None, []
     # H-10: Crossref es una API ajena — `updated-by` "debería" ser una lista de mapas, pero un
     # registro hostil (mapa en vez de lista, o una lista con un elemento que no es mapa) hacía

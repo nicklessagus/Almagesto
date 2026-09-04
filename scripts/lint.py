@@ -1123,6 +1123,13 @@ SEV_WARN = "warn"                  # heurística de alta señal: se revisa a man
 SEV_BACKLOG = "backlog"            # deuda visible: no invalida lo que hay
 
 
+def _year_of(v) -> int | None:
+    """Four-digit year inside a hand-written `year` value, or `None` — same rule as
+    `check_sources.declared_of`, so the snapshot in the registry compares equal."""
+    m = re.search(r"\b(1[5-9]\d\d|20\d\d)\b", str(v or ""))
+    return int(m.group(1)) if m else None
+
+
 def discovery_state(descubrimientos: list) -> str | None:
     """Verdict on a theme's discovery runs (#361 b): `None` when the cascade ran and every backend
     answered at least once, else one of the three states, as a sentence.
@@ -1423,6 +1430,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     sweep_pendiente: list = []         # (slug, motivo) — #88: el barrido 2b no consta en el registro
     cascada_sin_correr: list = []      # (tema, motivo) — #361: el paso 0b nunca corrió, corrió vacío o cojo
     tema_ejes_heredados: list = []     # (tema, motivo) — #360: tema de método sin `ejes:` → lee con los del objetivo
+    fuente_metadata_falsa: list = []   # (key, motivo) — #353: autor/año declarados ≠ Crossref (atribución falsa publicada)
+    fuente_metadata_dudosa: list = []  # (key, motivo) — #353: título ≠, primera página no confirma, no evaluable o sin cruzar
     impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
     cond_sin_clasificar: list = []     # (stem, motivo) — #221: condición sin `acota:`/`contextualiza:`
     verif_truncada: list = []          # (stem, motivo) — #226: `Evidencia`/`Condición` cortada
@@ -4430,6 +4439,50 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                      f"({' | '.join(sorted(VIA_FUENTE_OK))}) — un typo deja el campo mudo para la "
                      f"única pregunta que existe para consumirlo"))
 
+    # #353 — lo que un item de `sources:` DECLARA contra lo que su `doi` o su PDF dicen. El cruce
+    # lo hace `check_sources` (red; corre al declarar y a pedido) y deja el veredicto en el
+    # registro versionado con un snapshot de lo declarado: acá se lee, offline. Medido en una bóveda
+    # real (52 fuentes): 1 autor falso por Crossref (la atribución que #353 cazó, derivada del
+    # nombre del archivo), 1 año a ±1 (online-first: NO es falso), 3 títulos con variantes, y la
+    # primera página del PDF sin el apellido o el año en 14 —capítulos, preprints, `Hyv¨arinen`—:
+    # por eso SÓLO bloquea autor por Crossref y año por Crossref con diferencia ≥ 2; lo demás es
+    # backlog con su motivo (D-43: el no evaluable se dice, no es verde).
+    for _slug, _meta in ({} if cfg.themes_error() else (cfg.load_themes() or {})).items():
+        _chequeadas = cfg.as_map(cfg.load_registro(_slug).get("fuentes_chequeadas"))
+        for _it in cfg.as_list(cfg.as_map(_meta).get("sources")):
+            if not isinstance(_it, dict) or not (_k := str(_it.get("key") or "").strip()):
+                continue
+            _rec = cfg.as_map(_chequeadas.get(_k))
+            _cmd = f"`python scripts/check_sources.py {_slug}`"
+            if not _rec:
+                fuente_metadata_dudosa.append(
+                    (_k, f"lo declarado en `sources:` de `{_slug}` nunca se cruzó contra su `doi`/PDF "
+                         f"(#353) → {_cmd}"))
+                continue
+            _decl_hoy = {"author": str(_it.get("author") or "").strip(),
+                         "year": _year_of(_it.get("year")),
+                         "title": str(_it.get("title") or "").strip()}
+            _decl_reg = cfg.as_map(_rec.get("declarado"))
+            if {k: _decl_reg.get(k) for k in _decl_hoy} != _decl_hoy:
+                fuente_metadata_dudosa.append(
+                    (_k, f"lo declarado cambió desde el cruce del {_rec.get('fecha')} → {_cmd}"))
+                continue
+            _v, _via, _det = str(_rec.get("veredicto") or ""), str(_rec.get("via") or ""), str(_rec.get("detalle") or "")
+            if _v == "ok":
+                continue
+            _bloquea = _via == "crossref" and (
+                _v == "autor" or (_v == "anio" and abs(int(_decl_hoy["year"] or 0)
+                                                    - int(cfg.as_map(_rec.get("encontrado")).get("year") or 0)) >= 2))
+            if _bloquea:
+                fuente_metadata_falsa.append(
+                    (_k, f"{_det} (tema `{_slug}`, cruce del {_rec.get('fecha')}) → corregí la entrada de "
+                         f"`sources:` (o migrala a `extra_core` si tiene bibcode ADS) y re-corré {_cmd}; "
+                         f"si el DOI es el equivocado, corregí el DOI"))
+            else:
+                fuente_metadata_dudosa.append(
+                    (_k, f"[{_via}] {_v}: {_det} (tema `{_slug}`, {_rec.get('fecha')}) → abrí la fuente y "
+                         f"decidí; re-corré {_cmd} tras corregir"))
+
     # categorías que NO se pudieron evaluar: se omiten del reporte en vez de mostrar un "(0)" que
     # se leería como veredicto (el adversario que D-43 nombra: el cero inventado).
     suprimidas = set()
@@ -4709,6 +4762,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('version_publicada', '🕳 La nota se apoya en el PREPRINT habiendo versión publicada (#298, backlog)', SEV_BACKLOG, tuple(version_publicada), poblacion='papers'),
         Categoria('status_apilado', '🕳 `STATUS.md` apilado como bitácora: es ESTADO, se reescribe (#302, backlog)', SEV_BACKLOG, tuple(status_apilado), poblacion='config'),
         Categoria('alcance_desfasado', '🕳 `alcance`/`unidad_cita` de la nota ≠ el declarado en `sources[]` (#312, backlog)', SEV_BACKLOG, tuple(alcance_desfasado), poblacion='papers'),
+        Categoria('fuente_metadata_falsa', '⛔ `sources:` declara un autor o un año que Crossref DESMIENTE para ese `doi` (#353): atribución falsa publicada', SEV_BLOQUEANTE, tuple(fuente_metadata_falsa), poblacion='temas'),
+        Categoria('fuente_metadata_dudosa', '🕳 `sources:` sin cruzar contra su `doi`/PDF, o cruzada con título distinto, primera página que no confirma o no evaluable (#353, backlog)', SEV_BACKLOG, tuple(fuente_metadata_dudosa), poblacion='temas'),
         Categoria('tema_ejes_heredados', '🕳 Tema de MÉTODO sin `ejes:`: lee con los ejes del objetivo, que son los de una bóveda astro (#360, backlog)', SEV_BACKLOG, tuple(tema_ejes_heredados), poblacion='temas'),
         Categoria('cascada_sin_correr', '🕳 Tema off-ADS/mixto cuya cascada de descubrimiento (paso 0b) nunca corrió, corrió vacía o con backends caídos (#361, backlog)', SEV_BACKLOG, tuple(cascada_sin_correr), poblacion='temas'),
         Categoria('tema_fq_heredado', '🕳 Tema de MÉTODO sin `search_fq`: hereda el del objetivo, que excluye su literatura server-side (#351, backlog)', SEV_BACKLOG, tuple(tema_fq_heredado), poblacion='temas'),

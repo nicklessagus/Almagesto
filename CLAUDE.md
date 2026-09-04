@@ -1213,11 +1213,12 @@ Escribir el valor del otro carril hace que el loader **rechace duro**; lo vigila
 doc↔código.
 
 En `sources:`, `via` es **vocabulario cerrado y BINARIO** (#206): `usuario` (lo trajo una persona) ·
-`descubrimiento` (lo propuso la cascada de `discover`). Mide **quién decidió**, y eso no tiene
-tercer valor. De qué documento salió lo lleva **`motivo`**, obligatorio. El lint **bloquea** la
-entrada sin `via` o sin `motivo`, el `via` fuera del vocabulario (typo) y el valor **retirado** (con
-mensaje propio: un typo se corrige, un retiro se traduce). ⚠ El PDF que el usuario aporta para
-cerrar un `pending_source` **no** necesita valor propio: ese paper ya entró con su `via`.
+`descubrimiento` (lo propuso la cascada de `discover`). Mide **quién decidió**; no hay tercer valor.
+De qué documento salió lo lleva **`motivo`**, obligatorio. El lint **bloquea** la entrada sin `via`
+o sin `motivo`, el `via` fuera del vocabulario y el valor **retirado**. ⚠ El PDF que cierra un
+`pending_source` no necesita `via` propio: ya entró con el suyo. ⛔ **Y lo declarado se CRUZA
+contra su `doi` o la primera página del PDF al ingestar (`check_sources`, #353):** autor/año
+desmentidos por Crossref **bloquean**, el resto es backlog; registra y no reescribe `sources:`.
 
 ⛔ **El carril off-ADS tiene salida hacia la ingesta** (#111): `python scripts/triage.py <slug>
 --accept-source <doi> --via <via> --reason "<motivo>"` arma la entrada completa —metadata real de

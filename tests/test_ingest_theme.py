@@ -227,7 +227,7 @@ def test_offads_mixto_extra_core_corre_subcadena_ads(toy_vault, fake_run, fake_n
     assert run_main(monkeypatch) == 0
     assert [c[0] for c in fake_run.calls] == \
         ["fetch_web.py", "query_ads.py", "fetch_arxiv.py", "fetch_pdf.py",
-         "make_notes.py", "extract_fulltext.py", "check_retractions.py"]
+         "make_notes.py", "extract_fulltext.py", "check_sources.py", "check_retractions.py"]
     assert ("query_ads.py", "--theme", "gp", "--extra-only") in fake_run.calls
     assert ("make_notes.py", "--theme", "gp") in fake_run.calls
 
@@ -275,7 +275,8 @@ def test_offads_pending_deriva_sin_fallar(toy_vault, fake_run, fake_notes, monke
     assert run_main(monkeypatch) == 0
     key, kw = fake_notes.webs[0]
     assert key == "1999Paywall" and kw["pending"] == "paywall"
-    assert fake_run.calls == [("check_retractions.py", "--slug", "gp")]   # doi → chequeo igual
+    assert fake_run.calls == [("check_sources.py", "gp"),                   # #353: lo declarado se cruza
+                              ("check_retractions.py", "--slug", "gp")]   # doi → chequeo igual
     out = capsys.readouterr().out
     assert "Fuentes PENDIENTES" in out and "10.1/x" in out
 

@@ -7231,3 +7231,68 @@ def test_vista_ejes_faltantes_es_NO_EVALUABLE_si_el_tema_hereda_los_ejes(toy_vau
     hallazgos = [m for n, m in lint.collect().por_clave("vista_ejes_faltantes").items
                  if n == "2020ejeX...1..1X"]
     assert len(hallazgos) == 1 and "no contesta `activity`" in hallazgos[0], hallazgos
+
+
+# ── #353 · lo declarado en `sources:` contra lo que dice su `doi` ────────────────────────────────
+
+def _tema_con_fuente(**item):
+    base = {"key": "2011Yang", "doi": "10.1371/x", "author": "Yang", "year": 2011,
+            "title": "RAICAR-N", "via": "usuario", "motivo": "m"}
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "concept": "ica", "area": "methods",
+                                         "source": "local-pdfs", "sources": [{**base, **item}]}})
+
+
+def _registro_fuente(via="crossref", veredicto="autor", detalle="declarado «Yang», Crossref dice «Pendse»",
+                     declarado=None, encontrado=None):
+    cfg.save_registro("ica", {"slug": "ica", "fuentes_chequeadas": {"2011Yang": {
+        "key": "2011Yang", "fecha": "2026-09-04", "via": via, "doi": "10.1371/x",
+        "declarado": declarado or {"author": "Yang", "year": 2011, "title": "RAICAR-N"},
+        "encontrado": encontrado or {"family": "Pendse", "year": 2011, "title": "A Simple…"},
+        "veredicto": veredicto, "detalle": detalle}}})
+
+
+def test_autor_desmentido_por_crossref_bloquea(toy_vault):
+    """#353 — medido: una nota publicaba autor y título de OTRO paper, derivados del nombre del
+    archivo. Sólo el `doi` y el PDF eran correctos. Es la regla de método nº 4 en su forma pura."""
+    _tema_con_fuente(); _registro_fuente()
+    cat = lint.collect().por_clave("fuente_metadata_falsa")
+    assert [n for n, _m in cat.items] == ["2011Yang"] and cat.severidad == lint.SEV_BLOQUEANTE
+    assert cat.poblacion == "temas"
+    assert lint.collect().por_clave("fuente_metadata_dudosa").items == ()
+
+
+def test_anio_a_uno_es_backlog_y_a_dos_bloquea(toy_vault):
+    """#353 — medido: un año a ±1 es online-first vs impreso (Crossref «issued» 2007, la revista
+    2008): no es falso. A ≥2 sí."""
+    _tema_con_fuente(year=2008); _registro_fuente(veredicto="anio", detalle="2008 vs 2007",
+                                                  declarado={"author": "Yang", "year": 2008, "title": "RAICAR-N"},
+                                                  encontrado={"family": "Yang", "year": 2007, "title": "RAICAR-N"})
+    assert lint.collect().por_clave("fuente_metadata_falsa").items == ()
+    assert len(lint.collect().por_clave("fuente_metadata_dudosa").items) == 1
+    _registro_fuente(veredicto="anio", detalle="2008 vs 2005",
+                     declarado={"author": "Yang", "year": 2008, "title": "RAICAR-N"},
+                     encontrado={"family": "Yang", "year": 2005, "title": "RAICAR-N"})
+    assert len(lint.collect().por_clave("fuente_metadata_falsa").items) == 1
+
+
+def test_el_carril_pdf_nunca_bloquea(toy_vault):
+    """#353 — medido: la primera página no confirma apellido o año en 14 de 20 fuentes sin DOI
+    (capítulos, preprints, `Hyv¨arinen`): evidencia débil, backlog con motivo."""
+    _tema_con_fuente(doi=None); _registro_fuente(via="pdf", veredicto="autor", detalle="no está en la primera página")
+    assert lint.collect().por_clave("fuente_metadata_falsa").items == ()
+    hallazgos = [m for _n, m in lint.collect().por_clave("fuente_metadata_dudosa").items]
+    assert len(hallazgos) == 1 and "[pdf] autor" in hallazgos[0]
+
+
+def test_fuente_nunca_cruzada_o_cruce_viejo_es_backlog_con_el_comando(toy_vault):
+    """#353 — D-43: sin cruce no hay verde. Y si lo declarado cambió desde el cruce, el veredicto
+    guardado habla de otra declaración."""
+    _tema_con_fuente()
+    hallazgos = [m for _n, m in lint.collect().por_clave("fuente_metadata_dudosa").items]
+    assert len(hallazgos) == 1 and "nunca se cruzó" in hallazgos[0] and "check_sources.py ica" in hallazgos[0]
+    _registro_fuente(veredicto="ok", detalle="")
+    assert lint.collect().por_clave("fuente_metadata_dudosa").items == ()
+    _tema_con_fuente(author="Pendse")          # se corrigió la entrada: el cruce viejo ya no vale
+    hallazgos = [m for _n, m in lint.collect().por_clave("fuente_metadata_dudosa").items]
+    assert len(hallazgos) == 1 and "cambió desde el cruce" in hallazgos[0]
+    assert lint.collect().por_clave("fuente_metadata_falsa").items == ()

@@ -465,6 +465,13 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
     # retracciones (Crossref) — una fuente retractada silenciosa rompe la frontera dura igual.
     # Con extra_core también corre: los papers ADS del tema mixto traen DOI. Sólo los papers de
     # ESTE tema (--slug: sources + extra_core); el barrido completo es pasada periódica (maintain).
+    # #353 — lo DECLARADO en `sources:` se cruza contra su `doi` (Crossref) o la primera página
+    # del PDF, al declarar. Medido: una nota publicaba autor y título de otro paper, derivados del
+    # NOMBRE DEL ARCHIVO. El script registra y propone; no reescribe `sources:`. El lint lee el
+    # registro (offline) y bloquea autor/año discrepantes por Crossref.
+    if sources:
+        if run("check_sources.py", slug):
+            cfg.print_seguro("  ⚠ check_sources falló: las fuentes quedan SIN cruzar (el lint lo reporta)")
     if any(s.get("doi") for s in sources) or extra or meta.get("query"):
         _cierre_retracciones(slug)
     else:

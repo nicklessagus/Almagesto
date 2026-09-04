@@ -337,6 +337,12 @@
 ## 🕳 `alcance`/`unidad_cita` de la nota ≠ el declarado en `sources[]` (#312, backlog) (0)
 > sobre 60 notas de `papers/`
 
+## ⛔ `sources:` declara un autor o un año que Crossref DESMIENTE para ese `doi` (#353): atribución falsa publicada (0)
+> sobre 0 temas de `themes.yaml`
+
+## 🕳 `sources:` sin cruzar contra su `doi`/PDF, o cruzada con título distinto, primera página que no confirma o no evaluable (#353, backlog) (0)
+> sobre 0 temas de `themes.yaml`
+
 ## 🕳 Tema de MÉTODO sin `ejes:`: lee con los ejes del objetivo, que son los de una bóveda astro (#360, backlog) (0)
 > sobre 0 temas de `themes.yaml`
 

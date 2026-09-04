@@ -516,6 +516,12 @@ Qué cambia respecto del flujo ADS de arriba:
   copia de cada `pdf` a `vault/raw/pdfs/<slug>/<key>.pdf` (nota con el campo `pdf` ya linkeado) y
   `extract_fulltext.py`. `--force` re-baja/re-copia **fuentes**, nunca pisa notas. Los bullets de
   abajo documentan las piezas por si hay que correr algo a mano.
+  ⛔ **`title`/`author`/`year` salen del DOCUMENTO, no del nombre del archivo (#353).** Medido: una
+  entrada declaró autor, título, clave y `motivo` a partir de `RAICAR-N.pdf`, y el paper era de
+  otros autores. La cadena corre `check_sources.py` al ingestar (Crossref por `doi`; si no, la
+  primera página del PDF), registra el veredicto y el lint bloquea autor/año desmentidos por
+  Crossref. Antes de declarar: `pdftotext -f 1 -l 1 <pdf> -` y leé la primera página. Si el
+  paper **tiene bibcode ADS** no va en `sources:`: va en `extra_core` (ADS trae la metadata).
 - **Fuente = PDFs locales y/o web:**
   - **PDFs** que provee el usuario → copiarlos a `vault/raw/pdfs/<slug>/` (git-lfs) renombrados a la **clave de
     cita** (abajo); `python scripts/extract_fulltext.py <slug>` los pasa a `vault/raw/fulltext/<slug>/` (es
