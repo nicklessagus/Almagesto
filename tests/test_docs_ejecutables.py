@@ -560,10 +560,16 @@ def test_el_grafo_no_dibuja_como_estructura_lo_que_el_lint_no_cuenta():
 
     ⚠ No se arregla sacando los wikilinks: el índice se materializó (#237) **para** ser navegable.
     Es display, y por eso el filtro es un default que el usuario borra en dos clics."""
+    # #376 (3) — Obsidian REESCRIBE este archivo cuando el usuario toca los filtros del grafo, así
+    # que sólo se mira la clave que el framework escribe (`search`), y su ausencia se dice con el
+    # remedio en vez de morir con un `KeyError` que no nombra la causa.
     graph = json.loads((RAIZ / "vault" / ".obsidian" / "graph.json").read_text(encoding="utf-8"))
+    search = str(graph.get("search") or "")
     for excluido in ("wiki/log.md", "wiki/index.md"):
-        assert f"-path:{excluido}" in graph["search"], (
-            f"el grafo dibuja {excluido} como estructura; #249 ya declaró que esas aristas no lo son")
+        assert f"-path:{excluido}" in search, (
+            f"el grafo dibuja {excluido} como estructura; #249 ya declaró que esas aristas no lo son. "
+            f"Si Obsidian reescribió `vault/.obsidian/graph.json` al tocar los filtros, restauralo "
+            f"(`git checkout vault/.obsidian/graph.json`) o volvé a poner `-path:{excluido}`")
 
 
 # ── #339 · los flags de `tools/` y a quién se le atribuyen ──────────────────────────────────────

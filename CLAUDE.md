@@ -89,9 +89,10 @@ no puede condicionarla por remoto, así que el driver que protege contra `upstre
 silencio** lo que traiga `origin` —la otra máquina—; sin registrarlo, ese merge conflictúa y las dos
 versiones quedan visibles. El lint **bloquea** al clon que lo tiene puesto.
 **Si una operación revela una mejora
-de framework** (skill nuevo, fix de script, regla), anotala como backlog en `vault/STATUS.md`/`vault/wiki/log.md` y
-aplicala en el template — no la inlines acá. *(Si estás trabajando en el repo template `Almagesto` mismo,
-editar framework **es** la tarea; esta regla rige para las instancias.)*
+de framework**, **abrí el issue en el template y pará ahí (#377)**: anotá el nº en
+`vault/STATUS.md`/`log.md` y seguí. La instancia **no commitea framework**; el cambio se implementa
+en una sesión **del template**, no desde una bóveda. *(En el repo template mismo, editar
+framework **es** la tarea.)*
 
 ## ⛔ Frontera dura — la bóveda es SÓLO bibliografía (regla #0, no negociable)
 
