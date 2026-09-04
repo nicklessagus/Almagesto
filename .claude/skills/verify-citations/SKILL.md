@@ -112,8 +112,18 @@ fila de tabla con un valor, cada bullet o frase que asevera un hecho. Para cada 
   **flag "afirmación sin cita"** (hay que citarla o marcarla inferencia).
 
 ### 2. Fan-out: un subagente independiente por FUENTE
-Agrupar los pares **por bibcode** y lanzar un subagente por fuente, **en paralelo**
-(varios en un mismo mensaje). Cada uno juzga **todos los pares que citan su fuente**.
+
+```bash
+python scripts/verify_fanout.py <nota.md> --out build/<slug>/verif/<ronda>
+```
+
+⛔ **El reparto lo escribe el generador, no vos (#369).** Escribe un prompt por fuente en
+`<out>/prompts/<bibcode>.md` —sus pares con sus anclas, el fence generado y el path exacto de
+salida— y el **manifiesto** `<out>/_esperado.json` con el plan (`fuentes: {bibcode: n}`, `pares`).
+Era el único eslabón de esta cadena sin herramienta, y justo el que decide sobre qué corre el gate:
+medido, «TOTAL 60 en 16 fuentes» leído a ojo → **15** subagentes lanzados, y averiguar cuál faltaba
+costó un script ad-hoc. Lanzás un subagente por fuente, **en paralelo** (varios en un mismo
+mensaje), cada uno con su prompt. Cada uno juzga **todos los pares que citan su fuente**.
 
 > ⚠ **Por fuente, no por par (#100).** Lo que hace fuerte al chequeo es el **aislamiento** —cada
 > verificador ve una sola fuente, sin memoria, sin otros papers— y agrupar por fuente lo conserva
@@ -343,8 +353,12 @@ contra el nº de fuentes.
 ⛔ **Y los dos conteos se corren, no se estiman (#259):**
 
 ```bash
-python scripts/check_verify_fanout.py build/<slug>/verif/<ronda> --esperados <nº de pares lanzados>
+python scripts/check_verify_fanout.py build/<slug>/verif/<ronda>
 ```
+
+⛔ **Sin `--esperados`: la barrera lee el manifiesto (#369).** Rehúsa un `--esperados` que lo
+contradiga —un conteo a ojo equivocado en la misma dirección que la fuente que falta daba ✅ sobre un
+fan-out incompleto— y **nombra la fuente que falta**, que es lo que el conteo no puede.
 
 Valida **cada** `*.json` contra `VERIF_FANOUT_SCHEMA` **nombrando el archivo y la clave** que falta
 o sobra, y **aborta** si los pares devueltos no son los que se mandaron a juzgar (la red barata de

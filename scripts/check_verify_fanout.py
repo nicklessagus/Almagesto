@@ -49,6 +49,8 @@ def check_dir(directory: Path) -> tuple[dict, list[str]]:
     pairs, errors = {}, []
     for f in sorted(directory.glob("*.json")):
         name = f.name
+        if name == MANIFEST:
+            continue                    # #369: el manifiesto no es salida del fan-out
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
@@ -59,6 +61,34 @@ def check_dir(directory: Path) -> tuple[dict, list[str]]:
         if not errs:
             pairs[name] = len(data["pares"])
     return pairs, errors
+
+
+MANIFEST = "_esperado.json"
+
+
+def manifest_errors(pairs: dict, manifest: dict, expected: int | None) -> list[str]:
+    """What the directory is missing against the PLAN the generator wrote (#369).
+
+    Until now `--esperados` came from the operator reading «TOTAL 60 en 16 fuentes» and typing it —
+    the same class of hand count the barrier exists to catch. Measured: 15 subagents launched for
+    16 sources, `--esperados 60`; the count caught «faltan 1» and naming the missing source took an
+    ad-hoc script. With the manifest the barrier (a) refuses an `--esperados` that contradicts the
+    plan — a miscount in the same direction as a missing source would pass ✅ — and (b) names the
+    source, which is what the count cannot."""
+    out = []
+    plan = manifest.get("fuentes") or {}
+    if expected is not None and expected != manifest.get("pares"):
+        out.append(f"⛔ `--esperados {expected}` contradice el manifiesto ({manifest.get('pares')} pares "
+                   f"en {len(plan)} fuentes): el plan lo escribió el generador, no se transcribe")
+    devueltas = {Path(n).stem for n in pairs}
+    for bib, n in plan.items():
+        if bib not in devueltas:
+            out.append(f"⛔ falta la fuente `{bib}` ({n} par(es)): nunca se lanzó, o su subagente no "
+                       f"escribió el JSON")
+        elif pairs.get(f"{bib}.json") != n:
+            out.append(f"⛔ `{bib}.json` devuelve {pairs.get(f'{bib}.json')} par(es) y el plan le "
+                       f"mandó {n}")
+    return out
 
 
 def pair_count_errors(pairs: dict, expected: int) -> list[str]:
@@ -105,8 +135,21 @@ def main() -> int:
               file=sys.stderr)
         return 1
 
-    if args.esperados is not None:
+    manifest_path = directory / MANIFEST
+    if manifest_path.is_file():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            errors.append(f"{MANIFEST}: no parsea — {exc}")
+            manifest = {}
+        if manifest:
+            errors += manifest_errors(pairs, manifest, args.esperados)
+            errors += pair_count_errors(pairs, int(manifest.get("pares") or 0))
+    elif args.esperados is not None:
         errors += pair_count_errors(pairs, args.esperados)
+    else:
+        print("⚠ sin manifiesto (`_esperado.json`) ni `--esperados`: la forma se valida, el CONTEO no "
+              "— generá la ronda con `scripts/verify_fanout.py` para que la barrera sepa el plan")
 
     if errors:
         print(f"\n⛔ {len(errors)} hallazgo(s) — el consumidor NO puede derivar trabajo de esto:")

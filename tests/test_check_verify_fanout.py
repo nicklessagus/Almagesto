@@ -103,3 +103,39 @@ def test_pair_count_errors_cuenta_solo_lo_que_cumple_y_lo_declara():
     assert cvf.pair_count_errors({"a.json": 2}, 2) == []
     (msg,) = cvf.pair_count_errors({"a.json": 2}, 5)
     assert "2" in msg and "5" in msg and "1 archivo" in msg
+
+
+# ── #369 · el manifiesto: la barrera lee el PLAN en vez de un conteo a ojo ──
+
+def _manifiesto(d: Path, fuentes: dict):
+    (d / cvf.MANIFEST).write_text(json.dumps({"nota": "x.md", "fuentes": fuentes,
+                                              "pares": sum(fuentes.values())}), encoding="utf-8")
+
+
+def test_la_barrera_NOMBRA_la_fuente_que_falta(tmp_path):
+    """#369 — con `--esperados 60` la barrera decía «faltan 1»; saber CUÁL requirió un script
+    ad-hoc. El generador ya sabía el reparto: ahora lo escribe y la barrera lo lee."""
+    d = _dir_con(tmp_path, **{"2020ApJ...900....1A": _ok()})
+    _manifiesto(d, {"2020ApJ...900....1A": 1, "2011PLoSO...627594P": 1})
+    pairs, errors = cvf.check_dir(d)
+    errs = cvf.manifest_errors(pairs, json.loads((d / cvf.MANIFEST).read_text()), None)
+    assert any("falta la fuente `2011PLoSO...627594P`" in e for e in errs), errs
+
+
+def test_un_esperados_que_contradice_el_manifiesto_se_RECHAZA(tmp_path):
+    """El hueco simétrico y silencioso: un `--esperados` mal contado en la MISMA dirección que la
+    fuente que falta habría dado ✅ sobre un fan-out incompleto. El plan lo escribió el generador;
+    no se transcribe."""
+    d = _dir_con(tmp_path, **{"2020ApJ...900....1A": _ok()})
+    _manifiesto(d, {"2020ApJ...900....1A": 1})
+    errs = cvf.manifest_errors(cvf.check_dir(d)[0], json.loads((d / cvf.MANIFEST).read_text()), 2)
+    assert any("contradice el manifiesto" in e for e in errs), errs
+
+
+def test_el_manifiesto_NO_cuenta_como_salida_del_fanout(tmp_path):
+    """Es un `*.json` en el mismo directorio y no tiene `pares`: sin el recorte, la barrera lo
+    reportaría como archivo malformado en cada ronda."""
+    d = _dir_con(tmp_path, **{"2020ApJ...900....1A": _ok()})
+    _manifiesto(d, {"2020ApJ...900....1A": 1})
+    pairs, errors = cvf.check_dir(d)
+    assert errors == [] and list(pairs) == ["2020ApJ...900....1A.json"]
