@@ -1012,6 +1012,12 @@ re-extraer el `.txt`.
    pares). Nunca trunca una cita, agrupa por campo, arrastra `linea`/`segunda_mano` y ⛔ **no le
    sirve al 3b lo que `--drop-core` sacó del sujeto (#329)** —declara cuántas excluyó, y
    `--incluir-dropeados` las muestra—. Propone: el inventario lo escribís vos.
+   ⛔ **Y para la PROSA, `--cita --grep <re>` (#385):** emite «valor» (loc) [[bibcode]] pegable, con
+   las comillas del extractor — es donde vive la mayoría de las citas y se transcribía a mano.
+   ⛔ **Agrupar N fuentes bajo un MECANISMO común exige haberlo visto en las N (#370):** la tesis de
+   conjunto puede ser cierta y el mecanismo falso para un miembro, y ahí la frase suena bien.
+   ⛔ **Al corregir, la primera opción es SACAR la parte equivocada, no reescribirla (#389):** los
+   defectos nacidos al corregir llegan con material AGREGADO, y `apply_fixes` lo avisa por bloque.
    ⛔ **La fila de `--filas` sale CON EL VALOR ADENTRO y NO SE RE-TIPEA (#322):** los 12 verdaderos
    positivos medidos eran de **copiado** —6 de atribución, 6 de cola alterada—, y mover una cadena
    entre archivos lo hace perfecto un script y mal un LLM. Vos escribís **la glosa**; **una fila,

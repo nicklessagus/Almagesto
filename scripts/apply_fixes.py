@@ -68,6 +68,7 @@ class Result:
     skipped: list = field(default_factory=list)
     pairs_before: int = 0
     pairs_after: int = 0
+    added: list = field(default_factory=list)      # #389 · (bib, n, [bibcodes que el fix AGREGÓ])
 
 
 def normalise(s: str) -> str:
@@ -237,6 +238,16 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
     if res.failed:
         return res
 
+    # #389 — el contador SIMÉTRICO de #222. Aquél rehúsa si los pares BAJARON; éste AVISA si un
+    # bloque GANÓ citas: medido sobre 15 defectos de un concepto, 3 nacieron al corregir y los 3
+    # entraron con material agregado (una cita de otra fuente al final del párrafo, una narración
+    # sobre el segundo objeto, una atribución fabricada con cita verbatim y referente equivocado).
+    # No bloquea: a veces agregar una cita ES el arreglo (una `inferencia` que pasa a hecho citado).
+    for span, bib, n, new, kind in planned:
+        antes = set(lb._bibcodes("\n".join(lines[span[0]:span[1]])))
+        entran = sorted(set(lb._bibcodes("\n".join(new))) - antes)
+        if entran:
+            res.added.append((bib, n, entran))
     for span, bib, n, new, kind in sorted(planned, key=lambda x: -x[0][0]):
         if kind == "exact":
             lines[span[0]] = new[0]
@@ -290,6 +301,10 @@ def main(argv=None) -> int:
           + (f"   pares: {res.pairs_before} → {res.pairs_after}" if res.pairs_before else ""))
     for bib, n, motivo in res.failed:
         print(f"  ⛔ {bib} par {n}: {motivo}")
+    for bib, n, entran in res.added:
+        print(f"  ⚠ {bib} par {n}: el fix AGREGA {', '.join(f'[[{b}]]' for b in entran)} al bloque "
+              f"que repara. Los defectos nacidos al corregir llegan con material agregado (#389): "
+              f"¿es portante? La primera opción es SACAR la parte equivocada, no reescribirla.")
     if res.failed:
         print("⛔ NO se escribió nada: resolvé los que fallan primero.")
         return 1

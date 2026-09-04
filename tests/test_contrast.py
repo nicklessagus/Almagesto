@@ -341,6 +341,49 @@ def test_PARIDAD_con_el_lint_sobre_el_mismo_insumo(toy_vault, capsys):
     assert not de_contrast
 
 
+# ── #385 · el copiado sin re-tipear existía sólo para el INVENTARIO ──
+
+def test_cita_emite_el_fragmento_pegable_en_PROSA(toy_vault, capsys):
+    """#385 — `--filas` emite una fila de tabla, que sirve sólo al inventario. La síntesis es
+    PROSA, y en una ficha real es donde vive la mayoría de las citas: 33 de 43 en la medida. Para
+    ésas no había ningún comando que emitiera el fragmento, así que se transcribían a mano — el
+    gesto que #322 declara inseguro, y el que produjo el defecto que abrió el issue («methods would
+    produce» donde la fuente dice «methods of measurements would produce»).
+
+    Tres cosas que un LLM transcribiendo se come y el fragmento tiene que traer: la cadena tal
+    cual, el localizador, y el `[[bibcode]]` PEGADO (#325)."""
+    _extraccion("ica_ruido", "2013Voss", ground_truth=[
+        {"que": "blanqueo", "valor": f"«{LARGA}»", "linea": "p. 4", "segunda_mano": None}])
+    ct.main(["ica_ruido", "--cita", "--grep", "latent"])
+    out = capsys.readouterr().out
+    assert f"«{LARGA}» (p. 4) [[2013Voss]]" in out, out
+
+
+def test_cita_respeta_las_TRES_formas_de_comillas(toy_vault, capsys):
+    """#330 — las comillas son las del EXTRACTOR: `valor` llega entre «» (verbatim), con «» adentro
+    (glosa con la cita adentro) o sin «» (dato de tabla o prosa, que NO es verbatim). Emitir «» en el
+    tercer caso publicaría como palabras del paper lo que no lo es."""
+    _extraccion("ica_ruido", "2013Voss", ground_truth=[
+        {"que": "a", "valor": f"«{LARGA}»", "linea": "p. 1"},
+        {"que": "b", "valor": f"el extractor glosa: «{LARGA[:50]}» y sigue", "linea": "p. 2"},
+        {"que": "c", "valor": "K = 2.5 m/s, valor de tabla sin comillas", "linea": "p. 3"}])
+    ct.main(["ica_ruido", "--cita"])
+    out = capsys.readouterr().out
+    assert f"«{LARGA}» (p. 1) [[2013Voss]]" in out                       # verbatim: tal cual
+    assert f"el extractor glosa: «{LARGA[:50]}» y sigue (p. 2) [[2013Voss]]" in out   # la glosa, sin envolver
+    assert "K = 2.5 m/s, valor de tabla sin comillas (p. 3) [[2013Voss]]" in out
+    assert "«K = 2.5" not in out, "el script no agrega comillas: no sabe qué es verbatim"
+
+
+def test_cita_arrastra_la_marca_de_SEGUNDA_MANO(toy_vault, capsys):
+    """El valor que la fuente atribuye a otro trabajo no es de esa fuente (#103, el mecanismo de
+    error nº 1 medido): la prosa que pegue el fragmento no puede perder la marca."""
+    _extraccion("ica_ruido", "2013Voss", ground_truth=[
+        {"que": "a", "valor": f"«{LARGA}»", "linea": "p. 4", "segunda_mano": "Comon 1994"}])
+    ct.main(["ica_ruido", "--cita"])
+    assert "SEGUNDA MANO: Comon 1994" in capsys.readouterr().out
+
+
 # ── #373 · las citas de `## Vista` no las miraba NINGUNA capa ──
 
 def _nota_paper(bib: str, cuerpo: str):

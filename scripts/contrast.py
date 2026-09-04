@@ -137,7 +137,7 @@ def _mostrar(texto: str, completo: bool, limite: int) -> str:
 
 def imprimir(slug: str, *, campo: str | None, patron: str | None, paper: str | None,
              eje: str | None, completo: bool, limite: int, filas: bool,
-             incluir_dropeados: bool = False) -> int:
+             incluir_dropeados: bool = False, cita: bool = False) -> int:
     """The contrast view: group by FIELD, not by paper — contrasting is filtering, not reading 32
     files. Returns the number of lines printed.
 
@@ -198,7 +198,18 @@ def imprimir(slug: str, *, campo: str | None, patron: str | None, paper: str | N
             # medida salieron de un digest que no la imprimía.
             loc = v.get("linea") or "sin localizador"
             sm = f" · ⚠ SEGUNDA MANO: {v['segunda_mano']}" if v.get("segunda_mano") else ""
-            if filas:
+            if cita:
+                # #385 — el copiado sin re-tipear existía sólo para el INVENTARIO (`--filas`), y la
+                # síntesis es PROSA: en una ficha real, 33 de 43 citas. Para ésas el operador
+                # transcribía a mano, que es el gesto que #322 declara inseguro — y produjo el
+                # defecto que abrió el issue (dos palabras caídas al copiar). El fragmento trae lo
+                # que un LLM transcribiendo se come: la cadena TAL CUAL (#330: las comillas son las
+                # del extractor, el script no pone ninguna), el localizador, y el `[[bibcode]]`
+                # PEGADO (#325: entre la cita y el link, sólo el paréntesis del localizador — la
+                # marca de segunda mano va DESPUÉS del bibcode, no en el medio).
+                formas[quote_form(texto)] += 1
+                cfg.print_seguro(f"{texto} ({loc}) [[{bib}]]{sm}")
+            elif filas:
                 # Una fila, UNA fuente (#317): agrupar bibcodes bajo una glosa compartida es cómo
                 # se fabrican atribuciones — que sea una decisión explícita, no la salida natural.
                 # ⛔ #322 — la fila sale con el VALOR YA ADENTRO, con su `[[bibcode]]` y su
@@ -219,7 +230,7 @@ def imprimir(slug: str, *, campo: str | None, patron: str | None, paper: str | N
                 cfg.print_seguro(f"[[{bib}]] · {loc}{sm}\n    {mostrado}"
                                  + (f"\n    régimen: {regimen}" if regimen and not campo else ""))
             n += 1
-    if filas and n:
+    if (filas or cita) and n:
         cfg.print_seguro(f"\n  ⛔ La celda sale TAL CUAL del JSON, con su bibcode y su localizador: "
                          f"**no la re-tipees** — ahí es donde se pierden las citas (#322). Vos "
                          f"escribís la glosa (`{GLOSA}`) y decidís qué filas entran; si no entra en "
@@ -515,6 +526,9 @@ def main(argv=()) -> int:
                     help="los `ejes` de cada extracción (sin valor: todos)")
     ap.add_argument("--filas", action="store_true",
                     help="esqueleto de fila de tabla, UNA fuente por fila (#317)")
+    ap.add_argument("--cita", action="store_true",
+                    help="fragmento pegable en PROSA: «valor» (loc) [[bibcode]], con las comillas "
+                         "del extractor y el bibcode PEGADO (#385)")
     ap.add_argument("--limite", type=int, default=lb.TRUNCADO_CLAIM,
                     help="ancho máximo con --corto (default: el del bloque de verificación)")
     ap.add_argument("--corto", action="store_true",
@@ -557,7 +571,7 @@ def main(argv=()) -> int:
                          f"fan-out del paso 3 primero (`extraction_prompt.py {args.slug} <bib>`)")
         return 2
     n = imprimir(args.slug, campo=args.campo, patron=args.grep, paper=args.paper, eje=args.eje,
-                 completo=not args.corto, limite=args.limite, filas=args.filas,
+                 completo=not args.corto, limite=args.limite, filas=args.filas, cita=args.cita,
                  incluir_dropeados=args.incluir_dropeados)
     cfg.print_seguro(f"\n  {n} valor(es) — el contraste es FILTRAR, no leer los JSON enteros. "
                      f"⛔ La cita se copia ENTERA o se parafrasea sin comillas.")

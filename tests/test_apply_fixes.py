@@ -356,3 +356,36 @@ def test_el_reemplazo_exacto_es_VERBATIM_y_no_pasa_por_rewrap(tmp_path):
     res = af.apply(nota, d, write=True)
     assert res.applied == 1 and res.exact == 1, res
     assert largo in nota.read_text(encoding="utf-8").split("\n"), "se envolvió: no fue verbatim"
+
+
+# ── #389 · el contador SIMÉTRICO de #222 ──
+
+def test_un_fix_que_AGREGA_una_cita_al_bloque_AVISA(tmp_path, capsys):
+    """#389 — `apply` cuenta `pairs_of` antes y después y rehúsa si BAJARON (#222): una corrección
+    no puede hacer desaparecer una afirmación citada. Faltaba la otra mitad, por bloque: los
+    defectos que nacen AL CORREGIR llegan con material AGREGADO. Medido sobre 15 defectos de un
+    concepto de 22 fuentes, 3 nacieron corrigiendo y los 3 entraron con una cita o una narración
+    que el bloque no tenía —una de ellas, una atribución fabricada con cita verbatim y página
+    correcta y referente equivocado—. Y el control natural: cuando en vez de arreglar se SACÓ el
+    detalle, el defecto desapareció y no volvió.
+
+    No bloquea: a veces agregar una cita ES el arreglo (una `inferencia` que pasa a hecho citado).
+    Avisa, nombrando el bloque y la cita que entró."""
+    nota = _note(tmp_path, "# T\n\nLa señal es estelar [[2020A]].\n")
+    fix = _fixes(tmp_path, ("2020A", [{"n": 1, "viejo": "La señal es estelar [[2020A]].",
+                                      "nuevo": "La señal es estelar [[2020A]], como confirma [[2021B]]."}]))
+    r = af.apply(nota, fix, write=True)
+    assert r.applied == 1 and r.failed == []
+    assert r.added == [("2020A", 1, ["2021B"])], r.added
+
+
+def test_un_fix_que_SUSTRAE_no_avisa(tmp_path):
+    """El control: corregir por sustracción es la dirección que la medición favorece, y no puede
+    salir con un aviso — si avisara igual, el aviso no distinguiría nada. ⚠ Lo que se SACA es la
+    narración, no una cita: sacar un `[[bibcode]]` lo rehúsa #222, que es la otra mitad."""
+    nota = _note(tmp_path, "# T\n\nLa señal es estelar [[2020A]], y el paper la llama probable.\n")
+    fix = _fixes(tmp_path, ("2020A", [{"n": 1,
+                                      "viejo": "La señal es estelar [[2020A]], y el paper la llama probable.",
+                                      "nuevo": "La señal es estelar [[2020A]]."}]))
+    r = af.apply(nota, fix, write=True)
+    assert r.applied == 1 and r.added == []

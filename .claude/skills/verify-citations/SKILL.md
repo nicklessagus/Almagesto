@@ -374,6 +374,15 @@ completa, con la medición y los sistemas de referencia que etiquetan binario, e
 
 ### 4. Resolver lo que falla (no dejar pasar)
 
+⛔ **Y la primera opción es SACAR la parte equivocada, no reescribirla con más cuidado (#389).**
+Reemplazá sólo si esa cláusula es portante para lo que la nota afirma. Medido sobre 15 defectos
+de un concepto de 22 fuentes: 3 nacieron AL CORREGIR y los 3 llegaron con material agregado —una
+cita de otra fuente al final del párrafo, una narración sobre el segundo objeto, una atribución
+fabricada con cita verbatim y referente equivocado—; cuando en vez de arreglar se sacó el
+detalle, el defecto desapareció y no volvió. Una fila de régimen declara una condición; no narra
+el paper. `apply_fixes` avisa por bloque cuando un fix AGREGA citas: es la pregunta «¿es
+portante?» hecha por la máquina.
+
 ⛔ **Un hallazgo dice DÓNDE mirar, no QUÉ escribir.** La corrección se redacta **volviendo a la
 fuente**, no copiando el encuadre del reporte del verificador. Medido: en una sola sesión, dos
 correcciones hechas desde el reporte **introdujeron un error nuevo** — un resultado atribuido a
@@ -470,6 +479,11 @@ vigente»*), subida acá a la ronda **obligatoria**.
   se le pasa al verificador **`re_verificar[<bibcode>][].texto`** —el texto vigente— y **nada más de
   ese JSON**. `re_anclaje` lleva `ancla_vieja` y `veredicto`: eso es **la historia**, y es
   exactamente lo que no se le manda.
+- **Y esa historia se CONSUME al reconstruir el bloque (#366):** las filas nuevas pasan por
+  `lib_blocks.chain_from_reanchor(filas, re_anclaje)`, que le pone a la fila re-anclada su
+  cadena (`contradice→corregida`). Sin eso, un `contradice` resuelto corrigiendo la afirmación
+  cambia el ancla por definición, el viejo queda huérfano y el bloque publica **0 contradicen**
+  sobre una nota que afirmó lo contrario de su fuente — medido: 1 en 10 rondas, 62 huérfanos.
 - **Dirigir la pregunta, no la respuesta.** Si hace falta orientar la atención, se orienta al lugar
   donde mirar, nunca al veredicto esperado. Legítimo: *«prestá atención a qué método atribuye la
   fuente a cada valor de la Tabla 2»*. Prohibido: *«la nota dice que son estimados de calibración,

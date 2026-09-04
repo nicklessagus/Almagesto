@@ -54,7 +54,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import replace, dataclass
 from pathlib import Path
 
 import lib_config as cfg
@@ -1030,6 +1030,47 @@ def verdict_chain(verdict: str) -> list:
     one that says what the note actually did wrong."""
     partes = [x.strip(_ADORNO).strip() for x in _RESOLUCION_SEP.split(str(verdict or "").lower())]
     return [x for x in partes if x in VERDICTS]
+
+
+def chained_verdict(previous: str, current: str) -> str:
+    """The verdict a re-emitted row carries when its pair was RE-ANCHORED (#366).
+
+    ⛔ The chain of #232 only formed when the anchor survived. A `contradice` resolved by correcting
+    what the claim says changes the block, hence the anchor (D-4), and the next round verified a new
+    anchor that had never carried a `contradice`: the old one became an orphan and vanished from
+    the count. Measured on a note of 10 rounds: 1 `contradice` in round 1 → the final block said
+    **0 contradicen**, over 62 orphaned pairs accumulated by the same mechanism.
+
+    So the row re-emitted under the new anchor carries the history: `<previous first>→corregida`
+    when the previous verdict demanded action and the current one is clean. `verif_counts` still
+    partitions by the FIRST verdict —which says what the note actually got wrong— and `resueltos`
+    reads the annotation, so the block publishes `1 contradicen (1 resueltas)` instead of 0.
+
+    ⚠ Loosening the anchor is not an option (#224): the anchor stays the detector of expiry; this is
+    the history axis, which is what was missing."""
+    prev = verdict_chain(previous)
+    cur = verdict_chain(current)
+    if prev and prev[0] in ("contradice", "no-soportada") and cur == ["soportada"]:
+        return f"{prev[0]}→corregida"
+    return current
+
+
+def chain_from_reanchor(rows: list, re_anclaje: list) -> list:
+    """Apply `chained_verdict` to the rows whose anchor a re-anchoring proposal maps to (#366).
+
+    `re_anclaje` is what `reverify_subset --json` writes (#285): `ancla_vieja`, `ancla_nueva`,
+    `veredicto` and `bibcode` per pair. The old→new map already existed and was thrown away at the
+    only place it could have been used. ⛔ Never crosses `bibcode`: carrying a verdict from one
+    source to another would fabricate the attribution this framework most pursues."""
+    por_ancla = {(e.get("bibcode"), e.get("ancla_nueva")): e.get("veredicto", "")
+                 for e in re_anclaje if e.get("ancla_nueva")}
+    out = []
+    for r in rows:
+        prev = por_ancla.get((r.bibcode, r.anchor))
+        if prev:
+            r = replace(r, verdict=chained_verdict(prev, r.verdict))
+        out.append(r)
+    return out
 
 
 #: Las cinco columnas de la tabla de una vista. Las escribe `harvest_views.render_view` y las lee
