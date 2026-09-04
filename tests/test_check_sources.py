@@ -280,3 +280,17 @@ def test_una_url_se_cruza_contra_el_snapshot_web(toy_vault, monkeypatch):
     rec = cs.check_item({"key": "2015Shlens", "url": "https://x", "author": "Pendse", "year": 2014}, "ica")
     assert rec["via"] == "web" and rec["veredicto"] == "autor" and "snapshot" in rec["detalle"]
     assert cs.web_snapshot({"key": "2099Nada"}, "ica") is None
+
+
+def test_las_guardas_de_los_carriles_nuevos_no_miran_donde_no_deben(toy_vault, tmp_path, monkeypatch):
+    """Sin `pdf:` declarado no se globea la raíz del repo; una clave vacía no lee `<slug>/.txt`;
+    un `.txt` que no es snapshot web (es un PDF extraído) no entra al carril web."""
+    monkeypatch.setattr(cs.cfg, "ROOT", tmp_path)
+    (tmp_path / "trampa.bib").write_text("@article{x, author={Y}}", encoding="utf-8")
+    assert cs.bib_files_near({}) == [] and cs.bib_files_near({"pdf": ""}) == []
+    d = cfg.FULLTEXT / "ica"; d.mkdir(parents=True, exist_ok=True)
+    (d / ".txt").write_text(f"{cfg.FULLTEXT_WEB_MARK}\n# ---- contenido extraído (defuddle) ----\nx",
+                            encoding="utf-8")
+    assert cs.web_snapshot({"key": ""}, "ica") is None
+    (d / "2001HKO.txt").write_text("# Almagesto — fulltext por pdftotext\nprosa\n", encoding="utf-8")
+    assert cs.web_snapshot({"key": "2001HKO"}, "ica") is None
