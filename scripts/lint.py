@@ -1422,6 +1422,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     log_sin_entrada: list = []         # (slug, motivo) — #118: la cadena corrió y el log no lo dice
     sweep_pendiente: list = []         # (slug, motivo) — #88: el barrido 2b no consta en el registro
     cascada_sin_correr: list = []      # (tema, motivo) — #361: el paso 0b nunca corrió, corrió vacío o cojo
+    tema_ejes_heredados: list = []     # (tema, motivo) — #360: tema de método sin `ejes:` → lee con los del objetivo
     impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
     cond_sin_clasificar: list = []     # (stem, motivo) — #221: condición sin `acota:`/`contextualiza:`
     verif_truncada: list = []          # (stem, motivo) — #226: `Evidencia`/`Condición` cortada
@@ -1588,6 +1589,15 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     paper_abstracts: dict = {}         # {stem: abstract normalizado} — #216, duplicado sin doi/arxiv
     paper_lens_text: dict = {}         # {stem: título+abstract+keywords} — #291, el texto que lee la lente
     sin_extraer_por_sujeto: dict = {}  # nombre de sujeto → {stems core sin extraer} (D-13)
+    # #360 — qué tema es el sujeto de una vista `tipo: theme` (por slug, `concept` o `title`), para
+    # saber si su lente es heredada. Un mapa, una vez; el YAML roto lo reporta su propio detector.
+    _temas_por_sujeto: dict = {}
+    if not cfg.themes_error():
+        for _ts, _tm in (cfg.load_themes() or {}).items():
+            _tmm = cfg.as_map(_tm)
+            for _nombre in (_ts, _tmm.get("concept"), _tmm.get("title")):
+                if str(_nombre or "").strip():
+                    _temas_por_sujeto.setdefault(str(_nombre).strip().casefold(), _tmm)
     for f in files:
         try:
             text = open(f, encoding="utf-8").read()
@@ -2606,6 +2616,17 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                     _lente = [str(x).strip() for x in (_v.get("lente") or []) if str(x).strip()]
                     if not _lente or not _v.get("fecha"):
                         continue          # sin lente declarada o sin lectura, no hay qué comparar
+                    # #360 — con `ejes:` sin declarar la lente que la vista declara es la GLOBAL,
+                    # o sea el conjunto equivocado: comparar contra ella daba un cero limpio o
+                    # huecos sobre ejes que el tema nunca debió preguntar. D-43: no evaluable.
+                    _tm = _temas_por_sujeto.get(str(_v.get("sujeto") or "").strip().casefold()) \
+                        if _v.get("tipo") == "theme" else None
+                    if _tm is not None and cfg.theme_inherited_axes(_tm) is not None:
+                        vista_ejes_faltantes.append(
+                            (stem, f"no evaluable: la vista de «{_v['sujeto']}» se leyó con los ejes "
+                                   f"del objetivo porque el tema no declara `ejes:` — declaralos "
+                                   f"(#360) y este chequeo vuelve a comparar contra la lente propia"))
+                        continue
                     _faltan = [e for e in _lente if e not in _ejes_por_sujeto.get(_v["sujeto"], set())]
                     if _faltan:
                         vista_ejes_faltantes.append(
@@ -4491,6 +4512,25 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                  f"Medido en `ica`: 0 papers por la puerta fundacional con el fq heredado, 2 sin él "
                  f"(incl. Comon 1994) → declaralo en `themes.yaml`, aunque sea `null`"))
 
+    # #360 — el simétrico literal de #351 sobre el otro eje de #307: sin `ejes:` un tema de método
+    # LEE con los ejes de una bóveda astro (medido: 6 de 8 facetas vacías en 12 extracciones, y
+    # los ejes del tema desparramados en `aporte`). Backlog: heredar puede ser correcto; lo que
+    # no puede es ser invisible. `ejes: []` es decisión y calla.
+    if not cfg.themes_error():
+        for _slug, _tmeta in (cfg.load_themes() or {}).items():
+            try:
+                _ejes_h = cfg.theme_inherited_axes(_tmeta)
+            except Exception:                                   # noqa: BLE001 — objetivo ilegible: lo reporta su detector
+                continue
+            if _ejes_h is None:
+                continue
+            tema_ejes_heredados.append(
+                (f"tema `{_slug}`",
+                 f"declara `facet:` propia (tema de MÉTODO, D-26) y NO declara `ejes:`: la extracción "
+                 f"pregunta los del objetivo (`{', '.join(_ejes_h)}`), que son los de una bóveda "
+                 f"astro. Los ejes salen del contraste (3b) → declaralos en `themes.yaml`, aunque "
+                 f"sea `ejes: []`"))
+
     # #361 (b) — el paso 0b (la cascada de los tres backends, `discover.py --theme <slug>`) es
     # MANUAL por diseño (#95/#209) y el registro versionado guarda si corrió: `descubrimientos`.
     # Nadie lo leía. Medido: un tema cerrado entero —12 papers, 265 valores, 107 pares verificados,
@@ -4669,6 +4709,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('version_publicada', '🕳 La nota se apoya en el PREPRINT habiendo versión publicada (#298, backlog)', SEV_BACKLOG, tuple(version_publicada), poblacion='papers'),
         Categoria('status_apilado', '🕳 `STATUS.md` apilado como bitácora: es ESTADO, se reescribe (#302, backlog)', SEV_BACKLOG, tuple(status_apilado), poblacion='config'),
         Categoria('alcance_desfasado', '🕳 `alcance`/`unidad_cita` de la nota ≠ el declarado en `sources[]` (#312, backlog)', SEV_BACKLOG, tuple(alcance_desfasado), poblacion='papers'),
+        Categoria('tema_ejes_heredados', '🕳 Tema de MÉTODO sin `ejes:`: lee con los ejes del objetivo, que son los de una bóveda astro (#360, backlog)', SEV_BACKLOG, tuple(tema_ejes_heredados), poblacion='temas'),
         Categoria('cascada_sin_correr', '🕳 Tema off-ADS/mixto cuya cascada de descubrimiento (paso 0b) nunca corrió, corrió vacía o con backends caídos (#361, backlog)', SEV_BACKLOG, tuple(cascada_sin_correr), poblacion='temas'),
         Categoria('tema_fq_heredado', '🕳 Tema de MÉTODO sin `search_fq`: hereda el del objetivo, que excluye su literatura server-side (#351, backlog)', SEV_BACKLOG, tuple(tema_fq_heredado), poblacion='temas'),
         Categoria('sweep_pendiente', 'Barrido full-text (2b) sin rastro o truncado: no consta que la '

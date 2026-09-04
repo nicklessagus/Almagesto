@@ -7191,3 +7191,43 @@ def test_tema_ads_puro_no_tiene_paso_0b(toy_vault):
     ads` (o sin `source`) se descubre por `query_ads`, y exigirle la cascada inventaría deuda."""
     write_yaml(cfg.THEMES_YAML, {"gp": {"title": "GP", "concept": "gp", "query": "abs:gp"}})
     assert lint.collect().por_clave("cascada_sin_correr").items == ()
+
+
+# ── #360 · tema de MÉTODO sin `ejes:`: hereda los de una bóveda astro, y nadie avisaba ───────────
+
+def test_tema_de_metodo_sin_ejes_se_reporta_con_lo_que_hereda(toy_vault):
+    """#360 — simétrico literal de #351 (`tema_fq_heredado`). Medido: un tema cerrado con
+    `lint --cierre` en 0 sin proponer nunca sus `ejes:`, y la lectura siguiente preguntando
+    `rv`/`activity`/`planet`/`discovery` a papers de neuroimagen."""
+    write_yaml(cfg.THEMES_YAML, _tema_ica(search_fq=None))
+    cat = lint.collect().por_clave("tema_ejes_heredados")
+    hallazgos = [m for _n, m in cat.items]
+    assert any("NO declara `ejes:`" in h for h in hallazgos), hallazgos
+    assert cat.severidad == lint.SEV_BACKLOG and cat.poblacion == "temas"
+
+
+def test_ejes_DECLARADOS_incluido_vacio_callan_al_lint(toy_vault):
+    """#360 — `ejes: []` es decisión (D-43), no omisión."""
+    for ejes in ([], ["identificabilidad"]):
+        write_yaml(cfg.THEMES_YAML, _tema_ica(search_fq=None, ejes=ejes))
+        assert lint.collect().por_clave("tema_ejes_heredados").items == (), ejes
+
+
+def test_vista_ejes_faltantes_es_NO_EVALUABLE_si_el_tema_hereda_los_ejes(toy_vault):
+    """#360 — `vista_ejes_faltantes` compara los ejes que la vista contesta contra la lente que
+    declara; con `ejes:` sin declarar esa lente es la GLOBAL, o sea el conjunto equivocado, y el
+    chequeo devolvía un cero limpio (o huecos sobre ejes que el tema nunca debió preguntar). D-43:
+    no evaluable con su motivo, nunca verde."""
+    write_yaml(cfg.THEMES_YAML, _tema_ica(search_fq=None))
+    cuerpo = "## Vista — ica\n\n**Ejes:**\n- **rv:** nada.\n\nprosa.\n"
+    paper_con_vista(toy_vault, "2020ejeX...1..1X", thesis_links=["ica"], stars=[], no_sintetizado=None,
+                    vistas=[{"sujeto": "ica", "tipo": "theme", "fecha": "2026-08-27",
+                             "lente": ["rv", "activity"]}], body=cuerpo)
+    hallazgos = [m for n, m in lint.collect().por_clave("vista_ejes_faltantes").items
+                 if n == "2020ejeX...1..1X"]
+    assert len(hallazgos) == 1 and "no evaluable" in hallazgos[0] and "`ejes:`" in hallazgos[0], hallazgos
+    # con los ejes declarados el chequeo vuelve a comparar contra la lente propia
+    write_yaml(cfg.THEMES_YAML, _tema_ica(search_fq=None, ejes=["rv", "activity"]))
+    hallazgos = [m for n, m in lint.collect().por_clave("vista_ejes_faltantes").items
+                 if n == "2020ejeX...1..1X"]
+    assert len(hallazgos) == 1 and "no contesta `activity`" in hallazgos[0], hallazgos

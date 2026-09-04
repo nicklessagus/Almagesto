@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.191.0"
+ALMAGESTO_VERSION = "1.192.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -2139,6 +2139,25 @@ def theme_inherited_fq(meta: dict | None) -> str | None:
     if not tema.get("facet") or "search_fq" in tema:
         return None
     return objective_search_fq()
+
+
+def theme_inherited_axes(meta: dict | None) -> list | None:
+    """The global reading axes a METHOD theme silently inherits by not declaring `ejes:` (#360).
+
+    The literal mirror of `theme_inherited_fq` (#351): same signal of "method theme" (its own
+    `facet:`), same three states (D-43). #307 measured what the inheritance costs — a statistics
+    theme asked the axes of an astro vault: on one real theme **6 of 8** inherited facets came back
+    empty in nearly all 12 extractions, and the axes the theme needed were never asked, scattered
+    across `aporte` with no key to compare by. `search_fq` got its warning; `ejes:` got none, and
+    a theme closed with every gate green without ever proposing its axes.
+
+    Returns the inherited axis names when worth a warning, `None` otherwise: no `facet:` of its own
+    (not a method theme), or `ejes:` declared — **`[]` included**, the explicit decision not to ask
+    axes. Warns and decides nothing: the three states of `theme_axes` are unchanged."""
+    tema = as_map(meta)
+    if not tema.get("facet") or "ejes" in tema:
+        return None
+    return list(as_map(as_map(load_objective().get("relevance")).get("facets")))
 
 
 def yaml_error(path: Path, que: str) -> str | None:

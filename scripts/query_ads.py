@@ -1383,6 +1383,14 @@ def print_probe(q: str, recs: list, noncore_top: int = 25, theme_meta: dict | No
             f"lo que ese `fq` dejó afuera. Medido en `ica`:\n    0 papers por la puerta "
             f"fundacional con el fq heredado, 2 sin él (incl. Comon 1994, 2297 citas).\n"
             f"    → declaralo en la entrada del tema de `themes.yaml`, aunque sea `null` (#351).")
+    # #360 — el simétrico: sin `ejes:` la próxima LECTURA pregunta los ejes de la bóveda astro
+    # (medido: 6 de 8 facetas vacías en 12 extracciones). Propone; los ejes los firma el usuario.
+    if (ejes_h := cfg.theme_inherited_axes(theme_meta)) is not None:
+        cfg.print_seguro(
+            f"  ⚠ tema de MÉTODO sin `ejes:`: la extracción va a preguntar los ejes del objetivo "
+            f"({', '.join(ejes_h)}),\n    que son los de una bóveda astro. Los del tema salen del "
+            f"contraste (3b) y se declaran en `ejes:` de themes.yaml;\n    `ejes: []` es la decisión "
+            f"explícita de no preguntar ninguno (#360).")
     cfg.print_seguro(f"  {len(recs)} papers · {len(core)} CORE · {len(noncore)} no-core")
     # T-3: la lente es un PRESUPUESTO, no sólo un filtro. El probe existe para afinar el corte, y
     # el costo de leer lo que entra es la otra mitad de esa decisión (D-13 promete leer TODOS los

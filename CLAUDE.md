@@ -754,10 +754,10 @@ regla pasa a ser `core = facet propia Y (puerta 2 OR puerta 3)`:
 
 ⛔ **Y los EJES DE LECTURA también son del tema (#307): `ejes:` en `themes.yaml`.** #254 los
 derivó de la lente… global, así que a un tema de método se le preguntan los ejes de una bóveda astro
-(medido: 4 de 8 vacíos en 25 de 32 papers, y los que el tema necesitaba no se preguntaron nunca —
-volvieron desparramados en `aporte`, sin clave con la que compararlos). Mismos tres estados; la
-`lente` de la vista guarda **los ejes que se preguntaron**, o el diff de D-49 describiría otra
-lectura.
+(medido: 4 de 8 vacíos en 25 de 32 papers; los que el tema necesitaba nunca se preguntaron y
+volvieron desparramados en `aporte`). Mismos tres estados, **y sin declararlos el probe y el lint
+avisan, como con el `fq` (#360)**; la `lente` de la vista guarda **los ejes que se preguntaron**, o
+el diff de D-49 describiría otra lectura.
 ⛔ **Y el `search_fq` también es del tema (#295), porque es la mitad MÁS restrictiva.** D-26 hizo
 propia la lente y dejó global el `fq`, que acota **server-side, antes de traer nada**: un tema de
 otra disciplina se buscaba sobre un universo que **excluye su literatura por construcción**, y

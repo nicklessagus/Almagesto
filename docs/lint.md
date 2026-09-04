@@ -612,6 +612,15 @@ OCR, o marcar `pending`).
   entrada del tema, **aunque sea `null`**. El aviso simétrico sale en
   `query_ads.py <slug> --theme --probe`, que es donde el corte se decide antes de pagar
   descargas (#208).
+- **Tema de MÉTODO sin `ejes:`** (#360, `tema_ejes_heredados`): el simétrico literal del anterior
+  sobre el otro eje de #307. Sin `ejes:` la extracción pregunta los del objetivo —los de una bóveda
+  astro— a un tema de otra disciplina; medido: **6 de 8** facetas vacías en 12 extracciones y los
+  ejes del tema desparramados en `aporte`, y el tema cerrado con todos los gates en verde sin
+  proponerlos nunca. Backlog (heredar puede ser correcto); se cierra declarando `ejes:` en la
+  entrada del tema, **aunque sea `ejes: []`** (la decisión de no preguntar ninguno). El aviso
+  simétrico sale en el probe del tema. ⚠ Y `vista_ejes_faltantes` (#254/#270) sale **no evaluable**
+  para las vistas de un tema que hereda: compararía los ejes contestados contra la lente global,
+  que es el conjunto equivocado (D-43: un cero que nadie midió no es verde).
 - **Cascada de descubrimiento (paso 0b) sin correr, vacía o coja** (#361, `cascada_sin_correr`):
   el paso 0b —`discover.py --theme <slug>`, los tres backends— es **manual** por diseño (#95/#209)
   y el registro versionado guarda si corrió (`descubrimientos`), pero nadie lo leía. Medido: un

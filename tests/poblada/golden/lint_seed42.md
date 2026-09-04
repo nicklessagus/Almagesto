@@ -337,6 +337,9 @@
 ## 🕳 `alcance`/`unidad_cita` de la nota ≠ el declarado en `sources[]` (#312, backlog) (0)
 > sobre 60 notas de `papers/`
 
+## 🕳 Tema de MÉTODO sin `ejes:`: lee con los ejes del objetivo, que son los de una bóveda astro (#360, backlog) (0)
+> sobre 0 temas de `themes.yaml`
+
 ## 🕳 Tema off-ADS/mixto cuya cascada de descubrimiento (paso 0b) nunca corrió, corrió vacía o con backends caídos (#361, backlog) (0)
 > sobre 0 temas de `themes.yaml`
 

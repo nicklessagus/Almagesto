@@ -2928,3 +2928,26 @@ def test_note_paths_saca_los_hermanos_y_ordena(tmp_path):
         (tmp_path / n).write_text("x", encoding="utf-8")
     assert [p.name for p in cfg.note_paths(tmp_path)] == ["a.md", "b.md"]
     assert cfg.note_paths(tmp_path / "no-existe") == []
+
+
+# ── #360 · el simétrico de #351: los EJES que un tema de método hereda en silencio ───────────────
+
+def test_theme_inherited_axes_es_el_simetrico_de_theme_inherited_fq(toy_vault):
+    """#360 — #307 midió que a un tema de método se le preguntan los ejes de una bóveda astro (6 de
+    8 facetas vacías en 12 extracciones; los ejes que el tema necesitaba nunca se preguntaron).
+    `search_fq` tuvo su aviso (#351) y `ejes:` no. Mismos tres estados (D-43): sin declarar →
+    hereda y se DICE cuáles; declarado → calla; `ejes: []` → decisión explícita, calla."""
+    globales = list(cfg.as_map(cfg.as_map(cfg.load_objective().get("relevance")).get("facets")))
+    assert globales, "el toy_vault declara facetas globales"
+    assert cfg.theme_inherited_axes({"facet": "independent component"}) == globales
+    assert cfg.theme_inherited_axes({"facet": "ica", "ejes": []}) is None
+    assert cfg.theme_inherited_axes({"facet": "ica", "ejes": ["identificabilidad"]}) is None
+    assert cfg.theme_inherited_axes({"title": "GP", "query": "abs:x"}) is None, "sin facet propia no es tema de método"
+    assert cfg.theme_inherited_axes(None) is None
+
+
+def test_los_dos_heredados_comparten_la_senal_de_tema_de_metodo(toy_vault):
+    """#360 — paridad fq↔ejes: la señal de «tema de método» es UNA (la `facet:` propia). Si un día
+    divergen, un tema avisa por un eje y calla por el otro."""
+    for meta in ({"facet": "ica"}, {"title": "x"}, {"facet": "ica", "search_fq": None, "ejes": []}):
+        assert (cfg.theme_inherited_fq(meta) is None) == (cfg.theme_inherited_axes(meta) is None), meta

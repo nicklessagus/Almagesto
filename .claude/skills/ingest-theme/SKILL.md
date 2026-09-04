@@ -444,6 +444,11 @@ y los ejes que el tema necesitaba (identificabilidad, heterocedasticidad por ép
 compararlos entre papers. Preguntale al usuario qué quiere saber de este tema **antes** de la
 extracción: eso es la lista. Tres estados: sin declarar hereda las facetas globales, declarado son
 ésos, `ejes: []` es la decisión explícita de no preguntar ejes.
+⛔ **Red desde #360:** sin `ejes:` el probe del tema avisa y el lint lo reporta como backlog
+(`tema_ejes_heredados`), y `vista_ejes_faltantes` sale *no evaluable* para las vistas de ese tema
+—compararía contra la lente equivocada—. Medido: un tema cerrado con `lint --cierre` en 0 sin
+proponer nunca sus ejes, y la lectura siguiente preguntando `rv`/`activity`/`planet` a papers de
+neuroimagen (6 de 8 facetas vacías en 12 extracciones). El aviso propone; los ejes los firmás vos.
 
 ⚠ **Y una SEGUNDA lectura del mismo corpus con otra lente se pide, no se escribe a mano (#239/#308):**
 `python scripts/extraction_prompt.py <slug> <bibcode> --theme --enfasis "<lente>" --ejes a,b`. Es el

@@ -2583,3 +2583,24 @@ def test_el_sweep_imprime_el_fq(toy_vault, toy_classifier, no_sleep, monkeypatch
     monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, **kw: [])
     assert run_main(monkeypatch, ["test_star", "--sweep"]) == 0
     assert "fq: database:astronomy (del objetivo)" in capsys.readouterr().out
+
+
+# ── #360 · el probe del tema avisa los EJES heredados, como avisa el `fq` ────────────────────────
+
+def test_probe_avisa_los_ejes_HEREDADOS_de_un_tema_de_metodo(toy_classifier, monkeypatch, capsys):
+    """#360 — sin `ejes:` la próxima lectura pregunta `rv`, `activity`, `planet`… a papers de
+    neuroimagen. Medido: 6 de 8 facetas vacías en 12 extracciones, y los ejes del tema
+    desparramados en `aporte`. El aviso propone; los ejes los firma el usuario en `themes.yaml`."""
+    _objetivo_con_fq(monkeypatch, search_fq=None, facets={"rv": "rv", "activity": "activ"})
+    qa.print_probe("q", _recs_ica(), theme_meta={"title": "ICA", "facet": "independent component"})
+    out = capsys.readouterr().out
+    assert "sin `ejes:`" in out and "rv, activity" in out, out
+
+
+def test_probe_calla_los_ejes_con_ejes_DECLARADOS_incluido_vacio(toy_classifier, monkeypatch, capsys):
+    """#360 — `ejes: []` es la decisión explícita de no preguntar ejes (D-43): calla, como el
+    `search_fq: null` declarado."""
+    _objetivo_con_fq(monkeypatch, search_fq=None, facets={"rv": "rv"})
+    for ejes in ([], ["identificabilidad"]):
+        qa.print_probe("q", _recs_ica(), theme_meta={"title": "ICA", "facet": "ica", "ejes": ejes})
+        assert "sin `ejes:`" not in capsys.readouterr().out, ejes
