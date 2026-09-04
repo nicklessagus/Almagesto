@@ -483,8 +483,16 @@ def drop_core(slug: str, bibcodes: list, motivo: str) -> int:
         nota = cfg.PAPERS / f"{b.replace('/', '_')}.md"
         if nota.exists():
             fm = cfg.split_fm(nota.read_text(encoding="utf-8"))
+            # AUD-219 — `stars:` lleva el NOMBRE de la estrella y `thesis_links` el concepto del
+            # tema: el propio sujeto se nombra de tres maneras, y comparando sólo contra el slug
+            # contaba como «otro dueño» y el stub de una estrella no se borraba nunca.
+            propios = {slug, cfg.as_map(_tema_meta(slug)).get("concept") or slug}
+            try:
+                propios.add(cfg.star_by_slug(slug)[0])
+            except (KeyError, RuntimeError, OSError):
+                pass
             otros = [x for x in cfg.as_list(fm.get("stars")) + cfg.as_list(fm.get("thesis_links"))
-                     if x != slug and x != (cfg.as_map(_tema_meta(slug)).get("concept") or slug)]
+                     if x not in propios]
             # ⛔ `methods` es SUFICIENTE pero NO NECESARIO para «tiene extracción» (#188/#207).
             # `methods` es lo que la lectura ENCONTRÓ; `vistas[].fecha` es lo que dice que la
             # lectura OCURRIÓ, y sólo la escribe la lectura. La brecha entre las dos es exactamente
@@ -493,8 +501,7 @@ def drop_core(slug: str, bibcodes: list, motivo: str) -> int:
             # sólo el primer proxy la guarda protegía al revés de donde importa — medido en `ica`
             # (2026-08-29): borró 9 notas de ~100 líneas, cada una con la vista que documentaba POR
             # QUÉ el paper no era del tema, informando que no había extracción que perder.
-            extraida = bool(cfg.as_list(fm.get("methods"))) or any(
-                isinstance(v, dict) and v.get("fecha") for v in cfg.as_list(fm.get("vistas")))
+            extraida = cfg.note_has_reading(fm)
             if otros or extraida:
                 # No se borra: o pertenece a otro sujeto (la exclusión es del PAR paper-sujeto), o
                 # ya tiene extracción encima —trabajo pagado— y eso no se destruye en silencio.

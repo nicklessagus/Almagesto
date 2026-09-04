@@ -7309,7 +7309,7 @@ def test_el_bib_del_usuario_bloquea_como_crossref(toy_vault):
 
 # ── Auditoría 2026-09-04 · tests rojos (xfail estricto: pasan a rojo cuando el defecto se arregle) ──
 
-@pytest.mark.xfail(strict=True, reason="AUD-216 abierto (auditoría 2026-09-04): log_sin_entrada matchea el slug por substring")
+# AUD-216 — cerrado en la pasada de fix de la auditoría 2026-09-04
 def test_AUD216_el_log_no_da_por_escrita_una_entrada_que_solo_CONTIENE_el_slug(toy_vault, capsys):
     """AUD-216 — el predicado de `log_sin_entrada` es `x in ln` sobre el encabezado: un tema con
     slug corto (`ica`) queda «con entrada» por cualquier `## <fecha> — verificación …`."""

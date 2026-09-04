@@ -537,7 +537,7 @@ def test_el_detector_de_versiones_declara_su_poblacion(toy_vault, monkeypatch):
 
 # ── Auditoría 2026-09-04 · tests rojos (xfail estricto) ─────────────────────────────────────────
 
-@pytest.mark.xfail(strict=True, reason="AUD-222 abierto (auditoría 2026-09-04): aplicar_ground_truth persiste _cambios aunque la re-bajada haya fallado")
+# AUD-222 — cerrado en la pasada de fix de la auditoría 2026-09-04
 def test_AUD222_si_la_rebajada_falla_no_se_registra_un_cambio_que_no_ocurrio(toy_vault, monkeypatch):
     """AUD-222 — ignora el `returncode` de `fetch_ground_truth --force`: el JSON sigue con el valor
     viejo y `_cambios` dice que cambió, así que el lint pide `⚠desactualizado` sobre el vigente."""

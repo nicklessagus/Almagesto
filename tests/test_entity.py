@@ -373,7 +373,7 @@ def test_rename_de_tema_SI_mueve_las_capas_que_no_son_la_nota(toy_vault):
 
 # ── Auditoría 2026-09-04 · tests rojos (xfail estricto) ─────────────────────────────────────────
 
-@pytest.mark.xfail(strict=True, reason="AUD-218 abierto (auditoría 2026-09-04): entity no reescribe wikilinks con ancla #/^")
+# AUD-218 — cerrado en la pasada de fix de la auditoría 2026-09-04
 def test_AUD218_rename_reescribe_los_wikilinks_con_ancla(toy_vault):
     """AUD-218 — la regex de `entity._reescribir_wikilinks` acepta sólo `|` o `]]` tras el stem; el
     fix de AUD-168 (INV-84) se aplicó a `make_notes._wikilink_re` y no a su gemela."""

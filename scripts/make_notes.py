@@ -1438,16 +1438,20 @@ def migrate_all_source_fields() -> tuple[int, list]:
         head, resto = texto[ini:fin], texto[fin:]
         lineas = _drop_keys(head, tuple(f"{c}:" for c in malos))
         destino = "pending_motivo" if fm.get("pending_source") else "salvedades"
+        # AUD-221 — con DOS campos malos el bucle decidía por el `fm` viejo y en la segunda vuelta
+        # borraba la línea que acababa de escribir (o abría un segundo `salvedades:`). Las notas
+        # se juntan y se escriben UNA vez.
+        notas = []
         for campo, valor in sorted(malos.items()):
             lineas.append(f"{campo}: null")
-            nota = f"[{campo} decía] {valor}"
-            if destino == "pending_motivo" and not str(fm.get("pending_motivo") or "").strip():
-                lineas = [ln for ln in lineas if not ln.startswith("pending_motivo:")]
-                lineas.append(f"pending_motivo: {json.dumps(nota, ensure_ascii=False)}")
-            else:
-                lineas.append(f"salvedades:\n  - {json.dumps(nota, ensure_ascii=False)}"
-                              if not fm.get("salvedades") else
-                              f"# ⚠ #296 — mové a mano esta nota: {nota}")
+            notas.append(f"[{campo} decía] {valor}")
+        if destino == "pending_motivo" and not str(fm.get("pending_motivo") or "").strip():
+            lineas = [ln for ln in lineas if not ln.startswith("pending_motivo:")]
+            lineas.append(f"pending_motivo: {json.dumps(' · '.join(notas), ensure_ascii=False)}")
+        elif not fm.get("salvedades"):
+            lineas.append("salvedades:\n" + "\n".join(f"  - {json.dumps(n_, ensure_ascii=False)}" for n_ in notas))
+        else:
+            lineas.extend(f"# ⚠ #296 — mové a mano esta nota: {n_}" for n_ in notas)
         nuevo = texto[:ini] + "\n".join(lineas) + resto
         if not cfg.split_fm(nuevo):
             cfg.print_seguro(f"  ⛔ {f.name}: la migración dejaría el frontmatter sin parsear — NO "
@@ -2781,7 +2785,7 @@ def _wikilink_re(stem: str):
     detector does read them (its `LINK_RE` cuts at `#`), so they showed up as a finding right after
     the rename, over a link the renamer was supposed to have fixed. The captured group is re-emitted
     verbatim, so the anchor survives untouched."""
-    return re.compile(r"\[\[" + re.escape(stem) + r"(\||\]\]|#|\^)")
+    return cfg.wikilink_re(stem)
 
 
 # #114: el DOI que DataCite le asigna a un eprint de arXiv. `10.48550/arXiv.2605.28635`
@@ -2862,9 +2866,10 @@ def _consolidar_duplicado(old, new, old_stem: str, new_bibcode: str) -> None:
     """
     fm_old = cfg.split_fm(old.read_text(encoding="utf-8")) or {}
     fm_new = cfg.split_fm(new.read_text(encoding="utf-8")) or {}
-    if fm_old.get("methods") and not fm_new.get("methods"):
+    # AUD-223 — la MISMA regla de «tiene lectura» que `triage.drop_core` (vista fechada cuenta).
+    if cfg.note_has_reading(fm_old) and not cfg.note_has_reading(fm_new):
         raise SystemExit(
-            f"⛔ {old.name} tiene extracción LLM (`methods` poblado) y {new.name} no: consolidar "
+            f"⛔ {old.name} tiene extracción LLM (`methods` o una vista fechada) y {new.name} no: consolidar "
             f"hacia {new.name} la perdería.\n"
             f"   Salidas: renombrar al revés (`--rename-paper {new_bibcode} {old_stem}`), o mover "
             f"la prosa a mano y volver a correr.")

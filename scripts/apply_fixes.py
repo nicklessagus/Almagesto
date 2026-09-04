@@ -245,7 +245,9 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
     # No bloquea: a veces agregar una cita ES el arreglo (una `inferencia` que pasa a hecho citado).
     for span, bib, n, new, kind in planned:
         antes = set(lb._bibcodes("\n".join(lines[span[0]:span[1]])))
-        entran = sorted(set(lb._bibcodes("\n".join(new))) - antes)
+        # AUD-220 — en la rama «block» `new` es un `str`: `"\n".join(str)` une carácter por
+        # carácter y ningún `[[…]]` sobrevive, así que el aviso callaba justo en la rama medida.
+        entran = sorted(set(lb._bibcodes("\n".join(new) if isinstance(new, list) else new)) - antes)
         if entran:
             res.added.append((bib, n, entran))
     for span, bib, n, new, kind in sorted(planned, key=lambda x: -x[0][0]):

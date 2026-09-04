@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.201.0"
+ALMAGESTO_VERSION = "1.202.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -2041,6 +2041,13 @@ def subject_refusal(slug: str, expected: str, consequence: str,
     kinds = subject_kinds(slug)
     if expected in kinds:
         return None
+    # AUD-217 — con el YAML del tipo pedido ROTO, el sujeto puede estar definido y no leerse:
+    # «definilo ahí» sería la receta que fabrica una estrella duplicada. Se dice el error real
+    # (INV-80), que es lo que hay que arreglar.
+    _err = stars_error() if expected == "star" else themes_error()
+    if _err:
+        return (f"⛔ no se puede resolver '{slug}': {_err} — arreglá el YAML antes de correr este "
+                f"paso ({consequence}).")
     que = {"star": "una estrella (`vault/config/stars.yaml`)",
            "theme": "un tema (`vault/config/themes.yaml`)"}
     if kinds:
@@ -2139,6 +2146,25 @@ def theme_inherited_fq(meta: dict | None) -> str | None:
     if not tema.get("facet") or "search_fq" in tema:
         return None
     return objective_search_fq()
+
+
+def note_has_reading(fm: dict) -> bool:
+    """Did anyone READ this paper (extraction paid)? `methods` populated is sufficient but not
+    necessary (#188/#207): a view with `fecha` says the reading happened even when the method
+    was not the theme's. ONE rule for every deleter (`triage.drop_core`,
+    `make_notes._consolidar_duplicado`): AUD-223 measured the second one still using the proxy the
+    first had already declared insufficient, and deleting a note with a dated view."""
+    fm = as_map(fm)
+    return bool(as_list(fm.get("methods"))) or any(
+        isinstance(v, dict) and v.get("fecha") for v in as_list(fm.get("vistas")))
+
+
+def wikilink_re(stem: str):
+    """`[[stem]]`, `[[stem|alias]]`, `[[stem#section]]` and `[[stem^block]]`, without matching a
+    stem that merely prefixes it (AUD-168 / INV-84). ONE definition for the two renamers
+    (`make_notes.rename_paper`, `entity.rename`): AUD-218 measured the copy in `entity` still
+    missing the two anchor forms after the fix landed in `make_notes`."""
+    return re.compile(r"\[\[" + re.escape(stem) + r"(\||\]\]|#|\^)")
 
 
 def theme_inherited_axes(meta: dict | None) -> list | None:

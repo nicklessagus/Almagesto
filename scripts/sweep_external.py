@@ -348,7 +348,12 @@ def aplicar_ground_truth(slug: str) -> None:
     except Exception as exc:
         cfg.print_seguro(f"  ✗ {slug}: no se pudo diffear antes de aplicar ({exc}) — no se aplica")
         return
-    _run("fetch_ground_truth.py", slug, "--force")
+    # AUD-222 — el `returncode` se ignoraba: con la re-bajada fallida el JSON seguía con el valor
+    # viejo y `_cambios` decía que cambió, y el lint pedía `⚠desactualizado` sobre el vigente.
+    if _run("fetch_ground_truth.py", slug, "--force"):
+        cfg.print_seguro(f"  ✗ {slug}: la re-bajada FALLÓ — el snapshot no cambió y no se registra "
+                         f"ningún `_cambios` (volvé a correr)")
+        return
     if not cambios:
         return
     out = cfg.GROUND_TRUTH / f"{slug}.json"

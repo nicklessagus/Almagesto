@@ -277,11 +277,11 @@ def _reescribir_wikilinks(viejo: str, nuevo: str) -> int:
     """`[[viejo]]` / `[[viejo|alias]]` → `[[nuevo…]]` en toda la bóveda. Deliberadamente **no**
     toca el nombre suelto en prosa: un texto que menciona la estrella no es un link a su nota, y un
     replace ciego lo reescribiría (mismo criterio que `make_notes._wikilink_re`)."""
-    import re
-    rx = re.compile(r"\[\[" + re.escape(viejo) + r"(\||\]\])")
+    # AUD-218 — la MISMA regex que `make_notes` (anclas `#`/`^` incluidas) y el MISMO alcance:
+    # `vault/`, no `wiki/` — `STATUS.md` también linkea entidades y quedaba colgado.
+    rx = cfg.wikilink_re(viejo)
     n = 0
-    # ⚠ Los hermanos `.verif.md` (#344) entran a propósito: llevan un `[[bibcode]]` por fila.
-    for f in sorted(cfg.WIKI.rglob("*.md")):
+    for f in sorted(cfg.VAULT.rglob("*.md")):
         texto = f.read_text(encoding="utf-8")
         nuevo_texto = rx.sub(lambda m: f"[[{nuevo}{m.group(1)}", texto)
         if nuevo_texto != texto:

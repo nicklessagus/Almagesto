@@ -2986,7 +2986,7 @@ def test_extra_core_scope_devuelve_solo_las_entradas_con_alcance(toy_vault):
 
 # ── Auditoría 2026-09-04 · tests rojos (xfail estricto) ─────────────────────────────────────────
 
-@pytest.mark.xfail(strict=True, reason="AUD-217 abierto (auditoría 2026-09-04): subject_refusal dice «slug desconocido» sobre un YAML roto")
+# AUD-217 — cerrado en la pasada de fix de la auditoría 2026-09-04
 def test_AUD217_subject_refusal_no_manda_a_definir_un_sujeto_que_esta_en_un_yaml_roto(toy_vault):
     """AUD-217 — con `stars.yaml` inválido el sujeto SÍ está definido; «definilo ahí» es la receta
     que el propio docstring describe como la que fabrica una estrella falsa. Tiene que decir que
@@ -2994,3 +2994,20 @@ def test_AUD217_subject_refusal_no_manda_a_definir_un_sujeto_que_esta_en_un_yaml
     cfg.STARS_YAML.write_text("test_star:\n  name: X\n  bad: [unclosed\n", encoding="utf-8")
     r = cfg.subject_refusal("test_star", "star", "no se hizo nada")
     assert r is not None and "desconocido" not in r and "yaml" in r.lower(), r
+
+
+def test_note_has_reading_es_UNA_regla_para_todos_los_borradores():
+    """AUD-219/223 — `methods` poblado O una vista fechada; una vista sin fecha no es lectura."""
+    assert cfg.note_has_reading({"methods": ["ica"]}) is True
+    assert cfg.note_has_reading({"vistas": [{"sujeto": "x", "fecha": "2026-09-01"}]}) is True
+    assert cfg.note_has_reading({"vistas": [{"sujeto": "x"}], "methods": []}) is False
+    assert cfg.note_has_reading({}) is False and cfg.note_has_reading(None) is False
+
+
+def test_wikilink_re_cubre_las_cuatro_formas_y_no_el_prefijo():
+    """AUD-218 — una sola regex para los dos renombradores: alias, anclas `#` y `^`, y nunca un
+    stem que sólo prefija a otro."""
+    rx = cfg.wikilink_re("GJ 581")
+    for s in ("[[GJ 581]]", "[[GJ 581|alias]]", "[[GJ 581#Planetas]]", "[[GJ 581^blk]]"):
+        assert rx.search(s), s
+    assert not rx.search("[[GJ 5811]]")

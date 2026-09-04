@@ -393,7 +393,7 @@ def test_un_fix_que_SUSTRAE_no_avisa(tmp_path):
 
 # ── Auditoría 2026-09-04 · tests rojos (xfail estricto) ─────────────────────────────────────────
 
-@pytest.mark.xfail(strict=True, reason="AUD-220 abierto (auditoría 2026-09-04): el aviso #389 no se emite para un fix por BLOQUE (join carácter por carácter)")
+# AUD-220 — cerrado en la pasada de fix de la auditoría 2026-09-04
 def test_AUD220_un_fix_por_BLOQUE_que_agrega_una_cita_tambien_avisa(tmp_path):
     """AUD-220 — en la rama «block» `planned` guarda `new` como `str` y el conteo hace
     `"\\n".join(new)` sobre un str: ningún `[[…]]` sobrevive y el aviso de #389 calla."""

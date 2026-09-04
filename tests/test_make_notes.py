@@ -5034,7 +5034,7 @@ def test_fix_key_no_promete_un_alias_que_no_escribe(toy_vault, capsys):
 
 # ── Auditoría 2026-09-04 · tests rojos (xfail estricto) ─────────────────────────────────────────
 
-@pytest.mark.xfail(strict=True, reason="AUD-221 abierto (auditoría 2026-09-04): migrate_all_source_fields pierde la prosa del primer campo cuando hay dos")
+# AUD-221 — cerrado en la pasada de fix de la auditoría 2026-09-04
 def test_AUD221_migrar_DOS_source_fields_no_pierde_la_prosa_del_primero(toy_vault, capsys):
     """AUD-221 — el bucle decide por `fm.get("pending_motivo")` (dict viejo) y en la segunda vuelta
     filtra la línea `pending_motivo:` que acaba de escribir."""
@@ -5045,7 +5045,7 @@ def test_AUD221_migrar_DOS_source_fields_no_pierde_la_prosa_del_primero(toy_vaul
     assert "prosa A" in txt and "prosa B" in txt, txt
 
 
-@pytest.mark.xfail(strict=True, reason="AUD-223 abierto (auditoría 2026-09-04): _consolidar_duplicado borra una nota con vista FECHADA porque sólo mira methods")
+# AUD-223 — cerrado en la pasada de fix de la auditoría 2026-09-04
 def test_AUD223_consolidar_REHUSA_si_la_vieja_tiene_una_vista_fechada(toy_vault):
     """AUD-223 — el proxy `methods` ya fue declarado insuficiente en `triage.drop_core`; acá una
     lectura cara del PDF (vista con fecha y prosa) se borra con la nota."""

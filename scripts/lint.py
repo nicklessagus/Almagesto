@@ -2974,8 +2974,11 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 _nombres.add(str(_m["concept"]))
         _nombres |= {n for n, m in ({} if cfg.stars_error() else cfg.load_stars()).items()
                      if isinstance(m, dict) and m.get("slug") == _slug}
+        # AUD-216 — por PALABRA, no por substring: `ica` está dentro de «verificación» y
+        # «aplicación», así que cualquier entrada de otro sujeto daba por escrita la de `ica`.
+        _nombra = [re.compile(r"(?<![\w-])" + re.escape(x) + r"(?![\w-])", re.I) for x in _nombres]
         _sin = sorted(f for f in _fechas
-                      if f and not any(f in ln and any(x in ln for x in _nombres)
+                      if f and not any(f in ln and any(rx.search(ln) for rx in _nombra)
                                        for ln in log_txt.splitlines() if ln.startswith("## ")))
         if _sin:
             #  @inv INV-131
