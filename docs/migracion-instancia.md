@@ -330,6 +330,25 @@ orden canónico.
 > dañadas ya se habían reparado a mano cuando se abrieron los issues. En la instancia donde se
 > midieron: 60 de 169 con orden invertido, 10 avanzadas, 6 con la cabecera borrada.
 
+## 2e · v1.184.0-v1.186.0 (T3: #365 · #368 · #366 · #369 · #389 · #370 · #385) — el flujo de verify
+
+**Nada que reparar en el contenido.** Lo que cambia es **cómo se corre** el fan-out y cómo se
+escribe prosa citada. Tres hábitos nuevos y un chequeo:
+
+| hábito | antes | ahora |
+|---|---|---|
+| repartir el fan-out | prompts armados a mano, `--esperados` contado a ojo | `python scripts/verify_fanout.py <nota> --out build/<slug>/verif/<ronda>` escribe un prompt por fuente y el manifiesto; la barrera se corre **sin** `--esperados` y nombra la fuente que falta (#369) |
+| copiar una cita a la PROSA | transcribir a mano | `python scripts/contrast.py <slug> --cita --grep "<re>"` emite `«valor» (loc) [[bibcode]]` pegable (#385) |
+| reconstruir el bloque tras re-anclar | la cadena se perdía con el ancla | pasar las filas por `lib_blocks.chain_from_reanchor(filas, re_anclaje)` con el JSON de `reverify_subset` (#366) |
+| corregir | reescribir con más cuidado | **sacar** la parte equivocada primero; `apply_fixes` avisa si un fix agrega citas (#389) |
+
+**Chequeo nuevo del lint (backlog):** un `[[bibcode]]` dentro del blockquote de alcance de
+`## Huecos` o de una hipótesis (#368). Es contabilidad del corpus, no una cita, y el fan-out lo toma
+como par que ningún PDF puede respaldar. Se reemplaza por el nombre del paper.
+
+> Medido en `Almagesto-Tesis`: el caso que abrió #368 ya estaba corregido a mano (tres links →
+> «Meinecke 2002, Remes 2011 y Du 2014»).
+
 ## 3 · Cierre
 
 ```bash
