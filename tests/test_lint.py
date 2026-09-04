@@ -7305,3 +7305,24 @@ def test_el_bib_del_usuario_bloquea_como_crossref(toy_vault):
     assert len(lint.collect().por_clave("fuente_metadata_falsa").items) == 1
     _registro_fuente(via="web", detalle="no está en el arranque del snapshot web")
     assert lint.collect().por_clave("fuente_metadata_falsa").items == ()
+
+
+# ── Auditoría 2026-09-04 · tests rojos (xfail estricto: pasan a rojo cuando el defecto se arregle) ──
+
+@pytest.mark.xfail(strict=True, reason="AUD-216 abierto (auditoría 2026-09-04): log_sin_entrada matchea el slug por substring")
+def test_AUD216_el_log_no_da_por_escrita_una_entrada_que_solo_CONTIENE_el_slug(toy_vault, capsys):
+    """AUD-216 — el predicado de `log_sin_entrada` es `x in ln` sobre el encabezado: un tema con
+    slug corto (`ica`) queda «con entrada» por cualquier `## <fecha> — verificación …`."""
+    import yaml
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "concept": "ica", "area": "methods",
+                                         "query": "abs:x"}})
+    reg = toy_vault.VAULT / "config" / "registro"
+    reg.mkdir(parents=True, exist_ok=True)
+    (reg / "ica.yaml").write_text(
+        yaml.safe_dump({"slug": "ica", "cadena": [{"paso": "query_ads", "fecha": "2026-03-01"}]}),
+        encoding="utf-8")
+    toy_vault.LOG.write_text("# log\n\n## 2026-03-01 — verificación de otra cosa\n", encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    linea = [l for l in rep.splitlines() if l.startswith("## 📓 Operación sin entrada")]
+    assert linea, rep
+    assert int(linea[0].rsplit("(", 1)[1].rstrip(")")) == 1, linea[0]

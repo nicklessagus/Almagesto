@@ -2982,3 +2982,15 @@ def test_extra_core_scope_devuelve_solo_las_entradas_con_alcance(toy_vault):
     assert cfg.extra_core_scope({"extra_core": ec}, entry="t") == {
         "2021PhDT.........6D": ("caps. 2-3", "pagina")}
     assert cfg.extra_core_scope({}, entry="t") == {}
+
+
+# ── Auditoría 2026-09-04 · tests rojos (xfail estricto) ─────────────────────────────────────────
+
+@pytest.mark.xfail(strict=True, reason="AUD-217 abierto (auditoría 2026-09-04): subject_refusal dice «slug desconocido» sobre un YAML roto")
+def test_AUD217_subject_refusal_no_manda_a_definir_un_sujeto_que_esta_en_un_yaml_roto(toy_vault):
+    """AUD-217 — con `stars.yaml` inválido el sujeto SÍ está definido; «definilo ahí» es la receta
+    que el propio docstring describe como la que fabrica una estrella falsa. Tiene que decir que
+    el YAML no parsea (INV-80)."""
+    cfg.STARS_YAML.write_text("test_star:\n  name: X\n  bad: [unclosed\n", encoding="utf-8")
+    r = cfg.subject_refusal("test_star", "star", "no se hizo nada")
+    assert r is not None and "desconocido" not in r and "yaml" in r.lower(), r

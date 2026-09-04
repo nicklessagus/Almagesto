@@ -389,3 +389,18 @@ def test_un_fix_que_SUSTRAE_no_avisa(tmp_path):
                                       "nuevo": "La señal es estelar [[2020A]]."}]))
     r = af.apply(nota, fix, write=True)
     assert r.applied == 1 and r.added == []
+
+
+# ── Auditoría 2026-09-04 · tests rojos (xfail estricto) ─────────────────────────────────────────
+
+@pytest.mark.xfail(strict=True, reason="AUD-220 abierto (auditoría 2026-09-04): el aviso #389 no se emite para un fix por BLOQUE (join carácter por carácter)")
+def test_AUD220_un_fix_por_BLOQUE_que_agrega_una_cita_tambien_avisa(tmp_path):
+    """AUD-220 — en la rama «block» `planned` guarda `new` como `str` y el conteo hace
+    `"\\n".join(new)` sobre un str: ningún `[[…]]` sobrevive y el aviso de #389 calla."""
+    nota = _note(tmp_path, "# T\n\n- **Hueco.** Una frase larga\n  que sigue acá [[A]].\n")
+    viejo = "- **Hueco.** Una frase larga que sigue acá [[A]]."
+    fix = _fixes(tmp_path, ("A", [{"n": 1, "viejo": viejo,
+                                  "nuevo": "- **Hueco.** Una frase larga que sigue acá [[A]], como dice [[2021B]]."}]))
+    r = af.apply(nota, fix, write=True)
+    assert r.applied == 1 and r.failed == []
+    assert r.added == [("A", 1, ["2021B"])], r.added

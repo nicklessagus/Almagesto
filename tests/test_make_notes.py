@@ -5030,3 +5030,31 @@ def test_fix_key_no_promete_un_alias_que_no_escribe(toy_vault, capsys):
     mn.rename_paper("2006VanDerBaan", "2006Vrabie", fix_key=True)
     out = capsys.readouterr().out
     assert "alias en `versions[]`" not in out and "sin alias" in out, out
+
+
+# ── Auditoría 2026-09-04 · tests rojos (xfail estricto) ─────────────────────────────────────────
+
+@pytest.mark.xfail(strict=True, reason="AUD-221 abierto (auditoría 2026-09-04): migrate_all_source_fields pierde la prosa del primer campo cuando hay dos")
+def test_AUD221_migrar_DOS_source_fields_no_pierde_la_prosa_del_primero(toy_vault, capsys):
+    """AUD-221 — el bucle decide por `fm.get("pending_motivo")` (dict viejo) y en la segunda vuelta
+    filtra la línea `pending_motivo:` que acaba de escribir."""
+    f = _paper_con_source(toy_vault, "2010DosCampos", pending_source="paywall",
+                          pdf_source="'prosa A sobre el pdf'", fulltext_source="'prosa B sobre el txt'")
+    mn.migrate_all_source_fields()
+    txt = f.read_text(encoding="utf-8")
+    assert "prosa A" in txt and "prosa B" in txt, txt
+
+
+@pytest.mark.xfail(strict=True, reason="AUD-223 abierto (auditoría 2026-09-04): _consolidar_duplicado borra una nota con vista FECHADA porque sólo mira methods")
+def test_AUD223_consolidar_REHUSA_si_la_vieja_tiene_una_vista_fechada(toy_vault):
+    """AUD-223 — el proxy `methods` ya fue declarado insuficiente en `triage.drop_core`; acá una
+    lectura cara del PDF (vista con fecha y prosa) se borra con la nota."""
+    _nota_paper(toy_vault, "2026arXivVIEJO",
+                extra="vistas:\n- sujeto: ica\n  tipo: theme\n  fecha: '2026-09-01'\n  fuente: pdf\n")
+    p = toy_vault.PAPERS / "2026arXivVIEJO.md"
+    p.write_text(p.read_text(encoding="utf-8") + "\n## Vista — ica\n\n**Aporte:** lectura cara.\n",
+                 encoding="utf-8")
+    _nota_paper(toy_vault, "2026RASTINUEVO")
+    with pytest.raises(SystemExit):
+        mn.rename_paper("2026arXivVIEJO", "2026RASTINUEVO")
+    assert p.exists(), "no se borra una lectura que ocurrió"

@@ -533,3 +533,21 @@ def test_el_detector_de_versiones_declara_su_poblacion(toy_vault, monkeypatch):
     meta = {}
     sw.discover_versions(meta=meta)
     assert meta == {"miradas": 1, "notas": 3}
+
+
+# ── Auditoría 2026-09-04 · tests rojos (xfail estricto) ─────────────────────────────────────────
+
+@pytest.mark.xfail(strict=True, reason="AUD-222 abierto (auditoría 2026-09-04): aplicar_ground_truth persiste _cambios aunque la re-bajada haya fallado")
+def test_AUD222_si_la_rebajada_falla_no_se_registra_un_cambio_que_no_ocurrio(toy_vault, monkeypatch):
+    """AUD-222 — ignora el `returncode` de `fetch_ground_truth --force`: el JSON sigue con el valor
+    viejo y `_cambios` dice que cambió, así que el lint pide `⚠desactualizado` sobre el vigente."""
+    cfg.GROUND_TRUTH.mkdir(parents=True, exist_ok=True)
+    gt = cfg.GROUND_TRUTH / "test_star.json"
+    gt.write_text(json.dumps({"star": "Estrella Test", "slug": "test_star",
+                              "host": {"teff_K": 5344}, "planets": []}), encoding="utf-8")
+    monkeypatch.setattr(fetch_ground_truth, "nea_diff", lambda slug: [("host.teff_K", 5344, 5390)])
+    monkeypatch.setattr(sw, "_run", lambda *a, **k: 1)     # la re-bajada FALLA
+    sw.aplicar_ground_truth("test_star")
+    data = json.loads(gt.read_text(encoding="utf-8"))
+    assert data["host"]["teff_K"] == 5344
+    assert not data.get("_cambios"), data.get("_cambios")

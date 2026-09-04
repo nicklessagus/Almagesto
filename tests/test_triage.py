@@ -1225,3 +1225,16 @@ def test_promote_source_imprime_un_extra_core_que_parsea_como_yaml(toy_vault, mo
     assert data["extra_core"][0]["bibcode"] == "2011PLoSO...627594P"
     m = data["extra_core"][0]["motivo"]
     assert "extension de RAICAR" in m and "2011Yang" in m
+
+
+# ── Auditoría 2026-09-04 · tests rojos (xfail estricto) ─────────────────────────────────────────
+
+@pytest.mark.xfail(strict=True, reason="AUD-219 abierto (auditoría 2026-09-04): drop_core compara stars (NOMBRE) contra el slug y nunca borra el stub de una estrella")
+def test_AUD219_drop_core_borra_el_stub_que_solo_era_de_esta_ESTRELLA(toy_vault, capsys):
+    """AUD-219 — `stars:` lleva el nombre (`Estrella Test`) y `drop_core` lo compara contra el slug
+    (`test_star`): el propio sujeto cuenta como «otro dueño» y el stub queda para siempre."""
+    (cfg.PAPERS / "2009Icar..201..504M.md").write_text(
+        "---\nbibcode: 2009Icar..201..504M\ntags: [paper]\nstars: [Estrella Test]\nmethods: []\n"
+        "vistas:\n- sujeto: Estrella Test\n  tipo: star\n---\n# T\n", encoding="utf-8")
+    triage.drop_core("test_star", ["2009Icar..201..504M"], "off-topic")
+    assert not (cfg.PAPERS / "2009Icar..201..504M.md").exists(), capsys.readouterr().out

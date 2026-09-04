@@ -369,3 +369,18 @@ def test_rename_de_tema_SI_mueve_las_capas_que_no_son_la_nota(toy_vault):
     assert cfg.registro_path("componentes-independientes").exists()
     assert (cfg.FULLTEXT / "componentes-independientes" / "2020A.txt").exists()
     assert nota.exists() and hermano.exists(), "la nota del tema y su hermano NO se renombran"
+
+
+# ── Auditoría 2026-09-04 · tests rojos (xfail estricto) ─────────────────────────────────────────
+
+@pytest.mark.xfail(strict=True, reason="AUD-218 abierto (auditoría 2026-09-04): entity no reescribe wikilinks con ancla #/^")
+def test_AUD218_rename_reescribe_los_wikilinks_con_ancla(toy_vault):
+    """AUD-218 — la regex de `entity._reescribir_wikilinks` acepta sólo `|` o `]]` tras el stem; el
+    fix de AUD-168 (INV-84) se aplicó a `make_notes._wikilink_re` y no a su gemela."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    f = cfg.PAPERS / "2020G.md"
+    f.write_text("---\nbibcode: 2020G\n---\n\nVer [[gp_viejo#Régimen]] y [[gp_viejo^blk]] y [[gp_viejo]].\n",
+                 encoding="utf-8")
+    entity._reescribir_wikilinks("gp_viejo", "gp_nuevo")
+    txt = f.read_text(encoding="utf-8")
+    assert "[[gp_viejo" not in txt, txt
