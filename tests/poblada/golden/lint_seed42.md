@@ -337,6 +337,9 @@
 ## 🕳 `alcance`/`unidad_cita` de la nota ≠ el declarado en `sources[]` (#312, backlog) (0)
 > sobre 60 notas de `papers/`
 
+## 🕳 Tema off-ADS/mixto cuya cascada de descubrimiento (paso 0b) nunca corrió, corrió vacía o con backends caídos (#361, backlog) (0)
+> sobre 0 temas de `themes.yaml`
+
 ## 🕳 Tema de MÉTODO sin `search_fq`: hereda el del objetivo, que excluye su literatura server-side (#351, backlog) (0)
 > sobre 0 temas de `themes.yaml`
 
