@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.193.0"
+ALMAGESTO_VERSION = "1.194.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -2963,7 +2963,31 @@ def load_extra_core(meta: dict, *, entry: str = "?") -> list:
             sys.exit(_extra_core_error(
                 entry, [x["bibcode"]],
                 f"`via: {x['via']}` no está en el vocabulario ({' | '.join(EXTRA_CORE_VIA)})"))
+        # #382 — a LONG source with an ADS bibcode (a thesis, a book) lives here by contract and
+        # could not declare itself long: `unidad_cita`/`alcance` (#80) were read from `sources:`
+        # only. Same vocabulary, same rule (scope mandatory when the unit is not the line), same
+        # consequence: without it the prompt does not branch and completeness cannot tell a
+        # deliberate cut from an omission.
+        _unidad = str(x.get("unidad_cita") or "linea").strip()
+        if _unidad not in UNIDAD_CITA_OK:
+            sys.exit(f"'{entry}': {x['bibcode']}: `unidad_cita: {_unidad}` fuera del vocabulario "
+                     f"({' | '.join(UNIDAD_CITA_OK)}). Un typo deja al verificador sin saber cómo "
+                     f"citar esta fuente.")
+        if _unidad != "linea" and not str(x.get("alcance") or "").strip():
+            sys.exit(f"'{entry}': {x['bibcode']}: `unidad_cita: {_unidad}` sin `alcance`. Si la unidad "
+                     f"no es la línea es un documento largo, y casi nunca entra entero: declará qué "
+                     f"parte entró (p. ej. `alcance: caps. 2-3`), o el chequeo de completitud lee un "
+                     f"recorte deliberado como omisión (#80/#382).")
     return v
+
+
+def extra_core_scope(meta: dict, *, entry: str = "?") -> dict:
+    """`{bibcode: (alcance, unidad_cita)}` for the `extra_core` entries that declare either (#382):
+    what `make_notes` stamps on the ADS stub and `--restamp-alcance` re-syncs, the same leg the
+    off-ADS lane already had from `sources:`."""
+    return {x["bibcode"]: (x.get("alcance"), x.get("unidad_cita"))
+            for x in load_extra_core(meta, entry=entry)
+            if x.get("alcance") or x.get("unidad_cita")}
 
 
 def _extra_core_error(entry: str, bibcodes: list, motivo: str) -> str:

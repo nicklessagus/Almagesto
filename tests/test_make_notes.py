@@ -43,9 +43,9 @@ def ads_json(records, slug="test_star"):
     (d / "ads.json").write_text(json.dumps({"records": records}), encoding="utf-8")
 
 
-def seed_topic(slug="gp", area="methods", concept="gaussian-processes"):
+def seed_topic(slug="gp", area="methods", concept="gaussian-processes", **extra):
     write_yaml(cfg.THEMES_YAML, {slug: {"title": "Gaussian processes", "area": area, "concept": concept,
-                                        "aliases": ["análisis de componentes"]}})
+                                        "aliases": ["análisis de componentes"], **extra}})
 
 
 # ── helpers básicos ──────────────────────────────────────────────────────────
@@ -4953,3 +4953,37 @@ def test_la_fila_del_indice_publica_el_guion_y_no_la_cadena_None():
     """La misma garantía donde el lector la ve: la fila estampada de `## Estrellas`."""
     filas = mn._index_stars([("tau-cet", None, 34.0, 2)]).split("\n")
     assert filas[-1] == "| [[tau-cet]] | — | 34.0 | 2 |"
+
+
+# ── #382 · el `alcance` de una entrada de `extra_core` llega a la nota y al prompt ───────────────
+
+def test_extra_core_largo_estampa_alcance_en_el_stub_y_el_prompt_ramifica(toy_vault):
+    """#382 — `unidad_cita`/`alcance` declarados en `extra_core` no los leía nadie: la tesis de 229
+    páginas recibía el prompt de un paper normal. La nota los lleva (como el stub off-ADS los lleva
+    desde `sources:`), y de ahí los lee `extraction_prompt._long_document` (#241)."""
+    import extraction_prompt as ep
+    seed_topic(extra_core=[{"bibcode": "2021PhDT.........6D", "via": "usuario", "motivo": "tesis",
+                            "unidad_cita": "pagina", "alcance": "caps. 2-3"}])
+    ads_json([rec("2021PhDT.........6D")], slug="gp")
+    mn.write_paper_notes("gp", include_all=False, force=False, theme=True)
+    fm = read_fm(toy_vault.PAPERS / "2021PhDT.........6D.md")
+    assert fm["unidad_cita"] == "pagina" and fm["alcance"] == "caps. 2-3"
+    assert ep._long_document("2021PhDT.........6D") == ("pagina", "caps. 2-3")
+    # #312 también por este carril: la config es la autoridad y `--restamp-alcance` re-sincroniza
+    seed_topic(extra_core=[{"bibcode": "2021PhDT.........6D", "via": "usuario", "motivo": "tesis",
+                            "unidad_cita": "pagina", "alcance": "caps. 2-5"}])
+    mn.restamp_scope()
+    assert read_fm(toy_vault.PAPERS / "2021PhDT.........6D.md")["alcance"] == "caps. 2-5"
+
+
+def test_restamp_alcance_saltea_los_items_malformados_de_sources(toy_vault, capsys):
+    """#312/#382 — un item de `sources:` que no es un mapa, o sin `key`, no tumba el backfill ni
+    estampa nada: lo reporta el lint (`bad_sources`), no este comando."""
+    write_yaml(cfg.THEMES_YAML, {"t": {"title": "T", "concept": "t", "area": "methods",
+                                       "source": "web",
+                                       "sources": ["suelto", {"url": "https://x", "alcance": "cap. 1",
+                                                              "unidad_cita": "pagina"}]}})
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    assert mn.restamp_scope() == 0
+    assert "0 nota(s) re-sincronizadas" in capsys.readouterr().out
+    assert not list(cfg.PAPERS.glob("*.md"))

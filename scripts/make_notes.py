@@ -312,7 +312,8 @@ def stamp_scope(dest, alcance: str | None, unidad_cita: str | None) -> bool:
 
 
 def restamp_scope() -> int:
-    """Backfill of #312 over every declared source: `themes.yaml` → the note's frontmatter."""
+    """Backfill of #312 over every declared source — `sources:` items and, since #382, the
+    `extra_core` entries of themes AND stars that declare a scope: config → the note's frontmatter."""
     n = 0
     for slug, meta in (cfg.load_themes() or {}).items():
         for item in cfg.as_list(cfg.as_map(meta).get("sources")):
@@ -325,7 +326,14 @@ def restamp_scope() -> int:
                              item.get("alcance"), item.get("unidad_cita")):
                 cfg.print_seguro(f"  {key}: `alcance`/`unidad_cita` re-estampados desde themes.yaml")
                 n += 1
-    cfg.print_seguro(f"papers: {n} nota(s) re-sincronizadas con `sources[]` (#312)")
+    for _cfg, _subjects in (("themes.yaml", cfg.load_themes() or {}), ("stars.yaml", cfg.load_stars() or {})):
+        for slug, meta in _subjects.items():
+            for bib, (alc, uni) in cfg.extra_core_scope(cfg.as_map(meta), entry=slug).items():
+                if stamp_scope(cfg.PAPERS / f"{safe_name(bib)}.md", alc, uni):
+                    cfg.print_seguro(f"  {bib}: `alcance`/`unidad_cita` re-estampados desde `extra_core` "
+                                     f"de {_cfg} (#382)")
+                    n += 1
+    cfg.print_seguro(f"papers: {n} nota(s) re-sincronizadas con `sources[]`/`extra_core` (#312/#382)")
     return 0
 
 
@@ -3661,6 +3669,15 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, theme: bool = F
 {extraccion}"""
         cfg.write_text_atomic(dest, body)
         written += 1
+    # #382 — `unidad_cita`/`alcance` declarados en `extra_core` llegan a la nota, como los de
+    # `sources:` llegan al stub off-ADS: sin esto el prompt no ramifica (#241) y una tesis de 229
+    # páginas se lee como un paper. `stamp_scope` es cirugía idempotente y no toca lo que no cambió.
+    _meta_scope = tmeta if theme else cfg.star_by_slug(slug)[1]
+    _alcances = sum(1 for _b, (_a, _u) in cfg.extra_core_scope(_meta_scope, entry=slug).items()
+                    if stamp_scope(cfg.PAPERS / f"{safe_name(_b)}.md", _a, _u))
+    if _alcances:
+        cfg.print_seguro(f"  {_alcances} nota(s) con `alcance`/`unidad_cita` estampados desde "
+                         f"`extra_core` (#382)")
     cfg.print_seguro(f"  papers: {written} escritos, {skipped} ya existían"
           + (f", {merged} retro-linkeados (seeds add-only)" if merged else "")
           + (f", {restamped} con link [📄 PDF] re-estampado" if restamped else ""))

@@ -594,12 +594,12 @@ que el `--reason` del triage: en seis meses sirve el motivo, no la categoría. U
 hoy la cadena aborta y el lint lo nombra.
 
 ⛔ **Una fuente LARGA declara cómo se la cita y qué parte entró (#80):** `unidad_cita:
-linea|pagina|seccion` (default `linea`) y **`alcance`** (qué capítulos entraron), obligatorio cuando
-la unidad no es la línea. Un libro rompe dos supuestos de `verify-citations`: el fan-out asume un
-`.txt` que se lee **entero** —700 páginas lo revientan— y «línea 18443» no es una referencia
-utilizable; y casi nunca entra el libro entero, lo que choca con el chequeo de **completitud**, que
-sin `alcance` no distingue un recorte deliberado de una omisión. Eje **distinto** del `txt:`/`pdf:`
-de #117: aquél dice qué **archivo** se leyó, éste **cómo se apunta adentro**.
+linea|pagina|seccion` (default `linea`) y **`alcance`** (qué entró; obligatorio si la unidad no es
+la línea), **en `sources:` o en `extra_core` (#382)**. Un libro rompe dos supuestos de
+`verify-citations`: el fan-out asume un `.txt` que se lee **entero** —700 páginas lo revientan— y
+«línea 18443» no es referencia utilizable; y casi nunca entra entero, lo que choca con el chequeo
+de **completitud**, que sin `alcance` no distingue un recorte deliberado de una omisión. Eje
+distinto del `txt:`/`pdf:` de #117: aquél, qué **archivo** se leyó; éste, **cómo se apunta**.
 
 ⛔ **Y se RE-SINCRONIZAN: la autoridad es la config (#312).** Viajan al stub al crearlo y se
 congelaban ahí, así que ampliar el `alcance` dejaba la nota afirmando que ese material *no entra*

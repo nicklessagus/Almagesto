@@ -2951,3 +2951,34 @@ def test_los_dos_heredados_comparten_la_senal_de_tema_de_metodo(toy_vault):
     divergen, un tema avisa por un eje y calla por el otro."""
     for meta in ({"facet": "ica"}, {"title": "x"}, {"facet": "ica", "search_fq": None, "ejes": []}):
         assert (cfg.theme_inherited_fq(meta) is None) == (cfg.theme_inherited_axes(meta) is None), meta
+
+
+# ── #382 · una fuente LARGA con bibcode ADS se declara larga en `extra_core` ─────────────────────
+
+def test_extra_core_acepta_unidad_cita_y_alcance_con_la_misma_validacion_que_sources(toy_vault):
+    """#382 — `unidad_cita`/`alcance` (#80) sólo existían en `sources:`; una tesis con bibcode ADS
+    va por contrato en `extra_core` y no podía declararse larga: el prompt no ramificaba y el
+    chequeo de completitud no distinguía recorte de omisión. Misma validación que en `sources:`."""
+    ok = [{"bibcode": "2021PhDT.........6D", "via": "usuario", "motivo": "tesis",
+           "unidad_cita": "pagina", "alcance": "caps. 2-3"}]
+    assert cfg.load_extra_core({"extra_core": ok}, entry="t") == ok
+    with pytest.raises(SystemExit) as e:
+        cfg.load_extra_core({"extra_core": [{**ok[0], "alcance": None}]}, entry="t")
+    assert "alcance" in str(e.value) and "2021PhDT" in str(e.value)
+    with pytest.raises(SystemExit) as e:
+        cfg.load_extra_core({"extra_core": [{**ok[0], "unidad_cita": "hoja"}]}, entry="t")
+    assert "unidad_cita: hoja" in str(e.value) and "pagina" in str(e.value)
+    # `linea` (o ausente) no exige alcance: no es un documento largo
+    assert cfg.load_extra_core({"extra_core": [{**ok[0], "unidad_cita": "linea", "alcance": None}]},
+                               entry="t")
+
+
+def test_extra_core_scope_devuelve_solo_las_entradas_con_alcance(toy_vault):
+    """#382 — el mapa que `make_notes` estampa y `--restamp-alcance` re-sincroniza: sólo las
+    entradas que declaran algo; el resto no es un documento largo."""
+    ec = [{"bibcode": "2021PhDT.........6D", "via": "usuario", "motivo": "t", "unidad_cita": "pagina",
+           "alcance": "caps. 2-3"},
+          {"bibcode": "2020X", "via": "usuario", "motivo": "t"}]
+    assert cfg.extra_core_scope({"extra_core": ec}, entry="t") == {
+        "2021PhDT.........6D": ("caps. 2-3", "pagina")}
+    assert cfg.extra_core_scope({}, entry="t") == {}

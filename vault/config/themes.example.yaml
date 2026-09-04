@@ -46,6 +46,10 @@
 #                En un tema OFF-ADS también vale (tema MIXTO): los papers del tema que SÍ tienen
 #                bibcode ADS van acá — NO en sources: con el bibcode de key (degrada el stub:
 #                metadata a mano, blockquote off-ADS falso). ingest_theme les corre la sub-cadena ADS.
+#                ⛔ Una fuente LARGA con bibcode ADS (tesis `PhDT`, libro, actas) se declara larga
+#                ACÁ (#382): `unidad_cita: pagina` + `alcance: "caps. 2-3"`, misma validación que
+#                en sources: (alcance obligatorio si la unidad no es la línea). make_notes lo estampa
+#                en la nota y el prompt del extractor ramifica (#241); --restamp-alcance re-sincroniza.
 #   ejes     : (opcional, #307) los EJES DE LECTURA que el extractor pregunta por cada paper de este
 #              tema. Sin declarar → los de `relevance.facets` del objetivo; declarados → ésos;
 #              `ejes: []` → no se piden ejes, a propósito. Para un tema de método los globales son
