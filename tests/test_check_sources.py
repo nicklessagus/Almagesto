@@ -237,6 +237,8 @@ def test_bib_entries_parsea_llaves_comillas_y_and():
                                   "title": es[0]["title"]}
     assert cs.bib_meta(es[1])["family"] == "Vollgraf" and cs.bib_meta(es[1])["year"] == 2001
     assert cs.bib_entries(pathlib.Path("/no/existe.bib")) == []
+    assert "Jerome" in es[0]["author"] and "\\" not in es[0]["author"], "acentos TeX plegados"
+    assert cs._untex('Hyv{\\"a}rinen and Oja') == "Hyvarinen and Oja"
 
 
 def test_bib_match_por_doi_archivo_o_titulo_nunca_por_autor(tmp_path):

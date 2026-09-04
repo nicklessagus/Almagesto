@@ -121,6 +121,16 @@ _BIB_ENTRY = re.compile(r"@(\w+)\s*\{\s*([^,\s]+)\s*,", re.S)
 _BIB_FIELD = re.compile(r"(\w+)\s*=\s*(\{(?:[^{}]|\{[^{}]*\})*\}|\"[^\"]*\"|[^,\n]+)", re.S)
 
 
+_TEX_ACCENT_BRACED = re.compile(r"\{\\[\"'`^~=.uvHrcdb]\s*([A-Za-z])\}")      # {\"a}
+_TEX_ACCENT = re.compile(r"\\[\"'`^~=.uvHrcdb]\s*\{?\s*([A-Za-z])\s*\}?")   # \"a · \"{a}
+
+
+def _untex(v: str) -> str:
+    """Fold TeX accent commands (`Hyv{\\"a}rinen`, `Mars, J\\'er\\^ome`) to the bare letter: the
+    comparison strips accents anyway, and the detail line should not print them raw."""
+    return _TEX_ACCENT.sub(r"\1", _TEX_ACCENT_BRACED.sub(r"\1", v))
+
+
 def bib_entries(path: Path) -> list:
     """Entries of a BibTeX file as `{tipo, clave, <fields lowercased>}`; braces/quotes stripped,
     one level of nested braces tolerated. Small on purpose (no dependency): the fields this rail
@@ -139,7 +149,7 @@ def bib_entries(path: Path) -> list:
             v = f.group(2).strip().strip(",").strip()
             if v[:1] in "{\"":
                 v = v[1:-1]
-            campos[f.group(1).lower()] = " ".join(v.replace("{", "").replace("}", "").split())
+            campos[f.group(1).lower()] = " ".join(_untex(v).replace("{", "").replace("}", "").split())
         out.append(campos)
     return out
 

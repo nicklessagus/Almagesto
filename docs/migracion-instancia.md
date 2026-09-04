@@ -514,7 +514,9 @@ el lint ya hace por #82) quedan propuestos en el issue, no implementados.
 biblioteca, no la copia de la bóveda) hay un `*.bib`, se busca la entrada por DOI, por nombre de
 archivo en `file =` o por título, y se compara como Crossref (autor/año bloquean). **Web**: una
 `url:` se cruza contra el arranque del snapshot que guardó `fetch_web` (apellido y año; nunca
-bloquea). Para verlo: `python scripts/check_sources.py ica` de nuevo; si tu biblioteca tiene un
+bloquea). ⚠ El `.bib` es **para el momento de la ingesta**, como el PDF que entregás: se lee en la
+carpeta donde está el `pdf:` cuando lo declarás. Si después repuntás `pdf:` a la copia del vault
+(#299), el carril ya corrió; no hay campo de config para una biblioteca externa, a propósito. Para verlo: `python scripts/check_sources.py ica` de nuevo; si tu biblioteca tiene un
 `.bib` al lado de los PDFs, los `no-evaluable` de arXiv pasan a `[bib]`. `.csv`/`.xlsx` no se
 leen (decidido: demasiado específico); ésos los lee el agente antes de declarar (§2k).
 
