@@ -7124,3 +7124,70 @@ def test_los_wikilinks_del_hermano_siguen_contando(toy_vault, capsys):
                  encoding="utf-8")
     rc, rep = run_lint_reporte(capsys)
     assert rc == 1 and "2020noExiste" in rep, rep
+
+
+# ── #361 · la cascada de descubrimiento (paso 0b) que nunca corrió, o corrió coja ─────────────────
+
+def _tema_offads(source="local-pdfs+web"):
+    return {"icasso": {"title": "Icasso", "concept": "icasso", "area": "methods",
+                       "facet": "icasso", "search_fq": None, "source": source,
+                       "query": 'abs:"icasso"'}}
+
+
+def _descubrimiento(n_records, cobertura):
+    return {"fecha": "2026-08-31", "rows": 25, "n_records": n_records, "n_undedupable": 0,
+            "cobertura": {b: {"n": n, "error": e} for b, n, e in cobertura},
+            "encontrados": [], "no_deduplicables": [], "almagesto_version": "1.0"}
+
+
+def test_tema_offads_cuya_cascada_nunca_corrio_es_backlog(toy_vault):
+    """#361 (b) — el paso 0b es manual por diseño (#95/#209) y el registro versionado guarda si
+    corrió: `descubrimientos`. Nadie lo leía. Medido: un tema cerrado entero —12 papers, 107 pares
+    verificados, `lint --cierre` en 0— sin haber corrido la cascada, y ningún gate lo dijo."""
+    write_yaml(cfg.THEMES_YAML, _tema_offads())
+    cat = lint.collect().por_clave("cascada_sin_correr")
+    hallazgos = [m for _n, m in cat.items]
+    assert any("nunca corrió" in h and "discover.py --theme icasso" in h for h in hallazgos), hallazgos
+    assert cat.severidad == lint.SEV_BACKLOG
+    assert cat.poblacion == "temas", "INV-40: la categoría declara sobre qué población miró"
+
+
+def test_cascada_que_corrio_con_backends_caidos_nombra_cual(toy_vault):
+    """#361 (b) — «corrió» con OpenAlex en 429 no es «los tres miraron»: el tercer estado, con el
+    backend caído nombrado. Medido en `icasso`: dos corridas, las dos con OpenAlex FALLÓ."""
+    write_yaml(cfg.THEMES_YAML, _tema_offads())
+    cfg.save_descubrimiento("icasso", _descubrimiento(25, [
+        ("ads", 0, None), ("arxiv", 25, None), ("openalex", 0, "OpenAlex HTTP 429: Insufficient budget")]))
+    hallazgos = [m for _n, m in lint.collect().por_clave("cascada_sin_correr").items]
+    assert len(hallazgos) == 1 and "openalex" in hallazgos[0] and "FALLÓ" in hallazgos[0], hallazgos
+    assert "nunca corrió" not in hallazgos[0]
+
+
+def test_cascada_que_corrio_y_no_trajo_nada_lo_dice(toy_vault):
+    """#361 (b) — segundo estado: corrió entera y devolvió cero. No es deuda de correrla: es que la
+    consulta no trae nada, y eso pide revisar `query`/`aliases`/`topic`."""
+    write_yaml(cfg.THEMES_YAML, _tema_offads())
+    cfg.save_descubrimiento("icasso", _descubrimiento(0, [
+        ("ads", 0, None), ("arxiv", 0, None), ("openalex", 0, None)]))
+    hallazgos = [m for _n, m in lint.collect().por_clave("cascada_sin_correr").items]
+    assert len(hallazgos) == 1 and "no trajo nada" in hallazgos[0], hallazgos
+
+
+def test_un_backend_caido_en_una_corrida_y_sano_en_otra_no_es_deuda(toy_vault):
+    """#361 (b) — la unión de las corridas: si OpenAlex cayó el lunes y contestó el martes, el tema
+    SÍ tiene su mitad OpenAlex mirada. Y `NO CORRIÓ` (sin `topic:`) no es «caído»: es una decisión
+    declarada, que ya reporta la cascada al correr."""
+    write_yaml(cfg.THEMES_YAML, _tema_offads())
+    cfg.save_descubrimiento("icasso", _descubrimiento(3, [
+        ("ads", 3, None), ("arxiv", 0, None), ("openalex", 0, "timeout")]))
+    cfg.save_descubrimiento("icasso", _descubrimiento(9, [
+        ("ads", 3, None), ("arxiv", 0, None), ("openalex", 6, None),
+        ("seed_terms", 0, "NO CORRIÓ: sin `seed_terms:`")]))
+    assert lint.collect().por_clave("cascada_sin_correr").items == ()
+
+
+def test_tema_ads_puro_no_tiene_paso_0b(toy_vault):
+    """#361 (b) — el paso 0b lo prescribe el skill para el tema off-ADS o mixto; un tema `source:
+    ads` (o sin `source`) se descubre por `query_ads`, y exigirle la cascada inventaría deuda."""
+    write_yaml(cfg.THEMES_YAML, {"gp": {"title": "GP", "concept": "gp", "query": "abs:gp"}})
+    assert lint.collect().por_clave("cascada_sin_correr").items == ()

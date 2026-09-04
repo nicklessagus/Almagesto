@@ -399,6 +399,12 @@ este paso 0b y no algo que el orquestador haga solo (#95 sigue abierto como **de
 defecto). Lo único que `source:` decide de fondo es una propiedad del **corpus**: *«este tema tiene
 papers sin bibcode ADS, así que además de la query hay una lista declarada»*.
 
+⛔ **Este paso tiene red desde #361:** el lint reporta como backlog (`cascada_sin_correr`) el tema
+off-ADS o mixto cuyo registro no tiene `descubrimientos`, los tiene vacíos o con un backend que
+FALLÓ en todas las corridas. Medido: un tema se cerró con todos los gates en verde sin este paso, y
+lo detectó el usuario preguntando «¿falta algo?». Y el anclaje ya no muere con traceback: deja su
+fila `anclaje` en la cobertura, con los tres estados.
+
 ⛔ **No le digas al usuario "no tengo los fundacionales" habiendo mirado un solo buscador.** Fue un
 defecto medido: ADS devuelve **0 de 8** del canon de ICA/BSS y `author:"Hyvarinen, A"` trae dos
 papers sobre gotas de ácido sulfúrico (es otro Hyvärinen) — pero OpenAlex los tiene **8 de 8**, con

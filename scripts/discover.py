@@ -748,6 +748,27 @@ def _preview_theme(slug: str, rows: int = 25, min_citadores: int = 2,
                   min_citas=cfg.gate2_threshold(tema)[0],
                   term_slices=slices or None,
                   rows_por_termino=rpt)
+    # #361 (a) — el anclaje corre ANTES de imprimir y de registrar, envuelto con el mismo manejo que
+    # `cascade` le da a cada backend: `("anclaje", n, err)` con los tres estados de #290. Iba
+    # desnudo: un 429 de OpenAlex terminaba en traceback, sin línea de cierre y con el resultado de
+    # las etapas que SÍ corrieron perdido — en la etapa que `CLAUDE.md` declara «la de más
+    # apalancamiento». Y el registro no guardaba nada del anclaje, así que «corrió y devolvió N» y
+    # «no llegó a preguntar» se leían igual desde el disco.
+    ancla, del_tema = _theme_anchor(slug, tema.get("concept"))
+    anclados: list = []
+    no_res: list = []
+    if ancla:
+        try:
+            anclados, no_res = anchored_records(ancla, min_citadores=min_citadores, rows=rows)
+            out["cobertura"].append(("anclaje", len(anclados), None))
+        except Exception as e:                                  # noqa: BLE001 — declarado
+            out["cobertura"].append(("anclaje", 0, str(e)[:120]))
+    elif del_tema:
+        out["cobertura"].append(("anclaje", 0, f"NO CORRIÓ: el tema tiene {del_tema} paper(s) en la "
+                                               f"bóveda y NINGUNO trae `doi`"))
+    else:
+        out["cobertura"].append(("anclaje", 0, "NO CORRIÓ: el tema todavía no tiene papers en la "
+                                               "bóveda"))
     cfg.print_seguro(f"\nCascada para `{slug}` (preview — no baja nada, no clasifica):")
     print_cobertura(out["cobertura"])
     # #77: el rastro versionado. La cascada corría tres backends y su resultado moría en stdout, así
@@ -806,11 +827,13 @@ def _preview_theme(slug: str, rows: int = 25, min_citadores: int = 2,
         cfg.print_seguro(f"  … y {len(_rank) - rows} más (listado cortado en --rows {rows}; el "
                          f"orden es por citas/AÑO, no por cuenta cruda)")
 
-    ancla, del_tema = _theme_anchor(slug, tema.get("concept"))
     if ancla:
         cfg.print_seguro(f"\nAnclaje: {len(ancla)} papers del tema con DOI en la bóveda "
                          f"→ qué citan ≥{min_citadores} de ellos")
-        anclados, no_res = anchored_records(ancla, min_citadores=min_citadores, rows=rows)
+        _err_anc = next((e for b, _n, e in out["cobertura"] if b == "anclaje"), None)
+        if _err_anc:
+            cfg.print_seguro(f"  ⚠ el anclaje FALLÓ ({_err_anc}) — 0 candidatos, y eso NO "
+                             f"significa que ninguna referencia sea consenso: volvé a correrlo")
         if no_res:
             cfg.print_seguro(f"  ⚠ {len(no_res)} DOIs sin referencias resueltas "
                              "(OpenAlex las saca de depósitos Crossref; el astro pre-2000 no los tiene)")

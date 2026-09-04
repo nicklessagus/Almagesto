@@ -612,6 +612,18 @@ OCR, o marcar `pending`).
   entrada del tema, **aunque sea `null`**. El aviso simétrico sale en
   `query_ads.py <slug> --theme --probe`, que es donde el corte se decide antes de pagar
   descargas (#208).
+- **Cascada de descubrimiento (paso 0b) sin correr, vacía o coja** (#361, `cascada_sin_correr`):
+  el paso 0b —`discover.py --theme <slug>`, los tres backends— es **manual** por diseño (#95/#209)
+  y el registro versionado guarda si corrió (`descubrimientos`), pero nadie lo leía. Medido: un
+  tema cerrado entero —12 papers, 107 pares verificados, `lint --cierre` en 0— sin haber corrido la
+  cascada, y ningún gate lo dijo. Sólo para el tema **off-ADS o mixto** (`source:` declarado y
+  distinto de `ads`), que es donde el skill prescribe el paso. **Tres estados** (D-43), porque
+  piden acciones distintas: *nunca corrió* (correrla) · *corrió y no trajo nada* (revisar
+  `query`/`aliases`/`topic`) · *corrió con backends caídos*, nombrando cuál (volver a correr —
+  un 0 por caída no es «no tiene nada del tema»). Las corridas se **unen**: un backend caído en una
+  y sano en otra no es deuda, y las filas `NO CORRIÓ: …` son decisiones declaradas, no caídas.
+  Desde #361 la cobertura del registro lleva también la fila **`anclaje`**, con los mismos tres
+  estados: antes el anclaje moría con traceback y no dejaba rastro. Backlog.
 - **Capas colgadas de un slug que ya no existe** (INV-19, tras un `entity.py delete|rename` a
   medias).
 

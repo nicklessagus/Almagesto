@@ -844,9 +844,10 @@ la cascada y **propone**; nunca clasifica.
   skill prescribe a mano (0b).
 - **La cobertura distingue tres estados, no dos** (`print_cobertura`): corrió con N, **FALLÓ** (0
   por caída, que no es «no tiene nada») y **NO CORRIÓ** con el motivo. Saltear un backend en
-  silencio deja una cascada de tres que corrió una, leída como "los tres miraron". Ídem el conteo de
-  citas: arXiv no lo publica, así que la columna muestra **`?`, no `0`** — un `0` afirma "no lo cita
-  nadie" sobre un dato que nadie miró, y con esa columna se decide qué mandar a triage. ⛔ **Y `--topics` —el PRIMER comando del paso 0b— declara sus dos
+  silencio deja una cascada de tres que corrió una, leída como "los tres miraron". ⛔ **El anclaje
+  también, con fila `anclaje` en el registro; y el lint reporta el tema off-ADS/mixto cuya cascada
+  nunca corrió, corrió vacía o con backends caídos (#361).** Ídem las citas: arXiv no las publica y
+  la columna muestra **`?`, no `0`** (un `0` afirma «no lo cita nadie» sobre lo que nadie miró). ⛔ **Y `--topics` —el PRIMER comando del paso 0b— declara sus dos
   ceros (#290)**: «la taxonomía no tiene nada parecido» (probá una frase más general) y **FALLÓ**
   (volvé a correrlo) piden lo contrario, y salían idénticos.
 - **Dedup por DOI, nunca por título** (`ident`/`dedup`): el matcheo por título resolvió 18 de 25 y

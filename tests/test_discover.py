@@ -1107,3 +1107,62 @@ def test_el_motivo_dice_si_arxiv_NO_se_consulto(toy_vault, monkeypatch):
     monkeypatch.setattr(d.requests, "get", lambda *a, **k: _Resp({"best_oa_location": None}))
     _url, why = d.resolve_pdf("10.1/sin-titulo")
     assert "arXiv NO se consultó" in why
+
+
+# ── #361 · el anclaje honra el contrato de cobertura (corrió con N · FALLÓ · NO CORRIÓ) ─────────
+
+def _tema_ica_offads():
+    return {"ica": {"title": "ICA", "area": "methods", "concept": "ica", "source": "web",
+                    "query": 'abs:"independent component"', "aliases": ["ICA"], "topic": "T11447"}}
+
+
+def _cascada_vacia(**k):
+    return {"records": [], "undedupable": [], "cobertura": [("ads", 0, None)]}
+
+
+def test_el_anclaje_que_FALLA_se_declara_y_no_tumba_el_preview(toy_vault, monkeypatch, capsys):
+    """#361 (a) — `cascade` envuelve cada backend y honra los tres estados de #290; el anclaje —la
+    etapa que `CLAUDE.md` declara «la de más apalancamiento»— iba desnudo: un 429 de OpenAlex
+    terminaba en traceback, sin línea de cierre, y con el resultado de las etapas que SÍ corrieron
+    perdido. Medido en `icasso`: la cascada dijo «openalex FALLÓ» y el anclaje murió dos líneas
+    después.  @inv INV-121"""
+    write_yaml(cfg.THEMES_YAML, _tema_ica_offads())
+    monkeypatch.setattr(d, "cascade", _cascada_vacia)
+    monkeypatch.setattr(d, "_theme_anchor", lambda s, c=None: ([{"doi": "10.1/z"}], 1))
+
+    def revienta(*a, **k):
+        raise RuntimeError("OpenAlex HTTP 429: Insufficient budget")
+    monkeypatch.setattr(d, "anchored_records", revienta)
+    assert d._preview_theme("ica") == 0, "un backend caído no es un traceback"
+    out = capsys.readouterr().out
+    assert "anclaje" in out and "FALLÓ" in out and "Insufficient budget" in out, out
+    assert "CANDIDATOS" in out, "la línea de cierre tiene que salir igual"
+    cob = cfg.as_list(cfg.load_registro("ica").get("descubrimientos"))[-1]["cobertura"]
+    assert cob["anclaje"]["n"] == 0 and "Insufficient budget" in cob["anclaje"]["error"], cob
+
+
+def test_el_anclaje_que_corrio_queda_en_la_cobertura_del_registro(toy_vault, monkeypatch, capsys):
+    """#361 (a) — el registro guardaba la cobertura de los tres backends y NADA del anclaje, así que
+    «corrió y devolvió N» y «no llegó a preguntar» se leían igual desde el disco."""
+    write_yaml(cfg.THEMES_YAML, _tema_ica_offads())
+    monkeypatch.setattr(d, "cascade", _cascada_vacia)
+    monkeypatch.setattr(d, "_theme_anchor", lambda s, c=None: ([{"doi": "10.1/z"}], 1))
+    monkeypatch.setattr(d, "anchored_records", lambda a, min_citadores=2, rows=25: (
+        [{"title": "canon", "citation_count": 1, "citadores": 2, "found_in": ["anclado"]}], []))
+    assert d._preview_theme("ica") == 0
+    cob = cfg.as_list(cfg.load_registro("ica").get("descubrimientos"))[-1]["cobertura"]
+    assert cob["anclaje"] == {"n": 1, "error": None}, cob
+    assert "anclaje" in capsys.readouterr().out
+
+
+def test_el_anclaje_que_NO_CORRIO_lo_dice_en_la_cobertura(toy_vault, monkeypatch, capsys):
+    """#361 (a) — sin papers con DOI el anclaje no puede correr: tercer estado, con su motivo, y
+    distinto de FALLÓ (D-43)."""
+    write_yaml(cfg.THEMES_YAML, _tema_ica_offads())
+    monkeypatch.setattr(d, "cascade", _cascada_vacia)
+    monkeypatch.setattr(d, "_theme_anchor", lambda s, c=None: ([], 0))
+    monkeypatch.setattr(d, "anchored_records",
+                        lambda *a, **k: pytest.fail("sin ancla no se consulta nada"))
+    assert d._preview_theme("ica") == 0
+    cob = cfg.as_list(cfg.load_registro("ica").get("descubrimientos"))[-1]["cobertura"]
+    assert cob["anclaje"]["n"] == 0 and str(cob["anclaje"]["error"]).startswith("NO CORRIÓ"), cob

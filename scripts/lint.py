@@ -1123,6 +1123,37 @@ SEV_WARN = "warn"                  # heurística de alta señal: se revisa a man
 SEV_BACKLOG = "backlog"            # deuda visible: no invalida lo que hay
 
 
+def discovery_state(descubrimientos: list) -> str | None:
+    """Verdict on a theme's discovery runs (#361 b): `None` when the cascade ran and every backend
+    answered at least once, else one of the three states, as a sentence.
+
+    Runs are unioned: a backend that fell over on Monday and answered on Tuesday HAS been looked
+    at. `NO CORRIÓ: …` rows are declared decisions (no `topic:`, opt-in `seed_terms`), not
+    failures — the cascade already reports them when it runs — so they never count as down.
+    "Ran and returned nothing" is judged over the union too: zero in every run."""
+    runs = [d for d in descubrimientos if isinstance(d, dict)]
+    if not runs:
+        return "la cascada de los tres backends nunca corrió sobre este tema"
+    ok: set = set()
+    caidos: dict = {}
+    for d in runs:
+        for b, c in (d.get("cobertura") or {}).items():
+            err = (c or {}).get("error") if isinstance(c, dict) else None
+            if err is None:
+                ok.add(b)
+            elif not str(err).startswith("NO CORRIÓ"):
+                caidos[b] = str(err)
+    caidos = {b: e for b, e in caidos.items() if b not in ok}
+    if caidos:
+        return ("corrió con backends caídos — " +
+                "; ".join(f"{b} FALLÓ ({e[:80]})" for b, e in sorted(caidos.items())) +
+                " — y un 0 por caída no es «no tiene nada del tema»")
+    if all(int(d.get("n_records") or 0) == 0 for d in runs):
+        return (f"corrió {len(runs)} vez/veces y no trajo nada: revisá `query`/`aliases`/`topic` "
+                f"del tema antes de leerlo como «no hay literatura»")
+    return None
+
+
 @dataclass(frozen=True)
 class Categoria:
     """Una categoría del reporte: su clave estable, su título, su severidad y sus hallazgos.
@@ -1390,6 +1421,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     campos_txt_viejos: list = []       # (stem, motivo) — #205: `symbols_lost`/`fulltext_layout`
     log_sin_entrada: list = []         # (slug, motivo) — #118: la cadena corrió y el log no lo dice
     sweep_pendiente: list = []         # (slug, motivo) — #88: el barrido 2b no consta en el registro
+    cascada_sin_correr: list = []      # (tema, motivo) — #361: el paso 0b nunca corrió, corrió vacío o cojo
     impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
     cond_sin_clasificar: list = []     # (stem, motivo) — #221: condición sin `acota:`/`contextualiza:`
     verif_truncada: list = []          # (stem, motivo) — #226: `Evidencia`/`Condición` cortada
@@ -4459,6 +4491,28 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                  f"Medido en `ica`: 0 papers por la puerta fundacional con el fq heredado, 2 sin él "
                  f"(incl. Comon 1994) → declaralo en `themes.yaml`, aunque sea `null`"))
 
+    # #361 (b) — el paso 0b (la cascada de los tres backends, `discover.py --theme <slug>`) es
+    # MANUAL por diseño (#95/#209) y el registro versionado guarda si corrió: `descubrimientos`.
+    # Nadie lo leía. Medido: un tema cerrado entero —12 papers, 265 valores, 107 pares verificados,
+    # `lint --cierre` en 0— sin haber corrido la cascada, y ningún gate lo dijo; lo detectó el
+    # usuario preguntando «¿falta algo del tema?». Es el peor caso para el silencio: un tema con
+    # todos los verdes se lee como exhaustivo. Sólo para el tema off-ADS o MIXTO (`source:`
+    # declarado y distinto de `ads`), que es donde el skill prescribe el paso; un tema ADS puro se
+    # descubre por `query_ads` y exigirle la cascada inventaría deuda. Tres estados (D-43), porque
+    # piden acciones distintas: nunca corrió · corrió y no trajo nada · corrió con backends caídos.
+    if not cfg.themes_error():
+        for _slug, _tmeta in (cfg.load_themes() or {}).items():
+            _tm = cfg.as_map(_tmeta)
+            _src = str(_tm.get("source") or "ads").strip()
+            if _src == "ads":
+                continue
+            _estado = discovery_state(cfg.as_list((cfg.load_registro(_slug) or {}).get("descubrimientos")))
+            if _estado is not None:
+                cascada_sin_correr.append(
+                    (f"tema `{_slug}`",
+                     f"{_estado} → `python scripts/discover.py --theme {_slug}` (paso 0b del skill "
+                     f"`ingest-theme`: un tema cerrado sin él se lee como exhaustivo y no lo es)"))
+
     if not cfg.themes_error():
         for _slug, _tmeta in (cfg.load_themes() or {}).items():
             _facet = cfg.as_map(_tmeta).get("facet")
@@ -4615,6 +4669,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('version_publicada', '🕳 La nota se apoya en el PREPRINT habiendo versión publicada (#298, backlog)', SEV_BACKLOG, tuple(version_publicada), poblacion='papers'),
         Categoria('status_apilado', '🕳 `STATUS.md` apilado como bitácora: es ESTADO, se reescribe (#302, backlog)', SEV_BACKLOG, tuple(status_apilado), poblacion='config'),
         Categoria('alcance_desfasado', '🕳 `alcance`/`unidad_cita` de la nota ≠ el declarado en `sources[]` (#312, backlog)', SEV_BACKLOG, tuple(alcance_desfasado), poblacion='papers'),
+        Categoria('cascada_sin_correr', '🕳 Tema off-ADS/mixto cuya cascada de descubrimiento (paso 0b) nunca corrió, corrió vacía o con backends caídos (#361, backlog)', SEV_BACKLOG, tuple(cascada_sin_correr), poblacion='temas'),
         Categoria('tema_fq_heredado', '🕳 Tema de MÉTODO sin `search_fq`: hereda el del objetivo, que excluye su literatura server-side (#351, backlog)', SEV_BACKLOG, tuple(tema_fq_heredado), poblacion='temas'),
         Categoria('sweep_pendiente', 'Barrido full-text (2b) sin rastro o truncado: no consta que la '
                   'segunda red para el punto ciego de la query se haya tendido entera (backlog)',
