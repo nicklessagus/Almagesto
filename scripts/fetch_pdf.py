@@ -232,6 +232,40 @@ def download_pdf(url: str, token: str) -> bytes | None:
 
 
 
+def fetch_free_copy(slug: str, r: dict, dest: Path, token: str) -> tuple[bool, list]:
+    """Walk EVERY open-access candidate for record `r` (#358) and publish the first real PDF at
+    `dest` → `(got one, urls tried)`.
+
+    Cascade: OpenAlex → Unpaywall → Europe PMC → arXiv by exact title (`discover`). All of them,
+    not the first: measured, the first URL (OUP) answered a Cloudflare challenge with HTTP 200 and
+    the real copy was Europe PMC's. `download_pdf` validates the `%PDF` magic, so that HTML never
+    lands with a `.pdf` extension. The urls tried are what separates «no free copy» from «there
+    was one and the host blocked it» in the residue — those two ask for opposite actions.
+    Records `pdf_source` (#57) only when the candidate knows it (arXiv → `eprint`, a
+    `publishedVersion` OA location → `publisher`); otherwise it stays unknown."""
+    bib = r["bibcode"]
+    tried: list = []
+    for url, why, src in oa_candidates(r.get("doi"), r.get("title")):
+        tried.append(url)
+        pdf = download_pdf(url, token)
+        if pdf and write_pdf_atomic(dest, pdf):
+            cfg.print_seguro(f"      ✓ copia libre ({why}) → {dest.name} ({len(pdf)} bytes)")
+            if src:
+                cfg.record_pdf_source(slug, safe_name(bib), src)
+            return True, tried
+        cfg.print_seguro(f"      · copia libre ({why}) no entregó PDF: {url}")
+    return False, tried
+
+
+def oa_candidates(doi: str | None, title: str | None = None):
+    """Free-copy candidates for one DOI, in cascade order (#358): `discover.iter_pdf_candidates`,
+    imported here so tests can double it. The ADS lane never asked the open-access resolver the
+    repo already had — the exact mirror of #313 — and measured, 2 of 6 papers declared «sin
+    conseguir» in one theme were open access, with `discover.py --resolve` returning their URL."""
+    import discover
+    return discover.iter_pdf_candidates(doi, title)
+
+
 def _flags_usados(args, ap=None) -> list:
     """Los flags no-default de esta corrida, para dejarlos en `cadena:` del registro (D-48/D-57).
     Son las **escotillas**: `--force`, `--yes`, `--all` cambian lo que la corrida hizo, y sin
@@ -357,14 +391,32 @@ def main() -> int:
                 pass    # write_pdf_atomic ya imprimió el motivo; probar la siguiente fuente
             else:
                 cfg.print_seguro(f"      · {sub} no entregó PDF")
+        # #358 — agotados los `esource` de ADS, el resolver de acceso abierto ANTES de rendirse.
+        copias_libres: list = []
+        if not ok and r.get("doi"):
+            ok, copias_libres = fetch_free_copy(args.slug, r, dest, token)
+            got += int(ok)
         if not ok:
             hint = rescue_hint(r.get("bibstem"), r.get("year"))
+            # Tres estados, no uno (#358): «no hay copia libre» pide `pending:`; «la hubo y el
+            # host la bloqueó» pide otro depósito o bajarla a mano desde esa URL. Salían iguales.
+            estado = "bloqueado" if copias_libres else "sin-copia-libre"
             missing.append({"bibcode": bib, "title": r.get("title"), "doi": r.get("doi"),
-                            "bibstem": r.get("bibstem"), "year": r.get("year"), "hint": hint})
-            cfg.print_seguro(f"      → rescate manual [{r.get('bibstem') or 'sin bibstem'}]: {hint}")
+                            "bibstem": r.get("bibstem"), "year": r.get("year"), "hint": hint,
+                            "estado": estado, "copias_libres": copias_libres})
+            if copias_libres:
+                cfg.print_seguro(f"      → había copia libre y el host la bloqueó o no entregó un PDF "
+                                 f"({len(copias_libres)} URL en missing_pdf.json): probá bajarla a "
+                                 f"mano desde ahí antes del rescate manual")
+            else:
+                cfg.print_seguro(f"      → sin copia libre en OpenAlex, Unpaywall, Europe PMC ni arXiv"
+                                 + ("" if r.get("doi") else " (sin DOI: no se consultaron)")
+                                 + f" → rescate manual [{r.get('bibstem') or 'sin bibstem'}]: {hint}")
         time.sleep(SLEEP_S)
 
-    cfg.print_seguro(f"Bajados {got}, ya estaban {skipped}, sin conseguir {len(missing)}.")
+    n_bloq = sum(1 for m in missing if m["estado"] == "bloqueado")
+    cfg.print_seguro(f"Bajados {got}, ya estaban {skipped}, sin conseguir {len(missing)}"
+                     + (f" ({n_bloq} con copia libre que el host bloqueó)" if n_bloq else "") + ".")
     miss = cfg.ROOT / "build" / args.slug / "missing_pdf.json"
     if limited:
         cfg.print_seguro(f"  ⚠ --limit activo: quedaron {len(pendientes) - len(todo)} paper(s) "

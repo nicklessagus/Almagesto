@@ -142,7 +142,9 @@ python scripts/discover.py --topics "<tema en inglés>"   # el id T… de OpenAl
                                     #   (acepta VARIOS: `topic: [T1, T2]`, se buscan en OR — #293;
                                     #   y declara sus dos ceros: taxonomía vacía vs FALLÓ — #290)
 python scripts/discover.py --theme <slug> --rows-por-termino 600   # el slice de `seed_terms` se PAGINA (#294)
-python scripts/discover.py --resolve 10.1016/…           # ¿hay copia libre de ese DOI? (OpenAlex → Unpaywall)
+python scripts/discover.py --resolve 10.1016/…           # ¿hay copia libre de ese DOI? (OpenAlex → Unpaywall →
+                                    #   Europe PMC → arXiv por título exacto; #358: el carril ADS de
+                                    #   `fetch_pdf` recorre la misma cascada antes de rendirse)
 ```
 
 **Paso 3 de la cadena — la extracción, por par (paper, sujeto)** (⚠ éstos **sí** dependen del sujeto:

@@ -89,6 +89,13 @@ def patch_net(monkeypatch, responses, calls=None):
     monkeypatch.setattr(fp, "_curl_pdf", lambda url: None)   # sin curl por default; tests propios lo re-parchean
 
 
+@pytest.fixture(autouse=True)
+def _sin_resolver_oa(monkeypatch):
+    """#358: el carril ADS cae al resolver de acceso abierto al agotar los `esource`. Por default
+    acá no propone nada (y no sale a la red, INV-114); los tests propios lo re-parchean."""
+    monkeypatch.setattr(fp, "oa_candidates", lambda doi, title=None: iter([]))
+
+
 # ── esource_records ──────────────────────────────────────────────────────────
 
 def test_esource_records_forma_multiple(monkeypatch):
@@ -539,3 +546,88 @@ def test_no_re_baja_un_bibcode_que_ya_es_ALIAS_de_otra_nota(toy_vault):
     dentro, fuera = fp.drop_filter(recs, "ica")
     assert [r["bibcode"] for r in dentro] == ["2020otro...1..1A"]
     assert [r["bibcode"] for r in fuera] == ["2026arXiv260528635F"]
+
+
+# ── #358 · el carril ADS cae al resolver de acceso abierto antes de rendirse ─────────────────────
+
+def _oa_get(candidatos):
+    """Doble de `fetch_pdf.oa_candidates` — misma forma que `discover.iter_pdf_candidates`:
+    triples `(url, why, pdf_source)`."""
+    return lambda doi, title=None: iter(candidatos)
+
+
+def test_esource_agotado_cae_al_resolver_de_acceso_abierto(toy_vault, monkeypatch):
+    """#358 — el simétrico de #313: el carril ADS sólo probaba los `esource` de ADS y se rendía sin
+    preguntarle al resolver que el otro carril usa. Medido: 2 de 6 «sin conseguir» de un tema eran
+    open access, y `discover.py --resolve` ya devolvía la URL de los dos."""
+    ads_json(toy_vault.ROOT, "test_star", RECORDS[:1])
+    monkeypatch.setattr(fp, "esource_records", lambda bib, tok: [])
+    pedidos = []
+    monkeypatch.setattr(fp, "oa_candidates", lambda doi, title=None: pedidos.append(doi) or
+                        iter([("https://plos/x.pdf", "OpenAlex best_oa_location", "publisher")]))
+    monkeypatch.setattr(fp, "download_pdf", lambda url, tok: b"%PDF-oa" if "plos" in url else None)
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    assert pedidos == ["10.1/w"]
+    assert (toy_vault.PDFS / "test_star" / "1978oldW...1..1W.pdf").read_bytes() == b"%PDF-oa"
+    src = json.loads((toy_vault.ROOT / "build" / "test_star" / "pdf_source.json").read_text())
+    assert src["1978oldW...1..1W"] == "publisher", "#57: la procedencia viaja con el candidato"
+    assert not (toy_vault.ROOT / "build" / "test_star" / "missing_pdf.json").exists()
+
+
+def test_copia_libre_bloqueada_se_distingue_de_sin_copia_libre(toy_vault, monkeypatch, capsys):
+    """#358 (3) — «no hay copia libre» y «la hubo y el host la bloqueó» salían idénticos (`sin
+    conseguir` + rescate manual) y piden lo contrario: `pending:` el primero, otro depósito el
+    segundo. Medido: OUP devolvía un desafío de Cloudflare con 200 sobre la URL que OpenAlex
+    proponía."""
+    recs = [dict(RECORDS[0]), dict(RECORDS[1], arxiv_id=None)]
+    ads_json(toy_vault.ROOT, "test_star", recs)
+    monkeypatch.setattr(fp, "esource_records", lambda bib, tok: [])
+    monkeypatch.setattr(fp, "oa_candidates", lambda doi, title=None: iter(
+        [("https://oup/cloudflare.pdf", "OpenAlex best_oa_location", None)] if doi == "10.1/w" else []))
+    monkeypatch.setattr(fp, "download_pdf", lambda url, tok: None)
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    out = capsys.readouterr().out
+    miss = {m["bibcode"]: m for m in json.loads(
+        (toy_vault.ROOT / "build" / "test_star" / "missing_pdf.json").read_text(encoding="utf-8"))}
+    assert miss["1978oldW...1..1W"]["estado"] == "bloqueado"
+    assert miss["1978oldW...1..1W"]["copias_libres"] == ["https://oup/cloudflare.pdf"]
+    assert miss["2020newA...1..1A"]["estado"] == "sin-copia-libre"
+    assert "bloqueó" in out and "sin copia libre" in out, out
+    assert "sin conseguir 2 (1 con copia libre que el host bloqueó)" in out, out
+
+
+def test_sin_doi_no_se_consulta_el_resolver(toy_vault, monkeypatch):
+    """#358 — sin DOI no hay por dónde empezar: no se sale a la red por nada."""
+    ads_json(toy_vault.ROOT, "test_star", [dict(RECORDS[0], doi=None)])
+    monkeypatch.setattr(fp, "esource_records", lambda bib, tok: [])
+    monkeypatch.setattr(fp, "oa_candidates",
+                        lambda doi, title=None: pytest.fail("sin DOI no se consulta"))
+    assert run_main(monkeypatch, ["test_star"]) == 0
+
+
+def test_un_desafio_de_cloudflare_con_200_no_se_guarda_como_pdf(monkeypatch):
+    """#358 (nota) — la URL de OUP devuelve HTML con 200: una bajada ingenua escribiría la página
+    de Cloudflare con extensión `.pdf`. Los dos caminos (requests y el fallback curl) validan el
+    magic `%PDF`."""
+    html = b"<!DOCTYPE html><html><head><title>Just a moment...</title></head></html>"
+    patch_net(monkeypatch, [FakeResp(200, content=html)])
+    monkeypatch.setattr(fp, "_curl_pdf", lambda url: None)
+    assert fp.download_pdf("https://academic.oup.com/x.pdf", "tok") is None
+    # el fallback curl entrega el mismo HTML: tampoco pasa (`_curl_pdf` valida el magic él mismo)
+    monkeypatch.setattr(fp.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0))
+    monkeypatch.setattr(fp.shutil, "which", lambda x: "/usr/bin/curl")
+    monkeypatch.setattr(fp.Path, "read_bytes", lambda self: html)
+    monkeypatch.setattr(fp.Path, "exists", lambda self: True)
+    assert fp._curl_pdf("https://academic.oup.com/x.pdf") is None
+
+
+_OA_CANDIDATES_REAL = fp.oa_candidates      # antes de que el fixture autouse lo reemplace
+
+
+def test_oa_candidates_es_la_cascada_de_discover(monkeypatch):
+    """#358 — el carril ADS no reimplementa el resolver: delega en `discover.iter_pdf_candidates`,
+    la ÚNICA cascada del archivo del repo (si fueran dos, divergirían como #313 y #358)."""
+    import discover
+    monkeypatch.setattr(discover, "iter_pdf_candidates",
+                        lambda doi, title=None: iter([(f"u:{doi}:{title}", "w", None)]))
+    assert list(_OA_CANDIDATES_REAL("10.1/x", "T")) == [("u:10.1/x:T", "w", None)]

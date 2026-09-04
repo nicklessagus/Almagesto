@@ -1166,3 +1166,71 @@ def test_el_anclaje_que_NO_CORRIO_lo_dice_en_la_cobertura(toy_vault, monkeypatch
     assert d._preview_theme("ica") == 0
     cob = cfg.as_list(cfg.load_registro("ica").get("descubrimientos"))[-1]["cobertura"]
     assert cob["anclaje"]["n"] == 0 and str(cob["anclaje"]["error"]).startswith("NO CORRIÓ"), cob
+
+
+# ── #358 · la cascada del archivo: Europe PMC, y TODOS los candidatos en orden ─────────────────────
+
+def _oa_vacio(url, **k):
+    """OpenAlex y Unpaywall sin copia; Europe PMC con la respuesta REAL del 2026-09-04 para
+    10.1093/bioinformatics/btz225 (recortada a los campos que se leen)."""
+    if d.EUROPEPMC in url:
+        return _Resp({"resultList": {"result": [
+            {"id": "30938767", "source": "MED", "pmcid": "PMC6821374",
+             "doi": "10.1093/bioinformatics/btz225", "isOpenAccess": "Y", "inEPMC": "Y",
+             "hasPDF": "Y"}]}})
+    return _Resp({"best_oa_location": {"pdf_url": None, "url_for_pdf": None}})
+
+
+def test_resolve_pdf_cae_a_europepmc_antes_de_arxiv(monkeypatch):
+    """#358 — Europe PMC cubre justo la literatura que el modo off-ADS trae (biomedicina,
+    neuroimagen, bioinformática) y no estaba en ninguna cascada. Medido: resolvió el paper cuya
+    única copia según OpenAlex vivía en un host que bloquea bots (OUP tras Cloudflare)."""
+    monkeypatch.setattr(d.requests, "get", _oa_vacio)
+    monkeypatch.setattr(d, "_arxiv_pdf", lambda t: pytest.fail("Europe PMC va ANTES de arXiv"))
+    url, why = d.resolve_pdf("10.1093/bioinformatics/btz225", title="Icasso")
+    assert url == "https://europepmc.org/articles/PMC6821374?pdf=render" and "Europe PMC" in why
+
+
+def test_europepmc_no_propone_lo_cerrado_ni_lo_sin_pmcid(monkeypatch):
+    """#358 — `isOpenAccess: N` o sin `pmcid` no es una copia: proponerla sería el «encontré»
+    que no consigue nada."""
+    for fila in ({"pmcid": "PMC1", "isOpenAccess": "N"}, {"isOpenAccess": "Y"}):
+        monkeypatch.setattr(d.requests, "get", lambda url, **k: _Resp(
+            {"resultList": {"result": [fila]}} if d.EUROPEPMC in url
+            else {"best_oa_location": {}}))
+        assert d._europepmc_pdf("10.1/x")[0] is None, fila
+
+
+def test_iter_pdf_candidates_devuelve_todos_en_orden_con_su_procedencia(monkeypatch):
+    """#358 — `resolve_pdf` se queda con el PRIMERO; el carril ADS de `fetch_pdf` necesita
+    TODOS: medido, la primera URL (OpenAlex → OUP) devolvía un desafío de Cloudflare con 200 y la
+    copia real estaba en el tercero. Cada candidato lleva su `pdf_source` (#57): sólo arXiv es
+    `eprint`; una ubicación OA `publishedVersion` es `publisher`; lo demás, desconocido (`None`)."""
+    def fake(url, **k):
+        if d.EUROPEPMC in url:
+            return _Resp({"resultList": {"result": [{"pmcid": "PMC9", "isOpenAccess": "Y"}]}})
+        if d.UNPAYWALL in url:
+            return _Resp({"best_oa_location": {"url_for_pdf": "http://u/b.pdf", "version": "acceptedVersion"}})
+        return _Resp({"best_oa_location": {"pdf_url": "http://o/a.pdf", "version": "publishedVersion"}})
+    monkeypatch.setattr(d.requests, "get", fake)
+    monkeypatch.setattr(d, "_arxiv_pdf", lambda t: ("https://arxiv.org/pdf/1.1", "arXiv por título exacto"))
+    cands = list(d.iter_pdf_candidates("10.1/x", title="T"))
+    assert [c[0] for c in cands] == ["http://o/a.pdf", "http://u/b.pdf",
+                                     "https://europepmc.org/articles/PMC9?pdf=render",
+                                     "https://arxiv.org/pdf/1.1"]
+    assert [c[2] for c in cands] == ["publisher", None, None, "eprint"]
+
+
+def test_resolve_pdf_nombra_a_europepmc_entre_lo_consultado(monkeypatch):
+    """#358 — el motivo enumera LO QUE SE CONSULTÓ (un `pending` congela la fuente hasta que
+    alguien se acuerde): si Europe PMC entró a la cascada, tiene que figurar."""
+    monkeypatch.setattr(d.requests, "get", lambda *a, **k: _Resp({}))
+    url, why = d.resolve_pdf("10.1/x")
+    assert url is None and "Europe PMC" in why
+
+
+def test_iter_pdf_candidates_sin_doi_no_consulta_nada(monkeypatch):
+    """#358 — sin DOI no hay por dónde empezar: ni una llamada."""
+    monkeypatch.setattr(d.requests, "get", lambda *a, **k: pytest.fail("no debería consultar"))
+    monkeypatch.setattr(d, "_json", lambda *a, **k: pytest.fail("no debería consultar"))
+    assert list(d.iter_pdf_candidates(None)) == [] and list(d.iter_pdf_candidates("")) == []

@@ -881,14 +881,14 @@ la cascada y **propone**; nunca clasifica.
   papers cuyo título/abstract no usa ninguno de los términos del tema. Ahí manda la curación a
   mano, y el framework pide que cada entrada registre **por qué** entró (`extra_core` con
   `via`/`motivo`, o `sources`).
-- **Encontrar ≠ conseguir** (`resolve_pdf`): OpenAlex identificó 8/8 de los canónicos y devolvió
-  `pdf_url = None` **8/8**. La cascada del archivo es **OpenAlex → Unpaywall → arXiv por título
-  EXACTO** (#313: el carril off-ADS no miraba el depósito que el carril ADS prueba primero — medido,
-  las 2 fuentes `pending: paywall` de una bóveda eran obtenibles y una estaba en arXiv) y **propone
-  una URL y para**: no reescribe un `pending:` declarado ni edita `sources:`. ⛔ Nunca por título
-  **aproximado**, y el motivo enumera **lo que se consultó**: un `pending` es una declaración que
-  congela la fuente como inconseguible, así que un falso «no hay copia libre» dura hasta que alguien
-  se acuerde.
+- **Encontrar ≠ conseguir** (`resolve_pdf`): OpenAlex identificó 8/8 canónicos con `pdf_url = None`
+  **8/8**. La cascada del archivo es **OpenAlex → Unpaywall → Europe PMC → arXiv por título EXACTO**
+  (#313/#358, medidos: 2 `pending: paywall` obtenibles, uno en arXiv; 2 de 6 «sin conseguir» open
+  access, uno sólo vía Europe PMC) y **propone una URL y para**: no reescribe un `pending:` ni edita
+  `sources:`. ⛔ **El carril ADS de `fetch_pdf` la recorre ENTERA al agotar los `esource` (#358)** y
+  el residuo distingue «sin copia libre» de «la hubo y el host la bloqueó» (`estado`). ⛔ Nunca por
+  título **aproximado**; el motivo enumera **lo consultado**: un `pending` congela la fuente hasta
+  que alguien se acuerde.
 
 
 ### Ingest (una fuente → cascada de páginas)

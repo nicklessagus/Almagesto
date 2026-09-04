@@ -553,6 +553,91 @@ def print_cobertura(cobertura: list) -> None:
 UNPAYWALL = "https://api.unpaywall.org/v2/"
 
 
+EUROPEPMC = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
+_NO_FREE_COPY = "sin copia libre en OpenAlex, Unpaywall, Europe PMC ni arXiv"
+
+
+def _oa_source(location: dict) -> str | None:
+    """`pdf_source` (#57) for an OA location: `publisher` only when the deposit says it is the
+    published version; anything else is unknown (`None`), which is honest — an accepted manuscript
+    in a repository is neither the publisher's file nor an eprint."""
+    return "publisher" if str((location or {}).get("version") or "") == "publishedVersion" else None
+
+
+def _europepmc_pdf(doi: str) -> tuple[str | None, str]:
+    """Europe PMC by DOI → `(render url of the PMC copy, why)` (#358).
+
+    Covers exactly the literature the off-ADS mode brings in (biomedicine, neuroimaging,
+    bioinformatics) and was in no cascade. Measured 2026-09-04: it resolved the one paper whose only
+    OpenAlex location sat behind a bot-blocking host (OUP, Cloudflare challenge with HTTP 200), and
+    both issue DOIs came back as real PDFs (874 KB, 750 KB). Only `isOpenAccess: Y` with a `pmcid`
+    counts: proposing a closed record is the "found" that gets nothing."""
+    try:
+        d = _json(EUROPEPMC + "?" + urllib.parse.urlencode(
+            {"query": f'DOI:"{doi}"', "format": "json", "resultType": "lite"}))
+    except Exception as e:                                      # noqa: BLE001 — declarado
+        cfg.print_seguro(f"  ⚠ resolve_pdf: Europe PMC falló para {doi} ({e})")
+        return None, ""
+    for r in ((d.get("resultList") or {}).get("result") or []):
+        pmcid = str((r or {}).get("pmcid") or "").strip()
+        if pmcid and str(r.get("isOpenAccess") or "").upper() == "Y":
+            return (f"https://europepmc.org/articles/{pmcid}?pdf=render",
+                    f"Europe PMC ({pmcid}, isOpenAccess: Y)")
+    return None, ""
+
+
+def iter_pdf_candidates(doi: str | None, title: str | None = None):
+    """Yield every free-copy candidate for one work, in cascade order, as `(url, why, pdf_source)`.
+
+    Lazy on purpose (a generator whose return value says whether arXiv could be consulted):
+    `resolve_pdf` takes the FIRST (one proposal, no extra calls) and the ADS lane
+    of `fetch_pdf` walks ALL of them (#358) — measured, the first URL (OpenAlex → OUP) answered a
+    Cloudflare challenge with HTTP 200 and the real copy was the third candidate. Order:
+    OpenAlex → Unpaywall → Europe PMC → arXiv by EXACT title. Never downloads; never writes."""
+    doi = oa._bare_doi(doi)
+    if not doi:
+        return
+    # 1. OpenAlex: ya lo tenemos consultado en la cascada, y trae la ubicación OA si existe
+    try:
+        d = _json(oa.API + "/doi:" + urllib.parse.quote(doi) + "?" +
+                  urllib.parse.urlencode({"mailto": oa._mailto()}))
+        loc = d.get("best_oa_location") or {}
+        # #313 — el título sale de acá cuando el llamador no lo pasó: los tres call-sites tienen el
+        # DOI a mano y no siempre el título, y sin título la rama de arXiv no puede correr (la
+        # búsqueda por id no aplica: si tuviéramos el arXiv id no estaríamos resolviendo nada).
+        title = title or d.get("display_name") or d.get("title")
+        if loc.get("pdf_url"):
+            yield loc["pdf_url"], "OpenAlex best_oa_location", _oa_source(loc)
+    except Exception as e:                                      # noqa: BLE001 — declarado, no tragado
+        cfg.print_seguro(f"  ⚠ resolve_pdf: OpenAlex falló para {doi} ({e})")
+    # 2. Unpaywall: mismo universo de depósitos, distinta resolución de OA locations
+    try:
+        d = requests.get(UNPAYWALL + urllib.parse.quote(doi) + "?" +
+                         urllib.parse.urlencode({"email": oa._mailto()}), timeout=TIMEOUT).json()  # Unpaywall: otro servicio
+        loc = d.get("best_oa_location") or {}
+        if loc.get("url_for_pdf"):
+            yield loc["url_for_pdf"], "Unpaywall", _oa_source(loc)
+    except Exception as e:                                      # noqa: BLE001
+        cfg.print_seguro(f"  ⚠ resolve_pdf: Unpaywall falló para {doi} ({e})")
+    # 3. Europe PMC (#358): el depósito de la literatura que el modo off-ADS trae, y que ninguna
+    # cascada miraba. Antes de arXiv porque resuelve por DOI, sin adivinar nada.
+    url, why = _europepmc_pdf(doi)
+    if url:
+        yield url, why, None
+    # 4. arXiv (#313). El repo tiene dos módulos de arXiv y `fetch_pdf` prueba el eprint PRIMERO en
+    # el carril ADS, pero el carril `sources:` (off-ADS) sólo tiene esta función — y no lo miraba.
+    # Medido: las 2 fuentes `pending: paywall` de una bóveda eran obtenibles, y una estaba en arXiv
+    # con el mismo título y los mismos autores. Un falso «sin copia libre» no es un fallo
+    # transitorio: `pending` es una DECLARACIÓN que congela la fuente como inconseguible hasta que
+    # una persona se acuerde, porque esta función propone y no reescribe.
+    if title:
+        url, why = _arxiv_pdf(title)
+        if url:
+            yield url, why, "eprint"
+    # Return value (read by `resolve_pdf` via StopIteration): whether arXiv could be consulted.
+    return bool(title)
+
+
 def resolve_pdf(doi: str | None, title: str | None = None) -> tuple[str | None, str]:
     """`(url of a free PDF, reason)` for one work. Never downloads; never writes.
 
@@ -563,47 +648,20 @@ def resolve_pdf(doi: str | None, title: str | None = None) -> tuple[str | None, 
     those files was: the author's own page (3), an institutional repository (1); HAL blocked
     scripted access with an anti-bot page (1) and two are behind IEEE/MIT paywalls.
 
-    It PROPOSES a URL and stops. It never rewrites a `pending:` an operator declared, and never
-    edits `sources:` — the file still has to be looked at before it is trusted, and silently
-    swapping a declared source for one a script guessed is how a citation ends up pointing at a
-    document nobody opened."""
-    doi = oa._bare_doi(doi)
-    if not doi:
+    It PROPOSES a URL and stops — the first of `iter_pdf_candidates` (#358). It never rewrites a
+    `pending:` an operator declared, and never edits `sources:` — the file still has to be looked
+    at before it is trusted, and silently swapping a declared source for one a script guessed is
+    how a citation ends up pointing at a document nobody opened."""
+    if not oa._bare_doi(doi):
         return None, "sin DOI — no hay por dónde empezar (dejar `pending`, o declarar `url:`)"
-    # 1. OpenAlex: ya lo tenemos consultado en la cascada, y trae la ubicación OA si existe
+    gen = iter_pdf_candidates(doi, title)
     try:
-        d = _json(oa.API + "/doi:" + urllib.parse.quote(doi) + "?" +
-                  urllib.parse.urlencode({"mailto": oa._mailto()}))
-        url = ((d.get("best_oa_location") or {}).get("pdf_url"))
-        # #313 — el título sale de acá cuando el llamador no lo pasó: los tres call-sites tienen el
-        # DOI a mano y no siempre el título, y sin título la rama de arXiv no puede correr (la
-        # búsqueda por id no aplica: si tuviéramos el arXiv id no estaríamos resolviendo nada).
-        title = title or d.get("display_name") or d.get("title")
-        if url:
-            return url, "OpenAlex best_oa_location"
-    except Exception as e:                                      # noqa: BLE001 — declarado, no tragado
-        cfg.print_seguro(f"  ⚠ resolve_pdf: OpenAlex falló para {doi} ({e})")
-    # 2. Unpaywall: mismo universo de depósitos, distinta resolución de OA locations
-    try:
-        d = requests.get(UNPAYWALL + urllib.parse.quote(doi) + "?" +
-                         urllib.parse.urlencode({"email": oa._mailto()}), timeout=TIMEOUT).json()  # Unpaywall: otro servicio
-        url = ((d.get("best_oa_location") or {}).get("url_for_pdf"))
-        if url:
-            return url, "Unpaywall"
-    except Exception as e:                                      # noqa: BLE001
-        cfg.print_seguro(f"  ⚠ resolve_pdf: Unpaywall falló para {doi} ({e})")
-    # 3. arXiv (#313). El repo tiene dos módulos de arXiv y `fetch_pdf` prueba el eprint PRIMERO en
-    # el carril ADS, pero el carril `sources:` (off-ADS) sólo tiene esta función — y no lo miraba.
-    # Medido: las 2 fuentes `pending: paywall` de una bóveda eran obtenibles, y una estaba en arXiv
-    # con el mismo título y los mismos autores. Un falso «sin copia libre» no es un fallo
-    # transitorio: `pending` es una DECLARACIÓN que congela la fuente como inconseguible hasta que
-    # una persona se acuerde, porque esta función propone y no reescribe.
-    if title:
-        url, why = _arxiv_pdf(title)
-        if url:
-            return url, why
-    return None, ("sin copia libre en OpenAlex, Unpaywall ni arXiv" +
-                  ("" if title else " (arXiv NO se consultó: sin título con que buscar)") +
+        url, why, _src = next(gen)
+        return url, why
+    except StopIteration as stop:
+        title_known = bool(stop.value)
+    return None, (_NO_FREE_COPY +
+                  ("" if title_known else " (arXiv NO se consultó: sin título con que buscar)") +
                   " — probá la página del autor o el repositorio institucional; si no, dejalo "
                   "`pending: paywall`")
 
