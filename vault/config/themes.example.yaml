@@ -72,6 +72,10 @@
 #              lente, mismas puertas de D-26, misma compuerta de triage) en vez de limitarse a los
 #              bibcodes de `extra_core`. Es lo que convierte un tema mixto de "enumerado a mano" en
 #              "descubierto"; dejala en null si de verdad no querés que busque.
+#              ⛔ Corpus DECLARADO con bibcode ADS (#384): `source: ads` (o sin `source`) +
+#              `query: null` + `extra_core:` poblado → la cadena corre la sub-cadena `--extra-only`.
+#              NO hace falta mentir con `local-pdfs` + `sources: []`: eso afirma que hay bibliografía
+#              fuera de ADS y dispara el aviso de tema mixto sin fuentes, que ahí es falso.
 #   sources  : (sólo off-ADS) la bibliografía declarada del tema. Cada item:
 #                - key: 2006RasmussenWilliams       # clave de cita sintética AAAA+Autor (obligatoria)
 #                  url: https://...            # fuente web (snapshot vía fetch_web/defuddle) — o bien

@@ -48,8 +48,19 @@ def fake_notes(monkeypatch):
     return state
 
 
-def topic(source=None, sources=None, area="methods", concept="gaussian-processes", **extra):
+_QUERY_DEFAULT = object()
+
+
+def topic(source=None, sources=None, area="methods", concept="gaussian-processes",
+          query=_QUERY_DEFAULT, **extra):
+    """Entrada de tema. En modo ADS (`source=None`) la `query` va poblada por default (#384: un
+    tema ADS sin `query:` ni `extra_core:` no tiene vía de papers y la cadena rehúsa); en off-ADS
+    no, como siempre. `query=None` la omite explícitamente."""
     entry = {"title": "Gaussian processes", "area": area, "concept": concept, **extra}
+    if query is _QUERY_DEFAULT:
+        query = "abs:gp" if source is None else None
+    if query is not None:
+        entry["query"] = query
     if source:
         entry["source"] = source
     if sources is not None:
@@ -715,3 +726,42 @@ def test_todo_camino_que_deposita_un_PDF_pasa_por_stamp_pdf():
         texto = (raiz / mod).read_text(encoding="utf-8")
         assert "cfg.PDFS /" in texto, f"{mod}: ya no deposita en raw/pdfs — sacalo de esta lista"
         assert "stamp_pdf(" in texto, f"{mod} deposita en raw/pdfs/ y no llama a stamp_pdf"
+
+
+# ── #384 · corpus DECLARADO con bibcode ADS: `source: ads` + `query: null` + `extra_core:` ────────
+
+def test_tema_ads_sin_query_con_extra_core_corre_la_subcadena_extra_only(toy_vault, fake_run,
+                                                                          fake_notes, monkeypatch,
+                                                                          capsys):
+    """#384 — un tema cuyo corpus es una lista curada de bibcodes ADS tenía que MENTIR en
+    `source:` (`local-pdfs` + `sources: []`) para que la cadena corriera, y encima recibía el aviso
+    de #211 («tema mixto SIN fuentes declaradas») que ahí dice lo contrario de la verdad. La
+    sub-cadena `--extra-only` existía y sólo la alcanzaba el carril off-ADS."""
+    topic(query=None, extra_core=[{"bibcode": "2012PASP..124.1015B", "via": "usuario", "motivo": "canon"}])
+    assert run_main(monkeypatch) == 0
+    assert ("query_ads.py", "--theme", "gp", "--extra-only") in fake_run.calls
+    assert [c[0] for c in fake_run.calls] == \
+        ["query_ads.py", "fetch_arxiv.py", "fetch_pdf.py", "make_notes.py", "extract_fulltext.py",
+         "check_retractions.py"]
+    out = capsys.readouterr().out
+    assert "corpus declarado" in out and "tema mixto SIN fuentes" not in out, out
+
+
+def test_tema_ads_con_query_sigue_sin_extra_only(toy_vault, fake_run, fake_notes, monkeypatch):
+    """#384 — con `query:` poblada el descubrimiento ADS completo sigue igual (y `extra_core` es
+    el override de siempre, que `query_ads` mergea solo)."""
+    topic(query="abs:gp", extra_core=[{"bibcode": "2012PASP..124.1015B", "via": "usuario", "motivo": "x"}])
+    assert run_main(monkeypatch) == 0
+    assert ("query_ads.py", "--theme", "gp") in fake_run.calls
+    assert not any("--extra-only" in c for c in fake_run.calls)
+
+
+def test_tema_ads_sin_query_ni_extra_core_rehusa_con_las_vias(toy_vault, fake_run, fake_notes,
+                                                             monkeypatch):
+    """#384 — sin `query:` ni `extra_core:` un tema ADS no tiene ninguna vía de papers: se dice
+    antes de correr nada, con las dos salidas nombradas (el guard de off-ADS ya lo hacía)."""
+    topic(query=None)
+    with pytest.raises(SystemExit) as e:
+        run_main(monkeypatch)
+    assert "ninguna vía" in str(e.value) and "extra_core" in str(e.value) and "query" in str(e.value)
+    assert fake_run.calls == []

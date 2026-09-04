@@ -496,7 +496,10 @@ Qué cambia respecto del flujo ADS de arriba:
   tema mixto es `query:` poblada + `sources: []`, se declaran las fuentes off-ADS después, y se
   vuelve a correr (la cadena es idempotente). El orquestador aborta sólo si el tema no tiene
   **ninguna** vía de papers (ni `sources:`, ni `query:`, ni `extra_core:`) y **avisa** cuando corre
-  sólo la mitad ADS, para que no se lea como que corrió todo. Hasta 1.76.2 el guard abortaba con
+  sólo la mitad ADS, para que no se lea como que corrió todo. ⛔ **Corpus declarado con bibcode ADS
+  (#384): `source: ads` + `query: null` + `extra_core:`** corre la sub-cadena `--extra-only` sin
+  aviso de tema mixto — no hace falta mentir con `local-pdfs` + `sources: []`, que afirma
+  bibliografía fuera de ADS que no existe y dispara ese aviso donde es falso. Hasta 1.76.2 el guard abortaba con
   `sources:` vacía, o sea medía la premisa que #104 rompió, y el orden de arriba era un **deadlock**.
 - **Sin ADS (si `query:` queda en null):** se saltean `query_ads.py`, `fetch_arxiv.py`, `fetch_pdf.py` y `fetch_ground_truth.py`. En
   `vault/config/themes.yaml` la entrada lleva `query: null`, el switch **`source: web | local-pdfs |

@@ -1109,11 +1109,11 @@ cambiar los ejes de un tema produce un **diff computable**, nunca una re-interpr
 > local-pdfs [+web]` — ⚠ **el nombre engaña (#209): no dice «dónde se busca», dice QUÉ CADENA CORRE
 > el orquestador**; el descubrimiento multi-backend es `discover.py --theme <slug>`, un paso aparte
 > (0b) que `ingest_theme.py` no llama. Un tema off-ADS puede ser **mixto**, y su mitad astro entra
-> por **`query:` poblada** → descubrimiento ADS completo (misma lente, mismas puertas, misma
-> compuerta de triage), o **sólo `extra_core:`** → sub-cadena acotada a esos bibcodes; los papers con
-> bibcode ADS van siempre en `extra_core:`, nunca en `sources:`. Una fuente que no se consigue se
-> marca `pending: …` → stub con `pending_source`, derivada al usuario sin frenar. **`ingest-star` no
-> cambia: es astro-only.** Papers sin bibcode ADS → clave sintética `AAAA+Autor`; páginas web →
+> por **`query:` poblada** → descubrimiento ADS completo (misma lente, puertas y compuerta de
+> triage), o **sólo `extra_core:`** → sub-cadena acotada a esos bibcodes; los papers con bibcode ADS
+> van siempre en `extra_core:`, nunca en `sources:`; **`source: ads` + `query: null` + `extra_core:`
+> = corpus declarado (#384)**. Lo inconseguible → `pending: …` (stub `pending_source`), sin frenar.
+> **`ingest-star` sigue astro-only.** Papers sin bibcode ADS → clave sintética `AAAA+Autor`; páginas web →
 > **snapshot `.txt` determinista** (`fetch_web.py` vía defuddle, que crea además el stub).
 > ⛔ **Una `url:` que sirve un PDF NO se snapshotea: se BAJA como PDF (#242)** — `fetch_web` mira el
 > `Content-Type`, porque `resolve_pdf` devuelve `pdf_url` por construcción y el framework proponía

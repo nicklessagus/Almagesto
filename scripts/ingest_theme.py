@@ -192,14 +192,36 @@ def repoint_source_pdf(key: str, declared: str, dest: Path) -> None:
         f"        pdf: {rel}")
 
 
-def ingest_ads(slug: str, yes: bool = False) -> None:
-    """Cadena astro estándar (paso 2 del skill ingest-theme), abortando al primer fallo."""
+def ads_subchain(slug: str, extra_only: bool) -> tuple:
+    """The ADS sub-chain, ONE definition (#384): query_ads (full discovery, or with the extra-only
+    flag when the astro half of the theme is exactly its curated extra_core bibcodes), then
+    fetch_arxiv, fetch_pdf and make_notes. Both dispatchers run it. Until #384 the extra-only
+    variant was reachable only from the off-ADS lane, so a theme whose corpus is a declared list of
+    ADS bibcodes had to lie about its source kind to run at all, and then received the #211
+    warning about a mixed theme without declared sources, which there states the opposite."""
+    return (("query_ads.py", ["--theme", slug] + (["--extra-only"] if extra_only else [])),
+            ("fetch_arxiv.py", [slug]),
+            ("fetch_pdf.py", [slug]),      # los sin arXiv, vía resolver ADS (esources)
+            ("make_notes.py", ["--theme", slug]))
+
+
+def ingest_ads(slug: str, meta: dict, yes: bool = False) -> None:
+    """Cadena astro estándar (paso 2 del skill ingest-theme), abortando al primer fallo.
+
+    #384: no query plus a populated extra_core is a DECLARED corpus, all with ADS bibcodes, and
+    runs the extra-only sub-chain. With neither of the two it refuses before spending anything."""
+    extra = [e["bibcode"] for e in cfg.load_extra_core(meta, entry=slug)]
+    if not meta.get("query") and not extra:
+        sys.exit(f"'{slug}' es `source: ads` y no tiene ninguna vía de papers: ni `query:` "
+                 f"(descubrimiento ADS) ni `extra_core:` (corpus declarado, bibcodes ADS curados con "
+                 f"`via`/`motivo`). Declará al menos una en themes.yaml.")
+    extra_only = not meta.get("query")
+    if extra_only:
+        cfg.print_seguro(f"  `{slug}`: corpus declarado — {len(extra)} bibcode(s) en `extra_core:` y "
+                         f"sin `query:` → sub-cadena `--extra-only` (#384); no es un tema mixto ni "
+                         f"le faltan fuentes.")
     escotillas = ["--yes"] if yes else []          # INV-44: la escotilla del orquestador deja traza
-    for script, args in (("query_ads.py", ["--theme", slug]),
-                         ("fetch_arxiv.py", [slug]),
-                         ("fetch_pdf.py", [slug]),      # los sin arXiv, vía resolver ADS (esources)
-                         ("make_notes.py", ["--theme", slug]),
-                         ("extract_fulltext.py", [slug])):
+    for script, args in (*ads_subchain(slug, extra_only), ("extract_fulltext.py", [slug])):
         rc = run(script, *args, flags=escotillas)
         if rc:
             sys.exit(f"{script} falló (rc={rc}) — cadena abortada. La cadena es idempotente: "
@@ -384,20 +406,14 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
     # de D-26, misma compuerta de triage) y `extra_core` sigue siendo el override de siempre.
     if meta.get("query"):
         cfg.print_seguro(f"\nquery declarada en un tema off-ADS (tema mixto, #104) → descubrimiento ADS completo")
-        for script, sargs in (("query_ads.py", ["--theme", slug]),
-                              ("fetch_arxiv.py", [slug]),
-                              ("fetch_pdf.py", [slug]),
-                              ("make_notes.py", ["--theme", slug])):
+        for script, sargs in ads_subchain(slug, extra_only=False):
             rc = run(script, *sargs)
             if rc:
                 sys.exit(f"{script} falló (rc={rc}) — cadena abortada. La cadena es idempotente: "
                          "corregí y re-corré ingest_theme.py (lo ya bajado no se re-baja).")
     elif extra:
         cfg.print_seguro(f"\nextra_core: {len(extra)} paper(s) con bibcode ADS (tema mixto) → sub-cadena ADS")
-        for script, sargs in (("query_ads.py", ["--theme", slug, "--extra-only"]),
-                              ("fetch_arxiv.py", [slug]),
-                              ("fetch_pdf.py", [slug]),
-                              ("make_notes.py", ["--theme", slug])):
+        for script, sargs in ads_subchain(slug, extra_only=True):
             rc = run(script, *sargs)
             if rc:
                 sys.exit(f"{script} falló (rc={rc}) — cadena abortada. La cadena es idempotente: "
@@ -503,7 +519,7 @@ def main() -> int:
                 f"con la misma lente y la misma compuerta de triage (#104).")
         if args.force:
             cfg.print_seguro("  ⚠ --force no aplica al modo ads (corré el script puntual con --force si hace falta).")
-        ingest_ads(args.slug, args.yes)
+        ingest_ads(args.slug, meta, args.yes)
     elif source in OFFADS_KINDS:
         ingest_offads(args.slug, {**meta, "source": source}, args.force)
     else:
