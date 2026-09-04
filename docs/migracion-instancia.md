@@ -463,6 +463,26 @@ cuesta 0 (#362) — el orden de gasto está en `docs/operacion.md`.
 > Medido en el template (2026-09-04): las 52 fuentes de `Almagesto-Tesis` en dry-run (sin escribir
 > nada en la instancia); la instancia mide con el registro escrito y lo deja en el `log`.
 
+## 2i · v1.198.0 (T5b: `--promote-source`) — la fuente declarada que tenía bibcode ADS
+
+**Una operación para correr si `check_sources` (o vos) encontró una fuente de `sources:` con
+bibcode ADS.** El caso de #353 (`2011Yang` → `2011PLoSO...627594P`) ya lo migraste a mano y perdió
+el `no_vista` en el camino; para las que queden:
+
+```bash
+python scripts/triage.py ica --promote-source <key> --bibcode <bibcode ADS>
+# pegá el `extra_core` que imprime, sacá el item de `sources:`, pegá la marca ⚠ corregido en log.md
+python scripts/ingest_theme.py ica          # idempotente
+python scripts/lint.py
+```
+
+Mueve nota, hermano `.verif.md`, PDF/`.txt` bajo todos los slugs, extracción y wikilinks; **no**
+escribe `versions[]` (la clave era errónea, #355); re-estampa título/autor/año/doi/bibstem/citas/
+keywords/abstract desde ADS; y compara la curación de la nota antes y después — si algo se perdió
+lo grita con el `git show` para recuperarlo (rc 1). Candidatos en tu bóveda: los items de
+`sources:` cuyo DOI resuelva a un bibcode ADS (`2012Waldmann`/`2013Waldmann` son ApJ: casi seguro
+lo tienen; verificá con `python scripts/query_ads.py --probe 'doi:"<doi>"'`).
+
 ## 3 · Cierre
 
 ```bash

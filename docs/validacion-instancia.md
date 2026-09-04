@@ -128,3 +128,22 @@ y nombra el remedio); **(2) se deja a propósito** — el test de existencia de 
 que la doc nombra pasa en toda instancia que tenga los archivos que la doc promete, y una instancia
 sin `themes.yaml` es una instancia a la que le falta un archivo del schema, no un falso positivo.
 Comentarlo así en el issue y cerrarlo, o devolverlo si `Almagesto-Tesis` lo ve rojo.
+
+---
+
+## T5b · v1.198.0 — guía §2i
+
+### #353 (comentario 2) · `triage --promote-source`
+
+**Qué entró.** `triage.py <slug> --promote-source <key> --bibcode <bib>`: `rename_paper(fix_key=True)`
++ metadata de catálogo desde ADS (`fetch_bibcodes`) + chequeo de curación antes/después + snippet
+de `extra_core`. No edita `themes.yaml`.
+
+**Validar.** Elegir un item de `sources:` con bibcode ADS real (los ApJ de Waldmann), correr el
+comando, pegar el `extra_core`, sacar el item, `ingest_theme.py <slug>`, `lint.py`. Esperado: la
+nota nueva conserva `no_vista`/`no_sintetizado`/`salvedades`/`vistas`/`methods` byte a byte (diff
+del frontmatter contra `git show HEAD:`), `versions` vacío, `first_author`/`citation_count` de ADS,
+`## Abstract` verbatim si el stub tenía el placeholder, los wikilinks reescritos, `lint` sin
+huérfanas ni wikilinks rotos por el renombre. **Devolver si** se pierde una clave curada sin que
+el comando lo grite (rc 1 + «PERDIÓ curación»), o si escribe `themes.yaml`. **Al cerrar:** qué
+fuente se promovió y el diff de frontmatter.

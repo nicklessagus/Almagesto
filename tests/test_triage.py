@@ -7,6 +7,7 @@ import yaml
 
 import lib_config as cfg
 import triage
+import make_notes as make_notes_mod
 from conftest import write_yaml
 
 
@@ -1080,3 +1081,132 @@ def test_el_proximo_paso_de_la_sintesis_NO_lleva_theme_en_una_ESTRELLA(toy_vault
     assert run_main(monkeypatch, ["test_star", "--sintesis"]) == 0
     out = capsys.readouterr().out
     assert "`python scripts/make_notes.py test_star`" in out and "--theme" not in out
+
+
+# ── #353 (T5b) · `--promote-source`: la fuente declarada que tenía bibcode ADS ──────────────────
+
+def _fuente_off_ads(toy_vault):
+    """Un tema con un item de `sources:` mal declarado (el caso de #353) y su stub con curación."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "concept": "ica", "area": "methods",
+                                         "source": "local-pdfs",
+                                         "sources": [{"key": "2011Yang", "doi": "10.1371/x",
+                                                      "author": "Yang", "year": 2011,
+                                                      "pdf": "x.pdf", "via": "usuario",
+                                                      "motivo": "extension de RAICAR"}]}})
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / "2011Yang.md").write_text(
+        "---\nbibcode: 2011Yang\ntitle: 'RAICAR-N: a noise-aware extension'\nfirst_author: Yang\n"
+        "n_authors: 1\nyear: 2011\ndoi: 10.1371/x\ncitation_count: 0\nsource_url: null\n"
+        "accessed: null\nthesis_links: [ica]\nmethods: [RAICAR]\nrole: [aplicacion]\n"
+        "no_vista:\n- sujeto: ica\n  motivo: eje de reproducibilidad, es su propio tema\n"
+        "salvedades:\n- tipo: pdf_paginas\n  n: 12\n"
+        "vistas:\n- sujeto: ica\n  tipo: theme\n"
+        "keywords: []\n---\n\n# 2011Yang\n\n> _Generado con Almagesto v1_\n\n## Abstract\n"
+        f"{cfg.ABSTRACT_PLACEHOLDER}\n\n## Vista — ica\n\nprosa.\n", encoding="utf-8")
+    for base, ext in ((cfg.PDFS, ".pdf"), (cfg.FULLTEXT, ".txt")):
+        (base / "ica").mkdir(parents=True, exist_ok=True)
+        (base / "ica" / f"2011Yang{ext}").write_bytes(b"%PDF" if ext == ".pdf" else b"texto")
+    (toy_vault.PAPERS / "otra.md").write_text("---\nbibcode: 2020X\n---\n\nver [[2011Yang]].\n",
+                                             encoding="utf-8")
+
+
+def _ads_record():
+    return [{"bibcode": "2011PLoSO...627594P", "title": "A Simple and Objective Method for RSN Detection",
+             "authors": ["Pendse, Gautam V.", "Borsook, David", "Becerra, Lino"], "year": "2011",
+             "arxiv_id": None, "doi": "10.1371/journal.pone.0027594", "bibstem": "PLoSO",
+             "citation_count": 23, "keyword": ["fMRI", "ICA"], "abstract": "RAICAR-N (N stands for null hypothesis test)…",
+             "relevant": True}]
+
+
+def test_promote_source_migra_preservando_la_curacion(toy_vault, monkeypatch, capsys):
+    """#353 (T5b) — a mano son cinco pasos y se pierde curación en silencio (medido: el `no_vista`
+    de la nota vieja, recuperado de `git show HEAD:`). Un comando: la nota, el hermano, los
+    artefactos y los wikilinks se mueven SIN `versions[]` (la clave era errónea, #355), la
+    metadata de catálogo viene de ADS, y `no_vista`/`salvedades`/`vistas`/`methods` quedan iguales."""
+    import query_ads
+    _fuente_off_ads(toy_vault)
+    monkeypatch.setattr(query_ads, "fetch_bibcodes", lambda bibs, via_de=None: _ads_record())
+    assert triage.promote_source("ica", "2011Yang", "2011PLoSO...627594P") == 0
+    nueva = toy_vault.PAPERS / "2011PLoSO...627594P.md"
+    assert nueva.exists() and not (toy_vault.PAPERS / "2011Yang.md").exists()
+    fm = cfg.split_fm(nueva.read_text(encoding="utf-8"))
+    assert fm["no_vista"] == [{"sujeto": "ica", "motivo": "eje de reproducibilidad, es su propio tema"}]
+    assert fm["salvedades"] == [{"tipo": "pdf_paginas", "n": 12}] and fm["methods"] == ["RAICAR"]
+    assert fm["vistas"] == [{"sujeto": "ica", "tipo": "theme"}] and fm["thesis_links"] == ["ica"]
+    assert not fm.get("versions"), "clave errónea, no alias (#355)"
+    assert fm["first_author"] == "Pendse, Gautam V." and fm["n_authors"] == 3
+    assert fm["title"].startswith("A Simple") and fm["citation_count"] == 23 and fm["doi"].endswith("0027594")
+    assert fm["keywords"] == ["fMRI", "ICA"] and fm["source_url"] is None
+    assert "RAICAR-N (N stands for null hypothesis test)" in nueva.read_text(encoding="utf-8")
+    assert (toy_vault.PDFS / "ica" / "2011PLoSO...627594P.pdf").exists()
+    assert (toy_vault.FULLTEXT / "ica" / "2011PLoSO...627594P.txt").exists()
+    assert "[[2011PLoSO...627594P]]" in (toy_vault.PAPERS / "otra.md").read_text(encoding="utf-8")
+    out = capsys.readouterr().out
+    assert "extra_core:" in out and "bibcode: 2011PLoSO...627594P" in out
+    assert "extension de RAICAR" in out and "SACÁ el item `key: 2011Yang`" in out
+    assert "⚠ corregido" in out, "la marca de #238 lista para pegar en el log (#355)"
+    assert yaml.safe_load(cfg.THEMES_YAML.read_text(encoding="utf-8"))["ica"]["sources"], \
+        "themes.yaml no se toca: la config es curada"
+
+
+def test_promote_source_sin_registro_ads_promueve_igual_y_avisa(toy_vault, monkeypatch, capsys):
+    import query_ads
+    _fuente_off_ads(toy_vault)
+    monkeypatch.setattr(query_ads, "fetch_bibcodes", lambda bibs, via_de=None: [])
+    assert triage.promote_source("ica", "2011Yang", "2011PLoSO...627594P") == 0
+    fm = cfg.split_fm((toy_vault.PAPERS / "2011PLoSO...627594P.md").read_text(encoding="utf-8"))
+    assert fm["first_author"] == "Yang" and fm["no_vista"]
+    assert "ADS no devolvió" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("key,bib,motivo", [
+    ("2099Nadie", "2011PLoSO...627594P", "nada que promover"),
+    ("2011Yang", "no-es-bibcode", "forma de bibcode"),
+])
+def test_promote_source_rehusa_lo_que_no_puede(toy_vault, monkeypatch, key, bib, motivo):
+    import query_ads
+    _fuente_off_ads(toy_vault)
+    monkeypatch.setattr(query_ads, "fetch_bibcodes", lambda *a, **k: pytest.fail("no llega a ADS"))
+    with pytest.raises(SystemExit, match=motivo):
+        triage.promote_source("ica", key, bib)
+
+
+def test_promote_source_no_pisa_una_nota_que_ya_existe(toy_vault, monkeypatch):
+    import query_ads
+    _fuente_off_ads(toy_vault)
+    (toy_vault.PAPERS / "2011PLoSO...627594P.md").write_text("---\nbibcode: 2011PLoSO...627594P\n---\n",
+                                                             encoding="utf-8")
+    monkeypatch.setattr(query_ads, "fetch_bibcodes", lambda *a, **k: pytest.fail("no llega a ADS"))
+    with pytest.raises(SystemExit, match="son dos notas del mismo trabajo"):
+        triage.promote_source("ica", "2011Yang", "2011PLoSO...627594P")
+
+
+def test_main_promote_source_exige_bibcode(toy_vault, monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["triage.py", "ica", "--promote-source", "2011Yang"])
+    with pytest.raises(SystemExit):
+        triage.main()
+
+
+def test_promote_source_sin_nota_manda_a_editar_la_config(toy_vault, monkeypatch):
+    import query_ads
+    _fuente_off_ads(toy_vault)
+    (toy_vault.PAPERS / "2011Yang.md").unlink()
+    monkeypatch.setattr(query_ads, "fetch_bibcodes", lambda *a, **k: pytest.fail("no llega a ADS"))
+    with pytest.raises(SystemExit, match="no existe"):
+        triage.promote_source("ica", "2011Yang", "2011PLoSO...627594P")
+
+
+def test_promote_source_grita_si_perdio_curacion(toy_vault, monkeypatch, capsys):
+    """La promesa del comando es no perder curación; si el renombre la perdiera, se dice con el
+    remedio (rc 1), nunca en silencio — que es lo que pasó a mano."""
+    import query_ads
+    _fuente_off_ads(toy_vault)
+    monkeypatch.setattr(query_ads, "fetch_bibcodes", lambda bibs, via_de=None: [])
+
+    def rename_que_pierde(key, bib, *, fix_key=False):
+        (toy_vault.PAPERS / "2011Yang.md").unlink()
+        (toy_vault.PAPERS / f"{bib}.md").write_text(
+            f"---\nbibcode: {bib}\nfirst_author: Yang\n---\n\n## Abstract\n\nx\n", encoding="utf-8")
+    monkeypatch.setattr(make_notes_mod, "rename_paper", rename_que_pierde)
+    assert triage.promote_source("ica", "2011Yang", "2011PLoSO...627594P") == 1
+    assert "PERDIÓ curación" in capsys.readouterr().out

@@ -1222,10 +1222,10 @@ contra su `doi` o la primera página del PDF al ingestar (`check_sources`, #353)
 desmentidos por Crossref **bloquean**, el resto es backlog; registra y no reescribe `sources:`.
 
 ⛔ **El carril off-ADS tiene salida hacia la ingesta** (#111): `python scripts/triage.py <slug>
---accept-source <doi> --via <via> --reason "<motivo>"` arma la entrada completa —metadata real de
-OpenAlex, archivo resuelto por `resolve_pdf` o `pending: paywall`, y la procedencia— **lista para
-pegar**. No escribe `themes.yaml`: la config es curada y versionada, y un script que la edita solo
-convierte una decisión en un efecto colateral.
+--accept-source <doi> --via <via> --reason "<motivo>"` arma la entrada completa —metadata de
+OpenAlex, archivo resuelto o `pending`, y la procedencia— **lista para pegar**; y
+**`--promote-source <key> --bibcode <bib>`** migra a `extra_core` la fuente que tenía bibcode ADS,
+preservando la curación (#353). Ninguno escribe `themes.yaml`.
 
 ### Append (plegar UNA fuente puntual a una entidad existente — skill `append-knowledge`)
 El usuario trae **una fuente concreta** (bibcode ADS, PDF local o URL) para una ficha/concepto que

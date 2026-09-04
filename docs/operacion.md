@@ -235,6 +235,11 @@ python scripts/triage.py <slug> --drop-source <clave|url> --reason "<motivo>"
 #   real de OpenAlex y el archivo resuelto (o `pending: paywall`). NO escribe themes.yaml.
 python scripts/triage.py <slug> --accept-source <doi> --via usuario|descubrimiento \
                                 --reason "<motivo>"
+# off-ADS · PROMOVER una fuente que tenía bibcode ADS (#353, T5b): renombra nota + hermano +
+#   artefactos + wikilinks SIN `versions[]` (#355), re-estampa la metadata de catálogo desde ADS y
+#   preserva `no_vista`/`no_sintetizado`/`salvedades`/`vistas`; imprime el `extra_core` y el item
+#   a sacar de `sources:`. NO escribe themes.yaml.
+python scripts/triage.py <slug> --promote-source <key> --bibcode <bibcode>
 ```
 ⚠ Los dos `via` son vocabularios cerrados **distintos** (#162): `extra_core` (carril ADS) usa
 `usuario | triage | citado-por-corpus`; `sources:` (carril off-ADS) usa

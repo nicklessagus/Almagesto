@@ -59,9 +59,12 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import re
 import urllib.parse
 import json
 import sys
+
+import yaml
 
 import lib_config as cfg
 import make_notes                       # #217: la limpieza de `pdf:`/`fulltext:` vive donde se estampan
@@ -622,6 +625,101 @@ def accept_source(slug: str, idents: list, via: str, motivo: str) -> int:
     return 1 if fallidos else 0
 
 
+CURATED_KEYS = ("no_vista", "no_sintetizado", "salvedades", "vistas", "methods", "thesis_links",
+                "role", "refuta")
+
+
+def _yaml_scalar(v) -> str:
+    """One-line YAML scalar for `_set_campo` (quoted when the value needs it)."""
+    return yaml.safe_dump(v, allow_unicode=True, width=10 ** 6).split("\n")[0]
+
+
+def promote_source(slug: str, key: str, bibcode: str) -> int:
+    """Migrate a declared source (`sources:` item `key`) to its ADS identity `bibcode` (#353, T5b).
+
+    WHY, measured: the #353 case was fixed by hand and it took five steps — move two artifacts,
+    delete the stub, remove the item, add the `extra_core` map, re-run the chain — and it LOST the
+    old note's `no_vista` declaration silently (recovered from `git show HEAD:`). That is exactly
+    the class of artifact the framework calls non-regenerable: a curation judgement with its
+    motive. A note with an ADS bibcode never belonged in `sources:` (hand metadata, and the false
+    attribution #353 caught is impossible by construction in `extra_core`, where ADS is the
+    authority).
+
+    What it does, in order: `make_notes.rename_paper(key, bibcode, fix_key=True)` — note, sidecar,
+    PDF/`.txt` under every slug, extraction JSON and every wikilink; NO `versions[]` (the key was
+    wrong, not an alias, #355) — so every curated frontmatter key travels untouched (asserted
+    after); then the ADS record (`query_ads.fetch_bibcodes`) re-stamps the CATALOG fields the stub
+    had by hand (title, first author, year, doi, bibstem, citation_count, keywords, verbatim
+    abstract) and clears `source_url`/`accessed`. It prints the `extra_core` entry and the item to
+    remove; it never edits `themes.yaml`, like `accept_source`."""
+    import make_notes
+    import query_ads
+    try:
+        _, meta = cfg.theme_by_slug(slug)
+    except KeyError as e:
+        sys.exit(str(e))
+    item = next((s_ for s_ in cfg.as_list(meta.get("sources"))
+                 if isinstance(s_, dict) and str(s_.get("key") or "").strip() == key), None)
+    if item is None:
+        sys.exit(f"'{slug}': no hay un item de `sources:` con `key: {key}` — nada que promover")
+    if not re.fullmatch(r"\d{4}[A-Za-z0-9.&]{15}", bibcode):
+        sys.exit(f"`{bibcode}` no tiene forma de bibcode ADS (19 caracteres, AAAA + revista + …): la "
+                 f"promoción es hacia una identidad ADS real")
+    old_note = cfg.PAPERS / f"{make_notes.safe_name(key)}.md"
+    new_note = cfg.PAPERS / f"{make_notes.safe_name(bibcode)}.md"
+    if not old_note.exists():
+        sys.exit(f"no existe `papers/{old_note.name}`: promover una fuente que no tiene nota es sólo "
+                 f"editar `themes.yaml` (sacá el item y agregá el `extra_core`)")
+    if new_note.exists():
+        sys.exit(f"ya existe `papers/{new_note.name}`: son dos notas del mismo trabajo — consolidá con "
+                 f"`python scripts/make_notes.py --rename-paper {key} {bibcode}`")
+    antes = cfg.split_fm(old_note.read_text(encoding="utf-8")) or {}
+    curados = {k: antes.get(k) for k in CURATED_KEYS if k in antes}
+
+    make_notes.rename_paper(key, bibcode, fix_key=True)
+
+    recs = query_ads.fetch_bibcodes([bibcode], via_de={bibcode: "usuario"})
+    if recs:
+        r = recs[0]
+        autores = cfg.as_list(r.get("authors"))
+        campos = {"title": r.get("title"), "first_author": autores[0] if autores else None,
+                  "n_authors": len(autores), "year": int(r["year"]) if r.get("year") else None,
+                  "arxiv_id": r.get("arxiv_id"), "doi": r.get("doi"), "bibstem": r.get("bibstem"),
+                  "citation_count": r.get("citation_count"), "source_url": None, "accessed": None}
+        for k, v in campos.items():
+            make_notes._set_campo(new_note, k, _yaml_scalar(v))
+        make_notes.merge_frontmatter_list(new_note, "keywords", cfg.as_list(r.get("keyword")))
+        if r.get("abstract"):
+            texto = new_note.read_text(encoding="utf-8")
+            nuevo = re.sub(r"(## Abstract\s*\n)\s*" + re.escape(cfg.ABSTRACT_PLACEHOLDER),
+                           lambda m: m.group(1) + "\n" + r["abstract"].strip(), texto, count=1)
+            if nuevo != texto:
+                cfg.write_text_atomic(new_note, nuevo)
+        cfg.print_seguro(f"  metadata de catálogo re-estampada desde ADS ({r.get('title')!r}, "
+                         f"{r.get('citation_count')} citas)")
+    else:
+        cfg.print_seguro(f"  ⚠ ADS no devolvió `{bibcode}`: la metadata queda la declarada a mano — "
+                         f"revisá el bibcode y re-corré `make_notes.py --theme {slug}` cuando entre")
+
+    despues = cfg.split_fm(new_note.read_text(encoding="utf-8")) or {}
+    perdidos = [k for k, v in curados.items() if despues.get(k) != v]
+    if perdidos:
+        cfg.print_seguro(f"  ⛔ la promoción PERDIÓ curación de la nota vieja: {', '.join(perdidos)} — "
+                         f"recuperala de `git show HEAD:vault/wiki/papers/{old_note.name}`")
+    hoy = dt.date.today().isoformat()
+    motivo = str(item.get("motivo") or "").strip()
+    cfg.print_seguro(f"\n  extra_core:   # pegar en la entrada `{slug}` de vault/config/themes.yaml")
+    cfg.print_seguro(f"    - bibcode: {bibcode}")
+    cfg.print_seguro(f"      via: usuario")
+    cfg.print_seguro(f"      fecha: {hoy}")
+    cfg.print_seguro(f"      motivo: {(motivo + ' ' if motivo else '')!s}(promovido desde `sources:` "
+                     f"`{key}`, via {item.get('via') or '?'}; tiene bibcode ADS, #353)".strip())
+    cfg.print_seguro(f"\n  → y SACÁ el item `key: {key}` de `sources:` (la misma decisión, en el "
+                     f"carril correcto). Después: `python scripts/ingest_theme.py {slug}` "
+                     f"(idempotente: sólo baja lo que falte).")
+    return 1 if perdidos else 0
+
+
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser(
@@ -675,6 +773,10 @@ def main() -> int:
                     help=f"quién acepta la fuente OFF-ADS (vocabulario CERRADO): "
                          f"{' | '.join(VIA_FUENTE)}. ⚠ NO es el de `extra_core` (carril ADS), que "
                          f"es {' | '.join(cfg.EXTRA_CORE_VIA)}")
+    ap.add_argument("--promote-source", metavar="CLAVE", dest="promote_source",
+                    help="#353 (T5b): migra la fuente declarada CLAVE a su identidad ADS (--bibcode), "
+                         "preservando la curación de la nota; imprime el `extra_core` y no edita themes.yaml")
+    ap.add_argument("--bibcode", default="", help="bibcode ADS destino de --promote-source")
     ap.add_argument("--prioridad", action="store_true",
                     help="la cola de extracción: no filtra ni toca la lente, ordena lo que ya es "
                          "core. Dos vistas — #87: por cuántas facetas del objetivo toca cada uno "
@@ -706,6 +808,10 @@ def main() -> int:
         return close(drop_core(args.slug, args.drop_core, args.reason), "triage")
     if args.accept_source:
         return close(accept_source(args.slug, args.accept_source, args.via, args.reason), "triage")
+    if args.promote_source:
+        if not args.bibcode:
+            ap.error("--promote-source necesita --bibcode <bibcode ADS destino>")
+        return close(promote_source(args.slug, args.promote_source, args.bibcode), "triage")
     if args.prioridad:
         return prioridad(args.slug)
     if args.migrate:
