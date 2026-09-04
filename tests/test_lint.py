@@ -101,6 +101,17 @@ def test_la_cabecera_AUSENTE_manda_a_reconstruir_no_a_restampar(toy_vault, capsy
         "el mensaje nombra el comando para DESCARTARLO, no para recetarlo (#69)"
 
 
+def test_pdf_source_de_editor_con_eprint_version_es_una_contradiccion_y_BLOQUEA(toy_vault):
+    """#383 — `pdf_source: publisher` + `eprint_version: v1` es una contradicción INTERNA del
+    frontmatter, no un valor viejo: lo detectó el extractor al releer, no el lint. Y no es
+    cosmético: la nota manda a re-verificar contra el documento equivocado."""
+    from conftest import mk_note
+    mk_note(cfg.PAPERS, "2025pub....1P", {"tags": ["paper"], "bibcode": "2025pub....1P",
+                                          "pdf_source": "publisher", "eprint_version": "v1"}, "# P\n")
+    items = dict(lint.collect().por_clave("pdf_source_contradictorio").items)
+    assert "2025pub....1P" in items
+
+
 def test_boveda_vacia_pasa(toy_vault, capsys):
     rc, out = run_lint(capsys)
     assert rc == 0

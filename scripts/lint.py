@@ -1365,6 +1365,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     alcance_corto: list = []           # (stem, motivo) — alcance de hipótesis sin declarar o vencido (D-34)
     huecos_sin_alcance: list = []      # (stem, motivo) — #342: `## Huecos` sin alcance, o corto
     alcance_wikilink: list = []        # (stem, motivo) — #368: `[[link]]` dentro del blockquote de alcance
+    pdf_source_contra: list = []       # (stem, motivo) — #383: `pdf_source` de editor + `eprint_version`
     old_bearing: list = []             # `bearing` en nota de paper: schema pre-D-21
     sin_destino: list = []             # paper sin stars/thesis_links/methods (D-23)  @inv INV-94
     cadena_incompleta: list = []       # (slug, "se cortó en <paso>") — D-57
@@ -2412,6 +2413,16 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             # citas son contra el preprint), así que un valor fuera de vocabulario cae por el `else`
             # de todo `== "eprint"` en silencio. ⚠ #363: hasta 1.111.0 ese `else` eximía además del
             # chequeo de cita textual; #275 la sacó y la doc lo siguió afirmando 59 versiones.
+            # #383 — `pdf_source: publisher|ads|web` + `eprint_version` es una contradicción INTERNA
+            # del frontmatter, no un valor viejo: la nota manda a re-verificar contra el documento
+            # equivocado. Lo detectó el extractor al releer; el lint no lo miraba.
+            if (str(fm.get("pdf_source") or "") in ("publisher", "ads", "web")
+                    and str(fm.get("eprint_version") or "").strip()):
+                pdf_source_contra.append(
+                    (stem, f"`pdf_source: {fm.get('pdf_source')}` con `eprint_version: "
+                           f"{fm.get('eprint_version')}`: el PDF es del editor y la nota dice que "
+                           f"leyó un preprint → borrá `eprint_version`, o corregí `pdf_source` "
+                           f"(#383)"))
             for _campo, _ok in (("pdf_source", cfg.PDF_SOURCE_OK),
                                 ("fulltext_source", cfg.FULLTEXT_SOURCE_OK)):
                 _v = fm.get(_campo)
@@ -4507,6 +4518,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                   '(#252: visible, no es deuda)', SEV_BACKLOG, tuple(alias_rechazados), poblacion='ground_truth'),
         Categoria('foreign_alias', '⚠ Alias que SIMBAD no reconoce para esta estrella (WARN — puede meter papers de otro objeto)',
                   SEV_WARN, tuple(alias_ajenos), poblacion='ground_truth'),
+        Categoria('pdf_source_contradictorio', '⛔ `pdf_source` de editor con `eprint_version`: contradicción interna, la nota manda a re-verificar contra el documento equivocado (#383)',
+                  SEV_BLOQUEANTE, tuple(pdf_source_contra), poblacion='papers'),
         Categoria('merge_ours', '⛔ Driver `merge=ours` REGISTRADO en un clon con `origin`: el próximo merge de la otra máquina descarta lo del remoto en silencio (#390)',
                   SEV_BLOQUEANTE, tuple(merge_ours), poblacion='merge_ours'),
         Categoria('dangling_thesis', 'thesis_links sin página destino', SEV_BLOQUEANTE, tuple(dangling_thesis), poblacion='entidades'),

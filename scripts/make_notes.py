@@ -37,6 +37,7 @@ sentido (nunca pisa un valor existente ni distinto del ground-truth). Ver sync_m
 from __future__ import annotations
 
 import argparse
+import datetime as _dt
 import json
 import re
 import sys
@@ -209,8 +210,39 @@ def stamp_pdf(dest, stem: str) -> bool:
                None)
     if cur in ("null", "~", ""):
         cur = None                        # el `null` del stub NO es un puntero
+    sha = lb.sha10((dest.parent / rel).resolve().read_bytes())
+    guardado = next((ln.split(":", 1)[1].strip().strip("'\"") for ln in lines
+                     if ln.startswith("pdf_sha:")), None)
     if cur and (dest.parent / cur).resolve().exists():
-        return False                      # el que ya está resuelve: no se repunta (idempotente)
+        # #383 — #230 decide que `pdf_source` SOBREVIVE al archivo porque describe la lectura que
+        # ocurrió. Son dos casos y había un tercero: el archivo se REEMPLAZA por otro de distinta
+        # procedencia (el preprint v1 por el publicado). Ahí la lectura vieja se descarta —hay que
+        # re-extraer, cambió la paginación— y el valor que sobrevive MIENTE: `pdf_source: eprint`
+        # sobre el PDF del editor, con `eprint_version: v1` al lado. Medido: las dos versiones
+        # diferían en RESULTADOS, no en redacción. El hash es lo que distingue «se mantiene» de
+        # «se reemplazó», y se guarda en `pdf_sha:` al estampar.
+        if guardado and guardado != sha:
+            for campo in ("pdf_source", "eprint_version"):
+                if any(ln.startswith(f"{campo}:") for ln in lines):
+                    _set_campo(dest, campo, "null")
+            _set_campo(dest, "pdf_sha", sha)
+            cfg.print_seguro(f"  ⚠ {dest.name}: el PDF cambió de hash respecto del que se estampó "
+                             f"({guardado} → {sha}): `pdf_source` y `eprint_version` quedan en null "
+                             f"(desconocido, que es la verdad). Hay que re-extraer y re-verificar lo "
+                             f"anclado a ese PDF (#383)")
+            return True
+        if guardado is None or guardado == sha:
+            # Sin hash guardado no se toca: el reemplazo sólo se detecta en notas estampadas desde
+            # esta versión (registrar el hash en las 169 existentes sería el diff de 169 archivos
+            # que #378 evitó). Con el mismo hash, idempotente.
+            return False
+    want = f"pdf_sha: {sha}"
+    for i, ln in enumerate(lines):
+        if ln.startswith("pdf_sha:"):
+            lines[i] = want
+            break
+    else:
+        lines.append(want)
     # `cur` que NO resuelve se repunta: una nota que apunta a un archivo que no está afirma algo
     # falso sobre el disco, que es lo que #217 corrige en la dirección contraria (al borrarlo).
     want = f"pdf: {rel}"
@@ -2841,7 +2873,7 @@ def _consolidar_duplicado(old, new, old_stem: str, new_bibcode: str) -> None:
         f"{n} wikilink(s) reescrito(s).")
 
 
-def rename_paper(old_stem: str, new_bibcode: str) -> None:
+def rename_paper(old_stem: str, new_bibcode: str, *, fix_key: bool = False) -> None:
     """Renombra una nota de paper y TODO lo que la referencia (D-19).  @inv INV-84
 
     Mueve la nota, su hermano `<nota>.verif.md` (#344) y sus artefactos (`raw/pdfs/*/`,
@@ -2862,9 +2894,18 @@ def rename_paper(old_stem: str, new_bibcode: str) -> None:
 
     texto = old.read_text(encoding="utf-8")
     fm = cfg.split_fm(texto)
-    version = {"bibcode": old_stem, "pdf_source": fm.get("pdf_source"),
-               "eprint_version": fm.get("eprint_version")}
-    versions = [v for v in cfg.as_list(fm.get("versions")) if isinstance(v, dict)] + [version]
+    # #355 — `versions[]` es el ALIAS de D-19: dos bibcodes reales del mismo trabajo, y el viejo es
+    # lo que el mundo exterior conserva. Para una CLAVE EQUIVOCADA es una afirmación falsa en un
+    # campo máquina-legible, y encima blindada: `versions[]` exime de los dos chequeos de identidad
+    # (#229). Con `fix_key` el rastro va al `log` (la marca de #238), que es el canal de la curación.
+    versions = [v for v in cfg.as_list(fm.get("versions")) if isinstance(v, dict)]
+    if not fix_key:
+        versions.append({"bibcode": old_stem, "pdf_source": fm.get("pdf_source"),
+                         "eprint_version": fm.get("eprint_version")})
+    else:
+        cfg.print_seguro(f"  ⚠ clave ERRÓNEA, no alias: `versions[]` no se toca. Pegá en `log.md`:\n"
+                         f"     ⚠ corregido {_dt.date.today().isoformat()} → `{old_stem}` no identifica "
+                         f"este trabajo: la clave se corrigió a `{new_bibcode}` (#355)")
 
     # artefactos: se mueven, no se copian — dejar el `.txt` viejo al lado haría que el hash de
     # fuente del ancla (D-20) apunte a un archivo que ya nadie referencia.
@@ -2921,6 +2962,28 @@ def _finish_rename(nota, old_stem: str, new_bibcode: str) -> None:
                          "queda en null (no consta). Re-corré `make_notes <slug>` para repoblarlo.")
 
     _move_extraction(old_stem, new_bibcode)
+
+    # #356 — el mismo comando que movió los artefactos dejaba la nota afirmando que están donde ya
+    # no están: `pdf:` y `fulltext:` al viejo, el link `[📄 PDF]` y el blockquote off-ADS también.
+    # Es #217 al revés (`drop_core` re-apunta por verdad de disco «porque dejarlos apuntando a un
+    # archivo que este mismo comando borró afirma algo falso»), y la doc prometía «re-estampa la
+    # cabecera» donde se re-estampaba MEDIA. La maquinaria existía desde #304; el renombre no la
+    # llamaba. Primero el cuerpo por texto —los dos punteros del cuerpo nombran el archivo viejo—
+    # y después los dos campos por verdad de disco, que es la regla de sus caminos actuales.
+    nuevo_stem = safe_name(new_bibcode)
+    texto = nota.read_text(encoding="utf-8")
+    lim = cfg.fm_bounds(texto)
+    if lim is not None:
+        cuerpo = texto[lim[1]:]
+        cuerpo2 = cuerpo.replace(f"/{safe_name(old_stem)}.pdf", f"/{nuevo_stem}.pdf") \
+                        .replace(f"/{safe_name(old_stem)}.txt", f"/{nuevo_stem}.txt")
+        if cuerpo2 != cuerpo:
+            cfg.write_text_atomic(nota, texto[:lim[1]] + cuerpo2)
+    for campo in ("pdf", "fulltext"):
+        _set_campo(nota, campo, "null")        # el puntero viejo no resuelve: se re-apunta desde cero
+    stamp_pdf(nota, nuevo_stem)
+    stamp_fulltext(nota, nuevo_stem, None)
+    stamp_pdf_link(nota)
 
 
 def _slugs_of_bibcode(bibcode: str) -> list:
@@ -3821,6 +3884,9 @@ def _flags_usados(args, ap=None) -> list:
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser()
+    ap.add_argument("--fix-key", action="store_true", dest="fix_key",
+                    help="con --rename-paper: la clave vieja era ERRÓNEA (no un alias D-19), así que "
+                         "no va a `versions[]`; el rastro va al log (#355)")
     ap.add_argument("--rename-paper", nargs=2, metavar=("VIEJO", "NUEVO"),
                     help="renombra una nota de paper y sus artefactos, agrega el bibcode viejo a "
                          "`versions[]` y reescribe los wikilinks de la bóveda (ciclo "
@@ -4022,7 +4088,7 @@ def main() -> int:
     # slug— moría con exit 2 antes de llegar a su rama. Un comando publicado que no corre es peor
     # que uno ausente: el usuario lo copia y el ciclo preprint→publicado queda a medias.
     if args.rename_paper:
-        rename_paper(*args.rename_paper)
+        rename_paper(args.rename_paper[0], args.rename_paper[1], fix_key=args.fix_key)
         # #231 / D-57 — la rama retornaba ANTES del `save_paso` del final, así que consolidar un
         # duplicado —una operación que mueve archivos y reescribe wikilinks de TODA la bóveda— no
         # dejaba rastro en `cadena`. El slug sale de dónde viven los artefactos del bibcode nuevo:

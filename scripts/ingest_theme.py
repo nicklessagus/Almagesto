@@ -360,6 +360,13 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
                                             year=s.get("year"), n_authors=s.get("n_authors"),
                                             doi=s.get("doi"), venue=s.get("venue"),
                                             unidad_cita=_unidad, alcance=_alcance or None)
+            # #367 — la rama «crear el stub» es la única que linkeaba `pdf:`, y en este carril
+            # cerrar un `pending` es el caso NORMAL: la nota ya existe desde la corrida anterior,
+            # así que esa rama no se toma nunca y la nota quedaba con `pdf: null` y el PDF en disco
+            # (medido: 1 de 1). `stamp_pdf` es la única definición de «`pdf:` lo escribe la verdad
+            # de disco, lo escriba quien lo escriba» (#304), y este depositante no la llamaba.
+            make_notes.stamp_pdf(cfg.PAPERS / f"{make_notes.safe_name(key)}.md",
+                                 make_notes.safe_name(key))
     # Tema MIXTO: un método no-astro casi siempre tiene alguna aplicación/variante publicada en
     # revista astro — papers con bibcode ADS real. Van en `extra_core:` (no en `sources:`, que
     # degradaría el stub: clave sintética, citation_count 0, blockquote off-ADS falso) y para

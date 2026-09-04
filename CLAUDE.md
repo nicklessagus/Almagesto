@@ -318,7 +318,7 @@ lector ignora en silencio es peor que un error.
 
 Campos: `bibcode, title, first_author, n_authors, year, arxiv_id, doi, bibstem, stars[], facets[],
 keywords[], methods[], thesis_links[], role[], relevance, citation_count, pdf, fulltext,
-fulltext_source(pdftotext|ocr|web), pdf_source(eprint|ads|publisher|web), vistas[], versions[]`.
+fulltext_source(pdftotext|ocr|web), pdf_source(eprint|ads|publisher|web), pdf_sha, vistas[], versions[]`.
 
 ⛔ **Toda nota de paper pertenece a alguna ENTIDAD (D-23).** Al menos uno de `stars`,
 `thesis_links` o `methods` tiene que estar poblado. Sin ninguno de los tres el paper no entra en
@@ -431,9 +431,9 @@ El ciclo se resuelve con `python scripts/make_notes.py --rename-paper VIEJO NUEV
 nota y sus artefactos (`raw/pdfs/`, `raw/fulltext/` **y la extracción de `raw/extraccion/<slug>/`**
 — #228/#374: la identidad de una extracción es el `bibcode` **de adentro**, con UNA función para
 sus tres lectores, así que dejarla bajo el bibcode viejo hace que el cosechador saltee la nota
-**para siempre**, y una extracción no se regenera sin re-pagar el paso más caro), **re-estampa la cabecera**, deja `bibstem` en `null`
-—es verdad de catálogo y el renombre no tiene catálogo—, agrega el alias y **reescribe los wikilinks
-de toda la bóveda**. Alcance declarado: `vault/`.
+**para siempre**, y una extracción no se regenera sin re-pagar el paso más caro), **re-estampa la cabecera y re-apunta `pdf:`/`fulltext:` por verdad de disco (#356)**, deja `bibstem` en `null`
+—es verdad de catálogo y el renombre no tiene catálogo—, agrega el alias —con `--fix-key` no: la clave vieja era ERRÓNEA, no un alias, y el rastro va al
+`log` (#355)— y **reescribe los wikilinks de toda la bóveda**. Alcance declarado: `vault/`.
 
 ⛔ **El duplicado SIN `doi` ni `arxiv_id` lo reporta otra categoría (#216, backlog).** La clase de
 fuentes donde el problema es **más** probable es la que no tiene identificador —resúmenes de
@@ -458,7 +458,8 @@ como backlog el par `fulltext: null` + `fulltext_source: <valor>`). **`pdf_sourc
 propósito: no describe el archivo sino la **procedencia de la lectura que ocurrió** —una nota cuelga
 su salvedad de `pdf_source: eprint` para decir que sus citas son contra el preprint—, así que
 borrarlo destruiría la salvedad junto con el archivo. El par `pdf: null` + `pdf_source: <valor>`
-**no es hallazgo**.
+**no es hallazgo**. ⛔ **El REEMPLAZO del PDF sí (#383):** `stamp_pdf` guarda `pdf_sha`, y si el
+archivo cambió deja `pdf_source`/`eprint_version` en `null`; editor + `eprint_version` bloquea.
 
 Cuando un paper vive bajo **varios slugs** el campo es **estable**: la copia ya estampada se mantiene
 salvo que llegue una de **mejor calidad** (`pdftotext`/`web` > `ocr`); no se repunta al slug que

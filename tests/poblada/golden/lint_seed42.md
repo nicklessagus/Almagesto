@@ -50,6 +50,9 @@
 ## ⚠ Alias que SIMBAD no reconoce para esta estrella (WARN — puede meter papers de otro objeto) (0)
 > sobre 3 ground-truth de `raw/ground_truth/`
 
+## ⛔ `pdf_source` de editor con `eprint_version`: contradicción interna, la nota manda a re-verificar contra el documento equivocado (#383) (0)
+> sobre 60 notas de `papers/`
+
 ## ⛔ Driver `merge=ours` REGISTRADO en un clon con `origin`: el próximo merge de la otra máquina descarta lo del remoto en silencio (#390) (0)
 > sobre 0 patrones `merge=ours` de `.gitattributes`
 

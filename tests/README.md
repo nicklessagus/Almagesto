@@ -179,7 +179,7 @@ los `from conftest import ...` de la suite vieja. Sólo se ve corriendo la suite
 
 ## Cuánto del lint vigila el corpus poblado (10.3)
 
-El lint tiene **119 categorías**; el generador sintético sabe sembrar **16 anomalías**, y
+El lint tiene **121 categorías**; el generador sintético sabe sembrar **16 anomalías**, y
 `test_conteos_exactos` puede afirmar *"reporta exactamente estos K, ni uno más"* sólo sobre esas.
 El resto queda cubierto de otra forma —el corpus limpio tiene que dar **cero en las 119** salvo cuatro
 declaradas (`test_el_corpus_limpio_da_cero_en_TODAS_las_categorias`)—, que detecta el falso positivo

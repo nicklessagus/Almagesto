@@ -224,6 +224,10 @@ def main() -> int:
                 venue=args.venue, force=args.force_note)
             # `pdf_source: web` — la procedencia de la lectura, que #230 declara que sobrevive.
             cfg.record_pdf_source(args.slug, args.citekey, "web")
+            # #367 — todo camino que deposita en `raw/pdfs/` pasa por `stamp_pdf`: si la nota ya
+            # existía (una `url:` que antes era snapshot y hoy sirve PDF), el stub no la re-linkea.
+            make_notes.stamp_pdf(cfg.PAPERS / f"{make_notes.safe_name(args.citekey)}.md",
+                                 make_notes.safe_name(args.citekey))
             cfg.print_seguro(f"  → corré `python scripts/extract_fulltext.py {args.slug}` para el "
                              f"índice de búsqueda")
             return 0

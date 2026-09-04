@@ -2922,6 +2922,94 @@ def test_rename_paper_reescribe_todo_vault_no_solo_wiki(toy_vault):
     assert "[[2021pubY]]" in status.read_text(encoding="utf-8")
 
 
+def _paper_con_artefactos(old="2011Yang"):
+    """Nota off-ADS con PDF y `.txt` en disco y los tres punteros que #356 encontró apuntando a los
+    viejos: `pdf:`, `fulltext:` y el link `[📄 PDF]` del cuerpo."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "ica").mkdir(parents=True, exist_ok=True); (cfg.FULLTEXT / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "ica" / f"{old}.pdf").write_bytes(b"%PDF-1.4\n")
+    (cfg.FULLTEXT / "ica" / f"{old}.txt").write_text("prosa", encoding="utf-8")
+    nota = cfg.PAPERS / f"{old}.md"
+    nota.write_text(f"---\nbibcode: {old}\ndoi: 10.1/x\ntags: [paper]\nthesis_links: [ica]\n"
+                    f"pdf: ../../raw/pdfs/ica/{old}.pdf\nfulltext: ../../raw/fulltext/ica/{old}.txt\n"
+                    f"---\n# T\n\n**Yang** (2011)\n· [[ica]] · fuente off-ADS · `{old}` · "
+                    f"[📄 PDF](../../raw/pdfs/ica/{old}.pdf)\n\n> El respaldo citable es el snapshot "
+                    f"`vault/raw/fulltext/ica/{old}.txt`.\n", encoding="utf-8")
+    return nota
+
+
+def test_rename_paper_deja_TODOS_los_punteros_apuntando_a_archivos_que_existen(toy_vault):
+    """#356 — el mismo comando que movía los artefactos dejaba la nota afirmando que están donde ya
+    no están: `pdf:` y `fulltext:` al viejo, el link `[📄 PDF]` y el blockquote off-ADS también. Es
+    #217 al revés, y la doc prometía «re-estampa la cabecera»: re-estampaba MEDIA (el bibcode entre
+    backticks). La maquinaria existía (#304, `stamp_pdf`/`stamp_fulltext`); el renombre no la
+    llamaba. Es un assert, no una inspección."""
+    _paper_con_artefactos()
+    mn.rename_paper("2011Yang", "2011Pendse")
+    nota = cfg.PAPERS / "2011Pendse.md"
+    texto = nota.read_text(encoding="utf-8"); fm = cfg.split_fm(texto)
+    for campo in ("pdf", "fulltext"):
+        assert (nota.parent / fm[campo]).resolve().exists(), f"`{campo}` apunta a algo que no existe: {fm[campo]}"
+    assert "2011Yang" not in texto.split("---", 2)[2].replace("[[2011Yang]]", ""), \
+        "el cuerpo (link `[📄 PDF]` y blockquote) sigue nombrando el artefacto viejo"
+
+
+def test_rename_paper_con_fix_key_NO_escribe_versions(toy_vault, capsys):
+    """#355 — `--rename-paper` asumía que todo renombre es un alias D-19 y escribía `versions[]`
+    incondicionalmente. Para preprint→publicado es correcto; para una CLAVE EQUIVOCADA es una
+    afirmación falsa en un campo máquina-legible, y `versions[]` exime de los dos chequeos de
+    identidad (#229): una clave inventada queda blindada. Decidido con el usuario: el rastro va al
+    `log` (la marca de #238), no a la nota."""
+    _paper_con_artefactos()
+    mn.rename_paper("2011Yang", "2011Pendse", fix_key=True)
+    fm = cfg.split_fm((cfg.PAPERS / "2011Pendse.md").read_text(encoding="utf-8"))
+    assert not fm.get("versions"), fm.get("versions")
+    assert "⚠ corregido" in capsys.readouterr().out, "imprime la entrada del log lista para pegar"
+
+
+def test_rename_paper_sin_fix_key_sigue_escribiendo_el_alias(toy_vault):
+    """El control: el caso D-19 no cambia."""
+    _paper_con_artefactos()
+    mn.rename_paper("2011Yang", "2011Pendse")
+    fm = cfg.split_fm((cfg.PAPERS / "2011Pendse.md").read_text(encoding="utf-8"))
+    assert [v["bibcode"] for v in fm["versions"]] == ["2011Yang"]
+
+
+def test_reemplazar_el_PDF_por_otro_de_distinta_procedencia_deja_pdf_source_en_null(toy_vault, capsys):
+    """#383 — #230 decide que `pdf_source` SOBREVIVE al archivo, porque describe la procedencia de
+    la lectura que ocurrió, no el archivo. Son dos casos (desaparece / se mantiene) y había un
+    tercero: el archivo se REEMPLAZA por otro de distinta procedencia. Ahí la lectura vieja se está
+    descartando —hay que re-extraer, la paginación cambió— y el argumento de #230 no aplica: el
+    valor sobrevive y ahora MIENTE. Medido: un preprint v1 (28 pp) reemplazado por el publicado
+    (32 pp) quedó con `pdf_source: eprint` + `eprint_version: v1` sobre el PDF del editor — y las
+    dos versiones diferían en RESULTADOS, no en redacción."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True); (cfg.PDFS / "rv").mkdir(parents=True, exist_ok=True)
+    pdf = cfg.PDFS / "rv" / "2025A&A...696A.141H.pdf"; pdf.write_bytes(b"%PDF-1.4 v1\n")
+    nota = cfg.PAPERS / "2025A&A...696A.141H.md"
+    nota.write_text("---\nbibcode: 2025A&A...696A.141H\ntags: [paper]\npdf: null\n"
+                    "pdf_source: eprint\neprint_version: v1\n---\n# F\n", encoding="utf-8")
+    assert mn.stamp_pdf(nota, "2025A&A...696A.141H") is True       # primera estampa: registra el hash
+    pdf.write_bytes(b"%PDF-1.4 PUBLICADO, 32 paginas\n")            # el usuario aporta el publicado
+    assert mn.stamp_pdf(nota, "2025A&A...696A.141H") is True
+    fm = cfg.split_fm(nota.read_text(encoding="utf-8"))
+    assert fm.get("pdf_source") is None and fm.get("eprint_version") is None, fm
+    out = capsys.readouterr().out
+    assert "cambió de hash" in out and "re-extraer" in out
+
+
+def test_el_mismo_PDF_no_toca_pdf_source(toy_vault):
+    """El control de #230: sin cambio de archivo, `pdf_source` sobrevive intacto — y la segunda
+    corrida es idempotente."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True); (cfg.PDFS / "rv").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "rv" / "2020x....1X.pdf").write_bytes(b"%PDF-1.4\n")
+    nota = cfg.PAPERS / "2020x....1X.md"
+    nota.write_text("---\nbibcode: 2020x....1X\ntags: [paper]\npdf: null\npdf_source: eprint\n"
+                    "---\n# X\n", encoding="utf-8")
+    mn.stamp_pdf(nota, "2020x....1X")
+    assert mn.stamp_pdf(nota, "2020x....1X") is False
+    assert cfg.split_fm(nota.read_text(encoding="utf-8"))["pdf_source"] == "eprint"
+
+
 def test_rename_paper_usa_el_stem_saneado_en_los_wikilinks(toy_vault):
     """El archivo se crea con el stem saneado (`/` → `_`) y todos los wikilinks del repo usan el
     stem. Escribir el bibcode crudo dejaba cada link apuntando a una nota inexistente — latente,

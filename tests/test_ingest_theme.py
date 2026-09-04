@@ -1,5 +1,6 @@
 """ingest_theme: despacho por `source`, validaciones de sources:, pending, copia de PDFs."""
 import inspect
+from pathlib import Path
 import pathlib
 import sys
 from types import SimpleNamespace
@@ -681,3 +682,36 @@ def test_mixto_solo_con_extra_core_y_sin_sources_no_aborta(toy_vault, fake_run, 
           extra_core=[{"bibcode": "2012PASP..124.1015B", "via": "usuario", "motivo": "test"}])
     assert run_main(monkeypatch) == 0
     assert ("query_ads.py", "--theme", "gp", "--extra-only") in fake_run.calls
+
+
+# ── #367 · cerrar un `pending` off-ADS copia el PDF y dejaba la nota con `pdf: null` ──
+
+def test_cerrar_un_pending_offads_estampa_pdf_en_la_nota_que_YA_existe(toy_vault, fake_run, fake_notes,
+                                                                        monkeypatch, tmp_path):
+    """#367 — #304 arregló «el PDF que aparece después nunca se linkea» en el carril ADS y el
+    backfill, y el carril off-ADS quedó afuera. Y ahí cerrar un `pending` es el caso NORMAL, no el
+    borde: la nota ya existe (el stub nació con `pending_source` en la corrida anterior), así que la
+    rama «crear el stub» —la única que estampaba— no se toma nunca. Medido: 1 de 1 fuente cerrada
+    desde `pending` quedó con `pdf: null` con el PDF en disco."""
+    src = tmp_path / "remes.pdf"; src.write_bytes(b"%PDF-1.4\n")
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / "2011Remes.md").write_text(
+        "---\nbibcode: 2011Remes\ntags: [paper]\npdf: null\nthesis_links: [gp]\n---\n# R\n",
+        encoding="utf-8")
+    topic(source="local-pdfs", sources=[{"key": "2011Remes", "pdf": str(src), "title": "t",
+                                         "author": "Remes", "year": 2011}])
+    assert run_main(monkeypatch) == 0
+    fm = cfg.split_fm((cfg.PAPERS / "2011Remes.md").read_text(encoding="utf-8"))
+    assert fm.get("pdf") == "../../raw/pdfs/gp/2011Remes.pdf", fm.get("pdf")
+
+
+def test_todo_camino_que_deposita_un_PDF_pasa_por_stamp_pdf():
+    """La red barata para que no vuelva a rotar (#367): `stamp_pdf` es la única definición de
+    «`pdf:` lo escribe la verdad de disco, lo escriba quien lo escriba». Hoy los depositantes son
+    tres y cada uno tiene que llamarla en el mismo módulo — sin esto la asimetría de #304/#367 se
+    reabre con el próximo carril."""
+    raiz = Path(__file__).resolve().parents[1] / "scripts"
+    for mod in ("fetch_pdf.py", "fetch_web.py", "ingest_theme.py"):
+        texto = (raiz / mod).read_text(encoding="utf-8")
+        assert "cfg.PDFS /" in texto, f"{mod}: ya no deposita en raw/pdfs — sacalo de esta lista"
+        assert "stamp_pdf(" in texto, f"{mod} deposita en raw/pdfs/ y no llama a stamp_pdf"

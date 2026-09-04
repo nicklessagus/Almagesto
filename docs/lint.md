@@ -145,6 +145,10 @@ Deben quedar en **0**:
   auditar). El énfasis markdown alrededor de la palabra no cambia nada (#276).
 - **Fuente retractada citada en prosa sin la marca `⛔retractada`** (D-47): con la marca baja a
   informativa (visible, no destruida).
+- **`pdf_source` de editor (`publisher|ads|web`) con `eprint_version`** (#383): contradicción
+  interna del frontmatter —el PDF es del editor y la nota dice que leyó un preprint—, y manda a
+  re-verificar contra el documento equivocado. Nace del REEMPLAZO de un PDF por otro de distinta
+  procedencia, que #230 no cubría (cubre el borrado); hoy `stamp_pdf` lo detecta por `pdf_sha`.
 - **Driver `merge=ours` REGISTRADO en un clon que tiene `origin`** (#390, invierte #99):
   `merge=ours` es una regla por **path** y git no puede condicionarla por remoto, así que el mismo
   driver que protege contra `upstream` **descarta en silencio** lo que traiga `origin` — la otra
