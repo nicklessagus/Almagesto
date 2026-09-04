@@ -56,6 +56,42 @@ def sembrar(toy_vault, data=None, *, stem=BIB, fm_extra=None, body=None):
                    body if body is not None else mn.vista_block("Estrella Test", theme=False))
 
 
+def test_el_cosechador_AVISA_si_el_txt_contradice_una_cita_de_la_extraccion(toy_vault, capsys):
+    """#359 — el cruce contra el `.txt` corría sobre la NOTA, así que una cita mal transcrita **al
+    leer el PDF** pasaba por el cosechador sin que nada la mirara y sólo se cazaba si llegaba a una
+    ficha. Medido en una ingesta real: 2 de 265 valores, las dos nacidas en la extracción.
+
+    Importa por dónde se caza: una extracción **no se regenera** (#311) y alimenta a N sujetos, así
+    que verla en el origen es verla una vez en lugar de una vez por nota."""
+    d = extraccion(ground_truth=[{"que": "velocidad", "linea": "412", "regimen": "", "segunda_mano": None,
+                                  "valor": "«Speed is, however, a crucial factor because we have to "
+                                           "run the ICA algorithm many times and again»"}])
+    sembrar(toy_vault, d)
+    (cfg.FULLTEXT / "test_star").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "test_star" / f"{BIB}.txt").write_text(
+        "Speed is, however, a crucial factor because we have to run the ICA algorithm many times "
+        "which is why FastICA is very suitable for this purpose.", encoding="utf-8")
+    r = hv.harvest("test_star")
+    out = capsys.readouterr().out
+    assert "el `.txt`" in out and BIB in out
+    # ⛔ AVISA y no rechaza: el `.txt` es índice degradado (#205), así que rechazar produciría
+    # falsos negativos sobre extracciones correctas. Misma asimetría que #213.
+    assert r["rechazadas"] == 0 and r["cosechadas"] == 1
+
+
+def test_el_SILENCIO_del_txt_sobre_una_cita_no_avisa(toy_vault, capsys):
+    """El recorte que lo hace usable: si el `.txt` no tiene la cadena, es *no evaluable* (#321) — la
+    extracción es selectiva y se cita del PDF. Sin esto el aviso saldría sobre el 36 % de los
+    valores de una bóveda real, y un reporte donde casi nada es accionable se deja de mirar."""
+    d = extraccion(ground_truth=[{"que": "x", "linea": "1", "regimen": "", "segunda_mano": None,
+                                  "valor": "«una frase larga que el `.txt` no contiene en absoluto»"}])
+    sembrar(toy_vault, d)
+    (cfg.FULLTEXT / "test_star").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "test_star" / f"{BIB}.txt").write_text("prosa distinta del paper.", encoding="utf-8")
+    hv.harvest("test_star")
+    assert "el `.txt`" not in capsys.readouterr().out
+
+
 def test_la_lente_de_la_vista_sale_de_LO_QUE_LA_LECTURA_PREGUNTO(toy_vault):
     """#372 — la lente se tomaba del TEMA, una sola vez antes del bucle, así que toda vista
     declaraba los ejes del tema sin mirar cuáles contestó esa lectura. Con `--enfasis --ejes`

@@ -917,6 +917,7 @@ verificable:
 
 5. harvest_views      →  la única compuerta que corre `is_extraction` (INV-103).
                          Estampa la vista (fecha · txt · lente) y la sección de la nota.
+                         ⛔ Y cruza cada cita del JSON contra el `.txt` (#359): avisa.
 
 6. verify-citations   →  un subagente por fuente, misma regla del paso 4: lee el PDF.
                          Cada par verificado deja una fila con DOS hashes.
