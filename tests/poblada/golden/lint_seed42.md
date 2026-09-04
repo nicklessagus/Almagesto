@@ -269,6 +269,9 @@
 ## Capas colgadas: registro/raw/build de una entidad que ya no existe (INV-19, backlog) (0)
 > sobre 3 registros de sujeto
 
+## 🔗 Wikilink en el blockquote de ALCANCE: contabilidad del corpus que el fan-out toma como cita infalsificable (#368, backlog) (0)
+> sobre 29 notas de entidad (fichas, conceptos, queries)
+
 ## Alcance de hipótesis sin declarar o vencido: el veredicto se lee sobre un universo que ya no es el suyo (backlog) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 

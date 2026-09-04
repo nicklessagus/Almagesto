@@ -3079,6 +3079,27 @@ def test_hueco_con_alcance_al_dia_calla(toy_vault, capsys):
     assert "ica" not in _seccion(rep, "Hueco sin ALCANCE declarado"), rep
 
 
+def test_un_wikilink_en_el_alcance_de_huecos_es_backlog(toy_vault, capsys):
+    """#368 — el blockquote de alcance (D-34) es por diseño una afirmación sobre el CORPUS, y
+    `## Huecos` no está entre las estampadas: un `[[bibcode]]` ahí entra al fan-out como par, y es
+    un par que **ningún PDF puede respaldar** —«Remes 2011 dejó de estar pending el 2026-08-31» no
+    es una afirmación sobre el paper—. Dos verificadores independientes devolvieron `no-soportada`
+    con el mismo diagnóstico, y `no-soportada` pelada BLOQUEA (#91). Coste: dos lecturas de PDF
+    completas para descubrir que la pregunta no tenía sentido.
+
+    La regla es «no pongas un wikilink ahí», no «no mires ahí»: lint, backlog, con el reemplazo."""
+    _fulltexts("ica", 2)
+    _concepto_con_huecos(toy_vault, "ica",
+                         "## Huecos\n\n> Alcance 2026-01-01 · temas: [ica] · 2 papers — los que "
+                         "faltaban, [[2011Remes]] y [[2014spsi.conf..422D]], entraron el 2026-08-31.\n\n"
+                         "- nadie da un criterio para elegir $n$.\n")
+    _rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "Wikilink en el blockquote de ALCANCE")
+    assert "ica" in sec and "2011Remes" in sec, rep
+    assert "nombre" in sec, "el remedio es reemplazar el link por el nombre del paper"
+    assert not any(l.startswith("## ⛔") and "ALCANCE" in l for l in rep.split("\n")), rep
+
+
 def test_hueco_con_alcance_que_quedo_corto_es_backlog(toy_vault, capsys):
     """#342 — el corpus crece debajo del hueco: se declaró sobre 2 papers y hoy el slug tiene 5, así
     que la negativa se pesó contra un universo que ya no es el vigente (la staleness de D-34)."""

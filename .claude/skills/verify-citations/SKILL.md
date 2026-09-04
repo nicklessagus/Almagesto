@@ -224,6 +224,7 @@ describas en prosa:
   ]
 }
 ```
+⛔ **Estas 7 claves por par y NINGUNA OTRA.** Una clave de más rebota el archivo entero en la barrera, con la lectura del PDF ya pagada. Lo que no entre en ellas va en `nota` (#365).
 
 Un objeto por par, en `pares`, identificado por su **`ancla`** (la de la fila del bloque). `condicion`,
 `cond_tipo`, `completitud` y `nota` van vacías cuando no aplican; ninguna otra clave entra.

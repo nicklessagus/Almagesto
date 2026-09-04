@@ -320,6 +320,23 @@ def alcance_declarado(text: str) -> dict | None:
             "n_papers": int(n.group(1)) if n else None}
 
 
+def scope_wikilinks(text: str) -> list[str]:
+    """The `[[wikilink]]`s INSIDE the scope blockquote, where they are not citations (#368).
+
+    The scope (D-34) is by design a statement about the CORPUS —which themes, how many papers, as
+    of when— and `## Huecos` is not a stamped section, so a `[[bibcode]]` there enters the fan-out
+    as a pair: one that **no PDF can support**, because the claim is not about the paper. Measured:
+    3 links → 3 pairs → 2 blocking `no-soportada` and two full PDF reads to find out the question
+    made no sense. The rule is «do not put a link there», not «do not look there»: exempting the
+    whole blockquote would let a real claim in that nobody checks."""
+    m = ALCANCE_RE.search(text)
+    if not m:
+        return []
+    fin = text.find("\n\n", m.start())
+    bloque = text[m.start():fin if fin > 0 else len(text)]
+    return re.findall(r"\[\[([^\]|#]+)", bloque)
+
+
 def corpus_vigente(slugs: list) -> tuple[int, list]:
     """(papers con fulltext hoy en esos slugs, slugs cuyo directorio no existe). El universo de una
     hipótesis son directorios de `raw/fulltext/` porque es exactamente sobre lo que corre el grep."""
@@ -1347,6 +1364,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     status_vs_evidencia: list = []     # `sostenida` con filas `desafía` (D-37 / #177)
     alcance_corto: list = []           # (stem, motivo) — alcance de hipótesis sin declarar o vencido (D-34)
     huecos_sin_alcance: list = []      # (stem, motivo) — #342: `## Huecos` sin alcance, o corto
+    alcance_wikilink: list = []        # (stem, motivo) — #368: `[[link]]` dentro del blockquote de alcance
     old_bearing: list = []             # `bearing` en nota de paper: schema pre-D-21
     sin_destino: list = []             # paper sin stars/thesis_links/methods (D-23)  @inv INV-94
     cadena_incompleta: list = []       # (slug, "se cortó en <paso>") — D-57
@@ -2137,6 +2155,15 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                     (stem, f"`status: sostenida` con {n_desafia} fila(s) `desafía` en la tabla de "
                            f"evidencia: el status se DERIVA de la tabla (D-37). Si la evidencia está "
                            f"repartida, el status es `disputada`"))
+            # #368 — el mismo razonamiento vale para el alcance del VEREDICTO (D-34 lo comparte
+            # con `## Huecos`): un `[[bibcode]]` ahí es contabilidad, no cita. No se midió acá; se
+            # cubre porque la regla es la misma y dejarla en un solo sitio es escribirla a medias.
+            for _wl in scope_wikilinks(text):
+                alcance_wikilink.append(
+                    (stem, f"`[[{_wl}]]` dentro del blockquote de alcance de la hipótesis: es "
+                           f"contabilidad del corpus, no una cita, y el fan-out lo toma como par "
+                           f"que ningún PDF puede respaldar → reemplazalo por el nombre del paper "
+                           f"(#368)"))
             # D-34 — el ALCANCE define qué significa el veredicto. Sin él, "no hay evidencia" se lee
             # como "no existe evidencia": el mismo *afirmar de más* que la bóveda persigue en todos
             # lados, pero aplicado a una conclusión. Y con él, el alcance CRECE: sumar un tema (o
@@ -2197,6 +2224,12 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 # El blockquote se busca DENTRO de la sección: el de nivel de nota de una hipótesis
                 # (D-34) declara el alcance del veredicto, que es otra afirmación.
                 _est_h, _alc_h, _vig_h, _falt_h = scope_state(_sec_h)
+                for _wl in scope_wikilinks(_sec_h):
+                    alcance_wikilink.append(
+                        (stem, f"`[[{_wl}]]` dentro del blockquote de alcance de `## Huecos`: es "
+                               f"contabilidad del corpus, no una cita, y el fan-out lo toma como "
+                               f"par que ningún PDF puede respaldar → reemplazalo por el nombre "
+                               f"del paper (#368)"))
                 if _est_h == "sin_declarar":
                     huecos_sin_alcance.append(
                         (stem, f"`## Huecos` con {len(_bul_h)} afirmación(es) negativa(s) y sin "
@@ -4550,6 +4583,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('stale_pairs', 'Pares de verificación vencidos' + (' (BLOQUEA: modo --cierre)' if cierre else ' (backlog: pasada periódica; con `--cierre` bloquea)'), SEV_CIERRE, tuple(stale_pairs), poblacion='entidades'),
         Categoria('stale_verif', 'Verificación stale: la nota se editó después de su último verify-citations (backlog)', SEV_BACKLOG, tuple(stale_verif), poblacion='entidades'),
         Categoria('artefactos_colgados', 'Capas colgadas: registro/raw/build de una entidad que ya no existe (INV-19, backlog)', SEV_BACKLOG, tuple(artefactos_colgados), poblacion='registros'),
+        Categoria('alcance_wikilink', '🔗 Wikilink en el blockquote de ALCANCE: contabilidad del corpus que el fan-out toma como cita infalsificable (#368, backlog)',
+                  SEV_BACKLOG, tuple(alcance_wikilink), poblacion='entidades'),
         Categoria('alcance_corto', 'Alcance de hipótesis sin declarar o vencido: el veredicto se lee sobre un universo que ya no es el suyo (backlog)', SEV_BACKLOG, tuple(alcance_corto), poblacion='entidades'),
         Categoria('huecos_sin_alcance', 'Hueco sin ALCANCE declarado: una afirmación negativa sin alcance se lee como universal, y ninguna otra capa la mira (#342, backlog)', SEV_BACKLOG, tuple(huecos_sin_alcance), poblacion='huecos'),
         Categoria('coverage', 'Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog)', SEV_BACKLOG, tuple(coverage), poblacion='entidades'),

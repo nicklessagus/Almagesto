@@ -1100,6 +1100,24 @@ def test_el_fence_del_skill_es_el_que_genera_el_codigo():
                                 lb.verify_fanout_json_block(), re.S).group(1)) == _fence_del_skill()
 
 
+def test_el_fence_dice_que_las_claves_son_CERRADAS():
+    """#365 — el fence emitía las siete claves con sus glosas y **no decía en ningún lado que la
+    lista sea cerrada**. La regla existía en `CLAUDE.md` («ninguna otra clave entra»), o sea en
+    prosa que el subagente no ve: las reglas se caen en el fan-out. Medido: 2 incidentes en 10
+    rondas (~70 subagentes), uno rebotado por la barrera DESPUÉS de pagar la lectura completa del
+    PDF —107 290 tokens y 13 tool uses para re-emitir el mismo veredicto—.
+
+    La línea la genera la MISMA función que genera el bloque, así que prompt y validador no pueden
+    divergir; y va FUERA del ```json, para que el fence siga siendo el JSON que valida."""
+    bloque = lb.verify_fanout_json_block()
+    assert "NINGUNA OTRA" in bloque and "`nota`" in bloque
+    assert bloque.index("```\n", 10) < bloque.index("NINGUNA OTRA"), "la regla va después del fence"
+    # ⛔ y la barrera NO se afloja: la clave de más sigue rebotando el archivo
+    datos = _json.loads(re.search(r"```json\n(.*?)\n```", bloque, re.S).group(1))
+    datos["pares"][0]["_localizador_metodo"] = "x"
+    assert any("fuera del schema" in e for e in lb.fanout_errors(datos, entry="x"))
+
+
 def test_el_generador_rehusa_una_clave_del_schema_sin_placeholder(monkeypatch):
     """Un campo que el schema exige y el prompt no explica es un campo que el productor no puede
     llenar: se rehúsa en vez de imprimir un relleno, que sería la prosa vaga otra vez."""

@@ -446,6 +446,11 @@ OCR, o marcar `pending`).
 - **Cabecera no estampable** (#69: sin la línea `> _Generado con Almagesto v…_`, ancla de todos los
   estampadores): las cirugías de cabecera devuelven `False` en silencio sobre ella. Se arregla con
   `python scripts/make_notes.py --restamp-headers` (lee la versión del `generator`, no la inventa).
+- **Wikilink en el blockquote de ALCANCE** (#368): el alcance de `## Huecos` o de una hipótesis
+  (D-34) es contabilidad del corpus —qué temas, cuántos papers, a qué fecha— y un `[[bibcode]]` ahí
+  entra al fan-out como par que **ningún PDF puede respaldar**: medido, 3 links → 2 `no-soportada`
+  bloqueantes y dos lecturas de PDF completas para descubrir que la pregunta no tenía sentido. La
+  regla es *no pongas un link ahí*, no *no mires ahí*: se reemplaza por el nombre del paper.
 - **Cabecera DESPLAZADA o AUSENTE** (#380, dentro de *PDF ↔ disco / cuerpo*): son **tres** estados y
   el detector modelaba dos. *Desplazada* = la línea existe fuera del contrato (típicamente adentro
   de `## Abstract`, por el orden invertido de #378) → **mover**, con `--fix-header-order` si la

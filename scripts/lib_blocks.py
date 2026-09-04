@@ -1460,4 +1460,14 @@ def verify_fanout_json_block() -> str:
         raise ValueError(f"claves del schema sin placeholder para el prompt: {falta}")
     par = {k: _FANOUT_PLACEHOLDERS[k] for k in s["par"] + s["par_opt"]}
     top = {k: [par] if k == "pares" else _FANOUT_PLACEHOLDERS[k] for k in s["top"]}
-    return "```json\n" + json.dumps(top, ensure_ascii=False, indent=2) + "\n```"
+    # #365 — the fence showed the keys and never said the list is CLOSED. That rule lived in
+    # `CLAUDE.md`, prose the subagent never sees (rules fall off in the fan-out): measured, 2
+    # incidents in 10 rounds, one bounced by the barrier AFTER paying the full PDF read (107 290
+    # tokens, 13 tool uses) to re-emit the same verdict. The line is built HERE, by the function
+    # that builds the block, so prompt and validator cannot drift; and it goes OUTSIDE the ```json,
+    # so the fence stays the JSON the validator reads.
+    n = len(s["par"]) + len(s["par_opt"])
+    return ("```json\n" + json.dumps(top, ensure_ascii=False, indent=2) + "\n```\n"
+            f"⛔ **Estas {n} claves por par y NINGUNA OTRA.** Una clave de más rebota el archivo "
+            f"entero en la barrera, con la lectura del PDF ya pagada. Lo que no entre en ellas va "
+            f"en `nota`.")
