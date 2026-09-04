@@ -238,6 +238,47 @@ repara.
 > Medido en `Almagesto-Tesis`: **16** vistas con `enfasis`, **0** desalineadas — ya se habían
 > corregido a mano cuando se abrió el issue.
 
+## 2c · v1.178.0-v1.180.0 (#373 · #364/#388 · #359) — las citas que nadie miraba, y su ruido
+
+### #373 — el barrido ahora entra en `## Vista`
+
+En una nota de paper el bibcode es la nota, no un link, así que sus citas no tenían par para el
+fan-out ni candidato para el gate. Ahora el bibcode de la nota se **suma** a los adyacentes.
+
+⛔ **Es la sección con más citas de tu bóveda y entra entera a la superficie de chequeo.** Corré:
+
+```bash
+python scripts/contrast.py --validar-todo
+```
+
+> Medido en `Almagesto-Tesis` (2026-09-03): de **3** citas miradas se pasa a **5482**, y los
+> hallazgos bloqueantes quedan en **0**. Los 13 que aparecían en el camino eran los dos defectos que
+> este mismo cambio destapó, ya corregidos: una mención en la celda vecina que robaba la atribución
+> (5) y una asimetría de #326 en la matemática (7).
+
+### #364/#388 — baja el ruido del carril `.txt`
+
+Los avisos «el `.txt` dice otra cosa» sobre-reportaban por tres mecanismos que no rompen ninguna
+palabra: empalme de columnas, comillas TeX y ligaduras. **No hay nada que arreglar en tu contenido**:
+el reporte se acorta solo.
+
+> Medido en la misma bóveda: **231 → 155** avisos, y `icasso.md` —donde los cuatro casos se habían
+> verificado abriendo el PDF— pasa de **4 a 0**. ⚠ Los 155 restantes no están clasificados: que
+> bajen no los declara falsos.
+
+### #359 — el cosechador avisa sobre la extracción, no sólo sobre la nota
+
+`harvest_views` cruza ahora cada cita del JSON contra el `.txt` del paper. Vas a ver líneas nuevas
+al cosechar. **Avisa y no rechaza**: la extracción entra igual.
+
+Qué hacer con una: **abrir el PDF en esa página**. Si el `.txt` tiene razón, se corrige el JSON de
+extracción **y** la vista que ya se estampó — el cosechador no pisa prosa escrita, así que
+re-correrlo no la repara.
+
+> Medido: **129** avisos potenciales sobre 3117 citas de extracción de toda la bóveda (4 %), que por
+> corrida de cosecha son unas pocas. ⚠ El aviso por AUSENCIA no existe a propósito: el 36 % de esas
+> citas no está en su `.txt` y casi todo es degradación del índice.
+
 ## 3 · Cierre
 
 ```bash
