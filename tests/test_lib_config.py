@@ -2308,6 +2308,66 @@ def test_una_cita_con_MATEMATICA_se_encuentra_en_un_texto_normalizado_como_FUENT
     assert cfg.quote_found(q, fuente), "la cita está en su fuente, carácter por carácter"
 
 
+# ── #364/#388 · bajar el RUIDO de la acusación del `.txt` sin bajar su sensibilidad ──
+
+def test_las_comillas_TeX_no_son_una_diferencia_de_PALABRAS():
+    """#364/#388 — el PDF compone las comillas dobles con **dos simples** (`\u2018\u2018…\u2019\u2019`, el modo TeX) y
+    la extracción escribe `"`. Cero diferencia de palabras, y sin embargo la acusación salía: una
+    lectura de PDF por hallazgo, sobre el aviso que existe justamente para cuando el determinista le
+    GANA al LLM. Plegar los glifos en los dos lados no puede tapar una alteración de palabras."""
+    assert cfg.normalize_quote("dice \u2018\u2018tight\u2019\u2019 cluster") == cfg.normalize_quote('dice "tight" cluster')
+
+
+def test_las_ligaduras_no_son_una_diferencia_de_PALABRAS():
+    """La otra mitad barata: `pdftotext` deja la ligadura tipográfica (`\ufb01`, `\ufb02`) como UN carácter,
+    y la extracción escribe las dos letras. Es un carácter, no un borde de palabra, así que la
+    guarda de #333 no lo veía."""
+    assert cfg.normalize_source_text("the \ufb01nal \ufb02ux") == cfg.normalize_source_text("the final flux")
+
+
+def test_el_EMPALME_de_columnas_no_es_una_contradiccion():
+    """#388 — el caso literal medido: `pdftotext` intercala la columna de referencias renglón por
+    renglón, y lo que intercala es texto real que **arranca en un borde de palabra perfecto**. Ahí
+    el argumento de #333 se rompe: la guarda existe porque `pdftotext` rompe PALABRAS, y el empalme
+    no rompe ninguna.
+
+    El discriminante es que la cita **REANUDA** más adelante en la misma fuente: si el `.txt` trae
+    la continuación, no está diciendo otra cosa — está diciendo lo mismo con algo metido en el
+    medio. En el caso verdadero de esa misma medición la cola **seguía la misma frase** y no
+    reanuda, así que el filtro no lo toca."""
+    txt = cfg.normalize_source_text(
+        "Speed is, however, a crucial factor because we have to run the ICA "
+        "Duann, J.-R., Jung, T.-P., Sejnowski, T., Makeig, S., 2003. What is consistent in ICA "
+        "algorithm many times, which is why FastICA is very suitable for this purpose.")
+    assert cfg.txt_accuses(
+        "Speed is, however, a crucial factor because we have to run the ICA algorithm many times, "
+        "which is why FastICA is very suitable for this purpose.", [txt]) is None
+
+
+def test_una_SONDA_corta_no_alcanza_para_perdonar_el_empalme():
+    """El recorte del filtro de arriba: la reanudación se prueba con la COLA de la cita, y una cola
+    corta matchea por casualidad —cualquier `.txt` largo contiene «of the data» en algún lado—. Con
+    la sonda por debajo de `CITA_COLA_MIN` el filtro no opina y la acusación queda en pie, que es la
+    dirección segura: sobre-reportar, nunca perdonar de más."""
+    txt = cfg.normalize_source_text(
+        "the reproducibility index is computed over the whole set of runs and then a completely "
+        "different sentence follows here for a while. data of it appears again later on.")
+    a = cfg.txt_accuses(
+        "the reproducibility index is computed over the whole set of runs and data of it", [txt])
+    assert a is not None, "la cola («data of it», 10 caracteres) no prueba reanudación"
+
+
+def test_el_borde_de_palabra_sigue_acusando_lo_que_DEBE():
+    """⛔ El control que impide aflojar de más: el verdadero positivo medido en `icasso` —la
+    extracción escribió «power line interferences» donde el PDF dice «power line artifact», mezclando
+    dos frases vecinas de la misma columna— tiene que seguir acusando."""
+    txt = cfg.normalize_source_text(
+        "the signal clearly corresponds to a 150 Hz harmonics due to the power line artifact. Here "
+        "we encounter again the previously discussed problem of the number of components")
+    a = cfg.txt_accuses("clearly corresponds to a 150 Hz harmonics due to the power line interferences", [txt])
+    assert a is not None and "artifact" in a["cola_txt"]
+
+
 # ── #371 · el archivo de una SEGUNDA lente no puede ser el de la primera ──
 
 def test_lens_filename_sin_lente_es_el_canonico():

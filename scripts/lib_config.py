@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.178.0"
+ALMAGESTO_VERSION = "1.179.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -752,8 +752,20 @@ _SOURCE_MARKUP_RE = re.compile(r"\[\[|\]\]|[*_`\\]")
 #: partida queda como dos.
 _HYPHEN_BREAK_RE = re.compile(r"-\n[ \t]*")
 _QUOTE_ELLIPSIS_RE = re.compile(r"\[\s*(?:\.\.\.|…)\s*\]|…|\.\.\.")
-_QUOTE_SUBS = (("\u201c", '"'), ("\u201d", '"'), ("\u2018", "'"), ("\u2019", "'"),
-               ("\u2013", "-"), ("\u2014", "-"), ("\u00ad", ""))
+#: #364/#388 · las **ligaduras tipográficas** van primero: `pdftotext` las deja como UN carácter
+#: (`\ufb01nal`) y quien transcribe escribe las dos letras. Es un carácter, no un borde de palabra, así
+#: que la guarda de #333 —que existe porque `pdftotext` rompe PALABRAS y un LLM cambia PALABRAS— no
+#: podía verlo, y la acusación salía sobre una cita verbatim.
+_LIGATURE_SUBS = (("\ufb00", "ff"), ("\ufb01", "fi"), ("\ufb02", "fl"), ("\ufb03", "ffi"), ("\ufb04", "ffl"))
+
+_QUOTE_SUBS = (*_LIGATURE_SUBS,
+               ("\u201c", '"'), ("\u201d", '"'), ("\u2018", "'"), ("\u2019", "'"),
+               ("\u2013", "-"), ("\u2014", "-"), ("\u00ad", ""),
+               # …y recién ACÁ el modo TeX: el PDF compone la comilla doble con DOS simples
+               # (`\u2018\u2018…\u2019\u2019`), que las dos líneas de arriba dejan en `''`, y la transcripción escribe
+               # `"`. Cero diferencia de palabras. El orden importa: plegar `''` antes de unificar
+               # las simples no vería el par tipográfico.
+               ("''", '"'), ("``", '"'))
 
 
 def normalize_quote(s: str) -> str:
@@ -1281,11 +1293,20 @@ def txt_accuses(quote: str, readings: list) -> dict | None:
         while pos != -1:
             comun = _common_prefix_len(q, src[pos:])
             if mejor is None or comun > mejor[0]:
-                mejor = (comun, src[pos + comun:pos + comun + 2 * CITA_PREFIJO])
+                mejor = (comun, src[pos + comun:pos + comun + 2 * CITA_PREFIJO], src, pos)
             pos = src.find(arranque, pos + 1)
     if mejor is None:
         return None
-    comun, cola_txt = mejor
+    comun, cola_txt, src, pos = mejor
+    # #388 — el EMPALME DE COLUMNAS rompe el argumento de arriba: lo que `pdftotext` intercala es la
+    # columna vecina, que es texto real y **arranca en un borde de palabra perfecto**. La guarda
+    # anterior no lo ve porque no rompe ninguna palabra. El discriminante es que la cita REANUDA más
+    # adelante en la misma lectura: si el `.txt` trae la continuación, no está diciendo otra cosa,
+    # está diciendo lo mismo con algo metido en el medio. ⚠ En el verdadero positivo medido de esa
+    # misma tanda la cola SEGUÍA la misma frase y no reanuda, así que el filtro no lo toca.
+    sonda = q[comun:comun + CITA_COLA_MIN * 2].strip()
+    if len(sonda) >= CITA_COLA_MIN and sonda in src[pos + comun:]:
+        return None
     # El borde de palabra, y de paso la cita que el `.txt` tiene ENTERA: `normalize_quote` recorta
     # el espacio final, así que una coincidencia completa termina en una letra y la guarda la corta
     # sola — un `comun >= len(q)` aparte no decidiría nada (#319).

@@ -1026,17 +1026,17 @@ re-extraer el `.txt`.
    testigo, así que la cadena que está ahí prueba que la frase es de ese paper — sin ese paso, el
    *boilerplate* que la extracción no transcribió salía «mal atribuido». Duplicada, la regla ya
    divergía (13 contra 12), y desde #323 un falso positivo **frena operaciones**.
-   ⛔ **Y el `.txt` también puede ACUSAR, en un dominio acotado (#333):** una cita alterada que nace
+   ⛔ **Y el `.txt` también puede ACUSAR, en un dominio acotado (#333):** una cita alterada nacida
    **en la extracción** es invisible para un juez que **es** la extracción, así que si el `.txt` de
    esa misma fuente trae un **prefijo largo** de la cita y **sigue distinto** —en prosa, arrancando
    en un **borde de palabra**, sin tocar `$…$` ni una celda— gana el determinista sobre el LLM. Ese
    borde es la guarda que lo hace usable: `pdftotext` rompe **palabras** (ligadura `ﬁ`, `mix tures`,
-   empalme) y un LLM que transcribe mal cambia **palabras** — medido con el cortador de #332 ya
-   arreglado, 7 candidatas → **3 acusaciones, las 3 verdaderas**. ⛔ **No bloquea** (el `.txt` es
+   empalme) y un LLM que transcribe mal cambia **palabras**. ⛔ **El EMPALME DE COLUMNAS arranca en borde
+   perfecto (#364/#388): no acusa si la cita REANUDA** más adelante; las comillas TeX y las
+   ligaduras se pliegan de los dos lados. ⛔ **No bloquea** (el `.txt` es
    índice degradado) y la salida es la **marca `⚠verificar en el PDF`**, que `contrast --validar`
    deja **lista para pegar** y no aplica (#341): cuál lectura gana lo decide quien abra la página, y
-   corregir solo iría en la dirección equivocada — medido, un `.txt` partido ya hizo recortar una
-   nota **hacia** la cadena inventada.
+   corregir solo iría en la dirección equivocada.
    ⛔ **Y alcanza `## Vista` sumando el bibcode de la NOTA a los adyacentes (#373):** ahí el bibcode es
 la nota y no un link, así que 3838 transcripciones del PDF no las miraba nadie.
 ⛔ **Y ese cruce es PASO DE CIERRE de toda operación que sintetice, ANTES del verify (#323):**
