@@ -380,6 +380,43 @@ cuesta 0 (#362) — el orden de gasto está en `docs/operacion.md`.
 > sobre un DOI. La deuda declarada en su STATUS: esos 129 y los 155 avisos del `.txt`, que piden
 > PDFs de a uno y son operación de `maintain` aparte.
 
+## 2g · v1.189.0-v1.190.0 (#361 · #358) — la cascada que nadie miraba, y el PDF que sí había
+
+**Nada que reparar en contenido; dos cosas para correr.**
+
+- **Categoría nueva del lint, backlog: `cascada_sin_correr` (#361).** Sólo mira temas **off-ADS o
+  mixtos** (`source:` declarado y distinto de `ads`) y lee `descubrimientos` del registro, con
+  tres estados: *nunca corrió* · *corrió y no trajo nada* · *corrió con backends caídos* (nombra
+  cuál; un backend caído en una corrida y sano en otra **no** es deuda, y `NO CORRIÓ: …` es
+  decisión, no caída). Esperado en `Almagesto-Tesis`: **2** hallazgos — `icasso` (OpenAlex FALLÓ
+  en sus dos corridas del 08-31) y `rv-doppler` (sin `descubrimientos`). `ica` e `ica-ruido` corrieron
+  con los tres backends y no salen. Se cierra corriendo `python scripts/discover.py --theme <slug>`
+  cuando OpenAlex tenga presupuesto (#362: el aviso lo dice). ⚠ `rv-doppler` es corpus declarado
+  con `source: local-pdfs` porque #384 todavía no existía; cuando entre #384 y pase a `source: ads`
+  + `query: null`, sale solo de esta categoría.
+- **El anclaje ya no muere con traceback (#361 a).** Deja fila `anclaje` en la cobertura del
+  registro, con los tres estados. Sólo en corridas nuevas: las entradas viejas de `descubrimientos`
+  no la tienen y no se tocan.
+- **`fetch_pdf` cae al resolver de acceso abierto antes de rendirse (#358).** Cascada completa,
+  OpenAlex → Unpaywall → Europe PMC → arXiv por título exacto, **todos** los candidatos. En
+  `icasso` los dos «sin conseguir» eran open access: re-corré
+
+  ```bash
+  python scripts/fetch_pdf.py icasso          # esperado: 2022PLoSO..1770556W (OpenAlex → PLoS) y
+                                              # 2019Bioin..35.4307C (OUP bloqueado → Europe PMC)
+  python scripts/extract_fulltext.py icasso   # el .txt de los dos
+  python scripts/lint.py
+  ```
+
+  `fetch_pdf` estampa `pdf:` en la nota que ya existía (#304) y `extract_fulltext` el `fulltext:`.
+  `pdf_source` queda `publisher` para PLoS (`publishedVersion` según OpenAlex) y **desconocido**
+  (`null`) para la copia de Europe PMC — es honesto: no se sabe si es la versión del editor. El
+  residuo `build/<slug>/missing_pdf.json` trae ahora `estado: sin-copia-libre | bloqueado` y
+  `copias_libres`; la referencia `rescate-pdfs.md` dice qué hacer con cada uno.
+
+> Medido en el template (2026-09-04): smoke real con los dos DOI del issue, 874 KB y 750 KB, el
+> segundo sólo por Europe PMC. La instancia mide lo suyo y lo deja en el `log`.
+
 ## 3 · Cierre
 
 ```bash
