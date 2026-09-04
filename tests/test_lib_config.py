@@ -2293,6 +2293,21 @@ def test_extraction_texts_memoiza_por_boveda(toy_vault, monkeypatch):
     assert lecturas.count("2013Voss.json") == 1, "el JSON se lee UNA vez por corrida"
 
 
+def test_una_cita_con_MATEMATICA_se_encuentra_en_un_texto_normalizado_como_FUENTE():
+    """#326/#373 — las dos normalizaciones son asimétricas y no había variante que las uniera: la de
+    la CITA borra el span `$…$` y la de la FUENTE lo conserva desarmado (`$mathbf{a}^{1}$`). Así que
+    una cita cuyo contenido es sobre todo matemática no se encontraba **nunca** en su propia fuente,
+    aunque estuviera ahí carácter por carácter.
+
+    Estaba latente: hasta #373 esas citas vivían en las `## Vista`, que ninguna capa miraba. Al
+    entrar a la población el defecto salió como **7 hallazgos, los 7 falsos** sobre una bóveda real,
+    los 7 «el arranque coincide y la cola diverge» contra su propia extracción — y un falso positivo
+    acá **frena operaciones** (#323)."""
+    q = r"one has $\mathbf{A}^{-1} = \mathbf{A}^{T}(\mathbf{I}-\Sigma)^{-1}$"
+    fuente = cfg.normalize_source_text("Tras esferizar los datos «" + q + "», que en el caso ...")
+    assert cfg.quote_found(q, fuente), "la cita está en su fuente, carácter por carácter"
+
+
 # ── #371 · el archivo de una SEGUNDA lente no puede ser el de la primera ──
 
 def test_lens_filename_sin_lente_es_el_canonico():

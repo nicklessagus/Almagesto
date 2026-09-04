@@ -1037,7 +1037,9 @@ re-extraer el `.txt`.
    deja **lista para pegar** y no aplica (#341): cuál lectura gana lo decide quien abra la página, y
    corregir solo iría en la dirección equivocada — medido, un `.txt` partido ya hizo recortar una
    nota **hacia** la cadena inventada.
-   ⛔ **Y ese cruce es PASO DE CIERRE de toda operación que sintetice, ANTES del verify (#323):**
+   ⛔ **Y alcanza `## Vista` sumando el bibcode de la NOTA a los adyacentes (#373):** ahí el bibcode es
+la nota y no un link, así que 3838 transcripciones del PDF no las miraba nadie.
+⛔ **Y ese cruce es PASO DE CIERRE de toda operación que sintetice, ANTES del verify (#323):**
    `python scripts/contrast.py [<slug>] --validar-todo` (sin slug, toda la bóveda; exit ≠ 0, declara
    población y no evaluables). Un `grep` de segundos contra N subagentes leyendo PDFs: verificar con
    LLM lo que el `grep` ya sabe alterado es pagar el caro por lo que el barato sabía. La capacidad

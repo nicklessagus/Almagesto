@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.177.0"
+ALMAGESTO_VERSION = "1.178.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -981,7 +981,16 @@ def quote_variants(quote: str) -> list:
     crudo = str(quote or "")
     lecturas = [directa]
     for otra in (normalize_quote(_MATH_DELIMS.sub(r"\1", crudo)),
-                 normalize_quote(_MATH_DELIMS.sub(" … ", crudo))):
+                 normalize_quote(_MATH_DELIMS.sub(" … ", crudo)),
+                 # #373 — la cuarta, y es la SIMÉTRICA: la cita normalizada **como se normaliza una
+                 # fuente**, o sea conservando el span. Las otras tres nacieron mirando el `.txt`,
+                 # que no puede llevar la fórmula; pero la EXTRACCIÓN sí la lleva, y
+                 # `normalize_source_text` la conserva desarmada. Sin esta lectura, una cita cuyo
+                 # contenido es sobre todo matemática no se encontraba NUNCA en su propia
+                 # extracción, aunque estuviera ahí carácter por carácter. Estaba latente hasta que
+                 # #373 metió las `## Vista` en la población: 7 hallazgos, los 7 falsos, sobre una
+                 # bóveda real — y un falso positivo acá frena operaciones (#323).
+                 normalize_source_text(crudo)):
         if otra not in lecturas:
             lecturas.append(otra)
     return lecturas

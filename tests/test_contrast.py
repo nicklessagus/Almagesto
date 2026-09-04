@@ -341,6 +341,65 @@ def test_PARIDAD_con_el_lint_sobre_el_mismo_insumo(toy_vault, capsys):
     assert not de_contrast
 
 
+# ── #373 · las citas de `## Vista` no las miraba NINGUNA capa ──
+
+def _nota_paper(bib: str, cuerpo: str):
+    """Una nota de paper con su `## Vista`: ahí el bibcode es la NOTA, no un link adyacente."""
+    f = cfg.PAPERS / f"{bib}.md"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(f"---\nbibcode: {bib}\ntags: [paper]\n---\n\n# {bib}\n\n"
+                 f"## Vista — ica_ruido\n\n{cuerpo}\n", encoding="utf-8")
+    return f
+
+
+def test_una_cita_de_la_VISTA_alterada_respecto_de_SU_extraccion_BLOQUEA(toy_vault, capsys):
+    """#373 — el 99,7 % de las transcripciones directas del PDF no las contrastaba nadie: medido en
+    una bóveda real, **3838** citas de ≥40 caracteres en las `## Vista` de 159 notas de paper, de
+    las cuales el fan-out de verify veía **11**.
+
+    Son dos capas fallando a la vez: `verify-citations` empareja `(afirmación, [[bibcode]])` y ahí
+    el bibcode es la NOTA, no un link, así que no hay par; y el gate de #323 trata el silencio de la
+    extracción como *no evaluable* (#318, correcto) — pero acá la extracción **es el original de la
+    cita**, así que una divergencia nota↔extracción es justo el caso que debe acusar.
+
+    Prueba controlada del issue: alterar la cola de una cita que la extracción SÍ tiene."""
+    _extraccion("ica_ruido", "2013Voss")
+    _txt("ica_ruido", "2013Voss")
+    _nota_paper("2013Voss", f"Dice «{LARGA[:80]} y de ahí sale todo lo demás».")
+    assert ct.main(["--validar-todo"]) == 1
+    assert "la cola diverge" in capsys.readouterr().out
+
+
+def test_la_cita_FIEL_de_la_vista_no_se_reporta(toy_vault, capsys):
+    """El control: la misma cita, sin alterar, no es un hallazgo."""
+    _extraccion("ica_ruido", "2013Voss")
+    _txt("ica_ruido", "2013Voss")
+    _nota_paper("2013Voss", f"Dice «{LARGA}».")
+    assert ct.main(["--validar-todo"]) == 0, capsys.readouterr().out
+
+
+def test_el_SILENCIO_de_la_extraccion_sobre_la_vista_NO_bloquea(toy_vault, capsys):
+    """#318 no se afloja: la extracción es una transcripción **selectiva** (#188) y se cita del PDF
+    (#205), así que lo que no transcribió no prueba nada."""
+    _extraccion("ica_ruido", "2013Voss")
+    _txt("ica_ruido", "2013Voss")
+    _nota_paper("2013Voss", "Dice «una frase que la extracción nunca transcribió, larga y distinta».")
+    assert ct.main(["--validar-todo"]) == 0, capsys.readouterr().out
+
+
+def test_el_bibcode_de_la_nota_SE_SUMA_al_adyacente(toy_vault, capsys):
+    """El recorte, y lo midió la bóveda real: una fila de la vista cita a su propio paper y menciona
+    OTRO en una celda vecina. Con «el adyacente gana», esa mención le roba la atribución —5
+    hallazgos, los 5 falsos, y el mensaje nombraba la fuente correcta—, que es el modo de falla de
+    #325 dentro de una tabla. Con la UNIÓN no hay acusación falsa en ninguna dirección."""
+    _extraccion("ica_ruido", "2013Voss")
+    _extraccion("ica_ruido", "2004Davies", ground_truth=[
+        {"que": "otro", "valor": LARGA, "linea": "p. 9"}])
+    _txt("ica_ruido", "2004Davies"); _txt("ica_ruido", "2013Voss")
+    _nota_paper("2013Voss", f"Comparado con [[2004Davies]], que dice «{LARGA}».")
+    assert ct.main(["--validar-todo"]) == 0, capsys.readouterr().out
+
+
 # ── #374 · la identidad de una extracción es su `bibcode`, no el nombre del archivo ──
 
 def _segunda_lente(slug: str, bib: str, valor: str, sufijo: str = "__orden"):
