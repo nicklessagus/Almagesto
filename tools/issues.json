@@ -1949,6 +1949,11 @@
   {
    "number": 392,
    "title": "REGLA TRANSVERSAL: «prohibido de memoria» rige sólo donde el framework VERIFICA (D-59), no donde ESCRIBE identidad — 4 de 29 fuentes de una instancia con autor inventado por asociación, con la planilla correcta al lado del PDF",
+   "state": "CLOSED"
+  },
+  {
+   "number": 393,
+   "title": "tools/mutar.py --guardas reporta SOBREVIVIENTES FALSOS en cláusulas `and[0]`/`or[0]`: tres casos en un día, y en los tres la mutación a mano muere",
    "state": "OPEN"
   }
  ]
