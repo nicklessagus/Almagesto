@@ -1641,9 +1641,9 @@ evaluado*, no verde. Detalle y ratchets en `tests/README.md`; el resumen operati
      cero mutaciones no es «murieron todas» (D-43).
    - **Guardas** (`python tools/mutar.py --guardas <scripts|tools>/<mód>.py [--solo f,g]`, AUD-213) —
      vaciar el cuerpo no mide las **condiciones**: muta cada `if` interno a `False` y, en un
-     `and`/`or`, **cada cláusula por separado** (sólo eso revela la cláusula que ningún test
-     ejercita). Mismo contrato que la dirigida; una condición constante se saltea (el hallazgo sería
-     inventado). ⚠ Es el único modo que chequea la **baseline**: con el archivo de tests en rojo,
+     `and`/`or`, **cada cláusula por separado, a la identidad del operador** (`True` en `and`,
+     `False` en `or`; reproducila a mano con ESE literal, #393). Mismo contrato que la dirigida;
+     una condición constante se saltea (el hallazgo sería inventado). ⚠ Es el único modo que chequea la **baseline**: con el archivo de tests en rojo,
      toda guarda «muere» por el motivo equivocado (#202) → sale **no evaluado** (rc 2), no un verde.
    - **Barrido** (`--diff` / `--todo --ratchet`) — corre en **dos etapas** (#187: primero
      `tests/test_<módulo>.py`, sólo los sobrevivientes pagan la suite). Medido 2026-08-31: `--todo`

@@ -569,7 +569,11 @@ def test_guardas_verbose_dice_lo_que_paso_con_cada_una(repo_con_tests: Path, mon
     mutar.mutate_guards(repo_con_tests / "scripts" / "viejo.py", copia,
                         Path("tests/test_viejo.py"))
 
-    assert "SOBREVIVE" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "SOBREVIVE" in out
+    # #393 — la línea dice QUÉ literal se aplicó: una cláusula se neutraliza con la identidad de su
+    # operador, y verificarla a mano con `False` mide otro mutante (así nació un issue falso).
+    assert "\u2192False" in out or "\u2192True" in out, out
 
 
 def test_guardas_toma_un_solo_modulo(repo_con_tests: Path, monkeypatch):

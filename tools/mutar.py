@@ -530,8 +530,10 @@ def mutate_guards(archivo: Path, copia_raiz: Path, subset: Path, only: set[str] 
         if vivo:
             sobreviven.append(etiqueta)
         if verbose:
-            print(f"  {'SOBREVIVE' if vivo else 'muere    '}  {archivo.name}::{etiqueta}",
-                  flush=True)
+            # #393 — the mutant applied goes on the line: a clause is neutralised with the IDENTITY
+            # of its operator, and reproducing it by hand with `False` measures another mutant.
+            print(f"  {'SOBREVIVE' if vivo else 'muere    '}  {archivo.name}::{etiqueta}"
+                  f"\u2192{g.replacement}", flush=True)
     gemelo.write_text(original, encoding="utf-8")   # deja la copia sana
     return sobreviven
 
@@ -593,6 +595,8 @@ def _guards(args) -> int:
         for s in sobreviven:
             print(f"  - {s}")
         print("   (no escala a la suite: puede que otro archivo de tests sí las mate)")
+        print("   (cada cláusula se neutraliza con la IDENTIDAD de su operador —`True` en un `and`, "
+              "`False` en un `or`—; para reproducirla a mano usá ESE literal, #393)")
         return 1
     print(f"\nlas {len(a_mutar)} guardas mueren en su propio test ✅")
     return 0
