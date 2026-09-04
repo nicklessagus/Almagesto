@@ -349,6 +349,37 @@ como par que ningún PDF puede respaldar. Se reemplaza por el nombre del paper.
 > Medido en `Almagesto-Tesis`: el caso que abrió #368 ya estaba corregido a mano (tres links →
 > «Meinecke 2002, Remes 2011 y Du 2014»).
 
+## 2f · v1.183.0-v1.188.0 (#359 · #367 · #356 · #355 · #383 · #362) — artefactos y adquisición
+
+**Nada que reparar en el contenido.** Tres cosas que vas a ver, y conviene saber de antemano:
+
+- **El cosechador imprime de golpe muchos avisos (#359, v1.183.0).** Antes el cruce contra el
+  `.txt` corría después del estampado, y sobre una bóveda ya cosechada el rechazo de la vista lo
+  cortaba antes: **nunca** se veían. Ahora corre antes de tocar la nota, sobre toda extracción
+  admisible. No es regresión: es la población que estaba y no se mostraba. Cada aviso pide **abrir
+  el PDF** en esa página; si el `.txt` tiene razón, se corrige el JSON **y** la vista estampada.
+- **`pdf_sha` sólo aparece en lo que se estampe desde ahora (#383).** `stamp_pdf` guarda el hash
+  al escribir `pdf:`, y con él detecta el REEMPLAZO del archivo por otro de distinta procedencia
+  (deja `pdf_source`/`eprint_version` en `null` y avisa). Las notas existentes **no** llevan hash y
+  no se tocan —registrarlo en todas sería el diff de 169 archivos que #378 evitó—, así que en ellas
+  el reemplazo no se detecta. Chequeo que sí corre en todas: el par `pdf_source` de editor +
+  `eprint_version` es **bloqueante**.
+- **`--rename-paper VIEJO NUEVO --fix-key` para una clave EQUIVOCADA (#355).** Sin el flag, el
+  renombre escribe `versions[]`, que es el alias de D-19 y exime de los chequeos de identidad;
+  para una clave que no identifica a nada eso es una afirmación falsa blindada. Con el flag no se
+  escribe y el comando imprime la entrada del `log` con la marca de #238, lista para pegar. Y el
+  renombre re-apunta `pdf:`/`fulltext:` por verdad de disco (#356), que antes quedaban al viejo.
+
+Lo demás no deja rastro visible: cerrar un `pending` off-ADS estampa `pdf:` en la nota que ya
+existía (#367), y con la cuota de OpenAlex en cero `refs_of` sigue andando por la entidad única, que
+cuesta 0 (#362) — el orden de gasto está en `docs/operacion.md`.
+
+> Medido en `Almagesto-Tesis` (v1.188.0, validado por su instancia): **129** avisos de #359 sobre
+> los cinco sujetos, uno a uno los mismos de la medición a mano del 03 · `pdf_sha` en **0** notas ·
+> categoría #383 en **0** sobre 188 notas de paper · `refs_of` contra OpenAlex real, 79 referencias
+> sobre un DOI. La deuda declarada en su STATUS: esos 129 y los 155 avisos del `.txt`, que piden
+> PDFs de a uno y son operación de `maintain` aparte.
+
 ## 3 · Cierre
 
 ```bash
