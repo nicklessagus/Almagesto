@@ -864,6 +864,52 @@ def clean_catalog_markup_notes() -> int:
     return 0
 
 
+def fix_header_order() -> int:
+    """Migrator for #378: moves the header blockquote BELOW the header line.
+
+    The fix stops inverted notes from being born; the ones already inverted stay that way, because
+    `stamp_header` is idempotent and never looks at them again. Measured on a real instance: **60 of
+    169** inverted, of which 50 **undamaged** —they already had `## Abstract`, so the cascade
+    stopped— and 10 that advanced, 6 with the header already deleted by the harvester (#379).
+
+    Those 50 are not a problem today and are a conditional risk: if one loses its `## Abstract`, the
+    backfill of #277 runs on top of it and the cascade starts. They get normalised.
+
+    ⛔ **It does not touch a note already in canonical order** (109 of 169 in that measurement): a
+    migrator that rewrites everything yields a 169-file diff where the real change is 60, and at
+    that point the diff stops being reviewable. Idempotent: the second run returns 0.
+
+    Returns how many notes were normalised."""
+    n = 0
+    for dest in cfg.note_paths(cfg.PAPERS):
+        text = dest.read_text(encoding="utf-8")
+        cab = find_header_line(text)
+        i = text.find(GENERATOR_LINE)
+        if cab is None or i < 0 or i > cab[0]:
+            continue                      # sin cabecera, sin blockquote, o ya en orden canónico
+        # el blockquote arranca en la primera línea `> ` contigua hacia arriba de `GENERATOR_LINE`
+        ini = i
+        while ini > 0:
+            prev = text.rfind("\n", 0, ini - 1) + 1
+            if not text[prev:ini].lstrip().startswith(">"):
+                break
+            ini = prev
+        fin = text.find("\n", i) + 1
+        bloque = text[ini:fin]
+        resto = text[:ini] + text[fin:]
+        cab2 = find_header_line(resto)
+        if cab2 is None:
+            cfg.print_seguro(f"  ⚠ {dest.name}: sacar el blockquote deja la nota sin cabecera "
+                             f"reconocible — no se toca")
+            continue
+        nuevo = resto[:cab2[1]] + "\n\n" + bloque.rstrip("\n") + resto[cab2[1]:]
+        cfg.write_text_atomic(dest, nuevo)
+        n += 1
+    cfg.print_seguro(f"orden de cabecera: {n} nota(s) normalizada(s) (el aviso pasa DEBAJO de la "
+                     f"línea de cabecera, #378)")
+    return n
+
+
 def restamp_abstracts() -> int:
     """Backfill #277: writes the `## Abstract` section into every paper note that lacks it.
 
@@ -2103,8 +2149,19 @@ def stamp_header(dest) -> bool:
     m = H1_RE.search(text, offset)
     if not m:
         return False                                  # sin H1 no hay ancla honesta: no inventamos
+    # #378 — el ancla es la línea de CABECERA cuando existe, y el H1 sólo cuando no hay ninguna. El
+    # orden canónico es H1 → cabecera → blockquotes; anclando siempre en el H1 el aviso quedaba EN
+    # EL MEDIO, y de ahí sale una cascada: `restamp_abstracts` ancla en `GENERATOR_LINE`, que con el
+    # orden invertido está ARRIBA de la cabecera, así que inserta `## Abstract` sobre ella y la
+    # cabecera queda DENTRO de esa sección — de donde se la lleva el reemplazo del cosechador
+    # (#379). Medido: 60 de 169 notas con el orden invertido, 10 avanzadas a los pasos 3-4 y 6 con
+    # la cabecera ya borrada. La precondición es la nota sin `## Abstract` (#124/#277): #378 sólo
+    # hace daño donde #277 ya había fallado.
+    #  @inv INV-48
+    cab = find_header_line(text)
+    corte = cab[1] if cab else m.end()
     bloque = f"\n\n{LLM_DISCLAIMER[kind]}\n>\n{linea_gen}"
-    out = text[:m.end()] + bloque + text[m.end():]
+    out = text[:corte] + bloque + text[corte:]
     cfg.write_text_atomic(dest, out)
     return True
 
@@ -3762,6 +3819,10 @@ def main() -> int:
                          "de bookkeeping mandaba «agregar el concepto» a un archivo sin una sola "
                          "línea estática. Idempotente, cirugía: no toca `## Matrices` ni la prosa. "
                          "No requiere slug.")
+    ap.add_argument("--fix-header-order", action="store_true", dest="fix_header_order",
+                    help="migrador #378: en las notas de paper donde el aviso de capa LLM quedó "
+                         "ENTRE el H1 y la línea de cabecera, lo baja debajo de ella. Idempotente; "
+                         "no toca las que ya están en orden canónico.")
     ap.add_argument("--restamp-headers", action="store_true", dest="restamp_headers",
                     help="backfill #69: barre TODAS las fichas/conceptos y estampa la cabecera "
                          "(aviso de capa LLM + línea del generador) a las que nacieron sin ella. "
@@ -3863,6 +3924,9 @@ def main() -> int:
         return restamp_keywords()
     if args.restamp_index:
         return restamp_index()
+    if args.fix_header_order:
+        fix_header_order()
+        return 0
     if args.restamp_headers:
         return restamp_headers()
     if args.restamp_abstracts:

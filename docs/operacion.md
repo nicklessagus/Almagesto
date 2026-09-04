@@ -277,6 +277,7 @@ python scripts/make_notes.py --migrate-facets     # R-5: `topics:` → `facets:`
 python scripts/make_notes.py --migrate-registros  # D-28: `busqueda:` → `busquedas: []` (pliega, no borra)
 python scripts/triage.py <slug> --migrate         # #51: el juicio del build/<slug>/triage.json viejo
 python scripts/make_notes.py --restamp-headers    # cabecera a las notas que nacieron sin ella
+python scripts/make_notes.py --fix-header-order  # #378: el aviso de capa LLM, debajo de la cabecera
 python scripts/make_notes.py --restamp-keywords   # D-17: `keywords:` desde build/*/ads.json
 python scripts/make_notes.py --restamp-pdf-links  # #47: el link [📄 PDF] ↔ frontmatter `pdf`
 python scripts/make_notes.py --sync-mirror        # #70: campos espejo de NEA que quedaron en null

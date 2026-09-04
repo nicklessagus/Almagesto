@@ -1775,6 +1775,72 @@ def test_la_nota_de_PAPER_tambien_lleva_el_aviso_de_capa_LLM(toy_vault):
     assert mn.stamp_header(cfg.PAPERS / "2020a....1A.md") is False, "idempotente"
 
 
+def test_el_aviso_de_capa_LLM_va_DEBAJO_de_la_cabecera(toy_vault):
+    """#378 — `stamp_header_note` ancla en el H1 y no mira qué hay debajo, así que mete el aviso
+    ENTRE el H1 y la línea de cabecera. El orden canónico es H1 → cabecera → blockquotes, y con el
+    orden invertido `restamp_abstracts` —que ancla en `GENERATOR_LINE`— inserta `## Abstract`
+    ARRIBA de la cabecera, la cabecera queda DENTRO de esa sección, y de ahí se la lleva el
+    reemplazo del cosechador (#379).
+
+    Medido en una instancia real: 60 de 169 notas con el orden invertido, y **10** que avanzaron a
+    los pasos 3-4 (6 con la cabecera ya borrada). La precondición del daño es la nota SIN
+    `## Abstract` —el stub off-ADS de #124/#277—, así que #378 sólo hace daño donde #277 ya falló."""
+    from conftest import mk_note
+    mk_note(cfg.PAPERS, "2020b....1B", {"tags": ["paper"], "bibcode": "2020b....1B"},
+            "# Paper\n\n**Autor** (2020)\n· fuente off-ADS · `2020b....1B`\n")
+    dest = cfg.PAPERS / "2020b....1B.md"
+    assert mn.stamp_header(dest) is True
+    t = dest.read_text(encoding="utf-8")
+    assert t.index("· fuente off-ADS") < t.index("Capa LLM"), \
+        "el aviso va DEBAJO de la cabecera, no entre el H1 y ella"
+    assert mn.find_header_line(t) is not None, "la cabecera sigue cumpliendo el contrato"
+
+
+def test_la_cabecera_sobrevive_a_la_secuencia_COMPLETA_de_backfills(toy_vault):
+    """La secuencia de cuatro pasos que #378 reconstruyó con `git log`, como test de integración:
+    stub sin `## Abstract` → `--restamp-headers` → `--restamp-abstracts` → cosecha. Cada paso por
+    separado parecía inocuo; el daño vive en el orden."""
+    from conftest import mk_note
+    mk_note(cfg.PAPERS, "2020c....1C", {"tags": ["paper"], "bibcode": "2020c....1C"},
+            "# Paper\n\n**Autor** (2020)\n· fuente off-ADS · `2020c....1C`\n")
+    dest = cfg.PAPERS / "2020c....1C.md"
+    mn.stamp_header(dest)
+    mn.restamp_abstracts()
+    t = dest.read_text(encoding="utf-8")
+    assert mn.find_header_line(t) is not None, "la cabecera no quedó dentro de `## Abstract`"
+    assert t.index("· fuente off-ADS") < t.index("## Abstract")
+
+
+def test_fix_header_order_normaliza_la_nota_ya_invertida(toy_vault, capsys):
+    """La otra mitad de #378: el fix impide notas nuevas invertidas, y las que ya lo están siguen
+    igual —`stamp_header` es idempotente y no vuelve a tocarlas—. Medido en una instancia real: 50
+    notas con el orden invertido y SIN daño (ya tenían `## Abstract`, así que la cascada se detuvo),
+    pero con el riesgo condicional de que alguna pierda la sección y el backfill corra encima."""
+    from conftest import mk_note
+    mk_note(cfg.PAPERS, "2020d....1D", {"tags": ["paper"], "bibcode": "2020d....1D"},
+            "# Paper\n\n> ⚠ **Capa LLM — revisar antes de citar.**\n>\n"
+            "> _Generado con Almagesto v1.94.0._\n\n**Autor** (2020)\n"
+            "· fuente off-ADS · `2020d....1D`\n\n## Abstract\n_(no disponible)_\n")
+    dest = cfg.PAPERS / "2020d....1D.md"
+    assert mn.fix_header_order() == 1
+    t = dest.read_text(encoding="utf-8")
+    assert t.index("· fuente off-ADS") < t.index("Capa LLM"), t
+    assert mn.find_header_line(t) is not None
+    assert mn.fix_header_order() == 0, "idempotente: la segunda corrida no toca nada"
+
+
+def test_fix_header_order_no_toca_la_nota_en_ORDEN_CANONICO(toy_vault):
+    """El recorte: 109 de 169 notas de esa bóveda estaban bien, y un migrador que las reescriba
+    produce un diff de 169 archivos donde el cambio real son 60."""
+    from conftest import mk_note
+    mk_note(cfg.PAPERS, "2020e....1E", {"tags": ["paper"], "bibcode": "2020e....1E"},
+            "# Paper\n\n**Autor** (2020)\n· fuente off-ADS · `2020e....1E`\n\n"
+            "> ⚠ **Capa LLM — revisar antes de citar.**\n>\n> _Generado con Almagesto v1.94.0._\n")
+    antes = (cfg.PAPERS / "2020e....1E.md").read_text(encoding="utf-8")
+    assert mn.fix_header_order() == 0
+    assert (cfg.PAPERS / "2020e....1E.md").read_text(encoding="utf-8") == antes
+
+
 def test_stamp_header_destraba_el_puntero_de_busqueda(toy_vault):
     """El punto del backfill: sin cabecera, stamp_search_line no-opea EN SILENCIO (medido: 22 de 25
     notas de una bóveda real). Después del backfill, la misma llamada sí estampa."""
