@@ -4470,7 +4470,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             _v, _via, _det = str(_rec.get("veredicto") or ""), str(_rec.get("via") or ""), str(_rec.get("detalle") or "")
             if _v == "ok":
                 continue
-            _bloquea = _via == "crossref" and (
+            _bloquea = _via in ("crossref", "bib") and (
                 _v == "autor" or (_v == "anio" and abs(int(_decl_hoy["year"] or 0)
                                                     - int(cfg.as_map(_rec.get("encontrado")).get("year") or 0)) >= 2))
             if _bloquea:

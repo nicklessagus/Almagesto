@@ -60,7 +60,7 @@ def family_match(declared_author, found_family) -> bool:
     LAST token (`Bihan`) matches a compound found surname: the last token alone was blocking
     correct entries (measured by the instance with the module, not among its 52 sources)."""
     nd, nf = norm(declared_family(declared_author)), norm(found_family)
-    nd_full = norm(_SPLIT_AUTHORS.split(str(declared_author or ""), 1)[0])
+    nd_full = norm(_SPLIT_AUTHORS.split(str(declared_author or ""), maxsplit=1)[0])
     if not nd or not nf:
         return False
     return nd == nf or nd_full.replace(" ", "") == nf.replace(" ", "") or nd == nf.split()[-1]
@@ -69,7 +69,7 @@ def family_match(declared_author, found_family) -> bool:
 def declared_family(author) -> str:
     """The first author's SURNAME from a hand-written `author` field, normalised. Accepts
     `Hyvärinen, A.`, `Pendse et al.`, `Rasmussen & Williams`, `Gautam V. Pendse`."""
-    chunk = _SPLIT_AUTHORS.split(str(author or ""), 1)[0].strip()
+    chunk = _SPLIT_AUTHORS.split(str(author or ""), maxsplit=1)[0].strip()
     tokens = [t for t in chunk.split() if not t.endswith(".")] or chunk.split()
     return norm(tokens[-1]) if tokens else ""
 
@@ -101,37 +101,122 @@ def crossref_meta(msg: dict) -> dict:
             "title": str(titulo[0]) if titulo else ""}
 
 
-def compare_crossref(declared: dict, found: dict) -> tuple[str, str]:
-    """Verdict of declared-vs-Crossref. Author and year are decidable and block; the title is
-    compared normalised and is backlog (punctuation and case vary legitimately)."""
+def compare_crossref(declared: dict, found: dict, fuente: str = "Crossref") -> tuple[str, str]:
+    """Verdict of declared-vs-a-structured-record (Crossref, or the user's `.bib`, #392). Author
+    and year are decidable and block; the title is compared normalised and is backlog
+    (punctuation and case vary legitimately)."""
     if not found.get("family") and not found.get("year"):
-        return "no-evaluable", "Crossref no trae autor ni año para ese DOI"
+        return "no-evaluable", f"{fuente} no trae autor ni año para esta fuente"
     if declared.get("author") and found.get("family") and not family_match(declared["author"], found["family"]):
-        return "autor", f"declarado «{declared['author']}», Crossref dice «{found['family']}»"
+        return "autor", f"declarado «{declared['author']}», {fuente} dice «{found['family']}»"
     if declared.get("year") and found.get("year") and declared["year"] != found["year"]:
-        return "anio", f"declarado {declared['year']}, Crossref dice {found['year']}"
+        return "anio", f"declarado {declared['year']}, {fuente} dice {found['year']}"
     if declared.get("title") and found.get("title") and norm(declared["title"]) != norm(found["title"]):
-        return "titulo", f"declarado «{declared['title']}», Crossref dice «{found['title']}»"
+        return "titulo", f"declarado «{declared['title']}», {fuente} dice «{found['title']}»"
     return "ok", ""
 
 
-def compare_pdf(declared: dict, page: str) -> tuple[str, str]:
-    """Verdict of declared-vs-first-page: the surname and the year must be ON that page."""
+# ── the user's own `.bib` next to the PDFs (#392, point 3) ──────────────────────────────────────
+_BIB_ENTRY = re.compile(r"@(\w+)\s*\{\s*([^,\s]+)\s*,", re.S)
+_BIB_FIELD = re.compile(r"(\w+)\s*=\s*(\{(?:[^{}]|\{[^{}]*\})*\}|\"[^\"]*\"|[^,\n]+)", re.S)
+
+
+def bib_entries(path: Path) -> list:
+    """Entries of a BibTeX file as `{tipo, clave, <fields lowercased>}`; braces/quotes stripped,
+    one level of nested braces tolerated. Small on purpose (no dependency): the fields this rail
+    reads are `author`, `year`, `title`, `doi`, `file`."""
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    out = []
+    for m in _BIB_ENTRY.finditer(text):
+        ini = m.end()
+        fin = text.find("\n@", ini)
+        cuerpo = text[ini:fin if fin > 0 else len(text)]
+        campos = {"tipo": m.group(1).lower(), "clave": m.group(2)}
+        for f in _BIB_FIELD.finditer(cuerpo):
+            v = f.group(2).strip().strip(",").strip()
+            if v[:1] in "{\"":
+                v = v[1:-1]
+            campos[f.group(1).lower()] = " ".join(v.replace("{", "").replace("}", "").split())
+        out.append(campos)
+    return out
+
+
+def bib_meta(entry: dict) -> dict:
+    """`{family, year, title}` from a `.bib` entry: the first author's surname (`Last, First and
+    …` or `First Last and …`), the four-digit year, the title without braces."""
+    primero = re.split(r"\s+and\s+", str(entry.get("author") or ""), maxsplit=1)[0].strip()
+    family = primero.split(",")[0].strip() if "," in primero else (primero.split() or [""])[-1]
+    return {"family": family, "year": _year(entry.get("year")), "title": str(entry.get("title") or "")}
+
+
+def bib_match(item: dict, entries: list) -> dict | None:
+    """The `.bib` entry for this `sources:` item: by DOI, else by the PDF's file name inside the
+    entry's `file` field, else by normalised title. Never by author (that is what is being checked)."""
+    doi = str(item.get("doi") or "").strip().casefold()
+    doi = re.sub(r"^https?://(dx\.)?doi\.org/", "", doi)
+    if doi:
+        for e in entries:
+            if re.sub(r"^https?://(dx\.)?doi\.org/", "", str(e.get("doi") or "").strip().casefold()) == doi:
+                return e
+    nombre = Path(str(item.get("pdf") or "")).name
+    if nombre:
+        for e in entries:
+            if nombre in str(e.get("file") or ""):
+                return e
+    titulo = norm(item.get("title"))
+    if titulo:
+        for e in entries:
+            if norm(e.get("title")) == titulo:
+                return e
+    return None
+
+
+def bib_files_near(item: dict) -> list:
+    """`*.bib` in the directory of the DECLARED `pdf:` path (the user's library, not the vault
+    copy): that is where the spreadsheet with the four right answers was sitting (#392)."""
+    decl = str(item.get("pdf") or "").strip()
+    if not decl:
+        return []
+    p = Path(decl).expanduser()
+    d = (p if p.is_absolute() else cfg.ROOT / p).parent
+    return sorted(d.glob("*.bib")) if d.is_dir() else []
+
+
+def web_snapshot(item: dict, slug: str) -> str | None:
+    """Body of the web snapshot `fetch_web` wrote for a `url:` source, or `None` (#392, point 4)."""
+    key = str(item.get("key") or "").strip()
+    f = cfg.FULLTEXT / slug / f"{key.replace('/', '_')}.txt"
+    if not key or not f.is_file():
+        return None
+    text = f.read_text(encoding="utf-8", errors="replace")
+    if cfg.FULLTEXT_WEB_MARK not in text.split("\n", 1)[0]:
+        return None
+    marca = "# ---- contenido extraído (defuddle) ----"
+    i = text.find(marca)
+    return text[i + len(marca):] if i >= 0 else text
+
+
+def compare_pdf(declared: dict, page: str, donde: str = "la primera página del PDF") -> tuple[str, str]:
+    """Verdict of declared-vs-a-page of text (PDF first page, or the head of a web snapshot): the
+    surname and the year must be ON it. Weak evidence: never blocks (see the lint)."""
     texto = norm(page)
     if not texto.strip():
-        return "no-evaluable", "la primera página del PDF no tiene texto (¿escaneo sin OCR?)"
+        return "no-evaluable", f"{donde} no tiene texto (¿escaneo sin OCR?)"
     import extract_fulltext
     ok, motivo = extract_fulltext.is_legible(page)
     if not ok:
         # Measured on the instance: four PDFs of one author render as glyphs (fonts without
         # ToUnicode) and the rail said «the surname is missing». Illegible is not evaluable.
-        return "no-evaluable", f"primera página ilegible ({motivo}) — abrí el PDF a ojo"
+        return "no-evaluable", f"{donde} ilegible ({motivo}) — abrila a ojo"
     fam = declared_family(declared.get("author"))
-    fam_full = norm(_SPLIT_AUTHORS.split(str(declared.get("author") or ""), 1)[0]).replace(" ", "")
+    fam_full = norm(_SPLIT_AUTHORS.split(str(declared.get("author") or ""), maxsplit=1)[0]).replace(" ", "")
     if fam and not re.search(rf"\b{re.escape(fam)}\b", texto) and fam_full not in texto.replace(" ", ""):
-        return "autor", f"declarado «{declared['author']}» y el apellido no está en la primera página del PDF"
+        return "autor", f"declarado «{declared['author']}» y el apellido no está en {donde}"
     if declared.get("year") and not re.search(rf"\b{declared['year']}\b", texto):
-        return "anio", f"declarado {declared['year']} y ese año no aparece en la primera página del PDF"
+        return "anio", f"declarado {declared['year']} y ese año no aparece en {donde}"
     if not fam and not declared.get("year"):
         return "no-evaluable", "el item no declara `author` ni `year`: no hay nada que cruzar"
     return "ok", ""
@@ -178,10 +263,28 @@ def check_item(item: dict, slug: str) -> dict:
         # Measured: 5 of 32 DOIs in one vault are `10.48550/arXiv.*`, which Crossref does not
         # register — so the PDF rail is the fallback, not a dead end.
         sin_crossref = f"Crossref: {estado} para {doi}; "
+    # #392 (3): the user's own `.bib` next to the PDFs — structured, offline, and in the measured
+    # case it held the four right answers nobody consulted. Same comparison as Crossref.
+    for bib in bib_files_near(item):
+        e = bib_match(item, bib_entries(bib))
+        if e is not None:
+            rec["via"] = "bib"
+            rec["encontrado"] = {**bib_meta(e), "bib": bib.name, "clave": e.get("clave")}
+            rec["veredicto"], rec["detalle"] = compare_crossref(declared, bib_meta(e), fuente=f"`{bib.name}`")
+            return rec
     pdf = resolve_pdf_path(item, slug)
     page = pdf_first_page(pdf) if pdf else None
     rec["via"] = "pdf"
     if page is None:
+        # #392 (4): a `url:` source has no PDF; the head of the snapshot `fetch_web` wrote is the
+        # page to look at (defuddle puts the page title first). Weak evidence, like the PDF rail.
+        cuerpo = web_snapshot(item, slug)
+        if cuerpo is not None:
+            rec["via"] = "web"
+            rec["encontrado"] = {"snapshot": " ".join(cuerpo.split())[:200]}
+            rec["veredicto"], rec["detalle"] = compare_pdf(declared, "\n".join(cuerpo.split("\n")[:60]),
+                                                           donde="el arranque del snapshot web")
+            return rec
         rec.update(veredicto="no-evaluable",
                    detalle=sin_crossref
                    + ("sin PDF legible en disco" if pdf is None or not pdf.is_file()

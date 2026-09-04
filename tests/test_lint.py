@@ -7296,3 +7296,12 @@ def test_fuente_nunca_cruzada_o_cruce_viejo_es_backlog_con_el_comando(toy_vault)
     hallazgos = [m for _n, m in lint.collect().por_clave("fuente_metadata_dudosa").items]
     assert len(hallazgos) == 1 and "cambió desde el cruce" in hallazgos[0]
     assert lint.collect().por_clave("fuente_metadata_falsa").items == ()
+
+
+def test_el_bib_del_usuario_bloquea_como_crossref(toy_vault):
+    """#392 (3) — el `.bib` es la planilla del usuario: un autor que la contradice es la misma
+    atribución falsa que #353 caza por Crossref, y bloquea igual."""
+    _tema_con_fuente(); _registro_fuente(via="bib", detalle="declarado «VanDerBaan», `biblio.bib` dice «Vrabie»")
+    assert len(lint.collect().por_clave("fuente_metadata_falsa").items) == 1
+    _registro_fuente(via="web", detalle="no está en el arranque del snapshot web")
+    assert lint.collect().por_clave("fuente_metadata_falsa").items == ()

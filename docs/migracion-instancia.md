@@ -508,6 +508,16 @@ disputa). Lo que sí conviene: al declarar la próxima fuente, seguir el paso nu
 `.bib`/`.csv`) y 4 (cruce de `url:` contra el `<title>` del snapshot; `aliases` contra SIMBAD, que
 el lint ya hace por #82) quedan propuestos en el issue, no implementados.
 
+## 2l · v1.201.0 (#392, puntos 3 y 4) — el `.bib` del usuario y el snapshot web como carriles
+
+`check_sources` suma dos carriles. **`.bib`**: si en la carpeta del `pdf:` declarado (tu
+biblioteca, no la copia de la bóveda) hay un `*.bib`, se busca la entrada por DOI, por nombre de
+archivo en `file =` o por título, y se compara como Crossref (autor/año bloquean). **Web**: una
+`url:` se cruza contra el arranque del snapshot que guardó `fetch_web` (apellido y año; nunca
+bloquea). Para verlo: `python scripts/check_sources.py ica` de nuevo; si tu biblioteca tiene un
+`.bib` al lado de los PDFs, los `no-evaluable` de arXiv pasan a `[bib]`. `.csv`/`.xlsx` no se
+leen (decidido: demasiado específico); ésos los lee el agente antes de declarar (§2k).
+
 ## 3 · Cierre
 
 ```bash

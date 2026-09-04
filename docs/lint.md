@@ -617,8 +617,10 @@ OCR, o marcar `pending`).
   backlog): una fuente off-ADS declara su metadata a mano y nada la cruzaba. Medido: una nota
   publicaba **autor y título de otro paper** —clave sintética, `first_author`, `title` y hasta el
   `motivo` derivados del NOMBRE DEL ARCHIVO del PDF—; sólo el `doi` y el PDF eran correctos. El
-  cruce lo hace `python scripts/check_sources.py <slug>` (Crossref por `doi`; sin registro o sin
-  `doi`, la primera página del PDF vía `pdftotext -f 1 -l 1`), corre al ingestar y deja el
+  cruce lo hace `python scripts/check_sources.py <slug>` (Crossref por `doi`; sin registro, el
+  `.bib` del usuario en la carpeta del PDF declarado —#392, bloquea como Crossref—; después la
+  primera página del PDF vía `pdftotext -f 1 -l 1`, y para una `url:` el arranque del snapshot
+  web —los dos, evidencia débil—), corre al ingestar y deja el
   veredicto en el registro con un snapshot de lo declarado; el lint lo lee **offline**. Severidad
   medida sobre 52 fuentes reales: bloquea sólo **autor por Crossref** y **año por Crossref con
   diferencia ≥ 2** (a ±1 es online-first vs impreso); título distinto, primera página que no

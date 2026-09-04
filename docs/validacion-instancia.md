@@ -171,3 +171,12 @@ la planilla del usuario antes de escribir. Cierra el issue si la regla cubre los
 medidos; **devolver** si falta un skill donde se escriba identidad a mano. Los puntos 3 y 4 del
 issue (carril mecánico contra `.bib`/`.csv`; `url:` contra el `<title>`) no entran en esta versión:
 decidí si los querés como issue aparte.
+
+---
+
+## #392 (3 y 4) · v1.201.0 — guía §2l
+
+**Validar:** poner un `.bib` (aunque sea de una entrada) en la carpeta de un `pdf:` declarado y
+correr `check_sources.py <slug>` → esa fuente sale `[bib]`; una fuente `url:` con snapshot sale
+`[web]`. Un `.bib` que contradiga el autor declarado → `fuente_metadata_falsa` (bloquea); el carril
+web nunca bloquea. **Devolver si** el parser no lee tu `.bib` real (mandame la entrada que falla).

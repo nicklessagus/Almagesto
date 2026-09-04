@@ -205,3 +205,78 @@ def test_family_match_tolera_apellidos_compuestos(declarado, crossref, esperado)
     if esperado:
         assert cs.compare_crossref({"author": declarado, "year": None, "title": ""},
                                    {"family": crossref, "year": None, "title": ""})[0] != "autor"
+
+
+# ── #392 (3 y 4) · el `.bib` del usuario y el snapshot web como carriles ─────────────────────────
+
+BIB = """@article{vrabie2006,
+  author = {Vrabie, Valeriu and Le Bihan, Nicolas and Mars, J\\'er\\^ome},
+  title = {{Multicomponent} wave separation using {HOSVD}/unimodal-{ICA} subspace method},
+  journal = {Geophysics}, year = {2006}, doi = {10.1190/1.2335387},
+  file = {VLM06 (subspace method).pdf}
+}
+
+@inproceedings{vollgraf2001,
+  author = "Roland Vollgraf and Klaus Obermayer",
+  title = "Multi-dimensional {ICA} to separate correlated sources",
+  year = 2001,
+}
+"""
+
+
+def test_bib_entries_parsea_llaves_comillas_y_and():
+    es = cs.bib_entries.__wrapped__ if hasattr(cs.bib_entries, "__wrapped__") else None
+    import tempfile, pathlib
+    with tempfile.TemporaryDirectory() as d:
+        p = pathlib.Path(d) / "biblio.bib"; p.write_text(BIB, encoding="utf-8")
+        es = cs.bib_entries(p)
+    assert [e["clave"] for e in es] == ["vrabie2006", "vollgraf2001"]
+    assert es[0]["doi"] == "10.1190/1.2335387" and es[0]["file"] == "VLM06 (subspace method).pdf"
+    assert es[0]["title"].startswith("Multicomponent wave separation")
+    assert cs.bib_meta(es[0]) == {"family": "Vrabie", "year": 2006,
+                                  "title": es[0]["title"]}
+    assert cs.bib_meta(es[1])["family"] == "Vollgraf" and cs.bib_meta(es[1])["year"] == 2001
+    assert cs.bib_entries(pathlib.Path("/no/existe.bib")) == []
+
+
+def test_bib_match_por_doi_archivo_o_titulo_nunca_por_autor(tmp_path):
+    p = tmp_path / "b.bib"; p.write_text(BIB, encoding="utf-8")
+    es = cs.bib_entries(p)
+    assert cs.bib_match({"doi": "https://doi.org/10.1190/1.2335387"}, es)["clave"] == "vrabie2006"
+    assert cs.bib_match({"pdf": "/lib/VLM06 (subspace method).pdf"}, es)["clave"] == "vrabie2006"
+    assert cs.bib_match({"title": "multi-dimensional ica to separate correlated sources"}, es)["clave"] == "vollgraf2001"
+    assert cs.bib_match({"author": "Vrabie"}, es) is None
+
+
+def test_el_caso_de_392_lo_caza_el_bib_al_lado_del_pdf(toy_vault, tmp_path, monkeypatch):
+    """#392 — `2006VanDerBaan` declaraba a van der Baan; el `.bib` del usuario, en la misma carpeta
+    que el PDF, decía Vrabie. Crossref no hacía falta: el carril es offline y bloquea como Crossref."""
+    (tmp_path / "biblio.bib").write_text(BIB, encoding="utf-8")
+    (tmp_path / "VLM06 (subspace method).pdf").write_bytes(b"%PDF")
+    monkeypatch.setattr(cs.cr, "crossref_message", lambda doi, headers: (None, "sin-registro"))
+    rec = cs.check_item({"key": "2006VanDerBaan", "author": "VanDerBaan", "year": 2006,
+                         "doi": "10.1190/1.2335387", "pdf": str(tmp_path / "VLM06 (subspace method).pdf")}, "ica")
+    assert rec["via"] == "bib" and rec["veredicto"] == "autor" and "Vrabie" in rec["detalle"]
+    assert rec["encontrado"]["bib"] == "biblio.bib"
+
+
+def test_sin_bib_al_lado_el_carril_no_existe(tmp_path):
+    assert cs.bib_files_near({"pdf": str(tmp_path / "x.pdf")}) == []
+    assert cs.bib_files_near({}) == []
+
+
+def test_una_url_se_cruza_contra_el_snapshot_web(toy_vault, monkeypatch):
+    """#392 (4) — una fuente web no tenía contra qué cruzar. El snapshot que `fetch_web` guarda
+    arranca con el título de la página: apellido y año tienen que estar ahí. Nunca bloquea."""
+    monkeypatch.setattr(cs.cr, "crossref_message", lambda *a, **k: pytest.fail("sin doi"))
+    d = cfg.FULLTEXT / "ica"; d.mkdir(parents=True, exist_ok=True)
+    (d / "2015Shlens.txt").write_text(
+        f"{cfg.FULLTEXT_WEB_MARK} (off-ADS), determinista para citar/verificar\n"
+        "source_url : https://x\nretrieved  : 2026-09-04 (UTC)\ncitekey    : 2015Shlens\n"
+        "# ---- contenido extraído (defuddle) ----\n\n# A Tutorial on Independent Component Analysis\n\n"
+        "Jonathon Shlens, 2014\n" + "texto " * 120, encoding="utf-8")
+    rec = cs.check_item({"key": "2015Shlens", "url": "https://x", "author": "Shlens", "year": 2014}, "ica")
+    assert rec["via"] == "web" and rec["veredicto"] == "ok", rec
+    rec = cs.check_item({"key": "2015Shlens", "url": "https://x", "author": "Pendse", "year": 2014}, "ica")
+    assert rec["via"] == "web" and rec["veredicto"] == "autor" and "snapshot" in rec["detalle"]
+    assert cs.web_snapshot({"key": "2099Nada"}, "ica") is None

@@ -85,8 +85,9 @@ python fetch_pdf.py        <slug>   # PDFs aún sin bajar (sin arXiv + arXiv fal
 python fetch_ground_truth.py <slug> # NEA + SIMBAD → vault/raw/ground_truth/<slug>.json
 python make_notes.py       <slug>   # genera vault/wiki/stars/ y vault/wiki/papers/ (idempotente; --force)
 python extract_fulltext.py <slug>   # PDFs → vault/raw/fulltext/<slug>/*.txt
-python check_sources.py <slug>      # #353: lo DECLARADO en `sources:` contra su `doi` (Crossref) o la
-                                    #   primera página del PDF; registra el veredicto, no reescribe
+python check_sources.py <slug>      # #353/#392: lo DECLARADO en `sources:` contra su `doi` (Crossref),
+                                    #   el `.bib` del usuario al lado del PDF, la primera página del
+                                    #   PDF o el snapshot web; registra el veredicto, no reescribe
                                     #   la config (`--dry-run` mide sin escribir); el lint lo lee offline
 python check_retractions.py         # Crossref → marca `retracted` (bloqueante) y `corrections`
                                     #   (erratum/corrigendum/EoC: backlog) (red); la cadena usa --slug <slug>,
