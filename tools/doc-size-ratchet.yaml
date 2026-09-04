@@ -30,8 +30,8 @@
 # nadie lo declare — que es lo que el ratchet vino a frenar. `test_la_suba_del_techo_esta_declarada`
 # lo vigila: el techo vigente tiene que ser el de la última entrada.
 medido_en: "2026-09-04"
-techo_lineas: 1696
-techo_bytes: 135500
+techo_lineas: 1703
+techo_bytes: 136200
 
 crecimientos:
   - fecha: "2026-08-31"
@@ -162,3 +162,15 @@ crecimientos:
       (#340 lo midió). Suba mínima: 4 líneas.
     techo_lineas: 1696
     techo_bytes: 135500
+  - fecha: "2026-09-04"
+    ancla: "#392"
+    motivo: >-
+      Regla TRANSVERSAL pedida por el usuario con todas las letras («en todos lados hay que agregar
+      no respondas de memoria»): D-59 la enunciaba sólo para el fan-out de verify, y donde el agente
+      ESCRIBE identidad no regía. Medido en la instancia: 4 de 29 fuentes declaradas con autor
+      inventado por asociación con el tema, seis días como verdad, con la planilla correcta al
+      lado del PDF. Va en CLAUDE.md porque es la regla que un agente necesita ANTES de escribir
+      cualquier campo identificatorio, en cualquier skill; los skills llevan el comando concreto.
+      Comprimida dos veces; el techo estaba a 6 bytes. Suba: 7 líneas.
+    techo_lineas: 1703
+    techo_bytes: 136200

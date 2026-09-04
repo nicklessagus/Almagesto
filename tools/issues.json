@@ -1759,12 +1759,12 @@
   {
    "number": 353,
    "title": "Una fuente off-ADS declara su metadata a mano y NADA la cruza contra el `doi` que ella misma declara: medido, una nota publica autor y título de otro paper",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 354,
    "title": "El `--probe` con query cruda NO declara el `search_fq` que aplicó: seis ceros que parecían «no está en ADS» eran el fq del objetivo — el falso negativo de #238, repetido con su doc delante",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 355,
@@ -1779,7 +1779,7 @@
   {
    "number": 357,
    "title": "La puerta 2 promete «fundacional en SU campo» pero compara contra el `citation_count` de ADS: en un tema de otra disciplina eso mide «cuánto lo cita astro» y la puerta no abre nunca — medido en `icasso` con `search_fq: null` ya declarado, 21/21 en tema y 0 core",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 358,
@@ -1794,7 +1794,7 @@
   {
    "number": 360,
    "title": "Un tema de método sin `ejes:` declarado no avisa NADA: el simétrico de #351 quedó sin construir, y el chequeo de ejes del lint corre contra la lente equivocada — medido, 6 de 8 facetas vacías en 12 extracciones",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 361,
@@ -1874,12 +1874,12 @@
   {
    "number": 376,
    "title": "Tests del framework assertan sobre archivos `merge=ours`: el arreglo no puede llegar nunca a una instancia",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 377,
    "title": "La regla de oro dice \"aplicala en el template\" y en la práctica el operador quiere sólo el issue",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 378,
@@ -1899,7 +1899,7 @@
   {
    "number": 382,
    "title": "Una fuente LARGA con bibcode ADS no puede declararse larga: `unidad_cita`/`alcance` sólo se leen de `sources:`",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 383,
@@ -1909,7 +1909,7 @@
   {
    "number": 384,
    "title": "Un tema ADS de CORPUS DECLARADO tiene que mentir en `source:` para existir: la sub-cadena `--extra-only` sólo la alcanza el carril off-ADS",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 385,
@@ -1944,6 +1944,11 @@
   {
    "number": 391,
    "title": "REPLANTEO diferido de #387 B: la supersesión del `log` sigue siendo una convención en PROSA, y el precedente estructurado ya existe en el registro (D-52)",
+   "state": "OPEN"
+  },
+  {
+   "number": 392,
+   "title": "REGLA TRANSVERSAL: «prohibido de memoria» rige sólo donde el framework VERIFICA (D-59), no donde ESCRIBE identidad — 4 de 29 fuentes de una instancia con autor inventado por asociación, con la planilla correcta al lado del PDF",
    "state": "OPEN"
   }
  ]

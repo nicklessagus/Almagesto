@@ -202,6 +202,10 @@ de concepto) que se agregaría en cada caso, y **pedir aprobación**. Formato de
   (`b.K`, `b.existence`). `posiciones[]` lleva **una por cada lado**: `{ref: <bibcode>, value: …}`
   por paper (el bibcode **debe** existir como nota, lo chequea el lint) y, **si NEA arbitra**,
   `{source: ground_truth, value: …}` — NEA queda como verdad y el frontmatter no se toca.
+  ⛔ **Cada `value` se copia de la cita textual que el subagente devolvió con su página (#392)**,
+  nunca del recuerdo de «lo que ese paper suele decir»: la posición de una disputa es un campo que
+  identifica una afirmación, y un valor puesto de memoria fabrica el desacuerdo que el skill
+  existe para detectar.
   ```yaml
   disputes:
     - field: P_rot

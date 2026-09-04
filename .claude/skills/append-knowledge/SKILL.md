@@ -59,6 +59,11 @@ Progreso del append de <fuente> → <destino>:
    - **(ii) PDF off-ADS** a un tema con `source` off-ADS → agregar el item a `sources:` de la
      entrada del tema (`key` + `pdf` + metadata) y `python scripts/ingest_theme.py <slug>` (sólo
      procesa lo nuevo; deja nota con `pdf` linkeado y fulltext extraído).
+     ⛔ **La metadata (`key`, `author`, `title`, `year`, `doi`) sale del documento, no de memoria
+     (#392):** `pdftotext -f 1 -l 1 <pdf> -` antes de escribir el item, y el `.bib`/`.xlsx` que
+     haya al lado del PDF se lee primero. Si tiene DOI, `python scripts/check_sources.py <slug>`
+     lo cruza al ingestar; una `url:` se declara con el `<title>` del snapshot, no con lo que uno
+     recuerda del sitio.
    - **(iii) URL** a un tema off-ADS → ídem con `url` en `sources:` + `ingest_theme.py`.
    - **(ii)/(iii) puntual a un tema ADS o a una estrella** (fuente off-ADS aislada, sin cambiar el
      `source` de la entidad) → usar las piezas sueltas: `python scripts/fetch_web.py <slug> <key>

@@ -522,6 +522,10 @@ Qué cambia respecto del flujo ADS de arriba:
   primera página del PDF), registra el veredicto y el lint bloquea autor/año desmentidos por
   Crossref. Antes de declarar: `pdftotext -f 1 -l 1 <pdf> -` y leé la primera página. Si el
   paper **tiene bibcode ADS** no va en `sources:`: va en `extra_core` (ADS trae la metadata).
+  ⛔ **Y mirá lo que hay AL LADO del PDF antes de escribir nada (#392):** un `.bib`, `.xlsx`, `.csv`
+  o `.ris` en el directorio de la biblioteca del usuario es la planilla correcta; se lee primero
+  (`ls <dir>`; `grep -i -A6 '<palabra del archivo>' *.bib`). Medido: 4 de 29 fuentes con autor
+  inventado por asociación con el tema, y la planilla con las cuatro correctas al lado.
 - **Fuente = PDFs locales y/o web:**
   - **PDFs** que provee el usuario → copiarlos a `vault/raw/pdfs/<slug>/` (git-lfs) renombrados a la **clave de
     cita** (abajo); `python scripts/extract_fulltext.py <slug>` los pasa a `vault/raw/fulltext/<slug>/` (es

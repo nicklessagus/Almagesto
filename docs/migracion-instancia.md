@@ -497,6 +497,17 @@ Hyvärinen pasan de `autor` a `no-evaluable (primera página ilegible)`, y `2007
 `ok`. Lo demás es cosmético: el `extra_core` de `--promote-source` parsea como YAML y el resumen
 de `--fix-key` ya no promete un alias que no escribe.
 
+## 2k · v1.200.0 (#392) — «prohibido de memoria» donde el agente ESCRIBE identidad
+
+**Nada que correr: es una regla.** `CLAUDE.md` la lleva transversal (todo campo que identifica algo
+sale de una fuente abierta en ese momento; el `.bib`/`.xlsx` al lado del PDF se lee **antes**), y
+los cuatro skills donde se declara metadata llevan el comando concreto (`ingest-theme`,
+`append-knowledge`, `ingest-star` para `aliases`, `find-contradictions` para el `value` de una
+disputa). Lo que sí conviene: al declarar la próxima fuente, seguir el paso nuevo y correr
+`check_sources.py <slug>` antes de cerrar. Los puntos 3 (tercer carril de `check_sources` contra
+`.bib`/`.csv`) y 4 (cruce de `url:` contra el `<title>` del snapshot; `aliases` contra SIMBAD, que
+el lint ya hace por #82) quedan propuestos en el issue, no implementados.
+
 ## 3 · Cierre
 
 ```bash

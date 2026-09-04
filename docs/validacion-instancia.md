@@ -160,3 +160,14 @@ cualquier item → el bloque `extra_core:` impreso pasa por `yaml.safe_load`; `-
 --fix-key` → el resumen dice «sin alias». **Devolver si** un apellido compuesto correcto sigue
 saliendo `autor` por Crossref, o si el carril PDF sigue acusando sobre una primera página
 mojibake. Sin issue nuevo: los seis quedaron en el comentario de cierre de #353.
+
+---
+
+## #392 · v1.200.0 — guía §2k
+
+Regla transversal en `CLAUDE.md` + cláusula con comando en cuatro skills. **Validar:** leer las
+cinco piezas y, en la próxima declaración de una fuente, que el paso lleve a la primera página y a
+la planilla del usuario antes de escribir. Cierra el issue si la regla cubre los cuatro casos
+medidos; **devolver** si falta un skill donde se escriba identidad a mano. Los puntos 3 y 4 del
+issue (carril mecánico contra `.bib`/`.csv`; `url:` contra el `<title>`) no entran en esta versión:
+decidí si los querés como issue aparte.

@@ -179,6 +179,13 @@ Toda nota de `vault/wiki/` lleva frontmatter YAML. Campos comunes: `tags`, `gene
 (`Almagesto v<x>`, provenance — lo estampa `make_notes` desde `lib_config.ALMAGESTO_VERSION`), y
 cuando aplique `confidence: high|medium|low`.
 
+⛔ **PROHIBIDO DE MEMORIA, en todo campo que IDENTIFICA algo (#392):** clave sintética, `author`,
+`title`, `year`, `doi`, `aliases`, el `value` de una `disputes[].posiciones[]` y el `motivo` que
+afirma qué es el paper salen de una fuente **abierta en ese momento** —primera página del PDF
+(`pdftotext -f 1 -l 1 <pdf> -`), registro ADS/Crossref por DOI, o el `.bib`/`.xlsx`/`.csv` del
+usuario al lado del PDF, que se lee **antes**—, nunca por asociación con el tema. Un campo vacío es
+backlog; uno inventado se lee como verdad (medido: 4 de 29 fuentes, seis días, con la planilla al lado).
+
 > **Dónde está el "por qué".** Cada regla de acá lleva su `(#N)` o `(D-N)`: el issue público
 > (`github.com/nicklessagus/Almagesto/issues`) tiene el caso que la produjo y la medición;
 > `docs/contrato.md` tiene el invariante; `docs/mediciones.md`, la evidencia con su corpus y su

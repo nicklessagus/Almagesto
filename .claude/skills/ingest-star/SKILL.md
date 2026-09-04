@@ -36,7 +36,9 @@ Progreso del ingest de <estrella>:
 
 1. **Resolver el slug y ACORDAR LOS ALIAS antes de buscar (D-7).** Buscar la estrella en
    `vault/config/stars.yaml`. Si no está, agregarla con `slug`, `simbad`, `ads_object`, `aliases` y
-   (si aplica) `data_local`.
+   (si aplica) `data_local`. ⛔ **`aliases` no se escriben de memoria (#392):** salen de SIMBAD
+   (`python scripts/fetch_ground_truth.py <slug>` los trae y el lint cruza lo declarado contra
+   lo que SIMBAD sabe, #82); un alias inventado busca un objeto que no existe y calla.
 
    ⚠ **El recall de toda la búsqueda cuelga de `aliases`, y un alias que falta es un paper que
    nunca aparece — en silencio.** Es el mismo modo de falla que el glifo griego, pero **sin
