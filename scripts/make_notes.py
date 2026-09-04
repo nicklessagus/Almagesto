@@ -395,6 +395,19 @@ def find_header_line(text: str) -> tuple[int, int] | None:
     pos = text.find("\n", end + 1) + 1    # arranca DESPUÉS de la línea del `---` de cierre
     first_sec = text.find("\n## ", pos)
     limit = len(text) if first_sec < 0 else first_sec
+    return _header_shaped_line(text, pos, limit)
+
+
+def _header_shaped_line(text: str, pos: int, limit: int) -> tuple[int, int] | None:
+    """(start, end) of the first line SHAPED like a header between `pos` and `limit`, or None.
+
+    The SHAPE (`· ` plus the key in backticks) is split from the CONTRACT (that line must also come
+    before the first section) because there is a third state between «healthy» and «absent»: the
+    **displaced** header (#380), which exists and sits in the wrong place. The two ask for opposite
+    work —moving is not rebuilding— and the two consumers that need to tell them apart are the
+    lint's detector and the guard of #379, which refuses a section replacement that would take the
+    header with it. Without the split that guard never fires on the only case there is: a header
+    inside `## Abstract` does not meet the contract, by definition."""
     while pos < limit:
         nl = text.find("\n", pos, limit)
         line_end = limit if nl < 0 else nl
@@ -402,6 +415,18 @@ def find_header_line(text: str) -> tuple[int, int] | None:
             return pos, line_end
         pos = line_end + 1
     return None
+
+
+def header_line_anywhere(text: str) -> tuple[int, int] | None:
+    """(start, end) of a header-shaped line ANYWHERE in the body (#379/#380).
+
+    `find_header_line` without the cut at the first section: it answers *«does the header exist?»*,
+    not *«is it where the contract says?»*. The difference between the two answers IS the finding."""
+    lim = cfg.fm_bounds(text)
+    if lim is None:
+        return None
+    pos = text.find("\n", lim[1] + 1) + 1
+    return _header_shaped_line(text, pos, len(text))
 
 
 def stamp_pdf_link(dest) -> bool:

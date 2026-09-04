@@ -62,6 +62,45 @@ def run_lint_reporte(capsys):
 
 # ── bóveda vacía / reporte ───────────────────────────────────────────────────
 
+def test_la_cabecera_DESPLAZADA_se_reporta_aunque_tenga_link(toy_vault, capsys):
+    """#380 — el reporte de «cabecera fuera del contrato» estaba condicionado a `not has_link`, y
+    `has_link` es un `in` sobre el TEXTO ENTERO. Una cabecera desplazada sigue conteniendo su
+    `[📄 PDF]`, así que la conjunción apagaba el detector: de 10 notas fuera de contrato el lint
+    reportaba 7 —las que no tenían link— y callaba sobre 3, sin ninguna diferencia de fondo entre
+    los dos grupos. Las 3 eran los tres LIBROS del corpus, o sea donde perder la cabecera es más
+    caro, y estaban a una corrida de `harvest_views` de perderla (#379).
+
+    Es el falso limpio que el lint existe para no producir: hay TRES estados —en contrato,
+    desplazada, ausente— y el detector modelaba dos."""
+    from conftest import mk_note
+    (cfg.PDFS / "s").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "s" / "2020z....1Z.pdf").write_bytes(b"%PDF-1.4\n")
+    mk_note(cfg.PAPERS, "2020z....1Z",
+            {"tags": ["paper"], "bibcode": "2020z....1Z", "pdf": "../../raw/pdfs/s/2020z....1Z.pdf"},
+            "# P\n\n## Abstract\n_(no disponible)_\n\n**A** (2020)\n"
+            "· ADS: `2020z....1Z` · [📄 PDF](../../raw/pdfs/s/2020z....1Z.pdf)\n")
+    items = dict(lint.collect().por_clave("pdf_issues").items)
+    assert "2020z....1Z" in items, "la cabecera desplazada CON link era invisible"
+    assert "movela" in items["2020z....1Z"], "mover no es reconstruir: el mensaje los distingue"
+
+
+def test_la_cabecera_AUSENTE_manda_a_reconstruir_no_a_restampar(toy_vault, capsys):
+    """El otro de los tres estados, y su mensaje: `--restamp-pdf-links` **no puede** repararlo —
+    `stamp_pdf_link` necesita una cabecera que ya no existe, así que se saltea—. Recetarlo es el
+    patrón de #69: el comando que el propio mensaje del lint ofrece no-opea en silencio."""
+    from conftest import mk_note
+    (cfg.PDFS / "s").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "s" / "2020y....1Y.pdf").write_bytes(b"%PDF-1.4\n")
+    mk_note(cfg.PAPERS, "2020y....1Y",
+            {"tags": ["paper"], "bibcode": "2020y....1Y", "pdf": "../../raw/pdfs/s/2020y....1Y.pdf"},
+            "# P\n\n## Abstract\n_(no disponible)_\n")
+    items = dict(lint.collect().por_clave("pdf_issues").items)
+    assert "2020y....1Y" in items
+    assert "reconstru" in items["2020y....1Y"]
+    assert "`--restamp-pdf-links` NO puede" in items["2020y....1Y"], \
+        "el mensaje nombra el comando para DESCARTARLO, no para recetarlo (#69)"
+
+
 def test_boveda_vacia_pasa(toy_vault, capsys):
     rc, out = run_lint(capsys)
     assert rc == 0
@@ -1255,11 +1294,14 @@ def test_cuerpo_sin_link_pdf_se_marca(toy_vault, capsys):
 
 def test_cabecera_fuera_del_contrato_se_marca(toy_vault, capsys):
     """#48, el caso que quedaba mudo: sin línea de cabecera reconocible, stamp_pdf_link saltea
-    la nota → el lint la distingue del caso anterior (hay que normalizar la cabecera primero)."""
+    la nota → el lint la distingue del caso anterior (hay que normalizar la cabecera primero).
+
+    ⚠ Desde #380 el mensaje nombra CUÁL de los dos estados es: acá no hay ninguna línea con forma
+    de cabecera, así que es **ausente** y la acción es reconstruir, no mover."""
     _nota_con_pdf(toy_vault, "2012ApJ...753..122T",
                   "# T\n\nAna Pérez (2012), escrito a mano sin la línea de cabecera\n")
     rc, out = run_lint(capsys)
-    assert "cabecera fuera del contrato de stamp_pdf_link" in out
+    assert "cabecera AUSENTE" in out
 
 
 def test_link_en_cuerpo_sin_pdf_vigente_se_marca(toy_vault, capsys):

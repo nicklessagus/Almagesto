@@ -309,6 +309,27 @@ def upsert_section(dest: Path, header: str, cuerpo: str) -> bool:
     span = section_span(text, header)
     if span is not None:
         ini, fin = span
+        # #379 — REHÚSA si el span a descartar contiene algo que no es de esta sección. Reemplazaba
+        # de `ini` a `fin` sin mirar qué se llevaba, y cuando un backfill anterior dejó la cabecera
+        # ADENTRO (#378) se la llevó puesta: 6 de 169 notas en UNA corrida, sin aviso y con el lint
+        # en exit 0. La doctrina ya estaba escrita dos veces —#244 y #284— y ninguna cubría el
+        # cuerpo de la nota; el modo de falla es el que la regla de método declara peor: una promesa
+        # que el sistema deja de cumplir en silencio. Grita con el archivo, como #213 con la
+        # salvedad falsa, en vez de escribir y callar.
+        # ⚠ `find_header_line` se corre sobre la NOTA ENTERA y después se mira si su span cae
+        # adentro: sobre el fragmento devuelve None siempre (necesita el frontmatter para acotar),
+        # y ahí la guarda no dispararía nunca — un detector que no puede fallar se lee como
+        # cobertura. La fuente de verdad de «qué es la cabecera» sigue siendo una (#48).
+        cab = mn.header_line_anywhere(text)
+        descarta = text[ini:fin]
+        ajeno = ("la línea de cabecera" if cab and ini <= cab[0] < fin
+                 else "un blockquote" if any(ln.lstrip().startswith(">")
+                                             for ln in descarta.splitlines()) else "")
+        if ajeno:
+            cfg.print_seguro(f"  ⛔ {dest.name}: `{header}` contiene {ajeno} — reemplazarla la "
+                             f"borraría. NO se escribe: movela a su lugar "
+                             f"(`make_notes.py --fix-header-order`) y volvé a cosechar (#379)")
+            return False
         nuevo = text[:ini] + cuerpo.rstrip("\n") + "\n\n" + text[fin:]
     else:
         corte = text.find("\n## Vista — ")

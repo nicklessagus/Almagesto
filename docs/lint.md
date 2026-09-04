@@ -446,6 +446,14 @@ OCR, o marcar `pending`).
 - **Cabecera no estampable** (#69: sin la línea `> _Generado con Almagesto v…_`, ancla de todos los
   estampadores): las cirugías de cabecera devuelven `False` en silencio sobre ella. Se arregla con
   `python scripts/make_notes.py --restamp-headers` (lee la versión del `generator`, no la inventa).
+- **Cabecera DESPLAZADA o AUSENTE** (#380, dentro de *PDF ↔ disco / cuerpo*): son **tres** estados y
+  el detector modelaba dos. *Desplazada* = la línea existe fuera del contrato (típicamente adentro
+  de `## Abstract`, por el orden invertido de #378) → **mover**, con `--fix-header-order` si la
+  corrió un backfill. *Ausente* = ya se perdió (la borró el cosechador, #379) → **reconstruir**, del
+  historial de git; `--restamp-pdf-links` **no** puede, porque necesita la cabecera que falta.
+  ⚠ El reporte ya **no** está condicionado a que falte el link `[📄 PDF]`: `has_link` mira el texto
+  entero, así que una cabecera desplazada lo lleva igual y la conjunción apagaba el detector —
+  medido, 7 reportadas de 10, y las 3 mudas eran los tres libros del corpus.
 - **Roll-up estampado desactualizado** (D-10): se reporta **nombrando los stems** y el comando lo
   arma `cfg.make_notes_cmd` (INV-141), así que sale con `--theme` cuando corresponde.
   ⛔ **Cubre los DOS tipos de sujeto desde #338**: #300 llevó las dos garantías de D-10 al

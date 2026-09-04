@@ -56,6 +56,38 @@ def sembrar(toy_vault, data=None, *, stem=BIB, fm_extra=None, body=None):
                    body if body is not None else mn.vista_block("Estrella Test", theme=False))
 
 
+def test_upsert_section_REHUSA_si_la_seccion_traga_algo_ajeno(toy_vault, capsys):
+    """#379 — `upsert_section` reemplazaba de `ini` a `fin` **sin mirar qué descarta**. Cuando la
+    sección `## Abstract` contiene algo que no es abstract —porque un backfill anterior la insertó
+    en el lugar equivocado y la cabecera quedó adentro (#378)— ese contenido se va con el reemplazo:
+    6 de 169 notas perdieron su cabecera en UNA corrida, sin aviso, con el lint en exit 0.
+
+    El guard que sí existía cuida el verbatim ya puesto, y está bien; lo que no cuidaba es lo AJENO
+    que la sección haya tragado, que es otro eje. La doctrina ya estaba escrita dos veces en el
+    repo —#244 (se re-parsea y no se escribe si dejó de parsear) y #284 (`render_verif_table`
+    rehúsa un bloque cuya lectura no reproduce lo que se le escribió)— y ninguna cubría el CUERPO."""
+    dest = cfg.PAPERS / f"{BIB}.md"
+    mk_note(cfg.PAPERS, BIB, {"tags": ["paper"], "bibcode": BIB},
+            "# Paper\n\n## Abstract\n_(no disponible)_\n\n**Autor** (2020)\n"
+            "· fuente off-ADS · `" + BIB + "`\n\n## Vista — Estrella Test\n\n_(pendiente)_\n")
+    antes = dest.read_text(encoding="utf-8")
+    assert hv.upsert_section(dest, "## Abstract", "## Abstract\nel verbatim del catálogo\n") is False
+    out = capsys.readouterr().out
+    assert "cabecera" in out and BIB in out
+    assert dest.read_text(encoding="utf-8") == antes, "no se escribe: se grita con el archivo"
+
+
+def test_upsert_section_reemplaza_normal_cuando_no_hay_nada_ajeno(toy_vault):
+    """El control: el caso normal sigue funcionando, o la guarda rompería el cosechador entero."""
+    dest = cfg.PAPERS / f"{BIB}.md"
+    mk_note(cfg.PAPERS, BIB, {"tags": ["paper"], "bibcode": BIB},
+            "# Paper\n\n**Autor** (2020)\n· fuente off-ADS · `" + BIB + "`\n\n"
+            "## Abstract\n_(no disponible)_\n\n## Vista — Estrella Test\n\n_(pendiente)_\n")
+    assert hv.upsert_section(dest, "## Abstract", "## Abstract\nel verbatim del catálogo\n") is True
+    t = dest.read_text(encoding="utf-8")
+    assert "el verbatim del catálogo" in t and "· fuente off-ADS" in t
+
+
 def test_el_cosechador_AVISA_si_el_txt_contradice_una_cita_de_la_extraccion(toy_vault, capsys):
     """#359 — el cruce contra el `.txt` corría sobre la NOTA, así que una cita mal transcrita **al
     leer el PDF** pasaba por el cosechador sin que nada la mirara y sólo se cazaba si llegaba a una

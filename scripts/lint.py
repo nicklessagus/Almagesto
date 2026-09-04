@@ -85,6 +85,7 @@ import entity                                # alcance por slug de `--cierre` (#
 from extract_fulltext import is_legible      # umbral determinista de legibilidad (mismo que extract)
 from fetch_ground_truth import msini_earth   # verificación de masa (m·sini implícita)
 from make_notes import find_header_line      # contrato de la cabecera (mismo que stamp_pdf_link, #48)
+import make_notes as mn                     # #380: `header_line_anywhere`, la FORMA sin el contrato
 from make_notes import GENERATOR_LINE        # ancla de la cabecera de fichas/concepts (#69)
 
 #: Prefijo de la línea de estado de la cabecera (#233). Vive acá y no en un literal suelto porque lo
@@ -2709,12 +2710,35 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             # `pdf` apunta a un PDF que existe. Se distingue "sin link" (lo arregla el backfill
             # `make_notes.py --restamp-pdf-links`) de "cabecera fuera del contrato" (hay que
             # normalizarla a mano primero: el re-estampado la saltea, por eso quedaba muda).
+            # #380 — TRES estados, no dos. El reporte de «fuera del contrato» estaba condicionado a
+            # `not has_link`, y `has_link` es un `in` sobre el texto ENTERO: una cabecera desplazada
+            # sigue conteniendo su `[📄 PDF]`, así que la conjunción apagaba el detector. Medido: de
+            # 10 notas fuera de contrato el lint reportaba 7 y callaba sobre 3 —los tres LIBROS del
+            # corpus, donde perder la cabecera es más caro, a una corrida del cosechador de
+            # perderla—, y lo que decidía si hablaba era un accidente. Desplazada y ausente piden
+            # acciones OPUESTAS: mover no es reconstruir, y `--restamp-pdf-links` no puede reparar
+            # la ausente (`stamp_pdf_link` necesita la cabecera que ya no está, así que se saltea:
+            # el patrón de #69, el comando que el mensaje receta y no-opea).
+            cab_ok = find_header_line(text) is not None
+            # ⚠ Sigue atado a `pdf_ok`, como antes: la categoría es «PDF ↔ disco / cuerpo» y el
+            # defecto medido son notas CON PDF cuya cabecera el re-estampado no puede tocar. Soltar
+            # también esa condición pasaría la categoría de 0 a 60 sobre el corpus sintético del
+            # golden —notas que nunca tuvieron cabecera y tampoco PDF—, o sea ensanchar la población
+            # más allá de lo que el hallazgo justifica. Lo que se saca es la conjunción con
+            # `has_link`, que es la que apagaba el detector por un accidente.
+            if pdf_ok and not cab_ok:
+                desplazada = mn.header_line_anywhere(text) is not None
+                pdf_issues.append((stem, (
+                    "cabecera DESPLAZADA (existe, fuera del contrato: no es la primera línea del "
+                    "cuerpo antes de la primera `## `) → movela a su lugar, o corré "
+                    "`make_notes.py --fix-header-order` si la corrió un backfill (#378)")
+                    if desplazada else (
+                    "cabecera AUSENTE (no hay línea `· ` con la clave en backticks) → hay que "
+                    "reconstruirla, del historial de git si la borró el cosechador (#379); "
+                    "`--restamp-pdf-links` NO puede: necesita la cabecera que falta")))
             has_link = "[📄 PDF](" in text
-            if find_header_line(text) is None:
-                if pdf_ok and not has_link:
-                    pdf_issues.append((stem, "cabecera fuera del contrato de stamp_pdf_link "
-                                             "(sin línea `· ` con la clave en backticks) → normalizarla "
-                                             "y correr make_notes.py --restamp-pdf-links"))
+            if not cab_ok:
+                pass                       # ya reportada arriba: el link es un eje ortogonal
             elif pdf_ok and not has_link:
                 pdf_issues.append((stem, "PDF linkeado en el frontmatter pero sin `[📄 PDF]` en el "
                                          "cuerpo → correr make_notes.py --restamp-pdf-links"))
