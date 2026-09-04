@@ -247,6 +247,10 @@ fan-out ni candidato para el gate. Ahora el bibcode de la nota se **suma** a los
 
 ⛔ **Es la sección con más citas de tu bóveda y entra entera a la superficie de chequeo.** Corré:
 
+⚠ Y esperá que suba mucho **«sólo respaldada por la extracción»** (#341): son las citas que su
+propia extracción dice y su `.txt` no. Es el veredicto correcto —el `.txt` es índice degradado— y
+**no** es un hallazgo: viaja en la línea de población para que no se lea como verde limpio.
+
 ```bash
 python scripts/contrast.py --validar-todo
 ```
@@ -264,7 +268,9 @@ el reporte se acorta solo.
 
 > Medido en la misma bóveda: **231 → 155** avisos, y `icasso.md` —donde los cuatro casos se habían
 > verificado abriendo el PDF— pasa de **4 a 0**. ⚠ Los 155 restantes no están clasificados: que
-> bajen no los declara falsos.
+> bajen no los declara falsos. ⛔ Y esa medición mide **ruido, no sensibilidad**: el verdadero
+> positivo de #364 ya estaba corregido en la nota y en el JSON, así que no está en el corpus — quien
+> sostiene que el detector sigue cazando lo que debe es su test unitario, no este número.
 
 ### #359 — el cosechador avisa sobre la extracción, no sólo sobre la nota
 

@@ -111,6 +111,27 @@ def test_el_cosechador_AVISA_si_el_txt_contradice_una_cita_de_la_extraccion(toy_
     assert r["rechazadas"] == 0 and r["cosechadas"] == 1
 
 
+def test_el_aviso_del_txt_vuelve_a_salir_en_una_boveda_YA_COSECHADA(toy_vault, capsys):
+    """El caso que reportó quien migró la instancia: sobre una bóveda toda cosechada el aviso de
+    #359 no se veía. Si el aviso dependiera de que la nota cambie, el chequeo serviría **una sola
+    vez** —en la corrida que estampa la vista— y sería inútil justo donde importa: la extracción ya
+    está en disco y sigue alimentando a N sujetos."""
+    d = extraccion(ground_truth=[{"que": "velocidad", "linea": "412", "regimen": "", "segunda_mano": None,
+                                  "valor": "«Speed is, however, a crucial factor because we have to "
+                                           "run the ICA algorithm many times and again»"}])
+    sembrar(toy_vault, d)
+    (cfg.FULLTEXT / "test_star").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "test_star" / f"{BIB}.txt").write_text(
+        "Speed is, however, a crucial factor because we have to run the ICA algorithm many times "
+        "which is why FastICA is very suitable for this purpose.", encoding="utf-8")
+    hv.harvest("test_star")
+    capsys.readouterr()
+    r = hv.harvest("test_star")                      # segunda corrida: nada que estampar
+    out = capsys.readouterr().out
+    assert "sin cambios" in out, "el escenario es una bóveda ya cosechada"
+    assert "el `.txt`" in out, "el aviso NO puede depender de que la nota cambie"
+
+
 def test_el_SILENCIO_del_txt_sobre_una_cita_no_avisa(toy_vault, capsys):
     """El recorte que lo hace usable: si el `.txt` no tiene la cadena, es *no evaluable* (#321) — la
     extracción es selectiva y se cita del PDF. Sin esto el aviso saldría sobre el 36 % de los

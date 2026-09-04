@@ -1683,3 +1683,31 @@ del flujo **obliga** a mirar el resultado. Sigue siendo decisión abierta.
 real; nada cruza los dos, así que la única forma de detectar el desfasaje es que alguien lo lea. Es
 el mismo hueco que AUD-35 y el que #345 volvió a encontrar. No se cerró acá (sería otro frente):
 queda anotado con su mecanismo.
+
+## 2026-09-03 · Bajar el ruido de la acusación del `.txt` mide RUIDO, no sensibilidad (#364/#388)
+
+Los tres filtros deterministas de 1.179.0 —empalme de columnas, comillas TeX, ligaduras— se
+midieron sobre `Almagesto-Tesis`:
+
+| | avisos del carril `.txt` |
+|---|---|
+| antes | 231 |
+| después | **155** |
+
+y `icasso.md`, la nota donde los cuatro casos se habían verificado abriendo el PDF, pasa de **4 a
+0**.
+
+⛔ **Lo que esa medición NO mide, y hay que decirlo:** el **verdadero positivo** de #364 —«power line
+interferences» donde el PDF dice «artifact»— ya se había corregido en la nota y en el JSON el
+2026-08-31, así que **no está en el corpus**. Sobre esta bóveda se mide *cuánto ruido se saca*, y la
+*sensibilidad* la sostiene sólo el test unitario que reconstruye ese caso
+(`tests/test_lib_config.py::test_el_borde_de_palabra_sigue_acusando_lo_que_DEBE`). Un lector que
+tome el 231 → 155 como evidencia de que el detector sigue cazando lo que debe estaría leyendo de
+más.
+
+Lo señaló quien validó la migración en la instancia. Es la regla de método nº 5 aplicada a una
+medición propia: cuando el corpus no puede contestar la mitad de la pregunta, se declara cuál mitad.
+
+⚠ Los **155** restantes siguen **sin clasificar**: que bajen no los vuelve falsos. Junto con las
+**129** citas de extracción que el cruce de #359 acusa, son deuda de `maintain` y piden abrir PDFs
+de a uno.
