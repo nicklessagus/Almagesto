@@ -279,6 +279,51 @@ re-correrlo no la repara.
 > corrida de cosecha son unas pocas. ⚠ El aviso por AUSENCIA no existe a propósito: el 36 % de esas
 > citas no está en su `.txt` y casi todo es degradación del índice.
 
+## 2d · v1.181.0-v1.182.0 (#378 · #379 · #380) — la cabecera de las notas de paper
+
+Los tres son **una sola cascada**, y conviene leerla entera antes de tocar nada:
+
+1. **#378** inserta el aviso de capa LLM ENTRE el H1 y la línea de cabecera (orden invertido).
+2. Con ese orden, `--restamp-abstracts` mete `## Abstract` **arriba** de la cabecera y la cabecera
+   queda **dentro** de esa sección.
+3. **#379**: el cosechador reemplaza `## Abstract` entera y **se lleva la cabecera puesta**, sin
+   aviso y con el lint en 0.
+4. **#380**: el detector que debía verlo callaba sobre justo las notas que tenían link.
+
+⚠ **La precondición del daño es la nota SIN `## Abstract`** (el stub off-ADS de #124/#277), así que
+buscá ahí primero: #378 sólo hace daño donde #277 ya había fallado.
+
+**Chequeo (los tres estados, que piden acciones distintas):**
+
+```bash
+python - <<'EOF'
+import sys; sys.path.insert(0, "scripts")
+import lib_config as cfg, make_notes as mn
+ok = desp = aus = 0
+for f in sorted(cfg.PAPERS.glob("*.md")):
+    if f.name.endswith(".verif.md"): continue
+    t = f.read_text(encoding="utf-8")
+    if mn.find_header_line(t) is not None: ok += 1
+    elif mn.header_line_anywhere(t) is not None: desp += 1; print("MOVER      ", f.name)
+    else: aus += 1; print("RECONSTRUIR", f.name)
+print(f"en contrato: {ok} · desplazadas: {desp} · ausentes: {aus}")
+EOF
+```
+
+| estado | qué pasó | qué hacer |
+|---|---|---|
+| **desplazada** | está, en el lugar equivocado | `python scripts/make_notes.py --fix-header-order` |
+| **ausente** | ya se perdió | **reconstruir del historial de git** — `--restamp-pdf-links` NO puede: necesita la cabecera que falta |
+
+Y una tercera, sin daño pero con riesgo: la nota con el **orden invertido** que todavía tiene su
+`## Abstract`. No se rompe hoy; si alguna vez pierde la sección, el backfill corre encima y la
+cascada arranca. Las normaliza el mismo `--fix-header-order`, que **no toca** las que ya están en
+orden canónico.
+
+> Medido en `Almagesto-Tesis` (2026-09-03): **188 notas de paper, 188 en contrato, 0 y 0** — las 10
+> dañadas ya se habían reparado a mano cuando se abrieron los issues. En la instancia donde se
+> midieron: 60 de 169 con orden invertido, 10 avanzadas, 6 con la cabecera borrada.
+
 ## 3 · Cierre
 
 ```bash
