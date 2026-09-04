@@ -1296,6 +1296,33 @@ def print_gate_breakdown(core: list) -> None:
         cfg.print_seguro(f"    {n:>5}  {etiqueta}")
 
 
+def print_gate2_range(recs: list, theme_meta: dict) -> None:
+    """What gate 2 actually compares `fundacional_min_citas` against (#357): the ADS citation counts
+    this query brought, as a range — and, when the theme's universe is not astro, the warning that
+    the counter is ADS's («how much astro cites it»), not the field's.
+
+    Measured on `icasso` with `search_fq: null` correctly declared: 21 of 21 in theme, **0 core**
+    with any threshold — the founding paper has **9** citations in ADS and **284** in OpenAlex
+    (32×), and 6 of the 10 papers of the theme are not in ADS at all, so the gate cannot even
+    evaluate them. Lowering the threshold is NOT the fix: it would admit the founding paper on a
+    number that does not say «fundacional» and still miss the five ADS does not index. With the
+    range on screen, a gate that never opens stops being a mystery. `fundacional_fuente: openalex`
+    is an open decision (it breaks INV-24: offline re-derivation)."""
+    umbral, _why = cfg.gate2_threshold(theme_meta)
+    if umbral is None:
+        return
+    citas = [int(r.get("citation_count") or 0) for r in recs]
+    rango = f"{min(citas)}–{max(citas)}" if citas else "(sin papers)"
+    cfg.print_seguro(f"  puerta 2 (`fundacional_min_citas: {umbral}`): citation_count de ADS en esta "
+                     f"query = {rango} sobre {len(citas)} papers")
+    fq = search_fq(theme_meta)
+    if fq is None or "astronomy" not in str(fq):
+        cfg.print_seguro(
+            f"    ⚠ el contador es el de ADS —cuánto lo cita lo que ADS indexa—, no el de su campo: "
+            f"medido en `icasso`, el fundacional tiene 9 en ADS y 284 en OpenAlex, y 6 de 10 del tema "
+            f"no están en ADS (#357). Bajar el umbral no es la salida; el canon entra por `extra_core`.")
+
+
 # #289 — las dos clases de no-core que piden acciones OPUESTAS. `classify_theme` ya las distingue
 # en su `motivo`; lo que faltaba era leerlo. El prefijo alcanza porque el motivo lo escribe una sola
 # función (arriba) y se compara contra su texto, no contra una copia.
@@ -1404,6 +1431,7 @@ def print_probe(q: str, recs: list, noncore_top: int = 25, theme_meta: dict | No
         # la puerta 3 de D-26: mostrarlos mandaría a afinar objective.yaml cuando el archivo que
         # decide este corte es themes.yaml — el mismo error que la línea de cierre cometía.
         print_gate_breakdown(core)
+        print_gate2_range(recs, theme_meta)   # #357 — contra QUÉ contador se compara el umbral
         print_noncore_breakdown(noncore)      # #289 — el simétrico, del lado del no-core
     else:
         print_combination_contrast(recs)

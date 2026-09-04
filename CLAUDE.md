@@ -807,7 +807,9 @@ real, y el `via` que va al registro es siempre el **declarado** en la config.
 
 ⚠ **`fundacional_min_citas` no tiene default**: el número depende del campo (30k citas es normal en
 ML y muchísimo en astro) y esconderlo sería decidir por el usuario. Sin declararlo la puerta 2 **no
-abre** y el motivo queda en `why_excluded`. *(Decisión abierta en `vault/STATUS.md`.)*
+abre** y el motivo va a `why_excluded`. ⛔ **Y compara contra el contador de ADS (#357)**: en un
+tema de otra disciplina mide cuánto lo cita astro (ICASSO 2003: 9 en ADS, 284 en OpenAlex); el
+probe muestra el rango y avisa. *(Abierta en `docs/decisiones-abiertas.md`.)*
 
 ⛔ **La puerta 1 («lo cita tu corpus») PROPONE, no clasifica** (§4.3 del plan): alimenta los
 candidatos del triage con `via: citado-por-corpus`, nunca marca core. Si clasificara, ser core

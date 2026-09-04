@@ -2604,3 +2604,35 @@ def test_probe_calla_los_ejes_con_ejes_DECLARADOS_incluido_vacio(toy_classifier,
     for ejes in ([], ["identificabilidad"]):
         qa.print_probe("q", _recs_ica(), theme_meta={"title": "ICA", "facet": "ica", "ejes": ejes})
         assert "sin `ejes:`" not in capsys.readouterr().out, ejes
+
+
+# ── #357 · la puerta 2 compara contra el contador de ADS, y el probe no lo decía ─────────────────
+
+def test_probe_del_tema_muestra_el_rango_de_citas_que_compara_la_puerta_2(toy_classifier, monkeypatch,
+                                                                          capsys):
+    """#357 — «fundacional en SU campo» se compara contra `citation_count` de ADS, que en un tema de
+    otra disciplina mide cuánto lo cita astro: medido en `icasso`, 21/21 en tema y 0 core con
+    cualquier umbral (ICASSO 2003: 9 en ADS, 284 en OpenAlex; 6 de 10 del tema no están en ADS).
+    Con el rango a la vista, que la puerta no abra deja de ser un misterio."""
+    _objetivo_con_fq(monkeypatch, search_fq="database:astronomy", facets={"rv": "rv"})
+    meta = {"title": "ICA", "facet": "independent component", "fundacional_min_citas": 2000,
+            "search_fq": None}
+    qa.print_probe("q", _recs_ica(), theme_meta=meta)
+    out = capsys.readouterr().out
+    assert "fundacional_min_citas: 2000" in out and "citation_count de ADS" in out, out
+    assert "contador es el de ADS" in out and "#357" in out, out
+    # con el universo acotado a astro el contador de ADS es el correcto: no hay aviso extra
+    qa.print_probe("q", _recs_ica(), theme_meta={**meta, "search_fq": "database:astronomy"})
+    out = capsys.readouterr().out
+    assert "citation_count de ADS" in out and "contador es el de ADS" not in out, out
+    # un `fq` declarado que NO es astro (otra base de ADS) también mide «cuánto lo cita ADS»
+    qa.print_probe("q", _recs_ica(), theme_meta={**meta, "search_fq": "database:physics"})
+    assert "contador es el de ADS" in capsys.readouterr().out
+
+
+def test_probe_sin_umbral_no_habla_de_la_puerta_2(toy_classifier, monkeypatch, capsys):
+    """#357 — sin `fundacional_min_citas` la puerta 2 no abre por diseño (D-26) y ya lo dice el
+    `why_excluded`: no hay rango que mostrar."""
+    _objetivo_con_fq(monkeypatch, search_fq=None, facets={"rv": "rv"})
+    qa.print_probe("q", _recs_ica(), theme_meta={"title": "ICA", "facet": "ica"})
+    assert "citation_count de ADS" not in capsys.readouterr().out

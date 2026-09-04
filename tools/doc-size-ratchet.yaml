@@ -29,9 +29,9 @@
 # `crecimientos` con fecha, ancla y motivo. Lo que sigue prohibido es que el archivo crezca sin que
 # nadie lo declare — que es lo que el ratchet vino a frenar. `test_la_suba_del_techo_esta_declarada`
 # lo vigila: el techo vigente tiene que ser el de la última entrada.
-medido_en: "2026-09-03"
-techo_lineas: 1692
-techo_bytes: 135200
+medido_en: "2026-09-04"
+techo_lineas: 1696
+techo_bytes: 135500
 
 crecimientos:
   - fecha: "2026-08-31"
@@ -151,3 +151,14 @@ crecimientos:
       cada issue.
     techo_lineas: 1692
     techo_bytes: 135200
+  - fecha: "2026-09-04"
+    ancla: "#357"
+    motivo: >-
+      Cinco reglas de la tanda de temas de método entraron comprimiendo cada vez (#354, #360, #384,
+      #382: dos líneas o menos cada una, con dos compresiones vecinas por regla); la de #357 —contra
+      QUÉ contador compara la puerta 2, y que bajar el umbral no es la salida— es lo que un agente
+      necesita saber ANTES de acordar `fundacional_min_citas` con el usuario, y no entra sin subir.
+      Medido en `icasso`: 21/21 en tema y 0 core con cualquier umbral. No queda postmortem que mover
+      (#340 lo midió). Suba mínima: 4 líneas.
+    techo_lineas: 1696
+    techo_bytes: 135500

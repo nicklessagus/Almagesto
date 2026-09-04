@@ -1,5 +1,5 @@
 {
- "fetched": "2026-09-03",
+ "fetched": "2026-09-04",
  "issues": [
   {
    "number": 2,
@@ -1769,12 +1769,12 @@
   {
    "number": 355,
    "title": "`--rename-paper` asume que todo renombre es un alias D-19 y escribe `versions[]` incondicionalmente: corregir una clave EQUIVOCADA deja publicada la afirmación falsa de que ese bibcode identifica al mismo trabajo",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 356,
    "title": "`--rename-paper` mueve los artefactos y deja la nota apuntando a los viejos: `pdf:`, `fulltext:`, el link del cuerpo y el blockquote off-ADS quedan señalando archivos que el propio comando movió (#217 al revés)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 357,
@@ -1784,12 +1784,12 @@
   {
    "number": 358,
    "title": "El carril ADS de `fetch_pdf` nunca consulta el resolver de acceso abierto que el repo ya tiene: 2 de 6 papers declarados «sin conseguir» eran open access — el simétrico de #313, más Europe PMC que no está en ninguna cascada",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 359,
    "title": "El cruce de citas contra el `.txt` corre sobre la NOTA, no sobre la EXTRACCIÓN: una cita mal transcrita al leer el PDF sobrevive al cosechador y sólo se caza si llega a una nota — medido, 2 de 265 valores",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 360,
@@ -1799,72 +1799,72 @@
   {
    "number": 361,
    "title": "El anclaje de `discover --theme` crashea con traceback en vez de declarar FALLÓ (viola el contrato de cobertura de #290 en la etapa que más rinde), y `descubrimientos: 0` no lo mira ningún gate: cerré un tema entero con todos los verdes sin correr el paso 0b",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 362,
    "title": "OpenAlex ahora tiene presupuesto y el framework lo trata como gratis: `refs_of` usa el endpoint MEDIDO para resolver DOIs conocidos, que el endpoint libre devuelve igual — el anclaje y `citation_index` quedan sin cuota sin necesitarla",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 363,
    "title": "La exención de `pdf_source: eprint` sobre el chequeo de cita textual se sacó en v1.111.0 (#275) y 9 lugares siguen afirmando que existe — uno es el mensaje que el lint le IMPRIME al usuario",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 364,
    "title": "El detector de #333 acusa por interleaving de columnas y por glifo de comilla: 3 de 3 falsos positivos",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 365,
    "title": "El fence de #259 no dice que las claves son CERRADAS: el subagente agrega una y la barrera lo rebota después de leer el PDF",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 366,
    "title": "La cadena de veredictos de #232 no se forma cuando la corrección cambia el ancla: el bloque publica 0 donde hubo un contradice",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 367,
    "title": "Cerrar un `pending` off-ADS copia el PDF y deja la nota con `pdf: null`: #304 cubrió el carril ADS y el off-ADS quedó afuera — y es el caso donde la nota SIEMPRE preexiste",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 368,
    "title": "Un `[[bibcode]]` en el blockquote de alcance de `## Huecos` es infalsificable por construcción: el fan-out lo toma como par y vuelve `no-soportada` (bloqueante)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 369,
    "title": "El `--esperados` de la barrera lo cuenta el operador a ojo: lancé 15 verificadores para 16 fuentes y el conteo lo sabía el generador",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 370,
    "title": "Falta la regla simétrica de #322 para PROSA: una afirmación que agrupa N fuentes bajo un mecanismo común exige haberlo visto en las N",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 371,
    "title": "`extraction_prompt --enfasis` manda escribir la SEGUNDA lente al mismo archivo que la primera: destruye una extracción versionada y no regenerable, y deja sin testigo al gate de #323",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 372,
    "title": "`harvest_views` estampa la lente del TEMA en toda vista, así que una segunda lente con `--ejes` propios queda declarando ejes que nunca preguntó (rompe INV-146 y el diff de D-49)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 373,
    "title": "Las citas de `## Vista` no las mira NINGUNA capa: 3838 transcripciones del PDF sin verificar, y una alteración deliberada pasa con rc=0",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 374,
    "title": "`contrast.py` identifica la extracción por el NOMBRE DEL ARCHIVO y `harvest_views` por el `bibcode` de adentro: dos consumidores del mismo directorio con dos identidades, y el gate de #323 da falso limpio sobre 309 citas",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 375,
@@ -1884,17 +1884,17 @@
   {
    "number": 378,
    "title": "`--restamp-headers` inserta el aviso de capa LLM ENTRE el H1 y la línea de cabecera, y el orden invertido termina borrándola",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 379,
    "title": "`upsert_section` reemplaza la sección entera sin mirar qué descarta: `harvest_views` borró 6 líneas de cabecera en silencio",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 380,
    "title": "El lint no ve la cabecera DESPLAZADA: `has_link` mira el texto entero y la conjunción apaga el detector (3 libros invisibles)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 382,
@@ -1904,7 +1904,7 @@
   {
    "number": 383,
    "title": "Reemplazar un PDF por otro de mejor procedencia deja `pdf_source` y `eprint_version` mintiendo: #230 cubre el borrado, no el reemplazo",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 384,
@@ -1914,31 +1914,36 @@
   {
    "number": 385,
    "title": "El copiado sin re-tipear existe sólo para el INVENTARIO (`--filas`): la síntesis en PROSA —donde viven la mayoría de las citas— se transcribe a mano",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 386,
    "title": "#238 y #323 se contradicen: la marca `⚠ corregido` del log NO la conoce `contrast --validar`, así que una entrada marcada bloquea el gate para siempre",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 387,
    "title": "REPLANTEO DE REGLA: la supersesión del `log` es una convención en PROSA y no compone — decidir entre sacar el log del chequeo, hacer append-only estructurado, o distinguir afirmar de mencionar",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 388,
    "title": "La guarda de borde-de-palabra de #333 NO filtra el EMPALME DE COLUMNAS: 4 candidatas → 4 falsos positivos, verificadas una por una contra el PDF",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 389,
    "title": "Los defectos que nacen AL CORREGIR llegan con material AGREGADO: falta el contador simétrico de #222 y la doctrina de corregir por sustracción",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 390,
    "title": "#99 EXIGE el driver `merge=ours`, y ese mismo driver DESTRUYE en silencio al sincronizar la bóveda entre máquinas — el flujo que el propio framework promueve",
+   "state": "CLOSED"
+  },
+  {
+   "number": 391,
+   "title": "REPLANTEO diferido de #387 B: la supersesión del `log` sigue siendo una convención en PROSA, y el precedente estructurado ya existe en el registro (D-52)",
    "state": "OPEN"
   }
  ]

@@ -118,8 +118,14 @@ Progreso del ingest del tema <tema>:
    mitad de lo que decide el corte. Y **`fundacional_min_citas` se acuerda con el usuario o no se
    pone**: el número depende del campo (30k citas es normal en ML y muchísimo en astro) y el
    framework **no tiene default** — sin declararlo la puerta 2 no abre y el motivo queda en
-   `why_excluded`, visible en el apéndice "Excluidos por el filtro". ⚠ Está anotado en
-   `vault/STATUS.md` como **decisión abierta** si la puerta 2 debe existir: usala sólo si el
+   `why_excluded`, visible en el apéndice "Excluidos por el filtro". ⛔ **Y el umbral se compara
+   contra el `citation_count` de ADS (#357)**: en un tema de otra disciplina eso mide cuánto lo cita
+   astro, no cuán fundacional es en su campo (medido en `icasso`: 21/21 en tema, 0 core con
+   cualquier umbral; el fundacional tiene 9 en ADS y 284 en OpenAlex, y 6 de 10 no están en ADS).
+   El probe imprime el rango de citas que trajo la query y avisa; **bajar el umbral no es la
+   salida** (afirmaría «fundacional» sobre un número que no lo dice): el canon entra por
+   `extra_core`. ⚠ Está anotado en `docs/decisiones-abiertas.md` como **decisión abierta**
+   (`fundacional_fuente: openalex`, rompe INV-24) y si la puerta 2 debe existir: usala sólo si el
    usuario la pide.
 
    Tras la corrida, la cadena imprime el delta (`regla del tema (D-26): +N core / -M`). **Miralo**:
