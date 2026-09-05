@@ -1965,6 +1965,16 @@
    "number": 395,
    "title": "`vistas[].lente` declara los ejes VIGENTES, no los que la extracción preguntó: 209 slots afirman haber buscado 3 facetas que nadie preguntó (#372 en la primera lente, rompe INV-146) + 48 ejes vacíos sin línea + el parser no entra en `### Lente`",
    "state": "OPEN"
+  },
+  {
+   "number": 396,
+   "title": "Partir `lint.collect` (3576 líneas, 118 locales): una función por bloque `# ──`, con golden congelado y mutación dirigida por función",
+   "state": "OPEN"
+  },
+  {
+   "number": 397,
+   "title": "La ficha no guarda el BibTeX oficial del paper: la cita se reconstruye de memoria, y cruzar un `.bib` contra el vault exige resolver por DOI y título (26 de 81 entradas sin ficha, 8 papers con id distinto entre dos instancias)",
+   "state": "OPEN"
   }
  ]
 }
