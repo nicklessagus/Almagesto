@@ -1262,6 +1262,300 @@ def evidence_hash_lookup(pdf_on_disk: dict, ft_hash: dict):
     return evidencia_hash_de
 
 
+def check_second_hand_lifted(anchor_bodies: dict, segunda_mano: dict,
+                             paper_fms: dict) -> tuple:
+    """`(hallazgos, pares mirados)` — prose that lifts a SECOND-HAND value without saying so.
+
+    Fourth block out of `lint.collect` (#396). Three read-only inputs and a counter that comes
+    back as a return value instead of a one-element list mutated in place: the population of
+    INV-40 stops being a side effect.
+    """
+    # El lint ya bloquea la NOTA del paper retractado, pero no localiza QUÉ afirmación lo cita —
+    # que es lo que hay que revisar. Borrar la afirmación tampoco sirve: destruye trabajo y puede
+    # ser cierta por otra vía. Se marca en línea (R-3: `[[bib]] ⛔retractada`), y ahí baja a
+    # informativa: visible, no destruida. El símbolo es deliberado — un `(retractada)` pelado daría
+    # falso positivo con cualquier mención del hecho en prosa ("la señal fue retractada más tarde").
+    # #279 — la ficha que se apoya en un paper cuya vista marcó valores de SEGUNDA MANO y no lo
+    # dice. Se mira por BLOQUE citante (`pairs_of`, que ya excluye las secciones estampadas: la
+    # tabla `## Papers` cita todos los bibcodes y haría estallar la categoría), y el hallazgo se
+    # apaga si el bloque ya nombra la segunda mano — sin esa escotilla la deuda es inextinguible y
+    # una categoría que no se puede cerrar se deja de mirar.
+    # ⛔ #350 — y se cruza el VALOR, no el paper. La pregunta era *«¿este paper tiene ALGUNA segunda
+    # mano?»*, que sobre un survey o un handbook —llenos de atribuciones a terceros por
+    # construcción— la contesta que sí siempre: medido, 398 de 462 pares, el 86 %. Es la forma de
+    # #198 (*«un reporte donde 2 de 3 avisos no son accionables se deja de mirar»*), acá con 6 de
+    # cada 7. La pregunta accionable es *«¿el valor que ESTA línea toma es uno de ellos?»* y la
+    # contesta `second_hand_lifted` por el literal compartido; el hallazgo lo NOMBRA, que es lo que
+    # lo vuelve triage y no lectura.
+    #
+    hallazgos: list = []
+    n_pares = 0
+    for f, texto_n in anchor_bodies.items():
+        if not (in_dir(f, "stars") or in_dir(f, "concepts")):
+            continue
+        for _par in lb.pairs_of(texto_n):
+            _filas = segunda_mano.get(_par.bibcode)
+            if not _filas or "segunda mano" in _par.block.text.lower():
+                continue
+            n_pares += 1
+            # Los `[[bibcode]]` que el bloque cita también ATRIBUYEN: la prosa que dice «reclamadas
+            # por [[2013A&A...549A..48T]]» nombra a Tuomi sin escribir el apellido, y el aviso ahí
+            # no es accionable. El primer autor sale del frontmatter del paper, que el barrido ya
+            # leyó.
+            _atribuido = {a.split(",")[0].strip().casefold()
+                          for b in lb._bibcodes(_par.block.text)
+                          if (a := str((paper_fms.get(b) or {}).get("first_author") or "").strip())}
+            for _q, _v, _de, _ev in lb.second_hand_lifted(_par.block.text, _filas,
+                                                          atribuido=_atribuido):
+                hallazgos.append(
+                    (basename(f)[:-3],
+                     f"L{_par.block.first_line}: la línea toma {', '.join(_ev)} de "
+                     f"[[{_par.bibcode}]], y su vista marca ese valor como SEGUNDA MANO "
+                     f"(«{_q[:80]}» → {_de[:120]}) → la ficha tiene que decir de quién es (#103): "
+                     f"el número no es de esta fuente"))
+    return hallazgos, n_pares
+
+
+def check_prosa_retractada(anchor_bodies: dict, paper_fms: dict) -> tuple:
+    """`(sin_marca, marcada)` — prose leaning on a RETRACTED source (D-47).
+
+    Fifth block out of `lint.collect` (#396): two read-only inputs, two lists out. The mark
+    does not destroy the claim —it can be true by another route— it makes it visible, which is
+    why the two lists are separate and only the first one blocks.
+
+    @inv INV-93
+    """
+    prosa_retractada: list = []
+    prosa_retractada_marcada: list = []
+    retracted_stems = {stem for stem, fm_p in paper_fms.items() if fm_p.get("retracted")}
+    for f, texto_n in anchor_bodies.items():
+        stem_n = basename(f)[:-3]
+        # AUD-154 — esto escaneaba el TEXTO CRUDO, o sea también las secciones que estampa la
+        # máquina y `log.md`. Las dos hacen el bloqueante **irresoluble**: la marca `⛔retractada`
+        # puesta en una fila de `## Papers` la borra el próximo `make_notes` (es metadata derivada,
+        # se regenera), y `log.md` es la bitácora append-only —marcar una entrada histórica sería
+        # reescribir lo que pasó—. La cita que hay que revisar es la de la PROSA, que es donde la
+        # bóveda afirma algo apoyándose en esa fuente.
+        if stem_n in ("log", "index"):
+            continue
+        partes_n = cfg.frontmatter_span(texto_n)
+        texto_n = cfg.solo_prosa(partes_n[1] if partes_n else texto_n)
+        for stem_r in sorted(retracted_stems):
+            for m in re.finditer(r"\[\[" + re.escape(stem_r) + r"(?:\|[^\]]*)?\]\]([^\n]*)", texto_n):
+                destino = (prosa_retractada_marcada if m.group(1).lstrip().startswith(RETRACTED_MARK)
+                           else prosa_retractada)
+                destino.append(
+                    (stem_n, f"cita [[{stem_r}]] (RETRACTADO) — "
+                             + ("marcada: visible y no destruida; revisá si otra fuente la sostiene"
+                                if destino is prosa_retractada_marcada else
+                                f"marcala con `{RETRACTED_MARK}` pegado a la cita, o bajá la "
+                                f"afirmación a lo que otra fuente sostenga. No la borres: puede ser "
+                                f"cierta por otra vía")))
+    return prosa_retractada, prosa_retractada_marcada
+
+
+def check_identidad_duplicada(paper_fms: dict, ft_hash: dict, illegible_txt: list) -> tuple:
+    """`(identidad_dup, alias_con_nota, alias, ya_reportados, incompletos)` — D-19/#229.
+
+    Sixth block out of `lint.collect` (#396), and the first that used to WRITE into a shared
+    accumulator: what it used to append there comes back as a returned list, and the caller
+    is the one that extends `incomplete`.
+    That is the whole shape of the remaining extraction —the block computes, the caller
+    accumulates— and what proves it did not change anything is the golden staying
+    byte-identical, which is also what would catch a change of ORDER inside the accumulator.
+    """
+    # `alias` and `ya_reportados` come out because the next block (#216) consumes them: they are
+    # the stems this check already reported, and re-reporting them there would be noise.
+    #
+    # La identidad de un trabajo es su `doi`/`arxiv_id`, no su bibcode: el preprint y el publicado
+    # son bibcodes distintos del MISMO paper. Medido en la instancia real: 2 trabajos con dos notas.
+    # Bloqueante porque el daño es silencioso y se acumula: doble conteo en todo lo que cuenta
+    # papers, dos fuentes donde hay una, y un falso positivo permanente de #75 (la ficha cita una).
+    # Un alias en `versions[]` NO es un duplicado: es el registro de que el trabajo tuvo otro
+    # bibcode, y por eso no entra en la población.
+    # @inv INV-84
+    #
+    incompletos: list = []
+    identidad_dup: list = []
+    alias_con_nota: list = []          # #229: listado como alias Y con nota propia — contradicción
+    por_identidad: dict = {}
+    alias = {str(v.get("bibcode")) for fm_p in paper_fms.values()
+             for v in cfg.as_list(fm_p.get("versions")) if isinstance(v, dict) and v.get("bibcode")}
+    # #229 — la exención por alias es incondicional, y eso APAGA los dos detectores de identidad
+    # sobre una nota viva. Medido: una nota usó `versions[]` para decir «no son duplicados, se
+    # conservan los dos» —lo contrario de lo que el campo significa en D-19— y con eso dejó a una
+    # de las 4 notas SIN `doi` ni `arxiv_id` (justo la población que #216 existe para cubrir) fuera
+    # de los dos chequeos, para siempre. El lint seguía declarando «sobre 32 notas» mirando 31.
+    # O es un alias (y entonces NO debe haber nota) o es un trabajo distinto (y entonces NO va en
+    # `versions[]`): la contradicción de schema es lo que bloquea, no la exención.
+    for _a in sorted(alias & set(paper_fms)):
+        _quien = sorted(st for st, fm_p in paper_fms.items()
+                        if any(isinstance(v, dict) and str(v.get("bibcode")) == _a
+                               for v in cfg.as_list(fm_p.get("versions"))))
+        alias_con_nota.append(
+            (_a, f"está listado en `versions[]` de {', '.join(_quien)} Y tiene su propia nota: o es "
+                 f"un alias (y la nota no debería existir) o es otro trabajo (y no va en "
+                 f"`versions[]`). Mientras tanto queda fuera de los DOS chequeos de identidad "
+                 f"(D-19 y #216), que es donde más falta hace"))
+    # #230 — la contradicción sobre el disco que nadie cruzaba: `fulltext: null` con
+    # `fulltext_source` poblado afirma CÓMO se extrajo un texto que no existe. `retarget_artifacts`
+    # (#217) limpia los tres campos del `.txt`, así que el par lo produce una edición a mano o una
+    # nota anterior a esa versión.
+    #
+    # ⛔ Y la asimetría con `pdf_source` es DELIBERADA y va declarada: ése NO se limpia, porque no
+    # describe un archivo sino la PROCEDENCIA de la lectura que ocurrió — una nota cuelga su
+    # salvedad de `pdf_source: eprint` para decir que sus citas son contra el preprint, y borrarlo
+    # al borrar el archivo destruiría la salvedad junto con el PDF. El contrato lo dice, y por eso
+    # el par `pdf: null` + `pdf_source: <valor>` NO es hallazgo.
+    for stem_p, fm_p in sorted(paper_fms.items()):
+        if fm_p.get("fulltext_source") and not fm_p.get("fulltext"):
+            incompletos.append(
+                (stem_p, f"`fulltext_source: {fm_p['fulltext_source']}` sin `fulltext` — afirma "
+                         f"CÓMO se extrajo un texto que no está en disco → "
+                         f"`python scripts/make_notes.py <slug>` re-estampa por verdad de disco "
+                         f"(⚠ `pdf_source` sí sobrevive al borrado, a propósito: es la procedencia "
+                         f"de la lectura, no del archivo)"))
+
+    for stem_p, fm_p in sorted(paper_fms.items()):
+        if stem_p in alias:
+            continue
+        if (ident := mn.identidad(fm_p)):
+            por_identidad.setdefault(ident, []).append(stem_p)
+    for (clave, valor), stems in sorted(por_identidad.items()):
+        if len(stems) > 1:
+            identidad_dup.append(
+                (", ".join(stems), f"comparten {clave} `{valor}` → es el MISMO trabajo con dos "
+                                   f"notas; dejá una canónica: `python scripts/make_notes.py "
+                                   f"--rename-paper {stems[0]} {stems[1]}`"))
+    # #114 · segunda señal, y la que caza el caso REAL: dos notas cuyo `.txt` tiene los MISMOS BYTES
+    # son el mismo trabajo — eso no es heurística, es certeza. Hace falta porque la metadata a veces
+    # no los liga en absoluto: medido, el registro publicado traía `arxiv_id: null` y el del preprint
+    # el DOI DataCite, así que NINGÚN campo coincidía y el detector callaba sobre un duplicado real.
+    # ⚠ Sólo sobre `.txt` **legibles**. Dos extracciones FALLIDAS (escaneo sin capa de texto,
+    # mojibake, `.txt` casi vacío) tienen los mismos bytes y no son el mismo trabajo: son dos
+    # fracasos idénticos. Sin este recorte, la señal de bytes convierte a cada par de extracciones
+    # rotas en un hallazgo BLOQUEANTE que manda a fusionar dos papers ajenos — o sea a destruir una
+    # nota. Medido sobre el corpus sintético: dos `.txt` ilegibles sembrados a propósito daban un
+    # tercer duplicado que nadie sembró. El umbral no es nuevo: es el mismo `is_legible` con el que
+    # el lint ya reporta esos `.txt` en su propia categoría, y que dice justamente «esto no sirve
+    # para grep ni para verify» — un texto que no sirve para leerlo tampoco identifica a nadie.
+    # @inv INV-106
+    ya_reportados = {st for fila in identidad_dup for st in fila[0].split(", ")}
+    ft_ilegible = {basename(p_ft)[:-4] for p_ft, _ in illegible_txt}
+    por_texto: dict = {}
+    for stem_p in sorted(paper_fms):
+        if stem_p in alias or stem_p in ya_reportados or stem_p in ft_ilegible:
+            continue
+        if (h := ft_hash.get(stem_p)):
+            por_texto.setdefault(h, []).append(stem_p)
+    for h, stems in sorted(por_texto.items()):
+        if len(stems) > 1:
+            identidad_dup.append(
+                (", ".join(stems), f"su fulltext tiene los MISMOS bytes (`{h}`) → es el mismo "
+                                   f"trabajo con dos notas, aunque su metadata no lo diga; "
+                                   f"consolidá: `python scripts/make_notes.py --rename-paper "
+                                   f"{stems[0]} {stems[1]}`"))
+    return identidad_dup, alias_con_nota, alias, ya_reportados, incompletos
+
+
+def check_papers_table_stale(paper_fms: dict) -> tuple:
+    """`(papers_table_stale, no_evaluados)` — the stamped roll-up against the truth on disk (D-10).
+
+    Seventh block out of `lint.collect` (#396), same shape as the previous one: what it used to
+    append to `not_evaluated` comes back as a list and the caller accumulates it. Keeping the
+    D-43 half separate is the point — a subject the check could not evaluate is not a subject
+    whose table is up to date.
+    """
+    # La tabla materializada de `## Papers` es un snapshot, y un snapshot que nadie re-estampa
+    # miente igual que el roll-up Dataview que reemplazó (medido: 155 prometidos, 8 discutidos).
+    # Backlog —es "re-estampar", no una violación del vault— pero NOMBRA los stems que faltan o
+    # sobran, no la diferencia de conteos: dos listas del mismo largo pueden no ser los mismos
+    # papers (la lección de #70).
+    #
+    no_evaluados: list = []
+    papers_table_stale: list = []
+    # UNA sola pasada de parseo de `papers/`, compartida por todas las estrellas: sin esto el lint
+    # saltaba de ~2,0 a 5,9 parseos YAML por nota (medido por `tests/poblada/test_escala.py`, techo
+    # 2,3) — el costo crece con el producto notas × estrellas.
+    # `paper_fms` se llena en el LOOP principal (ver más arriba), que ya parsea cada nota: una
+    # pasada extra acá subía el ratio a ~3,0 (el techo del test de escala es 2,3), y el hotspot
+    # conocido —el doble parseo de split_fm+fm_error— ya se come 2,0.
+    # ⛔ #338 — y los CONCEPTOS, que estaban afuera. #300 llevó las dos garantías de D-10 al
+    # ESTAMPADOR de un concepto y el detector se quedó en `stars/`, así que la promesa «el lint
+    # reporta la tabla desactualizada» valía para la mitad del vault: medido, 2 de 3 sujetos de una
+    # bóveda real son temas, y un paper que reclama una estrella Y un tema con las dos tablas
+    # vacías se reportaba 1 de 2. Un tema estampa su roll-up bajo UNO de los dos encabezados
+    # —`## Papers` estilo ficha o `## Papers que tocan este tema (auto)` (D-24)—, y cada uno tiene
+    # su propio universo, así que se compara el que la nota trae contra el suyo: exigir el ausente
+    # inventaría un hueco en la nota que eligió el otro. La nota que no trae NINGUNO no puede
+    # recibir la cirugía nunca, y eso hasta hoy sólo lo decía un stdout de `make_notes`.
+    # ⚠ El slug de una ESTRELLA es un campo de su entrada; el de un TEMA es la CLAVE del YAML.
+    # Ese barrido es `cfg.all_subjects()` — UNA implementación, porque la segunda copia (INV-83)
+    # ya se había equivocado y salteaba todos los temas en silencio (#346).
+    for _kind, slug_s, _nombre_s, _meta_s in cfg.all_subjects():
+        # `mn.subject_note` es la MISMA función que usa el estampador: dos respuestas a «dónde vive
+        # la tabla de este sujeto» es cómo el estampador y el chequeo terminan discrepando.
+        dest_s = mn.subject_note(slug_s, _kind)
+        if not dest_s or not dest_s.exists():
+            continue
+        texto_s = dest_s.read_text(encoding="utf-8")
+        # Encabezado → cómo se arma SU universo. Los dos parten del MISMO predicado de pertenencia
+        # (`mn.theme_membership`, #347: comparación por clave normalizada, #243) y difieren en lo
+        # que publican: el roll-up declara además por cuál llave entró el paper (D-24). Hasta 1.156.0
+        # sólo el roll-up normalizaba y el universo comparaba el string exacto — o sea que este
+        # detector heredaba la subdeclaración del universo que compara.
+        universos = [(mn.PAPERS_HEADER,
+                      lambda s=slug_s, k=_kind: {r["stem"]
+                                                 for r in mn.papers_universe(s, k, paper_fms)})]
+        if _kind == "theme":
+            universos.append((mn.CONCEPT_ROLLUP_HEADER,
+                              lambda s=slug_s: {r["stem"]
+                                                for r in mn.concept_rollup_rows(s, paper_fms)}))
+        # ⚠ `cfg.section_span`, nunca un `split("\n## Papers")`: `## Papers` es PREFIJO de
+        # `## Papers que tocan este tema (auto)` y el corte crudo se llevaba el roll-up del tema
+        # como si fuera la tabla de ficha (la trampa de #176, que `section_start` ya resuelve).
+        spans = [(h, universo, cfg.section_span(texto_s, h)) for h, universo in universos]
+        if _kind == "theme" and all(span is None for _h, _u, span in spans):
+            papers_table_stale.append(
+                (slug_s, f"la nota del tema no trae `{mn.PAPERS_HEADER}` ni "
+                         f"`{mn.CONCEPT_ROLLUP_HEADER}`: el roll-up de papers no se puede estampar "
+                         f"nunca → agregá uno de los dos y re-corré "
+                         f"`{cfg.make_notes_cmd(slug_s)}`"))
+            continue
+        for header_s, universo, span in spans:
+            if span is None:
+                # En un tema los dos estampadores conviven y la nota lleva uno: el ausente no es
+                # deuda. En una estrella el roll-up es uno solo, así que su ausencia SÍ es la tabla
+                # que falta —y ése es el comportamiento histórico del detector—.
+                if _kind == "theme":
+                    continue
+                listados = set()
+            else:
+                listados = set(LINK_RE.findall(texto_s[span[0]:span[1]]))
+            try:
+                esperados = universo()
+            except Exception as _exc:                   # noqa: BLE001 — D-43, ver abajo
+                # AUD-286: «config rota: ya lo reporta otra categoría» era cierto sólo para el
+                # objetivo/los YAML ilegibles; un `KeyError`/`TypeError` de bug en el universo
+                # dejaba la tabla de ESTA nota sin chequear y el reporte en `(0)`. Se declara
+                # (INV-87) en vez de contribuir un cero.
+                no_evaluados.append(
+                    (f"roll-up `{header_s}` de `{slug_s}`",
+                     f"no se pudo armar el universo: {_exc.__class__.__name__}: {_exc}"))
+                continue
+            faltan, sobran = esperados - listados, listados - esperados
+            if faltan or sobran:
+                detalle = []
+                if faltan:
+                    detalle.append("faltan " + ", ".join(sorted(faltan)))
+                if sobran:
+                    detalle.append("sobran " + ", ".join(sorted(sobran)))
+                papers_table_stale.append(
+                    (slug_s, f"`{header_s}` no refleja el universo: " +
+                             "; ".join(detalle) + f" → `{cfg.make_notes_cmd(slug_s)}`"))
+    return papers_table_stale, no_evaluados
+
+
 def check_duplicate_without_id(paper_fms: dict, paper_abstracts: dict,
                                alias: set, ya_reportados: set) -> list:
     """Notes that are probably the SAME work and carry no `doi`/`arxiv_id` (#216).
@@ -3128,14 +3422,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # junto.
     evidencia_hash_de = evidence_hash_lookup(pdf_on_disk, ft_hash)
 
-    # ── #118 · la bitácora no tiene red ──────────────────────────────────────────────────────────
-    # Lo que escribe un SCRIPT se registra solo (`cadena` del registro versionado: qué corrió y
-    # cuándo); lo que escribe el LLM depende de que se acuerde. `CLAUDE.md` manda appendear a
-    # `log.md` tras cada operación y es el único paso salteable SIN red — #55, #56, #69 y #75 ya la
-    # tienen. Medido sobre un tema real: 22 pasos de cadena registrados, 0 entradas en el log.
-    # Los dos lados de la comparación ya viajan dentro de la bóveda, así que es offline y sin
-    # dependencias. BACKLOG, nunca bloqueante: una bitácora incompleta no invalida ninguna
-    # afirmación —a diferencia de una cita rota—, y frenar el cierre por esto vuelve trámite al lint.
+    # ── #118 · la bitácora no tiene red ──────────────────────────────────────────────────────
     try:
         log_txt = cfg.LOG.read_text(encoding="utf-8") if cfg.LOG.exists() else ""
     except OSError:
@@ -3416,258 +3703,34 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 (stem, f"[[{p.bibcode}]] **sin verificar**: hay una afirmación que lo cita y no "
                        f"tiene fila en el bloque (ancla {p.anchor})"))
 
-    # ── D-47: la prosa que cita una fuente RETRACTADA se marca, no se borra ──────────────────────
-    # El lint ya bloquea la NOTA del paper retractado, pero no localiza QUÉ afirmación lo cita —
-    # que es lo que hay que revisar. Borrar la afirmación tampoco sirve: destruye trabajo y puede
-    # ser cierta por otra vía. Se marca en línea (R-3: `[[bib]] ⛔retractada`), y ahí baja a
-    # informativa: visible, no destruida. El símbolo es deliberado — un `(retractada)` pelado daría
-    # falso positivo con cualquier mención del hecho en prosa ("la señal fue retractada más tarde").
-    # #279 — la ficha que se apoya en un paper cuya vista marcó valores de SEGUNDA MANO y no lo
-    # dice. Se mira por BLOQUE citante (`pairs_of`, que ya excluye las secciones estampadas: la
-    # tabla `## Papers` cita todos los bibcodes y haría estallar la categoría), y el hallazgo se
-    # apaga si el bloque ya nombra la segunda mano — sin esa escotilla la deuda es inextinguible y
-    # una categoría que no se puede cerrar se deja de mirar.
-    # ⛔ #350 — y se cruza el VALOR, no el paper. La pregunta era *«¿este paper tiene ALGUNA segunda
-    # mano?»*, que sobre un survey o un handbook —llenos de atribuciones a terceros por
-    # construcción— la contesta que sí siempre: medido, 398 de 462 pares, el 86 %. Es la forma de
-    # #198 (*«un reporte donde 2 de 3 avisos no son accionables se deja de mirar»*), acá con 6 de
-    # cada 7. La pregunta accionable es *«¿el valor que ESTA línea toma es uno de ellos?»* y la
-    # contesta `second_hand_lifted` por el literal compartido; el hallazgo lo NOMBRA, que es lo que
-    # lo vuelve triage y no lectura.
-    for f, texto_n in anchor_bodies.items():
-        if not (in_dir(f, "stars") or in_dir(f, "concepts")):
-            continue
-        for _par in lb.pairs_of(texto_n):
-            _filas = segunda_mano.get(_par.bibcode)
-            if not _filas or "segunda mano" in _par.block.text.lower():
-                continue
-            _n_pares_sm[0] += 1
-            # Los `[[bibcode]]` que el bloque cita también ATRIBUYEN: la prosa que dice «reclamadas
-            # por [[2013A&A...549A..48T]]» nombra a Tuomi sin escribir el apellido, y el aviso ahí
-            # no es accionable. El primer autor sale del frontmatter del paper, que el barrido ya
-            # leyó.
-            _atribuido = {a.split(",")[0].strip().casefold()
-                          for b in lb._bibcodes(_par.block.text)
-                          if (a := str((paper_fms.get(b) or {}).get("first_author") or "").strip())}
-            for _q, _v, _de, _ev in lb.second_hand_lifted(_par.block.text, _filas,
-                                                          atribuido=_atribuido):
-                segunda_mano_perdida.append(
-                    (basename(f)[:-3],
-                     f"L{_par.block.first_line}: la línea toma {', '.join(_ev)} de "
-                     f"[[{_par.bibcode}]], y su vista marca ese valor como SEGUNDA MANO "
-                     f"(«{_q[:80]}» → {_de[:120]}) → la ficha tiene que decir de quién es (#103): "
-                     f"el número no es de esta fuente"))
+    # ── #279/#350 · la prosa que levanta un valor de SEGUNDA MANO sin decirlo ────────────────
+    # El bloque vive en `check_second_hand_lifted` (#396).
+    _sm_hallazgos, _sm_pares = check_second_hand_lifted(anchor_bodies, segunda_mano, paper_fms)
+    segunda_mano_perdida += _sm_hallazgos
+    _n_pares_sm[0] += _sm_pares
 
-    retracted_stems = {stem for stem, fm_p in paper_fms.items() if fm_p.get("retracted")}
+    # ── D-47: la prosa que cita una fuente RETRACTADA ────────────────────────────────────────
+    # El bloque vive en `check_prosa_retractada` (#396).
     gt_prosa: list = []                # (slug, motivo) — #278: la prosa desmiente su ground-truth
-    prosa_retractada: list = []        # @inv INV-93
-    prosa_retractada_marcada: list = []
-    for f, texto_n in anchor_bodies.items():
-        stem_n = basename(f)[:-3]
-        # AUD-154 — esto escaneaba el TEXTO CRUDO, o sea también las secciones que estampa la
-        # máquina y `log.md`. Las dos hacen el bloqueante **irresoluble**: la marca `⛔retractada`
-        # puesta en una fila de `## Papers` la borra el próximo `make_notes` (es metadata derivada,
-        # se regenera), y `log.md` es la bitácora append-only —marcar una entrada histórica sería
-        # reescribir lo que pasó—. La cita que hay que revisar es la de la PROSA, que es donde la
-        # bóveda afirma algo apoyándose en esa fuente.
-        if stem_n in ("log", "index"):
-            continue
-        partes_n = cfg.frontmatter_span(texto_n)
-        texto_n = cfg.solo_prosa(partes_n[1] if partes_n else texto_n)
-        for stem_r in sorted(retracted_stems):
-            for m in re.finditer(r"\[\[" + re.escape(stem_r) + r"(?:\|[^\]]*)?\]\]([^\n]*)", texto_n):
-                destino = (prosa_retractada_marcada if m.group(1).lstrip().startswith(RETRACTED_MARK)
-                           else prosa_retractada)
-                destino.append(
-                    (stem_n, f"cita [[{stem_r}]] (RETRACTADO) — "
-                             + ("marcada: visible y no destruida; revisá si otra fuente la sostiene"
-                                if destino is prosa_retractada_marcada else
-                                f"marcala con `{RETRACTED_MARK}` pegado a la cita, o bajá la "
-                                f"afirmación a lo que otra fuente sostenga. No la borres: puede ser "
-                                f"cierta por otra vía")))
-
+    prosa_retractada, prosa_retractada_marcada = check_prosa_retractada(anchor_bodies, paper_fms)
     # ── ground-truth que se movió bajo la prosa (AUD-42) ─────────────────────────────────────
     # El bloque vive en `check_ground_truth_movido` (#396): una función por bloque, para que
     # la mutación dirigida pueda aislarlo y el mapa `@inv` no se lo adjudique a `collect`.
     gt_cambiado, gt_cambiado_marcado = check_ground_truth_movido()
-    # ── identidad duplicada (D-19 / INV-84) ──────────────────────────────────────────────────────
-    # La identidad de un trabajo es su `doi`/`arxiv_id`, no su bibcode: el preprint y el publicado
-    # son bibcodes distintos del MISMO paper. Medido en la instancia real: 2 trabajos con dos notas.
-    # Bloqueante porque el daño es silencioso y se acumula: doble conteo en todo lo que cuenta
-    # papers, dos fuentes donde hay una, y un falso positivo permanente de #75 (la ficha cita una).
-    # Un alias en `versions[]` NO es un duplicado: es el registro de que el trabajo tuvo otro
-    # bibcode, y por eso no entra en la población.
-    identidad_dup: list = []
-    alias_con_nota: list = []          # #229: listado como alias Y con nota propia — contradicción
-    por_identidad: dict = {}
-    alias = {str(v.get("bibcode")) for fm_p in paper_fms.values()
-             for v in cfg.as_list(fm_p.get("versions")) if isinstance(v, dict) and v.get("bibcode")}
-    # #229 — la exención por alias es incondicional, y eso APAGA los dos detectores de identidad
-    # sobre una nota viva. Medido: una nota usó `versions[]` para decir «no son duplicados, se
-    # conservan los dos» —lo contrario de lo que el campo significa en D-19— y con eso dejó a una
-    # de las 4 notas SIN `doi` ni `arxiv_id` (justo la población que #216 existe para cubrir) fuera
-    # de los dos chequeos, para siempre. El lint seguía declarando «sobre 32 notas» mirando 31.
-    # O es un alias (y entonces NO debe haber nota) o es un trabajo distinto (y entonces NO va en
-    # `versions[]`): la contradicción de schema es lo que bloquea, no la exención.
-    for _a in sorted(alias & set(paper_fms)):
-        _quien = sorted(st for st, fm_p in paper_fms.items()
-                        if any(isinstance(v, dict) and str(v.get("bibcode")) == _a
-                               for v in cfg.as_list(fm_p.get("versions"))))
-        alias_con_nota.append(
-            (_a, f"está listado en `versions[]` de {', '.join(_quien)} Y tiene su propia nota: o es "
-                 f"un alias (y la nota no debería existir) o es otro trabajo (y no va en "
-                 f"`versions[]`). Mientras tanto queda fuera de los DOS chequeos de identidad "
-                 f"(D-19 y #216), que es donde más falta hace"))
-    # #230 — la contradicción sobre el disco que nadie cruzaba: `fulltext: null` con
-    # `fulltext_source` poblado afirma CÓMO se extrajo un texto que no existe. `retarget_artifacts`
-    # (#217) limpia los tres campos del `.txt`, así que el par lo produce una edición a mano o una
-    # nota anterior a esa versión.
-    #
-    # ⛔ Y la asimetría con `pdf_source` es DELIBERADA y va declarada: ése NO se limpia, porque no
-    # describe un archivo sino la PROCEDENCIA de la lectura que ocurrió — una nota cuelga su
-    # salvedad de `pdf_source: eprint` para decir que sus citas son contra el preprint, y borrarlo
-    # al borrar el archivo destruiría la salvedad junto con el PDF. El contrato lo dice, y por eso
-    # el par `pdf: null` + `pdf_source: <valor>` NO es hallazgo.
-    for stem_p, fm_p in sorted(paper_fms.items()):
-        if fm_p.get("fulltext_source") and not fm_p.get("fulltext"):
-            incomplete.append(
-                (stem_p, f"`fulltext_source: {fm_p['fulltext_source']}` sin `fulltext` — afirma "
-                         f"CÓMO se extrajo un texto que no está en disco → "
-                         f"`python scripts/make_notes.py <slug>` re-estampa por verdad de disco "
-                         f"(⚠ `pdf_source` sí sobrevive al borrado, a propósito: es la procedencia "
-                         f"de la lectura, no del archivo)"))
-
-    for stem_p, fm_p in sorted(paper_fms.items()):
-        if stem_p in alias:
-            continue
-        if (ident := mn.identidad(fm_p)):
-            por_identidad.setdefault(ident, []).append(stem_p)
-    for (clave, valor), stems in sorted(por_identidad.items()):
-        if len(stems) > 1:
-            identidad_dup.append(
-                (", ".join(stems), f"comparten {clave} `{valor}` → es el MISMO trabajo con dos "
-                                   f"notas; dejá una canónica: `python scripts/make_notes.py "
-                                   f"--rename-paper {stems[0]} {stems[1]}`"))
-    # #114 · segunda señal, y la que caza el caso REAL: dos notas cuyo `.txt` tiene los MISMOS BYTES
-    # son el mismo trabajo — eso no es heurística, es certeza. Hace falta porque la metadata a veces
-    # no los liga en absoluto: medido, el registro publicado traía `arxiv_id: null` y el del preprint
-    # el DOI DataCite, así que NINGÚN campo coincidía y el detector callaba sobre un duplicado real.
-    # ⚠ Sólo sobre `.txt` **legibles**. Dos extracciones FALLIDAS (escaneo sin capa de texto,
-    # mojibake, `.txt` casi vacío) tienen los mismos bytes y no son el mismo trabajo: son dos
-    # fracasos idénticos. Sin este recorte, la señal de bytes convierte a cada par de extracciones
-    # rotas en un hallazgo BLOQUEANTE que manda a fusionar dos papers ajenos — o sea a destruir una
-    # nota. Medido sobre el corpus sintético: dos `.txt` ilegibles sembrados a propósito daban un
-    # tercer duplicado que nadie sembró. El umbral no es nuevo: es el mismo `is_legible` con el que
-    # el lint ya reporta esos `.txt` en su propia categoría, y que dice justamente «esto no sirve
-    # para grep ni para verify» — un texto que no sirve para leerlo tampoco identifica a nadie.
-    # @inv INV-106
-    ya_reportados = {st for fila in identidad_dup for st in fila[0].split(", ")}
-    ft_ilegible = {basename(p_ft)[:-4] for p_ft, _ in illegible_txt}
-    por_texto: dict = {}
-    for stem_p in sorted(paper_fms):
-        if stem_p in alias or stem_p in ya_reportados or stem_p in ft_ilegible:
-            continue
-        if (h := ft_hash.get(stem_p)):
-            por_texto.setdefault(h, []).append(stem_p)
-    for h, stems in sorted(por_texto.items()):
-        if len(stems) > 1:
-            identidad_dup.append(
-                (", ".join(stems), f"su fulltext tiene los MISMOS bytes (`{h}`) → es el mismo "
-                                   f"trabajo con dos notas, aunque su metadata no lo diga; "
-                                   f"consolidá: `python scripts/make_notes.py --rename-paper "
-                                   f"{stems[0]} {stems[1]}`"))
-
+    # ── identidad duplicada (D-19 / INV-84) ──────────────────────────────────────────────────
+    # El bloque vive en `check_identidad_duplicada` (#396); su `incomplete` vuelve como lista y
+    # se acumula acá — el bloque calcula, el llamador acumula.
+    (identidad_dup, alias_con_nota, alias, ya_reportados,
+     _id_incompletos) = check_identidad_duplicada(paper_fms, ft_hash, illegible_txt)
+    incomplete += _id_incompletos
     # ── #216 · duplicado SIN doi ni arxiv_id (backlog, REPORTA y no fusiona) ─────────────────
     # El bloque vive en `check_duplicate_without_id` (#396).
     abstract_dup = check_duplicate_without_id(paper_fms, paper_abstracts,
                                                      alias, ya_reportados)
-    # ── lista de papers desactualizada (D-10) ────────────────────────────────────────────────────
-    # La tabla materializada de `## Papers` es un snapshot, y un snapshot que nadie re-estampa
-    # miente igual que el roll-up Dataview que reemplazó (medido: 155 prometidos, 8 discutidos).
-    # Backlog —es "re-estampar", no una violación del vault— pero NOMBRA los stems que faltan o
-    # sobran, no la diferencia de conteos: dos listas del mismo largo pueden no ser los mismos
-    # papers (la lección de #70).
-    papers_table_stale: list = []
-    # UNA sola pasada de parseo de `papers/`, compartida por todas las estrellas: sin esto el lint
-    # saltaba de ~2,0 a 5,9 parseos YAML por nota (medido por `tests/poblada/test_escala.py`, techo
-    # 2,3) — el costo crece con el producto notas × estrellas.
-    # `paper_fms` se llena en el LOOP principal (ver más arriba), que ya parsea cada nota: una
-    # pasada extra acá subía el ratio a ~3,0 (el techo del test de escala es 2,3), y el hotspot
-    # conocido —el doble parseo de split_fm+fm_error— ya se come 2,0.
-    # ⛔ #338 — y los CONCEPTOS, que estaban afuera. #300 llevó las dos garantías de D-10 al
-    # ESTAMPADOR de un concepto y el detector se quedó en `stars/`, así que la promesa «el lint
-    # reporta la tabla desactualizada» valía para la mitad del vault: medido, 2 de 3 sujetos de una
-    # bóveda real son temas, y un paper que reclama una estrella Y un tema con las dos tablas
-    # vacías se reportaba 1 de 2. Un tema estampa su roll-up bajo UNO de los dos encabezados
-    # —`## Papers` estilo ficha o `## Papers que tocan este tema (auto)` (D-24)—, y cada uno tiene
-    # su propio universo, así que se compara el que la nota trae contra el suyo: exigir el ausente
-    # inventaría un hueco en la nota que eligió el otro. La nota que no trae NINGUNO no puede
-    # recibir la cirugía nunca, y eso hasta hoy sólo lo decía un stdout de `make_notes`.
-    # ⚠ El slug de una ESTRELLA es un campo de su entrada; el de un TEMA es la CLAVE del YAML.
-    # Ese barrido es `cfg.all_subjects()` — UNA implementación, porque la segunda copia (INV-83)
-    # ya se había equivocado y salteaba todos los temas en silencio (#346).
-    for _kind, slug_s, _nombre_s, _meta_s in cfg.all_subjects():
-        # `mn.subject_note` es la MISMA función que usa el estampador: dos respuestas a «dónde vive
-        # la tabla de este sujeto» es cómo el estampador y el chequeo terminan discrepando.
-        dest_s = mn.subject_note(slug_s, _kind)
-        if not dest_s or not dest_s.exists():
-            continue
-        texto_s = dest_s.read_text(encoding="utf-8")
-        # Encabezado → cómo se arma SU universo. Los dos parten del MISMO predicado de pertenencia
-        # (`mn.theme_membership`, #347: comparación por clave normalizada, #243) y difieren en lo
-        # que publican: el roll-up declara además por cuál llave entró el paper (D-24). Hasta 1.156.0
-        # sólo el roll-up normalizaba y el universo comparaba el string exacto — o sea que este
-        # detector heredaba la subdeclaración del universo que compara.
-        universos = [(mn.PAPERS_HEADER,
-                      lambda s=slug_s, k=_kind: {r["stem"]
-                                                 for r in mn.papers_universe(s, k, paper_fms)})]
-        if _kind == "theme":
-            universos.append((mn.CONCEPT_ROLLUP_HEADER,
-                              lambda s=slug_s: {r["stem"]
-                                                for r in mn.concept_rollup_rows(s, paper_fms)}))
-        # ⚠ `cfg.section_span`, nunca un `split("\n## Papers")`: `## Papers` es PREFIJO de
-        # `## Papers que tocan este tema (auto)` y el corte crudo se llevaba el roll-up del tema
-        # como si fuera la tabla de ficha (la trampa de #176, que `section_start` ya resuelve).
-        spans = [(h, universo, cfg.section_span(texto_s, h)) for h, universo in universos]
-        if _kind == "theme" and all(span is None for _h, _u, span in spans):
-            papers_table_stale.append(
-                (slug_s, f"la nota del tema no trae `{mn.PAPERS_HEADER}` ni "
-                         f"`{mn.CONCEPT_ROLLUP_HEADER}`: el roll-up de papers no se puede estampar "
-                         f"nunca → agregá uno de los dos y re-corré "
-                         f"`{cfg.make_notes_cmd(slug_s)}`"))
-            continue
-        for header_s, universo, span in spans:
-            if span is None:
-                # En un tema los dos estampadores conviven y la nota lleva uno: el ausente no es
-                # deuda. En una estrella el roll-up es uno solo, así que su ausencia SÍ es la tabla
-                # que falta —y ése es el comportamiento histórico del detector—.
-                if _kind == "theme":
-                    continue
-                listados = set()
-            else:
-                listados = set(LINK_RE.findall(texto_s[span[0]:span[1]]))
-            try:
-                esperados = universo()
-            except Exception as _exc:                   # noqa: BLE001 — D-43, ver abajo
-                # AUD-286: «config rota: ya lo reporta otra categoría» era cierto sólo para el
-                # objetivo/los YAML ilegibles; un `KeyError`/`TypeError` de bug en el universo
-                # dejaba la tabla de ESTA nota sin chequear y el reporte en `(0)`. Se declara
-                # (INV-87) en vez de contribuir un cero.
-                not_evaluated.append(
-                    (f"roll-up `{header_s}` de `{slug_s}`",
-                     f"no se pudo armar el universo: {_exc.__class__.__name__}: {_exc}"))
-                continue
-            faltan, sobran = esperados - listados, listados - esperados
-            if faltan or sobran:
-                detalle = []
-                if faltan:
-                    detalle.append("faltan " + ", ".join(sorted(faltan)))
-                if sobran:
-                    detalle.append("sobran " + ", ".join(sorted(sobran)))
-                papers_table_stale.append(
-                    (slug_s, f"`{header_s}` no refleja el universo: " +
-                             "; ".join(detalle) + f" → `{cfg.make_notes_cmd(slug_s)}`"))
-
+    # ── lista de papers desactualizada (D-10) ────────────────────────────────────────────────
+    # El bloque vive en `check_papers_table_stale` (#396).
+    papers_table_stale, _pt_no_eval = check_papers_table_stale(paper_fms)
+    not_evaluated += _pt_no_eval
     # ── el recorte de lectura no declarado (D-13/D-15 · INV-83) ──────────────────────────────────
     # El contrato dice que el ingest lee TODOS los core. La reconciliación anticipa que el
     # subconjunto va a ser el caso normal (≈6M tokens por estrella si no), así que el problema no es

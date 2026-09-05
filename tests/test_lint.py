@@ -7775,3 +7775,24 @@ def test_el_titulo_DISTINTO_sigue_saliendo_como_indeciso(toy_vault, capsys):
     _rc, rep = run_lint_reporte(capsys)
     seccion = _seccion(rep, "exportación oficial dicen cosas distintas")
     assert "uno de los dos está mal" in seccion and "TRUNCADO" not in seccion, rep
+
+
+def test_los_bloques_extraidos_de_collect_devuelven_lo_que_el_llamador_acumula():
+    """#396 — la forma con la que salen los bloques que ESCRIBÍAN en un acumulador compartido: la
+    función calcula y devuelve su lista, el llamador hace `incomplete += …`. Lo único que eso puede
+    cambiar es el ORDEN de los ítems dentro del acumulador, y eso lo detecta el golden byte-idéntico
+    —que es la razón por la que este refactor se hace con esa red y no a ojo—.
+
+    El test fija el CONTRATO de las siete: todas devuelven tuplas o listas, ninguna muta un
+    parámetro. Sin esto, la próxima extracción puede volver a appendear a un global y nadie lo ve."""
+    import inspect
+    extraidas = [lint.check_ground_truth_movido, lint.check_duplicate_without_id,
+                 lint.check_second_hand_lifted, lint.check_prosa_retractada,
+                 lint.check_identidad_duplicada, lint.check_papers_table_stale]
+    for fn in extraidas:
+        fuente = inspect.getsource(fn)
+        assert "\n    return " in fuente, f"{fn.__name__} no devuelve nada: ¿escribe en un global?"
+        for acumulador in ("incomplete.append", "not_evaluated.append", "illegible_txt.append",
+                           "segunda_mano_perdida.append", "log_sin_entrada.append"):
+            assert acumulador not in fuente, \
+                f"{fn.__name__} appendea a `{acumulador.split('.')[0]}`: el bloque calcula, el llamador acumula"
