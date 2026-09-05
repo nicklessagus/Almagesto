@@ -7510,7 +7510,9 @@ def test_bibtex_sin_fuente_BLOQUEA(toy_vault, capsys):
     """#397 — una entrada de cita sin procedencia es, por definición, un bloque que escribió
     alguien. Y una entrada BibTeX redactada de memoria sale plausible —volumen y páginas
     verosímiles— y nadie la vuelve a mirar: es la regla #0 sobre el único objeto de la bóveda que
-    hasta ahora se reconstruía en vez de traerse, y el que termina IMPRESO en un informe."""
+    hasta ahora se reconstruía en vez de traerse, y el que termina IMPRESO en un informe.
+
+    @inv INV-151"""
     _paper_con_bibtex(toy_vault, {"bibtex": _BTX_OK})
     rc, rep = run_lint_reporte(capsys)
     assert rc != 0, "es bloqueante"
@@ -7568,7 +7570,9 @@ def test_vistas_vacia_NO_apaga_el_chequeo_de_reclamos(toy_vault, capsys):
     """#398 — la salida obvia del operador (sacar la entrada y la sección) dejaba `vistas: []`, y
     con `if vistas:` la nota salía del chequeo de reclamos ENTERO: ni deuda ni declarada. Medido: la
     categoría de reclamos declarados cayó de 66 a 30 sin que las 36 restantes aparecieran en ninguna
-    otra — el falso limpio de D-43 dentro de la categoría que #188 existe para sostener."""
+    otra — el falso limpio de D-43 dentro de la categoría que #188 existe para sostener.
+
+    @inv INV-153"""
     mk_note(cfg.PAPERS, "2020aaa...1..1A",
             {"tags": ["paper"], "bibcode": "2020aaa...1..1A", "stars": ["Estrella Test"],
              "vistas": []}, "# p\n")

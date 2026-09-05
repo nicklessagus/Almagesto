@@ -53,7 +53,7 @@
 ## ⛔ `pdf_source` de editor con `eprint_version`: contradicción interna, la nota manda a re-verificar contra el documento equivocado (#383) (0)
 > sobre 60 notas de `papers/`
 
-## 🧩 Sujeto declarado `no_vista` cuya `## Vista` sigue publicando la PLANTILLA del stub (#398, backlog) (0)
+## 🧩 `## Vista` que sigue publicando la PLANTILLA del stub: el prompt al extractor, visible como si fuera contenido (#398, backlog) (0)
 > sobre 60 notas de `papers/`
 
 ## ⛔ `bibtex` sin `bibtex_source`: una entrada de cita sin procedencia es un bloque escrito a mano (#397) (0)

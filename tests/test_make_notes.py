@@ -614,7 +614,9 @@ def test_el_stub_de_estrella_publica_una_LINEA_DE_ESTADO_y_no_el_prompt(toy_vaul
     mostraba al lector un pedido como si fuera contenido, bajo un encabezado que ella misma presenta
     como síntesis de un LLM (#247). Medido: 47 notas.
 
-    La ramificación por tipo de sujeto de #76 no se perdió: vive donde se usa, en el prompt (#254)."""
+    La ramificación por tipo de sujeto de #76 no se perdió: vive donde se usa, en el prompt (#254).
+
+    @inv INV-152"""
     ads_json([rec("2020conA...1..1A")])
     mn.write_paper_notes("test_star", include_all=False, force=False)
     body = (toy_vault.PAPERS / "2020conA...1..1A.md").read_text(encoding="utf-8")

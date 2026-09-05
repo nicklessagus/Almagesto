@@ -1562,7 +1562,8 @@ vocabulario (#296) · `pdf_source` de editor con `eprint_version` (#383) · extr
 fuera del vocabulario (D-37) · `sources:` sin `via`/`motivo` (#111) o con autor/año que Crossref
 desmiente (#353) · par nota↔`.verif.md` roto (#344: tabla adentro, cabecera sin hermano, hermano
 huérfano) · lente vacía (ningún paper puede ser core) · mismo bibcode con `.txt` distinto entre
-slugs (D-18/D-20) · driver `merge=ours` registrado (#390) — la lista `SEV_BLOQUEANTE` de
+slugs (D-18/D-20) · driver `merge=ours` registrado (#390) · `bibtex` sin `bibtex_source` (#397:
+una entrada de cita sin procedencia es un bloque escrito a mano) — la lista `SEV_BLOQUEANTE` de
 `scripts/lint.py` (AUD-237): si agregás una, va acá.
 
 **La fuga de implementación** (regla #0) es **WARN**: heurística de alta señal, cada hit se revisa

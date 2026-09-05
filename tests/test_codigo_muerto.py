@@ -85,3 +85,32 @@ def test_el_detector_ve_el_caso_de_319():
                  "def f(s):\n    return s[:12] if len(s) > 12 else s\n",       # ESTE sí trunca
                  "def f(s, n):\n    return s[:n] if len(t) <= n else s\n"):    # otro sujeto
         assert _ramas_identicas(ast.parse(sano), "x.py") == [], sano
+
+
+# ── #397b · «qué es una nota» lo decide UNA función, no un glob ──────────────────────────────────
+
+def test_ningun_script_enumera_las_notas_con_un_glob_crudo():
+    """INV-148 — un hermano `<nota>.verif.md` **no es una nota**: `cfg.note_paths` lo saca de todo
+    enumerador. Un `PAPERS.glob("*.md")` a mano se los lleva puestos.
+
+    Medido en `Almagesto-Tesis` con v1.212.0: `fetch_bibtex` reportó **«192 nota(s) miradas»** sobre
+    189 y listó los tres hermanos entre los papers **sin BibTeX** — no los escribe (no tienen
+    frontmatter), pero el denominador y la lista mienten, que es lo que INV-40 existe para impedir.
+    El mismo glob estaba en `restamp_lens`, donde el síntoma es mudo: el hermano no tiene `vistas`,
+    así que se saltea en silencio y nadie lo ve.
+
+    Es un assert y no un ritual porque es decidible: la regla ya tiene una sola casa desde #344, y lo
+    único que hace falta es que nadie la reimplemente. Vale para los tres directorios de notas."""
+    ofensores = []
+    for f in sorted((RAIZ / "scripts").glob("*.py")) + sorted((RAIZ / "tools").glob("*.py")):
+        texto = f.read_text(encoding="utf-8")
+        for i, linea in enumerate(texto.split("\n"), 1):
+            if linea.lstrip().startswith("#"):
+                continue
+            for dirname in ("PAPERS", "STARS", "CONCEPTS", "QUERIES"):
+                if f'{dirname}.glob("*.md")' in linea or f"{dirname}.glob('*.md')" in linea:
+                    ofensores.append(f"{f.name}:{i}: {linea.strip()[:90]}")
+    assert not ofensores, (
+        "enumerar notas con un glob crudo se lleva los hermanos `.verif.md` (INV-148) — usá "
+        "`cfg.note_paths(<dir>)`, que es la única definición de «qué es una nota»:\n  "
+        + "\n  ".join(ofensores))

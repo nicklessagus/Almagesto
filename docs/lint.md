@@ -156,6 +156,13 @@ Deben quedar en **0**:
 - **Fuente retractada citada en prosa sin la marca `⛔retractada`** (D-47, `prosa_retractada`):
   con la marca pasa a **su propia categoría backlog** (`prosa_retractada_marcada`, *«visible, no
   destruida»*) — no existe severidad «informativa» (AUD-207).
+- **`bibtex` sin `bibtex_source`** (#397, `bibtex_sin_fuente`): una entrada de cita **sin
+  procedencia** es, por definición, un bloque que escribió alguien — y una entrada BibTeX redactada
+  de memoria sale plausible, con volumen y páginas verosímiles, sobre el dato que termina **impreso**
+  en un informe. Se cierra bajándola de su exportación oficial (`python scripts/fetch_bibtex.py
+  --paper <bibcode> --force`) o borrando el campo: el hueco es un estado correcto, la cita inventada
+  no. ⚠ `bibtex_source` es **vocabulario cerrado** (`ads|crossref|datacite|doi|arxiv`) y cae en la
+  misma categoría que `pdf_source`/`fulltext_source` fuera de vocabulario (#296).
 - **`pdf_source` de editor (`publisher|ads|web`) con `eprint_version`** (#383): contradicción
   interna del frontmatter —el PDF es del editor y la nota dice que leyó un preprint—, y manda a
   re-verificar contra el documento equivocado. Nace del REEMPLAZO de un PDF por otro de distinta
@@ -457,6 +464,15 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   y la sección— salía del chequeo **entero**, ni deuda ni declarada. Medido: la categoría de
   reclamos declarados cayó de 66 a 30 sin que las 36 restantes aparecieran en ninguna otra. La nota
   de schema **viejo** (sin la clave) sigue exenta: la reporta la categoría bloqueante de arriba.
+- **El frontmatter y la exportación oficial dicen cosas distintas del mismo paper** (#397,
+  `bibtex_drift`, backlog): `doi`, `year` y `title` del frontmatter se cruzan contra los campos de
+  adentro del `bibtex`. Es un gate de deriva de metadatos que antes no se podía hacer — el caso que
+  lo motivó es una ficha `2011Naik` que declara `year: 2012` en su propio frontmatter. Backlog
+  porque cuál de los dos está mal es **juicio**; lo que no es juicio es que el que viaja al informe
+  es el BibTeX. Se compara **normalizado** (`cfg.method_key`, #243): un DOI en mayúsculas no es una
+  discrepancia, y un falso positivo acá manda a revisar a mano una cita correcta. ⚠ Un campo que
+  una de las dos partes no dice **no se reporta**: eso es un hueco de schema (INV-63), no un
+  desacuerdo.
 - **`no_vista` se consulta en las cuatro redes** (#268): la escotilla que #256 hizo alcanzable
   decidía sobre **una** categoría, y las otras tres contaban la misma nota como deuda — medido, una
   nota con `no_vista` declarado y motivo seguía recibiendo *«conseguir el PDF»* sobre una tabla

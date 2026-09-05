@@ -1979,7 +1979,7 @@
   {
    "number": 398,
    "title": "Un reclamo declarado `no_vista` deja en la nota la PLANTILLA del stub como si fuera contenido (46 notas con las instrucciones al extractor visibles), y `vistas: []` apaga el chequeo de reclamos del lint",
-   "state": "OPEN"
+   "state": "CLOSED"
   }
  ]
 }

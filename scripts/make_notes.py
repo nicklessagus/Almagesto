@@ -440,7 +440,7 @@ def restamp_lens() -> int:
     n_lente = n_ejes = 0
     sin_json: list = []
     por_claves: list = []
-    for f in sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []:
+    for f in cfg.note_paths(cfg.PAPERS):
         try:
             text = f.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
@@ -2284,6 +2284,8 @@ def vista_block(sujeto: str, theme: bool = False, motivo: str = "", fecha: str =
     ⛔ The `vistas[]` entry is untouched either way: the frontmatter has to keep saying the subject
     claims the paper (#256). `theme` is kept because the two callers know it and the legacy template
     branched on it; the status line does not.
+
+    @inv INV-152
     """
     if str(motivo or "").strip():
         cuando = f" ({fecha})" if str(fecha or "").strip() else ""

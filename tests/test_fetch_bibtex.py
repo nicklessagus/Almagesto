@@ -143,7 +143,9 @@ def test_bibtex_for_respeta_el_orden_de_la_cascada(monkeypatch):
 def test_bibtex_for_sin_ningun_identificador_devuelve_HUECO_con_su_motivo(monkeypatch):
     """⛔ El cuarto caso de la cascada es un hueco DECLARADO, no un relleno: un libro o un manual de
     instrumento no tienen exportación oficial, y una entrada inventada para taparlo es el defecto
-    que este script existe para no cometer. El motivo dice cuál es el hueco."""
+    que este script existe para no cometer. El motivo dice cuál es el hueco.
+
+    @inv INV-151"""
     fake_net(monkeypatch)
     entrada, fuente, motivo = fb.bibtex_for({"bibcode": "2001Libro"}, "2001Libro", {})
     assert entrada == "" and fuente == ""
@@ -263,3 +265,24 @@ def test_notes_to_check_respeta_paper_y_slug(tmp_path, monkeypatch):
     import check_retractions as cr
     monkeypatch.setattr(cr, "slug_notes", lambda s: [tmp_path / "2020bbb.md"])
     assert [f.stem for f in fb.notes_to_check(SimpleNamespace(paper=None, slug="gp"))] == ["2020bbb"]
+
+
+def test_el_hermano_de_verificacion_NO_cuenta_como_nota_de_paper(tmp_path, monkeypatch, capsys):
+    """#397b — medido en una bóveda real con v1.212.0: el script enumeraba `papers/*.md` a mano y
+    contaba los tres hermanos `<nota>.verif.md` como notas, reportando «192 nota(s) miradas» sobre
+    189 y listándolos entre los papers **sin BibTeX**. No los escribe —no tienen frontmatter— pero
+    el denominador y la lista mienten, que es lo que INV-40 existe para impedir.
+
+    La regla ya tiene una sola casa desde #344 (`cfg.note_paths`): lo único que hacía falta era no
+    reimplementarla. El guard estático que impide la tercera vez vive en `test_codigo_muerto.py`."""
+    monkeypatch.setattr(cfg, "PAPERS", tmp_path)
+    monkeypatch.setattr(cfg, "get_ads_token", lambda: "tok")
+    fake_net(monkeypatch, post=lambda *a, **k: Resp(200, payload={"export": ""}))
+    _nota(tmp_path, {"bibcode": "2001Libro", "tags": ["paper"]})
+    (tmp_path / "2001Libro.verif.md").write_text("| # | Afirmación |\n|---|---|\n", encoding="utf-8")
+    assert [f.stem for f in fb.notes_to_check(SimpleNamespace(paper=None, slug=None))] == ["2001Libro"]
+    monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py"])
+    assert fb.main() == 0
+    salida = capsys.readouterr().out
+    assert "1 nota(s) de paper miradas" in salida, salida
+    assert ".verif" not in salida, "el hermano no entra ni al denominador ni a la lista de huecos"

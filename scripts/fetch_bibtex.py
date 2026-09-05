@@ -149,7 +149,9 @@ def bibtex_for(fm: dict, stem: str, ads_cache: dict) -> tuple:
     """`(entrada, fuente, motivo)` para una nota, recorriendo la cascada declarada.
 
     `motivo` sólo se puebla cuando NO hay entrada, y dice cuál es el hueco: es la diferencia entre
-    «este paper no tiene exportación oficial» y «nadie preguntó»."""
+    «este paper no tiene exportación oficial» y «nadie preguntó».
+
+    @inv INV-151"""
     bib = str(fm.get("bibcode") or "").strip() or stem
     if (entrada := ads_cache.get(bib)):
         return entrada, "ads", ""
@@ -185,7 +187,7 @@ def notes_to_check(args) -> list:
         return [f] if f.exists() else []
     if args.slug:
         return cr.slug_notes(args.slug)
-    return sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []
+    return cfg.note_paths(cfg.PAPERS)
 
 
 def main() -> int:
