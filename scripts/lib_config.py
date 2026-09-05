@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.204.0"
+ALMAGESTO_VERSION = "1.205.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -116,9 +116,6 @@ GROUND_TRUTH = RAW / "ground_truth"
 # `fulltext_source` en la nota (ocr|web; sin marca = pdftotext). Un solo lugar de verdad:
 # si cambia el header, cambia acá.
 FULLTEXT_OCR_MARK = "# Almagesto — fulltext por OCR"
-# Primera línea de un .txt cuyas ECUACIONES se perdieron en la extracción (#113). Hermana de
-# FULLTEXT_OCR_MARK: `make_notes` la lee para estampar `symbols_lost` en la nota del paper.
-FULLTEXT_SYMBOLS_MARK = "# Almagesto — simbolos NO extraidos"
 FULLTEXT_WEB_MARK = "# Almagesto — snapshot web"
 
 # Marca que arXiv estampa en el margen de CADA página del PDF que sirve
@@ -847,7 +844,7 @@ GUTTER = re.compile(rf"\S {{{CANALETA_MIN},}}\S")
 BOUNDARY_SPACES_MIN = 2
 
 
-def gutter_runs(line: str) -> list:
+def _gutter_runs(line: str) -> list:
     """`(start, end)` of every gutter on this line — `end` is where the next column starts.
 
     Uses `GUTTER`, the module's ONE definition of a gutter (content on both sides), and resumes the
@@ -863,7 +860,7 @@ def gutter_runs(line: str) -> list:
         pos = m.end() - 1
 
 
-def column_boundary(lines: list) -> int | None:
+def _column_boundary(lines: list) -> int | None:
     """The offset where this PAGE breaks into two columns, or `None` if it has only one (#332).
 
     The most voted gutter END over the page's non-blank lines: the end is where the right column
@@ -871,14 +868,14 @@ def column_boundary(lines: list) -> int | None:
     the leftmost, so the answer does not depend on dict order."""
     votos: dict = {}
     for line in lines:
-        for _, end in gutter_runs(line):
+        for _, end in _gutter_runs(line):
             votos[end] = votos.get(end, 0) + 1
     if not votos:
         return None
     return min(votos, key=lambda c: (-votos[c], c))
 
 
-def split_at_boundary(line: str, boundary: int) -> tuple:
+def _split_at_boundary(line: str, boundary: int) -> tuple:
     """`(left, right)` — this line cut at the page's column boundary (#332).
 
     The cut lands on the candidate CLOSEST to `boundary`: one of the line's own gutters, or
@@ -888,7 +885,7 @@ def split_at_boundary(line: str, boundary: int) -> tuple:
     which is where the flow that surrounds it lives."""
     if boundary >= len(line):
         return line, ""
-    cortes = [end for _, end in gutter_runs(line)]
+    cortes = [end for _, end in _gutter_runs(line)]
     # ⚠ Sin `boundary > 0`, a propósito (#319): con `boundary == 0` la línea vacía ya salió por la
     # guarda de arriba y `line[-1]` no puede aportar un corte —el run de espacios que termina en 0
     # mide 0, y 0 < BOUNDARY_SPACES_MIN—, así que la cláusula no decidiría nada.
@@ -918,7 +915,7 @@ def deinterleave_columns(t: str) -> list:
     and a quote that IS verbatim in the `.txt` came back «not there». Measured over a real vault:
     **148 of 155** `.txt` returned more than two readings, up to **19**, and a single sentence of
     ONE physical column fell into two of them. Pages are split at `\f`, each page gets ONE boundary
-    (`column_boundary`), and every line is cut there or, when it spans the width, kept whole on the
+    (`_column_boundary`), and every line is cut there or, when it spans the width, kept whole on the
     left. Recovery over the 251 unique (quote, `.txt`) pairs of that vault: **176 → 196**, measured
     as a FROZEN A/B —the same population against both versions of the module in one run, because the
     vault is a live instance and was being edited while it was measured—.
@@ -930,9 +927,9 @@ def deinterleave_columns(t: str) -> list:
     derecha: list = []
     for pagina in str(t or "").split("\f"):
         lineas = pagina.split("\n")
-        borde = column_boundary([l for l in lineas if l.strip()])
+        borde = _column_boundary([l for l in lineas if l.strip()])
         for linea in lineas:
-            l, r = (linea, "") if borde is None else split_at_boundary(linea, borde)
+            l, r = (linea, "") if borde is None else _split_at_boundary(linea, borde)
             izquierda.append(l.rstrip())
             derecha.append(r.rstrip())
     columnas = ["\n".join(izquierda)]
@@ -1519,10 +1516,10 @@ def method_key(nombre) -> str:
     ⛔ Normalising at COMPARISON time, never at write time: the spelling the extractor chose is
     information about how the paper names it, and rewriting it would destroy that.
     """
-    return slugify(nombre)
+    return _slugify(nombre)
 
 
-def slugify(texto) -> str:
+def _slugify(texto) -> str:
     """casefold + NFKD + non-alphanumerics to `-`. The transformation, without anybody's rule.
 
     Two callers want the same string and mean opposite things by it: `method_key` normalises at
@@ -1549,7 +1546,7 @@ def lens_filename(bibcode: str, enfasis: str = "") -> str:
     ⚠ Ordering matters: this can only ship after #374 (identity by the `bibcode` INSIDE the file),
     or every second lens falls out of that gate's population and `--filas` emits wikilinks that do
     not resolve."""
-    return f"{bibcode}__{slugify(enfasis)}.json" if str(enfasis or "").strip() else f"{bibcode}.json"
+    return f"{bibcode}__{_slugify(enfasis)}.json" if str(enfasis or "").strip() else f"{bibcode}.json"
 
 
 def concept_alias_index() -> dict:
@@ -2747,7 +2744,7 @@ def sort_by_citation_rate(recs, now_year: int | None = None) -> list:
 
 # ── escritura atómica: el ÚNICO writer del repo (D-53 / INV-90) ──────────────────────────────────
 
-def write_text_atomic(path: Path, text: str, *, encoding: str = "utf-8") -> None:
+def write_text_atomic(path: Path, text: str) -> None:
     """Publica `text` en `path` sin dejarlo nunca a medio escribir.  @inv INV-90
 
     Se escribe primero a un temporal en el **mismo directorio** (mismo filesystem, condición para
@@ -2768,7 +2765,7 @@ def write_text_atomic(path: Path, text: str, *, encoding: str = "utf-8") -> None
     de la bóveda— desaparecidas sin aviso.
 
     `os.replace` se llama como atributo del módulo `os` para que un test pueda interceptarlo."""
-    _publicar(path, lambda tmp: tmp.write_text(text, encoding=encoding))
+    _publicar(path, lambda tmp: tmp.write_text(text, encoding="utf-8"))
 
 
 def write_bytes_atomic(path: Path, data: bytes) -> None:
@@ -2818,6 +2815,39 @@ def legacy_triage_path(slug: str) -> Path:
     normal: sólo la usan el migrador (`triage.py --migrate`) y el detector del lint, que la reporta
     como bloqueante mientras exista. Nunca se escribe ahí."""
     return ROOT / "build" / slug / "triage.json"
+
+
+#: #126 · CLOSED vocabulary of the D-26 gates, in evaluation order. AUD-208: THREE, not two —
+#: `manual` is not a D-26 gate (no rule about the paper decides it) but it is a **provenance** the
+#: code writes into the same field («entered because the user put it in `extra_core`»). Written by
+#: `query_ads.puertas_abiertas`, read by `triage --prioridad`, and checked by the lint against
+#: `build/<slug>/ads.json` (AUD-283: a closed vocabulary that nothing validates catches no typo).
+PUERTAS = ("fundacional", "astro", "manual")
+
+
+#: The network-sweep register (D-46 / R-4): «when was the outside world last checked», versioned
+#: with the vault. ONE name (AUD-282): `sweep_external` writes it, the lint reads it, and both used
+#: to spell the file separately — a rename would have left the #297 backlog firing forever.
+RED_FILE = "_red.yaml"
+
+
+def red_path() -> Path:
+    """`vault/config/registro/_red.yaml` — not a subject's registro (its stem starts with `_`)."""
+    return REGISTRO / RED_FILE
+
+
+def load_red_pass() -> dict:
+    """The `ultima_pasada_red` map of `_red.yaml`, or `{}` when the sweep never ran or the file
+    does not parse. Tolerant like `load_registro`: the lint reports the missing pass (#297) and
+    must not die on a hand-edited file."""
+    f = red_path()
+    if not f.exists():
+        return {}
+    try:
+        data = yaml.safe_load(f.read_text(encoding="utf-8"))
+    except (yaml.YAMLError, UnicodeDecodeError, OSError):
+        return {}
+    return as_map(as_map(data).get("ultima_pasada_red"))
 
 
 def load_registro(slug: str) -> dict:
@@ -2991,8 +3021,14 @@ def dropped_from_subject(slug: str) -> dict:
 EXTRA_CORE_VIA = ("usuario", "triage", "citado-por-corpus")
 
 
-def extra_core_snippet(recs, via: str = "usuario", motivo: str = "<por qué es core para este sujeto>",
-                       tope: int = 10) -> str:
+#: Placeholder `motivo` of the pasted `extra_core:` block — the user rewrites it (D-58 makes it
+#: mandatory). And how many records the snippet lists: the cap is DECLARED in the output (#107),
+#: never silent — `query_ads --sweep` used to truncate at 10 without a word (AUD-285).
+EXTRA_CORE_MOTIVO_PLACEHOLDER = "<por qué es core para este sujeto>"
+EXTRA_CORE_SNIPPET_TOPE = 10
+
+
+def extra_core_snippet(recs, via: str = "usuario") -> str:
     """El bloque `extra_core:` listo para pegar, en la forma DURA de D-58 (#161).
 
     Una sola implementación para los dos carriles que lo imprimen. `query_ads --sweep` dictaba
@@ -3006,10 +3042,14 @@ def extra_core_snippet(recs, via: str = "usuario", motivo: str = "<por qué es c
     if via not in EXTRA_CORE_VIA:
         raise ValueError(f"`via: {via}` no está en el vocabulario ({' | '.join(EXTRA_CORE_VIA)})")
     hoy = _dt.date.today().isoformat()
+    recs = list(recs)
     out = ["extra_core:"]
-    for r in list(recs)[:tope]:
+    for r in recs[:EXTRA_CORE_SNIPPET_TOPE]:
         out.append(f"  - bibcode: {r['bibcode']}\n    via: {via}\n    fecha: {hoy}\n"
-                   f"    motivo: {motivo}")
+                   f"    motivo: {EXTRA_CORE_MOTIVO_PLACEHOLDER}")
+    if len(recs) > EXTRA_CORE_SNIPPET_TOPE:
+        out.append(f"  # … {len(recs) - EXTRA_CORE_SNIPPET_TOPE} candidato(s) más (snippet acotado "
+                   f"a los {EXTRA_CORE_SNIPPET_TOPE} primeros del orden en que se listaron)")
     return "\n".join(out) + "\n"
 
 
@@ -3847,7 +3887,13 @@ def load_cadena(slug: str) -> list:
     return [p for p in as_list(load_registro(slug).get("cadena")) if isinstance(p, dict)]
 
 
-def flags_usados(args, ap=None, ignorar=("theme",)) -> list:
+#: `--theme` is not a hatch: it selects WHICH chain runs (star vs theme), it does not change what
+#: a run did, so it never enters `cadena[].flags`. Was a hidden default `ignorar=("theme",)` that
+#: no caller varied (AUD-285); now a named rule.
+FLAGS_NOT_HATCHES = ("theme",)
+
+
+def flags_usados(args, ap=None) -> list:
     """Los flags NO-DEFAULT de esta corrida, para `cadena:` del registro (D-48/D-57).  @inv INV-44
 
     Implementación **única**: vivía copiada en siete scripts (seis idénticas y una con
@@ -3864,14 +3910,14 @@ def flags_usados(args, ap=None, ignorar=("theme",)) -> list:
     traza de ruido constante y degradar a "ninguno" es el agujero que esto cierra."""
     # Los POSICIONALES no son flags: `--slug=tau-cet` salía en TODA corrida de los seis scripts
     # cuyo posicional se llama `slug`, que es el ruido constante que este docstring dice evitar
-    # (AUD-44). `ignorar` listaba `theme` a mano — la exclusión era intencional y se perdió para el
+    # (AUD-44). `FLAGS_NOT_HATCHES` lista `theme` — la exclusión era intencional y se perdió para el
     # resto. Con `ap` se derivan del parser en vez de enumerarlos.
     posicionales = set()
     if ap is not None:
         posicionales = {a.dest for a in ap._actions if not a.option_strings}
     out = []
     for k, v in vars(args).items():
-        if k in ignorar or k in posicionales:
+        if k in FLAGS_NOT_HATCHES or k in posicionales:
             continue
         nombre = f"--{k.replace('_', '-')}"
         if v is True:

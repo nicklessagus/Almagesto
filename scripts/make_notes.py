@@ -2359,7 +2359,7 @@ def _papers_del_sujeto(slug: str, kind: str, fms: dict | None = None) -> list:
 # este recorte TODO paper aparece como sintetizado apenas se estampa la tabla. Es el mismo lazo que
 # el bloque `## Verificación de citas` en `lib_blocks`: un artefacto que se mide a sí mismo siempre
 # da el resultado que su propia existencia produce.
-SECCIONES_MAQUINA = cfg.SECCIONES_ESTAMPADAS
+# (AUD-280: the module alias `SECCIONES_MAQUINA` was removed — nothing here read it.)
 _prosa = cfg.solo_prosa
 
 
@@ -2533,7 +2533,7 @@ def _titulo_corto(title, n: int) -> str:
     return t[:n].rstrip() + "…" if len(t) > n else t
 
 
-def indicadores_table(fm: dict, names: set | None = None) -> str:
+def indicadores_table(fm: dict) -> str:
     """`## Indicadores de actividad esperados` materialised, with its link to the concept (#250).
 
     `activity_indicators_expected` was the only list field of `stars/` whose entries had **no
@@ -2544,7 +2544,7 @@ def indicadores_table(fm: dict, names: set | None = None) -> str:
 
     The destination resolves through the alias index of #245 after dropping the gloss (#250): the
     field is prose for a human, so `BIS (bisector de la CCF)` has to reach `bis.md`."""
-    names = note_names() if names is None else names
+    names = note_names()
     inds = [str(x).strip() for x in cfg.as_list(fm.get("activity_indicators_expected"))
             if str(x).strip()]
     out = [f"{INDICADORES_HEADER} ({len(inds)})", ""]
@@ -2587,13 +2587,13 @@ def planetas_table(fm: dict) -> str:
     return "\n".join(out)
 
 
-def metodos_rows(name: str, fms: dict | None = None) -> list:
+def metodos_rows(name: str) -> list:
     """`[(método, stem, año)]` — los métodos DE los papers de esta estrella (no todo paper de la
     bóveda que use el método). Es el mismo recorte que documenta `CLAUDE.md` para el equivalente
     determinista, y se parsea con `split_fm`, **no** con grep: `stars: [tau Cet]` en flow style y
     en bloque conviven en el mismo corpus, y el matcheo textual confunde `GJ 71` con `GJ 710`."""
     filas = []
-    for stem, fm in (fms if fms is not None else papers_fm_index()).items():
+    for stem, fm in papers_fm_index().items():
         if name not in cfg.as_list(fm.get("stars")):
             continue
         for m in cfg.as_list(fm.get("methods")):

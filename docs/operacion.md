@@ -288,8 +288,9 @@ del descubrimiento anclado) y `make_notes.py --web … --pending
 los nombra ningún otro documento: este párrafo es su única mención fuera del `--help`.
 `discover.py` declara **ocho** banderas (`--theme --topics --seed --seed-terms --rows
 --rows-por-termino --min-citadores --resolve`; #293/#294 sumaron las dos últimas nuevas), no tres.
-`contrast.py --corto` (acorta los valores MARCANDO el corte; por default no corta) y
-`contrast.py --limite` (el largo de ese corte) tampoco aparecen en otro documento.
+`contrast.py --corto` y `contrast.py --limite` **se retiraron** (AUD-287): eran el opt-in que
+reintroducía el corte dentro de la cita que #314 midió, y ningún skill los usaba — `contrast.py`
+imprime cada valor entero, siempre.
 
 **Migradores y backfills** (una sola corrida; el framework no lleva capas de retrocompatibilidad,
 así que cada cambio de schema entrega migrador **y** detector bloqueante — INV-64):
@@ -309,6 +310,7 @@ python scripts/make_notes.py --sync-mirror        # #70: campos espejo de NEA qu
 python scripts/make_notes.py --migrate-verif-archivo # #117: prefija cada `Hash fuente` con `txt:`/`pdf:`
 python scripts/make_notes.py --migrate-txt-fields # #205: saca `symbols_lost:`/`fulltext_layout:`
 python scripts/make_notes.py --migrate-vistas     # #188: `## Extracción (LLM)` → `vistas[]` + `## Vista — <sujeto>`
+python scripts/make_notes.py --restamp-vista-stub # #269: el stub `## Vista` con la plantilla VIEJA (citar por línea del `.txt`, retirada en #205) → la vigente; la prosa redactada no se toca
 python scripts/make_notes.py --rename-paper VIEJO NUEVO   # D-19: ciclo preprint → publicado
 ```
 

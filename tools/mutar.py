@@ -610,7 +610,7 @@ def _traceability_pairs() -> list[tuple[str, Path, str, list[str]]]:
     its own and is dropped."""
     sys.path.insert(0, str(RAIZ / "scripts"))
     import trace_invariants as ti
-    registro = ti.load_registro(RAIZ)
+    registro = ti.load_contract(RAIZ)
     por_inv: dict = {}
     for m in ti.collect_marks(RAIZ):
         por_inv.setdefault(m.inv, []).append(m)
@@ -662,7 +662,7 @@ def _contract_rows() -> tuple[set[str], set[str]]:
     """`(every INV row of §3 of the contract, the retired ones)` — the two sets of `unmarked_reasons`."""
     sys.path.insert(0, str(RAIZ / "scripts"))
     import trace_invariants as ti
-    registro = ti.load_registro(RAIZ)
+    registro = ti.load_contract(RAIZ)
     return set(registro), {inv for inv, meta in registro.items() if ti.is_retired(meta)}
 
 

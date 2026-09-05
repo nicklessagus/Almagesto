@@ -62,9 +62,6 @@ import lib_config as cfg
 import fetch_ground_truth
 from make_notes import rename_paper       # noqa: F401  (lo usan los tests como grabador)
 
-RED_FILE = "_red.yaml"
-
-
 # ── los seis detectores (#106 sumó `sweep_citas`) ─────────────────────────────────────────────────────────────────────────
 #
 # Cada uno vive en SU script (el que ya sabe hablar con esa fuente) y acá sólo se orquestan. Estas
@@ -394,21 +391,6 @@ def _merge_changes(previos, cambios) -> list:
 
 # ── la caducidad, versionada (D-46 / R-4) ────────────────────────────────────────────────────────
 
-def _red_path():
-    return cfg.REGISTRO / RED_FILE
-
-
-def load_ultima_pasada() -> dict:
-    f = _red_path()
-    if not f.exists():
-        return {}
-    try:
-        data = yaml.safe_load(f.read_text(encoding="utf-8"))
-    except yaml.YAMLError:
-        return {}
-    return cfg.as_map(cfg.as_map(data).get("ultima_pasada_red"))
-
-
 def save_ultima_pasada(cubrio: list, no_evaluados: list | None = None,
                        poblaciones: dict | None = None) -> None:
     """Persiste qué se miró afuera y **qué no se pudo mirar** (#172).
@@ -432,7 +414,7 @@ def save_ultima_pasada(cubrio: list, no_evaluados: list | None = None,
     # prohíbe en el lint. Sólo aparece cuando hay algo que declarar (el registro no es regenerable).
     if poblaciones:
         pasada["poblaciones"] = {k: dict(v) for k, v in poblaciones.items() if v}
-    cfg.write_text_atomic(_red_path(), yaml.safe_dump(
+    cfg.write_text_atomic(cfg.red_path(), yaml.safe_dump(
         {"ultima_pasada_red": pasada}, sort_keys=False, allow_unicode=True))
 
 
@@ -585,7 +567,7 @@ def main(argv=None) -> int:
     faltantes = (f" · NO evaluado: {', '.join(n for n, _ in no_evaluados)}" if no_evaluados else "")
     cfg.print_seguro(f"\nPasada de red {dt.date.today().isoformat()} · cubrió: {', '.join(cubrio)}"
                      f"{faltantes} · {pendientes} cosa(s) para revisar · registro en "
-                     f"`vault/config/registro/{RED_FILE}`")
+                     f"`vault/config/registro/{cfg.RED_FILE}`")
     if no_evaluados:
         return 2          # contrato del issue 0.1: "no pudo chequear" gana sobre "limpio"
     return 1 if pendientes else 0

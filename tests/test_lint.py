@@ -7325,3 +7325,77 @@ def test_AUD216_el_log_no_da_por_escrita_una_entrada_que_solo_CONTIENE_el_slug(t
     linea = [l for l in rep.splitlines() if l.startswith("## 📓 Operación sin entrada")]
     assert linea, rep
     assert int(linea[0].rsplit("(", 1)[1].rstrip(")")) == 1, linea[0]
+
+
+# ── AUD-283 · `puertas` es vocabulario cerrado y el lint lo consume ──────────────────────────────
+
+def test_una_puerta_fuera_del_vocabulario_se_reporta_y_una_valida_no(toy_vault):
+    """`cfg.PUERTAS` (#126) existía sin consumidor: un `puertas: [fundacionl]` en `ads.json` lo
+    agrupaba `triage --prioridad` como una política más. Población: los `records` de
+    `build/<slug>/ads.json`; el hallazgo nombra el bibcode y el valor."""
+    d = toy_vault.ROOT / "build" / "test_star"
+    d.mkdir(parents=True)
+    (d / "ads.json").write_text(json.dumps({"slug": "test_star", "records": [
+        {"bibcode": "2020ok.....1A", "puertas": ["fundacional", "manual"]},
+        {"bibcode": "2020typo...1B", "puertas": ["fundacionl"]}]}), encoding="utf-8")
+    hallazgos = [m for _s, m in lint.collect().por_clave("bad_decisions").items]
+    assert len(hallazgos) == 1, hallazgos
+    assert "2020typo...1B" in hallazgos[0] and "fundacionl" in hallazgos[0]
+    assert "fundacional | astro | manual" in hallazgos[0]
+
+
+# ── AUD-286 · lo que `collect` salteaba en silencio pasa por «No evaluado» (D-43) ────────────────
+
+def test_el_registro_que_no_se_puede_leer_en_la_bitacora_sale_NO_EVALUADO(toy_vault, monkeypatch):
+    """El `except Exception: continue` del chequeo #118 saltaba el sujeto y el reporte publicaba
+    `(0)`. `cfg.load_registro` es tolerante (YAML roto → `{}`, categoría `registro_ilegible`), así
+    que lo que este test simula es lo que NINGUNA categoría cubre. La primera lectura del registro
+    de un sujeto en `collect` es la de la bitácora; el doble falla sólo esa vez."""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    (cfg.REGISTRO / "test_star.yaml").write_text("busquedas: []\n", encoding="utf-8")
+    real, fallas = cfg.load_registro, []
+
+    def una_vez(slug):
+        if slug == "test_star" and not fallas:
+            fallas.append(slug)
+            raise RuntimeError("disco raro")
+        return real(slug)
+    monkeypatch.setattr(cfg, "load_registro", una_vez)
+    hallazgos = dict(lint.collect().por_clave("not_evaluated").items)
+    assert fallas, "el doble no llegó a fallar: el escenario no prueba nada"
+    assert "bitácora de `test_star` (#118)" in hallazgos, hallazgos
+    assert "RuntimeError: disco raro" in hallazgos["bitácora de `test_star` (#118)"]
+
+
+def test_el_universo_del_roll_up_que_revienta_sale_NO_EVALUADO(toy_vault, monkeypatch):
+    """`universo()` del chequeo de `## Papers` desactualizado: el `continue` decía «config rota: ya
+    lo reporta otra categoría», que era cierto sólo para los YAML ilegibles. Un bug en el universo
+    dejaba ESA nota sin chequear con cara de verde."""
+    write_gt(toy_vault, [gt_planet("b")])
+    ficha_espejo(toy_vault)
+
+    def revienta(*a, **k):
+        raise KeyError("stem")
+    monkeypatch.setattr(mn, "papers_universe", revienta)
+    hallazgos = dict(lint.collect().por_clave("not_evaluated").items)
+    clave = [k for k in hallazgos if k.startswith("roll-up `## Papers") and "test_star" in k]
+    assert clave, hallazgos
+    assert "KeyError" in hallazgos[clave[0]]
+
+
+def test_los_ejes_heredados_que_revientan_salen_NO_EVALUADO_salvo_objetivo_ilegible(toy_vault, monkeypatch):
+    """El chequeo #360 callaba TODO fallo con «objetivo ilegible: lo reporta su detector». Eso vale
+    sólo cuando `cfg.objective_error()` lo dice; otro fallo se declara — y con el objetivo roto no
+    se duplica lo que «clasificación de relevancia (la lente)» ya reporta."""
+    write_yaml(cfg.THEMES_YAML, _tema_ica(search_fq=None))
+
+    def revienta(meta):
+        raise TypeError("facets no es un mapa")
+    monkeypatch.setattr(cfg, "theme_inherited_axes", revienta)
+    hallazgos = dict(lint.collect().por_clave("not_evaluated").items)
+    assert "ejes heredados de `ica` (#360)" in hallazgos, hallazgos
+    assert "TypeError" in hallazgos["ejes heredados de `ica` (#360)"]
+    cfg.OBJECTIVE_YAML.write_text("relevance: [mal\n", encoding="utf-8")
+    hallazgos = dict(lint.collect().por_clave("not_evaluated").items)
+    assert "ejes heredados de `ica` (#360)" not in hallazgos, "duplicaría el hallazgo del objetivo"
+    assert any("lente" in k for k in hallazgos), hallazgos

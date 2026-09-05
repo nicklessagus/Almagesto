@@ -922,9 +922,9 @@ def main() -> int:
     # #161: el snippet lo arma `cfg.extra_core_snippet`, la MISMA pieza que usa `query_ads --sweep`.
     # Estaba duplicado inline en los dos carriles y el otro había divergido a una forma que el
     # framework bloquea — dos implementaciones de la misma promesa es la garantía de que una envejece.
+    # AUD-285: el tope (`cfg.EXTRA_CORE_SNIPPET_TOPE`) lo declara el propio snippet, para los dos
+    # carriles — acá se repetía a mano con un `10` literal y `query_ads --sweep` no lo decía.
     cfg.print_seguro("\n" + cfg.extra_core_snippet(ordenados, via="triage").rstrip("\n"))
-    if len(cands) > 10:
-        cfg.print_seguro(f"  # … {len(cands) - 10} candidato(s) más (snippet acotado a los 10 más citados)")
     return 0
 
 

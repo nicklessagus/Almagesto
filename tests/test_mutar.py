@@ -368,7 +368,7 @@ def test_los_pares_de_trazabilidad_salen_de_las_DOS_marcas(monkeypatch):
         symbol: str
 
     import trace_invariants as ti
-    monkeypatch.setattr(ti, "load_registro", lambda root: {
+    monkeypatch.setattr(ti, "load_contract", lambda root: {
         "INV-01": {"estado": "garantizado y medido"},
         "INV-02": {"estado": "garantizado y medido"},
         "INV-03": {"estado": "retirado (#205)"},
@@ -1223,7 +1223,7 @@ def test_traceability_pairs_IGNORA_la_marca_huerfana_en_vez_de_reventar(monkeypa
               ti.Mark("INV-999", "impl", "scripts/y.py", 1, "g"),
               ti.Mark("INV-999", "test", "tests/test_y.py", 2, "test_g")]
     monkeypatch.setattr(ti, "collect_marks", lambda root: marcas)
-    monkeypatch.setattr(ti, "load_registro", lambda root: {"INV-01": {"estado": "garantizado"}})
+    monkeypatch.setattr(ti, "load_contract", lambda root: {"INV-01": {"estado": "garantizado"}})
 
     pares = mutar._traceability_pairs()
 

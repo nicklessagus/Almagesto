@@ -977,13 +977,7 @@ def classify_theme(rec: dict, meta: dict) -> tuple[list[str], bool, str | None]:
     return facets_globales, False, "ninguna puerta abre (ni fundacional ni lente astro)"
 
 
-# #126 · vocabulario CERRADO de las puertas de D-26, en el orden en que se evalúan.
-# AUD-208 — son TRES, no dos. `manual` no es una puerta de D-26 (no la decide una regla sobre el
-# paper) pero es una **procedencia** que el código escribe y que el consumidor lee en el mismo campo:
-# «entró porque el usuario lo puso en `extra_core`». Dejarla fuera del vocabulario hacía que la doc
-# prometiera un cerrado de dos sobre un campo que en la práctica tiene tres valores — y un cerrado
-# que el propio código viola no sirve para cazar el typo, que es para lo único que existe.
-PUERTAS = ("fundacional", "astro", "manual")
+# #126 · el vocabulario cerrado de las puertas vive en `cfg.PUERTAS` (AUD-283: lo consume el lint).
 
 
 def puertas_abiertas(rec: dict, meta: dict) -> tuple:
@@ -1341,7 +1335,14 @@ def _clase_noncore(why: str | None) -> str:
     return "pasan la faceta, ninguna puerta abre"
 
 
-def print_noncore_breakdown(noncore: list, top: int = 10) -> None:
+#: How many non-core rows the probe shows (sanity check of the cut), and how many of the ones that
+#: PASS the theme's facet the breakdown lists (#289). Module constants, not parameters: no caller
+#: ever varied them (AUD-285), and the count printed next to each list is what makes the cap honest.
+NONCORE_TOP = 25
+NONCORE_PASAN_TOP = 10
+
+
+def print_noncore_breakdown(noncore: list) -> None:
     """Why each non-core stayed out, and which ones the GATE rejected rather than the facet (#289).
 
     `--theme --probe` is the only place where a method theme's cut is decided before paying for
@@ -1370,17 +1371,17 @@ def print_noncore_breakdown(noncore: list, top: int = 10) -> None:
     pasan = [r for r in noncore if _clase_noncore(r.get("why_excluded")).startswith("pasan la faceta")]
     if pasan:
         pasan.sort(key=lambda r: r.get("citation_count") or 0, reverse=True)
-        cfg.print_seguro(f"\n  no-core que PASAN la faceta (top {min(top, len(pasan))} de "
+        cfg.print_seguro(f"\n  no-core que PASAN la faceta (top {min(NONCORE_PASAN_TOP, len(pasan))} de "
                          f"{len(pasan)} por citas — son los que rechaza la PUERTA, no la faceta):")
-        for r in pasan[:top]:
+        for r in pasan[:NONCORE_PASAN_TOP]:
             cfg.print_seguro(_probe_row(r))
 
 
-def print_probe(q: str, recs: list, noncore_top: int = 25, theme_meta: dict | None = None) -> int:
+def print_probe(q: str, recs: list, theme_meta: dict | None = None) -> int:
     """Modo preview del skill `setup`: muestra el corte core/no-core de una query sin bajar nada,
     para afinar la regla de relevancia (relevance.facets) contra papers reales. Lista **TODO el core**
     (no un top-N: papers recientes/poco citados caen al fondo del ranking pero pueden ser core); del
-    no-core muestra sólo el top `noncore_top` por citas (chequeo de sanidad del corte). Cierra con el
+    no-core muestra sólo el top `NONCORE_TOP` por citas (chequeo de sanidad del corte). Cierra con el
     contraste de la regla de combinación (#41). El barrido 2b de ingest-star, que antes se hacía con
     probes manuales, hoy corre por --sweep (sweep_star)."""
     # @inv INV-59
@@ -1444,7 +1445,7 @@ def print_probe(q: str, recs: list, noncore_top: int = 25, theme_meta: dict | No
     cfg.print_seguro(f"  CORE (todos, por citas)  [tópicos que matchearon]:")
     for r in core:
         cfg.print_seguro(_probe_row(r))
-    shown = noncore[:noncore_top]
+    shown = noncore[:NONCORE_TOP]
     cfg.print_seguro(f"\n  no-core (top {len(shown)} de {len(noncore)}, chequeo de sanidad):")
     for r in shown:
         cfg.print_seguro(_probe_row(r))

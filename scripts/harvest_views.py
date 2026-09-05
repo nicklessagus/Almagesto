@@ -528,10 +528,13 @@ def bring_fulltext(slug: str, bibcode: str) -> bool:
     return True
 
 
-def harvest(slug: str, *, theme: bool = False, force: bool = False,
-            src: Path | None = None) -> dict:
-    """Cosecha todas las extracciones de `slug`. Devuelve los contadores del reporte."""
-    src = src or (cfg.EXTRACCION / slug)     # #311: versionadas, no en `build/`
+def harvest(slug: str, *, theme: bool = False, force: bool = False) -> dict:
+    """Cosecha todas las extracciones de `slug`. Devuelve los contadores del reporte.
+
+    The source directory is NOT a parameter (AUD-284): this is the only gate that runs
+    `is_extraction` (INV-103), and an external `src` would let it harvest from an unversioned
+    directory — exactly what #311 forbids. No caller ever passed one."""
+    src = cfg.EXTRACCION / slug              # #311: versionadas, no en `build/`
     n = {"cosechadas": 0, "rechazadas": 0, "sin_nota": 0, "sin_cambios": 0, "txt_traidos": 0}
     if not src.exists():
         cfg.print_seguro(f"  (sin {src}; nada que cosechar)")

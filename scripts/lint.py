@@ -1529,7 +1529,11 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             _f = cfg.PAPERS / f"{bib}.md"
             try:
                 _fm_cache[bib] = split_fm(_f.read_text(encoding="utf-8")) if _f.exists() else {}
-            except Exception:
+            except (UnicodeDecodeError, OSError):
+                # AUD-286: `split_fm` never raises (bad YAML → `{}`), so only the READ can fail —
+                # and that note is already reported, blocking, by the category `fm_broken` («el
+                # archivo no se pudo leer como UTF-8», main loop, AUD-153). Nothing is skipped in
+                # silence: the `{}` here is the same answer the main loop gave for it.
                 _fm_cache[bib] = {}
         return _fm_cache[bib]
 
@@ -2941,8 +2945,15 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             continue                      # `_red.yaml` no es un sujeto
         try:
             _d = cfg.load_registro(_slug) or {}
-        except Exception:
-            continue                      # registro ilegible: lo reporta su propio detector
+        except Exception as _exc:                       # noqa: BLE001 — D-43, ver abajo
+            # AUD-286: `cfg.load_registro` es tolerante (YAML roto → `{}`, y ESO lo reporta
+            # `registro_ilegible`), así que lo que llega acá es un fallo que ninguna categoría
+            # cubre. Saltearlo dejaba la bitácora del sujeto sin chequear y el reporte en `(0)`:
+            # un chequeo que no pudo correr lo DICE (INV-87), no contribuye un cero.
+            not_evaluated.append(
+                (f"bitácora de `{_slug}` (#118)",
+                 f"no se pudo leer el registro: {_exc.__class__.__name__}: {_exc}"))
+            continue
         # #88: ¿se tendió la segunda red? El barrido full-text es el ÚNICO camino para el punto
         # ciego de la query directa —surveys que TABULAN la estrella sin nombrarla en el abstract y
         # que además no están en el grafo de citas— y hasta ahora era un preview de stdout: no se
@@ -3506,8 +3517,15 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 listados = set(LINK_RE.findall(texto_s[span[0]:span[1]]))
             try:
                 esperados = universo()
-            except Exception:
-                continue                  # config rota: ya lo reporta otra categoría
+            except Exception as _exc:                   # noqa: BLE001 — D-43, ver abajo
+                # AUD-286: «config rota: ya lo reporta otra categoría» era cierto sólo para el
+                # objetivo/los YAML ilegibles; un `KeyError`/`TypeError` de bug en el universo
+                # dejaba la tabla de ESTA nota sin chequear y el reporte en `(0)`. Se declara
+                # (INV-87) en vez de contribuir un cero.
+                not_evaluated.append(
+                    (f"roll-up `{header_s}` de `{slug_s}`",
+                     f"no se pudo armar el universo: {_exc.__class__.__name__}: {_exc}"))
+                continue
             faltan, sobran = esperados - listados, listados - esperados
             if faltan or sobran:
                 detalle = []
@@ -3948,6 +3966,20 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             continue
         slug = data.get("slug") or Path(aj).parent.name
         vistos.add(slug)
+        # AUD-283 — `puertas` es vocabulario CERRADO (#126, `cfg.PUERTAS`) y hasta acá no lo
+        # validaba nadie: un valor fuera de la lista no es «otra política», es un typo que
+        # `triage --prioridad` agrupa como si fuera una, y el recorte de lectura se decide sobre
+        # esa pantalla. Misma familia que la decisión con forma inválida: registrada, leída mal.
+        for _r in cfg.as_list(data.get("records")):
+            if not isinstance(_r, dict):
+                continue
+            _fuera = [str(x) for x in cfg.as_list(_r.get("puertas")) if str(x) not in cfg.PUERTAS]
+            if _fuera:
+                bad_decisions.append(
+                    (slug, f"`puertas: {_fuera}` de `{_r.get('bibcode') or '?'}` en "
+                           f"`build/{slug}/ads.json` no está en el vocabulario "
+                           f"({' | '.join(cfg.PUERTAS)}) → `triage --prioridad` lo agrupa como "
+                           f"una política que no existe; re-corré `query_ads` para re-estampar"))
         t = data.get("truncated")
         if t:
             # `recent` (#79) = cuántos rescató la segunda pasada por fecha. Sólo lo traen los
@@ -4288,10 +4320,11 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             ("build/", f"{_n} extracción(es) en `build/*/extraccion/` (schema pre-#311): ahí NO se "
                        f"versionan ni viajan, y una extracción no se regenera sin volver a leer el "
                        f"PDF → `python scripts/make_notes.py --migrate-extracciones`"))
-    _pasada_red = cfg.REGISTRO / "_red.yaml"
-    if not _pasada_red.exists() and any(cfg.note_paths(cfg.PAPERS)):
+    # AUD-282: ONE loader (`cfg.load_red_pass`) for the file `sweep_external` writes — a file that
+    # exists but registers no pass (empty, hand-edited, unparseable) counts as «never ran».
+    if not cfg.load_red_pass() and any(cfg.note_paths(cfg.PAPERS)):
         reuso_sin_chequear.append(
-            ("(la bóveda)", "`vault/config/registro/_red.yaml` no existe: `sweep_external` nunca "
+            ("(la bóveda)", "`vault/config/registro/_red.yaml` no existe (o no registra ninguna pasada): `sweep_external` nunca "
                             "corrió acá, así que NINGUNA de las seis caducidades está chequeada "
                             "(retracciones, correcciones, versiones, snapshot web, ground-truth, "
                             "citas de la puerta 2) → `python scripts/sweep_external.py`"))
@@ -4592,7 +4625,14 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         for _slug, _tmeta in (cfg.load_themes() or {}).items():
             try:
                 _ejes_h = cfg.theme_inherited_axes(_tmeta)
-            except Exception:                                   # noqa: BLE001 — objetivo ilegible: lo reporta su detector
+            except Exception as _exc:                           # noqa: BLE001 — D-43, ver abajo
+                # AUD-286: el objetivo ilegible YA lo reporta `not_evaluated` («clasificación de
+                # relevancia (la lente)»), así que ahí se calla para no duplicarlo; cualquier
+                # OTRO fallo se declara, no se saltea.
+                if not cfg.objective_error():
+                    not_evaluated.append(
+                        (f"ejes heredados de `{_slug}` (#360)",
+                         f"{_exc.__class__.__name__}: {_exc}"))
                 continue
             if _ejes_h is None:
                 continue

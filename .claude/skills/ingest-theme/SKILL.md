@@ -240,7 +240,7 @@ Progreso del ingest del tema <tema>:
    carácter exacto del corte, y una invirtiendo el alcance de la afirmación. La herramienta agrupa
    por campo (`--campo`, `--grep`, `--eje`, `--paper`), arrastra `linea` y `segunda_mano`, emite
    filas de **una fuente cada una** (`--filas`) y **por default no trunca una cita**: si no entra,
-   filtrá menos filas (`--corto` es el opt-in que acorta, y **marca** el corte).
+   filtrá menos filas (el corte por flag se RETIRÓ en la auditoría 2026-09-04: contradecía #314).
    ⛔ **La fila sale de `--filas` CON EL VALOR ADENTRO: no lo re-tipees (#322).** Los 12 verdaderos
    positivos medidos son errores de **copiado** —6 de atribución (la frase de un paper bajo otro), 6
    de cola alterada—, **ninguno** de comprensión: o sea, de mover una cadena de un archivo a otro,

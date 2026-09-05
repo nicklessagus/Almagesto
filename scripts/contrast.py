@@ -18,11 +18,10 @@ concept note — the single step with no tool. The control: a note written paper
 
 Three guarantees, each closing one of the measured failure modes:
 
-  1. **A quote is never truncated.** If output must be shortened it goes through
-     `lib_blocks.truncate_claim` —which already retreats out of `$…$`, backticks and `[[ ]]`— and
-     the cut is MARKED. The default is the complete value (`--corto` is the opt-in that shortens):
-     when the material does not fit, the remedy is to filter fewer rows, never to cut more text
-     (#226's doctrine, one step earlier).
+  1. **A quote is never truncated.** Every value is printed whole, always: when the material does
+     not fit, the remedy is to filter fewer rows, never to cut text (#226's doctrine, one step
+     earlier). The opt-in cut (`--corto`/`--limite`) was retired (AUD-287): nothing used it, and it
+     reintroduced the exact cut that #314 measured two fabricated quotes on.
   2. **Provenance travels**: `linea` (the locator) and `segunda_mano` ride with every value. The six
      false attributions of that run came from a digest that dropped them.
   3. **One row, one source, and the string from the JSON already inside it (#322).** The row
@@ -128,16 +127,13 @@ def valores(data: dict) -> list[dict]:
     return filas
 
 
-def _mostrar(texto: str, completo: bool, limite: int) -> str:
-    """One textual value, whole by default; when cut, the cut is VISIBLE (#314)."""
-    t = " ".join(str(texto or "").split())
-    if completo or len(t) <= limite:
-        return t
-    return lb.truncate_claim(t, limite) + " […✂ CORTADO: no lo cites desde acá]"
+def _mostrar(texto: str) -> str:
+    """One textual value, whole — whitespace collapsed, never cut (#314)."""
+    return " ".join(str(texto or "").split())
 
 
 def imprimir(slug: str, *, campo: str | None, patron: str | None, paper: str | None,
-             eje: str | None, completo: bool, limite: int, filas: bool,
+             eje: str | None, filas: bool,
              incluir_dropeados: bool = False, cita: bool = False) -> int:
     """The contrast view: group by FIELD, not by paper — contrasting is filtering, not reading 32
     files. Returns the number of lines printed.
@@ -176,21 +172,21 @@ def imprimir(slug: str, *, campo: str | None, patron: str | None, paper: str | N
             for k, v in cfg.as_map(data.get("ejes")).items():
                 if eje and eje.lower() not in k.lower():
                     continue
-                texto = _mostrar(v, completo, limite)
+                texto = _mostrar(v)
                 if rx and not rx.search(f"{k} {texto}"):
                     continue
                 cfg.print_seguro(f"[[{bib}]] · eje `{k}`\n    {texto}")
                 n += 1
             continue
         for v in valores(data):
-            texto = _mostrar(v.get("valor"), completo, limite)
-            regimen = _mostrar(v.get("regimen"), completo, limite)
+            texto = _mostrar(v.get("valor"))
+            regimen = _mostrar(v.get("regimen"))
             que = " ".join(str(v.get("que") or "").split())
             campos = {"valor": texto, "regimen": regimen, "que": que}
             if campo and campo in campos:
                 mostrado = campos[campo]
             elif campo:
-                mostrado = _mostrar(data.get(campo), completo, limite)
+                mostrado = _mostrar(data.get(campo))
             else:
                 mostrado = f"{que} → {texto}"
             if rx and not rx.search(f"{que} {texto} {regimen}"):
@@ -530,12 +526,6 @@ def main(argv=()) -> int:
     ap.add_argument("--cita", action="store_true",
                     help="fragmento pegable en PROSA: «valor» (loc) [[bibcode]], con las comillas "
                          "del extractor y el bibcode PEGADO (#385)")
-    ap.add_argument("--limite", type=int, default=lb.TRUNCADO_CLAIM,
-                    help="ancho máximo con --corto (default: el del bloque de verificación)")
-    ap.add_argument("--corto", action="store_true",
-                    help="acorta los valores MARCANDO el corte. Por default NO se corta: si no "
-                         "entra, filtrá menos filas — un recorte cae dentro de la cita y el modelo "
-                         "la completa (#314: 2 citas fabricadas en el carácter exacto del corte)")
     ap.add_argument("--incluir-dropeados", action="store_true",
                     help="mostrar TAMBIÉN las extracciones de los papers que `--drop-core` sacó del "
                          "sujeto (#329). Por default no entran al 3b: son curación declarada, y "
@@ -572,7 +562,7 @@ def main(argv=()) -> int:
                          f"fan-out del paso 3 primero (`extraction_prompt.py {args.slug} <bib>`)")
         return 2
     n = imprimir(args.slug, campo=args.campo, patron=args.grep, paper=args.paper, eje=args.eje,
-                 completo=not args.corto, limite=args.limite, filas=args.filas, cita=args.cita,
+                 filas=args.filas, cita=args.cita,
                  incluir_dropeados=args.incluir_dropeados)
     cfg.print_seguro(f"\n  {n} valor(es) — el contraste es FILTRAR, no leer los JSON enteros. "
                      f"⛔ La cita se copia ENTERA o se parafrasea sin comillas.")

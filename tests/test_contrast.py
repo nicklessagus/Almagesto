@@ -47,14 +47,15 @@ def test_por_default_NO_trunca_la_cita(toy_vault, capsys):
     assert "CORTADO" not in out
 
 
-def test_con_corto_el_recorte_se_MARCA_y_respeta_los_bloques(toy_vault, capsys):
-    """Cuando se pide acortar, el corte usa `truncate_claim` —que ya retrocede fuera de `$…$`,
-    backticks y `[[ ]]`— y queda **visible**, para que nadie cite desde ahí."""
+@pytest.mark.parametrize("flag", [["--corto"], ["--limite", "40"]])
+def test_el_corte_por_flag_esta_RETIRADO(toy_vault, flag):
+    """AUD-287: `--corto`/`--limite` eran el opt-in que reintroducía el corte medido en #314 (2
+    citas fabricadas en el carácter exacto del corte) y ningún skill ni doc lo usaba. El parser
+    los rechaza: la única forma de que entre menos texto es filtrar menos filas."""
     _extraccion("ica_ruido", "2013Voss")
-    ct.main(["ica_ruido", "--corto", "--limite", "40"])
-    out = capsys.readouterr().out
-    assert "CORTADO: no lo cites desde acá" in out
-    assert LARGA not in out
+    with pytest.raises(SystemExit) as exc:
+        ct.main(["ica_ruido", *flag])
+    assert exc.value.code == 2
 
 
 def test_la_procedencia_viaja_con_cada_valor(toy_vault, capsys):

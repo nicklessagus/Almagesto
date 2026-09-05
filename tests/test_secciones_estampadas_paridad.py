@@ -42,11 +42,11 @@ El período es 4.3 d [[2020Prosa....1..1P]].
 """
 
 
-@pytest.mark.parametrize("modulo, attr", [(lint, "SECCIONES_ESTAMPADAS"),
-                                          (mn, "SECCIONES_MAQUINA")])
-def test_la_lista_es_la_misma_en_todos_los_consumidores(modulo, attr):
-    assert getattr(modulo, attr) is cfg.SECCIONES_ESTAMPADAS, (
-        f"{modulo.__name__}.{attr} tiene su propia copia: es exactamente la divergencia que "
+def test_la_lista_es_la_misma_en_todos_los_consumidores():
+    """`make_notes` ya no lleva alias (AUD-280): consume `cfg.solo_prosa` directo, así que su
+    paridad la prueba el test de abajo sobre el RECORTE, no un `is` sobre un alias."""
+    assert lint.SECCIONES_ESTAMPADAS is cfg.SECCIONES_ESTAMPADAS, (
+        "lint.SECCIONES_ESTAMPADAS tiene su propia copia: es exactamente la divergencia que "
         "produjo el bug (dos listas distintas para el mismo recorte)")
 
 

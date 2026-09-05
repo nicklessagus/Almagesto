@@ -59,7 +59,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lib_config as cfg  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
-CONTRATO = ROOT / "docs" / "contrato.md"
+def contract_path(root: Path) -> Path:
+    """`docs/contrato.md` under `root` — the ONE place that spells the path (AUD-281)."""
+    return root / "docs" / "contrato.md"
+
+
+CONTRATO = contract_path(ROOT)
 ARTEFACTO = ROOT / "docs" / "trazabilidad.md"
 RATCHET = ROOT / "docs" / "trazabilidad-ratchet.yaml"
 
@@ -145,8 +150,12 @@ def _limpio(celda: str) -> str:
     return re.sub(r"\s+", " ", celda.replace("**", "").replace("`", "")).strip()
 
 
-def load_registro(root: Path) -> dict:
-    contrato = root / "docs" / "contrato.md"
+def load_contract(root: Path) -> dict:
+    """`{INV-nn: meta}` parsed from §3 of the contract under `root`; raises `ContratoIlegible`.
+
+    Named after what it loads: it used to be `load_registro`, colliding with `cfg.load_registro`
+    (the subject's ingest registro — another artefact entirely, AUD-281)."""
+    contrato = contract_path(root)
     if not contrato.exists():
         raise ContratoIlegible(f"{contrato} no existe")
     reg = parse_contrato(contrato.read_text(encoding="utf-8"))
@@ -477,7 +486,7 @@ def main(argv=None) -> int:
     root = Path(args.root).resolve()
 
     try:
-        registro = load_registro(root)
+        registro = load_contract(root)
     except ContratoIlegible as e:
         print(f"⛔ no evaluado: {e}", file=sys.stderr)
         print("⛔ no evaluado — el registro canónico de invariantes no se pudo leer; "

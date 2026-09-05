@@ -5058,3 +5058,28 @@ def test_AUD223_consolidar_REHUSA_si_la_vieja_tiene_una_vista_fechada(toy_vault)
     with pytest.raises(SystemExit):
         mn.rename_paper("2026arXivVIEJO", "2026RASTINUEVO")
     assert p.exists(), "no se borra una lectura que ocurrió"
+
+
+# ── #269 · `--restamp-vista-stub`: la plantilla vieja del stub se re-estampa, la prosa no ────────
+
+def test_restamp_vista_stub_reemplaza_SOLO_la_plantilla_vieja_y_es_idempotente(toy_vault):
+    """AUD-288: el migrador existía sin doc ni test. Su `help` promete tres cosas y acá se prueban
+    las tres: la sección byte-idéntica a la plantilla vieja (#103, citar por nº de línea) pasa a la
+    vigente (`cfg.REGLA_LOCALIZADOR`); una vista con prosa redactada NO se toca (sus anclas
+    cuelgan del texto exacto); y correrlo dos veces no cambia nada."""
+    vieja = mn.vista_block("gp", True).replace(mn._BULLET_ANOTACION, mn._BULLET_ANOTACION_VIEJO)
+    assert "nº de línea" in vieja and vieja != mn.vista_block("gp", True)
+    stub = mk_note(toy_vault.PAPERS, "2020stubA...1A",
+                   {"tags": ["paper"], "vistas": [{"sujeto": "gp", "tipo": "theme"}]},
+                   "## Abstract\n\nx\n\n" + vieja)
+    prosa = mk_note(toy_vault.PAPERS, "2020prosB...1B",
+                    {"tags": ["paper"], "vistas": [{"sujeto": "gp", "tipo": "theme"}]},
+                    "## Vista — gp\n- **Aporte al tema:** el kernel cuasi-periódico [[2020stubA...1A]]\n")
+    antes_prosa = prosa.read_text(encoding="utf-8")
+    assert mn.restamp_vista_stub() == 0
+    despues = stub.read_text(encoding="utf-8")
+    assert "nº de línea" not in despues and cfg.REGLA_LOCALIZADOR in despues
+    assert "## Abstract" in despues, "la cirugía es sobre la sección, no sobre la nota"
+    assert prosa.read_text(encoding="utf-8") == antes_prosa
+    assert mn.restamp_vista_stub() == 0
+    assert stub.read_text(encoding="utf-8") == despues, "no es idempotente"

@@ -450,7 +450,7 @@ def test_el_mapa_commiteado_esta_al_dia_en_el_repo_REAL():
 
     Compara in-process con las mismas piezas que usa `--check`, así que la paridad es por
     construcción y no por un doble."""
-    esperado = ti.render(ti.load_registro(ti.ROOT), ti.collect_marks(ti.ROOT), ti.load_techos(ti.ROOT))
+    esperado = ti.render(ti.load_contract(ti.ROOT), ti.collect_marks(ti.ROOT), ti.load_techos(ti.ROOT))
     vigente = (ti.ROOT / "docs" / "trazabilidad.md").read_text(encoding="utf-8")
     assert vigente == esperado, (
         "`docs/trazabilidad.md` está desactualizado respecto de las marcas del árbol — "
@@ -473,7 +473,7 @@ def test_el_contrato_real_tiene_al_menos_un_retirado_y_esta_excluido():
     ejercido**, así que ni el vocabulario de estados del test de doc ni los ratchets la contemplaban.
     Este test fija que sigue ejercida — si algún día no queda ninguna fila retirada, la exclusión
     dejaría de estar probada sobre datos reales."""
-    registro = ti.load_registro(ti.ROOT)
+    registro = ti.load_contract(ti.ROOT)
     retirados = [i for i, meta in registro.items() if ti.is_retired(meta)]
     assert retirados, "ninguna fila `retirado`: la exclusión no se está ejerciendo"
     marcas = {m.inv for m in ti.collect_marks(ti.ROOT)}

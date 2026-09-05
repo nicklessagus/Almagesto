@@ -492,6 +492,48 @@ def test_objective_error_distingue_los_tres_estados(toy_vault):
     assert "no existe" in (cfg.objective_error() or "").lower()
 
 
+def test_yaml_error_distingue_ausente_roto_y_no_mapa(tmp_path):
+    """AUD-289: `yaml_error` es la única pieza pública del trío `stars_error`/`themes_error` sin
+    test directo. Tres estados (INV-80): ausente es legítimo (`None`); YAML roto nombra el archivo
+    y el `que`; válido pero no-mapa también es error. Sano → `None`.  @inv INV-80"""
+    f = tmp_path / "cosas.yaml"
+    assert cfg.yaml_error(f, "cada clave es una cosa") is None
+    f.write_text("a:\n  title: mal: sin comillas\n", encoding="utf-8")
+    err = cfg.yaml_error(f, "cada clave es una cosa")
+    assert err and "cosas.yaml" in err
+    f.write_text("- lista\n", encoding="utf-8")
+    assert "mapa" in (cfg.yaml_error(f, "cada clave es una cosa") or "")
+    f.write_text("a:\n  title: bien\n", encoding="utf-8")
+    assert cfg.yaml_error(f, "cada clave es una cosa") is None
+
+
+def test_load_red_pass_distingue_los_cuatro_estados_y_red_path_es_UNA(toy_vault):
+    """AUD-282: la pasada de red vive en `cfg.RED_FILE` (antes `sweep_external` y el lint la
+    deletreaban cada uno). Ausente, ilegible y sin `ultima_pasada_red` → `{}`; sana → el mapa."""
+    assert cfg.red_path() == cfg.REGISTRO / "_red.yaml"
+    assert cfg.load_red_pass() == {}
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    cfg.red_path().write_text("ultima_pasada_red: [mal\n", encoding="utf-8")
+    assert cfg.load_red_pass() == {}
+    cfg.red_path().write_text("otra_clave: 1\n", encoding="utf-8")
+    assert cfg.load_red_pass() == {}
+    cfg.red_path().write_text("ultima_pasada_red:\n  fecha: \"2026-09-04\"\n  cubrio: [versiones]\n",
+                              encoding="utf-8")
+    assert cfg.load_red_pass() == {"fecha": "2026-09-04", "cubrio": ["versiones"]}
+
+
+def test_extra_core_snippet_DECLARA_el_tope_en_vez_de_cortar_en_silencio():
+    """AUD-285: `tope=10` era un parámetro que nadie variaba y `query_ads --sweep` cortaba el
+    snippet a 10 sin decirlo (triage lo decía a mano, con otro `10` literal). Hoy el snippet lo
+    declara él mismo, para los dos carriles."""
+    recs = [{"bibcode": f"2020x....{i:02d}A"} for i in range(cfg.EXTRA_CORE_SNIPPET_TOPE + 3)]
+    out = cfg.extra_core_snippet(recs)
+    assert out.count("- bibcode:") == cfg.EXTRA_CORE_SNIPPET_TOPE
+    assert "3 candidato(s) más" in out and "snippet acotado" in out
+    assert cfg.EXTRA_CORE_MOTIVO_PLACEHOLDER in out
+    assert "candidato(s) más" not in cfg.extra_core_snippet(recs[:2])
+
+
 # ── issue 2.1 · D-28: `busquedas` es una LISTA; el embudo no se suma (INV-89) ────────────────────
 #
 # Hasta 1.25.0 `save_busqueda` PISABA: cada corrida borraba la anterior, así que el registro sólo

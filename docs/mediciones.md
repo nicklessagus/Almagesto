@@ -1213,7 +1213,7 @@ filas de arriba salen todas de la misma, antes y después.
 **Cómo se arregló, y por qué NO aplanando.** El texto aplanado contiene el empalme
 columna1→columna2, o sea frases que no escribió nadie (#46/#275): sirve como **cota superior de lo
 recuperable**, nunca como fuente. La canaleta pasa a ser de la **página**: se parte por `\f`, cada
-página elige **un** borde (`column_boundary` — el fin de canaleta más votado por sus líneas, que es
+página elige **un** borde (`_column_boundary` — el fin de canaleta más votado por sus líneas, que es
 donde arranca la columna derecha) y cada línea se corta ahí, en su propia canaleta más cercana, o
 queda entera a la izquierda si cruza el ancho.
 

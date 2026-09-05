@@ -107,7 +107,7 @@ def test_registra_la_fecha_de_pasada(toy_vault, detectores, monkeypatch):
     """R-4: versionada, en `config/registro/_red.yaml`. Sin esto, otro clon reporta "nunca se
     corrió una pasada de red", que es falso."""
     run_main(monkeypatch, ["--yes"])
-    reg = sw.load_ultima_pasada()
+    reg = cfg.load_red_pass()
     assert reg["fecha"]
     assert sorted(reg["cubrio"]) == ["citas-puerta2", "correcciones", "ground-truth",
                                      "retracciones", "versiones", "web"]
@@ -136,7 +136,7 @@ def test_detector_no_implementado_no_aporta_un_cero(toy_vault, monkeypatch, caps
     assert rc == 2
     out = capsys.readouterr().out
     assert "NO EVALUADO" in out and "web" in out
-    assert "web" not in sw.load_ultima_pasada()["cubrio"]
+    assert "web" not in cfg.load_red_pass()["cubrio"]
 
 
 def test_sweep_web_ignora_lo_que_no_es_snapshot_web(toy_vault):
@@ -427,7 +427,7 @@ def test_el_registro_declara_lo_que_NO_se_pudo_mirar(toy_vault, monkeypatch, cap
     monkeypatch.setattr(sw, "sweep_citas", lambda: ([], []))
 
     assert sw.main([]) == 2, "un detector que no pudo correr cuenta para el exit"
-    reg = sw.load_ultima_pasada()
+    reg = cfg.load_red_pass()
     assert "web" not in reg["cubrio"], "no se afirma haber mirado lo que no se miró"
     assert "web" in str(reg.get("no_evaluados")), "y se DECLARA cuál quedó sin mirar"
     assert "3" in str(reg.get("no_evaluados")), "con cuántos sujetos"
@@ -442,7 +442,7 @@ def test_una_pasada_limpia_no_declara_no_evaluados(toy_vault, monkeypatch):
     for nombre in ("sweep_web", "sweep_ground_truth", "sweep_citas"):
         monkeypatch.setattr(sw, nombre, lambda: ([], []))
     sw.main([])
-    assert "no_evaluados" not in sw.load_ultima_pasada()
+    assert "no_evaluados" not in cfg.load_red_pass()
 
 
 def test_sweep_citas_dice_las_claves_off_ADS_que_nadie_consulto(monkeypatch, capsys):
@@ -484,7 +484,7 @@ def test_el_modo_acotado_no_registra_la_pasada(toy_vault, monkeypatch, capsys):
     como chequeada — el registro no puede afirmar haber mirado lo que no miró (D-43)."""
     monkeypatch.setattr(sw, "discover_versions", lambda solo=None: ([], []))
     assert sw.main(["--bibcodes", "2002arXiv...1C"]) == 0
-    assert not (cfg.REGISTRO / sw.RED_FILE).exists()
+    assert not (cfg.REGISTRO / cfg.RED_FILE).exists()
     assert "NO es una pasada de red completa" in capsys.readouterr().out
 
 

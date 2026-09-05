@@ -151,7 +151,7 @@ def test_el_prompt_manda_al_PDF_SIEMPRE_y_dice_cual():
     La RUTA, no sólo la palabra «PDF»: el gate de mutación ya cazó una vez que `_pdf_rel` sobrevivía
     porque los asserts miraban palabras de la prosa fija.  @inv INV-100"""
     for texto in ("Texto limpio, sin marca.\n",
-                  f"{cfg.FULLTEXT_SYMBOLS_MARK} simbolos NO extraidos\nLa ecuacion (3).\n"):
+                  "# Almagesto — simbolos NO extraidos\nLa ecuacion (3).\n"):
         p = ep.build_prompt("gp", "2006Rasmussen", "GP", [], texto, kind="theme")
         assert "vault/raw/pdfs/gp/2006Rasmussen.pdf" in p, "no dice QUÉ PDF abrir"
         assert "PÁGINA del PDF" in p, "la cita va por página"
@@ -285,7 +285,7 @@ def test_la_regla_de_medios_no_depende_de_la_marca_de_simbolos():
     vació las fórmulas y no dice nada sobre si las tablas del paper son imágenes."""
     limpio = ep.build_prompt("ica", "1994Comon", "ICA", [], "Texto limpio.\n", kind="theme")
     marcado = ep.build_prompt("ica", "1994Comon", "ICA", [],
-                              f"{cfg.FULLTEXT_SYMBOLS_MARK} simbolos NO extraidos\nx\n", kind="theme")
+                              "# Almagesto — simbolos NO extraidos\nx\n", kind="theme")
     for p in (limpio, marcado):
         assert "lectura de gráfico" in p
 

@@ -2452,7 +2452,7 @@ def test_los_curados_quedan_CON_PUERTA_registrada(toy_vault, toy_classifier, no_
         assert por_bib[b]["relevant"] is True
         assert "manual" in (por_bib[b].get("puertas") or []), f"{b} quedó sin puerta registrada"
         assert por_bib[b]["via"] == "usuario", "un solo `via` por decisión, el declarado"
-    assert set(por_bib["2020icaA....1A"]["puertas"]) <= set(qa.PUERTAS)
+    assert set(por_bib["2020icaA....1A"]["puertas"]) <= set(cfg.PUERTAS)
 
 
 def test_la_regla_del_tema_no_re_juzga_un_curado(toy_classifier):

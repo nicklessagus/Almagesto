@@ -141,6 +141,9 @@ FLAGS_AJENOS = {
 FLAGS_RETIRADOS = {
     "--no-triage": "D-48 — se eliminó: permitía que un candidato ya descartado volviera a entrar "
                    "en silencio. La doc lo nombra para decir que no está.",
+    "--corto": "AUD-287 — se eliminó de `contrast.py`: reintroducía el corte dentro de la cita "
+               "que #314 midió (2 fabricadas), y nadie lo usaba.",
+    "--limite": "AUD-287 — el ancho del corte de `--corto`; se fue con él.",
 }
 
 

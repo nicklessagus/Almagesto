@@ -159,7 +159,7 @@ def topics(query: str, rows: int = 5) -> list[dict]:
             for r in d.get("results", [])]
 
 
-def print_topics(query: str, rows: int = 5) -> int:
+def print_topics(query: str) -> int:
     """Print the topic candidates for `query`, declaring the EMPTY case and the FAILED one (#290).
 
     Contract 3 applied to the module's first command. `--topics` is step 0b of `ingest-theme` and
@@ -171,7 +171,7 @@ def print_topics(query: str, rows: int = 5) -> int:
     line. Measured 2026-08-30: `--topics "matrix denoising"` and `--topics "heteroscedastic
     principal component analysis"` both return nothing and both say nothing."""
     try:
-        cands = topics(query, rows=rows)
+        cands = topics(query)
     except Exception as e:                                      # noqa: BLE001 — declarado
         cfg.print_seguro(f"  ⚠ topics    FALLÓ ({e}) — 0 candidatos, y eso NO significa que la "
                          "taxonomía de OpenAlex no tenga el tema")
