@@ -6399,6 +6399,56 @@ def test_una_vista_sin_lente_declarada_no_se_reporta(toy_vault, capsys):
     assert "2020aaa...1..1A" not in _seccion(rep, "ejes de su propia lente"), rep
 
 
+def test_la_SEGUNDA_lente_se_compara_contra_su_propia_subseccion(toy_vault, capsys):
+    """#395c — la vista de segunda lente (#239) contesta SUS ejes en su `### Lente — …`, y el
+    chequeo los buscaba en el bloque de la primera: medido, 13 vistas reportadas como «no contesta
+    NINGUNO de sus 7 ejes» con los siete ahí mismo. Es la forma de #373 en otro consumidor — el
+    parser no entra donde vive el contenido.
+
+    Las dos lentes contestan cada una LA SUYA y ninguna contesta la de la otra: si la clave volviera
+    a ser el sujeto, la unión de los dos bloques taparía el hueco y este test pasaría por casualidad,
+    así que abajo va el simétrico que exige que el hueco real siga saliendo."""
+    mk_note(cfg.PAPERS, "2020aaa...1..1A",
+            {"tags": ["paper"], "bibcode": "2020aaa...1..1A", "stars": ["Estrella Test"],
+             "vistas": [{"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-08-30",
+                         "lente": ["rv", "activity"], "fuente": "pdf"},
+                        {"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-09-01",
+                         "enfasis": "ruido", "lente": ["blanqueo", "momentos"], "fuente": "pdf"}]},
+            "# p\n\n## Vista — Estrella Test\n\n**Ejes:**\n\n- **rv:** algo\n"
+            "- **activity:** _(sin datos)_\n\n### Lente — ruido\n\n**Ejes:**\n\n"
+            "- **blanqueo:** algo\n- **momentos:** otra cosa\n")
+    link_from_log(toy_vault, "2020aaa...1..1A")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2020aaa...1..1A" not in _seccion(rep, "ejes de su propia lente"), rep
+
+
+def test_cada_lente_se_juzga_SOLA_y_la_otra_no_le_tapa_el_hueco(toy_vault, capsys):
+    """#395c, el simétrico — y el que decide entre arreglar y romper.
+
+    Las dos lecturas del mismo sujeto se juzgan por separado: si el parser volviera a indexar por
+    SUJETO, la unión de los dos bloques taparía el hueco de la primera lente (contesta `rv` y
+    declara también `blanqueo`, que sólo contesta la segunda) y el chequeo quedaría mudo justo donde
+    tiene que hablar. Y el mensaje NOMBRA la lente: con dos lecturas del mismo sujeto, «la vista de
+    X» a secas no dice cuál hay que completar.
+
+    Las dos mutaciones que lo matan: indexar por sujeto (`(sujeto, "")`) tapa el primer hueco; que
+    el parser no entre en `### Lente` mete `blanqueo` en el hueco de la segunda."""
+    mk_note(cfg.PAPERS, "2020aaa...1..1A",
+            {"tags": ["paper"], "bibcode": "2020aaa...1..1A", "stars": ["Estrella Test"],
+             "vistas": [{"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-08-30",
+                         "lente": ["rv", "blanqueo"], "fuente": "pdf"},
+                        {"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-09-01",
+                         "enfasis": "ruido", "lente": ["blanqueo", "momentos"], "fuente": "pdf"}]},
+            "# p\n\n## Vista — Estrella Test\n\n**Ejes:**\n\n- **rv:** algo\n"
+            "\n### Lente — ruido\n\n**Ejes:**\n\n- **blanqueo:** algo\n")
+    link_from_log(toy_vault, "2020aaa...1..1A")
+    _rc, rep = run_lint_reporte(capsys)
+    seccion = _seccion(rep, "ejes de su propia lente")
+    assert "no contesta `blanqueo`" in seccion, seccion          # el hueco de la PRIMERA lente
+    assert "(lente «ruido»)" in seccion, seccion
+    assert "no contesta `momentos`" in seccion, seccion          # el de la segunda, y SÓLO ése
+
+
 def test_una_vista_sin_fecha_no_se_reporta(toy_vault, capsys):
     """La fecha es lo que dice que la lectura OCURRIÓ: sin ella el hueco no es de la vista."""
     mk_note(cfg.PAPERS, "2020aaa...1..1A",

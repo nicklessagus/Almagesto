@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.209.0"
+ALMAGESTO_VERSION = "1.210.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1038,10 +1038,12 @@ VISTA_RE = re.compile(r"^##\s+Vista\s*[—–-]\s*(.+?)\s*$", re.M)
 _VISTA_HEAD = VISTA_RE
 _EJES_HEAD = re.compile(r"^\*\*Ejes:\*\*\s*$", re.M)
 _EJE_BULLET = re.compile(r"^-\s+\*\*(.+?):\*\*", re.M)
+#: #239/#395c · la sub-sección de una SEGUNDA lectura del mismo sujeto, dentro de su `## Vista`.
+_LENTE_HEAD = re.compile(r"^###\s+Lente\s+—\s+(.+?)\s*$", re.M)
 
 
 def view_axes(text: str) -> dict:
-    """`{subject: {axes answered}}` — the bullets of each view's `**Ejes:**` block (#270).
+    """`{(subject, emphasis): {axes answered}}` — the bullets of each view's `**Ejes:**` block (#270).
 
     #254 made the prompt derive its axes from `relevance.facets` and left no net: nothing compares
     the axes a view **answers** against the lens it **declares**. Measured on a real vault: 257 gaps
@@ -1049,7 +1051,14 @@ def view_axes(text: str) -> dict:
 
     ⚠ Only bullets INSIDE the `**Ejes:**` block count: `- **Aporte:**`, `- **Métodos:**` and
     `- **Hueco:**` are not axes, and a plain bold-bullet regex would count them. Headings inside a
-    code fence are skipped, same as `lint.vistas_en_cuerpo` (AUD-178)."""
+    code fence are skipped, same as `lint.vistas_en_cuerpo` (AUD-178).
+
+    ⛔ The key is the PAIR `(subject, emphasis)`, and each `### Lente — <emphasis>` sub-section is
+    read on its own (#395c). Keyed by subject alone, and taking only the FIRST `**Ejes:**` of the
+    section, a second reading of the same subject (#239) was compared against the first lens's
+    answers: measured on a real vault, 13 views came out as *"answers NONE of its 7 axes"* with the
+    seven answered right there. It is the shape of #373 in another consumer — the parser not going
+    in where the content lives. The base view (no emphasis) keys on `""`."""
     dentro = _offsets_en_fence(text)
     encabezados = [(m.start(), m.group(1).strip()) for m in _VISTA_HEAD.finditer(text)
                    if m.start() not in dentro]
@@ -1059,22 +1068,61 @@ def view_axes(text: str) -> dict:
         seccion = text[ini:fin]
         if (corte := re.search(r"\s+[^\w\s]", sujeto)):
             sujeto = sujeto[:corte.start()].strip()
-        m_ejes = _EJES_HEAD.search(seccion)
-        if not m_ejes:
-            continue
-        # El bloque son los bullets CONTIGUOS que siguen al encabezado: se saltean las líneas en
-        # blanco iniciales (el escritor deja una) y se corta en la primera línea que no es un
-        # bullet, blanco incluido. Sin cortar en el blanco, `- **Aporte al tema:**` —que vive más
-        # abajo y NO es un eje— entraba al conjunto y tapaba el hueco que el detector busca.
-        bloque, arranco = [], False
-        for linea in seccion[m_ejes.end():].split("\n"):
-            if linea.strip().startswith("- "):
-                bloque.append(linea); arranco = True
-            elif arranco or linea.strip():
-                break
-        out.setdefault(sujeto, set()).update(m.group(1).strip()
-                                             for m in _EJE_BULLET.finditer("\n".join(bloque)))
+        for enfasis, ini_t, fin_t in _lens_chunks(seccion):
+            if (ejes := _axes_of_chunk(seccion[ini_t:fin_t])):
+                out.setdefault((sujeto, enfasis), set()).update(ejes)
     return out
+
+
+def view_lens_spans(text: str) -> list:
+    """`[(subject, emphasis, start, end)]` — one span per reading, offsets into `text` (#395).
+
+    The same partition `view_axes` reads, exposed for whoever has to WRITE inside one reading
+    (the `--restamp-lente` backfill): the axes of a second lens live in its `### Lente — …`
+    sub-section, and a writer that cannot see that boundary would append them to the wrong one."""
+    dentro = _offsets_en_fence(text)
+    encabezados = [(m.start(), m.group(1).strip()) for m in _VISTA_HEAD.finditer(text)
+                   if m.start() not in dentro]
+    out = []
+    for i, (ini, sujeto) in enumerate(encabezados):
+        fin = encabezados[i + 1][0] if i + 1 < len(encabezados) else len(text)
+        if (corte := re.search(r"\s+[^\w\s]", sujeto)):
+            sujeto = sujeto[:corte.start()].strip()
+        out += [(sujeto, enf, ini + a, ini + b) for enf, a, b in _lens_chunks(text[ini:fin])]
+    return out
+
+
+def _lens_chunks(seccion: str) -> list:
+    """`[(emphasis, start, end)]` — a view section split at its `### Lente — <emphasis>` headings.
+
+    What comes before the first sub-heading is the base reading and carries `""`; a section without
+    sub-headings yields exactly one chunk, so the caller has no special case (#395c)."""
+    heads = [(m.start(), m.group(1).strip()) for m in _LENTE_HEAD.finditer(seccion)]
+    if not heads:
+        return [("", 0, len(seccion))]
+    out = [("", 0, heads[0][0])]
+    for j, (ini, enfasis) in enumerate(heads):
+        out.append((enfasis, ini, heads[j + 1][0] if j + 1 < len(heads) else len(seccion)))
+    return out
+
+
+def _axes_of_chunk(trozo: str) -> set:
+    """The axis names of the `**Ejes:**` block of one chunk (`set()` if it has none).
+
+    El bloque son los bullets CONTIGUOS que siguen al encabezado: se saltean las líneas en blanco
+    iniciales (el escritor deja una) y se corta en la primera línea que no es un bullet, blanco
+    incluido. Sin cortar en el blanco, `- **Aporte al tema:**` —que vive más abajo y NO es un eje—
+    entraba al conjunto y tapaba el hueco que el detector busca."""
+    m_ejes = _EJES_HEAD.search(trozo)
+    if not m_ejes:
+        return set()
+    bloque, arranco = [], False
+    for linea in trozo[m_ejes.end():].split("\n"):
+        if linea.strip().startswith("- "):
+            bloque.append(linea); arranco = True
+        elif arranco or linea.strip():
+            break
+    return {m.group(1).strip() for m in _EJE_BULLET.finditer("\n".join(bloque))}
 
 
 def solo_prosa(body: str) -> str:

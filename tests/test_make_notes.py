@@ -5083,3 +5083,156 @@ def test_restamp_vista_stub_reemplaza_SOLO_la_plantilla_vieja_y_es_idempotente(t
     assert prosa.read_text(encoding="utf-8") == antes_prosa
     assert mn.restamp_vista_stub() == 0
     assert stub.read_text(encoding="utf-8") == despues, "no es idempotente"
+
+
+# ── #395 · `--restamp-lente`: la lente y las líneas de eje, por verdad de la extracción ──────────
+
+def _nota_y_extraccion(vista: dict, cuerpo: str, data: dict):
+    """Una nota de paper con su `vistas[]` y el JSON versionado que la produjo (#311)."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    f = cfg.PAPERS / "2020lente..1..1L.md"
+    f.write_text("---\nbibcode: 2020lente..1..1L\ntags: [paper]\nvistas:\n"
+                 + yaml.safe_dump([vista], allow_unicode=True, sort_keys=False,
+                                  default_flow_style=False)
+                 + "---\n\n# p\n\n" + cuerpo, encoding="utf-8")
+    d = cfg.EXTRACCION / "test_star"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "2020lente..1..1L.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    return f
+
+
+_CUERPO_UN_EJE = "## Vista — Estrella Test\n\n**Ejes:**\n\n- **rv:** reporta K\n\n**Aporte:** algo\n"
+
+
+def test_restamp_lente_toma_la_lente_DECLARADA_por_la_extraccion(toy_vault, capsys):
+    """#395a — la lente estampada eran los ejes vigentes AL COSECHAR, que es otra pregunta: medido,
+    209 slots declarando tres facetas que la instancia agregó a `objective.yaml` **después** de esas
+    lecturas. El migrador la corrige por verdad del artefacto versionado."""
+    f = _nota_y_extraccion(
+        {"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-08-30",
+         "lente": ["rv", "ml", "simulation"]},                     # la lente de HOY, no la preguntada
+        _CUERPO_UN_EJE,
+        {"bibcode": "2020lente..1..1L", "vista": {"sujeto": "Estrella Test", "tipo": "star"},
+         "lente": ["rv", "activity"], "ejes": {"rv": "reporta K", "activity": ""}})
+    mn.restamp_lens()
+    v = cfg.split_fm(f.read_text(encoding="utf-8"))["vistas"][0]
+    assert list(v["lente"]) == ["rv", "activity"], v["lente"]
+    assert v["fecha"] == "2026-08-30", "el resto de la vista no se toca"
+    salida = capsys.readouterr().out
+    assert "COTA INFERIOR" not in salida, "la lente estaba DECLARADA: no se reconstruyó de las claves"
+    mn.restamp_lens()
+    assert "0 vista(s) con `lente` re-estampada" in capsys.readouterr().out, "idempotente"
+
+
+def test_restamp_lente_sin_lente_en_el_json_usa_las_claves_y_lo_DECLARA(toy_vault, capsys):
+    """La extracción PRE-#395 no trae `lente:`, y ahí la mejor fuente son las CLAVES de `ejes` —lo
+    que el prompt sembró—. Es una **cota inferior** y se dice: un eje que el extractor omitió no se
+    recupera del disco. Callarlo dejaría al operador leyendo una lente reconstruida como si fuera
+    la declarada, que es el defecto que este issue arregla en el otro sentido."""
+    f = _nota_y_extraccion(
+        {"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-08-30", "lente": ["ml"]},
+        _CUERPO_UN_EJE,
+        {"bibcode": "2020lente..1..1L", "vista": {"sujeto": "Estrella Test", "tipo": "star"},
+         "ejes": {"rv": "reporta K", "activity": ""}})
+    mn.restamp_lens()
+    assert list(cfg.split_fm(f.read_text(encoding="utf-8"))["vistas"][0]["lente"]) == ["rv", "activity"]
+    assert "COTA INFERIOR" in capsys.readouterr().out
+
+
+def test_restamp_lente_backfillea_el_eje_preguntado_y_VACIO(toy_vault, capsys):
+    """#395b — en 48 pares el JSON tiene la clave, vacía, y la prosa no trae su línea: ahí el
+    silencio SÍ es indistinguible de «nunca se preguntó», que es lo que #270 existe para evitar. El
+    cosechador las escribe desde #270; las vistas viejas no las tienen.
+
+    ⛔ Add-only: el eje que la nota ya contesta no se reescribe — la prosa es del extractor."""
+    f = _nota_y_extraccion(
+        {"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-08-30",
+         "lente": ["rv", "activity"]},
+        _CUERPO_UN_EJE,
+        {"bibcode": "2020lente..1..1L", "vista": {"sujeto": "Estrella Test", "tipo": "star"},
+         "lente": ["rv", "activity"], "ejes": {"rv": "reporta K", "activity": ""}})
+    mn.restamp_lens()
+    cuerpo = f.read_text(encoding="utf-8")
+    assert "- **activity:** _(sin datos)_" in cuerpo, cuerpo
+    assert "- **rv:** reporta K" in cuerpo, "el eje contestado no se reescribe"
+    assert cuerpo.index("- **activity:**") < cuerpo.index("**Aporte:**"), \
+        "la línea va DENTRO del bloque de ejes, no al final de la sección"
+    antes = cuerpo
+    mn.restamp_lens()
+    assert f.read_text(encoding="utf-8") == antes, "idempotente"
+
+
+def test_restamp_lente_sin_extraccion_en_disco_no_toca_la_vista_y_avisa(toy_vault, capsys):
+    """Sin el artefacto no hay verdad contra la cual re-estampar: la vista queda como está y se
+    NOMBRA. Reconstruirla desde la config sería volver a escribir la lente equivocada."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    f = cfg.PAPERS / "2020lente..1..1L.md"
+    f.write_text("---\nbibcode: 2020lente..1..1L\ntags: [paper]\n"
+                 "vistas:\n- sujeto: Estrella Test\n  tipo: star\n  fecha: '2026-08-30'\n"
+                 "  lente: [ml]\n---\n\n# p\n\n" + _CUERPO_UN_EJE, encoding="utf-8")
+    mn.restamp_lens()
+    assert list(cfg.split_fm(f.read_text(encoding="utf-8"))["vistas"][0]["lente"]) == ["ml"]
+    assert "sin extracción en disco" in capsys.readouterr().out
+
+
+def test_restamp_lente_backfillea_la_vista_QUE_ES_y_no_la_de_al_lado(toy_vault, capsys):
+    """#395b — con dos lecturas en la misma nota, el eje que falta va a la suya. Un escritor que no
+    viera el límite de `### Lente — …` (o que tomara la primera vista que encuentra) pegaría el eje
+    de una lente en la sub-sección de la otra, que es el defecto de #395c del lado de la escritura."""
+    f = _nota_y_extraccion(
+        {"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-08-30", "lente": ["rv", "activity"]},
+        "## Vista — Estrella Test\n\n**Ejes:**\n\n- **rv:** reporta K\n"
+        "\n### Lente — ruido\n\n**Ejes:**\n\n- **blanqueo:** algo\n",
+        {"bibcode": "2020lente..1..1L", "vista": {"sujeto": "Estrella Test", "tipo": "star"},
+         "lente": ["rv", "activity"], "ejes": {"rv": "reporta K", "activity": ""}})
+    mn.restamp_lens()
+    cuerpo = f.read_text(encoding="utf-8")
+    assert cuerpo.index("- **activity:**") < cuerpo.index("### Lente — ruido"), cuerpo
+    assert cuerpo.count("- **activity:**") == 1
+
+
+def test_restamp_lente_sin_bloque_de_ejes_no_lo_inventa(toy_vault, capsys):
+    """Sin `**Ejes:**` el migrador no toca nada: crear la sección sería inventar la forma de una
+    lectura que nadie renderizó — y el que decide qué contestó el extractor es el extractor."""
+    f = _nota_y_extraccion(
+        {"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-08-30", "lente": ["rv"]},
+        "## Vista — Estrella Test\n\n**Aporte:** algo\n",
+        {"bibcode": "2020lente..1..1L", "vista": {"sujeto": "Estrella Test", "tipo": "star"},
+         "lente": ["rv"], "ejes": {"rv": "", "activity": ""}})
+    antes = f.read_text(encoding="utf-8")
+    mn.restamp_lens()
+    assert "**Ejes:**" not in f.read_text(encoding="utf-8")
+    assert cfg.solo_prosa(antes) == cfg.solo_prosa(f.read_text(encoding="utf-8"))
+
+
+def test_restamp_lente_backfillea_la_SEGUNDA_lente_en_su_subseccion(toy_vault, capsys):
+    """#395b+c juntos — el par `(sujeto, énfasis)` es lo que decide dónde se escribe. La vista que
+    necesita el backfill acá es la de la SEGUNDA lente, y hay otra vista (otro sujeto) antes: un
+    escritor que agarrara el primer span, o que sólo mirara el sujeto, pegaría el eje en la sección
+    equivocada — y ahí el eje quedaría contestado para una lectura que no lo contestó."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    f = cfg.PAPERS / "2020lente..1..1L.md"
+    f.write_text(
+        "---\nbibcode: 2020lente..1..1L\ntags: [paper]\n"
+        "vistas:\n"
+        "- sujeto: Otra Estrella\n  tipo: star\n  fecha: '2026-08-29'\n  lente: [rv]\n"
+        "- sujeto: Estrella Test\n  tipo: star\n  fecha: '2026-09-01'\n  enfasis: ruido\n"
+        "  lente: [blanqueo, momentos]\n---\n\n# p\n\n"
+        "## Vista — Otra Estrella\n\n**Ejes:**\n\n- **rv:** algo\n\n"
+        "## Vista — Estrella Test\n\n### Lente — ruido\n\n**Ejes:**\n\n- **blanqueo:** algo\n",
+        encoding="utf-8")
+    d = cfg.EXTRACCION / "test_star"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "2020lente..1..1L.json").write_text(json.dumps(
+        {"bibcode": "2020lente..1..1L", "vista": {"sujeto": "Otra Estrella", "tipo": "star"},
+         "lente": ["rv"], "ejes": {"rv": "algo"}}), encoding="utf-8")
+    (d / "2020lente..1..1L__ruido.json").write_text(json.dumps(
+        {"bibcode": "2020lente..1..1L",
+         "vista": {"sujeto": "Estrella Test", "tipo": "star", "enfasis": "ruido"},
+         "lente": ["blanqueo", "momentos"], "ejes": {"blanqueo": "algo", "momentos": ""}}),
+        encoding="utf-8")
+    mn.restamp_lens()
+    cuerpo = f.read_text(encoding="utf-8")
+    assert cuerpo.index("- **momentos:**") > cuerpo.index("### Lente — ruido"), cuerpo
+    otra = cuerpo[cuerpo.index("## Vista — Otra Estrella"):cuerpo.index("## Vista — Estrella Test")]
+    assert "- **momentos:**" not in otra, otra

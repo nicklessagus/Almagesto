@@ -1098,7 +1098,11 @@ reconstruía hablando en vez de leyendo. En orden, con su consecuencia:
    cada re-lectura en una cascada de re-verificación.
 
 **El invariante (INV-146):** toda vista declara **los ejes vigentes al leerla** (`vistas[].lente`; con
-`enfasis`, los de ESA lente, #372), y
+`enfasis`, los de ESA lente, #372). ⛔ **Y la LENTE PREGUNTADA la escribe el PROMPT (#395):** el
+cosechador estampaba los ejes vigentes **al cosechar**, que es otra pregunta —medido, 209 slots
+declarando facetas agregadas al objetivo *después* de esas lecturas—; no se deriva de las claves de
+`ejes` (ésas son lo **contestado**, y tomarlas encoge el denominador de #270). Migrador:
+`make_notes.py --restamp-lente`, que además backfillea el eje preguntado y vacío. Y
 cambiar los ejes de un tema produce un **diff computable**, nunca una re-interpretación silenciosa. Una vista leída bajo los ejes A sigue siendo válida bajo los B: lo que cambia es su
 **cobertura**, y el detector de #270 pasa de ruido a señal.
 

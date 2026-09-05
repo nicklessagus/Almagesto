@@ -426,6 +426,15 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   lectura no ocurrió). Del lado del origen, el cosechador estampa el eje contestado en vacío como
   `_(sin datos)_`: sin eso la deuda es permanente, porque «se preguntó y no hay nada» no se
   distingue de «nunca se preguntó».
+  ⛔ **La comparación es por el par `(sujeto, énfasis)`** (#395c): una segunda lectura del mismo
+  sujeto (#239) contesta sus ejes en su `### Lente — …`, y el chequeo los buscaba en el bloque de la
+  primera — medido, **13 vistas** reportadas como «no contesta NINGUNO de sus 7 ejes» con los siete
+  ahí mismo. El mensaje nombra la lente, porque con dos lecturas del mismo sujeto «la vista de X» no
+  dice cuál hay que completar. ⛔ **Y la lente contra la que se compara la escribe el PROMPT**
+  (#395a): el cosechador estampaba los ejes vigentes **al cosechar** —209 slots declarando facetas
+  que la instancia agregó al objetivo *después* de esas lecturas—, así que este detector leía esa
+  declaración como verdad y pedía re-leer 209 papers para nada. Backfill de lo ya escrito:
+  `make_notes.py --restamp-lente`, por verdad de la extracción versionada.
 - **`no_vista` se consulta en las cuatro redes** (#268): la escotilla que #256 hizo alcanzable
   decidía sobre **una** categoría, y las otras tres contaban la misma nota como deuda — medido, una
   nota con `no_vista` declarado y motivo seguía recibiendo *«conseguir el PDF»* sobre una tabla

@@ -2657,10 +2657,16 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                                    f"del objetivo porque el tema no declara `ejes:` — declaralos "
                                    f"(#360) y este chequeo vuelve a comparar contra la lente propia"))
                         continue
-                    _faltan = [e for e in _lente if e not in _ejes_por_sujeto.get(_v["sujeto"], set())]
+                    # #395c — la clave es el PAR `(sujeto, énfasis)`: una segunda lectura del
+                    # mismo sujeto (#239) contesta SUS ejes en su `### Lente — …`, y con la clave
+                    # por sujeto se la comparaba contra los de la primera. Medido: 13 vistas
+                    # reportadas como «no contesta NINGUNO de sus 7 ejes» con los siete ahí mismo.
+                    _clave = (_v["sujeto"], str(_v.get("enfasis") or "").strip())
+                    _faltan = [e for e in _lente if e not in _ejes_por_sujeto.get(_clave, set())]
                     if _faltan:
+                        _cual = f" (lente «{_clave[1]}»)" if _clave[1] else ""
                         vista_ejes_faltantes.append(
-                            (stem, f"la vista de «{_v['sujeto']}» declara la lente "
+                            (stem, f"la vista de «{_v['sujeto']}»{_cual} declara la lente "
                                    f"`{', '.join(_lente)}` y no contesta `{', '.join(_faltan)}`: el "
                                    f"silencio sobre un eje se lee como «se miró y no hay nada»"))
                 # #239 — la coherencia de las SUB-secciones por lente, en los dos sentidos: una

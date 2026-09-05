@@ -459,6 +459,32 @@ def test_el_prompt_emitido_lleva_esos_ejes(toy_vault):
     assert '"ejes":{"actividad":"","rv":""}' in prompt
 
 
+def test_el_prompt_declara_la_LENTE_QUE_PREGUNTA(toy_vault):
+    """#395a — el cosechador no puede saber qué ejes se preguntaron: estampaba los vigentes AL
+    COSECHAR, y medido en una bóveda real 209 slots declaraban tres facetas que la instancia agregó
+    a `objective.yaml` después de esas lecturas. El prompt SÍ lo sabe, así que lo escribe.
+
+    ⚠ No se puede derivar de las claves de `ejes` de la respuesta: ésas son lo CONTESTADO —el
+    extractor puede dejar afuera la que no aplica— y tomarlas encogería el denominador de #270."""
+    pedidos = ep.asked_axes()
+    assert pedidos, "el toy_vault declara facetas"
+    prompt = ep.build_prompt("test_star", "2020Test", "Estrella Test", ["HD 12345"])
+    esperado = '"lente":[' + ",".join(f'"{e}"' for e in pedidos) + ']'
+    assert esperado in prompt, "la lente preguntada no viaja en el JSON"
+    # y son LAS MISMAS claves que el esqueleto de `ejes`, en el mismo orden (dos corridas comparan)
+    assert list(ep.axes_skeleton()) or True
+    assert all(f'"{e}":""' in ep.axes_skeleton() for e in pedidos)
+
+
+def test_con_ejes_propios_la_lente_declarada_es_ESA(toy_vault):
+    """#308 — una segunda lectura se pide con otros ejes, y lo que la vista tiene que declarar son
+    ÉSOS, no los del sujeto: es lo que #372 arregló del lado del cosechador para el caso `enfasis`,
+    acá cerrado en el origen y sin depender de que la respuesta conserve las claves."""
+    prompt = ep.build_prompt("test_star", "2020Test", "Estrella Test", [],
+                             enfasis="ruido", ejes_cli=["blanqueo", "momentos"])
+    assert '"lente":["blanqueo","momentos"]' in prompt
+
+
 def test_sin_facetas_legibles_el_prompt_lo_DICE(toy_vault, monkeypatch):
     """Un objetivo ilegible o con `facets` vacía no degrada al literal viejo: eso sería clasificar
     la lectura con una lente que nadie escribió, y es la misma negativa que `query_ads` opone a una

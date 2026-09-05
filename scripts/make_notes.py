@@ -373,6 +373,122 @@ def restamp_scope() -> int:
     return 0
 
 
+def _extraction_of(bibcode: str, enfasis: str = "") -> dict | None:
+    """The versioned extraction JSON of one reading, under whichever slug holds it (#311/#371)."""
+    import json
+    nombre = cfg.lens_filename(bibcode, enfasis)
+    for f in sorted(cfg.EXTRACCION.glob(f"*/{nombre}")) if cfg.EXTRACCION.exists() else []:
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError, OSError):
+            continue
+        if isinstance(data, dict):
+            return data
+    return None
+
+
+def _backfill_axes(text: str, sujeto: str, enfasis: str, ejes: dict) -> tuple:
+    """Adds the bullets of the axes the extraction ASKED and the note never printed (#395b).
+
+    Returns `(text, [added axes])`. An axis answered BLANK is stamped `_(sin datos)_` — filtering it
+    out is what made *"asked and there is nothing"* indistinguishable from *"never asked"*, which is
+    the false clean #270 exists to close. Measured: 48 pairs whose JSON has the key, empty, and
+    whose prose has no line for it (the harvester writes them since #270; the older views do not).
+
+    ⛔ ADD-ONLY: an axis the note already answers is never rewritten — the prose is the extractor's
+    and this is a migrator, not an editor. Without an `**Ejes:**` block it does nothing and says so:
+    creating the section would be inventing the shape of a reading nobody rendered."""
+    from harvest_views import SIN_DATOS       # import local: `harvest_views` importa este módulo
+    for suj, enf, ini, fin in cfg.view_lens_spans(text):
+        if suj != sujeto or enf != (enfasis or ""):
+            continue
+        trozo = text[ini:fin]
+        m = re.search(r"^\*\*Ejes:\*\*\s*$", trozo, re.M)
+        if not m:
+            return text, []
+        ya = cfg.view_axes(text).get((sujeto, enf), set())
+        faltan = [k for k in ejes if k not in ya]
+        # El final del bloque son los bullets CONTIGUOS: se inserta ahí, no al final de la sección,
+        # que es donde viven `**Aporte:**` y la tabla de ground-truth.
+        pos, arranco = m.end(), False
+        for linea in trozo[m.end():].split("\n"):
+            if linea.strip().startswith("- "):
+                pos += len(linea) + 1; arranco = True
+            elif arranco or linea.strip():
+                break
+            else:
+                pos += len(linea) + 1
+        add = "".join(f"- **{k}:** {str(ejes[k]).strip() or SIN_DATOS}\n" for k in faltan)
+        return text[:ini + pos] + add + text[ini + pos:], faltan
+    return text, []
+
+
+def restamp_lens() -> int:
+    """#395 — re-stamps `vistas[].lente` and back-fills the axis lines, by truth of the extraction.
+
+    Two halves of one defect, and the order matters: the lens was stamped with the axes in force
+    **when harvesting** —another question— so 209 slots of a real vault declared three facets the
+    instance added to `objective.yaml` after those readings; and the detector of #270 reads that
+    declaration as truth, so it asked to re-read 209 times for nothing.
+
+    ⚠ The authority is the JSON's `lente`, which only extractions made from #395 on carry. For the
+    older ones the fallback is the KEYS of `ejes` —what the prompt seeded— and that is a **lower
+    bound**, declared per note: if the extractor dropped a key that was asked, that axis is not
+    recoverable from disk. It is still strictly better than the config lens, which describes a
+    reading that did not happen."""
+    import harvest_views as hv_mod
+    n_lente = n_ejes = 0
+    sin_json: list = []
+    por_claves: list = []
+    for f in sorted(cfg.PAPERS.glob("*.md")) if cfg.PAPERS.exists() else []:
+        try:
+            text = f.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        fm = cfg.split_fm(text) or {}
+        vistas = [v for v in cfg.as_list(fm.get("vistas")) if isinstance(v, dict)]
+        if not vistas:
+            continue
+        bib = str(fm.get("bibcode") or "").strip() or f.stem
+        for v in vistas:
+            sujeto = str(v.get("sujeto") or "").strip()
+            enfasis = str(v.get("enfasis") or "").strip()
+            data = _extraction_of(bib, enfasis)
+            if data is None:
+                sin_json.append(f"{f.stem} · «{sujeto}»"
+                                + (f" (lente «{enfasis}»)" if enfasis else ""))
+                continue
+            ejes = cfg.as_map(data.get("ejes")) or {}
+            declarada = [str(x).strip() for x in cfg.as_list(data.get("lente")) if str(x).strip()]
+            lente = declarada or list(ejes)
+            if not declarada and ejes:
+                por_claves.append(f"{f.stem} · «{sujeto}»")
+            if lente and list(cfg.as_list(v.get("lente"))) != lente:
+                entrada = {"sujeto": sujeto, "tipo": v.get("tipo") or "star", "lente": lente}
+                if enfasis:
+                    entrada["enfasis"] = enfasis
+                try:
+                    if hv_mod.upsert_view(f, entrada, force=True):
+                        n_lente += 1
+                except hv_mod.ViewUpsertError as exc:
+                    cfg.print_seguro(f"  ⛔ {f.stem}: {exc}")
+                    continue
+                text = f.read_text(encoding="utf-8")
+            text, add = _backfill_axes(text, sujeto, enfasis, ejes)
+            if add:
+                cfg.write_text_atomic(f, text)
+                n_ejes += 1
+    cfg.print_seguro(f"papers: {n_lente} vista(s) con `lente` re-estampada y {n_ejes} con líneas de "
+                     f"eje backfilleadas desde la extracción (#395)")
+    for x in sin_json:
+        cfg.print_seguro(f"  ⚠ sin extracción en disco, la vista NO se tocó: {x}")
+    if por_claves:
+        cfg.print_seguro(f"  ⚠ {len(por_claves)} vista(s) sin `lente:` en su JSON (pre-#395): la lente "
+                         f"se tomó de las CLAVES de `ejes`, que es una COTA INFERIOR — un eje que el "
+                         f"extractor omitió no se recupera del disco")
+    return 0
+
+
 def stamp_fulltext(dest, stem: str, slug: str | None) -> bool:
     """Estampa/actualiza `fulltext:` + `fulltext_source:` (verdad de disco) en una nota que YA
     existe. Hace falta porque en la cadena ADS el stub nace ANTES que el .txt (make_notes corre
@@ -3998,6 +4114,10 @@ def main() -> int:
     ap.add_argument("--restamp-sources-meta", action="store_true", dest="restamp_sources_meta",
                     help="#353: re-sincroniza title/first_author/year/doi/n_authors del stub off-ADS "
                          "desde su item de `sources:` (la corrección de la config no llegaba a la nota)")
+    ap.add_argument("--restamp-lente", action="store_true", dest="restamp_lente",
+                    help="#395: re-estampa `vistas[].lente` y backfillea las líneas de eje desde la "
+                         "extracción versionada (la lente son los ejes que se PREGUNTARON, no los "
+                         "vigentes al cosechar). No requiere slug.")
     ap.add_argument("--restamp-alcance", action="store_true", dest="restamp_alcance",
                     help="#312: re-estampa `alcance`/`unidad_cita` de las notas desde `sources[]` de "
                          "themes.yaml (la config es la autoridad). No requiere slug.")
@@ -4093,6 +4213,8 @@ def main() -> int:
         return restamp_sources_meta()
     if args.restamp_alcance:
         return restamp_scope()
+    if args.restamp_lente:
+        return restamp_lens()
 
     if args.migrate_extracciones:
         n, choques = migrate_all_extracciones()
@@ -4155,7 +4277,7 @@ def main() -> int:
     if not args.slug:
         ap.error("falta el slug (corren sin slug: --restamp-pdf-links, --restamp-keywords, "
                  "--restamp-headers, --restamp-abstracts, --restamp-vista-stub, "
-                 "--restamp-alcance, --clean-catalog-markup, "
+                 "--restamp-alcance, --restamp-lente, --clean-catalog-markup, "
                  "--migrate-disputes, --migrate-bearing, --migrate-extracciones, "
                  "--migrate-source-fields, "
                  "--migrate-txt-fields, --migrate-vistas, --sync-mirror y --rename-paper)")

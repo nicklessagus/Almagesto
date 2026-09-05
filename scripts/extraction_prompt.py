@@ -22,6 +22,7 @@ over 10 models), prompts that explicitly ask to avoid imprecision **double** ove
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -366,20 +367,37 @@ def axes_skeleton(meta=None) -> str:
     cannot read instead of silently falling back to an empty one (INV-80).
 
     @inv INV-143"""
+    pedidos = asked_axes(meta)
+    if pedidos is None:                   # el tema declara `ejes: []` — a propósito, no es un error
+        return ('{"SIN_EJES": "el tema declara `ejes: []` — NO se piden ejes en esta lectura; '
+                'lo que el paper aporte va en `aporte` y `ground_truth`."}')
+    if not pedidos:
+        return ('{"SIN_FACETAS": "⛔ `relevance.facets` de `vault/config/objective.yaml` no se pudo '
+                'leer o vino vacia: NO inventes ejes. Frena y avisale al orquestador."}')
+    return "{" + ",".join(f'"{k}":""' for k in pedidos) + "}"
+
+
+def asked_axes(meta=None) -> list | None:
+    """The axis NAMES this prompt is about to ask for — `None` when the theme declares `ejes: []`.
+
+    Split out of `axes_skeleton` for #395: the prompt is the only place that knows, with certainty,
+    which axes a reading was asked about, and until now it only wrote them as JSON *keys* of the
+    answer. The harvester therefore stamped `vistas[].lente` with the axes in force **at harvest
+    time**, which is a different question: measured on a real vault, 209 slots declared three facets
+    the instance added to `objective.yaml` **after** those extractions ran, on readings where nobody
+    asked for them. That breaks INV-146 in its literal wording and with it the D-49 diff.
+
+    ⚠ `None` (the theme asked for no axes) and `[]` (the lens could not be read) are different and
+    the caller must not collapse them: the first is a decision, the second is a refusal to invent a
+    lens — the same doctrine `query_ads` follows (INV-80)."""
     propios = cfg.theme_axes(meta)        # #307: la mitad simétrica de D-26
     if propios is not None:
-        if not propios:
-            return ('{"SIN_EJES": "el tema declara `ejes: []` — NO se piden ejes en esta lectura; '
-                    'lo que el paper aporte va en `aporte` y `ground_truth`."}')
-        return "{" + ",".join(f'"{k}":""' for k in propios) + "}"
+        return list(propios) or None
     try:
         facets = cfg.as_map(cfg.as_map(cfg.load_objective().get("relevance")).get("facets"))
     except Exception:                     # objetivo ilegible: se DICE, no se inventa una lente
         facets = {}
-    if not facets:
-        return ('{"SIN_FACETAS": "⛔ `relevance.facets` de `vault/config/objective.yaml` no se pudo '
-                'leer o vino vacia: NO inventes ejes. Frena y avisale al orquestador."}')
-    return "{" + ",".join(f'"{k}":""' for k in facets) + "}"
+    return list(facets)
 
 
 #: #245 · cuántos métodos conocidos entran al prompt. Es un tope DECLARADO, no silencioso: en una
@@ -465,6 +483,13 @@ def build_prompt(slug: str, bibcode: str, name: str, aliases, texto: str = "",
     # pide una segunda lectura con otra lente, que es lo que la hace distinta de la primera.
     ejes = ("{" + ",".join(f'"{e}":""' for e in ejes_cli) + "}") if ejes_cli \
         else axes_skeleton(meta)
+    # #395 — la LENTE PREGUNTADA viaja en el JSON. El cosechador no la sabe: estampaba los ejes
+    # vigentes al cosechar, que es otra pregunta (medido: 209 slots declarando facetas que la
+    # instancia agregó DESPUÉS de esas lecturas). Y no se puede derivar de las claves de `ejes`,
+    # porque el extractor puede dejar afuera la que no aplica y ahí el denominador de #270 se
+    # encogería solo — la razón por la que #372 no lo hizo así.
+    lente_pedida = json.dumps(list(ejes_cli) if ejes_cli else (asked_axes(meta) or []),
+                              ensure_ascii=False, separators=(",", ":"))
     metodos_conocidos = known_methods()   # #245: el vocabulario que la bóveda ya tiene
     hay_pdf = cfg.pdf_slug(bibcode, slug) is not None    # #305: la misma resolución que el cosechador
     hay_txt = (cfg.FULLTEXT / slug / f"{bibcode}.txt").exists()
@@ -523,14 +548,16 @@ Escribí el resultado en `{out}` y devolvé el mismo JSON en **un solo bloque** 
 {{"bibcode":"{bibcode}","vista":{{"sujeto":"{sujeto}","tipo":"{tipo}","txt":"{slug}","fuente":"pdf"}},
  "role":["fundacional"|"aplicacion"|"arbitro"],"methods":[],"thesis_links":[],"refuta":[],
  "ground_truth":[{{"que":"","valor":"","linea":"","regimen":"","segunda_mano":null}}],
- "ejes":{ejes},
+ "ejes":{ejes},"lente":{lente_pedida},
  "aporte":"","hueco":"","salvedades":[],
  "abstract":"","abstract_es":"","conclusiones":"","conclusiones_es":""}}
 
 ⛔ Sin comas finales: tiene que parsear con `json.loads`. El nombre del archivo lleva el bibcode
 porque varios extractores corren en paralelo y un nombre genérico se pisa **en silencio**.
-`vista` va tal cual: dice de quién es esta lectura y de qué copia del `.txt` salió. La `fecha` y la
-`lente` no las escribís vos — las estampa el cosechador, que las sabe con certeza.
+`vista` va tal cual: dice de quién es esta lectura y de qué copia del `.txt` salió. La `fecha` la
+estampa el cosechador. ⛔ **`lente` va tal cual, sin tocar** (#395): son los ejes que ESTA lectura
+preguntó, y es lo único que el cosechador no puede saber —él conoce los ejes vigentes cuando cosecha,
+que es otra pregunta—. No la completes ni la recortes según lo que hayas contestado.
 ⛔ **Las ayudas de lectura** (#124). `abstract_es` es la traducción al castellano del `## Abstract`
 —la traducción va **al lado**, el original no se pisa—. `abstract`: dejalo **vacío** si la nota ya
 trae la sección (viene del catálogo y es la capa auditable); llenalo, transcrito del PDF, **sólo si

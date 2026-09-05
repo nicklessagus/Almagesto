@@ -664,8 +664,18 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False) -> dict:
         # como lente encogería el denominador del detector de ejes sin contestar (#254/#270), que
         # pasaría de medir cobertura a no poder medirla. `enfasis` es la marca DECLARADA de que esta
         # lectura se pidió con otra lente, así que ahí sus claves sí son lo preguntado.
+        # #395 — y la fuente PRIMERA es la lente que la extracción DECLARA: `extraction_prompt` es
+        # el único que sabe con certeza qué ejes preguntó, y desde #395 los escribe en `lente`. Sin
+        # eso el cosechador estampaba los ejes vigentes AL COSECHAR —otra pregunta—: medido, 209
+        # slots declarando tres facetas que la instancia agregó a `objective.yaml` después de esas
+        # lecturas, sobre papers donde nadie las preguntó. Rompe INV-146 y con él el diff de D-49,
+        # y encima el detector de #270 lee esa declaración como verdad y pide re-leer 209 veces.
         _propios = cfg.as_map(data.get("ejes"))
-        lente_vista = list(_propios) if (vista.get("enfasis") and _propios) else list(lente)
+        _declarada = [str(x).strip() for x in cfg.as_list(data.get("lente")) if str(x).strip()]
+        if _declarada:
+            lente_vista = _declarada
+        else:
+            lente_vista = list(_propios) if (vista.get("enfasis") and _propios) else list(lente)
         entrada = {"sujeto": sujeto, "tipo": tipo, "fecha": hoy, "lente": lente_vista}
         # #239 — la lente con la que se leyó, si la extracción declara una. Ausente = la lectura
         # por default del sujeto; presente = una segunda lectura que CONVIVE con la anterior.

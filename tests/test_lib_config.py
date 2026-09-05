@@ -1945,13 +1945,53 @@ _VISTA_EJES = """## Vista — tau Cet (2026-08-30)
 
 
 def test_view_axes_lee_los_bullets_del_bloque_de_ejes():
-    assert cfg.view_axes(_VISTA_EJES) == {"tau Cet": {"rv", "activity"}}
+    assert cfg.view_axes(_VISTA_EJES) == {("tau Cet", ""): {"rv", "activity"}}
 
 
 def test_view_axes_no_cuenta_los_bullets_de_fuera_del_bloque():
     """⛔ `- **Aporte:**` y `- **Hueco:**` no son ejes: una regex de bullets en negrita a secas los
     contaría y taparía justo el hueco que el detector de #270 busca."""
-    assert "Hueco" not in cfg.view_axes(_VISTA_EJES)["tau Cet"]
+    assert "Hueco" not in cfg.view_axes(_VISTA_EJES)[("tau Cet", "")]
+
+
+def test_el_bloque_de_ejes_CORTA_en_la_linea_en_blanco():
+    """La mitad que `_VISTA_EJES` no distingue: ahí lo que sigue al blanco es prosa (`**Aporte:**`),
+    que corta por ser no-bullet. Un BULLET después del blanco —`- **Hueco:**`, la forma real de una
+    vista— sólo queda afuera porque el blanco ya cerró el bloque; sin eso entraba al conjunto de
+    ejes y tapaba el hueco que el detector busca."""
+    texto = "## Vista — X\n\n**Ejes:**\n\n- **rv:** una medición\n\n- **Hueco:** falta el PDF\n"
+    assert cfg.view_axes(texto) == {("X", ""): {"rv"}}
+
+
+def test_el_bloque_de_ejes_no_arranca_despues_de_prosa():
+    """El simétrico: los blancos INICIALES se saltean (el escritor deja uno), pero una línea con
+    texto antes del primer bullet cierra el bloque ahí — si no, cualquier bullet de más abajo se
+    leería como eje de una sección que no los declaró."""
+    texto = "## Vista — X\n\n**Ejes:**\n\ntexto suelto\n- **rv:** una medición\n"
+    assert cfg.view_axes(texto) == {}
+
+
+def test_view_axes_lee_cada_LENTE_por_separado():
+    """#395c — la clave es el par `(sujeto, énfasis)`. Antes se tomaba el PRIMER `**Ejes:**` de la
+    sección y se indexaba por sujeto, así que la segunda lectura del mismo sujeto (#239) se
+    comparaba contra los ejes de la primera: medido, 13 vistas reportadas como «no contesta NINGUNO
+    de sus 7 ejes» con los siete contestados ahí mismo, en su `### Lente — …`."""
+    texto = ("## Vista — tau Cet\n\n**Ejes:**\n\n- **rv:** algo\n- **activity:** _(sin datos)_\n"
+             "\n### Lente — cuantas componentes\n\n**Ejes:**\n\n- **whitening:** otra cosa\n")
+    assert cfg.view_axes(texto) == {("tau Cet", ""): {"rv", "activity"},
+                                    ("tau Cet", "cuantas componentes"): {"whitening"}}
+
+
+def test_view_lens_spans_marca_el_limite_de_cada_lectura():
+    """El mismo corte, con offsets, para quien tiene que ESCRIBIR adentro de una lectura (#395b):
+    un backfill que no viera el límite pegaría los ejes de una lente en la sub-sección de la otra."""
+    texto = ("## Vista — X (2026-08-30)\n\n**Ejes:**\n\n- **rv:** a\n"
+             "\n### Lente — L2\n\n**Ejes:**\n\n- **w:** b\n")
+    spans = cfg.view_lens_spans(texto)
+    # El sufijo que arranca con puntuación se recorta (AUD-178): el sujeto es `X`, no `X (2026-…)`.
+    assert [(s, e) for s, e, _i, _f in spans] == [("X", ""), ("X", "L2")]
+    assert texto[spans[1][2]:spans[1][3]].startswith("### Lente — L2")
+    assert "rv" not in texto[spans[1][2]:spans[1][3]]
 
 
 def test_view_axes_ignora_un_encabezado_dentro_de_un_fence():

@@ -1006,3 +1006,30 @@ def test_el_remedio_por_nota_faltante_NO_lleva_theme_en_una_ESTRELLA(toy_vault, 
     assert hv.harvest("test_star")["sin_nota"] == 1
     out = capsys.readouterr().out
     assert "`python scripts/make_notes.py test_star`" in out and "--theme" not in out
+
+
+def test_la_lente_DECLARADA_por_la_extraccion_gana_sobre_los_ejes_vigentes(toy_vault):
+    """#395a — el cosechador no sabe qué ejes se preguntaron: estampaba los vigentes AL COSECHAR,
+    que es otra pregunta. Medido en una bóveda real: 209 slots declarando tres facetas que la
+    instancia agregó a `objective.yaml` DESPUÉS de esas lecturas, sobre papers donde nadie las
+    preguntó — rompe INV-146, y el detector de #270 lee esa declaración como verdad y pide re-leer.
+
+    Desde #395 la lente viaja en el JSON, escrita por `extraction_prompt`, que es el único que la
+    sabe con certeza. Acá la declarada NO es la del objetivo, así que si el cosechador la ignorara
+    el assert cae."""
+    pedidos = ["rv", "un_eje_que_el_objetivo_no_declara"]
+    sembrar(toy_vault, extraccion(lente=pedidos))
+    hv.harvest("test_star")
+    v = read_fm(cfg.PAPERS / f"{BIB}.md")["vistas"][0]
+    assert v["lente"] == pedidos, v["lente"]
+    assert v["lente"] != list(mn.objective_lens()[0])
+
+
+def test_sin_lente_declarada_sigue_mandando_la_del_sujeto(toy_vault):
+    """#395a, el recorte — una extracción PRE-#395 no trae `lente:`, y ahí el comportamiento
+    anterior (#372) se mantiene tal cual: las claves de `ejes` de una lectura normal son lo
+    CONTESTADO, no lo preguntado, y tomarlas encogería el denominador de #270."""
+    sembrar(toy_vault, extraccion(ejes={"rv": "reporta K"}))
+    hv.harvest("test_star")
+    v = read_fm(cfg.PAPERS / f"{BIB}.md")["vistas"][0]
+    assert v["lente"] == list(mn.objective_lens()[0])
