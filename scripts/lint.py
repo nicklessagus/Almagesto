@@ -1,7 +1,9 @@
 """Lint de la wiki — chequeo de salud (operación del patrón LLM Wiki).
 
 Uso:
-    python scripts/lint.py            # imprime resumen y escribe outputs/lint-<fecha>.md
+    python scripts/lint.py                    # imprime resumen y escribe outputs/lint-<fecha>.md
+    python scripts/lint.py --cierre [<slug>]  # R-1/#121: los pares vencidos cuentan para el exit;
+                                              # con slug (estrella/tema) sólo los de ese sujeto
 
 Detecta: wikilinks rotos (página faltante), **frontmatter no parseable o con forma inválida**
 (nota que empieza con `---` pero cuyo YAML no parsea, o un campo que el schema declara lista escrito
@@ -490,7 +492,6 @@ def merge_ours_driver_risk() -> tuple[list[str], str | None]:
     return patrones, None
 
 
-#  @inv INV-128
 GT_STALE_MARK = "⚠desactualizado"
 
 #: #321/#324 · el umbral de «se completó al copiar» vive en `lib_config`, junto con la regla que lo
@@ -855,9 +856,7 @@ def legacy_disputes(fm: dict) -> tuple[int, list]:
 # sea que la máquina producía su propia violación. Un typo en cualquiera de los dos deja el campo
 # mudo para la operación que lo consume —el contraste cross-paper en `role`, la decisión de apoyarse
 # en la hipótesis en `status`—, el mismo modo de falla de un `thesis_links` sin destino.
-#  @inv INV-46
 HYP_STATUS = cfg.HYP_STATUS
-#  @inv INV-46
 ROLES = cfg.ROLES
 
 
@@ -1700,6 +1699,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             if BIBCODE_RE.match(tgt):
                 nbib += 1
                 if in_verifiable_note and tgt not in fulltext:
+                    # @inv INV-03
                     unverifiable.append((stem, f"cita {tgt} sin fulltext (no chequeable claim↔fuente)"))
         # #344 — los links del HERMANO cuentan como los de la nota. La tabla vivía adentro hasta
         # 1.164.0, así que sacarla del barrido bajaría en silencio la población del detector de
@@ -1719,6 +1719,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             if tgt in incoming and stem != "index":
                 incoming[tgt] += 1
             elif tgt not in names:
+                # @inv INV-02
                 broken.append((stem, tgt))
             # #75: "citado" se mide contra el STEM de la nota de paper, así que se registra todo
             # target de una nota de entidad — no sólo los que parecen bibcode. Una clave sintética
@@ -2001,6 +2002,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         # verificado. Las otras dos son backlog: molestan, no ocultan.
         if stem not in NON_ORPHAN:
             for _ln, _got, _want in cfg.table_shape_issues(body_full):
+                # @inv INV-149
                 forma_rota.append(
                     (stem, f"L{_ln + _offset}: fila de tabla con {_got} celda(s) y su encabezado "
                            f"tiene {_want} → las de más NO se renderizan (¿dos filas empalmadas en "
@@ -2195,6 +2197,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         if in_dir(f, "hypotheses") and not err:
             st = fm.get("status")
             if st is not None and st not in HYP_STATUS:
+                # @inv INV-46
                 bad_status.append((stem, f"`status: {st}` fuera del vocabulario "
                                          f"({' | '.join(HYP_STATUS)})"))
             # D-37 · #177: `status` se DERIVA de la tabla de evidencia. `CLAUDE.md` promete que una
@@ -2452,6 +2455,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             # inventar — pero sin él un recorte deliberado se lee como omisión.
             if (_u := str(fm.get("unidad_cita") or "").strip()):
                 if _u not in cfg.UNIDAD_CITA_OK:
+                    # @inv INV-46, INV-109
                     bad_roles.append((stem, f"`unidad_cita: {_u}` fuera del vocabulario "
                                             f"({' | '.join(cfg.UNIDAD_CITA_OK)}) — el verificador "
                                             f"no sabe cómo citar esta fuente"))
@@ -2480,6 +2484,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 if _v in (None, ""):
                     continue          # ausente/`null` = DESCONOCIDO, que es un valor legítimo (#57)
                 if str(_v).strip() not in _ok:
+                    # @inv INV-46
                     bad_roles.append((stem, f"`{_campo}: {str(_v)[:60]}` fuera del vocabulario "
                                             f"({' | '.join(_ok)}) — `null`/ausente es el valor de "
                                             f"«desconocido»; si querías escribir una nota, va a "
@@ -2523,6 +2528,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                     # cuatro vocabularios cerrados del schema. El argumento de INV-108 (*"el motivo
                     # no se puede inventar"*) justifica el backlog del `pending_motivo` FALTANTE,
                     # que sigue abajo; no el de un valor que nadie declaró.
+                    # @inv INV-46, INV-108
                     bad_roles.append((stem, f"`pending_source: {_p}` fuera del vocabulario "
                                             f"({' | '.join(cfg.PENDING_OK)})"))
                 pending_srcs.append(
@@ -2783,6 +2789,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             roles = rol if isinstance(rol, list) else ([rol] if rol else [])
             for r in roles:
                 if str(r).strip() not in ROLES:
+                    # @inv INV-46
                     bad_roles.append((stem, f"`role: {r}` no está en el vocabulario "
                                             f"({'/'.join(ROLES)}) → typo: el rol queda mudo para el "
                                             f"contraste cross-paper"))
@@ -3272,6 +3279,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # exista, la prosa de esa ficha se escribió contra valores que ya no son los publicados. No
     # bloquea —la frase puede seguir siendo correcta, y borrarla destruiría trabajo—: se pide la
     # marca, igual que con una fuente retractada (D-47). Con la marca puesta baja a informativo.
+    # @inv INV-128
     gt_cambiado: list = []
     gt_cambiado_marcado: list = []
     for gt in sorted(glob.glob(str(cfg.GROUND_TRUTH / "*.json"))):
@@ -3554,6 +3562,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                          f"\"<motivo>\"`"))
 
     # contradicción ground-truth ↔ ficha (qué planetas + campo por campo) + masa sospechosa
+    # @inv INV-10
     mass_issues = []
     vistos_gt = set()
     for gtf in sorted(glob.glob(str(cfg.GROUND_TRUTH / "*.json"))):
@@ -3731,6 +3740,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 unsynthesized.append((stem, "`no_sintetizado` sin motivo → poné POR QUÉ no se "
                                             "inlinea (regla de poda, aporta sólo vía roll-up, …)"))
             continue
+        # @inv INV-45
         unsynthesized.append((stem, "extraído (`methods` poblado) pero su bibcode no está citado en "
                                     "ninguna ficha ni concepto → sintetizarlo donde corresponda, o "
                                     "marcar `no_sintetizado: <motivo>` en la nota del paper"))
@@ -3839,6 +3849,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         not_evaluated.append(("clasificación de relevancia (la lente)", obj_err))
 
     objective_warn = []
+    # @inv INV-57
     if not obj_err and cfg.load_objective().get("name") == cfg.DEFAULT_OBJECTIVE_NAME:
         objective_warn.append(
             ("vault/config/objective.yaml",
@@ -3856,6 +3867,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # ya migraste la bóveda. Bloqueante: sin lente no hay corpus, y con `require` colgando de una
     # faceta inexistente el corte no es "todo core" sino "nada core", que se ve igual que "no hay
     # papers".
+    # @inv INV-150
     lente_rota = []
     if not obj_err:
         _rel = cfg.as_map(cfg.load_objective().get("relevance"))
@@ -3879,6 +3891,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # hay en disco: eso convertiría un typo ya cometido en "área declarada"). Se reporta la ausencia
     # una vez, en vez de marcar todas las carpetas como no declaradas.
     declared_areas = set(cfg.load_concept_areas())
+    # @inv INV-47
     undeclared_areas = []
     if not declared_areas:
         undeclared_areas.append(
@@ -3897,6 +3910,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # en la raíz significa que el repo entero se abrió como vault y el grafo indexa el andamiaje
     # (outputs/, build/, scripts/, README, tests/). Error de operación silencioso: sólo se nota
     # mirando el grafo, y sin este check nadie lo mira.
+    # @inv INV-65
     root_obsidian = []
     if (cfg.ROOT / ".obsidian").exists():
         root_obsidian.append(
@@ -4045,6 +4059,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         # nadie lo diría. Sólo se evalúa para ESTRELLAS: el orden de un tema depende de su `source`
         # (off-ADS no corre query_ads ni fetch_ground_truth) y compararlo contra el orden astro
         # inventaría cortes que no existen.
+        # @inv INV-44
         if slug in stars_slugs and (corte := cfg.cadena_cortada(slug)):
             if corte == cfg.CADENA_SIN_TRAZA:
                 # AUD-149: esto devolvía `None` —el valor de "corrió entera"—, así que el sujeto sin
@@ -4382,6 +4397,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # sólo dentro de un slug — acá se ve la colisión **declarada**, incluso entre temas distintos y
     # antes de gastar red. La forma de la clave ya la valida `BIBCODE_RE`; lo que faltaba es la
     # unicidad, que es la otra mitad del invariante.
+    # @inv INV-27
     _por_clave: dict = {}
     for _slug, _meta in ({} if cfg.themes_error() else (cfg.load_themes() or {})).items():
         for _it in cfg.as_list(cfg.as_map(_meta).get("sources")):

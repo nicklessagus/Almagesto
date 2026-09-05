@@ -179,11 +179,16 @@ Los pasos 4–9 corren **sólo si el usuario pide archivar**:
    lo que el texto **realmente** dice, y ahí es donde se comprueba. El veredicto global no entra —
    está marcado `inferencia`, que es justamente la declaración de que no hay fuente que lo diga.
 
-8. **Chequeo de salud**: correr `python scripts/lint.py --cierre <slug>` antes de commitear (#121). Debe quedar en **0**
+8. **Chequeo de salud**: correr `python scripts/contrast.py --validar vault/wiki/concepts/hypotheses/<slug-hipotesis>.md`
+   (#323: el cruce barato de las citas contra la extracción, antes de pagar el verify) y después
+   `python scripts/lint.py --cierre` antes de commitear (#121). ⛔ **Sin slug**: `--cierre <slug>`
+   acota a un sujeto de `stars.yaml`/`themes.yaml` y con el slug de una hipótesis **rehúsa** (rc 2,
+   `entidad desconocida`); una nota de `concepts/hypotheses/` nunca entra a ese alcance, así que el
+   cierre de una hipótesis es el **global**. Debe quedar en **0**
    en las **categorías bloqueantes**: cuáles son lo decide el `exit code` del lint (1 si hay), y la
    lista canónica vive en `CLAUDE.md` — **no la copies acá**, que es cómo se desincronizó antes. La
-   **fuga de implementación** y las **citas no verificables** son WARN a revisar a mano (los "campos
-   incompletos" son backlog). Ojo con el tag del nuevo
+   **fuga de implementación** es WARN a revisar a mano; las **citas no verificables**
+   (`unverifiable`) y los "campos incompletos" son backlog. Ojo con el tag del nuevo
    `thesis_link`: tiene que matchear el nombre de la página de hipótesis (typo típico: guion vs guion_bajo).
 
 8b. **Contradicciones en los ejes tocados (D-39).** Si la hipótesis puso a dos papers a hablar del

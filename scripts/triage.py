@@ -5,6 +5,12 @@ Uso:
     python scripts/triage.py <slug> --report                          # + tabla en outputs/triage-<slug>.md
     python scripts/triage.py <slug> --drop <bib> [<bib> …] --reason "<motivo>"
     python scripts/triage.py <slug> --drop-source <clave> […] --reason "<motivo>" [--pointer <url|doi>]
+    python scripts/triage.py <slug> --drop-core <bib> […] --reason "<motivo>"      # #112: sacar un CORE del sujeto
+    python scripts/triage.py <slug> --accept-source <doi> […] --via <via> --reason "<motivo>"  # #111: entrada lista para pegar
+    python scripts/triage.py <slug> --promote-source <clave> --bibcode <bib>    # fuente off-ADS que resultó tener bibcode
+    python scripts/triage.py <slug> --prioridad                                # core agrupados por puerta (#126)
+    python scripts/triage.py <slug> --extraccion todos|subconjunto [--reason …]  # D-13: qué se leyó
+    python scripts/triage.py <slug> --sintesis [--n-papers N] [--reason …]     # INV-82: fecha de síntesis
     python scripts/triage.py <slug> --migrate                 # consolidar el triage.json pre-1.9.0
 
 El chaining trae papers conectados por citas al corpus del sujeto. La lente
@@ -454,9 +460,10 @@ def _notes_citing(bibcode: str) -> list:
             and (f"[[{stem}]]" in (txt := f.read_text(encoding="utf-8")) or f"[[{stem}|" in txt)]
 
 
-#  @inv INV-127
 def drop_core(slug: str, bibcodes: list, motivo: str) -> int:
     """Saca un paper que la lente dice CORE de ESTE sujeto, y borra sus artefactos (#112).
+
+    @inv INV-127
 
     Es el simétrico que a `extra_core` le faltaba. Hasta ahora `--drop` sólo evitaba re-proponer un
     candidato del chaining: sobre un core no tenía efecto, así que un descarte con motivo quedaba

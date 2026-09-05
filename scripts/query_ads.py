@@ -1484,7 +1484,7 @@ def main() -> int:
         sys.exit(f"⛔ no se puede clasificar: {err}\n"
                  "   Arreglá la lente antes de consultar ADS — clasificar con una lente vacía "
                  "marcaría el corpus entero con una regla que nadie escribió.")
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("slug", nargs="?",
                     help="slug de estrella (o tema con --theme). Se omite con --probe.")
     ap.add_argument("--rows", type=int, default=2000,

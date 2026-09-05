@@ -210,7 +210,8 @@ def fetch_planets(tab, mstar_msun=None) -> list[dict]:
 
 
 def fetch_host(host: str, tab=None) -> dict:
-    """Datos del host: primero de NEA (columnas host de pscomppars — pasar la tabla ya
+    """@inv INV-76
+    Datos del host: primero de NEA (columnas host de pscomppars — pasar la tabla ya
     consultada; si viene None se consulta acá, tolerante), luego SIMBAD **sólo** para `spectral_type` (`cfg.AUTORIDAD_CAMPO` se lo asigna a SIMBAD; `ra_deg`/`dec_deg` son de NEA y SIMBAD no los aporta acá — si NEA falla quedan `None`, y ésa es la ausencia que el JSON declara, no un dato perdido).
 
     H-14/H-15: antes, una falla de NEA o de SIMBAD acá se escribía al payload como
@@ -378,7 +379,7 @@ def _flags_usados(args, ap=None) -> list:
 
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("slug")
     ap.add_argument("--force", action="store_true",
                     help="refrescar un ground-truth existente desde NEA/SIMBAD (pisa el snapshot)")

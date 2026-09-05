@@ -58,16 +58,18 @@ usar `test-hypothesis`).
    y actualizar `vault/wiki/log.md`.
 
 5. **Verificar citas (si se archivó en `vault/wiki/`)**: correr el skill `verify-citations` sobre la nota
-   archivada — chequea afirmación por afirmación contra el fulltext (cita textual + nº de línea del
-   `.txt` obligatorios; sin respaldo textual ⇒ no-soportada). Resolver cada no-soportada/contradice
+   archivada — chequea afirmación por afirmación contra la fuente (#205: el **PDF**, con cita
+   textual + nº de **página** obligatorios y la fila anclada `pdf:<sha10>`; el `.txt` sólo ubica con
+   `grep`, y queda como fuente citada por línea únicamente en la fuente **web**; sin respaldo
+   textual ⇒ no-soportada). Resolver cada no-soportada/contradice
    (bajar la afirmación a lo que dice la fuente, reasignar la cita al bibcode correcto, o marcar
    `inferencia`) y dejar el bloque `## Verificación de citas` en la nota.
 
 6. **Chequeo de salud (si se escribió en `vault/wiki/`)**: correr `python scripts/lint.py --cierre` antes de
    commitear. Debe quedar en **0** en las **categorías bloqueantes**: cuáles son lo decide el
    `exit code` del lint (1 si hay), y la lista canónica vive en `CLAUDE.md` — **no la copies acá**,
-   que es cómo se desincronizó antes. La **fuga de implementación** y las **citas no verificables**
-   son WARN/precondición a revisar a mano (los "campos incompletos" son backlog, no bloquean). Si creaste un `thesis_link`/concepto nuevo, verificá que el tag matchee el
+   que es cómo se desincronizó antes. La **fuga de implementación** es WARN a revisar a mano; las
+   **citas no verificables** (`unverifiable`) y los "campos incompletos" son backlog, no bloquean. Si creaste un `thesis_link`/concepto nuevo, verificá que el tag matchee el
    nombre de la página (typo típico: `shift-vs-shape` vs `shift_vs_shape`).
 
 7. **Cierre (commit + push).** **Solo si se archivó algo en `vault/wiki/`** (si la respuesta quedó solo en

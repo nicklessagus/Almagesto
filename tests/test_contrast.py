@@ -541,7 +541,7 @@ def test_una_entrada_del_log_MARCADA_no_mueve_el_rc(toy_vault, capsys):
     """#386 — #238 manda MARCAR la entrada refutada (`⚠ corregido …`), no editarla, y `contrast`
     no conocía la marca: una entrada corregida exactamente como el framework manda seguía
     bloqueando el gate obligatorio de #323 **para siempre**, y la única salida era editar el `log`
-    — justo lo que #238 prohíbe. No había salida dentro de las reglas.  @inv INV-100"""
+    — justo lo que #238 prohíbe. No había salida dentro de las reglas.  @inv INV-141"""
     _extraccion("ica_ruido", "2013Voss")
     _extraccion("ica_ruido", "2004Davies", ground_truth=[
         {"que": "otro", "valor": "algo completamente distinto", "linea": "p. 9"}])
@@ -588,7 +588,7 @@ def test_PARIDAD_lint_contrast_sobre_la_marca_del_log(toy_vault, capsys):
     """#387 nombra el problema de fondo: una convención en PROSA **no compone** — cada chequeo la
     tiene que aprender por separado, hoy son dos y ya divergían. La regla vive en UNA función
     (`cfg.log_quote_exempt`) y los dos consumidores la llaman; lo que se compara son las dos
-    salidas sobre el mismo insumo, no las dos constantes."""
+    salidas sobre el mismo insumo, no las dos constantes.  @inv INV-141"""
     import lint as lt
     _extraccion("ica_ruido", "2013Voss")
     _extraccion("ica_ruido", "2004Davies", ground_truth=[

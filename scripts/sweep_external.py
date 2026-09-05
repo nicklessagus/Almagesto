@@ -1,7 +1,5 @@
 """La pasada de red UNIFICADA: todo lo que cambia afuera, en un solo lugar (D-41/D-45/D-46).
 
-@inv INV-85
-
 Uso:
     python scripts/sweep_external.py            # reporta el diff y pregunta antes de aplicar
     python scripts/sweep_external.py --yes      # no interactivo: aplica lo aplicable
@@ -441,6 +439,7 @@ def save_ultima_pasada(cubrio: list, no_evaluados: list | None = None,
 # ── orquestador ──────────────────────────────────────────────────────────────────────────────────
 
 def main(argv=None) -> int:
+    # @inv INV-85 — the six detectors run from here, and the diff is shown before anything applies
     cfg.stdout_tolerante()
     ap = argparse.ArgumentParser(
         description="Pasada de red unificada: retracciones, correcciones, versiones, snapshots web, "

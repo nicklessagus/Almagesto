@@ -1,4 +1,4 @@
-"""Convierte los PDFs de una estrella a texto plano para búsqueda local y re-extracción.
+"""Convierte los PDFs de una estrella a texto plano: el ÍNDICE de búsqueda del corpus (#205), no material de lectura.
 
 Uso:
     python scripts/extract_fulltext.py <slug> [--force] [--ocr]
@@ -235,7 +235,7 @@ def _flags_usados(args, ap=None) -> list:
 
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("slug")
     ap.add_argument("--force", action="store_true",
                     help="RE-EXTRAE el `.txt` aunque ya exista. ⚠ Es uno de los tres únicos "

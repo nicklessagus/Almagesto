@@ -1,7 +1,7 @@
 """Baja PDFs desde export.arxiv.org para los papers relevantes de una estrella.
 
 Uso:
-    python scripts/fetch_arxiv.py <slug> [--all] [--limit N]
+    python scripts/fetch_arxiv.py <slug> [--all] [--limit N] [--force]
 
 Lee build/<slug>/ads.json y baja el PDF de cada paper relevante con arxiv_id a
 pdfs/<slug>/<bibcode>.pdf. Respeta el rate limit de arXiv: 1 request / 3 s.
@@ -114,7 +114,7 @@ def drop_filter(recs: list, slug: str) -> tuple[list, list]:
 
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("slug")
     ap.add_argument("--all", action="store_true", help="incluir no-relevantes")
     ap.add_argument("--limit", type=int, default=0, help="máximo a bajar (0 = sin límite)")

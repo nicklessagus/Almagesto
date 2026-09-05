@@ -18,6 +18,13 @@ What it writes, per paper:
   · the `## Vista — <sujeto>` section, only while it still is the stub template. Redacted prose is
     never overwritten without `--force`: it may already carry verification anchors.
 
+What it checks before touching a note, and only WARNS about (#359): every quote in the JSON's
+`ground_truth[].valor` is crossed against the `.txt` of its source (`cfg.txt_accuses`, the one
+implementation, #324). A long prefix that then diverges means two readings of the same PDF —
+the extractor's and pdftotext's — and the verdict belongs to whoever opens the page: the `.txt`
+is a degraded index (#205), so it accuses and never rejects. It is the only moment a quote
+mis-transcribed while READING is seen before it feeds N subjects.
+
 It also brings the `.txt` to the subject's slug (D-18) so a retro-tagged paper's view is runnable:
 without that, `extraction_prompt.py <theme> <bib>` exits `⛔ no existe` and the remedy it suggests
 does not apply either, because the PDF is not under that slug.

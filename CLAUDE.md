@@ -865,26 +865,23 @@ la cascada y **propone**; nunca clasifica.
   no-deduplicable**. Cada registro acumula `found_in`: la procedencia **enruta**, la lente
   **decide**.
 - **Rankear sin filtro estructural amplifica, no filtra** (`topics` antes de `seed`): una frase
-  genérica ordenada por citas devuelve 143.450 works con **2 de 30** en tema en el top 30; con
-  `filter=topics.id:` primero, el canon entra al top 25. ⚠ El filtro es más laxo que su nombre:
-  T11447 declara 55.210 works y devuelve 169.977 (matchea temas secundarios).
+  genérica ordenada por citas da **2 de 30** en tema; con `filter=topics.id:` primero, el canon entra
+  al top 25. ⚠ El filtro es más laxo que su nombre: T11447 declara 55.210 works y devuelve 169.988.
 - **Descubrimiento ANCLADO** (`anchored_records`) — el de más apalancamiento: las **referencias de
   la mitad astro del propio tema**, rankeadas por cuántos de esos papers las citan (la puerta 1
   aplicada a un tema **nuevo**, donde el `citation_index` no existe todavía). Medido sobre 19 papers:
   devolvió los **ocho** del canon sin declarar nada, y alcanza lo que ninguna keyword del tema
   alcanza — los papers del **paso de blanqueo**.
 - **La cola especialista SÍ se alcanza, con el eje correcto — y el costo es triage (#107, medido).**
-  Esos papers viven entre **11 y 72 citas** dentro de un topic de 169.977 works, así que ningún
+  Esos papers viven entre **11 y 72 citas** dentro de un topic de 169.988 works, así que ningún
   corte por citas los toca; el eje que sí los alcanza es `seed_terms` (**slice de texto por término
   dentro del topic**). Medido: recuperación **7/18 → 13/18**, universo de candidatos **776 → 2521**.
   Ése es el canje —cobertura contra costo de triage—, se decide por tema, y por eso es **opt-in**.
-  ⚠ **Lección de método:** la primera medición (*"217 candidatos, límite estructural"*) era
-  artefacto de un tope de 15 filas puesto por el propio agente. Hoy `seed_terms` **avisa por
-  término**.
+  ⚠ La primera medición era artefacto de un tope de 15 filas del propio agente; hoy `seed_terms`
+  **avisa por término**.
   ⛔ **El aviso manda subir una perilla que EXISTE, y el slice se PAGINA (#294):**
   `rows_por_termino` es campo del tema y flag (`--rows-por-termino`); el backend topea en 200 por
-  request, así que sin paginar el remedio era un no-op (medido: 2 papers perdidos sólo por el
-  techo). ⛔ **Y el filtro por topic se decide POR TÉRMINO, con el conteo, y se declara (#293):** su
+  request, así que sin paginar el remedio era un no-op. ⛔ **Y el filtro por topic se decide POR TÉRMINO, con el conteo, y se declara (#293):** su
   valor escala con la **ambigüedad** del término — `HeteroPCA` tiene 9 works en todo OpenAlex (ahí
   el topic sólo puede sacar señal), `gaussian moments` 13.396 (ahí hace usable el ranking).
   Lo que queda fuera del alcance automático es chico y de una forma sola: **capítulos y actas** y
@@ -993,10 +990,11 @@ re-extraer el `.txt`.
    orquestador** (fuente de verdad única — puntero, no copia).
 
 1b. **Compuerta de triage (estrellas).** El citation chaining amplía el pool con papers que
-   mencionan al sujeto sin hablar de él (medido: 18 % de precisión). Sólo entra solo el que lleva el
-   **sujeto en el título**; el resto queda como **candidato** en `build/<slug>/ads.json` —sin
-   bajarse— y lo juzgás por título+abstract (`triage.py <slug>`): aceptado → `extra_core` (mapas
-   `{bibcode, via, fecha, motivo}`, forma dura D-58; `triage.py` imprime el snippet) + re-correr la
+   mencionan al sujeto sin hablar de él (18 % de precisión). Sólo entra solo el que lleva el **sujeto
+   en el título** (`relevance.chain_autoaccept: titulo`, el default; `never` manda TODO a triage,
+   INV-55); el resto queda como **candidato** en `build/<slug>/ads.json` —sin bajarse— y lo juzgás
+   por título+abstract (`triage.py <slug>`): aceptado → `extra_core` (mapas
+   `{bibcode, via, motivo[, fecha]}`, forma dura D-58; `triage.py` imprime el snippet) + re-correr la
    cadena; descartado → `--drop … --reason` (persiste); **dudoso → al usuario**.
 
 2. **Vos (LLM)** leés el **PDF** y poblás la extracción **de las notas de paper** (`methods`,
@@ -1009,7 +1007,7 @@ re-extraer el `.txt`.
    error nº 1 medido). ⛔ **Nada de prosa comparativa en la nota de paper**: comparar dos papers es
    `inferencia` y va al `## Inventario por eje` (2b).
 
-2b. **Contraste cross-paper (#72)** ⚠ *(el skill `ingest-star` lo numera **3b**)* — **entre leer los
+2b. **Contraste cross-paper (#72)** ⚠ *(**3b** en `ingest-star`, **3c** en `ingest-theme`)* — **entre leer los
    papers y escribir la síntesis.** Es el paso con más apalancamiento y el que más fácil se saltea,
    porque su producto no se nota si falta. Produce el **`## Inventario por eje`**: una fila por paper
    para cada **eje** donde los papers **no coinciden** (`Eje | Paper | Dice | Método / baseline`);
@@ -1080,14 +1078,14 @@ reconstruía hablando en vez de leyendo. En orden, con su consecuencia:
    normalmente **porque no se lo conoce**, así que pedir los ejes antes es pedir la respuesta que la
    operación existe para producir — y encima **cierra hallazgos**: los dos más valiosos de una
    ingesta medida salieron de extractores libres de contestar algo que nadie preguntó.
-3. **El paso 3b/2b es el PRODUCTOR de ejes, no un resumen**: un eje sólo existe al poner las vistas
+3. **El contraste (2b) es el PRODUCTOR de ejes, no un resumen**: un eje sólo existe al poner las vistas
    una al lado de la otra. Ahí nace el vocabulario del tema (medido: el mismo término nombrando
    cinco objetos distintos, y el alias central significando dos operaciones según la escuela).
 4. **El eje descubierto tiene tres destinos**: la **config** del tema (`ejes:`, #307), la
    **re-lectura** con esos ejes (`--enfasis`, #308) y la **próxima búsqueda** (una celda vacía del
    inventario *es* una query). Sin ellos el ciclo queda abierto justo donde el aprendizaje debería
    realimentar.
-5. **Los ejes son DEL USUARIO**: viven en `themes.yaml` (versionado, editable), el paso 3b los
+5. **Los ejes son DEL USUARIO**: viven en `themes.yaml` (versionado, editable), el contraste (2b) los
    **propone y no los escribe** (misma doctrina que `--drop-core` y AUD-160), y sin declarar rigen
    los de `relevance.facets` — los tres estados de D-43.
 6. ⛔ **Qué se propaga solo y qué no**: la vista nueva → nota del paper (#239) y el roll-up del
@@ -1119,10 +1117,11 @@ cambiar los ejes de un tema produce un **diff computable**, nunca una re-interpr
 > local-pdfs [+web]` — ⚠ **el nombre engaña (#209): no dice «dónde se busca», dice QUÉ CADENA CORRE
 > el orquestador**; el descubrimiento multi-backend es `discover.py --theme <slug>`, un paso aparte
 > (0b) que `ingest_theme.py` no llama. Un tema off-ADS puede ser **mixto**, y su mitad astro entra
-> por **`query:` poblada** → descubrimiento ADS completo (misma lente, puertas y compuerta de
-> triage), o **sólo `extra_core:`** → sub-cadena acotada a esos bibcodes; los papers con bibcode ADS
-> van siempre en `extra_core:`, nunca en `sources:`; **`source: ads` + `query: null` + `extra_core:`
-> = corpus declarado (#384)**. Lo inconseguible → `pending: …` (stub `pending_source`), sin frenar.
+> por **`query:` poblada** → descubrimiento ADS completo (misma lente y puertas; ⚠ **sin compuerta**:
+> en un tema el core del chaining entra solo salvo `chain_autoaccept: never`, INV-49), o **sólo
+> `extra_core:`** → sub-cadena acotada a esos bibcodes; los papers con bibcode ADS van siempre en
+> `extra_core:`, nunca en `sources:`; **`source: ads` + `query: null` + `extra_core:` = corpus
+> declarado (#384)**. Lo inconseguible → `pending: …` (stub `pending_source`), sin frenar.
 > **`ingest-star` sigue astro-only.** Papers sin bibcode ADS → clave sintética `AAAA+Autor`; páginas web →
 > **snapshot `.txt` determinista** (`fetch_web.py` vía defuddle, que crea además el stub).
 > ⛔ **Una `url:` que sirve un PDF NO se snapshotea: se BAJA como PDF (#242)** — `fetch_web` mira el
@@ -1147,9 +1146,9 @@ de su `source`, y un tema off-ADS no corre `query_ads` ni `fetch_ground_truth`, 
 contra el orden astro inventaría cortes que no existen. El `cadena` de un tema **se escribe igual**
 —la traza vale— pero nadie la contrasta contra un orden canónico, porque no hay uno solo) y **`decisiones`**. Un descarte que se **revierte** (el bibcode
 pasa a `extra_core`, la fuente se vuelve a declarar) no queda contradiciendo lo hecho: se **anula**
-explícito, con el motivo viejo preservado en `previa` (D-52). Y la compuerta de triage **ya no se
-puede apagar por flag** (D-48: `--no-triage` se eliminó — permitía que un candidato ya descartado
-volviera a entrar en silencio). La sección `busquedas` la escribe `query_ads` al cerrar cada corrida: `fecha`, `query` efectiva
+explícito, con el motivo viejo preservado en `previa` (D-52). Y la compuerta de triage **no se apaga
+por flag** (D-48: `--no-triage` se eliminó); su política es `chain_autoaccept` (arriba). La sección
+`busquedas` la escribe `query_ads` al cerrar cada corrida: `fecha`, `query` efectiva
 —en una estrella la arma `build_query` y antes se tiraba—, **`fq`** (#238/#295: el **resuelto**, o
 sea el del tema si lo declara — es la mitad más restrictiva del filtro, y sin él un «0 encontrados»
 **no es una medición reproducible**; ⛔ y la pantalla lo imprime SIEMPRE con procedencia, #354),
@@ -1181,7 +1180,7 @@ ninguno mudo:
 
 | | Aceptar | Descartar |
 |---|---|---|
-| **con bibcode ADS** | `extra_core: {bibcode, via, fecha, motivo}` (D-58) | candidato del chaining: `triage --drop … --reason` (#51) · **core del sujeto: `triage --drop-core … --reason` (#112)** |
+| **con bibcode ADS** | `extra_core: {bibcode, via, motivo[, fecha]}` (D-58) | candidato del chaining: `triage --drop … --reason` (#51) · **core del sujeto: `triage --drop-core … --reason` (#112)** |
 | **fuente off-ADS** | `sources: {…, via, fecha, motivo}` (#111) | `triage --drop-source … --reason` (#81) |
 
 ⛔ **`extra_core` fuerza la ENTRADA; `--drop-core` es su simétrico y faltaba (#112).** Un paper que
@@ -1268,9 +1267,10 @@ en el skill; acá va el contrato del artefacto.
 
 **Qué hace:** descompone la nota en pares (afirmación, `[[bibcode]]`) —las filas de tabla y los
 ítems de lista **heredan la cita del ámbito que los introduce**; las `SECCIONES_ESTAMPADAS` quedan
-afuera— y lanza **un subagente independiente por par** que lee SÓLO esa fuente (grounding-first,
-prohibido de memoria) y devuelve **dos ejes separados** (D-59): un `veredicto` de RESPALDO
-—`soportada|no-soportada|contradice`— y, aparte, la `condición` bajo la que la fuente lo afirma. Más
+afuera— y lanza **un subagente por FUENTE (#100)** que lee SÓLO ese PDF, juzga todos los pares que
+la citan (grounding-first, prohibido de memoria) y devuelve **dos ejes separados** (D-59): un
+`veredicto` de RESPALDO —`soportada|no-soportada|contradice`— y, aparte, la `condición` bajo la que
+la fuente lo afirma. Más
 **cita textual + nº de PÁGINA del PDF** (obligatoria; sin cita ⇒ no-soportada: tiene que tocar el
 **contenido distintivo**, la cercanía temática no alcanza). `no-soportada` = la fuente **calla**;
 `contradice` = **afirma lo contrario** → corrección o **disputa** (#71). Cada falla se **resuelve**
@@ -1518,7 +1518,7 @@ reglas del gate que hay que saber antes de correrlo.
 
 **Tres severidades** — bloqueante (exit ≠ 0), WARN (se revisa a mano) y backlog (deuda declarada;
 se trabaja con `maintain`). No existe "informativo" (AUD-207): lo declarado-y-resuelto se reporta
-**aparte** (*«visible, no es deuda»*), nunca mezclado con la deuda real. Dos reglas del reporte:
+**aparte**, nunca mezclado con la deuda real. Dos reglas del reporte:
 
 - **⛔ No evaluado cuenta para el exit** (D-43): un chequeo que no pudo correr (`objective.yaml`
   ilegible, sin `git`) suprime su categoría normal — un `(0)` que nadie midió se lee como veredicto,
@@ -1535,11 +1535,17 @@ implícita · `thesis_links` sin página destino · `disputes` mal formadas, con
 schema viejo (#71) · schemas retirados (`topics:`, `busqueda:`, `bearing`, `symbols_lost`/
 `fulltext_layout`, `## Extracción (LLM)` sin `vistas[]`) · `role` fuera del vocabulario ·
 incoherencia `vistas[]` ↔ cuerpo · juicio de triage en `build/` (pre-1.9.0) · fila de tabla con más
-celdas que su encabezado (#227: GFM la vuelve invisible) · registro ilegible (AUD-131: revierte la
-curación entera — `load_decisiones` rehúsa operar y `save_registro` rehúsa pisar) · veredicto
-`no-soportada`/`contradice` sin resolver (#91) · bloque de verificación con plantilla vieja ·
-`Hash fuente` sin prefijo (#117) · duplicado por identidad (D-19/#229) · `inferencia` sin premisas
-(D-42) · fuente retractada citada sin la marca `⛔retractada` (D-47).
+celdas que su encabezado (#227) · registro ilegible (AUD-131) · veredicto `no-soportada`/
+`contradice` sin resolver (#91) · bloque de verificación con plantilla vieja · `Hash fuente` sin
+prefijo (#117) · duplicado por identidad (D-19/#229) · `inferencia` sin premisas (D-42) · fuente
+retractada citada sin la marca `⛔retractada` (D-47) · `pdf_source`/`fulltext_source` fuera de
+vocabulario (#296) · `pdf_source` de editor con `eprint_version` (#383) · extracción en `build/`
+(pre-#311) · paper sin `## Abstract` (#124/#277) · paper sin destino (D-23) · `status` de hipótesis
+fuera del vocabulario (D-37) · `sources:` sin `via`/`motivo` (#111) o con autor/año que Crossref
+desmiente (#353) · par nota↔`.verif.md` roto (#344: tabla adentro, cabecera sin hermano, hermano
+huérfano) · lente vacía (ningún paper puede ser core) · mismo bibcode con `.txt` distinto entre
+slugs (D-18/D-20) · driver `merge=ours` registrado (#390) — la lista `SEV_BLOQUEANTE` de
+`scripts/lint.py` (AUD-237): si agregás una, va acá.
 
 **La fuga de implementación** (regla #0) es **WARN**: heurística de alta señal, cada hit se revisa
 a mano. No mira las `SECCIONES_ESTAMPADAS` (#214), y la exención no alcanza a `## Vista — <sujeto>`.
@@ -1622,23 +1628,20 @@ rote). Los números los dan las funciones del test, no esta prosa.
 ## Al escribir código: las nueve redes (regla permanente)
 
 Toda función nueva de `scripts/` **y de `tools/`** pasa por esto **antes de cerrar el issue**; la 6
-rige también para los scripts de una sola operación. ⛔ **Las redes 1 y 4 cubren `tools/` desde
-#345** (`mutar.ALCANCE`, que la red 4 **importa** en vez de repetir, para que no diverjan): acotarlas
-a `scripts/` dejaba sin red a **la herramienta que las ejecuta**, medido en 5 guardas de
-`tools/mutar.py` sin un test que las distinga. La **única exención es `tools/refresh_issues.py`** y
-se **declara con su motivo** en `mutar.EXENTOS_MODULO`, nunca por omisión del alcance: es un cliente
-HTTP contra la API de GitHub y la **regla de método 1** manda probarlo contra el servicio real, así
-que mutarlo sólo mediría el doble. Los tres estados de `scope_refusal` —fuera de alcance · exento ·
-sin `tests/test_<mod>.py`— piden acciones opuestas, y una selección **toda** exenta sale *no
-evaluado*, no verde. Detalle y ratchets en `tests/README.md`; el resumen operativo:
+rige también para los scripts de una sola operación. ⛔ **Las redes 1 y 4 cubren `tools/` (#345,
+`mutar.ALCANCE`, que la red 4 importa para que no diverjan)**: acotarlas a `scripts/` dejaba sin red
+a la herramienta que las ejecuta. La **única exención, `tools/refresh_issues.py`, se declara con su
+motivo** en `mutar.EXENTOS_MODULO` (cliente HTTP: la regla de método 1 manda probarlo contra el
+servicio real). Los tres estados de `scope_refusal` —fuera de alcance · exento · sin
+`tests/test_<mod>.py`— piden acciones opuestas, y una selección **toda** exenta sale *no evaluado*,
+no verde. Detalle y ratchets en `tests/README.md`; el resumen operativo:
 
 1. **Mutación** — romper cada función y exigir que **algún test muera**: es lo único que distingue
    "el test pasa" de "el test **podría** fallar". Trabaja sobre una copia del repo. Tres modos:
    - **Dirigida** (`python tools/mutar.py --dirigida <scripts|tools>/<mód>.py [--solo f,g]`) — **es un
      paso al escribir una función con guardas** (#204): un módulo, sólo su archivo de tests, ~0,44 s
-     por mutación. Sobre-reporta sobrevivientes y nunca da falso limpio (la dirección segura); no
-     toca el ratchet. **Rehúsa** si el módulo no tiene `tests/test_<módulo>.py` o nada mutable —
-     cero mutaciones no es «murieron todas» (D-43).
+     por mutación. Sobre-reporta y nunca da falso limpio; no toca el ratchet. **Rehúsa** si el módulo
+     no tiene `tests/test_<módulo>.py` o nada mutable — cero mutaciones no es «murieron todas» (D-43).
    - **Guardas** (`python tools/mutar.py --guardas <scripts|tools>/<mód>.py [--solo f,g]`, AUD-213) —
      vaciar el cuerpo no mide las **condiciones**: muta cada `if` interno a `False` y, en un
      `and`/`or`, **cada cláusula por separado, a la identidad del operador** (`True` en `and`,
@@ -1646,10 +1649,9 @@ evaluado*, no verde. Detalle y ratchets en `tests/README.md`; el resumen operati
      una condición constante se saltea (el hallazgo sería inventado). ⚠ Es el único modo que chequea la **baseline**: con el archivo de tests en rojo,
      toda guarda «muere» por el motivo equivocado (#202) → sale **no evaluado** (rc 2), no un verde.
    - **Barrido** (`--diff` / `--todo --ratchet`) — corre en **dos etapas** (#187: primero
-     `tests/test_<módulo>.py`, sólo los sobrevivientes pagan la suite). Medido 2026-08-31: `--todo`
-     = **32,5 min / 655 funciones** (#345). **Cadencia: a pedido, y recomendado al cerrar una tanda**, con el árbol
-     **quieto** (#199: el barrido copia el repo al arrancar; si seguís editando, su resultado
-     describe un árbol que ya no existe).
+     `tests/test_<módulo>.py`, sólo los sobrevivientes pagan la suite; `--todo` ≈ 32 min, #345).
+     **Cadencia: a pedido, y recomendado al cerrar una tanda**, con el árbol **quieto** (#199: copia
+     el repo al arrancar).
 2. **Schema compartido** — si N módulos prometen la misma forma, se prueba **una vez parametrizada**
    (`tests/test_backends_schema.py`), no con prosa en N docstrings.
 3. **Doble vs real** — un doble de test no se escribe a ojo: o deriva de la función real, o hay un
@@ -1676,9 +1678,8 @@ evaluado*, no verde. Detalle y ratchets en `tests/README.md`; el resumen operati
    comportamiento: no hay test que matar). Se encontró leyendo un commit; ahora es un assert.
 9. **Atribución del mapa** — `python tools/mutar.py --trazabilidad` (AUD-212, ~20 min): vacía cada
    implementación marcada `@inv` y corre **sólo el test marcado**; si pasa, esa fila de
-   `docs/trazabilidad.md` afirma una cobertura que no existe (20 atribuciones falsas sobre 143 en la
-   primera corrida). ⚠ Sobre-reporta y nunca da falso limpio: ante un sobreviviente por
-   coincidencia se marca un test que ejerza la rama verdadera, no se afloja el gate.
+   `docs/trazabilidad.md` afirma una cobertura que no existe. ⚠ Sobre-reporta: ante un
+   sobreviviente por coincidencia se marca un test que ejerza la rama verdadera.
 
 Las 2, 5, 7 y 8 corren solas en tier 0; la 1 y la 9 son a pedido (cuestan minutos). El motivo de la
 regla: en la sesión que la produjo, los bugs los encontraron agentes leyendo el código, no la suite

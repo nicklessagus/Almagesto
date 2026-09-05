@@ -17,6 +17,7 @@ GitHub token. Refresh it when closing a tanda, next to the version bump.
 """
 from __future__ import annotations
 
+import argparse
 import json
 import pathlib
 import subprocess
@@ -35,7 +36,15 @@ def fetch(limit: int = 1000) -> list:
 
 
 def main() -> int:
-    """Write the cache, or leave the old one in place saying why (never an empty one)."""
+    """Write the cache, or leave the old one in place saying why (never an empty one).
+
+    E-12 (auditoría 2026-09-04): without a parser, `--help` was silently ignored and the script
+    hit GitHub and rewrote the versioned `tools/issues.json`. It is the only executable in the
+    repo whose `--help` was allowed to write; parsing first makes `--help` exit before `fetch()`."""
+    ap = argparse.ArgumentParser(description=" ".join(__doc__.split("\n\n")[0].split()),
+                                 epilog="Needs `gh` and network; writes tools/issues.json. "
+                                        "Run it when closing a tanda, next to the version bump.")
+    ap.parse_args()
     try:
         issues = fetch()
     except (OSError, subprocess.CalledProcessError, ValueError) as exc:

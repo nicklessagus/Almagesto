@@ -30,7 +30,7 @@
 # nadie lo declare — que es lo que el ratchet vino a frenar. `test_la_suba_del_techo_esta_declarada`
 # lo vigila: el techo vigente tiene que ser el de la última entrada.
 medido_en: "2026-09-04"
-techo_lineas: 1703
+techo_lineas: 1704
 techo_bytes: 136200
 
 crecimientos:
@@ -173,4 +173,16 @@ crecimientos:
       cualquier campo identificatorio, en cualquier skill; los skills llevan el comando concreto.
       Comprimida dos veces; el techo estaba a 6 bytes. Suba: 7 líneas.
     techo_lineas: 1703
+    techo_bytes: 136200
+  - fecha: "2026-09-04"
+    ancla: "AUD-237"
+    motivo: >-
+      La lista «Bloqueantes (0 para cerrar)» de §Lint omitía 14 de las 40 categorías que
+      `scripts/lint.py` declara `SEV_BLOQUEANTE` (AUD-237, AUD-385…394): un agente que la usara
+      como checklist cerraba con bloqueantes vivos. Entran las 14 en la misma lista, más la
+      política `relevance.chain_autoaccept` (AUD-235: en un tema el chaining no pasa por triage) y
+      la unidad real del fan-out de verify (AUD-325). Se comprimió cuatro veces —intro de «las
+      nueve redes», bullets de `discover`, D-48, redes 1 y 9—: los bytes entran (136181/136200) y
+      falta UNA línea. Suba de una línea, sin bytes.
+    techo_lineas: 1704
     techo_bytes: 136200

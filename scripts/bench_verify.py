@@ -382,7 +382,7 @@ def cmd_score(modelo: str = "") -> int:
 
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     p_seed = sub.add_parser("seed", help="armar el benchmark (pares reales + sembrados)")
     p_seed.add_argument("--max", type=int, default=DEFAULT_MAX,

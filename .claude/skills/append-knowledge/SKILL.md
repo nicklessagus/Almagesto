@@ -39,10 +39,11 @@ Progreso del append de <fuente> → <destino>:
 2. **Plomería mínima** (por tipo; todo idempotente — con el retro-linkeo de `make_notes`, si la
    nota del paper ya existía en el corpus los seeds `stars`/`thesis_links` se mergean add-only
    solos, sin pisar su extracción):
-   - **(i) bibcode ADS** → agregarlo a `extra_core:` (lista de mapas `{bibcode, via, fecha, motivo}` — D-58; el `triage` imprime el snippet listo para pegar) en la entrada de la entidad
+   - **(i) bibcode ADS** → agregarlo a `extra_core:` (lista de mapas `{bibcode, via, motivo[, fecha]}` — D-58, `fecha` opcional; el `triage` imprime el snippet listo para pegar) en la entrada de la entidad
      (`vault/config/stars.yaml` o `themes.yaml` — curación **persistente**, sobrevive re-runs) y
      correr la cadena: estrella → los scripts del paso 2 de `ingest-star`; tema →
-     `python scripts/ingest_theme.py <slug>`. `query_ads` lo trae por bibcode (`via: manual`).
+     `python scripts/ingest_theme.py <slug>`. `query_ads` lo trae por bibcode con el `via`
+     declarado en la config y `puertas: [manual]` (#303; `via: manual` ya no se escribe).
      ⚠ La cadena re-corre también la query → puede traer **otros** papers nuevos (refresh
      implícito): si aparecen stubs extra, hacé su extracción (maintain A) o anotalos como backlog
      en `vault/STATUS.md` — no los dejes mudos. Dos compuertas que ese refresh puede disparar y

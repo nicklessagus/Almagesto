@@ -37,7 +37,7 @@ para ingestar. En Windows, los comandos de shell corren en Git Bash o WSL.
 |---|---|
 | `vault/config/objective.yaml` | **El objetivo de la bóveda** + clasificador de relevancia (papers core). Editar para instanciar. |
 | `vault/raw/pdfs/<slug>/` | PDFs (git-lfs). |
-| `vault/raw/fulltext/<slug>/*.txt` | Texto completo (pdftotext; si la capa de texto es ilegible, OCR marcado `source: ocr`, citable con salvedad) para búsqueda local y re-extracción. Ojo: el `.txt` puede venir del **preprint de arXiv** y no de la versión publicada; la nota del paper lo registra en `pdf_source` (ver abajo). |
+| `vault/raw/fulltext/<slug>/*.txt` | Texto completo (pdftotext; si la capa de texto es ilegible, OCR marcado `source: ocr`) — el **índice de búsqueda** del corpus (`grep`), **no** material de lectura ni de cita (#205: la fuente es el PDF). Ojo: el `.txt` puede venir del **preprint de arXiv** y no de la versión publicada; la nota del paper lo registra en `pdf_source` (ver abajo). |
 | `vault/raw/ground_truth/<slug>.json` | Hechos auditables (NASA Exoplanet Archive + SIMBAD). |
 | `vault/raw/refs/` | Fuentes de diseño del patrón (gist Karpathy, guía de implementación). |
 | `vault/wiki/stars/<slug>.md` | Ficha por estrella (entidad). **Frontmatter = fuente de verdad** (`spectral_type`, `P_rot_days`, planetas, indicadores esperados, métodos). Lo que sale de NEA/SIMBAD es **espejo puro**: si el ground-truth no tiene el valor, el campo queda null y el dato de literatura va al cuerpo, citado. |
@@ -117,16 +117,20 @@ python lint.py                      # chequeo de salud → outputs/lint-<fecha>.
 python scripts/sweep_external.py    # la PASADA DE RED: los seis eventos que caducan afuera
                                     #   (retracciones, correcciones, versiones, snapshot web,
                                     #   ground-truth y cruces del umbral de la puerta 2 — #106).
-                                    #   Reporta el diff y PREGUNTA antes de aplicar; la caducidad
-                                    #   queda en vault/config/registro/_red.yaml, junto con lo que
-                                    #   NO se pudo mirar (`no_evaluados`, #172)
-python scripts/entity.py plan   <slug>              # las siete capas de una entidad — no escribe
+                                    #   Reporta el diff y PREGUNTA antes de aplicar — con UNA
+                                    #   excepción nombrada (AUD-206): `retracciones` estampa
+                                    #   `retracted:`/`corrections:` SIN preguntar (metadata, no un
+                                    #   valor citado; enterarse tarde es peor que el diff). La
+                                    #   caducidad queda en vault/config/registro/_red.yaml, junto
+                                    #   con lo que NO se pudo mirar (`no_evaluados`, #172)
+python scripts/entity.py plan   <slug>              # las ocho capas de una entidad (#344: la octava es el
+                                                    #   hermano `.verif.md`) — no escribe
 python scripts/entity.py delete <slug> --yes        # borrar sin dejar nada colgado (INV-19)
 python scripts/entity.py rename <viejo> <nuevo> --yes
 python scripts/citation_index.py    # índice invertido obra→citadores (caro: ADS + OpenAlex)
 python scripts/trace_invariants.py [--check]        # regenera docs/trazabilidad.md desde las marcas
                                     #   `@inv` del código; `--check` sale 1 si quedó desactualizado
-python scripts/measure_layout.py [--json] [--por-slug] [--listar]
+python scripts/measure_layout.py [--json] [--por-slug] [--listar N]
                                     # diagnóstico: cuánto del corpus de `.txt` es multi-columna
                                     #   (#44/#45 — condiciona cómo se BUSCA una cita). No toca nada,
                                     #   exit 0 siempre
@@ -245,14 +249,16 @@ python scripts/triage.py <slug> --promote-source <key> --bibcode <bibcode>
 #   que no se pisa solo (#353): cirugía sobre lo declarado, la curación de la nota no se toca
 python scripts/make_notes.py --restamp-sources-meta
 ```
-⚠ Los dos `via` son vocabularios cerrados **distintos** (#162): `extra_core` (carril ADS) usa
-`usuario | triage | citado-por-corpus`; `sources:` (carril off-ADS) usa
-`usuario | descubrimiento | reporte`. Comparten sólo `usuario`.
+⚠ Los dos `via` son vocabularios cerrados **distintos** (#162/#266): `extra_core` (carril ADS) usa
+`usuario | triage | citado-por-corpus` (`lib_config.EXTRA_CORE_VIA`); `sources:` (carril off-ADS)
+es **binario**, `usuario | descubrimiento` (`triage.VIA_FUENTE`). Comparten sólo `usuario`.
+⛔ `reporte` se **retiró** en 1.72.0 (#206) y el lint lo bloquea con mensaje propio: se traduce a
+`via: usuario` + el documento nombrado en `motivo`.
 
 **Escotillas DESTRUCTIVAS** — las que pisan trabajo ya pagado. Ninguna se corre "para refrescar":
 
 ```bash
-python scripts/fetch_web.py <url> --force-note   # ⛔ REGENERA la nota de paper: PISA la extracción
+python scripts/fetch_web.py <slug> <clave> <url> --force-note   # ⛔ REGENERA la nota de paper: PISA la extracción
                                     #   LLM, que es el paso más caro de la cadena. Sin este flag,
                                     #   `--force` re-baja el snapshot y NO toca la nota
 python scripts/extract_fulltext.py <slug> --force  # ⛔ RE-EXTRAE el .txt. Es uno de los TRES casos
@@ -275,11 +281,15 @@ bloque arregla. Las otras quedan cubiertas por los bloques de arriba (`--priorid
 `extraction_prompt --out-dir`, `extract_fulltext --ocr`, `trace_invariants --check`) o son de
 conveniencia (`--max`, `--paper`, `--out`, `--limit`, `--accessed`, `--json`, `--por-slug`,
 `--listar`, `--no-chain`, `--root`): la lista completa está en el issue.
-⚠ **Y la promesa todavía no se cumple del todo (re-medido el 2026-08-27):** siguen sin nombrarse en
-ningún documento `discover.py --seed <topic_id>` (el ranking por citas dentro de un topic de
-OpenAlex), `discover.py --min-citadores N` (el corte del descubrimiento anclado) y
-`make_notes.py --web … --pending {paywall|scan|unextractable|adquisicion} --reason "<motivo>"`
-(la fuente no conseguida, #80). `discover.py` declara **seis** banderas, no tres.
+⚠ **Y la promesa se cumple sólo acá (re-medido el 2026-09-04):** `discover.py --seed <topic_id>`
+(el ranking por citas dentro de un topic de OpenAlex), `discover.py --min-citadores N` (el corte
+del descubrimiento anclado) y `make_notes.py --web … --pending
+{paywall|scan|unextractable|adquisicion} --reason "<motivo>"` (la fuente no conseguida, #80) no
+los nombra ningún otro documento: este párrafo es su única mención fuera del `--help`.
+`discover.py` declara **ocho** banderas (`--theme --topics --seed --seed-terms --rows
+--rows-por-termino --min-citadores --resolve`; #293/#294 sumaron las dos últimas nuevas), no tres.
+`contrast.py --corto` (acorta los valores MARCANDO el corte; por default no corta) y
+`contrast.py --limite` (el largo de ese corte) tampoco aparecen en otro documento.
 
 **Migradores y backfills** (una sola corrida; el framework no lleva capas de retrocompatibilidad,
 así que cada cambio de schema entrega migrador **y** detector bloqueante — INV-64):
@@ -292,16 +302,7 @@ python scripts/make_notes.py --migrate-registros  # D-28: `busqueda:` → `busqu
 python scripts/triage.py <slug> --migrate         # #51: el juicio del build/<slug>/triage.json viejo
 python scripts/make_notes.py --restamp-headers    # cabecera a las notas que nacieron sin ella
 python scripts/make_notes.py --fix-header-order  # #378: el aviso de capa LLM, debajo de la cabecera
-python scripts/verify_fanout.py <nota> --out build/<slug>/verif/r1   # #369: prompts por fuente + manifiesto
 python scripts/make_notes.py --rename-paper VIEJO NUEVO --fix-key   # #355: clave errónea, no alias
-
-> **OpenAlex tiene presupuesto (#362):** 1000 créditos por día (US$ 0,10), reset a medianoche UTC.
-> Lo cobran los endpoints de **lista y búsqueda** (`works?filter=…`, `works?search=…`); la **entidad
-> única** (`works/doi:<doi>`) cuesta **0**. Orden de gasto, medido: el slice de `seed_terms` de
-> `discover --theme` es el único consumidor grande (13 términos × páginas de 200, y quemó el día
-> corrido dos veces); `resolve_pdf` y `refs_of` (el anclaje, `citation_index`) van por la entidad
-> única y andan con la cuota en cero. Un 429 «Insufficient budget» **no se reintenta**: el mensaje
-> dice cuándo vuelve.
 python scripts/make_notes.py --restamp-keywords   # D-17: `keywords:` desde build/*/ads.json
 python scripts/make_notes.py --restamp-pdf-links  # #47: el link [📄 PDF] ↔ frontmatter `pdf`
 python scripts/make_notes.py --sync-mirror        # #70: campos espejo de NEA que quedaron en null
@@ -310,6 +311,35 @@ python scripts/make_notes.py --migrate-txt-fields # #205: saca `symbols_lost:`/`
 python scripts/make_notes.py --migrate-vistas     # #188: `## Extracción (LLM)` → `vistas[]` + `## Vista — <sujeto>`
 python scripts/make_notes.py --rename-paper VIEJO NUEVO   # D-19: ciclo preprint → publicado
 ```
+
+**La cadena de `verify-citations`** (paso de cierre de toda operación que escriba prosa con
+`[[bibcode]]`; el procedimiento vive en el skill — acá los cuatro scripts, en el orden en que corren:
+generar → barrera → aplicar → re-verificar):
+
+```bash
+python scripts/verify_fanout.py <nota> --out build/<slug>/verif/r1
+                                    # #369: los prompts del fan-out, UNO POR FUENTE (#100), y el
+                                    #   MANIFIESTO `_esperado.json` con el número que la barrera
+                                    #   compara — antes lo contaba el operador a ojo
+python scripts/check_verify_fanout.py build/<slug>/verif/r1 [--esperados N]
+                                    # #259: la BARRERA antes de consumir: forma del archivo, claves
+                                    #   y cantidad de veredictos; con manifiesto no hace falta N
+python scripts/apply_fixes.py <nota> <dir-de-fixes> [--write]
+                                    # #197: el aplicador SERIAL de las correcciones; sin --write es
+                                    #   dry-run (el default). Avisa por bloque el material AGREGADO
+                                    #   (#389: la primera opción al corregir es SACAR, no reescribir)
+python scripts/reverify_subset.py <nota> [--json build/<slug>/reverif.json]
+                                    # #257/#282: qué pares se re-anclan y cuáles se re-verifican
+                                    #   tras una corrección; propone y NO escribe la nota
+```
+
+> **OpenAlex tiene presupuesto (#362):** 1000 créditos por día (US$ 0,10), reset a medianoche UTC.
+> Lo cobran los endpoints de **lista y búsqueda** (`works?filter=…`, `works?search=…`); la **entidad
+> única** (`works/doi:<doi>`) cuesta **0**. Orden de gasto, medido: el slice de `seed_terms` de
+> `discover --theme` es el único consumidor grande (13 términos × páginas de 200, y quemó el día
+> corrido dos veces); `resolve_pdf` y `refs_of` (el anclaje, `citation_index`) van por la entidad
+> única y andan con la cuota en cero. Un 429 «Insufficient budget» **no se reintenta**: el mensaje
+> dice cuándo vuelve.
 
 Entre la query y el primer paso que gasta red y disco hay un **checkpoint humano** (la *guardia de
 expansión*): si el core recién clasificado se multiplicó respecto de las notas ya ingestadas del
@@ -342,13 +372,19 @@ Tu bóveda es **una sola implementación**: el framework (scripts, skills, `CLAU
 vive en Almagesto; vos le agregás contenido. Tu contenido no corre riesgo al mergear:
 `vault/config/objective.yaml`, `vault/config/stars.yaml`, `vault/config/themes.yaml`, `vault/STATUS.md`,
 `vault/wiki/index.md`, `vault/wiki/log.md` y `vault/wiki/matrices/method_star.md` están marcados
-`merge=ours` en `.gitattributes`, así que un merge del framework **nunca** los pisa (registrá el driver una vez por clon: `git config merge.ours.driver true`).
+`merge=ours` en `.gitattributes`, así que un merge del framework **nunca** los pisa — **si el driver
+viaja en el comando**. ⛔ **NO registres `merge.ours.driver` en el clon (#390):** es una regla por
+**path** y git no puede condicionarla por remoto, así que el driver que protege contra `upstream`
+**descarta en silencio** lo que traiga `origin` —tu otra máquina—. Se pasa con `-c` en cada merge
+del framework; el lint **bloquea** al clon que lo tiene registrado (`git config --unset
+merge.ours.driver` si `git config --get merge.ours.driver` imprime `true`; el detalle y la
+auditoría de merges anteriores están en `docs/migracion-instancia.md` §0).
 
 **Si instanciaste con "Use this template" (recomendado):** tu `origin` es *tu* repo y Almagesto es
 `upstream` (lo agregaste al instanciar). Traés mejoras del framework mergeando upstream:
 
 ```bash
-git fetch upstream && git merge upstream/main   # trae mejoras del framework; tu contenido (merge=ours) queda intacto
+git fetch upstream && git -c merge.ours.driver=true merge upstream/main   # trae mejoras del framework; tu contenido (merge=ours) queda intacto
 ```
 
 ⚠ **La primera vez ese comando falla** con `fatal: refusing to merge unrelated histories`, y es
@@ -356,7 +392,7 @@ esperable: "Use this template" te crea el repo con **historia limpia**, o sea si
 Almagesto. El primer merge se hace con el flag, y una sola vez:
 
 ```bash
-git merge upstream/main --allow-unrelated-histories
+git -c merge.ours.driver=true merge upstream/main --allow-unrelated-histories
 ```
 
 Ahí van a aparecer **conflictos add/add en archivos de framework** que tu instancia nunca tocó (git
@@ -372,7 +408,7 @@ repo, creá uno vacío, convertí Almagesto en `upstream` y poné el tuyo como `
 git remote rename origin upstream            # Almagesto = de dónde vienen los updates
 git remote add origin <URL-de-tu-repo>       # tu repo (crealo vacío primero)
 git push -u origin main
-# desde ahora, para actualizar:  git fetch upstream && git merge upstream/main
+# desde ahora, para actualizar:  git fetch upstream && git -c merge.ours.driver=true merge upstream/main
 ```
 
 **Regla de oro:** no edites archivos de framework (scripts, skills, `CLAUDE.md`, `vault/.obsidian/`) en tu

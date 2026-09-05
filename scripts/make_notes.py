@@ -9,8 +9,12 @@ Uso:
     python scripts/make_notes.py --migrate-disputes              # migración #71 de disputes, sin slug
     python scripts/make_notes.py --migrate-vistas                # migración #188 de vistas, sin slug
     python scripts/make_notes.py --sync-mirror                   # backfill espejo NEA (#70), sin slug
+    (los otros backfills/migradores —`--restamp-*`, `--migrate-*`, `--rename-paper`, `--fix-*`—
+     se listan en `--help`, con su issue; casi todos corren sin slug)
 
-- vault/wiki/stars/<slug>.md            : ficha índice de la estrella (frontmatter + Dataview).
+- vault/wiki/stars/<slug>.md            : ficha índice de la estrella (frontmatter + roll-ups
+  ESTAMPADOS, D-10/D-11 — el único bloque Dataview que este script emite es el de `index.md`,
+  debajo de cada tabla materializada, #237).
 - vault/wiki/concepts/<area>/<c>.md     : stub del concept durable de un tema (--theme).
 - vault/wiki/papers/<bibcode>.md        : una nota por paper relevante (metadata + placeholders LLM).
 
@@ -62,7 +66,7 @@ _listify_curado = cfg.listify_curado
 
 def fm(d: dict) -> str:
     """Frontmatter YAML entre --- ---."""
-    # @inv INV-71
+    # @inv INV-71, INV-62
     body = yaml.safe_dump(d, sort_keys=False, allow_unicode=True, default_flow_style=False)
     return f"---\n{body}---\n"
 
@@ -1732,7 +1736,7 @@ def _yaml_block_item(v: str) -> str:
     a ceiling**. Round-tripping through the dumper is what makes «add-only» actually idempotent.
 
     ⚠ Block context only: a comma is legal inside a plain block scalar and NOT inside a flow one,
-    so the `field: [a, b]` branch dumps the whole list instead of quoting item by item.  @inv INV-139"""
+    so the `field: [a, b]` branch dumps the whole list instead of quoting item by item."""
     return yaml.safe_dump(v, default_flow_style=False, allow_unicode=True).strip().removesuffix("...").strip()
 
 
@@ -1747,7 +1751,7 @@ def merge_frontmatter_list(dest, field: str, values: list) -> bool:
     lista, el campo no está, forma no reconocida—. El llamador cuenta el `False` como `skipped`,
     o sea «ya estaba linkeado», así que la entidad nueva **nunca entraba al roll-up** y nada lo
     decía. Los seis avisan por stderr nombrando archivo, campo y motivo; el único mudo es el
-    legítimo (`not missing`), que es el caso normal e idempotente."""
+    legítimo (`not missing`), que es el caso normal e idempotente.  @inv INV-139"""
     def _no(motivo: str) -> bool:
         """Say the refusal out loud and return False, so the caller's `skipped` is not a lie."""
         cfg.print_seguro(f"  ⚠ no pude linkear `{field}` en {dest.name}: {motivo}", file=sys.stderr)
@@ -1946,7 +1950,6 @@ def stamp_excluded(slug: str, dest) -> bool:
     return True
 
 
-# @inv INV-62
 GENERATOR_LINE = "> _Generado con Almagesto v"
 # Aviso de capa LLM de la cabecera. Vive acá y NO inline en los templates de cuerpo porque lo
 # escriben dos caminos —la creación de la nota y el backfill `stamp_header` (#69)— y si divergen, el
@@ -2259,7 +2262,7 @@ def stamp_header(dest) -> bool:
     # (#379). Medido: 60 de 169 notas con el orden invertido, 10 avanzadas a los pasos 3-4 y 6 con
     # la cabecera ya borrada. La precondición es la nota sin `## Abstract` (#124/#277): #378 sólo
     # hace daño donde #277 ya había fallado.
-    #  @inv INV-48
+    #  @inv INV-62
     cab = find_header_line(text)
     corte = cab[1] if cab else m.end()
     bloque = f"\n\n{LLM_DISCLAIMER[kind]}\n>\n{linea_gen}"
@@ -3938,7 +3941,7 @@ def _flags_usados(args, ap=None) -> list:
 
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--fix-key", action="store_true", dest="fix_key",
                     help="con --rename-paper: la clave vieja era ERRÓNEA (no un alias D-19), así que "
                          "no va a `versions[]`; el rastro va al log (#355)")
@@ -3948,7 +3951,8 @@ def main() -> int:
                          "preprint→publicado, D-19)")
     ap.add_argument("slug", nargs="?",
                     help="slug de estrella/tema; en --web es la CLAVE de cita (AAAA+Autor). "
-                         "Opcional sólo con --restamp-pdf-links.")
+                         "Opcional con los backfills y migradores que abajo dicen «sin slug» / "
+                         "«no requiere slug».")
     ap.add_argument("--all", action="store_true", help="incluir papers no-relevantes")
     ap.add_argument("--restamp-pdf-links", action="store_true", dest="restamp_pdf_links",
                     help="backfill #47: barre TODAS las notas de papers y re-estampa el link "

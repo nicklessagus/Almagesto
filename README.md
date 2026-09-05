@@ -70,7 +70,7 @@ flowchart LR
 > otras disciplinas** que el trabajo astro usa (análisis de datos, estadística, machine learning,
 > procesos gaussianos, signal processing) cuya bibliografía canónica vive **fuera de ADS** (el eje
 > tema/concepto y la capa de calidad son agnósticos de disciplina, así que la cadena los soporta
-> igual): se declaran en `themes.yaml` con `source: web \| local-pdfs` + su lista `sources:` y entran
+> igual): se declaran en `themes.yaml` con `source: web \| local-pdfs \| local-pdfs+web` + su lista `sources:` y entran
 > a `vault/raw/` desde snapshots web + PDFs locales. Lo que **no** hace falta es enumerarlas a ciegas:
 > `scripts/discover.py` (#104) barre **ADS + arXiv + OpenAlex** y suma el *descubrimiento anclado* —
 > las referencias de la mitad astro del propio tema, rankeadas por cuántos de esos papers las citan—;
@@ -177,9 +177,10 @@ que se commitea y viaja con la bóveda:
 
 Un tema **off-ADS puro** no lleva `busquedas`: no hubo query que registrar, porque sus fuentes ya
 están declaradas una por una en `themes.yaml`. Uno **mixto** sí lo lleva, y desde #104 de dos formas:
-con `query:` poblada corre el **descubrimiento ADS completo** —misma lente, mismas puertas, misma
-compuerta de triage— y registra esa corrida; sólo con `extra_core:` y `query: null`, registra lo que
-entró por esos bibcodes.
+con `query:` poblada corre el **descubrimiento ADS completo** —misma lente y mismas puertas; ⚠ **sin**
+compuerta de triage: en un tema el core del citation chaining entra solo (INV-49), salvo que
+`objective.yaml` declare `relevance.chain_autoaccept: never`— y registra esa corrida; sólo con
+`extra_core:` y `query: null`, registra lo que entró por esos bibcodes.
 
 <p align="center">
   <img src="docs/assets/demo-animated.svg" width="740"
@@ -193,7 +194,8 @@ La wiki resultante es una bóveda [Obsidian](https://obsidian.md) común: se abr
 de actividad).
 
 **La ficha de estrella.** Arriba, el frontmatter: el **contrato máquina-legible** que consume un
-agente o un script (`teff_K`, `P_rot_days`, `planets[]` con P/K/e/m·sini, `methods_applied`; cuando
+agente (`teff_K`, `P_rot_days`, `planets[]` con P/K/e/m·sini —éstos los cruza además el lint contra
+el ground-truth, campo por campo (#70)— y `methods_applied`, que sólo lee un agente; cuando
 dos fuentes discrepan sobre un eje se suma `disputes`, con una posición por fuente). Abajo, fuera de
 cuadro, la prosa destilada de los papers y los **tres** roll-ups que el ingest materializa
 (`## Papers`, `## Planetas (ground-truth NASA Exoplanet Archive)` y
@@ -234,7 +236,7 @@ descripción, o el usuario con `/<nombre>`). Encapsulan la cadena mecánica + el
 |---|---|---|
 | `setup` | "configurá la bóveda", "definí el objetivo" | Paso 0: traduce tu foco en palabras a `objective.yaml` (incluida la regex `relevance.facets`) y la **afina contra ADS con un preview** (`query_ads --probe`), para que NO escribas regex a mano. No ingesta. |
 | `ingest-star` | "bajá/ingestá/agregá la estrella X" | Corre la cadena mecánica (orquestador `ingest_star.py`) y hace la extracción LLM de los papers clave + síntesis + bookkeeping. Incluye la **compuerta de triage** del citation chaining: el candidato que sólo *menciona* al sujeto no se baja sin juicio (`triage.py`). |
-| `ingest-theme` | "investigá a fondo el tema X" | Como ingest-star pero por TEMA: query ADS por keywords → concept durable en `concepts/`. Soporta temas off-ADS (opt-in) vía `source: web\|local-pdfs` + `sources:` en `themes.yaml`. |
+| `ingest-theme` | "investigá a fondo el tema X" | Como ingest-star pero por TEMA: query ADS por keywords → concept durable en `concepts/`. Soporta temas off-ADS (opt-in) vía `source: web\|local-pdfs\|local-pdfs+web` + `sources:` en `themes.yaml`. |
 | `append-knowledge` | "agregale este paper a la ficha X", "sumá este PDF al concept Y" | Pliega **una fuente puntual** (bibcode / PDF / URL) a una ficha/concepto **existente**: plomería mínima + extracción enfocada + síntesis a la nota viva. No crea entidades ni barre por query. |
 | `test-hypothesis` | "hipótesis: …", "evidencia a favor/contra de …" | Testea un supuesto **durable** contra el fulltext y responde con veredicto citado; **a pedido del usuario** lo archiva en `concepts/hypotheses/`, taggea papers con `thesis_links` y declara la postura de
 cada uno en la tabla de evidencia de la hipótesis (D-21). |
@@ -242,13 +244,15 @@ cada uno en la tabla de evidencia de la hipótesis (D-21). |
 | `verify-citations` | cierre de toda operación con prosa `[[bibcode]]` | Chequea, afirmación por afirmación, que la fuente respalde el claim: **un subagente por fuente**, que lee ese PDF y nada más, y juzga todos los pares que la citan. Las correcciones las aplica un solo escritor serial (`scripts/apply_fixes.py`), que rechaza lo ambiguo en vez de adivinar. |
 | `find-contradictions` | "buscá contradicciones", "¿qué papers discrepan sobre X?" | Barre un eje (estrella/parámetro o concepto) y confirma desacuerdos claim↔claim **entre** papers → propone `disputes` (con una posición por fuente, y un marcador propio cuando quien arbitra es la NASA) para que apruebes. |
 | `maintain` | "actualizá X", "borrá el paper Y", "renombrá el slug", "re-clasificá" | Mantiene entidades **ya ingestadas**: refrescar con papers nuevos, borrar/renombrar limpio, re-clasificar tras cambiar `relevance.facets`, resolver backlog del lint. |
+| `audit-note` | "auditá la ficha de X", "¿esta ficha es confiable?" | Auditoría **a pedido** de UNA nota (ficha, concepto, hipótesis o query): siete frentes en paralelo —la nota contra sí misma, contra su cadena y contra el mundo declarado, con la prueba de escribir el pseudocódigo desde la nota—, corrección serial volviendo a la fuente y re-verificación de lo tocado. Caro por diseño; nunca es paso de cierre. Lo que no cierra queda **marcado en la nota** (`⚠verificar en el PDF`). |
+| `auditar` | "auditá el repo", "revisá que la doc sea coherente con el código" | Auditoría del **framework**, no de la bóveda: gates deterministas primero, después subagentes por frente (doc↔doc, doc↔código, contrato↔tests, promesas sin implementación), verificación adversaria de cada hallazgo y un artefacto acumulativo con IDs estables (`docs/internal/auditoria.md`). No arregla ni borra tests. |
 
 ## Verify: todo claim tiene fuente
 
 El diferencial sobre el patrón base: el lint de Karpathy chequea salud estructural, no que la fuente
 **respalde** la afirmación. Acá toda afirmación va citada `[[bibcode]]` o marcada `inferencia`, y el
 skill `verify-citations` la contrasta contra el texto real del paper (un subagente **por fuente**,
-aislado —ve un solo `.txt`, sin memoria y sin los otros papers—, con cita textual obligatoria; una
+aislado —ve un solo PDF, sin memoria y sin los otros papers—, con cita textual y página obligatorias; una
 contradicción se convierte en disputa tagueada, no en cita rota). Las filas
 de tabla heredan la cita del ámbito que las introduce (si no, se caerían del chequeo), y en las
 transcripciones se pregunta además por lo que la nota **omite**: una tabla truncada no afirma nada
@@ -298,10 +302,10 @@ Todo lo que puede ser determinista lo es, y lo que no, queda marcado como tal en
 | Juzgar los candidatos del citation chaining | **El modelo**, con los dudosos derivados a vos |
 | Extraer de cada paper qué método usa y qué aporta | **El modelo** |
 | Escribir la síntesis de fichas y conceptos | **El modelo** |
-| Verificar que cada cita respalde su afirmación | **El modelo**, con un subagente independiente por afirmación |
+| Verificar que cada cita respalde su afirmación | **El modelo**, con un subagente independiente por fuente (#100), que juzga todos los pares que la citan |
 | Detectar contradicciones entre papers | **El modelo propone, vos aprobás** antes de que se escriba nada |
-| Lo que caduca **afuera** después del ingest | **Determinista**, una sola pasada (`sweep_external.py`) con **seis** detectores: retracciones y correcciones (Crossref por DOI), preprint→publicado, snapshot web, ground-truth y cruces del umbral de la puerta 2 (#106). **Reporta, no aplica solo** |
-| Borrar o renombrar una entidad sin dejar capas colgadas | **Determinista** (`entity.py`, siete capas, dry-run por defecto) |
+| Lo que caduca **afuera** después del ingest | **Determinista**, una sola pasada (`sweep_external.py`) con **seis** detectores: retracciones y correcciones (Crossref por DOI), preprint→publicado, snapshot web, ground-truth y cruces del umbral de la puerta 2 (#106). **Reporta, no aplica solo** —con una excepción nombrada: `retracciones` estampa `retracted:`/`corrections:` sin preguntar (AUD-206), porque una fuente retractada citada rompe la frontera dura— |
+| Borrar o renombrar una entidad sin dejar capas colgadas | **Determinista** (`entity.py`, ocho capas —la octava es el hermano `.verif.md`, #344—, dry-run por defecto) |
 | Salud estructural (lint) y registro de qué se buscó | **Determinista** |
 
 ### Cómo se acota cada parte que hace el modelo, y cómo la chequeás
@@ -336,9 +340,10 @@ conceptos que no citan ninguna fuente.
 como se revisa código.
 
 **Verificar las citas.** Acá hay un modelo chequeando a otro modelo, y eso tiene un techo: es juicio
-robusto, no prueba. Lo que se hizo para acotarlo: cada afirmación la juzga un subagente
-**independiente** que lee **solamente** el texto de esa fuente y tiene prohibido responder de
-memoria; está obligado a devolver **cita textual y número de línea**, y sin eso la afirmación cuenta
+robusto, no prueba. Lo que se hizo para acotarlo: cada fuente la lee un subagente
+**independiente** —uno por fuente (#100), que juzga todos los pares que la citan— que lee
+**solamente** ese PDF y tiene prohibido responder de memoria; está obligado a devolver **cita
+textual y número de página**, y sin eso la afirmación cuenta
 como no soportada; los veredictos distinguen "la fuente no lo dice" de "la fuente dice lo
 contrario", que son problemas distintos; y en tablas y listas se chequea además lo que la nota
 **omite**, porque una transcripción sin errores pero incompleta se lee como completa. Además el

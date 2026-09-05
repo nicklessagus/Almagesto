@@ -37,8 +37,8 @@
 # ✅ que lo daba cerrado).
 #   · INV-05  las plantillas de `make_notes` no tienen test que las audite buscando prosa que
 #             describa a un consumidor downstream.
-#   · INV-23  la independencia del orden del PRIMER estampado de `fulltext` (`A,B` ≠ `B,A`) — es el
-#             INC-3 abierto: los tres tests existentes prueban la rama "ya hay valor estampado".
+#   · INV-23  (cerrado el 2026-08-28: `make_notes.best_fulltext` desempata por regla declarada; INC-3 quedó
+#             ✅ en el contrato el 2026-09-04, AUD-352).
 #   · INV-66  rutas absolutas en artefactos versionados: sin chequeo y sin test.
 #
 # ✅ INV-86 salió con el issue 8.3 (la `inferencia` sin premisas ahora bloquea).
@@ -46,15 +46,19 @@
 #    implementadas y medidas una por una. Queda su capa skill (issue 7.4), que no es
 #    marcable — la conducta de un skill no la ve ningún recolector.
 
-medido_en: "2026-08-27"
-almagesto_version: "1.68.0"
+medido_en: "2026-09-04"
+almagesto_version: "1.202.0"
 # `contrato_invariantes` se eliminó (#139): nadie lo leía (`grep -rn contrato_invariantes scripts/
 # tools/` → 0 hits fuera de este yaml) y era una copia que sólo podía envejecer. El total vigente lo
 # emite el recolector, por el mismo argumento que ya rige para los techos.
 
 techos:
-  sin_marca: 5    # medido: 2026-08-28 (tercera pasada) — 05, 95, 130, 132 y 133.
-  sin_test: 5     # medido: 2026-08-28 (tras cerrar INV-23).
+  sin_marca: 4    # medido: 2026-09-04 — 05, 95, 130 y 133 (INV-132 salió: AUD-347 le puso sus marcas).
+  sin_test: 5     # medido: 2026-09-04 — 05, 95, 130, 133 y el nuevo INV-150 (`lente_rota`, sin test propio).
+  # ⚠ INV-132 estuvo acá con el motivo «`discover.seed_terms` no es alcanzable desde el CLI» hasta el
+  #   2026-09-04, y ese motivo había caducado el 2026-08-28 (#210, 1.77.0): el contrato lo daba
+  #   «garantizado y medido» con seis tests y nadie puso las marcas. La lista de abajo lo cuenta como
+  #   historia; AUD-347 es el hallazgo.
   # ⚠ INV-133 entra a los dos por el mismo motivo que INV-95: su implementación vive en
   #   `trace_invariants.py`, que el recolector **excluye a propósito** (si no, se auto-adjudicaría
   #   cobertura — ya pasó con INV-87 e INV-90). O sea que lo único que esta herramienta no puede
@@ -66,7 +70,10 @@ techos:
   # imprimía dentro del artefacto y no tenía techo, así que podía crecer sin que nada lo dijera.
   # ⚠ Clasificar los 26 uno por uno es trabajo abierto: quien conozca la fila declara
   # `implementación: pendiente` en su estado cuando de verdad no hay código, y el techo baja.
-  sin_marcar: 27  # medido: 2026-08-28
+  sin_marcar: 22  # medido: 2026-09-04 (27 → 22: se marcaron los bloques de `lint.collect` de INV-03, 45, 65,
+                  #   108, 109, 129 y 132; entró INV-114, que perdió una marca de implementación FALSA —vivía
+                  #   sobre la llamada de red de `ingest_offads`, AUD-248— y cuya única implementación posible es
+                  #   la fixture de `tests/conftest.py`, igual que INV-126).
   # BAJA 7→6: INV-139 se cerró el mismo día que se enunció. Nació `INCUMPLIDO` a propósito —para
   #   nombrar los seis sitios que faltaban— y los seis se arreglaron en la misma tanda
   #   (AUD-131/145/146/149/200/201/202), así que hoy tiene marcas en implementación y en test. La

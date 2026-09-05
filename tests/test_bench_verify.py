@@ -389,7 +389,7 @@ def test_el_reporte_declara_su_condicion(toy_vault, monkeypatch, capsys):
     La fecha y el tamaño de muestra ya estaban; el **modelo** —la variable que más lo mueve— no, y
     el corpus tampoco se nombraba. El modelo lo declara quien corrió el fan-out (el script no puede
     saberlo) y, sin declararlo, el reporte dice «no declarado»: un número sin su condición no se
-    puede comparar con otro."""
+    puede comparar con otro.  @inv INV-75"""
     write_bench([pair("p000", "real", "soportada"), pair("p001", "sembrada", "no-soportada")])
     run(monkeypatch, "score")
     out = capsys.readouterr().out

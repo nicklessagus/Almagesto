@@ -3333,8 +3333,7 @@ def test_ground_truth_cambiado_pide_la_marca_y_con_la_marca_baja(toy_vault, caps
     valor que NEA corrige cambia bajo los pies de la prosa que ya lo citó sin que ninguna fila de
     verificación se entere. `sweep_external.aplicar_ground_truth` deja `_cambios` en el JSON; acá se
     pide la marca. Mismo criterio que D-47 con las fuentes retractadas: **no se borra la afirmación**
-    —puede seguir siendo correcta— se la hace visible.
-    """
+    —puede seguir siendo correcta— se la hace visible.  @inv INV-128"""
     (toy_vault.GROUND_TRUTH / "test_star.json").write_text(json.dumps({
         "star": "Estrella Test", "slug": "test_star", "host": {}, "planets": [],
         "_cambios": [{"campo": "host.teff_K", "viejo": 5344, "nuevo": 5390, "fecha": "2026-08-24"}],
@@ -5122,7 +5121,7 @@ def test_fila_de_tabla_que_no_renderiza_bloquea(toy_vault, capsys):
     así que el contenido es invisible para el lector mientras toda herramienta que parsea el archivo
     sí lo ve. Medido en una nota real: dos filas de `## Régimen de validez` fusionadas en una línea
     por un empalme (9 celdas en una tabla de 4), y la fila perdida era un par **verificado** — la
-    nota certificaba como chequeada una afirmación que su propio artefacto no muestra."""
+    nota certificaba como chequeada una afirmación que su propio artefacto no muestra.  @inv INV-149"""
     mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
             "# nota\n\n| A | B |\n|---|---|\n| uno | dos |\n| tres | cuatro | cinco | seis |\n")
     link_from_log(toy_vault, "nota")

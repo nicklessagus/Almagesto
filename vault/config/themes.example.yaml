@@ -24,8 +24,13 @@
 #              lo dice; el tema entra sólo por la lente astro.
 #   aliases  : opcional. Sirven para prosa, para el retro-tag por grep… y son los términos que
 #              `discover.py` le manda a arXiv (cada backend recibe la query en SU idioma).
-#   topic    : (opcional) id de subtema de OpenAlex (`T…`) para la cascada de `discover.py`.
-#              Sacalo con `python scripts/discover.py --topics "<tema en inglés>"`. ⚠ DECLARALO:
+#   topic    : (opcional) id de subtema de OpenAlex (`T…`) para la cascada de `discover.py` —
+#              o una LISTA `[T1, T2]` (#293): un tema de método que cruza disciplinas tiene su
+#              literatura repartida en varios topics (medido: una familia en cinco, y el mismo
+#              trabajo en topics distintos según sea preprint o publicado), así que obligarlo a
+#              elegir uno es pedirle que elija qué mitad perder. Se buscan en OR (`topics.id:T1|T2`,
+#              `discover.topic_filter`). Sacalo con `python scripts/discover.py --topics "<tema en
+#              inglés>"`. ⚠ DECLARALO:
 #              sin él, `discover` intenta inferirlo del `title`, y si tu bóveda escribe los títulos
 #              en castellano la taxonomía de OpenAlex (inglesa) no matchea y esa mitad de la
 #              cascada no corre. No falla en silencio —lo dice en la cobertura— pero perdés el
@@ -38,8 +43,10 @@
 #              declararlo el eje no corre, y la cobertura de `discover.py` lo dice («NO CORRIÓ»).
 #              Son CURACIÓN del tema (para ICA: noisy ICA, quasi-whitening, identifiability), no
 #              algo que se invente en cada corrida. El flag `--seed-terms t1,t2` los pisa.
-#   extra_core : opcional. ⚠ FORMA DURA (D-58): lista de MAPAS `{bibcode, via, motivo}`, no de
-#                bibcodes sueltos — la forma vieja aborta. `via` es vocabulario CERRADO:
+#   extra_core : opcional. ⚠ FORMA DURA (D-58): lista de MAPAS `{bibcode, via, motivo[, fecha]}`,
+#                no de bibcodes sueltos — la forma vieja aborta; `bibcode`/`via`/`motivo` son
+#                obligatorios y `fecha` opcional (el snippet que imprime `query_ads --sweep` la
+#                estampa). `via` es vocabulario CERRADO:
 #                usuario | triage | citado-por-corpus. Ver el ejemplo en stars.yaml.
 #                Override del clasificador: query_ads trae por bibcode los ausentes y rescata los
 #                que la query trajo marcados no-core. Persistente (config se commitea).
@@ -73,9 +80,13 @@
 #              ingest-theme (opt-in, sólo a pedido explícito) y requiere `sources:`.
 #              ⚠ En off-ADS, `query:` es OPCIONAL y NO es sólo decorativa (#104): si la poblás, el
 #              orquestador corre el descubrimiento ADS COMPLETO para la mitad astro del tema (misma
-#              lente, mismas puertas de D-26, misma compuerta de triage) en vez de limitarse a los
-#              bibcodes de `extra_core`. Es lo que convierte un tema mixto de "enumerado a mano" en
-#              "descubierto"; dejala en null si de verdad no querés que busque.
+#              lente, mismas puertas de D-26) en vez de limitarse a los bibcodes de `extra_core`.
+#              Es lo que convierte un tema mixto de "enumerado a mano" en "descubierto"; dejala en
+#              null si de verdad no querés que busque. ⚠ La compuerta de triage NO aplica en el
+#              carril tema (brecha declarada, INV-49): el core del chaining entra SOLO —la query ES
+#              la definición del tema— salvo que objective.yaml declare
+#              `relevance.chain_autoaccept: never`, que manda todo a triage (lo razonable en un
+#              tema de método, donde «el sujeto en el título» no significa nada).
 #              ⛔ Corpus DECLARADO con bibcode ADS (#384): `source: ads` (o sin `source`) +
 #              `query: null` + `extra_core:` poblado → la cadena corre la sub-cadena `--extra-only`.
 #              NO hace falta mentir con `local-pdfs` + `sources: []`: eso afirma que hay bibliografía

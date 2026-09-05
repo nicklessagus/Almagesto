@@ -239,8 +239,8 @@ Progreso del ingest del tema <tema>:
    modelo la completa con lo plausible. **2 citas fabricadas sobre 139 pares**, las dos en el
    carácter exacto del corte, y una invirtiendo el alcance de la afirmación. La herramienta agrupa
    por campo (`--campo`, `--grep`, `--eje`, `--paper`), arrastra `linea` y `segunda_mano`, emite
-   filas de **una fuente cada una** (`--filas`) y **nunca trunca una cita**: si no entra, filtrá
-   menos filas.
+   filas de **una fuente cada una** (`--filas`) y **por default no trunca una cita**: si no entra,
+   filtrá menos filas (`--corto` es el opt-in que acorta, y **marca** el corte).
    ⛔ **La fila sale de `--filas` CON EL VALOR ADENTRO: no lo re-tipees (#322).** Los 12 verdaderos
    positivos medidos son errores de **copiado** —6 de atribución (la frase de un paper bajo otro), 6
    de cola alterada—, **ninguno** de comprensión: o sea, de mover una cadena de un archivo a otro,
@@ -426,7 +426,9 @@ python scripts/discover.py --resolve 10.1016/…              # ¿hay copia libr
 
 ⛔ **Para un tema de método, preguntá por `seed_terms` (#210).** Los cuatro ejes de arriba rankean
 por citas, y eso tiene un **piso**: los papers especialistas de un tema viven entre **11 y 72
-citas** dentro de un topic de 169.988 works, o sea que **ningún corte por citas los toca**. El eje
+citas** dentro de un topic de 169.988 works (⚠ `CLAUDE.md` publica 169.977 para el mismo topic: dos
+consultas a OpenAlex en fechas distintas, no reconciliables sin re-medir — regla de método nº 5),
+o sea que **ningún corte por citas los toca**. El eje
 que sí los alcanza es el **slice de texto por término dentro del topic**, y está medido: la
 recuperación pasa de **7/18 a 13/18** con el universo de candidatos de **776 a 2521**. Ése es el
 canje —cobertura contra costo de triage— y **se decide por tema**, por eso es opt-in. Los términos
@@ -493,7 +495,9 @@ sigue siendo función de `(paper, lente)`), y `--resolve` propone una URL sin to
 Qué cambia respecto del flujo ADS de arriba:
 - **La mitad astro puede seguir descubriéndose:** si el tema es **mixto**, poblá `query:` **además**
   de `sources:` y el orquestador corre el descubrimiento ADS **completo** para esa mitad (misma
-  lente, mismas puertas, misma compuerta de triage). Sin `query:`, la mitad astro entra sólo por los
+  lente, mismas puertas; ⚠ la **compuerta de triage del chaining NO aplica en un tema** —su core
+  entra solo, brecha declarada INV-49— salvo que `objective.yaml` declare
+  `relevance.chain_autoaccept: never`, que manda todo candidato a triage). Sin `query:`, la mitad astro entra sólo por los
   bibcodes que enumeres en `extra_core:` — medido en ICA: 11 papers a mano contra familias enteras
   que la query encuentra sola.
 - ⛔ **Y `sources:` puede quedar VACÍA en la primera corrida (#211).** Es el orden que este mismo
@@ -544,9 +548,11 @@ Qué cambia respecto del flujo ADS de arriba:
   ToUnicode → `extract_fulltext` avisa "ILEGIBLE"; con `tesseract` instalado **cae solo a OCR** y el
   `.txt` queda `source: ocr`, citable con salvedad — ver docs/operacion.md), **no frenar el ingest ni dejarla
   muda**: marcá el
-  item de `sources:` con `pending: paywall|scan|unextractable` (dejando `url`/`doi` conocidos como
-  puntero). La cadena stubbea la nota con `pending_source`, la **deriva al usuario** en el aviso
-  final y el lint la lista como precondición. El resto del tema se arma igual con las fuentes
+  item de `sources:` con `pending: paywall|scan|unextractable|adquisicion` + `pending_motivo`
+  obligatorio (#80: `adquisicion` es «no falló, el usuario la va a conseguir» — sin ese valor entraba
+  forzada como `paywall`; el vocabulario es `lib_config.PENDING_OK`), dejando `url`/`doi` conocidos
+  como puntero. La cadena stubbea la nota con `pending_source`, la **deriva al usuario** en el aviso
+  final y el lint la lista como backlog (`pending_srcs`). El resto del tema se arma igual con las fuentes
   limpias; la pendiente queda como hueco citado. Cuando el usuario provea el PDF/fuente: reemplazar
   `pending` por `pdf:`/`url:`, re-correr la cadena (idempotente) y completar la extracción.
 - **Fuente evaluada y RECHAZADA (#81):** `sources:` registra lo que **aceptaste**; "miré este libro
@@ -564,7 +570,7 @@ Qué cambia respecto del flujo ADS de arriba:
   `2006Tichavsky`, `2025sklearn`). Debe **empezar con `AAAA`+letra** (lo exige `BIBCODE_RE` del lint) y
   coincidir con el nombre del `.txt`.
 - **Tema MIXTO — papers del tema que SÍ tienen bibcode ADS** (un método no-astro casi siempre tiene
-  aplicaciones/variantes publicadas en revista astro): van en **`extra_core:` (lista de mapas `{bibcode, via, fecha, motivo}` — D-58; el `triage` imprime el snippet listo para pegar)** de la
+  aplicaciones/variantes publicadas en revista astro): van en **`extra_core:` (lista de mapas `{bibcode, via, motivo[, fecha]}` — D-58, `fecha` opcional; el `triage` imprime el snippet listo para pegar)** de la
   entrada del tema, **no** en `sources:` con el bibcode como `key` (eso degrada el stub: metadata a
   mano, `citation_count: 0`, blockquote off-ADS factualmente falso). `ingest_theme.py` les corre solo
   la **sub-cadena ADS** (`query_ads --extra-only` → `fetch_arxiv` → `fetch_pdf` → `make_notes

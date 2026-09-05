@@ -104,8 +104,9 @@ Progreso del ingest de <estrella>:
    candidatos, ordenada por **citas/año** y no por citas crudas (#79: el barrido existe para
    recuperar casos tipo Garg+2019 / Willamo+2020, core poco citados que caen al fondo del ranking;
    rankearlo por citas repetía el sesgo de edad del mecanismo que le falló). Revisarla y agregar los que correspondan **de forma persistente** con
-   `extra_core:` (lista de mapas `{bibcode, via, fecha, motivo}` — D-58; el `triage` imprime el snippet listo para pegar) en la entrada de la estrella en `vault/config/stars.yaml` (el
-   `query_ads` los trae por bibcode, `via: manual`, y sobreviven al re-run — a diferencia de editar
+   `extra_core:` (lista de mapas `{bibcode, via, motivo[, fecha]}` — D-58, `fecha` opcional; el `triage` imprime el snippet listo para pegar) en la entrada de la estrella en `vault/config/stars.yaml` (el
+   `query_ads` los trae por bibcode con el `via` **declarado** y `puertas: [manual]` como marca de
+   curación —#303: `via: manual` ya no se escribe—, y sobreviven al re-run — a diferencia de editar
    `build/`, que es scratch y se pisa); después re-correr la cadena (idempotente). Si el barrido
    devuelve muchos y no bajás todos, **listá cuántos quedan sin bajar** en el `log` — no cures en
    silencio. (Un resultado vacío **no prueba ausencia** en papers pre-digitales — ver Notas: el OCR
@@ -124,9 +125,13 @@ Progreso del ingest de <estrella>:
    ```
    (En una bóveda ingestada antes de 1.9.0, `--migrate` consolida de una vez el juicio que haya
    quedado en el `build/<slug>/triage.json` viejo; ver `maintain E`.)
-   Los marcados `◆` **ya tienen nota en la bóveda** (entraron por otro slug): ya están bajados y
-   extraídos — la decisión sigue siendo por-slug (¿pertinente a ESTE sujeto?), pero se despachan
-   rápido (el `stars:` que falte lo cubre el retro-linkeo add-only de `make_notes`).
+   La marca distingue **tres** estados (#189): `◆` = hay **vista fechada de ESTE sujeto** (ya se
+   leyó desde acá); `◇` = **hay nota** (entró por otro slug: PDF y `.txt` ya están) pero **ninguna
+   lectura desde este sujeto**; sin marca = candidato nuevo. La decisión sigue siendo por-slug
+   (¿pertinente a ESTE sujeto?) en los tres casos; lo que `◇` **no** dice es «ya está leído»: que
+   la nota exista significa que alguien la creó (`make_notes` mergea seeds add-only sin leer
+   nada), no que alguien la haya leído desde este eje — medido, 141 de 908 notas reclamadas por 2+
+   sujetos sin segunda extracción. El `stars:` que falte lo cubre el retro-linkeo add-only.
    Clasificá cada candidato **sólo por título+abstract** (no bajes nada para decidir):
    - **pertinente** → pegá el snippet que imprime `triage.py` en `extra_core:` de `vault/config/stars.yaml` y re-corré
      la cadena (idempotente: baja sólo los nuevos; `extra_core` es override del clasificador).
@@ -259,7 +264,8 @@ Progreso del ingest de <estrella>:
      se leyeron con la lente que el prompt tenía y reescribirlas sería inventar contenido.
    - un paper que este sujeto **reclama** (`stars`/`thesis_links`) y que legítimamente no vas a leer
      desde acá —aporta sólo al roll-up— se **declara**: `no_vista: [{sujeto, motivo}]`. El lint lo
-     baja de backlog a informativo. Mismo criterio que `no_sintetizado` y que el `--reason` del
+     mueve a la categoría `reclamo_sin_vista_declarado` («visible, no es deuda»: sigue en el bloque
+     de backlog, no existe severidad informativa — AUD-207). Mismo criterio que `no_sintetizado` y que el `--reason` del
      triage: no curar en silencio.
    ⚠ **`pdf_source` antes de copiar un número** (#57): con `eprint` el `.txt` es el **preprint**
    (un `v1` pre-referato puede traer otros valores que el publicado que identifica el bibcode), y con

@@ -22,14 +22,13 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.202.0"
+ALMAGESTO_VERSION = "1.203.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
 # daría WARN permanente sin forma de apagarlo). El lint AVISA (WARN) mientras `name` siga siendo
 # este string — la instancia no definió su objetivo (skill `setup`) y clasifica "core" con la
 # regex del ejemplo. Mantener en sync con el YAML del template.
-# @inv INV-57
 DEFAULT_OBJECTIVE_NAME = "<definir con el skill setup>"
 
 ROOT = Path(__file__).resolve().parent.parent  # raíz del repo (andamiaje + bóveda)
@@ -314,6 +313,8 @@ def missing_schema_fields(tipo: str, fm: dict) -> list:
 
 def table_shape_issues(body: str) -> list:
     """Table rows whose cell count does not match their header's (#227). `[(line_no, got, want)]`.
+
+    @inv INV-149
 
     ⛔ **The artefact is what travels.** A row with more cells than its header does not render —
     GFM drops the excess— so the content is lost *in the reader's view* while still being there
@@ -1206,7 +1207,7 @@ def log_quote_exempt(stem: str, texto: str, kind: str = "") -> str | None:
     never fire — the same shape of bug as #168/#276, a check looking at markup that the layer below
     already normalised away.
 
-    @inv INV-100
+    @inv INV-141
 
     ⚠ **Scoped to `log.md` on purpose.** The mark is the way out of an *append-only* artefact; in a
     note or a concept the correction is made by editing, so neither exemption applies there and a
@@ -2974,7 +2975,7 @@ def load_extra_core(meta: dict, *, entry: str = "?") -> list:
     if v is None:
         return []
     if not isinstance(v, list) or any(not isinstance(x, dict) for x in v):
-    #  @inv INV-60
+    #  @inv INV-60, INV-48
         sueltos = [v] if isinstance(v, str) else [x for x in as_list(v) if isinstance(x, str)]
         sys.exit(_extra_core_error(entry, sueltos,
                                    "`extra_core` ya no acepta un bibcode suelto ni una lista de "
@@ -3297,7 +3298,7 @@ TOKENS_POR_PAPER = 24_000
 #
 # La declaración vive acá y no en cada script porque la comparten tres consumidores
 # (`fetch_ground_truth` escribe, `make_notes` la publica en la cabecera de la ficha, `lint` la
-# vigila): repetirla es cómo se desincronizan.  @inv INV-76
+# vigila): repetirla es cómo se desincronizan.
 # @inv INV-14
 AUTORIDAD_CAMPO = {
     "spectral_type": "simbad",

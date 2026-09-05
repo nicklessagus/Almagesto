@@ -1,7 +1,5 @@
 """Partición de una nota en bloques citables + los dos hashes del ancla (D-4 / D-20).
 
-@inv INV-78
-
 QUÉ PROBLEMA RESUELVE. El bloque `## Verificación de citas (AAAA-MM-DD)` de una nota se lee como
 "esta nota está verificada", pero una edición posterior —una frase nueva con su `[[bibcode]]`, un
 número corregido, una re-extracción del `.txt`— deja afirmaciones que nadie chequeó bajo ese mismo
@@ -9,7 +7,9 @@ encabezado. Hasta 1.24.0 el lint lo medía por fecha de git contra la fecha del 
 nada por archivo**. Acá la unidad pasa a ser el **par** (afirmación, cita), con dos hashes:
 
 - **ancla de bloque** — sha256 (10 hex) del bloque markdown **normalizado** que contiene la cita.
-- **hash de fuente** — sha256 (10 hex) del `.txt` que se leyó para verificarla.
+- **hash de fuente** — sha256 (10 hex) del ARCHIVO que se leyó para verificarla, con su tipo
+  delante (#117, `SOURCE_KINDS`): `pdf:<sha10>` en toda fila nueva —desde #205 la fuente es el
+  PDF—, `txt:<sha10>` en las filas viejas y en la fuente web, donde el `.txt` ES la captura.
 
 LA GRANULARIDAD ES EL BLOQUE, y las otras dos se descartaron midiendo:
 
@@ -135,7 +135,9 @@ def sha10(text: str | bytes) -> str:
 
 
 def source_hash(path: Path) -> str:
-    """Hash del `.txt` de fuente. Cuando el texto ya está en memoria, usar `sha10` directo."""
+    """Hash de un archivo de fuente leído como TEXTO (el `.txt`; the `txt:` kind). For a PDF hash
+    its bytes with `sha10` directly. Cuando el texto ya está en memoria, usar `sha10` directo.
+    @inv INV-78"""
     return sha10(Path(path).read_text(encoding="utf-8", errors="replace"))
 
 
@@ -268,7 +270,8 @@ def bytes_hash(path: Path) -> str:
 
 
 def block_anchor(text: str, intro: str | None = None) -> str:
-    """Ancla de un bloque, con su ámbito heredado si lo tiene (los DOS bloques entran al hash)."""
+    """Ancla de un bloque, con su ámbito heredado si lo tiene (los DOS bloques entran al hash).
+    @inv INV-78"""
     base = normalize_ws(text) if intro is None else f"{normalize_ws(intro)}\n{normalize_ws(text)}"
     return sha10(base)
 

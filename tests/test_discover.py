@@ -711,7 +711,7 @@ def _tema_ica(**kw):
 def test_seed_terms_sale_de_themes_yaml(toy_vault, monkeypatch, capsys):
     """#210 / INV-132 — `_preview_theme` llamaba a `cascade` SIN `term_slices` y no había bandera:
     el eje que la doc mide en 7/18 → 13/18 era inalcanzable desde cualquier entrada de usuario.
-    Los términos son curación del tema, así que la fuente por default es themes.yaml."""
+    Los términos son curación del tema, así que la fuente por default es themes.yaml.  @inv INV-132"""
     monkeypatch.setattr(d.cfg, "load_themes",
                         lambda: _tema_ica(seed_terms=["noisy ICA", "quasi-whitening"]))
     visto = {}
@@ -737,7 +737,7 @@ def test_seed_terms_sigue_apagado_por_default(toy_vault, monkeypatch):
 
 def test_flag_seed_terms_pisa_a_themes_yaml(toy_vault, monkeypatch):
     """#210 punto 1 — la bandera existe y manda sobre lo declarado (probar un término suelto sin
-    editar el YAML es justamente el caso de uso del flag)."""
+    editar el YAML es justamente el caso de uso del flag).  @inv INV-132"""
     monkeypatch.setattr(d.cfg, "load_themes", lambda: _tema_ica(seed_terms=["viejo"]))
     visto = {}
     monkeypatch.setattr(d, "cascade", lambda **k: visto.update(k) or {
@@ -749,7 +749,7 @@ def test_flag_seed_terms_pisa_a_themes_yaml(toy_vault, monkeypatch):
 
 def test_cobertura_dice_que_seed_terms_NO_CORRIO(monkeypatch):
     """#210 punto 4 — mismo criterio que `query:`/`topic:` faltantes: un eje apagado que no se
-    declara se lee como «la cascada ya miró todo lo que hay»."""
+    declara se lee como «la cascada ya miró todo lo que hay».  @inv INV-132"""
     monkeypatch.setattr(d, "seed", lambda tid, rows=200, min_citas=None: [])
     out = d.cascade(topic_id="T11447")
     motivos = {b: err for b, _n, err in out["cobertura"]}
@@ -769,7 +769,7 @@ def test_cobertura_cuenta_lo_que_trajo_el_slice(monkeypatch):
 
 def test_registro_guarda_los_seed_terms_de_la_corrida(toy_vault, monkeypatch):
     """#210 — el eje cambia el universo de candidatos por un factor de 3: dos corridas con y sin él
-    NO son comparables, y sin dejarlo escrito el registro afirmaría el mismo universo para las dos."""
+    NO son comparables, y sin dejarlo escrito el registro afirmaría el mismo universo para las dos.  @inv INV-132"""
     monkeypatch.setattr(d.cfg, "load_themes", lambda: _tema_ica(seed_terms=["noisy ICA"]))
     monkeypatch.setattr(d, "cascade", lambda **k: {"records": [], "undedupable": [], "cobertura": []})
     monkeypatch.setattr(d, "_theme_anchor", lambda s, c=None: ([], 0))
@@ -937,7 +937,7 @@ def test_seed_terms_pagina_el_slice(monkeypatch):
     """#294 — el docstring justificaba el cap diciendo que paginar el slice es asequible, y el
     cuerpo hacía UNA request con `per-page` topeado en los 200 del backend. Medidos: dos papers del
     gold standard quedaban fuera del top 200 de su slice, los dos exactamente de la cola
-    especialista que este eje existe para alcanzar."""
+    especialista que este eje existe para alcanzar.  @inv INV-132"""
     urls = _fake_oa(monkeypatch, 1405, [
         {"meta": {"count": 1405, "next_cursor": "c2"},
          "results": [{"id": f"W{i}"} for i in range(200)]},
@@ -960,7 +960,7 @@ def test_el_aviso_de_truncamiento_nombra_una_perilla_QUE_EXISTE(monkeypatch, cap
     """#294 / INV-132 — el aviso mandaba subir `rows_por_termino`, que no se podía subir desde
     ninguna entrada de usuario (`cascade` no lo pasaba, no había flag ni campo de tema) y que por
     encima de 200 era un no-op silencioso. Un remedio inexistente deja al operador donde lo dejaba
-    el cap mudo."""
+    el cap mudo.  @inv INV-132"""
     _fake_oa(monkeypatch, 5000, [{"meta": {"count": 579, "next_cursor": None},
                                   "results": [{"id": f"W{i}"} for i in range(15)]}])
     d.seed_terms("T11447", ["noisy ICA"], rows_por_termino=15)

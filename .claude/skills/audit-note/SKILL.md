@@ -180,9 +180,13 @@ abrir, se abre. La marca es para lo que **no se puede** cerrar en esta pasada.
 ### 0. Precondiciones (baratas, y acotan todo lo demás)
 
 ```bash
-python scripts/lint.py --cierre <slug>          # la salud estructural, ya resuelta
+python scripts/lint.py --cierre <slug>          # estrella o tema: la salud estructural, ya resuelta
+python scripts/lint.py --cierre                 # hipótesis o query: el cierre GLOBAL (ver abajo)
 ```
 
+⚠ `--cierre <slug>` acota a un sujeto de `stars.yaml`/`themes.yaml`; con el slug de una hipótesis o
+de una query **rehúsa** (rc 2, `entidad desconocida`), y esas notas nunca entran al alcance de un
+sujeto — para ellas el cierre es el global, sin slug.
 Correrlo **primero**: lo que el lint ya reporta no se re-deriva, se **cita**. Si hay bloqueantes,
 decirlo y seguir — la auditoría vale igual, pero el reporte tiene que declarar sobre qué corrió.
 
@@ -284,7 +288,9 @@ frescura que no tiene.
 ### 5. Cerrar
 
 ```bash
-python scripts/lint.py --cierre <slug>
+python scripts/contrast.py --validar <ruta-de-la-nota>   # #323: las citas contra la extracción, antes del verify
+python scripts/lint.py --cierre <slug>                    # estrella o tema
+python scripts/lint.py --cierre                           # hipótesis o query (el slug rehúsa, rc 2)
 ```
 
 Y dejar el registro donde vive el resto: entrada en `vault/wiki/log.md` (`## AAAA-MM-DD —

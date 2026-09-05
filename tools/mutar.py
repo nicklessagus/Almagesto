@@ -745,7 +745,9 @@ def _trazabilidad(args) -> int:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    # E-13: the docstring is hard-wrapped at 100 columns, so its first PHYSICAL line ends mid-sentence
+    # («…exigir que **algún test»). The description is the first PARAGRAPH, reflowed.
+    ap = argparse.ArgumentParser(description=" ".join(__doc__.split("\n\n")[0].split()))
     ap.add_argument("archivos", nargs="*", help="archivos de scripts/ o tools/ a mutar")
     ap.add_argument("--diff", action="store_true", help="los que cambiaron vs HEAD")
     ap.add_argument("--todo", action="store_true", help="todo scripts/ + tools/")

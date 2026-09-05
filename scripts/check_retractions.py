@@ -356,7 +356,7 @@ def main() -> int:
     un cero al total*. Antes, "sin nada que chequear" y "Crossref caído" terminaban los dos en un
     código que la cadena leía como veredicto sobre la frontera dura."""
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--paper", help="chequear un solo bibcode (default: todos los de papers/)")
     ap.add_argument("--slug", help="chequear sólo los papers de un ingest (modo de la cadena; "
                                    "el barrido completo, sin --slug, es la pasada periódica)")

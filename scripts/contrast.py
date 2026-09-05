@@ -20,8 +20,9 @@ Three guarantees, each closing one of the measured failure modes:
 
   1. **A quote is never truncated.** If output must be shortened it goes through
      `lib_blocks.truncate_claim` —which already retreats out of `$…$`, backticks and `[[ ]]`— and
-     the cut is MARKED. Default is `--completo`: when the material does not fit, the remedy is to
-     filter fewer rows, never to cut more text (#226's doctrine, one step earlier).
+     the cut is MARKED. The default is the complete value (`--corto` is the opt-in that shortens):
+     when the material does not fit, the remedy is to filter fewer rows, never to cut more text
+     (#226's doctrine, one step earlier).
   2. **Provenance travels**: `linea` (the locator) and `segunda_mano` ride with every value. The six
      false attributions of that run came from a digest that dropped them.
   3. **One row, one source, and the string from the JSON already inside it (#322).** The row

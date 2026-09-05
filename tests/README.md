@@ -240,13 +240,14 @@ env PATH=/tmp/binmin /tmp/cienv/bin/python -m pytest tests/ -q      # sin pdftot
 
 ---
 
-## Las siete redes que corren al escribir código (regla permanente, 2026-08-24)
+## Las nueve redes que corren al escribir código (regla permanente, 2026-08-24)
 
 Salieron de una sesión en la que **los bugs los encontraron agentes leyendo, no la suite**. Cada una
-ataca una clase de defecto que se repitió, y las ocho son deterministas: nada acá depende del
+ataca una clase de defecto que se repitió, y las nueve son deterministas: nada acá depende del
 juicio de un modelo.
 
-⚠ **La 8 se agregó el 2026-08-28 (AUD-212).** El mapa de `docs/trazabilidad.md` mide *que alguien
+⚠ **La 9 se agregó el 2026-08-28 (AUD-212); la numeración es la de `CLAUDE.md` §*las nueve redes*,
+que manda (AUD-228: los dos docs tenían la 8 y la 9 cruzadas).** El mapa de `docs/trazabilidad.md` mide *que alguien
 puso la marca*, no que la marca esté sobre código que el test cubre — que es la primera de las dos
 lecciones de método de la pasada `/auditar`. El gate vacía cada implementación marcada `@inv` y
 corre **sólo el test marcado**: si pasa, esa fila afirma una cobertura que no existe. Primera
@@ -266,10 +267,10 @@ que ejerza la rama verdadera, no aflojar el gate.
 | 5 | La **doc afirmando cosas del código** | `tests/test_docs_ejecutables.py` (tier 0) |
 | 6 | Un script que **pisa lo que ya escribió** | correr dos veces y hashear `vault/**/*.md` (ver abajo) |
 | 7 | Un símbolo **nuevo con nombre en castellano** | `tests/test_idioma_codigo.py` (tier 0) |
-| 8 | Una fila del mapa que **atribuye cobertura que no existe** | `python tools/mutar.py --trazabilidad` (~20 min) |
-| 9 | Un condicional que **no decide nada** (una regla escrita a medias) | `tests/test_codigo_muerto.py` (tier 0) |
+| 8 | Un condicional que **no decide nada** (una regla escrita a medias, #319) | `tests/test_codigo_muerto.py` (tier 0) |
+| 9 | Una fila del mapa que **atribuye cobertura que no existe** (AUD-212) | `python tools/mutar.py --trazabilidad` (~20 min) |
 
-⚠ **La 6 faltaba acá y estaba en `CLAUDE.md`** (#148). El doc normativo titulaba *"las **seis** redes"* (hoy son siete)
+⚠ **La 6 faltaba acá y estaba en `CLAUDE.md`** (#148). El doc normativo titulaba *"las **seis** redes"* (hoy son nueve)
 y delega el detalle en este archivo, que publicaba cinco — así que la regla de idempotencia se caía
 exactamente en la frontera entre los dos. Vale para **todo script que escriba en `vault/`**, no sólo
 para los de `scripts/`: la idempotencia es invariante del framework («la cadena es idempotente:
@@ -308,8 +309,8 @@ nota no puede cambiar si no cambió lo que afirma; el registro tiene que crecer 
 | la plantilla del bloque de verificación no tiene columna de **grado** | `Score` 0–10 reintroducía el eje que `parcial` había dejado |
 | la plantilla que publica la doc la parsea el mismo código que la chequea | ocho columnas en la doc, posiciones fijas 4 y 5 en el parser → `--cierre` en rojo permanente |
 
-**Cuándo**: 2, 5 y 7 corren solas en tier 0. La 4, al cerrar un issue. **La 1 (barrido de
-mutación) NO se corre salvo pedido explícito** (decidido 2026-08-27; ver la cadencia en
+**Cuándo**: 2, 5, 7 y 8 corren solas en tier 0. La 4, al cerrar un issue; la 9, a pedido (~20 min).
+**La 1 (barrido de mutación) NO se corre salvo pedido explícito** (decidido 2026-08-27; ver la cadencia en
 `CLAUDE.md`) — es la única que cuesta y la única que distingue "el test pasa" de "el test
 **podría** fallar", y por eso su suspensión está fechada y declarada en vez de ser un olvido.
 ⚠ Hasta esa corrección la misma frase decía las dos cosas: «NO se corre salvo pedido» y «al

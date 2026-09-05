@@ -155,8 +155,15 @@ astro, cuya bibliografía canónica vive fuera de ADS.
 `busquedas` queda vacía"*, y desde #104 eso es falso — justo para la feature más grande del rango:
 
 - Un tema off-ADS **mixto** con `query:` poblada corre el **descubrimiento ADS completo** (misma
-  lente, mismas puertas de D-26, misma compuerta de triage) y **sí** escribe `busquedas`. Sólo con
-  `extra_core:` y sin `query:` la sub-cadena queda acotada a esos bibcodes.
+  lente, mismas puertas de D-26) y **sí** escribe `busquedas`. Sólo con `extra_core:` y sin
+  `query:` la sub-cadena queda acotada a esos bibcodes (`--extra-only`; desde #384 vale igual para
+  `source: ads` sin `query:`). ⚠ **La compuerta de triage NO aplica en el carril tema** (brecha
+  declarada, INV-49): en `query_ads` el gate es `gate = bool(star_names) or politica == "never"`,
+  así que en un tema el core del chaining **entra solo** —la query *es* la definición del tema— y
+  un descarte previo se re-propone. La única perilla es `relevance.chain_autoaccept` en
+  `objective.yaml` (vocabulario cerrado `titulo | never`, `query_ads.CHAIN_AUTOACCEPT`): con
+  `never` el gate aplica también a temas. Fijado en
+  `tests/test_query_ads.py::test_main_tema_no_aplica_la_compuerta`.
 - Y para la mitad que ADS no indexa está `discover.py` (#104): la cascada **ADS + arXiv + OpenAlex**
   más el **descubrimiento anclado** (las referencias de la mitad astro del propio tema, rankeadas por
   cuántos de esos papers las citan). Es el paso 0b del skill `ingest-theme`, y **propone**: no
@@ -203,7 +210,8 @@ En la nota de **concepto** la tabla es más corta porque **no hay ground-truth**
 **régimen** (#74): acá dos papers pueden decir cosas distintas y **estar los dos bien** porque valen
 bajo condiciones distintas, así que el modo de falla no es "no coinciden" sino **generalizar de
 más** — y ése `verify-citations` lo devolvía `soportada`, porque la afirmación pelada sí está en el
-paper. El roll-up junta por `thesis_links` (y por `methods` si el área es `methods`).
+paper. El roll-up junta la **unión** de `thesis_links` y `methods` (`make_notes.concept_rollup_rows`,
+D-24), con la columna *Entró por*; **no ramifica por el área** —ningún chequeo lo hace (#246)—.
 
 En la nota de **paper**: la metadata (bibcode, autores, año, doi, `citation_count`, `pdf`,
 `fulltext`, `fulltext_source`, `pdf_source`) la estampan los scripts por **verdad de disco**; el LLM
@@ -211,9 +219,9 @@ llena `methods`, `thesis_links`, `role` y —desde #188— **una VISTA por sujet
 `vistas[]` (`sujeto`/`tipo`, más `fecha`/`txt`/`lente` que estampa `harvest_views.py`) y su
 sección `## Vista — <sujeto>`. La sección única `## Extracción (LLM)` es **schema viejo y el lint
 la bloquea**: sin el scope, el silencio de la nota
-sobre un eje no se distingue de «se miró y no hay nada». El migrador era de **un solo uso**, ya se
-usó y se borró (regla de schema nuevo: migrador de un uso + detector bloqueante, y el detector
-queda); la salida escrita para una nota vieja es declarar la vista a mano. ⛔ **`bearing` es schema viejo
+sobre un eje no se distingue de «se miró y no hay nada». El migrador es
+`make_notes.py --migrate-vistas` (regla de schema nuevo: migrador de un uso + detector bloqueante;
+los dos siguen en el repo). ⛔ **`bearing` es schema viejo
 y el lint lo BLOQUEA** (D-21; migrador: `make_notes.py --migrate-bearing`): la *postura* respecto de
 una tesis no vive en el paper —depende de la tesis, y un paper puede tocar varias— sino en la tabla
 de evidencia de la hipótesis, donde va con cita y `verify-citations` puede chequearla. Lo que **sí**
@@ -280,7 +288,7 @@ archivo. Cada cierre se verificó contra el código, no contra el issue.
 | #86 · registro sin abstract | `query_ads` marca y cuenta `sin_abstract` |
 | #87 · facetas matcheadas sin usar | `triage.py --prioridad` |
 | #88 · el `--sweep` no deja rastro | `cfg.save_barrido` → `barridos: []` (acumulativo) |
-| #89 · el aceptado sin motivo ni origen | `extra_core` como lista de mapas `{bibcode, via, fecha, motivo}` (D-58) |
+| #89 · el aceptado sin motivo ni origen | `extra_core` como lista de mapas `{bibcode, via, motivo[, fecha]}` (D-58; `lib_config.load_extra_core` exige los tres primeros, `fecha` es opcional y el snippet la estampa) |
 | #90 · core sin PDF no se marca en su nota | lint: *paper relevante sin fuente en disco* |
 | #91 · veredictos sin resolver bajo un encabezado que certifica | lint: `verif_sin_resolver` (bloqueante, INV-117) |
 | #92 · las keywords no llegan a la nota | `make_notes.stamp_keywords` (D-17) |
@@ -288,5 +296,7 @@ archivo. Cada cierre se verificó contra el código, no contra el issue.
 **Dos patrones transversales**, que valen más que los issues sueltos: (a) #86/#88/#89/#90 escriben
 los cuatro al registro versionado → **una tanda de schema, no cuatro migraciones**; (b) #79 acumula
 cuatro ocurrencias del mismo orden por citas (truncamiento, ranking del sweep, apéndice de excluidos,
-listado del triage), y sólo la primera es server-side — **las dos primeras están hechas** (1.12.0),
-quedan el apéndice y el listado del triage.
+listado del triage), y sólo la primera es server-side — **las cuatro están hechas**: las dos
+primeras en 1.12.0, y el apéndice (`make_notes.excluded_table`) y el listado del triage
+(`triage.py`, la cola de candidatos) ordenan hoy con la misma política única,
+`lib_config.sort_by_citation_rate` (citas/año).

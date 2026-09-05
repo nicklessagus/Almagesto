@@ -102,7 +102,7 @@ Progreso del refresh de <entidad>:
 
 ### B0. Borrar una ENTIDAD entera (estrella o tema) → `entity.py` (INV-19)
 
-Una entidad vive en **siete capas** y el procedimiento a mano de abajo era nueve pasos en orden
+Una entidad vive en **ocho capas** (la octava es el hermano `.verif.md`, #344) y el procedimiento a mano de abajo era nueve pasos en orden
 sobre siete lugares distintos — o sea una lista de cosas que se pueden saltear, y las salteadas no
 dejaban rastro (el lint tenía red para `wiki/` y **ninguna** para el registro, `raw/` ni `build/`).
 Hay herramienta:
@@ -141,12 +141,18 @@ Y el lint tiene la red del otro lado: **capas colgadas** (registro / `raw/pdfs` 
    actualiza sola.) Sacar la estrella de la matriz método×estrella.
 4. **Hacer durable el borrado de un paper** (si no, el próximo refresh lo resucita: `make_notes`
    re-escribe el stub de **todo** registro `relevant` sin nota en disco, y los fetchers re-bajan el
-   PDF). Las `decisiones` del registro **no** cubren esto: sólo se aplican a candidatos del
-   chaining, no al core de la query directa ni a `extra_core`. Según por qué entró:
+   PDF). Según por qué entró:
    - entró por **`extra_core`** → sacarlo de esa lista en `stars.yaml`/`themes.yaml`;
-   - entró por la **query** y la lente lo clasifica core → o ajustás la lente y re-clasificás
-     (sub-modo D), o lo dejás con `relevance: low` en vez de borrarlo, o asumís que va a volver.
-   Decidilo explícitamente y dejalo en el `log`: "borrado y no durable" es un estado, no un olvido.
+   - entró por la **query** y la lente lo clasifica core →
+     `python scripts/triage.py <slug> --drop-core <bibcode> --reason "<motivo>"` (#112): persiste
+     la exclusión del par (paper, sujeto) en las `decisiones` del registro versionado, borra PDF y
+     `.txt`, borra la nota **sólo** si el paper no pertenece a otro sujeto y no tiene extracción
+     (si no, avisa por qué), re-apunta `pdf:`/`fulltext:` por verdad de disco (#217) y el
+     clasificador lo respeta en cada corrida. Es el simétrico de `extra_core`; los pasos 2 y 3 de
+     arriba a mano quedan para lo que ese comando avisa y no hace (wikilinks rotos, #132). Ajustar la
+     lente (sub-modo D) sigue siendo la salida cuando el descarte es de una **clase** de papers, no
+     de uno.
+   Dejalo en el `log` en cualquiera de los dos casos.
 5. Cierre: **`lint.py --cierre <slug>` en 0** (0 wikilinks rotos / thesis_links colgados / disputes.ref sin destino) → `log`
    (qué se borró y por qué) → commit → preguntar push.
 
@@ -219,8 +225,9 @@ martes cualquiera no frena nada útil; el gate es el cierre de la operación que
   | la fuente **no está** en la bóveda (hay que bajarla) | skill `append-knowledge` |
   | la fuente **ya está**; falta extracción + síntesis | **acá** |
 
-  Procedimiento: leer el `.txt` (un subagente por paper, como en `ingest-star` — el prompt lo arma
-  `extraction_prompt.py` y la cosecha la hace `harvest_views.py`), poblar `methods`/`role`/
+  Procedimiento: leer el **PDF** (#205: el `.txt` es el índice, sólo para ubicar con `grep`; un
+  subagente por paper, como en `ingest-star` — el prompt lo arma `extraction_prompt.py` y la
+  cosecha la hace `harvest_views.py`), poblar `methods`/`role`/
   `thesis_links` y **la vista del sujeto** (`vistas[]` + `## Vista — <sujeto>`, #188), contrastar contra el `## Inventario por eje` de la nota destino, sintetizar
   **en su lugar** (no una sección nueva), y re-estampar la tabla `## Papers` con
   `python scripts/make_notes.py <slug>` para que el estado de cada paper deje de mentir. Si un paper
@@ -314,9 +321,10 @@ martes cualquiera no frena nada útil; el gate es el cierre de la operación que
   `notice_doi`, comparar contra lo que la nota afirma citando ese `[[bibcode]]`).
 - **Sin verificar** (query/concepto con citas pero sin bloque `## Verificación de citas`) → correr
   `verify-citations` sobre esa nota y dejar el bloque **fechado**.
-- **Citas no verificables** (bibcode citado sin su `.txt` en `vault/raw/fulltext/`) → es
-  **precondición**, no backlog opcional: sin fulltext no hay con qué chequear. Conseguir la fuente
-  (cascada de rescate de PDFs en `ingest-star`) o marcarla `pending`.
+- **Citas no verificables** (bibcode citado sin su `.txt` en `vault/raw/fulltext/`; categoría
+  `unverifiable`, **backlog**) → tratarla primero que el resto del backlog: sin fulltext no hay con
+  qué chequear. Conseguir la fuente (cascada de rescate de PDFs en `ingest-star`) o marcarla
+  `pending`.
 - **Claims stale** → re-verificar contra la fuente los que quedaron dudosos.
 Cierre: lint (idealmente bajando el conteo de backlog) → `log` → commit → preguntar push.
 

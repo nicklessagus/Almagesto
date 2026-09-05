@@ -59,6 +59,17 @@ relevance:
   # Dejá ambas sin declarar para el comportamiento histórico (≥1 faceta). Cambiar la
   # regla RE-CLASIFICA el corpus existente → correr el sub-modo re-clasificar de `maintain`.
 
+  # ── Compuerta de curación del citation chaining (opcional, AUD-196 / INV-55) ──
+  # Qué candidato del grafo de citas entra al corpus SIN juicio humano. Vocabulario CERRADO
+  # (`query_ads.CHAIN_AUTOACCEPT`; un typo aborta la corrida):
+  #   chain_autoaccept: titulo   # default: entra solo el que lleva el SUJETO en el título
+  #                              #   (mide 18 % de precisión en una bóveda de estrellas); el resto
+  #                              #   va a `triage.py <slug>` como candidato, sin bajarse
+  #   chain_autoaccept: never    # TODO al triage. Es la única forma de que la compuerta rija en
+  #                              #   un TEMA: sin `never`, en el carril tema el gate no aplica y el
+  #                              #   core del chaining entra solo (brecha declarada, INV-49) — y
+  #                              #   «el sujeto en el título» no significa nada en un tema de método
+
   # doctypes de ADS que casi siempre son ruido (menciones triviales / no-papers).
   noise_doctypes:
     - catalog

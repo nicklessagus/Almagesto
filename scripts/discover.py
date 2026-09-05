@@ -265,7 +265,7 @@ def seed_terms(topic_id: str | None, terms: list, rows_por_termino: int = 200) -
     not have, which for them ends where a silent cap ends: the rest of the slice cannot be seen.
     Measured, two papers of the gold standard were lost to exactly that ceiling — both of them the
     specialist mid-tail this axis exists to reach. Now the slice PAGES with a cursor up to
-    `rows_por_termino`, which is a theme field and a CLI flag."""
+    `rows_por_termino`, which is a theme field and a CLI flag.  @inv INV-132"""
     out: list[dict] = []
     vistos: set = set()
     for term in terms:
@@ -445,7 +445,7 @@ def cascade(*, ads_query: str | None = None, arxiv_terms: list | None = None,
     that timed out contributes zero records, and zero records is indistinguishable from "this
     backend knows nothing about your theme" unless the failure is stated. Callers must print it.
 
-    `term_slices` (opt-in) adds one OpenAlex text-search slice per term inside the topic. It is off
+    `term_slices` (opt-in, @inv INV-132) adds one OpenAlex text-search slice per term inside the topic. It is off
     by default because of its TRIAGE COST, not because it underperforms (#107): measured on the
     real corpus it takes recall from **7/18 to 13/18** and the candidate universe from **776 to
     2521**. That trade is decided per theme. ⚠ The first measurement said *"217 candidates, 1
@@ -750,7 +750,7 @@ def _preview_theme(slug: str, rows: int = 25, min_citadores: int = 2,
     append this run to `descubrimientos:` of the versioned registry (INV-121), which is
     deliberate — a discovery pass that leaves no trace is lost as soon as the terminal
     scrolls, the failure mode #55/#88 closed for triage and sweep. The docstring said
-    otherwise until #133, contradicting INV-59 on paper."""
+    otherwise until #133, contradicting INV-59 on paper.  @inv INV-132"""
     tema = cfg.as_map(cfg.load_themes().get(slug))
     if not tema:
         cfg.print_seguro(f"'{slug}' no está en themes.yaml")

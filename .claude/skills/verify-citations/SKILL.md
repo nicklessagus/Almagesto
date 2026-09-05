@@ -35,9 +35,13 @@ inversa. Verificar contra eso devuelve **`no-soportada` sobre afirmaciones corre
 | **agotar antes de concluir** | si la afirmación no aparece donde el índice la ubica, ampliá la ventana de páginas antes de concluir. `no verificable por extracción` queda para el PDF que es un escaneo ilegible incluso a ojo — distinto de `no-soportada`. |
 
 > ⛔ **La cita textual la chequea un script ANTES que vos (#220).** `python scripts/lint.py` marca
-> como backlog cada `«…»` de ≥ 40 caracteres que no aparezca en el `.txt` de ninguna de las fuentes
-> que cita su bloque, y **declara aparte** las no evaluables (sin `.txt` o con OCR; `eprint` dejó
-> de eximir en #275 — el `.txt` sale del mismo PDF que se leyó). Corrélo
+> como backlog (`cita_no_verbatim`) cada `«…»` de ≥ 40 caracteres que no aparezca en el `.txt` de
+> ninguna de las fuentes que cita su bloque, y **declara aparte** las no evaluables (sin `.txt` o
+> con OCR; `eprint` dejó de eximir en #275 — el `.txt` sale del mismo PDF que se leyó). ⛔ Y tiene
+> un segundo juez que **sí frena**: `cita_inventada` (#318) cruza la cita contra la **extracción**
+> —la transcripción hecha leyendo el PDF— y **bloquea con `--cierre`** cuando no está ni en el
+> `.txt` ni ahí (la fabricó el sintetizador); `python scripts/contrast.py --validar <nota>` es la
+> forma de correr ese cruce antes del fan-out (#323). Corrélo
 > antes del fan-out: es gratis y contesta —en milisegundos, sin abrir un PDF— la mitad decidible de
 > lo que después pagás con un subagente por fuente. ⚠ No reemplaza al fan-out: dice *«esta cadena no
 > está en ese archivo»*, no *«la fuente no respalda esto»*, y **la página no la chequea** (el `.txt`

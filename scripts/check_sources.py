@@ -1,4 +1,4 @@
-"""Cross what a `sources:` item DECLARES against what its DOI or its PDF says (#353).
+"""Cross what a `sources:` item DECLARES against its DOI, a `.bib` beside it, its PDF or its web snapshot (#353/#392).
 
 An off-ADS source declares its metadata by hand (`title`/`author`/`year`) and nothing checked it:
 measured in a real vault, a note published the author and title of ANOTHER paper — the synthetic
@@ -8,11 +8,17 @@ the `doi` and the PDF were right. It survived because the paper was never read (
 first view would have propagated the false attribution into prose. Rule of method 4: a map that
 attributes wrongly is worse than an empty one.
 
-Two evidence rails, both already at hand:
-- **`doi`** → Crossref (the same call `check_retractions` makes): first author, year, title.
-- **no `doi` but a PDF** → its FIRST PAGE via `pdftotext -f 1 -l 1`: author surname and year must
-  appear there (title is not judged from a page: too many layout artefacts).
-Neither → `no-evaluable`, with the reason (D-43): never green.
+Four evidence rails, all already at hand, tried in this order (the first that answers wins):
+- **`doi`** → Crossref (the same call `check_retractions` makes): first author, year, title. A DOI
+  Crossref does not register (`10.48550/arXiv.*`, 5 of 32 in one vault) falls through.
+- **a `.bib` in the directory of the DECLARED `pdf:` path** (#392): the user's own library, matched
+  by DOI or by surname+year — structured and offline; in the measured case it held the four right
+  answers nobody consulted. Same comparison as Crossref.
+- **a PDF** → its FIRST PAGE via `pdftotext -f 1 -l 1`: author surname and year must appear there
+  (title is not judged from a page: too many layout artefacts).
+- **a `url:` source without PDF** → the head of the snapshot `fetch_web` wrote (#392): same weak
+  test as the PDF page.
+None of the four → `no-evaluable`, with the reason (D-43): never green.
 
 It REPORTS and never rewrites `sources:` (curated, versioned config — same doctrine as
 `triage --accept-source`). The verdict is PERSISTED in the versioned registry

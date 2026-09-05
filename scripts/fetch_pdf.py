@@ -1,7 +1,7 @@
 """Baja PDFs de papers SIN arXiv vía el resolver de ADS (esources) — completa a fetch_arxiv.
 
 Uso:
-    python scripts/fetch_pdf.py <slug> [--all] [--limit N]
+    python scripts/fetch_pdf.py <slug> [--all] [--limit N] [--force]
 
 Lee build/<slug>/ads.json y, para cada paper relevante SIN PDF en disco — los sin arxiv_id
 (revistas viejas / sin e-print) y también los CON arXiv cuya bajada falló en fetch_arxiv
@@ -20,17 +20,29 @@ placeholders del resolver (`$SIMBAD$`…) y los links HTML (ADS_SCAN /full/, *_H
 descartan. Cada respuesta se valida por magic `%PDF` (el HTML de un paywall no se guarda) y
 se reintenta con backoff (el host de escaneos throttlea ráfagas — medido en el probe).
 
+Si el resolver no entrega y el paper tiene `doi`, sigue la **cascada de acceso abierto** (#358,
+`fetch_free_copy`): OpenAlex → Unpaywall → Europe PMC → arXiv por título EXACTO (los candidatos
+los arma `discover.iter_pdf_candidates`). Se recorren TODOS, no el primero — medido: la primera
+URL (OUP) contestó un desafío Cloudflare con HTTP 200 y la copia real era la de Europe PMC—, y
+cada uno se valida por magic `%PDF`.
+
 Lo que ni así se consigue queda en build/<slug>/missing_pdf.json (superset del formato de
 fetch_arxiv; al correr último en la cadena, es el residuo COMPLETO del ingest por verdad
-de disco). Cada entrada lleva `bibstem`/`year` y un `hint` con la rama de la cascada MANUAL
+de disco). Cada entrada lleva `bibstem`/`year`, un `hint` con la rama de la cascada MANUAL
 por donde seguir (#50: "bajar por DOI" no alcanza — Messenger, página del instrumento,
-mirror académico, o derivar al usuario si es un A&A pre-arXiv); el detalle de cada rama vive
-en `## Notas` del skill ingest-star.
-Idempotente: no re-baja lo que ya está en vault/raw/pdfs/<slug>/.
+mirror académico, o derivar al usuario si es un A&A pre-arXiv; el detalle de cada rama vive
+en `## Notas` del skill ingest-star) y —#358— **`estado` + `copias_libres`**, que son lo primero
+que hay que mirar: `sin-copia-libre` (ningún depósito tiene copia → pide `pending:`) contra
+`bloqueado` (la hubo, y el host la bloqueó o no entregó un PDF → `copias_libres` lista las URL
+probadas: bajarla a mano desde ahí antes del rescate manual). Salían iguales.
+Idempotente: no re-baja lo que ya está en vault/raw/pdfs/<slug>/; `--force` re-intenta incluso
+lo que ya tiene PDF (un PDF truncado por un corte anterior).
 
 Deja además en build/<slug>/pdf_source.json qué rama entregó cada PDF (`eprint` | `ads` |
-`publisher`), que make_notes estampa como `pdf_source` en la nota (#57): distinguir el preprint
-de la versión publicada cambia cómo se lee una discrepancia numérica al verificar citas.
+`publisher`; la cascada OA lo registra sólo cuando el candidato lo sabe —arXiv → `eprint`, una
+`publishedVersion` → `publisher`— y si no queda desconocido), que make_notes estampa como
+`pdf_source` en la nota (#57): distinguir el preprint de la versión publicada cambia cómo se lee
+una discrepancia numérica al verificar citas.
 """
 from __future__ import annotations
 
@@ -304,7 +316,7 @@ def drop_filter(recs: list, slug: str) -> tuple[list, list]:
 
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("slug")
     ap.add_argument("--all", action="store_true", help="incluir no-relevantes")
     ap.add_argument("--limit", type=int, default=0, help="máximo a intentar (0 = sin límite)")

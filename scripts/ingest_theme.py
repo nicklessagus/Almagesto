@@ -11,6 +11,11 @@ campo `source` (formaliza el modo off-ADS del skill ingest-theme en el tooling):
   extract_fulltext → check_retractions. La **guardia de expansión** (#37) frena entre la query y
   el primer paso que gasta red y disco si el core se multiplicó respecto de lo ya ingestado
   (default ×1.5 y 50 o más nuevos); `--yes` continúa a sabiendas.
+  · **Corpus DECLARADO (#384): `source: ads` + `query: null` + `extra_core:`** → la misma
+    sub-cadena con `query_ads --theme --extra-only` (sólo esos bibcodes, sin descubrimiento ni
+    guardia) → fetch_arxiv → fetch_pdf → make_notes --theme → extract_fulltext → check_retractions.
+    No es un tema mixto ni le faltan fuentes; sin `query:` NI `extra_core:` el orquestador rehúsa
+    antes de gastar nada. (`ads_subchain` es la definición única de esa sub-cadena.)
 - `web` | `local-pdfs` | `local-pdfs+web`: modo off-ADS. La bibliografía se declara en la
   lista `sources:` de la entrada (cada item: `key` = clave de cita sintética AAAA+Autor +
   `url` (fuente web) o `pdf` (ruta a un PDF provisto por el usuario) + metadata opcional
@@ -26,24 +31,36 @@ campo `source` (formaliza el modo off-ADS del skill ingest-theme en el tooling):
   docstring de la propia función, 145 líneas abajo, decía lo contrario — y un agente que sigue
   la doc no lo hace (#299: 8 de 8 fuentes sin repuntar en una corrida real).
   Rutas `pdf` relativas se resuelven
-  contra la raíz del repo (portable entre máquinas). Sin query_ads / fetch_ground_truth (no aplican fuera de ADS);
-  check_retractions SÍ corre cuando algún item declara `doi` (Crossref lo cubre igual).
+  contra la raíz del repo (portable entre máquinas). Orden del carril off-ADS:
+  stub del concept (`make_notes.write_concept_note`, en proceso, nunca `--force`) → por item:
+  `fetch_web.py` (URL; crea el stub del paper) o copia del PDF + stub
+  (`make_notes.write_web_paper_note`; `pending:` → stub con `pending_source`) → extract_fulltext →
+  **check_sources** (#353/#392: cruza lo DECLARADO en `sources:` contra su `doi` en Crossref, un
+  `.bib` junto al `pdf:` declarado, la primera página del PDF o el snapshot web; registra el
+  veredicto en el registro versionado y NO reescribe `sources:`; si falla, avisa y las fuentes
+  quedan sin cruzar) → check_retractions. Sin query_ads / fetch_ground_truth (no aplican fuera de
+  ADS); check_retractions SÍ corre cuando algún item declara `doi` (Crossref lo cubre igual), o
+  cuando el tema trae `extra_core:`/`query:` — sin ninguno de los tres se declara salteado (AUD-159).
   **Tema MIXTO:** un tema off-ADS puede además traer papers del tema que SÍ están en ADS (un
   método no-astro casi siempre tiene aplicaciones publicadas en revista astro), por dos vías que
   se excluyen entre sí, la primera con prioridad:
     · `query:` poblada (#104) → **descubrimiento ADS completo** (query_ads --theme → fetch_arxiv →
-      fetch_pdf → make_notes --theme), con la misma lente, las mismas puertas de D-26 y la misma
-      compuerta de triage que un tema `source: ads`. Sin esto, off-ADS le quitaba el descubrimiento
+      fetch_pdf → make_notes --theme), con la misma lente y las mismas puertas de D-26 que un tema
+      `source: ads` (⚠ la compuerta de triage del chaining NO aplica en un tema —su core entra
+      solo, brecha declarada INV-49— salvo `relevance.chain_autoaccept: never` en
+      `objective.yaml`). Sin esto, off-ADS le quitaba el descubrimiento
       automático a la mitad del tema que ADS sí indexa, y la única salida era enumerar bibcodes.
     · sólo `extra_core:` (lista de mapas, D-58) → sub-cadena acotada (query_ads --extra-only → …).
   En los dos casos: metadata ADS real, sin blockquote off-ADS. `extra_core` sigue siendo el
   override del clasificador y vale con o sin `query:`.
 
-Fallback fuentes no-conseguibles: un item puede llevar `pending: paywall|scan|unextractable`
-en vez de una fuente obtenible — declara que la fuente todavía NO se pudo conseguir (sin copia
-libre / escaneo / mojibake) y queda DERIVADA al usuario. El orquestador NO la fetchea ni la
-cuenta como fallo: crea el stub de nota con `pending_source` (con `url`/`doi` como puntero) y
-lista las pendientes en un aviso al final; el lint las surfacea como precondición. Cuando el
+Fallback fuentes no-conseguibles: un item puede llevar `pending: paywall|scan|unextractable|
+adquisicion` + `pending_motivo` obligatorio (#80; el vocabulario es `lib_config.PENDING_OK`) en
+vez de una fuente obtenible — declara que la fuente todavía NO está (sin copia libre / escaneo /
+mojibake / el usuario la va a conseguir: `adquisicion` no es un fallo, es otra latencia) y queda
+DERIVADA al usuario. El orquestador NO la fetchea ni la cuenta como fallo: crea el stub de nota
+con `pending_source` (con `url`/`doi` como puntero) y lista las pendientes en un aviso al final;
+el lint las surfacea como backlog (`pending_srcs`). Cuando el
 usuario provee la fuente: reemplazar `pending` por `pdf:`/`url:` y re-correr (idempotente).
 
 Idempotente como la cadena que envuelve: nada se re-baja ni se copia si ya existe. `--force`
@@ -311,6 +328,7 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
                      f"verify-citations no puede distinguir un recorte deliberado de una omisión.")
         if s.get("pending"):
             _pend = str(s["pending"]).strip()
+            # @inv INV-108
             if _pend not in cfg.PENDING_OK:
                 sys.exit(f"{key}: `pending: {_pend}` fuera del vocabulario "
                          f"({' | '.join(cfg.PENDING_OK)}). Un valor que nadie valida deja al "
@@ -442,7 +460,6 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
             # corrida de la cadena es latencia por algo que ya se resolvió — y la propuesta no puede
             # servir para nada, porque no hay copia libre que buscar. Para los otros tres valores sí
             # tiene sentido: describen un fallo, y encontrar no es conseguir.
-            # @inv INV-114
             doi = ptr if str(ptr).startswith("10.") else None
             if doi and why != "adquisicion":
                 url, _why = discover.resolve_pdf(doi)
@@ -452,8 +469,8 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
         cfg.print_seguro("  Cuando esté la fuente: reemplazá `pending` por `pdf:`/`url:` en sources: y re-corré.")
     if failed_items:
         cfg.print_seguro("\n! Fuentes que FALLARON (¿transitorio? → re-corré; si la fuente no se puede "
-              "conseguir, marcá el item con `pending: paywall|scan|unextractable` para derivarla "
-              "al usuario sin frenar la cadena):")
+              "conseguir, marcá el item con `pending: " + "|".join(cfg.PENDING_OK) + "` + "
+              "`pending_motivo` para derivarla al usuario sin frenar la cadena):")
         for key, ptr in failed_items:
             cfg.print_seguro(f"  - {key} → {ptr}")
     if fails:

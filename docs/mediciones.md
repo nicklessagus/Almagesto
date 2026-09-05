@@ -1331,7 +1331,7 @@ bloquea.
 
 ## 2026-08-31 · El mismo error de forma, tercera copia: el slug de un tema es la CLAVE (#346)
 
-**Qué era.** `lint.extraccion_no_declarada` (INV-83) barre estrellas **y** temas y le pedía
+**Qué era.** El detector `extraccion_no_declarada` de `lint.py` (INV-83) barre estrellas **y** temas y le pedía
 `meta.get("slug")` al mapa de los dos. En `stars.yaml` el slug es un **campo** de la entrada; en
 `themes.yaml` es la **clave del YAML** (lo dice el docstring de `cfg.theme_by_slug`). Para todo
 tema salía `None` y el loop hacía `continue`: el detector del recorte de lectura silencioso —lo que

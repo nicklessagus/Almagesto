@@ -178,7 +178,7 @@ def refresh(slug: str, citekey: str) -> tuple[str, str] | None:
 
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("slug", help="tema (subcarpeta de raw/fulltext)")
     ap.add_argument("citekey", help="clave de cita sintética AAAA+Autor (p. ej. 2006RasmussenWilliams)")
     ap.add_argument("url", help="URL a snapshotear")
@@ -243,6 +243,7 @@ def main() -> int:
     # la vieja: la cita apunta a una página y el archivo que `verify-citations` lee es otro. La
     # citekey es sintética (`AAAA+Autor`) y la colisión es normal —dos trabajos del mismo autor y
     # año—, así que no es hipotética.
+    # @inv INV-27
     if out.exists() and (previa := cfg.snapshot_url(out)) and previa != args.url:
         sys.exit(f"⛔ colisión de citekey: `{out}` ya es el snapshot de\n"
                  f"     {previa}\n   y estás pidiendo\n     {args.url}\n"

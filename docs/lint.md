@@ -88,7 +88,9 @@ Deben quedar en **0**:
 - **Nota de paper con `topics:`** (campo pre-R-5 sin lector; el vigente es `facets:`) y **registro
   con `busqueda:`** (mapa, schema pre-D-28; hoy es `busquedas:`, lista).
 - **`role` fuera del vocabulario** (`fundacional|aplicacion|arbitro`): un typo deja el rol mudo
-  para el contraste cross-paper.
+  para el contraste cross-paper. La misma categoría (`bad_roles`) cubre **todo campo con
+  vocabulario cerrado** de la nota de paper: `unidad_cita` (`linea|pagina|seccion`, #80) y
+  `pending_source` (`cfg.PENDING_OK`).
 - **`pdf_source` / `fulltext_source` fuera de su vocabulario cerrado** (#296:
   `eprint|ads|publisher|web` y `pdftotext|ocr|web`; `null`/ausente = **desconocido**, que es
   legítimo y no significa «publicado»). No es cosmético: el campo **decide lecturas** —`eprint` dice
@@ -106,7 +108,9 @@ Deben quedar en **0**:
 - **Extracciones en `build/*/extraccion/`** (pre-#311): ahí no se versionan ni viajan —medido,
   `git ls-files build/` = 0 sobre 33 extracciones que costaron ~4,9 M tokens de lectura de PDF— y
   una extracción no se regenera sin volver a pagar el paso más caro (#228) → `python
-  scripts/make_notes.py --migrate-extracciones`.
+  scripts/make_notes.py --migrate-extracciones`. ⚠ No tiene clave propia: el hallazgo se publica
+  **dentro de `old_registro`** (el título de esa categoría habla del registro con `busqueda:`;
+  buscá la fila `build/`) — AUD-381 lo anota como mapa que atribuye mal.
 - **Fila de tabla con más celdas que su encabezado (#227)**: GFM descarta el excedente, así que el
   contenido queda **invisible para el lector** mientras toda herramienta que parsea el archivo lo
   sigue viendo — y puede estar certificado como par verificado.
@@ -143,12 +147,41 @@ Deben quedar en **0**:
   `versions[]` con nota propia** (#229).
 - **Marca `inferencia` sin premisas** (D-42: sin al menos un `[[bibcode]]` no hay nada que
   auditar). El énfasis markdown alrededor de la palabra no cambia nada (#276).
-- **Fuente retractada citada en prosa sin la marca `⛔retractada`** (D-47): con la marca baja a
-  informativa (visible, no destruida).
+- **Fuente retractada citada en prosa sin la marca `⛔retractada`** (D-47, `prosa_retractada`):
+  con la marca pasa a **su propia categoría backlog** (`prosa_retractada_marcada`, *«visible, no
+  destruida»*) — no existe severidad «informativa» (AUD-207).
 - **`pdf_source` de editor (`publisher|ads|web`) con `eprint_version`** (#383): contradicción
   interna del frontmatter —el PDF es del editor y la nota dice que leyó un preprint—, y manda a
   re-verificar contra el documento equivocado. Nace del REEMPLAZO de un PDF por otro de distinta
   procedencia, que #230 no cubría (cubre el borrado); hoy `stamp_pdf` lo detecta por `pdf_sha`.
+- **`status` de hipótesis fuera del vocabulario cerrado** (D-37, `bad_status`: `abierta |
+  sostenida | disputada | refutada`, `lint.HYP_STATUS`): el consumidor lee ese campo para decidir
+  si se apoya en la hipótesis, y la prosa libre lo deja mudo. Se cierra escribiendo el valor que
+  la tabla de evidencia deriva (su hermano backlog, `status_vs_evidencia`, vigila esa derivación).
+- **Nota de paper sin destino** (D-23/INV-94, `sin_destino`): ninguno de `stars`, `thesis_links`
+  ni `methods` poblado → el paper no entra en ningún roll-up y ninguna síntesis lo alcanza; un link
+  entrante no lo salva (no es lo mismo que huérfana). La salida es **poblar el campo**, no borrar
+  la nota: es extracción ya pagada.
+- **`sources:` sin procedencia** (#111, `bad_sources`): entrada de `sources:` sin `via` o sin
+  `motivo`, `via` fuera del vocabulario binario (`usuario | descubrimiento`, `lint.VIA_FUENTE_OK`)
+  o con el valor **retirado** `reporte` (#206 — mensaje propio: se traduce a `via: usuario` + el
+  documento en `motivo`), `sources:` que no es lista o entrada que no es mapa (AUD-179: evadían el
+  chequeo con cero hallazgos), y la **misma clave** declarando dos fuentes distintas (las dos
+  escriben `papers/<key>.md` y comparten `.txt`: desambiguar con sufijo). En off-ADS todo entra
+  por decisión de alguien; el snippet correcto lo arma `triage.py <slug> --accept-source <doi>`.
+- **Lente vacía o incoherente** (`lente_rota`): `relevance.facets` vacío en `objective.yaml`
+  (típico: `topics:`, el schema pre-R-5) o `relevance.require` exigiendo una faceta que no existe
+  → **nada** puede ser core, y eso se ve igual que «no hay papers»; `query_ads` lo agarraba recién
+  al correr. Se cierra migrando `topics:` → `facets:` o con el skill `setup`.
+- **Mismo bibcode con `.txt` DISTINTO entre slugs** (#190/INV-135, `divergent_txt`): las copias
+  de D-18 tienen que coincidir byte a byte; dos hashes significan que alguien re-extrajo bajo un
+  slug y no bajo el otro (`--force`, el upgrade a OCR o el backfill de la marca no se propagan), y
+  el ancla de fuente (D-20) vigila una sola. Se **reporta, no se repara**: copiar la «buena» sobre
+  las otras escondería que medio corpus se re-extrajo. Población: `raw/fulltext/`.
+- **Nota de paper sin `## Abstract`** (#124/#277, `sin_abstract`) — detalle en *Backlog —
+  verificación y garantías*, donde vive con sus hermanas de #124; es bloqueante.
+- **`sources:` con autor o año que Crossref desmiente** (#353, `fuente_metadata_falsa`) — detalle
+  en *Backlog — curación, registro y búsqueda*, junto a su hermana backlog; es bloqueante.
 - **Driver `merge=ours` REGISTRADO en un clon que tiene `origin`** (#390, invierte #99):
   `merge=ours` es una regla por **path** y git no puede condicionarla por remoto, así que el mismo
   driver que protege contra `upstream` **descarta en silencio** lo que traiga `origin` — la otra
@@ -185,13 +218,15 @@ Deben quedar en **0**:
   abrir `vault/` como vault y borrar ese directorio.
 - **Alias de más** (declarado en `stars.yaml` y que resuelve a otro objeto).
 
-## Precondiciones de `verify-citations`
+## Precondiciones de `verify-citations` (las tres son **backlog**)
 
-Se listan para que el fan-out no corra sobre aire: **citas no verificables** (bibcode citado sin su
-`.txt` en `vault/raw/fulltext/`), **fuentes pendientes** (`pending_source`: paywall/escaneo/mojibake,
-derivada al usuario con su puntero) y **fulltext ilegible** (mojibake, escaneo sin capa de texto, o
-marca de agua repetida por página — existe pero no sirve para grep ni verify; rescate: PDF sano,
-OCR, o marcar `pending`).
+Se listan para que el fan-out no corra sobre aire — severidad **backlog** en las tres
+(`SEV_BACKLOG`; «precondición» describe para qué sirven, no es un nivel del reporte): **citas no
+verificables** (`unverifiable`: bibcode citado sin su `.txt` en `vault/raw/fulltext/`), **fuentes
+pendientes** (`pending_srcs`: `pending_source` con uno de los cuatro valores de `cfg.PENDING_OK`
+—`paywall|scan|unextractable|adquisicion`—, derivada al usuario con su puntero) y **fulltext
+ilegible** (`illegible_txt`: mojibake, escaneo sin capa de texto, o marca de agua repetida por
+página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o marcar `pending`).
 
 ## Backlog — verificación y garantías
 
@@ -225,7 +260,8 @@ OCR, o marcar `pending`).
   que es paso de cierre.
 - **Cabecera publicada ≠ la que el estampador daría hoy** (#233): nadie cruzaba lo publicado con lo
   producible — una nota puede publicar dos de las tres fechas obligatorias y pasar el gate.
-- **Nota de paper sin `## Abstract`** (#124/#277, **bloqueante**): es la única capa **auditable**
+- **Nota de paper sin `## Abstract`** (#124/#277, **bloqueante** — listada arriba en
+  *Bloqueantes*; el detalle vive acá con sus hermanas): es la única capa **auditable**
   del cuerpo —copia de catálogo, no síntesis— y `classify_offline` la lee para re-clasificar sin
   `build/` (D-49). Medido: **39 de 138** notas de una bóveda real ya no la tenían, con el lint en
   rc 0, porque el stub off-ADS nunca la escribía y nadie chequeaba. Se cierra con
@@ -331,22 +367,38 @@ OCR, o marcar `pending`).
   `log.md` de esa bóveda registra una corrección previa que recortó la nota **hacia** la cadena
   inventada porque el `.txt` partido parecía decirla. Por eso `contrast --validar` **emite**
   `⚠verificar en el PDF (<las dos colas>, <fecha>)` lista para pegar y **no escribe** en `vault/`;
-  una vez pegada, la levanta la categoría de abajo. Desde 1.162.0 el string vive en
-  `lib_config.VERIFICAR_PDF_MARK`: con dos copias, una herramienta podía proponer una marca que
-  ningún detector levanta — deuda escrita que se lee como agendada y no lo está.
+  una vez pegada, la levanta la categoría **`verificar_pdf`** (el bullet siguiente). Desde 1.162.0
+  el string vive en `lib_config.VERIFICAR_PDF_MARK`: con dos copias, una herramienta podía proponer
+  una marca que ningún detector levanta — deuda escrita que se lee como agendada y no lo está.
+- **Marcada para chequear contra el PDF** (#225, `verificar_pdf`, backlog): la cuarta marca en
+  línea, `⚠verificar en el PDF (<qué se dudó>, <fecha>)`, es deuda **abierta** —la producen
+  `audit-note` y `contrast --validar`— y se reporta con su línea hasta que alguien abra el PDF, la
+  verifique y **saque la marca**. Nunca bloqueante: la afirmación puede ser cierta, y la marca
+  existe para hacerla visible sin destruirla, igual que `⛔retractada` y `⚠desactualizado`.
+- **Condición sin clasificar** (#221, `cond_sin_clasificar`, backlog): una fila del bloque de
+  verificación con `Condición` poblada que no empieza por `acota:` ni por `contextualiza:`
+  (`lib_blocks.condition_kind`). El fan-out la puebla en casi todos los pares, así que sin el
+  vocabulario «resolvé cada condición» es la nota entera; `acota` obliga a editar (fila de
+  `## Régimen de validez`), `contextualiza` va al reporte. Se cierra clasificándola en la celda.
+- **Localizador que contradice al archivo vigilado** (#122, `verif_localizador`, backlog): la
+  evidencia cita una **página** y la fila vigila el `.txt` (`txt:<sha10>`), o cita una **línea** y
+  la fila vigila el PDF. Si la cita salió de ese archivo, re-anclar al prefijo correcto; si la
+  fuente es larga (`unidad_cita: pagina`) y se leyó del `.txt`, van los **dos** localizadores
+  (#200). Distinta de *evidencia sin localizador* (#226), que es *no evaluable*, no contradicción.
 - **`methods` sin página destino, resuelto también por `aliases`** (#245): el nombre canónico de
   un método es el **stem** de su nota y `aliases` es la tabla de sinónimos que el schema ya pide —
   y nadie la leía, así que `bisector span` y `bis` contaban como dos deudas donde hay una. Medido
   en una bóveda real: cierra 7 de 121. Chico, y del tipo correcto: lo que vacía ese backlog es que
   el **extractor vea la lista** antes de inventar una grafía, que es la otra mitad del arreglo (el
   prompt ahora la pega, con tope declarado y sin cerrar el vocabulario).
-- **Markup crudo de catálogo en `## Abstract`** (#271): ADS devuelve `<SUB>`, `<ASTROBJ>`,
-  `<A href>`, `<P />` y eso **es HTML válido** para cualquier renderer — medido, 249 ocurrencias en
-  42 notas. `<ASTROBJ>HD 40307</ASTROBJ>` deja el nombre del objeto **invisible**, `<A href>` vuelve
-  un link vivo una copia que se promete verbatim, y el resultado **depende del parser**. La limpieza
-  corre en los tres backends al ingestar; lo ya publicado se cierra con
-  `python scripts/make_notes.py --clean-catalog-markup`. ⚠ Ese backfill cambia bytes que leen el
-  detector de duplicados (#216) y el diff de lente offline (D-49): re-medirlos después.
+- ⚠ **NO es categoría del lint — markup crudo de catálogo en `## Abstract`** (#271): ADS
+  devuelve `<SUB>`, `<ASTROBJ>`, `<A href>`, `<P />` y eso **es HTML válido** para cualquier
+  renderer — medido, 249 ocurrencias en 42 notas; `<ASTROBJ>HD 40307</ASTROBJ>` deja el nombre
+  del objeto **invisible**. La limpieza corre en los tres backends al ingestar
+  (`lib_config.clean_catalog_markup`) y lo ya publicado se cierra con `python
+  scripts/make_notes.py --clean-catalog-markup`; **ningún detector de `lint.py` lo levanta**
+  (AUD-380: este bullet lo prometía). ⚠ Ese backfill cambia bytes que leen el detector de
+  duplicados (#216) y el diff de lente offline (D-49): re-medirlos después.
 - **Indicador de actividad esperado sin nota de concepto** (#250, backlog): era el **único**
   campo-lista de `stars/` sin destino chequeado ni link —`thesis_links` bloquea, `methods` es
   backlog, y éste no tenía ninguno de los dos—, así que la ficha nombra cinco indicadores y el
@@ -401,8 +453,40 @@ OCR, o marcar `pending`).
   la matemática** (`$P = 4{,}3115$`): sin deshacer las llaves no cruza ni un valor de una ficha
   real. Población: el **par** (bloque citante, bibcode), no la nota — con 8 de denominador, 398
   hallazgos no se pueden leer (INV-40 cumplido en la letra y no en el espíritu).
-- **Cita textual de `log.md` que su fuente no dice** (#238): la bitácora es append-only y no podía
-  corregirse; la entrada refutada se marca `⚠ corregido <fecha> → <entrada nueva>`, no se edita.
+- **Cita textual de `log.md` que su fuente no dice** (#238, `cita_log`): la bitácora es
+  append-only y no podía corregirse; la entrada refutada se marca `⚠ corregido <fecha> → <entrada
+  nueva>`, no se edita (la exención la decide `lib_config.log_quote_exempt`, compartida con
+  `contrast --validar`, #386).
+- **Operación sin entrada en `log.md`** (#118/INV-131, `log_sin_entrada`, backlog): el registro
+  del sujeto tiene pasos de `cadena` con fecha y `log.md` no tiene un encabezado `## <fecha> — …`
+  de esa fecha que **nombre** al sujeto (slug, nombre canónico, `concept` o alias, por palabra —
+  AUD-216: `ica` está dentro de «verificación»). Se cierra appendeando lo que se hizo.
+- **Ground-truth que cambió bajo la prosa** (AUD-42, `gt_cambiado` / `gt_cambiado_marcado`,
+  backlog las dos): `sweep_external` deja `_cambios` en `raw/ground_truth/<slug>.json` al aplicar
+  un diff de NEA, y el ancla de fuente (D-20) **no** hashea ese JSON, así que la frase que citaba el
+  valor viejo queda verde. No bloquea —la frase puede seguir siendo cierta y borrarla destruiría
+  trabajo—: se pide la marca `⚠desactualizado` **pegada al valor**, decidida **por campo** (#131:
+  una sola marca en cualquier parte silenciaba todos los cambios de la estrella). Con la marca
+  puesta pasa a `gt_cambiado_marcado` (*visible, no destruida*): revisá la prosa, actualizala y
+  sacá la marca. Población: `raw/ground_truth/`.
+- **Contraste cross-paper (3b) sin rastro** (#101, `contrast_missing`, backlog): la ficha o el
+  concepto tiene `## Inventario por eje` con la **fila vacía de la plantilla** y ≥2 papers
+  extraídos citados. Ausencia de la sección = declarado; presente-y-vacío = el paso se salteó —
+  y su producto no se nota si falta. Se cierra corriendo `contrast.py <slug>` y escribiendo el
+  inventario (o sacando la plantilla si el contraste es imposible con un solo paper).
+- **`status: sostenida` contra su propia tabla de evidencia** (D-37/#177, `status_vs_evidencia`,
+  backlog): una hipótesis `sostenida` con filas `desafía` en la tabla. El `status` se **deriva**
+  de la tabla; con evidencia repartida es `disputada`. Es lo único que impide que `status` sea un
+  campo que el agente elige.
+- **`methods` con varias grafías del mismo método** (#243, `methods_colision`, backlog): el
+  mismo método escrito de dos maneras (`PCA`/`pca`, `SysRem`/`sysrem`) se detecta por clave
+  normalizada (`cfg.method_key`); el roll-up **ya las junta**, así que no es deuda de ingesta sino
+  ruido que infla el backlog — se cierra unificando la grafía en las notas. ⛔ Los **sinónimos**
+  (`gls`/`periodograma-gls`) no se juntan solos: eso es juicio.
+- **`index.md` desactualizado contra la verdad de disco** (#237, `indice_viejo`, backlog): cada
+  tabla estampada del índice se compara, por `[[wikilink]]`, contra lo que `make_notes.index_tables`
+  daría hoy, y el hallazgo **nombra los stems** que faltan y que sobran (no la diferencia de
+  conteos) → `python scripts/make_notes.py --restamp-index`.
 - **Entradas de `## Verificación de citas` sin las tres sub-secciones** o con cabecera derivada a
   mano (INV-81): los conteos los genera `lib_blocks.verif_summary`, el mismo código que lee la
   tabla.
@@ -420,6 +504,14 @@ OCR, o marcar `pending`).
   y nunca leída), es backlog propio. ⛔ La escotilla decide sobre la vista **sin fecha** (#256), que
   es donde vive el reclamo pendiente; `no_vista` **no borra** la entrada de `vistas[]` — declara por
   qué no se leyó.
+- **Vista sin `fuente`, y vista construida SÓLO del abstract** (#207, `vista_sin_fuente` /
+  `vista_solo_abstract`, backlog las dos): `fuente: pdf|abstract` dice **de qué** se construyó la
+  lectura. Ausente = *no consta* (una vista escrita desde ocho líneas de abstract se lee igual que
+  una del paper: el dato no se inventa, se pide al extractor). `fuente: abstract` **no es un
+  error** —la vista es legítima y está declarada—: el hallazgo pide **conseguir el PDF** (mismo
+  carril que `pending_source`, visto desde la lectura), y ojo, el abstract es donde la fuente
+  afirma de más. Sólo se evalúa en vistas **con fecha**; un `fuente: pdf` sin PDF en disco lo
+  rechaza antes el cosechador (#207).
 - **La vista REFUTA un reclamo que sigue en el frontmatter** (#212): se leyó y el resultado dice
   que el reclamo es falso; la salida es el `--drop-core` que el cosechador imprime, no aflojar el
   add-only.
@@ -446,7 +538,8 @@ OCR, o marcar `pending`).
   del mismo programa» es real). Salida: `--rename-paper` + `versions[]`, o `--drop-core` con motivo.
 - **`fulltext: null` + `fulltext_source: <valor>`** (#230): afirma cómo se extrajo un texto que no
   existe. El par `pdf: null` + `pdf_source: <valor>` **no** es hallazgo (la procedencia de la
-  lectura que ocurrió sobrevive al archivo).
+  lectura que ocurrió sobrevive al archivo). ⚠ No tiene clave propia: se publica dentro de
+  **`incomplete`** (*Campos incompletos*, abajo).
 - **Cabecera no estampable** (#69: sin la línea `> _Generado con Almagesto v…_`, ancla de todos los
   estampadores): las cirugías de cabecera devuelven `False` en silencio sobre ella. Se arregla con
   `python scripts/make_notes.py --restamp-headers` (lee la versión del `generator`, no la inventa).
@@ -613,7 +706,7 @@ OCR, o marcar `pending`).
   `query_ads.py <slug> --theme --probe`, que es donde el corte se decide antes de pagar
   descargas (#208).
 - **`sources:` con autor o año que Crossref desmiente** (#353, `fuente_metadata_falsa`,
-  **bloqueante**) y **`sources:` sin cruzar o cruzada con duda** (#353, `fuente_metadata_dudosa`,
+  **bloqueante** — listada arriba en *Bloqueantes*; el detalle vive acá con su hermana) y **`sources:` sin cruzar o cruzada con duda** (#353, `fuente_metadata_dudosa`,
   backlog): una fuente off-ADS declara su metadata a mano y nada la cruzaba. Medido: una nota
   publicaba **autor y título de otro paper** —clave sintética, `first_author`, `title` y hasta el
   `motivo` derivados del NOMBRE DEL ARCHIVO del PDF—; sólo el `doi` y el PDF eran correctos. El
@@ -648,8 +741,15 @@ OCR, o marcar `pending`).
   y sano en otra no es deuda, y las filas `NO CORRIÓ: …` son decisiones declaradas, no caídas.
   Desde #361 la cobertura del registro lleva también la fila **`anclaje`**, con los mismos tres
   estados: antes el anclaje moría con traceback y no dejaba rastro. Backlog.
-- **Capas colgadas de un slug que ya no existe** (INV-19, tras un `entity.py delete|rename` a
-  medias).
+- **Cadena incompleta** (D-57/INV-91, `cadena_incompleta`, backlog): el registro de una
+  **estrella** tiene `cadena` y le falta un paso del orden canónico (`cfg.CADENA_ESTRELLA`); el
+  hallazgo **nombra el paso** donde se cortó y los que corrieron (*«faltan 4 pasos»* no es
+  accionable). Sin `cadena` en absoluto sale *no consta* (AUD-149: no consta ≠ completa). ⚠ Sólo
+  para estrellas (AUD-209): el orden de un tema depende de su `source`, así que compararlo contra
+  el orden astro inventaría cortes. Se cierra re-corriendo `python scripts/ingest_star.py <slug>`
+  (idempotente). Población: estrellas.
+- **Capas colgadas de un slug que ya no existe** (INV-19, `artefactos_colgados`, tras un
+  `entity.py delete|rename` a medias).
 
 ## Backlog — campos incompletos
 
@@ -667,7 +767,10 @@ remedio traía `--theme` hardcodeado sobre un directorio que puede ser una **est
 especular de #334); su **gemelo PDF** (#230/#338: mismo defecto y desde #205 la mitad cara de la
 cadena, y hasta 1.146.0 emitía prosa en vez de un comando ejecutable); y su hermano simétrico, un
 `raw/ground_truth/<slug>.json` sin su `stars/<slug>.md` (renombre a medias o ficha borrada sin
-limpiar).
+limpiar); `fulltext_source: <valor>` sin `fulltext` (#230: afirma cómo se extrajo un texto que
+no está en disco); y la **m·sini implícita que no se pudo calcular** (falta `K`, `P`, `e` o `M*`
+en el ground-truth — no es una contradicción, es una garantía que no corrió para ese planeta).
+Son **trece** sitios (`grep -c "incomplete.append" scripts/lint.py`).
 
 Revisar además a mano: claims stale y conceptos referidos sin página. Si faltan datos, abrir
 queries para imputar (web/ADS).

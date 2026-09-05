@@ -150,12 +150,14 @@ Para cada par en tensión, lanzar un subagente (tipo `Explore`: acá el resultad
 va a un directorio — ver #219) **en paralelo**, **en lotes de ≤ 15** (hay un tope de 20 concurrentes
 y pasarlo corta en silencio, #218: contá *lanzados vs pares* antes de creer que el barrido cerró, y
 re-lanzá sólo los que faltan en vez del lote entero). Cada uno lee **sólo
-los dos** `vault/raw/fulltext/**/<bibcode>.txt` en juego (grounding-first; prohibido de memoria) y devuelve:
+los dos PDF** en juego (`vault/raw/pdfs/**/<bibcode>.pdf`, #205; los `.txt` de
+`vault/raw/fulltext/**/` sirven para **ubicar** con `grep -n`, no para citar — y en una fuente
+**web** el `.txt` es la fuente, citada por línea) (grounding-first; prohibido de memoria) y devuelve:
 - `desacuerdo`: `real` | `aparente` | `no-concluyente`
   - **real** = ambos papers afirman valores/hechos incompatibles **más allá del error** (o uno afirma
     existencia y el otro la niega). Con **cita textual + nº de página de cada uno** (#205).
     (El estado de las fuentes —`retracted`, `corrections`, `pdf_source: eprint`— se filtró en el
-    paso 1: el subagente sólo ve los dos `.txt`, así que no puede juzgarlo.)
+    paso 1: el subagente sólo ve las dos fuentes, así que no puede juzgarlo.)
   - **aparente** = distinto régimen, distinta definición, distinta época, o dentro de la barra de
     error → **no** es disputa. Devolver **cuál es la condición** que los separa, con su cita: en un
     **concepto** eso no se tira, es la fila de `## Régimen de validez` (#74), y un "aparente" sin la
@@ -178,17 +180,18 @@ los dos** `vault/raw/fulltext/**/<bibcode>.txt` en juego (grounding-first; prohi
 > afectado) y un falso negativo de matcheo en cualquiera de los dos colapsa el veredicto a
 > `no-concluyente` sobre una disputa real.
 
-Prompt sugerido: *"Leé SOLO estos dos archivos: `<A.txt>` y `<B.txt>`. ¿Se contradicen sobre «<hecho>»?
-Respondé real/aparente/no-concluyente + el eje + cita textual con nº de línea de CADA paper (el que da
-`grep -n` o la lectura directa; NO uses `splitlines()` de Python — los form feeds corren la
-numeración) + una línea
-de resumen. Para localizar, en CADA archivo: el `.txt` suele entrelazar dos columnas en la misma
+Prompt sugerido: *"Leé SOLO estas dos fuentes: `<A.pdf>` y `<B.pdf>` (sus índices `<A.txt>` y
+`<B.txt>` sólo para ubicar con `grep -n`; si una fuente es web —`pdf: null`, `source_url`— su `.txt`
+ES la fuente y se cita por línea). ¿Se contradicen sobre «<hecho>»?
+Respondé real/aparente/no-concluyente + el eje + cita textual con nº de PÁGINA del PDF de CADA
+paper (#205; la cita son las palabras del PDF, no las del `.txt`) + una línea
+de resumen. Para localizar, en CADA índice: el `.txt` suele entrelazar dos columnas en la misma
 línea física, así que si la oración completa no aparece con grep NO concluyas que falta — acortá a
 un fragmento distintivo de 3–6 palabras (y reintentá partiendo por guión de corte); PROHIBIDO
 normalizar espacios sobre el archivo entero Y también colapsar un hueco de 8+ espacios dentro de
 una línea (ambos empalman columnas y fabrican adyacencias falsas); si normalizás, partí antes la
-línea en ese hueco y tratá cada segmento por separado.
-'no-concluyente' sólo si agotaste eso en los dos archivos. 'real' sólo si los valores son
+línea en ese hueco y tratá cada segmento por separado; ubicada la página, abrí el PDF ahí.
+'no-concluyente' sólo si agotaste eso en las dos fuentes. 'real' sólo si los valores son
 incompatibles más allá del error, o uno afirma y el otro
 niega. Si es 'aparente', decí EXACTAMENTE bajo qué condiciones vale cada uno (SNR, muestreo, tamaño
 de muestra, definición del observable, época) con su cita — no alcanza el rótulo. No uses memoria ni
