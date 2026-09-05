@@ -92,7 +92,7 @@
 ## Juicio de triage en build/<slug>/triage.json (pre-1.9.0) — el lector ya no lo mira (0)
 > sobre 3 registros de sujeto
 
-## ⛔ Schema viejo que el lector ya no lee: registro con `busqueda:` (pre-D-28) o extracciones en `build/*/extraccion/` (pre-#311) (0)
+## ⛔ Registro con `busqueda:` (schema viejo pre-D-28) o extracciones en `build/*/extraccion/` (pre-#311) — el lector ya no los lee (0)
 > sobre 3 registros de sujeto
 
 ## ⛔ Registro del sujeto ilegible — la curación (`decisiones`) queda SIN APLICAR: los descartes vuelven a ser core (0)
