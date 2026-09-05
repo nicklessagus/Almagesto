@@ -615,7 +615,7 @@ contiene lo que se le pregunta— desplazada del lint a la herramienta, y pega m
 operaciones**. El boilerplate compartido (CDS, agradecimientos, descripción de instrumento) es
 justo donde más iba a pasar.
 
-**Qué cambió.** Una sola implementación (`lib_config.quote_verdict`) con el orden explícito —el
+**Qué cambió.** Una sola implementación (`lib_quotes.quote_verdict`) con el orden explícito —el
 `.txt` de su fuente, la extracción, el `.txt` que parte la cita, la evidencia positiva— y un solo
 `CITA_PREFIJO`. El número estaba duplicado con un comentario que **declaraba** que tenían que
 coincidir y nada que lo chequeara (`grep CITA_PREFIJO tests/` no devolvía nada): regla de método
@@ -917,7 +917,7 @@ sí existe—. Reproducible con `python tools/mutar.py --dirigida --solo main sc
 `contrast.py --validar` / `--validar-todo` cerraba con `0 cita(s) con evidencia POSITIVA de
 alteración ✅` sobre **toda** la población que había mirado, sin distinguir que dentro de las que
 aprobó hay un subconjunto cuyo respaldo es **una sola lectura del PDF**: la del LLM que hizo la
-extracción. Es el paso 2 de `lib_config.quote_verdict` (`txt_degradado`) — la cita está en la
+extracción. Es el paso 2 de `lib_quotes.quote_verdict` (`txt_degradado`) — la cita está en la
 extracción de su fuente y **no** en el `.txt` de esa misma fuente.
 
 ⛔ **La discrepancia no es «PDF vs `.txt`»**: el PDF es la fuente y siempre tiene razón. Lo que
@@ -948,7 +948,7 @@ cerrados (1.143.0 / 1.144.0), así que el conteo anterior estaba contaminado por
 propio issue lo declaraba.
 
 **Cómo.** Mismo procedimiento y misma bóveda (`Almagesto-Tesis`, 163 notas), corriendo
-`lib_config.quote_verdict` de esta versión sobre cada cita `«…»` de ≥ 40 caracteres y clasificando
+`lib_quotes.quote_verdict` de esta versión sobre cada cita `«…»` de ≥ 40 caracteres y clasificando
 la población que el paso 2 aprueba (`txt_degradado`, el único testigo). Reproducible con
 `python scripts/contrast.py --validar-todo` desde la raíz de esa bóveda.
 
@@ -987,7 +987,7 @@ Es la asimetría que el issue nombra, afilada: **`pdftotext` rompe PALABRAS; un 
 cambia PALABRAS.** Con esa guarda la señal es 3/3 y sin ella 3/7 — o sea que el detector nacería con
 4 falsos positivos en un gate que desde #323 frena operaciones.
 
-**Qué cambió.** `lib_config.txt_accuses` + el veredicto `txt_acusa`, **no bloqueante**, reportado por
+**Qué cambió.** `lib_quotes.txt_accuses` + el veredicto `txt_acusa`, **no bloqueante**, reportado por
 `contrast --validar` y por el lint (`cita_txt_discrepa`, backlog).
 
 **Y con eso desbloqueada, la parte 2 de #341: la marca.** Cuando la divergencia es decidible,
@@ -1179,7 +1179,7 @@ universal falsa en una acotada verdadera.
 
 ## 2026-08-31 · La canaleta era de la línea y no de la página (#332)
 
-**Qué era.** `lib_config.deinterleave_columns` partía **cada línea** por cada run de ≥ 8 espacios y
+**Qué era.** `lib_quotes.deinterleave_columns` partía **cada línea** por cada run de ≥ 8 espacios y
 mandaba el segmento `i` al stream `i`. En una página real ese índice **deriva renglón a renglón**
 —una ecuación con su número, una canaleta que se angosta a 7 espacios, un enunciado a todo el
 ancho—, así que una oración continua de **una** columna física caía en dos lecturas distintas y

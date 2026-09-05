@@ -1039,7 +1039,7 @@ re-extraer el `.txt`.
    Bloquea con **evidencia positiva** (#318/#321) —la frase bajo **otro** bibcode (atribución), o un
    prefijo largo con la cola divergente—; el **silencio** no, que la extracción es selectiva (#188)
    y se cita del PDF (#205). ⛔ **Pero PRIMERO se prueba contra el `.txt` de SU fuente, y la regla es
-   UNA implementación (`lib_config.quote_verdict`, #324):** el `.txt` es índice degradado, no mal
+   UNA implementación (`lib_quotes.quote_verdict`, #324):** el `.txt` es índice degradado, no mal
    testigo, así que la cadena que está ahí prueba que la frase es de ese paper — sin ese paso, el
    *boilerplate* que la extracción no transcribió salía «mal atribuido». Duplicada, la regla ya
    divergía (13 contra 12), y desde #323 un falso positivo **frena operaciones**.
@@ -1456,7 +1456,7 @@ conteos —*"el mundo se movió"*—. Ninguno aplica nada. El umbral se persiste
 
 **Lo que no se pudo verificar queda MARCADO en la ficha (#225): `<afirmación> ⚠verificar en el PDF
 (<qué se dudó>, <fecha>)`.** La producen `audit-note` y `contrast --validar` (#341) —una sola
-definición, `lib_config.verificar_pdf_mark`— y tiene las propiedades de las otras: **no
+definición, `lib_quotes.verificar_pdf_mark`— y tiene las propiedades de las otras: **no
 destruye** la afirmación, es **visible**, **la levanta el lint** y **se saca cuando alguien la
 verifica**, con la evidencia. El criterio es amplio a propósito: **ante la menor duda se marca** —
 una marca de más cuesta abrir un PDF; una de menos deja a la bóveda afirmando algo falso con cara de
@@ -1468,7 +1468,7 @@ la fuente está en disco, se abre.
 medido, una entrada publica como cita textual **con página** una frase que **invierte el sentido**
 de lo que dice el paper. Misma doctrina que las otras marcas —hacer visible, no borrar—: el lint
 chequea las citas textuales del `log.md` contra el `.txt` de su bibcode, salvo que lleven la marca.
-⛔ **La exención la decide UNA función (`lib_config.log_quote_exempt`) y la llaman los dos chequeos
+⛔ **La exención la decide UNA función (`lib_quotes.log_quote_exempt`) y la llaman los dos chequeos
 (#386):** una convención en prosa **no compone**, y ya divergía —el lint la honraba, `contrast
 --validar` no la conocía—, así que la entrada marcada bloqueaba el gate de #323 para siempre. ⛔ **Y
 la entrada que CITA una cita defectuosa para explicarla la pone en un blockquote (#387): ahí es

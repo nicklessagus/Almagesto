@@ -455,7 +455,7 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   hallazgos no se pueden leer (INV-40 cumplido en la letra y no en el espíritu).
 - **Cita textual de `log.md` que su fuente no dice** (#238, `cita_log`): la bitácora es
   append-only y no podía corregirse; la entrada refutada se marca `⚠ corregido <fecha> → <entrada
-  nueva>`, no se edita (la exención la decide `lib_config.log_quote_exempt`, compartida con
+  nueva>`, no se edita (la exención la decide `lib_quotes.log_quote_exempt`, compartida con
   `contrast --validar`, #386).
 - **Operación sin entrada en `log.md`** (#118/INV-131, `log_sin_entrada`, backlog): el registro
   del sujeto tiene pasos de `cadena` con fecha y `log.md` no tiene un encabezado `## <fecha> — …`

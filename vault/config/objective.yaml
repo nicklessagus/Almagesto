@@ -1,108 +1,32 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# OBJETIVO de la bóveda  ·  EDITÁ ESTE ARCHIVO para instanciar tu propia wiki.
-#
-# Es el único archivo que define "de qué trata" esta bóveda. Controla:
-#   1) el encuadre que lee el agente (name/short/description),
-#   2) qué paper es "core" = `relevance.facets` (el clasificador de relevancia).
-#
-# `name` viene como PLACEHOLDER a propósito: el lint avisa (WARN) mientras siga
-# así, y es el target que pisa el skill `setup`. El resto (short/description/
-# relevance) trae el ejemplo canónico (actividad estelar vs RV planetaria) como
-# documentación del formato y default funcional. Para tu tema: reescribí
-# name/short/description y, sobre todo, `relevance.facets`.
-# ─────────────────────────────────────────────────────────────────────────────
+name: <definir con el skill setup>
+short: actividad estelar vs RV planetaria
+description: 'Reunir, por estrella y por concepto, todo lo publicado relevante (planetas,
+  actividad, indicadores, métodos) para decidir si una señal de velocidad radial es
+  actividad estelar o un planeta. El objetivo define qué papers entran como "core".
+  Reescribí esto para tu propio tema.
 
-name: "<definir con el skill setup>"
-short: "actividad estelar vs RV planetaria"
-description: >
-  Reunir, por estrella y por concepto, todo lo publicado relevante (planetas,
-  actividad, indicadores, métodos) para decidir si una señal de velocidad radial
-  es actividad estelar o un planeta. El objetivo define qué papers entran como
-  "core". Reescribí esto para tu propio tema.
-
-# ─── Clasificador de relevancia ──────────────────────────────────────────────
-# Un paper de ADS es "relevante" (= core) si matchea ≥1 faceta (regex sobre
-# título+abstract+keywords, case-insensitive) y su doctype no es ruido.
-# Cada faceta: nombre canónico → patrón regex de Python. Esto ES lo que define
-# tus papers core: ajustá los patrones a tu objetivo.
+  '
 relevance:
-  # (#85) La lente del BUSCADOR: el `fq` de Solr que acota el universo de toda query de
-  # descubrimiento, SERVER-SIDE y antes de traer nada. Es la mitad más restrictiva del filtro —
-  # `facets` (abajo) decide qué es core dentro de lo que ya llegó.
-  #   sin declarar   → database:astronomy   (el default del framework: el foco es astro)
-  #   con valor      → ése                  (p. ej. database:physics, o un fq compuesto)
-  #   search_fq: null → NO acota             (todo ADS, a propósito)
-  # Un `null` declarado es una DECISIÓN y no se lee igual que no declarar nada. Tocalo si tu bóveda
-  # necesita bibliografía que ADS no clasifica como astronomía — típicamente los métodos de otras
-  # disciplinas (estadística, ML, signal processing) al servicio del foco astro.
   search_fq: database:astronomy
-  # Comillas SIMPLES y una línea por patrón: YAML deja el string literal (sin
-  # interpretar \b ni plegar saltos en espacios), así la regex llega intacta.
   facets:
-    discovery: 'discover|detection of|planetary system|super-?earth|planets? orbiting|new planet|hot (jupiter|neptune)'
-    rv:        'radial[ -]velocit|doppler|HARPS|ESPRESSO|HIRES|spectrograph|CCF'
-    activity:  '\bactivit|magnetic|rotation|starspot|chromospher|faculae|granulation|stellar cycle|flare|S-?index|log ?R'
-    planet:    '\bplanet|exoplanet|habitable|orbit|transit|mass-radius'
-    # En `method` van las familias de método (genéricas) Y los nombres propios de las
-    # herramientas de TU área — un pipeline con nombre propio no matchea ninguna palabra genérica,
-    # así que si no lo listás acá sus papers salen no-core. Reemplazá los de abajo por los tuyos.
-    method:    'gaussian process|independent component|principal component|\bICA\b|\bPCA\b|neural network|deep learning|machine learning|periodogram|line-?by-?line|deconvolution|disentangl'
-
-  # ── Regla de COMBINACIÓN de facetas (opcional) ──────────────────────────────
-  # Por default la combinación es OR: alcanza con matchear UNA faceta cualquiera.
-  # Sirve para la query directa (pool chico), pero el citation chaining amplía el
-  # pool y esa laxitud deja pasar off-topic (discos de escombros, coronas X…).
-  # La palanca NO es podar regex sino declarar qué facetas son OBLIGATORIAS:
-  #   require:    [rv]     # AND: estas facetas DEBEN matchear (p. ej. el eje de la bóveda)
-  #   min_facets: 2        # o: al menos N facetas cualesquiera (default 1)
-  # Semántica: core = (≥ min_facets facetas) Y (todas las de require) Y (doctype no-ruido).
-  # Dejá ambas sin declarar para el comportamiento histórico (≥1 faceta). Cambiar la
-  # regla RE-CLASIFICA el corpus existente → correr el sub-modo re-clasificar de `maintain`.
-
-  # ── Compuerta de curación del citation chaining (opcional, AUD-196 / INV-55) ──
-  # Qué candidato del grafo de citas entra al corpus SIN juicio humano. Vocabulario CERRADO
-  # (`query_ads.CHAIN_AUTOACCEPT`; un typo aborta la corrida):
-  #   chain_autoaccept: titulo   # default: entra solo el que lleva el SUJETO en el título
-  #                              #   (mide 18 % de precisión en una bóveda de estrellas); el resto
-  #                              #   va a `triage.py <slug>` como candidato, sin bajarse
-  #   chain_autoaccept: never    # TODO al triage. Es la única forma de que la compuerta rija en
-  #                              #   un TEMA: sin `never`, en el carril tema el gate no aplica y el
-  #                              #   core del chaining entra solo (brecha declarada, INV-49) — y
-  #                              #   «el sujeto en el título» no significa nada en un tema de método
-
-  # doctypes de ADS que casi siempre son ruido (menciones triviales / no-papers).
+    discovery: discover|detection of|planetary system|super-?earth|planets? orbiting|new
+      planet|hot (jupiter|neptune)
+    rv: radial[ -]velocit|doppler|HARPS|ESPRESSO|HIRES|spectrograph|CCF
+    activity: \bactivit|magnetic|rotation|starspot|chromospher|faculae|granulation|stellar
+      cycle|flare|S-?index|log ?R
+    planet: \bplanet|exoplanet|habitable|orbit|transit|mass-radius
+    method: gaussian process|independent component|principal component|\bICA\b|\bPCA\b|neural
+      network|deep learning|machine learning|periodogram|line-?by-?line|deconvolution|disentangl
   noise_doctypes:
-    - catalog
-    - proposal
-    - abstract
-    - erratum
-    - bookreview
-    - newsletter
-    - pressrelease
-    - circular
-    - software
-
-# ─── Áreas de concepts/ ──────────────────────────────────────────────────────
-# Las subcarpetas de vault/wiki/concepts/ son ABIERTAS: podés crear el área que quieras
-# (investigás cualquier tema). Esta lista NO restringe — es sólo una REFERENCIA para que el
-# typo-check distinga un error de tipeo (`indicatorz`) de un área nueva legítima (`granulation`):
-# un `area` fuera de la lista sólo dispara un AVISO (make_notes avisa pero crea igual; el lint
-# lo marca WARN), nunca bloquea. Si tu área nueva es legítima, agregala acá para silenciar el aviso.
-#   · `methods` y `hypotheses` están RESERVADAS (siempre válidas): methods es universal;
-#     hypotheses es estructural (schema name/status + roll-up ESTAMPADO).
-#   · El resto es libre — editá la lista según el foco de TU bóveda.
-#   · Si BORRÁS esta clave, el typo-check queda APAGADO (el lint lo avisa). No se infiere de las
-#     carpetas que ya existen: eso convertiría un typo ya cometido en "área declarada".
-# Áreas de `concepts/` — ABIERTAS: esta lista sólo distingue un TYPO de un área nueva (el lint
-# avisa, nunca bloquea). Las dos que el framework distingue de verdad son `methods` y `hypotheses`;
-# cualquier otra que declares es **archivado**, porque ningún chequeo se ramifica por el área
-# (#246: el único uso funcional es la ruta de la nota, en `entity.py`).
-#
-# ⚠ La semilla trae sólo esas dos a propósito. Hasta 1.97.0 traía además `indicators` y `activity`,
-# y eso prometía una estructura que el código no sostiene: un indicador (BIS, S-index, FWHM) es
-# operativamente un procedimiento que produce un número, o sea un método chico, y separarlo en su
-# propia área no cambiaba nada salvo la ruta. Si a vos te sirve la distinción —el observable que
-# medís vs el mecanismo que lo causa— agregala acá y usala; es tu decisión, no la del framework.
+  - catalog
+  - proposal
+  - abstract
+  - erratum
+  - bookreview
+  - newsletter
+  - pressrelease
+  - circular
+  - software
 concept_areas:
-  - methods
-  - hypotheses
+- methods
+- hypotheses
