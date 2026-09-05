@@ -7560,3 +7560,72 @@ def test_el_drift_no_se_dispara_por_mayusculas_del_doi(toy_vault, capsys):
                                   "doi": "10.1/OK", "year": 2020, "title": "Un  titulo"})
     _rc, rep = run_lint_reporte(capsys)
     assert "2020aaa" not in _seccion(rep, "exportación oficial dicen cosas distintas"), rep
+
+
+# ── #398 · el stub que quedó publicando el prompt, y el `vistas: []` que apagaba el chequeo ──────
+
+def test_vistas_vacia_NO_apaga_el_chequeo_de_reclamos(toy_vault, capsys):
+    """#398 — la salida obvia del operador (sacar la entrada y la sección) dejaba `vistas: []`, y
+    con `if vistas:` la nota salía del chequeo de reclamos ENTERO: ni deuda ni declarada. Medido: la
+    categoría de reclamos declarados cayó de 66 a 30 sin que las 36 restantes aparecieran en ninguna
+    otra — el falso limpio de D-43 dentro de la categoría que #188 existe para sostener."""
+    mk_note(cfg.PAPERS, "2020aaa...1..1A",
+            {"tags": ["paper"], "bibcode": "2020aaa...1..1A", "stars": ["Estrella Test"],
+             "vistas": []}, "# p\n")
+    link_from_log(toy_vault, "2020aaa...1..1A")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2020aaa" in _seccion(rep, "nunca leído"), rep
+
+
+def test_vistas_vacia_con_no_vista_sale_DECLARADO_y_no_como_deuda(toy_vault, capsys):
+    """El simétrico: con la escotilla declarada y su motivo, el mismo estado es «visible, no es
+    deuda». Sin las dos mitades, arreglar el punto ciego convertiría 36 declaraciones en deuda."""
+    mk_note(cfg.PAPERS, "2020aaa...1..1A",
+            {"tags": ["paper"], "bibcode": "2020aaa...1..1A", "stars": ["Estrella Test"],
+             "vistas": [], "no_vista": [{"sujeto": "Estrella Test", "motivo": "sólo aporta al roll-up"}]},
+            "# p\n")
+    link_from_log(toy_vault, "2020aaa...1..1A")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2020aaa" not in _seccion(rep, "nunca leído"), rep
+    assert "2020aaa" in _seccion(rep, "DECLARADO"), rep
+
+
+def test_la_nota_de_schema_VIEJO_sigue_sin_pedir_una_vista_por_sujeto(toy_vault, capsys):
+    """El recorte que #398 no toca: sin la clave `vistas` la nota es schema viejo —la reporta la
+    categoría bloqueante de arriba— y pedirle además una vista por sujeto duplicaría el hallazgo en
+    cada nota del corpus, que es como nace un backlog de 900 que nadie mira."""
+    mk_note(cfg.PAPERS, "2020aaa...1..1A",
+            {"tags": ["paper"], "bibcode": "2020aaa...1..1A", "stars": ["Estrella Test"]}, "# p\n")
+    link_from_log(toy_vault, "2020aaa...1..1A")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2020aaa" not in _seccion(rep, "nunca leído"), rep
+
+
+def test_la_vista_que_sigue_publicando_el_PROMPT_se_reporta(toy_vault, capsys):
+    """#398 — la nota le dice al lector que esa sección es síntesis de un LLM (#247) y lo que
+    publica son las instrucciones al extractor. Medido: 46 notas así durante seis días, invisibles
+    porque el lint mira la coherencia `vistas[] ↔ sección` y la escotilla decide sobre el
+    frontmatter."""
+    import make_notes as mn
+    mk_note(cfg.PAPERS, "2020aaa...1..1A",
+            {"tags": ["paper"], "bibcode": "2020aaa...1..1A", "stars": ["Estrella Test"],
+             "vistas": [{"sujeto": "Estrella Test", "tipo": "star"}],
+             "no_vista": [{"sujeto": "Estrella Test", "motivo": "sólo aporta al roll-up"}]},
+            "# p\n\n" + mn._legacy_vista_block("Estrella Test", False))
+    link_from_log(toy_vault, "2020aaa...1..1A")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2020aaa" in _seccion(rep, "PLANTILLA del stub"), rep
+
+
+def test_la_vista_con_la_linea_de_estado_no_dispara(toy_vault, capsys):
+    """Y con el cuerpo ya migrado, la categoría calla: lo que se pide es que el cuerpo diga la
+    decisión que el frontmatter ya declaró, no que la sección desaparezca."""
+    import make_notes as mn
+    mk_note(cfg.PAPERS, "2020aaa...1..1A",
+            {"tags": ["paper"], "bibcode": "2020aaa...1..1A", "stars": ["Estrella Test"],
+             "vistas": [{"sujeto": "Estrella Test", "tipo": "star"}],
+             "no_vista": [{"sujeto": "Estrella Test", "motivo": "sólo aporta al roll-up"}]},
+            "# p\n\n" + mn.vista_block("Estrella Test", motivo="sólo aporta al roll-up"))
+    link_from_log(toy_vault, "2020aaa...1..1A")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2020aaa" not in _seccion(rep, "PLANTILLA del stub"), rep

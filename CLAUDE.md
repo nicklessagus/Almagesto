@@ -405,6 +405,14 @@ ya escrito bajo la misma clave: completa lo que falta, o manda declarar la lente
 `<bibcode>__<lente>.json` (#371):** al canónico pisaba, en silencio, un artefacto versionado y **no
 regenerable** (#311).
 
+⛔ **La sección de una vista SIN LEER es una LÍNEA DE ESTADO, no un prompt (#398).** Hasta 1.211.0
+el stub estampaba las instrucciones al extractor en el cuerpo de **toda** nota de paper, como
+marcador de posición para que el chequeo `vistas[]` ↔ cuerpo cerrara: no las lee nadie —el prompt
+vive en `extraction_prompt`— y mientras la lectura no ocurre la nota publica un **pedido como si
+fuera contenido** (medido: 47 notas, 46 bajo `no_vista`). Hoy dice *«reclamado, sin leer»* o *«no
+leído desde X (fecha): motivo»*, que es lo que antes había que reconstruir leyendo el `log`.
+Backfill: `make_notes.py --restamp-vista-stub`.
+
 ⛔ **`vistas[]` la escribe SÓLO la lectura, nunca el retro-link.** Es lo que mantiene a
 `stars`/`thesis_links`/`methods` como **reclamos** (`make_notes` los mergea add-only sin leer nada) y
 a `vistas[]` como **lecturas**. Un reclamo sin vista es backlog y se cierra de dos maneras: haciendo

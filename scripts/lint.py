@@ -1402,6 +1402,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     alcance_corto: list = []           # (stem, motivo) — alcance de hipótesis sin declarar o vencido (D-34)
     huecos_sin_alcance: list = []      # (stem, motivo) — #342: `## Huecos` sin alcance, o corto
     alcance_wikilink: list = []        # (stem, motivo) — #368: `[[link]]` dentro del blockquote de alcance
+    no_vista_con_plantilla: list = []  # (stem, motivo) — #398: `no_vista` con la plantilla en el cuerpo
     pdf_source_contra: list = []       # (stem, motivo) — #383: `pdf_source` de editor + `eprint_version`
     bibtex_sin_fuente: list = []       # (stem, motivo) — #397: `bibtex` sin `bibtex_source`
     bibtex_drift: list = []            # (stem, motivo) — #397: frontmatter ≠ exportación oficial
@@ -2800,6 +2801,22 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                                        f"seguir listando → `triage.py <slug> --drop-core {stem} "
                                        f"--reason \"…\"`, o quitá el reclamo a mano si el paper "
                                        f"pertenece a otro sujeto"))
+                # #398 — la sección de un sujeto declarado `no_vista` sigue publicando la
+                # PLANTILLA del stub: las instrucciones al extractor, bajo un encabezado que la nota
+                # presenta como síntesis (#247). Medido: 46 notas así durante seis días, invisibles
+                # porque el lint miraba la coherencia `vistas[] ↔ sección` y la escotilla decide
+                # sobre el frontmatter. Backlog con su migrador: la decisión ya está tomada, lo que
+                # falta es que el cuerpo la diga.
+                import make_notes as _mn          # import local: `make_notes` no importa al lint
+                for _v in vistas:
+                    _suj = str(_v.get("sujeto") or "").strip()
+                    if not _suj or _mn.view_stub_kind(
+                            text, _suj, str(_v.get("tipo") or "") == "theme") != "plantilla":
+                        continue
+                    no_vista_con_plantilla.append(
+                        (stem, f"la `## Vista` de **{_suj}** sigue publicando la PLANTILLA del stub "
+                               f"(las instrucciones al extractor, visibles como si fueran "
+                               f"contenido) → `python scripts/make_notes.py --restamp-vista-stub`"))
                 for falta in sorted(declaradas - secciones):
                     vistas_vs_cuerpo.append(
                         (stem, f"`vistas[]` declara la lectura de **{falta}** y el cuerpo no tiene "
@@ -2812,7 +2829,15 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 # viejo la reporta la categoría de arriba, y pedirle además una vista por sujeto
                 # duplicaría el hallazgo en cada nota del corpus — así nace un backlog de 900 que
                 # nadie mira.
-                if vistas:
+                # ⛔ #398 — la condición es «la nota DECLARA el campo», no «tiene alguna vista».
+                # Con `if vistas:`, una nota con `vistas: []` —el estado que deja el operador que
+                # saca la entrada y la sección— salía del chequeo de reclamos ENTERO: ni deuda ni
+                # declarada. Medido: la categoría de reclamos declarados cayó de 66 a 30 sin que las
+                # 36 restantes aparecieran en ninguna otra. Es el falso limpio de D-43 dentro de la
+                # categoría que #188 existe para sostener. Lo que el recorte protege sigue en pie:
+                # la nota de schema VIEJO (sin la clave) la reporta la categoría de arriba, y
+                # pedirle además una vista por sujeto duplicaría el hallazgo en cada nota del corpus.
+                if vistas or fm.get("vistas") is not None:
                     # Qué cuenta como RECLAMO, y por qué `methods` no entra entero: `stars` y
                     # `thesis_links` los siembra el ingest —son «este sujeto pidió que se leyera
                     # este paper»—, mientras que `methods` lo puebla la EXTRACCIÓN, o sea que es un
@@ -4776,6 +4801,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                   SEV_WARN, tuple(alias_ajenos), poblacion='ground_truth'),
         Categoria('pdf_source_contradictorio', '⛔ `pdf_source` de editor con `eprint_version`: contradicción interna, la nota manda a re-verificar contra el documento equivocado (#383)',
                   SEV_BLOQUEANTE, tuple(pdf_source_contra), poblacion='papers'),
+        Categoria('no_vista_con_plantilla', '🧩 Sujeto declarado `no_vista` cuya `## Vista` sigue publicando la PLANTILLA del stub (#398, backlog)',
+                  SEV_BACKLOG, tuple(no_vista_con_plantilla), poblacion='papers'),
         Categoria('bibtex_sin_fuente', '⛔ `bibtex` sin `bibtex_source`: una entrada de cita sin procedencia es un bloque escrito a mano (#397)',
                   SEV_BLOQUEANTE, tuple(bibtex_sin_fuente), poblacion='papers'),
         Categoria('bibtex_drift', '📇 El frontmatter y la exportación oficial dicen cosas distintas del mismo paper (#397, backlog)',

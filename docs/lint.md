@@ -441,6 +441,22 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   que la instancia agregó al objetivo *después* de esas lecturas—, así que este detector leía esa
   declaración como verdad y pedía re-leer 209 papers para nada. Backfill de lo ya escrito:
   `make_notes.py --restamp-lente`, por verdad de la extracción versionada.
+- **`## Vista` que sigue publicando la PLANTILLA del stub** (#398, backlog): hasta 1.211.0 el stub
+  estampaba las **instrucciones al extractor** en el cuerpo de toda nota de paper, como marcador de
+  posición para que el chequeo `vistas[]` ↔ cuerpo cerrara. No las lee nadie —el agente que lee el
+  paper recibe sus reglas de `extraction_prompt` y el cosechador pisa la sección con el JSON—, y
+  mientras la lectura no ocurre la nota le muestra al lector un **pedido como si fuera contenido**,
+  bajo un encabezado que ella misma presenta como síntesis de un LLM (#247). Medido: **47 notas**,
+  46 de ellas bajo un sujeto ya declarado `no_vista`. Hoy el stub lleva **una línea de estado** —
+  `_Reclamado por \`X\`; sin leer desde este sujeto._`, o `_No leído desde \`X\` (fecha): <motivo>._`
+  con `no_vista`— y el backfill es `python scripts/make_notes.py --restamp-vista-stub`, que **no
+  toca la entrada de `vistas[]`** (el frontmatter tiene que seguir diciendo que el sujeto reclama el
+  paper, #256) ni una vista con prosa redactada.
+  ⛔ **Y `vistas: []` ya no apaga el chequeo de reclamos** (#398): la rama corría bajo `if vistas:`,
+  así que la nota que quedaba con la lista vacía —el estado que deja el operador que saca la entrada
+  y la sección— salía del chequeo **entero**, ni deuda ni declarada. Medido: la categoría de
+  reclamos declarados cayó de 66 a 30 sin que las 36 restantes aparecieran en ninguna otra. La nota
+  de schema **viejo** (sin la clave) sigue exenta: la reporta la categoría bloqueante de arriba.
 - **`no_vista` se consulta en las cuatro redes** (#268): la escotilla que #256 hizo alcanzable
   decidía sobre **una** categoría, y las otras tres contaban la misma nota como deuda — medido, una
   nota con `no_vista` declarado y motivo seguía recibiendo *«conseguir el PDF»* sobre una tabla

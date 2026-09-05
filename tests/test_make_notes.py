@@ -606,27 +606,34 @@ def test_cli_topic_genera_concept_en_vez_de_ficha(toy_vault, monkeypatch):
 
 # ── #76: el CUERPO del stub ramifica por tipo de sujeto (los seeds ya ramificaban) ───────────
 
-def test_stub_estrella_no_hardcodea_los_ejes(toy_vault):
-    """El eje estrella es astro por schema (ground-truth NEA), pero los ejes de CONTENIDO salen
-    del objetivo de la bóveda — no de un hardcodeo a actividad/planetas."""
+def test_el_stub_de_estrella_publica_una_LINEA_DE_ESTADO_y_no_el_prompt(toy_vault):
+    """#398 — el stub estampaba las INSTRUCCIONES AL EXTRACTOR en el cuerpo de toda nota de paper,
+    como marcador de posición para que el chequeo `vistas[]` ↔ cuerpo cerrara. No las lee nadie: el
+    agente que lee el paper recibe sus reglas de `extraction_prompt` y el cosechador pisa la sección
+    con el JSON. Mientras tanto —el estado normal de un reclamo sembrado por retro-tag— la nota le
+    mostraba al lector un pedido como si fuera contenido, bajo un encabezado que ella misma presenta
+    como síntesis de un LLM (#247). Medido: 47 notas.
+
+    La ramificación por tipo de sujeto de #76 no se perdió: vive donde se usa, en el prompt (#254)."""
     ads_json([rec("2020conA...1..1A")])
     mn.write_paper_notes("test_star", include_all=False, force=False)
     body = (toy_vault.PAPERS / "2020conA...1..1A.md").read_text(encoding="utf-8")
-    assert "- **Ground-truth (planetas / parámetros):**" in body
-    assert "**Ejes del objetivo (actividad · rv):**" in body   # las facetas de la lente de juguete
-    assert "«toy»" in body                                     # objective.short, no un texto fijo
-    assert "Aporte al tema" not in body
+    assert "_Reclamado por `Estrella Test`; sin leer desde este sujeto._" in body, body
+    for instruccion in ("Ground-truth (planetas / parámetros)", "Ejes del objetivo",
+                        "Cómo anotar cada valor", "Rol del paper", "Aporte al tema"):
+        assert instruccion not in body, f"el prompt sigue en el cuerpo: {instruccion}"
 
 
-def test_stub_tema_no_pide_planetas_ni_actividad(toy_vault):
-    """El defecto de #76: un tema ingestado por ADS recibía los bullets de planetas y actividad,
-    contradiciendo que el eje tema/concepto es agnóstico de disciplina."""
+def test_el_stub_de_tema_publica_la_misma_LINEA_y_ningun_bullet(toy_vault):
+    """#398, la rama tema — y el cierre de #76 por otra vía: el stub ya no puede pedirle planetas a
+    un tema porque no le pide NADA. La línea nombra al sujeto, que es lo único que la sección tiene
+    que decir mientras la lectura no ocurrió."""
     seed_topic()
     ads_json([rec("2020gpsA...1..1A")], slug="gp")
     mn.write_paper_notes("gp", include_all=False, force=False, theme=True)
     body = (toy_vault.PAPERS / "2020gpsA...1..1A.md").read_text(encoding="utf-8")
-    assert "- **Aporte al tema:**" in body and "- **Régimen de validez:**" in body
-    assert "planeta" not in body.lower() and "Ejes del objetivo" not in body
+    assert "_Reclamado por `gaussian-processes`; sin leer desde este sujeto._" in body, body
+    assert "planeta" not in body.lower() and "Aporte al tema" not in body
 
 
 def test_stub_off_ads_comparte_el_bloque_del_tema(toy_vault):
@@ -634,14 +641,14 @@ def test_stub_off_ads_comparte_el_bloque_del_tema(toy_vault):
     propio bullet de tema— y la rama ADS de tema escriben el MISMO bloque, así que no divergen."""
     mn.write_web_paper_note("2020Smith", slug="gp", concept="gaussian-processes", url="https://x")
     body = (toy_vault.PAPERS / "2020Smith.md").read_text(encoding="utf-8")
-    assert mn.vista_block("gaussian-processes", theme=True) in body
+    assert mn.vista_block("gaussian-processes") in body
 
 
 def test_vista_block_sin_objetivo_degrada_a_generico(toy_vault):
     """make_notes corrido suelto, fuera de la cadena: sin objective.yaml el stub sale genérico
     (nunca inventado) y no rompe la generación."""
     toy_vault.OBJECTIVE_YAML.unlink()
-    block = mn.vista_block("Estrella Test", theme=False)
+    block = mn._legacy_vista_block("Estrella Test", theme=False)
     assert "- **Ejes del objetivo:**" in block           # sin facetas: sin paréntesis
     assert "objetivo de la bóveda / huecos" in block     # sin `short`: texto genérico
 
@@ -857,7 +864,7 @@ def test_objetivo_mal_formado_degrada_sin_romper_ni_inventar(toy_vault, obj):
     un `short: 2026` mataba la generación de notas a mitad de cadena, después de gastar la red. Y
     `facets` como string se deshacía en caracteres: facetas fabricadas escritas a la bóveda."""
     write_yaml(cfg.OBJECTIVE_YAML, obj)
-    block = mn.vista_block("Estrella Test", theme=False)
+    block = mn._legacy_vista_block("Estrella Test", theme=False)
     assert "## Vista — Estrella Test" in block
     assert "· " not in block.split("Ejes del objetivo")[1].split(":**")[0]   # sin facetas inventadas
 
@@ -1018,7 +1025,7 @@ def test_vista_block_forma(toy_vault, theme, cabeza):
     """Contrato de forma que asumen los dos templates de cuerpo (se interpolan como `{bloque}`
     al final del f-string): encabezado propio, bullets con la cola compartida y newline final. La
     cola es compartida a propósito: métodos y rol (#73) son del paper, no del tipo de sujeto."""
-    block = mn.vista_block("Sujeto", theme)
+    block = mn._legacy_vista_block("Sujeto", theme)
     lineas = block.rstrip("\n").split("\n")
     assert block.startswith("## Vista — Sujeto\n") and block.endswith("\n")
     assert len(lineas) == 7 and all(ln.startswith("- **") for ln in lineas[1:])
@@ -1033,7 +1040,7 @@ def test_vista_block_forma(toy_vault, theme, cabeza):
 def test_vista_block_tema_sin_short_cae_al_generico(toy_vault):
     """La rama que faltaba de la matriz: tema + objetivo sin `short`."""
     write_objective(toy_vault, short=None)
-    block = mn.vista_block("gp", theme=True)
+    block = mn._legacy_vista_block("gp", theme=True)
     assert "- **Aporte al tema:**" in block
     assert "- **Para el objetivo:** _(relevancia para el objetivo de la bóveda / huecos)_" in block
 
@@ -1041,7 +1048,7 @@ def test_vista_block_tema_sin_short_cae_al_generico(toy_vault):
 def test_vista_block_estrella_sin_facetas_pero_con_short(toy_vault):
     """Y la simétrica: sin facetas el bullet va sin paréntesis, pero el `short` sigue citándose."""
     write_objective(toy_vault, relevance={"facets": {}})
-    block = mn.vista_block("Estrella Test", theme=False)
+    block = mn._legacy_vista_block("Estrella Test", theme=False)
     assert "- **Ejes del objetivo:** _(qué dice el paper" in block
     assert "«toy»" in block
 
@@ -1334,7 +1341,7 @@ def test_unpend_al_llegar_fulltext(toy_vault):
     dest = toy_vault.PAPERS / "1999Paywall.md"
     # el usuario ya extrajo algo en la nota: eso debe sobrevivir al des-pendeo
     dest.write_text(dest.read_text(encoding="utf-8").replace(
-        "- **Aporte al tema:**", "- **Aporte al tema:** SENTINEL_LLM"), encoding="utf-8")
+        "_Reclamado por", "SENTINEL_LLM _Reclamado por"), encoding="utf-8")
     ft = toy_vault.FULLTEXT / "gp"
     ft.mkdir(parents=True, exist_ok=True)
     (ft / "1999Paywall.txt").write_text("fuente conseguida", encoding="utf-8")
@@ -3603,9 +3610,9 @@ def test_vista_block_lleva_el_sujeto_en_el_encabezado(toy_vault):
     por bibcode y el silencio sobre un eje se lee como «se miró y no hay nada» (#188).
 
     @inv INV-134"""
-    block = mn.vista_block("eps Eridani", theme=False)
+    block = mn.vista_block("eps Eridani")
     assert block.startswith("## Vista — eps Eridani\n") and block.endswith("\n")
-    assert "Ground-truth (planetas / parámetros)" in block
+    assert "`eps Eridani`" in block, "la línea de estado nombra al sujeto, no sólo el encabezado"
     assert mn.vista_block("s_index", theme=True).startswith("## Vista — s_index\n")
 
 
@@ -4276,7 +4283,7 @@ def test_el_migrador_deja_la_vista_cosechable(toy_vault):
     dest = mk_note(cfg.PAPERS, "2019A....1A",
                    {"bibcode": "2019A....1A", "tags": ["paper"], "stars": ["tau Cet"],
                     "vistas": [{"sujeto": "tau Cet", "tipo": "star"}]},
-                   "# p\n\n" + mn.vista_block("tau Cet", theme=False).replace(
+                   "# p\n\n" + mn._legacy_vista_block("tau Cet", theme=False).replace(
                        mn._BULLET_ANOTACION, mn._BULLET_ANOTACION_VIEJO))
     assert hv.write_view_section(dest, "tau Cet", "## Vista — tau Cet\n\nnueva\n",
                                  theme=False) is False, "la guarda no reconoce el stub viejo"
@@ -5063,24 +5070,30 @@ def test_AUD223_consolidar_REHUSA_si_la_vieja_tiene_una_vista_fechada(toy_vault)
 # ── #269 · `--restamp-vista-stub`: la plantilla vieja del stub se re-estampa, la prosa no ────────
 
 def test_restamp_vista_stub_reemplaza_SOLO_la_plantilla_vieja_y_es_idempotente(toy_vault):
-    """AUD-288: el migrador existía sin doc ni test. Su `help` promete tres cosas y acá se prueban
-    las tres: la sección byte-idéntica a la plantilla vieja (#103, citar por nº de línea) pasa a la
-    vigente (`cfg.REGLA_LOCALIZADOR`); una vista con prosa redactada NO se toca (sus anclas
-    cuelgan del texto exacto); y correrlo dos veces no cambia nada."""
-    vieja = mn.vista_block("gp", True).replace(mn._BULLET_ANOTACION, mn._BULLET_ANOTACION_VIEJO)
-    assert "nº de línea" in vieja and vieja != mn.vista_block("gp", True)
+    """AUD-288 + #398: el migrador prueba las tres cosas que su `help` promete, sobre las DOS
+    plantillas legacy —la de #269 (citar por nº de línea) y la vigente hasta 1.211.0—: las dos son
+    un stub y las dos pasan a la línea de estado; una vista con prosa redactada NO se toca (sus
+    anclas cuelgan del texto exacto); y correrlo dos veces no cambia nada."""
+    vieja = mn._legacy_vista_block("gp", True).replace(mn._BULLET_ANOTACION, mn._BULLET_ANOTACION_VIEJO)
+    assert "nº de línea" in vieja and vieja != mn._legacy_vista_block("gp", True)
     stub = mk_note(toy_vault.PAPERS, "2020stubA...1A",
                    {"tags": ["paper"], "vistas": [{"sujeto": "gp", "tipo": "theme"}]},
                    "## Abstract\n\nx\n\n" + vieja)
+    stub2 = mk_note(toy_vault.PAPERS, "2020stubC...1C",
+                    {"tags": ["paper"], "vistas": [{"sujeto": "gp", "tipo": "theme"}]},
+                    "## Abstract\n\nx\n\n" + mn._legacy_vista_block("gp", True))
     prosa = mk_note(toy_vault.PAPERS, "2020prosB...1B",
                     {"tags": ["paper"], "vistas": [{"sujeto": "gp", "tipo": "theme"}]},
                     "## Vista — gp\n- **Aporte al tema:** el kernel cuasi-periódico [[2020stubA...1A]]\n")
     antes_prosa = prosa.read_text(encoding="utf-8")
     assert mn.restamp_vista_stub() == 0
-    despues = stub.read_text(encoding="utf-8")
-    assert "nº de línea" not in despues and cfg.REGLA_LOCALIZADOR in despues
-    assert "## Abstract" in despues, "la cirugía es sobre la sección, no sobre la nota"
+    for f in (stub, stub2):
+        despues = f.read_text(encoding="utf-8")
+        assert "_Reclamado por `gp`; sin leer desde este sujeto._" in despues, despues
+        assert "nº de línea" not in despues and cfg.REGLA_LOCALIZADOR not in despues
+        assert "## Abstract" in despues, "la cirugía es sobre la sección, no sobre la nota"
     assert prosa.read_text(encoding="utf-8") == antes_prosa
+    despues = stub.read_text(encoding="utf-8")
     assert mn.restamp_vista_stub() == 0
     assert stub.read_text(encoding="utf-8") == despues, "no es idempotente"
 
@@ -5236,3 +5249,88 @@ def test_restamp_lente_backfillea_la_SEGUNDA_lente_en_su_subseccion(toy_vault, c
     assert cuerpo.index("- **momentos:**") > cuerpo.index("### Lente — ruido"), cuerpo
     otra = cuerpo[cuerpo.index("## Vista — Otra Estrella"):cuerpo.index("## Vista — Estrella Test")]
     assert "- **momentos:**" not in otra, otra
+
+
+# ── #398 · la plantilla del stub bajo un sujeto declarado `no_vista` ─────────────────────────────
+
+def _nota_no_vista(cuerpo: str, no_vista=True):
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    fm = {"bibcode": "2020nv....1..1N", "tags": ["paper"], "thesis_links": ["ica"],
+          "vistas": [{"sujeto": "ica", "tipo": "theme"}]}
+    if no_vista:
+        fm["no_vista"] = [{"sujeto": "ica", "motivo": "no aporta al eje, entra por el roll-up"}]
+    f = cfg.PAPERS / "2020nv....1..1N.md"
+    f.write_text("---\n" + yaml.safe_dump(fm, sort_keys=False, allow_unicode=True) + "---\n\n"
+                 + cuerpo, encoding="utf-8")
+    return f
+
+
+def test_restamp_vista_stub_cambia_el_prompt_por_la_linea_de_no_vista(toy_vault, capsys):
+    """#398 — el stub siembra la vista con las INSTRUCCIONES AL EXTRACTOR y nada las retira al
+    declarar que ese sujeto no se va a leer: medido, 46 notas publicando el prompt bajo `## Vista —
+    ica`, bajo un encabezado que la nota presenta como síntesis de un LLM (#247).
+
+    ⛔ La entrada de `vistas[]` NO se toca: el frontmatter tiene que seguir diciendo que el sujeto
+    reclama el paper (#256), y borrarla es la opción que el issue descarta a propósito."""
+    f = _nota_no_vista("# p\n\n" + mn._legacy_vista_block("ica", True))
+    mn.restamp_vista_stub()
+    salida = f.read_text(encoding="utf-8")
+    assert "_No leído desde `ica`: no aporta al eje, entra por el roll-up._" in salida, salida
+    assert "Aporte al tema:" not in salida, "la plantilla se fue entera"
+    assert cfg.split_fm(salida)["vistas"] == [{"sujeto": "ica", "tipo": "theme"}]
+    antes = salida
+    capsys.readouterr()
+    mn.restamp_vista_stub()
+    assert f.read_text(encoding="utf-8") == antes, "idempotente"
+    assert "0 sección(es)" in capsys.readouterr().out, \
+        "y el conteo lo dice: una sección ya en su forma vigente no se cuenta como tocada"
+
+
+def test_restamp_vista_stub_NO_pisa_una_vista_con_prosa(toy_vault, capsys):
+    """Sólo la sección que es la plantilla byte a byte: una vista con prosa real se deja como está
+    —sus anclas cuelgan de ese texto exacto— aunque el sujeto figure en `no_vista`, que es un estado
+    contradictorio y lo reporta el lint, no algo que un migrador resuelva pisando contenido."""
+    f = _nota_no_vista("# p\n\n## Vista — ica\n\nEsto lo escribió alguien y vale.\n")
+    mn.restamp_vista_stub()
+    assert "Esto lo escribió alguien y vale." in f.read_text(encoding="utf-8")
+
+
+def test_restamp_vista_stub_le_deja_al_sujeto_sin_leer_su_linea_de_reclamo(toy_vault, capsys):
+    """Sin `no_vista` el reclamo sigue pendiente de lectura, así que la línea es la otra: la nota
+    dice que el sujeto lo reclama y que nadie lo leyó desde ahí. Lo que NO puede seguir publicando
+    es el prompt — el extractor recibe sus reglas de `extraction_prompt`, no del cuerpo de la nota."""
+    f = _nota_no_vista("# p\n\n" + mn._legacy_vista_block("ica", True), no_vista=False)
+    mn.restamp_vista_stub()
+    salida = f.read_text(encoding="utf-8")
+    assert "_Reclamado por `ica`; sin leer desde este sujeto._" in salida, salida
+    assert "Aporte al tema:" not in salida
+
+
+def test_view_stub_kind_acepta_la_plantilla_VIEJA(toy_vault):
+    """Las dos plantillas son un stub: la nota que quedó con la de #269 no deja de serlo por no
+    haber pasado por el migrador, y tratarla como prosa la dejaría publicando el prompt para
+    siempre."""
+    vieja = mn._legacy_vista_block("ica", True).replace(mn._BULLET_ANOTACION, mn._BULLET_ANOTACION_VIEJO)
+    assert mn.view_stub_kind("# p\n\n" + vieja, "ica", True) == "plantilla"
+    assert mn.view_stub_kind("# p\n\n" + mn._legacy_vista_block("ica", True), "ica", True) == "plantilla"
+    # Los TRES estados, y por qué son tres: el lint reporta sólo `plantilla` —el prompt publicado
+    # como contenido— y el migrador además reescribe una línea de estado cuyo motivo cambió.
+    assert mn.view_stub_kind("# p\n\n" + mn.vista_block("ica"), "ica", True) == "estado"
+    assert mn.view_stub_kind("# p\n\n" + mn.vista_block("ica", motivo="otro motivo"),
+                             "ica", True) == "estado"
+    assert mn.view_stub_kind("# p\n\n## Vista — ica\n\nprosa real\n", "ica", True) == ""
+    assert mn.view_stub_kind("# p\n", "ica", True) == "", "sin sección no hay stub"
+
+
+def test_restamp_vista_stub_saltea_la_entrada_malformada_sin_romperse(toy_vault, capsys):
+    """`vistas` se lee CRUDO acá (no por `load_vistas`, que rechaza la forma inválida y aborta), así
+    que una entrada que no es un mapa tiene que saltearse: el migrador no puede caerse sobre una
+    nota que el lint ya está reportando como frontmatter con forma inválida."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    f = cfg.PAPERS / "2020nv....1..1N.md"
+    f.write_text("---\nbibcode: 2020nv....1..1N\ntags: [paper]\n"
+                 "vistas:\n- ica\n- {sujeto: ica, tipo: theme}\n"
+                 "no_vista:\n- {sujeto: ica, motivo: entra por el roll-up}\n---\n\n"
+                 "# p\n\n" + mn._legacy_vista_block("ica", True), encoding="utf-8")
+    mn.restamp_vista_stub()
+    assert "_No leído desde `ica`: entra por el roll-up._" in f.read_text(encoding="utf-8")

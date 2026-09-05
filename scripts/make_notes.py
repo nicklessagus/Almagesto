@@ -1007,42 +1007,74 @@ def _no_vista_declarada(fm: dict, stem: str, sujetos: set) -> bool:
     return bool(declaradas & sujetos)
 
 
+def view_stub_kind(text: str, sujeto: str, theme: bool) -> str:
+    """What the `## Vista — <subject>` section IS: `""` (written prose), `"plantilla"` or `"estado"`.
+
+    Three states, not two, because the migrator and the lint ask different things of the same
+    section (#398): the lint reports only the section that still publishes the extractor's TEMPLATE
+    —a request shown as content— while the migrator also rewrites a status LINE whose reason
+    changed. Collapsing them into a boolean makes one of the two questions unanswerable.
+
+    `"plantilla"` accepts the current legacy template and the previous one (#269): both are a stub,
+    and the note left on the old one does not stop being one for not having gone through the
+    migrator. The `no_vista` line carries its reason inside, so it is recognised by its opening —
+    the only part the stamper writes."""
+    import harvest_views as hv          # import local: `harvest_views` importa este módulo
+    span = hv.section_span(text, f"## Vista — {sujeto}")
+    if span is None:
+        return ""
+    actual = hv._norm(text[span[0]:span[1]])
+    legacy = _legacy_vista_block(sujeto, theme)
+    if actual in (hv._norm(legacy),
+                  hv._norm(legacy.replace(_BULLET_ANOTACION, _BULLET_ANOTACION_VIEJO))):
+        return "plantilla"
+    if actual == hv._norm(vista_block(sujeto)) or actual.startswith(
+            hv._norm(f"## Vista — {sujeto}\n\n_No leído desde")):
+        return "estado"
+    return ""
+
+
 def restamp_vista_stub() -> int:
-    """Migration #269: re-stamps the view template on notes that still carry the OLD one.
+    """Migration #398: swaps the extractor's TEMPLATE for the status line, in every stub section.
 
-    Needed because `harvest_views.write_view_section` only overwrites a view section **while it is
-    still the template**, comparing against the live `vista_block`. Changing the template therefore
-    makes every already-written stub stop matching, and the next harvest would print «ya tiene prosa
-    redactada → NO se pisa» and **write no view at all** — the fix would break the harvest it is
-    meant to unblock.
+    Also the reason it existed for #269: `harvest_views.write_view_section` only overwrites a view
+    section **while it is still a stub**, so changing what a stub looks like makes every note stop
+    matching and the next harvest would print «ya tiene prosa redactada → NO se pisa» and **write no
+    view at all** — the fix would break the harvest it is meant to unblock.
 
-    Only sections that are byte-for-byte the old template are touched: a view with real prose is
-    left alone (its anchors hang off the exact text)."""
+    ⛔ Only sections that are a stub **byte for byte** are touched: a view with real prose is left
+    alone (its anchors hang off that exact text). The subject declared `no_vista` gets the line with
+    its reason; the rest, the «claimed, not read» one — and re-running it regenerates the line when
+    the reason changes."""
     import harvest_views as hv          # import local: `harvest_views` importa `make_notes`
     notes = cfg.note_paths(cfg.PAPERS)
     tocadas = 0
     for dest in notes:
         text = dest.read_text(encoding="utf-8")
         fm = cfg.split_fm(text) or {}
+        try:
+            no_vista = {v["sujeto"]: v["motivo"]
+                        for v in cfg.load_no_vista(fm, entry=dest.stem)}
+        except cfg.VistasError:
+            continue                     # frontmatter inválido: lo reporta el lint, no se toca acá
         for v in cfg.as_list(fm.get("vistas")):
             if not isinstance(v, dict) or not (suj := str(v.get("sujeto") or "").strip()):
                 continue
             theme = str(v.get("tipo") or "") == "theme"
+            if not view_stub_kind(text, suj, theme):
+                continue                 # tiene prosa redactada: no se toca
+            nuevo = vista_block(suj, theme, motivo=no_vista.get(suj, ""),
+                                fecha=str(v.get("fecha") or ""))
             span = hv.section_span(text, f"## Vista — {suj}")
-            if span is None:
-                continue
-            actual = text[span[0]:span[1]]
-            viejo = vista_block(suj, theme).replace(_BULLET_ANOTACION, _BULLET_ANOTACION_VIEJO)
-            if hv._norm(actual) != hv._norm(viejo):
-                continue                 # o ya está migrada, o tiene prosa: no se toca
+            if hv._norm(text[span[0]:span[1]]) == hv._norm(nuevo):
+                continue                 # ya está en la forma vigente
             sep = "\n\n" if span[1] < len(text) else "\n"
-            text = text[:span[0]] + vista_block(suj, theme).rstrip("\n") + sep + text[span[1]:]
+            text = text[:span[0]] + nuevo.rstrip("\n") + sep + text[span[1]:]
             tocadas += 1
         if text != dest.read_text(encoding="utf-8"):
             cfg.write_text_atomic(dest, text)
-    cfg.print_seguro(f"vistas: {tocadas} sección(es) de stub re-estampadas con la plantilla vigente "
-                     f"(#269: la anterior mandaba citar por nº de línea del `.txt`, la doctrina que "
-                     f"#205 retiró)")
+    cfg.print_seguro(f"vistas: {tocadas} sección(es) de stub pasaron de la PLANTILLA del extractor "
+                     f"a la línea de estado (#398) — la entrada de `vistas[]` NO se toca")
     return 0
 
 
@@ -2234,8 +2266,37 @@ def objective_lens() -> tuple[list, str]:
         return [], ""
 
 
-def vista_block(sujeto: str, theme: bool) -> str:
-    """Sección `## Vista — <sujeto>` del stub de una nota de paper, ramificada por tipo de sujeto
+def vista_block(sujeto: str, theme: bool = False, motivo: str = "", fecha: str = "") -> str:
+    """The `## Vista — <subject>` section of a stub: ONE STATUS LINE, never a prompt (#398).
+
+    Until 1.211.0 this stamped the extractor's instructions into the body of **every** paper note,
+    as a placeholder so the blocking `vistas[]` ↔ body check would close. Nobody reads it: the agent
+    that reads the paper gets its rules from `extraction_prompt`, and `harvest_views` overwrites the
+    section with the resulting JSON. Meanwhile —the normal state of a claim seeded by retro-tag or
+    `extra_core`— the note showed the reader a request as if it were content, under a heading the
+    note itself presents as «an LLM's synthesis» (#247). Measured on a real vault: **47 notes**, 46
+    of them under a subject already declared `no_vista`.
+
+    Two lines, and which one is a fact about the note, not a style: the claim not yet read, and the
+    claim declared unread with its reason. What used to be reconstructed by reading the `log`
+    —«downloaded, catalogued, not read from this subject, and why»— the note now says in one line.
+
+    ⛔ The `vistas[]` entry is untouched either way: the frontmatter has to keep saying the subject
+    claims the paper (#256). `theme` is kept because the two callers know it and the legacy template
+    branched on it; the status line does not.
+    """
+    if str(motivo or "").strip():
+        cuando = f" ({fecha})" if str(fecha or "").strip() else ""
+        return (f"## Vista — {sujeto}\n\n_No leído desde `{sujeto}`{cuando}: "
+                f"{str(motivo).strip()}._\n")
+    return f"## Vista — {sujeto}\n\n_Reclamado por `{sujeto}`; sin leer desde este sujeto._\n"
+
+
+def _legacy_vista_block(sujeto: str, theme: bool) -> str:
+    """La PLANTILLA que el stub estampaba hasta 1.211.0 — sólo para RECONOCERLA y migrarla (#398).
+
+    No la escribe nadie más: es el insumo de `is_view_stub`, que decide qué secciones puede pisar el
+    migrador sin tocar prosa. Ramificada por tipo de sujeto
     (#76). Tema → el eje del concept (aporte, mecanismo/ecuación, régimen). Estrella → el
     ground-truth (que es del schema de `stars/`, no del objetivo) y los ejes de la lente. El rol
     del paper (fundacional/aplicación/árbitro) es #73, que define el campo antes que el bullet.
@@ -4139,10 +4200,10 @@ def main() -> int:
                          "leen el detector de duplicados (#216) y el diff de lente (D-49): "
                          "re-medilos después. Sin slug.")
     ap.add_argument("--restamp-vista-stub", action="store_true", dest="restamp_vista_stub",
-                    help="migración #269: re-estampa la plantilla de `## Vista` en las notas que "
-                         "todavía traen la anterior (la que mandaba citar por nº de línea del "
-                         "`.txt`). Sin ella el cosechador deja de reconocerlas y no escribe la "
-                         "vista. No toca una vista con prosa. Sin slug.")
+                    help="migración #398: la sección `## Vista` de un stub deja de publicar las "
+                         "INSTRUCCIONES AL EXTRACTOR y pasa a una línea de estado (reclamado sin "
+                         "leer, o no leído con su motivo de `no_vista`). No toca una vista con "
+                         "prosa. Sin slug.")
     ap.add_argument("--restamp-abstracts", action="store_true", dest="restamp_abstracts",
                     help="backfill #277: escribe el `## Abstract` que falte en una nota de paper "
                          "(contenido `_(no disponible)_` — lo completa la próxima extracción). La "
