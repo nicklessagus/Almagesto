@@ -7882,3 +7882,170 @@ def test_check_log_coverage_saltea_red_yaml_y_devuelve_sus_tres_listas(toy_vault
     assert [s for s, _ in log_sin] == ["test_star"], log_sin
     assert [s for s, _ in sweep] == ["test_star"], sweep
     assert no_eval == []
+
+
+# ── #396 · los diez chequeos de la región del registro y el objetivo ─────────────────────────────
+
+def test_check_root_obsidian_mira_la_raiz_y_no_la_boveda(toy_vault):
+    """#396/INV-65 — la bóveda es `vault/`; un `.obsidian/` en la RAÍZ significa que el repo entero
+    se abrió como vault y el grafo indexa andamiaje. Error de operación silencioso: sólo se nota
+    mirando el grafo.  @inv INV-65"""
+    assert lint.check_root_obsidian() == []
+    (cfg.VAULT / ".obsidian").mkdir(parents=True, exist_ok=True)
+    assert lint.check_root_obsidian() == [], "el `.obsidian/` de `vault/` es el caso CORRECTO"
+    (cfg.ROOT / ".obsidian").mkdir(parents=True, exist_ok=True)
+    filas = lint.check_root_obsidian()
+    assert len(filas) == 1 and "andamiaje" in filas[0][1]
+
+
+def test_check_verif_orphan_sidecar_pide_la_nota_que_audita(toy_vault):
+    """#396/#344 — un `<x>.verif.md` sin su nota es un rastro de auditoría que no se puede cerrar
+    contra nada. Es la otra mitad de INV-148."""
+    assert lint.check_verif_orphan_sidecar() == []
+    (cfg.STARS / f"test_star{cfg.VERIF_SUFFIX}").write_text("# verif\n", encoding="utf-8")
+    filas = lint.check_verif_orphan_sidecar()
+    assert len(filas) == 1 and "huérfano" in filas[0][1]
+    mk_note(cfg.STARS, "test_star", {"tags": ["star"]})
+    assert lint.check_verif_orphan_sidecar() == [], "con la nota al lado el par cierra"
+
+
+def test_check_status_stacked_tiene_tres_techos_y_cada_uno_habla_solo(toy_vault):
+    """#396/#302 — el `STATUS.md` es ESTADO, no bitácora. Los tres techos son independientes y se
+    reportan por separado: una lista de próximos pasos de más, encabezados fechados apilados, y el
+    largo total. Sin el archivo no hay nada que medir (la instancia recién clonada)."""
+    assert lint.check_status_stacked() == []
+    cfg.STATUS.write_text("# Estado\n\n## Próximos pasos\n- a\n", encoding="utf-8")
+    assert lint.check_status_stacked() == [], "UNA lista de próximos pasos es lo correcto"
+    cfg.STATUS.write_text("# Estado\n\n## Próximos pasos\n- a\n\n## Próximos pasos (viejo)\n- b\n",
+                          encoding="utf-8")
+    filas = lint.check_status_stacked()
+    assert len(filas) == 1 and "2 secciones de próximos pasos" in filas[0][1]
+
+    fechados = "\n".join(f"## 2026-0{i}-01 — algo" for i in range(1, 6))
+    cfg.STATUS.write_text(f"# Estado\n\n{fechados}\n", encoding="utf-8")
+    filas = lint.check_status_stacked()
+    assert len(filas) == 1 and "encabezados fechados apilados" in filas[0][1]
+
+    cfg.STATUS.write_text("# Estado\n" + "x\n" * (lint.STATUS_MAX_LINEAS + 5), encoding="utf-8")
+    filas = lint.check_status_stacked()
+    assert len(filas) == 1 and "no crece sin techo" in filas[0][1]
+
+
+def test_check_scope_desync_compara_contra_la_config_y_calla_cuando_no_declara(toy_vault):
+    """#396/#312 — la autoridad es la config: la nota desfasada deja al chequeo de completitud con
+    información FALSA, no sin información. Las dos guardas que ningún test alcanzaba antes de la
+    extracción: el item de `sources:` SIN `key` (que sin la guarda revienta con `KeyError`) y el
+    campo que la config NO declara (que sin la guarda reportaría «sin declarar ≠ …» sobre una nota
+    correcta, o sea deuda que nadie puede cerrar)."""
+    fm = {"tags": ["paper"], "alcance": "caps. 1-3", "unidad_cita": "pagina"}
+    def _tema(item):
+        write_yaml(cfg.THEMES_YAML, {"libros": {"title": "L", "area": "methods",
+                                                "source": "local-pdfs", "sources": [item]}})
+    _tema({"key": "2001Libro", "alcance": "caps. 1-3", "unidad_cita": "pagina"})
+    assert lint.check_scope_desync({"2001Libro": fm}) == []
+    _tema({"key": "2001Libro", "alcance": "caps. 1-9"})
+    filas = lint.check_scope_desync({"2001Libro": fm})
+    assert len(filas) == 1 and "caps. 1-9" in filas[0][1] and "restamp-alcance" in filas[0][1]
+    # la config que NO declara el campo no contradice a la nota que sí lo trae
+    _tema({"key": "2001Libro"})
+    assert lint.check_scope_desync({"2001Libro": fm}) == []
+    # item sin `key`: no hay a qué nota compararlo — se saltea, no revienta
+    _tema({"pdf": "x.pdf"})
+    assert lint.check_scope_desync({"2001Libro": fm}) == []
+    # y la clave declarada que no tiene nota tampoco es hallazgo de ESTA categoría
+    _tema({"key": "9999Fantasma", "alcance": "caps. 1-9"})
+    assert lint.check_scope_desync({"2001Libro": fm}) == []
+
+
+def test_check_extraction_in_build_cuenta_las_que_no_viajan(toy_vault):
+    """#396/#311 — `build/` es scratch por `.gitignore`: una extracción ahí no se versiona y no se
+    regenera sin volver a leer el PDF. El hallazgo es UNO y trae el conteo, no una fila por archivo."""
+    assert lint.check_extraction_in_build() == []
+    d = cfg.ROOT / "build" / "ica" / "extraccion"
+    d.mkdir(parents=True)
+    (d / "2001X.json").write_text("{}", encoding="utf-8")
+    (d / "2002Y.json").write_text("{}", encoding="utf-8")
+    filas = lint.check_extraction_in_build()
+    assert len(filas) == 1 and "2 extracción(es)" in filas[0][1]
+    assert "--migrate-extracciones" in filas[0][1]
+
+
+def test_check_red_pass_missing_calla_en_la_boveda_sin_papers(toy_vault):
+    """#396/AUD-282 — «`sweep_external` nunca corrió» sólo es deuda si hay corpus del que hablar.
+    La guarda de los papers es la que ningún test distinguía: sin ella, una bóveda recién
+    instanciada arranca debiendo una pasada de red sobre cero fuentes."""
+    assert lint.check_red_pass_missing() == [], "sin papers no hay caducidad que chequear"
+    mk_note(cfg.PAPERS, "2001Test", {"tags": ["paper"], "bibcode": "2001Test"})
+    filas = lint.check_red_pass_missing()
+    assert len(filas) == 1 and "sweep_external.py" in filas[0][1]
+    write_yaml(cfg.REGISTRO / "_red.yaml",
+               {"ultima_pasada_red": {"fecha": "2026-03-01", "cubrio": ["retracciones"]}})
+    assert lint.check_red_pass_missing() == []
+
+
+def test_check_reused_artifact_unchecked_solo_habla_del_eprint_sin_versions(toy_vault):
+    """#396/#297/D-18 — el reuso importa a un sujeto nuevo un artefacto cuya antigüedad nadie
+    chequeó, y eso sólo importa si el PDF es un PREPRINT que todavía no se cruzó contra su versión
+    publicada. Las dos guardas que sobrevivían: el PDF sin nota (no es esta categoría, es #230) y
+    el `pdf_source` que no es `eprint`."""
+    for slug in ("a", "b"):
+        (cfg.PDFS / slug).mkdir(parents=True, exist_ok=True)
+        (cfg.PDFS / slug / "2001Test.pdf").write_bytes(b"%PDF-1.4\n")
+    assert lint.check_reused_artifact_unchecked({}) == [], "sin nota no es hallazgo de esta categoría"
+    assert lint.check_reused_artifact_unchecked(
+        {"2001Test": {"pdf_source": "publisher"}}) == [], "un publicado no tiene versión que esperar"
+    assert lint.check_reused_artifact_unchecked(
+        {"2001Test": {"pdf_source": "eprint", "versions": ["2002Test"]}}) == []
+    filas = lint.check_reused_artifact_unchecked({"2001Test": {"pdf_source": "eprint"}})
+    assert len(filas) == 1 and "a, b" in filas[0][1] and "--bibcodes 2001Test" in filas[0][1]
+    # bajo un solo slug no hay reuso
+    (cfg.PDFS / "b" / "2001Test.pdf").unlink()
+    assert lint.check_reused_artifact_unchecked({"2001Test": {"pdf_source": "eprint"}}) == []
+
+
+def test_check_fulltext_y_pdf_without_note_saltean_lo_que_no_es_un_slug(toy_vault):
+    """#396/#108/#230 — extracción y descarga ya pagadas que no alcanzan ninguna síntesis.
+
+    Lo que fija este test es el CONTRATO observable: un archivo suelto en `raw/fulltext/` o en
+    `raw/pdfs/` —que no es un slug— no produce hallazgo, y el par slug+artefacto sin nota sí.
+
+    ⚠ Declarado, no tapado: el `if not _dir.is_dir(): continue` de los dos sobrevive a
+    `mutar --guardas` y va a seguir sobreviviendo, porque NINGÚN test puede distinguirlo. Medido:
+    `Path(<archivo>).glob("*")` devuelve vacío y no levanta, así que sacar la guarda da exactamente
+    el mismo resultado. Es de la familia de la red 8 (un condicional que no decide nada) sobre
+    código anterior a #396; se anota acá en vez de inventarle un test que probaría otra cosa."""
+    (cfg.FULLTEXT / "suelto.txt").write_text("x", encoding="utf-8")
+    (cfg.PDFS / "suelto.pdf").write_bytes(b"%PDF-1.4\n")
+    assert lint.check_fulltext_without_note() == [] and lint.check_pdf_without_note() == []
+
+    (cfg.FULLTEXT / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "ica" / "2001Test.txt").write_text("x", encoding="utf-8")
+    (cfg.PDFS / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "ica" / "2001Test.pdf").write_bytes(b"%PDF-1.4\n")
+    ft, pdf = lint.check_fulltext_without_note(), lint.check_pdf_without_note()
+    assert len(ft) == 1 and "raw/fulltext/ica/2001Test.txt" in ft[0][1]
+    assert len(pdf) == 1 and "raw/pdfs/ica/2001Test.pdf" in pdf[0][1]
+    mk_note(cfg.PAPERS, "2001Test", {"tags": ["paper"], "bibcode": "2001Test"})
+    assert lint.check_fulltext_without_note() == [] and lint.check_pdf_without_note() == []
+
+
+def test_check_index_stale_reporta_lo_que_falta_Y_lo_que_sobra(toy_vault):
+    """#396/#237 — el índice se ESTAMPA por verdad de frontmatter. Se compara en los DOS sentidos:
+    la nota nueva que falta y —la guarda que sobrevivía— el link que SOBRA, que es lo que queda
+    cuando alguien borra una entidad y el índice se quedó nombrándola."""
+    mk_note(cfg.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test"})
+    todos = {p.as_posix(): cfg.split_fm(p.read_text(encoding="utf-8"))
+             for p in cfg.note_paths(cfg.WIKI)}
+    (cfg.WIKI / "index.md").write_text("# Índice\n", encoding="utf-8")
+    faltan = lint.check_index_stale(todos)
+    assert faltan and any("faltan" in m for _s, m in faltan), faltan
+
+    tablas = mn.index_tables(fms=todos)
+    cuerpo = "".join(f"{h}\n{c}\n" for h, c in tablas.items())
+    (cfg.WIKI / "index.md").write_text(f"# Índice\n{cuerpo}", encoding="utf-8")
+    assert lint.check_index_stale(todos) == [], "el índice al día es silencioso"
+
+    # el link que SOBRA va DENTRO de la última sección: es lo que queda cuando se borra una entidad
+    (cfg.WIKI / "index.md").write_text(f"# Índice\n{cuerpo}\n[[fantasma]]\n", encoding="utf-8")
+    sobran = lint.check_index_stale(todos)
+    assert sobran and any("sobran" in m and "fantasma" in m for _s, m in sobran), sobran

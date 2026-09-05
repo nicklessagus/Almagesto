@@ -1782,6 +1782,285 @@ def check_log_coverage(stars_slugs) -> tuple:
     return log_sin_entrada, sweep_pendiente, not_evaluated
 
 
+def check_root_obsidian() -> list:
+    """`root_obsidian` — Obsidian opened on the repo ROOT instead of `vault/` (WARN · INV-65).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates.
+    Reads nothing but the disk, which is why it comes out first in this batch.
+    """
+    # Obsidian abierto en la raíz del repo (WARN): la bóveda es vault/ por diseño — un .obsidian/
+    # en la raíz significa que el repo entero se abrió como vault y el grafo indexa el andamiaje
+    # (outputs/, build/, scripts/, README, tests/). Error de operación silencioso: sólo se nota
+    # mirando el grafo, y sin este check nadie lo mira.
+    # @inv INV-65
+    root_obsidian = []
+    if (cfg.ROOT / ".obsidian").exists():
+        root_obsidian.append(
+            (".obsidian/ (raíz del repo)",
+             "Obsidian fue abierto en la raíz en vez de `vault/` — el grafo indexa andamiaje "
+             "(outputs/, build/, scripts/); abrí la carpeta `vault/` como vault y borrá este directorio"))
+    return root_obsidian
+
+
+def check_verif_orphan_sidecar() -> list:
+    """`verif_huerfano` — a `<x>.verif.md` whose note is gone (#344, BLOQUEANTE).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates.
+    One half of the pair invariant INV-148; the other half (a header with no sibling) is checked
+    where the notes are swept, so this one only needs the disk.
+    """
+    # #344 · el hermano HUÉRFANO: un `<x>.verif.md` cuya nota no existe. Es la otra mitad del
+    # invariante de par (INV-148) y aparece solo cuando algo movió la nota sin llevarse su rastro —
+    # `entity.py delete|rename` y `--rename-paper` lo llevan; una mano no—. Bloquea: un rastro de
+    # auditoría sin la nota que audita no se puede cerrar contra nada, y el mensaje de #249 vale
+    # igual acá (dentro de tres meses se lee como si la nota nunca hubiera existido).
+    verif_huerfano: list = []
+    for _side in sorted(cfg.WIKI.rglob("*" + cfg.VERIF_SUFFIX)) if cfg.WIKI.exists() else []:
+        _nota = _side.with_name(_side.name[:-len(cfg.VERIF_SUFFIX)] + ".md")
+        if not _nota.exists():
+            verif_huerfano.append(
+                (_side.relative_to(cfg.WIKI).as_posix(),
+                 f"hermano de verificación huérfano (`{_nota.name}` no existe) → borralo, o "
+                 f"recuperá la nota: el rastro de auditoría no se puede cerrar contra nada"))
+    return verif_huerfano
+
+
+def check_status_stacked() -> list:
+    """`status_apilado` — the `STATUS.md` that turned into a bitácora (#302).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates.
+    Three independent ceilings —stacked «próximos pasos», dated headings, total lines— that share
+    one read of the file, which is the only reason they live in one function.
+    """
+    status_apilado: list = []
+    # #302 — `STATUS.md` se volvió APPEND-ONLY, que es el trabajo del `log`. Es la única de las
+    # cuatro piezas de memoria in-repo cuya política de escritura no estaba declarada (del `log` se
+    # dice que es append-only, del `index.md` que se estampa, de `CLAUDE.md` que lleva regla +
+    # ancla con techo), y el resultado medido: 537 líneas, 12 encabezados fechados apilados y
+    # **cuatro** listas de próximos pasos, una de las cuales contradice un estado posterior del
+    # mismo archivo. El daño no es cosmético: es el primer archivo que un agente lee al iniciar
+    # sesión, y arranca por la lista equivocada.
+    if cfg.STATUS.exists():
+        try:
+            _st = cfg.STATUS.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            _st = ""
+        _pasos = re.findall(r"^#{1,4}\s+.*(?:pr[oó]ximos?\s+pasos?|lo que sigue).*$", _st,
+                            re.M | re.I)
+        _fechados = re.findall(r"^#{1,4}\s+.*\d{4}-\d{2}-\d{2}.*$", _st, re.M)
+        if len(_pasos) > 1:
+            status_apilado.append(
+                ("STATUS.md", f"{len(_pasos)} secciones de próximos pasos ("
+                              + " · ".join(p.strip()[:40] for p in _pasos[:4]) +
+                              ") — el estado tiene UNA: las viejas contradicen a la vigente y el "
+                              "agente arranca por la primera. Lo histórico va a `wiki/log.md`"))
+        if len(_fechados) > STATUS_MAX_FECHADOS:
+            status_apilado.append(
+                ("STATUS.md", f"{len(_fechados)} encabezados fechados apilados (techo declarado: "
+                              f"{STATUS_MAX_FECHADOS}) — eso es una bitácora, y la bitácora es "
+                              f"`wiki/log.md`: el STATUS **se reescribe**, no se appendea"))
+        if len(_st.splitlines()) > STATUS_MAX_LINEAS:
+            status_apilado.append(
+                ("STATUS.md", f"{len(_st.splitlines())} líneas (techo declarado: "
+                              f"{STATUS_MAX_LINEAS}) — si es estado, no crece sin techo"))
+    return status_apilado
+
+
+def check_scope_desync(paper_fms: dict) -> list:
+    """`alcance_desfasado` — the note's `alcance`/`unidad_cita` against the config that owns them (#312).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates.
+    The authority is the config, so a stale note does not leave the completeness check without
+    information: it leaves it with FALSE information, which is worse.
+    """
+    alcance_desfasado: list = []
+    # #312 — `alcance`/`unidad_cita` viajan de `sources[]` al stub y se congelan ahí: ampliar el
+    # alcance de un libro dejaba la nota **afirmando que ese material no entra mientras lo publica
+    # en su vista** (medido: 2 libros, 37 valores nuevos). Y no deja al chequeo de completitud sin
+    # información: lo deja con información FALSA, que es peor.
+    if not cfg.themes_error():
+        for _slug, _tmeta in (cfg.load_themes() or {}).items():
+            for _item in cfg.as_list(cfg.as_map(_tmeta).get("sources")):
+                if not isinstance(_item, dict) or not str(_item.get("key") or "").strip():
+                    continue
+                _key = str(_item["key"]).strip()
+                _fm = paper_fms.get(_key)
+                if _fm is None:
+                    continue
+                for _campo in ("alcance", "unidad_cita"):
+                    _cfgv = str(_item.get(_campo) or "").strip()
+                    _notav = str(_fm.get(_campo) or "").strip()
+                    if _cfgv and _cfgv != _notav:
+                        alcance_desfasado.append(
+                            (_key, f"`{_campo}` de la nota («{_notav or 'sin declarar'}») ≠ el "
+                                   f"declarado en `sources[]` de `{_slug}` («{_cfgv}») → el chequeo "
+                                   f"de completitud compara contra el equivocado; "
+                                   f"`python scripts/make_notes.py --restamp-alcance`"))
+    return alcance_desfasado
+
+
+def check_extraction_in_build() -> list:
+    """`old_registro` rows for extractions still under `build/` (#311, BLOQUEANTE).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates.
+    """
+    old_registro: list = []
+    # #311 — la extracción en `build/` es schema viejo: ese directorio es scratch por `.gitignore`,
+    # así que ahí las extracciones NO viajan (medido: `git ls-files build/` = 0 sobre 33 extracciones
+    # que costaron ~4,9 M tokens de lectura de PDF). Bloqueante y con migrador, como el
+    # `triage.json` pre-1.9.0: un artefacto caro en un directorio declarado descartable es una
+    # trampa puesta, no una convención.
+    for _ext in sorted(cfg.ROOT.glob("build/*/extraccion/*.json"))[:1]:
+        _n = len(list(cfg.ROOT.glob("build/*/extraccion/*.json")))
+        old_registro.append(
+            ("build/", f"{_n} extracción(es) en `build/*/extraccion/` (schema pre-#311): ahí NO se "
+                       f"versionan ni viajan, y una extracción no se regenera sin volver a leer el "
+                       f"PDF → `python scripts/make_notes.py --migrate-extracciones`"))
+    return old_registro
+
+
+def check_red_pass_missing() -> list:
+    """`reuso_sin_chequear` — `_red.yaml` says no network pass ever ran here (AUD-282 / D-46).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. It shares
+    a category with `check_reused_artifact_unchecked` and nothing else: this one is about the WHOLE
+    vault, that one about one artifact reused between slugs.
+    """
+    reuso_sin_chequear: list = []
+    # AUD-282: ONE loader (`cfg.load_red_pass`) for the file `sweep_external` writes — a file that
+    # exists but registers no pass (empty, hand-edited, unparseable) counts as «never ran».
+    if not cfg.load_red_pass() and any(cfg.note_paths(cfg.PAPERS)):
+        reuso_sin_chequear.append(
+            ("(la bóveda)", "`vault/config/registro/_red.yaml` no existe (o no registra ninguna pasada): `sweep_external` nunca "
+                            "corrió acá, así que NINGUNA de las seis caducidades está chequeada "
+                            "(retracciones, correcciones, versiones, snapshot web, ground-truth, "
+                            "citas de la puerta 2) → `python scripts/sweep_external.py`"))
+    return reuso_sin_chequear
+
+
+def check_reused_artifact_unchecked(paper_fms: dict) -> list:
+    """`reuso_sin_chequear` — a PDF reused between slugs whose age nobody checked (#297 / D-18).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates.
+    """
+    reuso_sin_chequear: list = []
+    # #297 — el reuso D-18 importa a un sujeto nuevo un artefacto cuya antigüedad nadie chequeó, y
+    # el detector de versiones vive SÓLO en la pasada periódica. La respuesta natural («si hubiera
+    # versión nueva, la búsqueda habría traído otro bibcode y D-19 los une») es falsa justo en el
+    # caso frecuente: el DOI del preprint identifica el DEPÓSITO, así que #216 garantiza que
+    # preprint y publicado no colisionen — queda el detector de abstract verbatim, que es backlog.
+    # Medido en una bóveda real: 62 % del corpus es `eprint` y `_red.yaml` NO EXISTÍA.
+    # Se detecta por verdad de disco: el mismo bibcode con PDF bajo ≥2 slugs.
+    _por_stem: dict = {}
+    for _pdf in cfg.PDFS.glob("*/*.pdf"):
+        _por_stem.setdefault(_pdf.stem, []).append(_pdf.parent.name)
+    for _stem, _slugs in sorted(_por_stem.items()):
+        if len(_slugs) < 2:
+            continue
+        _fm = paper_fms.get(_stem)
+        if not _fm or str(_fm.get("pdf_source") or "") != "eprint" or cfg.as_list(_fm.get("versions")):
+            continue
+        reuso_sin_chequear.append(
+            (_stem, f"reusado entre slugs ({', '.join(sorted(_slugs))}) con `pdf_source: eprint` y "
+                    f"sin `versions[]`: el artefacto entró a otro sujeto sin que nadie chequeara si "
+                    f"salió publicado (D-18/#216) → `python scripts/sweep_external.py --bibcodes "
+                    f"{_stem}`"))
+    return reuso_sin_chequear
+
+
+def check_fulltext_without_note() -> list:
+    """`incomplete` rows for a `.txt` with no paper note (#108).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates.
+    """
+    incomplete: list = []
+    # Fulltext SIN nota de paper (#108). Hermano simétrico de la «cita no verificable» (bibcode
+    # citado sin `.txt`) y del `ground_truth` sin ficha: acá el `.txt` **existe** y la nota no, así
+    # que es extracción ya pagada —descarga, PDF, pdftotext— que **no la alcanza ningún roll-up ni
+    # ninguna síntesis**, y ningún detector la miraba. Medido en una bóveda real: 10 de 30 `.txt`
+    # de un tema quedaron así. El mecanismo es alcanzable sin salirse de lo documentado: al
+    # **angostar la `query` de un tema**, sus registros salen de `build/<slug>/ads.json`,
+    # `make_notes` deja de escribirles nota, y el PDF y el `.txt` quedan en disco. Es la misma
+    # familia que INV-94 (paper sin entidad) un escalón más abajo: allá la nota existe y no la
+    # alcanza nadie; acá ni siquiera hay nota. Backlog: el artefacto es válido, lo que falta es la
+    # nota — o borrarlo si el sujeto ya no lo quiere.
+    # ⛔ #338 — el remedio sale de `cfg.make_notes_cmd` (INV-141), no de un flag escrito a mano.
+    # `_dir` es cualquier directorio de `raw/fulltext/`, o sea que puede ser una ESTRELLA, y acá
+    # el `--theme` estaba hardcodeado: la imagen especular de #334, que omitía el flag sobre un
+    # tema. Su gemelo PDF, veinte líneas abajo, hacía la tercera variante —prosa sin comando
+    # ejecutable («re-corré `make_notes.py` sobre `<slug>`»)—; las tres formas de la misma regla
+    # son el patrón de #215/#324, y ya habían divergido.
+    for _dir in sorted(cfg.FULLTEXT.glob("*")) if cfg.FULLTEXT.exists() else []:
+        if not _dir.is_dir():
+            continue
+        for _txt in sorted(_dir.glob("*.txt")):
+            if not (cfg.PAPERS / f"{cfg.note_stem(_txt.stem)}.md").exists():
+                incomplete.append(
+                    (_txt.stem, f"`raw/fulltext/{_dir.name}/{_txt.stem}.txt` sin su nota en "
+                                f"`papers/` → extracción ya pagada que no alcanza ninguna síntesis "
+                                f"(típico: se angostó la `query` del tema y el registro salió de "
+                                f"`ads.json`). Re-corré `{cfg.make_notes_cmd(_dir.name)}` o "
+                                f"borrá el artefacto colgado"))
+    return incomplete
+
+
+def check_pdf_without_note() -> list:
+    """`incomplete` rows for a PDF with no paper note (#230) — the twin of #108.
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. It is the
+    expensive half of the chain: since #205 the PDF is what gets READ and the `.txt` only indexes.
+    """
+    incomplete: list = []
+    # #230 — el GEMELO PDF de #108, que no existía. El barrido de arriba mira sólo
+    # `raw/fulltext/*/*.txt`: un `raw/pdfs/<slug>/<bib>.pdf` sin nota no lo veía **nadie** —el glob
+    # de PDFs es sólo para el drift nota→archivo, y INV-19 mira directorios de primer nivel—. Es
+    # exactamente el mismo defecto (descarga ya pagada que no alcanza ninguna síntesis) y desde
+    # #205 pesa MÁS que su hermano, porque el PDF es la fuente de lectura y el `.txt` sólo el
+    # índice: un PDF colgado es la mitad cara de la cadena tirada.
+    for _dir in sorted(cfg.PDFS.glob("*")) if cfg.PDFS.exists() else []:
+        if not _dir.is_dir():
+            continue
+        for _pdf in sorted(_dir.glob("*.pdf")):
+            if not (cfg.PAPERS / f"{cfg.note_stem(_pdf.stem)}.md").exists():
+                incomplete.append(
+                    (_pdf.stem, f"`raw/pdfs/{_dir.name}/{_pdf.stem}.pdf` sin su nota en `papers/` → "
+                                f"descarga ya pagada que no alcanza ninguna síntesis, y desde #205 "
+                                f"es la fuente de lectura, no el índice. Re-corré "
+                                f"`{cfg.make_notes_cmd(_dir.name)}` o borrá el artefacto colgado"))
+    return incomplete
+
+
+def check_index_stale(todos_fm: dict) -> list:
+    """`indice_viejo` — the stamped `index.md` against the truth of the frontmatter (#237).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates.
+    """
+    indice_viejo: list = []
+    # #237 — el ÍNDICE desactualizado, análogo al detector de `## Papers` (D-10) y por el mismo
+    # motivo: `index.md` es lo primero que un agente abre para orientarse y una de las cuatro piezas
+    # de la memoria in-repo, y era el único artefacto que quedó 100 % Dataview — o sea que le muestra
+    # al que abre el `.md` la query, no sus resultados, con el plugin sin versionar. Medido en una
+    # bóveda real: los tres commits de su `index.md` son anteriores a la instanciación, y no tenía
+    # cómo actualizarse (el paso de bookkeeping manda «agregar el concepto» a un archivo sin una
+    # sola línea estática). Nombra los stems, no la diferencia de conteos.
+    _idx = cfg.WIKI / "index.md"
+    if _idx.exists():
+        _txt_idx = _idx.read_text(encoding="utf-8")
+        for _h, _cuerpo in mn.index_tables(fms=todos_fm).items():
+            _span = cfg.section_span(_txt_idx, _h)
+            _visto = set() if _span is None else set(
+                lb.LINK_RE.findall(_txt_idx[_span[0]:_span[1]]))
+            _esperado = set(lb.LINK_RE.findall(_cuerpo))
+            _faltan, _sobran = sorted(_esperado - _visto), sorted(_visto - _esperado)
+            if _faltan or _sobran:
+                indice_viejo.append(
+                    ("index", f"`{_h}` desactualizada"
+                              + (f" — faltan: {', '.join(_faltan[:8])}" if _faltan else "")
+                              + (f" — sobran: {', '.join(_sobran[:8])}" if _sobran else "")
+                              + " → `python scripts/make_notes.py --restamp-index`"))
+    return indice_viejo
+
+
 def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     """Barre la bóveda entera y devuelve lo que encontró, **sin renderizar nada**.
 
@@ -4180,17 +4459,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                     (f"concepts/{d.name}/",
                      f"área fuera de concept_areas; {n} nota(s) — ¿typo o área nueva sin declarar?"))
 
-    # Obsidian abierto en la raíz del repo (WARN): la bóveda es vault/ por diseño — un .obsidian/
-    # en la raíz significa que el repo entero se abrió como vault y el grafo indexa el andamiaje
-    # (outputs/, build/, scripts/, README, tests/). Error de operación silencioso: sólo se nota
-    # mirando el grafo, y sin este check nadie lo mira.
-    # @inv INV-65
-    root_obsidian = []
-    if (cfg.ROOT / ".obsidian").exists():
-        root_obsidian.append(
-            (".obsidian/ (raíz del repo)",
-             "Obsidian fue abierto en la raíz en vez de `vault/` — el grafo indexa andamiaje "
-             "(outputs/, build/, scripts/); abrí la carpeta `vault/` como vault y borrá este directorio"))
+    # Obsidian en la raíz del repo: el bloque vive en `check_root_obsidian` (#396).
+    root_obsidian = check_root_obsidian()
 
     # corpus truncado (backlog): un build/<slug>/ads.json con `truncated` seteado significa que la
     # query directa devolvió menos papers de los que ADS reporta (numFound > --rows) → al sujeto le
@@ -4491,181 +4761,29 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                                             f"`python scripts/entity.py plan {slug_}` no lo va a "
                                             f"encontrar: borralo a mano, o recreá la entidad"))
 
-    # #344 · el hermano HUÉRFANO: un `<x>.verif.md` cuya nota no existe. Es la otra mitad del
-    # invariante de par (INV-148) y aparece solo cuando algo movió la nota sin llevarse su rastro —
-    # `entity.py delete|rename` y `--rename-paper` lo llevan; una mano no—. Bloquea: un rastro de
-    # auditoría sin la nota que audita no se puede cerrar contra nada, y el mensaje de #249 vale
-    # igual acá (dentro de tres meses se lee como si la nota nunca hubiera existido).
-    verif_huerfano: list = []
-    for _side in sorted(cfg.WIKI.rglob("*" + cfg.VERIF_SUFFIX)) if cfg.WIKI.exists() else []:
-        _nota = _side.with_name(_side.name[:-len(cfg.VERIF_SUFFIX)] + ".md")
-        if not _nota.exists():
-            verif_huerfano.append(
-                (_side.relative_to(cfg.WIKI).as_posix(),
-                 f"hermano de verificación huérfano (`{_nota.name}` no existe) → borralo, o "
-                 f"recuperá la nota: el rastro de auditoría no se puede cerrar contra nada"))
+    # El hermano `.verif.md` huérfano vive en `check_verif_orphan_sidecar` (#396).
+    verif_huerfano = check_verif_orphan_sidecar()
 
-    # #297 — el reuso D-18 importa a un sujeto nuevo un artefacto cuya antigüedad nadie chequeó, y
-    # el detector de versiones vive SÓLO en la pasada periódica. La respuesta natural («si hubiera
-    # versión nueva, la búsqueda habría traído otro bibcode y D-19 los une») es falsa justo en el
-    # caso frecuente: el DOI del preprint identifica el DEPÓSITO, así que #216 garantiza que
-    # preprint y publicado no colisionen — queda el detector de abstract verbatim, que es backlog.
-    # Medido en una bóveda real: 62 % del corpus es `eprint` y `_red.yaml` NO EXISTÍA.
-    # Se detecta por verdad de disco: el mismo bibcode con PDF bajo ≥2 slugs.
-    # #302 — `STATUS.md` se volvió APPEND-ONLY, que es el trabajo del `log`. Es la única de las
-    # cuatro piezas de memoria in-repo cuya política de escritura no estaba declarada (del `log` se
-    # dice que es append-only, del `index.md` que se estampa, de `CLAUDE.md` que lleva regla +
-    # ancla con techo), y el resultado medido: 537 líneas, 12 encabezados fechados apilados y
-    # **cuatro** listas de próximos pasos, una de las cuales contradice un estado posterior del
-    # mismo archivo. El daño no es cosmético: es el primer archivo que un agente lee al iniciar
-    # sesión, y arranca por la lista equivocada.
-    if cfg.STATUS.exists():
-        try:
-            _st = cfg.STATUS.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            _st = ""
-        _pasos = re.findall(r"^#{1,4}\s+.*(?:pr[oó]ximos?\s+pasos?|lo que sigue).*$", _st,
-                            re.M | re.I)
-        _fechados = re.findall(r"^#{1,4}\s+.*\d{4}-\d{2}-\d{2}.*$", _st, re.M)
-        if len(_pasos) > 1:
-            status_apilado.append(
-                ("STATUS.md", f"{len(_pasos)} secciones de próximos pasos ("
-                              + " · ".join(p.strip()[:40] for p in _pasos[:4]) +
-                              ") — el estado tiene UNA: las viejas contradicen a la vigente y el "
-                              "agente arranca por la primera. Lo histórico va a `wiki/log.md`"))
-        if len(_fechados) > STATUS_MAX_FECHADOS:
-            status_apilado.append(
-                ("STATUS.md", f"{len(_fechados)} encabezados fechados apilados (techo declarado: "
-                              f"{STATUS_MAX_FECHADOS}) — eso es una bitácora, y la bitácora es "
-                              f"`wiki/log.md`: el STATUS **se reescribe**, no se appendea"))
-        if len(_st.splitlines()) > STATUS_MAX_LINEAS:
-            status_apilado.append(
-                ("STATUS.md", f"{len(_st.splitlines())} líneas (techo declarado: "
-                              f"{STATUS_MAX_LINEAS}) — si es estado, no crece sin techo"))
-    # #312 — `alcance`/`unidad_cita` viajan de `sources[]` al stub y se congelan ahí: ampliar el
-    # alcance de un libro dejaba la nota **afirmando que ese material no entra mientras lo publica
-    # en su vista** (medido: 2 libros, 37 valores nuevos). Y no deja al chequeo de completitud sin
-    # información: lo deja con información FALSA, que es peor.
-    if not cfg.themes_error():
-        for _slug, _tmeta in (cfg.load_themes() or {}).items():
-            for _item in cfg.as_list(cfg.as_map(_tmeta).get("sources")):
-                if not isinstance(_item, dict) or not str(_item.get("key") or "").strip():
-                    continue
-                _key = str(_item["key"]).strip()
-                _fm = paper_fms.get(_key)
-                if _fm is None:
-                    continue
-                for _campo in ("alcance", "unidad_cita"):
-                    _cfgv = str(_item.get(_campo) or "").strip()
-                    _notav = str(_fm.get(_campo) or "").strip()
-                    if _cfgv and _cfgv != _notav:
-                        alcance_desfasado.append(
-                            (_key, f"`{_campo}` de la nota («{_notav or 'sin declarar'}») ≠ el "
-                                   f"declarado en `sources[]` de `{_slug}` («{_cfgv}») → el chequeo "
-                                   f"de completitud compara contra el equivocado; "
-                                   f"`python scripts/make_notes.py --restamp-alcance`"))
+    # El `STATUS.md` apilado vive en `check_status_stacked` (#396).
+    status_apilado += check_status_stacked()
+    # El desfasaje de `alcance`/`unidad_cita` vive en `check_scope_desync` (#396).
+    alcance_desfasado += check_scope_desync(paper_fms)
 
-    # #311 — la extracción en `build/` es schema viejo: ese directorio es scratch por `.gitignore`,
-    # así que ahí las extracciones NO viajan (medido: `git ls-files build/` = 0 sobre 33 extracciones
-    # que costaron ~4,9 M tokens de lectura de PDF). Bloqueante y con migrador, como el
-    # `triage.json` pre-1.9.0: un artefacto caro en un directorio declarado descartable es una
-    # trampa puesta, no una convención.
-    for _ext in sorted(cfg.ROOT.glob("build/*/extraccion/*.json"))[:1]:
-        _n = len(list(cfg.ROOT.glob("build/*/extraccion/*.json")))
-        old_registro.append(
-            ("build/", f"{_n} extracción(es) en `build/*/extraccion/` (schema pre-#311): ahí NO se "
-                       f"versionan ni viajan, y una extracción no se regenera sin volver a leer el "
-                       f"PDF → `python scripts/make_notes.py --migrate-extracciones`"))
-    # AUD-282: ONE loader (`cfg.load_red_pass`) for the file `sweep_external` writes — a file that
-    # exists but registers no pass (empty, hand-edited, unparseable) counts as «never ran».
-    if not cfg.load_red_pass() and any(cfg.note_paths(cfg.PAPERS)):
-        reuso_sin_chequear.append(
-            ("(la bóveda)", "`vault/config/registro/_red.yaml` no existe (o no registra ninguna pasada): `sweep_external` nunca "
-                            "corrió acá, así que NINGUNA de las seis caducidades está chequeada "
-                            "(retracciones, correcciones, versiones, snapshot web, ground-truth, "
-                            "citas de la puerta 2) → `python scripts/sweep_external.py`"))
-    _por_stem: dict = {}
-    for _pdf in cfg.PDFS.glob("*/*.pdf"):
-        _por_stem.setdefault(_pdf.stem, []).append(_pdf.parent.name)
-    for _stem, _slugs in sorted(_por_stem.items()):
-        if len(_slugs) < 2:
-            continue
-        _fm = paper_fms.get(_stem)
-        if not _fm or str(_fm.get("pdf_source") or "") != "eprint" or cfg.as_list(_fm.get("versions")):
-            continue
-        reuso_sin_chequear.append(
-            (_stem, f"reusado entre slugs ({', '.join(sorted(_slugs))}) con `pdf_source: eprint` y "
-                    f"sin `versions[]`: el artefacto entró a otro sujeto sin que nadie chequeara si "
-                    f"salió publicado (D-18/#216) → `python scripts/sweep_external.py --bibcodes "
-                    f"{_stem}`"))
+    # La extracción en `build/` vive en `check_extraction_in_build` (#396).
+    old_registro += check_extraction_in_build()
+    # Los dos chequeos de `reuso_sin_chequear` viven en `check_red_pass_missing` (la bóveda
+    # entera) y `check_reused_artifact_unchecked` (un artefacto entre slugs) — #396.
+    reuso_sin_chequear += check_red_pass_missing()
+    reuso_sin_chequear += check_reused_artifact_unchecked(paper_fms)
 
-    # Fulltext SIN nota de paper (#108). Hermano simétrico de la «cita no verificable» (bibcode
-    # citado sin `.txt`) y del `ground_truth` sin ficha: acá el `.txt` **existe** y la nota no, así
-    # que es extracción ya pagada —descarga, PDF, pdftotext— que **no la alcanza ningún roll-up ni
-    # ninguna síntesis**, y ningún detector la miraba. Medido en una bóveda real: 10 de 30 `.txt`
-    # de un tema quedaron así. El mecanismo es alcanzable sin salirse de lo documentado: al
-    # **angostar la `query` de un tema**, sus registros salen de `build/<slug>/ads.json`,
-    # `make_notes` deja de escribirles nota, y el PDF y el `.txt` quedan en disco. Es la misma
-    # familia que INV-94 (paper sin entidad) un escalón más abajo: allá la nota existe y no la
-    # alcanza nadie; acá ni siquiera hay nota. Backlog: el artefacto es válido, lo que falta es la
-    # nota — o borrarlo si el sujeto ya no lo quiere.
-    # ⛔ #338 — el remedio sale de `cfg.make_notes_cmd` (INV-141), no de un flag escrito a mano.
-    # `_dir` es cualquier directorio de `raw/fulltext/`, o sea que puede ser una ESTRELLA, y acá
-    # el `--theme` estaba hardcodeado: la imagen especular de #334, que omitía el flag sobre un
-    # tema. Su gemelo PDF, veinte líneas abajo, hacía la tercera variante —prosa sin comando
-    # ejecutable («re-corré `make_notes.py` sobre `<slug>`»)—; las tres formas de la misma regla
-    # son el patrón de #215/#324, y ya habían divergido.
-    for _dir in sorted(cfg.FULLTEXT.glob("*")) if cfg.FULLTEXT.exists() else []:
-        if not _dir.is_dir():
-            continue
-        for _txt in sorted(_dir.glob("*.txt")):
-            if not (cfg.PAPERS / f"{cfg.note_stem(_txt.stem)}.md").exists():
-                incomplete.append(
-                    (_txt.stem, f"`raw/fulltext/{_dir.name}/{_txt.stem}.txt` sin su nota en "
-                                f"`papers/` → extracción ya pagada que no alcanza ninguna síntesis "
-                                f"(típico: se angostó la `query` del tema y el registro salió de "
-                                f"`ads.json`). Re-corré `{cfg.make_notes_cmd(_dir.name)}` o "
-                                f"borrá el artefacto colgado"))
+    # El `.txt` sin nota vive en `check_fulltext_without_note` (#396).
+    incomplete += check_fulltext_without_note()
 
-    # #230 — el GEMELO PDF de #108, que no existía. El barrido de arriba mira sólo
-    # `raw/fulltext/*/*.txt`: un `raw/pdfs/<slug>/<bib>.pdf` sin nota no lo veía **nadie** —el glob
-    # de PDFs es sólo para el drift nota→archivo, y INV-19 mira directorios de primer nivel—. Es
-    # exactamente el mismo defecto (descarga ya pagada que no alcanza ninguna síntesis) y desde
-    # #205 pesa MÁS que su hermano, porque el PDF es la fuente de lectura y el `.txt` sólo el
-    # índice: un PDF colgado es la mitad cara de la cadena tirada.
-    for _dir in sorted(cfg.PDFS.glob("*")) if cfg.PDFS.exists() else []:
-        if not _dir.is_dir():
-            continue
-        for _pdf in sorted(_dir.glob("*.pdf")):
-            if not (cfg.PAPERS / f"{cfg.note_stem(_pdf.stem)}.md").exists():
-                incomplete.append(
-                    (_pdf.stem, f"`raw/pdfs/{_dir.name}/{_pdf.stem}.pdf` sin su nota en `papers/` → "
-                                f"descarga ya pagada que no alcanza ninguna síntesis, y desde #205 "
-                                f"es la fuente de lectura, no el índice. Re-corré "
-                                f"`{cfg.make_notes_cmd(_dir.name)}` o borrá el artefacto colgado"))
+    # Su gemelo PDF vive en `check_pdf_without_note` (#396).
+    incomplete += check_pdf_without_note()
 
-    # #237 — el ÍNDICE desactualizado, análogo al detector de `## Papers` (D-10) y por el mismo
-    # motivo: `index.md` es lo primero que un agente abre para orientarse y una de las cuatro piezas
-    # de la memoria in-repo, y era el único artefacto que quedó 100 % Dataview — o sea que le muestra
-    # al que abre el `.md` la query, no sus resultados, con el plugin sin versionar. Medido en una
-    # bóveda real: los tres commits de su `index.md` son anteriores a la instanciación, y no tenía
-    # cómo actualizarse (el paso de bookkeeping manda «agregar el concepto» a un archivo sin una
-    # sola línea estática). Nombra los stems, no la diferencia de conteos.
-    _idx = cfg.WIKI / "index.md"
-    if _idx.exists():
-        _txt_idx = _idx.read_text(encoding="utf-8")
-        for _h, _cuerpo in mn.index_tables(fms=todos_fm).items():
-            _span = cfg.section_span(_txt_idx, _h)
-            _visto = set() if _span is None else set(
-                lb.LINK_RE.findall(_txt_idx[_span[0]:_span[1]]))
-            _esperado = set(lb.LINK_RE.findall(_cuerpo))
-            _faltan, _sobran = sorted(_esperado - _visto), sorted(_visto - _esperado)
-            if _faltan or _sobran:
-                indice_viejo.append(
-                    ("index", f"`{_h}` desactualizada"
-                              + (f" — faltan: {', '.join(_faltan[:8])}" if _faltan else "")
-                              + (f" — sobran: {', '.join(_sobran[:8])}" if _sobran else "")
-                              + " → `python scripts/make_notes.py --restamp-index`"))
+    # El índice desactualizado vive en `check_index_stale` (#396).
+    indice_viejo += check_index_stale(todos_fm)
 
     # `sources:` sin procedencia (#111). Era el ÚNICO de los cuatro cuadrantes de curación sin
     # registro: `extra_core` dice quién y por qué desde D-58, el descarte de un candidato desde #51
