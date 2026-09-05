@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.210.0"
+ALMAGESTO_VERSION = "1.211.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1713,6 +1713,97 @@ def fm_bounds(text: str) -> tuple[int, int] | None:
     return off + matches[0].end() + 1, off + matches[1].start() - 1
 
 
+#: #397 · de dónde salió el BibTeX de una ficha. Vocabulario CERRADO, como `pdf_source` y
+#: `fulltext_source` (#296): el campo dice si la cita que va a terminar impresa en un paper es una
+#: exportación oficial o un bloque que escribió alguien, y un valor fuera de la lista cae por el
+#: `else` de cualquier chequeo **en silencio**. `doi` es el tercer estado honesto del carril del
+#: resolver: se bajó de `doi.org` y la agencia de registro no se pudo determinar (D-43).
+BIBTEX_SOURCES = ("ads", "crossref", "datacite", "doi", "arxiv")
+
+
+_BIBTEX_FIELD_RE = re.compile(r"^\s*([A-Za-z][A-Za-z0-9_-]*)\s*=\s*(.+?),?\s*$", re.M)
+
+
+def bibtex_fields(entry: str) -> dict:
+    """`{campo en minúsculas: valor}` de una entrada BibTeX — lo justo para cruzarla contra el
+    frontmatter (#397), no un parser de BibTeX.
+
+    Devuelve el valor **desenvuelto** de `{…}`, `"…"` o pelado (un año va sin llaves), y con las
+    llaves internas de protección sacadas: ADS escribe `title = "{A Jupiter-mass companion…}"` y
+    `author = {{Mayor}, Michel}`, así que compararlo crudo contra el `title` del frontmatter daría
+    una discrepancia que no existe. No resuelve macros ni concatenación con `#`: lo que no entienda
+    sale como está, y el chequeo que lo consume compara **normalizado** o no compara."""
+    out: dict = {}
+    cuerpo = entry.split("{", 1)[1] if "{" in entry else entry
+    for m in _BIBTEX_FIELD_RE.finditer(cuerpo):
+        campo, valor = m.group(1).casefold(), m.group(2).strip().rstrip(",").strip()
+        if campo in out:
+            continue                      # la primera gana: una entrada bien formada no repite
+        if valor[:1] in ("{", '"') and valor[-1:] in ("}", '"'):
+            valor = valor[1:-1]
+        out[campo] = valor.replace("{", "").replace("}", "").strip()
+    return out
+
+
+def stamp_fm_fields(path, fm: dict, body: str, fields: dict) -> None:
+    """Estampa claves de frontmatter editando el TEXTO (como merge_frontmatter_list de make_notes):
+    NO re-serializa el YAML completo → preserva byte a byte comentarios/orden que haya dejado la
+    extracción LLM. Si la nota ya traía esas claves (re-chequeo con --force, o una corrección nueva
+    sobre un paper ya anotado), las reemplaza —incluidos sus bloques indentados y los ítems `-` de
+    una lista—. Fallback (nota sin estructura `---\\n…\\n---\\n`): re-serializa el frontmatter parseado.
+    La publicación en disco es atómica (`cfg.write_text_atomic`, H-01/D-53): un corte a mitad de
+    camino nunca deja la nota truncada."""
+    text = path.read_text(encoding="utf-8")
+    keys = tuple(f"{k}:" for k in fields)
+    end = text.find("\n---\n", 4)
+    if text.startswith("---\n") and end > 0:
+        out, dropping = [], False
+        # una clave top-level nunca arranca con espacio/tab/`-`: mientras `dropping`, esas líneas
+        # son el bloque (mapa indentado o lista) de la clave vieja que estamos reemplazando
+        lines = text[4:end].split("\n")
+        i, n = 0, len(lines)
+        while i < n:
+            ln = lines[i]
+            if dropping:
+                if ln.strip() == "":
+                    # H-02: una línea EN BLANCO dentro del bloque (mapa/lista multilínea) es YAML
+                    # válido y no corta el bloque — el bug viejo la trataba como "clave nueva",
+                    # dejaba de dropear ahí, y el ítem huérfano que seguía se absorbía en la clave
+                    # anterior en silencio (`tags: ['paper', {'type': 'corrigendum'}]`, ninguna
+                    # categoría del lint lo veía). Se mira hacia adelante, saltando blancas: si lo
+                    # que sigue todavía está indentado, la(s) blanca(s) eran parte del bloque viejo
+                    # y se descartan con él; si lo que sigue es una clave nueva a nivel top, eran
+                    # separador legítimo y se conservan.
+                    j = i + 1
+                    while j < n and lines[j].strip() == "":
+                        j += 1
+                    if j < n and lines[j][:1] in (" ", "\t", "-"):
+                        i += 1
+                        continue
+                    dropping = False
+                    out.append(ln)
+                    i += 1
+                    continue
+                if ln[:1] in (" ", "\t", "-"):
+                    i += 1
+                    continue
+                dropping = False
+            if ln.startswith(keys):
+                dropping = True
+                i += 1
+                continue
+            out.append(ln)
+            i += 1
+        block = yaml.safe_dump(fields, sort_keys=False, allow_unicode=True,
+                               default_flow_style=False).rstrip("\n")
+        new_text = "---\n" + "\n".join(out + [block]) + text[end:]
+    else:
+        dumped = yaml.safe_dump({**fm, **fields}, sort_keys=False, allow_unicode=True,
+                                default_flow_style=False)
+        new_text = f"---\n{dumped}---{body}"
+    write_text_atomic(path, new_text)
+
+
 def frontmatter_span(text: str) -> tuple[str, str] | None:
     """Ubica el frontmatter por DELIMITADOR DE LÍNEA, no por búsqueda textual de la subcadena
     `---` (H-11). Un `text.split("---")`/`text.split("---", 2)` corta también dentro de un
@@ -3243,7 +3334,7 @@ def save_busqueda(slug: str, busqueda: dict) -> None:
 # `ingest_star.py` (y su constante `CHAIN`); acá vive la copia que el lint usa para nombrar el paso
 # donde se cortó, con `check_retractions` al final, que el orquestador corre aparte.
 CADENA_ESTRELLA = ("query_ads", "fetch_arxiv", "fetch_pdf", "fetch_ground_truth",
-                   "make_notes", "extract_fulltext", "check_retractions")
+                   "make_notes", "extract_fulltext", "check_retractions", "fetch_bibtex")
 
 # Variable que el orquestador exporta al lanzar cada paso, para que el propio paso sepa si lo
 # corrió la cadena o una mano. No es un flag porque tiene que atravesar el `subprocess.run`.

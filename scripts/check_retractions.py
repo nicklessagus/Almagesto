@@ -102,76 +102,17 @@ def split_note(text: str) -> tuple[dict | None, str]:
         return None, text
 
 
-def stamp_fields(path, fm: dict, body: str, fields: dict) -> None:
-    """Estampa claves de frontmatter editando el TEXTO (como merge_frontmatter_list de make_notes):
-    NO re-serializa el YAML completo → preserva byte a byte comentarios/orden que haya dejado la
-    extracción LLM. Si la nota ya traía esas claves (re-chequeo con --force, o una corrección nueva
-    sobre un paper ya anotado), las reemplaza —incluidos sus bloques indentados y los ítems `-` de
-    una lista—. Fallback (nota sin estructura `---\\n…\\n---\\n`): re-serializa el frontmatter parseado.
-    La publicación en disco es atómica (`cfg.write_text_atomic`, H-01/D-53): un corte a mitad de
-    camino nunca deja la nota truncada."""
-    text = path.read_text(encoding="utf-8")
-    keys = tuple(f"{k}:" for k in fields)
-    end = text.find("\n---\n", 4)
-    if text.startswith("---\n") and end > 0:
-        out, dropping = [], False
-        # una clave top-level nunca arranca con espacio/tab/`-`: mientras `dropping`, esas líneas
-        # son el bloque (mapa indentado o lista) de la clave vieja que estamos reemplazando
-        lines = text[4:end].split("\n")
-        i, n = 0, len(lines)
-        while i < n:
-            ln = lines[i]
-            if dropping:
-                if ln.strip() == "":
-                    # H-02: una línea EN BLANCO dentro del bloque (mapa/lista multilínea) es YAML
-                    # válido y no corta el bloque — el bug viejo la trataba como "clave nueva",
-                    # dejaba de dropear ahí, y el ítem huérfano que seguía se absorbía en la clave
-                    # anterior en silencio (`tags: ['paper', {'type': 'corrigendum'}]`, ninguna
-                    # categoría del lint lo veía). Se mira hacia adelante, saltando blancas: si lo
-                    # que sigue todavía está indentado, la(s) blanca(s) eran parte del bloque viejo
-                    # y se descartan con él; si lo que sigue es una clave nueva a nivel top, eran
-                    # separador legítimo y se conservan.
-                    j = i + 1
-                    while j < n and lines[j].strip() == "":
-                        j += 1
-                    if j < n and lines[j][:1] in (" ", "\t", "-"):
-                        i += 1
-                        continue
-                    dropping = False
-                    out.append(ln)
-                    i += 1
-                    continue
-                if ln[:1] in (" ", "\t", "-"):
-                    i += 1
-                    continue
-                dropping = False
-            if ln.startswith(keys):
-                dropping = True
-                i += 1
-                continue
-            out.append(ln)
-            i += 1
-        block = yaml.safe_dump(fields, sort_keys=False, allow_unicode=True,
-                               default_flow_style=False).rstrip("\n")
-        new_text = "---\n" + "\n".join(out + [block]) + text[end:]
-    else:
-        dumped = yaml.safe_dump({**fm, **fields}, sort_keys=False, allow_unicode=True,
-                                default_flow_style=False)
-        new_text = f"---\n{dumped}---{body}"
-    cfg.write_text_atomic(path, new_text)
-
-
 def stamp_retraction(path, fm: dict, body: str, retraction: dict) -> None:
     """`retracted: true` + `retraction{...}`: la fuente deja de ser válida (bloqueante en el lint)."""
     # @inv INV-33
-    stamp_fields(path, fm, body, {"retracted": True, "retraction": retraction})
+    cfg.stamp_fm_fields(path, fm, body, {"retracted": True, "retraction": retraction})
 
 
 def stamp_corrections(path, fm: dict, body: str, corrections: list) -> None:
     """`corrections: [...]` (#52): el paper SIGUE siendo citable — lo que hay que revisar son las
     afirmaciones que lo citan (un corrigendum cambia justo el valor extraído). Backlog en el lint."""
     # @inv INV-34
-    stamp_fields(path, fm, body, {"corrections": corrections})
+    cfg.stamp_fm_fields(path, fm, body, {"corrections": corrections})
 
 
 def crossref_message(doi: str, headers: dict) -> tuple[dict | None, str]:

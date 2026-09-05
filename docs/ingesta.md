@@ -114,7 +114,8 @@ flowchart TD
         S6[make_notes → stars/ + papers/]
         S7["extract_fulltext · PDFs → .txt"]
         S8[check_retractions --slug]
-        S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8
+        S9["fetch_bibtex --slug · BibTeX oficial"]
+        S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8 --> S9
     end
 
     subgraph T["ingest-theme · despacha por source"]

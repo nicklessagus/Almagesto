@@ -53,6 +53,12 @@
 ## ⛔ `pdf_source` de editor con `eprint_version`: contradicción interna, la nota manda a re-verificar contra el documento equivocado (#383) (0)
 > sobre 60 notas de `papers/`
 
+## ⛔ `bibtex` sin `bibtex_source`: una entrada de cita sin procedencia es un bloque escrito a mano (#397) (0)
+> sobre 60 notas de `papers/`
+
+## 📇 El frontmatter y la exportación oficial dicen cosas distintas del mismo paper (#397, backlog) (0)
+> sobre 60 notas de `papers/`
+
 ## ⛔ Driver `merge=ours` REGISTRADO en un clon con `origin`: el próximo merge de la otra máquina descarta lo del remoto en silencio (#390) (0)
 > sobre 0 patrones `merge=ours` de `.gitattributes`
 

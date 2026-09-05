@@ -38,7 +38,8 @@ def test_cadena_completa_en_orden(toy_vault, fake_run, monkeypatch):
                               ("fetch_ground_truth.py", "test_star"),
                               ("make_notes.py", "test_star"),
                               ("extract_fulltext.py", "test_star"),
-                              ("check_retractions.py", "--slug", "test_star")]
+                              ("check_retractions.py", "--slug", "test_star"),
+                              ("fetch_bibtex.py", "--slug", "test_star")]     # #397, cierra la cadena
 
 
 def test_handoff_nombra_los_pasos_salteables(toy_vault, fake_run, monkeypatch, capsys):

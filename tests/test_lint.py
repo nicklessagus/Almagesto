@@ -2408,8 +2408,9 @@ def test_cadena_cortada_nombra_el_paso(toy_vault, capsys):
 
 def test_cadena_completa_no_marca(toy_vault, capsys):
     cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
-    for paso in ("query_ads", "fetch_arxiv", "fetch_pdf", "fetch_ground_truth",
-                 "make_notes", "extract_fulltext", "check_retractions"):
+    # La lista sale de la cadena canónica y no de una copia: un paso nuevo (#397 sumó
+    # `fetch_bibtex`) no puede dejar este test verde sobre una cadena que ya no está completa.
+    for paso in cfg.CADENA_ESTRELLA:
         cfg.save_paso("test_star", paso)
     _, rep = run_lint_reporte(capsys)
     linea = [l for l in rep.splitlines() if l.startswith("## Cadena incompleta")]
@@ -7490,3 +7491,72 @@ def test_los_ejes_heredados_que_revientan_salen_NO_EVALUADO_salvo_objetivo_ilegi
     hallazgos = dict(lint.collect().por_clave("not_evaluated").items)
     assert "ejes heredados de `ica` (#360)" not in hallazgos, "duplicaría el hallazgo del objetivo"
     assert any("lente" in k for k in hallazgos), hallazgos
+
+
+# ── #397 · el BibTeX oficial de la ficha ─────────────────────────────────────────────────────────
+
+_BTX_OK = ('@ARTICLE{2020aaa...1..1A,\n         year = 2020,\n'
+           '          doi = {10.1/ok},\n        title = "{Un titulo}",\n}\n')
+
+
+def _paper_con_bibtex(toy_vault, extra: dict):
+    mk_note(cfg.PAPERS, "2020aaa...1..1A",
+            {"tags": ["paper"], "bibcode": "2020aaa...1..1A", "stars": ["Estrella Test"], **extra},
+            "# p\n")
+    link_from_log(toy_vault, "2020aaa...1..1A")
+
+
+def test_bibtex_sin_fuente_BLOQUEA(toy_vault, capsys):
+    """#397 — una entrada de cita sin procedencia es, por definición, un bloque que escribió
+    alguien. Y una entrada BibTeX redactada de memoria sale plausible —volumen y páginas
+    verosímiles— y nadie la vuelve a mirar: es la regla #0 sobre el único objeto de la bóveda que
+    hasta ahora se reconstruía en vez de traerse, y el que termina IMPRESO en un informe."""
+    _paper_con_bibtex(toy_vault, {"bibtex": _BTX_OK})
+    rc, rep = run_lint_reporte(capsys)
+    assert rc != 0, "es bloqueante"
+    assert "2020aaa" in _seccion(rep, "sin `bibtex_source`"), rep
+
+
+def test_bibtex_con_fuente_declarada_no_dispara(toy_vault, capsys):
+    _paper_con_bibtex(toy_vault, {"bibtex": _BTX_OK, "bibtex_source": "ads",
+                                  "doi": "10.1/ok", "year": 2020, "title": "Un titulo"})
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2020aaa" not in _seccion(rep, "sin `bibtex_source`"), rep
+
+
+def test_bibtex_source_fuera_de_vocabulario_BLOQUEA(toy_vault, capsys):
+    """Mismo criterio que `pdf_source`/`fulltext_source` (#296): el campo dice si la cita que va a
+    un paper es una exportación oficial, y un valor fuera de la lista cae por el `else` de cualquier
+    chequeo en silencio."""
+    _paper_con_bibtex(toy_vault, {"bibtex": _BTX_OK, "bibtex_source": "lo copié de google scholar"})
+    rc, rep = run_lint_reporte(capsys)
+    assert rc != 0 and "bibtex_source" in _seccion(rep, "fuera del vocabulario"), rep
+
+
+def test_el_drift_entre_el_frontmatter_y_la_exportacion_se_reporta(toy_vault, capsys):
+    """#397 — el caso que lo motivó: una ficha `2011Naik` con `year: 2012` en su propio frontmatter,
+    y la clave sintética contradiciendo al campo que tiene al lado. Backlog: cuál de los dos está
+    mal es juicio, pero el que viaja al informe es el BibTeX."""
+    _paper_con_bibtex(toy_vault, {"bibtex": _BTX_OK, "bibtex_source": "ads",
+                                  "year": 2011, "doi": "10.1/ok", "title": "Un titulo"})
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 0, "es backlog, no frena"
+    seccion = _seccion(rep, "exportación oficial dicen cosas distintas")
+    assert "2020aaa" in seccion and "2011" in seccion and "2020" in seccion, rep
+
+
+def test_el_campo_que_una_de_las_dos_no_dice_no_es_una_discrepancia(toy_vault, capsys):
+    """Sin `year` en el frontmatter no hay dos afirmaciones que comparar: reportarlo sería inventar
+    el hallazgo, y el hueco ya lo levanta el chequeo de schema por tipo (INV-63)."""
+    _paper_con_bibtex(toy_vault, {"bibtex": _BTX_OK, "bibtex_source": "ads", "doi": "10.1/ok"})
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2020aaa" not in _seccion(rep, "exportación oficial dicen cosas distintas"), rep
+
+
+def test_el_drift_no_se_dispara_por_mayusculas_del_doi(toy_vault, capsys):
+    """Se compara NORMALIZADO (`cfg.method_key`, #243): un DOI difiere en mayúsculas entre catálogos
+    y eso no es una discrepancia — un falso positivo acá manda a revisar a mano una cita correcta."""
+    _paper_con_bibtex(toy_vault, {"bibtex": _BTX_OK, "bibtex_source": "ads",
+                                  "doi": "10.1/OK", "year": 2020, "title": "Un  titulo"})
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2020aaa" not in _seccion(rep, "exportación oficial dicen cosas distintas"), rep

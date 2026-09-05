@@ -3142,3 +3142,38 @@ def test_note_state_con_vistas_mal_formadas_degrada_a_stub(toy_vault):
     """Una `vistas[]` mal formada es hallazgo del lint, no de acá: hay nota y la lectura no consta."""
     _nota_paper("2020mal.....1E", {"vistas": "no-es-lista"})
     assert cfg.note_state("2020mal.....1E", "Estrella Test") == cfg.NOTE_STUB
+
+
+# ── #397 · el escritor quirúrgico de frontmatter y el lector de BibTeX ───────────────────────────
+
+def test_stamp_fm_fields_reemplaza_la_clave_vieja_y_no_toca_el_cuerpo(tmp_path):
+    """Vivía en `check_retractions` y ahora es de `lib_config` (#397): lo usan el estampador de
+    retracciones y el de BibTeX, y una segunda implementación del mismo borrado quirúrgico es
+    justamente lo que este repo pagó siete veces en un día.
+
+    Lo que garantiza: edita el TEXTO —no re-serializa el YAML—, así que el orden y los comentarios
+    que dejó la extracción LLM quedan; y al reemplazar una clave se lleva su bloque indentado
+    entero, sin dejar ítems huérfanos que el YAML absorba en la clave anterior."""
+    f = tmp_path / "n.md"
+    f.write_text("---\nbibcode: X\n# comentario de la extracción\nretraction:\n  type: vieja\n"
+                 "  date: '2020-01-01'\ntags: [paper]\n---\n\n# cuerpo\n\nprosa\n", encoding="utf-8")
+    texto = f.read_text(encoding="utf-8")
+    cfg.stamp_fm_fields(f, cfg.split_fm(texto), texto.split("\n---\n", 1)[-1],
+                        {"retraction": {"type": "nueva"}})
+    salida = f.read_text(encoding="utf-8")
+    fm = cfg.split_fm(salida)
+    assert fm["retraction"] == {"type": "nueva"} and fm["bibcode"] == "X"
+    assert "vieja" not in salida and "2020-01-01" not in salida, "el bloque viejo se fue entero"
+    assert "# comentario de la extracción" in salida and "prosa" in salida
+
+
+def test_bibtex_fields_lee_las_tres_formas_de_valor():
+    """`{…}`, `"…"` y pelado (un año va sin llaves). Y desenvuelve las llaves de protección: ADS
+    escribe `title = "{A Jupiter-mass…}"`, y comparar eso crudo contra el `title` del frontmatter
+    daría la discrepancia que el chequeo de #397 existe para NO inventar."""
+    entrada = ('@ARTICLE{k,\n  year = 2004,\n  title = "{Identifiability Issues}",\n'
+               '  doi = {10.1109/LSP.2004.836989},\n  author = {{Davies}, Mike},\n}\n')
+    campos = cfg.bibtex_fields(entrada)
+    assert campos == {"year": "2004", "title": "Identifiability Issues",
+                      "doi": "10.1109/LSP.2004.836989", "author": "Davies, Mike"}
+    assert cfg.bibtex_fields("") == {} and cfg.bibtex_fields("sin nada") == {}

@@ -112,8 +112,8 @@ def test_split_note_no_saltea_el_paper():
     assert fm and fm.get("bibcode") == "2020aaa...1..1A"
 
 
-def test_stamp_fields_no_deja_la_nota_a_medias(toy_vault, monkeypatch):
-    """`stamp_fields` reescribe notas de `papers/` —con la extracción LLM adentro— sin tmp+rename.
+def test_stamp_fm_fields_no_deja_la_nota_a_medias(toy_vault, monkeypatch):
+    """`cfg.stamp_fm_fields` reescribe notas de `papers/` —con la extracción LLM adentro— sin tmp+rename.
     Medido con `ulimit -f`: 16.071 B → 8.192 B, 198 de 400 ocurrencias de la extracción destruidas.
     Es la misma clase que la 6ª pasada arregló en `save_registro`, sobre lo MENOS regenerable de la
     bóveda. Acá se simula el corte fallando la escritura: el original tiene que sobrevivir."""
@@ -139,11 +139,11 @@ def test_stamp_fields_no_deja_la_nota_a_medias(toy_vault, monkeypatch):
     monkeypatch.setattr(type(p), "write_text", write_que_se_corta)
     fm, body = cr.split_note(p.read_text(encoding="utf-8"))
     with pytest.raises(OSError):
-        cr.stamp_fields(p, fm, body, {"retracted": True})
+        cfg.stamp_fm_fields(p, fm, body, {"retracted": True})
     assert p.read_bytes() == original, "la nota quedó truncada: se perdió la extracción LLM"
 
 
-def test_stamp_fields_drop_de_la_clave_vieja_no_corrompe_el_frontmatter(toy_vault):
+def test_stamp_fm_fields_drop_de_la_clave_vieja_no_corrompe_el_frontmatter(toy_vault):
     """El borrado del bloque viejo se corta ante cualquier línea que no empiece con espacio/tab/`-`
     y deja el resto huérfano. Con una línea EN BLANCO el YAML parsea igual y el ítem huérfano se
     absorbe en la clave anterior (`tags: ['paper', {'type': 'corrigendum'}]`) — y **ninguna
@@ -164,7 +164,7 @@ def test_stamp_fields_drop_de_la_clave_vieja_no_corrompe_el_frontmatter(toy_vaul
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(texto, encoding="utf-8")
     fm0, body0 = cr.split_note(texto)
-    cr.stamp_fields(p, fm0, body0, {"retraction": {"type": "retraction", "date": "2022-01-01"}})
+    cfg.stamp_fm_fields(p, fm0, body0, {"retraction": {"type": "retraction", "date": "2022-01-01"}})
     fm = cfg.split_fm(p.read_text(encoding="utf-8"))
     assert fm.get("tags") == ["paper"], f"`tags` contaminado por el drop: {fm.get('tags')!r}"
 
@@ -612,6 +612,10 @@ def test_slug_estampa_su_paso_en_la_cadena(toy_vault, monkeypatch):
         cfg.save_paso("test_star", paso)
     assert cfg.cadena_cortada("test_star") == "check_retractions"   # el estado previo al paso
     assert run_main(monkeypatch, ["--slug", "test_star"]) == 0
+    # #397 sumó `fetch_bibtex` DESPUÉS de éste, así que la cadena ya no cierra acá: lo que este test
+    # mide es que el paso quede estampado UNA vez, no que la cadena esté completa.
+    assert cfg.cadena_cortada("test_star") == "fetch_bibtex"
+    cfg.save_paso("test_star", "fetch_bibtex")
     assert cfg.cadena_cortada("test_star") is None, (
         "la cadena completa no puede reportarse como cortada")
     pasos = [p["paso"] for p in cfg.load_cadena("test_star")]

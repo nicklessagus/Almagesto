@@ -326,7 +326,10 @@ lector ignora en silencio es peor que un error.
 
 Campos: `bibcode, title, first_author, n_authors, year, arxiv_id, doi, bibstem, stars[], facets[],
 keywords[], methods[], thesis_links[], role[], relevance, citation_count, pdf, fulltext,
-fulltext_source(pdftotext|ocr|web), pdf_source(eprint|ads|publisher|web), pdf_sha, vistas[], versions[]`.
+fulltext_source(pdftotext|ocr|web), pdf_source(eprint|ads|publisher|web), pdf_sha, vistas[], versions[],
+bibtex, bibtex_source(ads|crossref|datacite|doi|arxiv), bibtex_accessed`.
+
+⛔ **El `bibtex` se TRAE de una exportación oficial, nunca se redacta (#397).** La ficha guardaba campos sueltos y no la **referencia**, así que quien escribe un informe rearmaba la entrada con la ficha más lo que recordara el modelo — y una entrada inventada sale plausible, con volumen y páginas verosímiles, sobre el dato que termina impreso. Lo baja `python scripts/fetch_bibtex.py` (paso final de la cadena) por la cascada **ADS export → content negotiation en `doi.org` → arXiv**, y el cuarto caso —un libro, un manual— deja el campo **VACÍO**: un hueco es correcto, una cita inventada no. El lint **bloquea** el `bibtex` sin `bibtex_source` (una entrada sin procedencia es un bloque escrito a mano) y reporta el desacuerdo entre el frontmatter y la exportación (medido: una ficha `2011Naik` con `year: 2012` adentro).
 
 ⛔ **Toda nota de paper pertenece a alguna ENTIDAD (D-23).** Al menos uno de `stars`,
 `thesis_links` o `methods` tiene que estar poblado. Sin ninguno de los tres el paper no entra en

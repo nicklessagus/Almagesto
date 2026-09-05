@@ -91,10 +91,10 @@ def test_cadena_ads_en_orden(toy_vault, fake_run, fake_notes, monkeypatch):
     assert run_main(monkeypatch) == 0
     assert [c[0] for c in fake_run.calls] == ["query_ads.py", "fetch_arxiv.py", "fetch_pdf.py",
                                               "make_notes.py", "extract_fulltext.py",
-                                              "check_retractions.py"]
+                                              "check_retractions.py", "fetch_bibtex.py"]
     assert fake_run.calls[0] == ("query_ads.py", "--theme", "gp")
     assert fake_run.calls[3] == ("make_notes.py", "--theme", "gp")
-    assert fake_run.calls[-1] == ("check_retractions.py", "--slug", "gp")   # sólo este ingest
+    assert fake_run.calls[-1] == ("fetch_bibtex.py", "--slug", "gp")        # sólo este ingest (#397)
 
 
 def test_guardia_expansion_frena_la_cadena_ads(toy_vault, fake_run, fake_notes, monkeypatch, capsys):
@@ -227,7 +227,8 @@ def test_offads_mixto_extra_core_corre_subcadena_ads(toy_vault, fake_run, fake_n
     assert run_main(monkeypatch) == 0
     assert [c[0] for c in fake_run.calls] == \
         ["fetch_web.py", "query_ads.py", "fetch_arxiv.py", "fetch_pdf.py",
-         "make_notes.py", "extract_fulltext.py", "check_sources.py", "check_retractions.py"]
+         "make_notes.py", "extract_fulltext.py", "check_sources.py", "check_retractions.py",
+         "fetch_bibtex.py"]
     assert ("query_ads.py", "--theme", "gp", "--extra-only") in fake_run.calls
     assert ("make_notes.py", "--theme", "gp") in fake_run.calls
 
@@ -276,7 +277,8 @@ def test_offads_pending_deriva_sin_fallar(toy_vault, fake_run, fake_notes, monke
     key, kw = fake_notes.webs[0]
     assert key == "1999Paywall" and kw["pending"] == "paywall"
     assert fake_run.calls == [("check_sources.py", "gp"),                   # #353: lo declarado se cruza
-                              ("check_retractions.py", "--slug", "gp")]   # doi → chequeo igual
+                              ("check_retractions.py", "--slug", "gp"),  # doi → chequeo igual
+                              ("fetch_bibtex.py", "--slug", "gp")]
     out = capsys.readouterr().out
     assert "Fuentes PENDIENTES" in out and "10.1/x" in out
 
@@ -655,7 +657,7 @@ def test_mixto_con_query_y_sin_sources_corre_la_mitad_ads(toy_vault, fake_run, f
     assert run_main(monkeypatch) == 0
     scripts = [c[0] for c in fake_run.calls]
     assert scripts == ["query_ads.py", "fetch_arxiv.py", "fetch_pdf.py", "make_notes.py",
-                       "extract_fulltext.py", "check_retractions.py"]
+                       "extract_fulltext.py", "check_retractions.py", "fetch_bibtex.py"]
     assert ("query_ads.py", "--theme", "gp") in fake_run.calls      # completa, no --extra-only
     # y lo DICE: sin el aviso, correr la mitad se lee como haber corrido todo
     assert "SIN fuentes declaradas" in capsys.readouterr().out
@@ -751,7 +753,7 @@ def test_tema_ads_sin_query_con_extra_core_corre_la_subcadena_extra_only(toy_vau
     assert ("query_ads.py", "--theme", "gp", "--extra-only") in fake_run.calls
     assert [c[0] for c in fake_run.calls] == \
         ["query_ads.py", "fetch_arxiv.py", "fetch_pdf.py", "make_notes.py", "extract_fulltext.py",
-         "check_retractions.py"]
+         "check_retractions.py", "fetch_bibtex.py"]
     out = capsys.readouterr().out
     assert "corpus declarado" in out and "tema mixto SIN fuentes" not in out, out
 

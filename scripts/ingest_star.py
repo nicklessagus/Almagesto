@@ -7,7 +7,7 @@ Corre, en orden y abortando al primer fallo, la cadena astro completa para una e
 vault/config/stars.yaml:
 
     query_ads → [guardia de expansión] → fetch_arxiv → fetch_pdf → fetch_ground_truth
-    → make_notes → extract_fulltext → check_retractions
+    → make_notes → extract_fulltext → check_retractions → fetch_bibtex
 
 La **guardia de expansión** (#37) es un checkpoint humano entre la query y el primer paso que
 gasta red y disco: si el core del `ads.json` fresco se multiplicó respecto de las notas ya
@@ -79,6 +79,14 @@ def main() -> int:
         # dura sin verificar— invisible.
         sys.exit(f"check_retractions no pudo chequear (rc={retr_rc}) — la cadena no certifica lo "
                  "que no miró. Revisá el motivo que imprimió arriba y re-corré (es idempotente).")
+
+    # #397 — el BibTeX oficial de cada paper, último porque necesita las notas ya creadas y porque
+    # su hueco no invalida nada: un paper sin exportación oficial (un libro, un manual) deja el
+    # campo VACÍO, que es el estado correcto. Un rc 2 es red caída, no papers sin cita, así que
+    # avisa y NO aborta la cadena: lo que quedó sin bajar lo cierra la pasada de `maintain`.
+    if run("fetch_bibtex.py", "--slug", args.slug, flags=escotillas):
+        print("⚠ fetch_bibtex no pudo traer todo (¿red, token?) — el resto de la cadena vale; "
+              "cerralo con `python scripts/fetch_bibtex.py` (idempotente).")
     # El hand-off nombra los pasos SALTEABLES con su número del skill: son los que no dejan rastro
     # si se omiten. El contraste (3b) entró con #72 y es el de más apalancamiento — sin él la
     # síntesis se escribe sobre un solo paper por eje.

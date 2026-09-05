@@ -8,12 +8,12 @@ campo `source` (formaliza el modo off-ADS del skill ingest-theme en el tooling):
 
 - `ads` (default si el campo falta): cadena astro estándar —
   query_ads --theme → [guardia de expansión] → fetch_arxiv → fetch_pdf → make_notes --theme →
-  extract_fulltext → check_retractions. La **guardia de expansión** (#37) frena entre la query y
+  extract_fulltext → check_retractions → fetch_bibtex. La **guardia de expansión** (#37) frena entre la query y
   el primer paso que gasta red y disco si el core se multiplicó respecto de lo ya ingestado
   (default ×1.5 y 50 o más nuevos); `--yes` continúa a sabiendas.
   · **Corpus DECLARADO (#384): `source: ads` + `query: null` + `extra_core:`** → la misma
     sub-cadena con `query_ads --theme --extra-only` (sólo esos bibcodes, sin descubrimiento ni
-    guardia) → fetch_arxiv → fetch_pdf → make_notes --theme → extract_fulltext → check_retractions.
+    guardia) → fetch_arxiv → fetch_pdf → make_notes --theme → extract_fulltext → check_retractions → fetch_bibtex.
     No es un tema mixto ni le faltan fuentes; sin `query:` NI `extra_core:` el orquestador rehúsa
     antes de gastar nada. (`ads_subchain` es la definición única de esa sub-cadena.)
 - `web` | `local-pdfs` | `local-pdfs+web`: modo off-ADS. La bibliografía se declara en la
@@ -123,6 +123,11 @@ def _cierre_retracciones(slug: str) -> None:
     if rc:
         sys.exit(f"check_retractions no pudo chequear (rc={rc}) — la cadena no certifica lo que no "
                  "miró. Revisá el motivo que imprimió arriba y re-corré (es idempotente).")
+
+    # #397 — mismo cierre que `ingest_star`: avisa y no aborta (el hueco es un estado correcto).
+    if run("fetch_bibtex.py", "--slug", slug):
+        print("⚠ fetch_bibtex no pudo traer todo (¿red, token?) — cerralo con "
+              "`python scripts/fetch_bibtex.py` (idempotente).")
 
 
 # ── guardia de expansión (#37) ───────────────────────────────────────────────
