@@ -3177,3 +3177,14 @@ def test_bibtex_fields_lee_las_tres_formas_de_valor():
     assert campos == {"year": "2004", "title": "Identifiability Issues",
                       "doi": "10.1109/LSP.2004.836989", "author": "Davies, Mike"}
     assert cfg.bibtex_fields("") == {} and cfg.bibtex_fields("sin nada") == {}
+
+
+def test_is_ads_bibcode_no_confunde_una_clave_sintetica():
+    """#399 — `BIBCODE_LIKE_RE` es la heurística LAXA de los wikilinks (`^\\d{4}[A-Za-z]`) y una
+    clave sintética `AAAA+Autor` la pasa. Un bibcode de ADS son **19 caracteres exactos**, y la
+    diferencia no es cosmética: mandar las sintéticas al export de ADS devuelve 404 para el lote
+    entero, y la corrida lo anunciaba como caída de red sobre papers que sí se evaluaron bien."""
+    assert cfg.is_ads_bibcode("1995Natur.378..355M")
+    assert not cfg.is_ads_bibcode("2011Naik") and not cfg.is_ads_bibcode("1998HyvarinenICANN")
+    assert not cfg.is_ads_bibcode("") and not cfg.is_ads_bibcode(None)
+    assert not cfg.is_ads_bibcode("x" * 19), "la forma también: 19 caracteres cualesquiera no basta"

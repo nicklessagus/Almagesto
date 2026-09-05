@@ -168,7 +168,11 @@ Deben quedar en **0**:
   autor**, PROPONE el DOI para que alguien lo popule (nunca lo estampa — el matcheo por título es lo
   que este repo prohíbe resolver solo: `discover` lo midió en 18 de 25 resueltos, **2 apuntando a
   otro trabajo**). Medido: `2011Naik` no era un paper sin fuente oficial sino uno cuyo DOI
-  (`10.5772/52324`) Crossref tiene y la nota no lleva.
+  (`10.5772/52324`) Crossref tiene y la nota no lleva. ⛔ **Y el candidato con título exacto y autor
+  distinto se imprime como DUDOSO** (#399): el registro Crossref de ese mismo paper lleva
+  `family: "R."` —metadata rota del editor—, así que la exigencia de apellido lo dejaba **mudo** y
+  el caso que motivó el issue no aparecía en ninguna salida. Un candidato que nadie ve es
+  indistinguible de no haber buscado.
 - **`pdf_source` de editor (`publisher|ads|web`) con `eprint_version`** (#383): contradicción
   interna del frontmatter —el PDF es del editor y la nota dice que leyó un preprint—, y manda a
   re-verificar contra el documento equivocado. Nace del REEMPLAZO de un PDF por otro de distinta

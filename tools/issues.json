@@ -1974,12 +1974,17 @@
   {
    "number": 397,
    "title": "La ficha no guarda el BibTeX oficial del paper: la cita se reconstruye de memoria, y cruzar un `.bib` contra el vault exige resolver por DOI y título (26 de 81 entradas sin ficha, 8 papers con id distinto entre dos instancias)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 398,
    "title": "Un reclamo declarado `no_vista` deja en la nota la PLANTILLA del stub como si fuera contenido (46 notas con las instrucciones al extractor visibles), y `vistas: []` apaga el chequeo de reclamos del lint",
    "state": "CLOSED"
+  },
+  {
+   "number": 399,
+   "title": "`fetch_bibtex`: dos salidas que leen al revés — el 404 de un lote sin bibcodes ADS se anuncia como caída de red, y el DOI con título exacto pero autor distinto en Crossref se calla",
+   "state": "OPEN"
   }
  ]
 }

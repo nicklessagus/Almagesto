@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.216.0"
+ALMAGESTO_VERSION = "1.217.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1723,6 +1723,23 @@ def fm_bounds(text: str) -> tuple[int, int] | None:
 #: convención en TEXTO LIBRE que decidía un chequeo, y por eso cada consumidor nuevo tenía que
 #: aprenderla— y volvió a ser lo que parece, una línea que dice «esto quedó corregido por aquello».
 #: Su usuario vivo es `make_notes --fix-key`, que la imprime lista para pegar (#355).
+#: #399 · longitud EXACTA de un bibcode de ADS. `BIBCODE_LIKE_RE` es la heurística laxa que usan
+#: los wikilinks (`^\d{4}[A-Za-z]`) y matchea también una clave sintética `AAAA+Autor`, que es
+#: justo lo que no hay que mandarle a ADS.
+ADS_BIBCODE_LEN = 19
+
+
+def is_ads_bibcode(clave) -> bool:
+    """¿`clave` tiene forma de bibcode de ADS? (#399)
+
+    Un bibcode de ADS son **19 caracteres exactos**; una clave sintética `AAAA+Autor` —la que el
+    framework le da a una fuente off-ADS— pasa la heurística laxa de `BIBCODE_LIKE_RE` pero no esto.
+    Medido: mandar las 19 sintéticas al export de ADS devuelve 404 para el lote entero, y la corrida
+    lo anunciaba como caída de red sobre papers que sí se habían evaluado bien."""
+    clave = str(clave or "").strip()
+    return len(clave) == ADS_BIBCODE_LEN and bool(BIBCODE_LIKE_RE.match(clave))
+
+
 LOG_SUPERSEDED_MARK = "⚠ corregido"
 
 

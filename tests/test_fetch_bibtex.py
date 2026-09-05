@@ -215,7 +215,7 @@ def test_main_con_error_de_red_sale_2(tmp_path, monkeypatch, capsys):
     _nota(tmp_path, {"bibcode": "1995Natur.378..355M", "tags": ["paper"]})
     monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py"])
     assert fb.main() == 2
-    assert "ADS export falló" in capsys.readouterr().out
+    assert "ADS export no contestó" in capsys.readouterr().out
 
 
 # ── el lector de campos que usa el lint ─────────────────────────────────────────────────────────
@@ -402,3 +402,73 @@ def test_el_mailto_del_polite_pool_es_OPT_IN_y_no_sale_si_no_se_declaro(monkeypa
     monkeypatch.setattr(cfg, "get_mailto", lambda: "yo@ejemplo.org")
     fb.doi_candidate("Un titulo", "Naik")
     assert vistos.get("mailto") == "yo@ejemplo.org"
+
+
+# ── #399 · las dos salidas que leían al revés ───────────────────────────────────────────────────
+
+def test_las_claves_SINTETICAS_no_se_le_mandan_a_ADS(monkeypatch):
+    """#399 — `main` mandaba al export **todas** las claves pendientes, sintéticas incluidas. Con
+    las notas con bibcode ya estampadas, el lote que queda son las 19 `AAAA+Autor`: ADS contesta 404
+    al lote entero y la corrida anunciaba «⛔ ADS export falló» sobre papers que **sí** se habían
+    evaluado bien — el ⛔ afirmaba «no evaluado» de algo evaluado, que es la confusión que este
+    script existe para separar (D-43).
+
+    ⚠ `BIBCODE_LIKE_RE` no alcanza: es la heurística laxa de los wikilinks y una clave sintética la
+    pasa. Un bibcode de ADS son 19 caracteres exactos."""
+    mandados = []
+
+    def post(url, headers=None, json=None, timeout=None):
+        mandados.extend((json or {}).get("bibcode") or [])
+        return Resp(200, payload={"export": ENTRADA_ADS})
+    fake_net(monkeypatch, post=post)
+    out, errores = fb.ads_bibtex(["1995Natur.378..355M", "2011Naik", "1998HyvarinenICANN"], "tok")
+    assert mandados == ["1995Natur.378..355M"], mandados
+    assert errores == [] and "1995Natur.378..355M" in out
+
+
+def test_solo_claves_sinteticas_no_llama_a_ADS_ni_reporta_error(monkeypatch):
+    """El caso medido entero: nada que preguntar no es un fallo. Sin ninguna clave con forma de
+    bibcode no se hace el request, y la corrida no puede salir en rc 2."""
+    llamado = []
+    fake_net(monkeypatch, post=lambda *a, **k: llamado.append(1) or Resp(404))
+    assert fb.ads_bibtex(["2011Naik", "1998HyvarinenICANN"], "tok") == ({}, [])
+    assert llamado == []
+
+
+def test_el_404_de_ADS_es_una_RESPUESTA_y_el_5xx_es_no_evaluado(monkeypatch):
+    """#399 — «ninguno de éstos está en ADS» es un hueco legítimo que la cascada clasifica; un
+    timeout o un 5xx deja papers **sin consultar**, y ésa es la única condición que puede sacar la
+    corrida en rc 2. Los dos se veían igual porque `raise_for_status` levanta para ambos."""
+    fake_net(monkeypatch, post=lambda *a, **k: Resp(404))
+    assert fb.ads_bibtex(["1995Natur.378..355M"], "tok") == ({}, [])
+    fake_net(monkeypatch, post=lambda *a, **k: Resp(503))
+    out, errores = fb.ads_bibtex(["1995Natur.378..355M"], "tok")
+    assert out == {} and len(errores) == 1 and "SIN consultar" in errores[0]
+
+
+def test_el_titulo_EXACTO_con_autor_distinto_sale_como_DUDOSO(monkeypatch, tmp_path, capsys):
+    """#399 — `2011Naik`: Crossref tiene el DOI y el título coincide exacto, pero el registro lleva
+    `family: 'R.'` (metadata rota del editor), así que la exigencia de apellido fallaba y el caso
+    que motivó #397 **no aparecía en ninguna salida**.
+
+    La severidad no se afloja —sigue sin proponerse como bueno— pero se imprime: un candidato que
+    nadie ve es indistinguible de no haber buscado. Y sale por el canal de las propuestas, no
+    enterrado entre los huecos."""
+    monkeypatch.setattr(cfg, "get_mailto", lambda: "")
+    fake_net(monkeypatch, get=lambda *a, **k: _cr([
+        {"DOI": "10.5772/52324", "title": ["Introduction: Independent Component Analysis"],
+         "author": [{"family": "R.", "given": "Ganesh"}], "issued": {"date-parts": [[2012]]}}]))
+    doi, por_que = fb.doi_candidate("Introduction: Independent Component Analysis", "Naik", 2011)
+    assert doi == "", "sigue sin proponerse como bueno"
+    assert por_que.startswith("DUDOSO") and "10.5772/52324" in por_que and "«R.»" in por_que
+
+    monkeypatch.setattr(cfg, "PAPERS", tmp_path)
+    monkeypatch.setattr(cfg, "get_ads_token", lambda: "tok")
+    _nota(tmp_path, {"bibcode": "2011Naik", "tags": ["paper"], "year": 2011,
+                     "title": "Introduction: Independent Component Analysis",
+                     "first_author": "Naik, Ganesh"})
+    monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py"])
+    assert fb.main() == 0
+    salida = capsys.readouterr().out
+    assert "DUDOSO" in salida and "10.5772/52324" in salida, salida
+    assert "sin BibTeX (campo VACÍO" not in salida, "no se entierra entre los huecos"

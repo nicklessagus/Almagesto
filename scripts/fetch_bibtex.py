@@ -89,18 +89,35 @@ def ads_bibtex(bibcodes: list, token: str) -> tuple:
     Un error de red devuelve lo que sí se pudo traer y lo DECLARA: la alternativa es que una caída a
     mitad de camino se lea como «esos papers no tienen BibTeX», que es el falso limpio de siempre."""
     out, errores = {}, []
-    for i in range(0, len(bibcodes), ADS_CHUNK):
-        tanda = bibcodes[i:i + ADS_CHUNK]
+    # #399 — sólo lo que TIENE forma de bibcode. Con las claves sintéticas adentro, ADS contesta 404
+    # al lote entero y la corrida anunciaba «ADS export falló» sobre papers que sí se habían
+    # evaluado bien: el ⛔ afirmaba «no evaluado» de algo evaluado, que es la confusión que este
+    # script existe para separar (D-43).
+    reales = [b for b in bibcodes if cfg.is_ads_bibcode(b)]
+    for i in range(0, len(reales), ADS_CHUNK):
+        tanda = reales[i:i + ADS_CHUNK]
         try:
             r = requests.post(ADS_EXPORT,
                               headers={"Authorization": f"Bearer {token}",
                                        "Content-Type": "application/json"},
                               json={"bibcode": tanda}, timeout=60)
+        except requests.RequestException as exc:
+            errores.append(f"ADS export no contestó para {len(tanda)} bibcode(s) "
+                           f"({tanda[0]}…): {exc.__class__.__name__} — esos papers quedaron SIN "
+                           f"consultar")
+            continue
+        # ⛔ #399 — el 404 de un lote es una RESPUESTA: «ninguno de éstos está en ADS», que es un
+        # hueco legítimo y lo clasifica la cascada. Sólo el resto —timeout, 5xx, JSON roto— deja
+        # papers sin consultar, y ésa es la única condición que puede sacar la corrida en rc 2.
+        if r.status_code == 404:
+            continue
+        try:
             r.raise_for_status()
             out.update(split_entries(r.json().get("export") or ""))
         except (requests.RequestException, ValueError) as exc:
             errores.append(f"ADS export falló para {len(tanda)} bibcode(s) "
-                           f"({tanda[0]}…): {exc.__class__.__name__}")
+                           f"({tanda[0]}…): {exc.__class__.__name__} — esos papers quedaron SIN "
+                           f"consultar")
     return out, errores
 
 
@@ -185,18 +202,29 @@ def doi_candidate(title: str, first_author: str, year=None) -> tuple:
         items = (r.json().get("message") or {}).get("items") or []
     except (requests.RequestException, ValueError, AttributeError) as exc:
         return "", f"Crossref no contestó ({exc.__class__.__name__}): no consta"
+    dudosos = []
     for it in items:
         cand = ((it.get("title") or [""])[0] or "").strip()
         if cfg.method_key(cand) != cfg.method_key(titulo):
             continue                           # ⛔ título EXACTO normalizado, nunca parecido
-        autores = it.get("author") or [{}]
-        if cfg.method_key(str(autores[0].get("family") or "")) != cfg.method_key(familia):
-            continue
         if year:
             partes = ((it.get("issued") or {}).get("date-parts") or [[None]])[0]
             if partes and partes[0] and abs(int(partes[0]) - int(year)) > 1:
                 continue
+        autores = it.get("author") or [{}]
+        cr_familia = str(autores[0].get("family") or "").strip()
+        if cfg.method_key(cr_familia) != cfg.method_key(familia):
+            # ⛔ #399 — el título coincide EXACTO y el autor no: el candidato se IMPRIME como
+            # dudoso en vez de callarse. Medido: el registro Crossref de `2011Naik` lleva
+            # `family: "R."` —metadata rota del editor— así que el caso que motivó #397 no
+            # aparecía en ninguna salida. La severidad no se afloja: sigue sin proponerse como
+            # bueno, pero un candidato que nadie ve es indistinguible de no haber buscado.
+            dudosos.append(f"`{str(it.get('DOI') or '')}` (título exacto, pero Crossref dice autor "
+                           f"«{cr_familia or 's/d'}» ≠ «{familia}»: confirmalo contra la portada)")
+            continue
         return str(it.get("DOI") or ""), f"título exacto + autor «{familia}» en Crossref"
+    if dudosos:
+        return "", "DUDOSO — " + "; ".join(dudosos)
     return "", (f"Crossref devolvió {len(items)} resultado(s) y ninguno con el título EXACTO: "
                 f"resolvelo a mano — acá no se propone por parecido (#397)")
 
@@ -301,6 +329,11 @@ def main() -> int:
                 if doi_prop:
                     propuestas.append(f"{f.stem}: Crossref tiene `{doi_prop}` ({por_que}) — poblá "
                                       f"`doi:` en la nota y re-corré; NO se estampa solo")
+                    continue
+                if por_que.startswith("DUDOSO"):
+                    # #399 — sale por el canal de las propuestas y no enterrado entre los huecos:
+                    # un candidato que nadie ve es indistinguible de no haber buscado.
+                    propuestas.append(f"{f.stem}: {por_que} — si es el mismo trabajo, poblá `doi:`")
                     continue
                 motivo += f" · {por_que}"
             huecos.append(f"{f.stem}: {motivo}")
