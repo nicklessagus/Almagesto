@@ -1,5 +1,5 @@
 {
- "fetched": "2026-09-04",
+ "fetched": "2026-09-05",
  "issues": [
   {
    "number": 2,
@@ -1954,6 +1954,16 @@
   {
    "number": 393,
    "title": "tools/mutar.py --guardas reporta SOBREVIVIENTES FALSOS en cláusulas `and[0]`/`or[0]`: tres casos en un día, y en los tres la mutación a mano muere",
+   "state": "CLOSED"
+  },
+  {
+   "number": 394,
+   "title": "El chequeo #220 del lint no suma el bibcode de la PROPIA nota en `## Vista`: 5 de 19 hallazgos son palabras del paper adjudicadas al `[[wikilink]]` vecino — el simétrico de #373, que `contrast` ya tiene",
+   "state": "OPEN"
+  },
+  {
+   "number": 395,
+   "title": "`vistas[].lente` declara los ejes VIGENTES, no los que la extracción preguntó: 209 slots afirman haber buscado 3 facetas que nadie preguntó (#372 en la primera lente, rompe INV-146) + 48 ejes vacíos sin línea + el parser no entra en `### Lente`",
    "state": "OPEN"
   }
  ]
