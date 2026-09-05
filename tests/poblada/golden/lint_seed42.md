@@ -33,7 +33,7 @@
 > sobre 89 notas de `vault/wiki/`
 
 ## Contradicciones ground-truth ↔ ficha (0)
-> sobre 60 notas de `papers/`
+> sobre 3 ground-truth de `raw/ground_truth/`
 
 ## Ground-truth: masa inconsistente con m·sini (K,P,e,M*) (0)
 > sobre 3 ground-truth de `raw/ground_truth/`
@@ -92,7 +92,7 @@
 ## Juicio de triage en build/<slug>/triage.json (pre-1.9.0) — el lector ya no lo mira (0)
 > sobre 3 registros de sujeto
 
-## ⛔ Registro con `busqueda:` (schema viejo pre-D-28) — el lector ya no lo lee (0)
+## ⛔ Schema viejo que el lector ya no lee: registro con `busqueda:` (pre-D-28) o extracciones en `build/*/extraccion/` (pre-#311) (0)
 > sobre 3 registros de sujeto
 
 ## ⛔ Registro del sujeto ilegible — la curación (`decisiones`) queda SIN APLICAR: los descartes vuelven a ser core (0)
