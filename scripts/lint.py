@@ -1658,6 +1658,130 @@ def check_ground_truth_movido() -> tuple:
     return gt_cambiado, gt_cambiado_marcado
 
 
+def subject_log_names(slug: str) -> set:
+    """Every name a `log.md` heading may use for `slug` (#118 · AUD-177 / INV-131).
+
+    Extracted from `lint.collect` by #396. It is the insumo of `check_log_entry_missing` and it is
+    its own function because the rule it encodes is not about the bitácora at all: it is how this
+    vault NAMES a subject, and it reads three sources (the slug, `stars.yaml`, `themes.yaml`) that
+    can each fail on their own.
+
+    The detector used to demand the SLUG in the heading while the documented convention writes the
+    operation's TITLE, which is the **name** («## 2026-08-28 — ingest: tau Ceti», not `tau_ceti`).
+    It reported permanent backlog over a correct bitácora, and a false positive like that erodes
+    the whole category: the first time someone catches it lying, they stop reading it.
+    """
+    # Se acepta cualquiera de los nombres con los que el sujeto se nombra: slug, nombre canónico,
+    # `concept` y alias.
+    _nombres = {slug, slug.replace("_", " ")}
+    _meta_s = cfg.as_map(({} if cfg.stars_error() else cfg.load_stars()).get(
+        next((n for n, m in ({} if cfg.stars_error() else cfg.load_stars()).items()
+              if isinstance(m, dict) and m.get("slug") == slug), None)))
+    _meta_t = cfg.as_map(({} if cfg.themes_error() else cfg.load_themes()).get(slug))
+    for _n, _m in ((None, _meta_s), (None, _meta_t)):
+        _nombres |= {str(x) for x in cfg.as_list(_m.get("aliases")) if str(x).strip()}
+        if _m.get("concept"):
+            _nombres.add(str(_m["concept"]))
+    _nombres |= {n for n, m in ({} if cfg.stars_error() else cfg.load_stars()).items()
+                 if isinstance(m, dict) and m.get("slug") == slug}
+    return _nombres
+
+
+def check_sweep_registered(slug: str, registro: dict, stars_slugs) -> list:
+    """Rows for `sweep_pendiente` — the full-text sweep (2b) of ONE subject (#88 / AUD-181).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates.
+
+    Two sub-cases that ask for the same command and mean different things: the sweep that never ran,
+    and the one that ran TRUNCATED. Both are backlog — neither invalidates anything the note
+    claims — and both are about the SECOND net, so a subject that is not a star has neither.
+    """
+    filas: list = []
+    # #88: ¿se tendió la segunda red? El barrido full-text es el ÚNICO camino para el punto
+    # ciego de la query directa —surveys que TABULAN la estrella sin nombrarla en el abstract y
+    # que además no están en el grafo de citas— y hasta ahora era un preview de stdout: no se
+    # podía saber si se había corrido. Backlog: no invalida nada de lo que la ficha afirma.
+    _barridos = [b for b in cfg.as_list(registro.get("barridos")) if isinstance(b, dict)]
+    if slug in stars_slugs and not _barridos:
+        filas.append(
+            (slug, "el barrido full-text (2b) no consta en el registro: es el único camino "
+                   "para los surveys que TABULAN la estrella sin nombrarla en el abstract → "
+                   f"`python scripts/query_ads.py {slug} --sweep`"))
+    # AUD-181 / INV-118 — un barrido TRUNCADO se leía igual que uno completo: «la red se tendió
+    # y esto es todo lo que hay», sobre una cola que nadie miró. Es la segunda red del sujeto,
+    # así que su cola importa tanto como la de la query directa.
+    elif _barridos and _barridos[-1].get("truncated"):
+        filas.append(
+            (slug, f"el barrido full-text del {_barridos[-1].get('fecha') or 's/f'} quedó "
+                   f"TRUNCADO (ADS reporta {_barridos[-1].get('n_found')} y se pidieron "
+                   f"{_barridos[-1].get('rows')}) → "
+                   f"la cola no se miró; re-corré con `--rows` mayor"))
+    return filas
+
+
+def check_log_entry_missing(slug: str, registro: dict, log_txt: str) -> list:
+    """Rows for `log_sin_entrada` — the chain ran and the bitácora does not say so (#118).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. The date
+    comes from `cadena` (D-57: every script stamps itself), so what is being checked is that every
+    dated step left an entry that NAMES this subject.
+    """
+    filas: list = []
+    _fechas = {str(p.get("fecha")) for p in cfg.as_list(registro.get("cadena"))
+               if isinstance(p, dict) and p.get("fecha")}
+    # AUD-216 — por PALABRA, no por substring: `ica` está dentro de «verificación» y
+    # «aplicación», así que cualquier entrada de otro sujeto daba por escrita la de `ica`.
+    _nombra = [re.compile(r"(?<![\w-])" + re.escape(x) + r"(?![\w-])", re.I)
+               for x in subject_log_names(slug)]
+    _sin = sorted(f for f in _fechas
+                  if f and not any(f in ln and any(rx.search(ln) for rx in _nombra)
+                                   for ln in log_txt.splitlines() if ln.startswith("## ")))
+    if _sin:
+        #  @inv INV-131
+        filas.append(
+            (slug, f"la cadena corrió el {', '.join(_sin)} y `log.md` no tiene una entrada "
+                   f"`## <fecha> — …` que nombre a `{slug}` → appendear lo que se hizo"))
+    return filas
+
+
+def check_log_coverage(stars_slugs) -> tuple:
+    """`(log_sin_entrada, sweep_pendiente, not_evaluated)` — the bitácora of every subject (#118).
+
+    Extracted from `lint.collect` by #396. THREE checks lived under a single `# ──` marker, which is
+    the mistake the issue names first: a marker is not a check. What they actually share is the one
+    read of `log.md` and the sweep over `vault/config/registro/*.yaml`; the verdicts are unrelated,
+    so each one is its own module function and this is only the driver.
+
+    `not_evaluated` comes back as a list instead of being appended in place — the block computes,
+    the caller accumulates — which is what keeps the extraction a move of text.
+    """
+    log_sin_entrada: list = []
+    sweep_pendiente: list = []
+    not_evaluated: list = []
+    try:
+        log_txt = cfg.LOG.read_text(encoding="utf-8") if cfg.LOG.exists() else ""
+    except OSError:
+        log_txt = ""
+    for _reg in sorted(cfg.REGISTRO.glob("*.yaml")) if cfg.REGISTRO.exists() else []:
+        _slug = _reg.stem
+        if _slug.startswith("_"):
+            continue                      # `_red.yaml` no es un sujeto
+        try:
+            _d = cfg.load_registro(_slug) or {}
+        except Exception as _exc:                       # noqa: BLE001 — D-43, ver abajo
+            # AUD-286: `cfg.load_registro` es tolerante (YAML roto → `{}`, y ESO lo reporta
+            # `registro_ilegible`), así que lo que llega acá es un fallo que ninguna categoría
+            # cubre. Saltearlo dejaba la bitácora del sujeto sin chequear y el reporte en `(0)`:
+            # un chequeo que no pudo correr lo DICE (INV-87), no contribuye un cero.
+            not_evaluated.append(
+                (f"bitácora de `{_slug}` (#118)",
+                 f"no se pudo leer el registro: {_exc.__class__.__name__}: {_exc}"))
+            continue
+        sweep_pendiente += check_sweep_registered(_slug, _d, stars_slugs)
+        log_sin_entrada += check_log_entry_missing(_slug, _d, log_txt)
+    return log_sin_entrada, sweep_pendiente, not_evaluated
+
+
 def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     """Barre la bóveda entera y devuelve lo que encontró, **sin renderizar nada**.
 
@@ -3423,74 +3547,12 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     evidencia_hash_de = evidence_hash_lookup(pdf_on_disk, ft_hash)
 
     # ── #118 · la bitácora no tiene red ──────────────────────────────────────────────────────
-    try:
-        log_txt = cfg.LOG.read_text(encoding="utf-8") if cfg.LOG.exists() else ""
-    except OSError:
-        log_txt = ""
-    for _reg in sorted(cfg.REGISTRO.glob("*.yaml")) if cfg.REGISTRO.exists() else []:
-        _slug = _reg.stem
-        if _slug.startswith("_"):
-            continue                      # `_red.yaml` no es un sujeto
-        try:
-            _d = cfg.load_registro(_slug) or {}
-        except Exception as _exc:                       # noqa: BLE001 — D-43, ver abajo
-            # AUD-286: `cfg.load_registro` es tolerante (YAML roto → `{}`, y ESO lo reporta
-            # `registro_ilegible`), así que lo que llega acá es un fallo que ninguna categoría
-            # cubre. Saltearlo dejaba la bitácora del sujeto sin chequear y el reporte en `(0)`:
-            # un chequeo que no pudo correr lo DICE (INV-87), no contribuye un cero.
-            not_evaluated.append(
-                (f"bitácora de `{_slug}` (#118)",
-                 f"no se pudo leer el registro: {_exc.__class__.__name__}: {_exc}"))
-            continue
-        # #88: ¿se tendió la segunda red? El barrido full-text es el ÚNICO camino para el punto
-        # ciego de la query directa —surveys que TABULAN la estrella sin nombrarla en el abstract y
-        # que además no están en el grafo de citas— y hasta ahora era un preview de stdout: no se
-        # podía saber si se había corrido. Backlog: no invalida nada de lo que la ficha afirma.
-        _barridos = [b for b in cfg.as_list(_d.get("barridos")) if isinstance(b, dict)]
-        if _slug in stars_slugs and not _barridos:
-            sweep_pendiente.append(
-                (_slug, "el barrido full-text (2b) no consta en el registro: es el único camino "
-                        "para los surveys que TABULAN la estrella sin nombrarla en el abstract → "
-                        f"`python scripts/query_ads.py {_slug} --sweep`"))
-        # AUD-181 / INV-118 — un barrido TRUNCADO se leía igual que uno completo: «la red se tendió
-        # y esto es todo lo que hay», sobre una cola que nadie miró. Es la segunda red del sujeto,
-        # así que su cola importa tanto como la de la query directa.
-        elif _barridos and _barridos[-1].get("truncated"):
-            sweep_pendiente.append(
-                (_slug, f"el barrido full-text del {_barridos[-1].get('fecha') or 's/f'} quedó "
-                        f"TRUNCADO (ADS reporta {_barridos[-1].get('n_found')} y se pidieron "
-                        f"{_barridos[-1].get('rows')}) → "
-                        f"la cola no se miró; re-corré con `--rows` mayor"))
-        _fechas = {str(p.get("fecha")) for p in cfg.as_list(_d.get("cadena"))
-                   if isinstance(p, dict) and p.get("fecha")}
-        # AUD-177 / INV-131 — se exigía el SLUG en el encabezado y la convención documentada usa el
-        # título de la operación, que es el **nombre** («## 2026-08-28 — ingest: tau Ceti», no
-        # `tau_ceti`). El detector reportaba entonces backlog permanente sobre bitácora correcta —
-        # un falso positivo así erosiona la categoría entera: la primera vez que alguien la ve
-        # mentir, deja de mirarla. Se acepta cualquiera de los nombres con los que el sujeto se
-        # nombra: slug, nombre canónico, `concept` y alias.
-        _nombres = {_slug, _slug.replace("_", " ")}
-        _meta_s = cfg.as_map(({} if cfg.stars_error() else cfg.load_stars()).get(
-            next((n for n, m in ({} if cfg.stars_error() else cfg.load_stars()).items()
-                  if isinstance(m, dict) and m.get("slug") == _slug), None)))
-        _meta_t = cfg.as_map(({} if cfg.themes_error() else cfg.load_themes()).get(_slug))
-        for _n, _m in ((None, _meta_s), (None, _meta_t)):
-            _nombres |= {str(x) for x in cfg.as_list(_m.get("aliases")) if str(x).strip()}
-            if _m.get("concept"):
-                _nombres.add(str(_m["concept"]))
-        _nombres |= {n for n, m in ({} if cfg.stars_error() else cfg.load_stars()).items()
-                     if isinstance(m, dict) and m.get("slug") == _slug}
-        # AUD-216 — por PALABRA, no por substring: `ica` está dentro de «verificación» y
-        # «aplicación», así que cualquier entrada de otro sujeto daba por escrita la de `ica`.
-        _nombra = [re.compile(r"(?<![\w-])" + re.escape(x) + r"(?![\w-])", re.I) for x in _nombres]
-        _sin = sorted(f for f in _fechas
-                      if f and not any(f in ln and any(rx.search(ln) for rx in _nombra)
-                                       for ln in log_txt.splitlines() if ln.startswith("## ")))
-        if _sin:
-            #  @inv INV-131
-            log_sin_entrada.append(
-                (_slug, f"la cadena corrió el {', '.join(_sin)} y `log.md` no tiene una entrada "
-                        f"`## <fecha> — …` que nombre a `{_slug}` → appendear lo que se hizo"))
+    # Los tres chequeos viven en `check_log_coverage` (#396), con su veredicto por sujeto en
+    # `check_sweep_registered` y `check_log_entry_missing`: el bloque calcula, el llamador acumula.
+    _log_sin_entrada, _sweep_pendiente, _log_no_eval = check_log_coverage(stars_slugs)
+    log_sin_entrada += _log_sin_entrada
+    sweep_pendiente += _sweep_pendiente
+    not_evaluated += _log_no_eval
 
     stale_pairs: list = []
     old_verif_template: list = []

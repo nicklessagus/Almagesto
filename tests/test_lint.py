@@ -7788,11 +7788,97 @@ def test_los_bloques_extraidos_de_collect_devuelven_lo_que_el_llamador_acumula()
     import inspect
     extraidas = [lint.check_ground_truth_movido, lint.check_duplicate_without_id,
                  lint.check_second_hand_lifted, lint.check_prosa_retractada,
-                 lint.check_identidad_duplicada, lint.check_papers_table_stale]
+                 lint.check_identidad_duplicada, lint.check_papers_table_stale,
+                 lint.check_sweep_registered, lint.check_log_entry_missing,
+                 lint.check_log_coverage]
     for fn in extraidas:
         fuente = inspect.getsource(fn)
         assert "\n    return " in fuente, f"{fn.__name__} no devuelve nada: ¿escribe en un global?"
         for acumulador in ("incomplete.append", "not_evaluated.append", "illegible_txt.append",
-                           "segunda_mano_perdida.append", "log_sin_entrada.append"):
+                           "segunda_mano_perdida.append", "log_sin_entrada.append",
+                           "sweep_pendiente.append"):
+            nombre = acumulador.split(".")[0]
+            # ⚠ el nombre puede ser una LOCAL de la propia función (`check_log_coverage` arma su
+            # `not_evaluated` y lo devuelve): lo que este test prohíbe es escribir en el acumulador
+            # DE `collect`, no reusar la palabra. La declaración local es la que los distingue.
+            if f"    {nombre}: list = []" in fuente:
+                continue
             assert acumulador not in fuente, \
-                f"{fn.__name__} appendea a `{acumulador.split('.')[0]}`: el bloque calcula, el llamador acumula"
+                f"{fn.__name__} appendea a `{nombre}`: el bloque calcula, el llamador acumula"
+
+
+# ── #396 · los tres chequeos que vivían bajo el marcador `# ── #118` ─────────────────────────────
+
+def test_subject_log_names_junta_slug_alias_y_concept(toy_vault):
+    """#396/#118 — el nombre con el que el `log.md` puede nombrar al sujeto no es uno solo, y por
+    eso sale como función propia: es la regla de CÓMO se nombra un sujeto en esta bóveda, y lee
+    tres fuentes que fallan por separado (el slug, `stars.yaml`, `themes.yaml`).
+
+    La rama del `concept` es la que ningún test alcanzaba antes de la extracción: mutada a `False`,
+    un tema cuyo `concept` no se parece al slug queda sin su nombre y toda entrada correcta del log
+    se reporta como faltante — el falso positivo permanente que AUD-177 cerró."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "query": "abs:x",
+                                         "concept": "analisis-de-componentes-independientes",
+                                         "aliases": ["ICA", "componentes independientes"]}})
+    nombres = lint.subject_log_names("ica")
+    assert "ica" in nombres
+    assert "analisis-de-componentes-independientes" in nombres, nombres
+    assert {"ICA", "componentes independientes"} <= nombres, nombres
+    # y un slug que no está declarado en ningún lado devuelve lo que se puede saber sin config
+    assert lint.subject_log_names("tau_ceti") == {"tau_ceti", "tau ceti"}
+
+
+def test_check_sweep_registered_solo_habla_de_estrellas_y_distingue_truncado(toy_vault):
+    """#396/#88/AUD-181 — las dos guardas que el chequeo tiene y que mutar `collect` no podía
+    aislar. La primera: la segunda red es de ESTRELLAS (un tema no tiene barrido 2b), así que un
+    tema sin barridos es silencio, no deuda. La segunda: un barrido completo NO es uno truncado —
+    invertida, la categoría reportaría «la cola no se miró» sobre una cola que se miró entera."""
+    assert lint.check_sweep_registered("un_tema", {}, set()) == []
+    sin_barrido = lint.check_sweep_registered("test_star", {}, {"test_star"})
+    assert len(sin_barrido) == 1 and "no consta en el registro" in sin_barrido[0][1]
+
+    completo = {"barridos": [{"fecha": "2026-03-01", "n_found": 40, "rows": 200}]}
+    assert lint.check_sweep_registered("test_star", completo, {"test_star"}) == []
+    truncado = {"barridos": [{"fecha": "2026-03-01", "n_found": 900, "rows": 200,
+                              "truncated": True}]}
+    filas = lint.check_sweep_registered("test_star", truncado, {"test_star"})
+    assert len(filas) == 1 and "TRUNCADO" in filas[0][1] and "900" in filas[0][1]
+    # el barrido que NO es un mapa no cuenta como barrido: la estrella sigue debiendo el suyo
+    assert len(lint.check_sweep_registered("test_star", {"barridos": ["x"]}, {"test_star"})) == 1
+
+
+def test_check_log_entry_missing_pide_la_entrada_por_cualquiera_de_sus_nombres(toy_vault):
+    """#396/#118/INV-131 — la fecha la registra un SCRIPT (`cadena`, D-57) y la entrada la escribe
+    el LLM: es el único paso salteable sin red. Se da por escrita si el encabezado lleva la fecha y
+    alguno de los nombres del sujeto.  @inv INV-131"""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "query": "abs:x",
+                                         "concept": "ica"}})
+    reg = {"cadena": [{"paso": "query_ads", "fecha": "2026-03-01"}]}
+    assert lint.check_log_entry_missing("ica", reg, "## 2026-01-01 — ingest-theme: ica\n")
+    assert lint.check_log_entry_missing("ica", reg, "## 2026-03-01 — ingest-theme: otra cosa\n")
+    assert lint.check_log_entry_missing("ica", reg, "## 2026-03-01 — ingest-theme: ica") == []
+    # sin fechas en la cadena no hay nada que exigir
+    assert lint.check_log_entry_missing("ica", {}, "") == []
+
+
+def test_check_log_coverage_saltea_red_yaml_y_devuelve_sus_tres_listas(toy_vault):
+    """#396 — el driver. `_red.yaml` es la pasada de red de la BÓVEDA entera (D-46), no un sujeto:
+    sin la guarda del `_`, la bitácora le exigiría a `_red` una entrada de `log.md` con su nombre y
+    la categoría publicaría deuda que nadie puede cerrar.
+
+    Fija además la forma de salida: tres listas que el llamador acumula (#396), no tres globales
+    que el bloque mutaba."""
+    reg = toy_vault.VAULT / "config" / "registro"
+    reg.mkdir(parents=True, exist_ok=True)
+    (reg / "_red.yaml").write_text(
+        yaml.safe_dump({"cadena": [{"paso": "sweep_external", "fecha": "2026-03-01"}]}),
+        encoding="utf-8")
+    (reg / "test_star.yaml").write_text(
+        yaml.safe_dump({"slug": "test_star", "cadena": [{"paso": "query_ads", "fecha": "2026-03-01"}]}),
+        encoding="utf-8")
+    toy_vault.LOG.write_text("# log\n\n## 2026-01-01 — otra cosa\n", encoding="utf-8")
+
+    log_sin, sweep, no_eval = lint.check_log_coverage({"test_star"})
+    assert [s for s, _ in log_sin] == ["test_star"], log_sin
+    assert [s for s, _ in sweep] == ["test_star"], sweep
+    assert no_eval == []
