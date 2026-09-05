@@ -1630,14 +1630,10 @@ def test_registro_ilegible_se_reporta(toy_vault, capsys):
         "el registro ilegible no aparece en el reporte del lint")
 
 
-def test_lint_usa_el_lector_blindado_del_registro():
-    """`lint.py` es el único de seis lectores del registro que reimplementa la lectura cruda, y por
-    eso se saltea el blindaje que la 6ª pasada le puso a `load_registro`.
-
-    Mira `collect`, no `main`: desde 10.1 el barrido vive ahí y `main` sólo parsea, renderiza y
-    decide el exit."""
-    import inspect
-    assert "load_registro" in inspect.getsource(lint.collect), "lint.collect no usa cfg.load_registro"
+# (AUD-294 / F-04: acá había un assert sobre el TEXTO FUENTE de `collect` —«usa load_registro»—
+# que pasaba con el nombre en un comentario. Lo que importa lo prueban por comportamiento
+# `test_registro_ilegible_es_bloqueante_y_nombra_el_dano` y sus hermanos: un registro roto se
+# reporta, no se lee crudo.)
 
 
 def test_lint_no_muere_en_una_consola_no_utf8():

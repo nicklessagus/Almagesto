@@ -613,12 +613,19 @@ def test_un_desafio_de_cloudflare_con_200_no_se_guarda_como_pdf(monkeypatch):
     patch_net(monkeypatch, [FakeResp(200, content=html)])
     monkeypatch.setattr(fp, "_curl_pdf", lambda url: None)
     assert fp.download_pdf("https://academic.oup.com/x.pdf", "tok") is None
-    # el fallback curl entrega el mismo HTML: tampoco pasa (`_curl_pdf` valida el magic él mismo)
+
+
+def test_el_fallback_curl_tampoco_guarda_html_como_pdf(monkeypatch):
+    """AUD-291 (F-01) — la mitad de arriba dejaba `_curl_pdf` parcheado con una lambda y después
+    la llamaba: probaba al doble. Acá corre la función REAL con `subprocess.run` doblado."""
+    html = b"<!DOCTYPE html><html><head><title>Just a moment...</title></head></html>"
     monkeypatch.setattr(fp.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0))
     monkeypatch.setattr(fp.shutil, "which", lambda x: "/usr/bin/curl")
     monkeypatch.setattr(fp.Path, "read_bytes", lambda self: html)
     monkeypatch.setattr(fp.Path, "exists", lambda self: True)
     assert fp._curl_pdf("https://academic.oup.com/x.pdf") is None
+    monkeypatch.setattr(fp.Path, "read_bytes", lambda self: b"%PDF-1.4 real")
+    assert fp._curl_pdf("https://academic.oup.com/x.pdf") == b"%PDF-1.4 real"
 
 
 _OA_CANDIDATES_REAL = fp.oa_candidates      # antes de que el fixture autouse lo reemplace

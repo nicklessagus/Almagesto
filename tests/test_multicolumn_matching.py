@@ -56,10 +56,16 @@ def grep_lines(pattern, lines=LINES):
 
 
 def split_gutter(lines=LINES):
-    """Parte cada línea física en segmentos de columna. Cierra el empalme por canaleta."""
+    """Parte cada línea física en segmentos de columna con la regla de PRODUCCIÓN (#332,
+    `lib_config._column_boundary` + `_split_at_boundary`): la página elige UN borde y cada línea se
+    corta ahí. AUD-297 (F-07): el doble local partía con su propia regex y ningún test del archivo
+    tocaba `scripts/`."""
+    import lib_config as cfg
+    boundary = cfg._column_boundary(lines)
+    assert boundary is not None, "el fixture a dos columnas tiene que tener un borde votado"
     out = []
     for line in lines:
-        out.extend(seg for seg in GUTTER_SPLIT.split(line) if seg.strip())
+        out.extend(seg for seg in cfg._split_at_boundary(line, boundary) if seg.strip())
     return out
 
 
@@ -138,10 +144,14 @@ def test_paridad_del_doble_con_la_regex_real():
     pasada `/auditar` del 2026-08-28: cambiar `GUTTER` a algo que no matchea nada dejaba los 6 tests
     de este archivo en verde."""
     import measure_layout
+    import lib_config as cfg
     for n in range(CANALETA_MIN - 2, CANALETA_MIN + 3):
         linea = "a" + " " * n + "b"
         parte = len(GUTTER_SPLIT.split(linea)) > 1
         detecta = bool(measure_layout.GUTTER.search(linea))
+        # AUD-297: y la tercera lectura de la misma línea —`_gutter_runs`, la de producción— tiene
+        # que coincidir con las dos.
+        assert bool(cfg._gutter_runs(linea)) == detecta, (n, cfg._gutter_runs(linea))
         assert parte == detecta, (
             f"con {n} espacios el doble {'parte' if parte else 'no parte'} y el real "
             f"{'detecta' if detecta else 'no detecta'}: los dos leen distinto la misma línea")

@@ -195,10 +195,14 @@ def test_drop_source_persiste_sin_ads_json(toy_vault, monkeypatch, capsys):
     assert d["fuente"] == "https://gaussianprocess.org/gpml/"
 
 
-def test_drop_source_exige_motivo(toy_vault, monkeypatch):
-    """Simétrico con --drop: no curar en silencio. El motivo ES lo no regenerable."""
+def test_drop_source_exige_motivo(toy_vault, monkeypatch, capsys):
+    """Simétrico con --drop: no curar en silencio. El motivo ES lo no regenerable.
+    AUD-295 (F-05): con el tema sin sembrar, cualquier `SystemExit` («slug desconocido») daba el
+    test por verde aunque la guarda del `--reason` no existiera."""
+    seed_topic_offads()
     with pytest.raises(SystemExit):
         run_main(monkeypatch, ["gp", "--drop-source", "2006RasmussenWilliams"])
+    assert "--reason" in capsys.readouterr().err
 
 
 def test_drop_source_sin_pointer_no_lo_inventa(toy_vault, monkeypatch, capsys):
@@ -1181,10 +1185,14 @@ def test_promote_source_no_pisa_una_nota_que_ya_existe(toy_vault, monkeypatch):
         triage.promote_source("ica", "2011Yang", "2011PLoSO...627594P")
 
 
-def test_main_promote_source_exige_bibcode(toy_vault, monkeypatch):
+def test_main_promote_source_exige_bibcode(toy_vault, monkeypatch, capsys):
+    """AUD-296 (F-06): con `ica` sin sembrar, el `SystemExit` lo daba «tema desconocido», no la
+    guarda de `--bibcode`. Se siembra el tema y se exige el mensaje de argparse."""
+    _fuente_off_ads(toy_vault)
     monkeypatch.setattr(sys, "argv", ["triage.py", "ica", "--promote-source", "2011Yang"])
     with pytest.raises(SystemExit):
         triage.main()
+    assert "--bibcode" in capsys.readouterr().err
 
 
 def test_promote_source_sin_nota_manda_a_editar_la_config(toy_vault, monkeypatch):

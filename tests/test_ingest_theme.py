@@ -717,16 +717,24 @@ def test_cerrar_un_pending_offads_estampa_pdf_en_la_nota_que_YA_existe(toy_vault
     assert fm.get("pdf") == "../../raw/pdfs/gp/2011Remes.pdf", fm.get("pdf")
 
 
-def test_todo_camino_que_deposita_un_PDF_pasa_por_stamp_pdf():
-    """La red barata para que no vuelva a rotar (#367): `stamp_pdf` es la única definición de
-    «`pdf:` lo escribe la verdad de disco, lo escriba quien lo escriba». Hoy los depositantes son
-    tres y cada uno tiene que llamarla en el mismo módulo — sin esto la asimetría de #304/#367 se
-    reabre con el próximo carril."""
-    raiz = Path(__file__).resolve().parents[1] / "scripts"
-    for mod in ("fetch_pdf.py", "fetch_web.py", "ingest_theme.py"):
-        texto = (raiz / mod).read_text(encoding="utf-8")
-        assert "cfg.PDFS /" in texto, f"{mod}: ya no deposita en raw/pdfs — sacalo de esta lista"
-        assert "stamp_pdf(" in texto, f"{mod} deposita en raw/pdfs/ y no llama a stamp_pdf"
+def test_todo_camino_que_deposita_un_PDF_pasa_por_stamp_pdf(toy_vault, monkeypatch):
+    """La red para que no vuelva a rotar (#367): `stamp_pdf` es la única definición de «`pdf:` lo
+    escribe la verdad de disco, lo escriba quien lo escriba». AUD-293 (F-03): el assert sobre el
+    TEXTO FUENTE de los tres depositantes pasaba con el nombre en un comentario; acá el carril
+    `fetch_web` (url que sirve PDF, #242) se corre y se ESPÍA la llamada. Los otros dos tienen
+    test propio de comportamiento (`test_fetch_pdf::test_main_baja_todo_relevante_sin_pdf` estampa
+    por verdad de disco; `test_offads_pdf_copia_y_extrae` deja `pdf:` linkeado)."""
+    import fetch_web as fw
+    llamadas = []
+    monkeypatch.setattr(fw.make_notes, "stamp_pdf", lambda dest, stem: llamadas.append((dest.name, stem)) or True)
+    monkeypatch.setattr(fw, "content_type", lambda url: "application/pdf")
+    monkeypatch.setattr(fw, "download_pdf",
+                        lambda url, dest: (dest.parent.mkdir(parents=True, exist_ok=True),
+                                           dest.write_bytes(b"%PDF-1.4 x"), True)[-1])
+    monkeypatch.setattr(sys, "argv", ["fetch_web.py", "gp", "2015Voss",
+                                      "https://arxiv.org/pdf/1502.04148", "--concept", "gaussian-processes"])
+    assert fw.main() == 0
+    assert llamadas == [("2015Voss.md", "2015Voss")], llamadas
 
 
 # ── #384 · corpus DECLARADO con bibcode ADS: `source: ads` + `query: null` + `extra_core:` ────────
