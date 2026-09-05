@@ -93,6 +93,31 @@ def _year(v) -> int | None:
     return int(m.group(1)) if m else None
 
 
+def datacite_meta(doi: str) -> dict | None:
+    """`{family, year, title}` for a DOI that Crossref does not register, or `None` (#400).
+
+    The rail that was missing, and it was not theoretical: measured on a real vault, the only net
+    that caught a note carrying **another paper's title and author** —declared from memory, the
+    failure #392 is about— was the official BibTeX of #397, because this check falls through on a
+    `10.48550/arXiv.*` DOI and Crossref does not register those. `10.48550` is DataCite's arXiv
+    prefix, and 5 of 32 DOIs of that vault are one.
+
+    It reuses the content negotiation `fetch_bibtex` already does —one call, one implementation—
+    and reads the entry with the same minimal parser the lint uses."""
+    import fetch_bibtex as fb
+    entrada, _fuente = fb.doi_bibtex(doi)
+    if not entrada:
+        return None
+    campos = cfg.bibtex_fields(entrada)
+    autor = campos.get("author") or ""
+    # BibTeX escribe `Apellido, Nombre and Otro, Otra`: el primer autor es lo que hay antes del
+    # primer ` and `, y su apellido lo que hay antes de la coma (o la última palabra si no hay).
+    primero = autor.split(" and ")[0].strip()
+    familia = primero.split(",", 1)[0].strip() if "," in primero else (
+        primero.split()[-1] if primero.split() else "")
+    return {"family": familia, "year": _year(campos.get("year")), "title": campos.get("title") or ""}
+
+
 def crossref_meta(msg: dict) -> dict:
     """`{family, year, title}` from a Crossref `message` (double derived from a real response)."""
     autores = [cfg.as_map(a) for a in cfg.as_list(msg.get("author"))]
@@ -276,9 +301,17 @@ def check_item(item: dict, slug: str) -> dict:
             rec["encontrado"] = found
             rec["veredicto"], rec["detalle"] = compare_crossref(declared, found)
             return rec
-        # Measured: 5 of 32 DOIs in one vault are `10.48550/arXiv.*`, which Crossref does not
-        # register — so the PDF rail is the fallback, not a dead end.
-        sin_crossref = f"Crossref: {estado} para {doi}; "
+        # #400 — el DOI que Crossref no registra (`10.48550/arXiv.*`, 5 de 32 en una bóveda) tiene
+        # su propio carril ANTES de caer al PDF: DataCite, por la misma content negotiation que ya
+        # hace `fetch_bibtex`. Medido: la única red que cazó una nota con el título y el autor de
+        # OTRO paper —declarados de memoria, el fallo de #392— fue el BibTeX oficial de #397,
+        # porque acá el DOI de DataCite caía en silencio hasta el carril débil del PDF.
+        if (dc := datacite_meta(doi)) is not None:
+            rec["via"] = "datacite"
+            rec["encontrado"] = dc
+            rec["veredicto"], rec["detalle"] = compare_crossref(declared, dc, fuente="DataCite")
+            return rec
+        sin_crossref = f"Crossref: {estado} para {doi}; DataCite tampoco lo resolvió; "
     # #392 (3): the user's own `.bib` next to the PDFs — structured, offline, and in the measured
     # case it held the four right answers nobody consulted. Same comparison as Crossref.
     for bib in bib_files_near(item):

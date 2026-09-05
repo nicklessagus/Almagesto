@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.218.0"
+ALMAGESTO_VERSION = "1.219.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1727,6 +1727,42 @@ def fm_bounds(text: str) -> tuple[int, int] | None:
 #: los wikilinks (`^\d{4}[A-Za-z]`) y matchea también una clave sintética `AAAA+Autor`, que es
 #: justo lo que no hay que mandarle a ADS.
 ADS_BIBCODE_LEN = 19
+
+
+_TEX_CMD_RE = re.compile(r"\\(?:ensuremath|text|mathrm|mbox|emph|textit|textbf)\b")
+_TEX_ESC_RE = re.compile(r"\\([&%$#_{}])")
+
+
+def fold_tex(s: str) -> str:
+    """A BibTeX title folded to plain text, just enough to COMPARE it (#400).
+
+    Not a TeX renderer: it drops the sub/superscript delimiters keeping the digit —the same choice
+    `clean_catalog_markup` makes for ADS's `<SUB>`— and unescapes the characters BibTeX escapes.
+    Measured: three of the seven findings of the new drift category were the same title written in
+    two markups, HTML from the ADS catalog against TeX from the export, so **every** title with a
+    subscript or an `&` was a permanent finding.
+
+    ⚠ Symmetry is the point: the two sides get folded, so neither markup wins. What it cannot
+    resolve —an unknown macro— is left as is, and then the comparison says «distinto», which is the
+    safe direction: a false positive is read once, a silence is never read."""
+    # `isinstance` y no truthiness: lo que no es un string haría reventar el primer `sub`. La
+    # cadena VACÍA no necesita cláusula propia —las regex la devuelven igual— y agregarla sería una
+    # guarda que no decide nada (red 8).
+    if not isinstance(s, str):
+        return s
+    out = _TEX_CMD_RE.sub("", s)
+    out = re.sub(r"\$([_^])\{?([^${}]*)\}?\$", r"\2", out)      # $_2$ · $^{-1}$ → 2 · -1
+    out = re.sub(r"[_^]\{([^{}]*)\}", r"\1", out)                # _{2} → 2
+    out = _TEX_ESC_RE.sub(r"\1", out)                            # \& → &
+    return out.replace("{", "").replace("}", "").replace("$", "").strip()
+
+
+def catalog_compare_key(s: str) -> str:
+    """The comparison key of a catalog title, with the markup of BOTH worlds folded first (#400).
+
+    `method_key` alone compares `H<SUB>2</SUB>O` against `H$_2$O` and says they differ, because it
+    only strips non-alphanumerics. This resolves ADS's HTML (#271) and BibTeX's TeX before that."""
+    return method_key(fold_tex(clean_catalog_markup(s or "")))
 
 
 def is_ads_bibcode(clave) -> bool:

@@ -21,8 +21,13 @@ PENDSE = {"author": [{"family": "Pendse", "given": "Gautam V.", "sequence": "fir
                     "Detection in fMRI"]}
 
 
-def _crossref(monkeypatch, msg, estado="ok"):
+def _crossref(monkeypatch, msg, estado="ok", datacite=None):
+    """Los DOS carriles de red del chequeo, mockeados juntos: Crossref y —desde #400— DataCite.
+
+    Mockearlos por separado es cómo un test se escapa a la red: el carril nuevo cuelga del mismo
+    `doi`, así que dejarlo suelto hacía que la guarda offline de la suite lo cazara (y bien)."""
     monkeypatch.setattr(cs.cr, "crossref_message", lambda doi, headers: (msg, estado))
+    monkeypatch.setattr(cs, "datacite_meta", lambda doi: datacite)
 
 
 # ── normalización y apellido declarado ───────────────────────────────────────────────────────────
@@ -255,7 +260,7 @@ def test_el_caso_de_392_lo_caza_el_bib_al_lado_del_pdf(toy_vault, tmp_path, monk
     que el PDF, decía Vrabie. Crossref no hacía falta: el carril es offline y bloquea como Crossref."""
     (tmp_path / "biblio.bib").write_text(BIB, encoding="utf-8")
     (tmp_path / "VLM06 (subspace method).pdf").write_bytes(b"%PDF")
-    monkeypatch.setattr(cs.cr, "crossref_message", lambda doi, headers: (None, "sin-registro"))
+    _crossref(monkeypatch, None, "sin-registro")   # ni Crossref ni DataCite: el `.bib` es el carril
     rec = cs.check_item({"key": "2006VanDerBaan", "author": "VanDerBaan", "year": 2006,
                          "doi": "10.1190/1.2335387", "pdf": str(tmp_path / "VLM06 (subspace method).pdf")}, "ica")
     assert rec["via"] == "bib" and rec["veredicto"] == "autor" and "Vrabie" in rec["detalle"]
@@ -297,3 +302,42 @@ def test_las_guardas_de_los_carriles_nuevos_no_miran_donde_no_deben(toy_vault, t
     assert cs.web_snapshot({"key": ""}, "ica") is None
     (d / "2001HKO.txt").write_text("# Almagesto — fulltext por pdftotext\nprosa\n", encoding="utf-8")
     assert cs.web_snapshot({"key": "2001HKO"}, "ica") is None
+
+
+# ── #400 · el carril que faltaba: el DOI que Crossref no registra ────────────────────────────────
+
+def test_el_doi_de_DATACITE_tiene_carril_y_no_cae_al_PDF(toy_vault, monkeypatch):
+    """#400 — `10.48550/arXiv.*` es el prefijo de arXiv en DataCite y Crossref **no lo registra**,
+    así que caía al carril débil del PDF. Medido: la única red que cazó una nota con el título y el
+    autor de OTRO paper —declarados de memoria, el fallo de #392— fue el BibTeX oficial de #397,
+    no este chequeo, que es el que existe para eso. 5 de 32 DOIs de esa bóveda son de esa forma.
+
+    Bloquea igual que Crossref: es una fuente estructurada, no la portada de un PDF."""
+    _crossref(monkeypatch, None, "sin-registro",
+              datacite={"family": "Morello", "year": 2014,
+                        "title": "A new look at Spitzer observations of HD189733b"})
+    rec = cs.check_item({"key": "2014Waldmann", "author": "Waldmann", "year": 2014,
+                         "doi": "10.48550/arXiv.1403.2874"}, "ica")
+    assert rec["via"] == "datacite" and rec["veredicto"] == "autor"
+    assert "Morello" in rec["detalle"] and "DataCite" in rec["detalle"], rec["detalle"]
+
+
+def test_sin_crossref_ni_datacite_lo_DICE_antes_de_caer_al_pdf(toy_vault, monkeypatch):
+    """D-43 — «no se pudo cruzar» se declara con los dos carriles nombrados; sin eso, el DOI de
+    DataCite caía en silencio y el veredicto débil del PDF se leía como el único posible."""
+    _crossref(monkeypatch, None, "sin-registro", datacite=None)
+    rec = cs.check_item({"key": "2014X", "author": "X", "year": 2014, "doi": "10.48550/arXiv.1"}, "ica")
+    assert "DataCite tampoco" in rec["detalle"], rec["detalle"]
+
+
+def test_datacite_meta_saca_el_apellido_del_primer_autor(monkeypatch):
+    """BibTeX escribe `Apellido, Nombre and Otro, Otra`: el primer autor es lo de antes del primer
+    ` and `, y su apellido lo de antes de la coma. Sin eso el carril compararía contra la lista
+    entera y no distinguiría nada."""
+    import fetch_bibtex as fb
+    monkeypatch.setattr(fb, "doi_bibtex", lambda doi: (
+        '@misc{k,\n  author = {Morello, Giuseppe and Waldmann, Ingo P.},\n'
+        '  title = {A new look},\n  year = {2014},\n}\n', "datacite"))
+    assert cs.datacite_meta("10.48550/x") == {"family": "Morello", "year": 2014, "title": "A new look"}
+    monkeypatch.setattr(fb, "doi_bibtex", lambda doi: ("", ""))
+    assert cs.datacite_meta("10.48550/x") is None

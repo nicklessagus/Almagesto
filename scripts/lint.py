@@ -2635,15 +2635,31 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                     _nota, _oficial = str(fm.get(_c) or "").strip(), str(_campos.get(_c) or "").strip()
                     if not _nota or not _oficial:
                         continue          # lo que una de las dos no dice no es una discrepancia
-                    # `method_key` es el normalizador del repo (casefold + NFKD +
-                    # no-alfanumérico → `-`, #243): compara `10.1038/378355a0` con
-                    # `10.1038/378355A0` y un título con guiones distintos sin
-                    # inventar la discrepancia que este chequeo existe para cazar.
-                    if cfg.method_key(_nota) != cfg.method_key(_oficial):
+                    # #400 — se pliega el MARKUP de los dos mundos antes de comparar: el
+                    # frontmatter trae el HTML del catálogo ADS (`H<SUB>2</SUB>O`, `&amp;`) y la
+                    # exportación el TeX (`H$_2$O`, `\&`). Medido: 3 de los 7 primeros hallazgos de
+                    # esta categoría eran el MISMO título en dos marcados, o sea que todo título
+                    # con un subíndice o un `&` era un hallazgo permanente. Debajo sigue
+                    # `method_key`, que es lo que hace que `10.1038/378355A0` no sea una
+                    # discrepancia.
+                    _kn, _ko = cfg.catalog_compare_key(_nota), cfg.catalog_compare_key(_oficial)
+                    if _kn == _ko:
+                        continue
+                    # #400 — cuál de los dos está mal SÍ se puede decidir en un caso, y es el
+                    # frecuente: si el del frontmatter es **prefijo estricto** del oficial, está
+                    # truncado (medido: 3 de 7, cortados en 84, 80 y 71 caracteres — no es un
+                    # `[:N]`). Decir «uno de los dos está mal» ahí es no decir nada.
+                    if _c == "title" and _ko.startswith(_kn):
                         bibtex_drift.append(
-                            (stem, f"`{_c}` del frontmatter dice «{_nota[:60]}» y la exportación "
-                                   f"oficial dice «{_oficial[:60]}» — uno de los dos está mal, y el "
-                                   f"que viaja al informe es el BibTeX (#397)"))
+                            (stem, f"`title` del frontmatter está TRUNCADO: termina en «…"
+                                   f"{_nota[-40:]}» y la exportación oficial sigue «…"
+                                   f"{_oficial[len(_nota):][:60]}» → re-estampalo desde el catálogo "
+                                   f"(#400)"))
+                        continue
+                    bibtex_drift.append(
+                        (stem, f"`{_c}` del frontmatter dice «{_nota[:60]}» y la exportación "
+                               f"oficial dice «{_oficial[:60]}» — uno de los dos está mal, y el "
+                               f"que viaja al informe es el BibTeX (#397)"))
             for _campo, _ok in (("pdf_source", cfg.PDF_SOURCE_OK),
                                 ("fulltext_source", cfg.FULLTEXT_SOURCE_OK),
                                 ("bibtex_source", cfg.BIBTEX_SOURCES)):

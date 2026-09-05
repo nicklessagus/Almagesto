@@ -7735,3 +7735,43 @@ def test_check_duplicate_without_id_agrupa_por_abstract_y_no_por_titulo(toy_vaul
     assert lint.check_duplicate_without_id(fms, abst, {"2020A"}, set()) == [], \
         "lo ya reportado por identidad no se re-reporta acá"
     assert lint.check_duplicate_without_id(fms, abst, set(), {"2020B"}) == []
+
+
+def test_el_drift_no_se_dispara_por_el_MARKUP_de_cada_mundo(toy_vault, capsys):
+    """#400 — el frontmatter trae el HTML del catálogo ADS y la exportación el TeX: el MISMO título
+    escrito en dos marcados. Medido sobre los 7 primeros hallazgos de la categoría, **3** eran esto
+    —`H<SUB>2</SUB>O` vs `H$_2$O`, `s<SUP>-1</SUP>` vs `s$^-1$`, `H&amp;K` vs `H\\&K`—, o sea que
+    todo título con un subíndice o un `&` era un hallazgo permanente. Se pliegan los DOS lados, así
+    que ningún marcado gana."""
+    _paper_con_bibtex(toy_vault, {
+        "bibtex": '@ARTICLE{k,\n  title = "{Detecting H$_2$O with CRIRES+ and Ca II H\\\\&K}",\n}\n',
+        "bibtex_source": "ads", "title": "Detecting H<SUB>2</SUB>O with CRIRES+ and Ca II H&amp;K"})
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2020aaa" not in _seccion(rep, "exportación oficial dicen cosas distintas"), rep
+
+
+def test_el_titulo_TRUNCADO_se_nombra_como_tal(toy_vault, capsys):
+    """#400 — «uno de los dos está mal» no ayuda a decidir cuál, y en el caso frecuente SÍ se puede:
+    si el título del frontmatter es **prefijo estricto** del oficial, está truncado. Medido: 3 de 7,
+    cortados en 84, 80 y 71 caracteres —no es un `[:N]`— y ahí el BibTeX es el correcto."""
+    _paper_con_bibtex(toy_vault, {
+        "bibtex": '@ARTICLE{k,\n  title = "{The CORALIE survey VII. Two short-period Saturnian '
+                  'companions to HD 108147}",\n}\n',
+        "bibtex_source": "ads", "title": "The CORALIE survey VII. Two short-period Saturnian"})
+    _rc, rep = run_lint_reporte(capsys)
+    seccion = _seccion(rep, "exportación oficial dicen cosas distintas")
+    assert "TRUNCADO" in seccion and "companions to HD 108147" in seccion, rep
+    assert "uno de los dos está mal" not in seccion, "el caso decidible no se reporta como indeciso"
+
+
+def test_el_titulo_DISTINTO_sigue_saliendo_como_indeciso(toy_vault, capsys):
+    """El simétrico, y el que importa: el acierto real de la categoría fue un paper con el título de
+    OTRO paper (`2014Waldmann`, declarado de memoria — el caso de #392). Ahí no hay prefijo y la
+    salida sigue siendo «uno de los dos está mal», que es lo honesto: decidirlo pide abrir la
+    portada."""
+    _paper_con_bibtex(toy_vault, {
+        "bibtex": '@ARTICLE{k,\n  title = "{A new look at Spitzer observations of HD189733b}",\n}\n',
+        "bibtex_source": "ads", "title": "A new look at Spitzer observations of GJ 436b"})
+    _rc, rep = run_lint_reporte(capsys)
+    seccion = _seccion(rep, "exportación oficial dicen cosas distintas")
+    assert "uno de los dos está mal" in seccion and "TRUNCADO" not in seccion, rep

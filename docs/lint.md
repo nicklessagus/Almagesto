@@ -483,6 +483,15 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   discrepancia, y un falso positivo acá manda a revisar a mano una cita correcta. ⚠ Un campo que
   una de las dos partes no dice **no se reporta**: eso es un hueco de schema (INV-63), no un
   desacuerdo.
+  ⛔ **Se pliega el MARKUP de los dos mundos antes de comparar** (#400): el frontmatter trae el HTML
+  del catálogo ADS (`H<SUB>2</SUB>O`, `&amp;`) y la exportación el TeX (`H$_2$O`, `\&`) — el mismo
+  título en dos marcados. Medido sobre los 7 primeros hallazgos de la categoría: **3** eran esto, o
+  sea que todo título con un subíndice o un `&` era un hallazgo permanente (`cfg.catalog_compare_key`).
+  ⛔ **Y cuando el título del frontmatter es PREFIJO ESTRICTO del oficial se dice que está TRUNCADO**
+  y se manda a re-estamparlo: otros 3 de los 7 lo estaban, cortados en 84, 80 y 71 caracteres —no es
+  un `[:N]`—, y ahí «uno de los dos está mal» no ayuda a decidir cuál. El acierto real de la
+  categoría fue el caso sin prefijo: una nota con el título y el autor de **otro paper**, declarados
+  de memoria (#392), que ninguna otra red vio.
 - **`no_vista` se consulta en las cuatro redes** (#268): la escotilla que #256 hizo alcanzable
   decidía sobre **una** categoría, y las otras tres contaban la misma nota como deuda — medido, una
   nota con `no_vista` declarado y motivo seguía recibiendo *«conseguir el PDF»* sobre una tabla
@@ -785,10 +794,12 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   backlog): una fuente off-ADS declara su metadata a mano y nada la cruzaba. Medido: una nota
   publicaba **autor y título de otro paper** —clave sintética, `first_author`, `title` y hasta el
   `motivo` derivados del NOMBRE DEL ARCHIVO del PDF—; sólo el `doi` y el PDF eran correctos. El
-  cruce lo hace `python scripts/check_sources.py <slug>` (Crossref por `doi`; sin registro, el
-  `.bib` del usuario en la carpeta del PDF declarado —#392, bloquea como Crossref—; después la
-  primera página del PDF vía `pdftotext -f 1 -l 1`, y para una `url:` el arranque del snapshot
-  web —los dos, evidencia débil—), corre al ingestar y deja el
+  cruce lo hace `python scripts/check_sources.py <slug>` (Crossref por `doi`; sin registro,
+  **DataCite** por content negotiation —#400: `10.48550/arXiv.*` es su prefijo y Crossref no lo
+  registra, así que 5 de 32 DOIs de una bóveda caían en silencio al carril débil del PDF; bloquea
+  como Crossref, es una fuente estructurada—; después el `.bib` del usuario en la carpeta del PDF
+  declarado (#392, también bloquea); después la primera página del PDF vía `pdftotext -f 1 -l 1`, y
+  para una `url:` el arranque del snapshot web —los dos, evidencia débil—), corre al ingestar y deja el
   veredicto en el registro con un snapshot de lo declarado; el lint lo lee **offline**. Severidad
   medida sobre 52 fuentes reales: bloquea sólo **autor por Crossref** y **año por Crossref con
   diferencia ≥ 2** (a ±1 es online-first vs impreso); título distinto, primera página que no

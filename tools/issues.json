@@ -1944,7 +1944,7 @@
   {
    "number": 391,
    "title": "REPLANTEO diferido de #387 B: la supersesión del `log` sigue siendo una convención en PROSA, y el precedente estructurado ya existe en el registro (D-52)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 392,
@@ -1984,6 +1984,11 @@
   {
    "number": 399,
    "title": "`fetch_bibtex`: dos salidas que leen al revés — el 404 de un lote sin bibcodes ADS se anuncia como caída de red, y el DOI con título exacto pero autor distinto en Crossref se calla",
+   "state": "CLOSED"
+  },
+  {
+   "number": 400,
+   "title": "La categoría de #397 «frontmatter ≠ exportación oficial» cazó un paper con título de OTRO paper (un caso de #392 que #353 no ve: DOI de DataCite), y 6 de sus 7 hallazgos son markup o títulos truncados",
    "state": "OPEN"
   }
  ]

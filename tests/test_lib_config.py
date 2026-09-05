@@ -3188,3 +3188,33 @@ def test_is_ads_bibcode_no_confunde_una_clave_sintetica():
     assert not cfg.is_ads_bibcode("2011Naik") and not cfg.is_ads_bibcode("1998HyvarinenICANN")
     assert not cfg.is_ads_bibcode("") and not cfg.is_ads_bibcode(None)
     assert not cfg.is_ads_bibcode("x" * 19), "la forma también: 19 caracteres cualesquiera no basta"
+
+
+def test_catalog_compare_key_pliega_los_DOS_marcados():
+    """#400 — el `title:` del frontmatter trae el HTML del catálogo ADS y la exportación BibTeX el
+    TeX: el MISMO título en dos marcados. Medido sobre los 7 primeros hallazgos de la categoría de
+    #397, **3** eran esto, o sea que todo título con un subíndice o un `&` era un hallazgo
+    permanente. Se pliegan los dos lados, así que ningún marcado gana."""
+    for html, tex in (("Detecting H<SUB>2</SUB>O with CRIRES+", "Detecting H$_2$O with CRIRES+"),
+                      ("sub-m s<SUP>-1</SUP>", "sub-m s$^-1$"),
+                      ("Ca II H&amp;K", r"Ca II H\&K"),
+                      ("Two companions to <ASTROBJ>HD 108147</ASTROBJ>", "Two companions to HD 108147")):
+        assert cfg.catalog_compare_key(html) == cfg.catalog_compare_key(tex), (html, tex)
+    # Y sigue distinguiendo lo que ES distinto: el acierto real de la categoría fue un paper con el
+    # título de OTRO paper, y plegar markup no puede taparlo.
+    assert cfg.catalog_compare_key("Spitzer observations of GJ 436b") != \
+        cfg.catalog_compare_key("Spitzer observations of HD189733b")
+
+
+def test_fold_tex_no_es_un_renderizador_y_deja_lo_que_no_entiende():
+    """No resuelve TeX: quita los delimitadores de sub/superíndice conservando el dígito —la misma
+    decisión que `clean_catalog_markup` toma para `<SUB>`— y desescapa lo que BibTeX escapa. Lo que
+    no reconoce queda como está, y entonces la comparación dice «distinto»: un falso positivo se lee
+    una vez, un silencio no se lee nunca."""
+    assert cfg.fold_tex("H$_2$O") == "H2O"
+    assert cfg.fold_tex(r"m s$^{-1}$") == "m s-1"
+    assert cfg.fold_tex(r"Ca II H\&K") == "Ca II H&K"
+    # Macro desconocida: se queda como está, y entonces la comparación dice «distinto».
+    assert cfg.fold_tex(r"9.2 M$_{{\ensuremath{\oplus}}}$") == r"9.2 M_\oplus"
+    assert cfg.fold_tex("") == "" and cfg.fold_tex(None) is None
+    assert cfg.fold_tex(2020) == 2020, "lo que no es un string vuelve como está"
