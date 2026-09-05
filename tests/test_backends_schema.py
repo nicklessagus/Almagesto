@@ -96,22 +96,86 @@ def test_citation_count_ausente_es_None_no_cero(nombre, hacer, ausente, toy_vaul
     assert hacer()["citation_count"] is ausente
 
 
-# ── red #2 · `_flags_usados`: una implementación, siete clientes ────────────
+# ── red #2 · `cfg.flags_usados`: una implementación, siete clientes ──────────
 
 FLAGS_CLIENTES = ["fetch_pdf", "extract_fulltext", "fetch_ground_truth", "check_retractions",
                   "fetch_arxiv", "make_notes", "query_ads"]
 
 
+def _escenario(modulo: str, monkeypatch) -> list:
+    """The cheapest argv that drives `<modulo>.main()` to its `cfg.save_paso` with ONE
+    non-default flag set, with every network/tool boundary patched out. Returns the argv."""
+    import json
+    import shutil
+    build = cfg.ROOT / "build" / "test_star"
+    build.mkdir(parents=True, exist_ok=True)
+    (build / "ads.json").write_text(json.dumps({"records": [], "star": "Test Star"}),
+                                    encoding="utf-8")
+    monkeypatch.setattr(cfg, "get_ads_token", lambda: "tok")
+    if modulo in ("fetch_pdf", "fetch_arxiv"):
+        return ["test_star", "--limit", "1"]
+    if modulo == "extract_fulltext":
+        (cfg.PDFS / "test_star").mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")
+        return ["test_star", "--force"]
+    if modulo == "fetch_ground_truth":
+        import fetch_ground_truth as gt
+        monkeypatch.setattr(gt, "fetch_pscomppars", lambda host: [])
+        monkeypatch.setattr(gt, "fetch_host", lambda host, tab: {})
+        monkeypatch.setattr(gt, "fetch_planets", lambda tab, mass: [])
+        monkeypatch.setattr(gt, "unresolved_aliases", lambda host, aliases: [])
+        monkeypatch.setattr(gt, "simbad_identifiers", lambda host: None)
+        return ["test_star", "--force"]
+    if modulo == "check_retractions":
+        import check_retractions as cr
+        from conftest import mk_note
+        mk_note(cfg.PAPERS, "2020ok....1..1X",
+                {"bibcode": "2020ok....1..1X", "title": "Sano", "doi": "10.1/ok", "tags": ["paper"]})
+        (build / "ads.json").write_text(
+            json.dumps({"records": [{"bibcode": "2020ok....1..1X", "relevant": True}]}),
+            encoding="utf-8")
+        monkeypatch.setattr(cr, "crossref_retraction", lambda doi, headers: (None, [], "ok"))
+        return ["--slug", "test_star", "--force"]
+    if modulo == "make_notes":
+        return ["test_star", "--all"]
+    if modulo == "query_ads":
+        monkeypatch.setattr(qa, "sweep_star", lambda slug, rows: 0)
+        return ["test_star", "--sweep"]
+    raise AssertionError(modulo)
+
+
 @pytest.mark.parametrize("modulo", FLAGS_CLIENTES)
-def test_flags_usados_delega_en_la_implementacion_unica(modulo):
-    """Vivía copiada en los siete (seis idénticas y una con `chr(95)/chr(45)`), y las siete tenían
-    **el mismo agujero**: sólo miraban `v is True`. Red #2 — si N módulos prometen la misma forma,
-    se prueba una vez parametrizada, no con prosa en N docstrings."""
+def test_cada_script_estampa_sus_flags_via_la_implementacion_unica(modulo, toy_vault, monkeypatch):
+    """`_flags_usados` vivía copiada en los siete (seis idénticas y una con `chr(95)/chr(45)`), y
+    las siete tenían **el mismo agujero**: sólo miraban `v is True`. Red #2 — si N módulos prometen
+    la misma forma, se prueba una vez parametrizada. El test anterior leía el TEXTO FUENTE del
+    wrapper (AUD, frente D); éste mira el comportamiento: `main()` llega a `cfg.save_paso` con
+    `flags=` calculado por `cfg.flags_usados`, y el flag no-default que se pasó está adentro."""
     import importlib
+    import sys
     m = importlib.import_module(modulo)
-    fuente = inspect.getsource(m._flags_usados)
-    assert "cfg.flags_usados(args, ap)" in fuente, (
-        f"{modulo}._flags_usados reimplementa en vez de delegar:\n{fuente}")
+    argv = _escenario(modulo, monkeypatch)
+    flag = next(a for a in argv if a.startswith("--") and a != "--slug")
+    llamadas: list = []
+    real = cfg.flags_usados
+
+    def espia(args, ap=None, **kw):
+        out = real(args, ap, **kw)
+        llamadas.append(out)
+        return out
+
+    monkeypatch.setattr(cfg, "flags_usados", espia)
+    estampas: list = []
+    monkeypatch.setattr(cfg, "save_paso",
+                        lambda slug, paso, flags=None, **kw: estampas.append((paso, flags)))
+    monkeypatch.setattr(sys, "argv", [f"{modulo}.py", *argv])
+    assert m.main() == 0
+    assert estampas, f"{modulo}.main() no llegó a `cfg.save_paso`"
+    assert llamadas, f"{modulo}.main() no pasó por `cfg.flags_usados`"
+    paso, flags = estampas[-1]
+    assert paso == modulo
+    assert flags == llamadas[-1], "los flags estampados no son los que devolvió `cfg.flags_usados`"
+    assert any(f.startswith(flag) for f in flags), f"{flag!r} no quedó en {flags!r}"
 
 
 def test_flags_usados_registra_el_flag_con_valor():

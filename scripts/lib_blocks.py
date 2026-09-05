@@ -70,12 +70,12 @@ _CELL_SPLIT_RE = re.compile(r"(?<!\\)\|")   # un `|` que no venga escapado
 # `"[[ y sigo.\nEl radio vive en [[gp-kernels]]"` devolvía UN solo target multilínea, así que un
 # wikilink real dejaba de contar como entrante y su destino se reportaba **huérfano** — categoría
 # BLOQUEANTE — con un mensaje que nombraba un target inservible.
-LINK_RE = re.compile(r"\[\[([^\]\|#\n]+)(?=[\]\|#])")
-BIBCODE_RE = re.compile(r"^\d{4}[A-Za-z]")      # misma heurística que lint/bench_verify/fetch_web
+LINK_RE = cfg.LINK_RE                   # ONE definition (AUD-278)
+BIBCODE_RE = cfg.BIBCODE_LIKE_RE        # ONE heuristic (AUD-277)
 _WS_RE = re.compile(r"\s+")
 _BULLET_RE = re.compile(r"^(?:[-*+]|\d+\.)\s+")
-_SEP_ROW_RE = re.compile(r"^\|[\s\-:|]+\|?$")   # `|---|---|` — estructura, no contenido
-_FM_DELIM_RE = re.compile(r"^---[ \t]*$", re.MULTILINE)
+_SEP_ROW_RE = cfg.SEP_ROW_RE            # `|---|---|` — estructura, no contenido (AUD-278)
+_FM_DELIM_RE = cfg._FM_DELIM_RE
 
 
 @dataclass(frozen=True)

@@ -371,12 +371,6 @@ def nea_diff(slug: str) -> list:
     return cambios
 
 
-def _flags_usados(args, ap=None) -> list:
-    """Los flags no-default de esta corrida, para dejarlos en `cadena:` del registro (D-48/D-57).
-    Son las **escotillas**: `--force`, `--yes`, `--all` cambian lo que la corrida hizo, y sin
-    registrarlas la traza dice "corrió make_notes" sobre dos corridas que no hicieron lo mismo."""
-    return cfg.flags_usados(args, ap)
-
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -407,7 +401,7 @@ def main() -> int:
         # creado por `sweep_external.aplicar_ground_truth`)— y el único modo de cerrarlo era
         # `--force`, o sea pisar el snapshot: justo lo que el mensaje de arriba dice no hacer. Es
         # el mismo falso positivo permanente que `check_retractions` ya tenía y cerró.
-        cfg.save_paso(args.slug, "fetch_ground_truth", flags=_flags_usados(args, ap))
+        cfg.save_paso(args.slug, "fetch_ground_truth", flags=cfg.flags_usados(args, ap))
         return 0
     host = cfg.require_field(meta, "simbad", name, "stars.yaml")
     print(f"Ground-truth {name} (host={host!r})")
@@ -458,7 +452,7 @@ def main() -> int:
                "source": "NASA Exoplanet Archive (pscomppars) + SIMBAD"}
     out = write_ground_truth(args.slug, payload)
     print(f"  → {out}")
-    cfg.save_paso(args.slug, "fetch_ground_truth", flags=_flags_usados(args, ap))
+    cfg.save_paso(args.slug, "fetch_ground_truth", flags=cfg.flags_usados(args, ap))
     return 0
 
 

@@ -20,7 +20,7 @@
 #     deja de ser ratchet y se vuelve decorativo (la lección de AUD-07).
 #   - el techo NUNCA se sube. Si un símbolo nuevo lo necesita, el símbolo está mal nombrado.
 medido_en: "2026-08-27"
-techo: 44   # ocurrencias `archivo::símbolo`; `conocidos` son 43 NOMBRES
+techo: 42   # ocurrencias `archivo::símbolo`; `conocidos` son 43 NOMBRES
             # (tres viven en más de un archivo: `_listify_curado` en tres,
             #  y por eso los dos números no coinciden).
 

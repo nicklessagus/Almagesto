@@ -40,7 +40,6 @@ def _mailto() -> str:
     return cfg.get_mailto()
 
 
-MAILTO = ""                        # se resuelve por llamada; "" = pool público
 PER_PAGE = 200                     # máximo de OpenAlex
 BATCH = 50                         # DOIs por request en el filtro `doi:a|b|c`
 TIMEOUT = 60
@@ -199,7 +198,7 @@ def _get(params: dict) -> dict:
     para el mismo error. Si el servicio no cede, **levanta**: devolver `[]` sería indistinguible de
     "no hay resultados", que es el falso limpio que INV-69/INV-87 prohíben."""
     params = {**params, "select": SELECT}
-    correo = MAILTO or _mailto()
+    correo = _mailto()
     if correo:
         params["mailto"] = correo
     url = f"{API}?{urllib.parse.urlencode(params, safe=':|/.')}"

@@ -133,7 +133,7 @@ def _entity_slug(path: str) -> str | None:
 # `"[[ y sigo.\nEl radio vive en [[gp-kernels]]"` devolvía UN solo target multilínea, así que un
 # wikilink real dejaba de contar como entrante y su destino se reportaba **huérfano** — categoría
 # BLOQUEANTE — con un mensaje que nombraba un target inservible.
-LINK_RE = re.compile(r"\[\[([^\]\|#\n]+)(?=[\]\|#])")
+LINK_RE = cfg.LINK_RE                   # ONE definition (AUD-278)
 # Frontera dura (regla #0 de CLAUDE.md): la bóveda es SÓLO bibliografía. Detecta material de
 # implementación/código no bibliográfico que se filtró a una nota. WARN, no bloquea: son heurísticas de
 # alta señal/bajo ruido; se saltan los blockquotes meta (frontera/alcance). Revisar a mano cada hit.
@@ -560,7 +560,7 @@ def _field_is_marked(lineas_marcadas: list[str], campo: str, viejo) -> bool:
     return False
 
 
-_SEP_ROW = re.compile(r"^\|[\s\-:|]+\|?$")   # `|---|---|`: estructura, no contenido
+_SEP_ROW = cfg.SEP_ROW_RE               # `|---|---|`: estructura, no contenido (AUD-278)
 
 INVENTARIO_HEADER = "## Inventario por eje"
 
@@ -570,8 +570,8 @@ INVENTARIO_HEADER = "## Inventario por eje"
 # en sus tres formas: la escribe `make_notes` con el largo, pero una nota editada a mano con `-`
 # tendría la vista hecha y el detector la reportaría como ausente — un falso positivo sobre trabajo
 # real, que es la peor moneda de un gate bloqueante.
-EXTRACCION_VIEJA_RE = re.compile(r"^##\s+Extracci[oó]n\s*\(LLM\)\s*$", re.M)
-VISTA_RE = re.compile(r"^##\s+Vista\s*[—–-]\s*(.+?)\s*$", re.M)
+EXTRACCION_VIEJA_RE = cfg.EXTRACCION_VIEJA_RE      # ONE definition (AUD-278)
+VISTA_RE = cfg.VISTA_RE
 #: #239 · la sub-sección de una lente dentro de una vista.
 _LENTE_RE = re.compile(r"^###\s+Lente\s*[—–-]\s*(.+?)\s*$", re.M)
 
@@ -712,7 +712,7 @@ def _norm_alias(x: str) -> str:
     return re.sub(r"[^a-z0-9]", "", str(x).lower())
 
 
-BIBCODE_RE = re.compile(r"^\d{4}[A-Za-z]")   # heurística: target de link que parece bibcode
+BIBCODE_RE = cfg.BIBCODE_LIKE_RE        # heurística: target de link que parece bibcode (AUD-277)
 # R-3 (decidida con el usuario, 2026-08-24): la marca en línea de una cita a fuente retractada. El
 # símbolo es lo que la hace inconfundible con la palabra suelta en prosa; es la hermana de
 # `(inferencia de [[b]])` (D-42), y son las dos únicas marcas en línea del sistema.
@@ -4330,7 +4330,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         if not _dir.is_dir():
             continue
         for _txt in sorted(_dir.glob("*.txt")):
-            if not (cfg.PAPERS / f"{_txt.stem.replace('/', '_')}.md").exists():
+            if not (cfg.PAPERS / f"{cfg.note_stem(_txt.stem)}.md").exists():
                 incomplete.append(
                     (_txt.stem, f"`raw/fulltext/{_dir.name}/{_txt.stem}.txt` sin su nota en "
                                 f"`papers/` → extracción ya pagada que no alcanza ninguna síntesis "
@@ -4348,7 +4348,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         if not _dir.is_dir():
             continue
         for _pdf in sorted(_dir.glob("*.pdf")):
-            if not (cfg.PAPERS / f"{_pdf.stem.replace('/', '_')}.md").exists():
+            if not (cfg.PAPERS / f"{cfg.note_stem(_pdf.stem)}.md").exists():
                 incomplete.append(
                     (_pdf.stem, f"`raw/pdfs/{_dir.name}/{_pdf.stem}.pdf` sin su nota en `papers/` → "
                                 f"descarga ya pagada que no alcanza ninguna síntesis, y desde #205 "

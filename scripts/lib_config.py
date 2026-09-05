@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.203.0"
+ALMAGESTO_VERSION = "1.204.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1689,7 +1689,29 @@ def is_stamped_section(heading: str) -> bool:
     return _es_estampada(heading)
 
 
-_VISTA_HEAD = re.compile(r"^##\s+Vista\s*[—–-]\s*(.+?)\s*$", re.M)
+# ── Note-shape regexes: ONE definition each (AUD-277/AUD-278) ──────────────────────────────────
+# Method rule nº 4: every check that looks at note text normalizes the markdown first — and with
+# the same regex living in two modules the next fix (#176/#224-style) lands on one copy. These
+# were duplicated literally across `lib_blocks`, `lint`, `make_notes`, `bench_verify` and
+# `fetch_web`; those modules keep their historical names as aliases of the constants below.
+#
+# `[[target]]` — demands a delimiter (`]`, `|` or `#`) after the target and stops at the newline:
+# without that, an unclosed `[[` swallowed the NEXT link (measured 2026-08-28: one multiline
+# target, a real wikilink no longer counted as incoming, its destination reported orphan).
+LINK_RE = re.compile(r"\[\[([^\]\|#\n]+)(?=[\]\|#])")
+#: "looks like a bibcode / citekey": 4 digits + letter. Decides which link targets count as
+#: citations (coverage, orphans, bench) and which citekeys `fetch_web` accepts (INV-27).
+BIBCODE_LIKE_RE = re.compile(r"^\d{4}[A-Za-z]")
+#: `|---|---|` — table structure, never content.
+SEP_ROW_RE = re.compile(r"^\|[\s\-:|]+\|?$")
+#: #188 · the two body marks of a paper note. `## Extracción (LLM)` is the RETIRED schema (one
+#: unscoped section) and `## Vista — <sujeto>` the current one (one per lens). The dash is
+#: accepted in its three forms: `make_notes` writes the long one, but a hand-edited note with `-`
+#: has its view done and a strict detector would report it missing — a false positive on real
+#: work, the worst currency for a blocking gate.
+EXTRACCION_VIEJA_RE = re.compile(r"^##\s+Extracci[oó]n\s*\(LLM\)\s*$", re.M)
+VISTA_RE = re.compile(r"^##\s+Vista\s*[—–-]\s*(.+?)\s*$", re.M)
+_VISTA_HEAD = VISTA_RE
 _EJES_HEAD = re.compile(r"^\*\*Ejes:\*\*\s*$", re.M)
 _EJE_BULLET = re.compile(r"^-\s+\*\*(.+?):\*\*", re.M)
 
@@ -2158,6 +2180,42 @@ def note_has_reading(fm: dict) -> bool:
     fm = as_map(fm)
     return bool(as_list(fm.get("methods"))) or any(
         isinstance(v, dict) and v.get("fecha") for v in as_list(fm.get("vistas")))
+
+
+def note_stem(bibcode: str) -> str:
+    """The file stem of a bibcode's artefacts (note, PDF, `.txt`, extraction): `/` is the only
+    character a bibcode carries that a path cannot (`astro-ph/9605059` → `astro-ph_9605059`).
+    ONE rule for the eight layers `entity.py` moves (AUD-273: three `safe_name` defs plus ten
+    inline `replace("/", "_")` copies — if the rule ever changes, it changes here)."""
+    return bibcode.replace("/", "_")
+
+
+NOTE_ABSENT, NOTE_STUB, NOTE_READ = "sin_nota", "stub", "extraida"
+
+
+def note_state(bibcode: str, subject: str | None = None) -> str:
+    """Where a paper note stands: `sin_nota` (no file), `stub` (exists, no reading) or `extraida`
+    (a reading was paid for). ONE definition with the #189 semantics (AUD-286: `query_ads` called
+    «extraída» any note with `methods` populated — which `make_notes` merges add-only WITHOUT
+    reading — while `triage` demanded a DATED view).
+
+    Without `subject` the question is «did anyone read it?» and the rule is `note_has_reading`.
+    With `subject` it is «was it read FOR this subject?»: only a view of that subject with a
+    `fecha` counts — the stub is born with the subject's view and no date precisely because the
+    reading has not happened yet. A malformed `vistas[]` is the lint's finding, not this one's:
+    here it degrades to `stub` (there is a note, the reading is not on record)."""
+    dest = PAPERS / f"{note_stem(bibcode)}.md"
+    if not dest.exists():
+        return NOTE_ABSENT
+    fm = split_fm(dest.read_text(encoding="utf-8"))
+    if subject is None:
+        return NOTE_READ if note_has_reading(fm) else NOTE_STUB
+    try:
+        vistas = load_vistas(fm, entry=bibcode)
+    except VistasError:
+        return NOTE_STUB
+    leida = any(v["sujeto"] == subject and str(v.get("fecha") or "").strip() for v in vistas)
+    return NOTE_READ if leida else NOTE_STUB
 
 
 def wikilink_re(stem: str):

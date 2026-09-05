@@ -374,6 +374,9 @@ def subject_name(slug: str) -> str:
         return slug
 
 
+_STATE_MARK = {cfg.NOTE_ABSENT: NO_NOTE, cfg.NOTE_READ: READ_HERE, cfg.NOTE_STUB: OTHER_AXIS}
+
+
 def note_state(bibcode: str, subject: str) -> str:
     """¿En qué estado está este candidato respecto de la bóveda? (#189)
 
@@ -381,24 +384,10 @@ def note_state(bibcode: str, subject: str) -> str:
     le afirmaba al operador que el paper «ya está bajado y **extraído**». Es falso: la nota existe
     porque alguien la **creó**, y el retro-linkeo de `make_notes` mergea `stars`/`thesis_links`
     add-only **sin leer nada**. La extracción es una lectura CON LENTE (#188) y quien la hizo la
-    declara en `vistas[]`.
-
-    La vista tiene que estar **fechada**: el stub nace con la vista de su sujeto y sin `fecha`
-    justamente porque la lectura todavía no ocurrió (el lint la reporta como «declarada y sin
-    hacer»). Tomarla como lectura sería el mismo defecto con otro nombre.
-
-    Una `vistas[]` mal formada no cae acá: la reporta el lint. Acá se degrada a `OTHER_AXIS` —hay
-    nota y la lectura no consta—, que es lo único que se puede afirmar, y el listado sigue."""
-    nota = cfg.PAPERS / f"{bibcode.replace('/', '_')}.md"
-    if not nota.exists():
-        return NO_NOTE
-    fm = cfg.split_fm(nota.read_text(encoding="utf-8"))
-    try:
-        vistas = cfg.load_vistas(fm, entry=bibcode)
-    except cfg.VistasError:
-        return OTHER_AXIS
-    leida = any(v["sujeto"] == subject and str(v.get("fecha") or "").strip() for v in vistas)
-    return READ_HERE if leida else OTHER_AXIS
+    declara en `vistas[]`, **fechada**. La regla vive en `cfg.note_state` (AUD-286: acá y en
+    `query_ads` había dos definiciones de «extraída»); esto sólo traduce al vocabulario de las
+    marcas del listado."""
+    return _STATE_MARK[cfg.note_state(bibcode, subject)]
 
 
 def row(c: dict, subject: str) -> str:
@@ -454,7 +443,7 @@ def _notes_citing(bibcode: str) -> list:
 
     Mismo matcheo que `entity.referencias`: el wikilink pelado y el que lleva alias (`[[b|texto]]`).
     Se usa para AVISAR, nunca para reescribir."""
-    stem = bibcode.replace("/", "_")
+    stem = cfg.note_stem(bibcode)
     return [f for f in sorted(cfg.WIKI.rglob("*.md"))
             if f.name != f"{stem}.md"
             and (f"[[{stem}]]" in (txt := f.read_text(encoding="utf-8")) or f"[[{stem}|" in txt)]
@@ -487,7 +476,7 @@ def drop_core(slug: str, bibcodes: list, motivo: str) -> int:
             if ruta.exists():
                 ruta.unlink()
                 borrados += 1
-        nota = cfg.PAPERS / f"{b.replace('/', '_')}.md"
+        nota = cfg.PAPERS / f"{cfg.note_stem(b)}.md"
         if nota.exists():
             fm = cfg.split_fm(nota.read_text(encoding="utf-8"))
             # AUD-219 — `stars:` lleva el NOMBRE de la estrella y `thesis_links` el concepto del

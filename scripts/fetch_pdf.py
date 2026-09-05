@@ -106,8 +106,7 @@ def rescue_hint(bibstem: str | None, year=None) -> str:
     return "mirror académico / tablas del CDN del publisher / pedir el PDF al usuario"
 
 
-def safe_name(bibcode: str) -> str:
-    return bibcode.replace("/", "_")
+safe_name = cfg.note_stem       # alias kept for callers/tests; ONE rule in lib_config (AUD-273)
 
 
 def write_pdf_atomic(dest: Path, data: bytes) -> bool:
@@ -243,7 +242,6 @@ def download_pdf(url: str, token: str) -> bytes | None:
     return data
 
 
-
 def fetch_free_copy(slug: str, r: dict, dest: Path, token: str) -> tuple[bool, list]:
     """Walk EVERY open-access candidate for record `r` (#358) and publish the first real PDF at
     `dest` → `(got one, urls tried)`.
@@ -277,12 +275,6 @@ def oa_candidates(doi: str | None, title: str | None = None):
     import discover
     return discover.iter_pdf_candidates(doi, title)
 
-
-def _flags_usados(args, ap=None) -> list:
-    """Los flags no-default de esta corrida, para dejarlos en `cadena:` del registro (D-48/D-57).
-    Son las **escotillas**: `--force`, `--yes`, `--all` cambian lo que la corrida hizo, y sin
-    registrarlas la traza dice "corrió make_notes" sobre dos corridas que no hicieron lo mismo."""
-    return cfg.flags_usados(args, ap)
 
 def drop_filter(recs: list, slug: str) -> tuple[list, list]:
     """Split `recs` into (fetchable, actively dropped by the user for this subject).
@@ -451,7 +443,7 @@ def main() -> int:
                                            safe_name(r["bibcode"])))
     if _stamped:
         cfg.print_seguro(f"  {_stamped} nota(s) con `pdf:` estampado por verdad de disco (#304)")
-    cfg.save_paso(args.slug, "fetch_pdf", flags=_flags_usados(args, ap))
+    cfg.save_paso(args.slug, "fetch_pdf", flags=cfg.flags_usados(args, ap))
     return 0
 
 

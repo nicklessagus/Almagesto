@@ -627,7 +627,7 @@ def main() -> int:
     txt_rel, pdf_rel = _txt_rel(args.slug, args.bibcode), _pdf_rel(args.slug, args.bibcode)
     hay_pdf = (cfg.ROOT / pdf_rel).exists()
     hay_txt = (cfg.ROOT / txt_rel).exists()
-    nota = cfg.PAPERS / f"{args.bibcode.replace('/', '_')}.md"
+    nota = cfg.PAPERS / f"{cfg.note_stem(args.bibcode)}.md"
     if not hay_pdf and not nota.exists():
         # #334 — sólo la SEGUNDA mitad pasa por `make_notes_cmd`: el sujeto habitual de este
         # generador es un tema, y sin `--theme` el comando no corre. ⛔ `fetch_pdf` toma el slug

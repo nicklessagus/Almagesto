@@ -3011,3 +3011,52 @@ def test_wikilink_re_cubre_las_cuatro_formas_y_no_el_prefijo():
     for s in ("[[GJ 581]]", "[[GJ 581|alias]]", "[[GJ 581#Planetas]]", "[[GJ 581^blk]]"):
         assert rx.search(s), s
     assert not rx.search("[[GJ 5811]]")
+
+
+# ── AUD-273 / AUD-286 · `note_stem` y `note_state`: una regla, no trece ni dos ───────────────
+
+def test_note_stem_es_la_unica_regla_del_stem():
+    """AUD-273: tres `safe_name` y diez `replace("/", "_")` inline eran la misma identidad
+    archivo↔bibcode. Un bibcode sin `/` es su propio stem; el estilo arXiv viejo cambia la barra."""
+    assert cfg.note_stem("astro-ph/9605059") == "astro-ph_9605059"
+    assert cfg.note_stem("2020ApJ...1..1A") == "2020ApJ...1..1A"
+    assert cfg.note_stem("a/b/c") == "a_b_c"
+
+
+def _nota_paper(stem: str, fm: dict) -> None:
+    from conftest import mk_note
+    mk_note(cfg.PAPERS, stem, {"bibcode": stem, "tags": ["paper"], **fm})
+
+
+def test_note_state_sin_sujeto_usa_la_regla_de_lectura(toy_vault):
+    """AUD-286: `query_ads` llamaba «extraída» a `methods` poblado —que `make_notes` mergea
+    add-only sin leer— y `triage` exigía una vista FECHADA. Una sola regla (#189, vía
+    `note_has_reading`): la vista fechada alcanza aunque `methods` esté vacío, y `methods` sigue
+    alcanzando (es suficiente, no necesario)."""
+    _nota_paper("2020meth....1A", {"methods": ["gls"]})
+    _nota_paper("2020view....1B", {"vistas": [{"sujeto": "Estrella Test", "tipo": "star",
+                                              "fecha": "2026-09-01"}]})
+    _nota_paper("2020stub....1C", {"vistas": [{"sujeto": "Estrella Test", "tipo": "star"}]})
+    assert cfg.note_state("2020meth....1A") == cfg.NOTE_READ
+    assert cfg.note_state("2020view....1B") == cfg.NOTE_READ, \
+        "vista fechada sin `methods`: ANTES `query_ads` la llamaba `stub` (el caso que cambia)"
+    assert cfg.note_state("2020stub....1C") == cfg.NOTE_STUB, "vista sin fecha = lectura no hecha"
+    assert cfg.note_state("2020nada....1D") == cfg.NOTE_ABSENT
+    assert cfg.note_state("astro-ph/0001") == cfg.NOTE_ABSENT, "resuelve por `note_stem`"
+
+
+def test_note_state_con_sujeto_exige_la_vista_fechada_de_ese_sujeto(toy_vault):
+    """Con sujeto la pregunta es «¿se leyó PARA este sujeto?»: sólo cuenta la vista de ese sujeto
+    con `fecha`; `methods` poblado NO alcanza (lo mergea el retro-linkeo sin leer, #188)."""
+    _nota_paper("2020view....1B", {"methods": ["gls"],
+                                   "vistas": [{"sujeto": "Estrella Test", "tipo": "star",
+                                               "fecha": "2026-09-01"}]})
+    assert cfg.note_state("2020view....1B", "Estrella Test") == cfg.NOTE_READ
+    assert cfg.note_state("2020view....1B", "Otro Sujeto") == cfg.NOTE_STUB
+    assert cfg.note_state("2020nada....1D", "Estrella Test") == cfg.NOTE_ABSENT
+
+
+def test_note_state_con_vistas_mal_formadas_degrada_a_stub(toy_vault):
+    """Una `vistas[]` mal formada es hallazgo del lint, no de acá: hay nota y la lectura no consta."""
+    _nota_paper("2020mal.....1E", {"vistas": "no-es-lista"})
+    assert cfg.note_state("2020mal.....1E", "Estrella Test") == cfg.NOTE_STUB

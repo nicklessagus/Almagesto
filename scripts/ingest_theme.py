@@ -89,22 +89,7 @@ OFFADS_KINDS = {"web": ("url",), "local-pdfs": ("pdf",),
                 "local-pdfs+web": ("url", "pdf"), "web+local-pdfs": ("url", "pdf")}
 
 
-def _listify_curado(v, campo: str):
-    """Normaliza un campo de CURACIÓN MANUAL (`extra_core`) que `themes.yaml` instruye editar a
-    mano. Un `campo: <valor>` sin corchetes es la forma natural de declarar UN solo elemento y es
-    YAML válido — a diferencia de `cfg.as_list` (que trataría el escalar como forma inválida y lo
-    degradaría a `[]`), acá conviene PRESERVAR la intención: la curación no se pierde por no poner
-    corchetes (gemelo de `query_ads._listify_curado`, mismo defecto medido en R13). Reporta igual,
-    para que la forma se corrija en origen."""
-    if isinstance(v, list):
-        return v
-    if v:
-        cfg.print_seguro(
-            f"  ⚠ `{campo}` está escrito como escalar ({v!r}) en vez de lista — se toma como un "
-            f"solo elemento; para declarar más de uno usá `{campo}: [{v!r}, ...]`."
-        )
-        return [v]
-    return []
+_listify_curado = cfg.listify_curado      # ONE rule (R5/R7/R13), as in `query_ads` (AUD-275)
 
 
 def run(script: str, *args: str, flags=()) -> int:

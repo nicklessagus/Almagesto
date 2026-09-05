@@ -34,28 +34,14 @@ HEADERS = {"User-Agent": f"Almagesto/{cfg.ALMAGESTO_VERSION} (academic literatur
                          "https://github.com/nicklessagus/Almagesto)"}
 
 
-def safe_name(bibcode: str) -> str:
-    return bibcode.replace("/", "_")
+safe_name = cfg.note_stem       # alias kept for callers/tests; ONE rule in lib_config (AUD-273)
 
 
 def write_pdf_atomic(dest, data: bytes) -> bool:
-    """Escritura atómica del PDF final, vía `cfg.write_bytes_atomic` (D-53: un solo writer
-    atómico en el repo; esta función y su gemela de la otra vía de bajada eran dos clones del
-    patrón tmp+os.replace).
-
-    H-07: antes se escribía el destino directo — un corte a mitad (proceso matado, disco lleno)
-    deja un PDF TRUNCADO en el destino FINAL (medido: 35 B), y el único chequeo de idempotencia
-    de la cadena es `dest.exists()`: ese PDF roto cuenta como "ya bajado" para siempre, sin forma
-    de reintentarlo salvo borrarlo a mano. Con la escritura atómica un corte NUNCA deja nada en
-    `dest`: o el PDF completo se publica, o `dest` sigue sin existir y la próxima corrida lo
-    reintenta sola. `False` si la publicación falló (queda como "no conseguido" → entra al
-    residuo, igual que si la fuente no hubiera entregado nada)."""
-    try:
-        cfg.write_bytes_atomic(dest, data)
-        return True
-    except OSError as e:
-        cfg.print_seguro(f"    ! no se pudo escribir {dest.name} en disco: {e}")
-        return False
+    """Same atomic writer as `fetch_pdf.write_pdf_atomic` (H-07/D-53), and it delegates so the
+    two cannot drift (AUD-274): the body was a 12-line clone whose only diff was the print
+    prefix. Same reason `drop_filter` below delegates — these two fetchers are twins."""
+    return fetch_pdf.write_pdf_atomic(dest, data)
 
 
 def download_pdf(arxiv_id: str, dest) -> bool:
@@ -97,12 +83,6 @@ def download_pdf(arxiv_id: str, dest) -> bool:
     return write_pdf_atomic(dest, bytes(buf))
 
 
-
-def _flags_usados(args, ap=None) -> list:
-    """Los flags no-default de esta corrida, para dejarlos en `cadena:` del registro (D-48/D-57).
-    Son las **escotillas**: `--force`, `--yes`, `--all` cambian lo que la corrida hizo, y sin
-    registrarlas la traza dice "corrió make_notes" sobre dos corridas que no hicieron lo mismo."""
-    return cfg.flags_usados(args, ap)
 
 def drop_filter(recs: list, slug: str) -> tuple[list, list]:
     """Same guard as `fetch_pdf.drop_filter`, and it delegates so the two cannot drift (AUD-137).
@@ -186,7 +166,7 @@ def main() -> int:
              for r in residue], indent=2, ensure_ascii=False))
         cfg.print_seguro(f"Sin PDF ({len(no_arxiv)} sin arXiv + {len(failed)} fallidos) → {miss} "
                           "(fetch_pdf los intenta vía el resolver de ADS; el residuo final es el suyo).")
-    cfg.save_paso(args.slug, "fetch_arxiv", flags=_flags_usados(args, ap))
+    cfg.save_paso(args.slug, "fetch_arxiv", flags=cfg.flags_usados(args, ap))
     return 0
 
 

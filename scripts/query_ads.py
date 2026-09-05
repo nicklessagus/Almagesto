@@ -1100,15 +1100,11 @@ def classify_record(r: dict) -> tuple[list[str], bool]:
     return facets, True if r.get("via") == "manual" else relevant
 
 
-def note_state(bibcode: str) -> str:
-    """Estado de la nota de un paper: `extraida` (tiene extracción LLM — `methods` poblado),
-    `stub` (existe pero mudo) o `sin_nota`. Es el número que decide en la re-clasificación:
-    "342 notas salen del core" asusta hasta ver que 338 son stubs y sólo 4 tenían trabajo encima."""
-    dest = cfg.PAPERS / f"{bibcode.replace('/', '_')}.md"
-    if not dest.exists():
-        return "sin_nota"
-    fm = cfg.split_fm(dest.read_text(encoding="utf-8"))
-    return "extraida" if cfg.as_list(fm.get("methods")) else "stub"
+# Estado de la nota de un paper (`extraida` / `stub` / `sin_nota`): UNA definición, con la
+# semántica de #189 (AUD-286) — «extraída» es que la lectura ocurrió (`cfg.note_has_reading`), no
+# que `methods` esté poblado. Es el número que decide en la re-clasificación: "342 notas salen del
+# core" asusta hasta ver que 338 son stubs y sólo 4 tenían trabajo encima.
+note_state = cfg.note_state
 
 
 # ── D-49: la lente, del lado del que CLASIFICA ────────────────────────────────────────────────────
@@ -1464,12 +1460,6 @@ def print_probe(q: str, recs: list, noncore_top: int = 25, theme_meta: dict | No
 
 
 
-def _flags_usados(args, ap=None) -> list:
-    """Los flags no-default de esta corrida, para dejarlos en `cadena:` del registro (D-48/D-57).
-    Son las **escotillas**: `--force`, `--yes`, `--all` cambian lo que la corrida hizo, y sin
-    registrarlas la traza dice "corrió make_notes" sobre dos corridas que no hicieron lo mismo."""
-    return cfg.flags_usados(args, ap)
-
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     # D-6 / INV-80 — la lente vacía REHÚSA operar.  @inv INV-80
@@ -1599,7 +1589,7 @@ def main() -> int:
         # único camino para el punto ciego de la query directa (los surveys que TABULAN la estrella
         # sin nombrarla), y en una estrella real trajo el 63 % de sus `extra_core`.
         rc = sweep_star(args.slug, args.rows)
-        cfg.save_paso(args.slug, "query_ads", flags=_flags_usados(args, ap))
+        cfg.save_paso(args.slug, "query_ads", flags=cfg.flags_usados(args, ap))
         return rc
 
     star_names: list[str] = []      # sólo estrellas: insumo del rescate por glifo (#28)
@@ -1928,7 +1918,7 @@ def main() -> int:
         # saltea la guardia de expansión, `--extra-only` no consulta ADS), así que sin ellas dos
         # entradas idénticas del registro pueden describir corridas que no hicieron lo mismo. De
         # acá llegan a la cabecera de la ficha vía `search_line`.
-        "escotillas": _flags_usados(args, ap),
+        "escotillas": cfg.flags_usados(args, ap),
         "almagesto_version": cfg.ALMAGESTO_VERSION,
         # La LENTE con la que se clasificó, textual (#64 → auditoría 1.10.3). `almagesto_version`
         # es la versión del framework, NO la de la regla: cambiar una regex de `relevance.facets`
@@ -1937,7 +1927,7 @@ def main() -> int:
         "lente": lens_used(tema_meta),
     })
     cfg.print_seguro(f"  → {cfg.registro_path(args.slug)} (registro de búsqueda, versionado)")
-    cfg.save_paso(args.slug, "query_ads", flags=_flags_usados(args, ap))
+    cfg.save_paso(args.slug, "query_ads", flags=cfg.flags_usados(args, ap))
     return 0
 
 

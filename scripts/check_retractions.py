@@ -75,13 +75,8 @@ class NothingToCheck(RuntimeError):
     desde adentro es justo lo que producía el 1 sobrecargado. Informa, y `main()` decide."""
 
 
-def _mailto() -> str | None:
-    """Contact email for Crossref's polite pool — opt-in, see `lib_config.get_mailto`."""
-    return cfg.get_mailto() or None
-
-
 def _ua() -> dict:
-    m = _mailto()
+    m = cfg.get_mailto() or None    # Crossref polite pool — opt-in (AUD-276)
     ua = (f"Almagesto/{cfg.ALMAGESTO_VERSION} (academic literature vault; "
           "https://github.com/nicklessagus/Almagesto")
     ua += f"; mailto:{m})" if m else ")"
@@ -277,24 +272,7 @@ def title_says_retracted(title: str) -> bool:
     return t.startswith(("retracted", "retraction:", "retracted article", "withdrawn"))
 
 
-def _listify_curado(v, campo: str):
-    """Normaliza un campo de CURACIÓN MANUAL (`extra_core`, `sources`) que el framework instruye
-    editar a mano en YAML. Gemelo de `query_ads.py:_listify_curado`/`ingest_theme.py:_listify_curado`
-    (R5/R7): un `campo: <valor>` sin corchetes es la forma natural de declarar UN solo elemento y
-    es YAML válido — a diferencia de `cfg.as_list` (que trataría el escalar como forma inválida y
-    lo degradaría a `[]`), acá conviene PRESERVAR la intención. El `or []` viejo no disparaba con
-    un escalar truthy y la comprensión de abajo lo recorría CARÁCTER POR CARÁCTER: con
-    `extra_core: 2020ApJ...900....1X` el paper real nunca se pedía a Crossref y el paso cerraba en
-    verde sin haber chequeado nada — falso limpio en la frontera dura."""
-    if isinstance(v, list):
-        return v
-    if v:
-        cfg.print_seguro(
-            f"  ⚠ `{campo}` está escrito como escalar ({v!r}) en vez de lista — se toma como un "
-            f"solo elemento; para declarar más de uno usá `{campo}: [{v!r}, ...]`."
-        )
-        return [v]
-    return []
+_listify_curado = cfg.listify_curado      # ONE rule (R5/R7/R13), as in `query_ads` (AUD-275)
 
 
 def slug_notes(slug: str) -> list:
@@ -324,7 +302,7 @@ def slug_notes(slug: str) -> list:
             "en themes.yaml — nada que chequear (¿corriste la cadena de ingest primero?).")
     notes, seen = [], set()
     for stem in stems:
-        name = stem.replace("/", "_")
+        name = cfg.note_stem(stem)
         if name in seen:
             continue
         seen.add(name)
@@ -341,12 +319,7 @@ def _estampar(args, ap=None) -> None:
     Es el último paso de `CADENA_ESTRELLA` y era el único de los siete que no se estampaba: la
     cadena completa se reportaba como cortada acá, siempre.  @inv INV-91"""
     if args.slug:
-        cfg.save_paso(args.slug, "check_retractions", flags=_flags_usados(args, ap))
-
-
-def _flags_usados(args, ap=None) -> list:
-    """Los flags no-default de esta corrida, para `cadena:` del registro (D-48/D-57)."""
-    return cfg.flags_usados(args, ap)
+        cfg.save_paso(args.slug, "check_retractions", flags=cfg.flags_usados(args, ap))
 
 
 def main() -> int:
@@ -378,7 +351,7 @@ def main() -> int:
         cfg.print_seguro(f"--slug {args.slug}: {len(notes)} nota(s) del ingest (el barrido completo de la "
               "bóveda es la pasada periódica — correr sin --slug)")
     else:
-        notes = ([cfg.PAPERS / f"{args.paper.replace('/', '_')}.md"] if args.paper
+        notes = ([cfg.PAPERS / f"{cfg.note_stem(args.paper)}.md"] if args.paper
                  else cfg.note_paths(cfg.PAPERS))
     headers = _ua()
 

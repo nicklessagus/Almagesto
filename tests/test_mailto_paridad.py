@@ -18,6 +18,10 @@ de mutación, y las únicas de esas 10 que no necesitan red, o sea las más bara
 ⚠ La única diferencia entre los dos es el **valor de ausencia**, y es deliberada: Crossref devuelve
 `None` (el llamador arma el User-Agent con o sin mailto) y OpenAlex `""` (va como query param). Por
 eso el vacío se parametriza en vez de asumirse igual — si alguien los "unifica", este test lo dice.
+
+AUD-276 (2026-09-04): el wrapper `check_retractions._mailto` se eliminó —era `cfg.get_mailto() or
+None` y nada más—, así que el gemelo de Crossref se lee desde el User-Agent que `_ua()` arma, que
+es donde el opt-in termina viajando.
 """
 from __future__ import annotations
 
@@ -33,9 +37,33 @@ if str(SCRIPTS) not in sys.path:
 import check_retractions          # noqa: E402
 import openalex                   # noqa: E402
 
+def _mailto_crossref():
+    """Crossref's twin no longer has a `_mailto` wrapper (AUD-276): the opt-in is read inline in
+    `_ua()` and travels in the User-Agent. Reading it back from there IS the behaviour that
+    matters — a wrapper returning the right string but never reaching the header would pass the
+    old probe and leak nothing useful."""
+    ua = check_retractions._ua()["User-Agent"]
+    return ua.split("mailto:", 1)[1].rstrip(")") if "mailto:" in ua else None
+
+
+def _mailto_openalex():
+    return openalex._mailto()
+
+
+class _Gemelo:
+    """A twin under test: the module (for `subprocess` spying) plus how to read its mailto."""
+    def __init__(self, mod, leer):
+        self.mod, self._leer = mod, leer
+        self.__name__ = mod.__name__
+        self.subprocess = mod.subprocess
+
+    def _mailto(self):
+        return self._leer()
+
+
 GEMELOS = [
-    pytest.param(check_retractions, None, id="crossref"),
-    pytest.param(openalex, "", id="openalex"),
+    pytest.param(_Gemelo(check_retractions, _mailto_crossref), None, id="crossref"),
+    pytest.param(_Gemelo(openalex, _mailto_openalex), "", id="openalex"),
 ]
 
 

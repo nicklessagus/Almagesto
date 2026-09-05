@@ -204,7 +204,7 @@ def bib_files_near(item: dict) -> list:
 def web_snapshot(item: dict, slug: str) -> str | None:
     """Body of the web snapshot `fetch_web` wrote for a `url:` source, or `None` (#392, point 4)."""
     key = str(item.get("key") or "").strip()
-    f = cfg.FULLTEXT / slug / f"{key.replace('/', '_')}.txt"
+    f = cfg.FULLTEXT / slug / f"{cfg.note_stem(key)}.txt"
     if not key or not f.is_file():
         return None
     text = f.read_text(encoding="utf-8", errors="replace")
@@ -250,7 +250,7 @@ def pdf_first_page(pdf: Path) -> str | None:
 def resolve_pdf_path(item: dict, slug: str) -> Path | None:
     """The vault copy first (`raw/pdfs/<slug>/<key>.pdf`), else the declared `pdf:` path."""
     key = str(item.get("key") or "").strip()
-    copia = cfg.PDFS / slug / f"{key.replace('/', '_')}.pdf"
+    copia = cfg.PDFS / slug / f"{cfg.note_stem(key)}.pdf"
     if copia.is_file():
         return copia
     decl = str(item.get("pdf") or "").strip()

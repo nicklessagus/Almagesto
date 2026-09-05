@@ -49,7 +49,7 @@ from pathlib import Path
 
 import lib_config as cfg
 
-BIBCODE_RE = re.compile(r"^\d{4}[A-Za-z]")           # misma heurística que lint/fetch_web
+BIBCODE_RE = cfg.BIBCODE_LIKE_RE        # ONE heuristic (AUD-277)
 LINK_RE = re.compile(r"\[\[([^\]\|#]+)")
 WIKILINK_RE = re.compile(r"\[\[[^\]]*\]\]")          # wikilink completo, para CEGAR el claim
 LEADIN_RE = re.compile(r"^(\*\*[^*]{2,80}?\*\*:?)\s*")           # etiqueta del bullet: **Foo:**

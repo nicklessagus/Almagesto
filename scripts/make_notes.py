@@ -71,8 +71,7 @@ def fm(d: dict) -> str:
     return f"---\n{body}---\n"
 
 
-def safe_name(bibcode: str) -> str:
-    return bibcode.replace("/", "_")
+safe_name = cfg.note_stem       # alias kept for callers/tests; ONE rule in lib_config (AUD-273)
 
 
 def _txt_provenance(path) -> str:
@@ -1467,7 +1466,7 @@ def migrate_all_source_fields() -> tuple[int, list]:
     return n, movidas
 
 
-EXTRACCION_VIEJA_RE = re.compile(r"^##\s+Extracci[oó]n\s*\(LLM\)\s*$", re.M)
+EXTRACCION_VIEJA_RE = cfg.EXTRACCION_VIEJA_RE      # ONE definition (AUD-278)
 
 
 def migrate_all_vistas() -> tuple[int, list]:
@@ -3932,13 +3931,6 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
 
 
 
-def _flags_usados(args, ap=None) -> list:
-    """Los flags no-default de esta corrida, para dejarlos en `cadena:` del registro (D-48/D-57).
-    Son las **escotillas**: `--force`, `--yes`, `--all` cambian lo que la corrida hizo, y sin
-    registrarlas la traza dice "corrió make_notes" sobre dos corridas que no hicieron lo mismo."""
-    return cfg.flags_usados(args, ap)
-
-
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -4211,7 +4203,7 @@ def main() -> int:
         else:
             stamp_papers_table(args.slug, dest_final, "star")
             stamp_star_rollups(args.slug, dest_final)
-    cfg.save_paso(args.slug, "make_notes", flags=_flags_usados(args, ap))
+    cfg.save_paso(args.slug, "make_notes", flags=cfg.flags_usados(args, ap))
     return 0
 
 

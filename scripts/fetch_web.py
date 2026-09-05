@@ -46,7 +46,7 @@ import make_notes
 # Misma heurística de clave que scripts/lint.py (BIBCODE_RE): 4 dígitos + letra. Garantiza que el
 # .txt se llame como el [[citekey]] citado y que el lint lo reconozca como target de bibcode.
 # @inv INV-27
-CITEKEY_RE = re.compile(r"^\d{4}[A-Za-z]")
+CITEKEY_RE = cfg.BIBCODE_LIKE_RE       # ONE heuristic (AUD-277)
 
 # Bloques HTML crudos que defuddle a veces deja embebidos y que NO aportan texto citable
 # (media/embeds): se quitan para dejar el snapshot limpio y greppable. CONSERVADOR — sólo elementos
